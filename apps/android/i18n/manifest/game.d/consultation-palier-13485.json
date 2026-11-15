@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "progression.hero.last",
+          "androidName": "progression_hero_last",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.hero.first",
+          "androidName": "progression_hero_first",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.hero.next",
+          "androidName": "progression_hero_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.hero.first.hint",
+          "androidName": "progression_hero_first_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.hero.reveal.hint",
+          "androidName": "progression_hero_reveal_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.unlocked",
+          "androidName": "progression_unlocked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.section.achievements",
+          "androidName": "progression_section_achievements",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.link.succes",
+          "androidName": "game_concept_link_succes",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.achievement.a11y.hint",
+          "androidName": "progression_achievement_a11y_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.family.content",
+          "androidName": "progression_family_content",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.family.comment",
+          "androidName": "progression_family_comment",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.family.conversation",
+          "androidName": "progression_family_conversation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.family.tool",
+          "androidName": "progression_family_tool",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.family.social",
+          "androidName": "progression_family_social",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.badge.a11y.stars",
+          "androidName": "game_badge_a11y_stars",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.badge.a11y.imprint",
+          "androidName": "game_badge_a11y_imprint",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

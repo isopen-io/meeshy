@@ -140,9 +140,6 @@ const UNRESOLVED: ResolvedPostMentions = {
 /** Établi, et vide : ce post ne nomme personne. */
 const NO_MENTIONS: ResolvedPostMentions = { ...UNRESOLVED, reconciled: true };
 
-/** Longueur de l'extrait embarqué dans la notification — parité avec les routes. */
-const EXCERPT_LENGTH = 100;
-
 export interface PostMentionParams {
   prisma: PostMentionPrisma;
   mentionService: PostMentionResolver | null | undefined;
@@ -525,7 +522,7 @@ function notifyNewlyMentioned(
       postId: post.id,
       posterId: post.authorId,
       mentionedUserIds: [...newlyMentionedUserIds],
-      postExcerpt: content?.slice(0, EXCERPT_LENGTH),
+      postExcerpt: content || undefined,
       postType: post.type,
       visibility: post.visibility,
       visibilityUserIds: post.visibilityUserIds,

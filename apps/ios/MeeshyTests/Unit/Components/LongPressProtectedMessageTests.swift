@@ -1,0 +1,276 @@
+import XCTest
+import MeeshySDK
+@testable import Meeshy
+
+/// **L'appui long sur un message protégé ne montre plus son contenu** (#8009,
+/// complément porteur du 2026-09-26).
+///
+/// En Focal et en Script, l'aperçu de l'appui long (`MessageOverlayMenu`,
+/// chemin sans cadre source) rendait `message.content` et les pièces EN CLAIR :
+/// l'appui long contournait le flou et la vue unique. Et le menu offrait
+/// « Copier », « Traduire », « Enregistrer » et « Transférer » sur un message
+/// flouté — autant de sorties pour un contenu que le fil retient.
+///
+/// Les pièces jointes de l'aperçu, elles, étaient rognées (`.fill` dans un cadre
+/// 16:9 ou plafonné à 200 pt) : elles s'affichent désormais à leur rapport
+/// d'aspect ORIGINAL.
+@MainActor
+final class LongPressProtectedMessageTests: XCTestCase {
+
+    // MARK: - Fabriques
+
+    private func photo(id: String = "p1", width: Int? = 1200, height: Int? = 800,
+                       isBlurred: Bool = false, isViewOnce: Bool = false) -> MessageAttachment {
+        MessageAttachment(id: id, messageId: "m1", fileName: "p.jpg", mimeType: "image/jpeg",
+                          fileUrl: "https://staging.meeshy.me/p.jpg",
+                          isViewOnce: isViewOnce, isBlurred: isBlurred, width: width, height: height)
+    }
+
+    private func message(attachments: [MessageAttachment] = [], blurred: Bool = false,
+                         viewOnce: Bool = false, openedAt: Date? = nil) -> Message {
+        var message = Message(id: "m1", conversationId: "c1", senderId: "u2", content: "secret",
+                              attachments: attachments, senderName: "Demo")
+        message.isBlurred = blurred
+        message.isViewOnce = viewOnce
+        message.viewOnceOpenedAt = openedAt
+        return message
+    }
+
+    private func ctx(isMine: Bool = false, hasMedia: Bool = false, saveable: Int = 0,
+                     isBlurred: Bool = false) -> MessageMenuContext {
+        MessageMenuContext(isMine: isMine, canEdit: isMine, canDelete: isMine,
+                           hasText: true, hasMedia: hasMedia, hasTimebasedMedia: hasMedia,
+                           isPinned: false, isStarred: false, isEdited: true, hasEditRevisions: true,
+                           saveableAttachmentCount: saveable, canComposeMedia: saveable > 0,
+                           isBlurred: isBlurred)
+    }
+
+    // MARK: - La forme de l'aperçu
+
+    func test_previewForm_clearMessage_isClear() {
+        XCTAssertEqual(OverlayPreviewProtection.form(for: message()), .clear)
+    }
+
+    func test_previewForm_blurredText_isBlurred() {
+        XCTAssertEqual(OverlayPreviewProtection.form(for: message(blurred: true)), .blurred)
+    }
+
+    func test_previewForm_blurredAttachmentOnly_isBlurred() {
+        let form = OverlayPreviewProtection.form(for: message(attachments: [photo(isBlurred: true)]))
+        XCTAssertEqual(form, .blurred, "une pièce floutée protège l'aperçu même si le message ne l'est pas")
+    }
+
+    func test_previewForm_sealedViewOnce_isTheSealedChip() {
+        XCTAssertEqual(OverlayPreviewProtection.form(for: message(viewOnce: true)), .viewOnce(opened: false))
+    }
+
+    func test_previewForm_viewOncePhoto_isTheSealedChip() {
+        let form = OverlayPreviewProtection.form(for: message(attachments: [photo(isViewOnce: true)]))
+        XCTAssertEqual(form, .viewOnce(opened: false))
+    }
+
+    func test_previewForm_openedViewOnce_isTheOpenedChip() {
+        XCTAssertEqual(OverlayPreviewProtection.form(for: message(viewOnce: true, openedAt: Date())),
+                       .viewOnce(opened: true))
+    }
+
+    func test_previewForm_blurredAndViewOnce_viewOnceWins() {
+        XCTAssertEqual(OverlayPreviewProtection.form(for: message(blurred: true, viewOnce: true)),
+                       .viewOnce(opened: false))
+    }
+
+    func test_previewForm_isNeverClearForAProtectedMessage() {
+        let protected = [
+            message(blurred: true), message(viewOnce: true),
+            message(attachments: [photo(isBlurred: true)]), message(attachments: [photo(isViewOnce: true)])
+        ]
+        XCTAssertTrue(protected.allSatisfy { OverlayPreviewProtection.form(for: $0) != .clear })
+    }
+
+    // MARK: - Le menu ne fait fuir aucun contenu flouté
+
+    func test_primaryActions_blurred_offersNeitherCopyTranslateSaveNorCompose() {
+        let actions = MessageActionResolver.primaryActions(ctx(hasMedia: true, saveable: 1, isBlurred: true))
+        for leak in [PrimaryAction.copy, .translate, .saveMedia, .compose, .exportImage, .exportQuick] {
+            XCTAssertFalse(actions.contains(leak), "\(leak) ferait sortir un contenu flouté")
+        }
+        XCTAssertTrue(actions.contains(.more))
+    }
+
+    func test_primaryActions_blurredMine_keepsEditButNotCopy() {
+        let actions = MessageActionResolver.primaryActions(ctx(isMine: true, isBlurred: true))
+        XCTAssertTrue(actions.contains(.edit), "l'auteur garde l'édition de son propre message")
+        XCTAssertFalse(actions.contains(.copy))
+    }
+
+    func test_moreSections_blurred_retiresEveryContentExit() {
+        let items = MessageActionResolver.moreSections(ctx(hasMedia: true, isBlurred: true)).flatMap { section -> [MoreItem] in
+            switch section {
+            case .actions(let items), .info(let items), .moderation(let items): return items
+            }
+        }
+        for leak in [MoreItem.copy, .share, .language, .sentiment, .transcription, .history] {
+            XCTAssertFalse(items.contains(leak), "\(leak) ferait sortir un contenu flouté")
+        }
+        XCTAssertTrue(items.contains(.forward), "D8 (#10949) : un flouté se transfère, son flou hérité par la copie")
+        XCTAssertTrue(items.contains(.reply), "répondre reste possible : la citation masque un message protégé")
+        XCTAssertTrue(items.contains(.report))
+    }
+
+    func test_primaryActions_unblurred_unchanged() {
+        let actions = MessageActionResolver.primaryActions(ctx(hasMedia: true, saveable: 1))
+        XCTAssertTrue(actions.contains(.copy))
+        XCTAssertTrue(actions.contains(.translate))
+        XCTAssertTrue(actions.contains(.saveMedia))
+    }
+
+    func test_holdsBlur_readsMessageAndAttachments() {
+        XCTAssertFalse(message().holdsBlur)
+        XCTAssertTrue(message(blurred: true).holdsBlur)
+        XCTAssertTrue(message(attachments: [photo(isBlurred: true)]).holdsBlur)
+    }
+
+    // MARK: - Les pièces à leur rapport d'aspect ORIGINAL
+
+    func test_aspectRatio_readsTheAttachmentDimensions() {
+        XCTAssertEqual(OverlayPreviewMediaLayout.aspectRatio(of: photo(width: 1200, height: 800)), 1.5, accuracy: 0.0001)
+        XCTAssertEqual(OverlayPreviewMediaLayout.aspectRatio(of: photo(width: 720, height: 1280)), 0.5625, accuracy: 0.0001)
+    }
+
+    // MARK: - Les pièces au-delà de quatre : « +N » sur la dernière case (#9950)
+
+    func test_grid_fourPiecesOrLess_hidesNothing() {
+        XCTAssertEqual(OverlayPreviewMediaLayout.hiddenCount(total: 4), 0)
+        XCTAssertEqual(OverlayPreviewMediaLayout.hiddenCount(total: 1), 0)
+        XCTAssertEqual(OverlayPreviewMediaLayout.hiddenCount(total: 0), 0)
+    }
+
+    func test_grid_fivePhotos_saysPlusOne_onTheLastCell() {
+        XCTAssertEqual(OverlayPreviewMediaLayout.hiddenCount(total: 5), 1)
+        XCTAssertEqual(OverlayPreviewMediaLayout.hiddenCount(total: 9), 5)
+        XCTAssertEqual(OverlayPreviewMediaLayout.overflowCell(total: 5), 3)
+        XCTAssertNil(OverlayPreviewMediaLayout.overflowCell(total: 4))
+    }
+
+    func test_grid_drawsTheOverflow_likeTheBubbleGrid() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let grid = try String(contentsOf: root.appendingPathComponent(
+            "Meeshy/Features/Main/Components/MessageOverlayPreviewMedia.swift"), encoding: .utf8)
+        XCTAssertTrue(grid.contains("OverlayPreviewMediaLayout.overflowCell(total: attachments.count)"))
+        XCTAssertTrue(grid.contains("Text(verbatim: \"+\\(hidden)\")"))
+    }
+
+    func test_aspectRatio_missingDimensions_isSquare() {
+        XCTAssertEqual(OverlayPreviewMediaLayout.aspectRatio(of: photo(width: nil, height: nil)), 1)
+        XCTAssertEqual(OverlayPreviewMediaLayout.aspectRatio(of: photo(width: 0, height: 800)), 1)
+    }
+
+    func test_layout_everyCellKeepsItsRatio_forOneToFourMedia() {
+        let ratios: [CGFloat] = [1.5, 0.5625, 1, 2.4]
+        for count in 1...4 {
+            let input = Array(ratios.prefix(count))
+            let rows = OverlayPreviewMediaLayout.rows(ratios: input, width: 260, spacing: 3, maxHeight: 360)
+            let cells = rows.flatMap { $0 }
+            XCTAssertEqual(cells.count, count)
+            for (cell, ratio) in zip(cells, input) {
+                XCTAssertEqual(cell.width / cell.height, ratio, accuracy: 0.001, "ni rognée ni étirée (\(count) pièces)")
+            }
+        }
+    }
+
+    func test_layout_neverExceedsTheWidthOrTheHeight() {
+        let tall: [CGFloat] = [0.4]
+        let rows = OverlayPreviewMediaLayout.rows(ratios: tall, width: 260, spacing: 3, maxHeight: 320)
+        let cell = rows[0][0]
+        XCTAssertLessThanOrEqual(cell.height, 320.001, "un portrait très haut se réduit, il ne déborde pas")
+        XCTAssertLessThanOrEqual(cell.width, 260.001)
+
+        let grid = OverlayPreviewMediaLayout.rows(ratios: [1.5, 1.5, 0.75, 0.75], width: 260, spacing: 3, maxHeight: 320)
+        let height = grid.map { $0.first?.height ?? 0 }.reduce(0, +) + CGFloat(grid.count - 1) * 3
+        XCTAssertLessThanOrEqual(height, 320.001)
+        for row in grid {
+            let width = row.map(\.width).reduce(0, +) + CGFloat(row.count - 1) * 3
+            XCTAssertLessThanOrEqual(width, 260.001)
+        }
+    }
+
+    func test_layout_aRowSharesOneHeight() {
+        let rows = OverlayPreviewMediaLayout.rows(ratios: [1.5, 0.75], width: 260, spacing: 3, maxHeight: 400)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0][0].height, rows[0][1].height, accuracy: 0.001)
+        XCTAssertEqual(rows[0][0].width + rows[0][1].width + 3, 260, accuracy: 0.001, "la rangée remplit la largeur")
+    }
+
+    // MARK: - L'aperçu dit ce que la cellule dit (#9838)
+
+    private func koreanMessage() -> Message {
+        var message = Message(id: "m9", conversationId: "c1", senderId: "u2",
+                              content: "이제 12일만 기다리면 돼 ❤️", senderName: "Demo")
+        message.originalLanguage = "ko"
+        return message
+    }
+
+    private func translation(_ language: String, _ text: String) -> MessageTranslation {
+        MessageTranslation(id: "m9-\(language)", messageId: "m9", sourceLanguage: "ko",
+                           targetLanguage: language, translatedContent: text,
+                           translationModel: "nllb", confidenceScore: nil)
+    }
+
+    private var koreanTranslations: [MessageTranslation] {
+        [translation("fr", "Plus que 12 jours ❤️"), translation("en", "Only 12 more days ❤️")]
+    }
+
+    private func served(preferred: MessageTranslation?,
+                        selection: ConversationViewModel.BubbleLanguageSelection? = nil,
+                        usesFlatRow: Bool = false) -> OverlayPreviewServedText {
+        MessageOverlayMenu.previewServedText(
+            message: koreanMessage(), textTranslations: koreanTranslations, translatedAudios: [],
+            preferredTranslation: preferred, userLanguages: (regional: "en", custom: nil),
+            selection: selection, usesFlatRow: usesFlatRow, preferredAudioLangCode: nil, currentUserId: "u1")
+    }
+
+    /// Prisme `['fr']`, message coréen, traduction française disponible : le fil
+    /// dit le français, l'aperçu aussi — plus l'original coréen.
+    func test_previewServedText_servesThePrismTranslation_notTheOriginal() {
+        XCTAssertEqual(served(preferred: koreanTranslations[0]).text, "Plus que 12 jours ❤️")
+    }
+
+    /// Override manuel vers l'original (`activeTranslationOverrides[id] = nil`) :
+    /// la cellule rend l'original, l'aperçu aussi.
+    func test_previewServedText_manualOverrideToTheOriginal_servesTheOriginal() {
+        XCTAssertEqual(served(preferred: nil).text, "이제 12일만 기다리면 돼 ❤️")
+    }
+
+    /// Le drapeau basculé dans le fil gouverne la face affichée de l'aperçu.
+    func test_previewServedText_followsTheFlagSelectedInTheThread() {
+        let selection = ConversationViewModel.BubbleLanguageSelection(activeDisplayLangCode: "en", secondaryLangCode: nil)
+        XCTAssertEqual(served(preferred: koreanTranslations[0], selection: selection).text, "Only 12 more days ❤️")
+    }
+
+    /// La bande de drapeaux est celle de la cellule : la même source
+    /// (`BubbleContent`), jamais une liste recomposée par l'aperçu.
+    func test_previewServedText_flags_areTheCellFlags() {
+        let cell = BubbleContent(message: koreanMessage(), translations: koreanTranslations,
+                                 preferredTranslation: koreanTranslations[0],
+                                 userLanguages: (regional: "en", custom: nil), currentUserId: "u1")
+        let preview = served(preferred: koreanTranslations[0])
+
+        XCTAssertEqual(preview.flags, cell.translation?.availableFlags)
+        XCTAssertFalse(preview.flags.contains("fr"), "la langue affichée n'est pas un drapeau de la bande")
+    }
+
+    /// En Focal et en Script, la rangée du fil porte aussi la langue affichée,
+    /// marquée active : l'aperçu reprend CETTE bande, pas celle d'une bulle.
+    func test_previewServedText_inAFlatRowThread_carriesTheDisplayedLanguageAsActive() {
+        let preview = served(preferred: koreanTranslations[0], usesFlatRow: true)
+        let cell = BubbleContent(message: koreanMessage(), translations: koreanTranslations,
+                                 preferredTranslation: koreanTranslations[0],
+                                 userLanguages: (regional: "en", custom: nil), currentUserId: "u1")
+        let row = FocalRow.focusFlagCodes(originalLangCode: "ko", availableFlags: cell.translation?.availableFlags ?? [],
+                                          activeLangCode: "fr", limit: FocalMetrics.FocusStrip.flagLimitPlain)
+
+        XCTAssertEqual(preview.flags, row)
+        XCTAssertEqual(preview.activeFlag, "fr")
+    }
+}

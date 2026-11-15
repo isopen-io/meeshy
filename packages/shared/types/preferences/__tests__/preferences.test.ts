@@ -20,6 +20,7 @@ import {
   ApplicationPreferenceSchema,
   APPLICATION_PREFERENCE_DEFAULTS
 } from '../index';
+import { CIRCLE_NOTIFY_DEFAULTS } from '../../../utils/relation-levels';
 
 describe('PrivacyPreferenceSchema', () => {
   test('devrait accepter des données valides', () => {
@@ -31,12 +32,13 @@ describe('PrivacyPreferenceSchema', () => {
       showForwardSource: false,
       allowContactRequests: true,
       allowGroupInvites: false,
-      allowCallsFromNonContacts: false,
+      acceptCallsFromNonContacts: false,
       saveMediaToGallery: false,
       allowAnalytics: true,
       shareUsageData: false,
       blockScreenshots: false,
       hideProfileFromSearch: false,
+      notifyContactsOnReturn: false,
       encryptionPreference: 'optional' as const,
       autoEncryptNewConversations: false,
       showEncryptionStatus: true,
@@ -50,6 +52,21 @@ describe('PrivacyPreferenceSchema', () => {
   test('devrait appliquer les valeurs par défaut', () => {
     const result = PrivacyPreferenceSchema.parse({});
     expect(result).toEqual(PRIVACY_PREFERENCE_DEFAULTS);
+  });
+
+  test('« Appels hors contacts » est ouvert à tous par défaut (#8073)', () => {
+    expect(PrivacyPreferenceSchema.parse({}).acceptCallsFromNonContacts).toBe(true);
+  });
+
+  test('« Prévenir mes contacts quand je reviens » est activé par défaut, y compris pour un compte qui ne l’a jamais réglé (#8285)', () => {
+    expect(PrivacyPreferenceSchema.parse({}).notifyContactsOnReturn).toBe(true);
+    expect(PRIVACY_PREFERENCE_DEFAULTS.notifyContactsOnReturn).toBe(true);
+    expect(PrivacyPreferenceSchema.strict().parse({ notifyContactsOnReturn: false }).notifyContactsOnReturn).toBe(false);
+  });
+
+  test("l'ancienne clé allowCallsFromNonContacts est encore acceptée mais ne ferme plus rien (#8073)", () => {
+    const result = PrivacyPreferenceSchema.strict().parse({ allowCallsFromNonContacts: false });
+    expect(result.acceptCallsFromNonContacts).toBe(true);
   });
 
   test('devrait rejeter des types invalides', () => {
@@ -82,7 +99,12 @@ describe('AudioPreferenceSchema', () => {
       noiseSuppression: true,
       echoCancellation: true,
       voiceProfileEnabled: false,
-      voiceCloneQuality: 'balanced' as const
+      voiceCloneQuality: 'balanced' as const,
+      voiceCloningExaggeration: 0.5,
+      voiceCloningCfgWeight: 0.5,
+      voiceCloningTemperature: 1.0,
+      voiceCloningTopP: 0.9,
+      voiceCloningQualityPreset: 'balanced' as const
     };
 
     const result = AudioPreferenceSchema.parse(valid);
@@ -187,11 +209,23 @@ describe('NotificationPreferenceSchema', () => {
       storyReactionEnabled: true,
       commentReplyEnabled: true,
       commentLikeEnabled: false,
-      friendContentEnabled: false
+      friendContentEnabled: false,
+      contactActivityEnabled: false,
+      deviceBatteryEnabled: false,
+      gameEnabled: false,
+      gamePhotoEnabled: false,
+      bringEnabled: false,
+      talkieEnabled: false,
+      togetherEnabled: false
     };
 
     const result = NotificationPreferenceSchema.parse(valid);
-    expect(result).toEqual(valid);
+    expect(result).toEqual({ ...CIRCLE_NOTIFY_DEFAULTS, ...valid });
+  });
+
+  test('« Quand un contact revient sur Meeshy » est reçu par défaut (#8285)', () => {
+    expect(NotificationPreferenceSchema.parse({}).contactActivityEnabled).toBe(true);
+    expect(NOTIFICATION_PREFERENCE_DEFAULTS.contactActivityEnabled).toBe(true);
   });
 
   test('devrait valider le format des heures DND', () => {
@@ -287,6 +321,13 @@ describe('DocumentPreferenceSchema', () => {
     expect(result).toEqual(valid);
   });
 
+  test('la compression forte est un choix explicite, coupé par défaut, et un ancien client sans le champ reste valide (#9885)', () => {
+    const ancien = DocumentPreferenceSchema.parse({});
+    expect(ancien.compressImagesOnUpload).toBe(false);
+    expect(ancien.imageCompressionQuality).toBe(85);
+    expect(DOCUMENT_PREFERENCE_DEFAULTS.compressImagesOnUpload).toBe(false);
+  });
+
   test('devrait valider les limites de taille', () => {
     expect(() => {
       DocumentPreferenceSchema.parse({ autoDownloadMaxSize: 0 });
@@ -316,6 +357,7 @@ describe('ApplicationPreferenceSchema', () => {
       theme: 'dark' as const,
       accentColor: 'purple',
       interfaceLanguage: 'fr',
+      autoTranslateEnabled: false,
       fontSize: 'large' as const,
       fontFamily: 'roboto',
       lineHeight: 'relaxed' as const,
@@ -355,34 +397,71 @@ describe('ApplicationPreferenceSchema', () => {
     expect(valid.tutorialsCompleted).toHaveLength(3);
   });
 
-  test('conserve les timestamps de consentement voix (non strippés par Zod)', () => {
-    // Popup iOS 2026-07-08 : le consentement vocal transite par la MÊME API
-    // préférences (PATCH /me/preferences/application). Sans ces clés au
-    // schema, Zod (mode strip) les supprimait silencieusement.
-    const result = ApplicationPreferenceSchema.parse({
-      dataProcessingConsentAt: '2026-07-08T10:00:00Z',
-      voiceDataConsentAt: '2026-07-08T10:00:00Z',
-      voiceProfileConsentAt: '2026-07-08T10:00:00Z',
-      voiceCloningConsentAt: '2026-07-08T10:00:00Z',
-      voiceCloningEnabledAt: '2026-07-08T10:00:00Z'
+  // #4180 — un consentement se prouve par UNE SEULE colonne, horodatée par le
+  // serveur. Jusqu'ici ce schéma acceptait les CINQ mêmes noms que les
+  // colonnes `User.*ConsentAt` que `VoiceProfileService.updateConsent`
+  // horodate côté serveur : un client pouvait donc AFFIRMER un consentement
+  // — avec la date de SON choix — via un PATCH de préférences ordinaire, et
+  // `ConsentValidationService` donnait PRIORITÉ à cette affirmation sur la
+  // colonne serveur. Les quatre témoins ci-dessous remplacent les anciens
+  // « conserve »/« accepte null », qui gardaient exactement ce défaut.
+  describe('clés de consentement legacy — rejetées, jamais strippées en silence (#4180)', () => {
+    const LEGACY_KEYS = [
+      'dataProcessingConsentAt',
+      'voiceDataConsentAt',
+      'voiceProfileConsentAt',
+      'voiceCloningConsentAt',
+      'voiceCloningEnabledAt',
+    ] as const;
+
+    test.each(LEGACY_KEYS)('rejette %s avec une date ISO (le client ne peut plus affirmer un consentement)', (key) => {
+      expect(() => {
+        ApplicationPreferenceSchema.parse({ [key]: '2026-07-08T10:00:00Z' });
+      }).toThrow();
     });
-    expect(result.voiceProfileConsentAt).toBe('2026-07-08T10:00:00Z');
-    expect(result.voiceCloningConsentAt).toBe('2026-07-08T10:00:00Z');
+
+    test.each(LEGACY_KEYS)('rejette %s à null (un retrait explicite reste une AFFIRMATION du client, pas une absence)', (key) => {
+      expect(() => {
+        ApplicationPreferenceSchema.parse({ [key]: null });
+      }).toThrow();
+    });
+
+    test('rejette au format .partial() aussi — le chemin réel de PATCH /me/preferences/application', () => {
+      // `preference-router-factory.ts` appelle `schema.partial().parse(body)`
+      // sur PATCH (submittedFrom) — le témoin ci-dessus, sur `.parse()` nu,
+      // ne prouverait pas que la garde survit à `.partial()`, qui enveloppe
+      // CHAQUE champ dans un `.optional()` supplémentaire.
+      expect(() => {
+        ApplicationPreferenceSchema.partial().parse({ voiceCloningEnabledAt: '2026-07-08T10:00:00Z' });
+      }).toThrow();
+    });
+
+    test('l\'absence des cinq clés continue de parser normalement', () => {
+      const result = ApplicationPreferenceSchema.parse({ theme: 'dark' });
+      for (const key of LEGACY_KEYS) {
+        expect(result[key]).toBeUndefined();
+      }
+    });
   });
 
-  test('accepte null et l\'absence des timestamps de consentement', () => {
-    const withNulls = ApplicationPreferenceSchema.parse({
-      voiceProfileConsentAt: null
-    });
-    expect(withNulls.voiceProfileConsentAt).toBeNull();
-
-    const absent = ApplicationPreferenceSchema.parse({});
-    expect(absent.voiceProfileConsentAt).toBeUndefined();
+  test('conserve autoTranslateEnabled=false (le rang qui distingue la clé du défaut)', () => {
+    // La préférence de traduction automatique n'avait AUCUN store : pas de
+    // colonne User, et absente de ce schéma — Zod (mode strip) la supprimait
+    // du corps de PATCH /me/preferences/application, donc personne ne pouvait
+    // jamais la poser à `false`. Le témoin s'écrit sur `false` : sur `true`,
+    // la clé strippée et le défaut rendent le même verdict.
+    const result = ApplicationPreferenceSchema.parse({ autoTranslateEnabled: false });
+    expect(result.autoTranslateEnabled).toBe(false);
   });
 
-  test('rejette un timestamp de consentement non ISO-8601', () => {
+  test('autoTranslateEnabled vaut true par défaut, dans le schéma comme dans les défauts', () => {
+    expect(ApplicationPreferenceSchema.parse({}).autoTranslateEnabled).toBe(true);
+    expect(APPLICATION_PREFERENCE_DEFAULTS.autoTranslateEnabled).toBe(true);
+  });
+
+  test('rejette un autoTranslateEnabled non booléen', () => {
     expect(() => {
-      ApplicationPreferenceSchema.parse({ voiceProfileConsentAt: 'pas-une-date' });
+      ApplicationPreferenceSchema.parse({ autoTranslateEnabled: 'yes' });
     }).toThrow();
   });
 });

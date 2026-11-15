@@ -1,10 +1,11 @@
 import UIKit
 import MeeshySDK
+import MeeshyUI
 
 /// Centralizes image memory management for the Meeshy app.
 ///
 /// The image pipeline is built on `DiskCacheStore` (NSCache + disk FileManager),
-/// not Kingfisher — Kingfisher was audited out (2026-05-06, see `decisions.md`).
+/// not Kingfisher — Kingfisher was audited out (see `decisions.md`).
 /// This type provides:
 /// - `applyGlobal()` — called once at app launch to cap the in-memory image cache
 ///   at 60 MB and configure background decode via the shared `DiskCacheStore`
@@ -47,8 +48,6 @@ public enum ImageDownsamplingConfig {
     /// - Parameter pointSize: Rendered size of the image view in SwiftUI points.
     /// - Returns: Max pixel dimension suitable for the `maxPixelSize` argument.
     public static func maxPixelSize(for pointSize: CGSize) -> CGFloat {
-        let scale = UIScreen.main.scale
-        let largerDimension = max(pointSize.width, pointSize.height)
-        return largerDimension * scale
+        DecodeBudget.maxPixelWidth(for: .fitting(pointSize))
     }
 }

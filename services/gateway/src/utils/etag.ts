@@ -19,6 +19,24 @@ export function computeETagFromSerialized(body: string | Buffer): string {
   return `"${createHash('sha256').update(body).digest('hex')}"`;
 }
 
+export type StoredFileIdentity = {
+  readonly size: number;
+  readonly mtimeMs: number;
+  readonly ino: number;
+};
+
+/**
+ * STRONG ETag of a stored file (#11265): the quoted SHA-256 of size, mtime and
+ * inode. `If-Range` (RFC 9110 §13.1.5) only honours a strong validator — a
+ * weak one would let a client glue the tail of a new version onto the head of
+ * an old one. Size + mtime alone can survive an in-place replacement within
+ * the same millisecond; the inode changes with every write-then-rename.
+ */
+export function storedFileETag(file: StoredFileIdentity): string {
+  const identity = `${file.size}-${Math.floor(file.mtimeMs)}-${file.ino}`;
+  return `"${createHash('sha256').update(identity).digest('hex').slice(0, 32)}"`;
+}
+
 /**
  * RFC 7232 §3.2 — does an `If-None-Match` request header match `etag`?
  * Handles a single value, a comma-separated list, the `*` wildcard, and the

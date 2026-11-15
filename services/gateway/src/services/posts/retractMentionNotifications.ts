@@ -35,7 +35,10 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
-import type { RetractedNotificationAnnouncer } from '../notifications/retractedNotifications';
+import {
+  retractedNotificationOf,
+  type RetractedNotificationAnnouncer,
+} from '../notifications/retractedNotifications';
 
 export type RetractMentionPrisma = Pick<PrismaClient, 'notification'>;
 
@@ -60,7 +63,7 @@ export async function retractMentionNotifications(params: {
   const announcer = params.announcer ?? getSharedNotificationService();
 
   try {
-    const retracted = await params.prisma.notification.findMany({
+    const rows = await params.prisma.notification.findMany({
       where: {
         userId: { in: [...params.departedUserIds] },
         type: { in: [...MENTION_TYPES] },
@@ -69,17 +72,19 @@ export async function retractMentionNotifications(params: {
           { metadata: { path: ['postId'], equals: params.postId } },
         ],
       },
-      select: { id: true, userId: true },
+      // `delivery` : la révocation push ne réveille un appareil que là où un
+      // push est parti (cf. `retractedNotificationOf`).
+      select: { id: true, userId: true, delivery: true },
     });
-    if (retracted.length === 0) return;
+    if (rows.length === 0) return;
 
     await params.prisma.notification.deleteMany({
-      where: { id: { in: retracted.map((row) => row.id) } },
+      where: { id: { in: rows.map((row) => row.id) } },
     });
 
     // L'annonce APRÈS l'écriture durable, et jamais l'inverse : les compteurs
     // qu'elle recalcule doivent voir la base d'après le retrait.
-    await announcer?.announceNotificationsRetracted(retracted);
+    await announcer?.announceNotificationsRetracted(rows.map(retractedNotificationOf));
   } catch (error) {
     params.onError?.(error);
   }

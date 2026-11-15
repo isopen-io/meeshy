@@ -1,5 +1,6 @@
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import type { ContentTrackingLink } from '../TrackingLinkService';
+import { linkTrackingAuthorOf, type LinkSenderFacts } from './linkTrackingAuthor';
 
 /**
  * La seule méthode de `TrackingLinkService` que cette unité appelle, en
@@ -36,13 +37,13 @@ export interface ExplicitLinkParams {
 }
 
 /**
- * Les deux seules syntaxes qui FORCENT le tracking (`[[url]]`, `<url>`). Une
- * URL brute n'est jamais réécrite, et un lien markdown `[texte](url)` est
- * protégé puis restauré — donc un contenu qui n'en porte aucune ressort
- * identique à lui-même, au prix d'un aller-retour de protection markdown dont
- * il n'a aucun besoin.
+ * La seule syntaxe qui RÉÉCRIT le contenu (`<url>` → `m+<token>`). `[[url]]`
+ * est l'écriture d'un lien affiché tel quel, sans suivi (#9093) ; une URL
+ * brute et un lien markdown `[texte](url)` sont suivis par la carte
+ * `metadata.trackingLinks`, sans réécriture. Un contenu sans `<` ressort donc
+ * identique à lui-même.
  */
-const TRACKABLE_SYNTAX = /\[\[|</;
+const TRACKABLE_SYNTAX = /</;
 
 /**
  * Un contenu porte-t-il de quoi produire un lien traçable ?
@@ -59,9 +60,9 @@ export function hasTrackableLinkSyntax(content: string): boolean {
 }
 
 /**
- * Ce qu'un message doit aux liens qu'il contient : `[[url]]` et `<url>`
- * deviennent des `m+<token>` traçables — à l'envoi comme à l'édition, par
- * n'importe quel transport.
+ * Ce qu'un message doit aux liens qu'il contient : `<url>` devient un
+ * `m+<token>` traçable — à l'envoi comme à l'édition, par n'importe quel
+ * transport. `[[url]]` reste tel qu'écrit (#9093).
  *
  * Cette unité existe parce que l'obligation vivait en DEUX exemplaires
  * complets : `TrackingLinkService.processExplicitLinksInContent` (appelé par
@@ -109,13 +110,19 @@ export async function processExplicitLinks(params: ExplicitLinkParams): Promise<
 export interface LinkTargetMessage {
   readonly id: string;
   readonly conversationId: string;
+  /**
+   * L'EXPÉDITEUR du message édité, tel que la lecture l'a chargé (#10286) :
+   * ses adresses ne sont suivies que s'il est un compte inscrit. Requis — un
+   * transport qui ne le passe pas ne compile pas, et `null` ne suit rien.
+   */
+  readonly sender: LinkSenderFacts | null | undefined;
 }
 
 /**
  * La seconde question posée au même texte, et c'est pourquoi il en faut deux :
- * `processExplicitLinksInContent` RÉÉCRIT le contenu (`[[url]]`, `<url>` →
- * `m+<token>`), tandis que `collectContentTrackingLinks` le laisse INTACT et
- * rend le mapping `url → token` des URLs BRUTES, rangé dans
+ * `processExplicitLinksInContent` RÉÉCRIT le contenu (`<url>` → `m+<token>`),
+ * tandis que `collectContentTrackingLinks` le laisse INTACT et rend le mapping
+ * `url → token` des URLs BRUTES et des liens markdown, rangé dans
  * `metadata.trackingLinks`. Le client pointe alors le lien vers `/l/<token>`
  * tout en gardant l'URL affichable et son aperçu.
  */
@@ -189,6 +196,13 @@ export async function reconcileEditedLinks(params: EditedLinkParams): Promise<Re
   // conclure que le message ne porte plus de lien effacerait le mapping d'un
   // texte qui le porte toujours.
   if (!linkService) return { processedContent: content, trackingLinks: [], reconciled: false };
+
+  // Un message d'invité anonyme (ou d'expéditeur indéterminé) ne porte aucun
+  // lien suivi (#10286) : texte tel qu'écrit, et carte ÉTABLIE vide — ce qui
+  // efface aussi celle qu'un message écrit avant la loi gardait en base.
+  if (!linkTrackingAuthorOf(message.sender).tracked) {
+    return { processedContent: content, trackingLinks: [], reconciled: true };
+  }
 
   let rewriteFailed = false;
   const processedContent = await processExplicitLinks({

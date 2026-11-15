@@ -1,0 +1,188 @@
+{
+ "domain": "wallpaper",
+ "designs": [
+  {
+   "key": "lucioles",
+   "style": "gradient",
+   "palettes": {
+    "light": {
+     "base": "#F8F6EF",
+     "ink": "#F1DDB0",
+     "soft": "#EFE8D8"
+    },
+    "dark": {
+     "base": "#0D0F14",
+     "ink": "#2E2614",
+     "soft": "#151922"
+    }
+   },
+   "gradient": {
+    "angle": 180,
+    "stops": [
+     {
+      "role": "base",
+      "at": 0
+     },
+     {
+      "role": "soft",
+      "at": 1
+     }
+    ],
+    "blobs": [
+     {
+      "x": 0.2,
+      "y": 0.85,
+      "r": 0.7,
+      "role": "ink",
+      "opacity": 0.4
+     }
+    ]
+   },
+   "fit": "fill",
+   "lottie": {
+    "src": "fb8b374e8c0b841a.json",
+    "bytes": 25632,
+    "sha256": "fb8b374e8c0b841a6fe5e57fc11018ad890a38f8bc0924ff5e34f65a4fca2f23"
+   }
+  },
+  {
+   "key": "voile-aurore",
+   "style": "gradient",
+   "palettes": {
+    "light": {
+     "base": "#F3F7F8",
+     "ink": "#BDF3E9",
+     "soft": "#E4DEFB"
+    },
+    "dark": {
+     "base": "#071318",
+     "ink": "#0F3B3A",
+     "soft": "#221047"
+    }
+   },
+   "gradient": {
+    "angle": 180,
+    "stops": [
+     {
+      "role": "base",
+      "at": 0
+     },
+     {
+      "role": "soft",
+      "at": 1
+     }
+    ],
+    "blobs": [
+     {
+      "x": 0.3,
+      "y": 0.2,
+      "r": 0.7,
+      "role": "ink",
+      "opacity": 0.35
+     }
+    ]
+   },
+   "fit": "fill",
+   "lottie": {
+    "src": "2303e844e384560e.json",
+    "bytes": 2914,
+    "sha256": "2303e844e384560e5453a3e7abc55d08be435efc263c9e8543a28eb56f703d24"
+   }
+  },
+  {
+   "key": "neige-douce",
+   "style": "gradient",
+   "palettes": {
+    "light": {
+     "base": "#F4F7FB",
+     "ink": "#DCE3EC",
+     "soft": "#E9EEF4"
+    },
+    "dark": {
+     "base": "#0B1220",
+     "ink": "#18233A",
+     "soft": "#0F172A"
+    }
+   },
+   "gradient": {
+    "angle": 180,
+    "stops": [
+     {
+      "role": "base",
+      "at": 0
+     },
+     {
+      "role": "soft",
+      "at": 1
+     }
+    ],
+    "blobs": [
+     {
+      "x": 0.5,
+      "y": 0,
+      "r": 0.9,
+      "role": "ink",
+      "opacity": 0.4
+     }
+    ]
+   },
+   "fit": "fill",
+   "lottie": {
+    "src": "4b9367a69e99f1d8.json",
+    "bytes": 11493,
+    "sha256": "4b9367a69e99f1d851486d0a0046b7a654cb61ca1d7b3030131dccb4ae8b3466"
+   }
+  },
+  {
+   "key": "ondes",
+   "style": "gradient",
+   "palettes": {
+    "light": {
+     "base": "#F5F6FF",
+     "ink": "#DDE3FD",
+     "soft": "#EBEEFF"
+    },
+    "dark": {
+     "base": "#0B0D1F",
+     "ink": "#1C1B4A",
+     "soft": "#15133A"
+    }
+   },
+   "gradient": {
+    "angle": 180,
+    "stops": [
+     {
+      "role": "base",
+      "at": 0
+     },
+     {
+      "role": "soft",
+      "at": 1
+     }
+    ],
+    "blobs": [
+     {
+      "x": 0.2,
+      "y": 0.25,
+      "r": 0.6,
+      "role": "ink",
+      "opacity": 0.4
+     },
+     {
+      "x": 0.85,
+      "y": 0.75,
+      "r": 0.6,
+      "role": "ink",
+      "opacity": 0.35
+     }
+    ]
+   },
+   "fit": "fill",
+   "lottie": {
+    "src": "ba80a0826eb7398b.json",
+    "bytes": 4784,
+    "sha256": "ba80a0826eb7398b5afe48be3aa6605a0b57aeff72505486773da455743f165e"
+   }
+  }
+ ]
+}

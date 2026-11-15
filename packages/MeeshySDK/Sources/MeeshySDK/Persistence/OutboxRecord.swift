@@ -58,6 +58,10 @@ public enum OutboxKind: String, Codable, CaseIterable, Sendable {
     /// même story ne stacke pas de doublons).
     case markStoryViewed
     case toggleLikePost
+    /// #15997 — « Enregistrer » / « Retirer des favoris », durable hors ligne.
+    /// Porte l'état VOULU (`ToggleBookmarkPostPayload.bookmarked`) et se
+    /// coalesce par post : seule la dernière intention part au rejeu.
+    case toggleBookmarkPost
     case createComment
     case deleteComment
     case toggleLikeComment
@@ -65,6 +69,16 @@ public enum OutboxKind: String, Codable, CaseIterable, Sendable {
     /// enregistrement). Volontairement NON coalescé : chaque rapport porte
     /// une trace différente, voir `ReportAttachmentStatusPayload`.
     case reportAttachmentStatus
+    /// #8303 — la consommation des messages flamme-œil lus, envoyée à la
+    /// SORTIE de la conversation (`POST …/messages/after-read/consume`).
+    /// Idempotente côté passerelle : un rejeu ne consomme rien de plus.
+    case consumeAfterRead
+    /// #9617 — la déclaration d'une capture d'un contenu qui disparaît,
+    /// DURABLE : une capture faite hors ligne, socket coupée ou application
+    /// tuée s'annonce quand même tant que la passerelle l'accepte (24 h après
+    /// la lecture). Idempotente côté passerelle : une annonce au plus par
+    /// (acteur, message, sorte de capture).
+    case reportContentCapture
 }
 
 extension OutboxKind {
@@ -84,15 +98,85 @@ extension OutboxKind {
     /// pastille ne mène nulle part). Le compter rendait la pastille PERMANENTE
     /// dès qu'un « vu » épuisait son budget de tentatives : `.exhausted` est
     /// explicitement surfacé (T14b), l'auto-masquage après 3 cycles a été
-    /// retiré (2026-05-27) et la rétention GC est de 7 jours au boot — d'où le
+    /// retiré et la rétention GC est de 7 jours au boot — d'où le
     /// « Vues story non synchronisées 7/7 » figé en tête d'écran, sans aucun
     /// geste pour l'écarter.
     public var countsTowardSyncIndicator: Bool {
         switch self {
-        case .markAsRead, .reportAttachmentStatus, .markStoryViewed:
+        case .markAsRead, .reportAttachmentStatus, .markStoryViewed, .consumeAfterRead, .reportContentCapture:
             return false
         default:
             return true
+        }
+    }
+
+    /// **Une publication non envoyée attend son AUTEUR, jamais une horloge**
+    /// (#13415, demande du porteur). Elle quitte l'appareil à la
+    /// confirmation du serveur ou par le geste explicite de l'auteur
+    /// (« Supprimer » dans « Publications non envoyées ») — aucune purge par
+    /// ancienneté ne la touche.
+    public var isKeptUntilTheAuthorDecides: Bool {
+        self == .createPost
+    }
+
+    public static var keptUntilTheAuthorDecides: [String] {
+        allCases.filter(\.isKeptUntilTheAuthorDecides).map(\.rawValue)
+    }
+
+    /// **Une ligne TERMINALE de ce genre peut-elle être jetée sans rien perdre ?**
+    /// (#5965)
+    ///
+    /// Quand le budget de rejeu est épuisé, la ligne ne partira plus jamais :
+    /// la garder ne sert qu'à ce qu'une surface puisse encore en faire quelque
+    /// chose. Deux surfaces le font, et elles décident de cette liste :
+    ///
+    /// - **la bulle en échec** relit la ligne `.sendMessage` pour rejouer un
+    ///   envoi qui PORTE DES MÉDIAS — elle seule tient les identifiants
+    ///   d'attachments réellement téléversés
+    ///   (`ConversationViewModel.retryMessage`) ;
+    /// - **la reprise de brouillon** relit les lignes `.createPost`
+    ///   `.exhausted` pour reproposer un post, un réel ou un mood non parti
+    ///   (`OfflineQueue.recoverLastUnsentPost`).
+    ///
+    /// L'énumération va donc dans le sens JETABLE, jamais dans le sens gardé :
+    /// un genre qui naît demain est GARDÉ par défaut. Une ligne gardée pour
+    /// rien coûte une ligne de base ; une ligne jetée à tort coûte à
+    /// l'utilisateur ce qu'il avait écrit — les deux erreurs n'ont pas le même
+    /// prix de réparation.
+    ///
+    /// Ne dit RIEN de ce que la pastille affiche : celle-ci borne toute entrée
+    /// terminale à une minute, jetable ou non
+    /// (`SyncPillViewModel.terminalDisplayWindow`).
+    public var isDiscardableWhenTerminal: Bool {
+        switch self {
+        case .sendReaction,
+             .markAsRead,
+             .markStoryViewed,
+             .reportAttachmentStatus,
+             .consumeAfterRead,
+             .reportContentCapture,
+             .sendFriendRequest,
+             .respondFriendRequest,
+             .blockUser,
+             .unblockUser,
+             .toggleLikePost,
+             .toggleBookmarkPost,
+             .toggleLikeComment,
+             .deleteMessage,
+             .deleteComment:
+            return true
+        case .sendMessage,
+             .editMessage,
+             .createConversation,
+             .updateConversation,
+             .updateProfile,
+             .updateSettings,
+             .publishStory,
+             .repostStory,
+             .createPost,
+             .repostPost,
+             .createComment:
+            return false
         }
     }
 }
@@ -140,6 +224,14 @@ public struct OutboxRecord: Codable, FetchableRecord, PersistableRecord, Sendabl
     /// (l'epsilon du round 1) et la règle « ne pas antidater un partage
     /// repris ».
     public var waitingForFanoutOriginSince: Date?
+    /// #10321 — l'auteur a retiré cette publication PENDANT son envoi.
+    /// `nil` tant que personne n'a rien demandé. Une ligne `.inflight` ne se
+    /// supprime pas sous les pieds du dispatcher (il lit ses fichiers) : on la
+    /// MARQUE, le dispatcher relit la marque avant chaque téléversement et avant
+    /// le `POST`, et le flusher la retire sans émettre `.applied`. La marque
+    /// survit à un redémarrage : une ligne reprise par le reclaim des périmés
+    /// s'arrête au premier point de contrôle.
+    public var cancelRequestedAt: Date?
 
     public init(
         id: String = UUID().uuidString,
@@ -154,7 +246,8 @@ public struct OutboxRecord: Codable, FetchableRecord, PersistableRecord, Sendabl
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
         nextAttemptAt: Date = Date(),
-        waitingForFanoutOriginSince: Date? = nil
+        waitingForFanoutOriginSince: Date? = nil,
+        cancelRequestedAt: Date? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -169,5 +262,6 @@ public struct OutboxRecord: Codable, FetchableRecord, PersistableRecord, Sendabl
         self.updatedAt = updatedAt
         self.nextAttemptAt = nextAttemptAt
         self.waitingForFanoutOriginSince = waitingForFanoutOriginSince
+        self.cancelRequestedAt = cancelRequestedAt
     }
 }

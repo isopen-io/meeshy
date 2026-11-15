@@ -175,6 +175,51 @@ export class SecuritySanitizer {
   }
 
   /**
+   * Sanitize une référence média qui peut être une URL ABSOLUE **ou** un chemin
+   * d'API RELATIF (`/uploads/avatar.png`).
+   *
+   * `sanitizeURL` rend `null` pour DEUX raisons opposées : l'entrée est
+   * DANGEREUSE (protocole hors liste blanche, `javascript:`, `data:`), ou elle
+   * n'est pas une URL absolue du tout — un chemin relatif, parfaitement
+   * légitime. Replier sur l'entrée pour sauver le second cas restitue AUSSI le
+   * premier : c'est exactement ce que faisait `NotificationService` (#7157),
+   * où la sanitisation ne laissait passer que ce qu'elle devait bloquer.
+   *
+   * Les deux cas sont distingués ici, et à un seul endroit.
+   *
+   * @param input - URL absolue ou chemin relatif
+   * @returns la valeur sûre, ou `null` si elle doit être abandonnée
+   */
+  static sanitizeURLOrPath(input: string | null | undefined): string | null {
+    if (!input) return null;
+
+    const absolue = SecuritySanitizer.sanitizeURL(input);
+    if (absolue !== null) return absolue;
+
+    // Un chemin est « relatif » s'il RESTE sur son origine une fois résolu —
+    // pas s'il commence par `/`. Tester le préfixe laisse passer ce que
+    // l'analyseur d'URL normalise ensuite vers un AUTRE hôte :
+    //   `//evil.com/x`   → https://evil.com/x   (protocol-relative)
+    //   `/\\evil.com/x`   → https://evil.com/x   (l'antislash vaut une barre)
+    //   `/\t/evil.com`    → https://evil.com/    (les blancs sont supprimés)
+    // Les deux derniers commencent bien par un seul `/`. C'est donc
+    // l'analyseur qui doit trancher, jamais une comparaison de préfixe.
+    try {
+      const resolue = new URL(input, SecuritySanitizer.ORIGINE_SENTINELLE);
+      return resolue.origin === SecuritySanitizer.ORIGINE_SENTINELLE ? input : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Origine jetable contre laquelle un chemin d'API est résolu pour vérifier
+   * qu'il ne s'échappe pas. `.invalid` est réservé par la RFC 2606 : ce nom ne
+   * peut désigner aucun hôte réel.
+   */
+  private static readonly ORIGINE_SENTINELLE = 'https://chemin-relatif.invalid';
+
+  /**
    * Sanitize username/identifier - only alphanumeric, underscore, hyphen
    * Use for: usernames, conversation identifiers
    *

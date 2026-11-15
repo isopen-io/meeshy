@@ -11,56 +11,86 @@
 // Load environment configuration first
 import './env';
 
-import fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
 import sensible from '@fastify/sensible'; // Ajout pour httpErrors
 import multipart from '@fastify/multipart';
+import { MAX_DIRECT_UPLOAD_FILES } from '@meeshy/shared/types/attachment';
+import { largestUploadCeiling, uploadLimitPolicyFromEnv } from './services/attachments/upload-admission';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
+import { configureAtRestFileAccess } from './services/attachments/atRest/atRestFiles';
+import { atRestFileAccessFor } from './services/attachments/atRest/atRestFileAccessFor';
+import { startTranslatorForget } from './services/translatorForgetBootstrap';
+import { startAtRestFileSweep } from './jobs/at-rest-file-sweep';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 // Extrait dans `./gateway-logger` pour que `route-registration.ts` puisse
 // logger sans importer `server.ts` (effets de bord au chargement du module —
 // voir le commentaire en tête de `route-registration.ts`).
 import { logger } from './gateway-logger';
+import { getJwtSecret } from './utils/secrets';
+import { readerKeySecret } from './services/posts/readerKey';
 import { schemaValidationErrorResponse } from './utils/schema-validation-error';
+import { contentTypeParserErrorResponse } from './utils/content-type-parser-error';
+import { rateLimitRefusalResponse } from './utils/rate-limit-refusal';
 import * as fs from 'fs';
 import * as path from 'path';
 import { MessageTranslationService } from './services/message-translation/MessageTranslationService';
+import { setSharedTranslationCache } from './services/message-translation/translationCacheRegistry';
 import { MessagingService } from './services/MessagingService';
 import { MentionService } from './services/MentionService';
 import { StatusService } from './services/StatusService';
-import { AuthMiddleware, createUnifiedAuthMiddleware } from './middleware/auth';
+import { createUnifiedAuthMiddleware } from './middleware/auth';
 import { registerGlobalRateLimiter } from './middleware/rate-limiter';
 import { registerClientMutationIdHook } from './middleware/clientMutationId';
+import { registerRouteUsageHook } from './plugins/route-usage.plugin';
+import { registerRequestTimingHooks } from './plugins/request-timing.plugin';
+import { redactReaderFileUrl } from './utils/redact-reader-file-url';
 import { createDeviceLocaleMiddleware } from './middleware/deviceLocale';
 import { createDeviceCountryMiddleware } from './middleware/deviceCountry';
 import { requestIdPlugin } from './middleware/request-id';
-import { CORS_METHODS } from './config/cors-methods';
+import { CORS_METHODS, CORS_EXPOSED_HEADERS } from './config/cors-methods';
+import { fastifyCorsOrigin, isCorsRejection, CORS_REJECTION_MESSAGE } from './config/cors-origins';
 import { conditionalGetOnSend } from './utils/etag';
+import { resolveTrustProxy } from './config/trust-proxy';
+import { clientLogContext } from './utils/client-log-context';
 import { MutationLogService } from './services/MutationLogService';
 // L'enregistrement des routes REST (~50 fichiers) vit dans `./route-registration`,
 // un module SANS effet de bord au chargement (voir le commentaire en tête de
 // ce fichier) — nécessaire pour que le test de garde des routes puisse
 // l'importer sans déclencher `meeshyServer.start()`.
 import { registerAllRoutes } from './route-registration';
+import { canonicaliserCheminsOpenApi } from './utils/openapi-canonical-paths';
 import { InitService } from './services/InitService';
+import { bootstrapDatabase } from './services/database-bootstrap';
 import { MeeshySocketIOHandler } from './socketio/MeeshySocketIOHandler';
 import { CallCleanupService } from './services/CallCleanupService';
 import { shutdownEncryptionService } from './services/EncryptionService';
 import { MultiLevelJobMappingCache } from './services/MultiLevelJobMappingCache';
 import { getCacheStore } from './services/CacheStore';
 import { BackgroundJobsManager } from './jobs';
+import { backfillSearchTokens } from './jobs/backfill-search-tokens';
+import { demarrerSondeDeTypage, type SondeDeTypage } from './services/schema-drift.service';
 import { EmailService } from './services/EmailService';
 import { RedisDeliveryQueue } from './services/RedisDeliveryQueue';
+import { setSharedDeliveryQueue } from './services/delivery-queue-registry';
+import { gatewayDeliveryQueueSealer } from './services/deliveryQueueSealing';
 import { TusCleanupService } from './services/TusCleanupService';
 import { ExpiredMessagesCleanupService } from './services/ExpiredMessagesCleanupService';
+import { EphemeralRecipientExpiryService } from './services/EphemeralRecipientExpiryService';
+import { setEphemeralCountdownIOResolver } from './socketio/ephemeralCountdownAnnouncer';
+import { emitConversationActivityUpdate } from './socketio/emitConversationActivityUpdate';
 import { ExpiredStoriesCleanupService } from './services/ExpiredStoriesCleanupService';
+import { ExpiredShareLinksCleanupService } from './services/ExpiredShareLinksCleanupService';
 import { OrphanMediaCleanupService } from './services/storage/OrphanMediaCleanupService';
 import { MediaService } from './services/MediaService';
 import { ZmqAgentClient } from './services/zmq-agent/ZmqAgentClient';
-import { AuthenticationError, ValidationError, TranslationError } from './errors/custom-errors';
+import { agentInternalTokenConfigured } from './services/AgentHttpClient';
+import { warnPushConfiguration } from './services/push-transport-config';
+import { typedErrorResponse } from './errors/custom-errors';
+import { prismaRecipientAddressLookup, registerEmailRecipientLookup } from './services/email/recipient-policy';
 
 // ============================================================================
 // CONFIGURATION & ENVIRONMENT
@@ -77,11 +107,13 @@ interface Config {
 function loadConfiguration(): Config {
   const nodeEnv = process.env.NODE_ENV || 'development';
   const isDev = nodeEnv === 'development';
-  const dbUrl = process.env.DATABASE_URL || '';
+  // #10483 — la clé de lecteur anonyme : sans secret en production, refuser de
+  // démarrer plutôt que de recompter tous les lecteurs à chaque redémarrage.
+  readerKeySecret();
   return {
     nodeEnv,
     isDev,
-    jwtSecret: process.env.JWT_SECRET || 'meeshy-secret-key-dev',
+    jwtSecret: getJwtSecret(),
     port: parseInt(process.env.PORT || process.env.GATEWAY_PORT || '3000'),
     databaseUrl: process.env.DATABASE_URL || ''
   };
@@ -96,50 +128,6 @@ const config = loadConfiguration();
 // ============================================================================
 // TYPE DEFINITIONS
 // ============================================================================
-
-interface WebSocketMessage {
-  type: 'translate' | 'translate_multi' | 'typing' | 'stop_typing' | 'new_message' | 'join_conversation' | 'leave_conversation' | 'user_typing';
-  messageId?: string;
-  text?: string;
-  sourceLanguage?: string;
-  targetLanguage?: string;
-  targetLanguages?: string[];
-  conversationId?: string;
-  userId?: string;
-  data?: any; // Pour les données spécifiques au type de message
-}
-
-interface WebSocketResponse {
-  type: 'translation' | 'translation_multi' | 'error' | 'typing' | 'stop_typing' | 'message_sent' | 'conversation_joined' | 'conversation_left';
-  messageId?: string;
-  originalText?: string;
-  translatedText?: string;
-  translations?: Array<{
-    language: string;
-    text: string;
-    confidence: number;
-  }>;
-  sourceLanguage?: string;
-  targetLanguage?: string;
-  confidence?: number;
-  fromCache?: boolean;
-  modelUsed?: string;
-  conversationId?: string;
-  userId?: string;
-  error?: string;
-  data?: any; // Pour les données spécifiques au type de réponse
-  timestamp: string;
-}
-
-interface WebSocketConnection {
-  send: (data: string) => void;
-}
-
-interface TranslationRequest {
-  text: string;
-  source_language: string;
-  target_language: string;
-}
 
 // Fastify type extensions
 declare module 'fastify' {
@@ -163,7 +151,6 @@ class MeeshyServer {
   private messagingService: MessagingService;
   private mentionService: MentionService;
   private statusService: StatusService;
-  private authMiddleware: AuthMiddleware;
   private socketIOHandler: MeeshySocketIOHandler;
   private callCleanupService: CallCleanupService;
   private backgroundJobs: BackgroundJobsManager;
@@ -171,9 +158,14 @@ class MeeshyServer {
   private tusCleanup: TusCleanupService;
   private expiredStoriesCleanup: ExpiredStoriesCleanupService;
   private expiredMessagesCleanup: ExpiredMessagesCleanupService;
+  private ephemeralRecipientExpiry: EphemeralRecipientExpiryService;
+  private expiredShareLinksCleanup: ExpiredShareLinksCleanupService;
   private orphanMediaCleanup: OrphanMediaCleanupService;
   private deliveryQueue: RedisDeliveryQueue;
   private agentClient: ZmqAgentClient | null = null;
+
+  /** Sonde de dérive de typage (#4243) — démarrée avec les crons, arrêtée avec eux. */
+  private sondeDeTypage: SondeDeTypage | null = null;
 
   constructor() {
     // Check if HTTPS mode is enabled
@@ -197,6 +189,11 @@ class MeeshyServer {
         logger: false, // We use Winston instead
         disableRequestLogging: !config.isDev,
         bodyLimit: 50 * 1024 * 1024, // 50MB pour les fichiers audio volumineux
+        // Sans cette option, `request.ip` est l'adresse du conteneur Traefik —
+        // la MÊME pour tous les appelants — et toute limitation « par IP » se
+        // réduit à un seau unique pour la plateforme (#4137). Cf.
+        // `config/trust-proxy.ts` pour la raison du nombre plutôt que `true`.
+        trustProxy: resolveTrustProxy(),
         https: {
           key: fs.readFileSync(keyPath),
           cert: fs.readFileSync(certFilePath),
@@ -216,6 +213,9 @@ class MeeshyServer {
         logger: false, // We use Winston instead
         disableRequestLogging: !config.isDev,
         bodyLimit: 50 * 1024 * 1024, // 50MB pour les fichiers audio volumineux
+        // Mode NOMINAL en production : le gateway est derrière Traefik. Voir
+        // le commentaire de la branche HTTPS ci-dessus et #4137.
+        trustProxy: resolveTrustProxy(),
         ajv: {
           customOptions: {
             strict: 'log' as const, // Allow unknown keywords like 'example' (for OpenAPI documentation)
@@ -242,17 +242,16 @@ class MeeshyServer {
       },
     }) as unknown as PrismaClient;
 
-    // NOUVEAU: Initialiser le StatusService en premier (requis par AuthMiddleware)
-    this.statusService = new StatusService(this.prisma);
-
-    // Initialiser le middleware d'authentification unifié avec StatusService
-    this.authMiddleware = new AuthMiddleware(this.prisma, this.statusService);
+    registerEmailRecipientLookup(prismaRecipientAddressLookup(this.prisma)); // #8238 — garde centrale des e-mails
+    configureAtRestFileAccess(atRestFileAccessFor(this.prisma)); // #13100 — les fichiers scellés au repos s'ouvrent par ce processus
+    this.statusService = new StatusService(this.prisma); // requis par AuthMiddleware
 
     // Initialiser le cache multi-niveau partagé pour les mappings de jobs (avant MessageTranslationService)
     this.jobMappingCache = new MultiLevelJobMappingCache(getCacheStore());
 
     // Initialiser le service de traduction avec le cache partagé
     this.translationService = new MessageTranslationService(this.prisma, this.jobMappingCache);
+    setSharedTranslationCache(this.translationService); // #16557 — un retrait purge la copie en mémoire de ses traductions
 
     // Initialiser le service de messaging
     this.messagingService = new MessagingService(this.prisma, this.translationService);
@@ -263,7 +262,6 @@ class MeeshyServer {
     // Initialiser le handler Socket.IO avec l'instance de translationService qui reçoit les événements ZMQ
     this.socketIOHandler = new MeeshySocketIOHandler(
       this.prisma,
-      config.jwtSecret,
       this.translationService // ← Instance initialisée qui reçoit les événements ZMQ
     );
 
@@ -271,11 +269,44 @@ class MeeshyServer {
     this.callCleanupService = new CallCleanupService(this.prisma);
 
     // Initialiser la delivery queue Redis
-    this.deliveryQueue = new RedisDeliveryQueue(getCacheStore());
+    this.deliveryQueue = new RedisDeliveryQueue(getCacheStore(), gatewayDeliveryQueueSealer(this.prisma));
+    // #16706 — l'instance VIVANTE est celle-ci : c'est elle que
+    // `manager.setDeliveryQueue` fait descendre jusqu'aux quatre handlers qui
+    // enfilent, donc la seule dont la tranche MÉMOIRE porte des entrées de
+    // message. Les sites qui détruisent un contenu la retrouvent par le registre
+    // (`applyMessageRemovalEffects`, la purge de vue unique) : aucun d'eux ne
+    // reçoit la file en paramètre, et une purge qu'un appelant peut omettre
+    // n'est pas une purge.
+    //
+    // #18616 — cette phrase a été FAUSSE pendant tout ce temps :
+    // `MeeshySocketIOHandler.startMediaPipelines` construisait une seconde
+    // instance pour les quatre déclencheurs de `message:attachment-updated`.
+    // Elle est désormais tenue par un cliquet, parce qu'un doc-comment posé à
+    // l'endroit exact où l'on irait vérifier est une AFFIRMATION et ne rougit
+    // jamais : `socketio/__tests__/delivery-queue-door-sweep.ts`
+    // (`sweepDeliveryQueueConstructions`) gèle `server.ts` comme SEUL site de
+    // construction de production.
+    setSharedDeliveryQueue(this.deliveryQueue);
 
     // Initialiser les background jobs (cleanup, digest, etc.)
     const emailService = new EmailService();
     this.backgroundJobs = new BackgroundJobsManager(this.prisma, emailService, this.deliveryQueue);
+
+    // Rattrapage des jetons de recherche (#4159), en arrière-plan : une route
+    // de recherche adossée à un index vide ne trouve personne, et le
+    // rattrapage doit donc précéder l'usage. Il n'est PAS derrière une garde de
+    // premier boot — le dépôt a déjà payé ce piège avec `ensurePostGeoIndex`,
+    // restée sous `shouldInitialize()` et jamais exécutée en production.
+    void backfillSearchTokens(this.prisma).catch((error: unknown) =>
+      // Message EXPLICITE, avec sa conséquence : un `error` opaque a laissé ce
+      // rattrapage échouer en silence au premier déploiement — la colonne est
+      // restée vide sur les 222 comptes, et la recherche ne trouvait personne.
+      // Un journal qui ne dit pas ce qui est cassé ne signale rien.
+      logger.error(
+        '[BackfillSearchTokens] rattrapage INTERROMPU — la recherche de personnes ne trouvera personne tant que la colonne `searchTokens` est vide',
+        { error: error instanceof Error ? { name: error.name, message: error.message } : error }
+      )
+    );
 
     // Initialiser le service de nettoyage des uploads tus incomplets
     this.tusCleanup = new TusCleanupService();
@@ -291,6 +322,30 @@ class MeeshyServer {
     // a cet instant (il est cree par `socketIOHandler.initialize()`), et une
     // capture ici retiendrait `null` pour toujours.
     this.expiredMessagesCleanup = new ExpiredMessagesCleanupService(this.prisma, {
+      resolveManager: () => this.socketIOHandler.getManager(),
+    });
+
+    // #7451 — l'echeance PAR DESTINATAIRE d'un ephemere : `message:expired`
+    // vers `user:<u>` SEUL et retrait de SES bannieres a `D(u)`, une heure
+    // avant que le balayage ci-dessus ne detruise le contenu pour tout le
+    // monde. Deux balayages parce que deux invariants : l'un met hors de vue
+    // par lecteur, l'autre detruit une fois pour toutes.
+    this.ephemeralRecipientExpiry = new EphemeralRecipientExpiryService(this.prisma, {
+      resolveIO: () => this.socketIOHandler.getManager()?.getIO(),
+    });
+
+    // Le decompte demarre au fond du gel des accuses de reception, ou trois des
+    // cinq chemins n'ont aucun `io` a leur disposition. Meme patron, meme raison
+    // et meme paresse que ci-dessus : le manager n'existe pas encore.
+    setEphemeralCountdownIOResolver(() => this.socketIOHandler.getManager()?.getIO());
+
+    // Cron de révocation des liens de partage échus (#4195, suite de #4194).
+    // `expiresAt` n'est le geste de personne : sans ce balayage, un invité
+    // entré avant l'échéance gardait sa socket dans la room de conversation
+    // indéfiniment après elle. `resolveIO`/`resolveManager` sont PARESSEUX
+    // pour la même raison que ci-dessus.
+    this.expiredShareLinksCleanup = new ExpiredShareLinksCleanupService(this.prisma, {
+      resolveIO: () => this.socketIOHandler.getManager()?.getIO(),
       resolveManager: () => this.socketIOHandler.getManager(),
     });
     // SOTA audit Pilier 4 — outbox-based ghost media file cleanup. Reaps
@@ -340,8 +395,9 @@ class MeeshyServer {
     // Register multipart plugin for file uploads
     await this.server.register(multipart, {
       limits: {
-        fileSize: 4294967296, // 4GB max file size
-        files: 30, // Max 30 files per request
+        // #11266 — le plus grand plafond par type ; celui du rôle se juge dans la route.
+        fileSize: largestUploadCeiling(uploadLimitPolicyFromEnv()),
+        files: MAX_DIRECT_UPLOAD_FILES,
       },
     });
 
@@ -366,44 +422,192 @@ class MeeshyServer {
       }
     });
 
-    // CORS configuration
+    // Global error handler
+    this.server.setErrorHandler(async (error, request, reply) => {
+      // Un refus CORS n'est pas une panne serveur (#6591). `onRejected` l'a
+      // déjà journalisé en WARN au moment de la décision (`config/cors-origins.ts`) ;
+      // le relever ICI en ERROR, sous un 500, était tout le bruit mesuré en
+      // production — 64 lignes en 25 minutes, toutes depuis des outils locaux
+      // visant l'hôte de production, zéro utilisateur réel touché. Cette
+      // branche doit précéder le `logger.error` ci-dessous : c'est lui qui
+      // produisait la ligne ERROR.
+      if (isCorsRejection(error)) {
+        return reply.code(403).send({
+          success: false,
+          error: 'CORS Rejected',
+          message: CORS_REJECTION_MESSAGE,
+          code: 'CORS_REJECTED'
+        });
+      }
+
+      // Refus de SCHÉMA (Ajv, avant le handler) : Fastify le marque par
+      // `err.validation`. Sans cette branche il tombait dans le repli
+      // générique et ressortait en « Internal Server Error / An unexpected
+      // error occurred » sous un code 400 — le client apprenait qu'il avait
+      // tort, jamais sur quoi. C'est ce qui rendait illisible le refus de
+      // `POST /auth/register` le 2026-08-18.
+      //
+      // Elle passe AVANT la branche typée : un refus d'Ajv n'est pas une
+      // `BaseAppError`, mais il porte `statusCode: 400` et serait donc happé
+      // par tout repli qui lit ce champ.
+      //
+      // Et elle passe AVANT `logger.error` (#8082) : un refus de schéma est
+      // une saisie du client, pas une panne. Journalisé en ERROR « Uncaught
+      // error in request handler », un pseudo de 17 caractères accusait le
+      // serveur — le bruit que #6591 a retiré pour les refus CORS.
+      const schemaRefusal = schemaValidationErrorResponse(error);
+      if (schemaRefusal) {
+        logger.warn('Schema validation refused request', {
+          module: 'ErrorHandler',
+          func: 'setErrorHandler',
+          path: redactReaderFileUrl(request.url),
+          method: request.method,
+          fields: schemaRefusal.details.map(({ field }) => field)
+        });
+        const { statusCode: refusStatus, ...corpsRefus } = schemaRefusal;
+        return reply.code(refusStatus).send(corpsRefus);
+      }
+
+      // Refus du PARSEUR DE CORPS (#8052) : type de contenu non pris en charge
+      // (415), corps JSON vide ou illisible (400), corps trop gros (413). Une
+      // saisie du client, pas une panne — même raison et même place que le
+      // refus de schéma ci-dessus : avant `logger.error`, sans quoi chaque
+      // requête mal formée accusait le serveur et masquait les vrais 500.
+      const parserRefusal = contentTypeParserErrorResponse(error);
+      if (parserRefusal) {
+        logger.warn('Body parser refused request', {
+          module: 'ErrorHandler',
+          func: 'setErrorHandler',
+          path: redactReaderFileUrl(request.url),
+          method: request.method,
+          code: parserRefusal.code
+        });
+        return reply.code(parserRefusal.statusCode).send({
+          success: false,
+          error: parserRefusal.error,
+          message: parserRefusal.message,
+          code: parserRefusal.code
+        });
+      }
+
+      // Refus de DÉBIT (#11462) : un objet nu `statusCode: 429` lancé par
+      // @fastify/rate-limit. Même raison et même place que les deux refus
+      // ci-dessus — une défense normale du produit, pas une panne.
+      const rateRefusal = rateLimitRefusalResponse(error);
+      if (rateRefusal) {
+        logger.warn('Rate limit refused request', {
+          module: 'ErrorHandler',
+          func: 'setErrorHandler',
+          path: redactReaderFileUrl(request.url),
+          method: request.method,
+          code: rateRefusal.code
+        });
+        return reply.code(rateRefusal.statusCode).send({
+          success: false,
+          error: rateRefusal.error,
+          message: rateRefusal.message,
+          code: rateRefusal.code
+        });
+      }
+
+      logger.error('Uncaught error in request handler', {
+        module: 'ErrorHandler',
+        func: 'setErrorHandler',
+        error: error instanceof Error ? {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        } : error,
+        path: redactReaderFileUrl(request.url),
+        method: request.method
+      });
+      // TypeScript may treat catch variables as 'unknown' (useUnknownInCatchVariables).
+      // Cast to `any` once to safely access error properties below.
+      const err: any = error as any;
+
+      // Ce gestionnaire ne pose plus AUCUN champ que `errorResponseSchema` ne
+      // DÉCLARE (#4689). Il y posait `timestamp` et `statusCode` sur les deux
+      // branches typées, `details` sur deux des trois 413, `stack` sur le
+      // repli. `fast-json-stringify` ne supprime que là où un schéma EXISTE :
+      // une route qui déclarait consciencieusement son 4xx servait donc MOINS
+      // qu'une route qui ne déclarait rien — le geste vertueux était celui qui
+      // faisait perdre des champs, sur 595 déclarations de statut. Mesuré
+      // avant de retirer : aucun des trois clients ne lit `statusCode` ni
+      // `timestamp` dans un corps d'erreur, et le statut HTTP porte déjà
+      // l'information de `statusCode` pour tout le monde, y compris pour qui
+      // ne décode pas le corps. Le lien « ce qui PART ⊆ ce qui est DÉCLARÉ »
+      // est gardé : `__tests__/security/global-error-handler-field-closure-guard.test.ts`.
+
+
+      // TOUTE la hiérarchie typée, en UNE branche (#4212).
+      //
+      // Trois sous-classes sur dix-neuf avaient la leur ; les seize autres
+      // tombaient dans le repli générique. Celui-ci lit bien `err.statusCode`
+      // — le CODE était donc juste — mais il REMPLACE le message par « An
+      // unexpected error occurred » et jette tout champ propre à la classe.
+      //
+      // Un compte verrouillé recevait ainsi `423` avec « Internal Server
+      // Error » et SANS `lockedUntil` : la personne apprenait qu'on la
+      // refusait, jamais quand elle pourrait revenir (#4138).
+      //
+      // > Un handler qui rend le bon CODE et le mauvais CORPS est plus
+      // > trompeur qu'un handler qui échoue franchement : le code juste fait
+      // > croire que la couche a compris l'erreur.
+      //
+      // La DÉCISION vit dans `typedErrorResponse`, une fonction pure : ce
+      // handler-ci ne peut s'exercer qu'en montant un serveur, et le critère
+      // demande un témoin par sous-classe.
+      const typed = typedErrorResponse(error);
+      if (typed) {
+        const { statusCode: typeStatus, ...corpsType } = typed;
+        return reply.code(typeStatus).send(corpsType);
+      }
+
+      // Gestion des erreurs de limite de fichiers multipart
+      if (err && err.code === 'FST_FILES_LIMIT') {
+        return reply.code(413).send({
+          error: 'Too Many Files',
+          message: `You can only upload a maximum of ${MAX_DIRECT_UPLOAD_FILES} files at once. Please reduce the number of files.`
+        });
+      }
+
+      // Gestion des erreurs de taille de fichier
+      if (err && err.code === 'FST_REQ_FILE_TOO_LARGE') {
+        return reply.code(413).send({
+          error: 'File Too Large',
+          message: `File size exceeds the largest allowed upload size. Please reduce the file size.`
+        });
+      }
+
+      // Gestion des erreurs de limite de parties (parts) multipart
+      if (err && err.code === 'FST_PARTS_LIMIT') {
+        return reply.code(413).send({
+          error: 'Too Many Parts',
+          message: `Too many parts in the multipart request. Please reduce the number of elements.`
+        });
+      }
+
+      // Default error handling
+      const statusCode = (err && err.statusCode) || 500;
+      return reply.code(statusCode).send({
+        error: 'Internal Server Error',
+        message: config.isDev ? (err && err.message) : 'An unexpected error occurred'
+      });
+    });
+
+    // CORS — la règle vit dans `config/cors-origins` (#4480), pas ici : la porte
+    // WebSocket applique la MÊME, et deux littéraux jumeaux avaient divergé.
+    // `exposedHeaders` : `ETag` n'est pas dans la safelist CORS — sans lui, le
+    // 304 que `conditionalGetOnSend` (~200 endpoints GET) et `GET /sync`
+    // posent est invisible à tout client web d'une autre origine, qui ne peut
+    // alors jamais composer `If-None-Match` (#5015).
     await this.server.register(cors, {
-      origin: config.isDev ? true : (origin, cb) => {
-        // Add your production domains here
-        const allowedOrigins = process.env.CORS_ORIGINS?.split(',') ||
-                               process.env.ALLOWED_ORIGINS?.split(',') ||
-                               [
-                                 // Local development
-                                 'http://localhost:3100',
-                                 'http://localhost',
-                                 'http://localhost:80',
-                                 'http://127.0.0.1',
-                                 'http://127.0.0.1:80',
-                                 // Production
-                                 'https://meeshy.me',
-                                 'https://www.meeshy.me',
-                                 'https://gate.meeshy.me',
-                                 'https://ml.meeshy.me',
-                                 // Staging
-                                 'https://staging.meeshy.me:8443',
-                                 'https://gate.staging.meeshy.me:8443',
-                                 'https://ml.staging.meeshy.me:8443'
-                               ];
-
-        logger.info(`CORS check: origin="${origin}", allowed="${allowedOrigins.join(',')}"`);
-
-        // Allow requests without origin (e.g., mobile apps, Postman, curl)
-        // Allow requests from allowed origins
-        if (!origin || allowedOrigins.includes(origin)) {
-          return cb(null, true);
-        }
-
-        // Log the rejection for debugging
-        logger.warn(`CORS rejected origin: "${origin}"`);
-        return cb(new Error('Not allowed by CORS'), false);
-      },
+      origin: fastifyCorsOrigin({
+        onRejected: (origin) => logger.warn(`CORS rejected origin: "${origin}"`)
+      }),
       credentials: true,
-      methods: CORS_METHODS
+      methods: CORS_METHODS,
+      exposedHeaders: CORS_EXPOSED_HEADERS
     });
 
     // OpenAPI/Swagger documentation
@@ -420,7 +624,6 @@ All endpoints require JWT authentication via Bearer token, unless otherwise spec
 
 ## Rate Limits
 - Global: 300 requests/minute per IP
-- Messages: 20 messages/minute per user
 - Authentication: 5 attempts/15 minutes
 
 ## API Versioning
@@ -492,7 +695,28 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       },
       staticCSP: true,
       transformStaticCSP: (header) => header,
-      transformSpecification: (swaggerObject) => swaggerObject,
+      // #4372 — l'OpenAPI publié écrit ses chemins comme les deux AUTRES
+      // descriptions de la même API : sans barre finale. `@fastify/swagger`
+      // émet la forme DÉCLARÉE, si bien qu'un module monté au préfixe
+      // `/api/v1/me` déclarant sa route en `'/'` publiait `/api/v1/me/` —
+      // quinze chemins dans ce cas, quand le manifeste (430) et le catalogue
+      // client (416) n'en portent aucun. Le serveur sert les deux formes, donc
+      // rien ne cassait ; mais toute comparaison entre l'OpenAPI et l'une des
+      // deux autres sources rendait quinze faux négatifs.
+      //
+      // Ici, et pas dans les huit modules concernés : déclarer `''` au lieu de
+      // `'/'` chez chacun marcherait, et laisserait le neuvième arriver. C'est
+      // le seul point par lequel la spec atteint un consommateur — vérifié,
+      // `fastify.swagger()` n'est appelée nulle part ailleurs.
+      transformSpecification: (swaggerObject) => {
+        const { spec, collisions } = canonicaliserCheminsOpenApi(swaggerObject as never);
+        if (collisions.length > 0) {
+          // Une collision n'est pas résolue en silence : la forme canonique
+          // l'emporte, mais on DIT ce qui n'a pas pu être fusionné.
+          logger.warn('OpenAPI : verbes en collision après canonisation des chemins', { collisions });
+        }
+        return spec as never;
+      },
       transformSpecificationClone: true
     });
 
@@ -534,27 +758,10 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     this.server.decorate('mutationLogService', mutationLogService);
     logger.info('✅ MutationLogService registered');
 
-    // Client identification logging — enrichit le logger Pino avec version/device/geo client
+    // Client identification logging — version, plateforme, modèle, système,
+    // langue, fuseau. Jamais le lieu DÉCLARÉ par le client (audit #9608, P5).
     this.server.addHook('onRequest', (request, _reply, done) => {
-      const get = (key: string): string | undefined => {
-        const val = request.headers[key];
-        return typeof val === 'string' ? val : undefined;
-      };
-      const clientContext = {
-        appVersion : get('x-meeshy-version'),
-        appBuild   : get('x-meeshy-build'),
-        platform   : get('x-meeshy-platform'),
-        device     : get('x-meeshy-device'),
-        osVersion  : get('x-meeshy-os'),
-        locale     : get('x-meeshy-locale'),
-        timezone   : get('x-meeshy-timezone'),
-        country    : get('x-meeshy-country'),
-        city       : get('x-meeshy-city'),
-        region     : get('x-meeshy-region'),
-      };
-      const client = Object.fromEntries(
-        Object.entries(clientContext).filter(([, v]) => v !== undefined)
-      );
+      const client = clientLogContext(request.headers);
       if (Object.keys(client).length > 0) {
         // FastifyRequest.log is readonly in TS types but mutable at runtime
         (request as unknown as { log: FastifyRequest['log'] }).log = request.log.child({ client });
@@ -563,139 +770,31 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     });
     logger.info('✅ Client identification hook registered');
 
-    // Request timing — log slow requests (>2s) as warnings
-    this.server.addHook('onRequest', (request, _reply, done) => {
-      request.__startTime = performance.now();
-      done();
-    });
-    this.server.addHook('onResponse', (request, reply, done) => {
-      const start = request.__startTime;
-      if (start) {
-        const durationMs = Math.round(performance.now() - start);
-        const level = durationMs > 5000 ? 'warn' : durationMs > 2000 ? 'info' : 'debug';
-        if (level !== 'debug') {
-          logger[level](`⏱️ ${request.method} ${request.url} → ${reply.statusCode} (${durationMs}ms)`, {
-            module: 'RequestTiming',
-            durationMs,
-            method: request.method,
-            url: request.url,
-            statusCode: reply.statusCode
-          });
-        }
-      }
-      done();
-    });
+    // Request timing — log slow requests (>2s); the address is redacted when
+    // it is a reader-signed file address (#9600, audit L1-B).
+    registerRequestTimingHooks(this.server, { logger });
     logger.info('✅ Request timing hook registered');
+
+    // Compteur d'acces par route et par version cliente (#4275). Quatre issues
+    // — #4178, #4181, #4182, #4184 — font d'un compteur a ZERO le critere de
+    // retrait d'une adresse depreciee et INTERDISENT de le prouver par revue de
+    // code client : sans cette ligne, elles restent inatteignables par
+    // construction.
+    //
+    // Deux contraintes de POSE, et non une seule. Appel DIRECT sur la racine,
+    // jamais `register` : un hook pose dans un contexte encapsule ne verrait
+    // aucune des routes de production, et le compteur rendrait un tapis de
+    // zeros credible. Et arme sur `onResponse`, ou le routage est DEJA resolu :
+    // c'est ce qui fait rendre a `routeOptions.url` le GABARIT, jamais l'URL
+    // concrete — sans quoi un identifiant d'utilisateur entrerait dans la cle
+    // d'agregat au premier appel d'une route parametree.
+    //
+    // Cout mesure : 0,32 a 0,65 us par requete, aucune E/S, aucune promesse.
+    registerRouteUsageHook(this.server);
+    logger.info('✅ Route usage counter hook registered');
 
     // Socket.IO will be configured after server initialization
     // No need to register a plugin as Socket.IO attaches directly to the HTTP server
-
-    // Global error handler
-    this.server.setErrorHandler(async (error, request, reply) => {
-      logger.error('Uncaught error in request handler', {
-        module: 'ErrorHandler',
-        func: 'setErrorHandler',
-        error: error instanceof Error ? {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        } : error,
-        path: request.url,
-        method: request.method
-      });
-      // TypeScript may treat catch variables as 'unknown' (useUnknownInCatchVariables).
-      // Cast to `any` once to safely access error properties below.
-      const err: any = error as any;
-
-      if (err instanceof AuthenticationError) {
-        return reply.code(401).send({
-          error: 'Authentication Failed',
-          message: err.message,
-          statusCode: 401,
-          timestamp: new Date().toISOString()
-        });
-      }
-
-      // Refus de SCHÉMA (Ajv, avant le handler) : Fastify le marque par
-      // `err.validation`. Sans cette branche il tombait dans le repli
-      // générique et ressortait en « Internal Server Error / An unexpected
-      // error occurred » sous un code 400 — le client apprenait qu'il avait
-      // tort, jamais sur quoi. C'est ce qui rendait illisible le refus de
-      // `POST /auth/register` le 2026-08-18.
-      const schemaRefusal = schemaValidationErrorResponse(error);
-      if (schemaRefusal) {
-        return reply.code(schemaRefusal.statusCode).send({
-          ...schemaRefusal,
-          timestamp: new Date().toISOString()
-        });
-      }
-
-      if (error instanceof ValidationError) {
-        return reply.code(400).send({
-          error: 'Validation Error',
-          message: err.message,
-          statusCode: 400,
-          timestamp: new Date().toISOString()
-        });
-      }
-
-      if (error instanceof TranslationError) {
-        return reply.code(500).send({
-          error: 'Translation Error',
-          message: err.message,
-          statusCode: 500,
-          timestamp: new Date().toISOString()
-        });
-      }
-
-      // Gestion des erreurs de limite de fichiers multipart
-      if (err && err.code === 'FST_FILES_LIMIT') {
-        return reply.code(413).send({
-          error: 'Too Many Files',
-          message: `You can only upload a maximum of 30 files at once. Please reduce the number of files.`,
-          details: {
-            maxFiles: 30,
-            limit: 'Files limit reached'
-          },
-          statusCode: 413,
-          timestamp: new Date().toISOString()
-        });
-      }
-
-      // Gestion des erreurs de taille de fichier
-      if (err && err.code === 'FST_REQ_FILE_TOO_LARGE') {
-        return reply.code(413).send({
-          error: 'File Too Large',
-          message: `File size exceeds the allowed limit of 4 GB. Please reduce the file size.`,
-          details: {
-            maxFileSize: '4 GB',
-            limit: 'File size exceeded'
-          },
-          statusCode: 413,
-          timestamp: new Date().toISOString()
-        });
-      }
-
-      // Gestion des erreurs de limite de parties (parts) multipart
-      if (err && err.code === 'FST_PARTS_LIMIT') {
-        return reply.code(413).send({
-          error: 'Too Many Parts',
-          message: `Too many parts in the multipart request. Please reduce the number of elements.`,
-          statusCode: 413,
-          timestamp: new Date().toISOString()
-        });
-      }
-
-      // Default error handling
-      const statusCode = (err && err.statusCode) || 500;
-      return reply.code(statusCode).send({
-        error: 'Internal Server Error',
-        message: config.isDev ? (err && err.message) : 'An unexpected error occurred',
-        statusCode,
-        timestamp: new Date().toISOString(),
-        ...(config.isDev && { stack: err && err.stack })
-      });
-    });
 
     // Decorators for dependency injection
     this.server.decorate('prisma', this.prisma);
@@ -704,6 +803,8 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     this.server.decorate('mentionService', this.mentionService);
     this.server.decorate('socketIOHandler', this.socketIOHandler);
     this.server.decorate('jobMappingCache', this.jobMappingCache);
+    // Lu par la supervision d'administration (routes/admin/monitoring.ts) : sans elle, la carte « Présence » restait vide.
+    this.server.decorate('statusService', this.statusService);
     this.server.decorate('authenticate', this.createAuthMiddleware());
 
     logger.info('✓ Middleware configured successfully');
@@ -776,24 +877,6 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
   // HELPER METHODS
   // --------------------------------------------------------------------------
 
-  private sendWebSocketMessage(connection: WebSocketConnection, message: WebSocketResponse): void {
-    try {
-      connection.send(JSON.stringify(message));
-    } catch (error) {
-      logger.error('Failed to send WebSocket message:', error);
-    }
-  }
-
-  private sendWebSocketError(connection: WebSocketConnection, messageId: string | undefined, error: string): void {
-    const response: WebSocketResponse = {
-      type: 'error',
-      messageId,
-      error,
-      timestamp: new Date().toISOString()
-    };
-    this.sendWebSocketMessage(connection, response);
-  }
-
   // --------------------------------------------------------------------------
   // REST API ROUTES
   // --------------------------------------------------------------------------
@@ -817,6 +900,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
   private async initializeServices(): Promise<void> {
     logger.info('Initializing external services...');
+    warnPushConfiguration(logger); // #17249
 
     // Test database connection
     try {
@@ -825,24 +909,11 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       await this.prisma.user.findFirst();
       logger.info(`✓ Database connected successfully`);
 
-      // Initialize database with default data
-      const initService = new InitService(this.prisma);
-
-      // Check if initialization is needed
-      const shouldInit = await initService.shouldInitialize();
-
-      if (shouldInit) {
-        const forceReset = process.env.FORCE_DB_RESET === 'true';
-        if (forceReset) {
-          logger.info('🔄 FORCE_DB_RESET=true - Database will be completely reset and reinitialized');
-        } else {
-          logger.info('🔧 Database initialization required, starting...');
-        }
-        await initService.initializeDatabase();
-        logger.info('✅ Database initialization completed successfully');
-      } else {
-        logger.info('✅ Database already initialized, skipping initialization');
-      }
+      // Séquence de démarrage de la base — SSOT `bootstrapDatabase`, qui tient
+      // ensemble ce qui est un invariant de CHAQUE boot (index, comptes semés)
+      // et ce qui est un ensemencement (derrière `shouldInitialize()`, porte
+      // qui ne s'ouvre que sur une base VIDE).
+      await bootstrapDatabase(new InitService(this.prisma), logger);
 
     } catch (error) {
       logger.error('✗ Database connection failed:', error);
@@ -857,6 +928,8 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     // Initialize translation service
     try {
       await this.translationService.initialize();
+      startTranslatorForget({ zmq: this.translationService.getZmqClient(), redis: getCacheStore().getNativeClient() as never }); // #13102
+      startAtRestFileSweep(this.prisma); // #13100
       const isHealthy = await this.translationService.healthCheck();
       if (isHealthy) {
         logger.info('✓ Translation service initialized successfully');
@@ -875,7 +948,11 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     // Initialize agent ZMQ client (optional — only when AGENT_HOST is set)
     const agentHost = process.env.AGENT_HOST;
     if (agentHost) {
-      try {
+      // #10242 — sans secret interne, aucun appel HTTP ne part vers l'agent (fermé) : on le dit UNE fois, fort.
+      if (!agentInternalTokenConfigured()) {
+        // #10288 — le canal ZMQ est signé par ce même secret : sans lui, l'agent rejetterait tout.
+        logger.error('❌ AGENT_HOST is set but AGENT_INTERNAL_TOKEN is missing or shorter than 32 characters — every HTTP call and ZMQ event to the agent is refused');
+      } else try {
         this.agentClient = new ZmqAgentClient(agentHost, 5560, 5561);
         await this.agentClient.initialize();
         logger.info(`✓ Agent ZMQ client initialized (${agentHost}:5560/5561)`);
@@ -889,8 +966,6 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
   }
 
   private displayStartupBanner(): void {
-    const dbStatus = config.databaseUrl ? 'Connected' : 'Not configured'.padEnd(48);
-    const translateUrl = `tcp://0.0.0.0:${(process.env.ZMQ_TRANSLATOR_PORT || '5555').padEnd(37)}`;
     const useHttps = process.env.USE_HTTPS === 'true';
     const localIp = process.env.LOCAL_IP || '192.168.1.39';
     const domain = process.env.DOMAIN || 'localhost';
@@ -903,40 +978,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       logger.info(`📱 Network access: ${protocol}://${localIp}:${config.port}`);
       if (domain !== 'localhost') {
         logger.info(`🌐 Custom domain: ${protocol}://${domain}:${config.port}`);
-        const banner = `
-    ╔══════════════════════════════════════════════════════════════════╗
-    ║                       🌍 MEESHY GATEWAY 🌍                       ║
-    ╠══════════════════════════════════════════════════════════════════╣
-    ║  Environment: ${config.nodeEnv.padEnd(48)}   ║
-    ║  Port:        ${config.port.toString().padEnd(48)}   ║
-    ║  Database:    ${dbStatus}                                          ║
-    ║  Translator:  ${translateUrl}║
-    ╠══════════════════════════════════════════════════════════════════╣
-    ║  📡 WebSocket:    ${wsProtocol}://localhost:${config.port}/socket.io/${' '.repeat(20 - wsProtocol.length - config.port.toString().length)} ║
-    ║  🏥 Health:       ${protocol}://localhost:${config.port}/health${' '.repeat(24 - protocol.length - config.port.toString().length)} ║
-    ║  📖 Info:         ${protocol}://localhost:${config.port}/info${' '.repeat(26 - protocol.length - config.port.toString().length)} ║
-    ║  📱 Network:      ${protocol}://${localIp}:${config.port}${' '.repeat(38 - protocol.length - localIp.length - config.port.toString().length)} ║
-    ╚══════════════════════════════════════════════════════════════════╝
-        `.trim();
         logger.info(`🔌 WebSocket: ${wsProtocol}://localhost:${config.port}`);
       }else{
         logger.info(`🌐 Local access only (no custom domain configured)`);
-
-        const banner = `
-    ╔══════════════════════════════════════════════════════════════════╗
-    ║                       🌍 MEESHY GATEWAY 🌍                       ║
-    ╠══════════════════════════════════════════════════════════════════╣
-    ║  Environment: ${config.nodeEnv.padEnd(48)}   ║
-    ║  Port:        ${config.port.toString().padEnd(48)}   ║
-    ║  Database:    ${dbStatus}                                          ║
-    ║  Translator:  ${translateUrl}║
-    ╠══════════════════════════════════════════════════════════════════╣
-    ║  📡 WebSocket:    ${wsProtocol}://gate.${domain}:${config.port}/socket.io/${' '.repeat(20 - wsProtocol.length - config.port.toString().length)} ║
-    ║  🏥 Health:       ${protocol}://gate.${domain}:${config.port}/health${' '.repeat(24 - protocol.length - config.port.toString().length)} ║
-    ║  📖 Info:         ${protocol}://gate.${domain}:${config.port}/info${' '.repeat(26 - protocol.length - config.port.toString().length)} ║
-    ║  📱 Network:      ${protocol}://${localIp}:${config.port}${' '.repeat(38 - protocol.length - localIp.length - config.port.toString().length)} ║
-    ╚══════════════════════════════════════════════════════════════════╝
-        `.trim();
         logger.info(`🔌 WebSocket: ${wsProtocol}://gate.${domain}:${config.port}`);
       }
 
@@ -1032,6 +1076,26 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         // `call:leave` handler did), leaving a departed/kicked group-call
         // member visible in every other participant's roster/video grid
         // until the ~120s GC sweep.
+        // #7545 — la liste de conversations apprend l'appel en cours : sa
+        // réservation, chaque arrivée et chaque départ, et sa fin, relus
+        // depuis `Conversation.activeCallId` par UNE unité de diffusion.
+        // `updatedBy` : l'initiateur de l'appel — un départ ou une fin par GC
+        // n'a pas d'autre auteur, et le contrat exige un `User.id`.
+        cleanupManager.getCallService().setActiveCallChangedListener((conversationId, callId) => {
+          void this.prisma.callSession
+            .findUnique({ where: { id: callId }, select: { initiatorId: true } })
+            .then((call) =>
+              call
+                ? emitConversationActivityUpdate(this.prisma, cleanupManager.getIO(), {
+                    conversationId,
+                    updatedByUserId: call.initiatorId,
+                    call: true,
+                    onError: (error) => logger.warn('conversation:updated activeCall failed', { conversationId, error }),
+                  })
+                : undefined
+            )
+            .catch((error: unknown) => logger.warn('conversation:updated activeCall rejected', { conversationId, error }));
+        });
         cleanupManager.getCallService().setParticipantLeftBroadcaster(
           (_callId, event) =>
             callEventsHandler.broadcastParticipantLeftForRest(cleanupManager.getIO(), event)
@@ -1078,7 +1142,14 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         // crash/restart wiped, so pre-answer calls interrupted by the restart
         // resolve to `missed` (with their push notification) on the nominal
         // ringing budget instead of ringing until the GC tier.
-        void callEventsHandler.rehydrateActiveCalls(cleanupManager.getIO());
+        // `.catch` OBLIGATOIRE sur une promesse détachée (leçon 230) : le
+        // `try/catch` de ce bloc n'attrape qu'un `throw` synchrone, et un rejet
+        // sans écouteur termine le process sous le `--unhandled-rejections=throw`
+        // par défaut de Node 22 — le démarrage de la passerelle emporté par une
+        // ré-hydratation d'appels dont tout le contrat est d'être best-effort.
+        void callEventsHandler
+          .rehydrateActiveCalls(cleanupManager.getIO())
+          .catch((error: unknown) => logger.warn('[GWY] rehydrateActiveCalls failed', { error }));
       } else {
         logger.warn('[GWY] CallCleanupService starting without Socket.IO server — clients will not receive force-end broadcasts');
       }
@@ -1097,10 +1168,37 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       this.expiredStoriesCleanup.start();
       logger.info('✓ Expired stories cleanup service started');
 
+      // Sonde de DÉRIVE DE TYPAGE (#4243) : une passe au démarrage, puis toutes
+      // les 12 h. MongoDB n'impose aucun type et le schéma Prisma ne décrit
+      // qu'une INTENTION — une écriture passée hors Prisma a posé un NOMBRE dans
+      // `User.phoneNumber`, et comme Prisma relit la ligne après CHAQUE écriture,
+      // ce compte ne pouvait plus rien écrire sur lui-même : ni présence, ni
+      // `lastLoginIp`, ni compteur d'échecs d'authentification, ni profil. Rien
+      // ne le signalait — le défaut n'est sorti qu'en cassant le rattrapage de
+      // #4159, des mois après l'écriture fautive.
+      //
+      // PAS derrière une garde de premier boot : le dépôt a déjà payé ce piège
+      // avec `ensurePostGeoIndex`, restée sous `shouldInitialize()` donc jamais
+      // exécutée en production jusqu'à ce que `/posts/nearby` rende 500. Un
+      // contrôle RÉTROACTIF sur une base qui contient déjà des données est par
+      // définition incompatible avec une porte « base vide ».
+      this.sondeDeTypage = demarrerSondeDeTypage(this.prisma);
+      logger.info('✓ Schema drift probe started');
+
       // Start expired-messages sweep (per-minute): erase content + ciphertext
       // of self-destructing messages whose expiresAt has lapsed.
       this.expiredMessagesCleanup.start();
       logger.info('✓ Expired messages cleanup service started');
+
+      // Start per-recipient ephemeral expiry sweep (per-minute): drops the
+      // bubble and the banners of the ONE recipient whose D(u) has lapsed.
+      this.ephemeralRecipientExpiry.start();
+      logger.info('✓ Ephemeral recipient expiry service started');
+
+      // Start expired-share-links sweep (hourly): revokes guests of a share
+      // link once its expiresAt has lapsed, and marks the link inactive.
+      this.expiredShareLinksCleanup.start();
+      logger.info('✓ Expired share links cleanup service started');
 
       // Start orphan-media cleanup worker (5-min sweep, deletes files
       // referenced in OrphanMediaCleanup whose cleanupAfter has passed).
@@ -1117,25 +1215,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     logger.info('🛑 Shutting down server...');
 
     try {
-      // CALL-RESILIENCE — tell the call handler we're shutting down BEFORE the
-      // HTTP/Socket.IO server closes and mass-drops every socket, so it does not
-      // interpret the restart's disconnect storm as everyone hanging up and end
-      // active peer-to-peer calls. Clients re-join the restarted instance; the
-      // media (direct P2P) never dropped.
-      try {
-        const socketManager = this.socketIOHandler?.getManager?.();
-        socketManager?.getCallEventsHandler?.().prepareForShutdown();
-        // Release the handler's own periodic buffered-offer cleanup interval
-        // and any leftover disconnect-grace timers — `prepareForShutdown()`
-        // only flips shutdown mode and clears the grace timers; it does not
-        // stop the interval, which would otherwise keep querying a handler
-        // that's about to be torn down.
-        socketManager?.getCallEventsHandler?.().destroy();
-        socketManager?.getCallService?.()?.destroy();
-        logger.info('✓ Call handler set to shutdown mode (active calls preserved for reconnect)');
-      } catch (callShutdownError) {
-        logger.warn('⚠️ Could not set call handler shutdown mode', callShutdownError);
-      }
+      // Appels en mode arrêt, puis sockets fermées : les clients rejoignent
+      // aussitôt la nouvelle instance (#8297).
+      await this.socketIOHandler.close();
 
       // Stop call cleanup service
       if (this.callCleanupService) {
@@ -1161,10 +1243,28 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         logger.info('✓ Expired stories cleanup service stopped');
       }
 
+      // Stop schema drift probe (#4243)
+      if (this.sondeDeTypage) {
+        this.sondeDeTypage.arreter();
+        logger.info('✓ Schema drift probe stopped');
+      }
+
       // Stop expired-messages sweep
       if (this.expiredMessagesCleanup) {
         this.expiredMessagesCleanup.stop();
         logger.info('✓ Expired messages cleanup service stopped');
+      }
+
+      // Stop per-recipient ephemeral expiry sweep
+      if (this.ephemeralRecipientExpiry) {
+        this.ephemeralRecipientExpiry.stop();
+        logger.info('✓ Ephemeral recipient expiry service stopped');
+      }
+
+      // Stop expired-share-links sweep
+      if (this.expiredShareLinksCleanup) {
+        this.expiredShareLinksCleanup.stop();
+        logger.info('✓ Expired share links cleanup service stopped');
       }
 
       // Stop orphan-media cleanup worker

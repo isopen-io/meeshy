@@ -1,66 +1,84 @@
 package me.meeshy.app.reels
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.EaseIn
+import androidx.compose.animation.core.EaseOut
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import me.meeshy.ui.component.chrome.DisableEdgeBackWhile
+import me.meeshy.sdk.model.chrome.FloatingButtonGeometry
+import me.meeshy.sdk.model.chrome.RevealGeometry
+import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.component.chrome.CircularRevealMask
+import me.meeshy.ui.layout.currentMeeshyWindowInfo
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Comment
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import android.content.Intent
-import androidx.compose.material.icons.automirrored.filled.VolumeOff
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import me.meeshy.app.feed.QuoteComposerSheet
+import me.meeshy.app.feed.rememberContentShareOut
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.reels.R
-import me.meeshy.ui.component.MeeshyAvatar
-import me.meeshy.ui.component.video.ReelVideoSurface
-import me.meeshy.ui.theme.MeeshyPalette
-import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.sdk.model.PostShareLink
+import me.meeshy.sdk.model.share.ShareCard
+import me.meeshy.sdk.model.share.ShareCards
+import me.meeshy.sdk.model.share.ShareSubject
+import me.meeshy.ui.share.LocalShareLauncher
+import me.meeshy.ui.share.open
+import me.meeshy.sdk.model.ReelSwitchWork
+import me.meeshy.ui.component.chrome.StatusBarIconsOverDark
+import me.meeshy.ui.component.FeedbackToastHost
+import me.meeshy.ui.component.video.rememberVideoWindowShown
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.sdk.model.profile.ProfileSheetUser
+import me.meeshy.sdk.model.profile.ofAuthor
+import me.meeshy.ui.profile.LocalProfileSheetOpener
+import me.meeshy.ui.profile.LocalProfileSheetPresented
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.ui.unit.LayoutDirection
+import me.meeshy.app.stories.rememberSceneVideoExport
+import me.meeshy.app.feed.LocalPostCardImager
+
+/** How many reels from the end of the thread trigger the next cursor page. */
+private const val LOAD_MORE_THRESHOLD = 3
 
 /**
- * Full-screen vertical reel thread (iOS `ReelsPlayerView` parity): one video per page,
- * the visible page plays while the others stay paused. [seed] anchors the thread on a
- * reel touched in the Feed.
+ * Full-screen vertical reel thread (iOS `ReelsPlayerView` parity): one reel per page, the elected
+ * page plays while the others stay paused. [seed] anchors the thread on a reel touched in the Feed.
+ *
+ * Performance contract : le pager ne lit jamais la progression de lecture ; chaque page lit sa
+ * propre élection par `derivedStateOf`, si bien qu'un passage ne recompose que les deux pages
+ * touchées. Seuls la page affichée et la suivante créent un lecteur (la suivante en pause, pour
+ * que son premier plan soit prêt) ; une page qui sort de la fenêtre libère le sien.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -68,202 +86,283 @@ fun ReelsScreen(
     seed: String? = null,
     onClose: () -> Unit = {},
     onOpenPost: (String) -> Unit = {},
+    onOpenProfile: (String) -> Unit = {},
+    onOpenStory: (String) -> Unit = {},
+    onEditPost: ((String) -> Unit)? = null,
+    authorHasStory: (String) -> Boolean = { false },
     viewModel: ReelsViewModel = hiltViewModel(),
+    preloadViewModel: ReelPreloadViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    // Muet par defaut (autoplay poli) ; le toggle vaut pour toute la session Reels.
-    var muted by rememberSaveable { mutableStateOf(true) }
-    val shareContext = LocalContext.current
+    val context = LocalContext.current
+    val quickEmojis by viewModel.quickEmojis.collectAsStateWithLifecycle()
+    // Le son est ouvert à l'entrée (iOS `ReelsPlayerView` : l'ouverture du lecteur est le geste) ; le bouton
+    // muet vaut pour tous les réels de la session, et n'existe que pour un réel qui porte du son.
+    var muted by rememberSaveable { mutableStateOf(false) }
+    val probedAudio = remember { mutableStateMapOf<String, Boolean>() }
+    // Mode immersif : un appui long efface tout le chrome, un toucher le rend.
+    val chrome = rememberReelChromeHolder()
+    val chromeHidden = chrome.hidden
+    val isCallActive by viewModel.isCallActive.collectAsStateWithLifecycle()
+    val edgeSwipe = rememberReelEdgeSwipeState()
+    // Dans la fenêtre Picture-in-Picture, la vidéo seule : aucun chrome, aucun toast, aucune feuille (#13814).
+    val inVideoWindow = rememberVideoWindowShown()
+    val chromeOff = chromeHidden || inVideoWindow
+    val shareLauncher = LocalShareLauncher.current
+    val haptics = rememberMeeshyHaptics()
+    // Commentaires en feuille superposee (issue #4815) : le lecteur ne quitte jamais
+    // l'ecran, la video du reel visible continue de jouer sous la feuille.
+    var commentsReelId by rememberSaveable { mutableStateOf<String?>(null) }
+    val pagerState = rememberPagerState(pageCount = { state.reels.size })
 
+    val feedButtonStorage by viewModel.feedButtonStorage.collectAsStateWithLifecycle()
     LaunchedEffect(seed) { viewModel.load(seed) }
+    // Fond noir en plein cadre : heure et icônes claires, rendues à la fenêtre en quittant l'écran.
+    StatusBarIconsOverDark()
+    ReelsSystemBarsHidden()
+    // Le retour depuis le bord est celui du lecteur : l'hôte de navigation ne double pas le geste.
+    DisableEdgeBackWhile()
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color.Black),
-    ) {
-        when {
-            state.reels.isEmpty() && state.isLoading ->
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
-                    color = MeeshyPalette.White,
-                )
+    // Leaving the reels thread closes the last dwell session (records its view if
+    // it qualified) — the pager's per-settle end never fires for the final reel.
+    DisposableEffect(Unit) {
+        onDispose { viewModel.setCurrentReel(null) }
+    }
 
-            state.reels.isEmpty() ->
-                Text(
-                    text = state.errorMessage ?: "",
-                    color = MeeshyPalette.White.copy(alpha = 0.7f),
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(MeeshySpacing.xl),
-                )
-
-            else -> {
-                val pagerState = rememberPagerState(pageCount = { state.reels.size })
-                // Le reel visible possede la post room : c'est l'abonnement qui rend
-                // `post:liked`/`post:unliked` livrables pour un reel dont on ne suit pas
-                // l'auteur. Keye sur les ids (egalite structurelle) et non sur `state.reels`,
-                // qui est une nouvelle liste a chaque like optimiste.
-                val reelIds = state.reels.map { it.id }
-                LaunchedEffect(pagerState, reelIds) {
-                    snapshotFlow { pagerState.currentPage }
-                        .distinctUntilChanged()
-                        .collect { page -> viewModel.setCurrentReel(reelIds.getOrNull(page)) }
+    val shareOut = rememberContentShareOut()
+    val shareOutNow by rememberUpdatedState(shareOut)
+    val launcherNow by rememberUpdatedState(shareLauncher)
+    val reelsNow by rememberUpdatedState(state.reels)
+    val railRender = rememberSceneVideoExport(key = REEL_RAIL_IMAGER_KEY) { emptyList() }
+    val railRenderNow by rememberUpdatedState(railRender)
+    val cardImager = LocalPostCardImager.current
+    val railActions = remember(viewModel, cardImager) {
+        ReelRailActions(
+            onLike = viewModel::toggleLike,
+            onReact = viewModel::react,
+            onComments = { commentsReelId = it },
+            onBookmark = viewModel::toggleBookmark,
+            onRepost = viewModel::repost,
+            // « Citer » (#12234) : le compositeur de citation du réel, par-dessus le lecteur figé.
+            onQuote = viewModel::beginQuote,
+            // « Envoyer » (#14315) : la feuille Meeshy, qui frappe le lien de l'utilisateur.
+            onSend = { id ->
+                reelsNow.firstOrNull { it.id == id }?.let { reel ->
+                    val card = reel.shareCard(context)
+                    launcherNow?.open(ShareSubject.Card(card)) ?: shareOutNow(card)
                 }
-                VerticalPager(
-                    state = pagerState,
-                    modifier = Modifier.fillMaxSize(),
-                ) { page ->
-                    val reel = state.reels[page]
-                    Box(Modifier.fillMaxSize()) {
-                        ReelVideoSurface(
-                            mediaUrl = reel.videoUrl,
-                            isActive = page == pagerState.currentPage,
-                            modifier = Modifier.fillMaxSize(),
-                            muted = muted,
-                        )
-                        ReelOverlay(
-                            reel = reel,
-                            onLike = { viewModel.toggleLike(reel.id) },
-                            onComments = { onOpenPost(reel.id) },
-                            onRepost = { viewModel.repost(reel.id) },
-                            onShare = {
-                                viewModel.recordShare(reel.id)
-                                val send = Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-                                    putExtra(Intent.EXTRA_TEXT, "https://meeshy.me/post/${'$'}{reel.id}")
-                                }
-                                shareContext.startActivity(Intent.createChooser(send, null))
-                            },
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .navigationBarsPadding(),
-                        )
-                    }
-                }
+            },
+            onImager = cardImager?.let { imager ->
+                { id: String -> reelsNow.firstOrNull { it.id == id }?.imagerRequest(railRenderNow)?.let(imager) }
+            },
+        )
+    }
+    val openStory by rememberUpdatedState(onOpenStory)
+    val hasStory by rememberUpdatedState(authorHasStory)
+    val profileOpener = LocalProfileSheetOpener.current
+    // Un auteur qui a une story non vue : son avatar ouvre cette story (un seul groupe), sinon sa fiche (iOS).
+    val openAuthor: (String) -> Unit = remember(profileOpener) {
+        { id: String ->
+            if (hasStory(id)) {
+                openStory(id)
+            } else {
+                val reel = reelsNow.firstOrNull { it.authorId == id }
+                ProfileSheetUser.ofAuthor(id, reel?.username, reel?.authorName, reel?.authorAvatarUrl)?.let(profileOpener::open)
             }
         }
-
-        IconButton(
-            onClick = onClose,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .statusBarsPadding()
-                .padding(MeeshySpacing.sm),
-        ) {
-            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.reels_close), tint = MeeshyPalette.White)
-        }
-
-        // Toggle son : les reels DEMARRENT muets, ce bouton est le seul chemin
-        // pour entendre la piste — il doit donc etre visible en permanence.
-        IconButton(
-            onClick = { muted = !muted },
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .padding(MeeshySpacing.sm),
-        ) {
-            Icon(
-                imageVector = if (muted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
-                contentDescription = stringResource(if (muted) R.string.reels_unmute else R.string.reels_mute),
-                tint = MeeshyPalette.White,
-            )
-        }
     }
-}
+    // La fiche ouverte fige le lecteur (même verrou qu'un appel) : il reprend à sa fermeture.
+    val profileSheetOpen = LocalProfileSheetPresented.current.value
 
-@Composable
-private fun ReelOverlay(
-    reel: ReelPresentation,
-    onLike: () -> Unit,
-    onComments: () -> Unit,
-    onRepost: () -> Unit,
-    onShare: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(modifier.padding(MeeshySpacing.lg)) {
-        // Author + caption, bottom-left.
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth(0.72f),
+    ReelsRevealContainer(
+        feedButtonStorage = feedButtonStorage,
+        onClose = onClose,
+        onBeforeClose = viewModel::stopAllMedia,
+    ) { requestClose, revealCompleted ->
+        Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .reelEdgeSwipeOffset(edgeSwipe),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                MeeshyAvatar(name = reel.authorName ?: "?", size = 36.dp)
-                Spacer(Modifier.width(MeeshySpacing.sm))
-                Text(
-                    text = reel.authorName ?: "",
-                    color = MeeshyPalette.White,
-                    fontWeight = FontWeight.SemiBold,
+            val seedFailure = state.seedFailure
+            if (seedFailure != null) {
+                ReelOpenFailure(failure = seedFailure, onRetry = viewModel::retry, onClose = requestClose)
+            } else if (state.reels.isEmpty()) {
+                ReelEmptyStates(state = state, onRetry = viewModel::retry)
+            } else {
+                ReelsPager(
+                    pagerState = pagerState,
+                    reels = state.reels,
+                    viewModel = viewModel,
+                    preloadViewModel = preloadViewModel,
+                    muted = muted,
+                    onSoundProbed = { id, hasTrack -> probedAudio[id] = hasTrack },
+                    chromeHidden = chromeOff,
+                    revealCompleted = revealCompleted,
+                    isCallActive = isCallActive || profileSheetOpen || state.quoteComposer != null,
+                    quickEmojis = quickEmojis,
+                    railActions = railActions,
+                    onChromeHidden = chrome::setHidden,
+                    onOpenAuthor = openAuthor,
+                    onSettled = {
+                        // Jamais de chrome masqué porté sur le réel suivant ; un haptique léger pose le passage.
+                        chrome.onPageChanged()
+                        haptics.light()
+                    },
                 )
             }
-            reel.caption?.let {
-                Spacer(Modifier.height(MeeshySpacing.sm))
-                Text(
-                    text = it,
-                    color = MeeshyPalette.White.copy(alpha = 0.92f),
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
+            ReelTopChrome(
+                reel = state.reels.getOrNull(pagerState.currentPage),
+                chromeHidden = chromeOff,
+                muted = muted,
+                showsMute = state.reels.getOrNull(pagerState.currentPage)?.let { ReelSound.showsMuteButton(it, probedAudio[it.id]) } == true,
+                viewModel = viewModel,
+                onClose = requestClose,
+                onToggleMute = { muted = !muted },
+                onReveal = { chrome.setHidden(false) },
+                onOpen = { id -> onOpenPost(id) },
+                onEdit = onEditPost,
+                // « Partager » (menu « ⋯ ») : la feuille du système, avec le lien suivi de l'utilisateur.
+                onShare = { reel -> shareOut(reel.shareCard(context)) },
+            )
+            if (!inVideoWindow) FeedbackToastHost(toasts = viewModel.toasts, modifier = Modifier.navigationBarsPadding())
+        }
+        // Hors du contenu qui suit le doigt : une bande qui bouge avec son propre geste en annulerait la mesure.
+        ReelEdgeSwipeStrip(state = edgeSwipe, onClose = requestClose, modifier = Modifier.align(Alignment.CenterStart))
+        }
+    }
+
+    val quoteComposer = state.quoteComposer
+    if (quoteComposer != null && !inVideoWindow) {
+        QuoteComposerSheet(
+            composer = quoteComposer,
+            onTextChange = viewModel::onQuoteTextChange,
+            onSubmit = viewModel::submitQuote,
+            onDismiss = viewModel::cancelQuote,
+        )
+    }
+
+    val openCommentsReelId = commentsReelId
+    if (openCommentsReelId != null && !inVideoWindow) {
+        ReelCommentsThread(
+            reelId = openCommentsReelId,
+            serverCommentCount = state.reels.firstOrNull { it.id == openCommentsReelId }?.commentCount,
+            onDismiss = { commentsReelId = null },
+            onCommentSent = viewModel::commentSent,
+            commentsClosed = state.reels.firstOrNull { it.id == openCommentsReelId }?.commentsClosed,
+            onOpenPost = {
+                commentsReelId = null
+                onOpenPost(openCommentsReelId)
+            },
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ReelsPager(
+    pagerState: PagerState,
+    reels: List<ReelPresentation>,
+    viewModel: ReelsViewModel,
+    preloadViewModel: ReelPreloadViewModel,
+    muted: Boolean,
+    onSoundProbed: (String, Boolean) -> Unit,
+    chromeHidden: Boolean,
+    revealCompleted: Boolean,
+    isCallActive: Boolean,
+    quickEmojis: List<String>,
+    railActions: ReelRailActions,
+    onChromeHidden: (Boolean) -> Unit,
+    onOpenAuthor: (String) -> Unit,
+    onSettled: () -> Unit,
+) {
+    // Le reel visible possede la post room : c'est l'abonnement qui rend
+    // `post:liked`/`post:unliked` livrables pour un reel dont on ne suit pas
+    // l'auteur. Keye sur les ids (egalite structurelle) et non sur `reels`,
+    // qui est une nouvelle liste a chaque like optimiste.
+    val reelIds = reels.map { it.id }
+    val currentOnSettled by rememberUpdatedState(onSettled)
+    val reelsNow by rememberUpdatedState(reels)
+    // Hors premier plan (ON_STOP), aucun lecteur ne vit : les décodeurs sont rendus au système,
+    // la page affichée reprend à sa position au retour (voir ReelPage).
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
+    val election by rememberReelElection(pagerState, reelIds)
+    LaunchedEffect(pagerState, reelIds) {
+        snapshotFlow { pagerState.settledPage }
+            .distinctUntilChanged()
+            .collect { page ->
+                viewModel.setCurrentReel(reelIds.getOrNull(page))
+                // Infinite scroll: fetch the next cursor page a few reels before
+                // the pager runs out, so the fetch lands before the user does.
+                if (page >= reelIds.size - LOAD_MORE_THRESHOLD) viewModel.loadMore()
+                // Le suivant ET le précédent se préparent, la fenêtre suit l'usage et les contraintes de l'appareil.
+                preloadViewModel.onSettled(page, reelsNow.map { it.prepTarget() })
+            }
+    }
+    DisposableEffect(preloadViewModel) { onDispose { preloadViewModel.releaseAll() } }
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }
+            .distinctUntilChanged()
+            .drop(1)
+            .collect { currentOnSettled() }
+    }
+    VerticalPager(
+        state = pagerState,
+        modifier = Modifier.fillMaxSize(),
+        // Une page voisine est composee (donc son poster charge) ; son LECTEUR, lui, n'est cree que
+        // pour la precedente et la suivante (`ReelPreload`) — retour comme avance sans attente, rien de plus loin.
+        beyondViewportPageCount = 1,
+        key = { index -> reels.getOrNull(index)?.id ?: index },
+    ) { page ->
+        val reel = reels[page]
+        val pageKey by remember(reel.id, chromeHidden) {
+            derivedStateOf { ReelPageKey.of(reel.id, election, chromeHidden) }
+        }
+        val isElected = pageKey.isElected
+        val isSettled = pageKey.isSettled
+        val loadsMedia by remember(pagerState, page) {
+            derivedStateOf {
+                ReelPreload.loads(
+                    page = page,
+                    currentPage = pagerState.currentPage,
+                    isForeground = lifecycleState.isAtLeast(Lifecycle.State.STARTED),
                 )
             }
         }
-
-        // Actions column, bottom-right.
-        Column(
-            modifier = Modifier.align(Alignment.BottomEnd),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
-        ) {
-            ReelAction(
-                icon = if (reel.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                tint = if (reel.isLiked) MeeshyPalette.Error else MeeshyPalette.White,
-                count = reel.likeCount,
-                contentDescription = stringResource(R.string.reels_like),
-                onClick = onLike,
-            )
-            ReelAction(
-                icon = Icons.AutoMirrored.Filled.Comment,
-                tint = MeeshyPalette.White,
-                count = reel.commentCount,
-                contentDescription = stringResource(R.string.reels_comments),
-                onClick = onComments,
-            )
-            ReelAction(
-                icon = Icons.Filled.Repeat,
-                tint = MeeshyPalette.White,
-                count = reel.repostCount,
-                contentDescription = stringResource(R.string.reels_repost),
-                onClick = onRepost,
-            )
-            ReelAction(
-                icon = Icons.Filled.Share,
-                tint = MeeshyPalette.White,
-                count = null,
-                contentDescription = stringResource(R.string.reels_share),
-                onClick = onShare,
-            )
-        }
+        ReelPage(
+            reel = reel,
+            isElected = isElected,
+            isEngaged = ReelSwitchWork.engages(isElected = isElected, isSettled = isSettled),
+            loadsMedia = loadsMedia,
+            revealCompleted = revealCompleted,
+            isCallActive = isCallActive,
+            muted = muted,
+            onSoundProbed = { hasTrack -> onSoundProbed(reel.id, hasTrack) },
+            chromeHidden = pageKey.chromeHidden,
+            isOwn = viewModel.isOwn(reel),
+            quickEmojis = quickEmojis,
+            railActions = railActions,
+            onChromeHidden = onChromeHidden,
+            onOpenAuthor = onOpenAuthor,
+        )
     }
 }
 
-@Composable
-private fun ReelAction(
-    icon: ImageVector,
-    tint: Color,
-    count: Int?,
-    contentDescription: String? = null,
-    onClick: () -> Unit = {},
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        IconButton(onClick = onClick) {
-            Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(30.dp))
-        }
-        if (count != null) {
-            Text(
-                text = count.toString(),
-                color = MeeshyPalette.White,
-                fontWeight = FontWeight.Medium,
-            )
-        }
-    }
+/** La carte d'un réel pour ses deux gestes de partage : « 🔗 Réel de X : lien », la forme de la story. */
+private fun ReelPresentation.shareCard(context: android.content.Context): ShareCard {
+    val link = PostShareLink.webLink(id)
+    val sentence = authorName?.takeIf { it.isNotBlank() }?.let { context.getString(R.string.share_reel_text, it, link) } ?: link
+    return ShareCards.reel(id, title = caption.orEmpty(), authorId = authorId, messageText = sentence)
 }
+
+/** Ce qu'un réel voisin offre au préchargeur : son fichier vidéo, son poster, les sons qu'il jouera. */
+private fun ReelPresentation.prepTarget(): ReelPrepTarget = ReelPrepTarget(
+    id = id,
+    videoUrl = videoUrl.takeIf { stage.showsVideoSurface },
+    posterUrl = posterUrl ?: imageUrls.firstOrNull(),
+    audioUrls = listOfNotNull(audioUrl, scene?.backgroundAudioUrl, scene?.foregroundAudioUrl).distinct(),
+)
+
+private const val REEL_RAIL_IMAGER_KEY = "reel-rail-imager"

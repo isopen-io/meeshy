@@ -1,0 +1,163 @@
+/* LES BOUTONS CANONIQUES (#8879) — un `@utility` par RÔLE, pas par écran.
+ *
+ * La passe d'harmonie a relevé les boutons pleins réécrits site par site :
+ * `backgroundColor: var(--color-ios-brand)` plus `color: '#fff'`, une hauteur
+ * de 44, 48 ou 52, un rayon de 14, 20 ou capsule. Ils se posent désormais
+ * d'une classe (`BUTTON` de `components/ui-chrome.tsx` les nomme) :
+ *
+ *   btn-primary      l'action principale — aplat de marque, encre `onBrand`
+ *   btn-secondary    l'action d'à côté — remplissage neutre, encre de l'écran
+ *   btn-destructive  le geste qui détruit — TEXTE rouge sur un voile rouge,
+ *                    jamais du blanc sur du rouge (ConfirmDialog, AA)
+ *   btn-icon         une icône seule — cible de 44, sans fond ; dans un
+ *                    en-tête, `ChromeActionDisc` dessine le disque
+ *   btn-on-media     une icône posée sur un média plein écran — voile léger,
+ *                    encre blanche, filet (échelle `MeeshyColors.onMedia…`)
+ *
+ * Tailwind n'émet un `@utility` que s'il est EMPLOYÉ : ces règles ne coûtent
+ * rien à la première peinture tant qu'aucun écran ne les pose. Aucune couleur
+ * n'est écrite ici — chaque teinte est un jeton (`ui-primitives.test.ts`).
+ * La couleur d'accent d'une conversation se pose en surcharge
+ * (`style={{ backgroundColor: 'var(--accent)' }}`) sur `btn-primary`.
+ */
+
+:root {
+  --press-scale: 0.95;
+  --press-return-ms: 180ms;
+  --press-curve: cubic-bezier(0.2, 0, 0, 1);
+  --press-reduced-opacity: 0.78;
+}
+
+/* L'APPUI D'UN BOUTON PLEIN (#18412) — l'élément s'enfonce dans l'image même
+ * (`active:scale-95`, l'usage du contrat), sans transition à l'appui, et
+ * revient sur la courbe de l'appui long (`press-feedback.css`). `scale`,
+ * jamais `transform` : les propriétés individuelles se composent avec la
+ * scène et le balayage. Sous « Réduire les animations », plus d'échelle :
+ * le voile de K02 § 4 (`pressedActiveFillOpacity`) reste, seul. */
+@utility btn-press {
+  transition: scale var(--press-return-ms) var(--press-curve);
+  &:active:not(:disabled):not([aria-disabled='true']) {
+    scale: var(--press-scale);
+    transition: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    &:active:not(:disabled):not([aria-disabled='true']) {
+      scale: none;
+      opacity: var(--press-reduced-opacity);
+    }
+  }
+}
+
+@utility btn-primary {
+  @apply btn-press;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding-block: var(--space-2);
+  padding-inline: var(--space-5);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-semibold);
+  background-color: var(--ios-indigo-500);
+  color: var(--ios-on-brand);
+  &:disabled {
+    opacity: 0.4;
+  }
+}
+
+@utility btn-secondary {
+  @apply btn-press;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding-block: var(--space-2);
+  padding-inline: var(--space-5);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-semibold);
+  background-color: var(--color-ios-fill);
+  color: var(--ios-ink);
+  &:disabled {
+    opacity: 0.4;
+  }
+}
+
+@utility btn-destructive {
+  @apply btn-press;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding-block: var(--space-2);
+  padding-inline: var(--space-5);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-semibold);
+  background-color: color-mix(in srgb, var(--color-danger) 12%, transparent);
+  color: var(--color-danger);
+  &:disabled {
+    opacity: 0.4;
+  }
+}
+
+@utility btn-icon {
+  @apply btn-press;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  min-height: 44px;
+  min-width: 44px;
+  border-radius: var(--radius-pill);
+  background-color: transparent;
+  color: inherit;
+  &:disabled {
+    opacity: 0.4;
+  }
+}
+
+@utility btn-on-media {
+  @apply btn-press;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  min-height: 44px;
+  min-width: 44px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--ios-media-hairline);
+  background-color: var(--ios-scrim-soft);
+  color: var(--ios-on-media);
+  &:disabled {
+    opacity: 0.4;
+  }
+}
+
+/* LE DISQUE DU CHROME (#18412) — `ChromeActionDisc`, dans la cible
+ * `CHROME_ACTION_HIT_CLASS` (classe `chrome-action`). Au repos, 18 % de sa
+ * propre encre ; à l'appui, l'écart « soft » de K02 (+10 points, de 0,12 à
+ * 0,22), sans transition, puis le fondu de 200 ms (`toneFadeMs`). Aucune
+ * échelle : le disque n'est pas un bouton plein. Une cible SANS disque
+ * (`RowAction`, `RowMore`) reçoit le même voile sur son propre fond. La couche
+ * `components` laisse gagner l'utilitaire qu'un site poserait. `transparent`
+ * vient EN PREMIER dans le mélange : le repli que Tailwind écrit pour un
+ * navigateur sans `color-mix` est alors transparent, jamais un disque plein
+ * de `currentColor`. */
+@layer components {
+  [data-chrome-disc] {
+    background-color: color-mix(in srgb, transparent, currentColor var(--chrome-disc-fill, 18%));
+    transition: background-color 200ms ease;
+  }
+
+  .chrome-action:active:not(:disabled) [data-chrome-disc] {
+    --chrome-disc-fill: 28%;
+    transition: none;
+  }
+
+  .chrome-action:not(:has([data-chrome-disc])):active:not(:disabled) {
+    background-color: color-mix(in srgb, transparent, currentColor 10%);
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.effects.companions.more",
+          "androidName": "call_effects_companions_more",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.effects.companions.move",
+          "androidName": "call_effects_companions_move",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

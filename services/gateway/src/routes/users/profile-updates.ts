@@ -1,0 +1,588 @@
+/**
+ * Mises à jour du profil authentifié : `PATCH /users/me`,
+ * `/users/me/avatar`, `/users/me/banner`. Extrait de `profile.ts` (#4284,
+ * budget de taille) — la façade de ré-export vit là-bas.
+ */
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { z } from 'zod';
+import { logError } from '../../utils/logger';
+import { capitalizeName, normalizeDisplayName } from '../../utils/normalize';
+import {
+  updateUserProfileSchema,
+  updateAvatarSchema,
+  updateBannerSchema
+} from '@meeshy/shared/utils/validation';
+import {
+  userSchema,
+  updateUserRequestSchema,
+  errorResponseSchema,
+  validationErrorResponseSchema
+} from '@meeshy/shared/types/api-schemas';
+import type { AuthenticatedRequest } from './types';
+import { formatUserResponse } from '../auth/types';
+import { UserRoleEnum } from '@meeshy/shared/types';
+import { authUserCacheKey } from '../../middleware/auth';
+import { getCacheStore } from '../../services/CacheStore';
+import { withMutationLog } from '../../utils/withMutationLog';
+import { SecuritySanitizer } from '../../utils/sanitize.js';
+import { changedNameViolations, sendLengthFloorRefusal, sendZodRefusal, type NameField } from '../../utils/identity-name-floor';
+import { sendSuccess, sendInternalError, sendUnauthorized, sendBadRequest } from '../../utils/response';
+import { servedUserPermissions } from '../../services/admin/served-permissions';
+import {
+  AUTO_TRANSLATE_PREFERENCE_SELECT,
+  resolveAutoTranslateEnabled,
+  writeAutoTranslateEnabled,
+} from '../../utils/auto-translate-preference';
+import { applyCategoryWriteEffects } from '../me/preferences/preference-registry';
+import { calculateProfileCompletionRate } from '../../utils/profile-completion';
+import { releaseParticipantAvatarSnapshots } from '../../services/participantAvatarSnapshots';
+import { identityImageIsCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../services/attachments/identityImageOwnership';
+import { refreshParticipantNameSnapshots } from '../../services/participantNameSnapshots';
+import { EngagementService } from '../../services/engagement/EngagementService';
+import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
+import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
+
+/**
+ * Le seuil d'une bio qui « compte » (#8959) : le MÊME que l'anneau de
+ * complétion (`calculateProfileCompletionRate`, plus de dix caractères), mesuré
+ * après `trim` — une bio d'espaces ou d'un seul mot ne complète pas un profil,
+ * et ne rapporte donc pas non plus `profile.bio`.
+ */
+const BIO_MIN_LENGTH = 11;
+
+/**
+ * La valeur qu'un nom reçu PREND en base — capitalisation (prénom, nom) ou
+ * rognage (nom affiché), puis nettoyage. La MÊME fonction écrit le nom et
+ * normalise la valeur stockée avant de juger si le nom a changé (#13825).
+ */
+function writtenName(field: NameField, value: string): string {
+  const shaped = field === 'displayName' ? normalizeDisplayName(value) : capitalizeName(value);
+  return SecuritySanitizer.sanitizeText(shaped);
+}
+
+type ProfileState = {
+  readonly bio: string | null;
+  readonly systemLanguage: string | null;
+  readonly regionalLanguage: string | null;
+};
+
+/**
+ * Les jalons de profil (#8959) qu'une écriture de `PATCH /users/me` rend VRAIS,
+ * lus sur la ligne ÉCRITE et seulement pour les champs que le corps a touchés :
+ * une mise à jour du nom ne recrédite pas une bio posée hier. Chacun paie une
+ * fois par compte — le moteur le tient ; ce filtre évite seulement d'appeler
+ * pour rien.
+ */
+function profileMilestonesReached(
+  touched: { readonly bio: boolean; readonly languages: boolean },
+  user: ProfileState,
+): readonly EngagementOperationKey[] {
+  const bio = touched.bio && (user.bio ?? '').trim().length >= BIO_MIN_LENGTH;
+  const secondLanguage = touched.languages
+    && !!user.regionalLanguage
+    && user.regionalLanguage !== user.systemLanguage;
+  return [
+    ...(bio ? ['profile.bio' as const] : []),
+    ...(secondLanguage ? ['profile.second_language' as const] : []),
+  ];
+}
+
+function creditProfileMilestones(
+  fastify: FastifyInstance,
+  userId: string,
+  operations: readonly EngagementOperationKey[],
+): void {
+  if (operations.length === 0) return;
+  const engagement = new EngagementService(fastify.prisma);
+  for (const operation of operations) {
+    engagement.recordActivity(userId, operation)
+      .catch((error: unknown) => logError(fastify.log, `[PROFILE_UPDATE] engagement ${operation} failed`, error));
+  }
+}
+
+/**
+ * Update authenticated user profile
+ */
+export async function updateUserProfile(fastify: FastifyInstance) {
+  fastify.patch('/users/me', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Update the authenticated user profile. Allows updating personal information, language preferences, and translation settings. Email and phone number are NOT accepted here (#4184) — use POST /users/me/change-email and /change-phone, which require proof of possession before writing.',
+      tags: ['users'],
+      summary: 'Update user profile',
+      body: updateUserRequestSchema,
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                user: userSchema,
+                message: { type: 'string', example: 'Profile updated successfully' }
+              }
+            }
+          }
+        },
+        // Schema partage : l'enveloppe pose `error`, `message` ET `code`
+        // (`utils/response.ts`). Les cinq 400 de ce fichier, ecrits a la main,
+        // supprimaient `message` et `code` a la serialisation, et declaraient
+        // un tableau `details` que l'enveloppe ne pose jamais comme cle — elle
+        // l'ETALE a la racine ; son champ tableau s'appelle `violations`.
+        400: { description: 'Validation error or duplicate email/phone', ...validationErrorResponseSchema },
+        401: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const authContext = (request as AuthenticatedRequest).authContext;
+
+    try {
+      if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
+        return sendUnauthorized(reply, 'Authentication required');
+      }
+
+      const userId = authContext.userId;
+
+      /* istanbul ignore next — request.body is always an object in Fastify; defensive null guard */
+      fastify.log.info(`[PROFILE_UPDATE] User ${userId} updating profile. Body keys: ${Object.keys(request.body || {}).join(', ')}`);
+
+      const body = updateUserProfileSchema.parse(request.body);
+
+      const updateData: any = {};
+
+      if (body.firstName !== undefined) updateData.firstName = writtenName('firstName', body.firstName);
+      if (body.lastName !== undefined) updateData.lastName = writtenName('lastName', body.lastName);
+      if (body.displayName !== undefined) updateData.displayName = writtenName('displayName', body.displayName);
+      // `email` et `phoneNumber` NE SONT PLUS lisibles sur `body` — retirés du
+      // schéma (#4184) précisément pour qu'aucune ligne ne puisse plus les
+      // écrire ici. Cette route les acceptait autrefois SANS preuve de
+      // possession et les posait directement en base sans jamais remettre
+      // `emailVerifiedAt`/`phoneVerifiedAt` à `null` : une session courte
+      // suffisait à un attaquant pour prendre le compte en un seul appel.
+      // Le bon geste — `POST /users/me/change-email` / `/change-phone`
+      // (`contact-change.ts`) — prouve la possession avant d'écrire quoi que
+      // ce soit ; ne pas recréer ce raccourci ici.
+      if (body.bio !== undefined) updateData.bio = SecuritySanitizer.sanitizeText(body.bio);
+
+      // UNE lecture de la ligne avant l'écriture, ouverte seulement quand un
+      // champ du corps en a besoin : un NOM (la borne de #13825 ne juge que les
+      // noms CHANGÉS, il faut donc la valeur stockée) ou un des cinq champs du
+      // taux de complétion (#3688 — displayName, bio ici ; avatar a sa propre
+      // route). Les langues seules n'ouvrent aucune requête.
+      const touchesName = body.firstName !== undefined || body.lastName !== undefined || body.displayName !== undefined;
+      const touchesCompletion = body.displayName !== undefined || body.bio !== undefined;
+      const current = touchesName || touchesCompletion
+        ? await fastify.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+              firstName: true, lastName: true, displayName: true,
+              avatar: true, bio: true, phoneNumber: true, email: true,
+            },
+          })
+        : null;
+
+      // Un compte hérité (« A ») renvoyé tel quel par l'iOS publié passe ; un
+      // nom CHANGÉ sous la borne est refusé, rien n'est écrit (#13825).
+      const nameViolations = touchesName
+        ? changedNameViolations({
+            incoming: { firstName: body.firstName, lastName: body.lastName, displayName: body.displayName },
+            stored: current,
+            normalize: writtenName,
+          })
+        : [];
+      if (nameViolations.length > 0) {
+        return sendLengthFloorRefusal(reply, 'Invalid data', nameViolations);
+      }
+
+      if (touchesCompletion) {
+        if (current) {
+          updateData.profileCompletionRate = calculateProfileCompletionRate({
+            displayName: updateData.displayName ?? current.displayName,
+            avatar: current.avatar,
+            bio: updateData.bio ?? current.bio,
+            phoneNumber: current.phoneNumber,
+            email: current.email,
+          });
+        }
+      }
+
+      if (body.systemLanguage !== undefined) updateData.systemLanguage = body.systemLanguage;
+      if (body.regionalLanguage !== undefined) {
+        // Chaîne vide = effacement de la langue secondaire → null (le Prisme la
+        // traite comme absente). Mirror de customDestinationLanguage.
+        updateData.regionalLanguage = body.regionalLanguage === '' ? null : body.regionalLanguage;
+      }
+      if (body.customDestinationLanguage !== undefined) {
+        updateData.customDestinationLanguage = body.customDestinationLanguage === '' ? null : body.customDestinationLanguage;
+      }
+
+      const updatedUser = await withMutationLog({
+        request,
+        fastify,
+        userId: userId!,
+        kind: 'updateProfile',
+        // `converges` — voir `ReplayCost` : rejouer cette op rend le même état.
+        replayCost: 'converges',
+        // `include` — la relation qui porte `autoTranslateEnabled`, dont
+        // `User` n'a aucune colonne (#3736). Elle voyage avec la ligne que
+        // cette route lit DÉJÀ plutôt que dans une seconde requête, ce que le
+        // `select` de la SSOT existe précisément pour permettre.
+        //
+        // `onDuplicate` la demande AUSSI, et ce n'est pas de la symétrie
+        // décorative : une relecture de rejeu qui l'omettrait servirait le
+        // DÉFAUT à la place de la valeur stockée — sur le seul chemin dont
+        // personne ne regarde la sortie. Le COMPILATEUR le tient, mesuré :
+        // `withMutationLog` intersecte les deux formes de retour, si bien que
+        // retirer l'`include` d'un SEUL des deux sites fait perdre la relation
+        // au type et `resolveAutoTranslateEnabled` refuse l'argument
+        // (TS2559) — le témoin de projection en nomme l'intention.
+        op: () => fastify.prisma.user.update({
+          where: { id: userId },
+          data: updateData,
+          include: AUTO_TRANSLATE_PREFERENCE_SELECT,
+        }),
+        onDuplicate: (resultId) => fastify.prisma.user.findUnique({
+          where: { id: resultId },
+          include: AUTO_TRANSLATE_PREFERENCE_SELECT,
+        }),
+      });
+
+      try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
+
+      // `autoTranslateEnabled` — ACCEPTÉE par les deux schémas du corps (AJV
+      // `updateUserRequestSchema`, Zod `updateUserProfileSchema`) et JETÉE
+      // jusqu'à #3736 : `updateData` ci-dessus ne compose que des colonnes de
+      // `User`, où celle-ci n'existe pas. Son unique magasin est le document
+      // `UserPreferences.application` — la SSOT le sait, ce site l'appelle
+      // (`utils/auto-translate-preference.ts`) plutôt que de réécrire la
+      // fusion, qui est la moitié du problème.
+      //
+      // Elle est SERVIE dans les deux cas, écrite ou non : le contrat de cette
+      // route est un objet `user` COMPLET, et un client qui remplace son cache
+      // par cette réponse ne doit pas y perdre une préférence qu'il n'a pas
+      // touchée. Le chemin nominal — un corps qui ne la nomme pas — n'ouvre
+      // pour cela AUCUNE requête : il lit la relation jointe ci-dessus.
+      const autoTranslateEnabled =
+        body.autoTranslateEnabled === undefined
+          ? resolveAutoTranslateEnabled(updatedUser)
+          : await writeAutoTranslateEnabled(fastify.prisma, userId!, body.autoTranslateEnabled);
+
+      // Persister ne suffit pas : une ligne de préférences est par UTILISATEUR,
+      // pas par appareil (`services/gateway/CLAUDE.md`). `applyCategoryWriteEffects`
+      // est le site UNIQUE de ce qui suit une écriture de catégorie — les
+      // crochets de stockage PUIS la diffusion `user:preferences-updated` — et
+      // c'est lui, jamais une diffusion recopiée ici, qui garde ce site aligné
+      // sur les quatre verbes de `/me/preferences/application`.
+      if (body.autoTranslateEnabled !== undefined) {
+        await applyCategoryWriteEffects(fastify, userId!, ['application']);
+      }
+
+      // Toggle de la visibilité publique du profil vocal. `updateMany` est
+      // volontairement utilisé pour ne PAS lever P2025 quand l'utilisateur n'a
+      // pas encore de modèle vocal : la requête affecte 0 ligne et le toggle est
+      // un no-op silencieux (l'utilisateur n'a rien à exposer).
+      if (body.voicePublic !== undefined) {
+        await fastify.prisma.userVoiceModel.updateMany({
+          where: { userId },
+          data: { voicePublicAt: body.voicePublic ? new Date() : null },
+        });
+      }
+
+      // B3 (5.3) — un changement de langue doit rafraîchir le snapshot
+      // `resolvedLanguages` des sockets connectés du user, sinon SOCKET_LANG_FILTER
+      // continue de filtrer sur l'ancienne langue jusqu'à reconnexion. Best-effort.
+      const langChanged =
+        body.systemLanguage !== undefined ||
+        body.regionalLanguage !== undefined ||
+        body.customDestinationLanguage !== undefined;
+      if (langChanged) {
+        // #9708 — les langues cibles des conversations de ce compte changent.
+        announceConversationLanguageChange({ kind: 'reader-languages', userId: userId! });
+        fastify.socketIOHandler?.getManager?.()?.refreshUserResolvedLanguages(userId!, {
+          systemLanguage: updatedUser.systemLanguage,
+          regionalLanguage: updatedUser.regionalLanguage,
+          customDestinationLanguage: updatedUser.customDestinationLanguage,
+          deviceLocale: updatedUser.deviceLocale,
+        });
+      }
+
+      // Realtime propagation to conversation partners (tasks/socketio-events-cleanup.md #6).
+      // Only public-facing fields matter to other users' cached profile view.
+      //
+      // Les quatre composants du nom voyagent en GROUPE, pas en delta. Le nom
+      // rendu par un client est `displayName > « Prénom Nom » > username` : un
+      // delta partiel (« firstName vaut désormais Bob ») est IRRECOMPOSABLE chez
+      // le destinataire, qui ne stocke que le nom déjà composé — il lui manque
+      // toujours les autres composants. Envoyer les quatre ensemble laisse chaque
+      // client appliquer SON résolveur (`getUserDisplayName` web,
+      // `APIConversationUser.name` iOS) au lieu d'en fabriquer une quatrième
+      // copie côté serveur.
+      const nameChanged =
+        body.firstName !== undefined ||
+        body.lastName !== undefined ||
+        body.displayName !== undefined;
+      if (nameChanged) {
+        const publicChanges = {
+          displayName: updatedUser.displayName,
+          firstName: updatedUser.firstName,
+          lastName: updatedUser.lastName,
+          username: updatedUser.username,
+        };
+        await refreshParticipantNameSnapshots(fastify.prisma, userId!, publicChanges)
+          .catch((err: unknown) => logError(fastify.log, '[PROFILE_UPDATE] participant name refresh failed', err));
+        fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: publicChanges })
+          .catch((err: unknown) => logError(fastify.log, '[PROFILE_UPDATE] emitUserUpdated failed', err));
+
+        // Le nom résolu pour l'indicateur de frappe (`displayName` > « Prénom Nom »
+        // > `username`) dérive de ces trois champs, mis en cache par StatusHandler.
+        // Invalider ce cache pour que « X écrit… » reflète le nouveau nom sans
+        // attendre l'expiration du TTL. Jumeau du refresh de langue ci-dessus.
+        fastify.socketIOHandler?.getManager?.()?.refreshUserTypingIdentity(userId!);
+      }
+
+      creditProfileMilestones(fastify, userId!, profileMilestonesReached(
+        {
+          bio: body.bio !== undefined,
+          languages: body.regionalLanguage !== undefined || body.systemLanguage !== undefined,
+        },
+        updatedUser,
+      ));
+
+      // La MATRICE, jamais une copie (#4152).
+      //
+      // Ces trois sites composaient les permissions à la main, sur le seul
+      // prédicat `role === 'ADMIN' || role === 'BIGBOSS'` : un MODERATOR qui
+      // changeait son avatar recevait `canAccessAdmin: false` et voyait la
+      // console d'administration DISPARAÎTRE de son écran — sans qu'aucun rôle
+      // n'ait changé, et alors que le serveur continuait de l'autoriser.
+      const permissions = servedUserPermissions(updatedUser.role as UserRoleEnum);
+
+      return sendSuccess(reply, {
+        user: formatUserResponse({ ...updatedUser, autoTranslateEnabled }, permissions),
+        message: 'Profile updated successfully'
+      });
+
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        /* istanbul ignore next — authContext always set by authenticate preValidation */
+        const userId = authContext?.userId || 'unknown';
+        logError(fastify.log, `[PROFILE_UPDATE] Validation error for user ${userId}: ${JSON.stringify(error.issues)}`, error);
+        return sendZodRefusal(reply, 'Invalid data', error);
+      }
+
+      logError(fastify.log, 'Update user profile error:', error);
+      return sendInternalError(reply, 'Internal server error');
+    }
+  });
+}
+
+/**
+ * Update user avatar
+ */
+export async function updateUserAvatar(fastify: FastifyInstance) {
+  fastify.patch('/users/me/avatar', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Update the authenticated user avatar image. Accepts a URL pointing to the avatar image.',
+      tags: ['users'],
+      summary: 'Update user avatar',
+      body: {
+        type: 'object',
+        required: ['avatar'],
+        properties: {
+          avatar: { type: 'string', description: 'Avatar image URL or API path' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                user: userSchema,
+                message: { type: 'string', example: 'Avatar updated successfully' }
+              }
+            }
+          }
+        },
+        400: { description: 'Invalid image format', ...validationErrorResponseSchema },
+        401: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const authContext = (request as AuthenticatedRequest).authContext;
+      if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
+        return sendUnauthorized(reply, 'Authentication required');
+      }
+
+      const userId = authContext.userId;
+
+      const rawBody = request.body as { avatar?: unknown };
+      if (typeof rawBody.avatar === 'string' && rawBody.avatar.startsWith('data:')) {
+        return sendBadRequest(reply, 'Avatar must be a file URL. Data URI (base64) avatars are not accepted.');
+      }
+
+      fastify.log.info(`[AVATAR_UPDATE] User ${userId} updating avatar. Body: ${JSON.stringify(request.body)}`);
+
+      const body = updateAvatarSchema.parse(request.body);
+
+      fastify.log.info(`[AVATAR_UPDATE] Avatar URL validated: ${body.avatar}`);
+
+      // Recalcul du taux de complétion (#3688) — l'avatar est un des cinq
+      // champs de la formule ; les quatre autres sont relus pour la recomposer.
+      const current = await fastify.prisma.user.findUnique({
+        where: { id: userId },
+        select: { displayName: true, bio: true, phoneNumber: true, email: true, avatar: true },
+      });
+
+      if (!(await identityImageIsCallers(fastify.prisma, { userId: userId!, reference: body.avatar, current: current?.avatar }))) {
+        return sendBadRequest(reply, 'Invalid image format', { code: IDENTITY_IMAGE_NOT_OWNED });
+      }
+
+      const updatedUser = await fastify.prisma.user.update({
+        where: { id: userId },
+        data: {
+          avatar: body.avatar,
+          ...(current && {
+            profileCompletionRate: calculateProfileCompletionRate({ ...current, avatar: body.avatar }),
+          }),
+        },
+      });
+
+      await releaseParticipantAvatarSnapshots(fastify.prisma, userId!)
+        .catch((err: unknown) => logError(fastify.log, '[AVATAR_UPDATE] participant snapshot release failed', err));
+
+      try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
+
+      fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: { avatar: updatedUser.avatar } })
+        .catch((err: unknown) => logError(fastify.log, '[AVATAR_UPDATE] emitUserUpdated failed', err));
+
+      fastify.log.info(`[AVATAR_UPDATE] Avatar updated successfully for user ${userId}`);
+
+      if ((updatedUser.avatar ?? '').trim().length > 0) {
+        creditProfileMilestones(fastify, userId!, ['profile.avatar']);
+      }
+
+      // La MATRICE, jamais une copie (#4152).
+      //
+      // Ces trois sites composaient les permissions à la main, sur le seul
+      // prédicat `role === 'ADMIN' || role === 'BIGBOSS'` : un MODERATOR qui
+      // changeait son avatar recevait `canAccessAdmin: false` et voyait la
+      // console d'administration DISPARAÎTRE de son écran — sans qu'aucun rôle
+      // n'ait changé, et alors que le serveur continuait de l'autoriser.
+      const permissions = servedUserPermissions(updatedUser.role as UserRoleEnum);
+
+      return sendSuccess(reply, {
+        user: formatUserResponse(updatedUser, permissions),
+        message: 'Avatar updated successfully'
+      });
+
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        logError(fastify.log, `[AVATAR_UPDATE] Validation error: ${JSON.stringify(error.issues)}`, error);
+        return sendBadRequest(reply, 'Invalid image format');
+      }
+
+      logError(fastify.log, 'Update user avatar error:', error);
+      return sendInternalError(reply, 'Internal server error');
+    }
+  });
+}
+
+/**
+ * Update user banner
+ */
+export async function updateUserBanner(fastify: FastifyInstance) {
+  fastify.patch('/users/me/banner', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Update the authenticated user banner image. Accepts a URL pointing to the banner image.',
+      tags: ['users'],
+      summary: 'Update user banner',
+      body: {
+        type: 'object',
+        required: ['banner'],
+        properties: {
+          banner: { type: 'string', description: 'Banner image URL or API path' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                user: userSchema,
+                message: { type: 'string', example: 'Banner updated successfully' }
+              }
+            }
+          }
+        },
+        400: { description: 'Invalid image format', ...validationErrorResponseSchema },
+        401: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const authContext = (request as AuthenticatedRequest).authContext;
+      if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
+        return sendUnauthorized(reply, 'Authentication required');
+      }
+
+      const userId = authContext.userId;
+
+      fastify.log.info(`[BANNER_UPDATE] User ${userId} updating banner`);
+
+      const body = updateBannerSchema.parse(request.body);
+
+      const current = await fastify.prisma.user.findUnique({ where: { id: userId }, select: { banner: true } });
+      if (!(await identityImageIsCallers(fastify.prisma, { userId: userId!, reference: body.banner, current: current?.banner }))) {
+        return sendBadRequest(reply, 'Invalid image format', { code: IDENTITY_IMAGE_NOT_OWNED });
+      }
+
+      const updatedUser = await fastify.prisma.user.update({
+        where: { id: userId },
+        data: { banner: body.banner },
+      });
+
+      try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
+
+      fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: { banner: updatedUser.banner } })
+        .catch((err: unknown) => logError(fastify.log, '[BANNER_UPDATE] emitUserUpdated failed', err));
+
+      fastify.log.info(`[BANNER_UPDATE] Banner updated successfully for user ${userId}`);
+
+      // La MATRICE, jamais une copie (#4152).
+      //
+      // Ces trois sites composaient les permissions à la main, sur le seul
+      // prédicat `role === 'ADMIN' || role === 'BIGBOSS'` : un MODERATOR qui
+      // changeait son avatar recevait `canAccessAdmin: false` et voyait la
+      // console d'administration DISPARAÎTRE de son écran — sans qu'aucun rôle
+      // n'ait changé, et alors que le serveur continuait de l'autoriser.
+      const permissions = servedUserPermissions(updatedUser.role as UserRoleEnum);
+
+      return sendSuccess(reply, {
+        user: formatUserResponse(updatedUser, permissions),
+        message: 'Banner updated successfully'
+      });
+
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        logError(fastify.log, `[BANNER_UPDATE] Validation error: ${JSON.stringify(error.issues)}`, error);
+        return sendBadRequest(reply, 'Invalid image format');
+      }
+
+      logError(fastify.log, 'Update user banner error:', error);
+      return sendInternalError(reply, 'Internal server error');
+    }
+  });
+}

@@ -1,0 +1,359 @@
+import SwiftUI
+import PhotosUI
+import MeeshySDK
+import MeeshyUI
+
+// Les membres du composer ont perdu leur `private` dans `PostDetailView.swift`
+// au moment de l'extraction : une extension dans un AUTRE fichier ne voit pas
+// les membres privés de son type. C'est un RETRAIT, pas un ajout — le fichier
+// hôte, hors budget, n'a pas gagné une ligne.
+
+/// **LE COMPOSER DE COMMENTAIRE du détail d'un post** — extrait de
+/// `PostDetailView.swift` (#6578).
+///
+/// Il y vivait dans un fichier de 2 329 lignes, très au-delà du plafond dur de
+/// 1 200 : le lot qui devait lui apprendre à CITER un média ne pouvait pas y
+/// écrire une ligne de plus sans extraire d'abord. Le découpage suit la
+/// responsabilité, pas la tranche — tout ce qui compose, stage et envoie un
+/// commentaire est ici, et rien d'autre.
+///
+/// Le corps est repris MOT POUR MOT de l'hôte ; les additions du lot portent
+/// leur raison sur place.
+
+extension PostDetailView {
+
+    var composer: some View {
+        UniversalComposerBar(
+            style: .light,
+            mode: .comment,
+            onIngest: { ingests in handleComposerIngest(ingests) },
+            accentColor: accentColor,
+            secondaryColor: composerSecondaryColor,
+            forceShowAttachment: true,
+            voiceDoor: .open,
+            selectedLanguage: composerLanguage,
+            onLanguageChange: { composerLanguage = $0 },
+            onFocusChange: { composerIsFocused = $0 },
+            onSendMessage: { text, attachments, _ in submitComment(text: text, attachments: attachments) },
+            onLocationRequest: { showCommentLocationPicker = true },
+            textBinding: $composerText,
+            replyBanner: replyBannerView,
+            // **CE DONT ON PARLE, puis CE QU'ON JOINT** (#6578). Deux bandes
+            // distinctes dans la même zone : la citation désigne un média du
+            // POST, les pièces stagées sont les nôtres. Les confondre ferait
+            // croire qu'on peut retirer l'une en retirant l'autre.
+            //
+            // `CommentQuotationChip` lit le magasin LUI-MÊME et se rend vide
+            // quand il n'y a rien à citer — d'où le `AnyView` inconditionnel :
+            // le test « y a-t-il quelque chose à montrer ? » ne peut pas
+            // s'écrire ici sans dupliquer la lecture, et un hôte hors budget ne
+            // peut pas porter l'état qui le permettrait.
+            customAttachmentsPreview: AnyView(
+                VStack(spacing: 0) {
+                    CommentQuotationChip(postId: postId, accentColor: accentColor)
+                    if !commentAttachments.isEmpty || pendingPlace != nil {
+                        CommentAttachmentsTray(attachments: commentAttachments, onRemove: { id in
+                            commentAttachments.removeAll { $0.id == id }
+                        }, place: pendingPlace, onRemovePlace: { pendingPlace = nil }, accentColor: accentColor)
+                    }
+                }
+            ),
+            onTextChange: { text in
+                mentionController.handleQuery(in: text, participants: MentionParticipants.of(post: displayPost, comments: viewModel.comments))
+                CommentDraftStore.shared.save(postId: postId, text: text)
+            },
+            onStartRecording: { startCommentRecording() },
+            onStopRecordingToAttachment: { stopCommentRecordingToAttachment() },
+            onSendRecording: { stopAndSendCommentRecording() },
+            onCancelRecording: { audioRecorder.cancelRecording() },
+            externalIsRecording: audioRecorder.isRecording,
+            externalRecordingDuration: audioRecorder.duration,
+            externalAudioLevels: audioRecorder.audioLevels,
+            // La citation COMPTE comme du contenu : désigner une photo puis
+            // n'écrire que « 😍 » est le cas nominal, et un bouton d'envoi
+            // éteint sur une citation posée serait un contrôle qui ment.
+            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording || pendingPlace != nil
+                || CommentQuotationStore.shared.quotation(for: postId) != nil,
+            onPhotoLibrary: { showCommentPhotoPicker = true },
+            onFilePicker: { showCommentFilePicker = true },
+            // Le panneau « + » retient la scène comme le clavier (#10544) :
+            // dit AVANT qu'il ne se monte, relâché quand il se referme.
+            onShowAttachments: { sceneMeasures = sceneMeasures.recordingInputPanel(open: true) },
+            onAttachmentsVisibilityChange: { sceneMeasures = sceneMeasures.recordingInputPanel(open: $0) },
+            isBlurEnabled: $commentBlurEnabled,
+            pendingEffects: $commentEffects,
+            externalAttachments: commentAttachments,
+            focusTrigger: $composerFocusTrigger
+        )
+        #if DEBUG
+        .onAppear { preterLEnvoiDuVocalALaVitrine() }
+        #endif
+        // **Le plafond du choix est celui de l'envoi** (#6578). Il valait 1 —
+        // un contrôle qui ment, puisque le bandeau affiche un TABLEAU — et vaut
+        // désormais `MAX_POST_MEDIA`, la MÊME constante que le schéma du
+        // serveur : deux plafonds seraient deux vérités, et la seconde
+        // dériverait au premier ajustement.
+        .photosPicker(
+            isPresented: $showCommentPhotoPicker,
+            selection: $commentPhotoItems,
+            maxSelectionCount: MAX_POST_MEDIA,
+            matching: .any(of: [.images, .videos]), preferredItemEncoding: .current
+        )
+        .fileImporter(
+            isPresented: $showCommentFilePicker,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: true
+        ) { result in
+            if case .success(let urls) = result {
+                CommentAttachmentIntake.admit(CommentComposerStaging.fileAttachments(from: urls), into: &commentAttachments)
+            }
+        }
+        .sheet(isPresented: $showCommentLocationPicker) {
+            LocationPickerView(accentColor: accentColor) { place in
+                pendingPlace = place
+                showCommentLocationPicker = false
+            }
+        }
+        // **Désigner depuis le plein écran doit AMENER au clavier.** La
+        // galerie se referme sur le fil ; sans ce relais l'utilisateur voit une
+        // puce apparaître sous un champ qu'il doit aller toucher lui-même, et
+        // le geste « commenter cette photo » s'arrête à mi-chemin.
+        .adaptiveOnChange(of: CommentQuotationStore.shared.quotation(for: postId)?.postMediaId) { avant, apres in
+            guard apres != nil, avant != apres else { return }
+            composerFocusTrigger = true
+        }
+        // Ce qu'on choisit REJOINT la zone, aussitôt (#9736) : il remplaçait
+        // ce qui s'y trouvait, et n'apparaissait qu'une fois son fichier lu.
+        .adaptiveOnChange(of: commentPhotoItems) { _, items in
+            guard !items.isEmpty else { return }
+            commentPhotoItems = []
+            CommentAttachmentIntake.stage(items, into: $commentAttachments)
+        }
+        // « Éditer » une pièce jointe : la scène du composeur (#9127).
+        .commentSceneRetouch(attachments: $commentAttachments)
+        // La caméra (#9736) et le sticker (#14335), comme dans un message.
+        .commentMediaDoors(attachments: $commentAttachments, accentColor: accentColor)
+        // #9743 — un commentaire non envoyé auquel l'auteur renonce quitte la liste.
+        .unsentComments(restore: {}, discard: { viewModel.discardUnsentComment($0) }, draft: $composerText)
+    }
+
+    // MARK: - Reply targeting
+
+    /// Amorce une réponse. Répondre à une réponse (niveau 2) reste plat au niveau
+    /// 2 (cf. `sendReply` : parentId = racine) ; on préremplit une @mention vers
+    /// l'auteur ciblé pour qu'il soit notifié (`user_mentioned`) malgré le
+    /// reparentage à la racine.
+    func beginReply(to target: FeedComment) {
+        viewModel.replyingTo = target
+        composerFocusTrigger = true
+        // Retire la @mention auto-injectée d'une cible précédente avant d'en poser
+        // une nouvelle (évite accumulation / mauvais auteur notifié).
+        if let old = prefilledMention, composerText.hasPrefix(old) {
+            composerText = String(composerText.dropFirst(old.count))
+        }
+        prefilledMention = nil
+        guard target.parentId != nil,
+              let username = target.authorUsername, !username.isEmpty else { return }
+        let mention = "@\(username) "
+        if !composerText.hasPrefix(mention) {
+            composerText = mention + composerText
+        }
+        prefilledMention = mention
+    }
+
+    // MARK: - Comment send + voice (parity with feed/reels composer)
+
+    /// Dépôt / collage arrivé par la bande du composer (`onIngest`) : textes
+    /// fusionnés en UNE insertion (au curseur si le champ a le focus, sinon à
+    /// la fin), fichiers routés vers le staging commentaire existant
+    /// (lot 1).
+    private func handleComposerIngest(_ ingests: [ComposerIngest]) {
+        if let block = CommentComposerIngestion.mergedText(from: ingests) {
+            if !(composerIsFocused && CommentComposerIngestion.insertAtCursor(block)) {
+                composerText += block
+            }
+        }
+        CommentComposerIngestion.stageFiles(
+            CommentComposerIngestion.files(from: ingests),
+            accentColor: accentColor
+        ) { staged in
+            CommentAttachmentIntake.admit(staged, into: &commentAttachments)
+        }
+    }
+
+    private func submitComment(text: String, attachments: [ComposerAttachment]) {
+        if let editing = viewModel.editingComment {
+            submitCommentEdit(editing, text: text)
+            return
+        }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let media = CommentComposerStaging.pendingMedia(in: attachments)
+        let staged = commentAttachments
+        commentAttachments = CommentAttachmentIntake.stillLoading(commentAttachments)
+        let place = pendingPlace
+        pendingPlace = nil
+        // **La citation se LIT puis s'EFFACE, dans le même geste** (#6578) :
+        // la garder ferait citer le même média au commentaire suivant, comme
+        // un réglage collant, alors qu'elle décrit UNE phrase.
+        let citation = CommentQuotationStore.shared.quotation(for: postId)
+        CommentQuotationStore.shared.clear(for: postId)
+        guard !trimmed.isEmpty || !media.isEmpty || place != nil || citation != nil else { return }
+        let flags = commentEffects.flags.rawValue | (commentBlurEnabled ? MessageEffectFlags.blurred.rawValue : 0)
+        commentEffects = .none
+        commentBlurEnabled = false
+        // Réponse plate à 2 niveaux (cf. sendReply) : reparente à la racine.
+        let parentId = viewModel.replyingTo?.parentId ?? viewModel.replyingTo?.id
+        let effectFlags = flags > 0 ? Int(flags) : nil
+        // #6587 — la pastille DÉCLARE la langue ; sans ce relais, le serveur la devine.
+        let lang = composerLanguage
+        Task {
+            let sent: Bool
+            if !media.isEmpty {
+                sent = await viewModel.submitCommentWithMedia(trimmed, originalLanguage: lang, effectFlags: effectFlags, parentId: parentId, pendingMedia: media, location: place, quoted: citation)
+            } else if parentId != nil {
+                sent = await viewModel.sendReply(trimmed, originalLanguage: lang, effectFlags: effectFlags, location: place, quoted: citation)
+            } else {
+                sent = await viewModel.sendComment(trimmed, originalLanguage: lang, effectFlags: effectFlags, location: place, quoted: citation)
+            }
+            // **Rien n'a pu partir ni rejoindre la file** (#9743) : le
+            // commentaire revient dans le composeur, texte, pièces et lieu
+            // compris, pour être renvoyé d'un toucher.
+            guard !sent else { return }
+            if composerText.isEmpty { composerText = trimmed }
+            if commentAttachments.isEmpty { commentAttachments = staged }
+            if pendingPlace == nil { pendingPlace = place }
+        }
+    }
+
+    private func startCommentRecording() {
+        audioRecorder.startRecording()
+        HapticFeedback.medium()
+    }
+
+    @discardableResult
+    private func stopCommentRecordingToAttachment() -> Bool {
+        guard audioRecorder.duration > 0.5 else {
+            audioRecorder.cancelRecording()
+            return false
+        }
+        let duration = audioRecorder.duration
+        guard let url = audioRecorder.stopRecording() else { return false }
+        return stagerLeVocal(url, duree: duration)
+    }
+
+    /// Un vocal terminé rejoint la zone de commentaire.
+    private func stagerLeVocal(_ url: URL, duree: TimeInterval) -> Bool {
+        !CommentAttachmentIntake.admit(
+            [CommentComposerStaging.voiceAttachment(duration: duree, url: url)], into: &commentAttachments
+        ).isEmpty
+    }
+
+    private func stopAndSendCommentRecording() {
+        guard stopCommentRecordingToAttachment() else { return }
+        submitComment(text: "", attachments: commentAttachments)
+    }
+
+    #if DEBUG
+    /// La vitrine (#9810) : le micro ne se simule pas, un vocal FOURNI prend le chemin d'un enregistrement envoyé.
+    private func preterLEnvoiDuVocalALaVitrine() {
+        VitrineRendu.shared.composeurDeCommentaireAffiche { url, duree in
+            guard stagerLeVocal(url, duree: duree) else { return }
+            submitComment(text: "", attachments: commentAttachments)
+        }
+    }
+    #endif
+}
+
+extension PostDetailView {
+
+    var replyBannerView: AnyView? {
+        // Mode ÉDITION : bandeau dédié (prioritaire sur la réponse).
+        if let editing = viewModel.editingComment {
+            return AnyView(
+                HStack(spacing: MeeshySpacing.sm) {
+                    Image(systemName: "pencil")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color(hex: accentColor))
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                        Text(String(localized: "feed.comments.editing", defaultValue: "Modification du commentaire", bundle: .main))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(theme.textSecondary)
+                        Text(editing.displayContent)
+                            .font(.caption)
+                            .foregroundStyle(theme.textMuted)
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    Button {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            cancelEditComment()
+                        }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption2.bold())
+                            .foregroundStyle(theme.textMuted)
+                            .frame(width: 24, height: 24)
+                            .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
+                    }
+                    .accessibilityLabel(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
+                    .meeshyTapTarget(MeeshyControlSize.tapTarget)
+                }
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                        .fill(theme.surfaceGradient(tint: accentColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                                .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
+                        )
+                )
+            )
+        }
+        guard let reply = viewModel.replyingTo else { return nil }
+        return AnyView(
+            HStack(spacing: MeeshySpacing.sm) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color(hex: reply.authorColor))
+                    .frame(width: 3, height: 36)
+
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    Text(reply.author)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color(hex: reply.authorColor))
+
+                    Text(reply.displayContent)
+                        .font(.caption)
+                        .foregroundStyle(theme.textSecondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Button {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        viewModel.clearReply()
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption2.bold())
+                        .foregroundStyle(theme.textMuted)
+                        .frame(width: 24, height: 24)
+                        .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
+                }
+                .accessibilityLabel(String(localized: "a11y.comment.cancel_reply", defaultValue: "Annuler la réponse", bundle: .main))
+                .meeshyTapTarget(MeeshyControlSize.tapTarget)
+            }
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.sm)
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .fill(theme.surfaceGradient(tint: accentColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                            .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
+                    )
+            )
+        )
+    }
+}

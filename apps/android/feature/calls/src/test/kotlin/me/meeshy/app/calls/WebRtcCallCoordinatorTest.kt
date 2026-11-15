@@ -46,10 +46,13 @@ class WebRtcCallCoordinatorTest {
     private val iceState = MutableStateFlow(IceConnectionState.NEW)
     private val localCandidates = MutableSharedFlow<IceCandidate>(extraBufferCapacity = 8)
     private val incomingSignals = MutableSharedFlow<CallSignalEnvelope>(extraBufferCapacity = 8)
+    private val renegotiations = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
 
     private val engine: WebRtcEngine = mockk(relaxed = true) {
         every { iceConnectionState } returns iceState
         every { localIceCandidates } returns localCandidates
+        every { dataChannelMessages } returns MutableSharedFlow()
+        every { renegotiationRequests } returns renegotiations
         coEvery { createOffer() } returns SessionDescription(SessionDescription.Type.OFFER, "v=0-restart")
         coEvery { createAnswer() } returns SessionDescription(SessionDescription.Type.ANSWER, "v=0-answer")
         coEvery { setLocalDescription(any()) } returns Unit
@@ -71,11 +74,11 @@ class WebRtcCallCoordinatorTest {
 
     @Before
     fun setUp() {
-        coordinator = WebRtcCallCoordinator(engine, signals, context)
+        coordinator = WebRtcCallCoordinator(engine, signals, context, GroupCallNameSource.NONE)
     }
 
-    private fun CoroutineScope.startAsCaller() = coordinator.startOutgoing(
-        this, "call-9", emptyList(), peerId = "peer", selfId = "me", isVideo = false,
+    private fun CoroutineScope.startAsCaller(isVideo: Boolean = false) = coordinator.startOutgoing(
+        this, "call-9", emptyList(), peerId = "peer", selfId = "me", isVideo = isVideo,
         onMediaConnected = { connectedCount += 1 },
         onMediaStalled = { stalledCount += 1 },
     )
@@ -269,8 +272,8 @@ class WebRtcCallCoordinatorTest {
     fun `a stale offer arriving after a newer one is dropped`() = runTest(UnconfinedTestDispatcher()) {
         startAsCallee()
 
-        incomingSignals.emit(remoteSignal("offer", negotiationId = 2, sdp = "v=0-fresh"))
-        incomingSignals.emit(remoteSignal("offer", negotiationId = 1, sdp = "v=0-stale"))
+        incomingSignals.emit(remoteSignal("offer", negotiationId = 3, sdp = "v=0-fresh"))
+        incomingSignals.emit(remoteSignal("offer", negotiationId = 2, sdp = "v=0-stale"))
 
         coVerify(exactly = 1) { engine.setRemoteDescription(match { it.description == "v=0-fresh" }) }
         coVerify(exactly = 0) { engine.setRemoteDescription(match { it.description == "v=0-stale" }) }
@@ -315,4 +318,234 @@ class WebRtcCallCoordinatorTest {
             coVerify(exactly = 1) { engine.setRemoteDescription(match { it.description == "v=0-legacy" }) }
             coordinator.end()
         }
+
+    // MARK: - Screen share renegotiation (#13332, mirrors iOS screenShareNeedsRenegotiation)
+
+    @Test
+    fun `an engine renegotiation request sends a fresh offer of the next generation, from the callee too`() =
+        runTest(UnconfinedTestDispatcher()) {
+            startAsCallee()
+            incomingSignals.emit(remoteSignal("offer", negotiationId = 2, sdp = "v=0-offer"))
+
+            renegotiations.emit(Unit)
+
+            coVerify(exactly = 1) { engine.setLocalDescription(match { it.type == SessionDescription.Type.OFFER }) }
+            verify(exactly = 1) {
+                signals.emitOffer("call-9", "v=0-restart", to = "peer", from = "me", negotiationId = 3)
+            }
+            coordinator.end()
+        }
+
+    @Test
+    fun `a renegotiation request after the call ended sends nothing`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller()
+        coordinator.end()
+
+        renegotiations.emit(Unit)
+
+        verify(exactly = 0) { signals.emitOffer(any(), any(), any(), any(), any()) }
+    }
+
+    // MARK: - Speaker routing (#4798)
+    //
+    // The unit-test JVM's `android.jar` stub reports `Build.VERSION.SDK_INT == 0`
+    // (no Robolectric here), so `CallAudioRoute.actionFor` always resolves to the
+    // legacy `SetSpeakerphoneOn` branch — exactly the branch these tests assert on.
+    // The API-31+ branch selection itself is covered exhaustively, as a pure
+    // function, by CallAudioRouteTest.
+
+    @Test
+    fun `an outgoing audio call defaults to the earpiece`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller(isVideo = false)
+
+        verify(exactly = 1) { audioManager.isSpeakerphoneOn = false }
+        coordinator.end()
+    }
+
+    @Test
+    fun `an outgoing video call defaults to the loudspeaker`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller(isVideo = true)
+
+        verify(exactly = 1) { audioManager.isSpeakerphoneOn = true }
+        coordinator.end()
+    }
+
+    @Test
+    fun `starting a call routes audio into communication mode`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller()
+
+        verify(exactly = 1) { audioManager.mode = AudioManager.MODE_IN_COMMUNICATION }
+        coordinator.end()
+    }
+
+    @Test
+    fun `ending a call restores the normal audio mode`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller(isVideo = false)
+
+        coordinator.end()
+
+        verify(exactly = 1) { audioManager.mode = AudioManager.MODE_NORMAL }
+    }
+
+    @Test
+    fun `ending without ever routing call audio leaves the audio state untouched`() =
+        runTest(UnconfinedTestDispatcher()) {
+            coordinator.end()
+
+            verify(exactly = 0) { audioManager.mode = any() }
+            verify(exactly = 0) { audioManager.isSpeakerphoneOn = any() }
+        }
+
+    @Test
+    fun `toggling the speaker on routes to the loudspeaker`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller(isVideo = false)
+
+        coordinator.setSpeakerEnabled(true)
+
+        verify(exactly = 1) { audioManager.isSpeakerphoneOn = true }
+        coordinator.end()
+    }
+
+    @Test
+    fun `toggling the speaker off routes back to the earpiece`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller(isVideo = true)
+
+        coordinator.setSpeakerEnabled(false)
+
+        verify(exactly = 1) { audioManager.isSpeakerphoneOn = false }
+        coordinator.end()
+    }
+
+    @Test
+    fun `ending a call started on the loudspeaker also clears the speaker route`() =
+        runTest(UnconfinedTestDispatcher()) {
+            startAsCaller(isVideo = true)
+
+            coordinator.end()
+
+            // Undoes the video-call default (isSpeakerphoneOn = true at start) —
+            // without this, the route survives the call and leaks onto whatever
+            // audio plays next (e.g. a voice message coming out of the loudspeaker
+            // while the phone is held to the ear).
+            verify(exactly = 1) { audioManager.isSpeakerphoneOn = false }
+        }
+
+    @Test
+    fun `an explicit speakerOn intent overrides the isVideo default on startIncoming`() =
+        runTest(UnconfinedTestDispatcher()) {
+            // An audio call (isVideo = false) would default to the earpiece, but the
+            // caller (CallViewModel.accept) already knows the user tapped the
+            // speaker button while the join ACK was in flight — that intent must win.
+            coordinator.startIncoming(
+                this, "call-9", emptyList(), peerId = "peer", selfId = "me", isVideo = false,
+                onMediaConnected = {}, onMediaStalled = {}, speakerOn = true,
+            )
+
+            verify(exactly = 1) { audioManager.isSpeakerphoneOn = true }
+            verify(exactly = 0) { audioManager.isSpeakerphoneOn = false }
+            coordinator.end()
+        }
+
+    @Test
+    fun `the speaker preference is re-applied fresh on the next call`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller(isVideo = true)
+        coordinator.setSpeakerEnabled(false)
+        coordinator.end()
+
+        startAsCaller(isVideo = true)
+
+        // Twice total across both calls: the fresh video-default for call 2 must
+        // still fire even though the previous call's explicit toggle left it off.
+        verify(exactly = 2) { audioManager.isSpeakerphoneOn = true }
+        coordinator.end()
+    }
+
+    @Test
+    fun `an offer that lands between the join and the connection opening is still answered`() = runTest(UnconfinedTestDispatcher()) {
+        coordinator.holdIncomingSignals(this, "call-9")
+        incomingSignals.emit(remoteSignal("offer", sdp = "v=0-offer"))
+
+        startAsCallee()
+
+        coVerify(exactly = 1) { engine.setRemoteDescription(match { it.type == SessionDescription.Type.OFFER && it.description == "v=0-offer" }) }
+        verify(exactly = 1) { signals.emitAnswer("call-9", "v=0-answer", to = "peer", from = "me", negotiationId = 0) }
+        coordinator.end()
+    }
+
+    @Test
+    fun `held signals keep their order and the live ones follow them once`() = runTest(UnconfinedTestDispatcher()) {
+        coordinator.holdIncomingSignals(this, "call-9")
+        incomingSignals.emit(remoteSignal("offer", sdp = "v=0-offer"))
+        incomingSignals.emit(remoteSignal("ice-candidate", candidate = "held"))
+
+        startAsCallee()
+        incomingSignals.emit(remoteSignal("ice-candidate", candidate = "live"))
+
+        coVerify(exactly = 1) { engine.addIceCandidate(match { it.sdp == "held" }) }
+        coVerify(exactly = 1) { engine.addIceCandidate(match { it.sdp == "live" }) }
+        coordinator.end()
+    }
+
+    @Test
+    fun `a held signal of another call is never applied`() = runTest(UnconfinedTestDispatcher()) {
+        coordinator.holdIncomingSignals(this, "call-9")
+        incomingSignals.emit(remoteSignal("offer", sdp = "v=0-offer").copy(callId = "call-other"))
+
+        startAsCallee()
+
+        coVerify(exactly = 0) { engine.setRemoteDescription(any()) }
+        coordinator.end()
+    }
+
+    @Test
+    fun `ending before the connection opens drops what was held`() = runTest(UnconfinedTestDispatcher()) {
+        coordinator.holdIncomingSignals(this, "call-9")
+        incomingSignals.emit(remoteSignal("offer", sdp = "v=0-offer"))
+        coordinator.end()
+
+        startAsCallee()
+
+        coVerify(exactly = 0) { engine.setRemoteDescription(any()) }
+        coordinator.end()
+    }
+
+    // --- #13740 : le maillage d'un appel de groupe se pose AU-DESSUS du duo ---
+
+    @Test
+    fun `a third member's offer never reaches the primary's connection`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCallee()
+        incomingSignals.emit(remoteSignal("offer", sdp = "v=0-offer"))
+        incomingSignals.emit(remoteSignal("offer", sdp = "v=0-bob").let { it.copy(signal = it.signal.copy(from = "bob")) })
+
+        coVerify(exactly = 1) { engine.setRemoteDescription(any()) }
+        verify(exactly = 1) { engine.openMeshPeer(any(), any()) }
+        coordinator.end()
+    }
+
+    @Test
+    fun `a duo's re-joining peer is offered by the call's own connection, never by a mesh link`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller()
+        coordinator.onParticipantJoined("peer")
+        coordinator.onParticipantJoined("peer")
+
+        verify(exactly = 0) { engine.openMeshPeer(any(), any()) }
+        coVerify(exactly = 2) { engine.createOffer() }
+        coordinator.end()
+    }
+
+    @Test
+    fun `a group caller offers the second joiner through the mesh, addressed to it`() = runTest(UnconfinedTestDispatcher()) {
+        coordinator.startOutgoing(
+            this, "call-9", emptyList(), peerId = "", selfId = "me", isVideo = false,
+            onMediaConnected = {}, onMediaStalled = {},
+        )
+        coordinator.onParticipantJoined("alice")
+        coordinator.onParticipantJoined("bob")
+
+        coVerify(exactly = 1) { engine.createOffer() }
+        verify(exactly = 1) { signals.emitOffer("call-9", any(), to = "alice", from = "me", negotiationId = 0) }
+        verify(exactly = 1) { engine.openMeshPeer(any(), any()) }
+        assertThat(coordinator.groupMesh.value.roster.members.map { it.userId }).containsExactly("alice", "bob").inOrder()
+        coordinator.end()
+    }
 }

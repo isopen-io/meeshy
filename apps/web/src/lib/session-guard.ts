@@ -1,0 +1,504 @@
+import { ADMIN_ROUTE_KEYS, type AdminFicheRouteKey, type AdminListRouteKey } from './admin/admin-routes';
+import type { SessionState } from './api/session';
+import { clampReturnPath } from './view/magic-link';
+
+/**
+ * LA GARDE DE ROUTE (#5555, E6) — pure. Elle décide, elle ne navigue pas :
+ * `main.tsx` (`SessionGate`) applique la décision, ce module ne connaît ni le
+ * routeur ni le DOM.
+ *
+ * Deux familles de routes, symétriques : les routes PRIVÉES (`list`,
+ * `thread`, `progression`) exigent une session — un visiteur SANS COMPTE en est sorti (D-6,
+ * même doctrine que `/c/`) ; les routes d'AUTHENTIFICATION (`login`,
+ * `signup`) refusent une session déjà ACTIVE — s'y présenter connecté n'a pas
+ * de sens produit et renvoie vers `/`. Toute autre route (inconnue, ou future)
+ * est publique et neutre : `allow`.
+ *
+ * `pending2fa` reste `allow` sur `login` : c'est l'écran où vit la section
+ * deux-facteurs (`normalLoginSection` / `twoFactorSection`, exclusives,
+ * `LoginView.swift:118-124`) — l'en sortir romprait le flux au milieu.
+ *
+ * FIXTURES ⇒ TOUJOURS `allow` : le POC et ses captures n'ont pas de session
+ * réelle à faire respecter, et cette garde ne doit pas casser ce qui marche
+ * déjà avant que le travail `staging` (#5605, livré) ne soit consommé partout.
+ *
+ * L'ACCUEIL (#5816) — `welcome`/`magicLink`/`forgotPassword` rejoignent
+ * `AUTH_ROUTES` : un visiteur déjà authentifié n'y a rien à faire
+ * (`redirect-home`, `WelcomeView.swift:37-39`). `magicLinkValidate` n'entre
+ * dans AUCUN ensemble — un lien reçu par e-mail doit se VALIDER quel que soit
+ * le statut courant (§ 9 Q4 de la spécification : sinon la garde renverrait
+ * sur `/` avant que le jeton ne soit consommé, et il expirerait dans la boîte
+ * mail — `validateMagicLink()` gère elle-même le cas « déjà connecté »,
+ * `MeeshyApp.swift:1019-1034`). Une route PRIVÉE visitée sans session se
+ * décide désormais en DEUX temps : l'accueil d'abord (`welcomeCompleted`),
+ * la connexion ensuite — miroir `MeeshyApp.swift:37-39`
+ * (`shouldShowOnboarding = !hasCompletedOnboarding && !isAuthenticated`).
+ */
+
+export type RouteKey =
+  | 'list'
+  | 'thread'
+  | 'conversationsNew'
+  | 'progression'
+  /**
+   * LES PAGES DE LA VAGUE 2 DU JEU (#9384 à #9389) — PRIVÉES, comme
+   * `progression` : chacune lit un corpus qui n'existe que pour le lecteur
+   * connecté (`GET /me/engagement`, `/me/game/*`) et rend 401 sans session. Non
+   * déclarées ici, elles seraient PUBLIQUES par défaut : l'écran se peindrait
+   * en squelette sans fin devant un visiteur.
+   */
+  | 'progressionLigue'
+  | 'progressionLigueSemaine'
+  | 'progressionSaison'
+  | 'progressionSaisonNumero'
+  | 'progressionVitrine'
+  | 'progressionAtlas'
+  | 'progressionPrestige'
+  | 'progressionReglages'
+  /**
+   * LA FICHE D'UN CONCEPT (#9563) — PRIVÉE, même raison. Et l'ancienne adresse
+   * du Tableau de bord, qui redirige vers Progression (amendement n° 4) : privée
+   * elle aussi, sans quoi un favori ouvert sans session peindrait Progression en
+   * squelette au lieu de mener à la connexion.
+   */
+  | 'progressionConcept'
+  | 'progressionTableau'
+  /**
+   * LES PUBLICATIONS ENREGISTRÉES (#7286) — PRIVÉE, comme `feed` et pour la
+   * même raison : `GET /social/posts?scope=bookmarks` lit la table des favoris
+   * DU LECTEUR et rend 401 sans session, bien que `optionalAuth` garde la
+   * porte. Non déclarée ici, elle serait PUBLIQUE par défaut : un visiteur
+   * sans compte y verrait un écran qui se peint puis reçoit un 401 en silence
+   * — la classe de défaut que les trois entrées voisines décrivent.
+   */
+  | 'bookmarks'
+  /**
+   * LES MESSAGES FAVORIS (#7286) — PRIVÉE : les trois routes
+   * `/me/starred-messages` refusent un contexte sans compte (le favori est
+   * réservé aux inscrits, décision serveur de #7377). Publique par défaut,
+   * elle peindrait un écran qui reçoit un 401 en silence.
+   */
+  | 'starredMessages'
+  /**
+   * « MES SONS » (#9848) — PRIVÉE : `GET sounds.mine` et `DELETE sounds.byId`
+   * exigent un compte inscrit. Publique par défaut, elle peindrait un écran
+   * qui reçoit un 401 en silence.
+   */
+  | 'soundsMine'
+  /**
+   * L'ACCUEIL POST-INSCRIPTION (#7729) — PRIVÉE : `GET`/`PATCH
+   * /me/onboarding` exigent une session, et un parcours dont chaque carte
+   * crédite un COMPTE n'a rien à offrir à un visiteur ni à l'invité d'un lien.
+   */
+  | 'onboarding'
+  | 'stories'
+  /** « MES STORIES » (#6149) — même port que `stories` (`?scope=stories`,
+   * requiredAuth) : un visiteur sans compte n'a de toute façon rien à gérer. */
+  | 'storiesMine'
+  | 'storyCompose'
+  | 'story'
+  | 'feed'
+  /**
+   * MON HUMEUR (#7462) — PRIVÉE, comme `storyCompose` et `postCompose` :
+   * `POST posts.root` (type `STATUS`) porte `requiredAuth`
+   * (`routes/posts/core.ts:370-384`), et le corpus qui pré-sélectionne
+   * l'emoji courant (`GET /social/posts?scope=statuses`) rend 401 sans compte.
+   * Non déclarée ici, la route était PUBLIQUE par défaut (voir `routeKey`
+   * plus bas) : un visiteur sans compte choisissait une humeur, écrivait son
+   * mot, et découvrait à « Publier » que la passerelle refuse. Trouvée en
+   * déclarant `postCompose` (#7449) — la même classe de défaut, une porte
+   * plus loin.
+   */
+  | 'statusCompose'
+  /**
+   * PUBLIER DANS LE FIL (#7449) — PRIVÉE, comme `feed` et `storyCompose` :
+   * `POST posts.root` exige une session (`fastify.authenticate`), et
+   * `POST uploads.root` aussi. Non déclarée ici, elle serait PUBLIQUE par
+   * défaut (voir `routeKey` plus bas) : un visiteur sans compte composerait
+   * une publication entière — texte, médias montés — avant de se faire
+   * refuser à l'envoi. Le travail perdu est le coût exact de l'oubli.
+   */
+  | 'postCompose'
+  /** MODIFIER UNE PUBLICATION (#9317) — seul son auteur la modifie. */
+  | 'postEdit'
+  /**
+   * CRÉER UN LIEN, CRÉER UNE COMMUNAUTÉ (#7462, revue) — PRIVÉES, les deux
+   * dernières portes `/…/new` : `POST links.root` exige un compte
+   * (`routes/links/creation.ts:24-33`, `requireAuth: true`,
+   * `allowAnonymous: false`) et `POST communities.root` aussi
+   * (`routes/communities/core.ts:387-388`, `fastify.authenticate`). Non
+   * déclarées, elles étaient PUBLIQUES par défaut : un visiteur sans compte
+   * remplissait nom, description et options avant le refus. Le témoin de la
+   * famille `/…/new`, DÉRIVÉ de la table des routes, les a trouvées.
+   */
+  | 'shareLinkNew'
+  | 'communityNew'
+  /**
+   * LES TROIS AUTRES FAMILLES DE « MES LIENS » (#6408, #6409, #6410) —
+   * PRIVÉES : chacune ne lit que des ports authentifiés
+   * (`GET /tracking-links/user/me`, `GET /affiliate/tokens`,
+   * `GET /communities/mine`) et n'a rien à montrer à un visiteur sans compte.
+   * Non déclarées, elles seraient PUBLIQUES par défaut : l'écran se peindrait
+   * en squelette sans fin, ou une création se remplirait avant le refus.
+   */
+  | 'myTrackingLinks'
+  | 'myTrackingLinkNew'
+  | 'myTrackingLink'
+  | 'affiliateLinks'
+  | 'affiliateLinkNew'
+  | 'communityLinks'
+  | 'communityLink'
+  /**
+   * LE PROFIL PUBLIC ET LE MOT-CLÉ (#7032) — PRIVÉES, comme `feed`. Les deux
+   * ports qu'elles lisent exigent une session : `GET /directory/people/:handle`
+   * porte `fastify.authenticate` (`routes/directory/people.ts`), et
+   * `GET /social/posts?scope=hashtag` rend 401 sans elle
+   * (`routes/posts/feed.ts`). Non déclarées ici, elles seraient PUBLIQUES par
+   * défaut (voir `routeKey` plus bas) : un visiteur sans compte y verrait un
+   * écran qui se peint puis reçoit un 401 en silence — la classe de défaut que
+   * `stories`, `feed` et `settings` décrivent juste au-dessus.
+   */
+  | 'userProfile'
+  | 'hashtag'
+  | 'notifications'
+  | 'profile'
+  | 'settings'
+  | 'admin'
+  | 'adminUsers'
+  /**
+   * LA NOUVELLE ADMINISTRATION (#6795) — `/adm`, qui absorbera les vues de
+   * l'ancienne une à une pendant que `/admin` lui reste réservée.
+   *
+   * Elle est déclarée ICI et pas seulement dans la table : une route que cette
+   * loi ne connaît pas est PUBLIQUE par défaut (voir `routeKey` plus bas), et
+   * une porte d'administration publique s'ouvrirait à un visiteur sans session
+   * — l'exact contraire de ce que `admin`/`adminUsers` obtiennent deux lignes
+   * plus haut. L'oubli ne rougirait nulle part : l'écran se peindrait, puis le
+   * serveur refuserait.
+   */
+  | 'adm'
+  | 'admUsers'
+  /**
+   * LE DÉTAIL D'UN MEMBRE (#6819) — `/admin/users/$user` et `/adm/users/$user`,
+   * les deux adresses d'un même écran, comme leurs listes.
+   *
+   * Elles sont déclarées ici pour la raison écrite juste au-dessus, et elle
+   * pèse davantage sur un DÉTAIL que sur une liste : cet écran porte l'édition,
+   * la réinitialisation de mot de passe, la désactivation et le bannissement.
+   * Oubliée, l'adresse serait publique — un visiteur sans session la peindrait
+   * avant que le serveur ne refuse, et lirait au passage l'identifiant qu'il a
+   * tapé dans un écran d'administration.
+   */
+  | 'adminUser'
+  | 'admUser'
+  /**
+   * LES CONVERSATIONS DE L'INSTANCE (#6862) — `/admin/conversations` et
+   * `/adm/conversations`.
+   *
+   * Déclarées ici pour la raison écrite plus haut, et elle pèse ici autant que
+   * sur le détail d'un membre : cet écran ouvre l'INVENTAIRE des conversations
+   * — qui parle à qui, dans quels groupes. Oubliée, l'adresse serait PUBLIQUE
+   * par défaut, et un visiteur sans session la peindrait avant que le serveur
+   * ne refuse.
+   */
+  | 'adminConversations'
+  | 'admConversations'
+  /**
+   * LA LECTURE D'UNE CONVERSATION (#6862) — l'écran qui OUVRE le contenu,
+   * sous motif écrit et trace. De toutes les adresses d'administration, c'est
+   * celle dont l'oubli coûterait le plus : publique par défaut, elle se
+   * peindrait pour un visiteur sans session, qui y lirait au passage
+   * l'identifiant de conversation qu'il a tapé.
+   */
+  | 'adminConversation'
+  | 'admConversation'
+  /**
+   * LE PILOTAGE DE L'AGENT (#6733) — `/admin/agent` et `/adm/agent`.
+   *
+   * Déclarées ici pour la raison écrite plus haut, et avec un motif de plus :
+   * cet écran ne fait pas que LIRE. Il porte la relance de l'agent, qui peut
+   * faire publier un message dans une vraie conversation. Oubliée, l'adresse
+   * serait PUBLIQUE par défaut — un visiteur sans session la peindrait, geste
+   * compris, avant que le serveur ne refuse.
+   */
+  | 'adminAgent'
+  | 'admAgent'
+  /**
+   * LES ANONYMES (#7873) — la liste et la fiche d'un participant sans compte.
+   * Privées comme le reste de l'administration.
+   */
+  | 'adminAnonymous'
+  | 'admAnonymous'
+  | 'adminAnonymousOne'
+  | 'admAnonymousOne'
+  /**
+   * LA VUE DE DIEU (#8876) — TOUTES les clés d'administration, dans les deux
+   * espaces, DÉRIVÉES de `admin-routes.ts` : une section ou une fiche ajoutée à
+   * la table est PRIVÉE sans qu'on ait à y penser. Écrites à la main, vingt
+   * clés de plus auraient laissé l'oubli d'une seule ouvrir une adresse
+   * d'administration à un visiteur sans session.
+   */
+  | AdminListRouteKey
+  | AdminFicheRouteKey
+  | 'login'
+  | 'signup'
+  | 'welcome'
+  | 'magicLink'
+  | 'magicLinkValidate'
+  | 'forgotPassword'
+  /**
+   * LA JONCTION PAR LIEN (#5561) — dans AUCUN ensemble, comme
+   * `magicLinkValidate`. `/chat/:link` est la seule adresse de conversation
+   * qui sert quelqu'un sans compte, et la seule où un compte connecté
+   * REJOINT : privée, elle renverrait l'invité vers la connexion avant qu'il
+   * sache à quoi il est invité ; d'authentification, elle renverrait le
+   * membre vers `/` avant qu'il ait pu rejoindre. L'écran lit la session
+   * lui-même pour choisir entre « Rejoindre » et ses deux sorties.
+   */
+  | 'chatJoin'
+  /**
+   * LES LIENS REÇUS (#6714, #6715) — dans AUCUN ensemble, comme
+   * `magicLinkValidate` et `chatJoin` : un lien reçu s'ouvre quel que soit le
+   * statut. `/l/:token` et `/account/deletion?token=` sont PUBLICS par nature
+   * — la passerelle ne les authentifie pas, et annuler sa suppression ne doit
+   * pas exiger l'accès au compte. `/settings/verify-email-change` et
+   * `/settings/notifications` agissent sur le compte CONNECTÉ, mais une
+   * redirection d'ici vers `/login` PERDRAIT le jeton de l'e-mail, faute de
+   * chemin de retour : leurs écrans lisent la session eux-mêmes, ne dépensent
+   * rien sans elle, et disent qu'il faut se connecter.
+   */
+  | 'trackingLink'
+  | 'trackingLinkExpired'
+  | 'accountDeletion'
+  | 'revokeSessions'
+  | 'verifyEmailChange'
+  | 'settingsNotifications';
+
+export type RouteAccessDecision = 'allow' | 'redirect-login' | 'redirect-home' | 'redirect-welcome';
+
+/**
+ * `conversationsNew` (#5652, revue) — CRÉER une conversation est un geste de
+ * MEMBRE : la route est arrivée avec son écran mais n'a jamais été déclarée
+ * ici, donc un visiteur SANS SESSION y entrait et n'y trouvait qu'une
+ * recherche que la passerelle refuse (401 sur `GET /directory/people`). Une
+ * route privée non déclarée est la forme la plus discrète du défaut : rien ne
+ * rougit, l'écran s'ouvre, et c'est l'API qui dit non — trois écrans plus
+ * tard, on aura oublié pourquoi.
+ *
+ * `stories`/`storyCompose`/`story` (#5817, correctif d'un défaut de la MÊME
+ * classe, relevé § 2 de la spécification) — leurs ports (`GET /posts/feed/
+ * stories`, `POST /posts/:postId/view`) sont tous `requiredAuth` ; un
+ * visiteur sans compte y recevait un écran qui s'ouvre puis un 401 en
+ * silence, jamais une invitation à se connecter.
+ *
+ * `feed` (#5893) — `GET /social/posts?scope=home` EXIGE une session
+ * (`services/gateway/src/routes/posts/feed.ts:790-792`, 401 `UNAUTHORIZED`),
+ * bien que `optionalAuth` garde la porte : un visiteur sans compte y recevait
+ * jusqu'ici l'écran d'attente (route publique par défaut), puis — le jour où
+ * ce lot lui donne du contenu — un 401 en silence.
+ *
+ * `notifications` (#6288) — la même classe, fermée AVANT le contenu cette
+ * fois : les routes `/notifications*` de la passerelle portent toutes
+ * `onRequest: [fastify.authenticate]`.
+ *
+ * `profile` (#6289) — `/me` est SON profil : `PATCH /users/me*` et
+ * `GET /users/me/stats` portent `fastify.authenticate`. Un visiteur sans compte
+ * n'a pas de soi à voir ni à modifier.
+ *
+ * `settings` (#6340) — `GET`/`PATCH /me/preferences` portent
+ * `fastify.authenticate`. Laissée publique par #5563, la route ouvrait sans
+ * session un écran dont la requête restait désactivée : squelettes À VIE, et
+ * une déconnexion offerte à qui n'est pas connecté.
+ *
+ * `admin` / `adminUsers` (#6432) — PRIVÉES, et cette garde ne fait que la
+ * MOITIÉ du travail. Elle exige une session ; le DROIT, lui, se lit au
+ * serveur (`GET /me/permissions`) dans l'écran. La séparation n'est pas un
+ * oubli : `SessionUser` ne projette pas `role` (`lib/api/session.ts`), donc
+ * une garde de route qui trancherait ici ne pourrait que le DEVINER — et une
+ * garde qui devine sur une porte d'administration est pire qu'aucune garde,
+ * parce qu'on croit qu'elle garde. Ce qu'elle apporte est réel malgré tout :
+ * un visiteur sans compte est renvoyé vers la connexion plutôt que de voir un
+ * écran qui charge puis refuse.
+ */
+const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
+  'list',
+  'thread',
+  'conversationsNew',
+  'progression',
+  /* LES PAGES DE LA VAGUE 2 DU JEU (#9384 à #9389) — voir la raison écrite sur `RouteKey`. */
+  'progressionLigue',
+  'progressionLigueSemaine',
+  'progressionSaison',
+  'progressionSaisonNumero',
+  'progressionVitrine',
+  'progressionAtlas',
+  'progressionPrestige',
+  'progressionReglages',
+  'progressionConcept',
+  'progressionTableau',
+  /* LES PUBLICATIONS ENREGISTRÉES (#7286) — voir la raison écrite sur
+     `RouteKey` plus haut. */
+  'bookmarks',
+  /* LES MESSAGES FAVORIS (#7286) — voir la raison écrite sur `RouteKey`. */
+  'starredMessages',
+  /* « MES SONS » (#9848) — voir la raison écrite sur `RouteKey`. */
+  'soundsMine',
+  /* L'ACCUEIL POST-INSCRIPTION (#7729) — voir la raison écrite sur `RouteKey`. */
+  'onboarding',
+  'stories',
+  /* « MES STORIES » (#6149) — voir la raison écrite sur `RouteKey` plus haut. */
+  'storiesMine',
+  'storyCompose',
+  /* `story` N'EST PLUS PRIVÉE (#9149) — `/story/:id` est l'adresse d'un lien
+     PARTAGÉ : le lecteur sert la story publique à un visiteur sans compte
+     (`GET /posts/:id`, `optionalAuth` + `anonymousPostGate`) et pose
+     l'invitation par-dessus (`components/visitor-invitation.tsx`). */
+  'feed',
+  /* MON HUMEUR (#7462) — voir la raison écrite sur `RouteKey` plus haut. */
+  'statusCompose',
+  /* PUBLIER DANS LE FIL (#7449) — voir la raison écrite sur `RouteKey` plus haut. */
+  'postCompose',
+  /* MODIFIER UNE PUBLICATION (#9317) — voir la raison écrite sur `RouteKey`. */
+  'postEdit',
+  /* CRÉER UN LIEN, CRÉER UNE COMMUNAUTÉ (#7462, revue) — voir la raison
+     écrite sur `RouteKey` plus haut. */
+  'shareLinkNew',
+  'communityNew',
+  /* LES TROIS AUTRES FAMILLES DE « MES LIENS » (#6408, #6409, #6410) — voir la
+     raison écrite sur `RouteKey` plus haut. */
+  'myTrackingLinks',
+  'myTrackingLinkNew',
+  'myTrackingLink',
+  'affiliateLinks',
+  'affiliateLinkNew',
+  'communityLinks',
+  'communityLink',
+  /* LES DEUX ADRESSES DU TEXTE ENRICHI (#7032) — privées, leurs ports étant
+     authentifiés ; voir la raison écrite sur `RouteKey` plus haut. */
+  'userProfile',
+  'hashtag',
+  'notifications',
+  'profile',
+  'settings',
+  'admin',
+  'adminUsers',
+  'adminUser',
+  'adm',
+  'admUsers',
+  'admUser',
+  'adminConversations',
+  'admConversations',
+  'adminConversation',
+  'admConversation',
+  /* LE PILOTAGE DE L'AGENT (#6733) — privées comme le reste de
+     l'administration : sans cette déclaration elles seraient PUBLIQUES par
+     défaut, et cet écran porte la relance de l'agent, qui peut faire publier
+     un message dans une vraie conversation. */
+  'adminAgent',
+  'admAgent',
+  'adminAnonymous',
+  'admAnonymous',
+  'adminAnonymousOne',
+  'admAnonymousOne',
+  /* LA VUE DE DIEU (#8876) — le reste, dérivé de la table des sections : voir
+     la raison écrite sur `RouteKey` plus haut. */
+  ...ADMIN_ROUTE_KEYS,
+]);
+const AUTH_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['login', 'signup', 'welcome', 'magicLink', 'forgotPassword']);
+
+/**
+ * `routeKey` entre en `string`, pas en `RouteKey` (correction de revue,
+ * défaut 11) : la clé vient du ROUTEUR (`useRoute().key`), qui rend `''` pour
+ * une adresse inconnue et rendra demain la clé de chaque route ajoutée. La
+ * resserrer par une assertion (`key as RouteKey`) aurait fait passer un type
+ * pour une garantie que rien ne tient. `RouteKey` reste exporté : il nomme les
+ * routes que cette loi CONNAÎT — toute autre est publique et neutre.
+ */
+export function resolveRouteAccess(input: {
+  readonly sessionStatus: SessionState['status'];
+  readonly source: 'fixtures' | 'gateway';
+  readonly routeKey: string;
+  /** Défaut `true` (soldé) : un appelant qui ne connaît pas encore l'accueil
+   * (tout le code écrit avant #5816) retrouve exactement le comportement
+   * d'hier — `redirect-login`, jamais `redirect-welcome` par surprise. */
+  readonly welcomeCompleted?: boolean;
+}): RouteAccessDecision {
+  if (input.source === 'fixtures') return 'allow';
+
+  if (PRIVATE_ROUTES.has(input.routeKey)) {
+    if (input.sessionStatus === 'authenticated') return 'allow';
+    /**
+     * L'INVITÉ D'UN LIEN N'ENTRE QUE DANS SON FIL (#5561).
+     *
+     * Il a une session, donc une créance — mais elle n'ouvre qu'UNE
+     * conversation : `GET /links/:identifier/messages` rend 403 à la session
+     * d'un autre lien, et toutes les autres routes privées (la liste, le Flux,
+     * les réglages, le profil, l'administration) exigent un COMPTE. L'y laisser
+     * entrer ouvrirait des écrans qui se peignent puis reçoivent un 401 en
+     * silence — la classe de défaut que les commentaires ci-dessus décrivent
+     * pour `stories`, `feed` et `settings`.
+     *
+     * L'accueil (`redirect-welcome`) n'est PAS proposé à un invité : il a déjà
+     * franchi une porte d'entrée, et le renvoyer à « bienvenue » effacerait ce
+     * qu'il vient de faire. Il va à la connexion, qui est le seul chemin vers
+     * les écrans qu'il demande.
+     */
+    if (input.sessionStatus === 'guest') return input.routeKey === 'thread' ? 'allow' : 'redirect-login';
+    return (input.welcomeCompleted ?? true) ? 'redirect-login' : 'redirect-welcome';
+  }
+
+  if (AUTH_ROUTES.has(input.routeKey)) {
+    return input.sessionStatus === 'authenticated' ? 'redirect-home' : 'allow';
+  }
+
+  return 'allow';
+}
+
+/**
+ * `next` — OÙ REVENIR APRÈS S'ÊTRE CONNECTÉ (#5561), ou `null`.
+ *
+ * La valeur vient de l'ADRESSE, donc de quiconque a fabriqué le lien. La garde
+ * de même origine — y compris le refus des blancs et caractères de contrôle
+ * que le parseur d'URL efface (#6743 : `/\t/evil.com` devient `//evil.com`,
+ * et `history.replaceState` LÈVE sur une autre origine, faisant tomber
+ * `SessionGate`, `main.tsx`) — est celle de `clampReturnPath`
+ * (`view/magic-link.ts`, le retour d'un lien magique) : UNE SEULE garde,
+ * réemployée, jamais recopiée. Deux clampages d'une même valeur hostile
+ * divergeraient au premier correctif.
+ *
+ * `null` plutôt que `'/'` : un appelant doit pouvoir savoir qu'il n'y a RIEN à
+ * transmettre (le lien « Créer un compte » ne porte pas un `next=/` inventé).
+ */
+export function safeNextPath(raw: string | null): string | null {
+  return clampReturnPath(raw);
+}
+
+/**
+ * `/` ÉTAIT LA LISTE jusqu'à #10002 ; c'est désormais la landing publique. Un
+ * `next` ou un `returnUrl` qui la vise encore (un lien d'e-mail parti avant la
+ * bascule) demandait la liste : une session qui s'ouvre ne finit jamais sur la
+ * landing (décision porteur du 2026-10-10 : « après connexion : `/chats` »).
+ */
+const LEGACY_LIST_PATH = '/';
+
+/** `next` s'il est sûr ET qu'il n'est pas la landing — sinon `null`, l'appelant
+ * rendant sa destination par défaut (la liste, l'accueil post-inscription). */
+export function sessionNextPath(raw: string | null): string | null {
+  const safe = safeNextPath(raw);
+  return safe === LEGACY_LIST_PATH ? null : safe;
+}
+
+/**
+ * LA DESTINATION D'UNE SESSION QUI VIENT DE S'OUVRIR — `next` s'il est sûr,
+ * l'accueil sinon. L'accueil est FOURNI par l'appelant (`href('list')`) : ce
+ * module décide, il ne connaît pas le routeur.
+ *
+ * Elle sert les TROIS sites qui naviguent quand une session s'établit sur un
+ * écran d'authentification — `SessionGate` (`redirect-home`), la connexion et
+ * l'inscription. Ils partent du même rendu : si l'un seulement honorait
+ * `next`, le parent (`SessionGate`, dont l'effet s'exécute APRÈS celui de
+ * l'écran) le recouvrirait par `/`.
+ */
+export function landingAfterSession(next: string | null, home: string): string {
+  return sessionNextPath(next) ?? home;
+}

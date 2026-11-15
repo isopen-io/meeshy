@@ -198,16 +198,11 @@ describe('EncryptionHelper', () => {
       expect(decrypted.toString('utf8')).toBe(plaintext);
     });
 
-    it('should return unencrypted content when encryption key is not available', async () => {
+    it('#11381 — refuse de ranger une traduction en clair quand la clé de la conversation manque (fail-closed)', async () => {
       mockPrisma.conversation.findUnique.mockResolvedValue(null);
 
-      const result = await encryptionHelper.encryptTranslation(plaintext, conversationId);
-
-      expect(result.isEncrypted).toBe(false);
-      expect(result.encryptionKeyId).toBeNull();
-      expect(result.encryptionIv).toBeNull();
-      expect(result.encryptionAuthTag).toBeNull();
-      expect(result.encryptedContent).toBe(plaintext);
+      await expect(encryptionHelper.encryptTranslation(plaintext, conversationId))
+        .rejects.toMatchObject({ code: 'SERVER_AT_REST_UNAVAILABLE' });
     });
 
     it('should handle empty plaintext', async () => {
@@ -515,13 +510,23 @@ describe('EncryptionHelper', () => {
       expect(result.conversationId).toBeNull();
     });
 
-    it('should handle database errors gracefully', async () => {
+    it('#12822 — fails CLOSED on a database error: the caller writes nothing rather than plaintext', async () => {
       mockPrisma.message.findUnique.mockRejectedValue(new Error('Database error'));
+
+      await expect(encryptionHelper.shouldEncryptTranslation(messageId)).rejects.toThrow('Database error');
+    });
+
+    it('#12822 — reads the mode case-insensitively, like the write path', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: messageId,
+        conversationId,
+        encryptionMode: 'SERVER',
+        isEncrypted: true
+      } as any);
 
       const result = await encryptionHelper.shouldEncryptTranslation(messageId);
 
-      expect(result.shouldEncrypt).toBe(false);
-      expect(result.conversationId).toBeNull();
+      expect(result.shouldEncrypt).toBe(true);
     });
 
     it('should return false for unencrypted messages', async () => {

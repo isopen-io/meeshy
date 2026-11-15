@@ -3,6 +3,11 @@ import MeeshySDK
 
 /// API Client dédié au protocole de chiffrement de bout en bout (E2EE Signal)
 public final class E2EAPI: @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public static let shared = E2EAPI()
     
     private init() {}
@@ -31,7 +36,7 @@ public final class E2EAPI: @unchecked Sendable {
         // declenchait `DecodingError: Type mismatch for type String at path data`
         // a chaque cold start, ce qui empechait l'upload du bundle E2EE.
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.post(
-            endpoint: "/signal/keys",
+            SignalEndpoint.keys,
             body: bundle
         )
     }
@@ -40,7 +45,7 @@ public final class E2EAPI: @unchecked Sendable {
     public func fetchBundle(for userId: String) async throws -> BackendPreKeyBundle {
         // endpoint backend: GET /api/v1/signal/keys/:userId
         let response: APIResponse<BackendPreKeyBundle> = try await APIClient.shared.request(
-            endpoint: "/signal/keys/\(userId)",
+            SignalEndpoint.keysByUserId(userId: userId),
             method: "GET"
         )
         return response.data
@@ -57,7 +62,7 @@ public final class E2EAPI: @unchecked Sendable {
         // `data: { preKeyId, preKeyPublic }` selon la branche — toujours
         // un objet, jamais une string. Memo bug que uploadBundle.
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.post(
-            endpoint: "/signal/session/establish",
+            SignalEndpoint.sessionEstablish,
             body: body
         )
     }
@@ -88,7 +93,7 @@ public final class E2EAPI: @unchecked Sendable {
     /// GET /api/v1/conversations/:id/encryption-status
     public func fetchEncryptionStatus(conversationId: String) async throws -> ConversationEncryptionStatus {
         let response: APIResponse<ConversationEncryptionStatus> = try await APIClient.shared.request(
-            endpoint: "/conversations/\(conversationId)/encryption-status",
+            ConversationsEndpoint.byConversationIdEncryptionStatus(conversationId: conversationId),
             method: "GET"
         )
         return response.data
@@ -101,7 +106,7 @@ public final class E2EAPI: @unchecked Sendable {
     ) async throws -> EnableConversationEncryptionResult {
         struct Body: Codable { let mode: String }
         let response: APIResponse<EnableConversationEncryptionResult> = try await APIClient.shared.post(
-            endpoint: "/conversations/\(conversationId)/encryption",
+            ConversationsEndpoint.byConversationIdEncryption(conversationId: conversationId),
             body: Body(mode: mode.rawValue)
         )
         return response.data

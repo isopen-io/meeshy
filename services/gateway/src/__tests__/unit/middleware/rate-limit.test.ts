@@ -1,23 +1,19 @@
 /**
  * Tests for middleware/rate-limit.ts
  *
- * Covers: RATE_LIMITS constants, createRateLimitConfig, ROUTE_RATE_LIMITS,
- * registerRateLimiting (disabled path + enabled path with callbacks).
+ * Covers: RATE_LIMITS constants, createRateLimitConfig, ROUTE_RATE_LIMITS.
+ *
+ * `registerRateLimiting` a été SUPPRIMÉ par #4687 — enregistreur global qu'
+ * aucun appelant de production n'invoquait, et dont le `keyGenerator`
+ * annonçait une clé par compte en rendant l'adresse : un patron à copier, pas
+ * un limiteur. Ses témoins partent avec lui, y compris la garde négative
+ * « pas d'allowList » (#4137) : elle gardait la forme d'un plugin qui ne
+ * s'enregistre plus. La même garde vit, sur le SEUL enregistreur monté, dans
+ * `rate-limiter-pure.test.ts` (`registerGlobalRateLimiter`).
  *
  * @jest-environment node
  */
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
-
-const mockLogger = {
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
-  debug: jest.fn(),
-};
-
-jest.mock('../../../utils/logger', () => ({ logger: mockLogger }));
-
-jest.mock('@fastify/rate-limit', () => jest.fn());
+import { describe, it, expect, jest } from '@jest/globals';
 
 jest.mock('../../../utils/rate-limiter', () => ({
   isLocalIp: jest.fn((ip: string) => ip === '127.0.0.1'),
@@ -27,17 +23,9 @@ import {
   RATE_LIMITS,
   createRateLimitConfig,
   ROUTE_RATE_LIMITS,
-  registerRateLimiting,
 } from '../../../middleware/rate-limit';
 
 import { isLocalIp } from '../../../utils/rate-limiter';
-
-function makeMockFastify(redis: unknown = null) {
-  return {
-    register: jest.fn().mockResolvedValue(undefined),
-    redis,
-  };
-}
 
 describe('RATE_LIMITS', () => {
   it('INITIATE_CALL has max=5 and timeWindow=1 minute', () => {
@@ -53,10 +41,6 @@ describe('RATE_LIMITS', () => {
     expect(RATE_LIMITS.CALL_OPERATIONS.max).toBe(10);
   });
 
-  it('DEFAULT has numeric max and timeWindow', () => {
-    expect(typeof RATE_LIMITS.DEFAULT.max).toBe('number');
-    expect(typeof RATE_LIMITS.DEFAULT.timeWindow).toBe('number');
-  });
 });
 
 describe('createRateLimitConfig', () => {
@@ -73,10 +57,12 @@ describe('createRateLimitConfig', () => {
   });
 
   // Piege documente du projet : un rate limit par-route SANS keyGenerator
-  // explicite herite du keyGenerator GLOBAL (seau IP plateforme derriere
-  // Traefik sans trustProxy -> IDENTIQUE pour tout le monde). Ces tests
-  // prouvent que la config fournit une cle PAR UTILISATEUR, jamais le seau
-  // plateforme brut `global:${request.ip}`.
+  // explicite herite du keyGenerator GLOBAL, soit `global:${request.ip}` —
+  // l'ADRESSE de l'appelant, `trustProxy` etant pose depuis #4137. Une limite
+  // qui se veut par compte et compte par adresse se trompe dans les deux sens
+  // (plusieurs comptes derriere une sortie partagent un credit ; un compte a
+  // plusieurs adresses en cumule autant). Ces tests prouvent que la config
+  // fournit une cle PAR UTILISATEUR, jamais la cle globale brute.
   it('keyGenerator uses a per-user key when authContext is present', () => {
     const cfg = createRateLimitConfig(5, '1 minute', 'initiate');
     const req = { authContext: { userId: 'user-42' }, ip: '10.0.0.5' } as any;
@@ -106,7 +92,8 @@ describe('createRateLimitConfig', () => {
     const cfg = createRateLimitConfig(5, '1 minute', 'initiate');
     const body = cfg.config.rateLimit.errorResponseBuilder();
     expect(body.success).toBe(false);
-    expect(body.error.code).toBe('RATE_LIMIT_EXCEEDED');
+    expect(body.code).toBe('RATE_LIMIT_EXCEEDED');
+    expect(typeof body.error).toBe('string');
   });
 });
 
@@ -151,126 +138,5 @@ describe('ROUTE_RATE_LIMITS', () => {
       (ROUTE_RATE_LIMITS.callOperations as any).config.rateLimit.keyGenerator(req),
     ];
     expect(new Set(keys).size).toBe(keys.length);
-  });
-});
-
-describe('registerRateLimiting', () => {
-  const originalEnv = process.env;
-
-  beforeEach(() => {
-    jest.resetModules();
-    process.env = { ...originalEnv };
-    jest.clearAllMocks();
-  });
-
-  afterEach(() => {
-    process.env = originalEnv;
-  });
-
-  it('returns without registering when ENABLE_RATE_LIMITING=false', async () => {
-    process.env.ENABLE_RATE_LIMITING = 'false';
-    const fastify = makeMockFastify();
-    await registerRateLimiting(fastify as any);
-    expect(fastify.register).not.toHaveBeenCalled();
-    expect(mockLogger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('DISABLED'),
-    );
-  });
-
-  it('registers the plugin when rate limiting is enabled', async () => {
-    process.env.ENABLE_RATE_LIMITING = 'true';
-    const fastify = makeMockFastify();
-    await registerRateLimiting(fastify as any);
-    expect(fastify.register).toHaveBeenCalledTimes(1);
-    expect(mockLogger.info).toHaveBeenCalledWith(
-      expect.stringContaining('enabled'),
-      expect.any(Object),
-    );
-  });
-
-  it('registers the plugin when ENABLE_RATE_LIMITING is not set', async () => {
-    delete process.env.ENABLE_RATE_LIMITING;
-    const fastify = makeMockFastify();
-    await registerRateLimiting(fastify as any);
-    expect(fastify.register).toHaveBeenCalledTimes(1);
-  });
-
-  describe('registered plugin options callbacks', () => {
-    async function getOptions() {
-      process.env.ENABLE_RATE_LIMITING = 'true';
-      const fastify = makeMockFastify();
-      await registerRateLimiting(fastify as any);
-      return (fastify.register as jest.Mock).mock.calls[0][1] as Record<string, any>;
-    }
-
-    it('allowList returns true for local IPs', async () => {
-      const opts = await getOptions();
-      (isLocalIp as jest.Mock).mockReturnValueOnce(true);
-      expect(opts.allowList({ ip: '127.0.0.1' })).toBe(true);
-    });
-
-    it('allowList returns false for non-local IPs', async () => {
-      const opts = await getOptions();
-      (isLocalIp as jest.Mock).mockReturnValueOnce(false);
-      expect(opts.allowList({ ip: '8.8.8.8' })).toBe(false);
-    });
-
-    it('keyGenerator uses userId when auth context present', async () => {
-      const opts = await getOptions();
-      const req = { authContext: { userId: 'user-123' }, ip: '8.8.8.8' };
-      const key = opts.keyGenerator(req);
-      expect(key).toBe('user:user-123');
-    });
-
-    it('keyGenerator falls back to IP when no auth context', async () => {
-      const opts = await getOptions();
-      const req = { ip: '1.2.3.4' };
-      const key = opts.keyGenerator(req);
-      expect(key).toBe('1.2.3.4');
-    });
-
-    it('keyGenerator returns unknown when IP is missing', async () => {
-      const opts = await getOptions();
-      const req = {};
-      const key = opts.keyGenerator(req);
-      expect(key).toBe('unknown');
-    });
-
-    it('errorResponseBuilder returns structured 429 response', async () => {
-      const opts = await getOptions();
-      const req = { ip: '5.6.7.8', url: '/api/v1/test' };
-      const ctx = { max: 100, after: '30s' };
-      const body = opts.errorResponseBuilder(req, ctx);
-      expect(body.success).toBe(false);
-      expect(body.error.code).toBe('RATE_LIMIT_EXCEEDED');
-      expect(body.error.message).toContain('30s');
-    });
-
-    it('onExceeding logs a debug message with key and path', async () => {
-      const opts = await getOptions();
-      const req = { ip: '5.6.7.8', url: '/api/test' };
-      opts.onExceeding(req, 'some-key');
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        'Rate limit warning',
-        expect.objectContaining({ key: 'some-key' }),
-      );
-    });
-
-    it('passes redis option when fastify.redis is set', async () => {
-      process.env.ENABLE_RATE_LIMITING = 'true';
-      const mockRedis = { get: jest.fn() };
-      const fastify = makeMockFastify(mockRedis);
-      await registerRateLimiting(fastify as any);
-      const opts = (fastify.register as jest.Mock).mock.calls[0][1];
-      expect(opts.redis).toBe(mockRedis);
-    });
-
-    it('passes undefined redis when fastify.redis is null', async () => {
-      process.env.ENABLE_RATE_LIMITING = 'true';
-      const fastify = makeMockFastify(null);
-      await registerRateLimiting(fastify as any);
-      const opts = (fastify.register as jest.Mock).mock.calls[0][1];
-      expect(opts.redis).toBeUndefined();
-    });
   });
 });

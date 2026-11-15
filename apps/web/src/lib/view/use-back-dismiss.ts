@@ -1,0 +1,305 @@
+import { useEffect, useLayoutEffect, useRef } from 'react';
+
+import { layerEntryState, layerMarkerOf } from './layer-entry';
+import { openModalLayer } from './modal-layers';
+
+/**
+ * LE RETOUR MATÉRIEL CONSOMME LA COUCHE MODALE, PAS L'ÉCRAN (#5555, puis
+ * généralisé revue #5814, défaut majeur 6) — extrait de `components/
+ * sheet.tsx` pour que TOUTE couche modale future (feuille, menu, visionneuse
+ * de média) partage la MÊME loi plutôt que d'en réécrire une jumelle, comme
+ * le suivi le demandait : « elle mérite d'être écrite UNE fois, dans le
+ * socle des surfaces modales, jamais dans `message-menu.tsx` seul. »
+ *
+ * `MessageMenu` est la PREMIÈRE couche NON-`<dialog>` à l'utiliser — mesuré
+ * manquante sur l'AVD `Meeshy_Poc_Web-v31` (`AND-9-back-depuis-menu.png`) :
+ * menu ouvert, un appui BACK quittait le FIL (avec historique) ou
+ * L'APPLICATION (sans historique), le menu disparaissant avec l'écran plutôt
+ * qu'à cause de lui.
+ *
+ * MÊME MÉCANIQUE que `Sheet` : pose une entrée d'historique (même URL — le
+ * routeur la voit identique et ne re-rend rien, `router.tsx` § `notify`) au
+ * montage, se ferme sur `popstate` — le retour CONSOMME donc cette entrée
+ * au lieu de quitter l'écran. Fermée autrement (Échap, un clic hors-menu,
+ * une action choisie), elle REND son entrée (`history.back()`) pour qu'un
+ * retour ULTÉRIEUR ne soit pas avalé à la place.
+ *
+ * **ELLE NE REND QUE SA PROPRE ENTRÉE** (#6313). Une couche fermée PARCE
+ * QU'UNE ACTION A NAVIGUÉ — un barreau de l'échelle flottante pousse sa
+ * destination puis referme l'échelle — n'est plus l'entrée courante :
+ * reculer d'une entrée défaisait la navigation elle-même (mesuré : `/notifications`
+ * poussée, `/` rendue, sur `dev` comme sur la branche de #6288). L'entrée
+ * posée porte donc une MARQUE, et le retour n'a lieu que si l'historique est
+ * encore dessus. Le prix de #6313 — l'entrée de la couche restait sous la
+ * destination, et le retour suivant l'écran d'origine ne changeait rien — est
+ * levé par #18523 : `navigate()` (`lib/router.tsx`) lit `onLayerEntry()` (`layer-entry.ts`) et fait
+ * prendre à la destination LA PLACE de l'entrée de la couche.
+ *
+ * **L'ENTRÉE EST POSÉE DANS LE COMMIT QUI INSÈRE LA COUCHE** (#6319). Un effet
+ * passif la posait APRÈS la peinture (Preact : un `requestAnimationFrame`
+ * puis un `setTimeout`) : dans l'intervalle, la couche était VISIBLE et un
+ * retour ne trouvait aucune entrée à consommer — il quittait le fil (mesuré
+ * en CI : `URL blank`, trois têtes de dev sur neuf). L'effet de mise en page
+ * s'exécute avant que le navigateur ne rende la main : aucune image ne montre
+ * la couche sans que le retour lui appartienne.
+ *
+ * **ELLE DÉCLARE AUSSI LA COUCHE AU REGISTRE** (`modal-layers.ts`, W14
+ * #7372). Ce crochet est le seul point que TOUTE couche modale traverse —
+ * c'est ce que son titre promet depuis #5814 — donc le seul endroit d'où
+ * « quelque chose recouvre l'écran » se sait sans être recalculé par chaque
+ * hôte. Le suivi de lecture s'y abonne pour cesser de marquer lu ce qu'une
+ * visionneuse ou une feuille cache. La déclaration vit dans le MÊME effet de
+ * mise en page que l'entrée d'historique, pour la même raison : une couche
+ * visible une image avant d'être comptée est une image pendant laquelle le
+ * fil se marque lu.
+ *
+ * **UNE COUCHE QUI EN REMPLACE UNE AUTRE ADOPTE SON ENTRÉE** (#7527). Mesuré
+ * sur staging : appui long sur une bulle, « Plus… », et la feuille « Infos du
+ * message » ne s'ouvrait pas — le menu se refermait seul. Les deux couches
+ * s'échangent dans un SEUL commit React, qui joue TOUS les nettoyages avant
+ * TOUS les effets : le menu rendait donc son entrée (`history.back()`) juste
+ * avant que la feuille ne pose la sienne. Or le navigateur ne dispatche pas
+ * `popstate` pendant `history.back()` — il le POSTE (HTML, « traverse the
+ * history by a delta ») : le retour arrivait quand la feuille était seule à
+ * écouter, et c'est elle qu'il fermait.
+ *
+ * L'entrée n'est donc plus rendue DANS le nettoyage : elle est LAISSÉE, et la
+ * couche suivante du même commit la reprend telle quelle — aucun `back()`,
+ * aucun `pushState`, donc aucun `popstate` à égarer. Sans successeur, la
+ * micro-tâche la rend comme avant, en revérifiant qu'elle est toujours
+ * l'entrée courante (une navigation entre-temps annule le retour, § #6313).
+ *
+ * **SEULE LA COUCHE DU DESSUS RÉPOND AU RETOUR** (#8078). La fiche d'un membre
+ * s'ouvre PAR-DESSUS les détails de la conversation, restés montés : chaque
+ * couche écoutant tous les `popstate`, le retour Android fermait les deux
+ * feuilles et laissait l'entrée du dessous orpheline (le retour suivant ne
+ * faisait plus rien), et la fiche fermée par son bouton rendait son entrée
+ * par un `back()` que les détails prenaient pour le leur. Les couches
+ * s'empilent donc dans l'ordre où elles posent leur entrée ; une couche qui
+ * rend la sienne reste sur la pile jusqu'au `popstate` de ce retour, pour que
+ * celle du dessous ne le prenne pas pour elle.
+ *
+ * **ÉCHAP SUIT LA MÊME PILE** (#8517). Les couches du studio (Cadre, menu d'un
+ * objet, retouche) écoutaient chacune Échap sur `window` : une seule frappe
+ * refermait le Cadre ET la retouche qui le portait. Une couche qui le demande
+ * (`{ escape: true }`) ne répond à Échap que si elle est au SOMMET de la pile —
+ * la même loi que le retour, écrite une fois. Les `<dialog>` (`Sheet`) n'en ont
+ * pas besoin : le navigateur leur donne déjà `cancel`.
+ *
+ * **ET TOUTES SE REFERMENT D'UN SEUL APPEL** (#10539). Ouvrir une conversation
+ * depuis une notification doit montrer la conversation, pas la poser sous la
+ * feuille ou la visionneuse en cours : `dismissAllLayers()` rappelle la
+ * fermeture de chaque couche montée, du dessus au dessous. Une couche
+ * `held` n'y répond pas — l'appel en cours et la retouche d'un brouillon ne
+ * se referment que par leur propre geste. L'appelant apprend si l'entrée
+ * courante de l'historique est celle d'une couche refermée : il la REMPLACE
+ * par sa destination plutôt que de l'enterrer dessous (§ #6313).
+ */
+let nextMarker = 0;
+
+/** Les couches ouvertes, dans l'ordre où elles ont posé (ou adopté) leur
+ * entrée : la dernière est celle que le retour ferme (#8078). */
+let layerStack: readonly symbol[] = [];
+
+function isTopLayer(layer: symbol): boolean {
+  return layerStack[layerStack.length - 1] === layer;
+}
+
+function dropLayer(layer: symbol): void {
+  layerStack = layerStack.filter((open) => open !== layer);
+  closedLayers = closedLayers.filter((closed) => closed !== layer);
+}
+
+/** Les couches DÉMONTÉES qui restent sur la pile le temps que leur retour
+ * soit rendu (#8078) : elles gardent le `popstate` à venir, jamais Échap. */
+let closedLayers: readonly symbol[] = [];
+
+/** La couche MONTÉE la plus haute est celle qu'Échap ferme (#8517). */
+function isTopOpenLayer(layer: symbol): boolean {
+  const open = layerStack.filter((candidate) => !closedLayers.includes(candidate));
+  return open[open.length - 1] === layer;
+}
+
+/** L'entrée qu'une couche démontée a laissée, tant qu'aucune autre ne l'a
+ * adoptée et que la micro-tâche ne l'a pas rendue (#7527). */
+let pendingRelease: string | null = null;
+
+type OpenLayer = { readonly close: () => void; readonly marker: string | null };
+
+/** Les couches MONTÉES que `dismissAllLayers` referme, du dessous au dessus. */
+let dismissible: readonly OpenLayer[] = [];
+
+/** Une couche va SUCCÉDER à celles qu'on referme (l'aperçu tiré de la
+ * bannière, dont le chunk peut arriver après ce commit) : l'entrée laissée
+ * l'attend au lieu d'être rendue par un retour qu'elle prendrait pour le sien. */
+let successorExpected = false;
+
+export function dismissAllLayers(options: { readonly successor?: boolean } = {}): boolean {
+  const closing = [...dismissible].reverse();
+  const onLayerEntry = closing.some((open) => open.marker !== null && carriesMarker(window.history.state, open.marker));
+  successorExpected = onLayerEntry && options.successor === true;
+  closing.forEach((open) => open.close());
+  return onLayerEntry;
+}
+
+function carriesMarker(state: unknown, marker: string): boolean {
+  return layerMarkerOf(state) === marker;
+}
+
+function leaveEntry(marker: string, layer: symbol): void {
+  pendingRelease = marker;
+  queueMicrotask(() => {
+    if (pendingRelease !== marker) {
+      dropLayer(layer);
+      return;
+    }
+    if (successorExpected) {
+      successorExpected = false;
+      dropLayer(layer);
+      return;
+    }
+    pendingRelease = null;
+    if (!carriesMarker(window.history.state, marker)) {
+      dropLayer(layer);
+      return;
+    }
+    window.addEventListener('popstate', () => dropLayer(layer), { once: true });
+    window.history.back();
+  });
+}
+
+/** Les entrées qu'une couche a reprises à une couche ÉTEINTE avant que son
+ * nettoyage ne coure (#18460) : ce nettoyage ne doit plus les rendre. */
+let adoptedEntries: readonly string[] = [];
+
+/** L'entrée annoncée au rendu par une couche qui s'éteint, jusqu'à son nettoyage. */
+let announcedEntry: string | null = null;
+
+/** L'entrée laissée par la couche précédente, si elle est TOUJOURS l'entrée
+ * courante — sinon la nouvelle couche pose la sienne. */
+function adoptLeftEntry(): string | null {
+  successorExpected = false;
+  if (pendingRelease === null) return null;
+  if (!carriesMarker(window.history.state, pendingRelease)) return null;
+  const adopted = pendingRelease;
+  pendingRelease = null;
+  if (adopted === announcedEntry) adoptedEntries = [...adoptedEntries, adopted];
+  return adopted;
+}
+
+/**
+ * **UNE COUCHE QUI S'ÉTEINT ANNONCE SON ENTRÉE AU RENDU** (#18460). Démontée,
+ * une couche est nettoyée pendant la réconciliation, avant tout effet ; ÉTEINTE
+ * (`active: false`), elle l'est par son propre effet. Sous Preact, le runtime
+ * servi, les effets de mise en page d'un commit courent composant par
+ * composant, les enfants d'abord : la feuille que le menu ouvre (« Signaler »)
+ * posait sa propre entrée AVANT que le menu, son ancêtre, ne laisse la sienne,
+ * et l'entrée du menu restait orpheline sous la feuille (mesuré : deux entrées
+ * pour une feuille). L'annonce au rendu précède tous les effets du commit, quel
+ * que soit le runtime : la feuille adopte l'entrée comme après un démontage.
+ */
+function announceLeaving(marker: string): void {
+  if (pendingRelease !== null || !carriesMarker(window.history.state, marker)) return;
+  pendingRelease = marker;
+  announcedEntry = marker;
+}
+
+function wasAdopted(marker: string): boolean {
+  if (announcedEntry === marker) announcedEntry = null;
+  if (!adoptedEntries.includes(marker)) return false;
+  adoptedEntries = adoptedEntries.filter((entry) => entry !== marker);
+  return true;
+}
+
+export type BackDismissOptions = {
+  /** Échap ferme aussi la couche — seulement quand elle est au sommet. */
+  readonly escape?: boolean;
+  /**
+   * `false` : la couche ne pose AUCUNE entrée d'historique — son ouverture vit
+   * déjà dans l'adresse (`?open=`, `useAdminOpen`), qui a poussé la sienne : le
+   * retour change l'adresse et c'est l'adresse qui démonte la couche. Deux
+   * entrées pour une modale coûteraient deux retours. Lu au montage.
+   */
+  readonly history?: boolean;
+  /** `true` : `dismissAllLayers` ne la referme pas (#10539). Lu au montage. */
+  readonly held?: boolean;
+  /**
+   * `false` : la couche n'existe pas encore (#18460). Un menu ancré reste monté
+   * fermé ; son passage à vrai pose (ou adopte) l'entrée et inscrit la couche
+   * dans le même commit, son passage à faux la rend comme un démontage.
+   * `held`, `history` et `escape` sont relus à chaque activation. Vrai par défaut.
+   */
+  readonly active?: boolean;
+};
+
+export function useBackDismiss(onClose: () => void, options: BackDismissOptions = {}): void {
+  const escape = options.escape === true;
+  const withHistory = options.history !== false;
+  const held = options.held === true;
+  const active = options.active !== false;
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+  const heldEntry = useRef<string | null>(null);
+  if (!active && heldEntry.current !== null) announceLeaving(heldEntry.current);
+
+  useLayoutEffect(() => {
+    if (!active) return;
+    const releaseModalLayer = openModalLayer();
+    const close = () => onCloseRef.current();
+    const declare = (marker: string | null): (() => void) => {
+      if (held) return releaseModalLayer;
+      const open: OpenLayer = { close, marker };
+      dismissible = [...dismissible, open];
+      return () => {
+        dismissible = dismissible.filter((other) => other !== open);
+        releaseModalLayer();
+      };
+    };
+    if (!withHistory) return declare(null);
+    const adopted = adoptLeftEntry();
+    let marker = adopted;
+    if (marker === null) {
+      nextMarker += 1;
+      marker = `back-dismiss-${nextMarker}`;
+      window.history.pushState(layerEntryState(marker), '');
+    }
+    const ownMarker = marker;
+    heldEntry.current = ownMarker;
+    const undeclare = declare(ownMarker);
+    const layer = Symbol(ownMarker);
+    layerStack = [...layerStack, layer];
+    let consumedByHistory = false;
+    const onPopState = () => {
+      if (!isTopLayer(layer)) return;
+      consumedByHistory = true;
+      onCloseRef.current();
+    };
+    window.addEventListener('popstate', onPopState);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || !isTopOpenLayer(layer)) return;
+      event.preventDefault();
+      onCloseRef.current();
+    };
+    if (escape) window.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      heldEntry.current = null;
+      undeclare();
+      window.removeEventListener('popstate', onPopState);
+      window.removeEventListener('keydown', onKeyDown);
+      if (wasAdopted(ownMarker)) {
+        dropLayer(layer);
+        return;
+      }
+      if (!consumedByHistory && carriesMarker(window.history.state, ownMarker)) {
+        closedLayers = [...closedLayers, layer];
+        leaveEntry(ownMarker, layer);
+        return;
+      }
+      dropLayer(layer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+}

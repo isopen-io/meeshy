@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "androidName": "menu_block",
+          "status": "android-only"
+        },
+        {
+          "androidName": "menu_my_conversations",
+          "status": "android-only"
+        },
+        {
+          "androidName": "menu_unblock",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

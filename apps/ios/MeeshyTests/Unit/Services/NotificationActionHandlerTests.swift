@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 import UserNotifications
 import MeeshySDK
 @testable import Meeshy
@@ -69,6 +70,11 @@ final class NotificationActionHandlerTests: XCTestCase {
             onEnqueue?()
             return "ofqm_test"
         }
+
+        @discardableResult
+        func enqueueComment(_ comment: CreateCommentPayload, ownerId: String?) async throws -> String {
+            try await enqueue(.createComment, payload: comment, conversationId: comment.postId)
+        }
     }
 
     private final class MockOptimisticPersistence: OptimisticMessagePersisting {
@@ -77,7 +83,7 @@ final class NotificationActionHandlerTests: XCTestCase {
         var insertError: Error?
         /// Suspension point for the mid-flight expiration test — lets the test
         /// freeze `handle()` between `beginTask` and the outbox/REST work.
-        var onInsert: (() async -> Void)?
+        var onInsert: (@concurrent () async -> Void)?
 
         func insertOptimistic(_ record: MessageRecord) async throws {
             if let insertError { throw insertError }
@@ -120,6 +126,20 @@ final class NotificationActionHandlerTests: XCTestCase {
         }
     }
 
+    /// Attente en TEMPS RÉEL. Le regroupement des révocations socket a une
+    /// fenêtre de 200 ms : `Task.yield()` fait tourner la boucle sans garantir
+    /// qu'elle s'écoule, et le test conclurait avant le premier lot.
+    private func waitUntilRealTime(
+        timeout: Duration = .seconds(3),
+        _ condition: @MainActor () -> Bool
+    ) async {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while ContinuousClock.now < deadline {
+            if condition() { return }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
     // MARK: - Factory
 
     private struct SUTContext {
@@ -127,6 +147,10 @@ final class NotificationActionHandlerTests: XCTestCase {
         let messageService: MockMessageService
         let conversationService: MockConversationService
         let postService: MockPostService
+        /// Ce que le SEUL chemin réseau d'un commentaire a créé (#9743).
+        let comments: CommentPublisherSpy
+        let unsentNotices: () -> Int
+        let refusedReplyNotices: () -> Int
         let friendService: MockFriendService
         let queue: MockReplyQueue
         let persistence: MockOptimisticPersistence
@@ -137,17 +161,28 @@ final class NotificationActionHandlerTests: XCTestCase {
         let removedConversationBanners: () -> [String]
         let removedPostBanners: () -> [String]
         let preparedReplyQueue: () -> Int
+        let revokedNotificationIds: () -> [[String]]
+        /// #6999 — ce que le geste a CONSOMMÉ. Injecté : le défaut atteint
+        /// `NotificationToastManager.shared`, donc le réseau.
+        let consumedRefs: () -> [NotificationRef]
     }
 
     private func makeSUT(
-        authToken: String? = "jwt-token",
+        authToken: String? = nil,
         currentUserId: String? = "user1",
         preferredLanguage: String? = "fr",
-        isRegisteredUser: Bool = true
+        isRegisteredUser: Bool = true,
+        rememberedEndToEnd: [String] = []
     ) -> SUTContext {
         let messageService = MockMessageService()
         let conversationService = MockConversationService()
         let postService = MockPostService()
+        // Le jeton de session porte le compte, comme un vrai JWT : c'est lui
+        // qui désigne l'auteur d'une réponse à un commentaire (#9743, M2).
+        let sessionToken = authToken ?? currentUserId.map { TestSessionToken.make(userId: $0) }
+        let comments = CommentPublisherSpy(token: currentUserId.map { TestSessionToken.make(userId: $0) })
+        var unsentNotices = 0
+        var refusedReplyNotices = 0
         let friendService = MockFriendService()
         let queue = MockReplyQueue()
         let persistence = MockOptimisticPersistence()
@@ -159,25 +194,35 @@ final class NotificationActionHandlerTests: XCTestCase {
         var removedBanners: [String] = []
         var removedPostBanners: [String] = []
         var preparedReplyQueueCount = 0
+        var revokedIds: [[String]] = []
+        var consumedRefs: [NotificationRef] = []
 
         let sut = NotificationActionHandler(
             messageService: messageService,
             conversationService: conversationService,
             postService: postService,
+            commentPublisher: comments.publisher,
+            notifyUnsentComment: { unsentNotices += 1 },
             friendService: friendService,
             replyQueue: queue,
             messagePersistence: persistence,
             backgroundTasks: backgroundTasks,
-            authTokenProvider: { authToken },
+            authTokenProvider: { sessionToken },
             applyAuthToken: { appliedTokens.append($0) },
             currentUserId: { currentUserId },
             preferredLanguage: { preferredLanguage },
             isRegisteredUser: { isRegisteredUser },
             openNotification: { _ in openedCount += 1 },
             localMarkRead: { markedRead.append($0) },
+            consume: { consumedRefs.append($0) },
             removeDeliveredForConversation: { removedBanners.append($0) },
             removeDeliveredForPost: { removedPostBanners.append($0) },
-            prepareReplyQueue: { preparedReplyQueueCount += 1 }
+            removeDeliveredForNotificationIds: { revokedIds.append($0) },
+            prepareReplyQueue: { preparedReplyQueueCount += 1 },
+            conversationLocks: DeclaredConversationLocks(),
+            destinationGuard: Self.destinationGuard(remembering: rememberedEndToEnd),
+            notifyRefusedEndToEndReply: { _, _ in refusedReplyNotices += 1 },
+            endToEnd: MockEndToEndMessaging()
         )
 
         return SUTContext(
@@ -185,6 +230,9 @@ final class NotificationActionHandlerTests: XCTestCase {
             messageService: messageService,
             conversationService: conversationService,
             postService: postService,
+            comments: comments,
+            unsentNotices: { unsentNotices },
+            refusedReplyNotices: { refusedReplyNotices },
             friendService: friendService,
             queue: queue,
             persistence: persistence,
@@ -194,7 +242,9 @@ final class NotificationActionHandlerTests: XCTestCase {
             locallyMarkedRead: { markedRead },
             removedConversationBanners: { removedBanners },
             removedPostBanners: { removedPostBanners },
-            preparedReplyQueue: { preparedReplyQueueCount }
+            preparedReplyQueue: { preparedReplyQueueCount },
+            revokedNotificationIds: { revokedIds },
+            consumedRefs: { consumedRefs }
         )
     }
 
@@ -208,6 +258,29 @@ final class NotificationActionHandlerTests: XCTestCase {
             "messageId": messageId,
             "senderId": "sender1"
         ]
+    }
+
+    private static func destinationGuard(remembering ids: [String]) -> EndToEndDestinationGuard {
+        .isolated(remembering: ids)
+    }
+
+    /// #12641 — une réponse depuis la bannière d'une conversation vue chiffrée
+    /// de bout en bout ne part pas en clair et n'entre pas dans la file : la
+    /// bulle reste en échec dans le fil, avec sa raison.
+    func test_handle_reply_inARememberedEndToEndConversation_sendsNothing_queuesNothing() async {
+        let ctx = makeSUT(rememberedEndToEnd: ["conv1"])
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.reply.rawValue,
+            userInfo: replyUserInfo(),
+            replyText: "Le code du coffre est 4512"
+        )
+
+        XCTAssertEqual(ctx.messageService.sendCallCount, 0)
+        XCTAssertTrue(ctx.queue.enqueuedItems.isEmpty)
+        XCTAssertEqual(ctx.persistence.insertedRecords.map(\.content), [E2EEWire.contentPlaceholder], "#13067 — la bulle est scellée, le clair est au coffre")
+        XCTAssertEqual(ctx.persistence.insertedRecords.map(\.lastError), [EndToEndSendRefusal.sealedOnlyInConversation.userMessage])
+        XCTAssertEqual(ctx.refusedReplyNotices(), 1, "audit M4 — le refus se dit, la bannière ne disparaît pas en silence")
     }
 
     // MARK: - (a) Work completes inside handle(), wrapped in a background task
@@ -308,7 +381,8 @@ final class NotificationActionHandlerTests: XCTestCase {
             localMarkRead: { _ in },
             removeDeliveredForConversation: { _ in },
             removeDeliveredForPost: { _ in },
-            prepareReplyQueue: { }
+            prepareReplyQueue: { },
+            destinationGuard: .isolated()
         )
 
         await sut.handle(
@@ -541,10 +615,10 @@ final class NotificationActionHandlerTests: XCTestCase {
             replyText: "Bien vu !"
         )
 
-        XCTAssertEqual(ctx.postService.addCommentCallCount, 1)
-        XCTAssertEqual(ctx.postService.lastAddCommentPostId, "post1")
-        XCTAssertEqual(ctx.postService.lastAddCommentContent, "Bien vu !")
-        XCTAssertEqual(ctx.postService.lastAddCommentParentId, "c9",
+        XCTAssertEqual(ctx.comments.created.count, 1)
+        XCTAssertEqual(ctx.comments.created.last?.postId, "post1")
+        XCTAssertEqual(ctx.comments.created.last?.content, "Bien vu !")
+        XCTAssertEqual(ctx.comments.created.last?.parentCommentId, "c9",
                        "post_comment → threaded reply to THE notified comment")
     }
 
@@ -558,7 +632,7 @@ final class NotificationActionHandlerTests: XCTestCase {
                 replyText: "réponse"
             )
 
-            XCTAssertEqual(ctx.postService.lastAddCommentParentId, "c42",
+            XCTAssertEqual(ctx.comments.created.last?.parentCommentId, "c42",
                            "\(type) must thread under the notified comment")
         }
     }
@@ -572,8 +646,8 @@ final class NotificationActionHandlerTests: XCTestCase {
             replyText: "Premier !"
         )
 
-        XCTAssertEqual(ctx.postService.addCommentCallCount, 1)
-        XCTAssertNil(ctx.postService.lastAddCommentParentId,
+        XCTAssertEqual(ctx.comments.created.count, 1)
+        XCTAssertNil(ctx.comments.created.last?.parentCommentId,
                      "friend_new_post → root comment, never threaded")
     }
 
@@ -586,8 +660,8 @@ final class NotificationActionHandlerTests: XCTestCase {
             replyText: "ok"
         )
 
-        XCTAssertEqual(ctx.postService.addCommentCallCount, 1)
-        XCTAssertNil(ctx.postService.lastAddCommentParentId)
+        XCTAssertEqual(ctx.comments.created.count, 1)
+        XCTAssertNil(ctx.comments.created.last?.parentCommentId)
     }
 
     func test_handle_comment_anonymousSession_isLoggedNoop() async {
@@ -599,7 +673,7 @@ final class NotificationActionHandlerTests: XCTestCase {
             replyText: "anonyme"
         )
 
-        XCTAssertEqual(ctx.postService.addCommentCallCount, 0,
+        XCTAssertEqual(ctx.comments.created.count, 0,
                        "The comments endpoint requires a registered user — no call")
         XCTAssertTrue(ctx.queue.enqueuedKinds.isEmpty)
         XCTAssertEqual(ctx.backgroundTasks.endCallCount, 1)
@@ -607,7 +681,7 @@ final class NotificationActionHandlerTests: XCTestCase {
 
     func test_handle_comment_networkFailure_keepsDurableOutboxRow() async throws {
         let ctx = makeSUT()
-        ctx.postService.addCommentResult = .failure(TestError())
+        ctx.comments.createFailure = TestError()
 
         await ctx.sut.handle(
             actionIdentifier: MeeshyNotificationAction.comment.rawValue,
@@ -623,6 +697,53 @@ final class NotificationActionHandlerTests: XCTestCase {
         XCTAssertEqual(payload.content, "durable")
     }
 
+    /// #9743, M2 — une réponse que rien ne garde prévient l'utilisateur.
+    func test_handle_comment_neitherSentNorQueued_warnsTheUser() async {
+        let ctx = makeSUT()
+        ctx.comments.createFailure = TestError()
+        ctx.queue.enqueueKindError = TestError()
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.comment.rawValue,
+            userInfo: socialUserInfo(type: "post_comment", commentId: "c9"),
+            replyText: "perdu ?"
+        )
+
+        XCTAssertEqual(ctx.unsentNotices(), 1, "Une réponse ni envoyée ni gardée ne disparaît pas en silence.")
+    }
+
+    func test_handle_comment_sentOrQueued_warnsNoOne() async {
+        let ctx = makeSUT()
+        ctx.comments.createFailure = TestError()
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.comment.rawValue,
+            userInfo: socialUserInfo(type: "post_comment", commentId: "c9"),
+            replyText: "gardée"
+        )
+
+        XCTAssertEqual(ctx.unsentNotices(), 0)
+        XCTAssertEqual(ctx.queue.enqueuedKinds, [.createComment])
+    }
+
+    /// La notification s'adressait à un autre compte que celui du jeton :
+    /// rien ne part, rien n'est enfilé, l'utilisateur est prévenu.
+    func test_handle_comment_addressedToAnotherAccount_isRefused() async {
+        let ctx = makeSUT()
+        var info = socialUserInfo(type: "post_comment", commentId: "c9")
+        info["recipientId"] = "66f0a1b2c3d4e5f6000000b0"
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.comment.rawValue,
+            userInfo: info,
+            replyText: "pas à moi"
+        )
+
+        XCTAssertTrue(ctx.comments.created.isEmpty)
+        XCTAssertTrue(ctx.queue.enqueuedKinds.isEmpty)
+        XCTAssertEqual(ctx.unsentNotices(), 1)
+    }
+
     func test_handle_comment_outboxAndRestShareSameClientMutationId() async throws {
         let ctx = makeSUT()
 
@@ -633,7 +754,7 @@ final class NotificationActionHandlerTests: XCTestCase {
         )
 
         let payload = try decodedCommentPayload(ctx)
-        XCTAssertEqual(ctx.postService.lastAddCommentClientMutationId, payload.clientMutationId,
+        XCTAssertEqual(ctx.comments.created.last?.clientMutationId, payload.clientMutationId,
                        "Outbox replay and direct REST must share ONE mutation id so the gateway MutationLog dedups")
         XCTAssertTrue(payload.clientMutationId.hasPrefix("cmid_"))
     }
@@ -659,7 +780,7 @@ final class NotificationActionHandlerTests: XCTestCase {
             replyText: "sans cible"
         )
 
-        XCTAssertEqual(ctx.postService.addCommentCallCount, 0)
+        XCTAssertEqual(ctx.comments.created.count, 0)
         XCTAssertTrue(ctx.queue.enqueuedKinds.isEmpty)
     }
 
@@ -672,7 +793,7 @@ final class NotificationActionHandlerTests: XCTestCase {
             replyText: "  \n "
         )
 
-        XCTAssertEqual(ctx.postService.addCommentCallCount, 0)
+        XCTAssertEqual(ctx.comments.created.count, 0)
         XCTAssertTrue(ctx.queue.enqueuedKinds.isEmpty)
     }
 
@@ -842,5 +963,153 @@ final class NotificationActionHandlerTests: XCTestCase {
         )
 
         XCTAssertEqual(ctx.openedNotifications(), 1)
+    }
+
+    // MARK: - Révocation (features 4/5) : la bannière livrée suit la suppression
+
+    /// Push de contrôle `notification_revoked` (AppDelegate) ET socket
+    /// `notification:deleted` convergent ici : UN atome de retrait
+    /// (`removeDeliveredNotifications(matching:)`), jamais une seconde
+    /// implémentation d'`UNUserNotificationCenter`.
+    func test_revokeDeliveredBanners_routesTheIdsToTheSingleRemovalSeam() async {
+        let ctx = makeSUT()
+
+        await ctx.sut.revokeDeliveredBanners(notificationIds: ["n1", "n2"])
+
+        XCTAssertEqual(ctx.revokedNotificationIds(), [["n1", "n2"]])
+    }
+
+    func test_revokeDeliveredBanners_withNoIds_touchesNothing() async {
+        let ctx = makeSUT()
+
+        await ctx.sut.revokeDeliveredBanners(notificationIds: [])
+
+        XCTAssertEqual(ctx.revokedNotificationIds(), [])
+    }
+
+    func test_observeRevocations_removesTheBannerOfEachDeletedNotification() async {
+        let ctx = makeSUT()
+        let deletions = PassthroughSubject<String, Never>()
+        ctx.sut.observeRevocations(from: deletions.eraseToAnyPublisher())
+
+        deletions.send("n7")
+        await waitUntilRealTime { ctx.revokedNotificationIds().count == 1 }
+        deletions.send("n8")
+        await waitUntilRealTime { ctx.revokedNotificationIds().count == 2 }
+
+        XCTAssertEqual(ctx.revokedNotificationIds(), [["n7"], ["n8"]],
+                       "deux suppressions ESPACÉES restent deux lots — le regroupement ne retarde rien qui ne se chevauche")
+    }
+
+    /// Une purge en lot (`notification:deleted-bulk`, typiquement les lues
+    /// effacées depuis un autre appareil) republie ses ids UN PAR UN sur
+    /// `notificationWasDeleted`. Sans regroupement, deux cents suppressions
+    /// enchaînaient deux cents `getDeliveredNotifications` sur le main thread —
+    /// alors que le retrait prend DÉJÀ un tableau.
+    func test_observeRevocations_batchesABurstIntoASingleSystemCall() async {
+        let ctx = makeSUT()
+        let deletions = PassthroughSubject<String, Never>()
+        ctx.sut.observeRevocations(from: deletions.eraseToAnyPublisher())
+
+        ["n1", "n2", "n3", "n4", "n5"].forEach(deletions.send)
+        await waitUntilRealTime { !ctx.revokedNotificationIds().isEmpty }
+        // Une fenêtre de plus : un second lot trahirait un regroupement partiel.
+        try? await Task.sleep(for: .milliseconds(400))
+
+        XCTAssertEqual(ctx.revokedNotificationIds(), [["n1", "n2", "n3", "n4", "n5"]])
+    }
+
+    /// Un second abonnement remplace le premier : la racine SwiftUI peut
+    /// rejouer son câblage, la bannière ne doit pas être retirée deux fois.
+    func test_observeRevocations_calledTwice_keepsASingleSubscription() async {
+        let ctx = makeSUT()
+        let first = PassthroughSubject<String, Never>()
+        let second = PassthroughSubject<String, Never>()
+        ctx.sut.observeRevocations(from: first.eraseToAnyPublisher())
+        ctx.sut.observeRevocations(from: second.eraseToAnyPublisher())
+
+        first.send("stale")
+        second.send("live")
+        await waitUntilRealTime { !ctx.revokedNotificationIds().isEmpty }
+
+        XCTAssertEqual(ctx.revokedNotificationIds(), [["live"]])
+    }
+
+    // MARK: Câblage (gardes de source — AppDelegate et la racine ne s'instancient pas en test)
+
+    private func appSource(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Services
+            .deletingLastPathComponent()   // Unit
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // apps/ios
+            .appendingPathComponent(relativePath)
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// La branche `notification_revoked` vit AVANT la logique de sync du push
+    /// silencieux et termine le handler en `.noData` : ce push ne porte aucun
+    /// compteur, il ne doit ni déclencher `syncNow()` (le total messages) ni
+    /// l'ack de réception.
+    ///
+    /// #3894 — ce canal est celui qu'emprunte l'app quand le socket n'est PAS
+    /// là (arrière-plan) : il doit faire les QUATRE choses que fait le socket
+    /// `notification:deleted` app ouverte — pas seulement retirer la
+    /// bannière. `applyServerRevocation` (cache + compteur/badge de la
+    /// cloche) doit donc être appelé, APRÈS l'amorce du jeton d'auth qu'exige
+    /// son appel réseau (même amorce que `NotificationActionHandler.handle()`),
+    /// et AVANT `completionHandler(.noData)`.
+    func test_appDelegate_handlesRevocationPush_beforeSilentSync_andCompletesNoData() throws {
+        let code = AppSourceGuard.stripComments(try appSource("Meeshy/AppDelegate.swift"))
+        guard let branch = code.range(of: "NotificationRevocationPayload(userInfo: userInfo)"),
+              let sync = code.range(of: "NotificationCoordinator.shared.syncNow()") else {
+            XCTFail("AppDelegate doit parser la révocation et garder la sync silencieuse"); return
+        }
+        XCTAssertTrue(branch.lowerBound < sync.lowerBound, "la révocation se traite avant la sync")
+        let tail = code[branch.upperBound...].prefix(700)
+        XCTAssertTrue(tail.contains("revokeDeliveredBanners(notificationIds:"))
+        XCTAssertTrue(tail.contains("primeAPITokenFromSession()"),
+                      "un cold-launch en arrière-plan ne passe jamais par checkExistingSession — sans cette amorce, le GET /notifications/unread-count échoue en 401")
+        XCTAssertTrue(tail.contains("NotificationToastManager.shared.applyServerRevocation(notificationIds:"),
+                      "le cache et le compteur/badge de la cloche doivent être mis à jour, pas seulement la bannière")
+        XCTAssertTrue(tail.contains("completionHandler(.noData)"))
+
+        let authIdx = tail.range(of: "primeAPITokenFromSession()")!.lowerBound
+        let revocationIdx = tail.range(of: "applyServerRevocation(notificationIds:")!.lowerBound
+        let completionIdx = tail.range(of: "completionHandler(.noData)")!.lowerBound
+        XCTAssertTrue(authIdx < revocationIdx, "le jeton doit être amorcé AVANT tout appel réseau")
+        XCTAssertTrue(revocationIdx < completionIdx, "le retrait cache/compteur doit être ATTENDU avant de rendre la main à iOS")
+    }
+
+    func test_app_wiresSocketDeletions_toTheBannerRevocation() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/MeeshyApp.swift"))
+        XCTAssertTrue(code.contains("observeRevocations(from: NotificationToastManager.shared.notificationWasDeleted"),
+                      "le socket `notification:deleted` doit retirer la bannière livrée par le même atome que le push")
+    }
+}
+
+// MARK: - #9743, M2 — la réponse s'adresse au compte du jeton
+
+@MainActor
+final class NotificationCommentReplyOwnerTests: XCTestCase {
+
+    private let alice = "66f0a1b2c3d4e5f6000000a1"
+    private let bob = "66f0a1b2c3d4e5f6000000b0"
+
+    func test_author_isTheTokensAccount() {
+        XCTAssertEqual(NotificationReplyFailure.author(token: TestSessionToken.make(userId: alice), userInfo: [:]), alice)
+    }
+
+    func test_author_refusesANotificationAddressedToAnotherAccount() {
+        XCTAssertNil(NotificationReplyFailure.author(token: TestSessionToken.make(userId: alice),
+                                                     userInfo: ["recipientId": bob]))
+        XCTAssertEqual(NotificationReplyFailure.author(token: TestSessionToken.make(userId: alice),
+                                                       userInfo: ["recipientId": alice]), alice)
+    }
+
+    func test_author_needsAReadableToken() {
+        for token in [String?.none, "", "pas-un-jeton", TestSessionToken.make(userId: nil)] {
+            XCTAssertNil(NotificationReplyFailure.author(token: token, userInfo: [:]))
+        }
     }
 }

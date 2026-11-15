@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="session_lost_pending_sends">Your session was closed: %1$d unsent item(s) were lost.</string>
+</resources>

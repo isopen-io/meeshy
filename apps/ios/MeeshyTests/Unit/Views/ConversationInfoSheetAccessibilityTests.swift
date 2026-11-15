@@ -4,13 +4,13 @@ import XCTest
 @MainActor
 final class ConversationInfoSheetAccessibilityTests: XCTestCase {
 
-    private func sheetSource() throws -> String {
+    private func sheetSource(named file: String = "ConversationInfoSheet.swift") throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Components/ConversationInfoSheet.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Components/\(file)")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -23,6 +23,28 @@ final class ConversationInfoSheetAccessibilityTests: XCTestCase {
         }
         let end = source.index(range.upperBound, offsetBy: span, limitedBy: source.endIndex) ?? source.endIndex
         return String(source[range.upperBound ..< end])
+    }
+
+    // MARK: - #17907 — la fiche défile d'un bloc et épingle ses onglets, comme la fiche profil
+
+    func test_sheet_scrollsAsOneBlock_withPinnedTabBar() throws {
+        let source = try sheetSource()
+        let layout = try vicinity(after: "private var collapsibleLayout: some View {", in: source, span: 1_400)
+        XCTAssertTrue(layout.contains("LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders])"),
+                      "La fiche est UN défilement dont l'en-tête de section (les onglets) s'épingle, comme `UserProfileSheet`.")
+        XCTAssertTrue(layout.contains("pinnedTabBar(offset: offset)"),
+                      "Les onglets sont l'en-tête épinglé de la section, pas une rangée figée au-dessus du défilement.")
+        XCTAssertTrue(layout.contains("collapsibleHeader(offset: offset)"),
+                      "L'en-tête de la conversation défile avec le contenu et s'efface, comme celui du profil.")
+        XCTAssertTrue(source.contains("compactPinnedBar"),
+                      "Une barre compacte prend le relais de l'en-tête replié.")
+    }
+
+    func test_tabContent_hasNoNestedScrollView() throws {
+        let source = try sheetSource()
+        let content = try vicinity(after: "private var tabContent: some View {", in: source, span: 700)
+        XCTAssertFalse(content.contains("ScrollView("),
+                       "Le contenu d'onglet vit dans le défilement de la fiche : un ScrollView imbriqué le réduirait à la bande restante.")
     }
 
     // MARK: - Member-search clear button
@@ -49,7 +71,8 @@ final class ConversationInfoSheetAccessibilityTests: XCTestCase {
         // Anchored on the pinned sheet's navigation title (unique) rather than
         // `showAllPinnedMessages = false` — the latter first matches the @State
         // declaration far above the toolbar button.
-        let source = try sheetSource()
+        // #8103 — la feuille des épinglés a quitté la fiche pour son extension.
+        let source = try sheetSource(named: "ConversationInfoSheet+Pinned.swift")
         let nearClose = try vicinity(after: "conversation.info.pinned.title", in: source, span: 900)
         XCTAssertTrue(
             nearClose.contains("common.close"),

@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import os
 @testable import Meeshy
 
 /// Garde anti-débordement de pile pour les `body` les plus lourds de l'app.
@@ -65,6 +66,58 @@ final class ConversationViewBodyTypeDepthTests: XCTestCase {
         try assertNestingWithinBudget(of: ConversationView.Body.self, label: "ConversationView.body")
     }
 
+    /// **Les couches de l'écran de conversation** (#6194, suivi de #5855, LOT-10).
+    ///
+    /// `ConversationView.Body` n'est plus effacé : il est mesuré pour de VRAI
+    /// (ci-dessus). Il l'était avant par `AnyView`, ce qui imprimait « 0 niveau »
+    /// et certifiait le type que l'effacement avait aplati, jamais le coût qui
+    /// vivait derrière — c'est SOUS cette garde, verte, que l'app a débordé la
+    /// pile à chaque ouverture de conversation le 2026-09-12.
+    ///
+    /// Chaque couche est mesurable PARCE QU'elle est nominale : une propriété
+    /// calculée n'offre aucun type à interroger — le remède et la garde sont le
+    /// même geste.
+    func test_conversationLayers_nestingStaysWithinStackBudget() throws {
+        try assertNestingWithinBudget(of: ConversationBodyLifecycle.Body.self, label: "ConversationBodyLifecycle.body")
+        try assertNestingWithinBudget(of: ConversationRouterWatch.Body.self, label: "ConversationRouterWatch.body")
+        try assertNestingWithinBudget(of: ConversationDraftPersistenceWatch.Body.self, label: "ConversationDraftPersistenceWatch.body")
+        try assertNestingWithinBudget(of: ConversationBodyCovers.Body.self, label: "ConversationBodyCovers.body")
+        try assertNestingWithinBudget(of: ConversationComposerPickers.Body.self, label: "ConversationComposerPickers.body")
+        try assertNestingWithinBudget(of: ConversationComposerStickerSheet.Body.self, label: "ConversationComposerStickerSheet.body")
+        try assertNestingWithinBudget(of: ConversationComposerEditingCovers.Body.self, label: "ConversationComposerEditingCovers.body")
+        try assertNestingWithinBudget(of: ConversationComposerCore.Body.self, label: "ConversationComposerCore.body")
+        try assertNestingWithinBudget(of: ConversationReaderModeBranch.Body.self, label: "ConversationReaderModeBranch.body")
+        try assertNestingWithinBudget(of: ConversationHeaderCallButton.Body.self, label: "ConversationHeaderCallButton.body")
+    }
+
+    /// Les couches GÉNÉRIQUES sont mesurées à fentes vides : cela isole leur
+    /// composition PROPRE. Les arguments réels de chaque fente sont couverts par
+    /// `ConversationView.Body`.
+    private static let maxGenericLayerDepth = 24
+
+    func test_genericLayers_ownCompositionStaysShallow() throws {
+        typealias Empty = EmptyView
+        let layers: [(Any.Type, String)] = [
+            (ConversationBodyStage<Empty, Empty, Empty, Empty, Empty, Empty>.Body.self, "ConversationBodyStage.body"),
+            (ConversationBodySheets<Empty, Empty>.Body.self, "ConversationBodySheets.body"),
+            (ConversationBodyOverlayMenu<Empty, Empty>.Body.self, "ConversationBodyOverlayMenu.body"),
+            (ConversationOverlayMenuLayer<Empty>.Body.self, "ConversationOverlayMenuLayer.body"),
+            (ConversationScrollToBottomBranch<Empty>.Body.self, "ConversationScrollToBottomBranch.body"),
+            (ConversationExpandedHeaderBand<Empty, Empty, Empty, Empty, Empty>.Body.self, "ConversationExpandedHeaderBand.body"),
+            (ConversationHeaderMidContent<Empty, Empty>.Body.self, "ConversationHeaderMidContent.body"),
+            (ConversationHeaderActionsCluster<Empty, Empty, Empty>.Body.self, "ConversationHeaderActionsCluster.body"),
+            (ConversationFloatingHeaderSection<Empty, Empty, Empty, Empty>.Body.self, "ConversationFloatingHeaderSection.body"),
+        ]
+        for (type, label) in layers {
+            let measured = try Self.measureOnDeepStack(type)
+            print("[profondeur #5837] \(label) = \(measured.depth) niveaux (\(measured.typeNameLength) caractères)")
+            XCTAssertLessThanOrEqual(
+                measured.depth, Self.maxGenericLayerDepth,
+                "\(label) imbrique \(measured.depth) niveaux à fentes vides (plafond \(Self.maxGenericLayerDepth)) : sa composition PROPRE a grossi — la ranger dans une struct nominale.\n\(measured.excerpt)"
+            )
+        }
+    }
+
     func test_bubbleStandardLayoutBody_nestingStaysWithinStackBudget() throws {
         try assertNestingWithinBudget(of: BubbleStandardLayout.Body.self, label: "BubbleStandardLayout.body")
     }
@@ -73,10 +126,86 @@ final class ConversationViewBodyTypeDepthTests: XCTestCase {
         try assertNestingWithinBudget(of: ConversationListView.Body.self, label: "ConversationListView.body")
     }
 
+    // MARK: - Les RACINES et leurs couches (#5837)
+
+    /// **La racine manquait au budget, et c'est elle qui porte les autres.**
+    ///
+    /// Crash device du 2026-09-09 12:51 (`Meeshy-2026-09-09-125103.ips`) :
+    /// `EXC_BAD_ACCESS`, `sp` DANS la page de garde, 91 trames dans le décodeur
+    /// de métadonnées. `ConversationListView.init` débordait en résolvant un
+    /// KeyPath, atteint depuis `RootView.body` → `NavigationStack` → `ZStack`.
+    /// Les trois `body` bornés ci-dessus étaient VERTS : ce n'est pas leur
+    /// profondeur qui a franchi la limite, c'est celle du TRONC qui les héberge
+    /// — mesuré le 2026-09-09 : `RootView.body` = **66** niveaux (~1095 Ko),
+    /// `iPadRootView.body` = **69** (~1145 Ko), contre 1008 Ko de pile.
+    ///
+    /// > Une racine n'est pas un écran de plus : **tout ce qu'elle imbrique
+    /// > s'ajoute à la pile de CHAQUE vue qu'elle matérialise.** Un
+    /// > modificateur posé sur elle coûte un niveau à tous ses enfants.
+    ///
+    /// Remboursé par des `ViewModifier` NOMINAUX par tranches CONTIGUËS
+    /// (`RootLayers/`), et deux vues nominales pour les `switch` de routes.
+    /// Chaque couche est mesurée ICI aussi : sinon la racine passe au vert
+    /// pendant qu'une couche regrossit en silence — le découpage déplacerait
+    /// la dette au lieu de la rembourser.
+    func test_rootViewBody_nestingStaysWithinStackBudget() throws {
+        try assertNestingWithinBudget(of: RootView.Body.self, label: "RootView.body")
+    }
+
+    func test_iPadRootViewBody_nestingStaysWithinStackBudget() throws {
+        try assertNestingWithinBudget(of: iPadRootView.Body.self, label: "iPadRootView.body")
+    }
+
+    func test_rootRouteDestinations_nestingStaysWithinStackBudget() throws {
+        try assertNestingWithinBudget(of: RootRouteDestination.Body.self, label: "RootRouteDestination.body")
+        try assertNestingWithinBudget(of: iPadPanelDestination.Body.self, label: "iPadPanelDestination.body")
+    }
+
+    func test_rootLayers_nestingStaysWithinStackBudget() throws {
+        try assertNestingWithinBudget(of: RootStatusBubbleLayer.Body.self, label: "RootStatusBubbleLayer.body")
+        try assertNestingWithinBudget(of: RootIntentRoutingLayer.Body.self, label: "RootIntentRoutingLayer.body")
+        try assertNestingWithinBudget(of: RootEnvironmentLayer.Body.self, label: "RootEnvironmentLayer.body")
+        try assertNestingWithinBudget(of: RootStoryDoorsLayer.Body.self, label: "RootStoryDoorsLayer.body")
+        try assertNestingWithinBudget(of: RootChromeLayer.Body.self, label: "RootChromeLayer.body")
+        try assertNestingWithinBudget(of: RootSheetsLayer.Body.self, label: "RootSheetsLayer.body")
+    }
+
+    func test_iPadRootLayers_nestingStaysWithinStackBudget() throws {
+        try assertNestingWithinBudget(of: iPadEnvironmentLayer.Body.self, label: "iPadEnvironmentLayer.body")
+        try assertNestingWithinBudget(of: iPadStoryAndLifecycleLayer.Body.self, label: "iPadStoryAndLifecycleLayer.body")
+        try assertNestingWithinBudget(of: iPadSheetsLayer.Body.self, label: "iPadSheetsLayer.body")
+        try assertNestingWithinBudget(of: iPadCoversAndChromeLayer.Body.self, label: "iPadCoversAndChromeLayer.body")
+    }
+
+    /// Le budget global laisse la marge ; ce plafond dit ce qu'une RACINE doit
+    /// rester : un `ZStack` d'enfants nominaux et une poignée de couches. Une
+    /// racine à 30 niveaux n'a pas dérivé « un peu » — quelqu'un a recommencé
+    /// à empiler des modificateurs dessus au lieu de les ranger dans une couche.
+    private static let maxRootNestingDepth = 24
+
+    func test_rootBodies_stayShallow_becauseEveryChildPaysForThem() throws {
+        for (type, label) in [(RootView.Body.self as Any.Type, "RootView.body"),
+                              (iPadRootView.Body.self, "iPadRootView.body")] {
+            let measured = try Self.measureOnDeepStack(type)
+            XCTAssertLessThanOrEqual(
+                measured.depth, Self.maxRootNestingDepth,
+                """
+                \(label) imbrique \(measured.depth) niveaux, au-dessus du plafond de \
+                racine (\(Self.maxRootNestingDepth)). Un modificateur posé sur une racine \
+                coûte un niveau à CHAQUE vue qu'elle héberge (#5837) : le ranger dans la \
+                couche nominale de `RootLayers/` qui lui correspond, pas l'ajouter ici.
+                Nom de type mesuré (\(measured.typeNameLength) caractères) tronqué :
+                \(measured.excerpt)
+                """
+            )
+        }
+    }
+
     // MARK: - Harnais
 
     private func assertNestingWithinBudget(of type: Any.Type, label: String) throws {
         let measured = try Self.measureOnDeepStack(type)
+        print("[profondeur #5837] \(label) = \(measured.depth) niveaux (\(measured.typeNameLength) caractères)")
         XCTAssertLessThanOrEqual(
             measured.depth, Self.maxSafeNestingDepth,
             """
@@ -106,20 +235,21 @@ final class ConversationViewBodyTypeDepthTests: XCTestCase {
     /// dette n'est pas remboursée. Le harnais ne doit pas crasher pour dire
     /// qu'il y a trop de profondeur — il doit le MESURER.
     private static func measureOnDeepStack(_ type: Any.Type) throws -> Measurement {
-        var result: Measurement?
+        let result = OSAllocatedUnfairLock<Measurement?>(initialState: nil)
         let thread = Thread {
             let name = _typeName(type, qualified: false)
-            result = Measurement(
+            let measured = Measurement(
                 depth: maxAngleBracketDepth(of: name),
                 typeNameLength: name.count,
                 excerpt: String(name.prefix(600))
             )
+            result.withLock { $0 = measured }
         }
         thread.stackSize = 64 * 1024 * 1024
         thread.start()
         let deadline = Date().addingTimeInterval(60)
-        while result == nil, Date() < deadline { usleep(2000) }
-        guard let measured = result else {
+        while result.withLock({ $0 }) == nil, Date() < deadline { usleep(2000) }
+        guard let measured = result.withLock({ $0 }) else {
             throw XCTSkip("Mesure de profondeur de type non terminée en 60 s")
         }
         return measured
@@ -129,7 +259,7 @@ final class ConversationViewBodyTypeDepthTests: XCTestCase {
     /// `TupleView<(A, B, C)>` comptent pour un seul niveau de chevron mais
     /// chacun de leurs éléments porte sa propre imbrication — c'est bien le
     /// maximum atteint sur un chemin qui borne la récursion du démangleur.
-    static func maxAngleBracketDepth(of typeName: String) -> Int {
+    nonisolated static func maxAngleBracketDepth(of typeName: String) -> Int {
         var depth = 0
         var maximum = 0
         for character in typeName {
@@ -172,16 +302,11 @@ final class ConversationViewLayerErasureSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
             .appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.text(at: url)
     }
 
     /// Maillon → fichier. Chaque entrée doit se déclarer en `AnyView`.
     private static let erasedLayers: [(declaration: String, file: String)] = [
-        ("private var bodyWithSheets: AnyView", "Meeshy/Features/Main/Views/ConversationView.swift"),
-        ("private var bodyWithCovers: AnyView", "Meeshy/Features/Main/Views/ConversationView.swift"),
-        ("private var bodyWithLifecycle: AnyView", "Meeshy/Features/Main/Views/ConversationView.swift"),
-        ("private var bodyContent: AnyView", "Meeshy/Features/Main/Views/ConversationView.swift"),
-        ("var themedComposer: AnyView", "Meeshy/Features/Main/Views/ConversationView+Composer.swift"),
         ("func quickReactionBarOverlay(for messageId: String) -> AnyView",
          "Meeshy/Features/Main/Views/ConversationView+MessageRow.swift"),
         ("private var mainContent: AnyView", "Meeshy/Features/Main/Views/ConversationListView.swift"),
@@ -189,7 +314,7 @@ final class ConversationViewLayerErasureSourceGuardTests: XCTestCase {
         ("private func contentStack(shouldBlur: Bool) -> AnyView",
          "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift"),
         ("private var bubbleInnerContent: AnyView",
-         "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift"),
+         "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+TextBubble.swift"),
         ("var visualMediaGrid: AnyView",
          "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift"),
         ("func mediaWithReplyContainer(reply: BubbleContent.Reply) -> AnyView",

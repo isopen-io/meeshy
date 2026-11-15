@@ -21,7 +21,7 @@ public struct MeeshyAudioEditorView: View {
 
     @StateObject private var controller: AudioEditorController
     @StateObject private var waveform = AudioWaveformAnalyzer()
-    @ObservedObject private var theme = ThemeManager.shared
+    @ResolvedThemePalette private var theme
 
     private let accentColor: String
     private let onConfirm: (URL, [StoryVoiceTranscription], TimeInterval, TimeInterval) -> Void
@@ -53,7 +53,7 @@ public struct MeeshyAudioEditorView: View {
     /// remet `safeAreaInsets = 0` dans l'environnement SwiftUI ; le chrome
     /// (header, transport, dock) passerait sous la Dynamic Island / home
     /// indicator. La fenêtre expose toujours les insets physiques réels. Même
-    /// pattern que `MeeshyVideoEditorView` / `MeeshyImageEditorView`.
+    /// pattern que les anciens éditeurs plein écran d'image et de vidéo.
     // MARK: - Body
 
     public var body: some View {
@@ -112,14 +112,14 @@ public struct MeeshyAudioEditorView: View {
     // MARK: - Preparing State
 
     private var preparingState: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             ProgressView()
                 .tint(accent)
                 .scaleEffect(1.2)
             Text(String(localized: "audio.editor.preparing",
                         defaultValue: "Pr\u{00E9}paration de l'audio\u{2026}", bundle: .module))
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .font(MeeshyFont.relative(13, weight: .medium))
+                .foregroundStyle(theme.textMuted)
         }
     }
 
@@ -135,21 +135,21 @@ public struct MeeshyAudioEditorView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     header
-                        .padding(.horizontal, 16)
-                        .padding(.top, 10)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.top, MeeshySpacing.smPlus)
 
                     Spacer(minLength: 6)
 
                     waveformSection
-                        .padding(.horizontal, 18)
+                        .padding(.horizontal, MeeshySpacing.lg)
 
                     transportControls
-                        .padding(.top, 18)
+                        .padding(.top, MeeshySpacing.lg)
 
                     Spacer(minLength: 6)
 
                     bottomDock
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, MeeshySpacing.lg)
                         .padding(.bottom, 28)
                 }
                 // Plancher égal au conteneur : tant que le contenu tient, les
@@ -163,12 +163,13 @@ public struct MeeshyAudioEditorView: View {
     }
 
     private var bottomDock: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             if let error = controller.lastError {
                 errorBanner(error)
             }
             if let tool = controller.activeTool {
-                toolPanel(for: tool)
+                AudioEditorToolPanel(tool: tool, controller: controller, accent: accent,
+                                     isDark: isDark, onSpeedChange: applyPreviewRate)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if controller.document.hasHistory {
@@ -182,20 +183,17 @@ public struct MeeshyAudioEditorView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 10) {
-            circleButton(icon: "xmark") { cancelEditing() }
-                .accessibilityLabel(String(localized: "audio.editor.close",
-                                           defaultValue: "Fermer", bundle: .module))
+        HStack(spacing: MeeshySpacing.smPlus) {
+            circleButton(icon: "xmark", label: String(localized: "audio.editor.close",
+                                                      defaultValue: "Fermer", bundle: .module)) { cancelEditing() }
 
             if controller.document.hasHistory {
                 circleButton(icon: "arrow.uturn.backward",
+                             label: String(localized: "audio.editor.undo", defaultValue: "Annuler", bundle: .module),
                              enabled: controller.canUndo) { controller.undo() }
-                    .accessibilityLabel(String(localized: "audio.editor.undo",
-                                               defaultValue: "Annuler", bundle: .module))
                 circleButton(icon: "arrow.uturn.forward",
+                             label: String(localized: "audio.editor.redo", defaultValue: "R\u{00E9}tablir", bundle: .module),
                              enabled: controller.canRedo) { controller.redo() }
-                    .accessibilityLabel(String(localized: "audio.editor.redo",
-                                               defaultValue: "R\u{00E9}tablir", bundle: .module))
             }
 
             Spacer()
@@ -204,7 +202,7 @@ public struct MeeshyAudioEditorView: View {
         }
     }
 
-    private func circleButton(icon: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+    private func circleButton(icon: String, label: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button {
             guard enabled else { return }
             HapticFeedback.light()
@@ -213,12 +211,15 @@ public struct MeeshyAudioEditorView: View {
             ZStack {
                 Circle()
                     .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
-                    .frame(width: 38, height: 38)
+                    .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(theme.textPrimary.opacity(enabled ? 0.85 : 0.25))
+                    .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
+                    .foregroundStyle(theme.textPrimary.opacity(enabled ? 0.85 : 0.25))
             }
+            .meeshyTapTarget()
+            .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular))
         }
+        .accessibilityLabel(label)
         .buttonStyle(.plain)
         .disabled(!enabled)
     }
@@ -226,7 +227,7 @@ public struct MeeshyAudioEditorView: View {
     // MARK: - Mode Switcher (Simple / Pro — timeline switch style)
 
     private var modeSwitcher: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             modeSegment(.simple, label: String(localized: "audio.editor.mode.simple",
                                                defaultValue: "Simple", bundle: .module),
                         icon: "square.split.2x1")
@@ -234,13 +235,13 @@ public struct MeeshyAudioEditorView: View {
                                             defaultValue: "Pro", bundle: .module),
                         icon: "slider.horizontal.below.rectangle")
         }
-        .padding(4)
+        .padding(MeeshySpacing.xs)
         .background(
             Capsule().fill(isDark ? MeeshyColors.indigo900.opacity(0.55)
                                   : MeeshyColors.indigo100.opacity(0.85))
         )
         .overlay(
-            Capsule().strokeBorder(MeeshyColors.indigo400.opacity(0.25), lineWidth: 0.5)
+            Capsule().strokeBorder(MeeshyColors.indigo400.opacity(0.25), lineWidth: MeeshyBorder.hairline)
         )
     }
 
@@ -251,12 +252,12 @@ public struct MeeshyAudioEditorView: View {
             HapticFeedback.light()
             controller.mode = target
         } label: {
-            HStack(spacing: 5) {
-                Image(systemName: icon).font(.system(size: 11, weight: .semibold))
-                Text(label).font(.system(size: 12, weight: .semibold))
+            HStack(spacing: MeeshySpacing.xs) {
+                Image(systemName: icon).font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
+                Text(label).font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .frame(minWidth: 72)
             .foregroundStyle(isActive ? Color.white
                              : (isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo700))
@@ -273,7 +274,7 @@ public struct MeeshyAudioEditorView: View {
     // MARK: - Waveform Section
 
     private var waveformSection: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             AudioEditorWaveform(
                 samples: waveform.samples,
                 progress: playbackProgress,
@@ -291,13 +292,13 @@ public struct MeeshyAudioEditorView: View {
             .frame(height: 96)
 
             HStack {
-                Text(formatTime(displayTime))
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                Text(MediaFormat.duration(displayTime))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
                     .foregroundColor(accent)
                 Spacer()
-                Text(formatTime(controller.activeDuration))
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(theme.textMuted)
+                Text(MediaFormat.duration(controller.activeDuration))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .monospaced))
+                    .foregroundStyle(theme.textMuted)
             }
         }
     }
@@ -327,7 +328,7 @@ public struct MeeshyAudioEditorView: View {
 
     private var transportControls: some View {
         HStack(spacing: 34) {
-            transportButton(icon: "gobackward.5", size: 21) { skip(by: -5) }
+            transportButton(icon: "gobackward.5", size: 21, label: String(localized: "audio.editor.skip.backward.a11y", bundle: .module)) { skip(by: -5) }
             Button {
                 togglePlayback()
             } label: {
@@ -337,8 +338,8 @@ public struct MeeshyAudioEditorView: View {
                         .frame(width: 60, height: 60)
                         .shadow(color: accent.opacity(0.4), radius: 12)
                     Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 23, weight: .semibold))
-                        .foregroundColor(.white)
+                        .font(.system(size: MeeshyIconSize.xxl, weight: .semibold))
+                        .foregroundStyle(.white)
                         .offset(x: isPlaying ? 0 : 2)
                 }
             }
@@ -346,26 +347,27 @@ public struct MeeshyAudioEditorView: View {
             .accessibilityLabel(isPlaying
                 ? String(localized: "audio.editor.pause", defaultValue: "Pause", bundle: .module)
                 : String(localized: "audio.editor.play", defaultValue: "Lire", bundle: .module))
-            transportButton(icon: "goforward.5", size: 21) { skip(by: 5) }
+            transportButton(icon: "goforward.5", size: 21, label: String(localized: "audio.editor.skip.forward.a11y", bundle: .module)) { skip(by: 5) }
         }
     }
 
-    private func transportButton(icon: String, size: CGFloat, action: @escaping () -> Void) -> some View {
+    private func transportButton(icon: String, size: CGFloat, label: String, action: @escaping () -> Void) -> some View {
         Button {
             HapticFeedback.light()
             action()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: size, weight: .medium))
-                .foregroundColor(theme.textPrimary.opacity(0.65))
+                .meeshyScaledFont(size, weight: .medium)
+                .foregroundStyle(theme.textPrimary.opacity(0.65))
         }
+        .accessibilityLabel(label)
         .buttonStyle(.plain)
     }
 
     // MARK: - Tool Strip (FAB-style)
 
     private var toolStrip: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             ForEach(controller.availableTools) { tool in
                 toolFAB(tool)
             }
@@ -379,7 +381,7 @@ public struct MeeshyAudioEditorView: View {
             HapticFeedback.light()
             controller.selectTool(isActive ? nil : tool)
         } label: {
-            VStack(spacing: 5) {
+            VStack(spacing: MeeshySpacing.xs) {
                 ZStack {
                     Circle()
                         .fill(isActive ? AnyShapeStyle(MeeshyColors.brandGradient)
@@ -393,12 +395,12 @@ public struct MeeshyAudioEditorView: View {
                             )
                         )
                     Image(systemName: tool.icon)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
                         .foregroundColor(isActive ? .white : accent)
                 }
                 Text(tool.title)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(isActive ? theme.textPrimary : theme.textMuted)
+                    .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium)
+                    .foregroundStyle(isActive ? theme.textPrimary : theme.textMuted)
                     .lineLimit(1)
             }
         }
@@ -407,270 +409,17 @@ public struct MeeshyAudioEditorView: View {
         .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 
-    // MARK: - Tool Panels
-
-    @ViewBuilder
-    private func toolPanel(for tool: AudioEditorTool) -> some View {
-        VStack(spacing: 12) {
-            switch tool {
-            case .trim:
-                selectionHint(
-                    text: String(localized: "audio.editor.trim.hint",
-                                 defaultValue: "Glissez les poign\u{00E9}es pour garder une portion.",
-                                 bundle: .module),
-                    resetTitle: String(localized: "audio.editor.reset",
-                                       defaultValue: "R\u{00E9}initialiser", bundle: .module),
-                    reset: {
-                        controller.trimStart = 0
-                        controller.trimEnd = controller.activeDuration
-                    }
-                )
-            case .split:
-                selectionHint(
-                    text: String(localized: "audio.editor.split.hint",
-                                 defaultValue: "S\u{00E9}lectionnez la section \u{00E0} supprimer.",
-                                 bundle: .module),
-                    resetTitle: String(localized: "audio.editor.reset",
-                                       defaultValue: "R\u{00E9}initialiser", bundle: .module),
-                    reset: {
-                        let d = controller.activeDuration
-                        controller.splitStart = d * 0.4
-                        controller.splitEnd = d * 0.6
-                    }
-                )
-            case .fade:
-                fadePanel
-            case .speed:
-                speedPanel
-            case .volume:
-                volumePanel
-            case .transcribe:
-                transcribePanel
-            }
-        }
-        .padding(14)
-        .background(panelBackground)
-    }
-
-    private var panelBackground: some View {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.035))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(isDark ? Color.white.opacity(0.08)
-                                  : Color.black.opacity(0.06), lineWidth: 1)
-            )
-    }
-
-    private func selectionHint(text: String, resetTitle: String,
-                               reset: @escaping () -> Void) -> some View {
-        HStack(spacing: 10) {
-            Text(text)
-                .font(.system(size: 12))
-                .foregroundColor(theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 8)
-            Button {
-                HapticFeedback.light()
-                reset()
-            } label: {
-                Text(resetTitle)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(accent)
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private var fadePanel: some View {
-        VStack(spacing: 10) {
-            Toggle(isOn: $controller.fadeIn) {
-                Label(String(localized: "audio.editor.fade.in",
-                             defaultValue: "Fondu d'entr\u{00E9}e", bundle: .module),
-                      systemImage: "arrow.up.right")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
-            }
-            .tint(accent)
-            Toggle(isOn: $controller.fadeOut) {
-                Label(String(localized: "audio.editor.fade.out",
-                             defaultValue: "Fondu de sortie", bundle: .module),
-                      systemImage: "arrow.down.right")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
-            }
-            .tint(accent)
-        }
-    }
-
-    private var speedPanel: some View {
-        let speeds: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
-        return HStack(spacing: 8) {
-            ForEach(speeds, id: \.self) { value in
-                let isActive = abs(controller.speed - value) < 0.001
-                Button {
-                    HapticFeedback.light()
-                    controller.speed = value
-                    applyPreviewRate()
-                } label: {
-                    Text(speedLabel(value))
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                        .foregroundColor(isActive ? .white : theme.textSecondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 9)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(isActive ? AnyShapeStyle(MeeshyColors.brandGradient)
-                                      : AnyShapeStyle(isDark ? Color.white.opacity(0.06)
-                                                      : Color.black.opacity(0.04)))
-                        )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    private var volumePanel: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Image(systemName: "speaker.fill")
-                    .font(.system(size: 12))
-                    .foregroundColor(theme.textMuted)
-                Slider(value: $controller.gain, in: 0...2, step: 0.05)
-                    .tint(accent)
-                Image(systemName: "speaker.wave.3.fill")
-                    .font(.system(size: 12))
-                    .foregroundColor(theme.textMuted)
-            }
-            Text(volumeLabel(controller.gain))
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                .foregroundColor(accent)
-        }
-    }
-
-    // MARK: - Transcribe Panel
-
-    private var transcribePanel: some View {
-        VStack(spacing: 12) {
-            transcribeLanguageStrip
-            transcribeAction
-            transcribeResult
-        }
-    }
-
-    private var transcribeLanguageStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(transcribableLanguages, id: \.code) { language in
-                    let isActive = controller.transcriptionLanguage == language.code
-                    Button {
-                        HapticFeedback.light()
-                        controller.transcriptionLanguage = language.code
-                    } label: {
-                        HStack(spacing: 5) {
-                            Text(language.flag)
-                            Text(language.nativeName)
-                                .font(.system(size: 12, weight: .medium))
-                                .lineLimit(1)
-                        }
-                        .foregroundColor(isActive ? .white : theme.textSecondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule().fill(isActive ? AnyShapeStyle(MeeshyColors.brandGradient)
-                                           : AnyShapeStyle(isDark ? Color.white.opacity(0.06)
-                                                           : Color.black.opacity(0.04)))
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 2)
-        }
-    }
-
-    @ViewBuilder
-    private var transcribeAction: some View {
-        if controller.transcription == .running {
-            HStack(spacing: 8) {
-                ProgressView().tint(accent)
-                Text(String(localized: "audio.editor.transcription.running",
-                            defaultValue: "Transcription en cours\u{2026}", bundle: .module))
-                    .font(.system(size: 12))
-                    .foregroundColor(theme.textMuted)
-            }
-        } else {
-            Button {
-                HapticFeedback.medium()
-                controller.transcribe()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "waveform")
-                    Text(transcribeButtonTitle)
-                }
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(accent)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(accent.opacity(0.35), lineWidth: 1)
-                )
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    @ViewBuilder
-    private var transcribeResult: some View {
-        switch controller.transcription {
-        case .done(let text, _):
-            ScrollView {
-                Text(text)
-                    .font(.system(size: 13))
-                    .foregroundColor(theme.textPrimary.opacity(0.85))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(maxHeight: 110)
-        case .failed(let reason):
-            transcribeMessage(icon: "exclamationmark.triangle.fill",
-                              text: reason, tint: MeeshyColors.warning)
-        case .permissionDenied:
-            transcribeMessage(
-                icon: "lock.fill",
-                text: String(localized: "audio.editor.transcription.denied",
-                             defaultValue: "Acc\u{00E8}s \u{00E0} la reconnaissance vocale refus\u{00E9}. Activez-le dans R\u{00E9}glages.",
-                             bundle: .module),
-                tint: MeeshyColors.error
-            )
-        case .idle, .running:
-            EmptyView()
-        }
-    }
-
-    private func transcribeMessage(icon: String, text: String, tint: Color) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 12))
-                .foregroundColor(tint)
-            Text(text)
-                .font(.system(size: 12))
-                .foregroundColor(theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-    }
 
     // MARK: - History Strip
 
     private var historyStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(Array(controller.document.versions.enumerated()), id: \.element.id) { index, version in
                     historyChip(index: index, version: version)
                 }
             }
-            .padding(.horizontal, 2)
+            .padding(.horizontal, MeeshySpacing.xxs)
         }
     }
 
@@ -680,16 +429,16 @@ public struct MeeshyAudioEditorView: View {
             HapticFeedback.light()
             controller.selectVersion(version.id)
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: version.operation.displayIcon)
-                    .font(.system(size: 10, weight: .semibold))
+                    .meeshyScaledFont(MeeshyIconSize.xxs, weight: .semibold)
                 Text(version.operation.displayLabel)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .lineLimit(1)
             }
-            .foregroundColor(isActive ? .white : theme.textSecondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .foregroundStyle(isActive ? .white : theme.textSecondary)
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .background(
                 Capsule().fill(isActive ? AnyShapeStyle(accent)
                                : AnyShapeStyle(isDark ? Color.white.opacity(0.06)
@@ -715,12 +464,12 @@ public struct MeeshyAudioEditorView: View {
                           defaultValue: "Appliquer les modifications", bundle: .module)
                  : String(localized: "audio.editor.use",
                           defaultValue: "Utiliser l'audio", bundle: .module))
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white)
+                .font(MeeshyFont.relative(16, weight: .semibold))
+                .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
                 .background(MeeshyColors.brandGradient)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
                 .shadow(color: accent.opacity(0.3), radius: 12, y: 4)
         }
         .buttonStyle(.plain)
@@ -728,27 +477,28 @@ public struct MeeshyAudioEditorView: View {
     }
 
     private func errorBanner(_ message: String) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 12))
-                .foregroundColor(MeeshyColors.error)
+                .meeshyScaledFont(MeeshyIconSize.xs)
+                .foregroundStyle(MeeshyColors.error)
             Text(message)
-                .font(.system(size: 12))
-                .foregroundColor(theme.textSecondary)
+                .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                .foregroundStyle(theme.textSecondary)
             Spacer(minLength: 0)
             Button {
                 controller.lastError = nil
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(theme.textMuted)
+                    .meeshyScaledFont(MeeshyIconSize.xxs, weight: .bold)
+                    .foregroundStyle(theme.textMuted)
             }
+            .accessibilityLabel(String(localized: "common.close", bundle: .module))
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                 .fill(MeeshyColors.error.opacity(0.1))
         )
     }
@@ -758,16 +508,16 @@ public struct MeeshyAudioEditorView: View {
     private var processingOverlay: some View {
         ZStack {
             Color.black.opacity(0.35).ignoresSafeArea()
-            VStack(spacing: 12) {
+            VStack(spacing: MeeshySpacing.md) {
                 ProgressView().tint(.white).scaleEffect(1.2)
                 Text(String(localized: "audio.editor.processing",
                             defaultValue: "Traitement\u{2026}", bundle: .module))
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white)
+                    .font(MeeshyFont.relative(13, weight: .medium))
+                    .foregroundStyle(.white)
             }
-            .padding(24)
+            .padding(MeeshySpacing.xxl)
             .background(
-                RoundedRectangle(cornerRadius: 18)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus)
                     .fill(.ultraThinMaterial)
             )
         }
@@ -792,22 +542,6 @@ public struct MeeshyAudioEditorView: View {
         return min(1, max(0, currentTime / duration))
     }
 
-    private var transcribableLanguages: [LanguageInfo] {
-        let supported = controller.transcribableLanguageCodes
-        let catalog = controller.languageCatalog.filter { supported.contains($0.code) }
-        return catalog.isEmpty ? controller.languageCatalog : catalog
-    }
-
-    private var transcribeButtonTitle: String {
-        switch controller.transcription {
-        case .done, .failed, .permissionDenied:
-            return String(localized: "audio.editor.transcription.retry",
-                          defaultValue: "Transcrire \u{00E0} nouveau", bundle: .module)
-        default:
-            return String(localized: "audio.editor.transcription.start",
-                          defaultValue: "Transcrire", bundle: .module)
-        }
-    }
 
     // MARK: - Selection editing
 
@@ -953,7 +687,7 @@ public struct MeeshyAudioEditorView: View {
     private func configureAudioSession() {
         // Source UNIQUE call-aware : l'éditeur audio ne stomp pas un appel VoIP actif
         // (sinon micro coupé). No-op pendant un appel.
-        MediaSessionCoordinator.shared.activatePlaybackSync(options: [])
+        MediaSessionCoordinator.shared.activateContentPlayback(.audible)
     }
 
     private func deactivateAudioSession() {
@@ -981,151 +715,4 @@ public struct MeeshyAudioEditorView: View {
 
     // MARK: - Formatting
 
-    private func formatTime(_ seconds: Double) -> String {
-        let total = Int(max(0, seconds))
-        return String(format: "%d:%02d", total / 60, total % 60)
-    }
-
-    private func speedLabel(_ value: Double) -> String {
-        value == 1.0 ? "1\u{00D7}" : String(format: "%g\u{00D7}", value)
-    }
-
-    private func volumeLabel(_ value: Double) -> String {
-        value == 1.0
-            ? String(localized: "audio.editor.volume.normal",
-                     defaultValue: "Normal", bundle: .module)
-            : String(format: "%.0f%%", value * 100)
-    }
-}
-
-// MARK: - Audio Editor Waveform
-
-/// Interactive waveform: scrub anywhere on the bars, and — when a selection is
-/// supplied — drag the two edge handles. Pure presentation: it reports back via
-/// callbacks and never touches the controller directly.
-private struct AudioEditorWaveform: View {
-
-    struct Selection: Equatable {
-        var start: Double   // fraction 0…1
-        var end: Double     // fraction 0…1
-        var isRemoval: Bool // true → the region is cut out (split)
-    }
-
-    let samples: [Float]
-    let progress: Double
-    let accent: Color
-    let isDark: Bool
-    let selection: Selection?
-    let onScrub: (Double) -> Void
-    let onScrubEnded: () -> Void
-    let onSelectionStart: (Double) -> Void
-    let onSelectionEnd: (Double) -> Void
-
-    private let barGap: CGFloat = 2
-    private let spaceName = "audioEditorWaveform"
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                bars(in: geo.size)
-                    .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { value in
-                                onScrub(fraction(of: value.location.x, width: geo.size.width))
-                            }
-                            .onEnded { _ in onScrubEnded() }
-                    )
-
-                if let selection {
-                    handle(at: selection.start, width: geo.size.width, height: geo.size.height,
-                           isRemoval: selection.isRemoval) { x in
-                        onSelectionStart(fraction(of: x, width: geo.size.width))
-                    }
-                    handle(at: selection.end, width: geo.size.width, height: geo.size.height,
-                           isRemoval: selection.isRemoval) { x in
-                        onSelectionEnd(fraction(of: x, width: geo.size.width))
-                    }
-                }
-
-                playhead(in: geo.size)
-            }
-            .coordinateSpace(name: spaceName)
-        }
-    }
-
-    // MARK: Bars
-
-    private func bars(in size: CGSize) -> some View {
-        let values = samples.isEmpty ? Array(repeating: Float(0.18), count: 80) : samples
-        let count = values.count
-        let totalGap = barGap * CGFloat(max(0, count - 1))
-        let barWidth = max(1, (size.width - totalGap) / CGFloat(count))
-
-        return HStack(alignment: .center, spacing: barGap) {
-            ForEach(Array(values.enumerated()), id: \.offset) { item in
-                let fraction = count > 1 ? Double(item.offset) / Double(count - 1) : 0
-                let height = max(3, CGFloat(item.element) * size.height * 0.92)
-                RoundedRectangle(cornerRadius: 1.5)
-                    .fill(barColor(fraction: fraction))
-                    .frame(width: barWidth, height: height)
-            }
-        }
-        .frame(width: size.width, height: size.height, alignment: .center)
-    }
-
-    private func barColor(fraction: Double) -> Color {
-        let neutral = isDark ? Color.white.opacity(0.14) : Color.black.opacity(0.12)
-        guard let selection else {
-            return fraction <= progress ? accent : neutral
-        }
-        let inside = fraction >= selection.start && fraction <= selection.end
-        if selection.isRemoval {
-            return inside ? MeeshyColors.error.opacity(0.45) : (fraction <= progress ? accent : neutral)
-        }
-        if !inside {
-            return isDark ? Color.white.opacity(0.07) : Color.black.opacity(0.06)
-        }
-        return fraction <= progress ? accent : accent.opacity(0.32)
-    }
-
-    // MARK: Handle
-
-    private func handle(at fraction: Double, width: CGFloat, height: CGFloat,
-                        isRemoval: Bool, onMove: @escaping (CGFloat) -> Void) -> some View {
-        let clamped = max(0, min(1, fraction))
-        let x = clamped * width
-        let tint = isRemoval ? MeeshyColors.error : accent
-        return ZStack {
-            Color.clear.frame(width: 44, height: max(44, height))
-            RoundedRectangle(cornerRadius: 2)
-                .fill(tint)
-                .frame(width: 3, height: height)
-            Circle()
-                .fill(tint)
-                .frame(width: 14, height: 14)
-        }
-        .contentShape(Rectangle())
-        .position(x: x, y: height / 2)
-        .gesture(
-            DragGesture(minimumDistance: 0, coordinateSpace: .named(spaceName))
-                .onChanged { value in onMove(value.location.x) }
-        )
-    }
-
-    // MARK: Playhead
-
-    private func playhead(in size: CGSize) -> some View {
-        let x = max(0, min(1, progress)) * size.width
-        return Rectangle()
-            .fill(Color.white)
-            .frame(width: 2, height: size.height)
-            .shadow(color: .black.opacity(0.3), radius: 2)
-            .offset(x: x - 1)
-    }
-
-    private func fraction(of x: CGFloat, width: CGFloat) -> Double {
-        guard width > 0 else { return 0 }
-        return Double(max(0, min(width, x)) / width)
-    }
 }

@@ -25,13 +25,7 @@ public struct ConversationContext: Sendable {
         self.theme = theme; self.memberCount = memberCount
     }
 
-    public enum ConversationType: String, CaseIterable, Sendable {
-        case direct
-        case group
-        case community
-        case channel
-        case bot
-    }
+    public typealias ConversationType = MeeshyConversation.ConversationType
 
     public enum ConversationLanguage: String, CaseIterable, Sendable, Codable {
         case french
@@ -198,7 +192,7 @@ public struct DynamicColorGenerator {
     // 40-color vibrant palette — all colors optimized for both light and dark modes.
     // Each color has high saturation (65%+) and mid-range brightness (50-85%)
     // so they remain legible as text and produce visible tints at low opacity.
-    private static let vibrantPalette = [
+    static let vibrantPalette = [
         // Reds & Roses (350°–10°)
         "E74C3C", "C0392B", "DC4A5A", "D94452", "F43F5E",
         // Oranges & Corals (15°–40°)
@@ -234,6 +228,15 @@ public struct DynamicColorGenerator {
     public static func colorForName(_ name: String) -> String {
         let index = Int(stableHash(name) % UInt64(vibrantPalette.count))
         return vibrantPalette[index]
+    }
+
+    /// LA couleur d'un profil (#10754) — avatar sans photo, bannière de design — pareille sur
+    /// ma fiche, sur celle que voient les autres et dans le sélecteur de décor. Graine =
+    /// l'identifiant d'utilisateur, le nom seulement à défaut : miroir d'`authorAccentColor`
+    /// (`packages/shared/utils/conversation-colors.ts`), même palette, même hachage.
+    public static func profileAccentHex(userId: String?, name: String) -> String {
+        guard let userId, !userId.isEmpty else { return colorForName(name) }
+        return colorForName(userId)
     }
 
     // Adapt a hex color for text readability in the given theme mode.
@@ -380,5 +383,30 @@ public struct ConversationColorPalette: Sendable {
     public init(primary: String, secondary: String, accent: String, saturationBoost: Double = 0) {
         self.primary = primary; self.secondary = secondary
         self.accent = accent; self.saturationBoost = saturationBoost
+    }
+
+    /// Déclinaison d'une primaire : secondaire +30°, accent −30° (la même
+    /// dérivation que `DynamicColorGenerator.colorFor`, miroir de
+    /// `conversationAccentPaletteFromPrimary`, `packages/shared`).
+    public static func derived(fromPrimary primary: String, saturationBoost: Double = 0) -> ConversationColorPalette {
+        let bare = bareHex(primary)
+        return ConversationColorPalette(
+            primary: bare,
+            secondary: DynamicColorGenerator.hueShiftedHex(bare, degrees: 30),
+            accent: DynamicColorGenerator.hueShiftedHex(bare, degrees: -30),
+            saturationBoost: saturationBoost
+        )
+    }
+
+    /// `#e0604e` → `E0604E` : la forme des hex de la palette (sans dièse, majuscules).
+    public static func bareHex(_ hex: String) -> String {
+        (hex.hasPrefix("#") ? String(hex.dropFirst()) : hex).uppercased()
+    }
+}
+
+public extension MeeshyUser {
+    /// La couleur de ce profil (#10754) : `DynamicColorGenerator.profileAccentHex`, graine = l'identifiant.
+    var profileAccentHex: String {
+        DynamicColorGenerator.profileAccentHex(userId: id, name: displayName ?? username)
     }
 }

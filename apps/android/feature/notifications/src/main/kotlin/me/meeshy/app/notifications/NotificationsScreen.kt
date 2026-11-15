@@ -1,294 +1,267 @@
 package me.meeshy.app.notifications
 
-import androidx.compose.foundation.background
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.MarkEmailRead
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.hilt.navigation.compose.hiltViewModel
+import me.meeshy.sdk.model.NotificationListPane
+import me.meeshy.sdk.model.NotificationListStateReducer
+import me.meeshy.sdk.model.chrome.CollapsibleHeaderMetrics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import java.time.ZoneId
-import java.util.Locale
 import me.meeshy.feature.notifications.R
 import me.meeshy.sdk.model.ApiNotification
-import me.meeshy.sdk.model.notificationTypeAccentHex
-import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.sdk.model.story.StoryNotificationContext
+import me.meeshy.sdk.model.game.GameTarget
+import me.meeshy.sdk.model.NotificationQuickAction
 import me.meeshy.ui.component.chrome.MeeshyBackground
-import me.meeshy.ui.format.RelativeTimeFormat
-import me.meeshy.ui.format.rememberRelativeTimeStrings
-import me.meeshy.ui.component.chrome.MeeshyTopBar
-import me.meeshy.ui.theme.MeeshyPalette
-import me.meeshy.ui.theme.hexColor
+import me.meeshy.ui.component.refresh.MeeshyRefreshableBox
+import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.component.kit.MeeshyGlassRecipe
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshySpacing
-import me.meeshy.ui.theme.MeeshyTheme
 
+/** Squelette, erreur, vide et liste se relaient au fondu d'état du kit (200 ms). */
+private const val PANE_CROSSFADE_MILLIS = MeeshyGlassRecipe.TONE_FADE_MILLIS
+
+private const val PREFETCH_DISTANCE = 4
+
+/**
+ * @param onOpenConversation Navigate to a conversation ([NotificationDestination.Conversation]) — also
+ *   where the « Écrire » quick action lands.
+ * @param onOpenPost Navigate to a post/story/status detail ([NotificationDestination.Post]).
+ * @param onOpenReel Navigate to a réel, anchored at its id ([NotificationDestination.Reel]).
+ * @param onOpenStory Navigate to a user's story tray ([NotificationDestination.Story]).
+ * @param onOpenProfile Navigate to a user's profile ([NotificationDestination.Profile]).
+ * @param onOpenCommunity Navigate to a community's detail ([NotificationDestination.Community]).
+ * @param onOpenGame Navigate to the game screen a level/streak/badge/duo/league notice names ([NotificationDestination.Game]).
+ *
+ * Every parameter defaults to a no-op so existing callers keep compiling; wiring them is what
+ * makes a row tap actually open its target (issue #4793).
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationsScreen(
+    onBack: () -> Unit,
     viewModel: NotificationsViewModel = hiltViewModel(),
+    onOpenConversation: (String) -> Unit = {},
+    onOpenPost: (String) -> Unit = {},
+    onOpenReel: (String) -> Unit = {},
+    onOpenStory: (String) -> Unit = {},
+    onOpenMood: (String) -> Unit = onOpenPost,
+    onOpenProfile: (String) -> Unit = {},
+    onOpenGame: (GameTarget) -> Unit = {},
+    onOpenCommunity: (String) -> Unit = {},
+    onOpenStoryContent: ((NotificationDestination.StoryContent, StoryNotificationContext) -> Unit)? = null,
+    revealTap: EngagementRevealTapViewModel = hiltViewModel(),
+    toasts: NotificationFeedbackToasts = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val snackbar = remember { SnackbarHostState() }
+    val haptics = rememberMeeshyHaptics()
+    val context = LocalContext.current
+    val openConversation by rememberUpdatedState(onOpenConversation)
+    val openPost by rememberUpdatedState(onOpenPost)
+    val openReel by rememberUpdatedState(onOpenReel)
+    val openStory by rememberUpdatedState(onOpenStory)
+    val openMood by rememberUpdatedState(onOpenMood)
+    val openProfile by rememberUpdatedState(onOpenProfile)
+    val openGame by rememberUpdatedState(onOpenGame)
+    val openCommunity by rememberUpdatedState(onOpenCommunity)
+    val openStoryContent by rememberUpdatedState(onOpenStoryContent)
 
-    LaunchedEffect(state.errorMessage) {
-        state.errorMessage?.let { snackbar.showSnackbar(it) }
+    LaunchedEffect(viewModel) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is NotificationsEvent.ActionFailed -> {
+                    haptics.error()
+                    toasts.failure(context.getString(event.message))
+                }
+                is NotificationsEvent.OpenConversation -> openConversation(event.conversationId)
+            }
+        }
+    }
+    val onOpen = remember(viewModel, revealTap, haptics) {
+        { notification: ApiNotification ->
+            haptics.light()
+            viewModel.markAsRead(notification.id)
+            revealTap.onOpened(notification)
+            NotificationDestinationResolver.resolve(notification).dispatch(
+                onOpenConversation = { openConversation(it) },
+                onOpenPost = { openPost(it) },
+                onOpenReel = { openReel(it) },
+                onOpenStory = { openStory(it) },
+                onOpenProfile = { openProfile(it) },
+                onOpenMood = { openMood(it) },
+                onOpenGame = { openGame(it) },
+                onOpenCommunity = { openCommunity(it) },
+                onOpenStoryContent = { target ->
+                    openStoryContent?.invoke(target, StoryNotificationContext.from(notification, System.currentTimeMillis()))
+                        ?: openPost(target.postId)
+                },
+            )
+        }
+    }
+    val onMarkRead = remember(viewModel, haptics) {
+        { notification: ApiNotification ->
+            haptics.light()
+            viewModel.markAsRead(notification.id)
+        }
+    }
+    val onDelete = remember(viewModel, haptics) {
+        { notification: ApiNotification ->
+            haptics.medium()
+            viewModel.deleteNotification(notification.id)
+        }
+    }
+    val onQuickAction = remember(viewModel, haptics) {
+        { notification: ApiNotification, action: NotificationQuickAction ->
+            haptics.light()
+            viewModel.performQuickAction(notification, action)
+        }
+    }
+    val onSelectCategory = remember(viewModel, haptics) {
+        { category: me.meeshy.sdk.model.NotificationFilterCategory ->
+            haptics.light()
+            viewModel.selectCategory(category)
+        }
+    }
+    val onMarkAllRead = remember(viewModel, haptics) {
+        {
+            haptics.light()
+            viewModel.markAllRead()
+        }
+    }
+    val onRetry = remember(viewModel) { viewModel::load }
+    val listState = rememberLazyListState()
+    val density = LocalDensity.current.density
+    val scrollOffsetDp by remember(listState, density) {
+        derivedStateOf {
+            if (listState.firstVisibleItemIndex > 0) -CollapsibleHeaderMetrics.COLLAPSE_THRESHOLD
+            else -listState.firstVisibleItemScrollOffset / density
+        }
     }
 
     MeeshyBackground {
         Scaffold(
-            topBar = {
-                MeeshyTopBar(
-                    title = stringResource(R.string.notifications_title),
-                    actions = {
-                        if (state.notifications.any { !it.state.isRead }) {
-                            TextButton(onClick = viewModel::markAllRead) {
-                                Text(stringResource(R.string.notifications_mark_all_read))
-                            }
-                        }
-                    },
-                )
-            },
-            snackbarHost = { SnackbarHost(snackbar) },
             containerColor = Color.Transparent,
         ) { padding ->
-            PullToRefreshBox(
-                isRefreshing = state.isSyncing,
-                onRefresh = viewModel::load,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-            ) {
-                when {
-                    state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = MeeshyPalette.Indigo500)
-                    }
-                    state.notifications.isEmpty() -> Box(
-                        Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = stringResource(R.string.notifications_empty),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MeeshyTheme.tokens.textSecondary,
-                        )
-                    }
-                    else -> LazyColumn {
-                        itemsIndexed(state.notifications, key = { _, item -> item.id }) { index, notification ->
-                            if (index == state.notifications.lastIndex) {
-                                LaunchedEffect(notification.id) { viewModel.loadMore() }
-                            }
-                            NotificationItem(
-                                notification = notification,
-                                onTap = { viewModel.markAsRead(notification.id) },
-                                onMarkRead = { viewModel.markAsRead(notification.id) },
-                                onDelete = { viewModel.deleteNotification(notification.id) },
-                            )
-                            HorizontalDivider(color = MeeshyTheme.tokens.inputBorder.copy(alpha = 0.4f))
-                        }
-                        if (state.isLoadingMore) {
-                            item {
-                                Box(
-                                    modifier = Modifier.fillMaxWidth().padding(MeeshySpacing.md),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * Port of iOS `NotificationRowView`'s `.swipeActions`: trailing (end-to-start) swipe deletes,
- * leading (start-to-end) swipe marks read — only offered while unread, mirroring iOS's
- * `if !notification.isRead`. Non-destructive at the gesture level (mirrors the established
- * `ConversationListScreen` pattern): the swipe box always snaps back, and the row's actual
- * removal/re-style comes from the repository cache mutation flowing back through [state].
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun NotificationItem(
-    notification: ApiNotification,
-    onTap: () -> Unit,
-    onMarkRead: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    val isUnread = !notification.state.isRead
-    val accent = hexColor(notificationTypeAccentHex(notification.type))
-
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            when (value) {
-                SwipeToDismissBoxValue.StartToEnd -> if (isUnread) onMarkRead()
-                SwipeToDismissBoxValue.EndToStart -> onDelete()
-                SwipeToDismissBoxValue.Settled -> Unit
-            }
-            false
-        },
-    )
-
-    SwipeToDismissBox(
-        state = dismissState,
-        backgroundContent = { NotificationSwipeBackground(direction = dismissState.dismissDirection, isUnread = isUnread) },
-    ) {
-        Surface(
-            onClick = onTap,
-            color = if (isUnread) accent.copy(alpha = 0.12f) else Color.Transparent,
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                MeeshyAvatar(
-                    name = notification.actor?.displayName ?: notification.actor?.username ?: "?",
-                    modifier = Modifier.size(44.dp),
-                    containerColor = accent,
+            Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                NotificationListHeader(
+                    scrollOffsetDp = scrollOffsetDp,
+                    unreadCount = state.unreadCount,
+                    onBack = onBack,
+                    onMarkAllRead = onMarkAllRead,
                 )
-                Spacer(Modifier.width(MeeshySpacing.md))
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = notification.actor?.displayName ?: notification.actor?.username
-                                ?: stringResource(R.string.notifications_system_sender),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MeeshyTheme.tokens.textPrimary,
-                            fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Normal,
-                        )
-                        if (isUnread) {
-                            Spacer(Modifier.width(MeeshySpacing.sm))
-                            Box(
-                                Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(accent),
-                            )
-                        }
-                    }
-                    notification.content?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MeeshyTheme.tokens.textSecondary,
-                        )
-                    }
-                    notificationRowRelativeTime(notification)?.let { relativeTime ->
-                        Text(
-                            text = relativeTime,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MeeshyTheme.tokens.textMuted,
-                        )
-                    }
+                NotificationCategoryBar(selected = state.selectedCategory, onSelect = onSelectCategory)
+                MeeshyRefreshableBox(
+                    onRefresh = viewModel::pullRefresh,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    NotificationPanes(
+                        state = state,
+                        listState = listState,
+                        onOpen = onOpen,
+                        onMarkRead = onMarkRead,
+                        onDelete = onDelete,
+                        onQuickAction = onQuickAction,
+                        onRetry = onRetry,
+                        onLoadMore = viewModel::loadMore,
+                    )
                 }
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun NotificationSwipeBackground(direction: SwipeToDismissBoxValue, isUnread: Boolean) {
-    val (alignment, icon, description, background) = when {
-        direction == SwipeToDismissBoxValue.StartToEnd && isUnread -> NotificationSwipeVisual(
-            alignment = Alignment.CenterStart,
-            icon = Icons.Filled.MarkEmailRead,
-            description = stringResource(R.string.notifications_action_mark_read),
-            background = MeeshyPalette.Indigo500.copy(alpha = 0.20f),
-        )
-        direction == SwipeToDismissBoxValue.EndToStart -> NotificationSwipeVisual(
-            alignment = Alignment.CenterEnd,
-            icon = Icons.Filled.Delete,
-            description = stringResource(R.string.notifications_action_delete),
-            background = MeeshyPalette.Error.copy(alpha = 0.20f),
-        )
-        else -> NotificationSwipeVisual(
-            alignment = Alignment.CenterStart,
-            icon = Icons.Filled.MarkEmailRead,
-            description = "",
-            background = Color.Transparent,
-        )
+private fun NotificationPanes(
+    state: NotificationsUiState,
+    onOpen: (ApiNotification) -> Unit,
+    onMarkRead: (ApiNotification) -> Unit,
+    onDelete: (ApiNotification) -> Unit,
+    onQuickAction: (ApiNotification, NotificationQuickAction) -> Unit,
+    onRetry: () -> Unit,
+    onLoadMore: () -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+) {
+    val rows = remember(state.selectedCategory, state.notifications, state.categoryRows) { state.filteredNotifications }
+    val reduceMotion = LocalReduceMotion.current
+    val pane = NotificationListStateReducer.pane(
+        hasRows = rows.isNotEmpty(),
+        isLoading = state.isLoading || state.isCategoryLoading,
+        loadDidFail = state.loadDidFail,
+    )
+
+    LaunchedEffect(state.selectedCategory) { listState.scrollToItem(0) }
+    LaunchedEffect(rows.firstOrNull()?.id) {
+        if (listState.firstVisibleItemIndex > 1) return@LaunchedEffect
+        if (NotificationListMotion.animatesScrollToTop(reduceMotion)) listState.animateScrollToItem(0) else listState.scrollToItem(0)
     }
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(background)
-            .padding(horizontal = MeeshySpacing.xl),
-        contentAlignment = alignment,
-    ) {
-        if (background != Color.Transparent) {
-            Icon(imageVector = icon, contentDescription = description, tint = MeeshyTheme.tokens.textSecondary)
+    val nearEnd by remember(listState) {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+            info.totalItemsCount > 0 && last >= info.totalItemsCount - PREFETCH_DISTANCE
         }
     }
-}
+    LaunchedEffect(nearEnd, state.canLoadMore, rows.size) { if (nearEnd && state.canLoadMore) onLoadMore() }
 
-private data class NotificationSwipeVisual(
-    val alignment: Alignment,
-    val icon: ImageVector,
-    val description: String,
-    val background: Color,
-)
-
-/**
- * The notification row's arrival timestamp as a compact relative label ("5 min", "2 h", "3 j", …)
- * — the Android parity of iOS `NotificationRowView`'s
- * `RelativeTimeFormatter.shortString(for: notification.createdAt)`, replacing the previous absolute
- * short date-time. Returns null when the notification carries no parseable `createdAt`, so the row
- * shows no label rather than a raw/garbled string. The [rememberRelativeTimeStrings] read stays
- * before the early return to keep the composable-call graph unconditional.
- */
-@Composable
-private fun notificationRowRelativeTime(notification: ApiNotification): String? {
-    val strings = rememberRelativeTimeStrings()
-    val millis = NotificationRowTime.epochMillis(notification) ?: return null
-    return RelativeTimeFormat.short(
-        epochMillis = millis,
-        referenceMillis = System.currentTimeMillis(),
-        zone = ZoneId.systemDefault(),
-        locale = Locale.getDefault(),
-        strings = strings,
-    )
+    Crossfade(targetState = pane, animationSpec = tween(PANE_CROSSFADE_MILLIS), label = "notification-pane", modifier = Modifier.fillMaxSize()) { target ->
+        when (target) {
+            NotificationListPane.Skeleton -> NotificationListSkeleton()
+            NotificationListPane.Error -> NotificationListErrorState(onRetry = onRetry)
+            NotificationListPane.Empty -> NotificationListEmptyState(state.selectedCategory)
+            NotificationListPane.Content -> LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                items(rows, key = { it.id }, contentType = { "notification" }) { notification ->
+                    NotificationRow(
+                        notification = notification,
+                        isFriend = notification.actor?.id in state.friendIds,
+                        isConnectRequested = notification.actor?.id in state.connectRequestedIds,
+                        isWriteInFlight = notification.actor?.id in state.writeInFlightIds,
+                        onOpen = onOpen,
+                        onMarkRead = onMarkRead,
+                        onDelete = onDelete,
+                        onQuickAction = onQuickAction,
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = NotificationListMotion.rowFade(),
+                            placementSpec = NotificationListMotion.rowPlacement(reduceMotion),
+                            fadeOutSpec = NotificationListMotion.rowFade(),
+                        ),
+                    )
+                }
+                if (state.canLoadMore || state.isLoadingMore) {
+                    item(key = "loading-more", contentType = "loading") {
+                        Box(Modifier.fillMaxWidth().padding(MeeshySpacing.md), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

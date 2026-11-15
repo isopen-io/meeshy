@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_clear_all_message">Todas las diapositivas vuelven a empezar vacías, sobre el fondo neutro. Deshacer restaura las diapositivas.</string>
+    <string name="composer_media_sources">Elegir una fuente</string>
+    <string name="composer_preview_close">Cerrar la vista previa</string>
+    <string name="composer_preview_previous">Diapositiva anterior</string>
+    <string name="composer_preview_next">Diapositiva siguiente</string>
+</resources>

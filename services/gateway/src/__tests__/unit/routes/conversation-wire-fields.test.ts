@@ -34,7 +34,14 @@ import {
 
 const CONV_ID = '507f1f77bcf86cd7994390bb';
 
-/** Ce que le handler de liste pose réellement pour une ligne de conversation. */
+/**
+ * Ce que le handler de liste POSE, une fois qu'il l'a — c'est-à-dire la moitié
+ * AVAL de la chaîne, et elle seule. Cet objet est fabriqué ici : il ne prouve
+ * rien de ce que la REQUÊTE charge. Quatre de ses champs ont été verts pendant
+ * des mois alors que le `select` Prisma ne les demandait pas (2026-09-11).
+ * L'autre moitié est gardée par `conversation-list-select-parity.test.ts` ; les
+ * deux témoins ne se remplacent pas, ils se referment l'un sur l'autre.
+ */
 const listRowFromHandler = {
   id: CONV_ID,
   type: 'group',
@@ -94,6 +101,19 @@ describe('GET /conversations — ce qui survit à la sérialisation', () => {
     expect(row.slowModeSeconds).toBe(0);
     expect(row.autoTranslateEnabled).toBe(true);
   });
+
+  it("sert le régime de chiffrement ET son activation (#11380)", () => {
+    // iOS date par `encryptionEnabledAt` l'historique en clair d'une
+    // conversation chiffrée après coup : sans lui, chaque message passé d'un
+    // pair se signalait « non chiffré » et perdait sa traduction.
+    const row = serializeList({
+      ...listRowFromHandler,
+      encryptionMode: 'e2ee',
+      encryptionEnabledAt: '2026-10-01T08:00:00.000Z',
+    });
+    expect(row.encryptionMode).toBe('e2ee');
+    expect(row.encryptionEnabledAt).toBe('2026-10-01T08:00:00.000Z');
+  });
 });
 
 describe('GET /conversations/:id — ce qui survit à la sérialisation', () => {
@@ -105,5 +125,50 @@ describe('GET /conversations/:id — ce qui survit à la sérialisation', () => 
     expect(serializeDetail(detailFromHandler).currentUserJoinedAt).toBe(
       '2026-02-25T22:21:26.871Z',
     );
+  });
+});
+
+// #9927 — la restriction d'écriture du lecteur, et l'archivage de Global pour
+// un mineur, doivent ATTEINDRE le client : sans déclaration, le sérialiseur
+// les retirerait en silence et un ancien comme un nouveau client verraient
+// Global ouverte en écriture.
+describe('viewerWriteRestriction — ce qui survit à la sérialisation (#9927)', () => {
+  const minorGlobalRow = {
+    ...listRowFromHandler,
+    type: 'global',
+    viewerWriteRestriction: 'minor-global',
+    userPreferences: [{ isPinned: false, isMuted: false, isArchived: true, tags: [] }],
+  };
+
+  it('la liste sert minor-global et Global archivée', () => {
+    const row = serializeList(minorGlobalRow);
+    expect(row.viewerWriteRestriction).toBe('minor-global');
+    expect(row.userPreferences[0].isArchived).toBe(true);
+  });
+
+  it('la liste sert null quand aucune restriction ne s’applique', () => {
+    expect(serializeList({ ...listRowFromHandler, viewerWriteRestriction: null }).viewerWriteRestriction).toBeNull();
+  });
+
+  it('le détail sert minor-global', () => {
+    expect(serializeDetail({ ...detailFromHandler, viewerWriteRestriction: 'minor-global' }).viewerWriteRestriction).toBe('minor-global');
+  });
+});
+
+describe('viewerCapabilities — ce qui survit à la sérialisation (#14690)', () => {
+  it('la liste sert la capacité du lecteur', () => {
+    expect(serializeList({ ...listRowFromHandler, viewerCapabilities: { canMakeObsolete: false } }).viewerCapabilities).toEqual({
+      canMakeObsolete: false,
+    });
+  });
+
+  it('le détail sert la capacité du lecteur', () => {
+    expect(serializeDetail({ ...detailFromHandler, viewerCapabilities: { canMakeObsolete: true } }).viewerCapabilities).toEqual({
+      canMakeObsolete: true,
+    });
+  });
+
+  it("absente quand le handler ne l'a pas calculée", () => {
+    expect(serializeList(listRowFromHandler)).not.toHaveProperty('viewerCapabilities');
   });
 });

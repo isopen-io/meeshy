@@ -89,7 +89,15 @@ final class OfflineQueueRetryAllMediaGuardTests: XCTestCase {
         XCTAssertEqual(rows, 2, "les deux rows audio doivent survivre pour le flusher")
     }
 
-    func test_retryAll_textItemWithoutMedia_stillSent() async throws {
+    /// Avec une outbox, `retryAll` n'envoie PLUS rien : il courait en parallèle
+    /// du flusher sans réclamer la ligne, et sa requête héritée (contenu, langue,
+    /// réponse, pièces) perdait la protection (éphémère, vue unique, flou,
+    /// effets), l'autocollant, la réponse à une story et la copie des pièces
+    /// d'un partage multiple — un message vue unique écrit hors ligne partait
+    /// permanent, et la dédup serveur renvoyait ensuite cette copie au flusher.
+    /// Le flusher (reconnexion socket, retour réseau, mise en file) est
+    /// l'unique émetteur.
+    func test_retryAll_withOutbox_leavesTextItemToTheFlusher() async throws {
         let item = OfflineQueueItem(conversationId: "conv-text", content: "hello")
         try await queue.enqueue(item)
 
@@ -102,8 +110,32 @@ final class OfflineQueueRetryAllMediaGuardTests: XCTestCase {
         await queue.retryAll()
 
         let sends = await counter.count
-        XCTAssertEqual(sends, 1, "un item texte pur reste rejoué par le chemin chaud (non-régression)")
+        XCTAssertEqual(sends, 0, "la ligne outbox appartient au flusher")
         let rows = try await outboxRowCount()
-        XCTAssertEqual(rows, 0, "la row d'un envoi réussi est bien supprimée")
+        XCTAssertEqual(rows, 1, "la ligne reste pour le flusher")
+    }
+
+    /// Le miroir mémoire suit l'outbox : une ligne que le flusher a appliquée ou
+    /// épuisée n'y reste pas (elle était rejouée à chaque reconnexion, sans
+    /// limite ni délai, même après un 403 définitif).
+    func test_retryAll_dropsItemsWhoseOutboxRowIsGone() async throws {
+        let item = OfflineQueueItem(conversationId: "conv-gone", content: "parti")
+        try await queue.enqueue(item)
+        try await pool.write { db in try db.execute(sql: "DELETE FROM outbox") }
+
+        await queue.retryAll()
+
+        let remaining = await queue.pendingItems
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func test_flusherOutcome_removesTheItemFromTheMemoryMirror() async throws {
+        let item = OfflineQueueItem(conversationId: "conv-applied", content: "envoyé")
+        try await queue.enqueue(item)
+
+        await queue.publishOutcome(.applied(cmid: item.clientMessageId))
+
+        let remaining = await queue.pendingItems
+        XCTAssertFalse(remaining.contains { $0.clientMessageId == item.clientMessageId })
     }
 }

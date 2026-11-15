@@ -1,0 +1,77 @@
+[
+  {
+    "_label": "hors-ligne-sans-activite-connue",
+    "input": { "isOnline": false, "elapsedMs": null },
+    "expected": { "status": "offline" }
+  },
+  {
+    "_label": "actif-a-l-instant",
+    "input": { "isOnline": false, "elapsedMs": 0 },
+    "expected": { "status": "online" }
+  },
+  {
+    "_label": "juste-sous-la-fenetre-online-59999ms",
+    "input": { "isOnline": false, "elapsedMs": 59999 },
+    "expected": { "status": "online" }
+  },
+  {
+    "_label": "exactement-la-fenetre-online-60000ms-borne-incluse",
+    "input": { "isOnline": false, "elapsedMs": 60000 },
+    "expected": { "status": "online" }
+  },
+  {
+    "_label": "juste-au-dessus-de-la-fenetre-online-60001ms",
+    "input": { "isOnline": false, "elapsedMs": 60001 },
+    "expected": { "status": "away" }
+  },
+  {
+    "_label": "exactement-la-fenetre-away-180000ms-borne-incluse",
+    "input": { "isOnline": false, "elapsedMs": 180000 },
+    "expected": { "status": "away" }
+  },
+  {
+    "_label": "juste-au-dessus-de-la-fenetre-away-180001ms",
+    "input": { "isOnline": false, "elapsedMs": 180001 },
+    "expected": { "status": "idle" }
+  },
+  {
+    "_label": "exactement-la-fenetre-idle-300000ms-borne-incluse",
+    "input": { "isOnline": false, "elapsedMs": 300000 },
+    "expected": { "status": "idle" }
+  },
+  {
+    "_label": "juste-au-dessus-de-la-fenetre-idle-300001ms",
+    "input": { "isOnline": false, "elapsedMs": 300001 },
+    "expected": { "status": "offline" }
+  },
+  {
+    "_label": "isOnline-vrai-sans-lastActiveAt-garde-anti-stale-confiante",
+    "input": { "isOnline": true, "elapsedMs": null },
+    "expected": { "status": "online" }
+  },
+  {
+    "_label": "isOnline-vrai-perime-juste-sous-la-garde-299999ms",
+    "input": { "isOnline": true, "elapsedMs": 299999 },
+    "expected": { "status": "online" }
+  },
+  {
+    "_label": "isOnline-vrai-perime-exactement-la-garde-300000ms-borne-incluse",
+    "input": { "isOnline": true, "elapsedMs": 300000 },
+    "expected": { "status": "online" }
+  },
+  {
+    "_label": "isOnline-vrai-perime-au-dela-de-la-garde-300001ms-le-flag-cesse-d-etre-fiable",
+    "input": { "isOnline": true, "elapsedMs": 300001 },
+    "expected": { "status": "offline" }
+  },
+  {
+    "_label": "horodatage-futur-elapsed-negatif-reste-online",
+    "input": { "isOnline": false, "elapsedMs": -5000 },
+    "expected": { "status": "online" }
+  },
+  {
+    "_label": "horodatage-futur-avec-isOnline-vrai-reste-online",
+    "input": { "isOnline": true, "elapsedMs": -100000 },
+    "expected": { "status": "online" }
+  }
+]

@@ -1,0 +1,158 @@
+import { z } from 'zod';
+import { parseBirthDateDay } from '../utils/age.js';
+import { VIEWER_WRITE_RESTRICTIONS } from './conversation.js';
+
+/**
+ * Le contrat de l'onboarding post-inscription (#7729) — UNE forme pour la
+ * passerelle (`GET`/`PATCH /api/v1/me/onboarding`), web-v2 et iOS.
+ *
+ * Source : docs/marketing/campagne-2026-09/onboarding-parcours.md § 2, § 3.
+ *
+ * L'état vit sur `User` : `onboardingCompletedAt DateTime?` (jamais de booléen
+ * jumeau) et `onboardingSteps String[]` (les étapes VUES, faites ou passées).
+ */
+
+export const ONBOARDING_STEP_IDS = ['languages', 'age', 'email', 'global', 'story', 'friends', 'notifications', 'profile'] as const;
+
+/**
+ * Les étapes dont la VUE clôt le parcours — celles proposées à tout compte.
+ * `email` (#7907) n'en est pas : elle n'est proposée qu'à un courriel NON
+ * vérifié, et le serveur la pré-coche dès que l'adresse l'est. Elle vient
+ * juste après les langues : la vérification rend la story publiable, donc
+ * elle doit précéder le salut et la story.
+ *
+ * `age` (#9927) n'en est pas non plus : l'étape est FACULTATIVE (un âge non
+ * déclaré ne restreint rien). Elle vient juste après les langues, avant Global,
+ * dont elle décide si le compte peut y écrire.
+ *
+ * `profile` (#17235) n'en est pas davantage : la carte « Montre-toi » (avatar
+ * et bannière) est FACULTATIVE, pré-cochée quand les deux images sont posées.
+ * Elle est déclarée en dernier pour ne rien décaler ; c'est le client qui la
+ * place, après le courriel et avant Global.
+ */
+export const ONBOARDING_COMPLETION_STEP_IDS = ['languages', 'global', 'story', 'friends', 'notifications'] as const;
+
+export const OnboardingStepIdSchema = z.enum(ONBOARDING_STEP_IDS);
+export type OnboardingStepId = z.infer<typeof OnboardingStepIdSchema>;
+
+export const OnboardingStepOutcomeSchema = z.enum(['done', 'skipped']);
+export type OnboardingStepOutcome = z.infer<typeof OnboardingStepOutcomeSchema>;
+
+export const StoryDefaultVisibilitySchema = z.enum(['public', 'friends']);
+export type StoryDefaultVisibility = z.infer<typeof StoryDefaultVisibilitySchema>;
+
+/** Seuls les comptes créés à partir de ce jour reçoivent le parcours. */
+export const ONBOARDING_START_AT = '2026-09-24T00:00:00.000Z';
+/** Au-delà, un parcours non fini est clos par le serveur, sans insister. */
+export const ONBOARDING_WINDOW_DAYS = 7;
+export const ONBOARDING_MAX_SUGGESTIONS = 6;
+
+/**
+ * Un profil suggéré à l'étape « Trouve ta bande ». Strict : ni présence ni
+ * `lastActiveAt` ni date de naissance ne peuvent voyager à côté.
+ */
+export const OnboardingSuggestionSchema = z
+  .object({
+    id: z.string(),
+    username: z.string(),
+    displayName: z.string(),
+    avatarUrl: z.string().nullable(),
+    languages: z.array(z.string()),
+  })
+  .strict();
+export type OnboardingSuggestion = z.infer<typeof OnboardingSuggestionSchema>;
+
+/**
+ * Les points qu'un geste de l'onboarding créditera MAINTENANT (#7908) —
+ * barème × élan COURANT du compte, calculé par la même loi que le crédit
+ * (`computeEngagementElan`). `friendship` est la part du LECTEUR : l'autre
+ * personne est créditée à son propre élan, jamais moins que le barème.
+ */
+export const OnboardingStepRewardsSchema = z
+  .object({
+    global: z.number().int().nonnegative(),
+    story: z.number().int().nonnegative(),
+    friendship: z.number().int().nonnegative(),
+  })
+  .strict();
+export type OnboardingStepRewards = z.infer<typeof OnboardingStepRewardsSchema>;
+
+/**
+ * Les quatre derniers champs sont OPTIONNELS pour le client (rétrocompatibles :
+ * un serveur antérieur ne les sert pas) ; la passerelle les sert toujours.
+ * - `emailVerified` (#7907) — l'adresse du compte est vérifiée ;
+ * - `canPublishStory` (#7907, #8476) — `POST /posts { type: 'STORY' }`
+ *   passera la garde de publication : vérifié, OU délai de grâce de l'adresse
+ *   non échu (phase d'activation autre que `blocked`) ;
+ * - `pendingFriendRequests` (#7910) — demandes d'ami ENVOYÉES par le compte
+ *   et toujours en attente (ni acceptées, ni refusées, ni annulées) ;
+ * - `stepRewards` (#7908) — ce que chaque geste créditera à l'élan courant ;
+ * - `viewerWriteRestriction` (#9927) — `'minor-global'` : mineur déclaré (13-17
+ *   ans), Global est en lecture seule et rangée dans ses archives jusqu'à ses
+ *   18 ans ; `null` : aucune restriction. La passerelle le sert TOUJOURS au
+ *   client qui annonce `X-Meeshy-Capabilities: onboarding-age` — sa présence
+ *   lui dit qu'elle connaît l'étape `age`. Sans l'en-tête, ni ce champ ni
+ *   l'étape `age` ne sont servis (un client antérieur décode en strict).
+ *   ABSENT malgré l'en-tête = passerelle antérieure.
+ */
+export const OnboardingStateSchema = z
+  .object({
+    eligible: z.boolean(),
+    completedAt: z.iso.datetime().nullable(),
+    seenSteps: z.array(OnboardingStepIdSchema),
+    prefilledSteps: z.array(OnboardingStepIdSchema),
+    globalConversationId: z.string().nullable(),
+    protectedRegime: z.boolean(),
+    storyDefaultVisibility: StoryDefaultVisibilitySchema,
+    suggestions: z.array(OnboardingSuggestionSchema).max(ONBOARDING_MAX_SUGGESTIONS),
+    emailVerified: z.boolean().optional(),
+    canPublishStory: z.boolean().optional(),
+    pendingFriendRequests: z.number().int().nonnegative().optional(),
+    stepRewards: OnboardingStepRewardsSchema.optional(),
+    viewerWriteRestriction: z.enum(VIEWER_WRITE_RESTRICTIONS).nullable().optional(),
+  })
+  .strict();
+export type OnboardingState = z.infer<typeof OnboardingStateSchema>;
+
+export const OnboardingPatchBodySchema = z.union([
+  z.object({ step: OnboardingStepIdSchema, outcome: OnboardingStepOutcomeSchema }).strict(),
+  z.object({ finish: z.literal(true) }).strict(),
+]);
+export type OnboardingPatchBody = z.infer<typeof OnboardingPatchBodySchema>;
+
+export const isOnboardingStepId = (value: string): value is OnboardingStepId =>
+  (ONBOARDING_STEP_IDS as readonly string[]).includes(value);
+
+/**
+ * Les étapes vues, plus `step` : sans doublon, dans l'ordre du parcours, et
+ * sans ce que la base porterait d'inconnu.
+ */
+export function addOnboardingStep(seen: readonly string[], step: OnboardingStepId): OnboardingStepId[] {
+  const present = new Set<string>([...seen, step]);
+  return ONBOARDING_STEP_IDS.filter((id) => present.has(id));
+}
+
+/**
+ * `PUT /api/v1/me/birth-date` (#9927) — la date de naissance, déclarée UNE
+ * fois, au jour près (`AAAA-MM-JJ`, un jour qui existe au calendrier).
+ */
+export const BirthDateDeclarationBodySchema = z
+  .object({
+    birthDate: z.string().refine((value) => parseBirthDateDay(value) !== null, {
+      message: 'birthDate doit être un jour AAAA-MM-JJ',
+    }),
+  })
+  .strict();
+export type BirthDateDeclarationBody = z.infer<typeof BirthDateDeclarationBodySchema>;
+
+/**
+ * Ce que la déclaration établit : la classe d'âge, et si Meeshy Global est
+ * désormais fermée en écriture pour ce compte (mineur de 13 à 17 ans).
+ */
+export const BirthDateDeclarationResultSchema = z
+  .object({
+    ageClass: z.enum(['adult', 'minor']),
+    viewerWriteRestrictionGlobal: z.boolean(),
+  })
+  .strict();
+export type BirthDateDeclarationResult = z.infer<typeof BirthDateDeclarationResultSchema>;

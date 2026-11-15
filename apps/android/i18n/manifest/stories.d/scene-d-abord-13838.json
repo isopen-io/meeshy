@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "composer_close_draft_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_close_draft_keep",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_close_draft_discard",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_sheet_dismiss",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_caption_limit_reached",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_caption_too_long",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

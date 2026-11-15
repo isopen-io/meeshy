@@ -173,4 +173,47 @@ class ReportUserViewModelTest {
 
         coVerify(exactly = 1) { repo.reportUser(any(), any(), any()) }
     }
+
+    @Test
+    fun `un succes emet le toast puis la fermeture dans cet ordre`() = runTest {
+        val repo = mockk<ReportRepository>()
+        coEvery { repo.reportUser(any(), any(), any()) } returns NetworkResult.Success(Unit)
+        val vm = sut(repo)
+
+        vm.effects.test {
+            vm.submit()
+            advanceUntilIdle()
+            assertThat(awaitItem()).isEqualTo(ReportUserEffect.ShowSentToast)
+            assertThat(awaitItem()).isEqualTo(ReportUserEffect.Close)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `une erreur n'emet aucun effet et laisse reessayer`() = runTest {
+        val repo = mockk<ReportRepository>()
+        coEvery { repo.reportUser(any(), any(), any()) } returns NetworkResult.Failure(ApiError("down"))
+        val vm = sut(repo)
+
+        vm.effects.test {
+            vm.submit()
+            advanceUntilIdle()
+            expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertThat(vm.state.value.hasError).isTrue()
+        assertThat(vm.state.value.canSubmit).isTrue()
+    }
+
+    @Test
+    fun `les motifs proposes et envoyes sont des jetons minuscules, jamais ceux d'iOS`() = runTest {
+        val vm = sut(mockk(relaxed = true))
+        val iosTokens = setOf("SPAM", "HARASSMENT", "INAPPROPRIATE_CONTENT", "IMPERSONATION", "OTHER")
+        vm.state.value.reasons.forEach {
+            assertThat(it.wireValue).isEqualTo(it.wireValue.lowercase())
+            assertThat(iosTokens).doesNotContain(it.wireValue)
+        }
+        assertThat(vm.state.value.reasons.map { it.wireValue })
+            .containsExactly("spam", "harassment", "inappropriate", "impersonation", "other").inOrder()
+    }
 }

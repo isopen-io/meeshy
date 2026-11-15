@@ -1,0 +1,16 @@
+## D-P6 — Un seul moteur de packs : trois domaines, une spécification par domaine, un montage de routes par domaine (2026-10-11, #10148, #9141, #9190)
+
+**Statut** : Accepté (lot LP0).
+
+**Contexte — l'histoire** : #9141 a posé les packs de stickers : `services/stickers/StickerPacks.ts` (boutique, installés, détail, installation, proposition, modération) et `routes/sticker-packs.ts`, sous `/api/v1/sticker-packs` ; #9190 les a portés aux clients (web, iOS). Aucun registre de décision ne les documentait. Le 2026-10-11, le porteur demande « un système qui permet de proposer des frames par pack de téléchargement comme pour les stickers », « le même code » pour les cadres des succès et des photos, et « un système réutilisé par les frames en appels vidéo, en prise de photo » (#10146).
+
+**Décision** :
+1. **Un moteur** (`services/gateway/src/services/packs/`) : `PackCatalog.ts` (boutique, installés, détail, installation au compteur atomique, diffusion `pack:installation-updated` sur `user:<id>`), `PackSubmissions.ts` (propositions et modération, extraites telles quelles de `StickerPacks.ts`), `PackIndex.ts` (registres officiels lus au démarrage). Chaque domaine se décrit par une `PackDomainSpec { domain, registry, community, removalGuard, toSummary }` : `stickerPackSpec` (intégrés Mee/Meo/Mee & Meo, magasin `StickerPack`), `gloryFramePackSpec` (registre officiel seul, `community: null`, sans propositions ; `removalGuard` à `null` jusqu'au L10a), et au lot LC `captureFramePackSpec`.
+2. **`StickerPacks.ts` devient une FAÇADE** : `new StickerPacks(deps)` et `stickerPacksRoutes(fastify, { packs })` restent les points d'entrée ; réponses, codes, chemins, en-têtes et schémas de `/sticker-packs` identiques à l'octet (`sticker-packs-frozen-responses.test.ts`, fixture produite par le code d'avant).
+3. **Une fabrique de routes**, `registerPackRoutes` (`routes/pack-routes.ts`), **un montage par domaine** : `/api/v1/sticker-packs` (inchangé) et `/api/v1/packs/glory-frame` (neuf, registre VIDE jusqu'au L3 : boutique `[]`, installation 404). Jamais un paramètre `:domain` : le manifeste des routes et les catalogues d'endpoints générés (groupe `packs`) restent explicites.
+4. **Les domaines sont isolés** : un domaine ne lit, parmi les choix d'un utilisateur, que les clés du sien (`parsePackChoiceKey`) ; `/sticker-packs` refuse en 400 (schéma de paramètre) toute clé à point, `/packs/glory-frame/mee/install` rend 404.
+5. **Chaque pack de cadres dit quand ses cadres sont utilisables** : l'entrée de registre porte un `usage` (`FrameUsage`, #10146), et chaque collection peut le remplacer ; la passerelle le sert dans le résumé et le détail, le client l'affiche (`describeFrameUsage`) et l'applique (`canUseFrame`).
+
+**Alternatives rejetées** : un moteur par domaine (trois compteurs, trois diffusions, trois jeux de routes à tenir alignés — la dérive que la directive interdit) ; un paramètre de route `:domain` (le manifeste et les catalogues générés ne diraient plus quels domaines existent).
+
+**Conséquences** : l'export et la purge RGPD des packs ne sont PAS dans ce lot : c'est LP3 (#10151), lot propre sous #9141. Le 422 écrit à la main de `POST /sticker-packs/submissions` ne bouge pas (contrat servi). Les clients consomment la diffusion au LP1 (web) et au LP2 (iOS).

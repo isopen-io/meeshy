@@ -15,6 +15,11 @@ import Combine
 ///     stay free of cross-actor warnings.
 @MainActor
 public final class EdgeTranscriptionService: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public static let shared = EdgeTranscriptionService()
 
     @Published public private(set) var authorizationStatus: SFSpeechRecognizerAuthorizationStatus = .notDetermined
@@ -85,8 +90,7 @@ public final class EdgeTranscriptionService: ObservableObject {
                     try await self.runRecognition(audioURL: audioURL, localeIdentifier: identifier)
                 }
                 group.addTask {
-                    let nanos = UInt64(max(1, timeout) * 1_000_000_000)
-                    try await Task.sleep(nanoseconds: nanos)
+                    try await Task.sleep(for: .seconds(max(1, timeout)))
                     throw EdgeTranscriptionError.timedOut
                 }
                 defer { group.cancelAll() }
@@ -299,33 +303,36 @@ public enum EdgeTranscriptionError: LocalizedError, Equatable {
 /// The recognition callback fires on an arbitrary queue and the cancellation
 /// handler runs on yet another — `RecognitionBox` serializes the "resume the
 /// continuation once" and "cancel the task" decisions so neither races.
-private final class RecognitionBox: @unchecked Sendable {
-    private let lock = NSLock()
-    private var task: SFSpeechRecognitionTask?
-    private var cancelRequested = false
-    private var resumed = false
+private final class RecognitionBox: Sendable {
+    private struct State {
+        var task: SFSpeechRecognitionTask?
+        var cancelRequested = false
+        var resumed = false
+    }
+
+    private let slot = Locked(uncheckedState: State())
 
     func attach(_ task: SFSpeechRecognitionTask) {
-        lock.lock()
-        defer { lock.unlock() }
-        self.task = task
-        if cancelRequested { task.cancel() }
+        slot.mutateUnchecked { state in
+            state.task = task
+            if state.cancelRequested { task.cancel() }
+        }
     }
 
     func cancel() {
-        lock.lock()
-        defer { lock.unlock() }
-        cancelRequested = true
-        task?.cancel()
+        slot.mutateUnchecked { state in
+            state.cancelRequested = true
+            state.task?.cancel()
+        }
     }
 
     /// Returns `true` only the first time — guarantees a single
     /// `continuation.resume`.
     func claimResume() -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        if resumed { return false }
-        resumed = true
-        return true
+        slot.mutate { state -> Bool in
+            if state.resumed { return false }
+            state.resumed = true
+            return true
+        }
     }
 }

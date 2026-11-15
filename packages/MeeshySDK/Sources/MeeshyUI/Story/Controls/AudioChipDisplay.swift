@@ -9,7 +9,9 @@ import MeeshySDK
 public nonisolated enum BackgroundAudioAnnouncement: Equatable, Sendable {
     case none
     case original
-    case credit(title: String?, username: String?, duration: TimeInterval?)
+    /// `releasedAt` : date de publication du son dans la bibliothèque (#9677) —
+    /// elle remplace le titre absent : « @auteur · date ».
+    case credit(title: String?, username: String?, duration: TimeInterval?, releasedAt: Date? = nil)
 }
 
 /// Contenu de la chip audio, à droite de la note (reader ET preview).
@@ -24,25 +26,9 @@ public nonisolated enum AudioChipDisplay: Equatable, Sendable {
     case waveform
     case marquee(text: String)
 
-    /// Résolveur UNIQUE (B8f, arbitrage 9) : DÉLÈGUE à `backgroundAnnouncement`
-    /// — la vérité de la provenance (B3.4) — plutôt que de la ré-implémenter.
-    /// `soundId` reste le discriminant emprunté/propre, au vocabulaire de
-    /// `StoryAudioPlayerObject` que cet appelant porte. Le cache froid
-    /// (`soundId` posé, aucune métadonnée résolue) rendait `.waveform` avant
-    /// B8f — une piste EMPRUNTÉE affichée comme si elle était originale
-    /// (constat 9) ; il rend désormais `display(for:)` de la forme CRÉDIT,
-    /// jamais la sinusoïde.
-    public static func resolve(soundId: String?, title: String?, authorUsername: String?) -> AudioChipDisplay {
-        display(for: backgroundAnnouncement(sound: borrowedSound(soundId: soundId),
-                                            libraryTitle: title,
-                                            libraryUsername: authorUsername,
-                                            libraryDuration: nil))
-    }
-
     /// Adapte le vocabulaire `soundId` (emprunté ⇔ non-nil) en piste v3 —
-    /// SOURCE UNIQUE de cette conversion, partagée par `resolve` et par les
-    /// appelants qui interrogent directement `backgroundAnnouncement`
-    /// (`AudioForegroundChip`).
+    /// SOURCE UNIQUE de cette conversion pour les appelants qui interrogent
+    /// `backgroundAnnouncement` (`AudioForegroundChip`).
     public static func borrowedSound(soundId: String?) -> BackgroundSoundV3? {
         soundId.map { BackgroundSoundV3(source: .library(soundId: $0), volume: 1) }
     }
@@ -55,23 +41,44 @@ public nonisolated enum AudioChipDisplay: Equatable, Sendable {
         switch announcement {
         case .none, .original:
             return .waveform
-        case .credit(let title, let username, _):
-            return .marquee(text: creditMarqueeText(title: title, username: username))
+        case .credit(let title, let username, _, let releasedAt):
+            return .marquee(text: creditLine(title: title, username: username, releasedAt: releasedAt)
+                ?? genericCredit)
         }
     }
 
-    private static func creditMarqueeText(title: String?, username: String?) -> String {
+    /// Le crédit d'un son de bibliothèque dont rien n'est connu (cache froid).
+    public static let genericCredit = "♫ —"
+
+    /// **LE crédit d'un son emprunté, une seule forme partout** (#9677) :
+    /// « titre · @auteur » ; sans titre, « @auteur · date » quand la date du son
+    /// est connue ; sinon ce qui existe. `nil` quand rien n'est connu — l'hôte
+    /// choisit alors son crédit générique. Jamais la durée : c'est le crédit
+    /// d'une ŒUVRE, pas un compteur, et la jumelle web (#9678) ne la dit pas.
+    public static func creditLine(title: String?,
+                                  username: String?,
+                                  releasedAt: Date?,
+                                  locale: Locale = .current,
+                                  timeZone: TimeZone = .current) -> String? {
         let cleanTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
         let author = username?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .drop(while: { $0 == "@" })
-        let authorTag = (author?.isEmpty == false) ? "@\(author!)" : nil
-        switch (cleanTitle?.isEmpty == false ? cleanTitle : nil, authorTag) {
-        case let (t?, a?): return "\(t) · \(a)"
-        case let (nil, a?): return a
-        case let (t?, nil): return t
-        case (nil, nil):   return "♫ —"
-        }
+        let authorTag = (author?.isEmpty == false) ? author.map { "@\($0)" } : nil
+        let titlePart = (cleanTitle?.isEmpty == false) ? cleanTitle : nil
+        let datePart = titlePart == nil
+            ? releasedAt.map { creditDate($0, locale: locale, timeZone: timeZone) }
+            : nil
+        let parts = [titlePart, authorTag, authorTag == nil ? nil : datePart].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// « 12 mars 2026 » — la date courte de la langue du lecteur.
+    public static func creditDate(_ date: Date, locale: Locale, timeZone: TimeZone) -> String {
+        var style = Date.FormatStyle(date: .abbreviated, time: .omitted)
+        style.locale = locale
+        style.timeZone = timeZone
+        return date.formatted(style)
     }
 
     // MARK: - Annonce du fond (B3.4 provenance, B3.5 existence)
@@ -82,17 +89,19 @@ public nonisolated enum AudioChipDisplay: Equatable, Sendable {
     public static func backgroundAnnouncement(sound: BackgroundSoundV3?,
                                                libraryTitle: String?,
                                                libraryUsername: String?,
-                                               libraryDuration: TimeInterval?) -> BackgroundAudioAnnouncement {
+                                               libraryDuration: TimeInterval?,
+                                               libraryReleasedAt: Date? = nil) -> BackgroundAudioAnnouncement {
         guard let sound else { return .none }
         switch sound.source {
         case .original:
             return .original
         case .library:
-            return .credit(title: libraryTitle, username: libraryUsername, duration: libraryDuration)
+            return .credit(title: libraryTitle, username: libraryUsername, duration: libraryDuration,
+                           releasedAt: libraryReleasedAt)
         }
     }
 
-    // MARK: - Temps restant du secteur audio (directive user 2026-08-02, itération 2)
+    // MARK: - Temps restant du secteur audio
 
     /// Fin de lecture du secteur — miroir EXACT de la fenêtre du reader
     /// (`AudioForegroundReaderOverlay.visibleAudios`) : un FOND joue jusqu'à
@@ -162,9 +171,7 @@ public nonisolated enum AudioChipDisplay: Equatable, Sendable {
         let cap = minuteDigits >= 2 ? 99 * 60 + 59 : 9 * 60 + 59
         let whole = seconds.isFinite ? max(0, Int(seconds.rounded(.up))) : cap
         let bounded = min(whole, cap)
-        return minuteDigits >= 2
-            ? String(format: "%02d:%02d", bounded / 60, bounded % 60)
-            : String(format: "%d:%02d", bounded / 60, bounded % 60)
+        return MediaFormat.duration(bounded, style: minuteDigits >= 2 ? .paddedClock : .clock)
     }
 }
 
@@ -189,20 +196,6 @@ public struct AudioChipPlaybackWindow: Equatable, Sendable {
     }
 }
 
-/// Primitive UNIQUE descendue au header du reader : le contenu à droite de la
-/// note (onde ou crédit défilant) + la fenêtre du fond qui arme le compteur.
-/// Equatable — le header reste une leaf view à inputs primitifs (règle « Zero
-/// Unnecessary Re-render »).
-public struct AudioChipHeaderModel: Equatable, Sendable {
-    public let display: AudioChipDisplay
-    public let window: AudioChipPlaybackWindow?
-
-    public init(display: AudioChipDisplay, window: AudioChipPlaybackWindow? = nil) {
-        self.display = display
-        self.window = window
-    }
-}
-
 /// Défilement horizontal EN CERCLE du crédit d'un son de bibliothèque
 /// (directive user 2026-08-02, itération 2) : deux copies
 /// « {titre · @pseudo} · {M:SS} » séparées par `gap`, offset = fonction PURE
@@ -220,16 +213,30 @@ public struct AudioChipMarquee: View {
     let height: CGFloat
     let fontSize: CGFloat
 
+    /// **La teinte appartient à la SURFACE, pas à l'atome** (#4078).
+    ///
+    /// Le blanc reste le défaut parce qu'il est juste là où cet atome est né :
+    /// posé SUR UN MÉDIA (chip de premier plan du reader, en-tête du viewer
+    /// story, réel plein écran), où aucune couleur dérivée du contenu n'est
+    /// garantie AA — même convention que `BackgroundSoundBadge.overMediaAccentHex`.
+    ///
+    /// Il est FAUX dès que l'hôte est un fond thémé : la carte du fil peut
+    /// être claire, et le crédit y sortait à 1,03:1 — illisible. L'hôte qui
+    /// connaît sa surface passe donc sa propre teinte.
+    let tint: Color
+
     public init(text: String,
                 paused: Bool = false,
                 window: AudioChipPlaybackWindow? = nil,
                 height: CGFloat = 18,
-                fontSize: CGFloat = 12) {
+                fontSize: CGFloat = 12,
+                tint: Color = .white) {
         self.text = text
         self.paused = paused
         self.window = window
         self.height = height
         self.fontSize = fontSize
+        self.tint = tint
     }
 
     @State private var contentWidth: CGFloat = 0
@@ -273,7 +280,10 @@ public struct AudioChipMarquee: View {
         GeometryReader { geo in
             let reduceMotion = MeeshyMotion.shouldReduce(system: systemReduceMotion,
                                                          userForced: userForcedReduceMotion)
-            let fits = contentWidth > 0 && contentWidth <= geo.size.width
+            // Une demi-pointe de tolérance : un hôte qui DIMENSIONNE la boîte sur
+            // le texte lui-même (`BackgroundSoundBadge`) mesure la même largeur,
+            // à l'arrondi près — le crédit qui tient ne doit pas défiler.
+            let fits = contentWidth > 0 && contentWidth <= geo.size.width + 0.5
             Group {
                 if reduceMotion {
                     truncatedContent
@@ -329,7 +339,8 @@ public struct AudioChipMarquee: View {
                 AudioChipRemainingTimeText(window: window,
                                            minuteDigits: digits,
                                            fontSize: fontSize,
-                                           dimmed: paused)
+                                           dimmed: paused,
+                                           tint: tint)
             }
         }
     }
@@ -357,15 +368,16 @@ public struct AudioChipMarquee: View {
                 AudioChipRemainingTimeText(window: window,
                                            minuteDigits: digits,
                                            fontSize: fontSize,
-                                           dimmed: paused)
+                                           dimmed: paused,
+                                           tint: tint)
             }
         }
     }
 
     private func marqueeText(_ string: String) -> some View {
         Text(string)
-            .font(.system(size: fontSize, weight: .semibold))
-            .foregroundColor(.white.opacity(paused ? 0.5 : 0.92))
+            .meeshyScaledFont(fontSize, weight: .semibold)
+            .foregroundColor(tint.opacity(paused ? 0.5 : 0.92))
             .lineLimit(1)
     }
 
@@ -383,8 +395,8 @@ public struct AudioChipMarquee: View {
     }
 }
 
-/// Compteur « M:SS » du temps restant du secteur — atome AUTONOME : il
-/// observe le playhead ICI même (jamais dans le header — doctrine
+/// Compteur « M:SS » du temps restant du secteur — atome AUTONOME : il LIT le
+/// playhead ICI même (jamais dans le header — doctrine
 /// StoryViewerView+Sidebar « le header est reconstruit à chaque tick ») et un
 /// `TimelineView(.periodic)` cadence la relecture à la seconde. `elapsed`
 /// vient du clock canvas (`StoryReaderPlayheadState`, throttle 30 Hz) : quand
@@ -394,17 +406,31 @@ struct AudioChipRemainingTimeText: View {
     let minuteDigits: Int
     let fontSize: CGFloat
     let dimmed: Bool
+    /// Même teinte que le texte qui le PRÉCÈDE sur la ligne : le compteur est
+    /// la queue du crédit, pas un voisin. Les peindre séparément a produit le
+    /// défaut du #4078 à l'échelle d'une rangée — un segment lisible, un autre
+    /// invisible.
+    let tint: Color
 
-    @ObservedObject private var playhead = StoryReaderPlayheadState.shared
+    /// LU, jamais OBSERVÉ (#7010). Le playhead publie ≈ 30 fois par seconde ;
+    /// ce compteur change une fois par SECONDE, et c'est le
+    /// `TimelineView(.periodic(by: 1))` ci-dessous qui porte sa cadence.
+    /// L'abonnement ré-évaluait donc le corps — et reconstruisait la
+    /// `TimelineView` — vingt-neuf fois pour rien. Lire la valeur DANS la
+    /// fermeture du `TimelineView` la prend fraîche à chaque tic, sans rien
+    /// souscrire : la cadence vient de l'horloge, la valeur de la source.
+    private var playhead: StoryReaderPlayheadState { .shared }
 
     init(window: AudioChipPlaybackWindow,
          minuteDigits: Int,
          fontSize: CGFloat,
-         dimmed: Bool) {
+         dimmed: Bool,
+         tint: Color = .white) {
         self.window = window
         self.minuteDigits = minuteDigits
         self.fontSize = fontSize
         self.dimmed = dimmed
+        self.tint = tint
     }
 
     var body: some View {
@@ -417,9 +443,9 @@ struct AudioChipRemainingTimeText: View {
                     slideDuration: window.slideDuration,
                     isBackground: window.isBackground) ?? 0,
                 minuteDigits: minuteDigits))
-                .font(.system(size: fontSize, weight: .semibold))
+                .meeshyScaledFont(fontSize, weight: .semibold)
                 .monospacedDigit()
-                .foregroundColor(.white.opacity(dimmed ? 0.5 : 0.92))
+                .foregroundColor(tint.opacity(dimmed ? 0.5 : 0.92))
                 .lineLimit(1)
                 .fixedSize()
         }

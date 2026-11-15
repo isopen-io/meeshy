@@ -17,6 +17,7 @@ import { describe, it, expect } from '@jest/globals';
 import {
   parsePlaybackTrace,
   appendPlaybackStretches,
+  newStretchesDurationMs,
   traceCoverage,
   MAX_TRACE_STRETCHES,
   type PlaybackStretch,
@@ -132,6 +133,45 @@ describe('appendPlaybackStretches — rejeu', () => {
   it('dédoublonne aussi à l\'intérieur d\'un même rapport', () => {
     const trace = appendPlaybackStretches([], [st(0, 500), st(0, 500)]);
     expect(trace).toHaveLength(1);
+  });
+});
+
+describe('newStretchesDurationMs — durée RÉELLEMENT ajoutée par un rapport (#7359)', () => {
+  it('somme les écoutes nouvelles du rapport', () => {
+    expect(newStretchesDurationMs([], [st(0, 8000), st(9000, 9500)])).toBe(8500);
+  });
+
+  it('ne compte rien pour une écoute déjà connue — même garde que le rejeu de trace', () => {
+    const existing = [st(0, 500), st(500, 900)];
+    expect(newStretchesDurationMs(existing, [st(0, 500), st(500, 900)])).toBe(0);
+  });
+
+  it('ne compte que la part NOUVELLE quand le rapport mélange connu et inédit', () => {
+    const existing = [st(0, 500)];
+    expect(newStretchesDurationMs(existing, [st(0, 500), st(500, 1200)])).toBe(700);
+  });
+
+  it('dédoublonne aussi à l\'intérieur d\'un même rapport', () => {
+    expect(newStretchesDurationMs([], [st(0, 1000), st(0, 1000)])).toBe(1000);
+  });
+
+  it('écarte les entrées malformées de la somme', () => {
+    expect(newStretchesDurationMs([], [st(500, 100), st(0, 300)])).toBe(300);
+  });
+
+  it('rend zéro pour un rapport sans stretch (position seule)', () => {
+    expect(newStretchesDurationMs([st(0, 500)], [])).toBe(0);
+  });
+
+  it('reste pleine même quand la trace persistée sacrifie ses écoutes les plus courtes', () => {
+    // La durée cumulée ne doit jamais régresser parce que `capTrace` a
+    // écarté une entrée de la trace STOCKÉE : elle compte ce qui a été
+    // ajouté par CE rapport, indépendamment du plafond de stockage.
+    const longues = Array.from({ length: MAX_TRACE_STRETCHES }, (_, i) =>
+      st(i * 10_000, i * 10_000 + 5_000)
+    );
+    const nouvelle = st(9_999_000, 9_999_800);
+    expect(newStretchesDurationMs(longues, [nouvelle])).toBe(800);
   });
 });
 

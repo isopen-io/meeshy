@@ -1,0 +1,78 @@
+package me.meeshy.app.calls
+
+import kotlinx.coroutines.CoroutineScope
+import me.meeshy.sdk.model.call.CallMediaTogglePayload
+import me.meeshy.sdk.model.call.CallEvent
+import me.meeshy.sdk.model.call.CallState
+
+/**
+ * What a call collaborator may ask of the session that owns it (the
+ * [CallViewModel]). The host keeps the single copy of the call's state — the FSM
+ * phase, the server id, the config — and republishes the [CallUiState]; a
+ * collaborator owns only its own slice and reads the rest through this seam, so
+ * no collaborator ever holds the view model itself.
+ */
+interface CallSessionHost {
+    /** The scope every collaborator job lives in — cancelled with the call surface. */
+    val scope: CoroutineScope
+
+    /** The immutable inputs of the call in flight ([CallConfig.EMPTY] while idle). */
+    val config: CallConfig
+
+    /** The id every outbound emit is keyed by — blank until one is known. */
+    val callId: String
+
+    /** The local user id, used as the `from` of participant-keyed emits (blank without a session). */
+    val selfId: String
+
+    /** The current FSM phase. */
+    val callState: CallState
+
+    /** Seconds of connected media so far. */
+    val elapsedSeconds: Long
+
+    /** Fold [event] into the FSM exactly as a remote event would be. */
+    fun dispatch(event: CallEvent)
+
+    /**
+     * Tear the call's media down (engine closed, audio route restored). The media
+     * session is the host's own — one per call surface — so a collaborator asks the
+     * host rather than holding a second coordinator of its own.
+     */
+    fun endMedia()
+
+    /** Cancel every job the session itself launched (clock, quality, rejoin…): none survives the call. */
+    fun cancelSessionJobs() {}
+
+    /** Force a fresh ICE restart of the media path (a no-op outside a stall). */
+    fun restartMediaIce()
+
+    /** Rebuild and publish the [CallUiState] from the current slices. */
+    fun publish()
+
+    /**
+     * A peer toggled a medium: `true` when it is a member of a group call's mesh, not the primary peer — the
+     * primary's indicators must then ignore it (#13740). A duo never routes one.
+     */
+    fun routesGroupMediaToggle(toggle: CallMediaTogglePayload): Boolean = false
+
+    /** `true` once the call is proven to gather more than two people (a duo never is). */
+    val isGroupCall: Boolean get() = false
+}
+
+/** What an extension point needs to key its work to the call in flight. */
+data class CallSessionInfo(
+    val callId: String,
+    val config: CallConfig,
+)
+
+/**
+ * `true` while media is (or is being re-)established — the window in which the
+ * clock, the quality sampler, the heartbeat and the capture relay run. They all
+ * share this one definition so they start and stop together.
+ */
+internal val CallState.carriesMedia: Boolean
+    get() = this is CallState.Connected || this is CallState.Reconnecting
+
+/** Raison wire d'un refus explicite (schéma gateway socketEndCallSchema). */
+internal const val END_REASON_REJECTED = "rejected"

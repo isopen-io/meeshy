@@ -28,11 +28,49 @@ enum BubbleSwipeResistance {
         return true
     }
 
+    /// **La piste du glissé latéral**, partagée par la bulle et le commentaire
+    /// (#8582). Jusque-là inscrite en dur dans `BubbleSwipeContainer` : la zone
+    /// d'action (72 pt) où la ligne suit le doigt exactement, l'élastique au-delà
+    /// (15 % de la course en trop) et le seuil de validation (66 pt, ~92 % de la
+    /// zone). Un commentaire qui répond au glissé doit se sentir EXACTEMENT comme
+    /// une bulle — d'où une seule source, et non deux jeux de constantes.
+    static let actionZone: CGFloat = 72
+    static let rubberBandFactor: CGFloat = 0.15
+    static let commitDistance: CGFloat = 66
+
+    /// Décalage affiché pour une translation du doigt : identique dans la zone
+    /// d'action, freiné par l'élastique au-delà. Symétrique en signe.
+    static func trackedOffset(translation h: CGFloat) -> CGFloat {
+        let absH = abs(h)
+        guard absH > actionZone else { return h }
+        let sign: CGFloat = h > 0 ? 1 : -1
+        return sign * (actionZone + (absH - actionZone) * rubberBandFactor)
+    }
+
+    /// Vrai si un décalage ORIENTÉ dans le sens de l'action (positif = vers
+    /// l'action) a atteint le seuil de validation.
+    static func commits(offset: CGFloat) -> Bool {
+        offset >= commitDistance
+    }
+
+    /// Résultat d'un pas de drag vis-à-vis du seuil de validation :
+    /// `crossed` = état courant, `firesHaptic` = vrai UNIQUEMENT au passage
+    /// de sous-seuil à sur-seuil (une fois par franchissement).
+    struct ThresholdCrossing: Equatable {
+        let crossed: Bool
+        let firesHaptic: Bool
+    }
+
+    static func crossing(wasCrossed: Bool, offset: CGFloat) -> ThresholdCrossing {
+        let crossed = commits(offset: abs(offset))
+        return ThresholdCrossing(crossed: crossed, firesHaptic: crossed && !wasCrossed)
+    }
+
     /// Direction du swipe REPLY (signe de la translation qui commite une
     /// réponse). Rangée plate (Script, `uniformFlatRow`) : géométrie
     /// UNIFORME — tous les messages étant alignés pareil, reply = glisser à
     /// DROITE (+1) et forward = glisser à GAUCHE, indépendamment de
-    /// l'expéditeur (directive user 2026-08-18). Bulles : convention
+    /// l'expéditeur. Bulles: convention
     /// historique — le côté qui « pointe vers l'expéditeur »
     /// (`isMine ? -1 : +1`), inchangée bit-à-bit.
     static func replyDirection(uniformFlatRow: Bool, isMine: Bool) -> CGFloat {

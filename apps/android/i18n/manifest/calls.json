@@ -1,0 +1,350 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.incoming.accept",
+          "androidName": "call_action_accept",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.camera.caption",
+          "androidName": "call_action_camera",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.panel.close",
+          "androidName": "call_action_close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "notifications.action.declineCall",
+          "androidName": "call_action_decline",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.end",
+          "androidName": "call_action_hang_up",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.minimize",
+          "androidName": "call_action_minimize",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.viewer.action.mute",
+          "androidName": "call_action_mute",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversations.error.retry",
+          "androidName": "call_action_retry",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.status.speaker",
+          "androidName": "call_action_speaker",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.journal.callRecordingStarted",
+          "androidName": "call_capture_journal_call_recording_started",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.journal.callRecordingStopped",
+          "androidName": "call_capture_journal_call_recording_stopped",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.journal.recording",
+          "androidName": "call_capture_journal_recording",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.journal.screenshot",
+          "androidName": "call_capture_journal_screenshot",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.a11y.ended",
+          "androidName": "call_ended",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.ended.connectionLost",
+          "androidName": "call_ended_connection_lost",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.ended.rejected",
+          "androidName": "call_ended_declined",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.ended.failed",
+          "androidName": "call_ended_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.ended.missed",
+          "androidName": "call_ended_missed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.error.callee_refuses_non_contacts",
+          "androidName": "call_error_callee_refuses_non_contacts",
+          "status": "adopted"
+        },
+        {
+          "androidName": "call_feedback_issue_audio_quality",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_feedback_issue_dropped",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.feedback.issue.echo",
+          "androidName": "call_feedback_issue_echo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.label.other",
+          "androidName": "call_feedback_issue_other",
+          "status": "adopted"
+        },
+        {
+          "androidName": "call_feedback_issue_sync",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_feedback_issue_video_quality",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.feedback.send",
+          "androidName": "call_feedback_send",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.feedback.later",
+          "androidName": "call_feedback_skip",
+          "status": "adopted"
+        },
+        {
+          "androidName": "call_feedback_star",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.feedback.title.anonymous",
+          "androidName": "call_feedback_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.empty.calls",
+          "androidName": "call_history_empty_missed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bookmarks.filter.all",
+          "androidName": "call_history_filter_all",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.filter.missed",
+          "androidName": "call_history_filter_missed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.incoming.audio",
+          "androidName": "call_history_incoming",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.ended.missed",
+          "androidName": "call_history_missed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.direction.outgoing",
+          "androidName": "call_history_outgoing",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversations.error.retry",
+          "androidName": "call_history_retry",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.section.appels",
+          "androidName": "call_history_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "focal.summary.day.yesterday",
+          "androidName": "call_history_yesterday",
+          "status": "adopted"
+        },
+        {
+          "androidName": "call_peer_camera_off",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_peer_muted",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_peer_quality_degraded",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.alert",
+          "androidName": "call_peer_screen_capturing",
+          "status": "adopted"
+        },
+        {
+          "androidName": "call_pill_ongoing",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_pill_reopen",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_quality_excellent",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_quality_fair",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.good",
+          "androidName": "call_quality_good",
+          "status": "adopted"
+        },
+        {
+          "androidName": "call_quality_poor",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.row.reaction.a11y",
+          "androidName": "call_reaction_from",
+          "status": "adopted"
+        },
+        {
+          "androidName": "call_spoken_hours",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_spoken_minutes",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_spoken_seconds",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.type.audio",
+          "androidName": "call_start_audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.start.video",
+          "androidName": "call_start_video",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.status.connected",
+          "androidName": "call_status_connected",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.pill.status.connecting",
+          "androidName": "call_status_connecting",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.waiting.incoming",
+          "androidName": "call_status_incoming",
+          "status": "adopted"
+        },
+        {
+          "androidName": "call_status_reconnecting",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.pill.status.ringing",
+          "androidName": "call_status_ringing",
+          "status": "adopted"
+        },
+        {
+          "androidName": "call_waiting_answer_a11y",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.waiting.banner.a11y",
+          "androidName": "call_waiting_banner_a11y",
+          "status": "adopted"
+        },
+        {
+          "androidName": "call_waiting_reject_a11y",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.waiting.incoming",
+          "androidName": "call_waiting_subtitle",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

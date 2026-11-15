@@ -1,0 +1,746 @@
+[
+  {
+    "slug": "afrique",
+    "domain": "glory-frame",
+    "origin": "official",
+    "order": 10,
+    "installedByDefault": true,
+    "removable": false,
+    "hidden": false,
+    "contractSchema": 1,
+    "names": {
+      "fr": {
+        "name": "Afrique éternelle",
+        "description": "La savane et les royaumes : trente-huit cadres pour les rangs d'Ambassadeur à Mythe."
+      },
+      "en": {
+        "name": "Eternal Africa",
+        "description": "The savanna and the kingdoms: thirty-eight frames for the ranks from Ambassador to Myth."
+      },
+      "es": {
+        "name": "África eterna",
+        "description": "La sabana y los reinos: treinta y ocho marcos para los rangos de Embajador a Mito."
+      },
+      "pt": {
+        "name": "África eterna",
+        "description": "A savana e os reinos: trinta e oito molduras para as patentes de Embaixador a Mito."
+      },
+      "de": {
+        "name": "Ewiges Afrika",
+        "description": "Die Savanne und die Königreiche: achtunddreißig Rahmen für die Ränge vom Botschafter bis zum Mythos."
+      },
+      "it": {
+        "name": "Africa eterna",
+        "description": "La savana e i regni: trentotto cornici per i ranghi da Ambasciatore a Mito."
+      },
+      "ar": {
+        "name": "أفريقيا الخالدة",
+        "description": "السافانا والممالك: ثمانية وثلاثون إطارًا للرتب من السفير إلى الأسطورة."
+      }
+    },
+    "collections": [
+      {
+        "slug": "savane"
+      },
+      {
+        "slug": "royaumes"
+      }
+    ],
+    "atmosphere": "afrique",
+    "version": 4,
+    "cover": {
+      "src": "016694c090dcae9f.webp",
+      "bytes": 16410,
+      "sha256": "016694c090dcae9f552ebd3e0704bdc21aaf9b2c20bc947e90c7ab9feec1b002"
+    },
+    "preview": {
+      "src": "0cdd58dabc781105.webp",
+      "bytes": 132526,
+      "sha256": "0cdd58dabc781105df9a7ec71a82253708cd598bcbd343979ad232bde071041a"
+    },
+    "contract": {
+      "src": "845589dcfc12a8c3.json",
+      "bytes": 278408,
+      "sha256": "845589dcfc12a8c3d8f0c33cbd394d32d443dfd56f51eba913f34a978665c298"
+    },
+    "strings": {
+      "fr": {
+        "src": "cccb8b55988bffce.json",
+        "bytes": 17634,
+        "sha256": "cccb8b55988bffcecd51a5807b68eeb459761e2defa303813712de6381c606f6"
+      }
+    },
+    "downloadBytes": {
+      "story": 8061436,
+      "square": null
+    },
+    "fingerprint": "a9671cdde629eec0079b8212baf93348de58909278c1897096687da669cdefbe"
+  },
+  {
+    "slug": "egypte",
+    "domain": "glory-frame",
+    "origin": "official",
+    "order": 20,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "names": {
+      "fr": {
+        "name": "Égypte solaire",
+        "description": "Pyramides, cartouches et dieux du soleil : dix-neuf cadres d'Ambassadeur à Mythe."
+      },
+      "en": {
+        "name": "Solar Egypt",
+        "description": "Pyramids, cartouches and sun gods: nineteen frames from Ambassador to Myth."
+      },
+      "es": {
+        "name": "Egipto solar",
+        "description": "Pirámides, cartuchos y dioses del sol: diecinueve marcos de Embajador a Mito."
+      },
+      "pt": {
+        "name": "Egito solar",
+        "description": "Pirâmides, cartuchos e deuses do sol: dezenove molduras de Embaixador a Mito."
+      },
+      "de": {
+        "name": "Sonniges Ägypten",
+        "description": "Pyramiden, Kartuschen und Sonnengötter: neunzehn Rahmen vom Botschafter bis zum Mythos."
+      },
+      "it": {
+        "name": "Egitto solare",
+        "description": "Piramidi, cartigli e dèi del sole: diciannove cornici da Ambasciatore a Mito."
+      },
+      "ar": {
+        "name": "مصر الشمسية",
+        "description": "أهرامات وخراطيش وآلهة الشمس: تسعة عشر إطارًا من السفير إلى الأسطورة."
+      }
+    },
+    "collections": [
+      {
+        "slug": "egypte"
+      }
+    ],
+    "atmosphere": "egypte",
+    "version": 4,
+    "cover": {
+      "src": "aa665278a4cd57bb.webp",
+      "bytes": 17254,
+      "sha256": "aa665278a4cd57bb7cfe3f171c9105e767f6badfc9575ed3f60f01ba2f9c4e67"
+    },
+    "preview": {
+      "src": "17141d539d52c54a.webp",
+      "bytes": 72408,
+      "sha256": "17141d539d52c54a0f921b29db96a8f3ad536f1171a8f199cc532c92cd291c37"
+    },
+    "contract": {
+      "src": "ac12aecb8a0c3c83.json",
+      "bytes": 133184,
+      "sha256": "ac12aecb8a0c3c83f79dfee33a15a03f6ac0762628522e7af453b6bae495254e"
+    },
+    "strings": {
+      "fr": {
+        "src": "8103c2830f64db4c.json",
+        "bytes": 9820,
+        "sha256": "8103c2830f64db4ca5bfe7f9a39f6b35143d851796745ff13b1f63705173cb74"
+      }
+    },
+    "downloadBytes": {
+      "story": 4960648,
+      "square": null
+    },
+    "fingerprint": "b2c6b4b50f724dd6f9ea334d8bda80a2bd774abf6f744b1d4c48f235c5ed93c4"
+  },
+  {
+    "slug": "olympe",
+    "domain": "glory-frame",
+    "origin": "official",
+    "order": 30,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "names": {
+      "fr": {
+        "name": "Olympe",
+        "description": "Marbre, lauriers et dieux de l'Olympe : dix-neuf cadres d'Ambassadeur à Mythe."
+      },
+      "en": {
+        "name": "Olympus",
+        "description": "Marble, laurels and the gods of Olympus: nineteen frames from Ambassador to Myth."
+      },
+      "es": {
+        "name": "Olimpo",
+        "description": "Mármol, laureles y dioses del Olimpo: diecinueve marcos de Embajador a Mito."
+      },
+      "pt": {
+        "name": "Olimpo",
+        "description": "Mármore, louros e deuses do Olimpo: dezenove molduras de Embaixador a Mito."
+      },
+      "de": {
+        "name": "Olymp",
+        "description": "Marmor, Lorbeer und die Götter des Olymp: neunzehn Rahmen vom Botschafter bis zum Mythos."
+      },
+      "it": {
+        "name": "Olimpo",
+        "description": "Marmo, allori e dèi dell'Olimpo: diciannove cornici da Ambasciatore a Mito."
+      },
+      "ar": {
+        "name": "الأولمب",
+        "description": "رخام وأكاليل غار وآلهة الأولمب: تسعة عشر إطارًا من السفير إلى الأسطورة."
+      }
+    },
+    "collections": [
+      {
+        "slug": "olympe"
+      }
+    ],
+    "atmosphere": "olympe",
+    "version": 4,
+    "cover": {
+      "src": "2e187f928a1da8ce.webp",
+      "bytes": 15602,
+      "sha256": "2e187f928a1da8ceb49c8aa6bb86594af244504a6643b986d181ef7cc07f2d31"
+    },
+    "preview": {
+      "src": "099f8fafc845791e.webp",
+      "bytes": 71894,
+      "sha256": "099f8fafc845791e7469790d697a14b44a81376e27f75f805fb30129e3fcd728"
+    },
+    "contract": {
+      "src": "bfbedb41c8367399.json",
+      "bytes": 147781,
+      "sha256": "bfbedb41c836739956626a37573bf0c369565f1e111feb8699d58c0cbda02265"
+    },
+    "strings": {
+      "fr": {
+        "src": "aee33f2477f636d2.json",
+        "bytes": 8562,
+        "sha256": "aee33f2477f636d2af939ba89a1d041e2f7590c768c571186ffaf671915d2dac"
+      }
+    },
+    "downloadBytes": {
+      "story": 3778449,
+      "square": null
+    },
+    "fingerprint": "766a29c1bd700486043ea574c16e6730fbbefd424f9523a17dff053579b85be3"
+  },
+  {
+    "slug": "celeste",
+    "domain": "glory-frame",
+    "origin": "official",
+    "order": 40,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "names": {
+      "fr": {
+        "name": "Empire céleste",
+        "description": "Laques, nuages et dragons de jade : dix-neuf cadres d'Ambassadeur à Mythe."
+      },
+      "en": {
+        "name": "Celestial Empire",
+        "description": "Lacquer, clouds and jade dragons: nineteen frames from Ambassador to Myth."
+      },
+      "es": {
+        "name": "Imperio celeste",
+        "description": "Lacas, nubes y dragones de jade: diecinueve marcos de Embajador a Mito."
+      },
+      "pt": {
+        "name": "Império celeste",
+        "description": "Lacas, nuvens e dragões de jade: dezenove molduras de Embaixador a Mito."
+      },
+      "de": {
+        "name": "Himmlisches Reich",
+        "description": "Lack, Wolken und Jadedrachen: neunzehn Rahmen vom Botschafter bis zum Mythos."
+      },
+      "it": {
+        "name": "Impero celeste",
+        "description": "Lacche, nuvole e draghi di giada: diciannove cornici da Ambasciatore a Mito."
+      },
+      "ar": {
+        "name": "الإمبراطورية السماوية",
+        "description": "ورنيش وغيوم وتنانين من اليشم: تسعة عشر إطارًا من السفير إلى الأسطورة."
+      }
+    },
+    "collections": [
+      {
+        "slug": "celeste"
+      }
+    ],
+    "atmosphere": "celeste",
+    "version": 4,
+    "cover": {
+      "src": "ddf815deaa09774f.webp",
+      "bytes": 17238,
+      "sha256": "ddf815deaa09774fd9d0d36e7542ac9b4a02b0768f79f8f001abebec69192d50"
+    },
+    "preview": {
+      "src": "6ef2be70ceb703b3.webp",
+      "bytes": 65780,
+      "sha256": "6ef2be70ceb703b3c91d2a77ce75d58db2f9b46de7340b334ac7287506992f2b"
+    },
+    "contract": {
+      "src": "f99fb2ecbcd338fa.json",
+      "bytes": 167298,
+      "sha256": "f99fb2ecbcd338fa1cc09441e0137ab6fffe037689406a5058255a8c9b668d73"
+    },
+    "strings": {
+      "fr": {
+        "src": "722a446cbd7f8c10.json",
+        "bytes": 9810,
+        "sha256": "722a446cbd7f8c102514c654b6e14e87cc7ef5060f6acd7fef0ff6b3a3821439"
+      }
+    },
+    "downloadBytes": {
+      "story": 3532760,
+      "square": null
+    },
+    "fingerprint": "96bef5e25ea57a5d14d2d5887d88d4a250ea202af7f2408abc416bfe9f032fe9"
+  },
+  {
+    "slug": "nord",
+    "domain": "glory-frame",
+    "origin": "official",
+    "order": 50,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "names": {
+      "fr": {
+        "name": "Aurores du Nord",
+        "description": "Runes, fjords et aurores boréales : dix-neuf cadres d'Ambassadeur à Mythe."
+      },
+      "en": {
+        "name": "Northern Lights",
+        "description": "Runes, fjords and auroras: nineteen frames from Ambassador to Myth."
+      },
+      "es": {
+        "name": "Auroras del Norte",
+        "description": "Runas, fiordos y auroras boreales: diecinueve marcos de Embajador a Mito."
+      },
+      "pt": {
+        "name": "Auroras do Norte",
+        "description": "Runas, fiordes e auroras boreais: dezenove molduras de Embaixador a Mito."
+      },
+      "de": {
+        "name": "Nordlichter",
+        "description": "Runen, Fjorde und Polarlichter: neunzehn Rahmen vom Botschafter bis zum Mythos."
+      },
+      "it": {
+        "name": "Aurore del Nord",
+        "description": "Rune, fiordi e aurore boreali: diciannove cornici da Ambasciatore a Mito."
+      },
+      "ar": {
+        "name": "أضواء الشمال",
+        "description": "رونيات ومضايق وأضواء قطبية: تسعة عشر إطارًا من السفير إلى الأسطورة."
+      }
+    },
+    "collections": [
+      {
+        "slug": "nord"
+      }
+    ],
+    "atmosphere": "nord",
+    "version": 4,
+    "cover": {
+      "src": "def2a7c4003689d2.webp",
+      "bytes": 20838,
+      "sha256": "def2a7c4003689d237c2c94228c261b9f22747bd3b70007e2cea2f50f3e5c446"
+    },
+    "preview": {
+      "src": "52c8b1142588f10b.webp",
+      "bytes": 72896,
+      "sha256": "52c8b1142588f10bc5784ba97565bf0b8d4233e777663c8d366db47997b09ece"
+    },
+    "contract": {
+      "src": "390a6bd0a8663932.json",
+      "bytes": 140497,
+      "sha256": "390a6bd0a866393265ddc1b26d796cbdd526ab519195443622843cf3d525f7d2"
+    },
+    "strings": {
+      "fr": {
+        "src": "1c66aec3d87a4c9e.json",
+        "bytes": 8899,
+        "sha256": "1c66aec3d87a4c9ef768211911cb5747b3b3364ef3facebd49cda3461a7e28b6"
+      }
+    },
+    "downloadBytes": {
+      "story": 5179222,
+      "square": null
+    },
+    "fingerprint": "3843980763af39669934250b2a4ac856d1f346081ae3f42e3d281b6ca82b4736"
+  },
+  {
+    "slug": "abysses",
+    "domain": "glory-frame",
+    "origin": "official",
+    "order": 60,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "names": {
+      "fr": {
+        "name": "Abysses",
+        "description": "Coraux, méduses et lueurs des grands fonds : dix-neuf cadres d'Ambassadeur à Mythe."
+      },
+      "en": {
+        "name": "Abyss",
+        "description": "Corals, jellyfish and the glow of the deep: nineteen frames from Ambassador to Myth."
+      },
+      "es": {
+        "name": "Abismos",
+        "description": "Corales, medusas y destellos de las profundidades: diecinueve marcos de Embajador a Mito."
+      },
+      "pt": {
+        "name": "Abismos",
+        "description": "Corais, medusas e brilhos das profundezas: dezenove molduras de Embaixador a Mito."
+      },
+      "de": {
+        "name": "Tiefsee",
+        "description": "Korallen, Quallen und das Leuchten der Tiefe: neunzehn Rahmen vom Botschafter bis zum Mythos."
+      },
+      "it": {
+        "name": "Abissi",
+        "description": "Coralli, meduse e bagliori degli abissi: diciannove cornici da Ambasciatore a Mito."
+      },
+      "ar": {
+        "name": "الأعماق",
+        "description": "مرجان وقناديل وبريق الأعماق: تسعة عشر إطارًا من السفير إلى الأسطورة."
+      }
+    },
+    "collections": [
+      {
+        "slug": "abysses"
+      }
+    ],
+    "atmosphere": "abysses",
+    "version": 4,
+    "cover": {
+      "src": "c142164470cf9a81.webp",
+      "bytes": 17014,
+      "sha256": "c142164470cf9a8194d28202103d24415357ad4affc0c14898d91541bd062674"
+    },
+    "preview": {
+      "src": "2e2d5f6532302344.webp",
+      "bytes": 72752,
+      "sha256": "2e2d5f653230234416f98ed9a6e26fdc859bc8fb88d0c4a920a30a58e9b30211"
+    },
+    "contract": {
+      "src": "066276a6bb0122c0.json",
+      "bytes": 119950,
+      "sha256": "066276a6bb0122c08f47ec79b0c9999635f5a110e8f2e8f1d03218c6c77dc381"
+    },
+    "strings": {
+      "fr": {
+        "src": "85b73bf79f1d90c2.json",
+        "bytes": 8535,
+        "sha256": "85b73bf79f1d90c2de5aefc287a21c7a5f34a7c2ac3761291addbab6736edd83"
+      }
+    },
+    "downloadBytes": {
+      "story": 5512585,
+      "square": null
+    },
+    "fingerprint": "8a1e76392da89d81cc659dc101b7bd828bf4cc1cbc668952cedd301a5ebafb4c"
+  },
+  {
+    "slug": "neon",
+    "domain": "glory-frame",
+    "origin": "official",
+    "order": 70,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "names": {
+      "fr": {
+        "name": "Néon",
+        "description": "Enseignes, chrome et nuits électriques : dix-neuf cadres d'Ambassadeur à Mythe."
+      },
+      "en": {
+        "name": "Neon",
+        "description": "Signs, chrome and electric nights: nineteen frames from Ambassador to Myth."
+      },
+      "es": {
+        "name": "Neón",
+        "description": "Letreros, cromo y noches eléctricas: diecinueve marcos de Embajador a Mito."
+      },
+      "pt": {
+        "name": "Néon",
+        "description": "Letreiros, cromo e noites elétricas: dezenove molduras de Embaixador a Mito."
+      },
+      "de": {
+        "name": "Neon",
+        "description": "Leuchtreklame, Chrom und elektrische Nächte: neunzehn Rahmen vom Botschafter bis zum Mythos."
+      },
+      "it": {
+        "name": "Neon",
+        "description": "Insegne, cromo e notti elettriche: diciannove cornici da Ambasciatore a Mito."
+      },
+      "ar": {
+        "name": "نيون",
+        "description": "لافتات وكروم وليالٍ كهربائية: تسعة عشر إطارًا من السفير إلى الأسطورة."
+      }
+    },
+    "collections": [
+      {
+        "slug": "neon"
+      }
+    ],
+    "atmosphere": "neon",
+    "version": 4,
+    "cover": {
+      "src": "7a11ab49f74f8d9e.webp",
+      "bytes": 12348,
+      "sha256": "7a11ab49f74f8d9e9ee84ccc504ac073ed9ccbeba8b0c6c61de6a4cb0ee63312"
+    },
+    "preview": {
+      "src": "44fe4cefb0c528e9.webp",
+      "bytes": 68608,
+      "sha256": "44fe4cefb0c528e91470c9f65402caae8c9aa91ef55a0bf8360d6aa6c688ae7b"
+    },
+    "contract": {
+      "src": "7a5f376228690a5b.json",
+      "bytes": 152691,
+      "sha256": "7a5f376228690a5bf33b4e70564922ff982cd0a7de08a053c36f5ec6747041e6"
+    },
+    "strings": {
+      "fr": {
+        "src": "71e2904a9d04f3c8.json",
+        "bytes": 9771,
+        "sha256": "71e2904a9d04f3c83b938efddcca42539caa5b7d30355b66395f098d90d1bf7a"
+      }
+    },
+    "downloadBytes": {
+      "story": 3959548,
+      "square": null
+    },
+    "fingerprint": "eaec25cd57fb5457eca045ea8a4f71ab495765ece82c6f4073392caef33465c4"
+  },
+  {
+    "slug": "moments",
+    "domain": "glory-frame",
+    "origin": "official",
+    "order": 80,
+    "installedByDefault": true,
+    "removable": false,
+    "hidden": false,
+    "contractSchema": 1,
+    "names": {
+      "fr": {
+        "name": "Les moments",
+        "description": "Paliers de niveau, Flamme, Meeshes frappées et réalisation du jour : seize cadres pour les grandes étapes."
+      },
+      "en": {
+        "name": "Moments",
+        "description": "Level tiers, Flame, minted Meeshes and the daily achievement: sixteen frames for the big milestones."
+      },
+      "es": {
+        "name": "Los momentos",
+        "description": "Niveles, Llama, Meeshes acuñadas y el logro del día: dieciséis marcos para las grandes etapas."
+      },
+      "pt": {
+        "name": "Os momentos",
+        "description": "Patamares de nível, Chama, Meeshes cunhadas e a conquista do dia: dezesseis molduras para as grandes etapas."
+      },
+      "de": {
+        "name": "Die Momente",
+        "description": "Levelstufen, Flamme, geprägte Meeshes und die Tagesleistung: sechzehn Rahmen für die großen Etappen."
+      },
+      "it": {
+        "name": "I momenti",
+        "description": "Livelli, Fiamma, Meesh coniate e il traguardo del giorno: sedici cornici per le grandi tappe."
+      },
+      "ar": {
+        "name": "اللحظات",
+        "description": "مستويات وشعلة وميشات مسكوكة وإنجاز اليوم: ستة عشر إطارًا للمراحل الكبرى."
+      }
+    },
+    "collections": [
+      {
+        "slug": "moments"
+      }
+    ],
+    "version": 4,
+    "cover": {
+      "src": "ac9e19b1eb404909.webp",
+      "bytes": 13250,
+      "sha256": "ac9e19b1eb4049090b7a3574f27d671704a7e0d2b54af7ad8697fbddf6d7ef3f"
+    },
+    "preview": {
+      "src": "167d9eadec1a2590.webp",
+      "bytes": 53740,
+      "sha256": "167d9eadec1a25904f4899a691158ddcf4d038b7780d72bd7ceaa80dbe35ff36"
+    },
+    "contract": {
+      "src": "dc945005e095dbce.json",
+      "bytes": 134799,
+      "sha256": "dc945005e095dbcec24f72d713e33c74b10df287920a47c642c9a682295790e6"
+    },
+    "strings": {
+      "fr": {
+        "src": "d7ffbcc69cc910b4.json",
+        "bytes": 6831,
+        "sha256": "d7ffbcc69cc910b4fad7cccc25378235352bc015a45ace749cc5af6d7a7e239a"
+      }
+    },
+    "downloadBytes": {
+      "story": 4474750,
+      "square": null
+    },
+    "fingerprint": "044b6569e0e7f5179855ba09a53a9b78e99fb634ac3942c681bc146c5a31110e"
+  },
+  {
+    "slug": "tresor",
+    "domain": "glory-frame",
+    "origin": "official",
+    "order": 90,
+    "installedByDefault": true,
+    "removable": false,
+    "hidden": false,
+    "contractSchema": 1,
+    "names": {
+      "fr": {
+        "name": "Le trésor",
+        "description": "Bourses, escarcelles, coffrets, coffre et réserve : quatorze cadres pour chaque palier du trésor."
+      },
+      "en": {
+        "name": "The treasury",
+        "description": "Purses, pouches, caskets, the vault and the reserve: fourteen frames for each treasury tier."
+      },
+      "es": {
+        "name": "El tesoro",
+        "description": "Bolsas, escarcelas, cofrecillos, cofre y reserva: catorce marcos para cada nivel del tesoro."
+      },
+      "pt": {
+        "name": "O tesouro",
+        "description": "Bolsas, escarcelas, cofrinhos, cofre e reserva: catorze molduras para cada patamar do tesouro."
+      },
+      "de": {
+        "name": "Der Schatz",
+        "description": "Beutel, Taschen, Kästchen, Tresor und Reserve: vierzehn Rahmen für jede Schatzstufe."
+      },
+      "it": {
+        "name": "Il tesoro",
+        "description": "Borse, scarselle, cofanetti, forziere e riserva: quattordici cornici per ogni livello del tesoro."
+      },
+      "ar": {
+        "name": "الكنز",
+        "description": "أكياس وصرر وعلب وخزنة واحتياطي: أربعة عشر إطارًا لكل مستوى من الكنز."
+      }
+    },
+    "collections": [
+      {
+        "slug": "tresor"
+      }
+    ],
+    "usage": {
+      "kind": "moment",
+      "family": "treasury"
+    },
+    "version": 4,
+    "cover": {
+      "src": "0e558ffde0751e0c.webp",
+      "bytes": 17176,
+      "sha256": "0e558ffde0751e0c8ccf17b1e1d0d2661e770fb91528e7984adf649eccaa50f3"
+    },
+    "preview": {
+      "src": "312cf64c661395bf.webp",
+      "bytes": 54948,
+      "sha256": "312cf64c661395bf346c455e9d3fcd78b5abecb55c630b8a622d8f8255d7a0e9"
+    },
+    "contract": {
+      "src": "83bab60ea011fdaf.json",
+      "bytes": 156239,
+      "sha256": "83bab60ea011fdaf19c68c5d79e570c3fb2efc265e00088df1b8e08cf1914f6d"
+    },
+    "strings": {
+      "fr": {
+        "src": "1cfe632e638a61dd.json",
+        "bytes": 5775,
+        "sha256": "1cfe632e638a61ddecb8dc9cf5d2c983fa88c3b189b8e916bee50d733b48941c"
+      }
+    },
+    "downloadBytes": {
+      "story": 3934644,
+      "square": null
+    },
+    "fingerprint": "71eb1b4f330c9ddf0b9c23f8aeeaf29c52c2e8deea99eccbc070b0498a406db4"
+  },
+  {
+    "slug": "succes",
+    "domain": "glory-frame",
+    "origin": "official",
+    "order": 100,
+    "installedByDefault": true,
+    "removable": false,
+    "hidden": false,
+    "contractSchema": 1,
+    "names": {
+      "fr": {
+        "name": "Les hauts faits",
+        "description": "Un cadre par rareté, du commun au mythique, et un cadre neutre : six cadres pour chaque haut fait accompli."
+      },
+      "en": {
+        "name": "Great deeds",
+        "description": "One frame per rarity, from common to mythic, and a neutral one: six frames for every great deed done."
+      },
+      "es": {
+        "name": "Las hazañas",
+        "description": "Un marco por rareza, de común a mítica, y un marco neutro: seis marcos para cada hazaña lograda."
+      },
+      "pt": {
+        "name": "As façanhas",
+        "description": "Uma moldura por raridade, de comum a mítica, e uma moldura neutra: seis molduras para cada façanha cumprida."
+      },
+      "de": {
+        "name": "Die Heldentaten",
+        "description": "Ein Rahmen pro Seltenheit, von gewöhnlich bis mythisch, und ein neutraler Rahmen: sechs Rahmen für jede vollbrachte Heldentat."
+      },
+      "it": {
+        "name": "Le imprese",
+        "description": "Una cornice per rarità, da comune a mitica, e una cornice neutra: sei cornici per ogni impresa compiuta."
+      },
+      "ar": {
+        "name": "المآثر",
+        "description": "إطار لكل ندرة، من الشائع إلى الأسطوري، وإطار محايد: ستة إطارات لكل مأثرة محقّقة."
+      }
+    },
+    "collections": [
+      {
+        "slug": "succes"
+      }
+    ],
+    "version": 4,
+    "cover": {
+      "src": "8d804ea74f058bf8.webp",
+      "bytes": 9892,
+      "sha256": "8d804ea74f058bf8f8391aaa05af5b3511b40a8097c7831ef2db8d650b1dc857"
+    },
+    "preview": {
+      "src": "fe3036fcc9d8a883.webp",
+      "bytes": 14868,
+      "sha256": "fe3036fcc9d8a8834feb5a81ef9448888c57e5b62c0502d4619d7bc3722aeb52"
+    },
+    "contract": {
+      "src": "174055302160daa4.json",
+      "bytes": 35478,
+      "sha256": "174055302160daa497149cb00fef7e9f2d703624e7f1fe7624d3b5d149277fe1"
+    },
+    "strings": {
+      "fr": {
+        "src": "845c7ad9ecb25223.json",
+        "bytes": 1851,
+        "sha256": "845c7ad9ecb252235afaf74faa4dc55cd7600d655ce2bdeeeeea6a4f8c7aaff6"
+      }
+    },
+    "downloadBytes": {
+      "story": 1345439,
+      "square": null
+    },
+    "fingerprint": "bd66b5804cfe9966d3c9ed7d62a3e75271bbcab3d5dd3cbba2118552c71f7fa3"
+  }
+]

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_unsent_only_unlinked">عدد كبير جدًا من الأشخاص الذين اخترتهم لا تربطك بهم أي صلة بعد اليوم. أزلهم من القائمة أو حاول مجددًا غدًا.</string>
+    <string name="feed_unsent_only_unlinked_counted">الأشخاص المختارون بلا صلة بك: %1$d، والحد %2$d في اليوم. أزلهم من القائمة أو حاول مجددًا غدًا.</string>
+</resources>

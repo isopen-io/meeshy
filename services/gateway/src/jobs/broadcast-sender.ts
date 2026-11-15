@@ -1,8 +1,8 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { EmailService } from '../services/EmailService';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { buildBroadcastRecipientFilter, localizedBroadcastText, type BroadcastTargeting } from './broadcast-recipients';
-import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
+import { buildBroadcastRecipientFilter, emailChannelRecipientConstraint, localizedBroadcastText, type BroadcastTargeting } from './broadcast-recipients';
+import { RECIPIENT_LANG_SELECT, recipientLanguage, recipientLanguages } from '../utils/recipient-language';
 
 const logger = enhancedLogger.child({ module: 'BroadcastSenderJob' });
 
@@ -29,7 +29,7 @@ export class BroadcastSenderJob {
         return;
       }
 
-      const filter = this.buildRecipientFilter(broadcast.targeting as any);
+      const filter = await this.buildRecipientFilter(broadcast.targeting as any);
 
       // Count total recipients
       const totalRecipients = await this.prisma.user.count({ where: filter });
@@ -86,18 +86,20 @@ export class BroadcastSenderJob {
             // If no preferences found, proceed with sending
           }
 
-          // Même descente et même repli de traduction que le canal IN-APP : les
-          // deux voix d'une diffusion ne peuvent pas élire des langues
-          // différentes pour un même destinataire. `localizedBroadcastText` est
-          // la SSOT du repli (langue du lecteur → langue source → original) ;
-          // ce site en portait une copie.
-          const lang = recipientLanguage(user, 'en');
+          // Deux rôles distincts pour la langue, comme le canal IN-APP :
+          //  - CADRAGE (`language` de l'e-mail) = le rang le plus haut RENSEIGNÉ ;
+          //  - CONTENU (sujet/corps) = la DESCENTE ORDONNÉE du Prisme.
+          // Les deux voix d'une diffusion ne peuvent pas élire des langues
+          // différentes pour un même destinataire : `localizedBroadcastText`
+          // route par la même SSOT (`resolvePrismTranslation`).
+          const framingLang = recipientLanguage(user, 'en');
+          const preferredLanguages = recipientLanguages(user);
           const localized = (translated: Record<string, string>, original: string) =>
             localizedBroadcastText({
               translated,
               sourceLanguage: broadcast.sourceLanguage,
               original,
-              lang,
+              preferredLanguages,
             });
           const subject = localized(translatedSubjects, broadcast.subject);
           const body = localized(translatedBodies, broadcast.body);
@@ -110,7 +112,7 @@ export class BroadcastSenderJob {
               recipientName,
               subject,
               body,
-              language: lang,
+              language: framingLang,
               unsubscribeUrl,
             });
 
@@ -169,8 +171,16 @@ export class BroadcastSenderJob {
     }
   }
 
-  /** Ciblage commun (`buildBroadcastRecipientFilter`) + contrainte du canal : une adresse vérifiée. */
-  private buildRecipientFilter(targeting: BroadcastTargeting): any {
-    return { ...buildBroadcastRecipientFilter(targeting), emailVerifiedAt: { not: null } };
+  /**
+   * Ciblage commun (`buildBroadcastRecipientFilter`) + contrainte du CANAL
+   * (`emailChannelRecipientConstraint`) : une adresse vérifiée, et jamais une
+   * adresse de bootstrap — vérifiée d'office précisément parce qu'elle ne
+   * reçoit rien (#6581).
+   */
+  private async buildRecipientFilter(targeting: BroadcastTargeting): Promise<any> {
+    return {
+      ...(await buildBroadcastRecipientFilter(this.prisma, targeting)),
+      ...emailChannelRecipientConstraint(),
+    };
   }
 }

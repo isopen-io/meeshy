@@ -37,6 +37,43 @@ final class OfflineQueuePendingUIItemsPublisherTests: XCTestCase {
         try await super.tearDown()
     }
 
+    // MARK: - Attendre une CONDITION, jamais un DÉLAI (#6057)
+
+    /// Chaque test de cette classe dormait un temps FIXE — 100, 150 ou 200 ms —
+    /// puis lisait la DERNIÈRE émission du publisher. Sur cette machine le
+    /// sommeil est très au-delà du nécessaire ; sur le runner CI (3 vCPU, 7 Go)
+    /// il ne l'est pas toujours, et `test_publisher_includes_failed_status` a
+    /// alterné vert et rouge **sur le même commit** — deux runs au même
+    /// horodatage, l'un rouge, l'autre vert.
+    ///
+    /// > Un `Task.sleep` dans un test dit « je crois que ce sera fini d'ici
+    /// > là ». Une attente sur condition dit « c'est fini ». Les deux passent
+    /// > sur une machine rapide ; une seule dit quelque chose de vrai.
+    ///
+    /// **L'assertion ne perd rien.** C'est bien la DERNIÈRE émission qu'on
+    /// attend, jamais « une émission quelque part dans la séquence » : une
+    /// ligne qui apparaîtrait puis disparaîtrait doit toujours faire rougir
+    /// `test_publisher_includes_failed_status`, dont c'est le sujet même.
+    ///
+    /// La borne de 5 s n'est pas un budget mais un ANTI-BLOCAGE : la boucle
+    /// rend la main dès que la condition tient, si bien que la suite est plus
+    /// RAPIDE qu'avec les sommeils fixes qu'elle remplace. En cas de dépassement
+    /// elle rend le dernier instantané reçu — l'assertion appelante échoue alors
+    /// en montrant ce qui a vraiment été publié, pas un `nil` muet.
+    @discardableResult
+    private func attendreDernier(
+        _ recorder: Recorder<[OutboxUIItem]>,
+        borne: TimeInterval = 5,
+        _ condition: ([OutboxUIItem]) -> Bool
+    ) async -> [OutboxUIItem]? {
+        let echeance = Date().addingTimeInterval(borne)
+        while Date() < echeance {
+            if let dernier = recorder.snapshot().last, condition(dernier) { return dernier }
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
+        return recorder.snapshot().last
+    }
+
     // MARK: - Empty queue
 
     func test_publisher_emits_empty_when_queue_empty() async throws {
@@ -44,11 +81,14 @@ final class OfflineQueuePendingUIItemsPublisherTests: XCTestCase {
         let cancellable = queue.pendingUIItemsPublisher
             .sink { recorder.append($0) }
 
-        try await Task.sleep(nanoseconds: 100_000_000)
+        // `{ _ in true }` et non `{ $0.isEmpty }` : attendre la condition qu'on
+        // s'apprête à ASSERTER la rendrait vraie par construction. Ce qu'on
+        // attend ici, c'est la PREMIÈRE émission, quelle qu'elle soit ; c'est
+        // l'assertion qui dit ce qu'elle doit valoir.
+        let last = await attendreDernier(recorder, { _ in true })
         cancellable.cancel()
 
-        let received = recorder.snapshot()
-        XCTAssertEqual(received.last, [],
+        XCTAssertEqual(last, [],
             "Empty outbox MUST publish an empty snapshot")
     }
 
@@ -66,13 +106,11 @@ final class OfflineQueuePendingUIItemsPublisherTests: XCTestCase {
         )
         try await queue.enqueue(item)
 
-        try await Task.sleep(nanoseconds: 200_000_000)
-        cancellable.cancel()
-
-        let received = recorder.snapshot()
-        guard let last = received.last else {
+        guard let last = await attendreDernier(recorder, { $0.count == 1 }) else {
             return XCTFail("Publisher never emitted")
         }
+        cancellable.cancel()
+
         XCTAssertEqual(last.count, 1, "Single enqueue MUST surface exactly one row")
         XCTAssertEqual(last.first?.kind, .message)
         XCTAssertEqual(last.first?.titlePreview, "Hello pill")
@@ -126,13 +164,11 @@ final class OfflineQueuePendingUIItemsPublisherTests: XCTestCase {
         let recorder = Recorder<[OutboxUIItem]>()
         let cancellable = queue.pendingUIItemsPublisher
             .sink { recorder.append($0) }
-        try await Task.sleep(nanoseconds: 150_000_000)
-        cancellable.cancel()
-
-        let received = recorder.snapshot()
-        guard let last = received.last else {
+        guard let last = await attendreDernier(recorder, { $0.count == 3 }) else {
             return XCTFail("Publisher never emitted")
         }
+        cancellable.cancel()
+
         XCTAssertEqual(last.map(\.id), ["ofq_order_a", "ofq_order_b", "ofq_order_c"],
             "Rows MUST be sorted by createdAt ascending")
     }
@@ -150,19 +186,19 @@ final class OfflineQueuePendingUIItemsPublisherTests: XCTestCase {
         let recorder = Recorder<[OutboxUIItem]>()
         let cancellable = queue.pendingUIItemsPublisher
             .sink { recorder.append($0) }
-        try await Task.sleep(nanoseconds: 100_000_000)
+        // La ligne doit être VUE avant d'être drainée : sans cette attente, un
+        // `[]` final ne prouverait rien — il pourrait n'être que l'état initial.
+        guard await attendreDernier(recorder, { $0.count == 1 }) != nil else {
+            return XCTFail("Publisher never emitted the enqueued row")
+        }
 
         // Simulate a successful drain: the outbox row is DELETED (not marked
         // as applied — `OutboxStatus` has no `.applied` case). After deletion
         // the publisher MUST drop the row.
         try await queue.deleteForTesting(clientMessageId: "cid_drain")
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let last = await attendreDernier(recorder, { $0.isEmpty })
         cancellable.cancel()
 
-        let received = recorder.snapshot()
-        guard let last = received.last else {
-            return XCTFail("Publisher never emitted")
-        }
         XCTAssertEqual(last, [], "Drained (deleted) rows MUST disappear from the publisher snapshot")
     }
 
@@ -181,13 +217,11 @@ final class OfflineQueuePendingUIItemsPublisherTests: XCTestCase {
             .sink { recorder.append($0) }
 
         try await queue.markFailedForTesting(clientMessageId: "cid_failed", reason: "test failure")
-        try await Task.sleep(nanoseconds: 200_000_000)
-        cancellable.cancel()
-
-        let received = recorder.snapshot()
-        guard let last = received.last else {
+        guard let last = await attendreDernier(recorder, { $0.first?.status == .failed }) else {
             return XCTFail("Publisher never emitted")
         }
+        cancellable.cancel()
+
         XCTAssertEqual(last.count, 1, "Failed rows MUST remain visible in the publisher snapshot")
         XCTAssertEqual(last.first?.status, .failed)
         XCTAssertEqual(last.first?.titlePreview, "boom")
@@ -216,10 +250,9 @@ final class OfflineQueuePendingUIItemsPublisherTests: XCTestCase {
 
         let recorder = Recorder<[OutboxUIItem]>()
         let cancellable = queue.pendingUIItemsPublisher.sink { recorder.append($0) }
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let last = await attendreDernier(recorder, { $0.count == 1 }) ?? []
         cancellable.cancel()
 
-        let last = recorder.snapshot().last ?? []
         XCTAssertEqual(last.count, 1, "an exhausted (permanently failed) row MUST surface in the SyncPill snapshot")
         XCTAssertEqual(last.first?.status, .exhausted)
     }
@@ -263,10 +296,9 @@ final class OfflineQueuePendingUIItemsPublisherTests: XCTestCase {
 
         let recorder = Recorder<[OutboxUIItem]>()
         let cancellable = queue.pendingUIItemsPublisher.sink { recorder.append($0) }
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let last = await attendreDernier(recorder, { $0.map(\.id) == ["ofq_send_visible"] }) ?? []
         cancellable.cancel()
 
-        let last = recorder.snapshot().last ?? []
         XCTAssertEqual(last.map(\.id), ["ofq_send_visible"],
             "markAsRead rows MUST be excluded from the SyncPill snapshot; only the real sendMessage stays")
     }
@@ -317,12 +349,56 @@ final class OfflineQueuePendingUIItemsPublisherTests: XCTestCase {
 
         let recorder = Recorder<[OutboxUIItem]>()
         let cancellable = queue.pendingUIItemsPublisher.sink { recorder.append($0) }
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let last = await attendreDernier(recorder, { $0.map(\.id) == ["ofq_send_visible_story"] }) ?? []
         cancellable.cancel()
 
-        let last = recorder.snapshot().last ?? []
         XCTAssertEqual(last.map(\.id), ["ofq_send_visible_story"],
             "markStoryViewed rows MUST be excluded from the SyncPill snapshot; only the real sendMessage stays")
+    }
+
+    // MARK: - Témoin NÉGATIF — le sommeil fixe ne revient pas (#6057)
+
+    /// **Cette classe n'attend plus par DÉLAI, et rien ne doit l'y ramener.**
+    ///
+    /// Les neuf `Task.sleep` qu'elle portait ne sont pas arrivés d'un coup :
+    /// chaque test ajouté a recopié le motif de ses voisins, ce qui est la
+    /// chose raisonnable à faire quand tous les voisins le font. C'est pourquoi
+    /// le correctif ne peut pas être seulement « je les ai remplacés » — sans
+    /// témoin, le prochain test écrit ici recopiera le motif du jour d'avant,
+    /// et le flake reviendra sur un test de plus sans que personne ne relie les
+    /// deux.
+    ///
+    /// La garde interdit la forme d'ATTENTE — `Task.sleep` précédé d'un `try
+    /// await` — et pas le `try?` du sondage de `attendreDernier` : ce dernier
+    /// n'est pas un pari sur la durée, c'est l'intervalle entre deux
+    /// vérifications d'une condition.
+    ///
+    /// > Un sommeil fixe dans un test est un pari sur la vitesse de la machine.
+    /// > Il se gagne toujours sur un poste de développement, et se perd
+    /// > exactement là où on ne peut pas déboguer.
+    ///
+    /// **L'aiguille est ASSEMBLÉE, et ce n'est pas de la coquetterie.** Écrite
+    /// en clair, elle apparaîtrait trois fois dans ce fichier — le littéral de
+    /// recherche, le message d'échec, et la phrase ci-dessus qui explique la
+    /// règle — si bien que la garde se compterait elle-même et ne pourrait
+    /// JAMAIS être verte. C'est la leçon du cliquet des couleurs (#5883), qui a
+    /// rougi le jour où quelqu'un a écrit la phrase justifiant sa propre
+    /// correction : *un garde qui punit la phrase qui le justifie apprend aux
+    /// gens à ne plus écrire la phrase.* Faute d'un dépouilleur de commentaires
+    /// dans cette cible de test (`ComposerSourceGuard` vit dans `MeeshyUITests`),
+    /// l'assemblage est la parade la plus simple qui reste honnête.
+    func test_cetteClasse_nAttendPlusParSommeilFixe() throws {
+        let aiguille = "try await " + "Task" + ".sleep"
+        let source = try String(contentsOf: URL(fileURLWithPath: #filePath), encoding: .utf8)
+        let sommeils = source.components(separatedBy: aiguille).count - 1
+        XCTAssertEqual(
+            sommeils, 0,
+            "Un sommeil fixe est réapparu dans cette classe (\(sommeils) occurrence(s) de "
+                + "« \(aiguille) »). Les assertions y portent sur CE QUI est publié, jamais sur le "
+                + "temps que ça prend : attendre la condition avec `attendreDernier(_:borne:_:)` dit "
+                + "la même chose, sans parier sur la vitesse de la machine — et rend la classe douze "
+                + "fois plus rapide au passage (#6057)."
+        )
     }
 
     // MARK: - Helpers

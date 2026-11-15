@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.phone.tooShort",
+          "androidName": "account_contact_phone_too_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.phone.implausible",
+          "androidName": "account_contact_phone_implausible",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

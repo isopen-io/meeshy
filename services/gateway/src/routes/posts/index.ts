@@ -2,13 +2,17 @@ import { FastifyInstance } from 'fastify';
 import { createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { registerCoreRoutes } from './core';
 import { registerPostMediaRoutes } from './media';
+import { registerPostMediaExportRoutes } from './media-export';
 import { registerFeedRoutes } from './feed';
 import { registerCommentRoutes } from './comments';
+import { registerCommentSettingsRoutes } from './commentSettings';
 import { registerInteractionRoutes } from './interactions';
 import { registerStoryAudioRoutes } from './audio';
 import { registerSoundRoutes } from './sounds';
 import { registerNearbyRoutes } from './nearby';
 import { registerHashtagRoutes } from './hashtag';
+import { registerGlobalPostSearchRoute } from '../search/global-search';
+import { registerInteractiveResponseRoutes } from './interactiveResponses';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
 
 /**
@@ -33,13 +37,17 @@ export async function postRoutes(fastify: FastifyInstance) {
     allowAnonymous: false,
   });
 
-  registerCoreRoutes(fastify, prisma, requiredAuth);
+  registerCoreRoutes(fastify, prisma, requiredAuth, optionalAuth);
   registerPostMediaRoutes(fastify, prisma, requiredAuth);
+  registerPostMediaExportRoutes(fastify, prisma, requiredAuth);
   registerFeedRoutes(fastify, prisma, requiredAuth, optionalAuth);
   registerCommentRoutes(fastify, prisma, requiredAuth);
+  registerCommentSettingsRoutes(fastify, prisma, requiredAuth);
   registerInteractionRoutes(fastify, prisma, requiredAuth, orphanCleanup);
   registerStoryAudioRoutes(fastify, prisma, requiredAuth);
   registerSoundRoutes(fastify, prisma, requiredAuth);
   registerNearbyRoutes(fastify, prisma, requiredAuth);
   registerHashtagRoutes(fastify, prisma, requiredAuth);
+  registerGlobalPostSearchRoute(fastify, prisma, requiredAuth);
+  registerInteractiveResponseRoutes(fastify, prisma, requiredAuth);
 }

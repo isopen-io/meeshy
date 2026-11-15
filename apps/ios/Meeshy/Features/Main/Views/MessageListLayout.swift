@@ -1,9 +1,10 @@
 // apps/ios/Meeshy/Features/Main/Views/MessageListLayout.swift
 
 import UIKit
+import MeeshySDK
 
 /// **Loi pure de stabilité du champ visuel** de la liste de messages
-/// (chasse Fable 2026-08-16, causes n°1 et n°2 restantes du chantier Focal).
+/// (causes n°1 et n°2 restantes du chantier Focal).
 ///
 /// La liste est INVERSÉE (`transform scaleY: -1`, item 0 = bas visuel) et
 /// self-sizing (`.estimated`). Deux familles de corrections déplacent le
@@ -30,7 +31,7 @@ import UIKit
 ///   récentes vivent près du bas ; compenser les ferait sauter à leur tour —
 ///   le pire échange possible. L'ancre reste le bas visuel, comme
 ///   aujourd'hui.
-/// - près du bas (`offset < seuil`) pour les insertions → 0. La poussée
+/// - près du bas (`offset + contentInset.top < seuil`) pour les insertions → 0. La poussée
 ///   naturelle (le message entrant apparaît, l'auto-scroll RC2.1 suit) est
 ///   le comportement historique voulu.
 ///
@@ -60,11 +61,113 @@ nonisolated enum MessageListOffsetCompensationLaw {
     /// supprimées (−) SOUS la fenêtre visible.
     static func batchUpdateAdjustment(
         headDelta: CGFloat,
-        contentOffsetY: CGFloat,
+        distanceFromVisualBottom: CGFloat,
         nearBottomThreshold: CGFloat
     ) -> CGFloat {
-        guard contentOffsetY >= nearBottomThreshold else { return 0 }
+        guard !isNearVisualBottom(distanceFromVisualBottom: distanceFromVisualBottom, threshold: nearBottomThreshold) else { return 0 }
         return headDelta
+    }
+
+    /// #16458 — la liste est retournée : tout en bas, `contentOffset.y` vaut
+    /// `-contentInset.top` (composeur + zone sûre). Comparer l'offset BRUT au
+    /// seuil élargissait « près du bas » de toute la marge (≈ 320 pt), et un
+    /// lecteur remonté de deux bulles était ramené en bas par un message entrant.
+    static func distanceFromVisualBottom(contentOffsetY: CGFloat, bottomInset: CGFloat) -> CGFloat {
+        contentOffsetY + bottomInset
+    }
+
+    static func isNearVisualBottom(distanceFromVisualBottom: CGFloat, threshold: CGFloat) -> Bool {
+        distanceFromVisualBottom < threshold
+    }
+}
+
+/// **Loi d'estimation de hauteur de rangée** (issue #4041).
+///
+/// Le layout compositionnel ne reçoit qu'UNE hauteur estimée — la liste n'a
+/// qu'une section (`MessageListSection.main`), il n'existe aucun canal par
+/// item. Tant que cette estimation valait la cote d'une TÊTE DE GROUPE
+/// (150 pt : en-tête d'identité réservé + marges), alors que la population
+/// dominante du fil est la rangée DE SUITE (~51 pt mesurés), chaque cellule
+/// réalisée arrivait ~100 pt trop haute avant de se rétracter. Mesure sur la
+/// capture : 114 pt à l'entrée, 51 pt une fois posée, résorption en ~150 ms.
+///
+/// Ce qui rendait l'écart VISIBLE plutôt qu'absorbé dans la frame, ce sont
+/// les trois gardes ci-dessus et ci-dessous — toutes justes, aucune touchée
+/// par ce lot : le plafond d'invalidations partielles avale la correction
+/// au-delà de quatre cellules par transaction, `selfSizingAdjustment` ne
+/// compense pas DANS la fenêtre, et le rattrapage complet attend la pose.
+/// **Une estimation JUSTE ne les contourne pas : elle les sollicite moins**,
+/// puisqu'une cellule dont la hauteur préférée égale l'estimation
+/// n'invalide pas du tout.
+///
+/// La loi décide QUAND remplacer l'estimation servie par ce que le fil
+/// mesure vraiment. Elle est un POINT FIXE : ré-appliquée à ce qu'elle vient
+/// de rendre, elle ne propose plus rien — adopter coûte une invalidation
+/// COMPLÈTE, s'y reprendre à chaque pose coûterait plus cher que le défaut
+/// corrigé.
+///
+/// **L'échantillon est l'état RÉEL du layout** (hauteurs des items visibles),
+/// jamais les seules corrections de self-sizing : n'échantillonner que les
+/// cellules qui INVALIDENT biaise vers celles dont l'estimation est déjà
+/// fausse — une fois la rangée de suite adoptée, elle disparaîtrait de
+/// l'échantillon et seules les têtes de groupe y resteraient ; la loi
+/// oscillerait de l'une à l'autre, une invalidation complète par pose.
+///
+/// Type pur, `nonisolated`, sans UIKit — même patron que
+/// `MessageListOffsetCompensationLaw`.
+nonisolated enum MessageListHeightEstimationLaw {
+
+    /// Cellules visibles en deçà desquelles on n'apprend rien : une
+    /// conversation qui vient de s'ouvrir sur trois messages n'est pas un
+    /// échantillon du fil.
+    static let minimumSamples = 6
+
+    /// Écart minimal entre l'estimation servie et ce que le fil mesure pour
+    /// qu'il vaille la peine d'adopter. En deçà, le remède (une invalidation
+    /// complète, donc un repositionnement ancré de tout le contenu non
+    /// mesuré) coûte plus cher que le mal.
+    static let adoptionThreshold: CGFloat = 12
+
+    /// Plancher : une rangée de suite d'une ligne porte au moins son texte
+    /// (`FocalMetrics.Text` — 15 pt × 1,42 ≈ 21) et ses deux
+    /// `Row.paddingVertical` (3 + 3). 32 laisse la marge sans jamais laisser
+    /// l'estimation s'effondrer sur des hauteurs dégénérées (cellules lues
+    /// en plein calcul de layout).
+    static let minimumEstimate: CGFloat = 32
+
+    /// Plafond : au-delà d'environ un quart d'écran, la liste ne réaliserait
+    /// plus assez de cellules par frame pour couvrir la fenêtre — un fil de
+    /// médias plein écran ne doit pas emporter l'estimation avec lui.
+    static let maximumEstimate: CGFloat = 240
+
+    /// L'estimation à adopter, ou `nil` s'il n'y a rien à changer.
+    ///
+    /// - Parameters:
+    ///   - visibleHeights: hauteurs des items visibles, telles que le layout
+    ///     les porte à cet instant (mesurées pour celles qui se sont posées,
+    ///     égales à l'estimation courante pour les autres — ce qui STABILISE
+    ///     la loi au lieu de la biaiser).
+    ///   - current: l'estimation actuellement servie au layout.
+    ///   - alreadyLearned: le fil a déjà appris une estimation (#16459). La
+    ///     médiane de la FENÊTRE suit ce qu'on regarde — photos, puis texte — et
+    ///     chaque adoption repositionne tout le contenu : mesuré sur iPhone,
+    ///     dix adoptions en 70 s, chacune un saut. On apprend une fois.
+    static func proposal(visibleHeights: [CGFloat], current: CGFloat, alreadyLearned: Bool = false) -> CGFloat? {
+        guard !alreadyLearned, visibleHeights.count >= minimumSamples else { return nil }
+        let candidate = min(maximumEstimate, max(minimumEstimate, median(of: visibleHeights)))
+        guard abs(candidate - current) >= adoptionThreshold else { return nil }
+        return candidate
+    }
+
+    /// Médiane — jamais la moyenne : une minorité de rangées hautes (média,
+    /// citation, tête de groupe) tirerait la moyenne loin de la population
+    /// dominante, celle dont l'estimation doit être juste.
+    static func median(of values: [CGFloat]) -> CGFloat {
+        let sorted = values.sorted()
+        guard !sorted.isEmpty else { return 0 }
+        let middle = sorted.count / 2
+        guard sorted.count.isMultiple(of: 2) else { return sorted[middle] }
+        return (sorted[middle - 1] + sorted[middle]) / 2
     }
 }
 
@@ -83,6 +186,11 @@ nonisolated enum MessageListOffsetCompensationLaw {
 /// anciens attributs sont déjà jetés) : l'hôte les mesure AVANT d'appliquer
 /// son snapshot et les dépose via `noteUpcomingDeletionCompensation(height:)`.
 final class MessageListLayout: UICollectionViewCompositionalLayout {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     /// Seuil « près du bas » de l'hôte (même règle que son
     /// `isCurrentlyNearBottom`). Le défaut infini désactive la compensation
@@ -97,7 +205,7 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     /// violent (des dizaines de cellules réalisées par frame), la cascade
     /// dépasse la garde de ré-entrance d'UIKit : assertion SIGTRAP dans
     /// `_setNeedsVisibleCellsUpdate` (`_updateVisibleCellsNow` ×7) — trois
-    /// crashs reproduits 2026-08-18 (08:11, 08:15 ×2) sur long défilement.
+    /// crashs reproduits (08:11, 08:15 ×2) sur long défilement.
     ///
     /// Au-delà du plafond, la correction est ABANDONNÉE pour la transaction
     /// courante : le contenu glisse du delta non compensé — invisible en
@@ -108,8 +216,7 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     /// **Plafond d'invalidations PARTIELLES par transaction CoreAnimation —
     /// posé sur l'ENTONNOIR `invalidateLayout(with:)`.**
     ///
-    /// Quatre itérations du même SIGTRAP (2026-08-18 : flings du matin,
-    /// 11:36 au repos, 11:43/11:50/12:00/12:10) ont éliminé les autres
+    /// Quatre itérations du même SIGTRAP (11:36 au repos, 11:43/11:50/12:00/12:10) ont éliminé les autres
     /// leviers un à un : plafonner `contentOffsetAdjustment` puis
     /// `shouldInvalidateLayout(forPreferredLayoutAttributes:)` n'a jamais
     /// suffi, car le redimensionnement self-sizing des cellules
@@ -125,16 +232,26 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     /// des corrections self-sizing) est AVALÉE pour la transaction : la
     /// passe de cellules visibles converge au lieu de franchir la garde de
     /// ré-entrance d'UIKit (assertion à ~7 passes imbriquées). Les cellules
-    /// concernées gardent leur hauteur estimée UNE frame — invisible à
-    /// vitesse de fling — et se rattrapent au tour suivant : une invalidation
-    /// COMPLÈTE est planifiée (jamais avalée, budget réarmé). Les
-    /// invalidations complètes (rotation, reload, notre rattrapage) passent
-    /// TOUJOURS.
+    /// concernées gardent leur hauteur UNE frame de plus, et une passe de
+    /// layout est demandée au tour suivant (`scheduleDeferredRelayout`), budget
+    /// réarmé : UIKit y ré-émet la correction. Les invalidations complètes
+    /// (rotation, reload, adoption d'estimation) passent TOUJOURS.
+    ///
+    /// **#7624 — le plafond DIFFÈRE, il ne remplace plus par une invalidation
+    /// COMPLÈTE.** Le rattrapage d'origine était une invalidation complète ;
+    /// or le layout compositionnel y JETTE toutes les hauteurs mesurées —
+    /// mesuré au simulateur, chaque cellule visible re-mesurée depuis
+    /// l'estimation (`in=62.7` pour toutes), `contentSize` 7155 → 6445 au
+    /// repos. La re-mesure de la fenêtre dépassait à son tour le plafond et
+    /// replanifiait un rattrapage : 22 invalidations complètes en cascade sur
+    /// 25 s de flings, 2,4 s de fil principal (Time Profiler, Debug), des
+    /// gels de 100 à 400 ms à chaque pose. Une simple passe de layout suffit
+    /// à faire ré-émettre la correction, sans rien oublier.
     static let maxPartialInvalidationsPerTransaction = 4
 
     private(set) var partialInvalidationsThisTransaction = 0
     private var transactionResetScheduled = false
-    private var recoveryInvalidationScheduled = false
+    private var deferredRelayoutScheduled = false
 
     private func scheduleTransactionReset() {
         guard !transactionResetScheduled else { return }
@@ -145,23 +262,38 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
         }
     }
 
-    private func scheduleRecoveryInvalidation() {
-        guard !recoveryInvalidationScheduled else { return }
-        recoveryInvalidationScheduled = true
+    /// Le contexte avalé n'est PAS rejouable : celui qu'UIKit fabrique pour
+    /// une correction self-sizing appartient à la mise à jour en cours
+    /// (`_queueDeferredResolveForInvalidationWithContext:` exige
+    /// `currentUpdate != nil` — SIGABRT mesuré au simulateur en le rejouant au
+    /// tour suivant). Ce qui se rejoue, c'est la QUESTION : une passe de
+    /// layout au tour suivant, où UIKit re-mesure les cellules visibles et
+    /// ré-émet la correction de celles dont la hauteur diffère encore —
+    /// budget réarmé, sans rien oublier de ce qui est déjà mesuré.
+    private func scheduleDeferredRelayout() {
+        guard !deferredRelayoutScheduled else { return }
+        deferredRelayoutScheduled = true
         DispatchQueue.main.async { [weak self] in
-            self?.fireOrDeferRecoveryInvalidation()
+            self?.relayoutAfterDeferredInvalidations()
         }
     }
 
-    /// Le rattrapage (invalidation COMPLÈTE) ne tombe JAMAIS pendant que la
+    func relayoutAfterDeferredInvalidations() {
+        deferredRelayoutScheduled = false
+        collectionView?.setNeedsLayout()
+    }
+
+    /// L'invalidation COMPLÈTE ancrée — depuis #7624, le seul client est
+    /// l'adoption d'une nouvelle estimation (`invalidateForAdoptedEstimate`) ;
+    /// le plafond ci-dessus ne l'appelle plus. Elle ne tombe JAMAIS pendant que la
     /// liste bouge : une invalidation complète en plein momentum tue la
     /// décélération — chaque fling semblait « avalé » dès qu'une tempête
-    /// avait laissé un refus derrière elle (rouleau, user 2026-08-18).
+    /// avait laissé un refus derrière elle (rouleau).
     /// Pendant le mouvement, chaque frame re-sollicite naturellement les
     /// cellules refusées (budget réarmé par tour) ; le rattrapage complet
     /// attend la pose, en se re-proposant au tour suivant.
     ///
-    /// **2026-08-21 — plus de re-proposition « au tour suivant ».** Se re-poser
+    /// ** — plus de re-proposition « au tour suivant ».** Se re-poser
     /// par `DispatchQueue.main.async` à chaque tour de boucle pendant tout le
     /// mouvement faisait tourner la main queue à vide : Time Profiler sur un
     /// défilement de 10 s — 830 ms CPU dans cette méthode et sa closure,
@@ -173,23 +305,61 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     /// relance en vol — si aucun arrêt n'est signalé (défilement programmé).
     private(set) var recoveryInvalidationPending = false
 
-    private func fireOrDeferRecoveryInvalidation() {
-        recoveryInvalidationScheduled = false
+    /// Portée non-`private` : appelée par `invalidateForAdoptedEstimate()`
+    /// (chemin réel) ET directement par les tests — le
+    /// mécanisme d'ancrage ci-dessous ne dépend d'aucun timing, seul le
+    /// DÉCLENCHEMENT (planification async) l'est.
+    func fireOrDeferRecoveryInvalidation() {
         if let collectionView, collectionView.isDragging || collectionView.isDecelerating {
             recoveryInvalidationPending = true
             scheduleRecoveryRetry()
             return
         }
         recoveryInvalidationPending = false
+        // Une invalidation COMPLÈTE ne porte AUCUNE des deux compensations
+        // ci-dessus (elles ne s'accrochent qu'aux entonnoirs self-sizing et
+        // batch update) : sans ancre, elle repositionne silencieusement le
+        // contenu déjà visible dès que la re-mesure change quoi que ce soit
+        // dans la liste — mesuré en repro: `contentOffset`
+        // 968→842 en moins de 20 ms, sans doigt ni décélération. L'ancre
+        // n'est PAS le bas visuel (l'utilisateur peut lire n'importe où dans
+        // l'historique) : c'est la rangée la plus proche du bord haut de la
+        // fenêtre visible, celle qu'il regarde.
+        guard let collectionView else {
+            invalidateLayout()
+            return
+        }
+        let anchor = topmostVisibleAnchor(in: collectionView)
         invalidateLayout()
+        guard let anchor else { return }
+        collectionView.layoutIfNeeded()
+        guard let restoredAttributes = layoutAttributesForItem(at: anchor.indexPath) else { return }
+        let delta = restoredAttributes.frame.minY - anchor.minY
+        guard abs(delta) > 0.5 else { return }
+        collectionView.contentOffset.y += delta
+    }
+
+    /// La cellule visible dont `minY` est le plus proche de zéro dans le
+    /// repère de la fenêtre — la première rangée que l'utilisateur voit,
+    /// quelle que soit sa position dans l'historique.
+    private func topmostVisibleAnchor(in collectionView: UICollectionView) -> (indexPath: IndexPath, minY: CGFloat)? {
+        var best: (indexPath: IndexPath, minY: CGFloat)?
+        for indexPath in collectionView.indexPathsForVisibleItems {
+            guard let minY = layoutAttributesForItem(at: indexPath)?.frame.minY else { continue }
+            if best == nil || minY < best!.minY {
+                best = (indexPath, minY)
+            }
+        }
+        return best
     }
 
     private var recoveryRetryScheduled = false
+    private let delays = DelayedActions()
 
     private func scheduleRecoveryRetry() {
         guard !recoveryRetryScheduled else { return }
         recoveryRetryScheduled = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.recoveryRetryInterval) { [weak self] in
+        delays.run(after: .seconds(Self.recoveryRetryInterval)) { [weak self] in
             guard let self else { return }
             self.recoveryRetryScheduled = false
             guard self.recoveryInvalidationPending else { return }
@@ -209,11 +379,36 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
         fireOrDeferRecoveryInvalidation()
     }
 
+    /// **Ré-estimation adoptée** (#4041) : l'hôte vient de remplacer la
+    /// hauteur estimée que son provider de section sert au layout. TOUT le
+    /// contenu encore non mesuré change alors de hauteur d'un coup.
+    ///
+    /// Le repositionnement passe donc par le chemin ANCRÉ — celui qui existe
+    /// déjà pour le rattrapage — et jamais par un `invalidateLayout()` nu :
+    /// une invalidation complète sans ancre fait glisser la lecture en
+    /// silence (sans doigt ni décélération). Le même chemin garantit aussi
+    /// qu'une adoption arrivée pendant un mouvement est DIFFÉRÉE à la pose au
+    /// lieu de tuer la décélération.
+    func invalidateForAdoptedEstimate() {
+        fireOrDeferRecoveryInvalidation()
+    }
+
+    /// **Une correction VOULUE n'est pas une tempête** (#8232). Le dépliage
+    /// d'un message long redimensionne UNE ou deux rangées, sur un geste :
+    /// si le plafond ci-dessus était déjà consommé dans la transaction —
+    /// un toucher qui suit un défilement dans le même tour —, la correction
+    /// était avalée et la passe différée ne la ré-émettait pas (mesuré en
+    /// test : 242 pt au lieu de 707, deux secondes plus tard). Le geste
+    /// rouvre donc le budget pour sa transaction, borné comme toujours.
+    func admitDeliberateResize() {
+        partialInvalidationsThisTransaction = 0
+    }
+
     override func invalidateLayout(with context: UICollectionViewLayoutInvalidationContext) {
         let isPartial = !context.invalidateEverything && !context.invalidateDataSourceCounts
         if isPartial {
             guard partialInvalidationsThisTransaction < Self.maxPartialInvalidationsPerTransaction else {
-                scheduleRecoveryInvalidation()
+                scheduleDeferredRelayout()
                 return
             }
             partialInvalidationsThisTransaction += 1
@@ -222,7 +417,7 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
         super.invalidateLayout(with: context)
     }
 
-    // MARK: - Sur-réserve Focal (2026-08-21)
+    // MARK: - Sur-réserve Focal
 
     /// Hauteur supplémentaire de contenu demandée AU-DESSUS de l'écran
     /// (côté y croissant du repère renversé = visuellement le haut) quand la
@@ -235,7 +430,7 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
 
     override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
         guard focalOverscan > 0 else { return super.layoutAttributesForElements(in: rect) }
-        // Des DEUX côtés (2026-08-21) : la compaction est symétrique autour
+        // Des DEUX côtés: la compaction est symétrique autour
         // de la ligne de focus — les rangées du bas comme celles du haut sont
         // tirées vers elle, et la place libérée aux deux bords doit déjà être
         // occupée par des cellules réalisées.
@@ -313,7 +508,10 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
         stashedDeletionHeight = 0
         pendingBatchAdjustment = MessageListOffsetCompensationLaw.batchUpdateAdjustment(
             headDelta: headDelta,
-            contentOffsetY: offsetY,
+            distanceFromVisualBottom: MessageListOffsetCompensationLaw.distanceFromVisualBottom(
+                contentOffsetY: offsetY,
+                bottomInset: collectionView.contentInset.top
+            ),
             nearBottomThreshold: nearBottomThreshold
         )
     }

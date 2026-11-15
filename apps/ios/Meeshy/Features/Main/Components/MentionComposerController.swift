@@ -5,10 +5,30 @@ import os
 
 // MARK: - MentionComposerController
 
-/// Manages mention autocomplete for any text composer (conversation, story comment, etc.).
-/// Context-aware: routes API suggestions to the correct endpoint based on `Context`.
+/// Manages mention autocomplete for any text composer (conversation, comments,
+/// story comments, composer draft…).
+///
+/// **La règle du porteur (#7847, #14053)**, appliquée
+/// à la lettre :
+///
+/// | frappe | ce qui répond | réseau |
+/// |---|---|---|
+/// | `@` | contacts (cache) puis participants du contexte | aucun — le cache des contacts se réchauffe s'il est vide ou périmé |
+/// | `@a` | les mêmes, filtrés localement | aucun |
+/// | `@al` | les mêmes filtrés ; s'il n'y en a AUCUN, le serveur | une recherche seulement sans correspondance locale |
+/// | `@ali…` | les mêmes filtrés, puis le SERVEUR dans son ordre | une recherche (débounce) ; les autres déjà connus restent affichés |
+///
+/// L'ÉTAPE est `MentionLookupRule.stage(for:localMatchCount:)` et l'ORDRE
+/// (locaux → serveur dans son ordre, sans doublon, jamais soi) est `MentionSuggestionRule`
+/// — deux règles pures du SDK, partagées avec `MentionSuggestionsModel`.
+/// L'orchestration du cache des contacts est `MentionContactsStore` (app).
 @MainActor
 public final class MentionComposerController: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     // MARK: - Context
 
@@ -16,17 +36,18 @@ public final class MentionComposerController: ObservableObject {
         case conversation(id: String)
         case post(id: String)
 
-        var contextId: String {
-            switch self {
-            case .conversation(let id): return id
-            case .post(let id): return id
-            }
-        }
+        /// **Un brouillon composer PAS ENCORE publié (#3904).** Aucun id
+        /// serveur n'existe tant que le contenu n'est pas envoyé — l'endpoint
+        /// CONTEXTUEL est donc impossible, et la recherche distante passe par
+        /// l'ANNUAIRE (`AudienceUserSearching`).
+        case composerDraft
 
-        var contextType: MentionContextType {
+        /// `nil` ⇒ aucune requête CONTEXTUELLE possible (cas `.composerDraft`).
+        var remoteContext: (contextId: String, contextType: MentionContextType)? {
             switch self {
-            case .conversation: return .conversation
-            case .post: return .post
+            case .conversation(let id): return (id, .conversation)
+            case .post(let id): return (id, .post)
+            case .composerDraft: return nil
             }
         }
     }
@@ -37,82 +58,201 @@ public final class MentionComposerController: ObservableObject {
     @Published public private(set) var activeQuery: String? = nil
     @Published public private(set) var draftMentions: [String: MentionCandidate] = [:]
 
+    /// **Une recherche est EN VOL.** Sans ce témoin, « aucune suggestion »
+    /// couvre deux états qui n'ont pas la même réponse : « personne ne
+    /// correspond » et « on n'a pas encore regardé ». Une bande qui les
+    /// confond annonce « aucune personne trouvée » 300 ms avant d'avoir
+    /// cherché, puis se dédit.
+    @Published public private(set) var isResolving = false
+
+    /// **LA règle de montage de la bande, écrite UNE fois.**
+    ///
+    /// On montre la bande dès qu'une requête `@` est active, SAUF pendant
+    /// qu'une recherche est en vol et n'a encore rien rendu. Une bande vide
+    /// n'est donc pas un silence : c'est la réponse « personne », que
+    /// `ComposerMentionStrip` écrit en toutes lettres.
+    public var showsSuggestions: Bool {
+        activeQuery != nil && (!suggestions.isEmpty || !isResolving)
+    }
+
     // MARK: - Private
 
-    private let context: Context
+    private var context: Context
     private let service: MentionServiceProviding
-    private let localCandidates: () -> [MentionCandidate]
+    private let directory: AudienceUserSearching
+    private let contacts: MentionContactsProviding
+    private let currentUserId: String?
+    private let debounceNanoseconds: UInt64
+    private var participants: () -> [MentionCandidate]
+    /// Ce qu'une mention ferait dans la conversation (#14066, #14071), posé par
+    /// l'hôte qui la connaît ; `nil` hors conversation (post, brouillon).
+    private(set) var target: ConversationMentionTarget?
+    /// Les « autres » rendus par la DERNIÈRE recherche distante. Ils restent
+    /// affichés, refiltrés par la requête courante, pendant que la suivante
+    /// est en vol — c'est ce qui affine sans clignoter.
+    private var others: [MentionCandidate] = []
+    /// La requête à laquelle `others` RÉPOND : servis tels quels pour elle,
+    /// refiltrés pour une frappe plus récente (cf. `MentionSuggestionRule`).
+    private var othersQuery: String?
     private var debounceTask: Task<Void, Never>?
+    private var warmTask: Task<Void, Never>?
 
-    // 0 = la liste par défaut s'affiche dès la frappe de « @ » (requête vide) :
-    // pour un post, le backend renvoie auteur + personnes ayant commenté + contacts ;
-    // pour une conversation, les participants. Débounce + cache Redis évitent le spam.
-    private static let minQueryLengthForAPI = 0
-    private static let debounceMs: UInt64 = 300_000_000
+    public static let defaultDebounceNanoseconds: UInt64 = 300_000_000
+    /// Même plafond que `MentionSuggestionsModel` (SDK), qui interroge le même
+    /// annuaire : deux plafonds différents pour une même liste se seraient
+    /// contredits à l'écran selon la surface qui pose la question.
+    private static let directoryLimit = 20
 
     // MARK: - Init
 
-    public init(
+    /// `participants` : les personnes du CONTEXTE (expéditeurs d'une
+    /// conversation, auteur et commentateurs d'un post), servies APRÈS les
+    /// contacts. `contacts` : le magasin des contacts, lu depuis le cache et
+    /// réchauffé à la frappe du `@`.
+    init(
         context: Context,
-        localCandidates: @escaping () -> [MentionCandidate] = { [] },
-        service: MentionServiceProviding = MentionService.shared
+        participants: @escaping () -> [MentionCandidate] = { [] },
+        service: MentionServiceProviding = MentionService.shared,
+        directory: AudienceUserSearching = UserService.shared,
+        contacts: MentionContactsProviding = MentionContactsStore.shared,
+        currentUserId: String? = AuthManager.shared.currentUser?.id,
+        debounceNanoseconds: UInt64 = MentionComposerController.defaultDebounceNanoseconds
     ) {
         self.context = context
-        self.localCandidates = localCandidates
+        self.participants = participants
         self.service = service
+        self.directory = directory
+        self.contacts = contacts
+        self.currentUserId = currentUserId
+        self.debounceNanoseconds = debounceNanoseconds
     }
 
     // MARK: - Public API
 
-    /// Called on every text change. Parses the trailing `@query` and
-    /// updates `suggestions` / `activeQuery` with a 300ms debounce for API calls.
+    /// Charge les contacts EN CACHE (sans réseau) avant la première frappe,
+    /// pour que le `@` les serve à l'image près. À appeler au montage de l'hôte.
+    public func primeContacts() async {
+        _ = await contacts.loadCached()
+        recompute()
+    }
+
+    /// Remplace les participants du contexte (auteur et commentateurs d'un
+    /// post, dont la liste bouge). Une liste ouverte se recompose aussitôt.
+    public func updateParticipants(_ list: [MentionCandidate]) {
+        participants = { list }
+        recompute()
+    }
+
+    /// **Borne la liste à ce qu'une mention ferait ICI** (#14071) : le type de
+    /// la conversation (`direct`, `group`, `public`…) et, pour une directe, son
+    /// interlocuteur. Une suggestion sans effet à l'envoi n'est pas affichée ;
+    /// un type inconnu, ou un lecteur qui n'est pas membre, ne propose personne
+    /// et n'interroge pas le réseau.
+    ///
+    /// `servedMembers` lit les participants ACTIFS servis de la conversation
+    /// (cache d'abord), à la première frappe du `@` : ce sont les membres que la
+    /// liste propose en local — et le lecteur parmi eux prouve son appartenance
+    /// quand la ligne ouverte ne portait pas son rang.
+    func scope(to target: ConversationMentionTarget, servedMembers: ServedMembersLoader? = nil) {
+        if target.conversationId != self.target?.conversationId { servedMemberIds = [] }
+        self.target = target
+        self.servedMembersLoader = servedMembers
+        recompute()
+    }
+
+    /// Les participants actifs servis, lus par `servedMembersLoader`.
+    private var servedMemberIds: Set<String> = []
+    private var servedMembersLoader: ServedMembersLoader?
+    private var membersTask: Task<Void, Never>?
+
+    /// Les membres que le fil SAIT actifs : soi, l'interlocuteur et les
+    /// participants servis. Jamais les auteurs de l'historique, dont certains
+    /// sont partis et seraient proposés puis ignorés à l'envoi — sauf pour un
+    /// INVITÉ de lien, à qui la passerelle ne sert que ces auteurs (#10205).
+    private var reach: MentionReach? {
+        guard let target else { return nil }
+        let guestAuthors = target.isGuest ? participants().map(\.id) : []
+        let known = [target.interlocutorId, currentUserId].compactMap { $0 } + guestAuthors
+        let member = target.isMember || currentUserId.map(servedMemberIds.contains) == true
+        return MentionReach(conversationType: target.conversationType, isMember: member,
+                            memberIds: Set(known).union(servedMemberIds))
+    }
+
+    /// Sans portée (type inconnu, non-membre), la passerelle refuserait la
+    /// recherche ; un invité n'y a pas accès (`allowAnonymous: false`).
+    private var mayAskTheNetwork: Bool {
+        guard let reach else { return true }
+        return reach.scope != nil && target?.isGuest != true
+    }
+
+    private func loadServedMembers() {
+        guard let loader = servedMembersLoader, let conversationId = target?.conversationId,
+              target?.isGuest != true else { return }
+        membersTask?.cancel()
+        membersTask = Task { [weak self] in
+            let ids = await loader(conversationId)
+            guard let self, !Task.isCancelled, self.target?.conversationId == conversationId else { return }
+            self.servedMemberIds = Set(ids)
+            self.recompute()
+        }
+    }
+
+    /// Change le contexte distant d'un hôte qui SURVIT à son sujet (la barre
+    /// du lecteur de story passe d'une story à la suivante sans se démonter).
+    /// Une liste ouverte sur l'ancien contexte se referme.
+    public func retarget(_ newContext: Context) {
+        guard newContext != context else { return }
+        context = newContext
+        clearSuggestions()
+    }
+
+    /// La frappe d'un hôte dont les participants BOUGENT (commentaires d'un
+    /// post) : la liste du contexte est relue à chaque frappe, jamais figée à
+    /// la construction.
+    public func handleQuery(in text: String, participants list: [MentionCandidate]) {
+        participants = { list }
+        handleQuery(in: text)
+    }
+
+    /// Appelée à chaque changement de texte.
     public func handleQuery(in text: String) {
-        guard let query = extractMentionQuery(from: text) else {
+        guard let query = ComposerMentionQuery.trailingHandle(in: text) else {
             clearSuggestions()
             return
         }
+        let opening = activeQuery == nil
         activeQuery = query
-
-        let locals = localCandidates()
-        let filtered = filterLocals(locals, query: query)
-        suggestions = filtered
-
         debounceTask?.cancel()
-        guard query.count >= Self.minQueryLengthForAPI else { return }
 
-        debounceTask = Task { [weak self] in
-            guard let self else { return }
-            do {
-                try await Task.sleep(nanoseconds: Self.debounceMs)
-                guard !Task.isCancelled else { return }
-                let apiResults = try await service.suggestions(
-                    contextId: context.contextId,
-                    contextType: context.contextType,
-                    query: query
-                )
-                guard !Task.isCancelled else { return }
-                suggestions = mergeAPISuggestions(apiResults, localCandidates: filtered)
-            } catch is CancellationError {
-                // Expected — ignore
-            } catch {
-                Logger.messages.error("MentionComposerController: API suggestions failed: \(error.localizedDescription, privacy: .public)")
-            }
+        let stage = MentionLookupRule.stage(for: query, localMatchCount: localMatchCount(for: query))
+        if stage != .remote { dropOthers() }
+        recompute()
+        if opening { warmContacts(); loadServedMembers() }
+
+        guard stage == .remote, mayAskTheNetwork else {
+            isResolving = false
+            return
         }
+        scheduleRemoteLookup(query: query.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     /// Clears active suggestion state (called when `@` is no longer present in text).
     public func clearSuggestions() {
         debounceTask?.cancel()
         debounceTask = nil
+        warmTask?.cancel()
+        warmTask = nil
+        dropOthers()
         activeQuery = nil
         suggestions = []
+        isResolving = false
     }
 
     /// Replaces the trailing `@query` in `text` with `@username ` and records the mention.
     /// Returns the updated text.
     @discardableResult
     public func insertMention(_ candidate: MentionCandidate, into text: String) -> String {
-        let result = replaceMentionQuery(withUsername: candidate.username, in: text)
+        let result = ComposerMentionQuery.replacingTrailingHandle(in: text, with: candidate.username)
         draftMentions[candidate.username] = candidate
         clearSuggestions()
         return result
@@ -125,49 +265,94 @@ public final class MentionComposerController: ObservableObject {
 
     // MARK: - Private Helpers
 
-    /// Extracts the current `@query` fragment at the end of the text cursor.
-    /// Returns `nil` when no active mention is in progress.
-    ///
-    /// Délégué à la règle PURE du SDK (`ComposerMentionQuery`), partagée avec
-    /// les composeurs de post et de story : la règle vivait ici en double, et
-    /// cette copie-ci ouvrait une recherche sur « exemple.com » à chaque
-    /// `contact@exemple.com` tapé — elle coupait sur le DERNIER `@` sans
-    /// vérifier qu'il ouvre un handle.
-    private func extractMentionQuery(from text: String) -> String? {
-        ComposerMentionQuery.trailingHandle(in: text)
-    }
-
-    private func filterLocals(_ locals: [MentionCandidate], query: String) -> [MentionCandidate] {
-        guard !query.isEmpty else { return locals }
-        return locals.filter {
-            $0.username.localizedCaseInsensitiveContains(query) ||
-            $0.displayName.localizedCaseInsensitiveContains(query)
+    /// **Le `@` réchauffe le cache des contacts** s'il est vide ou périmé :
+    /// ce qu'il sert d'abord est la mémoire ou le disque ; le réseau ne vient
+    /// qu'ensuite, et un échec n'efface rien de ce qui est affiché.
+    private func warmContacts() {
+        warmTask?.cancel()
+        warmTask = Task { [weak self] in
+            guard let self else { return }
+            if self.contacts.snapshot.isEmpty {
+                _ = await self.contacts.loadCached()
+                guard !Task.isCancelled else { return }
+                self.recompute()
+            }
+            _ = await self.contacts.refreshIfNeeded()
+            guard !Task.isCancelled else { return }
+            self.recompute()
         }
     }
 
-    /// Merges API `[MentionSuggestion]` into `[MentionCandidate]`, deduplicating against
-    /// already-present local candidates (by username). API results come first.
-    private func mergeAPISuggestions(
-        _ api: [MentionSuggestion],
-        localCandidates: [MentionCandidate]
-    ) -> [MentionCandidate] {
-        let localUsernames = Set(localCandidates.map(\.username))
-        let fromAPI = api.map { s in
-            MentionCandidate(
-                id: s.id,
-                username: s.username,
-                displayName: s.displayName ?? s.username,
-                avatarURL: s.avatar
-            )
+    /// **Une seule recherche distante, deux sources selon le contexte.** Une
+    /// conversation ou un post interrogent `/mentions/suggestions` ; un
+    /// brouillon, sans id serveur, interroge l'annuaire.
+    private func scheduleRemoteLookup(query: String) {
+        isResolving = true
+        let debounce = debounceNanoseconds
+        debounceTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await Task.sleep(for: .nanoseconds(debounce))
+                guard !Task.isCancelled else { return }
+                let found = try await self.remoteCandidates(for: query)
+                guard !Task.isCancelled else { return }
+                self.others = found
+                self.othersQuery = query
+                self.recompute()
+                self.isResolving = false
+            } catch is CancellationError {
+                // Attendu : une frappe plus récente a déjà repris le témoin à
+                // son compte — le remettre à `false` ici l'éteindrait pour la
+                // recherche SUIVANTE, qui vient de commencer.
+            } catch {
+                guard !Task.isCancelled else { return }
+                self.isResolving = false
+                Logger.messages.error("MentionComposerController: remote suggestions failed: \(error.localizedDescription, privacy: .public)")
+            }
         }
-        let newFromAPI = fromAPI.filter { !localUsernames.contains($0.username) }
-        return localCandidates + newFromAPI
     }
 
-    /// Replaces the active `@query` fragment at the end of the text with the
-    /// chosen handle. Même règle partagée que l'extraction — deux moitiés d'une
-    /// même décision ne peuvent pas vivre à deux endroits différents.
-    private func replaceMentionQuery(withUsername username: String, in text: String) -> String {
-        ComposerMentionQuery.replacingTrailingHandle(in: text, with: username)
+    private func remoteCandidates(for query: String) async throws -> [MentionCandidate] {
+        guard let remote = context.remoteContext else {
+            let found = try await directory.searchUsers(query: query, limit: Self.directoryLimit, offset: 0)
+            return found.map {
+                MentionCandidate(id: $0.id, username: $0.username,
+                                 displayName: $0.displayName ?? $0.username, avatarURL: $0.avatar, ring: $0.avatarRing)
+            }
+        }
+        let found = try await service.suggestions(
+            contextId: remote.contextId, contextType: remote.contextType, query: query)
+        return found.map {
+            MentionCandidate(id: $0.id, username: $0.username,
+                             displayName: $0.displayName ?? $0.username, avatarURL: $0.avatar, ring: $0.avatarRing)
+        }
+    }
+
+    private func dropOthers() {
+        others = []
+        othersQuery = nil
+    }
+
+    private func localMatchCount(for query: String) -> Int {
+        MentionSuggestionRule.localMatches(
+            contacts: contacts.snapshot,
+            participants: participants(),
+            query: query,
+            excludingUserId: currentUserId,
+            reach: reach
+        ).count
+    }
+
+    private func recompute() {
+        guard let query = activeQuery else { return }
+        suggestions = MentionSuggestionRule.ordered(
+            contacts: contacts.snapshot,
+            participants: participants(),
+            others: others,
+            othersQuery: othersQuery,
+            query: query,
+            excludingUserId: currentUserId,
+            reach: reach
+        )
     }
 }

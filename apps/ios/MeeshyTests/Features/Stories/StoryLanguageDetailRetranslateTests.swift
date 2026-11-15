@@ -12,6 +12,7 @@ import XCTest
 /// demande, l'anneau tourne tant qu'il n'a pas bougé. La nouvelle traduction
 /// arrivant par socket, l'anneau s'éteint de lui-même — aucun drapeau à
 /// éteindre à la main.
+@MainActor
 final class StoryLanguageDetailRetranslateTests: XCTestCase {
 
     func test_isRetranslating_noBaseline_false() {

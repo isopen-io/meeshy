@@ -1,62 +1,48 @@
 package me.meeshy.app.contacts
 
 import androidx.annotation.StringRes
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.graphics.Color
 import me.meeshy.ui.component.chrome.MeeshyBackground
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.app.contacts.circles.CirclesTab
 import me.meeshy.feature.contacts.R
-import me.meeshy.sdk.model.FriendRequest
-import me.meeshy.sdk.model.FriendRequestUser
-import me.meeshy.sdk.model.friend.resolvedName
-import me.meeshy.sdk.theme.DynamicColorGenerator
-import me.meeshy.ui.component.MeeshyAvatar
-import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.theme.MeeshyTheme
-import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContactsScreen(
     onBack: () -> Unit,
     initialTab: ContactsTab? = null,
+    onOpenProfile: (userId: String) -> Unit = {},
     viewModel: ContactsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -83,8 +69,8 @@ fun ContactsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.contacts_back),
+                            leadingNavigationIcon(),
+                            contentDescription = leadingNavigationLabel(stringResource(R.string.contacts_back)),
                         )
                     }
                 },
@@ -96,191 +82,51 @@ fun ContactsScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            TabRow(
+            ScrollableTabRow(
                 selectedTabIndex = selectedIndex,
                 containerColor = Color.Transparent,
+                edgePadding = 0.dp,
             ) {
                 tabs.forEachIndexed { index, tab ->
-                    val badge = if (tab == ContactsTab.Requests) state.receivedRequests.size else 0
+                    val badge = if (tab == ContactsTab.Requests) state.pendingReceivedCount else 0
                     Tab(
                         selected = index == selectedIndex,
                         onClick = { viewModel.selectTab(tab) },
                         text = {
-                            if (badge > 0) {
-                                BadgedBox(badge = { Badge { Text(badge.toString()) } }) {
-                                    Text(stringResource(tab.labelRes))
-                                }
-                            } else {
-                                Text(stringResource(tab.labelRes))
+                            BadgedBox(badge = { RequestsCountBadge(count = badge) }) {
+                                Text(stringResource(tab.labelRes), maxLines = 1, softWrap = false)
                             }
                         },
                     )
                 }
             }
             when (state.selectedTab) {
-                ContactsTab.Contacts -> ContactsListTab()
-                ContactsTab.Requests -> RequestsTab(
-                    state = state,
-                    onAccept = viewModel::acceptRequest,
-                    onDecline = viewModel::declineRequest,
-                    onCancel = viewModel::cancelRequest,
-                )
-                ContactsTab.Discover -> DiscoverTab()
-                ContactsTab.Blocked -> BlockedTab()
+                ContactsTab.Contacts -> ContactsListTab(onOpenProfile = onOpenProfile)
+                ContactsTab.Circles -> CirclesTab(onFindContacts = { viewModel.selectTab(ContactsTab.Discover) })
+                ContactsTab.Requests -> RequestsTab(onOpenProfile = onOpenProfile)
+                ContactsTab.Discover -> DiscoverTab(onOpenProfile = onOpenProfile)
+                ContactsTab.Blocked -> BlockedTab(onOpenProfile = onOpenProfile)
             }
         }
     }
     }
 }
 
+/** The pending-requests count pops in and out instead of snapping (a request received live, the last one answered). */
 @Composable
-private fun RequestsTab(
-    state: ContactsUiState,
-    onAccept: (String) -> Unit,
-    onDecline: (String) -> Unit,
-    onCancel: (String) -> Unit,
-) {
-    if (state.isLoadingRequests) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
-        return
-    }
-    if (state.receivedRequests.isEmpty() && state.sentRequests.isEmpty()) {
-        EmptyState(stringResource(R.string.contacts_requests_empty))
-        return
-    }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = 8.dp),
-    ) {
-        if (state.receivedRequests.isNotEmpty()) {
-            item { SectionHeader(stringResource(R.string.contacts_requests_received)) }
-            items(state.receivedRequests, key = { "received-${it.id}" }) { request ->
-                ReceivedRequestRow(
-                    request = request,
-                    pending = request.id in state.pendingActionIds,
-                    onAccept = { onAccept(request.id) },
-                    onDecline = { onDecline(request.id) },
-                )
-            }
-        }
-        if (state.sentRequests.isNotEmpty()) {
-            item { SectionHeader(stringResource(R.string.contacts_requests_sent)) }
-            items(state.sentRequests, key = { "sent-${it.id}" }) { request ->
-                SentRequestRow(
-                    request = request,
-                    pending = request.id in state.pendingActionIds,
-                    onCancel = { onCancel(request.id) },
-                )
-            }
-        }
+private fun RequestsCountBadge(count: Int) {
+    val lastShown = remember { intArrayOf(count) }
+    if (count > 0) lastShown[0] = count
+    AnimatedVisibility(visible = count > 0, enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
+        Badge { Text(lastShown[0].toString()) }
     }
 }
-
-@Composable
-private fun ReceivedRequestRow(
-    request: FriendRequest,
-    pending: Boolean,
-    onAccept: () -> Unit,
-    onDecline: () -> Unit,
-) {
-    RequestRow(user = request.sender, userId = request.senderId) {
-        OutlinedButton(onClick = onDecline, enabled = !pending) {
-            Text(stringResource(R.string.contacts_request_decline))
-        }
-        Spacer(Modifier.width(8.dp))
-        FilledTonalButton(onClick = onAccept, enabled = !pending) {
-            Text(stringResource(R.string.contacts_request_accept))
-        }
-    }
-}
-
-@Composable
-private fun SentRequestRow(
-    request: FriendRequest,
-    pending: Boolean,
-    onCancel: () -> Unit,
-) {
-    RequestRow(user = request.receiver, userId = request.receiverId) {
-        OutlinedButton(onClick = onCancel, enabled = !pending) {
-            Text(stringResource(R.string.contacts_request_cancel))
-        }
-    }
-}
-
-@Composable
-private fun RequestRow(
-    user: FriendRequestUser?,
-    userId: String,
-    actions: @Composable () -> Unit,
-) {
-    val name = user.displayLabel()
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        MeeshyAvatar(
-            name = name,
-            size = 44.dp,
-            containerColor = hexColor(DynamicColorGenerator.colorForName(userId.ifBlank { name })),
-        )
-        Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = name,
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            user?.username?.takeIf { it.isNotBlank() }?.let {
-                Text(
-                    text = "@$it",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MeeshyTheme.tokens.textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        Spacer(Modifier.width(12.dp))
-        Row(horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-            actions()
-        }
-    }
-}
-
-@Composable
-private fun SectionHeader(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MeeshyPalette.Indigo500,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-    )
-}
-
-@Composable
-private fun EmptyState(message: String) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MeeshyTheme.tokens.textSecondary,
-            modifier = Modifier.padding(32.dp),
-        )
-    }
-}
-
-private fun FriendRequestUser?.displayLabel(): String =
-    this?.resolvedName?.takeIf { it.isNotBlank() } ?: "?"
 
 @get:StringRes
 private val ContactsTab.labelRes: Int
     get() = when (this) {
         ContactsTab.Contacts -> R.string.contacts_tab_contacts
+        ContactsTab.Circles -> R.string.contacts_tab_circles
         ContactsTab.Requests -> R.string.contacts_tab_requests
         ContactsTab.Discover -> R.string.contacts_tab_discover
         ContactsTab.Blocked -> R.string.contacts_tab_blocked

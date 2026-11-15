@@ -1,0 +1,430 @@
+import SwiftUI
+import Combine
+import MeeshySDK
+import MeeshyUI
+
+struct VoiceProfileManageView: View {
+    let accentColor: String
+    /// Ouverte par un indicateur de consentement (#16418) : sans profil,
+    /// l'assistant s'ouvre directement au lieu de l'état vide.
+    var opensWizardWhenEmpty: Bool = false
+
+    /// La teinte d'accent, convertie UNE fois : chaque site la répétait en
+    /// `Color(hex:)`, et le cliquet des couleurs en dur le comptait autant de fois
+    /// (+3 introduits par #6481).
+    private var accent: Color { Color(hex: accentColor) }
+
+    @Environment(\.dismiss) private var dismiss
+    private var theme: ThemeManager { ThemeManager.shared }
+    @StateObject private var viewModel = VoiceProfileManageViewModel()
+    @State private var showDeleteConfirmation = false
+    @State private var showAddSamples = false
+    @State private var showWizard = false
+
+    var body: some View {
+        ZStack {
+            theme.backgroundGradient.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                header
+
+                if viewModel.isLoading && viewModel.profile == nil {
+                    loadingView
+                } else if let profile = viewModel.profile {
+                    profileContent(profile)
+                } else {
+                    emptyState
+                }
+            }
+        }
+        .task {
+            await viewModel.loadProfile()
+            if Self.opensWizard(requested: opensWizardWhenEmpty, profile: viewModel.profile, loadError: viewModel.error) { showWizard = true }
+        }
+        .alert(String(localized: "voice.profile.deleteAlert.title", defaultValue: "Supprimer le profil vocal", bundle: .main), isPresented: $showDeleteConfirmation) {
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+            Button(String(localized: "voice.profile.delete", defaultValue: "Supprimer", bundle: .main), role: .destructive) {
+                Task { await viewModel.deleteProfile() }
+            }
+        } message: {
+            Text(String(localized: "voice.profile.deleteAlert.message", defaultValue: "Cette action est irréversible. Toutes vos données vocales seront supprimées conformément au RGPD.", bundle: .main))
+        }
+        .sheet(isPresented: $showAddSamples) {
+            addSamplesSheet
+        }
+        // L'assistant a son propre modèle : sans relecture à sa fermeture, le
+        // profil qu'il vient de créer restait invisible derrière l'état vide.
+        .sheet(isPresented: $showWizard, onDismiss: { Task { await viewModel.loadProfile() } }) {
+            VoiceProfileWizardView(accentColor: accentColor)
+        }
+    }
+
+    /// L'assistant suit une demande d'indicateur seulement quand la lecture a
+    /// RÉUSSI sans profil : un échec réseau garde l'écran et son erreur.
+    nonisolated static func opensWizard(requested: Bool, profile: VoiceProfile?, loadError: String?) -> Bool {
+        requested && profile == nil && loadError == nil
+    }
+
+    // MARK: - Header
+
+    /// En-tête partagé, FIXE (`scrollOffset: 0`) : les états chargement et vide
+    /// ne défilent pas, et seul le contenu du profil porte un défilement (#6481).
+    /// Le retour en verre ferme la feuille — la sortie qu'était la croix.
+    private var header: some View {
+        CollapsibleHeader(
+            title: String(localized: "voice.profile.title", defaultValue: "Profil vocal", bundle: .main),
+            scrollOffset: 0,
+            onBack: { dismiss() },
+            titleColor: theme.textPrimary,
+            backArrowColor: accent,
+            backgroundColor: theme.backgroundPrimary,
+            trailing: { EmptyView() }
+        )
+    }
+
+    // MARK: - Loading
+
+    private var loadingView: some View {
+        VStack {
+            Spacer()
+            ProgressView()
+                .scaleEffect(1.2)
+                .tint(accent)
+            Spacer()
+        }
+    }
+
+    // MARK: - Empty State
+
+    private var emptyState: some View {
+        EmptyStateView(
+            icon: "person.wave.2.fill",
+            title: String(localized: "voice.profile.empty.title", defaultValue: "Aucun profil vocal", bundle: .main),
+            subtitle: String(localized: "voice.profile.empty.description", defaultValue: "Vos vocaux traduits garderont votre voix.", bundle: .main),
+            actionLabel: String(localized: "voice.profile.create", defaultValue: "Créer un profil vocal", bundle: .main),
+            accentColor: accentColor,
+            onAction: { showWizard = true }
+        )
+    }
+
+    // MARK: - Profile Content
+
+    private func profileContent(_ profile: VoiceProfile) -> some View {
+        ScrollView {
+            VStack(spacing: MeeshySpacing.lg) {
+                statusCard(profile)
+
+                infoCard(profile)
+
+                cloningToggle
+
+                if profile.isReady {
+                    voicePublicToggle
+                }
+
+                samplesSection
+
+                actionsSection
+
+                if let error = viewModel.error {
+                    Text(error)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                        .foregroundStyle(MeeshyColors.error)
+                        .padding(.horizontal, MeeshySpacing.xl)
+                }
+
+                Spacer().frame(height: 32)
+            }
+            .padding(.top, MeeshySpacing.sm)
+        }
+    }
+
+    // MARK: - Status Card
+
+    private func statusCard(_ profile: VoiceProfile) -> some View {
+        HStack(spacing: MeeshySpacing.md) {
+            // Glyphe de statut décoratif : le libellé texte adjacent porte le sens →
+            // masqué à VoiceOver (évite l'annonce du nom brut du symbole), scale sous
+            // Dynamic Type pour rester harmonisé avec le libellé (146i).
+            Image(systemName: statusIcon(for: profile.status))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxxl))
+                .foregroundColor(statusColor(for: profile.status))
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                Text(statusLabel(for: profile.status))
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
+                    .foregroundStyle(theme.textPrimary)
+
+                if let description = statusDescription(for: profile.status) {
+                    Text(description)
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                        .foregroundStyle(theme.textSecondary)
+                }
+            }
+
+            Spacer()
+
+            if let quality = profile.quality {
+                VStack(spacing: MeeshySpacing.xxs) {
+                    Text("\(Int(quality * 100))%")
+                        .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold, design: .monospaced))
+                        .foregroundColor(accent)
+                    Text(String(localized: "voice.profile.quality", defaultValue: "Qualité", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                        .foregroundStyle(theme.textMuted)
+                }
+            }
+        }
+        .padding(MeeshySpacing.lg)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                .fill(theme.backgroundSecondary)
+        )
+        .padding(.horizontal, MeeshySpacing.lg)
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - Info Card
+
+    private func infoCard(_ profile: VoiceProfile) -> some View {
+        VStack(spacing: MeeshySpacing.smPlus) {
+            infoRow(label: String(localized: "voice.profile.samples", defaultValue: "Échantillons", bundle: .main), value: "\(profile.sampleCount)")
+            infoRow(label: String(localized: "voice.profile.totalDuration", defaultValue: "Durée totale", bundle: .main), value: String(localized: "voice.profile.totalDuration.value", defaultValue: "\(profile.totalDurationSeconds) secondes", bundle: .main))
+            infoRow(label: String(localized: "voice.profile.createdAt", defaultValue: "Créé le", bundle: .main), value: profile.createdAt.formatted(date: .abbreviated, time: .shortened))
+            if let lastUsed = profile.lastUsedAt {
+                infoRow(label: String(localized: "voice.profile.lastUsed", defaultValue: "Dernière utilisation", bundle: .main), value: lastUsed.formatted(date: .abbreviated, time: .shortened))
+            }
+        }
+        .padding(MeeshySpacing.lg)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                .fill(theme.backgroundSecondary)
+        )
+        .padding(.horizontal, MeeshySpacing.lg)
+    }
+
+    private func infoRow(label: String, value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(MeeshyFont.relative(MeeshyFont.labelSize))
+                .foregroundStyle(theme.textSecondary)
+            Spacer()
+            Text(value)
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                .foregroundStyle(theme.textPrimary)
+        }
+    }
+
+    // MARK: - Cloning Toggle
+
+    private var cloningToggle: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                Text(String(localized: "voice.profile.cloningEnabled", defaultValue: "Clonage vocal actif", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .foregroundStyle(theme.textPrimary)
+                Text(String(localized: "voice.profile.cloningDescription", defaultValue: "Les traductions audio utiliseront votre voix", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                    .foregroundStyle(theme.textSecondary)
+            }
+            Spacer()
+            Toggle(String(localized: "voice.profile.cloningEnabled", defaultValue: "Clonage vocal actif", bundle: .main), isOn: Binding(
+                get: { viewModel.isCloningEnabled },
+                set: { newValue in
+                    Task { await viewModel.toggleCloning(enabled: newValue) }
+                }
+            ))
+            .labelsHidden()
+            .tint(accent)
+        }
+        .padding(MeeshySpacing.lg)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                .fill(theme.backgroundSecondary)
+        )
+        .padding(.horizontal, MeeshySpacing.lg)
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - Voice Public Toggle
+
+    private var voicePublicToggle: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                Text(String(localized: "voice.makePublic", defaultValue: "Rendre mon profil vocal public", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .foregroundStyle(theme.textPrimary)
+                Text(String(localized: "voice.makePublic.description", defaultValue: "Un échantillon de votre voix sera visible sur votre profil public", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                    .foregroundStyle(theme.textSecondary)
+            }
+            Spacer()
+            Toggle(String(localized: "voice.makePublic", defaultValue: "Rendre mon profil vocal public", bundle: .main), isOn: Binding(
+                get: { viewModel.isVoicePublic },
+                set: { newValue in
+                    Task { await viewModel.toggleVoicePublic(enabled: newValue) }
+                }
+            ))
+            .labelsHidden()
+            .tint(accent)
+        }
+        .padding(MeeshySpacing.lg)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                .fill(theme.backgroundSecondary)
+        )
+        .padding(.horizontal, MeeshySpacing.lg)
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - Samples
+
+    // Le gateway ne modélise pas de collection d'échantillons éditables (profil
+    // vocal unique) : la liste par-item et son bouton de suppression ont été
+    // retirés (UI morte — getSamples() renvoyait toujours []). Le nombre réel
+    // d'échantillons est affiché par infoCard (profile.sampleCount) ; l'ajout
+    // d'échantillons de calibration reste fonctionnel via « Ajouter ».
+    private var samplesSection: some View {
+        HStack {
+            Text(String(localized: "voice.profile.voiceSamples", defaultValue: "Échantillons vocaux", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                .foregroundStyle(theme.textPrimary)
+            Spacer()
+            // Le (+) reste dans sa carte, à côté du titre qu'il sert, et
+            // porte le verre adaptatif des actions d'en-tête (#6481).
+            Button {
+                HapticFeedback.light()
+                showAddSamples = true
+            } label: {
+                HStack(spacing: MeeshySpacing.xs) {
+                    Image(systemName: "plus")
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                    Text(String(localized: "voice.profile.add", defaultValue: "Ajouter", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                }
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.sm)
+                .adaptiveGlass(in: Capsule(), tint: accent.opacity(0.14), interactive: true)
+                .foregroundColor(accent)
+            }
+            .accessibilityLabel(String(localized: "voice.profile.add", defaultValue: "Ajouter", bundle: .main))
+        }
+        .padding(MeeshySpacing.lg)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                .fill(theme.backgroundSecondary)
+        )
+        .padding(.horizontal, MeeshySpacing.lg)
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - Actions
+
+    private var actionsSection: some View {
+        Button(role: .destructive) {
+            HapticFeedback.medium()
+            showDeleteConfirmation = true
+        } label: {
+            HStack(spacing: MeeshySpacing.sm) {
+                Image(systemName: "trash.fill")
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm))
+                Text(String(localized: "voice.profile.deleteProfile", defaultValue: "Supprimer le profil vocal", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
+            }
+            .foregroundColor(MeeshyColors.error)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, MeeshySpacing.mdPlus)
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
+            )
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
+    }
+
+    // MARK: - Add Samples Sheet
+
+    private var addSamplesSheet: some View {
+        NavigationStack {
+            ZStack {
+                theme.backgroundGradient.ignoresSafeArea()
+
+                VStack(spacing: MeeshySpacing.lg) {
+                    VoiceRecordingView(
+                        accentColor: accentColor,
+                        minimumSamples: 1,
+                        minimumDurationSeconds: 10
+                    ) { audioDataList in
+                        HapticFeedback.success()
+                        Task {
+                            await viewModel.uploadAdditionalSamples(audioDataList)
+                            showAddSamples = false
+                        }
+                    }
+                }
+                .padding(.horizontal, MeeshySpacing.lg)
+            }
+            // The navigation bar is already on screen for the Close button, but its
+            // title slot sat empty while a hand-rolled Text played the title inside
+            // the content. Handing the title to the bar restores the header trait
+            // VoiceOver expects, keeps it legible at every Dynamic Type size (the
+            // bar truncates, the body Text pushed the recorder down instead), and
+            // matches every other sheet in the app.
+            .navigationTitle(String(localized: "voice.profile.addSamples", defaultValue: "Ajouter des échantillons", bundle: .main))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { showAddSamples = false }
+                }
+            }
+        }
+    }
+
+    // MARK: - Status Helpers
+
+    private func statusIcon(for status: VoiceProfileStatus) -> String {
+        switch status {
+        case .pending: return "clock.fill"
+        case .processing: return "gearshape.2.fill"
+        case .ready: return "checkmark.seal.fill"
+        case .failed: return "exclamationmark.triangle.fill"
+        case .expired: return "clock.badge.exclamationmark.fill"
+        }
+    }
+
+    private func statusColor(for status: VoiceProfileStatus) -> Color {
+        switch status {
+        case .pending: return MeeshyColors.warning
+        case .processing: return MeeshyColors.info
+        case .ready: return MeeshyColors.success
+        case .failed: return MeeshyColors.error
+        case .expired: return theme.textMuted
+        }
+    }
+
+    private func statusLabel(for status: VoiceProfileStatus) -> String { status.displayLabel }
+
+    /// Les états « Actif », « En attente » et « Analyse en cours » se suffisent : leur description répétait le libellé (épure #18078, règle 2). « Échec » et « Expiré » disent quoi faire.
+    private func statusDescription(for status: VoiceProfileStatus) -> String? {
+        switch status {
+        case .pending, .processing: return nil
+        case .ready: return nil
+        case .failed: return String(localized: "voice.profile.status.failed.description", defaultValue: "L'analyse a échoué, veuillez réessayer", bundle: .main)
+        case .expired: return String(localized: "voice.profile.status.expired.description", defaultValue: "Veuillez enregistrer de nouveaux échantillons", bundle: .main)
+        }
+    }
+}
+
+/// Le mot du statut d'un profil vocal, le même sur l'écran de gestion et sur le récapitulatif de l'assistant.
+extension VoiceProfileStatus {
+    var displayLabel: String {
+        switch self {
+        case .pending: return String(localized: "voice.profile.status.pending.label", defaultValue: "En attente", bundle: .main)
+        case .processing: return String(localized: "voice.profile.status.processing.label", defaultValue: "Analyse en cours", bundle: .main)
+        case .ready: return String(localized: "voice.profile.status.ready.label", defaultValue: "Actif", bundle: .main)
+        case .failed: return String(localized: "voice.profile.status.failed.label", defaultValue: "Échec", bundle: .main)
+        case .expired: return String(localized: "voice.profile.status.expired.label", defaultValue: "Expiré", bundle: .main)
+        }
+    }
+}

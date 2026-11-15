@@ -124,7 +124,7 @@ function makeSocketRecorder() {
   // `.to()` CHAÎNE : `emitToConversationParticipants` écrit
   // `io.to(fil).to(perso…).emit(...)` pour ne livrer qu'une copie par socket.
   const chain = (rooms: string[]): any => ({
-    to: (room: string) => chain([...rooms, room]),
+    to: (room: string) => chain([...rooms, room]), except: () => chain(rooms),
     emit: (event: string, payload: any) => emits.push({ room: rooms[0], rooms, event, payload }),
   });
 
@@ -261,7 +261,7 @@ describe("PATCH unban — la personne était partie AVANT d'être bannie", () =>
 
     await app.inject({ method: 'PATCH', url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/unban` });
 
-    expect(socket.emits.map((e) => e.event)).toEqual(['conversation:participant-unbanned']);
+    expect([...new Set(socket.emits.map((e) => e.event))]).toEqual(['conversation:participant-unbanned']);
     expect(socket.emits[0].payload.membershipRestored).toBe(false);
     await app.close();
   });

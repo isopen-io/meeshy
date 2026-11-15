@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "focal_long_message_collapsed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "focal_long_message_expanded",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

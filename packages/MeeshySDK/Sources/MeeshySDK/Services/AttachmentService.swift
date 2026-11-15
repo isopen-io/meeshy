@@ -13,7 +13,15 @@ public protocol AttachmentTranslationProviding: Sendable {
     ) async throws -> AttachmentTranslateResponse
 }
 
-public final class AttachmentService: AttachmentTranslationProviding, @unchecked Sendable {
+/// Enveloppe de `DELETE /attachments/:id` (#9948). La passerelle sert
+/// `{ success, data: { message } }` ; une version antérieure servait
+/// `{ success, data: { deleted: true } }`. Seul `success` engage le client :
+/// `data` n'est pas décodé, donc les deux formes passent.
+public struct AttachmentDeleteResponse: Decodable, Sendable {
+    public let success: Bool
+}
+
+public final class AttachmentService: AttachmentTranslationProviding, Sendable {
     public static let shared = AttachmentService()
     private let api: APIClientProviding
 
@@ -24,7 +32,7 @@ public final class AttachmentService: AttachmentTranslationProviding, @unchecked
     public func requestTranscription(attachmentId: String, force: Bool = false) async throws {
         let bodyData = try JSONEncoder().encode(TranscribeRequest(force: force))
         let _: SimpleAPIResponse = try await api.request(
-            endpoint: "/attachments/\(attachmentId)/transcribe",
+            AttachmentsEndpoint.byAttachmentIdTranscribe(attachmentId: attachmentId),
             method: "POST",
             body: bodyData
         )
@@ -32,14 +40,17 @@ public final class AttachmentService: AttachmentTranslationProviding, @unchecked
 
     public func getStatusDetails(attachmentId: String) async throws -> [AttachmentStatusUser] {
         let response: OffsetPaginatedAPIResponse<[AttachmentStatusUser]> = try await api.request(
-            endpoint: "/attachments/\(attachmentId)/status-details"
+            AttachmentsEndpoint.byAttachmentIdStatusDetails(attachmentId: attachmentId)
         )
         return response.data
     }
 
     public func delete(attachmentId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(
-            endpoint: "/attachments/\(attachmentId)"
+        let _: AttachmentDeleteResponse = try await api.request(
+            AttachmentsEndpoint.byAttachmentId(attachmentId: attachmentId),
+            method: "DELETE",
+            body: nil,
+            queryItems: nil
         )
     }
 
@@ -63,7 +74,7 @@ public final class AttachmentService: AttachmentTranslationProviding, @unchecked
         )
         do {
             let response: APIResponse<AttachmentTranslateResponse> = try await api.post(
-                endpoint: "/attachments/\(attachmentId)/translate",
+                AttachmentsEndpoint.byAttachmentIdTranslate(attachmentId: attachmentId),
                 body: request
             )
             return response.data

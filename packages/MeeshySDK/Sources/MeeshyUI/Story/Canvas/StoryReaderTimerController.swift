@@ -1,5 +1,7 @@
+import Combine
 import Foundation
 import QuartzCore
+import MeeshySDK
 
 /// Behaviour contract for the slide-duration timer that drives the
 /// reader's auto-advance arrow ring + countdown.
@@ -148,7 +150,11 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
     public private(set) var isActive: Bool = false
     public private(set) var isPaused: Bool = false
     public private(set) var isPlaybackStalled: Bool = false
+    /// L'hôte a réclamé l'audio (`PlaybackInterruption`) : la slide attend,
+    /// elle n'avance pas sous la vue qui la recouvre.
+    public private(set) var isInterrupted: Bool = false
 
+    private var interruptionSubscription: AnyCancellable?
     private var duration: TimeInterval = 0
     private var elapsed: TimeInterval = 0
     private var completionFired: Bool = false
@@ -159,11 +165,12 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
     /// drive the timer via `_advanceClockForTesting(by:)` never have
     /// to instantiate one. Created lazily on the first real
     /// `setCurrentSlide` call where `useDisplayLink == true`.
-    // `nonisolated(unsafe)` so the `nonisolated deinit` can invalidate it
-    // without crossing the MainActor isolation boundary. All mutations happen
-    // in MainActor methods (setCurrentSlide / startDisplayLinkIfNeeded /
-    // stopDisplayLink), so single-context mutation is preserved.
-    private nonisolated(unsafe) var displayLink: CADisplayLink?
+    // unchecked: touché par le main et par le deinit seulement
+    private nonisolated let displayLinkSlot = Locked<CADisplayLink?>(uncheckedState: nil)
+    private var displayLink: CADisplayLink? {
+        get { displayLinkSlot.mutateUnchecked { $0 } }
+        set { displayLinkSlot.mutateUnchecked { $0 = newValue } }
+    }
     private var lastTick: CFTimeInterval?
 
     /// `false` in tests (skips CADisplayLink instantiation so a single
@@ -177,9 +184,18 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
     /// - Parameter useDisplayLink : Set to `false` in unit tests to
     ///   skip the `CADisplayLink` sub-system entirely and drive the
     ///   timer through `_advanceClockForTesting(by:)` instead.
-    public init(useDisplayLink: Bool = true) {
+    public init(useDisplayLink: Bool = true, interruption: PlaybackInterruption? = nil) {
         self.useDisplayLink = useDisplayLink
         super.init()
+        interruptionSubscription = (interruption ?? .shared).$isActive
+            .removeDuplicates()
+            .sink { [weak self] active in self?.setInterrupted(active) }
+    }
+
+    private func setInterrupted(_ interrupted: Bool) {
+        guard interrupted != isInterrupted else { return }
+        isInterrupted = interrupted
+        if !interrupted { lastTick = nil }
     }
 
     // `nonisolated` (l'intention documentée ci-dessus l.118) : sans ce mot-clé,
@@ -188,7 +204,7 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
     // le TaskLocal scope et abort (SIGABRT) — c'est ce crash qui faisait tomber
     // le bundle via le teardown de StoryCanvasUIView (qui possède ce controller).
     nonisolated deinit {
-        displayLink?.invalidate()
+        displayLinkSlot.mutateUnchecked { $0 }?.invalidate()
     }
 
     // MARK: - StoryReaderTimerControlling
@@ -251,6 +267,26 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
         if !stalled { lastTick = nil }
     }
 
+    /// **Reprend le compte à rebours à une fraction de la slide** (#7878) — la
+    /// barre de la story se parcourt au doigt. La pause éventuelle est gardée
+    /// (le lecteur la tient pendant le glissé) ; la prochaine image repart de
+    /// la position choisie, sans intégrer le temps passé sous le doigt.
+    ///
+    /// Reculer après la fin réarme l'avance automatique ; pointer la fin la
+    /// déclenche, une seule fois.
+    public func seek(toFraction fraction: Double) {
+        let clamped = fraction.isFinite ? min(max(fraction, 0), 1) : 0
+        elapsed = duration * clamped
+        progress = clamped
+        lastTick = nil
+        if clamped < 1 { completionFired = false }
+        onProgressChange?(progress)
+        if clamped >= 1, !completionFired {
+            completionFired = true
+            onCompletion?()
+        }
+    }
+
     public func _advanceClockForTesting(by seconds: TimeInterval) {
         integrate(by: seconds)
     }
@@ -275,14 +311,13 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
         // Proxy weak partagé : le link ne retient jamais le controller —
         // le `deinit` (backstop) reste atteignable, et un tick orphelin
         // s'auto-invalide. Cf. WeakDisplayLinkTarget.
-        let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
+        let link = WeakDisplayLinkTarget.makeLink(frameRateRange: .clock) { [weak self] link in
             guard let self else {
                 link.invalidate()
                 return
             }
             self.tick(link)
         }
-        link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
         link.add(to: .main, forMode: .common)
         displayLink = link
     }
@@ -307,14 +342,14 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
             // Pending : arm the anti-freeze failsafe. Paused / backgrounded time
             // is not counted (guard on `isPaused`); a disabled failsafe (0) never
             // force-activates, preserving pure gating semantics for tests.
-            guard !isPaused, contentReadyFailsafe > 0 else { return }
+            guard !isPaused, !isInterrupted, contentReadyFailsafe > 0 else { return }
             pendingElapsed += d
             if pendingElapsed >= contentReadyFailsafe, let id = currentSlideId {
                 markContentReady(slideId: id)
             }
             return
         }
-        guard !isPaused, !isPlaybackStalled, duration > 0 else { return }
+        guard !isPaused, !isPlaybackStalled, !isInterrupted, duration > 0 else { return }
         elapsed = min(duration, elapsed + d)
         progress = elapsed / duration
         onProgressChange?(progress)

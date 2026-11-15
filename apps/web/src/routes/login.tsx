@@ -1,0 +1,573 @@
+import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
+import { useStore } from 'zustand/react';
+
+import { AuthBrandFooter, AuthRefusal, AuthSubmitButton, AuthTitle } from '@/components/auth-chrome';
+import { AgeBlocked, AuthColumn, isAgeBelowMinimum } from '@/components/auth-column';
+import { Field } from '@/components/field';
+import { GlyphSvg } from '@/components/glyph';
+import { AUTH_GLYPHS } from '@/components/glyphs-auth';
+import { MagicLinkPanel, type MagicLinkPanelDeps } from '@/components/magic-link-panel';
+import { auth, isVerificationRequired } from '@/lib/api/auth';
+import { apiConfig } from '@/lib/api/config';
+import { sessionStore } from '@/lib/api/session';
+import { useOnline } from '@/lib/net/online';
+import { holdPendingVerification } from '@/lib/pending-verification';
+import { isEmailValid } from '@/lib/signup-form';
+import { useSearch } from '@/lib/router';
+import { landingAfterSession, safeNextPath } from '@/lib/session-guard';
+import { placeLoginFailure } from '@/lib/view/auth-feedback';
+import { useShortViewport } from '@/lib/view/short-viewport';
+import { Link, href, navigate } from '@/routes/route-table';
+import { PasswordInput } from '@/components/password-input';
+import { DeviceAccountList } from '@/components/device-account-list';
+import type { AccountSwitcher, AccountVault, DeviceAccount } from '@/lib/api/accounts';
+import { accountSwitcher, accountVault } from '@/lib/api/device-accounts';
+import { translate } from '@/lib/i18n-catalog';
+import { useInterfaceLanguage } from '@/components/public-header';
+import type { InterfaceLanguage } from '@/lib/interface-language';
+import { AuthHeader } from '@/components/auth-header';
+import { AuthSiteFooter } from '@/components/auth-site-footer';
+
+/**
+ * L'ÉCRAN DE CONNEXION (#5555) — anatomie de `LoginView.swift:93-166`.
+ *
+ * DEUX sections EXCLUSIVES : la connexion normale et le second facteur. La
+ * liste des comptes de l'appareil (#8286) les précède — elle ouvre un compte
+ * GARDÉ sans mot de passe, et préremplit l'identifiant des autres. La section active se lit sur le
+ * MAGASIN DE SESSION partagé (`session.status === 'pending2fa'`), jamais un
+ * état local dupliqué : c'est la MÊME source que `SessionGate` (`main.tsx`)
+ * consulte pour décider si cet écran doit même rester affiché.
+ */
+
+/**
+ * LES DEUX PORTES, ET CELLE QUI S'OUVRE PAR DÉFAUT (#6404).
+ *
+ * Directive porteur 2026-09-13 : « Avec connexion par magic link comme
+ * connexion par défaut pour le moment ! […] Proposer l'option se connecter
+ * avec identifiant (e-mail, téléphone, pseudo) et mot de passe ». Le mot de
+ * passe n'est donc pas retiré — il DESCEND d'un rang, derrière un contrôle
+ * nommé.
+ *
+ * **Le choix vit dans l'ADRESSE**, jamais dans un état local : le retour
+ * arrière le rend, un lien le partage, et une recette ouvre directement l'une
+ * des deux portes (même règle que la catégorie de la cloche, `notifications.tsx`).
+ * `lien` est l'ABSENCE du paramètre — l'adresse par défaut reste `/login` nu,
+ * et une valeur inconnue y retombe plutôt que de rendre un écran vide.
+ *
+ * ## `password`, et `motdepasse` qu'on LIT encore (#6583)
+ *
+ * Directive porteur 2026-09-14 : « `/login?methode=motdepasse` doit être
+ * `/login?methode=password` ». La valeur ÉMISE change donc ; la valeur LUE,
+ * elle, s'élargit. `motdepasse` a été l'adresse de cette porte pendant toute
+ * la vie de #6404 — elle est dans des signets, des liens partagés et la
+ * recette. La retirer du vocabulaire de lecture renverrait ces adresses sur le
+ * lien magique, c'est-à-dire sur un écran que personne n'a demandé : une
+ * valeur qu'on cesse d'écrire n'est pas une valeur qu'on peut cesser de
+ * comprendre.
+ */
+const METHOD_PARAM = 'methode';
+
+/** La valeur ÉCRITE dans l'adresse de la porte du mot de passe. Un seul site,
+ * pour que le lien qui l'émet et la lecture qui l'accepte ne puissent pas
+ * diverger. */
+const PASSWORD_METHOD = 'password';
+
+/** L'ancienne écriture, LUE mais jamais émise (§ doc-comment ci-dessus). */
+const LEGACY_PASSWORD_METHOD = 'motdepasse';
+
+/**
+ * `next` — OÙ REVENIR UNE FOIS CONNECTÉ (#5561). Une invitation `/chat/:link`
+ * y envoie un visiteur sans session ; la connexion le lui rend. La valeur est
+ * clampée à chaque usage (`safeNextPath`), jamais crue.
+ */
+const NEXT_PARAM = 'next';
+
+/**
+ * `email` — L'ADRESSE DÉJÀ TAPÉE (#8216). L'inscription y bascule avec
+ * l'adresse qu'on venait de saisir : la retaper est un geste de trop, et une
+ * occasion de se tromper d'adresse puis de créer un second compte. Elle
+ * préremplit la saisie, jamais n'envoie rien.
+ */
+const EMAIL_PARAM = 'email';
+
+/** `?motif=age` — l'accueil vient de recevoir le 422 d'une date sous 13 ans
+ * (#9928) : la connexion s'ouvre sur l'écran qui le dit. */
+export const ageBlockedFromSearch = (search: URLSearchParams): boolean => search.get('motif') === 'age';
+
+type LoginMethod = 'lien' | 'password';
+
+/**
+ * LE SERVEUR MONTRÉ À LA CONNEXION (#8287) — miroir du sélecteur iOS réservé au
+ * simulateur : en DÉVELOPPEMENT local seulement, jamais dans un build de
+ * production. La base relative du dev part par le proxy : c'est sa cible qu'on nomme.
+ */
+export function loginServerLabel({
+  dev,
+  base,
+  proxyTarget,
+}: {
+  readonly dev: boolean | undefined;
+  readonly base: string;
+  readonly proxyTarget: string;
+}): string | null {
+  if (dev !== true) return null;
+  return base === '' ? proxyTarget : base.replace(/\/api\/v1\/?$/, '');
+}
+
+export function loginMethodFromSearch(raw: string | null): LoginMethod {
+  return raw === PASSWORD_METHOD || raw === LEGACY_PASSWORD_METHOD ? 'password' : 'lien';
+}
+
+/** Le violet de marque du titre — `purple700 → purple600 → purple500`
+ * (`LoginView.swift:109`), dérivé de Swift (D-4). C'est la SEULE surface de
+ * l'application qui emploie cette rampe : la marque partout ailleurs est
+ * indigo (`--color-ios-brand`). */
+const TITLE_GRADIENT = 'linear-gradient(90deg, var(--ios-purple-700), var(--ios-purple-600), var(--ios-purple-500))';
+const FOCUS_TINT = 'var(--ios-purple-600)';
+
+/** L'ENCRE DES ACTIONS EN TEXTE — un pas de rampe par schéma, comme
+ * `signup.tsx` : `indigo500` nu tombe sous 4,5:1 pour du petit texte dans les
+ * DEUX schémas. */
+const INDIGO_LINK = 'text-[color:var(--ios-indigo-400)] light:text-[color:var(--ios-indigo-600)]';
+
+/** Le retour de la connexion (#16452) — la landing sur le web ; dans la coque,
+ * où `/` renvoie à la liste puis… à la connexion, l'accueil à deux portes. */
+const LOGIN_BACK = __SHELL__ ? 'welcome' : 'home';
+
+/**
+ * L'ÉCRAN, tel que le routeur le monte : il LIT l'adresse, et délègue tout le
+ * reste à `LoginDoors`. Ce découpage n'est pas cosmétique — `useSearch()` exige
+ * le contexte du routeur, donc un témoin qui monterait l'écran entier devrait
+ * monter le routeur, ses chunks paresseux et son préalable de catalogue pour
+ * prouver deux `<input>`. La PORTE est une donnée ; l'adresse qui la choisit
+ * est une autre question, et `loginMethodFromSearch` la tient, seule et pure.
+ */
+/**
+ * POURQUOI LA SESSION PRÉCÉDENTE S'EST FERMÉE (#9613) — chargée à la demande :
+ * la connexion d'un lecteur qui n'a rien à apprendre n'en paie que l'appel.
+ */
+const SessionEndNotice = lazy(() => import('@/components/session-end-notice'));
+
+function LoginTitle({ language, level: Level }: { readonly language: InterfaceLanguage; readonly level: 'h1' | 'h2' }) {
+  return (
+    <Level data-login-title className="text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+      {translate(language, 'login.title')}
+    </Level>
+  );
+}
+
+export default function LoginScreen({ magicLinkDeps }: { readonly magicLinkDeps?: MagicLinkPanelDeps } = {}) {
+  const [search] = useSearch();
+  return (
+    <LoginDoors
+      method={loginMethodFromSearch(search.get(METHOD_PARAM))}
+      next={search.get(NEXT_PARAM)}
+      email={search.get(EMAIL_PARAM)}
+      ageBlocked={ageBlockedFromSearch(search)}
+      {...(magicLinkDeps === undefined ? {} : { magicLinkDeps })}
+      serverLabel={import.meta.env.DEV ? loginServerLabel({ dev: true, base: apiConfig.base, proxyTarget: __API_PROXY_TARGET__ }) : null}
+    />
+  );
+}
+
+export function LoginDoors({
+  method,
+  next = null,
+  email = null,
+  ageBlocked: ageBlockedAtArrival = false,
+  magicLinkDeps,
+  passwordLogin = auth.login,
+  accounts = { vault: accountVault, switcher: accountSwitcher },
+  serverLabel = null,
+}: {
+  readonly method: LoginMethod;
+  /** La valeur BRUTE de `?next=` — clampée ici, là où elle sert. */
+  readonly next?: string | null;
+  /** L'adresse à PRÉREMPLIR (#8216) — la valeur brute de `?email=`. */
+  readonly email?: string | null;
+  /** Ouvrir sur l'écran des moins de 13 ans (`?motif=age`, #9928). */
+  readonly ageBlocked?: boolean;
+  readonly magicLinkDeps?: MagicLinkPanelDeps;
+  /** La connexion par mot de passe — injectable pour les témoins. */
+  readonly passwordLogin?: typeof auth.login;
+  /** Le coffre des comptes et la bascule (#8286) — injectables pour les témoins. */
+  readonly accounts?: { readonly vault: AccountVault; readonly switcher: AccountSwitcher };
+  /** Le serveur visé, montré en développement seulement (#8287) — `null` : rien. */
+  readonly serverLabel?: string | null;
+}) {
+  const session = useStore(sessionStore, (s) => s.session);
+  const online = useOnline();
+
+  const [username, setUsername] = useState(email ?? '');
+  const [password, setPassword] = useState('');
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [focused, setFocused] = useState<'username' | 'password' | 'code' | null>(null);
+  const [isSubmitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  /* MOINS DE 13 ANS (#9928) : un 403 `AGE_BELOW_MINIMUM` n'est pas un échec à réessayer. */
+  const [ageBlocked, setAgeBlocked] = useState(ageBlockedAtArrival);
+
+  const language = useInterfaceLanguage();
+  const shortViewport = useShortViewport();
+  const [deviceAccounts, setDeviceAccounts] = useState<readonly DeviceAccount[]>(() => accounts.vault.list());
+  /** Proposée au compte SUPPLÉMENTAIRE seulement : le premier est gardé sans
+   * question. Lue au montage — la liste ne change pas sous la saisie. */
+  const [offersKeepSignedIn] = useState(() => accounts.switcher.offersKeepSignedIn());
+  const [keepSignedIn, setKeepSignedIn] = useState(true);
+
+  const requires2FA = session.status === 'pending2fa';
+  /** Ce que les liens qui RÉÉCRIVENT l'adresse transmettent — changer de porte
+   * ou aller s'inscrire ne doit pas perdre l'invitation, ni propager un `next`
+   * hostile. `undefined` : `href()` omet alors le paramètre. */
+  const nextSearch = { [NEXT_PARAM]: safeNextPath(next) ?? undefined };
+
+  /**
+   * L'AUTHENTIFICATION PARLE TOUJOURS À LA PASSERELLE RÉELLE (`auth.ts` importe
+   * `httpTransport`, jamais les fixtures) — indépendamment de `apiConfig.source`,
+   * qui ne gouverne QUE les données de liste/fil. Une connexion réussie doit
+   * donc mener vers `/` ICI, sans attendre `SessionGate` (`main.tsx`), dont la
+   * garde `redirect-home` ne mord qu'en source `'gateway'` (T7 : les fixtures
+   * restent `allow` partout, délibérément, pour ne pas casser le POC).
+   */
+  useEffect(() => {
+    if (session.status !== 'authenticated') return;
+    accounts.vault.noteActive(session.user, offersKeepSignedIn ? keepSignedIn : undefined);
+    navigate(landingAfterSession(next, href('list')), true);
+  }, [session.status, next]);
+
+  function chooseAccount(account: DeviceAccount) {
+    if (accounts.switcher.switchTo(account.user.id) === 'switched') return;
+    setUsername(account.user.username);
+    setPassword('');
+    setErrorMessage(null);
+    if (method !== 'password') navigate(href('login', undefined, { [METHOD_PARAM]: PASSWORD_METHOD, ...nextSearch }), true);
+  }
+
+  function forgetAccount(account: DeviceAccount) {
+    accounts.vault.forget(account.user.id);
+    setDeviceAccounts(accounts.vault.list());
+  }
+
+  async function handleLoginSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (username.trim() === '' || password === '' || isSubmitting) return;
+    setSubmitting(true);
+    setErrorMessage(null);
+    const result = await passwordLogin({ username, password, ...(offersKeepSignedIn ? { rememberDevice: keepSignedIn } : {}) });
+    setSubmitting(false);
+    if (!result.ok && isAgeBelowMinimum(result)) {
+      setPassword('');
+      setAgeBlocked(true);
+      return;
+    }
+    if (!result.ok) {
+      setErrorMessage(placeLoginFailure(result).message);
+      return;
+    }
+    /* UN E-MAIL INCONNU DEVIENT UN COMPTE (#8034, contrat #8033) : la
+       passerelle l'a créé SANS mot de passe ni session, et envoyé un code et
+       un lien. On va AUSSITÔT à la saisie du code ; le mot de passe tapé est
+       retenu en mémoire vive (jamais l'adresse, jamais le stockage) pour
+       voyager avec ce code — seule preuve que celui qui l'a tapé possède
+       l'adresse. */
+    if (isVerificationRequired(result.data)) {
+      const { email, accountCreated, pendingSessionToken } = result.data;
+      holdPendingVerification({ email, password, accountCreated, ...(pendingSessionToken !== undefined ? { pendingSessionToken } : {}) });
+      navigate(href('verifyEmail', undefined, { email: result.data.email, ...nextSearch }));
+    }
+    // Un succès (avec ou sans 2FA) écrit le magasin — `session.status` change
+    // et `SessionGate` (`main.tsx`) prend la suite (redirection vers `/`).
+  }
+
+  async function handleTwoFactorSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (twoFactorCode.length < 6 || isSubmitting) return;
+    setSubmitting(true);
+    setErrorMessage(null);
+    const result = await auth.completeTwoFactor(twoFactorCode);
+    setSubmitting(false);
+    if (!result.ok && isAgeBelowMinimum(result)) {
+      sessionStore.getState().clearSession();
+      setTwoFactorCode('');
+      setPassword('');
+      setAgeBlocked(true);
+      return;
+    }
+    if (!result.ok) setErrorMessage(placeLoginFailure(result).message);
+  }
+
+  function cancelTwoFactor() {
+    sessionStore.getState().clearSession();
+    setTwoFactorCode('');
+    setErrorMessage(null);
+  }
+
+  if (ageBlocked) {
+    return (
+      <AuthColumn>
+        <AuthHeader back={LOGIN_BACK} />
+        <div className="flex flex-1 flex-col justify-center gap-6 px-8">
+          <AgeBlocked language={language} onConfirm={() => setAgeBlocked(false)} />
+        </div>
+      </AuthColumn>
+    );
+  }
+
+  return (
+    /* LES ESPACES PLIENT, PAS L'ÉCRAN (#8418). `gap-8 py-10` fixes
+       faisaient 672 px de la porte par défaut et 830 de celle du mot de
+       passe : sur un téléphone, la connexion défilait. iOS range la même
+       colonne entre des `Spacer()` (`LoginView.swift:128-201`) qui cèdent la
+       place avant le contenu — ici `justify-evenly` partage le blanc
+       restant, et `gap-2` / `py-2` sont le plancher quand il n'en reste
+       plus. Témoin : `scripts/check-phone-frame.mjs`, 375×667. */
+    <AuthColumn className="items-center px-6 py-2">
+      {/* L'EN-TÊTE PUBLIC (#10007) — la langue, posée EN HAUT : la
+          colonne qui suit garde son partage du blanc (`justify-evenly`,
+          #8418) sous lui, au lieu de le faire flotter au milieu du vide. */}
+      <AuthHeader back={LOGIN_BACK} />
+      <div className="flex w-full flex-1 flex-col items-center justify-evenly gap-2">
+        {/* LE BLASON NE PARAÎT QUE LÀ OÙ IL NOMME QUELQUE CHOSE (#6583).
+            Directive porteur 2026-09-14 : « à la connexion la page doit être
+            sans titre sauf la baguette magique ». La porte par défaut a la
+            baguette, un titre de champ et un bouton — le blason y disait une
+            seconde fois ce que la page est, à quelqu'un qui vient de cliquer
+            « Se connecter ». Les DEUX autres sections le gardent : la porte du
+            mot de passe n'a pas de baguette, et le second facteur est un écran
+            d'arrêt au milieu d'un parcours, où savoir de QUI vient la demande
+            de code n'est pas un ornement.
+
+            Ce que cette directive retirait AUSSI — le titre de section du
+            panneau — est revenu par celle du 2026-09-15 (#6626) : « Votre
+            adresse e-mail » y ancre le (i) « Comment ça marche », donc annonce
+            quelque chose au lieu de répéter le champ. `MagicLinkPanel` n'a
+            plus de prop `heading` : plus personne ne le taisait. */}
+        {/* SUR UN TÉLÉPHONE COURT, LE BLASON CÈDE À WORLD WIDE (#10007).
+            La carte et « ou avec votre compte » ajoutent ~120 px à la porte du
+            mot de passe : à 375×667 elle défilait de 163 px. Sous 700 px de
+            haut, le blason se tait — la signature de pied nomme encore
+            Meeshy — et l'écran tient entier (`check-phone-frame.mjs`). Le
+            second facteur, sans carte, le garde. */}
+        {requires2FA || (method === 'password' && !shortViewport) ? <AuthTitle gradient="login" /> : null}
+
+        {/* L'ÉCRAN SE NOMME (épure #17584, règle 7, verdict du 2026-11-15) : « Connexion ».
+            #6583 avait retiré le blason parce qu'il redisait le PRODUIT ; ce titre dit
+            l'ÉCRAN, que rien ne nommait plus à qui arrive par un lien profond. Il est le
+            titre de premier niveau là où le blason se tait, de second niveau sous lui. */}
+        {requires2FA ? null : <LoginTitle language={language} level={method === 'password' && !shortViewport ? 'h2' : 'h1'} />}
+
+        {requires2FA ? null : (
+          <Suspense fallback={null}>
+            <SessionEndNotice language={language} />
+          </Suspense>
+        )}
+
+        {!online ? (
+          <p className="w-full rounded-field px-4 py-2 text-center text-caption" style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink-2)' }}>
+            {translate(language, 'login.offline')}
+          </p>
+        ) : null}
+
+        {!requires2FA && deviceAccounts.length > 0 ? (
+          <DeviceAccountList
+            language={language}
+            accounts={deviceAccounts}
+            activeId={null}
+            isPreserved={accounts.vault.hasPreservedSession}
+            onChoose={chooseAccount}
+            onForget={forgetAccount}
+          />
+        ) : null}
+
+        {requires2FA ? (
+          <form onSubmit={handleTwoFactorSubmit} className="grid w-full gap-4" noValidate>
+            <div className="grid gap-1 text-center">
+              <h2 className="text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+                {translate(language, 'login.twoFactor.title')}
+              </h2>
+              <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+                {translate(language, 'login.twoFactor.lead')}
+              </p>
+            </div>
+
+            <Field id="login-2fa-code" icon="key" tint={FOCUS_TINT} focused={focused === 'code'}>
+              {({ id }) => (
+                <input
+                  id={id}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  aria-label={translate(language, 'login.twoFactor.code')}
+                  value={twoFactorCode}
+                  onChange={(e) => setTwoFactorCode(e.currentTarget.value.replace(/\D/g, ''))}
+                  onFocus={() => setFocused('code')}
+                  onBlur={() => setFocused(null)}
+                  placeholder={translate(language, 'login.twoFactor.code')}
+                  className="w-full bg-transparent py-3 text-input outline-none"
+                  style={{ color: 'var(--color-ios-ink)' }}
+                />
+              )}
+            </Field>
+
+            {errorMessage !== null ? <AuthRefusal>{errorMessage}</AuthRefusal> : null}
+
+            <AuthSubmitButton
+              disabled={twoFactorCode.length < 6 || !online}
+              isSubmitting={isSubmitting}
+              label={translate(language, 'login.twoFactor.submit')}
+              busyLabel={translate(language, 'login.twoFactor.busy')}
+            />
+
+            <button
+              type="button"
+              onClick={cancelTwoFactor}
+              className="py-2 text-center text-title font-semibold"
+              style={{ color: 'var(--color-ios-ink-2)', minHeight: 44 }}
+            >
+              {translate(language, 'login.twoFactor.cancel')}
+            </button>
+          </form>
+        ) : method === 'lien' ? (
+          /* LA PORTE PAR DÉFAUT — le MÊME panneau que l'écran plein
+             `/auth/magic-link` (`MagicLinkPanel`), jamais une seconde machine :
+             saisie, envoi, compte à rebours, renvoi et la note sur les
+             indésirables y vivent une seule fois. `autoFocus` est FAUX ici :
+             le panneau partage l'écran avec le titre et les deux liens du bas,
+             et voler le focus au montage déplacerait le défilement sans que
+             personne ne l'ait demandé. */
+          <MagicLinkPanel
+            {...(magicLinkDeps === undefined ? {} : { deps: magicLinkDeps })}
+            next={next}
+            initialEmail={email ?? ''}
+            footer={
+              <div className="mt-1 grid justify-items-center gap-2">
+                <Link
+                  to="login"
+                  search={{ [METHOD_PARAM]: PASSWORD_METHOD, ...nextSearch }}
+                  replace
+                  className={`inline-flex items-center text-title font-semibold ${INDIGO_LINK}`}
+                  style={{ minHeight: 44 }}
+                >
+                  {translate(language, 'login.passwordDoor')}
+                </Link>
+              </div>
+            }
+          />
+        ) : (
+          <form onSubmit={handleLoginSubmit} className="grid w-full gap-4" noValidate>
+            <Field
+              id="login-username"
+              label={translate(language, 'login.username.label')}
+              icon="user"
+              tint={FOCUS_TINT}
+              focused={focused === 'username'}
+            >
+              {({ id }) => (
+                <input
+                  id={id}
+                  type="text"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  value={username}
+                  onInput={(e) => setUsername(e.currentTarget.value)}
+                  onFocus={() => setFocused('username')}
+                  onBlur={() => setFocused(null)}
+                  className="w-full bg-transparent py-3 text-input outline-none"
+                  style={{ color: 'var(--color-ios-ink)' }}
+                />
+              )}
+            </Field>
+
+            <Field id="login-password" label={translate(language, 'login.password.label')} icon="lock" tint={FOCUS_TINT} focused={focused === 'password'}>
+              {({ id }) => (
+                <PasswordInput
+                  id={id}
+                  autoComplete="current-password"
+                  value={password}
+                  onValue={setPassword}
+                  onFocus={() => setFocused('password')}
+                  onBlur={() => setFocused(null)}
+                />
+              )}
+            </Field>
+
+            {errorMessage !== null ? <AuthRefusal>{errorMessage}</AuthRefusal> : null}
+
+            {offersKeepSignedIn ? (
+              <label data-keep-signed-in className="flex items-center gap-3 text-body" style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}>
+                <input
+                  type="checkbox"
+                  checked={keepSignedIn}
+                  onChange={(e) => setKeepSignedIn(e.currentTarget.checked)}
+                  className="size-5 shrink-0"
+                  style={{ accentColor: 'var(--color-ios-brand)' }}
+                />
+                {translate(language, 'accounts.keep_signed_in')}
+              </label>
+            ) : null}
+
+            <AuthSubmitButton
+              disabled={username.trim() === '' || password === '' || !online}
+              isSubmitting={isSubmitting}
+              label={translate(language, 'login.submit')}
+              busyLabel={translate(language, 'login.submit.busy')}
+            />
+
+            {/* LES DEUX PORTES (#5816) — `LoginView.swift:478-503` : la
+                connexion par e-mail EN PREMIER (action mise en avant,
+                l.481-493), « Mot de passe oublié ? » EN DESSOUS (l.495-501) —
+                empilées, jamais côte à côte (doc-comment l.479-480). Ancres,
+                pas des boutons qui naviguent : pas d'`history`, un vrai `href`.
+
+                « Se connecter par e-mail », baguette en tête (#6626) : le mot
+                dit CE QUE l'on fait, la baguette garde l'identité de la porte.
+                Le glyphe porte sa propre teinte — le dégradé du libellé est
+                découpé dans le TEXTE (`background-clip: text`), et un tracé en
+                `currentColor` y serait transparent. */}
+            <div className="mt-1 grid justify-items-center gap-2">
+              <Link to="login" search={nextSearch} replace className="inline-flex items-center gap-2 font-semibold text-title" style={{ minHeight: 44 }}>
+                <GlyphSvg glyph={AUTH_GLYPHS.magicWand} size={18} style={{ color: 'var(--ios-purple-500)' }} />
+                <span
+                  style={{
+                    background: 'linear-gradient(90deg, var(--ios-purple-500), var(--ios-indigo-400))',
+                    WebkitBackgroundClip: 'text',
+                    backgroundClip: 'text',
+                    color: 'transparent',
+                  }}
+                >
+                  {translate(language, 'login.emailDoor')}
+                </span>
+              </Link>
+              <Link
+                to="forgotPassword"
+                search={{ [EMAIL_PARAM]: isEmailValid(username) ? username.trim() : undefined }}
+                className="inline-flex items-center font-medium text-title"
+                style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}
+                aria-label={translate(language, 'login.forgotPassword.label')}
+              >
+                {translate(language, 'login.forgotPassword')}
+              </Link>
+            </div>
+          </form>
+        )}
+
+        <p className="text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {translate(language, 'login.noAccount')}{' '}
+          <Link to="signup" search={nextSearch} className="font-semibold" style={{ background: TITLE_GRADIENT, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>
+            {translate(language, 'login.createAccount')}
+          </Link>
+        </p>
+
+        {serverLabel === null ? null : (
+          <p data-login-server className="font-mono text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
+            {translate(language, 'login.server_origin', { origin: serverLabel })}
+          </p>
+        )}
+
+        <AuthBrandFooter />
+      </div>
+      <AuthSiteFooter />
+    </AuthColumn>
+  );
+}

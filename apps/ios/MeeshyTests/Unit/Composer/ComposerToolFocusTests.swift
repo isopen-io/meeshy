@@ -1,0 +1,210 @@
+import XCTest
+import MeeshyUI
+@testable import Meeshy
+
+/// **Un outil ouvert prend TOUTE la place** (#8652, directive porteur
+/// 2026-09-29).
+///
+/// > « Actuellement la version actuelle ouvre le rail des outils de texte qui
+/// > apparaissent à côté en surplus. Il faudrait enlever le rail d'en-tête (X)
+/// > (…) etc., les tools de la scène principale laissent place aux tools de
+/// > l'outil sélectionné avec (X), et le rail du bas audience, publication ;
+/// > les (+) n'ont pas besoin d'être là quand un outil est ouvert ! »
+///
+/// Remplace les témoins de la colonne « à droite de la porte » (#8558), que
+/// la directive révoque : ils gardaient exactement le surplus visé.
+final class ComposerToolFocusTests: XCTestCase {
+
+    private static let portesAvecOutils: [ComposerRailDoor] = [.media, .drawing, .text, .sticker]
+
+    // MARK: - Le rail : les contrôleurs REMPLACENT les portes
+
+    @MainActor
+    func test_resolve_texteEnSaisie_remplaceLesPortesParSesReglages() {
+        let mode = ComposerRailMode.resolve(drawing: false, textEditing: true,
+                                            expandedDrawingTool: nil, expandedTextTool: .color,
+                                            doors: Self.portesAvecOutils)
+        guard case .tool(let controles) = mode else { return XCTFail("attendu : les réglages seuls, reçu \(mode)") }
+        XCTAssertEqual(controles.map(\.id), TextEditTool.all.map { "text.\($0.rawValue)" })
+        XCTAssertEqual(controles.filter(\.isExpanded).map(\.id), ["text.color"])
+        XCTAssertTrue(mode.opensTool)
+    }
+
+    @MainActor
+    func test_resolve_dessinPrimeSurLeTexte() {
+        let mode = ComposerRailMode.resolve(drawing: true, textEditing: true,
+                                            expandedDrawingTool: nil, expandedTextTool: nil,
+                                            doors: Self.portesAvecOutils)
+        guard case .tool(let controles) = mode else { return XCTFail("attendu : les réglages seuls, reçu \(mode)") }
+        XCTAssertTrue(controles.allSatisfy { $0.id.hasPrefix("drawing.") })
+    }
+
+    @MainActor
+    func test_resolve_sansOutilOuvert_rendLesPortes() {
+        let mode = ComposerRailMode.resolve(drawing: false, textEditing: false,
+                                            expandedDrawingTool: nil, expandedTextTool: nil,
+                                            doors: Self.portesAvecOutils)
+        XCTAssertEqual(mode, .doors(Self.portesAvecOutils))
+        XCTAssertFalse(mode.opensTool)
+    }
+
+    // MARK: - Le chrome : une bascule, sans reste
+
+    /// **Le rail droit RESTE** depuis #8713 (« en bas on a undo et redo
+    /// toujours, même pour les outils type dessin ») : les contrôleurs de
+    /// l'outil s'y posent au-dessus de l'historique.
+    func test_isShown_outilOuvert_neLaisseQueSesControleursEtLeRailDroit() {
+        let servis = ComposerToolFocus.Chrome.allCases.filter {
+            ComposerToolFocus.isShown($0, toolIsOpen: true)
+        }
+        XCTAssertEqual(servis, [.trailingRail, .toolControls],
+                       "en-tête, portes, socle, trace du son et description cèdent")
+    }
+
+    func test_isShown_outilFerme_rendLeChromeDAvant_sansLesControleurs() {
+        let servis = Set(ComposerToolFocus.Chrome.allCases.filter {
+            ComposerToolFocus.isShown($0, toolIsOpen: false)
+        })
+        XCTAssertEqual(servis, Set(ComposerToolFocus.Chrome.allCases).subtracting([.toolControls]))
+    }
+
+    func test_transition_reduceMotion_coupeLeFondu() {
+        XCTAssertNil(ComposerToolFocus.transition(reduceMotion: true))
+        XCTAssertNotNil(ComposerToolFocus.transition(reduceMotion: false))
+    }
+
+    /// VoiceOver annonce les RÉGLAGES de l'outil quand ils occupent le rail —
+    /// plus « Ajouter à la scène », qui serait faux à cet instant.
+    @MainActor
+    func test_leRail_occupeParUnOutil_sAnnonceCommeSesReglages() throws {
+        XCTAssertNotEqual(ComposerRailCopy.toolRailLabel, ComposerRailCopy.railLabel)
+    }
+
+    // MARK: - Les sites de montage demandent à la règle
+
+    func test_surface_neMonteAucuneColonneEnSurplus_etCedeSonChrome() throws {
+        let surface = AppSourceGuard.stripComments(try AppSourceGuard.composerSceneSurfaceSource())
+        XCTAssertTrue(surface.contains("struct ComposerSceneSurface"), "le fichier lu n'est pas la surface")
+        for interdit in ["flyoutColumn", "ComposerRailFlyoutAnchorKey", ".flyout("] {
+            XCTAssertFalse(surface.contains(interdit), "la colonne en surplus est revenue : \(interdit)")
+        }
+        // **Le repos se pose sur la scène** (#13839) : ✕, ↶ ↷ et la colonne
+        // demandent à `ComposerRestChrome`, nourrie de l'outil et de l'écriture.
+        XCTAssertTrue(surface.contains("ComposerRestChrome.State(toolIsOpen: toolIsOpen,"),
+                      "le chrome du repos doit répondre à l'outil par la règle")
+        // La légende sait QUEL texte on écrit (#9448) — même règle, plus fine ;
+        // elle cède aussi à un objet sélectionné (#13957), d'où `sceneIsFocused`.
+        XCTAssertTrue(surface.contains("ComposerToolFocus.isShown(.description, toolIsOpen: sceneIsFocused, writing: writing)"),
+                      ".description doit répondre à l'outil, à la sélection et au texte écrit par la règle")
+        // Le rail droit répond AUSSI à l'écriture (#6131) — même règle.
+        XCTAssertTrue(surface.contains("guard ComposerToolFocus.isShown(.trailingRail, toolIsOpen: toolIsOpen, writesText: writesText)"),
+                      ".trailingRail doit répondre à l'outil et à l'écriture par la règle")
+        XCTAssertTrue(surface.contains("options: trailingOptions"),
+                      "le rail droit porte les réglages de l'outil et leur (x) (#8713)")
+        // L'édition du fond vide aussi les portes (#8847) : `toolIsOpen` est la
+        // règle (`ComposerToolFocus.toolIsOpen`), et la colonne la lit. Une
+        // édition ouverte depuis le rail d'édition en est un NIVEAU, pas un
+        // outil (#13957) : la règle de la sélection le dit.
+        XCTAssertTrue(surface.contains("ComposerToolFocus.toolIsOpen(railOpensTool: railMode.opensTool,"),
+                      "l'outil ouvert se lit de la règle, pas du seul mode du rail")
+        XCTAssertTrue(surface.contains("ComposerSelectionChrome.inlineEditOpensTool(")
+                        && surface.contains("editsInline: editsInline, objectIsSelected: selectionColumn != nil))"),
+                      "l'édition en place n'ouvre un outil que hors du rail d'édition")
+        XCTAssertFalse(surface.contains("ComposerLeadingRail("),
+                       "le rail gauche à glyphes est revenu sur la scène (#13839)")
+    }
+
+    func test_hote_effaceLeSocle_quandUnOutilDeLaSceneEstOuvert() throws {
+        let hote = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+        XCTAssertTrue(hote.contains("let servi = sceneSelectionRelay.publicationIsShown(toolOwnsScreen: sceneToolOwnsScreen)"),
+                      "le socle cède à l'outil ET à l'édition (#13957)")
+        XCTAssertTrue(hote.contains("railMode: sceneRailMode"),
+                      "la surface et le socle lisent le MÊME mode")
+        XCTAssertFalse(hote.contains("anchorsToDoor"))
+    }
+
+    // MARK: - La géométrie des boutons flottants (#8558, inchangée)
+
+    func test_lesBoutonsFlottants_sontPlusPetits_etPlusHauts() {
+        XCTAssertEqual(ComposerRailGeometry.railWidth, 44, "la cible tactile ne rétrécit pas")
+        XCTAssertGreaterThanOrEqual(ComposerRailGeometry.floatingBottomInset,
+                                    ComposerRailGeometry.gutter + ComposerRailGeometry.railWidth)
+    }
+
+    // MARK: - #10358 · Le rail gauche de la scène : glyphes blancs en relief
+
+    /// **Sans disque de verre, l'encre fait tout** (retour porteur 2026-10-12).
+    /// Sur la scène : blanc au repos, jaune quand l'entrée est active. En
+    /// colonne (rangée basse, éditeur), la teinte de l'appelant ne change pas.
+    func test_10358_encreDuRailSurLaScene_blancAuRepos_jauneActif() {
+        XCTAssertEqual(ComposerFloatingRailInk.glyph(separate: true, active: false, columnTint: .gray), .white)
+        XCTAssertEqual(ComposerFloatingRailInk.glyph(separate: true, active: true, columnTint: .gray), .yellow)
+        XCTAssertEqual(ComposerFloatingRailInk.glyph(separate: false, active: true, columnTint: .gray), .gray,
+                       "la rangée du bas n'est pas concernée")
+        XCTAssertGreaterThan(ComposerFloatingRailInk.shadowOpacity, 0, "le relief vient d'une ombre portée")
+        XCTAssertGreaterThan(ComposerFloatingRailInk.shadowRadius, 0)
+    }
+
+    // MARK: - #10364 · Plus aucun cercle autour des outils du composer
+
+    /// **La loi des boutons d'outil flottants** (retour porteur 2026-10-12 :
+    /// « enlever les cercles autour des outils ») : jaune quand l'outil est
+    /// actif, sinon la teinte de repos — blanche par défaut, et l'action
+    /// destructrice garde sa couleur d'erreur au repos.
+    func test_10364_encreDUnOutilFlottant_jauneActif_teinteDeReposSinon() {
+        XCTAssertEqual(ComposerFloatingRailInk.floating(active: false), .white)
+        XCTAssertEqual(ComposerFloatingRailInk.floating(active: true), .yellow)
+        XCTAssertEqual(ComposerFloatingRailInk.floating(active: false, restTint: .red), .red,
+                       "supprimer reste rouge au repos")
+        XCTAssertEqual(ComposerFloatingRailInk.floating(active: true, restTint: .red), .yellow)
+        XCTAssertEqual(ComposerFloatingRailInk.glyph(separate: true, active: true, columnTint: .gray),
+                       ComposerFloatingRailInk.floating(active: true),
+                       "le rail gauche et les autres outils suivent la MÊME loi")
+    }
+
+    /// Les colonnes de la scène ne peignent plus que l'encre de repos : les
+    /// options du rail droit sont blanches ; Retirer, dans la barre de la
+    /// sélection (#13839, L5), reste rouge.
+    @MainActor
+    func test_10364_lesOptionsDuRailDroit_peignentLEncreBlanche() {
+        XCTAssertEqual(ComposerTrailingColumnPaint(.exitTool).tint, ComposerFloatingRailInk.rest)
+        XCTAssertTrue(ComposerSelectionAction.remove.isDestructive)
+        XCTAssertEqual(ComposerSelectionPaint.tint(.remove), MeeshyColors.error)
+        XCTAssertEqual(ComposerSelectionPaint.tint(.modify), ComposerFloatingRailInk.rest)
+    }
+
+    /// Le rail droit, le couloir de l'éditeur d'objet et la rangée d'outils du
+    /// document ne montent plus aucun disque de verre : glyphe en relief,
+    /// encre de la loi, cible de 44 pt.
+    func test_10364_aucunOutilNePorteDeCercle() throws {
+        let verre = try source("Meeshy/Features/Composer/ComposerRailGlass.swift")
+        XCTAssertTrue(verre.contains("enum ComposerFloatingRailInk"), "le fichier lu n'est pas celui du verre des rails")
+        XCTAssertFalse(verre.contains("ComposerRailButtonGlass"), "le modificateur de disque est supprimé")
+
+        let droit = try source("Meeshy/Features/Composer/ComposerTrailingRail.swift")
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(droit.contains("structComposerTrailingRail"), "le fichier lu n'est pas le rail droit")
+        XCTAssertFalse(droit.contains("ComposerRailButtonGlass("))
+        XCTAssertTrue(droit.contains(".foregroundColor(ComposerFloatingRailInk.floating(active:isOn,restTint:tint))"))
+        XCTAssertTrue(droit.contains(".modifier(ComposerRailGlyphRelief(active:true))"))
+        XCTAssertTrue(droit.contains(".frame(width:ComposerRailGeometry.railWidth,height:ComposerRailGeometry.railWidth)"),
+                      "la cible reste de 44 pt")
+        XCTAssertTrue(droit.contains(".accessibilityAddTraits(isOn?.isSelected:[])"),
+                      "l'état actif reste annoncé")
+
+        let editeur = try source("Meeshy/Features/Composer/ComposerObjectEditorView.swift")
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(editeur.contains("privatevartoolRail"), "le couloir d'outils de l'éditeur est introuvable")
+        XCTAssertFalse(editeur.contains(".adaptiveLiquidGlass(in:Circle()"), "plus de disque dans l'éditeur d'objet")
+        XCTAssertTrue(editeur.contains(".foregroundStyle(ComposerFloatingRailInk.floating(active:ComposerObjectEditorRail.isSelected(entree,selected:selectedTool)))"))
+        XCTAssertTrue(editeur.contains(".frame(width:44,height:44)"))
+    }
+
+    private func source(_ chemin: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent(chemin)
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+}

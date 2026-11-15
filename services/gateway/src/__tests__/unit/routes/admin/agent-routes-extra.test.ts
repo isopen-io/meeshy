@@ -55,6 +55,15 @@ const adminUser = {
   email: 'admin@test.com',
 };
 
+// #4157 — `PUT /llm` et `DELETE /reset` montent en S6 (souverain) : ADMIN n'y
+// suffit plus, seul BIGBOSS peut les appeler.
+const bigbossUser = {
+  id: '507f1f77bcf86cd799439098',
+  role: 'BIGBOSS',
+  username: 'bigboss',
+  email: 'bigboss@test.com',
+};
+
 function makePrisma(): any {
   return {
     agentConfig: {
@@ -69,6 +78,9 @@ function makePrisma(): any {
     agentUserRole: {
       count: jest.fn<any>(),
       findMany: jest.fn<any>(),
+      // #4465 — `GET /stats` compte les utilisateurs contrôlés distincts en
+      // base (`$group` + `$count`) plutôt que de charger une ligne par rôle.
+      aggregateRaw: jest.fn<any>().mockResolvedValue([{ total: 0 }]),
       upsert: jest.fn<any>(),
       update: jest.fn<any>(),
       deleteMany: jest.fn<any>(),
@@ -90,6 +102,9 @@ function makePrisma(): any {
     },
     agentScanLog: {
       findMany: jest.fn<any>(),
+      // #4465 — `GET /scan-logs/stats` agrège par seau en base (`$facet`)
+      // plutôt que de charger une ligne par scan.
+      aggregateRaw: jest.fn<any>().mockResolvedValue([{ buckets: [], outcomes: [] }]),
       count: jest.fn<any>(),
       findUnique: jest.fn<any>(),
     },
@@ -100,6 +115,18 @@ function makePrisma(): any {
     },
     agentGlobalProfile: {
       deleteMany: jest.fn<any>(),
+    },
+    // #4157 — `PUT /llm` et `DELETE /reset` (S6) écrivent leur trace ici.
+    adminAuditLog: {
+      create: jest.fn<any>(),
+    },
+    // #4165 — `GET /configs` interroge désormais `conversation` DIRECTEMENT
+    // (filtre relationnel `agentConfig`/`agentAnalytic`/`agentUserRoles`),
+    // plutôt que d'assembler l'univers des conversationIds à la main depuis
+    // les trois `findMany` ci-dessus.
+    conversation: {
+      findMany: jest.fn<any>(),
+      count: jest.fn<any>(),
     },
     message: {
       findMany: jest.fn<any>(),
@@ -248,7 +275,20 @@ describe('Agent Admin Routes — extra coverage', () => {
   // GET /configs — early return when no conversations
   // ──────────────────────────────────────────────────────────────────────────
   describe('GET /configs', () => {
-    it('returns empty pagination when allConvIds.length === 0', async () => {
+    it('returns empty pagination when no conversation has any agent activity', async () => {
+      // #4165 — l'univers des conversations "avec une activité agent" est
+      // désormais un `where` relationnel posé DIRECTEMENT sur
+      // `conversation.findMany`/`.count` (`agentConfig`/`agentAnalytic`/
+      // `agentUserRoles`), plus un ramassage manuel par trois `findMany` sur
+      // les tables agent elles-mêmes — d'où le nom du test, mis à jour : il
+      // n'y a plus d'`allConvIds` à observer, seulement le résultat de la
+      // requête `conversation` bornée.
+      prisma.conversation.findMany.mockResolvedValue([]);
+      prisma.conversation.count.mockResolvedValue(0);
+      // `pageConvIds` est vide, mais les trois `findMany` de détail sont
+      // APPELÉS quand même (`where: { conversationId: { in: [] } }`) — sans
+      // valeur résolue explicite, le double nu rend `undefined` (jamais une
+      // promesse), et `configs.map(...)` lève.
       prisma.agentConfig.findMany.mockResolvedValue([]);
       prisma.agentUserRole.findMany.mockResolvedValue([]);
       prisma.agentAnalytic.findMany.mockResolvedValue([]);
@@ -266,7 +306,8 @@ describe('Agent Admin Routes — extra coverage', () => {
     });
 
     it('returns 500 when DB throws', async () => {
-      prisma.agentConfig.findMany.mockRejectedValue(new Error('DB error'));
+      prisma.conversation.findMany.mockRejectedValue(new Error('DB error'));
+      prisma.conversation.count.mockResolvedValue(0);
 
       app = buildApp(prisma);
       await app.ready();
@@ -377,8 +418,8 @@ describe('Agent Admin Routes — extra coverage', () => {
       cacheStoreMock.get.mockResolvedValue(null);
       prisma.agentAnalytic.findUnique.mockResolvedValue(null);
       prisma.agentConversationSummary.findUnique.mockResolvedValue(null);
-      prisma.agentUserRole.findMany.mockResolvedValue([]);
-      prisma.agentConfig.findUnique.mockResolvedValue(null);
+      prisma.agentUserRole.findMany.mockResolvedValue([]); prisma.user.findMany.mockResolvedValue([]);
+      prisma.agentConfig.findUnique.mockResolvedValue({ scanStartedAt: null, currentNode: null });
 
       const res = await app.inject({ method: 'GET', url: `/configs/${CONV_ID}/live` });
       const body = JSON.parse(res.body);
@@ -397,7 +438,7 @@ describe('Agent Admin Routes — extra coverage', () => {
       prisma.agentUserRole.findMany.mockResolvedValue([
         { userId: USER_ID, confidence: 0.5, locked: true },
       ]);
-      prisma.agentConfig.findUnique.mockResolvedValue(null);
+      prisma.agentConfig.findUnique.mockResolvedValue({ scanStartedAt: null, currentNode: null });
       // user not found in DB
       prisma.user.findMany.mockResolvedValue([]);
 
@@ -610,7 +651,13 @@ describe('Agent Admin Routes — extra coverage', () => {
   // DELETE /reset (nuclear)
   // ──────────────────────────────────────────────────────────────────────────
   describe('DELETE /reset', () => {
-    it('deletes all agent data and Redis agent:* keys', async () => {
+    // #4157 — ANTI-TÉMOIN corrigé. Ce test appelait `/reset` avec ADMIN, sans
+    // corps, et attestait un `200` : exactement ce que l'issue nomme « efface
+    // TOUTES les configs, rôles, résumés, profils et clés Redis de la
+    // plateforme — sans corps, sans confirmation, sans audit ». La destruction
+    // TOTALE de l'état de l'agent monte en S6 (souverain, BIGBOSS seul) et
+    // exige désormais un motif écrit, consigné dans AdminAuditLog.
+    it('deletes all agent data and Redis agent:* keys — BIGBOSS avec motif écrit', async () => {
       prisma.$transaction.mockImplementation(async (promises: Promise<any>[]) =>
         Promise.all(promises)
       );
@@ -619,13 +666,18 @@ describe('Agent Admin Routes — extra coverage', () => {
       prisma.agentConversationSummary.deleteMany.mockResolvedValue({ count: 3 });
       prisma.agentAnalytic.deleteMany.mockResolvedValue({ count: 4 });
       prisma.agentGlobalProfile.deleteMany.mockResolvedValue({ count: 2 });
+      prisma.adminAuditLog.create.mockResolvedValue({});
       cacheStoreMock.keys.mockResolvedValue(['agent:config:c1', 'agent:profiles:c2']);
       cacheStoreMock.publish.mockResolvedValue(1);
 
-      app = buildApp(prisma);
+      app = buildApp(prisma, bigbossUser);
       await app.ready();
 
-      const res = await app.inject({ method: 'DELETE', url: '/reset' });
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/reset',
+        payload: { reason: 'Corruption détectée après incident #4157' },
+      });
       const body = JSON.parse(res.body);
 
       expect(res.statusCode).toBe(200);
@@ -633,6 +685,40 @@ describe('Agent Admin Routes — extra coverage', () => {
       expect(body.data.deleted.roles).toBe(10);
       expect(body.data.deleted.globalProfiles).toBe(2);
       expect(body.data.deleted.redisKeys).toBe(2);
+
+      expect(prisma.adminAuditLog.create).toHaveBeenCalledTimes(1);
+      const auditData = prisma.adminAuditLog.create.mock.calls[0][0].data;
+      expect(auditData.action).toBe('AGENT_FULL_RESET');
+      expect(auditData.adminId).toBe(bigbossUser.id);
+      expect(JSON.parse(auditData.metadata).reason).toBe('Corruption détectée après incident #4157');
+    });
+
+    it('refuse ADMIN — le rang souverain (BIGBOSS) est requis (#4157)', async () => {
+      app = buildApp(prisma, adminUser);
+      await app.ready();
+
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/reset',
+        payload: { reason: 'Corruption détectée après incident #4157' },
+      });
+
+      expect(res.statusCode).toBe(403);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    // Spec 2026-10-04 § 4 : BIGBOSS sans motif → le reset a lieu, tracé ; un motif FOURNI court → 400.
+    it('admet BIGBOSS sans motif, refuse son motif fourni trop court', async () => {
+      prisma.$transaction.mockImplementation(async (promises: Promise<any>[]) => Promise.all(promises));
+      for (const m of ['agentConfig', 'agentUserRole', 'agentConversationSummary', 'agentAnalytic', 'agentGlobalProfile']) prisma[m].deleteMany.mockResolvedValue({ count: 0 });
+      cacheStoreMock.keys.mockResolvedValue([]);
+      app = buildApp(prisma, bigbossUser);
+      await app.ready();
+      const court = await app.inject({ method: 'DELETE', url: '/reset', payload: { reason: 'court' } });
+      expect(court.statusCode).toBe(400);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect((await app.inject({ method: 'DELETE', url: '/reset', payload: {} })).statusCode).toBe(200);
+      expect(prisma.adminAuditLog.create.mock.calls[0][0].data).toMatchObject({ action: 'AGENT_FULL_RESET', metadata: undefined });
     });
   });
 
@@ -742,20 +828,18 @@ describe('Agent Admin Routes — extra coverage', () => {
       await app.ready();
     });
 
+    // #4465 — l'agrégation par seau (jour/semaine, $facet) tourne désormais
+    // côté MongoDB : `aggregateRaw` rend directement le document replié, et
+    // ces témoins vérifient la fusion `buckets` + `outcomes` du HANDLER, pas
+    // le pipeline lui-même (hors de portée d'un double Prisma).
     it('aggregates by day bucket', async () => {
-      const startedAt = new Date('2024-06-01T10:00:00Z');
-      prisma.agentScanLog.findMany.mockResolvedValue([
-        {
-          startedAt,
-          conversationId: CONV_ID,
-          outcome: 'success',
-          messagesSent: 3,
-          reactionsSent: 1,
-          userIdsUsed: [USER_ID],
-          estimatedCostUsd: 0.01,
-          configChangedAt: null,
-        },
-      ]);
+      prisma.agentScanLog.aggregateRaw.mockResolvedValue([{
+        buckets: [{
+          _id: '2024-06-01', scans: 1, messagesSent: 3, reactionsSent: 1,
+          costUsd: 0.01, configChanges: 0, conversations: 1, users: 1,
+        }],
+        outcomes: [{ _id: { bucket: '2024-06-01', outcome: 'success' }, count: 1 }],
+      }]);
 
       const res = await app.inject({ method: 'GET', url: '/scan-logs/stats?bucket=day' });
       const body = JSON.parse(res.body);
@@ -767,19 +851,13 @@ describe('Agent Admin Routes — extra coverage', () => {
     });
 
     it('aggregates by week bucket', async () => {
-      const startedAt = new Date('2024-06-05T10:00:00Z');
-      prisma.agentScanLog.findMany.mockResolvedValue([
-        {
-          startedAt,
-          conversationId: CONV_ID,
-          outcome: 'success',
-          messagesSent: 2,
-          reactionsSent: 0,
-          userIdsUsed: [],
-          estimatedCostUsd: 0.005,
-          configChangedAt: startedAt,
-        },
-      ]);
+      prisma.agentScanLog.aggregateRaw.mockResolvedValue([{
+        buckets: [{
+          _id: '2024-06-02', scans: 1, messagesSent: 2, reactionsSent: 0,
+          costUsd: 0.005, configChanges: 1, conversations: 1, users: 0,
+        }],
+        outcomes: [{ _id: { bucket: '2024-06-02', outcome: 'success' }, count: 1 }],
+      }]);
 
       const res = await app.inject({ method: 'GET', url: '/scan-logs/stats?bucket=week' });
       const body = JSON.parse(res.body);

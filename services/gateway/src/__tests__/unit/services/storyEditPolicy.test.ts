@@ -2,11 +2,9 @@
  * @jest-environment node
  *
  * storyContentEditRequested — the single predicate deciding whether a
- * PUT /posts/:postId payload is a CONTENT edit of a story (→ engagement
- * reset + `engagementReset: true` on the story:updated broadcast) or a
- * metadata-only update (visibility, audience) that must leave views and
- * reactions untouched. Shared by PostService (reset) and the route
- * (broadcast flag) so the two can never diverge.
+ * PUT /posts/:postId payload is a CONTENT edit of a story (→ stale
+ * translations dropped and re-run; views and reactions kept since #16386)
+ * or a metadata-only update (visibility, audience).
  */
 
 import { describe, it, expect } from '@jest/globals';

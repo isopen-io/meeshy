@@ -15,6 +15,10 @@ import { getPresenceVisibilityService } from '../../services/PresenceVisibilityS
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { viewerFromRequest } from '../users/presence-gate';
 import { gateCoMemberPresence, type MemberUser } from './member-presence';
+import { isAddableUser } from './addable-user';
+import { scheduleCommunityAddedAnnouncement } from '../../services/notifications/community-added';
+import { communityGuardsItsSalons, exitCommunitySalons } from '../../services/conversations/communitySalonExit';
+import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
 
 const logger = enhancedLogger.child({ module: 'CommunityMembersRoutes' });
 import {
@@ -27,7 +31,11 @@ import {
   CommunityRole
 } from './types';
 import { validatePagination } from '../../utils/pagination';
+import { activeMembershipOf } from './serialization';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+
+/** #6375 — le créateur garde la main : ni rétrogradé ni retiré par un administrateur. */
+const CREATOR_PROTECTED = 'COMMUNITY_CREATOR_PROTECTED';
 
 export async function registerMemberRoutes(fastify: FastifyInstance) {
   // Route pour obtenir les membres d'une communaute
@@ -116,12 +124,13 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
       const userId = authContext.userId;
 
       // Verifier l'acces a la communaute
-      const community = await fastify.prisma.community.findFirst({
-        where: { id },
+      // #8876 — communauté désactivée par l'administration : 404, comme pour les lecteurs publics.
+const community = await fastify.prisma.community.findFirst({
+        where: { id, isActive: true },
         select: {
           createdBy: true,
           isPrivate: true,
-          members: { select: { userId: true } }
+          members: { where: { isActive: true }, select: { userId: true } }
         }
       });
 
@@ -142,7 +151,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
 
       const [members, totalCount] = await Promise.all([
         fastify.prisma.communityMember.findMany({
-          where: { communityId: id },
+          where: { communityId: id, isActive: true },
           include: {
             user: {
               select: {
@@ -151,7 +160,9 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
                 displayName: true,
                 avatar: true,
                 isOnline: true,
-                lastActiveAt: true
+                lastActiveAt: true,
+                // #10945 — le contour équipé, résolu en `profileDecor` à la sortie.
+                ...AVATAR_RING_COLUMN
               }
             }
           },
@@ -159,17 +170,16 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
           skip: offsetNum,
           take: limitNum
         }),
-        fastify.prisma.communityMember.count({ where: { communityId: id } })
+        fastify.prisma.communityMember.count({ where: { communityId: id, isActive: true } })
       ]);
 
-      // Porte MIXTE. Le contrôle d'accès ci-dessus ne referme que les
-      // communautés PRIVÉES : sur une communauté publique, `hasAccess` est faux
-      // et le lecteur est un NON-MEMBRE qui parcourt une liste de tiers.
-      //
-      //  - lecteur co-membre  ⇒ contexte d'accès garanti ⇒ préférences seules,
-      //    et une entrée absente reste visible ;
-      //  - lecteur non-membre ⇒ c'est une porte de DÉCOUVERTE ⇒ critère STRICT
-      //    (blocage, amitié, co-participation), et une entrée absente masque.
+      // Critère STRICT, quel que soit le statut de membre du lecteur. La
+      // co-appartenance à la communauté ne vaut plus d'accès à la présence
+      // (directive produit 2026-08-25) : seuls soi-même, un admin global, ou
+      // un ami accepté (selon SES préférences) voient `isOnline`/`lastActiveAt`
+      // d'un membre — le contrôle d'accès ci-dessus (`hasAccess`) referme
+      // seulement la LISTE elle-même sur les communautés privées, il ne
+      // gouverne plus la présence des lignes qu'elle rend.
       //
       // `userMinimalSchema` ne déclare pas `lastActiveAt` : ce champ ne sort
       // d'aucune de ces réponses, mais le gate le couvre pour le jour où il y
@@ -178,15 +188,14 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         .map((m: { user?: MemberUser | null }) => m.user?.id)
         .filter((uid: string | undefined): uid is string => !!uid);
 
-      const presenceService = getPresenceVisibilityService(fastify.prisma);
-      const presenceVis = hasAccess
-        ? await presenceService.resolvePrefsOnly(memberUserIds)
-        : await presenceService.resolveForTargets(viewerFromRequest(request), memberUserIds);
-      const onMissingEntry = hasAccess ? 'reveal' as const : 'hide' as const;
+      const presenceVis = await getPresenceVisibilityService(fastify.prisma).resolveForTargets(
+        viewerFromRequest(request),
+        memberUserIds,
+      );
 
       const gatedMembers = members.map((m: { user?: MemberUser | null }) =>
         m.user
-          ? { ...m, user: applyPresenceVisibilityAsOffline(m.user, presenceVis.get(m.user.id), { onMissingEntry }) }
+          ? { ...m, user: servedPerson(applyPresenceVisibilityAsOffline(m.user, presenceVis.get(m.user.id))) }
           : m
       );
 
@@ -276,12 +285,13 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
       const userId = authContext.userId;
 
       // Verifier que la communaute existe et que l'utilisateur est admin
-      const community = await fastify.prisma.community.findFirst({
-        where: { id },
+      // #8876 — communauté désactivée par l'administration : 404, comme pour les lecteurs publics.
+const community = await fastify.prisma.community.findFirst({
+        where: { id, isActive: true },
         select: {
           createdBy: true,
           members: {
-            where: { userId },
+            where: { userId, isActive: true },
             select: { role: true }
           }
         }
@@ -299,13 +309,8 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Only community admins can add members');
       }
 
-      // Verifier que l'utilisateur a ajouter existe
-      const userToAdd = await fastify.prisma.user.findFirst({
-        where: { id: validatedData.userId },
-        select: { id: true }
-      });
-
-      if (!userToAdd) {
+      // #6376 — un compte vivant, sans blocage : la règle de POST …/invite (`isAddableUser`).
+      if (!(await isAddableUser(fastify.prisma, userId, validatedData.userId))) {
         return sendNotFound(reply, 'User to add not found');
       }
 
@@ -318,8 +323,33 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
       });
 
       let member;
-      if (existingMember) {
+      if (existingMember?.isActive) {
         member = existingMember;
+      } else if (existingMember) {
+        // Ligne laissée par un départ (#5760) : on la RÉACTIVE avec le rôle
+        // demandé, plutôt que d'ouvrir une seconde ligne pour la même paire
+        // (communityId, userId) — même règle que POST .../join et .../invite.
+        member = await fastify.prisma.communityMember.update({
+          where: { id: existingMember.id },
+          data: {
+            isActive: true,
+            leftAt: null,
+            /* istanbul ignore next -- AddMemberSchema's `role` is `.optional().default(CommunityRole.MEMBER)`, so Zod's own parse() already guarantees a defined value here */
+            role: (validatedData.role || CommunityRole.MEMBER) as string
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                avatar: true,
+                isOnline: true,
+                deactivatedAt: true
+              }
+            }
+          }
+        });
       } else {
         // Ajouter le membre avec le role specifie (par defaut: MEMBER)
         member = await fastify.prisma.communityMember.create({
@@ -336,17 +366,23 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
                 username: true,
                 displayName: true,
                 avatar: true,
-                isOnline: true
+                isOnline: true,
+                deactivatedAt: true
               }
             }
           }
         });
       }
 
-      // L'acteur est admin de la communauté et la cible vient d'en devenir
-      // membre : ils sont co-membres, donc préférences seules. La branche
-      // `existingMember` ne charge aucun `user` — le gate la laisse passer.
-      return sendSuccess(reply, await gateCoMemberPresence(fastify.prisma, member));
+      if (!existingMember?.isActive) {
+        scheduleCommunityAddedAnnouncement(fastify.prisma, { communityId: id, actorId: userId, recipientIds: [validatedData.userId] });
+      }
+
+      // Critère STRICT avec le viewer réel (l'admin qui vient d'ajouter le
+      // membre) — la co-appartenance qu'ils viennent de créer ne vaut aucun
+      // accès à la présence. La branche `existingMember` ne charge aucun
+      // `user` — le gate la laisse passer.
+      return sendSuccess(reply, await gateCoMemberPresence(fastify.prisma, viewerFromRequest(request), member));
     } catch (error) {
       logger.error('Error adding community member', error as Error);
       return sendInternalError(reply, 'Failed to add community member');
@@ -425,13 +461,16 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
 
       const userId = authContext.userId;
 
-      // Verifier que la communaute existe et que l'utilisateur est admin
+      // #6375 — une communauté désactivée (#8876) ne se gère plus : 404,
+      // comme pour tous ses lecteurs.
       const community = await fastify.prisma.community.findFirst({
-        where: { id },
+        where: { id, isActive: true },
         select: {
           createdBy: true,
+          isPrivate: true,
+          isActive: true,
           members: {
-            where: { userId },
+            where: activeMembershipOf(userId),
             select: { role: true }
           }
         }
@@ -449,9 +488,27 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Only community admins can update member roles');
       }
 
-      // Mettre a jour le role du membre
+      // Mettre a jour le role du membre.
+      //
+      // `communityId` BORNE la ligne a la communaute du chemin (#4142). Sans
+      // lui, la garde d'admin ci-dessus porte sur la communaute `:id` pendant
+      // que l'ecriture porte sur `CommunityMember.id`, qui est GLOBAL : un
+      // administrateur de A promouvait un membre de B en connaissant son
+      // identifiant de ligne. La decision d'autorisation et la ligne ecrite
+      // doivent designer la meme communaute.
+      // #6375 — seule une ligne ACTIVE se gère, et jamais celle du créateur :
+      // ses droits viennent de `createdBy`, qu'aucun rôle ne lui retire. Les
+      // deux bornes vivent dans le `where` de l'écriture : aucune lecture
+      // préalable ne peut se périmer avant elle.
       const updatedMember = await fastify.prisma.communityMember.update({
-        where: { id: memberId },
+        // Rendre le rôle d'administrateur au créateur reste permis : une ligne
+        // rétrogradée avant cette garde doit pouvoir être réparée.
+        where: {
+          id: memberId,
+          communityId: id,
+          isActive: true,
+          ...(validatedData.role === CommunityRole.ADMIN ? {} : { userId: { not: community.createdBy } })
+        },
         data: { role: validatedData.role as string },
         include: {
           user: {
@@ -463,7 +520,30 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
             }
           }
         }
+      }).catch((error: unknown) => {
+        // P2025 = aucune ligne ne satisfait le `where`. Ici cela veut dire
+        // « ce membre n'appartient pas a cette communaute » — un 404, jamais un
+        // 403 : repondre « interdit » confirmerait que la ligne existe
+        // AILLEURS, ce que l'appelant n'a pas le droit d'apprendre.
+        if ((error as { code?: string }).code === 'P2025') return null;
+        throw error;
       });
+
+      if (!updatedMember) {
+        // Le seul 403 : la ligne active du créateur, DANS cette communauté —
+        // l'appelant, administrateur, la voit déjà dans la liste.
+        const creatorRow = await fastify.prisma.communityMember.findFirst({
+          where: { id: memberId, communityId: id, ...activeMembershipOf(community.createdBy) },
+          select: { id: true }
+        });
+        if (creatorRow) {
+          return sendForbidden(reply, 'The community creator keeps their role', { code: CREATOR_PROTECTED });
+        }
+      }
+
+      if (!updatedMember) {
+        return sendNotFound(reply, 'Member not found in this community');
+      }
 
       return sendSuccess(reply, updatedMember);
     } catch (error) {
@@ -537,13 +617,16 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
 
       const userId = authContext.userId;
 
-      // Verifier que la communaute existe et que l'utilisateur est admin
+      // #6375 — une communauté désactivée (#8876) ne se gère plus : 404,
+      // comme pour tous ses lecteurs.
       const community = await fastify.prisma.community.findFirst({
-        where: { id },
+        where: { id, isActive: true },
         select: {
           createdBy: true,
+          isPrivate: true,
+          isActive: true,
           members: {
-            where: { userId },
+            where: activeMembershipOf(userId),
             select: { role: true }
           }
         }
@@ -561,13 +644,35 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Only community admins can remove members');
       }
 
-      // Supprimer le membre
-      await fastify.prisma.communityMember.deleteMany({
-        where: {
-          communityId: id,
-          userId: memberId
-        }
+      // Aligné sur le départ volontaire (#5760) : `isActive: false` + `leftAt`,
+      // jamais une suppression — la ligne reste la trace du retrait, et la
+      // ré-adhésion (POST .../join, .../invite, .../members) la réactive au
+      // lieu d'en ouvrir une seconde (#5800).
+      if (memberId === community.createdBy) {
+        return sendForbidden(reply, 'The community creator cannot be removed', { code: CREATOR_PROTECTED });
+      }
+
+      const activeMembership = await fastify.prisma.communityMember.findFirst({
+        where: { communityId: id, ...activeMembershipOf(memberId) }
       });
+
+      if (!activeMembership) {
+        return sendNotFound(reply, 'Member not found in this community');
+      }
+
+      const leftAt = new Date();
+      await fastify.prisma.communityMember.update({
+        where: { id: activeMembership.id },
+        data: { isActive: false, leftAt }
+      });
+
+      // #16704 — retiré d'une communauté qui garde ses salons, on ne les lit plus.
+      if (communityGuardsItsSalons(community)) {
+        await exitCommunitySalons(
+          { prisma: fastify.prisma, socketIOHandler: fastify.socketIOHandler },
+          { communityId: id, userId: memberId, now: leftAt },
+        );
+      }
 
       return sendSuccess(reply, { message: 'Member removed successfully' });
     } catch (error) {

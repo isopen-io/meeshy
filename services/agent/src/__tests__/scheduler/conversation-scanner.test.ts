@@ -29,6 +29,8 @@ function makePersistence(overrides: Record<string, jest.Mock> = {}) {
     getRecentMessageCount: jest.fn().mockResolvedValue(1),
     getRecentUniqueAuthors: jest.fn().mockResolvedValue(1),
     evictRecentlyActiveUsers: jest.fn().mockResolvedValue(0),
+    evictStaleRoles: jest.fn().mockResolvedValue(0),
+    touchUserRoles: jest.fn().mockResolvedValue(undefined),
     getControlledUsers: jest.fn().mockResolvedValue([makeControlledUser()]),
     getAgentConfig: jest.fn().mockResolvedValue({
       scanIntervalMinutes: 3,
@@ -123,8 +125,27 @@ function makeBudgetManager() {
     recordMessage: jest.fn().mockResolvedValue(undefined),
     recordBurst: jest.fn().mockResolvedValue(undefined),
     getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0, isWeekend: false }),
+    canSpendLlm: jest.fn().mockResolvedValue({ allowed: true, spentUsd: 0, budgetUsd: 10 }),
   } as any;
 }
+
+describe('ConversationScanner — budget quotidien en dollars (#10287)', () => {
+  it("ne lance plus aucun scan (ni graphe, ni statut) quand le budget LLM du jour est atteint", async () => {
+    const graph = { invoke: jest.fn() };
+    const persistence = makePersistence();
+    const budgetManager = makeBudgetManager();
+    budgetManager.canSpendLlm = jest.fn().mockResolvedValue({ allowed: false, spentUsd: 10.2, budgetUsd: 10 });
+    const configCache = makeConfigCache();
+    configCache.getGlobalConfig = jest.fn().mockResolvedValue({ enabled: true, globalDailyBudgetUsd: 10 });
+    const scanner = new ConversationScanner(graph as any, persistence, makeStateManager(), makeDeliveryQueue(), makeRedis(), configCache, budgetManager);
+
+    await scanner.scanConversation('conv-1');
+
+    expect(budgetManager.canSpendLlm).toHaveBeenCalledWith(10);
+    expect(graph.invoke).not.toHaveBeenCalled();
+    expect(persistence.updateScanStatus).not.toHaveBeenCalled();
+  });
+});
 
 describe('ConversationScanner — analytics upsert after cycle', () => {
   it('calls persistence.updateAnalytics after graph produces message actions', async () => {

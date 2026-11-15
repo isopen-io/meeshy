@@ -18,21 +18,21 @@ struct MessageDaySeparator: View, Equatable {
             Text(label)
                 .font(.caption.weight(.semibold))
                 .foregroundColor(textColor)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 5)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.xs)
                 .background(
                     Capsule()
                         .fill(.ultraThinMaterial)
                         .overlay(
                             Capsule()
-                                .strokeBorder(borderColor, lineWidth: 0.5)
+                                .strokeBorder(borderColor, lineWidth: MeeshyBorder.hairline)
                         )
                 )
                 .accessibilityLabel(label)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, MeeshySpacing.xsPlus)
     }
 
     private var textColor: Color {

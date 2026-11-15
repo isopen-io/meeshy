@@ -85,7 +85,7 @@ const mockResolveMentionedUsers = jest.fn() as jest.Mock<any>;
 const mockResolveUsernamesToIds = jest.fn() as jest.Mock<any>;
 jest.mock('../../../services/MentionService', () => ({
   resolveMentionedUsers: (...a: any[]) => mockResolveMentionedUsers(...a),
-  resolveUsernamesToIds: (...a: any[]) => mockResolveUsernamesToIds(...a),
+  resolveUsernamesToIds: (...a: any[]) => mockResolveUsernamesToIds(...a), withoutPendingMessageRequests: async (_p: unknown, _c: unknown, ids: readonly string[]) => [...ids],
 }));
 
 const mockBuildPostReplyTo = jest.fn() as jest.Mock<any>;
@@ -97,9 +97,8 @@ jest.mock('../../../services/messaging/postReplySnapshot', () => ({
 }));
 
 const mockSerializeAttachmentForSocket = jest.fn() as jest.Mock<any>;
-jest.mock('../../serializeAttachmentForSocket', () => ({
-  serializeAttachmentForSocket: (...a: any[]) => mockSerializeAttachmentForSocket(...a),
-}));
+// #7070 — la LISTE (site UNIQUE, partagé avec le producteur REST/ZMQ) autant que la pièce : sans elle le handler n'émet plus rien, et l'échec nomme l'émission, jamais le double. Elle DÉLÈGUE à l'espion, pour que « chaque pièce passe par le sérialiseur » reste mesuré ici. Écrit sur UNE ligne : ce fichier est hors budget (`gateway-test-file-size-budget`), il ne peut que rétrécir.
+jest.mock('../../serializeAttachmentForSocket', () => ({ serializeAttachmentForSocket: (...a: any[]) => mockSerializeAttachmentForSocket(...a), serializeMessageAttachmentsForSocket: (l: unknown) => (Array.isArray(l) ? l.map((a: unknown) => mockSerializeAttachmentForSocket(a)) : []) }));
 
 const mockConversationStatsUpdate = jest.fn() as jest.Mock<any>;
 jest.mock('../../../services/ConversationStatsService', () => ({
@@ -430,6 +429,33 @@ describe('MessageHandler', () => {
       await handler.handleMessageSend(
         socket,
         makeValidSendData({ content: '', copyAttachmentsFromMessageId: SOURCE_MSG_ID }),
+        callback,
+      );
+
+      expect(callback).not.toHaveBeenCalledWith(
+        expect.objectContaining({ error: 'Le message ne peut pas être vide' }),
+      );
+      expect(mockResolveParticipant).toHaveBeenCalled();
+    });
+
+    // Quatrième porte de l'exemption de contenu vide, la même famille que
+    // copyAttachmentsFromMessageId ci-dessus, sur le même transport socket —
+    // celui qui rejoue une géolocalisation seule après l'échec du POST REST
+    // (fallback documenté du client iOS). Resté fermé, ce transport rejetait
+    // à coup sûr tout message de géolocalisation seule : ni texte, ni
+    // attachmentIds, la retentative ne pouvait donc jamais réussir (#4039,
+    // repro : envoi bloqué pour toujours dans le SyncPill).
+    it('does not reject an empty-content send carrying a location (location-only share)', async () => {
+      const GEO = { latitude: 48.8566, longitude: 2.3522, name: 'Paris' };
+      mockValidateMessageLength.mockReturnValue({ isValid: false, error: 'Le message ne peut pas être vide' });
+      mockValidateSocketEvent.mockReturnValue({
+        success: true,
+        data: makeValidSendData({ content: '', location: GEO }),
+      });
+
+      await handler.handleMessageSend(
+        socket,
+        makeValidSendData({ content: '', location: GEO }),
         callback,
       );
 
@@ -1564,7 +1590,7 @@ describe('MessageHandler', () => {
       ]);
     });
 
-    it("expose `isEncrypted` explicitement à false plutôt que de l'omettre — un client ne doit jamais avoir à deviner qu'un texte est en clair", async () => {
+    it("expose `isEncrypted` explicitement à false, et ne sert jamais une traduction encore chiffrée comme du texte (#12822)", async () => {
       const msg = makeMongoTranslated({
         translations: {
           en: { text: 'Hello', translationModel: 'basic', createdAt: new Date() },
@@ -1576,7 +1602,8 @@ describe('MessageHandler', () => {
 
       const byLang = new Map(emittedTranslations().map((t) => [t.targetLanguage, t]));
       expect(byLang.get('en')).toEqual(expect.objectContaining({ isEncrypted: false }));
-      expect(byLang.get('de')).toEqual(expect.objectContaining({ isEncrypted: true }));
+      expect(byLang.has('de')).toBe(false);
+      expect(JSON.stringify(emittedTranslations())).not.toContain('Z2VoZWlt');
     });
 
     it('laisse intact un tableau déjà au format API — le type partagé `Message.translations` en promet un, il ne doit pas être re-transformé', async () => {
@@ -2880,17 +2907,15 @@ describe('MessageHandler', () => {
       }));
     });
 
-    it('omits clientMessageId from ACK when absent from response data (line 1152 false branch)', async () => {
+    // #17058 — « absent » = absent de la SOUMISSION ; raison et jumeaux dans `message-ack-submitted-cid.test.ts`.
+    it('#17058 — omet le cid quand le client n’en a pas SOUMIS', async () => {
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: makeValidSendData({ clientMessageId: undefined }) });
       (deps.messagingService.handleMessage as jest.Mock<any>).mockResolvedValue({
         success: true,
-        data: {
-          id: 'msg-nocid', conversationId: VALID_CONV_ID,
-          createdAt: new Date(), senderId: PARTICIPANT_ID,
-          // no clientMessageId
-        },
+        data: { id: 'msg-nocid', conversationId: VALID_CONV_ID, createdAt: new Date(), senderId: PARTICIPANT_ID },
       });
 
-      await handler.handleMessageSend(socket, makeValidSendData(), callback);
+      await handler.handleMessageSend(socket, makeValidSendData({ clientMessageId: undefined }), callback);
 
       const arg = (callback.mock.calls[0] as [any])[0];
       expect(arg.success).toBe(true);

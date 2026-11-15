@@ -1,4 +1,6 @@
 import XCTest
+import MeeshySDK
+@testable import Meeshy
 
 /// Gardes par analyse de source sur la ligne de méta du header du reader de
 /// story — `StoryHeaderView` est couplée à des `@Binding` du viewer et à son
@@ -66,12 +68,15 @@ final class StoryHeaderMetaGuardTests: XCTestCase {
         return out
     }
 
-    /// Corps de `StoryHeaderView`, commentaires retirés. Le fichier héberge
-    /// aussi le rail d'actions : sans ce scope, une assertion matcherait le
-    /// premier `Image(systemName: "clock")` venu, d'où qu'il vienne.
+    /// Corps de `StoryHeaderView`, commentaires retirés.
+    ///
+    /// #4084 — l'en-tête a quitté `StoryViewerView+Sidebar.swift` pour son
+    /// propre fichier. Le scope reste : rien ne garantit qu'un fichier ne
+    /// reçoive pas plus tard une seconde vue, et une assertion à l'échelle du
+    /// fichier matcherait alors le premier glyphe venu, d'où qu'il vienne.
     private func headerBlock() throws -> String {
         let fileSource = strippingComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"))
+            try source("Meeshy/Features/Stories/Views/StoryViewerView+Header.swift"))
         guard let start = fileSource.range(of: "struct StoryHeaderView: View {") else {
             XCTFail("StoryHeaderView introuvable")
             return ""
@@ -83,20 +88,81 @@ final class StoryHeaderMetaGuardTests: XCTestCase {
         return String(fileSource[start.upperBound..<end.lowerBound])
     }
 
-    // MARK: - 1. L'horloge qualifie la date de publication, l'expiration a quitté le header
+    // MARK: - 1. L'heure qualifie l'AUTEUR, l'expiration a quitté le header
 
-    func test_header_showsClockNextToPublicationTime() throws {
+    /// **Vue `2f` — l'heure appartient à la ligne du NOM.**
+    ///
+    /// Elle qualifie l'AUTEUR (« Camille Roux, il y a 2 h ») ; le crédit du son,
+    /// juste dessous, qualifie le CONTENU. Depuis #8878 la ligne est celle de
+    /// `FullscreenIdentityRow` (SDK), commune à tous les visualiseurs plein écran :
+    /// l'en-tête lui PASSE le nom et l'heure, et c'est l'atome qui les pose sur une
+    /// même rangée. Le témoin garde donc les deux moitiés du contrat : l'en-tête
+    /// nourrit le nom ET l'heure, et l'atome les range dans le même `HStack`.
+    func test_header_publicationTimeSitsOnTheNameLine() throws {
         let header = try headerBlock()
 
-        guard let clock = header.range(of: #"Image(systemName: "clock")"#),
-              let publishedAt = header.range(of: "Text(story.timeAgo)") else {
-            XCTFail("Le header doit rendre une horloge ET l'heure de publication")
+        XCTAssertTrue(
+            header.contains("FullscreenIdentityRow("),
+            "L'identité de l'auteur est celle de l'atome plein écran, pas une rangée réécrite."
+        )
+        XCTAssertTrue(
+            header.contains("name: DisplayName.truncated(group.username)"),
+            "Le nom passé à l'atome est celui de la ligne du nom."
+        )
+        XCTAssertTrue(
+            header.contains("subtitle: StoryHeaderTime.subtitle(of: currentStory)"),
+            "Vue `2f` : l'heure de publication est le `subtitle` de l'atome, donc sur la " +
+            "ligne du NOM qu'elle qualifie — pas sur une rangée de méta partagée avec le " +
+            "crédit du son, où la donnée la plus consultée se noie dans la moins consultée."
+        )
+
+        let atom = strippingComments(
+            try source("../../packages/MeeshySDK/Sources/MeeshyUI/Fullscreen/FullscreenTopBar.swift"))
+        let nameLine = try XCTUnwrap(atom.range(of: "HStack(spacing: MeeshySpacing.xsPlus) {"),
+                                     "La ligne du nom de l'atome est introuvable")
+        let tail = String(atom[nameLine.upperBound...])
+        let name = try XCTUnwrap(tail.range(of: "Text(name)"))
+        let date = try XCTUnwrap(tail.range(of: "Text(subtitle)"))
+        let accessory = try XCTUnwrap(tail.range(of: "accessory\n"))
+        XCTAssertTrue(name.lowerBound < date.lowerBound && date.lowerBound < accessory.lowerBound,
+                      "Le nom, puis l'heure sur sa ligne, puis l'accessoire SOUS elle.")
+    }
+
+    /// **Vue `2f` — le crédit du son occupe sa propre ligne, SOUS celle du nom.**
+    ///
+    /// Deux attributions distinctes — qui a republié, à qui appartient la
+    /// musique — se tronquaient l'une l'autre quand elles partageaient la
+    /// largeur. Le crédit est l'`accessory` de l'atome, qui le range sous la
+    /// ligne du nom : il vient APRÈS l'heure dans l'en-tête, et hors de la ligne.
+    func test_header_soundCreditSitsOnItsOwnLineBelowTheName() throws {
+        let header = try headerBlock()
+
+        guard let time = header.range(of: "subtitle: StoryHeaderTime.subtitle(of: currentStory)"),
+              let accessory = header.range(of: "accessory: {"),
+              let badge = header.range(of: "BackgroundSoundBadge(") else {
+            XCTFail("Le header doit porter l'heure, l'accessoire ET le crédit du son")
             return
         }
         XCTAssertTrue(
-            clock.lowerBound < publishedAt.lowerBound,
-            "L'horloge doit PRÉCÉDER l'heure de publication : elle la qualifie. " +
-            "Posée après, elle se relit comme le préfixe de ce qui suit."
+            time.lowerBound < accessory.lowerBound && accessory.lowerBound < badge.lowerBound,
+            "Le crédit du son est dans l'`accessory` de l'atome : SOUS la ligne du nom, " +
+            "jamais au-dessus ni sur elle."
+        )
+    }
+
+    /// L'horloge a quitté l'en-tête avec la vue `2f` : collée à l'auteur, « 2 h »
+    /// se lit sans ambiguïté comme une date de publication, et `FeedPostCard`
+    /// n'en a jamais porté. Elle ne manquait à personne — elle était déjà
+    /// `accessibilityHidden(true)`.
+    func test_header_hasNoClockGlyph() throws {
+        let header = try headerBlock()
+
+        XCTAssertFalse(
+            header.contains(#"Image(systemName: "clock")"#),
+            "Vue `2f` : plus d'horloge dans l'en-tête. La directive du 2026-07-30 qui " +
+            "l'avait introduite portait sur le RETRAIT du compte à rebours « Expire " +
+            "dans Xh » ; l'horloge y avait été re-affectée, jamais demandée pour " +
+            "elle-même."
         )
     }
 
@@ -154,7 +220,7 @@ final class StoryHeaderMetaGuardTests: XCTestCase {
     /// restent réservés aux pistes FOREGROUND (`AudioForegroundReaderOverlay`).
     func test_canvas_rendersNoWaveformChipForBackgroundAudio() throws {
         let canvas = strippingComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift"))
 
         XCTAssertFalse(
             canvas.contains("StoryWaveformBadgeView("),
@@ -207,8 +273,9 @@ final class StoryHeaderMetaGuardTests: XCTestCase {
     /// — `createPostMentionNotificationsBatch` notifie TOUS les modes —
     /// ouvrait la story, et n'y trouvait aucune trace d'avoir été nommée.
     private func canvasCode() throws -> String {
+        // L'UNITÉ du canvas : le chrome haut (en-tête, rangée des références) vit dans `+Canvas+Layers`.
         strippingComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift"))
     }
 
     func test_theReaderMountsTheReferenceNoteRow_fedByTheCurrentStory() throws {
@@ -267,5 +334,19 @@ final class StoryHeaderMetaGuardTests: XCTestCase {
             "`selectedProfileUser` que l'en-tête), sinon la rangée nomme des " +
             "gens qu'on ne peut pas atteindre."
         )
+    }
+
+    /// #15198 — une story en attente dit son attente par l'horloge d'un
+    /// message en envoi, à la place de l'heure (#14879) ; jamais par un libellé.
+    func test_headerTime_pendingStory_showsTheClockInPlaceOfTheTime() {
+        let pending = StoryItem(id: "\(PendingStoryMarker.prefix)\(UUID().uuidString)#0", content: nil, media: [],
+                                storyEffects: nil, createdAt: Date(), expiresAt: nil, isViewed: false)
+        let sent = StoryItem(id: "665f1c2e9b1d4a0012345678", content: nil, media: [],
+                             storyEffects: nil, createdAt: Date(), expiresAt: nil, isViewed: false)
+
+        XCTAssertNil(StoryHeaderTime.subtitle(of: pending))
+        XCTAssertTrue(StoryHeaderTime.showsPendingClock(for: pending))
+        XCTAssertEqual(StoryHeaderTime.subtitle(of: sent), sent.timeAgo)
+        XCTAssertFalse(StoryHeaderTime.showsPendingClock(for: sent))
     }
 }

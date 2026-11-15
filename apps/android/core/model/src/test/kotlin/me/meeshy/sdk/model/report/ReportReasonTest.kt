@@ -80,8 +80,29 @@ class ReportReasonTest {
     }
 
     @Test
-    fun `messageOrdered covers the full enum with no omissions`() {
-        assertThat(ReportReason.messageOrdered).containsExactlyElementsIn(ReportReason.entries)
+    fun `messageOrdered covers the full enum except the profile-only fake profile`() {
+        assertThat(ReportReason.messageOrdered)
+            .containsExactlyElementsIn(ReportReason.entries - ReportReason.FAKE_PROFILE)
+    }
+
+    @Test
+    fun `fake profile carries the gateway token fake_profile`() {
+        assertThat(ReportReason.FAKE_PROFILE.wireValue).isEqualTo("fake_profile")
+    }
+
+    @Test
+    fun `profileOrdered lists the eight iOS profile reasons in order`() {
+        assertThat(ReportReason.profileOrdered).containsExactly(
+            ReportReason.SPAM,
+            ReportReason.INAPPROPRIATE,
+            ReportReason.HARASSMENT,
+            ReportReason.VIOLENCE,
+            ReportReason.HATE_SPEECH,
+            ReportReason.FAKE_PROFILE,
+            ReportReason.IMPERSONATION,
+            ReportReason.OTHER,
+        ).inOrder()
+        assertThat(ReportReason.profileOrdered).containsExactlyElementsIn(ReportReason.entries)
     }
 
     @Test

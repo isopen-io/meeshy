@@ -2,6 +2,7 @@
 import XCTest
 import AVFoundation
 @testable import MeeshyUI
+import MeeshySDK
 
 @MainActor
 final class StoryBackgroundLayerVideoTests: XCTestCase {
@@ -43,9 +44,11 @@ final class StoryBackgroundLayerVideoTests: XCTestCase {
                         resolver: resolver, imageCache: nil)
         XCTAssertNotNil(layer.avPlayer,
                         "cache-miss : le player doit être attaché IMMÉDIATEMENT (streaming), pas après un download")
-        let assetURL = (layer.avPlayer?.currentItem?.asset as? AVURLAsset)?.url
-        XCTAssertEqual(assetURL, remote,
-                       "le player doit streamer l'URL DISTANTE, pas attendre un fichier local pré-téléchargé")
+        // #9881 : l'URL distante se lit par le transfert UNIQUE du cache, pendant
+        // sa course — jamais par un second flux HTTPS à côté de lui.
+        let asset = layer.avPlayer?.currentItem?.asset as? ProgressiveURLAsset
+        XCTAssertEqual(asset?.remoteURL, remote,
+                       "le player doit lire l'URL DISTANTE en flux, pas attendre un fichier local pré-téléchargé")
     }
 
     func test_handleAppLifecycle_pausesAndResumes() throws {

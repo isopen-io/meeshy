@@ -46,7 +46,25 @@ function buildApp(user = adminUser): FastifyInstance {
 
   app.decorate('prisma', mockPrisma);
   app.decorate('authenticate', async (request: any) => {
-    request.user = user;
+    // Le contexte d'authentification de la PRODUCTION.
+    //
+    // Ce double posait `request.user = { id, role }` — une forme que le
+    // middleware réel NE PRODUIT PAS : `request.user` y porte `userId`,
+    // `username` et `isAnonymous`, et **jamais `role`**, qui vit dans
+    // `authContext.registeredUser`.
+    //
+    // La garde locale d'`agent-topics` lisait `user.role` : en production, elle
+    // testait `undefined` contre une liste de rôles, donc elle refusait TOUT LE
+    // MONDE — BIGBOSS compris. Les routes d'administration de l'agent étaient
+    // fermées, et ces témoins étaient verts parce que le double, lui, posait ce
+    // que la production ne pose pas (#4153).
+    request.user = { userId: user.id, isAnonymous: false };
+    request.authContext = {
+      isAuthenticated: true,
+      type: 'user',
+      userId: user.id,
+      registeredUser: { id: user.id, role: user.role },
+    };
   });
 
   app.register(agentTopicsRoutes);
@@ -94,6 +112,32 @@ describe('Agent Topics Routes — admin dashboard push', () => {
 
     expect(res.statusCode).toBe(200);
     expect(adminEventsPublished()).toEqual([{ kind: 'topics' }]);
+  });
+
+  it('POST /topics accepte une priorité admin (0-10) et la persiste (#6192)', async () => {
+    mockPrisma.agentTopicCatalog.create.mockResolvedValueOnce({ ...storedTopic, priority: 3 });
+
+    const res = await app.inject({ method: 'POST', url: '/topics', payload: { ...validTopicBody, priority: 3 } });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.agentTopicCatalog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ priority: 3 }) }),
+    );
+  });
+
+  it('POST /topics refuse une priorité hors de 0-10', async () => {
+    const tooHigh = await app.inject({ method: 'POST', url: '/topics', payload: { ...validTopicBody, priority: 11 } });
+    const negative = await app.inject({ method: 'POST', url: '/topics', payload: { ...validTopicBody, priority: -1 } });
+    expect(tooHigh.statusCode).toBe(400);
+    expect(negative.statusCode).toBe(400);
+    expect(mockPrisma.agentTopicCatalog.create).not.toHaveBeenCalled();
+  });
+
+  it('PATCH /topics/:id ne touche pas à la priorité quand le corps ne la porte pas', async () => {
+    mockPrisma.agentTopicCatalog.update.mockResolvedValueOnce(storedTopic);
+    await app.inject({ method: 'PATCH', url: `/topics/${storedTopic.id}`, payload: { label: 'Kongossa' } });
+    const data = mockPrisma.agentTopicCatalog.update.mock.calls[0][0].data;
+    expect(data).not.toHaveProperty('priority');
   });
 
   it('PATCH /topics/:id publishes {kind:"topics"} on agent:admin-event', async () => {

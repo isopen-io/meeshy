@@ -1,0 +1,275 @@
+import * as attachmentsEndpoints from '@meeshy/shared/api/endpoints/attachments';
+
+import type { ConversationsDeps } from './conversations';
+import { uploadedAttachmentsOf } from './fixtures';
+import { isHeifFamily, UPLOAD_FORMAT_REFUSED } from '@/lib/media/heif';
+
+import type { ApiFailure, ApiResult } from './http';
+import type { Attachment } from './types';
+
+/**
+ * LE PORT DE L'UPLOAD (#5668, § 0 de la spécification) — **PAS**
+ * `POST /conversations/:id/messages` (qui ne consomme que des
+ * `attachmentIds` déjà obtenus, `messages.ts`), mais
+ * `POST attachments.upload`
+ * (`services/gateway/src/routes/attachments/upload.ts:59-207`,
+ * `consumes: ['multipart/form-data']`) : les octets partent AVANT, sur cette
+ * route-ci.
+ *
+ * FORME multipart EXACTE que la passerelle lit (`upload.ts:128-151`) : un
+ * champ `files` par fichier (`part.type === 'file'`), et un champ
+ * `metadata_<i>` (JSON, `i` = rang du fichier dans l'ordre d'ajout) — ce lot
+ * n'y pose que `duration` (ms), pour un vocal (`upload.ts:146`,
+ * `UploadProcessor.ts:744-745`). Miroir `apps/web/services/attachmentService.ts:53-76`.
+ *
+ * `uploadMultiple` AVALE les échecs PAR FICHIER (`UploadProcessor.ts:744-751`)
+ * — un fichier au MIME refusé (#5615) disparaît de la réponse SOUS
+ * `success: true`. Ce port ne réconcilie PAS lui-même (c'est
+ * `send/perform-send.ts` qui compare `attachments.length` au nombre de
+ * fichiers envoyés, § 0 « UPLOAD_PARTIAL ») : il rend la réponse telle quelle.
+ */
+export type PendingUpload = {
+  readonly file: File;
+  /** Millisecondes — posé seulement pour un enregistrement vocal
+   * (`use-recorder.ts`). */
+  readonly durationMs?: number;
+  /** `PendingAttachment.localId` (`send/attachments.ts`) — REÇU quand
+   * l'appelant en a un (défaut 7, revue #5668), pour que le repli
+   * `fixtures` réutilise l'URL d'aperçu déjà créée (`previewUrlFor`)
+   * plutôt que d'en fabriquer une troisième pour le même fichier. Sans
+   * effet sur le port réel : `formDataOf` ne le sert jamais au fil. */
+  readonly localId?: string;
+};
+
+function formDataOf(pending: readonly PendingUpload[]): FormData {
+  const form = new FormData();
+  pending.forEach((p, index) => {
+    form.append('files', p.file, p.file.name);
+    if (p.durationMs !== undefined) {
+      form.append(`metadata_${index}`, JSON.stringify({ duration: p.durationMs }));
+    }
+  });
+  return form;
+}
+
+/**
+ * LE DÉLAI D'UN TÉLÉVERSEMENT SE COMPTE EN OCTETS, PAS EN LATENCE
+ * (revue-correction #5668) — `DEFAULT_TIMEOUT_MS` (15 s, `http.ts`) est
+ * arbitré contre le p95 d'un appel JSON. Le profil réseau que ce dépôt
+ * budgète (Fast 3G, `budgets.json § network_note`) monte à ~400 kbit/s : une
+ * photo de 4 Mo demande ~80 s, une de 10 Mo ~200 s. Sous les 15 s du défaut,
+ * AUCUN envoi de photo n'aboutissait sur ce profil — et l'échec se lisait
+ * « la passerelle n'a pas répondu », qui accuse le serveur d'une horloge
+ * cliente. Le plafond retenu couvre `SMALL_FILE_THRESHOLD` (50 Mo,
+ * `attachment.ts:487`, la borne au-delà de laquelle c'est TUS qui doit
+ * porter) à ce débit-là, avec une marge : 50 Mo / 400 kbit/s ≈ 1000 s.
+ * Ce n'est PAS « pas de délai » : une connexion morte doit toujours finir par
+ * rendre la main à « Réessayer ».
+ */
+const UPLOAD_TIMEOUT_MS = 1_200_000;
+
+/**
+ * LE PORT DU RAPPORT DE CONSOMMATION (#7225, W6) — route RÉELLE :
+ * `POST attachments.byAttachmentIdStatus`
+ * (`services/gateway/src/routes/messages-writes.ts:588-608`), corps validé
+ * par `AttachmentStatusBodySchema`
+ * (`services/gateway/src/validation/messages-schemas.ts:212-251`).
+ *
+ * `stretches` reprend la forme EXACTE que le schéma valide
+ * (`startMs`/`endMs`/`endedBy`) — le tracker qui les PRODUIT vit dans
+ * `use-media-playback.ts` (co-localisé avec la lecture, § du fichier), ce
+ * port ne fait que composer la requête.
+ */
+export type PlaybackStretch = {
+  readonly startMs: number;
+  readonly endMs: number;
+  readonly endedBy: 'pause' | 'seek' | 'muted' | 'completed' | 'dismissed' | 'superseded';
+};
+
+export type AttachmentStatusReport = {
+  /** 'listened' pour un vocal, 'watched' pour une vidéo, 'viewed' pour
+   * l'OUVERTURE d'une image ou d'un document (#7363, W6 — miroir
+   * `DocumentOpenReport.bodyForOpening`, `packages/MeeshySDK/Sources/
+   * MeeshyUI/Media/DocumentOpenReport.swift` : lire n'est pas enregistrer,
+   * jamais `'downloaded'` pour une simple ouverture), 'downloaded' pour un
+   * enregistrement EXPLICITE. Le serveur accepte les quatre depuis toujours
+   * (`AttachmentStatusBodySchema`, `messages-schemas.ts:212`) — seul ce
+   * type CLIENT était resté étroit. */
+  readonly action: 'listened' | 'watched' | 'viewed' | 'downloaded';
+  readonly playPositionMs?: number;
+  readonly durationMs?: number;
+  readonly complete?: boolean;
+  readonly stretches?: readonly PlaybackStretch[];
+  readonly language?: string;
+};
+
+export function reportAttachmentStatus(
+  params: ConversationsDeps & { readonly attachmentId: string; readonly report: AttachmentStatusReport },
+): Promise<ApiResult<unknown>> {
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    return Promise.resolve({ ok: true, data: undefined });
+  }
+  return params.transport.request<unknown>({
+    method: 'POST',
+    path: attachmentsEndpoints.byAttachmentIdStatus(params.attachmentId),
+    body: params.report,
+  });
+}
+
+export async function uploadAttachments(
+  params: ConversationsDeps & { readonly pending: readonly PendingUpload[]; readonly signal?: AbortSignal },
+): Promise<ApiResult<{ readonly attachments: readonly Attachment[] }>> {
+  if (params.pending.length === 0) return { ok: true, data: { attachments: [] } };
+
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    return { ok: true, data: { attachments: uploadedAttachmentsOf(params.pending) } };
+  }
+
+  return params.transport.request<{ readonly attachments: readonly Attachment[] }>({
+    method: 'POST',
+    path: attachmentsEndpoints.upload,
+    body: formDataOf(params.pending),
+    timeoutMs: UPLOAD_TIMEOUT_MS,
+    ...(params.signal !== undefined ? { signal: params.signal } : {}),
+  });
+}
+
+/**
+ * QUI A OUVERT / TÉLÉCHARGÉ / ÉCOUTÉ / REGARDÉ UNE PIÈCE (#7226, W7) —
+ * `GET attachments.byAttachmentIdStatusDetails`
+ * (`services/gateway/src/routes/messages-reads.ts:570-634`). L'enveloppe
+ * pose `pagination` À LA RACINE (`sendPaginatedSuccess`), PAS dans `data` —
+ * `data` EST le tableau (`statusDetails.statuses`), contrairement à
+ * `fetchMessageReceiptsPeople` (§ `receipts.ts`) dont la pagination vit dans
+ * `data.pagination`. Deux routes, deux conventions ; ce port SUIT chacune,
+ * il n'en invente pas une troisième commune.
+ *
+ * Forme d'une ligne — miroir EXACT de `getAttachmentStatusDetails`
+ * (`services/gateway/src/services/MessageReadStatusService.ts:2271-2305`) :
+ * `viewCount` compte les ouvertures d'une IMAGE, `downloadedAt` un
+ * téléchargement (générique, tous types de pièce).
+ */
+export type AttachmentStatusRow = {
+  readonly participantId: string;
+  readonly username: string;
+  readonly avatar?: string | null;
+  readonly viewedAt: string | null;
+  readonly downloadedAt: string | null;
+  readonly listenedAt: string | null;
+  readonly watchedAt: string | null;
+  readonly listenCount: number;
+  readonly watchCount: number;
+  readonly listenedComplete: boolean;
+  readonly watchedComplete: boolean;
+  readonly lastPlayPositionMs: number | null;
+  readonly lastWatchPositionMs: number | null;
+  readonly viewCount: number;
+  readonly viewedLanguages: readonly string[];
+};
+
+export const attachmentStatusDetailsQueryKey = (attachmentId: string) =>
+  ['attachment-status-details', attachmentId] as const;
+
+/**
+ * DÉTERMINISTE, DÉRIVÉE DE L'IDENTIFIANT (#7226) — pas de corpus « qui a
+ * consommé cette pièce » sous fixtures ; un seed tiré des caractères de
+ * `attachmentId` (même motif que `waveformOf`, `lib/view/message.ts:103`)
+ * fait varier ouvertures/téléchargements/position d'une pièce à l'autre
+ * SANS jamais changer d'un rendu au suivant.
+ *
+ * `viewedAt` ET `viewCount` DÉRIVENT DU MÊME TIRAGE (revue #7363) — ils ne
+ * sont pas deux dés indépendants. La passerelle les pose ENSEMBLE, dans la
+ * même transaction (`MessageMediaConsumptionService.markImageAsViewed` :
+ * `viewedAt: now, viewCount: 1` à la création, les deux incrémentés à la
+ * mise à jour) : `viewCount > 0` sans `viewedAt` n'existe pas en base. Les
+ * deux tirages séparés d'avant étaient exactement INVERSES l'un de l'autre
+ * (`seed % 4 === 0` posait la date quand `seed % 4` posait zéro), si bien
+ * que la carte de la fiche affirmait « 1 ouverture » ET « Pas encore
+ * ouvert » sur la MÊME pièce — une contradiction que seul le corpus
+ * fabriquait, mais qu'une capture, un gate navigateur ou une démonstration
+ * montrait telle quelle.
+ */
+function attachmentStatusFixtureOf(attachmentId: string): readonly AttachmentStatusRow[] {
+  const seed = [...attachmentId].reduce((acc, c) => (acc * 31 + c.charCodeAt(0)) % 9973, 7);
+  const complete = seed % 2 === 0;
+  const positionMs = complete ? null : 4_000 + (seed % 20_000);
+  const count = 1 + (seed % 3);
+  const viewCount = seed % 4;
+  const base = Date.UTC(2026, 8, 21, 10, 5, 0);
+  return [
+    {
+      participantId: `fx-participant-${seed}`,
+      username: 'Alice',
+      avatar: null,
+      viewedAt: viewCount > 0 ? new Date(base).toISOString() : null,
+      downloadedAt: seed % 5 === 0 ? new Date(base + 1_000).toISOString() : null,
+      listenedAt: new Date(base + 2_000).toISOString(),
+      watchedAt: new Date(base + 2_000).toISOString(),
+      listenCount: count,
+      watchCount: count,
+      listenedComplete: complete,
+      watchedComplete: complete,
+      lastPlayPositionMs: positionMs,
+      lastWatchPositionMs: positionMs,
+      viewCount,
+      viewedLanguages: [],
+    },
+  ];
+}
+
+export async function fetchAttachmentStatusDetails(
+  params: ConversationsDeps & {
+    readonly attachmentId: string;
+    readonly offset?: number;
+    readonly limit?: number;
+    readonly filter?: 'all' | 'viewed' | 'downloaded' | 'listened' | 'watched';
+    readonly signal?: AbortSignal;
+  },
+): Promise<ApiResult<readonly AttachmentStatusRow[]>> {
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    const statuses = attachmentStatusFixtureOf(params.attachmentId);
+    return { ok: true, data: statuses, pagination: { total: statuses.length, limit: 20, offset: 0, hasMore: false } };
+  }
+  // Même raison que `fetchMessageReceiptsPeople` : les agrégats « ouvertures »
+  // et « téléchargements » se SOMMENT sur les lignes servies, donc une page de
+  // vingt (le défaut de la route, `messages-reads.ts:585`) donnerait un total
+  // FAUX dès le vingt-et-unième consommateur. 100 est le plafond de la route
+  // (`validatePagination(…, { maxLimit: 100 })`).
+  const query = new URLSearchParams({
+    ...(params.offset !== undefined ? { offset: String(params.offset) } : {}),
+    limit: String(params.limit ?? 100),
+    ...(params.filter !== undefined ? { filter: params.filter } : {}),
+  });
+  const search = query.toString();
+  return params.transport.request<readonly AttachmentStatusRow[]>({
+    method: 'GET',
+    path: `${attachmentsEndpoints.byAttachmentIdStatusDetails(params.attachmentId)}${search.length > 0 ? `?${search}` : ''}`,
+    ...(params.signal !== undefined ? { signal: params.signal } : {}),
+  });
+}
+
+export { UPLOAD_FORMAT_REFUSED };
+
+const UNSUPPORTED_MEDIA_TYPE = 415;
+
+/**
+ * **LE VERDICT D'UN LOT TÉLÉVERSÉ** (W9, #11315) — `null` quand chaque fichier
+ * a sa pièce. `uploadMultiple` avale un fichier refusé SOUS `success: true` :
+ * moins de pièces que de fichiers est un échec (`UPLOAD_PARTIAL`), jamais un
+ * envoi amputé. Quand le lot porte une photo HEIC, la cause probable est
+ * nommée — le format — par `UPLOAD_FORMAT_REFUSED`, et un `415` sur ce lot
+ * aussi ; tout autre échec traverse inchangé.
+ */
+export function uploadShortfall(
+  files: readonly { readonly type: string; readonly name: string }[],
+  result: ApiResult<{ readonly attachments: readonly Attachment[] }>,
+): ApiFailure | null {
+  const carriesHeif = files.some(isHeifFamily);
+  if (!result.ok) {
+    return result.status === UNSUPPORTED_MEDIA_TYPE && carriesHeif ? { ...result, code: UPLOAD_FORMAT_REFUSED } : result;
+  }
+  if (result.data.attachments.length >= files.length) return null;
+  return carriesHeif
+    ? { ok: false, status: 200, error: 'Format de photo refusé par la passerelle', code: UPLOAD_FORMAT_REFUSED }
+    : { ok: false, status: 200, error: 'Lot de pièces jointes incomplet', code: 'UPLOAD_PARTIAL' };
+}

@@ -150,6 +150,32 @@ final class NotificationCachePatchTests: XCTestCase {
                        "un ré-marquage ne doit pas réécrire l'horodatage de lecture d'origine")
     }
 
+    // MARK: - Rollback (#7000)
+
+    func test_markingUnread_restoresOnlyTheTargetRow() {
+        let items = [
+            makeNotification(id: "n1", isRead: true, conversationId: "c1"),
+            makeNotification(id: "n2", isRead: true, conversationId: "c1")
+        ]
+
+        let result = NotificationCachePatch.markingUnread(items, id: "n1")
+
+        XCTAssertFalse(result[0].isRead)
+        XCTAssertNil(result[0].readAt, "une ligne redevenue non lue n'a plus d'horodatage de lecture")
+        XCTAssertTrue(
+            result[1].isRead,
+            "un rollback ne rend que ce que CE geste a pris — jamais les lignes voisines de la même conversation"
+        )
+    }
+
+    func test_markingUnread_leavesAnAlreadyUnreadRowUntouched() {
+        let items = [makeNotification(id: "n1")]
+
+        let result = NotificationCachePatch.markingUnread(items, id: "n1")
+
+        XCTAssertFalse(result[0].isRead)
+    }
+
     // MARK: - Suppression
 
     func test_removing_dropsOnlyTheTargetRow() {

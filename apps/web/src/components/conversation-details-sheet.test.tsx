@@ -1,0 +1,432 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+
+import type { PaginationMeta } from '@meeshy/shared/types/api-responses';
+
+import type { ConversationsDeps } from '@/lib/api/conversations';
+import { sessionStore } from '@/lib/api/session';
+import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
+import type { Conversation, Participant } from '@/lib/api/types';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { departureStore, markObsoleteRefused, type DepartureKind } from '@/lib/conversation-departure';
+import type { PortailPartage } from '@/lib/view/invitation';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+
+import { ConversationDetailsSheet } from './conversation-details-sheet';
+import { ThreadHeader } from './thread-header';
+
+/**
+ * **TOUCHER LE TITRE D'UNE CONVERSATION OUVRE SES DÉTAILS** (#7829) — la
+ * feuille (cache d'abord, membres, partage d'un lien) et les portes de
+ * l'en-tête qui l'ouvrent.
+ */
+
+const participant = (id: string, username: string, name: string, role = 'member'): Participant =>
+  ({
+    id: `p-${id}`,
+    conversationId: 'c-groupe',
+    userId: `u-${id}`,
+    type: 'user',
+    displayName: name,
+    role,
+    language: 'fr',
+    isActive: true,
+    isOnline: false,
+    joinedAt: new Date('2026-01-01'),
+    user: { id: `u-${id}`, username, displayName: name },
+  }) as Participant;
+
+const conversation = (overrides: Partial<Conversation> = {}): Conversation =>
+  ({
+    id: 'c-groupe',
+    type: 'group',
+    title: 'Équipe Lyon',
+    description: 'On prépare le lancement',
+    status: 'active',
+    visibility: 'private',
+    isActive: true,
+    memberCount: 12,
+    currentUserRole: 'moderator',
+    participants: [participant('nour', 'nour', 'Nour Haddad', 'admin'), participant('moi', 'moi', 'Moi Même')],
+    createdAt: new Date('2026-01-01'),
+    updatedAt: new Date('2026-01-01'),
+    unreadCount: 0,
+    ...overrides,
+  }) as Conversation;
+
+const wireMember = (id: string, username: string, name: string, role = 'member') => ({
+  id: `p-${id}`,
+  userId: `u-${id}`,
+  type: 'user',
+  username,
+  displayName: name,
+  avatar: null,
+  conversationRole: role,
+});
+
+const cursorPagination = (totalCount: number): PaginationMeta =>
+  Object.assign({ total: totalCount, offset: 0, limit: 50, hasMore: false }, { nextCursor: null, totalCount });
+
+/** Un transport dont on tient chaque réponse : `pending` laisse la requête en vol. */
+const transportOf = (replies: Readonly<Record<string, ApiResult<unknown> | 'pending'>>) => {
+  const calls: HttpRequest[] = [];
+  const transport = (async () => ({ ok: false, status: 0, error: 'jamais appelé' })) as unknown as HttpTransport;
+  transport.request = (async (req: HttpRequest) => {
+    calls.push(req);
+    const reply = replies[`${req.method} ${req.path}`];
+    if (reply === 'pending') return new Promise(() => {});
+    return reply ?? { ok: false, status: 404, error: `non prévu : ${req.method} ${req.path}` };
+  }) as HttpTransport['request'];
+  const deps: ConversationsDeps = { source: 'gateway', transport };
+  return { deps, calls: () => calls };
+};
+
+const MEMBERS = 'GET /api/v1/conversations/c-groupe/participants?limit=50';
+
+const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+let container: HTMLDivElement;
+let root: Root;
+
+beforeAll(async () => {
+  ensureHappyDomRegistered({ url: 'http://localhost/' });
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+  await loadInterfaceCatalog('fr');
+});
+afterAll(async () => {
+  await act(async () => {});
+  delete globals.IS_REACT_ACT_ENVIRONMENT;
+  await releaseHappyDomIfRegistered();
+});
+beforeEach(() => {
+  window.history.replaceState(null, '', '/c/c-groupe');
+});
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+});
+
+const settle = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  });
+
+const monteFeuille = async (options: {
+  readonly conversation?: Conversation;
+  readonly replies: Readonly<Record<string, ApiResult<unknown> | 'pending'>>;
+  readonly portail?: PortailPartage;
+  readonly onRequestDeparture?: (kind: DepartureKind) => void;
+}) => {
+  const { deps, calls } = transportOf(options.replies);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+  act(() => {
+    root.render(
+      <QueryClientProvider client={client}>
+        <ConversationDetailsSheet
+          conversation={options.conversation ?? conversation()}
+          title={options.conversation?.title ?? 'Équipe Lyon'}
+          accent="#6366f1"
+          viewerId="u-moi"
+          storyRingOf={(authorId) => (authorId === 'u-nour' ? { entryStoryId: 's-nour', unseen: true } : undefined)}
+          deps={deps}
+          origin="https://meeshy.me"
+          {...(options.portail === undefined ? {} : { portail: options.portail })}
+          {...(options.onRequestDeparture === undefined ? {} : { onRequestDeparture: options.onRequestDeparture })}
+          onClose={() => {}}
+        />
+      </QueryClientProvider>,
+    );
+  });
+  return { calls };
+};
+
+const noms = (): string[] =>
+  [...container.ownerDocument.querySelectorAll('[data-conversation-member] .text-body')].map((node) => node.textContent ?? '');
+
+describe('ConversationDetailsSheet — ce que la feuille montre (#7829)', () => {
+  test('l’en-tête : nom, description, type et nombre de membres', async () => {
+    await monteFeuille({ replies: { [MEMBERS]: 'pending' } });
+    expect(document.querySelector('[data-conversation-details-name]')?.textContent).toBe('Équipe Lyon');
+    expect(document.querySelector('[data-conversation-details-description]')?.textContent).toBe('On prépare le lancement');
+    expect(document.querySelector('[data-conversation-details-meta]')?.textContent).toBe('Groupe · 12 membres');
+  });
+
+  test('CACHE D’ABORD : les participants déjà connus se peignent avant la réponse, sans squelette', async () => {
+    await monteFeuille({ replies: { [MEMBERS]: 'pending' } });
+    expect(noms()).toEqual(['Nour Haddad', 'Moi Même · Vous']);
+    expect(document.querySelector('[data-conversation-details-loading]')).toBeNull();
+    expect(document.querySelector('[data-member-role="admin"]')?.textContent).toBe('Administrateur');
+  });
+
+  test('la page de la passerelle remplace le cache quand elle arrive', async () => {
+    await monteFeuille({
+      replies: {
+        [MEMBERS]: {
+          ok: true,
+          data: [wireMember('nour', 'nour', 'Nour Haddad', 'admin'), wireMember('ali', 'ali', 'Ali Ben'), wireMember('moi', 'moi', 'Moi Même')],
+          pagination: cursorPagination(3),
+        },
+      },
+    });
+    await settle();
+    expect(noms()).toEqual(['Nour Haddad', 'Ali Ben', 'Moi Même · Vous']);
+    expect(document.querySelector('[data-conversation-details-meta]')?.textContent).toBe('Groupe · 3 membres');
+  });
+
+  test('cache VIDE et réponse en vol : le squelette, annoncé au lecteur d’écran', async () => {
+    await monteFeuille({ conversation: conversation({ participants: [] }), replies: { [MEMBERS]: 'pending' } });
+    const loading = document.querySelector('[data-conversation-details-loading]');
+    expect(loading?.getAttribute('aria-busy')).toBe('true');
+    expect(loading?.textContent).toContain('Chargement des membres');
+  });
+
+  test('cache vide et refus : l’erreur se dit, « Réessayer » relance la requête', async () => {
+    const { calls } = await monteFeuille({
+      conversation: conversation({ participants: [] }),
+      replies: { [MEMBERS]: { ok: false, status: 500, error: 'panne' } },
+    });
+    await settle();
+    const erreur = document.querySelector('[data-conversation-details-error]');
+    expect(erreur?.textContent).toContain('Impossible de charger les membres.');
+    act(() => erreur?.querySelector('button')?.click());
+    await settle();
+    expect(calls().filter((call) => call.path.includes('/participants')).length).toBe(2);
+  });
+
+  test('toucher un membre ouvre son profil', async () => {
+    await monteFeuille({ replies: { [MEMBERS]: 'pending' } });
+    const lien = document.querySelector<HTMLAnchorElement>('[data-conversation-member="p-nour"] a');
+    expect(lien?.getAttribute('href')).toBe('/u/nour');
+    act(() => {
+      lien?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+    });
+    expect(window.location.pathname).toBe('/u/nour');
+  });
+
+  test('l’appui long sur un membre ouvre le menu d’avatar — profil, story — sans « Détails » : on y est', async () => {
+    await monteFeuille({ replies: { [MEMBERS]: 'pending' } });
+    const lien = document.querySelector('[data-conversation-member="p-nour"] a');
+    act(() => {
+      lien?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 }));
+    });
+    const entrees = [...document.querySelectorAll<HTMLElement>('[data-avatar-menu-entry]')].map((node) => node.dataset.avatarMenuEntry);
+    expect(entrees).toEqual(['profile', 'story']);
+    /* Posé DANS le `<dialog>` : hors de lui, une feuille modale le rendrait inerte. */
+    expect(document.querySelector('[data-avatar-menu]')?.closest('dialog')).not.toBeNull();
+  });
+
+  test('« Partager un lien » crée le lien et le partage en un geste ; l’issue se dit', async () => {
+    const copies: string[] = [];
+    await monteFeuille({
+      replies: {
+        [MEMBERS]: 'pending',
+        'POST /api/v1/links': {
+          ok: true,
+          data: {
+            linkId: 'mshy_lyon',
+            conversationId: 'c-groupe',
+            shareLink: { id: 'l1', linkId: 'mshy_lyon', name: null, description: null, expiresAt: null, isActive: true },
+          },
+        },
+      },
+      portail: { copier: async (texte) => void copies.push(texte) },
+    });
+    act(() => document.querySelector<HTMLButtonElement>('[data-conversation-details-share]')?.click());
+    await settle();
+    expect(copies).toEqual(['https://meeshy.me/chat/mshy_lyon']);
+    expect(document.querySelector('[role="status"]')?.textContent).toBe('Lien copié.');
+  });
+
+  test('une conversation DIRECTE ne propose aucun lien de partage (la passerelle le refuserait)', async () => {
+    await monteFeuille({ conversation: conversation({ type: 'direct', title: 'Nour Haddad' }), replies: { [MEMBERS]: 'pending' } });
+    expect(document.querySelector('[data-conversation-details-share]')).toBeNull();
+    expect(document.querySelector('[data-conversation-details-meta]')?.textContent).toContain('Discussion privée');
+  });
+});
+
+describe('ConversationDetailsSheet — quitter et supprimer (#7837, #7285)', () => {
+  const departures = () => [...document.querySelectorAll<HTMLButtonElement>('[data-conversation-departure]')];
+
+  test('en groupe : « Quitter » à côté du partage, « Supprimer pour moi » en bas, chacun à 44 px au moins', async () => {
+    await monteFeuille({ replies: { [MEMBERS]: 'pending' }, onRequestDeparture: () => {} });
+    expect(departures().map((b) => [b.dataset.conversationDeparture, b.textContent])).toEqual([
+      ['leave', 'Quitter'],
+      ['delete', 'Supprimer pour moi'],
+    ]);
+    for (const button of departures()) expect(Number.parseFloat(button.style.minHeight)).toBeGreaterThanOrEqual(44);
+    expect(document.querySelector('[data-conversation-details-share]')?.parentElement).toBe(departures()[0]?.parentElement ?? null);
+  });
+
+  test('toucher l’un ou l’autre DEMANDE le geste, qui sera confirmé — il ne part jamais d’un seul toucher', async () => {
+    const asked: DepartureKind[] = [];
+    await monteFeuille({ replies: { [MEMBERS]: 'pending' }, onRequestDeparture: (kind) => asked.push(kind) });
+    act(() => departures()[0]?.click());
+    act(() => departures()[1]?.click());
+    expect(asked).toEqual(['leave', 'delete']);
+  });
+
+  test('une conversation DIRECTE ne se quitte pas : la suppression, et l’obsolescence pour l’un OU l’autre membre (#14653)', async () => {
+    const asked: DepartureKind[] = [];
+    await monteFeuille({
+      conversation: conversation({ type: 'direct', title: 'Nour', currentUserRole: 'member' }),
+      replies: { [MEMBERS]: 'pending' },
+      onRequestDeparture: (kind) => asked.push(kind),
+    });
+    await settle();
+    expect(departures().map((b) => b.dataset.conversationDeparture)).toEqual(['delete', 'obsolete']);
+    act(() => departures()[1]?.click());
+    expect(asked).toEqual(['obsolete']);
+  });
+
+  test('RENDRE OBSOLÈTE (#14645) : offert à l’administrateur de la conversation, en bas, après la suppression ; il DEMANDE le geste', async () => {
+    const asked: DepartureKind[] = [];
+    await monteFeuille({
+      conversation: conversation({ currentUserRole: 'admin' }),
+      replies: { [MEMBERS]: 'pending' },
+      onRequestDeparture: (kind) => asked.push(kind),
+    });
+    await settle();
+    expect(departures().map((b) => [b.dataset.conversationDeparture, b.textContent])).toEqual([
+      ['leave', 'Quitter'],
+      ['delete', 'Supprimer pour moi'],
+      ['obsolete', 'Rendre obsolète'],
+    ]);
+    act(() => departures()[2]?.click());
+    expect(asked).toEqual(['obsolete']);
+  });
+
+  test('#14690 — refusé par la passerelle (l’expéditeur d’une demande non acceptée), le tête-à-tête ne propose plus que la suppression, même feuille ouverte', async () => {
+    const direct = conversation({ type: 'direct', title: 'Nour', currentUserRole: 'member' });
+    departureStore.setState({ obsoleteRefused: [] });
+    await monteFeuille({ conversation: direct, replies: { [MEMBERS]: 'pending' }, onRequestDeparture: () => {} });
+    await settle();
+    expect(departures().map((b) => b.dataset.conversationDeparture)).toEqual(['delete', 'obsolete']);
+
+    act(() => markObsoleteRefused(direct.id));
+
+    expect(departures().map((b) => b.dataset.conversationDeparture)).toEqual(['delete']);
+    departureStore.setState({ obsoleteRefused: [] });
+  });
+
+  test('un modérateur ne rend pas obsolète', async () => {
+    await monteFeuille({ replies: { [MEMBERS]: 'pending' }, onRequestDeparture: () => {} });
+    await settle();
+    expect(departures().map((b) => b.dataset.conversationDeparture)).toEqual(['leave', 'delete']);
+  });
+
+  test('sans hôte qui sache partir (visiteur sans compte), aucun geste n’est rendu', async () => {
+    await monteFeuille({ replies: { [MEMBERS]: 'pending' } });
+    expect(departures()).toEqual([]);
+  });
+});
+
+describe('ConversationDetailsSheet — les statistiques (#7835)', () => {
+  const STATS = 'GET /api/v1/conversations/c-groupe/stats';
+
+  const REPLIES = { [MEMBERS]: 'pending', [STATS]: { ok: true, data: { totalMessages: 3 } } as ApiResult<unknown> } as const;
+
+  afterEach(() => {
+    sessionStore.setState({ session: { status: 'anonymous' } });
+  });
+
+  test('un compte inscrit voit la section Statistiques, chargée à la demande', async () => {
+    sessionStore.setState({
+      session: { status: 'authenticated', user: { id: 'u-moi', username: 'moi', displayName: 'Moi Même' }, token: 'jwt', sessionToken: 's', expiresAt: Number.MAX_SAFE_INTEGER },
+    } as Parameters<typeof sessionStore.setState>[0]);
+    const { calls } = await monteFeuille({ replies: REPLIES });
+    for (let tries = 0; tries < 100 && container.querySelector('[data-conversation-stats-counters]') === null; tries += 1) await settle();
+    expect(container.querySelector('[data-conversation-stat="messages"]')?.textContent).toContain('3');
+    expect(calls().some((call) => `${call.method} ${call.path}` === STATS)).toBe(true);
+  });
+
+  test('un INVITÉ (la passerelle lui refuse la route) : aucune statistique demandée ni montrée', async () => {
+    sessionStore.setState({
+      session: {
+        status: 'guest',
+        sessionToken: 'anon',
+        guest: { participantId: 'p-awa', nickname: 'Awa', conversationId: 'c-groupe', link: 'mshy_world', mayWrite: true },
+        expiresAt: Number.MAX_SAFE_INTEGER,
+      },
+    } as Parameters<typeof sessionStore.setState>[0]);
+    const { calls } = await monteFeuille({ replies: REPLIES });
+    await settle();
+    await settle();
+    expect(container.querySelector('[data-conversation-stats]')).toBeNull();
+    expect(calls().some((call) => call.path.endsWith('/stats'))).toBe(false);
+  });
+
+  test('sans session (visiteur), rien non plus', async () => {
+    const { calls } = await monteFeuille({ replies: REPLIES });
+    await settle();
+    expect(container.querySelector('[data-conversation-stats]')).toBeNull();
+    expect(calls().some((call) => call.path.endsWith('/stats'))).toBe(false);
+  });
+});
+
+describe('ThreadHeader — les portes vers les détails (#7829)', () => {
+  const monteEnTete = (options: { readonly conversation: Conversation; readonly title: string; readonly expanded: boolean }) => {
+    const ouvertures: string[] = [];
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(
+        <ThreadHeader
+          title={options.title}
+          accent="#6366f1"
+          conversation={options.conversation}
+          viewerId="u-moi"
+          group={options.conversation.type !== 'direct'}
+          otherUnread={0}
+          expanded={options.expanded}
+          onToggleExpanded={() => ouvertures.push('bascule')}
+          onOpenDetails={() => ouvertures.push('details')}
+          currentRowTitle=""
+          isAuto
+          readingMenuRows={[]}
+          onSelectReadingMode={() => {}}
+          onResetReadingModeToAuto={() => {}}
+        />,
+      );
+    });
+    return ouvertures;
+  };
+
+  test('en groupe, toucher le titre ouvre les détails', () => {
+    const ouvertures = monteEnTete({ conversation: conversation(), title: 'Équipe Lyon', expanded: true });
+    const titre = document.querySelector<HTMLButtonElement>('[data-thread-title-details]');
+    expect(titre?.textContent).toBe('Équipe Lyon');
+    expect(titre?.getAttribute('aria-haspopup')).toBe('dialog');
+    act(() => titre?.click());
+    expect(ouvertures).toEqual(['details']);
+  });
+
+  test('en direct, le titre mène toujours au pair ; son appui long offre profil et détails', () => {
+    const direct = conversation({ type: 'direct', participants: [participant('nour', 'nour', 'Nour Haddad'), participant('moi', 'moi', 'Moi Même')] });
+    const ouvertures = monteEnTete({ conversation: direct, title: 'Nour Haddad', expanded: true });
+    const lien = document.querySelector<HTMLAnchorElement>('h1 a');
+    expect(lien?.getAttribute('href')).toBe('/u/nour');
+    act(() => {
+      lien?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 }));
+    });
+    const entrees = [...document.querySelectorAll<HTMLElement>('[data-avatar-menu-entry]')].map((node) => node.dataset.avatarMenuEntry);
+    expect(entrees).toEqual(['profile', 'details']);
+    act(() => document.querySelector<HTMLButtonElement>('[data-avatar-menu-entry="details"]')?.click());
+    expect(ouvertures).toEqual(['details']);
+  });
+
+  test('l’appui long sur l’avatar de l’en-tête (replié) ouvre le menu, pas la bascule', () => {
+    const ouvertures = monteEnTete({ conversation: conversation(), title: 'Équipe Lyon', expanded: false });
+    const bascule = document.querySelector('[data-thread-avatar-door]');
+    act(() => {
+      bascule?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 }));
+    });
+    const entrees = [...document.querySelectorAll<HTMLElement>('[data-avatar-menu-entry]')].map((node) => node.dataset.avatarMenuEntry);
+    expect(entrees).toEqual(['details']);
+    expect(ouvertures).toEqual([]);
+  });
+});

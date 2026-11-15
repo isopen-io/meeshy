@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="media_hub_encrypted_notice">محادثة مشفّرة: تبقى الملفات مغلقة، لذا لا يمكن عرض معاينتها هنا.</string>
+    <string name="media_hub_encrypted_tile">ملف مشفّر</string>
+</resources>

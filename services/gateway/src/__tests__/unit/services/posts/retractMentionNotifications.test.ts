@@ -13,12 +13,21 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { retractMentionNotifications } from '../../../../services/posts/retractMentionNotifications';
 
+/**
+ * `delivery` fait partie de la relecture : la révocation push ne réveille un
+ * appareil que là où un push nominal est parti (`retractedNotificationOf`).
+ */
 const ROWS = [
-  { id: 'n-1', userId: 'u-bob' },
-  { id: 'n-2', userId: 'u-carol' },
+  { id: 'n-1', userId: 'u-bob', delivery: { pushSent: true } },
+  { id: 'n-2', userId: 'u-carol', delivery: { pushSent: false } },
 ];
 
-function makePrisma(rows: ReadonlyArray<{ id: string; userId: string }> = ROWS) {
+const ANNOUNCED = [
+  { id: 'n-1', userId: 'u-bob', pushSent: true },
+  { id: 'n-2', userId: 'u-carol', pushSent: false },
+];
+
+function makePrisma(rows: ReadonlyArray<{ id: string; userId: string; delivery?: unknown }> = ROWS) {
   return {
     notification: {
       findMany: jest.fn<any>().mockResolvedValue([...rows]),
@@ -59,7 +68,7 @@ describe('retractMentionNotifications', () => {
           { metadata: { path: ['postId'], equals: 'post-1' } },
         ],
       },
-      select: { id: true, userId: true },
+      select: { id: true, userId: true, delivery: true },
     });
   });
 
@@ -83,7 +92,7 @@ describe('retractMentionNotifications', () => {
       prisma, postId: 'post-1', departedUserIds: ['u-bob', 'u-carol'], announcer,
     });
 
-    expect(announcer.announceNotificationsRetracted).toHaveBeenCalledWith(ROWS);
+    expect(announcer.announceNotificationsRetracted).toHaveBeenCalledWith(ANNOUNCED);
     // Les compteurs que l'annonce recalcule doivent voir la base d'APRÈS le retrait.
     const deleted = prisma.notification.deleteMany.mock.invocationCallOrder[0];
     const announced = announcer.announceNotificationsRetracted.mock.invocationCallOrder[0];

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "message.piece.wholeMessage",
+          "androidName": "piece_whole_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message.piece.a11y.photo",
+          "androidName": "piece_a11y_photo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message.piece.a11y.video",
+          "androidName": "piece_a11y_video",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

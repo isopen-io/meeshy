@@ -26,6 +26,12 @@ android {
             isReturnDefaultValues = true
         }
     }
+    sourceSets {
+        getByName("test") {
+            java.srcDir(rootProject.file("test-support/compose-robolectric/kotlin"))
+            resources.srcDir(rootProject.file("test-support/compose-robolectric/resources"))
+        }
+    }
 }
 
 dependencies {
@@ -38,10 +44,12 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(platform(libs.compose.bom))
     implementation(libs.bundles.compose)
+    implementation(libs.coil.compose)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
     debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(libs.compose.ui.test.manifest)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
@@ -49,4 +57,6 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.truth)
     testImplementation(libs.mockk)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
 }

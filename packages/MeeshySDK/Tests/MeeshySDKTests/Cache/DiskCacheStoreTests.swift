@@ -291,6 +291,55 @@ final class DiskCacheStoreTests: XCTestCase {
             "an oversized bitmap must not blow the shared NSCache budget")
     }
 
+    // MARK: - warmedImage (#3897: cost-aware promotion, not a bare setObject)
+
+    /// #9685 — `warmedImage` décodait l'image PLEINE (`UIImage(contentsOfFile:)`,
+    /// 4000 px ≈ 61 Mo, au premier dessin sur le fil principal) puis devait la
+    /// refuser au cache. Elle est désormais RÉDUITE À LA SOURCE à la hauteur d'un
+    /// écran (`warmedPixelCap`) : ce qui revient tient dans le budget, et se
+    /// promeut pour la lecture synchrone suivante.
+    func test_warmedImage_aHugeFile_isDecodedDownsampledAtTheSource_andPromoted() async throws {
+        let store = makeStore()
+        let image = makeSolidImage(width: 4000, height: 3000)
+        let key = "https://example.com/warmed-huge-\(UUID().uuidString).jpg"
+        await store.save(image.jpegData(compressionQuality: 0.8)!, for: key)
+
+        let warmed = try XCTUnwrap(store.warmedImage(for: key))
+
+        let cg = try XCTUnwrap(warmed.cgImage)
+        XCTAssertEqual(max(cg.width, cg.height), Int(DiskCacheStore.warmedPixelCap),
+                       "le plus grand côté est borné au plafond, jamais les 4000 px de la source")
+        XCTAssertNotNil(DiskCacheStore.cachedImage(for: key), "réduite, elle tient dans le budget")
+    }
+
+    /// #9685 — le chemin des listes : une source de 4000 px demandée pour une
+    /// vignette affichée à 128 pt × 2 se décode à 256 px, pas à 4000.
+    func test_downsampledImage_aFourThousandPixelSource_decodesAtTheDisplayedSize() throws {
+        let data = try XCTUnwrap(makeSolidImage(width: 4000, height: 3000).jpegData(compressionQuality: 0.8))
+
+        let image = try XCTUnwrap(DiskCacheStore.downsampledImage(data: data, maxPixelSize: 256))
+
+        let cg = try XCTUnwrap(image.cgImage)
+        XCTAssertEqual(max(cg.width, cg.height), 256)
+        XCTAssertEqual(min(cg.width, cg.height), 192, "le rapport 4:3 est gardé")
+    }
+
+    /// Symmetric: a reasonably-sized disk hit IS promoted, so the next
+    /// synchronous `cachedImage(for:)` (e.g. a reused list cell) hits memory
+    /// instead of re-decoding from disk.
+    func test_warmedImage_reasonableFile_isPromotedIntoTheCache_forTheNextSynchronousRead() async {
+        let store = makeStore()
+        let image = makeSolidImage(width: 40, height: 40)
+        let key = "https://example.com/warmed-\(UUID().uuidString).jpg"
+        await store.save(image.pngData()!, for: key)
+
+        let warmed = store.warmedImage(for: key)
+
+        XCTAssertNotNil(warmed)
+        XCTAssertNotNil(DiskCacheStore.cachedImage(for: key),
+                        "a reasonable bitmap should be promoted for the next synchronous read")
+    }
+
     private func makeSolidImage(width: CGFloat, height: CGFloat) -> UIImage {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1.0

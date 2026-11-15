@@ -11,6 +11,15 @@ final class RouterTests: XCTestCase {
         Conversation(id: id, identifier: id, type: .direct, title: "Test", lastMessageAt: Date(), createdAt: Date(), updatedAt: Date())
     }
 
+    /// Un registre de surfaces PROPRE au test : `PresentedSurfaceRegistry.shared`
+    /// garde les surfaces que les vues hébergées par d'autres suites ont déclarées
+    /// sans jamais disparaître, et ouvrir une conversation les referme toutes —
+    /// leurs fermetures (brouillon du composer, lecture coupée) tournent alors
+    /// sur le main pendant que ce test l'attend.
+    private func makeIsolatedRouter() -> Router {
+        Router(surfaces: PresentedSurfaceRegistry())
+    }
+
     private func makeCommunity(id: String = "000000000000000000000002") -> Community {
         Community(id: id, identifier: id, name: "Test Community", createdBy: "user1")
     }
@@ -148,6 +157,24 @@ final class RouterTests: XCTestCase {
         router.onRouteRequested = { _ in true }   // iPad two-column intercept
         router.replaceStack(with: .links)
         XCTAssertTrue(router.path.isEmpty, "iPad forwards via the callback, never the NavigationStack path")
+    }
+
+    /// iPad : `replaceStack` passait par `popToRoot()`, qui sur iPad retire UN
+    /// niveau — le panneau, ou à défaut la CONVERSATION ouverte. Un lien interne
+    /// vers son profil (ou la boutique) fermait la conversation, quand le même
+    /// lien venu de l'extérieur ne remplaçait que le panneau. Aucun retour :
+    /// la route remplace le panneau.
+    func test_replaceStack_iPad_neverPopsTheOpenConversation() {
+        let router = Router()
+        var routed: [Route] = []
+        var pops = 0
+        router.onRouteRequested = { routed.append($0); return true }
+        router.onPopRequested = { pops += 1 }
+
+        router.replaceStack(with: .links)
+
+        XCTAssertEqual(pops, 0, "aucun retour : il fermerait la conversation ouverte")
+        XCTAssertEqual(routed, [.links])
     }
 
     func test_isHubRoute_afterPushProfile_returnsTrue() {
@@ -380,17 +407,19 @@ final class RouterTests: XCTestCase {
         XCTAssertEqual(router.currentRoute, .dataExport)
     }
 
-    func test_push_postDetail_addsToPath() {
-        let router = Router()
+    /// Le détail d'un post s'ouvre en FEUILLE, jamais dans la pile (#16676).
+    func test_push_postDetail_presentsTheSheet_andLeavesThePathUntouched() {
+        let router = makeIsolatedRouter()
         router.push(.postDetail("post123"))
-        XCTAssertEqual(router.path.count, 1)
-        XCTAssertEqual(router.currentRoute, .postDetail("post123"))
+        XCTAssertTrue(router.path.isEmpty)
+        XCTAssertEqual(router.presentedPost?.postId, "post123")
     }
 
-    func test_push_postDetail_withShowComments_addsToPath() {
-        let router = Router()
+    func test_push_postDetail_withShowComments_presentsTheSheetOnComments() {
+        let router = makeIsolatedRouter()
         router.push(.postDetail("post123", showComments: true))
-        XCTAssertEqual(router.path.count, 1)
+        XCTAssertTrue(router.path.isEmpty)
+        XCTAssertEqual(router.presentedPost?.showComments, true)
     }
 
     func test_push_bookmarks_addsToPath() {
@@ -515,7 +544,7 @@ final class RouterTests: XCTestCase {
     /// multiple times per frame" warning. A single atomic assignment to
     /// `path` fixes it — and makes navigation synchronous.
     func test_navigateToConversation_replacesPathInOneSynchronousStep() {
-        let router = Router()
+        let router = makeIsolatedRouter()
         router.push(.profile)
         router.push(.settings)
 
@@ -529,23 +558,52 @@ final class RouterTests: XCTestCase {
 
     /// iPad two-column mode (`onRouteRequested` set) keeps forwarding the
     /// route via the callback instead of mutating `path`.
+    ///
+    /// The forwarding is SYNCHRONOUS (same single step as the iPhone path,
+    /// see `test_navigateToConversation_replacesPathInOneSynchronousStep`).
+    /// The witness used to wait for a 0.2 s main-queue timer under a 1 s
+    /// bound — a timer, not the event: on a loaded CI runner the main queue
+    /// was starved past the bound and the test failed while the route had
+    /// already been forwarded (dev run 42116853798). It now reads the event.
     func test_navigateToConversation_iPad_forwardsViaOnRouteRequested() {
-        let router = Router()
+        let router = makeIsolatedRouter()
         var interceptedRoute: Route?
         router.onRouteRequested = { route in
             interceptedRoute = route
             return true
         }
-        let forwarded = expectation(description: "route forwarded to callback")
 
         router.navigateToConversation(makeConversation(id: "000000000000000000000099"))
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { forwarded.fulfill() }
-        wait(for: [forwarded], timeout: 1.0)
 
         XCTAssertTrue(router.path.isEmpty)
         if case .conversation = interceptedRoute {} else {
             XCTFail("Expected .conversation forwarded via onRouteRequested")
         }
     }
+
+    /// iPad : ouvrir une conversation depuis une autre (transfert, « écrire à
+    /// ce membre », réponse à une humeur) ne referme plus d'abord la colonne de
+    /// détail. `popToRoot()` y remettait `activeConversation` à nil : les deux
+    /// colonnes passaient 50 ms par le fil d'actualité et la liste, chacune
+    /// relançant ses chargements, et la conversation déjà ouverte était démontée
+    /// puis reconstruite au lieu d'atterrir en place.
+    func test_navigateToConversation_iPad_neverClosesTheDetailColumnFirst() {
+        let router = makeIsolatedRouter()
+        var popRequested = false
+        var forwarded: [Route] = []
+        router.onPopRequested = { popRequested = true }
+        router.onRouteRequested = { route in
+            forwarded.append(route)
+            return true
+        }
+
+        router.navigateToConversation(makeConversation(id: "000000000000000000000098"))
+        let settled = expectation(description: "le différé de 50 ms aurait eu le temps de tirer")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { settled.fulfill() }
+        wait(for: [settled], timeout: 10.0)
+
+        XCTAssertFalse(popRequested, "la colonne de détail n'est jamais vidée entre deux conversations")
+        XCTAssertEqual(forwarded.count, 1, "la conversation est remise d'un seul geste")
+    }
+
 }

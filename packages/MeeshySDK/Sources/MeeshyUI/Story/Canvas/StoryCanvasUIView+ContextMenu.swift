@@ -8,48 +8,332 @@ import Combine
 import os
 import MeeshySDK
 
+/// Les entrées du menu long-press d'un élément du canvas, dans leur ordre
+/// d'affichage. Le même inventaire alimente les actions VoiceOver
+/// (`makeCustomActions`) : une seule règle décide de ce qu'un élément offre.
+///
+/// `nonisolated` sur le TYPE : le package pose `.defaultIsolation(MainActor
+/// .self)` (SE-0466), qui isolerait cet énuméré et le rendrait illisible
+/// depuis un contexte non isolé.
+/// **Public depuis #4063** : le rail *trailing* est une vue de l'APP, et il
+/// porte exactement ces actions — même règle, autre géographie. Les recopier
+/// côté app aurait fait deux inventaires d'un même geste, dont la divergence
+/// n'aurait rougi nulle part.
+///
+/// `Hashable` pour la même raison : l'hôte déclare en `Set` ce dont il possède
+/// la primitive, et la vue les énumère par `id: \.self`.
+public nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equatable, Hashable {
+    case edit
+    /// **Rogner la SOURCE d'une vidéo ou d'un son (#4082) — des bornes, jamais
+    /// un fichier cuit.**
+    ///
+    /// Distincte d'`edit`, et la distinction porte : « Modifier » ouvre
+    /// l'inspecteur du type d'objet, quand celle-ci ouvre une bande sous la
+    /// scène et n'écrit que `sourceStart`/`sourceEnd`. Un objet peut admettre
+    /// l'une sans l'autre — une image se modifie et ne se rogne pas.
+    case trim
+    case duplicate
+    case bringForward
+    case sendBackward
+    /// **Le média quitte la scène et redevient une slide du post (#4046).**
+    ///
+    /// D'une autre NATURE que les deux au-dessus : l'empilement écrit le `z`
+    /// d'un `MeeshySceneObject` — son ordre DANS son plan — quand celle-ci écrit son
+    /// `plane`. Les confondre ferait passer un objet devant un fond au lieu de
+    /// le sortir.
+    case leaveScene
+    /// **Un média de PREMIER PLAN devient le fond** (#8716, directive porteur
+    /// 2026-09-29 : « lorsqu'on longpress sur une image/vidéo sur la scène en
+    /// front, on doit proposer de mettre en fond ou de remplacer le fond »).
+    /// Deux cas, un geste : le MOT dit s'il y a un fond à remplacer — l'auteur
+    /// sait avant de toucher que l'ancien va partir.
+    case setAsBackground
+    case replaceBackground
+    case delete
+
+    /// **Ce qu'un objet offre VRAIMENT (#4046) — loi 4, sans exception : une
+    /// action absente, jamais grisée.**
+    ///
+    /// Elle rendait `allCases` pour tout objet non verrouillé, et deux de ces
+    /// cinq entrées n'avaient alors AUCUN effet :
+    ///
+    /// - **l'empilement sur un objet SEUL de son plan.** « Mettre au premier
+    ///   plan » un objet qui y est déjà, faute de frère, ne déplace rien : le
+    ///   menu proposait un geste dont le résultat était l'écran d'avant. Un
+    ///   objet de FOND non plus n'empile pas — il n'est pas dans le plan.
+    /// - **« Modifier » sans éditeur.** L'entrée délègue à `onItemDoubleTapped`,
+    ///   une closure que l'HÔTE fournit. La scène incrustée de l'écran document
+    ///   ne la transmet pas : le menu y peignait « Modifier » au-dessus d'un
+    ///   `nil`. Mesuré, pas supposé.
+    ///
+    /// Un élément verrouillé — le badge d'attribution d'une republication, seul
+    /// porteur de `StoryTextObject.isLocked` — n'offre ni édition, ni
+    /// duplication, ni suppression : les trois retirent ou dénaturent
+    /// l'attribution. L'empilement lui reste, s'il a un effet : il ne touche pas
+    /// au contenu.
+    /// - Parameter canLeaveScene: l'hôte SAIT-il recevoir un objet qui sort ?
+    ///   Le SDK ne connaît ni « Story » ni « Post » — ce sont des notions de
+    ///   l'app. Il ne demande donc pas le PROFIL mais l'EFFET : même frontière
+    ///   que `hasEditor`, qui ne demande pas s'il existe un éditeur mais si
+    ///   l'hôte en a câblé un. **Le défaut FERME** : un appelant qui ne se
+    ///   prononce pas n'offre pas la sortie.
+    public static func offered(
+        isLocked: Bool,
+        isBackground: Bool,
+        sharesPlaneWithAnother: Bool,
+        hasEditor: Bool,
+        canLeaveScene: Bool = false,
+        hasTrimmableSource: Bool = false,
+        canBecomeBackground: Bool = false,
+        sceneHasBackground: Bool = false
+    ) -> [StoryCanvasContextAction] {
+        let empile = !isBackground && sharesPlaneWithAnother
+        var servies: [StoryCanvasContextAction] = []
+        if !isLocked, hasEditor { servies.append(.edit) }
+        // Le rognage suit l'édition, et se décide sur l'OBJET : une image et un
+        // texte n'ont pas de source à rogner. Le défaut FERME, comme
+        // `canLeaveScene` — un appelant qui ne se prononce pas n'offre rien.
+        if !isLocked, hasTrimmableSource { servies.append(.trim) }
+        if !isLocked { servies.append(.duplicate) }
+        if empile { servies.append(contentsOf: [.bringForward, .sendBackward]) }
+        // Un FOND se sort aussi — c'est même le cas nominal en Post. La sortie
+        // ne dépend donc pas du plan, contrairement à l'empilement. Le VERROU,
+        // lui, la refuse : sortir le badge d'attribution d'une republication
+        // retirerait l'attribution, ce que le verrou existe pour empêcher.
+        if !isLocked, canLeaveScene { servies.append(.leaveScene) }
+        // **Devenir le fond** (#8716) : un média de PREMIER PLAN seulement — un
+        // fond l'est déjà — et l'hôte doit savoir le faire. Le défaut FERME,
+        // comme la sortie : le SDK demande l'EFFET, jamais le profil.
+        if !isLocked, !isBackground, canBecomeBackground {
+            servies.append(sceneHasBackground ? .replaceBackground : .setAsBackground)
+        }
+        if !isLocked { servies.append(.delete) }
+        return servies
+    }
+
+    /// **Six littéraux français vécurent ici** (#4431). Ils alimentaient un menu
+    /// d'appui long — une surface qu'on ouvre rarement, qu'aucun cliquet de
+    /// localisation ne balaie : le cliquet français surveille les
+    /// `defaultValue:` du catalogue de l'app, et ces chaînes n'y étaient pas.
+    /// Elles n'étaient pas des `defaultValue`, elles ÉTAIENT la valeur.
+    ///
+    /// Le rail *trailing* (#4063) les a rendues permanentes dès qu'un objet est
+    /// sélectionné, sur l'écran de composition le plus utilisé : un simulateur
+    /// en anglais rendait alors le rail de gauche en anglais et celui de droite
+    /// en français, à quelques points de distance.
+    ///
+    /// > **Une chaîne écrite en dur ne se signale que quand la surface qui la
+    /// > porte devient visible.** Le défaut n'est pas né avec le rail — le rail
+    /// > en a fait un spectacle.
+    ///
+    /// `bundle: .module` — ce sont des mots du SDK, servis depuis son
+    /// catalogue, comme leurs voisins `story.drawEdit.tool.*`.
+    ///
+    /// **`@MainActor` malgré le type `nonisolated`**, et c'est le motif que le
+    /// dépôt a déjà posé pour ce cas exact (`TextEditTool.accessibilityLabel`) :
+    /// `Bundle.module`, généré par SPM sans annotation, tombe sous l'isolation
+    /// par défaut du package. Seules des VUES lisent ce titre — le rail des
+    /// contrôleurs et le menu d'appui long ; les règles pures qui décident
+    /// QUELLES actions offrir (`offered`) n'en ont pas besoin et restent
+    /// nonisolated, ce qui est la seule chose qui compte pour les tests et pour
+    /// la politique app-side.
+    @MainActor
+    public var title: String {
+        switch self {
+        case .edit:
+            return String(localized: "story.canvas.action.edit",
+                          defaultValue: "Modifier", bundle: .module)
+        case .trim:
+            return String(localized: "story.canvas.action.trim",
+                          defaultValue: "Rogner", bundle: .module)
+        case .duplicate:
+            return String(localized: "story.canvas.action.duplicate",
+                          defaultValue: "Dupliquer", bundle: .module)
+        case .bringForward:
+            return String(localized: "story.canvas.action.bringForward",
+                          defaultValue: "Mettre au premier plan", bundle: .module)
+        case .sendBackward:
+            return String(localized: "story.canvas.action.sendBackward",
+                          defaultValue: "Mettre à l'arrière", bundle: .module)
+        case .leaveScene:
+            return String(localized: "story.canvas.action.leaveScene",
+                          defaultValue: "Sortir de la scène", bundle: .module)
+        case .setAsBackground:
+            return String(localized: "story.canvas.action.setAsBackground",
+                          defaultValue: "Mettre en fond", bundle: .module)
+        case .replaceBackground:
+            return String(localized: "story.canvas.action.replaceBackground",
+                          defaultValue: "Remplacer le fond", bundle: .module)
+        case .delete:
+            return String(localized: "story.canvas.action.delete",
+                          defaultValue: "Supprimer", bundle: .module)
+        }
+    }
+
+    public var systemImage: String {
+        switch self {
+        case .edit:         return "pencil"
+        case .trim:         return "scissors"
+        case .duplicate:    return "doc.on.doc"
+        case .bringForward: return "square.3.stack.3d.top.filled"
+        case .sendBackward: return "square.2.stack.3d.bottom.filled"
+        case .leaveScene:   return "rectangle.portrait.and.arrow.right"
+        case .setAsBackground:   return "photo.on.rectangle"
+        case .replaceBackground: return "photo.on.rectangle.angled"
+        case .delete:       return "trash"
+        }
+    }
+}
+
+// MARK: - Le menu d'un objet n'est pas la fin d'un glissé (#13839, L5)
+
+/// **Un appui long n'ouvre le menu que sur un doigt IMMOBILE.** Pendant une
+/// manipulation, ou juste après (le doigt qui ralentit au bout d'un glissé lent
+/// tient assez longtemps pour que l'appui long se reconnaisse), la demande est
+/// refusée : le menu n'est qu'un raccourci des actions de la sélection, jamais
+/// la récompense d'un déplacement.
+public nonisolated enum StoryCanvasContextMenuGate {
+    /// Le temps, après la fin d'un geste, pendant lequel un appui long est lu
+    /// comme sa queue.
+    public static let settle: TimeInterval = 0.6
+
+    public static func admits(isManipulating: Bool, lastManipulationEnd: Date?, now: Date) -> Bool {
+        guard !isManipulating else { return false }
+        guard let fin = lastManipulationEnd else { return true }
+        return now.timeIntervalSince(fin) >= settle
+    }
+}
+
 // MARK: - UIContextMenuInteractionDelegate (long-press / right-click)
 
 extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
     public func contextMenuInteraction(_ interaction: UIContextMenuInteraction,
                                        configurationForMenuAtLocation location: CGPoint)
     -> UIContextMenuConfiguration? {
-        guard mode == .edit, let id = hitTestItem(at: location) else { return nil }
+        // **L'hôte qui peint son menu le reçoit de l'appui long, jamais d'ici**
+        // (#14206) : le système demande cette configuration dès que le doigt se
+        // pose, quand il peut encore glisser.
+        guard mode == .edit, onItemMenuRequested == nil, let id = hitTestItem(at: location) else { return nil }
+        guard onBackgroundMediaLongPressed == nil || hitTestForegroundItem(at: location) != nil else { return nil }
+        // Le menu n'est jamais la fin d'un glissé (#13839, L5).
+        guard StoryCanvasContextMenuGate.admits(isManipulating: isGestureActive,
+                                                lastManipulationEnd: lastManipulationEndedAt,
+                                                now: Date()) else { return nil }
         
-        let kind: CanvasItemKind = {
-            if slide.effects.textObjects.contains(where: { $0.id == id }) { return .text }
-            if slide.effects.stickerObjects?.contains(where: { $0.id == id }) == true { return .sticker }
-            if slide.locationObjects.contains(where: { $0.id == id }) { return .location }
-            return .media
-        }()
+        // **Une famille, UNE fonction** (#4671). Ce bloc redemandait « de quel
+        // type est cet objet ? » et répondait autrement que `itemKind(forId:)` :
+        // il retombait sur `.media` pour tout inconnu — donc pour une pastille
+        // AUDIO — pendant que l'autre rendait `nil`. Deux écritures d'une seule
+        // règle, déjà divergentes le jour où la troisième famille est apparue.
+        //
+        // Le repli `.media` disparaît avec la duplication : un objet dont la
+        // famille est inconnue n'a pas de menu, plutôt qu'un menu de média posé
+        // sur autre chose.
+        guard let kind = itemKind(forId: id) else { return nil }
 
         return UIContextMenuConfiguration(
             identifier: id as NSString,
             previewProvider: nil
         ) { [weak self] _ in
-            UIMenu(children: [
-                UIAction(title: "Modifier",
-                         image: UIImage(systemName: "pencil")) { _ in
-                    self?.onItemDoubleTapped?(id, kind)
-                },
-                UIAction(title: "Dupliquer",
-                         image: UIImage(systemName: "doc.on.doc")) { _ in
-                    self?.contextDuplicate(id: id)
-                },
-                UIAction(title: "Mettre au premier plan",
-                         image: UIImage(systemName: "square.3.stack.3d.top.filled")) { _ in
-                    self?.contextBringForward(id: id)
-                },
-                UIAction(title: "Mettre à l'arrière",
-                         image: UIImage(systemName: "square.2.stack.3d.bottom.filled")) { _ in
-                    self?.contextSendBackward(id: id)
-                },
-                UIAction(title: "Supprimer",
-                         image: UIImage(systemName: "trash"),
-                         attributes: .destructive) { _ in
-                    self?.contextDelete(id: id)
-                },
-            ])
+            self?.contextMenu(for: id, kind: kind)
+        }
+    }
+
+    /// **Le menu peint par l'hôte** (#8717), remis au `.began` d'un appui long
+    /// immobile (#14206) — jamais pendant ni juste après un glissé (L5).
+    func requestItemMenu(id: String, at location: CGPoint) {
+        guard let onItemMenuRequested, let kind = itemKind(forId: id),
+              StoryCanvasContextMenuGate.admits(isManipulating: isGestureActive,
+                                                lastManipulationEnd: lastManipulationEndedAt,
+                                                now: Date()) else { return }
+        onItemMenuRequested(id, kind, Self.normalized(location, in: bounds.size))
+    }
+
+    /// Le point du doigt rapporté à la carte (0…1) — indépendant de l'échelle
+    /// à laquelle l'hôte projette le canvas.
+    nonisolated static func normalized(_ point: CGPoint, in size: CGSize) -> CGPoint {
+        guard size.width > 0, size.height > 0 else { return CGPoint(x: 0.5, y: 0.5) }
+        return CGPoint(x: min(max(point.x / size.width, 0), 1),
+                       y: min(max(point.y / size.height, 0), 1))
+    }
+
+    /// Construit le menu de l'élément `id`. Séparé de la configuration UIKit,
+    /// qui n'expose pas son `actionProvider` : c'est ici qu'un test lit ce
+    /// que le menu offre.
+    func contextMenu(for id: String, kind: CanvasItemKind) -> UIMenu {
+        let children = StoryCanvasContextAction
+            .offered(
+                isLocked: isLockedItem(id: id),
+                isBackground: isBackgroundItem(id: id),
+                sharesPlaneWithAnother: foregroundSiblingExists(besides: id),
+                hasEditor: hasEditor(for: kind),
+                canLeaveScene: canLeaveScene,
+                hasTrimmableSource: onItemTrimRequested != nil
+                    && StorySceneObjectPredicates.hasTrimmableSource(slide: slide, id: id),
+                canBecomeBackground: onItemMadeBackground != nil && kind == .media,
+                sceneHasBackground: slide.effects.hasVisualBackgroundMedia
+            )
+            .map { action in
+                UIAction(title: action.title,
+                         image: UIImage(systemName: action.systemImage),
+                         attributes: action == .delete ? .destructive : []) { [weak self] _ in
+                    self?.performContextAction(action, on: id, kind: kind)
+                }
+            }
+        return UIMenu(children: children)
+    }
+
+    /// Le FOND n'est pas dans le plan : l'empiler ne veut rien dire. Lu sur
+    /// l'objet lui-même plutôt que sur `hitTestItem`, qui l'exclut déjà — la
+    /// règle doit rester vraie même si un appelant futur vise un fond.
+    /// « Sortir de la scène » a-t-elle quelqu'un derrière elle ? Même
+    /// prédicat que `hasEditor` pour « Modifier » : une action sans relais
+    /// n'a aucun effet, donc n'est pas offerte (loi 4).
+    var canLeaveScene: Bool { onItemLeftScene != nil }
+
+    /// Projection de `StorySceneObjectPredicates` — la règle a été EXTRAITE
+    /// pour que le rail *trailing* (#4063) pose la même question sans en
+    /// recopier la réponse. Deux implémentations d'une même règle divergent
+    /// sans qu'aucun témoin ne le voie : chaque copie reste cohérente avec
+    /// elle-même, et le menu finit par offrir ce que le rail refuse.
+    func isBackgroundItem(id: String) -> Bool {
+        StorySceneObjectPredicates.isBackground(slide: slide, id: id)
+    }
+
+    /// **Un FRÈRE de plan, tous types confondus.** L'empilement raisonne sur les
+    /// `zIndex` de TOUS les éléments (c'est ce que `bringForward` fait, et ce
+    /// que le rendu trie) : compter les seuls médias dirait « seul » d'un objet
+    /// posé sous un texte, et retirerait une action qui a bel et bien un effet.
+    func foregroundSiblingExists(besides id: String) -> Bool {
+        StorySceneObjectPredicates.sharesPlaneWithAnother(slide: slide, besides: id)
+    }
+
+    /// Point de passage UNIQUE entre une entrée du menu et la primitive qui
+    /// l'exécute — c'est lui que les tests exercent, la configuration UIKit
+    /// ne laissant pas déclencher ses `UIAction`.
+    ///
+    /// Les deux actions d'empilement échangeaient deux positions dans le
+    /// TABLEAU `mediaObjects` alors que le rendu trie par `zIndex`
+    /// (`StoryRenderer.render`) : le geste ne se voyait jamais, et ignorait
+    /// textes, stickers et pastilles. `bringForward` / `sendBackward`
+    /// raisonnent sur les `zIndex` de tous les types d'éléments et propagent
+    /// elles-mêmes la slide.
+    func performContextAction(_ action: StoryCanvasContextAction, on id: String, kind: CanvasItemKind) {
+        switch action {
+        case .edit:         onItemDoubleTapped?(id, kind)
+        case .duplicate:    contextDuplicate(id: id)
+        case .bringForward: bringForward(id: id)
+        case .sendBackward: sendBackward(id: id)
+        // DÉLÉGUÉE : le SDK ne sait pas ce qu'est « redevenir une slide du
+        // post ». Il rend l'objet à l'hôte, qui décide de son sort.
+        case .leaveScene:   onItemLeftScene?(id, kind)
+        case .delete:       contextDelete(id: id)
+        // DÉLÉGUÉE comme la sortie : rogner ouvre l'éditeur de l'hôte sur les
+        // bornes de la source. Offerte seulement quand l'hôte l'a câblée ET
+        // que l'objet a une source à rogner (loi 4).
+        case .trim:         onItemTrimRequested?(id, kind)
+        // DÉLÉGUÉE : ce que devient l'ancien fond est une décision de l'hôte.
+        case .setAsBackground, .replaceBackground: onItemMadeBackground?(id, kind)
         }
     }
 
@@ -89,8 +373,8 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         let preview = UITargetedPreview(view: overlay, parameters: params)
 
         // Remove the temporary overlay after the menu's lift animation.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            overlay.removeFromSuperview()
+        Task { @MainActor [weak overlay] in
+            if await cancellableSleep(for: .milliseconds(500)) { overlay?.removeFromSuperview() }
         }
         return preview
     }
@@ -99,80 +383,23 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
 
     /// These mutate the slide and re-fire onItemModified so the binding
     /// propagates back to the SwiftUI composer layer.
-    /// Réordonne un élément foreground pour le placer en tête de la liste
-    /// `mediaObjects` / `textObjects` / `stickerObjects`. Appelé au touch
-    /// (`handlePan.began`, `handlePinch.began`, `handleRotation.began`) pour
-    /// que l'élément manipulé soit immédiatement le plus en avant. No-op pour
-    /// le background media (les bg restent toujours derrière les fg via le
-    /// filtre de `StoryRenderer.collectItems`).
-    /// Ramène l'élément touché au premier plan visuel.
     ///
-    /// **Important** : le rendu canvas (`StoryRenderer.render`) trie les
-    /// éléments par `zIndex` (pas par leur ordre dans les arrays).
-    /// Réordonner uniquement les tableaux (`remove + append`) ne suffisait
-    /// donc pas — le visuel ne bougeait pas alors que les listes de
-    /// l'inspecteur (qui lisent l'ordre du tableau) reflétaient bien le
-    /// mouvement. On assigne maintenant `nextTopZ()` à l'élément pour piloter
-    /// le z-order de rendu, et on réordonne aussi le tableau pour rester
-    /// cohérent avec l'inspecteur.
+    /// **Toucher un objet posé le fait passer au premier plan** (#13918, R6) —
+    /// au tap, au début d'un glissé, d'un pincement ou d'une rotation. La règle
+    /// est `StoryEffects.broughtToFront`, celle du modèle du compositeur : les
+    /// cinq familles, le lieu compris, et l'objet touché DÉPASSE un voisin de
+    /// même rang. Rien ne change pour un fond ou un objet déjà devant.
     ///
-    /// **Perf** : chaque mutation passe par une copie locale puis UNE
-    /// réassignation au `slide`. Mutations directes via subscript (`.foo[i]
-    /// = ...`) ou `remove/append` sur la propriété déclencheraient
-    /// `slide.didSet` plusieurs fois — donc `rebuildLayers()` plusieurs
-    /// fois par tap — visible jitter sur les devices lents.
-    ///
-    /// `internal` plutôt que `private` pour symétrie avec `sendToBack(id:)`
-    /// et pour permettre les tests sans simuler un tap UIKit.
+    /// Une seule réassignation de `slide` : un seul `didSet`, donc un seul
+    /// `rebuildLayers()` par tap.
     internal func bringForegroundToFront(id: String) {
-        let topZ = nextTopZ()
-
-        // Texte
-        if let idx = slide.effects.textObjects.firstIndex(where: { $0.id == id }) {
-            var texts = slide.effects.textObjects
-            // Skip only when BOTH the z-index AND the array position
-            // already reflect the "front" state — `||` would always
-            // continue because `nextTopZ()` returns `currentMax + 1`,
-            // so `zIndex < topZ` is always true.
-            guard texts[idx].zIndex < topZ - 1
-                  || idx != texts.count - 1 else { return }
-            texts[idx].zIndex = topZ
-            let item = texts.remove(at: idx)
-            texts.append(item)
-            slide.effects.textObjects = texts
-            onItemModified?(slide)
-            return
-        }
-        // Media foreground (skip si bg)
-        if var medias = slide.effects.mediaObjects,
-           let idx = medias.firstIndex(where: { $0.id == id }),
-           medias[idx].isBackground == false {
-            // Same `< topZ - 1` rationale as in the texts branch above.
-            guard medias[idx].zIndex < topZ - 1
-                  || idx != medias.count - 1 else { return }
-            medias[idx].zIndex = topZ
-            let item = medias.remove(at: idx)
-            medias.append(item)
-            slide.effects.mediaObjects = medias
-            onItemModified?(slide)
-            return
-        }
-        // Sticker
-        if var stickers = slide.effects.stickerObjects,
-           let idx = stickers.firstIndex(where: { $0.id == id }) {
-            // Same `< topZ - 1` rationale as in the texts branch above.
-            guard stickers[idx].zIndex < topZ - 1
-                  || idx != stickers.count - 1 else { return }
-            stickers[idx].zIndex = topZ
-            let item = stickers.remove(at: idx)
-            stickers.append(item)
-            slide.effects.stickerObjects = stickers
-            onItemModified?(slide)
-            return
-        }
+        guard let devant = slide.effects.broughtToFront(id) else { return }
+        slide.effects = devant
+        onItemModified?(slide)
     }
 
     func contextDuplicate(id: String) {
+        guard !isLockedItem(id: id) else { return }
         var duplicatedNewId: String?
         var duplicatedKind: CanvasItemKind?
         // Branche media : `guard var` au lieu de `mediaObjects![idx]` — même si
@@ -225,7 +452,7 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
             copy.zIndex = nextTopZ()
             slide.locationObjects.append(copy)
             duplicatedNewId = newId
-            duplicatedKind = .location
+            duplicatedKind = .place
         }
         onItemModified?(slide)
         if let newId = duplicatedNewId, let kind = duplicatedKind {
@@ -233,27 +460,8 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         }
     }
 
-    func contextBringForward(id: String) {
-        if var medias = slide.effects.mediaObjects,
-           let idx = medias.firstIndex(where: { $0.id == id }),
-           idx < medias.count - 1 {
-            medias.swapAt(idx, idx + 1)
-            slide.effects.mediaObjects = medias
-            onItemModified?(slide)
-        }
-    }
-
-    func contextSendBackward(id: String) {
-        if var medias = slide.effects.mediaObjects,
-           let idx = medias.firstIndex(where: { $0.id == id }),
-           idx > 0 {
-            medias.swapAt(idx, idx - 1)
-            slide.effects.mediaObjects = medias
-            onItemModified?(slide)
-        }
-    }
-
     func contextDelete(id: String) {
+        guard !isLockedItem(id: id) else { return }
         slide.effects.mediaObjects?.removeAll { $0.id == id }
         slide.effects.textObjects.removeAll { $0.id == id }
         slide.effects.stickerObjects?.removeAll { $0.id == id }

@@ -1,0 +1,536 @@
+/**
+ * #6516 — dénombrement des surfaces qui lisent `Message.sender`.
+ *
+ * `Message.sender` est une relation REQUISE : une lecture qui la charge et
+ * rencontre UN SEUL message dont le `Participant` expéditeur a disparu ne
+ * filtre pas la ligne, elle fait rejeter TOUTE la lecture par Prisma
+ * (#6501). `withOrphanedSenderRepair` / `discoverConversationIdsByMessageIds`
+ * (`services/messaging/withOrphanedSenderRepair.ts`) réparent la portée
+ * touchée et rejouent une fois — mais seulement là où ils sont BRANCHÉS.
+ * `messages-list.ts` (la page principale) et `ConversationBridgeService.ts`
+ * (le pont ✦) l'étaient déjà (#6501) ; #6516 en dénombre chaque AUTRE
+ * lecteur, sur le même patron que `personal-history-hiding-surface-guard.test.ts` :
+ * la question n'est jamais « ce lecteur est-il réparé ? » — un exemple y
+ * répond toujours oui — c'est « par combien de lecteurs sur combien ? ».
+ *
+ * Ce que le garde attrape :
+ *   - un NOUVEAU fichier qui lit `Message` par `findMany`/`findFirst`/
+ *     `findUnique` sans se déclarer (absent de la table) ;
+ *   - une nouvelle lecture ajoutée à un fichier déjà classé sans le nombre
+ *     de lectures qui bouge (les deux compteurs cessent de correspondre) ;
+ *   - la disparition silencieuse d'un `withOrphanedSenderRepair(` dans un
+ *     fichier qui le portait.
+ *
+ * Ce qu'il n'attrape pas, et qu'il ne prétend pas attraper : qu'une
+ * réparation soit branchée sur la BONNE lecture à l'intérieur d'un fichier,
+ * ou que sa PORTÉE (liste statique vs résolveur) soit correcte — les témoins
+ * de `withOrphanedSenderRepair.test.ts` et des suites de route/socket
+ * couvrent ce comportement ; celui-ci couvre la COUVERTURE.
+ *
+ * Un fichier peut porter des lectures qui ne sélectionnent JAMAIS `sender`
+ * à côté de lectures qui la sélectionnent : `reads` compte TOUTES les
+ * lectures de `Message` du fichier (comme le garde frère), `applications`
+ * compte les occurrences textuelles de `withOrphanedSenderRepair(` — un seul
+ * appel peut envelopper plusieurs lectures partageant une même portée
+ * (`Promise.all`), d'où `applications` parfois inférieur au nombre de
+ * lectures qui en avaient réellement besoin. Chaque entrée `applies` dit,
+ * dans son commentaire, ce que les lectures NON enveloppées ne sélectionnent
+ * pas.
+ *
+ * @jest-environment node
+ */
+
+import { describe, it, expect } from '@jest/globals';
+import { readFileSync, readdirSync, statSync } from 'fs';
+import { join } from 'path';
+
+const ROUTES_DIR = join(__dirname, '../../../routes');
+const SOCKETIO_DIR = join(__dirname, '../../../socketio');
+const SERVICES_DIR = join(__dirname, '../../../services');
+
+const MESSAGE_READ = /\.message\.(findMany|findFirst|findUnique)\s*\(/g;
+const APPLY_REPAIR = /\bwithOrphanedSenderRepair\s*\(/g;
+
+type Classification =
+  | { readonly kind: 'applies'; readonly reads: number; readonly applications: number }
+  | { readonly kind: 'exempt'; readonly reads: number; readonly why: string };
+
+const DOES_NOT_SELECT_SENDER =
+  "Aucune de ces lectures ne sélectionne la relation `sender` (`select`/`include` vérifiés champ par " +
+  "champ, constantes nommées résolues jusqu'à leur définition) : un expéditeur disparu n'entre pas dans " +
+  'leur trajectoire d\'erreur — il n\'y a rien à réparer pour elles.';
+
+/**
+ * `routes/` — un fichier par entrée. Le chemin est relatif à `ROUTES_DIR`.
+ */
+const ROUTE_SURFACES: Record<string, Classification> = {
+  // ── Répare (au moins une lecture de ce fichier sélectionne `sender`) ──────
+  'admin/agent-configs.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // La 2e lecture (`trouves`, filtre de recherche) ne charge que les colonnes
+  // de protection — jamais `sender` ; la 3e (`translationsWhere`) est la
+  // jumelle de la 1re sur `GET /admin/translations`, même portée découverte.
+  'admin/content.ts': { kind: 'applies', reads: 5, applications: 2 },
+  // #11510 — la pellicule souveraine charge `sender` (le porteur nommé) : enveloppée,
+  // portée connue (la conversation du chemin).
+  'admin/conversation-attachments-sovereign.ts': { kind: 'applies', reads: 1, applications: 1 },
+  'admin/conversation-messages-sovereign.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // #8876 — `enrichReports` nomme l'entité qu'un signalement désigne ; sa lecture
+  // de messages charge `sender` (l'auteur) et est enveloppée — un expéditeur
+  // disparu ne doit pas faire rejeter toute la page de modération.
+  'admin/reports-enrichment.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // `rankMessages` (la seule des trois à charger `sender`) est enveloppée ;
+  // les deux lectures de `rankConversations` ne chargent qu'identifiant/titre.
+  'admin/system-rankings.ts': { kind: 'applies', reads: 3, applications: 1 },
+  'conversations/messages-advanced-delete.ts': { kind: 'applies', reads: 1, applications: 1 },
+  'conversations/messages-advanced-edit.ts': { kind: 'applies', reads: 2, applications: 2 },
+  // Seule lecture du fichier : les messages SOURCE d'un transfert, dont les
+  // ids peuvent appartenir à PLUSIEURS conversations dans une même page — la
+  // portée se DÉCOUVRE (`discoverConversationIdsByMessageIds`), jamais connue
+  // d'avance.
+  'conversations/messages-list-query.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // #16684 — les 3 lectures de la fenêtre `around` ont quitté ce fichier pour
+  // `messages-cursor-window.ts` (ci-dessous). Restent la lecture du curseur
+  // `before` (une sonde `{ id, createdAt, pinnedAt }`, qui ne charge pas
+  // `sender`) et la page principale, réparée depuis #6501.
+  'conversations/messages-list.ts': { kind: 'applies', reads: 2, applications: 1 },
+  // #16684 — la résolution de la fenêtre `around`. Ses deux lectures sont des
+  // SONDES d'identifiants (`{ select: { id: true, createdAt: true } }` pour la
+  // cible, `{ select: { id: true } }` pour les deux moitiés) : elles ne
+  // chargent JAMAIS `sender`, donc rien à réparer. La page qui hydrate
+  // réellement les expéditeurs reste celle de `messages-list.ts`, enveloppée
+  // depuis #6501.
+  'conversations/messages-cursor-window.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
+  // Les 2 lectures d'existence (`pinnedAt`/dé-épinglage) ne chargent que des
+  // identifiants ; seule la page des épingles charge `sender`.
+  'conversations/messages-pin.ts': { kind: 'applies', reads: 3, applications: 1 },
+  // Les deux `findMany` de contenu/traductions partagent la MÊME portée
+  // (`conversationId` de la route) et un seul `withOrphanedSenderRepair`
+  // les enveloppe tous les deux via `Promise.all`. La 3e lecture (`before`,
+  // curseur) ne charge que `createdAt`.
+  'conversations/messages-search.ts': { kind: 'applies', reads: 3, applications: 1 },
+  'conversations/threads.ts': { kind: 'applies', reads: 2, applications: 2 },
+  'links/utils/prisma-queries.ts': { kind: 'applies', reads: 2, applications: 2 },
+  // Les 2 autres lectures (`/translations`, `/status-details`) vérifient
+  // l'existence du message sans jamais charger `sender`.
+  'messages-reads.ts': { kind: 'applies', reads: 3, applications: 1 },
+  'messages-writes.ts': { kind: 'applies', reads: 2, applications: 2 },
+  // `changedRows` (portée = l'appartenance déjà résolue) charge `sender` par
+  // défaut ; `deletedRows` (tombstones) ne charge que
+  // `{id, conversationId, deletedAt}`.
+  'sync/messages.ts': { kind: 'applies', reads: 2, applications: 1 },
+
+  // ── Exemptes, avec leur raison ────────────────────────────────────────────
+  'admin/user-reports.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
+  'admin/user-member-stats.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'attachments/metadata.ts': { kind: 'exempt', reads: 4, why: DOES_NOT_SELECT_SENDER },
+  // #9927 — lit le TYPE de la conversation du message visé (règle des 13-17 ans), jamais son expéditeur.
+  'attachments/upload.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'conversations/messages-advanced-reads.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'conversations/messages-list-views.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
+  'conversations/messages-read-status.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
+  'conversations/messages-view-once.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'conversations/receipts.ts': { kind: 'exempt', reads: 5, why: DOES_NOT_SELECT_SENDER },
+  'conversations/shared-translations.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
+  'me/export.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'mentions.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'reactions.ts': { kind: 'exempt', reads: 5, why: DOES_NOT_SELECT_SENDER },
+  'reports/target.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'translation-non-blocking.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'translation.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'user-deletions.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
+};
+
+/** `socketio/` — même règle, racine différente. */
+const SOCKETIO_SURFACES: Record<string, Classification> = {
+  // Les deux `findFirst` d'édition/suppression (admission) chargent `sender`
+  // et sont réparés. Les deux restants ne le sont pas, pour deux raisons
+  // DISTINCTES :
+  //  - le lookup du message TRANSFÉRÉ (forward, best-effort) est déjà
+  //    enveloppé dans un `.catch(() => [null, null])` : une erreur — celle-ci
+  //    y compris — omet simplement l'aperçu de transfert, jamais la
+  //    diffusion du message lui-même. L'envelopper de plus réparerait la
+  //    conversation source, mais rien ne le SERT ici : le bénéfice
+  //    reviendrait à un AUTRE lecteur (#6516 le couvre déjà sur ses propres
+  //    surfaces).
+  //  - le dernier `findUnique` ne sélectionne pas `sender`.
+  'handlers/MessageHandler.ts': { kind: 'applies', reads: 4, applications: 2 },
+  'emitConversationPreviewUpdate.ts': { kind: 'applies', reads: 1, applications: 1 },
+
+  'handlers/ReactionHandler.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
+  // 7 → 6 (#9709) : la livraison d'une traduction texte est partie, entière,
+  // dans `deliverTextTranslation.ts` (déclaré juste en dessous) — sa lecture
+  // (`conversationId`, `senderId` scalaire, `createdAt`) a changé de fichier,
+  // pas de nature.
+  // #11381 — la lecture de `translation:request` est partie dans `messaging/atRestTranslationSource.ts`.
+  'MeeshySocketIOManager.ts': { kind: 'exempt', reads: 5, why: DOES_NOT_SELECT_SENDER },
+  'deliverTextTranslation.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #16706 (cycle 143 bis) — la garde d'ADMISSION de la file hors ligne. Elle lit
+  // `MESSAGE_LIVENESS_SELECT` seul (`deletedAt`, `expiresAt`, `viewOnceBurnedAt`)
+  // et ne sert aucun expéditeur : rien à réparer, par construction.
+  'offlineParticipantQueue.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'utils/participant-resolver.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'utils/personalPreviewOverride.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'announceCitedPostWithdrawal.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9646 — relit les CINQ colonnes de protection d'un message édité ou dont
+  // une pièce est enrichie, pour décider de la remise par lecteur. Jamais
+  // `sender`. Absent du garde du masquage personnel : une `findUnique`, hors
+  // de son périmètre (`findMany`/`count`), et elle ne sert aucun contenu.
+  'readerSignedDelivery.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #18615 — la lecture PARTAGÉE des faits de message du rejeu : `createdAt`
+  // pour le PLANCHER D'HISTOIRE, plus `MESSAGE_LIVENESS_SELECT`
+  // (`deletedAt`/`expiresAt`) pour la garde de vivacité, qui la lisait
+  // elle-même jusqu'ici (#16685) et est redevenue PURE. Jamais `sender` :
+  // aucune des deux questions ne porte sur un expéditeur.
+  'queuedMessageFacts.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #12822 — relit le seul régime du message enrichi (`encryptionMode`, et
+  // celui de sa conversation) pour sceller son entrée de file hors ligne.
+  'emitAttachmentUpdated.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #16964 suite — relit `createdAt`, et rien d'autre, pour savoir quels
+  // lecteurs le PLANCHER D'HISTORIQUE écarte du texte d'une édition. Jamais
+  // `sender` : il n'y a aucun expéditeur à réparer sur cette lecture.
+  //
+  // Déclaré sur `editedAudience.ts` et non sur ses appelants : la loi a été
+  // extraite là quand un audit adversarial a montré qu'elle manquait au SECOND
+  // transport de l'édition (le socket). Une règle retapée à chaque site est une
+  // règle qu'un site finira par ne pas avoir — et son unique lecture avec elle.
+  //
+  // C'est la SECONDE lecture de la même ligne quand le message porte des
+  // pièces jointes (`readerSignedDelivery` relit ses cinq colonnes de
+  // protection). Les fusionner serait tentant et serait faux : les deux
+  // lectures n'ont pas le même repli — une protection illisible FERME
+  // (`{}`, la pièce est signée), une date illisible fait lire le plancher de
+  // tous. Les garder séparées est ce qui permet à chacune d'échouer dans son
+  // sens.
+  'editedAudience.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+};
+
+/** `services/` — même règle, troisième racine. */
+const SERVICE_SURFACES: Record<string, Classification> = {
+  'battery/batteryContext.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'ConversationBridgeService.ts': { kind: 'applies', reads: 2, applications: 2 },
+  // #17076 — DEUX lectures, UNE réparation, et l'écart est une DÉCISION.
+  // `recompute()` est le chemin AUTORITATIF : il répare. `foldFlooredWindow`
+  // sert la fenêtre d'UN lecteur et n'écrit RIEN — or réparer est une écriture,
+  // et le moindre `upsert` depuis une fenêtre partielle remplacerait la ligne
+  // agrégée de TOUS (un témoin de `stats-history-floor.test.ts` le garde). La
+  // conséquence est acceptée : un orphelin y retombe sur `senderId`, un
+  // `Participant.id` que l'enrichissement nominal de la route ne trouvera pas,
+  // exactement comme sous une réparation qui échoue.
+  'ConversationMessageStatsService.ts': { kind: 'applies', reads: 2, applications: 1 },
+  'messaging/copyAttachments.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // #6910 — la relecture de dédoublonnage a QUITTÉ `MessageProcessor.ts` pour
+  // `messageDedupProjection.ts` : elle y sert désormais les DEUX gardes (la clé
+  // `clientMessageId` et le repli par contenu), et la réparation du `sender`
+  // orphelin l'a suivie. `MessageProcessor.ts` ne lit plus `Message` du tout.
+  'messaging/messageDedupProjection.ts': { kind: 'applies', reads: 1, applications: 1 },
+  'messaging/MessagingService.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // #7377 — la liste des favoris de message charge `sender` pour chaque ligne
+  // servie ; sa portée est connue (les conversations des étoiles de la page).
+  'messaging/messageStars/StarredMessagesReader.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // #14619 — la recherche de la liste des conversations : ses lectures
+  // chargent `sender` pour la ligne de résultat, et un seul
+  // `withOrphanedSenderRepair` les enveloppe via `Promise.all`, portée = les
+  // conversations du lecteur.
+  //
+  // TROIS depuis #16574 (`cb3e6d2ab`), qui a ajouté la recherche dans les
+  // TRANSCRIPTIONS à côté du contenu et des traductions. Le lot n'a pas
+  // redéclaré son compte ici : ce cliquet est resté ROUGE sur `dev`, et c'est
+  // exactement la question qu'il est fait pour poser — « une lecture de plus,
+  // est-elle enveloppée ? ». Elle l'est : les trois partagent le même
+  // `Promise.all` sous l'unique `withOrphanedSenderRepair`, donc une seule
+  // application pour trois lectures.
+  'search/globalMessageSearch.ts': { kind: 'applies', reads: 3, applications: 1 },
+
+  // Deux lectures depuis #9240 : `resolveConversationId` (projette le scalaire
+  // `conversationId`) et la garde d'admission d'écriture de
+  // `addAttachmentReaction` (projette `conversation: { isActive, closedAt }`).
+  // Ni l'une ni l'autre ne demande la relation `sender` — un expéditeur disparu
+  // n'entre dans aucune de leurs branches.
+  'AttachmentReactionService.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
+  'attachments/attachmentReadVerdict.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #10458 — l'auteur d'un message signalé : le scalaire `senderId`, puis le
+  // `Participant` par son id. Jamais la relation `sender` — un expéditeur disparu
+  // rend « sans auteur ».
+  'reports/reportedContentAuthor.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #14110 / #14627 — la priorité d'un signalement : `messageType` (une
+  // position ?) et `conversationId` (l'audience). Jamais `sender`.
+  'reports/reportPriority.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
+  // #10726 — le mode de chiffrement du porteur et de sa conversation, pour
+  // savoir si la passerelle lit le vocal. Jamais `sender`.
+  'attachments/attachmentCarrierServerReadable.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9315 — même nature que son voisin : l'état des messages porteurs d'un fichier, sans `sender`.
+  'attachments/fileRouteVerdict.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #13100 — le rattrapage du scellement au repos : les seuls identifiants des messages d'une conversation. Jamais `sender`.
+  'attachments/atRest/atRestBackfill.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9646 — les cinq colonnes de protection des porteurs d'une page de pièces
+  // (galerie, détail), pour signer celles qui disparaissent. Jamais `sender`.
+  'attachments/signServedAttachments.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // Deux `create`/`update` (jamais `find*`) pour le message-résumé d'appel :
+  // hors du périmètre `.message.find*` de ce garde, mais nommé ici pour la
+  // même raison que #6501 l'a nommé dans l'issue — `sender` y est
+  // TOUJOURS l'initiateur fraîchement résolu de l'appel en cours, jamais une
+  // ligne relue depuis le passé, donc jamais orpheline en pratique.
+  // (Aucune entrée n'est nécessaire pour un fichier sans `find*` — nommé ici
+  // par exhaustivité avec #6516, qui l'énumérait explicitement.)
+  'message-translation/EncryptionHelper.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'message-translation/MessageTranslationService.ts': { kind: 'exempt', reads: 8, why: DOES_NOT_SELECT_SENDER },
+  // #9709 — le rattrapage d'une langue qui arrive lit le contenu, la langue,
+  // les traductions et les colonnes de protection ; `senderId` est le SCALAIRE,
+  // jamais la relation `sender`.
+  'message-translation/ArrivalHistoryBackfill.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // 12 → 11 (#7199) : le calcul de non-lu a QUITTÉ ce fichier pour
+  // `unreadCountsCore.ts` (déclaré plus bas), afin que la liste et le push
+  // temps réel comptent par la même implémentation. Aucune lecture n'a
+  // disparu : elle a changé de fichier.
+  //
+  // 11 → 10 (#7451) : le GEL par message est parti dans
+  // `messaging/freezeMessageStatus.ts` (déclaré plus bas), même mécanique —
+  // le fichier hôte pèse deux fois le plafond de taille et le lot du décompte
+  // éphémère devait y ajouter. La lecture a changé de fichier, pas de nature.
+  'MessageReadStatusService.ts': { kind: 'exempt', reads: 10, why: DOES_NOT_SELECT_SENDER },
+  'messaging/anonymizeDeletedAccountMessages.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #11381 — le texte à retraduire (colonnes au repos seules, jamais `sender`).
+  'messaging/atRestTranslationSource.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #7451 — la fenêtre du gel : `select: { id: true }`, rien d'autre.
+  'messaging/freezeMessageStatus.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #7740 — anti-répétition de Global : `select: { content: true }`, aucun expéditeur.
+  'messaging/messagePostSaveEffects.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #7740 — la ligne d'arrivées de Global relit ses messages système (`id`,
+  // `metadata`, `deletedAt`) pour retrouver la ligne ouverte : aucun `sender`.
+  'conversations/globalArrivalsNotice.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9539 — heures habituelles d'écriture pour la mission personnelle : `select: { createdAt: true }`, aucun expéditeur chargé.
+  'game/MissionHabits.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #7729 — suggestions d'onboarding : `select: { senderId: true }`, la relation n'est jamais chargée.
+  'onboarding/OnboardingService.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #14105 — le lien d'un choisi d'un post ONLY : a-t-il écrit dans la conversation directe ?
+  // `select: { senderId: true }`, la relation n'est jamais chargée.
+  'posts/directContactVisibility.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #7578 — purge serveur du contenu d'une vue unique : ni expéditeur ni contenu servi.
+  'messaging/purgeViewOnceContent.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #11269 — rattrapage des médias à vue unique lus par tous : `senderId` (colonne) seul, la relation n'est jamais chargée.
+  'messaging/viewOnceMediaCatchUp.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9382 — le signal de jeu « réponse reçue » : `select: { createdAt: true }`
+  // seul, pour mesurer la fenêtre d'éligibilité du bonus. Aucun expéditeur servi.
+  'game/MessageGameSignals.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #7451 — CELLE-CI sélectionne bien `sender`, et reste pourtant exempte : elle
+  // n'en lit que `{ id, userId }` pour NOMMER la room personnelle de
+  // l'expéditeur, et retombe explicitement sur `row.senderId` quand la relation
+  // est absente (`row.sender?.userId ?? row.sender?.id ?? row.senderId`). Un
+  // expéditeur disparu n'ouvre donc aucune trajectoire d'erreur : l'annonce
+  // part vers la room du `Participant.id`, qui est exactement l'adresse que
+  // `ROOMS.user()` attend d'un participant sans ligne `User`.
+  // #8302 — la flamme-œil consommée : `{ select: { id, senderId, effectFlags } }`,
+  // jamais `sender`. `senderId` sert à refuser qu'un auteur consomme le sien.
+  'messaging/consumeAfterReadMessages.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      'Sélectionne `senderId` seul, pour exclure l\'auteur de sa propre consommation : ' +
+      'aucune identité d\'expéditeur n\'est servie, rien à réparer.',
+  },
+  // #8557 — la contagion d'une réponse relit le message CITÉ :
+  // `{ select: { effectFlags, isBlurred, ephemeralDuration } }`, jamais `sender`.
+  'messaging/replyProtectionContagion.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #8630 — la chaîne citée (vers le haut) et les réponses (vers le bas) :
+  // `senderId` en COLONNE, jamais la relation `sender`.
+  'messaging/quoteCascade.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
+  'messaging/ephemeralCountdown.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      'Sélectionne `sender` mais seulement `{ id, userId }`, pour nommer une room personnelle, ' +
+      'avec repli explicite sur `senderId` : rien à réparer.',
+  },
+  // #6601 — la garde de citation : `{ select: { id: true, conversationId: true, deletedAt: true } }`,
+  // jamais `sender`. Elle lie le message cité à la conversation de l'envoi ;
+  // un expéditeur disparu n'entre dans aucune de ses branches.
+  'messaging/attachmentReplySnapshot.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #8064 — le rattachement d'un enregistrement d'appel retrouve la bulle par
+  // `select: { id: true }` ; la relecture qui la rediffuse passe par
+  // `findUniqueOrThrow` avec `CALL_SUMMARY_MESSAGE_INCLUDE`, la même forme que
+  // les écritures du message-résumé de `CallService` (initiateur de l'appel).
+  'calls/callRecordingLink.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'messaging/conversationWriteAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'messaging/attachmentSendAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'messaging/copyExitProtection.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9641 — la suppression d'un avis de capture relit l'expéditeur
+  // (`senderId`) du message qu'il nomme, jamais la relation `sender`.
+  'messaging/messageDeleteAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9629 — la durée des avis : identité, horloge, métadonnée, échéance.
+  'messaging/captureNoticeRetention.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
+  // #9629 — l'audience d'un avis de capture : `NOTICE_SELECT` et
+  // `CAPTURED_SELECT`, identité, horloge, `senderId` et métadonnée — jamais la
+  // relation `sender`.
+  'messaging/captureNoticeVisibility.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
+  // #9617 — la capture déclarée relit les messages désignés par
+  // `CAPTURED_MESSAGE_SELECT` : identité, horloge, auteur par son seul
+  // `senderId` et colonnes de la loi de sortie — jamais la relation `sender`.
+  'messaging/contentCaptureNotices.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'messaging/forwardAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'messaging/messageMentions.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #16557 — la troisième lecture est celle de `loadMessageReadableByReader` (la forme « demande »), même projection sans contenu.
+  'messaging/messageReadAccess.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
+  'messaging/messageNotificationFanOut.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
+  'messaging/messageRemovalEffects.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #7377 — la pose d'une étoile : `STAR_ADMISSION_MESSAGE_SELECT`, les seules
+  // colonnes du verdict (identifiant, conversation, type, dates, protection),
+  // jamais `sender`.
+  'messaging/messageStars/MessageStarWriter.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'messaging/reproduceEditedMessageNotifications.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'notifications/NotificationService.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
+  'notifications/reactionNotify.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'ReactionService.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
+  'resolveVisibleLastMessage.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #7199 — le calcul de non-lu partagé. Sa lecture unique projette le SCALAIRE
+  // `senderId` (pour soustraire les messages du lecteur lui-même), jamais la
+  // relation `sender` : un expéditeur disparu n'entre dans aucune de ses branches.
+  'unreadCountsCore.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9630 — les candidats avis de capture du compteur unitaire : identité et marque.
+  'unreadCountOfParticipant.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+
+  // #6501 — balayage de rétention SANS lecteur, portée GLOBALE par
+  // construction (`expiresAt` à travers toute la base, jamais une seule
+  // conversation) : il n'y a pas de `conversationIds` bornable à donner à la
+  // réparation sans une lecture aussi large que celle qu'on protégerait. Un
+  // orphelin qui bloque cette passe reste couvert par le balayage nocturne de
+  // maintenance (`MaintenanceService.cleanupExpiredData`), qui répare AVANT
+  // de nettoyer.
+  // #8630 — la 2e lecture charge les RÉPONSES que la destruction emporte, avec
+  // le même `select` que la passe : même balayage, même portée, même raison.
+  'ExpiredMessagesCleanupService.ts': {
+    kind: 'exempt',
+    reads: 2,
+    why:
+      "Balayage de rétention côté serveur, sans lecteur et de portée GLOBALE (toute la base, " +
+      "filtrée par `expiresAt` — jamais une conversation) : aucune liste de `conversationIds` " +
+      "bornable ne peut être donnée à la réparation sans lire aussi large que la passe " +
+      'elle-même. Le balayage nocturne de maintenance répare les orphelins AVANT ce nettoyage. ' +
+      "La lecture des réponses emportées (#8630) suit la passe qui les découvre, avec le même `select`.",
+  },
+  'CallService.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "`prisma.message.findFirst` — l'unique lecture, hors périmètre `find*` sur `sender` : elle " +
+      "charge `metadata`/`content` du message-résumé d'appel, jamais `sender`. Le message lui-même " +
+      "n'est écrit QUE par `create`/`update` (`CALL_SUMMARY_MESSAGE_INCLUDE`), où `senderId` est " +
+      "toujours l'initiateur de l'appel EN COURS — une ligne fraîchement résolue, jamais relue " +
+      'depuis le passé, donc jamais orpheline en pratique.',
+  },
+
+  // Le résolveur PARTAGÉ lui-même (#6516) : sa seule lecture est la
+  // découverte de portée — `{ select: { conversationId: true } }`, jamais
+  // `sender`. C'est la garantie qu'il offre à ses appelants, pas un lecteur
+  // de plus à couvrir.
+  'messaging/withOrphanedSenderRepair.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      'Le résolveur de portée `discoverConversationIdsByMessageIds` lit `{ select: ' +
+      '{ conversationId: true } }` — jamais `sender`, par construction : le redemander ' +
+      "reproduirait l'erreur qu'il diagnostique.",
+  },
+};
+
+const walk = (dir: string): string[] =>
+  readdirSync(dir).flatMap((entry) => {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      return entry === '__tests__' ? [] : walk(full);
+    }
+    return full.endsWith('.ts') ? [full] : [];
+  });
+
+const countMatches = (source: string, pattern: RegExp): number =>
+  (source.match(new RegExp(pattern.source, 'g')) ?? []).length;
+
+const scan = (root: string) =>
+  walk(root)
+    .map((full) => ({
+      relative: full.slice(root.length + 1),
+      source: readFileSync(full, 'utf8'),
+    }))
+    .map((file) => ({
+      ...file,
+      reads: countMatches(file.source, MESSAGE_READ),
+      applications: countMatches(file.source, APPLY_REPAIR),
+    }))
+    .filter((file) => file.reads > 0);
+
+describe('orphaned sender repair — dénombrement des surfaces de lecture (#6516)', () => {
+  const roots: ReadonlyArray<{ readonly name: string; readonly dir: string; readonly surfaces: Record<string, Classification> }> = [
+    { name: 'routes', dir: ROUTES_DIR, surfaces: ROUTE_SURFACES },
+    { name: 'socketio', dir: SOCKETIO_DIR, surfaces: SOCKETIO_SURFACES },
+    { name: 'services', dir: SERVICES_DIR, surfaces: SERVICE_SURFACES },
+  ];
+
+  it('refuse de passer sur un balayage vide', () => {
+    expect(scan(ROUTES_DIR).length).toBeGreaterThan(5);
+    expect(scan(SERVICES_DIR).length).toBeGreaterThan(5);
+  });
+
+  for (const { name, dir, surfaces } of roots) {
+    describe(`racine « ${name} »`, () => {
+      it('déclare chaque fichier qui lit Message — aucune surface non déclarée', () => {
+        const undeclared = scan(dir)
+          .filter((file) => surfaces[file.relative] === undefined)
+          .map((file) => file.relative);
+
+        expect(undeclared).toEqual([]);
+      });
+
+      it("ne déclare aucune surface qui a cessé de lire Message", () => {
+        const scanned = new Set(scan(dir).map((file) => file.relative));
+        const stale = Object.keys(surfaces).filter((relative) => !scanned.has(relative));
+
+        expect(stale).toEqual([]);
+      });
+
+      it('compte exactement les lectures que chaque surface déclare', () => {
+        const drift = scan(dir)
+          .filter((file) => surfaces[file.relative]?.reads !== file.reads)
+          .map((file) => `${file.relative}: déclaré ${surfaces[file.relative]?.reads}, trouvé ${file.reads}`);
+
+        expect(drift).toEqual([]);
+      });
+
+      it('compte exactement les réparations que chaque surface « applies » déclare', () => {
+        const drift = scan(dir)
+          .filter((file) => surfaces[file.relative]?.kind === 'applies')
+          .filter((file) => {
+            const declared = surfaces[file.relative] as Extract<Classification, { kind: 'applies' }>;
+            return declared.applications !== file.applications;
+          })
+          .map((file) => `${file.relative}: trouvé ${file.applications}`);
+
+        expect(drift).toEqual([]);
+      });
+
+      it("n'attend aucune réparation d'une surface déclarée exempte", () => {
+        const contradictions = scan(dir)
+          .filter((file) => surfaces[file.relative]?.kind === 'exempt' && file.applications > 0)
+          .map((file) => file.relative);
+
+        expect(contradictions).toEqual([]);
+      });
+
+      it('donne à chaque exemption une raison énoncée', () => {
+        const unexplained = Object.entries(surfaces)
+          .filter(([, classification]) => classification.kind === 'exempt')
+          .filter(([, classification]) => (classification as { why: string }).why.trim().length < 20)
+          .map(([relative]) => relative);
+
+        expect(unexplained).toEqual([]);
+      });
+
+      it("attend au moins une réparation d'une surface déclarée « applies »", () => {
+        const empty = Object.entries(surfaces)
+          .filter(([, classification]) => classification.kind === 'applies')
+          .filter(([, classification]) => (classification as { applications: number }).applications < 1)
+          .map(([relative]) => relative);
+
+        expect(empty).toEqual([]);
+      });
+    });
+  }
+});

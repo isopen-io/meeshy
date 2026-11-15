@@ -29,6 +29,10 @@ export {
 
 // Export des types unifies Phase 1
 export * from './conversation.js';
+export * from './conversation-preview.js';
+export * from './conversation-card.js';
+export * from './world.js';
+export * from './guest-attachment-kinds.js';
 export * from './user.js';
 export * from './anonymous.js';
 export * from './api-responses.js';
@@ -48,13 +52,53 @@ export * from './affiliate.js';
 // Export des types unifiés Phase 4 - Tracking Links
 export * from './tracking-link.js';
 
+// Lien d'invitation (#7794, #7797) — aperçu du groupe et statistiques du lien
+export * from './share-link-stats.js';
+
+// Écrans d'affichage d'un contenu, portés par les événements de portée (#10483)
+export * from './content-surfaces.js';
+export * from './content-reach.js';
+export * from './social-events-v2.js';
+export * from './playback-qoe.js';
+
+// Sticker porté par un message (#4823) — descripteur dédié, hissé depuis `metadata.sticker`
+export * from './message-sticker.js';
+export * from './sticker-definition.js';
+export * from './sticker-pack.js';
+export * from './sticker-pack-asset.js';
+
+// Favori de message (#7377) — étoile personnelle, liste et paramètres
+export * from './message-star.js';
+
 // Export des types unifiés Phase 5 - Attachments
 export * from './attachment.js';
+export * from './upload-limits.js';
 // V2: Remplacé par attachment-audio.js qui utilise JSON intégré dans MessageAttachment
 // export * from './attachment-transcription.js';
 
 // Export des types unifiés Phase 6 - Video Calls
 export * from './video-call.js';
+export * from './call-rules.js';
+export * from './call-recording.js';
+export * from './call-controls.js';
+export * from './call-preview.js';
+export * from './call-live-frame.js';
+
+// Cadres de gloire (#10146, #10148) — la loi d'usage des cadres et le moteur de packs à domaines
+export * from './frame-usage.js';
+export * from './glory-atmospheres.js';
+export * from './content-pack.js';
+export * from './content-pack-index.js';
+export * from './glory-frame-pack.js';
+export * from './glory-frame-atlas.js';
+export * from './pack-ownership.js';
+export * from './pack-availability.js';
+export * from './pack-unlock.js';
+export * from './pack-registry-override.js';
+export * from './pack-presence.js';
+export * from './lens-format.js';
+export * from './lens-pack.js';
+export * from './lens-partner.js';
 
 // Export des types unifiés Phase 7 - Audio Effects Timeline
 export * from './audio-effects-timeline.js';
@@ -69,6 +113,14 @@ export * from './push-notification.js';
 // Export des types posts/stories/statuts
 export * from './post.js';
 
+// **Le contrat de SCÈNE, atteignable par l'index comme tout le reste.**
+// Il était joignable uniquement par chemin profond
+// (`@meeshy/shared/types/canvas-v3`), que cinq fichiers web importaient déjà —
+// donc utilisé, mais invisible à qui parcourt la surface du paquet. Un contrat
+// qu'on ne trouve pas se réinvente : `Post.storyEffects` est encore `unknown`
+// ci-dessus, et chaque consommateur revalide pour son compte.
+export * from './canvas-v3.js';
+
 // Export des types communauté
 export * from './community.js';
 
@@ -77,6 +129,13 @@ export * from './reaction.js';
 
 // Export des types mentions
 export * from './mention.js';
+
+// Export des types d'engagement (streaks/badges — catalogue des axes, #5530)
+export * from './engagement.js';
+// Barème réglable et état par conversation « N (M) 🔥 » (#8906)
+export * from './engagement-scale.js';
+export * from './engagement-operations.js';
+export * from './engagement-act-streaks.js';
 
 // Export des types références de post (Prisme des références — parité Swift)
 export type {
@@ -104,6 +163,7 @@ export * from './security.js';
 
 // Export des types Magic Link (authentification sans mot de passe)
 export * from './magic-link.js';
+export * from './account-activation.js';
 
 // Export des types Signal Protocol database (pre-key bundles, conversation keys)
 export * from './signal-database.js';
@@ -163,19 +223,26 @@ export {
   type NotificationResponse,
   type NotificationCounts,
 
-  // Preferences
-  type NotificationPreference,
-  type CreateNotificationPreferenceDTO,
-  type UpdateNotificationPreferenceDTO,
-
   // Utility functions
   isNotificationExpired,
   isNotificationUnread,
+} from './notification.js';
+
+// Les préférences de notification et leurs règles d'envoi (extraites de
+// `notification.ts`, budget de taille #4532).
+export {
+  type NotificationPreference,
+  type CreateNotificationPreferenceDTO,
+  type UpdateNotificationPreferenceDTO,
   isDNDActive,
   isNotificationTypeEnabled,
   shouldSendNotification,
   getDefaultNotificationPreferences,
-} from './notification.js';
+} from './notification-preferences.js';
+
+// Le média inline d'une bannière — hérité par `NotificationContext` (#7003).
+export type { NotificationAttachmentWire } from './notification-attachment-wire.js';
+export type { NotificationContentDetail, NotificationContentCategory } from './notification-content-detail.js';
 
 // Legacy aliases for backwards compatibility
 export type { Notification as PrismaNotification } from './notification.js';
@@ -277,6 +344,7 @@ export type UserRoleEnum = GlobalUserRole;
 
 // Importation des types de messages consolidés
 import type { Message as ConsolidatedMessage, MessageWithTranslations as ConsolidatedMessageWithTranslations } from './conversation.js';
+import type { GuestAttachmentKind } from './guest-attachment-kinds.js';
 
 // Alias pour rétrocompatibilité
 export type Message = ConsolidatedMessage;
@@ -540,6 +608,8 @@ export interface ConversationLink {
   readonly allowAnonymousMessages: boolean;
   readonly allowAnonymousFiles: boolean;
   readonly allowAnonymousImages: boolean;
+  /** Familles ouvertes aux invités (#10001) — `null`/absent : aucune restriction par famille. @see guest-attachment-kinds.ts */
+  readonly allowedAttachmentKinds?: readonly GuestAttachmentKind[] | null;
   readonly allowViewHistory: boolean;
   readonly requireNickname: boolean;
   readonly requireEmail: boolean;
@@ -660,6 +730,10 @@ export interface CreateConversationRequest {
   readonly participants?: readonly string[]; // Alias pour la rétrocompatibilité
   readonly communityId?: string;
   readonly identifier?: string;
+  /** Tête-à-tête seulement (#12966) : obtenir ou créer celui que le serveur lit, à côté d'un tête-à-tête chiffré de bout en bout. */
+  readonly plaintext?: boolean;
+  /** Le mode de chiffrement choisi à la création ; absent : `server` (le serveur chiffre toujours au repos). */
+  readonly encryptionMode?: 'server' | 'hybrid' | 'e2ee';
 }
 
 /**
@@ -724,3 +798,59 @@ export { AGENT_TYPES, SCAN_STALE_MS, isScanActive } from './agent.js';
 // ===== LA LENTILLE — modes de lecture + pont ✦ (contrat §3.1-3.3, C-010) =====
 export * from './reading-modes.js';
 export * from './conversation-bridge.js';
+export * from './contact-card.js';
+export * from './relation.js';
+export * from './relation-level-response.js';
+export * from './bring.js';
+export * from './talkie.js';
+// Les schémas zod de l'écoute et de la position partagée ne passent pas par le
+// baril : chaque `z.object` y est un effet de bord que le bundler web ne secoue pas.
+export * from './now-playing-constants.js';
+export type {
+  NowPlayingUpdatePayload,
+  NowPlayingAck,
+  NowPlayingClearAck,
+  NowPlayingChangedEventData,
+  NowPlayingClearedEventData,
+  NowPlayingSnapshot,
+} from './now-playing.js';
+// La batterie des Proches (#14147) : mêmes raisons, les schémas restent hors du baril.
+export * from './battery-constants.js';
+export type {
+  BatteryReport,
+  BatteryReportAck,
+  BatteryPullPayload,
+  BatteryPullAck,
+  BatteryPullRequestedEventData,
+  BatteryAnnouncement,
+  BatteryServedPhase,
+  BatteryReaderState,
+  BatteryChangedEventData,
+  BatteryClearedEventData,
+  BatterySnapshot,
+  BatteryEmitterSettings,
+  BatteryEmitterSettingsUpdate,
+  BatteryPersonSettings,
+  BatteryPersonSettingsUpdate,
+} from './battery.js';
+export * from './shared-location-constants.js';
+export * from './blood-location.js';
+export type {
+  SharedLocationPosition,
+  SharedLocationStartPayload,
+  SharedLocationUpdatePayload,
+  SharedLocationAck,
+  SharedLocationStopAck,
+  SharedLocationChangedEventData,
+  SharedLocationEndedEventData,
+  SharedLocationSnapshot,
+} from './shared-location.js';
+
+// ===== LA CAPTURE D'UN CONTENU QUI DISPARAÎT (#9617) =====
+export * from './content-capture.js';
+
+// Traduction calculée par un membre et partagée scellée (#9899)
+export * from './shared-translation.js';
+
+// ===== CE QUE CHAQUE PERSONNE DE LA LISTE DES VUES A FAIT (#9727) =====
+export type { PostViewerEngagement, PostViewerRow } from './publication-viewers.js';

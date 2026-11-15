@@ -37,3 +37,34 @@ export function qualifiesAsReel(media: ReadonlyArray<ReelMediaLike>): boolean {
   const imageCount = normalized.filter((m) => m.mime.startsWith('image/')).length;
   return hasQualifyingVideo || hasQualifyingAudio || imageCount >= 2;
 }
+
+/**
+ * Ce que le composer sait au moment où l'auteur presse Publier (#8603).
+ * `type` est le format ARMÉ (`POST` / `REEL` / `STORY` / `STATUS`).
+ */
+export type ReelOfferContext = {
+  readonly type: string;
+  readonly media: ReadonlyArray<ReelMediaLike>;
+  readonly isRepost: boolean;
+  readonly isEdit: boolean;
+  readonly formatChosenByAuthor: boolean;
+};
+
+/**
+ * « Ce post doit-il PROPOSER le réel ? » — demande porteur 2026-09-28 (#8603) :
+ * un POST dont le SEUL média est UNE vidéo ouvre, à la publication, le modal
+ * « C'est un Réel / C'est un Post » (Réel par défaut). Jamais pour plusieurs
+ * médias, une photo, un audio, un texte seul, une story, un réel, un repost,
+ * une édition — ni quand l'auteur a déjà choisi « Post » au chevron.
+ *
+ * La vidéo doit QUALIFIER (`qualifiesAsReel`, plancher 3 s) : proposer un réel
+ * que la passerelle rétrograderait en post serait un choix qui ment.
+ *
+ * Miroir EXACT du SDK iOS : `ReelComposition.offersReelForPost`.
+ */
+export function offersReelForPost(context: ReelOfferContext): boolean {
+  if (context.type !== 'POST' || context.isRepost || context.isEdit || context.formatChosenByAuthor) return false;
+  if (context.media.length !== 1) return false;
+  const isVideo = (context.media[0]?.mimeType ?? '').toLowerCase().startsWith('video/');
+  return isVideo && qualifiesAsReel(context.media);
+}

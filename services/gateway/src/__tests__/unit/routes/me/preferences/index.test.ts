@@ -1,6 +1,11 @@
 /**
  * Unit tests for userPreferencesRoutes (routes/me/preferences/index.ts)
- * Tests GET / (all prefs), DELETE / (reset all), and sub-route registration.
+ * Tests GET / (all prefs) and sub-route registration.
+ *
+ * Les TROIS routes racine (`GET`/`PATCH`/`DELETE /me/preferences`) ont leur
+ * propre témoin depuis #4181 : `unified-routes.test.ts`. Ce fichier ne garde
+ * plus que le MONTAGE — que le plugin monte bien ses sous-routes, et qu'il ne
+ * plante pas sans Prisma.
  *
  * @jest-environment node
  */
@@ -188,35 +193,15 @@ describe('GET / — get all preferences', () => {
   });
 });
 
-// ─── DELETE / ────────────────────────────────────────────────────────────────
-
-describe('DELETE / — reset all preferences', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(() => app.close());
-
-  it('returns 200 on successful reset', async () => {
-    const res = await app.inject({ method: 'DELETE', url: '/' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
-  });
-
-  it('returns 401 when unauthenticated', async () => {
-    const anonApp = await buildApp({ auth: 'unauthenticated' });
-    const res = await anonApp.inject({ method: 'DELETE', url: '/' });
-    expect(res.statusCode).toBe(401);
-    await anonApp.close();
-  });
-
-  it('returns 500 on DB error', async () => {
-    const prisma = makePrisma();
-    prisma.userPreferences.updateMany = jest.fn<any>().mockRejectedValue(new Error('db error'));
-    const errApp = await buildApp({ prisma });
-    const res = await errApp.inject({ method: 'DELETE', url: '/' });
-    expect(res.statusCode).toBe(500);
-    await errApp.close();
-  });
-});
+// ─── DELETE / — RETIRÉE (#4186), puis ROUVERTE sous un autre contrat (#4181) ──
+//
+// La remise à zéro GLOBALE n'avait aucun appelant sur les trois clients : elle
+// a été retirée au lot précédent. #4181 reprend l'adresse pour la forme qui la
+// mérite — `DELETE /me/preferences?categories=` (absent = tout), qui absorbe du
+// même coup les SEPT `DELETE` par catégorie. Le retrait n'était donc pas un
+// aller-retour : c'est lui qui a libéré l'adresse.
+//
+// Son témoin vit avec ses deux sœurs, dans `unified-routes.test.ts`.
 
 // ─── Sub-routes registration ──────────────────────────────────────────────────
 

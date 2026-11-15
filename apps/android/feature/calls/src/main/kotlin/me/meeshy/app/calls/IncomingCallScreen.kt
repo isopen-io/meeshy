@@ -1,0 +1,524 @@
+package me.meeshy.app.calls
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.motion.pressable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.unit.dp
+import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallButtonRole
+import me.meeshy.sdk.model.call.CallSelfTileLaw
+import me.meeshy.sdk.model.call.CallSelfTileScale
+import me.meeshy.sdk.model.call.CallTileSize
+import me.meeshy.sdk.model.call.IncomingAcceptGlyph
+import me.meeshy.sdk.model.call.IncomingCallAction
+import me.meeshy.sdk.model.call.IncomingCallChoices
+import me.meeshy.sdk.model.call.IncomingCallLayout
+import me.meeshy.sdk.model.call.IncomingPreAnswer
+import me.meeshy.ui.theme.MeeshySpacing
+
+/**
+ * L'appel entrant plein écran (iOS `IncomingCallView`) : anneaux et avatar qui rebondit, le nom,
+ * « Appel (vidéo) entrant », la pastille de type, puis Refuser (rouge) et Répondre (vert, comme
+ * iOS `MeeshyColors.success`), chacun avec un retour haptique. Le tri des permissions est fait par l'hôte
+ * ([onAccept] est déjà l'accepter-sous-permissions). L'arrivée est annoncée à TalkBack. Un appel vidéo
+ * 1:1 propose au-dessus des actions « Activer le son » de l'aperçu avant décroché ([preview]). Sur un
+ * écran court ou en grande police, les actions gardent leur place et l'identité se compacte
+ * ([IncomingCallIdentity]). Un appel vidéo offre aussi « Sans vidéo » entre les deux ([IncomingCallChoices], vue P17) :
+ * décrocher sans jamais ouvrir ma caméra ([onAcceptWithoutVideo]).
+ *
+ * L'appel VIDÉO suit la vue P17 ([IncomingVideoBody]) : la puce de verre du type, le nom et « Activer le son » en haut,
+ * la vidéo de l'appelant derrière sans disque sur son visage, MA caméra en vignette à ma couleur, la barre de verre
+ * d'avant le décroché ([preAnswer]) puis Refuser · Sans vidéo · Répondre. L'appel AUDIO garde la disposition livrée.
+ */
+@Composable
+internal fun IncomingCallScreen(
+    state: CallUiState,
+    peer: CallPeerVisual,
+    reduceMotion: Boolean,
+    onAccept: () -> Unit,
+    onDecline: () -> Unit,
+    modifier: Modifier = Modifier,
+    onDeclineWithMessage: ((String) -> Unit)? = null,
+    preview: CallPreviewUi = CallPreviewUi(),
+    onTogglePreviewSound: () -> Unit = {},
+    onAcceptWithoutVideo: () -> Unit = onAccept,
+    preAnswer: IncomingPreAnswerHost? = null,
+) {
+    val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
+    val announce = rememberCallAnnouncer()
+    val title = callPeerTitle(state.peerName)
+    val typeLabel = stringResource(if (state.isVideoCall) R.string.call_incoming_video else R.string.call_incoming_audio)
+
+    var declineSheetOpen by rememberSaveable { mutableStateOf(false) }
+    // Ce que je choisis AVANT de décrocher : un état local de l'écran, rien n'en part au pair (P17.9).
+    var microphoneOn by rememberSaveable { mutableStateOf(true) }
+    var cameraOn by rememberSaveable { mutableStateOf(true) }
+    val choice = IncomingPreAnswer(microphoneOn = microphoneOn, cameraOn = cameraOn)
+    val layout = IncomingCallLayout.of(state.isVideoCall)
+
+    LaunchedEffect(Unit) {
+        announce(context.getString(R.string.call_incoming_a11y, typeLabel, title))
+    }
+    if (layout == IncomingCallLayout.VideoPreview) IncomingSelfCameraWhileSeen(cameraOn = cameraOn, host = preAnswer)
+
+    val perform: (IncomingCallAction) -> Unit = { action ->
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        val route = choice.route(state.isVideoCall)
+        when (action) {
+            IncomingCallAction.Decline -> onDecline()
+            IncomingCallAction.AnswerWithoutVideo -> {
+                preAnswer?.onAnswerMuted?.invoke(choice.answersMuted)
+                onAcceptWithoutVideo()
+            }
+            IncomingCallAction.Accept -> {
+                preAnswer?.onAnswerMuted?.invoke(choice.answersMuted)
+                if (route == IncomingPreAnswer.Route.WithoutVideo) onAcceptWithoutVideo() else onAccept()
+            }
+        }
+    }
+    val actions = IncomingCallChoices.actions(state.isVideoCall)
+    val acceptsVideo = IncomingCallChoices.acceptGlyph(state.isVideoCall, choice.route(state.isVideoCall)) == IncomingAcceptGlyph.Video
+    val messageButton: (@Composable () -> Unit)? = if (onDeclineWithMessage == null) {
+        null
+    } else {
+        {
+            DeclineWithMessageButton(
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    declineSheetOpen = true
+                },
+            )
+        }
+    }
+
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        val spacing = IncomingCallSpacing.forHeight(maxHeight)
+        if (layout == IncomingCallLayout.VideoPreview) {
+            IncomingVideoBody(
+                title = title,
+                typeLabel = typeLabel,
+                peerName = state.peerName,
+                peer = peer,
+                reduceMotion = reduceMotion,
+                preview = preview,
+                onTogglePreviewSound = onTogglePreviewSound,
+                choice = choice,
+                preAnswer = preAnswer,
+                onToggleMicrophone = { microphoneOn = !microphoneOn },
+                onToggleCamera = { cameraOn = !cameraOn },
+                actionGap = spacing.actionGap,
+                bottom = spacing.bottom,
+                actions = { IncomingActionsRow(actions, acceptsVideo, layout, perform) },
+                messageButton = messageButton,
+            )
+        } else {
+            IncomingAudioBody(
+                state = state,
+                peer = peer,
+                reduceMotion = reduceMotion,
+                title = title,
+                typeLabel = typeLabel,
+                spacing = spacing,
+                preview = preview,
+                onTogglePreviewSound = onTogglePreviewSound,
+                messageButton = messageButton,
+                actions = { IncomingActionsRow(actions, acceptsVideo, layout, perform) },
+            )
+        }
+    }
+
+    if (declineSheetOpen && onDeclineWithMessage != null) {
+        CallDeclineSheet(
+            reduceMotion = reduceMotion,
+            onSend = { text ->
+                declineSheetOpen = false
+                onDeclineWithMessage(text)
+            },
+            onDismiss = { declineSheetOpen = false },
+        )
+    }
+}
+
+/** L'appel AUDIO entrant tel qu'il est livré (#8480) : la planche ne le redessine pas (P17.12), sa disposition ne bouge pas. */
+@Composable
+private fun IncomingAudioBody(
+    state: CallUiState,
+    peer: CallPeerVisual,
+    reduceMotion: Boolean,
+    title: String,
+    typeLabel: String,
+    spacing: IncomingCallSpacing,
+    preview: CallPreviewUi,
+    onTogglePreviewSound: () -> Unit,
+    messageButton: (@Composable () -> Unit)?,
+    actions: @Composable () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(bottom = spacing.bottom),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        IncomingCallIdentity(
+            rings = { IncomingCallRings(name = state.peerName, peer = peer, reduceMotion = reduceMotion) },
+            details = {
+                Column(
+                    modifier = Modifier.padding(horizontal = MeeshySpacing.xl),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    IncomingCallerName(title)
+                    Spacer(Modifier.height(MeeshySpacing.sm))
+                    Text(
+                        text = typeLabel,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                        color = CallPalette.InkSecondary,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(MeeshySpacing.md))
+                    CallTypeBadge(isVideo = false, label = stringResource(R.string.call_incoming_badge_audio))
+                }
+            },
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+        )
+        Spacer(Modifier.height(spacing.identityGap))
+        if (preview.offersSound) {
+            CallPreviewSoundButton(isAudible = preview.isAudible, onToggle = onTogglePreviewSound)
+            Spacer(Modifier.height(spacing.actionGap))
+        }
+        if (messageButton != null) {
+            messageButton()
+            Spacer(Modifier.height(spacing.actionGap))
+        }
+        actions()
+    }
+}
+
+/**
+ * La vue P17 (appel VIDÉO entrant), de haut en bas : la puce de verre « Appel vidéo entrant », le nom, la puce « Activer le
+ * son » — centrés ; puis la vidéo voilée de l'appelant, que son disque ne recouvre pas (P17.1), et MA caméra en vignette à
+ * ma couleur, au bord de fin au tiers de la place libre (P17.4) ; la barre d'avant le décroché (P17.6) ; Refuser · Sans
+ * vidéo · Répondre ; le bouton « Message » en dernier, comme iOS.
+ */
+@Composable
+private fun IncomingVideoBody(
+    title: String,
+    typeLabel: String,
+    peerName: String,
+    peer: CallPeerVisual,
+    reduceMotion: Boolean,
+    preview: CallPreviewUi,
+    onTogglePreviewSound: () -> Unit,
+    choice: IncomingPreAnswer,
+    preAnswer: IncomingPreAnswerHost?,
+    onToggleMicrophone: () -> Unit,
+    onToggleCamera: () -> Unit,
+    actionGap: Dp,
+    bottom: Dp,
+    actions: @Composable () -> Unit,
+    messageButton: (@Composable () -> Unit)?,
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(bottom = bottom),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        // Le haut défile seul si la place manque (très grande police, écran court) : la barre et les boutons restent entiers.
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val viewport = maxHeight
+            Column(
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = viewport),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                IncomingTypeChip(label = typeLabel, modifier = Modifier.padding(top = MeeshySpacing.lg))
+                Spacer(Modifier.height(MeeshySpacing.sm))
+                IncomingCallerName(title, modifier = Modifier.padding(horizontal = MeeshySpacing.xl))
+                Spacer(Modifier.height(MeeshySpacing.sm))
+                if (preview.offersSound) CallPreviewSoundButton(isAudible = preview.isAudible, onToggle = onTogglePreviewSound)
+                IncomingVideoStage(
+                    peerName = peerName,
+                    peer = peer,
+                    reduceMotion = reduceMotion,
+                    callerVideoPlays = preview.video != null,
+                    choice = choice,
+                    preAnswer = preAnswer,
+                    modifier = Modifier.weight(1f).fillMaxWidth().heightIn(min = IncomingCallRingsMinFootprint),
+                )
+            }
+        }
+        IncomingPreAnswerBar(
+            peerName = callPeerTitle(peerName),
+            choice = choice,
+            hasLocalVideoTrack = preAnswer?.selfTrack != null,
+            onToggleMicrophone = onToggleMicrophone,
+            onToggleCamera = onToggleCamera,
+            modifier = Modifier.padding(horizontal = MeeshySpacing.md),
+        )
+        Spacer(Modifier.height(actionGap))
+        actions()
+        if (messageButton != null) {
+            Spacer(Modifier.height(actionGap))
+            messageButton()
+        }
+    }
+}
+
+/**
+ * La place sous « Activer le son » : le disque de l'appelant et ses anneaux seulement tant que sa vidéo ne joue pas
+ * (P17.1), et MA vignette au bord de fin au tiers de la place libre (P17.4), réduite si la place manque.
+ */
+@Composable
+private fun IncomingVideoStage(
+    peerName: String,
+    peer: CallPeerVisual,
+    reduceMotion: Boolean,
+    callerVideoPlays: Boolean,
+    choice: IncomingPreAnswer,
+    preAnswer: IncomingPreAnswerHost?,
+    modifier: Modifier = Modifier,
+) {
+    BoxWithConstraints(modifier) {
+        if (IncomingCallChoices.showsCallerDisc(previewPlaysVideo = callerVideoPlays)) {
+            IncomingCallRings(name = peerName, peer = peer, reduceMotion = reduceMotion, modifier = Modifier.fillMaxSize())
+        }
+        if (preAnswer != null) {
+            val standard = CallSelfTileScale.Standard
+            val tile = CallSelfTileLaw.fitted(
+                CallTileSize(standard.widthDp, standard.heightDp),
+                CallTileSize(maxWidth.value, maxHeight.value),
+            )
+            Column(Modifier.fillMaxSize().padding(end = MeeshySpacing.md), horizontalAlignment = Alignment.End) {
+                Spacer(Modifier.weight(1f))
+                IncomingSelfPreview(preAnswer, choice, tile, reduceMotion)
+                Spacer(Modifier.weight(2f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun IncomingCallerName(title: String, modifier: Modifier = Modifier) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.headlineMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = CallPalette.Ink,
+        textAlign = TextAlign.Center,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier,
+    )
+}
+
+/** Refuser · (Sans vidéo) · Répondre, la rangée de boutons ronds légendés, commune aux deux dispositions. */
+@Composable
+private fun IncomingActionsRow(
+    actions: List<IncomingCallAction>,
+    acceptsVideo: Boolean,
+    layout: IncomingCallLayout,
+    onPerform: (IncomingCallAction) -> Unit,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(IncomingCallChoices.buttonSpacingDp(actions.size).dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        actions.forEach { action ->
+            IncomingChoice(
+                action = action,
+                acceptsVideo = acceptsVideo,
+                layout = layout,
+                compact = actions.size > 2,
+                onPerform = { onPerform(action) },
+            )
+        }
+    }
+}
+
+/**
+ * Les respirations de l'écran entrant : celles d'iOS dès [ROOMY_HEIGHT] (un S8 les a), resserrées
+ * en dessous pour que l'identité garde de la place au-dessus des actions.
+ */
+private data class IncomingCallSpacing(val actionGap: Dp, val identityGap: Dp, val bottom: Dp) {
+    companion object {
+        private val ROOMY_HEIGHT = 600.dp
+        private val ROOMY = IncomingCallSpacing(MeeshySpacing.xl, MeeshySpacing.lg, MeeshySpacing.xxxl)
+        private val COMPACT = IncomingCallSpacing(MeeshySpacing.md, MeeshySpacing.sm, MeeshySpacing.lg)
+
+        fun forHeight(height: Dp): IncomingCallSpacing = if (height >= ROOMY_HEIGHT) ROOMY else COMPACT
+    }
+}
+
+/**
+ * L'identité de l'appelant au-dessus des actions, qui restent, elles, toujours entières à l'écran :
+ * le nom, l'état et la pastille sont mesurés d'abord, les anneaux prennent la place qui reste (de
+ * [IncomingCallRingsMinFootprint] à [IncomingCallRingsFootprint]) et l'ensemble est centré. Si même
+ * réduits ils ne tiennent pas (très grande police sur un écran court), l'identité défile seule.
+ */
+@Composable
+private fun IncomingCallIdentity(
+    rings: @Composable () -> Unit,
+    details: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BoxWithConstraints(modifier) {
+        val viewport = if (constraints.hasBoundedHeight) constraints.maxHeight else null
+        Layout(
+            contents = listOf(rings, details),
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        ) { (ringsMeasurables, detailsMeasurables), layoutConstraints ->
+            val width = layoutConstraints.maxWidth
+            val detailsPlaceable = detailsMeasurables.single().measure(Constraints(maxWidth = width))
+            val natural = IncomingCallRingsFootprint.roundToPx()
+            val roomGap = MeeshySpacing.xxxl.roundToPx()
+            val room = viewport?.minus(detailsPlaceable.height) ?: (natural + roomGap)
+            val gap = if (room >= natural + roomGap) roomGap else MeeshySpacing.lg.roundToPx()
+            val diameter = (room - gap)
+                .coerceIn(IncomingCallRingsMinFootprint.roundToPx(), natural)
+                .coerceAtMost(width)
+            val ringsPlaceable = ringsMeasurables.single().measure(Constraints.fixed(diameter, diameter))
+            val content = diameter + gap + detailsPlaceable.height
+            val height = maxOf(content, viewport ?: content)
+            layout(width, height) {
+                val top = (height - content) / 2
+                ringsPlaceable.place((width - diameter) / 2, top)
+                detailsPlaceable.place((width - detailsPlaceable.width) / 2, top + diameter + gap)
+            }
+        }
+    }
+}
+
+/** « Message » : la capsule de verre qui ouvre les réponses rapides (iOS `declineWithMessageButton`). */
+@Composable
+private fun DeclineWithMessageButton(onClick: () -> Unit) {
+    val label = stringResource(R.string.call_decline_open)
+    val description = stringResource(R.string.call_decline_open_label)
+    val hint = stringResource(R.string.call_decline_open_hint)
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    CallGlassButtonSurface(
+        role = CallButtonRole.Neutral,
+        shape = CircleShape,
+        isPressed = pressed,
+        modifier = Modifier
+            .pressable()
+            .defaultMinSize(minHeight = 48.dp)
+            .clickable(interactionSource = source, indication = null, onClickLabel = hint, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description },
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = MeeshySpacing.xl),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        ) {
+            Icon(MeeshyIcons.MessageFilled, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = Color.White,
+                modifier = Modifier.clearAndSetSemantics { },
+            )
+        }
+    }
+}
+
+/** Un bouton de l'écran entrant, tel que la règle le nomme ; son aspect vient de [IncomingChoiceLooks] (vue P17). */
+@Composable
+private fun IncomingChoice(action: IncomingCallAction, acceptsVideo: Boolean, layout: IncomingCallLayout, compact: Boolean, onPerform: () -> Unit) {
+    val look = IncomingChoiceLooks.of(action, acceptsVideo, layout)
+    val (caption, description, hint) = when (action) {
+        IncomingCallAction.Decline -> Triple(R.string.call_incoming_decline, R.string.call_action_decline, R.string.call_incoming_decline_hint)
+        IncomingCallAction.AnswerWithoutVideo -> Triple(
+            R.string.call_incoming_answer_no_video,
+            R.string.call_incoming_answer_no_video_label,
+            R.string.call_incoming_answer_no_video_hint,
+        )
+        IncomingCallAction.Accept -> Triple(R.string.call_incoming_accept, R.string.call_action_accept, R.string.call_incoming_accept_hint)
+    }
+    IncomingAction(
+        look = look,
+        caption = stringResource(caption),
+        description = stringResource(description),
+        hint = stringResource(hint),
+        onClick = onPerform,
+        compact = compact,
+    )
+}
+
+/**
+ * Un disque et sa légende. Trois boutons doivent tenir sur 320 dp, même en très grande police : en [compact], la largeur
+ * se borne et la légende passe sur deux lignes centrées au plus ; à deux boutons, la légende garde toute sa place.
+ */
+@Composable
+private fun IncomingAction(
+    look: IncomingChoiceLook,
+    caption: String,
+    description: String,
+    hint: String,
+    onClick: () -> Unit,
+    compact: Boolean,
+) {
+    val width = if (compact) Modifier.widthIn(max = COMPACT_ACTION_MAX_WIDTH) else Modifier
+    Column(width, horizontalAlignment = Alignment.CenterHorizontally) {
+        IncomingGlassDisc(look = look, contentDescription = "$description. $hint", hint = hint, onClick = onClick)
+        Spacer(Modifier.height(MeeshySpacing.smPlus))
+        Text(
+            text = caption,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Medium,
+            color = look.caption,
+            textAlign = TextAlign.Center,
+            maxLines = if (compact) COMPACT_CAPTION_MAX_LINES else Int.MAX_VALUE,
+            overflow = if (compact) TextOverflow.Ellipsis else TextOverflow.Clip,
+            modifier = Modifier.clearAndSetSemantics { },
+        )
+    }
+}
+
+private val COMPACT_ACTION_MAX_WIDTH = 80.dp
+private const val COMPACT_CAPTION_MAX_LINES = 2

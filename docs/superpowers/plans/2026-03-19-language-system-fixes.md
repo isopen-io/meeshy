@@ -220,7 +220,7 @@ with auto-translate explicitly disabled. Now returns early if disabled.
 **Problem:** `ProfileView.swift:657` falls back to `Locale.current.language.languageCode` when `systemLanguage` is empty. This violates the Prisme Linguistique: device locale must never be used for content language.
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/ProfileView.swift:657`
+- Modify: `apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift:657`
 
 - [ ] **Step 1: Read ProfileView.swift to find the fallback**
 

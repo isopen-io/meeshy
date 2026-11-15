@@ -39,6 +39,23 @@ final class SocketNotificationEventPersistenceTests: XCTestCase {
         XCTAssertEqual(api.createdAt, "2026-06-28T10:00:00.000Z")
     }
 
+    /// La ligne insérée par le socket doit dire CE QUI est arrivé, comme celle
+    /// que le REST posera à la prochaine synchro : sans le sous-titre, elle
+    /// restait muette sur son type jusqu'au prochain rafraîchissement.
+    func test_toAPINotification_carriesTheServerActionPhrase() throws {
+        let event = try makeEvent("""
+        {
+            "id": "n1b", "userId": "u1", "type": "post_comment",
+            "title": "Alice Dupont", "subtitle": "a commenté votre réel",
+            "content": "Superbe montage !",
+            "actor": { "id": "a1", "displayName": "Alice Dupont" }
+        }
+        """)
+
+        let api = event.toAPINotification(createdAt: "2026-06-28T10:00:00.000Z")
+        XCTAssertEqual(api.subtitle, "a commenté votre réel")
+    }
+
     func test_toAPINotification_isReadDefaultsToFalseWhenAbsent() throws {
         let event = try makeEvent("""
         { "id": "n2", "userId": "u1", "type": "friend_request", "content": "x" }

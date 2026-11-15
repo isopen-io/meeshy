@@ -9,20 +9,24 @@
  * site parmi les « non-fuites accidentelles » — à tort : le schéma de cette
  * route décrit le MESSAGE (id, content, sender…) quand `sendSuccess` répond
  * `{ success, data }`. Aucune de ses déclarations ne matche l'objet réel, et
- * `data` traverse ENTIER par l'`additionalProperties: true` du bloc. Vérifié en
- * isolant le compilateur, et confirmé par le ROUGE : sur le code d'avant, le
- * témoin d'identité passait déjà — seuls les témoins de GATE tombent.
+ * `data` traverse ENTIER par l'`additionalProperties: true` du bloc.
  *
  * La leçon du site : **un `{ type: 'object' }` nu ne vide que si le schéma qui
  * le porte décrit vraiment la charge utile.** Quand l'enveloppe ne correspond
  * pas, la déclaration est inerte — et le balayage produit un faux positif sur
  * la forme, qui cachait ici un VRAI défaut de fond.
  *
- * Régime : `resolvePrefsOnly`. L'appelant doit être un participant ACTIF de la
- * conversation (403 sinon) — contexte d'accès garanti des deux côtés, seules
- * les préférences s'appliquent. Et `onMissingEntry: 'reveal'`, parce qu'une
- * entrée absente y est NORMALE : un expéditeur anonyme n'a pas de `userId`,
- * donc pas de préférences, et reste visible.
+ * Régime : critère STRICT (`resolveForTargets`), directive produit du
+ * 2026-08-25 — « lorsqu'on n'est pas ami, je veux supprimer ma présence en
+ * ligne […] et personne ne doit savoir ma dernière connexion si on n'est pas
+ * ami. Admin et supérieur peuvent constamment avoir l'état de présence. »
+ * Être co-participant ACTIF de la conversation (le 403 gardé plus haut dans le
+ * handler) donne accès au MESSAGE, jamais à la présence de son auteur — ce
+ * n'est plus, depuis cette directive, un critère d'autorisation de présence.
+ * Un expéditeur ANONYME (`userId` absent) n'a pas de ligne `User` à résoudre
+ * via `resolveForTargets` (indexée par `User.id`) : masqué par défaut, sauf
+ * pour un viewer ADMIN/BIGBOSS — l'entitlement de la directive est
+ * inconditionnel, il ne dépend pas de l'existence d'une relation.
  *
  * @jest-environment node
  */
@@ -39,7 +43,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 const mockAuthMiddleware = jest.fn();
 jest.mock('../../../middleware/auth', () => ({
   createUnifiedAuthMiddleware: () => mockAuthMiddleware,
-  isRegisteredUser: (ctx: any) => ctx?.type === 'registered',
+  isRegisteredUser: (ctx: any) => ctx?.type === 'user',
 }));
 
 jest.mock('../../../services/attachments/index', () => ({
@@ -75,10 +79,10 @@ jest.mock('../../../validation/messages-schemas', () => ({
   AttachmentStatusBodySchema: {},
 }));
 
-const mockResolvePrefsOnly = jest.fn<any>();
+const mockResolveForTargets = jest.fn<any>();
 jest.mock('../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({
-    resolvePrefsOnly: (...args: any[]) => mockResolvePrefsOnly(...args),
+    resolveForTargets: (...args: any[]) => mockResolveForTargets(...args),
   }),
 }));
 
@@ -127,15 +131,15 @@ const anonymousSender = (): SenderShape => ({
   user: null,
 });
 
-async function buildApp(sender: SenderShape): Promise<FastifyInstance> {
+async function buildApp(sender: SenderShape, viewerRole: string = 'USER'): Promise<FastifyInstance> {
   mockAuthMiddleware.mockImplementation(async (req: any) => {
     req.authContext = {
-      type: 'registered',
+      type: 'user',
       isAuthenticated: true,
       isAnonymous: false,
       userId: READER_USER_ID,
       hasFullAccess: true,
-      registeredUser: { id: READER_USER_ID, role: 'USER' },
+      registeredUser: { id: READER_USER_ID, role: viewerRole },
     };
   });
 
@@ -155,7 +159,9 @@ async function buildApp(sender: SenderShape): Promise<FastifyInstance> {
         translations: null,
         metadata: null,
         sender,
-        // L'appelant EST participant actif — sans quoi la route rend 403.
+        // L'appelant EST participant actif — sans quoi la route rend 403. La
+        // co-participation reste le critère d'ACCÈS AU MESSAGE ; ce n'est plus
+        // un critère de présence depuis la directive du 2026-08-25.
         conversation: { participants: [{ userId: READER_USER_ID, role: 'member' }] },
         attachments: [],
       }),
@@ -170,16 +176,16 @@ async function buildApp(sender: SenderShape): Promise<FastifyInstance> {
   return app;
 }
 
-async function fetchSender(sender: SenderShape) {
-  const app = await buildApp(sender);
+async function fetchSender(sender: SenderShape, viewerRole: string = 'USER') {
+  const app = await buildApp(sender, viewerRole);
   const res = await app.inject({ method: 'GET', url: `/messages/${MESSAGE_ID}` });
   await app.close();
   return res.json().data?.sender;
 }
 
 beforeEach(() => {
-  mockResolvePrefsOnly.mockReset();
-  mockResolvePrefsOnly.mockResolvedValue(new Map());
+  mockResolveForTargets.mockReset();
+  mockResolveForTargets.mockResolvedValue(new Map());
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -192,7 +198,7 @@ beforeEach(() => {
 // future « correction » du schéma qui, elle, tronquerait pour de bon.
 describe('GET /messages/:messageId — l’expéditeur traverse le sérialiseur', () => {
   it('sert l’expéditeur entier (le schéma ne le gouverne pas)', async () => {
-    mockResolvePrefsOnly.mockResolvedValue(new Map([[SENDER_USER_ID, VISIBLE]]));
+    mockResolveForTargets.mockResolvedValue(new Map([[SENDER_USER_ID, VISIBLE]]));
 
     const sender = await fetchSender(registeredSender());
 
@@ -206,38 +212,104 @@ describe('GET /messages/:messageId — l’expéditeur traverse le sérialiseur'
   });
 });
 
-describe('GET /messages/:messageId — gate de présence de l’expéditeur', () => {
-  it('masque les DEUX porteurs quand l’expéditeur a coupé sa présence', async () => {
-    mockResolvePrefsOnly.mockResolvedValue(new Map([[SENDER_USER_ID, HIDDEN]]));
+describe('GET /messages/:messageId — gate de présence de l’expéditeur (critère strict)', () => {
+  it('USER non ami (co-participant seul) ⇒ masqué sur les DEUX porteurs', async () => {
+    // Le mock répond exactement ce que `PresenceVisibilityService.resolveForTargets`
+    // rendrait pour un viewer USER qui n'est ni l'expéditeur ni son ami : HIDDEN.
+    mockResolveForTargets.mockResolvedValue(new Map([[SENDER_USER_ID, HIDDEN]]));
 
-    const sender = await fetchSender(registeredSender());
+    const sender = await fetchSender(registeredSender(), 'USER');
 
     expect(sender.isOnline).toBe(false);
     expect(sender.user.isOnline).toBe(false);
   });
 
-  it('conserve la présence que les préférences autorisent', async () => {
-    mockResolvePrefsOnly.mockResolvedValue(new Map([[SENDER_USER_ID, VISIBLE]]));
+  it('ADMIN non ami ⇒ visible (entitlement inconditionnel de la directive)', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[SENDER_USER_ID, VISIBLE]]));
 
-    const sender = await fetchSender(registeredSender());
+    const sender = await fetchSender(registeredSender(), 'ADMIN');
 
     expect(sender.isOnline).toBe(true);
     expect(sender.user.isOnline).toBe(true);
   });
 
-  it('résout sous le régime prefs-only, sur le `User.id` de l’expéditeur', async () => {
-    await fetchSender(registeredSender());
+  it('ami accepté ⇒ visible sous les préférences de l’expéditeur', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[SENDER_USER_ID, VISIBLE]]));
 
-    expect(mockResolvePrefsOnly).toHaveBeenCalledWith([SENDER_USER_ID]);
-  });
-
-  // Le défaut d'une carte absente s'INVERSE entre les deux régimes : sous
-  // prefs-only un id manquant est normal (pas de compte, donc pas de
-  // préférences) et vaut MONTRABLE, là où le critère strict masquerait.
-  it('laisse un expéditeur anonyme visible, et n’ouvre aucune résolution', async () => {
-    const sender = await fetchSender(anonymousSender());
+    const sender = await fetchSender(registeredSender(), 'USER');
 
     expect(sender.isOnline).toBe(true);
-    expect(mockResolvePrefsOnly).not.toHaveBeenCalled();
+    expect(sender.user.isOnline).toBe(true);
+  });
+
+  it('résout sous le critère strict, avec le viewer et le `User.id` de l’expéditeur', async () => {
+    await fetchSender(registeredSender(), 'USER');
+
+    expect(mockResolveForTargets).toHaveBeenCalledWith(
+      { userId: READER_USER_ID, role: 'USER' },
+      [SENDER_USER_ID],
+    );
+  });
+
+  // Le défaut d'une carte absente est désormais UNIFORME : sous le critère
+  // strict, une entrée manquante masque — jamais l'inverse du régime
+  // prefs-only retiré. Un expéditeur anonyme n'a pas de `User.id` à résoudre,
+  // donc pas d'entrée : masqué pour un viewer non privilégié, et
+  // `resolveForTargets` n'est même pas appelé (rien à résoudre).
+  it('expéditeur anonyme + viewer USER ⇒ masqué, sans résolution ouverte', async () => {
+    const sender = await fetchSender(anonymousSender(), 'USER');
+
+    expect(sender.isOnline).toBe(false);
+    expect(mockResolveForTargets).not.toHaveBeenCalled();
+  });
+
+  // Contrepartie de la directive : « les utilisateurs avec le rôle ADMIN et
+  // supérieur peuvent CONSTAMMENT avoir l'état de présence » — y compris
+  // quand la cible est un participant anonyme sans ligne `User` à résoudre.
+  it('expéditeur anonyme + viewer ADMIN ⇒ visible', async () => {
+    const sender = await fetchSender(anonymousSender(), 'ADMIN');
+
+    expect(sender.isOnline).toBe(true);
+    expect(mockResolveForTargets).not.toHaveBeenCalled();
+  });
+
+  // Le bypass EN LIGNE de ce site (expéditeur sans `User.id`, donc hors de
+  // portée de `resolveForTargets`) suit `isGlobalAdmin`, jamais
+  // `isGlobalModerator` : un MODERATOR n'est « ni un ami ni un administrateur »
+  // (loi partagée). Ce témoin rougit si le site rétrograde vers l'ancien
+  // bypass modérateur — le seul rang où les deux prédicats divergent.
+  it('expéditeur anonyme + viewer MODERATOR ⇒ masqué, comme un utilisateur ordinaire', async () => {
+    const sender = await fetchSender(anonymousSender(), 'MODERATOR');
+
+    expect(sender.isOnline).toBe(false);
+    expect(mockResolveForTargets).not.toHaveBeenCalled();
+  });
+});
+
+// Revue adversariale 2026-08-26 (F2, constat 2). Le repli « entrée absente »
+// était RÉÉCRIT en ligne (`FULL_PRESENCE_VISIBILITY` + `isGlobalAdmin`) et ne
+// couvrait que l'expéditeur ANONYME : un expéditeur INSCRIT dont le résolveur
+// ne rendait pas d'entrée (anomalie) tombait sur `undefined`, donc HIDDEN même
+// pour un ADMIN. Le site passe désormais par `presenceFor` (`presence-gate`),
+// UN repli pour toutes les portes : une entrée absente — anonyme ou inscrit
+// non résolu — reçoit la MÊME réponse, révélée à ADMIN/BIGBOSS, masquée sinon.
+describe('GET /messages/:messageId — entrée ABSENTE pour un expéditeur INSCRIT (repli partagé)', () => {
+  it('viewer ADMIN ⇒ visible sur les DEUX porteurs (la loi partagée révèle l’inconnu à ADMIN+)', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map());
+
+    const sender = await fetchSender(registeredSender(), 'ADMIN');
+
+    expect(sender.isOnline).toBe(true);
+    expect(sender.user.isOnline).toBe(true);
+    expect(mockResolveForTargets).toHaveBeenCalledWith({ userId: READER_USER_ID, role: 'ADMIN' }, [SENDER_USER_ID]);
+  });
+
+  it('viewer USER ⇒ masqué sur les DEUX porteurs (une porte refuse ce qu’elle ne sait pas)', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map());
+
+    const sender = await fetchSender(registeredSender(), 'USER');
+
+    expect(sender.isOnline).toBe(false);
+    expect(sender.user.isOnline).toBe(false);
   });
 });

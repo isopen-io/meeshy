@@ -1,7 +1,7 @@
 import Foundation
 
 /// L'état du SECOND opt-in de position — « Rendre ce contenu trouvable à
-/// proximité » (spec du 2026-08-02 §2) — pour UNE publication.
+/// proximité » — pour UNE publication.
 ///
 /// Le premier opt-in, « Afficher une position sur ce contenu », est le lieu
 /// choisi lui-même (`CreatePostRequest.location`) : il ne passe pas par ici et

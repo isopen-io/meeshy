@@ -1,0 +1,170 @@
+import { createStore } from 'zustand/vanilla';
+
+import type { LensSettings } from '@/lib/meeshy-lens/lens-stage';
+
+import { BRIGHTNESS_LIMIT, clampBrightness, effectsFilter, VIDEO_PRESET_CATALOG, VIDEO_PRESETS, type VideoPreset } from './video-effects-look';
+
+export { BRIGHTNESS_LIMIT, effectsFilter, VIDEO_PRESET_CATALOG, VIDEO_PRESETS, type VideoPreset };
+
+/**
+ * **LES EFFETS DE MA VIDÉO** (#8442) — les règles et l'état, sans traitement
+ * d'image : ce module est LÉGER, l'écran d'appel le lit ; le traitement vit
+ * dans un chunk à part (`video-effects-pipeline.ts`), chargé au premier effet
+ * de couleur, et le moteur le branche par `camera-effects.ts`.
+ *
+ * Miroir de `VideoFilterPreset` d'iOS : les huit ambiances de Meeshy
+ * (#17000, `VIDEO_PRESET_CATALOG`) et la luminosité (±50 %). Les effets s'appliquent à la piste ENVOYÉE : ce que je
+ * vois dans ma vignette est ce que l'autre voit.
+ *
+ * Les EFFETS DE VISAGE (#8551) — lissage de peau, crapaud, ange, démon,
+ * éruption volcanique — se choisissent un à la fois, par-dessus la couleur :
+ * ils demandent le même traitement d'images, même quand la couleur est
+ * naturelle (`needsFramePipeline`). Leur dessin vit avec le traitement
+ * (`face-effects.ts`), jamais ici.
+ *
+ * Le flou d'arrière-plan est d'abord celui de la CAMÉRA (contrainte
+ * `backgroundBlur`, là où elle l'offre — Chrome sur ChromeOS, Windows et macOS
+ * récents, Safari sur macOS) : rien n'est téléchargé. Ailleurs (#8471), il se
+ * fait par SEGMENTATION dans le traitement des images (un modèle léger chargé
+ * au premier flou, `video-effects-segmentation.ts`) ; sans traitement possible,
+ * l'interrupteur n'existe pas.
+ *
+ * Le zoom numérique (#8441) recadre aussi l'image ENVOYÉE : `frameSettings`
+ * réunit ce que le traitement reçoit pour une caméra donnée.
+ */
+
+/** Les effets de visage, dans l'ordre partagé avec iOS (`CallFaceEffect`). */
+export const FACE_EFFECTS = ['none', 'smoothing', 'toad', 'angel', 'demon', 'volcano'] as const;
+
+export type FaceEffect = (typeof FACE_EFFECTS)[number];
+
+export type VideoEffects = { readonly preset: VideoPreset; readonly brightness: number; readonly blur: boolean; readonly faceEffect: FaceEffect };
+
+export const NO_EFFECTS: VideoEffects = { preset: 'natural', brightness: 0, blur: false, faceEffect: 'none' };
+
+/** Faut-il traiter les images ? Le flou seul non : il se règle sur la caméra elle-même. */
+export const needsFramePipeline = (effects: VideoEffects): boolean => effectsFilter(effects) !== 'none' || effects.faceEffect !== 'none';
+
+/**
+ * Ce que le traitement des images reçoit : les effets, le zoom numérique, si le flou lui revient (la caméra ne
+ * le fait pas), et la lens MeeshyLens posée sur l'image, s'il y en a une (W14, `lib/meeshy-lens/lens-stage.ts`).
+ */
+export type FrameSettings = { readonly effects: VideoEffects; readonly zoom: number; readonly segmentBlur: boolean; readonly lens?: LensSettings };
+
+export const frameSettings = (effects: VideoEffects, camera: { readonly nativeBlur: boolean; readonly zoom: number }, lens?: LensSettings): FrameSettings => ({
+  effects,
+  zoom: Number.isFinite(camera.zoom) ? Math.max(1, camera.zoom) : 1,
+  segmentBlur: effects.blur && !camera.nativeBlur,
+  ...(lens === undefined ? {} : { lens }),
+});
+
+/** Faut-il traiter les images ? Sinon la caméra part BRUTE, sans traverser le moindre code. */
+export const needsFrames = (settings: FrameSettings): boolean => needsFramePipeline(settings.effects) || settings.segmentBlur || settings.zoom > 1 || settings.lens !== undefined;
+
+/** Les noms que `call:analytics` retient (`effectsUsed`). */
+export function effectsUsedOf(effects: VideoEffects): readonly string[] {
+  return [...(effects.preset === 'natural' ? [] : [`filter:${effects.preset}`]), ...(clampBrightness(effects.brightness) === 0 ? [] : ['brightness']), ...(effects.blur ? ['background-blur'] : []), ...(effects.faceEffect === 'none' ? [] : [`face:${effects.faceEffect}`])];
+}
+
+type CanvasProbe = { readonly getContext: (kind: '2d' | 'webgl2') => unknown; readonly captureStream?: unknown };
+
+export type EffectsEnvironment = {
+  readonly MediaStreamTrackProcessor?: unknown;
+  readonly MediaStreamTrackGenerator?: unknown;
+  readonly VideoTrackGenerator?: unknown;
+  readonly OffscreenCanvas?: unknown;
+  readonly Worker?: unknown;
+  readonly WebAssembly?: unknown;
+  readonly createCanvas: () => CanvasProbe | null;
+};
+
+const hasFilter = (context: unknown): boolean => typeof context === 'object' && context !== null && 'filter' in context;
+
+/**
+ * Le traitement de couleur est possible quand le canevas sait FILTRER
+ * (`ctx.filter`) et qu'on peut en tirer une piste : images traitables
+ * (`MediaStreamTrackProcessor` + un générateur, Chrome et la coque Android),
+ * sinon un canevas filmé (`captureStream`).
+ */
+export function colorPipelineSupported(env: EffectsEnvironment): boolean {
+  const canvas = env.createCanvas();
+  if (canvas === null || !hasFilter(canvas.getContext('2d'))) return false;
+  const frames = env.MediaStreamTrackProcessor !== undefined && (env.MediaStreamTrackGenerator !== undefined || env.VideoTrackGenerator !== undefined) && env.OffscreenCanvas !== undefined;
+  return frames || typeof canvas.captureStream === 'function';
+}
+
+type LoseContext = { readonly getExtension?: (name: string) => { readonly loseContext?: () => void } | null };
+
+const hasWebgl2 = (canvas: CanvasProbe | null): boolean => {
+  const context = canvas?.getContext('webgl2') as LoseContext | null | undefined;
+  if (context === null || context === undefined) return false;
+  context.getExtension?.('WEBGL_lose_context')?.loseContext?.();
+  return true;
+};
+
+/** Le flou par segmentation (#8471) : le traitement des images, un worker, WebAssembly (le modèle) et WebGL2 (le compositeur). */
+export function segmentationSupported(env: EffectsEnvironment): boolean {
+  return colorPipelineSupported(env) && env.Worker !== undefined && env.WebAssembly !== undefined && hasWebgl2(env.createCanvas());
+}
+
+/** L'environnement du navigateur, lu une fois. */
+export function browserEffectsEnvironment(): EffectsEnvironment {
+  const scope = globalThis as unknown as Record<string, unknown>;
+  return {
+    MediaStreamTrackProcessor: scope.MediaStreamTrackProcessor,
+    MediaStreamTrackGenerator: scope.MediaStreamTrackGenerator,
+    VideoTrackGenerator: scope.VideoTrackGenerator,
+    OffscreenCanvas: scope.OffscreenCanvas,
+    Worker: scope.Worker,
+    WebAssembly: scope.WebAssembly,
+    createCanvas: () => (typeof document === 'undefined' ? null : document.createElement('canvas')),
+  };
+}
+
+let colorSupport: boolean | null = null;
+
+/** Le navigateur sait-il traiter la couleur ? Mesuré une fois par session. */
+export function browserColorSupport(): boolean {
+  colorSupport ??= colorPipelineSupported(browserEffectsEnvironment());
+  return colorSupport;
+}
+
+let segmentationSupport: boolean | null = null;
+
+/** Le navigateur sait-il flouter par segmentation ? Mesuré une fois par session. */
+export function browserSegmentationSupport(): boolean {
+  segmentationSupport ??= segmentationSupported(browserEffectsEnvironment());
+  return segmentationSupport;
+}
+
+type BlurCapabilities = MediaTrackCapabilities & { readonly backgroundBlur?: unknown };
+
+/** La caméra offre-t-elle SON flou d'arrière-plan ? */
+export function cameraBlur(track: MediaStreamTrack | null): boolean {
+  if (track === null || typeof track.getCapabilities !== 'function') return false;
+  const blur = (track.getCapabilities() as BlurCapabilities).backgroundBlur;
+  return Array.isArray(blur) && blur.includes(true);
+}
+
+/** Le flou est offert par la caméra, sinon par la segmentation — jamais sans caméra. */
+export const blurOffered = (track: MediaStreamTrack | null, segmentation: boolean): boolean => track !== null && (cameraBlur(track) || segmentation);
+
+/** L'interrupteur du flou existe-t-il pour cette caméra, dans ce navigateur ? */
+export const blurCapable = (track: MediaStreamTrack | null): boolean => blurOffered(track, track !== null && !cameraBlur(track) && browserSegmentationSupport());
+
+export const effectsOffered = (support: { readonly color: boolean; readonly blur: boolean }): boolean => support.color || support.blur;
+
+/* La caméra DERRIÈRE une piste traitée : le zoom et le flou se règlent sur elle. */
+const sources = new WeakMap<MediaStreamTrack, MediaStreamTrack>();
+
+export const registerCameraSource = (sent: MediaStreamTrack, camera: MediaStreamTrack): void => void sources.set(sent, camera);
+
+export const forgetCameraSource = (sent: MediaStreamTrack): void => void sources.delete(sent);
+
+/** La caméra d'où vient une piste envoyée — elle-même si elle n'est pas traitée. */
+export const cameraSourceOf = (track: MediaStreamTrack): MediaStreamTrack => sources.get(track) ?? track;
+
+/** Les effets choisis — gardés d'un appel à l'autre pendant la session, comme iOS. */
+export const videoEffectsStore = createStore<{ readonly effects: VideoEffects }>(() => ({ effects: NO_EFFECTS }));
+
+export const setVideoEffects = (patch: Partial<VideoEffects>): void => videoEffectsStore.setState(({ effects }) => ({ effects: { ...effects, ...patch, brightness: clampBrightness(patch.brightness ?? effects.brightness) } }));

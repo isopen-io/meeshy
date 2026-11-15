@@ -23,7 +23,7 @@
 ### Task E1: L'annonce du fond — un résolveur, trois surfaces
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift` (header — l'actuel note+onde/marquee ad hoc)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift` (header — l'actuel note+onde/marquee ad hoc)
 - Modify: `apps/ios/Meeshy/Features/Main/Views/FeedPostCard.swift` (rangée auteur, après `↻ @handle`)
 - Modify: `apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView.swift` (rangée auteur — le vrai fichier)
 - Create: `apps/ios/Meeshy/Features/Main/Components/BackgroundSoundBadge.swift` (LA vue commune — ♫〰 ou marquee crédit, à partir de l'enum B5)
@@ -74,7 +74,7 @@
 ### Task E4: Le viewer story adopte le ScenePlayer (`.reader`)
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift` (l'hôte canvas de `StoryCardView`)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift` (l'hôte canvas de `StoryCardView`)
 - Test: `apps/ios/MeeshyTests/Unit/Views/StoryViewerScenePlayerGuardTests.swift`
 
 - [ ] **Step 1: Test rouge (source)** — `StoryCardView` monte `MeeshyScenePlayer(… mode: .reader …)` à l'endroit exact où vivait l'hôte canvas direct (`StoryReaderRepresentable`, `StoryViewerView+Canvas.swift:1192` — défini côté SDK `Story/Canvas/`, possédé par B : le swap est le point de couture B4→E4) ; les couches de chrome (progress bars, header, rail, `ReferenceNoteRow`, commentaires) sont INCHANGÉES autour (assertions positives sur leur présence — la refonte ne touche que la couche contenu) ; l'ancien hôte direct n'est plus référencé DANS ce fichier (il vit désormais sous le ScenePlayer, côté SDK).

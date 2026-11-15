@@ -12,7 +12,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logError: jest.fn(), logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn(), debug: jest.fn() } }));
 jest.mock('../../../utils/pagination', () => ({
   validatePagination: jest.fn<any>().mockReturnValue({ offset: 0, limit: 10 }),
   buildPaginationMeta: jest.fn<any>().mockReturnValue({ total: 0, limit: 10, offset: 0 }),
@@ -25,9 +25,10 @@ const mockGetRecentReports = jest.fn<any>().mockResolvedValue([]);
 const mockGetReportById = jest.fn<any>().mockResolvedValue({ id: 'rpt-1' });
 const mockUpdateReport = jest.fn<any>().mockResolvedValue({ id: 'rpt-1', status: 'resolved' });
 const mockDeleteReport = jest.fn<any>().mockResolvedValue(undefined);
-const mockGetReportsForEntity = jest.fn<any>().mockResolvedValue([]);
+const mockGetReportsForEntity = jest.fn<any>().mockResolvedValue({ reports: [], total: 0 });
 const mockAssignModerator = jest.fn<any>().mockResolvedValue({ id: 'rpt-1' });
 const mockGetModeratorReports = jest.fn<any>().mockResolvedValue([]);
+const mockAdminAuditLogCreate = jest.fn<any>().mockResolvedValue({});
 
 jest.mock('../../../services/admin/report.service', () => ({
   getReportService: jest.fn().mockReturnValue({
@@ -43,6 +44,21 @@ jest.mock('../../../services/admin/report.service', () => ({
     getModeratorReports: (...a: any[]) => mockGetModeratorReports(...a),
   }),
 }));
+
+// #3718 — la logique de notification elle-même (langues, contenu, garde
+// anonyme) est couverte par son propre témoin
+// (`services/reports/__tests__/reportResolvedNotification.test.ts`) ; ici on
+// ne garde que le CÂBLAGE — la route appelle-t-elle la bonne fonction, avec
+// la bonne charge, au bon moment ? `jest.requireActual` pour ne pas perdre
+// `isNewlyResolvedReportTransition`, dont la route dépend réellement.
+const mockNotifyReportResolved = jest.fn<any>().mockResolvedValue(undefined);
+jest.mock('../../../services/reports/reportResolvedNotification', () => {
+  const actual = jest.requireActual('../../../services/reports/reportResolvedNotification') as any;
+  return {
+    ...actual,
+    notifyReportResolved: (...a: any[]) => mockNotifyReportResolved(...a),
+  };
+});
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
@@ -71,7 +87,19 @@ async function buildApp(role = 'MODERATOR'): Promise<FastifyInstance> {
     };
   });
 
-  app.decorate('prisma', {} as any);
+  // La cible d'un signalement est VÉRIFIÉE avant écriture depuis #4155 : un
+  // double `prisma` vide est plus pauvre que la production — la vérification y
+  // lèverait, et le témoin lirait 500 là où il croit lire 201.
+  //
+  // #4157 — `adminAuditLog.create` est appelé par `withAudit` (DELETE /:id) ;
+  // le stub est nécessaire pour que la trace s'écrive RÉELLEMENT plutôt que
+  // d'échouer en silence (`withAudit` est best-effort et n'échoue jamais la
+  // requête, mais un témoin de trace a besoin d'un mock qui répond).
+  app.decorate('prisma', {
+    message: { findUnique: async () => ({ conversationId: '507f1f77bcf86cd799439077' }) },
+    participant: { findFirst: async () => ({ id: 'p1' }) },
+    adminAuditLog: { create: mockAdminAuditLogCreate },
+  } as any);
 
   await app.register(reportRoutes);
   await app.ready();
@@ -163,6 +191,24 @@ describe('GET / — MODERATOR role → 200', () => {
   });
 });
 
+// #4157 — le SEUIL de référence pour la table `Report`. L'issue documente une
+// contradiction ENTRE FICHIERS : `GET /admin/users/:id/reports` (routes/admin/
+// users.ts, hors territoire de ce lot) admet AUDIT via `canViewUsers`, alors
+// que cette route-ci — qui lit la MÊME table — exige `canModerateContent`
+// (MODERATOR). Ce témoin fixe le seuil JUSTE de CE fichier ; l'autre route
+// doit converger vers lui, pas l'inverse (voir `edits_hors_territoire`).
+describe('GET / — AUDIT role → 403 (seuil de référence #4157)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => { app = await buildApp('AUDIT'); });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 403 for AUDIT — canModerateContent = false, la table Report exige MODERATOR', async () => {
+    const res = await app.inject({ method: 'GET', url: '/' });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().success).toBe(false);
+  });
+});
+
 // ─── GET /stats ───────────────────────────────────────────────────────────────
 
 describe('GET /stats — MODERATOR → 200', () => {
@@ -244,9 +290,29 @@ describe('PATCH /:id — invalid body → 400', () => {
   });
 });
 
+describe('PATCH /:id — 404 quand le signalement est introuvable', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockGetReportById.mockResolvedValue(null);
+    app = await buildApp();
+  });
+  afterAll(async () => {
+    mockGetReportById.mockResolvedValue({ id: 'rpt-1', status: 'pending' });
+    await app.close();
+  });
+
+  it('returns 404 and does NOT call updateReport', async () => {
+    mockUpdateReport.mockClear();
+    const res = await app.inject({ method: 'PATCH', url: '/rpt-missing', payload: { status: 'resolved' } });
+    expect(res.statusCode).toBe(404);
+    expect(mockUpdateReport).not.toHaveBeenCalled();
+  });
+});
+
 describe('PATCH /:id — success → 200', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
+    mockGetReportById.mockResolvedValue({ id: 'rpt-1', status: 'pending' });
     mockUpdateReport.mockResolvedValue({ id: 'rpt-1', status: 'resolved' });
     app = await buildApp();
   });
@@ -263,20 +329,167 @@ describe('PATCH /:id — success → 200', () => {
   });
 });
 
+// #3718 — art. 16 DSA : le déclarant reçoit une réponse motivée quand son
+// signalement bascule dans un statut terminal.
+describe('PATCH /:id — #3718 notifie le déclarant sur une transition TERMINALE réelle', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => { app = await buildApp(); });
+  afterAll(async () => { await app.close(); });
+
+  it('appelle notifyReportResolved quand le statut passe de pending à resolved', async () => {
+    mockNotifyReportResolved.mockClear();
+    mockGetReportById.mockResolvedValue({ id: 'rpt-1', status: 'pending' });
+    mockUpdateReport.mockResolvedValue({
+      id: 'rpt-1',
+      status: 'resolved',
+      reporterId: 'reporter-1',
+      reportedType: 'message',
+      reportType: 'spam',
+      actionTaken: 'content_removed',
+    });
+
+    const res = await app.inject({ method: 'PATCH', url: '/rpt-1', payload: { status: 'resolved' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockNotifyReportResolved).toHaveBeenCalledTimes(1);
+    const [, reportArg] = mockNotifyReportResolved.mock.calls[0];
+    expect(reportArg).toMatchObject({
+      id: 'rpt-1',
+      reporterId: 'reporter-1',
+      status: 'resolved',
+      actionTaken: 'content_removed',
+    });
+  });
+
+  it("n'appelle PAS notifyReportResolved quand le statut ne change pas (édition de moderatorNotes)", async () => {
+    mockNotifyReportResolved.mockClear();
+    mockGetReportById.mockResolvedValue({ id: 'rpt-1', status: 'resolved' });
+    mockUpdateReport.mockResolvedValue({ id: 'rpt-1', status: 'resolved', reporterId: 'reporter-1' });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/rpt-1',
+      payload: { moderatorNotes: 'note actualisée' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockNotifyReportResolved).not.toHaveBeenCalled();
+  });
+
+  it("n'appelle PAS notifyReportResolved quand le nouveau statut n'est pas terminal", async () => {
+    mockNotifyReportResolved.mockClear();
+    mockGetReportById.mockResolvedValue({ id: 'rpt-1', status: 'pending' });
+    mockUpdateReport.mockResolvedValue({ id: 'rpt-1', status: 'under_review', reporterId: 'reporter-1' });
+
+    const res = await app.inject({ method: 'PATCH', url: '/rpt-1', payload: { status: 'under_review' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockNotifyReportResolved).not.toHaveBeenCalled();
+  });
+});
+
 // ─── DELETE /:id ──────────────────────────────────────────────────────────────
 
 describe('DELETE /:id — success → 200', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
+    mockGetReportById.mockResolvedValue({ id: 'rpt-1', reportedType: 'message', reportedEntityId: 'msg-1', reportType: 'spam', status: 'pending' });
     mockDeleteReport.mockResolvedValue(undefined);
     app = await buildApp();
   });
-  afterAll(async () => { await app.close(); });
+  afterAll(async () => {
+    mockGetReportById.mockResolvedValue({ id: 'rpt-1' });
+    await app.close();
+  });
 
-  it('returns 200 after deleting a report', async () => {
+  it('returns 200 after deleting a report, and writes an AdminAuditLog trace', async () => {
+    mockAdminAuditLogCreate.mockClear();
     const res = await app.inject({ method: 'DELETE', url: '/rpt-1' });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+    expect(mockDeleteReport).toHaveBeenCalledWith('rpt-1');
+
+    expect(mockAdminAuditLogCreate).toHaveBeenCalledTimes(1);
+    const auditData = mockAdminAuditLogCreate.mock.calls[0][0].data;
+    expect(auditData.action).toBe('ADMIN_REPORT_DELETED');
+    expect(auditData.entity).toBe('Report');
+    expect(auditData.entityId).toBe('rpt-1');
+  });
+});
+
+// #4157 — la matrice n'a pas d'avis sur ce point (« — » dans le tableau de
+// l'issue) : un modérateur ne peut pas effacer la trace d'un signalement qui
+// le VISE (`reportedType === 'user' && reportedEntityId === l'appelant`) —
+// sans quoi il efface la preuve avant qu'un rang supérieur ne l'examine.
+describe('DELETE /:id — refuse un modérateur qui supprime un signalement le visant (#4157)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockGetReportById.mockResolvedValue({
+      id: 'rpt-self',
+      reportedType: 'user',
+      reportedEntityId: USER_ID, // == l'id du modérateur authentifié par buildApp()
+      reportType: 'harassment',
+      status: 'pending',
+    });
+    app = await buildApp('MODERATOR');
+  });
+  afterAll(async () => {
+    mockGetReportById.mockResolvedValue({ id: 'rpt-1' });
+    await app.close();
+  });
+
+  it('returns 403 and does NOT delete the report', async () => {
+    mockDeleteReport.mockClear();
+    const res = await app.inject({ method: 'DELETE', url: '/rpt-self' });
+    expect(res.statusCode).toBe(403);
+    expect(mockDeleteReport).not.toHaveBeenCalled();
+  });
+});
+
+// Un signalement visant un AUTRE utilisateur (ou une autre entité) reste
+// supprimable — la garde ne porte que sur l'AUTO-suppression.
+describe('DELETE /:id — un signalement visant un TIERS reste supprimable', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockGetReportById.mockResolvedValue({
+      id: 'rpt-other',
+      reportedType: 'user',
+      reportedEntityId: '507f1f77bcf86cd799439099', // ≠ USER_ID
+      reportType: 'harassment',
+      status: 'pending',
+    });
+    mockDeleteReport.mockResolvedValue(undefined);
+    app = await buildApp('MODERATOR');
+  });
+  afterAll(async () => {
+    mockGetReportById.mockResolvedValue({ id: 'rpt-1' });
+    await app.close();
+  });
+
+  it('returns 200 and deletes the report', async () => {
+    mockDeleteReport.mockClear();
+    const res = await app.inject({ method: 'DELETE', url: '/rpt-other' });
+    expect(res.statusCode).toBe(200);
+    expect(mockDeleteReport).toHaveBeenCalledWith('rpt-other');
+  });
+});
+
+describe('DELETE /:id — 404 quand le signalement est introuvable', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockGetReportById.mockResolvedValue(null);
+    app = await buildApp('MODERATOR');
+  });
+  afterAll(async () => {
+    mockGetReportById.mockResolvedValue({ id: 'rpt-1' });
+    await app.close();
+  });
+
+  it('returns 404 and does NOT delete anything', async () => {
+    mockDeleteReport.mockClear();
+    const res = await app.inject({ method: 'DELETE', url: '/rpt-missing' });
+    expect(res.statusCode).toBe(404);
+    expect(mockDeleteReport).not.toHaveBeenCalled();
   });
 });
 
@@ -285,7 +498,7 @@ describe('DELETE /:id — success → 200', () => {
 describe('GET /entity/:type/:id — success → 200', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
-    mockGetReportsForEntity.mockResolvedValue([]);
+    mockGetReportsForEntity.mockResolvedValue({ reports: [], total: 0 });
     app = await buildApp();
   });
   afterAll(async () => { await app.close(); });

@@ -20,13 +20,13 @@ class ConversationListContentTest {
         conversations: List<ApiConversation> = emptyList(),
         showSkeleton: Boolean = false,
         errorMessage: String? = null,
-        selectedFilter: ConversationFilter = ConversationFilter.ALL,
+        selectedFilters: Set<ConversationFilter> = setOf(ConversationFilter.ALL),
         searchText: String = "",
     ) = ConversationListUiState(
         conversations = conversations,
         showSkeleton = showSkeleton,
         errorMessage = errorMessage,
-        selectedFilter = selectedFilter,
+        selectedFilters = selectedFilters,
         searchText = searchText,
     )
 
@@ -77,7 +77,7 @@ class ConversationListContentTest {
     @Test
     fun `error takes precedence over an active filter narrowing to nothing`() {
         val content = ConversationListContent.of(
-            state(errorMessage = "boom", selectedFilter = ConversationFilter.UNREAD),
+            state(errorMessage = "boom", selectedFilters = setOf(ConversationFilter.UNREAD)),
         )
 
         assertThat(content).isEqualTo(ConversationListContent.Error("boom"))
@@ -85,16 +85,16 @@ class ConversationListContentTest {
 
     @Test
     fun `active filter matching nothing renders the filtered-empty message`() {
-        val content = ConversationListContent.of(state(selectedFilter = ConversationFilter.UNREAD))
+        val content = ConversationListContent.of(state(selectedFilters = setOf(ConversationFilter.UNREAD)))
 
         assertThat(content).isEqualTo(ConversationListContent.FilteredEmpty)
     }
 
     @Test
-    fun `a non-blank search matching nothing renders the filtered-empty message`() {
+    fun `a non-blank search matching nothing renders search-no-results, distinct from a filter`() {
         val content = ConversationListContent.of(state(searchText = "zzz"))
 
-        assertThat(content).isEqualTo(ConversationListContent.FilteredEmpty)
+        assertThat(content).isEqualTo(ConversationListContent.SearchNoResults)
     }
 
     @Test
@@ -108,5 +108,41 @@ class ConversationListContentTest {
     fun `an empty account with no filter and no error renders the cold-empty message`() {
         assertThat(ConversationListContent.of(state()))
             .isEqualTo(ConversationListContent.ColdEmpty)
+    }
+
+    @Test
+    fun `search without results wins over an active filter`() {
+        val content = ConversationListContent.of(
+            state(searchText = "zzz", selectedFilters = setOf(ConversationFilter.UNREAD)),
+        )
+
+        assertThat(content).isEqualTo(ConversationListContent.SearchNoResults)
+    }
+
+    @Test
+    fun `a corpus whose sections are not produced yet keeps the skeleton`() {
+        val content = ConversationListContent.of(
+            state(conversations = listOf(conv("a"))),
+            sectionsAwaitCorpus = true,
+        )
+
+        assertThat(content).isEqualTo(ConversationListContent.Skeleton)
+    }
+
+    @Test
+    fun `grouping awaits the corpus only when an empty grouping was made on an empty corpus`() {
+        fun awaits(groupedIsEmpty: Boolean, last: Int, corpus: Int) =
+            ConversationListContent.groupingAwaitsCorpus(groupedIsEmpty, last, corpus)
+
+        assertThat(awaits(groupedIsEmpty = true, last = 0, corpus = 3)).isTrue()
+        assertThat(awaits(groupedIsEmpty = true, last = 3, corpus = 3)).isFalse()
+        assertThat(awaits(groupedIsEmpty = true, last = 0, corpus = 0)).isFalse()
+        assertThat(awaits(groupedIsEmpty = false, last = 0, corpus = 3)).isFalse()
+    }
+
+    @Test
+    fun `before the cache has answered the list shows the skeleton, never the empty account`() {
+        assertThat(ConversationListContent.of(ConversationListUiState()))
+            .isEqualTo(ConversationListContent.Skeleton)
     }
 }

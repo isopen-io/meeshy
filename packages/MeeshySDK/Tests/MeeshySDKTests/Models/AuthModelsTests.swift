@@ -25,17 +25,18 @@ final class AuthModelsTests: XCTestCase {
 
     func testRegisterRequestEncodable() throws {
         let request = RegisterRequest(
-            username: "newuser", password: "strongpass",
-            firstName: "Jean", lastName: "Dupont",
-            email: "jean@example.com", phoneNumber: "+33612345678",
-            phoneCountryCode: "FR", systemLanguage: "fr", regionalLanguage: "oc"
+            displayName: "Jean Dupont",
+            email: "jean@example.com",
+            password: "strongpass",
+            phoneNumber: "+33612345678",
+            phoneCountryCode: "FR",
+            systemLanguage: "fr",
+            regionalLanguage: "oc"
         )
         let data = try JSONEncoder().encode(request)
         let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-        XCTAssertEqual(dict["username"] as? String, "newuser")
+        XCTAssertEqual(dict["displayName"] as? String, "Jean Dupont")
         XCTAssertEqual(dict["password"] as? String, "strongpass")
-        XCTAssertEqual(dict["firstName"] as? String, "Jean")
-        XCTAssertEqual(dict["lastName"] as? String, "Dupont")
         XCTAssertEqual(dict["email"] as? String, "jean@example.com")
         XCTAssertEqual(dict["phoneNumber"] as? String, "+33612345678")
         XCTAssertEqual(dict["phoneCountryCode"] as? String, "FR")
@@ -43,15 +44,33 @@ final class AuthModelsTests: XCTestCase {
         XCTAssertEqual(dict["regionalLanguage"] as? String, "oc")
     }
 
+    /// #5218 — trois clés que le client N'ENVOIE PLUS : la passerelle dérive
+    /// `username`, `firstName` et `lastName` de `displayName`. Elles restent
+    /// déclarées (la reprise après transfert de numéro les réémet), donc c'est
+    /// leur ABSENCE du JSON qu'il faut éprouver, pas leur type.
+    func testRegisterRequestOmitsTheDerivedIdentityFields() throws {
+        let request = RegisterRequest(
+            displayName: "Jean Dupont", email: "jean@example.com", password: "strongpass"
+        )
+        let data = try JSONEncoder().encode(request)
+        let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        XCTAssertNil(dict["username"])
+        XCTAssertNil(dict["firstName"])
+        XCTAssertNil(dict["lastName"])
+    }
+
     func testRegisterRequestDefaultLanguages() throws {
         let request = RegisterRequest(
-            username: "u", password: "p", firstName: "A", lastName: "B", email: "a@b.c"
+            displayName: "A B", email: "a@b.c", password: "p"
         )
         let data = try JSONEncoder().encode(request)
         let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         XCTAssertEqual(dict["systemLanguage"] as? String, "fr")
-        XCTAssertEqual(dict["regionalLanguage"] as? String, "fr")
-        XCTAssertNil(dict["phoneNumber"] as? String)
+        // `regionalLanguage` est OPTIONNEL depuis #5218 : le contrat le déclare
+        // `regionalLanguage?`, et un défaut « fr » posé côté client aurait
+        // affirmé un rang 2 que personne n'a choisi.
+        XCTAssertNil(dict["regionalLanguage"])
+        XCTAssertNil(dict["phoneNumber"])
     }
 
     // MARK: - MeeshyUser
@@ -160,9 +179,32 @@ final class AuthModelsTests: XCTestCase {
         XCTAssertEqual(decoded.avatarURL, "https://example.com/avatar.png")
     }
 
+    /// #8286 — une entrée écrite AVANT le choix « Rester connecté » ne porte
+    /// pas la clé : elle appartient au temps où tout compte gardait sa
+    /// session. L'absence vaut donc `true`, jamais une corruption.
+    func testSavedAccountWithoutKeepsSessionKeyDecodesAsKept() throws {
+        let legacy = #"{"id":"sa1","username":"atabeth","lastActiveAt":0}"#
+        let decoded = try JSONDecoder().decode(SavedAccount.self, from: Data(legacy.utf8))
+        XCTAssertTrue(decoded.keepsSession)
+    }
+
+    func testSavedAccountKeepsSessionRoundtrips() throws {
+        let original = SavedAccount(id: "sa2", username: "b", displayName: nil, avatarURL: nil, lastActiveAt: Date(), keepsSession: false)
+        let decoded = try JSONDecoder().decode(SavedAccount.self, from: JSONEncoder().encode(original))
+        XCTAssertFalse(decoded.keepsSession)
+    }
+
     func testSavedAccountShortNameReturnsDisplayName() {
         let account = SavedAccount(id: "1", username: "user1", displayName: "Display Name", avatarURL: nil, lastActiveAt: Date())
         XCTAssertEqual(account.shortName, "Display Name")
+    }
+
+    /// Mesuré au simulateur (#8286) : `/auth/me` peut servir un nom
+    /// d'affichage VIDE — la rangée « Changer de compte » n'affichait alors ni
+    /// nom ni initiales.
+    func testSavedAccountShortNameFallsBackToUsernameWhenDisplayNameIsBlank() {
+        let account = SavedAccount(id: "3", username: "user3", displayName: "  ", avatarURL: nil, lastActiveAt: Date())
+        XCTAssertEqual(account.shortName, "user3")
     }
 
     func testSavedAccountShortNameFallsBackToUsername() {
@@ -172,31 +214,48 @@ final class AuthModelsTests: XCTestCase {
 
     // MARK: - AvailabilityResponse
 
+    /// Le contrat a CHANGÉ (#4158) : l'adresse et le numéro ne rendent plus
+    /// qu'un verdict de FORME. `emailAvailable` et `phoneNumberAvailable` ne
+    /// sont plus décodés — les décoder serait décoder un oracle.
     func testAvailabilityResponseDecodable() throws {
         let json = """
         {
             "usernameAvailable": true,
-            "emailAvailable": false,
+            "emailValid": true,
             "suggestions": ["user123", "user456"]
         }
         """.data(using: .utf8)!
         let response = try JSONDecoder().decode(AvailabilityResponse.self, from: json)
         XCTAssertEqual(response.usernameAvailable, true)
-        XCTAssertEqual(response.emailAvailable, false)
-        XCTAssertNil(response.phoneNumberAvailable)
+        XCTAssertEqual(response.emailValid, true)
+        XCTAssertNil(response.phoneNumberValid)
         XCTAssertEqual(response.suggestions, ["user123", "user456"])
         XCTAssertTrue(response.available)
     }
 
-    func testAvailabilityResponseAvailableComputed() throws {
-        let json = """
-        {
-            "usernameAvailable": false,
-            "emailAvailable": true
-        }
-        """.data(using: .utf8)!
-        let response = try JSONDecoder().decode(AvailabilityResponse.self, from: json)
-        XCTAssertFalse(response.available)
+    /// `available` ne parle QUE du pseudo.
+    ///
+    /// Elle retombait sur `emailAvailable ?? phoneNumberAvailable`, des champs
+    /// que le serveur ne sert plus : la laisser ainsi ferait rendre `false` à
+    /// chaque adresse, et l'écran d'inscription dirait « déjà utilisée » à tout
+    /// le monde. C'est la moitié SILENCIEUSE de la bascule, et celle qui
+    /// casserait le produit sans qu'aucun test de la route ne rougisse.
+    func testAvailabilityResponseAvailableNeParleQueDuPseudo() throws {
+        let pseudoPris = try JSONDecoder().decode(
+            AvailabilityResponse.self,
+            from: #"{"usernameAvailable": false, "emailValid": true}"#.data(using: .utf8)!
+        )
+        XCTAssertFalse(pseudoPris.available)
+        XCTAssertTrue(pseudoPris.wellFormed)
+
+        // Sans pseudo soumis, `available` ne peut rien affirmer — et ne doit
+        // surtout pas emprunter la réponse de l'adresse.
+        let adresseSeule = try JSONDecoder().decode(
+            AvailabilityResponse.self,
+            from: #"{"emailValid": true}"#.data(using: .utf8)!
+        )
+        XCTAssertFalse(adresseSeule.available)
+        XCTAssertTrue(adresseSeule.wellFormed)
     }
 
     // MARK: - MagicLinkResponse

@@ -41,6 +41,7 @@ jest.mock('../../../routes/links/types', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerAdminRoutes } from '../../../routes/links/admin';
+import { findFirstHonouringWhere } from '../../helpers/find-first-honouring-where';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -57,19 +58,54 @@ function makePrisma(overrides: Record<string, any> = {}) {
     conversationShareLink: {
       findMany: jest.fn<any>().mockResolvedValue([]),
       findUnique: jest.fn<any>().mockResolvedValue(null),
-      findFirst: jest.fn<any>().mockResolvedValue(null),
+      // La requête qui DÉCIDE (`loadShareLinkForManagement`) ne peut pas être
+      // doublée par un `mockResolvedValue` : voir `seedLinks` ci-dessous.
+      findFirst: jest.fn<any>(findFirstHonouringWhere([])),
       count: jest.fn<any>().mockResolvedValue(0),
       update: jest.fn<any>().mockResolvedValue({}),
       delete: jest.fn<any>().mockResolvedValue({}),
     },
     participant: {
+      count: jest.fn<any>().mockResolvedValue(0),
       findFirst: jest.fn<any>().mockResolvedValue(null),
+      // Retirer un lien révoque ses invités (`revokeShareLinkGuests`) : le
+      // double porte la surface que la production appelle, sinon la route
+      // tombe en 500 pour une raison qui n'a rien à voir avec le témoin.
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     ...overrides,
   } as any;
 }
 
-function makeShareLink(overrides: Record<string, any> = {}) {
+/**
+ * Les deux membres que le `where` de production DOIT écarter — présents dans
+ * toute conversation semée, jamais nommés par un témoin.
+ *
+ * Sans eux, un double qui honore son `where` n'a rien à honorer : une liste
+ * déjà réduite à l'appelant traverse le filtre juste exactement comme le
+ * filtre élargi, et le témoin reste incapable de tomber (#4585). Chacun tient
+ * une moitié de `where: { userId, isActive: true }`.
+ */
+const AUTRES_MEMBRES = [
+  // Un ADMIN qui n'est PAS l'appelant : `userId` retiré du `where`, c'est SON
+  // rang qui ouvrirait la porte à l'appelant.
+  { userId: OTHER_USER_ID, role: 'ADMIN', isActive: true },
+  // L'appelant SORTI de la conversation : `isActive` retiré du `where`, un
+  // administrateur parti garderait ses clés.
+  { userId: USER_ID, role: 'ADMIN', isActive: false },
+];
+
+/** L'appelant, membre ACTIF de la conversation avec ce rang. */
+const appelant = (role: string) => ({ userId: USER_ID, role, isActive: true });
+
+/**
+ * La ligne telle que la BASE la contient : `participants` nomme les lignes de
+ * l'appelant, et la conversation porte toujours `AUTRES_MEMBRES` en plus. Un
+ * témoin qui poserait ici la liste DÉJÀ filtrée décrirait le résultat de la
+ * garde au lieu de la lui soumettre.
+ */
+function makeShareLink({ participants = [], ...overrides }: Record<string, any> = {}) {
   return {
     id: LINK_DB_ID,
     linkId: LINK_PUBLIC_ID,
@@ -82,10 +118,42 @@ function makeShareLink(overrides: Record<string, any> = {}) {
       title: 'Test Conv',
       type: 'group',
       description: null,
-      participants: [],
+      participants: [...AUTRES_MEMBRES, ...participants],
     },
     ...overrides,
   };
+}
+
+/**
+ * Un AUTRE lien, dans une AUTRE conversation, que l'appelant ne gère pas —
+ * semé en TÊTE de toute collection. La base n'a jamais une seule ligne : si le
+ * `where: { linkId }` de tête venait à disparaître, c'est lui que `findFirst`
+ * rendrait, et les témoins le voient (403 partout, `update` sur le mauvais id).
+ */
+const AUTRE_LIEN = {
+  id: '507f1f77bcf86cd799439055',
+  linkId: 'mshy_autre_lien_zzz',
+  createdBy: OTHER_USER_ID,
+  conversationId: '507f1f77bcf86cd799439066',
+  currentUses: 0,
+  allowedLanguages: [],
+  conversation: {
+    id: '507f1f77bcf86cd799439066',
+    title: 'Autre conv',
+    type: 'group',
+    description: null,
+    participants: [],
+  },
+};
+
+/**
+ * Sème la collection que `findFirst` interroge, et laisse le `where` de
+ * production décider ce qui en revient — plutôt que de décider à sa place.
+ */
+function seedLinks(prisma: any, ...rows: Record<string, any>[]) {
+  prisma.conversationShareLink.findFirst.mockImplementation(
+    findFirstHonouringWhere([AUTRE_LIEN, ...rows])
+  );
 }
 
 function makeRegisteredAuthContext(overrides: Record<string, any> = {}) {
@@ -299,6 +367,18 @@ describe('GET /links/my-links', () => {
     expect(res.statusCode).toBe(500);
     await app.close();
   });
+
+  // #4170 — alias déprécié : `GET /links` (`links/user.ts`) absorbe cette
+  // liste. Le web migre dans ce même lot ; aucune preuve qu'un déploiement
+  // plus ancien ne l'appelle encore, donc la porte annonce plutôt que de se
+  // taire (`utils/deprecation.ts`).
+  it('annonce sa dépréciation vers GET /links', async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/links/my-links' });
+    expect(res.headers['deprecation']).toBe('@1787961600');
+    expect(res.headers['link']).toContain('</api/v1/links>; rel="successor-version"');
+    await app.close();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -323,7 +403,7 @@ describe('PATCH /links/:linkId/toggle', () => {
 
   it('returns 404 when link not found', async () => {
     const prisma = makePrisma();
-    prisma.conversationShareLink.findFirst.mockResolvedValue(null);
+    seedLinks(prisma);
     const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'PATCH',
@@ -336,12 +416,7 @@ describe('PATCH /links/:linkId/toggle', () => {
 
   it('returns 403 when user is not creator and not admin/moderator', async () => {
     const prisma = makePrisma();
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({
-        createdBy: OTHER_USER_ID,
-        conversation: { id: CONV_ID, participants: [] },
-      })
-    );
+    seedLinks(prisma, makeShareLink({ createdBy: OTHER_USER_ID }));
     const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'PATCH',
@@ -354,15 +429,7 @@ describe('PATCH /links/:linkId/toggle', () => {
 
   it('returns 403 when participant has non-admin role', async () => {
     const prisma = makePrisma();
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({
-        createdBy: OTHER_USER_ID,
-        conversation: {
-          id: CONV_ID,
-          participants: [{ userId: USER_ID, role: 'MEMBER', isActive: true }],
-        },
-      })
-    );
+    seedLinks(prisma, makeShareLink({ createdBy: OTHER_USER_ID, participants: [appelant('MEMBER')] }));
     const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'PATCH',
@@ -397,9 +464,7 @@ describe('PATCH /links/:linkId/toggle', () => {
         avatar: null,
       },
     };
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })
-    );
+    seedLinks(prisma, makeShareLink({ createdBy: USER_ID }));
     prisma.conversationShareLink.update.mockResolvedValue(updatedLink);
     const app = await buildApp({ prisma });
     const res = await app.inject({
@@ -438,9 +503,7 @@ describe('PATCH /links/:linkId/toggle', () => {
         avatar: null,
       },
     };
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })
-    );
+    seedLinks(prisma, makeShareLink({ createdBy: USER_ID }));
     prisma.conversationShareLink.update.mockResolvedValue(updatedLink);
     const app = await buildApp({ prisma });
     const res = await app.inject({
@@ -477,15 +540,7 @@ describe('PATCH /links/:linkId/toggle', () => {
         avatar: null,
       },
     };
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({
-        createdBy: OTHER_USER_ID,
-        conversation: {
-          id: CONV_ID,
-          participants: [{ userId: USER_ID, role: 'ADMIN', isActive: true }],
-        },
-      })
-    );
+    seedLinks(prisma, makeShareLink({ createdBy: OTHER_USER_ID, participants: [appelant('ADMIN')] }));
     prisma.conversationShareLink.update.mockResolvedValue(updatedLink);
     const app = await buildApp({ prisma });
     const res = await app.inject({
@@ -520,15 +575,7 @@ describe('PATCH /links/:linkId/toggle', () => {
         avatar: null,
       },
     };
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({
-        createdBy: OTHER_USER_ID,
-        conversation: {
-          id: CONV_ID,
-          participants: [{ userId: USER_ID, role: 'MODERATOR', isActive: true }],
-        },
-      })
-    );
+    seedLinks(prisma, makeShareLink({ createdBy: OTHER_USER_ID, participants: [appelant('MODERATOR')] }));
     prisma.conversationShareLink.update.mockResolvedValue(updatedLink);
     const app = await buildApp({ prisma });
     const res = await app.inject({
@@ -540,11 +587,44 @@ describe('PATCH /links/:linkId/toggle', () => {
     await app.close();
   });
 
+  it('returns 200 when user is conversation admin (lowercase — la seule casse écrite en base, #3875)', async () => {
+    const prisma = makePrisma();
+    const updatedLink = {
+      id: LINK_DB_ID,
+      isActive: true,
+      conversation: {
+        id: CONV_ID,
+        title: 'T',
+        description: null,
+        type: 'group',
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      creator: {
+        id: OTHER_USER_ID,
+        username: 'other',
+        firstName: null,
+        lastName: null,
+        displayName: null,
+        avatar: null,
+      },
+    };
+    seedLinks(prisma, makeShareLink({ createdBy: OTHER_USER_ID, participants: [appelant('admin')] }));
+    prisma.conversationShareLink.update.mockResolvedValue(updatedLink);
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/links/${LINK_PUBLIC_ID}/toggle`,
+      payload: { isActive: true },
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
   it('calls update with correct isActive value', async () => {
     const prisma = makePrisma();
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })
-    );
+    seedLinks(prisma, makeShareLink({ createdBy: USER_ID }));
     prisma.conversationShareLink.update.mockResolvedValue({ id: LINK_DB_ID });
     const app = await buildApp({ prisma });
     await app.inject({
@@ -576,9 +656,7 @@ describe('PATCH /links/:linkId/toggle', () => {
 
   it('returns 500 when update throws', async () => {
     const prisma = makePrisma();
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })
-    );
+    seedLinks(prisma, makeShareLink({ createdBy: USER_ID }));
     prisma.conversationShareLink.update.mockRejectedValue(new Error('Write failed'));
     const app = await buildApp({ prisma });
     const res = await app.inject({
@@ -587,6 +665,25 @@ describe('PATCH /links/:linkId/toggle', () => {
       payload: { isActive: false },
     });
     expect(res.statusCode).toBe(500);
+    await app.close();
+  });
+
+  // #4170 — alias déprécié : `PATCH /links/:linkId` (le générique,
+  // management.ts) absorbe `isActive` depuis l'origine. Android
+  // (`LinkApi.kt: @PATCH "links/{linkId}/toggle"`) en reste le seul
+  // appelant mesuré — le successeur porte le `linkId` RÉSOLU, jamais un
+  // gabarit `:linkId` non suivable.
+  it('annonce sa dépréciation vers PATCH /links/:linkId, avec le linkId résolu', async () => {
+    const prisma = makePrisma();
+    seedLinks(prisma, makeShareLink({ createdBy: USER_ID }));
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/links/${LINK_PUBLIC_ID}/toggle`,
+      payload: { isActive: true },
+    });
+    expect(res.headers['deprecation']).toBe('@1787961600');
+    expect(res.headers['link']).toContain(`</api/v1/links/${LINK_PUBLIC_ID}>; rel="successor-version"`);
     await app.close();
   });
 });
@@ -615,7 +712,7 @@ describe('PATCH /links/:linkId/extend', () => {
 
   it('returns 404 when link not found', async () => {
     const prisma = makePrisma();
-    prisma.conversationShareLink.findFirst.mockResolvedValue(null);
+    seedLinks(prisma);
     const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'PATCH',
@@ -628,12 +725,7 @@ describe('PATCH /links/:linkId/extend', () => {
 
   it('returns 403 when user is not creator and not admin/moderator', async () => {
     const prisma = makePrisma();
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({
-        createdBy: OTHER_USER_ID,
-        conversation: { id: CONV_ID, participants: [] },
-      })
-    );
+    seedLinks(prisma, makeShareLink({ createdBy: OTHER_USER_ID }));
     const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'PATCH',
@@ -646,15 +738,7 @@ describe('PATCH /links/:linkId/extend', () => {
 
   it('returns 403 when participant has non-privileged role', async () => {
     const prisma = makePrisma();
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({
-        createdBy: OTHER_USER_ID,
-        conversation: {
-          id: CONV_ID,
-          participants: [{ userId: USER_ID, role: 'MEMBER', isActive: true }],
-        },
-      })
-    );
+    seedLinks(prisma, makeShareLink({ createdBy: OTHER_USER_ID, participants: [appelant('MEMBER')] }));
     const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'PATCH',
@@ -689,9 +773,7 @@ describe('PATCH /links/:linkId/extend', () => {
         avatar: null,
       },
     };
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })
-    );
+    seedLinks(prisma, makeShareLink({ createdBy: USER_ID }));
     prisma.conversationShareLink.update.mockResolvedValue(updatedLink);
     const app = await buildApp({ prisma });
     const res = await app.inject({
@@ -728,15 +810,7 @@ describe('PATCH /links/:linkId/extend', () => {
         avatar: null,
       },
     };
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({
-        createdBy: OTHER_USER_ID,
-        conversation: {
-          id: CONV_ID,
-          participants: [{ userId: USER_ID, role: 'ADMIN', isActive: true }],
-        },
-      })
-    );
+    seedLinks(prisma, makeShareLink({ createdBy: OTHER_USER_ID, participants: [appelant('ADMIN')] }));
     prisma.conversationShareLink.update.mockResolvedValue(updatedLink);
     const app = await buildApp({ prisma });
     const res = await app.inject({
@@ -770,15 +844,41 @@ describe('PATCH /links/:linkId/extend', () => {
         avatar: null,
       },
     };
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({
-        createdBy: OTHER_USER_ID,
-        conversation: {
-          id: CONV_ID,
-          participants: [{ userId: USER_ID, role: 'MODERATOR', isActive: true }],
-        },
-      })
-    );
+    seedLinks(prisma, makeShareLink({ createdBy: OTHER_USER_ID, participants: [appelant('MODERATOR')] }));
+    prisma.conversationShareLink.update.mockResolvedValue(updatedLink);
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/links/${LINK_PUBLIC_ID}/extend`,
+      payload: { expiresAt: FUTURE_DATE },
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('returns 200 when user is admin in conversation (lowercase — la seule casse écrite en base, #3875)', async () => {
+    const prisma = makePrisma();
+    const updatedLink = {
+      id: LINK_DB_ID,
+      conversation: {
+        id: CONV_ID,
+        title: 'T',
+        description: null,
+        type: 'group',
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      creator: {
+        id: OTHER_USER_ID,
+        username: 'other',
+        firstName: null,
+        lastName: null,
+        displayName: null,
+        avatar: null,
+      },
+    };
+    seedLinks(prisma, makeShareLink({ createdBy: OTHER_USER_ID, participants: [appelant('admin')] }));
     prisma.conversationShareLink.update.mockResolvedValue(updatedLink);
     const app = await buildApp({ prisma });
     const res = await app.inject({
@@ -792,9 +892,7 @@ describe('PATCH /links/:linkId/extend', () => {
 
   it('converts expiresAt string to a Date object when updating', async () => {
     const prisma = makePrisma();
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })
-    );
+    seedLinks(prisma, makeShareLink({ createdBy: USER_ID }));
     prisma.conversationShareLink.update.mockResolvedValue({ id: LINK_DB_ID });
     const app = await buildApp({ prisma });
     await app.inject({
@@ -823,9 +921,7 @@ describe('PATCH /links/:linkId/extend', () => {
 
   it('returns 500 when update throws', async () => {
     const prisma = makePrisma();
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })
-    );
+    seedLinks(prisma, makeShareLink({ createdBy: USER_ID }));
     prisma.conversationShareLink.update.mockRejectedValue(new Error('Write failed'));
     const app = await buildApp({ prisma });
     const res = await app.inject({
@@ -834,6 +930,23 @@ describe('PATCH /links/:linkId/extend', () => {
       payload: { expiresAt: FUTURE_DATE },
     });
     expect(res.statusCode).toBe(500);
+    await app.close();
+  });
+
+  // #4170 — même raison que `/toggle` : Android
+  // (`LinkApi.kt: @PATCH "links/{linkId}/extend"`) en reste le seul
+  // appelant mesuré une fois le web migré vers la porte générique.
+  it('annonce sa dépréciation vers PATCH /links/:linkId, avec le linkId résolu', async () => {
+    const prisma = makePrisma();
+    seedLinks(prisma, makeShareLink({ createdBy: USER_ID }));
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/links/${LINK_PUBLIC_ID}/extend`,
+      payload: { expiresAt: FUTURE_DATE },
+    });
+    expect(res.headers['deprecation']).toBe('@1787961600');
+    expect(res.headers['link']).toContain(`</api/v1/links/${LINK_PUBLIC_ID}>; rel="successor-version"`);
     await app.close();
   });
 });
@@ -859,7 +972,7 @@ describe('DELETE /links/:linkId', () => {
 
   it('returns 404 when link not found', async () => {
     const prisma = makePrisma();
-    prisma.conversationShareLink.findFirst.mockResolvedValue(null);
+    seedLinks(prisma);
     const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'DELETE',
@@ -871,12 +984,7 @@ describe('DELETE /links/:linkId', () => {
 
   it('returns 403 when user is not creator and not admin/moderator', async () => {
     const prisma = makePrisma();
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({
-        createdBy: OTHER_USER_ID,
-        conversation: { id: CONV_ID, participants: [] },
-      })
-    );
+    seedLinks(prisma, makeShareLink({ createdBy: OTHER_USER_ID }));
     const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'DELETE',
@@ -888,15 +996,7 @@ describe('DELETE /links/:linkId', () => {
 
   it('returns 403 when participant has non-privileged role', async () => {
     const prisma = makePrisma();
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({
-        createdBy: OTHER_USER_ID,
-        conversation: {
-          id: CONV_ID,
-          participants: [{ userId: USER_ID, role: 'MEMBER', isActive: true }],
-        },
-      })
-    );
+    seedLinks(prisma, makeShareLink({ createdBy: OTHER_USER_ID, participants: [appelant('MEMBER')] }));
     const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'DELETE',
@@ -906,12 +1006,14 @@ describe('DELETE /links/:linkId', () => {
     await app.close();
   });
 
-  it('returns 200 and deletes link when user is creator', async () => {
+  // #4170 crit.5 — DELETE devient une fermeture DOUCE : la ligne survit,
+  // `isActive` bascule à `false`. Avant ce lot `.delete()` détruisait la
+  // ligne ; ce témoin garde le nouveau contrat (message + verdict que la
+  // ligne n'est plus jamais physiquement retirée).
+  it('returns 200 and CLOSES (soft-close) the link when user is creator', async () => {
     const prisma = makePrisma();
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })
-    );
-    prisma.conversationShareLink.delete.mockResolvedValue({ id: LINK_DB_ID });
+    seedLinks(prisma, makeShareLink({ createdBy: USER_ID }));
+    prisma.conversationShareLink.update.mockResolvedValue({ id: LINK_DB_ID, isActive: false });
     const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'DELETE',
@@ -920,21 +1022,14 @@ describe('DELETE /links/:linkId', () => {
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body.success).toBe(true);
-    expect(body.data.message).toBe('Lien supprimé avec succès');
+    expect(body.data.message).toBe('Lien fermé avec succès');
+    expect(prisma.conversationShareLink.delete).not.toHaveBeenCalled();
     await app.close();
   });
 
   it('returns 200 when user is conversation ADMIN', async () => {
     const prisma = makePrisma();
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({
-        createdBy: OTHER_USER_ID,
-        conversation: {
-          id: CONV_ID,
-          participants: [{ userId: USER_ID, role: 'ADMIN', isActive: true }],
-        },
-      })
-    );
+    seedLinks(prisma, makeShareLink({ createdBy: OTHER_USER_ID, participants: [appelant('ADMIN')] }));
     prisma.conversationShareLink.delete.mockResolvedValue({ id: LINK_DB_ID });
     const app = await buildApp({ prisma });
     const res = await app.inject({
@@ -949,15 +1044,7 @@ describe('DELETE /links/:linkId', () => {
 
   it('returns 200 when user is conversation MODERATOR', async () => {
     const prisma = makePrisma();
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({
-        createdBy: OTHER_USER_ID,
-        conversation: {
-          id: CONV_ID,
-          participants: [{ userId: USER_ID, role: 'MODERATOR', isActive: true }],
-        },
-      })
-    );
+    seedLinks(prisma, makeShareLink({ createdBy: OTHER_USER_ID, participants: [appelant('MODERATOR')] }));
     prisma.conversationShareLink.delete.mockResolvedValue({ id: LINK_DB_ID });
     const app = await buildApp({ prisma });
     const res = await app.inject({
@@ -968,17 +1055,30 @@ describe('DELETE /links/:linkId', () => {
     await app.close();
   });
 
-  it('calls prisma.delete with the link db id', async () => {
+  it('returns 200 when user is conversation admin (lowercase — la seule casse écrite en base, #3875)', async () => {
     const prisma = makePrisma();
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })
-    );
+    seedLinks(prisma, makeShareLink({ createdBy: OTHER_USER_ID, participants: [appelant('admin')] }));
     prisma.conversationShareLink.delete.mockResolvedValue({ id: LINK_DB_ID });
     const app = await buildApp({ prisma });
-    await app.inject({ method: 'DELETE', url: `/links/${LINK_PUBLIC_ID}` });
-    expect(prisma.conversationShareLink.delete).toHaveBeenCalledWith({
-      where: { id: LINK_DB_ID },
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/links/${LINK_PUBLIC_ID}`,
     });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('calls prisma.update with isActive:false and the link db id — never prisma.delete', async () => {
+    const prisma = makePrisma();
+    seedLinks(prisma, makeShareLink({ createdBy: USER_ID }));
+    prisma.conversationShareLink.update.mockResolvedValue({ id: LINK_DB_ID });
+    const app = await buildApp({ prisma });
+    await app.inject({ method: 'DELETE', url: `/links/${LINK_PUBLIC_ID}` });
+    expect(prisma.conversationShareLink.update).toHaveBeenCalledWith({
+      where: { id: LINK_DB_ID },
+      data: { isActive: false },
+    });
+    expect(prisma.conversationShareLink.delete).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -994,12 +1094,10 @@ describe('DELETE /links/:linkId', () => {
     await app.close();
   });
 
-  it('returns 500 when delete throws', async () => {
+  it('returns 500 when the closing update throws', async () => {
     const prisma = makePrisma();
-    prisma.conversationShareLink.findFirst.mockResolvedValue(
-      makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })
-    );
-    prisma.conversationShareLink.delete.mockRejectedValue(new Error('Delete failed'));
+    seedLinks(prisma, makeShareLink({ createdBy: USER_ID }));
+    prisma.conversationShareLink.update.mockRejectedValue(new Error('Update failed'));
     const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'DELETE',

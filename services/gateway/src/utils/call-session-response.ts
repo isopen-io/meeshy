@@ -17,6 +17,8 @@
  * d'appel) et idempotent (une entrée déjà aplatie repasse inchangée).
  */
 
+import { parseCallReactionCounts, type CallReactionCounts } from '@meeshy/shared/types/call-controls';
+
 type MinimalUser = {
   id: string;
   username?: string | null;
@@ -61,6 +63,7 @@ export type CallParticipantResponse = {
 export type CallSessionResponse = {
   participants: CallParticipantResponse[];
   participantCount: number;
+  reactionCounts: CallReactionCounts;
   [key: string]: unknown;
 };
 
@@ -118,5 +121,6 @@ export function toCallSessionResponse<T extends SessionInput | null | undefined>
     ...session,
     participants,
     participantCount: participants.filter((p) => !p.leftAt).length,
+    reactionCounts: parseCallReactionCounts(session.reactionCounts),
   } as never;
 }

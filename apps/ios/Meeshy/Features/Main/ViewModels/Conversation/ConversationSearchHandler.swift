@@ -9,6 +9,11 @@ import MeeshyUI
 /// the incremental split.
 @MainActor
 final class ConversationSearchHandler {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     private let state: ConversationStateStore
     private let conversationId: String
     private let messageService: MessageServiceProviding
@@ -44,7 +49,7 @@ final class ConversationSearchHandler {
             // Persist the matched messages so the in-situ filtered-conversation
             // view can render them as real bubbles — including matches that fall
             // outside the currently-loaded window.
-            try? await persistence.upsertFromAPIMessages(response.data)
+            await bestEffort("conversationSearchHandler.messages.upsertFromAPIMessages", category: .grdb) { try await persistence.upsertFromAPIMessages(response.data, preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)) }
             state.searchResults = response.data.map { buildSearchResult($0, query: trimmed) }
             nextCursor = response.cursorPagination?.nextCursor
             state.searchHasMore = response.cursorPagination?.hasMore ?? false
@@ -69,7 +74,7 @@ final class ConversationSearchHandler {
                 query: trimmed,
                 cursor: cursor
             )
-            try? await persistence.upsertFromAPIMessages(response.data)
+            await bestEffort("conversationSearchHandler.messages.upsertFromAPIMessages.2", category: .grdb) { try await persistence.upsertFromAPIMessages(response.data, preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)) }
             state.searchResults.append(contentsOf: response.data.map { buildSearchResult($0, query: trimmed) })
             nextCursor = response.cursorPagination?.nextCursor
             state.searchHasMore = response.cursorPagination?.hasMore ?? false

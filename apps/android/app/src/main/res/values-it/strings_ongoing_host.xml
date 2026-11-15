@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lot: ongoing-activity-host — boutons et textes des notifications en cours. -->
+<resources>
+    <string name="ongoing_action_cancel">Annulla</string>
+    <string name="ongoing_action_pause">Pausa</string>
+    <string name="ongoing_action_resume">Riprendi</string>
+    <string name="ongoing_action_close">Chiudi</string>
+    <string name="ongoing_action_hang_up">Riaggancia</string>
+    <string name="ongoing_action_mute">Disattiva microfono</string>
+    <string name="ongoing_action_unmute">Riattiva microfono</string>
+    <string name="ongoing_outbox_sent_of_total">%1$d di %2$d inviati</string>
+    <string name="ongoing_playback_protected">Messaggio vocale</string>
+</resources>

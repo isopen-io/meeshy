@@ -30,6 +30,9 @@ public struct MeeshyScenePlayer: View {
     private let mode: ScenePlayerMode
     /// Le `StoryItem` qui PORTE la scène — son identité et son index de médias.
     private let carrier: StoryItem?
+    /// La couleur d'auteur sur laquelle une scène sans fond se lit (#14258).
+    /// Distincte d'`accentColorHex`, qui teinte la chrome de l'hôte.
+    private let sceneFloorHex: String?
     private var languages: [String]
     /// Le muet DEMANDÉ par l'hôte. `nil` = aucune demande, le mode décide.
     private let requestedMute: Bool?
@@ -41,6 +44,22 @@ public struct MeeshyScenePlayer: View {
     private let contentProgressHandler: ((Double) -> Void)?
     private let playbackProgressingHandler: ((Bool) -> Void)?
     private var playbackTimeHandler: ((Double) -> Void)?
+    /// **La position à laquelle la scène s'OUVRE** (#6580) — la moitié
+    /// manquante d'`onPlaybackTime`. La carte publie sa position ; l'hôte du
+    /// détail la rend ici, et la scène reprend à la bonne seconde au lieu de
+    /// tout recommencer. Elle voyage par l'INIT, comme les autres fils du
+    /// contrat B4 et pour la même raison (E4) : un fil chaîné sort de la
+    /// fenêtre équilibrée qu'une garde de couture relit.
+    private let startAt: Double
+    private let servesLetterboxFill: Bool
+    /// Le pont du parcours au doigt (#7878) — descend tel quel à l'hôte canvas.
+    private let scrubber: ScenePlaybackScrubber?
+    /// Les pastilles des sons de premier plan se posent PAR le player (#9737).
+    /// `false` pour l'hôte qui les pose lui-même au-dessus de sa couche de
+    /// gestes — le lecteur de story.
+    private let stagesSoundChips: Bool
+    /// L'horloge des pastilles de CETTE surface.
+    @StateObject private var chipClock = SceneSoundChipClock()
     @Binding private var sceneIndex: Int
     @Binding private var isPlaying: Bool
     /// `startsPaused` réalisé : la commande de lecture n'est honorée qu'À PARTIR
@@ -64,9 +83,14 @@ public struct MeeshyScenePlayer: View {
                 isPlaying: Binding<Bool>,
                 accentColorHex: String,
                 carrier: StoryItem? = nil,
+                sceneFloorHex: String? = nil,
                 preferredContentLanguages: [String] = [],
                 isMuted: Bool? = nil,
                 isOutgoing: Bool = false,
+                startAt: Double = 0,
+                servesLetterboxFill: Bool = true,
+                scrubber: ScenePlaybackScrubber? = nil,
+                stagesSoundChips: Bool = true,
                 preloadedImages: [String: UIImage] = [:],
                 preloadedVideoURLs: [String: URL] = [:],
                 preloadedAudioURLs: [String: URL] = [:],
@@ -79,9 +103,14 @@ public struct MeeshyScenePlayer: View {
         self._isPlaying = isPlaying
         self.accentColorHex = accentColorHex
         self.carrier = carrier
+        self.sceneFloorHex = sceneFloorHex
         self.languages = preferredContentLanguages
         self.requestedMute = isMuted
         self.isOutgoing = isOutgoing
+        self.startAt = startAt
+        self.servesLetterboxFill = servesLetterboxFill
+        self.scrubber = scrubber
+        self.stagesSoundChips = stagesSoundChips
         self.preloadedImages = preloadedImages
         self.preloadedVideoURLs = preloadedVideoURLs
         self.preloadedAudioURLs = preloadedAudioURLs
@@ -119,12 +148,19 @@ public struct MeeshyScenePlayer: View {
     public nonisolated static func carrierMediaIdentity(in document: CanvasV3,
                                                         sceneIndex: Int) -> String? {
         guard document.scenes.indices.contains(sceneIndex) else { return nil }
-        guard let carrier = document.scenes[sceneIndex].objects
-                .filter({ $0.kind == .media && $0.plane == .content })
-                .min(by: { $0.z < $1.z }) else { return nil }
-        guard case .string(let identity)? = carrier.payload["postMediaId"],
-              !identity.isEmpty else { return nil }
-        return identity
+        // Aucune restriction de PLAN : un fond `plane: bg` référencé (forme
+        // servie par la passerelle, contrat des deux orthographes #6894) est
+        // tout autant le porteur de la scène qu'un média `plane: content` —
+        // c'est même, sur un tel document, son SEUL média. `mediaReference`
+        // est le site unique des deux orthographes ; le relire ici a divergé
+        // du contrat une fois déjà (#6894).
+        return document.scenes[sceneIndex].objects
+            .filter { $0.kind == .media }
+            .compactMap { object -> (z: Int, identity: String)? in
+                guard let identity = object.mediaReference else { return nil }
+                return (object.z, identity)
+            }
+            .min { $0.z < $1.z }?.identity
     }
 
     /// La naissance est en pause dans les trois modes ; la commande du viewer ne
@@ -194,8 +230,7 @@ public struct MeeshyScenePlayer: View {
         let scene = document.scenes[sceneIndex]
         let addressed = scene.objects
             .compactMap { object -> (z: Int, identity: String)? in
-                guard case .string(let identity)? = object.payload["postMediaId"],
-                      !identity.isEmpty else { return nil }
+                guard let identity = object.mediaReference else { return nil }
                 return (object.z, identity)
             }
             .min { $0.z < $1.z }?.identity
@@ -204,10 +239,78 @@ public struct MeeshyScenePlayer: View {
 
     public var body: some View {
         host.onAppear { hasAppeared = true }
+            .overlay { soundChips }
     }
 
+    /// La scène jouée pose-t-elle un son ? Lecture bon marché du document,
+    /// avant toute conversion : la plupart des scènes n'en portent aucun.
+    nonisolated static func sceneCarriesSound(in document: CanvasV3, sceneIndex: Int) -> Bool {
+        guard document.scenes.indices.contains(sceneIndex) else { return false }
+        return document.scenes[sceneIndex].objects.contains { $0.kind == .audio }
+    }
+
+    /// Les sons de la scène jouée, tels que l'hôte les lit.
+    var sceneAudios: [StoryAudioPlayerObject] {
+        guard Self.sceneCarriesSound(in: document, sceneIndex: sceneIndex) else { return [] }
+        return StoryEffects(rendering: document, sceneIndex: sceneIndex).audioPlayerObjects ?? []
+    }
+
+    /// Les pastilles que la surcouche peint (#13901) : celles qu'aucun autre
+    /// objet ne recouvre, de la plus basse à la plus haute. Une pastille
+    /// enfouie se peint dans le canvas, à son rang (`StoryAudioChipLayer`).
+    var overlaidSceneAudios: [StoryAudioPlayerObject] {
+        guard Self.sceneCarriesSound(in: document, sceneIndex: sceneIndex) else { return [] }
+        return SceneAudioStageRule.overlaidAudios(in: StoryEffects(rendering: document, sceneIndex: sceneIndex))
+    }
+
+    /// **Les pastilles des sons de PREMIER PLAN** (#9737), sur toute surface
+    /// qui rejoue une scène. Un mode à chrome (lecteur, réel) les fenêtre sur
+    /// SON fil de position et laisse le toucher couper la piste ; la carte et
+    /// l'aperçu, muets par construction et sans fil de position, les montrent
+    /// toutes, muettes, sans prendre le toucher.
+    @ViewBuilder
+    private var soundChips: some View {
+        if stagesSoundChips {
+            let audios = overlaidSceneAudios
+            if !SceneAudioStageRule.stagedAudios(in: audios).isEmpty {
+                if config.showsChrome {
+                    ClockedSceneSoundChips(
+                        clock: chipClock,
+                        audios: audios,
+                        slideDuration: storyItem.toRenderableSlide(preferredLanguages: languages)
+                            .computedTotalDuration(),
+                        isHostMuted: Self.hostMute(config: config, requestedMute: requestedMute))
+                } else {
+                    SceneSoundChipLayer(audios: audios, isInteractive: false, isHostMuted: true)
+                }
+            }
+        }
+    }
+
+    /// Le fil de position servi à l'hôte : celui de la chrome, précédé du tic
+    /// de l'horloge des pastilles. Armé pour les seuls modes à chrome.
+    private var playbackRelay: ((Double) -> Void)? {
+        guard config.showsChrome else { return nil }
+        guard stagesSoundChips else { return playbackTimeHandler }
+        let clock = chipClock
+        let chrome = playbackTimeHandler
+        return { seconds in
+            clock.tick(seconds)
+            chrome?(seconds)
+        }
+    }
+
+    /// L'identité servie à l'hôte est COMPOSÉE (porteur@scène#boucle) : la
+    /// QoE porte l'identifiant du porteur, la story réellement lue (#11287).
     var host: StoryReaderRepresentable {
+        var reader = baseHost
+        reader.playbackQoEStoryId = carrier?.id
+        return reader
+    }
+
+    private var baseHost: StoryReaderRepresentable {
         StoryReaderRepresentable(story: storyItem,
+                                 sceneFloorHex: sceneFloorHex,
                                  preferredLanguages: languages,
                                  preloadedImages: preloadedImages,
                                  preloadedVideoURLs: preloadedVideoURLs,
@@ -215,25 +318,65 @@ public struct MeeshyScenePlayer: View {
                                  playerProvider: playerProvider,
                                  mute: Self.hostMute(config: config,
                                                      requestedMute: requestedMute),
+                                 // Le VERROU descend avec l'état : sans lui, il
+                                 // n'existait qu'au niveau du prop, et une
+                                 // notification diffusée relevait le muet d'une
+                                 // carte de fil avant la passe de rendu (#4084).
+                                 locksMute: config.locksMute,
                                  isPaused: Self.hostIsPaused(config: config,
                                                              hasAppeared: hasAppeared,
                                                              isPlaying: isPlaying),
                                  isOutgoing: isOutgoing,
+                                 startAt: startAt,
+                                 // #6636 — le lecteur qui présente l'image
+                                 // seule ne fait plus peindre la bande.
+                                 servesLetterboxFill: servesLetterboxFill,
+                                 // **La position se LÈGUE d'une surface à la
+                                 // suivante** (#6580) : la carte du fil joue,
+                                 // le plein écran qu'elle ouvre reprend là. La
+                                 // clé est celle du PORTEUR + du rang de scène,
+                                 // la seule que les deux surfaces partagent —
+                                 // l'identité d'hôte, elle, porte le n° de
+                                 // boucle, qui leur est propre.
+                                 positionKey: ScenePlaybackPositions.key(
+                                    carrierId: carrier?.id, sceneIndex: sceneIndex),
+                                 scrubber: scrubber,
                                  onCompletion: loopHandler,
                                  onContentReady: contentReadyHandler,
                                  onContentProgress: contentProgressHandler,
-                                 onPlaybackTime: config.showsChrome ? playbackTimeHandler : nil,
+                                 onPlaybackTime: playbackRelay,
                                  onPlaybackProgressing: playbackProgressingHandler)
     }
 
     private var playerProvider: SharedCarrierPlayerProvider {
         SharedCarrierPlayerProvider(
-            carrierIdentity: Self.carrierMediaIdentity(in: document, sceneIndex: sceneIndex))
+            carrierIdentity: Self.carrierMediaIdentity(in: document, sceneIndex: sceneIndex),
+            role: Self.carrierSurfaceRole(mode: mode))
     }
 
+    /// Le rôle sous lequel ce lecteur demande le player partagé (#9575) : la
+    /// carte et l'aperçu vivent DANS un fil, le lecteur et le réel tiennent
+    /// l'écran. Une carte ne reprend pas un player que la fenêtre PiP joue.
+    nonisolated static func carrierSurfaceRole(mode: ScenePlayerMode) -> VideoSurfaceRole {
+        switch mode {
+        case .card, .preview: return .inline
+        case .reader, .reel: return .fullscreen
+        }
+    }
+
+    /// Le tour de boucle remet aussi la position PUBLIÉE à zéro (#10555) : la
+    /// dernière émission du tour est sa fin, et la suivante n'arrive qu'une
+    /// fois le contenu du nouveau tour prêt — la barre de l'hôte restait
+    /// pleine entre les deux. Appelé depuis le tick du canvas, jamais pendant
+    /// une mise à jour de vue.
     private var loopHandler: (@Sendable () -> Void)? {
         guard config.loops else { return nil }
-        return { MainActor.assumeIsolated { loopPass += 1 } }
+        return {
+            MainActor.assumeIsolated {
+                loopPass += 1
+                playbackRelay?(0)
+            }
+        }
     }
 
     /// Les cinq champs repris du porteur sont EXACTEMENT ceux que l'hôte
@@ -242,17 +385,41 @@ public struct MeeshyScenePlayer: View {
     /// dans le Prisme du lecteur. Le reste du `StoryItem` (compteurs, visibilité,
     /// vues) ne descend jamais jusqu'au canvas — le recopier serait un leurre.
     private var storyItem: StoryItem {
-        StoryItem(id: Self.hostIdentity(carrierId: Self.identityRoot(carrierId: carrier?.id,
-                                                                     document: document,
-                                                                     sceneIndex: sceneIndex),
-                                        sceneId: document.scenes[safe: sceneIndex]?.id
-                                                 ?? "\(sceneIndex)",
-                                        loopPass: loopPass),
+        Self.renderedItem(id: Self.hostIdentity(carrierId: Self.identityRoot(carrierId: carrier?.id,
+                                                                             document: document,
+                                                                             sceneIndex: sceneIndex),
+                                                sceneId: document.scenes[safe: sceneIndex]?.id
+                                                         ?? "\(sceneIndex)",
+                                                loopPass: loopPass),
+                          document: document,
+                          sceneIndex: sceneIndex,
+                          carrier: carrier)
+    }
+
+    static func renderedItem(id: String,
+                             document: CanvasV3,
+                             sceneIndex: Int,
+                             carrier: StoryItem?) -> StoryItem {
+        StoryItem(id: id,
                   content: carrier?.content,
                   media: carrier?.media ?? [],
                   storyEffects: StoryEffects(rendering: document, sceneIndex: sceneIndex),
                   createdAt: carrier?.createdAt ?? Date(timeIntervalSince1970: 0),
                   translations: carrier?.translations)
+    }
+
+    /// **La durée du tour que le player joue (#10555)** : celle de la slide
+    /// même que l'hôte monte, dans le Prisme du lecteur. La barre d'un hôte
+    /// qui la recalculait de son côté — depuis d'autres effets, ou sans les
+    /// langues du lecteur — divisait la position du player par une autre
+    /// durée que la sienne.
+    public static func playedDuration(document: CanvasV3,
+                                      sceneIndex: Int = 0,
+                                      carrier: StoryItem? = nil,
+                                      preferredContentLanguages: [String] = []) -> TimeInterval {
+        renderedItem(id: carrier?.id ?? "", document: document, sceneIndex: sceneIndex, carrier: carrier)
+            .toRenderableSlide(preferredLanguages: preferredContentLanguages)
+            .computedTotalDuration()
     }
 }
 
@@ -262,13 +429,15 @@ public struct MeeshyScenePlayer: View {
 /// et la couche ouvre alors le sien.
 public struct SharedCarrierPlayerProvider: StoryCarrierPlayerProviding {
     public let carrierIdentity: String?
+    public let role: VideoSurfaceRole
 
-    public init(carrierIdentity: String?) {
+    public init(carrierIdentity: String?, role: VideoSurfaceRole = .fullscreen) {
         self.carrierIdentity = carrierIdentity
+        self.role = role
     }
 
     public func player(for mediaIdentity: String) -> AVPlayer? {
         guard let carrierIdentity, mediaIdentity == carrierIdentity else { return nil }
-        return SharedAVPlayerManager.shared.loadedPlayer(matching: mediaIdentity)
+        return SharedAVPlayerManager.shared.loadedPlayer(matching: mediaIdentity, role: role)
     }
 }

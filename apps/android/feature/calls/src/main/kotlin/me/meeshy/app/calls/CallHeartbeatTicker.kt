@@ -1,5 +1,6 @@
 package me.meeshy.app.calls
 
+import me.meeshy.sdk.model.call.CallRules
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -30,6 +31,6 @@ class RealCallHeartbeatTicker @Inject constructor() : CallHeartbeatTicker {
 
     private companion object {
         /** Gateway sizes its 120 s timeout for a 10 s client cadence (CallCleanupService). */
-        const val HEARTBEAT_PERIOD_MS = 10_000L
+        const val HEARTBEAT_PERIOD_MS = CallRules.HEARTBEAT_INTERVAL_MS
     }
 }

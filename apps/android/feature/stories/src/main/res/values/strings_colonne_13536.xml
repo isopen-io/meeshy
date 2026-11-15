@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_column_text_style">Style</string>
+    <string name="composer_column_text_effect">Fades</string>
+    <string name="composer_column_text_color">Colour</string>
+    <string name="composer_column_text_align">Alignment</string>
+    <string name="composer_column_text_background">Backing</string>
+    <string name="composer_column_text_timing">Timing</string>
+    <string name="composer_column_draw_color">Brush colour</string>
+    <string name="composer_column_draw_width">Brush thickness</string>
+    <string name="composer_column_exit_tool">Finish the tool</string>
+</resources>

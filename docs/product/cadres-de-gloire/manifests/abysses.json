@@ -1,0 +1,192 @@
+[
+ {
+  "file": "abysses-ambassadeur-5.jpg",
+  "rank": "ambassadeur",
+  "division": 5,
+  "option": "V",
+  "name": "Les Hippocampes d'or",
+  "story": "Deux hippocampes d'or, tenants héraldiques, gardent le blason au-dessus d'un lagon turquoise où dansent les caustiques ; des rangs de perles relient l'écu à la photo, le sable est semé d'étoiles de mer et de coquilles Saint-Jacques dorées.",
+  "layout": "pied : Mee (coucou) et Meo (salut) sur le sable",
+  "message": null
+ },
+ {
+  "file": "abysses-ambassadeur-4.jpg",
+  "rank": "ambassadeur",
+  "division": 4,
+  "option": "IV",
+  "name": "Le Jardin de corail",
+  "story": "La photo s'ouvre dans une arche au cœur d'un récif : murs de gorgones, coraux cornes-de-cerf, coraux tabulaires, éponges-tubes, corail cerveau et anémones aux pointes luminescentes ; un banc de poissons d'argent trace une auréole au-dessus du blason.",
+  "layout": "ruban : Mee (sourire) et Meo (cool) posés sur la plaque",
+  "message": "Le voyage continue"
+ },
+ {
+  "file": "abysses-ambassadeur-3.jpg",
+  "rank": "ambassadeur",
+  "division": 3,
+  "option": "III",
+  "name": "La Porte de Zanzibar",
+  "story": "Une touche d'Afrique au fond du lagon : la photo passe sous une porte sculptée de la côte swahilie (Lamu, Stone Town de Zanzibar) engloutie dans l'eau turquoise — imposte en demi-lune à éventail d'or et rosaces, jambages à chaîne sculptée, clous de laiton, lotus aux socles —, que les coraux, les anémones et les balanes ont colonisée ; une tortue verte passe au-dessus, deux poissons-cochers la gardent, la coque d'un boutre glisse à la surface et un rang de cauris de l'océan Indien court sous la photo.",
+  "layout": "libre : Mee (bisou volé) et Meo (bravo) perchés sur le linteau",
+  "message": "Merci la famille"
+ },
+ {
+  "file": "abysses-ambassadeur-2.jpg",
+  "rank": "ambassadeur",
+  "division": 2,
+  "option": "II",
+  "name": "Les Lanternes de méduses",
+  "story": "Dans la zone crépusculaire, des méduses bioluminescentes pendent comme des lanternes au bout de rangs de perles, coiffées de calottes d'or ; une grande coquille Saint-Jacques couronne le blason, une guirlande de coquilles et de perles roses suit l'arche, des siphonophores dérivent en chaînes de lumière et des plumes de mer s'allument au pied du cadre.",
+  "layout": "selfie : Meo prend la photo",
+  "message": "Pour toi, maman"
+ },
+ {
+  "file": "abysses-ambassadeur-1.jpg",
+  "rank": "ambassadeur",
+  "division": 1,
+  "option": "I",
+  "name": "Atlantide",
+  "story": "La photo prend place au seuil d'un temple englouti : colonnes de nacre cannelées aux chapiteaux à volutes de nautile, archivolte de claveaux d'or et de nacre, rosace de nacre derrière le blason, coquille Saint-Jacques en clé de voûte ; une baleine à bosse passe dans les rais de lumière et l'or des épaves, perles et pierres, ruisselle sur les marches.",
+  "layout": "pied : Mee (fête) et Meo (roi) sur les marches du temple",
+  "message": "On l'a fait ensemble"
+ },
+ {
+  "file": "abysses-orateur-a.jpg",
+  "rank": "orateur",
+  "division": null,
+  "option": "A",
+  "name": "Le Chant des baleines",
+  "story": "Deux baleines à bosse se répondent au-dessus du blason : leur chant devient des ondes d'or qui descendent le long de la photo, et l'arche résonne en cercles de lumière dans un éventail de rayons venus de la surface ; corail cerveau, coraux mous et anémones écoutent au pied du cadre.",
+  "layout": "libre : Meo (sérénade) et Mee (danse) au pied de l'arche",
+  "message": "Écoute la mer chanter"
+ },
+ {
+  "file": "abysses-orateur-b.jpg",
+  "rank": "orateur",
+  "division": null,
+  "option": "B",
+  "name": "L'Éclipse de la manta",
+  "story": "Une raie manta géante passe devant le soleil de la surface : sa silhouette cernée d'or éclipse la lumière, qui jaillit tout autour en couronne de rayons ; d'autres mantas, vues par en dessous, montrent leur ventre blanc, et un banc d'argent tourne dans le halo.",
+  "layout": "pied : Mee (wow) et Meo (trophée)",
+  "message": null
+ },
+ {
+  "file": "abysses-orateur-c.jpg",
+  "rank": "orateur",
+  "division": null,
+  "option": "C",
+  "name": "L'Aube de Ganvié",
+  "story": "Une touche d'Afrique entre ciel et lagune : le soleil se lève derrière le blason sur Ganvié, la cité lacustre du lac Nokoué au Bénin — maisons de bambou tressé et de paille sur pilotis, village lointain, pirogues, aigrettes et baobabs sur la rive ; sous la surface, le soleil se brise en rais d'or le long des pilotis et des acadjas, les parcs de branchages où s'abritent les tilapias. Au pied du cadre, une tenture d'appliqués inspirée de celles des palais d'Abomey : le poisson échappé de la nasse de Houégbadja, le requin de Béhanzin, le soleil et la pirogue.",
+  "layout": "perches : Mee (sourire) et Meo (bravo) sur les toits de paille",
+  "message": "Le jour se lève sur nous"
+ },
+ {
+  "file": "abysses-oracle-a.jpg",
+  "rank": "oracle",
+  "division": null,
+  "option": "A",
+  "name": "Le Plancton d'étoiles",
+  "story": "La mer de nuit s'ouvre sur le ciel : les étoiles dessinent une raie manta au-dessus du blason et le plancton bioluminescent tourbillonne comme des galaxies ; sur les côtés, six lentilles de microscope révèlent l'infime de l'océan — diatomées, radiolaire, coccolithe, cristal de glace.",
+  "layout": "ruban : Mee (wow) et Meo (feu d'artifice) aux coins de la plaque",
+  "message": "Jusqu'aux étoiles"
+ },
+ {
+  "file": "abysses-oracle-b.jpg",
+  "rank": "oracle",
+  "division": null,
+  "option": "B",
+  "name": "La Lune des méduses",
+  "story": "La pleine lune se lève derrière le blason, gravée d'une fleur de vie, et ses neuf phases tournent autour d'elle comme une horloge du ciel ; des méduses-lunes aux quatre anneaux la traversent, deux constellations s'allument au-dessus de la mer, et l'on entrevoit l'infime : des éphyrules, méduses-lunes nouveau-nées grandes comme un grain de sel, des cristaux de glace à secteurs et des flocons fractals qui dérivent comme une neige d'étoiles.",
+  "layout": "cotes : Mee (montée au ciel) et Meo (amoureux) se penchent dans l'ovale",
+  "message": null
+ },
+ {
+  "file": "abysses-oracle-c.jpg",
+  "rank": "oracle",
+  "division": null,
+  "option": "C",
+  "name": "Le Nombre d'or",
+  "story": "Un nautile d'or et de nacre surgit au-dessus de la photo, face aux rectangles d'or et à la spirale de Fibonacci tracés en platine dans le ciel, étoiles à leurs sommets ; une fleur de vie auréole le blason, des nautiles de lumière grands comme un grain de sable croissent selon la même spirale le long de la photo face au pentagramme, aux solides de Platon et au flocon fractal.",
+  "layout": "pied : Mee (jackpot) et Meo (cool)",
+  "message": "Tout est lié"
+ },
+ {
+  "file": "abysses-legende-5.jpg",
+  "rank": "legende",
+  "division": 5,
+  "option": "V",
+  "name": "Constellations du large",
+  "story": "La nuit tombe sur le large : la Voie lactée se lève au-dessus de l'horizon, une baleine et une raie manta s'y dessinent en constellations ; sous la surface, le plancton bioluminescent s'enroule en deux galaxies spirales et dérive en voie lactée au pied du cadre, et deux gouttes révèlent l'infime — une diatomée, une cellule.",
+  "layout": "pied : Mee (coucou) et Meo (yo)",
+  "message": null
+ },
+ {
+  "file": "abysses-legende-4.jpg",
+  "rank": "legende",
+  "division": 4,
+  "option": "IV",
+  "name": "Les Méduses-nébuleuses",
+  "story": "Les méduses sont devenues nébuleuses : leurs ombrelles de gaz rose et bleu flottent de part et d'autre du blason, leurs tentacules traînent des poussières d'étoiles ; entre elles dérivent des molécules d'eau et le réseau hexagonal de la glace.",
+  "layout": "cotes : Mee (amoureuse) et Meo (amoureux) se penchent dans l'arche",
+  "message": "Ma perle, c'est vous"
+ },
+ {
+  "file": "abysses-legende-3.jpg",
+  "rank": "legende",
+  "division": 3,
+  "option": "III",
+  "name": "La Double Hélice",
+  "story": "Les laminaires montent le long de la photo en se tordant en doubles hélices d'ADN, leurs lames d'or accrochées aux brins ; au sommet, elles rejoignent une galaxie spirale qui tourne derrière le blason, et des atomes remontent comme des bulles.",
+  "layout": "perches : Mee (bravo) et Meo (champagne) dans les coins du ciel",
+  "message": null
+ },
+ {
+  "file": "abysses-legende-2.jpg",
+  "rank": "legende",
+  "division": 2,
+  "option": "II",
+  "name": "Le Récif des neurones",
+  "story": "Les coraux se sont faits neurones : leurs branches deviennent dendrites, leurs troncs des axones gainés de myéline qui s'allument d'étincelles le long de la photo ; au-dessus, une supernova explose derrière le blason, entre deux nébuleuses et des galaxies lointaines.",
+  "layout": "ruban : Mee (lettre) et Meo (muscles) aux coins de la plaque",
+  "message": "Merci d'y avoir cru"
+ },
+ {
+  "file": "abysses-legende-1.jpg",
+  "rank": "legende",
+  "division": 1,
+  "option": "I",
+  "name": "La Baleine des galaxies",
+  "story": "L'océan s'est renversé en ciel : une baleine à bosse faite d'étoiles nage parmi les nébuleuses, les galaxies, un amas et un trou noir, la mer n'étant plus qu'un liseré au pied du cadre ; le long de la photo, des bulles portent chacune un monde infime — atome, noyau, cellule, ADN, molécule d'eau, diatomée, flocon fractal, onde quantique.",
+  "layout": "pied : Mee (montée au ciel) et Meo (roi)",
+  "message": "Plus loin que la mer"
+ },
+ {
+  "file": "abysses-mythe-a.jpg",
+  "rank": "mythe",
+  "division": null,
+  "option": "A",
+  "name": "Le Maelström",
+  "story": "Un tourbillon océanique s'enroule jusqu'à devenir un trou noir et son disque d'accrétion, d'où monte le blason prisme ; à gauche l'immense — toile cosmique, amas de galaxies, quasar et ses jets —, à droite l'infime — traces de particules en bulles, noyau atomique, mousse quantique —, des cordes vibrent au pied du cadre, une baleine et une méduse brillent en constellations.",
+  "layout": "selfie : Mee et Meo se prennent en photo",
+  "message": "Du quark au quasar"
+ },
+ {
+  "file": "abysses-mythe-b.jpg",
+  "rank": "mythe",
+  "division": null,
+  "option": "B",
+  "name": "Le Nautile-galaxie",
+  "story": "La spirale du nautile, cloison après cloison, s'ouvre en galaxie spirale dont le blason prisme occupe le cœur : ses bras d'étoiles et ses nébuleuses roses suivent exactement la courbe de la coquille. Un quasar lance ses jets le long de la photo, une perle renferme un noyau d'atome, des atomes gravitent, une baleine brille en constellation et une méduse de lumière laisse pendre des cordes qui vibrent.",
+  "layout": "cotes : Mee (bisou volé) et Meo (trophée) se penchent dans l'arche",
+  "message": null
+ },
+ {
+  "file": "abysses-mythe-c.jpg",
+  "rank": "mythe",
+  "division": null,
+  "option": "C",
+  "name": "La Sonde de l'univers",
+  "story": "La ligne de sonde des marins plonge le long de la photo, graduée de 10²⁶ m à 10⁻³⁵ m : la toile cosmique couvre le ciel, puis l'échelle descend, chaque échelon enfermé dans une bulle de verre reliée à la suivante — amas, galaxie, soleil, planète océan, baleine, méduse, cellule, ADN, atome, noyau, quarks, corde — jusqu'à la mousse quantique où pend le plomb d'or.",
+  "layout": "perches : Mee (danse) et Meo (feu d'artifice) de part et d'autre du blason",
+  "message": "À toutes les échelles"
+ }
+]

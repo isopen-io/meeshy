@@ -25,7 +25,7 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 const mockFindExistingTrackingLink = jest.fn() as jest.Mock<any>;
 const mockCreateTrackingLink = jest.fn() as jest.Mock<any>;
 const mockCollectContentTrackingLinks = jest.fn(async () => []) as jest.Mock<any>;
-// L'algorithme `[[url]]` / `<url>` vit dans `TrackingLinkService` et n'est
+// L'algorithme `<url>` vit dans `TrackingLinkService` et n'est
 // testé QUE là (`TrackingLinkService.test.ts`). MessageProcessor en portait un
 // second exemplaire complet ; il n'en garde que la délégation, donc c'est la
 // délégation — pas l'algorithme — que ces tests décrivent. Identité par
@@ -57,12 +57,11 @@ jest.mock('../../../../services/MentionService', () => ({
   })),
 }));
 
-const mockEncryptMessage = jest.fn() as jest.Mock<any>;
-const mockEncryptHybridServerLayer = jest.fn() as jest.Mock<any>;
+const mockSealAtRest = jest.fn() as jest.Mock<any>;
 jest.mock('../../../../services/EncryptionService', () => ({
   EncryptionService: jest.fn().mockImplementation(() => ({
-    encryptMessage: (...a: any[]) => mockEncryptMessage(...a),
-    encryptHybridServerLayer: (...a: any[]) => mockEncryptHybridServerLayer(...a),
+    sealAtRest: (...a: any[]) => mockSealAtRest(...a),
+    openAtRest: jest.fn(async () => { throw new Error('not opened in these tests'); }),
   })),
 }));
 
@@ -75,11 +74,11 @@ jest.mock('../../../../services/notifications/NotificationService', () => ({
     createReplyNotification: (...a: any[]) => mockCreateReplyNotification(...a),
     createMentionNotificationsBatch: (...a: any[]) => mockCreateMentionNotificationsBatch(...a),
   })),
+}));
+jest.mock('../../../../services/notifications/notification-preview', () => ({
+  ...(jest.requireActual('../../../../services/notifications/notification-preview') as object),
   protectedPreview: jest.fn().mockReturnValue(null),
-  // Cycle 125 — la JUMELLE de `protectedPreview`, pour le MÉDIA : l'éventail
-  // l'appelle pour décider si le FICHIER d'une pièce jointe a le droit de
-  // voyager sur le canal push. Absente de cette fabrique, elle rend la fonction
-  // `undefined` et l'éventail entier meurt dans son `catch`.
+  // Cycle 125 — la JUMELLE média de `protectedPreview` : elle décide si le FICHIER d'une pièce jointe a le droit de voyager sur le push. Doublée ICI (et non laissée au `requireActual` ci-dessus) pour que l'éventail reste isolé du verdict réel, comme avant #7093.
   maskedAttachment: jest.fn().mockReturnValue(false),
 }));
 
@@ -249,7 +248,7 @@ describe('MessageProcessor.processLinksInContent', () => {
     processor = makeProcessor();
   });
 
-  // L'algorithme lui-même (protection markdown, `[[url]]`, `<url>`, réutilisation
+  // L'algorithme lui-même (protection markdown, `<url>`, réutilisation
   // de token, séquences `$`) est décrit UNE fois, dans `TrackingLinkService.test.ts`.
   // Le décrire ici aussi, c'était le prix du second exemplaire qui vivait dans
   // ce fichier — et deux descriptions d'un même algorithme ne restent pas
@@ -257,11 +256,11 @@ describe('MessageProcessor.processLinksInContent', () => {
   it('délègue au traitement de liens de TrackingLinkService et rend son résultat', async () => {
     mockProcessExplicitLinksInContent.mockResolvedValue({ processedContent: 'm+abc123', trackingLinks: [] });
 
-    const result = await processor.processLinksInContent('[[https://example.com/page]]', CONV_ID, 'u-author', MSG_ID);
+    const result = await processor.processLinksInContent('<https://example.com/page>', CONV_ID, 'u-author', MSG_ID);
 
     expect(result).toBe('m+abc123');
     expect(mockProcessExplicitLinksInContent).toHaveBeenCalledWith({
-      content: '[[https://example.com/page]]',
+      content: '<https://example.com/page>',
       conversationId: CONV_ID,
       messageId: MSG_ID,
       createdBy: 'u-author',
@@ -280,9 +279,9 @@ describe('MessageProcessor.processLinksInContent', () => {
   it('rend le contenu original quand le traitement lève', async () => {
     mockProcessExplicitLinksInContent.mockRejectedValue(new Error('DB error'));
 
-    const result = await processor.processLinksInContent('[[https://example.com/err]]', CONV_ID);
+    const result = await processor.processLinksInContent('<https://example.com/err>', CONV_ID);
 
-    expect(result).toBe('[[https://example.com/err]]');
+    expect(result).toBe('<https://example.com/err>');
   });
 });
 
@@ -316,7 +315,7 @@ describe('MessageProcessor.saveMessage — le propriétaire du lien de suivi', (
   it('crée le lien au nom du User derrière le participant expéditeur, pas du participant', async () => {
     partFindUnique.mockResolvedValue({ userId: 'u-author' });
 
-    await processor.saveMessage({ ...baseData, content: 'regarde [[https://example.com]]' });
+    await processor.saveMessage({ ...baseData, content: 'regarde <https://example.com>' });
 
     expect(partFindUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: SENDER_ID } })
@@ -338,17 +337,19 @@ describe('MessageProcessor.saveMessage — le propriétaire du lien de suivi', (
     );
   });
 
-  // Un participant anonyme n'a AUCUN `User.id` : le schéma prévoit `null`
-  // (« null si anonyme »). Y laisser le `Participant.id` attribuait le lien à
-  // un id qui ne désigne aucun utilisateur.
-  it('laisse le lien sans propriétaire pour un expéditeur anonyme', async () => {
-    partFindUnique.mockResolvedValue({ userId: null });
-
-    await processor.saveMessage({ ...baseData, content: 'regarde [[https://example.com]]' });
-
-    expect(mockProcessExplicitLinksInContent).toHaveBeenCalledWith(
-      expect.objectContaining({ createdBy: undefined })
-    );
+  // #10286 — un invité anonyme ne fait JAMAIS de ses adresses des liens suivis :
+  // ni `m+<token>`, ni carte `metadata.trackingLinks`, texte tel qu'écrit.
+  it.each([[{ type: 'anonymous', userId: null }], [{ type: 'user', userId: null }], [null]])(
+    'ne suit aucune adresse d’un expéditeur non inscrit (%j)', async (sender) => {
+    partFindUnique.mockResolvedValue(sender);
+    mockCollectContentTrackingLinks.mockResolvedValue([{ url: 'https://evil.example', token: 'tok-1' }]);
+    const content = 'regarde <https://evil.example>, https://evil.example et m+abc12 tel quel';
+    await processor.saveMessage({ ...baseData, content });
+    expect(mockProcessExplicitLinksInContent).not.toHaveBeenCalled();
+    expect(mockCollectContentTrackingLinks).not.toHaveBeenCalled();
+    const data = msgCreate.mock.calls[0][0].data;
+    expect(data.content).toBe(content);
+    expect(data.metadata?.trackingLinks).toBeUndefined();
   });
 
   it('ne résout rien quand le message ne porte aucune URL', async () => {
@@ -358,15 +359,13 @@ describe('MessageProcessor.saveMessage — le propriétaire du lien de suivi', (
   });
 
   // La résolution est best-effort : elle ne doit pas faire échouer l'envoi.
-  it('envoie quand même, sans propriétaire, si la résolution échoue', async () => {
+  // Fail-closed (#10286) : sans preuve d'un compte inscrit, rien n'est suivi.
+  it('envoie quand même, texte tel qu’écrit et sans lien suivi, si la résolution échoue', async () => {
     partFindUnique.mockRejectedValue(new Error('DB down'));
-
-    const result = await processor.saveMessage({ ...baseData, content: 'regarde [[https://example.com]]' });
-
+    const result = await processor.saveMessage({ ...baseData, content: 'regarde <https://example.com>' });
     expect(result).toBeDefined();
-    expect(mockProcessExplicitLinksInContent).toHaveBeenCalledWith(
-      expect.objectContaining({ createdBy: undefined })
-    );
+    expect(mockProcessExplicitLinksInContent).not.toHaveBeenCalled();
+    expect(msgCreate.mock.calls[0][0].data.content).toBe('regarde <https://example.com>');
   });
 });
 
@@ -380,72 +379,73 @@ describe('MessageProcessor.getEncryptionContext', () => {
     processor = makeProcessor();
   });
 
-  it('returns no encryption for system messages', async () => {
-    const ctx = await processor.getEncryptionContext(CONV_ID, 'sys msg', 'system');
+  it('returns no encryption when the conversation has no encryption regime', async () => {
+    const ctx = await processor.getEncryptionContext(CONV_ID, 'sys msg');
     expect(ctx.isEncrypted).toBe(false);
     expect(ctx.mode).toBeNull();
   });
 
   it('returns no encryption when conversation not found', async () => {
     convFindUnique.mockResolvedValue(null);
-    const ctx = await processor.getEncryptionContext(CONV_ID, 'hello', 'text');
+    const ctx = await processor.getEncryptionContext(CONV_ID, 'hello');
     expect(ctx.isEncrypted).toBe(false);
   });
 
   it('returns no encryption when encryptionEnabledAt is null', async () => {
     convFindUnique.mockResolvedValue({ encryptionMode: 'server', encryptionEnabledAt: null, serverEncryptionKeyId: 'k' });
-    const ctx = await processor.getEncryptionContext(CONV_ID, 'hello', 'text');
+    const ctx = await processor.getEncryptionContext(CONV_ID, 'hello');
     expect(ctx.isEncrypted).toBe(false);
   });
 
   it('returns no encryption when encryptionMode is null', async () => {
     convFindUnique.mockResolvedValue({ encryptionMode: null, encryptionEnabledAt: new Date(), serverEncryptionKeyId: 'k' });
-    const ctx = await processor.getEncryptionContext(CONV_ID, 'hello', 'text');
+    const ctx = await processor.getEncryptionContext(CONV_ID, 'hello');
     expect(ctx.isEncrypted).toBe(false);
   });
 
-  it('returns mode=e2ee with isEncrypted=false (client encrypts)', async () => {
+  it('returns mode=e2ee with isEncrypted=false for a textless message (#11216: text is refused)', async () => {
     convFindUnique.mockResolvedValue({ encryptionMode: 'e2ee', encryptionEnabledAt: new Date(), serverEncryptionKeyId: null });
-    const ctx = await processor.getEncryptionContext(CONV_ID, 'hello', 'text');
+    const ctx = await processor.getEncryptionContext(CONV_ID, '');
     expect(ctx.isEncrypted).toBe(false);
     expect(ctx.mode).toBe('e2ee');
   });
 
-  it('encrypts server-side in server mode', async () => {
+  it('encrypts at rest in server mode, under the key the conversation designates', async () => {
     convFindUnique.mockResolvedValue({ encryptionMode: 'server', encryptionEnabledAt: new Date(), serverEncryptionKeyId: 'key-1' });
-    mockEncryptMessage.mockResolvedValue({ ciphertext: 'enc-ct', metadata: { keyId: 'key-1' } });
-    const ctx = await processor.getEncryptionContext(CONV_ID, 'hello', 'text');
+    mockSealAtRest.mockResolvedValue({ ciphertext: 'enc-ct', metadata: { protocol: 'aes-256-gcm', keyId: 'key-1', iv: 'iv', authTag: 'tag', aad: 'conversation:v1' } });
+    const ctx = await processor.getEncryptionContext(CONV_ID, 'hello');
+    expect(mockSealAtRest).toHaveBeenCalledWith({ plaintext: 'hello', conversationId: CONV_ID, preferredKeyId: 'key-1' });
     expect(ctx.isEncrypted).toBe(true);
     expect(ctx.mode).toBe('server');
     expect(ctx.encryptedContent).toBe('enc-ct');
   });
 
-  it('encrypts server layer in hybrid mode', async () => {
+  it('encrypts at rest in hybrid mode (#11374 : hybrid = au repos, jamais de bout en bout)', async () => {
     convFindUnique.mockResolvedValue({ encryptionMode: 'hybrid', encryptionEnabledAt: new Date(), serverEncryptionKeyId: 'key-2' });
-    mockEncryptHybridServerLayer.mockResolvedValue({ ciphertext: 'hyb-ct', keyId: 'key-2', iv: 'iv', authTag: 'tag' });
-    const ctx = await processor.getEncryptionContext(CONV_ID, 'hello', 'text');
+    mockSealAtRest.mockResolvedValue({ ciphertext: 'hyb-ct', metadata: { protocol: 'aes-256-gcm', keyId: 'key-2', iv: 'iv', authTag: 'tag', aad: 'conversation:v1' } });
+    const ctx = await processor.getEncryptionContext(CONV_ID, 'hello');
     expect(ctx.isEncrypted).toBe(true);
     expect(ctx.mode).toBe('hybrid');
     expect((ctx.encryptionMetadata as Record<string, unknown>)?.protocol).toBe('aes-256-gcm');
     expect((ctx.encryptionMetadata as Record<string, unknown>)?.canTranslate).toBe(true);
   });
 
-  it('falls back to no encryption for unknown mode', async () => {
+  it('#11381 — refuses an unknown mode instead of writing plaintext', async () => {
     convFindUnique.mockResolvedValue({ encryptionMode: 'quantum', encryptionEnabledAt: new Date(), serverEncryptionKeyId: 'k' });
-    const ctx = await processor.getEncryptionContext(CONV_ID, 'hello', 'text');
-    expect(ctx.isEncrypted).toBe(false);
-    expect(ctx.mode).toBeNull();
+    await expect(processor.getEncryptionContext(CONV_ID, 'hello')).rejects.toMatchObject({ code: 'SERVER_AT_REST_UNAVAILABLE' });
   });
 
-  it('falls back to no encryption when encryption service throws', async () => {
+  it('#11381 — propagates an encryption failure instead of writing plaintext (fail-closed)', async () => {
     convFindUnique.mockResolvedValue({ encryptionMode: 'server', encryptionEnabledAt: new Date(), serverEncryptionKeyId: 'k' });
-    mockEncryptMessage.mockRejectedValue(new Error('KMS unavailable'));
-    const ctx = await processor.getEncryptionContext(CONV_ID, 'hello', 'text');
-    expect(ctx.isEncrypted).toBe(false);
+    mockSealAtRest.mockRejectedValue(new Error('KMS unavailable'));
+    await expect(processor.getEncryptionContext(CONV_ID, 'hello')).rejects.toThrow('KMS unavailable');
   });
 });
 
 // ── saveMessage ────────────────────────────────────────────────────────────
+
+// La projection ENTIÈRE qu'exige la lecture de protection d'une source de copie (#9572).
+const ORDINARY_SOURCE = { isViewOnce: false, isBlurred: false, effectFlags: 0, ephemeralDuration: null, expiresAt: null, forwardedFromId: null, attachments: [] };
 
 describe('MessageProcessor.saveMessage', () => {
   let processor: MessageProcessor;
@@ -487,17 +487,14 @@ describe('MessageProcessor.saveMessage', () => {
     expect(findFirstArgs.include?.replyTo?.include).toHaveProperty('attachments');
   });
 
-  it('uses provided encryptedContent + encryptionMetadata', async () => {
-    await processor.saveMessage({ ...baseData, encryptedContent: 'encrypted', encryptionMetadata: { mode: 'e2ee', keyId: 'k1' } });
-    const createArgs = msgCreate.mock.calls[0][0] as { data: Record<string, unknown> };
-    expect(createArgs.data.isEncrypted).toBe(true);
-    expect(createArgs.data.encryptedContent).toBe('encrypted');
-  });
-
-  it('sets content to empty string when message is encrypted', async () => {
-    await processor.saveMessage({ ...baseData, encryptedContent: 'ct', encryptionMetadata: { mode: 'server' } });
-    const createArgs = msgCreate.mock.calls[0][0] as { data: Record<string, unknown> };
-    expect(createArgs.data.content).toBe('');
+  it.each([
+    ['un chiffré déclaré e2ee', { mode: 'e2ee', keyId: 'k1' }],
+    ['un chiffré déclaré server', { mode: 'server' }],
+  ])('refuse %s dans une conversation en clair, sans rien ranger (#12562)', async (_label, encryptionMetadata) => {
+    await expect(
+      processor.saveMessage({ ...baseData, encryptedContent: 'encrypted', encryptionMetadata }),
+    ).rejects.toMatchObject({ code: 'E2EE_REGIME_CHANGED', status: 409 });
+    expect(msgCreate).not.toHaveBeenCalled();
   });
 
   it('derives effectFlags from isBlurred/expiresAt/isViewOnce', async () => {
@@ -563,9 +560,9 @@ describe('MessageProcessor.saveMessage', () => {
     expect(mockAssociateAttachmentsToMessage).not.toHaveBeenCalled();
   });
 
-  it('associates attachments for new message with attachmentIds', async () => {
+  it('associates attachments with the WRITTEN row, so they carry its protection (#7498)', async () => {
     await processor.saveMessage({ ...baseData, attachmentIds: ['att-1', 'att-2'] });
-    expect(mockAssociateAttachmentsToMessage).toHaveBeenCalledWith(['att-1', 'att-2'], MSG_ID);
+    expect(mockAssociateAttachmentsToMessage).toHaveBeenCalledWith(['att-1', 'att-2'], MSG_ID, await msgCreate.mock.results[0].value);
   });
 
   it('refreshes attachments in memory when attachmentIds provided', async () => {
@@ -586,7 +583,7 @@ describe('MessageProcessor.saveMessage', () => {
     };
     attFindMany.mockResolvedValueOnce([origAtt]).mockResolvedValue([]);
     attCreate.mockResolvedValue({ ...origAtt });
-    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
     expect(attCreate).toHaveBeenCalledTimes(1);
   });
 
@@ -638,7 +635,7 @@ describe('MessageProcessor.saveMessage', () => {
   const forwardedAttachmentData = async () => {
     attFindMany.mockResolvedValueOnce([encryptedOrigAtt]).mockResolvedValue([]);
     attCreate.mockResolvedValue({ ...encryptedOrigAtt });
-    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
     return (attCreate.mock.calls[0][0] as { data: Record<string, unknown> }).data;
   };
 
@@ -708,7 +705,7 @@ describe('MessageProcessor.saveMessage', () => {
       thumbnailEncryptionIv: null, thumbnailEncryptionAuthTag: null };
     attFindMany.mockResolvedValueOnce([plainAtt]).mockResolvedValue([]);
     attCreate.mockResolvedValue({ ...plainAtt });
-    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
     const data = (attCreate.mock.calls[0][0] as { data: Record<string, unknown> }).data;
     expect(data.isEncrypted).toBeFalsy();
     expect(data.encryptionIv ?? null).toBeNull();
@@ -737,7 +734,7 @@ describe('MessageProcessor.saveMessage', () => {
     };
     attFindMany.mockResolvedValue([imageAtt]);
     attCreate.mockResolvedValue(imageAtt);
-    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
     expect(msgUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { messageType: 'image' } }));
   });
 
@@ -749,7 +746,7 @@ describe('MessageProcessor.saveMessage', () => {
       pageCount: null, lineCount: null, transcription: null, translations: null, metadata: null };
     attFindMany.mockResolvedValue([audioAtt]);
     attCreate.mockResolvedValue(audioAtt);
-    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
     expect(msgUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { messageType: 'audio' } }));
   });
 
@@ -761,7 +758,7 @@ describe('MessageProcessor.saveMessage', () => {
       pageCount: null, lineCount: null, transcription: null, translations: null, metadata: null };
     attFindMany.mockResolvedValue([videoAtt]);
     attCreate.mockResolvedValue(videoAtt);
-    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
     expect(msgUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { messageType: 'video' } }));
   });
 
@@ -773,7 +770,7 @@ describe('MessageProcessor.saveMessage', () => {
       pageCount: 5, lineCount: null, transcription: null, translations: null, metadata: null };
     attFindMany.mockResolvedValue([fileAtt]);
     attCreate.mockResolvedValue(fileAtt);
-    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
     expect(msgUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { messageType: 'file' } }));
   });
 
@@ -798,21 +795,15 @@ describe('MessageProcessor.saveMessage', () => {
       pageCount: null, lineCount: null, transcription: null, translations: null, metadata: null };
     attFindMany.mockResolvedValue([textAtt]);
     attCreate.mockResolvedValue(textAtt);
-    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
     expect(msgUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { messageType: 'file' } }));
   });
 
-  it('handles empty original attachments on forward gracefully', async () => {
-    attFindMany.mockResolvedValueOnce([]).mockResolvedValue([]);
-    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
-    expect(attCreate).not.toHaveBeenCalled();
-  });
-
-  it('updates tracking link messageIds when [[url]] was processed', async () => {
-    // La réécriture est le SIGNAL : `saveMessage` rattache les liens au message
-    // seulement quand le contenu traité diffère de celui qu'on lui a donné.
+  it('updates tracking link messageIds when <url> was processed', async () => {
+    // La réécriture (d'un compte inscrit) est le SIGNAL du rattachement.
+    partFindUnique.mockResolvedValue({ type: 'user', userId: 'u-author' });
     mockProcessExplicitLinksInContent.mockResolvedValue({ processedContent: 'm+tok-abc', trackingLinks: [] });
-    await processor.saveMessage({ ...baseData, content: '[[https://example.com]]' });
+    await processor.saveMessage({ ...baseData, content: '<https://example.com>' });
     expect(tlUpdateMany).toHaveBeenCalled();
   });
 
@@ -826,9 +817,9 @@ describe('MessageProcessor.saveMessage', () => {
    * n'était jamais écrite. « `tlUpdateMany` a été appelé » ne peut pas voir ça.
    */
   it('rattache un lien dont la colonne messageId est ABSENTE, sans voler celui d\'un autre message', async () => {
+    partFindUnique.mockResolvedValue({ type: 'user', userId: 'u-author' });
     mockProcessExplicitLinksInContent.mockResolvedValue({ processedContent: 'm+tok-abc', trackingLinks: [] });
-    await processor.saveMessage({ ...baseData, content: '[[https://example.com]]' });
-
+    await processor.saveMessage({ ...baseData, content: '<https://example.com>' });
     const { where } = tlUpdateMany.mock.calls[0][0] as any;
     const fresh = { token: 'tok-abc', conversationId: baseData.conversationId };
 
@@ -870,7 +861,7 @@ describe('MessageProcessor.saveMessage', () => {
     const SOURCE_MSG_ID = 'orig-msg-id';
 
     it('copie les pièces jointes de la source et NE supprime PAS le message créé', async () => {
-      msgFindUnique.mockResolvedValue({ sender: { id: SENDER_ID, userId: 'user-1' } });
+      msgFindUnique.mockResolvedValue({ ...ORDINARY_SOURCE, sender: { id: SENDER_ID, userId: 'user-1' } });
       partFindUnique.mockResolvedValue({ id: SENDER_ID, userId: 'user-1' });
       const origAtt = {
         id: 'orig-att', fileName: 'file.jpg', originalName: 'file.jpg',
@@ -887,7 +878,7 @@ describe('MessageProcessor.saveMessage', () => {
     });
 
     it('supprime le message ORPHELIN quand le contrôle de propriété refuse la copie', async () => {
-      msgFindUnique.mockResolvedValue({ sender: { id: 'someone-else', userId: 'user-2' } });
+      msgFindUnique.mockResolvedValue({ ...ORDINARY_SOURCE, sender: { id: 'someone-else', userId: 'user-2' } });
       partFindUnique.mockResolvedValue({ id: SENDER_ID, userId: 'user-1' });
 
       await expect(
@@ -899,7 +890,7 @@ describe('MessageProcessor.saveMessage', () => {
     });
 
     it('supprime le message ORPHELIN quand la source ne porte aucune pièce jointe', async () => {
-      msgFindUnique.mockResolvedValue({ sender: { id: SENDER_ID, userId: 'user-1' } });
+      msgFindUnique.mockResolvedValue({ ...ORDINARY_SOURCE, sender: { id: SENDER_ID, userId: 'user-1' } });
       partFindUnique.mockResolvedValue({ id: SENDER_ID, userId: 'user-1' });
       attFindMany.mockResolvedValue([]);
 
@@ -912,7 +903,7 @@ describe('MessageProcessor.saveMessage', () => {
     });
 
     it('remonte l’échec de copie même si la suppression de la ligne orpheline échoue elle-même', async () => {
-      msgFindUnique.mockResolvedValue({ sender: { id: 'someone-else', userId: 'user-2' } });
+      msgFindUnique.mockResolvedValue({ ...ORDINARY_SOURCE, sender: { id: 'someone-else', userId: 'user-2' } });
       partFindUnique.mockResolvedValue({ id: SENDER_ID, userId: 'user-1' });
       msgDelete.mockRejectedValue(new Error('delete failed'));
 
@@ -981,7 +972,7 @@ describe('MessageProcessor.saveMessage', () => {
      * différents.
      */
     it('diffusion (copyAttachmentsFromMessageId) : persiste "image", pas "text"', async () => {
-      msgFindUnique.mockResolvedValue({ sender: { id: SENDER_ID, userId: 'user-1' } });
+      msgFindUnique.mockResolvedValue({ ...ORDINARY_SOURCE, sender: { id: SENDER_ID, userId: 'user-1' } });
       partFindUnique.mockResolvedValue({ id: SENDER_ID, userId: 'user-1' });
       attFindMany.mockResolvedValue([imageAtt]);
       attCreate.mockResolvedValue({ ...imageAtt });
@@ -998,7 +989,7 @@ describe('MessageProcessor.saveMessage', () => {
     it('transfert d’une carte de visite (text/vcard) : "file", jamais "text"', async () => {
       attFindMany.mockResolvedValue([cardAtt]);
       attCreate.mockResolvedValue({ ...cardAtt });
-      await processor.saveMessage({ ...baseData, content: '', forwardedFromId: 'orig-msg-id' });
+      await processor.saveMessage({ ...baseData, content: '', forwardedFromId: 'orig-msg-id', forwardImposes: null });
       expect(persistedMessageType()).toBe('file');
     });
 
@@ -1010,7 +1001,7 @@ describe('MessageProcessor.saveMessage', () => {
     it('lot hétérogène : "file", pas le type de la PREMIÈRE pièce jointe', async () => {
       attFindMany.mockResolvedValue([imageAtt, videoAtt]);
       attCreate.mockResolvedValue({ ...imageAtt });
-      await processor.saveMessage({ ...baseData, content: '', forwardedFromId: 'orig-msg-id' });
+      await processor.saveMessage({ ...baseData, content: '', forwardedFromId: 'orig-msg-id', forwardImposes: null });
       expect(persistedMessageType()).toBe('file');
     });
 
@@ -1111,7 +1102,8 @@ describe('MessageProcessor — notification flows', () => {
 
   it('sends mention notifications when mentionedUserIds are provided', async () => {
     msgCreate.mockResolvedValue(makeMessage());
-    partFindUnique.mockResolvedValue({ userId: 'sender-user' });
+    // #14066 — l'expéditeur est un membre ACTIF : sinon il ne cite personne.
+    partFindUnique.mockResolvedValue({ userId: 'sender-user', isActive: true, conversationId: CONV_ID });
     userFindUnique.mockResolvedValue({ username: 'sender', displayName: 'Sender', avatar: null });
     convFindUnique.mockResolvedValue({ title: 'T', type: 'group', participants: [{ userId: 'sender-user' }, { userId: 'mentioned-user' }] });
     attFindMany.mockResolvedValue([]);
@@ -1451,7 +1443,7 @@ describe('MessageProcessor — branch gap coverage', () => {
     // First call (in copyForwardedAttachments) throws; second call (refresh) returns []
     attFindMany.mockRejectedValueOnce(new Error('db fail')).mockResolvedValue([]);
     const processor = makeProcessor();
-    await expect(processor.saveMessage({ ...baseData, forwardedFromId: 'orig-id' })).resolves.toBeDefined();
+    await expect(processor.saveMessage({ ...baseData, forwardedFromId: 'orig-id', forwardImposes: null })).resolves.toBeDefined();
   });
 
   // Lines 740-741 — already-transcribed audio skip log
@@ -1478,7 +1470,7 @@ describe('MessageProcessor — branch gap coverage', () => {
     mockCreateTrackingLink.mockResolvedValue({ token: 'tok-xyz' });
     tlUpdateMany.mockRejectedValue(new Error('update failed'));
     const processor = makeProcessor();
-    await expect(processor.saveMessage({ ...baseData, content: '[[https://example.com]]' })).resolves.toBeDefined();
+    await expect(processor.saveMessage({ ...baseData, content: '<https://example.com>' })).resolves.toBeDefined();
   });
 
   // Line 1099 — catch block in triggerAllNotifications
@@ -1562,6 +1554,7 @@ describe('MessageProcessor — B.1/B.2 send path optimizations', () => {
     });
 
     it('calls processMentionsInDB when explicit mentionedUserIds provided even without @', async () => {
+      partFindUnique.mockResolvedValue({ userId: 'sender-user', isActive: true, conversationId: CONV_ID });
       mockValidateMentionPermissions.mockResolvedValue({ validUserIds: [SENDER_ID] });
       userFindMany.mockResolvedValue([{ username: 'alice' }]);
       msgUpdate.mockResolvedValue(makeMessage());

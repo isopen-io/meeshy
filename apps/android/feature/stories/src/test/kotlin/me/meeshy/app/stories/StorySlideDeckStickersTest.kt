@@ -141,10 +141,10 @@ class StorySlideDeckStickersTest {
     }
 
     @Test
-    fun `transformSticker clamps an extreme pinch`() {
+    fun `transformSticker keeps an extreme pinch`() {
         val deck = StorySlideDeck.single("a").addStickerToSelected(sticker("s1"))
         val after = deck.transformSticker("s1", scaleBy = 99f, rotateByDeg = 0f)
-        assertThat(after.selectedSlide.stickers.single().scale).isEqualTo(StoryTextElement.MAX_SCALE)
+        assertThat(after.selectedSlide.stickers.single().scale).isEqualTo(99f)
     }
 
     @Test

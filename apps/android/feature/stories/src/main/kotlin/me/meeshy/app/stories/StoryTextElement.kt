@@ -1,19 +1,62 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.StoryKeyframe
+import me.meeshy.sdk.model.StoryTextEffect
 import me.meeshy.sdk.model.StoryTextObject
+import me.meeshy.sdk.model.scene.SceneObjectScalePolicy
+import me.meeshy.sdk.model.scene.StoryElementTiming
+import me.meeshy.sdk.model.scene.StoryTextBackground
+import me.meeshy.sdk.model.scene.StoryTextBidi
+import me.meeshy.sdk.model.scene.StoryTextDirection
+import me.meeshy.sdk.model.scene.StoryTextFade
+import me.meeshy.sdk.model.scene.StoryTextLanguage
+import me.meeshy.sdk.model.scene.StoryTextFrameShape
+import me.meeshy.sdk.model.scene.StoryTextFrame
+import me.meeshy.sdk.model.scene.StoryTextFace
+import me.meeshy.sdk.model.scene.StoryTextGenericFamily
+import me.meeshy.sdk.model.scene.StoryTextOutline
+import me.meeshy.sdk.model.scene.StoryTextStyleCatalog
+import me.meeshy.sdk.model.scene.StoryTextStyleKind
 
 /**
- * The visual style of an on-canvas text element — parity with the iOS
- * `StoryTextStyle` cases (bold / neon / typewriter / handwriting / classic). The
- * [wire] string is exactly what the gateway expects on `StoryTextObject.textStyle`,
- * so the UI never hardcodes the literal.
+ * The visual style of an on-canvas text element — the eighteen iOS `StoryTextStyle` cases, DERIVED from the shared
+ * [StoryTextStyleCatalog] (the single source of truth: wire value, face, weight). The [wire] string is exactly what
+ * the gateway expects on `StoryTextObject.textStyle`, so the UI never hardcodes the literal. The composer's picker
+ * offers [composerOffered]; the other cases are read, kept and republished untouched.
  */
-enum class StoryTextStyle(val wire: String) {
-    BOLD("bold"),
-    NEON("neon"),
-    TYPEWRITER("typewriter"),
-    HANDWRITING("handwriting"),
-    CLASSIC("classic"),
+enum class StoryTextStyle(val kind: StoryTextStyleKind) {
+    BOLD(StoryTextStyleKind.BOLD),
+    NEON(StoryTextStyleKind.NEON),
+    TYPEWRITER(StoryTextStyleKind.TYPEWRITER),
+    HANDWRITING(StoryTextStyleKind.HANDWRITING),
+    CLASSIC(StoryTextStyleKind.CLASSIC),
+    CALLIGRAPHY(StoryTextStyleKind.CALLIGRAPHY),
+    CARTOON(StoryTextStyleKind.CARTOON),
+    FUTURISTIC(StoryTextStyleKind.FUTURISTIC),
+    FANTASY(StoryTextStyleKind.FANTASY),
+    CURVE(StoryTextStyleKind.CURVE),
+    TAG(StoryTextStyleKind.TAG),
+    ITALIC(StoryTextStyleKind.ITALIC),
+    RETRO(StoryTextStyleKind.RETRO),
+    ELEGANT(StoryTextStyleKind.ELEGANT),
+    POSTER(StoryTextStyleKind.POSTER),
+    BUBBLE(StoryTextStyleKind.BUBBLE),
+    NOTE(StoryTextStyleKind.NOTE),
+    BRUSH(StoryTextStyleKind.BRUSH),
+    ;
+
+    val wire: String get() = kind.wire
+
+    companion object {
+        /** The five styles the composer's picker offers (selector unchanged by the 18-style reader). */
+        val composerOffered: List<StoryTextStyle> = listOf(BOLD, NEON, TYPEWRITER, HANDWRITING, CLASSIC)
+
+        /** The style a wire `textStyle` names — absent or unknown reads as [BOLD], iOS `parsedTextStyle` parity. */
+        fun fromWire(raw: String?): StoryTextStyle {
+            val kind = StoryTextStyleCatalog.fromWire(raw)
+            return entries.first { it.kind == kind }
+        }
+    }
 }
 
 /**
@@ -54,49 +97,33 @@ data class StoryTextTypography(
     val family: StoryTextFontFamily,
     val letterSpacingEm: Float,
     val glow: Boolean,
+    val face: StoryTextFace = StoryTextFace.SYSTEM_SANS,
+)
+
+/** Maps a style to its [StoryTextTypography], straight from the shared catalog. */
+fun StoryTextStyle.typography(): StoryTextTypography = StoryTextTypography(
+    fontWeight = kind.fontWeight,
+    italic = kind.italic,
+    family = when (kind.generic) {
+        StoryTextGenericFamily.SANS -> StoryTextFontFamily.SANS
+        StoryTextGenericFamily.SERIF -> StoryTextFontFamily.SERIF
+        StoryTextGenericFamily.MONOSPACE -> StoryTextFontFamily.MONOSPACE
+        StoryTextGenericFamily.CURSIVE -> StoryTextFontFamily.CURSIVE
+    },
+    letterSpacingEm = kind.letterSpacingEm,
+    glow = kind.glow,
+    face = kind.face,
 )
 
 /**
- * Maps a style to its [StoryTextTypography] — the iOS-parity look of each of the five
- * cases. Total over the enum so the canvas Composable stays glue.
+ * The EFFECT this composer's style PRESET carries (#4870). A style is a FONT and nothing
+ * else; what glows is the orthogonal [StoryTextEffect] axis. This composer has no effect
+ * control yet, so its "neon" preset — which the canvas shows glowing ([StoryTextTypography.glow])
+ * — publishes that glow on the axis, for the reader here, on the web and on iOS alike to see
+ * what the author saw. Retire this preset the day the composer gets its own effect control.
  */
-fun StoryTextStyle.typography(): StoryTextTypography = when (this) {
-    StoryTextStyle.BOLD -> StoryTextTypography(
-        fontWeight = 800,
-        italic = false,
-        family = StoryTextFontFamily.SANS,
-        letterSpacingEm = 0f,
-        glow = false,
-    )
-    StoryTextStyle.NEON -> StoryTextTypography(
-        fontWeight = 700,
-        italic = false,
-        family = StoryTextFontFamily.SANS,
-        letterSpacingEm = 0.05f,
-        glow = true,
-    )
-    StoryTextStyle.TYPEWRITER -> StoryTextTypography(
-        fontWeight = 500,
-        italic = false,
-        family = StoryTextFontFamily.MONOSPACE,
-        letterSpacingEm = 0.03f,
-        glow = false,
-    )
-    StoryTextStyle.HANDWRITING -> StoryTextTypography(
-        fontWeight = 400,
-        italic = true,
-        family = StoryTextFontFamily.CURSIVE,
-        letterSpacingEm = 0f,
-        glow = false,
-    )
-    StoryTextStyle.CLASSIC -> StoryTextTypography(
-        fontWeight = 400,
-        italic = false,
-        family = StoryTextFontFamily.SERIF,
-        letterSpacingEm = 0f,
-        glow = false,
-    )
-}
+fun StoryTextStyle.presetEffect(): StoryTextEffect =
+    if (typography().glow) StoryTextEffect.GLOW else StoryTextEffect.NONE
 
 /**
  * Pure, immutable model of one on-canvas text element of a story slide. Position
@@ -119,12 +146,22 @@ data class StoryTextElement(
     val size: StoryTextSize = StoryTextSize.DEFAULT,
     val background: StoryTextBackground = StoryTextBackground.None,
     val outline: StoryTextOutline = StoryTextOutline(),
+    /** Forme, marge et liseré de la boîte (#13561) — les champs `frame*` d'iOS. */
+    val frame: StoryTextFrame = StoryTextFrame(),
+    /** La langue dans laquelle l'auteur ÉCRIT (#13534) ; `null` : la langue de la publication. */
+    val sourceLanguage: String? = null,
     val fade: StoryTextFade = StoryTextFade(),
     val timing: StoryElementTiming = StoryElementTiming(),
     val x: Float = CENTER,
     val y: Float = CENTER,
     val scale: Float = DEFAULT_SCALE,
     val rotationDeg: Float = DEFAULT_ROTATION,
+    /** La personne qu'une pastille de mention ÉPINGLÉE nomme (#13846) ; `null` : un texte ordinaire. */
+    val referenceUserId: String? = null,
+    /** Son rang dans l'ordre UNIQUE de la scène (#13852, le `zIndex` d'iOS) : le plus haut se peint au-dessus. */
+    val zIndex: Int = 0,
+    /** Ses images clés (#14271, iOS `StoryTextObject.keyframes`) : temps relatif à son départ, pose figée à cet instant. */
+    val keyframes: List<StoryKeyframe> = emptyList(),
 ) {
     /** True once the element carries content worth publishing (non-blank text). */
     val isPublishable: Boolean get() = text.isNotBlank()
@@ -140,30 +177,42 @@ data class StoryTextElement(
     val baseDirection: StoryTextDirection get() = StoryTextBidi.resolveBaseDirection(text)
 
     /**
+     * The glyph size, in pixels, this element is laid out at on a scene [canvasWidthPx]
+     * wide — BEFORE its own [scale], which the scene applies as a layer transform. Same
+     * law as the reader ([StoryTextMetrics]), so what the author sees is what is read.
+     */
+    /** The glyph outline stroke in pixels on a scene [canvasWidthPx] wide, before [scale] — the reader's law (#12324). */
+    fun previewOutlinePx(canvasWidthPx: Float): Float =
+        StoryTextMetrics.designPx(outline.width.toDouble(), 1.0, canvasWidthPx)
+
+
+    fun previewFontPx(canvasWidthPx: Float): Float =
+        StoryTextMetrics.fontPx(size.designSize.toDouble(), 1.0, canvasWidthPx)
+
+    /**
      * A copy with every continuous field pulled back into its legal range: [x]/[y]
-     * clamped into the canvas `0f..1f`, [scale] clamped to `[MIN_SCALE, MAX_SCALE]`,
-     * and [rotationDeg] wrapped into `(-180, 180]`. Total even on a non-finite input
-     * (`NaN`/∞ collapse to the field's neutral value), so the deck reducer and the
-     * canvas Composable can stay glue while the only real rules live in one place.
+     * clamped into the canvas `0f..1f`, [scale] kept as written when finite and positive
+     * ([servedScale] — no ceiling, #14298), and [rotationDeg] wrapped into `(-180, 180]`.
+     * Total even on a non-finite input (`NaN`/∞ collapse to the field's neutral value),
+     * so the deck reducer and the canvas Composable can stay glue.
      */
     fun normalised(): StoryTextElement = copy(
         x = clampCoord(x),
         y = clampCoord(y),
-        scale = clampScale(scale),
+        scale = servedScale(scale),
         rotationDeg = normaliseRotation(rotationDeg),
     )
 
     /**
      * Applies one incremental pinch/rotate gesture: multiplies [scale] by the
-     * gesture's [scaleBy] factor (clamped to `[MIN_SCALE, MAX_SCALE]`) and adds
-     * [rotateByDeg] to [rotationDeg] (wrapped into `(-180, 180]`), leaving the
-     * position, text, and style untouched. A degenerate factor (`scaleBy <= 0`,
-     * `NaN`) collapses to the neutral value rather than producing a broken element.
-     * The clamp/wrap rules — the only real logic — live here so the Composable that
-     * binds `detectTransformGestures` stays glue.
+     * gesture's [scaleBy] factor — no ceiling, and never below the scale at which its
+     * glyphs are 5 design pixels high ([SceneObjectScalePolicy], #14298) — and adds
+     * [rotateByDeg] to [rotationDeg] (wrapped into `(-180, 180]`), leaving the position,
+     * text, and style untouched. A degenerate factor (`scaleBy <= 0`, `NaN`) leaves the
+     * scale where it is.
      */
     fun transformed(scaleBy: Float, rotateByDeg: Float): StoryTextElement = copy(
-        scale = clampScale(scale * scaleBy),
+        scale = SceneObjectScalePolicy.settled(scale, scaleBy, smallestSideDesignPx = size.designSize.toDouble()),
         rotationDeg = normaliseRotation(rotationDeg + rotateByDeg),
     )
 
@@ -196,11 +245,19 @@ data class StoryTextElement(
         backgroundStyle = background.toStyleWire(),
         borderColor = outline.color?.takeIf { outline.width > StoryTextOutline.NONE_WIDTH },
         borderWidth = outline.width.takeIf { it > StoryTextOutline.NONE_WIDTH }?.toDouble(),
+        frameShape = frame.shape.wire.takeIf { frame.shape != StoryTextFrameShape.ROUNDED },
+        framePaddingScale = frame.paddingScale.takeIf { it != StoryTextFrame.DEFAULT_PADDING }?.toDouble(),
+        frameBorderWidth = frame.borderWidth.takeIf { it > 0f }?.toDouble(),
+        frameBorderColor = frame.borderColor?.takeIf { frame.borderWidth > 0f },
+        textEffect = style.presetEffect().wireOrNull,
         fadeIn = fade.inSeconds.takeIf { it > StoryTextFade.NONE_SECONDS }?.toDouble(),
         fadeOut = fade.outSeconds.takeIf { it > StoryTextFade.NONE_SECONDS }?.toDouble(),
         startTime = timing.startSeconds.takeIf { it > StoryElementTiming.NONE_SECONDS }?.toDouble(),
         duration = timing.durationSeconds.takeIf { it > StoryElementTiming.NONE_SECONDS }?.toDouble(),
-        sourceLanguage = sourceLanguage,
+        sourceLanguage = StoryTextLanguage.normalised(this.sourceLanguage) ?: sourceLanguage,
+        referenceUserId = referenceUserId,
+        zIndex = zIndex,
+        keyframes = keyframes.takeIf { it.isNotEmpty() },
     )
 
     companion object {
@@ -213,12 +270,6 @@ data class StoryTextElement(
         /** At-rest scale — the element renders at its intrinsic size. */
         const val DEFAULT_SCALE: Float = 1f
 
-        /** Smallest a user can pinch an element down to (still legible/grabbable). */
-        const val MIN_SCALE: Float = 0.3f
-
-        /** Pinch ceiling — parity with the canvas/image-viewer 4× cap. */
-        const val MAX_SCALE: Float = 4f
-
         /** At-rest rotation — upright. */
         const val DEFAULT_ROTATION: Float = 0f
 
@@ -226,12 +277,11 @@ data class StoryTextElement(
         fun clampCoord(value: Float): Float = value.coerceIn(0f, 1f)
 
         /**
-         * Clamps a scale factor into `[MIN_SCALE, MAX_SCALE]`. A non-finite value
-         * (`NaN`/∞ — e.g. a divide-by-zero gesture) collapses to [DEFAULT_SCALE]
-         * rather than poisoning the element.
+         * A written scale factor as every reader renders it: kept when finite and
+         * positive, however large or small; zero, negative or non-finite collapses to
+         * [DEFAULT_SCALE] rather than poisoning the element.
          */
-        fun clampScale(value: Float): Float =
-            if (value.isFinite()) value.coerceIn(MIN_SCALE, MAX_SCALE) else DEFAULT_SCALE
+        fun servedScale(value: Float): Float = SceneObjectScalePolicy.served(value)
 
         /**
          * Wraps a rotation in degrees into the canonical half-open turn `(-180, 180]`,

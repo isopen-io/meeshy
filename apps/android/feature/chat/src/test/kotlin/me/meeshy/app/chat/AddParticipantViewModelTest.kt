@@ -16,6 +16,7 @@ import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.UserSearchResult
 import me.meeshy.sdk.user.UserRepository
+import kotlinx.coroutines.launch
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -143,5 +144,50 @@ class AddParticipantViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { conversations.addParticipant("c1", "u1") }
+    }
+
+    @Test
+    fun a_refused_add_raises_a_localizable_failure_flag_and_an_error_haptic() = runTest(dispatcher) {
+        val users = mockk<UserRepository>()
+        val conversations = mockk<ConversationRepository>()
+        coEvery { users.searchUsers("ali", any(), any()) } returns NetworkResult.Success(results("u1"))
+        coEvery { conversations.addParticipant("c1", "u1") } returns NetworkResult.Failure(ApiError(message = "raw"))
+        val vm = viewModel(users = users, conversations = conversations)
+        val haptics = mutableListOf<FeedbackHaptic>()
+        val job = kotlinx.coroutines.CoroutineScope(dispatcher).launch { vm.haptics.collect { haptics += it } }
+        vm.load("c1", existingMemberIds = emptySet())
+        vm.onQueryChange("ali")
+        advanceUntilIdle()
+
+        vm.addParticipant("u1") {}
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.addFailed).isTrue()
+        assertThat(haptics).containsExactly(FeedbackHaptic.ERROR)
+        vm.onQueryChange("alic")
+        assertThat(vm.state.value.addFailed).isFalse()
+        job.cancel()
+    }
+
+    @Test
+    fun a_confirmed_add_emits_a_success_haptic_and_marks_the_row_already_member() = runTest(dispatcher) {
+        val users = mockk<UserRepository>()
+        val conversations = mockk<ConversationRepository>()
+        coEvery { users.searchUsers("ali", any(), any()) } returns NetworkResult.Success(results("u1"))
+        coEvery { conversations.addParticipant("c1", "u1") } returns NetworkResult.Success(Unit)
+        val vm = viewModel(users = users, conversations = conversations)
+        val haptics = mutableListOf<FeedbackHaptic>()
+        val job = kotlinx.coroutines.CoroutineScope(dispatcher).launch { vm.haptics.collect { haptics += it } }
+        vm.load("c1", existingMemberIds = emptySet())
+        vm.onQueryChange("ali")
+        advanceUntilIdle()
+
+        vm.addParticipant("u1") {}
+        advanceUntilIdle()
+
+        assertThat(haptics).containsExactly(FeedbackHaptic.SUCCESS)
+        assertThat(vm.state.value.results.first().isMember).isTrue()
+        assertThat(vm.state.value.addFailed).isFalse()
+        job.cancel()
     }
 }

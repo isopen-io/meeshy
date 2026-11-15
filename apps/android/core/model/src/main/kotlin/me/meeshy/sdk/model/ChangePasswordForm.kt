@@ -2,9 +2,11 @@ package me.meeshy.sdk.model
 
 /**
  * Pure validation for the change-password form — feature-parity §L. Port of iOS
- * `ChangePasswordView.isValid` / `passwordsMatch`, hardened with one SOTA gate iOS
+ * `ChangePasswordView.isValid` / `passwordsMatch`, hardened with one gate iOS
  * lacks: the new password must differ from the current one (a no-op change is
  * pointless, and a dedicated hint tells the user why the button stays disabled).
+ * That gate only applies when the account HAS a password; setting a first one
+ * (magic-link accounts, #9186) asks for no current password at all.
  *
  * Every gate is surfaced individually so the screen can render per-rule hint rows;
  * [canSubmit] is the single verdict the submit button reads.
@@ -35,11 +37,25 @@ object ChangePasswordForm {
         currentPassword: String,
         newPassword: String,
         confirmPassword: String,
-    ): ChangePasswordValidation =
-        ChangePasswordValidation(
-            isCurrentPresent = currentPassword.isNotEmpty(),
+        hasPassword: Boolean? = null,
+    ): ChangePasswordValidation {
+        val asksCurrent = asksCurrentPassword(hasPassword)
+        return ChangePasswordValidation(
+            isCurrentPresent = !asksCurrent || currentPassword.isNotEmpty(),
             isNewLongEnough = newPassword.length >= ChangePasswordValidation.MIN_LENGTH,
             passwordsMatch = newPassword.isNotEmpty() && newPassword == confirmPassword,
-            isNewDifferent = newPassword.isEmpty() || newPassword != currentPassword,
+            isNewDifferent = !asksCurrent || newPassword.isEmpty() || newPassword != currentPassword,
         )
+    }
+
+    /**
+     * Le champ « mot de passe actuel » n'est retiré que si la passerelle a DIT que le
+     * compte n'en a pas (iOS `PasswordChangeForm.asksCurrentPassword`) ; une lecture
+     * inconnue garde le formulaire d'un changement.
+     */
+    fun asksCurrentPassword(hasPassword: Boolean?): Boolean = hasPassword != false
+
+    /** Ce qui part sous `currentPassword` : rien quand le compte n'en a pas. */
+    fun submittedCurrent(currentPassword: String, hasPassword: Boolean?): String? =
+        if (asksCurrentPassword(hasPassword)) currentPassword else null
 }

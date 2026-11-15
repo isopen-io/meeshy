@@ -296,4 +296,57 @@ final class StoryCanvasPlaybackHealthTests: XCTestCase {
         XCTAssertFalse(view._readerAudioMixerForTesting.hasStartedPlayback,
                        "The mixer must stay unscheduled until the pre-cache Task populates it")
     }
+
+    // MARK: - #6757 : une pause utilisateur n'est pas un stall — même lu AVANT elle
+
+    /// La pause gèle le `CADisplayLink`, seul site qui sonde la santé de lecture.
+    /// Un stall lu juste avant la pause (clip arrivé à sa fin, buffering) restait
+    /// donc affiché pendant TOUTE la pause — le spinner des captures 244 à 247 —
+    /// alors que `StoryPlaybackHealth` dit « pause utilisateur ⇒ progresse ».
+    func test_userPause_settlesAStallReadBeforeIt() {
+        let view = makeCanvasView(slide: makeSolidColorSlide())
+        var events: [Bool] = []
+        view.onPlaybackProgressing = { events.append($0) }
+
+        view._refreshPlaybackHealthForTesting(status: .waitingToPlayAtSpecifiedRate, failed: false, now: 100)
+        XCTAssertEqual(events, [false], "préalable : un stall est lu pendant la lecture")
+
+        view.setPaused(true)
+        drainMainQueue()
+
+        XCTAssertEqual(events, [false, true],
+                       "La pause utilisateur n'est pas un stall : le signal repasse à « progresse » sans attendre un tick que la pause a gelé")
+        XCTAssertFalse(view.isPlaybackStalled)
+    }
+
+    /// Le watchdog mesure un stall CONTINU de lecture ; le temps passé en pause
+    /// n'en est pas. Compté, il expirait pendant la pause et la reprise forçait
+    /// « progresse » sur une vidéo encore bloquée : la story filait à la suivante
+    /// sans indicateur (captures 247 → 248, lecteur refermé dès la reprise).
+    func test_pauseTime_neverCountsTowardTheStallWatchdog() {
+        let view = makeCanvasView(slide: makeSolidColorSlide())
+        var events: [Bool] = []
+        view.onPlaybackProgressing = { events.append($0) }
+        let watchdog = StoryCanvasUIView.playbackStallWatchdogSeconds
+
+        view._refreshPlaybackHealthForTesting(status: .waitingToPlayAtSpecifiedRate, failed: false, now: 100)
+        view.setPaused(true)
+        drainMainQueue()
+        view.setPaused(false)
+
+        view._refreshPlaybackHealthForTesting(status: .waitingToPlayAtSpecifiedRate, failed: false, now: 100 + watchdog + 1)
+
+        XCTAssertTrue(view.isPlaybackStalled,
+                      "Un vrai stall après la reprise gèle toujours la timeline : la pause n'a pas consommé le watchdog")
+        XCTAssertEqual(events.last, false, "… et l'indicateur de stall est de nouveau demandé")
+    }
+
+    /// Le solde de pause passe par la file principale (l'hôte appelle `setPaused`
+    /// depuis `updateUIView`, où rendre un état est interdit) : on la vide sans
+    /// laisser tourner le `CADisplayLink`, gelé par la pause.
+    private func drainMainQueue() {
+        let drained = expectation(description: "file principale vidée")
+        DispatchQueue.main.async { drained.fulfill() }
+        wait(for: [drained], timeout: 1)
+    }
 }

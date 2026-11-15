@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- « Mes cercles » (#13938) : android-only tant que les clés circles.* ne sont pas au catalogue iOS de dev ; texte exact de la branche lot/ui-cercles-ios-13938. Partagées par « Mes cercles » et le profil. -->
+<resources>
+    <string name="circles_action_request">اطلب %1$s</string>
+    <string name="circles_action_request_a11y">اطلب من %2$s المستوى %1$s</string>
+    <string name="circles_action_unlink">إلغاء الرابط</string>
+    <string name="circles_promote_friend">لنكن أصدقاء</string>
+    <string name="circles_promote_close">لنكن مقرّبين</string>
+    <string name="circles_promote_blood">لنصبح دمًا واحدًا</string>
+    <string name="circles_promote_friend_a11y">لنكن أصدقاء: طلب مستوى صديق من %1$s</string>
+    <string name="circles_promote_close_a11y">لنكن مقرّبين: طلب مستوى مقرّب من %1$s</string>
+    <string name="circles_promote_blood_a11y">لنصبح دمًا واحدًا: طلب مستوى دم من %1$s</string>
+    <string name="circles_demote_close">لنبقَ مقرّبين</string>
+    <string name="circles_demote_friend">لنبقَ أصدقاء</string>
+    <string name="circles_demote_acquaintance">لنبقَ على تواصل</string>
+    <string name="circles_demote_close_confirm_title">الاكتفاء بالبقاء مقرّبين مع %1$s؟</string>
+    <string name="circles_demote_friend_confirm_title">الاكتفاء بالبقاء أصدقاء مع %1$s؟</string>
+    <string name="circles_demote_acquaintance_confirm_title">الاكتفاء بالبقاء على تواصل مع %1$s؟</string>
+    <string name="circles_confirm_cancel">إلغاء</string>
+    <string name="circles_demote_confirm_body">سينتقل %1$s من %2$s إلى %3$s. ستفقد ما يشاركه %2$s. لن يتم إشعار %1$s ولن يستطيع أن يطلب منك الصعود مجددًا قبل 30 يومًا.</string>
+    <string name="circles_level_acquaintance">معرفة</string>
+    <string name="circles_level_blood">الدم</string>
+    <string name="circles_level_close">مقرّب</string>
+    <string name="circles_level_community">المجتمع</string>
+    <string name="circles_level_friend">صديق</string>
+    <string name="circles_level_public">عام</string>
+    <string name="circles_missing_audio">رسالة صوتية</string>
+    <string name="circles_missing_message">رسالة</string>
+    <string name="circles_missing_other">تفاعل آخر</string>
+    <string name="circles_missing_post_view">مشاهدة منشور</string>
+    <string name="circles_missing_reaction">تفاعل</string>
+    <string name="circles_notice_lower_failed">تعذّر حفظ التعديل.</string>
+    <string name="circles_pending">تم إرسال الطلب · %1$s</string>
+    <string name="circles_progress_eligible">جاهز للمستوى %1$s</string>
+    <string name="circles_progress_missing">ينقص: %1$s</string>
+    <string name="circles_progress_weeks">أسابيع متتالية: %1$d من %2$d</string>
+    <string name="circles_unlink_confirm_body">لن تكونا مرتبطين بعد الآن: لا دائرة مشتركة. لن يتم إشعار %1$s ولن يستطيع أن يطلب منك رابطًا قبل 30 يومًا.</string>
+    <string name="circles_unlink_confirm_title">إلغاء الرابط مع %1$s؟</string>
+</resources>

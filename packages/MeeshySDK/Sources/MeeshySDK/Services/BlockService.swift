@@ -39,50 +39,91 @@ public protocol BlockServiceProviding: Sendable {
     func refreshCache() async
 }
 
-public final class BlockService: ObservableObject, BlockServiceProviding, @unchecked Sendable {
+public final class BlockService: ObservableObject, BlockServiceProviding, Sendable {
     public static let shared = BlockService()
     private let api: APIClientProviding
 
-    @Published public private(set) var blockedUserIds: Set<String> = []
+    private let blockedIds = Locked<Set<String>>([])
+    private let willChange = Locked(uncheckedState: ObservableObjectPublisher())
 
-    init(api: APIClientProviding = APIClient.shared) {
+    public var objectWillChange: ObservableObjectPublisher {
+        willChange.mutateUnchecked { $0 }
+    }
+
+    public var blockedUserIds: Set<String> {
+        blockedIds.read { $0 }
+    }
+
+    /// #10503 — un blocage ABOUTI est un signal négatif (`block`) ; la file
+    /// durable émet les siens à l'envoi.
+    private let socialEvents: SocialEventsV2Hub
+
+    init(api: APIClientProviding = APIClient.shared, socialEvents: SocialEventsV2Hub = .shared) {
         self.api = api
+        self.socialEvents = socialEvents
+    }
+
+    @MainActor
+    private func publish(_ change: @Sendable (inout Set<String>) -> Void) {
+        objectWillChange.send()
+        blockedIds.mutate(change)
     }
 
     // MARK: - Block
 
+    /// Bloquer — `PUT`, parce que c'est une APPARTENANCE À UN ENSEMBLE (#4164).
+    ///
+    /// `POST /users/{id}/block` modélisait une ACTION et rendait `409` au
+    /// second appel. Or l'état visé est atteint dans les deux cas, et ce 409
+    /// obligeait l'appelant à traiter comme une erreur ce qui est un succès —
+    /// à commencer par la file hors ligne, qui rejoue des mutations
+    /// enregistrées avant une mise à jour.
     public func blockUser(userId: String) async throws {
-        let _: APIResponse<BlockActionResponse> = try await api.post(
-            endpoint: "/users/\(userId)/block",
-            body: [String: String]()
+        let _: APIResponse<BlockActionResponse> = try await api.request(
+            DirectoryEndpoint.blocksByUserId(userId: userId),
+            method: "PUT",
+            body: try JSONEncoder().encode([String: String]()),
+            queryItems: nil
         )
-        await MainActor.run { _ = blockedUserIds.insert(userId) }
+        await MainActor.run { publish { _ = $0.insert(userId) } }
+        socialEvents.emit(SocialInteractionEvents.negative(.block, on: SocialTarget(kind: .profile, id: userId)))
     }
 
     // MARK: - Unblock
 
     public func unblockUser(userId: String) async throws {
-        let _ = try await api.delete(
-            endpoint: "/users/\(userId)/block"
+        let _: APIResponse<BlockActionResponse> = try await api.request(
+            DirectoryEndpoint.blocksByUserId(userId: userId),
+            method: "DELETE",
+            body: nil,
+            queryItems: nil
         )
-        await MainActor.run { _ = blockedUserIds.remove(userId) }
+        await MainActor.run { publish { _ = $0.remove(userId) } }
     }
 
     // MARK: - List
 
+    /// La liste, désormais BORNÉE côté serveur (100 par page).
+    ///
+    /// Elle ne l'était par rien : ni page, ni curseur, ni plafond. Ce site sert
+    /// à hydrater la blocklist locale, dont la taille est celle d'un usage
+    /// humain ; il lit donc la première page et s'en tient là. Le jour où un
+    /// compte dépasse le plafond, c'est le curseur de la route qui répondra —
+    /// pas une liste sans fin.
     public func listBlockedUsers() async throws -> [BlockedUser] {
         let response: APIResponse<[BlockedUser]> = try await api.request(
-            endpoint: "/users/me/blocked-users"
+            DirectoryEndpoint.blocks
         )
         let users = response.data
-        await MainActor.run { blockedUserIds = Set(users.map(\.id)) }
+        let ids = Set(users.map(\.id))
+        await MainActor.run { publish { $0 = ids } }
         return users
     }
 
     // MARK: - Local Cache
 
     public func isBlocked(userId: String) -> Bool {
-        blockedUserIds.contains(userId)
+        blockedIds.read { $0.contains(userId) }
     }
 
     /// R6-4 — mutation PUREMENT LOCALE de la blocklist canonique, sans réseau.
@@ -95,9 +136,9 @@ public final class BlockService: ObservableObject, BlockServiceProviding, @unche
     @MainActor
     public func setBlockedOptimistic(userId: String, blocked: Bool) {
         if blocked {
-            blockedUserIds.insert(userId)
+            publish { _ = $0.insert(userId) }
         } else {
-            blockedUserIds.remove(userId)
+            publish { _ = $0.remove(userId) }
         }
     }
 
@@ -111,7 +152,7 @@ public final class BlockService: ObservableObject, BlockServiceProviding, @unche
     /// sur le même device) ne voie pas la blocklist du user précédent avant
     /// le prochain refresh réseau. Câblée depuis `AuthManager.logout()`.
     public func reset() async {
-        await MainActor.run { blockedUserIds.removeAll() }
+        await MainActor.run { publish { $0.removeAll() } }
     }
 }
 

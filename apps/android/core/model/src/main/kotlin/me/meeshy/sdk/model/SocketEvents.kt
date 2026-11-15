@@ -1,7 +1,22 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
+import me.meeshy.sdk.model.preview.ConversationActiveCall
+import me.meeshy.sdk.model.preview.ConversationLastReaction
+import me.meeshy.sdk.model.preview.ConversationPreviewSticker
+import me.meeshy.sdk.model.preview.LastMessageAttachmentSummary
+import me.meeshy.sdk.model.preview.LastMessageCallSummary
+import me.meeshy.sdk.model.preview.LastMessageSystemEvent
+import me.meeshy.sdk.model.preview.PreviewFieldUpdate
+import me.meeshy.sdk.model.preview.PreviewFieldUpdateSerializer
+import me.meeshy.sdk.model.preview.TolerantAttachmentSummarySerializer
+import me.meeshy.sdk.model.preview.TolerantCallSummarySerializer
+import me.meeshy.sdk.model.preview.TolerantPreviewStickerSerializer
+import me.meeshy.sdk.model.preview.TolerantSystemEventSerializer
 
 /** Mirrors iOS MessageSocketManager event payloads (Sockets/MessageSocketManager.swift). */
 
@@ -10,6 +25,18 @@ data class MessageDeletedEvent(
     val messageId: String,
     val conversationId: String,
     val deletedAt: String? = null,
+)
+
+/**
+ * `message:expired` — server-initiated twin of `message:deleted` for a
+ * self-destructing message burned by `ExpiredMessagesCleanupService` rather
+ * than a user request. Same local effect (drop the bubble), distinct name so
+ * a consumer that needs to tell the two apart can.
+ */
+@Serializable
+data class MessageExpiredEvent(
+    val messageId: String,
+    val conversationId: String,
 )
 
 /** `message:pinned` — a conversation member pinned [messageId]. */
@@ -40,16 +67,46 @@ data class TypingEvent(
 data class ReactionUpdateEvent(
     val messageId: String,
     val conversationId: String,
-    val userId: String,
+    /**
+     * Le `User.id` de l'acteur. **Optionnel au contrat** (`types/reaction.ts`), et c'est délibéré :
+     * la passerelle le pose toujours, mais une charge PERSISTÉE puis rejouée hors ligne peut dater
+     * d'avant son ajout.
+     *
+     * **Piège ARMÉ, pas panne mesurée** (#18070) : aucun émetteur ne l'omet aujourd'hui — les trois
+     * sites passent une chaîne — donc rien ne tombe. Exigé ici, il FERAIT lever
+     * `MissingFieldException` sur ce rejeu, avalée par `SocketInboundRoute.guarded`, et la réaction
+     * n'arriverait jamais sans que rien ne rougisse. On ne laisse pas un piège armé au motif que
+     * personne n'a marché dessus.
+     */
+    val userId: String? = null,
     val emoji: String,
+    /** Le `Participant.id` de l'acteur (clé d'auteur d'un tiers) ; absent d'une vieille passerelle. */
+    val participantId: String? = null,
+    /** L'agrégat servi APRÈS l'action : borne autoritaire du nombre de lignes d'un emoji. */
+    val aggregation: ReactionEventAggregation? = null,
+)
+
+/**
+ * « Cet écho est-il le mien ? » — site UNIQUE de la question, parce qu'elle a un piège : [userId] est
+ * désormais nullable, et `null == null` rendrait VRAI pour un lecteur anonyme (dont l'identité est nulle
+ * elle aussi) face à la réaction d'un tiers. Un acteur INCONNU n'est jamais moi.
+ */
+fun ReactionUpdateEvent.isOwnEcho(currentUserId: String?): Boolean =
+    userId != null && userId == currentUserId
+
+@Serializable
+data class ReactionEventAggregation(
+    val emoji: String? = null,
     val count: Int = 0,
+    val participantIds: List<String>? = null,
 )
 
 @Serializable
 data class UnreadUpdateEvent(
     val conversationId: String,
     val unreadCount: Int,
-    val totalUnread: Int = 0,
+    /** Le pont ✦ à trois états : absent = non calculé (on garde), `null` = effacer, objet = remplacer. */
+    val bridge: BridgeAnnouncement = BridgeAnnouncement.NotComputed,
 )
 
 /**
@@ -70,14 +127,61 @@ data class UserStatusEvent(
     val lastActiveAt: String? = null,
 )
 
+/**
+ * Une traduction de texte servie par `message:translation`.
+ *
+ * Fidèle à `packages/shared/types/socketio-events/translation.ts` (`TranslationData`), dont
+ * `buildTranslationEvent.ts` est l'unique producteur. Seules les clés que les consommateurs
+ * utilisent sont déclarées — `ignoreUnknownKeys = true` tolère les autres (`id`, `cacheKey`,
+ * `cached`, `confidenceScore`, `createdAt`), et les déclarer n'ajouterait que de la dérive à tenir.
+ *
+ * La lecture est INDULGENTE (chaînes vides par défaut) pour la raison de [TranscriptionReadyEvent] :
+ * une trame malformée doit être écartée par la fusion no-op, jamais lever au décodage et emporter
+ * l'événement entier.
+ */
+@Serializable
+data class TranslationEntry(
+    val targetLanguage: String = "",
+    val translatedContent: String = "",
+    val sourceLanguage: String? = null,
+    val translationModel: String? = null,
+)
+
+/**
+ * `message:translation` — le rattrapage du Prisme Linguistique : le pipeline traduit APRÈS la création
+ * (`message:new` porte `translations` VIDE), donc un message reçu reste dans la langue de l'expéditeur
+ * jusqu'à cet événement.
+ *
+ * **La charge IMBRIQUE ses traductions et ne porte PAS de `conversationId`** — le contrat
+ * (`TranslationEvent`, `translation.ts`) et son émetteur unique (`buildTranslationEvent.ts`) sont
+ * formels, et le web le documente à l'identique (`realtime-apply.ts`, `applyMessageTranslation` :
+ * on retrouve le fil en balayant le cache, jamais par un champ de la charge).
+ *
+ * Ce miroir déclarait une forme PLATE — `conversationId`, `targetLanguage`, `translatedContent` à la
+ * racine, tous requis — que la passerelle n'a jamais émise : chaque trame levait
+ * `MissingFieldException`, avalée par `SocketInboundRoute.guarded`. Aucune traduction temps réel
+ * n'atteignait Android, et le Prisme devenait fonction d'un rechargement REST (#18069).
+ */
 @Serializable
 data class TranslationEvent(
     val messageId: String,
-    val conversationId: String,
-    val targetLanguage: String,
-    val translatedContent: String,
-    val translationModel: String? = null,
-)
+    val translations: List<TranslationEntry> = emptyList(),
+) {
+    /** Les traductions à FUSIONNER : sans langue ni texte, il n'y a rien à écrire dans la bulle. */
+    val usable: List<TranslationEntry>
+        get() = translations.filter { it.targetLanguage.isNotBlank() && it.translatedContent.isNotBlank() }
+
+    /**
+     * Les langues dont la passerelle a RÉPONDU, texte vide compris.
+     *
+     * Distinct de [usable], et la distinction n'est pas cosmétique : ce qui efface un état
+     * « traduction en cours » est l'ARRIVÉE d'une réponse, pas sa qualité. Confondre les deux
+     * laisserait l'attente allumée POUR TOUJOURS sur une trame à texte vide — l'écran promet une
+     * traduction que plus aucun événement ne viendra solder.
+     */
+    val answeredLanguages: List<String>
+        get() = translations.map { it.targetLanguage }.filter { it.isNotBlank() }.distinct()
+}
 
 /**
  * A ready voice-note transcript — the payload of `audio:transcription-ready`.
@@ -109,6 +213,9 @@ data class TranscriptionPayload(
     val confidence: Double? = null,
     val durationMs: Long? = null,
     val source: String? = null,
+    /** Les segments servis (`segments[].startMs/endMs` ou secondes) : le karaoké et les locuteurs de la fiche. */
+    val segments: List<TranscriptionSegment>? = null,
+    val speakerCount: Int? = null,
 )
 
 /**
@@ -144,18 +251,31 @@ data class TranslatedAudioPayload(
     val quality: Double? = null,
     val voiceModelId: String? = null,
     val ttsModel: String? = null,
+    val segments: List<TranscriptionSegment>? = null,
+    val speakerCount: Int? = null,
 )
 
+/**
+ * `conversation:encryption-changed` (#12522) — la bascule du régime d'une conversation. Aucun
+ * contenu n'y voyage. Tous les modes repeignent la conversation en cache (#13794) ; l'activation du bout en
+ * bout scelle en plus le registre (#12956), et une rétrogradation annoncée est ignorée (#12949).
+ */
 @Serializable
-data class AttachmentUpdatedEvent(
-    val messageId: String,
+data class ConversationEncryptionChangedSocketEvent(
     val conversationId: String,
-    val attachmentId: String,
-    val status: String? = null,
-    val url: String? = null,
-    val thumbnailUrl: String? = null,
+    val mode: String? = null,
+    val epoch: Int? = null,
 )
 
+/**
+ * `conversation:updated` — métadonnées (titre, avatar…) ET groupe « dernier message » en clés plates
+ * `lastMessage*` (#7545, #7548), miroir de `ConversationUpdatedEvent` (iOS).
+ *
+ * Tout est facultatif : le chemin message-driven ne porte que l'identité et l'aperçu, un renommage que
+ * les métadonnées. Les clés qui peuvent légitimement VIDER la ligne (identité, auteur, carte du Prisme,
+ * réaction, appel) sont tri-état ([PreviewFieldUpdate]) ; chaque sous-champ du contrat est tolérant,
+ * pour qu'une forme inattendue d'UN champ neuf ne jette jamais l'événement qui porte aussi le rang.
+ */
 @Serializable
 data class ConversationUpdatedSocketEvent(
     val conversationId: String,
@@ -163,7 +283,110 @@ data class ConversationUpdatedSocketEvent(
     val description: String? = null,
     val avatar: String? = null,
     val updatedAt: String? = null,
+    val banner: String? = null,
+    val defaultWriteRole: String? = null,
+    val isAnnouncementChannel: Boolean? = null,
+    val slowModeSeconds: Int? = null,
+    val autoTranslateEnabled: Boolean? = null,
+    val lastMessageAt: String? = null,
+    @Serializable(with = StringUpdateSerializer::class)
+    val lastMessageId: PreviewFieldUpdate<String> = PreviewFieldUpdate.Unchanged,
+    val lastMessagePreview: String? = null,
+    @Serializable(with = StringUpdateSerializer::class)
+    val lastMessageSenderName: PreviewFieldUpdate<String> = PreviewFieldUpdate.Unchanged,
+    val lastMessageSenderUserId: String? = null,
+    @Serializable(with = TranslationsUpdateSerializer::class)
+    val lastMessageTranslations: PreviewFieldUpdate<Map<String, String>> = PreviewFieldUpdate.Unchanged,
+    val lastMessageOriginalLanguage: String? = null,
+    @Serializable(with = TolerantSharedPlaceSerializer::class)
+    val location: SharedPlace? = null,
+    val senderId: String? = null,
+    /** Vrai quand le serveur a RECALCULÉ l'aperçu : seul cas où le groupe peut reculer dans le temps. */
+    val previewRecalculated: Boolean = false,
+    @Serializable(with = LossyApiMessageAttachmentListOrNullSerializer::class)
+    val lastMessageAttachments: List<ApiMessageAttachment>? = null,
+    val lastMessageAttachmentCount: Int? = null,
+    val lastMessageIsBlurred: Boolean? = null,
+    val lastMessageIsViewOnce: Boolean? = null,
+    val lastMessageExpiresAt: String? = null,
+    val lastMessageType: String? = null,
+    val lastMessageEffectFlags: Int? = null,
+    val lastMessageEphemeralDuration: Int? = null,
+    val lastMessageIsEncrypted: Boolean? = null,
+    val lastMessageIsForwarded: Boolean? = null,
+    @Serializable(with = TolerantSystemEventSerializer::class)
+    val lastMessageSystemEvent: LastMessageSystemEvent? = null,
+    @Serializable(with = TolerantCallSummarySerializer::class)
+    val lastMessageCallSummary: LastMessageCallSummary? = null,
+    @Serializable(with = TolerantAttachmentSummarySerializer::class)
+    val lastMessageAttachmentSummary: LastMessageAttachmentSummary? = null,
+    @Serializable(with = TolerantPreviewStickerSerializer::class)
+    val lastMessageSticker: ConversationPreviewSticker? = null,
+    @Serializable(with = LastReactionUpdateSerializer::class)
+    val lastReaction: PreviewFieldUpdate<ConversationLastReaction> = PreviewFieldUpdate.Unchanged,
+    @Serializable(with = ActiveCallUpdateSerializer::class)
+    val activeCall: PreviewFieldUpdate<ConversationActiveCall> = PreviewFieldUpdate.Unchanged,
+    val listRankAt: String? = null,
+) {
+    /** La nature du message nommé ; `null` quand AUCUNE de ses clés n'est sur le fil. */
+    val lastMessageNature: LastMessageNature?
+        get() = LastMessageNature(
+            messageType = lastMessageType,
+            effectFlags = lastMessageEffectFlags,
+            ephemeralDuration = lastMessageEphemeralDuration,
+            isEncrypted = lastMessageIsEncrypted ?: false,
+            isForwarded = lastMessageIsForwarded ?: false,
+            systemEvent = lastMessageSystemEvent,
+            callSummary = lastMessageCallSummary,
+            attachmentSummary = lastMessageAttachmentSummary,
+            sticker = lastMessageSticker,
+        ).takeUnless { it.isEmpty }
+}
+
+internal object StringUpdateSerializer :
+    KSerializer<PreviewFieldUpdate<String>> by PreviewFieldUpdateSerializer(String.serializer())
+
+internal object TranslationsUpdateSerializer :
+    KSerializer<PreviewFieldUpdate<Map<String, String>>> by PreviewFieldUpdateSerializer(
+        MapSerializer(String.serializer(), String.serializer()),
+    )
+
+internal object LastReactionUpdateSerializer :
+    KSerializer<PreviewFieldUpdate<ConversationLastReaction>> by PreviewFieldUpdateSerializer(ConversationLastReaction.serializer())
+
+internal object ActiveCallUpdateSerializer :
+    KSerializer<PreviewFieldUpdate<ConversationActiveCall>> by PreviewFieldUpdateSerializer(ConversationActiveCall.serializer())
+
+/**
+ * `conversation:participant-joined` — l'effectif ACTIF APRÈS l'adhésion est absolu : à POSER, pas à
+ * incrémenter (un delta ne converge pas après un événement manqué). Absent d'un serveur ancien.
+ */
+@Serializable
+data class ParticipantJoinedEvent(
+    val conversationId: String,
+    val userId: String? = null,
+    val displayName: String? = null,
+    val joinedAt: String? = null,
+    val memberCount: Int? = null,
+    val memberCountCapped: Boolean? = null,
 )
+
+/**
+ * `conversation:participant-unbanned` — la levée du bannissement ; l'appartenance n'est rendue que si
+ * le bannissement l'avait prise ([membershipRestored] absent se lit `true`).
+ */
+@Serializable
+data class ParticipantUnbannedEvent(
+    val conversationId: String,
+    val userId: String? = null,
+    val participantId: String? = null,
+    val membershipRestored: Boolean? = null,
+    val memberCount: Int? = null,
+    val memberCountCapped: Boolean? = null,
+) {
+    fun names(identity: String): Boolean =
+        identity.isNotEmpty() && (identity == userId || identity == participantId)
+}
 
 /**
  * `conversation:participant-left`.
@@ -226,6 +449,16 @@ data class ParticipantRoleUpdatedEvent(
     val conversationId: String,
     val userId: String,
     @SerialName("newRole") val role: String,
+    val updatedBy: String? = null,
+    @Serializable(with = TolerantRoleParticipantSerializer::class)
+    val participant: ParticipantRoleUpdatedParticipantInfo? = null,
+    /**
+     * #15987 — la capacité de la CIBLE recalculée pour son nouveau rang, présente
+     * dans le seul exemplaire remis à sa room personnelle. Absente (serveur
+     * antérieur, autre destinataire) ou illisible : `null`.
+     */
+    @Serializable(with = TolerantViewerCapabilitiesSerializer::class)
+    val viewerCapabilities: ConversationViewerCapabilities? = null,
 )
 
 /**
@@ -243,7 +476,29 @@ data class PresenceSnapshotEvent(
 @Serializable
 data class ConversationDeletedSocketEvent(
     val conversationId: String,
-    val deletedAt: String? = null,
+)
+
+/**
+ * `conversation:restored` — la MONTANTE du couple `delete-for-me` /
+ * `restore-for-me` (#4389, moitié cliente de #4344).
+ *
+ * Diffusée sur la room PERSONNELLE du restaurateur, jamais celle de la
+ * conversation : le geste est personnel, et les autres membres n'ont rien à
+ * apprendre — la conversation ne les a jamais quittés.
+ *
+ * `userId` est déclaré comme sur [ConversationDeletedSocketEvent]… à ceci près
+ * que la descendante ne le porte PAS ici : son modèle Kotlin s'arrête à
+ * `conversationId` + `deletedAt`, quand la passerelle émet bien `userId`. On ne
+ * corrige pas ce voisin dans ce lot, mais on ne reproduit pas son omission :
+ * `userId` est ce qui permettra de distinguer une restauration à soi d'un
+ * événement reçu par erreur, le jour où cette room cesse d'être une preuve.
+ * Il est OPTIONNEL par prudence de décodage — kotlinx échoue sur le document
+ * ENTIER quand un champ requis manque, et un tel échec est silencieux.
+ */
+@Serializable
+data class ConversationRestoredSocketEvent(
+    val conversationId: String,
+    val userId: String? = null,
 )
 
 /** `conversation:closed` — the whole conversation ended for EVERY participant
@@ -256,11 +511,36 @@ data class ConversationClosedSocketEvent(
     val closedAt: String? = null,
 )
 
+/**
+ * `conversation:obsoleted` (#14645) — la conversation a été rendue OBSOLÈTE : son contenu n'est plus
+ * lisible et ses données partent après [purgeAfter]. Toujours précédé de [ConversationClosedSocketEvent]
+ * (les anciens clients la retirent par celui-là) ; les deux retirent la ligne et ferment le fil.
+ */
+@Serializable
+data class ConversationObsoletedSocketEvent(
+    val conversationId: String,
+    val obsoletedBy: String? = null,
+    val obsoletedAt: String? = null,
+    val purgeAfter: String? = null,
+)
+
+/** La réponse de `DELETE /conversations/:id/obsolete` (#14645), idempotente : un second appel rend les mêmes dates. */
+@Serializable
+data class ConversationObsoleted(
+    val conversationId: String,
+    val obsoletedAt: String? = null,
+    val purgeAfter: String? = null,
+)
+
 @Serializable
 data class ReadStatusSummary(
     val totalMembers: Int = 0,
     val deliveredCount: Int = 0,
     val readCount: Int = 0,
+    /** Le message que ce résumé décrit ; `null` d'une passerelle d'avant #7433 (résumé non nommé). */
+    val messageId: String? = null,
+    /** L'instant où le dernier destinataire actif a lu le message ; `null` tant qu'il en manque un. */
+    val readByAllAt: String? = null,
 )
 
 @Serializable
@@ -331,6 +611,15 @@ data class SocketPostRepostedData(
 data class SocketPostLikedData(
     val postId: String,
     val userId: String,
+    /**
+     * Le total ABSOLU de j'aime APRÈS le geste, servi par la passerelle.
+     *
+     * **La clé du fil est `likeCount`, sans `s`** (`types/post.ts`, et
+     * `PostReactionHandler.ts` qui pose `likeCount: post.likeCount`). Le miroir lisait `likesCount` :
+     * `ignoreUnknownKeys` laissait passer la trame, le champ prenait son défaut, et les quatre écrans
+     * sociaux d'Android écrivaient **0** par-dessus le compteur juste à chaque événement (#18157).
+     */
+    @SerialName("likeCount")
     val likesCount: Int = 0,
 )
 
@@ -338,13 +627,21 @@ data class SocketPostLikedData(
 data class SocketPostUnlikedData(
     val postId: String,
     val userId: String,
+    /**
+     * Le total ABSOLU de j'aime APRÈS le geste, servi par la passerelle.
+     *
+     * **La clé du fil est `likeCount`, sans `s`** (`types/post.ts`, et
+     * `PostReactionHandler.ts` qui pose `likeCount: post.likeCount`). Le miroir lisait `likesCount` :
+     * `ignoreUnknownKeys` laissait passer la trame, le champ prenait son défaut, et les quatre écrans
+     * sociaux d'Android écrivaient **0** par-dessus le compteur juste à chaque événement (#18157).
+     */
+    @SerialName("likeCount")
     val likesCount: Int = 0,
 )
 
 @Serializable
 data class SocketPostDeletedData(
     val postId: String,
-    val deletedAt: String? = null,
 )
 
 /**
@@ -365,6 +662,8 @@ data class SocketCommentAddedData(
     val postId: String,
     val comment: ApiPostComment,
     val commentCount: Int = 0,
+    /** La clé d'idempotence de l'auteur : l'écho remplace sa ligne optimiste (id = cmid) au lieu de la doubler. */
+    val clientMutationId: String? = null,
 )
 
 /**
@@ -384,6 +683,15 @@ data class SocketCommentLikedData(
     val postId: String,
     val commentId: String,
     val userId: String,
+    /**
+     * Le total ABSOLU de j'aime APRÈS le geste, servi par la passerelle.
+     *
+     * **La clé du fil est `likeCount`, sans `s`** (`types/post.ts`, et
+     * `PostReactionHandler.ts` qui pose `likeCount: post.likeCount`). Le miroir lisait `likesCount` :
+     * `ignoreUnknownKeys` laissait passer la trame, le champ prenait son défaut, et les quatre écrans
+     * sociaux d'Android écrivaient **0** par-dessus le compteur juste à chaque événement (#18157).
+     */
+    @SerialName("likeCount")
     val likesCount: Int = 0,
 )
 
@@ -443,7 +751,8 @@ data class SocketStoryUpdatedData(
 data class SocketStoryViewedData(
     val storyId: String,
     val viewerId: String,
-    val viewedAt: String? = null,
+    /** Total autoritatif de vues porté par l'événement (iOS `SocketStoryViewedData.viewCount`) ; `null` d'une ancienne passerelle. */
+    val viewCount: Int? = null,
 )
 
 @Serializable
@@ -556,6 +865,27 @@ data class SocketCommentTranslationUpdatedData(
 )
 
 /**
+ * `media:caption-translation-updated` — the gateway translated a
+ * `PostMedia.caption` server-side and broadcasts the finished entry (#6280).
+ * DISTINCT of [SocketPostTranslationUpdatedData] (translates `Post.content`) and
+ * of any audio-track translation event: this one targets a MEDIA's caption,
+ * never `Post.content` or a transcription. [commentId] is set when the media
+ * belongs to a comment rather than the post itself — `null` for a post-level
+ * media, mirroring iOS `SocketMediaCaptionTranslationUpdatedData`.
+ * [translation] has the same shape as [ApiMediaCaptionTranslationEntry] — text
+ * plus optional model/confidence/timestamps — so it decodes straight into one;
+ * a blank text is a no-op the merge ignores.
+ */
+@Serializable
+data class SocketMediaCaptionTranslationUpdatedData(
+    val mediaId: String,
+    val postId: String,
+    val commentId: String? = null,
+    val language: String,
+    val translation: ApiMediaCaptionTranslationEntry,
+)
+
+/**
  * `status:unreacted` — a user removed their reaction from a mood status. Same shape as
  * [SocketStatusReactedData] (mirror of the shared `StatusUnreactedEventData`): it carries
  * no aggregate count, so the bar decrements the emoji by one (clamped ≥0, dropping the
@@ -568,3 +898,6 @@ data class SocketStatusUnreactedData(
     val userId: String,
     val emoji: String,
 )
+
+/** `message:translation-shared` (#9899) : la même forme que la lecture REST, enveloppe scellée comprise. */
+typealias MessageTranslationSharedEvent = me.meeshy.sdk.model.translation.SharedTranslation

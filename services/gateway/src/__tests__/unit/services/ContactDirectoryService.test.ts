@@ -21,6 +21,7 @@ jest.mock('../../../services/PresenceVisibilityService', () => ({
 
 import { ContactDirectoryService } from '../../../services/ContactDirectoryService';
 import { normalizeContacts } from '../../../utils/contact-identifiers';
+import { matchesMongoWhere } from '../../helpers/mongo-where';
 
 const OWNER_ID = '507f1f77bcf86cd799439011';
 const AWA_ID = '507f1f77bcf86cd799439022';
@@ -56,13 +57,31 @@ function makeUser(overrides: Record<string, unknown> = {}) {
 function makePrisma(options: {
   users?: unknown[];
   owner?: { blockedUserIds: string[] } | null;
+  /** Qui a BLOQUÉ le demandeur — la requête POSITIVE de `blockedIdsAroundViewer`. */
+  bloqueurs?: string[];
   existing?: unknown[];
   count?: number;
 } = {}) {
-  const { users = [], owner = { blockedUserIds: [] }, existing = [], count = existing.length } = options;
+  const {
+    users = [],
+    owner = { blockedUserIds: [] },
+    bloqueurs = [],
+    existing = [],
+    count = existing.length,
+  } = options;
   return {
+    // « Ne pas être trouvé » (#8104) : la loi de découvrabilité lit les
+    // préférences de confidentialité ; aucun document ⇒ personne ne se cache.
+    userPreferences: { findMany: jest.fn<any>(async () => []) },
+    userPreference: { findMany: jest.fn<any>(async () => []) },
     user: {
-      findMany: jest.fn<any>().mockResolvedValue(users),
+      // Le double DISTINGUE les deux requêtes : « qui m'a bloqué ? »
+      // (`blockedUserIds: { has }`) et les CANDIDATS du carnet. Un double qui
+      // rend les mêmes lignes aux deux ferait passer tout candidat pour un
+      // bloqueur.
+      findMany: jest.fn<any>().mockImplementation(async (args: any) =>
+        args?.where?.blockedUserIds ? bloqueurs.map((id: string) => ({ id })) : users
+      ),
       findUnique: jest.fn<any>().mockResolvedValue(owner),
     },
     userContact: {
@@ -73,6 +92,10 @@ function makePrisma(options: {
     },
   } as any;
 }
+
+/** Les arguments de la requête CANDIDATS — jamais celle des bloqueurs. */
+const argsCandidats = (prisma: any) =>
+  (prisma.user.findMany.mock.calls as any[]).filter((c) => !c[0]?.where?.blockedUserIds).at(-1)![0];
 
 describe('ContactDirectoryService.match', () => {
   it('matches a contact by normalized phone number', async () => {
@@ -129,16 +152,47 @@ describe('ContactDirectoryService.match', () => {
     );
   });
 
-  it('excludes users the owner has blocked', async () => {
-    const prisma = makePrisma({ users: [], owner: { blockedUserIds: [BOB_ID] } });
+  it('excludes users the owner has blocked — and those who blocked the owner', async () => {
+    const prisma = makePrisma({
+      users: [],
+      owner: { blockedUserIds: [BOB_ID] },
+      bloqueurs: [AWA_ID],
+    });
     const service = new ContactDirectoryService(prisma);
     const contacts = normalizeContacts([{ emails: ['bob@test.com'] }]);
 
     await service.match({ contacts, excludeUserId: OWNER_ID });
 
-    const where = prisma.user.findMany.mock.calls[0][0].where;
-    expect(where.id.notIn).toEqual(expect.arrayContaining([OWNER_ID, BOB_ID]));
-    expect(where.NOT).toEqual({ blockedUserIds: { has: OWNER_ID } });
+    const where = argsCandidats(prisma).where;
+    expect(where.id.notIn).toEqual(expect.arrayContaining([OWNER_ID, BOB_ID, AWA_ID]));
+    // Le blocage vit dans une LISTE, jamais dans un filtre de tableau NIÉ :
+    // `NOT: { blockedUserIds: { has } }` écarte aussi les comptes qui n'ont
+    // jamais écrit la colonne (#6529, #6452), et l'`isSet` posé pour y
+    // répondre n'existe pas sur une liste scalaire — Prisma refusait la
+    // requête, donc 500 (#6811).
+    expect(where.NOT).toBeUndefined();
+    expect(JSON.stringify(where)).not.toContain('blockedUserIds');
+  });
+
+  /**
+   * Preuve par ÉVALUATION contre un vrai document (#6529), pas seulement par
+   * inspection de la forme du `where` — c'est exactement ce qui a laissé
+   * passer le même défaut sur `contactLookupScope()` jusqu'à #6452 : la forme
+   * `NOT: { blockedUserIds: { has } }` a l'air juste, elle EST juste pour un
+   * champ posé, et ne l'est plus pour un champ ABSENT (ce que Prisma traduit
+   * sur le connecteur MongoDB — voir `__tests__/helpers/mongo-where.ts`).
+   */
+  it('rend un contact dont le compte Meeshy ne porte AUCUNE clé `blockedUserIds`', async () => {
+    const prisma = makePrisma({ users: [] });
+    const service = new ContactDirectoryService(prisma);
+    const contacts = normalizeContacts([{ emails: ['awa@test.com'] }]);
+
+    await service.match({ contacts, excludeUserId: OWNER_ID });
+
+    const where = argsCandidats(prisma).where;
+    const compteSansBlocageDeclare = { id: AWA_ID, isActive: true, email: 'awa@test.com' };
+
+    expect(matchesMongoWhere(compteSansBlocageDeclare, where)).toBe(true);
   });
 
   it('does not hit the database when no contact carries an identifier', async () => {
@@ -235,6 +289,214 @@ describe('ContactDirectoryService.sync', () => {
       where: { ownerId: OWNER_ID, contactKey: { notIn: [] } },
     });
     expect(result.synced).toBe(0);
+  });
+
+  it('stamps every upsert with the request receipt clock in merge mode', async () => {
+    const prisma = makePrisma({ users: [] });
+    const service = new ContactDirectoryService(prisma);
+    const contacts = normalizeContacts([{ emails: ['awa@test.com'] }]);
+    const receivedAt = new Date('2026-08-25T10:00:00.000Z');
+
+    await service.sync({ ownerId: OWNER_ID, contacts, mode: 'merge', receivedAt });
+
+    const args = prisma.userContact.upsert.mock.calls[0][0];
+    expect(args.create.lastSyncedAt).toEqual(receivedAt);
+    expect(args.update.lastSyncedAt).toEqual(receivedAt);
+  });
+
+  it('stamps every upsert with the request receipt clock in replace mode', async () => {
+    const prisma = makePrisma({ users: [] });
+    const service = new ContactDirectoryService(prisma);
+    const contacts = normalizeContacts([{ emails: ['awa@test.com'] }]);
+    const receivedAt = new Date('2026-08-25T10:00:00.000Z');
+
+    await service.sync({ ownerId: OWNER_ID, contacts, mode: 'replace', receivedAt });
+
+    const args = prisma.userContact.upsert.mock.calls[0][0];
+    expect(args.create.lastSyncedAt).toEqual(receivedAt);
+    expect(args.update.lastSyncedAt).toEqual(receivedAt);
+  });
+});
+
+/**
+ * Synchronisation par lots (contrat K2) : la purge historique par
+ * `contactKey notIn` ne connaît qu'UN lot — structurellement incompatible
+ * avec plusieurs requêtes successives pour un même carnet complet. Dès que
+ * `syncStartedAt` et/ou `isFinalBatch` est fourni, `mode` est ignoré pour la
+ * purge : aucun lot intermédiaire ne supprime rien, et seul le lot marqué
+ * `isFinalBatch: true` purge — par filigrane `lastSyncedAt`, jamais par
+ * ensemble de clés.
+ */
+describe('ContactDirectoryService.sync — synchronisation par lots (filigrane)', () => {
+  it('never purges a non-final batch, even in replace mode', async () => {
+    const prisma = makePrisma({ users: [] });
+    const service = new ContactDirectoryService(prisma);
+    const contacts = normalizeContacts([{ emails: ['awa@test.com'] }]);
+
+    const result = await service.sync({
+      ownerId: OWNER_ID,
+      contacts,
+      mode: 'replace',
+      syncStartedAt: new Date('2026-08-25T10:00:00.000Z'),
+      isFinalBatch: false,
+    });
+
+    expect(prisma.userContact.deleteMany).not.toHaveBeenCalled();
+    expect(result.removed).toBe(0);
+  });
+
+  it('never purges a batch that only carries a syncStartedAt token (still not final)', async () => {
+    const prisma = makePrisma({ users: [] });
+    const service = new ContactDirectoryService(prisma);
+    const contacts = normalizeContacts([{ emails: ['awa@test.com'] }]);
+
+    const result = await service.sync({
+      ownerId: OWNER_ID,
+      contacts,
+      mode: 'replace',
+      syncStartedAt: new Date('2026-08-25T10:00:00.000Z'),
+    });
+
+    expect(prisma.userContact.deleteMany).not.toHaveBeenCalled();
+    expect(result.removed).toBe(0);
+  });
+
+  it('purges everything not touched since the watermark on the final batch', async () => {
+    const prisma = makePrisma({ users: [] });
+    const service = new ContactDirectoryService(prisma);
+    const contacts = normalizeContacts([{ emails: ['awa@test.com'] }]);
+    const watermark = new Date('2026-08-25T10:00:00.000Z');
+    const receivedAt = new Date('2026-08-25T10:00:05.000Z');
+
+    const result = await service.sync({
+      ownerId: OWNER_ID,
+      contacts,
+      syncStartedAt: watermark,
+      isFinalBatch: true,
+      receivedAt,
+    });
+
+    expect(prisma.userContact.deleteMany).toHaveBeenCalledWith({
+      where: { ownerId: OWNER_ID, lastSyncedAt: { lt: watermark } },
+    });
+    expect(result.removed).toBe(3);
+  });
+
+  it('falls back to the request receipt clock as the watermark when no token was supplied (single-batch sync)', async () => {
+    const prisma = makePrisma({ users: [] });
+    const service = new ContactDirectoryService(prisma);
+    const contacts = normalizeContacts([{ emails: ['awa@test.com'] }]);
+    const receivedAt = new Date('2026-08-25T10:00:00.000Z');
+
+    await service.sync({ ownerId: OWNER_ID, contacts, isFinalBatch: true, receivedAt });
+
+    expect(prisma.userContact.deleteMany).toHaveBeenCalledWith({
+      where: { ownerId: OWNER_ID, lastSyncedAt: { lt: receivedAt } },
+    });
+  });
+
+  it('skips the purge when the watermark is older than 24h', async () => {
+    const prisma = makePrisma({ users: [] });
+    const service = new ContactDirectoryService(prisma);
+    const contacts = normalizeContacts([{ emails: ['awa@test.com'] }]);
+    const receivedAt = new Date('2026-08-25T10:00:00.000Z');
+    const staleWatermark = new Date(receivedAt.getTime() - 25 * 60 * 60 * 1000);
+
+    const result = await service.sync({
+      ownerId: OWNER_ID,
+      contacts,
+      syncStartedAt: staleWatermark,
+      isFinalBatch: true,
+      receivedAt,
+    });
+
+    expect(prisma.userContact.deleteMany).not.toHaveBeenCalled();
+    expect(result.removed).toBe(0);
+  });
+
+  it('still purges when the watermark is exactly 24h old (boundary is inclusive)', async () => {
+    const prisma = makePrisma({ users: [] });
+    const service = new ContactDirectoryService(prisma);
+    const contacts = normalizeContacts([{ emails: ['awa@test.com'] }]);
+    const receivedAt = new Date('2026-08-25T10:00:00.000Z');
+    const boundaryWatermark = new Date(receivedAt.getTime() - 24 * 60 * 60 * 1000);
+
+    const result = await service.sync({
+      ownerId: OWNER_ID,
+      contacts,
+      syncStartedAt: boundaryWatermark,
+      isFinalBatch: true,
+      receivedAt,
+    });
+
+    expect(prisma.userContact.deleteMany).toHaveBeenCalled();
+    expect(result.removed).toBe(3);
+  });
+
+  it('is idempotent on a duplicated final batch replayed with the same watermark', async () => {
+    const prisma = makePrisma({ users: [] });
+    const service = new ContactDirectoryService(prisma);
+    const contacts = normalizeContacts([{ emails: ['awa@test.com'] }]);
+    const watermark = new Date('2026-08-25T10:00:00.000Z');
+    const receivedAt = new Date('2026-08-25T10:00:05.000Z');
+
+    await service.sync({ ownerId: OWNER_ID, contacts, syncStartedAt: watermark, isFinalBatch: true, receivedAt });
+    const result = await service.sync({ ownerId: OWNER_ID, contacts, syncStartedAt: watermark, isFinalBatch: true, receivedAt });
+
+    expect(prisma.userContact.deleteMany).toHaveBeenCalledTimes(2);
+    expect(prisma.userContact.deleteMany).toHaveBeenLastCalledWith({
+      where: { ownerId: OWNER_ID, lastSyncedAt: { lt: watermark } },
+    });
+    expect(result.removed).toBe(3);
+  });
+
+  it('purges a batch received out of order the same way, since the watermark is order-independent', async () => {
+    const prisma = makePrisma({ users: [] });
+    const service = new ContactDirectoryService(prisma);
+    const contacts = normalizeContacts([{ emails: ['awa@test.com'] }]);
+    const watermark = new Date('2026-08-25T10:00:00.000Z');
+    const laterReceivedAt = new Date('2026-08-25T10:05:00.000Z');
+    const earlierReceivedAt = new Date('2026-08-25T10:02:00.000Z');
+
+    await service.sync({ ownerId: OWNER_ID, contacts, syncStartedAt: watermark, isFinalBatch: true, receivedAt: laterReceivedAt });
+    await service.sync({ ownerId: OWNER_ID, contacts, syncStartedAt: watermark, isFinalBatch: true, receivedAt: earlierReceivedAt });
+
+    for (const call of prisma.userContact.deleteMany.mock.calls) {
+      expect(call[0]).toEqual({ where: { ownerId: OWNER_ID, lastSyncedAt: { lt: watermark } } });
+    }
+  });
+
+  it('clamps a watermark ahead of the request receipt clock, so the final batch never purges what it just wrote', async () => {
+    const prisma = makePrisma({ users: [] });
+    const service = new ContactDirectoryService(prisma);
+    const contacts = normalizeContacts([{ emails: ['awa@test.com'] }]);
+    const receivedAt = new Date('2026-08-25T10:00:00.000Z');
+    const futureWatermark = new Date(receivedAt.getTime() + 3000);
+
+    await service.sync({
+      ownerId: OWNER_ID,
+      contacts,
+      syncStartedAt: futureWatermark,
+      isFinalBatch: true,
+      receivedAt,
+    });
+
+    expect(prisma.userContact.deleteMany).toHaveBeenCalledWith({
+      where: { ownerId: OWNER_ID, lastSyncedAt: { lt: receivedAt } },
+    });
+  });
+
+  it('stamps every upsert with the request receipt clock in watermark mode', async () => {
+    const prisma = makePrisma({ users: [] });
+    const service = new ContactDirectoryService(prisma);
+    const contacts = normalizeContacts([{ emails: ['awa@test.com'] }]);
+    const receivedAt = new Date('2026-08-25T10:00:00.000Z');
+
+    await service.sync({ ownerId: OWNER_ID, contacts, isFinalBatch: true, receivedAt });
+
+    const args = prisma.userContact.upsert.mock.calls[0][0];
+    expect(args.update.lastSyncedAt).toEqual(receivedAt);
+    expect(args.create.lastSyncedAt).toEqual(receivedAt);
   });
 });
 
@@ -382,7 +644,7 @@ describe('ContactDirectoryService.list — blocage et présence', () => {
   });
 
   it('severs the Meeshy link of a contact who blocked the owner', async () => {
-    const prisma = makePrisma({ existing: [storedEntry], count: 1, users: [{ id: AWA_ID }] });
+    const prisma = makePrisma({ existing: [storedEntry], count: 1, bloqueurs: [AWA_ID] });
     const service = new ContactDirectoryService(prisma);
 
     const result = await service.list({ ownerId: OWNER_ID, viewer: OWNER_VIEWER, offset: 0, limit: 50 });
@@ -424,17 +686,5 @@ describe('ContactDirectoryService.list — blocage et présence', () => {
 
     expect(prisma.user.findMany).not.toHaveBeenCalled();
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
-  });
-});
-
-describe('ContactDirectoryService.clear', () => {
-  it('removes every entry of the owner and reports the count', async () => {
-    const prisma = makePrisma();
-    const service = new ContactDirectoryService(prisma);
-
-    const removed = await service.clear(OWNER_ID);
-
-    expect(prisma.userContact.deleteMany).toHaveBeenCalledWith({ where: { ownerId: OWNER_ID } });
-    expect(removed).toBe(3);
   });
 });

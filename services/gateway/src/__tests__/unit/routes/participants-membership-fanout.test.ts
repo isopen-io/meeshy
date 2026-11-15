@@ -19,13 +19,18 @@
  * @jest-environment node
  */
 
+import { roomDeliveries } from '../../helpers/room-deliveries';
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { findFirstHonouringWhere } from '../../helpers/find-first-honouring-where';
+import { matchesMongoWhere } from '../../helpers/mongo-where';
 
+jest.mock('../../../services/messaging/messageRequests', () => ({ ...jest.requireActual<object>('../../../services/messaging/messageRequests'), decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })) }));
 jest.mock('../../../routes/conversations/utils/access-control', () => ({
   canAccessConversation: jest.fn<any>(),
 }));
 
 jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
+  ...jest.requireActual<Record<string, unknown>>('@meeshy/shared/utils/conversation-helpers'),
   isValidMongoId: jest.fn<any>((id: string) => /^[0-9a-fA-F]{24}$/.test(id)),
 }));
 
@@ -46,6 +51,8 @@ const TARGET_ID = '507f1f77bcf86cd799439033';
 const WITNESS_ID = '507f1f77bcf86cd799439066';
 /** Participant entré par lien de partage : aucune ligne `User` derrière lui. */
 const ANON_PARTICIPANT_ID = '507f1f77bcf86cd799439077';
+/** Un AUTRE membre RÉEL de la conversation — jamais l'appelant. */
+const INTRUDER_USER_ID = '507f1f77bcf86cd799439099';
 
 type EmittedEvent = { rooms: string[]; excepts: string[]; event: string; payload: any };
 
@@ -115,11 +122,16 @@ function createMockFastify() {
  * par un `mockResolvedValueOnce` positionnel — laisse le test survivre à une
  * requête ajoutée ailleurs dans la route.
  */
-function createMockPrisma(audience: Array<{ id: string; userId: string | null }>) {
+function createMockPrisma(audience: Array<{ id: string; userId?: string | null } & Record<string, unknown>>) {
   const findMany = jest.fn<any>(async (args: any) => {
     const where = args?.where ?? {};
     if (where.isActive === true && where.userId === undefined) {
-      return audience.filter((p) => !where.NOT || p.userId !== where.NOT.userId);
+      // Les sémantiques MESURÉES de MongoDB (#9106) : un invité par lien n'a
+      // pas de clé `userId`, et une négation écarte la clé absente.
+      return audience
+        .map((p) => ({ conversationId: CONV_ID, isActive: true, ...p }))
+        .filter((p) => matchesMongoWhere(p, where))
+        .map((p) => ({ ...p, userId: p.userId ?? null }));
     }
     return [];
   });
@@ -175,6 +187,34 @@ function targetParticipant(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/**
+ * #5191 — les deux gardes plates (`participants-writes.ts:578`,
+ * `participant-removal.ts:82`) résolvent l'appelant par
+ * `where: { conversationId, userId, isActive: true }`, doublé jusqu'ici par un
+ * `mockResolvedValueOnce().mockResolvedValue()` POSITIONNEL : la même paire de
+ * lignes sortait quel que soit le `where` demandé, et retirer `userId` du
+ * filtre de production ne faisait tomber aucun témoin de ce fichier.
+ *
+ * L'INTRUS — un autre membre RÉEL de la conversation, simple `member`, rang
+ * insuffisant pour ajouter/retirer qui que ce soit — est semé EN PREMIER via
+ * `findFirstHonouringWhere` : si `userId` disparaît du `where`, cette ligne
+ * est résolue à la place de l'appelant, et la garde de rang qui suit refuse
+ * une action que l'appelant réel devrait pourtant obtenir.
+ */
+function seedParticipants(
+  prisma: ReturnType<typeof createMockPrisma>,
+  actorRole: string,
+  targetOverrides: Record<string, unknown> = {}
+): void {
+  prisma.participant.findFirst.mockImplementation(
+    findFirstHonouringWhere([
+      { id: 'p-intruder', conversationId: CONV_ID, userId: INTRUDER_USER_ID, isActive: true, role: 'member', user: { id: INTRUDER_USER_ID, role: 'USER' } },
+      actorParticipant(actorRole),
+      targetParticipant(targetOverrides)
+    ])
+  );
+}
+
 describe('POST /conversations/:id/participants — l\'ajout devient comptable', () => {
   let prisma: any;
   let fastify: ReturnType<typeof createMockFastify>;
@@ -186,7 +226,7 @@ describe('POST /conversations/:id/participants — l\'ajout devient comptable', 
     prisma = createMockPrisma([
       { id: 'p-actor', userId: ACTOR_ID },
       { id: 'p-witness', userId: WITNESS_ID },
-      { id: ANON_PARTICIPANT_ID, userId: null },
+      { id: ANON_PARTICIPANT_ID },
       { id: 'p-added', userId: TARGET_ID },
     ]);
     fastify = createMockFastify();
@@ -199,7 +239,7 @@ describe('POST /conversations/:id/participants — l\'ajout devient comptable', 
       }),
     };
     (fastify as any).notificationService = createMockNotificationService();
-    prisma.participant.findFirst.mockResolvedValueOnce(actorParticipant('admin')).mockResolvedValue(targetParticipant());
+    seedParticipants(prisma, 'admin');
   });
 
   async function addTarget() {
@@ -218,16 +258,25 @@ describe('POST /conversations/:id/participants — l\'ajout devient comptable', 
   it('émet conversation:participant-joined vers les rooms PERSONNELLES des membres', async () => {
     await addTarget();
 
-    const joined = emitted.filter((e) => e.event === 'conversation:participant-joined');
-    expect(joined).toHaveLength(1);
-    expect(joined[0].rooms).toEqual([
+    const delivered = roomDeliveries(emitted.filter((e) => e.event === 'conversation:participant-joined'));
+    expect([...delivered.keys()].sort()).toEqual([
       `conversation:${CONV_ID}`,
       `user:${ACTOR_ID}`,
-      `user:${WITNESS_ID}`,
       // Le participant sans compte est nommé par son `Participant.id` :
       // l'adresser par `userId` sauterait une room qui EXISTE.
       `user:${ANON_PARTICIPANT_ID}`,
-    ]);
+      `user:${WITNESS_ID}`,
+    ].sort());
+  });
+
+  it('l\'effectif ne part que vers les COMPTES — ni la room du fil, ni l\'invité (#10205)', async () => {
+    await addTarget();
+
+    const delivered = roomDeliveries(emitted.filter((e) => e.event === 'conversation:participant-joined'));
+    expect(delivered.get(`conversation:${CONV_ID}`)).not.toHaveProperty('memberCount');
+    expect(delivered.get(`user:${ANON_PARTICIPANT_ID}`)).not.toHaveProperty('memberCount');
+    expect(delivered.get(`user:${ACTOR_ID}`)).toHaveProperty('memberCount');
+    expect(delivered.get(`user:${WITNESS_ID}`)).toHaveProperty('memberCount');
   });
 
   it('ÉCARTE le nouvel arrivant de l\'éventail', async () => {
@@ -284,7 +333,7 @@ describe('POST /conversations/:id/participants — l\'ajout devient comptable', 
       }),
     };
     (fastify as any).notificationService = createMockNotificationService();
-    prisma.participant.findFirst.mockResolvedValueOnce(actorParticipant('admin')).mockResolvedValue(targetParticipant());
+    seedParticipants(prisma, 'admin');
 
     await addTarget();
 
@@ -319,32 +368,24 @@ describe('POST /conversations/:id/participants — l\'ajout devient comptable', 
       }),
     };
     (fastify as any).notificationService = createMockNotificationService();
-    prisma.participant.findFirst.mockResolvedValueOnce(actorParticipant('admin')).mockResolvedValue(targetParticipant());
+    seedParticipants(prisma, 'admin');
 
     await addTarget();
 
-    const joined = emitted.filter((e) => e.event === 'conversation:participant-joined');
-    expect(joined).toHaveLength(2);
+    const delivered = roomDeliveries(emitted.filter((e) => e.event === 'conversation:participant-joined'));
+    expect(delivered.get(`conversation:${CONV_ID}`)).not.toHaveProperty('memberCount');
 
-    const capped = joined[0];
-    expect(capped.payload.memberCount).toBe(199);
-    expect(capped.payload.memberCountCapped).toBe(true);
-    expect(capped.rooms).toContain(`conversation:${CONV_ID}`);
-    expect(capped.rooms).not.toContain(`user:${ACTOR_ID}`);
-    expect(capped.excepts).toEqual([`user:${ACTOR_ID}`]);
-
-    const exact = joined[1];
-    expect(exact.rooms).toEqual([`user:${ACTOR_ID}`]);
+    const exact = delivered.get(`user:${ACTOR_ID}`);
     // 250 dans l'éventail + l'arrivant, que l'éventail écarte : 251.
-    expect(exact.payload.memberCount).toBe(251);
-    expect(exact.payload.memberCountCapped).toBeUndefined();
+    expect(exact.memberCount).toBe(251);
+    expect(exact.memberCountCapped).toBeUndefined();
   });
 
   it('demande le rôle de conversation ET le rôle plateforme de l\'éventail', async () => {
     await addTarget();
 
     const audienceCall = prisma.participant.findMany.mock.calls.find(
-      (call: any[]) => call[0]?.where?.isActive === true && call[0]?.where?.NOT
+      (call: any[]) => call[0]?.where?.isActive === true && call[0]?.where?.OR
     );
     expect(audienceCall?.[0]?.select).toMatchObject({
       id: true,
@@ -376,7 +417,7 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
     emitted = [];
     prisma = createMockPrisma([
       { id: 'p-actor', userId: ACTOR_ID },
-      { id: ANON_PARTICIPANT_ID, userId: null },
+      { id: ANON_PARTICIPANT_ID },
     ]);
     fastify = createMockFastify();
     registerParticipantsRoutes(fastify as any, prisma, jest.fn(), jest.fn());
@@ -387,12 +428,10 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
       }),
     };
     (fastify as any).notificationService = createMockNotificationService();
-    prisma.participant.findFirst
-      .mockResolvedValueOnce(actorParticipant('creator'))
-      // La cible porte le `select` de production : `isActive` (le handler refuse
-      // de retirer quelqu'un déjà sorti), `userId` (room personnelle + payload)
-      // et `shareLinkId`.
-      .mockResolvedValue(targetParticipant({ id: 'p-removed', displayName: 'Removed User' }));
+    // La cible porte le `select` de production : `isActive` (le handler refuse
+    // de retirer quelqu'un déjà sorti), `userId` (room personnelle + payload)
+    // et `shareLinkId`.
+    seedParticipants(prisma, 'creator', { id: 'p-removed', displayName: 'Removed User' });
   });
 
   it('chaîne la room du fil et les rooms personnelles des membres restants', async () => {
@@ -406,9 +445,8 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
       createMockReply()
     );
 
-    const left = emitted.filter((e) => e.event === 'conversation:participant-left');
-    expect(left).toHaveLength(1);
-    // La room du fil reste en TÊTE, et la room personnelle du RETIRÉ ferme la
+    const delivered = roomDeliveries(emitted.filter((e) => e.event === 'conversation:participant-left'));
+    // La room du fil reste servie, et la room personnelle du RETIRÉ ferme la
     // chaîne. Cette dernière a longtemps manqué sur l'argument que « la room du
     // fil porte le retiré lui-même, encore dedans jusqu'à l'éviction qui suit
     // l'emit ». C'est vrai de l'appareil qui a le FIL ouvert, et faux de tous
@@ -416,13 +454,16 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
     // personnelles des membres restants (« l'écran de liste a quitté la room »).
     // Il n'avait été appliqué qu'à ceux dont le COMPTEUR bouge, jamais à celui
     // dont l'APPARTENANCE s'arrête.
-    expect(left[0].rooms).toEqual([
+    expect([...delivered.keys()].sort()).toEqual([
       `conversation:${CONV_ID}`,
       `user:${ACTOR_ID}`,
       `user:${ANON_PARTICIPANT_ID}`,
       `user:${TARGET_ID}`,
-    ]);
-    expect(left[0].payload).toMatchObject({
+    ].sort());
+    // Le retiré n'est plus participant : il apprend son départ, pas l'effectif.
+    expect(delivered.get(`user:${TARGET_ID}`)).not.toHaveProperty('memberCount');
+    expect(delivered.get(`user:${ACTOR_ID}`)).toHaveProperty('memberCount');
+    expect(delivered.get(`user:${ACTOR_ID}`)).toMatchObject({
       conversationId: CONV_ID,
       userId: TARGET_ID,
       displayName: 'Removed User',
@@ -444,9 +485,7 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
       }),
     };
     (fastify as any).notificationService = createMockNotificationService();
-    prisma.participant.findFirst
-      .mockResolvedValueOnce(actorParticipant('creator'))
-      .mockResolvedValue(targetParticipant({ id: 'p-removed', displayName: 'Removed User' }));
+    seedParticipants(prisma, 'creator', { id: 'p-removed', displayName: 'Removed User' });
 
     const route = fastify.routes.find((r) => r.method === 'DELETE')!;
     await route.handler(
@@ -458,9 +497,9 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
       createMockReply()
     );
 
-    const left = emitted.find((e) => e.event === 'conversation:participant-left')!;
-    expect(left.payload.memberCount).toBe(199);
-    expect(left.payload.memberCountCapped).toBe(true);
+    const left = roomDeliveries(emitted.filter((e) => e.event === 'conversation:participant-left')).get(`user:${ACTOR_ID}`);
+    expect(left.memberCount).toBe(199);
+    expect(left.memberCountCapped).toBe(true);
   });
 
   it('sert l\'effectif ENTIER des restants à l\'admin du GROUPE', async () => {
@@ -483,9 +522,7 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
       }),
     };
     (fastify as any).notificationService = createMockNotificationService();
-    prisma.participant.findFirst
-      .mockResolvedValueOnce(actorParticipant('creator'))
-      .mockResolvedValue(targetParticipant({ id: 'p-removed', displayName: 'Removed User' }));
+    seedParticipants(prisma, 'creator', { id: 'p-removed', displayName: 'Removed User' });
 
     const route = fastify.routes.find((r) => r.method === 'DELETE')!;
     await route.handler(
@@ -497,13 +534,10 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
       createMockReply()
     );
 
-    const left = emitted.filter((e) => e.event === 'conversation:participant-left');
-    expect(left).toHaveLength(2);
-    expect(left[0].payload.memberCount).toBe(199);
-    expect(left[0].excepts).toEqual([`user:${ACTOR_ID}`]);
-    expect(left[1].rooms).toEqual([`user:${ACTOR_ID}`]);
-    expect(left[1].payload.memberCount).toBe(250);
-    expect(left[1].payload.memberCountCapped).toBeUndefined();
+    const delivered = roomDeliveries(emitted.filter((e) => e.event === 'conversation:participant-left'));
+    expect(delivered.get(`conversation:${CONV_ID}`)).not.toHaveProperty('memberCount');
+    expect(delivered.get(`user:${ACTOR_ID}`).memberCount).toBe(250);
+    expect(delivered.get(`user:${ACTOR_ID}`).memberCountCapped).toBeUndefined();
   });
 
   it("n'émet qu'UNE fois — un appareil du retiré resté dans la room ne double pas", async () => {
@@ -521,6 +555,6 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
     // copies au socket assis dans les deux rooms, et un client qui RETIRE la
     // ligne sur cet événement la retirerait deux fois — anodin ici, mais la
     // même forme porte `memberCount` pour les restants.
-    expect(emitted.filter((e) => e.event === 'conversation:participant-left')).toHaveLength(1);
+    expect(() => roomDeliveries(emitted.filter((e) => e.event === 'conversation:participant-left'))).not.toThrow();
   });
 });

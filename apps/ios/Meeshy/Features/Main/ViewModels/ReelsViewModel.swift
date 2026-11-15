@@ -38,6 +38,11 @@ struct CacheCoordinatorReelFeedCache: ReelFeedCacheReading {
 /// reel) pages the seedless « Pour toi » thread.
 @MainActor
 final class ReelsViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published private(set) var reels: [FeedPost] = []
     /// Réel actuellement visible. Le `didSet` gère l'appartenance à la post room
     /// (`ROOMS.post`) du réel actif : on quitte l'ancienne, on rejoint la nouvelle.
@@ -52,6 +57,13 @@ final class ReelsViewModel: ObservableObject {
     }
     @Published private(set) var isLoadingMore = false
     @Published private(set) var hasLoadedOnce = false
+
+    /// Motif du dernier échec de chargement, `nil` quand le dernier
+    /// aller-retour a abouti. Sans lui, une panne réseau au démarrage à froid
+    /// se rendait « Aucun réel pour le moment » : le lecteur croyait qu'il
+    /// n'existait rien, et n'avait aucun moyen de réessayer. Le journal seul
+    /// ne corrige personne — il ne quitte pas la machine du développeur.
+    @Published private(set) var loadFailure: String?
 
     @Published private(set) var likedIds: Set<String> = []
     @Published private(set) var bookmarkedIds: Set<String> = []
@@ -81,6 +93,18 @@ final class ReelsViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private let service: PostServiceProviding
     private let cache: ReelFeedCacheReading
+    /// #10483 — l'impression d'un réel porte sa surface (`reels`) ; la source
+    /// `feed` reste celle du compteur historique. Groupée et persistée.
+    private lazy var impressions = ImpressionBatcher(source: "feed", surface: .reels, postService: service)
+    /// « Enregistrer » (#15994) : l'écrivain du fil — cache des favoris et toasts compris.
+    private lazy var bookmarker = PostBookmarkWriter()
+    /// #10501 — l'impression du réel actuellement à l'écran.
+    private var listedImpression: String?
+    /// #10483 — l'entrée du lecteur : le PREMIER réel compté porte la marque
+    /// de la porte qui l'a ouvert (tap du fil ou du profil, notification,
+    /// lien) ; les suivants, atteints par balayage, sont un listing `reels`.
+    private let openSources: DetailOpenSourceProviding
+    private var entryConsumed = false
 
     /// Same key `FeedViewModel` writes the main feed under — the reel pager
     /// reuses that cache so a cold-start launch shares the feed's offline data.
@@ -89,9 +113,11 @@ final class ReelsViewModel: ObservableObject {
     init(
         service: PostServiceProviding = PostService.shared,
         cache: ReelFeedCacheReading = CacheCoordinatorReelFeedCache(),
-        postDeletedEvents: AnyPublisher<String, Never> = SocialSocketManager.shared.postDeleted.eraseToAnyPublisher()
+        postDeletedEvents: AnyPublisher<String, Never> = SocialSocketManager.shared.postDeleted.eraseToAnyPublisher(),
+        openSources: DetailOpenSourceProviding = DetailOpenSources.shared
     ) {
         self.service = service
+        self.openSources = openSources
         self.cache = cache
         subscribeToLikeEvents()
         subscribeToBookmarkEvents()
@@ -238,6 +264,12 @@ final class ReelsViewModel: ObservableObject {
         }
     }
 
+    /// Rejoue le chargement après une panne. C'est ce que fait le bouton
+    /// « Réessayer » de l'écran vide — un contrôle sans effet n'en serait pas un.
+    func retryLoad() async {
+        await fetch(reset: reels.isEmpty)
+    }
+
     private func fetch(reset: Bool) async {
         guard !isFetching, reset || hasMore else { return }
         isFetching = true
@@ -248,29 +280,33 @@ final class ReelsViewModel: ObservableObject {
             hasLoadedOnce = true
         }
         do {
-            let preferred = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            let preferred = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
             // Thread d'affinité dédié (exclut le seed + les réels du viewer, porte
             // `isBookmarkedByMe`). `FeedPost.reels` reste un garde-fou : la réponse
             // est déjà `type: REEL`, on filtre par sécurité.
             let response = try await service.getReels(seedReelId: seedReelId, cursor: reset ? nil : nextCursor, limit: 20)
             let mapped = response.data.map { $0.toFeedPost(preferredLanguages: preferred) }
             let newReels = FeedPost.reels(from: mapped)
-            if reset {
-                reels = newReels
-            } else {
-                let existing = Set(reels.map(\.id))
-                reels.append(contentsOf: newReels.filter { !existing.contains($0.id) })
-            }
+            // L'ordre est STABLE sous le lecteur (#9702) : la passerelle reclasse
+            // sa page à chaque lecture (les réels vus coulent, la graine est
+            // exclue). Le réel regardé et ce qui le précède gardent leur place ;
+            // une relecture ne réordonne que la suite, une page de plus s'ajoute.
+            reels = reset
+                ? ReelThreadOrder.refreshed(current: reels, anchorId: currentId, served: newReels)
+                : ReelThreadOrder.appended(current: reels, served: newReels)
             absorbServerFlags(newReels)
             nextCursor = response.pagination?.nextCursor
             hasMore = response.pagination?.hasMore ?? (nextCursor != nil)
-            // A reset replaces the list, so a `currentId` seeded from the cache
-            // may now point at a reel the fresh feed dropped — fall back to the
-            // first reel in that case (and on first load when it was nil).
+            // Sans réel regardé (premier chargement sur cache vide), le premier
+            // réel servi le devient.
             if currentId == nil || !reels.contains(where: { $0.id == currentId }) {
                 currentId = reels.first?.id
             }
+            if loadFailure != nil { loadFailure = nil }
         } catch {
+            // Le motif est PUBLIÉ, pas seulement journalisé : l'écran vide doit
+            // pouvoir dire « panne » plutôt que « rien », et offrir un réessai.
+            loadFailure = String(localized: "common.error.generic")
             // Transient network failures (offline blip, timeout) must NOT
             // permanently kill pagination: `hasMore` is left untouched (still
             // `true`) and `nextCursor` is preserved, so the next
@@ -324,6 +360,36 @@ final class ReelsViewModel: ObservableObject {
 
     // MARK: - Interactions (optimistic)
 
+    /// **Poser un émoji AUTRE que le cœur** (comme sur les stories »).
+    ///
+    /// Le cœur garde `toggleLike` : il porte l'état `isLiked`, le compteur
+    /// affiché, la réconciliation optimiste et son repli REST — tout un
+    /// appareil que le serveur alimente par l'événement canonique `post:liked`.
+    /// Un émoji quelconque n'a rien de tout cela : il n'existe pas de
+    /// « isLaughed » ni de compteur par émoji dans cette vue.
+    ///
+    /// Le geste est donc ADDITIF, jamais un basculement : poser 😂 ne retire
+    /// pas ❤️ et ne se dé-pose pas d'un second appui — ce serait promettre un
+    /// état que la vue ne sait ni afficher ni réconcilier. Le retrait passe par
+    /// les surfaces qui montrent le détail des réactions.
+    ///
+    /// Aucun rollback optimiste : rien n'est peint localement, donc rien à
+    /// défaire. L'échec est silencieux ici et le restera tant que le rail
+    /// n'affichera pas les réactions autres que le cœur.
+    func react(_ post: FeedPost, emoji: String) {
+        guard emoji != MeeshyQuickReactions.heart else {
+            toggleLike(post)
+            return
+        }
+        EngagementTracker.shared.recordAction(.reacted, surface: .reels)
+        Task {
+            try? await withTaskTimeout(seconds: TaskTimeoutDefaults.socialReaction) {
+                _ = try await SocialSocketManager.shared.addPostReaction(
+                    postId: post.id, emoji: emoji)
+            }
+        }
+    }
+
     func toggleLike(_ post: FeedPost) {
         let id = post.id
         guard !heartInFlight.contains(id) else { return }
@@ -360,6 +426,8 @@ final class ReelsViewModel: ObservableObject {
                     else { try await service.like(postId: id) }
                     restOK = true
                 } catch {
+                    // La limite du jour (#9571) se dit ; le geste se défait.
+                    DailyGestureLimitNotice.surface(error)
                     restOK = false
                 }
                 if !restOK { applyLike(id: id, liked: wasLiked) }
@@ -394,12 +462,10 @@ final class ReelsViewModel: ObservableObject {
             EngagementTracker.shared.recordAction(.bookmarked, surface: .reels)
         }
         HapticFeedback.light()
-        Task {
-            do {
-                if wasBookmarked { try await service.removeBookmark(postId: id) }
-                else { try await service.bookmark(postId: id) }
-            } catch {
-                // Rollback both the icon and the optimistic count.
+        Task { [weak self] in
+            guard let self else { return }
+            await bookmarker.write(bookmarked: !wasBookmarked, postId: id, post: post, onRejected: { [weak self] in
+                guard let self else { return }
                 if wasBookmarked {
                     bookmarkedIds.insert(id)
                     bookmarkDelta[id] = (bookmarkDelta[id] ?? 0) + 1
@@ -407,7 +473,7 @@ final class ReelsViewModel: ObservableObject {
                     bookmarkedIds.remove(id)
                     bookmarkDelta[id] = (bookmarkDelta[id] ?? 0) - 1
                 }
-            }
+            })
             bookmarkInFlight.remove(id)
         }
     }
@@ -468,36 +534,53 @@ final class ReelsViewModel: ObservableObject {
     /// Suppression optimiste, avec rollback si l'API échoue. Réutilise
     /// `removeDeletedReel` (même logique d'avancement du pager que l'événement
     /// temps réel `post:deleted`) pour ne pas dupliquer la règle d'avancement.
-    func deletePost(_ postId: String) async {
-        guard reels.contains(where: { $0.id == postId }) else { return }
-        let snapshot = reels
+    func deletePost(_ postId: String, reason: String? = nil) async {
+        await withdrawPost(postId, .delete(reason: reason))
+    }
+
+    /// Suppression, retrait ou passage en privé (#11535) : même retrait optimiste, même retour arrière.
+    func withdrawPost(_ postId: String, _ withdrawal: PublicationWithdrawal) async {
+        guard let removedIndex = reels.firstIndex(where: { $0.id == postId }) else { return }
+        let removedReel = reels[removedIndex]
         let snapshotCurrentId = currentId
         removeDeletedReel(postId)
+        let advancedTo = currentId
         do {
-            try await service.delete(postId: postId)
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.deleted", defaultValue: "Post deleted", bundle: .main))
+            try await withdrawal.perform(postId: postId, with: service)
+            FeedbackToastManager.shared.showSuccess(withdrawal.successText(deleted: String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main)))
         } catch {
-            reels = snapshot
-            currentId = snapshotCurrentId
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Error deleting post", bundle: .main))
+            // Remet CE réel à sa place — la page chargée pendant l'appel reste — et ne ramène le pager
+            // dessus que si l'utilisateur n'a pas bougé depuis (`OptimisticRollback`).
+            reels = OptimisticRollback.restoring(removedReel, at: removedIndex, into: reels)
+            if currentId == advancedTo { currentId = snapshotCurrentId }
+            FeedbackToastManager.shared.showError(withdrawal.failureText(deleteError: String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main)))
         }
     }
 
     func reportPost(_ postId: String) async {
         do {
             try await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.reported", defaultValue: "Post reported", bundle: .main))
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.reported", defaultValue: "Publication signalée", bundle: .main))
         } catch {
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.reportError", defaultValue: "Error reporting post", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.reportError", defaultValue: "Erreur lors du signalement", bundle: .main))
+        }
+    }
+
+    /// Ferme / rouvre les commentaires d'un réel (#16541) — même geste que le fil.
+    func toggleComments(_ postId: String) async {
+        guard let current = reels.first(where: { $0.id == postId })?.commentsDisabled else { return }
+        await CommentSettingsToggle.run(postId: postId, current: current, service: service) { closed in
+            guard let index = reels.firstIndex(where: { $0.id == postId }) else { return }
+            reels[index].commentsDisabled = closed
         }
     }
 
     func pinPost(_ postId: String) async {
         do {
             try await service.pinPost(postId: postId)
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.pinned", defaultValue: "Post pinned", bundle: .main))
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.pinned", defaultValue: "Publication épinglée", bundle: .main))
         } catch {
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.pinError", defaultValue: "Error pinning post", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.pinError", defaultValue: "Erreur lors de l'épinglage", bundle: .main))
         }
     }
 
@@ -513,7 +596,7 @@ final class ReelsViewModel: ObservableObject {
         location: PostLocationUpdate? = nil,
         visibility: String? = nil,
         visibilityUserIds: [String]? = nil,
-        known: Set<PostEditField> = EditPostDraft.documentFields
+        known: Set<PostEditField> = EditPostDraft.documentFields, storyEffects: StoryEffects? = nil, additions: PostEditAdditions = PostEditAdditions()
     ) async {
         guard let idx = reels.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = reels[idx]
@@ -538,31 +621,64 @@ final class ReelsViewModel: ObservableObject {
             // Le corps ne se construit plus ici : `known` dit ce que la
             // surface a su RENDRE, `PostEditPayload.build` en tire le PUT. Un
             // champ non déclaré est OMIS, et le serveur préserve le sien.
-            let updated = try await service.update(postId: postId, known: known, draft: PostEditDraft(
+            let updated = try await service.update(postId: postId, known: known, draft: additions.completing(PostEditDraft(
                 content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
-                originalLanguage: language, type: type, removeMediaIds: removeMediaIds,
+                originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: storyEffects,
                 location: location
-            ))
+            )))
             if let newIdx = reels.firstIndex(where: { $0.id == postId }) {
-                reels[newIdx] = updated.toFeedPost(preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+                reels[newIdx] = updated.toFeedPost(preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
             }
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.edited", defaultValue: "Post edited", bundle: .main))
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.edited", defaultValue: "Publication modifiée", bundle: .main))
         } catch {
             if let rollbackIdx = reels.firstIndex(where: { $0.id == postId }) {
                 reels[rollbackIdx] = snapshot
             }
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.editError", defaultValue: "Error editing post", bundle: .main))
+            if !DailyGestureLimitNotice.surface(error) {
+                FeedbackToastManager.shared.showError(String(localized: "feed.post.editError", defaultValue: "Erreur lors de la modification", bundle: .main))
+            }
         }
     }
 
     func recordView(_ id: String) {
-        // Vue UNIQUE (`viewCount`) — dédupliquée côté serveur par `PostView`
-        // (`@@unique(postId, userId)`) : rejouer l'appel ne la gonfle pas.
-        Task { try? await service.viewPost(postId: id, duration: nil) }
+        // Le lecteur de réels EST un écran détail (#10483) : chaque réel qui
+        // s'installe à l'écran compte une vue (et une impression ci-dessous),
+        // ici seulement — le tap qui présente le lecteur n'envoie que `open`.
+        let entry = readerEntry(for: id)
+        Task { [service] in
+            _ = try? await service.recordSocialEvents(
+                [.view(postId: id, durationMs: nil, surface: .reels, entry: entry)],
+                credential: .account
+            )
+        }
         // Impression (portée) — le réel est apparu à l'écran. Comptée à CHAQUE
         // apparition : revenir sur un réel déjà vu est une nouvelle impression.
         // La déduplication de session qui vivait ici plafonnait le compteur à 1
         // par réel et par lancement d'app.
-        Task { try? await service.recordImpression(postId: id, source: "feed") }
+        closeListedImpression()
+        listedImpression = impressions.recordListed(id, position: reels.firstIndex { $0.id == id }, isVideo: true)
+        // Un réel installé occupe tout l'écran jusqu'au suivant.
+        if let listedImpression { impressions.noteVisible(fraction: 1, of: listedImpression) }
+    }
+
+    /// Le réel à l'écran cède la place : sa mesure de visibilité se clôt.
+    private func closeListedImpression() {
+        guard let previous = listedImpression else { return }
+        listedImpression = nil
+        impressions.noteGone(previous)
+    }
+
+    private func readerEntry(for id: String) -> ContentEntry {
+        guard entryConsumed else {
+            entryConsumed = true
+            return openSources.consumeEntry(for: id)
+        }
+        return .listing(.reels)
+    }
+
+    /// Le lecteur se ferme : les impressions en attente partent.
+    func flushImpressions() async {
+        closeListedImpression()
+        await impressions.flushNow()
     }
 }

@@ -1,7 +1,9 @@
 package me.meeshy.app.conversations
 
-import me.meeshy.sdk.model.ApiConversationLastMessage
-import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.model.LastMessageSummaryKind
+import me.meeshy.sdk.model.media.MediaKindLabel
+import me.meeshy.sdk.model.media.MediaKindStrings
+import me.meeshy.sdk.model.preview.PreviewEffect
 
 /**
  * Classifies how the row should summarize a conversation's last message —
@@ -11,6 +13,10 @@ import me.meeshy.sdk.model.isoToEpochMillisOrNull
  * Priority order — first match wins — mirrors iOS exactly:
  *   1. `expiresAt <= now`   → [EXPIRED] (the content is gone; every other flag
  *                             loses to it).
+ *   1 bis. `isEncrypted`     → [ENCRYPTED] (#13110) — Android-only arm: the native app
+ *                             opens no end-to-end message yet (#13015), the gateway
+ *                             serves no text, and the row says so instead of « no
+ *                             message yet ».
  *   2. `isBlurred`           → [HIDDEN] (moderation/blur outranks an active
  *                             ephemeral so blurred content never leaks).
  *   3. `isViewOnce`          → [VIEW_ONCE].
@@ -21,26 +27,7 @@ import me.meeshy.sdk.model.isoToEpochMillisOrNull
  * `expiresAt <= now`, so a message whose expiry hits precisely at the sampled
  * instant already reads as EXPIRED — one less way a row can flash old content.
  */
-enum class MessageSummaryKind {
-    STANDARD,
-    HIDDEN,
-    VIEW_ONCE,
-    EPHEMERAL_ACTIVE,
-    EXPIRED,
-    ;
-
-    companion object {
-        fun of(message: ApiConversationLastMessage?, nowMillis: Long): MessageSummaryKind {
-            if (message == null) return STANDARD
-            val expiresAt = isoToEpochMillisOrNull(message.expiresAt)
-            if (expiresAt != null && expiresAt <= nowMillis) return EXPIRED
-            if (message.isBlurred) return HIDDEN
-            if (message.isViewOnce) return VIEW_ONCE
-            if (expiresAt != null) return EPHEMERAL_ACTIVE
-            return STANDARD
-        }
-    }
-}
+typealias MessageSummaryKind = LastMessageSummaryKind
 
 /**
  * A row's summary line: the display [text] plus the classifier [kind] that drives
@@ -51,4 +38,21 @@ enum class MessageSummaryKind {
 data class SummaryLine(
     val text: String,
     val kind: MessageSummaryKind,
+    /** The effect line 2 APPLIES (#16975): veil, frozen finish, one-shot entrance; `null` = none. */
+    val effect: PreviewEffect? = null,
+    /** The last message id, which keys the one-shot entrance. */
+    val messageId: String? = null,
+)
+
+/**
+ * Les cinq libellés de média de l'aperçu de liste, tous tirés de la source unique
+ * [MediaKindLabel.summary] — aucune copie locale (« 📷 Photo », « 🎥 Vidéo »,
+ * « 🎙️ Message vocal », « 📎 Fichier », « 📍 Position »).
+ */
+fun LastMessagePreviewLabels.withMediaKinds(strings: MediaKindStrings): LastMessagePreviewLabels = copy(
+    photo = MediaKindLabel.summary(MediaKindLabel.Kind.PHOTO, strings),
+    video = MediaKindLabel.summary(MediaKindLabel.Kind.VIDEO, strings),
+    voice = MediaKindLabel.summary(MediaKindLabel.Kind.AUDIO, strings),
+    file = MediaKindLabel.summary(MediaKindLabel.Kind.FILE, strings),
+    location = MediaKindLabel.summary(MediaKindLabel.Kind.LOCATION, strings),
 )

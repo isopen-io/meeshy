@@ -1,0 +1,3 @@
+## 2026-06-08 — SwiftUI iOS 16 compat
+
+20. **Ne JAMAIS utiliser `.onChange` natif de SwiftUI dans le code app/feature (cible iOS 16).** La forme à 2 paramètres `.onChange(of:initial:){ old, new in }` est **iOS 17+** → erreur de compilation sur iOS 16 ; la forme à 1 paramètre `.onChange(of:){ new in }` compile mais est **dépréciée en iOS 17** (warning). **Règle : toujours `adaptiveOnChange(of:initial:_:)`** (wrapper `packages/MeeshySDK/Sources/MeeshyUI/Compatibility/AdaptiveOnChange.swift`, importer `MeeshyUI`). Le seul `.onChange` natif autorisé est celui confiné dans ce wrapper. Même prudence pour toute API SwiftUI iOS-17-only → `if #available` ou wrapper compat. Violation trouvée+corrigée : `MiniAudioPlayerBar.swift:93`.

@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 import os
 
-nonisolated private let engagementLogger = Logger(subsystem: "me.meeshy.app", category: "engagement")
+nonisolated private let engagementLogger = MeeshyLog.logger(.engagement)
 
 /// Sink the tracker pushes sessions into (durable outbox in production).
 public protocol EngagementSinking: Sendable {
@@ -10,6 +10,9 @@ public protocol EngagementSinking: Sendable {
     func checkpoint(_ s: EngagementSession) async
     func finalizeSession(_ s: EngagementSession) async
     func requestFlush() async
+    /// #10764 — le PREMIER CONTACT de la session, envoyé tout de suite, sous la
+    /// clé que la mesure finale reprendra (la passerelle fusionne les deux).
+    func announceSession(_ s: EngagementSession) async
 }
 
 /// Tracks one consumption session per surface: monotonic dwell, micro-actions,
@@ -17,6 +20,11 @@ public protocol EngagementSinking: Sendable {
 /// topmost-owns-the-clock rule (an overlay surface pauses the one underneath).
 @MainActor
 final class EngagementTracker {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = EngagementTracker()
 
     private struct ActiveSession {
@@ -57,18 +65,31 @@ final class EngagementTracker {
         self.consentProvider = consentProvider
     }
 
+    /// Une session commence QUEL QUE SOIT le consentement d'analyse (#10764) :
+    /// l'ouverture, la lecture et la vue qualifiée sont des compteurs de portée,
+    /// comme les vues et les impressions — les éteindre au refus (le défaut par
+    /// défaut) laissait `postOpenCount`, `playCount` et `qualifiedViewCount` à 0
+    /// sur tous les réels. Le refus retire de la session ce qui décrit le
+    /// lecteur (micro-actions, trace de lecture), voir `snapshot`.
     func begin(postId: String, contentType: EngagementSession.ContentType, surface: EngagementSurface) {
-        guard consentProvider(), let userId = userIdProvider() else { return }
+        // Une publication encore dans la file d'envoi n'a qu'un cmid : aucune
+        // session ne part pour un id que le serveur ne connaît pas (#14929).
+        guard !PendingPublicationMarker.isPending(postId: postId),
+              let userId = userIdProvider() else { return }
         pauseTop()   // topmost-owns-the-clock
         let s = ActiveSession(
             sessionId: UUID().uuidString, postId: postId, contentType: contentType, surface: surface,
-            startedAtWall: Date(), consent: "granted", accumulatedMs: 0, runningSinceMs: nowMs(),
+            startedAtWall: Date(), consent: consentProvider() ? "granted" : "denied",
+            accumulatedMs: 0, runningSinceMs: nowMs(),
             actions: [], watchSamples: [], watchMs: nil, mediaDurationMs: nil, completed: false
         )
         sessions[surface] = s
         topStack.append(surface)
         let session = snapshot(s, userId: userId, truncated: false)
-        Task { await sink.beginSession(session) }
+        Task { [sink] in
+            await sink.beginSession(session)
+            await sink.announceSession(session)
+        }
     }
 
     func recordAction(_ type: EngagementAction.ActionType, surface: EngagementSurface) {
@@ -130,12 +151,13 @@ final class EngagementTracker {
         sessions[top] = s
     }
     private func snapshot(_ s: ActiveSession, userId: String, truncated: Bool) -> EngagementSession {
-        EngagementSession(
+        let traced = s.consent == "granted"
+        return EngagementSession(
             sessionId: s.sessionId, userId: userId, postId: s.postId,
             contentType: s.contentType, surface: s.surface, startedAt: s.startedAtWall,
             dwellMs: currentDwell(of: s), watchMs: s.watchMs, mediaDurationMs: s.mediaDurationMs,
             completed: s.completed, truncated: truncated, consent: s.consent,
-            actions: s.actions, watchSamples: s.watchSamples
+            actions: traced ? s.actions : [], watchSamples: traced ? s.watchSamples : []
         )
     }
 }

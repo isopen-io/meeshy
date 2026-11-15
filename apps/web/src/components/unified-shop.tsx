@@ -1,0 +1,308 @@
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+
+import { PACK_DOMAINS, type PackDomain } from '@meeshy/shared/types/content-pack';
+
+import type { ConversationsDeps } from '@/lib/api/conversations';
+import { apiDeps } from '@/lib/api/deps';
+import { packQueryKeys } from '@/lib/api/pack-query-keys';
+import { loadShop, purchasePack, setShopPackInstalled, shopPackText, type ShopPack } from '@/lib/api/packs-shop';
+import type { GloryRankKey } from '@meeshy/shared/utils/game/glory';
+
+import { loadGameCatalogParts, translateGame } from '@/lib/i18n-game-catalog';
+import { usePackPreviewCatalog } from '@/lib/i18n-pack-preview-catalog';
+import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
+import { packIsLocked, packUnlockLine } from '@/lib/packs/unlock-line';
+import { stickerPackCoverSrc } from '@/lib/sticker-packs/src';
+import type { PlainStickerPacksKey } from '@/lib/i18n-sticker-packs-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
+
+import { meeStickersOfPack } from '@/lib/mee/catalog';
+import { renderMeeSticker } from '@/lib/mee/render';
+import { isMeeBuiltinPack, type MeeBuiltinPack } from '@/lib/mee/types';
+
+import { isDecorDomain, packItemsQueryKey } from '@/lib/packs/decor-domains';
+import type { PackItems } from '@/lib/packs/pack-items-load';
+
+import type { PackInspection, PackShopAdapter } from './pack-shop';
+
+/** La vignette d'un pack Mee intégré : son premier Mee, dessiné par le client (le serveur ne sert aucune image). */
+function MeePackCover({ slug }: { readonly slug: MeeBuiltinPack }) {
+  const box = 'block h-14 w-14 shrink-0 rounded-xl';
+  const first = meeStickersOfPack(slug)[0];
+  return first === undefined ? (
+    <span aria-hidden className={box} />
+  ) : (
+    <span aria-hidden className={box} dangerouslySetInnerHTML={{ __html: renderMeeSticker(first, { uid: `shop-${slug}`, animated: false }) }} />
+  );
+}
+
+/** Chargée à la demande, comme dans `frame-pack-shop.tsx` : `pack_shop` est `dynamic_only` (budgets.json). */
+const PackShop = lazy(() => import('./pack-shop').then((m) => ({ default: m.PackShop })));
+/* #16267 — la fiche d'un pack et le plein écran d'un élément, chargés au premier toucher. */
+const PackSheet = lazy(() => import('./pack-sheet').then((m) => ({ default: m.PackSheet })));
+const DecorPreview = lazy(() => import('./decor-preview').then((m) => ({ default: m.DecorPreview })));
+/* W16 — proposer une lens, chargé seulement quand le domaine « Lens » est choisi. */
+const LensSubmit = lazy(() => import('./lens-submit'));
+
+/**
+ * **LA VITRINE UNIQUE** (#10632, spec § 9) — stickers, cadres, fonds,
+ * contours et bannières dans UNE boutique, filtrable par domaine. C'est la
+ * boutique générique (`PackShop`) branchée sur `GET /packs/shop` : prix en
+ * Meeshes, possession lue au serveur, achat optimiste. Les écrans qui
+ * restituent ce que l'on possède (feuille de stickers, étagère de cadres)
+ * gardent leur boutique ; celle-ci en est la porte d'entrée commune.
+ *
+ * Un pack se désigne par `domaine:slug` — deux domaines peuvent partager un
+ * slug sans que l'un porte le geste de l'autre.
+ */
+
+export type UnifiedFilter = 'all' | PackDomain;
+
+export const BALANCE_QUERY_KEY = ['me', 'packs', 'balance'] as const;
+const SHOP_KEY_ROOT = ['me', 'packs', 'shop'] as const;
+const shopKey = (filter: UnifiedFilter) => [...SHOP_KEY_ROOT, filter] as const;
+const SHOP_INSTALLED_KEY = ['me', 'packs', 'shop', 'installed'] as const;
+
+export type UnifiedPack = ShopPack & { readonly rawSlug: string };
+
+const DOMAIN_KEYS: Readonly<Record<PackDomain, PlainStickerPacksKey>> = {
+  sticker: 'packs.domain.sticker',
+  'glory-frame': 'packs.domain.glory-frame',
+  'capture-frame': 'packs.domain.capture-frame',
+  wallpaper: 'packs.domain.wallpaper',
+  'avatar-ring': 'packs.domain.avatar-ring',
+  banner: 'packs.domain.banner',
+  'banner-frame': 'packs.domain.banner-frame',
+  lens: 'packs.domain.lens',
+};
+
+
+function PackCover({ pack }: { readonly pack: UnifiedPack }) {
+  if (pack.domain === 'sticker' && pack.builtin === true && isMeeBuiltinPack(pack.rawSlug)) return <MeePackCover slug={pack.rawSlug} />;
+  const cover = stickerPackCoverSrc(pack);
+  return cover === null ? (
+    <span aria-hidden className="block h-14 w-14 shrink-0 rounded-xl" style={{ backgroundColor: 'var(--color-ios-fill)' }} />
+  ) : (
+    <img src={cover} alt="" loading="lazy" decoding="async" className="block h-14 w-14 shrink-0 rounded-xl object-cover" />
+  );
+}
+
+/**
+ * La fiche et le plein écran d'un pack de décor (#16267), chacun par un
+ * `import()`. Une « autre proposition » ouvre le plein écran de SON pack, à
+ * son élément — lu dans le cache des éléments que la rangée a remplis.
+ */
+function UnifiedPackInspector({
+  inspection,
+  language,
+  deps,
+  queryClient,
+}: {
+  readonly inspection: PackInspection<UnifiedPack>;
+  readonly language: InterfaceLanguage;
+  readonly deps: ConversationsDeps;
+  readonly queryClient: QueryClient;
+}) {
+  const catalogReady = usePackPreviewCatalog(language);
+  const refOf = (pack: UnifiedPack) => (isDecorDomain(pack.domain) ? { domain: pack.domain, slug: pack.rawSlug } : null);
+  const decorPacks = inspection.packs.flatMap((pack) => {
+    const ref = refOf(pack);
+    return ref === null ? [] : [ref];
+  });
+  const sheet = inspection.sheet;
+  const sheetRef = sheet === null ? null : refOf(sheet);
+  const preview = inspection.preview;
+  const previewRef = preview === null ? null : refOf(preview.pack);
+  if (!catalogReady) return null;
+  return (
+    <Suspense fallback={null}>
+      {sheet === null || sheetRef === null ? null : (
+        <PackSheet
+          language={language}
+          deps={deps}
+          pack={{ ...sheetRef, title: shopPackText(sheet, language).name, description: shopPackText(sheet, language).description, author: sheet.author, installed: sheet.installed, price: sheet.price, owned: sheet.owned }}
+          cover={<PackCover pack={sheet} />}
+          action={inspection.actionOf(sheet)}
+          busy={inspection.busy(sheet)}
+          notice={inspection.notice}
+          onAction={() => void inspection.toggle(sheet)}
+          onOpenItem={(index) => inspection.openPreview(sheet, index)}
+          onClose={inspection.closeSheet}
+        />
+      )}
+      {preview === null || previewRef === null ? null : (
+        <DecorPreview
+          language={language}
+          deps={deps}
+          pack={{ ...previewRef, title: shopPackText(preview.pack, language).name, installed: preview.pack.installed }}
+          index={preview.index}
+          packs={decorPacks}
+          action={inspection.actionOf(preview.pack)}
+          busy={inspection.busy(preview.pack)}
+          notice={inspection.notice}
+          onIndex={(index) => inspection.openPreview(preview.pack, index)}
+          onProposal={(item) => {
+            const target = inspection.packs.find((pack) => pack.domain === item.domain && pack.rawSlug === item.pack);
+            if (target === undefined) return;
+            const items = queryClient.getQueryData<PackItems>(packItemsQueryKey(item.domain, item.pack))?.items ?? [];
+            inspection.openPreview(target, Math.max(0, items.findIndex((candidate) => candidate.key === item.key)));
+          }}
+          onAction={() => inspection.toggle(preview.pack)}
+          onClose={inspection.closePreview}
+        />
+      )}
+    </Suspense>
+  );
+}
+
+export const keyedPack = (pack: ShopPack): UnifiedPack => ({ ...pack, rawSlug: pack.slug, slug: `${pack.domain}:${pack.slug}` });
+
+const ownedIn = (pack: UnifiedPack) => (list: unknown) =>
+  Array.isArray(list)
+    ? (list as readonly UnifiedPack[]).map((candidate) => (candidate.slug === pack.slug ? { ...candidate, owned: true, installed: true } : candidate))
+    : list;
+
+/**
+ * Au geste, seule la liste affichée change (le retour arrière la rétablit) ; à la
+ * confirmation, la possession vaut pour TOUS les filtres déjà en cache (le serveur
+ * rend `owned: true, installed: true`) — revenu sur « Tout », un pack acheté n'est
+ * plus à acheter ; les surfaces du domaine se revalident.
+ */
+const markOwned = (queryClient: QueryClient, filter: UnifiedFilter, pack: UnifiedPack, confirmed: boolean) => {
+  if (!confirmed) {
+    queryClient.setQueryData(shopKey(filter), ownedIn(pack));
+    return;
+  }
+  queryClient.setQueriesData({ queryKey: SHOP_KEY_ROOT }, ownedIn(pack));
+  void queryClient.invalidateQueries({ queryKey: packQueryKeys(pack.domain).installed });
+  void queryClient.invalidateQueries({ queryKey: packQueryKeys(pack.domain).catalogue });
+};
+
+export const unifiedShopAdapter = (
+  language: InterfaceLanguage,
+  filter: UnifiedFilter,
+  deps: ConversationsDeps,
+  queryClient: QueryClient,
+  rankName?: (rank: GloryRankKey) => string,
+): PackShopAdapter<UnifiedPack> => ({
+  domain: filter,
+  catalogueKey: shopKey(filter),
+  installedKey: SHOP_INSTALLED_KEY,
+  loadCatalogue: async (signal) => {
+    const result = await loadShop({ ...deps, signal }, filter === 'all' ? [] : [filter]);
+    if (!result.ok) return result;
+    if (result.data.balance !== null) queryClient.setQueryData(BALANCE_QUERY_KEY, result.data.balance);
+    return { ok: true, data: result.data.packs.map(keyedPack) };
+  },
+  setInstalled: (pack, installed) => setShopPackInstalled(deps, pack.domain, pack.rawSlug, installed),
+  applyInstalled: () => undefined,
+  completeInstalled: async (pack) => (client) => {
+    void client.invalidateQueries({ queryKey: packQueryKeys(pack.domain).installed });
+    void client.invalidateQueries({ queryKey: packQueryKeys(pack.domain).catalogue });
+  },
+  title: (pack) => shopPackText(pack, language).name,
+  description: (pack) => shopPackText(pack, language).description,
+  meta: (pack) => [
+    ...(pack.author === '' ? [] : [translateStickerPacks(language, 'stickerPacks.by', { author: pack.author })]),
+    translateStickerPacks(language, DOMAIN_KEYS[pack.domain]),
+  ],
+  cover: (pack) => <PackCover pack={pack} />,
+  inspectable: (pack) => isDecorDomain(pack.domain),
+  inspector: (inspection) => <UnifiedPackInspector inspection={inspection} language={language} deps={deps} queryClient={queryClient} />,
+  unlock: (pack) =>
+    pack.requirementPreview === undefined ? null : packUnlockLine({ preview: pack.requirementPreview, language, ...(rankName !== undefined ? { rankName } : {}) }),
+  locked: (pack) => packIsLocked(pack.requirementPreview),
+  price: (pack) => pack.price,
+  owned: (pack) => pack.owned,
+  removable: (pack) => pack.removable,
+  purchase: async (pack, requestId) => {
+    const result = await purchasePack(deps, pack.domain, pack.rawSlug, requestId);
+    return result.ok ? { ok: true, data: { balance: result.data.balance } } : result;
+  },
+  applyPurchased: (client, pack, confirmed) => {
+    markOwned(client, filter, pack, confirmed !== null);
+    if (confirmed === null || confirmed.balance === null) return;
+    client.setQueryData(BALANCE_QUERY_KEY, confirmed.balance);
+  },
+});
+
+export function UnifiedShop({
+  language,
+  initialDomain,
+  deps = apiDeps,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly initialDomain?: PackDomain | undefined;
+  readonly deps?: ConversationsDeps;
+}) {
+  const queryClient = useQueryClient();
+  const [filter, setFilter] = useState<UnifiedFilter>(initialDomain ?? 'all');
+  /* W18 — le nom d'un rang vit au catalogue du jeu, chargé à part : la ligne de
+     déblocage le nomme dès qu'il est là, et dit la Gloire qui manque en attendant. */
+  const [ranksReady, setRanksReady] = useState<InterfaceLanguage | null>(null);
+  useEffect(() => {
+    const alive = { current: true };
+    loadGameCatalogParts(language, ['banner']).then(
+      () => alive.current && setRanksReady(language),
+      () => undefined,
+    );
+    return () => {
+      alive.current = false;
+    };
+  }, [language]);
+  const rankName = useMemo(
+    () => (ranksReady === language ? (rank: GloryRankKey) => translateGame(language, `game.rank.${rank}`) : undefined),
+    [ranksReady, language],
+  );
+  const adapter = useMemo(() => unifiedShopAdapter(language, filter, deps, queryClient, rankName), [language, filter, deps, queryClient, rankName]);
+  const balance = useQuery<number | null>({ queryKey: BALANCE_QUERY_KEY, queryFn: () => null, enabled: false, staleTime: Infinity });
+  const chips: readonly { readonly id: UnifiedFilter; readonly label: string }[] = [
+    { id: 'all', label: translateStickerPacks(language, 'packs.shop.all') },
+    ...PACK_DOMAINS.map((domain) => ({ id: domain, label: translateStickerPacks(language, DOMAIN_KEYS[domain]) })),
+  ];
+
+  return (
+    <div data-unified-shop={filter} className="flex flex-col gap-3">
+      {typeof balance.data === 'number' ? (
+        <p data-shop-balance className="text-caption font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+          {translateStickerPacks(language, 'packs.balance', { balance: String(balance.data) })}
+        </p>
+      ) : null}
+      <div role="radiogroup" aria-label={translateStickerPacks(language, 'packs.shop.domains')} className="flex gap-2 overflow-x-auto pb-1">
+        {chips.map((chip) => (
+          <button
+            key={chip.id}
+            type="button"
+            role="radio"
+            aria-checked={chip.id === filter}
+            data-shop-domain={chip.id}
+            onClick={() => setFilter(chip.id)}
+            className="min-h-11 shrink-0 rounded-full px-4 text-body font-semibold focus-visible:outline-2"
+            style={{
+              outlineColor: 'var(--color-ios-brand)',
+              color: chip.id === filter ? 'var(--color-ios-on-brand)' : 'var(--color-ios-ink)',
+              backgroundColor: chip.id === filter ? 'var(--accent, var(--color-ios-brand))' : 'var(--color-ios-fill)',
+            }}
+          >
+            {chip.label}
+          </button>
+        ))}
+      </div>
+      <Suspense fallback={null}>
+        <PackShop
+          adapter={adapter}
+          language={language}
+          hint={translateStickerPacks(language, 'packs.shop.hint')}
+          empty={translateStickerPacks(language, 'packs.shop.empty')}
+        />
+      </Suspense>
+      {filter === 'lens' ? (
+        <Suspense fallback={null}>
+          <LensSubmit language={language} deps={deps} />
+        </Suspense>
+      ) : null}
+    </div>
+  );
+}

@@ -1,0 +1,24 @@
+package me.meeshy.app.feed
+
+/**
+ * Ce que le corps du fil montre — UN état à la fois (#14263). Hors ligne sans rien de gardé, le fil dit une seule chose :
+ * il est hors ligne et n'a pas encore été chargé ; jamais un bandeau « restent affichées » au-dessus d'une erreur vide.
+ */
+enum class FeedBody { SKELETON, POSTS, EMPTY, LOAD_ERROR, OFFLINE_EMPTY }
+
+val FeedUiState.body: FeedBody get() = body(hasPending = false)
+
+/** Une publication encore sur l'appareil se lit dans le fil quel que soit l'état du reste (#14902). */
+fun FeedUiState.body(hasPending: Boolean): FeedBody = when {
+    hasPending -> FeedBody.POSTS
+    showSkeleton -> FeedBody.SKELETON
+    posts.isNotEmpty() -> FeedBody.POSTS
+    loadFailed && isOffline -> FeedBody.OFFLINE_EMPTY
+    loadFailed -> FeedBody.LOAD_ERROR
+    else -> FeedBody.EMPTY
+}
+
+/** Le bandeau « Hors ligne » ne se pose que sur des publications lisibles : sans elles, l'état vide hors ligne parle seul. */
+val FeedUiState.showsOfflineBand: Boolean get() = showsOfflineBand(hasPending = false)
+
+fun FeedUiState.showsOfflineBand(hasPending: Boolean): Boolean = isOffline && body(hasPending) == FeedBody.POSTS

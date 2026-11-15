@@ -1,0 +1,535 @@
+import { rememberSearchId, useSearchTelemetry } from '@/lib/telemetry/search-telemetry';
+import { keepPreviousData, useInfiniteQuery, useQuery, type UseInfiniteQueryResult } from '@tanstack/react-query';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useStore } from 'zustand/react';
+
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import { LensPaginationFooter } from '@/components/lens-pagination-footer';
+import { LiveAnnouncement } from '@/components/live-announcement';
+import { PullIndicator } from '@/components/pull-indicator';
+import { blockedUsersQueryOptions, flattenBlockedUsers } from '@/lib/api/blocks';
+import { unwrap } from '@/lib/api/client';
+import { apiDeps } from '@/lib/api/deps';
+import { performRespondToRequest, performSendRequest, performUnblock, type FriendActionDeps, type FriendActionOutcome } from '@/lib/api/friend-actions';
+import {
+  FRIEND_REQUESTS_PAGE_SIZE,
+  flattenFriendRequests,
+  friendRequestsQueryOptions,
+  type FriendRequestRecord,
+  type PersonSummary,
+} from '@/lib/api/friend-requests';
+import { FRIENDS_QUERY_PREFIX } from '@/lib/api/friends-keys';
+import { performEmailInvitation } from '@/lib/api/invitations';
+import { appQueryClient } from '@/lib/api/query-client';
+import { sessionStore } from '@/lib/api/session';
+import { searchUsers } from '@/lib/api/users-search';
+import { resolveViewer } from '@/lib/api/viewer';
+import {
+  DISCOVER_TAB_PARAM,
+  REQUEST_FILTER_PARAM,
+  discoverTabFromSearch,
+  personNameOf,
+  relationshipIndexOf,
+  relationshipOf,
+  requestFilterFromSearch,
+  type DiscoverTab,
+  type RequestFilter,
+} from '@/lib/discover/view';
+import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
+import { useOnline } from '@/lib/net/online';
+import { useSearch } from '@/lib/router';
+import { coldStateOf } from '@/lib/view/cold-state';
+import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
+import { useTapGate } from '@/lib/view/tap-gate';
+import { useExhaustPages } from '@/lib/view/use-exhaust-pages';
+import { announcementToneOf } from '@/lib/view/announcement-tone';
+import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
+import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
+import { useMinute } from '@/lib/view/use-minute';
+import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
+import { useScrollportMemory } from '@/lib/view/use-scrollport-memory';
+import { useSettled } from '@/lib/view/use-settled';
+import {
+  BlockedPersonRow,
+  DISCOVER_TOP_RESERVE,
+  DiscoverEmpty,
+  DiscoverError,
+  DiscoverGlyph,
+  DiscoverHeader,
+  DiscoverOfflineNotice,
+  DiscoverSearchField,
+  DiscoverSkeleton,
+  DiscoverTabBar,
+  InviteCard,
+  PERSON_ROW_HEIGHT,
+  PersonResultRow,
+  ReceivedRequestRow,
+  RequestFilterRail,
+  SentRequestRow,
+  type ConnectionHandlers,
+  type InviteStatus,
+} from '@/routes/discover-parts';
+import { PhoneAddPrompt } from '@/components/phone-add-prompt';
+import { usePhoneAddPrompt } from '@/lib/view/use-phone-add-prompt';
+import type { RelationRequestLevel } from '@meeshy/shared/types/relation';
+import { RELATION_LINKS_QUERY_KEY } from '@/lib/api/friends-keys';
+import { loadCirclesCatalog } from '@/lib/i18n-circles-catalog';
+import type { CircleRequestHandlers } from '@/routes/discover-circles-parts';
+import type { raiseCaption as RaiseCaption } from '@/routes/discover-raise-caption';
+
+/* L'onglet « Cercles » et le rituel du Sang (#13938) se chargent À LA DEMANDE :
+   Découvrir ne les paie que si on les ouvre (`budgets.json` › `discover`). */
+const CirclesPanel = lazy(() => import('@/routes/discover-circles').then((m) => ({ default: m.CirclesPanel })));
+const BloodRitualDialog = lazy(() => import('@/routes/blood-ritual-dialog').then((m) => ({ default: m.BloodRitualDialog })));
+
+/** Le cran d'une demande de montée (« Demande le niveau Proche ») : son module et le catalogue des cercles ne se chargent que si une demande en porte un. */
+function useRaiseCaption(rows: readonly FriendRequestRecord[], language: InterfaceLanguage): typeof RaiseCaption | null {
+  const needed = rows.some((row) => row.targetLevel !== undefined);
+  const [caption, setCaption] = useState<{ readonly language: InterfaceLanguage; readonly of: typeof RaiseCaption } | null>(null);
+  const ready = caption !== null && caption.language === language;
+  useEffect(() => {
+    if (!needed || ready) return undefined;
+    let live = true;
+    void Promise.all([import('@/routes/discover-raise-caption'), loadCirclesCatalog(language)]).then(
+      ([m]) => {
+        if (live) setCaption({ language, of: m.raiseCaption });
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [needed, ready, language]);
+  return ready ? caption.of : null;
+}
+
+/**
+ * **DÉCOUVRIR** (#6363) — quatrième barreau de l'échelle, miroir de
+ * `PeopleDiscoveryView` (`apps/ios/Meeshy/Features/Contacts/`) : en-tête avec
+ * retour, trois onglets soulignés — Découvrir, Demandes, Bloqués — et leur
+ * contenu. Remplace l'écran d'attente de #6214.
+ *
+ * **L'onglet et le filtre vivent dans l'ADRESSE** (`?onglet=requests`,
+ * `?demandes=sent`) : le profil peut ouvrir directement les demandes, et le
+ * retour arrière rend l'onglet, comme la catégorie de la cloche (D-55).
+ *
+ * **Une source par fait.** Les demandes reçues de l'onglet, le compte de
+ * l'onglet « Demandes », la pastille du barreau (#6321) et le compte du profil
+ * lisent le MÊME panier (`friend-requests.ts`) ; l'état de chaque personne de la
+ * recherche (Ajouter, En attente, Accepter/Refuser, Contact, Bloqué) se lit
+ * dans ces mêmes paniers (`relationshipIndexOf`). Un geste les fait bouger
+ * ensemble, au tap (`friend-actions.ts`).
+ *
+ * **Cache d'abord.** Les paniers sont persistés (`query-client.ts`) et se
+ * peignent au premier rendu ; le squelette ne vient que sur un cache vide. Une
+ * recherche garde les résultats précédents le temps que la suivante réponde.
+ *
+ * **Ce que l'écran n'offre pas**, parce que le web n'a pas de quoi le faire (loi
+ * 4) : inviter par SMS et retrouver son carnet d'adresses (#6394), les
+ * suggestions à requête vide que la passerelle ne sert pas (#6395), ouvrir le
+ * profil d'une personne (#6396), la découverte à proximité (#6397). D-62.
+ */
+
+const SEARCH_DEBOUNCE_MS = 350;
+const MIN_QUERY_LENGTH = 2;
+const ANNOUNCE_MS = 4000;
+
+type ListQuery = Pick<UseInfiniteQueryResult, 'data' | 'isError' | 'isPaused' | 'refetch' | 'fetchNextPage'>;
+
+type AnnounceKey = Extract<InterfaceCatalogKey, `discover.announce.${string}`>;
+
+export default function DiscoverScreen() {
+  const language = currentInterfaceLanguage();
+  const [search, setSearch] = useSearch();
+  const tab = discoverTabFromSearch(search.get(DISCOVER_TAB_PARAM));
+  const filter = requestFilterFromSearch(search.get(REQUEST_FILTER_PARAM));
+  const frame = useRef<HTMLDivElement | null>(null);
+  useScrollportMemory(frame);
+  const online = useOnline();
+  const minute = useMinute();
+  const now = useMemo(() => new Date(), [minute]);
+  const session = useStore(sessionStore, (state) => state.session);
+  const enabled = apiDeps.source === 'fixtures' || session.status === 'authenticated';
+  const viewerId = resolveViewer({ source: apiDeps.source, session }).id ?? null;
+  /* « AJOUTEZ VOTRE NUMÉRO » (#8843) — là où l'on cherche des gens, si le
+     profil n'en a pas ; miroir de la vue iOS d'avant la recherche par contacts. */
+  const phonePrompt = usePhoneAddPrompt(enabled);
+
+  const received = useInfiniteQuery({ ...friendRequestsQueryOptions(apiDeps, 'received'), enabled }, appQueryClient);
+  const sent = useInfiniteQuery({ ...friendRequestsQueryOptions(apiDeps, 'sent'), enabled }, appQueryClient);
+  const accepted = useInfiniteQuery({ ...friendRequestsQueryOptions(apiDeps, 'accepted'), enabled }, appQueryClient);
+  const blocked = useInfiniteQuery({ ...blockedUsersQueryOptions(apiDeps), enabled }, appQueryClient);
+  /* L'INDEX de relation (#6421) doit lire TOUS les contacts et TOUS les
+     bloqués, pas seulement leur première page — `accepted` n'a aucune liste
+     visible pour le faire défiler, et `blocked` ne défile que sous son
+     propre onglet. */
+  useExhaustPages(accepted, enabled);
+  useExhaustPages(blocked, enabled);
+
+  const receivedRows = useMemo(() => flattenFriendRequests(received.data), [received.data]);
+  const sentRows = useMemo(() => flattenFriendRequests(sent.data), [sent.data]);
+  const acceptedRows = useMemo(() => flattenFriendRequests(accepted.data), [accepted.data]);
+  const blockedRows = useMemo(() => flattenBlockedUsers(blocked.data), [blocked.data]);
+  const index = useMemo(
+    () => relationshipIndexOf({ viewerId, received: receivedRows, sent: sentRows, accepted: acceptedRows, blocked: blockedRows }),
+    [viewerId, receivedRows, sentRows, acceptedRows, blockedRows],
+  );
+
+  const announcer = useLiveAnnouncer(ANNOUNCE_MS);
+  const { announce } = announcer;
+  const deps: FriendActionDeps = useMemo(
+    () => ({ ...apiDeps, queryClient: appQueryClient, isOnline: () => navigator.onLine, viewerId: () => viewerId }),
+    [viewerId],
+  );
+  /* L'ENCRE DIT LA NATURE (revue #7083) : un refus et un hors-ligne ne se
+     lisent pas comme une réussite. Le ton voyage avec le texte, dans le même
+     état — voir `use-live-announcer.ts`. */
+  const report = useCallback(
+    (outcome: FriendActionOutcome, done: AnnounceKey, failed: AnnounceKey) =>
+      announce(
+        translate(language, outcome === 'done' ? done : outcome === 'offline' ? 'discover.announce.offline' : failed),
+        announcementToneOf(outcome),
+      ),
+    [announce, language],
+  );
+
+  /* Un geste REMPLACE ce qu'il touche : le second tap d'un double tap
+     n'atteint ni la ligne qui remonte, ni le bouton qui a pris la place (#6417). */
+  const admitTap = useTapGate();
+  /* LE RITUEL DU SANG (#13938) — une demande de Sang ne s'accepte pas par
+     `PATCH accept` (`RELATION_RITUAL_REQUIRED`) : « Accepter » l'ouvre, depuis
+     « Cercles » comme depuis « Demandes ». */
+  const [ritualTarget, setRitualTarget] = useState<{ readonly userId: string; readonly name: string } | null>(null);
+  const openRitual = useCallback(
+    (userId: string, person: PersonSummary | null) => setRitualTarget({ userId, name: personNameOf(person, translate(language, 'discover.unknown')) }),
+    [language],
+  );
+  const closeRitual = useCallback(() => {
+    setRitualTarget(null);
+    void appQueryClient.invalidateQueries({ queryKey: FRIENDS_QUERY_PREFIX });
+  }, []);
+  const onAccept = useCallback(
+    (request: FriendRequestRecord) => {
+      if (request.targetLevel === 'BLOOD') {
+        openRitual(request.senderId, request.sender);
+        return;
+      }
+      if (!admitTap()) return;
+      void performRespondToRequest({ request, action: 'accept', deps }).then((o) => report(o, 'discover.announce.accepted', 'discover.announce.acceptFailed'));
+    },
+    [admitTap, deps, report, openRitual],
+  );
+  const onReject = useCallback(
+    (request: FriendRequestRecord) => {
+      if (!admitTap()) return;
+      void performRespondToRequest({ request, action: 'reject', deps }).then((o) => report(o, 'discover.announce.rejected', 'discover.announce.rejectFailed'));
+    },
+    [admitTap, deps, report],
+  );
+  const onCancel = useCallback(
+    (request: FriendRequestRecord) => {
+      if (!admitTap()) return;
+      void performRespondToRequest({ request, action: 'cancel', deps }).then((o) => report(o, 'discover.announce.cancelled', 'discover.announce.cancelFailed'));
+    },
+    [admitTap, deps, report],
+  );
+  const onAdd = useCallback(
+    (person: PersonSummary) => {
+      if (!admitTap()) return;
+      void performSendRequest({ person, deps }).then((o) => report(o, 'discover.announce.sent', 'discover.announce.sendFailed'));
+    },
+    [admitTap, deps, report],
+  );
+  const handlers: ConnectionHandlers = useMemo(() => ({ onAdd, onCancel, onAccept, onReject }), [onAdd, onCancel, onAccept, onReject]);
+  /* DEMANDER UN CRAN (#13938) — le même geste optimiste qu'« Ajouter », avec le cran visé. */
+  const onRaise = useCallback(
+    (person: PersonSummary, targetLevel: RelationRequestLevel) => {
+      if (!admitTap()) return;
+      void performSendRequest({ person, targetLevel, deps }).then((o) => report(o, 'discover.announce.sent', 'discover.announce.sendFailed'));
+    },
+    [admitTap, deps, report],
+  );
+  const circleHandlers: CircleRequestHandlers = useMemo(
+    () => ({ onAccept, onDecline: onReject, onCancel, onRitual: openRitual }),
+    [onAccept, onReject, onCancel, openRitual],
+  );
+  /* Le cran d'une demande de montée dans « Demandes » (iso `RequestsTab.levelCaption`) — dès que son module et le catalogue des cercles sont là. */
+  const caption = useRaiseCaption(
+    useMemo(() => [...receivedRows, ...sentRows], [receivedRows, sentRows]),
+    language,
+  );
+  const levelCaption = (request: FriendRequestRecord, direction: 'incoming' | 'outgoing'): string | null => (caption === null ? null : caption(language, request, direction));
+
+  /* Débloquer passe par une confirmation modale : un double tap n'y retire
+     personne, il ne peut qu'ouvrir une confirmation — la porte n'y est pas. */
+  const [unblockTarget, setUnblockTarget] = useState<PersonSummary | null>(null);
+  const closeConfirm = useCallback(() => setUnblockTarget(null), []);
+  const confirmUnblock = useCallback(() => {
+    if (unblockTarget === null) return;
+    setUnblockTarget(null);
+    void performUnblock({ person: unblockTarget, deps }).then((o) => report(o, 'discover.announce.unblocked', 'discover.announce.unblockFailed'));
+  }, [unblockTarget, deps, report]);
+
+  const [typed, setTyped] = useState('');
+  const query = useSettled(typed, SEARCH_DEBOUNCE_MS).trim();
+  const searchIds = useRef(new Map<string, string>());
+  const results = useQuery(
+    {
+      queryKey: ['users', 'search', query],
+      queryFn: async () => {
+        const served = await searchUsers(apiDeps, query);
+        rememberSearchId(searchIds.current, query, served);
+        return unwrap(served);
+      },
+      enabled: enabled && tab === 'discover' && query.length >= MIN_QUERY_LENGTH,
+      placeholderData: keepPreviousData,
+    },
+    appQueryClient,
+  );
+  const { onResultsClick } = useSearchTelemetry({
+    query,
+    results: results.data,
+    searchId: searchIds.current.get(query),
+    settled: !results.isPlaceholderData,
+    minLength: MIN_QUERY_LENGTH,
+    resultKind: 'profile',
+    targetKind: 'profile',
+    rowAttribute: 'data-person',
+  });
+
+  const [email, setEmail] = useState('');
+  const [invite, setInvite] = useState<{ readonly status: InviteStatus; readonly sentTo: string }>({ status: 'idle', sentTo: '' });
+  const submitInvite = useCallback(() => {
+    if (invite.status === 'sending') return;
+    const address = email.trim();
+    setInvite({ status: 'sending', sentTo: '' });
+    void performEmailInvitation({ email: address, deps }).then((status) => {
+      setInvite({ status, sentTo: address });
+      if (status === 'sent') setEmail('');
+    });
+  }, [invite.status, email, deps]);
+
+  const replaceParams = useCallback(
+    (updates: Readonly<Record<string, string | null>>) => {
+      const kept = [...search.entries()].filter(([name]) => !(name in updates));
+      const added = Object.entries(updates).flatMap(([name, value]) => (value === null ? [] : [[name, value] as [string, string]]));
+      setSearch(new URLSearchParams([...kept, ...added]), true);
+    },
+    [search, setSearch],
+  );
+  const selectTab = useCallback(
+    (next: DiscoverTab) => {
+      replaceParams({ [DISCOVER_TAB_PARAM]: next === 'discover' ? null : next, [REQUEST_FILTER_PARAM]: null });
+      frame.current?.scrollTo({ top: 0 });
+    },
+    [replaceParams],
+  );
+  const selectFilter = useCallback((next: RequestFilter) => replaceParams({ [REQUEST_FILTER_PARAM]: next === 'received' ? null : next }), [replaceParams]);
+
+  const refreshTargets: readonly ListQuery[] = tab === 'blocked' ? [blocked] : tab === 'requests' ? [received, sent] : tab === 'circles' ? [received, sent, accepted] : [received, sent, accepted, blocked];
+  const onRefresh = useCallback(
+    () =>
+      Promise.all([
+        ...refreshTargets.map((target) => target.refetch()),
+        ...(tab === 'circles' ? [appQueryClient.refetchQueries({ queryKey: RELATION_LINKS_QUERY_KEY })] : []),
+      ]).then(() => undefined),
+    [refreshTargets, tab],
+  );
+  const pull = usePullToRefresh({ root: frame, onRefresh, threshold: PULL_THRESHOLD });
+
+  const activeList = tab === 'blocked' ? blocked : tab === 'requests' ? (filter === 'sent' ? sent : received) : null;
+  const activeCount = tab === 'blocked' ? blockedRows.length : filter === 'sent' ? sentRows.length : receivedRows.length;
+  const paginationState = activeList === null ? 'exhausted' : paginationStateOf(activeList);
+  const { observe: observeTail } = useLoadMoreSentinel({
+    root: frame,
+    rootMargin: loadMoreRootMargin(PERSON_ROW_HEIGHT),
+    enabled: activeList !== null && activeList.data !== undefined && paginationState === 'idle',
+    onReach: () => void activeList?.fetchNextPage(),
+  });
+
+  const listFooter = (pageSize: number) => (
+    <LensPaginationFooter
+      state={paginationState}
+      showsAllLoadedHint={showsAllLoadedHint(activeCount, pageSize)}
+      exhaustedLabel={translate(language, 'discover.allLoaded')}
+      onRetry={() => void activeList?.fetchNextPage()}
+      sentinelRef={observeTail}
+    />
+  );
+
+  const listBody = (list: ListQuery, count: number, empty: ReactNode, rows: ReactNode) =>
+    list.data === undefined ? (
+      coldStateOf(list) === 'error' ? (
+        <DiscoverError language={language} online={online} onRetry={() => void list.refetch()} />
+      ) : coldStateOf(list) === 'offline' ? (
+        <DiscoverOfflineNotice language={language} cold />
+      ) : (
+        <DiscoverSkeleton />
+      )
+    ) : count === 0 ? (
+      empty
+    ) : (
+      <>
+        {online ? null : <DiscoverOfflineNotice language={language} cold={false} />}
+        {rows}
+      </>
+    );
+
+  const searchBody =
+    query.length < MIN_QUERY_LENGTH ? null : results.data === undefined ? (
+      <p role={results.isError ? 'alert' : 'status'} data-discover-search-state={results.isError ? 'error' : 'searching'} className="py-6 text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+        {translate(language, results.isError ? 'discover.search.error' : 'discover.search.searching')}
+      </p>
+    ) : results.data.length === 0 && !results.isPlaceholderData ? (
+      <p role="status" data-discover-search-state="empty" className="py-6 text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+        {translate(language, 'discover.search.empty', { query })}
+      </p>
+    ) : (
+      <ul data-discover-results aria-busy={results.isPlaceholderData} className="flex flex-col" onClickCapture={onResultsClick}>
+        {results.data.map((person) => (
+          <PersonResultRow key={person.id} language={language} person={person} relationship={relationshipOf(index, person.id)} handlers={handlers} />
+        ))}
+      </ul>
+    );
+
+  const panels: Readonly<Record<DiscoverTab, () => ReactNode>> = {
+    discover: () => (
+      <section data-discover-people className="flex flex-col gap-4 pb-8">
+        {phonePrompt.visible ? (
+          <div className="px-4 pt-2">
+            <PhoneAddPrompt language={language} deps={phonePrompt.deps} onDismiss={phonePrompt.dismiss} onVerified={phonePrompt.verified} />
+          </div>
+        ) : null}
+        <InviteCard language={language} email={email} sentTo={invite.sentTo} status={invite.status} onEmailChange={setEmail} onSubmit={submitInvite} />
+        <div className="grid gap-2 px-4">
+          <DiscoverSearchField language={language} value={typed} onChange={setTyped} />
+          {searchBody}
+        </div>
+      </section>
+    ),
+    requests: () => (
+      <section data-discover-requests={filter} className="flex flex-1 flex-col">
+        <RequestFilterRail language={language} selected={filter} counts={{ received: receivedRows.length, sent: sentRows.length }} onSelect={selectFilter} />
+        {filter === 'received'
+          ? listBody(
+              received,
+              receivedRows.length,
+              <DiscoverEmpty
+                data="received"
+                glyph={<DiscoverGlyph name="userCheck" size={44} />}
+                title={translate(language, 'discover.requests.empty.received.title')}
+              />,
+              <ul data-request-list="received" className="flex flex-col">
+                {receivedRows.map((request) => (
+                  <ReceivedRequestRow key={request.id} language={language} request={request} now={now} onAccept={onAccept} onReject={onReject} levelCaption={levelCaption(request, 'incoming')} />
+                ))}
+                {listFooter(FRIEND_REQUESTS_PAGE_SIZE)}
+              </ul>,
+            )
+          : listBody(
+              sent,
+              sentRows.length,
+              <DiscoverEmpty
+                data="sent"
+                glyph={<DiscoverGlyph name="paperPlaneTilt" size={44} />}
+                title={translate(language, 'discover.requests.empty.sent.title')}
+              />,
+              <ul data-request-list="sent" className="flex flex-col">
+                {sentRows.map((request) => (
+                  <SentRequestRow key={request.id} language={language} request={request} now={now} onCancel={onCancel} levelCaption={levelCaption(request, 'outgoing')} />
+                ))}
+                {listFooter(FRIEND_REQUESTS_PAGE_SIZE)}
+              </ul>,
+            )}
+      </section>
+    ),
+    circles: () => (
+      <Suspense fallback={<DiscoverSkeleton />}>
+        <CirclesPanel
+        language={language}
+        enabled={enabled}
+        online={online}
+        now={now}
+        received={receivedRows}
+        sent={sentRows}
+        accepted={acceptedRows}
+        requestHandlers={circleHandlers}
+        onRaise={onRaise}
+        onFindContacts={() => selectTab('discover')}
+        />
+      </Suspense>
+    ),
+    blocked: () => (
+      <section data-discover-blocked className="flex flex-1 flex-col">
+        {listBody(
+          blocked,
+          blockedRows.length,
+          <DiscoverEmpty
+            data="blocked"
+            glyph={<DiscoverGlyph name="handPalm" size={44} />}
+            title={translate(language, 'discover.blocked.empty.title')}
+          />,
+          <ul data-blocked-list className="flex flex-col">
+            {blockedRows.map((person) => (
+              <BlockedPersonRow key={person.id} language={language} person={person} onUnblock={setUnblockTarget} />
+            ))}
+            {listFooter(FRIEND_REQUESTS_PAGE_SIZE)}
+          </ul>,
+        )}
+      </section>
+    ),
+  };
+
+  const loading = activeList !== null && coldStateOf(activeList) === 'loading';
+
+  return (
+    <main className="relative flex h-dvh flex-col overflow-hidden pt-safe">
+      <DiscoverHeader language={language} />
+      <DiscoverTabBar language={language} selected={tab} received={receivedRows.length} onSelect={selectTab} />
+      <PullIndicator phase={pull.phase} offsetPx={pull.offsetPx} reducedMotion={pull.reducedMotion} />
+      <div
+        ref={frame}
+        id="contenu"
+        role="tabpanel"
+        aria-labelledby={`discover-tab-${tab}`}
+        data-discover-panel={tab}
+        className="scrollbar-none overscroll-contain flex flex-1 flex-col overflow-y-auto pb-safe"
+        style={pullTransform(pull.phase, pull.offsetPx)}
+        {...(loading ? { 'aria-busy': true } : {})}
+      >
+        <div aria-hidden="true" className="shrink-0" style={{ height: DISCOVER_TOP_RESERVE }} />
+        {panels[tab]()}
+      </div>
+      {/* LA PASTILLE D'ANNONCE VIT DANS `components/live-announcement.tsx`
+          depuis la revue #7083 : elle était écrite ici et, en `sr-only`
+          inconditionnel, une seconde fois sur `/u/` — mêmes clés, même hook,
+          deux produits. Le motif que les 40 surfaces restantes vont copier n'a
+          plus qu'un site. */}
+      <LiveAnnouncement text={announcer.text} tone={announcer.tone} marker="discover" />
+      {/* **UNE SEULE CONFIRMATION, PARTOUT** (revue-correction #6149, défaut
+          majeur 2, issue #7858) — `UnblockConfirm` était la SECONDE des trois
+          copies divergentes, blanc sur `--color-warning` mêlé de noir. */}
+      {ritualTarget === null ? null : (
+        <Suspense fallback={null}>
+          <BloodRitualDialog language={language} userId={ritualTarget.userId} name={ritualTarget.name} onFinished={closeRitual} />
+        </Suspense>
+      )}
+      {unblockTarget === null ? null : (
+        <ConfirmDialog
+          name="unblock"
+          title={translate(language, 'discover.blocked.confirm.title')}
+          body={translate(language, 'discover.blocked.confirm.body', {
+            name: personNameOf(unblockTarget, translate(language, 'discover.unknown')),
+          })}
+          cancelLabel={translate(language, 'discover.blocked.confirm.cancel')}
+          confirmLabel={translate(language, 'discover.blocked.unblock')}
+          tone="destructive"
+          onCancel={closeConfirm}
+          onConfirm={confirmUnblock}
+        />
+      )}
+    </main>
+  );
+}

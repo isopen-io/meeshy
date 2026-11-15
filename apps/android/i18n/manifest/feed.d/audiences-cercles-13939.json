@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        {
+          "androidName": "status_composer_visibility_acquaintances",
+          "status": "android-only"
+        },
+        {
+          "androidName": "status_composer_visibility_close",
+          "status": "android-only"
+        },
+        {
+          "androidName": "status_composer_visibility_blood",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="my_stories_resume_failed">Impossible de convertir cette story en brouillon. Elle reste dans votre file.</string>
+    <string name="my_stories_draft_open_failed">Impossible d’ouvrir ce brouillon.</string>
+</resources>

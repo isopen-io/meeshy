@@ -20,7 +20,10 @@
 import { describe, it, expect } from 'vitest';
 
 /** L'inventaire des valeurs d'exécution que `types/post.ts` a le droit d'exporter. */
-const ALLOWED_RUNTIME_EXPORTS = ['DEFAULT_PUBLICATION_VISIBILITY'] as const;
+const ALLOWED_RUNTIME_EXPORTS = ['DEFAULT_PUBLICATION_VISIBILITY', 'POST_VISIBILITIES'] as const;
+// `POST_VISIBILITIES` (#13931) : la liste des audiences est UNE source — schéma
+// Zod du gateway, listes des écrans d'administration, filtre web — au lieu de
+// quatre `z.enum` et de deux listes recopiées à la main.
 
 describe('post types module', () => {
   it('loads without error and exports only its declared runtime surface', async () => {

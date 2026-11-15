@@ -1,0 +1,172 @@
+{
+  "kit": "K20",
+  "tolerance": 1e-9,
+  "fit": [
+    { "name": "quatre et plus, tout tient", "slots": 5, "available": 390, "tileHeight": 48, "minTileHeight": 32, "aspect": 0.5625, "spacing": 6, "height": 48, "width": 27, "scrolls": false },
+    { "name": "dix vignettes à 48 : 324", "slots": 10, "available": 324, "tileHeight": 48, "minTileHeight": 32, "aspect": 0.5625, "spacing": 6, "height": 48, "width": 27, "scrolls": false },
+    { "name": "dix vignettes serrées à 32 : 234", "slots": 10, "available": 234, "tileHeight": 48, "minTileHeight": 32, "aspect": 0.5625, "spacing": 6, "height": 32, "width": 18, "scrolls": false },
+    { "name": "dix vignettes, entre les deux, hauteur entière", "slots": 10, "available": 300, "tileHeight": 48, "minTileHeight": 32, "aspect": 0.5625, "spacing": 6, "height": 43, "width": 24.1875, "scrolls": false },
+    { "name": "dix vignettes sous 234 : elle défile", "slots": 10, "available": 200, "tileHeight": 48, "minTileHeight": 32, "aspect": 0.5625, "spacing": 6, "height": 32, "width": 18, "scrolls": true },
+    { "name": "largeur inconnue : pleine taille", "slots": 10, "available": null, "tileHeight": 48, "minTileHeight": 32, "aspect": 0.5625, "spacing": 6, "height": 48, "width": 27, "scrolls": false },
+    { "name": "une vignette, place juste", "slots": 1, "available": 20, "tileHeight": 48, "minTileHeight": 32, "aspect": 0.5625, "spacing": 6, "height": 35, "width": 19.6875, "scrolls": false },
+    { "name": "une vignette, place trop étroite", "slots": 1, "available": 10, "tileHeight": 48, "minTileHeight": 32, "aspect": 0.5625, "spacing": 6, "height": 32, "width": 18, "scrolls": true },
+    { "name": "hauteur minimale au-dessus de la hauteur : la hauteur gagne", "slots": 3, "available": 30, "tileHeight": 24, "minTileHeight": 32, "aspect": 0.5625, "spacing": 6, "height": 24, "width": 13.5, "scrolls": true }
+  ],
+  "pitch": [
+    { "tileWidth": 27, "spacing": 6, "pitch": 33 },
+    { "tileWidth": 18, "spacing": 6, "pitch": 24 }
+  ],
+  "contentWidth": [
+    { "slots": 10, "tileWidth": 27, "spacing": 6, "width": 324 },
+    { "slots": 10, "tileWidth": 18, "spacing": 6, "width": 234 },
+    { "slots": 5, "tileWidth": 27, "spacing": 6, "width": 159 },
+    { "slots": 0, "tileWidth": 27, "spacing": 6, "width": 0 }
+  ],
+  "target": [
+    { "source": 1, "translation": 0, "pitch": 33, "count": 4, "rtl": false, "target": 1 },
+    { "source": 1, "translation": 33, "pitch": 33, "count": 4, "rtl": false, "target": 2 },
+    { "source": 1, "translation": 16, "pitch": 33, "count": 4, "rtl": false, "target": 1 },
+    { "source": 1, "translation": 17, "pitch": 33, "count": 4, "rtl": false, "target": 2 },
+    { "source": 1, "translation": 50, "pitch": 33, "count": 4, "rtl": false, "target": 3 },
+    { "source": 1, "translation": 1000, "pitch": 33, "count": 4, "rtl": false, "target": 3 },
+    { "source": 1, "translation": -1000, "pitch": 33, "count": 4, "rtl": false, "target": 0 },
+    { "source": 2, "translation": -33, "pitch": 33, "count": 4, "rtl": false, "target": 1 },
+    { "source": 2, "translation": -33, "pitch": 33, "count": 4, "rtl": true, "target": 3 },
+    { "source": 2, "translation": 33, "pitch": 33, "count": 4, "rtl": true, "target": 1 },
+    { "source": 0, "translation": 0, "pitch": 33, "count": 0, "rtl": false, "target": null },
+    { "source": 5, "translation": 0, "pitch": 33, "count": 4, "rtl": false, "target": null },
+    { "source": 1, "translation": 33, "pitch": 0, "count": 4, "rtl": false, "target": null }
+  ],
+  "destination": [
+    { "source": 1, "target": 1, "rank": null },
+    { "source": 1, "target": 3, "rank": 3 },
+    { "source": 3, "target": 0, "rank": 0 }
+  ],
+  "shift": [
+    { "index": 2, "source": 1, "target": 3, "pitch": 33, "rtl": false, "shift": -33 },
+    { "index": 3, "source": 1, "target": 3, "pitch": 33, "rtl": false, "shift": -33 },
+    { "index": 1, "source": 1, "target": 3, "pitch": 33, "rtl": false, "shift": 0 },
+    { "index": 0, "source": 1, "target": 3, "pitch": 33, "rtl": false, "shift": 0 },
+    { "index": 4, "source": 1, "target": 3, "pitch": 33, "rtl": false, "shift": 0 },
+    { "index": 2, "source": 1, "target": 3, "pitch": 33, "rtl": true, "shift": 33 },
+    { "index": 1, "source": 3, "target": 1, "pitch": 33, "rtl": false, "shift": 33 },
+    { "index": 2, "source": 3, "target": 1, "pitch": 33, "rtl": false, "shift": 33 },
+    { "index": 3, "source": 3, "target": 1, "pitch": 33, "rtl": false, "shift": 0 },
+    { "index": 0, "source": 3, "target": 1, "pitch": 33, "rtl": false, "shift": 0 },
+    { "index": 1, "source": 3, "target": 1, "pitch": 33, "rtl": true, "shift": -33 },
+    { "index": 2, "source": 2, "target": 2, "pitch": 33, "rtl": false, "shift": 0 }
+  ],
+  "tap": [
+    { "name": "une autre vignette : on y va", "tapped": "b", "current": "a", "armed": null, "double": false, "enabled": true, "canSelect": true, "canDuplicate": true, "effect": "select:b" },
+    { "name": "la courante ne répond pas", "tapped": "a", "current": "a", "armed": null, "double": false, "enabled": true, "canSelect": true, "canDuplicate": true, "effect": "none" },
+    { "name": "second toucher : on duplique", "tapped": "b", "current": "a", "armed": null, "double": true, "enabled": true, "canSelect": true, "canDuplicate": true, "effect": "duplicate:b" },
+    { "name": "second toucher sur la courante : on duplique", "tapped": "a", "current": "a", "armed": null, "double": true, "enabled": true, "canSelect": true, "canDuplicate": true, "effect": "duplicate:a" },
+    { "name": "second toucher sans rappel de duplication, la courante : rien", "tapped": "a", "current": "a", "armed": null, "double": true, "enabled": true, "canSelect": true, "canDuplicate": false, "effect": "none" },
+    { "name": "second toucher sans rappel de duplication, une autre : on y va", "tapped": "b", "current": "a", "armed": null, "double": true, "enabled": true, "canSelect": true, "canDuplicate": false, "effect": "select:b" },
+    { "name": "armée : tout toucher désarme sans naviguer", "tapped": "b", "current": "a", "armed": "c", "double": false, "enabled": true, "canSelect": true, "canDuplicate": true, "effect": "disarm" },
+    { "name": "armée : même un second toucher désarme", "tapped": "b", "current": "a", "armed": "c", "double": true, "enabled": true, "canSelect": true, "canDuplicate": true, "effect": "disarm" },
+    { "name": "désactivée : rien", "tapped": "b", "current": "a", "armed": null, "double": false, "enabled": false, "canSelect": true, "canDuplicate": true, "effect": "none" },
+    { "name": "sans rappel d'aller : rien", "tapped": "b", "current": "a", "armed": null, "double": false, "enabled": true, "canSelect": false, "canDuplicate": true, "effect": "none" },
+    { "name": "sans courante : toute vignette répond", "tapped": "a", "current": null, "armed": null, "double": false, "enabled": true, "canSelect": true, "canDuplicate": true, "effect": "select:a" }
+  ],
+  "longPress": [
+    { "name": "arme une vignette", "pressed": "b", "armed": null, "enabled": true, "canArm": true, "effect": "arm:b" },
+    { "name": "déjà armée : rien de plus", "pressed": "b", "armed": "b", "enabled": true, "canArm": true, "effect": "none" },
+    { "name": "une autre armée : celle-ci prend l'armement", "pressed": "b", "armed": "c", "enabled": true, "canArm": true, "effect": "arm:b" },
+    { "name": "rien à faire d'une vignette armée : rien", "pressed": "b", "armed": null, "enabled": true, "canArm": false, "effect": "none" },
+    { "name": "désactivée : rien", "pressed": "b", "armed": null, "enabled": false, "canArm": true, "effect": "none" }
+  ],
+  "canArm": [
+    { "count": 1, "canMove": true, "canRemove": false, "canArm": false },
+    { "count": 2, "canMove": true, "canRemove": false, "canArm": true },
+    { "count": 1, "canMove": false, "canRemove": true, "canArm": true },
+    { "count": 4, "canMove": false, "canRemove": false, "canArm": false },
+    { "count": 0, "canMove": true, "canRemove": true, "canArm": false }
+  ],
+  "actions": [
+    { "index": 0, "count": 4, "canDuplicate": true, "canMove": true, "canRemove": true, "kinds": ["duplicate", "moveLater", "remove"] },
+    { "index": 1, "count": 4, "canDuplicate": true, "canMove": true, "canRemove": true, "kinds": ["duplicate", "moveEarlier", "moveLater", "remove"] },
+    { "index": 3, "count": 4, "canDuplicate": true, "canMove": true, "canRemove": true, "kinds": ["duplicate", "moveEarlier", "remove"] },
+    { "index": 1, "count": 4, "canDuplicate": true, "canMove": false, "canRemove": true, "kinds": ["duplicate", "remove"] },
+    { "index": 0, "count": 1, "canDuplicate": true, "canMove": true, "canRemove": true, "kinds": ["duplicate", "remove"] },
+    { "index": 1, "count": 4, "canDuplicate": false, "canMove": false, "canRemove": false, "kinds": [] }
+  ],
+  "tapTracker": [
+    {
+      "name": "deux touchers en moins de 300 ms sur la même vignette",
+      "steps": [
+        { "id": "a", "at": 0.0, "isDouble": false },
+        { "id": "a", "at": 0.2, "isDouble": true },
+        { "id": "a", "at": 0.25, "isDouble": false }
+      ]
+    },
+    {
+      "name": "300 ms pile : ce n'est plus un double toucher",
+      "steps": [
+        { "id": "a", "at": 0.0, "isDouble": false },
+        { "id": "a", "at": 0.3, "isDouble": false }
+      ]
+    },
+    {
+      "name": "une autre vignette ne double rien",
+      "steps": [
+        { "id": "a", "at": 0.0, "isDouble": false },
+        { "id": "b", "at": 0.1, "isDouble": false },
+        { "id": "b", "at": 0.2, "isDouble": true }
+      ]
+    }
+  ],
+  "edgeScroll": [
+    { "location": 5, "viewport": 200, "zone": 33, "direction": -1 },
+    { "location": 100, "viewport": 200, "zone": 33, "direction": 0 },
+    { "location": 190, "viewport": 200, "zone": 33, "direction": 1 },
+    { "location": 33, "viewport": 200, "zone": 33, "direction": 0 },
+    { "location": 5, "viewport": 0, "zone": 33, "direction": 0 }
+  ],
+  "haptics": [
+    { "event": "select", "haptic": "standard", "style": "light" },
+    { "event": "duplicate", "haptic": "standard", "style": "light" },
+    { "event": "arm", "haptic": "standard", "style": "medium" },
+    { "event": "step", "haptic": "standard", "style": "rigid" },
+    { "event": "select", "haptic": "none", "style": null },
+    { "event": "arm", "haptic": "none", "style": null }
+  ],
+  "recipe": {
+    "tapWindowMs": 300,
+    "holdMs": 400,
+    "holdSlop": 10,
+    "ringWidth": 2,
+    "ringFadeMs": 200,
+    "neighbourMs": 200,
+    "revealMs": 250,
+    "restShadow": { "opacity": 0.45, "radius": 12, "y": 4 },
+    "liftShadow": { "opacity": 0.6, "radius": 30, "y": 14 },
+    "liftScale": 1.15,
+    "liftTiltDegrees": -6,
+    "plusVeil": 0.35,
+    "plusVeilOnLight": 0.62,
+    "plusStroke": 1.5,
+    "plusStrokeOpacity": 0.85,
+    "plusGlyph": 16,
+    "placeholderStroke": 1.5,
+    "placeholderOpacity": 0.6,
+    "crossDisc": 24,
+    "crossStroke": 1.5,
+    "crossGlyph": 12,
+    "crossOverhangX": 8,
+    "crossOverhangY": 10,
+    "statusRing": 22,
+    "waitingVeil": 0.5,
+    "waitingGlyph": 14,
+    "disabledOpacity": 0.4,
+    "pressedOpacity": 0.85,
+    "onLightOutline": 0.8,
+    "spacing": 6,
+    "radius": 8
+  },
+  "contrast": {
+    "min": 3,
+    "crossGlyphMin": 2.7,
+    "backdrops": { "plain": 0.0, "deep": 0.3655, "onLight": 0.613 }
+  }
+}

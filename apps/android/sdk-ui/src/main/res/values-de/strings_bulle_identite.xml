@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="a11y_message_source_system">Systemnachricht</string>
+    <string name="a11y_message_source_ads">Ankündigung</string>
+    <string name="a11y_message_source_app">Anwendung</string>
+    <string name="a11y_message_source_agent">Agent</string>
+    <string name="a11y_message_source_authority">Behörde</string>
+</resources>

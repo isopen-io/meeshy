@@ -173,18 +173,14 @@ final class ComposerMoodSurfaceTests: XCTestCase {
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerMoodSurface.swift")
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerMoodSurface.swift")
+        let doorURL = url.deletingLastPathComponent().appendingPathComponent("MoodComposerDoor.swift")
+        return AppSourceGuard.stripComments(
+            try String(contentsOf: url, encoding: .utf8) + "\n" + String(contentsOf: doorURL, encoding: .utf8))
     }
 
     private func hostSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        return AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
     }
 
     /// Le corps d'un BLOC, et non le fichier : celui-ci porte aussi
@@ -510,15 +506,20 @@ final class ComposerMoodSurfaceTests: XCTestCase {
         )
     }
 
-    /// **Zéro clé neuve au catalogue.** Les cinq libellés du mood sont ceux de
-    /// `StatusComposerView`, plus `common.close` que la surface document lit
+    /// **Zéro clé neuve au catalogue.** Les quatre libellés du mood sont ceux
+    /// de `StatusComposerView`, plus `common.close` que la surface document lit
     /// déjà. Le cliquet français est à ZÉRO tolérance et le catalogue est
     /// épinglé à un plafond : une clé de plus pour une phrase déjà traduite
     /// sept fois l'en rapproche pour rien.
+    ///
+    /// **`status.composer.title` n'y est plus depuis le 2026-08-28** — le
+    /// titre affiche directement `status.composer.mood.question`, et la clé
+    /// « Status » devenue sans lecteur a été retirée du catalogue dans le MÊME
+    /// commit (voir `ComposerMoodCopy`).
     func test_lesLibelles_reutilisentLesClesDejaTraduites() throws {
         let code = try surfaceSource()
         let attendues: Set<String> = [
-            "status.composer.title", "status.composer.title.repost",
+            "status.composer.title.repost",
             "status.composer.mood.question", "status.composer.placeholder",
             "status.composer.repost.via", "common.close"
         ]
@@ -546,6 +547,64 @@ final class ComposerMoodSurfaceTests: XCTestCase {
             trouvees, attendues,
             "Le mood n'ajoute AUCUNE clé au catalogue : le cliquet français est à zéro tolérance et le "
                 + "catalogue est épinglé à un plafond. Toute clé hors de cet ensemble est neuve ou perdue."
+        )
+    }
+
+    /// **La consolidation du 2026-08-28** : le titre EST la question du mood,
+    /// et la flèche PUBLIER — reçue déjà composée, jamais construite ici —
+    /// vit à côté de la croix, dans le MÊME en-tête. Sans cette garde, un
+    /// retour en arrière referait deux lignes pour une seule question et
+    /// laisserait la feuille sans flèche accessible depuis son premier écran.
+    func test_leTitre_estDirectementLaQuestion_etLaFlecheRejointLaCroixDansLEnTete() throws {
+        let bloc = try surfaceBlock()
+        guard let entete = blockBody(startingAt: "private var header", in: bloc) else {
+            throw AncreIntrouvable(quoi: "private var header")
+        }
+        XCTAssertTrue(
+            entete.contains("ComposerMoodCopy.moodQuestion"),
+            "Le titre affiche directement la question — sans elle, la consolidation qui libère la hauteur "
+                + "sous la saisie n'a pas eu lieu."
+        )
+        XCTAssertTrue(
+            entete.contains("ComposerMoodCopy.repostTitle"),
+            "Une republication garde son propre titre, distinct de la question du mood."
+        )
+        XCTAssertTrue(
+            entete.contains("headerPublishButton"),
+            "La flèche PUBLIER doit être montée dans l'en-tête — c'est elle que le socle ne peint plus "
+                + "sous le mood (`ComposerChromeOwnership.socleZones(for: .mood)` est vide)."
+        )
+        XCTAssertTrue(
+            entete.contains(".adaptiveGlass(in: Circle())"),
+            "La croix devient un vrai bouton de verre — LiquidGlass sur iOS 26+, repli translucide avant, "
+                + "par le wrapper partagé plutôt qu'un `if #available` réécrit ici."
+        )
+    }
+
+    /// **Garde NÉGATIVE — la question ne se répète plus au-dessus de la
+    /// grille.** Elle vit désormais dans le TITRE (garde ci-dessus) ; la
+    /// répéter ici reprendrait exactement la hauteur que la consolidation
+    /// visait à rendre.
+    func test_laGrilleDEmojis_neRepeteplusLaQuestionDuTitre() throws {
+        let bloc = try surfaceBlock()
+        guard let grille = blockBody(startingAt: "private var emojiGrid", in: bloc) else {
+            throw AncreIntrouvable(quoi: "private var emojiGrid")
+        }
+        XCTAssertFalse(
+            grille.contains("ComposerMoodCopy.moodQuestion"),
+            "La grille ne doit plus peindre la question : elle est montée UNE fois, dans le titre de l'en-tête."
+        )
+    }
+
+    /// La surface reçoit son bouton PUBLIER tout fait — même règle que
+    /// `onClose`, `viaUsername` ou `allowedAudiences` : la matière décidée par
+    /// le site de montage arrive en PARAMÈTRE, jamais reconstruite ici. Sans
+    /// ce paramètre, `header` n'aurait rien à monter à droite de la feuille.
+    func test_laSurface_recoitSaFlecheDejaComposee_etNeLaFabriquePas() throws {
+        let bloc = try surfaceBlock()
+        XCTAssertTrue(
+            bloc.contains("let headerPublishButton: AnyView"),
+            "Le bouton Publier de l'en-tête est un PARAMÈTRE reçu du site de montage."
         )
     }
 
@@ -615,8 +674,8 @@ final class ComposerMoodSurfaceTests: XCTestCase {
             "Le meuble doit monter la surface du mood — sinon la branche `.mood` du routage n'aurait nulle part où aller."
         )
 
-        guard let bloc = blockBody(startingAt: "private var moodSurface", in: code) else {
-            throw AncreIntrouvable(quoi: "private var moodSurface")
+        guard let bloc = blockBody(startingAt: "var moodSurface", in: code) else {
+            throw AncreIntrouvable(quoi: "var moodSurface")
         }
         XCTAssertTrue(bloc.contains("ComposerMoodSurface("), "Le bloc lu n'est pas celui de la surface mood.")
         XCTAssertTrue(
@@ -626,6 +685,11 @@ final class ComposerMoodSurfaceTests: XCTestCase {
         XCTAssertTrue(
             bloc.contains("onDismiss"),
             "Et cette fermeture est celle du MEUBLE, pas une seconde sortie fabriquée sur place."
+        )
+        XCTAssertTrue(
+            bloc.contains("headerPublishButton: AnyView(moodHeaderPublishButton)"),
+            "La flèche de l'en-tête doit être fournie par le meuble — sans elle, la surface n'aurait aucun "
+                + "moyen de partir depuis son en-tête, et le socle ne la peint plus sous le mood."
         )
     }
 
@@ -641,18 +705,35 @@ final class ComposerMoodSurfaceTests: XCTestCase {
     /// elle l'est, et que le corps se contente d'aiguiller.
     func test_leMeuble_choisitLeMood_parLaRegleEprouvable_etNonParUnIfDansLeCorps() throws {
         let code = try hostSource()
-        guard let lecture = blockBody(startingAt: "private var mountedSurface", in: code) else {
-            throw AncreIntrouvable(quoi: "private var mountedSurface")
+        guard let lecture = blockBody(startingAt: "var mountedSurface", in: code) else {
+            throw AncreIntrouvable(quoi: "var mountedSurface")
         }
         XCTAssertTrue(
             lecture.contains("ComposerSurfaceRouting.surface("),
             "Le choix de surface passe par la règle — elle est éprouvée là, une seule fois."
         )
 
-        guard let corps = blockBody(startingAt: "private var surface", in: code) else {
-            throw AncreIntrouvable(quoi: "private var surface")
+        // **Ancre RENDUE EXACTE au #4120**, et c'est le piège que la garde du
+        // socle documente déjà : `"var surface:"` est un PRÉFIXE. Le
+        // meuble déclare désormais `surfaceWithIntakePortals` AVANT
+        // l'aiguillage — la garde lisait donc le corps des portails, où il n'y a
+        // ni `case .mood` ni `mountedSurface`, et rougissait sur un bloc qui
+        // n'était pas le sien. Le type de retour referme l'ancre.
+        guard let corps = blockBody(startingAt: "var surface: some View", in: code) else {
+            throw AncreIntrouvable(quoi: "var surface: some View")
         }
-        XCTAssertTrue(corps.contains("mountedSurface"), "Le corps consomme la lecture unique, il n'en refait pas une seconde.")
+        // **La lecture unique a un NOM depuis le 2026-08-30.** Elle était en
+        // ligne dans l'aiguillage (`ComposerMountedView.mounted(surface:…)`) ;
+        // un second site en a eu besoin — l'historique — et a interrogé le KIND
+        // à la place, ce qui compilait sans jamais pouvoir rendre vrai. La
+        // résolution est désormais `mountedComposerView`, calculée à UN endroit.
+        //
+        // Ce que ce témoin dit reste le même : le corps CONSOMME une lecture,
+        // il n'en refait pas une seconde.
+        XCTAssertTrue(corps.contains("mountedComposerView"),
+                      "Le corps consomme la lecture unique, il n'en refait pas une seconde.")
+        XCTAssertFalse(corps.contains("ComposerMountedView.mounted("),
+                       "La résolution vit dans `mountedComposerView`, pas dans le corps de l'aiguillage.")
         XCTAssertTrue(corps.contains("case .mood"), "Et la troisième issue est servie.")
         XCTAssertFalse(
             corps.contains("profile.initialFormat"),
@@ -1203,7 +1284,7 @@ final class ComposerMoodSurfaceContrastTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerMoodSurface.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerMoodSurface.swift")
         let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
         XCTAssertTrue(code.contains("struct ComposerMoodSurface"), "Source de la surface introuvable — la garde ne mesurerait rien")
 

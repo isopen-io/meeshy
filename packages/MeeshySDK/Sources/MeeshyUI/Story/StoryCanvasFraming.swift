@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import MeeshySDK
 
 /// Pure, `nonisolated` framing solver for the story canvas **container transform**.
 /// The canvas keeps fixed intrinsic 9:16 bounds (`CanvasGeometry.aspectFitSize` of the
@@ -12,10 +13,10 @@ public nonisolated enum StoryCanvasFraming {
 
     /// Alignement vertical de la carte DANS la région libre quand elle ne la
     /// remplit pas (contrainte largeur active). `.center` = historique ;
-    /// `.top` = flush sous le header, le mou entier en bas (directive user
-    /// 2026-07-04) ; `.bottom` = collée juste au-dessus du sheet, le mou entier
+    /// `.top` = flush sous le header, le mou entier en bas;
+    /// `.bottom` = collée juste au-dessus du sheet, le mou entier
     /// en haut — une carte PAYSAGE (courte) reste ainsi au ras du sheet et
-    /// « remonte » avec lui quand il grandit (directive user 2026-07-20).
+    /// « remonte » avec lui quand il grandit.
     public enum VerticalAlignment: Equatable, Sendable { case center, top, bottom }
 
     public struct Input: Equatable, Sendable {
@@ -57,25 +58,45 @@ public nonisolated enum StoryCanvasFraming {
 
     /// Truth-table helper for `canvasIsCarded`.
     ///
-    /// Mode dessin IMMERSIF (user 2026-07-11) : `drawingActive` ne carde PLUS —
-    /// pendant le dessin le canvas reste plein écran (`.free`), dessinable
-    /// jusqu'aux angles, avec les seules bulles flottantes par-dessus (aucune
-    /// sheet). Remplace la spec 2026-06-02 « identique pour tous les outils,
-    /// dessin inclus ». Le paramètre est conservé pour documenter la table de
-    /// vérité (testée par `StoryCanvasFramingTests.test_isCarded_truthTable`).
+    /// **RETOURNÉE au #4124.** La règle disait
+    /// « plein écran par défaut, cardée quand un panneau réduit la zone
+    /// visible » ; elle dit maintenant l'inverse — **cardée par défaut**, plein
+    /// écran seulement là où l'immersion est le sujet :
     ///
-    /// Timeline (2026-07-14) : forcée via `ComposerControlsLayer`'s override
-    /// pendant que `bandStateMachine.state` lui-même reste `.hidden` (le band
-    /// panel est présenté sans passer par le state machine) — `timelineActive`
-    /// capture donc ce cas séparément, comme `drawingActive`/`textActive`.
-    /// Default `false` keeps pre-existing call sites source-compatible.
-    /// L'édition texte court-circuite tout : le canvas reste plein écran, les
-    /// contrôles flottent par-dessus. Ce n'est pas un terme de la disjonction
-    /// mais une sortie anticipée — quand l'éditeur s'ouvre depuis la tuile
-    /// Texte, la band n'est pas `.hidden` (elle est seulement masquée et
-    /// non-interactive), et `bandPresent` seul relancerait le carding.
+    /// > « mettre la scène 9:16 au centre avec coin arrondi et un peu d'espace
+    /// > à gauche, haut, bas et droite de l'écran »
+    ///
+    /// Les deux exceptions ne sont pas des restes : ce sont deux directives
+    /// antérieures du même porteur, et elles ne sont pas révoquées.
+    ///
+    /// - **DESSIN immersif** : pendant le dessin le canvas reste
+    ///   plein écran, dessinable jusqu'aux angles, bulles flottantes sans sheet.
+    ///   Le paramètre était jusqu'ici conservé « pour documenter la table » et
+    ///   ne décidait RIEN — tant que le repos ne cardait pas, lui et le repos
+    ///   rendaient le même verdict. Il redevient décisif, et il l'emporte même
+    ///   band déployée.
+    /// - **ÉDITION TEXTE** : sortie anticipée, jamais un terme de
+    ///   la disjonction. Quand l'éditeur s'ouvre depuis la tuile Texte, la band
+    ///   n'est PAS `.hidden` (seulement masquée et non-interactive), donc un
+    ///   terme ordinaire serait écrasé par `bandPresent`.
+    ///
+    /// `bandPresent` et `timelineActive` deviennent de ce fait sans effet
+    /// PROPRE — cardé ∪ cardé = cardé. Ils restent au contrat parce qu'ils
+    /// nomment les deux raisons HISTORIQUES du cardage : les retirer
+    /// obligerait chaque appelant à re-prouver qu'il n'en avait pas besoin, et
+    /// perdrait la trace de la règle qu'on vient d'inverser.
+    ///
+    /// **RETOURNÉE une seconde fois au #8370.**
+    /// La maquette plein écran (`docs/product/composer-plein-ecran/`) dit :
+    /// « la scène est en plein écran et le reste des contrôleurs sont par-dessus
+    /// la scène ». Elle supplante la carte de #4124 : au repos, la scène occupe
+    /// le viewport, et les contrôles flottent dessus en verre. Seul un PANNEAU
+    /// qui réduit la zone visible — band déployée, timeline — la carde encore,
+    /// pour qu'elle se rétracte au-dessus de lui plutôt que de s'y cacher : la
+    /// règle d'avant #4124, et `bandPresent` / `timelineActive` en redeviennent
+    /// les raisons. Les deux immersions (dessin, texte) l'emportent toujours.
     public static func isCarded(bandPresent: Bool, drawingActive: Bool, textActive: Bool, timelineActive: Bool = false) -> Bool {
-        guard !textActive else { return false }
+        guard !textActive, !drawingActive else { return false }
         return bandPresent || timelineActive
     }
 
@@ -86,11 +107,82 @@ public nonisolated enum StoryCanvasFraming {
     ///   les bords du viewport (plein bord 9:16, coins droits), contrôleurs cachés.
     /// - Session plein écran (`isFullscreenSession`) → toujours `.free`, même quand
     ///   le chrome ré-apparaît brièvement au touch-and-hold (pas de re-cardage).
+    /// **#6806 — la session plein écran rend `.immersive`, pas `.free`.**
+    ///
+    /// Directive porteur 2026-09-16 : « Meme probleme pour les story il faut pas
+    /// afficher une troisieme couche en plein plein écran, mais juste agrandir
+    /// le canvas à sa taille total du viewport ».
+    ///
+    /// Les deux états ne peuvent plus être confondus, parce que `.free` est
+    /// AUSSI ce que le COMPOSER passe pendant le dessin et l'édition de texte :
+    /// y couvrir le viewport rognerait la scène que l'auteur est en train de
+    /// composer — le contraire exact de « dessinable jusqu'aux angles ». Le cas
+    /// `.immersive` existait depuis l'origine et ne décidait rien ; il porte
+    /// désormais la seule chose qui distingue la LECTURE plein écran de tout le
+    /// reste.
+    ///
+    /// Le PEEK (chrome masqué par appui long) garde `.free` : c'est un aperçu
+    /// transitoire, et le faire zoomer à chaque appui ferait respirer l'écran à
+    /// chaque doigt posé.
     public static func readerPresentation(isFullscreenSession: Bool, chromeVisible: Bool) -> Presentation {
-        (isFullscreenSession || !chromeVisible) ? .free : .carded
+        if isFullscreenSession { return .immersive }
+        return chromeVisible ? .carded : .free
+    }
+
+    /// **La colonne d'une légende : celle du CANVAS, jamais celle du conteneur.**
+    ///
+    /// Une légende posée sur une scène est un commentaire de CETTE scène ; elle
+    /// s'aligne donc sur ses bords, comme la ligne d'auteur d'une carte de réel.
+    /// Le conteneur qui l'héberge peut être plus large — le lecteur de stories
+    /// déborde volontairement le viewport pour sa pagination — et un
+    /// `frame(maxWidth: .infinity)` y résout la largeur du CONTENEUR.
+    ///
+    /// Mesuré au simulateur le 2026-09-02 (#4762) : conteneur de 491,3 pt à
+    /// x = −44,7 sur un écran de 402 pt, légende à `horizontalInset` 20 ⇒ elle
+    /// commençait à **−24,7 pt**, hors écran, et « The latest apps » s'affichait
+    /// « e latest apps ». La mesure a rendu −24,8.
+    ///
+    /// > L'ordre `padding` puis `frame` était déjà juste. Ce qui débordait
+    /// > n'était pas la vue, c'était la largeur qu'on lui PROPOSAIT — et une
+    /// > vue ne peut pas se défendre d'un conteneur trop large.
+    ///
+    /// - Parameters:
+    ///   - viewport: la taille offerte à l'hôte (souvent plus large que la scène).
+    ///   - ratio: le ratio du canvas (9:16 en portrait, 16:9 pour un fond paysage).
+    ///   - scale: l'échelle de présentation rendue par `resolve` — la carte est
+    ///     peinte à `scale`, la légende doit suivre le même rétrécissement.
+    public static func captionColumnWidth(viewport: CGSize,
+                                          ratio: CGFloat,
+                                          scale: CGFloat) -> CGFloat {
+        let fit = CanvasGeometry.aspectFitSize(in: viewport, ratio: ratio)
+        return max(0, fit.width * max(scale, 0))
     }
 
     public static func resolve(_ input: Input) -> Result {
+        // **#6806 — en lecture plein écran, le canvas COUVRE le viewport.**
+        //
+        // C'était la troisième couche que la directive refuse : le canvas
+        // gardait ses bornes 9:16 intrinsèques (un aspect-fit du viewport), donc
+        // sur un iPhone 16 Pro — 0,462, plus étroit que 0,5625 — il restait
+        // 76,6 pt de sol en haut et en bas, qu'on habillait d'un flou. Le sol,
+        // le flou, puis le canvas : trois surfaces pour une scène.
+        //
+        // Le facteur est une COUVERTURE, jamais un étirement : le rapport du
+        // canvas est préservé et ce qui dépasse sort de l'écran.
+        if input.state == .immersive {
+            let intrinsic = CanvasGeometry.aspectFitSize(in: input.viewport, ratio: input.canvasRatio)
+            guard intrinsic.width > 0, intrinsic.height > 0 else { return .identity }
+            //
+            // **Le facteur se LIT sur la loi, il ne se recompose pas ici**
+            // (#6806). `max(viewport.w / intrinsic.w, viewport.h / intrinsic.h)`
+            // écrit sur place aurait été un second solveur de couverture rendant
+            // le même nombre que celui du plein cadre de la galerie — donc un
+            // doublon INVISIBLE à toute assertion de valeur, jusqu'au jour où
+            // l'un des deux bougerait. C'est exactement la faute que ce fichier
+            // dénonce vingt lignes plus bas à propos de l'ajustement.
+            let couverture = MediaStageFraming.coverScale(frame: input.viewport, media: intrinsic)
+            return Result(scale: couverture, offset: .zero, cornerRadius: 0)
+        }
         guard input.state == .carded else { return .identity }
         let intrinsic = CanvasGeometry.aspectFitSize(in: input.viewport, ratio: input.canvasRatio)
         guard intrinsic.width > 0, intrinsic.height > 0,
@@ -107,10 +199,42 @@ public nonisolated enum StoryCanvasFraming {
         // width (side margins). Never upscales past intrinsic. So the canvas is always a
         // centred rounded card that (a) starts below the header, (b) never overlaps the sheet
         // when open, (c) grows toward full-but-margined when the sheet collapses — identical
-        // for every tool incl. drawing (user spec 2026-06-02).
-        let scaleH = regionHeight / intrinsic.height
-        let scaleW = regionWidth / intrinsic.width
-        let scale = min(1, max(0, min(scaleH, scaleW)))
+        // for every tool incl. drawing.
+        //
+        // **Cet ajustement est la loi de `MediaStageFraming`, et il n'en existe
+        // qu'un** (#6141, moitié de convergence). La story le calculait avec sa
+        // propre arithmétique — deux solveurs de cadrage pour une seule question,
+        // rendant le même nombre, donc leur doublon était invisible à toute
+        // assertion de valeur jusqu'au jour où l'un bougerait.
+        //
+        // Trois choses qu'il faut dire ici, parce qu'elles expliquent pourquoi la
+        // projection ne prend PAS tout :
+        //
+        // - **les deux planchers sont NULS.** Le plateau de lecture ne descend
+        //   jamais sous trois fois son overlay en hauteur, ni sous la bande de sa
+        //   colonne d'actions en largeur (#6692) ; une carte de story, elle, se
+        //   laisse rétrécir par le sheet — c'est même toute sa géométrie. Les
+        //   planchers sont des entrées de l'hôte précisément pour que les deux
+        //   puissent différer sur ce point sans différer sur la loi.
+        // - **la gouttière est nulle aussi** : les marges latérales sont déjà
+        //   retirées par `sideInset` au-dessus, et les compter deux fois
+        //   rétrécirait la carte.
+        // - **l'ALIGNEMENT vertical reste ici.** `center` / `top` / `bottom` est
+        //   une question que le plateau de lecture ne pose pas ; le solveur rend
+        //   des COTES, la story en tire un `scale` et place l'offset elle-même.
+        let cadre = MediaStageFraming.resolve(
+            MediaStageFraming.Input(
+                viewport: CGSize(width: regionWidth, height: regionHeight),
+                mediaRatio: input.canvasRatio,
+                corridors: MediaStageFraming.Corridors(safeTop: 0, top: 0, rail: 0,
+                                                       transport: 0, safeBottom: 0, gutter: 0),
+                presentation: .carded,
+                cardedCornerRadius: input.cardedCornerRadius,
+                minimumFrameHeight: 0,
+                minimumFrameWidth: 0
+            )
+        )
+        let scale = min(1, max(0, cadre.media.height / intrinsic.height))
 
         // `.top` : la carte colle au bord SUPÉRIEUR de la région (flush sous
         // le header) — le mou vertical éventuel (contrainte largeur active)

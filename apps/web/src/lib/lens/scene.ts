@@ -1,0 +1,273 @@
+import { useEffect, useRef, useState } from 'react';
+
+import { SCENE_ENTER_DURATION_MS, SCENE_FLATTEN_DURATION_MS, SCENE_REST_DELAY_MS } from '@/lib/reading-mode/metrics';
+import { trackVisibleRows } from '@/lib/view/visible-rows';
+
+/**
+ * Le MOUVEMENT de la liste s'importe d'un seul lieu : la perspective au
+ * défilement (`useScene`, ci-dessous) et le glissement d'une remontée en tête
+ * (`useListReorderFlip`, #11207), qui vit dans `lib/view` parce qu'il ne
+ * connaît rien de la Lentille.
+ */
+export { useListReorderFlip } from '@/lib/view/list-reorder-flip';
+
+import {
+  BAND_OFFSET,
+  BAND_HALF_HEIGHT,
+  bandCenter,
+  blend,
+  breathing,
+  electFocus,
+  enterLevel,
+  loupe,
+  perspective,
+} from './law';
+
+/**
+ * LA SCÈNE DE LA LENTILLE — ce qui transforme un défilement en perspective,
+ * et ce qui l'APLATIT au repos (#5694, écart 2).
+ *
+ * QUATRE RÈGLES GOUVERNENT CE FICHIER, et chacune vient d'un piège précis.
+ *
+ * 1. **On ne lit la géométrie qu'UNE fois par image.** Chaque
+ *    `getBoundingClientRect()` force le navigateur à recalculer la mise en
+ *    page. En lire une par rangée à chaque événement `scroll` — qui se
+ *    déclenche plus souvent que les images — produirait la saccade qu'on
+ *    cherche précisément à éviter. Un `requestAnimationFrame` coalesce donc
+ *    tous les événements d'une image en une seule passe.
+ *
+ * 2. **On n'écrit que `transform` et `opacity`, et JAMAIS par l'état React.**
+ *    Repasser par un rendu à chaque image ferait diffuser l'arbre entier
+ *    soixante fois par seconde. La passe écrit donc directement dans le style
+ *    des nœuds — c'est ce que `visualEffect` fait sur iOS, et pour la même
+ *    raison : la perspective est une passe d'AFFICHAGE, pas un changement
+ *    d'état. Seules la rangée ÉLUE et le NIVEAU DE SCÈNE traversent React
+ *    (`focus`, `level`) parce qu'ils changent de CONTENU (le supplément
+ *    magnifié) et non seulement d'apparence — et `level` ne change que DEUX
+ *    fois par session de défilement (miroir `LentilleSceneActivity.level`,
+ *    doc-comment Swift), jamais par tick.
+ *
+ * 3. **`prefers-reduced-motion` coupe la perspective, jamais l'élection.**
+ *    Un utilisateur qui réduit les animations perd le relief ; il ne doit pas
+ *    perdre le repère.
+ *
+ * 4. **AU REPOS, LA LISTE S'APLATIT** (`LentilleSceneActivity.noteScroll`/
+ *    `.flatten`, `Perspective/LentilleSceneActivity.swift:33-55`) :
+ *    `level` vaut 1 pendant le défilement et jusqu'à `SCENE_REST_DELAY_MS`
+ *    après le dernier tick, 0 au repos — `blend(perspective(distance),
+ *    level)` fond alors CHAQUE rangée vers l'identité, quelle que soit sa
+ *    distance à la bande de focus. La MAGNIFICATION suit : `magnified` (posé
+ *    par l'appelant) doit se gater par `level > 0` — une rangée élue ne
+ *    reste visuellement magnifiée qu'en scène active, exactement
+ *    `LentilleMagnifiableRow.isMagnified = scene.level > 0 &&
+ *    election.electedId == id` (`Mode/LentilleMagnification.swift:435-437`).
+ *    Le retour à l'identité est ANIMÉ (`SCENE_FLATTEN_DURATION_MS`, une
+ *    transition CSS posée juste avant l'écriture finale, jamais pendant le
+ *    défilement actif — sinon chaque écriture par image serait, elle aussi,
+ *    transitionnée, et la perspective prendrait du retard sur le doigt).
+ *
+ * 5. **La passe ne travaille que sur ce qui se VOIT** (#11207). Elle lisait
+ *    et écrivait toutes les rangées `[data-row]` montées : deux cents
+ *    rangées chargées par la pagination, deux cents lectures de géométrie et
+ *    quatre cents écritures par image pour huit rangées à l'écran.
+ *    `trackVisibleRows` (`lib/view/visible-rows.ts`) tient l'ensemble visible
+ *    plus `SCENE_OVERSCAN_PX` de chaque côté — la marge qui laisse une rangée
+ *    recevoir sa perspective AVANT d'entrer à l'écran. Une rangée qui SORT de
+ *    l'ensemble est rendue à l'identité, une fois : hors de l'ensemble, toute
+ *    rangée est plate, et c'est ce qui permet à l'aplatissement de ne toucher,
+ *    lui aussi, que l'ensemble.
+ */
+
+/** La marge de la passe, de chaque côté du défileur — deux à trois rangées. */
+export const SCENE_OVERSCAN_PX = 240;
+
+/** Ce que la scène remet à la liste, et qui traverse React. */
+export type Scene = {
+  /** L'identifiant de la rangée élue par la bande de focus. */
+  readonly focus: string | null;
+  /**
+   * 1 pendant le défilement et jusqu'au repos, 0 après
+   * `SCENE_REST_DELAY_MS` d'immobilité. Gate la magnification : une rangée
+   * n'est visuellement magnifiée que si `level > 0`.
+   */
+  readonly level: number;
+};
+
+const REDUCED_MOTION = () =>
+  typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const toIdentity = (rank: HTMLElement): void => {
+  const visual = rank.firstElementChild;
+  if (!(visual instanceof HTMLElement)) return;
+  visual.style.transition = '';
+  visual.style.opacity = '1';
+  visual.style.transform = 'translateY(0px) scale(1)';
+};
+
+const flattenTransition = (reduced: boolean): string =>
+  reduced ? 'none' : `opacity ${SCENE_FLATTEN_DURATION_MS}ms ease-in-out, transform ${SCENE_FLATTEN_DURATION_MS}ms ease-in-out`;
+
+export function useScene(frame: { current: HTMLElement | null }): Scene {
+  const [focus, setFocus] = useState<string | null>(null);
+  const [level, setLevel] = useState(0);
+  const focusRef = useRef<string | null>(null);
+  const levelRef = useRef(0);
+  const enteredAt = useRef<number | null>(null);
+  const request = useRef(0);
+  const rest = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const element = frame.current;
+    if (element === null) return;
+
+    const reduced = REDUCED_MOTION();
+
+    const schedule = () => {
+      if (request.current === 0) request.current = requestAnimationFrame(pass);
+    };
+
+    const rows = trackVisibleRows(element, {
+      selector: '[data-row]',
+      overscanPx: SCENE_OVERSCAN_PX,
+      onEnter: schedule,
+      onLeave: (left) => left.forEach(toIdentity),
+    });
+
+    const pass = () => {
+      request.current = 0;
+      const ranks = rows.current();
+      if (ranks.length === 0) return;
+      const box = element.getBoundingClientRect();
+
+      const focusY = bandCenter({
+        frameTop: box.top,
+        frameBottom: box.bottom - BAND_OFFSET,
+        scroll: element.scrollTop,
+      });
+
+      /**
+       * L'ENTRÉE EST EASE-OUT (`enterLevel`, `SCENE_ENTER_DURATION_MS`) —
+       * atteint 1 avant même la fin de la fenêtre, l'écrêtage évite un
+       * dépassement au-delà.
+       */
+      const currentLevel = (() => {
+        if (levelRef.current === 0) return 0;
+        if (enteredAt.current === null) return 1;
+        const elapsed = performance.now() - enteredAt.current;
+        return elapsed >= SCENE_ENTER_DURATION_MS ? 1 : enterLevel(elapsed, SCENE_ENTER_DURATION_MS);
+      })();
+
+      /**
+       * UNE seule passe de LECTURE, puis une seule passe d'ÉCRITURE. Les
+       * entrelacer ferait, à chaque rangée, une invalidation puis une
+       * relecture — le « layout thrashing » : O(n) recalculs au lieu d'un.
+       */
+      const metrics: { readonly node: HTMLElement; readonly id: string; readonly midY: number; readonly width: number }[] = [];
+      for (const rank of ranks) {
+        const r = rank.getBoundingClientRect();
+        const id = rank.dataset.row;
+        if (id === undefined) continue;
+        metrics.push({ node: rank, id, midY: r.top + r.height / 2, width: r.width });
+      }
+
+      const elected = electFocus({
+        candidates: metrics,
+        focusY,
+        current: focusRef.current,
+        hysteresis: BAND_HALF_HEIGHT,
+      });
+
+      for (const m of metrics) {
+        const distance = focusY - m.midY;
+        const rawP = reduced ? { alpha: 1, scale: 1 } : perspective(distance);
+        const p = reduced ? rawP : blend(rawP, currentLevel);
+        const breath = breathing({ distance, level: currentLevel, reducedMotion: reduced });
+        // La LOUPE (#6586/#6588) grandit la rangée EN PLUS de la perspective —
+        // deux échelles qui se MULTIPLIENT, comme les deux `.scaleEffect`
+        // empilés côté iOS (`LentillePerspective` puis `LentilleFocusBreathing`).
+        const magnify = loupe({ distance, level: currentLevel, reducedMotion: reduced, width: m.width });
+        const visual = m.node.firstElementChild;
+        if (visual instanceof HTMLElement) {
+          visual.style.opacity = String(p.alpha);
+          visual.style.transform = `translateY(${breath}px) scale(${p.scale * magnify})`;
+        }
+      }
+
+      if (elected !== focusRef.current) {
+        focusRef.current = elected;
+        setFocus(elected);
+      }
+
+      /**
+       * L'ENTRÉE EST UNE ANIMATION, DONC ELLE A BESOIN D'UN MOTEUR.
+       *
+       * `enterLevel` interpole sur `SCENE_ENTER_DURATION_MS` — mais rien ne
+       * REJOUE la passe une fois le doigt arrêté : `pass` n'était planifiée
+       * que par un événement `scroll`. Un défilement d'UN SEUL événement
+       * (roulette d'un cran, `scrollTo`, PagePrécédente au clavier, fin de
+       * geste) laissait donc la perspective figée à sa première fraction —
+       * mesuré : opacités 0,990 à 1,000, échelles 0,999, pendant les 4,5 s
+       * qui précèdent l'aplatissement — PENDANT que `level = 1` avait déjà
+       * ouvert le supplément magnifié. Une scène à moitié armée : le
+       * contenu de la rangée élue paraît, le relief qui la désigne jamais.
+       *
+       * Tant que la scène monte, la passe se replanifie donc elle-même — et
+       * s'arrête d'elle-même dès `currentLevel === 1`, sans minuteur ni
+       * boucle permanente.
+       */
+      if (levelRef.current === 1 && currentLevel < 1) schedule();
+    };
+
+    /**
+     * L'APLATISSEMENT — miroir `LentilleSceneActivity.flatten()` : le niveau
+     * retombe à 0, ANIMÉ. La transition CSS n'est posée que pour CETTE
+     * écriture (jamais pendant le défilement actif, § règle 4 du
+     * doc-comment) et effacée par la prochaine entrée en scène.
+     */
+    const flatten = () => {
+      levelRef.current = 0;
+      enteredAt.current = null;
+      setLevel(0);
+      for (const rank of rows.current()) {
+        const visual = rank.firstElementChild;
+        if (visual instanceof HTMLElement) {
+          visual.style.transition = flattenTransition(reduced);
+          visual.style.opacity = '1';
+          visual.style.transform = 'translateY(0px) scale(1)';
+        }
+      }
+    };
+
+    const onScroll = () => {
+      if (levelRef.current === 0) {
+        levelRef.current = 1;
+        enteredAt.current = performance.now();
+        setLevel(1);
+        // Une nouvelle entrée en scène : effacer la transition posée par un
+        // éventuel aplatissement précédent, sans quoi les écritures par
+        // image de la passe active seraient, elles aussi, transitionnées —
+        // la perspective prendrait du retard sur le doigt.
+        for (const rank of rows.current()) {
+          const visual = rank.firstElementChild;
+          if (visual instanceof HTMLElement) visual.style.transition = '';
+        }
+      }
+      if (rest.current !== null) clearTimeout(rest.current);
+      rest.current = setTimeout(flatten, SCENE_REST_DELAY_MS);
+      schedule();
+    };
+
+    element.addEventListener('scroll', onScroll, { passive: true });
+    // Une passe initiale : sans elle, rien n'est élu tant qu'on n'a pas défilé.
+    schedule();
+
+    return () => {
+      rows.stop();
+      element.removeEventListener('scroll', onScroll);
+      if (request.current !== 0) cancelAnimationFrame(request.current);
+      if (rest.current !== null) clearTimeout(rest.current);
+    };
+  }, [frame]);
+
+  return { focus, level };
+}

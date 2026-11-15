@@ -5,13 +5,17 @@ import MeeshySDK
 
 @MainActor
 class StatusViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published var statuses: [StatusEntry] = [] {
         didSet { statusIndexByUserId = Self.index(statuses) }
     }
     /// Index `userId → position` reconstruit à chaque écriture de `statuses`
     /// (O(n), rare) pour que `statusForUser` soit O(1) — il était un balayage
     /// linéaire appelé par cellule de message et par rangée de conversation
-    /// (audit fluidité 2026-08-21).
     private var statusIndexByUserId: [String: Int] = [:]
 
     private static func index(_ entries: [StatusEntry]) -> [String: Int] {
@@ -30,6 +34,8 @@ class StatusViewModel: ObservableObject {
     let mode: StatusService.Mode
     private let statusService: StatusServiceProviding
     private var cancellables = Set<AnyCancellable>()
+    /// Emojis envoyés par statut pendant la session : le même ne repart pas deux fois (#18110).
+    private var sessionReactions: [String: Set<String>] = [:]
     private let socialSocket: SocialSocketProviding
     private let authManager: AuthManaging
     private let offlineQueue: OfflineQueueing
@@ -42,8 +48,10 @@ class StatusViewModel: ObservableObject {
     private let isOffline: @Sendable () -> Bool
 
     /// Groupement, persistance et flush (arrière-plan / relance) portés par
-    /// `ImpressionBatcher`.
-    private lazy var impressions = ImpressionBatcher(source: "status", postService: postService)
+    /// `ImpressionBatcher` — la file PARTAGÉE de l'humeur sur un avatar
+    /// (`SharedImpressionBatchers.moodAvatar`), que les hôtes sans ce modèle
+    /// alimentent aussi : une seule file, une seule clé de persistance.
+    private let impressions: ReachImpressionRecording
 
     /// A mood is "stuck offline" (recoverable as a draft) once it has been
     /// unsent for longer than this — the "pas envoyé dans la minute → offline"
@@ -67,8 +75,14 @@ class StatusViewModel: ObservableObject {
         authManager: AuthManaging = AuthManager.shared,
         offlineQueue: OfflineQueueing = OfflineQueue.shared,
         postService: PostServiceProviding = PostService.shared,
-        isOffline: @escaping @Sendable () -> Bool = { NetworkMonitor.shared.isOffline }
+        isOffline: @escaping @Sendable () -> Bool = { NetworkMonitor.shared.isOffline },
+        moodImpressions: ReachImpressionRecording? = nil
     ) {
+        if let moodImpressions {
+            self.impressions = moodImpressions
+        } else {
+            self.impressions = SharedImpressionBatchers.moodAvatar
+        }
         self.mode = mode
         self.statusService = statusService
         self.socialSocket = socialSocket
@@ -84,9 +98,10 @@ class StatusViewModel: ObservableObject {
     // `viewCount` comme les autres. Aucune surface ne les alimentait — la barre
     // de moods était le seul contenu du produit dont la portée restait à zéro.
     //
-    // Même contrat que le feed : une impression par APPARITION du pill, groupée
-    // sur 3 s ; la vue UNIQUE part à l'ouverture du popover (dédupliquée côté
-    // serveur par `PostView`, donc rejouable sans risque).
+    // Même contrat que le feed : une impression par APPARITION de l'humeur sur
+    // un avatar (`countsImpression`), groupée sur 3 s, sans dédoublonnage ; la
+    // vue part à CHAQUE ouverture de la bulle, depuis son site unique
+    // (`StatusBubbleController.show`).
 
     /// Le mood `statusId` est apparu à l'écran.
     func trackImpression(_ statusId: String) {
@@ -97,11 +112,6 @@ class StatusViewModel: ObservableObject {
     /// groupement est perdu.
     func flushImpressions() async {
         await impressions.flushNow()
-    }
-
-    /// Le mood `statusId` a été ouvert (popover) — vue unique par utilisateur.
-    func markStatusViewed(_ statusId: String) {
-        Task { [postService] in try? await postService.viewPost(postId: statusId, duration: nil) }
     }
 
     // MARK: - Load Statuses
@@ -148,10 +158,10 @@ class StatusViewModel: ObservableObject {
                 nextCursor = response.pagination?.nextCursor
                 hasMore = response.pagination?.hasMore ?? false
                 if mode == .friends { myStatus = statuses.first }
-                try? await CacheCoordinator.shared.statuses.save(entries, for: cacheKey)
+                await bestEffort("statusViewModel.statuses.save", category: .cache) { try await CacheCoordinator.shared.statuses.save(entries, for: cacheKey) }
             } else {
                 if statuses.isEmpty {
-                    error = String(localized: "Impossible de charger les statuts", defaultValue: "Impossible de charger les statuts")
+                    error = String(localized: "status.load.error", defaultValue: "Impossible de charger les statuts")
                 }
             }
         } catch {
@@ -256,9 +266,9 @@ class StatusViewModel: ObservableObject {
             )
             do {
                 try await offlineQueue.enqueue(.createPost, payload: payload, conversationId: nil)
-                FeedbackToastManager.shared.showSuccess(String(localized: "status.queuedOffline", defaultValue: "Mood en attente d'envoi", bundle: .main))
+                FeedbackToastManager.shared.showSuccess(String(localized: "status.queuedOffline", defaultValue: "Humeur en attente d'envoi", bundle: .main))
             } catch {
-                FeedbackToastManager.shared.showError(String(localized: "status.publishError", defaultValue: "Error publishing status", bundle: .main))
+                FeedbackToastManager.shared.showError(String(localized: "status.publishError", defaultValue: "Impossible de publier le statut", bundle: .main))
             }
             return
         }
@@ -268,11 +278,18 @@ class StatusViewModel: ObservableObject {
 
             if let entry = post.toStatusEntry() {
                 myStatus = entry
-                statuses.insert(entry, at: 0)
+                // L'écho socket de SA propre humeur (salle de l'auteur) peut
+                // arriver avant la réponse REST : l'insérer une seconde fois
+                // donnait deux lignes au même id.
+                if let existing = statuses.firstIndex(where: { $0.id == entry.id }) {
+                    statuses[existing] = entry
+                } else {
+                    statuses.insert(entry, at: 0)
+                }
                 await saveCacheSnapshot()
             }
         } catch {
-            FeedbackToastManager.shared.showError(String(localized: "status.publishError", defaultValue: "Error publishing status", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "status.publishError", defaultValue: "Impossible de publier le statut", bundle: .main))
         }
     }
 
@@ -364,7 +381,7 @@ class StatusViewModel: ObservableObject {
         // file où basculer.
         guard !isOffline() else {
             FeedbackToastManager.shared.showError(
-                String(localized: "feed.repost.error", defaultValue: "Error reposting", bundle: .main)
+                String(localized: "feed.repost.error", defaultValue: "Erreur lors du repost", bundle: .main)
             )
             return false
         }
@@ -399,7 +416,7 @@ class StatusViewModel: ObservableObject {
             // possède : le catalogue est à sept langues avec un cliquet français
             // à zéro tolérance. Ne pas lire ce toast unique comme un oubli.
             FeedbackToastManager.shared.showError(
-                String(localized: "feed.repost.error", defaultValue: "Error reposting", bundle: .main)
+                String(localized: "feed.repost.error", defaultValue: "Erreur lors du repost", bundle: .main)
             )
             return false
         }
@@ -419,39 +436,58 @@ class StatusViewModel: ObservableObject {
     /// Supersedes a recovered mood when the user re-sends it from the composer,
     /// so the resend replaces the stuck row instead of duplicating it.
     func supersedeRecoveredStatus(clientMutationId: String) async {
-        await offlineQueue.cancelCreatePost(clientMutationId: clientMutationId)
+        _ = await offlineQueue.cancelPendingPublication(clientMutationId: clientMutationId)
     }
 
     // MARK: - Clear Status
 
+    /// Une humeur encore dans la file d'envoi (son id est le cmid de sa ligne
+    /// `.createPost`) n'existe pas côté serveur : elle s'ANNULE par la même
+    /// action que la pastille et le détail (`PendingPublicationCancel`), jamais
+    /// par un `DELETE` (#10331).
     func clearStatus() async {
         guard let status = myStatus else { return }
 
-        let snapshot = statuses
-        let previousStatus = myStatus
+        let index = statuses.firstIndex { $0.id == status.id }
         statuses.removeAll { $0.id == status.id }
         myStatus = nil
+
+        guard !PendingPublicationMarker.isPending(postId: status.id) else {
+            guard await PendingPublicationCancel.run(status.id, queue: offlineQueue) else {
+                return restore(status, at: index)
+            }
+            return await saveCacheSnapshot()
+        }
 
         do {
             try await statusService.delete(statusId: status.id)
             await saveCacheSnapshot()
         } catch {
-            statuses = snapshot
-            myStatus = previousStatus
-            FeedbackToastManager.shared.showError(String(localized: "status.deleteError", defaultValue: "Error deleting status", bundle: .main))
+            restore(status, at: index)
+            FeedbackToastManager.shared.showError(String(localized: "status.deleteError", defaultValue: "Impossible de supprimer le statut", bundle: .main))
         }
+    }
+
+    /// Défaire CE retrait : les humeurs arrivées par socket pendant l'attente
+    /// restent, et une humeur publiée entre-temps n'est pas remplacée par
+    /// l'ancienne.
+    private func restore(_ status: StatusEntry, at index: Int?) {
+        if let index {
+            statuses = OptimisticRollback.restoring(status, at: index, into: statuses)
+        }
+        if myStatus == nil { myStatus = status }
     }
 
     private func saveCacheSnapshot() async {
         let cacheKey = "statuses_\(mode)"
-        try? await CacheCoordinator.shared.statuses.save(statuses, for: cacheKey)
+        await bestEffort("statusViewModel.statuses.save.2", category: .cache) { try await CacheCoordinator.shared.statuses.save(statuses, for: cacheKey) }
     }
 
     // MARK: - Current User Info (for preview)
 
     var currentUserDisplayName: String {
         let user = authManager.currentUser
-        return user?.displayName ?? user?.username ?? "Moi"
+        return user?.displayName ?? user?.username ?? String(localized: "common.me", defaultValue: "Moi", bundle: .main)
     }
 
     var currentUserInitial: String {
@@ -463,25 +499,45 @@ class StatusViewModel: ObservableObject {
 
     // MARK: - Lookup Methods
 
-    func statusForUser(userId: String) -> StatusEntry? {
+    /// L'humeur VIVANTE d'un utilisateur. Une humeur expire (`expiresAt`), mais
+    /// la liste n'est relue qu'au démarrage et au tirer pour rafraîchir — et
+    /// le cache la sert d'abord : sans ce filtre, l'avatar d'un ami gardait
+    /// une humeur éteinte au démarrage hors ligne ou après un jour au premier
+    /// plan. Même règle que l'humeur du tray (`StoryViewModel+Viewing`).
+    func statusForUser(userId: String, now: Date = Date()) -> StatusEntry? {
         guard let offset = statusIndexByUserId[userId], offset < statuses.count else { return nil }
-        return statuses[offset]
+        let entry = statuses[offset]
+        if let expiresAt = entry.expiresAt, expiresAt <= now { return nil }
+        return entry
     }
 
     // MARK: - Mood Tap Handler
 
-    /// - Parameter repliesInline: vrai quand le mood est affiché dans la barre de
-    ///   la conversation directe de son auteur — toucher son contenu répond alors
-    ///   immédiatement (sans pop-up de confirmation).
-    func moodTapHandler(for userId: String, repliesInline: Bool = false) -> ((CGPoint) -> Void)? {
+    /// La bulle flottante de l'humeur (liste, contacts, story tray…).
+    func moodTapHandler(for userId: String) -> ((CGPoint) -> Void)? {
         guard statusForUser(userId: userId) != nil else { return nil }
         return { [weak self] point in
             guard let entry = self?.statusForUser(userId: userId) else { return }
             Task { @MainActor in
-                StatusBubbleController.shared.show(entry: entry, anchor: point, repliesInline: repliesInline)
+                Self.bubbleController.show(entry: entry, anchor: point)
             }
         }
     }
+
+    /// En CONVERSATION (en-tête, bulles, fil), la boule de mood ouvre la page
+    /// plein écran de l'humeur, sans bulle ni pop-up de réponse (#13987).
+    func moodSpotlightHandler(for userId: String,
+                              controller: StatusBubbleController? = nil) -> ((CGPoint) -> Void)? {
+        guard statusForUser(userId: userId) != nil else { return nil }
+        let target = controller ?? Self.bubbleController
+        return { [weak self, weak target] _ in
+            guard let entry = self?.statusForUser(userId: userId) else { return }
+            target?.openSpotlight(entry: entry)
+        }
+    }
+
+    /// L'hôte unique de la bulle d'humeur et de la page plein écran.
+    private static var bubbleController: StatusBubbleController { StatusBubbleController.shared }
 
     // MARK: - Socket.IO Real-Time Updates
 
@@ -583,7 +639,9 @@ class StatusViewModel: ObservableObject {
 
     // MARK: - React to Status
 
-    func reactToStatus(_ statusId: String, emoji: String) async {
+    @discardableResult
+    func reactToStatus(_ statusId: String, emoji: String) async -> StatusReactionOutcome {
+        guard sessionReactions[statusId, default: []].insert(emoji).inserted else { return .alreadyPlaced }
         // Optimistic : refleter la reaction dans reactionSummary avant le reseau
         // (parite avec les reactions de post/commentaire). Snapshot pour rollback.
         let previousSummary = statuses.first(where: { $0.id == statusId })?.reactionSummary
@@ -594,14 +652,34 @@ class StatusViewModel: ObservableObject {
         }
         do {
             try await statusService.react(statusId: statusId, emoji: emoji)
+            return .sent
         } catch {
             // Rollback de l'optimisme + toast. (Sur succes, le broadcast
             // `status:reacted` reconcilie l'etat autoritaire cote serveur.)
+            sessionReactions[statusId]?.remove(emoji)
             if let index = statuses.firstIndex(where: { $0.id == statusId }) {
                 statuses[index].reactionSummary = previousSummary
             }
-            FeedbackToastManager.shared.showError(String(localized: "status.reactError", defaultValue: "Error reacting to status", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "status.reactError", defaultValue: "Impossible de réagir au statut", bundle: .main))
+            return .failed
         }
+    }
+
+    func placedReactions(on statusId: String) -> Set<String> {
+        sessionReactions[statusId] ?? []
+    }
+
+    /// Injecté depuis la racine dans `StatusBubbleController` (#18110) : la
+    /// bulle et la page plein écran réagissent par CETTE instance, celle qui
+    /// tient la barre — sa mise à jour optimiste y est donc visible.
+    var reactionHandler: MoodReactionHandler {
+        MoodReactionHandler(
+            react: { [weak self] statusId, emoji in
+                guard let self else { return .failed }
+                return await self.reactToStatus(statusId, emoji: emoji)
+            },
+            placed: { [weak self] statusId in self?.placedReactions(on: statusId) ?? [] }
+        )
     }
 
 }

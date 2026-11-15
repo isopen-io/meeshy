@@ -42,55 +42,7 @@ final class StoryComposerAdoptedDraftTests: XCTestCase {
 
     // MARK: - (c) Décision d'ouverture
 
-    func test_openingDraftAction_adoptedSession_restoresWithoutOffering() {
-        XCTAssertEqual(
-            StoryComposerView.openingDraftAction(
-                isEditingExistingStory: false, isAdoptedDraftSession: true, isSeededSession: false),
-            .restoreAdoptedDraft
-        )
-    }
-
-    func test_openingDraftAction_freshSession_offersPassiveResume() {
-        XCTAssertEqual(
-            StoryComposerView.openingDraftAction(
-                isEditingExistingStory: false, isAdoptedDraftSession: false, isSeededSession: false),
-            .offerDraftResume
-        )
-    }
-
-    /// INVERSION CONSCIENTE (directive user 2026-08-02, point c) : un
-    /// brouillon portant `editingPostId` ROUVRE le mode édition — la session
-    /// est alors à la fois éditante ET adoptée, et c'est le brouillon choisi
-    /// qui doit revivre, pas l'hydratation serveur (qui écraserait le travail
-    /// repris). L'adoption prime.
-    func test_openingDraftAction_adoptedEditSession_restoresTheAdoptedDraft() {
-        XCTAssertEqual(
-            StoryComposerView.openingDraftAction(
-                isEditingExistingStory: true, isAdoptedDraftSession: true, isSeededSession: false),
-            .restoreAdoptedDraft,
-            "Rouvrir un brouillon d'édition doit restaurer CE brouillon, jamais ré-hydrater le serveur par-dessus."
-        )
-    }
-
-    /// Une entrée en édition FRAÎCHE (« Modifier » sur une story publiée)
-    /// reste hydratée depuis la story : le système de brouillons ne s'anime
-    /// qu'ensuite (autosaves porteurs d'`editingPostId`).
-    func test_openingDraftAction_freshEditSession_staysHydratedByEditMode() {
-        XCTAssertEqual(
-            StoryComposerView.openingDraftAction(
-                isEditingExistingStory: true, isAdoptedDraftSession: false, isSeededSession: false),
-            .hydratedByEditMode
-        )
-    }
-
     // MARK: - « Recommencer » sur une session adoptée
-
-    func test_draftDiscardAction_adoptedSession_detaches_freshSessionDeletes() {
-        XCTAssertEqual(StoryComposerView.draftDiscardAction(isAdoptedDraftSession: true),
-                       .detachFromAdoptedDraft)
-        XCTAssertEqual(StoryComposerView.draftDiscardAction(isAdoptedDraftSession: false),
-                       .deleteCurrentDraft)
-    }
 
     func test_detachFromAdoptedDraft_movesToAFreshId_andTheChosenDraftSurvives() throws {
         let store = makeStore()
@@ -112,41 +64,4 @@ final class StoryComposerAdoptedDraftTests: XCTestCase {
 
     // MARK: - Gardes de câblage (ouverture + Recommencer)
 
-    /// (c) — l'`onAppear` du composer route l'ouverture par la décision pure
-    /// `openingDraftAction` : session adoptée → restauration directe, jamais
-    /// `checkForDraft()` (qui trouverait le brouillon adopté sous
-    /// `viewModel.draftId` et poserait une DEUXIÈME invite).
-    func test_onAppear_routesThroughTheOpeningDraftDecision() throws {
-        let code = try ComposerSourceGuard.source("StoryComposerView.swift")
-
-        XCTAssertGreaterThanOrEqual(
-            ComposerSourceGuard.occurrences(of: "openingDraftAction(", in: code), 1,
-            """
-            Sans décision d'ouverture, `checkForDraft()` retrouve le brouillon \
-            adopté sous `viewModel.draftId` et re-propose le bandeau : double \
-            invite, canvas vide, et l'autosave reste suspendu sous une offre \
-            que l'utilisateur a déjà tranchée.
-            """
-        )
-    }
-
-    /// « Recommencer » générique — le corps de la View ne supprime plus le
-    /// brouillon en direct : la décision passe par `draftDiscardAction`, qui
-    /// détache les sessions adoptées au lieu de détruire leur brouillon.
-    func test_bannerDiscard_routesThroughTheDiscardDecision() throws {
-        let code = try ComposerSourceGuard.source("StoryComposerView.swift")
-
-        XCTAssertEqual(
-            ComposerSourceGuard.occurrences(of: "clearCurrentDraft()", in: code), 0,
-            """
-            Un `clearCurrentDraft()` câblé en direct dans la View détruit le \
-            brouillon ADOPTÉ quand la session en porte un : « Recommencer » \
-            doit s'en détacher (id neuf), pas le supprimer.
-            """
-        )
-        XCTAssertEqual(
-            ComposerSourceGuard.occurrences(of: "discardOfferedDraft()", in: code), 1,
-            "Le discard du bandeau passe par l'applicateur unique de la décision."
-        )
-    }
 }

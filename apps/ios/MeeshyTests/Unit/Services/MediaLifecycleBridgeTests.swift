@@ -22,6 +22,7 @@ final class MediaLifecycleBridgeTests: XCTestCase {
         PlaybackCoordinator.shared.testStopAllProbe = nil
         MediaSessionCoordinator.shared.testProbe = nil
         SharedAVPlayerManager.shared.isPlaying = false
+        SharedAVPlayerManager.shared.resetPipForTesting()
         try await super.tearDown()
     }
 
@@ -104,6 +105,27 @@ final class MediaLifecycleBridgeTests: XCTestCase {
             "Une vidéo (réel) hors PiP ne doit JAMAIS continuer de jouer en arrière-plan")
         XCTAssertEqual(stopProbe.stopAllCount, 1)
         XCTAssertEqual(sessionProbe.deactivateCount, 1)
+    }
+
+    /// #11041 — la fenêtre PiP automatique s'ouvre (`willStart`) pendant la
+    /// transition : la vidéo lui appartient. L'ancienne loi la mettait en pause
+    /// puis démontait le lecteur (`stopAll` → `pip.teardown()`) faute d'avoir vu
+    /// `isPictureInPictureActive` sous 0,4 s — la fenêtre avortait.
+    func test_prepareForBackground_videoPlayingWhilePipStarts_handsOffWithoutPauseNorTeardown() async {
+        _ = setupCoordinator(isPlaying: false)
+        SharedAVPlayerManager.shared.isPlaying = true
+        SharedAVPlayerManager.shared.simulateSystemPipStartForTesting()
+        let stopProbe = PlaybackCoordinatorStopAllProbe()
+        PlaybackCoordinator.shared.testStopAllProbe = stopProbe
+        let sessionProbe = MediaSessionCoordinatorTestProbe()
+        MediaSessionCoordinator.shared.testProbe = sessionProbe
+
+        await MediaLifecycleBridge.shared.prepareForBackground()
+
+        XCTAssertTrue(SharedAVPlayerManager.shared.isPlaying,
+            "Une vidéo qui part en PiP ne se met pas en pause : la pause avorterait la fenêtre")
+        XCTAssertEqual(stopProbe.stopAllCount, 0, "stopAll démonterait la fenêtre PiP")
+        XCTAssertEqual(sessionProbe.deactivateCount, 0, "la session reste active pour le PiP")
     }
 
     func test_prepareForBackground_videoPlayingWhileAudioQueueActive_pausesVideoButKeepsSession() async {

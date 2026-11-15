@@ -46,23 +46,26 @@ extension StoryCanvasUIView {
         defer { CATransaction.commit() }
 
         // Background layer
-        let bgKind = StoryRenderer.renderBackground(slide: slide,
-                                                    languages: readerContext.preferredLanguages)
+        let bgKind = readerContext.aliasingLocalMedia(
+            StoryRenderer.renderBackground(slide: slide, languages: readerContext.preferredLanguages))
         // BG transform : priorité à `mediaObjects[bg]` (source de vérité
-        // unifiée avec les items FG depuis 2026-05-29). Fallback sur le
+        // unifiée avec les items FG). Fallback sur le
         // champ legacy `slide.effects.backgroundTransform.scale/offset/rotation`
         // pour les stories publiées AVANT l'unification (les valeurs y sont
         // gelées mais valides). `videoFitMode` reste toujours sur
         // `backgroundTransform` (n'est pas une coord géométrique).
         let bgTransform: BackgroundTransform = {
             let videoFitMode = slide.effects.backgroundTransform?.videoFitMode
+            // Le fond des bandes (#8414) voyage comme le cadrage : il n'est pas
+            // une coordonnée, il reste sur `backgroundTransform`.
+            let backdrop = slide.effects.backgroundTransform?.backdrop
             // Source unique : `mediaObjects[bg]` est TOUJOURS la source de
             // vérité dès qu'il existe — y compris quand toutes ses valeurs
             // sont aux défauts (scale=1.0, x=y=0.5, rotation=0). L'ancienne
             // garde de transition (scale != 1.0 || x != 0.5 || ...) basculait
             // sur `backgroundTransform` legacy quand le user dezoomait
             // exactement à 1.0, provoquant un saut visible entre les deux
-            // sources si la legacy avait un scale différent (bug 2026-05-29).
+            // sources si la legacy avait un scale différent.
             // `backgroundTransform` n'est utilisée qu'en pur fallback quand
             // `mediaObjects[bg]` n'existe pas (stories pré-unification).
             if let bg = slide.effects.mediaObjects?.first(where: { $0.isBackground }) {
@@ -71,7 +74,8 @@ extension StoryCanvasUIView {
                     offsetX: (bg.x - 0.5) * Double(geometry.renderSize.width),
                     offsetY: (bg.y - 0.5) * Double(geometry.renderSize.height),
                     rotation: bg.rotation,
-                    videoFitMode: videoFitMode
+                    videoFitMode: videoFitMode,
+                    backdrop: backdrop
                 )
             }
             if let t = slide.effects.backgroundTransform {
@@ -79,22 +83,22 @@ extension StoryCanvasUIView {
                                            offsetX: Double(t.offsetX ?? 0),
                                            offsetY: Double(t.offsetY ?? 0),
                                            rotation: t.rotation ?? 0,
-                                           videoFitMode: videoFitMode)
+                                           videoFitMode: videoFitMode, backdrop: backdrop)
             }
             return BackgroundTransform(scale: 1, offsetX: 0, offsetY: 0,
-                                       rotation: 0, videoFitMode: videoFitMode)
+                                       rotation: 0, videoFitMode: videoFitMode, backdrop: backdrop)
         }()
         backgroundLayer.frame = CGRect(origin: .zero, size: geometry.renderSize)
         // Letterbox fill : la couleur de fond de la slide n'habille les bandes QUE
         // s'il n'y a PAS de média de fond visuel. Avec un fond image/vidéo
         // (`bgKind.isVisualMedia`), aucune couleur — letterbox neutre (transparente)
-        // → le fond coloré est supprimé dès qu'un visuel de fond existe (user
-        // 2026-06-03, inverse la préférence 2026-05-28). En pratique le média
+        // → le fond coloré est supprimé dès qu'un visuel de fond existe.
+        // En pratique le média
         // remplit le canvas (resizeAspectFill par défaut) ; la bande neutre ne
         // concerne que le mode fit explicite (double-tap auteur).
         let letterboxColor: UIColor? = {
             guard !bgKind.isVisualMedia, let hex = slide.effects.background else { return nil }
-            return Self.parseBackgroundHex(hex)
+            return HexColor(hex: hex)?.uiColor
         }()
         backgroundLayer.configure(
             kind: bgKind,
@@ -108,32 +112,42 @@ extension StoryCanvasUIView {
             // `.gradient` cases can stamp the preview ON TOP of the flat tint
             // (user spec 2026-05-28: thumbnail visible above color, not below).
             slidePreviewThumbHash: slide.effects.thumbHash,
+            // **Les bandes d'un média AJUSTÉ sont peintes, pas laissées nues**
+            // La scène étant figée en 9:16, un
+            // fond paysage n'en occupe que la tranche centrale — et l'auteur
+            // écrit dans ce qui reste. La cascade des sources est une RÈGLE
+            // pure : le fond d'abord, les collages de premier plan ensuite, le
+            // composite de slide en dernier.
+            letterboxFillHashes: StoryLetterboxFill.candidateHashes(effects: slide.effects),
             // Filter is BAKED into the background bitmap at stamp time (no overlay) —
             // renders identically in composer / preview / reader / published, and an
-            // in-place image edit re-filters via `contentVersion` (2026-06-03 pivot).
+            // in-place image edit re-filters via `contentVersion`.
             filter: slide.effects.filter.flatMap { StoryFilter(rawValue: $0) },
             filterIntensity: Float(slide.effects.filterIntensity ?? 1.0),
+            // Les réglages du média de fond (#9496) et son look (#13840), comme la vignette et l'export.
+            adjustments: StoryBackgroundLook.adjustments(for: slide.effects),
+            mediaLook: slide.effects.resolvedBackgroundMedia?.look,
             contentVersion: composerImageRevision
         )
 
-        // Items — détache les sublayers existants AVANT de les ré-attacher.
-        // Les layers cachés (StoryRendererCache) restent retenus côté cache
-        // et seront ré-attachés via `addSublayer` à la prochaine itération,
-        // ce qui détache automatiquement du parent précédent (O(1)).
-        itemsContainer.sublayers?.forEach { $0.removeFromSuperlayer() }
+        // En LECTURE, le verre ne se recapture que si ce qui est dessous a
+        // changé (#9864) — `refreshPlaybackGlassBackdropIfNeeded`, puis la
+        // passe `feedPlaybackGlassLayers` après le rendu. Ailleurs (composer,
+        // preview de timeline), chaque reconstruction suit une mutation du
+        // modèle : la capture reste celle d'avant, à chaque appel.
+        let feedsGlassFromPlaybackLaw = mode == .play
+        if feedsGlassFromPlaybackLaw {
+            refreshPlaybackGlassBackdropIfNeeded(now: CACurrentMediaTime())
+        } else {
+            backdropCapture.invalidate()
+            _ = backdropCapture.captureCanvasBackdrop(slide: slide,
+                                                      geometry: geometry,
+                                                      time: currentTime,
+                                                      mode: renderMode,
+                                                      languages: readerContext.preferredLanguages, contentsScale: traitCollection.storyCanvasDisplayScale)
+        }
 
-        // Drop the stale canvas backdrop captured during the previous tick,
-        // then re-capture against the current slide state. The helper short-
-        // circuits to a no-op when no glass-style text exists on the slide,
-        // so this is essentially free for the common path.
-        backdropCapture.invalidate()
-        _ = backdropCapture.captureCanvasBackdrop(slide: slide,
-                                                  geometry: geometry,
-                                                  time: currentTime,
-                                                  mode: renderMode,
-                                                  languages: readerContext.preferredLanguages)
-
-        // Cache CALayer : actif dans LES DEUX modes depuis 2026-07-11.
+        // Cache CALayer : actif dans LES DEUX modes.
         // - `.play` : `displayLinkTick` rebuild à 60 Hz sans mutation du modèle
         //   (seul `currentTime` avance) — fingerprint historique inchangé.
         // - `.edit` : `StoryRenderer.render` fournit un `contentHash` JSON
@@ -149,24 +163,34 @@ extension StoryCanvasUIView {
             cacheForRender.invalidateIfNeeded(slideId: slide.id,
                                               languages: readerContext.preferredLanguages,
                                               mode: renderMode,
-                                              renderSize: geometry.renderSize)
+                                              renderSize: geometry.renderSize, contentsScale: traitCollection.storyCanvasDisplayScale)
         }
 
-        let rendered = StoryRenderer.render(slide: slide,
-                                            into: geometry,
-                                            at: currentTime,
-                                            mode: renderMode,
-                                            languages: readerContext.preferredLanguages,
-                                            resolver: readerContext.postMediaURLResolver,
-                                            imageCache: readerContext.imageCache,
-                                            playerProvider: readerContext.playerProvider,
-                                            cache: cacheForRender,
-                                            backdropProvider: { [weak backdropCapture] frame in
-                                                backdropCapture?.cropRegion(frame)
-                                            },
-                                            suppressDrawingOverlay: isDrawingOverlayActive)
-        for sub in rendered.sublayers ?? [] {
-            itemsContainer.addSublayer(sub)
+        let editGlassProvider: StoryRenderer.BackdropProvider?
+        if feedsGlassFromPlaybackLaw {
+            editGlassProvider = nil
+        } else {
+            editGlassProvider = { [weak backdropCapture] frame in
+                backdropCapture?.cropRegion(frame)
+            }
+        }
+        // #9865 — rendu DANS `itemsContainer` : un arbre inchangé d'une image à
+        // l'autre ne détache ni ne ré-attache aucun calque.
+        _ = StoryRenderer.render(slide: slide,
+                                 into: geometry,
+                                 at: currentTime,
+                                 mode: renderMode,
+                                 languages: readerContext.preferredLanguages,
+                                 resolver: readerContext.postMediaURLResolver,
+                                 imageCache: readerContext.imageCache,
+                                 playerProvider: readerContext.playerProvider,
+                                 cache: cacheForRender,
+                                 backdropProvider: editGlassProvider, contentsScale: traitCollection.storyCanvasDisplayScale, imageDecodeTiming: .offMainActor,
+                                 suppressDrawingOverlay: isDrawingOverlayActive,
+                                 outOfWindowGhostOpacity: timelineGhostOpacity,
+                                 reusing: itemsContainer)
+        if feedsGlassFromPlaybackLaw {
+            feedPlaybackGlassLayers()
         }
 
         // Re-stamp l'état mute global sur les media layers fraîchement
@@ -217,6 +241,11 @@ extension StoryCanvasUIView {
         }
 
         applyForegroundFrames()
+        // **Le marqueur se repose APRÈS les frames** (#4073) : `rebuildLayers`
+        // remplace ou déplace les calques d'objet qui ont changé, et un cadre posé
+        // une seule fois désignerait une frame périmée dès le premier déplacement.
+        // Le recalcul est le prix d'un cadre qui suit le doigt.
+        refreshSelectionMarker()
         scheduleContentReadyEvaluation(for: bgKind)
         // Emit l'état initial de progression (généralement 0.0 hors color/gradient
         // qui passent immédiatement à backgroundContentReady=true via le path sync).
@@ -287,15 +316,56 @@ extension StoryCanvasUIView {
         }
     }
 
-    /// Parses a `#RRGGBB` or `RRGGBB` hex string into a UIColor.
-    /// Local helper; matches the logic used by StoryRenderer + StoryAVCompositor.
-    nonisolated static func parseBackgroundHex(_ hex: String) -> UIColor? {
-        var s = hex
-        if s.hasPrefix("#") { s.removeFirst() }
-        guard s.count == 6, let v = UInt32(s, radix: 16) else { return nil }
-        return UIColor(red: CGFloat((v >> 16) & 0xff) / 255,
-                       green: CGFloat((v >> 8) & 0xff) / 255,
-                       blue: CGFloat(v & 0xff) / 255,
-                       alpha: 1)
+    /// **Le verre se capture quand ce qui est dessous change** (#9864).
+    ///
+    /// La décision est `StoryGlassBackdropPlayback.shouldRecapture` : une
+    /// capture pour un dessous immobile, ~12 Hz pour un dessous qui bouge, et
+    /// une nouvelle dès que la slide, sa révision, la taille de rendu, les
+    /// langues ou l'ensemble des objets visibles changent. Une slide sans verre
+    /// rend sa texture tout de suite.
+    func refreshPlaybackGlassBackdropIfNeeded(now: CFTimeInterval) {
+        guard StoryGlassBackdropPlayback.slideHasGlass(slide) else {
+            backdropCapture.invalidate()
+            return
+        }
+        let languages = readerContext.preferredLanguages
+        let key = StoryGlassCaptureKey(
+            slideId: slide.id,
+            contentRevision: slideContentRevision,
+            renderSize: geometry.renderSize,
+            languages: languages,
+            visibleItemIds: StoryGlassBackdropPlayback.visibleBackdropItemIds(slide: slide,
+                                                                               at: currentTime.seconds))
+        let backgroundIsVideo: Bool = {
+            if case .video = backgroundLayer.kind { return true }
+            return false
+        }()
+        guard StoryGlassBackdropPlayback.shouldRecapture(
+            previous: backdropCapture.playbackKey,
+            current: key,
+            backdropMoves: StoryGlassBackdropPlayback.backdropMoves(slide: slide,
+                                                                    backgroundIsVideo: backgroundIsVideo),
+            now: now,
+            lastCaptureAt: backdropCapture.playbackCapturedAt) else { return }
+        backdropCapture.capturePlaybackBackdrop(slide: slide,
+                                                geometry: geometry,
+                                                time: currentTime,
+                                                languages: languages, contentsScale: traitCollection.storyCanvasDisplayScale,
+                                                key: key,
+                                                now: now)
+    }
+
+    /// Ne re-nourrit que le verre qui n'a pas déjà la découpe de la capture
+    /// courante pour son cadre courant (#9864) : sans cette garde, chaque tick
+    /// rejouait découpe, flou MPS et `createCGImage` sur une image identique.
+    func feedPlaybackGlassLayers() {
+        let generation = backdropCapture.generation
+        for sub in itemsContainer.sublayers ?? [] {
+            guard let textLayer = sub as? StoryTextLayer, textLayer.hasGlassBackdrop else { continue }
+            let stamp = StoryGlassFeedStamp(generation: generation, frame: textLayer.frame)
+            guard StoryGlassBackdropPlayback.shouldFeed(lastFed: textLayer.glassBackdropFeedStamp,
+                                                        current: stamp) else { continue }
+            textLayer.setBackdropTexture(backdropCapture.cropRegion(textLayer.frame), stamp: stamp)
+        }
     }
 }

@@ -21,6 +21,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 import { AttachmentReactionHandler } from '../../../socketio/handlers/AttachmentReactionHandler';
 import type { AttachmentReactionHandlerDependencies } from '../../../socketio/handlers/AttachmentReactionHandler';
+import { PARTICIPATION_VIVANTE } from '../../../routes/conversations/utils/access-control';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -132,12 +133,15 @@ describe('AttachmentReactionHandler', () => {
   // ─── validation guards ─────────────────────────────────────────────────────
 
   describe('validation guards', () => {
+    // Frontière Zod, parité avec les trois jumelles de réaction : le vrai schéma
+    // est exercé (pas de mock de `validateSocketEvent`), donc ces témoins
+    // tombent si le schéma est débranché ou affaibli.
     it('returns error when payload is missing attachmentId', async () => {
       const deps = makeDeps();
       const handler = new AttachmentReactionHandler(deps);
       const cb = jest.fn();
       await handler.handleAdd(makeSocket(), makePayload({ attachmentId: '' }), cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid payload' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
     });
 
     it('returns error when payload is missing messageId', async () => {
@@ -145,7 +149,7 @@ describe('AttachmentReactionHandler', () => {
       const handler = new AttachmentReactionHandler(deps);
       const cb = jest.fn();
       await handler.handleAdd(makeSocket(), makePayload({ messageId: '' }), cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid payload' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
     });
 
     it('returns error when payload is missing emoji', async () => {
@@ -153,7 +157,16 @@ describe('AttachmentReactionHandler', () => {
       const handler = new AttachmentReactionHandler(deps);
       const cb = jest.fn();
       await handler.handleAdd(makeSocket(), makePayload({ emoji: '' }), cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid payload' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
+    });
+
+    it('rejects an over-long emoji (> EMOJI_MAX_LENGTH) at the boundary — parity with the reaction twins', async () => {
+      const deps = makeDeps();
+      const handler = new AttachmentReactionHandler(deps);
+      const cb = jest.fn();
+      await handler.handleAdd(makeSocket(), makePayload({ emoji: 'a'.repeat(40) }), cb);
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
+      expect(deps.service.addAttachmentReaction).not.toHaveBeenCalled();
     });
 
     it('rejects non-ObjectId messageId (optimistic/temp id)', async () => {
@@ -161,7 +174,7 @@ describe('AttachmentReactionHandler', () => {
       const handler = new AttachmentReactionHandler(deps);
       const cb = jest.fn();
       await handler.handleAdd(makeSocket(), makePayload({ messageId: 'cid_temp_123' }), cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Could not resolve participant' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
     });
 
     it('rejects non-ObjectId attachmentId', async () => {
@@ -169,7 +182,7 @@ describe('AttachmentReactionHandler', () => {
       const handler = new AttachmentReactionHandler(deps);
       const cb = jest.fn();
       await handler.handleAdd(makeSocket(), makePayload({ attachmentId: 'not-an-object-id' }), cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Could not resolve participant' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
     });
 
     it('returns error when socket user is not in socketToUser map', async () => {
@@ -374,7 +387,7 @@ describe('AttachmentReactionHandler', () => {
       // Security: identity is verified against the DB, scoped to the conversation.
       expect(prisma.participant.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'anon-participant-id', conversationId: VALID_CONV_ID, isActive: true },
+          where: { id: 'anon-participant-id', conversationId: VALID_CONV_ID, ...PARTICIPATION_VIVANTE },
         })
       );
       expect(service.addAttachmentReaction).toHaveBeenCalledWith(

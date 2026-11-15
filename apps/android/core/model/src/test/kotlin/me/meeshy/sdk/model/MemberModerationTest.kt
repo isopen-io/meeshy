@@ -198,4 +198,24 @@ class MemberModerationTest {
         assertThat(MemberRoleAction.entries.map { it.target })
             .containsNoneOf(MemberRole.CREATOR, null)
     }
+
+    @Test
+    fun the_address_key_is_shared_with_the_settings_policy() {
+        val account = PaginatedParticipant(id = "p1", userId = "u1")
+        val visitor = PaginatedParticipant(id = "p2", userId = null)
+        assertThat(MemberModeration.addressKey(account)).isEqualTo("u1")
+        assertThat(MemberModeration.addressKey(visitor)).isEqualTo("p2")
+        assertThat(MemberActionPolicy.actions(visitor, MemberRole.ADMIN).map { it.targetKey }.toSet())
+            .containsExactly(MemberModeration.addressKey(visitor))
+    }
+
+    @Test
+    fun an_accountless_visitor_is_never_offered_a_role_change() {
+        assertThat(
+            MemberModeration.roleActions(MemberRole.CREATOR, MemberRole.MEMBER, isSelf = false, hasAccount = false),
+        ).isEmpty()
+        assertThat(
+            MemberModeration.roleActions(MemberRole.CREATOR, MemberRole.MEMBER, isSelf = false, hasAccount = true),
+        ).isNotEmpty()
+    }
 }

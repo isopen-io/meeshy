@@ -406,6 +406,24 @@ describe('PhonePasswordResetService.verifyIdentity', () => {
     expect(result.codeSent).toBe(true);
   });
 
+  // #4859 — `userAgent` était destructuré du corps et jamais transmis à
+  // `logSecurityEvent` : `SecurityEvent.userAgent` (colonne dédiée du schéma,
+  // au même rang qu'`ipAddress`) restait NUL pour tout événement de ce
+  // service. Vérifie qu'il atteint désormais la colonne, comme `ipAddress`.
+  it('forwards userAgent to the security event, in metadata and its dedicated column', async () => {
+    const prisma = makePrisma();
+    const sut = makeSut({ prisma });
+
+    await sut.verifyIdentity(BASE_IDENTITY);
+
+    const calls = (prisma.securityEvent.create as jest.Mock<any>).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    for (const [{ data }] of calls) {
+      expect(data.userAgent).toBe(BASE_IDENTITY.userAgent);
+      expect(data.metadata.userAgent).toBe(BASE_IDENTITY.userAgent);
+    }
+  });
+
   it('returns internal_error on unexpected exception', async () => {
     const prisma = makePrisma();
     (prisma.phonePasswordResetToken.findUnique as jest.Mock<any>).mockRejectedValue(

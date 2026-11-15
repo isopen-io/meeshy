@@ -1,0 +1,1003 @@
+import { quotedPieceIdOf } from '@/lib/view/quoted-preview';
+import { memo, useRef } from 'react';
+
+import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline';
+
+import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
+import type { LocalDelivery } from '@/lib/view/message';
+import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
+import { badgesOf, editedByModeratorOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
+import { bodyKindOf, moodCitationOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
+import { usePresence } from '@/lib/view/use-presence';
+import { threadRowKeyOf } from '@/lib/view/use-arrival-motion';
+import { prismFor, served } from '@/lib/api/prism';
+import { mediaCarrierOf } from '@/lib/view/media';
+import type { PlacedMessage } from '@/lib/grouping';
+import { endToEndSealed } from '@/lib/view/end-to-end-sealed';
+import { time } from '@/lib/grouping';
+import type { FlatRowMode } from '@/lib/reading-mode/decision';
+import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
+import { protectionOf } from '@/lib/reading-mode/protection';
+import {
+  AVATAR_FRAME,
+  AVATAR_INSET,
+  AVATAR_SIZE,
+  GROUP_TOP_PADDING,
+  META_TEXT_OPACITY,
+  ROW_PADDING_HORIZONTAL,
+  ROW_PADDING_VERTICAL,
+  STICKER_SIDE,
+  TEXT_INDENT,
+} from '@/lib/reading-mode/metrics';
+import { useFocusFrame } from '@/lib/view/use-focus-frame';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+
+import { hereKeyOf } from '@/lib/view/use-conversation-viewing';
+import { authorInkStyle } from '@/lib/view/author-ink';
+import { authorLanguageChip } from '@/lib/view/author-language-chip';
+import '@/styles/conversation-look.css';
+import { AuthorAvatar } from './author-avatar';
+import { PersonName } from './person-name';
+import { Attachments } from './attachment-blocks';
+import { FocusCard, FocusIdentity, FocusStamp, FocusStrip } from './focal-focus-overlays';
+import { FocalBottomLine } from './focal-bottom-line';
+import { GlyphSvg } from './glyph';
+import { THREAD_IDENTITY_GLYPHS } from './glyphs-thread-identity';
+import { EmojiOnly, LocationCard, MoodQuote, StickerArtwork, StoryCitationCard } from './message-body-blocks';
+import { ProtectedContent, ProtectionNotice } from './protected-content';
+import { ProtectionChrome } from './protection-chrome';
+import { LongMessageText } from './long-message-text';
+import { ConversationLinkCards } from './conversation-link-cards';
+import { SystemNotice } from './system-notice';
+import { linkRenderingOf } from '@/lib/view/sender-links';
+import { callNoticeTarget } from '@/lib/calls/call-notice';
+import { Badges, Check, EditedMark, Quote, reactionEntries, RowQuote } from './message-blocks';
+import { FailedSendBand } from './failed-send-band';
+
+const defaultNow = (): number => Date.now();
+
+/**
+ * LA RANGÉE PLATE DU FIL (Focal / Script) — miroir de `FocalRow.swift`
+ * (`apps/ios/Meeshy/Features/Focal/Row/`, §1.5 de la spécification #5566).
+ * « Pastille 22, "Pseudo · HH:mm" en tête de groupe, texte 15 pleine largeur
+ * au retrait 41, méta discrète, AUCUNE bulle. »
+ *
+ * DEUX ÉCARTS avec la BULLE (`bubble.tsx`), et c'est le point : cette rangée
+ * n'a NI fond, NI rayon, NI alignement gauche/droite — c'est un LOG à colonne
+ * unique. Et l'identité vit en TÊTE de groupe (`head`), pas en pied
+ * (`tail`) : c'est l'INVERSE de la bulle, la remarque explicite du contrat
+ * iOS (« attention : c'est l'inverse de la bulle »).
+ *
+ * `mode` ne change PAS la disposition — « input.density n'est PAS lu » —
+ * `script` et `focal` partagent CETTE rangée ; ce qui les distingue est la
+ * PERSPECTIVE au défilement (`reading-mode/scene.ts`, appliquée par l'hôte
+ * en mode `focal` seul, HORS de cette rangée — même partition qu'iOS, où le
+ * pass de perspective vit dans `MessageListViewController`, pas `FocalRow`).
+ * `data-reading-mode` reste posé pour que le gate visuel et un lecteur
+ * d'écran puissent DIRE dans quel mode ils sont.
+ *
+ * DEUX COLONNES (#5135, directive porteur 2026-09-04, correction de revue
+ * #5566 défauts 6/7) : le contenu à gauche, l'heure et l'accusé de réception
+ * dans une colonne MÉTA à droite, alignée sur la DERNIÈRE ligne du contenu —
+ * miroir de `FocalRow.swift:165-183` (`HStack(alignment:.bottom)`). Cette
+ * colonne se monte sur CHAQUE rangée (jamais seulement la tête de groupe) :
+ * une rangée de continuation SANS heure était le défaut mesuré (#5566
+ * défaut 6) — la tête de groupe ne porte plus que l'IDENTITÉ.
+ *
+ * L'ÉLECTION (#5648) — Focal se distingue désormais de Script par l'ÉLECTION
+ * d'une rangée au défilement soutenu (carte teintée, chip d'identité
+ * agrandi, tampon de date), plus par la courbe continue qu'iOS a retirée
+ * (`reading-mode/perspective.ts`, gelée). `elected` est la SEULE donnée que
+ * l'hôte fait traverser React à ce sujet (`reading-mode/scene.ts`) : quand
+ * elle bascule, l'en-tête d'identité et la colonne méta s'effacent
+ * (`FocalRow.swift:182, :269, :317-322`), la ligne basse ordinaire cède la
+ * place à `FocusStrip`/`FocusStamp` (`focal-focus-overlays.tsx`) — DEUX
+ * rangées re-rendent par changement d'élection (l'ancienne élue, la
+ * nouvelle), jamais toutes. `memo` en bas de fichier tient cette promesse :
+ * une rangée dont AUCUNE prop ne change ne re-rend jamais, y compris
+ * pendant la scène du fil.
+ *
+ * LA PROTECTION (D-23, #5676) — le dispatch par `kind`
+ * (`protectionOf(message, now)`) : `deleted` SEUL rend un TOMBSTONE PLAT
+ * (`ProtectionNotice surface="row"`, aucun avatar, aucune identité, aucune
+ * colonne méta — `FocalRow.swift:66-67 systemBody`) ; `expired` ne rend RIEN
+ * (`EmptyView`, `FocalRow.swift:63-73`) ; `veiled` ET `burned` gardent la
+ * grille ENTIÈRE (identité et méta restent lisibles,
+ * `FocalProtectedContent.swift:18-19`) et enveloppent SEULEMENT
+ * citation/pièces-jointes/texte/panneau secondaire dans
+ * `<ProtectedContent surface="row">` — jamais la bande de reprise d'un
+ * envoi échoué (`FocalRow.swift:224-238` reste HORS voile, un échec se voit
+ * même sur un message protégé). `burned` REJOINT `veiled` — et c'est un ÉCART
+ * ASSUMÉ avec `FocalRow.swift:66` (qui bascule `systemBody` dès que
+ * `kind === .burned`) : le web garde le comportement de la BULLE, « contenu
+ * visible pendant la fenêtre, tombstone après » (D-23 §1.4 point 4, question
+ * 3 — un défaut suspecté de la CIBLE, à ouvrir en issue iOS). `standard` n'appelle même pas
+ * `ProtectedContent` (« plan vide ⇒ vue intacte »).
+ */
+export const FocalRow = memo(function FocalRow({
+  mode,
+  place,
+  languages,
+  viewerId,
+  localDelivery,
+  sendStartedAt,
+  sendProgressKey,
+  sendFailureReason,
+  onRetry,
+  onDiscard,
+  revealable = true,
+  onJumpToMessage,
+  onOpenStory,
+  senderStoryRing,
+  highlighted = false,
+  elected = false,
+  expired = false,
+  ephemeralDeadline,
+  onConsumeViewOnce,
+  onEphemeralExpired,
+  now = defaultNow,
+  displayLanguage,
+  onPickLanguage,
+  myReactions,
+  onReact,
+  onOpenDetail,
+  selected,
+  onToggleSelect,
+  group = false,
+}: {
+  mode: FlatRowMode;
+  /** Une conversation de GROUPE (#10004) : le nom d'un autre auteur y prend SA teinte. */
+  group?: boolean;
+  place: PlacedMessage;
+  languages: readonly string[];
+  viewerId: string;
+  /** Traduire (#5814) — une langue IMPOSÉE au rang 0 du Prisme, `undefined`
+   * ⇒ la résolution ordinaire (`languages`) décide seule. UN résolveur,
+   * `resolvePrismTranslation` (D-14) : jamais une seconde loi. */
+  displayLanguage?: string;
+  /**
+   * LE GESTE QUI POSE `displayLanguage` (revue #5814, défaut majeur 12) — le
+   * pied de CETTE rangée (pastille + drapeaux) appelle CE prop, exactement
+   * comme le sous-menu « Traduire » du menu du message appelle
+   * `useMessageMenu.onPickLanguage` : UNE seule loi de « quelle langue pour
+   * CE message », jamais une révélation locale qui répondrait autrement que
+   * le menu. `undefined` ⇒ le pied garde son effet (loi 4 : pas de bouton
+   * inerte) via l'appel optionnel — mais l'hôte (`routes/thread.tsx`) le
+   * fournit TOUJOURS en production.
+   */
+  onPickLanguage?: (code: string) => void;
+  /** Les emojis que CE lecteur a posés sur CE message (`reaction-store.ts`)
+   * — marque `ReactionChip mine` (#5814, T12). */
+  myReactions?: readonly string[];
+  /** Bascule MA réaction en tapant une capsule — la mienne se retire (#5865),
+   * celle d'autrui pose la même (#10583). `undefined` ⇒ `<span>` inerte (loi 4). */
+  onReact?: (emoji: string) => void;
+  /**
+   * OUVRE LA FICHE DU MESSAGE (#8536) — le MÊME panneau que « Plus… » au menu
+   * du message (`useMessageMenu.setDetailFor`). Le tampon de l'ÉLU le porte :
+   * « quand je touche la date : ça n'ouvre pas les détails du message ».
+   * `undefined` ⇒ le tampon reste une heure lisible, sans geste (loi 4).
+   */
+  onOpenDetail?: (messageId: string) => void;
+  /** Mode sélection ACTIF (`undefined` hors sélection) — `false` = rangée
+   * non cochée, `true` = cochée (#5814, question 5). */
+  selected?: boolean;
+  /** VA AVEC `selected` — sans elle, la coche serait un contrôle INERTE
+   * (loi 4). Prend l'id plutôt qu'une fermeture par rangée : une référence
+   * STABLE (`useCallback` chez l'hôte) est ce qui laisse `memo` faire son
+   * travail quand cinquante rangées sont montées. */
+  onToggleSelect?: (messageId: string) => void;
+  /** L'opinion de CE client sur l'envoi, tant que le transport n'a pas tranché. */
+  localDelivery?: LocalDelivery;
+  /** Epoch ms du début de la tentative en cours — l'horloge des 200 ms
+   * (§5 étape 9 de la spécification #5813), transmise à la fois à la
+   * colonne méta ordinaire et à `FocusStamp` (rangée élue). */
+  sendStartedAt?: number;
+  sendProgressKey?: string;
+  /** LA CAUSE de l'échec, en clair (`sendFailureReason`) — portée par la
+   * bande elle-même : `lastError` était capturé et lu par PERSONNE. */
+  sendFailureReason?: string;
+  onRetry?: () => void;
+  onDiscard?: () => void;
+  /**
+   * LE CONTENU EST-IL SEULEMENT LA ? (#6862) — `false` quand la charge ne
+   * PORTE PAS le texte : la lecture souveraine de l'administration retient
+   * `content`, `translations` et les URL des pieces AU SERVEUR. Le voile
+   * offrirait alors un tap qui decouvre une bulle VIDE (loi 4). `true` par
+   * defaut : le fil ordinaire recoit le texte, seulement masque a l'affichage.
+   * Couvre aussi le CHIFFREMENT, que `protectionOf` ne connait pas — d'ou le
+   * `|| !revealable` sur `isProtected` ci-dessous.
+   */
+  revealable?: boolean;
+  /** Saute au message cité (défaut #5566 défaut 10 : le bouton ne faisait rien). */
+  /** `pieceId` (#9911) — la pièce que la citation nomme : le saut met sa tuile en évidence. */
+  onJumpToMessage: (messageId: string, pieceId?: string) => void;
+  /**
+   * Ouvre la story citée (#5936) — `undefined` ⇒ la carte se rend quand même
+   * (« la citation qui subsiste »), mais AUCUN geste ne s'arme (loi 4,
+   * `StoryCitationCard`) : aucune route story n'existe encore côté hôte.
+   */
+  onOpenStory?: (messageId: string) => void;
+  /** Mis en évidence brièvement après un saut de citation. */
+  highlighted?: boolean;
+  /** Élue par la scène du fil (`reading-mode/scene.ts`) — Focal seul, jamais Script. */
+  elected?: boolean;
+  /**
+   * FORCÉ par l'hôte (`thread.tsx`, état `expiredIds`) quand
+   * `EphemeralBadge.onExpired` s'est déclenché pour CE message — jamais un
+   * `setInterval` posé ici : une seconde horloge dans cette rangée est le
+   * défaut que D-23 interdit (« écrire une seconde horloge de révélation
+   * dans une peau »).
+   */
+  expired?: boolean;
+  /**
+   * L'ÉCHÉANCE DE CE LECTEUR (#7454) — composée par l'HÔTE
+   * (`thread-modes.tsx`, `resolveEphemeralDeadline`) et jamais recalculée ici :
+   * la règle est partagée (`@meeshy/shared/utils/ephemeral-deadline`) et la
+   * RÉCEPTION locale qui l'alimente est un état du client, hors de cette
+   * rangée. OBLIGATOIRE : c'est ce qui rend impossible de monter une peau de
+   * message sans décider ce qu'elle fait d'un éphémère.
+   */
+  ephemeralDeadline: EphemeralDeadline;
+  /** Consomme une vue unique (D-10, `lib/api/view-once.ts`) ; `undefined` en environnement sans réseau. */
+  onConsumeViewOnce?: (messageId: string) => Promise<boolean>;
+  onEphemeralExpired?: (messageId: string) => void;
+  /** Horloge injectable — jamais `Date.now()` lu directement (déterminisme des témoins). */
+  now?: () => number;
+  /**
+   * L'ANNEAU DE STORY DE L'EXPÉDITEUR (#7528) — lu par l'HÔTE dans le corpus
+   * du plateau. Présent, l'avatar ET le nom ouvrent sa story ; absent, son
+   * profil (`identityTarget`).
+   */
+  senderStoryRing?: AuthorStoryRing;
+}) {
+  const { message, head, tail } = place;
+  const nowMs = now();
+  /* LA PRÉSENCE VIVANTE DE L'EXPÉDITEUR (#10571) — avant tout retour anticipé. */
+  const senderPresence = usePresence(message.sender, { now });
+  const kind = expired ? 'expired' : protectionOf(message, nowMs);
+  const isMine = isMineOf(message, viewerId);
+
+  /** LA LOUPE ET SON CADRE (#6586/#6588, #8506) — avant tout retour anticipé
+   * (règle des Hooks) : un message expiré/système/supprimé n'est jamais élu,
+   * la rangée n'y grandit donc jamais, mais le hook doit tourner sur CHAQUE
+   * rendu. */
+  const rowRef = useRef<HTMLDivElement>(null);
+  useFocusFrame(rowRef, elected);
+
+  // `expired` — EmptyView : rien à rendre, mais l'ANCRE structurelle reste
+  // (`data-message`) pour que les gates puissent constater l'absence.
+  if (kind === 'expired') {
+    return <div data-reading-mode={mode} data-message={message.id} data-protected="expired" />;
+  }
+
+  /**
+   * LA RANGÉE SYSTÈME (#5936) — testée AVANT la protection (« un message
+   * système est système AVANT d'être supprimé »,
+   * `BubbleContentBuilder.swift:52`) : `FocalSystemRows.swift`, rangée PLATE
+   * centrée SUR LES DEUX COLONNES (`FocalSystemNoticeRow` n'a pas de
+   * retrait, contrairement à une parole ordinaire), sans avatar ni identité
+   * ni colonne méta.
+   */
+  const systemRow = systemRowOf(message);
+  if (systemRow !== null) {
+    return (
+      <div
+        data-reading-mode={mode}
+        data-message={message.id}
+        className="grid"
+        style={{
+          gridTemplateColumns: `${TEXT_INDENT}px 1fr`,
+          paddingInline: ROW_PADDING_HORIZONTAL,
+          paddingBlockStart: head ? GROUP_TOP_PADDING : ROW_PADDING_VERTICAL,
+          paddingBlockEnd: ROW_PADDING_VERTICAL,
+        }}
+      >
+        <div style={{ gridColumn: '1 / -1' }}>
+          <SystemNotice row={systemRow} timeString={time(message.createdAt)} surface="row" callTarget={callNoticeTarget(message, viewerId)} languages={languages} />
+        </div>
+      </div>
+    );
+  }
+
+  /**
+   * `deleted` SEUL prend le TOMBSTONE PLAT (ni avatar, ni identité, ni
+   * colonne méta, `FocalRow.swift:66-67`) : un message supprimé n'a JAMAIS
+   * eu de fenêtre à ouvrir. `burned` N'EST PAS traité ici — et c'est un
+   * ÉCART ASSUMÉ avec `FocalRow.swift:66` (qui bascule sur `systemBody` dès
+   * que `kind === .burned`, donc dès que la consommation aboutit) : le web
+   * garde le comportement de la BULLE (D-23 §1.4 point 4, question 3) —
+   * « contenu visible pendant la fenêtre, tombstone après ». Router `burned`
+   * ici COUPERAIT la révélation à l'instant même où la consommation serveur
+   * répond, avant que les 5 s payées par le lecteur ne s'écoulent. `burned`
+   * rejoint donc `veiled` plus bas : `ProtectedContent` sait déjà rendre son
+   * tombstone SANS affordance quand il MONTE directement sur un message
+   * brûlé à l'arrivée (`viewOnceCount ≥ maxViewOnceCount` avant toute
+   * interaction) — la même fonction couvre les deux histoires par sa PHASE
+   * locale, jamais par le `kind` du dernier rendu de l'hôte.
+   */
+  if (kind === 'deleted') {
+    return (
+      <div
+        data-reading-mode={mode}
+        data-message={message.id}
+        className="grid"
+        style={{
+          gridTemplateColumns: `${TEXT_INDENT}px 1fr`,
+          paddingInline: ROW_PADDING_HORIZONTAL,
+          paddingBlockStart: head ? GROUP_TOP_PADDING : ROW_PADDING_VERTICAL,
+          paddingBlockEnd: ROW_PADDING_VERTICAL,
+        }}
+      >
+        <div aria-hidden />
+        <div data-row-content>
+          <ProtectionNotice kind={kind} surface="row" />
+        </div>
+      </div>
+    );
+  }
+
+  // Texte ET pistes AUDIO traduites (#5805) — miroir `BubbleContentBuilder
+  // .buildAvailableFlags(translations:translatedAudios:)` (`:365-395`) : un
+  // vocal traduit SANS traduction texte monte lui aussi la bande de drapeaux,
+  // une image dont seul l'`alt` est traduit ne la monte PAS (revue #5805).
+  const translatedLanguages = translatedLanguagesOf(message);
+  /** `displayLanguage` est une INSERTION au rang 0 (#5814, § 5 étape 4) —
+   * UN résolveur (`resolvePrismTranslation`, D-14), jamais un second, et
+   * depuis la revue #5805 UNE SEULE composition : `prismFor` (`api/prism.ts`). */
+  const preferredLanguages = prismFor({ readerLanguages: languages, displayLanguage });
+  const rendered = served({
+    preferredLanguages,
+    originalLanguage: message.originalLanguage,
+    translations: message.translations,
+    original: message.content,
+  });
+  /**
+   * LA RÉSOLUTION NATURELLE, SANS `displayLanguage` (revue #5814, correction
+   * après gate — `check-reading-mode.mjs` § 9 bis) — `PrismPastille` se
+   * MONTE quand une traduction existe naturellement pour CE message,
+   * jamais quand l'override ACTIF la rend égale à l'original. Utiliser
+   * `rendered.language` pour cette garde était le défaut : cliquer la
+   * pastille pose `displayLanguage = originalLanguage`, ce qui fait
+   * `rendered.language === originalLanguage` — et un `PrismPastille` gardé
+   * par CETTE égalité se DÉMONTE au clic qui vient de le presser, avant
+   * même que le doigt ne se relève. Le bouton doit rester monté tant que
+   * l'ORIGINE offre quelque chose à explorer, quel que soit ce qui est
+   * actuellement affiché.
+   */
+  const naturalServedLanguage = servedRowLanguage({
+    served: served({
+      preferredLanguages: languages,
+      originalLanguage: message.originalLanguage,
+      translations: message.translations,
+      original: message.content,
+    }),
+    preferredLanguages: languages,
+    attachments: message.attachments,
+    fallbackLanguage: message.originalLanguage,
+  });
+
+  /**
+   * LA LANGUE ACTIVE DU PIED (revue #5814, défaut majeur 12) — la langue
+   * RÉELLEMENT servie par la rangée, jamais un état local, et jamais
+   * `rendered.language` seul (revue #5805) : sur un message MÉDIA-SEUL
+   * (`content: ''`) cette langue est l'ORIGINALE, alors que la transcription
+   * affichée est traduite — la bande retirait alors la mauvaise langue et
+   * proposait un drapeau sans effet. `servedRowLanguage` lit le texte quand
+   * il existe, la pièce sinon.
+   */
+  const activeLanguage = servedRowLanguage({
+    served: rendered,
+    preferredLanguages,
+    attachments: message.attachments,
+    fallbackLanguage: message.originalLanguage,
+  });
+
+  /* LA PASTILLE DE LANGUE SUR L'AVATAR DE 22 PX (#10004) — la langue SERVIE
+     est celle que la rangée vient de résoudre, jamais une seconde descente. */
+  const languageChip = authorLanguageChip({ originalLanguage: message.originalLanguage, servedLanguage: activeLanguage, isMine });
+
+  const footerLanguages = languageBand({
+    originalLanguage: message.originalLanguage,
+    preferredLanguages: languages,
+    translations: translatedLanguages,
+    servedLanguage: activeLanguage,
+  });
+
+  /* DEUX NOMS, PAS UN (revue #5935) — miroir `FocalIdentityHeader.swift:87-92` :
+   * iOS passe `senderDisplayName` à l'AVATAR (ses initiales restent celles de
+   * la personne) et n'échange que le TEXTE contre le littéral de soi
+   * (`focal.row.you`). Un seul nom ici faisait, sur la donnée RÉELLE de la
+   * passerelle, afficher au lecteur son PROPRE nom là où iOS écrit « soi » —
+   * invisible sur fixture (`viewer.displayName === 'Vous'`), visible dès que
+   * VITE_DATA_SOURCE=gateway. Le viewer n'a pas toujours de `sender` peuplé
+   * sur ses propres messages (fixture, charge socket allégée) : le repli
+   * comble l'identité, jamais un nom vide en tête de groupe. */
+  const senderAvatarName = message.sender?.displayName ?? (isMine ? 'Vous' : '');
+  /* LA PHOTO DE L'EXPÉDITEUR (#6975) — `message.sender` est un `Participant`
+     complet (c'est déjà lui que `usePresence` reçoit plus haut),
+     donc les DEUX rangs de la loi partagée sont là : avatar local, puis
+     avatar du compte. La rangée de message est le mode de lecture PAR DÉFAUT
+     (D-7) : elle est vue à chaque message de chaque conversation. */
+  const senderPhoto = participantAvatarOf(message.sender);
+  const senderName = isMine ? 'Vous' : senderAvatarName;
+  /* LE PSEUDO DE L'EXPÉDITEUR (#7241) — sous `sender.user.username` ; la liste REST
+     le sert à la racine, et `withSenderAccount` (`lib/api/sender-account.ts`,
+     #7991) l'y replie à la frontière. `undefined` sur soi : on n'ouvre pas SON profil
+     depuis son propre message, la fiche de soi n'offre aucun geste relationnel
+     (`user-profile.tsx`, `isSelf`). */
+  const senderHandle = isMine ? undefined : message.sender?.user?.username;
+  const senderRing = isMine ? undefined : senderStoryRing;
+  const identityOpens = (typeof senderHandle === 'string' && senderHandle !== '') || senderRing !== undefined;
+  /* LA COULEUR DU NOM DE SOI — un jeton GÉNÉRÉ, pas l'encre primaire
+   * (revue #5935, défaut majeur 2, SOLDÉ). `FocalIdentityHeader.swift:90-92`
+   * peint le nom de SOI en `MeeshyColors.indigo500` ; servi TEL QUEL sur la
+   * ligne d'identité de 13 px, il MESURE 4,47:1 en clair et 4,45:1 en sombre
+   * (Chromium, `lib/contrast.mjs` sur `/c/c-deploiement`) — sous la barre AA
+   * de 4,5:1, et le gras 800 n'ouvre pas l'exemption « grand texte »
+   * (13 px < 18,5 px). D-4 interdit d'inventer une couleur ici : l'encre
+   * primaire tenait AA (15,99:1 / 17,79:1) mais rendait la tête d'un message
+   * à SOI indiscernable de celle d'un autre — la distinction que la cible
+   * iOS porte. `--color-self-name-ink` (méthode D-18/#5625,
+   * `packages/design-tokens/scripts/generate-from-ios.mjs`) sert désormais
+   * le cran suivant qui PASSE — indigo700 en clair, indigo200 en sombre
+   * (7,90:1 / 13,34:1), la MÊME paire que `--color-day-ink` mais nommée pour
+   * SA fonction : un séparateur de jour et un nom de soi ne sont pas la
+   * même chose, même si leur cran de contraste coïncide aujourd'hui.
+   * **iOS lui-même reste sous AA sur ce point précis** — un défaut de la
+   * CIBLE (famille #5681-#5683), pas une dérivation qui invente une
+   * couleur : issue compagnon ouverte côté iOS, pas ici. */
+  const senderNameColor = isMine ? 'var(--color-self-name-ink)' : 'var(--color-ios-ink)';
+  /* LE NOM TEINTÉ PAR PERSONNE, EN GROUPE (#10004) — l'identifiant d'abord,
+     le nom en repli (`authorAccentColor`) ; la feuille choisit le schéma. */
+  const tintsName = group && !isMine;
+  const senderNameStyle = tintsName
+    ? authorInkStyle({ authorId: message.sender?.userId ?? message.senderId, name: senderAvatarName })
+    : { color: senderNameColor };
+  /* SANS COMPTE (#5774, travail 2/3 ; glyphe #5935) — miroir
+   * `FocalIdentityHeader.swift:99-161` : un visiteur entré par lien porte un
+   * marqueur AVANT son nom. Le fantôme `theatermasks.fill` d'iOS est
+   * ICONOGRAPHIQUE ici (`mask-happy`, `scripts/extract-glyphs.mjs`), pas un
+   * badge textuel — l'écart avec le tracé exact d'iOS (Phosphor ne publie
+   * pas `theatermasks`) est assumé, D-32. */
+  const isAnonymousSender = message.sender?.type === 'anonymous';
+  /* Les adresses d'un anonyme restent du texte (#10286) — la décision de la bulle. */
+  const links = linkRenderingOf(message);
+  const reactions = reactionEntries(message.reactionSummary);
+
+  // `kind === 'veiled' | 'burned'` toutes deux passent par `ProtectedContent`
+  // (voir le commentaire ci-dessus sur le tombstone plat).
+  const sealedEndToEnd = endToEndSealed(message);
+  const isProtected = kind !== 'standard' || !revealable || sealedEndToEnd;
+
+  /**
+   * LA LIGNE BASSE — miroir de `FocalMetaColumn.mountsBottomLine` (défaut 7) :
+   * elle ne monte plus systématiquement, seulement si elle a quelque chose à
+   * dire (un jeu de drapeaux SUR LE DERNIER message d'un groupe traduit et
+   * non voilé, ou une réaction). `hasTranslation` porte sur CE message —
+   * indépendamment de la langue explorée (`displayLanguage`) : la loi ne
+   * connaît que la donnée, jamais quelle langue est actuellement servie. `isVeiled`
+   * couvre désormais TOUTE protection (D-23), pas seulement `isBlurred`.
+   */
+  const showsBottomLine = mountsBottomLine({
+    hasTranslation: translatedLanguages.length > 0,
+    isVeiled: isProtected,
+    isLastInGroup: tail,
+    hasReactions: reactions.length > 0,
+  });
+
+  /** `checkStatusOf` et non `deliveryOf` (revue-correction #5813) : `null`
+   * sur un envoi ÉCHOUÉ — sa bande dit déjà « Non envoyé », et
+   * `deliveredCount: 0` ferait sinon peindre la coche « envoyé » juste à
+   * côté. Site unique, partagé avec `Bubble` (`lib/view/message.ts`). */
+  const delivery = checkStatusOf(message, localDelivery);
+
+  // Le tampon n'est calculé QUE quand il est rendu (§5.6 de la spécification
+  // #5648) — cette rangée ne re-rend que sur un changement de `elected`
+  // (`memo`), donc `new Date()` ici ne tourne pas à chaque frame de la scène.
+  const nowMoment = elected ? new Date() : null;
+
+
+  /**
+   * LES BADGES DE TÊTE (#5936) — `badgesOf` porte l'ORDRE complet
+   * (épinglé, transféré, modifié) ; `Badges` n'en peint que les deux premiers
+   * (« modifié » revient à `EditedMark` — chacun a sa propre place, §
+   * doc-comment de `Badges`). L'ÉPHÉMÈRE a quitté cette loi au lot #7454 :
+   * voir `message-badges.ts` § « L'ÉPHÉMÈRE A QUITTÉ CETTE LOI ».
+   *
+   * `isEdited` LIT CETTE SORTIE, jamais `message.isEdited` en direct
+   * (revue-correction #5936, défaut majeur 1) — sans quoi la moitié de ce que
+   * `badgesOf` calcule n'atteignait aucun pixel.
+   */
+  const badges = badgesOf(message);
+  const isEdited = editedOf(badges);
+
+  /**
+   * LE CORPS (#5936) — `textOrEmojiBlock` (`FocalRow.swift:604-615`) :
+   * story citée à la place de la citation ordinaire, pièce jointe SAUF
+   * sticker (le PNG joint EST le sticker), lieu, puis sticker → emoji seul
+   * → texte, dans cet ordre.
+   */
+  const storyCitation = storyCitationOf(message);
+  const moodCitation = moodCitationOf(message);
+  const sharedPlace = placeOf(message);
+  const body = bodyKindOf(message);
+
+  const contentBlock = (
+    <>
+      {/* `isMine={false}` DÉLIBÉRÉMENT, et ce n'est pas un oubli : la peau
+          « mine » de la citation est écrite pour le fond INDIGO de la bulle
+          (nom en blanc, texte en blanc 70 %, filet blanc). La rangée plate
+          n'a AUCUN fond — servie « mine », la citation d'un message à soi
+          devenait du blanc sur du blanc en schéma clair, donc INVISIBLE
+          (mesuré : contraste 1,0:1). Une peau ne se choisit pas sur
+          l'expéditeur mais sur la SURFACE qui la porte. */}
+      {storyCitation !== null ? (
+        <RowQuote railed>
+          <StoryCitationCard
+            citation={storyCitation}
+            accent="var(--accent)"
+            language={currentInterfaceLanguage()}
+            now={new Date(nowMs)}
+            {...(onOpenStory === undefined ? {} : { onOpen: onOpenStory })}
+          />
+        </RowQuote>
+      ) : moodCitation !== null ? (
+        <RowQuote>
+          <MoodQuote citation={moodCitation} isMine={false} language={currentInterfaceLanguage()} now={new Date(nowMs)} />
+        </RowQuote>
+      ) : message.replyTo ? (
+        <RowQuote>
+          <Quote
+            quote={message.replyTo}
+            isMine={false}
+            languages={languages}
+            onJump={() => onJumpToMessage(message.replyTo!.id, quotedPieceIdOf(message.replyTo!))}
+            citingId={message.id}
+            now={new Date(nowMs)}
+          />
+        </RowQuote>
+      ) : null}
+      {message.attachments && body.kind !== 'sticker' ? (
+        <Attachments
+          attachments={message.attachments}
+          languages={languages}
+          fallbackLanguage={message.originalLanguage}
+          carrier={mediaCarrierOf({ message, caption: rendered, senderAvatarUrl: senderPhoto })}
+          mediaFrame="tiles"
+          isMine={isMine}
+          message={message}
+          {...(displayLanguage !== undefined ? { displayLanguage } : {})}
+        />
+      ) : null}
+      {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" language={currentInterfaceLanguage()} /> : null}
+
+      {body.kind === 'sticker' ? (
+        <StickerArtwork sticker={body.sticker} picture={body.picture} side={STICKER_SIDE} senderName={message.sender?.displayName} />
+      ) : body.kind === 'emoji-only' ? (
+        <EmojiOnly text={body.text} fontSize={body.fontSize} />
+      ) : rendered.text ? (
+        /* `plainTextHidden` (#7032) DÉPLACE le masque, il ne le retire pas.
+           Le texte servi est DÉJÀ dans `aria-label={rowLabel}`
+           (`composeMessageLabel`, `thread-modes.tsx`) : sans masque, l'arbre
+           AX réel le portait DEUX fois, en frère non `ignored` du libellé de
+           l'`article` (revue #5935, défauts majeurs 1/4). Mais `aria-hidden`
+           sur le PARAGRAPHE ENTIER rendrait chaque lien de mention focusable
+           ET invisible aux technologies d'assistance — la violation ARIA
+           `aria-hidden-focus`, c'est-à-dire pire qu'un texte nu. Seuls les
+           segments NON interactifs sont donc masqués : la phrase n'est
+           toujours lue qu'une fois, et les liens restent atteignables, nommés,
+           et au clavier. `lang` reste porté ICI pour l'affichage visuel ET sur
+           `[data-row]` (`rowServed.language`) pour le libellé.
+
+           CE MASQUE EST LE SECOND DES DEUX DE #7142, ET SA MOITIÉ VISIBLE.
+           Son contrat — « le texte servi est DÉJÀ dans `aria-label` » — est
+           VRAI partout SAUF sur une rangée VOILÉE qu'on vient de révéler :
+           là, `thread-modes.tsx` compose sans `phase`, le libellé retombe sur
+           « Contenu masqué » (`message-a11y-label.ts:233`), et ce même
+           libellé est la seule raison pour laquelle on masque le texte ici.
+           Mesuré : les deux masques se composent, et le contenu révélé
+           n'atteint AUCUNE technologie d'assistance — sur une vue unique il
+           est brûlé sans avoir jamais été lisible. Le correctif se décide des
+           DEUX côtés à la fois : soit le libellé porte le texte (et ce masque
+           reste juste), soit le DOM le rend pour cet état — jamais les deux,
+           jamais aucun. */
+        <LongMessageText
+          messageId={threadRowKeyOf(message)}
+          text={rendered.text}
+          lang={rendered.language}
+          className="text-bubble leading-[1.35] whitespace-pre-wrap"
+          style={{ color: 'var(--color-ios-ink)' }}
+          mentions={message.validatedMentions}
+          trackingLinks={message.trackingLinks}
+          links={links}
+          plainTextHidden
+        />
+      ) : null}
+      {links === 'plain' ? null : <ConversationLinkCards text={message.content} trackingLinks={message.trackingLinks} />}
+    </>
+  );
+
+  return (
+    <div
+      ref={rowRef}
+      data-reading-mode={mode}
+      data-elected={elected ? 'true' : undefined}
+      data-message={message.id}
+      /* PAS d'`aria-selected` ICI (revue #5814) : l'attribut n'est défini que
+         sur `option`/`row`/`gridcell`/`tab`/`treeitem`. Sur un `div` sans
+         rôle il était invalide — et rendu DEUX fois (l'hôte le posait aussi
+         sur `[data-row]`). L'état de sélection est porté par la COCHE, un
+         `role="checkbox"` réel avec `aria-checked`, qui est aussi le seul
+         chemin CLAVIER vers la bascule. */
+      className="grid transition-colors duration-500"
+      style={{
+        gridTemplateColumns: `${TEXT_INDENT}px 1fr`,
+        paddingInline: ROW_PADDING_HORIZONTAL,
+        paddingBlockStart: head ? GROUP_TOP_PADDING : ROW_PADDING_VERTICAL,
+        paddingBlockEnd: ROW_PADDING_VERTICAL,
+        borderRadius: 10,
+        backgroundColor: highlighted
+          ? 'color-mix(in srgb, var(--accent) 22%, transparent)'
+          : selected === true
+            ? 'color-mix(in srgb, var(--accent) 10%, transparent)'
+            : 'transparent',
+      }}
+    >
+      {/* LA BANDE DE TÊTE — badges (épinglé, transféré, #5936) puis chrome
+          de protection (F11, #7454), AU-DESSUS de l'identité
+          (`FocalRow.swift:233`, `:365-376`). Elle s'étend sur les DEUX
+          colonnes et part du bord gauche de la pastille (#7929), comme
+          `badgesSection` iOS : elle COIFFE le message, avatar compris — ce
+          n'est pas du contenu, que #7995 range sur la colonne du nom. Les effets décoratifs
+          ne s'y comptent plus : ils s'EXÉCUTENT (#7596). L'horloge du chrome
+          est PARTAGÉE (`secondClock`) — cette rangée ne re-rend jamais pour
+          elle. */}
+      <div data-row-band style={{ gridColumn: '1 / -1', paddingInlineStart: AVATAR_INSET }}>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badges badges={badges} />
+        </div>
+        <ProtectionChrome
+          deadline={ephemeralDeadline}
+          {...(onEphemeralExpired === undefined ? {} : { onExpired: () => onEphemeralExpired(message.id) })}
+        />
+      </div>
+
+      {/* L'AVATAR DE LA TÊTE DE GROUPE — s'EFFACE en focus, comme le nom
+          juste à côté : côté iOS l'en-tête d'identité ENTIER (avatar + nom)
+          passe à `opacity: 0` (`FocalRow.swift:269`) et `focusIdentityChip`
+          le REMPLACE à la même place. Le laisser visible peignait DEUX
+          pastilles et DEUX noms sur la même rangée (mesuré sur
+          `thread-focal-scene.dark.png`, correction de revue #5648).
+
+          EN MODE SÉLECTION (`selected !== undefined`, #5814) — une COCHE
+          REMPLACE l'avatar dans le MÊME gabarit : le mode sélection est actif
+          pour TOUT le fil à la fois, jamais une rangée isolée. */}
+      <div
+        className="flex justify-center pt-0.5"
+        /* L'EFFACEMENT EN FOCUS NE VAUT QUE POUR L'AVATAR (revue #5814) :
+           effacer la COCHE d'une rangée élue la rendrait invisible ET
+           incliquable au milieu d'un mode sélection actif. */
+        style={{ opacity: elected && selected === undefined ? 0 : 1 }}
+      >
+        {selected !== undefined ? (
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={selected}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleSelect?.(message.id);
+            }}
+            className="relative z-[1] grid place-items-center"
+            style={{ width: TEXT_INDENT, minHeight: 44 }}
+          >
+            <span
+              aria-hidden
+              className="grid place-items-center rounded-full"
+              style={{
+                width: AVATAR_SIZE,
+                height: AVATAR_SIZE,
+                border: `1.5px solid ${selected ? 'var(--accent)' : 'var(--color-ios-ink-3)'}`,
+                backgroundColor: selected ? 'var(--accent)' : 'transparent',
+                color: 'var(--color-ios-on-brand)',
+              }}
+            >
+              {selected ? '✓' : null}
+            </span>
+            <span className="offscreen">{translate(currentInterfaceLanguage(), 'thread.select.message')}</span>
+          </button>
+        ) : head ? (
+          <span className="relative inline-flex">
+          <AuthorAvatar
+            {...(isMine ? {} : { authorId: hereKeyOf(message.sender), sender: message.sender, participant: { id: message.senderId, name: senderAvatarName } })}
+            initials={initialsOf(senderAvatarName)}
+            color="var(--accent)"
+            size={AVATAR_SIZE}
+            {...(senderPhoto === undefined ? {} : { src: senderPhoto })}
+            /* `name` VOYAGE AVEC `profileUsername`, jamais seul : il ne sert
+               ici qu'à NOMMER le lien (« Voir le profil de … »). Posé
+               inconditionnellement, il ferait écrire le nom dans l'`aria-label`
+               des initiales — un SECOND libellé que #5935 a précisément retiré
+               de cette rangée, et que trois témoins tiennent. */
+            {...(identityOpens
+              ? {
+                  name: senderAvatarName,
+                  ...(senderHandle === undefined ? {} : { profileUsername: senderHandle }),
+                  ...(senderRing === undefined ? {} : { storyRing: senderRing }),
+                }
+              : {})}
+            presence={senderPresence}
+          />
+          {languageChip === null ? null : (
+            <span aria-hidden data-author-language={languageChip} className={`author-language-chip${tintsName ? ' author-ink' : ''}`} style={tintsName ? senderNameStyle : { color: 'var(--color-ios-ink-2)' }}>
+              {languageChip}
+            </span>
+          )}
+          </span>
+        ) : null}
+      </div>
+
+      {/* `position: relative` sur TOUTE la colonne de contenu — tête de
+          groupe COMPRISE — et non sur le seul bloc « deux colonnes »
+          (correction de revue, capture `thread-focal-scene.dark.png`) :
+          ancrée plus bas, `FocusIdentity` (34 px, overhang -20 px)
+          débordait DANS le texte du message plutôt que dans la zone
+          RÉSERVÉE par l'en-tête d'identité (désormais invisible,
+          `opacity:0`, mais toujours présente dans le flux — donc encore
+          « à elle » l'espace que la superposition vient occuper). Depuis
+          #8506, la pastille s'y pose ENTIÈRE (plus de débord) ; sur une
+          rangée de CONTINUATION (sans tête), elle se pose AU-DESSUS de la
+          première ligne et le cadre monte d'autant (`continuation`). */}
+      <div className="min-w-0 relative isolate">
+        {elected ? <FocusCard continuation={!head} /> : null}
+        {elected ? (
+          <FocusIdentity
+            continuation={!head}
+            initials={initialsOf(senderAvatarName)}
+            name={senderName}
+            accent="var(--accent)"
+            {...(senderPhoto === undefined ? {} : { src: senderPhoto })}
+            username={senderHandle}
+            {...(senderRing === undefined ? {} : { storyRing: senderRing })}
+            {...(isMine ? {} : { participantId: message.senderId, authorId: hereKeyOf(message.sender) })}
+            presence={senderPresence}
+          />
+        ) : null}
+
+
+        {head ? (
+          /* TÊTE DE GROUPE : l'IDENTITÉ seule (défaut 6) — « cet en-tête ne
+             date plus rien » (iOS, `FocalIdentityHeader.swift:13-18`).
+             L'heure vit désormais dans la colonne méta, accolée à CHAQUE
+             rangée, tête comme continuation. S'EFFACE en focus (:269) —
+             `FocusIdentity` la remplace en overlay. */
+          <div
+            data-identity
+            className="pb-0.5 flex items-center gap-1.5"
+            /* `minHeight: AVATAR_FRAME` (34) — le CADRE réservé par
+               `Focus.avatarSize` (revue #5648, `FocusIdentity` débordait
+               dans le texte sans lui) : la ligne d'identité a maintenant
+               la MÊME hauteur, pastille de présence posée ou non — la
+               présence NE DOIT PAS faire grandir la rangée. */
+            style={{ opacity: elected ? 0 : 1, minHeight: AVATAR_FRAME }}
+            /* `aria-hidden` (revue #5935, défauts majeurs 1/4) —
+               `role="article"` + `aria-label` sur `[data-row]`
+               (`thread-modes.tsx`) NE réduit PAS le sous-arbre : sans ce
+               masque, un lecteur d'écran annonçait le libellé COMPOSÉ puis
+               relisait ce nom (arbre AX réel : `[article]` PUIS
+               `[StaticText] "Amina Diallo"`, ni l'un ni l'autre `ignored`).
+               `composeMessageLabel` porte désormais « Sans compte » lui-même
+               (`message-a11y-label.ts`) — masquer ce nœud ne perd donc plus
+               rien que `aria-label={rowLabel}` ne dise déjà. Le glyphe garde
+               son `role="img"` PROPRE ; il disparaît de l'arbre avec le
+               reste, sans perte puisque son nom est désormais DANS le
+               libellé de la rangée. */
+            aria-hidden
+          >
+            {isAnonymousSender ? (
+              <GlyphSvg
+                glyph={THREAD_IDENTITY_GLYPHS.maskHappy}
+                title="Sans compte"
+                /* `text-title` — LA MÊME taille que le nom, pour que `0.8em`
+                   soit bien `nameSize × 0.8` (iOS, `:130-131`). Sans elle,
+                   l'`em` se résolvait sur la police HÉRITÉE du conteneur
+                   (16 px) et le fantôme mesurait 12,8 px contre les 10,4 px
+                   d'iOS — mesuré au navigateur, revue #5935. */
+                className="shrink-0 text-title"
+                style={{ width: '0.8em', height: '0.8em', color: 'var(--ios-purple-500)' }}
+              />
+            ) : null}
+            {/* `redundant` — cette ligne est `aria-hidden` (voir juste au-dessus) :
+                un lien focalisable dans un sous-arbre masqué recevrait le focus
+                sans jamais s'annoncer. L'AVATAR, hors du masque, porte le
+                chemin annoncé. */}
+            <PersonName
+              name={senderName}
+              username={senderHandle}
+              {...(isMine ? {} : { participantId: message.senderId })}
+              {...(senderRing === undefined ? {} : { storyRing: senderRing })}
+              redundant
+              className={`text-title font-extrabold${tintsName ? ' author-ink' : ''}`}
+              style={senderNameStyle}
+            >
+              {senderName}
+            </PersonName>
+          </div>
+        ) : null}
+
+        {/* DEUX COLONNES : le contenu (citation, pièces jointes, texte, ligne
+            basse) à gauche ; l'heure et l'accusé à droite, alignés sur la
+            DERNIÈRE ligne du bloc — `items-end` fait ce que
+            `HStack(alignment:.bottom)` fait côté iOS. */}
+        <div data-row-content className="flex items-end gap-2">
+          <div data-row-body className="min-w-0 flex-1">
+            {/* La bande de reprise reste DANS la rangée du message concerné,
+                et HORS voile : un échec d'envoi se voit même sur un message
+                protégé (`FocalRow.swift:224-238`, même parti que la bulle). */}
+            {localDelivery === 'failed' ? (
+              <FailedSendBand
+                {...(sendFailureReason === undefined ? {} : { reason: sendFailureReason })}
+                {...(onRetry === undefined ? {} : { onRetry })}
+                {...(onDiscard === undefined ? {} : { onDiscard })}
+                textColor="var(--color-error)"
+              />
+            ) : null}
+
+            {/* LA LOUPE DE L'ÉLU NE GROSSIT QUE CE BLOC (#8536) — citation, médias,
+                texte, protégés ou non ; l'identité, la bande basse et le tampon
+                restent à l'échelle 1 (`use-focus-frame.ts`, `thread-scene.css`). */}
+            <div data-loupe>
+              {isProtected ? (
+                <ProtectedContent
+                  messageId={message.id}
+                  kind={kind}
+                  isViewOnce={message.isViewOnce}
+                  isBlurred={message.isBlurred === true}
+                  contentLength={message.content.length}
+                  attachments={message.attachments}
+                  surface="row"
+                  revealable={revealable}
+                  endToEnd={sealedEndToEnd}
+                  onConsumeViewOnce={onConsumeViewOnce}
+                  media={{
+                    frame: 'tiles',
+                    languages,
+                    fallbackLanguage: message.originalLanguage,
+                    carrier: mediaCarrierOf({ message, caption: rendered, senderAvatarUrl: senderPhoto }),
+                    isMine,
+                    ...(displayLanguage !== undefined ? { displayLanguage } : {}),
+                  }}
+                  now={now}
+                >
+                  {contentBlock}
+                </ProtectedContent>
+              ) : (
+                contentBlock
+              )}
+            </div>
+
+            <FocalBottomLine
+              mounts={showsBottomLine}
+              elected={elected}
+              originalLanguage={message.originalLanguage}
+              naturalServedLanguage={naturalServedLanguage}
+              activeLanguage={activeLanguage}
+              footerLanguages={footerLanguages}
+              reactions={reactions}
+              {...(myReactions === undefined ? {} : { myReactions })}
+              {...(onPickLanguage === undefined ? {} : { onPickLanguage })}
+              {...(onReact === undefined ? {} : { onReact, reactorsFor: message.id })}
+            />
+          </div>
+
+          {/* « MODIFIÉ » — HORS DU RÉVÉLÉ, et c'est la loi iOS elle-même
+              (revue-correction #5936). `FocalMetaRow.body`
+              (`FocalMetaRow.swift:83-99`) compose
+              `HStack { Spacer · editedIndicator · stamp · checks }` : SEULS
+              le tampon (`FocalRevealedTime`) et les coches
+              (`FocalRevealedDetail`) sont gatés par le révélé —
+              `editedIndicator` ne l'est PAS, et le doc-comment du fichier le
+              dit mot pour mot (« F-083ter — F10, libellé « modifié »
+              visible … l'œil le voit désormais aussi »). Monté DANS
+              `.focal-meta`, il héritait de `opacity: 0`
+              (`thread-scene.css:39-43`) et de l'`opacity: 0 !important` de
+              la rangée ÉLUE (`:51-61`) : présent au DOM, mesurable au
+              contraste, INVISIBLE à l'œil — la forme la plus fréquente de
+              défaut du dépôt. Il vit donc dans SA propre boîte, sœur de la
+              colonne méta et posée juste avant elle, comme sur iOS.
+              `aria-hidden` : `composeMessageLabel` porte déjà « modifié ». */}
+          {isEdited ? (
+            <div data-loupe-follow className="flex shrink-0 items-center pb-0.5" aria-hidden>
+              <EditedMark onBrandBubble={false} byModerator={editedByModeratorOf(badges)} />
+            </div>
+          ) : null}
+
+          {/* LA COLONNE MÉTA — heure puis accusé, sur CHAQUE rangée (défaut
+              6). `Check` est déjà silencieux (`isMine === false` ⇒ `null`) :
+              une rangée reçue ne porte que l'heure.
+              `.focal-meta` PILOTE LE RÉVÉLÉ PAR CSS (`app.css`, depuis
+              `main[data-revealed]`) — zéro re-rendu au geste, jamais une
+              prop : la même feuille que `FocalRevealedDetail` (iOS)
+              n'invalide qu'elle-même. `[data-elected='true'] .focal-meta`
+              s'efface en plus (`FocusStamp` la remplace en overlay). */}
+          <div
+            className="focal-meta flex shrink-0 items-center gap-1 pb-0.5"
+            /* `aria-hidden` INCONDITIONNEL (revue #5935, défauts majeurs
+               1/4 — élargi depuis le seul cas `elected`). L'heure et
+               l'accusé sont DÉJÀ dans `rowLabel` (`time(...)` et
+               `deliveryWord`, `message-a11y-label.ts`) : sur une rangée
+               ORDINAIRE, `<time>` n'était pas encore masqué et l'arbre AX
+               réel le portait deux fois (`[time] → [StaticText] "11:43"`,
+               frère non `ignored` de l'`article`). `Check` ne porte qu'un
+               `role="img"` déjà absorbé par le même libellé (`deliveryWord`)
+               — rien de focalisable ici, seulement du texte redondant. Sur
+               la rangée ÉLUE, cela tient l'ancienne garde (`FocusStamp` la
+               remplace en clair) sans avoir plus besoin de la condition. */
+            aria-hidden
+          >
+            <time
+              className="text-time font-medium tabular-nums"
+              /* `META_TEXT_OPACITY` et non un `0.55` en dur : la cote est
+                 DÉRIVÉE de `FocalMetrics.MetaText` et gardée par
+                 `check-curve.mjs`. Écrite deux fois, elle ne serait plus
+                 gardée qu'à un seul des deux endroits. */
+              style={{ color: 'var(--color-ios-ink-2)', opacity: META_TEXT_OPACITY }}
+              dateTime={new Date(message.createdAt).toISOString()}
+            >
+              {time(message.createdAt)}
+            </time>
+            {delivery === null ? null : (
+              <Check status={delivery} isMine={isMine} {...(sendStartedAt === undefined ? {} : { sendStartedAt })} {...(sendProgressKey === undefined ? {} : { progressKey: sendProgressKey })} />
+            )}
+          </div>
+
+          {elected && nowMoment !== null ? (
+            <>
+              {/* LA BANDE DE FOCUS monte sous la MÊME loi que la ligne basse
+                  qu'elle remplace (`mountsBottomLine`) — jamais sous une loi
+                  à elle. Sans ce garde-fou, la rangée élue montrait des
+                  drapeaux là où la rangée ordinaire n'en montre AUCUN, et
+                  surtout elle FRANCHISSAIT la garde nommée de cette loi :
+                  « jamais de drapeau en clair sur un message VOILÉ » — la
+                  langue d'origine d'un message protégé partait sur la carte
+                  de l'élue (correction de revue #5648, doctrine des cycles
+                  124/125 du CLAUDE.md : une protection se mesure sur TOUT ce
+                  que la surface transporte). */}
+              {showsBottomLine ? (
+                <FocusStrip
+                  servedLanguage={naturalServedLanguage}
+                  originalLanguage={message.originalLanguage}
+                  footerLanguages={footerLanguages}
+                  active={activeLanguage}
+                  {...(onPickLanguage === undefined
+                    ? {}
+                    : {
+                        onToggleOriginal: () => onPickLanguage(message.originalLanguage),
+                        onPickLanguage,
+                      })}
+                  reactions={reactions}
+                  {...(myReactions === undefined ? {} : { myReactions })}
+                  {...(onReact === undefined ? {} : { onToggleReaction: onReact, reactorsFor: message.id })}
+                />
+              ) : null}
+              <FocusStamp
+                sentAt={new Date(message.createdAt)}
+                now={nowMoment}
+                timeString={time(message.createdAt)}
+                locale={currentInterfaceLanguage()}
+                delivery={delivery}
+                isMine={isMine}
+                {...(sendStartedAt === undefined ? {} : { sendStartedAt })}
+                {...(sendProgressKey === undefined ? {} : { sendProgressKey })}
+                {...(onOpenDetail === undefined || selected !== undefined ? {} : { onOpen: () => onOpenDetail(message.id) })}
+              />
+            </>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+});

@@ -59,53 +59,37 @@ final class ShareCancelCommitGuardTests: XCTestCase {
         )
     }
 
-    /// Verrou 1 : Annuler doit passer par `ShareCancelPolicy`, jamais par
-    /// `isSending` seul — `isSending` redevient `false` bien avant
-    /// `onFinish()`, exactement la fenêtre qui a laissé passer la régression.
-    func test_cancelButton_isGatedByShareCancelPolicy_notByIsSendingAlone() throws {
+    /// Verrou 1, depuis l'écran unique (#10947) : la FERMETURE de la feuille
+    /// n'efface les fichiers copiés que par `ShareCancelPolicy`, nourrie de ce
+    /// qui les possède — une fiche de studio (`handedOff`) ou un envoi tenté
+    /// (`ExtensionShareDispatcher.holdsStagedMedia`, armé AVANT le premier
+    /// `await`, vérifié à l'exécution par `ExtensionShareDispatcherTests`).
+    func test_closing_discardsOnlyThroughTheCancelPolicy_fedByWhatOwnsTheFiles() throws {
         let source = condensed(try shareSource())
 
         XCTAssertTrue(
-            source.contains("ShareCancelPolicy.isCancelAllowed(sendWasAttempted: sendWasAttempted)"),
-            "Le bouton Annuler doit consulter ShareCancelPolicy.isCancelAllowed(sendWasAttempted:) — "
-            + "un verrou qui ne redevient jamais false, contrairement à isSending."
+            source.contains("let ownedByAFiche = handedOff || dispatcher?.holdsStagedMedia == true"),
+            "La fermeture doit savoir si une fiche possède les fichiers copiés."
+        )
+        XCTAssertTrue(
+            source.contains("if ShareCancelPolicy.isCancelAllowed(sendWasAttempted: ownedByAFiche) { discardStagedMedia() }"),
+            "Les fichiers ne s'effacent qu'à travers ShareCancelPolicy — jamais sur un simple « fermer »."
         )
     }
 
-    /// `sendWasAttempted` doit être un verrou à SENS UNIQUE : initialisé à
-    /// `false`, jamais réassigné à `false` ailleurs dans le fichier — sinon
-    /// la même fenêtre se rouvrirait sous un autre nom (c'est exactement le
-    /// piège que « déplacer isSending = false après le sleep » aurait recréé).
-    ///
-    /// Round 3 : source passée par `ShareSourceCommentStripping` (pas
-    /// `condensed`, qui collapse aussi les espaces — la première assertion a
-    /// besoin de la mise en forme exacte de la déclaration) pour qu'un
-    /// commentaire mentionnant `sendWasAttempted = false`/`= true` ne puisse
-    /// ni fausser le compte, ni masquer une régression réelle.
-    func test_sendWasAttempted_isNeverResetToFalseAfterInit() throws {
+    /// `handedOff` est un verrou à SENS UNIQUE : posé une fois la fiche de
+    /// studio écrite, jamais remis à `false`.
+    func test_handedOff_isNeverResetToFalseAfterInit() throws {
         let source = ShareSourceCommentStripping.strippingComments(try shareSource())
 
-        XCTAssertTrue(
-            source.contains("@State private var sendWasAttempted = false"),
-            "sendWasAttempted doit être déclaré comme @State, initialisé à false."
-        )
-
-        let occurrencesOfFalse = source.components(separatedBy: "sendWasAttempted = false").count - 1
-        XCTAssertEqual(
-            occurrencesOfFalse, 1,
-            "sendWasAttempted ne doit être assigné à false QU'À sa déclaration — le "
-            + "réassigner ailleurs recréerait un état « annulable » implicite."
-        )
-
-        XCTAssertTrue(
-            source.contains("sendWasAttempted = true"),
-            "sendWasAttempted doit être armé au tout début d'un envoi tenté, avant le premier POST."
-        )
+        XCTAssertTrue(source.contains("private var handedOff = false"))
+        XCTAssertEqual(source.components(separatedBy: "handedOff = false").count - 1, 1)
+        XCTAssertTrue(source.contains("handedOff = true"))
     }
 
     /// Verrou 2 (effet secondaire à traiter) : `complete()` ne doit pouvoir
     /// atteindre `extensionContext?.completeRequest` qu'une seule fois, que
-    /// l'appel vienne d'`onCancel` ou d'`onFinish`.
+    /// l'appel vienne de la fermeture, du studio ou de l'ouverture de l'app.
     func test_complete_routesThroughTheCompletionGate() throws {
         let source = condensed(try shareSource())
 

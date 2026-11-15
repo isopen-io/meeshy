@@ -1,0 +1,178 @@
+import { useMemo } from 'react';
+import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
+import { InfoAlone } from '@/components/info-hint';
+import { useStore } from 'zustand';
+
+import { PeerAvatar } from '@/components/peer-avatar';
+import { BUTTON } from '@/components/ui-chrome';
+import { apiDeps } from '@/lib/api/deps';
+import { servedRingOf } from '@/lib/profile-decor/served-ring';
+import { useStoryTray } from '@/lib/api/query';
+import { sessionStore } from '@/lib/api/session';
+import { storyViewedStore } from '@/lib/api/story-viewed-store';
+import { resolveViewer } from '@/lib/api/viewer';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
+import { groupStoriesByAuthor, storyAuthorLabel, storyAuthorPresenceKey, type StoryTrayGroup } from '@/lib/view/story-tray';
+import { useSearch } from '@/lib/router';
+import { openLinkProps, useImpressionRef } from '@/lib/view/reading-telemetry';
+import { Link } from '@/routes/route-table';
+
+/* LA COQUILLE COMMUNE (#6149) — extraite dans `stories-parts.tsx` pour que
+   `/stories/mine` puisse l'importer sans tirer cet écran entier dans son
+   propre chunk. RÉ-EXPORTÉE ici : ce fichier reste l'adresse historique de
+   ces trois pièces (`stories-i18n.test.tsx` les importe encore d'ici), et
+   `StoriesScreen` plus bas les consomme depuis ce même import. */
+import { StoriesHeader, StoriesLoadError, StoriesLoading } from './stories-parts';
+
+export { StoriesHeader, StoriesLoading, StoriesLoadError };
+
+/**
+ * **TOUTES LES STORIES** (#6080) — la destination du second bouton flottant du
+ * rail (« Voir toutes les stories »).
+ *
+ * `?author=` filtre l'AFFICHAGE sur un auteur — un repli de navigation
+ * conservé pour un lien direct, mais qui n'a plus de PORTE dans l'interface
+ * depuis #5817 : chaque tuile du rail ouvre désormais directement le lecteur
+ * (`/story/$post`), jamais cette liste filtrée. La MÊME adresse sert « tout
+ * voir » et « voir celles d'Inès » parce que c'est le même écran avec un
+ * filtre : deux écrans auraient été deux vérités sur « comment on présente
+ * une story ».
+ *
+ * **CHAQUE LIGNE OUVRE LE LECTEUR** (#5817), jamais elle-même : le tap sur
+ * une ligne nomme une PERSONNE, donc suit son id d'entrée
+ * (`group.entryStoryId`, même loi que le rail, `lib/view/story-tray.ts`)
+ * plutôt que de reboucler sur `?author=`.
+ *
+ * Il lit le MÊME cache que le rail (`useStoryTray`, même clé de requête) :
+ * arriver ici depuis la liste ne déclenche aucune requête et n'affiche aucun
+ * squelette — cache-first, § Instant App Principles.
+ *
+ * **CATALOGUE D'INTERFACE** (#6547) — relevé pendant #6488 : cet écran restait
+ * écrit en dur en français quelle que soit la langue résolue. Les pièces
+ * ci-dessous suivent le patron déjà établi par `routes/feed.tsx` (#6488) et
+ * `routes/communities-parts.tsx` : chacune prend sa langue en primitive, sans
+ * lire `currentInterfaceLanguage()` elle-même, pour rester testable par
+ * `renderToStaticMarkup` sans DOM ni magasin.
+ */
+export function StoriesEmpty({ language }: { readonly language: InterfaceLanguage }) {
+  return (
+    <div className="grid flex-1 content-center justify-items-center gap-3 px-6 py-12 text-center">
+      <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+        {translate(language, 'stories.empty.title')}
+      </p>
+      <InfoAlone
+        hint={{ label: translate(language, 'stories.empty.question'), text: translate(language, 'stories.empty.subtitle'), glyph: SETTINGS_GLYPHS.info }}
+      />
+      <Link
+        to="storyCompose"
+        className={BUTTON.primary}
+      >
+        {translate(language, 'stories.create')}
+      </Link>
+    </div>
+  );
+}
+
+const storiesCountLabel = (language: InterfaceLanguage, count: number): string =>
+  translate(language, count === 1 ? 'stories.count.one' : 'stories.count.other', { count: String(count) });
+
+export function StoryRow({ language, group }: { readonly language: InterfaceLanguage; readonly group: StoryTrayGroup }) {
+  const label = storyAuthorLabel(group, language);
+  const photo = participantAvatarOf(group.author);
+  return (
+    <Link
+      to="story"
+      params={{ post: group.entryStoryId }}
+      {...(group.isMine ? {} : openLinkProps(group.entryStoryId, 'story_rail'))}
+      className="flex w-full items-center gap-3 rounded-card px-3 py-2.5"
+      style={{ backgroundColor: 'var(--color-ios-card)' }}
+    >
+      <span
+        className="grid shrink-0 place-items-center rounded-chip"
+        style={{
+          padding: '2px',
+          background: group.hasUnseen
+            ? 'var(--color-ios-brand)'
+            : 'var(--color-ios-outline)',
+        }}
+      >
+        <PeerAvatar
+          presenceKey={storyAuthorPresenceKey(group)}
+          ringRef={servedRingOf(group.author)}
+          initials={initialsOf(label)}
+          color={'var(--color-ios-brand)'}
+          size={44}
+          {...(photo === undefined ? {} : { src: photo })}
+        />
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+          {label}
+        </span>
+        <span className="text-check" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {storiesCountLabel(language, group.stories.length)}
+        </span>
+      </span>
+    </Link>
+  );
+}
+
+/** Une ligne de la liste compte son impression comme une tuile du rail (#10483). */
+export function StoryRowItem({ language, group }: { readonly language: InterfaceLanguage; readonly group: StoryTrayGroup }) {
+  const impressionRef = useImpressionRef(group.isMine ? undefined : group.entryStoryId, 'story', 'story_rail');
+  return (
+    <li ref={impressionRef}>
+      <StoryRow language={language} group={group} />
+    </li>
+  );
+}
+
+export default function StoriesScreen() {
+  const language = currentInterfaceLanguage();
+  const [search] = useSearch();
+  const filtreAuteur = search.get('author') ?? undefined;
+  const session = useStore(sessionStore, (s) => s.session);
+  const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
+  const tray = useStoryTray();
+  /** L'avance OPTIMISTE sur « vu par moi » — le MÊME magasin que le rail
+   * (`api/story-viewed-store.ts`) : revenir du lecteur éteint l'anneau ici
+   * aussi, sans attendre que la passerelle reserve `isViewedByMe`. */
+  const seenNow = useStore(storyViewedStore, (s) => s.ids);
+
+  const groups = useMemo(
+    () => groupStoriesByAuthor(tray.data ?? [], { viewerId: viewer.id ?? undefined, viewedIds: seenNow }),
+    [tray.data, viewer.id, seenNow],
+  );
+  const montres = useMemo(
+    () => (filtreAuteur === undefined ? groups : groups.filter((g) => g.authorId === filtreAuteur)),
+    [groups, filtreAuteur],
+  );
+
+  const chargement = tray.data === undefined && !tray.isError;
+  const defaultTitle = translate(language, 'stories.title');
+  const title = filtreAuteur === undefined ? defaultTitle : storyAuthorLabel(montres[0] ?? groups[0] ?? ({} as never), language) || defaultTitle;
+
+  return (
+    <main className="flex h-dvh flex-col overflow-hidden pt-safe">
+      <StoriesHeader language={language} title={title} />
+
+      <div className="scrollbar-none flex-1 overflow-y-auto px-4 pb-safe">
+        {chargement ? (
+          <StoriesLoading language={language} />
+        ) : tray.isError ? (
+          <StoriesLoadError language={language} />
+        ) : montres.length === 0 ? (
+          <StoriesEmpty language={language} />
+        ) : (
+          <ul className="flex flex-col gap-2 py-2">
+            {montres.map((g) => (
+              <StoryRowItem key={g.authorId} language={language} group={g} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </main>
+  );
+}

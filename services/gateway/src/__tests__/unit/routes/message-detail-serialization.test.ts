@@ -89,10 +89,10 @@ jest.mock('../../../validation/messages-schemas', () => ({
   AttachmentStatusBodySchema: {},
 }));
 
-const mockResolvePrefsOnly = jest.fn<any>();
+const mockResolveForTargets = jest.fn<any>();
 jest.mock('../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({
-    resolvePrefsOnly: (...args: any[]) => mockResolvePrefsOnly(...args),
+    resolveForTargets: (...args: any[]) => mockResolveForTargets(...args),
   }),
 }));
 
@@ -157,7 +157,10 @@ const messageRow = () => ({
       createdAt: '2026-08-01T10:05:00.000Z',
     },
   },
-  metadata: { location: { latitude: 48.8584, longitude: 2.2945, name: 'Tour Eiffel' } },
+  metadata: {
+    location: { latitude: 48.8584, longitude: 2.2945, name: 'Tour Eiffel' },
+    sticker: { emoji: '🔥', animation: 'pulse' },
+  },
   sender: {
     id: SENDER_PARTICIPANT_ID,
     userId: SENDER_USER_ID,
@@ -173,12 +176,12 @@ const messageRow = () => ({
 });
 
 async function fetchDetail(): Promise<any> {
-  mockResolvePrefsOnly.mockReset();
-  mockResolvePrefsOnly.mockResolvedValue(new Map([[SENDER_USER_ID, { showOnline: true, showLastSeenTimestamp: true }]]));
+  mockResolveForTargets.mockReset();
+  mockResolveForTargets.mockResolvedValue(new Map([[SENDER_USER_ID, { showOnline: true, showLastSeenTimestamp: true }]]));
 
   mockAuthMiddleware.mockImplementation(async (req: any) => {
     req.authContext = {
-      type: 'registered',
+      type: 'user',
       isAuthenticated: true,
       isAnonymous: false,
       userId: READER_USER_ID,
@@ -235,6 +238,8 @@ describe("GET /messages/:messageId — l'enveloppe réelle", () => {
       'deliveredToAllAt', 'readByAllAt', 'statusSummary',
       // Hissé depuis `metadata.location` par `hoistLocationOnto`.
       'location',
+      // Hissé depuis `metadata.sticker` par `hoistStickerOnto` (#4823).
+      'sticker',
     ]);
     const served = new Set(Object.keys(body.data));
 
@@ -264,6 +269,12 @@ describe("GET /messages/:messageId — l'enveloppe réelle", () => {
     // en strippe le contenu en silence.
     expect(body.data.metadata.location.name).toBe('Tour Eiffel');
     expect(body.data.location).toMatchObject({ latitude: 48.8584, longitude: 2.2945 });
+  });
+
+  it('conserve le `sticker` que le handler HISSE depuis `metadata.sticker` (#4823)', async () => {
+    const body = await fetchDetail();
+
+    expect(body.data.sticker).toEqual({ emoji: '🔥', animation: 'pulse' });
   });
 
   it('conserve les compteurs de livraison, à plat ET groupés', async () => {

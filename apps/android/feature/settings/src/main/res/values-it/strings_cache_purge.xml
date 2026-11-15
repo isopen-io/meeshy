@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cache_purge_freed">%1$s liberati</string>
+    <string name="cache_purge_failed">Impossibile svuotare la cache. Riprova.</string>
+    <string name="cache_purge_cell_selected">Selezionata</string>
+    <string name="cache_purge_cell_unselected">Non selezionata</string>
+</resources>

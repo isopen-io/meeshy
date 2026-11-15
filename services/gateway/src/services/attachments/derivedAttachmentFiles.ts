@@ -1,0 +1,102 @@
+import path from 'path';
+import { storageKeyFromMediaUrl } from './mediaStorageKey';
+import { RESPONSIVE_VARIANT_WIDTHS, avifVariantPathFor, thumbnailPathFor, variantPathFor } from './thumbnail';
+import { compatRenditionPathFor } from './video-compat-rendition';
+
+/**
+ * LES FICHIERS QU'UNE PIÈCE JOINTE A FAIT NAÎTRE À CÔTÉ DE SES OCTETS (#9315).
+ *
+ * Deux producteurs écrivent sur le disque sans colonne dédiée, et seule la
+ * ligne sait où :
+ * - les pistes TTS de `MessageTranslationService`, rangées dans
+ *   `translations[langue]` avec `path` (absolu, au moment de l'écriture) et
+ *   `url` (`/api/v1/attachments/file/translated/<id>_<langue>.<ext>`) ;
+ * - les variantes WebP de `MetadataManager.generateImageVariants`, rangées dans
+ *   `imageVariants[].url` sous leur clé de stockage, et leurs jumelles AVIF
+ *   (`generateAvifVariants`, `avifVariants[].url`, #11262).
+ *
+ * Les deux colonnes sont du JSON que la base n'a jamais validé : tout ce qui
+ * n'a pas la forme attendue est ignoré, jamais deviné. Ce module ne lit que la
+ * ligne ; le disque et la décision d'effacer restent à `AttachmentService`.
+ */
+export function derivedFileCandidates(row: {
+  readonly translations?: unknown;
+  readonly imageVariants?: unknown;
+  readonly avifVariants?: unknown;
+  readonly renditions?: unknown;
+}): readonly string[] {
+  return [
+    ...translationTrackCandidates(row.translations),
+    ...variantCandidates(row.imageVariants),
+    ...variantCandidates(row.avifVariants),
+    ...variantCandidates(row.renditions),
+  ];
+}
+
+/**
+ * Le chemin absolu d'un candidat, seulement s'il désigne un fichier SOUS la
+ * racine des dépôts. Une valeur venue d'une colonne JSON est une donnée, pas un
+ * chemin de confiance : `..`, un absolu étranger ou un dossier voisin au nom
+ * préfixé (`/srv/uploads-old`) rendent `null`.
+ */
+export function resolveInsideUploadRoot(uploadRoot: string, candidate: string): string | null {
+  const root = path.resolve(uploadRoot);
+  const resolved = path.resolve(root, candidate);
+  return resolved.startsWith(root + path.sep) ? resolved : null;
+}
+
+/**
+ * Les clés de stockage des variantes WebP d'une ligne (`PostMedia` comme
+ * `MessageAttachment`, #11260). Même lecture défensive que ci-dessus, et une
+ * garde de plus : une clé qui remonte (`..`) n'est jamais rendue, parce que
+ * l'appelant la passe à un stockage qui efface.
+ */
+export function imageVariantKeys(imageVariants: unknown): readonly string[] {
+  return variantCandidates(imageVariants).filter((key) => !key.split('/').includes('..'));
+}
+
+function translationTrackCandidates(translations: unknown): readonly string[] {
+  if (!isRecord(translations)) return [];
+  return Object.values(translations).flatMap((track) => {
+    if (!isRecord(track)) return [];
+    const fromUrl = typeof track.url === 'string' ? storageKeyFromMediaUrl(track.url) : null;
+    const fromPath = typeof track.path === 'string' && track.path.length > 0 ? track.path : null;
+    return [fromUrl, fromPath].filter((value): value is string => value !== null);
+  });
+}
+
+function variantCandidates(imageVariants: unknown): readonly string[] {
+  if (!Array.isArray(imageVariants)) return [];
+  return imageVariants.flatMap((variant) => {
+    if (!isRecord(variant) || typeof variant.url !== 'string') return [];
+    const key = storageKeyFromMediaUrl(variant.url);
+    return key === null ? [] : [key];
+  });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Les chemins qu'un rendu POSE par convention à côté des octets — vignette
+ * (`_thumb.webp` d'une image, `_thumb.jpg` d'une vidéo), variantes WebP et
+ * AVIF de chaque largeur, rendu H.264 (`_h264.mp4`) — que la ligne les cite
+ * ou NON (#11264, contre-audit S9 N2).
+ *
+ * Le worker de médias écrit ses fichiers avant de les inscrire sur la ligne :
+ * une suppression qui lit la ligne PENDANT ce rendu ne les voit pas. Effacer
+ * aussi les chemins conventionnels, une fois qu'aucune ligne ne partage plus
+ * les octets, referme cette fenêtre. Ces chemins dérivent tous du `filePath`
+ * et ne peuvent pas le désigner lui-même.
+ */
+export function conventionalDerivedPaths(filePath: string): readonly string[] {
+  const ext = path.extname(filePath);
+  const base = ext ? filePath.slice(0, filePath.length - ext.length) : filePath;
+  return [
+    thumbnailPathFor(filePath),
+    `${base}_thumb.jpg`,
+    ...RESPONSIVE_VARIANT_WIDTHS.flatMap((width) => [variantPathFor(filePath, width), avifVariantPathFor(filePath, width)]),
+    compatRenditionPathFor(filePath),
+  ].filter((candidate) => candidate !== filePath);
+}

@@ -106,6 +106,11 @@ object TokenRefreshPolicy {
      * it). Every other endpoint is eligible.
      */
     fun isRefreshEligible(endpoint: String): Boolean {
+        // ces quatre familles SONT la poignée de main d'authentification.
+        // Ce n'est pas une adresse qu'on appelle, c'est un préfixe qu'on RECONNAÎT
+        // pour décider si un rafraîchissement a du sens — l'équivalent Kotlin de
+        // `MeeshyEndpointPolicy` côté iOS. Aucune interface Retrofit ne peut porter
+        // un prédicat (#4352).
         val isRefreshOrAuth = endpoint == "/auth/refresh" ||
             endpoint.startsWith("/auth/login") ||
             endpoint.startsWith("/auth/register") ||
@@ -141,15 +146,52 @@ object TokenRefreshPolicy {
     }
 
     /**
-     * iOS `mapUnauthorized(endpoint:serverMessage:)`: a 401 on `/auth/login*` means the
-     * supplied credentials are wrong (there is no session to expire), so it must never
-     * tear anything down; anywhere else a 401 is a genuine [UnauthorizedMapping.SessionExpired].
-     * A null **or blank** [serverMessage] falls back to [DEFAULT_INVALID_CREDENTIALS_MESSAGE]
+     * `/me/account/deletion` answers 401 INVALID_PASSWORD for a wrong confirmation
+     * password (`services/gateway/src/routes/me/delete-account.ts`) — the same
+     * "wrong credentials, not a dead session" shape as `/auth/login*`, just on an
+     * endpoint that is not part of the auth handshake.
+     */
+    private const val ACCOUNT_DELETION_ENDPOINT: String = "/me/account/deletion"
+
+    /**
+     * Les portes dont un 401 dit « code ou jeton refusé », jamais « session
+     * expirée » : la seconde étape de la connexion (`/auth/login/2fa`, déjà couvert
+     * par le préfixe `/auth/login`) et ses jumelles `/auth/2fa/verify` et
+     * `/auth/2fa/cancel`, où un code de second facteur faux rend 401 ; l'attente
+     * d'une preuve d'adresse (`/auth/verification/status`, #8083), où un jeton
+     * d'attente inconnu rend 401 `PENDING_TOKEN_INVALID` — rafraîchir ou démonter
+     * la session déjà ouverte d'un AUTRE compte sur cette réponse serait faux.
+     *
+     * `/auth/logout` : on quitte la session avec ses jetons FIGÉS, et un 401 (jeton
+     * expiré) ne doit ni rafraîchir ni démonter ce que le compte SUIVANT vient de
+     * poser dans le porte-jetons. `/anonymous/refresh` : la session d'un invité, pas
+     * celle du compte inscrit — un 401 y est « session d'invité inconnue », et le
+     * compte inscrit, s'il y en a un d'ouvert, n'est jamais touché.
+     */
+    private val CREDENTIALS_REFUSAL_ENDPOINTS: Set<String> = setOf(
+        ACCOUNT_DELETION_ENDPOINT,
+        "/auth/2fa/verify",
+        "/auth/2fa/cancel",
+        "/auth/verification/status",
+        "/auth/logout",
+        "/anonymous/refresh",
+    )
+
+    /**
+     * iOS `mapUnauthorized(endpoint:serverMessage:)`: a 401 on `/auth/login*` (Android
+     * addition: also [ACCOUNT_DELETION_ENDPOINT]) means the supplied credentials are
+     * wrong (there is no session to expire), so it must never tear anything down;
+     * anywhere else a 401 is a genuine [UnauthorizedMapping.SessionExpired]. A null
+     * **or blank** [serverMessage] falls back to [DEFAULT_INVALID_CREDENTIALS_MESSAGE]
      * (iOS only nil-coalesces; the blank guard is a deliberate improvement so an empty
      * gateway body never surfaces as an empty error).
      */
     fun mapUnauthorized(endpoint: String, serverMessage: String?): UnauthorizedMapping {
-        if (!endpoint.startsWith("/auth/login")) return UnauthorizedMapping.SessionExpired
+        // un 401 sur la connexion — ou sur la confirmation par mot de passe de la
+        // suppression de compte — dit « identifiants refusés », jamais
+        // « session expirée ». Prédicat, pas appel.
+        val isCredentialsEndpoint = endpoint.startsWith("/auth/login") || endpoint in CREDENTIALS_REFUSAL_ENDPOINTS
+        if (!isCredentialsEndpoint) return UnauthorizedMapping.SessionExpired
         val message = serverMessage?.takeIf { it.isNotBlank() } ?: DEFAULT_INVALID_CREDENTIALS_MESSAGE
         return UnauthorizedMapping.InvalidCredentials(message)
     }

@@ -19,7 +19,7 @@ struct AttachmentLoadingTile: View {
     var onCancel: (() -> Void)? = nil
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             ZStack(alignment: .topTrailing) {
                 tileBody
                     .frame(width: size, height: size)
@@ -33,7 +33,7 @@ struct AttachmentLoadingTile: View {
                         Image(systemName: "xmark")
                             // Doctrine 86i : glyphe d'annulation dans un cercle fixe 18×18 → figé.
                             .font(.system(size: 8, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                             .frame(width: 18, height: 18)
                             .background(
                                 Circle()
@@ -41,13 +41,14 @@ struct AttachmentLoadingTile: View {
                                     .shadow(color: MeeshyColors.error.opacity(0.4), radius: 3, y: 1)
                             )
                     }
+                    .accessibilityLabel(String(localized: "attachment.loading.cancel-a11y", defaultValue: "Annuler le chargement", bundle: .main))
                     .offset(x: 5, y: -5)
                 }
             }
 
             Text(label)
-                .font(MeeshyFont.relative(10, weight: .medium))
-                .foregroundColor(ThemeManager.shared.textSecondary)
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                .foregroundStyle(ThemeManager.shared.textSecondary)
                 .lineLimit(1)
                 .frame(width: max(size, 60))
         }
@@ -121,13 +122,13 @@ struct AttachmentLoadingTile: View {
                 .progressViewStyle(.circular)
                 .tint(.white)
                 .scaleEffect(0.7)
-                .padding(5)
+                .padding(MeeshySpacing.xs)
                 .background(Circle().fill(Color.black.opacity(0.4)))
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                .padding(4)
+                .padding(MeeshySpacing.xs)
         } else {
             // No preview yet (bytes still loading) — full placeholder + label.
-            VStack(spacing: 3) {
+            VStack(spacing: MeeshySpacing.xxs) {
                 ProgressView()
                     .progressViewStyle(.circular)
                     .tint(.white)
@@ -136,32 +137,32 @@ struct AttachmentLoadingTile: View {
                     // Doctrine 86i : label d'étape borné par la tuile de dimension fixe
                     // `size`×`size` (≈56) → figé (déjà `minimumScaleFactor` pour rétrécir).
                     .font(.system(size: 8, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundStyle(Color.white.opacity(MeeshyOpacity.intense))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, MeeshySpacing.xs)
             }
         }
     }
 
     @ViewBuilder
     private var failureOverlay: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: MeeshySpacing.xxs) {
             Image(systemName: "exclamationmark.triangle.fill")
                 // Doctrine 86i : glyphe d'erreur borné par la tuile fixe → figé ; décoratif
                 // (le libellé « Erreur » adjacent porte le sens).
                 .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .accessibilityHidden(true)
             Text(String(localized: "attachment.loading.error", defaultValue: "Erreur", bundle: .main))
                 // Doctrine 86i : label borné par la tuile de dimension fixe → figé.
                 .font(.system(size: 8, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
         }
-        .padding(6)
+        .padding(MeeshySpacing.xsPlus)
         .background(
             RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(MeeshyColors.error.opacity(0.65))
+                .fill(MeeshyColors.error.opacity(MeeshyOpacity.heavy))
         )
     }
 
@@ -187,13 +188,7 @@ struct AttachmentLoadingTile: View {
     /// label and as the VoiceOver accessibility label (which must stay the
     /// media kind even in the `.failed` state, where the error goes to value).
     private var kindLabel: String {
-        switch prep.kind {
-        case .image: return String(localized: "attachment.kind.photo", defaultValue: "Photo", bundle: .main)
-        case .video: return String(localized: "attachment.kind.video", defaultValue: "Video", bundle: .main)
-        case .audio: return String(localized: "attachment.kind.audio", defaultValue: "Audio", bundle: .main)
-        case .file:  return String(localized: "attachment.kind.file", defaultValue: "File", bundle: .main)
-        case .location: return String(localized: "attachment.kind.location", defaultValue: "Location", bundle: .main)
-        }
+        MediaKindLabel.name(MediaKindLabel.kind(for: prep.kind))
     }
 
     // MARK: - Accessibility
@@ -232,12 +227,12 @@ struct AttachmentLoadingTile: View {
 
     private var stageLabel: String {
         switch prep.stage {
-        case .loading:      return String(localized: "attachment.stage.loading", defaultValue: "Loading", bundle: .main)
-        case .compressing:  return String(localized: "attachment.stage.compressing", defaultValue: "Compressing", bundle: .main)
-        case .thumbnailing: return String(localized: "attachment.stage.thumbnailing", defaultValue: "Preview", bundle: .main)
-        case .hashing:      return String(localized: "attachment.stage.hashing", defaultValue: "Hash", bundle: .main)
+        case .loading:      return String(localized: "attachment.stage.loading", defaultValue: "Chargement en cours", bundle: .main)
+        case .compressing:  return String(localized: "attachment.stage.compressing", defaultValue: "Compression en cours", bundle: .main)
+        case .thumbnailing: return String(localized: "attachment.stage.thumbnailing", defaultValue: "Aperçu", bundle: .main)
+        case .hashing:      return String(localized: "attachment.stage.hashing", defaultValue: "Empreinte", bundle: .main)
         case .ready:        return ""
-        case .failed:       return String(localized: "attachment.loading.error", defaultValue: "Error", bundle: .main)
+        case .failed:       return String(localized: "attachment.loading.error", defaultValue: "Erreur", bundle: .main)
         }
     }
 

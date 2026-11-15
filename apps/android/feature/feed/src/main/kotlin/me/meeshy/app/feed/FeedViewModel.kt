@@ -2,6 +2,7 @@ package me.meeshy.app.feed
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,16 +13,28 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.lang.LanguageResolver
-import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.getUserDisplayName
 import me.meeshy.sdk.model.PostType
-import me.meeshy.sdk.model.SharedPlace
-import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.feed.FeedHeadHold
+import me.meeshy.sdk.model.postTypeFromWire
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.network.InMemoryNetworkMonitor
+import me.meeshy.sdk.network.NetworkMonitor
+import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.model.analytics.ContentSurface
+import me.meeshy.sdk.model.analytics.ImpressionSource
+import me.meeshy.sdk.post.FeedEngagementRepository
 import me.meeshy.sdk.post.ImpressionBatcher
+import me.meeshy.sdk.post.PostCommentSettingsRepository
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.post.writeMediaCaptionTranslationsTo
+import me.meeshy.sdk.post.writePostTranslationsTo
+import me.meeshy.sdk.post.writePostReactionsTo
+import me.meeshy.sdk.post.writePostUpdatesTo
+import me.meeshy.sdk.publication.PublicationOutbox
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.session.SessionRepository
@@ -33,13 +46,24 @@ data class FeedUiState(
     val posts: List<FeedPostPresentation> = emptyList(),
     val isSyncing: Boolean = false,
     val showSkeleton: Boolean = false,
-    val errorMessage: String? = null,
+    /**
+     * The feed could not load and has nothing to show: the screen draws the error state
+     * (« Impossible de charger le fil » + Réessayer, iOS FeedView) instead of the empty one.
+     */
+    val loadFailed: Boolean = false,
+    /** No usable network: the screen draws the discreet « Hors ligne » band over what the feed keeps (#14263). */
+    val isOffline: Boolean = false,
+    /** A one-shot localized feedback (toast), cleared by [FeedViewModel.consumeNotice]. */
+    val notice: FeedNotice? = null,
     val hasMore: Boolean = true,
     val isLoadingMore: Boolean = false,
     /** Count of posts that arrived via `post:created` since the last acknowledge/refresh. */
     val newPostsCount: Int = 0,
     /** L'id de l'utilisateur connecte — decide quel menu d'options porte chaque card. */
     val currentUserId: String? = null,
+    /** Le nom et l'avatar de l'utilisateur connecté : le visage du placeholder de composeur (iOS `MeeshyAvatar`, mode `.feedComposer`). */
+    val currentUserName: String? = null,
+    val currentUserAvatarUrl: String? = null,
     /**
      * On-demand post translations in flight, keyed `postId|language`. Guards a
      * double-tap on a translatable flag chip from firing two requests, and lets the
@@ -62,16 +86,11 @@ data class FeedUiState(
     val quoteComposer: QuoteComposerState? = null,
 )
 
-/**
- * State of the open quote-repost composer: the source post being quoted (author +
- * a content preview so the sheet renders the embed) and the commentary draft.
- */
-data class QuoteComposerState(
-    val postId: String,
-    val sourceAuthorName: String?,
-    val sourceContentPreview: String,
-    val text: String = "",
-)
+/** Language codes of [postId] whose on-demand translation is in flight (keys are `postId|language`). */
+fun FeedUiState.translatingCodesOf(postId: String): Set<String> =
+    translatingLanguages.mapNotNullTo(mutableSetOf()) { key ->
+        key.substringAfter('|', "").takeIf { it.isNotEmpty() && key.substringBefore('|') == postId }
+    }
 
 @HiltViewModel
 class FeedViewModel @Inject constructor(
@@ -79,8 +98,12 @@ class FeedViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
-    private val feedMediaUploader: FeedMediaUploader,
     private val reportRepository: ReportRepository,
+    private val workManager: WorkManager,
+    engagement: FeedEngagementRepository,
+    private val publications: PublicationOutbox,
+    private val network: NetworkMonitor = InMemoryNetworkMonitor(),
+    commentSettings: PostCommentSettingsRepository? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(FeedUiState())
@@ -100,6 +123,19 @@ class FeedViewModel @Inject constructor(
      */
     private val realtimeHead = MutableStateFlow(FeedRealtimeHead())
 
+    /** L'écran demande la retenue de tête ([holdHead]) : lecteur loin du haut, ou fil hors de l'écran (#16676). */
+    private var headHoldRequested = false
+
+    /**
+     * La retenue de tête en cours ([FeedHeadHold]) : ce qui arrive en tête attend, compté par la bannière. Lue au moment
+     * de projeter, jamais combinée au flux du cache : un maillon de plus y décalait l'ordre entre l'émission du cache et
+     * son rappel d'erreur, et l'avis « chargement impossible » se changeait en état d'erreur sur un fil lisible.
+     */
+    private var headHold = FeedHeadHold()
+
+    /** Les dernières entrées projetées : la retenue qui change rejoue la projection sans attendre une émission. */
+    private var latestInputs: FeedInputs? = null
+
     /** The raw posts currently displayed — the flag-tap handler resolves against these. */
     private var latestPosts: List<ApiPost> = emptyList()
 
@@ -111,11 +147,20 @@ class FeedViewModel @Inject constructor(
      * than [viewModelScope] — see [ImpressionBatcher]'s own doc for why [onCleared]'s flush
      * would otherwise race the ViewModel's own teardown.
      */
-    private val impressionBatcher = ImpressionBatcher(source = "feed", postRepository = postRepository)
+    private val impressionBatcher = ImpressionBatcher(
+        source = ImpressionSource.FEED,
+        surface = ContentSurface.FEED,
+        deliver = engagement::deliver,
+    )
 
     /** [postId] just appeared on screen — call once per composition entry. */
     fun trackImpression(postId: String) {
         impressionBatcher.record(postId)
+    }
+
+    /** Le fil sort de l'écran ou passe en arrière-plan : le lot d'impressions part, il n'est pas jeté (iOS `flushNow`). */
+    fun flushImpressions() {
+        impressionBatcher.flushNowAsync()
     }
 
     override fun onCleared() {
@@ -125,63 +170,28 @@ class FeedViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            network.isOnline.collect { online -> _state.update { it.copy(isOffline = !online) } }
+        }
+        viewModelScope.launch {
+            publications.notices.collect { notice -> _state.update { it.copy(notice = notice.feedNotice) } }
+        }
+        viewModelScope.launch {
+            // Un j'aime ou un favori que la file a perdu : le retour arrière est déjà fait, le fil le DIT.
+            postRepository.gestureRefusals.collect { refusal -> _state.update { it.copy(notice = refusal.feedNotice) } }
+        }
+        viewModelScope.launch {
             combine(
                 postRepository.feedStream(
-                    onSyncError = { error ->
-                        _state.update {
-                            it.copy(errorMessage = error.message, isSyncing = false, showSkeleton = false)
-                        }
-                    },
+                    onSyncError = { _ -> _state.update { it.withLoadFailure() } },
                 ),
                 sessionRepository.currentUser,
                 postRepository.feedHasMore,
                 activeLanguageOverride,
                 realtimeHead,
             ) { result, user, hasMore, overrides, head -> FeedInputs(result, user, hasMore, overrides, head) }
-                .collect { (result, user, hasMore, overrides, head) ->
-                    val cachePosts = result.postsOrNull() ?: latestCachePosts
-                    latestCachePosts = cachePosts
-                    val cacheIds = cachePosts.mapTo(HashSet()) { it.id }
-
-                    // Prune buffered posts the cache has surfaced (memory hygiene) and release
-                    // like overlays the cache has caught up to; the display work below already
-                    // keeps buffered posts from double-rendering.
-                    val prunedHead = FeedRealtimeReducer.reconcile(head, cacheIds)
-                    val reconciledLikes = FeedRealtimeReducer.reconcileLikes(prunedHead, cachePosts)
-                    val reconciledBookmarks = FeedRealtimeReducer.reconcileBookmarks(reconciledLikes, cachePosts)
-                    val reconciled = FeedRealtimeReducer.reconcileComments(reconciledBookmarks, cachePosts)
-                    if (reconciled !== head) realtimeHead.value = reconciled
-
-                    // Tombstoned posts (live `post:deleted`) are hidden from both the head and
-                    // the cache-projected list until a refresh drops them from the cache. Live
-                    // like overlays (`post:liked`/`post:unliked`) and bookmark overlays
-                    // (`post:bookmarked`) override the cache count/own-state.
-                    val removed = reconciled.removedIds
-                    val likes = reconciled.likes
-                    val bookmarks = reconciled.bookmarks
-                    val comments = reconciled.comments
-                    val visibleCache = cachePosts
-                        .let { if (removed.isEmpty()) it else it.filterNot { p -> p.id in removed } }
-                        .withLikeOverlays(likes)
-                        .withBookmarkOverlays(bookmarks)
-                        .withCommentOverlays(comments)
-                    val visibleRealtime = reconciled.posts
-                        .filterNot { it.id in cacheIds || it.id in removed }
-                        .withLikeOverlays(likes)
-                        .withBookmarkOverlays(bookmarks)
-                        .withCommentOverlays(comments)
-                    latestPosts = visibleRealtime + visibleCache
-                    _state.update {
-                        it.project(
-                            result = result,
-                            cachePosts = visibleCache,
-                            realtimePosts = visibleRealtime,
-                            user = user,
-                            mediaBaseUrl = config.socketUrl,
-                            overrides = overrides,
-                            newPostsCount = reconciled.newPostsCount,
-                        ).copy(hasMore = hasMore)
-                    }
+                .collect { inputs ->
+                    latestInputs = inputs
+                    render(inputs)
                 }
         }
         viewModelScope.launch {
@@ -196,8 +206,10 @@ class FeedViewModel @Inject constructor(
             // new feed post, so route it through the SAME head-accept path as post:created
             // (dedup against the cache-projected feed and the buffered head, prepend
             // newest-first, bump the banner). Mirror of iOS FeedSocketHandler routing
-            // post:reposted through handlePostUpsert.
+            // post:reposted through handlePostUpsert. A repost served as a story or a status
+            // lives in the tray, never the feed (iOS `belongsToStoryTray`, #14466).
             socialSocket.postReposted.collect { payload ->
+                if (postTypeFromWire(payload.repost.type) in TRAY_TYPES) return@collect
                 val cacheIds = latestCachePosts.mapTo(HashSet()) { it.id }
                 realtimeHead.update { FeedRealtimeReducer.accept(it, payload.repost, cacheIds) }
             }
@@ -243,9 +255,16 @@ class FeedViewModel @Inject constructor(
             // resolution chain (preferences + active override) decides whether to surface
             // it, so no override is forced here (parity with iOS applyPostTranslation and
             // the story-viewer realtime merge).
-            socialSocket.postTranslationUpdated.collect { payload ->
-                postRepository.applyTranslationUpdate(payload.postId, payload.language, payload.translation)
-            }
+            socialSocket.writePostTranslationsTo(postRepository)
+        }
+        viewModelScope.launch {
+            // Prisme, push side (#6280): the gateway translated a PostMedia.caption
+            // server-side and broadcast the finished entry. Fold it into the feed
+            // cache so the open card re-renders the media's caption in the reader's
+            // preferred language the instant it lands — the media-caption sibling of
+            // post:translation-updated above (parity with iOS
+            // FeedViewModel.applyMediaCaptionTranslation).
+            socialSocket.writeMediaCaptionTranslationsTo(postRepository)
         }
         viewModelScope.launch {
             // post:updated — the author edited the post (caption, media, mood, ...) and the
@@ -253,9 +272,16 @@ class FeedViewModel @Inject constructor(
             // shows in place, preserving the viewer's own like/bookmark/view/reaction state
             // (the broadcast is unpersonalized). Mirror of iOS FeedViewModel's post:updated
             // sink, and the content-edit sibling of post:translation-updated above.
-            socialSocket.postUpdated.collect { payload ->
-                postRepository.applyPostUpdate(payload.post)
-            }
+            socialSocket.writePostUpdatesTo(postRepository)
+        }
+        viewModelScope.launch {
+            // post:reaction-added / -removed — le compte ABSOLU d'un emoji s'ecrit dans le fil (iOS handlePostReaction).
+            socialSocket.writePostReactionsTo(postRepository)
+        }
+        viewModelScope.launch {
+            // Reconnexion de la socket : les evenements emis pendant la coupure sont perdus, la tete se relit en silence
+            // (la fusion garde les pages defilees et la tete temps reel) — iOS `didReconnect`.
+            socialSocket.reconnected.collect { postRepository.refresh() }
         }
     }
 
@@ -266,12 +292,82 @@ class FeedViewModel @Inject constructor(
      */
     private fun currentUserId(): String? = sessionRepository.currentUser.value?.id
 
+    /** La projection du fil depuis [inputs], la retenue de tête appliquée (#16676). */
+    private fun render(inputs: FeedInputs) {
+        val (result, user, hasMore, overrides, head) = inputs
+        val cachePosts = result.postsOrNull() ?: latestCachePosts
+        latestCachePosts = cachePosts
+        val cacheIds = cachePosts.mapTo(HashSet()) { it.id }
+
+        // Prune buffered posts the cache has surfaced (memory hygiene) and release
+        // like overlays the cache has caught up to; the display work below already
+        // keeps buffered posts from double-rendering.
+        val prunedHead = FeedRealtimeReducer.reconcile(head, cacheIds)
+        val reconciledLikes = FeedRealtimeReducer.reconcileLikes(prunedHead, cachePosts)
+        val reconciledBookmarks = FeedRealtimeReducer.reconcileBookmarks(reconciledLikes, cachePosts)
+        val reconciled = FeedRealtimeReducer.reconcileComments(reconciledBookmarks, cachePosts)
+        if (reconciled !== head) realtimeHead.value = reconciled
+
+        // Tombstoned posts (live `post:deleted`) are hidden from both the head and
+        // the cache-projected list until a refresh drops them from the cache. Live
+        // like overlays (`post:liked`/`post:unliked`) and bookmark overlays
+        // (`post:bookmarked`) override the cache count/own-state.
+        val removed = reconciled.removedIds
+        val likes = reconciled.likes
+        val bookmarks = reconciled.bookmarks
+        val comments = reconciled.comments
+        val marks = reconciled.reposts
+        val visibleCache = cachePosts
+            .let { if (removed.isEmpty()) it else it.filterNot { p -> p.id in removed } }
+            .withLikeOverlays(likes)
+            .withBookmarkOverlays(bookmarks)
+            .withCommentOverlays(comments)
+            .withRepostMarks(marks)
+        val visibleRealtime = reconciled.posts
+            .filterNot { it.id in cacheIds || it.id in removed }
+            .withLikeOverlays(likes)
+            .withBookmarkOverlays(bookmarks)
+            .withCommentOverlays(comments)
+            .withRepostMarks(marks)
+        val candidate = visibleRealtime + visibleCache
+        latestPosts = candidate
+
+        // Lecteur loin du haut ou fil hors de l'écran : ce qui arrive en tête attend, la liste ne bouge pas
+        // au-dessus du post lu et la position restaurée retombe sur lui (#16676).
+        val split = headHold.steered(headHoldRequested, candidate.map { it.id }).split(candidate) { it.id }
+        headHold = split.next
+        _state.update {
+            it.project(
+                result = result,
+                posts = split.displayed,
+                user = user,
+                mediaBaseUrl = config.apiBaseUrl,
+                overrides = overrides,
+                newPostsCount = FeedHeadHold.bannerCount(reconciled.newPostsCount, split.held.size),
+            ).copy(hasMore = hasMore)
+        }
+    }
+
     /**
-     * Tap on the "new posts" banner (scroll-to-top): clear the banner count. The posts
-     * already sit at the head, so only the counter resets. Port of iOS `acknowledgeNewPosts`.
+     * Tap on the "new posts" banner (scroll-to-top): clear the banner count and let the held
+     * posts in at the head ([FeedHeadHold]), even before the list has reached the top. Port of
+     * iOS `acknowledgeNewPosts`.
      */
     fun acknowledgeNewPosts() {
+        headHold = headHold.release()
         realtimeHead.update { FeedRealtimeReducer.acknowledge(it) }
+        latestInputs?.let(::render)
+    }
+
+    /**
+     * L'écran pilote la retenue de tête (#16676) : [holding] vrai quand le premier élément visible est un post ou que
+     * le fil n'est pas à l'écran (quitté, recouvert, en arrière-plan) ; faux quand le lecteur est revenu en haut, ce
+     * qui laisse entrer ce qui attendait.
+     */
+    fun holdHead(holding: Boolean) {
+        if (holding == headHoldRequested) return
+        headHoldRequested = holding
+        latestInputs?.let(::render)
     }
 
     /**
@@ -302,6 +398,34 @@ class FeedViewModel @Inject constructor(
         }
     }
 
+    /** Rend la carte à la résolution du Prisme : défait le choix manuel de langue (iOS `clearTranslationOverride`). */
+    fun clearLanguageOverride(postId: String) {
+        activeLanguageOverride.update { it - postId }
+    }
+
+    /**
+     * Pick in the post's language explorer sheet (iOS `PostTranslationSheet.onSelectLanguage`):
+     * the chosen language becomes the card's text. Unlike a flag chip, picking the language already
+     * read never reverts to the default — it is simply the current one.
+     */
+    fun onPostLanguageSelected(postId: String, code: String) {
+        val post = latestPosts.firstOrNull { it.id == postId } ?: return
+        val preferences = sessionRepository.currentUser.value ?: EmptyContentPreferences
+        val result = LanguageFlagTapResolver.resolve(
+            tappedCode = code,
+            activeCode = FeedPostBuilder.resolveActiveCode(post, preferences, activeLanguageOverride.value[postId]),
+            originalLanguage = post.originalLanguage,
+            translations = post.translations.toTranslationRows(),
+        )
+        when (result) {
+            is LanguageFlagTapResolver.Result.Activate ->
+                activeLanguageOverride.update { it + (postId to result.code) }
+            is LanguageFlagTapResolver.Result.RequestTranslation ->
+                requestOnDemandTranslation(postId, result.targetLanguage)
+            LanguageFlagTapResolver.Result.Revert, LanguageFlagTapResolver.Result.None -> Unit
+        }
+    }
+
     /**
      * The viewer tapped a configured language the post has no content for yet:
      * translate it on demand, then switch the card to it. The merged translation
@@ -324,7 +448,7 @@ class FeedViewModel @Inject constructor(
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: Exception) {
-                _state.update { it.copy(errorMessage = error.message) }
+                _state.update { it.copy(notice = FeedNotice.TRANSLATION_FAILED) }
             } finally {
                 _state.update { it.copy(translatingLanguages = it.translatingLanguages - key) }
             }
@@ -339,7 +463,7 @@ class FeedViewModel @Inject constructor(
      */
     fun openImageViewer(postId: String, imageIndex: Int) {
         val post = _state.value.posts.firstOrNull { it.id == postId } ?: return
-        val gallery = FeedMediaGallery.of(post, imageIndex)
+        val gallery = FeedMediaGallery.ofVisuals(post, imageIndex)
         _state.update { it.copy(imageViewer = gallery.takeUnless(FeedGallery::isEmpty)) }
     }
 
@@ -375,42 +499,65 @@ class FeedViewModel @Inject constructor(
     }
 
     fun refresh() {
+        headHold = headHold.release()
         realtimeHead.update { FeedRealtimeReducer.clear(it) }
-        _state.update { it.copy(errorMessage = null, isSyncing = true) }
+        latestInputs?.let(::render)
+        _state.update { it.copy(loadFailed = false, isSyncing = true) }
         viewModelScope.launch {
-            try {
-                postRepository.refresh()
+            val failure = try {
+                postRepository.refreshReporting()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(errorMessage = e.message, isSyncing = false) }
+                e
             }
+            _state.update { if (failure == null) it.copy(isSyncing = false) else it.withLoadFailure() }
         }
     }
 
+    /** The toast for [FeedUiState.notice] has been shown. */
+    fun consumeNotice() {
+        _state.update { it.copy(notice = null) }
+    }
+
+    /** Un commentaire de l'utilisateur vient d'être confirmé depuis la feuille : le compteur de la carte suit, sans attendre l'écho. */
+    fun onCommentSent(postId: String) {
+        val current = _state.value.posts.firstOrNull { it.id == postId }?.commentCount ?: return
+        realtimeHead.update { FeedRealtimeReducer.comment(it, postId, me.meeshy.sdk.model.comments.CommentsTitleCount.afterSend(current)) }
+    }
+
+    /**
+     * Toggles the post's like state through the durable outbox
+     * ([PostRepository.toggleLike]'s KDoc), then schedules [OutboxFlushWorker] —
+     * the offline-tap replay trigger every other outbox producer already sets
+     * (`ChatViewModel`, `SettingsViewModel`, ...). Without this, a like made
+     * while offline sits `PENDING` forever: nothing else in the app schedules a
+     * flush on its behalf.
+     */
     fun toggleLike(postId: String) {
         viewModelScope.launch {
             try {
                 postRepository.toggleLike(postId)
+                workManager.enqueue(OutboxFlushWorker.buildRequest())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(errorMessage = e.message) }
+                _state.update { it.copy(notice = FeedNotice.LIKE_FAILED) }
             }
         }
     }
 
     /**
-     * Repost simple (pas de quote) puis refresh : le repost cree un POST nouveau
+     * Repost simple (pas de quote) puis refresh : le repost cree une publication nouvelle
      * cote serveur, que seul un re-fetch peut faire apparaitre en tete de flux.
      *
-     * Le [RepostCommand] resout la cible : reposter un repost vise sa RACINE, jamais
-     * le partage intermediaire (sinon la nouvelle card embarque une share vide — le
-     * gateway n'hydrate `repostOf` que sur un niveau). Port d'iOS `resolveRepostTargetId`.
+     * Le [RepostCommand] resout la cible et le format : reposter un repost vise sa RACINE,
+     * jamais le partage intermediaire (le gateway n'hydrate `repostOf` que sur un niveau), et
+     * la publication garde le format de la CARTE (iOS `RepostTargeting.target(cardType:)`).
      */
     fun repost(postId: String) {
-        val command = RepostCommand.of(postId, repostOfFor(postId), quote = false, commentary = null)
-        sendRepost(command)
+        val card = cardOf(postId)
+        sendRepost(postId, RepostCommand.of(postId, card?.repostOf, quote = false, commentary = null, cardType = card?.type))
     }
 
     /**
@@ -420,16 +567,7 @@ class FeedViewModel @Inject constructor(
      */
     fun beginQuote(postId: String) {
         val source = latestPosts.firstOrNull { it.id == postId } ?: return
-        _state.update {
-            it.copy(
-                quoteComposer = QuoteComposerState(
-                    postId = postId,
-                    sourceAuthorName = (source.author?.displayName ?: source.author?.username)
-                        ?.takeIf { name -> name.isNotBlank() },
-                    sourceContentPreview = source.content.orEmpty().trim(),
-                ),
-            )
-        }
+        _state.update { it.copy(quoteComposer = QuoteComposerState.quoting(source, sessionRepository.currentUser.value)) }
     }
 
     fun onQuoteTextChange(text: String) {
@@ -448,159 +586,101 @@ class FeedViewModel @Inject constructor(
      */
     fun submitQuote() {
         val composer = _state.value.quoteComposer ?: return
+        val card = cardOf(composer.postId)
         val command = RepostCommand.of(
             composer.postId,
-            repostOfFor(composer.postId),
+            card?.repostOf,
             quote = true,
             commentary = composer.text,
+            cardType = card?.type,
         )
         _state.update { it.copy(quoteComposer = null) }
-        sendRepost(command)
+        sendRepost(composer.postId, command)
     }
 
-    private fun repostOfFor(postId: String) =
-        latestPosts.firstOrNull { it.id == postId }?.repostOf
-
-    private fun sendRepost(command: RepostCommand) {
-        viewModelScope.launch {
-            val result = postRepository.repost(
-                command.targetId,
-                content = command.content,
-                isQuote = command.isQuote,
-            )
-            when (result) {
-                is NetworkResult.Success -> postRepository.refresh()
-                is NetworkResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
-            }
-        }
-    }
+    private fun cardOf(postId: String): ApiPost? = latestPosts.firstOrNull { it.id == postId }
 
     /**
-     * Epingle un de SES PROPRES posts (feature-parity §F) — port fidele d'iOS
-     * (`PostDetailViewModel.pinPost`/`ProfileUserPostsList.pinPost`), qui n'expose
-     * jamais de contrepartie "unpin" dans son UI ; `PostRepository.unpinPost`
-     * existe côté SDK mais reste sans appelant sur les deux plateformes, donc
-     * pas branche ici. Refresh apres succes pour faire remonter `isPinned`.
+     * La carte touchée ([cardId]) compte la republication et se marque au geste ; le serveur confirme (« Repartage »,
+     * puis le fil se recharge pour montrer la nouvelle publication) ou refuse, et la carte reprend son état d'avant
+     * avec « Erreur lors du repost ». Un second geste pendant l'envoi n'envoie rien (iOS `FeedView.togglePostRepost`).
      */
-    fun pinPost(postId: String) {
+    private fun sendRepost(cardId: String, command: RepostCommand) {
+        val before = realtimeHead.value.reposts
+        val begun = before.begun(cardId, cardOf(cardId)?.repostCount ?: 0) ?: return
+        realtimeHead.update { it.copy(reposts = begun) }
         viewModelScope.launch {
-            when (val result = postRepository.pinPost(postId)) {
-                is NetworkResult.Success -> postRepository.refresh()
-                is NetworkResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
+            val confirmed = try {
+                postRepository.repost(
+                    command.targetId,
+                    targetType = command.targetType,
+                    content = command.content,
+                    isQuote = command.isQuote,
+                ) is NetworkResult.Success
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                false
+            }
+            if (!confirmed) {
+                realtimeHead.update { it.copy(reposts = it.reposts.refused(cardId, before)) }
+                _state.update { it.copy(notice = FeedNotice.REPOST_FAILED) }
+                return@launch
+            }
+            realtimeHead.update { it.copy(reposts = it.reposts.confirmed(cardId)) }
+            _state.update { it.copy(notice = FeedNotice.REPOSTED) }
+            try {
+                postRepository.refresh()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
             }
         }
     }
 
-    /** Suppression confirmee cote UI ; le refresh retire le post du flux. */
-    fun deletePost(postId: String) {
-        viewModelScope.launch {
-            when (val result = postRepository.delete(postId)) {
-                is NetworkResult.Success -> postRepository.refresh()
-                is NetworkResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
-            }
-        }
+    private val postActions = FeedPostActionsDelegate(
+        posts = postRepository,
+        reports = reportRepository,
+        scope = viewModelScope,
+        head = realtimeHead,
+        notify = { notice -> _state.update { it.copy(notice = notice) } },
+        commentSettings = commentSettings,
+    )
+
+    /** #16541 — ferme ou rouvre les commentaires d'une carte ; voir [FeedPostActionsDelegate.toggleComments]. */
+    fun toggleComments(postId: String) {
+        val post = _state.value.posts.firstOrNull { it.id == postId } ?: return
+        postActions.toggleComments(postId, disabled = !post.commentsDisabled)
     }
 
-    /** Signale [postId] pour [reason] — best effort, echec silencieux (parite report user). */
-    fun reportPost(postId: String, reason: ReportReason) {
-        viewModelScope.launch {
-            reportRepository.reportPost(postId, reason, details = null)
-        }
-    }
+    /** Epingle un de SES PROPRES posts (iOS `pinPost`) ; voir [FeedPostActionsDelegate.pin]. */
+    fun pinPost(postId: String) = postActions.pin(postId)
 
-    /** Comptabilise un partage cote serveur — l'intent systeme part sans attendre. */
-    fun recordShare(postId: String) {
-        viewModelScope.launch {
-            postRepository.share(postId)
-        }
-    }
+    /** Suppression confirmee, OPTIMISTE (iOS `withdrawPost`) ; voir [FeedPostActionsDelegate.delete]. */
+    fun deletePost(postId: String) = postActions.delete(postId)
 
+    /** Signale [postId] pour [reason] (iOS `feed.post.reported`) ; voir [FeedPostActionsDelegate.report]. */
+    fun reportPost(postId: String, reason: ReportReason) = postActions.report(postId, reason)
+
+    /** Bookmark analogue of [toggleLike] — same durable-outbox toggle, same flush schedule. */
     fun toggleBookmark(postId: String) {
+        val adding = cardOf(postId)?.isBookmarkedByMe != true
         viewModelScope.launch {
             try {
-                postRepository.toggleBookmark(postId)
+                val accepted = postRepository.toggleBookmark(postId)
+                workManager.enqueue(OutboxFlushWorker.buildRequest())
+                if (accepted && adding) _state.update { it.copy(notice = FeedNotice.BOOKMARKED) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(errorMessage = e.message) }
+                _state.update { it.copy(notice = FeedNotice.BOOKMARK_FAILED) }
             }
         }
     }
-
-    /**
-     * Publish a post: the pure [FeedComposerDraft]/[FeedPostPublishRequest] already
-     * validated [content]/[visibility]/[mediaIds] before calling this (the publish gate
-     * is that draft's SSOT, not re-checked here — mirror of
-     * [StatusesViewModel.setStatus] trusting its own [StatusPublishRequest]). Port of
-     * iOS `FeedViewModel.createPost`'s direct (non-durable) path: confirmed by the
-     * network before the post is shown, so there is nothing to roll back on failure. A
-     * blank [content] (a media-only post) is sent as `null`, never an empty string, so
-     * a stricter gateway validation on the text field is never exercised for a post
-     * that carries only media. A successful create is prepended to the realtime head
-     * via [FeedRealtimeReducer.created] — visible at the top instantly, without raising
-     * the "new posts" banner. [type] carries the reel-classification decision the pure
-     * [FeedComposerDraft.postType] already resolved (`ReelComposition.defaultType`) —
-     * defaulted to [PostType.POST] so any other call site is unaffected. [location]
-     * carries the optional device-captured [me.meeshy.sdk.model.SharedPlace] attachment
-     * the composer's location tile resolved — forwarded to the gateway verbatim,
-     * `null` when no location was attached (the common case, unaffected). [language]
-     * carries the composer's source-language choice ([me.meeshy.sdk.model.ComposerLanguage],
-     * mirrors iOS's `composerLanguage`) — forwarded to the gateway's `originalLanguage`
-     * field verbatim, `null` when the caller doesn't supply one (every other existing
-     * call site is unaffected; the real composer always supplies one, see
-     * `FeedComposerDraft.language`). **Deliberate, documented scope cuts**: no
-     * durable-outbox queueing yet (unlike iOS's `enqueueDurableTextPost`, U1 ST3) — a
-     * post typed while offline is lost rather than durably queued; a tracked follow-up
-     * once Android's `OutboxKind` gains a `CREATE_POST` lane. Camera capture, file and
-     * audio attachments remain separately-scoped follow-ups to this photo/video
-     * sub-slice.
-     */
-    fun publishPost(
-        content: String,
-        visibility: String,
-        mediaIds: List<String> = emptyList(),
-        type: String = PostType.POST.name,
-        location: SharedPlace? = null,
-        language: String? = null,
-    ) {
-        viewModelScope.launch {
-            try {
-                val result = postRepository.create(
-                    content = content.ifBlank { null },
-                    type = type,
-                    visibility = visibility,
-                    mediaIds = mediaIds.ifEmpty { null },
-                    location = location,
-                    originalLanguage = language,
-                )
-                when (result) {
-                    is NetworkResult.Success ->
-                        realtimeHead.update { FeedRealtimeReducer.created(it, result.data) }
-                    is NetworkResult.Failure ->
-                        _state.update { it.copy(errorMessage = result.error.message) }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(errorMessage = e.message) }
-            }
-        }
-    }
-
-    /**
-     * Uploads freshly-picked composer media as `post`-context TUS attachments — the
-     * network half of the photo/video fast-follow to the text-only Feed composer,
-     * consuming the TUS foundation the story-media fix built (never the legacy
-     * `MessageAttachment`-producing path). A plain suspend delegate (no `_state`
-     * mutation): the composer sheet owns its own upload-in-flight UI state via
-     * `remember`, mirroring the story composer's split between network call and
-     * caller-owned progress state, just without a ViewModel of its own for the sheet.
-     */
-    suspend fun uploadMedia(items: List<MediaUploadItem>): NetworkResult<List<UploadedMedia>> =
-        feedMediaUploader.upload(items)
 
     private companion object {
         const val LOAD_MORE_THRESHOLD = 5
+        val TRAY_TYPES = setOf(PostType.STORY, PostType.STATUS)
     }
 }
 
@@ -672,27 +752,26 @@ private fun List<ApiPost>.toPresentations(
     preferences: LanguageResolver.ContentLanguagePreferences,
     mediaBaseUrl: String,
     overrides: Map<String, String>,
+    viewerRole: String?,
 ): List<FeedPostPresentation> =
-    map { FeedPostBuilder.build(it, preferences, mediaBaseUrl, activeLanguageCode = overrides[it.id]) }
+    map { FeedPostBuilder.build(it, preferences, mediaBaseUrl, activeLanguageCode = overrides[it.id], viewerRole = viewerRole) }
 
 /**
- * Projects the cache result plus the real-time head into the UI state. Realtime posts
- * (already filtered to be disjoint from the cache) are prepended to the cache-projected
- * list; skeleton shows only when there is genuinely nothing to display.
+ * Projects the displayed posts (the real-time head, disjoint from the cache, then the
+ * cache-projected list, minus what the head hold keeps aside) into the UI state; skeleton
+ * shows only when there is genuinely nothing to display.
  */
 private fun FeedUiState.project(
     result: CacheResult<List<ApiPost>>,
-    cachePosts: List<ApiPost>,
-    realtimePosts: List<ApiPost>,
+    posts: List<ApiPost>,
     user: MeeshyUser?,
     mediaBaseUrl: String,
     overrides: Map<String, String>,
     newPostsCount: Int,
 ): FeedUiState {
     val prefs = user ?: EmptyContentPreferences
-    val projected = realtimePosts.toPresentations(prefs, mediaBaseUrl, overrides) +
-        cachePosts.toPresentations(prefs, mediaBaseUrl, overrides)
-    val clearedError = if (result is CacheResult.Fresh) null else errorMessage
+    val projected = posts.toPresentations(prefs, mediaBaseUrl, overrides, user?.role)
+    val stillFailed = loadFailed && result !is CacheResult.Fresh && projected.isEmpty()
     val isSyncing = when (result) {
         is CacheResult.Fresh -> false
         is CacheResult.Stale -> true
@@ -701,14 +780,28 @@ private fun FeedUiState.project(
     }
     val showSkeleton = when (result) {
         is CacheResult.Fresh, is CacheResult.Stale -> false
-        is CacheResult.Syncing, CacheResult.Empty -> projected.isEmpty() && clearedError == null
+        is CacheResult.Syncing, CacheResult.Empty -> projected.isEmpty() && !stillFailed
     }
     return copy(
         posts = projected,
         isSyncing = isSyncing,
         showSkeleton = showSkeleton,
-        errorMessage = clearedError,
+        loadFailed = stillFailed,
         newPostsCount = newPostsCount,
         currentUserId = user?.id,
+        currentUserName = user?.let { getUserDisplayName(it, fallback = "M") },
+        currentUserAvatarUrl = user?.avatar?.takeIf { it.isNotBlank() }?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
     )
 }
+
+/**
+ * A load failure: with nothing on screen, the drawn error state; with posts already shown,
+ * only the localized toast — the reader keeps reading what the cache holds. Offline, the band
+ * already says why: no toast over a readable feed (#14263).
+ */
+private fun FeedUiState.withLoadFailure(): FeedUiState = when {
+    posts.isEmpty() -> copy(loadFailed = true, isSyncing = false, showSkeleton = false)
+    isOffline -> copy(isSyncing = false, showSkeleton = false)
+    else -> copy(notice = FeedNotice.LOAD_FAILED, isSyncing = false, showSkeleton = false)
+}
+

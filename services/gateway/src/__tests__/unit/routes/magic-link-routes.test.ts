@@ -17,12 +17,23 @@ import Fastify, { FastifyInstance } from 'fastify';
 const mockRequestMagicLink = jest.fn() as jest.Mock<any>;
 const mockValidateMagicLink = jest.fn() as jest.Mock<any>;
 
+jest.mock('../../../services/auth/email-verification-watch', () => ({
+  pendingSessionTokenFor: jest.fn(async () => ({ pendingSessionToken: 'attente-opaque' })),
+}));
 jest.mock('../../../services/MagicLinkService', () => ({
   MagicLinkService: jest.fn().mockImplementation(() => ({
     requestMagicLink: (...args: unknown[]) => mockRequestMagicLink(...args),
     validateMagicLink: (...args: unknown[]) => mockValidateMagicLink(...args),
   })),
 }));
+
+const mockStartAccountFromEmail = jest.fn() as jest.Mock<any>;
+jest.mock('../../../services/AuthService', () => ({
+  AuthService: jest.fn().mockImplementation(() => ({
+    startAccountFromEmail: (...args: unknown[]) => mockStartAccountFromEmail(...args),
+  })),
+}));
+jest.mock('../../../utils/secrets', () => ({ getJwtSecret: () => 'secret' }));
 
 const mockGetCacheStore = jest.fn() as jest.Mock<any>;
 jest.mock('../../../services/CacheStore', () => ({
@@ -145,258 +156,126 @@ describe('MagicLink Routes', () => {
   // POST /magic-link/request
   // ══════════════════════════════════════════════════════════════════════════
 
+  // #8033 (amendement porteur 2026-09-26) — la porte « e-mail seul » n'envoie
+  // plus de lien magique : elle envoie code + lien `/auth/verify-email`, à un
+  // compte existant comme à une adresse inconnue (créée). Le service UNIQUE
+  // est `AuthService.startAccountFromEmail`, porte `email-only`. La réponse
+  // publique ne change pas : elle ne dit rien de l'existence du compte.
   describe('POST /magic-link/request', () => {
-    it('returns the service result directly when email is valid', async () => {
-      const serviceResult = {
-        success: true,
-        message: 'If an account exists, a login link has been sent.',
-        expiresInSeconds: 600,
-      };
-      mockRequestMagicLink.mockResolvedValue(serviceResult);
+    const MESSAGE = 'If an account exists, a login link has been sent.';
 
-      const response = await app.inject({
-        method: 'POST',
-        url: '/magic-link/request',
-        payload: { email: 'test@example.com' },
-      });
+    it.each([
+      ['une adresse inconnue (compte créé)', { kind: 'verification-required', accountCreated: true, email: 'x@example.com' }],
+      ['un compte existant', { kind: 'verification-required', accountCreated: false, email: 'x@example.com' }],
+      ['un compte supprimé', { kind: 'unavailable' }],
+    ])('rend la MÊME réponse pour %s', async (_cas, issue) => {
+      mockStartAccountFromEmail.mockResolvedValue(issue);
+
+      const response = await app.inject({ method: 'POST', url: '/magic-link/request', payload: { email: 'x@example.com' } });
 
       expect(response.statusCode).toBe(200);
-      const body = response.json();
-      expect(body.success).toBe(true);
-      expect(body.message).toBe('If an account exists, a login link has been sent.');
-      expect(body.data.expiresInSeconds).toBe(600);
+      expect(response.json()).toEqual({
+        success: true,
+        message: MESSAGE,
+        data: { expiresInSeconds: 900, pendingSessionToken: 'attente-opaque' },
+      });
     });
 
-    it('passes rememberDevice=false by default to the service', async () => {
-      mockRequestMagicLink.mockResolvedValue({ success: true, message: 'ok' });
+    it('passe par la porte « e-mail seul », avec le contexte et la locale de la requête', async () => {
+      mockStartAccountFromEmail.mockResolvedValue({ kind: 'verification-required', accountCreated: true, email: 'x@example.com' });
 
       await app.inject({
         method: 'POST',
         url: '/magic-link/request',
-        payload: { email: 'test@example.com' },
+        payload: { email: 'x@example.com' },
+        headers: { 'x-device-locale': 'pt-BR' },
       });
 
-      expect(mockRequestMagicLink).toHaveBeenCalledWith(
-        expect.objectContaining({ rememberDevice: false })
+      expect(mockStartAccountFromEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'x@example.com', door: 'email-only', requestContext: makeRequestContext(), deviceLocale: 'pt-BR' }),
+        expect.anything(),
       );
-    });
-
-    it('passes rememberDevice=true to the service when provided', async () => {
-      mockRequestMagicLink.mockResolvedValue({ success: true, message: 'ok' });
-
-      await app.inject({
-        method: 'POST',
-        url: '/magic-link/request',
-        payload: { email: 'test@example.com', rememberDevice: true },
-      });
-
-      expect(mockRequestMagicLink).toHaveBeenCalledWith(
-        expect.objectContaining({ rememberDevice: true })
-      );
-    });
-
-    it('passes ip and userAgent from request context to the service', async () => {
-      mockRequestMagicLink.mockResolvedValue({ success: true, message: 'ok' });
-      mockGetRequestContext.mockResolvedValue({
-        ip: '192.168.1.42',
-        userAgent: 'Mozilla/5.0',
-        geoData: null,
-        deviceInfo: null,
-      });
-
-      await app.inject({
-        method: 'POST',
-        url: '/magic-link/request',
-        payload: { email: 'user@example.com' },
-      });
-
-      expect(mockRequestMagicLink).toHaveBeenCalledWith(
-        expect.objectContaining({
-          email: 'user@example.com',
-          ipAddress: '192.168.1.42',
-          userAgent: 'Mozilla/5.0',
-        })
-      );
+      expect(mockRequestMagicLink).not.toHaveBeenCalled();
     });
 
     it('returns 400 when email is missing', async () => {
-      // Missing required field is caught by Fastify JSON-schema validation before the handler
-      const response = await app.inject({
-        method: 'POST',
-        url: '/magic-link/request',
-        payload: {},
-      });
+      const response = await app.inject({ method: 'POST', url: '/magic-link/request', payload: {} });
 
       expect(response.statusCode).toBe(400);
+      expect(mockStartAccountFromEmail).not.toHaveBeenCalled();
     });
 
     it('returns 400 when email is invalid', async () => {
-      // AJV format:'email' validation fires before the Zod check in the handler
-      const response = await app.inject({
-        method: 'POST',
-        url: '/magic-link/request',
-        payload: { email: 'not-an-email' },
-      });
+      const response = await app.inject({ method: 'POST', url: '/magic-link/request', payload: { email: 'pas-une-adresse' } });
 
       expect(response.statusCode).toBe(400);
     });
 
     it('returns 400 when email exceeds 255 characters (Zod max(255) fires in handler)', async () => {
-      // The Fastify body schema has no maxLength, so Zod validation in the handler rejects it
-      const longEmail = `${'a'.repeat(250)}@b.com`;
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/magic-link/request',
-        payload: { email: longEmail },
-      });
+      const email = `${'a'.repeat(250)}@example.com`;
+      const response = await app.inject({ method: 'POST', url: '/magic-link/request', payload: { email } });
 
       expect(response.statusCode).toBe(400);
-      const body = response.json();
-      expect(body.success).toBe(false);
+      expect(mockStartAccountFromEmail).not.toHaveBeenCalled();
     });
 
-    it('returns 500 and logs error when requestMagicLink throws', async () => {
-      mockRequestMagicLink.mockRejectedValue(new Error('Redis down'));
+    // #6655 — un refus de débit SE DIT : 429, jamais un 200 « regardez votre
+    // boîte ». Le débit est compté AVANT toute lecture du compte : il ne dit
+    // rien de son existence.
+    it('returns 429 with code RATE_LIMITED when the limiter refuses the request', async () => {
+      mockStartAccountFromEmail.mockResolvedValue({ kind: 'rate-limited' });
 
-      const response = await app.inject({
-        method: 'POST',
-        url: '/magic-link/request',
-        payload: { email: 'test@example.com' },
-      });
+      const response = await app.inject({ method: 'POST', url: '/magic-link/request', payload: { email: 'x@example.com' } });
+
+      expect(response.statusCode).toBe(429);
+      expect(response.json()).toMatchObject({ success: false, code: 'RATE_LIMITED' });
+    });
+
+    // #16491 — une adresse réservée ou jetable SANS compte n'en ouvre pas un,
+    // mais cette porte ne le DIT pas : la réponse est celle de tout autre cas,
+    // sans quoi elle apprendrait qu'aucun compte ne porte l'adresse.
+    it('answers an address that may not open an account exactly like an existing account (no enumeration)', async () => {
+      mockStartAccountFromEmail.mockResolvedValue({ kind: 'existing-account' });
+      const existant = await app.inject({ method: 'POST', url: '/magic-link/request', payload: { email: 'x@mailinator.com' } });
+      mockStartAccountFromEmail.mockResolvedValue({ kind: 'email-domain-not-allowed' });
+      const refuse = await app.inject({ method: 'POST', url: '/magic-link/request', payload: { email: 'x@mailinator.com' } });
+
+      expect(refuse.statusCode).toBe(200);
+      expect(refuse.json()).toEqual(existant.json());
+      expect(JSON.stringify(refuse.json())).not.toContain('EMAIL_DOMAIN_NOT_ALLOWED');
+    });
+
+    it('returns 500 and logs error when the service throws', async () => {
+      mockStartAccountFromEmail.mockRejectedValue(new Error('Mongo down'));
+
+      const response = await app.inject({ method: 'POST', url: '/magic-link/request', payload: { email: 'x@example.com' } });
 
       expect(response.statusCode).toBe(500);
-      const body = response.json();
-      expect(body.success).toBe(false);
       expect(mockLoggerChild.error).toHaveBeenCalled();
     });
 
     it('returns 500 when getRequestContext throws', async () => {
       mockGetRequestContext.mockRejectedValue(new Error('context error'));
 
-      const response = await app.inject({
-        method: 'POST',
-        url: '/magic-link/request',
-        payload: { email: 'test@example.com' },
-      });
+      const response = await app.inject({ method: 'POST', url: '/magic-link/request', payload: { email: 'x@example.com' } });
 
       expect(response.statusCode).toBe(500);
     });
   });
 
   // ══════════════════════════════════════════════════════════════════════════
-  // GET /magic-link/validate
+  // GET /magic-link/validate — RETIRÉE (#4186)
+  //
+  // Elle ouvrait une session sans appliquer `rememberDevice` ni
+  // `markSessionTrusted`, figeait `expiresIn` à 86 400, et faisait voyager le
+  // jeton en query string. Ses onze cas ne sont pas « perdus » : leurs
+  // équivalents vivent tous sur la POST ci-dessous, qui est désormais l'unique
+  // porte. L'absence de la route, elle, est gardée par un témoin NÉGATIF —
+  // `__tests__/unit/routes/identity-twins-retired.test.ts` — parce qu'un
+  // fichier qui se contente de ne plus tester une route ne remarquerait jamais
+  // son retour.
   // ══════════════════════════════════════════════════════════════════════════
 
-  describe('GET /magic-link/validate', () => {
-    it('returns 200 with user/token/session on valid token', async () => {
-      mockValidateMagicLink.mockResolvedValue(makeValidateResult());
-
-      const response = await app.inject({
-        method: 'GET',
-        url: '/magic-link/validate?token=valid-token-abc',
-      });
-
-      expect(response.statusCode).toBe(200);
-      const body = response.json();
-      expect(body.success).toBe(true);
-      // Fastify's fast-json-stringify serialises nested objects via their schema;
-      // user/session are typed as { type: 'object' } with no properties, so fields
-      // pass as empty objects in the serialised response — check presence, not fields.
-      expect(body.data.user).toBeDefined();
-      expect(body.data.token).toBe('jwt-token-abc');
-      expect(body.data.sessionToken).toBe('session-token-xyz');
-      expect(body.data.expiresIn).toBe(86400);
-    });
-
-    it('passes the query token to validateMagicLink', async () => {
-      mockValidateMagicLink.mockResolvedValue(makeValidateResult());
-
-      await app.inject({
-        method: 'GET',
-        url: '/magic-link/validate?token=my-specific-token',
-      });
-
-      expect(mockValidateMagicLink).toHaveBeenCalledWith(
-        expect.objectContaining({ token: 'my-specific-token' })
-      );
-    });
-
-    it('returns 400 when token query param is missing', async () => {
-      // Missing required querystring property is caught by Fastify before the handler
-      const response = await app.inject({
-        method: 'GET',
-        url: '/magic-link/validate',
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    it('returns 400 when token query param is empty string', async () => {
-      const response = await app.inject({
-        method: 'GET',
-        url: '/magic-link/validate?token=',
-      });
-
-      expect(response.statusCode).toBe(400);
-      const body = response.json();
-      expect(body.success).toBe(false);
-    });
-
-    it('returns 400 with result.error when validateMagicLink returns success=false', async () => {
-      mockValidateMagicLink.mockResolvedValue({
-        success: false,
-        error: 'Token expired or invalid',
-      });
-
-      const response = await app.inject({
-        method: 'GET',
-        url: '/magic-link/validate?token=expired-token',
-      });
-
-      expect(response.statusCode).toBe(400);
-      const body = response.json();
-      expect(body.success).toBe(false);
-      expect(body.error).toBe('Token expired or invalid');
-    });
-
-    it('always sets expiresIn to 86400 (24h) regardless of the result', async () => {
-      mockValidateMagicLink.mockResolvedValue(makeValidateResult());
-
-      const response = await app.inject({
-        method: 'GET',
-        url: '/magic-link/validate?token=any-token',
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json().data.expiresIn).toBe(86400);
-    });
-
-    it('returns 500 and logs error when validateMagicLink throws', async () => {
-      mockValidateMagicLink.mockRejectedValue(new Error('DB crash'));
-
-      const response = await app.inject({
-        method: 'GET',
-        url: '/magic-link/validate?token=crash-token',
-      });
-
-      expect(response.statusCode).toBe(500);
-      const body = response.json();
-      expect(body.success).toBe(false);
-      expect(mockLoggerChild.error).toHaveBeenCalled();
-    });
-
-    it('returns 500 when getRequestContext throws', async () => {
-      mockGetRequestContext.mockRejectedValue(new Error('context error'));
-
-      const response = await app.inject({
-        method: 'GET',
-        url: '/magic-link/validate?token=some-token',
-      });
-
-      expect(response.statusCode).toBe(500);
-    });
-  });
 
   // ══════════════════════════════════════════════════════════════════════════
   // POST /magic-link/validate
@@ -722,10 +601,13 @@ describe('MagicLink Routes', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // La connexion rend-elle un UTILISATEUR ?
 //
-// Les deux routes de validation déclaraient `user: { type: 'object' }` et
+// La route de validation déclarait `user: { type: 'object' }` et
 // `session: { type: 'object' }`. Sans `properties`, fast-json-stringify
 // (`additionalProperties: false` par défaut) les vidait en `{}` : la connexion
 // par lien magique rendait son jeton, et AUCUN utilisateur.
+//
+// (Le défaut valait pour ses DEUX verbes ; la jumelle GET a depuis été
+// retirée — #4186.)
 //
 // Les deux formes sont déjà décrites par les schémas partagés — `userSchema`
 // couvre le `socketIOUser` que le service construit, `sessionSchema` la
@@ -801,5 +683,77 @@ describe('POST /magic-link/validate — l’utilisateur et la session atteignent
     const data = await validateAndRead();
 
     expect(data.token).toBe('jwt-token-abc');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// La PROPRIÉTÉ qui devait survivre à la fusion (#4186)
+//
+// Les deux verbes ouvraient une session ; un seul appliquait la politique
+// complète. En retirant la jumelle GET on garde la POST — encore faut-il que
+// ce qui la rendait supérieure soit VERROUILLÉ, sans quoi la fusion aurait
+// aligné la survivante sur la pauvre sans que rien ne rougisse.
+//
+// Les cas unitaires ci-dessus couvrent chaque geste séparément. Ce témoin-ci
+// exige leur CONJONCTION sur une seule réponse — c'est la conjonction qui est
+// le contrat : `rememberDevice` vient du stockage SERVEUR (jamais du corps de
+// la requête, sinon n'importe quel client s'offrirait 365 jours), il DÉCLENCHE
+// `markSessionTrusted`, il porte `expiresIn` à un an, et il se relit sur
+// `session.isTrusted`. Trois d'entre eux verts et le quatrième rouge, c'est
+// une session annoncée durable que le serveur ne tient pas.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('POST /magic-link/validate — la politique de session complète (#4186)', () => {
+  // Ce bloc vit HORS du `describe` racine : il ne bénéficie donc pas de son
+  // `beforeEach`. Sans ce nettoyage, `markSessionTrusted` gardait l'appel du
+  // cas précédent et le témoin « aucune session de confiance » rougissait sur
+  // un appel qui n'était pas le sien.
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetRequestContext.mockResolvedValue(makeRequestContext());
+  });
+
+  it('applique rememberDevice, marque la session de confiance et sert 365 jours — ensemble', async () => {
+    mockValidateMagicLink.mockResolvedValue(
+      makeValidateResult({ rememberDevice: true, session: makeSession() })
+    );
+    mockMarkSessionTrusted.mockResolvedValue(true);
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/magic-link/validate',
+      // Le corps ne porte PAS `rememberDevice` : le service seul le sait.
+      payload: { token: 'tok-remember' },
+    });
+    const data = res.json().data;
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(mockMarkSessionTrusted).toHaveBeenCalledWith(
+      'session-xyz-789',
+      expect.objectContaining({ userId: 'user-abc-123', source: 'magic_link' })
+    );
+    expect(data.expiresIn).toBe(365 * 24 * 60 * 60);
+    expect(data.session.isTrusted).toBe(true);
+  });
+
+  it('sans rememberDevice : aucune session de confiance, 24 heures', async () => {
+    mockValidateMagicLink.mockResolvedValue(
+      makeValidateResult({ rememberDevice: false, session: makeSession() })
+    );
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/magic-link/validate',
+      payload: { token: 'tok-simple' },
+    });
+    const data = res.json().data;
+    await app.close();
+
+    expect(mockMarkSessionTrusted).not.toHaveBeenCalled();
+    expect(data.expiresIn).toBe(24 * 60 * 60);
+    expect(data.session.isTrusted).toBe(false);
   });
 });

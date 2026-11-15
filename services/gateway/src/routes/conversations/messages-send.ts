@@ -1,0 +1,588 @@
+/**
+ * Surface ENVOI DE MESSAGE (issue #4284 — découpage de `messages.ts`, 2945
+ * lignes, en fichiers frères par responsabilité). Porte `SendMessageBodySchema`
+ * et la route `POST /conversations/:id/messages` (chiffrement, pièces
+ * jointes, transfert, lieu partagé — via `MessagingService`). Voir
+ * `messages.ts` pour le composeur (`registerMessagesRoutes`), qui appelle
+ * `registerSendMessageRoute` et ré-exporte `SendMessageBodySchema`.
+ */
+import { signReaderAttachmentsIn, type SignableAttachment } from '../../services/attachments/signedAttachmentUrls';
+import { withSubmittedClientMessageId } from '../../socketio/utils/message-ack-shaping.js';
+import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
+import { protectionOfFullMessageRow, quotedRowOf, signedQuotedReply } from '../../socketio/readerSignedDelivery';
+import type { QuotedMessageRow } from '../../services/messaging/servedQuotedMessage';
+import { FastifyInstance } from 'fastify';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { MessagingService } from '../../services/messaging/MessagingService';
+import { ErrorCode, ErrorMessages } from '@meeshy/shared/types';
+import { resolveConversationId } from '../../utils/conversation-id-cache';
+import { MESSAGE_LIMITS } from '../../config/message-limits';
+import { MAX_ATTACHMENTS_PER_MESSAGE } from '@meeshy/shared/types/attachment';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { isBlockedBetween } from '../../utils/blocking';
+import { messageValidationHook } from '../../middleware/rate-limiter';
+import type {
+  ConversationParams,
+  SendMessageBody
+} from './types';
+import { sendSuccess, sendError, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
+import { refuserCommeIntrouvable } from './utils/access-control';
+import { z } from 'zod';
+import { CommonSchemas } from '@meeshy/shared/utils/validation';
+import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
+import {
+  ENCRYPTION_ENVELOPE_SHAPE,
+  noSilentDowngrade,
+  NO_SILENT_DOWNGRADE_ISSUE,
+  libsignalSendComplete,
+  LIBSIGNAL_SEND_ISSUE,
+  toEncryptedPayload,
+  toDeviceLayer,
+} from '../../validation/encryption-envelope.js';
+import { MENTIONED_USER_IDS_SHAPE } from '../../validation/mention-list.js';
+import { EPHEMERAL_DURATION_SHAPE } from '../../validation/ephemeral-duration.js';
+import { FORWARDED_ATTACHMENT_IDS_SHAPE } from '../../validation/forwarded-attachments.js';
+import { isForwardRefusalCode } from '@meeshy/shared/types/forward-refusal';
+import { admitAttachmentReply } from '../../services/messaging/attachmentReplySnapshot';
+import { admitMessageAttachments } from '../../services/messaging/attachmentSendAdmission';
+import { GUEST_ATTACHMENT_REFUSAL_CODES } from '@meeshy/shared/types/guest-attachment-kinds';
+import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
+import { E2EE_PLAINTEXT_REFUSED } from '../../services/messaging/e2eePlaintextAdmission';
+import { SERVER_AT_REST_CIPHERTEXT_REFUSED, SERVER_AT_REST_UNAVAILABLE } from '../../services/messaging/serverAtRest';
+import { isClientMessageType } from '../../validation/client-message-type';
+import { relayRefusalStatus } from '../../services/e2ee/e2ee-relay-errors';
+import type { UnifiedAuthRequest } from '../../middleware/auth';
+import { logger } from './messages-shared';
+import { withQuoteServedToReader } from './ephemeralReaderDeadlines';
+
+const e2eeDeviceRefsSchema = {
+  type: 'array',
+  items: { type: 'object', properties: { userId: { type: 'string' }, deviceId: { type: 'integer' } } },
+} as const;
+
+// `content` est optionnel : un message média-seul (image/vidéo/fichier sans
+// légende) ou un forward arrive avec un contenu vide. Le `.refine()` final
+// exige qu'au moins une source de contenu soit présente. Restaure le
+// comportement du commit ee9a29db, perdu lors de la migration Zod (Phase 4).
+export const SendMessageBodySchema = z.object({
+  content: z
+    .string()
+    .max(
+      MESSAGE_LIMITS.MAX_MESSAGE_LENGTH,
+      `Le message ne peut pas dépasser ${MESSAGE_LIMITS.MAX_MESSAGE_LENGTH} caractères`,
+    )
+    .optional(),
+  // Phase 4 §6.2 — `cid_<uuid v4 lowercase>` idempotency key. OPTIONAL:
+  // only clients needing sync/dedup (app, web) send it. Scripts and
+  // integrations may omit it; the message is then simply not deduped
+  // (MessageProcessor persists clientMessageId as null). When provided it
+  // must still be well-formed.
+  clientMessageId: z
+    .string()
+    .regex(CLIENT_MESSAGE_ID_REGEX, 'Invalid clientMessageId format (expected cid_<uuid v4 lowercase>)')
+    .optional(),
+  originalLanguage: CommonSchemas.language.optional(),
+  // #12822 — `system` n'est écrit que par la passerelle.
+  messageType: CommonSchemas.messageType.refine(isClientMessageType, { message: 'messageType "system" is reserved to the gateway' }).optional(),
+  replyToId: z.string().optional(),
+  // #6164 — la PIÈCE NOMMÉE que cette réponse vise. Champ DÉDIÉ, jamais un
+  // `metadata` brut (même doctrine que `location` / `sticker`) : le serveur
+  // seul le range sous `metadata.attachmentReplyTo`, après l'avoir ADMIS.
+  // Seul `attachmentId` voyage — la NATURE est dérivée du MIME relu
+  // (`admitAttachmentReply`), pour qu'un client ne puisse pas forger le seul
+  // fait descriptif qui survive à une protection posée plus tard.
+  attachmentReplyTo: z.object({ attachmentId: z.string().min(1) }).optional(),
+  storyReplyToId: z.string().optional(),
+  forwardedFromId: z.string().optional(),
+  forwardedFromConversationId: z.string().optional(),
+  ...FORWARDED_ATTACHMENT_IDS_SHAPE,
+  // Diffusion à plusieurs destinataires (PAS un transfert) : copie SERVEUR
+  // des pièces jointes du message désigné vers celui-ci, mêmes fichiers,
+  // sans `forwardedFromId` ni marque de transfert sur les copies. Voir
+  // `services/messaging/copyAttachments.ts`.
+  copyAttachmentsFromMessageId: z.string().optional(),
+  // Enveloppe de chiffrement — déclarée dans `validation/encryption-envelope.ts`.
+  // Elle vivait ICI, et ici seulement : le transport SOCKET, pourtant le chemin
+  // d'envoi PRIMAIRE, n'en portait aucun champ et perdait donc tout chiffré.
+  // Les deux transports lisent désormais la même déclaration.
+  ...ENCRYPTION_ENVELOPE_SHAPE,
+  // Même plafond que le schéma socket et que `MessageValidator` — ce tableau
+  // n'était borné nulle part sur le chemin REST.
+  attachmentIds: z.array(z.string()).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
+  isBlurred: z.boolean().optional(),
+  expiresAt: z.string().optional(),
+  ...EPHEMERAL_DURATION_SHAPE,
+  effectFlags: z.number().int().optional(),
+  isViewOnce: z.boolean().optional(),
+  maxViewOnceCount: z.number().int().optional(),
+  // Liste explicite de mentionnés — déclarée dans `validation/mention-list.ts`,
+  // la MÊME que celle des deux schémas socket. Elle vivait ici seule ; le
+  // transport SOCKET, qui porte le trafic, la strippait.
+  ...MENTIONED_USER_IDS_SHAPE,
+  // Lieu partagé — champ dédié, JAMAIS un `metadata` brut (cf.
+  // services/location/sharedPlace.ts). Validation stricte déléguée à
+  // `parseSharedPlace`, appelé côté `MessageProcessor.saveMessage`.
+  location: z.unknown().optional(),
+  // Sticker (#4823) — même doctrine que `location` : champ dédié, jamais un
+  // `metadata` brut. Validation stricte déléguée à `parseMessageSticker`,
+  // appelé côté `MessageProcessor.saveMessage`. Un sticker seul rend aussi
+  // le corps non vide : la décoration EST le contenu du message.
+  sticker: z.unknown().optional(),
+}).refine(
+  (data) =>
+    (data.content?.trim().length ?? 0) > 0 ||
+    (data.attachmentIds?.length ?? 0) > 0 ||
+    Boolean(data.forwardedFromId) ||
+    Boolean(data.copyAttachmentsFromMessageId) ||
+    Boolean(data.encryptedContent) ||
+    Boolean(data.location) ||
+    Boolean(data.sticker),
+  { message: 'Le message ne peut pas être vide', path: ['content'] },
+).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE).refine(libsignalSendComplete, LIBSIGNAL_SEND_ISSUE);
+
+/**
+ * Enregistre la route d'envoi de message.
+ */
+export function registerSendMessageRoute(
+  fastify: FastifyInstance,
+  prisma: PrismaClient,
+  optionalAuth: any,
+  getMessagingService: () => MessagingService,
+  socketIOHandler: any
+) {
+  fastify.post<{
+    Params: ConversationParams;
+    Body: SendMessageBody;
+  }>('/conversations/:id/messages', {
+    schema: {
+      description: 'Send a new message to a conversation with optional encryption and attachments. Unified handler using MessagingService.',
+      tags: ['conversations', 'messages'],
+      summary: 'Send message',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      body: {
+        type: 'object',
+        properties: {
+          content: { type: 'string', description: 'Message content' },
+          clientMessageId: {
+            type: 'string',
+            description: 'Optional Phase 4 idempotency key, format cid_<uuid v4 lowercase>. Only clients needing dedup/sync send it.',
+            pattern: '^cid_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+          },
+          originalLanguage: { type: 'string', description: 'Language code (e.g., fr, en)', default: 'fr' },
+          messageType: { type: 'string', enum: ['text', 'image', 'file', 'audio', 'video'], default: 'text' },
+          replyToId: { type: 'string', description: 'ID of message being replied to' },
+          attachmentReplyTo: {
+            type: 'object',
+            properties: { attachmentId: { type: 'string' } },
+            description: 'Pièce jointe NOMMÉE du message cité (#6164). REFUSÉ si elle n’appartient pas à replyToId, ou si replyToId ne désigne pas un message vivant de cette conversation (#6601).',
+          },
+          storyReplyToId: { type: 'string', description: 'ID of story being replied to' },
+          forwardedFromId: { type: 'string', description: 'ID of original forwarded message' },
+          forwardedFromConversationId: { type: 'string', description: 'ID of source conversation for cross-conversation forwarding' },
+          forwardedAttachmentIds: {
+            type: 'array',
+            items: { type: 'string' },
+            minItems: 1,
+            maxItems: MAX_ATTACHMENTS_PER_MESSAGE,
+            description: 'Pièces de forwardedFromId à recopier, dans l’ordre (#9914). Absent : tout le lot. Une pièce étrangère au message source est REFUSÉE (code forwarded-attachment-not-in-source).'
+          },
+          encryptedContent: {
+            type: 'string',
+            description: 'Ciphertext. Its presence is what makes the message encrypted — a body carrying only this field is a valid message.'
+          },
+          encryptionMode: {
+            type: 'string',
+            enum: ['e2ee', 'server', 'hybrid'],
+            description: 'Encryption mode. Case-insensitive on input, normalised lowercase. Defaults to e2ee when encryptedContent is present.'
+          },
+          encryptionMetadata: { type: 'object', description: 'Encryption metadata' },
+          encryptionProtocol: { type: 'string', enum: ['libsignal-v1'], description: 'libsignal-v1 (#3706) : envelopes requises, encryptionMetadata.senderDeviceId requis' },
+          envelopes: { type: 'array', maxItems: 32, items: { type: 'object', additionalProperties: true }, description: 'Une enveloppe libsignal opaque par appareil destinataire { userId, deviceId, registrationId, type, body }' },
+          unapprovedOwnDevices: { type: 'array', items: { type: 'integer' }, description: 'Mes appareils non approuvés, exclus de l’envoi (spec § 3.5)' },
+          isEncrypted: {
+            type: 'boolean',
+            description: 'Optional echo of the encryption fact. When true, encryptedContent is REQUIRED — the server never downgrades a message declared encrypted to plaintext.'
+          },
+          attachmentIds: { type: 'array', items: { type: 'string' }, maxItems: MAX_ATTACHMENTS_PER_MESSAGE, description: 'IDs des attachments pré-uploadés' },
+          isBlurred: { type: 'boolean' },
+          expiresAt: { type: 'string', format: 'date-time' },
+          ephemeralDuration: { type: 'integer', minimum: 1, description: 'Durée d\'un message éphémère, en secondes. Le décompte part de la RÉCEPTION de chaque destinataire (#7451).' },
+          effectFlags: { type: 'integer', description: 'Bitfield for message effects' },
+          mentionedUserIds: { type: 'array', items: { type: 'string' } },
+          location: {
+            type: 'object',
+            additionalProperties: true,
+            description: 'Lieu partagé (latitude, longitude, name?, address?, category?) — validé serveur',
+          },
+          sticker: {
+            type: 'object',
+            additionalProperties: true,
+            description: 'Sticker (templateId?, slots?, animation?, emoji?, stickerId?) — validé serveur (parseMessageSticker), servi hissé depuis metadata.sticker',
+          }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: { type: 'object', additionalProperties: true },
+            message: { type: 'string' },
+            metadata: { type: 'object', additionalProperties: true }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        409: {
+          description: 'Envoi libsignal refusé (#3706) : E2EE_DEVICES_MISMATCH (Sesame) ou E2EE_REGIME_CHANGED',
+          ...errorResponseSchema,
+          properties: {
+            ...errorResponseSchema.properties,
+            missing: e2eeDeviceRefsSchema,
+            extra: e2eeDeviceRefsSchema,
+            stale: e2eeDeviceRefsSchema,
+          }
+        },
+        429: {
+          description: 'Meeshy Global — un compte de moins de 24 h écrit un message toutes les 30 s (#7740)',
+          ...errorResponseSchema,
+          properties: {
+            ...errorResponseSchema.properties,
+            retryAfter: { type: 'number' },
+          }
+        },
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [optionalAuth],
+    preHandler: [messageValidationHook]
+  }, async (request, reply) => {
+    try {
+      const authRequest = request as UnifiedAuthRequest;
+
+      // Vérifier que l'utilisateur est authentifié
+      if (!authRequest.authContext.isAuthenticated) {
+        return sendUnauthorized(reply, 'Authentification requise pour envoyer des messages');
+      }
+
+      const bodyResult = SendMessageBodySchema.safeParse(request.body);
+      if (!bodyResult.success) {
+        return sendBadRequest(reply, 'Validation error', { message: bodyResult.error.message });
+      }
+
+      const { id } = request.params;
+      const {
+        content,
+        clientMessageId,
+        originalLanguage,
+        messageType = 'text',
+        replyToId,
+        attachmentReplyTo,
+        storyReplyToId,
+        forwardedFromId,
+        forwardedFromConversationId,
+        forwardedAttachmentIds,
+        copyAttachmentsFromMessageId,
+        attachmentIds,
+        isBlurred,
+        expiresAt,
+        ephemeralDuration,
+        isViewOnce,
+        maxViewOnceCount,
+        mentionedUserIds,
+        location,
+        sticker
+      } = bodyResult.data as SendMessageBody;
+
+      // Resolve identifier (e.g. "meeshy") → ObjectId, same as GET route
+      const conversationId = await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return refuserCommeIntrouvable(reply);
+      }
+
+      // Compute effectFlags from legacy fields if not provided
+      const { MESSAGE_EFFECT_FLAGS } = await import('@meeshy/shared/types/message-effect-flags');
+      let effectFlags = (bodyResult.data as any).effectFlags ?? 0;
+      if (isBlurred && !(effectFlags & MESSAGE_EFFECT_FLAGS.BLURRED)) effectFlags |= MESSAGE_EFFECT_FLAGS.BLURRED;
+      if ((expiresAt || ephemeralDuration) && !(effectFlags & MESSAGE_EFFECT_FLAGS.EPHEMERAL)) effectFlags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
+      if (isViewOnce && !(effectFlags & MESSAGE_EFFECT_FLAGS.VIEW_ONCE)) effectFlags |= MESSAGE_EFFECT_FLAGS.VIEW_ONCE;
+      if (effectFlags & MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ) effectFlags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
+
+      const userId = authRequest.authContext.userId;
+      let participantId: string;
+      if (authRequest.authContext.isAnonymous) {
+        participantId = authRequest.authContext.participantId!;
+      } else {
+        const participant = await prisma.participant.findFirst({
+          where: { userId, conversationId, isActive: true },
+          select: { id: true }
+        });
+        if (!participant) {
+          return sendForbidden(reply, 'You are not a participant of this conversation');
+        }
+        participantId = participant.id;
+      }
+
+      if (!participantId) {
+        return sendForbidden(reply, 'Participant identification failed');
+      }
+
+      // Block enforcement applies to DIRECT conversations only. Bidirectional:
+      // reject if the sender blocked the other party OR the other party blocked
+      // the sender. Anonymous senders (no userId) are not block-enforced.
+      if (!authRequest.authContext.isAnonymous && userId) {
+        const conversation = await prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: {
+            type: true,
+            participants: {
+              where: { isActive: true },
+              select: { userId: true }
+            }
+          }
+        });
+        if (conversation && (conversation.type === 'direct' || conversation.type === 'dm')) {
+          const otherMemberIds = conversation.participants
+            .map(p => p.userId)
+            .filter((memberId): memberId is string => memberId !== null && memberId !== userId);
+          for (const otherId of otherMemberIds) {
+            if (await isBlockedBetween(prisma, userId, otherId)) {
+              return sendForbidden(reply, ErrorMessages[ErrorCode.USER_BLOCKED].en, {
+                code: ErrorCode.USER_BLOCKED
+              });
+            }
+          }
+        }
+      }
+
+      // #6870 — une pièce inconnue, déjà volée, ou pas encore visible par ce
+      // chemin (jamais confirmée : `associateAttachmentsToMessage` est un
+      // `updateMany` muet en aval) ne doit ni se perdre en silence ni faire
+      // échouer l'envoi sans nom. Même vérification que le transport WS
+      // (`MessageHandler.handleMessageSendWithAttachments`), AVANT que le
+      // message n'existe.
+      if (attachmentIds && attachmentIds.length > 0) {
+        const attachmentAdmission = await admitMessageAttachments(prisma, {
+          attachmentIds,
+          ownerId: userId ?? participantId,
+          conversationId,
+          clientMessageId,
+        });
+        if (!attachmentAdmission.ok) {
+          return sendNotFound(reply, 'Attachment not found', {
+            code: 'ATTACHMENT_NOT_FOUND',
+            message: `Attachment ${attachmentAdmission.invalidAttachmentId} not found`
+          });
+        }
+      }
+
+      const corr: Record<string, any> = {
+        clientMessageId,
+        conversationId,
+        participantId,
+        route: 'POST /conversations/:id/messages'
+      };
+      const routeStart = Date.now();
+      logger.info('perf:http.message.post', {
+        ...corr, step: 'http.message.post', phase: 'start'
+      });
+
+      // MessagingService unifié — instance partagée construite une seule fois
+      const messagingService = getMessagingService();
+
+      // #6164 / #6601 — CITER UN MESSAGE, ET SA PIÈCE NOMMÉE. `replyToId` est
+      // refusé s'il ne désigne pas un message vivant de CETTE conversation ;
+      // une pièce citée en plus est refusée si elle n'appartient pas à ce
+      // message. Les deux bornes vivent au site unique `admitAttachmentReply` —
+      // tout transport qui porte ces champs passe par elle, jamais par une
+      // transcription locale.
+      const citation = await admitAttachmentReply(prisma, { conversationId, replyToId, attachmentReplyTo });
+      if (!citation.ok) {
+        return sendBadRequest(reply, citation.reason ?? 'Pièce jointe citée invalide');
+      }
+
+      const messageRequest = {
+        conversationId,
+        content: content || '',
+        clientMessageId,
+        originalLanguage,
+        messageType,
+        replyToId,
+        // #4859 — accepté par le schéma (ligne 61/144) et destructuré du corps
+        // depuis toujours, mais jamais transmis ici : le chemin WS
+        // (`MessageHandler.ts:390,622`) et `MessageProcessor` (qui capture le
+        // `postReplyTo` et écrit la colonne) le portent tous les deux — seul
+        // ce transport REST le laissait tomber, silencieusement, malgré la
+        // validation qui l'accepte.
+        storyReplyToId,
+        forwardedFromId,
+        forwardedFromConversationId,
+        forwardedAttachmentIds,
+        copyAttachmentsFromMessageId,
+        mentionedUserIds,
+        attachmentIds,
+        isBlurred,
+        expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+        // #7451 — la DURÉE, pas l'échéance. `MessageProcessor.saveMessage` la
+        // normalise, et la DÉRIVE d'`expiresAt` pour un client déjà distribué :
+        // c'est le point où les trois transports se rejoignent.
+        ephemeralDuration,
+        effectFlags,
+        isViewOnce,
+        maxViewOnceCount,
+        // Lieu partagé et sticker — champs dédiés transmis tels quels ; validés
+        // et écrits dans `metadata.location` / `metadata.sticker` par
+        // `MessageProcessor.saveMessage`.
+        location,
+        sticker,
+        // L'instantané ADMIS, jamais ce que le client a envoyé : `kind` est
+        // celui du MIME relu en base. `MessageProcessor.saveMessage` le range
+        // sous `metadata.attachmentReplyTo` par le site unique de composition
+        // (`clientDeclaredMetadata`).
+        attachmentReplyTo: citation.snapshot ?? undefined,
+        // Le FAIT du chiffrement, c'est la présence du chiffré — pas un booléen
+        // posé à côté. Gater sur `isEncrypted` perdait dans les DEUX sens : un
+        // chiffré sans le drapeau était jeté (alors que le `.refine()` ci-dessus
+        // le compte comme porteur de contenu), et le drapeau sans le chiffré
+        // faisait mentir le `!` puis écrivait le message EN CLAIR. Le schéma
+        // refuse désormais le second cas ; ici on sert le premier.
+        encryptedPayload: toEncryptedPayload(bodyResult.data, { sessionId: authRequest.authContext.sessionId ?? null }),
+        // #14369 — la couche appareil d'un envoi hybride, à côté du clair.
+        deviceLayer: toDeviceLayer(bodyResult.data, { sessionId: authRequest.authContext.sessionId ?? null }),
+        metadata: {
+          source: 'rest' as const,
+          requestId: request.id
+        }
+      };
+
+      const result = await messagingService.handleMessage(messageRequest, participantId);
+
+      if (!result.success) {
+        logger.info('perf:http.message.post', {
+          ...corr, step: 'http.message.post', phase: 'end',
+          durationMs: Date.now() - routeStart, success: false,
+          error: result.error
+        });
+        // #4855 / #5151 — un droit PARTICIPANT refusé (host ayant retiré
+        // `canSendMessages`, ou `canSendFiles`/`canSendImages`/`canSendVideos`/
+        // `canSendAudios` pour le type de pièce jointe posté) est un 403,
+        // jamais une erreur de VALIDATION de la requête — même statut que le
+        // jumeau anonyme, `routes/links/messages.ts`.
+        if (result.code === ErrorCode.NEWCOMER_SLOW_MODE) {
+          const retryAfter = result.retryAfter ?? 1;
+          reply.header('retry-after', String(retryAfter));
+          return sendError(reply, 429, result.error || ErrorMessages[ErrorCode.NEWCOMER_SLOW_MODE].fr, {
+            code: ErrorCode.NEWCOMER_SLOW_MODE,
+            details: { retryAfter }
+          });
+        }
+        // #9927 — un mineur déclaré dans Meeshy Global : définitif, donc 403,
+        // avec le code que les clients récents lisent.
+        if (result.code === GLOBAL_ADULTS_ONLY_CODE) {
+          return sendForbidden(reply, result.error || MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
+        }
+        // #10001 — la famille d'une pièce fermée aux invités de ce lien : 403,
+        // avec le code stable que les clients localisent.
+        if (result.code === GUEST_ATTACHMENT_REFUSAL_CODES.KIND_NOT_ALLOWED) {
+          return sendForbidden(reply, result.error, { code: result.code });
+        }
+        if (result.code === 'WRITE_NOT_PERMITTED' || result.code === 'ATTACHMENT_RIGHT_NOT_PERMITTED') {
+          // #16053 — le motif STABLE voyage : un client l'explique au lieu de rejouer l'envoi.
+          return sendForbidden(reply, result.error || 'Vous n\'êtes pas autorisé à envoyer des messages', { code: result.code });
+        }
+        // #9598 — un transfert refusé porte son motif STABLE ; `error` reste
+        // la phrase que les anciens clients affichent.
+        // #11216 — un clair refusé dans une conversation e2ee : 400 et son code stable.
+        // #3706 — un refus du relais libsignal : 409 Sesame (avec l'écart), 403, ou 400 lisible.
+        const relayStatus = relayRefusalStatus(result.code);
+        if (relayStatus) {
+          return sendError(reply, relayStatus, result.error || 'Envoi chiffré refusé', {
+            code: result.code,
+            ...(result.e2eeMismatch ? { details: { ...result.e2eeMismatch } } : {}),
+          });
+        }
+        if (result.code === SERVER_AT_REST_UNAVAILABLE) {
+          return sendError(reply, 503, result.error || 'Chiffrement sur le serveur indisponible', { code: result.code });
+        }
+        if (isForwardRefusalCode(result.code) || result.code === E2EE_PLAINTEXT_REFUSED || result.code === SERVER_AT_REST_CIPHERTEXT_REFUSED) {
+          return sendBadRequest(reply, result.error || 'Invalid message request', { code: result.code });
+        }
+        return sendBadRequest(reply, result.error || 'Invalid message request');
+      }
+
+      // Broadcaster via socket (async) — SAUF sur un dedup idempotent.
+      // Quand le même clientMessageId est renvoyé (ex: à la reconnexion, où
+      // l'outbox SQLite ET le retry en mémoire drainent le même message), le
+      // message existe déjà et a déjà été broadcasté au premier envoi. Re-broadcaster
+      // `message:new` est ce qui dupliquait la bulle chez l'expéditeur (course
+      // echo/reconcile) ET le récepteur. Le flag est posé in-process par
+      // MessageProcessor.saveMessage (cf. §6.2 idempotence).
+      if (socketIOHandler && result.data && !(result.data as { isDuplicate?: boolean }).isDuplicate) {
+        const broadcastConvId = result.data.conversationId || conversationId;
+        setImmediate(() => {
+          socketIOHandler.broadcastMessage(result.data as any, broadcastConvId).catch((err: any) => {
+            logger.error('⚠️ [REST] Socket broadcast failed', err);
+          });
+        });
+      }
+
+      logger.info('perf:http.message.post', {
+        ...corr, step: 'http.message.post', phase: 'end',
+        durationMs: Date.now() - routeStart, success: true,
+        messageId: result.data?.id
+      });
+
+      // #8562 — la citation, telle que CET expéditeur a le droit de la lire.
+      // #13100 — et ses pièces protégées ou scellées au repos, sous SES adresses signées.
+      const rawQuote = result.data ? quotedRowOf(result.data) : null;
+      const served = await withQuoteServedToReader(prisma, result.data, result.data?.senderId ?? undefined);
+      // #17058 — SECOND transport du même défaut, que l'issue ne nommait pas.
+      // La réponse rend la LIGNE, donc son `clientMessageId` : sur un hit de
+      // déduplication par contenu la ligne est celle du PREMIER message, et la
+      // réponse à `cid_B` repartait sous `cid_A`. Le web fusionne « par id OU
+      // clientMessageId », si bien que la seconde bulle était absorbée par la
+      // ligne du premier message et disparaissait. Une réponse d'envoi ne nomme
+      // que le message qu'on lui a soumis.
+      return sendSuccess(reply, served ? withSubmittedClientMessageId(withAttachmentsSignedForSender(served, rawQuote), clientMessageId) : served);
+
+    } catch (error) {
+      logger.error('Error in REST send message:', error);
+      return sendInternalError(reply, 'Erreur interne lors de l\'envoi du message');
+    }
+  });
+}
+
+/**
+ * #13100 — la réponse d'envoi rend à l'expéditeur ses pièces sous l'adresse
+ * que la route signée lui servira : une pièce scellée au repos (ou protégée)
+ * n'a pas d'adresse nue lisible — celles de sa CITATION comprises (#18470), dont
+ * la protection se lit sur la ligne citée BRUTE (`quoted`, relue avant que la
+ * citation soit servie à l'expéditeur). Les autres pièces passent telles quelles.
+ */
+function withAttachmentsSignedForSender<M extends { readonly senderId?: string | null; readonly attachments?: unknown; readonly replyTo?: unknown }>(
+  message: M,
+  quoted: QuotedMessageRow | null
+): M {
+  if (!message.senderId) return message;
+  const signer = readerFileUrlSignerFromEnv(new Date());
+  const reply = message.replyTo;
+  const withQuote = quoted && typeof reply === 'object' && reply !== null
+    ? { ...message, replyTo: signedQuotedReply(reply, { quoted, participantId: message.senderId, signer }) }
+    : message;
+  if (!Array.isArray(message.attachments)) return withQuote;
+  const attachments = signReaderAttachmentsIn(message.attachments as SignableAttachment[], {
+    message: protectionOfFullMessageRow(message),
+    readerParticipantId: message.senderId,
+    signer,
+  });
+  return { ...withQuote, attachments };
+}
+

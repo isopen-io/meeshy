@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notification_banner_someone">شخص ما</string>
+    <string name="notification_game_league_result_title">دوريّك الأسبوعي</string>
+    <string name="notification_game_season_step_title">موسمك</string>
+    <string name="notification_game_mission_window_title">مهمّتك الحالية</string>
+    <string name="notification_detail_shared_location">موقع مشترك</string>
+    <string name="notification_detail_invitation">دعوة</string>
+</resources>

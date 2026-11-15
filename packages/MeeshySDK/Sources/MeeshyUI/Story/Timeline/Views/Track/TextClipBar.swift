@@ -70,6 +70,16 @@ public struct TextClipBar: View, Equatable {
                Self.previewSnippet(content, maxLength: 40))
     }
 
+    var accessibilityModel: ClipBarAccessibility {
+        ClipBarAccessibility(geometry: geometry, isLocked: isLocked, muteLabels: nil, isMuted: false)
+    }
+
+    var accessibilityCallbacks: ClipBarCallbacks {
+        ClipBarCallbacks(onTap: onTap, onDoubleTap: onDoubleTap, onMoveDelta: onMoveDelta,
+                         onMoveEnded: onMoveEnded, onTrimStartDelta: onTrimStartDelta,
+                         onTrimEndDelta: onTrimEndDelta, onToggleMute: nil)
+    }
+
     public var body: some View {
         ZStack(alignment: .leading) {
             Rectangle().fill(MeeshyColors.error.opacity(isDark ? 0.32 : 0.22))
@@ -84,15 +94,16 @@ public struct TextClipBar: View, Equatable {
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 6)
+            .padding(.horizontal, MeeshySpacing.xsPlus)
             if isSelected {
-                RoundedRectangle(cornerRadius: 6).stroke(MeeshyColors.indigo400, lineWidth: 2)
+                RoundedRectangle(cornerRadius: 6).stroke(MeeshyColors.indigo400, lineWidth: MeeshyBorder.strong)
                     .allowsHitTesting(false)
             }
             if ClipTrimHandles.shouldShow(isSelected: isSelected, isLocked: isLocked) {
                 ClipTrimHandles(laneHeight: laneHeight,
                                 onTrimStartDelta: onTrimStartDelta,
-                                onTrimEndDelta: onTrimEndDelta)
+                                onTrimEndDelta: onTrimEndDelta,
+                                adjustStepPoints: accessibilityModel.stepPoints)
             }
         }
         .frame(width: geometry.width(for: duration), height: laneHeight - 4)
@@ -115,5 +126,6 @@ public struct TextClipBar: View, Equatable {
             format: String(localized: "story.timeline.a11y.clip.displayedRange", bundle: .module),
             startTime, startTime + duration
         ))
+        .clipBarAccessibility(accessibilityModel, callbacks: accessibilityCallbacks)
     }
 }

@@ -20,8 +20,17 @@ final class TextEditToolbarLayoutTests: XCTestCase {
                        "aucun doublon dans la rangée")
     }
 
-    func test_theRowCarriesSevenTools() {
-        XCTAssertEqual(TextEditTool.all.count, 7)
+    /// Huit depuis #4870 : l'EFFET — lueur, ombre, relief — a sa bulle, à
+    /// côté de la police dont il est l'axe orthogonal.
+    func test_theRowCarriesEightTools() {
+        XCTAssertEqual(TextEditTool.all.count, 8)
+    }
+
+    /// L'EFFET vient JUSTE APRÈS la police : c'est la question que l'auteur se
+    /// posait devant la grille des dix-huit avant que POLICE ne soit nommée
+    /// pour ce qu'elle est (#4850), et elle se pose dans cet ordre.
+    func test_effectSitsRightAfterStyle() {
+        XCTAssertEqual(Array(TextEditTool.all.prefix(2)), [.style, .effect])
     }
 
     /// Taille et graisse sont des valeurs continues : elles vivent en curseurs
@@ -40,7 +49,7 @@ final class TextEditToolbarLayoutTests: XCTestCase {
             TextEditToolbarMetrics.fits(
                 bubbleCount: TextEditTool.all.count,
                 in: TextEditToolbarMetrics.narrowestUsableWidth),
-            "les sept bulles doivent tenir sur un iPhone SE")
+            "les huit bulles doivent tenir sur un iPhone SE")
     }
 
     /// La rangée haute ne porte plus que « Terminé » : elle tient par
@@ -61,7 +70,7 @@ final class TextEditToolbarLayoutTests: XCTestCase {
             TextEditToolbarMetrics.fits(
                 bubbleCount: TextEditTool.all.count + 1,
                 in: TextEditToolbarMetrics.narrowestUsableWidth),
-            "huit bulles ne tiennent plus sur un iPhone SE")
+            "neuf bulles ne tiennent plus sur un iPhone SE")
     }
 
     func test_requiredWidth_countsBubblesAndTheGapsBetweenThem() {

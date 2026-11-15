@@ -8,8 +8,8 @@ import { z } from 'zod'
 
 /**
  * export type ConversationReadingMode =
- *   | 'focal'    // rangée plate + perspective — défaut sous drapeau
- *   | 'script'   // même rangée plate, densité uniforme, aucune perspective
+ *   | 'focal'    // rangée plate + perspective + bloc de verre de l'élue
+ *   | 'script'   // même rangée plate, aucune perspective — défaut sous drapeau (#8147)
  *   | 'summary'  // Résumé Vivant — l'état d'abord, la preuve à un tap
  *   | 'river'    // en sursis : présent au catalogue, jamais sélectionnable
  *   | 'bubbles'; // rendu bulle historique — uniquement drapeau éteint

@@ -1,14 +1,22 @@
+import { unsetOrNull } from '../../utils/prisma-unset';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { Prisma } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
+import { sendSuccess, sendInternalError, sendNotFound, sendBadRequest } from '../../utils/response';
 import { BroadcastTranslationService } from '../../services/admin/broadcast-translation.service';
+import { broadcastTargetLanguages } from '../../jobs/broadcast-recipients';
 import { BroadcastSenderJob } from '../../jobs/broadcast-sender';
 import { BroadcastInAppSenderJob } from '../../jobs/broadcast-inapp-sender';
 import { EmailService } from '../../services/EmailService';
+import { activityWindow, buildBroadcastRecipientFilter, emailChannelRecipientConstraint, resolveSystemLanguageVariants, type BroadcastTargeting } from '../../jobs/broadcast-recipients';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery, validateBody, validateParams } from '../../validation/helpers.js';
 import { BroadcastsListQuerySchema, CreateBroadcastBodySchema, UpdateBroadcastBodySchema, BroadcastIdParamSchema } from '../../validation/admin-schemas.js';
+import { requirePermission } from '../../middleware/authorize';
+import { loadAdminPeople } from './oversight-people';
 
 const logger = enhancedLogger.child({ module: 'BroadcastRoutes' });
 
@@ -16,20 +24,88 @@ const logger = enhancedLogger.child({ module: 'BroadcastRoutes' });
 // Auth middleware - BIGBOSS & ADMIN only
 // ---------------------------------------------------------------------------
 
-const requireBroadcastPermission = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return sendUnauthorized(reply, 'Authentification requise');
-  }
-  const userRole = authContext.registeredUser.role;
-  if (!['BIGBOSS', 'ADMIN'].includes(userRole)) {
-    return sendForbidden(reply, 'Permission insuffisante');
-  }
+// `requireBroadcastPermission` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+const requireBroadcastPermission = requirePermission('canManageNotifications');
+
+/**
+ * Projection de la LISTE `GET /admin/broadcasts` (#4166, critère 1 —
+ * famille « include sans select à la racine »).
+ *
+ * L'ancien `findMany` ne portait ni `select` ni `include` du tout : la ligne
+ * `AdminBroadcast` ENTIÈRE partait pour chaque élément de page, sans schéma
+ * de réponse pour la retenir (cette route ne déclare aucun `schema:`) — «
+ * chaque ligne de liste transporte `translatedBodies` / `translatedSubjects`,
+ * c'est-à-dire N copies du corps complet de l'e-mail » (texte de l'issue).
+ *
+ * Ces huit champs sont exactement ceux que la LISTE de
+ * `apps/web/app/admin/broadcasts/page.tsx` lit (vérifié : `broadcast.id`,
+ * `.name`, `.subject`, `.status`, `.totalRecipients`, `.sentCount`,
+ * `.failedCount`, `.createdAt` — jamais `.body`, `.targeting`,
+ * `.translatedSubjects`/`.translatedBodies`, ni aucun champ du canal
+ * in-app). Aucun autre client (iOS, Android) n'appelle cette route admin
+ * (vérifié : aucune référence à `admin/broadcasts` hors web). La fiche de
+ * détail (`GET /admin/broadcasts/:id`, hors périmètre de cette famille) sert
+ * elle la ligne ENTIÈRE, sans changement — c'est là que
+ * `translatedSubjects`/`translatedBodies` sont affichés.
+ */
+const adminBroadcastListSelect = {
+  id: true,
+  name: true,
+  subject: true,
+  status: true,
+  totalRecipients: true,
+  sentCount: true,
+  failedCount: true,
+  createdAt: true,
+  // #8876 — ce que la console lit pour SUIVRE une diffusion sans ouvrir sa fiche :
+  // quand elle est partie et finie, dans quelle langue et vers lesquelles, et où
+  // en est le canal in-app. Toujours pas le corps, ni le ciblage, ni les traductions.
+  sentAt: true,
+  completedAt: true,
+  sourceLanguage: true,
+  targetLanguages: true,
+  inAppSentCount: true,
+  inAppSentAt: true,
 };
 
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
+
+/**
+ * La ligne de journal d'un geste sur une diffusion — même forme que la
+ * création et la suppression (`entity: 'Broadcast'`, nom en `metadata` pour le
+ * libellé de repli du journal). Best-effort : le geste a déjà eu lieu.
+ */
+async function tracerDiffusion(
+  request: FastifyRequest,
+  action: string,
+  broadcastId: string,
+  metadata: Record<string, unknown>,
+  changes?: Record<string, unknown>,
+): Promise<void> {
+  const adminId = (request as UnifiedAuthRequest).authContext?.registeredUser?.id;
+  if (!adminId) return;
+  try {
+    await request.server.prisma.adminAuditLog.create({
+      data: {
+        adminId,
+        userId: adminId,
+        action,
+        entity: 'Broadcast',
+        entityId: broadcastId,
+        ...(changes && Object.keys(changes).length > 0 ? { changes: JSON.stringify(changes) } : {}),
+        metadata: JSON.stringify(metadata),
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+      },
+    });
+  } catch {
+    logger.warn(`Audit write failed for ${action} ${broadcastId}`);
+  }
+}
 
 export async function broadcastRoutes(fastify: FastifyInstance) {
 
@@ -42,24 +118,32 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
     preHandler: [validateQuery(BroadcastsListQuerySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      /* istanbul ignore next -- Zod BroadcastsListQuerySchema always provides offset and limit */
-      const { offset = '0', limit = '20', status } = request.query as {
+      /* istanbul ignore next -- `BroadcastsListQuerySchema` pose `offset: paginationOffset()` et `limit: paginationLimit(20)`, tous deux `.prefault(…)` (`validation/admin-schemas.ts`), et `createValidator` RÉÉCRIT `request.query` avec le résultat validé (`validation/helpers.ts`, `request[source] = validated;`) : les valeurs par défaut du destructuring ne peuvent plus servir. Vérifié le 2026-09-24. */
+      const { offset = '0', limit = '20', status, search } = request.query as {
         offset?: string;
         limit?: string;
         status?: string;
+        search?: string;
       };
 
       const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
-      const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || /* istanbul ignore next -- Zod always provides a valid limit */ 20), 100);
+      const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || /* istanbul ignore next -- `paginationLimit(20)` rend un entier borné à [1, 100] (`.pipe(z.number().int().min(1).max(100))`) : `parseInt` ne peut pas rendre 0 ni NaN ici, donc ce `|| 20` ne s'exécute jamais. Vérifié le 2026-09-24. */ 20), 100);
 
-      const where: any = {};
+      const where: Prisma.AdminBroadcastWhereInput = {};
       if (status) {
         where.status = status;
+      }
+      if (search) {
+        where.OR = [
+          { name: { contains: search, mode: 'insensitive' } },
+          { subject: { contains: search, mode: 'insensitive' } },
+        ];
       }
 
       const [broadcasts, total] = await Promise.all([
         fastify.prisma.adminBroadcast.findMany({
           where,
+          select: adminBroadcastListSelect,
           orderBy: { createdAt: 'desc' },
           skip: offsetNum,
           take: limitNum,
@@ -73,10 +157,12 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
           total,
           offset: offsetNum,
           limit: limitNum,
-          hasMore: offsetNum + limitNum < total,
+          // #8876 — la page RENDUE, pas la page DEMANDÉE : `offset + limit` annonçait
+          // une page de plus à la dernière page incomplète.
+          hasMore: offsetNum + broadcasts.length < total,
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error listing broadcasts');
       return sendInternalError(reply, 'Erreur lors de la recuperation des broadcasts');
     }
@@ -99,10 +185,16 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         subject: string;
         body: string;
         sourceLanguage: string;
-        targeting?: any;
+        targeting?: BroadcastTargeting;
       };
 
-      /* istanbul ignore next -- Zod CreateBroadcastBodySchema enforces all required fields; guard unreachable */
+      // Ce garde est ATTEIGNABLE, contrairement à ce qu'affirmait l'annotation
+      // `istanbul ignore next` qui le couvrait (#7773) : `CreateBroadcastBodySchema`
+      // déclare `name: z.string()` SANS `.min(1)` (`validation/admin-schemas.ts`),
+      // et Zod impose la PRÉSENCE du champ, jamais sa NON-VACUITÉ — `""` est un
+      // `string` valide. Ce garde est donc le seul rempart contre un broadcast au
+      // nom vide, et un témoin le prouve désormais
+      // (`__tests__/unit/routes/admin/admin-broadcasts-empty-field-guard.test.ts`).
       if (!name || !subject || !body || !sourceLanguage) {
         return sendBadRequest(reply, 'Les champs name, subject, body et sourceLanguage sont requis');
       }
@@ -134,7 +226,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       });
 
       return sendSuccess(reply, broadcast, { statusCode: 201 });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error creating broadcast');
       return sendInternalError(reply, 'Erreur lors de la creation du broadcast');
     }
@@ -159,8 +251,21 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         return sendNotFound(reply, 'Broadcast non trouve');
       }
 
-      return sendSuccess(reply, broadcast);
-    } catch (error: any) {
+      // #8876 — QUI l'a créée, envoyée et publiée dans l'application : des
+      // personnes nommées, une seule lecture de comptes. Les `*ById` restent servis.
+      const people = await loadAdminPeople(fastify.prisma, [
+        broadcast.createdById,
+        broadcast.sentById,
+        broadcast.inAppSentById,
+      ]);
+
+      return sendSuccess(reply, {
+        ...broadcast,
+        createdBy: people.get(broadcast.createdById) ?? null,
+        sentBy: broadcast.sentById ? (people.get(broadcast.sentById) ?? null) : null,
+        inAppSentBy: broadcast.inAppSentById ? (people.get(broadcast.inAppSentById) ?? null) : null,
+      });
+    } catch (error: unknown) {
       logger.error('Error fetching broadcast');
       return sendInternalError(reply, 'Erreur lors de la recuperation du broadcast');
     }
@@ -194,10 +299,10 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         subject?: string;
         body?: string;
         sourceLanguage?: string;
-        targeting?: any;
+        targeting?: BroadcastTargeting;
       };
 
-      const updateData: any = {};
+      const updateData: Prisma.AdminBroadcastUpdateInput = {};
       if (name !== undefined) updateData.name = SecuritySanitizer.sanitizeText(name);
       if (subject !== undefined) updateData.subject = SecuritySanitizer.sanitizeText(subject);
       if (body !== undefined) updateData.body = SecuritySanitizer.sanitizeText(body);
@@ -209,8 +314,18 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         data: updateData,
       });
 
+      // Toute écriture d'administration laisse sa ligne (spec 2026-10-04 § 4) :
+      // les seuls champs CHANGÉS, avant/après, et le nom pour le libellé.
+      const avantParChamp = existing as unknown as Record<string, unknown>;
+      const changes = Object.fromEntries(
+        Object.entries(updateData as Record<string, unknown>)
+          .filter(([champ, apres]) => JSON.stringify(avantParChamp[champ] ?? null) !== JSON.stringify(apres ?? null))
+          .map(([champ, apres]) => [champ, { before: avantParChamp[champ] ?? null, after: apres }])
+      );
+      await tracerDiffusion(request, 'UPDATE_BROADCAST', id, { name: broadcast.name }, changes);
+
       return sendSuccess(reply, broadcast);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error updating broadcast');
       return sendInternalError(reply, 'Erreur lors de la mise a jour du broadcast');
     }
@@ -236,59 +351,72 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       }
 
       // Build recipient filter (same logic as BroadcastSenderJob)
-      const targeting = (broadcast.targeting || {}) as any;
+      const targeting = (broadcast.targeting || {}) as BroadcastTargeting;
 
-      const where: any = {
-        emailVerifiedAt: { not: null },
+      // La contrainte du CANAL e-mail vient du MÊME site que le job d'envoi
+      // (#6581) : l'aperçu ne doit pas annoncer un destinataire que l'envoi
+      // écarte — ni compter les trois adresses de bootstrap, vérifiées d'office
+      // justement parce qu'elles ne reçoivent aucun courrier.
+      const where: Prisma.UserWhereInput = {
+        ...emailChannelRecipientConstraint(),
         isActive: true,
-        deletedAt: null,
+        // Nul OU ABSENT — même clause que `buildBroadcastRecipientFilter`
+        // (leçon 318 : un compte jamais supprimé n'a pas la colonne).
+        AND: [unsetOrNull('deletedAt')],
       };
 
       if (targeting.languages && Array.isArray(targeting.languages) && targeting.languages.length > 0) {
-        where.systemLanguage = { in: targeting.languages };
+        // #5161 — `systemLanguage` est persisté VERBATIM (`fr`/`fr-FR`/`FR`/`fr_FR`
+        // coexistent) ; un `in` cru sur les codes canoniques saisis dans l'UI admin
+        // rate toute variante région/casse. Même SSOT que le job d'envoi
+        // (`buildBroadcastRecipientFilter` → `resolveSystemLanguageVariants`).
+        where.systemLanguage = { in: await resolveSystemLanguageVariants(fastify.prisma, targeting.languages) };
       }
 
       if (targeting.countries && Array.isArray(targeting.countries) && targeting.countries.length > 0) {
         where.registrationCountry = { in: targeting.countries };
       }
 
-      if (targeting.activityStatus) {
-        const now = new Date();
-        switch (targeting.activityStatus) {
-          case 'active': {
-            // Active in last 30 days
-            const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-            where.lastActiveAt = { gte: thirtyDaysAgo };
-            break;
-          }
-          case 'inactive': {
-            // No activity in last 30 days
-            const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-            where.OR = [
-              { lastActiveAt: { lt: thirtyDaysAgo } },
-              { lastActiveAt: null },
-            ];
-            break;
-          }
-          case 'new': {
-            // Registered in last 7 days
-            const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-            where.createdAt = { gte: sevenDaysAgo };
-            break;
-          }
-          // 'all' or unrecognized -> no additional filter
+      // Même SSOT que l'envoi réel (#6777) — `activityWindow` est la SEULE
+      // fonction qui décide de la fenêtre d'ancienneté/activité, pour les
+      // quatre valeurs de `activityStatus`.
+      Object.assign(where, activityWindow(targeting, new Date()));
+
+      // Deux comptes (audit 2026-10-04) : le canal E-MAIL exige une adresse
+      // vérifiée (`where` ci-dessus) ; l'IN-APP non — il compte avec le filtre
+      // de son job d'envoi (`BroadcastInAppSenderJob`), sans contrainte de canal.
+      // `recipientCount` reste le compte e-mail (rétrocompatible).
+      const [recipientCount, inAppRecipients] = await Promise.all([
+        fastify.prisma.user.count({ where }),
+        fastify.prisma.user.count({ where: await buildBroadcastRecipientFilter(fastify.prisma, targeting) }),
+      ]);
+
+      // #5334 — l'aperçu comptait par `systemLanguage` SEUL (rang 1 du Prisme),
+      // quand l'envoi réel (`BroadcastSenderJob`/`BroadcastInAppSenderJob`)
+      // descend les quatre rangs via `recipientLanguage()`. Un compte dont la
+      // langue applicative vit au rang 2, 3 ou 4 tombait dans la mauvaise case
+      // de l'aperçu (ou hors de toute case, `systemLanguage` étant vide) alors
+      // qu'il recevra la diffusion dans sa vraie langue résolue. Même SSOT que
+      // l'envoi : les colonnes du Prisme, résolues PAR UTILISATEUR, jamais un
+      // `groupBy` sur une seule colonne. Paginé par lots (#4165, comme
+      // `BroadcastSenderJob`) : jamais de collection entière en mémoire.
+      const LANGUAGE_BREAKDOWN_BATCH_SIZE = 500;
+      const recipientsByCanonicalLanguage: Record<string, number> = {};
+      for (let skip = 0; ; skip += LANGUAGE_BREAKDOWN_BATCH_SIZE) {
+        const batch = await fastify.prisma.user.findMany({
+          where,
+          select: RECIPIENT_LANG_SELECT,
+          skip,
+          take: LANGUAGE_BREAKDOWN_BATCH_SIZE,
+          orderBy: { createdAt: 'asc' },
+        });
+        for (const user of batch) {
+          // #5161 — repli sur le code CANONIQUE ; les variantes convergent.
+          const canonical = normalizeLanguageForDedup(recipientLanguage(user, 'en'));
+          recipientsByCanonicalLanguage[canonical] = (recipientsByCanonicalLanguage[canonical] ?? 0) + 1;
         }
+        if (batch.length < LANGUAGE_BREAKDOWN_BATCH_SIZE) break;
       }
-
-      // Count total recipients
-      const recipientCount = await fastify.prisma.user.count({ where });
-
-      // Group by systemLanguage
-      const recipientsByLanguage = await fastify.prisma.user.groupBy({
-        by: ['systemLanguage'],
-        where,
-        _count: true,
-      });
 
       // Group by registrationCountry
       const recipientsByCountry = await fastify.prisma.user.groupBy({
@@ -297,10 +425,17 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         _count: true,
       });
 
-      // Get unique target languages from recipients
-      const targetLanguages = recipientsByLanguage
-        .map((g: any) => g.systemLanguage)
-        .filter(Boolean) as string[];
+      // Les CIBLES du translator passent en plus par `broadcastTargetLanguages`
+      // (#5247), qui fait ce que la carte ne fait pas : EXCLURE la langue
+      // SOURCE. Traduire une diffusion vers sa propre langue fait produire à
+      // NLLB une paraphrase du texte de l'admin et la stocke comme une
+      // traduction — un `fr → fr` qui altère le contenu servi. Les clés étant
+      // déjà canoniques, l'appel ne fait plus que l'exclusion et préserve
+      // l'ordre.
+      const targetLanguages = broadcastTargetLanguages(
+        Object.keys(recipientsByCanonicalLanguage),
+        broadcast.sourceLanguage,
+      );
 
       // Translate content
       const translationService = new BroadcastTranslationService();
@@ -319,24 +454,34 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
           translatedBodies: translations.bodies,
           targetLanguages,
           totalRecipients: recipientCount,
-          status: 'READY',
+          // Une diffusion déjà SENT ou SENDING ne REVIENT pas à READY : la
+          // préparation rafraîchit ses traductions, pas son histoire.
+          ...(broadcast.status === 'DRAFT' || broadcast.status === 'READY' ? { status: 'READY' } : {}),
         },
+      });
+      await tracerDiffusion(request, 'PREVIEW_BROADCAST', id, {
+        name: broadcast.name,
+        emailRecipients: recipientCount,
+        inAppRecipients,
+        targetLanguages,
       });
 
       return sendSuccess(reply, {
         recipientCount,
-        recipientsByLanguage: recipientsByLanguage.map((g: any) => ({
-          language: g.systemLanguage,
-          count: g._count,
+        emailRecipients: recipientCount,
+        inAppRecipients,
+        recipientsByLanguage: Object.entries(recipientsByCanonicalLanguage).map(([language, count]) => ({
+          language,
+          count,
         })),
-        recipientsByCountry: recipientsByCountry.map((g: any) => ({
+        recipientsByCountry: recipientsByCountry.map((g) => ({
           country: g.registrationCountry,
           count: g._count,
         })),
         translations,
         broadcast: updatedBroadcast,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error previewing broadcast');
       return sendInternalError(reply, 'Erreur lors de la preview du broadcast');
     }
@@ -394,12 +539,12 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       // Launch BroadcastSenderJob fire-and-forget
       const emailService = new EmailService();
       const job = new BroadcastSenderJob(fastify.prisma, emailService);
-      job.execute(id).catch((err: any) => {
-        logger.error(`Broadcast job failed for id=${id}: ${err.message}`);
+      job.execute(id).catch((err: unknown) => {
+        logger.error(`Broadcast job failed for id=${id}: ${err instanceof Error ? err.message : 'Unknown error'}`);
       });
 
       return sendSuccess(reply, undefined, { message: 'Envoi en cours' });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error sending broadcast');
       return sendInternalError(reply, 'Erreur lors du lancement de l\'envoi du broadcast');
     }
@@ -502,7 +647,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       });
 
       return sendSuccess(reply, undefined, { message: 'Broadcast supprime' });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error deleting broadcast');
       return sendInternalError(reply, 'Erreur lors de la suppression du broadcast');
     }

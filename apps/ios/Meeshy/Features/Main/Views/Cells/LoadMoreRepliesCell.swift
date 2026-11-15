@@ -1,6 +1,11 @@
 import UIKit
 
 final class LoadMoreRepliesCell: UICollectionViewCell {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     private let label = UILabel()
     var parentId: String?
     var remaining: Int = 0
@@ -40,18 +45,24 @@ final class LoadMoreRepliesCell: UICollectionViewCell {
         accessibilityLabel = text
         accessibilityHint = String(
             localized: "comments.load-more-replies.hint",
-            defaultValue: "Shows the remaining replies in this thread",
+            defaultValue: "Affiche les réponses restantes de ce fil",
             bundle: .main
         )
     }
 
     /// Pluriel résolu explicitement : le markup AGA inline (`^[…](inflect: true)`)
     /// dans un `defaultValue` sans entrée String Catalog fuit en brut sur iOS 18.x.
-    static func labelText(remaining: Int) -> String {
+    /// `bundle` et `locale` vont par PAIRE, comme `PostStatAccessibility` : la
+    /// table de traduction et la règle de pluriel — sans eux, un témoin juge la
+    /// langue du SIMULATEUR plutôt que la loi.
+    static func labelText(remaining: Int,
+                          bundle: Bundle = .main,
+                          locale: Locale = .current) -> String {
         String(
             localized: "comments.load-more-replies",
-            defaultValue: "View \(remaining) more \(remaining == 1 ? "reply" : "replies")",
-            bundle: .main
+            defaultValue: "Voir \(remaining) réponses de plus",
+            bundle: bundle,
+            locale: locale
         )
     }
 

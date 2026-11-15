@@ -168,4 +168,29 @@ class ComposerSendGateTest {
         assertThat(ComposerSendKind.fromMessageType(null)).isEqualTo(ComposerSendKind.FILE)
         assertThat(ComposerSendKind.fromMessageType("")).isEqualTo(ComposerSendKind.FILE)
     }
+
+    @Test
+    fun `a closed composer refuses every kind with the write restriction reason`() {
+        ComposerSendKind.entries.forEach { kind ->
+            val decision = ComposerSendGate.evaluate(
+                kind, affordances(), SlowModeState.UNTHROTTLED, closure = me.meeshy.sdk.model.ComposerClosure.MINOR_GLOBAL,
+            )
+            assertThat(decision.allowed).isFalse()
+            assertThat(decision.blockReason).isEqualTo(SendBlockReason.WRITE_RESTRICTED)
+            assertThat(decision.cooldownSeconds).isEqualTo(0)
+        }
+    }
+
+    @Test
+    fun `a 403 GLOBAL_ADULTS_ONLY reveals the minor restriction`() {
+        assertThat(ComposerSendGate.restrictionRevealedBy(403, "GLOBAL_ADULTS_ONLY"))
+            .isEqualTo(me.meeshy.sdk.model.ConversationWriteRestriction.MinorGlobal)
+    }
+
+    @Test
+    fun `any other refusal reveals nothing`() {
+        assertThat(ComposerSendGate.restrictionRevealedBy(403, "FORBIDDEN")).isNull()
+        assertThat(ComposerSendGate.restrictionRevealedBy(429, "GLOBAL_ADULTS_ONLY")).isNull()
+        assertThat(ComposerSendGate.restrictionRevealedBy(null, null)).isNull()
+    }
 }

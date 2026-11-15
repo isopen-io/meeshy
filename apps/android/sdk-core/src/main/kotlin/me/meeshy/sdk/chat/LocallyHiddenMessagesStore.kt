@@ -25,6 +25,10 @@ data class LocallyHiddenMessages(val ids: Set<String> = emptySet()) {
 
     fun hide(id: String): LocallyHiddenMessages =
         if (id.isBlank() || id in ids) this else LocallyHiddenMessages(ids + id)
+
+    /** Inverse of [hide]; returns the **same instance** when [id] was not hidden. */
+    fun unhide(id: String): LocallyHiddenMessages =
+        if (id !in ids) this else LocallyHiddenMessages(ids - id)
 }
 
 /**
@@ -36,6 +40,9 @@ data class LocallyHiddenMessages(val ids: Set<String> = emptySet()) {
 interface LocallyHiddenMessagesStore {
     val hidden: StateFlow<LocallyHiddenMessages>
     fun hide(messageId: String)
+
+    /** `message:restored-for-me` : the reader brought the message back from another device. */
+    fun unhide(messageId: String)
 }
 
 /** Volatile store — for tests and previews. */
@@ -47,6 +54,11 @@ class InMemoryLocallyHiddenMessagesStore(
 
     override fun hide(messageId: String) {
         val next = _hidden.value.hide(messageId)
+        if (next !== _hidden.value) _hidden.value = next
+    }
+
+    override fun unhide(messageId: String) {
+        val next = _hidden.value.unhide(messageId)
         if (next !== _hidden.value) _hidden.value = next
     }
 }
@@ -64,6 +76,13 @@ class SharedPrefsLocallyHiddenMessagesStore(context: Context) : LocallyHiddenMes
 
     override fun hide(messageId: String) {
         val next = _hidden.value.hide(messageId)
+        if (next === _hidden.value) return
+        prefs.edit().putStringSet(KEY_IDS, next.ids).apply()
+        _hidden.value = next
+    }
+
+    override fun unhide(messageId: String) {
+        val next = _hidden.value.unhide(messageId)
         if (next === _hidden.value) return
         prefs.edit().putStringSet(KEY_IDS, next.ids).apply()
         _hidden.value = next

@@ -1,0 +1,150 @@
+package me.meeshy.sdk.model
+
+/**
+ * Deux textes d'une même rangée « se répètent » quand, dépouillés de leurs guillemets, de leur
+ * casse, de leurs espaces et d'une troncature « … », l'un est l'autre, le début ou la fin de
+ * l'autre. Miroir de `NotificationRowText` (iOS, MeeshySDK) : le serveur tronque ses citations,
+ * l'égalité stricte ne les reconnaîtrait jamais.
+ */
+public object NotificationRowText {
+
+    public fun repeats(candidate: String, other: String): Boolean {
+        val a = normalized(candidate)
+        val b = normalized(other)
+        if (a.isEmpty() || b.isEmpty()) return false
+        return a == b || a.startsWith(b) || b.startsWith(a) || a.endsWith(b) || b.endsWith(a)
+    }
+
+    /** Garde, dans l'ordre, chaque texte qui ne répète aucun des précédents ; les autres deviennent `null`. */
+    public fun distinct(texts: List<String?>): List<String?> {
+        val kept = ArrayList<String>(texts.size)
+        return texts.map { text ->
+            if (text == null || normalized(text).isEmpty() || kept.any { repeats(text, it) }) {
+                null
+            } else {
+                kept += text
+                text
+            }
+        }
+    }
+
+    internal fun normalized(text: String): String =
+        text.replace("…", " ").replace("...", " ")
+            .filterNot { it in QUOTES }
+            .split(WHITESPACE)
+            .filter { it.isNotEmpty() }
+            .joinToString(" ")
+            .lowercase()
+
+    private const val QUOTES = "«»“”„\"'’"
+    private val WHITESPACE = Regex("\\s+")
+}
+
+/** Nature du contenu visé par le pied de rangée — l'icône que la couche UI pose. */
+public enum class RowContentKind { STORY, REEL, MOOD, POST }
+
+/** Le pied de rangée : OÙ ça s'est passé. */
+public sealed interface NotificationRowFooter {
+    public data class Conversation(val title: String) : NotificationRowFooter
+
+    /** [excerpt] `null` : la couche UI retombe sur le libellé de [kind]. */
+    public data class Content(
+        val kind: RowContentKind,
+        val excerpt: String?,
+        /** Date de publication du contenu lié ; la couche UI la formate. */
+        val publishedAtMillis: Long? = null,
+        /** Le contenu éphémère lié a expiré : le pied se grise et passe en rouge. */
+        val isExpired: Boolean = false,
+    ) : NotificationRowFooter
+
+    /** Tout le reste : une ligne de contexte servie par la passerelle. */
+    public data class Plain(val text: String) : NotificationRowFooter
+}
+
+/** Les pièces de rangée que la bannière ne porte pas : la citation et le pied, dédoublonnés. */
+public data class NotificationRowDetail(
+    val body: String?,
+    val quote: String?,
+    val footer: NotificationRowFooter?,
+) {
+    public companion object {
+
+        public fun of(
+            notification: ApiNotification,
+            headline: String,
+            body: String?,
+            nowMillis: Long = System.currentTimeMillis(),
+        ): NotificationRowDetail {
+            val quote = if (notification.notificationType == MeeshyNotificationType.COMMENT_REPLY) {
+                notification.metadata?.parentCommentPreview?.takeIf { it.isNotBlank() }
+            } else {
+                null
+            }
+            val (keptBody, keptQuote) = NotificationRowText.distinct(listOf(headline, body, quote)).let { it[1] to it[2] }
+            val shown = listOfNotNull(headline, keptBody, keptQuote)
+            return NotificationRowDetail(
+                body = keptBody,
+                quote = keptQuote,
+                footer = footer(notification, nowMillis)?.let { dedupe(it, shown) },
+            )
+        }
+
+        private fun footer(notification: ApiNotification, nowMillis: Long): NotificationRowFooter? {
+            val kind = contentKind(notification)
+            if (kind != null) {
+                val context = notification.context
+                return NotificationRowFooter.Content(
+                    kind = kind,
+                    excerpt = notification.metadata?.postPreview?.takeIf { it.isNotBlank() },
+                    publishedAtMillis = context?.postCreatedAt?.let(::isoToEpochMillisOrNull),
+                    isExpired = context?.postExpiresAt?.let(::isoToEpochMillisOrNull)?.let { it <= nowMillis } ?: false,
+                )
+            }
+            val context = notification.context
+            val group = context?.conversationTitle?.takeIf { it.isNotBlank() }
+            if (group != null && !context.conversationType.equals("direct", ignoreCase = true)) {
+                return NotificationRowFooter.Conversation(group)
+            }
+            return notification.subtitle?.trim()?.takeIf { it.isNotEmpty() }?.let { NotificationRowFooter.Plain(it) }
+        }
+
+        private fun dedupe(footer: NotificationRowFooter, shown: List<String>): NotificationRowFooter? = when (footer) {
+            is NotificationRowFooter.Conversation ->
+                if (shown.any { NotificationRowText.repeats(footer.title, it) }) null else footer
+            is NotificationRowFooter.Content ->
+                footer.copy(excerpt = footer.excerpt?.takeUnless { e -> shown.any { NotificationRowText.repeats(e, it) } })
+            is NotificationRowFooter.Plain ->
+                if (shown.any { NotificationRowText.repeats(footer.text, it) }) null else footer
+        }
+
+        private fun contentKind(notification: ApiNotification): RowContentKind? {
+            if (notification.notificationType !in CONTENT_TYPES) return null
+            val declared = (notification.metadata?.postType ?: notification.metadata?.contentType)?.uppercase()
+            return when (declared) {
+                "STORY" -> RowContentKind.STORY
+                "REEL" -> RowContentKind.REEL
+                "MOOD", "STATUS" -> RowContentKind.MOOD
+                "POST" -> RowContentKind.POST
+                else -> when (notification.notificationType) {
+                    MeeshyNotificationType.STORY_REACTION, MeeshyNotificationType.STORY_NEW_COMMENT,
+                    MeeshyNotificationType.FRIEND_STORY_COMMENT, MeeshyNotificationType.STORY_THREAD_REPLY,
+                    MeeshyNotificationType.FRIEND_NEW_STORY -> RowContentKind.STORY
+                    MeeshyNotificationType.STATUS_REACTION, MeeshyNotificationType.FRIEND_NEW_MOOD -> RowContentKind.MOOD
+                    else -> RowContentKind.POST
+                }
+            }
+        }
+
+        private val CONTENT_TYPES = setOf(
+            MeeshyNotificationType.POST_COMMENT, MeeshyNotificationType.STORY_NEW_COMMENT,
+            MeeshyNotificationType.FRIEND_STORY_COMMENT, MeeshyNotificationType.STORY_THREAD_REPLY,
+            MeeshyNotificationType.COMMENT_REPLY, MeeshyNotificationType.COMMENT_LIKE,
+            MeeshyNotificationType.COMMENT_REACTION, MeeshyNotificationType.POST_LIKE,
+            MeeshyNotificationType.STORY_REACTION, MeeshyNotificationType.STATUS_REACTION,
+            MeeshyNotificationType.POST_REPOST, MeeshyNotificationType.FRIEND_NEW_STORY,
+            MeeshyNotificationType.FRIEND_NEW_POST, MeeshyNotificationType.FRIEND_NEW_MOOD,
+            MeeshyNotificationType.LEGACY_POST_COMMENT, MeeshyNotificationType.LEGACY_POST_LIKE,
+            MeeshyNotificationType.LEGACY_STORY_REPLY,
+        )
+    }
+}

@@ -88,6 +88,7 @@ extension StoryCanvasUIView {
     /// mute state, completion callback). Idempotent — safe to call from `updateUIView`.
     public func setReaderContext(_ context: StoryReaderContext) {
         readerContext = context
+        muteIsLocked = context.locksMute
         isAudioMuted = context.mute
         audioMixer.setMute(context.mute)
         // Propagation immédiate aux video media layers : `rebuildLayers()` qui
@@ -132,6 +133,10 @@ extension StoryCanvasUIView {
         let wasPlay = mode == .play
         let didChange = mode != newMode
         mode = newMode
+        // Le confinement suit le MODE, pas le rayon d'arrondi : un canvas qui
+        // passe en lecture cesse de peindre hors de ses bornes, et un retour en
+        // édition rend à la poignée le droit de dépasser.
+        applyReadingClip()
         currentTime = time
         if newMode == .play {
             completionFired = false
@@ -175,5 +180,80 @@ extension StoryCanvasUIView {
                 startEditDisplayLinkIfNeeded()
             }
         }
+        if PlaybackClockRearm.isDue(entersPlay: newMode == .play,
+                                    modeChanged: didChange,
+                                    clockRunning: displayLink != nil,
+                                    isOnScreen: window != nil) {
+            rearmPlaybackClock()
+        }
     }
+
+    /// **Le tour suivant d'une scène allée au bout rejoue avec son horloge
+    /// (#10555).** La fin d'une scène invalide le lien de lecture
+    /// (`advancePlayheadIfActive` → `stopPlayback`), et le tour de boucle
+    /// repasse par `setMode(.play, time: .zero)` sans changer de mode : le son
+    /// et la vidéo repartaient, le playhead restait à zéro et la barre de
+    /// l'hôte sur sa dernière valeur. Réarmée sous la pause de l'hôte, elle
+    /// attend la reprise.
+    func rearmPlaybackClock() {
+        startPlayback()
+        displayLink?.isPaused = isPlaybackPaused
+    }
+
+    /// Classifies an item that was hit by a gesture so the parent can route to
+    /// the correct editor (text panel vs media editor sheet vs sticker UX).
+    public nonisolated enum CanvasItemKind: Sendable, Equatable, Hashable, CaseIterable {
+        case text, media, sticker, place, audio
+    }
+
+    /// Durée totale effective de la slide, sans reparcourir le contenu à
+    /// chaque tick de display-link.
+    var effectiveSlideTotalDuration: TimeInterval {
+        if let cachedSlideTotalDuration { return cachedSlideTotalDuration }
+        let computed = slide.computedTotalDuration()
+        cachedSlideTotalDuration = computed
+        return computed
+    }
+
+    nonisolated static func structureFingerprint(of slide: StorySlide) -> String {
+        StorySlideStructureRules.fingerprint(of: slide)
+    }
+
+    /// Watchdog : si la lecture du média primaire reste non-`.playing` en
+    /// CONTINU pendant ce laps, on retombe sur l'horloge murale
+    /// (progressing=true) pour qu'une story ne puisse JAMAIS rester gelée sur un
+    /// flux mort/jamais-prêt. Stall-relatif (et non « 5 s après content-ready »)
+    /// pour couvrir aussi le cas « la vidéo joue puis meurt » sans hard-stall.
+    static let playbackStallWatchdogSeconds: CFTimeInterval = 5.0
+
+    nonisolated static let snapTargets: [Double] = [0.18, 0.25, 0.5, 0.75, 0.82]
+    nonisolated static let snapTolerance: Double = 0.02
+
+    /// Cibles de snap du CADRAGE d'arrière-plan : effet snap pour cadrer le
+    /// contenu en centrant ou en collant bordure.
+    /// `0.5` = centré, `0.0`/`1.0` = collé au bord. Tolérance plus large que le
+    /// foreground : le pan bg est ralenti (× 0.5), le snap doit rester perceptible.
+    nonisolated static let backgroundSnapTargets: [Double] = [0.0, 0.5, 1.0]
+    nonisolated static let backgroundSnapTolerance: Double = 0.035
+
+    // MARK: - Active canvas registry (canvas-wide preemption)
+
+    /// Faible-ref registry de toutes les instances actuellement en `.play`
+    /// **dans tout le process**. Mutée uniquement depuis `MainActor`. Sert à
+    /// préempter (pause bg/FG/audio mixer) les anciennes instances dès qu'une
+    /// nouvelle entre en `.play`.
+    ///
+    /// Pourquoi un registry SDK et non `PlaybackCoordinator` ?
+    /// `PlaybackCoordinator.willStartPlaying(external:)` mutex uniquement les
+    /// `StoppablePlayer` enregistrés (typiquement les `audioMixer`). Il ignore
+    /// les `AVPlayer` bg/FG attachés au canvas. SwiftUI peut maintenir deux
+    /// canvases en window pendant 1-2 frames lors d'un swap `.id(story.id)`
+    /// (~16-33 ms), assez pour que les pistes audio des vidéos bg se
+    /// chevauchent audiblement quand on enchaîne back→forward sur des slides
+    /// vidéo. Ce registry coordonne le **canvas entier**.
+    ///
+    /// NSHashTable.weakObjects() s'auto-nettoie quand les canvases sont
+    /// désalloués — aucune cleanup explicite requise au `deinit` (sauf le
+    /// removeAll que ferait NSHashTable spontanément).
+    @MainActor static let activePlayingCanvases = NSHashTable<StoryCanvasUIView>.weakObjects()
 }

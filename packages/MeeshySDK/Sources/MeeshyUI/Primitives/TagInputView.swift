@@ -15,7 +15,7 @@ public struct TagInputView: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TagFlowLayout(spacing: 6) {
+            FlowLayout(spacing: 6) {
                 ForEach(tags, id: \.self) { tag in
                     tagChip(tag)
                 }
@@ -30,15 +30,16 @@ public struct TagInputView: View {
                 .fill(colorForTag(tag))
                 .frame(width: 8, height: 8)
             Text(tag)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+                .font(MeeshyFont.relative(13, weight: .medium))
+                .foregroundStyle(theme.textPrimary)
             Button {
                 removeTag(tag)
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(theme.textMuted)
+                    .meeshyScaledFont(9, weight: .bold)
+                    .foregroundStyle(theme.textMuted)
             }
+            .accessibilityLabel(String(format: String(localized: "tag.remove", bundle: .module), tag))
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -50,8 +51,8 @@ public struct TagInputView: View {
 
     private var inputField: some View {
         TextField(String(localized: "tag.placeholder", defaultValue: "Ajouter un tag…", bundle: .module), text: $inputText)
-            .font(.system(size: 13))
-            .foregroundColor(theme.textPrimary)
+            .font(MeeshyFont.relative(13))
+            .foregroundStyle(theme.textPrimary)
             .frame(minWidth: 100)
             .onSubmit {
                 addTag(inputText)
@@ -72,52 +73,13 @@ public struct TagInputView: View {
     }
 
     private func colorForTag(_ tag: String) -> Color {
-        let hash = abs(tag.hashValue)
+        // `magnitude` : `abs(Int.min)` trappe.
+        let hash = Int(tag.hashValue.magnitude % 1_000_003)
         let colors: [Color] = [
             Color(hex: "3B82F6"), Color(hex: "A855F7"), Color(hex: "F97316"),
             Color(hex: "4ECDC4"), Color(hex: "F8B500"), Color(hex: "FF6B6B"),
             Color(hex: "2ECC71"), Color(hex: "9B59B6"), Color(hex: "45B7D1"),
         ]
         return colors[hash % colors.count]
-    }
-}
-
-struct TagFlowLayout: Layout {
-    var spacing: CGFloat = 6
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        layout(proposal: proposal, subviews: subviews).size
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let result = layout(proposal: proposal, subviews: subviews)
-        for (index, position) in result.positions.enumerated() {
-            subviews[index].place(
-                at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y),
-                proposal: .unspecified
-            )
-        }
-    }
-
-    private func layout(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint]) {
-        let maxWidth = proposal.width ?? .infinity
-        var positions: [CGPoint] = []
-        var x: CGFloat = 0
-        var y: CGFloat = 0
-        var rowHeight: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x + size.width > maxWidth, x > 0 {
-                x = 0
-                y += rowHeight + spacing
-                rowHeight = 0
-            }
-            positions.append(CGPoint(x: x, y: y))
-            rowHeight = max(rowHeight, size.height)
-            x += size.width + spacing
-        }
-
-        return (CGSize(width: maxWidth, height: y + rowHeight), positions)
     }
 }

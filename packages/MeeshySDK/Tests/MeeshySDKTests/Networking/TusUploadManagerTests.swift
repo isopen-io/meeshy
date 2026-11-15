@@ -12,6 +12,29 @@ final class TusUploadManagerTests: XCTestCase {
         XCTAssertNotNil(manager)
     }
 
+    // MARK: - Annulation
+
+    /// L'annulation de l'appelant atteint l'envoi : une tâche déjà annulée ne lance rien et rend la main avec
+    /// `CancellationError`. Avant, l'envoi partait dans une tâche détachée que l'annulation n'atteignait jamais.
+    func test_uploadFile_fromACancelledTask_throwsCancellation_withoutUploading() async throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("tus-cancel-\(UUID().uuidString).bin")
+        try Data(repeating: 7, count: 64).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let manager = TusUploadManager(baseURL: URL(string: "https://127.0.0.1:9")!)
+        let credential = MeeshyRequestCredential(header: "Authorization", value: "Bearer test")
+
+        let upload = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await manager.uploadFile(fileURL: file, mimeType: "application/octet-stream", credential: credential)
+        }
+        do {
+            _ = try await upload.value
+            XCTFail("un envoi annulé ne rend pas de résultat")
+        } catch {
+            XCTAssertTrue(error is CancellationError, "attendu CancellationError, reçu \(error)")
+        }
+    }
+
     // MARK: - Progress Publisher
 
     func test_progressPublisher_exists_andCanSubscribe() async {
@@ -239,5 +262,59 @@ final class TusUploadManagerTests: XCTestCase {
         XCTAssertEqual(attachment.originalName, "video.mp4")
         XCTAssertNil(attachment.thumbnailUrl)
         XCTAssertEqual(attachment.duration, 120)
+    }
+
+    // MARK: - Provenance déclarée à la création (#9775)
+
+    /// Décode `Upload-Metadata` comme le serveur TUS : paires `clé base64`.
+    private func decodedMetadata(_ header: String) -> [String: String] {
+        Dictionary(uniqueKeysWithValues: header.split(separator: ",").compactMap { pair in
+            let parts = pair.split(separator: " ", maxSplits: 1).map(String.init)
+            guard let key = parts.first else { return nil }
+            let value = parts.count > 1 ? Data(base64Encoded: parts[1]).flatMap { String(data: $0, encoding: .utf8) } ?? "" : ""
+            return (key, value)
+        })
+    }
+
+    // MARK: - Le nom annoncé au serveur (#11166)
+
+    func test_announcedName_withoutDeclaredName_neverCarriesTheTechnicalCopyPrefix() {
+        let copy = URL(fileURLWithPath: "/tmp/composer_file_058F7FEA-B7A2-4CF3-876F-763EDA90E946_Devis.pdf")
+
+        XCTAssertEqual(TusUploadManager.announcedName(declared: nil, fileURL: copy), "Devis.pdf")
+    }
+
+    func test_announcedName_declaredCopyName_isCleanedToo() {
+        let declared = "file_058F7FEA-B7A2-4CF3-876F-763EDA90E946_Devis.pdf"
+
+        XCTAssertEqual(TusUploadManager.announcedName(declared: declared, fileURL: URL(fileURLWithPath: "/tmp/0.pdf")), "Devis.pdf")
+    }
+
+    func test_announcedName_ordinaryFile_keepsItsName() {
+        XCTAssertEqual(TusUploadManager.announcedName(declared: nil, fileURL: URL(fileURLWithPath: "/tmp/IMG_0001.jpg")), "IMG_0001.jpg")
+    }
+
+    func test_creationMetadata_capture_declaresCapturedInAppTrue() {
+        let header = TusUploadManager.creationMetadata(
+            fileName: "prise.jpg", mimeType: "image/jpeg", uploadContext: nil,
+            thumbHash: nil, transcription: nil, capturedInApp: true
+        )
+
+        let metadata = decodedMetadata(header)
+        XCTAssertEqual(metadata["capturedinapp"], "true")
+        XCTAssertEqual(metadata["filename"], "prise.jpg")
+        XCTAssertEqual(metadata["filetype"], "image/jpeg")
+    }
+
+    func test_creationMetadata_notACapture_carriesNoCaptureKey() {
+        let header = TusUploadManager.creationMetadata(
+            fileName: "galerie.jpg", mimeType: "image/jpeg", uploadContext: "post",
+            thumbHash: "abc", transcription: nil, capturedInApp: false
+        )
+
+        let metadata = decodedMetadata(header)
+        XCTAssertNil(metadata["capturedinapp"])
+        XCTAssertEqual(metadata["uploadcontext"], "post")
+        XCTAssertEqual(metadata["thumbhash"], "abc")
     }
 }

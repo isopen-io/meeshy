@@ -21,7 +21,7 @@ import SwiftUI
 ///    fermé ET plein écran net), maximale à mi-parcours ⇒ l'ondulation ne vit que
 ///    pendant l'expansion.
 ///
-/// `animatableData` pilote `progress` → animer la valeur anime le reveal.
+/// `animatableData` pilote `progress` et `phase` → animer l'une ou l'autre anime le reveal.
 public struct LiquidRevealShape: Shape {
     /// Foyer du reveal en coordonnées normalisées (0–1) du rect.
     public var center: UnitPoint
@@ -56,9 +56,14 @@ public struct LiquidRevealShape: Shape {
         self.phase = phase
     }
 
-    public var animatableData: Double {
-        get { progress }
-        set { progress = newValue }
+    /// `progress` ET `phase` : une valeur absente d'ici ne s'interpole pas,
+    /// elle saute à sa cible — la vague ne coulait donc jamais (#9702).
+    public var animatableData: AnimatablePair<Double, Double> {
+        get { AnimatablePair(progress, phase) }
+        set {
+            progress = newValue.first
+            phase = newValue.second
+        }
     }
 
     public nonisolated func path(in rect: CGRect) -> Path {

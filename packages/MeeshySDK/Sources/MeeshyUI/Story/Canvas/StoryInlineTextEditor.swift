@@ -6,16 +6,49 @@ import MeeshySDK
 /// en place. Le vrai fond (solide / glass) reste rendu par la calque dessous ;
 /// ce champ ne peint que les glyphes éditables.
 public final class StoryInlineTextEditor: UITextView {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     private let placeholderLabel = UILabel()
 
     /// `true` quand le placeholder est masqué (le champ contient du texte).
     public var isPlaceholderHidden: Bool { placeholderLabel.isHidden }
 
+    /// Un toucher sur le champ, sans rien retirer à ses gestes propres
+    /// (curseur, sélection) : l'hôte qui a remplacé le clavier le rend (#13839).
+    var onTouched: (() -> Void)? {
+        didSet { installTouchRecognizerIfNeeded() }
+    }
+
+    private let touchRelay = StoryInlineEditorTouchRelay()
+    private var touchRecognizer: UITapGestureRecognizer?
+
+    private func installTouchRecognizerIfNeeded() {
+        guard touchRecognizer == nil, onTouched != nil else { return }
+        let reconnaisseur = UITapGestureRecognizer(target: self, action: #selector(touched))
+        reconnaisseur.cancelsTouchesInView = false
+        reconnaisseur.delegate = touchRelay
+        addGestureRecognizer(reconnaisseur)
+        touchRecognizer = reconnaisseur
+    }
+
+    @objc private func touched() { onTouched?() }
+
     public init() {
         super.init(frame: .zero, textContainer: nil)
         backgroundColor = .clear
         isScrollEnabled = false
+        // Un `UITextView` est un `UIScrollView`, qui rogne à ses bounds. Le
+        // champ colle à ses glyphes (`textContainerInset = .zero`) : une lueur
+        // ou une ombre (#4870) déborderait et serait COUPÉE pendant la frappe,
+        // puis « sauterait » à sa pleine étendue quand la calque reprend la
+        // main. Tant que le champ ne défile pas il n'a rien à rogner ; dès
+        // qu'il défile, `sizeToFitTextContent` remet le rognage (les lignes
+        // sorties doivent rester cachées).
+        clipsToBounds = false
         isOpaque = false
         textContainerInset = .zero
         textContainer.lineFragmentPadding = 0
@@ -23,6 +56,8 @@ public final class StoryInlineTextEditor: UITextView {
         spellCheckingType = .no
         placeholderLabel.numberOfLines = 0
         placeholderLabel.isUserInteractionEnabled = false
+        NotificationCenter.default.addObserver(self, selector: #selector(flameTextDidChange),
+                                               name: UITextView.textDidChangeNotification, object: self)
         placeholderLabel.text = String(localized: "story.textEditor.placeholder",
                                        defaultValue: "Exprimez-vous…",
                                        bundle: .module)
@@ -41,9 +76,12 @@ public final class StoryInlineTextEditor: UITextView {
     public func apply(textObject: StoryTextObject,
                       geometry: CanvasGeometry,
                       setText: Bool) {
-        let designFontSize = CGFloat(textObject.fontSize * textObject.scale)
+        // Taille de l'ÉDITION, comme le calque (#9139) : le champ montre la
+        // coupe que le pincement agrandira sans la recouper.
+        let designFontSize = CGFloat(textObject.fontSize)
+        let renderedFontSize = StoryTextLayer.renderedFontSize(of: textObject, in: geometry)
         let resolved = StoryTextFontResolver.resolveFont(forTextObject: textObject,
-                                                         size: geometry.render(designFontSize))
+                                                         size: renderedFontSize)
         let color = Self.color(hex: textObject.textColor) ?? .white
         let align = Self.alignment(from: textObject.textAlign)
 
@@ -71,11 +109,20 @@ public final class StoryInlineTextEditor: UITextView {
             attrs[.strokeColor] = borderColor
             attrs[.strokeWidth] = -(widthPx / max(designFontSize, 1)) * 100.0
         }
+        // L'EFFET (lueur / ombre / relief, #4870) est un attribut de glyphe
+        // lui aussi — `NSShadow`, que TextKit rend en temps réel comme le
+        // contour. Même site de conversion que le canvas et le composite.
+        if let shadow = StoryTextEffectRendering.nsShadow(
+            for: textObject, fontSize: renderedFontSize, textColor: color) {
+            attrs[.shadow] = shadow
+        }
         typingAttributes = attrs
         if textStorage.length > 0 {
             textStorage.setAttributes(
                 attrs, range: NSRange(location: 0, length: textStorage.length))
         }
+        flameFontSize = textObject.parsedTextEffect.burns ? renderedFontSize : nil
+        refreshFlame()
 
         placeholderLabel.font = resolved
         // Le placeholder doit rester visible quelle que soit la couleur de
@@ -103,8 +150,8 @@ public final class StoryInlineTextEditor: UITextView {
     /// ajoutée a des bounds quasi-nulles (designSize ≈ 0 + 16 padding)
     /// et l'invite "Exprimez-vous…" reste clippée à 6 px de large.
     ///
-    /// `maxHeight` borne la hauteur à celle de la ZONE d'édition (spec
-    /// 2026-08-01). Au-delà, le champ défile au lieu de continuer à grandir :
+    /// `maxHeight` borne la hauteur à celle de la ZONE d'édition.
+    /// Au-delà, le champ défile au lieu de continuer à grandir :
     /// un texte long sortait auparavant par le haut de l'écran, ses premières
     /// lignes devenant illisibles ET inéditables. Sans zone mesurée la valeur
     /// par défaut laisse la croissance libre, comportement d'origine.
@@ -123,6 +170,8 @@ public final class StoryInlineTextEditor: UITextView {
         let clamped = min(natural, max(maxHeight, 1))
         let shouldScroll = natural > clamped + 0.5
         if isScrollEnabled != shouldScroll { isScrollEnabled = shouldScroll }
+        // Rogner SEULEMENT quand on défile — voir `init`.
+        if clipsToBounds != shouldScroll { clipsToBounds = shouldScroll }
 
         let next = CGSize(width: width, height: clamped)
         if next != bounds.size {
@@ -163,6 +212,44 @@ public final class StoryInlineTextEditor: UITextView {
         // `contentOffset`, qui emporterait le placeholder hors du champ.
         placeholderLabel.frame = CGRect(origin: .zero, size: bounds.size)
             .inset(by: textContainerInset)
+        refreshFlame()
+    }
+
+    // MARK: - Flamme (#17112)
+
+    /// Taille de police rendue d'un texte en FEU, `nil` pour tout autre effet.
+    private var flameFontSize: CGFloat?
+    private var flameLayer: StoryFlameLayer?
+
+    @objc private func flameTextDidChange() { refreshFlame() }
+
+    /// **Le texte brûle pendant qu'on le tape.** La calque du canvas cache ses
+    /// flammes — taillées sur l'ancien texte — pendant l'édition ; le champ
+    /// pose les siennes, sur ses propres glyphes, mis en ligne par TextKit
+    /// comme il les peint. La silhouette ne se recalcule que si le texte ou le
+    /// cadre change, et le feu tourne sur le serveur de rendu : la frappe ne
+    /// perd aucune image.
+    private func refreshFlame() {
+        guard let fontSize = flameFontSize, let typed = attributedText, typed.length > 0 else {
+            flameLayer?.removeFromSuperlayer()
+            flameLayer = nil
+            return
+        }
+        let glyphs = NSMutableAttributedString(attributedString: typed)
+        glyphs.removeAttribute(.shadow, range: NSRange(location: 0, length: glyphs.length))
+        let size = CGSize(width: bounds.width, height: max(bounds.height, contentSize.height))
+        let flame = flameLayer ?? StoryFlameLayer()
+        flame.configure(glyphFrame: CGRect(origin: .zero, size: size),
+                        fontSize: fontSize,
+                        key: StoryFlameGlyphKey(glyphs: glyphs, size: size, scale: 1),
+                        animates: StoryFlameTextRenderer.motionAllowed) { _ in
+            glyphs.draw(with: CGRect(origin: .zero,
+                                     size: CGSize(width: size.width, height: .greatestFiniteMagnitude)),
+                        options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
+        }
+        flame.zPosition = 1
+        if flame.superlayer !== layer { layer.addSublayer(flame) }
+        flameLayer = flame
     }
 
     // MARK: - Helpers
@@ -190,20 +277,18 @@ public final class StoryInlineTextEditor: UITextView {
     }
 
     private static func color(hex: String?) -> UIColor? {
-        guard var trimmed = hex?.trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
-        if trimmed.hasPrefix("#") { trimmed.removeFirst() }
-        guard trimmed.count == 6 || trimmed.count == 8 else { return nil }
-        var rgb: UInt64 = 0
-        guard Scanner(string: trimmed).scanHexInt64(&rgb) else { return nil }
-        if trimmed.count == 8 {
-            return UIColor(red: CGFloat((rgb & 0xFF000000) >> 24) / 255,
-                           green: CGFloat((rgb & 0x00FF0000) >> 16) / 255,
-                           blue: CGFloat((rgb & 0x0000FF00) >> 8) / 255,
-                           alpha: CGFloat(rgb & 0x000000FF) / 255)
-        }
-        return UIColor(red: CGFloat((rgb & 0xFF0000) >> 16) / 255,
-                       green: CGFloat((rgb & 0x00FF00) >> 8) / 255,
-                       blue: CGFloat(rgb & 0x0000FF) / 255,
-                       alpha: 1)
+        guard let hex else { return nil }
+        return HexColor(hex: hex)?.uiColor
+    }
+}
+
+/// Laisse le toucher du champ coexister avec ses propres gestes : il n'en
+/// annule aucun, il se contente d'être prévenu.
+private final class StoryInlineEditorTouchRelay: NSObject, UIGestureRecognizerDelegate {
+    nonisolated deinit {}
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        true
     }
 }

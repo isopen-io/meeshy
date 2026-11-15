@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_draft_resume_title">Entwurf fortsetzen</string>
+    <string name="feed_draft_resume_action">Fortsetzen</string>
+    <string name="feed_draft_resume_discard_title">Diesen Entwurf löschen?</string>
+    <string name="feed_draft_resume_discard_body">Er wird von diesem Gerät entfernt.</string>
+</resources>

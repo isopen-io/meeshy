@@ -39,6 +39,12 @@ jest.mock('../../../services/MentionService', () => ({
   resolveMentionedUsers: jest.fn<any>().mockResolvedValue([]),
 }));
 
+const mockCreateNotification = jest.fn<any>().mockResolvedValue({ id: 'notif-1' });
+
+jest.mock('../../../services/notifications/notification-service-registry', () => ({
+  getSharedNotificationService: () => ({ createNotification: (...a: any[]) => mockCreateNotification(...a) }),
+}));
+
 jest.mock('../../../services/notifications/NotificationService', () => ({
   NotificationService: jest.fn().mockImplementation(() => ({
     createPostMentionNotificationsBatch: jest.fn<any>().mockResolvedValue(undefined),
@@ -94,7 +100,25 @@ jest.mock('../../../routes/posts/types', () => ({
   },
 }));
 
-// ─── Import after mocks ───────────────────────────────────────────────────────
+// #4147 — POST /posts / from-attachment / repost tirent leur plafond de
+// création d'un compteur PARTAGÉ qui lit Redis directement, fail-closed
+// (createSharedWriteRateLimitPreHandler, routes/posts/socialRateLimit.ts) :
+// sans ce double, `getCacheStore().getNativeClient()` rend `null` en test
+// (aucun REDIS_URL) et CHAQUE écriture de ce type serait refusée avant
+// d'atteindre ce que ce fichier vérifie — détail complet dans
+// unit/routes/posts/core.test.ts, premier fichier de la série à le poser.
+// `incr` répond toujours « premier appel » : ce fichier ne teste PAS le
+// plafond (son témoin dédié vit dans social-write-rate-limit.test.ts) —
+// juste un Redis DISPONIBLE.
+jest.mock('../../../services/CacheStore', () => ({
+  getCacheStore: () => ({
+    getNativeClient: () => ({
+      incr: async () => 1,
+      pexpire: async () => 1,
+      pttl: async () => -1,
+    }),
+  }),
+}));// ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerCoreRoutes } from '../../../routes/posts/core';
 
@@ -114,7 +138,7 @@ const MOCK_POST = {
 
 // ─── buildApp ─────────────────────────────────────────────────────────────────
 
-async function buildApp({ authenticated = true } = {}): Promise<FastifyInstance> {
+async function buildApp({ authenticated = true, emailVerified = true, activation = undefined as unknown, prisma = {} as unknown, role = 'USER' } = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
   const requiredAuth = async (req: any, reply: any) => {
@@ -126,7 +150,7 @@ async function buildApp({ authenticated = true } = {}): Promise<FastifyInstance>
       type: 'user',
       isAnonymous: false,
       userId: USER_ID,
-      registeredUser: { id: USER_ID, role: 'USER' },
+      registeredUser: { emailVerifiedAt: emailVerified ? new Date() : null, id: USER_ID, role, activation },
     };
   };
 
@@ -142,7 +166,7 @@ async function buildApp({ authenticated = true } = {}): Promise<FastifyInstance>
     broadcastStatusDeleted: jest.fn<any>().mockResolvedValue(undefined),
   });
 
-  registerCoreRoutes(app, {} as any, requiredAuth);
+  registerCoreRoutes(app, prisma as any, requiredAuth);
   await app.ready();
   return app;
 }
@@ -161,6 +185,47 @@ describe('POST /posts — not authenticated', () => {
       payload: { content: 'Hello' },
     });
     expect(res.statusCode).toBe(401);
+  });
+});
+
+// #8476 — publier suit la loi du délai de grâce (#8238) : une adresse non
+// prouvée n'empêche rien tant que la phase d'activation n'est pas `blocked`.
+const inGrace = (phase: 'quiet' | 'invite') => ({ phase, deadline: '2026-10-26T00:00:00.000Z', missing: ['email', 'phone'] });
+
+describe('POST /posts — email not verified, within the activation grace', () => {
+  it.each(['quiet', 'invite'] as const)('a POST reaches the creation in phase %s', async (phase) => {
+    mockCreatePost.mockResolvedValue(MOCK_POST);
+    const app = await buildApp({ emailVerified: false, activation: inGrace(phase) });
+    const res = await app.inject({ method: 'POST', url: '/posts', payload: { content: 'Hello' } });
+    expect(res.statusCode).toBe(201);
+    await app.close();
+  });
+
+  it('a second STORY reaches the creation too — no first-story exception is needed any more', async () => {
+    mockCreatePost.mockResolvedValue({ ...MOCK_POST, type: 'STORY' });
+    const findFirst = jest.fn<any>().mockResolvedValue({ id: 'story-0' });
+    const app = await buildApp({ emailVerified: false, activation: inGrace('invite'), prisma: { post: { findFirst } } });
+    const res = await app.inject({ method: 'POST', url: '/posts', payload: { type: 'STORY', content: 'Hello' } });
+    expect(res.statusCode).toBe(201);
+    await app.close();
+  });
+});
+
+describe('POST /posts — email not verified, outside the activation grace', () => {
+  it('returns 403 EMAIL_NOT_VERIFIED once the phase is blocked', async () => {
+    const app = await buildApp({ emailVerified: false, activation: { phase: 'blocked', deadline: '2026-09-01T00:00:00.000Z', missing: ['email', 'phone'] } });
+    const res = await app.inject({ method: 'POST', url: '/posts', payload: { content: 'Hello' } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
+    await app.close();
+  });
+
+  it('returns 403 EMAIL_NOT_VERIFIED when no activation was served (fail-closed)', async () => {
+    const app = await buildApp({ emailVerified: false });
+    const res = await app.inject({ method: 'POST', url: '/posts', payload: { content: 'Hello' } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
+    await app.close();
   });
 });
 
@@ -361,11 +426,18 @@ describe('DELETE /posts/:postId — not authenticated', () => {
   });
 });
 
+const AUTHOR_ID = '507f1f77bcf86cd799439099';
+
+const deletePrisma = (post: { authorId: string; type?: string } | null, authorRole = 'USER') => ({
+  post: { findFirst: jest.fn<any>().mockResolvedValue(post) },
+  user: { findUnique: jest.fn<any>().mockResolvedValue({ role: authorRole, systemLanguage: 'fr' }) },
+});
+
 describe('DELETE /posts/:postId — not found', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
-    mockDeletePost.mockResolvedValue(null);
-    app = await buildApp();
+    mockDeletePost.mockReset();
+    app = await buildApp({ prisma: deletePrisma(null) });
   });
   afterAll(async () => { await app.close(); });
 
@@ -375,41 +447,83 @@ describe('DELETE /posts/:postId — not found', () => {
       url: `/posts/${POST_ID}`,
     });
     expect(res.statusCode).toBe(404);
+    expect(mockDeletePost).not.toHaveBeenCalled();
   });
 });
 
 describe('DELETE /posts/:postId — forbidden', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    mockDeletePost.mockRejectedValue(new Error('FORBIDDEN'));
-    app = await buildApp();
-  });
-  afterAll(async () => { await app.close(); });
+  it('returns 403 when a plain user is not the post author', async () => {
+    mockDeletePost.mockReset();
+    const app = await buildApp({ prisma: deletePrisma({ authorId: AUTHOR_ID }) });
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}`, payload: { reason: 'Hors charte' } });
+    await app.close();
 
-  it('returns 403 when user is not the post author', async () => {
-    const res = await app.inject({
-      method: 'DELETE',
-      url: `/posts/${POST_ID}`,
-    });
     expect(res.statusCode).toBe(403);
+    expect(mockDeletePost).not.toHaveBeenCalled();
+  });
+
+  it('#11149 — un MODERATOR ne retire pas la publication d’un ADMIN', async () => {
+    mockDeletePost.mockReset();
+    const app = await buildApp({ role: 'MODERATOR', prisma: deletePrisma({ authorId: AUTHOR_ID }, 'ADMIN') });
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}`, payload: { reason: 'Hors charte' } });
+    await app.close();
+
+    expect(res.statusCode).toBe(403);
+    expect(mockDeletePost).not.toHaveBeenCalled();
   });
 });
 
 describe('DELETE /posts/:postId — success', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
-    mockDeletePost.mockResolvedValue({ ...MOCK_POST, deletedAt: new Date() });
-    app = await buildApp();
+    mockDeletePost.mockReset().mockResolvedValue({ ...MOCK_POST, deletedAt: new Date() });
+    mockCreateNotification.mockClear();
+    app = await buildApp({ prisma: deletePrisma({ authorId: USER_ID, type: 'POST' }) });
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 200 with success=true', async () => {
+  it("returns 200 with success=true — l'auteur, sans corps, sans motif ni notification", async () => {
     const res = await app.inject({
       method: 'DELETE',
       url: `/posts/${POST_ID}`,
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+    expect(mockDeletePost).toHaveBeenCalledWith(POST_ID, USER_ID, { actorRole: 'USER' });
+    expect(mockCreateNotification).not.toHaveBeenCalled();
+  });
+});
+
+describe('DELETE /posts/:postId — retrait par la modération (#11149)', () => {
+  it('exige un motif : 400 MODERATION_REASON_REQUIRED, rien de retiré', async () => {
+    mockDeletePost.mockReset();
+    const app = await buildApp({ role: 'MODERATOR', prisma: deletePrisma({ authorId: AUTHOR_ID }) });
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}`, payload: { reason: 'no' } });
+    await app.close();
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('MODERATION_REASON_REQUIRED');
+    expect(mockDeletePost).not.toHaveBeenCalled();
+  });
+
+  it("retire avec le motif nettoyé et prévient l'AUTEUR par content_removed", async () => {
+    mockDeletePost.mockReset().mockResolvedValue({ ...MOCK_POST, authorId: AUTHOR_ID, type: 'REEL', deletedAt: new Date() });
+    mockCreateNotification.mockClear();
+    const app = await buildApp({ role: 'ADMIN', prisma: deletePrisma({ authorId: AUTHOR_ID, type: 'REEL' }) });
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}`, payload: { reason: '  Contenu violent  ' } });
+    await new Promise((resolve) => setImmediate(resolve));
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(mockDeletePost).toHaveBeenCalledWith(POST_ID, USER_ID, { actorRole: 'ADMIN', reason: 'Contenu violent' });
+    expect(mockCreateNotification).toHaveBeenCalledTimes(1);
+    expect(mockCreateNotification).toHaveBeenCalledWith(expect.objectContaining({
+      userId: AUTHOR_ID,
+      type: 'content_removed',
+      title: 'Votre réel a été retiré par la modération',
+      metadata: { contentType: 'reel', contentId: POST_ID, postId: POST_ID, reason: 'Contenu violent' },
+    }));
+    expect(mockCreateNotification.mock.calls[0][0].actor).toBeUndefined();
   });
 });
 

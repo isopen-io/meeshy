@@ -1,0 +1,515 @@
+{
+ "features": {
+  "F1": {
+   "titre": "La pastille de synchronisation annonce chaque état, dont la frappe, et toucher quelqu'un qui écrit ouvre sa conversation",
+   "clauses": [
+    "La pastille (SyncPill) annonce les états de synchronisation et de connexion : hors ligne, reconnexion, envois en cours par nature, échecs, retour en ligne.",
+    "La pastille annonce la frappe : « X écrit… » dans une conversation, avec l'emphase ×1,1 d'iOS (TypingAnnouncementLaw) au début d'une frappe.",
+    "Toucher une entrée de frappe ouvre la conversation où la personne écrit ; toucher une entrée en échec la relance ; toucher une entrée avec source va à sa source.",
+    "Visible sur tous les écrans où iOS la montre, à la place qu'iOS lui donne (SyncPillPlacement), masquée là où iOS la masque."
+   ],
+   "ios_reference_files": [
+    "apps/ios/Meeshy/Features/Main/Components/SyncPill.swift",
+    "apps/ios/Meeshy/Features/Main/ViewModels/SyncPillViewModel.swift",
+    "apps/ios/Meeshy/Features/Main/Components/TypingAnnouncementLaw.swift",
+    "apps/ios/Meeshy/Features/Main/Components/SyncPillLabels.swift",
+    "apps/ios/Meeshy/Features/Main/Components/SyncPillPlacement.swift",
+    "apps/ios/Meeshy/Features/Main/Components/SyncPillRotator.swift",
+    "apps/ios/Meeshy/Features/Main/Components/SyncPillMarquee.swift",
+    "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift"
+   ],
+   "android_existant": "core/model …/syncpill/* et …/connection/SyncPillReducer.kt + SyncPillEntry.kt (TYPING_SCALE vaut 1.6f là où iOS dit 1.1) : la loi existe, aucune peau Compose n'est montée (le slot searchSyncPill de ConversationListScreen vaut {}).",
+   "plan_targets": [
+    "pastille-synchro-globale-affichage"
+   ]
+  },
+  "F2": {
+   "titre": "L'aperçu du dernier message montre toujours son auteur devant, et détaille une pièce jointe : pictogramme, nombre, poids, dimensions, durée",
+   "clauses": [
+    "L'aperçu de la ligne de conversation décrit UN seul message, le dernier, correctement (Prisme rang par rang, jamais translations.first).",
+    "L'auteur est TOUJOURS devant l'aperçu : « Vous : » pour mes messages, le nom de l'expéditeur sinon, en conversation directe comme en groupe. La directive du 2026-11-03 prime sur une convention iOS antérieure qui le tairait ; un tel changement côté iOS s'écrit dans apps/ios/decisions/.",
+    "Une pièce jointe est précisée : un pictogramme par nature (photo, vidéo, vocal, audio, fichier, contact, lieu, sticker…), le nombre (« 3 photos »), le poids (« 2,4 Mo »), les dimensions d'une image ou d'une vidéo (« 1920 × 1080 »), la durée d'un audio ou d'une vidéo, le nom et l'extension d'un fichier ; pluriels et mélanges ont une forme définie.",
+    "Un message ou une pièce protégés (éphémère, vue unique, flouté, chiffré, expiré) ne livrent AUCUN détail de pièce : ni poids, ni dimensions, ni durée, ni nom (leçon 275).",
+    "La loi est UNE : packages/shared/utils/conversation-preview.ts + packages/shared/fixtures/conversation-preview-cases.json, rejoués par le composeur Swift et la loi Kotlin ; un détail que la passerelle ne sert pas dans la ligne de liste s'ajoute de façon rétrocompatible (champ additif)."
+   ],
+   "ios_reference_files": [
+    "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationPreview/ConversationPreviewComposer.swift",
+    "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationPreview/ConversationPreviewBody.swift",
+    "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationPreview/ConversationPreviewStrings.swift",
+    "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationListAuthor.swift",
+    "packages/MeeshySDK/Sources/MeeshySDK/Models/LastMessageFacet.swift",
+    "apps/ios/Meeshy/Features/Main/Views/ConversationPreviewLine.swift",
+    "packages/shared/utils/conversation-preview.ts",
+    "packages/shared/fixtures/conversation-preview-cases.json"
+   ],
+   "android_existant": "Fondations fusionnées : liste-conversations-fil-complet-et-contrat-apercu, piece-jointe-fil-complet-et-protection, conversation-derniere-ligne-facette-atomique, apercu-conversation-donnees. Restent la loi du composeur et le rendu de ligne.",
+   "plan_targets": [
+    "conversation-apercu-compositeur-loi",
+    "ligne-apercu-rendu"
+   ]
+  },
+  "F3": {
+   "titre": "Toucher l'avatar d'une ligne ouvre le profil de l'interlocuteur ou les détails du groupe, et l'avatar montre décoration, humeur et présence",
+   "clauses": [
+    "Toucher l'avatar d'une conversation directe ouvre la fiche profil de l'interlocuteur ; d'une conversation à plusieurs (groupe, public, communauté) ouvre les détails de la conversation — jamais le fil.",
+    "Le geste d'avatar est distinct : toucher la ligne ouvre la conversation, l'appui long sur la ligne ouvre ses options, et la zone de l'avatar est exclue de ces deux gestes.",
+    "L'avatar montre la décoration équipée (contour), l'humeur si elle existe, la présence si le serveur l'a servie (amis acceptés ; hors ligne = aucun point ; Ami = en ligne ou rien, Proche = détaillée — #13928).",
+    "Accessibilité : l'avatar est un bouton à part entière, libellé (« Voir le profil de X » / « Détails de Y »), cible 44 pt / 48 dp, actions annoncées par VoiceOver et TalkBack.",
+    "Un interlocuteur supprimé, bloqué ou anonyme a un repli défini (détails de la conversation) au lieu d'un geste mort."
+   ],
+   "ios_reference_files": [
+    "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",
+    "apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift",
+    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift"
+   ],
+   "android_existant": "Fondations fusionnées : atomes-d-avatar-loi-humeur-et-non-lus, avatar-unique-et-branchement-social, racine-fiches-profil-partage, profile-entry-points-messaging, ligne-lentille-plate. Reste le branchement des gestes de la ligne.",
+   "plan_targets": [
+    "ligne-avatar-gestes"
+   ]
+  },
+  "F4": {
+   "titre": "En faisant défiler la liste des conversations et le fil, le rail des stories reste en haut, réduit en petit rail",
+   "clauses": [
+    "Dans la liste des conversations, le grand plateau de stories défile avec la liste puis, une fois sorti, une bande compacte (PinnedStoryTrailBand d'iOS) prend la place du titre dans l'en-tête réduit.",
+    "Même comportement dans le fil des posts (FeedView d'iOS), même composant, même pipeline de données.",
+    "Toucher un anneau de la bande ouvre le lecteur de stories comme le grand plateau ; la bande ne recompose ni la liste ni le fil à chaque image de défilement (fluidité, dimension 4)."
+   ],
+   "ios_reference_files": [
+    "apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift",
+    "apps/ios/Meeshy/Features/Stories/Views/StoryEntryMetrics.swift",
+    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+StoryRail.swift",
+    "apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift",
+    "apps/ios/Meeshy/Features/Main/Views/FeedView.swift",
+    "apps/ios/Meeshy/Features/Main/Views/RootViewComponents.swift"
+   ],
+   "android_existant": "feature/stories porte StoryTray.kt, StoryRailPlan.kt, StoryEntryMetrics.kt ; la bande compacte et l'en-tête repliable de la liste restent à faire.",
+   "plan_targets": [
+    "liste-entete-et-plateau-stories",
+    "story-tray-pinned-band"
+   ]
+  }
+ },
+ "lots": [
+  {
+   "key": "pastille-toucher-mene-a-chaque-source",
+   "platform": "ios",
+   "title": "Toucher une entrée de la pastille mène toujours quelque part : la conversation même hors cache, mes stories pour une story en publication",
+   "goal": "Sortir la destination d'un toucher de la pastille dans une loi pure partagée par RootView et iPadRootView, et supprimer les deux toucher morts : une story en publication ouvre mes stories, une conversation absente de la liste en mémoire s'ouvre par son id (cache GRDB puis réseau).",
+   "acceptance": [
+    "Une loi nonisolated SyncPillDestination.resolve(source:knownConversationIds:currentUserId:) rend .openConversation(id, highlight) / .openConversationById(id, highlight) / .openPost(id) / .openOwnStories(userId) / .none ; RootView.handleSyncPillTap et iPadRootView.handleSyncPillTap n'ont plus de switch propre et l'appliquent seulement",
+    "Toucher une frappe dont la conversation n'est pas dans conversations l'ouvre par RootConversationOpener.navigateToConversationById (iPhone) et par son équivalent iPad, jamais un log puis rien",
+    "Toucher une entrée .story (publication en cours) ouvre le lecteur sur les stories de l'utilisateur courant (StoryViewerRequest(id: currentUserId, singleGroup: true)) ; sans utilisateur courant, la rotation avance (aucun toucher inerte)",
+    "L'ancre de message et sa portée par conversation (#4027) restent posées avant la navigation, pour les deux racines",
+    "Décision écrite : apps/ios/decisions/2026-11-03-toucher-une-entree-de-la-pastille-mene-toujours-quelque-part.md (demande porteur du 2026-11-03, remplace le « V1 no-op »)",
+    "./apps/ios/meeshy.sh test vert ; preuve ios.yml workflow_dispatch only_testing=SyncPillDestinationTests,SyncPillRetryWiringTests au SHA de tête"
+   ],
+   "tests": [
+    "SyncPillDestinationTests.test_resolve_conversationInCache_opensItWithAnchor",
+    "SyncPillDestinationTests.test_resolve_conversationNotInCache_opensById",
+    "SyncPillDestinationTests.test_resolve_story_opensOwnStories",
+    "SyncPillDestinationTests.test_resolve_storyWithoutCurrentUser_returnsNone",
+    "SyncPillDestinationTests.test_resolve_unknown_returnsNone",
+    "SyncPillRetryWiringTests (inchangé, non régression retry > navigate > advance)"
+   ],
+   "files": [
+    "apps/ios/Meeshy/Features/Main/Components/SyncPillDestination.swift",
+    "apps/ios/Meeshy/Features/Main/Views/RootView.swift",
+    "apps/ios/Meeshy/Features/Main/Views/iPadRootView+Navigation.swift",
+    "apps/ios/MeeshyTests/Unit/Components/SyncPillDestinationTests.swift",
+    "apps/ios/decisions/2026-11-03-toucher-une-entree-de-la-pastille-mene-toujours-quelque-part.md",
+    "apps/ios/decisions.md"
+   ],
+   "ios_reference_files": [
+    "apps/ios/Meeshy/Features/Main/Views/RootView.swift",
+    "apps/ios/Meeshy/Features/Main/Views/iPadRootView+Navigation.swift",
+    "apps/ios/Meeshy/Features/Main/Views/RootConversationOpener.swift",
+    "apps/ios/Meeshy/Features/Main/Components/SyncPill.swift",
+    "packages/MeeshySDK/Sources/MeeshySDK/Persistence/OutboxUIItem.swift"
+   ],
+   "deps": [],
+   "sensible": false,
+   "lourd": false,
+   "features": [
+    "F1"
+   ],
+   "source": "cartographie",
+   "role": "cible",
+   "issue": 15741,
+   "pr": 15759
+  },
+  {
+   "key": "apercu-piece-jointe-detaillee-loi",
+   "platform": "partage",
+   "title": "La ligne d'aperçu détaille toujours une pièce jointe, même légendée, et ne dit rien de celle d'un éphémère",
+   "goal": "Changer la loi unique composeConversationPreview et ses vecteurs, avec son miroir Swift dans la MÊME PR (sinon ConversationPreviewCasesTests rougit sur dev) : une légende ne fait plus disparaître nombre et détails, les dimensions s'écrivent « L × H », l'éphémère actif ne livre plus aucun détail de pièce. Décision iOS écrite.",
+   "acceptance": [
+    "Pièce seule légendée : icône + légende servie par le Prisme + détails (durée, « L × H », pages, poids) — « Alice : 📷 Au bord du lac · 450 × 456 · 234 Ko » ; un audio nommé ou un fichier garde aussi son nom.extension après la légende.",
+    "Plusieurs pièces légendées : « 📷 3 photos · Nos vacances · 1,4 Mo » ; mixte : « 📎 4 pièces jointes · Nos vacances » ; sans légende, formes actuelles inchangées.",
+    "Dimensions « 1920 × 1080 » (× entre espaces insécables U+00A0) dans TS et Swift.",
+    "Éphémère actif : [décompte, nature] seulement (« 🔥 4 min · Photo ») — ni poids, ni dimensions, ni durée, ni nom ; son texte reste servi comme avant (#9574).",
+    "Protections et préséance inchangées (expiré > vue unique > flou > chiffré > flamme-œil > éphémère) ; un message protégé ne rend toujours aucun détail.",
+    "Vecteurs : photo-with-caption, attachments-with-caption, ephemeral-photo, photo, video mis à jour ; cas ajoutés (fichier légendé, vidéos légendées, mixte légendé, éphémère audio nommé, éphémère fichier, auteur en direct « Vous : » et « Alice : » avec isDirect).",
+    "Vitest shared vert et sdk-tests (only_testing ConversationPreviewCasesTests,ConversationPreviewProjectionTests) vert par workflow_dispatch au SHA de tête ; les témoins web qui figent l'ancienne valeur sont mis à jour à la valeur, rien d'autre côté web.",
+    "apps/ios/decisions/2026-11-03-l-apercu-detaille-une-piece-jointe-meme-legendee.md écrit et cartographié dans apps/ios/decisions.md (la demande du 2026-11-03 prime sur « la légende gagne »)."
+   ],
+   "tests": [
+    "packages/shared/__tests__/conversation-preview.test.ts : caption keeps details, many with caption keeps count, dimensions spaced, ephemeral hides piece details, direct author always",
+    "packages/MeeshySDK/Tests/MeeshySDKTests/Models/ConversationPreviewCasesTests.swift (rejoue le JSON)",
+    "packages/MeeshySDK/Tests/MeeshySDKTests/Models/ConversationPreviewProjectionTests.swift : test_compose_ephemeralPhoto_hidesDimensionsAndSize"
+   ],
+   "files": [
+    "packages/shared/utils/conversation-preview.ts",
+    "packages/shared/fixtures/conversation-preview-cases.json",
+    "packages/shared/__tests__/conversation-preview.test.ts",
+    "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationPreview/ConversationPreviewBody.swift",
+    "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationPreview/ConversationPreviewComposer.swift",
+    "packages/MeeshySDK/Tests/MeeshySDKTests/Models/ConversationPreviewProjectionTests.swift",
+    "apps/ios/decisions/2026-11-03-l-apercu-detaille-une-piece-jointe-meme-legendee.md",
+    "apps/ios/decisions.md",
+    "apps/web/src/components/conversation-preview.test.tsx",
+    "apps/web/src/components/lens-row-preview.test.tsx"
+   ],
+   "ios_reference_files": [
+    "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationPreview/ConversationPreviewBody.swift",
+    "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationPreview/ConversationPreviewComposer.swift",
+    "packages/shared/utils/conversation-preview.ts",
+    "packages/shared/fixtures/conversation-preview-cases.json"
+   ],
+   "deps": [],
+   "sensible": true,
+   "lourd": true,
+   "features": [
+    "F2"
+   ],
+   "source": "cartographie",
+   "role": "cible",
+   "issue": 15559,
+   "pr": 15700
+  },
+  {
+   "key": "apercu-details-dits-a-voiceover",
+   "platform": "ios",
+   "title": "VoiceOver dit l'auteur et les détails d'une pièce de la ligne de conversation en mots",
+   "goal": "La ligne iOS lit à VoiceOver ce que l'œil voit après la nouvelle loi : auteur devant, dimensions « 1920 sur 1080 », poids en mots, sans glyphe ; témoins de rendu de ligne.",
+   "acceptance": [
+    "spokenText lit une dimension « L × H » comme « L sur H » (clé localisée dans les 7 langues) et un poids en mots ; les horloges restent lues en durée.",
+    "Conversation directe : le libellé VoiceOver et le texte vu commencent par « Alice : » ou « Vous : ».",
+    "Photo légendée : texte vu = légende + dimensions + poids ; éphémère photo : ni dimensions ni poids, vu comme dit.",
+    "LocalizationConsistencyTests vert ; ios.yml (only_testing ConversationPreviewLineTests) vert par workflow_dispatch au SHA de tête."
+   ],
+   "tests": [
+    "ConversationPreviewLineTests.test_spokenText_dimensions_readsInWords",
+    "ConversationPreviewLineTests.test_spokenText_fileSize_readsInWords",
+    "ConversationPreviewLineTests.test_preview_directConversation_prefixesPeerAuthor",
+    "ConversationPreviewLineTests.test_preview_captionedPhoto_keepsDetails",
+    "ConversationPreviewLineTests.test_preview_ephemeralPhoto_hidesDetails"
+   ],
+   "files": [
+    "apps/ios/Meeshy/Features/Main/Views/ConversationPreviewLine.swift",
+    "apps/ios/Meeshy/Localizable.xcstrings",
+    "apps/ios/MeeshyTests/Unit/Views/ConversationPreviewLineTests.swift"
+   ],
+   "ios_reference_files": [
+    "apps/ios/Meeshy/Features/Main/Views/ConversationPreviewLine.swift",
+    "apps/ios/Meeshy/Features/Main/Views/ConversationPreviewCatalog.swift"
+   ],
+   "deps": [
+    "apercu-piece-jointe-detaillee-loi"
+   ],
+   "sensible": false,
+   "lourd": false,
+   "features": [
+    "F2"
+   ],
+   "source": "cartographie",
+   "role": "cible",
+   "issue": 15760,
+   "pr": 15772
+  },
+  {
+   "key": "liste-piece-protegee-sans-detail",
+   "platform": "serveur",
+   "title": "La liste des conversations n'envoie plus rien d'une pièce protégée ou éphémère : ni poids, ni dimensions, ni durée, ni nom, ni vignette",
+   "goal": "Fermer la charge (leçon 275) : sur GET /conversations et conversation:updated, une pièce masquée (vue unique, floutée, effet) d'un message non retenu, ou une pièce d'un éphémère, part réduite à sa nature et ses drapeaux, par UNE projection partagée par les deux chemins.",
+   "acceptance": [
+    "REST lastMessage.attachments[0] et socket lastMessageAttachments[0] : pour une pièce maskedAttachment ou d'un message éphémère actif, seuls id, mimeType, isViewOnce, isBlurred, effectFlags portent une valeur ; fileSize, duration, width, height, pageCount, originalName, thumbnailUrl, alt, metadata, bitrate, sampleRate sont null ou absents.",
+    "attachmentSummary / lastMessageAttachmentSummary : count et kinds gardés, totalSize null dès qu'une pièce chargée est masquée ou que le message est éphémère.",
+    "Une seule fonction pure (routes/conversations/utils/last-message-media.ts) décide la projection ; list-last-message-body.ts et lastMessagePreviewPrism.ts l'appellent ; core-list.ts et lastMessagePreviewGroup.ts ne reçoivent qu'un hunk de câblage de cinq lignes au plus.",
+    "Rétrocompatible : clés et schémas de réponse inchangés, valeurs nullables ; un message non protégé garde tous ses détails (témoin de non-régression).",
+    "Gateway vert sous bun (ci.yml workflow_dispatch au SHA de tête) ; passage par auditeur-adversarial (protection de contenu)."
+   ],
+   "tests": [
+    "services/gateway/src/routes/conversations/utils/__tests__/list-last-message-body.protected-piece.test.ts",
+    "services/gateway/src/socketio/utils/__tests__/lastMessagePreviewPrism.test.ts : pièce masquée et pièce d'éphémère sans détail",
+    "services/gateway/src/socketio/utils/__tests__/lastMessagePreviewGroup.test.ts : totalSize nul sous pièce masquée"
+   ],
+   "files": [
+    "services/gateway/src/routes/conversations/utils/last-message-media.ts",
+    "services/gateway/src/routes/conversations/utils/list-last-message-body.ts",
+    "services/gateway/src/routes/conversations/utils/last-message-nature.ts",
+    "services/gateway/src/routes/conversations/core-list.ts",
+    "services/gateway/src/socketio/utils/lastMessagePreviewPrism.ts",
+    "services/gateway/src/socketio/utils/lastMessagePreviewGroup.ts"
+   ],
+   "ios_reference_files": [
+    "packages/shared/utils/attachment-protection.ts"
+   ],
+   "deps": [],
+   "sensible": true,
+   "lourd": false,
+   "features": [
+    "F2"
+   ],
+   "source": "cartographie",
+   "role": "cible",
+   "issue": 15701
+  },
+  {
+   "key": "interlocuteur-compte-ferme-servi",
+   "platform": "serveur",
+   "title": "La liste des conversations dit quand l'interlocuteur a fermé son compte",
+   "goal": "Servir, de façon additive et rétrocompatible, accountClosed: true sur un participant dont le compte est désactivé ou supprimé (User.isActive === false), dans la liste et le détail, pour que les clients replient le toucher d'avatar sur les détails au lieu d'un profil mort.",
+   "acceptance": [
+    "Les participants de GET /conversations (top 5) et du détail portent accountClosed: true quand User.isActive === false, et n'ont PAS le champ sinon (ancien client inchangé).",
+    "accountClosed est déclaré dans conversationParticipantMinimalSchema et conversationParticipantSchema (fast-json-stringify le garde) ; conversation-list-select-parity reste vert.",
+    "Rien d'autre du compte ne part : ni deletedAt, ni deactivatedAt, ni horodatage ; un participant anonyme n'a jamais le champ.",
+    "Le select de la liste ne charge que user.isActive en plus (aucune requête supplémentaire)."
+   ],
+   "tests": [
+    "services/gateway conversation-list-account-closed.test.ts : pair supprimé => accountClosed true ; pair actif => champ absent ; anonyme => absent",
+    "packages/shared participant-helpers serializeConversationParticipant : accountClosed projeté depuis user.isActive, jamais d'horodatage",
+    "conversation-list-select-parity.test.ts (existant) vert"
+   ],
+   "files": [
+    "packages/shared/types/api-schemas/conversation.ts",
+    "packages/shared/utils/participant-helpers.ts",
+    "services/gateway/src/routes/conversations/core-selects.ts",
+    "services/gateway/src/routes/conversations/core-list.ts",
+    "services/gateway/src/routes/conversations/core-detail.ts"
+   ],
+   "ios_reference_files": [],
+   "deps": [],
+   "sensible": true,
+   "lourd": false,
+   "features": [
+    "F3"
+   ],
+   "source": "cartographie",
+   "role": "cible",
+   "issue": 15717,
+   "pr": 15739
+  },
+  {
+   "key": "ligne-avatar-cible-et-accessibilite",
+   "platform": "ios",
+   "title": "Toucher l'avatar d'une ligne ouvre toujours un profil ou des détails, et VoiceOver l'annonce comme un bouton à part",
+   "goal": "Une loi pure décide de la cible du toucher d'avatar (profil du pair ou détails), avec repli détails pour un interlocuteur supprimé, bloqué ou anonyme et une conversation verrouillée qui passe la porte PIN puis montre les détails ; l'avatar sort de la fusion VoiceOver de la ligne avec son propre libellé et ses actions.",
+   "acceptance": [
+    "ConversationAvatarTarget.resolve (SDK, nonisolated) : direct + pair inscrit, non bloqué, compte non fermé => .profile(userId) ; tout autre cas (groupe, public, communauté, anonyme, supprimé, bloqué, pair inconnu) => .conversationInfo ; jamais nil.",
+    "ConversationListView consomme la loi : plus aucun toucher d'avatar sans effet ; anneau de story non lu garde la priorité (MeeshyAvatar.handleTap).",
+    "Conversation verrouillée : le toucher présente la porte PIN puis, déverrouillée, les détails, jamais le fil.",
+    "VoiceOver : l'avatar est un élément distinct hors du .combine de la ligne, trait bouton, libellé « Voir le profil de X » ou « Détails de Y » (clés neuves, 7 langues), cible >= 44 pt, entrées de son menu exposées en accessibilityActions ; la ligne garde son libellé et son indice.",
+    "APIConversationUser et MeeshyConversation décodent accountClosed (absent = false), sur les rangs Lentille et Themed.",
+    "Décision écrite : apps/ios/decisions/2026-11-03-l-avatar-d-une-ligne-n-ouvre-jamais-le-fil.md."
+   ],
+   "tests": [
+    "MeeshySDKTests ConversationAvatarTargetTests : direct, groupe, public, communauté, anonyme, supprimé, bloqué, pair absent",
+    "MeeshySDKTests APIConversationAccountClosedDecodingTests : présent, absent, ancien serveur",
+    "MeeshyTests LentilleRowAvatarAccessibilityTests : libellé, trait bouton, actions, hors fusion",
+    "MeeshyTests ConversationListAvatarRoutingTests : verrouillée => PIN puis détails"
+   ],
+   "files": [
+    "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationAvatarTarget.swift",
+    "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationModels.swift",
+    "packages/MeeshySDK/Sources/MeeshySDK/Models/MeeshyConversation.swift",
+    "apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift",
+    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift",
+    "apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift",
+    "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",
+    "apps/ios/Meeshy/Localizable.xcstrings",
+    "apps/ios/decisions/2026-11-03-l-avatar-d-une-ligne-n-ouvre-jamais-le-fil.md"
+   ],
+   "ios_reference_files": [
+    "apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift",
+    "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",
+    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Profile/ProfileSheetUser.swift"
+   ],
+   "deps": [
+    "interlocuteur-compte-ferme-servi"
+   ],
+   "sensible": true,
+   "lourd": true,
+   "features": [
+    "F3"
+   ],
+   "source": "cartographie",
+   "role": "cible",
+   "issue": 15887,
+   "pr": 15942
+  },
+  {
+   "key": "ligne-avatar-contour-du-pair",
+   "platform": "android",
+   "title": "L'avatar d'une conversation directe montre le contour que l'interlocuteur a équipé",
+   "goal": "Décoder le profileDecor servi sur le participant de la liste et passer le contour du pair à l'avatar de ligne (direct seulement), comme iOS participantRing.",
+   "acceptance": [
+    "ApiParticipant décode profileDecor (nullable, tolérant, ancien serveur et vieille ligne Room = null) en hunk de câblage <= 5 lignes dans Conversation.kt.",
+    "DirectInterlocutor expose le contour du pair ; un groupe n'a jamais de contour de pair.",
+    "ConversationRowAvatar passe ce contour à MeeshyAvatar (API posée par contours-d-avatar-equipes) ; anneau de story concentrique, point par-dessus, contour décoratif ignoré par TalkBack et sans animation sous réduction.",
+    "Aucun littéral de couleur ; accent toujours en paramètre."
+   ],
+   "tests": [
+    "core/model ApiParticipantProfileDecorDecodingTest : présent, absent, illisible",
+    "core/model DirectInterlocutorRingTest : direct => contour du pair ; groupe => null",
+    "feature/conversations ConversationRowAvatarContourTest (Robolectric) : contour rendu pour un direct décoré, absent pour un groupe"
+   ],
+   "files": [
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/Conversation.kt",
+    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/DirectInterlocutor.kt",
+    "apps/android/feature/conversations/src/main/kotlin/me/meeshy/app/conversations/ConversationRowAvatar.kt",
+    "apps/android/feature/conversations/src/main/kotlin/me/meeshy/app/conversations/ConversationFlatRow.kt",
+    "apps/android/feature/conversations/src/main/kotlin/me/meeshy/app/conversations/ConversationRowActions.kt"
+   ],
+   "ios_reference_files": [
+    "apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift",
+    "packages/MeeshySDK/Sources/MeeshySDK/Models/DirectInterlocutor.swift"
+   ],
+   "deps": [
+    "ligne-avatar-gestes",
+    "contours-d-avatar-equipes"
+   ],
+   "sensible": false,
+   "lourd": false,
+   "features": [
+    "F3"
+   ],
+   "source": "cartographie",
+   "role": "cible",
+   "issue": 15984
+  }
+ ],
+ "exclusions": {
+  "liste-entete-et-plateau-stories": "F4 est portée entière par story-tray-pinned-band (bande + deux hôtes). Le plateau défile déjà avec la liste (ConversationListBody.kt:76). Le reste du lot (actions de verre 44 dp, « Poser un mood », titre dégradé) n'est pas demandé, et sa chaîne de trois dépendances retarderait F4.",
+  "liste-virtualisee-entetes": "Atteint seulement par liste-entete-et-plateau-stories : en-têtes épinglés et virtualisation non demandés par F4.",
+  "liste-sections-etat-et-ordre": "Dépendance de liste-virtualisee-entetes seulement ; aucune clause F1-F4 ne l'exige.",
+  "persist-conversations-fusion-en-place": "Dépendance de liste-sections-etat-et-ordre seulement ; aucun lot cible de F1-F4 n'en dépend."
+ },
+ "issues": {
+  "conversation-apercu-compositeur-loi": 15986,
+  "ephemere-echeance-par-lecteur-et-reveil-unique": 15985,
+  "ligne-apercu-rendu": 15988,
+  "ligne-avatar-gestes": 15989,
+  "contours-d-avatar-equipes": 15042,
+  "pastille-toucher-mene-a-chaque-source": 15741,
+  "apercu-piece-jointe-detaillee-loi": 15559,
+  "apercu-details-dits-a-voiceover": 15760,
+  "liste-piece-protegee-sans-detail": 15701,
+  "interlocuteur-compte-ferme-servi": 15717,
+  "ligne-avatar-cible-et-accessibilite": 15887,
+  "ligne-avatar-contour-du-pair": 15984
+ },
+ "deps_extra": {
+  "conversation-apercu-compositeur-loi": [
+   "apercu-piece-jointe-detaillee-loi"
+  ],
+  "ligne-avatar-gestes": [
+   "interlocuteur-compte-ferme-servi"
+  ],
+  "liste-entete-et-plateau-stories": [
+   "story-tray-pinned-band"
+  ]
+ },
+ "criteres_ajoutes": {
+  "pastille-synchro-globale-affichage": [
+   "Miroir Kotlin de TypingAnnouncementLaw dans :core:model (me.meeshy.sdk.model.syncpill) : EMPHASIS_SCALE = 1.1f, montée 220 ms / palier 450 ms / retour 280 ms, total DÉRIVÉ, scale(emphasizing) = 1f au repos, announcement(newEntries) = la DERNIÈRE entrée de frappe neuve, conversationId(fromEntryId) ; une frappe qui continue ne rejoue pas l'accent ; Réduire les animations ⇒ aucune emphase. Témoin TypingAnnouncementLawTest (port de TypingAnnouncementLawTests.swift)",
+   "SyncPillEntry.TYPING_SCALE (1.6f, champ scale sans consommateur) est le rapport des tailles TYPING/COMPACT (35/22, iOS SyncPillPlacementTests.swift:174), jamais l'emphase : le présentateur tire la taille de SyncPillMetrics et l'accent de la loi ci-dessus ; le témoin SyncPillReducerTest:93 est gardé ou remplacé par un témoin plus fort, jamais retiré",
+   "La source de frappe est UNE : le roster de la liste (ConversationTypingRoster, nourri par MessageSocketManager.typingStarted/typingStopped), sans second état ; la conversation de la route courante (fil ouvert) est passée comme openConversationId et exclue ; libellé « @<nom du roster> » + points d'activité réservés",
+   "Toucher une frappe ouvre sa conversation depuis N'IMPORTE quel écran, fil d'une autre conversation compris, et par son id quand elle n'est pas dans le cache ; une entrée de publication de story ouvre les stories de l'utilisateur courant ; une source inconnue avance la rotation (iso du lot iOS pastille-toucher-mene-a-chaque-source)",
+   "Amarrage : un Modifier.docksSyncPill de :sdk-ui adossé à SyncPillDockClaims (tenu par :app, fourni par CompositionLocal) est posé par la barre de recherche de la liste (relevée de MeeshySpacing.sm, à la place du slot local syncPill de ConversationSearchDock), la barre du composeur du fil (ChatComposer.kt) et le composeur du lecteur de story (hauteur déclarée)",
+   "La règle de visibilité est UNE fonction pure de :core:model (SyncPillVisibility.isVisible : lecteur de story, réels, notification in-app) ; la pastille passe SOUS le calque d'onboarding post-inscription et sous les feuilles modales"
+  ],
+  "conversation-apercu-compositeur-loi": [
+   "Rejoue conversation-preview-cases.json tel que l'a changé apercu-piece-jointe-detaillee-loi : légende + détails, « L × H » à espaces insécables, éphémère actif sans aucun détail de pièce.",
+   "ApiConversationLastMessage (Conversation.kt:212) décode l'enveloppe sender servie par GET /conversations (id, userId, displayName, username) et viewOnceConsumed ; la projection ApiConversation → entrée du composeur pose senderId, senderUserId, senderName et reconnaît « moi » par sender.userId (senderId est un Participant.id) ; test de JSON doré sur la charge réelle de core-list.ts.",
+   "Un message (expiré et vue unique compris) a TOUJOURS un auteur, « Vous » ou le nom servi, que la conversation soit directe ou de groupe ; seuls appels et avis système n'en ont pas (témoin sur un rang direct)."
+  ],
+  "ligne-apercu-rendu": [
+   "Le chemin réel est remplacé : ConversationRowContainer.kt:78-92 (messageSummaryLine, showSender = type != \"direct\") et ConversationRowPreviewLine.kt rendent la valeur du composeur ; l'auteur est devant en direct comme en groupe, « Vous : » pour mes messages sur REST, conversation:updated et envoi optimiste (témoin Compose sur une conversation directe).",
+   "Une pièce montre pictogramme par nature, nombre, poids, « 1920 × 1080 », durée et nom.extension tels que composés ; une pièce masquée ou éphémère n'affiche ni ne dit aucun détail, même si la charge en porte (témoin Compose).",
+   "Les libellés reprennent les clés iOS par le manifeste i18n (fragment apps/android/i18n/manifest/<module>.d/ligne-apercu-rendu.json) dans les sept langues, pas quatre (CONVENTIONS § 11) ; TalkBack lit durées, dimensions et poids en mots."
+  ],
+  "ligne-avatar-gestes": [
+   "La cible du toucher vient d'une loi pure :core:model conversationlist/ConversationAvatarTarget (miroir de ConversationAvatarTarget.swift) : direct + pair inscrit, non bloqué (peerBlocked), compte non fermé (ApiParticipant.accountClosed) => profil ; groupe, public, communauté, anonyme, supprimé, bloqué ou pair non élu => détails ; jamais un geste sans effet.",
+   "Conversation verrouillée : le toucher d'avatar passe la porte PIN puis montre les détails, jamais le fil (même règle qu'iOS).",
+   "TalkBack : l'avatar est un nœud distinct NON fusionné dans le mergeDescendants de la ligne, Role.Button, libellé « Voir le profil de X » / « Détails de Y » (clés adoptées du manifeste iOS, 7 langues), cible >= 48 dp, entrées du menu d'avatar en customActions ; témoin Compose sur l'arbre sémantique.",
+   "ApiParticipant décode accountClosed et type (nullable, défaut sûr) en hunk de câblage <= 5 lignes dans Conversation.kt.",
+   "Le lot n'édite PAS sdk-ui MeeshyAvatar.kt (branche vivante claude/android-contours-d-avatar-equipes) : il utilise gestures/onMoodTap existants et pose libellé et cible chez l'hôte ConversationRowAvatar."
+  ],
+  "liste-entete-et-plateau-stories": [
+   "Ne redéfinit ni PinnedStoryTrailBand.kt ni StoryTray.kt : consomme le slot livré par story-tray-pinned-band.",
+   "La mesure iOS fait foi : anneaux 36 dp, toutes les entrées défilantes. Le critère « 6 entrées max, avatars 48 dp, anneau 3,5 » est supplanté (MeeshyAvatar.swift:52, StoryTrayView.swift:731-797).",
+   "Chemin réel du graphe : app/src/main/kotlin/me/meeshy/app/navigation/graph/ConversationsNavGraph.kt."
+  ],
+  "story-tray-pinned-band": [
+   "Fichiers réels : la bande se monte par app/navigation/graph/ConversationsNavGraph.kt et graph/FeedNavGraph.kt, via un slot composé à côté de MeeshyStoryRail.kt (même StoriesViewModel, mêmes humeurs). MeeshyApp.kt et MeeshyAvatar.kt ne sont pas édités. ConversationListScreen.kt et FeedScreen.kt ne reçoivent que du câblage (merge origin/dev dès que pastille-synchro-globale-affichage, qui écrit ConversationListScreen.kt:165, fusionne).",
+   "La bande est un mode compact de StoryRingCell (AvatarContext.StoryTrayCompact 36 dp, sans libellé, sans cascade), pas une jumelle. Toutes les entrées vont dans un LazyRow (clé userId, contentType), aucun plafond, avec un dégagement de fin ACCESSORY_TRAILING_CLEARANCE.",
+   "Première cellule = soi, MÊME règle que le grand plateau : un groupe à soi, même expiré, ouvre la liste de gestion au toucher. Sans groupe, c'est StoryTrayActionResolver qui décide (gérer si historique, sinon composer). L'appui long ouvre le menu StoryTraySelfMenu. Cela supplante « tap = lecteur » (iOS StoryTrayView.swift:748, :838-839).",
+   "Toucher un anneau d'autrui appelle le même onOpenStory(userId) que le grand plateau (Routes.story), avec haptique. L'appui long ouvre « Voir les stories / Voir le profil » par le même onShowProfile.",
+   "Les hôtes passent une distance de défilement réelle, issue d'une loi pure de :core:model (CollapsibleHeaderMetrics, depuis firstVisibleItemIndex/offset ; index > 0 ⇒ saturé), et plus scrollProgress plafonné à 60 dp. Témoin HeaderScrollDistanceTest : révélation ≥ 0,6 quand le bas du plateau (StoryEntryMetrics.height) quitte la liste.",
+   "La bande ne prend aucun toucher sous une révélation de 0,6. Le titre ne prend ni toucher ni TalkBack au-delà de 0,5. La hauteur vaut 48 dp × révélation, rognée.",
+   "Fluidité : aucun écran hôte ne lit l'offset ni la minuterie de quiétude en composition (ConversationListScreen.kt:70-91 passe dans ConversationListHeader, en derivedStateOf). Témoin Compose ConversationListScrollRecompositionTest / FeedScrollRecompositionTest : 0 recomposition des rangées, des cartes et des anneaux de la bande sur 30 images de défilement.",
+   "La croissance 44→60 dp de la barre ne déplace pas la liste. Témoin : la position d'une rangée = sa position initiale − la distance défilée, à 1 dp près.",
+   "Impressions : même file story_rail et même onMoodShown, avec une présence partagée entre plateau et bande (port pur de ReachPresence en :core:model, grâce de 2 s, horloge injectée). Une story vue dans les deux pendant la bascule compte une seule fois ; revue après 2 s, elle compte de nouveau ; flush à la disparition. Témoin ReachPresenceTest.",
+   "Accessibilité : anneaux annoncés « Ouvrir la story de X », cible 48 dp, RTL depuis le bord start, Réduire les animations = fondu seul. Le point de présence ne vient que de rememberPresence ; s'il est absent, aucun point."
+  ]
+ },
+ "sans_fichiers": {
+  "ligne-avatar-gestes": [
+   "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/MeeshyAvatar.kt"
+  ]
+ },
+ "drapeaux": {
+  "pastille-synchro-globale-affichage": {
+   "sensible": true
+  },
+  "conversation-apercu-compositeur-loi": {
+   "sensible": true,
+   "lourd": true
+  },
+  "ephemere-echeance-par-lecteur-et-reveil-unique": {
+   "sensible": true,
+   "lourd": true
+  },
+  "ligne-apercu-rendu": {
+   "sensible": true,
+   "lourd": true
+  },
+  "ligne-avatar-gestes": {
+   "sensible": true
+  }
+ },
+ "plan_cibles": {
+  "pastille-synchro-globale-affichage": [
+   "F1"
+  ],
+  "conversation-apercu-compositeur-loi": [
+   "F2"
+  ],
+  "ligne-apercu-rendu": [
+   "F2"
+  ],
+  "ligne-avatar-gestes": [
+   "F3"
+  ],
+  "liste-entete-et-plateau-stories": [
+   "F4"
+  ],
+  "story-tray-pinned-band": [
+   "F4"
+  ],
+  "contours-d-avatar-equipes": [
+   "F3"
+  ]
+ }
+}

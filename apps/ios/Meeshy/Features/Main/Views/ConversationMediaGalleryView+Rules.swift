@@ -1,0 +1,347 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+// MARK: - Les RÈGLES PURES du plein écran
+//
+// Extraites de `ConversationMediaGalleryView.swift` (#4014) : le fichier
+// dépassait le budget 800-1100 (1259 lignes), et la
+// interdit d'ajouter à un fichier hors budget — on extrait d'abord.
+//
+// La découpe suit la RESPONSABILITÉ, pas une tranche : ces quatre types ne
+// rendent rien. Ils décident — quoi préchauffer, quelles pages garder montées,
+// quelle source d'image élire. Ils sont déjà testés comme des règles pures, et
+// les sortir de la vue rend visible ce qui l'était déjà en fait.
+
+// MARK: - Prewarm
+
+/// Préchauffage du plein écran — au TAP dans la conversation
+/// (`ConversationView.onMediaTap`) et pour la fenêtre de rendu
+/// (`prefetchNeighbors`). Il chauffe ce que le plein écran AFFICHE, jamais
+/// autre chose : image → la variante élue, décodée dans la NSCache (fast-path
+/// synchrone de `ProgressiveCachedImage` → affichage instantané, sans
+/// placeholder) ; vidéo → le poster NET remonté en mémoire (extrait SEULEMENT
+/// si le fichier est déjà sur l'appareil) et la VIGNETTE serveur décodée, que
+/// la page voisine montre pendant le glissement tant que le poster manque
+/// (#16470). Un préchauffage ne télécharge jamais le fichier vidéo : il est mis
+/// en cache par la page (auto-DL) ou par `SharedAVPlayerManager` au tap lecture.
+enum GalleryPrewarm {
+    static func warm(_ attachment: MessageAttachment) {
+        switch attachment.type {
+        case .video:
+            VideoPosterResolver.warmIfLocal(attachment)
+            warmImage(attachment.thumbnailUrl)
+        case .image:
+            // 5.2 — préchauffer la MÊME variante que celle affichée, pas
+            // l'original, sinon on téléchargerait les deux.
+            warmImage(GalleryImageSource.fullscreenURL(for: attachment))
+        case .audio, .file, .location:
+            return
+        }
+    }
+
+    private static func warmImage(_ url: String?) {
+        guard let url, !url.isEmpty,
+              let resolved = MeeshyConfig.resolveMediaURL(url)?.absoluteString
+        else { return }
+        Task { _ = await CacheCoordinator.shared.images.image(for: resolved) }
+    }
+}
+
+// MARK: - Render window
+
+/// Combien de pages, de part et d'autre de la page courante, rendent le média
+/// PLEIN FORMAT — et lesquelles se contentent d'un aperçu.
+///
+/// C'est LA règle qui borne le coût de la galerie. Sans elle, le `LazyHStack`
+/// réalise une page de plus à chaque swipe et n'en libère jamais aucune : le
+/// travail vivant croît avec la distance parcourue, ce qui est exactement le
+/// symptôme « plus je défile, plus ça rame ». Isolée ici parce qu'une règle qui
+/// borne un coût doit pouvoir être VÉRIFIÉE : le ralentissement qu'elle évite
+/// ne se voit sur aucune capture d'écran.
+enum GalleryRenderWindow {
+    /// Rayon en pages. `1` — la page visible et ses deux voisines immédiates,
+    /// soit exactement ce qu'un glissement en cours peut montrer.
+    static let radius = 1
+
+    static func rendersFullPixels(distance: Int) -> Bool {
+        abs(distance) <= radius
+    }
+
+    /// **Une page n'est construite que près de la page ouverte** (#11163). Le
+    /// pager par sélection appelle le constructeur de CHAQUE pièce à chaque
+    /// mise à jour ; au-delà de la fenêtre et de sa marge, la page est un fond
+    /// noir sans état. La marge d'une page fait qu'une page devient réelle
+    /// AVANT d'entrer dans la fenêtre — jamais sous les yeux de l'utilisateur.
+    static func buildsPage(distance: Int) -> Bool {
+        abs(distance) <= radius + 1
+    }
+
+    /// Ce qu'on préchauffe : STRICTEMENT la fenêtre de rendu. Préchauffer
+    /// au-delà décoderait des images que personne ne peut voir, donc de la
+    /// pression mémoire pure — donc des évictions, donc un re-décodage au
+    /// retour, l'inverse de l'intention.
+    static func prefetchRange(around index: Int, count: Int) -> ClosedRange<Int>? {
+        guard count > 0, index >= 0, index < count else { return nil }
+        return max(0, index - radius)...min(count - 1, index + radius)
+    }
+}
+
+// MARK: - Fullscreen image source
+
+/// Sélection de la variante d'image servie en plein écran.
+enum GalleryImageSource {
+    @MainActor
+    static func fullscreenURL(for attachment: MessageAttachment) -> String {
+        fullscreenURL(for: attachment, on: WindowMetrics.physicalDisplay)
+    }
+
+    static func fullscreenURL(for attachment: MessageAttachment, on display: DisplayMetrics) -> String {
+        let original = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
+        guard !original.isEmpty else { return "" }
+        return ImageVariantSelector.bestImageURL(
+            variants: attachment.imageVariants ?? [],
+            originalURL: original,
+            originalWidth: attachment.width,
+            targetWidthPx: DecodeBudget.targetWidthPx(for: .fullscreen, on: display)
+        )
+    }
+}
+
+// MARK: - Fullscreen image display source
+
+/// Ce que la page image de la fenêtre de rendu MONTE comme source d'affichage.
+///
+/// Feature 3 — « l'image de base doit être NETTE ; ouvrir en plein écran
+/// présuppose que la donnée est chargée, sinon charger et afficher DIRECTEMENT
+/// la première image nette — jamais la vignette ». D'où deux cas, et deux
+/// seulement : le plein format est RÉSIDENT (affiché tel quel, sans transition)
+/// ou il se CHARGE (forcé — l'ouverture est un geste manuel, §14.1 — avec le
+/// thumbHash pour seul fond, flou assumé). La vignette `thumbnailUrl` n'est
+/// jamais un étage d'affichage : le point de montage ne connaît même pas son
+/// URL. Elle pouvait rester l'image affichée quand la politique réseau bloquait
+/// le plein format — nette dans une bulle, floue au plein écran.
+enum FullscreenImageSource {
+    struct Mount: Equatable {
+        let fullURL: String
+        /// Fond décoratif pendant le chargement — `nil` quand le plein format
+        /// est déjà résident (rien à couvrir, aucune transition).
+        let backdropThumbHash: String?
+        let isResident: Bool
+    }
+
+    /// `nil` sans plein format : la page rend alors son glyphe d'état vide.
+    nonisolated static func resolve(fullURL: String?, thumbHash: String?, isFullResident: Bool) -> Mount? {
+        guard let fullURL, !fullURL.isEmpty else { return nil }
+        return Mount(
+            fullURL: fullURL,
+            backdropThumbHash: isFullResident ? nil : thumbHash,
+            isResident: isFullResident
+        )
+    }
+
+    /// Résidence = image DÉCODÉE en NSCache (lecture mémoire pure, aucun
+    /// `stat` par évaluation du `body`). Un fichier sur disque mais évincé de
+    /// la NSCache est de toute façon réchauffé de façon synchrone par
+    /// `ProgressiveCachedImage.init` — il s'affiche immédiatement, et le fond
+    /// passé n'est alors jamais décodé.
+    ///
+    /// #3897 — `hasAnyCachedImageVariant`, pas `cachedImage(for:)` seul :
+    /// cette dernière ne sonde que le slot PLEIN FORMAT (bare), aveugle aux
+    /// variantes dimensionnées (128–1024px) qu'une bulle ou un aperçu ont pu
+    /// décoder pour la MÊME URL. Une variante bucketée résidente est un
+    /// signal juste de résidence pour ce PROBE (backdrop oui/non) même si
+    /// elle n'est pas ce que `ProgressiveCachedImage` servira en `fullUrl:`.
+    nonisolated static func isResident(_ url: String) -> Bool {
+        let resolved = MeeshyConfig.resolveMediaURL(url)?.absoluteString ?? url
+        return DiskCacheStore.hasAnyCachedImageVariant(for: resolved)
+    }
+}
+
+// MARK: - Où trouver la place quand la légende se déplie
+
+/// **Déplier une légende demande de la place, et chaque surface la prend
+/// ailleurs** (directive porteur 2026-09-02).
+///
+/// > « Le contenu doit pouvoir s'afficher en dessous de l'auteur et quand on
+/// > affiche / déplie pour tout voir, les détails d'auteur se cachent pour
+/// > afficher le contenu. […] Pour les story pas besoin de cacher quoi que ce
+/// > soit, quand on déplie, on floute juste la story. »
+///
+/// Deux réponses à UNE question, et la différence n'est pas un goût : elle
+/// vient du VOISINAGE. Le plein écran média porte, sous la légende, une carte
+/// d'auteur et une pellicule — la place se prend donc en les retirant. La story
+/// n'a rien sous sa légende : sa scène occupe tout, elle recule au lieu de
+/// céder.
+///
+/// La règle vit ici pour être interrogeable : un troisième hôte qui monterait
+/// la couche partagée devra DIRE lequel des deux comportements il adopte, au
+/// lieu de recopier l'un des deux au jugé.
+enum CaptionExpansionSpace {
+
+    /// **Le plein écran média ne CÈDE plus rien** (directive porteur
+    /// 2026-09-05).
+    ///
+    /// > « En plein écran le "voir plus" de la légende doit juste afficher le
+    /// > texte déplié avec effet ombre, en repoussant le détail de l'auteur
+    /// > vers le haut. »
+    ///
+    /// Cette valeur répondait `!captionExpanded` : la carte d'auteur
+    /// DISPARAISSAIT en fondu pour libérer le bas de l'écran, sur la directive
+    /// du 2026-09-02 (« les détails d'auteur se cachent pour afficher le
+    /// contenu »). La directive d'aujourd'hui la renverse, et il faut le dire
+    /// franchement plutôt que l'effacer : ce n'est pas une correction de
+    /// défaut, c'est un CHANGEMENT D'AVIS du porteur, et le code doit porter
+    /// les deux dates pour que la prochaine main sache laquelle est vivante.
+    ///
+    /// Ce qui change dans la MÉCANIQUE : il n'y a plus de place à trouver. La
+    /// légende dépliée grandit dans une pile ancrée en bas, donc elle POUSSE
+    /// ses voisins vers le haut — l'auteur monte au lieu de s'effacer. Et la
+    /// lisibilité, que le retrait des voisins servait, est portée par l'ombre
+    /// que `MediaCaptionOverlay` applique déjà (`legibleOverCanvas` : une passe
+    /// courte et dense, une longue et douce).
+    ///
+    /// > **Une constante qui ignore son paramètre est un mensonge de
+    /// > signature.** D'où le retrait de la fonction plutôt qu'un `true`
+    /// > inconditionnel : `showsAuthorDetails(captionExpanded:)` promettait que
+    /// > la réponse DÉPEND du dépliage. Elle n'en dépend plus, et le seul
+    /// > moyen honnête de le dire est qu'aucun appelant ne la demande.
+    ///
+    /// Le témoin qui remplace ses deux unitaires est une garde de SOURCE : la
+    /// galerie ne doit conditionner sa carte d'auteur sur `captionExpanded` par
+    /// aucun chemin.
+
+    /// Opacité de la scène d'une story pendant que sa légende est dépliée.
+    ///
+    /// **Ce n'est PAS un flou qu'on ajoute**:
+    ///
+    /// > « le flou c'est pas un voile qui apparaît mais le contenu qui disparaît
+    /// > un peu pour laisser le thumbnail naturel du background si on a un média
+    /// > sur la scène, sinon on laisse la couleur de fond simplement »
+    ///
+    /// Le lecteur monte DÉJÀ, sous la scène, un fond dérivé du ThumbHash de la
+    /// slide — flou, à la bonne couleur, et gratuit puisqu'il est là pour le
+    /// démarrage à froid (« Layer 1.5 »). Effacer la scène le révèle. Sans média,
+    /// c'est la couleur de fond de la story qui remonte, sans rien de plus.
+    ///
+    /// > Un voile AJOUTE une couche que personne n'a demandée ; effacer en
+    /// > RÉVÈLE une qui était déjà juste. La seconde coûte moins cher à la
+    /// > machine et ment moins à l'œil — le fond qu'on découvre est vraiment
+    /// > celui de cette story, pas un gris générique.
+    ///
+    /// Se COMPOSE avec l'opacité de transition du canvas (`contentOpacity`) par
+    /// multiplication : les deux disent la même chose — « combien de cette scène
+    /// voit-on ? » — et se cumulent au lieu de se remplacer.
+    nonisolated static func storySceneOpacity(captionExpanded: Bool) -> Double {
+        captionExpanded ? 0.28 : 1
+    }
+
+    /// **La bande que le rail d'actions occupe à droite de la scène.**
+    ///
+    /// Repliée, la légende tient dans le bas et ne rencontre personne ; dépliée,
+    /// elle monte et traverse le rail (Envoyer, Vues, Partager, Enregistrer,
+    /// Traductions), qui court sur presque toute la hauteur. Le corpus lui laisse
+    /// donc cette bande — et la zone tactile du retour en tête aussi, sans quoi
+    /// un tap destiné au rail remonterait le texte à la place.
+    ///
+    /// > Deux vues qui doivent éviter le MÊME voisin doivent l'éviter avec le
+    /// > MÊME nombre. Deux littéraux identiques ne sont pas une règle partagée :
+    /// > ils sont deux règles qui se ressemblent, jusqu'au jour où le rail bouge.
+    ///
+    /// C'est la bande BRUTE, en points d'ÉCRAN. Les vues qui vivent dans la
+    /// colonne du canvas ne l'emploient jamais telle quelle : elles passent par
+    /// `railClearanceInset(columnWidth:viewportWidth:)`, qui la traduit dans leur
+    /// repère.
+    nonisolated static var storyActionRailInset: CGFloat { 68 }
+
+    /// **Ce que le chrome haut du lecteur ne cède JAMAIS** — barres de
+    /// progression, ligne d'auteur, fermeture.
+    ///
+    /// La zone qui ramène le corpus en tête couvre le vide au-dessus du texte :
+    /// c'est ce qui la rend atteignable sans viser. Mais elle est montée en
+    /// `zIndex(60)`, donc AU-DESSUS du chrome — sans cette réserve, elle
+    /// avalerait le bouton de fermeture de la story, et l'utilisateur qui veut
+    /// sortir remonterait un texte à la place.
+    ///
+    /// Le nombre est celui que le lecteur réserve déjà à son chrome pour borner
+    /// le rail (`topReserved`, `StoryViewerView+Canvas`) : la même bande, dite
+    /// une seule fois.
+    nonisolated static func storyTopChromeReserve(topInset: CGFloat) -> CGFloat {
+        topInset + 100
+    }
+
+    /// **Le dégagement du rail, EN COORDONNÉES DE COLONNE** — qui n'est pas la
+    /// même chose qu'en coordonnées d'écran.
+    ///
+    /// Sert aux DEUX voisins du rail : le corpus déplié (que le texte ne doit
+    /// pas chevaucher) et la zone qui le ramène en tête (qui ne doit pas
+    /// avaler ses touchers).
+    ///
+    /// La légende vit dans la colonne du CANVAS, qui déborde volontairement le
+    /// viewport pour la pagination (mesuré : 491,3 pt pour un écran de 402, donc
+    /// 44,7 pt de débordement de chaque côté). C'est ce cadrage qui a sauvé le
+    /// texte en #4762 — sans lui il sortait par la gauche.
+    ///
+    /// > Le même cadrage qui a réparé le TEXTE trahit la zone TACTILE. Un
+    /// > retrait de 68 pt exprimé dans une colonne de 491 laisse son bord droit
+    /// > à 378 pt d'écran, pas à 334 : le rail d'actions se retrouve recouvert
+    /// > aux trois quarts. Un nombre juste dans un repère est faux dans l'autre,
+    /// > et rien ne le signale — les deux valent « 68 ».
+    ///
+    /// On rend donc au retrait ce que le débordement lui a pris. À gauche, rien
+    /// à faire : déborder hors de l'écran n'y prend aucun toucher.
+    nonisolated static func railClearanceInset(columnWidth: CGFloat,
+                                               viewportWidth: CGFloat) -> CGFloat {
+        max(0, (columnWidth - viewportWidth) / 2) + storyActionRailInset
+    }
+}
+
+
+// MARK: - Ce que « répondre » FAIT, depuis le plein écran
+
+/// **La route du bouton « répondre » du plein écran** (#6165).
+///
+/// Jusqu'à ce lot, répondre depuis la galerie n'avait qu'un chemin : remonter
+/// la pièce à l'hôte, qui REFERMAIT le plein écran et armait le composer du
+/// fil. On perdait la pièce des yeux au moment précis où l'on voulait en
+/// parler — et la citation, faute de savoir nommer une pièce (#6164), montrait
+/// la PREMIÈRE du message alors qu'on regardait la troisième.
+///
+/// La directive porteur du 2026-09-12 demande l'inverse : « permettre de
+/// répondre ou commenter un attachement directement à partir de sa vue en
+/// plein écran, donc citer la pièce directement avec une universal composer bar
+/// qui apparaît ».
+///
+/// Les deux chemins COEXISTENT, et c'est volontaire : les hôtes SOCIAUX (post,
+/// story, réel, commentaire) ne câblent pas la barre — leur « porteur » est un
+/// commentaire, pas un message de conversation, et le composer qui le reçoit
+/// n'est pas le même. Ils gardent donc l'ancien chemin tant qu'ils ne
+/// l'adoptent pas, au lieu de perdre le geste.
+///
+/// **C'est une somme, pas deux booléens.** Un hôte qui lirait
+/// `hasInPlaceComposer` et `hasThreadHandOff` séparément pourrait déclencher
+/// les DEUX — la barre monterait pendant que la galerie se referme sous elle.
+/// La route rend UN cas, et il n'y a rien à combiner.
+enum FullscreenReplyRoute: Equatable {
+    /// La barre universelle monte AU-DESSUS du média. Rien ne se referme.
+    case composeInPlace
+    /// L'ancien chemin : l'hôte referme le plein écran et arme le composer.
+    case handOffToThread
+    /// Aucun bouton n'est rendu — loi 4, un contrôle existe s'il a un effet.
+    case none
+
+    /// `isProtected` — `ComposableAttachment.isProtected`, le prédicat que le
+    /// menu d'appui long lit déjà. Une pièce à vue unique, floutée ou chiffrée
+    /// n'a pas d'entrée vers le geste : la bannière de citation porterait sa
+    /// vignette, ce qui ferait sortir de la conversation ce que la protection y
+    /// retient. La garde est ici, au RANG DE L'EXISTENCE du bouton, plutôt
+    /// qu'au rang de la vignette — il n'y a alors plus qu'un endroit où la
+    /// protection puisse être oubliée.
+    static func route(isProtected: Bool,
+                      hasInPlaceComposer: Bool,
+                      hasThreadHandOff: Bool) -> FullscreenReplyRoute {
+        guard !isProtected else { return .none }
+        if hasInPlaceComposer { return .composeInPlace }
+        return hasThreadHandOff ? .handOffToThread : .none
+    }
+}

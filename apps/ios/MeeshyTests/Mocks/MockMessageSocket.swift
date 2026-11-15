@@ -16,6 +16,9 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let messageReceived = PassthroughSubject<APIMessage, Never>()
     let messageEdited = PassthroughSubject<APIMessage, Never>()
     let messageDeleted = PassthroughSubject<MessageDeletedEvent, Never>()
+    let messageExpired = PassthroughSubject<MessageExpiredEvent, Never>()
+    let messageCitedPostWithdrawn = PassthroughSubject<MessageCitedPostWithdrawnEvent, Never>()
+    let messageCountdownStarted = PassthroughSubject<MessageCountdownStartedEvent, Never>()
     let messageHiddenForMe = PassthroughSubject<MessageHiddenForMeEvent, Never>()
     let messageRestoredForMe = PassthroughSubject<MessageRestoredForMeEvent, Never>()
     let messagePinned = PassthroughSubject<MessagePinnedEvent, Never>()
@@ -30,12 +33,15 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let userStatusChanged = PassthroughSubject<UserStatusEvent, Never>()
     let presenceSnapshotReceived = PassthroughSubject<PresenceSnapshotEvent, Never>()
     let readStatusUpdated = PassthroughSubject<ReadStatusUpdateEvent, Never>()
+    let pendingMessagesDelivered = PassthroughSubject<PendingMessagesDeliveredEvent, Never>()
     let conversationJoined = PassthroughSubject<ConversationParticipationEvent, Never>()
     let conversationJoinError = PassthroughSubject<ConversationJoinErrorEvent, Never>()
     let conversationLeft = PassthroughSubject<ConversationParticipationEvent, Never>()
     let participantRoleUpdated = PassthroughSubject<ParticipantRoleUpdatedEvent, Never>()
     let participantRightsUpdated = PassthroughSubject<ParticipantRightsUpdatedEvent, Never>()
     let messageConsumed = PassthroughSubject<MessageConsumedEvent, Never>()
+    let viewOncePurged = PassthroughSubject<ViewOncePurgedEvent, Never>()
+    let messageStarred = PassthroughSubject<MessageStarredEvent, Never>()
     let liveLocationStarted = PassthroughSubject<LiveLocationStartedEvent, Never>()
     let liveLocationUpdated = PassthroughSubject<LiveLocationUpdatedEvent, Never>()
     let liveLocationStopped = PassthroughSubject<LiveLocationStoppedEvent, Never>()
@@ -67,6 +73,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let reactionSynced = PassthroughSubject<ReactionSyncEvent, Never>()
     let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusUpdatedEvent, Never>()
     let attachmentUpdated = PassthroughSubject<AttachmentUpdatedEvent, Never>()
+    let attachmentDeleted = PassthroughSubject<AttachmentDeletedEvent, Never>()
     let mentionCreated = PassthroughSubject<MentionCreatedEvent, Never>()
     let userPreferencesUpdated = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
     let userPreferencesConversationUpdated = PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never>()
@@ -77,7 +84,9 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let participantBanned = PassthroughSubject<ParticipantBannedEvent, Never>()
     let participantUnbanned = PassthroughSubject<ParticipantUnbannedEvent, Never>()
     let conversationClosed = PassthroughSubject<ConversationClosedEvent, Never>()
+    let conversationObsoleted = PassthroughSubject<ConversationObsoletedEvent, Never>()
     let conversationDeleted = PassthroughSubject<ConversationDeletedSocketEvent, Never>()
+    let conversationRestored = PassthroughSubject<ConversationRestoredSocketEvent, Never>()
     let conversationStatsReceived = PassthroughSubject<ConversationStatsEvent, Never>()
     let callSignalOfferReceived = PassthroughSubject<CallAnswerData, Never>()
     let callQualityAlert = PassthroughSubject<CallQualityAlertData, Never>()
@@ -102,6 +111,21 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     var liveLocationStopConversationIds: [String] = []
     var sendWithAttachmentsCallCount = 0
     var sendViaSocketFallbackCallCount = 0
+    /// Les arguments de CHAQUE appel au repli socket, dans l'ordre : le compteur
+    /// dit combien, ce tableau dit avec quoi (socket-first et repli confondus).
+    struct SendViaSocketFallbackCall: Equatable {
+        let conversationId: String
+        let content: String?
+        let attachmentIds: [String]
+        let replyToId: String?
+        let storyReplyToId: String?
+        let originalLanguage: String?
+        let isEncrypted: Bool
+        let clientMessageId: String
+        let location: SharedPlace?
+        let sticker: MessageSticker?
+    }
+    var sendViaSocketFallbackCalls: [SendViaSocketFallbackCall] = []
     var sendViaSocketFallbackResult: MessageSocketManager.SendMessageAck?
     var lastSendViaSocketFallbackClientMessageId: String?
     var lastSendViaSocketFallbackAttachmentIds: [String]?
@@ -109,6 +133,9 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     /// Dernier lieu partagé transmis au repli socket (Lot 2 — chaîne
     /// d'écriture du lieu) ; nil quand le message n'en portait pas.
     var lastSendViaSocketFallbackLocation: SharedPlace?
+    /// Dernier sticker transmis au repli socket (#4823) ; nil quand le message
+    /// n'en portait pas.
+    var lastSendViaSocketFallbackSticker: MessageSticker?
     var callInitiateCallCount = 0
     var callInitiateResult: Result<MessageSocketManager.CallInitiateAck, Error> = .success(
         MessageSocketManager.CallInitiateAck(callId: "mock-call-id", mode: "audio", iceServers: [])
@@ -150,8 +177,17 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         connectionState = .disconnected
     }
 
+    /// Ce que la PASSERELLE fait au moment où la jonction lui parvient (#5947).
+    ///
+    /// Sans ce crochet, aucun témoin ne peut reproduire la seule fenêtre qui
+    /// compte : celle où le serveur a DÉJÀ répondu et où le client n'a pas
+    /// encore branché son puits. Un témoin qui envoie la réponse « plus tard »
+    /// mesure un ordre que la production n'a pas.
+    var onJoinConversation: ((String) -> Void)?
+
     func joinConversation(_ conversationId: String) {
         joinConversationIds.append(conversationId)
+        onJoinConversation?(conversationId)
     }
 
     func leaveConversation(_ conversationId: String) {
@@ -182,16 +218,22 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         liveLocationStopConversationIds.append(conversationId)
     }
 
-    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String?) {
+    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String?, sticker: MessageSticker?) {
         sendWithAttachmentsCallCount += 1
     }
 
-    func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String, location: SharedPlace?) async -> MessageSocketManager.SendMessageAck? {
+    func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String, location: SharedPlace?, sticker: MessageSticker?) async -> MessageSocketManager.SendMessageAck? {
         sendViaSocketFallbackCallCount += 1
+        sendViaSocketFallbackCalls.append(SendViaSocketFallbackCall(
+            conversationId: conversationId, content: content, attachmentIds: attachmentIds,
+            replyToId: replyToId, storyReplyToId: storyReplyToId, originalLanguage: originalLanguage,
+            isEncrypted: isEncrypted, clientMessageId: clientMessageId, location: location, sticker: sticker
+        ))
         lastSendViaSocketFallbackClientMessageId = clientMessageId
         lastSendViaSocketFallbackAttachmentIds = attachmentIds
         lastSendViaSocketFallbackIsEncrypted = isEncrypted
         lastSendViaSocketFallbackLocation = location
+        lastSendViaSocketFallbackSticker = sticker
         return sendViaSocketFallbackResult
     }
 
@@ -266,7 +308,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         callForegroundedCallCount += 1
     }
 
-    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {
+    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool, kind: CallScreenCaptureKind) {
         callScreenCaptureDetectedCallCount += 1
     }
 
@@ -296,6 +338,10 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
 
     func simulateMessageDeleted(_ event: MessageDeletedEvent) {
         messageDeleted.send(event)
+    }
+
+    func simulateMessageExpired(_ event: MessageExpiredEvent) {
+        messageExpired.send(event)
     }
 
     func simulateMessageHiddenForMe(_ event: MessageHiddenForMeEvent) {
@@ -341,6 +387,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         lastSendViaSocketFallbackAttachmentIds = nil
         lastSendViaSocketFallbackIsEncrypted = nil
         lastSendViaSocketFallbackLocation = nil
+        lastSendViaSocketFallbackSticker = nil
         callInitiateCallCount = 0
         callJoinCallCount = 0
         callLeaveCallCount = 0

@@ -6,150 +6,67 @@ import MeeshyUI
 
 // MARK: - FeedPostCard Media Preview
 extension FeedPostCard {
+    /// **Vue `3f` — un lot de médias se PARCOURT, il ne se contemple pas.**
+    ///
+    /// Un média seul garde son rendu ; à partir de deux, la carte monte le
+    /// carrousel (`FeedPostCardCarousel`) : un média à la fois, à la taille de
+    /// la carte, avec SA légende, un compteur et des pastilles.
+    ///
+    /// Ce qui a disparu ici : la mosaïque (2 côte à côte, 3 en 1+2, 4 en
+    /// grille, 5+ en 2+3 avec un badge `+N`). Elle montrait tout d'un coup —
+    /// ce que le carrousel perd, et qu'il faut assumer — mais elle ne pouvait
+    /// porter AUCUNE légende par média, ce qui est la doctrine même de `3f`.
+    ///
+    /// L'index de page n'est PAS déclaré ici : il vit dans le carrousel. Posé
+    /// sur la carte, chaque glissement invaliderait l'en-tête, le crédit du
+    /// son, le texte et la rangée d'actions — et le Prisme relancerait sa
+    /// résolution de langue à chaque slide. « La pagination ne change ni le
+    /// texte du post ni l'annonce du son » devient ainsi une impossibilité de
+    /// structure, pas une précaution à tenir.
     @ViewBuilder
     var mediaPreview: some View {
         let mediaList = post.media
-        let count = mediaList.count
-        let spacing: CGFloat = 3
 
-        if count == 1, let media = mediaList.first {
+        if mediaList.count == 1, let media = mediaList.first {
             // Aucun cadre de hauteur ici : image et vidéo portent la leur via
             // `fittedMediaHeight`. Le `.frame(height: 220)` qui vivait ici
             // écrasait ce calcul et letterboxait les clips verticaux.
             // L'audio et les documents restent compacts et s'auto-dimensionnent.
-            singleMediaView(media)
-                .contentShape(RoundedRectangle(cornerRadius: 12))
-        } else if count == 2 {
-            // Two images side by side - equal width
-            HStack(spacing: spacing) {
-                galleryImageView(mediaList[0])
-                    .contentShape(Rectangle())
-                    .onTapGesture { openFullscreen(mediaList[0]) }
-                    .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 1 of \(count)", bundle: .main))
-                    .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Tap to view fullscreen", bundle: .main))
-                    .accessibilityAddTraits(.isButton)
-                galleryImageView(mediaList[1])
-                    .contentShape(Rectangle())
-                    .onTapGesture { openFullscreen(mediaList[1]) }
-                    .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 2 of \(count)", bundle: .main))
-                    .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Tap to view fullscreen", bundle: .main))
-                    .accessibilityAddTraits(.isButton)
+            //
+            // **La légende s'affiche ICI AUSSI.** Elle ne
+            // s'affichait que sur le carrousel (≥ 2 médias) et en plein écran ;
+            // un média SEUL n'en montrait aucune — et c'est le cas d'un post à
+            // canvas, qui n'en a qu'un. L'auteur composait sa légende, la
+            // voyait dans le composer, la retrouvait sur le serveur, et ne la
+            // revoyait plus jamais dans son fil.
+            //
+            // > **Une capacité servie sur deux surfaces de trois ne rougit
+            // > nulle part.** La troisième n'a pas de témoin qui l'attende, et
+            // > celui qui la découvre conclut qu'elle n'a jamais été
+            // > enregistrée — c'est exactement le rapport qu'on a reçu.
+            ZStack(alignment: .bottomLeading) {
+                singleMediaView(media)
+                singleMediaCaption(media)
             }
-            .frame(height: 180)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-        } else if count == 3 {
-            // One large left, two stacked right
-            HStack(spacing: spacing) {
-                galleryImageView(mediaList[0])
-                    .aspectRatio(0.75, contentMode: .fill)
-                    .contentShape(Rectangle())
-                    .onTapGesture { openFullscreen(mediaList[0]) }
-                    .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 1 of \(count)", bundle: .main))
-                    .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Tap to view fullscreen", bundle: .main))
-                    .accessibilityAddTraits(.isButton)
-
-                VStack(spacing: spacing) {
-                    galleryImageView(mediaList[1])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[1]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 2 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Tap to view fullscreen", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
-                    galleryImageView(mediaList[2])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[2]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 3 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Tap to view fullscreen", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
-                }
-            }
-            .frame(height: 220)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-        } else if count == 4 {
-            // 2x2 grid
-            VStack(spacing: spacing) {
-                HStack(spacing: spacing) {
-                    galleryImageView(mediaList[0])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[0]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 1 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Tap to view fullscreen", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
-                    galleryImageView(mediaList[1])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[1]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 2 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Tap to view fullscreen", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
-                }
-                HStack(spacing: spacing) {
-                    galleryImageView(mediaList[2])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[2]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 3 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Tap to view fullscreen", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
-                    galleryImageView(mediaList[3])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[3]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 4 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Tap to view fullscreen", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
-                }
-            }
-            .frame(height: 220)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-        } else if count >= 5 {
-            // First row: 2 images, Second row: 3 images with +N overlay
-            VStack(spacing: spacing) {
-                HStack(spacing: spacing) {
-                    galleryImageView(mediaList[0])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[0]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 1 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Tap to view fullscreen", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
-                    galleryImageView(mediaList[1])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[1]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 2 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Tap to view fullscreen", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
-                }
-                HStack(spacing: spacing) {
-                    galleryImageView(mediaList[2])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[2]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 3 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Tap to view fullscreen", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
-                    galleryImageView(mediaList[3])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[3]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 4 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Tap to view fullscreen", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
-                    ZStack {
-                        galleryImageView(mediaList[4])
-                        if count > 5 {
-                            Color.black.opacity(0.6)
-                            Text("+\(count - 5)")
-                                .font(MeeshyFont.relative(22, weight: .bold))
-                                .foregroundColor(.white)
-                                .accessibilityHidden(true)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture { openFullscreen(mediaList[4]) }
-                    .accessibilityLabel(count > 5
-                        ? String(localized: "feed.media.moreItems", defaultValue: "\(count - 5) more media items", bundle: .main)
-                        : String(localized: "feed.media.item", defaultValue: "Media 5 of \(count)", bundle: .main))
-                    .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Tap to view fullscreen", bundle: .main))
-                    .accessibilityAddTraits(.isButton)
-                }
-            }
-            .frame(height: 240)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+            // Le texte alternatif du média est LU par VoiceOver (#6738).
+            .postMediaAccessibility(media)
+        } else if mediaList.count > 1 {
+            FeedPostCardCarousel(
+                media: mediaList,
+                // MÊME résolveur que la galerie plein écran (vue `3e`) : la
+                // légende propre du média, et le texte du porteur seulement
+                // s'il n'y a qu'un visuel — donc jamais ici, où il y en a
+                // plusieurs. Le carrousel consulte la règle, il ne la réécrit
+                // pas.
+                captions: SocialMediaCaption.map(
+                    for: mediaList, carrierText: post.displayContent,
+                    preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
+                ),
+                accentColor: accentColor,
+                onOpen: { openFullscreen($0) },
+                scrollTarget: SocialTarget(kind: .post, id: post.id)
+            )
         }
     }
 
@@ -165,90 +82,45 @@ extension FeedPostCard {
             galleryImageView(model.primary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 160)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
 
             if model.count > 1 {
                 Text("+\(model.count - 1)")
                     .font(.caption2.weight(.bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
+                    .foregroundStyle(Color.white)
+                    .padding(.horizontal, MeeshySpacing.xsPlus)
+                    .padding(.vertical, MeeshySpacing.xxs)
                     .background(Capsule().fill(Color.black.opacity(0.6)))
-                    .padding(8)
+                    .padding(MeeshySpacing.sm)
             }
         }
         .accessibilityHidden(true)
     }
 
     // Gallery-specific image view (no individual rounding)
+    /// Délégation mince vers `FeedMediaTile` (#4096) : le visuel d'un média de
+    /// carte est décrit à UN seul endroit, que le carrousel et l'aperçu d'une
+    /// republication montent tous deux.
     func galleryImageView(_ media: FeedMedia) -> some View {
-        ZStack {
-            let thumbUrl = media.thumbnailUrl ?? media.url ?? ""
-            if !thumbUrl.isEmpty || media.thumbHash != nil {
-                ProgressiveCachedImage(
-                    thumbHash: media.thumbHash,
-                    thumbnailUrl: media.thumbnailUrl,
-                    fullUrl: media.url,
-                    autoLoad: true
-                ) {
-                    Color(hex: media.thumbnailColor)
-                        .shimmer()
-                }
-                .aspectRatio(contentMode: .fill)
-                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-                .clipped()
-            } else {
-                LinearGradient(
-                    colors: [Color(hex: media.thumbnailColor), Color(hex: media.thumbnailColor).opacity(0.6)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            }
+        FeedMediaTile(media: media)
+    }
 
-            // Video overlay (décoratif : la cellule galerie parente porte le libellé VoiceOver)
-            if media.type == .video {
-                VStack(spacing: 6) {
-                    ZStack {
-                        Circle()
-                            .fill(.ultraThinMaterial)
-                            .frame(width: 36, height: 36)
-                        Circle()
-                            .fill(Color.white.opacity(0.85))
-                            .frame(width: 30, height: 30)
-                        // Glyphe dans un cercle de dimension fixe 30/36 : figé (déborderait s'il scalait, doctrine 86i)
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.black.opacity(0.7))
-                            .offset(x: 1)
-                    }
-                    if let duration = media.durationFormatted {
-                        Text(duration)
-                            .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.black.opacity(0.6)))
-                    }
-                }
-                .accessibilityHidden(true)
-            } else if media.type == .audio {
-                VStack(spacing: 4) {
-                    Image(systemName: "waveform")
-                        .font(MeeshyFont.relative(20))
-                        .foregroundColor(.white)
-                    if let duration = media.durationFormatted {
-                        Text(duration)
-                            .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.black.opacity(0.6)))
-                    }
-                }
-                .accessibilityHidden(true)
-            }
-        }
-        .clipped()
+    /// **Ouvrir le plein écran d'une SCÈNE** — sans média d'entrée, parce
+    /// qu'un canvas n'en a pas forcément un : un texte, un dessin, des stickers
+    /// ou un simple fond de couleur se rejouent aussi bien. Le site unique
+    /// (`socialMediaGallery`) lit la nature du post et choisit le player ;
+    /// `fullscreenMediaId` reste nul, la galerie n'ayant rien à feuilleter.
+    ///
+    /// **L'index dit SUR QUELLE scène on entre** (directive porteur
+    /// 2026-09-06) : « lorsqu'on montre la mosaïque on doit pouvoir cliquer sur
+    /// n'importe quelle scène et l'afficher en plein écran ». Sans lui, les
+    /// quatre tuiles menaient toutes à la première — un seul bouton dessiné
+    /// quatre fois.
+    func openSceneFullscreen(at index: Int = 0) {
+        fullscreenMediaId = nil
+        fullscreenSceneIndex = index
+        showFullscreenGallery = true
+        HapticFeedback.light()
     }
 
     func openFullscreen(_ media: FeedMedia) {
@@ -259,10 +131,32 @@ extension FeedPostCard {
     }
 
     // `mediaIsCompact` vivait ici pour décider si `mediaPreview` devait imposer
-    // une hauteur de 220 pt. Ce cadre a disparu le 2026-08-10 — il écrasait le
+    // une hauteur de 220 pt. Ce cadre a disparu — il écrasait le
     // calcul de ratio des cellules image/vidéo et letterboxait les clips
     // verticaux. L'audio et les documents s'auto-dimensionnent, le prédicat
     // n'avait donc plus d'appelant.
+
+    /// **La légende d'un média SEUL** — même résolveur, même chrome que le
+    /// carrousel (`FeedPostCardCarousel.slide`).
+    ///
+    /// Le dégradé n'existe que SOUS elle : sans légende, rien ne s'assombrit.
+    /// Un voile permanent ferait payer à tous les posts le coût de ceux qui
+    /// parlent.
+    ///
+    /// `SocialMediaCaption.map` reste le juge : pour UN visuel, il retombe sur
+    /// le texte du porteur à défaut de légende propre — et c'est ce repli qui
+    /// est ici indésirable, le texte du post étant DÉJÀ rendu au-dessus du
+    /// média. On ne lit donc que la légende PROPRE.
+    /// **La légende d'un média SEUL** — la MÊME couche que le carrousel et la
+    /// carte de scène (`FeedCaptionOverlay`), donc la même troncature : vingt
+    /// mots et une ellipse. Elle portait son propre chrome jusqu'au
+    /// 2026-09-05, avec un `lineLimit(3)` qui rendait une longueur différente
+    /// selon la largeur et le corps de texte.
+    func singleMediaCaption(_ media: FeedMedia) -> some View {
+        FeedCaptionOverlay(caption: media.resolvedCaption(
+            preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
+        ))
+    }
 
     @ViewBuilder
     func singleMediaView(_ media: FeedMedia) -> some View {
@@ -293,8 +187,9 @@ extension FeedPostCard {
         .aspectRatio(contentMode: .fill)
         .fittedMediaHeight(mediaWidth: media.width, mediaHeight: media.height)
         .clipped()
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
         .onTapGesture { openFullscreen(media) }
+        .accessibilityAction(named: Text(String(localized: "a11y.post.media.open.hint", bundle: .main))) { openFullscreen(media) }
     }
 
     func videoMediaView(_ media: FeedMedia) -> some View {
@@ -327,6 +222,17 @@ extension FeedPostCard {
                     accentColor: media.thumbnailColor,
                     transcription: media.transcription,
                     translatedAudios: media.translatedAudios,
+                    // Prisme AUDIO (#4926) — la piste ET la bande de
+                    // transcription sortent de la MÊME élection : un seul
+                    // paramètre, donc structurellement une seule descente
+                    // (§ cycle 128 du CLAUDE.md racine).
+                    initialTranscriptionLanguage: SocialAudioTrack.servedLanguage(
+                        originalLanguage: SocialAudioTrack.originalLanguage(
+                            transcription: media.transcription,
+                            carrier: post.originalLanguage
+                        ),
+                        translatedAudios: media.translatedAudios
+                    ),
                     onFullscreen: {
                         audioFullscreen = .fromFeed(
                             media: media,
@@ -347,57 +253,55 @@ extension FeedPostCard {
                 )
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
     }
 
     func documentMediaView(_ media: FeedMedia) -> some View {
         let theme = ThemeManager.shared
-        return HStack(spacing: 14) {
+        return HStack(spacing: MeeshySpacing.mdPlus) {
             // Document icon
             ZStack {
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                     .fill(Color(hex: media.thumbnailColor).opacity(0.2))
                     .frame(width: 48, height: 56)
 
                 // Glyphe dans un cadre de dimension fixe 48×56 : figé (déborderait s'il scalait, doctrine 86i) ; le nom de fichier porte le sens
                 Image(systemName: "doc.fill")
                     .font(.system(size: 24))
-                    .foregroundColor(Color(hex: media.thumbnailColor))
+                    .foregroundStyle(Color(hex: media.thumbnailColor))
                     .accessibilityHidden(true)
             }
 
             // Document info
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main))
-                    .font(MeeshyFont.relative(14, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     if let size = media.fileSize {
                         Text(size)
-                            .font(MeeshyFont.relative(12))
-                            .foregroundColor(theme.textMuted)
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                            .foregroundStyle(theme.textMuted)
                     }
-
                     if let pages = media.pageCount {
                         Text("\u{2022}")
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                         Text("\(pages) \(String(localized: "feed.post.detail.pages", defaultValue: "pages", bundle: .main))")
-                            .font(MeeshyFont.relative(12))
-                            .foregroundColor(theme.textMuted)
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                            .foregroundStyle(theme.textMuted)
                     }
                 }
             }
-
             Spacer()
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                 .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1)
                 )
         )
@@ -438,12 +342,43 @@ private struct FeedVideoMediaCell: View {
                 accentColor: accentColor,
                 frame: .card,
                 availability: availability,
-                performance: .inline,
                 onDownload: onDownload,
                 onExpand: onExpand
             )
         }
         .fittedMediaHeight(mediaWidth: media.width, mediaHeight: media.height)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+    }
+}
+
+// MARK: - Ce qui se traduit, vu par l'égalité de la carte
+extension FeedPostCard {
+    /// **Tout ce que la carte affiche et qui peut changer de langue** (#6560).
+    ///
+    /// `FeedPostCard.==` gouverne `.equatable()` : ce qu'il ne compare pas ne se
+    /// redessine pas. Il comptait les traductions du POST et rien des médias —
+    /// une traduction de légende arrivée par `media:caption-translation-updated`
+    /// atteignait le store sans jamais atteindre la carte ni le plein écran de
+    /// scène qu'elle monte. La légende d'un média est un contenu DISTINCT du
+    /// post : elle entre ici avec sa langue et ses traductions.
+    nonisolated struct TranslatableSignature: Equatable {
+        nonisolated struct Caption: Equatable {
+            let mediaId: String
+            let text: String?
+            let language: String?
+            let translations: [String: String]?
+        }
+
+        let postTranslationCount: Int
+        let captions: [Caption]
+    }
+
+    nonisolated static func translatableSignature(of post: FeedPost) -> TranslatableSignature {
+        TranslatableSignature(
+            postTranslationCount: post.translations?.count ?? 0,
+            captions: post.media.map {
+                .init(mediaId: $0.id, text: $0.caption, language: $0.captionLanguage, translations: $0.captionTranslations)
+            }
+        )
     }
 }

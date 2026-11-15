@@ -32,6 +32,7 @@ const mockGenerateIceServers = jest.fn<any>().mockReturnValue([]);
 const mockClearRingingTimeout = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn().mockImplementation(() => ({
     joinCall: mockJoinCall,
     generateIceServers: mockGenerateIceServers,

@@ -32,17 +32,21 @@ final class LocalizationConsistencyTests: XCTestCase {
     // `apps/ios/MeeshyIntents` root was recabled into `apps/ios/Meeshy/Features/Intents/`
     // on 2026-06-24 (cf. apps/ios/CLAUDE.md § App Extensions) — already
     // covered by the `apps/ios/Meeshy` root below, so it was dropped here.
-    private static let sourceRoots = [
+    // Les trois déclarations ci-dessous sont lues par le FRÈRE
+    // `LocalizationConsistencyTests+Scanning.swift`, où vit le lecteur de
+    // catalogues. `private` est de portée FICHIER en Swift : elles s'élargissent
+    // en `internal` par la découpe de 232i, pas par un choix de visibilité.
+    static let sourceRoots = [
         "apps/ios/Meeshy",
         "apps/ios/MeeshyNotificationExtension",
+        "apps/ios/MeeshyNotificationContentExtension",
         "apps/ios/MeeshyWidgets",
         "apps/ios/MeeshyShareExtension",
-        "apps/ios/MeeshyContextMenu",
         "packages/MeeshySDK/Sources",
     ]
 
-    private static let appCatalogPath = "apps/ios/Meeshy/Localizable.xcstrings"
-    private static let sdkCatalogPath = "packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings"
+    static let appCatalogPath = "apps/ios/Meeshy/Localizable.xcstrings"
+    static let sdkCatalogPath = "packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings"
 
     /// Documented exceptions. Keep empty; add a key only with a justifying comment.
     private static let orphanAllowlist: Set<String> = []
@@ -82,9 +86,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         // interpolation, so this is immune to the nested-literal pitfalls that
         // break naive literal extraction.
         let quotedTokens = quotedIdentifierTokens(in: env.combinedSource)
+        let adopted = androidAdoptedAppKeys(repoRoot: env.repoRoot)
 
         let orphans = env.appIdentifierKeys
-            .filter { !Self.orphanAllowlist.contains($0) && !quotedTokens.contains($0) }
+            .filter { !Self.orphanAllowlist.contains($0) && !quotedTokens.contains($0) && !adopted.contains($0) }
             .sorted()
 
         XCTAssertTrue(
@@ -100,31 +105,654 @@ final class LocalizationConsistencyTests: XCTestCase {
     /// locales. Additive list: an iteration that finishes localizing a screen adds
     /// its path here so the screen can never silently regress to French-only.
     private static let fullyLocalizedScreens = [
-        "apps/ios/Meeshy/Features/Main/Views/StatusComposerView.swift",
-        // Lot 4.6 — la surface qui SERT désormais les six déclencheurs du mood.
-        // Ajoutée ici dès qu'elle est présentée, et non au retrait de l'écran
+        // Lot 4.6 — la surface qui SERT les six déclencheurs du mood. Elle a été
+        // ajoutée ici dès sa présentation, et non au retrait de l'écran
         // historique : la liste est ADDITIVE, et l'écran que les auteurs voient
-        // ne doit à aucun moment sortir du cliquet. La ligne au-dessus reste
-        // jusqu'au retrait du fichier (tâche 4.8, conditionnelle) — l'amputer
-        // maintenant perdrait un écran déclaré intégralement traduit sans que
-        // rien ne le dise.
-        "apps/ios/Meeshy/Features/Main/Composer/ComposerMoodSurface.swift",
-        // 225i — the registration step flow: the first screens a new account ever
-        // sees, and the largest single-file gap in the catalog when it was pinned.
-        "apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift",
+        // ne doit à aucun moment sortir du cliquet.
+        //
+        // Lot 4.8 — `StatusComposerView.swift` a quitté cette liste AVEC le
+        // fichier, et pas une ligne avant : la remplaçante était déjà là, si
+        // bien qu'aucun écran n'est sorti du cliquet entre les deux lots.
+        "apps/ios/Meeshy/Features/Composer/ComposerMoodSurface.swift",
+        // 225i — the registration flow: the first screen a new account ever sees,
+        // and the largest single-file gap in the catalog when it was pinned.
+        //
+        // #5218 — le wizard en huit étapes est remplacé par UN écran. Le cliquet
+        // suit le CODE, pas le chemin (#4084) : sans ces deux lignes, les clés
+        // de l'inscription sortiraient de la garde au moment même où elles sont
+        // réécrites — et rien ne rougirait.
+        "apps/ios/Meeshy/Features/Auth/Signup/SignupView.swift",
+        "apps/ios/Meeshy/Features/Auth/Signup/SignupViewModel.swift",
+        // #8288 — l'inscription se découpe par PHASE : ses extraits restent
+        // dans le cliquet, sinon leurs clés en sortiraient au moment même où
+        // elles sont déplacées.
+        "apps/ios/Meeshy/Features/Auth/Signup/SignupView+Phone.swift",
+        "apps/ios/Meeshy/Features/Auth/Signup/SignupView+Card.swift",
+        "apps/ios/Meeshy/Features/Auth/Signup/SignupCountrySheet.swift",
         // 226i — share-link creation, the largest remaining gap after 225i (55 keys).
-        "apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift",
+        "apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift",
+        // 263i (#4309) — quarante écrans qui passaient DÉJÀ les deux règles
+        // (chaque clé traduite dans les six locales requises ET `defaultValue`
+        // inline égal à la valeur du catalogue). Les épingler ne change pas une
+        // ligne de production : cela interdit seulement qu'ils REDESCENDENT.
+        //
+        // La liste s'arrête à quarante parce que 92 autres fichiers sont tout
+        // aussi propres, mais que le parseur qui les a élus n'est pas
+        // compilable ici : on épingle un lot que la CI valide, puis on poursuit.
+        //
+        // Ce qui MANQUE à cette liste dit l'essentiel :
+        // `NotificationSettingsView` (53 clés), `SecurityView` (44),
+        // `ConversationView` (43), `MyStoriesView` (42), `GlobalSearchView`
+        // (34)… en sont ABSENTS non par oubli mais parce que leurs
+        // `defaultValue` inline divergent de la valeur du catalogue — 648 clés
+        // dans tout le dépôt. `test_pinnedScreenDefaultsMatchCatalog` le refuse
+        // à raison : le catalogue est ce qui S'AFFICHE, donc un `defaultValue`
+        // divergent est du texte mort qui ment au lecteur (#4308).
+        "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift",  // 87
+        // #18592 — les Réglages en deux strates : les rangées, les blocs, le pli
+        // « Annexes », le thème et la langue de l'interface ont quitté
+        // `SettingsView.swift` avec leurs clés. Le cliquet suit le CODE (leçon 578).
+        "apps/ios/Meeshy/Features/Settings/Views/SettingsLayout.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/SettingsRowContent.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/SettingsAnnexFold.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/SettingsThemePicker.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/SettingsInterfaceLanguageMenu.swift",
+        "apps/ios/Meeshy/Features/Main/Components/SyncPillLabels.swift",  // 53
+        "apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet.swift",  // 47
+        // #8103 — l'aperçu des épinglés a quitté la fiche (extraction de taille),
+        // et l'onglet Médias est devenu l'écran « Médias, liens et documents ».
+        "apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet+Pinned.swift",
+        // Extraits de taille de la fiche : la rangée de sécurité et la rangée de membre
+        // portent des clés qui ne doivent pas sortir du cliquet en changeant de fichier.
+        "apps/ios/Meeshy/Features/Main/Components/ConversationInfoSecurityRow.swift",
+        "apps/ios/Meeshy/Features/Main/Components/ConversationInfoMemberRow.swift",
+        "apps/ios/Meeshy/Features/Main/Components/MediaHub/ConversationMediaHubCopy.swift",
+        "apps/ios/Meeshy/Features/Main/Components/MediaHub/ConversationMediaHubView.swift",
+        "apps/ios/Meeshy/Features/Profile/Views/ParticipantProfileSheet.swift",  // 43
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift",  // 37
+        // #14056 — les règles pures de l'éditeur (refus d'identité compris) ont
+        // quitté `ProfileView.swift` pour la taille : leurs clés suivent.
+        "apps/ios/Meeshy/Features/Profile/Views/MeeshyUser+ProfileEdits.swift",
+        // #18592 — la fiche de profil réorganisée : ses sections ont quitté
+        // `ProfileView.swift` avec leurs clés. `ProfileCirclesSection.swift` n'y
+        // est PAS : ses deux compteurs sont PLURIELS (`profile.circles.pill.a11y`,
+        // `profile.circles.requests`), sans `stringUnit` plat égal au littéral,
+        // et la règle B ne peut pas les satisfaire — même exclusion que
+        // `StatsTimelineChart` (268i).
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileActivityBand.swift",
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileSavedContentRows.swift",
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileContactSection.swift",
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileIdentitySection.swift",
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileLanguageRow.swift",
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileMembershipLine.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift",  // 34
+        "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift",  // 32
+        // #4084 — l'en-tête du viewer story a QUITTÉ le fichier ci-dessus pour
+        // le sien. Le cliquet suit le CODE, pas le chemin : sans cette ligne,
+        // les deux tiers des clés épinglées ici seraient sorties de la garde
+        // sans qu'une seule assertion rougisse — une extraction fait franchir
+        // au code une frontière que les listes de fichiers ne voient pas.
+        "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Header.swift",
+        "apps/ios/Meeshy/Features/Main/Views/NearbyDiscoveryView.swift",  // 31
+        "apps/ios/Meeshy/Features/Main/Components/ConversationLockSheet.swift",  // 30
+        "apps/ios/Meeshy/Features/Settings/Views/AboutView.swift",  // 28
+        "apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView.swift",  // 24
+        "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",  // 22
+        // #13864 — la surface document est partie ; « Texte du post » la remplace au socle.
+        "apps/ios/Meeshy/Features/Composer/ComposerPostTextPill.swift",
+        "apps/ios/Meeshy/Features/Main/Views/ConversationContextMenuView.swift",  // 21
+        // #11230 — les libellés du menu d'une rangée ont quitté le menu custom
+        // pour le catalogue que les deux chemins d'OS lisent : le cliquet suit.
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMenuCatalog.swift",
+        "apps/ios/Meeshy/Features/Auth/Views/LoginView.swift",  // 20
+        "apps/ios/Meeshy/Features/Composer/ComposerObjectChipsCopy.swift",  // 19
+        "apps/ios/Meeshy/Features/Main/Components/NearbyDiscoverabilityControl.swift",  // 17
+        "apps/ios/Meeshy/Features/Settings/Components/LocationSharingSettingsSection.swift",  // 16
+        // #5218 — `OnboardingView` (le carrousel de cinq pages, 16 clés) est
+        // remplacé par `WelcomeView`. Épinglé dès la bascule, pour la même
+        // raison qu'au #4084 : un écran qui remplace un écran épinglé n'a
+        // aucune raison de sortir du cliquet.
+        "apps/ios/Meeshy/Features/Auth/Views/WelcomeView.swift",
+        "apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift",  // 14
+        "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenView.swift",  // 14
+        // #10383 — la page du plein écran audio a quitté le fichier épinglé :
+        // ses clés la suivent, et le cliquet avec elles.
+        "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenPage.swift",
+        "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenPage+Transcription.swift",
+        "apps/ios/Meeshy/Features/Call/Views/CallBubbleView.swift",  // 14
+        "apps/ios/Meeshy/Features/Focal/Lens/ReadingModeLensSheet.swift",  // 13
+        "apps/ios/Meeshy/Features/Settings/Views/ActiveSessionsView.swift",  // 12
+        // #9612 — ce que la ligne dit d'une session, et l'avis d'une session
+        // fermée par le serveur : épinglés dès leur création.
+        "apps/ios/Meeshy/Features/Settings/ViewModels/ActiveSessionsPresentation.swift",
+        "apps/ios/Meeshy/Features/Auth/SessionClosedNoticeView.swift",
+        "apps/ios/Meeshy/Features/Main/Views/ConversationListQuickActions.swift",  // 12
+        "apps/ios/Meeshy/Features/Main/Components/MediaKindLabel.swift",  // 11
+        "apps/ios/Meeshy/Features/Lens/Mode/LentilleModeLabels.swift",  // 10
+        "apps/ios/Meeshy/Features/Lens/Row/LentilleBridgeLine.swift",  // 9
+        "apps/ios/Meeshy/Features/Main/Models/ConversationFilterLabel.swift",  // 9
+        "apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift",  // 9
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift",  // 9
+        // #6145 — le menu ⋯ a emporté quatre clés hors du fichier épinglé (les
+        // deux verbes, la note de marque, le libellé VoiceOver du glyphe). Un
+        // cliquet ancré sur un CHEMIN cesse de voir ce qu'une découpe déplace,
+        // et il cesse de le voir EN SILENCE : sa destination s'inscrit donc
+        // dans le même commit (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+Menu.swift",  // 5
+        // #8095 — même geste que le #6145 : la légende servie et ses libellés
+        // VoiceOver ont quitté le fichier épinglé avec leurs deux clés.
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+Captions.swift",  // 2
+        // La rangée de langues de la légende a quitté le fichier épinglé avec sa clé
+        // (`gallery.caption.languages`) : sa destination s'inscrit dans le même commit.
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+CaptionLanguages.swift",  // 1
+        "apps/ios/Meeshy/Features/Stories/Views/StoryExportShareSheet.swift",  // 9
+        "apps/ios/Meeshy/Features/Contacts/DiscoverViewModel.swift",  // 4
+        "apps/ios/Meeshy/Features/Contacts/RequestsViewModel.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageEditsDetailView.swift",  // 8
+        "apps/ios/Meeshy/Features/Focal/Summary/LivingSummaryView.swift",  // 8
+        // 2026-10-02 — `CallManager.swift` découpé par responsabilité : ses clés
+        // ont suivi leur code, la liste suit les hôtes (leçon 578).
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+Answer.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+Connection.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallCollaborators/CallVideoSuspension.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallCollaborators/CallCameraActuator.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+IncomingSignal.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+MediaControls.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+Outgoing.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+RemoteEvents.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallCollaborators/CallSignalingRouter.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+VideoFallback.swift",
+        "apps/ios/Meeshy/Features/Call/Views/CallWaitingBannerView.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Views/StarredMessagesView.swift",  // 8
+        "apps/ios/Meeshy/Features/Stories/Views/StoryTrayActions.swift",  // 8
+        "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift",  // 8
+        // #13907 — les mots du rail ont quitté sa vue retirée ; le cliquet les suit.
+        "apps/ios/Meeshy/Features/Composer/ComposerRailCopy.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+ComposerBanners.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Views/FriendRequestListView.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Components/MiniAudioPlayerBar.swift",  // 6
+        "apps/ios/Meeshy/Features/Composer/StickerLibraryPaste.swift",  // 6
+        // 267i (#4322) — les 92 écrans restants qui passaient DÉJÀ les deux
+        // règles, soit 280 clés. #4309 en avait épinglé 40 sur 132 en disant
+        // pourquoi il n'en prenait pas plus : « le risque n'est pas par fichier
+        // mais par PARSEUR — s'il se trompe, il se trompe partout ». La CI a
+        // depuis validé ce parseur sur les 40 premiers, du premier coup, sur les
+        // DEUX règles. Le solde est donc pris avec une confiance mesurée.
+        //
+        // Ce qui reste dehors n'y est pas par oubli : 164 fichiers échouent
+        // encore, dont 154 sur la SEULE règle du `defaultValue` (#4308, 648 clés
+        // divergentes). C'est la dette de littéraux, pas la traduction, qui
+        // borne désormais ce cliquet — la règle A n'en retient que 56.
+        "apps/ios/Meeshy/Features/Main/Views/MessageListViewController.swift",  // 15
+        // #10758 — la découpe emporte les clés de date avec leur code (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Views/MessageListViewController+DayOverlays.swift",
+        "apps/ios/Meeshy/Features/Main/Views/MessageListViewController+Rows.swift",
+        "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift",  // 7
+        "apps/ios/Meeshy/Features/Stories/Views/StoryLanguageDetailView.swift",  // 7
+        "apps/ios/Meeshy/Features/River/View/RiverBubbleView.swift",  // 6
+        "apps/ios/Meeshy/Features/Settings/ViewModels/VoiceProfileManageViewModel.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/ConversationListHelpers.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift",  // 6
+        "apps/ios/Meeshy/Features/Settings/Views/LicensesView.swift",  // 6
+        // #14628 — l'AGPL-3.0 de libsignal : la licence de Meeshy, l'offre de source, les avis.
+        "apps/ios/Meeshy/Features/Settings/Views/LicensesAGPLSection.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/LicensesLibsignalSection.swift",
+        "apps/ios/Meeshy/Features/Stories/Views/MyStoriesDeleteConfirmation.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/RootMenuLadderEntry.swift",  // 6
+        "apps/ios/Meeshy/Features/Links/Views/ShareLinkIdentitySheet.swift",  // 0 — #7795 : la page vit dans MeeshyUI
+        "apps/ios/Meeshy/Features/Call/Components/CallSignalGlyph.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Components/LanguageFlagChip.swift",  // 5
+        "apps/ios/Meeshy/Features/Composer/ComposerDescriptionLayer.swift",  // 5
+        "apps/ios/Meeshy/Features/Composer/ComposerFormatAvailability.swift",  // 5
+        "apps/ios/Meeshy/Features/Focal/Summary/EpisodeSegmenter.swift",  // 5
+        "apps/ios/Meeshy/Features/Lens/Chrome/LentilleSectionIdentity.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Services/CrashDiagnosticsManager.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Services/MediaPermissionCoordinator.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/ViewModels/ConversationOptionsViewModel.swift",  // 5
+        "apps/ios/Meeshy/Features/Settings/ViewModels/TwoFactorViewModel.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+Selection.swift",  // 5
+        "apps/ios/Meeshy/Features/Stories/Views/MyStoryCardPresentation.swift",  // 5
+        "apps/ios/Meeshy/Features/Contacts/PeopleDiscoveryView.swift",  // 4
+        "apps/ios/Meeshy/Features/Composer/MediaComposerDoor.swift",  // 4
+        "apps/ios/Meeshy/Features/Composer/MeeshyComposerHost.swift",  // 4
+        "apps/ios/Meeshy/Features/Composer/UpgradeGateView.swift",  // 4
+        "apps/ios/Meeshy/Features/Lens/Mode/LentilleFocusCard.swift",  // 4
+        "apps/ios/Meeshy/Features/Stories/Services/StoryPhotoSaveService.swift",  // 4
+        "apps/ios/Meeshy/Features/Stories/Services/StoryPublishService.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/Cells/PostStatAccessibility.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/ConversationHelperViews.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+ScrollIndicators.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/BubbleSwipeContainer.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/MessageRowOffer.swift",  // 2
+        "apps/ios/Meeshy/Features/Stories/Views/MyStoriesTab.swift",  // 4
+        "apps/ios/Meeshy/Features/Stories/Views/StoryAuthorIdentityCard.swift",  // 4
+        "apps/ios/Meeshy/Features/Stories/Views/StoryUploadPresentation.swift",  // 4
+        "apps/ios/Meeshy/Features/Contacts/BlockedViewModel.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Services/StatusBubbleController.swift",  // 3
+        "apps/ios/Meeshy/Features/Settings/ViewModels/ActiveSessionsViewModel.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/ViewModels/GlobalSearchViewModel.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Views/FeedPostLocationView.swift",  // 3
+        "apps/ios/Meeshy/Features/Stories/Views/MyStoryCard.swift",  // 3
+        "apps/ios/Meeshy/Features/Stories/Views/StoryCanvasAccessibility.swift",  // 3
+        "apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Views/iPadRootView+Navigation.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Components/BrandSignature.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Components/ReelFeedSoundButton.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Components/ToggleStateAccessibility.swift",  // 2
+        "apps/ios/Meeshy/Features/Focal/Row/FocalIdentityHeader.swift",  // 2
+        "apps/ios/Meeshy/Features/Focal/Summary/EpisodeListView.swift",  // 2
+        "apps/ios/Meeshy/Features/Focal/Summary/FaceRampView.swift",  // 2
+        "apps/ios/Meeshy/Features/Lens/Mode/LentilleModeMenu.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Models/ConversationFilterComposition.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Services/MessageForwardService.swift",  // 2
+        "apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift",  // 2
+        "apps/ios/Meeshy/Features/Settings/ViewModels/VoiceProfileWizardViewModel.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/AudioPostComposerView.swift",  // 2
+        // Cohésion de `AudioPostComposerView` : la carte d'état, la zone de rognage et le
+        // sélecteur de langue ont quitté l'hôte avec leurs clés ; le cliquet suit le code (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Views/AudioPostStatusCard.swift",
+        "apps/ios/Meeshy/Features/Main/Views/AudioPostTrimZone.swift",
+        "apps/ios/Meeshy/Features/Main/Views/AudioLanguagePickerView.swift",
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleFailedRetryBar.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaViews.swift",
+        "apps/ios/Meeshy/Features/Main/Views/DownloadBadgeView.swift",  // 2
+        "apps/ios/Meeshy/Features/Stories/Views/StoryLanguageQuickBar.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/iPadRootView.swift",  // 2
+        "apps/ios/Meeshy/Features/Stories/Notifications/StoryNotificationOfflineContent.swift",  // 2
+        // #6508 — les mots d'un échec d'ouverture ont QUITTÉ l'écran ci-dessus
+        // (et le détail d'un post) pour la table que partagent le détail, la
+        // cible story et le lecteur de réels. Le cliquet suit le CODE, pas le
+        // chemin : la destination s'inscrit dans le même commit (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Views/ContentFetchFailure+Copy.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/ReelOpenFailureView.swift",  // 2
+        "apps/ios/Meeshy/Core/DependencyContainer.swift",  // 1
+        "apps/ios/Meeshy/Features/Auth/ViewModels/EmailVerificationViewModel.swift",  // 0
+        // #8081 — les refus de la preuve d'adresse ont quitté le ViewModel pour
+        // la table que partagent la saisie du code, le lien et l'envoi : le
+        // cliquet suit les CLÉS jusqu'à leur nouveau fichier (leçon 578).
+        "apps/ios/Meeshy/Features/Auth/EmailProofErrorText.swift",  // 9
+        "apps/ios/Meeshy/Features/Contacts/CallStarter.swift",  // 1
+        "apps/ios/Meeshy/Features/Contacts/CallsViewModel.swift",  // 1
+        "apps/ios/Meeshy/Features/Contacts/ContactsSkeletonList.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Components/BackgroundColorPalette.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Components/BackgroundSoundBadge.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Components/ComposerMentionStrip.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Components/LocalizedNumber.swift",  // 1
+        "apps/ios/Meeshy/Features/Composer/ComposerTrailingRail.swift",  // 1
+        "apps/ios/Meeshy/Features/Focal/Row/FocalConversationStartRow.swift",  // 1
+        "apps/ios/Meeshy/Features/Focal/Row/FocalMetaRow.swift",  // 1
+        "apps/ios/Meeshy/Features/Navigation/Router+StoryReply.swift",  // 1
+        "apps/ios/Meeshy/Features/River/Core/RiverConversationMapping.swift",  // 1
+        "apps/ios/Meeshy/Features/River/View/RiverLaneHeaderStrip.swift",  // 1
+        "apps/ios/Meeshy/Features/River/View/RiverTimeHandle.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Services/ContactSyncService.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Services/ConversationCreator.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Services/WidgetDataManager.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/ViewModels/NewConversationViewModel.swift",  // 1
+        "apps/ios/Meeshy/Features/Stories/ViewModels/StoryExportShareViewModel.swift",  // 1
+        // #10654 — le carrousel est devenu une liste : sa clé de rang l'a suivie
+        // (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/AudioStackView.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaFilmstrip.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/HashtagResultsView.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonFeedPost.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonLinkRow.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonProfileHeader.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonStoryThumb.swift",  // 1
+        "apps/ios/Meeshy/Features/Stories/Views/StoryLocationReaderTapOverlay.swift",  // 1
+        // 268i (#4308) — les 105 écrans débloqués par la RÉCONCILIATION des
+        // `defaultValue`. Ils ne butaient que sur la règle B : leur littéral
+        // inline disait « Reply » là où le catalogue `fr` — celui qui
+        // S'AFFICHE — dit « Répondre ». 498 littéraux réalignés sur le
+        // catalogue, aucun changement de comportement.
+        //
+        // Trois fichiers du lot en sont EXCLUS : `StatsTimelineChart`,
+        // `MembersCountLabel`, `UnreadCountLabel`. Leurs clés sont
+        // PLURIELLES, donc sans `stringUnit` plat — la règle B compare le
+        // littéral à une valeur source qui n'existe pas pour un pluriel, et
+        // aucune réconciliation ne peut la satisfaire (suivi ouvert).
+        "apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift",  // 60
+        // Cohésion de `MyStoriesView` : le cliquet suit le CODE, pas le chemin (leçon 578). Les
+        // alertes de suppression, le menu « ... » et les rangées de la file ont quitté l'hôte
+        // avec leurs clés.
+        "apps/ios/Meeshy/Features/Stories/Views/MyStoriesDeleteAlerts.swift",
+        "apps/ios/Meeshy/Features/Stories/Views/MyStoriesQueueRows.swift",
+        "apps/ios/Meeshy/Features/Stories/Views/MyStoryActionMenu.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift",  // 6
+        // Cohésion de `SecurityView` : le cliquet suit le CODE, pas le chemin (leçon 578). Les
+        // sections e-mail, téléphone, verrou des conversations et double authentification, et leurs
+        // pastilles communes, ont quitté l'hôte avec leurs clés.
+        "apps/ios/Meeshy/Features/Settings/Views/SecurityEmailSection.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/SecurityPhoneSection.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/SecurityConversationLockSection.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/SecurityTwoFactorSection.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/SecuritySectionChrome.swift",
+        // #8843 — le flux SMS du numéro a quitté l'écran ci-dessus pour être
+        // partagé avec la proposition faite avant la recherche de contacts :
+        // le cliquet suit les CLÉS jusqu'à leur nouveau fichier (leçon 578),
+        // et la proposition naît certifiée.
+        "apps/ios/Meeshy/Features/Settings/ViewModels/PhoneChangeFlowModel.swift",  // 2
+        "apps/ios/Meeshy/Features/Contacts/PhonePromptSheet.swift",  // 11
+        "apps/ios/Meeshy/Features/Settings/Views/NotificationSettingsView.swift",  // 56
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView.swift",  // 49
+        // Cohésion de `ConversationView` : le cliquet suit le CODE, pas le chemin (leçon 578). Les
+        // clés ont quitté l'hôte avec leur code — le consentement vocal, la bannière d'erreur, les
+        // contrôles du titre et de la recherche, le squelette, les avis de la liste — et rejoignent
+        // le cliquet dans le même commit.
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+ErrorBanner.swift",
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+HeaderControls.swift",
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+MessageListLayer.swift",
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+Presentations.swift",
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+Skeleton.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/TwoFactorSetupView.swift",  // 41
+        "apps/ios/Meeshy/Features/Main/Views/GlobalSearchView.swift",  // 40
+        "apps/ios/Meeshy/Features/Main/Views/ParticipantsView.swift",  // 38
+        "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView.swift",  // 37
+        // Cohésion de `ConversationDashboardView` : le cliquet suit le CODE, pas le chemin (leçon 578).
+        // Les sections, et les règles qui les alimentent, ont quitté l'hôte avec leurs clés.
+        "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView+Breakdown.swift",
+        "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView+ContentTypes.swift",
+        "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView+ParticipantProfiles.swift",
+        "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView+Rules.swift",
+        "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView+Sentiment.swift",
+        "apps/ios/Meeshy/Features/Main/Components/ConversationPreferencesTab.swift",  // 31
+        "apps/ios/Meeshy/Features/Main/Views/FeedView+Attachments.swift",  // 6
+        // #15628 — la citation a quitté la feuille pour le compositeur : ses
+        // mots partent avec elle.
+        "apps/ios/Meeshy/Features/Composer/QuoteComposerDoor.swift",
+        "apps/ios/Meeshy/Features/Composer/ComposerQuotedPublicationCard.swift",
+        "apps/ios/Meeshy/Features/Main/Components/MessageMoreSheet.swift",  // 29
+        "apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift",  // 29
+        "apps/ios/Meeshy/Features/Settings/Views/VoiceProfileWizardView.swift",  // 29
+        "apps/ios/Meeshy/Features/Settings/Views/DeleteAccountView.swift",  // 28
+        // #10947 — l'écran de partage unique remplace `SharePickerView` et le
+        // sélecteur de transfert : ses mots sont traduits dans les sept langues.
+        "apps/ios/Meeshy/Features/Share/ShareSheetCopy.swift",
+        "apps/ios/Meeshy/Features/Share/ShareContentZone.swift",
+        "apps/ios/Meeshy/Features/Navigation/Router.swift",  // 27
+        "apps/ios/Meeshy/Features/Main/Components/EffectsPickerView.swift",  // 24
+        "apps/ios/Meeshy/Features/Links/Views/CreateTrackingLinkView.swift",  // 24
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift",  // 10
+        "apps/ios/Meeshy/Features/Profile/ViewModels/ProfileUserPostsViewModel.swift",  // 14
+        "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView.swift",  // 5
+        // #6693 — le rail d'actions a quitté l'hôte avec ses quatorze clés. Le cliquet
+        // suit le CODE, pas le chemin : sa destination s'inscrit dans le même commit.
+        "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView+ActionRail.swift",  // 14
+        // #7007 — même mouvement, même raison : l'état vide du pager a quitté
+        // l'hôte (hors budget, et il devait gagner un TROISIÈME état) en emportant
+        // `reels.empty`. Il arrive avec une clé de plus, `common.retry`, parce
+        // qu'une panne qui ne propose pas d'en sortir n'est pas un état.
+        "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView+EmptyState.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Components/EditPostSheet.swift",  // 23
+        "apps/ios/Meeshy/Features/Main/Components/ReportMessageSheet.swift",  // 21
+        "apps/ios/Meeshy/Features/Main/Views/FeedView.swift",  // 12
+        "apps/ios/Meeshy/Features/Main/Views/FeedComposerPlaceholder.swift",  // 9
+        "apps/ios/Meeshy/Features/Contacts/DiscoverTab.swift",  // 19
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift",  // 19
+        // #4328 — la surface RÉPERTOIRE, en entier. Onze clés absentes du
+        // catalogue y servaient du français aux six autres langues, et du
+        // français SANS ACCENTS au francophone : le `defaultValue` n'avait
+        // jamais été relu comme du texte affiché, puisque personne ne le
+        // croyait affiché.
+        "apps/ios/Meeshy/Features/Contacts/ContactsShared.swift",  // 11
+        "apps/ios/Meeshy/Features/Contacts/PhonebookListView.swift",  // 14
+        "apps/ios/Meeshy/Features/Contacts/PhonebookViewModel.swift",  // 5
+        "apps/ios/Meeshy/Features/Contacts/AffiliatesListView.swift",  // 4
+        // #4430 — les onze chaînes dont le `defaultValue` était écrit en ANGLAIS
+        // dans un catalogue de langue source française. Entrées au catalogue,
+        // traduites en sept locales, littéraux réalignés sur le `fr`.
+        "apps/ios/Meeshy/Features/Main/Components/SecurityVerificationView.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/Cells/TopLevelCommentCell.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Cells/ReplyCell.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Cells/LoadMoreRepliesCell.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleMetaBadges.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Components/ConversationEncryptionDetailSheet.swift",  // 1
+        // 2026-11-01 — le mode se choisit à la création : les mots d'un mode,
+        // partagés par la fiche et l'écran de création, et la section de choix.
+        "apps/ios/Meeshy/Features/Main/Components/ConversationEncryptionModeText.swift",
+        "apps/ios/Meeshy/Features/Main/Views/NewConversationEncryptionSection.swift",
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageViewsDetailView.swift",  // 1
+        // Cohésion de `MessageViewsDetailView` : les cartes et le badge ont quitté l'hôte avec leurs clés ; le cliquet suit le code (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageViewsConsumptionCard.swift",
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageViewsDeliveryBadge.swift",
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageViewsSendAttemptsCard.swift",
+        // #7366 — les onglets et libellés de la fiche en sont sortis ; le cliquet suit le code.
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageViewsFilter.swift",  // 13
+        "apps/ios/Meeshy/Features/Intents/MeeshyAppIntents.swift",  // 1
+        // Vue `3h` (#4098) — la carte de citation de story naît certifiée :
+        // trois clés, sept locales, `defaultValue` alignés sur le catalogue `fr`.
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStoryCitationCard.swift",  // 3
+        // #7797 — la fiche du lien a confié ses textes à `ShareLinkDetailCopy`,
+        // partagé par la carte « Configuration » et le formulaire : le cliquet
+        // suit les CLÉS jusqu'à leur nouveau fichier (leçon 578). La page
+        // d'invitation (#7795) vit dans MeeshyUI, catalogue du SDK.
+        "apps/ios/Meeshy/Features/Links/Views/ShareLinkDetailView.swift",  // 0
+        "apps/ios/Meeshy/Features/Links/Views/ShareLinkDetailCopy.swift",  // 59
+        "apps/ios/Meeshy/Features/Main/Views/RootView.swift",  // 7
+        // Découpe de la racine : le cliquet suit les CLÉS jusqu'à leurs nouveaux fichiers (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Views/RootConversationOpener.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/RootFloatingChrome.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Views/RootPendingBanners.swift",  // 2
+        // #6579 — `CallPresentationLayer` a QUITTÉ l'écran ci-dessus pour son
+        // propre fichier (RootView.swift dépassait le plafond dur de 1200
+        // lignes). Le cliquet suit le CODE, pas le chemin : sans cette ligne,
+        // `call.unknown` sortirait du cliquet en silence (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Views/RootLayers/CallPresentationLayer.swift",  // 1
+        "apps/ios/Meeshy/Features/Auth/Views/EmailVerificationView.swift",  // 17
+        "apps/ios/Meeshy/Features/Main/Components/RecentMediaStrip.swift",  // 17
+        // Cohésion de `RecentMediaStrip` : la cellule et son aperçu ont quitté l'hôte avec leurs clés ; le cliquet suit le code (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Components/RecentMediaCell.swift",
+        // Découpé par responsabilité : le cliquet suit les CLÉS jusqu'à leurs nouveaux fichiers (leçon 578).
+        "apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel+PostActions.swift",  // 12
+        "apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel+Reactions.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel+Posting.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel+Pagination.swift",  // 1
+        "apps/ios/Meeshy/Features/Settings/Views/ChangePasswordView.swift",  // 17
+        "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel.swift",  // 15
+        // #6600 — l'édition de commentaire a quitté l'hôte avec sa clé.
+        "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel+CommentEdit.swift",  // 1
+        // Cohésion de `PostDetailViewModel` : les actions sur le post ont quitté l hôte avec leurs clés (leçon 578).
+        "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel+PostActions.swift",
+        "apps/ios/Meeshy/Features/Call/Views/FloatingCallPillView.swift",  // 16
+        "apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift",  // 16
+        "apps/ios/Meeshy/Features/Main/Views/ReportUserView.swift",  // 16
+        "apps/ios/Meeshy/Features/Contacts/CallsTab.swift",  // 15
+        "apps/ios/Meeshy/Features/Contacts/RequestsTab.swift",  // 15
+        "apps/ios/Meeshy/Features/Main/Components/MemberManagementSection.swift",  // 15
+        "apps/ios/Meeshy/Features/Main/Views/EmojiPickerSheet.swift",  // 15
+        "apps/ios/Meeshy/Features/Call/Views/IncomingCallView.swift",  // 15
+        "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift",  // 15
+        // #9727 — la feuille « Vues » quitte l'hôte ci-dessus et naît certifiée :
+        // ce que chaque personne a fait, sept locales, `defaultValue` alignés sur le `fr`.
+        "apps/ios/Meeshy/Features/Main/Views/PublicationViewersSheet.swift",  // 23
+        // #16386 — le détail d'une personne (plein écran) et l'en-tête chiffré
+        // quittent l'hôte avec leurs clés : le cliquet suit le code.
+        "apps/ios/Meeshy/Features/Main/Views/ViewerEngagementDetailScreen.swift",
+        "apps/ios/Meeshy/Features/Main/Views/PublicationViewersStats.swift",
+        // #8582 — la ligne de commentaire de story a QUITTÉ l'hôte ci-dessus
+        // avec ses quatre clés : le cliquet suit le code (leçon 578).
+        "apps/ios/Meeshy/Features/Stories/Views/StoryCommentRowView.swift",  // 7
+        // #8709 — le menu « … » d'un commentaire (post ET story) naît certifié :
+        // ses dix clés, sept locales, `defaultValue` alignés sur le `fr`.
+        "apps/ios/Meeshy/Features/Main/Views/CommentMoreMenu.swift",  // 10
+        "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+CommentMenu.swift",  // 1
+        "apps/ios/Meeshy/Features/Contacts/KeypadTab.swift",  // 14
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleSystemViews.swift",  // 14
+        "apps/ios/Meeshy/Features/Settings/Views/DataExportView.swift",  // 14
+        "apps/ios/Meeshy/Features/Links/Views/LinksHubView.swift",  // 14
+        "apps/ios/Meeshy/AppDelegate.swift",  // 13
+        "apps/ios/Meeshy/Features/Contacts/CallDetailSheet.swift",  // 13
+        "apps/ios/Meeshy/Features/Main/Components/AttachmentLoadingTile.swift",  // 13
+        "apps/ios/Meeshy/Features/Main/Components/MessageActionsMenu.swift",  // 13
+        "apps/ios/Meeshy/Features/Main/Components/MessageOverlayMenu.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Components/MessageOverlayPreviewAudioPlayer.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+MessageRow.swift",  // 13
+        "apps/ios/Meeshy/Features/Links/Views/AffiliateCreateView.swift",  // 12
+        "apps/ios/Meeshy/Features/Main/Views/NewConversationView.swift",  // 12
+        "apps/ios/Meeshy/Features/Links/Views/CommunityLinkDetailView.swift",  // 11
+        "apps/ios/Meeshy/Features/Main/Components/LocationPickerView.swift",  // 10
+        // #16901 — la carte du bas a quitté le sélecteur de lieu avec ses trois clés.
+        "apps/ios/Meeshy/Features/Main/Components/LocationPickerBottomCard.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageTranscriptionDetailView.swift",  // 10
+        "apps/ios/Meeshy/Features/Main/ViewModels/ReelsViewModel.swift",  // 10
+        "apps/ios/Meeshy/Features/Settings/Views/MediaDownloadSettingsView.swift",  // 10
+        "apps/ios/Meeshy/Features/Profile/Views/UserStatsView.swift",  // 10
+        // #18592 — les trois cartes Messages · Conversations · Traductions ont
+        // quitté `UserStatsView.swift` avec leurs clés (leçon 578).
+        "apps/ios/Meeshy/Features/Profile/Views/UserActivityCards.swift",
+        "apps/ios/Meeshy/Features/Contacts/ContactsListTab.swift",  // 9
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageReportDetailView.swift",  // 9
+        "apps/ios/Meeshy/Features/Main/Views/BookmarksView.swift",  // 9
+        "apps/ios/Meeshy/Features/Settings/Views/PrivacyPolicyView.swift",  // 9
+        "apps/ios/Meeshy/Features/Settings/Views/TermsOfServiceView.swift",  // 9
+        "apps/ios/Meeshy/Features/Contacts/BlockedTab.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetailSentimentTab.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar+Recording.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+Header.swift",  // 8
+        "apps/ios/Meeshy/Features/Focal/Row/FocalQuotedReplyView.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/ViewModels/StatusViewModel.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleDeliveryCheck.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift",  // 7
+        "apps/ios/Meeshy/Features/Settings/Views/DataStorageView.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Views/RootViewComponents.swift",  // 7
+        "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift",  // 5
+        // Cohésion de `StoryViewerView` — le cliquet suit le CODE, pas le chemin : le geste du
+        // canvas, l'indicateur de buffering, l'interstitiel d'identité et la liste des
+        // commentaires de story sont devenus des types à eux (neuf clés quittent les trois
+        // fichiers ci-dessus ; sans ces cinq lignes elles sortiraient de la garde en silence).
+        "apps/ios/Meeshy/Features/Stories/Views/StoryGestureOverlayView.swift",
+        "apps/ios/Meeshy/Features/Stories/Views/StoryPlaybackStallIndicator.swift",
+        "apps/ios/Meeshy/Features/Stories/Views/StoryGroupIntroOverlay.swift",
+        "apps/ios/Meeshy/Features/Stories/Views/StoryCommentThread.swift",
+        "apps/ios/Meeshy/Features/Stories/Views/StoryCommentsOverlayView.swift",
+        // 2026-09-02 — deux de ses appels (`story.viewer.replyTo`,
+        // `story.viewer.reply.cancel`) ont MIGRÉ avec `StoryComposerBarView`
+        // vers son propre fichier (dette de taille). Épinglé dès la découpe,
+        // sinon les deux cliquets ci-dessous cesseraient de les voir — la
+        // dérive silencieuse que #4425 décrit pour `StoryViewModel`.
+        "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+CanvasComposerBar.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageLanguageDetailView.swift",  // 6
+        "apps/ios/Meeshy/Features/Stories/Views/StoryViewerContainer.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/iPadRootView+Panels.swift",  // 6
+        "apps/ios/Meeshy/MeeshyApp.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Components/ContactCardView.swift",  // 5
+        // #8101 — la carte de visite partagée : règles (libellés des champs)
+        // et fiche. Épinglées dès leur naissance.
+        "apps/ios/Meeshy/Features/Main/Components/ContactCard/ContactCardRules.swift",
+        "apps/ios/Meeshy/Features/Main/Components/ContactCard/ContactCardDetailSheet.swift",
+        "apps/ios/Meeshy/Features/Main/Components/LanguagePickerSheet.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageReactionsDetailView.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleReactionsOverlay.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Components/ConnectionBanner.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/CommentMediaView.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Components/CrashReportSheet.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar+Drop.swift",  // 3
+        "apps/ios/Meeshy/Features/Composer/PasteIntoComposer.swift",  // 2
+        // #13913 — le refus d'un document et le plafond de durée ont quitté le
+        // collage et la limite pour la table des variantes, avec leurs clés.
+        "apps/ios/Meeshy/Features/Composer/ComposerFormatVariant.swift",
+        "apps/ios/Meeshy/Features/Profile/Views/AchievementBadgeView.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Views/WebRTCVideoView.swift",  // 3
+        "apps/ios/Meeshy/Features/Contacts/ContactsHubView.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Components/MentionSuggestionPanel.swift",  // 2
+        "apps/ios/Meeshy/Features/Focal/Row/FocalProtectedContent.swift",  // 2
+        "apps/ios/Meeshy/Features/Focal/Row/FocalSystemRows.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/ViewModels/BookmarksViewModel.swift",  // 2
+        "apps/ios/Meeshy/Features/Stories/Views/StoryRepostEmbedCell.swift",  // 2
+        "apps/ios/Meeshy/Features/Contacts/AffiliatesViewModel.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Components/CharacterCountLabel.swift",  // 1
+        "apps/ios/Meeshy/Features/Call/Services/VoIPPushManager.swift",  // 1
+        "apps/ios/Meeshy/Features/Stories/Notifications/StoryNotificationLoadingView.swift",  // 1
+        // 270i (#4364) — the four screens the eleven new catalog entries unblock.
+        // Each held a key that was ABSENT from the catalog, so its `defaultValue`
+        // shipped French to the six other locales; each is now translated in all
+        // seven. Three of the four are ACCESSIBILITY surfaces, where the gap was
+        // spoken rather than read.
+        "apps/ios/Meeshy/Features/Focal/Preferences/MessageAccessibilityLabelComposer.swift",  // 20
+        "apps/ios/Meeshy/Features/Main/Components/AddParticipantSheet.swift",  // 11
+        "apps/ios/Meeshy/Features/Main/Components/SyncPill.swift",  // 4
+        "apps/ios/Meeshy/Features/Focal/Lens/ReadingModeChip.swift",  // 4
+        // 270i — the first two sources OUTSIDE the app target ever pinned. They
+        // needed no work: both already passed BOTH rules against the widget
+        // catalog. What was missing was the map entry telling this suite which
+        // catalog serves them (`catalogByTargetFragment`), without which they were
+        // measured against the app catalog and looked untranslated.
+        "apps/ios/MeeshyWidgets/ConversationTimeline.swift",  // 1
+        "apps/ios/MeeshyWidgets/FavoriteContactsWidget.swift",  // 3
+        "apps/ios/MeeshyWidgets/QuickReplyWidget.swift",  // 6
+        "apps/ios/MeeshyWidgets/RecentConversationsWidget.swift",  // 7
+        "apps/ios/MeeshyWidgets/UnreadCountWidget.swift",  // 6
+        "apps/ios/MeeshyWidgets/WidgetModels.swift",  // 4
+        // 232i (#4328) — les deux surfaces dont le remplissage a vide le cliquet.
+        //
+        // `MediaDownloadPreferences.swift` est la PREMIÈRE source du SDK épinglée
+        // ici : ses quatre appels n'ont pas de `bundle:`, donc ils résolvent contre
+        // le catalogue de l'APP, exactement comme une vue du target principal — la
+        // règle qui s'y applique est celle de l'app, et sa place est cette liste.
+        //
+        // `StorySentinelView.swift` est l'écran qu'un client trop ancien voit à la
+        // place d'une story d'un format plus récent. C'est la surface où un repli
+        // en langue source est le plus coûteux : elle ne s'affiche QUE devant
+        // quelqu'un qu'on est en train de perdre, et on lui parlait français.
+        "packages/MeeshySDK/Sources/MeeshySDK/Networking/MediaDownloadPreferences.swift",  // 4
+        "apps/ios/Meeshy/Features/Stories/Views/StorySentinelView.swift",  // 4
+        // Dédoublonnage audit L3-18 — le switch « type de conversation → libellé »
+        // était recopié dans quatre fichiers ; trois d'entre eux étaient épinglés
+        // ici (`ConversationInfoSheet.swift`, `GlobalSearchView.swift`,
+        // `SharePickerView.swift`). Le cliquet suit le CODE, pas le chemin (#4084,
+        // #6040, #6145, #6693) : sans cette ligne, les huit clés `conversation.type.*`
+        // seraient sorties de la garde des trois en même temps, sans qu'une seule
+        // assertion rougisse.
+        "apps/ios/Meeshy/Features/Main/Components/ConversationTypeDisplayName.swift",  // 8
     ]
 
     /// Keys exempt from `fullyLocalizedScreens`, each with the reason it is not
     /// simply a missing translation. Keep this list as short as the truth allows.
-    private static let untranslatableKeys: Set<String> = [
-        // 225i — the in-app terms of use. Product/legal copy: it is not a UI label
-        // an iteration may translate on its own authority, and a machine rendering
-        // of terms a user is asked to ACCEPT is worse than an honest source-language
-        // one. Needs a reviewed translation, tracked outside the UI/UX track.
-        "onboarding.step.recap.terms.body",
-    ]
+    // MARK: - `untranslatableKeys` — SUPPRIMÉE au #5218
+    //
+    // Elle ne portait qu'une clé : `onboarding.step.recap.terms.body`, le pavé de
+    // conditions d'utilisation du récapitulatif du wizard d'inscription — exempté
+    // parce qu'une traduction machine de conditions qu'on demande d'ACCEPTER est
+    // pire qu'un texte honnêtement en langue source. Le wizard est supprimé, la
+    // clé avec lui : l'exemption n'avait plus rien à exempter.
+    //
+    // **Elle n'a pas été vidée, elle a été RETIRÉE**, avec sa plomberie
+    // (`honouringExemptions`) et son témoin
+    // (`test_lExemptionDesClesIntraduisiblesAUnEffetSurLeCliquet`). Ce témoin le
+    // demandait lui-même, en toutes lettres : « l'exemption vide rendrait ce
+    // témoin trivialement vrai — le supprimer serait alors plus honnête que le
+    // garder ». Un ensemble vide traversé par trois règles est une porte que
+    // personne ne garde plus : le prochain qui a besoin d'une exemption la
+    // rouvrirait sans que rien n'exige qu'elle ait un EFFET (leçon 380).
+    //
+    // `SignupView` ne rouvre pas le besoin : elle n'affiche AUCUN pavé légal,
+    // seulement une phrase courte et deux liens vers `TermsOfServiceView` /
+    // `PrivacyPolicyView`, qui servent leur texte depuis leurs propres sources.
+
+    /// La source d'un écran épinglé, résolue pour l'UNITÉ quand `path` désigne
+    /// `StoryViewModel.swift` (#4425).
+    ///
+    /// Ce fichier s'est scindé en plusieurs frères : un appel `String(localized:)`
+    /// épinglé « traduit dans les 6 locales » ou « defaultValue == catalogue »
+    /// peut migrer vers `StoryViewModel+Publication.swift` sans que son texte
+    /// change — mais une lecture bornée au seul fichier historique cesserait de
+    /// le voir, et les deux cliquets ci-dessous rétréciraient en silence : ils
+    /// ne verraient plus JAMAIS ces appels, ni pour les confirmer conformes ni
+    /// pour signaler une régression future. Tout autre écran épinglé continue
+    /// de se lire tel quel — un seul fichier, une lecture directe.
+    private func pinnedScreenSource(at url: URL, path: String) throws -> String {
+        guard path == "apps/ios/" + AppSourceGuard.storyViewModelPath else {
+            return try String(contentsOf: url, encoding: .utf8)
+        }
+        let unit = try AppSourceGuard.storyViewModelSource()
+        XCTAssertGreaterThan(
+            unit.count, 400,
+            "L'unité de StoryViewModel est introuvable ou vide — ce cliquet ne mesurerait plus rien pour cet écran."
+        )
+        return unit
+    }
 
     func test_fullyLocalizedScreensStayTranslatedInEveryShippedLocale() throws {
         let env = try makeEnvironment()
@@ -133,10 +761,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         for path in Self.fullyLocalizedScreens {
             let url = env.repoRoot.appendingPathComponent(path)
             let catalog = env.catalog(resolvedFor: url)
-            let text = try String(contentsOf: url, encoding: .utf8)
+            let text = try pinnedScreenSource(at: url, path: path)
             for call in localizedCalls(in: text) {
-                guard isIdentifier(call.key), !call.isModuleBundle,
-                      !Self.untranslatableKeys.contains(call.key) else { continue }
+                guard isIdentifier(call.key), !call.isModuleBundle else { continue }
                 let missing = catalog.requiredLocales.subtracting(catalog.translations[call.key] ?? [])
                 guard !missing.isEmpty else { continue }
                 violations.append("\(call.key)  (\(url.lastPathComponent) → missing \(missing.sorted().joined(separator: ", ")))")
@@ -165,10 +792,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         for path in Self.fullyLocalizedScreens {
             let url = env.repoRoot.appendingPathComponent(path)
             let catalog = env.catalog(resolvedFor: url)
-            let text = try String(contentsOf: url, encoding: .utf8)
+            let text = try pinnedScreenSource(at: url, path: path)
             for call in localizedCalls(in: text) {
                 guard isIdentifier(call.key), !call.isModuleBundle,
-                      !Self.untranslatableKeys.contains(call.key),
                       let inline = call.defaultValue,
                       // Xcode rewrites `"… \(x)"` to `"… %@"` on extraction, so an
                       // interpolated default legitimately differs from its catalog
@@ -223,6 +849,151 @@ final class LocalizationConsistencyTests: XCTestCase {
         )
     }
 
+    /// **Added 270i (#4364). Every catalog shipped by a target is READ by this suite.**
+    ///
+    /// An app extension is a separate bundle, so a `String(localized:)` in its sources
+    /// resolves against the catalog shipped INSIDE it. `catalogByTargetFragment` is the
+    /// map that says which — and it named the share extension and the notification
+    /// extension while `MeeshyWidgets/Localizable.xcstrings` (39 keys, all seven
+    /// locales) sat unread beside them. Nothing went red: an unmapped target simply
+    /// falls back to the app catalog, where its keys do not exist, so its strings are
+    /// reported as untranslated when they are translated, and its sources can never be
+    /// pinned. A silent MIS-measure, not a failure.
+    ///
+    /// The omission was invisible from the map itself — a map is only ever read for the
+    /// entries it has. It becomes visible from the FILESYSTEM, which is what this guard
+    /// reads: every `Localizable.xcstrings` in the iOS tree is either the app catalog or
+    /// mapped to the fragment of the target that owns it. The reverse direction too, so
+    /// a moved or renamed catalog cannot leave a dead entry behind — that would restore
+    /// the exact same silent fallback.
+    func test_everyPerTargetCatalogIsMapped() throws {
+        let env = try makeEnvironment()
+        let iosRoot = env.repoRoot.appendingPathComponent("apps/ios")
+
+        let catalogsOnDisk = catalogFiles(under: iosRoot)
+            .map { $0.path.replacingOccurrences(of: env.repoRoot.path + "/", with: "") }
+            .filter { $0 != Self.appCatalogPath }
+            .sorted()
+        XCTAssertFalse(
+            catalogsOnDisk.isEmpty,
+            "No per-target catalog found under apps/ios — the scan lost its way rather "
+            + "than the extensions losing their catalogs."
+        )
+
+        let mapped = Set(Environment.catalogByTargetFragment.values)
+        let unmapped = catalogsOnDisk.filter { !mapped.contains($0) }
+        XCTAssertTrue(
+            unmapped.isEmpty,
+            "These catalogs ship inside a target but are never read by this suite, so "
+            + "that target's keys are measured against the app catalog — where they do "
+            + "not exist. Add them to `catalogByTargetFragment`:\n"
+            + unmapped.joined(separator: "\n")
+        )
+
+        let onDisk = Set(catalogsOnDisk)
+        let dangling = mapped.filter { !onDisk.contains($0) }.sorted()
+        XCTAssertTrue(
+            dangling.isEmpty,
+            "These mapped catalogs no longer exist, so their target silently falls back "
+            + "to the app catalog:\n" + dangling.joined(separator: "\n")
+        )
+
+        // A mapped entry is only worth its line if a source under that fragment
+        // actually resolves to it: the map is consulted by `catalog(resolvedFor:)`,
+        // whose fallback is the app catalog — the very thing being guarded against.
+        for (fragment, path) in Environment.catalogByTargetFragment {
+            let probe = URL(fileURLWithPath: "\(env.repoRoot.path)\(fragment)Probe.swift")
+            let expected = try loadTranslations(env.repoRoot.appendingPathComponent(path))
+            XCTAssertEqual(
+                Set(env.catalog(resolvedFor: probe).translations.keys), Set(expected.keys),
+                "A source under \(fragment) does not resolve against \(path)"
+            )
+        }
+    }
+
+    /// Every `Localizable.xcstrings` under `directory`, build products excluded.
+    ///
+    /// The FILENAME is the scope, not the extension: a catalog is a string TABLE, and
+    /// `String(localized:)` without a `table:` argument resolves against `Localizable`
+    /// alone. `InfoPlist.xcstrings` — which two targets also ship — localizes Info.plist
+    /// values (bundle name, usage descriptions) that the system reads directly, so it is
+    /// no more mappable here than it is callable from code. Measured: no call site in
+    /// the iOS tree passes `table:`, so `Localizable` is the whole of what this suite
+    /// models.
+    ///
+    /// Derived data is skipped by DESCENT rather than by filtering its files:
+    /// `apps/ios/Build` holds tens of thousands of intermediates, each with its own copy.
+    private func catalogFiles(under directory: URL) -> [URL] {
+        guard let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else { return [] }
+        var catalogs: [URL] = []
+        for case let url as URL in enumerator {
+            if url.lastPathComponent == "Build" || url.lastPathComponent == ".build" {
+                enumerator.skipDescendants()
+                continue
+            }
+            if url.lastPathComponent == "Localizable.xcstrings" { catalogs.append(url) }
+        }
+        return catalogs
+    }
+
+    /// **Borne du scanner — il voit les DEUX écritures d'un appel (258i, #4292).**
+    ///
+    /// Le marqueur a été un littéral pendant huit itérations, et un appel réparti sur
+    /// plusieurs lignes lui était invisible. Le cliquet ci-dessus repose entièrement
+    /// sur ce que le scanner VOIT : rétréci à nouveau, il ne rougirait pas — il
+    /// compterait simplement moins, et le plafond deviendrait franchissable sans que
+    /// rien ne le signale.
+    ///
+    /// Cette borne épingle donc les deux formes contre un échantillon dont la réponse
+    /// est connue, plutôt que contre le dépôt, dont le contenu bouge.
+    func test_leScannerVoitLesAppelsRepartisSurPlusieursLignes() {
+        let source = """
+        let a = String(localized: "une.ligne", defaultValue: "A", bundle: .main)
+        let b = String(
+            localized: "plusieurs.lignes",
+            defaultValue: "B",
+            bundle: .main
+        )
+        """
+        let keys = localizedCalls(in: source).map(\.key).sorted()
+        XCTAssertEqual(
+            keys, ["plusieurs.lignes", "une.ligne"],
+            "le scanner doit voir l'appel sur une ligne ET l'appel réparti — sinon le "
+            + "plafond du cliquet borne une mesure partielle"
+        )
+    }
+
+    /// Un `bundle:` PASSÉ EN PARAMÈTRE (`MeeshyPasswordField`, #8054) désigne le
+    /// catalogue que ses appelants lui donnent : `.module` seul ⇒ le SDK ; le
+    /// moindre `.main` ⇒ l'app, où la clé reste exigée.
+    func test_leScannerSuitUnBundlePasséEnParamètre() {
+        let forwarded = """
+        var label: String { label(bundle: .module) }
+        func label(bundle: Bundle) -> String {
+            String(localized: "cle.sdk", defaultValue: "A", bundle: bundle)
+        }
+        """
+        XCTAssertEqual(localizedCalls(in: forwarded).map(\.isModuleBundle), [true])
+
+        let mixed = forwarded + "\nlet b = label(bundle: .main)"
+        XCTAssertEqual(localizedCalls(in: mixed).map(\.isModuleBundle), [false],
+                       "un paramètre aussi rempli par `.main` reste compté contre le catalogue de l'app")
+
+        let labelled = """
+        static var failed: String { failed(in: .module) }
+        static func failed(in bundle: Bundle) -> String {
+            String(localized: "cle.sdk", defaultValue: "A", bundle: bundle)
+        }
+        """
+        XCTAssertEqual(localizedCalls(in: labelled).map(\.isModuleBundle), [true],
+                       "le paramètre se remplit sous son ÉTIQUETTE (`in: .module`), pas sous son nom")
+        XCTAssertEqual(localizedCalls(in: labelled + "\nlet b = failed(in: .main)").map(\.isModuleBundle), [false])
+    }
+
     /// Keys with at least one locale expressed as plural variations.
     private func pluralizedKeys(_ url: URL) throws -> [String] {
         let json = try JSONSerialization.jsonObject(with: try Data(contentsOf: url)) as? [String: Any]
@@ -239,6 +1010,81 @@ final class LocalizationConsistencyTests: XCTestCase {
     func test_untranslatedKeyBacklogDoesNotGrow() throws {
         let env = try makeEnvironment()
 
+        let untranslated = untranslatedKeys(env)
+
+        // History: 1669 at 220i, −63 for the onboarding step flow (225i), then −54 for
+        // share-link creation and −7 once pluralized keys stopped being miscounted
+        // (226i) — pinned at 1545. RE-MEASURED at 224i when the scan became per-target:
+        // unchanged, because the five share-extension keys are currently duplicated
+        // into the app catalog as well, so they were already counted as translated.
+        //
+        // RE-PINNED at 258i (#4292) — 1545 → 114. The ceiling had stopped bounding
+        // anything: the catalog filled up over the intervening iterations (3397 of
+        // 3408 entries translated in all six required locales), so the real backlog had
+        // fallen to 102 while the pin stayed at 1545. A ratchet that admits 1443 new
+        // untranslated keys is a comment, not a ratchet. The +12 on top of 102 are keys
+        // the scanner could not SEE until this iteration widened its marker to
+        // multi-line calls — they were always untranslated, merely uncountable, and
+        // making them countable is the precondition for ever clearing them (#4293).
+        //
+        // RE-PINNED at 270i (#4364) — 114 → 81, in two independent moves. −22 is pure
+        // measurement: `MeeshyWidgets` ships its own fully translated catalog and this
+        // suite had never read it, so 22 widget keys were counted against the app
+        // catalog, where they do not exist. −11 is real work: eleven keys entered the
+        // app catalog in all seven locales, ten of them copied verbatim from an entry
+        // that already carried the same French text (see the `contacts.phonebook` /
+        // `sync.pill.a11y` / `a11y.delivery` fills of that iteration).
+        //
+        // The number must only ever go DOWN: a failure means a new key was introduced
+        // with a `defaultValue` alone, which ships the source language to every other
+        // locale. Add the catalog entry — with its translations, to the catalog of
+        // the target that OWNS the key — instead of raising the ceiling.
+        //
+        // 231i — 81 → 31. Eight interpolated keys entered the catalog this iteration
+        // (#4328), which accounts for eight of the fifty. The other forty-two were
+        // SLACK: earlier iterations lowered the backlog without re-measuring the
+        // ceiling, so the ratchet had stopped ratcheting — it would have accepted
+        // forty-two new untranslated keys without a word. The number below was READ
+        // from this witness with the ceiling set to 0, never computed from the
+        // previous one; a ceiling that is subtracted rather than measured drifts in
+        // the comfortable direction, and nothing ever says so.
+        //
+        // 232i — 31 → 0, et le zéro est ATTEIGNABLE pour la première fois (#4328).
+        // Sept clés sont entrées au catalogue dans les sept locales (les trois
+        // `media.policy.*.short` restantes, les quatre `story.sentinel.*`), ce qui
+        // ramenait la mesure de 8 à 1. La huitième — `onboarding.step.recap.terms.body`,
+        // les CGU — n'est pas une traduction manquante : la suite la déclare
+        // `untranslatableKeys` depuis 225i, et deux règles honoraient déjà cette
+        // déclaration. CE cliquet, non. Le plancher du plafond valait donc 1 pour une
+        // raison qu'aucun lecteur du nombre ne pouvait voir, et un `0` aurait été
+        // inatteignable sans jamais dire pourquoi.
+        //
+        // > Une exemption porte sur la NATURE d'une clé, pas sur la règle qui la lit.
+        // > Déclarée pour deux lectures sur trois, elle laisse la troisième compter ce
+        // > que le dépôt a explicitement décidé de ne pas traduire.
+        //
+        // #5218 — l'exemption ET son témoin sont partis avec la clé qu'ils
+        // gardaient (le pavé de CGU du wizard d'inscription supprimé) ; voir la
+        // note « `untranslatableKeys` — SUPPRIMÉE » plus haut dans ce fichier.
+        // Le plafond, lui, ne bouge pas : il valait déjà 0, et la clé exemptée
+        // n'était comptée par AUCUNE des lectures qui l'alimentent aujourd'hui.
+        let backlogCeiling = 0
+        XCTAssertLessThanOrEqual(
+            untranslated.count, backlogCeiling,
+            "\(untranslated.count) identifier keys are untranslated in at least one shipped "
+            + "locale (ceiling \(backlogCeiling)). Add the missing entries to the catalog of the "
+            + "target that owns them."
+        )
+    }
+
+    /// Les clés identifiantes non traduites dans au moins une locale expédiée.
+    ///
+    /// Elle prenait un `honouringExemptions` qui séparait la MESURE de la RÈGLE,
+    /// pour qu'un témoin puisse prouver que `untranslatableKeys` changeait le
+    /// compte. L'ensemble d'exemptions a été retiré au #5218 (voir la note plus
+    /// haut) : le paramètre n'avait plus qu'une valeur, et un paramètre à une
+    /// seule valeur ment sur ce qu'il gouverne.
+    private func untranslatedKeys(_ env: Environment) -> Set<String> {
         var untranslated: Set<String> = []
         for file in env.sourceFiles {
             let catalog = env.catalog(resolvedFor: file)
@@ -250,348 +1096,139 @@ final class LocalizationConsistencyTests: XCTestCase {
                 }
             }
         }
-
-        // Pinned at the 226i measurement: 1669 at 220i, −63 for the onboarding step
-        // flow (225i), then −54 for share-link creation and −7 once pluralized keys
-        // stopped being miscounted (226i). RE-MEASURED at 224i when the scan became
-        // per-target: unchanged, because the five share-extension keys are currently
-        // duplicated into the app catalog as well, so they were already counted as
-        // translated — the per-target scan and the 226i gains therefore compose.
-        // The number must only ever go DOWN: a failure means a new key was introduced
-        // with a `defaultValue` alone, which ships the source language to every other
-        // locale. Add the catalog entry — with its translations, to the catalog of
-        // the target that OWNS the key — instead of raising the ceiling.
-        let backlogCeiling = 1545
-        XCTAssertLessThanOrEqual(
-            untranslated.count, backlogCeiling,
-            "\(untranslated.count) identifier keys are untranslated in at least one shipped "
-            + "locale (ceiling \(backlogCeiling)). Add the missing entries to the catalog of the "
-            + "target that owns them."
-        )
+        return untranslated
     }
 
-    // MARK: - Environment
+    // MARK: - Langue déclarée du document (T2.2)
 
-    /// One catalog, indexed. Added 224i, when the single-catalog model started
-    /// reporting correctly-localized extension strings as untranslated.
-    private struct CatalogIndex {
-        /// Key → locales whose string unit is in the `translated` state.
-        let translations: [String: Set<String>]
-        /// Shipped locales minus THIS catalog's source language.
-        let requiredLocales: Set<String>
-        /// This catalog's source language — `fr` for the app, `en` for the share extension.
-        let sourceLanguage: String
-        /// Key → its value in the source language, when it has a flat one.
-        let sourceValues: [String: String]
-    }
-
-    private struct Environment {
-        /// An app extension is a SEPARATE BUNDLE: a `String(localized:)` in its sources
-        /// resolves against ITS `Localizable.xcstrings`, never the host app's. Checking
-        /// those sources against the app catalog reports keys as untranslated while they
-        /// are in fact fully translated in the catalog shipping beside them.
-        /// Path fragment → the catalog that target actually resolves against.
-        ///
-        /// Declared HERE rather than on the enclosing suite on purpose: the suite is
-        /// `@MainActor`, so a static of its own would be actor-isolated and unreadable
-        /// from `catalog(resolvedFor:)`, which is nonisolated — a nested type does not
-        /// inherit the enclosing type's global actor.
-        static let catalogByTargetFragment: [String: String] = [
-            "/MeeshyShareExtension/": "apps/ios/MeeshyShareExtension/Localizable.xcstrings",
-            "/MeeshyNotificationExtension/": "apps/ios/MeeshyNotificationExtension/Localizable.xcstrings",
-        ]
-
-        let repoRoot: URL
-        let sourceFiles: [URL]
-        let combinedSource: String
-        let appIdentifierKeys: [String]
-        let appKeysWithEn: Set<String>
-        let sdkKeysWithEn: Set<String>
-        /// Catalog repo-path → its index. Always contains the app catalog.
-        let catalogs: [String: CatalogIndex]
-        let appCatalogPath: String
-
-        /// The catalog the given source file's bundle resolves against.
-        func catalog(resolvedFor file: URL) -> CatalogIndex {
-            for (fragment, catalogPath) in Self.catalogByTargetFragment
-            where file.path.contains(fragment) {
-                if let index = catalogs[catalogPath] { return index }
-            }
-            return appCatalog
-        }
-
-        /// Force-unwrap-free accessor: the app catalog is always loaded.
-        var appCatalog: CatalogIndex {
-            catalogs[appCatalogPath]
-                ?? CatalogIndex(translations: [:], requiredLocales: [], sourceLanguage: "fr", sourceValues: [:])
-        }
-    }
-
-    private func makeEnvironment() throws -> Environment {
-        let repoRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // Unit
-            .deletingLastPathComponent()   // MeeshyTests
-            .deletingLastPathComponent()   // apps/ios
-            .deletingLastPathComponent()   // apps
-            .deletingLastPathComponent()   // repo root
-
-        let appCatalog = repoRoot.appendingPathComponent(Self.appCatalogPath)
-        let sdkCatalog = repoRoot.appendingPathComponent(Self.sdkCatalogPath)
-        guard FileManager.default.fileExists(atPath: appCatalog.path),
-              FileManager.default.fileExists(atPath: sdkCatalog.path) else {
-            throw XCTSkip("Localization catalogs not reachable from \(repoRoot.path) — source tree unavailable")
-        }
-
-        let appKeys = try loadCatalog(appCatalog)
-        let sdkKeys = try loadCatalog(sdkCatalog)
-
-        var files: [URL] = []
-        for root in Self.sourceRoots {
-            files.append(contentsOf: swiftFiles(under: repoRoot.appendingPathComponent(root)))
-        }
-        guard !files.isEmpty else {
-            throw XCTSkip("No Swift sources found — source tree unavailable")
-        }
-
-        let combined = files
-            .compactMap { try? String(contentsOf: $0, encoding: .utf8) }
-            .joined(separator: "\n")
-
-        // Index the app catalog plus every per-target catalog. Each is measured
-        // against the shipped locales minus ITS OWN source language, which differs:
-        // the app catalog is authored in `fr`, the share extension's in `en`.
-        let shipped = try shippedLocales(repoRoot: repoRoot)
-        var catalogs: [String: CatalogIndex] = [:]
-        for path in [Self.appCatalogPath] + Environment.catalogByTargetFragment.values {
-            let url = repoRoot.appendingPathComponent(path)
-            guard FileManager.default.fileExists(atPath: url.path) else { continue }
-            let language = try sourceLanguage(url)
-            catalogs[path] = CatalogIndex(
-                translations: try loadTranslations(url),
-                requiredLocales: shipped.subtracting([language]),
-                sourceLanguage: language,
-                sourceValues: try values(url, locale: language)
-            )
-        }
-
-        return Environment(
-            repoRoot: repoRoot,
-            sourceFiles: files,
-            combinedSource: combined,
-            appIdentifierKeys: appKeys.keys.filter(isIdentifier),
-            appKeysWithEn: Set(appKeys.filter { $0.value }.keys),
-            sdkKeysWithEn: Set(sdkKeys.filter { $0.value }.keys),
-            catalogs: catalogs,
-            appCatalogPath: Self.appCatalogPath
-        )
-    }
-
-    /// Key → its flat string-unit value in `locale`. Plural variations have no single
-    /// value and are absent, which keeps them out of the source-parity check.
-    private func values(_ url: URL, locale: String) throws -> [String: String] {
-        let json = try JSONSerialization.jsonObject(with: try Data(contentsOf: url)) as? [String: Any]
-        let strings = json?["strings"] as? [String: Any] ?? [:]
-        var result: [String: String] = [:]
-        for (key, value) in strings {
-            let localizations = (value as? [String: Any])?["localizations"] as? [String: Any]
-            let unit = (localizations?[locale] as? [String: Any])?["stringUnit"] as? [String: Any]
-            if let text = unit?["value"] as? String { result[key] = text }
-        }
-        return result
-    }
-
-    /// Locales the app actually ships — read from `Info.plist`, not hard-coded.
-    private func shippedLocales(repoRoot: URL) throws -> Set<String> {
-        let url = repoRoot.appendingPathComponent("apps/ios/Meeshy/Info.plist")
-        let plist = try PropertyListSerialization.propertyList(from: try Data(contentsOf: url), format: nil)
-        let locales = (plist as? [String: Any])?["CFBundleLocalizations"] as? [String]
-        return Set(locales ?? [])
-    }
-
-    private func sourceLanguage(_ url: URL) throws -> String {
-        let json = try JSONSerialization.jsonObject(with: try Data(contentsOf: url)) as? [String: Any]
-        return json?["sourceLanguage"] as? String ?? "fr"
-    }
-
-    /// Key → locales whose string unit is explicitly `translated` (a stale or
-    /// needs-review unit is not a shipped translation).
+    /// **Cliquet i18n — la clé neuve existe dans les SEPT locales expédiées,
+    /// vérifié par DUMP du catalogue, jamais à l'œil.**
     ///
-    /// A pluralized key carries no flat `stringUnit`: its text lives under
-    /// `variations.plural.<CLDR category>`. Reading only the flat unit reported every
-    /// such key as untranslated in EVERY locale even when fully translated — the nine
-    /// plural entries the catalog already had were all counted as gaps (fixed 226i).
-    private func loadTranslations(_ url: URL) throws -> [String: Set<String>] {
-        let json = try JSONSerialization.jsonObject(with: try Data(contentsOf: url)) as? [String: Any]
-        let strings = json?["strings"] as? [String: Any] ?? [:]
-        var result: [String: Set<String>] = [:]
-        for (key, value) in strings {
-            let localizations = (value as? [String: Any])?["localizations"] as? [String: Any] ?? [:]
-            var translated: Set<String> = []
-            for (locale, payload) in localizations {
-                if isTranslated(payload) { translated.insert(locale) }
-            }
-            result[key] = translated
-        }
-        return result
-    }
+    /// `composer.document.a11y.language` est la clé accessible que
+    /// `ComposerDocumentCopy.language` sert à la capsule de langue du meuble
+    /// (`MeeshyComposerHost.documentLanguageCapsule`). L'édition du catalogue
+    /// est TEXTUELLE (un `json.load`/`json.dump` réordonnerait les 3369
+    /// entrées existantes) : cette garde relit le résultat par la MÊME voie
+    /// que le reste de la suite — `JSONSerialization`, jamais un coup d'œil
+    /// sur le diff — pour prouver que l'édition à la main n'a oublié aucune
+    /// locale.
+    func test_composerDocumentLanguageKey_isTranslatedInAllSevenShippedLocales() throws {
+        let env = try makeEnvironment()
+        let shipped = try shippedLocales(repoRoot: env.repoRoot)
 
-    /// Whether one locale's payload is a shipped translation: either a flat string
-    /// unit marked `translated`, or a set of plural variations whose EVERY category is
-    /// marked `translated` — one stale category leaves the key partly untranslated for
-    /// the counts that select it, so `allSatisfy` is deliberate rather than `contains`.
-    private func isTranslated(_ payload: Any?) -> Bool {
-        guard let payload = payload as? [String: Any] else { return false }
-        if let unit = payload["stringUnit"] as? [String: Any] {
-            return unit["state"] as? String == "translated"
-        }
-        guard let plural = (payload["variations"] as? [String: Any])?["plural"] as? [String: Any],
-              !plural.isEmpty else { return false }
-        return plural.values.allSatisfy { category in
-            ((category as? [String: Any])?["stringUnit"] as? [String: Any])?["state"] as? String == "translated"
-        }
-    }
+        XCTAssertEqual(
+            shipped.count, 7,
+            "La prémisse de cette garde est que l'app expédie SEPT locales (ar, de, en, es, fr, "
+            + "it, pt-BR) — si ce compte a changé, la garde doit changer avec lui."
+        )
 
-    /// Returns every key in a `.xcstrings` catalog mapped to whether it has an
-    /// `en` localization (flat string unit or plural variations).
-    private func loadCatalog(_ url: URL) throws -> [String: Bool] {
-        let data = try Data(contentsOf: url)
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        let strings = json?["strings"] as? [String: Any] ?? [:]
-        var result: [String: Bool] = [:]
-        for (key, value) in strings {
-            let localizations = (value as? [String: Any])?["localizations"] as? [String: Any]
-            result[key] = localizations?["en"] != nil
-        }
-        return result
-    }
-
-    private func swiftFiles(under directory: URL) -> [URL] {
-        guard let enumerator = FileManager.default.enumerator(
-            at: directory,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else { return [] }
-        var files: [URL] = []
-        for case let url as URL in enumerator {
-            let path = url.path
-            if path.contains("/Build/") || path.contains("/.build/") { continue }
-            if url.pathExtension == "swift" { files.append(url) }
-        }
-        return files
-    }
-
-    // MARK: - Source scanning
-
-    private func isIdentifier(_ key: String) -> Bool {
-        guard !key.contains(" "), key.contains(".") || key.contains("_") else { return false }
-        return key.allSatisfy { $0.isLetter || $0.isNumber || $0 == "." || $0 == "_" || $0 == "-" }
-    }
-
-    private struct LocalizedCall {
-        let key: String
-        let hasDefaultValue: Bool
-        let isModuleBundle: Bool
-        /// The inline `defaultValue:` when it is a single-line literal. `nil` for a
-        /// multi-line `"""` block, which this scanner deliberately does not read.
-        let defaultValue: String?
-    }
-
-    /// Finds each `String(localized: "…" …)` call and reports its key plus
-    /// whether the call carries a `defaultValue:` and/or `bundle: .module`.
-    /// The call segment is delimited by a string-aware balanced-paren scan so
-    /// parentheses inside string literals don't end it prematurely.
-    private func localizedCalls(in source: String) -> [LocalizedCall] {
-        let marker = "String(localized:"
-        let ns = source as NSString
-        let stringPrefixLength = ("String" as NSString).length
-        var calls: [LocalizedCall] = []
-        var searchStart = 0
-        while searchStart < ns.length {
-            let found = ns.range(
-                of: marker,
-                options: [],
-                range: NSRange(location: searchStart, length: ns.length - searchStart)
+        let key = "composer.document.a11y.language"
+        guard let translated = env.appCatalog.translations[key] else {
+            return XCTFail(
+                "`\(key)` est absent du catalogue — la capsule de langue du document affichera son "
+                + "identifiant brut."
             )
-            if found.location == NSNotFound { break }
+        }
 
-            let openParen = found.location + stringPrefixLength
-            var i = openParen
-            var depth = 0
-            var inString = false
-            var escaped = false
-            var end = ns.length - 1
-            while i < ns.length {
-                // Skip UTF-16 surrogate halves (emoji/flags) — they are never
-                // one of the control characters we track, and UnicodeScalar
-                // rejects them.
-                guard let scalar = UnicodeScalar(ns.character(at: i)) else { i += 1; continue }
-                let c = Character(scalar)
-                if inString {
-                    if escaped { escaped = false }
-                    else if c == "\\" { escaped = true }
-                    else if c == "\"" { inString = false }
-                } else {
-                    if c == "\"" { inString = true }
-                    else if c == "(" { depth += 1 }
-                    else if c == ")" { depth -= 1; if depth == 0 { end = i; break } }
-                }
-                i += 1
+        let manquantes = shipped.subtracting(translated).sorted()
+        XCTAssertTrue(
+            manquantes.isEmpty,
+            "`\(key)` manque dans : \(manquantes.joined(separator: ", ")). Une locale absente "
+            + "affiche soit l'identifiant brut (`fr`, langue source), soit le français "
+            + "(les six autres) — dans les deux cas, jamais la traduction attendue."
+        )
+    }
+
+    // MARK: - Libellés de menu contextuel d'avatar
+
+    /// **Un littéral nu passé à `AvatarContextMenuItem(label:)` est invisible
+    /// aux deux axes ci-dessus.** Ils ne scannent que les appels
+    /// `String(localized:)` ; `label` est une `String` rendue TELLE QUELLE
+    /// (`MeeshyAvatar.AvatarContextMenuItem.label`), donc un littéral y sort
+    /// dans la langue source pour les sept locales, sans qu'aucun test ne
+    /// rougisse.
+    ///
+    /// La garde vise le BLOC d'appel — le couple `label:` … `icon:` qui
+    /// identifie ce constructeur —, jamais le fichier : un `label:` alimenté
+    /// par `String(localized:)` ou par une constante de copie
+    /// (`StoryTrayCopy.viewProfile`) passe sans réserve.
+    func test_avatarContextMenuLabels_areNeverBareLiterals() throws {
+        let env = try makeEnvironment()
+
+        var violations: [String] = []
+        for file in env.sourceFiles {
+            guard let text = try? String(contentsOf: file, encoding: .utf8) else { continue }
+            for literal in Self.bareContextMenuLabels(in: text) {
+                violations.append("\(file.lastPathComponent) : label: \"\(literal)\"")
             }
-
-            let segment = ns.substring(with: NSRange(location: found.location, length: end - found.location + 1))
-            if let key = firstKey(in: segment) {
-                calls.append(LocalizedCall(
-                    key: key,
-                    hasDefaultValue: segment.contains("defaultValue:"),
-                    isModuleBundle: segment.contains(".module"),
-                    defaultValue: inlineDefaultValue(in: segment)
-                ))
-            }
-            searchStart = end + 1
         }
-        return calls
+        violations.sort()
+        XCTAssertTrue(
+            violations.isEmpty,
+            "Ces libellés de menu contextuel d'avatar sont des littéraux nus : ils "
+            + "s'affichent dans la langue source quelle que soit l'interface choisie. "
+            + "Les passer par `String(localized:…, bundle:)`, avec l'entrée au catalogue "
+            + "du bundle qui les résout :\n"
+            + violations.joined(separator: "\n")
+        )
     }
 
-    /// The inline `defaultValue:` literal of a call segment, when it is written on
-    /// one line. A multi-line `"""` block yields `nil` rather than the empty string
-    /// the naive single-quote regex would report for its opening delimiter.
-    private func inlineDefaultValue(in segment: String) -> String? {
-        guard segment.range(of: #"defaultValue:\s*""""#, options: .regularExpression) == nil,
-              let range = segment.range(
-                  of: #"defaultValue:\s*"((?:[^"\\]|\\.)*)""#,
-                  options: .regularExpression
-              )
-        else { return nil }
-        let match = segment[range]
-        guard let open = match.firstIndex(of: "\""), let close = match.lastIndex(of: "\""), open != close else {
-            return nil
-        }
-        return String(match[match.index(after: open)..<close])
+    /// **Contre-épreuve de la garde négative ci-dessus.** Une garde qui ne
+    /// reconnaît plus la forme qu'elle interdit passe au vert en ayant perdu sa
+    /// protection. Ces vecteurs prouvent qu'elle rougirait si un littéral nu
+    /// revenait — sur une ligne comme sur plusieurs — et qu'elle ne condamne
+    /// pas les deux formes légitimes.
+    func test_bareContextMenuLabelScanner_recognizesTheFormItForbids() {
+        let forbiddenInline = """
+        items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill", action: onViewProfile))
+        """
+        XCTAssertEqual(Self.bareContextMenuLabels(in: forbiddenInline), ["Voir le profil"])
+
+        let forbiddenMultiline = """
+        AvatarContextMenuItem(
+            label: "Voir la story",
+            icon: "play.circle.fill"
+        ) { onViewStory() }
+        """
+        XCTAssertEqual(Self.bareContextMenuLabels(in: forbiddenMultiline), ["Voir la story"])
+
+        let localizedCall = """
+        AvatarContextMenuItem(
+            label: String(localized: "avatar.menu.view_profile", defaultValue: "Voir le profil", bundle: .module),
+            icon: "person.fill"
+        ) { onViewProfile() }
+        """
+        XCTAssertEqual(Self.bareContextMenuLabels(in: localizedCall), [])
+
+        let namedConstant = """
+        AvatarContextMenuItem(label: StoryTrayCopy.viewProfile, icon: "person.fill") { }
+        """
+        XCTAssertEqual(Self.bareContextMenuLabels(in: namedConstant), [])
+
+        let roleBetweenLabelAndIcon = """
+        AvatarContextMenuItem(label: "Voir le profil", role: .destructive, icon: "person.fill") { }
+        """
+        XCTAssertEqual(Self.bareContextMenuLabels(in: roleBetweenLabelAndIcon), ["Voir le profil"])
     }
 
-    /// The first quoted string literal after `localized:` in a call segment.
-    private func firstKey(in segment: String) -> String? {
-        guard let keyRange = segment.range(
-            of: #"localized:\s*"([^"]*)""#,
-            options: .regularExpression
-        ) else { return nil }
-        let match = segment[keyRange]
-        guard let open = match.firstIndex(of: "\""), let close = match.lastIndex(of: "\""), open != close else {
-            return nil
-        }
-        return String(match[match.index(after: open)..<close])
-    }
-
-    /// All clean quoted identifier tokens (`"a11y.foo.bar"`) in the source.
-    private func quotedIdentifierTokens(in source: String) -> Set<String> {
+    /// Littéraux nus passés en `label:` d'un `AvatarContextMenuItem`. Le couple
+    /// `label:` suivi d'`icon:` est ce qui identifie ce constructeur : il
+    /// attrape aussi bien `AvatarContextMenuItem(label:…)` que le
+    /// `.init(label:…)` des sites qui laissent le type se déduire. Tolère un
+    /// `role: …,` intercalé entre les deux (l'ordre déclaré de l'initialiseur
+    /// est `label:icon:role:action:`, mais la garde ne dépend pas de cet ordre
+    /// pour rester correcte si le paramètre bouge).
+    private static func bareContextMenuLabels(in source: String) -> [String] {
         let ns = source as NSString
-        guard let regex = try? NSRegularExpression(pattern: #""([A-Za-z0-9_.\-]+)""#) else { return [] }
-        var tokens: Set<String> = []
+        guard let regex = try? NSRegularExpression(
+            pattern: #"label:\s*"((?:[^"\\]|\\.)*)"\s*,\s*(?:role:\s*[^,]+,\s*)?icon:"#
+        ) else { return [] }
+        var found: [String] = []
         regex.enumerateMatches(in: source, range: NSRange(location: 0, length: ns.length)) { match, _, _ in
             if let match, match.numberOfRanges > 1 {
-                tokens.insert(ns.substring(with: match.range(at: 1)))
+                found.append(ns.substring(with: match.range(at: 1)))
             }
         }
-        return tokens
+        return found
     }
 }

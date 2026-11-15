@@ -75,7 +75,7 @@ final class StoryComposerInsertForegroundMediaTests: XCTestCase {
     func test_insertForegroundImage_onASlideAtTheMediaCap_returnsNil() {
         let sut = makeSUT()
         let slideId = sut.currentSlide.id
-        for index in 0..<10 {
+        for index in 0..<StoryComposerLimits.maxImagesPerScene {
             _ = sut.insertForegroundImage(
                 makeImage(), fileURL: nil, intoSlideId: slideId, objectId: "cap-\(index)")
         }
@@ -117,9 +117,10 @@ final class StoryComposerInsertForegroundMediaTests: XCTestCase {
     func test_insertForegroundVideo_atTheMediaCap_returnsNilAndLeavesNoProvisionalEntry() {
         let sut = makeSUT()
         let slideId = sut.currentSlide.id
-        for index in 0..<10 {
-            _ = sut.insertForegroundImage(
-                makeImage(), fileURL: nil, intoSlideId: slideId, objectId: "cap-\(index)")
+        for index in 0..<StoryComposerLimits.maxVideosPerScene {
+            _ = sut.insertForegroundVideo(
+                url: URL(fileURLWithPath: "/tmp/cap-\(index).mp4"), thumbnail: makeImage(),
+                aspectRatio: 1, duration: 1, intoSlideId: slideId, objectId: "cap-\(index)")
         }
 
         let refused = sut.insertForegroundVideo(
@@ -136,5 +137,31 @@ final class StoryComposerInsertForegroundMediaTests: XCTestCase {
             "Un refus ne doit laisser AUCUNE entrée provisoire derrière lui."
         )
         XCTAssertNil(sut.loadedImages["refused"])
+    }
+
+    // MARK: - Un fond naît centré, hors de la cascade (#18652)
+
+    func test_insertForegroundImage_asBackgroundOnASceneWithPosedObjects_isCentered() throws {
+        let sut = makeSUT()
+        _ = sut.addText()
+        _ = sut.addText()
+        let obj = try XCTUnwrap(sut.insertForegroundImage(
+            makeImage(), fileURL: nil, intoSlideId: sut.currentSlide.id, objectId: "bg-1"))
+        let fond = try XCTUnwrap(sut.currentSlide.effects.mediaObjects?.first { $0.id == obj.id })
+        XCTAssertTrue(fond.isBackground)
+        XCTAssertEqual(fond.x, 0.5, accuracy: 1e-9, "un fond couvre la scène : il n'entre pas dans la cascade")
+        XCTAssertEqual(fond.y, 0.5, accuracy: 1e-9)
+        XCTAssertEqual(fond.scale, 1)
+    }
+
+    func test_insertForegroundImage_overAnExistingBackground_stillCascadesAsAPosedObject() throws {
+        let sut = makeSUT()
+        _ = sut.insertForegroundImage(makeImage(), fileURL: nil, intoSlideId: sut.currentSlide.id, objectId: "bg")
+        _ = sut.addText()
+        let obj = try XCTUnwrap(sut.insertForegroundImage(
+            makeImage(), fileURL: nil, intoSlideId: sut.currentSlide.id, objectId: "pose"))
+        let pose = try XCTUnwrap(sut.currentSlide.effects.mediaObjects?.first { $0.id == obj.id })
+        XCTAssertFalse(pose.isBackground)
+        XCTAssertNotEqual(pose.x, 0.5, "un objet posé garde la cascade")
     }
 }

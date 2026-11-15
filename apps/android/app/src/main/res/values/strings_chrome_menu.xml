@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lot: boutons-flottants-contre-les-bords — boutons flottants et echelle du menu (cles iOS en commentaire). -->
+<resources>
+    <!-- a11y.floating.feed.hint -->
+    <!-- a11y.floating.menu.hint -->
+    <!-- a11y.floating.menu.notifications-value -->
+    <!-- a11y.menu.item.hint -->
+    <!-- root.menu.communities -->
+</resources>

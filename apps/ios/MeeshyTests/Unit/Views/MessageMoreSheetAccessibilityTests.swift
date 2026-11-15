@@ -49,11 +49,19 @@ final class MessageMoreSheetAccessibilityTests: XCTestCase {
         guard let action = source.range(of: "selectedItem = nil") else {
             XCTFail("MessageMoreSheet.swift must render the inline close button"); return
         }
-        // La fenêtre couvre le modificateur qui suit le `label:` du bouton ;
-        // 900 caractères englobent le corps du label le plus verbeux.
-        let end = source.index(action.upperBound, offsetBy: 900, limitedBy: source.endIndex)
-            ?? source.endIndex
-        let vicinity = String(source[action.upperBound..<end])
+        // La fenêtre est la chaîne des modificateurs posés sur le BOUTON, après
+        // son `.buttonStyle(.plain)` : une longueur fixe en caractères rougissait
+        // dès qu'un modificateur s'ajoutait au label (cible de 44 pt, #17296).
+        let afterAction = source[action.upperBound...]
+        guard let style = afterAction.range(of: ".buttonStyle(.plain)") else {
+            XCTFail("The inline close button must keep its .buttonStyle(.plain)"); return
+        }
+        let modifierLines = afterAction[style.upperBound...]
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .dropFirst()
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .prefix { $0.hasPrefix(".") || $0.hasPrefix("//") }
+        let vicinity = modifierLines.joined(separator: "\n")
         XCTAssertTrue(
             vicinity.contains(".accessibilityLabel(") && vicinity.contains("common.close"),
             "The icon-only inline close button must carry an accessibility label " +

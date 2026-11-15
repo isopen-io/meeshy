@@ -1,0 +1,414 @@
+import Testing
+import CoreGraphics
+@testable import MeeshySDK
+
+/// **La loi de cadrage de la LECTURE : les couloirs d'abord, le cadre ensuite.**
+///
+/// Aucune vue n'est montée — le solveur est pur, donc tout ce qu'il décide
+/// s'éprouve ici. Les valeurs attendues sont calculées à la main pour un
+/// iPhone 16 Pro (390 × 844) à partir des cotes de la spec
+/// (`docs/superpowers/specs/2026-09-12-lecture-media-plateau-design.md` § 2.1).
+///
+/// Zone libre : `844 − 59 − 56 − 80 − 34 − 12 = 603` de haut, `390 − 2×12 = 366`
+/// de large. Le rail vaut 80 parce que c'est ce que `FilmstripMetrics` réserve
+/// réellement, et l'app lui passe sa constante plutôt que de recopier le nombre.
+///
+/// Les deux planchers sont ceux que la galerie dérive : 330 de haut (trois fois
+/// son overlay), 204 de large (sa colonne d'actions et ses deux gouttières,
+/// `12 + 44 + 12`, tenue dans le tiers latéral du cadre — #6692).
+@Suite("MediaStageFraming — le plateau de lecture")
+struct MediaStageFramingTests {
+
+    // MARK: - Fabriques
+
+    static let viewport = CGSize(width: 390, height: 844)
+
+    static let corridors = MediaStageFraming.Corridors(
+        safeTop: 59, top: 56, rail: 80, transport: 0, safeBottom: 34, gutter: 12
+    )
+
+    static func input(
+        ratio: CGFloat,
+        presentation: MediaStageFraming.Presentation,
+        viewport: CGSize = MediaStageFramingTests.viewport,
+        corridors: MediaStageFraming.Corridors = MediaStageFramingTests.corridors,
+        minimumFrameHeight: CGFloat = 330,
+        minimumFrameWidth: CGFloat = 204
+    ) -> MediaStageFraming.Input {
+        MediaStageFraming.Input(
+            viewport: viewport,
+            mediaRatio: ratio,
+            corridors: corridors,
+            presentation: presentation,
+            cardedCornerRadius: 22,
+            minimumFrameHeight: minimumFrameHeight,
+            minimumFrameWidth: minimumFrameWidth
+        )
+    }
+
+    static func close(_ a: CGFloat, _ b: CGFloat, _ tolerance: CGFloat = 0.01) -> Bool {
+        abs(a - b) < tolerance
+    }
+
+    // MARK: - Cadré — le cadre prend ce que les couloirs laissent
+
+    @Test("Une 4:5 est contrainte par la largeur, et remplit son cadre")
+    func carded_portrait_isWidthBound() {
+        let r = MediaStageFraming.resolve(Self.input(ratio: 0.8, presentation: .carded))
+
+        #expect(Self.close(r.frame.width, 366), "390 − 2×12")
+        #expect(Self.close(r.frame.height, 457.5), "366 / 0,8 — ajustée au ratio, jamais étirée")
+        #expect(r.media == r.frame, "sans plancher actif, le média remplit son cadre")
+        #expect(r.letterboxes == false, "un média qui remplit son cadre ne laisse aucune bande")
+    }
+
+    @Test("Une 9:16 perd de la largeur pour que le rail tienne")
+    func carded_tall_isHeightBound() {
+        let r = MediaStageFraming.resolve(Self.input(ratio: 0.5625, presentation: .carded))
+
+        #expect(Self.close(r.frame.height, 603), "844 − 59 − 56 − 80 − 34 − 12")
+        #expect(Self.close(r.frame.width, 339.1875), "603 × 0,5625")
+        #expect(r.media == r.frame)
+    }
+
+    // MARK: - Le plancher — il ne mord QUE sur un cadre court
+
+    /// **Le témoin du plancher ne peut tomber que sur un cadre COURT.** Sur une
+    /// 4:5 ou une 9:16, la règle juste et la règle absente rendent le même
+    /// verdict : un témoin écrit là serait vert des deux côtés du diff.
+    @Test("Une 16:9 : le cadre s'arrête au plancher, le média non")
+    func carded_wideVideo_frameStopsAtFloor_mediaDoesNot() {
+        let r = MediaStageFraming.resolve(Self.input(ratio: 16.0 / 9.0, presentation: .carded))
+
+        #expect(Self.close(r.media.height, 205.875), "le MÉDIA garde son ratio : 366 × 9/16")
+        #expect(Self.close(r.frame.height, 330), "le CADRE s'arrête au plancher")
+        #expect(Self.close(r.frame.width, r.media.width),
+                "le plancher de LARGEUR ne mord pas : une 16:9 prend toute la largeur libre")
+        #expect(r.letterboxes, "un cadre plus haut que son média laisse deux bandes à habiller")
+    }
+
+    /// **Sans plancher, le cadre d'une vidéo EST son média.** Le plancher de 330 pt
+    /// fabriquait deux bandes autour d'une 16:9 (206 pt d'image dans 330 pt de
+    /// cadre). L'hôte le retire pour une vidéo en passant 0 : la loi n'a pas à
+    /// changer, seul son entrée.
+    @Test("Une 16:9 sans plancher : le cadre épouse le média, aucune bande")
+    func carded_wideVideo_withoutFloors_frameHugsTheMedia() {
+        let r = MediaStageFraming.resolve(
+            Self.input(ratio: 16.0 / 9.0, presentation: .carded,
+                       minimumFrameHeight: 0, minimumFrameWidth: 0))
+
+        #expect(Self.close(r.frame.height, 205.875))
+        #expect(Self.close(r.frame.width, r.media.width))
+        #expect(Self.close(r.frame.height, r.media.height))
+        #expect(r.letterboxes == false, "un cadre qui épouse le ratio n'a rien à habiller")
+    }
+
+    @Test("Sans plancher, une vidéo verticale garde sa taille ajustée (aspectFit, pas de crop)")
+    func carded_portraitVideo_withoutFloors_isUnchanged() {
+        let withFloors = MediaStageFraming.resolve(Self.input(ratio: 0.5625, presentation: .carded))
+        let without = MediaStageFraming.resolve(
+            Self.input(ratio: 0.5625, presentation: .carded,
+                       minimumFrameHeight: 0, minimumFrameWidth: 0))
+
+        #expect(without.media == withFloors.media)
+        #expect(without.frame == withFloors.frame)
+    }
+
+    @Test("En plein cadre, le cadre est le viewport entier, le média reste ajusté")
+    func full_video_frameIsTheWholeViewport_mediaStaysFitted() {
+        let r = MediaStageFraming.resolve(
+            Self.input(ratio: 16.0 / 9.0, presentation: .full,
+                       minimumFrameHeight: 0, minimumFrameWidth: 0))
+
+        #expect(r.frame == Self.viewport)
+        #expect(Self.close(r.media.width, Self.viewport.width))
+        #expect(Self.close(r.media.height, Self.viewport.width * 9.0 / 16.0))
+    }
+
+    @Test("Le plancher est un minimum, jamais un maximum")
+    func carded_floorNeverShrinksATallFrame() {
+        let r = MediaStageFraming.resolve(Self.input(ratio: 0.5625, presentation: .carded))
+
+        #expect(Self.close(r.frame.height, 603))
+        #expect(r.letterboxes == false)
+    }
+
+    @Test("Un plancher absurde reste borné par la zone libre")
+    func carded_floorNeverExceedsTheFreeRegion() {
+        let r = MediaStageFraming.resolve(
+            Self.input(ratio: 16.0 / 9.0, presentation: .carded, minimumFrameHeight: 5_000)
+        )
+
+        #expect(Self.close(r.frame.height, 603), "jamais de cadre qui pousserait le rail hors écran")
+    }
+
+    // MARK: - Le plancher de LARGEUR — le jumeau, sur l'autre axe (#6692)
+
+    /// **Ce témoin ne peut tomber que sur un cadre ÉTROIT.** Une 4:5 (366), une
+    /// 9:16 (339) et une 16:9 (366) sont toutes plus larges que le plancher : la
+    /// règle juste et la règle absente y rendent le même cadre. Il s'écrit donc
+    /// sur l'image très haute de la recette (900 × 3 600), dont le cadre ne
+    /// gardait qu'environ 128 pt sur l'appareil — trop peu pour l'auteur, sa
+    /// date, sa ligne de format et la colonne d'actions qui s'y posent.
+    @Test("Une 1:4 : le cadre s'arrête au plancher de largeur, le média non")
+    func carded_veryTallImage_frameStopsAtWidthFloor_mediaDoesNot() {
+        let r = MediaStageFraming.resolve(Self.input(ratio: 0.25, presentation: .carded))
+
+        #expect(Self.close(r.media.height, 603), "contrainte par la HAUTEUR libre")
+        #expect(Self.close(r.media.width, 150.75), "le MÉDIA garde son ratio : 603 × 0,25 — jamais étiré")
+        #expect(Self.close(r.frame.width, 204), "le CADRE s'arrête au plancher de largeur")
+        #expect(Self.close(r.frame.height, r.media.height), "ce plancher n'agit que sur la largeur")
+        #expect(r.letterboxes, "un cadre plus large que son média laisse deux bandes latérales à habiller")
+    }
+
+    /// Vert sans la règle, et c'est dit : ce qu'il attrape est l'écriture
+    /// inverse — un `min` à la place du `max`, qui ferait du plancher un PLAFOND
+    /// et raboterait chaque cadre plus large que lui.
+    @Test("Le plancher de largeur est un minimum, jamais un maximum")
+    func carded_widthFloorNeverShrinksAWideFrame() {
+        let r = MediaStageFraming.resolve(Self.input(ratio: 0.5625, presentation: .carded))
+
+        #expect(Self.close(r.frame.width, 339.1875), "603 × 0,5625 — plus large que le plancher, intacte")
+        #expect(r.media == r.frame)
+    }
+
+    @Test("Un plancher de largeur absurde reste borné par la zone libre")
+    func carded_widthFloorNeverExceedsTheFreeRegion() {
+        let r = MediaStageFraming.resolve(
+            Self.input(ratio: 0.25, presentation: .carded, minimumFrameWidth: 5_000)
+        )
+
+        #expect(Self.close(r.frame.width, 366), "jamais de cadre qui mordrait sur les gouttières")
+        #expect(Self.close(r.media.width, 150.75), "et le média n'en grandit pas pour autant")
+    }
+
+    /// **En plein cadre, aucun plancher ne mord.** Le cadre EST l'écran ; un
+    /// plancher qui s'y appliquerait encore ne pourrait que le pousser dehors.
+    @Test("En plein cadre, le plancher de largeur ne change rien")
+    func full_ignoresTheWidthFloor() {
+        let sans = MediaStageFraming.resolve(
+            Self.input(ratio: 0.25, presentation: .full, minimumFrameWidth: 0)
+        )
+        let avec = MediaStageFraming.resolve(
+            Self.input(ratio: 0.25, presentation: .full, minimumFrameWidth: 5_000)
+        )
+
+        #expect(sans == avec, "le plancher de largeur ne touche pas un cadre qui a pris l'écran")
+        #expect(avec.frame == Self.viewport)
+        #expect(Self.close(avec.media.width, 211), "844 × 0,25 — l'image entière, comme à la recette")
+    }
+
+    // MARK: - Plein cadre
+
+    @Test("En plein cadre, le cadre EST l'écran et perd son rayon")
+    func full_frameTakesTheViewport_andLosesItsRadius() {
+        let r = MediaStageFraming.resolve(Self.input(ratio: 0.8, presentation: .full))
+
+        #expect(r.frame == Self.viewport, "les couloirs ne bornent plus rien")
+        #expect(Self.close(r.cornerRadius, 0), "un cadre qui touche les quatre bords n'a pas de coin")
+    }
+
+    /// **Le plein cadre FABRIQUE son propre hors-champ.** Une 4:5 remplit son
+    /// cadre en cadré (366 × 457,5) et flotte une fois l'écran pris (390 × 487,5
+    /// dans 390 × 844). Conditionner le fond au letterbox du seul état cadré,
+    /// c'est garantir du noir exactement là où on voulait l'éviter — défaut
+    /// trouvé sur la maquette, et c'est ce témoin qui l'attrape.
+    @Test("Une 4:5 remplissait sa carte, et ne remplit plus l'écran")
+    func full_portrait_letterboxesEvenThoughItFilledItsCard() {
+        let carded = MediaStageFraming.resolve(Self.input(ratio: 0.8, presentation: .carded))
+        let full = MediaStageFraming.resolve(Self.input(ratio: 0.8, presentation: .full))
+
+        #expect(carded.letterboxes == false, "elle remplissait son cadre…")
+        #expect(full.letterboxes, "…et elle ne remplit plus l'écran")
+        #expect(Self.close(full.media.width, 390))
+        #expect(Self.close(full.media.height, 487.5), "390 / 0,8")
+    }
+
+    /// **Même une 9:16 laisse des bandes en plein écran.** L'écran d'un
+    /// iPhone 16 Pro est en 0,462 — plus ÉTROIT que le 0,5625 d'une scène. Fit
+    /// et non fill : on ne rogne jamais, donc la scène s'arrête à 693 pt de haut
+    /// et laisse 75 pt en haut comme en bas.
+    @Test("Une 9:16 en plein écran est ajustée, pas rognée")
+    func full_tallScene_fitsWithoutCropping() {
+        let r = MediaStageFraming.resolve(Self.input(ratio: 0.5625, presentation: .full))
+
+        #expect(Self.close(r.media.width, 390), "la largeur de l'écran")
+        #expect(Self.close(r.media.height, 693.333, 0.01), "390 / 0,5625")
+        #expect(r.media.height < Self.viewport.height,
+                "une scène ne remplit PAS un écran plus étroit qu'elle — elle y flotte")
+        #expect(r.letterboxes, "donc il y a du hors-champ à habiller, même sur une 9:16")
+    }
+
+    // MARK: - Dégénérescences
+
+    @Test("Un viewport nul rend des zéros, sans planter")
+    func zeroViewport_returnsZeroes() {
+        let r = MediaStageFraming.resolve(Self.input(ratio: 0.8, presentation: .carded, viewport: .zero))
+
+        #expect(r.frame == .zero)
+        #expect(r.media == .zero)
+        #expect(r.letterboxes == false)
+    }
+
+    @Test("Un ratio non positif rend des zéros, sans diviser par zéro")
+    func nonPositiveRatio_returnsZeroes() {
+        let r = MediaStageFraming.resolve(Self.input(ratio: 0, presentation: .carded))
+
+        #expect(r.frame == .zero)
+        #expect(r.media == .zero)
+    }
+
+    @Test("Des couloirs plus grands que l'écran ne rendent jamais un cadre négatif")
+    func corridorsLargerThanTheScreen_neverProduceANegativeFrame() {
+        let r = MediaStageFraming.resolve(
+            Self.input(ratio: 0.8, presentation: .carded, viewport: CGSize(width: 390, height: 200))
+        )
+
+        #expect(r.frame.height >= 0)
+        #expect(r.frame.width >= 0)
+    }
+
+    /// **Le rail est une ENTRÉE, jamais une constante du solveur.** Si la
+    /// pellicule changeait de hauteur, le cadre doit suivre sans qu'on touche
+    /// au solveur — c'est ce qui interdit de recopier 80 quelque part.
+    @Test("Épaissir le rail rétrécit le cadre d'autant")
+    func aThickerRail_shrinksTheFrameByTheSameAmount() {
+        let base = MediaStageFraming.resolve(Self.input(ratio: 0.5625, presentation: .carded))
+        let thicker = MediaStageFraming.resolve(
+            Self.input(
+                ratio: 0.5625,
+                presentation: .carded,
+                corridors: MediaStageFraming.Corridors(
+                    safeTop: 59, top: 56, rail: 120, transport: 0, safeBottom: 34, gutter: 12
+                )
+            )
+        )
+
+        #expect(Self.close(base.frame.height - thicker.frame.height, 40), "120 − 80")
+    }
+
+    // MARK: - La bande de transport (#6162)
+
+    /// **La progression d'une vidéo vit dans le COULOIR, pas sur le cadre.**
+    ///
+    /// Elle est donc une réserve du plateau comme le rail : elle se prend à la
+    /// hauteur AVANT que le cadre ne prenne le reste. Le témoin le mesure sur une
+    /// 9:16 — la seule nature contrainte par la hauteur, donc la seule où une
+    /// réserve mal comptée se VOIT. Sur une 4:5 (contrainte par la largeur), la
+    /// règle juste et la règle absente rendraient le même cadre.
+    @Test("La bande de transport rétrécit le cadre de sa propre hauteur")
+    func aTransportBand_shrinksTheFrameByItsOwnHeight() {
+        let sans = MediaStageFraming.resolve(Self.input(ratio: 0.5625, presentation: .carded))
+        let avec = MediaStageFraming.resolve(
+            Self.input(
+                ratio: 0.5625,
+                presentation: .carded,
+                corridors: MediaStageFraming.Corridors(
+                    safeTop: 59, top: 56, rail: 80, transport: 44, safeBottom: 34, gutter: 12
+                )
+            )
+        )
+
+        #expect(Self.close(sans.frame.height - avec.frame.height, 44),
+                "la bande prend à la hauteur ce qu'elle occupe, ni plus ni moins")
+        #expect(Self.close(avec.frame.height, 559), "603 − 44")
+    }
+
+    /// **En plein cadre, la bande ne réserve RIEN.** Les couloirs n'existent plus
+    /// — le média a pris l'écran — et une réserve qui survivrait à la bascule
+    /// laisserait une bande noire de 44 pt exactement là où l'on vient de tout
+    /// rendre au média.
+    @Test("En plein cadre, la bande de transport ne prend rien")
+    func full_ignoresTheTransportBand() {
+        let sans = MediaStageFraming.resolve(Self.input(ratio: 0.5625, presentation: .full))
+        let avec = MediaStageFraming.resolve(
+            Self.input(
+                ratio: 0.5625,
+                presentation: .full,
+                corridors: MediaStageFraming.Corridors(
+                    safeTop: 59, top: 56, rail: 80, transport: 44, safeBottom: 34, gutter: 12
+                )
+            )
+        )
+
+        #expect(sans == avec, "la bande ne change rien à un cadre qui n'a plus de couloirs")
+        #expect(avec.frame == Self.viewport)
+    }
+
+    // MARK: - Le facteur de COUVERTURE (#6806)
+
+    /// **La loi complémentaire de l'ajustement, et pourquoi elle vit ici.**
+    ///
+    /// `resolve` ajuste et centre — « jamais de rognage », et son doc-comment
+    /// nomme lui-même la conséquence : en plein cadre, même une scène 9:16 laisse
+    /// des bandes, parce que l'écran d'un iPhone 16 Pro est en 0,462, plus ÉTROIT
+    /// que le 0,5625 d'une scène. Une pièce jointe DOIT s'en accommoder : la
+    /// rogner retirerait ce que l'expéditeur a envoyé. Une SCÈNE, non — c'est une
+    /// surface de composition, et la laisser en boîte aux lettres peint une
+    /// surface que personne n'a composée.
+    ///
+    /// D'où une fonction EN PLUS, jamais un paramètre de `resolve` : le solveur
+    /// garde son contrat `media <= frame` intact. Lui faire rendre le rognage a
+    /// été essayé et mesuré au simulateur — les médias de post se posaient EN
+    /// HAUT À GAUCHE, à leurs cotes cardées. **Le rognage appartient à qui SAIT
+    /// ce qu'il compose**, et le solveur ne le sait pas.
+    @Test("Le facteur agrandit le canvas jusqu'à couvrir le cadre")
+    func coverScaleCouvreLeCadre() {
+        // iPhone 16 Pro, plein cadre : le cadre prend l'écran, le média est
+        // l'ajustement 9:16 que `resolve` en a tiré.
+        let cadre = CGSize(width: 402, height: 874)
+        let média = CGSize(width: 402, height: 402 / 0.5625)   // 402 × 714,67
+
+        let facteur = MediaStageFraming.coverScale(frame: cadre, media: média)
+
+        #expect(abs(facteur - 874 / (402 / 0.5625)) < 0.0001,
+                "le facteur est celui qui comble l'axe le PLUS court")
+        #expect(média.height * facteur >= cadre.height - 0.001,
+                "après couverture, plus un point de sol en haut ni en bas")
+        #expect(média.width * facteur >= cadre.width - 0.001,
+                "ni sur les côtés — ce qui dépasse sort de l'écran")
+    }
+
+    /// **Une couverture n'est jamais un étirement** : un seul facteur pour les
+    /// deux axes, donc le rapport du canvas est intact et c'est le CADRE qui
+    /// rogne.
+    @Test("La couverture préserve le rapport du canvas")
+    func coverScalePreserveLeRapport() {
+        let cadre = CGSize(width: 402, height: 874)
+        let média = CGSize(width: 402, height: 714.6667)
+
+        let facteur = MediaStageFraming.coverScale(frame: cadre, media: média)
+        let couvert = CGSize(width: média.width * facteur, height: média.height * facteur)
+
+        #expect(abs(couvert.width / couvert.height - média.width / média.height) < 0.0001,
+                "le rapport survit à la couverture — sinon les visages s'allongent")
+    }
+
+    /// **Un média qui remplit déjà ne se touche pas.** Le facteur ne descend
+    /// jamais sous 1 : sans ce plancher, une scène plus large que son cadre
+    /// serait RÉDUITE par une fonction qui s'appelle « couvrir », et rouvrirait
+    /// les bandes qu'elle est censée fermer.
+    @Test("La couverture ne rétrécit jamais")
+    func coverScaleNeRetrecitPas() {
+        let cadre = CGSize(width: 402, height: 874)
+
+        #expect(MediaStageFraming.coverScale(frame: cadre, media: cadre) == 1)
+        #expect(MediaStageFraming.coverScale(frame: cadre,
+                                             media: CGSize(width: 600, height: 1200)) == 1,
+                "un média DÉJÀ plus grand n'est pas rétréci")
+    }
+
+    /// Une cote nulle ne fabrique ni infini ni NaN : elle rend l'identité. Un
+    /// `scaleEffect(.infinity)` ne fait pas rougir un témoin — il fait
+    /// disparaître l'écran.
+    @Test("Une cote nulle rend l'identité, jamais un infini")
+    func coverScaleSurCoteNulle() {
+        let cadre = CGSize(width: 402, height: 874)
+
+        #expect(MediaStageFraming.coverScale(frame: cadre, media: .zero) == 1)
+        #expect(MediaStageFraming.coverScale(frame: cadre,
+                                             media: CGSize(width: 402, height: 0)) == 1)
+        #expect(MediaStageFraming.coverScale(frame: .zero, media: cadre) == 1)
+    }
+
+}

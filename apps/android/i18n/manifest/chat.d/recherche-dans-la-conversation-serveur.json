@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {"androidName": "chat_search_translation_badge", "status": "android-only"},
+        {"androidName": "chat_search_retry", "status": "android-only"},
+        {"androidName": "chat_search_failed", "status": "android-only"},
+        {"androidName": "chat_search_offline", "status": "android-only"},
+        {"androidName": "chat_search_open_result", "status": "android-only"}
+      ]
+    }
+  }
+}

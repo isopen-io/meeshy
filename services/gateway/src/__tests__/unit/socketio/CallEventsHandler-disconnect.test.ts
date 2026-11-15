@@ -16,8 +16,9 @@
  */
 
 import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { CALL_REJOIN_GRACE_MS } from '@meeshy/shared/types/call-rules';
 
-const GRACE_EXPIRY_MS = 31_000;
+const GRACE_EXPIRY_MS = CALL_REJOIN_GRACE_MS + 1_000;
 
 // ---------------------------------------------------------------------------
 // Module-level mocks
@@ -28,6 +29,15 @@ const mockCreateCallSummaryMessageDc = jest.fn<any>();
 const mockForceEndOrphanedCallSessionDc = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
+  // Vague 182 — `CallAlreadyEndedError` must be the REAL class, not
+  // undefined: CallEventsHandler's catch blocks now do
+  // `error instanceof CallAlreadyEndedError` (absorbAlreadyEndedLeave's
+  // no-op path), which throws "right-hand side of 'instanceof' is not
+  // callable" under a mock that omits it — silently swallowing every
+  // assertion downstream of the disconnect-grace force-cleanup path this
+  // suite exercises. `jest.requireActual` keeps the real error class while
+  // still mocking the service itself.
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn().mockImplementation(() => ({
     leaveCall: mockLeaveCallDc,
     createCallSummaryMessage: mockCreateCallSummaryMessageDc,
@@ -90,6 +100,7 @@ jest.mock('../../../utils/logger', () => ({
 // ---------------------------------------------------------------------------
 
 import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
+import { CallAlreadyEndedError } from '../../../services/CallService';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -156,6 +167,9 @@ function makePrisma(): PrismaClient & {
   });
 
   return {
+    participant: {
+      findMany: jest.fn<any>().mockResolvedValue([{ id: MEMBERSHIP_ID }]),
+    },
     callParticipant: {
       findMany: jest.fn<any>().mockResolvedValue([makeActiveParticipation()]),
       // CALL-RESILIENCE — grace-expiry re-check: participant still present, call
@@ -577,14 +591,29 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
       await handlers['disconnect']();
       await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
 
+      expect((prisma as any).participant.findMany).toHaveBeenCalledWith({ where: { userId: USER_ID }, select: { id: true } });
       expect(prisma.callParticipant.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({
+          where: {
             OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
-            participant: { userId: USER_ID }
-          })
+            participantId: { in: [MEMBERSHIP_ID] }
+          }
         })
       );
+    });
+
+    it('reads no call participation when the account holds no Participant row', async () => {
+      const prisma = makePrisma();
+      (prisma as any).participant.findMany.mockResolvedValue([]);
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['disconnect']();
+
+      expect(prisma.callParticipant.findMany).not.toHaveBeenCalled();
+      expect(mockLeaveCallDc).not.toHaveBeenCalled();
     });
 
     it('force-cleanup counts remaining participants matching leftAt null OR unset', async () => {

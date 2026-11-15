@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "media.skipBack10s", "status": "adopted" },
+        { "catalog": "app", "iosKey": "media.skipForward10s", "status": "adopted" },
+        { "catalog": "app", "iosKey": "media.pauseAudio", "status": "adopted" },
+        { "catalog": "app", "iosKey": "media.playAudio", "status": "adopted" },
+        { "catalog": "app", "iosKey": "audio.fullscreen.airplay", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.carousel.next", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.carousel.previous", "status": "adopted" },
+        { "catalog": "app", "iosKey": "media.download", "status": "adopted" }
+      ]
+    }
+  }
+}

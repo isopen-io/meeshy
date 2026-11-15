@@ -1,0 +1,311 @@
+import Foundation
+
+// Extrait de `MessageModels.swift` (978 lignes, à la lisière du budget) : le
+// lot #4945 enrichit le message CITÉ tel que le fil le sert — on extrait
+// d'abord, on ajoute ensuite.
+
+/// Le message CITÉ tel que `GET /messages` (`messages-list-query.ts`,
+/// `replyTo.select`) et `message:new` le servent.
+///
+/// Sous-ensemble minimal jusqu'au cycle #4945 — `id`, `content`, `senderId`,
+/// `sender`, `attachments` — alors que la passerelle sert depuis toujours la
+/// langue d'origine, les traductions et les six champs de protection
+/// (`reply-message-protection-contract`). Sans eux, iOS ne pouvait ni
+/// descendre le Prisme sur le texte cité, ni savoir qu'une réponse à un
+/// message à vue unique republiait son texte en clair dans chaque citation.
+///
+/// Tout est `decodeIfPresent` : un fil ancien, ou un écho socket allégé,
+/// décode tel quel.
+public struct APIMessageReplyTo: Decodable, Sendable {
+    public let id: String
+    public let content: String?
+    public let senderId: String?
+    public let sender: APIMessageSender?
+    public let attachments: [APIMessageAttachment]?
+    public let originalLanguage: String?
+    /// Les traductions du texte cité. Tolérant comme les blobs de Prisme
+    /// d'`APIMessageAttachment` : une entrée écrite à moitié par un worker ne
+    /// fait pas tomber la citation — elle rend l'original.
+    public let translations: [APITextTranslation]?
+    public let isViewOnce: Bool?
+    public let isBlurred: Bool?
+    public let expiresAt: Date?
+    public let effectFlags: UInt32?
+    public let isEncrypted: Bool?
+    public let encryptionMode: String?
+
+    /// L'instantané FIGÉ de la PIÈCE NOMMÉE par cette réponse (#6164) : l'ancre
+    /// du saut et la NATURE, et rien d'autre. La passerelle le grave dans
+    /// `metadata.attachmentReplyTo` du message CITANT et le ressert ici.
+    ///
+    /// `nil` sur toute citation d'avant le lot, et sur toute réponse qui vise
+    /// le message entier — le repli est alors le média REPRÉSENTATIF, comme
+    /// avant.
+    public let attachmentReplyTo: APIQuotedAttachmentReference?
+    /// #7927 — le message cité est SUPPRIMÉ : la passerelle vide son texte et
+    /// le dit ici ; la citation composée ne porte alors plus rien de lui.
+    public let deletedAt: Date?
+    /// #9915 — le nombre TOTAL de photos et vidéos du message cité : la
+    /// passerelle n'en sert que quatre dans `attachments`. `nil` chez une
+    /// passerelle antérieure, et pour un message protégé.
+    public let visualAttachmentCount: Int?
+    /// #17441 — l'avis cité (appel, arrivée, départ annoncé), que la passerelle
+    /// sert sous `notice`. `nil` chez une passerelle antérieure et pour tout
+    /// message qui n'est pas un avis citable : la citation dit alors `content`.
+    public let notice: QuotedNotice?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, content, senderId, sender, attachments
+        case originalLanguage, translations
+        case isViewOnce, isBlurred, expiresAt, effectFlags, isEncrypted, encryptionMode
+        case attachmentReplyTo, deletedAt, visualAttachmentCount, notice
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        content = try c.decodeIfPresent(String.self, forKey: .content)
+        senderId = try c.decodeIfPresent(String.self, forKey: .senderId)
+        sender = try c.decodeIfPresent(APIMessageSender.self, forKey: .sender)
+        attachments = try c.decodeIfPresent([APIMessageAttachment].self, forKey: .attachments)
+        originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
+        // Tolérant par ÉLÉMENT, pas par tableau : le `try?` d'avant perdait
+        // TOUTES les traductions de la citation dès qu'une seule était
+        // malformée — la citation repassait alors dans la langue de son
+        // auteur, sans que rien ne le signale.
+        translations = c.decodeLossyArrayIfPresent([APITextTranslation].self, forKey: .translations)
+        isViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce)
+        isBlurred = try c.decodeIfPresent(Bool.self, forKey: .isBlurred)
+        // La date suit la stratégie du décodeur appelant ; une forme qu'elle
+        // ne lit pas laisse le champ nil sans perdre la citation — l'expiration
+        // ne gouverne aucune protection ici (voir `isProtected`).
+        expiresAt = (try? c.decodeIfPresent(Date.self, forKey: .expiresAt)) ?? nil
+        effectFlags = try c.decodeIfPresent(UInt32.self, forKey: .effectFlags)
+        isEncrypted = try c.decodeIfPresent(Bool.self, forKey: .isEncrypted)
+        encryptionMode = try c.decodeIfPresent(String.self, forKey: .encryptionMode)
+        // `try?` : un instantané malformé ne fait pas tomber la citation
+        // ENTIÈRE — elle retombe alors sur son média représentatif, ce que
+        // toutes les citations faisaient avant ce lot.
+        attachmentReplyTo = (try? c.decodeIfPresent(APIQuotedAttachmentReference.self,
+                                                    forKey: .attachmentReplyTo)) ?? nil
+        // `try?` : une date illisible ne fait pas tomber la citation entière.
+        deletedAt = (try? c.decodeIfPresent(Date.self, forKey: .deletedAt)) ?? nil
+        visualAttachmentCount = (try? c.decodeIfPresent(Int.self, forKey: .visualAttachmentCount)) ?? nil
+        notice = (try? c.decodeIfPresent(QuotedNotice.self, forKey: .notice)) ?? nil
+    }
+
+    /// Le message cité ne doit pas republier son texte : vue unique, flouté ou
+    /// chiffré — par les champs hérités OU par le bitfield canonique
+    /// (`effectFlags`, seul porteur quand un client envoie le bit sans le
+    /// champ), même lecture que `protectedPreview` côté passerelle.
+    ///
+    /// L'éphémère n'en fait PAS partie : son texte est lisible dans le fil
+    /// jusqu'à l'expiration, et la citation vit dans ce même fil.
+    public var isProtected: Bool {
+        let flags = MessageEffectFlags(rawValue: effectFlags ?? 0)
+        return isViewOnce == true || isBlurred == true || isEncrypted == true
+            || flags.contains(.viewOnce) || flags.contains(.blurred)
+    }
+}
+
+// MARK: - L'instantané FIGÉ de la pièce citée
+
+/// Ce que `replyTo.attachmentReplyTo` porte, et RIEN d'autre (#6164, #6123
+/// voie C) : l'ancre du saut et la NATURE du média.
+///
+/// La frontière n'est pas un détail d'encodage, c'est la décision du lot : un
+/// instantané ne se relit pas, donc il ne peut porter que des faits qui ne
+/// peuvent JAMAIS devenir un secret. La vignette, le nom de fichier, la taille
+/// et la **DURÉE** en sont exclus — le cycle 125 les nomme dans ce qu'une
+/// protection doit garder — et ils voyagent sur `attachments`, où ils sont
+/// retenus pièce par pièce. Le dépôt divulgue en revanche déjà l'icône de TYPE
+/// d'un contenu protégé (`protectedPreview` → `contentTypeIcon`) : la nature
+/// est donc le seul fait descriptif qu'on a le droit de figer.
+///
+/// Site de vérité de la forme : `services/gateway/src/services/messaging/
+/// attachmentReplySnapshot.ts`, qui tient la liste des champs RÉVOCABLES à
+/// côté d'elle.
+public struct APIQuotedAttachmentReference: Decodable, Sendable, Equatable {
+    public let attachmentId: String
+    /// `image` · `video` · `audio` · `location` · `file` — le vocabulaire du
+    /// SERVEUR, plus grossier que celui d'`AttachmentKind`, qui n'a ni
+    /// `location` ni `file`.
+    public let kind: String?
+
+    /// La nature figée, projetée dans le vocabulaire d'`AttachmentKind` — ce
+    /// que `ReplyReference.attachmentType` déclare porter.
+    ///
+    /// Sert UNIQUEMENT quand la pièce nommée n'est plus servie (supprimée,
+    /// retenue, hors fenêtre) : la citation dit alors « une photo » sans rien
+    /// montrer. Une localisation rend `nil` — il n'y a pas de média à décrire.
+    public var declaredKind: String? {
+        switch kind {
+        case "image": return AttachmentKind.image.rawValue
+        case "video": return AttachmentKind.video.rawValue
+        case "audio": return AttachmentKind.audio.rawValue
+        case "file": return AttachmentKind.other.rawValue
+        default: return nil
+        }
+    }
+}
+
+// MARK: - Représentatif d'une citation, côté fil
+
+public extension Array where Element == APIMessageAttachment {
+    /// La MÊME règle que `[MeeshyMessageAttachment].quotedRepresentative`
+    /// (`CoreModels.swift`), sur le type du fil : le premier média hors
+    /// localisation, sinon le premier tout court. Une seule règle, deux
+    /// surcharges — la copie inline que `uiReplyTo` portait a divergé une fois
+    /// (`.first` devant une localisation) et n'a plus le droit d'exister.
+    var quotedRepresentative: APIMessageAttachment? {
+        first(where: { $0.mimeType != "application/x-location" }) ?? first
+    }
+}
+
+// MARK: - Vers la citation
+
+public extension APIMessageReplyTo {
+    /// Le SEUL constructeur de `ReplyReference` depuis le fil — partagé par le
+    /// chemin réseau (`APIMessage.toMessage`) et le chemin cache
+    /// (`MessagePersistenceActor.replyToJson`), qui divergeaient sur le média
+    /// représentatif (`.first` contre hors-localisation), sur le type gravé
+    /// (MIME brut contre `AttachmentKind`) et sur `isMe`.
+    ///
+    /// - `previewText` est ÉLU par le Prisme (`PrismTranslationResolver`) : le
+    ///   prisme du lecteur est parcouru dans l'ordre, la première langue servie
+    ///   gagne, `nil` ⇒ l'original — jamais `translations.first`. Un
+    ///   cryptogramme (`isEncrypted`) n'est pas une traduction et se saute.
+    /// - Un message cité PROTÉGÉ (`isProtected`) ne republie rien : le
+    ///   placeholder porte le même vocabulaire que `protectedPreview` côté
+    ///   passerelle (« 👁️ 🖼️ », « 🌫️ 💬 », « 🔒 🎵 »), et la citation entière
+    ///   est déclarée protégée, vignette comprise.
+    /// - Les sept faits du média représentatif voyagent avec elle.
+    ///
+    /// `isMe` se résout sur l'UTILISATEUR (`sender.userId`, sinon `senderId`),
+    /// jamais sur l'identifiant de participant seul : `replyTo.senderId` est
+    /// l'appartenance à la conversation, pas la personne.
+    ///
+    /// Un AVIS cité (#17441) se dit dans la langue des libellés que l'app a
+    /// prêtés (`QuotedNotice.lend`), du point de vue du lecteur ; sans eux, le
+    /// repli français servi.
+    func toReplyReference(
+        currentUserId: String?, preferredLanguages: [String],
+        noticeStrings: ConversationPreviewStrings? = QuotedNotice.lentStrings
+    ) -> ReplyReference {
+        let noticeText = noticeStrings.flatMap { strings in notice?.text(viewerId: currentUserId, strings: strings) }
+        let reference = composedReference(currentUserId: currentUserId, preferredLanguages: preferredLanguages, noticeText: noticeText)
+        return deletedAt.map { reference.tombstoned(at: $0) } ?? reference
+    }
+
+    private func composedReference(currentUserId: String?, preferredLanguages: [String], noticeText: String?) -> ReplyReference {
+        // La pièce NOMMÉE l'emporte sur le représentatif (#6164) — et quand
+        // elle est nommée mais ABSENTE (supprimée, hors fenêtre), on ne
+        // retombe sur RIEN : emprunter la vignette de la première montrerait
+        // une photo que cette réponse ne cite pas. Il reste alors la NATURE
+        // figée, qui suffit à dire « une photo ».
+        let representative: APIMessageAttachment? = attachmentReplyTo == nil
+            ? attachments?.quotedRepresentative
+            : attachments?.first { $0.id == attachmentReplyTo?.attachmentId }
+        let placeholder = isProtected ? protectedPlaceholder(for: representative) : nil
+        var reference = ReplyReference(
+            messageId: id,
+            authorName: sender?.name ?? "?",
+            previewText: placeholder ?? noticeText ?? servedPreviewText(preferredLanguages: preferredLanguages, representative: representative),
+            isMe: currentUserId.map { (sender?.resolvedUserId ?? senderId) == $0 } ?? false,
+            authorAvatarUrl: sender?.resolvedAvatar,
+            attachmentType: representative?.mimeType.map { AttachmentKind(mimeType: $0).rawValue }
+                ?? attachmentReplyTo?.declaredKind,
+            attachmentId: attachmentReplyTo?.attachmentId,
+            attachmentThumbnailUrl: representative?.thumbnailUrl,
+            // Retenue par l'init dès que la citation est déclarée protégée.
+            attachmentFileUrl: representative?.fileUrl,
+            attachmentIsProtected: isProtected ? true : representative?.declaredProtection,
+            attachmentFacts: representative.map { ReplyReference.QuotedAttachmentFacts($0) },
+            // #9371 — la PERSONNE citée, pour que `user:updated` la repeigne.
+            authorUserId: sender?.resolvedUserId
+        )
+        // #8320 — la zone lecture : l'échéance d'un éphémère, et les pistes
+        // traduites d'un audio cité pour élire hors fenêtre la piste du
+        // vocal d'origine. Jamais les pistes d'un média protégé.
+        reference.quotedExpiresAt = expiresAt
+        reference.authorIsAnonymous = sender.map { !$0.hasAccount } ?? true
+        reference.authorRing = sender?.profileDecor?.avatarRing
+        // #9573 — la nature de disparition du cité, lue par la loi de sortie
+        // sur ce que le fil déclare. Sans `effectFlags`, rien n'est déclaré :
+        // la citation reste illisible, et son contenu ne sortira pas.
+        reference.quotedExitNature = effectFlags.map { flags in
+            ContentExitLaw.of(ContentExitLaw.Subject(
+                isViewOnce: isViewOnce, isBlurred: isBlurred, effectFlags: flags, expiresAt: expiresAt,
+                attachments: (attachments ?? []).map {
+                    ContentExitLaw.Piece(isViewOnce: $0.isViewOnce, isBlurred: $0.isBlurred, effectFlags: $0.effectFlags)
+                }
+            )).nature
+        }
+        // #9911 — le compte des tuiles d'une citation du message ENTIER. La
+        // passerelle sert au plus quatre pièces du cité, et leur compte TOTAL
+        // à côté (#9915) ; sans lui, les pièces servies sont un plancher.
+        if attachmentReplyTo == nil, !isProtected {
+            let tiles = (attachments ?? []).filter { piece in
+                let kind = AttachmentKind(mimeType: piece.mimeType ?? "")
+                return kind == .image || kind == .video
+            }
+            let count = tiles.isEmpty ? 0 : max(tiles.count, visualAttachmentCount ?? 0)
+            reference.quotedPieceCount = count == 0 ? nil : count
+        }
+        if let representative, !reference.quotedMediaIsProtected, reference.attachmentFileUrl != nil,
+           AttachmentKind(mimeType: representative.mimeType ?? "") == .audio {
+            reference.quotedAudioTracks = ReplyReference.QuotedAudioTracks(
+                originalLanguage: originalLanguage,
+                translations: representative.translations
+            )
+        }
+        return reference
+    }
+
+    /// Le texte servi par le Prisme ; sans texte, une carte de visite se dit
+    /// par son contact (« 👤 Zoé »), jamais par son nom de fichier (#8122).
+    private func servedPreviewText(preferredLanguages: [String], representative: APIMessageAttachment?) -> String {
+        let text = prismPreviewText(preferredLanguages: preferredLanguages)
+        guard text.isEmpty, let representative else { return text }
+        return ContactCardFile.mediaLabel(
+            mimeType: representative.mimeType ?? "",
+            fileName: representative.originalName ?? representative.fileName ?? ""
+        ) ?? text
+    }
+
+    private func prismPreviewText(preferredLanguages: [String]) -> String {
+        let original = content ?? ""
+        let readable: [String: String] = (translations ?? []).reduce(into: [:]) { acc, translation in
+            guard translation.isEncrypted != true else { return }
+            acc[translation.targetLanguage] = translation.translatedContent
+        }
+        return PrismTranslationResolver.resolve(
+            originalLanguage: originalLanguage,
+            translations: readable,
+            preferredLanguages: preferredLanguages
+        )?.text ?? original
+    }
+
+    /// Même vocabulaire que `PROTECTION_ICON` + `CONTENT_TYPE_ICON`
+    /// (`NotificationService.ts`), même précédence (vue unique, puis flouté,
+    /// puis chiffré) — une citation et une bannière décrivent le même secret
+    /// avec les mêmes mots.
+    private func protectedPlaceholder(for representative: APIMessageAttachment?) -> String {
+        let flags = MessageEffectFlags(rawValue: effectFlags ?? 0)
+        let protectionIcon: String = {
+            if isViewOnce == true || flags.contains(.viewOnce) { return "👁️" }
+            if isBlurred == true || flags.contains(.blurred) { return "🌫️" }
+            return "🔒"
+        }()
+        return "\(protectionIcon) \(Self.contentTypeIcon(mimeType: representative?.mimeType))"
+    }
+
+    private static func contentTypeIcon(mimeType: String?) -> String {
+        guard let mimeType else { return "💬" }
+        if mimeType.hasPrefix("image/") { return "🖼️" }
+        if mimeType.hasPrefix("video/") { return "🎬" }
+        if mimeType.hasPrefix("audio/") { return "🎵" }
+        if mimeType == "application/x-location" { return "📍" }
+        return "📎"
+    }
+}

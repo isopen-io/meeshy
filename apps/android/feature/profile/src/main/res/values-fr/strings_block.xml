@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_block_confirm_title">Bloquer cet utilisateur</string>
+    <string name="profile_block_confirm_message">Vous ne recevrez plus de messages de %1$s. Vous pourrez le débloquer dans les réglages.</string>
+    <string name="profile_block_confirm_action">Bloquer</string>
+    <string name="profile_block_cancel">Annuler</string>
+    <string name="profile_block_fallback_name">cette personne</string>
+</resources>

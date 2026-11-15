@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversations_title">Meeshy Chats</string>
+    <string name="conversations_no_messages">لا توجد رسائل بعد</string>
+    <string name="conversations_preview_expired_content_description">انتهت صلاحية آخر رسالة</string>
+    <string name="conversations_preview_hidden_content_description">آخر رسالة مخفية</string>
+    <string name="conversations_preview_view_once_content_description">آخر رسالة: عرض لمرة واحدة</string>
+    <string name="conversations_action_all_notifications">كل الإشعارات</string>
+    <string name="conversations_lock_title_unlock">إلغاء قفل المحادثة</string>
+    <string name="conversations_lock_title_unlock_all">إلغاء قفل الكل</string>
+    <string name="conversations_lock_subtitle_open">أدخل رمز %1$s لفتحها</string>
+    <string name="conversations_change_master_pin">تغيير رمز PIN الرئيسي</string>
+    <string name="conversations_lock_security_menu">إعدادات القفل</string>
+    <string name="conversations_unlock_all">إلغاء قفل كل المحادثات</string>
+    <string name="conversations_lock_dots_a11y">تم إدخال %1$d من %2$d أرقام</string>
+    <string name="conversations_action_remove_favorite">إزالة المفضلة</string>
+    <string name="conversations_favorite_set_content_description">تعيين التفاعل المفضل %1$s</string>
+    <string name="conversations_tags_add_content_description">إضافة وسم</string>
+    <string name="conversations_action_move_to_category">نقل إلى فئة</string>
+    <string name="conversations_category_search_hint">ابحث عن فئة أو أنشئ واحدة…</string>
+    <string name="conversations_action_discard_draft">تجاهل المسودة</string>
+    <string name="conversations_delete_for_all_confirm_message">سيتم إغلاق «%1$s» لجميع المشاركين. لن يتمكن أحد من الكتابة بعد الآن.</string>
+    <string name="share_link_created_title">تم إنشاء الرابط</string>
+    <string name="my_share_links_share">مشاركة الرابط</string>
+    <string name="my_share_links_delete">حذف الرابط</string>
+    <string name="my_share_links_extend">تمديد الصلاحية</string>
+    <string name="share_link_detail_not_found">هذا الرابط لم يعد متاحًا.</string>
+    <string name="global_search_recent_title">عمليات البحث الأخيرة</string>
+    <string name="global_search_tab_users">المستخدمون</string>
+    <string name="conversations_action_mark_unread">تعليم كغير مقروء</string>
+    <string name="conversations_empty">لا توجد محادثات بعد</string>
+    <string name="conversations_no_results">لا توجد محادثات مطابقة</string>
+    <string name="conversations_open_global_search">بحث شامل</string>
+    <string name="conversations_section_all">محادثاتي</string>
+    <string name="conversations_section_pinned">المثبّتة</string>
+    <string name="dashboard_action_search">بحث شامل</string>
+    <string name="global_search_hint">ابحث في كل مكان…</string>
+    <string name="new_conversation_error_blocked">لا يمكنك بدء محادثة مع هذا المستخدم.</string>
+</resources>

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_explorer_request_failed">La traduction a échoué. Touchez pour réessayer.</string>
+</resources>

@@ -64,7 +64,6 @@ final class ConversationListViewModelTests: XCTestCase {
         let resolvedStore = store ?? Self.makeTestStore()
         let resolvedCategoryStore = categoryStore ?? UserCategoryStore(service: ConvListTestCategoryWriter())
         let sut = ConversationListViewModel(
-            api: api,
             conversationService: conversationService,
             preferenceService: preferenceService,
             messageSocket: messageSocket,
@@ -275,6 +274,24 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertEqual(sut.conversations.count, 1)
     }
 
+    /// #7631 — un cache de moins de 5 min peint sans attendre, mais ne dispense
+    /// pas de la revalidation : une réaction ou un appel terminé app fermée
+    /// n'y figurent pas.
+    func test_loadConversations_freshCache_revalidatesByDeltaInBackground() async {
+        let conversation = makeConversation(id: "000000000000000000000001")
+        try? await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        let syncEngine = MockConversationSyncEngine()
+        let revalidated = expectation(description: "le delta part au démarrage sur un cache frais")
+        syncEngine.onSyncSinceLastCheckpoint = { revalidated.fulfill() }
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+
+        await sut.loadConversations()
+
+        XCTAssertEqual(sut.conversations.count, 1, "le cache peint avant tout réseau")
+        await fulfillment(of: [revalidated], timeout: 2)
+        XCTAssertEqual(syncEngine.fullSyncCallCount, 0, "une revalidation, pas un plein")
+    }
+
     func test_loadConversations_refetchesAfterCacheInvalidation() async {
         // Pre-populate cache
         let conversation = makeConversation(id: "000000000000000000000001")
@@ -287,7 +304,6 @@ final class ConversationListViewModelTests: XCTestCase {
         let countAfterFirst = syncEngine.fullSyncCallCount
 
         // Invalidate the cache (both local TTL and CacheCoordinator)
-        sut.invalidateCache()
         await CacheCoordinator.shared.conversations.invalidate(for: "list")
         await sut.loadConversations()
         let countAfterSecond = syncEngine.fullSyncCallCount
@@ -583,6 +599,36 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertNil(sut.conversations.first(where: { $0.id == "conv2" })?.userState.deletedForUserAt)
     }
 
+    // MARK: - deleteConversation : la conversation QUITTE la liste (colonne de détail iPad)
+
+    func test_deleteConversation_success_announcesTheRemoval() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1"), makeConversation(id: "conv2")])
+        await sut.storeHydrationTask?.value
+        var removed: [String] = []
+        let token = sut.conversationLeavesDetail.sink { removed.append($0) }
+        defer { token.cancel() }
+
+        await sut.deleteConversation(conversationId: "conv1")
+
+        XCTAssertEqual(removed, ["conv1"], "l'iPad referme la colonne de détail qui montrait conv1")
+    }
+
+    func test_deleteConversation_permanentFailure_announcesNothing() async throws {
+        let store = Self.makeTestStore(lifecycleError: MeeshyError.server(statusCode: 422, message: "bad"))
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1")])
+        await sut.storeHydrationTask?.value
+        var removed: [String] = []
+        let token = sut.conversationLeavesDetail.sink { removed.append($0) }
+        defer { token.cancel() }
+
+        await sut.deleteConversation(conversationId: "conv1")
+
+        XCTAssertEqual(removed, [], "la ligne est rétablie : la conversation reste ouverte")
+    }
+
     // MARK: - deleteConversation: Failure (restore)
 
     func test_deleteConversation_rollsBackOnPermanentFailure() async throws {
@@ -635,12 +681,12 @@ final class ConversationListViewModelTests: XCTestCase {
         let untagged = makeConversation(id: "conv2")
 
         let filtered = ConversationListViewModel.filterConversations(
-            [tagged, untagged], searchText: "", filter: .all, tag: "Travail"
+            [tagged, untagged], searchText: "", filters: [.all], tag: "Travail"
         )
         XCTAssertEqual(filtered.map(\.id), ["conv1"], "seules les conversations portant l'étiquette restent")
 
         let cleared = ConversationListViewModel.filterConversations(
-            [tagged, untagged], searchText: "", filter: .all, tag: nil
+            [tagged, untagged], searchText: "", filters: [.all], tag: nil
         )
         XCTAssertEqual(cleared.map(\.id), ["conv1", "conv2"], "retirer le filtre rend toute la liste")
     }
@@ -654,7 +700,7 @@ final class ConversationListViewModelTests: XCTestCase {
 
         for filter in [ConversationFilter.all, .unread, .archived, .personnel] {
             let result = ConversationListViewModel.filterConversations(
-                [deleted, visible], searchText: "", filter: filter
+                [deleted, visible], searchText: "", filters: [filter]
             )
             XCTAssertFalse(result.contains(where: { $0.id == "conv1" }),
                            "Soft-deleted conv must be hidden from filter \(filter)")
@@ -672,13 +718,13 @@ final class ConversationListViewModelTests: XCTestCase {
         let untouched = makeConversation(id: "conv2", name: "Team Beta")
 
         let byCustomName = ConversationListViewModel.filterConversations(
-            [renamed, untouched], searchText: "Préféré", filter: .all
+            [renamed, untouched], searchText: "Préféré", filters: [.all]
         )
         XCTAssertEqual(byCustomName.map(\.id), ["conv1"],
                        "search must match the locally-renamed displayName, not just the server title")
 
         let byOldServerTitle = ConversationListViewModel.filterConversations(
-            [renamed, untouched], searchText: "Alpha", filter: .all
+            [renamed, untouched], searchText: "Alpha", filters: [.all]
         )
         XCTAssertTrue(byOldServerTitle.isEmpty,
                       "once renamed locally, the row is found by its displayed name — not the superseded server title")
@@ -692,7 +738,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "active1", isActive: true),
             makeConversation(id: "archived1", isActive: false)
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
 
         // Deterministic wait on the debounced filter pipeline instead of a
         // fixed sleep (#1869): `filteredConversations` isn't itself @Published
@@ -711,7 +757,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "read", unreadCount: 0),
             makeConversation(id: "unread", unreadCount: 3)
         ]
-        sut.selectedFilter = .unread
+        sut.selectedFilters = [.unread]
 
         try await Task.sleep(nanoseconds: 200_000_000)
 
@@ -725,7 +771,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "dm", type: .direct),
             makeConversation(id: "grp", type: .group)
         ]
-        sut.selectedFilter = .personnel
+        sut.selectedFilters = [.personnel]
 
         try await Task.sleep(nanoseconds: 200_000_000)
 
@@ -739,7 +785,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "dm", type: .direct),
             makeConversation(id: "grp", type: .group)
         ]
-        sut.selectedFilter = .privee
+        sut.selectedFilters = [.privee]
 
         try await Task.sleep(nanoseconds: 200_000_000)
 
@@ -755,7 +801,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "active", isActive: true),
             archivedConv
         ]
-        sut.selectedFilter = .archived
+        sut.selectedFilters = [.archived]
 
         try await Task.sleep(nanoseconds: 200_000_000)
 
@@ -770,7 +816,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "c2", name: "Bob"),
             makeConversation(id: "c3", name: "Alice and Bob")
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
         sut.searchText = "Alice"
 
         try await Task.sleep(nanoseconds: 200_000_000)
@@ -787,7 +833,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "fav", reaction: "heart"),
             makeConversation(id: "nofav", reaction: nil)
         ]
-        sut.selectedFilter = .favoris
+        sut.selectedFilters = [.favoris]
 
         try await Task.sleep(nanoseconds: 200_000_000)
 
@@ -801,7 +847,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "ch1", isAnnouncementChannel: true),
             makeConversation(id: "notch", isAnnouncementChannel: false)
         ]
-        sut.selectedFilter = .channels
+        sut.selectedFilters = [.channels]
 
         try await Task.sleep(nanoseconds: 200_000_000)
 
@@ -1280,6 +1326,27 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertEqual(sut.conversations.first(where: { $0.id == "conv1" })?.userState.unreadCount, 1)
     }
 
+    /// Choix du porteur : « Marquer non lu » sur la conversation OUVERTE sur iPad
+    /// la désélectionne — la colonne de détail revient vide, la pastille reste,
+    /// comme Mail ou Messages. Restée ouverte, la règle « conversation ouverte ⇒
+    /// 0 non lu » effaçait la pastille aussitôt.
+    func test_markAsUnread_deselectsTheConversation_andKeepsItUnreadAcrossTheExit() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1", unreadCount: 0)])
+        await sut.storeHydrationTask?.value
+        var leaving: [String] = []
+        let token = sut.conversationLeavesDetail.sink { leaving.append($0) }
+        defer { token.cancel() }
+
+        await sut.markAsUnread(conversationId: "conv1")
+
+        XCTAssertEqual(leaving, ["conv1"], "la colonne de détail se referme")
+        XCTAssertTrue(ExplicitUnreadMarks.consume("conv1"),
+                      "la sortie du Résumé ne rattrape pas une conversation qu'on vient de marquer non lue")
+        XCTAssertFalse(ExplicitUnreadMarks.consume("conv1"), "la marque ne sert qu'une fois")
+    }
+
     func test_markAsUnread_rollsBackOnPermanentFailure() async throws {
         let store = Self.makeTestStore(lifecycleError: MeeshyError.server(statusCode: 422, message: "bad"))
         let (sut, _, _, _, _, _, _) = makeSUT(store: store)
@@ -1448,9 +1515,9 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertTrue(sut.filteredConversations.isEmpty)
         XCTAssertTrue(sut.groupedConversations.isEmpty)
         XCTAssertFalse(sut.isLoading)
-        XCTAssertFalse(sut.isLoadingMore)
+        XCTAssertNotEqual(sut.paginationState, .loadingMore)
         XCTAssertEqual(sut.searchText, "")
-        XCTAssertEqual(sut.selectedFilter, .all)
+        XCTAssertEqual(sut.selectedFilters, [.all])
         XCTAssertTrue(sut.typingUsernames.isEmpty)
         XCTAssertEqual(sut.totalUnreadCount, 0)
     }
@@ -1465,7 +1532,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "dm", type: .direct),
             makeConversation(id: "grp", type: .group)
         ]
-        sut.selectedFilter = .ouvertes
+        sut.selectedFilters = [.ouvertes]
 
         try await Task.sleep(nanoseconds: 200_000_000)
 
@@ -1484,7 +1551,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "dm", type: .direct),
             makeConversation(id: "pub", type: .public)
         ]
-        sut.selectedFilter = .globales
+        sut.selectedFilters = [.globales]
 
         try await Task.sleep(nanoseconds: 200_000_000)
 
@@ -1501,7 +1568,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "active2", isActive: true),
             makeConversation(id: "archived", isActive: false)
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
 
         try await Task.sleep(nanoseconds: 200_000_000)
 
@@ -1518,7 +1585,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "c2", name: "Alice Group", unreadCount: 0),
             makeConversation(id: "c3", name: "Bob DM", unreadCount: 2)
         ]
-        sut.selectedFilter = .unread
+        sut.selectedFilters = [.unread]
         sut.searchText = "Alice"
 
         try await Task.sleep(nanoseconds: 200_000_000)
@@ -1535,7 +1602,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "c1", name: "ALICE"),
             makeConversation(id: "c2", name: "Bob")
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
         sut.searchText = "alice"
 
         try await Task.sleep(nanoseconds: 200_000_000)
@@ -1552,7 +1619,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "c1", name: "Alice"),
             makeConversation(id: "c2", name: "Bob")
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
         sut.searchText = ""
 
         try await Task.sleep(nanoseconds: 200_000_000)
@@ -1588,7 +1655,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "newest", lastMessageAt: newest),
             makeConversation(id: "recent", lastMessageAt: recent)
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
 
         try await waitForGrouping { !sut.groupedConversations.isEmpty }
 
@@ -1608,7 +1675,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "pinned1", isPinned: true),
             makeConversation(id: "pinned2", isPinned: true)
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
 
         try await waitForGrouping { sut.groupedConversations.contains { $0.section.id == "pinned" } }
 
@@ -1633,7 +1700,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "c2", sectionId: "cat-family"),
             makeConversation(id: "c3")
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
 
         try await waitForGrouping {
             sut.groupedConversations.contains { $0.section.id == "cat-work" }
@@ -1658,7 +1725,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "c1"),
             makeConversation(id: "c2")
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
 
         try await waitForGrouping { sut.groupedConversations.contains { $0.section.id == "other" } }
 
@@ -1675,7 +1742,7 @@ final class ConversationListViewModelTests: XCTestCase {
         sut.conversations = [
             makeConversation(id: "c1", sectionId: "deleted-category-id")
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
 
         try await waitForGrouping { sut.groupedConversations.contains { $0.section.id == "other" } }
 
@@ -1863,47 +1930,45 @@ final class ConversationListViewModelTests: XCTestCase {
     }
 
     // MARK: - Socket: user preferences updated
+    //
+    // Les trois témoins qui vivaient ici poussaient un
+    // `UserPreferencesUpdatedEvent(category: "conversation", conversationId:
+    // "conv1")` — une forme que le décodeur de PRODUCTION ne peut pas produire
+    // sur ce publisher : depuis la scission de l'union, toute charge portant un
+    // `conversationId` est routée vers `userPreferencesConversationUpdated`, et
+    // le publisher plat ne porte que le scope CATÉGORIE. Ils gardaient donc un
+    // sink que le fil ne pouvait plus atteindre, et par là même rendaient
+    // invisible l'absence du seul abonné qui comptait (#4201).
+    //
+    // Ce qui les remplace dit les DEUX moitiés du contrat réel : la ligne suit
+    // le STORE, et le publisher plat ne la touche pas.
 
-    func test_socketUserPreferencesUpdated_updatesPinState() async throws {
+    func test_conversationScopePreference_movesTheRow_throughTheStore_notTheFlatPublisher() async throws {
+        let store = Self.makeTestStore()
         let messageSocket = MockMessageSocket()
-        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
-        sut.conversations = [makeConversation(id: "conv1", isPinned: false)]
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket, store: store)
+        sut.setConversations([makeConversation(id: "000000000000000000000001", isPinned: false)])
+        await sut.storeHydrationTask?.value
 
+        // Le publisher PLAT ne porte que le scope catégorie (`{ userId,
+        // category }`) : il ne nomme aucune conversation et ne doit donc rien
+        // déplacer dans la liste. Sa destination est
+        // `UserPreferencesManager.observeRemotePreferenceBroadcast` (SDK).
         messageSocket.userPreferencesUpdated.send(
-            UserPreferencesUpdatedEvent(userId: "user1", category: "conversation", conversationId: "conv1", isPinned: true, isMuted: nil)
+            UserPreferencesUpdatedEvent(userId: "user1", category: "notification")
         )
+        await drainMainQueue()
 
-        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertFalse(sut.conversations[0].userState.isPinned,
+                       "une diffusion de scope catégorie ne nomme aucune conversation — la ligne ne bouge pas")
 
-        XCTAssertTrue(sut.conversations[0].userState.isPinned)
-    }
+        // Le scope conversation, lui, arrive par ConversationStoreSocketBridge →
+        // ConversationStore → observeStore() → mergeUserStateFromStore.
+        try await store.apply(.setPinned(true), for: "000000000000000000000001")
+        try? await Task.sleep(nanoseconds: 300_000_000)
 
-    func test_socketUserPreferencesUpdated_updatesMuteState() async throws {
-        let messageSocket = MockMessageSocket()
-        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
-        sut.conversations = [makeConversation(id: "conv1", isMuted: false)]
-
-        messageSocket.userPreferencesUpdated.send(
-            UserPreferencesUpdatedEvent(userId: "user1", category: "conversation", conversationId: "conv1", isPinned: nil, isMuted: true)
-        )
-
-        try await Task.sleep(nanoseconds: 50_000_000)
-
-        XCTAssertTrue(sut.conversations[0].userState.isMuted)
-    }
-
-    func test_socketUserPreferencesUpdated_ignoresUnknownConversation() async throws {
-        let messageSocket = MockMessageSocket()
-        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
-        sut.conversations = [makeConversation(id: "conv1", isPinned: false)]
-
-        messageSocket.userPreferencesUpdated.send(
-            UserPreferencesUpdatedEvent(userId: "user1", category: "conversation", conversationId: "unknown", isPinned: true, isMuted: nil)
-        )
-
-        try await Task.sleep(nanoseconds: 50_000_000)
-
-        XCTAssertFalse(sut.conversations[0].userState.isPinned)
+        XCTAssertTrue(sut.conversations[0].userState.isPinned,
+                      "le store est la source de vérité de userState pour cette liste")
     }
 
     // MARK: - markAsUnread: preserves existing unread count
@@ -1941,24 +2006,10 @@ final class ConversationListViewModelTests: XCTestCase {
 
     func test_loadConversations_guardsPreviousFetchInProgress() async {
         let (sut, _, _, _, _, _, _) = makeSUT()
-        sut.invalidateCache()
 
         async let first: () = sut.loadConversations()
         async let second: () = sut.loadConversations()
         _ = await (first, second)
-
-        XCTAssertFalse(sut.isLoading)
-    }
-
-    // MARK: - invalidateCache
-
-    func test_invalidateCache_allowsNextLoadToFetch() async {
-        let (sut, _, _, _, _, _, _) = makeSUT()
-        sut.conversations = [makeConversation(id: "c1")]
-
-        sut.invalidateCache()
-
-        await sut.loadConversations()
 
         XCTAssertFalse(sut.isLoading)
     }
@@ -1974,7 +2025,7 @@ final class ConversationListViewModelTests: XCTestCase {
         ]
 
         // Switch to unread filter: should show only dm1 and grp1
-        sut.selectedFilter = .unread
+        sut.selectedFilters = [.unread]
         try await Task.sleep(nanoseconds: 200_000_000)
 
         XCTAssertEqual(sut.filteredConversations.count, 2)
@@ -1993,7 +2044,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "dev2", sectionId: "cat-dev"),
             makeConversation(id: "other1"),
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
 
         try await waitForGrouping {
             sut.groupedConversations.contains { $0.section.id == "cat-dev" }
@@ -3670,21 +3721,57 @@ final class ConversationListViewModelTests: XCTestCase {
         // le plus ancien, même sémantique que le curseur gateway `before` —
         // au lieu de refetcher la page 1 (dont le zero-progress guard
         // forcerait `.exhausted` et tuerait l'infinite scroll).
+        //
+        // #6857 — les identifiants sont ceux que la PASSERELLE sert, c'est-à-dire
+        // des ObjectId. Ce témoin posait « tail » et « newest », des chaînes
+        // qu'aucun serveur n'émet : il verdissait donc sur un repli que la
+        // passerelle aurait refusé en 500. La fixture irréaliste était ce qui
+        // laissait vivre le défaut — c'est elle qu'on corrige, pas la règle.
         await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let queue = "68f3808baf186ffd9583b0fa"
         let conversationService = MockConversationService()
         conversationService.listPageResult = .success(
-            ConversationPage(items: [makeConversation(id: "older")], nextCursor: "older", hasMore: true)
+            ConversationPage(items: [makeConversation(id: "68f3808baf186ffd9583b0fb")],
+                             nextCursor: "68f3808baf186ffd9583b0fb", hasMore: true)
         )
         let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
         sut.conversations = [
-            makeConversation(id: "newest", lastMessageAt: Date()),
-            makeConversation(id: "tail", lastMessageAt: Date(timeIntervalSinceNow: -3_600)),
+            makeConversation(id: "68f3808baf186ffd9583b0fc", lastMessageAt: Date()),
+            makeConversation(id: queue, lastMessageAt: Date(timeIntervalSinceNow: -3_600)),
         ]
 
         await sut.loadMore()
 
-        XCTAssertEqual(conversationService.lastListPageCursor, "tail",
+        XCTAssertEqual(conversationService.lastListPageCursor, queue,
                        "Without a persisted cursor, loadMore must page from the oldest loaded conversation instead of refetching page 1")
+    }
+
+    /// **La moitié que la fixture irréaliste cachait** (#6857).
+    ///
+    /// Une entrée locale dont l'identifiant n'a jamais été servi — fixture de
+    /// témoin gravée dans le cache, conversation optimiste, sentinelle — ne doit
+    /// pas devenir un curseur. Mesuré au simulateur : `before=conv-hydrate`
+    /// faisait rendre 500 à la passerelle, et « Réessayer », qui rappelle
+    /// `loadMore()`, rejouait indéfiniment le même échec.
+    ///
+    /// Le repli à `nil` demande la PREMIÈRE page — ce qui est précisément la
+    /// récupération qui manquait : on réaffiche ce qu'on a plutôt que d'échouer.
+    func test_loadMore_withoutCursor_refusesALocalIdTheServerNeverServed() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let conversationService = MockConversationService()
+        conversationService.listPageResult = .success(
+            ConversationPage(items: [makeConversation(id: "68f3808baf186ffd9583b0fb")],
+                             nextCursor: "68f3808baf186ffd9583b0fb", hasMore: true)
+        )
+        let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
+        sut.conversations = [
+            makeConversation(id: "conv-hydrate", lastMessageAt: Date(timeIntervalSinceNow: -3_600)),
+        ]
+
+        await sut.loadMore()
+
+        XCTAssertNil(conversationService.lastListPageCursor,
+                     "un identifiant que le serveur n'a jamais servi ne devient pas un curseur — il ferait rendre 500 à la route")
     }
 
     // MARK: - ThemedConversationRow timestamp color
@@ -4125,6 +4212,107 @@ final class ConversationListViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.typingUsers, ["conv1": "alice", "conv2": "bob"])
     }
+
+    // MARK: - Aperçu d'appui long : relu à chaque appui
+
+    private func previewPage(conversationId: String, content: String) -> MessagesAPIResponse {
+        JSONStub.decode("""
+        {"success":true,"data":[{"id":"aa00000000000000000000\(content.count)","conversationId":"\(conversationId)","senderId":"u-other","content":"\(content)","createdAt":"2026-10-18T08:00:00.000Z"}],"pagination":null,"cursorPagination":null,"hasNewer":null}
+        """)
+    }
+
+    /// L'aperçu ne se chargeait qu'UNE fois par conversation pour toute la vie du VM (des heures) : un message
+    /// modifié — ou supprimé pour tous — restait lisible à chaque appui long suivant.
+    func test_aLongPress_refreshesAPreviewLoadedEarlier() async {
+        let conversationId = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(24)).lowercased()
+        let service = MockMessageService()
+        service.listResult = .success(previewPage(conversationId: conversationId, content: "avant"))
+        let (sut, _, _, _, _, _, _) = makeSUT(messageService: service)
+
+        await sut.loadPreviewMessages(for: conversationId)
+        XCTAssertEqual(sut.previewMessages[conversationId]?.map(\.content), ["avant"], "précondition")
+
+        service.listResult = .success(previewPage(conversationId: conversationId, content: "corrigé"))
+        await sut.loadPreviewMessages(for: conversationId, refresh: true)
+
+        XCTAssertEqual(sut.previewMessages[conversationId]?.map(\.content), ["corrigé"])
+    }
+
+    func test_anAutoPreviewLoad_doesNotRefetchAPreviewAlreadyLoaded() async {
+        let conversationId = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(24)).lowercased()
+        let service = MockMessageService()
+        service.listResult = .success(previewPage(conversationId: conversationId, content: "avant"))
+        let (sut, _, _, _, _, _, _) = makeSUT(messageService: service)
+
+        await sut.loadPreviewMessages(for: conversationId)
+        await sut.loadPreviewMessages(for: conversationId)
+
+        XCTAssertEqual(service.listCallCount, 1, "le préchargement opportuniste reste idempotent")
+    }
+
+    // MARK: - Une seule liste vivante, partagée par ses fenêtres
+
+    /// iPad : une fenêtre détachée, ou la racine qui remplace l'autre au passage compact ↔ regular (Stage
+    /// Manager, Split View), créait un SECOND `ConversationListViewModel` complet — abonnements socket, push et
+    /// lus doublés, un GET par push pour une conversation absente de sa liste vide. Un propriétaire réutilise
+    /// la liste déjà vivante.
+    func test_aSecondOwner_sharesTheLiveListViewModel() {
+        let (made, _, _, _, _, _, _) = makeSUT()
+        let first = ConversationListVMOwner(make: { made })
+        let second = ConversationListVMOwner(make: {
+            XCTFail("une liste vivante existe : aucune seconde ne doit naître")
+            return made
+        })
+
+        XCTAssertTrue(first.viewModel === second.viewModel)
+    }
+
+    // MARK: - Widget : une liste jamais chargée ne s'y publie pas
+
+    /// iPad multi-fenêtre : `DetachedWindowView` possède son propre `ConversationListViewModel`, qui ne
+    /// charge JAMAIS la liste. Son `[]` initial traversait le debounce et partait vers
+    /// `NotificationCoordinator.registerConversations([])` : widget, destinations de l'extension de
+    /// partage et noms locaux des notifications effacés 200 ms après chaque fenêtre détachée.
+    func test_aListThatNeverLoaded_publishesNothingToTheWidget() async throws {
+        let spy = ConvListWidgetSinkSpy()
+        let previous = NotificationCoordinator.shared.widgetSink
+        NotificationCoordinator.shared.widgetSink = spy
+        defer { NotificationCoordinator.shared.widgetSink = previous }
+        let (sut, _, _, _, _, _, _) = makeSUT()
+
+        try await Task.sleep(nanoseconds: 450_000_000)
+
+        XCTAssertEqual(sut.loadState, .idle, "précondition : la liste n'a jamais été chargée")
+        XCTAssertFalse(spy.publishedConversations.contains { $0.isEmpty },
+                       "un VM qui n'a rien chargé ne doit pas vider le widget")
+    }
+
+    func test_aLoadedList_isPublishedToTheWidget() async throws {
+        let conversation = makeConversation(id: "000000000000000000000077")
+        try await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        let spy = ConvListWidgetSinkSpy()
+        let previous = NotificationCoordinator.shared.widgetSink
+        NotificationCoordinator.shared.widgetSink = spy
+        defer { NotificationCoordinator.shared.widgetSink = previous }
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.fullSyncResult = true
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+
+        await sut.loadConversations()
+        try await Task.sleep(nanoseconds: 450_000_000)
+
+        XCTAssertTrue(spy.publishedConversations.contains { $0.map(\.id).contains(conversation.id) },
+                      "une liste chargée doit toujours atteindre le widget")
+    }
+}
+
+private final class ConvListWidgetSinkSpy: NotificationWidgetSink {
+    var publishedConversations: [[MeeshyConversation]] = []
+    func publishConversations(_ conversations: [MeeshyConversation]) { publishedConversations.append(conversations) }
+    func publishUnreadCount(_ count: Int) {}
+    func publishFavoriteContacts(_ conversations: [MeeshyConversation]) {}
+    func reloadTimelines() {}
+    func wipeAll() {}
 }
 
 // MARK: - ConversationUpdatedEvent factory

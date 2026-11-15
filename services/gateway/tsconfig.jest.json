@@ -1,0 +1,18 @@
+{
+  // #10203 — la configuration que ts-jest TRANSFORME, et rien d'autre.
+  //
+  // `isolatedModules` fait passer ts-jest de `LanguageService` (un programme
+  // TypeScript par worker, typecheck de chaque fichier chargé) à
+  // `transpileModule` (fichier par fichier, sans types) : la suite tombe de
+  // 584 s à 268 s en local.
+  //
+  // L'option vit ICI et non dans `tsconfig.test.json` : ce dernier est aussi
+  // le projet que `tsc -p tsconfig.test.json --noEmit` mesure pour le cliquet
+  // de #6160 (`tsc-never-loaded-tests-ratchet.test.ts`), et c'est désormais
+  // LUI qui porte la vérification de types des fichiers de test — ts-jest ne
+  // la fait plus. Y ajouter `isolatedModules` changerait la mesure du cliquet.
+  "extends": "./tsconfig.test.json",
+  "compilerOptions": {
+    "isolatedModules": true
+  }
+}

@@ -25,6 +25,10 @@ jest.mock('../../../../utils/rate-limiter.js', () => ({
   createAuthGlobalRateLimiter: jest.fn(() => ({
     middleware: jest.fn(() => async () => {}),
   })),
+  // `/login/2fa` n'avait AUCUN preHandler ; elle en porte désormais un (#4138).
+  createTwoFactorLoginRateLimiter: jest.fn(() => ({
+    middleware: jest.fn(() => async () => {}),
+  })),
 }));
 
 const mockGetRequestContext = jest.fn<any>().mockResolvedValue({
@@ -127,6 +131,8 @@ function makeAuthService(overrides: Record<string, any> = {}) {
     }),
     updateOnlineStatus: jest.fn<any>().mockResolvedValue(undefined),
     logout: jest.fn<any>().mockResolvedValue(true),
+    logoutCurrent: jest.fn<any>().mockResolvedValue(1),
+    getUserActiveSessions: jest.fn<any>().mockResolvedValue([]),
     ...overrides,
   } as any;
 }
@@ -200,7 +206,12 @@ describe('POST /login — success', () => {
     expect(body.success).toBe(true);
     expect(body.data.token).toBe('jwt-access-token');
     expect(body.data.sessionToken).toBe('session-token');
-    expect(authService.generateToken).toHaveBeenCalledWith(mockUser);
+    // #4264 — le jeton NOMME la session qui vient de naître. Sans ce second
+    // argument, `POST /refresh` ne pouvait que COMPTER les sessions valides du
+    // compte : révoquer CET appareil-ci depuis un autre laissait son JWT passer
+    // tant qu'une seule session restait valide — le cas nominal, puisqu'on
+    // révoque toujours depuis un appareil qu'on garde.
+    expect(authService.generateToken).toHaveBeenCalledWith(mockUser, mockSession.id);
     await app.close();
   });
 });
@@ -354,6 +365,50 @@ describe('POST /login/2fa — success', () => {
     expect(authService.completeAuthWith2FA).toHaveBeenCalledWith('tok', '123456', expect.any(Object));
     await app.close();
   });
+
+  it('sert `usedBackupCode` dans le corps SÉRIALISÉ — l\'écran de vérification en dépend pour avertir du code de secours consommé (#4458)', async () => {
+    const authService = makeAuthService();
+    authService.completeAuthWith2FA = jest.fn<any>().mockResolvedValue({
+      user: mockUser,
+      sessionToken: 'session-token',
+      session: mockSession,
+      requires2FA: false,
+      usedBackupCode: true,
+    });
+    const { app } = await buildApp({ authService });
+    const res = await app.inject({
+      method: 'POST', url: '/login/2fa',
+      payload: { twoFactorToken: 'tok', code: 'ABCD1234' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.usedBackupCode).toBe(true);
+    await app.close();
+  });
+
+  it('sert `usedBackupCode: false` quand le second facteur a été validé par TOTP', async () => {
+    const { app } = await buildApp();
+    const res = await app.inject({
+      method: 'POST', url: '/login/2fa',
+      payload: { twoFactorToken: 'tok', code: '123456' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.usedBackupCode).toBe(false);
+    await app.close();
+  });
+
+  it('NOMME lui aussi la session dans le jeton — la seconde porte n\'émet pas un jeton plus pauvre (#4264)', async () => {
+    // La 2FA est le second des CINQ sites d'émission. Un site oublié rouvre
+    // toute la garde : il suffit d'entrer par lui pour obtenir un jeton
+    // anonyme, que `POST /refresh` ne pourra plus rattacher à rien.
+    const { app, authService } = await buildApp();
+    await app.inject({
+      method: 'POST', url: '/login/2fa',
+      payload: { twoFactorToken: 'tok', code: '123456' },
+    });
+
+    expect(authService.generateToken).toHaveBeenCalledWith(mockUser, mockSession.id);
+    await app.close();
+  });
 });
 
 describe('POST /login/2fa — service error', () => {
@@ -382,7 +437,8 @@ describe('POST /logout — success', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
     expect(authService.updateOnlineStatus).toHaveBeenCalledWith(USER_ID, false);
-    expect(authService.logout).toHaveBeenCalledWith('session-token-123');
+    expect(authService.logoutCurrent).toHaveBeenCalledWith(USER_ID, { sessionId: null, sessionToken: 'session-token-123' });
+    expect(authService.logout).not.toHaveBeenCalled();
     await app.close();
   });
 });
@@ -406,6 +462,27 @@ describe('POST /logout — service error', () => {
       headers: { 'x-session-token': 'session-token-123' },
     });
     expect(res.statusCode).toBe(500);
+    await app.close();
+  });
+});
+
+describe('POST /logout — refuser une session prouvée ne l’adopte pas (#10477)', () => {
+  it('la route déclare `adoptsSession: false`, que lit la porte d’authentification', async () => {
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    const vus: Array<boolean | undefined> = [];
+    app.decorate('authenticate', async (req: FastifyRequest) => {
+      vus.push(req.routeOptions.config.adoptsSession);
+      (req as unknown as { user: { userId: string } }).user = { userId: USER_ID };
+    });
+    registerLoginRoutes({
+      fastify: app, authService: makeAuthService(), redis: null, prisma: null,
+      phoneTransferService: {}, smsService: {}, cacheStore: {},
+    } as never);
+    await app.ready();
+
+    await app.inject({ method: 'POST', url: '/logout' });
+
+    expect(vus).toEqual([false]);
     await app.close();
   });
 });

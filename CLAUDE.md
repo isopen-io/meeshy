@@ -1,7 +1,132 @@
 # Meeshy - CLAUDE.md
 
+> ## ⛔ Aucune feature sans issue — règle de démarrage (directive 2026-08-26)
+> **Avant d'écrire la première ligne d'une feature, d'une amélioration ou d'un correctif non trivial**, ouvrir (ou retrouver) son **issue** dans `isopen-io/meeshy`, la placer dans un **milestone précis** (nommé par le résultat attendu, avec échéance) et l'inscrire au projet « Meeshy — pilotage » (https://github.com/orgs/isopen-io/projects/1) avec `Status = In Progress`. Le commit qui livre la ferme (`Closes #n`) avec sa preuve (gate, mesure, PR). **Une tâche sans issue n'existe pas ; un travail sans milestone n'est pas planifié.** Ce qu'on découvre en chemin (dette, dimension non mûre, suivi) devient une issue à son tour — jamais une ligne dans un fichier ou une page. Détail : § « Pilotage du développement » du `CLAUDE.md` racine.
+
+> ## 🚦 STAGING D'ABORD, PRODUCTION RÉTROCOMPATIBLE, E2EE OPTIONNEL (directive porteur 2026-10-03, #9228)
+> Décisions prises après l'audit multi-dimension du 2026-10-02. Chacune a son issue, et l'issue fait foi.
+> - **`dev` = staging. Claude y est autonome sur TOUT** (#9226) : toute PR vers `dev` fusionne automatiquement dès la CI verte, et Claude gère seul les déploiements, migrations et données de staging. Les lots de cryptographie, d'authentification et de migration de données passent en plus par l'agent `auditeur-adversarial` avant fusion.
+> - **La production ne reçoit que ce que le staging a validé, et c'est Claude qui promeut le CODE** (#9223, tranché le 2026-10-04). Il promeut seul quand la CI est verte, la recette sur staging passée et le retour arrière prêt, puis rend compte au porteur. **Les migrations et les purges de données de production attendent le feu vert du porteur**, chacune précédée d'une sauvegarde vérifiée.
+> - **La production a des utilisateurs : toute évolution est RÉTROCOMPATIBLE** (#9223, #9231). Un ancien client fonctionne contre le nouveau serveur, et l'inverse, pendant la transition. Un ancien chemin (route, événement socket, champ, format chiffré) ne se retire qu'à zéro usage mesuré, ou après qu'une version minimale a invité l'utilisateur à mettre à jour. Jamais de bascule sèche.
+> - **Le chiffrement de bout en bout est OPTIONNEL, activé par conversation, IRRÉVERSIBLE, et la traduction automatique existe dans les deux modes** (#9224, #9229, #12949). Sans E2EE : toutes les features serveur. Avec E2EE : le serveur ne voit jamais le clair, la traduction se fait sur l'appareil, et les features qui exigent le clair côté serveur sont absentes, l'interface le disant. Un message en clair dans une conversation chiffrée est refusé (fail-closed). **Une conversation chiffrée de bout en bout ne repasse jamais en clair** (décision porteur du 2026-10-25, #12949) : aucune route, admin comprise, ne la rétrograde (`409 E2EE_IRREVERSIBLE`), et un client qui l'a vue `e2ee` ignore toute rétrogradation servie. Pour revenir au clair, on crée une autre conversation.
+> - **Carnet d'adresses : le serveur ne garde en clair que les contacts INSCRITS** (#9225, #9230). D'un non-inscrit, il ne garde qu'une empreinte HMAC à clé secrète, sans nom, qui ne sert qu'à annoncer « X a rejoint Meeshy ».
+> - **Staging et production partagent un serveur physique, dans deux dossiers distincts, mais ni base, ni Redis, ni réseau, ni secrets** (#9232). Moins de 1 000 utilisateurs : on reste simple. Mais rien ne doit empêcher de monter vite à 100 000 (passerelle sans état, médias derrière une interface S3, bases authentifiées et sauvegardées hors site).
+> - **Meeshy est gratuit : NLLB-200 et MMS-TTS restent tant que c'est le cas** (#9227). Toute monétisation est précédée de leur remplacement par des modèles sous licence commerciale.
+> - **Les compétences manquantes sont des agents spécialisés** (`.claude/agents/`) : `crypto-e2ee`, `sre-infra`, `conformite-juridique`, `auditeur-adversarial`. Ils outillent le travail. Ils ne remplacent ni un audit cryptographique tiers, ni un avis juridique signé, et ils le disent quand c'est cela qui est requis.
+
+> ## 🟢 LE KOTLIN NATIF EST DÉGELÉ — `apps/android` vise l'ISO de l'application iOS (directive porteur 2026-10-22, #11570)
+> **Le gel du 2026-09-16 est levé par directive du porteur.** `apps/android` reçoit de nouveau des features, des portages d'écran et des mises à parité, et son objectif est l'iso de l'application iOS : mêmes features, mêmes états, même disposition, même hiérarchie et mêmes gestes. **La référence est `apps/ios` + `packages/MeeshySDK`**, comme pour `apps/web`. La transposition est Material/Compose seulement là où la plateforme l'impose (retour système, notifications, partage).
+> - **Les lois à miroirs se relisent de nouveau « touche les TROIS »** (Prisme § 3 et ses familles, présence, accent, actions). Les divergences du miroir Kotlin consignées pendant le gel redeviennent de la dette à solder, chacune par une issue.
+> - **La coque Capacitor `apps/web/android` continue sous sa propre directive (2026-09-07).** Le dégel ne la retire pas. **L'app native a repris la fiche Play `me.meeshy.app` (décision porteur 2026-10-29, #13619, qui remplace #11570) ; la coque est renommée `me.meeshy.webapp` et mise hors service pour le moment.** La passerelle lit `me.meeshy.app` comme native. Le `namespace` Kotlin reste `me.meeshy.app` (ADR-028 de `apps/android/decisions.md`).
+> - **Le seul compilateur Android joignable est la CI `android.yml`** : `dl.google.com` est refusé par le proxy des conteneurs. Un lot Android est prouvé par `assembleDebug` + `testDebugUnitTest` verts sur sa PR, jamais par un « ça devrait compiler ».
+
+> ## 🧊 (CLOS le 2026-10-22 — #11570) LE DÉVELOPPEMENT ANDROID KOTLIN EST GELÉ (directive porteur 2026-09-16)
+> **Bandeau CLOS, conservé pour l'histoire : il décrit l'état du dépôt du 2026-09-16 au 2026-10-22.** Le bandeau ci-dessus le remplace. Ses interdits ne s'appliquent plus.
+>
+> **`apps/android` — l'application NATIVE Kotlin (1 582 fichiers `.kt`, 254 559 lignes, mesurés le 2026-09-16) — ne reçoit plus de développement.** Aucune feature, aucun portage d'écran, aucune mise à parité, y compris si une issue ouverte avant cette date le demande : ces plans sont SUSPENDUS, ils ne se rejouent pas. Le gel porte sur le développement, pas sur le code : rien n'est supprimé, `android.yml` continue de tourner, et la reprise se décidera par une directive, jamais par une session.
+>
+> **CE QUE LE GEL NE TOUCHE PAS — la coque Android de `apps/web`** (ex `apps/web-v2`, renommée le 2026-09-24, #7668). Ce sont DEUX Android, et la confusion coûterait le chantier en cours : `apps/web/android` est une coque Capacitor qui ne porte AUCUN Kotlin écrit à la main (mesuré : 0 fichier `.kt`, 3 fichiers Java générés). La directive 2026-09-07 fait de `apps/web-v2` « une application similaire à `apps/ios` pour le web ET Android EN UNE FOIS » — c'est elle qui sert Android désormais, et elle continue à plein régime. Geler le Kotlin natif ne retire pas Android du produit : **cela fait de la coque le chemin Android.**
+>
+> **L'UNIQUE exception, même régime que celui du legacy web jusqu'à son retrait (#7668) :** un incident de production, une faille de sécurité ou une régression bloquante sur l'application déjà publiée se corrige — au minimum, et sans rien ajouter d'autre.
+>
+> **Conséquence sur les règles « toute évolution touche les TROIS ».** Le dépôt énonce plusieurs lois à trois miroirs (Prisme Linguistique § 3 et ses quatre familles, présence § « Source de vérité TS »). Tant que ce gel tient, elles se lisent **« touche les DEUX »** — web et iOS — et **une divergence du miroir Kotlin n'est PAS un défaut à corriger** : c'est la conséquence assumée du gel. Ne pas ouvrir d'issue pour « remettre Android à parité » ; ne pas compter Android comme dimension manquante (§ 13, Complétude) d'une feature web ou iOS. Un lot qui TOUCHE une de ces lois note, dans son commentaire de clôture, ce que le miroir Kotlin n'a pas reçu — la dette se CONSIGNE, elle ne se solde pas.
+
+> ## ✅ UNE SEULE APPLICATION WEB : `apps/web` (2026-09-24, #7668)
+> **Le legacy Next.js a quitté le dépôt, et `apps/web-v2` a pris son chemin et son nom de paquet (`@meeshy/web`, version 2.0.x — la numérotation du chantier continue, elle ne repart pas de la 1.x du legacy).** meeshy.me la servait depuis le 2026-09-15 (conteneur `meeshy-frontend`, image `isopen/meeshy-web-v31`, construite depuis `apps/web/Dockerfile` par `docker.yml` — le nom d'image est l'affaire de #7709).
+>
+> - Il n'y a plus de « legacy à ne pas toucher » ni de « chantier » : `apps/web` EST l'application web, et elle suit l'interface iOS (bandeau ci-dessous, § « La v2.0 suit l'interface iOS », toujours en vigueur).
+> - La dernière forme du legacy est gelée sous le tag **`legacy-web-final`** : `git checkout legacy-web-final -- apps/web` la restaure, `node apps/web/scripts/route-inventory.mjs` y lit encore ses adresses.
+> - Le volume Docker `frontend_uploads` (monté en production sur `/srv/legacy-uploads/u:ro`) porte les téléversements du temps du legacy : il n'est pas dans le dépôt et ne part pas avec le code.
+> - Une loi à miroirs dont la colonne web citait un fichier du legacy se relit ainsi : si l'application **consomme** `@meeshy/shared`, la colonne web n'a plus de miroir à garder ; si elle **réimplémente**, la colonne pointe `apps/web/src/…` ; si elle ne porte pas encore la dimension, c'est une issue, jamais un chemin mort.
+> - Les journaux (`tasks/`), les CHANGELOG et les récits datés gardent `apps/web` au sens du legacy et `apps/web-v2` au sens du chantier : ils racontent ce qui était vrai à leur date, et ne se réécrivent pas.
+
+> ## 🛑 (CLOS le 2026-09-24 — #7668) LA V3 EN DÉVELOPPEMENT EST ANNULÉE — le chantier web est `apps/web-v2` (2.0.0) (directives porteur 2026-09-07 et 2026-09-10)
+> **Bandeau CLOS, conservé pour l'histoire : il décrit l'état du dépôt du 2026-09-07 au 2026-09-24.** Depuis, `apps/web-v2` s'appelle `apps/web` et le legacy n'est plus dans le dépôt (bandeau ci-dessus). Son tableau, son exception « le legacy SERT les utilisateurs » et ses chiffres ne s'appliquent plus ; seule la règle « la v2.0 suit l'interface iOS » reste en vigueur.
+>
+> **Deux applications web coexistent, et leurs noms ont changé le 2026-09-07 puis le 2026-09-10. Lire ce tableau avant de toucher à quoi que ce soit :**
+>
+> | répertoire | ce que c'est | état |
+> |---|---|---|
+> | `apps/web` | le LEGACY | **sert meeshy.me**, 74 routes, 100 % du trafic |
+> | `apps/web-v2` | **le chantier**, version **2.0.0** — ex `apps/web-v3` (la v3.1), ex `apps/web-v4` | la seule application web en développement ; elle deviendra `apps/web` quand elle sera mûre en staging |
+>
+> **L'ancienne refonte v3 est ANNULÉE, et elle a quitté le dépôt (#5994).** Aucune feature, aucun correctif, aucun portage d'écran ne la ressuscite — y compris si une issue ouverte avant le 2026-09-07 le demande, y compris si son `ordre.md` ou sa matrice des 31 vues le prévoyait : **ces plans sont périmés, ils ne se rejouent pas.**
+>
+> **`apps/web-v2` est le SEUL chantier web, en version 2.0.0** (la v3.1 jusqu'au 2026-09-10). Il deviendra `apps/web` quand il sera mûr en staging ; le legacy reste en production d'ici là. Son pilotage est le lot #5491 et ses issues.
+>
+> **L'UNIQUE exception au gel : `apps/web` (le legacy) SERT les utilisateurs jusqu'à la bascule.** Un incident de production, une faille de sécurité ou une régression bloquante s'y corrige — au minimum, et sans rien ajouter d'autre.
+>
+> **La v2.0 suit l'interface iOS**, pas la planche web : `apps/ios` et `packages/MeeshySDK` sont la référence de disposition, de hiérarchie, d'états et de gestes. La palette est DÉRIVÉE de `MeeshyColors.swift` (`packages/design-tokens/ios.css`, généré — #5445) ; `tokens.css` est la table héritée de l'ancienne refonte, encore importée par la v2.0 (`src/styles/app.css`, `src/styles/institutional.css`), et plus gardée par aucun gate depuis son retrait (#6000).
+>
+> **Ce que la bascule coûte, remesuré le 2026-09-11 sur `dev`** : le legacy sert **74 routes** (1 252 fichiers, 243 681 lignes hors tests) ; le chantier en sert **16** (200 fichiers, 32 044 lignes hors tests, plus 133 fichiers de témoins). Il n'est plus « sur fixtures sans API ni temps réel » — 4 fichiers appellent le réseau et 11 touchent au socket, les 16 fixtures cohabitant avec ces branchements. **Tout chiffre de ce paragraphe se remesure avant d'être cité : il a déjà été faux dans les deux sens.** La parité est un chantier — elle se pilote par #5491, jamais par ce fichier. Les décisions d'architecture et de produit du chantier vivent dans `apps/web/decisions.md`.
+
 ## Project Overview
 Meeshy is a high-performance real-time messaging platform with multi-language translation, voice cloning, and end-to-end encryption. It supports 100k+ messages/second with simultaneous multi-language translation.
+
+## Pilotage du développement — GitHub Project, exclusivement (directive 2026-08-26)
+
+**Le développement de Meeshy se pilote UNIQUEMENT depuis GitHub** : le projet Projects v2 « Meeshy — pilotage » (org `isopen-io`, projet #1 — https://github.com/orgs/isopen-io/projects/1), les milestones et les issues du dépôt `isopen-io/meeshy`. Rien d'autre ne fait foi sur l'état d'une tâche — ni un fichier `tasks/todo-*.md`, ni une page publiée, ni un message de session.
+
+| Objet | Où il vit | Règle |
+|---|---|---|
+| Une tâche | une **issue** | titre SÉMANTIQUE (le résultat attendu), corps = Contexte · Preuve · Critère de fin · source (`tasks/…:ligne`, spec, planche) ; les codes internes (`T2.1`, `Lot H`, `P0 …`) vont dans le corps, jamais dans le titre |
+| Un livrable | un **milestone** avec échéance | nommé par le résultat (« Une story ne peut plus partir deux fois »), jamais A/B/C, Vague, Phase 1 |
+| L'état | les champs du projet : `Status`, `Priorité`, `Horizon`, `Début`, `Échéance`, `Tâche P0` | l'état se LIT dans le projet et ne se recopie dans aucun fichier |
+| La fin | l'issue **fermée** par le commit qui la livre (`Closes #n`) avec sa preuve (gate, mesure, PR) | « partiel » est un Status, pas un état livrable |
+| Le plan | un milestone + ses issues + leurs dépendances | un plan qui n'est pas dans le projet n'existe pas |
+| Une décision produit ouverte | une issue labellisée `décision-produit`, assignée au porteur | jamais une question qui traîne dans un doc |
+
+**Les artifacts (`claude.ai/code/artifact/…`) servent à TROIS choses, et trois seulement : les BROUILLONS (draft d'un doc, d'une spec, d'une analyse à faire valider), le DESIGN (planches, maquettes, vues cibles, iconographie, prototypes visuels) et les COMPTES RENDUS de communication (bilan de session, rapport d'audit, compte rendu de revue, note au porteur).** Un artifact n'est jamais un tableau de bord d'avancement, une liste de tâches à cocher ni une source d'état : s'il montre l'état d'une tâche, c'est au titre d'un compte rendu DATÉ, et l'issue GitHub a raison en cas d'écart. Ne pas ouvrir de page « progress », « suivi », « todo » ou « pilotage » — ouvrir des issues.
+
+Corollaires :
+- `tasks/*.md` sont des JOURNAUX et des SOURCES : on y lit l'histoire et on y renvoie depuis les issues ; on ne s'en sert plus pour piloter. les leçons restent vivantes, une par fichier sous `tasks/lessons/` (#7711) — c'est le seul tracker de fichier maintenu ; `tasks/lessons.md` n'en est plus que la carte.
+- Une session qui démarre un chantier commence par lire ses issues (`gh issue list --milestone "<nom>" --state open`, `gh project item-list 1 --owner isopen-io`) et pose `Status = In Progress` ; une session qui livre ferme ses issues et dit, dans le commentaire de clôture, ce qui est mûr et ce qui reste (voir les treize dimensions ci-dessous). Le scope `project` du token est requis pour les champs (`gh auth refresh -s project,read:project`).
+- Les documents de design du dépôt (`docs/product/*.html`, `docs/product/*.md`) gardent leur rendu publié en artifact — c'est du design, autorisé — mais l'ÉTAT des tâches qu'ils décrivent vit dans les issues, jamais dans le document.
+
+### La branche poussée tôt, complément de « aucune feature sans issue » (directive 2026-09-06, #5243)
+
+**L'issue dit QUOI ; la branche poussée dit QUI, MAINTENANT.** `Status = In Progress` vit dans Projects v2 (GraphQL) : une session distante ne peut ni le lire de façon fiable ni le poser en continu, et le tableau ne dit que ce que les autres ont *annoncé*. **Git est le seul substrat que toutes les sessions partagent, voient, et peuvent écrire** — c'est donc lui qui porte la réservation, jamais une convention non actionnable par tout le monde.
+
+1. **Pousser le squelette dans les quinze minutes**, avant d'écrire la logique — un commit poussé (squelette, témoin rouge, ou même le seul fichier de spécification) est visible de toute session en un `fetch` ; c'est gratuit, la branche existe de toute façon.
+2. **Corollaire d'asymétrie — la règle de tranchage, pas un conseil : quand deux lots se disputent un fichier, celui qui n'a rien écrit cède.** Un lot arrêté avant sa première écriture ne coûte que de la lecture ; l'autre a déjà payé. Aucune négociation n'est nécessaire — la décision se lit depuis ce que git montre.
+3. Une session qui découvre, au relevé, qu'une branche vivante écrit déjà ses chemins cède ce travail et en prend un autre — elle ne négocie pas, ne fusionne pas en avance, ne double pas.
+
+Cette doctrine réduit la FENÊTRE de collision (le seul facteur à forte dynamique — sessions actives et surface de travail ne baissent pas) ; elle ne prétend pas supprimer la collision. Les collisions d'**espace de noms partagé** (numéros de leçon, cliquets mesurés, registres générés) relèvent d'une règle différente : un identifiant qui ne s'alloue pas ne collisionne pas (#5102).
+
+### Avant de proposer une PR : fusionner `dev` dans sa branche, en gardant les corrections de `dev` (directive porteur 2026-11-15, #18654)
+
+**Une PR ne se propose que sur une branche qui CONTIENT la tête de `dev`.** Le 2026-11-15, quarante-cinq PR ouvertes sur des bases anciennes ont été fusionnées d'un coup : `dev` a mis une soirée à repasser au vert (fonction déclarée par deux PR, gardes de source ignorées, références de cliquets périmées, projet Xcode non régénéré, tests écrits pour la langue du poste).
+
+1. **Avant d'ouvrir la PR, et de nouveau avant de la fusionner** : `git fetch origin dev` puis fusionner `origin/dev` DANS la branche (jamais un rebase qui réécrit, jamais un `--ours` global). Là où les deux côtés ont touché le même endroit, **la correction déjà sur `dev` se garde** et le lot s'y adapte ; un fichier de `dev` ne se remplace jamais par la version entière de la branche.
+2. **Rejouer sur l'arbre FUSIONNÉ**, pas sur l'arbre d'avant : compilation, suites touchées, et les gardes de texte — sur iOS `check_house_rules.sh`, `check_cohesion_budget.sh`, `check_test_registration.sh`, `node scripts/check-accent-color-hardcoding.mjs` et le projet Xcode régénéré (`xcodegen generate`) ; sur le web la suite complète depuis `apps/web`, le build et les cliquets ; sur Android `assembleDebug` et les tests des modules touchés. Une référence de cliquet se remesure sur un export de l'arbre fusionné (`git archive`), jamais sur un arbre qui porte du travail non poussé.
+3. **Un test ne dépend ni de la langue ni du système du poste** : il lit son attendu dans le catalogue de la langue courante ou épingle la langue, et il passe sous le compilateur de la CI (Xcode 26) comme sous celui du poste.
+4. **L'issue du lot le dit** : son critère de fin porte « `dev` fusionnée dans la branche, ses corrections gardées, gardes rejouées sur l'arbre fusionné », et son commentaire de livraison donne le SHA de `dev` contenu. Une PR dont la branche ne contient pas la tête de `dev` ne se fusionne pas : on la met à jour d'abord.
+
+## Roadmap — un produit très optimisé, hyper fluide, mûr sur treize dimensions (directive 2026-08-26)
+
+La roadmap (milestones + champ `Horizon` du projet ; analyse dans `docs/product/roadmap-produit-2026-08.md`) ne suit pas une liste de features : elle suit la réalisation d'un produit **TRÈS optimisé — sans aucune lenteur —, HYPER fluide, aéré, agréable visuellement ET fonctionnellement**. Chaque feature, existante ou à venir, est portée à MATURITÉ sur les treize dimensions ci-dessous. Une feature « qui marche » mais qui rame, à qui il manque un état, qu'on ne trouve pas ou qu'on n'ose pas modifier n'est pas livrée.
+
+| # | Dimension | La question à poser | Le témoin |
+|---|---|---|---|
+| 1 | Sécurité | Qui peut voir / faire ça — et qu'est-ce qui part À CÔTÉ ? | gardes fail-closed testées, champs voisins relus, secrets hors dépôt |
+| 2 | Performance | Combien de temps avant que l'utilisateur VOIE quelque chose ? | p95 mesuré (API, rendu, démarrage à froid) ; cache-first : jamais de spinner sur un cache non vide |
+| 3 | Optimisation mémoire | Que reste-t-il en mémoire une fois l'écran quitté ? | aucune rétention (cycles ARC, listeners, caches non bornés), profil sur appareil réel |
+| 4 | Fluidité | Y a-t-il UNE image perdue pendant le geste ? | 60/120 fps au scroll, aux transitions et pendant la frappe ; optimistic update sur chaque action |
+| 5 | Facilité d'accès | Peut-on y arriver sans le savoir, sans voir, sans la souris ? | VoiceOver / TalkBack / lecteur d'écran, contrastes, cibles 44 pt, clavier, RTL, Dynamic Type |
+| 6 | Cohérence de positionnement | Est-ce à la place où l'utilisateur la chercherait, avec le vocabulaire du reste ? | même geste ⇒ même effet sur les trois plateformes ; même mot, même icône, même couleur de contexte |
+| 7 | Facilité d'usage | Combien de gestes pour l'usage nominal ? | chemin nominal ≤ 2 gestes, défauts justes, zéro configuration obligatoire |
+| 8 | Expérience utilisateur | Est-ce agréable, aéré, lisible — a-t-on envie d'y revenir ? | états vide / chargement / erreur / hors-ligne dessinés, feedback instantané, animation qui explique |
+| 9 | Compatibilité | Ça marche sur quoi ? | iOS 16→26 + iPad, Android API cible, navigateurs courants, réseau lent, hors-ligne, clair/sombre, 7 langues |
+| 10 | Utilité | À quel besoin réel ça répond — l'a-t-on mesuré ? | usage mesuré (analytics, retours) ; sinon la feature sort de la roadmap (§ 4 du doc) |
+| 11 | Maintenabilité | Peut-on la changer sans la casser ? | UNE source de vérité, tests de comportement, TypeScript strict, aucune jumelle divergente |
+| 12 | Simplicité d'usage | L'utilisateur a-t-il DÛ comprendre quelque chose pour s'en servir ? | **la complexité se paie dans le CODE, jamais chez l'utilisateur** : on complexifie volontiers l'implémentation (résolution automatique, cache, pré-calcul, inférence) pour que la feature s'utilise sans friction |
+| 13 | Complétude | Manque-t-il un état, un cas, une plateforme, une langue ? | matrice cas × plateforme remplie ; « partiel » est un Status d'issue, pas un livrable |
+
+Règles de tenue :
+- Une issue de feature déclare, à sa création, les dimensions qu'elle vise ; à sa fermeture, elle dit lesquelles sont mûres et ouvre une issue par dimension qui ne l'est pas (même milestone ou suivant — jamais oubliée).
+- **Une lenteur est un BUG, pas une dette.** Un écran qui attend le réseau alors que le cache a des données, une liste qui saccade, une action sans feedback immédiat ont au moins la priorité de la feature qu'ils dégradent, et se corrigent avant toute nouvelle feature du même écran.
+- Un milestone se compose en équilibrant les treize dimensions — pas trois issues de sécurité et zéro de fluidité. Le champ `Horizon` ordonne ; l'analyse 360° (`docs/product/roadmap-produit-2026-08.md` § 2) alimente.
+- Cache-First, Stale-While-Revalidate, Optimistic Updates, Offline Graceful Degradation, Zero Unnecessary Re-render (§ Instant App Principles) et le Prisme Linguistique sont les MÉCANISMES par lesquels les dimensions 2, 4, 6, 7, 8 et 12 se réalisent — ils ne sont pas optionnels.
 
 ## Prisme Linguistique — Philosophie Produit
 
@@ -36,21 +161,21 @@ iOS : `MeeshyUser.preferredContentLanguages` dans `packages/MeeshySDK/Sources/Me
 **La locale appareil intervient en 4e priorité — jamais en remplacement des préférences in-app.** Un utilisateur francophone avec un iPhone en anglais voit toujours ses messages en français (priorité 1) ; la locale anglaise n'intervient que si aucune traduction française n'est disponible ET qu'une traduction anglaise existe. Source de vérité : `resolveUserLanguage()` dans `packages/shared/utils/conversation-helpers.ts` accepte `{ deviceLocale }` en 2e argument.
 
 Source de verite gateway : `packages/shared/utils/conversation-helpers.ts` → `resolveUserLanguage()`
-Source de verite iOS : `ConversationViewModel.preferredLanguages` + `preferredTranslation(for:)`
+Source de verite iOS : `ConversationViewModel.preferredLanguages` + `preferredTranslation(for:)` — et `preferredLanguages` PROJETTE `ReaderPrism.resolve(for:)` (`packages/MeeshySDK/Sources/MeeshySDK/Auth/ReaderPrism.swift`, la descente STRICTE, rangs 1→4 sans repli « fr »), la MÊME fonction que `MessagePersistenceActor.readerPrism()` remet aux chemins socket et NSE pour graver `replyToJson`. Deux boucles jumelles gravaient deux citations pour un même message dès que la locale appareil manquait au serveur ou qu'aucune langue n'était configurée, et chaque ouverture rejouait un changement de ligne pour un contenu identique (2026-09-03, #4945). `MeeshyUser.preferredContentLanguages` (repli « fr ») sert les DÉFAUTS de composition, jamais ce qui se grave ni ce qui s'affiche en conversation.
 
 ### Regles critiques du Prisme
 1. **Si aucune traduction ne matche la langue preferee, afficher le contenu original (retourner `nil`).** Ne JAMAIS tomber sur `translations.first` comme fallback — l'absence de traduction vers la langue preferee signifie que le contenu est deja dans cette langue.
 2. **La locale appareil entre en 4e priorité (Prisme étendu 2026-05-26)** — après `systemLanguage`, `regionalLanguage`, `customDestinationLanguage`. Elle ne les supplante jamais. iOS l'injecte via header `X-Device-Locale` ; gateway la persiste opportunément dans `User.deviceLocale`.
-3. **La langue d'origine concourt à son RANG dans le prisme, jamais comme court-circuit (2026-08-10).** Un résolveur parcourt les langues du lecteur DANS L'ORDRE ; la première servie gagne — par une traduction, ou parce que le message est déjà écrit dedans. Ne JAMAIS écrire « si la langue d'origine appartient au prisme ⇒ afficher l'original » : cette formulation rétrograde la langue PRIMAIRE dès que la langue d'origine occupe un rang inférieur, ce que produit mécaniquement la locale appareil (règle 2). Prisme `['fr','en']`, message anglais, traduction française disponible ⇒ **« Bonjour »**, jamais « Hello ». Sources de vérité, une par client : `resolveLastMessagePreview()` (`packages/shared/utils/conversation-helpers.ts`, consommée par le web), `MeeshyConversation.resolvedLastMessagePreview` (`packages/MeeshySDK/.../CoreModels.swift`) et `resolveLastMessagePreview()` (`apps/android/core/model/.../lang/LastMessagePreviewResolver.kt`) — toute évolution touche les TROIS. Android a rejoint la règle au cycle 118 : son `ApiConversation` ne déclarait ni `lastMessageTranslations` ni `lastMessageOriginalLanguage`, donc le décodeur les jetait et la ligne de liste restait dans la langue de l'expéditeur pour tout le monde. **Quand cette liste dit « jumelles », compter les clients avant de la croire.**
+3. **La langue d'origine concourt à son RANG dans le prisme, jamais comme court-circuit (2026-08-10).** Un résolveur parcourt les langues du lecteur DANS L'ORDRE ; la première servie gagne — par une traduction, ou parce que le message est déjà écrit dedans. Ne JAMAIS écrire « si la langue d'origine appartient au prisme ⇒ afficher l'original » : cette formulation rétrograde la langue PRIMAIRE dès que la langue d'origine occupe un rang inférieur, ce que produit mécaniquement la locale appareil (règle 2). Prisme `['fr','en']`, message anglais, traduction française disponible ⇒ **« Bonjour »**, jamais « Hello ». Sources de vérité, une par client : `resolveLastMessagePreview()` (`packages/shared/utils/conversation-helpers.ts`, consommée par le web), `MeeshyConversation.resolvedLastMessagePreview` (`packages/MeeshySDK/.../Models/MeeshyConversation.swift`) et `resolveLastMessagePreview()` (`apps/android/core/model/.../lang/LastMessagePreviewResolver.kt`) — toute évolution touche les TROIS. Android a rejoint la règle au cycle 118 : son `ApiConversation` ne déclarait ni `lastMessageTranslations` ni `lastMessageOriginalLanguage`, donc le décodeur les jetait et la ligne de liste restait dans la langue de l'expéditeur pour tout le monde. **Quand cette liste dit « jumelles », compter les clients avant de la croire.**
 
    **Cette règle gouverne TROIS familles de résolveurs, pas une** (cycle 120). L'énumération initiale ne couvrait que l'APERÇU DE LISTE ; le cycle 119 a ajouté l'AUDIO ; le cycle 120 a trouvé la troisième — les POSTS/COMMENTAIRES — dont le web ne descendait PAS le prisme (il ne résolvait que le rang 1, ratant toute traduction d'un rang inférieur quand le rang 1 manquait — cas nominal dès que la locale appareil, rang 4, diffère de la langue applicative) :
 
    | famille | web | iOS | Android |
    |---|---|---|---|
    | aperçu de liste | `resolveLastMessagePreview()` (`packages/shared/utils/conversation-helpers.ts`) | `MeeshyConversation.resolvedLastMessagePreview` | `LastMessagePreviewResolver.kt` |
-   | audio (transcription + piste jouée) | `resolveAutoLanguage` (`apps/web/hooks/use-audio-translation.ts`) | `AudioTrackLanguageResolver.resolve` | `resolveTranslatedAudio` (`BubbleContentBuilder.kt`) |
+   | audio (transcription + piste jouée) | `resolveAudioTrack` + `servedTranscript` (`apps/web/src/lib/api/prism.ts`) | `AudioTrackLanguageResolver.resolve` | `resolveTranslatedAudio` (`BubbleContentBuilder.kt`) |
    | audio **sur l'écran verrouillé** (piste ATTACHÉE au push) | résolu **SERVEUR** : `NotificationService.servedAttachmentMedia`, élu par la langue du texte servi | idem (NSE) | idem |
-   | posts / commentaires | `TranslationToggle` (`autoResolved`, via `usePreferredLanguages`) + `usePostTranslation` (`apps/web/hooks/use-post-translation.ts`) | `APIPost.resolveTranslation` (`packages/MeeshySDK/.../Models/PostModels.swift`) | `LanguageResolver.preferredTranslation` (`apps/android/core/model/.../lang/`) |
+   | posts / commentaires | `resolveFeedText` (`apps/web/src/lib/feed/text.ts`) + `resolveStoryCaption` (`apps/web/src/lib/stories/caption.ts`), tous deux sur `served()` (`apps/web/src/lib/api/prism.ts`) qui appelle `resolvePrismTranslation` | `APIPost.resolveTranslation` (`packages/MeeshySDK/.../Models/PostModels.swift`) | `LanguageResolver.preferredTranslation` (`apps/android/core/model/.../lang/`) |
    | **bannière de notification** (message, réponse, mention) | résolu **SERVEUR**, une fois pour les trois clients : `NotificationService.previewPrismSource` + `prismTranslation` (`services/gateway/.../notifications/`), partagé par les trois éventails → le CORPS servi et, en projection, `translatedContent` / `translatedLanguage` sur le fil APNs/FCM | idem (NSE) | idem |
 
    **La quatrième famille est résolue côté SERVEUR** — c'est ce qui l'a tenue hors des trois énumérations précédentes, qui balayaient les clients. Un résolveur de Prisme n'est pas nécessairement dans un client : dès qu'un contenu part vers un destinataire NOMMÉ (un push, un e-mail, un digest), c'est la passerelle qui descend son prisme. Trouvée au cycle 121 en posant la question de la 261 sur un type de contenu de plus : « et le texte poussé dans une notification, qui le résout ? ».
@@ -65,7 +190,7 @@ Source de verite iOS : `ConversationViewModel.preferredLanguages` + `preferredTr
 
    **Les TROIS éventails de `messageNotificationFanOut` descendent le Prisme depuis le cycle 122.** `createReplyNotification` et `createMentionNotification` posaient `content: params.messagePreview` — l'original — et ne poussaient ni `translatedContent` ni `translatedLanguage` : une bannière de réponse ou de mention arrivait toujours dans la langue de l'expéditeur pendant que celle d'un message simple servait la traduction. Défaut DISTINCT de celui du cycle 121 (ABSENCE du Prisme, pas un mauvais rang). La descente est désormais un site UNIQUE côté serveur — `NotificationService.prismTranslation`, alimenté par `pushableTranslations` + `loadMessagePrismSource` — que les trois éventails partagent ; l'éventail de mentions relit la source UNE fois pour tous ses destinataires, la descente restant par lecteur.
 
-   **Et un contenu résolu doit être SERVI, pas seulement transporté (cycle 122).** La descente ci-dessus alimente `translatedContent` / `translatedLanguage` sur le fil push — **des champs qu'AUCUN client ne lit** (mesuré : ni la NSE iOS, ni l'app, ni Android, ni le service worker web). Le seul texte que les trois plateformes rendent est `payload.body`, et il restait composé depuis l'aperçu ORIGINAL : le symptôme visé — deux textes pour un même message — survivait intact, une couche plus bas. **La question à poser à tout résolveur de Prisme n'est donc pas seulement « élit-il le bon rang ? » mais « qui AFFICHE ce qu'il élit ? »** — un correctif dont la valeur n'atteint aucun lecteur n'a corrigé personne. Le corps de la bannière ET le `Notification.content` persisté portent désormais le texte servi, sur les trois éventails ; `translatedContent`/`translatedLanguage` restent sur le fil comme champs de service.
+   **Et un contenu résolu doit être SERVI, pas seulement transporté (cycle 122).** La descente ci-dessus alimente `translatedContent` / `translatedLanguage` sur le fil push — **des champs qu'AUCUN client ne lit** (mesuré : ni la NSE iOS, ni l'app, ni Android, ni le service worker web). Le seul texte que les trois plateformes rendent est `payload.body`, et il restait composé depuis l'aperçu ORIGINAL : le symptôme visé — deux textes pour un même message — survivait intact, une couche plus bas. **La question à poser à tout résolveur de Prisme n'est donc pas seulement « élit-il le bon rang ? » mais « qui AFFICHE ce qu'il élit ? »** — un correctif dont la valeur n'atteint aucun lecteur n'a corrigé personne. Le corps de la bannière ET le `Notification.content` persisté portent désormais le texte servi, sur les trois éventails ; `translatedContent`/`translatedLanguage` restent dans le contexte PERSISTÉ de la notification, mais **ne voyagent plus sur le fil APNs/FCM depuis #14319** : aucun lecteur mesuré, et une traduction en clair n'a rien à faire dans une charge que personne n'affiche. Seuls `content`/`originalLanguage` (pré-enregistrement NSE) et les clés de détail (lues par la NSE iOS, le service worker web et la coque Android) restent à côté du corps.
 
    **Ce qui traduit un aperçu dépend de ce que l'aperçu EST, et le site qui l'a COMPOSÉ est le seul à le savoir** : `Message.translations` ne traduit QUE `Message.content`. D'où `PreviewPrismBasis` (cycle 123), un type SOMME que l'éventail déclare — `message-content` (nominal) · `protected-placeholder` (éphémère / vue unique / flouté / chiffré : un placeholder, que rien ne traduit) · `transcript` + SA carte (`MessageAttachment.translations`). Un booléen « substituable ou non » ne pouvait pas dire la troisième forme, qui n'est pas non-substituable mais substituable par une AUTRE carte.
 
@@ -117,7 +242,7 @@ Source de verite iOS : `ConversationViewModel.preferredLanguages` + `preferredTr
 ## Architecture
 
 ```
-apps/web (Next.js 15)        apps/ios (SwiftUI)
+apps/web (Vite + Preact + Capacitor : web, PWA, Android)   apps/ios (SwiftUI)
          ↓ WebSocket/HTTP              ↓ REST/WebSocket
 services/gateway (Fastify 5 + Socket.IO + ZMQ)
          ↓ ZeroMQ (PUSH/SUB)
@@ -128,7 +253,7 @@ MongoDB 8 (Prisma) + Redis 8
 
 ### Monorepo Structure
 ```
-apps/web/          → Next.js 15 frontend (port 3100)
+apps/web/          → Vite + Preact + Capacitor (web, PWA et coque Android ; image 3400)
 apps/ios/          → SwiftUI iOS app
 services/gateway/  → Fastify 5 API + WebSocket (port 3000)
 services/translator/ → FastAPI ML service (port 8000)
@@ -199,11 +324,13 @@ Each increment leaves the codebase in a working state.
 - No comments - code should be self-documenting
 - Prefer options objects over positional parameters
 - Use array methods (`map`, `filter`, `reduce`) over loops
+- **Budget de taille : 1000–1200 lignes par fichier (directive 2026-09-02, qui relâche le 800–1100 du 2026-08-28).** Le plafond DUR est 1200 ; 1000 est le seuil au-delà duquel un découpage se justifie sans se discuter. Le relâchement ne dispense de rien d'autre : un fichier déjà hors budget reste interdit d'ajout, et une dette héritée ne se solde pas en montant le plafond. Un fichier qui dépasse se DÉCOUPE — par responsabilité, pas par tranche arbitraire : une extension par surface, un type par fichier, les sous-vues chez elles. Ajouter à un fichier déjà hors budget est interdit : on extrait d'abord, on ajoute ensuite. Le budget vaut pour les sources écrites à la main (Swift, TS, Python) — pas pour le code généré ni les dépendances.
+- **Cohésion d'abord (directive porteur 2026-10-19, #10988) : prioritaire sur le budget de lignes ci-dessus** — un type = une responsabilité, une fonction <= 80 lignes, un type <= 1 500 lignes en unité (déclaration + extensions), tenus par `apps/ios/scripts/check_cohesion_budget.sh` ; règles détaillées dans `apps/ios/CLAUDE.md` et `packages/MeeshySDK/CLAUDE.md`.
 - **No redundant boolean + timestamp pairs** - a nullable `DateTime?` field is sufficient: `null` = false, non-null = true with timestamp. Never add a separate boolean (e.g. use `deletedAt: DateTime?` NOT `isDeleted: Boolean` + `deletedAt: DateTime?`)
 
 ### Preferred Tools
 - **Language**: TypeScript strict mode (JS services), Swift (iOS), Python (translator)
-- **Testing**: Jest/Vitest + React Testing Library (web), pytest (Python), XCTest (iOS)
+- **Testing**: `bun test` + happy-dom (web), Jest/Vitest (gateway, shared), pytest (Python), XCTest (iOS)
 - **Validation**: Zod (TypeScript), Pydantic (Python)
 - **State**: Zustand (web), SwiftUI @Published (iOS)
 
@@ -261,10 +388,10 @@ Response format: sendSuccess()/sendError() from utils/response.ts.
 - One task per subagent for focused execution
 
 ### 3. Self-Improvement Loop
-- After ANY correction from the user: update `tasks/lessons.md` with the pattern
+- After ANY correction from the user: write the pattern as a new file `tasks/lessons/<AAAA-MM-JJ>-<slug>.md` (never in `tasks/lessons.md`, which is only the map)
 - Write rules for yourself that prevent the same mistake
 - Ruthlessly iterate on these lessons until mistake rate drops
-- Review lessons at session start for relevant project
+- At session start, grep `tasks/lessons/` for your domain (`ls tasks/lessons | grep <mot>`), never read it all
 
 ### 4. Verification Before Done
 - Never mark a task complete without proving it works
@@ -294,6 +421,7 @@ git worktree add ../v2_meeshy-{branch-name} -b {branch-name} main
 ```
 
 ### Regles
+0. **Jamais plus de 4 worktrees ouverts à la fois, toutes sessions confondues (directive porteur 2026-10-02).** Un worktree iOS pèse 5 à 11 Go (`Build`, `SourcePackages`, `node_modules`) : au-delà, le disque sature et les sessions s'arrêtent. Le hook `.claude/hooks/worktree-limit.sh` refuse le 5e (création de worktree en shell, `EnterWorktree`, agent isolé en worktree). Avant d'en ouvrir un : rapatrier `dev` dans un worktree inactif, fusionner dans `dev` ce qui doit l'être, puis le retirer (`git worktree remove`) — un worktree fusionné et inactif ne reste jamais ouvert.
 1. Chaque worktree possede des fichiers specifiques -- JAMAIS deux worktrees sur le meme fichier
 2. project.pbxproj: gere par le DERNIER worktree a merger uniquement
 3. Ordre de merge: branches pure-UI d'abord, branches avec fichiers partages en dernier
@@ -311,12 +439,13 @@ feat/{area}-{feature}  ex: feat/settings-legal, feat/settings-account
 ```
 
 ## Task Management
-1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
-2. **Verify Plan**: Check in before starting implementation
-3. **Track Progress**: Mark items complete as you go
-4. **Explain Changes**: High-level summary at each step
-5. **Document Results**: Add review section to `tasks/todo.md`
-6. **Capture Lessons**: Update `tasks/lessons.md` after corrections
+Le pilotage est sur GitHub (§ « Pilotage du développement ») — aucun `tasks/todo.md` n'est créé ni maintenu.
+1. **Plan First**: le plan = un milestone + ses issues (titres sémantiques, critère de fin par issue, dépendances)
+2. **Verify Plan**: le porteur valide le milestone avant l'implémentation ; ce qui reste ouvert devient une issue `décision-produit`
+3. **Track Progress**: `Status` du projet posé au démarrage (`In Progress`) ; une issue livrée est fermée par son commit (`Closes #n`)
+4. **Explain Changes**: résumé de haut niveau à chaque étape, dans un commentaire de l'issue — pas dans un fichier
+5. **Document Results**: commentaire de clôture = preuve (commit, gate, mesure) + dimensions mûres / restantes
+6. **Capture Lessons**: un fichier `tasks/lessons/<AAAA-MM-JJ>-<slug>.md` après toute correction — seul tracker de fichier maintenu
 
 ## Core Principles
 - **Simplicity First**: Make every change as simple as possible. Minimal code impact.
@@ -366,7 +495,7 @@ NEXT_PUBLIC_API_URL="https://gate.meeshy.me"
 ### Local Services (tmux "meeshy")
 - Window 0: translator (FastAPI, port 8000)
 - Window 1: gateway (Fastify, port 3000)
-- Window 2: web (Next.js, port 3100)
+- Window 2: web (`bun run dev` dans `apps/web`, serveur Vite)
 
 ### Docker Environments
 | Environment | Compose File | SSL | Domains |
@@ -457,14 +586,19 @@ accent = hueShift(primary, −30°)
 ### User Presence (source de vérité + palette)
 États dérivés de `isOnline` (backend, autoritatif — garde anti-stale jusqu'à 5 min) + `lastActiveAt` (décroissance 60s/3min/5min) — règle produit 1/3/5 (2026-07-20) :
 `online` (isOnline OU actif ≤ 60s) → **vert** `#34D399` (pulse) · `away` (≤ 3min) → **orange** `#FBBF24` · `idle` (≤ 5min) → **gris AFFICHÉ** `#9CA3AF` · `offline` (> 5min OU aucune donnée) → **aucun point**.
-- **Offline = pas de pastille sur les avatars** (comme WhatsApp). Le gris `#9CA3AF` reste défini dans les maps centrales (`PRESENCE_DOT_CLASS.offline`, `PresenceState.offline.dotColor`) pour les affichages LABELLISÉS explicites (en-têtes de section « Hors ligne », badge story-intro, texte « vu il y a X »), mais les dots d'avatar ne le rendent jamais.
+- **Offline = pas de pastille sur les avatars** (comme WhatsApp). Le gris `#9CA3AF` reste défini dans les maps centrales (`PRESENCE_HEX.offline` partagé, `PresenceState.offline.dotColor`) pour les affichages LABELLISÉS explicites (en-têtes de section « Hors ligne », badge story-intro, texte « vu il y a X »), mais les dots d'avatar ne le rendent jamais.
 - Source de vérité TS : `packages/shared/utils/user-presence.ts` (`getUserPresenceStatus`) ; miroirs : iOS `UserPresence.state(now:)` (PresenceModels.swift), Android `Presence.kt` — toute évolution touche les 3 sites
-- Mapping couleur CENTRAL (ne jamais redéclarer localement) : web `PRESENCE_DOT_CLASS`/`PRESENCE_BADGE_CLASS` (`apps/web/lib/user-status.ts`), iOS `PresenceState.dotColor` (`MeeshyUI/Theme/PresenceStyle.swift`), Android `meeshyPresenceDotColor` (`MeeshyAvatar.kt`, renvoie `null` pour offline = pas de dot)
-- **typing:start reçu = preuve d'activité** : les clients forcent localement online (iOS `PresenceManager.noteActivity`, web `TypingService` → user-store) — une personne qui écrit est TOUJOURS verte
+- Mapping couleur CENTRAL (ne jamais redéclarer localement) : web — aucun miroir, `apps/web` CONSOMME `PRESENCE_HEX` / `presenceTone` de `@meeshy/shared/utils/user-presence` (`apps/web/src/components/avatar.tsx`), iOS `PresenceState.dotColor` (`MeeshyUI/Theme/PresenceStyle.swift`), Android `meeshyPresenceDotColor` (`MeeshyAvatar.kt`, renvoie `null` pour offline = pas de dot)
+- **typing:start reçu = preuve d'activité** : les clients forcent localement online (iOS `PresenceManager.noteActivity`, web `lens-row.tsx` : un pair qui écrit est rendu `online` depuis le `typing-store`) — une personne qui écrit est TOUJOURS verte
+- **Visibilité de la présence = amis acceptés, soi, ADMIN/BIGBOSS — rien d'autre (directive 2026-08-25).** Hors amitié acceptée, `isOnline` et `lastActiveAt` d'un autre utilisateur ne sont JAMAIS servis : ni par le partage d'une conversation, ni par la co-appartenance à une communauté, ni par un lien de story, ni à MODERATOR/AUDIT/ANALYST (= utilisateur ordinaire), ni à un viewer anonyme. Seule l'ACTIVITÉ (frappe, message envoyé) révèle qu'on est en ligne, et elle voyage par ses propres événements (`typing:start/stop`, `message:new`) — inchangés. Loi UNIQUE : `resolvePresenceVisibility()` (`packages/shared/utils/presence-visibility.ts`), résolue côté gateway par `PresenceVisibilityService.resolveForTarget(viewer, target)` / `resolveForTargets(viewer, ids)`, le viewer venant de `viewerFromRequest()` / `viewerFromAuthContext()` (`routes/users/presence-gate.ts`). Aucun site de service ne réécrit la boucle amitié/rôle ; `resolvePrefsOnly` (aveugle au viewer) a été SUPPRIMÉE et la garde `presence-visibility-viewer-aware-guard.test.ts` interdit son retour. Le broadcast `user:status` a pour audience les rooms `user:<id>` des amis acceptés + ADMIN/BIGBOSS connectés + soi (`socketio/presence-audience.ts`) — plus jamais les rooms de conversation ; `presence:snapshot` est résolu par destinataire. Un AGRÉGAT sans identité (« N en ligne ») n'est pas visé — mais **une SÉLECTION ou un ORDRE qui dépend de la présence révèle autant que le champ** (`?onlineOnly=`, `orderBy isOnline`, suggestions classées par `lastActiveAt`, `?lastActiveAfter=`) : la sélection se restreint d'abord aux ids autorisés puis se re-filtre sur la valeur SERVIE (`OnlineOnlyScope` / `servedOnline` / `mayOrderByRawPresence` / `servedOnlineFirst`, `routes/users/presence-gate.ts`), et **ce qui part À CÔTÉ du champ gardé** (`lastActiveAt` voisin, colonnes de la LIGNE via `include` + `additionalProperties: true`) est gardé aussi. Une entrée absente de la carte ⇒ masquée sauf ADMIN+ (`presenceFor`) ; `serializeConversationParticipant` est fail-closed. Clients : présence absente ⇒ aucun point — ils ne fabriquent rien, et ne GARDENT pas ce que le serveur retire (le web dérive la présence de la charge servie par `getUserPresenceStatus`, `apps/web/src/lib/view/conversation.ts` — aucun état local ne la prolonge). Détail : `services/gateway/decisions.md` § « Visibilité de la présence », `tasks/lessons.md` § 288.
+- **L'Ami est BINAIRE, le Proche est détaillé (directive porteur 2026-10-31, #13928).** Parmi les amis acceptés, le niveau effectif décide de ce qui est servi : **Ami (FRIEND) = « en ligne » ou rien** — `isOnline` servi, `lastActiveAt` TOUJOURS nul, donc ni away/idle ni « vu il y a » — ; **Proche (CLOSE) et au-dessus = la présence complète** (règle 1/3/5, sous les préférences de la cible) ; sous Ami = rien ; soi, ADMIN/BIGBOSS, blocage et compte désactivé inchangés. La loi unique reste `resolvePresenceVisibility` (deux interrogations de la loi d'accès : `presence.online` puis `presence.detailed` — aucune autre porte ne les interroge, la garde `presence-visibility-viewer-aware-guard.test.ts` y veille avec l'interdit d'`areConnected`) ; `user:status` scinde son audience en trois sous-ensembles (`presenceStatusEmissions`, `friendLevels`) et `lastActiveAt` est nul dans la charge d'un Ami comme dans tout champ voisin. Clients : un `lastActiveAt` nul rend déjà « en ligne ou rien » (aucun miroir à changer, témoins de non-régression). Décision : `services/gateway/decisions/2026-10-31-la-presence-d-un-ami-est-binaire-celle-d-un-proche-est-detaillee.md`.
+- **Entre deux comptes de l'équipe (ANALYST et au-dessus : ANALYST, AUDIT, MODERATOR, ADMIN, BIGBOSS — directive porteur du 2026-11-10), la présence est celle d'un Sang (2026-11-07, #16623).** La loi d'accès reçoit les DEUX rôles (`targetRole`, `isPlatformTeam`) et rend le niveau Sang aux outils de cercle de cette paire seulement : un MODERATOR lit la présence détaillée d'un collègue SOUS ses préférences (raison `level`, pas `role`), et `user:status` d'un sujet de l'équipe part aussi vers les collègues ANALYST, AUDIT et MODERATOR. Face à un utilisateur ordinaire, rien ne change : ces rôles restent des viewers ordinaires, et l'utilisateur ordinaire respecte les cercles. Décision : `services/gateway/decisions/2026-11-07-deux-comptes-de-l-equipe-ont-entre-eux-les-outils-de-cercle-16623.md`.
+- **UNE exception, consentie et grossière (2026-09-27, #8285) : « X était sur Meeshy récemment ».** Quand X redevient actif (première socket authentifiée), ses amis acceptés ET les porteurs de son numéro / e-mail dans leur carnet reçoivent la notification `contact_recently_active` — au plus UNE fois toutes les 3 heures par X (`SET NX EX 10800`), sans heure ni identifiant apparié. Rien ne part si X a coupé `privacy.showOnlineStatus` ou `privacy.notifyContactsOnReturn` (« Prévenir mes contacts quand je reviens sur Meeshy », défaut activé) ; caché de la recherche ⇒ ses amis seulement. Le destinataire la coupe par `notification.contactActivityEnabled`. Aucune autre porte de présence ne change. Site unique : `services/gateway/src/services/notifications/contact-recently-active.ts` ; décision : `services/gateway/decisions/2026-09-27-le-retour-d-un-contact-s-annonce-une-fois-toutes-les-3-heures.md`.
 
 ### API Response Format (all services)
+Le producteur unique est `sendSuccess()`/`sendError()` (`services/gateway/src/utils/response.ts`) ; la forme qu'il émet est déclarée par `packages/shared/types/api-schemas/error.ts` (`errorResponseSchema`) — ne pas la reproduire ici, elle a divergé une fois déjà (#4884). **`error` est une CHAÎNE PLATE, pas un objet** :
 ```typescript
-{ success: boolean, data?: T, error?: { code, message }, pagination?: PaginationMeta }
+{ success: boolean, data?: T, error?: string, message?: string, code?: string, pagination?: PaginationMeta }
 ```
 
 ### ZMQ Communication (Gateway ↔ Translator)
@@ -482,9 +616,16 @@ accent = hueShift(primary, −30°)
 - `emit()` does NOT await Promises
 - Always wrap async Socket.IO/EventEmitter listeners in try/catch
 
+## MeeshyComposer — la planche est le document de DESIGN maintenu
+
+**Le document des VUES est `docs/product/MeeshyComposerDesign/MeeshyComposerMobile.dc.html` (+ son `support.js`), et il PRIME sur la planche là où les deux divergent — pour la DISPOSITION, la HIÉRARCHIE, les ÉTATS et les GESTES de chaque écran, et sous réserve de sa DATE.** Le document est arrêté au 2026-08-28 : **une directive porteur postérieure le supplante, et l'issue fermée fait foi.** *Exception en vigueur* — **la géographie du repos** (directive porteur du 2026-10-30, #13839) : la scène prend le plus grand 9:16 de la zone sûre et les contrôles se posent SUR elle — ✕, ↶ ↷, rangée des diapos, colonne de six boutons ronds, ⋯, et « Public · Publier ▾ » en bas ; le reste vit dans ⋯. Sur grand écran, la place libre autour du 9:16 (jamais la classe de taille) accueille deux rails LIBELLÉS — ce qu'on ajoute à gauche, « SÉLECTION » à droite — et Publier passe sous la scène (L6, `ComposerSceneArrangement`). `apps/ios/CLAUDE.md` § « Le composer se pose SUR LA SCÈNE » l'écrit. *(CLOS le 2026-10-30 — #13839, conservé pour l'histoire : « le document montre des contrôles posés SUR la scène ; #4561 et #4633 (fermées le 2026-08-31) ont tranché l'inverse, et `apps/ios/CLAUDE.md` § 1 l'écrit — aucun contrôle ne se pose sur le canvas, les rails vivent dans les couloirs du plateau. Sans cette clause, la règle de préséance ordonne littéralement de reproduire une géographie abandonnée. »)* **Et son SILENCE n'est pas une prescription** (retour porteur 2026-09-02, revert `328dd69026`) : une cible muette sur une dimension ne l'interdit pas. La vue `1b` ne dessine pas les rails du plateau ; elle ne dit pas de les retirer — les lire comme une interdiction a fait perdre une sémantique que le document n'exprimait pas (*à GAUCHE ce qu'on POSE sur la scène, à DROITE ce qui structure la PUBLICATION*). Le document prescrit ce qu'il MONTRE ; sur le reste, il se tait, et **ce qui existe et complète la cible s'agrège, ne se supprime pas.** **La SÉMANTIQUE — les noms et les règles — n'est ni à la planche ni au document des vues : elle est à `docs/product/meeshy-composer-modele.md`**, qui en est l'autorité déclarée (et que la garde `PlancheVocabularyGuardTests` cite comme référence de vocabulaire). **Et la sémantique de la LECTURE est à `docs/product/meeshy-reader-modele.md`** (#4769) — même rang, autre moitié : le premier dit ce qu'on écrit, le second ce qui le restitue. Il tranche notamment que le moteur partagé est le **player** (`MeeshyScenePlayer`) et non « le lecteur », ce dernier mot désignant partout dans le code l'état « en lecture, pas en composition » ; la loi 6 se relit donc « le PLAYER est l'aperçu ». La planche porte les features et leurs lacunes ; ce document porte les **31 écrans mobiles** à implémenter, chacun avec sa doctrine. Les captures de référence vivent dans `cible/<id>.png`, l'index dans `vues.md`, et `capture-cibles.js` régénère les trois d'UNE commande — aucune capture n'est posée à la main, donc aucune ne peut dériver du document en silence. Les trois planches larges (`4a` pipeline, `4d` refus motivés, `4e` budgets) ne sont **pas** des écrans : ce sont des critères de recette. Pilotage : milestone « Les 31 vues mobiles du composer sont implémentées » (#63), une issue par vue (#4071–#4101), vérifiées au simulateur `Meeshy-iOS26`. **Conformité = disposition, hiérarchie, états et gestes** ; polices, couleurs et rayons par le design system Meeshy — l'écart typographique avec le document est assumé. La refonte PRÉSERVE : l'ancien chemin reste routé tant que la matrice des 31 vues n'est pas complète, et le décommissionnement est un lot séparé.
+`docs/product/planche-meeshy-composer.html` (ex-`docs/superpowers/specs/2026-08-19-meeshy-composer-views.html`, 100+ révisions) est la **vision de design vivante** du composer : matrice feature × état (`data-task` / `data-kind` / `data-state`), douze lois, inventaire, budgets, risques, et les VUES cibles (anatomie, scène 9:16, outils, timeline, étagère, viewers, 18 styles de texte, iconographie, éditeurs). C'est cette vision, validée, que MeeshyComposer / Scène / Timeline doivent reproduire à la fin.
+- La planche porte la VISION ; **l'ÉTAT de chaque tâche est porté par son issue GitHub** (champ « Tâche P0 » = identifiant de ligne ; milestone « MeeshyComposer — livré » pour le fait). Une ligne de la matrice qui bascule (`docs(p0): …`) le fait dans le même commit que le gate, et l'issue correspondante se ferme / passe `In Progress` dans le même mouvement — si les deux divergent, l'issue a raison.
+- **La source de vérité de la vision est le FICHIER du dépôt `docs/product/planche-meeshy-composer.html` (et sa version Markdown allégée `docs/product/planche-meeshy-composer.md`, avec captures des vues), jamais une URL d'artifact.** Un artifact peut disparaître à tout moment (compte, partage retiré, purge) ; le fichier tracké, non. Le fichier PEUT être republié en artifact comme rendu de design ÉPHÉMÈRE (autorisé), mais aucune référence de gouvernance ne dépend d'une URL — on ouvre le FICHIER.
+- Les rendus des vues (PNG/PDF/captures) vivent dans `docs/product/planche-meeshy-composer/`, alimentent la version Markdown, et sont référencés par les issues du projet « Meeshy — pilotage ».
+
 ## Subdirectory CLAUDE.md Files
 Each major directory has its own CLAUDE.md with domain-specific conventions:
-- `apps/web/CLAUDE.md` - Next.js frontend patterns
 - `apps/ios/CLAUDE.md` - SwiftUI iOS patterns
 - `services/gateway/CLAUDE.md` - Fastify API patterns
 - `services/translator/CLAUDE.md` - FastAPI ML patterns
@@ -493,8 +634,8 @@ Each major directory has its own CLAUDE.md with domain-specific conventions:
 - `infrastructure/CLAUDE.md` - Docker & deployment
 
 ## Architectural Decision Records
-Each active development directory has a `decisions.md` file documenting key architectural choices:
-- `apps/web/decisions.md` - State, routing, auth, styling, i18n, build decisions
+Each active development directory has a `decisions.md` file documenting key architectural choices (one file per decision under the sibling `decisions/` folder, #7711 — `decisions.md` keeps the map; `apps/web` still in one file):
+- `apps/web/decisions.md` - le registre D-n du web (Vite + Preact + Capacitor) : état, routage, auth, i18n, build, coque Android
 - `apps/ios/decisions.md` - MVVM, navigation, singletons, cache, security decisions
 - `services/gateway/decisions.md` - Framework, WebSocket, ZMQ, encryption, rate limiting decisions
 - `services/translator/decisions.md` - ML models, TTS backends, worker pool, package manager decisions

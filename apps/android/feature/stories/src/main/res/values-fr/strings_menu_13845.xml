@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_clear_all_message">Toutes les diapos repartent vides, sur le fond neutre. Défaire rétablit les diapos.</string>
+    <string name="composer_media_sources">Choisir une source</string>
+    <string name="composer_preview_close">Fermer l’aperçu</string>
+    <string name="composer_preview_previous">Diapo précédente</string>
+    <string name="composer_preview_next">Diapo suivante</string>
+</resources>

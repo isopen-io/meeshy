@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.frames.more",
+          "androidName": "call_frames_more",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.frames.less",
+          "androidName": "call_frames_less",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.frames.more.hint",
+          "androidName": "call_frames_more_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.frames.less.hint",
+          "androidName": "call_frames_less_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.mode.quit",
+          "androidName": "call_mode_quit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.mode.quit.montage.hint",
+          "androidName": "call_mode_quit_montage_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.mode.recording",
+          "androidName": "call_mode_recording",
+          "status": "adopted"
+        },
+        {
+          "androidName": "call_montage_next",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_montage_previous",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

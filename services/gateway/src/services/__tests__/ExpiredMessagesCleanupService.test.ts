@@ -1,5 +1,38 @@
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { describe, it, expect, jest } from '@jest/globals';
+
+jest.mock('../../utils/logger-enhanced', () => {
+  const actual = jest.requireActual('../../utils/logger-enhanced') as {
+    enhancedLogger: Record<string, unknown>;
+  };
+  const child: Record<string, unknown> = {};
+  Object.assign(child, {
+    trace: jest.fn(),
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    fatal: jest.fn(),
+    child: () => child,
+  });
+  return {
+    ...actual,
+    enhancedLogger: { ...actual.enhancedLogger, child: () => child },
+  };
+});
+
+import { enhancedLogger } from '../../utils/logger-enhanced';
 import { ExpiredMessagesCleanupService } from '../ExpiredMessagesCleanupService';
+import { sharedTranslationRow, sharedTranslationTable } from '../../__tests__/helpers/shared-translation-table';
+
+const sharedLog = enhancedLogger.child({ module: 'test-probe' }) as unknown as {
+  error: jest.Mock;
+  warn: jest.Mock;
+  info: jest.Mock;
+};
+
+const burnRefusedCalls = () =>
+  sharedLog.error.mock.calls.filter((call) => String(call[0]).includes('burn refused'));
 
 /**
  * Un message qui s'autodétruit ne s'autodétruisait que sur l'écran.
@@ -31,6 +64,9 @@ interface MessageRow {
   messageType: string;
   expiresAt: Date | null;
   attachments: Array<{ id: string; mimeType: string | null }>;
+  isViewOnce?: boolean;
+  ephemeralDuration?: number | null;
+  effectFlags?: number | null;
 }
 
 function messageRow(overrides: Partial<MessageRow> = {}): MessageRow {
@@ -54,8 +90,18 @@ function buildPrisma(rows: MessageRow[]) {
     findFirst: jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue(null),
     update: jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({}),
   };
+  // #11269 (F5) — la purge d'une vue unique pose son estampille par une
+  // écriture CONDITIONNÉE ; le double la fait passer par `update`, où les
+  // témoins lisent déjà les écritures et en simulent les échecs.
+  const messageWithStamp = {
+    ...message,
+    updateMany: jest.fn<(args: unknown) => Promise<{ count: number }>>().mockImplementation(async (args) => {
+      await message.update(args);
+      return { count: 1 };
+    }),
+  };
   return {
-    message,
+    message: messageWithStamp,
     conversation: {
       findUnique: jest.fn<(args: unknown) => Promise<unknown>>()
         .mockResolvedValue({ lastMessageAt: NOW, createdAt: NOW }),
@@ -134,7 +180,7 @@ describe('ExpiredMessagesCleanupService', () => {
 
     await service.cleanup();
 
-    expect(findManyArgs(prisma).where).toMatchObject({ expiresAt: { lt: NOW } });
+    expect(findManyArgs(prisma).where.AND).toContainEqual({ expiresAt: { lt: NOW } });
   });
 
   it('apparie le vivant sur l’ABSENCE de `deletedAt` autant que sur sa nullité', async () => {
@@ -290,18 +336,22 @@ describe('ExpiredMessagesCleanupService', () => {
     await expect(service.cleanup()).resolves.toEqual({ burned: 0 });
   });
 
-  it('annonce la destruction à la room, à la liste et à la file hors ligne', async () => {
+  it('annonce la destruction à la room, à la liste et à la file hors ligne, sous son propre nom', async () => {
+    // `message:expired`, pas `message:deleted` : même effet visuel pour un
+    // client (retirer la bulle), mais la CAUSE diffère — personne n'a demandé
+    // ce retrait, le minuteur posé à l'envoi l'a décidé. Un client qui veut
+    // distinguer les deux (toast, log) doit pouvoir le faire sur le NOM.
     const { service, manager } = buildService([messageRow()]);
 
     await service.cleanup();
 
     expect(manager!.to).toHaveBeenCalledWith('conversation:conv-1');
-    expect(manager!.emit).toHaveBeenCalledWith('message:deleted', {
+    expect(manager!.emit).toHaveBeenCalledWith('message:expired', {
       messageId: 'msg-1',
       conversationId: 'conv-1',
     });
     expect(manager!.enqueueOfflineMessageMutation).toHaveBeenCalledWith(
-      expect.objectContaining({ eventType: 'deleted', messageId: 'msg-1' }),
+      expect.objectContaining({ eventType: 'expired', messageId: 'msg-1' }),
     );
   });
 
@@ -345,23 +395,274 @@ describe('ExpiredMessagesCleanupService', () => {
     expect(manager!.emit).not.toHaveBeenCalled();
   });
 
+  it('le prédicat exige une échéance PRÉSENTE, NON NULLE et passée — jamais l’ordre BSON', async () => {
+    // Incident prod : le connecteur Prisma/Mongo passe par un pipeline
+    // d'agrégation où `$lt` suit l'ordre BSON total — `null`/absent passent
+    // AVANT les dates et la page de 500 se remplit de lignes sans échéance,
+    // que le filet refuse à chaque passe. Le prédicat doit exclure ces états
+    // EXPLICITEMENT, pas par hypothèse de bracketing.
+    const { service, prisma } = buildService([messageRow()]);
+
+    await service.cleanup();
+
+    const where = findManyArgs(prisma).where;
+    expect(where.AND).toEqual([
+      { expiresAt: { isSet: true } },
+      { expiresAt: { not: null } },
+      { expiresAt: { lt: NOW } },
+    ]);
+    expect(where.OR).toEqual([{ deletedAt: null }, { deletedAt: { isSet: false } }]);
+  });
+
+  it('le refus de brûler emporte un échantillon exploitable des lignes refusées', async () => {
+    sharedLog.error.mockClear();
+    const { service } = buildService([
+      messageRow({ id: 'sans-echeance-1', expiresAt: null }),
+      messageRow({ id: 'sans-echeance-2', expiresAt: null }),
+      messageRow({ id: 'pas-echu', expiresAt: new Date(NOW.getTime() + 60_000) }),
+      messageRow({ id: 'sans-echeance-4', expiresAt: null }),
+    ]);
+
+    await service.cleanup();
+
+    const calls = burnRefusedCalls();
+    expect(calls).toHaveLength(1);
+    expect(calls[0][1]).toMatchObject({
+      returned: 4,
+      lapsed: 0,
+      refusedSample: [
+        { id: 'sans-echeance-1', expiresAtType: 'null', expiresAtValue: 'null' },
+        { id: 'sans-echeance-2', expiresAtType: 'null', expiresAtValue: 'null' },
+        {
+          id: 'pas-echu',
+          expiresAtType: 'Date',
+          expiresAtValue: JSON.stringify(new Date(NOW.getTime() + 60_000)),
+        },
+      ],
+    });
+  });
+
+  it('le refus persistant ne part en ERROR qu’à la première passe puis une fois toutes les 10', async () => {
+    sharedLog.error.mockClear();
+    const { service } = buildService([messageRow({ id: 'refuse', expiresAt: null })]);
+
+    for (let pass = 0; pass < 10; pass += 1) {
+      await service.cleanup();
+    }
+    expect(burnRefusedCalls()).toHaveLength(1);
+
+    await service.cleanup();
+    const calls = burnRefusedCalls();
+    expect(calls).toHaveLength(2);
+    expect(calls[1][1]).toMatchObject({ suppressedOccurrences: 9 });
+  });
+
+  it('une passe saine remet le dédoublonnage à zéro — le refus suivant repart en ERROR immédiat', async () => {
+    sharedLog.error.mockClear();
+    const { service, prisma } = buildService([]);
+    const findMany = (prisma as unknown as { message: { findMany: jest.Mock } }).message.findMany;
+    const refused = [messageRow({ id: 'refuse', expiresAt: null })];
+    findMany
+      .mockResolvedValueOnce(refused)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(refused);
+
+    await service.cleanup();
+    await service.cleanup();
+    await service.cleanup();
+
+    const calls = burnRefusedCalls();
+    expect(calls).toHaveLength(2);
+    expect(calls[1][1]).toMatchObject({ suppressedOccurrences: 0 });
+  });
+
+  it("ne DÉTRUIT pas une vue unique non éphémère que l'ancien chemin avait programmée (#7578)", async () => {
+    // L'ancien `scheduleViewOnceBurn` posait `expiresAt` dès la PREMIÈRE
+    // ouverture, auteur compris. La détruire ici supprimerait la bulle pour
+    // tous et le message chez qui ne l'a jamais vu.
+    const { service, prisma, manager } = buildService([
+      messageRow({ isViewOnce: true, ephemeralDuration: null }),
+    ]);
+
+    const result = await service.cleanup();
+
+    expect(result).toEqual({ burned: 0 });
+    expect(updateCalls(prisma).some(([args]) => 'deletedAt' in args.data)).toBe(false);
+    expect(manager?.emit).not.toHaveBeenCalled();
+  });
+
+  // #8345 — flamme-œil ET vue unique : la flamme gouverne la BULLE
+  // (`expiresAt`), la vue unique le seul CONTENU (`viewOnceBurnAt`). Classer la
+  // ligne en « vue unique héritée » annulerait la destruction promise par la
+  // flamme (`expiresAt: null`) et purgerait le contenu sur-le-champ.
+  it.each([
+    ['EPHEMERAL | EPHEMERAL_AFTER_READ', MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ],
+    ['EPHEMERAL_AFTER_READ seul', MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ],
+  ])('une flamme-œil à vue unique échue (%s) est DÉTRUITE, jamais réévaluée en vue unique héritée (#8345)', async (_label, effectFlags) => {
+    const { service, prisma } = buildService([
+      messageRow({ isViewOnce: true, ephemeralDuration: null, effectFlags }),
+    ]);
+
+    const result = await service.cleanup();
+
+    expect(result).toEqual({ burned: 1 });
+    const calls = updateCalls(prisma);
+    expect(calls.some(([args]) => 'deletedAt' in args.data)).toBe(true);
+    expect(calls.some(([args]) => 'viewOnceBurnAt' in args.data)).toBe(false);
+  });
+
   it('`start` balaye immédiatement puis à intervalle, `stop` désarme', async () => {
     jest.useFakeTimers();
     try {
       const { service, prisma } = buildService([messageRow()]);
       const findMany = (prisma as unknown as { message: { findMany: jest.Mock } }).message.findMany;
+      // Deux balayages par passe : l'éphémère (`expiresAt`) et la purge des vues
+      // uniques (`viewOnceBurnAt`, #7578). Chacun se compte par sa question.
+      const passes = (column: string) =>
+        findMany.mock.calls.filter((call) => JSON.stringify(call[0]).includes(column)).length;
 
       service.start(60_000);
-      expect(findMany).toHaveBeenCalledTimes(1);
+      expect(passes('expiresAt')).toBe(1);
+      expect(passes('viewOnceBurnAt')).toBe(1);
 
       jest.advanceTimersByTime(60_000);
-      expect(findMany).toHaveBeenCalledTimes(2);
+      expect(passes('expiresAt')).toBe(2);
+      expect(passes('viewOnceBurnAt')).toBe(2);
 
       service.stop();
       jest.advanceTimersByTime(180_000);
-      expect(findMany).toHaveBeenCalledTimes(2);
+      expect(passes('expiresAt')).toBe(2);
+      expect(passes('viewOnceBurnAt')).toBe(2);
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+/**
+ * L'échéance d'un éphémère DÉTRUIT le contenu (`content`, `encryptedContent`,
+ * `translations`, `metadata`) — et laissait la version SCELLÉE que les appareils
+ * des membres s'étaient passée (#9899, audit C4) : ce que l'expéditeur croyait
+ * détruit restait lisible, pour qui détenait la clé, dans la table voisine.
+ *
+ * Le balayage appelle `applyMessageRemovalEffects` pour chaque message, et
+ * l'effacement y vit : ces témoins gardent que l'appel reste le chemin, et que
+ * la table se vide vraiment. Le double de la table APPLIQUE le `where`.
+ */
+describe('ExpiredMessagesCleanupService — traductions partagées', () => {
+  const serviceWith = (rows: MessageRow[], table: ReturnType<typeof sharedTranslationTable>) => {
+    const base = buildPrisma(rows);
+    // Le double rend ses lignes à TOUTE lecture ; la cascade des réponses (#8630)
+    // interroge `replyToId` et prendrait les autres lignes pour des réponses à
+    // emporter. Personne ne cite ces messages : la base répondrait « aucune ».
+    (base as unknown as { message: { findMany: jest.Mock } }).message.findMany.mockImplementation(
+      async (args: unknown) => (JSON.stringify(args).includes('replyToId') ? [] : rows),
+    );
+    const prisma = {
+      ...(base as object),
+      sharedTranslation: table.delegate,
+    } as unknown as import('@meeshy/shared/prisma/client').PrismaClient;
+    const service = new ExpiredMessagesCleanupService(prisma, {
+      attachmentRemover: buildAttachments(),
+      now: () => NOW,
+      resolveManager: () => null,
+    });
+    return { service, prisma };
+  };
+
+  it('efface les traductions partagées du message échu — toutes ses langues', async () => {
+    const table = sharedTranslationTable([
+      sharedTranslationRow({ id: 'fr', messageId: 'msg-1', targetLanguage: 'fr' }),
+      sharedTranslationRow({ id: 'en', messageId: 'msg-1', targetLanguage: 'en' }),
+    ]);
+    const { service } = serviceWith([messageRow()], table);
+
+    await service.cleanup();
+
+    expect(table.remainingIds()).toEqual([]);
+  });
+
+  it("laisse intactes celles d'un message que la requête rendrait sans être échu", async () => {
+    // Le filet `_isLapsed` refuse le message ; l'effacement ne doit pas le
+    // rattraper par la porte de derrière.
+    const table = sharedTranslationTable([
+      sharedTranslationRow({ id: 'détruit', messageId: 'msg-1' }),
+      sharedTranslationRow({ id: 'pas-échu', messageId: 'msg-pas-echu' }),
+      sharedTranslationRow({ id: 'jamais-éphémère', messageId: 'msg-sans-echeance' }),
+    ]);
+    const { service } = serviceWith(
+      [
+        messageRow({ id: 'msg-1' }),
+        messageRow({ id: 'msg-pas-echu', expiresAt: new Date(NOW.getTime() + 60_000) }),
+        messageRow({ id: 'msg-sans-echeance', expiresAt: null }),
+      ],
+      table,
+    );
+
+    await service.cleanup();
+
+    expect(table.remainingIds()).toEqual(['pas-échu', 'jamais-éphémère']);
+  });
+
+  it("garde celles d'un message dont l'effacement a échoué — la passe suivante reprend les deux", async () => {
+    const table = sharedTranslationTable([sharedTranslationRow({ id: 'reste', messageId: 'msg-1' })]);
+    const { service, prisma } = serviceWith([messageRow()], table);
+    (prisma as unknown as { message: { update: jest.Mock } }).message.update.mockRejectedValueOnce(
+      new Error('write conflict'),
+    );
+
+    await service.cleanup();
+
+    expect(table.remainingIds()).toEqual(['reste']);
+  });
+
+  it("une table voisine qui ne répond pas ne fait ni échouer la passe ni sortir le message du décompte", async () => {
+    const table = sharedTranslationTable([sharedTranslationRow({ messageId: 'msg-1' })]);
+    table.deleteMany.mockRejectedValueOnce(new Error('mongo down'));
+    const { service } = serviceWith([messageRow()], table);
+
+    await expect(service.cleanup()).resolves.toEqual({ burned: 1 });
+  });
+
+  it("la purge d'une vue unique efface aussi les traductions partagées de la bulle purgée", async () => {
+    // L'autre moitié du même service : `purgeViewOnce` n'appelle pas les effets
+    // de retrait (la bulle reste, aucun `deletedAt`) et porte l'effacement
+    // elle-même.
+    const table = sharedTranslationTable([
+      sharedTranslationRow({ id: 'purgée', messageId: 'msg-1' }),
+      sharedTranslationRow({ id: 'voisine', messageId: 'msg-ailleurs' }),
+    ]);
+    const { service } = serviceWith([messageRow()], table);
+
+    await service.purgeViewOnce();
+
+    expect(table.remainingIds()).toEqual(['voisine']);
+  });
+});
+
+describe('#11269 — le journal de purge des vues uniques', () => {
+  it('journalise chaque ligne purgée : message, conversation, pièces, fichiers en attente', async () => {
+    const prisma = {
+      ...(buildPrisma([messageRow({ attachments: [{ id: 'att-1', mimeType: 'image/jpeg' }] })]) as object),
+      messageAttachment: { count: jest.fn<(args: unknown) => Promise<number>>().mockResolvedValue(0) },
+      sharedTranslation: sharedTranslationTable([]).delegate,
+    } as unknown as import('@meeshy/shared/prisma/client').PrismaClient;
+    const service = new ExpiredMessagesCleanupService(prisma, {
+      attachmentRemover: buildAttachments(),
+      now: () => NOW,
+      resolveManager: () => null,
+    });
+    sharedLog.info.mockClear();
+
+    await service.purgeViewOnce();
+
+    const journal = sharedLog.info.mock.calls.find((call) => String(call[0]).includes('view-once purged'));
+    expect(journal?.[1]).toMatchObject({
+      messageId: 'msg-1',
+      conversationId: 'conv-1',
+      attachments: 1,
+      filesPending: false,
+      firstPurge: true,
+    });
   });
 });

@@ -17,10 +17,21 @@ export interface RevokedSessionIO {
   in(room: string): { fetchSockets(): Promise<RevokedSessionSocket[]> };
 }
 
-const DEFAULT_MESSAGES: Record<AuthSessionRevokedEventData['reason'], string> = {
+export const DEFAULT_REVOCATION_MESSAGES: Record<AuthSessionRevokedEventData['reason'], string> = {
   password_changed: 'Your password was changed — please sign in again.',
   logout_all_devices: 'All sessions were signed out — please sign in again.',
-  admin_revoke: 'Your session was revoked — please sign in again.',
+  admin_revoke: 'Your session was closed by the Meeshy team — please sign in again.',
+  user_revoke: 'This device was signed out from another device.',
+  logout: 'Signed out.',
+  // #5712 — jamais passé par les deux appelants de CETTE fonction (révocation
+  // TOTALE d'un compte) : la session expirée est refusée à la CONNEXION, un
+  // seul socket à la fois, directement par `AuthHandler._authenticateJWTUser`
+  // — qui compose son propre message plutôt que d'appeler cette fonction.
+  // Présent uniquement pour l'exhaustivité que `Record` exige sur l'union.
+  session_expired: 'Your session expired — please sign in again.',
+  // #8238 — même régime que `session_expired` : refusé à la CONNEXION par
+  // `AuthHandler._authenticateJWTUser`, présent pour l'exhaustivité.
+  activation_required: 'Confirm your email address to continue — please sign in again.',
 };
 
 export interface DisconnectRevokedSessionsParams {
@@ -29,6 +40,8 @@ export interface DisconnectRevokedSessionsParams {
   userId: string;
   reason: AuthSessionRevokedEventData['reason'];
   message?: string;
+  /** #10264 — la révocation vient de la suppression du compte : le nommer. */
+  accountDeleted?: boolean;
   onError?: (error: unknown) => void;
 }
 
@@ -80,13 +93,14 @@ export interface DisconnectRevokedSessionsParams {
 export async function disconnectRevokedSessions(
   params: DisconnectRevokedSessionsParams
 ): Promise<number> {
-  const { io, userId, reason, message, onError } = params;
+  const { io, userId, reason, message, accountDeleted, onError } = params;
   if (!io || !userId) return 0;
 
   const payload: AuthSessionRevokedEventData = {
     code: 'session_revoked',
-    message: message ?? DEFAULT_MESSAGES[reason],
+    message: message ?? DEFAULT_REVOCATION_MESSAGES[reason],
     reason,
+    ...(accountDeleted ? { deletedAccountId: userId } : {}),
   };
 
   let sockets: RevokedSessionSocket[];

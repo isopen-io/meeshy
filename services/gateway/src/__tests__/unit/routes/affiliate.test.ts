@@ -11,7 +11,14 @@ import Fastify, { FastifyInstance } from 'fastify';
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 jest.mock('../../../utils/logger-enhanced', () => ({
-  enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn() }) },
+  enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn() }) },
+}));
+
+jest.mock('../../../services/engagement/EngagementService', () => ({
+  EngagementService: jest.fn().mockImplementation(() => ({
+    recordActivity: jest.fn(async () => undefined),
+    recordLinkVisit: jest.fn(async () => 0),
+  })),
 }));
 
 jest.mock('../../../utils/sanitize', () => ({
@@ -35,12 +42,6 @@ jest.mock('../../../services/AffiliateTrackingService', () => ({
     trackAffiliateVisit: (...args: any[]) => mockTrackVisit(...args),
     convertAffiliateVisit: (...args: any[]) => mockConvertVisit(...args),
   },
-}));
-
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  affiliateTokenSchema: { type: 'object', additionalProperties: true },
-  affiliateRelationSchema: { type: 'object', additionalProperties: true },
-  errorResponseSchema: { type: 'object', properties: {} },
 }));
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
@@ -78,7 +79,7 @@ const mockAffiliateToken = {
   updatedAt: new Date('2026-01-01T00:00:00Z'),
   creator: {
     id: USER_ID, username: 'alice', firstName: 'Alice', lastName: 'Smith',
-    displayName: 'Alice Smith', avatar: null,
+    displayName: 'Alice Smith', avatar: null, banner: null, isActive: true, deletedAt: null,
   },
   _count: { affiliations: 2 },
 };
@@ -307,7 +308,57 @@ describe('GET /affiliate/validate/:token', () => {
     expect(body.success).toBe(true);
     expect(body.data.isValid).toBe(true);
   });
+
+  it('ne livre jamais le nom civil du parrain à un appelant public (H-1) : prénom et nom à null, champs gardés', async () => {
+    (app as any).prisma.affiliateToken.findUnique.mockClear();
+    const res = await app.inject({ method: 'GET', url: '/affiliate/validate/' + TOKEN_CODE });
+    const affiliateUser = res.json().data.affiliateUser;
+    expect(affiliateUser).toHaveProperty('firstName', null);
+    expect(affiliateUser).toHaveProperty('lastName', null);
+    const select = (app as any).prisma.affiliateToken.findUnique.mock.calls[0][0].include.creator.select;
+    expect(select).not.toHaveProperty('firstName');
+    expect(select).not.toHaveProperty('lastName');
+  });
+
+  it('sert la bannière et l’avatar de l’invitant, à côté de son nom affiché et de son pseudo (#10559)', async () => {
+    (app as unknown as PrismaDouble).prisma.affiliateToken.findUnique.mockResolvedValueOnce({
+      ...mockAffiliateToken,
+      creator: { ...mockAffiliateToken.creator, avatar: '2026/10/a/avatar.png', banner: '2026/10/a/banniere.jpg' },
+    });
+    const res = await app.inject({ method: 'GET', url: '/affiliate/validate/' + TOKEN_CODE });
+    expect(res.json().data.affiliateUser).toEqual({
+      id: USER_ID,
+      username: 'alice',
+      firstName: null,
+      lastName: null,
+      displayName: 'Alice Smith',
+      avatar: '2026/10/a/avatar.png',
+      banner: '2026/10/a/banniere.jpg',
+    });
+  });
+
+  it('ne lit de l’invitant que ce que la porte publique sert : ni e-mail, ni téléphone, ni présence (#10559)', async () => {
+    const findUnique = (app as unknown as PrismaDouble).prisma.affiliateToken.findUnique;
+    findUnique.mockClear();
+    await app.inject({ method: 'GET', url: '/affiliate/validate/' + TOKEN_CODE });
+    const lu = findUnique.mock.calls[0]?.[0] as { include: { creator: { select: Record<string, unknown> } } };
+    expect(Object.keys(lu.include.creator.select).sort()).toEqual(['avatar', 'banner', 'deletedAt', 'displayName', 'id', 'isActive', 'username']);
+  });
+
+  it.each([
+    ['désactivé', { isActive: false }],
+    ['supprimé', { deletedAt: new Date('2026-10-01T00:00:00Z') }],
+  ])('un jeton dont le compte est %s ne sert rien de lui (#10559)', async (_cas, etat) => {
+    (app as unknown as PrismaDouble).prisma.affiliateToken.findUnique.mockResolvedValueOnce({
+      ...mockAffiliateToken,
+      creator: { ...mockAffiliateToken.creator, ...etat },
+    });
+    const res = await app.inject({ method: 'GET', url: '/affiliate/validate/' + TOKEN_CODE });
+    expect(res.json().data).toEqual({ isValid: false });
+  });
 });
+
+type PrismaDouble = { prisma: { affiliateToken: { findUnique: jest.Mock<(args: unknown) => Promise<unknown>> } } };
 
 // ─── POST /affiliate/track-visit ─────────────────────────────────────────────
 

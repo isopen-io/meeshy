@@ -1,0 +1,152 @@
+import SwiftUI
+import Combine
+import MeeshySDK
+import MeeshyUI
+
+struct LicensesView: View {
+    @Environment(\.dismiss) private var dismiss
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    private let accentColor = "6366F1"
+    private let source = SourceOffer(bundle: .main)
+
+    @State private var libsignalNotices: [LicenseNotice] = []
+    @State private var presentedNotice: LicenseNotice?
+
+    private let licenses: [OpenSourceLicense] = [
+        OpenSourceLicense(name: "Socket.IO Client Swift", author: "Socket.IO", licenseType: "MIT", url: "https://github.com/socketio/socket.io-client-swift"),
+        OpenSourceLicense(name: "Firebase iOS SDK", author: "Google", licenseType: "Apache 2.0", url: "https://github.com/firebase/firebase-ios-sdk"),
+        OpenSourceLicense(name: "WebRTC", author: "Google", licenseType: "BSD", url: "https://webrtc.org"),
+        OpenSourceLicense(name: "Starscream", author: "Dalton Cherry", licenseType: "Apache 2.0", url: "https://github.com/daltoniam/Starscream")
+    ]
+
+    var body: some View {
+        ZStack {
+            theme.backgroundGradient.ignoresSafeArea()
+
+            CollapsibleHeaderPage(
+                title: String(localized: "about.licenses.title", defaultValue: "Licences", bundle: .main),
+                onBack: { dismiss() },
+                titleColor: theme.textPrimary,
+                backArrowColor: Color(hex: accentColor),
+                backgroundColor: theme.backgroundPrimary,
+                content: { pageContent }
+            )
+        }
+        .task { libsignalNotices = await Self.loadLibsignalNotices() }
+        .sheet(item: $presentedNotice) { LicenseTextView(notice: $0) }
+    }
+
+    private static func loadLibsignalNotices() async -> [LicenseNotice] {
+        await Task.detached(priority: .userInitiated) { LicenseNotices.libsignal() }.value
+    }
+
+    private func openAGPL() {
+        guard let text = LicenseNotices.agplText() else { return }
+        presentedNotice = LicenseNotice(
+            title: String(localized: "about.licenses.agpl.title", defaultValue: "Texte de la licence AGPL-3.0", bundle: .main),
+            license: nil,
+            text: text
+        )
+    }
+
+    // MARK: - Content
+
+    private var pageContent: some View {
+        VStack(spacing: MeeshySpacing.md) {
+            LicensesAGPLSection(source: source, accentColor: accentColor, onOpenAGPL: openAGPL)
+
+            if !libsignalNotices.isEmpty {
+                LicensesLibsignalSection(notices: libsignalNotices, accentColor: accentColor) { presentedNotice = $0 }
+                    .padding(.top, MeeshySpacing.md)
+            }
+
+            LicensesSectionHeader(title: String(localized: "about.licenses.section.open_source", defaultValue: "Open source", bundle: .main), icon: "checkmark.seal.fill", color: accentColor)
+                .padding(.top, MeeshySpacing.md)
+
+            Text(String(localized: "about.licenses.intro", defaultValue: "Meeshy utilise les bibliothèques open source suivantes.", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                .foregroundStyle(theme.textMuted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, MeeshySpacing.xs)
+                .textSelection(.enabled)
+
+            ForEach(licenses) { license in
+                licenseCard(license)
+            }
+
+            Spacer().frame(height: 40)
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.sm)
+    }
+
+    // MARK: - License Card
+
+    @ViewBuilder
+    private func licenseCard(_ license: OpenSourceLicense) -> some View {
+        if let destination = URL(string: license.url) {
+        Link(destination: destination) {
+            HStack(spacing: MeeshySpacing.md) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                    Text(license.name)
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                        .foregroundStyle(theme.textPrimary)
+
+                    Text(license.author)
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
+                        .foregroundStyle(theme.textMuted)
+                }
+
+                Spacer()
+
+                Text(license.licenseType)
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
+                    .foregroundStyle(Color.white)
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.vertical, MeeshySpacing.xs)
+                    .background(
+                        Capsule().fill(Color(hex: badgeColor(for: license.licenseType)))
+                    )
+
+                Image(systemName: "arrow.up.right")
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                    .foregroundStyle(Color(hex: accentColor))
+            }
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                    .fill(theme.surfaceGradient(tint: accentColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                            .stroke(theme.border(tint: accentColor), lineWidth: 1)
+                    )
+            )
+        }
+        .accessibilityLabel(String(localized: "about.licenses.card.label", defaultValue: "\(license.name) par \(license.author), licence \(license.licenseType)", bundle: .main))
+        .accessibilityHint(String(localized: "about.licenses.card.hint", defaultValue: "Ouvre le dépôt dans Safari", bundle: .main))
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func badgeColor(for licenseType: String) -> String {
+        switch licenseType {
+        case "MIT": return "4ADE80"
+        case "Apache 2.0": return "F59E0B"
+        case "BSD": return "3B82F6"
+        default: return "6B7280"
+        }
+    }
+}
+
+// MARK: - Model
+
+private struct OpenSourceLicense: Identifiable {
+    let id = UUID()
+    let name: String
+    let author: String
+    let licenseType: String
+    let url: String
+}

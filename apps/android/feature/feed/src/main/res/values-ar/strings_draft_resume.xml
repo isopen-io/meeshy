@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_draft_resume_title">تابِع مسودتك</string>
+    <string name="feed_draft_resume_action">متابعة</string>
+    <string name="feed_draft_resume_discard_title">حذف هذه المسودة؟</string>
+    <string name="feed_draft_resume_discard_body">ستُمحى من هذا الجهاز.</string>
+</resources>

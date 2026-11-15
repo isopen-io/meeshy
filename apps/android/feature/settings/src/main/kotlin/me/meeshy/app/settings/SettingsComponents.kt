@@ -1,0 +1,127 @@
+package me.meeshy.app.settings
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
+import me.meeshy.sdk.model.settings.SettingsHubRow
+import me.meeshy.ui.component.settings.SettingsCard
+import me.meeshy.ui.component.settings.SettingsRow
+import me.meeshy.ui.component.settings.SettingsSectionHeader
+import me.meeshy.ui.component.settings.SettingsSeparator
+import me.meeshy.ui.component.settings.SettingsSwitchRow
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.MeeshyTheme
+
+/** Rangée de navigation d'iOS `settingsRow` + chevron : tuile teintée, valeur facultative, haptique légère. */
+@Composable
+internal fun SettingsChevronRow(
+    icon: ImageVector,
+    title: String,
+    color: Color,
+    onClick: () -> Unit,
+    value: String? = null,
+    heavyHaptic: Boolean = false,
+    chevronTint: Color = MeeshyTheme.tokens.textMuted,
+    subtitle: String? = null,
+) {
+    val haptics = rememberMeeshyHaptics()
+    SettingsRow(
+        icon = icon,
+        title = title,
+        color = color,
+        subtitle = subtitle,
+        value = value,
+        modifier = Modifier.clickable(role = Role.Button) {
+            if (heavyHaptic) haptics.heavy() else haptics.light()
+            onClick()
+        },
+        trailing = {
+            if (value != null) {
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MeeshyTheme.tokens.textSecondary,
+                )
+                Spacer(Modifier.width(MeeshySpacing.xs))
+            }
+            Icon(
+                MeeshyIcons.ChevronForward,
+                contentDescription = null,
+                tint = chevronTint,
+                modifier = Modifier.size(20.dp),
+            )
+        },
+    )
+}
+
+/** Interrupteur de réglage : bascule à l'écran (état hissé, donc optimiste) avec un retour haptique de sélection. */
+@Composable
+internal fun NotificationToggleRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
+    icon: ImageVector = MeeshyIcons.BellFilled,
+    color: Color = MeeshyPalette.Warning,
+    subtitle: String? = null,
+) {
+    val haptics = rememberMeeshyHaptics()
+    SettingsSwitchRow(
+        icon = icon,
+        title = label,
+        color = color,
+        subtitle = subtitle,
+        checked = checked,
+        enabled = enabled,
+        onCheckedChange = {
+            haptics.selection()
+            onCheckedChange(it)
+        },
+    )
+}
+
+/** Section teintée du hub : titre en capitales (en-tête d'accessibilité) au-dessus d'une carte. */
+@Composable
+internal fun SettingsGroup(
+    title: String,
+    icon: ImageVector,
+    tint: Color,
+    orientation: String? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
+        SettingsSectionHeader(title = title, icon = icon, color = tint)
+        orientation?.let { SettingsOrientation(it) }
+        SettingsCard(tint = tint, content = content)
+    }
+}
+
+/** Projette les rangées du catalogue dans une carte, un séparateur entre deux rangées voisines. */
+@Composable
+internal fun SettingsRows(
+    rows: List<SettingsHubRow>,
+    tint: Color,
+    separatedBefore: (SettingsHubRow) -> Boolean = { true },
+    rowContent: @Composable (SettingsHubRow) -> Unit,
+) {
+    rows.forEachIndexed { index, row ->
+        if (index > 0 && separatedBefore(row)) SettingsSeparator(tint)
+        rowContent(row)
+    }
+}

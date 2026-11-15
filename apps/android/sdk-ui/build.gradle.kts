@@ -28,21 +28,59 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
+    }
+    sourceSets {
+        getByName("test") {
+            java.srcDir(rootProject.file("test-support/compose-robolectric/kotlin"))
+            resources.srcDir(rootProject.file("test-support/compose-robolectric/resources"))
+        }
+    }
 }
 
 dependencies {
     api(project(":sdk-core"))
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    // lot: mesures-de-fenetre-et-largeurs-de-lecture — mesure de la fenetre et posture de pliable
+    implementation(libs.androidx.window)
     implementation(platform(libs.compose.bom))
     api(libs.bundles.compose)
     implementation(libs.coil.compose)
+    implementation(libs.coil.gif)
+    implementation(libs.lottie.compose)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
+    // lot: socle-media3-1-10 (#14567) — les médias passent par le client OkHttp (HTTP/2) dérivé du pool partagé ;
+    // FrameExtractor sert les vignettes vidéo.
+    implementation(libs.androidx.media3.datasource.okhttp)
+    implementation(libs.androidx.media3.inspector.frame)
+    implementation(libs.okhttp)
+    // lot: viseur-de-capture-du-composeur (#13423) — preview, photo, segments vidéo, torche, zoom, mise au point
+    implementation(libs.camerax.core)
+    implementation(libs.camerax.camera2)
+    implementation(libs.camerax.lifecycle)
+    implementation(libs.camerax.view)
+    implementation(libs.camerax.video)
     debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(libs.compose.ui.test.manifest)
 
     testImplementation(libs.junit)
     testImplementation(libs.truth)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.activity.compose)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.androidx.test.ext.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.turbine)
+    testImplementation(libs.mockk)
+    testImplementation(libs.kotlinx.serialization.json)
 }

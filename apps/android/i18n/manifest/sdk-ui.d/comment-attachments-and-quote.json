@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "comment.quote.a11y",
+          "androidName": "comment_quote_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "comment.quote.about",
+          "androidName": "comment_quote_about",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "comment.quote.kind.audio",
+          "androidName": "comment_quote_kind_audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "comment.quote.kind.file",
+          "androidName": "comment_quote_kind_file",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "comment.quote.kind.image",
+          "androidName": "comment_quote_kind_image",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "comment.quote.kind.location",
+          "androidName": "comment_quote_kind_location",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "comment.quote.kind.video",
+          "androidName": "comment_quote_kind_video",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "comment.quote.remove",
+          "androidName": "comment_quote_remove",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

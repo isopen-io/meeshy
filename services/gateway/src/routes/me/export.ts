@@ -3,26 +3,84 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendError } from '../../utils/response';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import {
+  resolveExportPage,
+  exportPosts,
+  exportStories,
+  exportComments,
+  exportReactions,
+  exportMedia,
+  exportVoiceProfile,
+  exportPacks,
+} from './export-sections';
+import {
+  exportSecurityEvents,
+  exportSessions,
+  securityEventExportItemSchema,
+  sessionExportItemSchema,
+} from './export-security';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
+import { withoutExpiredConnectionTraces } from '../../services/retention/retention-bounds';
+import { exportGame } from './export-game';
+import { exportReadingActivity } from './export-reading';
+import { relationsExportSchema } from './export-relations';
+import { exportRelations } from '../../services/relations/relationExport';
+import { exportCallTelemetry } from '../../services/calls/callTelemetryPrivacy';
 
 const logger = enhancedLogger.child({ module: 'DataExport' });
 
 const MESSAGES_LIMIT = 10000;
 
-type ExportType = 'profile' | 'messages' | 'contacts';
+type ExportType =
+  | 'profile'
+  | 'messages'
+  | 'contacts'
+  | 'posts'
+  | 'stories'
+  | 'comments'
+  | 'reactions'
+  | 'media'
+  | 'voiceProfile'
+  | 'sessions'
+  | 'securityEvents'
+  | 'game'
+  | 'packs'
+  | 'readingActivity'
+  | 'calls'
+  | 'relations';
+
+const VALID_TYPES: ExportType[] = [
+  'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions', 'securityEvents', 'game', 'packs',
+  'readingActivity', 'calls', 'relations',
+];
+
 type ExportFormat = 'json' | 'csv';
 
 function parseTypes(raw: string | undefined): ExportType[] {
-  const valid: ExportType[] = ['profile', 'messages', 'contacts'];
-  if (!raw) return valid;
+  if (!raw) return VALID_TYPES;
   return raw
     .split(',')
-    .map((t) => t.trim().toLowerCase() as ExportType)
-    .filter((t) => valid.includes(t));
+    .map((t) => t.trim() as ExportType)
+    .filter((t) => VALID_TYPES.includes(t));
 }
 
-function toCsv(headers: string[], rows: Record<string, unknown>[]): string {
+/**
+ * Serialize rows to CSV.
+ *
+ * Cells carry text set by other users (conversation titles, other
+ * participants' display names). Any cell whose first character is a
+ * spreadsheet formula trigger (`=`, `+`, `-`, `@`, tab, CR) is neutralized by
+ * prefixing a single quote, so opening the export in Excel / Sheets /
+ * LibreOffice cannot execute a smuggled formula (CWE-1236 — CSV injection).
+ * Structural quoting (comma / quote / newline) is applied on top, unchanged.
+ *
+ * Exported for direct behavioural testing of the neutralization.
+ */
+export function toCsv(headers: string[], rows: Record<string, unknown>[]): string {
+  const FORMULA_TRIGGERS = /^[=+\-@\t\r]/;
   const escape = (val: unknown): string => {
-    const str = val === null || val === undefined ? '' : String(val);
+    const raw = val === null || val === undefined ? '' : String(val);
+    const str = FORMULA_TRIGGERS.test(raw) ? `'${raw}` : raw;
     return str.includes(',') || str.includes('"') || str.includes('\n')
       ? `"${str.replace(/"/g, '""')}"`
       : str;
@@ -33,6 +91,353 @@ function toCsv(headers: string[], rows: Record<string, unknown>[]): string {
   }
   return lines.join('\n');
 }
+
+// ─── Schémas de réponse des sections ajoutées par #3633 ────────────────────
+//
+// Des `properties` NOMMÉES, jamais `additionalProperties: true` : ce dernier
+// désarme fast-json-stringify (`response-schema-closure-guard.test.ts`), et
+// `me/export.ts|200` porte déjà trois entrées héritées à ce défaut — ne pas
+// en ajouter sept de plus. Chaque schéma ci-dessous nomme EXACTEMENT les
+// colonnes du `select` correspondant dans `export-sections.ts`.
+
+const gameRowsSchema = { type: 'array', items: { type: 'object', additionalProperties: true } } as const;
+
+/** La télémétrie de lecture du compte (#10499, O6) — quatre listes de lignes. */
+const readingActivityExportSchema = {
+  type: 'object',
+  nullable: true,
+  properties: {
+    impressions: gameRowsSchema,
+    engagements: gameRowsSchema,
+    views: gameRowsSchema,
+    contentEvents: gameRowsSchema,
+    hasMore: { type: 'object', additionalProperties: { type: 'boolean' } },
+  },
+} as const;
+
+const gameExportSchema = {
+  type: 'object',
+  nullable: true,
+  properties: {
+    progress: { type: 'object', additionalProperties: true, nullable: true },
+    settings: { type: 'object', additionalProperties: true, nullable: true },
+    pseudonym: { type: 'object', additionalProperties: true, nullable: true },
+    leagueHistory: gameRowsSchema,
+    weekPoints: gameRowsSchema,
+    duos: gameRowsSchema,
+    seasons: gameRowsSchema,
+    trophies: gameRowsSchema,
+    atlas: gameRowsSchema,
+    missions: gameRowsSchema,
+    gloryLedger: gameRowsSchema,
+    meeshLedger: gameRowsSchema,
+    mythicSeat: {
+      type: 'object',
+      nullable: true,
+      properties: { number: { type: 'integer' }, edition: { type: 'integer' }, grantedAt: { type: 'string', nullable: true } },
+    },
+    photoMoments: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          stepId: { type: 'string' },
+          detectedAt: { type: 'string', nullable: true },
+          presentedAt: { type: 'string', nullable: true },
+          notifiedAt: { type: 'string', nullable: true },
+          keptAt: { type: 'string', nullable: true },
+        },
+      },
+    },
+    hasMore: { type: 'boolean' },
+  },
+} as const;
+
+const packFileFields = {
+  mimeType: { type: 'string' },
+  filePath: { type: 'string' },
+  fileUrl: { type: 'string' },
+  width: { type: 'integer' },
+  height: { type: 'integer' },
+  sizeBytes: { type: 'integer' },
+} as const;
+
+const packsExportSchema = {
+  type: 'object',
+  nullable: true,
+  properties: {
+    choices: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          domain: { type: 'string', nullable: true },
+          slug: { type: 'string' },
+          installed: { type: 'boolean' },
+          installedAt: { type: 'string', nullable: true },
+          updatedAt: { type: 'string' },
+        },
+      },
+    },
+    library: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string', nullable: true },
+          origin: { type: 'string' },
+          animated: { type: 'boolean' },
+          createdAt: { type: 'string' },
+          lastUsedAt: { type: 'string' },
+          ...packFileFields,
+        },
+      },
+    },
+    submissions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          slug: { type: 'string' },
+          name: { type: 'string' },
+          description: { type: 'string' },
+          author: { type: 'string' },
+          status: { type: 'string' },
+          reviewNote: { type: 'string', nullable: true },
+          reviewedAt: { type: 'string', nullable: true },
+          installCount: { type: 'integer' },
+          createdAt: { type: 'string' },
+          items: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                key: { type: 'string' },
+                title: { type: 'string' },
+                emoji: { type: 'string' },
+                kind: { type: 'string' },
+                // `StickerTextZone[]` d'un Instant, servies telles que proposées.
+                zones: { type: 'array', nullable: true },
+                position: { type: 'integer' },
+                ...packFileFields,
+              },
+            },
+          },
+        },
+      },
+    },
+    // #10709 — les packs d'apparence PROPOSÉS par le compte (fonds, contours, bannières) : données seulement.
+    appearanceSubmissions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          domain: { type: 'string' },
+          slug: { type: 'string' },
+          name: { type: 'string' },
+          description: { type: 'string' },
+          author: { type: 'string' },
+          status: { type: 'string' },
+          reviewNote: { type: 'string', nullable: true },
+          reviewedAt: { type: 'string', nullable: true },
+          price: { type: 'integer', nullable: true },
+          installCount: { type: 'integer' },
+          createdAt: { type: 'string' },
+          contractJson: { type: 'string' },
+        },
+      },
+    },
+    // #11271 — les lens PROPOSÉES par le compte : métadonnées et document servi.
+    lensSubmissions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          slug: { type: 'string' }, name: { type: 'string' }, author: { type: 'string' }, status: { type: 'string' },
+          reviewNote: { type: 'string', nullable: true }, reviewedAt: { type: 'string', nullable: true }, installCount: { type: 'integer' },
+          cost: { type: 'string' }, surfaces: { type: 'array', items: { type: 'string' } }, startsAt: { type: 'string' }, endsAt: { type: 'string' },
+          communities: { type: 'array', items: { type: 'string' } }, createdAt: { type: 'string' }, documentJson: { type: 'string' },
+        },
+      },
+    },
+    // #11327 — le profil partenaire de lens (0 ou 1) : ce qu'il a déclaré et son état, jamais les octets du logo.
+    partnerProfile: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          displayName: { type: 'string' }, website: { type: 'string', nullable: true }, logoSrc: { type: 'string', nullable: true },
+          logoSize: { type: 'integer', nullable: true }, verifiedAt: { type: 'string', nullable: true }, createdAt: { type: 'string' }, updatedAt: { type: 'string' },
+        },
+      },
+    },
+    // #10632, #11272 — les packs POSSÉDÉS : domaine, slug, voie (purchase|game|grant|event), raison, prix payé (0 hors achat), date.
+    ownerships: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          domain: { type: 'string', nullable: true },
+          slug: { type: 'string' },
+          source: { type: 'string' },
+          reference: { type: 'string', nullable: true },
+          priceMeeshes: { type: 'integer' },
+          acquiredAt: { type: 'string' },
+        },
+      },
+    },
+    counts: {
+      type: 'object',
+      properties: { choices: { type: 'integer' }, library: { type: 'integer' }, submissions: { type: 'integer' }, ownerships: { type: 'integer' }, appearanceSubmissions: { type: 'integer' }, lensSubmissions: { type: 'integer' }, partnerProfile: { type: 'integer' } },
+    },
+    hasMore: {
+      type: 'object',
+      properties: { choices: { type: 'boolean' }, library: { type: 'boolean' }, submissions: { type: 'boolean' }, ownerships: { type: 'boolean' }, appearanceSubmissions: { type: 'boolean' }, lensSubmissions: { type: 'boolean' }, partnerProfile: { type: 'boolean' } },
+    },
+  },
+} as const;
+
+/** La télémétrie et la note de chacun de MES appels (#11277) : objets libres, déclarés comme tels. */
+const callExportItemSchema = {
+  type: 'object',
+  properties: {
+    callId: { type: 'string' },
+    role: { type: 'string' },
+    joinedAt: { type: 'string' },
+    leftAt: { type: 'string', nullable: true },
+    analytics: { type: 'object', additionalProperties: true, nullable: true },
+    feedback: { type: 'object', additionalProperties: true, nullable: true },
+  },
+} as const;
+
+const postExportItemSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    type: { type: 'string' },
+    visibility: { type: 'string' },
+    content: { type: 'string', nullable: true },
+    originalLanguage: { type: 'string', nullable: true },
+    communityId: { type: 'string', nullable: true },
+    repostOfId: { type: 'string', nullable: true },
+    isQuote: { type: 'boolean' },
+    createdAt: { type: 'string' },
+    updatedAt: { type: 'string' },
+  },
+};
+
+const storyExportItemSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    type: { type: 'string' },
+    visibility: { type: 'string' },
+    content: { type: 'string', nullable: true },
+    storyEffects: { type: 'object', additionalProperties: true, nullable: true },
+    createdAt: { type: 'string' },
+    updatedAt: { type: 'string' },
+  },
+};
+
+const commentExportItemSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    postId: { type: 'string' },
+    parentId: { type: 'string', nullable: true },
+    content: { type: 'string' },
+    originalLanguage: { type: 'string', nullable: true },
+    isEdited: { type: 'boolean' },
+    likeCount: { type: 'integer' },
+    replyCount: { type: 'integer' },
+    createdAt: { type: 'string' },
+    updatedAt: { type: 'string' },
+  },
+};
+
+const messageReactionExportItemSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    messageId: { type: 'string' },
+    emoji: { type: 'string' },
+    createdAt: { type: 'string' },
+  },
+};
+
+const postReactionExportItemSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    postId: { type: 'string' },
+    emoji: { type: 'string' },
+    createdAt: { type: 'string' },
+  },
+};
+
+const commentReactionExportItemSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    commentId: { type: 'string' },
+    emoji: { type: 'string' },
+    createdAt: { type: 'string' },
+  },
+};
+
+const attachmentExportItemSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    messageId: { type: 'string', nullable: true },
+    originalName: { type: 'string' },
+    mimeType: { type: 'string' },
+    fileSize: { type: 'integer' },
+    fileUrl: { type: 'string' },
+    duration: { type: 'integer', nullable: true },
+    width: { type: 'integer', nullable: true },
+    height: { type: 'integer', nullable: true },
+    createdAt: { type: 'string' },
+  },
+};
+
+const postMediaExportItemSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    postId: { type: 'string', nullable: true },
+    commentId: { type: 'string', nullable: true },
+    originalName: { type: 'string' },
+    mimeType: { type: 'string' },
+    fileSize: { type: 'integer' },
+    fileUrl: { type: 'string' },
+    duration: { type: 'integer', nullable: true },
+    width: { type: 'integer', nullable: true },
+    height: { type: 'integer', nullable: true },
+    createdAt: { type: 'string' },
+  },
+};
+
+const voiceProfileExportSchema = {
+  type: 'object',
+  properties: {
+    profileId: { type: 'string', nullable: true },
+    embeddingModel: { type: 'string' },
+    embeddingDimension: { type: 'integer' },
+    audioCount: { type: 'integer' },
+    totalDurationMs: { type: 'integer' },
+    qualityScore: { type: 'number' },
+    version: { type: 'integer' },
+    referenceAudioUrl: { type: 'string', nullable: true },
+    trainingAudioSamples: { type: 'array', items: { type: 'object', additionalProperties: true }, nullable: true },
+    voiceCharacteristics: { type: 'object', additionalProperties: true, nullable: true },
+    voiceAnalysisAt: { type: 'string', nullable: true },
+    voicePublicAt: { type: 'string', nullable: true },
+    createdAt: { type: 'string' },
+    updatedAt: { type: 'string' },
+  },
+};
 
 export async function dataExportRoutes(fastify: FastifyInstance) {
   fastify.get(
@@ -49,7 +454,22 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
             format: { type: 'string', enum: ['json', 'csv'], default: 'json' },
             types: {
               type: 'string',
-              description: 'Comma-separated: profile,messages,contacts',
+              description:
+                'Comma-separated: profile,messages,contacts,posts,stories,comments,reactions,media,voiceProfile,sessions,securityEvents,game,packs,readingActivity,calls,relations. ' +
+                'Defaults to all of them.',
+            },
+            limit: {
+              type: 'string',
+              description:
+                'Max rows per list-type section for THIS request (default 500, capped at 2000). ' +
+                'Applies uniformly to posts/stories/comments/reactions/media/sessions/securityEvents/calls — profile and voiceProfile are single rows and ignore it.',
+            },
+            offset: {
+              type: 'string',
+              description:
+                'Rows to skip per list-type section, for the NEXT page of the same `types` list (default 0). ' +
+                'Each section reports its own `<type>Count` (total matching) and `<type>HasMore` — call again with ' +
+                '`offset += limit` while any requested section still has `hasMore: true`.',
             },
           },
         },
@@ -81,6 +501,80 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
                     nullable: true,
                   },
                   contactsCount: { type: 'integer', nullable: true },
+                  posts: { type: 'array', items: postExportItemSchema, nullable: true },
+                  postsCount: { type: 'integer', nullable: true },
+                  postsHasMore: { type: 'boolean', nullable: true },
+                  stories: { type: 'array', items: storyExportItemSchema, nullable: true },
+                  storiesCount: { type: 'integer', nullable: true },
+                  storiesHasMore: { type: 'boolean', nullable: true },
+                  comments: { type: 'array', items: commentExportItemSchema, nullable: true },
+                  commentsCount: { type: 'integer', nullable: true },
+                  commentsHasMore: { type: 'boolean', nullable: true },
+                  reactions: {
+                    type: 'object',
+                    nullable: true,
+                    properties: {
+                      messages: { type: 'array', items: messageReactionExportItemSchema },
+                      posts: { type: 'array', items: postReactionExportItemSchema },
+                      comments: { type: 'array', items: commentReactionExportItemSchema },
+                    },
+                  },
+                  reactionsCount: {
+                    type: 'object',
+                    nullable: true,
+                    properties: {
+                      messages: { type: 'integer' },
+                      posts: { type: 'integer' },
+                      comments: { type: 'integer' },
+                    },
+                  },
+                  reactionsHasMore: {
+                    type: 'object',
+                    nullable: true,
+                    properties: {
+                      messages: { type: 'boolean' },
+                      posts: { type: 'boolean' },
+                      comments: { type: 'boolean' },
+                    },
+                  },
+                  media: {
+                    type: 'object',
+                    nullable: true,
+                    properties: {
+                      attachments: { type: 'array', items: attachmentExportItemSchema },
+                      postMedia: { type: 'array', items: postMediaExportItemSchema },
+                    },
+                  },
+                  mediaCount: {
+                    type: 'object',
+                    nullable: true,
+                    properties: {
+                      attachments: { type: 'integer' },
+                      postMedia: { type: 'integer' },
+                    },
+                  },
+                  mediaHasMore: {
+                    type: 'object',
+                    nullable: true,
+                    properties: {
+                      attachments: { type: 'boolean' },
+                      postMedia: { type: 'boolean' },
+                    },
+                  },
+                  voiceProfile: { ...voiceProfileExportSchema, nullable: true },
+                  sessions: { type: 'array', items: sessionExportItemSchema, nullable: true },
+                  sessionsCount: { type: 'integer', nullable: true },
+                  sessionsHasMore: { type: 'boolean', nullable: true },
+                  securityEvents: { type: 'array', items: securityEventExportItemSchema, nullable: true },
+                  securityEventsCount: { type: 'integer', nullable: true },
+                  securityEventsHasMore: { type: 'boolean', nullable: true },
+                  game: gameExportSchema,
+                  packs: packsExportSchema,
+                  readingActivity: readingActivityExportSchema,
+                  relations: relationsExportSchema,
+                  calls: { type: 'array', items: callExportItemSchema, nullable: true },
+                  callsCount: { type: 'integer', nullable: true },
+                  callsHasMore: { type: 'boolean', nullable: true },
                   csv: {
                     type: 'object',
                     additionalProperties: { type: 'string' },
@@ -105,7 +599,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
       }
 
       const userId = authContext.userId;
-      const query = request.query as { format?: string; types?: string };
+      const query = request.query as { format?: string; types?: string; limit?: string; offset?: string };
       const format = (query.format || 'json') as ExportFormat;
       const requestedTypes = parseTypes(query.types);
 
@@ -136,20 +630,35 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
               timezone: true,
               createdAt: true,
               lastActiveAt: true,
+              // #9614 — l'adresse et le lieu d'inscription et de dernière
+              // connexion (effacés 12 mois après, #9642).
+              registrationIp: true,
+              registrationLocation: true,
+              registrationCountry: true,
+              lastLoginAt: true,
+              lastLoginIp: true,
+              lastLoginLocation: true,
             },
           });
 
-          exportData.profile = user;
+          // Les adresses de plus de 12 mois ne se servent plus, purge armée ou non.
+          exportData.profile = user ? withoutExpiredConnectionTraces(user, new Date()) : user;
         }
 
-        if (requestedTypes.includes('messages')) {
+        // Calculée UNE fois, réutilisée par `messages` et `reactions` : une
+        // seconde `participant.findMany` nue ferait passer ce fichier de 2 à 3
+        // `findMany` sans `take`, au-delà de la dette gelée par
+        // `unbounded-findmany-guard.test.ts`.
+        let pIds: string[] = [];
+        if (requestedTypes.includes('messages') || requestedTypes.includes('reactions')) {
           const participantIds = await fastify.prisma.participant.findMany({
             where: { userId, type: 'user' },
             select: { id: true },
           });
+          pIds = participantIds.map((p) => p.id);
+        }
 
-          const pIds = participantIds.map((p) => p.id);
-
+        if (requestedTypes.includes('messages')) {
           const messages = await fastify.prisma.message.findMany({
             where: {
               senderId: { in: pIds },
@@ -218,6 +727,123 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
           exportData.contactsCount = contacts.length;
         }
 
+        const page = resolveExportPage(query);
+
+        if (requestedTypes.includes('posts')) {
+          const section = await exportPosts(fastify.prisma, userId, page);
+          exportData.posts = section.items;
+          exportData.postsCount = section.total;
+          exportData.postsHasMore = section.hasMore;
+        }
+
+        if (requestedTypes.includes('stories')) {
+          const section = await exportStories(fastify.prisma, userId, page);
+          exportData.stories = section.items;
+          exportData.storiesCount = section.total;
+          exportData.storiesHasMore = section.hasMore;
+        }
+
+        if (requestedTypes.includes('comments')) {
+          const section = await exportComments(fastify.prisma, userId, page);
+          exportData.comments = section.items;
+          exportData.commentsCount = section.total;
+          exportData.commentsHasMore = section.hasMore;
+        }
+
+        if (requestedTypes.includes('reactions')) {
+          const sections = await exportReactions(fastify.prisma, pIds, userId, page);
+          exportData.reactions = {
+            messages: sections.messages.items,
+            posts: sections.posts.items,
+            comments: sections.comments.items,
+          };
+          exportData.reactionsCount = {
+            messages: sections.messages.total,
+            posts: sections.posts.total,
+            comments: sections.comments.total,
+          };
+          exportData.reactionsHasMore = {
+            messages: sections.messages.hasMore,
+            posts: sections.posts.hasMore,
+            comments: sections.comments.hasMore,
+          };
+        }
+
+        if (requestedTypes.includes('media')) {
+          const sections = await exportMedia(fastify.prisma, userId, page);
+          exportData.media = {
+            attachments: sections.attachments.items,
+            postMedia: sections.postMedia.items,
+          };
+          exportData.mediaCount = {
+            attachments: sections.attachments.total,
+            postMedia: sections.postMedia.total,
+          };
+          exportData.mediaHasMore = {
+            attachments: sections.attachments.hasMore,
+            postMedia: sections.postMedia.hasMore,
+          };
+        }
+
+        if (requestedTypes.includes('voiceProfile')) {
+          exportData.voiceProfile = await exportVoiceProfile(fastify.prisma, userId);
+        }
+
+        if (requestedTypes.includes('sessions')) {
+          // Le cadrage lit les quatre rangs du Prisme sur SA projection, pas sur
+          // celle du middleware d'authentification qu'aucun balayage ne garde (#4642).
+          const reader = await fastify.prisma.user.findUnique({
+            where: { id: userId },
+            select: RECIPIENT_LANG_SELECT,
+          });
+          const language = recipientLanguage(reader, 'en');
+          const section = await exportSessions(fastify.prisma, userId, page, language);
+          exportData.sessions = section.items;
+          exportData.sessionsCount = section.total;
+          exportData.sessionsHasMore = section.hasMore;
+        }
+
+        if (requestedTypes.includes('securityEvents')) {
+          const section = await exportSecurityEvents(fastify.prisma, userId, page);
+          exportData.securityEvents = section.items;
+          exportData.securityEventsCount = section.total;
+          exportData.securityEventsHasMore = section.hasMore;
+        }
+
+        if (requestedTypes.includes('game')) {
+          exportData.game = await exportGame(fastify.prisma, userId, page);
+        }
+
+        if (requestedTypes.includes('calls')) {
+          const section = await exportCallTelemetry(fastify.prisma, userId, page);
+          exportData.calls = section.items;
+          exportData.callsCount = section.total;
+          exportData.callsHasMore = section.hasMore;
+        }
+
+        if (requestedTypes.includes('readingActivity')) {
+          exportData.readingActivity = await exportReadingActivity(fastify.prisma, userId, page);
+        }
+
+        if (requestedTypes.includes('relations')) {
+          exportData.relations = await exportRelations(fastify.prisma, userId, page);
+        }
+
+        if (requestedTypes.includes('packs')) {
+          const sections = await exportPacks(fastify.prisma, userId, page);
+          exportData.packs = {
+            choices: sections.choices.items,
+            library: sections.library.items,
+            submissions: sections.submissions.items,
+            ownerships: sections.ownerships.items,
+            appearanceSubmissions: sections.appearanceSubmissions.items,
+            lensSubmissions: sections.lensSubmissions.items,
+            partnerProfile: sections.partnerProfile.items,
+            counts: { choices: sections.choices.total, library: sections.library.total, submissions: sections.submissions.total, ownerships: sections.ownerships.total, appearanceSubmissions: sections.appearanceSubmissions.total, lensSubmissions: sections.lensSubmissions.total, partnerProfile: sections.partnerProfile.total },
+            hasMore: { choices: sections.choices.hasMore, library: sections.library.hasMore, submissions: sections.submissions.hasMore, ownerships: sections.ownerships.hasMore, appearanceSubmissions: sections.appearanceSubmissions.hasMore, lensSubmissions: sections.lensSubmissions.hasMore, partnerProfile: sections.partnerProfile.hasMore },
+          };
+        }
+
         if (format === 'csv') {
           const csvSections: Record<string, string> = {};
 
@@ -245,6 +871,65 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
                 flatContacts
               );
             }
+          }
+
+          if (exportData.voiceProfile) {
+            const voiceProfile = exportData.voiceProfile as Record<string, unknown>;
+            csvSections.voiceProfile = toCsv(Object.keys(voiceProfile), [voiceProfile]);
+          }
+
+          // Sections plates ajoutées par #3633 : même patron que `messages`
+          // ci-dessus, généralisé pour éviter quatre blocs quasi identiques.
+          for (const key of ['posts', 'stories', 'comments', 'sessions', 'securityEvents'] as const) {
+            const rows = exportData[key] as Record<string, unknown>[] | undefined;
+            if (rows && rows.length > 0) {
+              csvSections[key] = toCsv(Object.keys(rows[0]), rows);
+            }
+          }
+
+          // Sections à sous-tables (deux sources hétérogènes chacune) :
+          // aplaties en CSV sous une clé composée `parent.enfant`.
+          for (const parentKey of ['reactions', 'media'] as const) {
+            const parent = exportData[parentKey] as Record<string, Record<string, unknown>[]> | undefined;
+            if (!parent) continue;
+            for (const [childKey, rows] of Object.entries(parent)) {
+              if (rows.length > 0) {
+                csvSections[`${parentKey}.${childKey}`] = toCsv(Object.keys(rows[0]), rows);
+              }
+            }
+          }
+
+          // Le jeu : une table par liste, et une ligne pour la progression et les réglages.
+          const game = exportData.game as Record<string, unknown> | undefined;
+          for (const [childKey, value] of Object.entries(game ?? {})) {
+            const rows = Array.isArray(value)
+              ? (value as Record<string, unknown>[])
+              : value && typeof value === 'object'
+                ? [value as Record<string, unknown>]
+                : [];
+            if (rows.length > 0) csvSections[`game.${childKey}`] = toCsv(Object.keys(rows[0]), rows);
+          }
+
+          // Les packs : une table par liste ; les éléments d'une proposition voyagent en JSON dans leur cellule.
+          const packs = exportData.packs as Record<string, unknown> | undefined;
+          for (const childKey of ['choices', 'library', 'submissions', 'ownerships', 'appearanceSubmissions', 'lensSubmissions', 'partnerProfile'] as const) {
+            const rows = (packs?.[childKey] ?? []) as Record<string, unknown>[];
+            const flat = rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, Array.isArray(value) ? JSON.stringify(value) : value])));
+            if (flat.length > 0) csvSections[`packs.${childKey}`] = toCsv(Object.keys(flat[0]), flat);
+          }
+
+          // Les appels (#11277) : la télémétrie et la note voyagent en JSON dans leur cellule.
+          const calls = (exportData.calls ?? []) as Record<string, unknown>[];
+          if (calls.length > 0) {
+            const flat = calls.map((row) => ({ ...row, analytics: JSON.stringify(row.analytics ?? null), feedback: JSON.stringify(row.feedback ?? null) }));
+            csvSections.calls = toCsv(Object.keys(flat[0]), flat);
+          }
+
+          // Les cercles (#14400) : une table par liste ; mes passages et mes dates de retrait voyagent en JSON dans leur cellule.
+          const relations = exportData.relations as Record<string, Record<string, unknown>[]> | undefined;
+          for (const childKey of ['links', 'interactionDays', 'consents', 'bloodLocationPoints', 'bloodLocationConsultations'] as const) {
+            const flat = (relations?.[childKey] ?? []).map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value !== null && typeof value === 'object' ? JSON.stringify(value) : value])));
+            if (flat.length > 0) csvSections[`relations.${childKey}`] = toCsv(Object.keys(flat[0]), flat);
           }
 
           exportData.csv = csvSections;

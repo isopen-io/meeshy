@@ -8,7 +8,6 @@
  * One endpoint is exercised per modified file:
  *   core.ts        → POST /api/v1/posts (401, 400, 500)
  *   feed.ts        → GET  /api/v1/posts/feed (401)
- *   audio.ts       → POST /api/v1/stories/audio (401, 400)
  *   interactions.ts → POST /api/v1/posts/:id/like (401, 404)
  *   comments.ts    → POST /api/v1/posts/:id/comments (401, 400, 404)
  *
@@ -75,7 +74,40 @@ jest.mock('../../../middleware/rate-limiter', () => ({
   createPostRouteRateLimitConfig: jest.fn<() => Record<string, unknown>>().mockReturnValue({}),
 }));
 
+// #4147 — POST /posts tire son plafond de création d'un compteur PARTAGÉ qui
+// lit Redis directement, fail-closed (createSharedWriteRateLimitPreHandler,
+// routes/posts/socialRateLimit.ts) : sans ce double,
+// `getCacheStore().getNativeClient()` rend `null` en test (aucun REDIS_URL)
+// et la création serait refusée 429 avant d'atteindre les gardes 401/400/500
+// que ce fichier vérifie — détail complet dans
+// __tests__/unit/routes/posts/core.test.ts, premier fichier de la série à
+// le poser. `incr` répond toujours « premier appel » : ce fichier ne teste
+// PAS le plafond (son témoin dédié vit dans social-write-rate-limit.test.ts)
+// — juste un Redis DISPONIBLE.
+jest.mock('../../../services/CacheStore', () => ({
+  getCacheStore: () => ({
+    getNativeClient: () => ({
+      incr: async () => 1,
+      pexpire: async () => 1,
+      pttl: async () => -1,
+    }),
+  }),
+}));
+
+// Le module réel est ÉTALÉ d'abord (#6293) : ce double ne rendait que
+// `withMutationLog`, laissant `withMutationOutcome` et la classe
+// `MutationResultGone` à `undefined`. Depuis que la route like emploie
+// `withMutationOutcome` pour garder ses effets de bord au rejeu, l'appeler ici
+// levait un `TypeError` que le `catch` de la route déguisait en 500 — ce fichier
+// attendait 404 et lisait 500, sans qu'aucun message ne parle d'idempotence.
+// Même remède que `interactions.harness.ts`, qui le documente déjà.
 jest.mock('../../../utils/withMutationLog', () => ({
+  // `as object` EXIGÉ : `jest.requireActual` rend `unknown`, et TS refuse
+  // d'étaler `unknown` (TS2698). C'est pour cette raison que
+  // `interactions.harness.ts` prend le module en PARAMÈTRE typé `object` plutôt
+  // que d'appeler `requireActual` chez lui — son doc-comment le dit, et la
+  // première version de ce correctif ne l'a pas lu.
+  ...(jest.requireActual('../../../utils/withMutationLog') as object),
   withMutationLog: jest.fn().mockImplementation(({ op }: any) => op()),
 }));
 
@@ -123,7 +155,7 @@ const buildAuthMiddleware = (userId?: string) =>
     if (userId) {
       req.authContext = {
         isAuthenticated: true,
-        registeredUser: { id: userId, username: 'testuser' },
+        registeredUser: { emailVerifiedAt: new Date(), id: userId, username: 'testuser' },
       };
     }
     done();
@@ -135,6 +167,23 @@ async function buildApp(authenticated: boolean): Promise<FastifyInstance> {
   (app as any).prisma = prisma;
   (app as any).socialEvents = null;
   (app as any).notificationService = null;
+
+  // Reproduit la SEULE branche de `server.ts#setErrorHandler` pertinente ici —
+  // le refus de schéma Ajv (#6853) — sans réimporter tout le gestionnaire
+  // global (CORS, hiérarchie d'erreurs typées…), hors du périmètre de ce
+  // fichier. Sans elle, un refus de `schema.params` échappe sous la forme PAR
+  // DÉFAUT de Fastify (`{statusCode, error:'Bad Request', message}`, sans
+  // `success`), que ce harnais léger ne pose jamais lui-même : le témoin
+  // attesterait un contrat que la production ne sert pas.
+  const { schemaValidationErrorResponse } = await import('../../../utils/schema-validation-error');
+  app.setErrorHandler(async (error, _request, reply) => {
+    const schemaRefusal = schemaValidationErrorResponse(error);
+    if (schemaRefusal) {
+      const { statusCode: refusStatus, ...corpsRefus } = schemaRefusal;
+      return reply.code(refusStatus).send(corpsRefus);
+    }
+    throw error;
+  });
 
   const requiredAuth = buildAuthMiddleware(authenticated ? 'user-123' : undefined);
   const optionalAuth = buildAuthMiddleware(authenticated ? 'user-123' : undefined);
@@ -200,8 +249,33 @@ describe('posts routes — error response format', () => {
     expect(body.error).toBe('Invalid request');
   });
 
+  it('core: un corps refusé nomme ses champs fautifs, jamais leur valeur (POST /posts, #13824)', async () => {
+    const resp = await authApp.inject({ method: 'POST', url: '/posts', body: { type: 'POST', content: 'é'.repeat(5001) } });
+    expect(resp.statusCode).toBe(400);
+    const body = resp.json() as ErrorBody & { code?: string; issues?: Array<{ code: string; path: string[]; message: string }> };
+    assertErrorShape(body);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(body.issues?.map((issue) => issue.path)).toEqual([['content']]);
+    expect(JSON.stringify(body)).not.toContain('éé');
+  });
+
+  it('core: un plafond de story dépassé nomme sa borne à la racine du 400 (POST /posts, #13590)', async () => {
+    const stickers = Array.from({ length: 51 }, (_, i) => ({ id: `s${i}`, emoji: '😀' }));
+    const resp = await authApp.inject({ method: 'POST', url: '/posts', body: { type: 'STORY', storyEffects: { stickerObjects: stickers } } });
+    expect(resp.statusCode).toBe(400);
+    const body = resp.json() as ErrorBody & { code?: string; storyLimit?: string; limit?: number };
+    assertErrorShape(body);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(body.storyLimit).toBe('STORY_LIMIT_STICKERS');
+    expect(body.limit).toBe(50);
+  });
+
   it('core: should return structured error on 404 for unknown post (GET /posts/:postId)', async () => {
-    const resp = await authApp.inject({ method: 'GET', url: '/posts/nonexistent123456789012' });
+    // Forme ObjectId VALIDE mais inconnue (#6853) : le fixture historique
+    // (`nonexistent123456789012`, 23 caractères non-hex) est désormais rejeté
+    // en 400 par `postIdParamsSchema` avant d'atteindre le handler — ce test
+    // vise le 404 « post absent », pas le 400 « id malformé » couvert plus bas.
+    const resp = await authApp.inject({ method: 'GET', url: '/posts/aaaaaaaaaaaaaaaaaaaaaaaa' });
     expect(resp.statusCode).toBe(404);
     const body: ErrorBody = resp.json();
     assertErrorShape(body);
@@ -271,5 +345,51 @@ describe('posts routes — error response format', () => {
     const body: ErrorBody = resp.json();
     assertErrorShape(body);
     expect(body.error).toBe('Post not found');
+  });
+
+  // ── postId format validation (#6853) ─────────────────────────────────────
+  //
+  // `GET /posts/stories` tombait dans `/posts/:postId` avec `postId =
+  // "stories"` — une chaîne qui n'est pas un ObjectId de 24 caractères
+  // hexadécimaux — et le cast Prisma non gardé remontait en 500 générique.
+  // `postIdParamsSchema` (`routes/posts/types.ts`) le refuse désormais en 400
+  // AVANT le handler, sur `/posts/:postId` et ses voisins qui appellent
+  // directement Prisma/`PostService` sans passer par une porte d'audience
+  // déjà gardée par `isValidObjectId` (like/unlike, bookmark, share, les
+  // comptent parmi les « voisins » déjà sûrs et restent hors de ce témoin).
+  //
+  // La classe, pas seulement `"stories"` : un slug court, une chaîne trop
+  // longue, et une chaîne de la bonne LONGUEUR mais hors alphabet hexadécimal
+  // (24 caractères, un `g` non-hex) — celle-ci est le cas qu'un simple
+  // contrôle de longueur laisserait passer.
+  const MALFORMED_POST_IDS: readonly [id: string, why: string][] = [
+    ['stories', 'le cas mesuré en production'],
+    ['abc', 'trop court'],
+    ['a'.repeat(30), 'trop long'],
+    ['g'.repeat(24), '24 caractères mais hors alphabet hexadécimal'],
+  ];
+
+  const ROUTES_WITH_POST_ID: readonly [label: string, method: string, buildUrl: (id: string) => string, body: unknown][] = [
+    ['GET /posts/:postId', 'GET', (id) => `/posts/${id}`, undefined],
+    ['PUT /posts/:postId', 'PUT', (id) => `/posts/${id}`, {}],
+    ['DELETE /posts/:postId', 'DELETE', (id) => `/posts/${id}`, undefined],
+    ['POST /posts/:postId/translate', 'POST', (id) => `/posts/${id}/translate`, { targetLanguage: 'en' }],
+    ['POST /posts/:postId/pin', 'POST', (id) => `/posts/${id}/pin`, undefined],
+    ['DELETE /posts/:postId/pin', 'DELETE', (id) => `/posts/${id}/pin`, undefined],
+    ['GET /posts/:postId/views', 'GET', (id) => `/posts/${id}/views`, undefined],
+    ['GET /posts/:postId/interactions', 'GET', (id) => `/posts/${id}/interactions`, undefined],
+    ['POST /posts/:postId/republish', 'POST', (id) => `/posts/${id}/republish`, undefined],
+    ['POST /posts/:postId/repost', 'POST', (id) => `/posts/${id}/repost`, {}],
+  ];
+
+  describe.each(ROUTES_WITH_POST_ID)('%s — postId non conforme', (_label, method, buildUrl, body) => {
+    it.each(MALFORMED_POST_IDS)('rend 400 nommant le champ, jamais 500 (%s — %s)', async (malformedId) => {
+      const resp = await authApp.inject({ method: method as 'GET' | 'POST' | 'PUT' | 'DELETE', url: buildUrl(malformedId), body });
+      expect(resp.statusCode).toBe(400);
+      const parsed = resp.json();
+      expect(parsed.success).toBe(false);
+      expect(parsed.code).toBe('VALIDATION_ERROR');
+      expect(parsed.details?.some((d: { field: string }) => d.field === 'postId')).toBe(true);
+    });
   });
 });

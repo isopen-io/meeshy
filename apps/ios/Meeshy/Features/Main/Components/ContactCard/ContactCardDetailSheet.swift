@@ -1,0 +1,337 @@
+import SwiftUI
+import Contacts
+import ContactsUI
+import MessageUI
+import MeeshySDK
+import MeeshyUI
+
+/// La fiche d'une carte de visite (#8101) : la conversation se FLOUTE et une
+/// fiche Liquid Glass (iOS 26 ; matériau translucide en repli) liste TOUS les
+/// champs de la vCard. Un appui long sur un champ le copie — retour
+/// haptique + toast. La section « Sur Meeshy » montre le profil PUBLIC du
+/// compte associé (bannière, avatar, nom, @username, bio) avec ses actions.
+struct ContactCardDetailSheet: View {
+    @State private var delayed = DelayedActions()
+    @ObservedObject var model: ContactCardViewModel
+    let accentHex: String
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isVisible = false
+    @State private var isShowingAddToContacts = false
+    @State private var invitation: PhonebookInvitation?
+
+    private var accent: Color { Color(hex: accentHex) }
+    private var fields: [ContactCardField] { model.card.map { ContactCardField.fields(for: $0) } ?? [] }
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay(Color.black.opacity(colorScheme == .dark ? 0.35 : 0.12))
+                .ignoresSafeArea()
+                .opacity(isVisible ? 1 : 0)
+                .onTapGesture { close() }
+                .accessibilityLabel(String(localized: "contact-card.detail.close", defaultValue: "Fermer la fiche", bundle: .main))
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { close() }
+
+            if isVisible {
+                card
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .transition(reduceMotion ? .opacity : .scale(scale: 0.94).combined(with: .opacity))
+            }
+        }
+        .onAppear {
+            meeshyWithAnimation(.spring(response: 0.38, dampingFraction: 0.86),
+                                reduced: .easeOut(duration: 0.15),
+                                reduceMotion: reduceMotion) {
+                isVisible = true
+            }
+        }
+        .dismissOnEscape { close() }
+        .feedbackToastOverlay()
+        .sheet(isPresented: $isShowingAddToContacts) {
+            if let card = model.card {
+                AddToContactsView(card: card) { isShowingAddToContacts = false }
+                    .ignoresSafeArea()
+            }
+        }
+        .sheet(item: $invitation) { invitation in
+            SMSComposerView(recipients: [invitation.phoneNumber], body: invitation.message)
+        }
+    }
+
+    // MARK: - Fiche
+
+    private var card: some View {
+        VStack(spacing: 0) {
+            header
+            ScrollView {
+                VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
+                    if !fields.isEmpty {
+                        VStack(spacing: 0) {
+                            ForEach(Array(fields.enumerated()), id: \.element.id) { index, field in
+                                ContactCardFieldRow(field: field, accent: accent)
+                                if index < fields.count - 1 {
+                                    Divider().padding(.leading, 48)
+                                }
+                            }
+                        }
+                        .background(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous).fill(Color.primary.opacity(MeeshyOpacity.faint)))
+                    }
+                    ForEach(model.accounts) { account in
+                        meeshySection(account)
+                    }
+                    if model.meeshyLookupIsUnavailable {
+                        Text(String(localized: "contact-card.lookup-unavailable-encrypted", defaultValue: "Vérification « Sur Meeshy » indisponible dans une conversation chiffrée", bundle: .main))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    footerActions
+                }
+                .padding(MeeshySpacing.lg)
+            }
+            .frame(maxHeight: 560)
+        }
+        .frame(maxWidth: 520)
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(accent.opacity(MeeshyOpacity.medium), lineWidth: 1))
+        .shadow(color: .black.opacity(MeeshyOpacity.light), radius: 24, y: 10)
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isModal)
+    }
+
+    private var header: some View {
+        HStack(alignment: .center, spacing: MeeshySpacing.md) {
+            face(of: model.primaryAccount, context: .custom(52))
+                .frame(width: 52, height: 52)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                Text(model.card?.displayName ?? "")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(Color.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+                if let subtitle = subtitle {
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(Color.secondary)
+                }
+            }
+            Spacer(minLength: 8)
+            Button(action: close) {
+                Image(systemName: "xmark")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Color.primary)
+                    .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "contact-card.detail.close", defaultValue: "Fermer la fiche", bundle: .main))
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.xs)
+    }
+
+    private var subtitle: String? {
+        let parts = [model.card?.title, model.card?.organization].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    // MARK: - Sur Meeshy
+
+    private func meeshySection(_ account: PublicContactAccount) -> some View {
+        let showsFace = model.sectionShowsFace(for: account)
+        return VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .bottomLeading) {
+                banner(account)
+                if showsFace {
+                    face(of: account, context: .storyViewer)
+                        .padding(MeeshySpacing.xxs)
+                        .background(Circle().fill(.ultraThinMaterial))
+                        .offset(x: 12, y: 22)
+                        .accessibilityHidden(true)
+                }
+            }
+            VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
+                Text(String(localized: "contact-card.on-meeshy", defaultValue: "Sur Meeshy", bundle: .main))
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(accent)
+                    .textCase(.uppercase)
+                    .accessibilityAddTraits(.isHeader)
+                Text(account.displayName)
+                    .font(.headline)
+                    .foregroundStyle(Color.primary)
+                Text("@" + account.username)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                if let bio = account.bio, !bio.isEmpty {
+                    Text(bio)
+                        .font(.subheadline)
+                        .foregroundStyle(Color.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                // #9481 — trois coupes au plus, ce que SA visibilité autorise ; rien quand elle est fermée.
+                GameContactStrip(userId: account.userId)
+                ContactAccountActionRow(model: model, account: account, accentHex: accentHex, style: .prominent, onWillNavigate: { close() })
+                    .padding(.top, MeeshySpacing.xsPlus)
+            }
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.top, showsFace ? MeeshySpacing.xxxl : MeeshySpacing.md)
+            .padding(.bottom, MeeshySpacing.md)
+            .accessibilityElement(children: .contain)
+        }
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous).fill(Color.primary.opacity(MeeshyOpacity.faint)))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func banner(_ account: PublicContactAccount) -> some View {
+        let gradient = LinearGradient(colors: [accent.opacity(MeeshyOpacity.strong), accent.opacity(MeeshyOpacity.light)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        if let bannerUrl = account.bannerUrl {
+            CachedAsyncImage(url: bannerUrl, targetSize: CGSize(width: 480, height: 96), thumbHash: nil, showsStatusOverlays: false) {
+                gradient
+            }
+            .frame(height: 84)
+            .frame(maxWidth: .infinity)
+            .clipped()
+            .accessibilityHidden(true)
+        } else {
+            gradient.frame(height: 84).accessibilityHidden(true)
+        }
+    }
+
+    // MARK: - Pied
+
+    @ViewBuilder
+    private var footerActions: some View {
+        VStack(spacing: MeeshySpacing.sm) {
+            if model.card != nil {
+                footerButton(String(localized: "contact-card.action.add-to-contacts", defaultValue: "Ajouter aux contacts", bundle: .main), icon: "person.crop.circle.badge.plus") {
+                    isShowingAddToContacts = true
+                }
+            }
+            if model.accounts.isEmpty, let phone = model.card?.primaryPhone?.value, MFMessageComposeViewController.canSendText() {
+                footerButton(String(localized: "contact-card.action.invite", defaultValue: "Inviter sur Meeshy", bundle: .main), icon: "paperplane") {
+                    invitation = PhonebookInvitation(phoneNumber: phone, message: PhonebookViewModel.invitationMessage(name: model.card?.displayName ?? ""))
+                }
+            }
+        }
+    }
+
+    private func footerButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(accent)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(Capsule().fill(accent.opacity(MeeshyOpacity.light)))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Fermeture
+
+    private func close() {
+        meeshyWithAnimation(.easeOut(duration: 0.2), reduced: .easeOut(duration: 0.12), reduceMotion: reduceMotion) {
+            isVisible = false
+        }
+        delayed.run(after: .milliseconds(200)) {
+            withoutCoverAnimation { dismiss() }
+        }
+    }
+
+    /// Le visage d'un compte, celui de la bulle : sa photo, sinon ses initiales ;
+    /// sans compte associé, les initiales du nom de la carte. Site unique de
+    /// l'en-tête et des sections.
+    private func face(of account: PublicContactAccount?, context: AvatarContext) -> some View {
+        MeeshyAvatar(name: account?.displayName ?? model.card?.displayName ?? "", context: context, accentColor: accentHex, avatarURL: account?.avatarUrl, isDark: colorScheme == .dark)
+    }
+}
+
+// MARK: - Un champ copiable
+
+/// Une ligne de la fiche. Appui long ⇒ copie + haptique + toast ; VoiceOver
+/// lit « libellé, valeur » et propose l'action « Copier ».
+struct ContactCardFieldRow: View {
+    let field: ContactCardField
+    let accent: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: MeeshySpacing.md) {
+            Image(systemName: field.kind.systemImage)
+                .font(.body.weight(.medium))
+                .foregroundColor(accent)
+                .frame(width: 24, height: 24)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                Text(field.label)
+                    .font(.caption)
+                    .foregroundStyle(Color.secondary)
+                Text(field.value)
+                    .font(.body)
+                    .foregroundStyle(Color.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.smPlus)
+        .frame(minHeight: MeeshyControlSize.tapTarget)
+        .contentShape(Rectangle())
+        .onLongPressGesture(minimumDuration: 0.4) { copy() }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(field.label + ", " + field.value)
+        .accessibilityHint(String(localized: "contact-card.field.copy-hint", defaultValue: "Appui long pour copier", bundle: .main))
+        .accessibilityAction(named: Text(String(localized: "contact-card.field.copy", defaultValue: "Copier", bundle: .main))) { copy() }
+    }
+
+    private func copy() {
+        UIPasteboard.general.string = field.value
+        HapticFeedback.success()
+        FeedbackToastManager.shared.showSuccess(
+            String(format: String(localized: "contact-card.toast.copied", defaultValue: "%@ copié", bundle: .main), field.label)
+        )
+    }
+}
+
+// MARK: - Ajouter au carnet
+
+/// `CNContactViewController` en mode « nouveau contact inconnu » : l'écran
+/// système d'ajout, prérempli depuis la vCard. Aucune autorisation d'accès au
+/// carnet n'est demandée avant que l'utilisateur ne choisisse d'enregistrer.
+private struct AddToContactsView: UIViewControllerRepresentable {
+    let card: VCard
+    let onDone: () -> Void
+
+    func makeUIViewController(context: Context) -> UINavigationController {
+        let contact = (try? CNContactVCardSerialization.contacts(with: Data(VCardWriter.write(card).utf8)).first) ?? CNContact()
+        let controller = CNContactViewController(forUnknownContact: contact)
+        controller.contactStore = CNContactStore()
+        controller.allowsActions = false
+        controller.delegate = context.coordinator
+        controller.navigationItem.leftBarButtonItem = UIBarButtonItem(systemItem: .close, primaryAction: UIAction { _ in onDone() })
+        return UINavigationController(rootViewController: controller)
+    }
+
+    func updateUIViewController(_ uiViewController: UINavigationController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(onDone: onDone) }
+
+    final class Coordinator: NSObject, CNContactViewControllerDelegate {
+        // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466) → double-free au
+        // démontage hors d'une tâche. Garde : MainActorDeinitSourceGuardTests.
+        nonisolated deinit {}
+        let onDone: () -> Void
+        init(onDone: @escaping () -> Void) { self.onDone = onDone }
+
+        func contactViewController(_ viewController: CNContactViewController, didCompleteWith contact: CNContact?) {
+            onDone()
+        }
+    }
+}

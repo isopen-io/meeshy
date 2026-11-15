@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "androidName": "conversations_filter_row",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversations_filter_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversations_filter_state_selected",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversations_filter_state_unselected",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -1,8 +1,54 @@
 import type { CanvasV3, SceneV3, ObjectV3, AudioVariantV3 } from '@meeshy/shared/types/canvas-v3';
+import { mappedMediaUrl } from './mediaUrlLookup';
 
-export function isCanvasV3(blob: unknown): blob is CanvasV3 {
+/**
+ * ÉCRITURE / VALIDATION — « ce blob est-il EXACTEMENT la v3 que je sais
+ * valider ? » (#4774)
+ *
+ * `CanvasV3Schema` décrit la v3, pas la v4 : accepter à l'écriture un rang que
+ * l'on ne sait pas valider revient à persister un document dont AUCUNE garde
+ * n'a lu la forme. Ce prédicat existe donc à part de `isCanvasV3OrNewer`, et
+ * les deux ne peuvent pas fusionner : **on lit avec tolérance ce que l'on
+ * refuse d'écrire sans l'avoir validé** — un lecteur qui se durcit rend un
+ * écran vide, un valideur qui se relâche grave en base ce qu'il n'a pas
+ * compris.
+ *
+ * Le rang 3 ne les distingue PAS (leçon 261) : le seul témoin qui les sépare
+ * se pose sur un rang supérieur (`storyEffectsV3.versionSense.test.ts`).
+ */
+export function isCanvasV3Exactly(blob: unknown): blob is CanvasV3 {
   return typeof blob === 'object' && blob !== null && (blob as { v?: unknown }).v === 3;
 }
+
+/**
+ * LECTURE / RENDU — « ce blob est-il un document canvas, fût-il plus récent
+ * que moi ? » (#4774)
+ *
+ * Un `v: 4` servi TEL QUEL à un client caps-3 (table O17) doit continuer d'être
+ * LU comme un canvas : le rétrograder sur la branche v1 ne rend pas un rendu
+ * dégradé, il rend le VIDE — la forme v1 (`textObjects`, `background`…) est
+ * absente d'un document v3+. Miroir exact des deux ponts natifs
+ * (`StoryModels.swift` `mark >= 3`, `StoryEffectsWireSerializer.kt` `mark < 3`)
+ * et du web (`isCanvasV3OrNewer`, `apps/web/lib/story-transforms.ts`).
+ *
+ * Le rétrécissement vers `CanvasV3` est DÉLIBÉRÉMENT optimiste : un document
+ * d'un rang supérieur se lit champ par champ à travers la lentille v3, ce qui
+ * EST la tolérance au futur. La sévérité, elle, vit chez `isCanvasV3Exactly`.
+ */
+export function isCanvasV3OrNewer(blob: unknown): blob is CanvasV3 {
+  if (typeof blob !== 'object' || blob === null) return false;
+  const mark = (blob as { v?: unknown }).v;
+  return typeof mark === 'number' && mark >= 3;
+}
+
+/**
+ * @deprecated Alias historique d'`isCanvasV3Exactly`, conservé pour les deux
+ * importateurs hors territoire de ce lot : `routes/posts/core.ts`
+ * (`rejectNonV3StoryEffects` — sens ÉCRITURE, l'alias y est JUSTE) et
+ * `StoryTextObjectTranslationService.ts` (`docIsV3` — sens LECTURE, l'alias y
+ * est FAUX ; suivi #4774). Aucun site neuf ne l'appelle : on nomme son sens.
+ */
+export const isCanvasV3 = isCanvasV3Exactly;
 
 const num = (v: unknown, d: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v.length > 0 ? v : undefined);
@@ -11,6 +57,19 @@ const SCENE_ASPECT = 9 / 16;
 
 function asArray(v: unknown): Record<string, unknown>[] {
   return Array.isArray(v) ? (v as Record<string, unknown>[]) : [];
+}
+
+/** Un objet qui porte au moins une clé — `undefined` sinon (un `{}` ne dit rien). */
+function objectWithKeys(v: unknown): Record<string, unknown> | undefined {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return undefined;
+  const record = v as Record<string, unknown>;
+  return Object.keys(record).length > 0 ? record : undefined;
+}
+
+function isStringMap(v: unknown): v is Record<string, string> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+    && Object.values(v as Record<string, unknown>).every((value) => typeof value === 'string')
+    && Object.keys(v as Record<string, unknown>).length > 0;
 }
 
 function isPivot(v: unknown): v is { x: number; y: number } {
@@ -81,10 +140,24 @@ export function convertV1ToV3(
   const objects: ObjectV3[] = [];
   let z = 0;
 
-  if (str(blob.background)) {
+  // **Le porteur du FOND existe dès que le fond a quelque chose à dire**
+  // (#5406) — jumeau EXACT de `CanvasV3.migratedScene` (Swift), qui portait la
+  // même condition et donc le même trou.
+  //
+  // `backgroundTransform` ne voyage QUE dans cette charge, et son champ le plus
+  // utile — `videoFitMode`, le cadrage que le double-tap fond choisit — ne vaut
+  // que sur un fond MÉDIA, c'est-à-dire là où une couleur de fond n'a aucune
+  // raison d'exister. Conditionner le porteur à la seule couleur jetait donc le
+  // cadrage précisément dans le cas où l'auteur venait de le choisir.
+  const bgTransform = objectWithKeys(blob.backgroundTransform);
+  const bgColor = str(blob.background);
+  if (bgColor !== undefined || bgTransform !== undefined) {
     objects.push({
       ...baseObject({ id: 'bg' }, 'media', 'bg', z++),
-      payload: { background: blob.background, transform: blob.backgroundTransform ?? null },
+      payload: {
+        ...(bgColor !== undefined ? { background: bgColor } : {}),
+        transform: bgTransform ?? null,
+      },
     });
   }
 
@@ -123,16 +196,34 @@ export function convertV1ToV3(
       typeof m.isMuted === 'boolean' ? m.isMuted
       : typeof m.muted === 'boolean' ? m.muted
       : volume !== undefined ? volume <= 0 : undefined;
+    // **RÉPAND, puis corrige** (#4905) — la forme de la branche `textObjects`,
+    // seule des cinq à n'avoir JAMAIS rien perdu. Un inventaire humain se
+    // maintient à la main ; un `rest` se maintient tout seul.
+    //
+    // Ne sortent du `rest` que deux catégories, et il faut les distinguer :
+    //   - les champs d'ENVELOPPE, que `baseObject` a déjà logés ailleurs — les
+    //     laisser passer les mettrait EN DOUBLE, dans l'enveloppe et la charge ;
+    //   - les champs à RÈGLE, dont la valeur ne se recopie pas telle quelle.
+    //     Ils sont réécrits APRÈS le `rest`, donc ils gagnent.
+    //
+    // Passent désormais sans qu'on y pense : `fadeIn`, `fadeOut`, `sourceStart`,
+    // `sourceEnd`, `intrinsicDuration`, `thumbHash`, `name`, `placement`,
+    // `mutedVolumeMemento`, `isDuckingDisabled` — dix clés que le pont Swift
+    // émettait et que cette branche jetait.
+    const {
+      id: _i, x: _x, y: _y, scale: _s, rotation: _r, opacity: _op, zIndex: _z,
+      startTime: _st, endTime: _e, keyframes: _k, sourceLanguage: _l,
+      isMuted: _im, muted: _mt, volume: _vo, anchor: _an,
+      postMediaId: _pm, mediaURL: _mu, mediaType: _my,
+      ...rest
+    } = m;
     o.payload = {
+      ...rest,
       postMediaId: m.postMediaId ?? null,
       ...(str(m.mediaURL) ? { mediaURL: m.mediaURL } : {}),
       ...(str(m.mediaType) ? { mediaType: m.mediaType } : {}),
       ...(volume !== undefined ? { volume } : {}),
       ...(muted !== undefined ? { muted } : {}),
-      ...(typeof m.loop === 'boolean' ? { loop: m.loop } : {}),
-      ...(typeof m.isBackground === 'boolean' ? { isBackground: m.isBackground } : {}),
-      ...(typeof m.duration === 'number' ? { duration: m.duration } : {}),
-      ...(typeof m.aspectRatio === 'number' ? { aspectRatio: m.aspectRatio } : {}),
       ...(isPivot(m.anchor) ? { anchor: m.anchor } : {}),
     };
     objects.push(o);
@@ -148,14 +239,46 @@ export function convertV1ToV3(
     // La spec O8 les attendait déjà ici : `unclaimedCanvasMediaIds` compte
     // `sticker` parmi les CLAIM_BEARING_KINDS et lit `payload.postMediaId`
     // (ci-dessous). Le convertisseur était simplement en retard sur elle.
+    //
+    // MÊME piège, deuxième morsure (#4741). Les stickers à GABARIT — pastille
+    // de lieu, cadre de coeurs, ruban d'heure — portent leur dessin dans
+    // `templateId` et leur texte dans `slots`. Sans ces deux clés, une
+    // décoration qui traverse le serveur redevient son emoji de REPLI : le
+    // composer dessine, le lecteur rend un glyphe.
+    //
+    // L'emoji continue de voyager, et c'est délibéré : il sert le lecteur dont
+    // le build ne connaît pas ce `templateId`, qui verra un glyphe plutôt qu'un
+    // trou. Mais un repli conservé SANS la chose dont il est le repli n'est
+    // plus un repli — c'est le contenu.
+    //
+    // Deux correctifs parallèles (#4741 sur dev, #4819 sur la branche stickers)
+    // ont recopié ces clés le même jour ; la fusion garde la forme la plus
+    // STRICTE : `slots` n'est transporté que si toutes ses valeurs sont des
+    // chaînes (`isStringMap`) — un emplacement numérique ne rendrait rien et
+    // ferait mentir le type `[String: String]` du client. `animation` et
+    // `duration` (#4821) voyagent au même titre.
+    // **RÉPAND, puis corrige** (#4905) — la forme de la branche `textObjects`,
+    // seule des cinq à n'avoir JAMAIS rien perdu. Un inventaire humain se
+    // maintient à la main ; un `rest` se maintient tout seul.
+    //
+    // Ne sortent du `rest` que deux catégories, et il faut les distinguer :
+    //   - les champs d'ENVELOPPE, que `baseObject` a déjà logés ailleurs — les
+    //     laisser passer les mettrait EN DOUBLE, dans l'enveloppe et la charge ;
+    //   - les champs à RÈGLE, dont la valeur ne se recopie pas telle quelle.
+    //     Ils sont réécrits APRÈS le `rest`, donc ils gagnent.
+    //
+    // `slots` est le seul champ à règle ici, et il le RESTE : la fusion de
+    // #4741 et #4819 a gardé la forme la plus STRICTE, et le laisser passer par
+    // le `rest` reviendrait sur cet arbitrage.
+    const {
+      id: _i, x: _x, y: _y, scale: _s, rotation: _r, opacity: _op, zIndex: _z,
+      startTime: _st, endTime: _e, keyframes: _k, sourceLanguage: _l,
+      slots: _sl,
+      ...rest
+    } = st;
     o.payload = {
-      emoji: st.emoji,
-      ...(str(st.postMediaId) ? { postMediaId: st.postMediaId } : {}),
-      ...(str(st.provider) ? { provider: st.provider } : {}),
-      ...(typeof st.baseSize === 'number' ? { baseSize: st.baseSize } : {}),
-      ...(str(st.anchorPoint) ? { anchorPoint: st.anchorPoint } : {}),
-      ...(typeof st.fadeIn === 'number' ? { fadeIn: st.fadeIn } : {}),
-      ...(typeof st.fadeOut === 'number' ? { fadeOut: st.fadeOut } : {}),
+      ...rest,
+      ...(isStringMap(st.slots) ? { slots: st.slots } : {}),
     };
     objects.push(o);
   }
@@ -179,34 +302,102 @@ export function convertV1ToV3(
 
   for (const L of asArray(blob.locationObjects)) {
     const o = baseObject(L, 'place', 'fg', z++);
-    o.payload = { place: L.place ?? null };
+    // MÊME piège, TROISIÈME morsure (#4832) — sur le FRÈRE du champ ci-dessus.
+    // Le lot #4717 a donné un gabarit à la pastille de lieu : `styleId` nomme
+    // le gabarit qui la DÉCORE. Sans lui, une pastille décorée qui traverse le
+    // serveur redevient la pastille de BASE, et la perte est invisible parce
+    // que cette pastille de base EST le repli d'un `styleId` absent.
+    //
+    // La forme du défaut n'est pas humaine : ce convertisseur RECOMPOSE la
+    // charge clé par clé, donc chaque branche est un inventaire à tenir à jour
+    // et toute clé ajoutée en amont s'y perd en silence. Le témoin qui
+    // l'attraperait vraiment est un témoin d'EXHAUSTIVITÉ (#4833) — celui par
+    // clé ne parle que des clés auxquelles on a déjà pensé.
+    // MÊME piège, QUATRIÈME morsure (#4840) — la FENÊTRE TEMPORELLE, cette
+    // fois. `baseObject` porte déjà `timing.start` / `timing.end` pour toute
+    // famille ; les trois clés de charge, elles, se recopient branche par
+    // branche, et celle-ci était la SEULE des quatre à n'en émettre aucune
+    // (média, sticker et audio les ont toutes les trois). Le lieu partage sa
+    // famille temporelle avec le sticker — `TimelineClipKind.place`.
+    //
+    // Défensif à ce jour : aucun producteur v1 ne pose encore de fenêtre sur un
+    // lieu (iOS publie en v3 nativement, web et Android n'ont pas de timeline).
+    // Ce qui se répare ici est l'INVENTAIRE — la forme même que ce commentaire
+    // dénonce depuis #4832, et qui a mordu quatre fois sur cette branche.
+    // **RÉPAND, puis corrige** (#4905) — la forme de la branche `textObjects`,
+    // seule des cinq à n'avoir JAMAIS rien perdu. Un inventaire humain se
+    // maintient à la main ; un `rest` se maintient tout seul.
+    //
+    // Ne sortent du `rest` que deux catégories, et il faut les distinguer :
+    //   - les champs d'ENVELOPPE, que `baseObject` a déjà logés ailleurs — les
+    //     laisser passer les mettrait EN DOUBLE, dans l'enveloppe et la charge ;
+    //   - les champs à RÈGLE, dont la valeur ne se recopie pas telle quelle.
+    //     Ils sont réécrits APRÈS le `rest`, donc ils gagnent.
+    //
+    // `place` est forcé à `null` quand il manque : le `rest` l'OMETTRAIT, et le
+    // golden gelé porte la clé. Et `anchor` — le pivot nommé — passe désormais,
+    // onzième clé récupérée.
+    const {
+      id: _i, x: _x, y: _y, scale: _s, rotation: _r, opacity: _op, zIndex: _z,
+      startTime: _st, endTime: _e, keyframes: _k, sourceLanguage: _l,
+      place: _pl,
+      ...rest
+    } = L;
+    o.payload = {
+      ...rest,
+      place: L.place ?? null,
+    };
     objects.push(o);
   }
   for (const a of asArray(blob.audioPlayerObjects)) {
     const o = baseObject(a, 'audio', 'content', z++);
+    // **RÉPAND, puis corrige** (#4905) — la forme de la branche `textObjects`,
+    // seule des cinq à n'avoir JAMAIS rien perdu.
+    //
+    // Trois champs sont forcés à `null` quand ils manquent : le `rest` les
+    // OMETTRAIT, et le golden gelé porte les clés. Deux portent une règle. Le
+    // reste passe — dont `mutedVolumeMemento`, `sourceStart` et `sourceEnd`,
+    // trois clés que le pont Swift émettait et que cette branche jetait.
+    //
+    // `backgroundAudioVariants` sort du `rest` DÉLIBÉRÉMENT : le pont Swift
+    // nomme cette donnée `variants` dans la charge, et la laisser passer sous
+    // son nom v1 créerait un SECOND nom pour une seule chose — exactement ce
+    // qu'un lot de cohérence ne doit pas faire. Que la passerelle ne porte pas
+    // les variantes du tout est un manque distinct, à mesurer à part.
+    const {
+      id: _i, x: _x, y: _y, scale: _s, rotation: _r, opacity: _op, zIndex: _z,
+      startTime: _st, endTime: _e, keyframes: _k, sourceLanguage: _l,
+      postMediaId: _pm, mediaURL: _mu, placement: _pl,
+      volume: _vo, waveformSamples: _wf, backgroundAudioVariants: _bv,
+      ...rest
+    } = a;
     o.payload = {
+      ...rest,
       postMediaId: str(a.postMediaId) ?? null,
       mediaURL: a.mediaURL ?? null,
       placement: a.placement ?? null,
-      ...(str(a.soundId) ? { soundId: a.soundId } : {}),
-      ...(str(a.soundAuthorUsername) ? { soundAuthorUsername: a.soundAuthorUsername } : {}),
-      ...(str(a.name) ? { name: a.name } : {}),
       // `volume` est un champ VIVANT (F10) mais son défaut de décodage vaut 1
       // des deux côtés : l'omettre le restitue, l'émettre à 1 ferait diverger
       // le golden gelé de son propre convertisseur.
       ...(typeof a.volume === 'number' && a.volume !== 1 ? { volume: a.volume } : {}),
-      ...(typeof a.isBackground === 'boolean' ? { isBackground: a.isBackground } : {}),
-      ...(typeof a.loop === 'boolean' ? { loop: a.loop } : {}),
-      ...(typeof a.duration === 'number' ? { duration: a.duration } : {}),
-      ...(typeof a.fadeIn === 'number' ? { fadeIn: a.fadeIn } : {}),
-      ...(typeof a.fadeOut === 'number' ? { fadeOut: a.fadeOut } : {}),
+      // La FORME D'ONDE d'une note vocale (~80 nombres) : sans elle, le
+      // `guard !samples.isEmpty` du lecteur ne dessine RIEN — une bande vide
+      // sous la puce. Parité avec le pont Swift, qui l'emet depuis le meme lot.
+      ...(Array.isArray(a.waveformSamples) && a.waveformSamples.length > 0
+        ? { waveformSamples: a.waveformSamples }
+        : {}),
     };
     objects.push(o);
   }
 
+  // Le filtre de SLIDE est celui du FOND (#8502) : il va au média de fond, et
+  // jamais sur un média posé qui porte déjà SON filtre — la clé
+  // `payload.filter` est partagée, et l'écraser effaçait le réglage de l'objet.
+  // Même règle que le pont Swift (`CanvasV3Migration`).
   const filterTarget =
-    objects.find(o => o.kind === 'media' && o.plane === 'content') ??
-    objects.find(o => o.kind === 'media' && o.plane === 'bg');
+    objects.find(o => o.kind === 'media' && o.payload?.isBackground === true) ??
+    objects.find(o => o.kind === 'media' && o.plane === 'bg') ??
+    objects.find(o => o.kind === 'media' && o.plane === 'content' && !str(o.payload?.filter));
   if (filterTarget && str(blob.filter)) {
     filterTarget.payload = {
       ...filterTarget.payload,
@@ -303,15 +494,26 @@ export function convertV1ToV3(
  * scène. La propriété du média reste jugée par `claimableMediaWhere`
  * (PostService) — jamais dupliquée ici : cette fonction ne juge que
  * l'appartenance. Blob non-v3 ⇒ [] (l'archive v1 n'est pas concernée).
+ *
+ * Prédicat de LECTURE (#4774) : la garde ÉNUMÈRE un document, elle ne le
+ * valide pas. La tolérance ne peut qu'AJOUTER des références à réclamer — un
+ * rang inconnu lu strictement ferait échapper tout son canvas au claim.
  */
 const CLAIM_BEARING_KINDS: ReadonlySet<string> = new Set(['sticker', 'media']);
-const CLAIM_PAYLOAD_KEYS = ['mediaId', 'postMediaId'] as const;
+/**
+ * Les deux clés de charge sous lesquelles un objet v3 référence un
+ * `PostMedia` par id — exportée pour `storyEffectsMediaRemap.ts`, qui doit
+ * réutiliser CETTE liste plutôt que la retaper (#4883) : c'est ce module qui
+ * sait lire un objet v3, jamais une seconde énumération de `scenes[].objects`
+ * écrite ailleurs.
+ */
+export const CLAIM_PAYLOAD_KEYS = ['mediaId', 'postMediaId'] as const;
 
 export function unclaimedCanvasMediaIds(
   blob: unknown,
   claimedMediaIds: readonly string[]
 ): string[] {
-  if (!isCanvasV3(blob)) return [];
+  if (!isCanvasV3OrNewer(blob)) return [];
   const claimed = new Set(claimedMediaIds);
   const unclaimed: string[] = [];
   for (const scene of asArray((blob as { scenes?: unknown }).scenes)) {
@@ -329,6 +531,55 @@ export function unclaimedCanvasMediaIds(
     }
   }
   return unclaimed;
+}
+
+/**
+ * Réécrit, à toute profondeur de scène, les références `payload.mediaId` /
+ * `payload.postMediaId` d'un document v3 selon `idMap` (ancien id `PostMedia`
+ * → nouveau) — le pendant v3 de `remapRefs` (`storyEffectsMediaRemap.ts`), qui
+ * ne sait lire que la forme legacy (`mediaObjects[]` / `audioPlayerObjects[]`
+ * racine). Un repost v3 sans cette fonction pointait encore les médias de son
+ * ancêtre (#4883) : `remapStoryEffectsMediaIds` n'a jamais rien trouvé à
+ * remapper à la racine d'un blob v3, qui ne porte pas ces deux clés.
+ *
+ * Contrairement à `unclaimedCanvasMediaIds`, TOUT objet est parcouru, sans
+ * filtrer par `kind` : un objet `audio` porte aussi `payload.postMediaId`
+ * (piste de fond), et `remapRefs` remappait déjà `audioPlayerObjects` au même
+ * titre que `mediaObjects` côté legacy — restreindre ici aux seuls kinds
+ * « claim-bearing » (`sticker`/`media`) laisserait les pistes audio d'un
+ * repost pointer l'ancêtre.
+ */
+export function remapCanvasV3MediaIds(
+  blob: CanvasV3,
+  idMap: Readonly<Record<string, string>>,
+  urlMap: Readonly<Record<string, string>> = {}
+): { blob: CanvasV3; changed: boolean } {
+  let changed = false;
+  const scenes = (blob.scenes ?? []).map((scene) => ({
+    ...scene,
+    objects: scene.objects.map((object) => {
+      const payload = object.payload;
+      const nextPayload: Record<string, unknown> = { ...payload };
+      let objectChanged = false;
+      for (const key of CLAIM_PAYLOAD_KEYS) {
+        const id = payload[key];
+        if (typeof id === 'string' && idMap[id] !== undefined && idMap[id] !== id) {
+          nextPayload[key] = idMap[id];
+          objectChanged = true;
+        }
+      }
+      const url = payload.mediaURL;
+      const mappedUrl = typeof url === 'string' ? mappedMediaUrl(urlMap, url) : undefined;
+      if (mappedUrl !== undefined && mappedUrl !== url) {
+        nextPayload.mediaURL = mappedUrl;
+        objectChanged = true;
+      }
+      if (!objectChanged) return object;
+      changed = true;
+      return { ...object, payload: nextPayload };
+    }),
+  }));
+  return changed ? { blob: { ...blob, scenes }, changed: true } : { blob, changed: false };
 }
 
 /**
@@ -351,8 +602,14 @@ export type StoryTranslatableText = {
   [key: string]: unknown;
 };
 
+/**
+ * Prédicat de LECTURE (#4774) — un document d'un rang supérieur porte ses
+ * textes là où la v3 les porte (`scenes[].objects[kind=text]`), jamais dans la
+ * forme v1. Le lire strictement le ferait retomber sur `textObjects`, absent :
+ * zéro texte traduit sur un document qui en a.
+ */
 export function storyTranslatableTexts(blob: unknown): StoryTranslatableText[] | undefined {
-  if (isCanvasV3(blob)) {
+  if (isCanvasV3OrNewer(blob)) {
     const texts = asArray((blob as { scenes?: unknown }).scenes)
       .flatMap((scene) => asArray(scene.objects))
       .filter((object) => object.kind === 'text')
@@ -382,8 +639,14 @@ export function storyTranslatableTexts(blob: unknown): StoryTranslatableText[] |
   return Array.isArray(textObjects) ? (textObjects as StoryTranslatableText[]) : undefined;
 }
 
+/**
+ * Prédicat de LECTURE (#4774) — et c'est ici que le rendre strict coûterait le
+ * plus cher : sans chemin v3, l'appelant retombe sur le chemin v1
+ * (`storyEffects.textObjects.$i.…`) et GRAVE une forme v1 dans un document
+ * v3+. Un `$set` Mongo ne demande pas la permission au document qu'il modifie.
+ */
 export function translationSetPath(blob: unknown, objectId: string, lang: string): string | null {
-  if (!isCanvasV3(blob)) return null;
+  if (!isCanvasV3OrNewer(blob)) return null;
   const scenes = asArray((blob as { scenes?: unknown }).scenes);
   for (let s = 0; s < scenes.length; s++) {
     const o = asArray(scenes[s].objects).findIndex((object) => object.id === objectId);
@@ -392,9 +655,15 @@ export function translationSetPath(blob: unknown, objectId: string, lang: string
   return null;
 }
 
+/**
+ * Prédicat de LECTURE (#4774) — « c'est déjà un document canvas, ne le
+ * convertis pas ». Le lire strictement enverrait un rang supérieur au
+ * convertisseur v1→v3, qui n'y trouverait AUCUNE clé v1 et rendrait une
+ * coquille : le serveur retirerait ce que le client savait afficher.
+ */
 export function convertStoryEffectsForWire(effects: unknown): unknown {
   if (effects == null) return effects;
-  if (isCanvasV3(effects)) return effects;
+  if (isCanvasV3OrNewer(effects)) return effects;
   if (typeof effects !== 'object') return effects;
   try {
     return convertV1ToV3(effects as Record<string, unknown>);
@@ -406,7 +675,11 @@ export function convertStoryEffectsForWire(effects: unknown): unknown {
 /**
  * Le LECTEUR d'une charge utile, tel que la négociation O17 le connaît.
  *
- * `canvasCaps` vient de l'en-tête `X-Canvas-Caps` (absent = client legacy) ;
+ * `canvasCaps` vient de l'en-tête `X-Canvas-Caps` — `undefined` (en-tête
+ * absent) vaut « client qui n'a rien dit » (legacy présumé) ; `0` vaut
+ * « client qui déclare ne rendre AUCUN canvas », une affirmation distincte de
+ * l'absence (#5195 — un client comme web-v2, qui ne lit jamais `storyEffects`
+ * par conception, se distingue ainsi d'un client simplement pas-encore-connu).
  * `readerLanguage` est la langue DÉJÀ résolue par le middleware d'auth
  * (`authContext.userLanguage` — le Prisme s'applique jusqu'à l'invite de mise
  * à jour). `broadcast` est l'exception temps réel F3 : une seule charge pour
@@ -427,9 +700,10 @@ export type WireForm = 'as-is' | 'convert' | 'sentinel';
  * La table O17 (spec §C3 rév. 7), pure :
  * v1 + sans caps ⇒ tel quel (restitution garantie) ; v1 + caps ≥ 3 ⇒ converti
  * si `CANVAS_V3_READ` armé, sinon v1 ; v3-natif + caps ≥ 3 ⇒ v3 ; v3-natif +
- * sans caps ⇒ sentinelle. Le prédicat v3-natif est la MARQUE (`v >= 3`),
- * jamais la validité du schéma : un blob marqué mais invalide part tel quel
- * aux clients capables (rendu best-effort) et en sentinelle aux autres.
+ * sans caps ⇒ sentinelle. Le prédicat v3-natif est la MARQUE
+ * (`isCanvasV3OrNewer`, sens LECTURE — #4774), jamais la validité du schéma :
+ * un blob marqué mais invalide part tel quel aux clients capables (rendu
+ * best-effort) et en sentinelle aux autres.
  */
 export function resolveWireForm(
   blob: unknown,
@@ -437,8 +711,7 @@ export function resolveWireForm(
   readArmed: boolean
 ): WireForm {
   if (blob == null || typeof blob !== 'object') return 'as-is';
-  const mark = (blob as { v?: unknown }).v;
-  const isV3Native = typeof mark === 'number' && mark >= 3;
+  const isV3Native = isCanvasV3OrNewer(blob);
   if (caps !== undefined && caps >= 3) {
     if (isV3Native) return 'as-is';
     return readArmed ? 'convert' : 'as-is';
@@ -505,7 +778,8 @@ export function upgradeSentinel(readerLanguage: string | undefined): Record<stri
  * pour la sentinelle ; `CANVAS_V3_READ` (lu à chaque appel, défaut OFF) ne
  * gouverne que la conversion de l'archive v1. Règle 5 : un post à média
  * porteur ne reçoit pas de sentinelle — `storyEffects` est OMIS, le média se
- * lit tel quel.
+ * lit tel quel. Règle 5 bis (#5195) : un lecteur qui DÉCLARE `canvasCaps: 0`
+ * ne reçoit pas non plus de sentinelle — voir plus bas.
  */
 export function negotiateWireStoryEffects<T>(post: T, reader?: WireReader): T {
   if (reader?.broadcast === true) return post;
@@ -518,7 +792,17 @@ export function negotiateWireStoryEffects<T>(post: T, reader?: WireReader): T {
     return { ...post, storyEffects: convertStoryEffectsForWire(effects) };
   }
   const media = (post as { media?: unknown }).media;
-  if (Array.isArray(media) && media.length > 0) {
+  /**
+   * `canvasCaps === 0` est une DÉCLARATION, jamais une absence (celle-ci vaut
+   * `undefined` — cf. `WireReader.canvasCaps`) : un client qui la pose dit
+   * « je ne rendrai AUCUN canvas », pas « je ne l'ai pas encore dit ». La
+   * sentinelle d'invite (« Mets à jour Meeshy pour voir ce contenu ») serait
+   * un conseil FAUX pour un tel client — se mettre à jour ne le ferait pas
+   * lire `storyEffects`, qu'il n'implémente pas par conception (#5195). Même
+   * sort que le média porteur (règle 5) : OMETTRE, jamais la sentinelle.
+   */
+  const declaresNoCanvasSupport = reader?.canvasCaps === 0;
+  if ((Array.isArray(media) && media.length > 0) || declaresNoCanvasSupport) {
     return { ...post, storyEffects: undefined };
   }
   return { ...post, storyEffects: upgradeSentinel(reader?.readerLanguage) };

@@ -16,11 +16,13 @@ class StoryCommentMappingTest {
         id: String = "c1",
         content: String = "bonjour",
         translations: Map<String, ApiPostTranslationEntry>? = null,
+        originalLanguage: String? = null,
         author: ApiAuthor? = ApiAuthor(id = "u1", username = "alice", displayName = "Alice"),
         createdAt: String? = "2026-06-20T10:00:00Z",
     ) = ApiPostComment(
         id = id,
         content = content,
+        originalLanguage = originalLanguage,
         translations = translations,
         author = author,
         createdAt = createdAt,
@@ -99,5 +101,40 @@ class StoryCommentMappingTest {
         assertThat(mapped.clientId).isNull()
         assertThat(mapped.id).isEqualTo("c1")
         assertThat(mapped.createdAt).isEqualTo("2026-06-20T10:00:00Z")
+    }
+
+    @Test
+    fun commentWrittenInThePrimaryLanguage_keepsItsOriginalDespiteALowerRankTranslation() {
+        val mapped = comment(
+            content = "bonjour",
+            originalLanguage = "fr",
+            translations = mapOf("en" to ApiPostTranslationEntry(text = "hello")),
+        ).toStoryComment(Prefs(systemLanguage = "fr", regionalLanguage = "en"))
+
+        assertThat(mapped.content).isEqualTo("bonjour")
+        assertThat(mapped.isTranslated).isFalse()
+    }
+
+    @Test
+    fun commentWrittenInALowerRankLanguage_isServedInThePrimaryOne() {
+        val mapped = comment(
+            content = "hello",
+            originalLanguage = "en",
+            translations = mapOf("fr" to ApiPostTranslationEntry(text = "bonjour")),
+        ).toStoryComment(Prefs(systemLanguage = "fr", regionalLanguage = "en"))
+
+        assertThat(mapped.content).isEqualTo("bonjour")
+        assertThat(mapped.isTranslated).isTrue()
+    }
+
+    @Test
+    fun noLanguageConfigured_keepsTheOriginal() {
+        val mapped = comment(
+            content = "hello",
+            translations = mapOf("fr" to ApiPostTranslationEntry(text = "bonjour")),
+        ).toStoryComment(Prefs())
+
+        assertThat(mapped.content).isEqualTo("hello")
+        assertThat(mapped.isTranslated).isFalse()
     }
 }

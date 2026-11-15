@@ -1,4 +1,5 @@
 import XCTest
+import MeeshyUI
 @testable import Meeshy
 
 /// A `Button`'s tappable region is exactly its label's layout region. The three
@@ -22,8 +23,12 @@ final class AudioFullscreenTouchTargetTests: XCTestCase {
             .deletingLastPathComponent()   // …/Unit
             .deletingLastPathComponent()   // …/MeeshyTests
             .deletingLastPathComponent()   // …/apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Views/AudioFullscreenView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+            .appendingPathComponent("Meeshy/Features/Main/Views")
+        // #10383 — la page a quitté `AudioFullscreenView.swift` (plafond de
+        // taille) : ses contrôles vivent dans la page et son extension.
+        return try ["AudioFullscreenPage.swift", "AudioFullscreenPage+Transcription.swift"]
+            .map { try String(contentsOf: url.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     /// Comments are stripped before matching: an explanatory comment naming
@@ -58,36 +63,43 @@ final class AudioFullscreenTouchTargetTests: XCTestCase {
 
     func test_closeControl_reachesTheFortyFourPointFloor() throws {
         // The close control is the ONLY way out of the fullscreen player: a missed
-        // tap traps the user on the screen.
+        // tap traps the user on the screen. It is the shared chrome close (#8878):
+        // the 36 pt disc, its 44 pt frame and its full-rectangle content shape live in
+        // `FullscreenChromeDisc`, pinned by the SDK's `FullscreenChromeMetricsTests`.
         let source = try strippedSource()
-        let near = try window(after: "Image(systemName: \"xmark\")", in: source)
+        let near = try window(after: "FullscreenTopBar(", in: source, span: 60)
         XCTAssertTrue(
-            near.contains(".frame(width: 44, height: 44)"),
-            "The fullscreen player's close control must expose a 44 pt hit region — it is the " +
-            "only exit from the screen."
+            near.contains("onDismiss()"),
+            "The fullscreen player's close control is the shared chrome close wired to onDismiss — " +
+            "it is the only exit from the screen."
         )
-        XCTAssertTrue(
-            near.contains(".contentShape(Circle())"),
-            "Without .contentShape the transparent ring between the 36 pt pill and the 44 pt " +
-            "edge does not reliably participate in hit-testing."
+        XCTAssertGreaterThanOrEqual(
+            FullscreenChromeMetrics.tapTarget, 44,
+            "The shared chrome close exposes a 44 pt hit region."
+        )
+        XCTAssertGreaterThan(
+            FullscreenChromeMetrics.tapTarget, FullscreenChromeMetrics.discDiameter,
+            "The hit region overflows the visible disc — that overflow is what the content shape fills."
         )
     }
 
     func test_saveControl_reachesTheFortyFourPointFloor() throws {
         let source = try strippedSource()
-        let near = try window(after: "Image(systemName: \"arrow.down.to.line\")", in: source)
         XCTAssertTrue(
-            near.contains(".frame(width: 44, height: 44)") && near.contains(".contentShape(Circle())"),
-            "The save control must expose a 44 pt hit region."
+            source.contains("FullscreenChromeDisc(systemImage: FullscreenChromeSymbol.save"),
+            "The save control is the shared chrome disc (36 pt visible, 44 pt target)."
+        )
+        XCTAssertTrue(
+            source.contains("height: FullscreenChromeMetrics.tapTarget"),
+            "The save control's busy state must keep the 44 pt hit region too."
         )
     }
 
     func test_translateControl_reachesTheFortyFourPointFloor() throws {
         let source = try strippedSource()
-        let near = try window(after: "Image(systemName: \"translate\")", in: source)
         XCTAssertTrue(
-            near.contains(".frame(width: 44, height: 44)") && near.contains(".contentShape(Circle())"),
-            "The translate control must expose a 44 pt hit region."
+            source.contains("FullscreenChromeDisc(systemImage: \"translate\""),
+            "The translate control is the shared chrome disc (36 pt visible, 44 pt target)."
         )
     }
 
@@ -99,12 +111,14 @@ final class AudioFullscreenTouchTargetTests: XCTestCase {
         // accessibility fix, and would break the Dynamic Type freeze of 82i/86i.
         let source = try strippedSource()
         XCTAssertEqual(
-            source.components(separatedBy: ".frame(width: 36, height: 36)").count - 1, 2,
-            "The two 36 pt chrome pills must keep their frozen size; only the hit region grows."
+            source.components(separatedBy: ".frame(width: 36, height: 36)").count - 1, 0,
+            "The 36 pt chrome pills are the shared `FullscreenChromeDisc` now; none is hand-rolled here."
         )
+        XCTAssertEqual(FullscreenChromeMetrics.discDiameter, 36,
+                       "The shared disc keeps the 36 pt size the two pills had.")
         XCTAssertEqual(
-            source.components(separatedBy: ".frame(width: 26, height: 26)").count - 1, 1,
-            "The 26 pt translate pill must keep its frozen size — it overflows its row if it scales."
+            source.components(separatedBy: ".frame(width: 26, height: 26)").count - 1, 0,
+            "The 26 pt translate pill is gone (#10568) — it was lost at the foot of the screen; the shared disc replaces it."
         )
     }
 
@@ -112,7 +126,7 @@ final class AudioFullscreenTouchTargetTests: XCTestCase {
         // The motor pass must not cost the screen-reader pass: all three controls are
         // icon-only, so each needs a name.
         let source = try strippedSource()
-        for key in ["common.close", "audio.fullscreen.language.choose"] {
+        for key in ["media.download", "audio.fullscreen.language.choose"] {
             XCTAssertTrue(
                 source.contains(key),
                 "\(key) must still name its icon-only control after the touch-target change."

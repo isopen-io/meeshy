@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_publish_failed_story">La historia no se publicó</string>
+    <string name="composer_publish_failed_post">La publicación no se publicó</string>
+    <string name="composer_publish_failed_reel">El reel no se publicó</string>
+</resources>

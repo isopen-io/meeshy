@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:reels": {
+      "resDir": "feature/reels/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.repost.success",
+          "androidName": "reels_toast_reposted",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.repost.error",
+          "androidName": "reels_toast_repost_failed",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

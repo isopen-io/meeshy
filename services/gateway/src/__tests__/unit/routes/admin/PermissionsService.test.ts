@@ -28,13 +28,18 @@ describe('getUserPermissions', () => {
     expect(p.canManageTranslations).toBe(true);
   });
 
-  it('grants ADMIN all permissions except auditLogs and translations', () => {
+  it('grants ADMIN all permissions except auditLogs — translations INCLUSES', () => {
+    // `canManageTranslations: false` était la DIVERGENCE de cette matrice
+    // locale contre la centrale, qui l'accorde à ADMIN. Ce témoin la gelait
+    // (#4152). Ce fichier ne teste plus une matrice mais une PROJECTION : la
+    // valeur vient désormais du site unique, et il n'y a plus rien ici qui
+    // puisse en différer.
     const p = sut.getUserPermissions('ADMIN');
 
     expect(p.canAccessAdmin).toBe(true);
     expect(p.canManageUsers).toBe(true);
     expect(p.canViewAuditLogs).toBe(false);
-    expect(p.canManageTranslations).toBe(false);
+    expect(p.canManageTranslations).toBe(true);
   });
 
   it('grants MODERATOR content moderation but not user management or analytics', () => {

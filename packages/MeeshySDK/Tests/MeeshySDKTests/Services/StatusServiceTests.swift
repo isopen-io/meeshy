@@ -233,7 +233,7 @@ final class StatusServiceTests: XCTestCase {
     // MARK: - react
 
     func testReactPostsToLikeEndpoint() async throws {
-        let response = APIResponse<[String: String]>(success: true, data: [:], error: nil)
+        let response = APIResponse(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/posts/post123/like", result: response)
 
         try await service.react(statusId: "post123", emoji: "heart")
@@ -245,12 +245,22 @@ final class StatusServiceTests: XCTestCase {
 
     // MARK: - Mode endpoint mapping
 
+    /// `Mode.endpoint` rend désormais une ADRESSE TYPÉE et non un chemin
+    /// (#4282) — c'était le dernier chemin écrit à la main du SDK, et il avait
+    /// échappé à l'audit parce qu'il vivait dans une propriété calculée, pas
+    /// au site d'appel.
+    ///
+    /// Le témoin compare donc les CAS, pas les chaînes : comparer à
+    /// `"/posts/feed/statuses"` réintroduirait ici exactement ce que le lot a
+    /// retiré là-bas — un chemin écrit à la main, qu'aucun compilateur ne
+    /// confronte au serveur.
     func testFriendsModeEndpoint() {
-        XCTAssertEqual(StatusService.Mode.friends.endpoint, "/posts/feed/statuses")
+        XCTAssertEqual(StatusService.Mode.friends.endpoint.path, PostsEndpoint.feedStatuses.path)
     }
 
     func testDiscoverModeEndpoint() {
-        XCTAssertEqual(StatusService.Mode.discover.endpoint, "/posts/feed/statuses/discover")
+        XCTAssertEqual(StatusService.Mode.discover.endpoint.path,
+                       PostsEndpoint.feedStatusesDiscover.path)
     }
 
     // MARK: - Error handling

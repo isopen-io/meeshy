@@ -11,11 +11,11 @@ import PencilKit
 ///      MUST produce the same visibility decisions today (sharp on/off cut),
 ///      and the consolidated branch MUST keep that contract.
 ///   2. `contentsScale` parameterization for export (#17) — the live path keeps
-///      `UIScreen.main.scale` as the default, while export call-sites pass
+///      the ambient trait scale as the default, while export call-sites pass
 ///      `1.0` so the export resolution stays 1:1 with the design pixel grid.
 ///
 /// Tests are `@MainActor` because `StoryRenderer.render` is `@MainActor`-isolated
-/// (CALayer subclasses it instantiates touch `UIScreen.main` at configure time).
+/// (CALayer subclasses it instantiates are MainActor-bound).
 @MainActor
 final class StoryRenderer_RenderTests: XCTestCase {
 
@@ -112,20 +112,27 @@ final class StoryRenderer_RenderTests: XCTestCase {
 
     // MARK: - Bug B (#17) — contentsScale parameter
 
-    /// Default path: callers that omit `contentsScale` MUST get the device
-    /// screen scale on the root layer (preserves live composer/viewer
-    /// fidelity on Retina/Pro displays).
-    func test_render_defaultScale_usesUIScreenMain() {
-        let slide = makeSlideWithTimedAndStaticText(startTime: 0, duration: 5)
-        let geometry = makeGeometry()
+    /// L'échelle passée par l'appelant (le canvas passe sa `displayScale`)
+    /// atteint la racine, sans qu'aucun `UIScreen.main` ne s'en mêle.
+    func test_render_propagatesExplicitContentsScale_toRootAndEveryItemLayer() {
+        var effects = StoryEffects(textObjects: [StoryTextObject(id: "t1", text: "Légende")])
+        effects.stickerObjects = [StorySticker(id: "s1", emoji: "🎧")]
+        let slide = StorySlide(id: "scale-slide", effects: effects)
 
-        let root = StoryRenderer.render(slide: slide,
-                                        into: geometry,
-                                        at: .zero,
-                                        mode: .edit)
-
-        XCTAssertEqual(root.contentsScale, UIScreen.main.scale,
-                       "Default contentsScale must match UIScreen.main.scale")
+        for scale in [CGFloat(2.0), CGFloat(3.0)] {
+            let root = StoryRenderer.render(slide: slide,
+                                            into: makeGeometry(),
+                                            at: .zero,
+                                            mode: .edit,
+                                            contentsScale: scale)
+            XCTAssertEqual(root.contentsScale, scale)
+            let items = (root.sublayers ?? []).filter { $0.zPosition != 9999 }
+            XCTAssertFalse(items.isEmpty)
+            for layer in items {
+                XCTAssertEqual(layer.contentsScale, scale, accuracy: 0.001,
+                               "Un calque d'item ignore l'échelle demandée : \(type(of: layer))")
+            }
+        }
     }
 
     /// Export path: explicit `contentsScale: 1.0` MUST land on the root layer
@@ -171,25 +178,6 @@ final class StoryRenderer_RenderTests: XCTestCase {
                 XCTAssertEqual(layer.rasterizationScale, 1.0, accuracy: 0.001,
                                "rasterizationScale doit suivre l'échelle de rendu")
             }
-        }
-    }
-
-    /// Le canvas live garde la densité de l'appareil — la propagation ne doit
-    /// pas dégrader l'affichage à l'écran.
-    func test_render_defaultScale_itemLayersKeepScreenScale() {
-        var effects = StoryEffects(textObjects: [StoryTextObject(id: "t1", text: "Légende")])
-        effects.stickerObjects = [StorySticker(id: "s1", emoji: "🎧")]
-        let slide = StorySlide(id: "scale-slide", effects: effects)
-
-        let root = StoryRenderer.render(slide: slide,
-                                        into: makeGeometry(),
-                                        at: .zero,
-                                        mode: .edit)
-
-        let items = (root.sublayers ?? []).filter { $0.zPosition != 9999 }
-        for layer in items {
-            XCTAssertEqual(layer.contentsScale, UIScreen.main.scale, accuracy: 0.001,
-                           "Le canvas live doit rester à la densité de l'écran")
         }
     }
 

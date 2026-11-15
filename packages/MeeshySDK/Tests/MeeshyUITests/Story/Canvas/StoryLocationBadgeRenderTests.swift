@@ -205,4 +205,61 @@ final class StoryLocationBadgeRenderTests: XCTestCase {
         XCTAssertEqual(b, expectedB, accuracy: 0.01, file: file, line: line)
         XCTAssertEqual(a, alpha, accuracy: 0.01, file: file, line: line)
     }
+
+    // MARK: - La fenêtre de la pastille atteint le PIXEL
+
+    /// **Une pastille de lieu APPARAÎT et DISPARAÎT quand elle veut** —
+    /// directive porteur 2026-08-31 (#4591). Ce témoin est celui qui manquait :
+    /// il n'interroge ni le modèle ni la timeline, mais **ce que le rendu
+    /// PEINT**, à trois instants.
+    ///
+    /// > Il aurait rougi tant que `MeeshyUI` déclarait
+    /// > `extension StoryLocationObject: RenderableItem { var startTime: Double? { nil } }`.
+    /// > Ces quatre calculées OMBRAIENT les propriétés stockées dans tout le
+    /// > module — la fenêtre posée au modèle n'aurait gouverné AUCUN pixel, et
+    /// > les témoins du modèle seraient restés verts. **Un repli qui rend `nil`
+    /// > sans condition satisfait le contrat qu'il vide.**
+    func test_renderer_honoursTheLocationWindow_inPlayMode() {
+        var lieu = StoryLocationObject(id: "loc-1",
+                                       place: SharedPlace(latitude: 48.8566, longitude: 2.3522,
+                                                          name: "Tour Eiffel"))
+        lieu.startTime = 2
+        lieu.duration = 3
+        var slide = StorySlide(id: "s1")
+        slide.locationObjects = [lieu]
+        let geometry = CanvasGeometry(renderSize: CGSize(width: 1080, height: 1920))
+
+        func peinte(at seconds: Double) -> Bool {
+            let root = StoryRenderer.render(slide: slide, into: geometry,
+                                            at: CMTime(seconds: seconds, preferredTimescale: 600),
+                                            mode: .play)
+            return (root.sublayers ?? []).contains { $0.name == "loc-1" }
+        }
+
+        XCTAssertFalse(peinte(at: 1), "Avant sa fenêtre, la pastille ne doit pas être peinte")
+        XCTAssertTrue(peinte(at: 3), "Dans sa fenêtre, la pastille doit être peinte")
+        XCTAssertFalse(peinte(at: 6), "Après sa fenêtre, la pastille ne doit plus être peinte")
+    }
+
+    /// Et une pastille SANS fenêtre reste visible tout du long : `nil` signifie
+    /// « aucune fenêtre posée », pour les cinq familles — pas « cette famille
+    /// n'a pas de temps ». C'est ce qui garantit qu'aucune publication déjà
+    /// composée ne change de comportement.
+    func test_renderer_keepsAWindowlessLocationVisible_throughout() {
+        var slide = StorySlide(id: "s1")
+        slide.locationObjects = [
+            StoryLocationObject(id: "loc-1",
+                                place: SharedPlace(latitude: 48.8566, longitude: 2.3522,
+                                                   name: "Tour Eiffel"))
+        ]
+        let geometry = CanvasGeometry(renderSize: CGSize(width: 1080, height: 1920))
+
+        for seconds in [0.0, 5.0, 30.0] {
+            let root = StoryRenderer.render(slide: slide, into: geometry,
+                                            at: CMTime(seconds: seconds, preferredTimescale: 600),
+                                            mode: .play)
+            XCTAssertTrue((root.sublayers ?? []).contains { $0.name == "loc-1" },
+                          "Sans fenêtre posée, la pastille vit toute la slide (t=\(seconds))")
+        }
+    }
 }

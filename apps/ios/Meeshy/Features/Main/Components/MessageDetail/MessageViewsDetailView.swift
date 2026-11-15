@@ -3,36 +3,6 @@ import MeeshySDK
 import MeeshyUI
 import os
 
-// MARK: - Views Sub-Filter
-
-private enum ViewsFilter: String, CaseIterable, Identifiable {
-    case sent, delivered, read, notSeen, listened, watched
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .sent: return String(localized: "message-detail.views.sent", defaultValue: "Sent", bundle: .main)
-        case .delivered: return String(localized: "message-detail.views.delivered", defaultValue: "Delivered", bundle: .main)
-        case .read: return String(localized: "message-detail.views.read", defaultValue: "Read", bundle: .main)
-        case .notSeen: return String(localized: "message-detail.views.not-seen", defaultValue: "Not seen", bundle: .main)
-        case .listened: return String(localized: "message-detail.views.listened", defaultValue: "Listened", bundle: .main)
-        case .watched: return String(localized: "message-detail.views.watched", defaultValue: "Seen", bundle: .main)
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .sent: return "paperplane.fill"
-        case .delivered: return "checkmark.circle.fill"
-        case .read: return "eye.fill"
-        case .notSeen: return "eye.slash.fill"
-        case .listened: return "headphones"
-        case .watched: return "play.rectangle.fill"
-        }
-    }
-}
-
 // MARK: - MessageViewsDetailView
 
 /// Onglet « Qui a vu » du détail d'un message : sous-filtres (Envoyé / Distribué /
@@ -53,33 +23,73 @@ struct MessageViewsDetailView: View {
     @State private var isLoadingReadStatus = false
     @State private var attachmentStatuses: [String: [AttachmentStatusUser]] = [:]
     @State private var isLoadingAttachmentStatuses = false
-    @State private var readStatusError: String? = nil
+    @State private var readStatusError: MessageViewsLabels.LoadFailure? = nil
+    /// Les membres connus de la conversation, par identifiant de PARTICIPATION (#10956) : les
+    /// listes de lecture ne servent que celui-là, et c'est ici que se retrouvent le COMPTE de la
+    /// personne (sa présence servie) et son contour équipé (#10946). Lu dans le cache seul.
+    @State private var membersByParticipant: [String: PaginatedParticipant] = [:]
 
-    // Views sub-filter
-    @State private var viewsFilter: ViewsFilter = .sent
+    // Views sub-filter — `nil` tant que l'utilisateur n'a rien touché :
+    // l'onglet d'ouverture est alors celui que `MessageViewsFilter.initial`
+    // juge pertinent (#7366), jamais « Envoyé » par défaut. Il se règle sur
+    // le décompte SERVEUR dès qu'il est chargé (#7433) : sur les compteurs
+    // locaux seuls, une bulle faussement « lue » ouvrait la fiche sur un
+    // onglet « Lu » que le serveur laissait vide.
+    @State private var chosenViewsFilter: MessageViewsFilter? = nil
+    private var viewsFilter: MessageViewsFilter {
+        chosenViewsFilter ?? .initial(
+            readCount: readStatusData?.readCount ?? message.readCount,
+            deliveredCount: readStatusData?.receivedCount ?? message.deliveredCount,
+            showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts
+        )
+    }
 
-    // Historique local des tentatives d'envoi (spec 2026-07-08
-    // message-send-failure-retry-flow) — vide pour les messages reçus
+    // Historique local des tentatives d'envoi — vide pour les messages reçus
     // (aucune ligne `send_attempts` locale), la carte ne s'affiche pas.
     @State private var sendAttempts: [SendAttemptRecord] = []
 
-    private var availableViewsFilters: [ViewsFilter] {
-        var filters: [ViewsFilter] = [.sent, .delivered, .read, .notSeen]
-        let hasAudio = message.attachments.contains { AttachmentKind(mimeType: $0.mimeType) == .audio }
-        let hasVideo = message.attachments.contains { AttachmentKind(mimeType: $0.mimeType) == .video }
-        if hasAudio { filters.append(.listened) }
-        if hasVideo { filters.append(.watched) }
-        return filters
+    private var availableViewsFilters: [MessageViewsFilter] {
+        // #7228 — un onglet par famille de consommation PRÉSENTE. La partition
+        // est celle de `MediaConsumptionFamily` : audio, vidéo, et tout le
+        // reste, qui s'OUVRE (image, PDF, tableur, présentation, archive…).
+        let families = MessageViewsConsumption.families(in: message.attachments)
+        return [.sent, .delivered, .read, .notSeen] + families.map(MessageViewsFilter.init(family:))
     }
 
     var body: some View {
         viewsTabContent
             .onAppear {
                 Task {
+                    await loadMembers()
                     await loadSendAttempts()
                     await loadReadStatus()
                     await loadAttachmentStatuses()
                 }
+            }
+            // I3 (#7349) — la fiche ne se rechargeait qu'à l'ouverture ;
+            // `read-status:updated` pour cette conversation la relance en
+            // direct, sans qu'il faille la refermer puis la rouvrir. Même
+            // idiome que `MessageTranscriptionDetailView` dans ce même
+            // dossier (`.onReceive(MessageSocketManager.shared.<event>
+            // .filter { ... })`).
+            .onReceive(
+                MessageSocketManager.shared.readStatusUpdated
+                    .filter { $0.conversationId == conversationId }
+                    .receive(on: DispatchQueue.main)
+            ) { _ in
+                Task { await loadReadStatus(force: true) }
+            }
+            // I4 (#7360) — les cartes « écouté jusqu'à » / « Nx » se relancent
+            // en direct, pour CE message seulement (règle testée à part).
+            .onReceive(
+                MessageSocketManager.shared.attachmentStatusUpdated
+                    .filter { [messageId = message.id, conversationId] in
+                        MessageViewsConsumption.refreshesCards(
+                            on: $0, messageId: messageId, conversationId: conversationId)
+                    }
+                    .receive(on: DispatchQueue.main)
+            ) { _ in
+                Task { await loadAttachmentStatuses() }
             }
     }
 
@@ -91,13 +101,13 @@ struct MessageViewsDetailView: View {
         return VStack(alignment: .leading, spacing: 0) {
             // Sub-filter capsules
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     ForEach(availableViewsFilters) { filter in
                         viewsFilterCapsule(filter, accent: accent)
                     }
                 }
             }
-            .padding(.bottom, 14)
+            .padding(.bottom, MeeshySpacing.mdPlus)
 
             // Content for selected filter
             Group {
@@ -114,6 +124,8 @@ struct MessageViewsDetailView: View {
                     viewsListenedContent(accent: accent)
                 case .watched:
                     viewsWatchedContent(accent: accent)
+                case .opened:
+                    viewsOpenedContent(accent: accent)
                 }
             }
             .id(viewsFilter)
@@ -126,7 +138,7 @@ struct MessageViewsDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func viewsFilterCapsule(_ filter: ViewsFilter, accent: Color) -> some View {
+    private func viewsFilterCapsule(_ filter: MessageViewsFilter, accent: Color) -> some View {
         let isSelected = viewsFilter == filter
         var count: Int? = nil
 
@@ -134,22 +146,23 @@ struct MessageViewsDetailView: View {
         case .delivered: count = readStatusData?.receivedCount
         case .read: count = readStatusData?.readCount
         case .notSeen: count = readStatusData?.notSeenCount
-        case .listened:
-            let audioIds = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .audio }.map(\.id)
-            count = audioIds.reduce(0) { $0 + (attachmentStatuses[$1]?.count ?? 0) }
-        case .watched:
-            let videoIds = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .video }.map(\.id)
-            count = videoIds.reduce(0) { $0 + (attachmentStatuses[$1]?.count ?? 0) }
-        default: break
+        default:
+            // Les trois onglets de consommation comptent les participants de
+            // LEUR famille ; les autres n'en ont pas et restent sans pastille.
+            if let family = filter.family {
+                count = MessageViewsConsumption
+                    .attachments(message.attachments, in: family)
+                    .reduce(0) { $0 + (attachmentStatuses[$1.id]?.count ?? 0) }
+            }
         }
 
         return Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                viewsFilter = filter
+                chosenViewsFilter = filter
             }
             HapticFeedback.light()
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: filter.icon)
                     .font(.caption2.weight(.medium))
                 Text(filter.label)
@@ -158,7 +171,7 @@ struct MessageViewsDetailView: View {
                     Text("\(count)")
                         .font(.system(.caption2, design: .monospaced).weight(.bold))
                         .foregroundColor(isSelected ? accent : theme.textMuted)
-                        .padding(.horizontal, 5)
+                        .padding(.horizontal, MeeshySpacing.xs)
                         .padding(.vertical, 1)
                         .background(
                             Capsule()
@@ -166,15 +179,15 @@ struct MessageViewsDetailView: View {
                         )
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .background(
                 Capsule()
                     .fill(isSelected ? accent.opacity(0.15) : isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
             )
             .overlay(
                 Capsule()
-                    .stroke(isSelected ? accent.opacity(0.35) : Color.clear, lineWidth: 0.5)
+                    .stroke(isSelected ? accent.opacity(0.35) : Color.clear, lineWidth: MeeshyBorder.hairline)
             )
             .foregroundColor(isSelected ? accent : theme.textMuted)
         }
@@ -190,74 +203,76 @@ struct MessageViewsDetailView: View {
     // MARK: - Envoyé (Sent) — Message Info + Author
 
     private func viewsSentContent(accent: Color) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.mdPlus) {
             // Author card with avatar
-            HStack(spacing: 12) {
-                MeeshyAvatar(
+            HStack(spacing: MeeshySpacing.md) {
+                LivePresence { MeeshyAvatar(
                     name: message.senderName ?? "?",
                     context: .userListItem,
                     accentColor: message.senderColor ?? contactColor,
-                    avatarURL: message.senderAvatarURL
-                )
+                    avatarURL: message.senderAvatarURL,
+                    presenceState: message.isMe ? nil : PresenceManager.shared.presenceState(forSenderOf: message),
+                    ring: message.senderRing
+                ) }
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(message.senderName ?? "Inconnu")
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    Text(message.senderName ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main))
                         .font(.callout.weight(.semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
 
-                    Text(formatDateFR(message.createdAt))
+                    Text(formatDateTime(message.createdAt))
                         .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 Spacer()
 
                 // Delivery badge
-                deliveryBadge(accent: accent)
+                MessageViewsDeliveryBadge(level: deliveryStatusLevel, accent: accent)
             }
-            .padding(12)
+            .padding(MeeshySpacing.md)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(accent.opacity(0.1), lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                            .stroke(accent.opacity(0.1), lineWidth: MeeshyBorder.hairline)
                     )
             )
 
             // Message meta info (merged from old Meta tab)
             VStack(spacing: 0) {
-                metaInfoRow(icon: "number", label: "ID", value: String(message.id.prefix(12)), accent: accent)
-                metaDivider
-                metaInfoRow(icon: "bubble.left.fill", label: "Type", value: message.messageType.rawValue, accent: accent)
-                metaDivider
-                metaInfoRow(icon: "antenna.radiowaves.left.and.right", label: "Source", value: message.messageSource.rawValue, accent: accent)
-                metaDivider
-                metaInfoRow(icon: "globe", label: "Langue", value: message.originalLanguage.uppercased(), accent: accent)
-                metaDivider
-                metaInfoRow(
+                MessageViewsMetaRow(icon: "number", label: String(localized: "message-detail.meta.id", bundle: .main), value: String(message.id.prefix(12)), accent: accent)
+                MessageViewsMetaDivider()
+                MessageViewsMetaRow(icon: "bubble.left.fill", label: String(localized: "message-detail.meta.type", bundle: .main), value: message.messageType.rawValue, accent: accent)
+                MessageViewsMetaDivider()
+                MessageViewsMetaRow(icon: "antenna.radiowaves.left.and.right", label: String(localized: "message-detail.meta.source", bundle: .main), value: message.messageSource.rawValue, accent: accent)
+                MessageViewsMetaDivider()
+                MessageViewsMetaRow(icon: "globe", label: String(localized: "message-detail.meta.language", bundle: .main), value: message.originalLanguage.uppercased(), accent: accent)
+                MessageViewsMetaDivider()
+                MessageViewsMetaRow(
                     icon: "lock.shield.fill",
-                    label: "Chiffrement",
+                    label: String(localized: "message-detail.meta.encryption", bundle: .main),
                     value: message.isEncrypted
-                        ? "Oui" + (message.encryptionMode.map { " (\($0))" } ?? "")
-                        : "Non",
+                        ? String(localized: "message-detail.meta.encryption-yes", bundle: .main) + (message.encryptionMode.map { " (\($0))" } ?? "")
+                        : String(localized: "message-detail.meta.encryption-no", bundle: .main),
                     accent: accent,
                     valueColor: message.isEncrypted ? .green : nil
                 )
 
                 if message.isEdited {
-                    metaDivider
-                    metaInfoRow(icon: "pencil", label: "Modifie", value: formatDateTimeFR(message.updatedAt), accent: accent, valueColor: .yellow)
+                    MessageViewsMetaDivider()
+                    MessageViewsMetaRow(icon: "pencil", label: String(localized: "message-detail.meta.modified", bundle: .main), value: formatDateTime(message.updatedAt), accent: accent, valueColor: .yellow)
                 }
 
                 if !message.attachments.isEmpty {
-                    metaDivider
+                    MessageViewsMetaDivider()
                     let types = Set(message.attachments.map {
                         $0.mimeType.components(separatedBy: "/").first ?? "file"
                     })
-                    metaInfoRow(
+                    MessageViewsMetaRow(
                         icon: "paperclip",
-                        label: "Pieces jointes",
+                        label: String(localized: "message-detail.meta.attachments", bundle: .main),
                         value: "\(message.attachments.count) (\(types.sorted().joined(separator: ", ")))",
                         accent: accent
                     )
@@ -268,235 +283,54 @@ struct MessageViewsDetailView: View {
                 // conversation source même pour un tête-à-tête. Une seule
                 // surface de vérité désormais.
                 if message.forwardedFrom != nil {
-                    metaDivider
-                    metaInfoRow(
+                    MessageViewsMetaDivider()
+                    MessageViewsMetaRow(
                         icon: "arrowshape.turn.up.forward.fill",
-                        label: String(localized: "message.detail.forwarded", defaultValue: "Forwarded", bundle: .main),
+                        label: String(localized: "message.detail.forwarded", defaultValue: "Transféré", bundle: .main),
                         value: BubbleForwardedIndicator.label(for: ForwardBadgePolicy.attribution(for: message.forwardedFrom)),
                         accent: accent
                     )
                 }
 
                 if let reply = message.replyTo {
-                    metaDivider
-                    metaInfoRow(icon: "arrowshape.turn.up.left.fill", label: "Reponse a", value: reply.authorName, accent: accent)
+                    MessageViewsMetaDivider()
+                    MessageViewsMetaRow(icon: "arrowshape.turn.up.left.fill", label: String(localized: "message-detail.meta.reply-to", bundle: .main), value: reply.authorName, accent: accent)
                 }
             }
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
             )
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
 
             if !sendAttempts.isEmpty {
-                sendAttemptsCard(accent: accent)
+                MessageViewsSendAttemptsCard(attempts: sendAttempts, accent: accent)
             }
         }
     }
 
     // MARK: - Historique d'envoi (tentatives locales)
 
-    /// Pluriel résolu explicitement : le markup AGA inline (`^[…](inflect: true)`)
-    /// dans un `defaultValue` sans entrée String Catalog fuit en brut sur iOS 18.x.
-    static func sendAttemptCountLabel(_ count: Int) -> String {
-        String(
-            localized: "message-detail.send-history.attempt-count",
-            defaultValue: "\(count) \(count == 1 ? "attempt" : "attempts")",
-            bundle: .main
-        )
-    }
-
-    private func sendAttemptsCard(accent: Color) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(accent.opacity(0.7))
-                Text(String(localized: "message-detail.send-history.title", defaultValue: "Send history", bundle: .main))
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
-                Spacer()
-                Text(Self.sendAttemptCountLabel(sendAttempts.count))
-                    .font(.caption2.weight(.medium))
-                    .foregroundColor(theme.textMuted)
-            }
-
-            if let first = sendAttempts.first {
-                metaInfoRow(
-                    icon: "paperplane",
-                    label: String(localized: "message-detail.send-history.first-attempt", defaultValue: "1st attempt", bundle: .main),
-                    value: formatDateTimeFR(first.startedAt),
-                    accent: accent
-                )
-            }
-
-            VStack(spacing: 0) {
-                ForEach(sendAttempts, id: \.attemptNumber) { attempt in
-                    sendAttemptRow(attempt, accent: accent)
-                    if attempt.attemptNumber != sendAttempts.last?.attemptNumber {
-                        metaDivider
-                    }
-                }
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(accent.opacity(0.1), lineWidth: 0.5)
-                )
-        )
-    }
-
-    private func sendAttemptRow(_ attempt: SendAttemptRecord, accent: Color) -> some View {
-        let isSuccess = attempt.outcome == SendAttemptRecord.Outcome.success.rawValue
-        return HStack(alignment: .top, spacing: 10) {
-            Image(systemName: isSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .font(.caption2.weight(.medium))
-                .foregroundColor(isSuccess ? MeeshyColors.success : MeeshyColors.error)
-                .frame(width: 16)
-                .padding(.top, 1)
-                .accessibilityLabel(isSuccess
-                    ? String(localized: "message-detail.send-history.outcome.succeeded", defaultValue: "Succeeded", bundle: .main)
-                    : String(localized: "message-detail.send-history.outcome.failed", defaultValue: "Failed", bundle: .main))
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(String(localized: "message-detail.send-history.attempt-number", defaultValue: "Attempt \(attempt.attemptNumber)", bundle: .main))
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textPrimary)
-                    Text(sendAttemptTransportLabel(attempt.transport))
-                        .font(.caption2.weight(.medium))
-                        .foregroundColor(accent.opacity(0.8))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1)
-                        .background(Capsule().fill(accent.opacity(0.1)))
-                }
-                if let errorMessage = attempt.errorMessage, !errorMessage.isEmpty {
-                    Text(errorMessage)
-                        .font(.caption2)
-                        .foregroundColor(theme.textMuted)
-                        .lineLimit(2)
-                }
-            }
-
-            Spacer()
-
-            Text(formatTimeWithSecondsFR(attempt.startedAt))
-                .font(.system(.caption2, design: .monospaced))
-                .foregroundColor(theme.textMuted)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .accessibilityElement(children: .combine)
-    }
-
-    private func sendAttemptTransportLabel(_ transport: String) -> String {
-        switch SendAttemptRecord.Transport(rawValue: transport) {
-        case .socketFirst: return String(localized: "message-detail.send-history.transport.realtime", defaultValue: "Real-time", bundle: .main)
-        case .rest: return "REST"
-        case .socketFallback: return String(localized: "message-detail.send-history.transport.realtime-fallback", defaultValue: "Real-time fallback", bundle: .main)
-        case .outbox: return String(localized: "message-detail.send-history.transport.auto-retry", defaultValue: "Auto retry", bundle: .main)
-        case nil: return transport
-        }
-    }
-
-    private func deliveryBadge(accent: Color) -> some View {
-        let level = deliveryStatusLevel
-        let icon: String
-        let label: String
-        let color: Color
-
-        switch level {
-        case 3:
-            icon = "eye.fill"
-            label = String(localized: "bubble.delivery.read", defaultValue: "Lu", bundle: .main)
-            color = .green
-        case 2:
-            icon = "checkmark.circle.fill"
-            label = String(localized: "bubble.delivery.delivered", defaultValue: "Distribué", bundle: .main)
-            color = accent
-        case 1:
-            icon = "checkmark"
-            label = String(localized: "bubble.delivery.sent", defaultValue: "Envoyé", bundle: .main)
-            color = accent.opacity(0.7)
-        case 0:
-            icon = "arrow.up.circle"
-            label = String(localized: "bubble.delivery.sending", defaultValue: "Envoi en cours", bundle: .main)
-            color = theme.textMuted
-        default:
-            icon = "exclamationmark.circle"
-            label = String(localized: "bubble.delivery.failed", defaultValue: "Échec de l'envoi", bundle: .main)
-            color = .red
-        }
-
-        return HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.caption2.weight(.semibold))
-            Text(label)
-                .font(.caption2.weight(.semibold))
-        }
-        .foregroundColor(color)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            Capsule()
-                .fill(color.opacity(0.12))
-        )
-        .accessibilityElement(children: .combine)
-    }
-
-    private func metaInfoRow(icon: String, label: String, value: String, accent: Color, valueColor: Color? = nil) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.caption2.weight(.medium))
-                .foregroundColor(accent.opacity(0.6))
-                .frame(width: 16)
-
-            Text(label)
-                .font(.caption.weight(.medium))
-                .foregroundColor(theme.textMuted)
-                .frame(width: 85, alignment: .leading)
-
-            Text(value)
-                .font(.caption.weight(.medium))
-                .foregroundColor(valueColor ?? theme.textPrimary)
-                .lineLimit(1)
-
-            Spacer()
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-    }
-
-    private var metaDivider: some View {
-        Rectangle()
-            .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
-            .frame(height: 0.5)
-            .padding(.leading, 38)
+    static func sendAttemptCountLabel(_ count: Int,
+                                      bundle: Bundle = .main,
+                                      locale: Locale = .current) -> String {
+        MessageViewsSendAttemptsCard.sendAttemptCountLabel(count, bundle: bundle, locale: locale)
     }
 
     // MARK: - Distribué (Delivered) — User List
 
     private func viewsDeliveredContent(accent: Color) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if isLoadingReadStatus {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
+            if showsReadStatusSpinner {
                 loadingIndicator(accent: accent)
             } else if let status = readStatusData {
                 if status.receivedBy.isEmpty {
-                    emptyStateView(icon: "checkmark.circle", text: String(localized: "message-detail.views.delivered.empty", defaultValue: "Aucune confirmation de distribution", bundle: .main), accent: accent)
+                    MessageDetailEmptyState(icon: "checkmark.circle", text: String(localized: "message-detail.views.delivered.empty", defaultValue: "Aucune confirmation de distribution", bundle: .main))
                 } else {
-                    timelineBanner(
+                    MessageDetailTimelineBanner(
                         icon: "checkmark.circle.fill",
-                        text: status.receivedCount >= status.totalMembers ? "Distribue a tous" : "Distribue",
-                        detail: status.receivedBy.first.map { formatTimeFR($0.receivedAt) } ?? "",
+                        text: MessageViewsLabels.deliveredBanner(receivedCount: status.receivedCount, totalMembers: status.totalMembers),
+                        detail: status.receivedBy.first.map { MessageDetailClock.hourMinute($0.receivedAt) } ?? "",
                         count: "\(status.receivedCount)/\(status.totalMembers)",
                         accent: accent
                     )
@@ -504,6 +338,7 @@ struct MessageViewsDetailView: View {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(status.receivedBy.enumerated()), id: \.element.participantId) { index, user in
                             userStatusRow(
+                                participantId: user.participantId,
                                 username: user.displayName,
                                 avatar: user.avatarURL,
                                 date: user.receivedAt,
@@ -522,17 +357,17 @@ struct MessageViewsDetailView: View {
     // MARK: - Lu (Read) — User List
 
     private func viewsReadContent(accent: Color) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if isLoadingReadStatus {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
+            if showsReadStatusSpinner {
                 loadingIndicator(accent: accent)
             } else if let status = readStatusData {
                 if status.readBy.isEmpty {
-                    emptyStateView(icon: "eye.slash", text: String(localized: "message-detail.views.read.empty", defaultValue: "Personne n'a lu ce message", bundle: .main), accent: accent)
+                    MessageDetailEmptyState(icon: "eye.slash", text: String(localized: "message-detail.views.read.empty", defaultValue: "Personne n'a lu ce message", bundle: .main))
                 } else {
-                    timelineBanner(
+                    MessageDetailTimelineBanner(
                         icon: "eye.fill",
-                        text: status.readCount >= status.totalMembers ? "Lu par tous" : "Lu",
-                        detail: status.readBy.first.map { formatTimeFR($0.readAt) } ?? "",
+                        text: MessageViewsLabels.readBanner(readCount: status.readCount, totalMembers: status.totalMembers),
+                        detail: status.readBy.first.map { MessageDetailClock.hourMinute($0.readAt) } ?? "",
                         count: "\(status.readCount)/\(status.totalMembers)",
                         accent: accent
                     )
@@ -540,6 +375,7 @@ struct MessageViewsDetailView: View {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(status.readBy.enumerated()), id: \.element.participantId) { index, user in
                             userStatusRow(
+                                participantId: user.participantId,
                                 username: user.displayName,
                                 avatar: user.avatarURL,
                                 date: user.readAt,
@@ -558,15 +394,15 @@ struct MessageViewsDetailView: View {
     // MARK: - Pas vu (Not Seen) — User List
 
     private func viewsNotSeenContent(accent: Color) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if isLoadingReadStatus {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
+            if showsReadStatusSpinner {
                 loadingIndicator(accent: accent)
             } else if let status = readStatusData {
                 let notSeen = status.notSeenBy ?? []
                 if notSeen.isEmpty {
-                    emptyStateView(icon: "checkmark.circle", text: String(localized: "message-detail.views.not-seen.empty", defaultValue: "Tout le monde a recu le message", bundle: .main), accent: accent)
+                    MessageDetailEmptyState(icon: "checkmark.circle", text: String(localized: "message-detail.views.not-seen.empty", defaultValue: "Tout le monde a reçu le message", bundle: .main))
                 } else {
-                    timelineBanner(
+                    MessageDetailTimelineBanner(
                         icon: "eye.slash.fill",
                         text: String(localized: "message-detail.views.not-seen.title", defaultValue: "Pas encore vu", bundle: .main),
                         detail: String(localized: "message-detail.views.not-seen.count", defaultValue: "^[\(notSeen.count) participant](inflect: true)", bundle: .main),
@@ -577,6 +413,7 @@ struct MessageViewsDetailView: View {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(notSeen.enumerated()), id: \.element.participantId) { index, user in
                             userStatusRow(
+                                participantId: user.participantId,
                                 username: user.displayName,
                                 avatar: user.avatarURL,
                                 date: nil,
@@ -592,108 +429,79 @@ struct MessageViewsDetailView: View {
         }
     }
 
-    // MARK: - Écouté (Listened) — Per-Audio Attachment
+    // MARK: - Consommation par pièce jointe (écoutée / visionnée / ouverte)
 
     private func viewsListenedContent(accent: Color) -> some View {
-        let audioAttachments = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .audio }
-
-        return VStack(alignment: .leading, spacing: 14) {
-            if isLoadingAttachmentStatuses {
-                loadingIndicator(accent: accent)
-            } else {
-                ForEach(audioAttachments) { attachment in
-                    mediaConsumptionCard(
-                        attachment: attachment,
-                        isAudio: true,
-                        accent: accent
-                    )
-                }
-
-                if audioAttachments.isEmpty {
-                    emptyStateView(icon: "headphones", text: String(localized: "message-detail.views.audio.empty", defaultValue: "Aucun audio attache", bundle: .main), accent: accent)
-                }
-            }
-        }
+        consumptionContent(family: .listened, accent: accent)
     }
-
-    // MARK: - Vu (Watched) — Per-Video Attachment
 
     private func viewsWatchedContent(accent: Color) -> some View {
-        let videoAttachments = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .video }
+        consumptionContent(family: .watched, accent: accent)
+    }
 
-        return VStack(alignment: .leading, spacing: 14) {
+    private func viewsOpenedContent(accent: Color) -> some View {
+        consumptionContent(family: .opened, accent: accent)
+    }
+
+    /// Une carte par pièce jointe de la famille. UNE fonction pour les trois
+    /// onglets (#7228) : les trois corps recopiés divergeaient — seul celui de
+    /// l'audio savait dire « Nx », et aucun ne montrait les téléchargements.
+    private func consumptionContent(family: MediaConsumptionFamily, accent: Color) -> some View {
+        let attachments = MessageViewsConsumption.attachments(message.attachments, in: family)
+
+        return VStack(alignment: .leading, spacing: MeeshySpacing.mdPlus) {
             if isLoadingAttachmentStatuses {
                 loadingIndicator(accent: accent)
+            } else if attachments.isEmpty {
+                MessageDetailEmptyState(icon: Self.emptyIcon(for: family), text: Self.emptyLabel(for: family))
             } else {
-                ForEach(videoAttachments) { attachment in
-                    mediaConsumptionCard(
+                ForEach(attachments) { attachment in
+                    MessageViewsConsumptionCard(
                         attachment: attachment,
-                        isAudio: false,
-                        accent: accent
+                        family: family,
+                        accent: accent,
+                        users: attachmentStatuses[attachment.id] ?? [],
+                        contactColor: contactColor,
+                        members: membersByParticipant
                     )
-                }
-
-                if videoAttachments.isEmpty {
-                    emptyStateView(icon: "play.rectangle", text: String(localized: "message-detail.views.video.empty", defaultValue: "Aucune video attachee", bundle: .main), accent: accent)
                 }
             }
         }
     }
 
-    // MARK: - Shared Views Components
-
-    private func timelineBanner(icon: String, text: String, detail: String, count: String? = nil, accent: Color) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(accent)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(text)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
-                Text(detail)
-                    .font(.caption2)
-                    .foregroundColor(theme.textMuted)
-            }
-
-            Spacer()
-
-            if let count {
-                Text(count)
-                    .font(.system(.caption, design: .monospaced).weight(.bold))
-                    .foregroundColor(accent)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(
-                        Capsule()
-                            .fill(accent.opacity(0.12))
-                    )
-            }
+    private static func emptyIcon(for family: MediaConsumptionFamily) -> String {
+        switch family {
+        case .listened: return "headphones"
+        case .watched: return "play.rectangle"
+        case .opened: return "doc.viewfinder"
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(accent.opacity(isDark ? 0.06 : 0.04))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(accent.opacity(0.12), lineWidth: 0.5)
-                )
-        )
     }
 
-    private func userStatusRow(username: String, avatar: String?, date: Date?, accent: Color, index: Int, trailing: AnyView? = nil) -> some View {
-        HStack(spacing: 10) {
-            MeeshyAvatar(
+    private static func emptyLabel(for family: MediaConsumptionFamily) -> String {
+        switch family {
+        case .listened:
+            return String(localized: "message-detail.views.audio.empty", defaultValue: "Aucun audio attaché", bundle: .main)
+        case .watched:
+            return String(localized: "message-detail.views.video.empty", defaultValue: "Aucune vidéo attachée", bundle: .main)
+        case .opened:
+            return String(localized: "message-detail.views.opened.empty", defaultValue: "Aucune image ni document attaché", bundle: .main)
+        }
+    }
+
+    private func userStatusRow(participantId: String, username: String, avatar: String?, date: Date?, accent: Color, index: Int, trailing: AnyView? = nil) -> some View {
+        HStack(spacing: MeeshySpacing.smPlus) {
+            LivePresence { MeeshyAvatar(
                 name: username,
                 context: .userListItem,
                 accentColor: contactColor,
-                avatarURL: avatar
-            )
+                avatarURL: avatar,
+                presenceState: memberPresence(participantId),
+                ring: membersByParticipant[participantId]?.avatarRing
+            ) }
 
             Text(username)
                 .font(.footnote.weight(.medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Spacer()
 
@@ -704,158 +512,15 @@ struct MessageViewsDetailView: View {
             if let date {
                 Text(relativeDate(date))
                     .font(.caption2)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             } else {
                 Image(systemName: "clock")
                     .font(.caption2)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 4)
-    }
-
-    private func mediaConsumptionCard(attachment: MessageAttachment, isAudio: Bool, accent: Color) -> some View {
-        let users = attachmentStatuses[attachment.id] ?? []
-        let icon = isAudio ? "waveform" : "film"
-        let name = attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName
-
-        return VStack(alignment: .leading, spacing: 10) {
-            // Attachment header
-            HStack(spacing: 8) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(accent.opacity(isDark ? 0.15 : 0.1))
-                        .frame(width: 32, height: 32)
-                    Image(systemName: icon)
-                        .font(.footnote.weight(.semibold))
-                        .foregroundColor(accent)
-                }
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(name)
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(theme.textPrimary)
-                        .lineLimit(1)
-
-                    if let duration = attachment.duration {
-                        Text(formatDuration(duration / 1000))
-                            .font(.system(.caption2, design: .monospaced).weight(.medium))
-                            .foregroundColor(theme.textMuted)
-                    }
-                }
-
-                Spacer()
-
-                Text("\(users.count)")
-                    .font(.system(.caption2, design: .monospaced).weight(.bold))
-                    .foregroundColor(accent)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(accent.opacity(0.12)))
-            }
-
-            if users.isEmpty {
-                Text(isAudio ? "Pas encore ecoute" : "Pas encore visionne")
-                    .font(.caption)
-                    .foregroundColor(theme.textMuted)
-                    .padding(.vertical, 4)
-            } else {
-                // User consumption rows
-                ForEach(Array(users.enumerated()), id: \.element.id) { index, user in
-                    let listenDate = isAudio ? user.listenedAt : user.watchedAt
-                    let isComplete = isAudio ? (user.listenedComplete ?? false) : (user.watchedComplete ?? false)
-                    let positionMs = isAudio ? user.lastPlayPositionMs : user.lastWatchPositionMs
-                    let count = isAudio ? user.listenCount : user.watchCount
-                    let fraction = Self.positionFraction(positionMs: positionMs, complete: isComplete, durationMs: attachment.duration)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 10) {
-                            MeeshyAvatar(
-                                name: user.username,
-                                context: .userListItem,
-                                accentColor: contactColor,
-                                avatarURL: user.avatar
-                            )
-
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(user.username)
-                                    .font(.caption.weight(.medium))
-                                    .foregroundColor(theme.textPrimary)
-
-                                if let date = listenDate {
-                                    Text(relativeDate(date))
-                                        .font(.caption2)
-                                        .foregroundColor(theme.textMuted)
-                                }
-                            }
-
-                            Spacer()
-
-                            // Play count badge
-                            if let c = count, c > 1 {
-                                Text("\(c)x")
-                                    .font(.system(.caption2, design: .monospaced).weight(.bold))
-                                    .foregroundColor(accent.opacity(0.8))
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 2)
-                                    .background(
-                                        Capsule().fill(accent.opacity(0.08))
-                                    )
-                            }
-
-                            // Completion status
-                            if isComplete {
-                                HStack(spacing: 3) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.caption2)
-                                    Text(String(localized: "message-detail.complete", defaultValue: "complet", bundle: .main))
-                                        .font(.caption2.weight(.semibold))
-                                }
-                                .foregroundColor(MeeshyColors.success)
-                            } else if let pos = positionMs, pos > 0 {
-                                Text(formatDuration(pos / 1000))
-                                    .font(.system(.caption2, design: .monospaced).weight(.semibold))
-                                    .foregroundColor(theme.textMuted)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(
-                                        Capsule()
-                                            .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
-                                    )
-                            }
-                        }
-
-                        // Live playback progress — real-time position pushed via
-                        // `attachment-status:updated` (percentage/playPositionMs)
-                        // lands here through `attachmentStatuses` reload, same as
-                        // the mm:ss chip above.
-                        if !isComplete, fraction > 0 {
-                            HStack(spacing: 6) {
-                                ProgressView(value: fraction)
-                                    .progressViewStyle(.linear)
-                                    .tint(accent)
-                                Text("\(Int((fraction * 100).rounded()))%")
-                                    .font(.system(.caption2, design: .monospaced).weight(.semibold))
-                                    .foregroundColor(theme.textMuted)
-                                    .frame(minWidth: 30, alignment: .trailing)
-                            }
-                            .padding(.leading, 54)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04), lineWidth: 0.5)
-                )
-        )
+        .padding(.vertical, MeeshySpacing.sm)
+        .padding(.horizontal, MeeshySpacing.xs)
     }
 
     private func loadingIndicator(accent: Color) -> some View {
@@ -865,56 +530,37 @@ struct MessageViewsDetailView: View {
                 .tint(accent)
             Spacer()
         }
-        .padding(.vertical, 30)
-    }
-
-    private func emptyStateView(icon: String, text: String, accent: Color) -> some View {
-        VStack(spacing: 8) {
-            Image(systemName: icon)
-                // 28pt (< 40pt hero freeze) paired with a footnote caption → scale
-                // it with Dynamic Type so icon and caption grow in proportion.
-                .font(MeeshyFont.relative(28, weight: .light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
-                // Decorative — the caption below already states the empty state.
-                .accessibilityHidden(true)
-            Text(text)
-                .font(.footnote.weight(.medium))
-                .foregroundColor(theme.textMuted)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 30)
-        // Read the whole empty state as the single caption, not "image" + text.
-        .accessibilityElement(children: .combine)
+        .padding(.vertical, MeeshySpacing.xxxl)
     }
 
     private func retryableErrorView(accent: Color) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             Image(systemName: "wifi.slash")
                 // 28pt (< 40pt hero freeze) paired with a footnote caption → scale
                 // it with Dynamic Type so icon and caption grow in proportion.
-                .font(MeeshyFont.relative(28, weight: .light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
+                .font(MeeshyFont.relative(MeeshyFont.displaySize, weight: .light))
+                .foregroundStyle(theme.textMuted.opacity(0.4))
                 // Decorative — the error caption + Retry button carry the meaning.
                 // Not combined into one element: the button must stay independently
                 // focusable for VoiceOver.
                 .accessibilityHidden(true)
-            Text(readStatusError ?? String(localized: "message-detail.load-error", defaultValue: "Impossible de charger les donnees", bundle: .main))
+            Text(readStatusError.map { MessageViewsLabels.loadFailure($0) } ?? String(localized: "message-detail.load-error", defaultValue: "Impossible de charger les données", bundle: .main))
                 .font(.footnote.weight(.medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
             Button {
                 readStatusData = nil
                 Task { await loadReadStatus() }
             } label: {
-                Text(String(localized: "common.retry", defaultValue: "Reessayer", bundle: .main))
+                Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .main))
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
+                    .foregroundStyle(Color.white)
+                    .padding(.horizontal, MeeshySpacing.mdPlus)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(Capsule().fill(accent))
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 30)
+        .padding(.vertical, MeeshySpacing.xxxl)
     }
 
     // MARK: - Network Actions
@@ -923,9 +569,7 @@ struct MessageViewsDetailView: View {
     /// encore optimiste garde son id local `cid_…` (l'upgrade in-place ne
     /// change jamais l'identité SwiftUI) : il n'existe pas côté serveur, et
     /// les endpoints `/messages/:id/...` répondraient 400 "Validation failed".
-    private var messageHasServerId: Bool {
-        message.id.count == 24 && message.id.allSatisfy(\.isHexDigit)
-    }
+    private var messageHasServerId: Bool { ConversationViewModel.isServerMessageId(message.id) }
 
     private func loadSendAttempts() async {
         guard sendAttempts.isEmpty else { return }
@@ -933,133 +577,113 @@ struct MessageViewsDetailView: View {
             .sendAttempts(messageId: message.id)) ?? []
     }
 
-    private func loadReadStatus() async {
-        guard readStatusData == nil, !isLoadingReadStatus else { return }
-        guard messageHasServerId else { return }
+    /// Les deux règles pures — « faut-il repartir au réseau » et « le spinner
+    /// a-t-il le droit de remplacer ce qui est à l'écran » — vivent dans
+    /// `MessageViewsReadStatusRules`, éprouvables sans monter SwiftUI.
+    private var showsReadStatusSpinner: Bool {
+        MessageViewsReadStatusRules.showsSpinner(
+            isLoading: isLoadingReadStatus, hasExisting: readStatusData != nil
+        )
+    }
+
+    /// La présence servie d'un membre listé, par son COMPTE ; aucune pour un membre inconnu.
+    private func memberPresence(_ participantId: String) -> PresenceState? {
+        MessageViewsMemberPresence.state(of: participantId, in: membersByParticipant)
+    }
+
+    private func loadMembers() async {
+        switch await CacheCoordinator.shared.participants.load(for: conversationId) {
+        case .fresh(let members, _), .stale(let members, _):
+            membersByParticipant = Dictionary(members.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        case .expired, .empty:
+            return
+        }
+    }
+
+    private func loadReadStatus(force: Bool = false) async {
+        guard MessageViewsReadStatusRules.shouldFetch(
+            hasExisting: readStatusData != nil,
+            isLoading: isLoadingReadStatus,
+            force: force,
+            hasServerId: messageHasServerId
+        ) else { return }
         isLoadingReadStatus = true
         readStatusError = nil
         defer { isLoadingReadStatus = false }
         do {
             let response: APIResponse<ReadStatusData> = try await APIClient.shared.request(
-                endpoint: "/messages/\(message.id)/read-status"
+                MessagesEndpoint.byMessageIdReadStatus(messageId: message.id)
             )
             if response.success {
                 readStatusData = response.data
             } else {
-                readStatusError = "Erreur serveur"
+                readStatusError = .server
                 Logger.network.error("read-status error: success=false")
             }
         } catch {
-            readStatusError = "Erreur de connexion"
+            readStatusError = .connection
             Logger.network.error("read-status decode/network error: \(error)")
         }
     }
 
+    /// #7228 — TOUTES les pièces jointes, plus seulement les médias à piste :
+    /// une image et un document ont des ouvertures et des téléchargements à
+    /// montrer. La boucle SÉRIELLE d'origine coûtait alors un aller-retour par
+    /// photo — dix photos, dix attentes en file derrière un seul spinner — et
+    /// écrivait l'état dix fois, donc dix rendus. Les appels partent ensemble,
+    /// et `attachmentStatuses` n'est écrit QU'UNE fois.
     private func loadAttachmentStatuses() async {
-        let mediaAttachments = message.attachments.filter {
-            AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack
-        }
-        guard !mediaAttachments.isEmpty, !isLoadingAttachmentStatuses else { return }
+        let targets = MessageViewsConsumption.statusTargets(in: message.attachments)
+        guard !targets.isEmpty, !isLoadingAttachmentStatuses else { return }
         isLoadingAttachmentStatuses = true
         defer { isLoadingAttachmentStatuses = false }
 
-        for attachment in mediaAttachments {
-            do {
-                let statuses = try await AttachmentService.shared.getStatusDetails(attachmentId: attachment.id)
-                attachmentStatuses[attachment.id] = statuses
-            } catch {
-                Logger.network.error("attachment status fetch failed for \(attachment.id): \(error.localizedDescription)")
+        let loaded = await withTaskGroup(of: (String, [AttachmentStatusUser])?.self) { group in
+            for attachment in targets {
+                group.addTask {
+                    do {
+                        let statuses = try await AttachmentService.shared.getStatusDetails(attachmentId: attachment.id)
+                        return (attachment.id, statuses)
+                    } catch {
+                        Logger.network.error("attachment status fetch failed for \(attachment.id): \(error.localizedDescription)")
+                        return nil
+                    }
+                }
             }
+            var accumulated: [String: [AttachmentStatusUser]] = [:]
+            for await result in group {
+                guard let result else { continue }
+                accumulated[result.0] = result.1
+            }
+            return accumulated
         }
+
+        attachmentStatuses.merge(loaded) { _, fresh in fresh }
     }
 
     // MARK: - Helpers
 
+    /// #7365 — résolu comme la bulle (`MessageViewsReadStatusRules`).
     private var deliveryStatusLevel: Int {
-        // Phase 4 spec §6.2 — `.invisible`, `.clock`, `.slow` are all visual
-        // refinements of the "still sending" phase (between optimistic apply
-        // and server ACK). They share level 0 with `.sending` so the badge
-        // collapses them to the single "Envoi..." label, matching the existing
-        // 4-bucket design (failed / sending / sent / delivered / read).
-        switch message.deliveryStatus {
-        case .failed: return -1
-        case .sending, .invisible, .clock, .slow: return 0
-        case .sent: return 1
-        case .delivered: return 2
-        case .read: return 3
-        }
+        MessageViewsReadStatusRules.deliveryStatusLevel(
+            for: message,
+            tally: readStatusData.map {
+                .init(recipientCount: $0.totalMembers, deliveredCount: $0.receivedCount, readCount: $0.readCount)
+            },
+            showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts
+        )
     }
 
-    private func formatDateFR(_ date: Date) -> String {
+    private func formatDateTime(_ date: Date) -> String {
         date.formatted(.dateTime.day().month().year().hour().minute())
-    }
-
-    private func formatTimeFR(_ date: Date) -> String {
-        date.formatted(.dateTime.hour().minute())
-    }
-
-    private func formatDateTimeFR(_ date: Date) -> String {
-        date.formatted(.dateTime.day().month().year().hour().minute())
-    }
-
-    private func formatTimeWithSecondsFR(_ date: Date) -> String {
-        date.formatted(.dateTime.hour().minute().second())
-    }
-
-    private func formatDuration(_ seconds: Int) -> String {
-        let mins = seconds / 60
-        let secs = seconds % 60
-        return String(format: "%d:%02d", mins, secs)
     }
 
     private func relativeDate(_ date: Date) -> String {
         RelativeTimeFormatter.longString(for: date)
     }
 
-    /// Fraction (`0...1`) of an attachment consumed by a participant — ported
-    /// from the (now-deleted) `MessageInfoSheet.mediaFraction`. `complete`
-    /// always wins: a media marked complete reads as fully consumed
-    /// regardless of the last reported position (matches the server's own
-    /// `listenedComplete`/`watchedComplete` semantics).
+    /// Fraction (`0...1`) consommée d'une pièce jointe — la règle vit dans la carte.
     static func positionFraction(positionMs: Int?, complete: Bool, durationMs: Int?) -> Double {
-        if complete { return 1 }
-        guard let durationMs, durationMs > 0, let positionMs else { return 0 }
-        return min(1, max(0, Double(positionMs) / Double(durationMs)))
+        MessageViewsConsumptionCard.positionFraction(positionMs: positionMs, complete: complete, durationMs: durationMs)
     }
-}
-
-// MARK: - Read Status API Models
-
-private struct ReadStatusData: Decodable {
-    let messageId: String
-    let totalMembers: Int
-    let receivedCount: Int
-    let readCount: Int
-    let notSeenCount: Int?
-    let receivedBy: [ReceivedByUser]
-    let readBy: [ReadByUser]
-    let notSeenBy: [NotSeenByUser]?
-}
-
-private struct ReceivedByUser: Decodable, Identifiable {
-    let participantId: String
-    let displayName: String
-    let avatarURL: String?
-    let receivedAt: Date
-    var id: String { participantId }
-}
-
-private struct ReadByUser: Decodable, Identifiable {
-    let participantId: String
-    let displayName: String
-    let avatarURL: String?
-    let readAt: Date
-    var id: String { participantId }
-}
-
-private struct NotSeenByUser: Decodable, Identifiable {
-    let participantId: String
-    let displayName: String
-    let avatarURL: String?
-    var id: String { participantId }
 }

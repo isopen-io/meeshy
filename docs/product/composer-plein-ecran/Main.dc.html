@@ -1,0 +1,1115 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Composer plein écran — mobile</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&amp;family=Instrument+Serif:ital@0;1&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#000;font-family:Figtree,system-ui,sans-serif;color:#fff}
+button{font-family:inherit;color:inherit}
+input{font-family:inherit}
+.m1{background:radial-gradient(circle at 50% 57%,#fef3c7 0 6%,rgba(254,243,199,0) 7%),linear-gradient(180deg,#312e81 0%,#7c3aed 28%,#f97316 54%,#fbbf24 59%,#0e7490 60%,#083344 100%)}
+.m2{background:repeating-linear-gradient(90deg,rgba(0,0,0,0) 0 34px,rgba(20,24,10,.45) 34px 42px),radial-gradient(ellipse at 30% 18%,rgba(254,240,138,.7),rgba(254,240,138,0) 45%),linear-gradient(165deg,#166534,#14532d 45%,#052e16)}
+.m3{background:radial-gradient(#fde047 1px,rgba(0,0,0,0) 2px) 0 0/13px 17px,linear-gradient(180deg,#0b1026 0%,#1e1b4b 50%,#0f172a 50.5%,#111827 100%)}
+.m4{background:radial-gradient(ellipse 26% 18% at 50% 36%,#f2c6a0 0 97%,rgba(0,0,0,0) 100%),radial-gradient(ellipse 46% 30% at 50% 90%,#4f46e5 0 97%,rgba(0,0,0,0) 100%),linear-gradient(180deg,#fde68a,#fb923c)}
+.m5{background:linear-gradient(180deg,#7dd3fc 0%,#bae6fd 38%,#06b6d4 40%,#0891b2 58%,#fcd34d 60%,#fde68a 100%)}
+.m6{background:radial-gradient(circle at 12% 102%,#050507 0 14%,rgba(0,0,0,0) 15%),radial-gradient(circle at 42% 104%,#050507 0 15%,rgba(0,0,0,0) 16%),radial-gradient(circle at 78% 102%,#050507 0 16%,rgba(0,0,0,0) 17%),radial-gradient(circle at 20% 8%,rgba(236,72,153,.85),rgba(0,0,0,0) 38%),radial-gradient(circle at 82% 12%,rgba(99,102,241,.95),rgba(0,0,0,0) 38%),linear-gradient(180deg,#1e1b4b,#0b0b12 72%)}
+.glass{background:rgba(12,12,18,.5);-webkit-backdrop-filter:blur(18px) saturate(150%);backdrop-filter:blur(18px) saturate(150%);border:1px solid rgba(255,255,255,.14);color:#fff}
+.ib{width:44px;height:44px;border-radius:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0}
+.chip{height:40px;padding:0 14px;border-radius:20px;display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap}
+.rail{display:flex;flex-direction:column;gap:2px;padding:6px;border-radius:28px}
+.rb{width:54px;min-height:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10px;font-weight:600;background:transparent;border:0;border-radius:18px;cursor:pointer;color:#fff;padding:0}
+.rb.on{background:#4f46e5}
+.rb.off{opacity:.35}
+.primary{background:#4f46e5;border:0;color:#fff}
+.chrome{position:absolute;inset:0;pointer-events:none}
+.chrome .fl{pointer-events:auto;transition:opacity .22s ease,transform .22s ease}
+.comp.hide .chrome .fl{opacity:0;pointer-events:none}
+.comp.hide .chrome .fl *{pointer-events:none !important}
+.comp.hide .chrome .fl.top{transform:translateY(-10px)}
+.comp.hide .chrome .fl.bot{transform:translateY(10px)}
+.scene{position:absolute;inset:0;overflow:hidden;touch-action:none;--k:1}
+.bgfill{position:absolute;inset:0}
+.blurfill{filter:blur(26px) brightness(.62) saturate(1.2);transform:scale(1.3)}
+.bgmedia{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);box-shadow:0 18px 50px rgba(0,0,0,.35)}
+.fitlabel{font-size:11px;font-weight:700;color:#a1a1aa;text-transform:uppercase;letter-spacing:.06em}
+.obj{position:absolute;border:0;background:transparent;padding:0;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;display:flex;align-items:center;justify-content:center}
+.obj.sel{outline:2px dashed rgba(255,255,255,.95);outline-offset:calc(var(--k)*8px);border-radius:8px}
+.obj.ghost{opacity:.25}
+.obj.enter{animation:pop .45s cubic-bezier(.2,.9,.3,1.3)}
+@keyframes pop{from{opacity:0;transform:translate(-50%,-50%) scale(.6)}}
+.t{display:block;white-space:pre;padding:calc(var(--k)*4px) calc(var(--k)*10px);border-radius:calc(var(--k)*10px);line-height:1.1}
+.t-classic{font-weight:800;font-size:calc(var(--k)*32px);text-shadow:0 2px 14px rgba(0,0,0,.4)}
+.t-neon{font-weight:700;font-size:calc(var(--k)*32px);text-shadow:0 0 6px currentColor,0 0 18px currentColor,0 0 34px currentColor}
+.t-box{font-weight:800;font-size:calc(var(--k)*26px)}
+.t-serif{font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-size:calc(var(--k)*44px);text-shadow:0 2px 14px rgba(0,0,0,.35)}
+.stk{font-weight:800;font-size:calc(var(--k)*18px);padding:calc(var(--k)*8px) calc(var(--k)*14px);border-radius:calc(var(--k)*14px);display:flex;align-items:center;gap:calc(var(--k)*6px);white-space:nowrap}
+.fgmedia{width:calc(var(--k)*150px);height:calc(var(--k)*200px);border-radius:calc(var(--k)*14px);border:calc(var(--k)*4px) solid #fff;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.tok{height:40px;padding:0 12px;border-radius:14px;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.12);cursor:pointer;white-space:nowrap;flex-shrink:0;color:#fff}
+.tok.on{background:#fff;color:#111}
+.tok.danger{color:#fca5a5}
+.dot{width:30px;height:30px;border-radius:15px;border:2px solid rgba(255,255,255,.5);cursor:pointer;flex-shrink:0;padding:0}
+.dot.on{border:3px solid #fff;box-shadow:0 0 0 2px #4f46e5}
+.scroll-x{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
+.scroll-x::-webkit-scrollbar{display:none}
+.sheet{position:absolute;left:0;right:0;bottom:0;border-radius:26px 26px 0 0;padding:10px 16px 22px;background:rgba(14,14,20,.82);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);border-top:1px solid rgba(255,255,255,.14);animation:up .25s ease}
+@keyframes up{from{transform:translateY(40px);opacity:0}}
+.row{display:flex;align-items:center;gap:12px;width:100%;min-height:56px;border:0;background:transparent;color:#fff;text-align:left;padding:8px 6px;border-radius:14px;cursor:pointer}
+.row.on{background:rgba(99,102,241,.25)}
+.row.dis{opacity:.45;cursor:not-allowed}
+.tile{position:relative;aspect-ratio:3/4;border-radius:12px;border:0;cursor:pointer;padding:0;overflow:hidden}
+.tile .num{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:12px;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800}
+.tile.on .num{background:#4f46e5}
+.tile .cap{position:absolute;left:0;right:0;bottom:0;padding:18px 8px 6px;font-size:10px;font-weight:600;text-align:left;background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.7))}
+.tab{height:34px;padding:0 12px;border-radius:17px;border:0;font-size:13px;font-weight:600;background:rgba(255,255,255,.08);color:#d4d4d8;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.tab.on{background:#fff;color:#111}
+.track{position:relative;height:22px;border-radius:6px;background:rgba(255,255,255,.07);border:0;padding:0;cursor:pointer;flex-grow:1}
+.bar{position:absolute;top:3px;bottom:3px;border-radius:5px;background:rgba(165,180,252,.55)}
+.bar.on{background:#818cf8;box-shadow:0 0 0 2px #fff}
+.bubble{max-width:260px;padding:10px 14px;border-radius:20px;font-size:15px;line-height:1.35}
+.imgmsg{position:relative;width:248px;height:186px;border-radius:20px;border:0;padding:0;cursor:pointer;overflow:hidden}
+.mini{position:relative;width:200px;height:433px;border-radius:20px;overflow:hidden;--k:.513}
+.mini .obj{cursor:default}
+.slidethumb{position:relative;width:34px;height:60px;border-radius:9px;border:2px solid rgba(255,255,255,.35);padding:0;cursor:pointer;overflow:hidden;flex-shrink:0}
+.slidethumb.on{border-color:#fff;box-shadow:0 0 0 2px #4f46e5}
+.menu-item{display:flex;align-items:center;gap:12px;width:100%;height:50px;padding:0 16px;border:0;background:transparent;color:#fff;font-size:15px;font-weight:600;text-align:left;cursor:pointer}
+.menu-item.danger{color:#fca5a5}
+.menu-item.dis{opacity:.4;cursor:not-allowed}
+.hint{animation:fadeup .4s ease .3s both}
+@keyframes fadeup{from{opacity:0;transform:translateY(6px)}}
+</style>
+</helmet>
+
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; background: #09090b;">
+
+<!-- ============ CONVERSATION ============ -->
+<sc-if value="{{screenConv}}" hint-placeholder-val="{{true}}">
+<div style="position: absolute; inset: 0; display: flex; flex-direction: column; background: #09090b;">
+  <div style="height: 64px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-bottom: 1px solid rgba(255,255,255,.08); flex-shrink: 0;">
+    <button class="ib" aria-label="Retour" style="background: transparent; border: 0;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>
+    </button>
+    <div style="width: 38px; height: 38px; border-radius: 19px; background: #8b5cf6; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px;">L</div>
+    <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 1px;">
+      <div style="font-size: 16px; font-weight: 700;">Léa</div>
+      <div style="font-size: 12px; color: #a1a1aa;">Conversation</div>
+    </div>
+    <button class="chip" onClick="{{openStoryFromConv}}" aria-label="Créer une story" style="background: rgba(99,102,241,.18); border: 1px solid rgba(129,140,248,.4); color: #e0e7ff;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v8M8 12h8"></path></svg>
+      Story
+    </button>
+  </div>
+
+  <div style="flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column-reverse; gap: 10px; padding: 14px 12px;">
+    <sc-for list="{{sentRev}}" as="m" hint-placeholder-count="0">
+      <div style="align-self: flex-end; display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+        <div class="mini">
+          <div class="{{m.fillCls}}" style="background-color: {{m.fillColor}};"></div>
+          <sc-if value="{{m.hasBg}}" hint-placeholder-val="{{true}}"><div class="{{m.mediaCls}}" style="width: {{m.mw}}%; height: {{m.mh}}%;"></div></sc-if>
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position: absolute; inset: 0; width: 100%; height: 100%;">
+            <sc-for list="{{m.paths}}" as="p" hint-placeholder-count="0"><path d="{{p.d}}" stroke="{{p.color}}" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path></sc-for>
+          </svg>
+          <sc-for list="{{m.objs}}" as="o" hint-placeholder-count="0">
+            <div class="obj" style="left: {{o.x}}%; top: {{o.y}}%; transform: translate(-50%, -50%) rotate({{o.r}}deg) scale({{o.s}});">
+              <sc-if value="{{o.isText}}" hint-placeholder-val="{{false}}"><span class="{{o.tcls}}" style="color: {{o.fg}}; background: {{o.bgc}};">{{o.text}}</span></sc-if>
+              <sc-if value="{{o.isMedia}}" hint-placeholder-val="{{false}}"><span class="{{o.mcls}}" style="display: block; height: calc(var(--k) * {{o.mh}}px);"></span></sc-if>
+              <sc-if value="{{o.isHeart}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 24 24" style="width: calc(var(--k)*76px); height: calc(var(--k)*76px);"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.8 4.5c2.1 0 3.6 1.2 5.2 3 1.6-1.8 3.1-3 5.2-3 3.8 0 5.9 3.9 4.4 7.3C19.5 16.4 12 21 12 21z" fill="#f43f5e" stroke="#fff" stroke-width="1.4"></path></svg></sc-if>
+              <sc-if value="{{o.isStar}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 24 24" style="width: calc(var(--k)*76px); height: calc(var(--k)*76px);"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.5 1.3 6.6L12 17.3l-5.9 3.2 1.3-6.6-4.9-4.5 6.6-.8z" fill="#fbbf24" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"></path></svg></sc-if>
+              <sc-if value="{{o.isPill}}" hint-placeholder-val="{{false}}"><span class="stk" style="background: {{o.pillBg}}; color: {{o.pillFg}};">{{o.pillText}}</span></sc-if>
+            </div>
+          </sc-for>
+        </div>
+        <div style="font-size: 11px; color: #a1a1aa;">{{m.meta}}</div>
+      </div>
+    </sc-for>
+
+    <div class="bubble" style="align-self: flex-end; background: #4f46e5;">Magnifique ! Je t'en fais une version.</div>
+
+    <div style="align-self: flex-start; display: flex; flex-direction: column; gap: 6px;">
+      <button class="imgmsg" onClick="{{openFromConv}}" aria-label="Ouvrir la photo dans l'éditeur plein écran">
+        <span class="m1" style="position: absolute; inset: 0;"></span>
+        <span class="glass" style="position: absolute; left: 10px; bottom: 10px; height: 34px; padding: 0 12px; border-radius: 17px; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"></path></svg>
+          Modifier
+        </span>
+      </button>
+      <div style="font-size: 11px; color: #a1a1aa; padding-left: 4px;">Touchez la photo : elle s'ouvre en plein écran, prête à éditer.</div>
+    </div>
+
+    <div class="bubble" style="align-self: flex-start; background: #1f1f27;">Regarde la vue depuis la terrasse</div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 8px; padding: 10px 10px 18px; border-top: 1px solid rgba(255,255,255,.08); flex-shrink: 0;">
+    <button class="ib" onClick="{{openAttachFromConv}}" aria-label="Joindre un média" style="background: rgba(255,255,255,.08); border: 0;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+    </button>
+    <label for="msg" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);">Message</label>
+    <input id="msg" placeholder="Message" style="flex-grow: 1; height: 44px; border-radius: 22px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.05); color: #fff; padding: 0 16px; font-size: 15px; outline: none;">
+    <button class="ib" onClick="{{cameraFromConv}}" aria-label="Caméra" style="background: rgba(255,255,255,.08); border: 0;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 012-2h2l2-2h6l2 2h2a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path><circle cx="12" cy="13" r="3.5"></circle></svg>
+    </button>
+  </div>
+</div>
+</sc-if>
+
+<!-- ============ SOURCES : n'importe quel média ============ -->
+<sc-if value="{{screenSources}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; display: flex; flex-direction: column; background: #0c0c11;">
+  <div style="display: flex; align-items: center; gap: 8px; padding: 12px 10px 6px;">
+    <button class="ib" onClick="{{srcClose}}" aria-label="Fermer" style="background: rgba(255,255,255,.08); border: 0;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+    </button>
+    <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+      <div style="font-size: 17px; font-weight: 800;">{{srcTitle}}</div>
+      <div style="font-size: 12px; color: #a1a1aa;">{{srcSub}}</div>
+    </div>
+  </div>
+  <div class="scroll-x" style="padding: 8px 12px 10px;">
+    <sc-for list="{{srcTabs}}" as="t" hint-placeholder-count="5">
+      <button class="{{t.cls}}" onClick="{{t.pick}}">{{t.label}}</button>
+    </sc-for>
+  </div>
+  <sc-if value="{{srcIsOther}}" hint-placeholder-val="{{false}}">
+    <div style="margin: 0 12px 10px; padding: 12px 14px; border-radius: 14px; background: rgba(99,102,241,.14); border: 1px solid rgba(129,140,248,.3); font-size: 13px; line-height: 1.4; color: #e0e7ff;">Photos, Fichiers, navigateur, autre messagerie : « Partager vers Meeshy » dépose le média ici, et il s'ouvre dans la même scène.</div>
+  </sc-if>
+  <div style="flex-grow: 1; overflow-y: auto; padding: 0 12px;">
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;">
+      <sc-for list="{{srcItems}}" as="it" hint-placeholder-count="6">
+        <button class="{{it.cls}}" onClick="{{it.pick}}" aria-label="{{it.aria}}">
+          <span class="{{it.media}}" style="position: absolute; inset: 0;"></span>
+          <sc-if value="{{srcMulti}}" hint-placeholder-val="{{true}}"><span class="num">{{it.num}}</span></sc-if>
+          <span class="cap">{{it.src}}</span>
+        </button>
+      </sc-for>
+    </div>
+  </div>
+  <div style="display: flex; align-items: center; gap: 10px; padding: 12px 12px 20px; border-top: 1px solid rgba(255,255,255,.08);">
+    <button class="chip" onClick="{{srcCamera}}" style="background: rgba(255,255,255,.1); border: 0; height: 48px; border-radius: 24px;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 012-2h2l2-2h6l2 2h2a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path><circle cx="12" cy="13" r="3.5"></circle></svg>
+      Caméra
+    </button>
+    <div style="flex-grow: 1;"></div>
+    <sc-if value="{{srcMulti}}" hint-placeholder-val="{{true}}">
+      <button class="chip primary" onClick="{{srcContinue}}" style="height: 48px; border-radius: 24px; padding: 0 20px; opacity: {{srcContinueOpacity}};">{{continueLabel}}</button>
+    </sc-if>
+  </div>
+</div>
+</sc-if>
+
+<!-- ============ COMPOSER PLEIN ÉCRAN ============ -->
+<sc-if value="{{screenComposer}}" hint-placeholder-val="{{false}}">
+<div class="{{rootCls}}" style="position: absolute; inset: 0;">
+
+  <div class="scene" data-scene="1" onPointerDown="{{sceneDown}}" onPointerMove="{{sceneMove}}" onPointerUp="{{sceneUp}}" onPointerCancel="{{sceneUp}}">
+    <div class="{{fillCls}}" style="background-color: {{fillColor}};"></div>
+    <sc-if value="{{hasBg}}" hint-placeholder-val="{{true}}"><div class="{{mediaCls}}" style="width: {{mw}}%; height: {{mh}}%;"></div></sc-if>
+    <sc-if value="{{noBg}}" hint-placeholder-val="{{false}}">
+      <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #71717a; font-size: 14px;">Scène vide : posez un média</div>
+    </sc-if>
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;">
+      <sc-for list="{{paths}}" as="p" hint-placeholder-count="0"><path d="{{p.d}}" stroke="{{p.color}}" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path></sc-for>
+    </svg>
+    <sc-for list="{{objs}}" as="o" hint-placeholder-count="0">
+      <button class="{{o.cls}}" aria-label="{{o.aria}}" onPointerDown="{{o.down}}" style="left: {{o.x}}%; top: {{o.y}}%; transform: translate(-50%, -50%) rotate({{o.r}}deg) scale({{o.s}});">
+        <sc-if value="{{o.isText}}" hint-placeholder-val="{{false}}"><span class="{{o.tcls}}" style="color: {{o.fg}}; background: {{o.bgc}};">{{o.text}}</span></sc-if>
+        <sc-if value="{{o.isMedia}}" hint-placeholder-val="{{false}}"><span class="{{o.mcls}}" style="display: block; height: calc(var(--k) * {{o.mh}}px);"></span></sc-if>
+        <sc-if value="{{o.isHeart}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 24 24" style="width: calc(var(--k)*76px); height: calc(var(--k)*76px);"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.8 4.5c2.1 0 3.6 1.2 5.2 3 1.6-1.8 3.1-3 5.2-3 3.8 0 5.9 3.9 4.4 7.3C19.5 16.4 12 21 12 21z" fill="#f43f5e" stroke="#fff" stroke-width="1.4"></path></svg></sc-if>
+        <sc-if value="{{o.isStar}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 24 24" style="width: calc(var(--k)*76px); height: calc(var(--k)*76px);"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.5 1.3 6.6L12 17.3l-5.9 3.2 1.3-6.6-4.9-4.5 6.6-.8z" fill="#fbbf24" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"></path></svg></sc-if>
+        <sc-if value="{{o.isPill}}" hint-placeholder-val="{{false}}"><span class="stk" style="background: {{o.pillBg}}; color: {{o.pillFg}};">{{o.pillText}}</span></sc-if>
+      </button>
+    </sc-for>
+  </div>
+
+  <div class="chrome">
+    <!-- haut : fermer · profil · animé · slides · son -->
+    <div class="fl top" style="position: absolute; top: 12px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none;">
+      <div style="width: 100%; box-sizing: border-box; padding: 0 12px; display: flex; align-items: center; gap: 8px; pointer-events: none;">
+        <button class="ib glass" onClick="{{close}}" aria-label="Fermer le composer" style="pointer-events: auto;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+        </button>
+        <div style="flex-grow: 1;"></div>
+        <button class="{{dynCls}}" onClick="{{toggleDynamic}}" aria-pressed="{{dynamic}}" style="pointer-events: auto;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"></path></svg>
+          Animé
+        </button>
+      </div>
+      <sc-if value="{{showRail}}" hint-placeholder-val="{{false}}">
+        <div class="glass" style="display: flex; align-items: center; gap: 6px; padding: 5px; border-radius: 16px; pointer-events: auto;">
+          <sc-for list="{{slidesView}}" as="sl" hint-placeholder-count="1">
+            <button class="{{sl.cls}}" onClick="{{sl.pick}}" aria-label="{{sl.aria}}"><span class="{{sl.bg}}" style="position: absolute; inset: 0;"></span></button>
+          </sc-for>
+          <button class="slidethumb" onClick="{{addSlide}}" aria-label="Ajouter une slide" style="background: rgba(255,255,255,.08); display: flex; align-items: center; justify-content: center; border-style: dashed;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+          </button>
+        </div>
+      </sc-if>
+      <sc-if value="{{hasSound}}" hint-placeholder-val="{{false}}">
+        <button class="chip glass" onClick="{{openSound}}" style="height: 34px; font-size: 13px; pointer-events: auto;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+          {{soundLine}}
+        </button>
+      </sc-if>
+    </div>
+
+    <!-- couloir gauche : ce qu'on POSE sur la scène -->
+    <sc-if value="{{showRails}}" hint-placeholder-val="{{true}}">
+      <div class="fl rail glass" style="position: absolute; left: 10px; top: 200px;">
+        <button class="rb" onClick="{{addText}}" aria-label="Poser un texte">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6V4h14v2M12 4v16M9 20h6"></path></svg>
+          Texte
+        </button>
+        <button class="rb" onClick="{{openStickers}}" aria-label="Poser un sticker">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-9-9h9z"></path><path d="M21 3l-9 9"></path><circle cx="9" cy="13" r="1"></circle><path d="M8.5 16.5c1.8 1 3.8.6 5-1"></path></svg>
+          Sticker
+        </button>
+        <button class="rb" onClick="{{startDraw}}" aria-label="Dessiner">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21c3 0 4-2 4-4a3 3 0 116 0"></path><path d="M20 3L10 13"></path></svg>
+          Dessin
+        </button>
+        <button class="rb" onClick="{{openPose}}" aria-label="Poser un média">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"></rect><circle cx="9" cy="9" r="2"></circle><path d="M21 15l-5-5L5 21"></path></svg>
+          Média
+        </button>
+        <button class="rb" onClick="{{openSound}}" aria-label="Poser un son">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+          Son
+        </button>
+      </div>
+
+      <!-- couloir droit : historique, temps, slide -->
+      <div class="fl rail glass" style="position: absolute; right: 10px; top: 200px;">
+        <button class="{{undoCls}}" onClick="{{undo}}" aria-label="Annuler">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"></path><path d="M4 9h10a6 6 0 010 12h-3"></path></svg>
+          Annuler
+        </button>
+        <button class="{{redoCls}}" onClick="{{redo}}" aria-label="Rétablir">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"></path><path d="M20 9H10a6 6 0 000 12h3"></path></svg>
+          Rétablir
+        </button>
+        <sc-if value="{{dynamic}}" hint-placeholder-val="{{false}}">
+          <button class="{{tlCls}}" onClick="{{toggleTimeline}}" aria-label="Plan temps">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M4 12h16M4 17h7"></path><path d="M17 4v6"></path></svg>
+            Temps
+          </button>
+        </sc-if>
+        <button class="{{frameCls}}" onClick="{{toggleFrame}}" aria-label="Cadre du média">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v16h16"></path><path d="M2 6h16v16"></path></svg>
+          Cadre
+        </button>
+        <button class="rb" onClick="{{addSlide}}" aria-label="Nouvelle slide">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="18" rx="2"></rect><path d="M12 9v6M9 12h6"></path></svg>
+          Slide
+        </button>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{showHint}}" hint-placeholder-val="{{false}}">
+      <div class="fl hint glass" style="position: absolute; left: 0; right: 0; margin: 0 auto; top: 560px; width: 250px; padding: 10px 14px; border-radius: 16px; font-size: 12.5px; line-height: 1.4; text-align: center;">Touchez la scène pour libérer l'écran. Appui long sur un objet : ses actions.</div>
+    </sc-if>
+
+    <!-- mode dessin -->
+    <sc-if value="{{drawMode}}" hint-placeholder-val="{{false}}">
+      <div class="fl bot glass" style="position: absolute; left: 12px; right: 12px; bottom: 18px; padding: 10px 12px; border-radius: 22px; display: flex; align-items: center; gap: 10px;">
+        <div style="font-size: 13px; font-weight: 700; flex-shrink: 0;">Dessin</div>
+        <div class="scroll-x" style="flex-grow: 1; padding: 4px;">
+          <sc-for list="{{drawColors}}" as="c" hint-placeholder-count="5">
+            <button class="{{c.cls}}" onClick="{{c.pick}}" aria-label="{{c.aria}}" style="background: {{c.hex}};"></button>
+          </sc-for>
+        </div>
+        <button class="chip primary" onClick="{{drawDone}}" style="height: 40px;">OK</button>
+      </div>
+    </sc-if>
+
+    <!-- bas : légende + ce qui part, ou inspecteur, + plan temps -->
+    <sc-if value="{{showBottom}}" hint-placeholder-val="{{true}}">
+      <div class="fl bot" style="position: absolute; left: 12px; right: 12px; bottom: 16px; display: flex; flex-direction: column; gap: 10px;">
+
+        <sc-if value="{{timelineOpen}}" hint-placeholder-val="{{false}}">
+          <div class="glass" style="border-radius: 20px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <button class="ib" onClick="{{play}}" aria-label="{{playAria}}" style="width: 36px; height: 36px; background: #fff; border: 0;">
+                <sc-if value="{{playing}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="#111"><rect x="5" y="4" width="5" height="16" rx="1"></rect><rect x="14" y="4" width="5" height="16" rx="1"></rect></svg></sc-if>
+                <sc-if value="{{paused}}" hint-placeholder-val="{{true}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="#111"><path d="M7 4l13 8-13 8z"></path></svg></sc-if>
+              </button>
+              <div style="font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; flex-grow: 1;">{{timeLabel}}</div>
+              <sc-if value="{{hasSel}}" hint-placeholder-val="{{false}}">
+                <button class="tok" onClick="{{setIn}}" style="height: 32px; font-size: 12px;">Entre ici</button>
+                <button class="tok" onClick="{{setOut}}" style="height: 32px; font-size: 12px;">Sort ici</button>
+              </sc-if>
+            </div>
+            <div style="position: relative; display: flex; flex-direction: column; gap: 4px;">
+              <button class="track" onClick="{{scrub}}" aria-label="Déplacer la tête de lecture" style="margin-left: 72px; height: 14px; background: rgba(255,255,255,.12);"></button>
+              <sc-for list="{{tracks}}" as="tr" hint-placeholder-count="0">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <div style="width: 64px; font-size: 11px; color: #d4d4d8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;">{{tr.label}}</div>
+                  <button class="track" onClick="{{tr.pick}}" aria-label="{{tr.aria}}"><span class="{{tr.cls}}" style="left: {{tr.left}}%; width: {{tr.width}}%;"></span></button>
+                </div>
+              </sc-for>
+              <sc-if value="{{noTracks}}" hint-placeholder-val="{{false}}">
+                <div style="font-size: 12px; color: #a1a1aa; padding: 4px 0;">Posez un texte ou un sticker : chaque objet devient une piste.</div>
+              </sc-if>
+              <div style="position: absolute; top: 0; bottom: 0; left: calc(72px + (100% - 72px) * {{phFrac}}); width: 2px; background: #fbbf24; border-radius: 1px; pointer-events: none;"></div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{frameOpen}}" hint-placeholder-val="{{false}}">
+          <div class="glass" style="border-radius: 22px; padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="flex-grow: 1; font-size: 13px; line-height: 1.35; color: #e4e4e7;">{{frameInfo}}</div>
+              <button class="tok on" onClick="{{toggleFrame}}">OK</button>
+            </div>
+            <div class="fitlabel">Le média</div>
+            <div class="scroll-x">
+              <sc-for list="{{fitTokens}}" as="f" hint-placeholder-count="2">
+                <button class="{{f.cls}}" onClick="{{f.pick}}">{{f.label}}</button>
+              </sc-for>
+            </div>
+            <div class="fitlabel">Autour du média</div>
+            <div class="scroll-x">
+              <sc-for list="{{fillTokens}}" as="f" hint-placeholder-count="5">
+                <button class="{{f.cls}}" onClick="{{f.pick}}"><span style="width: 16px; height: 16px; border-radius: 8px; background: {{f.swatch}}; border: 1px solid rgba(255,255,255,.4);"></span>{{f.label}}</button>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{hasSel}}" hint-placeholder-val="{{false}}">
+          <div class="glass" style="border-radius: 22px; padding: 10px; display: flex; flex-direction: column; gap: 8px;">
+            <sc-if value="{{selIsText}}" hint-placeholder-val="{{false}}">
+              <label for="seltext" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);">Texte de l'objet</label>
+              <input id="seltext" value="{{selText}}" onInput="{{onSelText}}" style="height: 42px; border-radius: 14px; border: 1px solid rgba(255,255,255,.18); background: rgba(0,0,0,.25); color: #fff; padding: 0 14px; font-size: 16px; font-weight: 600; outline: none;">
+              <div class="scroll-x">
+                <sc-for list="{{styleTokens}}" as="st" hint-placeholder-count="4">
+                  <button class="{{st.cls}}" onClick="{{st.pick}}">{{st.label}}</button>
+                </sc-for>
+                <sc-for list="{{colorTokens}}" as="c" hint-placeholder-count="4">
+                  <button class="{{c.cls}}" onClick="{{c.pick}}" aria-label="{{c.aria}}" style="background: {{c.hex}}; margin-top: 5px;"></button>
+                </sc-for>
+              </div>
+            </sc-if>
+            <div class="scroll-x">
+              <button class="tok" onClick="{{sizeDown}}" aria-label="Réduire">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"></path></svg>
+              </button>
+              <button class="tok" onClick="{{sizeUp}}" aria-label="Agrandir">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+              </button>
+              <button class="tok" onClick="{{rotate}}" aria-label="Pivoter">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 11-3-6.2"></path><path d="M20 4v5h-5"></path></svg>
+              </button>
+              <button class="tok" onClick="{{raise}}">Monter</button>
+              <button class="tok" onClick="{{lower}}">Reculer</button>
+              <button class="tok danger" onClick="{{removeSel}}">Retirer</button>
+              <button class="tok on" onClick="{{deselect}}">OK</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{noSel}}" hint-placeholder-val="{{true}}">
+          <label for="caption" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);">{{captionPh}}</label>
+          <input id="caption" class="glass" value="{{caption}}" onInput="{{onCaption}}" placeholder="{{captionPh}}" style="height: 46px; border-radius: 23px; padding: 0 18px; font-size: 15px; outline: none;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <sc-if value="{{showAudience}}" hint-placeholder-val="{{false}}">
+              <button class="chip glass" onClick="{{openAudience}}" aria-label="Qui verra" style="height: 46px; border-radius: 23px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18"></path></svg>
+                {{audienceLabel}}
+              </button>
+            </sc-if>
+            <div style="flex-grow: 1;"></div>
+            <div style="display: flex; align-items: stretch; height: 50px; border-radius: 25px; overflow: hidden; background: #4f46e5; box-shadow: 0 8px 24px rgba(79,70,229,.45);">
+              <button class="chip primary" onClick="{{onSend}}" style="height: 50px; border-radius: 0; padding: 0 14px 0 20px; font-size: 15px;">{{sendLabel}}</button>
+              <span style="width: 1px; margin: 12px 0; background: rgba(255,255,255,.4);"></span>
+              <button class="chip primary" onClick="{{togglePubMenu}}" aria-label="Publier comme" aria-haspopup="menu" aria-expanded="{{pubMenu}}" style="height: 50px; border-radius: 0; padding: 0 14px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"></path></svg>
+              </button>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+  </div>
+
+  <!-- appui long : les actions de l'objet -->
+  <sc-if value="{{menuOpen}}" hint-placeholder-val="{{false}}">
+    <div style="position: absolute; inset: 0;">
+      <button onClick="{{closeMenu}}" aria-label="Fermer les actions" style="position: absolute; inset: 0; border: 0; background: rgba(0,0,0,.4); cursor: pointer;"></button>
+      <div class="glass" style="position: absolute; left: 50%; top: {{menuTop}}%; transform: translate(-50%, 0); width: 250px; border-radius: 18px; overflow: hidden; background: rgba(20,20,28,.85);">
+        <div style="padding: 12px 16px 6px; font-size: 12px; color: #a1a1aa;">{{menuTitle}}</div>
+        <button class="{{mUpCls}}" onClick="{{raise}}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg>Monter</button>
+        <button class="{{mDownCls}}" onClick="{{lower}}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"></path></svg>Reculer</button>
+        <button class="menu-item" onClick="{{menuEdit}}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"></path></svg>Modifier</button>
+        <button class="{{mOutCls}}" onClick="{{menuOut}}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-8 8M10 5H5a1 1 0 00-1 1v13a1 1 0 001 1h13a1 1 0 001-1v-5"></path></svg>{{mOutLabel}}</button>
+        <sc-if value="{{mOutReason}}" hint-placeholder-val="{{false}}">
+          <div style="padding: 0 16px 12px 46px; font-size: 11.5px; color: #a1a1aa; line-height: 1.35;">{{mOutReason}}</div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- « Publier comme » : la flèche CHOISIT le type, seul Publier envoie -->
+  <sc-if value="{{pubMenu}}" hint-placeholder-val="{{false}}">
+    <div style="position: absolute; inset: 0;">
+      <button onClick="{{closePubMenu}}" aria-label="Fermer le menu" style="position: absolute; inset: 0; border: 0; background: rgba(0,0,0,.35); cursor: pointer;"></button>
+      <div class="glass" role="menu" style="position: absolute; right: 12px; bottom: 80px; width: 300px; max-height: 560px; overflow-y: auto; border-radius: 20px; background: rgba(20,20,28,.9); padding: 6px; animation: up .2s ease;">
+        <div style="padding: 10px 12px 6px; font-size: 12px; font-weight: 700; color: #a1a1aa; text-transform: uppercase; letter-spacing: .06em;">Ce qui part</div>
+        <sc-for list="{{pubRows}}" as="r" hint-placeholder-count="3">
+          <sc-if value="{{r.isKind}}" hint-placeholder-val="{{true}}">
+            <button class="{{r.cls}}" role="menuitem" onClick="{{r.pick}}" aria-disabled="{{r.disabled}}" aria-expanded="{{r.expandedAria}}">
+              <span style="width: 38px; height: 38px; border-radius: 12px; background: {{r.tint}}; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; flex-shrink: 0;">{{r.letter}}</span>
+              <span style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1;">
+                <span style="font-size: 15px; font-weight: 700;">{{r.label}}</span>
+                <span style="font-size: 12px; color: #a1a1aa; line-height: 1.3;">{{r.sub}}</span>
+              </span>
+              <sc-if value="{{r.isDefault}}" hint-placeholder-val="{{false}}">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-label="Par défaut"><path d="M5 12l5 5 9-10"></path></svg>
+              </sc-if>
+              <sc-if value="{{r.expandable}}" hint-placeholder-val="{{false}}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate({{r.chevron}}deg);"><path d="M9 6l6 6-6 6"></path></svg>
+              </sc-if>
+            </button>
+          </sc-if>
+          <sc-if value="{{r.isLayout}}" hint-placeholder-val="{{false}}">
+            <button class="row" role="menuitem" onClick="{{r.pick}}" style="min-height: 44px; padding-left: 58px; font-size: 14px; font-weight: 600; gap: 10px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="2" stroke-linejoin="round"><rect x="{{r.gx}}" y="4" width="{{r.gw}}" height="16" rx="2"></rect><rect x="{{r.gx2}}" y="{{r.gy2}}" width="7" height="{{r.gh2}}" rx="2"></rect></svg>
+              <span style="flex-grow: 1;">{{r.label}}</span>
+              <sc-if value="{{r.chosen}}" hint-placeholder-val="{{false}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"></path></svg></sc-if>
+            </button>
+          </sc-if>
+        </sc-for>
+        <div style="padding: 8px 12px 10px; font-size: 11.5px; color: #a1a1aa; line-height: 1.35;">Choisir une ligne change seulement ce qui part. Rien n'est envoyé avant l'appui sur Publier.</div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- feuilles -->
+  <sc-if value="{{sheetOpen}}" hint-placeholder-val="{{false}}">
+    <button onClick="{{closeSheet}}" aria-label="Fermer" style="position: absolute; inset: 0; border: 0; background: rgba(0,0,0,.25); cursor: pointer;"></button>
+    <div class="sheet">
+      <div style="width: 38px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.3); margin: 0 auto 10px;"></div>
+      <div style="display: flex; align-items: center; margin-bottom: 8px;">
+        <div style="font-size: 17px; font-weight: 800; flex-grow: 1;">{{sheetTitle}}</div>
+        <button class="ib" onClick="{{closeSheet}}" aria-label="Fermer" style="width: 36px; height: 36px; background: rgba(255,255,255,.1); border: 0;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+        </button>
+      </div>
+
+      <sc-if value="{{sheetAudience}}" hint-placeholder-val="{{false}}">
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <sc-for list="{{audienceOpts}}" as="a" hint-placeholder-count="4">
+            <button class="{{a.cls}}" onClick="{{a.pick}}">
+              <span style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1;">
+                <span style="font-size: 15px; font-weight: 700;">{{a.label}}</span>
+                <span style="font-size: 12.5px; color: #a1a1aa;">{{a.sub}}</span>
+              </span>
+            </button>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{sheetSticker}}" hint-placeholder-val="{{false}}">
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;">
+          <sc-for list="{{stickerOpts}}" as="s" hint-placeholder-count="6">
+            <button onClick="{{s.pick}}" style="height: 84px; border-radius: 16px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.06); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; --k: .55;">
+              <sc-if value="{{s.isHeart}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 24 24" width="34" height="34"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.8 4.5c2.1 0 3.6 1.2 5.2 3 1.6-1.8 3.1-3 5.2-3 3.8 0 5.9 3.9 4.4 7.3C19.5 16.4 12 21 12 21z" fill="#f43f5e" stroke="#fff" stroke-width="1.4"></path></svg></sc-if>
+              <sc-if value="{{s.isStar}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 24 24" width="34" height="34"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.5 1.3 6.6L12 17.3l-5.9 3.2 1.3-6.6-4.9-4.5 6.6-.8z" fill="#fbbf24" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"></path></svg></sc-if>
+              <sc-if value="{{s.isPill}}" hint-placeholder-val="{{false}}"><span class="stk" style="background: {{s.pillBg}}; color: {{s.pillFg}};">{{s.pillText}}</span></sc-if>
+              <span style="font-size: 11px; color: #d4d4d8;">{{s.label}}</span>
+            </button>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{sheetSound}}" hint-placeholder-val="{{false}}">
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <sc-for list="{{soundOpts}}" as="s" hint-placeholder-count="3">
+            <button class="{{s.cls}}" onClick="{{s.pick}}">
+              <span style="width: 40px; height: 40px; border-radius: 12px; background: {{s.tint}}; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+              </span>
+              <span style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1;">
+                <span style="font-size: 15px; font-weight: 700;">{{s.title}}</span>
+                <span style="font-size: 12.5px; color: #a1a1aa;">{{s.credit}} · {{s.dur}}</span>
+              </span>
+            </button>
+          </sc-for>
+          <sc-if value="{{hasSound}}" hint-placeholder-val="{{false}}">
+            <button class="row" onClick="{{removeSound}}" style="color: #fca5a5; font-weight: 600; font-size: 14px; min-height: 44px;">Retirer le son de fond</button>
+          </sc-if>
+        </div>
+      </sc-if>
+
+    </div>
+  </sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{hasToast}}" hint-placeholder-val="{{false}}">
+  <div class="glass hint" role="status" style="position: absolute; top: 76px; left: 0; right: 0; margin: 0 auto; width: max-content; padding: 10px 16px; border-radius: 18px; font-size: 13.5px; font-weight: 600; white-space: nowrap;">{{toast}}</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+const RATIO = { m1: 4 / 3, m2: 1, m3: 9 / 16, m4: 3 / 4, m5: 16 / 9, m6: 4 / 5 };
+const RATIO_LABEL = { m1: 'Photo 4:3', m2: 'Photo carrée', m3: 'Photo 9:16', m4: 'Portrait 3:4', m5: 'Photo 16:9', m6: 'Photo 4:5' };
+const SCREEN = 390 / 844;
+const FILLS = [
+  { id: 'blur', label: 'Flou', swatch: 'linear-gradient(135deg,#7c3aed,#f97316)' },
+  { id: '#000000', label: 'Noir', swatch: '#000000' },
+  { id: '#f5f5f4', label: 'Blanc', swatch: '#f5f5f4' },
+  { id: '#312e81', label: 'Indigo', swatch: '#312e81' },
+  { id: '#fde68a', label: 'Sable', swatch: '#fde68a' }
+];
+const defaultFit = (bg) => bg && Math.abs(RATIO[bg] - 9 / 16) < 0.05 ? 'fill' : 'fit';
+const bgView = (sl) => {
+  const r = RATIO[sl.bg] || 1;
+  const cover = sl.fit === 'fill';
+  const wide = r > SCREEN;
+  const mw = cover ? (wide ? (r / SCREEN) * 100 : 100) : (wide ? 100 : (r / SCREEN) * 100);
+  const mh = cover ? (wide ? 100 : (SCREEN / r) * 100) : (wide ? (SCREEN / r) * 100 : 100);
+  const blur = sl.fill === 'blur';
+  return {
+    hasBg: !!sl.bg,
+    fillCls: 'bgfill' + (blur && sl.bg ? ' blurfill ' + sl.bg : ''),
+    fillColor: blur ? '#09090b' : sl.fill,
+    mediaCls: 'bgmedia ' + (sl.bg || ''),
+    mw: mw.toFixed(2), mh: mh.toFixed(2)
+  };
+};
+const MEDIA = [
+  { id: 'm1', src: 'Léa · conversation', from: 'conv' },
+  { id: 'm4', src: 'Karim · conversation', from: 'conv' },
+  { id: 'm2', src: 'Galerie', from: 'recent' },
+  { id: 'm3', src: 'Galerie', from: 'recent' },
+  { id: 'm5', src: 'Fichiers', from: 'files' },
+  { id: 'm6', src: 'Partagé depuis une autre app', from: 'other' }
+];
+const TABS = [
+  { id: 'all', label: 'Tout' },
+  { id: 'recent', label: 'Galerie' },
+  { id: 'conv', label: 'Conversations' },
+  { id: 'files', label: 'Fichiers' },
+  { id: 'other', label: 'Autres apps' }
+];
+const STICKERS = [
+  { g: 'heart', label: 'Cœur' },
+  { g: 'star', label: 'Étoile' },
+  { g: 'wow', label: 'Tampon' },
+  { g: 'clock', label: 'Heure' },
+  { g: 'place', label: 'Lieu' },
+  { g: 'mention', label: 'Mention' }
+];
+const PILLS = {
+  wow: { text: 'WOW', bg: '#fbbf24', fg: '#1c1917' },
+  clock: { text: '06:28', bg: '#ffffff', fg: '#111111' },
+  place: { text: 'Lisbonne', bg: '#4f46e5', fg: '#ffffff' },
+  mention: { text: '@lea', bg: 'rgba(0,0,0,.6)', fg: '#ffffff' }
+};
+const SOUNDS = [
+  { id: 's1', title: 'Aube claire', credit: '[artiste]', dur: '0:32', tint: '#7c3aed' },
+  { id: 's2', title: 'Marée basse', credit: '[artiste]', dur: '0:45', tint: '#0891b2' },
+  { id: 's3', title: 'Néons', credit: '[artiste]', dur: '0:28', tint: '#db2777' }
+];
+const TEXT_STYLES = [
+  { id: 'classic', label: 'Classique' },
+  { id: 'neon', label: 'Néon' },
+  { id: 'box', label: 'Cartouche' },
+  { id: 'serif', label: 'Serif' }
+];
+const COLORS = [
+  { hex: '#ffffff', name: 'Blanc' },
+  { hex: '#fbbf24', name: 'Ambre' },
+  { hex: '#a5b4fc', name: 'Indigo' },
+  { hex: '#f472b6', name: 'Rose' },
+  { hex: '#111111', name: 'Noir' }
+];
+const PROFILES = {
+  send: { caption: 'Ajouter un message…' },
+  story: { caption: 'Texte de la story…' },
+  post: { caption: 'Légende de ce média…' },
+  reel: { caption: 'Texte du réel…' }
+};
+const AUDIENCES = [
+  { id: 'public', label: 'Public', sub: 'Tout le monde sur Meeshy' },
+  { id: 'community', label: 'Communautés', sub: 'Les membres de vos communautés' },
+  { id: 'contacts', label: 'Contacts', sub: 'Vos contacts acceptés' },
+  { id: 'private', label: 'Privé', sub: 'Vous seul' }
+];
+const LAYOUTS = [
+  { id: 'carousel', label: 'Image par image', g: [4, 16, 20, 4, 0] },
+  { id: 'reel', label: 'Défilement continu', g: [7, 10, 18, 4, 16] },
+  { id: 'hero', label: 'Une grande, les autres à côté', g: [3, 11, 15, 4, 7] },
+  { id: 'wave', label: 'En vague', g: [3, 8, 13, 8, 10] },
+  { id: 'sine', label: 'En zigzag', g: [3, 8, 14, 2, 10] }
+];
+const REEL_REFUSAL = 'Un réel demande une vidéo ou un son d’au moins 3 secondes, ou au moins deux images.';
+const DURATION = 6;
+let seq = 0;
+const uid = () => 'o' + (++seq) + Date.now().toString(36);
+const newSlide = (bg) => ({ id: uid(), bg, fit: defaultFit(bg), fill: 'blur', objects: [], strokes: [], caption: '', sound: null });
+const pathOf = (pts) => pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+const inkOn = (hex) => (hex === '#ffffff' || hex === '#fbbf24' || hex === '#a5b4fc') ? '#111111' : '#ffffff';
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      screen: 'conv', srcMode: 'new', srcTab: 'all', srcSel: [], nextProfile: 'send',
+      profile: 'send', slides: [], cur: 0, selected: null, menuFor: null, sheet: null,
+      tool: null, drawColor: '#ffffff', live: null, chrome: true, dragging: false,
+      dynamic: false, timeline: false, playing: false, ph: 0,
+      past: [], future: [], audience: 'contacts', sent: [], toast: '', hint: true, pubMenu: false, pubExpanded: null, entry: 'conv'
+    };
+  }
+
+  componentWillUnmount() { this.stopPlay(); clearTimeout(this.toastT); clearTimeout(this.lp); }
+
+  slide() { return this.state.slides[this.state.cur]; }
+
+  updateCur(fn, record) {
+    const s = this.state;
+    const slides = s.slides.map((sl, i) => i === s.cur ? fn(sl) : sl);
+    const next = { slides };
+    if (record !== false) { next.past = s.past.concat([s.slides]).slice(-40); next.future = []; }
+    this.setState(next);
+  }
+
+  updateObj(id, fn, record) {
+    this.updateCur((sl) => ({ ...sl, objects: sl.objects.map((o) => o.id === id ? fn(o) : o) }), record);
+  }
+
+  flash(msg) {
+    clearTimeout(this.toastT);
+    this.setState({ toast: msg });
+    this.toastT = setTimeout(() => this.setState({ toast: '' }), 2400);
+  }
+
+  openComposer(profile, slides) {
+    this.stopPlay();
+    this.setState({
+      screen: 'composer', frameEdit: false, profile, entry: profile === 'send' ? 'conv' : 'feed', pubMenu: false, pubExpanded: null, slides, cur: 0, selected: null, menuFor: null, sheet: null,
+      tool: null, chrome: true, dynamic: false, timeline: false, playing: false, ph: 0,
+      past: [], future: [], hint: true
+    });
+  }
+
+  mkObj(kind, extra) {
+    const s = this.state;
+    const start = s.dynamic ? Math.min(s.ph, 0.8) : 0;
+    return { id: uid(), kind, x: 50, y: 42, s: 1, r: 0, t0: start, t1: 1, ...extra };
+  }
+
+  addObject(o, extra) {
+    const s = this.state;
+    const slides = s.slides.map((sl, i) => i === s.cur ? { ...sl, objects: sl.objects.concat([o]) } : sl);
+    this.setState({ slides, past: s.past.concat([s.slides]).slice(-40), future: [], selected: o.id, sheet: null, hint: false, chrome: true, ...(extra || {}) });
+  }
+
+  poseMedia(m) {
+    const sl = this.slide();
+    if (!sl.bg) { this.updateCur((x) => ({ ...x, bg: m, fit: defaultFit(m) })); this.setState({ screen: 'composer' }); return; }
+    this.setState({ screen: 'composer' });
+    this.addObject(this.mkObj('media', { media: m, s: 0.9, y: 40 }));
+  }
+
+  sceneRect(e) {
+    const el = e.currentTarget.closest ? e.currentTarget.closest('[data-scene]') : null;
+    return (el || e.currentTarget).getBoundingClientRect();
+  }
+
+  pct(e, rect) {
+    return [((e.clientX - rect.left) / rect.width) * 100, ((e.clientY - rect.top) / rect.height) * 100];
+  }
+
+  capture(e) {
+    const el = e.currentTarget.closest ? e.currentTarget.closest('[data-scene]') : null;
+    try { (el || e.currentTarget).setPointerCapture(e.pointerId); } catch (err) { }
+  }
+
+  objDown(e, id) {
+    if (this.state.tool === 'draw') return;
+    e.stopPropagation();
+    this.capture(e);
+    const o = this.slide().objects.find((x) => x.id === id);
+    const rect = this.sceneRect(e);
+    this.drag = { id, sx: e.clientX, sy: e.clientY, ox: o.x, oy: o.y, rect, moved: false, fired: false, snap: this.state.slides };
+    clearTimeout(this.lp);
+    this.lp = setTimeout(() => {
+      if (this.drag && !this.drag.moved) {
+        this.drag.fired = true;
+        this.setState({ menuFor: id, selected: id, hint: false });
+      }
+    }, 480);
+  }
+
+  sceneDown(e) {
+    const s = this.state;
+    if (s.tool === 'draw') {
+      this.capture(e);
+      const rect = this.sceneRect(e);
+      this.stroke = { rect };
+      this.setState({ live: [this.pct(e, rect)] });
+      return;
+    }
+    this.tap = { x: e.clientX, y: e.clientY };
+  }
+
+  sceneMove(e) {
+    if (this.stroke) {
+      const p = this.pct(e, this.stroke.rect);
+      this.setState({ live: (this.state.live || []).concat([p]) });
+      return;
+    }
+    const d = this.drag;
+    if (!d) return;
+    const dx = e.clientX - d.sx;
+    const dy = e.clientY - d.sy;
+    if (!d.moved && Math.hypot(dx, dy) < 5) return;
+    if (!d.moved) { d.moved = true; clearTimeout(this.lp); }
+    const x = Math.max(4, Math.min(96, d.ox + (dx / d.rect.width) * 100));
+    const y = Math.max(4, Math.min(96, d.oy + (dy / d.rect.height) * 100));
+    const slides = this.state.slides.map((sl, i) => i === this.state.cur ? { ...sl, objects: sl.objects.map((o) => o.id === d.id ? { ...o, x, y } : o) } : sl);
+    this.setState({ slides, dragging: true, selected: d.id, hint: false });
+  }
+
+  sceneUp(e) {
+    clearTimeout(this.lp);
+    if (this.stroke) {
+      const pts = this.state.live || [];
+      this.stroke = null;
+      if (pts.length > 1) {
+        const color = this.state.drawColor;
+        this.updateCur((sl) => ({ ...sl, strokes: sl.strokes.concat([{ d: pathOf(pts), color }]) }));
+      }
+      this.setState({ live: null });
+      return;
+    }
+    const d = this.drag;
+    if (d) {
+      this.drag = null;
+      if (d.moved) {
+        this.setState({ dragging: false, past: this.state.past.concat([d.snap]).slice(-40), future: [] });
+        return;
+      }
+      if (!d.fired) this.setState({ selected: d.id, hint: false });
+      return;
+    }
+    const t = this.tap;
+    this.tap = null;
+    if (!t || Math.hypot(e.clientX - t.x, e.clientY - t.y) > 8) return;
+    const s = this.state;
+    if (s.sheet) { this.setState({ sheet: null }); return; }
+    if (s.selected) { this.setState({ selected: null }); return; }
+    this.setState({ chrome: !s.chrome, hint: false });
+  }
+
+  startPlay() {
+    this.stopPlay();
+    this.timer = setInterval(() => {
+      const ph = this.state.ph + 0.05 / DURATION;
+      this.setState({ ph: ph >= 1 ? 0 : ph });
+    }, 50);
+    this.setState({ playing: true, selected: null });
+  }
+
+  stopPlay() { if (this.timer) clearInterval(this.timer); this.timer = null; }
+
+  pause() { this.stopPlay(); this.setState({ playing: false }); }
+
+  objView(o, s, selectedId, timelineShown) {
+    const inWindow = s.ph >= o.t0 && s.ph <= o.t1;
+    const ghost = s.dynamic && timelineShown && !s.playing && !inWindow;
+    const pill = PILLS[o.g];
+    const isText = o.kind === 'text';
+    const st = o.st || 'classic';
+    const box = st === 'box';
+    return {
+      id: o.id, x: o.x.toFixed(2), y: o.y.toFixed(2), r: o.r, s: o.s,
+      cls: 'obj' + (o.id === selectedId ? ' sel' : '') + (ghost ? ' ghost' : '') + (s.playing ? ' enter' : ''),
+      aria: isText ? 'Texte : ' + o.text : (o.kind === 'media' ? 'Média posé' : 'Sticker'),
+      isText, tcls: 't t-' + st, text: o.text,
+      fg: box ? inkOn(o.color) : o.color, bgc: box ? o.color : 'transparent',
+      isMedia: o.kind === 'media', mcls: 'fgmedia ' + o.media, mh: o.kind === 'media' ? (150 / (RATIO[o.media] || 0.75)).toFixed(0) : 0,
+      isHeart: o.g === 'heart', isStar: o.g === 'star', isPill: !!pill,
+      pillText: pill ? pill.text : '', pillBg: pill ? pill.bg : '', pillFg: pill ? pill.fg : '',
+      down: (e) => this.objDown(e, o.id)
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const sl = this.slide();
+    const P = PROFILES[s.profile];
+
+    const base = {
+      screenConv: s.screen === 'conv', screenSources: s.screen === 'sources', screenComposer: s.screen === 'composer',
+      hasToast: !!s.toast, toast: s.toast,
+      sentRev: s.sent.slice().reverse(),
+      openFromConv: () => this.openComposer('send', [newSlide('m1')]),
+      openStoryFromConv: () => this.setState({ screen: 'sources', srcMode: 'new', srcSel: [], srcTab: 'all', nextProfile: 'story' }),
+      openAttachFromConv: () => this.setState({ screen: 'sources', srcMode: 'new', srcSel: [], srcTab: 'all', nextProfile: 'send' }),
+      cameraFromConv: () => { this.openComposer('send', [newSlide('m5')]); this.flash('Photo prise : elle devient le fond'); }
+    };
+
+    const multi = s.srcMode === 'new';
+    const srcItems = MEDIA.filter((m) => s.srcTab === 'all' || m.from === s.srcTab).map((m) => {
+      const idx = s.srcSel.indexOf(m.id);
+      return {
+        media: m.id, src: m.src, num: idx >= 0 ? String(idx + 1) : '',
+        cls: 'tile' + (idx >= 0 ? ' on' : ''),
+        aria: 'Média · ' + m.src,
+        pick: () => {
+          if (multi) {
+            const sel = idx >= 0 ? s.srcSel.filter((x) => x !== m.id) : s.srcSel.concat([m.id]).slice(0, 10);
+            this.setState({ srcSel: sel });
+            return;
+          }
+          if (s.srcMode === 'slide') {
+            const slides = s.slides.concat([newSlide(m.id)]);
+            this.setState({ screen: 'composer', slides, cur: slides.length - 1, selected: null, past: s.past.concat([s.slides]), future: [] });
+            return;
+          }
+          this.poseMedia(m.id);
+        }
+      };
+    });
+    const src = {
+      srcTitle: multi ? (s.nextProfile === 'story' ? 'Créer une story' : 'Joindre des médias') : (s.srcMode === 'slide' ? 'Nouvelle slide' : 'Poser un média'),
+      srcSub: multi ? 'Choisissez un ou plusieurs médias : chacun devient une slide' : (s.srcMode === 'slide' ? 'Le média devient le fond de la nouvelle slide' : (sl && sl.bg ? 'Il se posera au premier plan de la scène' : 'Il deviendra le fond de la scène')),
+      srcTabs: TABS.map((t) => ({ label: t.label, cls: 'tab' + (s.srcTab === t.id ? ' on' : ''), pick: () => this.setState({ srcTab: t.id }) })),
+      srcItems, srcMulti: multi, srcIsOther: s.srcTab === 'other',
+      continueLabel: s.srcSel.length > 1 ? 'Composer ' + s.srcSel.length + ' slides' : 'Composer',
+      srcContinueOpacity: s.srcSel.length ? 1 : 0.45,
+      srcContinue: () => { if (s.srcSel.length) this.openComposer(s.nextProfile, s.srcSel.map(newSlide)); },
+      srcClose: () => this.setState({ screen: multi ? 'conv' : 'composer' }),
+      srcCamera: () => {
+        if (multi) { this.openComposer(s.nextProfile, [newSlide('m5')]); this.flash('Photo prise : elle devient le fond'); return; }
+        this.poseMedia('m5');
+      }
+    };
+
+    if (s.screen !== 'composer' || !sl) return { ...base, ...src, rootCls: 'comp', objs: [], paths: [] };
+
+    const timelineShown = s.dynamic && s.timeline;
+    const visible = s.playing ? sl.objects.filter((o) => s.ph >= o.t0 && s.ph <= o.t1) : sl.objects;
+    const objs = visible.map((o) => this.objView(o, s, s.selected, timelineShown));
+    const paths = sl.strokes.concat(s.live && s.live.length > 1 ? [{ d: pathOf(s.live), color: s.drawColor }] : []);
+    const selObj = sl.objects.find((o) => o.id === s.selected);
+    const menuObj = sl.objects.find((o) => o.id === s.menuFor);
+    const drawMode = s.tool === 'draw';
+    const hidden = !s.chrome || s.dragging;
+    const idxOf = (id) => sl.objects.findIndex((o) => o.id === id);
+    const targetId = s.menuFor || s.selected;
+    const move = (dir) => {
+      const i = idxOf(targetId);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= sl.objects.length) return;
+      this.updateCur((x) => {
+        const arr = x.objects.slice();
+        const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+        return { ...x, objects: arr };
+      });
+      this.setState({ menuFor: null });
+    };
+    const mi = menuObj ? idxOf(menuObj.id) : -1;
+    const isMediaMenu = menuObj && menuObj.kind === 'media';
+    const outBlocked = isMediaMenu && s.profile === 'story';
+    const sheetTitles = { audience: 'Qui verra', sticker: 'Stickers', sound: 'Son de fond' };
+    const nSlides = s.slides.length;
+    const soundObj = SOUNDS.find((x) => x.id === sl.sound);
+    const reelRefusal = nSlides >= 2 || !!soundObj ? null : REEL_REFUSAL;
+    const kindLabel = (k) => k === 'send' ? 'Envoyer à Léa' : (k === 'story' ? (nSlides > 1 ? 'Publier ' + nSlides + ' stories' : 'Publier la story') : (k === 'post' ? 'Publier le post' : 'Publier le réel'));
+    const publish = (k, layout) => {
+      if (k === 'reel' && reelRefusal) { this.setState({ pubMenu: false }); this.flash('Réel indisponible : ajoutez une image ou un son'); return; }
+      this.pause();
+      if (k === 'send') {
+        const snaps = s.slides.map((x) => ({
+          id: uid(), ...bgView(x),
+          paths: x.strokes,
+          objs: x.objects.map((o) => this.objView(o, { ...s, dynamic: false, playing: false }, null, false)),
+          meta: (x.caption ? x.caption + ' · ' : '') + (s.dynamic ? 'scène animée' : 'envoyé')
+        }));
+        this.setState({ screen: 'conv', pubMenu: false, sent: s.sent.concat(snaps) });
+        this.flash(snaps.length > 1 ? snaps.length + ' scènes envoyées à Léa' : 'Envoyé à Léa');
+        return;
+      }
+      const lay = LAYOUTS.find((l) => l.id === layout);
+      const what = k === 'story' ? (nSlides > 1 ? nSlides + ' stories publiées' : 'Story publiée · 24 h') : (k === 'post' ? 'Post publié' + (lay ? ' · ' + lay.label.toLowerCase() : '') : 'Réel publié');
+      this.setState({ screen: 'conv', pubMenu: false, sheet: null });
+      this.flash(what + ' · ' + audience.label);
+    };
+    const kinds = s.entry === 'conv' ? ['send', 'story', 'post', 'reel'] : ['story', 'post', 'reel'];
+    const KIND_META = {
+      send: { letter: 'L', tint: '#8b5cf6', label: 'Envoyer à Léa', sub: 'Dans la conversation' },
+      story: { letter: 'S', tint: '#db2777', label: 'Story', sub: 'Visible 24 h' },
+      post: { letter: 'P', tint: '#0891b2', label: 'Post', sub: nSlides > 1 ? 'Dans le fil · ' + nSlides + ' médias, choisir la disposition' : 'Dans le fil' },
+      reel: { letter: 'R', tint: '#ea580c', label: 'Réel', sub: 'Plein écran' }
+    };
+    const audience = AUDIENCES.find((a) => a.id === s.audience);
+
+    return {
+      ...base, ...src,
+      rootCls: 'comp' + (hidden ? ' hide' : ''),
+      ...bgView(sl), noBg: !sl.bg,
+      frameCls: 'rb' + (s.frameEdit ? ' on' : '') + (sl.bg ? '' : ' off'),
+      toggleFrame: () => { if (!sl.bg) return; this.setState({ frameEdit: !s.frameEdit, selected: null, hint: false }); },
+      frameOpen: !!s.frameEdit && !!sl.bg && !drawMode,
+      frameInfo: (RATIO_LABEL[sl.bg] || 'Média') + (sl.fit === 'fill' ? ' · rognée pour couvrir l’écran' : ' · entière, posée dans le cadre'),
+      fitTokens: [{ id: 'fit', label: 'Ajuster (entier)' }, { id: 'fill', label: 'Remplir (rogné)' }].map((f) => ({ label: f.label, cls: 'tok' + (sl.fit === f.id ? ' on' : ''), pick: () => this.updateCur((x) => ({ ...x, fit: f.id })) })),
+      fillTokens: FILLS.map((f) => ({ label: f.label, swatch: f.swatch, cls: 'tok' + (sl.fill === f.id ? ' on' : ''), pick: () => this.updateCur((x) => ({ ...x, fill: f.id, fit: x.fit === 'fill' ? 'fit' : x.fit })) })),
+      objs, paths,
+      sceneDown: (e) => this.sceneDown(e), sceneMove: (e) => this.sceneMove(e), sceneUp: (e) => this.sceneUp(e),
+      close: () => { this.stopPlay(); this.setState({ screen: 'conv', playing: false }); },
+      dynamic: s.dynamic,
+      dynCls: 'chip glass' + (s.dynamic ? ' primary' : ''),
+      toggleDynamic: () => {
+        if (s.dynamic) { this.stopPlay(); this.setState({ dynamic: false, timeline: false, playing: false }); return; }
+        this.setState({ dynamic: true, timeline: true, ph: 0 });
+        this.flash('Scène animée : chaque objet a sa piste');
+      },
+      showRail: s.profile !== 'send' || nSlides > 1,
+      slidesView: s.slides.map((x, i) => ({ cls: 'slidethumb' + (i === s.cur ? ' on' : ''), bg: x.bg || '', aria: 'Slide ' + (i + 1), pick: () => this.setState({ cur: i, selected: null }) })),
+      addSlide: () => this.setState({ screen: 'sources', srcMode: 'slide', srcTab: 'all' }),
+      hasSound: !!soundObj, soundLine: soundObj ? soundObj.title + ' · ' + soundObj.credit : '',
+      showRails: !drawMode,
+      addText: () => this.addObject(this.mkObj('text', { text: 'Votre texte', st: 'classic', color: '#ffffff', y: 38 })),
+      openStickers: () => this.setState({ sheet: 'sticker', selected: null }),
+      startDraw: () => this.setState({ tool: 'draw', selected: null, sheet: null, hint: false }),
+      openPose: () => this.setState({ screen: 'sources', srcMode: 'pose', srcTab: 'all' }),
+      openSound: () => this.setState({ sheet: 'sound', selected: null }),
+      undoCls: 'rb' + (s.past.length ? '' : ' off'),
+      redoCls: 'rb' + (s.future.length ? '' : ' off'),
+      undo: () => { if (!s.past.length) return; this.setState({ slides: s.past[s.past.length - 1], past: s.past.slice(0, -1), future: [s.slides].concat(s.future), selected: null, cur: Math.min(s.cur, s.past[s.past.length - 1].length - 1) }); },
+      redo: () => { if (!s.future.length) return; this.setState({ slides: s.future[0], future: s.future.slice(1), past: s.past.concat([s.slides]), selected: null }); },
+      tlCls: 'rb' + (s.timeline ? ' on' : ''),
+      toggleTimeline: () => this.setState({ timeline: !s.timeline }),
+      showHint: s.hint && !drawMode && !s.sheet,
+      drawMode,
+      drawColors: COLORS.map((c) => ({ hex: c.hex, aria: 'Couleur ' + c.name, cls: 'dot' + (s.drawColor === c.hex ? ' on' : ''), pick: () => this.setState({ drawColor: c.hex }) })),
+      drawDone: () => this.setState({ tool: null }),
+      showBottom: !drawMode,
+      timelineOpen: timelineShown,
+      playing: s.playing, paused: !s.playing, playAria: s.playing ? 'Pause' : 'Lire',
+      play: () => s.playing ? this.pause() : this.startPlay(),
+      timeLabel: (s.ph * DURATION).toFixed(1) + ' s / ' + DURATION + ' s',
+      phFrac: s.ph.toFixed(4),
+      scrub: (e) => { const r = e.currentTarget.getBoundingClientRect(); this.setState({ ph: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) }); },
+      tracks: sl.objects.map((o) => ({
+        label: o.kind === 'text' ? o.text : (o.kind === 'media' ? 'Média' : (PILLS[o.g] ? PILLS[o.g].text : (o.g === 'heart' ? 'Cœur' : 'Étoile'))),
+        aria: 'Piste de l’objet',
+        left: (o.t0 * 100).toFixed(1), width: ((o.t1 - o.t0) * 100).toFixed(1),
+        cls: 'bar' + (o.id === s.selected ? ' on' : ''),
+        pick: (e) => { const r = e.currentTarget.getBoundingClientRect(); this.setState({ selected: o.id, ph: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) }); }
+      })),
+      noTracks: sl.objects.length === 0,
+      setIn: () => { const ph = s.ph; this.updateObj(s.selected, (o) => ({ ...o, t0: Math.min(ph, o.t1 - 0.05) })); },
+      setOut: () => { const ph = s.ph; this.updateObj(s.selected, (o) => ({ ...o, t1: Math.max(ph, o.t0 + 0.05) })); },
+      hasSel: !!selObj && !s.playing, noSel: (!selObj || s.playing) && !(s.frameEdit && sl.bg),
+      selIsText: !!selObj && selObj.kind === 'text',
+      selText: selObj && selObj.kind === 'text' ? selObj.text : '',
+      onSelText: (e) => { const v = e.target.value; this.updateObj(s.selected, (o) => ({ ...o, text: v }), false); },
+      styleTokens: TEXT_STYLES.map((t) => ({ label: t.label, cls: 'tok' + (selObj && selObj.st === t.id ? ' on' : ''), pick: () => this.updateObj(s.selected, (o) => ({ ...o, st: t.id })) })),
+      colorTokens: COLORS.map((c) => ({ hex: c.hex, aria: 'Couleur ' + c.name, cls: 'dot' + (selObj && selObj.color === c.hex ? ' on' : ''), pick: () => this.updateObj(s.selected, (o) => ({ ...o, color: c.hex })) })),
+      sizeUp: () => this.updateObj(s.selected, (o) => ({ ...o, s: Math.min(3, +(o.s + 0.15).toFixed(2)) })),
+      sizeDown: () => this.updateObj(s.selected, (o) => ({ ...o, s: Math.max(0.4, +(o.s - 0.15).toFixed(2)) })),
+      rotate: () => this.updateObj(s.selected, (o) => ({ ...o, r: (o.r + 15) % 360 })),
+      raise: () => move(1), lower: () => move(-1),
+      removeSel: () => { const id = s.selected; this.updateCur((x) => ({ ...x, objects: x.objects.filter((o) => o.id !== id) })); this.setState({ selected: null }); },
+      deselect: () => this.setState({ selected: null }),
+      caption: sl.caption, captionPh: P.caption,
+      onCaption: (e) => { const v = e.target.value; this.updateCur((x) => ({ ...x, caption: v }), false); },
+      showAudience: s.profile !== 'send',
+      audienceLabel: audience.label,
+      openAudience: () => this.setState({ sheet: 'audience', selected: null }),
+      sendLabel: kindLabel(s.profile),
+      onSend: () => publish(s.profile, s.profile === 'post' && nSlides > 1 ? (s.layout || 'carousel') : null),
+      pubMenu: s.pubMenu,
+      togglePubMenu: () => this.setState({ pubMenu: !s.pubMenu, pubExpanded: null, selected: null }),
+      closePubMenu: () => this.setState({ pubMenu: false }),
+      pubRows: kinds.flatMap((k) => {
+        const m = KIND_META[k];
+        const refusal = k === 'reel' ? reelRefusal : null;
+        const expandable = k === 'post' && nSlides > 1;
+        const expanded = expandable && s.pubExpanded === 'post';
+        const aud = k === 'send' ? '' : ' · ' + audience.label;
+        const head = {
+          isKind: true, isLayout: false, letter: m.letter, tint: m.tint, label: m.label,
+          sub: refusal || (m.sub + aud), disabled: !!refusal,
+          isDefault: s.profile === k, expandable, chevron: expanded ? 90 : 0,
+          expandedAria: expandable ? expanded : undefined,
+          cls: 'row' + (s.profile === k ? ' on' : '') + (refusal ? ' dis' : ''),
+          pick: () => {
+            if (refusal) return;
+            if (expandable) { this.setState({ pubExpanded: expanded ? null : 'post', profile: 'post' }); return; }
+            this.setState({ profile: k, layout: null, pubMenu: false });
+          }
+        };
+        if (!expanded) return [head];
+        return [head].concat(LAYOUTS.map((l) => ({
+          isKind: false, isLayout: true, label: l.label,
+          gx: l.g[0], gw: l.g[1], gx2: l.g[2], gy2: l.g[3], gh2: 16 - l.g[3] > 4 ? 16 - l.g[3] : 8,
+          chosen: s.profile === 'post' && (s.layout || 'carousel') === l.id,
+          pick: () => this.setState({ profile: 'post', layout: l.id, pubMenu: false })
+        })));
+      }),
+      menuOpen: !!menuObj,
+      menuTop: menuObj ? Math.max(14, Math.min(58, menuObj.y - 6)).toFixed(1) : 30,
+      menuTitle: menuObj ? (menuObj.kind === 'text' ? 'Texte' : (menuObj.kind === 'media' ? 'Média de premier plan' : 'Sticker')) : '',
+      closeMenu: () => this.setState({ menuFor: null }),
+      mUpCls: 'menu-item' + (mi >= 0 && mi < sl.objects.length - 1 ? '' : ' dis'),
+      mDownCls: 'menu-item' + (mi > 0 ? '' : ' dis'),
+      menuEdit: () => {
+        if (menuObj && menuObj.kind === 'text') { this.setState({ menuFor: null, selected: menuObj.id }); return; }
+        this.setState({ menuFor: null, selected: menuObj ? menuObj.id : null });
+        this.flash('Éditeur : rogner · recadrer · couper');
+      },
+      mOutLabel: isMediaMenu ? 'Sortir de la scène' : 'Retirer de la scène',
+      mOutCls: 'menu-item ' + (outBlocked ? 'dis' : 'danger'),
+      mOutReason: outBlocked ? 'En Story, une slide est la story entière : le média y reste.' : '',
+      menuOut: () => {
+        if (!menuObj || outBlocked) return;
+        const id = menuObj.id;
+        if (isMediaMenu) {
+          const media = menuObj.media;
+          const slides = s.slides.map((x, i) => i === s.cur ? { ...x, objects: x.objects.filter((o) => o.id !== id) } : x).concat([newSlide(media)]);
+          this.setState({ slides, menuFor: null, selected: null, past: s.past.concat([s.slides]), future: [], profile: s.profile === 'send' ? 'send' : s.profile });
+          this.flash('Le média devient sa propre slide');
+          return;
+        }
+        this.updateCur((x) => ({ ...x, objects: x.objects.filter((o) => o.id !== id) }));
+        this.setState({ menuFor: null, selected: null });
+      },
+      sheetOpen: !!s.sheet,
+      sheetTitle: sheetTitles[s.sheet] || '',
+      closeSheet: () => this.setState({ sheet: null }),
+      sheetAudience: s.sheet === 'audience',
+      audienceOpts: AUDIENCES.map((a) => ({ label: a.label, sub: a.sub, cls: 'row' + (s.audience === a.id ? ' on' : ''), pick: () => this.setState({ audience: a.id, sheet: null }) })),
+      sheetSticker: s.sheet === 'sticker',
+      stickerOpts: STICKERS.map((x) => {
+        const pill = PILLS[x.g];
+        return {
+          label: x.label, isHeart: x.g === 'heart', isStar: x.g === 'star', isPill: !!pill,
+          pillText: pill ? pill.text : '', pillBg: pill ? pill.bg : '', pillFg: pill ? pill.fg : '',
+          pick: () => this.addObject(this.mkObj('sticker', { g: x.g, y: 30, x: 50 }))
+        };
+      }),
+      sheetSound: s.sheet === 'sound',
+      soundOpts: SOUNDS.map((x) => ({ ...x, cls: 'row' + (sl.sound === x.id ? ' on' : ''), pick: () => { this.updateCur((y) => ({ ...y, sound: x.id })); this.setState({ sheet: null }); } })),
+      removeSound: () => { this.updateCur((y) => ({ ...y, sound: null })); this.setState({ sheet: null }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

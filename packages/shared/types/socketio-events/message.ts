@@ -1,0 +1,680 @@
+/**
+ * Le domaine MESSAGE : envoi, édition, suppression, épinglage, mentions,
+ * visibilité personnelle, accusés de lecture, et le modèle transporté sur le
+ * socket (`SocketIOMessage`).
+ *
+ * @see ../socketio-events.ts — la façade qui garde l'adresse historique.
+ */
+
+// Import unified Participant types
+import type { ParticipantType } from '../participant.js';
+import type { E2EEEnvelope, LIBSIGNAL_PROTOCOL } from '../e2ee-directory.js';
+import type { PersonProfileDecor } from '../profile-decor.js';
+import type { MessageSticker } from '../message-sticker.js';
+import type { LastMessageSystemEvent } from '../conversation-preview.js';
+
+/**
+ * Données pour l'événement de suppression de message.
+ *
+ * `deletedAt` (ISO 8601) est l'heure SERVEUR du retrait — la valeur EXACTE que
+ * l'écriture `Message.deletedAt` vient de committer, jamais une horloge
+ * recomposée au moment de l'émission. Elle est déclarée parce que les TROIS
+ * clients datent la pierre tombale, et qu'aucun ne pouvait le faire avec autre
+ * chose que l'horloge de son appareil : Android fait `deletedAt ?: now`
+ * (`MessageRealtimeApplier.kt`), iOS pose `Date()` (`ConversationSyncEngine`),
+ * le web `new Date()` (`applyMessageDeleted`). Deux appareils du même compte
+ * dataient donc la même suppression différemment, et un rejeu de la file hors
+ * ligne la datait de la RECONNEXION — des heures après le retrait.
+ *
+ * Le type est énoncé parce qu'un horodatage dont le type ne l'est pas est
+ * décidé par l'encodeur : `Date` et chaîne ISO sortent identiques de
+ * `JSON.stringify`, et tout témoin posé sur la forme `Date` atteste alors une
+ * charge que personne ne reçoit.
+ *
+ * **Un client la lit comme OPTIONNELLE** : une entrée de la file hors ligne
+ * écrite avant #18159 est rejouée telle qu'elle a été stockée, sans ce champ,
+ * et un client neuf doit tourner contre un serveur ancien. Le repli reste
+ * l'horloge locale — exactement le comportement d'avant.
+ */
+export interface MessageDeletedEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+  readonly deletedAt: string;
+}
+
+/**
+ * Same shape as `MessageDeletedEventData` — a client removes the bubble
+ * identically either way — but a distinct event name lets a client that
+ * cares (a toast, a distinct log line) tell a server-initiated TTL burn
+ * apart from a user-requested deletion. @see MESSAGE_EXPIRED
+ */
+export interface MessageExpiredEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+}
+
+/**
+ * Le post cité par des messages de `conversationId` a été retiré (#7969).
+ * `postId` est l'identifiant que les messages portent dans `storyReplyToId` ;
+ * `deletedAt` (ISO 8601) est le marqueur que la lecture REST sert déjà sur
+ * `postReplyTo.deletedAt`. Aucun champ du contenu retiré. @see MESSAGE_CITED_POST_WITHDRAWN
+ */
+export interface MessageCitedPostWithdrawnEventData {
+  readonly conversationId: string;
+  readonly postId: string;
+  readonly deletedAt: string;
+}
+
+/**
+ * LE DÉCOMPTE D'UN ÉPHÉMÈRE COMMENCE (contrat du fil #7451, point 5) — émis à
+ * la PREMIÈRE réception d'un destinataire, jamais à l'envoi.
+ *
+ * `expiresAt` vaut `D(u) = réception(u) + ephemeralDuration` sur la room
+ * `user:<destinataire>`, et la plus TARDIVE des `D(u)` connues sur la room
+ * `user:<expéditeur>` — deux valeurs pour un même message, ce qui est la raison
+ * même pour laquelle cet événement est adressé par utilisateur et non diffusé
+ * en room de conversation (point 4).
+ *
+ * Le client compose ce qu'il AFFICHE avec `ephemeralDeadline()`
+ * (`utils/ephemeral-deadline.ts`) : cette valeur y entre comme échéance SERVIE,
+ * en concurrence avec sa réception locale, et c'est la plus PROCHE qui gagne.
+ *
+ * @see MESSAGE_COUNTDOWN_STARTED
+ */
+export interface MessageCountdownStartedEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+  /** ISO 8601 — l'échéance de CE destinataire, ou celle de l'expéditeur. */
+  readonly expiresAt: string;
+}
+
+/**
+ * Résumé des statuts de lecture pour enrichir les événements temps réel
+ *
+ * `messageId` — OPTIONNEL, DÉSORMAIS POSÉ par G-5 (#7347) sur le chemin EXACT
+ * (`broadcastReadStatus.ts`, quand `applyReceipt` lui transmet le lot FIGÉ —
+ * `args.messageIds`) : la passerelle émet alors UN résumé PAR message affecté,
+ * chacun nommant le sien — une rafale de lecture sur trois messages de trois
+ * auteurs distincts produit trois résumés, pas un agrégé sur le seul dernier.
+ * Reste ABSENT sur le repli LEGACY (aucun lot exact connu, ou `type:
+ * 'received'`) : `broadcastReadStatus.ts` retombe alors sur
+ * `getLatestMessageSummary`, le DERNIER message non supprimé de la
+ * conversation, comme avant G-5 ; un client applique ce résumé au message le
+ * plus RÉCENT de son cache (repli historique #7223). Optionnel pour que les
+ * DEUX chemins compilent et se décodent sans erreur : un champ requis aurait
+ * cassé le repli legacy, qui ne le pose jamais.
+ *
+ * ── LA FORME EST ARRÊTÉE ICI, ET G-5 LA SUIT (revue-correction W2) ─────────
+ *
+ * Le critère de fin écrit sur #7347 dit « la charge porte les `messageIds`
+ * figés et, PAR MESSAGE, `deliveredCount`/`readCount`/`readByAllAt` » — au
+ * PLURIEL, ce qui se lit aussi comme UN événement portant un TABLEAU. Ce
+ * n'est PAS la forme retenue, et l'écart doit se lire depuis le type plutôt
+ * que se découvrir à la fusion de G-5 :
+ *
+ *   - **un événement PAR message, chacun nommant le sien** (`messageId`
+ *     SINGULIER sur le résumé). C'est ce que dit l'autre moitié du même
+ *     critère — « rafale M1 M2 M3 lue ⇒ TROIS RÉSUMÉS, pas un » — et c'est
+ *     la seule forme RÉTROCOMPATIBLE : `summary` est un OBJET que les trois
+ *     décodeurs lisent déjà (web `isReadStatusUpdated`, iOS
+ *     `ReadStatusSummary` dans `Sockets/ReadStatusEvents.swift` — extrait de
+ *     `MessageSocketManager.swift` par G-5, budget de taille —, Kotlin gelé) ;
+ *     le muer en tableau casserait les trois d'un coup, un champ optionnel
+ *     de plus n'en casse aucun ;
+ *   - **l'id vit SUR le résumé, pas à la racine de l'événement.** Ce résumé
+ *     n'a jamais décrit « la conversation » : il décrit LE message que
+ *     `getLatestMessageSummary` vient d'élire. L'id est donc le qualifiant
+ *     des trois compteurs, et voyage avec eux — les séparer rouvrirait la
+ *     forme d'angle mort du cycle 126 (un champ qui QUALIFIE une valeur,
+ *     posé ailleurs qu'elle, se perd au premier relais qui recopie).
+ *
+ * `readByAllAt` — TRANCHÉ par G-5 (#7347) : elle VOYAGE, calculée par le MÊME
+ * moteur que le REST (`MessageReadStatusService.getConversationReadStatuses`,
+ * qui rend déjà `{totalMembers, receivedCount, readCount, readByAllAt}` PAR
+ * message — celui que `GET …/receipts` sert déjà). `Date | null`, comme
+ * `lastReadAt` ci-dessous : `null` tant que le dernier destinataire actif n'a
+ * pas rattrapé CE message, une date figée dès qu'il l'a fait. Son
+ * consommateur web (`apps/web/src/lib/api/realtime-apply.ts`) change dans
+ * le MÊME lot, comme promis ci-dessus — jamais l'un sans l'autre.
+ */
+export interface ReadStatusSummary {
+  readonly totalMembers: number;
+  readonly deliveredCount: number;
+  readonly readCount: number;
+  readonly messageId?: string;
+  readonly readByAllAt?: Date | null;
+}
+
+/**
+ * Données pour l'événement de mise à jour du statut de lecture
+ */
+export interface ReadStatusUpdatedEventData {
+  readonly conversationId: string;
+  readonly participantId: string;
+  /**
+   * `User.id` de l'acteur, ou `null` quand c'est un participant ANONYME — il
+   * n'a pas de ligne `User`, et `participantId` est alors sa seule identité.
+   * Le cas se produit sur l'accusé de livraison automatique d'une conversation
+   * ouverte par lien de partage, où les anonymes sont la population dominante.
+   *
+   * Un consommateur qui compare cette valeur à sa propre identité (synchro
+   * multi-appareils du curseur de lecture) n'a rien à changer : `null` ne
+   * correspond à personne, ce qui est le comportement voulu. `summary`, lui,
+   * est porté par `conversationId` seul et reste applicable.
+   */
+  readonly userId: string | null;
+  readonly type: 'read' | 'received';
+  readonly updatedAt: Date;
+  readonly summary: ReadStatusSummary;
+  /**
+   * Read frontier of the ACTOR at broadcast time, read from
+   * `ConversationReadCursor.lastReadAt`. It lets the actor's OTHER devices sync
+   * their own read cursor (multi-device read sync); a peer reading does not
+   * move your own cursor, so a recipient who is not the actor MUST ignore it.
+   * Read receipts are monotone, so a client applies it only when strictly newer
+   * than its local cursor. `null` when the actor has no read cursor yet.
+   *
+   * **Qui est « l'acteur » : `userId ?? participantId`, dans cet ordre.**
+   * `userId` seul ne suffit plus depuis qu'il vaut légitimement `null` pour un
+   * invité de lien partagé : un client sans compte qui ne comparerait que ce
+   * champ ne pourrait JAMAIS reconnaître ses propres autres appareils, et
+   * perdrait la synchro de curseur que ces deux champs existent pour porter.
+   * `participantId` est la ligne d'appartenance de l'acteur — non nulle pour
+   * TOUTE la population, et partagée par tous les appareils d'une même identité
+   * (une seule ligne `Participant` par couple conversation/identité, pour un
+   * inscrit comme pour un invité).
+   *
+   * C'est la MÊME règle que celle qui nomme la room personnelle
+   * (`personalRoomKey`, `ROOMS.user(userId ?? id)`) — une seule règle
+   * d'identité d'acteur dans tout le système, pas deux. Un client à compte
+   * compare son `User.id` et n'a RIEN à changer : la seconde branche ne
+   * s'ouvre que là où la première est nulle.
+   *
+   * Present ONLY on `type: 'read'` broadcasts — the sole action that advances
+   * a read cursor. ABSENT (`undefined`) on `type: 'received'` (delivery never
+   * moves `lastReadAt`) and on the bulk auto-deliver broadcast
+   * (`MessageHandler._autoDeliverToOnlineRecipients`), which carries only the
+   * aggregate `summary` for sender checkmarks. Travels paired with
+   * `unreadCount`: a consumer applies them together or not at all.
+   *
+   * **Et présent seulement dans la copie ADRESSÉE À L'ACTEUR.** Ces deux champs
+   * ne décrivent pas la conversation mais UNE personne : à quel point elle est
+   * en retard sur ce fil, et quand elle l'a rattrapé pour la dernière fois. Le
+   * serveur émet donc l'événement DEUX fois sur un `read` — une copie sans ces
+   * champs à l'éventail de la conversation, une copie complète à la seule room
+   * personnelle de l'acteur (`ROOMS.user(userId ?? participantId)`), dont
+   * l'éventail est alors exclu pour qu'aucun socket ne reçoive les deux. Un
+   * pair ne les recevait de toute façon que pour les jeter, puisque le seul
+   * consommateur qui les lit conditionne leur usage à « l'acteur, c'est moi » ;
+   * et la préférence d'accusés de lecture qui autorise la diffusion consent à
+   * « j'ai lu ton message », pas à la publication d'un arriéré.
+   *
+   * Rien à changer côté client : un appareil de l'acteur les reçoit toujours,
+   * par le canal que ses sessions rejoignent à l'authentification. Un client
+   * qui les lirait SANS vérifier l'identité de l'acteur, en revanche, cessera
+   * de voir passer l'arriéré des autres — c'était le défaut, pas le contrat.
+   */
+  readonly lastReadAt?: Date | null;
+  /**
+   * Server-authoritative unread count for the ACTOR in this conversation
+   * after the read/receive action. Same `userId ?? participantId` scoping and
+   * same present-on-dedicated-routes / absent-on-auto-deliver semantics as
+   * `lastReadAt`; applied as-is by the actor's devices when accepted. Même
+   * portée d'adressage : la copie de l'acteur, jamais l'éventail.
+   */
+  readonly unreadCount?: number;
+}
+
+/**
+ * Une personne vient d'ouvrir une vue unique (#7578).
+ *
+ * L'événement dit QUI a ouvert — il ne retire rien à personne. Le client dont
+ * c'est l'identité (`userId`, ou `participantId` pour un invité) passe le
+ * message à l'état « ouvert » et purge son contenu local ; tous les autres ne
+ * changent RIEN à leur bulle : ce qu'une personne ouvre ne retire rien aux
+ * autres. Jamais de `message:deleted` / `message:expired` pour une vue unique
+ * ouverte : la bulle « (1) · déjà ouvert » reste chez chacun.
+ */
+export interface MessageConsumedEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+  /** Identité de celui qui a ouvert (`User.id`, ou `Participant.id` d'un invité). */
+  readonly userId: string;
+  /** `Participant.id` de celui qui a ouvert — toujours présent, anonyme compris. */
+  readonly participantId?: string;
+  /** L'AUTEUR a ouvert son propre message : n'entre jamais dans l'audience. */
+  readonly byAuthor?: boolean;
+  /** Destinataires ACTIFS (auteur exclu) qui ont ouvert. */
+  readonly viewOnceCount: number;
+  /** Destinataires ACTIFS (auteur exclu) — le dénominateur. */
+  readonly maxViewOnceCount: number;
+  /** Tous les destinataires actifs ont ouvert : la purge du CONTENU est programmée. */
+  readonly isFullyConsumed: boolean;
+}
+
+/**
+ * Le CONTENU d'une vue unique vient d'être purgé côté serveur (#7578) — tous
+ * les destinataires l'ont ouverte, ou son plafond de rétention est atteint.
+ *
+ * La bulle RESTE chez chacun : le client purge le contenu local (texte,
+ * traductions, média, vignette, transcription) et garde l'état « ouvert ».
+ * Ce n'est PAS un retrait.
+ */
+export interface MessageViewOncePurgedEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+}
+
+/**
+ * One message named by a personal-visibility event, with the conversation it
+ * belongs to.
+ *
+ * `conversationId` is not decoration: every client cache in this repo is keyed
+ * by conversation, so a bare `messageId` would force a scan of every cached
+ * list to find the one page holding it.
+ */
+export interface PersonalMessageVisibilityRef {
+  readonly messageId: string;
+  readonly conversationId: string;
+}
+
+/**
+ * Payload of `MESSAGE_HIDDEN_FOR_ME`.
+ *
+ * A list, not a single id: the bulk route hides up to 100 messages in one
+ * request, and one event per message would make a "clear these 100" gesture
+ * cost 100 broadcasts. The single-message route emits a one-element list, so
+ * clients have exactly one shape to handle.
+ */
+export interface MessageHiddenForMeEventData {
+  readonly userId: string;
+  readonly messages: readonly PersonalMessageVisibilityRef[];
+  /** ISO-8601 instant the hiding was recorded. */
+  readonly hiddenAt: string;
+}
+
+/** Payload of `MESSAGE_RESTORED_FOR_ME`. Same shape, opposite direction. */
+export interface MessageRestoredForMeEventData {
+  readonly userId: string;
+  readonly messages: readonly PersonalMessageVisibilityRef[];
+  /** ISO-8601 instant the restore was recorded. */
+  readonly restoredAt: string;
+}
+
+/**
+ * Données pour l'événement d'épinglage d'un message
+ */
+export interface MessagePinnedEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+  readonly pinnedBy: string;
+  readonly pinnedAt: string;
+}
+
+/**
+ * Données pour l'événement de désépinglage d'un message
+ */
+export interface MessageUnpinnedEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+}
+
+/**
+ * Charge de `message:starred` (#7377) — l'état de l'étoile PERSONNELLE du
+ * destinataire, après écriture. `starredAt` (ISO 8601) est la date de pose,
+ * `null` quand `starred` vaut `false`.
+ */
+export interface MessageStarredEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+  readonly starred: boolean;
+  readonly starredAt: string | null;
+}
+
+export interface MentionCreatedEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+  readonly senderId: string;
+  readonly mentionedUserId: string;
+  readonly content: string;
+  readonly timestamp: string;
+}
+
+/**
+ * Ce qu'un client DÉCLARE en citant une pièce : son identifiant, rien d'autre.
+ * La nature n'est jamais crue — la passerelle la relit du MIME en base.
+ */
+export interface AttachmentReplyToInput {
+  readonly attachmentId: string;
+}
+
+/**
+ * Données pour l'envoi de message
+ *
+ * `clientMessageId` est OBLIGATOIRE — format `cid_<UUID v4 lowercase>`.
+ * Validé contre `CLIENT_MESSAGE_ID_REGEX` exporté depuis
+ * `@meeshy/shared/utils/client-message-id`. Sert d'identifiant
+ * d'idempotence cross-device pour le dedup gateway/MongoDB.
+ */
+export interface MessageSendData {
+  readonly conversationId: string;
+  readonly content: string;
+  readonly originalLanguage?: string;
+  readonly messageType?: string;
+  readonly replyToId?: string;
+  /**
+   * La PIÈCE NOMMÉE que cette réponse vise (#9909) — la même que
+   * `POST /messages`. Exige `replyToId` : la pièce doit appartenir au message
+   * cité, sans quoi l'envoi est REFUSÉ. La passerelle en relit la nature dans
+   * la base et grave l'instantané dans `metadata.attachmentReplyTo`.
+   */
+  readonly attachmentReplyTo?: AttachmentReplyToInput;
+  readonly clientMessageId: string;
+  /** Réponse privée à une story — DM porteur du contexte de la story. */
+  readonly storyReplyToId?: string;
+  /** Transfert : le message source, et sa conversation si elle diffère. */
+  readonly forwardedFromId?: string;
+  readonly forwardedFromConversationId?: string;
+  /** #9914 — les pièces de `forwardedFromId` à recopier, dans l’ordre ; absent : tout le lot. */
+  readonly forwardedAttachmentIds?: readonly string[];
+  /**
+   * Diffusion à plusieurs destinataires (PAS un transfert) : la passerelle
+   * copie CÔTÉ SERVEUR les pièces jointes du message désigné, si bien que
+   * l'émetteur n'envoie ni texte ni `attachmentIds`.
+   */
+  readonly copyAttachmentsFromMessageId?: string;
+  readonly isBlurred?: boolean;
+  /**
+   * ISO 8601 — la passerelle en recompose le bit EPHEMERAL.
+   *
+   * LE REPLI DES CLIENTS DÉJÀ DISTRIBUÉS, depuis #7451 : un client à jour
+   * envoie `ephemeralDuration` ci-dessous, et la passerelle DÉRIVE la durée de
+   * cette échéance pour ceux qui ne savent envoyer que ça. Les deux côtés du
+   * cliquet d'égalité de clés portent le champ
+   * (`services/gateway/src/validation/socket-event-schemas.ts`, § SendDoorRatchet).
+   */
+  readonly expiresAt?: string;
+  /**
+   * Durée d'un éphémère, en SECONDES (#7451). C'est elle que le client envoie
+   * désormais, et non une échéance : le décompte part de la RÉCEPTION de chaque
+   * destinataire, que seul le serveur connaît.
+   */
+  readonly ephemeralDuration?: number;
+  readonly effectFlags?: number;
+  readonly isViewOnce?: boolean;
+  readonly maxViewOnceCount?: number;
+  /**
+   * Lieu partagé — champ dédié, JAMAIS un `metadata` brut. La forme n'est pas
+   * contrainte ici : la validation stricte vit côté passerelle
+   * (`services/location/sharedPlace.ts`).
+   */
+  readonly location?: unknown;
+  /**
+   * Sticker — champ dédié, même contrat que `location` : la forme est validée
+   * côté passerelle (`services/stickers/messageSticker.ts`), jamais ici.
+   */
+  readonly sticker?: unknown;
+  /**
+   * Les mentionnés que l'ÉMETTEUR nomme, plutôt que ceux que la passerelle
+   * déduit du texte.
+   *
+   * Ce n'est pas une commodité : c'est le seul canal qui survit au chiffrement.
+   * La passerelle retombe sur l'extraction des `@username` du CONTENU quand la
+   * liste est absente — mais en mode `e2ee` le client remplace `content` par le
+   * littéral `[Encrypted]` avant d'émettre, si bien qu'il n'y a plus rien à
+   * extraire. La liste explicite est alors la seule chose qui rattache un
+   * message à ceux qu'il nomme.
+   */
+  readonly mentionedUserIds?: readonly string[];
+  readonly encryptedContent?: string;
+  readonly encryptionMode?: EncryptionModeOnWire;
+  readonly encryptionMetadata?: Readonly<Record<string, unknown>>;
+  readonly isEncrypted?: boolean;
+  /** Envoi libsignal par appareil (#3706) : `E2EE_SEND_SHAPE` (`../e2ee-directory.ts`). */
+  readonly encryptionProtocol?: typeof LIBSIGNAL_PROTOCOL;
+  readonly envelopes?: readonly E2EEEnvelope[];
+  readonly unapprovedOwnDevices?: readonly number[];
+}
+
+/**
+ * Le mode de chiffrement TEL QU'IL VOYAGE. La passerelle normalise la casse à
+ * l'entrée (iOS émet « E2EE »), mais le jeu de valeurs est FERMÉ : ce sont les
+ * trois que le schéma accepte, ni plus ni moins.
+ */
+export type EncryptionModeOnWire = 'e2ee' | 'server' | 'hybrid';
+
+/**
+ * Réponse d'envoi de message
+ */
+export interface MessageSendResponseData {
+  readonly messageId: string;
+}
+
+/**
+ * Données pour l'envoi de message avec attachements
+ *
+ * `clientMessageId` est OBLIGATOIRE — format `cid_<UUID v4 lowercase>`.
+ * Validé contre `CLIENT_MESSAGE_ID_REGEX` exporté depuis
+ * `@meeshy/shared/utils/client-message-id`. Sert d'identifiant
+ * d'idempotence cross-device pour le dedup gateway/MongoDB.
+ */
+export interface MessageSendWithAttachmentsData {
+  readonly conversationId: string;
+  readonly content: string;
+  readonly originalLanguage?: string;
+  readonly attachmentIds: readonly string[];
+  readonly replyToId?: string;
+  /** La pièce nommée citée (#9909) — même contrat que `MessageSendData`. */
+  readonly attachmentReplyTo?: AttachmentReplyToInput;
+  readonly clientMessageId: string;
+  readonly storyReplyToId?: string;
+  readonly forwardedFromId?: string;
+  readonly forwardedFromConversationId?: string;
+  /** #9914 — les pièces de `forwardedFromId` à recopier, dans l’ordre ; absent : tout le lot. */
+  readonly forwardedAttachmentIds?: readonly string[];
+  readonly isBlurred?: boolean;
+  /** Voir `MessageSendData.expiresAt` — chemin HÉRITÉ, la durée fait foi. */
+  readonly expiresAt?: string;
+  /**
+   * Durée d'un éphémère, en SECONDES (#7451). C'est elle que le client envoie
+   * désormais, et non une échéance : le décompte part de la RÉCEPTION de chaque
+   * destinataire, que seul le serveur connaît.
+   */
+  readonly ephemeralDuration?: number;
+  readonly effectFlags?: number;
+  readonly isViewOnce?: boolean;
+  readonly maxViewOnceCount?: number;
+  readonly location?: unknown;
+  /** Même contrat que `MessageSendData.sticker` ci-dessus. */
+  readonly sticker?: unknown;
+  /** Même contrat que `MessageSendData.mentionedUserIds` ci-dessus. */
+  readonly mentionedUserIds?: readonly string[];
+  readonly encryptedContent?: string;
+  readonly encryptionMode?: EncryptionModeOnWire;
+  readonly encryptionMetadata?: Readonly<Record<string, unknown>>;
+  readonly isEncrypted?: boolean;
+  /** Envoi libsignal par appareil (#3706) : `E2EE_SEND_SHAPE` (`../e2ee-directory.ts`). */
+  readonly encryptionProtocol?: typeof LIBSIGNAL_PROTOCOL;
+  readonly envelopes?: readonly E2EEEnvelope[];
+  readonly unapprovedOwnDevices?: readonly number[];
+}
+
+/**
+ * Données pour l'édition de message
+ */
+export interface MessageEditData {
+  readonly messageId: string;
+  readonly content: string;
+}
+
+/**
+ * Données pour la suppression de message
+ */
+export interface MessageDeleteData {
+  readonly messageId: string;
+  /** Motif d'un retrait par un TIERS (#11149) — exigé de lui, ignoré pour l'auteur. */
+  readonly reason?: string;
+}
+
+// ===== TYPES DE BASE =====
+
+/**
+ * Types de messages supportés dans l'architecture Meeshy
+ * Défini une fois, réutilisé partout
+ */
+export type MessageType = 'text' | 'image' | 'file' | 'audio' | 'video' | 'location' | 'system';
+
+// ===== STRUCTURES DE DONNÉES =====
+
+/**
+ * Lightweight sender shape for Socket.IO message broadcasts.
+ * A subset of Participant — only the fields needed for display.
+ */
+export interface SocketIOMessageSender {
+  readonly id: string;
+  readonly displayName: string;
+  readonly avatar?: string;
+  readonly type?: ParticipantType;
+  readonly userId?: string;
+  readonly username?: string;
+  readonly firstName?: string;
+  readonly lastName?: string;
+  /** Le contour d'avatar ÉQUIPÉ (#10713), la forme de `/me` réduite au contour ; absent sans contour ou sans compte. */
+  readonly profileDecor?: PersonProfileDecor;
+}
+
+/**
+ * La charge utile de `message:new` et de `message:edited`, TELLE QUE LES
+ * PRODUCTEURS L'ÉMETTENT.
+ *
+ * Elle a longtemps déclaré quatorze champs quand les producteurs en servaient
+ * une trentaine. Ce n'est pas une imprécision sans suite : les décodeurs iOS,
+ * Android et web sont écrits CONTRE ce contrat, et un champ qui n'y figure pas
+ * doit être transcrit indépendamment par chacun des trois — c'est exactement
+ * ainsi que `conversation:join-error` a vécu huit sites d'émission et deux
+ * transcriptions client divergentes sans jamais être déclaré (cycle 99).
+ *
+ * Ce qui est déclaré `unknown` l'est PAR DÉCISION, pas par paresse : `replyTo`,
+ * `translations` et `metadata` ont une forme DÉLIBÉRÉMENT différente d'un
+ * transport à l'autre (cf. l'en-tête de
+ * `services/gateway/src/socketio/messageNewPayload.ts`, qui énumère les écarts
+ * et leur raison). Entre deux producteurs qui se contredisent, ne rien affirmer
+ * est plus honnête que d'en couronner un.
+ *
+ * `attachments` reste `unknown` pour une raison DIFFÉRENTE depuis #7070 : les
+ * deux producteurs servent désormais la MÊME forme (`SocketAttachment`,
+ * `services/gateway/src/socketio/serializeAttachmentForSocket.ts`), mais ce
+ * type est gateway-side et le paquet partagé ne l'importe pas — le déclarer
+ * ici demanderait de le faire migrer, ce que ce lot ne fait pas.
+ *
+ * Portée de la garde, pour ne pas la surestimer : la passerelle compile en
+ * `strict: false` / `strictNullChecks: false`. Déclarer un champ ici fait donc
+ * tomber une émission dont la clé MANQUE ou dont le TYPE est incompatible —
+ * jamais une qui sert `undefined` là où le contrat promet une valeur.
+ */
+export interface SocketIOMessage {
+  readonly id: string;
+  readonly conversationId: string;
+  /**
+   * `User.id` de l'expéditeur — et non son `Participant.id`, contrairement à ce
+   * que cette ligne a déclaré pendant toute la vie du contrat. Les clients
+   * comparent ce champ à leur propre `User.id` pour reconnaître leurs messages
+   * et réconcilier la bulle optimiste entre appareils ; les producteurs le
+   * résolvent par `resolveWireSenderId`, qui ne replie sur le `Participant.id`
+   * que pour un expéditeur ANONYME, lequel n'en a pas d'autre.
+   */
+  readonly senderId: string;
+  readonly content: string;
+  readonly originalLanguage: string;
+  readonly messageType: MessageType;
+  readonly messageSource?: string;
+  /**
+   * Ne voyage QUE vers les appareils de l'expéditeur — `stripClientMessageId`
+   * le retire de la charge utile des pairs juste avant l'émission.
+   */
+  readonly clientMessageId?: string;
+  readonly isEdited?: boolean;
+  readonly editedAt?: Date;
+  /**
+   * #11375 — l'auteur d'une modification faite par un TIERS (modérateur de
+   * plateforme), servi par `message:edited` : la marque
+   * `MASKED_MODERATOR_EDITOR` (une room n'a pas de lecteur nommé, l'identité
+   * n'y part jamais), `null` quand l'auteur a modifié lui-même, absent sur une
+   * charge d'une passerelle antérieure.
+   * @see packages/shared/utils/message-edit-attribution.ts
+   */
+  readonly editedById?: string | null;
+  readonly editedByRole?: string | null;
+  readonly deletedAt?: Date;
+  /**
+   * ABSENT pour un éphémère (contrat #7451, point 4) : une diffusion en room
+   * ne peut pas porter une échéance différente par lecteur. Le client compose
+   * la sienne depuis `ephemeralDuration` et sa RÉCEPTION locale
+   * (`utils/ephemeral-deadline.ts`), et `message:countdown-started` lui porte
+   * l'échéance SERVEUR dès qu'elle existe — la passerelle l'émet depuis #7451.
+   */
+  readonly expiresAt?: Date;
+  /** Secondes entières, > 0 — servi partout : REST, `message:new` et push. */
+  readonly ephemeralDuration?: number;
+  readonly createdAt: Date;
+  readonly updatedAt?: Date;
+  readonly sender?: SocketIOMessageSender;
+
+  /** Vue unique, flou, effets de bulle. */
+  readonly isBlurred?: boolean;
+  readonly isViewOnce?: boolean;
+  readonly maxViewOnceCount?: number;
+  readonly effectFlags?: number;
+
+  /** Réponses, citations de post, transferts. */
+  readonly replyToId?: string;
+  readonly replyTo?: unknown;
+  readonly storyReplyToId?: string;
+  readonly postReplyTo?: unknown;
+  readonly forwardedFromId?: string;
+  readonly forwardedFromConversationId?: string;
+  readonly forwardedFrom?: unknown;
+  readonly forwardedFromConversation?: unknown;
+
+  /** Prisme Linguistique et pièces jointes — formes propres au transport. */
+  readonly translations?: unknown;
+  readonly attachments?: unknown;
+
+  /** Mentions : les pseudos validés en base, et leur résolution enrichie. */
+  readonly validatedMentions?: readonly string[];
+  readonly mentionedUsers?: readonly unknown[];
+
+  /** Hissés depuis `metadata` par les producteurs, pour être lisibles en direct. */
+  readonly location?: unknown;
+  readonly sticker?: MessageSticker;
+  readonly trackingLinks?: readonly unknown[];
+
+  /**
+   * Enveloppe E2EE. Le FAIT du chiffrement, c'est la présence du chiffré ; le
+   * chiffré sans le MODE ne dit pas sous quel régime déchiffrer.
+   */
+  readonly isEncrypted?: boolean;
+  readonly encryptionMode?: string;
+  readonly encryptedContent?: string;
+  readonly encryptionMetadata?: unknown;
+  readonly encryptedPayload?: unknown;
+  /**
+   * Vrai pour un message chiffré de bout en bout (#3706) : un client sans
+   * libsignal ne peut pas le lire et invite à mettre à jour Meeshy au lieu de
+   * rendre une bulle vide (#9223).
+   */
+  readonly e2eeUpgradeRequired?: boolean;
+
+  /** Servis par le seul transport REST/ZMQ (cf. `messageNewPayload.ts`). */
+  readonly originalContent?: string;
+  readonly metadata?: unknown;
+
+  /**
+   * L'événement système localisable d'un avis que le SERVEUR complète sur
+   * place (#8565) — la ligne d'arrivées regroupées de Meeshy Global, qui ne
+   * part qu'en `message:edited`. Même forme que `lastMessageSystemEvent` de
+   * `conversation:updated` : la ligne de liste y relit sa clé, ses noms et son
+   * compte sans recalcul client ni seconde diffusion.
+   */
+  readonly systemEvent?: LastMessageSystemEvent;
+}

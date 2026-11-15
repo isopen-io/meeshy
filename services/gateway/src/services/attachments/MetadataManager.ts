@@ -11,9 +11,12 @@ import { spawn } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
 import { PDFParse } from 'pdf-parse';
 import * as ffmpeg from 'fluent-ffmpeg';
-import { createImageThumbnail, thumbnailPathFor, createResponsiveVariants, variantPathFor } from './thumbnail';
+import { createImageThumbnail, thumbnailPathFor, createResponsiveVariants, variantPathFor, createAvifVariants, avifVariantPathFor } from './thumbnail';
 import type { AttachmentMetadata } from '@meeshy/shared/types/attachment';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { guardedTimeout } from '../../utils/guarded-timer';
+import { mediaKindOf, mediaKindOfPath, timeMediaStage } from '../metrics/mediaStageMetrics';
+import { videoDisplaySize } from './video-display-size';
 
 // Logger dédié pour MetadataManager
 const logger = enhancedLogger.child({ module: 'MetadataManager' });
@@ -31,6 +34,9 @@ async function resolveParseFile(): Promise<MusicMetadataModule['parseFile']> {
   return mm.parseFile;
 }
 
+
+/** En dessous de 1 kbit/s, aucun vocal réel : la durée annoncée est fausse. */
+const MIN_PLAUSIBLE_AUDIO_BITRATE = 1_000;
 
 export interface AudioMetadata {
   duration: number;      // En millisecondes
@@ -77,6 +83,10 @@ export class MetadataManager {
    * Génère une miniature pour une image (WebP — sprint bande passante D4)
    */
   async generateThumbnail(imagePath: string): Promise<string | null> {
+    return timeMediaStage('thumbnail', 'image', () => this.generateThumbnailUntimed(imagePath));
+  }
+
+  private async generateThumbnailUntimed(imagePath: string): Promise<string | null> {
     try {
       const fullPath = path.join(this.uploadBasePath, imagePath);
       const thumbnailPath = thumbnailPathFor(imagePath);
@@ -100,7 +110,15 @@ export class MetadataManager {
    * image E2EE révélerait son contenu en clair).
    */
   async generateImageVariants(
-    imagePath: string
+    imagePath: string,
+    options: { readonly strict?: boolean } = {}
+  ): Promise<Array<{ path: string; width: number; height: number; size: number }>> {
+    return timeMediaStage('variants', 'image', () => this.generateImageVariantsUntimed(imagePath, options));
+  }
+
+  private async generateImageVariantsUntimed(
+    imagePath: string,
+    options: { readonly strict?: boolean }
   ): Promise<Array<{ path: string; width: number; height: number; size: number }>> {
     try {
       const fullPath = path.join(this.uploadBasePath, imagePath);
@@ -120,6 +138,34 @@ export class MetadataManager {
       return written;
     } catch (error) {
       logger.error('[MetadataManager] Erreur génération variantes responsive', error);
+      // Le worker (#11264) veut l'échec : sa file reprend, puis passe la pièce à `failed`.
+      if (options.strict) throw error;
+      return [];
+    }
+  }
+
+  /**
+   * Variantes AVIF responsive (#11262), écrites à côté des WebP sous
+   * `<base>_<largeur>w.avif`.
+   */
+  async generateAvifVariants(
+    imagePath: string,
+    options: { readonly strict?: boolean } = {}
+  ): Promise<Array<{ path: string; width: number; height: number; size: number }>> {
+    try {
+      const fullPath = path.join(this.uploadBasePath, imagePath);
+      const variants = await createAvifVariants(fullPath);
+      const written: Array<{ path: string; width: number; height: number; size: number }> = [];
+      for (const variant of variants) {
+        const relPath = avifVariantPathFor(imagePath, variant.width);
+        await fs.writeFile(path.join(this.uploadBasePath, relPath), variant.buffer);
+        written.push({ path: relPath, width: variant.width, height: variant.height, size: variant.buffer.length });
+      }
+      return written;
+    } catch (error) {
+      logger.error('[MetadataManager] Erreur génération variantes AVIF', error);
+      // Le worker (#11264) veut l'échec : sa file reprend, puis passe la pièce à `failed`.
+      if (options.strict) throw error;
       return [];
     }
   }
@@ -140,6 +186,10 @@ export class MetadataManager {
    * Génère une miniature pour une vidéo avec ffmpeg
    */
   async generateVideoThumbnail(videoPath: string): Promise<string | null> {
+    return timeMediaStage('thumbnail', 'video', () => this.generateVideoThumbnailUntimed(videoPath));
+  }
+
+  private async generateVideoThumbnailUntimed(videoPath: string): Promise<string | null> {
     try {
       const fullPath = path.join(this.uploadBasePath, videoPath);
       const ext = path.extname(videoPath);
@@ -262,10 +312,10 @@ export class MetadataManager {
    */
   private async extractAudioWithFfprobe(fullPath: string): Promise<AudioMetadata | null> {
     return new Promise((resolve) => {
-      const timeout = setTimeout(() => {
+      const timeout = guardedTimeout({ name: 'ffprobe-audio-timeout', afterMs: 10000, logger, run: () => {
         logger.warn('[MetadataManager] Timeout ffprobe après 10 secondes');
         resolve(null);
-      }, 10000);
+      } });
 
       ffmpeg.ffprobe(fullPath, (err, metadata) => {
         clearTimeout(timeout);
@@ -373,13 +423,11 @@ export class MetadataManager {
    * Détecte les incohérences (ex: 1 seconde ne peut pas peser 50MB)
    * @param duration Durée en millisecondes
    * @param fileSize Taille du fichier en bytes
-   * @param bitrate Bitrate en bits/sec
    * @param mimeType Type MIME du fichier
    */
   validateAudioCoherence(
     duration: number,
     fileSize: number,
-    bitrate: number,
     mimeType: string
   ): { isValid: boolean; reason?: string; estimatedDuration?: number } {
     if (duration <= 0 || fileSize <= 0) {
@@ -408,8 +456,11 @@ export class MetadataManager {
 
     const expected = expectedBitrates[mimeType] || { min: 8_000, max: 5_000_000 };
 
-    // Vérifier si le bitrate réel est cohérent
-    if (actualBitrate < expected.min * 0.5) {
+    // Un débit FAIBLE n'est pas une incohérence : la voix, le silence, un Vorbis ou un
+    // Opus de basse qualité descendent légitimement sous le débit « typique » du format,
+    // et la durée que le conteneur déclare reste exacte (#11549 : un ogg vorbis de 3,5 s
+    // servi à 1,7 s). Seul un débit physiquement impossible trahit un en-tête faux.
+    if (actualBitrate < MIN_PLAUSIBLE_AUDIO_BITRATE) {
       // Bitrate trop faible: durée probablement trop longue
       const estimatedDurationSeconds = (fileSize * 8) / expected.min;
       const estimatedDuration = Math.round(estimatedDurationSeconds * 1000); // Convertir en ms
@@ -471,12 +522,15 @@ export class MetadataManager {
       }
 
       let metadata: AudioMetadata | null = null;
+      let embeddedPictureBytes = 0;
 
       // Tenter d'extraire avec music-metadata d'abord
       try {
         const parseFile = await resolveParseFile();
         const parsedMetadata = await parseFile(fullPath);
         const format = parsedMetadata.format;
+        embeddedPictureBytes = (parsedMetadata.common?.picture ?? [])
+          .reduce((total, picture) => total + picture.data.length, 0);
 
         metadata = {
           duration: Math.round((format.duration || 0) * 1000), // Convertir secondes -> millisecondes
@@ -535,12 +589,13 @@ export class MetadataManager {
         };
       }
 
-      // Valider la cohérence durée/taille
-      if (mimeType && metadata.duration > 0 && fileSize > 0) {
+      // Valider la cohérence durée/taille : le débit se mesure sur le son, la pochette
+      // d'un morceau court le ferait passer pour un en-tête faux (#16510).
+      const audioBytes = fileSize - embeddedPictureBytes;
+      if (mimeType && metadata.duration > 0 && audioBytes > 0) {
         const validation = this.validateAudioCoherence(
           metadata.duration,
-          fileSize,
-          metadata.bitrate,
+          audioBytes,
           mimeType
         );
 
@@ -598,16 +653,40 @@ export class MetadataManager {
   }
 
   /**
+   * Les pistes que porte un conteneur (#9693) — `null` quand ffprobe ne
+   * répond pas : l'appelant garde alors ce qu'il savait, il ne conclut rien.
+   * `fullPath` est ABSOLU : la sonde sert aussi un fichier hors du dépôt.
+   */
+  async probeMediaStreams(fullPath: string): Promise<{ video: boolean; audio: boolean } | null> {
+    return timeMediaStage('probe', mediaKindOfPath(fullPath), () => this.probeMediaStreamsUntimed(fullPath));
+  }
+
+  private async probeMediaStreamsUntimed(fullPath: string): Promise<{ video: boolean; audio: boolean } | null> {
+    return new Promise((resolve) => {
+      const timeout = guardedTimeout({ name: 'ffprobe-streams-timeout', afterMs: 10000, logger, run: () => resolve(null) });
+      ffmpeg.ffprobe(fullPath, (err, metadata) => {
+        clearTimeout(timeout);
+        if (err) {
+          resolve(null);
+          return;
+        }
+        const kinds = (metadata.streams ?? []).map((stream) => stream.codec_type);
+        resolve({ video: kinds.includes('video'), audio: kinds.includes('audio') });
+      });
+    });
+  }
+
+  /**
    * Extrait les métadonnées d'un fichier vidéo
    */
   async extractVideoMetadata(videoPath: string): Promise<VideoMetadata> {
     const fullPath = path.join(this.uploadBasePath, videoPath);
 
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
+      const timeout = guardedTimeout({ name: 'ffprobe-video-timeout', afterMs: 30000, logger, run: () => {
         logger.warn(`[MetadataManager] Timeout ffprobe pour: ${videoPath}`);
         reject(new Error('ffprobe timeout after 30 seconds'));
-      }, 30000);
+      } });
 
       ffmpeg.ffprobe(fullPath, (err, metadata) => {
         clearTimeout(timeout);
@@ -639,8 +718,7 @@ export class MetadataManager {
 
         resolve({
           duration: Math.round((metadata.format?.duration || 0) * 1000), // Convertir secondes -> millisecondes
-          width: videoStream.width || 0,
-          height: videoStream.height || 0,
+          ...videoDisplaySize(videoStream),
           fps: Math.round(fps * 100) / 100,
           videoCodec: videoStream.codec_name || 'unknown',
           bitrate: parseInt(String(metadata.format?.bit_rate || 0), 10),
@@ -678,6 +756,16 @@ export class MetadataManager {
    * Avec validation intelligente utilisant les métadonnées du frontend
    */
   async extractMetadata(
+    filePath: string,
+    attachmentType: string,
+    mimeType: string,
+    providedMetadata?: unknown,
+    fileSize?: number
+  ): Promise<AttachmentMetadata> {
+    return timeMediaStage('probe', mediaKindOf(mimeType), () => this.extractMetadataUntimed(filePath, attachmentType, mimeType, providedMetadata, fileSize));
+  }
+
+  private async extractMetadataUntimed(
     filePath: string,
     attachmentType: string,
     mimeType: string,
@@ -742,14 +830,12 @@ export class MetadataManager {
               const frontendValidation = this.validateAudioCoherence(
                 frontendDuration,
                 fileSize,
-                providedMetadata.bitrate || 128000,
                 mimeType
               );
 
               const backendValidation = this.validateAudioCoherence(
                 backendDuration,
                 fileSize,
-                extractedMeta.bitrate || 128000,
                 mimeType
               );
 

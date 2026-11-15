@@ -34,7 +34,7 @@ const TimingSchema = z.object({
   message: 'TIMING_END_BEFORE_START',
 });
 
-const ObjectV3Schema = z.object({
+export const ObjectV3Schema = z.object({
   id: z.string().min(1),
   kind: z.string().superRefine((k, ctx) => {
     if ((RESERVED_KINDS as readonly string[]).includes(k)) {
@@ -56,8 +56,73 @@ const ObjectV3Schema = z.object({
   // payload permissif PAR CONTRAT — il porte notamment, pour kind:text,
   // `translations: {lang: contenu}` (Prisme par objet, spec §C1 rév. 4/C6) :
   // le convertisseur A3 et le golden en font foi, pas une contrainte Zod.
+  //
+  // **Un objet `kind: media` référence un enregistrement du post par DEUX
+  // clés acceptées, jamais contraintes ici pour la même raison (#6894)** :
+  // `postMediaId` est la forme de RÉFÉRENCE — celle qu'écrit le composer iOS —
+  // et `mediaId` un ALIAS, forme servie par cette passerelle pour un fond
+  // `plane: bg` référencé sans porteur `content` associé. **Corrigé (revue
+  // 2026-09-17)** : `storyEffectsV3.ts` (`CLAIM_PAYLOAD_KEYS = ['mediaId',
+  // 'postMediaId']`) ne restreint ce couple à AUCUN plane ni kind particulier
+  // — `unclaimedCanvasMediaIds`/`remapCanvasV3MediaIds` lisent les deux clés
+  // sur tout objet pertinent, quel que soit son plan — et ne RENOMME jamais
+  // `mediaId` en `postMediaId` : `remapCanvasV3MediaIds` change la VALEUR
+  // sous la clé d'origine, jamais la clé elle-même. Les deux clés désignent
+  // le MÊME enregistrement ; c'est l'ORDRE de lecture côté consommateur
+  // (`postMediaId`, puis `mediaId`) qui fait foi pour ÉLIRE l'une des deux
+  // quand un objet porte les deux à la fois — pas une préférence de forme.
+  // Site de lecture unique côté iOS : `ObjectV3.mediaReference`
+  // (`packages/MeeshySDK/Sources/MeeshySDK/Models/CanvasV3.swift`).
   payload: z.record(z.string(), z.unknown()),
+}).superRefine((o, ctx) => {
+  // **Le recadrage d'un média est DÉCLARÉ, même dans une charge permissive**
+  // (#5085).
+  //
+  // Les quatre bornes voyagent dans `payload`, qui n'a aucun site où refuser.
+  // Elles ont donc traversé la passerelle pendant tout un lot **sans lecteur
+  // ni validation** : une image recadrée sur iOS se rendait entière ailleurs,
+  // et rien ne pouvait rougir — un schéma permissif n'a pas de site où
+  // refuser, et un lecteur qui ignore un champ ne se distingue pas d'un
+  // lecteur qui ne l'a jamais reçu.
+  //
+  // **Une règle partagée n'est pas un contrat** : `media-crop.ts` dit comment
+  // LIRE, pas que le champ EXISTE. Cette clause est le second fait, et c'est
+  // elle qui donne une prise aux gardes — le prochain client qui oublie les
+  // bornes se compare désormais à quelque chose.
+  //
+  // La charge reste permissive : on ne contraint QUE ces quatre clés, et
+  // seulement là où elles ont un sens.
+  for (const issue of mediaCropIssues(o.kind, o.payload)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: issue });
+  }
 });
+
+/** Les quatre bornes, telles qu'elles voyagent — à plat, jamais imbriquées. */
+export const CROP_PAYLOAD_KEYS = ['cropX', 'cropY', 'cropW', 'cropH'] as const;
+
+/**
+ * **Les quatre bornes se lisent ENSEMBLE ou pas du tout**, et seul un `media`
+ * en porte.
+ *
+ * Un recadrage amputé n'a pas de repli sensé : le compléter fabriquerait un
+ * cadrage que personne n'a posé, et le rendrait indiscernable d'un vrai. Le
+ * refuser AU FIL évite qu'un lecteur ait à choisir — et évite surtout que
+ * trois lecteurs choisissent différemment.
+ */
+function mediaCropIssues(kind: string, payload: Record<string, unknown>): string[] {
+  const present = CROP_PAYLOAD_KEYS.filter((k) => payload[k] !== undefined);
+  if (present.length === 0) return [];
+  if (kind !== 'media') return [`CROP_ON_NON_MEDIA:${kind}`];
+  if (present.length !== CROP_PAYLOAD_KEYS.length) {
+    const manquantes = CROP_PAYLOAD_KEYS.filter((k) => payload[k] === undefined);
+    return [`CROP_INCOMPLETE:${manquantes.join(',')}`];
+  }
+  const invalides = CROP_PAYLOAD_KEYS.filter((k) => {
+    const v = payload[k];
+    return typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1;
+  });
+  return invalides.length > 0 ? [`CROP_OUT_OF_RANGE:${invalides.join(',')}`] : [];
+}
 
 // Variante TTS d'une piste, par langue — miroir du `backgroundAudioVariants`
 // racine v1 (`StoryAudioVariant` iOS : les trois clés sont NON optionnelles
@@ -120,12 +185,34 @@ const SceneV3Schema = z.object({
   carrierAspect: z.number().positive().finite().optional(),
 });
 
+/**
+ * Comment l'auteur veut que ses scènes soient PRÉSENTÉES (#5322).
+ *
+ * Décision d'AUTEUR, donc elle voyage avec la publication : deux lecteurs
+ * doivent voir la même mise en page, et la recalculer côté lecteur (d'après le
+ * nombre de scènes, leur format, l'appareil) rendrait deux réponses pour un
+ * même post.
+ *
+ * Miroirs à tenir ENSEMBLE : `MosaicLayoutMode` (Swift, `CanvasV3.swift`) et le
+ * miroir Kotlin. Le défaut de lecture est `carousel` sur les trois plateformes
+ * (directive porteur 2026-09-06 : « le défilement image par image […] doit être
+ * le mode par défaut »), et c'est celui que reçoit TOUT le corpus antérieur au
+ * champ. Seul mode PAGINÉ — une scène par page — donc le seul qui ne plafonne
+ * ni ne reporte.
+ */
+export const MosaicLayoutModeSchema = z.enum(['wave', 'hero', 'reel', 'sine', 'carousel']);
+export type MosaicLayoutMode = z.infer<typeof MosaicLayoutModeSchema>;
+
 export const CanvasV3Schema = z.object({
   v: z.literal(3),
   // O3 — `scenes` absent tant qu'aucun objet visuel : jamais de cadre vide.
   // Présent, il porte au moins une scène.
   scenes: z.array(SceneV3Schema).min(1).max(10).optional(),
   sound: BackgroundSoundSchema.optional(),
+  // OPTIONNEL et ADDITIF : absent de toute publication antérieure au
+  // 2026-09-06, et le lecteur retombe alors sur `carousel`. Un canvas
+  // mono-scène n'a rien à en dire — une mosaïque d'un élément n'en est pas une.
+  layout: MosaicLayoutModeSchema.optional(),
 });
 
 export type CanvasV3 = z.infer<typeof CanvasV3Schema>;

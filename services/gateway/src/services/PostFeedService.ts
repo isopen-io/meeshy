@@ -1,28 +1,34 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { readSeenCounts } from './posts/seenCounts';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
-import { authorSelect, postInclude, postMentionInclude, storyPostInclude, trayStorySelect, NOT_DELETED } from './posts/postIncludes';
+import { postInclude, statusPostSelect, storyPostInclude, trayStorySelect, NOT_DELETED, type PostPayload } from './posts/postIncludes';
+import { withAudienceListFor } from './posts/audienceList';
 import { withMentions, type WireReader } from './posts/postReferences';
 import { EPHEMERAL_AUTHOR_ARCHIVE_MS } from './posts/ephemeralPosts';
-import { buildPostVisibilityOrFilter, isEphemeralPostType } from './posts/postVisibility';
+import { likedFromReactions, withViewerPostState } from './posts/viewerPostState';
+import { buildFeedVisibilityFilter, viewerPostAudience } from './posts/feedVisibility';
 import {
   reelAffinityScore,
   type ReelAffinityContext,
   type ReelSeed,
 } from './posts/reelAffinity';
 import type { CacheStore } from './CacheStore';
-import { getCommunityCoMemberIds, isActiveCommunityMember } from './posts/communityVisibility';
+import { loadFeedFriendIds } from './posts/feedFriends';
+import { loadFeedDirectContactIds } from './posts/feedContacts';
+import { getCommunityCoMemberIds } from './posts/communityVisibility';
+import { loadCommunityFeed } from './posts/communityFeed';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { hoistLocationDeep } from './location/sharedPlace';
 import { verdictFor, type ReferenceAccessVerdict } from './posts/referenceAccess';
-import { getPresenceVisibilityService } from './PresenceVisibilityService';
+import { getPresenceVisibilityService, type PresenceViewer } from './PresenceVisibilityService';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
+import type { GlobalUserRoleType } from '@meeshy/shared/types/role-types';
 
 const logger = enhancedLogger.child({ module: 'PostFeedService' });
-
-const FEED_SOCIAL_CACHE_TTL = 300; // 5 min — friend lists change infrequently
 
 // Plafond des tombstones renvoyés par un delta-sync de stories. Le filtre de
 // visibilité borne déjà au cercle de l'utilisateur : 500 disparitions sur une
@@ -129,7 +135,7 @@ export class PostFeedService {
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-    const visibilityFilter = this.buildVisibilityFilter(userId, allContactIds, communityCoMemberIds);
+    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds, this.cache);
 
     // Phase 1 — Fetch candidates
     const where: any = {
@@ -160,7 +166,7 @@ export class PostFeedService {
 
     const candidates = await this.prisma.post.findMany({
       where,
-      include: feedPostInclude,
+      select: feedPostInclude,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: candidateLimit,
     });
@@ -188,7 +194,7 @@ export class PostFeedService {
     // - seenCounts       : combien de fois chaque candidat est déjà remonté (fatigue)
     const [interestAffinity, seenCounts] = await Promise.all([
       this.getInterestAffinity(userId),
-      this.getSeenCounts(userId, candidateIds),
+      readSeenCounts(this.prisma as never, userId, candidateIds),
     ]);
 
     // Phase 2 — Score the window (display order only; cursor is fixed above)
@@ -218,20 +224,10 @@ export class PostFeedService {
     scored.sort((a, b) => b.score - a.score);
     const items = scored;
 
-    const postIds = items.map((s) => s.post.id);
-    const [userReactionsMap, personalFlags] = postIds.length > 0
-      ? await Promise.all([
-          this.resolveUserReactionsMap(userId, items.map((s) => s.post)),
-          this.resolvePersonalFlags(userId, postIds),
-        ])
-      : [new Map<string, string[]>(), { bookmarkedIds: new Set<string>(), repostedIds: new Set<string>() }];
+    const withState = await withViewerPostState(this.prisma, userId, items.map((s) => s.post));
 
     return {
-      items: items.map((s) => withMentions(hoistLocationDeep({
-        ...this.enrichWithLikeStatus(s.post, userReactionsMap.get(s.post.id) ?? []),
-        currentUserReactions: userReactionsMap.get(s.post.id) ?? [],
-        ...this.personalFlagsFor(s.post.id, personalFlags),
-      }), reader)),
+      items: withState.map((post) => withMentions(hoistLocationDeep(post), reader)),
       nextCursor,
       hasMore,
     };
@@ -239,7 +235,19 @@ export class PostFeedService {
 
   async getStories(
     userId: string,
-    options?: { updatedSince?: Date; projection?: 'tray'; cursor?: string; limit?: number; archiveOfAuthor?: boolean; reader?: WireReader }
+    options?: {
+      updatedSince?: Date;
+      projection?: 'tray';
+      cursor?: string;
+      limit?: number;
+      archiveOfAuthor?: boolean;
+      reader?: WireReader;
+      // Rôle RÉEL du viewer (2026-08-25) : porté depuis la route jusqu'au gate
+      // de présence auteur — le bypass ADMIN/BIGBOSS doit s'appliquer au fil de
+      // stories comme partout ailleurs. Absent (tests, appelants historiques)
+      // ⇒ `USER`, le plus bas privilège, jamais un bypass par défaut.
+      viewerRole?: GlobalUserRoleType;
+    }
   ) {
     const now = new Date();
     // G1(c) pagination keyset (createdAt, id) — même patron que getStatuses /
@@ -271,7 +279,7 @@ export class PostFeedService {
           ],
         });
       }
-      return this.fetchAndEnrichStories(archiveWhere, userId, limit, options?.projection === 'tray', () => Promise.resolve([]), now, options?.reader);
+      return this.fetchAndEnrichStories(archiveWhere, userId, limit, options?.projection === 'tray', () => Promise.resolve([]), now, options?.viewerRole, options?.reader);
     }
     const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
       this.getFriendIds(userId),
@@ -279,7 +287,7 @@ export class PostFeedService {
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-    const visibilityFilter = this.buildVisibilityFilter(userId, allContactIds, communityCoMemberIds);
+    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds, this.cache);
 
     // Archive de l'AUTEUR : mes propres stories restent renvoyées après leur
     // expiration, pour que « Mes stories » puisse les lister (vignette voilée).
@@ -383,7 +391,7 @@ export class PostFeedService {
           .then((rows) => rows.map((r) => r.id))
       : () => Promise.resolve([]);
 
-    return this.fetchAndEnrichStories(where, userId, limit, options?.projection === 'tray', deletedIdsFactory, now, options?.reader);
+    return this.fetchAndEnrichStories(where, userId, limit, options?.projection === 'tray', deletedIdsFactory, now, options?.viewerRole, options?.reader);
   }
 
   /**
@@ -401,6 +409,7 @@ export class PostFeedService {
     isTrayProjection: boolean,
     deletedIdsFactory: () => Promise<string[]>,
     now: Date,
+    viewerRole: GlobalUserRoleType | undefined,
     reader?: WireReader,
   ) {
     // G1(b) projection tray : select léger (anneaux + miniature + vu) au lieu
@@ -419,7 +428,7 @@ export class PostFeedService {
           // Story-scoped include : l'auteur embarque isOnline/lastActiveAt pour
           // que l'interstitiel d'identité du viewer résolve la présence AU
           // moment du switch de groupe (jamais après affichage du slide).
-          include: storyPostInclude,
+          select: storyPostInclude,
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: limit + 1,
         });
@@ -472,8 +481,10 @@ export class PostFeedService {
     // Gate de présence de l'auteur. Les deux projections chargent
     // `isOnline`/`lastActiveAt` (décision produit : l'interstitiel d'identité
     // doit être complet à l'instant du switch de groupe) — les SERVIR bruts
-    // n'en est pas une.
-    const authorVisibility = await this.resolveStoryAuthorPresence(stories, userId);
+    // n'en est pas une. Viewer RÉEL (userId + rôle), jamais un rôle figé — le
+    // bypass ADMIN/BIGBOSS de la loi de présence doit s'appliquer ici aussi.
+    const viewer: PresenceViewer = { userId, role: viewerRole ?? 'USER' };
+    const authorVisibility = await this.resolveStoryAuthorPresence(stories, viewer);
 
     // hoistLocationDeep est un no-op sûr sur la projection tray (ni `metadata`
     // ni `comments` sélectionnés — cf. trayStorySelect) : elle ne rend de
@@ -488,7 +499,7 @@ export class PostFeedService {
         : 'none';
       const author = (s as { author?: { id: string; isOnline: boolean | null; lastActiveAt: Date | null } | null }).author;
       return withMentions(hoistLocationDeep({
-        ...this.enrichWithLikeStatus(s, userReactionsMap.get(s.id) ?? []),
+        ...this.enrichWithLikeStatus(withAudienceListFor(s, userId), userReactionsMap.get(s.id) ?? []),
         ...(author ? { author: applyPresenceVisibilityAsOffline(author, authorVisibility.get(author.id)) } : {}),
         isViewedByMe: viewedSet.has(s.id),
         currentUserReactions: userReactionsMap.get(s.id) ?? [],
@@ -523,7 +534,7 @@ export class PostFeedService {
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-    const visibilityFilter = this.buildVisibilityFilter(userId, allContactIds, communityCoMemberIds);
+    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds, this.cache);
 
     const whereClause: any = {
       deletedAt: NOT_DELETED,
@@ -545,17 +556,14 @@ export class PostFeedService {
 
     const statuses = await this.prisma.post.findMany({
       where: whereClause,
-      include: {
-        author: { select: authorSelect },
-        postMentions: postMentionInclude,
-      },
+      select: statusPostSelect,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     });
 
     const hasMore = statuses.length > limit;
     const items = (hasMore ? statuses.slice(0, limit) : statuses)
-      .map((p) => withMentions(hoistLocationDeep(p), reader));
+      .map((p) => withMentions(hoistLocationDeep(withAudienceListFor(p, userId)), reader));
     const nextCursor = hasMore && items.length > 0
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
@@ -587,17 +595,14 @@ export class PostFeedService {
 
     const statuses = await this.prisma.post.findMany({
       where,
-      include: {
-        author: { select: authorSelect },
-        postMentions: postMentionInclude,
-      },
+      select: statusPostSelect,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     });
 
     const hasMore = statuses.length > limit;
     const items = (hasMore ? statuses.slice(0, limit) : statuses)
-      .map((p) => withMentions(hoistLocationDeep(p), reader));
+      .map((p) => withMentions(hoistLocationDeep(withAudienceListFor(p, userId)), reader));
     const nextCursor = hasMore && items.length > 0
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
@@ -645,7 +650,7 @@ export class PostFeedService {
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const contactIds = new Set([...friendIds, ...dmContactIds]);
-    const visibilityFilter = this.buildVisibilityFilter(userId, [...contactIds], communityCoMemberIds);
+    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, [...contactIds], communityCoMemberIds, this.cache);
 
     const andClauses: any[] = [
       visibilityFilter,
@@ -665,7 +670,7 @@ export class PostFeedService {
 
     const candidates = await this.prisma.post.findMany({
       where: { deletedAt: NOT_DELETED, type: PostType.REEL, AND: andClauses },
-      include: feedPostInclude,
+      select: feedPostInclude,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: candidatePoolSize,
     });
@@ -729,25 +734,34 @@ export class PostFeedService {
   }
 
   /** Enrichit des réels avec l'état viewer (réactions + like + favori). */
-  private async enrichReelsForViewer(items: any[], viewerUserId: string, reader?: WireReader) {
-    if (items.length === 0) return [];
-    const postIds = items.map((p) => p.id);
-    // Aligné sur `getFeed` PAR LE MÊME HELPER, et non par une recopie : la
+  private async enrichReelsForViewer(items: PostPayload[], viewerUserId: string, reader?: WireReader) {
+    // Aligné sur `getFeed` PAR LA MÊME FONCTION, et non par une recopie : la
     // version précédente disait déjà « aligné sur getFeed » tout en n'exposant
     // que `isBookmarkedByMe` — le rail du reel viewer ne pouvait donc pas
     // savoir que le lecteur avait déjà reposté.
-    const [userReactionsMap, personalFlags] = await Promise.all([
-      this.resolveUserReactionsMap(viewerUserId, items),
-      this.resolvePersonalFlags(viewerUserId, postIds),
-    ]);
-    return items.map((p) => withMentions(hoistLocationDeep({
-      ...this.enrichWithLikeStatus(p, userReactionsMap.get(p.id) ?? []),
-      currentUserReactions: userReactionsMap.get(p.id) ?? [],
-      ...this.personalFlagsFor(p.id, personalFlags),
-    }), reader));
+    const withState = await withViewerPostState(this.prisma, viewerUserId, items);
+    return withState.map((p) => withMentions(hoistLocationDeep(p), reader));
   }
 
-  /** Langues que l'utilisateur lit (Prisme Linguistique). Best-effort. */
+  /**
+   * Langues que l'utilisateur lit (Prisme Linguistique). Best-effort.
+   *
+   * Descend le prisme ORDONNÉ complet via la SSOT `resolveUserLanguagesOrdered`
+   * — systemLanguage → regionalLanguage → customDestinationLanguage →
+   * deviceLocale (rang 4, persisté sur `User.deviceLocale`). L'ancienne
+   * implémentation énumérait à la main les TROIS premiers rangs et OMETTAIT la
+   * locale appareil : un lecteur sans préférence in-app (nouveau compte, dont le
+   * seul signal est la locale appareil — cas nominal de la règle 2 du Prisme)
+   * recevait un ensemble VIDE, donc AUCUN reel n'était boosté par sa langue lue
+   * (`reelAffinity` `W.viewerLanguage`), et son fil « Pour toi » était classé
+   * sans ce signal. Même défaut que le hook posts/commentaires web
+   * (`usePostTranslation`, qui ne consultait que le rang 1).
+   *
+   * `resolveUserLanguagesOrdered` canonicalise déjà (casse repliée, région
+   * strippée) ; on repasse par `normalizeLanguageForDedup` pour que les clés du
+   * `Set` vivent dans l'ESPACE EXACT où `reelAffinity` compare le candidat
+   * (`.has()`), idempotent sur des codes déjà canoniques.
+   */
   private async getViewerLanguages(userId: string): Promise<Set<string>> {
     try {
       const u = await this.prisma.user.findUnique({
@@ -756,11 +770,13 @@ export class PostFeedService {
           systemLanguage: true,
           regionalLanguage: true,
           customDestinationLanguage: true,
+          deviceLocale: true,
         },
       });
-      const langs = [u?.systemLanguage, u?.regionalLanguage, u?.customDestinationLanguage]
-        .filter((l): l is string => !!l && l.trim() !== '')
-        .map((l) => normalizeLanguageForDedup(l));
+      if (!u) return new Set();
+      const langs = resolveUserLanguagesOrdered(u, {
+        deviceLocale: u.deviceLocale ?? undefined,
+      }).map((l) => normalizeLanguageForDedup(l));
       return new Set(langs);
     } catch {
       return new Set();
@@ -852,7 +868,7 @@ export class PostFeedService {
         getCommunityCoMemberIds(this.prisma, viewerUserId, this.cache),
       ]);
       const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-      andClauses.push(this.buildVisibilityFilter(viewerUserId, allContactIds, communityCoMemberIds));
+      andClauses.push(await buildFeedVisibilityFilter(this.prisma, viewerUserId, allContactIds, communityCoMemberIds, this.cache));
     }
 
     if (cursorData) {
@@ -870,7 +886,7 @@ export class PostFeedService {
 
     const posts = await this.prisma.post.findMany({
       where,
-      include: feedPostInclude,
+      select: feedPostInclude,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     });
@@ -881,104 +897,27 @@ export class PostFeedService {
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
 
-    const noFlags = { bookmarkedIds: new Set<string>(), repostedIds: new Set<string>() };
-
-    if (!viewerUserId || items.length === 0) {
-      return {
-        items: items.map((p) => withMentions(hoistLocationDeep({
-          ...p,
-          currentUserReactions: [] as string[],
-          ...this.personalFlagsFor(p.id, noFlags),
-        }), reader)),
-        nextCursor,
-        hasMore,
-      };
-    }
-
-    const [userReactionsMap, personalFlags] = await Promise.all([
-      this.resolveUserReactionsMap(viewerUserId, items),
-      this.resolvePersonalFlags(viewerUserId, items.map((p) => p.id)),
-    ]);
+    const withState = await withViewerPostState(this.prisma, viewerUserId, items);
 
     return {
-      items: items.map((p) => withMentions(hoistLocationDeep({
-        ...this.enrichWithLikeStatus(p, userReactionsMap.get(p.id) ?? []),
-        currentUserReactions: userReactionsMap.get(p.id) ?? [],
-        ...this.personalFlagsFor(p.id, personalFlags),
-      }), reader)),
+      items: withState.map((p) => withMentions(hoistLocationDeep(p), reader)),
       nextCursor,
       hasMore,
     };
   }
 
   async getCommunityFeed(communityId: string, viewerUserId: string | undefined, cursor?: string, limit: number = 20, reader?: WireReader) {
-    const cursorData = cursor ? decodeCursor(cursor) : null;
-
-    // ACL : seuls les membres actifs voient les posts COMMUNITY ; un non-membre
-    // (ou un viewer anonyme) est limité aux posts PUBLIC de la communauté.
-    const isMember = viewerUserId
-      ? await isActiveCommunityMember(this.prisma, viewerUserId, communityId)
-      : false;
-
-    const where: any = {
-      communityId,
-      deletedAt: NOT_DELETED,
-      type: { in: [PostType.POST, PostType.REEL] },
-      visibility: isMember ? { in: ['PUBLIC', 'COMMUNITY'] } : 'PUBLIC',
-    };
-
-    if (cursorData) {
-      where.OR = [
-        { createdAt: { lt: new Date(cursorData.createdAt) } },
-        { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
-      ];
-    }
-
-    const posts = await this.prisma.post.findMany({
-      where,
-      include: feedPostInclude,
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: limit + 1,
-    });
-
-    const hasMore = posts.length > limit;
-    const items = hasMore ? posts.slice(0, limit) : posts;
-    const nextCursor = hasMore && items.length > 0
-      ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
-      : null;
-
-    if (!viewerUserId || items.length === 0) {
-      return {
-        items: items.map((p) => withMentions(hoistLocationDeep({
-          ...p,
-          currentUserReactions: [] as string[],
-          ...this.personalFlagsFor(p.id, { bookmarkedIds: new Set<string>(), repostedIds: new Set<string>() }),
-        }), reader)),
-        nextCursor,
-        hasMore,
-      };
-    }
-
-    const [communityReactionsMap, communityFlags] = await Promise.all([
-      this.resolveUserReactionsMap(viewerUserId, items),
-      this.resolvePersonalFlags(viewerUserId, items.map((p) => p.id)),
-    ]);
-
-    return {
-      items: items.map((p) => withMentions(hoistLocationDeep({
-        ...this.enrichWithLikeStatus(p, communityReactionsMap.get(p.id) ?? []),
-        currentUserReactions: communityReactionsMap.get(p.id) ?? [],
-        ...this.personalFlagsFor(p.id, communityFlags),
-      }), reader)),
-      nextCursor,
-      hasMore,
-    };
+    return loadCommunityFeed(this.prisma, { communityId, viewerUserId, ...(cursor !== undefined ? { cursor } : {}), limit, ...(reader !== undefined ? { reader } : {}) });
   }
 
   async getBookmarks(userId: string, cursor?: string, limit: number = 20, reader?: WireReader) {
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
-    const where: any = { userId };
+    // L'audience se relit à CHAQUE lecture (#17182) : un favori est posé une
+    // fois, l'audience de la publication bouge (communauté quittée, ami retiré,
+    // passage en PRIVATE, blocage). Posée dans la requête, la page reste pleine.
+    const audience = await viewerPostAudience(this.prisma, userId, this.cache);
+    const where: any = { userId, post: { is: { deletedAt: NOT_DELETED, AND: [audience] } } };
 
     if (cursorData) {
       where.OR = [
@@ -991,7 +930,7 @@ export class PostFeedService {
       where,
       include: {
         post: {
-          include: feedPostInclude,
+          select: feedPostInclude,
         },
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -1005,20 +944,15 @@ export class PostFeedService {
       : null;
 
     const posts = items.map((b) => b.post).filter((p) => p && !p.deletedAt);
-    const [bookmarkReactionsMap, bookmarkFlags] = await Promise.all([
-      this.resolveUserReactionsMap(userId, posts),
-      this.resolvePersonalFlags(userId, posts.map((p) => p.id)),
-    ]);
+    const withState = await withViewerPostState(this.prisma, userId, posts);
 
     return {
       // `isBookmarkedByMe: true` sans condition : la liste EST construite depuis
       // la table des favoris du lecteur. Servi explicitement quand même — un
       // client qui ne reçoit pas le champ le décode `false` et rendait l'écran
       // des favoris avec des signets ÉTEINTS. `isLikedByMe` manquait de même.
-      items: posts.map((p) => withMentions(hoistLocationDeep({
-        ...this.enrichWithLikeStatus(p, bookmarkReactionsMap.get(p.id) ?? []),
-        currentUserReactions: bookmarkReactionsMap.get(p.id) ?? [],
-        ...this.personalFlagsFor(p.id, bookmarkFlags),
+      items: withState.map((p) => withMentions(hoistLocationDeep({
+        ...p,
         isBookmarkedByMe: true,
       }), reader)),
       nextCursor,
@@ -1030,258 +964,52 @@ export class PostFeedService {
   // PRIVATE HELPERS
   // ============================================
 
-  /**
-   * Flags d'action PERSONNELS d'un lot de posts : le favori et le repost DU
-   * LECTEUR.
-   *
-   * `isLikedByMe` / `isBookmarkedByMe` / `isRepostedByMe` ne décrivent pas le
-   * post — ils décrivent la relation du lecteur AU post. Ils n'ont donc de sens
-   * que servis ENSEMBLE : un client qui en reçoit un et pas les autres décode
-   * les absents en `false` (SDK : `isBookmarkedByMe ?? false`) et affiche
-   * « pas en favori » d'un post qui l'est.
-   *
-   * Ce helper existe parce que la recopie de ces deux requêtes a produit la
-   * divergence : le 2026-08-25, sur six méthodes servant des posts, seule
-   * `getFeed` posait les trois flags. L'onglet Posts d'un profil n'annonçait ni
-   * favori ni repost, et `getBookmarks` — la liste des favoris — ne disait pas
-   * que ses propres posts étaient en favori. Toute nouvelle méthode servant des
-   * posts passe par ici ; aucune ne réécrit la paire de requêtes.
-   */
-  private async resolvePersonalFlags(
-    viewerUserId: string | undefined,
-    postIds: string[],
-  ): Promise<{ bookmarkedIds: Set<string>; repostedIds: Set<string> }> {
-    if (!viewerUserId || postIds.length === 0) {
-      return { bookmarkedIds: new Set(), repostedIds: new Set() };
-    }
-
-    const [userBookmarks, userReposts] = await Promise.all([
-      this.prisma.postBookmark.findMany({
-        where: { userId: viewerUserId, postId: { in: postIds } },
-        select: { postId: true },
-      }),
-      // Un repost = un post dont le `repostOfId` est dans le lot ET dont
-      // l'auteur est le lecteur.
-      this.prisma.post.findMany({
-        where: { authorId: viewerUserId, repostOfId: { in: postIds }, deletedAt: NOT_DELETED },
-        select: { repostOfId: true },
-      }),
-    ]);
-
-    return {
-      bookmarkedIds: new Set(userBookmarks.map((b) => b.postId)),
-      repostedIds: new Set(userReposts.map((r) => r.repostOfId).filter(Boolean) as string[]),
-    };
+  private getDirectConversationContactIds(userId: string): Promise<string[]> {
+    return loadFeedDirectContactIds({ prisma: this.prisma, cache: this.cache, userId });
   }
 
-  /**
-   * Projection des flags personnels sur UN post. Rend toujours les deux clés —
-   * `false` explicite, jamais une clé absente : c'est l'absence, pas la valeur,
-   * qui faisait mentir le client.
-   */
-  private personalFlagsFor(
-    postId: string,
-    flags: { bookmarkedIds: Set<string>; repostedIds: Set<string> },
-  ): { isBookmarkedByMe: boolean; isRepostedByMe: boolean } {
-    return {
-      isBookmarkedByMe: flags.bookmarkedIds.has(postId),
-      isRepostedByMe: flags.repostedIds.has(postId),
-    };
+  private getFriendIds(userId: string): Promise<string[]> {
+    return loadFeedFriendIds({ prisma: this.prisma, cache: this.cache, userId });
   }
 
-  /// G5 — délègue au filtre canonique unique (posts/postVisibility.ts).
-  /// Audience feed = friends ∪ contacts DM (divergence assumée vs PostService,
-  /// décision produit en attente — story-sota §4).
-  private buildVisibilityFilter(viewerId: string, friendIds: string[], communityCoMemberIds: string[] = []) {
-    return buildPostVisibilityOrFilter(viewerId, friendIds, communityCoMemberIds);
-  }
-
-  private async getDirectConversationContactIds(userId: string): Promise<string[]> {
-    const cacheKey = `feed:contacts:${userId}`;
-    if (this.cache) {
-      const cached = await this.cache.get(cacheKey).catch(() => null);
-      if (cached) return JSON.parse(cached) as string[];
-    }
-    try {
-      const myMemberships = await this.prisma.participant.findMany({
-        where: { userId, isActive: true, conversation: { type: 'direct' } },
-        select: { conversationId: true },
-      });
-      const conversationIds = myMemberships.map((m) => m.conversationId);
-      if (conversationIds.length === 0) {
-        if (this.cache) await this.cache.set(cacheKey, '[]', FEED_SOCIAL_CACHE_TTL).catch(() => undefined);
-        return [];
-      }
-
-      const otherMembers = await this.prisma.participant.findMany({
-        where: {
-          conversationId: { in: conversationIds },
-          userId: { not: userId },
-          isActive: true,
-        },
-        select: { userId: true },
-      });
-      const result = [...new Set(otherMembers.map((m) => m.userId).filter(Boolean) as string[])];
-      if (this.cache) await this.cache.set(cacheKey, JSON.stringify(result), FEED_SOCIAL_CACHE_TTL).catch(() => undefined);
-      return result;
-    } catch {
-      return [];
-    }
-  }
-
-  private async getFriendIds(userId: string): Promise<string[]> {
-    const cacheKey = `feed:friends:${userId}`;
-    if (this.cache) {
-      const cached = await this.cache.get(cacheKey).catch(() => null);
-      if (cached) return JSON.parse(cached) as string[];
-    }
-    try {
-      const friendRequests = await this.prisma.friendRequest.findMany({
-        where: {
-          status: 'accepted',
-          OR: [
-            { senderId: userId },
-            { receiverId: userId },
-          ],
-        },
-        select: { senderId: true, receiverId: true },
-      });
-
-      const result = friendRequests.map((f) =>
-        f.senderId === userId ? f.receiverId : f.senderId
-      );
-      if (this.cache) await this.cache.set(cacheKey, JSON.stringify(result), FEED_SOCIAL_CACHE_TTL).catch(() => undefined);
-      return result;
-    } catch {
-      return [];
-    }
-  }
-
-  /// `isLikedByMe` dérive de la table `PostReaction` (via `currentUserReactions`),
-  /// PAS du Json legacy `post.reactions` (jamais mis à jour par le chemin socket →
-  /// `isLikedByMe` était faux après un like socket, et iOS lit `isLiked = isLikedByMe`).
-  /// Source UNIQUE et alignée avec `currentUserReactions` que les surfaces lisent.
+  /// Stories : `isLikedByMe` suit la règle des listes (`likedFromReactions`,
+  /// `posts/viewerPostState.ts`) — la table `PostReaction`, jamais le Json legacy.
   private enrichWithLikeStatus(post: any, currentUserReactions: string[]) {
-    return { ...post, isLikedByMe: currentUserReactions.length > 0 };
+    return { ...post, isLikedByMe: likedFromReactions(currentUserReactions) };
   }
 
   /**
    * Visibilité de la présence des AUTEURS d'une page de stories.
    *
-   * Le régime se décide par AUTEUR, sur ce que ses stories de la page prouvent
-   * du lien — c'est la question qui départage les deux régimes de la
-   * passerelle (« le lecteur a-t-il un DROIT sur cette donnée, ou seulement un
-   * lien qu'il a posé tout seul ? ») appliquée ici :
+   * Régime UNIQUE et STRICT (directive produit 2026-08-25 : « ce n'est pas
+   * parce qu'on partage un contexte — conversation, communauté — qu'on doit
+   * voir la présence de l'autre »). Tous les auteurs de la page, quelle que
+   * soit la visibilité de leurs stories (PUBLIC, FRIENDS, COMMUNITY, ONLY),
+   * passent par le MÊME `resolveForTargets(viewer, ids)` que le reste de la
+   * plateforme : self ou ADMIN/BIGBOSS toujours privilégié, sinon amitié
+   * ACCEPTÉE requise — une co-appartenance de communauté ou un contact DM ne
+   * suffit plus, même si elle a suffi à autoriser l'accès à la story
+   * elle-même (`buildPostVisibilityOrFilter`, résolu en amont).
    *
-   *  - une story PUBLIQUE ne prouve RIEN. `buildPostVisibilityOrFilter` porte
-   *    `{ visibility: PUBLIC }` sans condition d'audience : n'importe quel
-   *    compte authentifié la voit. Critère STRICT.
-   *  - toute AUTRE visibilité prouve un lien posé des deux côtés — amitié,
-   *    contact DM, co-appartenance de communauté, ou une désignation
-   *    nominative par l'auteur (`ONLY`). Contexte acquis : préférences seules.
-   *
-   * Un auteur qui prouve le lien par UNE de ses stories le prouve pour toutes :
-   * masquer sa présence sur sa story publique pendant qu'elle s'affiche sur sa
-   * story d'amis, dans la même page, n'aurait aucun sens.
-   *
-   * Le viewer est construit en rôle `USER`, jamais celui de l'appelant : le fil
-   * de stories est une surface de CONSOMMATION, pas de modération. Le bypass
-   * modérateur n'y a rien à faire, et fixer le rôle garantit que ce gate ne
-   * peut qu'en montrer MOINS.
+   * Le viewer est le VRAI viewer (userId + rôle réel de l'appelant), jamais
+   * un rôle figé à `USER` : la directive dit que le rôle ADMIN et supérieur
+   * voit la présence « constamment », et ce bypass doit donc s'appliquer au
+   * fil de stories comme partout ailleurs — plus de surface de consommation
+   * qui l'exclurait.
    */
   private async resolveStoryAuthorPresence(
     stories: Array<Record<string, any>>,
-    viewerId: string,
+    viewer: PresenceViewer,
   ): Promise<Map<string, PresenceVisibility>> {
-    const contextIds = new Set<string>();
-    const publicOnlyIds = new Set<string>();
-    for (const story of stories) {
-      const authorId = story.author?.id as string | undefined;
-      if (!authorId) continue;
-      if (story.visibility === PostVisibility.PUBLIC && authorId !== viewerId) publicOnlyIds.add(authorId);
-      else contextIds.add(authorId);
-    }
-    for (const id of contextIds) publicOnlyIds.delete(id);
-    if (contextIds.size === 0 && publicOnlyIds.size === 0) return new Map();
+    const authorIds = [...new Set(
+      stories.flatMap((story) => {
+        const authorId = story.author?.id;
+        return typeof authorId === 'string' ? [authorId] : [];
+      }),
+    )];
+    if (authorIds.length === 0) return new Map();
 
-    const presence = getPresenceVisibilityService(this.prisma);
-    const [context, strict] = await Promise.all([
-      contextIds.size > 0
-        ? presence.resolvePrefsOnly([...contextIds])
-        : Promise.resolve(new Map<string, PresenceVisibility>()),
-      publicOnlyIds.size > 0
-        ? presence.resolveForTargets({ userId: viewerId, role: 'USER' }, [...publicOnlyIds], {
-            allowConversationContext: true,
-          })
-        : Promise.resolve(new Map<string, PresenceVisibility>()),
-    ]);
-    return new Map([...context, ...strict]);
-  }
-
-  /**
-   * Réactions du viewer par post AFFICHÉ, en redirigeant vers la RACINE pour
-   * un repost SIMPLE (chantier reposts cohérents & watermark, tâche 9) :
-   * `isLikedByMe`/`currentUserReactions` d'un repost `isQuote:false`
-   * reflètent l'état de l'utilisateur sur l'ORIGINAL
-   * (`originalRepostOfId ?? repostOfId`), jamais sur le repost lui-même — un
-   * repost simple n'a pas de vie sociale propre. Une citation garde son
-   * propre état.
-   *
-   * Factorisé pour que les CINQ surfaces qui exposent ces flags (feed, réel
-   * viewer, profil, communauté, favoris) appliquent EXACTEMENT la même
-   * règle — celle dont dérive déjà `PostService.getPostById`, l'autre
-   * chemin d'enrichissement gateway (mémoire projet « flags perso post = 2
-   * chemins »). Deux reposts distincts du même original convergent
-   * naturellement sur la même racine, donc affichent la même réaction —
-   * même invariant d'idempotence que l'écriture (like/unlike).
-   *
-   * EXCLUSION ÉPHÉMÈRE (review task-9, critique #1, même garde que
-   * `PostService.getPostById` et `resolveRedirectTarget` dans
-   * postVisibility.ts) : quand `repostOf.type` est STORY/STATUS, ce repost
-   * garde SA PROPRE réaction — sinon lecture (ce flag) et écriture
-   * (like/unlike désormais posés sur le repost lui-même) divergeraient.
-   * `repostOf.type` est déjà chargé par `feedPostInclude` (= `postInclude`)
-   * sur les 5 surfaces appelantes — aucune requête supplémentaire.
-   */
-  private async resolveUserReactionsMap(
-    viewerUserId: string,
-    posts: ReadonlyArray<{
-      id: string;
-      isQuote?: boolean;
-      repostOfId?: string | null;
-      originalRepostOfId?: string | null;
-      repostOf?: { type?: string | null } | null;
-    }>,
-  ): Promise<Map<string, string[]>> {
-    if (posts.length === 0) return new Map();
-
-    const targetIdByPostId = new Map<string, string>();
-    for (const post of posts) {
-      const repostRootIsEphemeral = post.repostOf != null
-        && post.repostOf.type != null
-        && isEphemeralPostType(post.repostOf.type as PostType);
-      const isSimpleRepost = !post.isQuote && Boolean(post.repostOfId) && !repostRootIsEphemeral;
-      targetIdByPostId.set(post.id, isSimpleRepost ? (post.originalRepostOfId ?? post.repostOfId!) : post.id);
-    }
-
-    const targetIds = [...new Set(targetIdByPostId.values())];
-    const reactions = await this.prisma.postReaction.findMany({
-      where: { userId: viewerUserId, postId: { in: targetIds } },
-      select: { postId: true, emoji: true },
-    });
-
-    const byTargetId = new Map<string, string[]>();
-    for (const r of reactions) {
-      const list = byTargetId.get(r.postId) ?? [];
-      list.push(r.emoji);
-      byTargetId.set(r.postId, list);
-    }
-
-    const result = new Map<string, string[]>();
-    for (const post of posts) {
-      result.set(post.id, byTargetId.get(targetIdByPostId.get(post.id)!) ?? []);
-    }
-    return result;
+    return getPresenceVisibilityService(this.prisma).resolveForTargets(viewer, authorIds);
   }
 
   private affinityScore(authorId: string, viewerId: string, friendIds: string[]): number {
@@ -1352,30 +1080,6 @@ export class PostFeedService {
           .catch(() => undefined);
       }
       return affinity;
-    } catch {
-      return new Map();
-    }
-  }
-
-  /**
-   * Combien de fois chaque candidat est déjà remonté dans le feed du viewer.
-   * Sert la fatigue d'impression : on dégrade ce qui a déjà été montré pour
-   * renouveler le feed. Non caché (dépend du jeu de candidats courant et bouge
-   * vite). Dégradation gracieuse : erreur → Map vide (aucune pénalité).
-   */
-  private async getSeenCounts(userId: string, postIds: string[]): Promise<Map<string, number>> {
-    if (postIds.length === 0) return new Map();
-    try {
-      const grouped = await this.prisma.postImpression.groupBy({
-        by: ['postId'],
-        where: { userId, postId: { in: postIds } },
-        _count: { postId: true },
-      });
-      const counts = new Map<string, number>();
-      for (const row of grouped as Array<{ postId: string; _count?: { postId?: number } }>) {
-        counts.set(row.postId, row._count?.postId ?? 0);
-      }
-      return counts;
     } catch {
       return new Map();
     }

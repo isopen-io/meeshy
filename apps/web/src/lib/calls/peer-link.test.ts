@@ -1,0 +1,415 @@
+import { describe, expect, test } from 'bun:test';
+
+import { createPeerLink, ICE_DISCONNECT_GRACE_MS, ICE_RESTART_MAX_ATTEMPTS, isPolitePeer, isStaleEpoch, orderVideoCodecs, peerConfiguration, restartBackoffMs, type LinkState, type OutgoingSignal } from './peer-link';
+
+/**
+ * LE LIEN PAIR-À-PAIR (#6382, #8044) — les trois règles d'iOS
+ * (`CallManager.swift` § 3.5) sur une `RTCPeerConnection` simulée : la
+ * négociation parfaite, l'époque de négociation et la reprise ICE bornée.
+ */
+
+type Track = { readonly kind: 'audio' | 'video' };
+type Transceiver = { direction: string; readonly sender: { track: Track | null; replaceTrack: (t: Track | null) => Promise<void> }; readonly receiver: { readonly track: Track }; readonly setCodecPreferences?: (codecs: readonly { readonly mimeType: string }[]) => void };
+
+function fakeConnection(options: { readonly codecPreferences?: boolean } = {}) {
+  const calls: string[] = [];
+  const transceivers: Transceiver[] = [];
+  const addTransceiver = (trackOrKind: Track | 'audio' | 'video', init: { direction: string }): Transceiver => {
+    const kind = typeof trackOrKind === 'string' ? trackOrKind : trackOrKind.kind;
+    const sender = { track: typeof trackOrKind === 'string' ? null : trackOrKind, replaceTrack: async (t: Track | null) => void (sender.track = t) };
+    const transceiver: Transceiver = {
+      direction: init.direction,
+      sender,
+      receiver: { track: { kind } },
+      ...(options.codecPreferences === false
+        ? {}
+        : { setCodecPreferences: (codecs: readonly { readonly mimeType: string }[]) => void calls.push(`codecs:${kind}:${codecs.map((codec) => codec.mimeType).join(',')}`) }),
+    };
+    transceivers.push(transceiver);
+    calls.push(`add:${kind}:${init.direction}`);
+    return transceiver;
+  };
+  const pc = {
+    signalingState: 'stable',
+    connectionState: 'new',
+    localDescription: null as { type: string; sdp: string } | null,
+    remoteDescription: null as { type: string; sdp: string } | null,
+    onicecandidate: null as ((event: { candidate: { candidate: string; sdpMid: string | null; sdpMLineIndex: number | null } | null }) => void) | null,
+    ontrack: null as ((event: { track: Track }) => void) | null,
+    onnegotiationneeded: null as (() => void) | null,
+    onconnectionstatechange: null as (() => void) | null,
+    onsignalingstatechange: null as (() => void) | null,
+    addTransceiver,
+    getTransceivers: () => transceivers,
+    createOffer: async (options?: { iceRestart?: boolean }) => {
+      calls.push(options?.iceRestart === true ? 'createOffer:restart' : 'createOffer');
+      return { type: 'offer', sdp: 'restart-offer' };
+    },
+    setLocalDescription: async (description?: { type: string; sdp: string }) => {
+      const next = description ?? (pc.remoteDescription?.type === 'offer' && pc.signalingState === 'have-remote-offer' ? { type: 'answer', sdp: 'answer-sdp' } : { type: 'offer', sdp: 'offer-sdp' });
+      pc.localDescription = next;
+      pc.signalingState = next.type === 'offer' ? 'have-local-offer' : 'stable';
+      calls.push(`setLocal:${next.type}`);
+    },
+    setRemoteDescription: async (description: { type: string; sdp: string }) => {
+      pc.remoteDescription = description;
+      pc.signalingState = description.type === 'offer' ? 'have-remote-offer' : 'stable';
+      calls.push(`setRemote:${description.type}`);
+    },
+    addIceCandidate: async (candidate: { candidate?: string }) => void calls.push(`candidate:${candidate.candidate ?? ''}`),
+    getConfiguration: () => ({ iceServers: [] }),
+    setConfiguration: (config: { iceServers: unknown[] }) => void calls.push(`config:${config.iceServers.length}`),
+    close: () => void calls.push('close'),
+  };
+  const setState = (state: string) => {
+    pc.connectionState = state;
+    pc.onconnectionstatechange?.();
+  };
+  return { pc, calls, setState };
+}
+
+function link(options: { readonly local?: string; readonly remote?: string; readonly video?: boolean; readonly receiveOnly?: boolean; readonly shapeSdp?: (sdp: string) => string; readonly codecPreferences?: boolean } = {}) {
+  const fake = fakeConnection(options.codecPreferences === undefined ? {} : { codecPreferences: options.codecPreferences });
+  const sent: OutgoingSignal[] = [];
+  const states: LinkState[] = [];
+  const timers: Array<{ fn: () => void; ms: number; active: boolean }> = [];
+  const tracks: Track[] = [{ kind: 'audio' }, ...(options.video === true ? [{ kind: 'video' as const }] : [])];
+  const localStream = { getAudioTracks: () => tracks.filter((t) => t.kind === 'audio'), getVideoTracks: () => tracks.filter((t) => t.kind === 'video') } as unknown as MediaStream;
+  const remoteTracks: Track[] = [];
+  const remoteStream = { getTracks: () => remoteTracks, addTrack: (t: Track) => void remoteTracks.push(t) } as unknown as MediaStream;
+  const peer = createPeerLink({
+    localUserId: options.local ?? 'u-a',
+    remoteUserId: options.remote ?? 'u-b',
+    iceServers: [],
+    localStream,
+    ...(options.receiveOnly === true ? { receiveOnly: true } : {}),
+    ...(options.shapeSdp === undefined ? {} : { shapeSdp: options.shapeSdp }),
+    send: (signal) => void sent.push(signal),
+    onRemoteStream: () => undefined,
+    onState: (state) => void states.push(state),
+    createConnection: () => fake.pc as unknown as RTCPeerConnection,
+    createStream: () => remoteStream,
+    schedule: (fn, ms) => {
+      const timer = { fn, ms, active: true };
+      timers.push(timer);
+      return timer;
+    },
+    cancel: (handle) => void ((handle as { active: boolean }).active = false),
+  });
+  const runTimers = () => {
+    for (const timer of timers.splice(0)) if (timer.active) timer.fn();
+  };
+  return { peer, fake, sent, states, timers, runTimers, remoteTracks };
+}
+
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe('règles pures', () => {
+  test('le plus petit identifiant est poli ; soi-même et le vide ne le sont jamais', () => {
+    expect(isPolitePeer('a', 'b')).toBe(true);
+    expect(isPolitePeer('b', 'a')).toBe(false);
+    expect(isPolitePeer('a', 'a')).toBe(false);
+    expect(isPolitePeer('', 'b')).toBe(false);
+  });
+
+  test('une époque plus ancienne que la plus haute vue est périmée', () => {
+    expect(isStaleEpoch(1, 2)).toBe(true);
+    expect(isStaleEpoch(2, 2)).toBe(false);
+    expect(isStaleEpoch(3, 2)).toBe(false);
+  });
+
+  test('la reprise ICE : immédiate, puis 2, 4, 8, 16 s', () => {
+    expect([1, 2, 3, 4, 5, 6].map(restartBackoffMs)).toEqual([0, 2_000, 4_000, 8_000, 16_000, 16_000]);
+  });
+});
+
+describe('offre et réponse', () => {
+  test('l’offrant pose une ligne audio sendrecv et une ligne vidéo recvonly sans caméra', async () => {
+    const { peer, fake, sent, states } = link();
+    await peer.offer();
+    expect(fake.calls.slice(0, 2)).toEqual(['add:audio:sendrecv', 'add:video:recvonly']);
+    expect(sent).toEqual([{ type: 'offer', sdp: 'offer-sdp', negotiationId: 1 }]);
+    expect(states).toEqual(['connecting']);
+  });
+
+  test('la description envoyée passe par le réglage Opus, offre comme réponse ; la locale reste celle du navigateur (#8697)', async () => {
+    const offerer = link({ shapeSdp: (sdp) => `${sdp}+opus` });
+    await offerer.peer.offer();
+    expect(offerer.sent).toEqual([{ type: 'offer', sdp: 'offer-sdp+opus', negotiationId: 1 }]);
+    expect(offerer.fake.pc.localDescription?.sdp).toBe('offer-sdp');
+    const answerer = link({ local: 'u-b', remote: 'u-a', shapeSdp: (sdp) => `${sdp}+opus` });
+    await answerer.peer.receiveDescription({ type: 'offer', sdp: 'remote-offer' }, 2);
+    expect(answerer.sent).toEqual([{ type: 'answer', sdp: 'answer-sdp+opus', negotiationId: 2 }]);
+  });
+
+  test('avec la caméra, la ligne vidéo émet', async () => {
+    const { peer, fake } = link({ video: true });
+    await peer.offer();
+    expect(fake.calls).toContain('add:video:sendrecv');
+  });
+
+  test('le répondant accroche ses pistes aux lignes de l’offre et répond à la MÊME époque', async () => {
+    const { peer, fake, sent } = link({ local: 'u-b', remote: 'u-a' });
+    fake.pc.addTransceiver('audio', { direction: 'recvonly' });
+    fake.calls.length = 0;
+    await peer.receiveDescription({ type: 'offer', sdp: 'remote-offer' }, 4);
+    expect(fake.calls).toEqual(['setRemote:offer', 'setLocal:answer']);
+    expect(fake.pc.getTransceivers()[0]?.direction).toBe('sendrecv');
+    expect(sent).toEqual([{ type: 'answer', sdp: 'answer-sdp', negotiationId: 4 }]);
+  });
+
+  test('en réception seule (aperçu avant décroché, #8480), le répondant n’accroche AUCUNE piste et ne peut pas en ajouter', async () => {
+    const { peer, fake, sent } = link({ local: 'u-b', remote: 'u-a', video: true, receiveOnly: true });
+    fake.pc.addTransceiver('audio', { direction: 'sendrecv' });
+    fake.pc.addTransceiver('video', { direction: 'sendrecv' });
+    await peer.receiveDescription({ type: 'offer', sdp: 'remote-offer' }, 1);
+    await peer.setVideoTrack({ kind: 'video' } as unknown as MediaStreamTrack);
+    await peer.setAudioTrack({ kind: 'audio' } as unknown as MediaStreamTrack);
+    expect(fake.pc.getTransceivers().map((t) => [t.direction, t.sender.track])).toEqual([['recvonly', null], ['recvonly', null]]);
+    expect(sent.map((signal) => signal.type)).toEqual(['answer']);
+  });
+
+  test('un candidat arrivé avant la description attend, puis passe', async () => {
+    const { peer, fake } = link();
+    await peer.receiveCandidate({ candidate: 'c1' }, 0);
+    expect(fake.calls).not.toContain('candidate:c1');
+    await peer.receiveDescription({ type: 'offer', sdp: 'x' }, 1);
+    expect(fake.calls).toContain('candidate:c1');
+  });
+
+  test('un signal d’une époque périmée est écarté', async () => {
+    const { peer, fake } = link();
+    await peer.offer();
+    await peer.offer().catch(() => undefined);
+    fake.calls.length = 0;
+    await peer.receiveDescription({ type: 'answer', sdp: 'old' }, 0);
+    expect(fake.calls).toEqual([]);
+  });
+
+  test('les candidats locaux partent avec l’époque courante', async () => {
+    const { peer, fake, sent } = link();
+    await peer.offer();
+    fake.pc.onicecandidate?.({ candidate: { candidate: 'cand', sdpMid: '0', sdpMLineIndex: 0 } });
+    fake.pc.onicecandidate?.({ candidate: null });
+    expect(sent.at(-1)).toEqual({ type: 'ice-candidate', candidate: 'cand', sdpMid: '0', sdpMLineIndex: 0, negotiationId: 1 });
+    expect(sent).toHaveLength(2);
+  });
+
+  test('les pistes distantes rejoignent UN flux', () => {
+    const { fake, remoteTracks } = link();
+    fake.pc.ontrack?.({ track: { kind: 'audio' } });
+    fake.pc.ontrack?.({ track: { kind: 'video' } });
+    expect(remoteTracks.map((t) => t.kind)).toEqual(['audio', 'video']);
+  });
+});
+
+describe('négociation parfaite', () => {
+  test('collision : le pair IMPOLI ignore l’offre entrante', async () => {
+    const { peer, fake, sent } = link({ local: 'u-b', remote: 'u-a' });
+    await peer.offer();
+    fake.calls.length = 0;
+    await peer.receiveDescription({ type: 'offer', sdp: 'theirs' }, 1);
+    expect(fake.calls).toEqual([]);
+    expect(sent).toHaveLength(1);
+  });
+
+  test('collision : le pair POLI cède et répond', async () => {
+    const { peer, fake, sent } = link({ local: 'u-a', remote: 'u-b' });
+    await peer.offer();
+    await peer.receiveDescription({ type: 'offer', sdp: 'theirs' }, 1);
+    expect(fake.calls).toContain('setRemote:offer');
+    expect(sent.at(-1)?.type).toBe('answer');
+  });
+
+  test('la renégociation automatique n’est ouverte qu’après la première connexion', async () => {
+    const { fake, sent } = link();
+    fake.pc.onnegotiationneeded?.();
+    await flush();
+    expect(sent).toHaveLength(0);
+    fake.setState('connected');
+    fake.pc.onnegotiationneeded?.();
+    await flush();
+    expect(sent.at(-1)?.type).toBe('offer');
+  });
+});
+
+describe('reprise ICE', () => {
+  test('déconnecté : 3 s de grâce, puis une offre de redémarrage ICE', async () => {
+    const { fake, states, timers, runTimers } = link();
+    fake.setState('connected');
+    fake.setState('disconnected');
+    expect(states.at(-1)).toBe('reconnecting');
+    expect(timers[0]?.ms).toBe(ICE_DISCONNECT_GRACE_MS);
+    runTimers();
+    runTimers();
+    await flush();
+    expect(fake.calls).toContain('createOffer:restart');
+  });
+
+  test('revenu pendant la grâce : aucune reprise', () => {
+    const { fake, states, runTimers } = link();
+    fake.setState('connected');
+    fake.setState('disconnected');
+    fake.setState('connected');
+    runTimers();
+    expect(fake.calls).not.toContain('createOffer:restart');
+    expect(states.at(-1)).toBe('connected');
+  });
+
+  test(`après ${ICE_RESTART_MAX_ATTEMPTS} reprises ratées, le lien est « failed »`, () => {
+    const { fake, states } = link();
+    fake.setState('connected');
+    for (let attempt = 0; attempt <= ICE_RESTART_MAX_ATTEMPTS; attempt += 1) fake.setState('failed');
+    expect(states.at(-1)).toBe('failed');
+  });
+
+  test('fermer coupe les écouteurs et la connexion', () => {
+    const { peer, fake } = link();
+    peer.close();
+    expect(fake.calls).toContain('close');
+    expect(fake.pc.onconnectionstatechange).toBeNull();
+  });
+});
+
+describe('le canal de données des sous-titres (#8048)', () => {
+  const channelLink = () => {
+    const fake = fakeConnection();
+    const created: Array<{ readonly label: string; readonly ordered: boolean | undefined; readonly beforeOffer: boolean }> = [];
+    const handed: string[] = [];
+    const pc = Object.assign(fake.pc, {
+      ondatachannel: null as ((event: { channel: { label: string } }) => void) | null,
+      createDataChannel: (label: string, init?: { ordered?: boolean }) => {
+        created.push({ label, ordered: init?.ordered, beforeOffer: !fake.calls.includes('setLocal:offer') });
+        return { label };
+      },
+    });
+    const localStream = { getAudioTracks: () => [{ kind: 'audio' }], getVideoTracks: () => [] } as unknown as MediaStream;
+    const peer = createPeerLink({
+      localUserId: 'u-a',
+      remoteUserId: 'u-b',
+      iceServers: [],
+      localStream,
+      send: () => undefined,
+      onRemoteStream: () => undefined,
+      onState: () => undefined,
+      onChannel: (channel) => void handed.push(channel.label),
+      createConnection: () => pc as unknown as RTCPeerConnection,
+      createStream: () => ({ getTracks: () => [], addTrack: () => undefined }) as unknown as MediaStream,
+    });
+    return { peer, pc, created, handed };
+  };
+
+  test('l’offrant crée le canal « transcription » AVANT l’offre (m=application), ordonné, et le remet', async () => {
+    const h = channelLink();
+    await h.peer.offer();
+    expect(h.created).toEqual([{ label: 'transcription', ordered: true, beforeOffer: true }]);
+    expect(h.handed).toEqual(['transcription']);
+  });
+
+  test('celui qui répond reçoit le canal du pair ; un autre libellé est ignoré ; fermer le débranche', () => {
+    const h = channelLink();
+    h.pc.ondatachannel?.({ channel: { label: 'autre' } });
+    h.pc.ondatachannel?.({ channel: { label: 'transcription' } });
+    expect(h.handed).toEqual(['transcription']);
+    expect(h.created).toEqual([]);
+    h.peer.close();
+    expect(h.pc.ondatachannel).toBeNull();
+  });
+});
+
+describe('configuration et codecs de la négociation (#11319)', () => {
+  const CAPABILITIES: Readonly<Record<string, readonly { readonly mimeType: string; readonly clockRate: number }[]>> = {
+    audio: [{ mimeType: 'audio/red', clockRate: 48000 }, { mimeType: 'audio/opus', clockRate: 48000 }, { mimeType: 'audio/G722', clockRate: 8000 }],
+    video: [
+      { mimeType: 'video/VP9', clockRate: 90000 },
+      { mimeType: 'video/rtx', clockRate: 90000 },
+      { mimeType: 'video/AV1', clockRate: 90000 },
+      { mimeType: 'video/VP8', clockRate: 90000 },
+      { mimeType: 'video/H264', clockRate: 90000 },
+      { mimeType: 'video/ulpfec', clockRate: 90000 },
+    ],
+  };
+
+  const withCodecCapabilities = async <T>(run: () => Promise<T>): Promise<T> => {
+    const globals = globalThis as unknown as { RTCRtpReceiver?: unknown };
+    const previous = globals.RTCRtpReceiver;
+    globals.RTCRtpReceiver = { getCapabilities: (kind: string) => ({ codecs: CAPABILITIES[kind] ?? [], headerExtensions: [] }) };
+    try {
+      return await run();
+    } finally {
+      globals.RTCRtpReceiver = previous;
+    }
+  };
+
+  test('la connexion est en max-bundle, rtcp-mux exigé, pool ICE de 4, et garde les serveurs ICE', () => {
+    const servers = [{ urls: 'turn:relay.example.test:3478', username: 'u', credential: 'c' }];
+    expect(peerConfiguration(servers)).toEqual({ iceServers: servers, bundlePolicy: 'max-bundle', rtcpMuxPolicy: 'require', iceCandidatePoolSize: 4 });
+  });
+
+  test('createPeerLink crée sa connexion avec cette configuration', () => {
+    const seen: RTCConfiguration[] = [];
+    const fake = fakeConnection();
+    createPeerLink({
+      localUserId: 'u-a',
+      remoteUserId: 'u-b',
+      iceServers: [],
+      localStream: { getAudioTracks: () => [], getVideoTracks: () => [] } as unknown as MediaStream,
+      send: () => undefined,
+      onRemoteStream: () => undefined,
+      onState: () => undefined,
+      createConnection: (config) => {
+        seen.push(config);
+        return fake.pc as unknown as RTCPeerConnection;
+      },
+      createStream: () => ({ getTracks: () => [], addTrack: () => undefined }) as unknown as MediaStream,
+    });
+    expect(seen).toEqual([{ iceServers: [], bundlePolicy: 'max-bundle', rtcpMuxPolicy: 'require', iceCandidatePoolSize: 4 }]);
+  });
+
+  test('l’ordre vidéo garde H264 puis VP8 puis VP9, suivis du RTX, et exclut AV1, ULPFEC et RED', () => {
+    expect(orderVideoCodecs(CAPABILITIES.video ?? []).map((codec) => codec.mimeType)).toEqual(['video/H264', 'video/VP8', 'video/VP9', 'video/rtx']);
+  });
+
+  test('sans capacité vidéo annoncée, l’ordre vidéo est vide', () => {
+    expect(orderVideoCodecs([])).toEqual([]);
+  });
+
+  test('l’offre applique H264 > VP8 > VP9 au transceiver vidéo, et l’audio garde Opus puis RED', async () => {
+    const { peer, fake } = link({ video: true });
+    await withCodecCapabilities(() => peer.offer());
+    expect(fake.calls).toContain('codecs:video:video/H264,video/VP8,video/VP9,video/rtx');
+    expect(fake.calls).toContain('codecs:audio:audio/opus,audio/red,audio/G722');
+  });
+
+  test('un navigateur qui n’annonce aucune capacité garde la négociation par défaut', async () => {
+    const { peer, fake } = link({ video: true });
+    await peer.offer();
+    expect(fake.calls).toContain('setLocal:offer');
+    expect(fake.calls.some((call) => call.startsWith('codecs:'))).toBe(false);
+  });
+
+  test('un navigateur sans setCodecPreferences (Firefox avant 128) offre quand même, sans erreur', async () => {
+    const { peer, fake, sent } = link({ video: true, codecPreferences: false });
+    await withCodecCapabilities(() => peer.offer());
+    expect(fake.calls).toContain('setLocal:offer');
+    expect(sent.map((signal) => signal.type)).toEqual(['offer']);
+  });
+
+  test('le côté qui répond applique H264 > VP8 > VP9 aux lignes vidéo de l’offre reçue', async () => {
+    const { peer, fake } = link({ video: true, local: 'u-b', remote: 'u-a' });
+    fake.pc.addTransceiver('audio', { direction: 'recvonly' });
+    fake.pc.addTransceiver('video', { direction: 'recvonly' });
+    await withCodecCapabilities(() => peer.receiveDescription({ type: 'offer', sdp: 'remote-offer' }, 1));
+    expect(fake.calls).toContain('codecs:video:video/H264,video/VP8,video/VP9,video/rtx');
+    expect(fake.calls.indexOf('codecs:video:video/H264,video/VP8,video/VP9,video/rtx')).toBeLessThan(fake.calls.indexOf('setLocal:answer'));
+  });
+
+  test('une caméra allumée après une offre sans vidéo garde H264 d’abord sur sa nouvelle ligne', async () => {
+    const { peer, fake } = link({ local: 'u-b', remote: 'u-a' });
+    fake.pc.addTransceiver('audio', { direction: 'recvonly' });
+    await peer.receiveDescription({ type: 'offer', sdp: 'audio-only-offer' }, 1);
+    await withCodecCapabilities(() => peer.setVideoTrack({ kind: 'video' } as unknown as MediaStreamTrack));
+    expect(fake.calls).toContain('add:video:sendrecv');
+    expect(fake.calls).toContain('codecs:video:video/H264,video/VP8,video/VP9,video/rtx');
+  });
+});

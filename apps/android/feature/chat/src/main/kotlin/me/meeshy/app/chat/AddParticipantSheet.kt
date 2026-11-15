@@ -29,13 +29,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.chat.R
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.sdk.model.UserPresence
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -47,7 +55,7 @@ import me.meeshy.ui.theme.MeeshyTheme
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddParticipantSheet(
+internal fun AddParticipantSheet(
     conversationId: String,
     existingMemberIds: Set<String>,
     accentColor: Color,
@@ -56,6 +64,17 @@ fun AddParticipantSheet(
     viewModel: AddParticipantViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val haptics = LocalHapticFeedback.current
+
+    val searchingLabel = stringResource(R.string.add_participant_searching_a11y)
+
+    LaunchedEffect(viewModel) {
+        viewModel.haptics.collect { kind ->
+            haptics.performHapticFeedback(
+                if (kind == FeedbackHaptic.SUCCESS) HapticFeedbackType.LongPress else HapticFeedbackType.TextHandleMove,
+            )
+        }
+    }
 
     LaunchedEffect(conversationId, existingMemberIds) {
         viewModel.load(conversationId, existingMemberIds)
@@ -103,15 +122,16 @@ fun AddParticipantSheet(
 
             when {
                 state.isSearching -> Box(
-                    modifier = Modifier.fillMaxWidth().padding(MeeshySpacing.lg),
+                    modifier = Modifier.fillMaxWidth().padding(MeeshySpacing.lg).semantics {
+                        liveRegion = LiveRegionMode.Polite
+                        contentDescription = searchingLabel
+                    },
                     contentAlignment = Alignment.Center,
                 ) {
                     CircularProgressIndicator(color = accentColor, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
                 }
 
-                state.query.trim().length < 2 -> AddParticipantMessage(
-                    stringResource(R.string.add_participant_prompt),
-                )
+                state.query.trim().length < 2 -> Unit
 
                 state.results.isEmpty() -> AddParticipantMessage(
                     stringResource(R.string.add_participant_no_results),
@@ -128,9 +148,11 @@ fun AddParticipantSheet(
                 }
             }
 
-            if (state.errorMessage != null) {
+            if (state.addFailed || state.searchFailed) {
                 Text(
-                    text = state.errorMessage.orEmpty(),
+                    text = stringResource(
+                        if (state.addFailed) R.string.add_participant_failed else R.string.add_participant_search_failed,
+                    ),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
@@ -146,6 +168,7 @@ private fun AddParticipantRowView(
     accentColor: Color,
     onAdd: () -> Unit,
 ) {
+    val addLabel = stringResource(R.string.add_participant_add_a11y, row.name)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -153,7 +176,7 @@ private fun AddParticipantRowView(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
-        MeeshyAvatar(name = row.name, size = 40.dp, containerColor = accentColor)
+        MeeshyAvatar(name = row.name, size = 40.dp, containerColor = accentColor, imageUrl = row.avatarUrl, presence = rememberPresence(row.id, UserPresence.served(row.isOnline, null)))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -183,7 +206,10 @@ private fun AddParticipantRowView(
                 strokeWidth = 2.dp,
                 modifier = Modifier.size(20.dp),
             )
-            else -> Button(onClick = onAdd) {
+            else -> Button(
+                onClick = onAdd,
+                modifier = Modifier.semantics { contentDescription = addLabel },
+            ) {
                 Text(stringResource(R.string.add_participant_add_button))
             }
         }

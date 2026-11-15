@@ -572,11 +572,12 @@ class TranslationPipelineService:
             logger.info(f"   ├─ speaker_count > 1: {speaker_count is not None and speaker_count > 1}")
             logger.info(f"   └─ has segments: {segments_count > 0}")
 
-            is_multi_speaker = (
-                speaker_count is not None and
-                speaker_count > 1 and
-                result.transcription_segments and
-                len(result.transcription_segments) > 0
+            # #17309 — un modèle de voix par locuteur : seulement si la passerelle autorise le clonage.
+            from .audio_pipeline.voice_cloning_guards import takes_multi_speaker_path
+            is_multi_speaker = takes_multi_speaker_path(
+                speaker_count=speaker_count,
+                segments=result.transcription_segments,
+                generate_voice_clone=job.generate_voice_clone,
             )
 
             logger.info(
@@ -607,7 +608,8 @@ class TranslationPipelineService:
                         sender_speaker_id=getattr(transcription, 'sender_speaker_id', None),
                         model_type="medium",
                         on_translation_ready=None,
-                        diarization_speakers=getattr(transcription, 'diarization_speakers', None)
+                        diarization_speakers=getattr(transcription, 'diarization_speakers', None),
+                        generate_voice_clone=job.generate_voice_clone
                     )
 
                     logger.info(f"[PIPELINE] ✅ Multi-speaker: {len(translations)} langues traduites")

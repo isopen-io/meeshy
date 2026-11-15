@@ -79,6 +79,7 @@ jest.mock('../../../../middleware/rate-limiter', () => ({
 }));
 
 const mockWithMutationLog = jest.fn<any>().mockImplementation(({ op }: any) => op());
+const mockWithMutationVerdict = jest.fn<any>().mockImplementation(async ({ op }: any) => ({ result: await op(), replayed: false }));
 
 jest.mock('../../../../utils/withMutationLog', () => ({
   // Le module réel est ÉTALÉ d'abord : `MutationResultGone` est une CLASSE
@@ -88,13 +89,31 @@ jest.mock('../../../../utils/withMutationLog', () => ({
   // qui se déguise en 500 sur des chemins d'erreur sans rapport.
   ...(jest.requireActual('../../../../utils/withMutationLog') as object),
   withMutationLog: (...args: any[]) => mockWithMutationLog(...args),
+  withMutationVerdict: (...args: any[]) => mockWithMutationVerdict(...args),
 }));
 
 jest.mock('../../../../utils/sanitize.js', () => ({
   SecuritySanitizer: { sanitizeText: jest.fn((t: string) => t) },
 }));
 
-// ─── Import after mocks ───────────────────────────────────────────────────────
+// #4147 — POST /posts / from-attachment / repost tirent leur plafond de
+// création d'un compteur PARTAGÉ qui lit Redis directement, fail-closed
+// (createSharedWriteRateLimitPreHandler, routes/posts/socialRateLimit.ts) :
+// sans ce double, `getCacheStore().getNativeClient()` rend `null` en test
+// (aucun REDIS_URL) et CHAQUE écriture de ce type serait refusée avant
+// d'atteindre ce que ce fichier vérifie — détail complet dans core.test.ts,
+// premier fichier de la série à le poser. `incr` répond toujours « premier
+// appel » : ce fichier ne teste PAS le plafond (son témoin dédié vit dans
+// social-write-rate-limit.test.ts) — juste un Redis DISPONIBLE.
+jest.mock('../../../../services/CacheStore', () => ({
+  getCacheStore: () => ({
+    getNativeClient: () => ({
+      incr: async () => 1,
+      pexpire: async () => 1,
+      pttl: async () => -1,
+    }),
+  }),
+}));// ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerCoreRoutes } from '../../../../routes/posts/core';
 
@@ -110,7 +129,7 @@ function makeAuth(authenticated: boolean) {
     if (authenticated) {
       (req as any).authContext = {
         isAuthenticated: true,
-        registeredUser: { id: USER_ID, role: 'USER' },
+        registeredUser: { emailVerifiedAt: new Date(), id: USER_ID, role: 'USER' },
       };
     } else {
       (req as any).authContext = null;
@@ -141,6 +160,7 @@ async function buildApp(opts: {
   // (services/posts/postMentions.ts) : sans délégué, elle s'abstient de tout
   // écrire — ce qui est le comportement voulu, mais pas ce que ces cas testent.
   const prisma = {
+    post: { findFirst: async (args?: { select?: Record<string, boolean> }) => (Object.keys(args?.select ?? {}).join() === 'authorId,type' ? { authorId: USER_ID, type: 'POST' } : null) },
     postMention: {
       findMany: (...args: any[]) => mockPostMentionFindMany(...args),
       deleteMany: (...args: any[]) => mockPostMentionDeleteMany(...args),
@@ -179,15 +199,13 @@ describe('POST /posts — invalid body triggers 400', () => {
 
 // ─── POST /posts — onDuplicate callback ──────────────────────────────────────
 
-describe('POST /posts — withMutationLog calls onDuplicate', () => {
+describe('POST /posts — the mutation verdict replays through onDuplicate', () => {
   let app: FastifyInstance;
   beforeAll(async () => { ({ app } = await buildApp()); });
   afterAll(async () => { await app.close(); });
 
   it('returns 201 when onDuplicate replays existing post', async () => {
-    mockWithMutationLog.mockImplementationOnce(async ({ onDuplicate }: any) => {
-      return onDuplicate(POST_ID);
-    });
+    mockWithMutationVerdict.mockImplementationOnce(async ({ onDuplicate }: any) => ({ result: await onDuplicate(POST_ID), replayed: true }));
     const res = await app.inject({
       method: 'POST', url: '/posts',
       payload: { content: 'Hello world', type: 'POST' },

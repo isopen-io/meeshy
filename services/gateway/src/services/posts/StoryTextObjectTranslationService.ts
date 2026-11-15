@@ -14,12 +14,15 @@ import type { StoryTranslationUpdatedEventData } from '@meeshy/shared/types/sock
 import type { PostTranslationUpdatedEventData } from '@meeshy/shared/types/post';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { getCommunityCoMemberIds } from './communityVisibility';
+import { communityPostAudienceIds } from './communityVisibility';
+import { circleAudienceIds } from './postAudience';
+import { withoutBlockedRecipients } from '../../utils/blocking';
 import {
   composeStoryContentForLanguage,
   isContentDerivedFromTextObjects,
 } from './storyContentComposition';
-import { isCanvasV3, storyTranslatableTexts, translationSetPath } from './storyEffectsV3';
+import { isCanvasV3OrNewer, storyTranslatableTexts, translationSetPath } from './storyEffectsV3';
+import { servedTextIndex, textsWithoutCredits } from './repostCreditChips';
 
 const log = enhancedLogger.child({ module: 'StoryTextObjectTranslationService' });
 
@@ -69,6 +72,7 @@ export class StoryTextObjectTranslationService {
           authorId: true,
           visibility: true,
           visibilityUserIds: true,
+          communityId: true,
           content: true,
           storyEffects: true,
         },
@@ -92,7 +96,12 @@ export class StoryTextObjectTranslationService {
       // (le contrat du trigger avec le translator) ; la persistance, elle,
       // cible l'objet par SON ID dans sa scène — une scène contient aussi des
       // objets non-texte, l'index plat n'y est pas un index d'objet.
-      const docIsV3 = isCanvasV3(post.storyEffects);
+      // #4774 — le sens LECTURE : un document d'un rang SUPERIEUR range ses
+      // textes comme un v3, donc il se persiste comme un v3. Sous le predicat
+      // STRICT, il repartait par le chemin v1 et GRAVAIT
+      // `storyEffects.textObjects.$i.translations.$lang` dans un document qui
+      // n'a pas de `textObjects` — une corruption, pas un affichage manquant.
+      const docIsV3 = isCanvasV3OrNewer(post.storyEffects);
       const targetObjectId = docIsV3
         ? storyTranslatableTexts(post.storyEffects)?.[textObjectIndex]?.id
         : undefined;
@@ -147,19 +156,30 @@ export class StoryTextObjectTranslationService {
 
       log.info('StoryTextObject translations persisted — broadcasting', { postId, textObjectIndex });
 
-      const eventData: StoryTranslationUpdatedEventData = {
-        postId,
-        textObjectIndex,
-        translations,
-      };
+      // #10498, #10524 — l'index diffusé est celui du canvas SERVI, dont la
+      // puce de crédit est retirée.
+      const servedIndex = servedTextIndex({
+        storyEffects: post.storyEffects,
+        textIndex: textObjectIndex,
+      });
+      const eventData: StoryTranslationUpdatedEventData | null = servedIndex === null
+        ? null
+        : { postId, textObjectIndex: servedIndex, translations };
 
       // Broadcast to both the author's feed room (so they see translations land
       // in their own composer/preview) AND to viewers who can see the post.
       // Previously only the author was notified, so live viewers stayed on the
       // untranslated text until they refreshed.
-      const recipientIds = await this.resolveBroadcastRecipients(post.authorId, post.visibility, post.visibilityUserIds);
-      for (const userId of recipientIds) {
-        this.io.to(ROOMS.feed(userId)).emit(SERVER_EVENTS.STORY_TRANSLATION_UPDATED, eventData);
+      // #17209 — le même filtre de blocage que la diffusion temps réel des publications.
+      const recipientIds = await withoutBlockedRecipients(
+        this.prisma,
+        post.authorId,
+        await this.resolveBroadcastRecipients(post.authorId, post.visibility, post.visibilityUserIds, post.communityId ?? null),
+      );
+      if (eventData) {
+        for (const userId of recipientIds) {
+          this.io.to(ROOMS.feed(userId)).emit(SERVER_EVENTS.STORY_TRANSLATION_UPDATED, eventData);
+        }
       }
 
       // L'index recomposé doit remonter par le MÊME canal que la légende
@@ -214,10 +234,14 @@ export class StoryTextObjectTranslationService {
       translations: { ...((target.translations ?? {}) as Record<string, unknown>), ...translations },
     };
 
+    // #10523 — une story d'avant #4502 a pu ranger la puce de crédit dans son
+    // index : l'assemblage ne la reprend pas.
+    const assembled = textsWithoutCredits(storyEffects, textObjects);
+
     const fields: Record<string, Prisma.InputJsonValue> = {};
     const createdAt = new Date().toISOString();
     for (const lang of languages) {
-      const composed = composeStoryContentForLanguage(textObjects, lang);
+      const composed = composeStoryContentForLanguage(assembled, lang);
       if (!composed) continue;
       fields[`translations.${lang}`] = {
         text: composed,
@@ -237,6 +261,7 @@ export class StoryTextObjectTranslationService {
     authorId: string,
     visibility: string,
     visibilityUserIds: string[],
+    communityId: string | null,
   ): Promise<string[]> {
     const recipients = new Set<string>([authorId]);
     if (visibility === 'ONLY') {
@@ -245,7 +270,9 @@ export class StoryTextObjectTranslationService {
     }
 
     if (visibility === 'COMMUNITY') {
-      for (const id of await getCommunityCoMemberIds(this.prisma, authorId)) recipients.add(id);
+      // Posée dans une communauté, la story ne se traduit en direct que pour ses
+      // lecteurs (#17178), jamais pour les co-membres de l'auteur ailleurs.
+      for (const id of await communityPostAudienceIds(this.prisma, { authorId, communityId })) recipients.add(id);
       return [...recipients];
     }
 
@@ -253,6 +280,14 @@ export class StoryTextObjectTranslationService {
     // (`case 'PRIVATE': return []`). Without this guard the story falls through to the friend
     // fan-out below and leaks the translated overlay text to every friend of the author.
     if (visibility === 'PRIVATE') {
+      return [...recipients];
+    }
+
+    // Un cercle (Connaissances, Proches, Sang — #13931) ne se replie JAMAIS sur
+    // « tous les amis » : seuls les comptes du niveau voulu reçoivent la traduction.
+    const circle = await circleAudienceIds(this.prisma, authorId, visibility);
+    if (circle) {
+      for (const id of circle) recipients.add(id);
       return [...recipients];
     }
 

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_file_download">تنزيل</string>
+    <string name="bubble_file_downloading">جارٍ التنزيل %1$d %%</string>
+    <string name="bubble_file_downloading_unknown">جارٍ التنزيل…</string>
+    <string name="bubble_file_ready">جاهز للفتح</string>
+    <string name="bubble_file_download_failed">فشل التنزيل — المس لإعادة المحاولة</string>
+    <string name="bubble_piece_sealed">مرفق مشفّر</string>
+    <string name="bubble_piece_sealed_a11y">مرفق مشفّر من طرف إلى طرف — لا يُفتح على هذا الجهاز</string>
+    <string name="bubble_file_cancel">إلغاء التنزيل</string>
+</resources>

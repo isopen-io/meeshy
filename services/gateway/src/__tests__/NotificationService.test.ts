@@ -162,7 +162,8 @@ describe('NotificationService - Structure Groupée', () => {
       expect(notificationData.userId).toBe('user_recipient');
       expect(notificationData.type).toBe('new_message');
       expect(notificationData.priority).toBe('normal');
-      expect(notificationData.content).toBe('Salut! Comment vas-tu?');
+      expect(notificationData.content).toBe('Petit message texte');
+      expect(notificationData.content).not.toContain('Salut');
 
       // Le titre n'est plus « absent » mais explicitement `null` : le service
       // persiste désormais `title`/`subtitle` comme source unique pour le push
@@ -197,7 +198,7 @@ describe('NotificationService - Structure Groupée', () => {
       // `attachments` : la clé est omise plutôt que posée à vide.
       expect(notificationData.metadata).toEqual({
         action: 'view_message',
-        messagePreview: 'Salut! Comment vas-tu?',
+        messagePreview: 'Petit message texte',
       });
 
       // STATE
@@ -274,9 +275,9 @@ describe('NotificationService - Structure Groupée', () => {
       // l'action que le tap doit déclencher côté client.
       expect(createCall.data.metadata).toEqual({
         action: 'view_message',
-        messagePreview: 'Merci @alice pour ton aide!',
+        messagePreview: 'Message texte',
       });
-      expect(createCall.data.content).toContain('Merci @alice');
+      expect(createCall.data.content).toBe('Message texte');
     });
   });
 
@@ -320,7 +321,7 @@ describe('NotificationService - Structure Groupée', () => {
       // une réaction cite le message d'autrui, elle n'en est pas l'aperçu).
       expect(createCall.data.metadata).toEqual({
         action: 'view_message',
-        messageContent: 'Super idée!',
+        messageContent: 'Petit message texte',
         reactionEmoji: '❤️',
       });
     });
@@ -375,6 +376,26 @@ describe('NotificationService - Structure Groupée', () => {
     });
   });
 
+  describe('missed_call sans lieu lisible (#9115)', () => {
+    it('ne nomme aucune conversation et n’en lit rien quand l’appelant n’en donne aucune', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({ id: 'user_caller', username: 'eve' });
+      mockPrisma.conversation.findUnique.mockClear();
+      mockPrisma.notification.create.mockImplementation((data) => ({ id: 'notif_call', ...data.data }));
+
+      await service.createMissedCallNotification({
+        recipientUserId: 'user_recipient',
+        callerId: 'user_caller',
+        conversationId: null,
+        callSessionId: 'call_999',
+        callType: 'audio',
+      });
+
+      const createCall = mockPrisma.notification.create.mock.calls.at(-1)[0];
+      expect(createCall.data.context).toEqual({ callSessionId: 'call_999' });
+      expect(mockPrisma.conversation.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Structure Groupée - friend_request', () => {
     it('devrait créer une notification de demande d\'ami', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
@@ -388,7 +409,7 @@ describe('NotificationService - Structure Groupée', () => {
       }));
 
       const result = await service.createFriendRequestNotification({
-        userId: 'user_recipient',
+        recipientUserId: 'user_recipient',
         requesterId: 'user_requester',
         friendRequestId: 'req_789',
       });
@@ -586,11 +607,14 @@ describe('NotificationService - Structure Groupée', () => {
         readAt: new Date(),
       });
 
-      const result = await service.markAsRead('notif_123');
+      // `markAsRead` a gagné un second argument : la ligne DOIT appartenir à
+      // l'appelant. Le témoin datait d'avant cette garde.
+      const result = await service.markAsRead('notif_123', 'user_123');
 
       expect(result).toBeDefined();
+      // Le `where` porte l'APPELANT : c'est là que vit la garde de propriété.
       expect(mockPrisma.notification.update).toHaveBeenCalledWith({
-        where: { id: 'notif_123' },
+        where: { id: 'notif_123', userId: 'user_123' },
         data: {
           isRead: true,
           readAt: expect.any(Date),
@@ -626,31 +650,48 @@ describe('NotificationService - Structure Groupée', () => {
       const count = await service.getUnreadCount('user_123');
 
       expect(count).toBe(12);
+      // Le compte ne porte QUE les notifications encore visibles : une ligne
+      // échue ne compte plus. Ce filtre est venu après le témoin.
       expect(mockPrisma.notification.count).toHaveBeenCalledWith({
-        where: {
+        where: expect.objectContaining({
           userId: 'user_123',
           isRead: false,
-        },
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: expect.any(Date) } },
+          ],
+        }),
       });
     });
   });
 
   describe('deleteNotification', () => {
     it('devrait supprimer une notification', async () => {
+      // La suppression est gardée par une RELECTURE portée par `userId` : si
+      // elle ne rend rien, le `delete` ne part pas.
+      mockPrisma.notification.findUnique.mockResolvedValue({
+        userId: 'user_123', type: 'new_message', context: {}, delivery: {},
+      });
       mockPrisma.notification.delete.mockResolvedValue({ id: 'notif_123' });
 
-      const result = await service.deleteNotification('notif_123');
+      const result = await service.deleteNotification('notif_123', 'user_123');
 
       expect(result).toBe(true);
+      expect(mockPrisma.notification.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'notif_123', userId: 'user_123' } }),
+      );
       expect(mockPrisma.notification.delete).toHaveBeenCalledWith({
         where: { id: 'notif_123' },
       });
     });
 
     it('devrait retourner false en cas d\'erreur', async () => {
+      mockPrisma.notification.findUnique.mockResolvedValue({
+        userId: 'user_123', type: 'new_message', context: {}, delivery: {},
+      });
       mockPrisma.notification.delete.mockRejectedValue(new Error('Not found'));
 
-      const result = await service.deleteNotification('notif_invalid');
+      const result = await service.deleteNotification('notif_invalid', 'user_123');
 
       expect(result).toBe(false);
     });
@@ -681,11 +722,11 @@ describe('NotificationService - Structure Groupée', () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
 
       const result = await service.createMessageNotification({
-        userId: 'user_recipient',
+        recipientUserId: 'user_recipient',
         senderId: 'user_invalid',
         messageId: 'msg_123',
         conversationId: 'conv_123',
-        preview: 'Test',
+        messagePreview: 'Test',
       });
 
       expect(result).toBeNull();
@@ -703,11 +744,11 @@ describe('NotificationService - Structure Groupée', () => {
       mockPrisma.notification.create.mockRejectedValue(new Error('DB Error'));
 
       const result = await service.createMessageNotification({
-        userId: 'user_recipient',
+        recipientUserId: 'user_recipient',
         senderId: 'user_sender',
         messageId: 'msg_123',
         conversationId: 'conv_123',
-        preview: 'Test',
+        messagePreview: 'Test',
       });
 
       expect(result).toBeNull();

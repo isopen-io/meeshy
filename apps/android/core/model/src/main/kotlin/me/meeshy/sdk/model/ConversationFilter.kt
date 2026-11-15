@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model
 
+import me.meeshy.sdk.model.conversationlist.ConversationFilterComposition
+
 /**
  * Conversation list filter — port of `MeeshyConversationFilter`
  * (packages/MeeshySDK/Sources/MeeshySDK/Models/CoreModels.swift) and the
@@ -36,29 +38,46 @@ object ConversationFilters {
         filter: ConversationFilter,
         searchText: String,
         currentUserId: String? = null,
+    ): List<ApiConversation> = apply(conversations, setOf(filter), searchText, currentUserId)
+
+    /** Sélection composée : types en OU, états en ET, entre familles ET ; ensemble vide = Tous. */
+    fun apply(
+        conversations: List<ApiConversation>,
+        filters: Set<ConversationFilter>,
+        searchText: String,
+        currentUserId: String? = null,
     ): List<ApiConversation> {
         val query = searchText.trim()
-        return conversations.filter { c -> c.matches(filter) && c.matchesSearch(query, currentUserId) }
+        return conversations.filter { c -> c.matches(filters) && c.matchesSearch(query, currentUserId) }
     }
 
-    private fun ApiConversation.matches(filter: ConversationFilter): Boolean {
+    private fun ApiConversation.matches(filters: Set<ConversationFilter>): Boolean {
         val prefs = resolvedPreferences
         if (prefs?.deletedForUserAt != null) return false
-        val archived = prefs?.isArchived == true
-        val active = isActive ?: true
-        val archiveOk = if (filter == ConversationFilter.ARCHIVED) archived else !archived
-        return when (filter) {
-            ConversationFilter.ALL -> active && archiveOk
-            ConversationFilter.UNREAD -> unreadCount > 0 && archiveOk
-            ConversationFilter.PERSONAL -> type == "direct" && active && archiveOk
-            ConversationFilter.PRIVATE -> type == "group" && active && archiveOk
-            ConversationFilter.OPEN -> (type == "public" || type == "community") && active && archiveOk
-            ConversationFilter.GLOBAL -> type == "global" && active && archiveOk
-            ConversationFilter.CHANNELS -> isAnnouncementChannel && active && archiveOk
-            ConversationFilter.FAVORITES -> !prefs?.reaction.isNullOrBlank() && active && archiveOk
-            ConversationFilter.ARCHIVED -> archived
-        }
+        val wantsArchived = ConversationFilterComposition.includesArchived(filters)
+        if (wantsArchived != (prefs?.isArchived == true)) return false
+        if (!wantsArchived && isActive == false) return false
+        val types = ConversationFilterComposition.selectedTypes(filters)
+        val typeOk = types.isEmpty() || types.any { matchesType(it) }
+        val stateOk = ConversationFilterComposition.selectedStates(filters).all { matchesState(it, prefs) }
+        return typeOk && stateOk
     }
+
+    private fun ApiConversation.matchesType(type: ConversationFilter): Boolean = when (type) {
+        ConversationFilter.PERSONAL -> this.type == "direct"
+        ConversationFilter.PRIVATE -> this.type == "group"
+        ConversationFilter.OPEN -> this.type == "public" || this.type == "community"
+        ConversationFilter.GLOBAL -> this.type == "global"
+        ConversationFilter.CHANNELS -> isAnnouncementChannel
+        else -> false
+    }
+
+    private fun ApiConversation.matchesState(state: ConversationFilter, prefs: ApiConversationPreferences?): Boolean =
+        when (state) {
+            ConversationFilter.UNREAD -> unreadCount > 0
+            ConversationFilter.FAVORITES -> !prefs?.reaction.isNullOrBlank()
+            else -> true
+        }
 
     private fun ApiConversation.matchesSearch(query: String, currentUserId: String?): Boolean {
         if (query.isEmpty()) return true

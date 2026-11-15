@@ -1,0 +1,342 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+
+import { appQueryClient } from '@/lib/api/query-client';
+import { typeInto } from '@/test-support/act-mount';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+
+import ConversationNewScreen from './conversation-new';
+
+/**
+ * **NOUVELLE CONVERSATION — LES DEUX MODES** (#6706).
+ *
+ * Ce que les témoins de bibliothèque ne peuvent pas prouver
+ * (`lib/conversation-new/group.test.ts` tient la validation et les issues) :
+ * qu'un tap fait DEUX choses différentes selon le mode, que la sélection se
+ * voit et s'annonce, et qu'un refus se pose sous le champ qu'il vise SANS
+ * qu'aucune requête ne parte.
+ *
+ * **Tout ce qui est mesuré ici précède le réseau.** `validateGroupDraft` court
+ * avant l'appel : un titre vide ou une liste vide se refusent sans sortir. La
+ * création RÉUSSIE n'est pas jouée ici — sous `bun test` la source est
+ * `fixtures`, et `createGroupConversation` y refuse délibérément (501) : un
+ * groupe de démonstration n'aurait aucun fil où mener.
+ *
+ * Le champ de recherche garde son nom accessible EXACT : le gate navigateur
+ * (`scripts/check-list-actions.mjs:767`) le cherche par
+ * `input[aria-label="Rechercher un contact"]`, et le renommer casserait un gate
+ * que ce fichier ne joue pas.
+ */
+
+const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+beforeAll(() => {
+  ensureHappyDomRegistered({ url: 'http://localhost/conversations/new' });
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+});
+
+afterAll(async () => {
+  delete globals.IS_REACT_ACT_ENVIRONMENT;
+  await releaseHappyDomIfRegistered();
+});
+
+let mounted: { readonly container: HTMLDivElement; readonly root: Root } | null = null;
+
+afterEach(() => {
+  act(() => mounted?.root.unmount());
+  mounted?.container.remove();
+  mounted = null;
+});
+
+const settle = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+/**
+ * LE CLIENT DE REQUÊTES EST FOURNI PAR LE CONTEXTE, comme dans l'application
+ * (`main.tsx`) — l'écran lit `useQueryClient()`, une recherche en `useQuery` et
+ * deux `useMutation`, dont aucun ne reçoit le client en argument. Monté nu, il
+ * lève « No QueryClient set » avant d'avoir rendu une seule ligne.
+ *
+ * C'est l'instance PARTAGÉE (`appQueryClient`) et non une instance neuve : la
+ * liste des amis vient du cache persisté, et c'est précisément ce que #6705
+ * promet — les amis peints dès l'ouverture, sans attente.
+ */
+async function mount(): Promise<HTMLDivElement> {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  mounted = { container, root };
+  await act(async () => {
+    root.render(
+      <QueryClientProvider client={appQueryClient}>
+        <ConversationNewScreen />
+      </QueryClientProvider>,
+    );
+  });
+  await settle();
+  return container;
+}
+
+async function click(element: Element | null | undefined) {
+  await act(async () => {
+    (element as HTMLElement | null | undefined)?.click();
+  });
+  await settle();
+}
+
+const groupToggle = (el: HTMLElement) => el.querySelector<HTMLButtonElement>('[data-new-group-toggle]');
+const composer = (el: HTMLElement) => el.querySelector<HTMLFormElement>('[data-group-composer]');
+const titleField = (el: HTMLElement) => el.querySelector<HTMLInputElement>('[data-group-title]');
+const submit = (el: HTMLElement) => el.querySelector<HTMLButtonElement>('[data-group-submit]');
+const chosen = (el: HTMLElement) => el.querySelector('[data-group-chosen]');
+const people = (el: HTMLElement) => [...el.querySelectorAll<HTMLButtonElement>('[data-person]')];
+const firstPerson = (el: HTMLElement) => people(el)[0] ?? null;
+const text = (el: Element | null | undefined) => (el?.textContent ?? '').replace(/\s+/gu, ' ');
+
+async function submitGroup(el: HTMLElement) {
+  const form = composer(el);
+  if (form === null) throw new Error('composeur de groupe absent');
+  await act(async () => {
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  });
+  await settle();
+}
+
+describe('l’écran s’ouvre en DIRECT', () => {
+  test('le champ de recherche garde le nom que le gate navigateur cherche', async () => {
+    const el = await mount();
+    expect(el.querySelector('input[aria-label="Rechercher un contact"]')).not.toBeNull();
+  });
+
+  test('aucun composeur de groupe n’est offert : l’interrupteur « Nouveau groupe » est éteint, plus de sélecteur Direct/Groupe (#14646)', async () => {
+    const el = await mount();
+    expect(composer(el)).toBeNull();
+    expect(groupToggle(el)?.getAttribute('role')).toBe('switch');
+    expect(groupToggle(el)?.getAttribute('aria-checked')).toBe('false');
+    expect(text(groupToggle(el))).toContain('Nouveau groupe');
+    expect(el.querySelector('[data-new-mode]')).toBeNull();
+    expect(text(el.querySelector('h1'))).toBe('Nouvelle conversation');
+  });
+
+  /* En direct, une rangée OUVRE une conversation : elle ne se déclare pas
+     cochable, sans quoi un lecteur d'écran annoncerait un état qui n'existe pas. */
+  test('la feuille se ferme par (X), plus par « < » (#14646)', async () => {
+    const el = await mount();
+    const close = el.querySelector<HTMLAnchorElement>('[data-new-close]');
+    expect(close?.getAttribute('aria-label')).toBe('Fermer');
+    expect(close?.getAttribute('href')).toBe('/chats');
+    expect(close?.querySelector('svg')).not.toBeNull();
+  });
+
+  test('une rangée ne s’annonce PAS cochable', async () => {
+    const el = await mount();
+    expect(firstPerson(el)?.hasAttribute('aria-pressed')).toBe(false);
+  });
+});
+
+/**
+ * **LE CHIFFREMENT SE CHOISIT ICI** (décision du 2026-11-01) — et seulement
+ * ici : les autres créations n'envoient aucun mode. Sous `bun test` la source
+ * est `fixtures` : aucun rôle n'est servi, l'écran offre donc ce qu'il offre à
+ * un utilisateur ordinaire (ce qu'un ANALYST voit est tenu par
+ * `creation-encryption-picker.test.tsx`, ce qui part par `api/conversations.test.ts`).
+ */
+describe('le choix du chiffrement', () => {
+  const encryption = (el: HTMLElement) => el.querySelector('[data-creation-encryption]');
+  const encryptionRadio = (el: HTMLElement, mode: string) => el.querySelector<HTMLInputElement>(`[data-creation-encryption] input[value="${mode}"]`);
+  const waitForEncryption = async (el: HTMLElement) => {
+    for (let tries = 0; tries < 50 && encryption(el) === null; tries += 1) await settle();
+  };
+
+  test('en direct, AVANT les personnes : Serveur et Hybride, Serveur coché', async () => {
+    const el = await mount();
+    await waitForEncryption(el);
+    expect(encryption(el)).not.toBeNull();
+    expect([...el.querySelectorAll<HTMLInputElement>('[data-creation-encryption] input')].map((input) => input.value)).toEqual(['server', 'hybrid']);
+    expect(encryptionRadio(el, 'server')?.checked).toBe(true);
+    const person = firstPerson(el);
+    const position = person === null ? 0 : (encryption(el)?.compareDocumentPosition(person) ?? 0);
+    expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  test('le choix fait en direct survit au passage en groupe', async () => {
+    const el = await mount();
+    await waitForEncryption(el);
+    await click(encryptionRadio(el, 'hybrid'));
+    await click(groupToggle(el));
+    await waitForEncryption(el);
+    expect(encryptionRadio(el, 'hybrid')?.checked).toBe(true);
+    expect(encryptionRadio(el, 'server')?.checked).toBe(false);
+  });
+});
+
+describe('passer en GROUPE change ce qu’un tap produit', () => {
+  test('le composeur paraît, l’interrupteur s’allume, le titre de la feuille reste celui d’iOS', async () => {
+    const el = await mount();
+    await click(groupToggle(el));
+    expect(composer(el)).not.toBeNull();
+    expect(groupToggle(el)?.getAttribute('aria-checked')).toBe('true');
+    expect(text(el.querySelector('h1'))).toBe('Nouvelle conversation');
+  });
+
+  test('personne choisie : l’interrupteur dit qu’un groupe se crée seul (#14646)', async () => {
+    const el = await mount();
+    await click(groupToggle(el));
+    expect(text(groupToggle(el))).not.toContain('Vous pouvez le créer seul');
+    expect(text(groupToggle(el))).toContain('Nouveau groupe');
+    const info = el.querySelector<HTMLButtonElement>('button[aria-label="Peut-on créer un groupe seul ?"]');
+    expect(info).not.toBeNull();
+    expect(groupToggle(el)?.contains(info ?? null)).toBe(false);
+    const note = el.ownerDocument.getElementById(info?.getAttribute('aria-controls') ?? '');
+    expect(note?.textContent).toContain('Vous pouvez le créer seul');
+    expect(note?.className).toContain('sr-only');
+    expect(groupToggle(el)?.getAttribute('aria-describedby')).toBe(note?.id ?? 'absente');
+    await click(firstPerson(el));
+    expect(groupToggle(el)?.hasAttribute('aria-describedby')).toBe(false);
+    expect(el.querySelector('button[aria-label="Peut-on créer un groupe seul ?"]')).toBeNull();
+  });
+
+  test('aucun champ de description à la création (#14646)', async () => {
+    const el = await mount();
+    await click(groupToggle(el));
+    expect(el.querySelector('[data-group-description]')).toBeNull();
+    expect(el.querySelector('[data-group-description-open]')).toBeNull();
+    expect(el.querySelector('textarea')).toBeNull();
+  });
+
+  test('chaque rangée devient une case à cocher, et le DIT', async () => {
+    const el = await mount();
+    await click(groupToggle(el));
+    expect(firstPerson(el)?.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  test('toucher quelqu’un le coche, le retoucher le décoche', async () => {
+    const el = await mount();
+    await click(groupToggle(el));
+
+    await click(firstPerson(el));
+    expect(firstPerson(el)?.getAttribute('aria-pressed')).toBe('true');
+    expect(chosen(el)).not.toBeNull();
+
+    await click(firstPerson(el));
+    expect(firstPerson(el)?.getAttribute('aria-pressed')).toBe('false');
+    expect(chosen(el)).toBeNull();
+  });
+
+  /* Le choix se défait LÀ OÙ IL SE VOIT : sans cela, se tromper obligerait à
+     remonter la liste pour retrouver la ligne. */
+  test('une personne choisie se retire depuis sa pastille', async () => {
+    const el = await mount();
+    await click(groupToggle(el));
+    await click(firstPerson(el));
+
+    const retrait = el.querySelector<HTMLButtonElement>('[data-group-remove]');
+    expect(retrait?.getAttribute('aria-label')).toContain('Retirer');
+    await click(retrait);
+
+    expect(chosen(el)).toBeNull();
+    expect(firstPerson(el)?.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  test('éteindre puis rallumer l’interrupteur ne perd pas ce qui était choisi', async () => {
+    const el = await mount();
+    await click(groupToggle(el));
+    await click(firstPerson(el));
+
+    await click(groupToggle(el));
+    await click(groupToggle(el));
+
+    expect(firstPerson(el)?.getAttribute('aria-pressed')).toBe('true');
+  });
+});
+
+describe('un refus se pose sous son champ, et RIEN ne part', () => {
+  test('sans titre : le champ est visé et se déclare invalide', async () => {
+    const el = await mount();
+    await click(groupToggle(el));
+    await click(firstPerson(el));
+    await submitGroup(el);
+
+    expect(composer(el)).not.toBeNull();
+    expect(titleField(el)?.getAttribute('aria-invalid')).toBe('true');
+    const decrit = titleField(el)?.getAttribute('aria-describedby')?.split(' ')[0] ?? '';
+    expect(text(el.querySelector(`#${decrit}`))).toContain('nom');
+  });
+
+  test('sans personne mais avec un titre (#14646) : rien n’est refusé, le groupe de moi seul part', async () => {
+    const el = await mount();
+    await click(groupToggle(el));
+    typeInto(titleField(el), 'Mes notes');
+    await settle();
+    await submitGroup(el);
+
+    expect(titleField(el)?.getAttribute('aria-invalid') ?? 'false').toBe('false');
+    expect(text(el.querySelector('[role="alert"]'))).not.toContain('personne');
+  });
+
+  test('sans personne ni titre : c’est le TITRE qui est blâmé', async () => {
+    const el = await mount();
+    await click(groupToggle(el));
+    await submitGroup(el);
+
+    expect(titleField(el)?.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  test('corriger le champ visé efface son refus', async () => {
+    const el = await mount();
+    await click(groupToggle(el));
+    await click(firstPerson(el));
+    await submitGroup(el);
+    expect(titleField(el)?.getAttribute('aria-invalid')).toBe('true');
+
+    typeInto(titleField(el), 'Équipe');
+    await settle();
+    expect(titleField(el)?.getAttribute('aria-invalid')).toBe('false');
+  });
+
+  test('le bouton nomme le geste, et reste actionnable après un refus', async () => {
+    const el = await mount();
+    await click(groupToggle(el));
+    await submitGroup(el);
+
+    expect(text(submit(el))).toBe('Créer le groupe');
+    expect(submit(el)?.disabled).toBe(false);
+  });
+});
+
+/**
+ * **LA PHOTO SUR LES DEUX SURFACES DE CET ÉCRAN** (#6975) — la liste des
+ * personnes ET les chips du groupe. `PersonSummary.avatar` est servi, et la
+ * surface VOISINE la passait déjà (`discover-parts.tsx:222`) : deux listes de
+ * personnes, la même donnée, un visage d'un côté et deux initiales de l'autre.
+ *
+ * Le témoin porte sur l'`<img>` RENDUE, jamais sur la présence du champ dans
+ * le modèle : c'est le pas qui manquait. Son CONTRE-TÉMOIN (« aucune photo ⇒
+ * aucune `<img>` ») vit là où le corpus le rend observable : la rangée
+ * `c-annonces` du gate de pixels (`scripts/check-avatar-pixels.mjs`) et
+ * l'entrée `avatarUrl: null` de la rampe (`living-summary.test.tsx`) — cet
+ * écran-ci ne sert qu'UN contact, et il porte une photo.
+ */
+describe('la photo des personnes (#6975)', () => {
+  test('une personne porteuse de photo rend une <img> dans sa ligne', async () => {
+    const el = await mount();
+    const rows = people(el);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.some((row) => row.querySelector('.avatar-root img') !== null)).toBe(true);
+  });
+
+  test('la chip d’un membre choisi porte la même photo que sa ligne', async () => {
+    const el = await mount();
+    await click(groupToggle(el));
+    const porteurDePhoto = people(el).find((row) => row.querySelector('.avatar-root img') !== null);
+    expect(porteurDePhoto).toBeDefined();
+    await click(porteurDePhoto);
+    const chip = chosen(el);
+    expect(chip).not.toBeNull();
+    expect(chip?.querySelector('.avatar-root img')).not.toBeNull();
+  });
+});

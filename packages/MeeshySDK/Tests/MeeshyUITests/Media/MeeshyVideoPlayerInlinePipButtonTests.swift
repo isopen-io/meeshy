@@ -1,18 +1,15 @@
 import XCTest
 @testable import MeeshyUI
 
-/// § B.2 — la top bar inline n'affiche le bouton PiP que si le contrôle est
-/// demandé ET que l'appareil supporte réellement le PiP
-/// (`AVPictureInPictureController.isPictureInPictureSupported()` vaut
-/// toujours `false` sur Simulateur). MASQUÉ, pas désactivé : un bouton grisé
-/// flottant sur une vidéo n'est pas explicable, contrairement à un item de
-/// menu grisé (cf. `VideoTransportControls.moreMenu`, qui désactive son item
-/// PiP au lieu de le masquer).
+/// § B.2 puis #11041 (décision porteur e, 2026-10-20) — la top bar inline
+/// n'affiche JAMAIS de bouton PiP : une vidéo inline ne configure aucune
+/// fenêtre (`PipPresentationLaw`), le bouton n'aurait aucun effet (loi 4).
+/// Le PiP vit au plein écran (`VideoTransportControls`).
 final class MeeshyVideoPlayerInlinePipButtonTests: XCTestCase {
 
-    func test_showsPipButton_whenControlPresentAndSupported() {
-        XCTAssertTrue(_InlineOverlayControls.showsPipButton(
-            controls: .inlineDefault, isPipSupported: true))
+    func test_hidesPipButton_evenWhenControlPresentAndSupported() {
+        XCTAssertFalse(_InlineOverlayControls.showsPipButton(
+            controls: [.playPause, .pip], isPipSupported: true))
     }
 
     func test_hidesPipButton_whenSupportedButControlAbsent() {
@@ -22,6 +19,6 @@ final class MeeshyVideoPlayerInlinePipButtonTests: XCTestCase {
 
     func test_hidesPipButton_whenControlPresentButUnsupported() {
         XCTAssertFalse(_InlineOverlayControls.showsPipButton(
-            controls: .inlineDefault, isPipSupported: false))
+            controls: [.playPause, .pip], isPipSupported: false))
     }
 }

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_repost_from">أعيدت مشاركته من</string>
+    <string name="feed_repost_original">الأصلي</string>
+    <string name="feed_repost_show_language">عرض بـ %1$s</string>
+</resources>

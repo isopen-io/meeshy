@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_file_download">Télécharger</string>
+    <string name="bubble_file_downloading">Téléchargement %1$d %%</string>
+    <string name="bubble_file_downloading_unknown">Téléchargement…</string>
+    <string name="bubble_file_ready">Prêt à ouvrir</string>
+    <string name="bubble_file_download_failed">Échec du téléchargement — touchez pour réessayer</string>
+    <string name="bubble_piece_sealed">Pièce chiffrée</string>
+    <string name="bubble_piece_sealed_a11y">Pièce chiffrée de bout en bout — ne s’ouvre pas sur cet appareil</string>
+    <string name="bubble_file_cancel">Annuler le téléchargement</string>
+</resources>

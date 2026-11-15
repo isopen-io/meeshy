@@ -68,4 +68,23 @@ class AudioTranslationEventTest {
         assertThat(event.language).isEmpty()
         assertThat(event.translatedAudio.url).isEmpty()
     }
+
+    @Test
+    fun `decodes the segments and the speaker count of a translated track`() {
+        val event = json.decodeFromString<AudioTranslationEvent>(
+            """
+            {
+              "messageId": "m1", "conversationId": "c1", "language": "es",
+              "translatedAudio": {
+                "url": "https://cdn/es.mp3", "speakerCount": 1,
+                "segments": [{ "text": "hola", "startMs": 500, "endMs": 1500 }]
+              }
+            }
+            """.trimIndent(),
+        )
+
+        assertThat(event.translatedAudio.speakerCount).isEqualTo(1)
+        assertThat(event.translatedAudio.segments)
+            .containsExactly(TranscriptionSegment(text = "hola", startTime = 0.5, endTime = 1.5))
+    }
 }

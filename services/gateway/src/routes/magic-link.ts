@@ -1,24 +1,55 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { AgeBelowMinimumError } from '../errors/custom-errors';
 import { z } from 'zod';
 import { MagicLinkService } from '../services/MagicLinkService';
 import { getCacheStore } from '../services/CacheStore';
 import { EmailService } from '../services/EmailService';
 import { GeoIPService, getRequestContext } from '../services/GeoIPService';
 import { initSessionService, markSessionTrusted } from '../services/SessionService';
+import { rememberPendingDeviceTrust } from './auth/pending-device-trust';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
-import { sendSuccess, sendBadRequest, sendInternalError } from '../utils/response.js';
-import { userSchema, sessionSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { sendSuccess, sendBadRequest, sendError, sendInternalError } from '../utils/response.js';
+import {
+  userSchema,
+  sessionSchema,
+  errorResponseSchema,
+  pendingSessionTokenProperty,
+  adoptWithinSecondsProperty,
+  linkDeviceHashProperty,
+  linkDeviceSecretProperty,
+  linkConfirmProperty,
+  linkConfirmationProperties
+} from '@meeshy/shared/types/api-schemas';
+import { parseLinkDeviceHash } from '../services/auth/link-device-binding';
+import { countLegacyLinkLogin, getLegacyLinkLoginCounter, linkLoginConsent } from '../services/auth/legacy-link-client';
+import { provenChallengeAdoption } from '../services/auth/pending-two-factor';
+import { provenSessionAdoption, servedSession } from '../services/auth/session-adoption';
+import { pendingSessionTokenFor } from '../services/auth/email-verification-watch';
+import { AuthService } from '../services/AuthService';
+import { LOGIN_CODE_TTL_MINUTES } from '../services/auth/email-code';
+import { getJwtSecret } from '../utils/secrets';
+import { deferAfterResponse } from '../utils/after-response';
+import { localeDeLaRequete } from './auth/request-locale';
 const logger = enhancedLogger.child({ module: 'MagicLinkRoutes' });
 
 // Validation schemas
 const requestMagicLinkSchema = z.object({
   email: z.email('Invalid email address').max(255),
-  rememberDevice: z.boolean().optional().default(false) // Stored server-side for security
+  rememberDevice: z.boolean().optional().default(false), // Stored server-side for security
+  /** OÙ REVENIR une fois connecté (#6742) — clampé côté SERVICE
+   * (`clampMagicLinkReturnUrl`), jamais cru ici : une valeur hostile n'échoue
+   * pas la requête, elle est simplement absente du lien envoyé. */
+  returnUrl: z.string().max(2048).optional(),
+  /** #10872 — l'empreinte du secret que CET appareil garde : son lien s'y conclura sans question. */
+  linkDeviceHash: z.string().regex(/^[0-9a-fA-F]{64}$/, 'Invalid device hash').optional()
 });
 
 const validateMagicLinkSchema = z.object({
-  token: z.string().min(1, 'Token is required')
+  token: z.string().min(1, 'Token is required'),
   // rememberDevice is retrieved from server-side storage, not from client
+  /** #10872 — le secret de l'appareil, et le oui de l'utilisateur après la confirmation. */
+  linkDeviceSecret: z.string().regex(/^[A-Za-z0-9_-]{22,256}$/, 'Invalid device secret').optional(),
+  confirm: z.boolean().optional()
 });
 
 export async function magicLinkRoutes(fastify: FastifyInstance) {
@@ -37,13 +68,27 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
     geoIPService
   );
 
+  // #8033 — la porte « e-mail seul » passe par la fonction UNIQUE que partage
+  // `POST /auth/login` : code + lien `/auth/verify-email`, compte créé si
+  // l'adresse est inconnue. Construit à la PREMIÈRE demande, jamais à
+  // l'enregistrement : le secret JWT et le manager Socket.IO se résolvent à
+  // l'appel, comme partout ailleurs.
+  let accountService: AuthService | null = null;
+  const accounts = (): AuthService => {
+    accountService ??= new AuthService(fastify.prisma, getJwtSecret(), {
+      resolveSocketManager: () => fastify.socketIOHandler?.getManager(),
+      accountThrottle: cacheStore,
+    });
+    return accountService;
+  };
+
   /**
    * POST /auth/magic-link/request
    * Request a magic link to be sent via email
    */
   fastify.post('/magic-link/request', {
     schema: {
-      description: 'Request a magic link for passwordless login. A link valid for 1 minute will be sent to the provided email address.',
+      description: 'Email-only sign-in (#8033). Sends ONE email carrying a 6-digit code and a link to `/auth/verify-email` — to an existing account, or to an unknown address, whose account is then created without a password. Present the code or the link to POST /auth/verify-email to open the session. The response never reveals whether the account existed.',
       tags: ['auth'],
       summary: 'Request magic link',
       body: {
@@ -60,7 +105,13 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
             type: 'boolean',
             description: 'Remember device for long session (365 days). Stored server-side for security.',
             default: false
-          }
+          },
+          returnUrl: {
+            type: 'string',
+            description: 'Internal path to return to after a successful login (#6742). Clamped server-side to a same-origin path; a suspect value is dropped, never trusted.',
+            example: '/chat/mshy_equipe_7f3a'
+          },
+          linkDeviceHash: linkDeviceHashProperty
         }
       },
       response: {
@@ -73,13 +124,19 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
             data: {
               type: 'object',
               properties: {
-                expiresInSeconds: { type: 'number', example: 600, description: 'Token expiry duration in seconds' }
+                expiresInSeconds: { type: 'number', example: 600, description: 'Token expiry duration in seconds' },
+                pendingSessionToken: pendingSessionTokenProperty
               }
             }
           }
         },
         400: {
           description: 'Invalid request',
+          ...errorResponseSchema
+        },
+        429: {
+          description:
+            'Rate limited. Distinct from the 200 above: the refusal concerns the CALLER, not the existence of the address — the limiter is checked BEFORE the account lookup, so saying it enumerates nothing.',
           ...errorResponseSchema
         }
       },
@@ -94,21 +151,40 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, validationResult.error.issues[0]?.message || 'Invalid email address');
       }
 
-      const { email, rememberDevice } = validationResult.data;
+      const { email } = validationResult.data;
+      const linkDeviceHash = parseLinkDeviceHash(validationResult.data.linkDeviceHash);
 
-      // Get request context
       const requestContext = await getRequestContext(request);
 
-      // Request magic link - rememberDevice is stored server-side with the token
-      const result = await magicLinkService.requestMagicLink({
-        email,
-        ipAddress: requestContext.ip,
-        userAgent: requestContext.userAgent,
-        deviceFingerprint: (request.body as any)?.deviceFingerprint,
-        rememberDevice // Stored server-side for security
-      });
+      const issue = await accounts().startAccountFromEmail(
+        { email, door: 'email-only', requestContext, deviceLocale: localeDeLaRequete(request), linkDeviceHash },
+        { afterResponse: deferAfterResponse }
+      );
 
-      return sendSuccess(reply, { expiresInSeconds: (result as any).expiresInSeconds }, { message: result.message });
+      /**
+       * UN REFUS DU LIMITEUR SE DIT (#6655) — 429, jamais un 200 qui ferait
+       * croire qu'un e-mail est parti. Il n'énumère rien : le débit est compté
+       * AVANT toute lecture du compte (`startAccountFromEmail`, porte
+       * `email-only`), donc il parle de l'APPELANT.
+       *
+       * Tout autre cas — compte créé, compte existant, compte supprimé, adresse
+       * réservée ou jetable sans compte (#16491 : rien n'est créé ni envoyé) —
+       * rend la MÊME réponse : c'est la garde anti-énumération.
+       */
+      if (issue.kind === 'rate-limited') {
+        return sendError(reply, 429, 'Too many requests. Please try again in about an hour.', { code: 'RATE_LIMITED' });
+      }
+
+      // #8083 — le jeton d'attente de CET appareil, dans TOUS les cas servis :
+      // une adresse sans compte actif en reçoit un aussi (non lié, toujours
+      // `pending`), sans quoi sa présence dirait si le compte existe.
+      const attente = await pendingSessionTokenFor(fastify.prisma, email);
+
+      return sendSuccess(
+        reply,
+        { expiresInSeconds: LOGIN_CODE_TTL_MINUTES * 60, ...attente },
+        { message: 'If an account exists, a login link has been sent.' }
+      );
 
     } catch (error) {
       logger.error('MagicLink error', error as Error);
@@ -116,102 +192,31 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
     }
   });
 
-  /**
-   * GET /auth/magic-link/validate
-   * Validate magic link token and create session
-   */
-  fastify.get('/magic-link/validate', {
-    schema: {
-      description: 'Validate a magic link token and log the user in. The token must be valid and not expired (1 minute validity).',
-      tags: ['auth'],
-      summary: 'Validate magic link',
-      querystring: {
-        type: 'object',
-        required: ['token'],
-        properties: {
-          token: {
-            type: 'string',
-            description: 'Magic link token from email',
-            example: 'abc123xyz...'
-          }
-        }
-      },
-      response: {
-        200: {
-          description: 'Successful login via magic link',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                // `{ type: 'object' }` sans `properties` sérialise en `{}` :
-                // la connexion rendait son jeton et AUCUN utilisateur. Les
-                // schémas partagés décrivent déjà ces deux formes —
-                // `userSchema` couvre le `socketIOUser` que le service
-                // construit, `sessionSchema` la `SessionData` de
-                // `createSession`.
-                //
-                // Pas de gate de présence ici, et pour une raison précise :
-                // `isOnline`/`lastActiveAt` y sont SYNTHÉTISÉS pour le
-                // compte qui vient de se connecter — c'est le lecteur
-                // lui-même, et la politique rend `FULL` sur `isSelf`.
-                user: userSchema,
-                token: { type: 'string', description: 'JWT access token' },
-                sessionToken: { type: 'string', description: 'Session token for device management' },
-                session: sessionSchema,
-                expiresIn: { type: 'number', example: 86400 }
-              }
-            }
-          }
-        },
-        400: {
-          description: 'Invalid or expired token',
-          ...errorResponseSchema
-        }
-      },
-      security: []
-    }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      // Validate input
-      const query = request.query as { token?: string };
-      const validationResult = validateMagicLinkSchema.safeParse({ token: query.token });
-
-      if (!validationResult.success) {
-        /* istanbul ignore next -- Zod always produces a non-falsy message; the || branch is unreachable */
-        return sendBadRequest(reply, validationResult.error.issues[0]?.message || 'Token is required');
-      }
-
-      const { token } = validationResult.data;
-
-      // Get request context
-      const requestContext = await getRequestContext(request);
-
-      // Validate magic link
-      const result = await magicLinkService.validateMagicLink({
-        token,
-        requestContext
-      });
-
-      if (!result.success) {
-        return sendBadRequest(reply, result.error);
-      }
-
-      // Return success with user data
-      return sendSuccess(reply, {
-        user: result.user,
-        token: result.token,
-        sessionToken: result.sessionToken,
-        session: result.session,
-        expiresIn: 86400 // 24 hours
-      });
-
-    } catch (error) {
-      logger.error('MagicLink validation error', error as Error);
-      return sendInternalError(reply, 'An error occurred. Please try again.');
-    }
-  });
+  // ─── La jumelle GET de la validation a été RETIRÉE (#4186) ────────────────
+  //
+  // `GET /auth/magic-link/validate?token=…` ouvrait une session comme la POST
+  // ci-dessous, mais en moins bien, et sur deux points qui se paient chez
+  // l'utilisateur :
+  //
+  //   1. elle n'appliquait NI `rememberDevice` NI `markSessionTrusted`, et
+  //      figeait `expiresIn` à 86 400. Celui qui avait coché « se souvenir de
+  //      moi » à la DEMANDE du lien — un choix conservé côté SERVEUR,
+  //      justement pour qu'aucun client ne puisse le forger — se retrouvait
+  //      déconnecté au bout de 24 h au lieu de 365 jours, sans rien pour le
+  //      lui expliquer. Deux verbes, un seul nom, deux durées de session ;
+  //   2. elle faisait voyager le jeton de connexion à USAGE UNIQUE en QUERY
+  //      STRING : journalisé par tout proxy et tout serveur d'accès, gardé
+  //      dans l'historique du navigateur, transmis en `Referer`.
+  //
+  // Aucun client ne l'appelait — mesuré sur les trois : le SDK iOS
+  // (`AuthService.swift:102`), le web (`services/magic-link.service.ts:150`)
+  // et Android (`AuthApi.kt:147`) font tous les trois un POST. Et le lien
+  // ENVOYÉ PAR E-MAIL ne la visait pas non plus : `MagicLinkService:430`
+  // compose `${FRONTEND_URL}/auth/magic-link?token=…`, une page WEB, qui
+  // relaie ensuite vers la POST. Aucun lien déjà dans une boîte mail ne se
+  // brise donc — c'est ce qui rend ce retrait possible sans redirection.
+  //
+  // Témoin d'absence : `__tests__/unit/routes/identity-twins-retired.test.ts`.
 
   /**
    * POST /auth/magic-link/validate
@@ -229,8 +234,10 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
           token: {
             type: 'string',
             description: 'Magic link token from email'
-          }
+          },
           // rememberDevice is retrieved from server-side storage (set during request)
+          linkDeviceSecret: linkDeviceSecretProperty,
+          confirm: linkConfirmProperty
         }
       },
       response: {
@@ -247,7 +254,28 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
                 token: { type: 'string' },
                 sessionToken: { type: 'string' },
                 session: sessionSchema,
-                expiresIn: { type: 'number', example: 86400 }
+                expiresIn: { type: 'number', example: 86400 },
+
+                // Branche « second facteur attendu » (#4534). Elle DOIT être
+                // déclarée : `fast-json-stringify` retire tout champ absent du
+                // schéma, et une garde dont l'annonce n'atteint aucun client
+                // n'a fermé la porte que pour la murer — le compte protégé
+                // resterait sans sortie. Même défaut qu'à `POST /login` avant
+                // #4138 (`routes/auth/login.ts:66-77`).
+                //
+                // Les deux branches sont EXCLUSIVES : celle-ci ne porte ni
+                // `token`, ni `sessionToken`, ni `session`, ni `expiresIn`.
+                requires2FA: { type: 'boolean', description: 'True when the account carries a second factor — no access token is granted yet', example: true },
+                twoFactorToken: { type: 'string', description: 'Short-lived token identifying the pending login; present it to POST /auth/login/2fa with the user code' },
+                message: { type: 'string', description: 'Human-readable prompt for the second factor' },
+
+                // #10518 — porté par les DEUX branches : le délai d'adoption
+                // de la session, ou la durée de vie du défi.
+                adoptWithinSeconds: adoptWithinSecondsProperty,
+
+                // #10872 — branche EXCLUSIVE « confirmez le compte » : ni
+                // session, ni jeton, ni défi ; le lien n'a pas été consommé.
+                ...linkConfirmationProperties
               }
             }
           }
@@ -269,19 +297,54 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, validationResult.error.issues[0]?.message || 'Token is required');
       }
 
-      const { token } = validationResult.data;
+      const { token, linkDeviceSecret, confirm } = validationResult.data;
 
       // Get request context
       const requestContext = await getRequestContext(request);
 
+      // #10878 — un ancien binaire iOS (avant #10872) garde la connexion directe, comptée.
+      const consent = linkLoginConsent({ headers: request.headers, confirm, linkDeviceSecret });
+
       // Validate magic link
       const result = await magicLinkService.validateMagicLink({
         token,
-        requestContext
+        requestContext,
+        linkDeviceSecret,
+        confirmed: consent.confirmed
       });
+
+      // #10872 — rien n'est consommé, aucune session : le client montre le
+      // compte cible et rejoue avec `confirm: true` si l'utilisateur dit oui.
+      if (result.requiresConfirmation && result.account) {
+        return sendSuccess(reply, { requiresConfirmation: true, account: result.account, intent: result.intent, maskedEmail: result.maskedEmail });
+      }
 
       if (!result.success) {
         return sendBadRequest(reply, result.error);
+      }
+
+      countLegacyLinkLogin({ route: 'magic-link-validate', consent, counter: getLegacyLinkLoginCounter() });
+
+      // Second facteur attendu : aucune session n'existe, il n'y a donc rien à
+      // marquer de confiance — seulement à RETENIR (#4534). Depuis #4471 la
+      // préférence est gardée par le SERVEUR entre les deux étapes, indexée
+      // par l'empreinte du jeton d'étape 2 : le lien magique rejoint cette
+      // mémoire sans rien faire transporter au client, donc sans qu'aucune
+      // asymétrie ne puisse se rouvrir entre les deux portes de connexion.
+      if (result.requires2FA) {
+        await rememberPendingDeviceTrust({
+          store: cacheStore,
+          twoFactorToken: result.twoFactorToken,
+          rememberDevice: result.rememberDevice
+        });
+
+        return sendSuccess(reply, {
+          requires2FA: true,
+          twoFactorToken: result.twoFactorToken,
+          ...provenChallengeAdoption(),
+          user: result.user,
+          message: 'Veuillez entrer votre code d\'authentification à deux facteurs'
+        });
       }
 
       // Use rememberDevice from SERVER-SIDE storage (not from client request)
@@ -309,11 +372,13 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         user: result.user,
         token: result.token,
         sessionToken: result.sessionToken,
-        session: { ...result.session, isTrusted: rememberDevice },
-        expiresIn
+        session: { ...servedSession(result.session ?? {}), isTrusted: rememberDevice },
+        expiresIn,
+        ...provenSessionAdoption(result.session ?? {}, new Date())
       });
 
     } catch (error) {
+      if (error instanceof AgeBelowMinimumError) throw error;
       logger.error('MagicLink validation error', error as Error);
       return sendInternalError(reply, 'An error occurred. Please try again.');
     }

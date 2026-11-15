@@ -113,3 +113,23 @@ export function resolveDensityGridStepDegrees(cellSizeKm: unknown): number | nul
   if (cellSizeKm <= 10) return GRID.CITY.step;
   return GRID.REGION.step;
 }
+
+/**
+ * Précision RÉELLEMENT appliquée à partir de ce que l'auteur demande (#3637 —
+ * "Défaut NEIGHBORHOOD, EXACT réservé à un opt-in explicite, jamais pour un
+ * mineur"). `EXACT` n'est jamais implicite : il exige `confirmed === true`
+ * (un geste séparé du simple choix dans l'énumération) ET `isAdult === true`
+ * (majorité VÉRIFIÉE — une date de naissance absente ne prouve rien, voir
+ * `@meeshy/shared/utils/age`). Faute de l'un des deux, la demande retombe sur
+ * `NEIGHBORHOOD` plutôt que d'être refusée entière : la découvrabilité reste
+ * disponible, seule sa précision la plus exposée est retenue. Toute autre
+ * précision demandée passe telle quelle — la garde ne porte QUE sur EXACT.
+ */
+export function resolveDiscoverabilityPrecision(
+  requested: unknown,
+  { confirmed, isAdult }: { confirmed: boolean; isAdult: boolean }
+): DiscoverabilityPrecision | undefined {
+  if (!isDiscoverabilityPrecision(requested)) return undefined;
+  if (requested !== 'EXACT') return requested;
+  return confirmed && isAdult ? 'EXACT' : 'NEIGHBORHOOD';
+}

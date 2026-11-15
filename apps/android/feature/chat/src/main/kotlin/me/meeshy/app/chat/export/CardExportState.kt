@@ -1,0 +1,186 @@
+package me.meeshy.app.chat.export
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import java.text.DateFormat
+import java.util.Date
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import me.meeshy.ui.component.export.ExportAnnouncement
+
+internal enum class CardOutcome { GALLERY, SHARED, DENIED, FAILED }
+
+/**
+ * L'état de l'atelier : ce que l'utilisateur a choisi (format, langue, onglet, partie touchée) et ce
+ * que la peinture en a fait. Le format voyage en chaîne ([CardFormat.serialized]) : un seul
+ * champ d'état, une seule clé de peinture. L'aperçu précédent reste affiché pendant que le suivant
+ * se peint.
+ */
+@Stable
+internal class CardExportState(
+    private val source: CardSource,
+    val viewer: CardViewer,
+    conversationTitle: String?,
+    val store: CardPreferenceStore,
+    private val dateFormat: DateFormat,
+    private val timeFormat: DateFormat,
+    initialFormat: CardFormat,
+) {
+    var anonymousLabel: String = "Anonyme"
+
+    var format by mutableStateOf(initialFormat)
+    var exportLanguage by mutableStateOf<String?>(null)
+    var tab by mutableStateOf(CardTab.STYLES)
+    var focus by mutableStateOf<CardPartId?>(null)
+    var touched by mutableStateOf(false)
+    var galleryOpen by mutableStateOf(false)
+    var rendered by mutableStateOf<CardImage?>(null)
+    var failed by mutableStateOf(false)
+    var busy by mutableStateOf(false)
+    var outcome by mutableStateOf<CardOutcome?>(null)
+    var savedDefault by mutableStateOf(CardFormat.readDefault(store))
+    var usage by mutableStateOf(CardUsage.read(store))
+    private var renderedKey by mutableStateOf<String?>(null)
+
+    /** L'image de chaque média de la carte, chargée une fois à l'ouverture ([CardPictureLoader]) ; vide tant qu'elle charge. */
+    var pictures by mutableStateOf<Map<String, android.graphics.Bitmap>>(emptyMap())
+
+    /** Le fond choisi dans la galerie (#18672) et ses pixels, remis à la peinture sous [CardBackdrop.MEDIA_ID]. */
+    var backdrop by mutableStateOf<CardBackdrop?>(null)
+    var backdropPicture by mutableStateOf<android.graphics.Bitmap?>(null)
+    var backdropFailed by mutableStateOf(false)
+
+    /** Ce que la peinture reçoit : les médias de la carte, et le fond choisi. */
+    val painted: Map<String, android.graphics.Bitmap>
+        get() = backdropPicture?.let { pictures + (CardBackdrop.MEDIA_ID to it) } ?: pictures
+
+    /** La vidéo qui défile (#18671) : choisie, sa vitesse, son avancement pendant l'encodage. */
+    var video by mutableStateOf(false)
+    var speed by mutableStateOf(CardScrollSpeed.standard)
+    var progress by mutableStateOf<Double?>(null)
+
+    /** La hauteur de la carte sans plafond et celle de sa fenêtre — `null` : elle tient dans son format, rien ne défile. */
+    var scroll by mutableStateOf<Pair<Double, Double>?>(null)
+
+    val scrollPlan: CardScrollPlan? get() = scroll?.let { (content, window) -> CardScrollPlan.of(content, window, speed) }
+
+    val title: String? = CardText.nonBlank(conversationTitle)
+    val languages: List<CardLanguage> = source.languages
+    val tabs: List<CardTab> = CardTab.offered(languages.size + 1)
+
+    val subject: CardSubject? get() = source.subject(exportLanguage)
+
+    val preparing: Boolean get() = source.preparing
+
+    val renderKey: String get() = "${format.serialized}|${exportLanguage.orEmpty()}|${painted.keys.sorted().joinToString(",")}|${subject?.hero?.id.orEmpty()}|${backdrop?.media?.url.orEmpty()}:${backdrop?.veil ?: 0.0}"
+    val ready: Boolean get() = rendered != null && renderedKey == renderKey
+    val isDefault: Boolean get() = savedDefault == format
+
+    fun inputFor(next: CardFormat, from: CardSubject = checkNotNull(subject)): CardInput = CardInput.of(
+        from, next, handle = viewer.username, conversationTitle = title, anonymousLabel = anonymousLabel,
+        formatDate = { dateFormat.format(Date(it)) }, formatTime = { timeFormat.format(Date(it)) },
+    ).copy(backdrop = backdrop)
+
+    /** Peint l'aperçu hors du thread principal ; un résultat périmé par un nouveau choix est écarté. */
+    suspend fun renderPreview() {
+        val key = renderKey
+        val input = inputFor(format)
+        val shown = painted
+        failed = false
+        val card = runCatching { withContext(Dispatchers.Default) { CardRenderer.render(input, PREVIEW_WIDTH, shown) } }.getOrNull()
+        val tall = runCatching {
+            withContext(Dispatchers.Default) {
+                CardRenderer.layout(input.copy(unbounded = true)).let { layout -> layout.viewportHeight?.let { layout.height to it } }
+            }
+        }.getOrNull()
+        if (key != renderKey) return
+        scroll = tall?.takeIf { (content, window) -> content - window > 1 }
+        if (card == null) failed = true else {
+            rendered = card
+            renderedKey = key
+        }
+    }
+
+    /** Toucher une partie de la carte ouvre l'onglet qui la règle. */
+    fun pick(part: CardPartId) {
+        touched = true
+        focus = part
+        tab = CardTab.of(part)
+    }
+
+    /** Choisir un onglet à la main désigne la partie qu'il règle. */
+    fun openTab(next: CardTab) {
+        tab = next
+        focus = when (next) {
+            CardTab.PALETTE -> CardPartId.BACKGROUND
+            CardTab.LINK -> CardPartId.LINK.takeIf { subject?.quoted != null }
+            CardTab.TYPEFACE -> if (focus == CardPartId.QUOTE || focus == CardPartId.REPLY) focus else CardPartId.REPLY
+            CardTab.FRAME -> CardPartId.HEADER.takeIf { title != null || format.showDate }
+            else -> null
+        }
+    }
+
+    fun saveAsDefault() {
+        CardFormat.writeDefault(format, store)
+        savedDefault = format
+    }
+
+    fun recordUse() {
+        CardUsage.record(format.template, store)
+        usage = CardUsage.read(store)
+    }
+
+    /** La vitrine : l'état de la carte (sans son template) nomme la clé d'une vignette. */
+    fun thumbSource(store: CardThumbnailStore, subject: CardSubject): CardThumbSource {
+        val neutral = format.copy(template = CardTemplates.defaultId).serialized
+        val shown = painted
+        return CardThumbSource(
+            store = store,
+            keyOf = { id -> "${id.rawValue}|$neutral|${exportLanguage.orEmpty()}|${shown.keys.sorted().joinToString(",")}" },
+            inputOf = { id -> inputFor(format.copy(template = id), subject) },
+            pictures = shown,
+        )
+    }
+
+    /** Les maquettes : chacune peinte sur le message courant, habillée de ce qu'elle impose (#18673). */
+    fun modelThumbSource(store: CardThumbnailStore, subject: CardSubject): CardModelThumbSource {
+        val neutral = (CardModels.model(CardModels.DEFAULT_ID)?.applied(format) ?: format).serialized
+        val shown = painted
+        return CardModelThumbSource(
+            store = store,
+            keyOf = { model -> "model:${model.id}|$neutral|${exportLanguage.orEmpty()}|${shown.keys.sorted().joinToString(",")}" },
+            inputOf = { model -> inputFor(model.applied(format), subject) },
+            pictures = shown,
+        )
+    }
+
+    companion object {
+        const val PREVIEW_WIDTH = 720
+    }
+}
+
+/** L'atelier tel qu'il s'ouvre : ce qu'on image tel qu'il était à l'ouverture, le format par défaut de l'appareil. */
+@Composable
+internal fun rememberCardExportState(source: CardSource, viewer: CardViewer, conversationTitle: String?): CardExportState {
+    val context = LocalContext.current
+    return remember(source.key) {
+        val store = AndroidCardPreferenceStore(context)
+        CardExportState(
+            source, viewer, conversationTitle, store,
+            android.text.format.DateFormat.getLongDateFormat(context), android.text.format.DateFormat.getTimeFormat(context),
+            initialFormat = CardFormat.readDefault(store) ?: CardFormat.initial,
+        )
+    }
+}
+
+/** Ce que la fin d'un export annonce une fois la feuille fermée ; un refus ou un échec reste dit DANS la feuille, ouverte. */
+internal fun cardExportAnnouncement(outcome: CardOutcome, saved: String, shared: String): ExportAnnouncement? = when (outcome) {
+    CardOutcome.GALLERY -> ExportAnnouncement(saved)
+    CardOutcome.SHARED -> ExportAnnouncement(shared)
+    CardOutcome.DENIED, CardOutcome.FAILED -> null
+}

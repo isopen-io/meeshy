@@ -786,6 +786,38 @@ describe('socketCallScreenCaptureDetectedSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('accepts kind "screenshot" and "recording" (#16665)', () => {
+    for (const kind of ['screenshot', 'recording'] as const) {
+      const result = socketCallScreenCaptureDetectedSchema.safeParse({
+        callId: validMongoId2,
+        participantId: validParticipantId,
+        isCapturing: true,
+        kind,
+      });
+      expect(result.success && result.data.kind).toBe(kind);
+    }
+  });
+
+  it('accepts an unknown kind, which the handler reads as a recording (#16665)', () => {
+    const result = socketCallScreenCaptureDetectedSchema.safeParse({
+      callId: validMongoId2,
+      participantId: validParticipantId,
+      isCapturing: true,
+      kind: 'selfie',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an oversized kind (#16665)', () => {
+    const result = socketCallScreenCaptureDetectedSchema.safeParse({
+      callId: validMongoId2,
+      participantId: validParticipantId,
+      isCapturing: true,
+      kind: 'x'.repeat(33),
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('socketCallAnalyticsSchema', () => {

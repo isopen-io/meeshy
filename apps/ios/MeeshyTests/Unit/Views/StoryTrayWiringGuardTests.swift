@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 // MARK: - StoryTrayWiringGuardTests
@@ -36,7 +37,7 @@ final class StoryTrayWiringGuardTests: XCTestCase {
     /// Corps du struct `StoryUploadOverlay`, borné dynamiquement par la
     /// déclaration de struct suivante (ou la fin du fichier).
     private func uploadOverlayBlock() throws -> String {
-        let tray = try source("Meeshy/Features/Main/Views/StoryTrayView.swift")
+        let tray = try source("Meeshy/Features/Stories/Views/StoryTrayView.swift")
         guard let start = tray.range(of: "struct StoryUploadOverlay") else {
             XCTFail("StoryUploadOverlay introuvable dans StoryTrayView.swift")
             return ""
@@ -76,7 +77,7 @@ final class StoryTrayWiringGuardTests: XCTestCase {
     // MARK: - Reprise : un seul écrivain de pendingDraftId
 
     func test_resumeDraft_handlers_routeThroughOpenComposer() throws {
-        let tray = try source("Meeshy/Features/Main/Views/StoryTrayView.swift")
+        let tray = try source("Meeshy/Features/Stories/Views/StoryTrayView.swift")
 
         let resumeCases = occurrences(of: "case .resumeDraft", in: tray)
         XCTAssertGreaterThanOrEqual(resumeCases, 2, "Grande trail ET mini-trail épinglée doivent gérer .resumeDraft")
@@ -103,20 +104,84 @@ final class StoryTrayWiringGuardTests: XCTestCase {
     /// sans que rien ne rougisse ; ne lire que le second laisserait la porte
     /// arrêter de le passer.
     func test_composerCover_handsThePendingDraftToTheHost_whichAdoptsIt_andResetsOnDismiss() throws {
-        let actions = try source("Meeshy/Features/Main/Views/StoryTrayActions.swift")
-        let host = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
+        let actions = try source("Meeshy/Features/Stories/Views/StoryTrayActions.swift")
+        let host = try AppSourceGuard.composerHostSource()
 
         XCTAssertTrue(
             actions.contains("draftId: viewModel.pendingDraftId"),
             "Le cover racine doit REMETTRE au meuble le brouillon à reprendre — sans lui, le meuble ouvre une session neuve et le brouillon repris reste orphelin"
         )
+        // **L'APPEL, jamais le nom du local qui le nourrit** : le meuble lit
+        // depuis #4611 la graine de la porte en repli du paramètre
+        // (`draftId ?? intent.origin.resumedDraftId`), ce qui a renommé la
+        // variable. Épingler `adoptDraft(id: draftId)` faisait tomber cette
+        // garde sur un changement qui ne touchait ni l'appel ni son rôle.
         XCTAssertTrue(
-            host.contains("composer.adoptDraft(id: draftId)"),
+            host.contains("composer.adoptDraft(id:"),
             "Le meuble doit adopter le brouillon reçu — sans adoption, l'autosave écrit sous un id neuf et duplique le brouillon"
         )
         XCTAssertTrue(
             actions.contains("viewModel.pendingDraftId = nil"),
             "Le dismiss du cover doit consommer pendingDraftId — sinon le PROCHAIN « + » rouvrirait le dernier brouillon repris"
         )
+    }
+
+    // MARK: - Une cellule d'anneau ne se recalcule que si ce qu'elle affiche change (#10574)
+
+    private func ringGroup(storyIds: [String] = ["s1"], viewed: Bool = false, username: String = "alice") -> StoryGroup {
+        StoryGroup(
+            id: "u1",
+            username: username,
+            avatarColor: "FF2E63",
+            avatarURL: nil,
+            stories: storyIds.map {
+                StoryItem(
+                    id: $0, content: "hello", media: [], storyEffects: nil,
+                    createdAt: Date(timeIntervalSince1970: 0),
+                    expiresAt: Date(timeIntervalSince1970: 72_000),
+                    isViewed: viewed, updatedAt: nil
+                )
+            }
+        )
+    }
+
+    private func ringInputs(
+        group: StoryGroup? = nil,
+        coverURL: String? = "https://x/cover.jpg",
+        moodEmoji: String? = nil,
+        presence: PresenceState = .online,
+        theme: ThemeMode = .dark
+    ) -> StoryRingCellRenderInputs {
+        StoryRingCellRenderInputs(
+            group: group ?? ringGroup(), coverURL: coverURL, avatarSize: 64, showsUsername: true,
+            moodEmoji: moodEmoji, hasMoodTap: true, presence: presence, menuLabels: [], theme: theme,
+            now: Date(timeIntervalSince1970: 10)
+        )
+    }
+
+    func test_storyRingCell_sameDisplayedData_isEqual() {
+        XCTAssertEqual(ringInputs(), ringInputs())
+    }
+
+    func test_storyRingCell_eachDisplayedChange_isDistinguished() {
+        let base = ringInputs()
+
+        XCTAssertNotEqual(base, ringInputs(group: ringGroup(storyIds: ["s1", "s2"])), "une story de plus")
+        XCTAssertNotEqual(base, ringInputs(group: ringGroup(viewed: true)), "anneau lu")
+        XCTAssertNotEqual(base, ringInputs(group: ringGroup(username: "bob")), "nom")
+        XCTAssertNotEqual(base, ringInputs(coverURL: "https://x/other.jpg"), "couverture")
+        XCTAssertNotEqual(base, ringInputs(moodEmoji: "🔥"), "humeur")
+        XCTAssertNotEqual(base, ringInputs(presence: .away), "présence")
+        XCTAssertNotEqual(base, ringInputs(theme: .light), "thème")
+    }
+
+    func test_storyRingCell_isMountedEquatableAtEverySite() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryTrayView.swift"))
+        let sites = source.components(separatedBy: "StoryRingCell(").dropFirst()
+
+        XCTAssertEqual(sites.count, 3)
+        for site in sites {
+            XCTAssertTrue(site.prefix(1_400).contains(".equatable()"), "un site monte la cellule sans sa garde")
+        }
     }
 }

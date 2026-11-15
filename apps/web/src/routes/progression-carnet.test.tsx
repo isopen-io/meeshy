@@ -1,0 +1,461 @@
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, Suspense } from 'react';
+
+import { apiDeps } from '@/lib/api/deps';
+import { gameBlockFixture } from '@/lib/api/game-fixture';
+import type { HttpTransport } from '@/lib/api/http';
+import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATIONS_QUERY_KEY, type NotificationCounts } from '@/lib/api/notifications';
+import { applyNotificationNew } from '@/lib/api/notifications-realtime';
+import { appQueryClient } from '@/lib/api/query-client';
+import type { PhotoEnv } from '@/lib/game-photo/env';
+import { achievementMoment, flameMoment, meeshMoment, rankMoment, startMoment, type PhotoMoment } from '@/lib/game-photo/moments';
+import type { Notebook, NotebookEntry } from '@/lib/game-photo/notebook';
+import { loadGameCatalog } from '@/lib/i18n-game-catalog';
+import { createActMounter } from '@/test-support/act-mount';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { scriptedTransport } from '@/test-support/scripted-transport';
+
+import ProgressionCarnetScreen, { CarnetBody } from './progression-carnet';
+
+const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+const { mount, unmountAll, click } = createActMounter();
+
+beforeAll(() => {
+  ensureHappyDomRegistered({ url: 'http://localhost/me/progression/carnet' });
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+});
+afterAll(async () => {
+  delete globals.IS_REACT_ACT_ENVIRONMENT;
+  await releaseHappyDomIfRegistered();
+});
+afterEach(unmountAll);
+
+const settle = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 15)));
+const by = (host: ParentNode, attribute: string) => host.querySelector<HTMLElement>(`[${attribute}]`);
+
+const kept = (moment: PhotoMoment, createdAt: string): NotebookEntry => ({
+  id: moment.id,
+  momentId: moment.id,
+  emblem: moment.emblem,
+  kicker: moment.kicker,
+  title: moment.title,
+  status: 'kept',
+  createdAt,
+  expiresAt: null,
+  mode: 'selfie',
+  story: new File(['s'], 'story.png', { type: 'image/png' }),
+  square: new File(['q'], 'profil.png', { type: 'image/png' }),
+});
+
+const pending = (moment: PhotoMoment, createdAt: string, expiresAt: string): NotebookEntry => ({
+  id: moment.id,
+  momentId: moment.id,
+  emblem: moment.emblem,
+  kicker: moment.kicker,
+  title: moment.title,
+  status: 'pending',
+  createdAt,
+  expiresAt,
+});
+
+function bench(entries: readonly NotebookEntry[] | 'broken', link: string | null = null, legacy: 'none' | 'quarantined' | null = null) {
+  const state = { entries: [...(entries === 'broken' ? [] : entries)], removed: [] as string[], shared: [] as File[], texts: [] as (string | undefined)[], legacy, discarded: 0 };
+  const notebook: Notebook = {
+    defer: async () => true,
+    keep: async () => 'kept',
+    ...(legacy === null
+      ? {}
+      : {
+          legacy: async () => state.legacy ?? 'none',
+          discardLegacy: async () => ((state.discarded += 1), (state.legacy = 'none'), true),
+        }),
+    list: async () => (entries === 'broken' ? [] : [...state.entries]),
+    remove: async (id) => {
+      state.removed.push(id);
+      state.entries = state.entries.filter((e) => e.id !== id);
+      return true;
+    },
+  };
+  const env = {
+    notebook,
+    share: async (file: File, _title: string, text?: string) => (state.shared.push(file), state.texts.push(text), 'shared' as const),
+    referral: async () => link,
+    now: () => new Date('2026-10-05T10:00:00.000Z'),
+    playOptions: { reducedMotion: false, haptics: false, schedule: (run: () => void) => (run(), () => undefined) },
+  } as unknown as PhotoEnv;
+  return { env, state };
+}
+
+/**
+ * LE CARNET DE PROGRESSION (#9382) — « le chemin parcouru » : les photos
+ * gardées, les moments en attente (« plus tard », sept jours). Local à
+ * l'appareil : un carnet qui ne s'ouvre pas se lit « vide », jamais comme une
+ * erreur qui ferait croire à une perte.
+ */
+describe('un carnet vide', () => {
+  test('on dit qu’il attend sa première page, et ce qu’il garde', async () => {
+    const { env } = bench([]);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    expect(host.textContent).toContain('Ta Chronique attend sa première page');
+    expect(host.textContent).toContain('les moments où tes aïeux se manifestent');
+  });
+
+  test('un stockage qui refuse se lit vide, sans alerte', async () => {
+    const { env } = bench('broken');
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    expect(host.textContent).toContain('Ta Chronique attend sa première page');
+  });
+
+  test('pendant la lecture : occupé, pas un faux vide', async () => {
+    const { env: base } = bench([]);
+    const env = { ...base, notebook: { ...base.notebook, list: () => new Promise<readonly NotebookEntry[]>(() => undefined) } } as PhotoEnv;
+    const host = await mount(<CarnetBody env={env} />);
+    expect(host.querySelector('[aria-busy="true"]')).not.toBeNull();
+    expect(host.textContent).not.toContain('Ta Chronique attend sa première page');
+  });
+});
+
+describe('les photos gardées', () => {
+  const entries = [kept(startMoment(), '2026-09-01T10:00:00.000Z'), kept(rankMoment({ rank: 'voix', division: 2 }), '2026-10-01T10:00:00.000Z')];
+
+  test('chacune dit son titre et sa date, la plus récente en tête', async () => {
+    const { env } = bench(entries);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    const titles = Array.from(host.querySelectorAll('[data-carnet-entry]')).map((e) => e.getAttribute('data-carnet-entry'));
+    expect(titles).toEqual(['start', 'rank:voix:2'].reverse());
+    expect(host.textContent).toContain('1 octobre 2026');
+    expect(host.textContent).toContain('Voix II');
+  });
+
+  test('l’aperçu est une vraie image, nommée', async () => {
+    const { env } = bench(entries);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    expect(host.querySelector('img')?.getAttribute('alt')).toContain('Voix II');
+  });
+
+  test('« Partager » envoie la story de CETTE entrée', async () => {
+    const { env, state } = bench(entries);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    await click(by(host, 'data-carnet-share'));
+    await settle();
+    expect(state.shared).toHaveLength(1);
+    expect(state.shared[0]?.type).toBe('image/png');
+  });
+
+  test('une entrée neuve se garde en JPEG et se partage en .jpg ; une ancienne en PNG se relit et se partage en .png (#10238)', async () => {
+    const [first, second] = entries;
+    const neuve: NotebookEntry = { ...first!, story: new Blob(['j'], { type: 'image/jpeg' }) };
+    const ancienne: NotebookEntry = { ...second!, story: new Blob(['p'], { type: 'image/png' }) };
+    const { env, state } = bench([neuve, ancienne]);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    expect(host.querySelectorAll('img').length).toBeGreaterThanOrEqual(2);
+    for (const button of Array.from(host.querySelectorAll<HTMLElement>('[data-carnet-share]'))) {
+      await click(button);
+      await settle();
+    }
+    expect(state.shared.map((file) => `${file.type} .${file.name.split('.').pop()}`).sort()).toEqual(['image/jpeg .jpg', 'image/png .png']);
+  });
+
+  test('« Partager » redit aussi le lien de parrainage en texte (#7742)', async () => {
+    const { env, state } = bench(entries, 'https://meeshy.me/signup/affiliate/aff_abc');
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    await click(by(host, 'data-carnet-share'));
+    await settle();
+    expect(state.texts).toEqual(['Rejoins-moi sur Meeshy : https://meeshy.me/signup/affiliate/aff_abc']);
+  });
+
+  test('sans lien, l’image part seule', async () => {
+    const { env, state } = bench(entries, null);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    await click(by(host, 'data-carnet-share'));
+    await settle();
+    expect(state.shared).toHaveLength(1);
+    expect(state.texts).toEqual([undefined]);
+  });
+
+  test('retirer demande une confirmation, puis retire', async () => {
+    const { env, state } = bench(entries);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    await click(by(host, 'data-carnet-remove'));
+    expect(state.removed).toEqual([]);
+    expect(host.textContent).toContain('Confirmer le retrait');
+    await click(by(host, 'data-carnet-remove'));
+    await settle();
+    expect(state.removed).toEqual(['rank:voix:2']);
+    expect(host.querySelectorAll('[data-carnet-entry]')).toHaveLength(1);
+  });
+});
+
+/**
+ * LA REPRISE (#10166, § 5.13) : « Reprendre » sur une photo gardée rouvre le
+ * déroulé au moment de l'entrée avec sa recette — la même photo si la source
+ * est gardée, sinon selfie neuf ou carte seule — et le carnet se relit à la
+ * fermeture : la ligne est remplacée, jamais doublée.
+ */
+describe('reprendre une photo gardée (#10166)', () => {
+  const voix = rankMoment({ rank: 'voix', division: 2 });
+  const { square: _square, ...neuve } = kept(voix, '2026-10-01T10:00:00.000Z');
+  const withSource: NotebookEntry = { ...neuve, source: new Blob(['src'], { type: 'image/jpeg' }), frameId: 'savane.voix-2', pose: 'pied' };
+
+  test('« Reprendre » rouvre le déroulé du moment, en reprise : la même photo proposée quand la source est gardée', async () => {
+    const { env } = bench([withSource]);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    await click(by(host, 'data-carnet-retake'));
+    expect(host.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe('Photo : Voix II');
+    expect(host.textContent).toContain('On la reprend ?');
+    expect(host.querySelector('[data-photo-choice="same-photo"]')).not.toBeNull();
+    expect(host.querySelector('[data-photo-choice="later"]')).toBeNull();
+  });
+
+  test('une ancienne entrée (deux images, sans source) ne propose que le selfie neuf ou la carte', async () => {
+    const { env } = bench([kept(voix, '2026-10-01T10:00:00.000Z')]);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    await click(by(host, 'data-carnet-retake'));
+    expect(host.querySelector('[data-photo-choice="same-photo"]')).toBeNull();
+    expect(host.querySelector('[data-photo-choice="selfie"]')).not.toBeNull();
+  });
+
+  test('fermer la reprise relit le carnet : une ligne par moment', async () => {
+    const { env, state } = bench([withSource]);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    await click(by(host, 'data-carnet-retake'));
+    state.entries = [{ ...withSource, frameId: 'royaumes.voix-2' }];
+    await click(host.querySelector<HTMLElement>('[data-photo-close]'));
+    await settle();
+    expect(host.querySelectorAll('[data-carnet-entry]')).toHaveLength(1);
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+  });
+});
+
+describe('les moments en attente', () => {
+  const trophy = achievementMoment('achievement.first_voice');
+  const entries = [pending(trophy, '2026-10-03T10:00:00.000Z', '2026-10-10T10:00:00.000Z')];
+
+  test('« En attente », sans échéance — l’attente n’expire plus (#10161) —, et de quoi photographier maintenant', async () => {
+    const { env } = bench(entries);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    const row = host.querySelector(`[data-carnet-entry="${trophy.id}"]`);
+    expect(row?.textContent).toContain('En attente');
+    expect(row?.textContent).not.toContain('jusqu’au');
+    expect(by(host, 'data-carnet-take')).not.toBeNull();
+  });
+
+  test('« Photographier » rouvre la proposition du moment', async () => {
+    const { env } = bench(entries);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    await click(by(host, 'data-carnet-take'));
+    expect(host.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe(`Photo : ${trophy.title}`);
+  });
+
+  test('une entrée en attente n’a pas d’aperçu ni de partage : rien à partager', async () => {
+    const { env } = bench(entries);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    expect(by(host, 'data-carnet-share')).toBeNull();
+    expect(host.querySelector('img')).toBeNull();
+  });
+
+  test('une étape de piste reportée n’apparaît jamais « en attente », même sans bloc du jeu en cache (#10161)', async () => {
+    const { env } = bench([pending(rankMoment({ rank: 'voix', division: 2 }), '2026-10-03T10:00:00.000Z', '2026-10-10T10:00:00.000Z')]);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    expect(host.querySelector('[data-carnet-entry]')).toBeNull();
+    expect(host.textContent).not.toContain('En attente');
+  });
+});
+
+describe('la place et l’appareil (#10161)', () => {
+  test('le carnet dit la place qu’il occupe et que ses photos vivent sur cet appareil', async () => {
+    const { env } = bench([kept(startMoment(), '2026-10-04T10:00:00.000Z')]);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    expect(by(host, 'data-carnet-size')?.textContent).toContain('La Chronique occupe');
+    expect(host.textContent).toContain('Tes photos vivent sur cet appareil.');
+  });
+
+  test('un ancien carnet en quarantaine se signale, sans rien montrer, et se supprime', async () => {
+    const { env, state } = bench([], null, 'quarantined');
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    const notice = by(host, 'data-carnet-legacy');
+    expect(notice?.textContent).toContain('n’appartient à aucun compte connu');
+    await click(notice?.querySelector<HTMLElement>('[data-carnet-legacy-delete]') ?? null);
+    await settle();
+    expect(state.discarded).toBe(1);
+    expect(by(host, 'data-carnet-legacy')).toBeNull();
+  });
+
+  test('sans ancien carnet : aucun signalement', async () => {
+    const { env } = bench([], null, 'none');
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    expect(by(host, 'data-carnet-legacy')).toBeNull();
+  });
+});
+
+/**
+ * LE RATTRAPAGE (#9961, #9962) — chaque étape déjà franchie sans photo se
+ * photographie, DANS L'ORDRE : la première de chaque piste est ouverte, les
+ * suivantes l'attendent. Les étapes se lisent dans le bloc du jeu déjà en
+ * cache ; sans lui, la section se tait.
+ */
+describe('à rattraper', () => {
+  const game = gameBlockFixture({ mintedLifetime: 21, flameRecord: 8, streak: 6 });
+  const keptStart = kept(startMoment(), '2026-09-01T10:00:00.000Z');
+  const keptFirst = kept(meeshMoment({ number: 1 }), '2026-09-02T10:00:00.000Z');
+  const catchUp = (host: ParentNode) => Array.from(host.querySelectorAll('[data-carnet-catch-up]')).map((e) => e.getAttribute('data-carnet-catch-up'));
+
+  test('sans bloc du jeu en cache : aucune section', async () => {
+    const { env } = bench([keptStart]);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    expect(host.textContent).not.toContain('À rattraper');
+    expect(catchUp(host)).toEqual([]);
+  });
+
+  test('les étapes franchies sans photo gardée, jamais celles déjà gardées', async () => {
+    const { env } = bench([keptStart, keptFirst]);
+    const host = await mount(<CarnetBody env={env} game={game} />);
+    await settle();
+    expect(host.textContent).toContain('À rattraper');
+    const ids = catchUp(host);
+    expect(ids).toContain('meesh:10');
+    expect(ids).toContain('meesh:20');
+    expect(ids).toContain('flame:7');
+    expect(ids).not.toContain('start');
+    expect(ids).not.toContain('meesh:1');
+  });
+
+  test('une étape ouverte se photographie : le même déroulé que les autres', async () => {
+    const { env } = bench([keptStart, keptFirst]);
+    const host = await mount(<CarnetBody env={env} game={game} />);
+    await settle();
+    await click(host.querySelector<HTMLElement>('[data-carnet-catch-up="meesh:10"] [data-carnet-catch-up-take]'));
+    expect(host.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe('Photo : Meesh n° 10');
+  });
+
+  test('une étape fermée dit laquelle prendre d’abord, sans bouton, et le dit au lecteur d’écran', async () => {
+    const { env } = bench([keptStart, keptFirst]);
+    const host = await mount(<CarnetBody env={env} game={game} />);
+    await settle();
+    const locked = host.querySelector<HTMLElement>('[data-carnet-catch-up="meesh:20"]');
+    expect(locked?.hasAttribute('data-carnet-catch-up-locked')).toBe(true);
+    expect(locked?.textContent).toContain('Prends d’abord : Meesh n° 10');
+    expect(locked?.querySelector('button')).toBeNull();
+    expect(locked?.getAttribute('aria-label')).toBe('Meesh n° 20 — verrouillée. Prends d’abord : Meesh n° 10');
+  });
+
+  test('les étapes se rangent par piste, chacune sous son nom', async () => {
+    const { env } = bench([keptStart, keptFirst]);
+    const host = await mount(<CarnetBody env={env} game={game} />);
+    await settle();
+    const tracks = Array.from(host.querySelectorAll('[data-carnet-track]')).map((e) => e.getAttribute('data-carnet-track'));
+    expect(tracks).toContain('meesh');
+    expect(tracks).toContain('flame');
+    expect(host.querySelector('[data-carnet-track="meesh"]')?.textContent).toContain('L’Héritage');
+    expect(host.querySelector('[data-carnet-track="meesh"] [data-carnet-catch-up="flame:7"]')).toBeNull();
+  });
+
+  test('un moment en attente qui est une étape ne paraît qu’une fois : dans le rattrapage', async () => {
+    const { env } = bench([keptStart, keptFirst, pending(flameMoment(7), '2026-10-03T10:00:00.000Z', '2026-10-10T10:00:00.000Z')]);
+    const host = await mount(<CarnetBody env={env} game={game} />);
+    await settle();
+    expect(host.querySelectorAll('[data-carnet-entry="flame:7"]')).toHaveLength(0);
+    expect(catchUp(host).filter((id) => id === 'flame:7')).toHaveLength(1);
+    expect(host.textContent).not.toContain('En attente');
+  });
+
+  test('un carnet à jour : aucune section', async () => {
+    const { env } = bench([keptStart]);
+    const host = await mount(<CarnetBody env={env} game={gameBlockFixture({ mintedLifetime: 0, glory: 0, levelRecord: 1, score: 0, flameRecord: 0, streak: 0, balance: 0 })} />);
+    await settle();
+    expect(host.textContent).not.toContain('À rattraper');
+  });
+});
+
+/**
+ * IMMORTALISÉE SUR UN AUTRE APPAREIL (D22 b, #10182 ; #10174) : l'identifiant servi (`keptAt`) sort l'étape de
+ * « À rattraper » même sans photo ici ; la piste reprend à l'étape suivante.
+ */
+describe('le registre partagé', () => {
+  test('une étape `keptAt` servie par le serveur n’est plus à rattraper', async () => {
+    const env = { notebook: { list: async () => [] as NotebookEntry[] }, now: () => new Date('2026-10-05T10:00:00.000Z') } as unknown as PhotoEnv;
+    const base = gameBlockFixture({ mintedLifetime: 10 });
+    const game = { ...base, photo: { atmosphere: null, invitations: 'every' as const, baselineAt: null, baseline: null, treasuryPeakTier: null, moments: [{ stepId: 'meesh:1', detectedAt: null, presentedAt: null, notifiedAt: null, keptAt: '2026-10-04T10:00:00.000Z' }] } };
+    const host = await mount(<CarnetBody env={env} game={game} />);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(host.querySelector('[data-carnet-catch-up="meesh:1"]')).toBeNull();
+    expect(host.querySelector('[data-carnet-catch-up="meesh:10"]')).not.toBeNull();
+  });
+});
+
+/* L'ÉCRAN, pas le suivi seul (#10175) : ouvrir le carnet à froid — aucune liste de la cloche en cache, la cloche à une
+   non-lue — éteint « moments à immortaliser » par UNE requête, et le carnet fermé n'en envoie plus aucune. Le transport
+   de l'application est remplacé le temps du témoin : en source `fixtures`, rien ne partirait et le témoin ne pourrait
+   pas tomber. */
+describe('ouvrir le carnet éteint « moments à immortaliser » dans la cloche', () => {
+  const READ_BY_TYPES = 'POST /api/v1/notifications/read-by-types';
+  const deps = apiDeps as unknown as { source: string; transport: HttpTransport };
+  const saved = { source: deps.source, transport: deps.transport };
+
+  beforeAll(async () => {
+    await loadGameCatalog('fr');
+  });
+  afterEach(() => {
+    deps.source = saved.source;
+    deps.transport = saved.transport;
+    appQueryClient.removeQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
+  });
+
+  test('UNE requête read-by-types à l’ouverture, cache vide ; plus aucune une fois le carnet quitté', async () => {
+    const { transport, calls } = scriptedTransport({ [READ_BY_TYPES]: { ok: true, status: 200, data: undefined } });
+    deps.source = 'gateway';
+    deps.transport = transport;
+    appQueryClient.removeQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
+    appQueryClient.setQueryData<NotificationCounts>(NOTIFICATION_COUNTS_QUERY_KEY, { total: 1, unread: 1, byType: { game_photo_moment: 1 } });
+
+    await mount(
+      <QueryClientProvider client={new QueryClient()}>
+        <Suspense fallback={null}>
+          <ProgressionCarnetScreen />
+        </Suspense>
+      </QueryClientProvider>,
+    );
+    await settle();
+    const readByTypes = () => calls().filter((req) => `${req.method} ${req.path}` === READ_BY_TYPES);
+    expect(readByTypes().map((req) => req.body)).toEqual([{ types: ['game_photo_moment'] }]);
+
+    unmountAll();
+    const before = calls().length;
+    applyNotificationNew(appQueryClient, {
+      id: 'p-apres',
+      type: 'game_photo_moment',
+      title: null,
+      content: 'p-apres',
+      actor: null,
+      context: {},
+      metadata: {},
+      state: { isRead: false, createdAt: '2026-10-25T08:00:00.000Z' },
+    });
+    await settle();
+    expect(calls().length).toBe(before);
+  });
+});

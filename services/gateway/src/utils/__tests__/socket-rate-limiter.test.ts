@@ -13,8 +13,9 @@ jest.mock('../logger.js', () => ({
   logger: { warn: jest.fn(), debug: jest.fn(), info: jest.fn(), error: jest.fn() },
 }));
 
-import { SocketRateLimiter, checkSocketRateLimit, getSocketRateLimiter } from '../socket-rate-limiter';
+import { SocketRateLimiter, checkSocketRateLimit, getSocketRateLimiter, callSignalBudgetId, SOCKET_RATE_LIMITS } from '../socket-rate-limiter';
 import type { Socket } from 'socket.io';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -221,16 +222,16 @@ describe('checkSocketRateLimit', () => {
     const socket = makeSocket();
     const config = makeConfig({ maxRequests: 1 });
 
-    await checkSocketRateLimit(socket, 'user-block', config, limiter, 'custom:error');
-    const result = await checkSocketRateLimit(socket, 'user-block', config, limiter, 'custom:error');
+    await checkSocketRateLimit(socket, 'user-block', config, limiter, SERVER_EVENTS.CALL_ERROR);
+    const result = await checkSocketRateLimit(socket, 'user-block', config, limiter, SERVER_EVENTS.CALL_ERROR);
 
     expect(result).toBe(false);
     expect(socket.emit).toHaveBeenCalledWith(
-      'custom:error',
+      SERVER_EVENTS.CALL_ERROR,
       expect.objectContaining({
         code: 'RATE_LIMIT_EXCEEDED',
         message: expect.stringContaining('seconds'),
-        retryAfter: expect.any(Number),
+        details: { retryAfter: expect.any(Number) },
       })
     );
   });
@@ -253,5 +254,18 @@ describe('getSocketRateLimiter', () => {
     const a = getSocketRateLimiter();
     const b = getSocketRateLimiter();
     expect(a).toBe(b);
+  });
+});
+
+describe('call:signal — un budget par appareil (#17952)', () => {
+  it('un appareil qui épuise son budget ne bloque pas un autre appareil du même compte', async () => {
+    const limiter = new SocketRateLimiter();
+    const config = SOCKET_RATE_LIMITS.CALL_SIGNAL;
+    for (let i = 0; i < config.maxRequests; i += 1) {
+      await limiter.checkLimit(callSignalBudgetId('jcnm', 'ipad'), config);
+    }
+    expect(await limiter.checkLimit(callSignalBudgetId('jcnm', 'ipad'), config)).toBe(false);
+    expect(await limiter.checkLimit(callSignalBudgetId('jcnm', 'iphone'), config)).toBe(true);
+    limiter.destroy();
   });
 });

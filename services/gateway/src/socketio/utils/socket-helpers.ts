@@ -42,6 +42,54 @@ export interface SocketUser {
   displayName?: string;
   /** @deprecated kept for backward compat during migration — raw session token */
   sessionToken?: string;
+  /**
+   * #16687 — les conversations dont la room n'a PAS pu être rejointe pour cette
+   * socket, après épuisement des réessais (`_joinConversationRoomsWithRetry`).
+   *
+   * Inscrire la socket dans `connectedUsers` n'est pas neutre : c'est ce que
+   * `enqueueForOfflineParticipants` lit pour décider de ne PAS enfiler. Sans ce
+   * marqueur, une socket absente de la room était tenue pour joignable et le
+   * message n'allait nulle part — ni émission vive, ni rejeu.
+   *
+   * ABSENT ou vide = joignable partout, le cas nominal.
+   *
+   * **CE CHAMP EST DÉRIVÉ, il ne s'écrit plus à la main (#16726).** La
+   * joignabilité est un fait de SOCKET, et cette entrée est par COMPTE : elle
+   * porte l'INTERSECTION des verdicts des sockets vivantes du compte, que
+   * `withCombinedReachability` (`socketio/socketReachability.ts`) recalcule à
+   * chaque authentification, à chaque déconnexion et à chaque jonction de
+   * mi-session. Le fait par socket vit dans `socket.data`.
+   *
+   * L'intersection, parce qu'un compte est joignable dès qu'UNE de ses sockets
+   * est dans la room : l'union enfilerait pour un compte que la diffusion
+   * atteint (doublon à la remise), et le dernier écrit PERDRAIT — c'est ce que
+   * #16726 a coûté, le survivant malade héritant d'une entrée sans marqueur.
+   *
+   * **CE QUE CE MARQUEUR NE COUVRE PAS**, énuméré parce qu'un invariant annoncé
+   * plus fort qu'il n'est vaut moins que pas d'invariant :
+   *
+   * - **Zéro room jointe** quand la LECTURE des participants tombe au
+   *   handshake : un `ReadonlySet` d'ids ne peut pas dire « toutes, dont
+   *   j'ignore la liste ». C'est `allConversationRoomsUnreachable`, déclaré
+   *   juste en dessous, qui le dit (#16687 suite, #16719).
+   * - **La portée reste celle du NŒUD.** `connectedUsers` est une carte de
+   *   processus : un compte connecté à un autre nœud n'y a pas d'entrée, donc
+   *   pas de marqueur — la file l'enfile comme hors ligne, ce qui est le repli
+   *   juste. La JONCTION, elle, traverse désormais l'adaptateur (#18381).
+   * - La convergence de l'appareil resté muet est une question distincte
+   *   (#16688).
+   */
+  unreachableConversations?: ReadonlySet<string>;
+  /**
+   * « Cette socket n'est joignable pour AUCUNE de ses conversations, et on ne
+   * sait pas lesquelles » (#16687 suite). Posé quand la LECTURE des
+   * conversations du compte est tombée au handshake : zéro room rejointe, et
+   * aucune liste à mettre dans `unreachableConversations`, qu'un ensemble ne
+   * peut pas exprimer. La file hors ligne le lit comme injoignable quelle que
+   * soit la conversation — sans quoi la socket passait pour joignable et rien
+   * n'était enfilé, pendant qu'aucune diffusion de room ne l'atteignait.
+   */
+  allConversationRoomsUnreachable?: boolean;
 }
 
 export interface ConnectedUserResult {

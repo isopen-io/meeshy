@@ -1,65 +1,84 @@
 /**
- * Tests — PostService.recordAnonymousOpen
- * v1 "comptage bête" : 1ᵉʳ (postId, sessionKey) → +1 postOpenCount ; doublon
- * (P2002) → no-op ; post non public / introuvable → no-op.
+ * Tests — PostService.recordAnonymousView (#10483, ex `recordAnonymousOpen`).
+ *
+ * La vue d'un lecteur SANS compte, désigné par sa clé de lecteur HMAC : elle
+ * entre dans `viewCount` une fois par lecteur, sous la garde de lecture
+ * anonyme (`isServableToAnonymous`) ; une vue répétée ne monte que la durée.
  * @jest-environment node
  */
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect } from '@jest/globals';
 import { PostService } from '../services/PostService';
+import { makeReachPrisma, type ReachPost } from './helpers/reach-prisma';
+import { readerKeyOf } from '../services/posts/readerKey';
 
 const POST_A = '507f1f77bcf86cd799439011';
+const ROOT = '507f1f77bcf86cd799439012';
+const LECTEUR = readerKeyOf({ sessionToken: 'visitor_a' });
+const AUTRE = readerKeyOf({ sessionToken: 'visitor_b' });
 
-const buildPrisma = (over: Partial<Record<string, unknown>> = {}) => {
-  const post = {
-    findFirst: jest.fn<(arg?: unknown) => Promise<{ id: string } | null>>()
-      .mockResolvedValue({ id: POST_A }),
-    update: jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue({}),
-  };
-  const anonymousPostOpen = {
-    create: jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue({ id: 'x' }),
-  };
-  const prisma = { post, anonymousPostOpen, ...over };
-  return prisma as unknown as ConstructorParameters<typeof PostService>[0] & {
-    post: typeof post; anonymousPostOpen: typeof anonymousPostOpen;
-  };
+const service = (posts: readonly ReachPost[]) => {
+  const fake = makeReachPrisma(posts);
+  return { ...fake, svc: new PostService(fake.prisma as never) };
 };
 
-const makeService = (prisma: ReturnType<typeof buildPrisma>) =>
-  new PostService(prisma as unknown as ConstructorParameters<typeof PostService>[0]);
+describe('PostService.recordAnonymousView', () => {
+  it('la 1ʳᵉ vue d’un lecteur compte viewCount, anonymousViewCount et postOpenCount en une écriture', async () => {
+    const h = service([{ id: POST_A }]);
 
-describe('PostService.recordAnonymousOpen', () => {
-  it('compte la 1ʳᵉ ouverture (insert) et incrémente postOpenCount', async () => {
-    const prisma = buildPrisma();
-    const counted = await makeService(prisma).recordAnonymousOpen(POST_A, 'sess-1');
-    expect(counted).toBe(true);
-    expect(prisma.anonymousPostOpen.create).toHaveBeenCalledTimes(1);
-    expect(prisma.post.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { postOpenCount: { increment: 1 } } }),
-    );
+    expect(await h.svc.recordAnonymousView(POST_A, LECTEUR)).toBe(true);
+    expect(h.store.read(POST_A)).toMatchObject({ viewCount: 1, anonymousViewCount: 1, postOpenCount: 1 });
+    expect(h.prisma.$runCommandRaw).toHaveBeenCalledTimes(1);
   });
 
-  it('ne recompte pas un doublon (P2002) — no-op', async () => {
-    const prisma = buildPrisma({
-      anonymousPostOpen: {
-        create: jest.fn<(arg?: unknown) => Promise<unknown>>()
-          .mockRejectedValue(Object.assign(new Error('Unique'), { code: 'P2002' })),
-      },
+  it('une vue répétée du même lecteur compte au total, pas dans les uniques', async () => {
+    const h = service([{ id: POST_A }]);
+    await h.svc.recordAnonymousView(POST_A, LECTEUR);
+
+    expect(await h.svc.recordAnonymousView(POST_A, LECTEUR)).toBe(true);
+    expect(h.store.read(POST_A)).toMatchObject({
+      viewCount: 2, anonymousViewCount: 2, postOpenCount: 2, uniqueViewCount: 1, anonymousUniqueViewCount: 1,
     });
-    const counted = await makeService(prisma).recordAnonymousOpen(POST_A, 'sess-1');
-    expect(counted).toBe(false);
-    expect(prisma.post.update).not.toHaveBeenCalled();
   });
 
-  it('ne compte pas un post non public / introuvable', async () => {
-    const prisma = buildPrisma({
-      post: {
-        findFirst: jest.fn<(arg?: unknown) => Promise<null>>().mockResolvedValue(null),
-        update: jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue({}),
-      },
-    });
-    const counted = await makeService(prisma).recordAnonymousOpen(POST_A, 'sess-1');
-    expect(counted).toBe(false);
-    expect(prisma.anonymousPostOpen.create).not.toHaveBeenCalled();
-    expect(prisma.post.update).not.toHaveBeenCalled();
+  it('deux lecteurs ⇒ +2', async () => {
+    const h = service([{ id: POST_A }]);
+    await h.svc.recordAnonymousView(POST_A, LECTEUR);
+    await h.svc.recordAnonymousView(POST_A, AUTRE);
+
+    expect(h.store.read(POST_A)).toMatchObject({ viewCount: 2, anonymousViewCount: 2 });
+  });
+
+  it('garde la durée la plus longue', async () => {
+    const h = service([{ id: POST_A }]);
+    await h.svc.recordAnonymousView(POST_A, LECTEUR, 3000);
+    await h.svc.recordAnonymousView(POST_A, LECTEUR, 8000);
+    await h.svc.recordAnonymousView(POST_A, LECTEUR, 1000);
+
+    expect(h.opens).toEqual([expect.objectContaining({ postId: POST_A, sessionKey: LECTEUR, durationMs: 8000 })]);
+  });
+
+  it('crédite la racine d’un repost', async () => {
+    const h = service([{ id: ROOT }, { id: POST_A, repostOfId: ROOT, originalRepostOfId: ROOT }]);
+    await h.svc.recordAnonymousView(POST_A, LECTEUR);
+
+    expect(h.store.read(ROOT)).toMatchObject({ viewCount: 1, anonymousViewCount: 1 });
+  });
+
+  it.each([
+    ['réservé aux amis', { id: POST_A, visibility: 'FRIENDS' }],
+    ['expiré', { id: POST_A, type: 'STORY', expiresAt: new Date(Date.now() - 1000) }],
+    ['d’un auteur désactivé', { id: POST_A, author: { isActive: false, deletedAt: null, deactivatedAt: new Date() } }],
+  ])('ne compte pas un post %s', async (_nom, post) => {
+    const h = service([post]);
+
+    expect(await h.svc.recordAnonymousView(POST_A, LECTEUR)).toBe(false);
+    expect(h.writes).toEqual([]);
+  });
+
+  it('ne compte pas un post introuvable', async () => {
+    const h = service([]);
+
+    expect(await h.svc.recordAnonymousView(POST_A, LECTEUR)).toBe(false);
+    expect(h.writes).toEqual([]);
   });
 });

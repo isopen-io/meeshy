@@ -75,4 +75,38 @@ class TranscriptionReadyEventTest {
         assertThat(event.transcription.language).isNull()
         assertThat(event.attachmentId).isNull()
     }
+
+    @Test
+    fun `decodes the served segments and the speaker count`() {
+        val event = json.decodeFromString<TranscriptionReadyEvent>(
+            """
+            {
+              "messageId": "m1", "conversationId": "c1", "attachmentId": "a1",
+              "transcription": {
+                "text": "bonjour a tous", "language": "fr", "speakerCount": 2,
+                "segments": [
+                  { "text": "bonjour", "startMs": 0, "endMs": 1000, "speakerId": "s1" },
+                  { "text": "a tous", "startTime": 1.0, "endTime": 2.5, "speakerId": "s2" }
+                ]
+              }
+            }
+            """.trimIndent(),
+        )
+
+        assertThat(event.transcription.speakerCount).isEqualTo(2)
+        assertThat(event.transcription.segments).containsExactly(
+            TranscriptionSegment(text = "bonjour", startTime = 0.0, endTime = 1.0, speakerId = "s1"),
+            TranscriptionSegment(text = "a tous", startTime = 1.0, endTime = 2.5, speakerId = "s2"),
+        ).inOrder()
+    }
+
+    @Test
+    fun `a frame without segments still decodes, with none`() {
+        val event = json.decodeFromString<TranscriptionReadyEvent>(
+            """{ "messageId": "m1", "conversationId": "c1", "transcription": { "text": "x" } }""",
+        )
+
+        assertThat(event.transcription.segments).isNull()
+        assertThat(event.transcription.speakerCount).isNull()
+    }
 }

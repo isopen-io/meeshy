@@ -1,12 +1,11 @@
 package me.meeshy.app.stories
 
-import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.CompletableDeferred
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -15,16 +14,25 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPostComment
+import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SocketCommentAddedData
+import me.meeshy.sdk.model.SocketCommentDeletedData
+import me.meeshy.sdk.model.SocketCommentReactionAggregation
+import me.meeshy.sdk.model.SocketCommentReactionUpdateData
+import me.meeshy.sdk.model.SocketCommentTranslationUpdatedData
+import me.meeshy.sdk.model.SocketCommentUpdatedData
+import me.meeshy.sdk.model.StoryComment
+import me.meeshy.sdk.model.StoryCommentPage
 import me.meeshy.sdk.model.StoryCommentStatus
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.post.PostModerationRepository
+import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
-import me.meeshy.sdk.story.StoryRepository
+import me.meeshy.sdk.story.StoryCommentsRepository
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -32,240 +40,312 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class StoryCommentsViewModelTest {
 
-    private val dispatcher = UnconfinedTestDispatcher()
+    @Before fun setUp() { Dispatchers.setMain(UnconfinedTestDispatcher()) }
+    @After fun tearDown() { Dispatchers.resetMain() }
 
-    @Before
-    fun setUp() = Dispatchers.setMain(dispatcher)
-
-    @After
-    fun tearDown() = Dispatchers.resetMain()
-
-    private val repo: StoryRepository = mockk(relaxed = true)
+    private val repository: StoryCommentsRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
-    private val commentAdded = MutableSharedFlow<SocketCommentAddedData>(extraBufferCapacity = 8)
-    private val socialSocket: SocialSocketManager = mockk(relaxed = true) {
-        every { commentAdded } returns this@StoryCommentsViewModelTest.commentAdded
+    private val socket: SocialSocketManager = mockk(relaxed = true)
+    private val moderation: PostModerationRepository = mockk()
+    private val reports: ReportRepository = mockk()
+    private val added = MutableSharedFlow<SocketCommentAddedData>(extraBufferCapacity = 16)
+    private val updated = MutableSharedFlow<SocketCommentUpdatedData>(extraBufferCapacity = 16)
+    private val deleted = MutableSharedFlow<SocketCommentDeletedData>(extraBufferCapacity = 16)
+    private val reactionAdded = MutableSharedFlow<SocketCommentReactionUpdateData>(extraBufferCapacity = 16)
+    private val reactionRemoved = MutableSharedFlow<SocketCommentReactionUpdateData>(extraBufferCapacity = 16)
+    private val translated = MutableSharedFlow<SocketCommentTranslationUpdatedData>(extraBufferCapacity = 16)
+
+    init {
+        coEvery { repository.cachedRoots(any(), any()) } returns null
     }
 
-    private val me = MeeshyUser(id = "me", username = "me", displayName = "Me")
+    private fun row(id: String, parentId: String? = null, replyCount: Int = 0) = StoryComment(
+        id = id, clientId = null, authorName = "A", avatarUrl = null, content = "c$id", isTranslated = false,
+        createdAt = null, status = StoryCommentStatus.Sent, parentId = parentId, replyCount = replyCount,
+    )
 
-    private fun wire(id: String, content: String = "c-$id", createdAt: String? = null) =
-        ApiPostComment(
-            id = id,
-            content = content,
-            author = ApiAuthor(id = "u-$id", username = "name-$id"),
-            createdAt = createdAt,
-        )
+    private fun page(vararg rows: StoryComment, next: String? = null) = StoryCommentPage(rows.toList(), next, next != null)
+
+    private fun api(id: String, parentId: String? = null) = ApiPostComment(id = id, content = "c$id", parentId = parentId)
 
     private fun viewModel(): StoryCommentsViewModel {
-        every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(me)
-        return StoryCommentsViewModel(repo, session, socialSocket)
+        every { session.currentUser } returns MutableStateFlow(MeeshyUser(id = "me", username = "me"))
+        every { socket.commentAdded } returns added
+        every { socket.commentUpdated } returns updated
+        every { socket.commentDeleted } returns deleted
+        every { socket.commentReactionAdded } returns reactionAdded
+        every { socket.commentReactionRemoved } returns reactionRemoved
+        every { socket.commentTranslationUpdated } returns translated
+        return StoryCommentsViewModel(repository, session, socket, moderation, reports)
+    }
+
+    private fun StoryCommentsViewModel.ids() = state.value.comments.roots.map { it.id }
+
+    @Test
+    fun `la liste locale est servie d'abord et le reseau la revalide sans spinner`() = runTest {
+        coEvery { repository.cachedRoots("s1", any()) } returns page(row("old"))
+        coEvery { repository.roots("s1", null, any(), any()) } returns NetworkResult.Success(page(row("old"), row("new")))
+        val vm = viewModel()
+
+        vm.begin("s1", payloadCount = 1)
+
+        assertThat(vm.ids()).containsExactly("old", "new").inOrder()
+        assertThat(vm.state.value.isLoadingRoots).isFalse()
+        assertThat(vm.state.value.comments.count).isEqualTo(2)
     }
 
     @Test
-    fun load_success_populatesCommentsOldestFirst() = runTest {
-        coEvery { repo.comments("s1") } returns NetworkResult.Success(
-            listOf(wire("b", createdAt = "2026-06-20T11:00:00Z"), wire("a", createdAt = "2026-06-20T09:00:00Z")),
+    fun `un cache vide attend le reseau avec un squelette`() = runTest {
+        coEvery { repository.cachedRoots("s1", any()) } returns null
+        coEvery { repository.roots("s1", null, any(), any()) } returns NetworkResult.Failure(ApiError("hors ligne"))
+        val vm = viewModel()
+
+        vm.begin("s1")
+
+        assertThat(vm.state.value.isLoadingRoots).isFalse()
+        assertThat(vm.state.value.isOffline).isTrue()
+        assertThat(vm.ids()).isEmpty()
+    }
+
+    @Test
+    fun `une panne reseau garde la liste locale`() = runTest {
+        coEvery { repository.cachedRoots("s1", any()) } returns page(row("old"))
+        coEvery { repository.roots("s1", null, any(), any()) } returns NetworkResult.Failure(ApiError("hors ligne"))
+        val vm = viewModel()
+
+        vm.begin("s1")
+
+        assertThat(vm.ids()).containsExactly("old")
+    }
+
+    @Test
+    fun `deplier un fil recharge sa premiere page et voir plus la suivante`() = runTest {
+        coEvery { repository.roots("s1", null, any(), any()) } returns NetworkResult.Success(page(row("r", replyCount = 30)))
+        coEvery { repository.replies("s1", "r", null, any(), any()) } returns NetworkResult.Success(page(row("a", "r"), next = "a"))
+        coEvery { repository.replies("s1", "r", "a", any(), any()) } returns NetworkResult.Success(page(row("b", "r")))
+        val vm = viewModel()
+        vm.begin("s1")
+
+        vm.toggleThread("r")
+        vm.loadMoreReplies("r")
+
+        assertThat(vm.state.value.comments.repliesOf("r").map { it.id }).containsExactly("a", "b").inOrder()
+        assertThat(vm.state.value.comments.thread.isExpanded("r")).isTrue()
+        assertThat(vm.state.value.comments.thread.hasMoreReplies("r")).isFalse()
+    }
+
+    @Test
+    fun `le coeur est optimiste puis rejoue en arriere si le serveur refuse`() = runTest {
+        coEvery { repository.roots("s1", null, any(), any()) } returns NetworkResult.Success(page(row("r")))
+        coEvery { repository.like("s1", "r") } returns NetworkResult.Failure(ApiError("non"))
+        val vm = viewModel()
+        vm.begin("s1")
+
+        vm.toggleLike("r")
+
+        val after = vm.state.value.comments.find("r")!!
+        assertThat(after.likedByMe).isFalse()
+        assertThat(after.likeCount).isEqualTo(0)
+        assertThat(vm.state.value.comments.likesInFlight).isEmpty()
+    }
+
+    @Test
+    fun `le coeur accepte reste pose`() = runTest {
+        coEvery { repository.roots("s1", null, any(), any()) } returns NetworkResult.Success(page(row("r")))
+        coEvery { repository.like("s1", "r") } returns NetworkResult.Success(Unit)
+        val vm = viewModel()
+        vm.begin("s1")
+
+        vm.toggleLike("r")
+
+        assertThat(vm.state.value.comments.find("r")!!.likedByMe).isTrue()
+        coVerify(exactly = 1) { repository.like("s1", "r") }
+    }
+
+    @Test
+    fun `les sockets ajoutent, remplacent et retirent en place pour la story a l'ecran seulement`() = runTest {
+        coEvery { repository.roots("s1", null, any(), any()) } returns NetworkResult.Success(page(row("r")))
+        val vm = viewModel()
+        vm.begin("s1")
+
+        added.emit(SocketCommentAddedData("s1", api("n"), commentCount = 2))
+        added.emit(SocketCommentAddedData("autre", api("x"), commentCount = 9))
+        assertThat(vm.ids()).containsExactly("r", "n").inOrder()
+        assertThat(vm.state.value.comments.count).isEqualTo(2)
+
+        updated.emit(SocketCommentUpdatedData("s1", ApiPostComment(id = "n", content = "edite")))
+        assertThat(vm.state.value.comments.find("n")!!.content).isEqualTo("edite")
+
+        deleted.emit(SocketCommentDeletedData("s1", "n", commentCount = 1))
+        assertThat(vm.ids()).containsExactly("r")
+    }
+
+    @Test
+    fun `un agregat de coeur du socket fixe le compte`() = runTest {
+        coEvery { repository.roots("s1", null, any(), any()) } returns NetworkResult.Success(page(row("r")))
+        val vm = viewModel()
+        vm.begin("s1")
+
+        reactionAdded.emit(
+            SocketCommentReactionUpdateData("r", "s1", "me", "❤️", aggregation = SocketCommentReactionAggregation("❤️", 4)),
         )
-        val vm = viewModel()
 
-        vm.load("s1")
-
-        assertThat(vm.state.value.comments.map { it.id }).containsExactly("a", "b").inOrder()
-        assertThat(vm.state.value.isLoading).isFalse()
-        assertThat(vm.state.value.isEmpty).isFalse()
-        assertThat(vm.state.value.errorMessage).isNull()
+        assertThat(vm.state.value.comments.find("r")!!.likeCount).isEqualTo(4)
+        assertThat(vm.state.value.comments.find("r")!!.likedByMe).isTrue()
     }
 
     @Test
-    fun load_emptySuccess_isEmptyWithoutError() = runTest {
-        coEvery { repo.comments("s1") } returns NetworkResult.Success(emptyList())
+    fun `une traduction arrivee par socket est rangee dans la ligne`() = runTest {
+        coEvery { repository.roots("s1", null, any(), any()) } returns NetworkResult.Success(page(row("r")))
         val vm = viewModel()
+        vm.begin("s1")
 
-        vm.load("s1")
+        translated.emit(SocketCommentTranslationUpdatedData("s1", "r", "en", ApiPostTranslationEntry(text = "hello")))
 
-        assertThat(vm.state.value.isEmpty).isTrue()
-        assertThat(vm.state.value.errorMessage).isNull()
+        assertThat(vm.state.value.comments.find("r")!!.translations).containsKey("en")
     }
 
     @Test
-    fun load_coldFailure_surfacesError() = runTest {
-        coEvery { repo.comments("s1") } returns NetworkResult.Failure(ApiError("network down"))
+    fun `la chasse trouve une reponse a la page deux de son fil et deplie le parent`() = runTest {
+        coEvery { repository.roots("s1", null, any(), any()) } returns NetworkResult.Success(page(row("r", replyCount = 30)))
+        coEvery { repository.replies("s1", "r", null, any(), any()) } returns NetworkResult.Success(page(row("a", "r"), next = "a"))
+        coEvery { repository.replies("s1", "r", "a", any(), any()) } returns NetworkResult.Success(page(row("goal", "r")))
         val vm = viewModel()
+        vm.begin("s1")
 
-        vm.load("s1")
+        vm.huntTarget("goal", parentId = "r")
 
-        assertThat(vm.state.value.errorMessage).isEqualTo("network down")
-        assertThat(vm.state.value.comments).isEmpty()
-        assertThat(vm.state.value.isEmpty).isFalse()
+        assertThat(vm.state.value.targetFound).isTrue()
+        assertThat(vm.state.value.comments.thread.isExpanded("r")).isTrue()
+        assertThat(vm.state.value.comments.contains("goal")).isTrue()
     }
 
     @Test
-    fun load_coldException_surfacesMessage() = runTest {
-        coEvery { repo.comments("s1") } throws RuntimeException("kaboom")
+    fun `la chasse d'un commentaire disparu l'annonce introuvable`() = runTest {
+        coEvery { repository.roots("s1", null, any(), any()) } returns NetworkResult.Success(page(row("r")))
         val vm = viewModel()
+        vm.begin("s1")
 
-        vm.load("s1")
+        vm.huntTarget("ghost", parentId = null)
 
-        assertThat(vm.state.value.errorMessage).isEqualTo("kaboom")
+        assertThat(vm.state.value.targetFound).isFalse()
     }
 
     @Test
-    fun refreshFailure_keepsExistingComments_noError() = runTest {
-        coEvery { repo.comments("s1") } returns
-            NetworkResult.Success(listOf(wire("a", createdAt = "2026-06-20T09:00:00Z")))
+    fun `changer de story quitte la salle de la precedente`() = runTest {
+        coEvery { repository.roots(any(), any(), any(), any()) } returns NetworkResult.Success(page())
         val vm = viewModel()
-        vm.load("s1")
-        assertThat(vm.state.value.comments).hasSize(1)
 
-        coEvery { repo.comments("s1") } returns NetworkResult.Failure(ApiError("flaky"))
-        vm.load("s1")
+        vm.begin("s1")
+        vm.begin("s2")
 
-        assertThat(vm.state.value.comments.map { it.id }).containsExactly("a")
-        assertThat(vm.state.value.errorMessage).isNull()
-        assertThat(vm.state.value.isLoading).isFalse()
+        verify { socket.leavePostRoom("s1") }
+        verify { socket.joinPostRoom("s2") }
     }
 
     @Test
-    fun load_coldLoad_showsSkeletonThenList() = runTest {
-        val gate = CompletableDeferred<NetworkResult<List<ApiPostComment>>>()
-        coEvery { repo.comments("s1") } coAnswers { gate.await() }
+    fun `la suppression retire la ligne apres la confirmation du serveur`() = runTest {
+        coEvery { repository.roots("s1", null, any(), any()) } returns NetworkResult.Success(page(row("r")))
+        coEvery { repository.delete("s1", "r") } returns NetworkResult.Success(Unit)
         val vm = viewModel()
+        vm.begin("s1")
 
-        vm.state.test {
-            assertThat(awaitItem().isLoading).isFalse() // idle
-            vm.load("s1")
-            assertThat(awaitItem().isLoading).isTrue() // cold skeleton
-            gate.complete(NetworkResult.Success(listOf(wire("a", createdAt = "2026-06-20T09:00:00Z"))))
-            val loaded = awaitItem()
-            assertThat(loaded.isLoading).isFalse()
-            assertThat(loaded.comments).hasSize(1)
-            cancelAndIgnoreRemainingEvents()
-        }
+        vm.delete("r")
+
+        assertThat(vm.ids()).isEmpty()
     }
 
     @Test
-    fun load_isReentrancySafe_whileInFlightForSameStory() = runTest {
-        val gate = CompletableDeferred<NetworkResult<List<ApiPostComment>>>()
-        coEvery { repo.comments("s1") } coAnswers { gate.await() }
+    fun `l'edition remplace le texte de la ligne`() = runTest {
+        coEvery { repository.roots("s1", null, any(), any()) } returns NetworkResult.Success(page(row("r")))
+        coEvery { repository.edit("s1", "r", "neuf", any()) } returns NetworkResult.Success(row("r").copy(content = "neuf"))
         val vm = viewModel()
+        vm.begin("s1")
 
-        vm.load("s1")
-        vm.load("s1")
-        gate.complete(NetworkResult.Success(emptyList()))
+        vm.edit("r", "neuf")
 
-        coVerify(exactly = 1) { repo.comments("s1") }
+        assertThat(vm.state.value.comments.find("r")!!.content).isEqualTo("neuf")
     }
 
     @Test
-    fun post_optimisticPending_thenSentOnAck() = runTest {
-        coEvery { repo.comments("s1") } returns NetworkResult.Success(emptyList())
-        val gate = CompletableDeferred<NetworkResult<ApiPostComment>>()
-        coEvery { repo.comment("s1", "hi") } coAnswers { gate.await() }
+    fun `une edition refusee COMMENTS_DISABLED garde le texte d'origine et ferme le fil`() = runTest {
+        coEvery { repository.roots("s1", null, any(), any()) } returns NetworkResult.Success(page(row("r")))
+        coEvery { repository.edit("s1", "r", "neuf", any()) } returns
+            NetworkResult.Failure(ApiError(message = "Comments are disabled", code = "COMMENTS_DISABLED", httpStatus = 403))
         val vm = viewModel()
-        vm.load("s1")
+        vm.begin("s1")
+        var closed = 0
 
-        vm.post("hi")
+        vm.edit("r", "neuf") { closed++ }
 
-        // optimistic row is shown immediately as Pending, with my name
-        val pending = vm.state.value.comments.single()
-        assertThat(pending.status).isEqualTo(StoryCommentStatus.Pending)
-        assertThat(pending.content).isEqualTo("hi")
-        assertThat(pending.authorName).isEqualTo("Me")
-
-        gate.complete(NetworkResult.Success(wire("server1", content = "hi", createdAt = "2026-06-20T12:00:00Z")))
-
-        val confirmed = vm.state.value.comments.single()
-        assertThat(confirmed.id).isEqualTo("server1")
-        assertThat(confirmed.status).isEqualTo(StoryCommentStatus.Sent)
+        assertThat(vm.state.value.comments.find("r")!!.content).isEqualTo("cr")
+        assertThat(closed).isEqualTo(1)
     }
 
     @Test
-    fun post_failure_marksRowFailed() = runTest {
-        coEvery { repo.comments("s1") } returns NetworkResult.Success(emptyList())
-        coEvery { repo.comment("s1", "oops") } returns NetworkResult.Failure(ApiError("no net"))
+    fun `une autre panne d'edition ne ferme pas le fil`() = runTest {
+        coEvery { repository.roots("s1", null, any(), any()) } returns NetworkResult.Success(page(row("r")))
+        coEvery { repository.edit("s1", "r", "neuf", any()) } returns NetworkResult.Failure(ApiError(message = "boom", code = "INTERNAL_ERROR"))
         val vm = viewModel()
-        vm.load("s1")
+        vm.begin("s1")
+        var closed = 0
 
-        vm.post("oops")
+        vm.edit("r", "neuf") { closed++ }
 
-        assertThat(vm.state.value.comments.single().status).isEqualTo(StoryCommentStatus.Failed)
+        assertThat(closed).isEqualTo(0)
+    }
+
+    private fun loadedViewModel(): StoryCommentsViewModel {
+        coEvery { repository.roots("s1", null, any(), any()) } returns NetworkResult.Success(page(row("r"), row("q")))
+        val vm = viewModel()
+        vm.begin("s1")
+        return vm
     }
 
     @Test
-    fun post_blankContent_isIgnored() = runTest {
-        coEvery { repo.comments("s1") } returns NetworkResult.Success(emptyList())
-        val vm = viewModel()
-        vm.load("s1")
+    fun `a moderation removal drops the row at once and keeps it gone when the gateway agrees`() = runTest {
+        coEvery { moderation.removeComment("s1", "r", "spam abusif") } returns NetworkResult.Success(Unit)
+        val vm = loadedViewModel()
 
-        vm.post("   ")
+        vm.remove("r", "  spam abusif ")
 
-        assertThat(vm.state.value.comments).isEmpty()
-        coVerify(exactly = 0) { repo.comment(any(), any()) }
+        assertThat(vm.ids()).containsExactly("q")
+        coVerify { moderation.removeComment("s1", "r", "spam abusif") }
     }
 
     @Test
-    fun retry_resendsFailedComment_toSent() = runTest {
-        coEvery { repo.comments("s1") } returns NetworkResult.Success(emptyList())
-        coEvery { repo.comment("s1", "again") } returns NetworkResult.Failure(ApiError("flaky"))
-        val vm = viewModel()
-        vm.load("s1")
-        vm.post("again")
-        val failed = vm.state.value.comments.single()
-        assertThat(failed.status).isEqualTo(StoryCommentStatus.Failed)
+    fun `a refused removal brings the row back`() = runTest {
+        coEvery { moderation.removeComment("s1", "r", any()) } returns NetworkResult.Failure(ApiError("non"))
+        val vm = loadedViewModel()
 
-        coEvery { repo.comment("s1", "again") } returns
-            NetworkResult.Success(wire("server9", content = "again", createdAt = "2026-06-20T12:30:00Z"))
-        vm.retry(failed.clientId!!)
+        vm.remove("r", "spam abusif")
 
-        val sent = vm.state.value.comments.single()
-        assertThat(sent.id).isEqualTo("server9")
-        assertThat(sent.status).isEqualTo(StoryCommentStatus.Sent)
+        assertThat(vm.ids()).containsExactly("r", "q").inOrder()
     }
 
     @Test
-    fun retry_unknownClientId_isInert() = runTest {
-        coEvery { repo.comments("s1") } returns NetworkResult.Success(emptyList())
-        val vm = viewModel()
-        vm.load("s1")
+    fun `a reason out of bounds sends nothing`() = runTest {
+        val vm = loadedViewModel()
 
-        vm.retry("ghost")
+        vm.remove("r", "ab")
 
-        coVerify(exactly = 0) { repo.comment(any(), any()) }
+        assertThat(vm.ids()).containsExactly("r", "q").inOrder()
     }
 
     @Test
-    fun socketCommentForThisStory_appendsLive() = runTest {
-        coEvery { repo.comments("s1") } returns NetworkResult.Success(emptyList())
-        val vm = viewModel()
-        vm.load("s1")
+    fun `reply target is exposed then cleared`() = runTest {
+        val vm = loadedViewModel()
 
-        commentAdded.tryEmit(SocketCommentAddedData(postId = "s1", comment = wire("live1")))
-
-        assertThat(vm.state.value.comments.map { it.id }).containsExactly("live1")
+        vm.setReplyTarget(row("r"))
+        assertThat(vm.state.value.replyTarget?.id).isEqualTo("r")
+        vm.clearReplyTarget()
+        assertThat(vm.state.value.replyTarget).isNull()
     }
 
     @Test
-    fun socketCommentForOtherStory_isIgnored() = runTest {
-        coEvery { repo.comments("s1") } returns NetworkResult.Success(emptyList())
-        val vm = viewModel()
-        vm.load("s1")
+    fun `the viewer is read from the session when a story begins`() = runTest {
+        val vm = loadedViewModel()
 
-        commentAdded.tryEmit(SocketCommentAddedData(postId = "other", comment = wire("x")))
-
-        assertThat(vm.state.value.comments).isEmpty()
-    }
-
-    @Test
-    fun socketEchoOfAlreadyShownComment_isDeduped() = runTest {
-        coEvery { repo.comments("s1") } returns
-            NetworkResult.Success(listOf(wire("dup", createdAt = "2026-06-20T09:00:00Z")))
-        val vm = viewModel()
-        vm.load("s1")
-        assertThat(vm.state.value.comments).hasSize(1)
-
-        commentAdded.tryEmit(SocketCommentAddedData(postId = "s1", comment = wire("dup")))
-
-        assertThat(vm.state.value.comments.map { it.id }).containsExactly("dup")
+        assertThat(vm.state.value.viewerId).isEqualTo("me")
     }
 }

@@ -1,15 +1,15 @@
 // MARK: - Themed Message Bubble — composition orchestrator
 //
-// Was a 953-line god view. Task-14 of the bubble-decompose refactor pivots
-// this file into a thin orchestrator: it owns the public init API (preserved
+// A thin orchestrator: it owns the public init API (preserved
 // unchanged for every call site), the local @State ledger, and the kind
-// dispatch. Every rendering decision now lives in a sub-view under
+// dispatch. Every rendering decision lives in a sub-view under
 // `Views/Bubble/`.
 //
 // Kind dispatch (mirrors legacy `body`):
 //   - `.deleted`         → `BubbleDeletedView`
-//   - `.burned`          → `BubbleBurnedView`
+//   - `.viewOnceSealed` / `.viewOnceOpened` → `BubbleViewOnceSealedView`
 //   - `.ephemeralExpired`→ `EmptyView`
+//   - `.standard` + `content.sticker` → `BubbleSticker` (Bubble/BubbleSticker.swift)
 //   - `.standard`        → `BubbleStandardLayout` (Bubble/BubbleStandardLayout.swift)
 //
 // State ownership: this view keeps the @State for sheets, fullscreen
@@ -36,7 +36,83 @@ import MapKit
 import MeeshySDK
 import MeeshyUI
 
+/// **Le double tap est le geste de la barre de réaction rapide.**
+///
+/// Écrit comme une fonction PURE de la nature de la bulle plutôt qu'en `if`
+/// dans le corps de la vue : c'est ce qui le rend mesurable, et ce qui empêche
+/// la seconde surface — les cellules média — d'en écrire une deuxième version.
+/// Deux gestes identiques gouvernés par deux conditions distinctes divergent au
+/// premier ajustement de l'une, en silence.
+///
+/// **Le geste ne remplace rien.** Il coexiste avec le simple tap (plein écran
+/// d'un média) et l'appui long (menu complet) : il ne fait qu'ajouter un chemin
+/// COURT vers ce que la capsule « + » ouvrait déjà, et il passe par le MÊME
+/// rappel (`onAddReaction`) — donc par le même ancrage de barre, résolu en
+/// UIKit avec le cadre de la cellule.
+nonisolated enum QuickReactionGesture {
+
+    /// `true` seulement pour une bulle STANDARD.
+    ///
+    /// Les quatre autres natures n'ont rien à réagir, et le geste y ouvrirait
+    /// une barre dont le serveur refuserait l'effet — un contrôle qui a l'air
+    /// de marcher, ce que la loi 4 de la doctrine composer interdit :
+    ///
+    /// - `.deleted` — le contenu n'existe plus ;
+    /// - `.viewOnceOpened` — une vue unique déjà ouverte n'a plus de contenu ;
+    /// - `.ephemeralExpired` — le message n'est plus là ;
+    /// - `.system` — un avis n'est la parole de personne ;
+    /// - `.viewOnceSealed` — le toucher d'une vue unique l'OUVRE :
+    ///   un second geste sur la même puce ne doit rien faire d'autre.
+    static func acceptsDoubleTap(kind: BubbleContent.Kind) -> Bool {
+        switch kind {
+        case .standard:
+            return true
+        case .deleted, .viewOnceOpened, .viewOnceSealed, .ephemeralExpired, .system:
+            return false
+        }
+    }
+}
+
+/// Le geste lui-même, en TYPE NOMMÉ plutôt qu'en chaîne posée dans le corps.
+///
+/// Deux raisons, et la seconde a déjà coûté un crash au dépôt :
+///
+/// 1. le geste s'applique à DEUX surfaces (la bulle, puis les cellules média) :
+///    un type le rend applicable sans le recopier ;
+/// 2. chaque modificateur empilé dans une fermeture de `body` enrichit le type
+///    générique que SwiftUI doit copier, et la copie de témoin devient récursive
+///    assez profondément pour épuiser la pile — le débordement par PROFONDEUR DE
+///    TYPE déjà payé sur la zone de description. Un type nommé referme
+///    cette profondeur derrière un seul `some View`.
+///
+/// `isEnabled` plutôt qu'un `if` chez l'appelant : une branche conditionnelle
+/// dans un `@ViewBuilder` change l'IDENTITÉ de la vue, ce qui recrée son état à
+/// chaque bascule. Ici l'identité est stable et seule la reconnaissance du geste
+/// s'éteint.
+struct QuickReactionDoubleTap: ViewModifier {
+
+    let isEnabled: Bool
+    let onOpen: () -> Void
+
+    func body(content: Content) -> some View {
+        content.onTapGesture(count: 2) {
+            guard isEnabled else { return }
+            // La même vibration que la capsule « + » : c'est le MÊME acte,
+            // atteint par un chemin plus court.
+            HapticFeedback.light()
+            onOpen()
+        }
+        .accessibilityActions {
+            if isEnabled {
+                Button(String(localized: "a11y.main.bubble.quickReact", bundle: .main)) { onOpen() }
+            }
+        }
+    }
+}
+
 struct ThemedMessageBubble: View {
+    @Environment(\.announcesCapture) private var announcesCapture // #9617 — la surface annonce-t-elle sa capture ?
+    @Environment(\.bubbleSkin) private var skin
     // MARK: - Public init API (preserved unchanged for all call sites)
 
     let message: Message
@@ -59,8 +135,14 @@ struct ThemedMessageBubble: View {
     var preferredAudioLangCode: String? = nil
     var showAvatar: Bool = true
     var presenceState: PresenceState? = nil
+    /// L'auteur a l'écran de CETTE conversation ouvert — résolu par
+    /// l'hôte, jamais lu ici sur `PresenceManager`.
+    var senderIsHere: ConversationHere = .absent
     var senderMoodEmoji: String? = nil
     var senderStoryRingState: StoryRingState = .none
+    /// Toucher la pastille d'humeur de l'auteur — l'hôte ouvre la bulle
+    /// d'humeur (emoji + texte) à l'ancre remise. Hors `==` : une fermeture.
+    var onSenderMoodTap: ((CGPoint) -> Void)? = nil
     var onViewStory: (() -> Void)? = nil
     var onAddReaction: ((String) -> Void)? = nil
     var onToggleReaction: ((String) -> Void)? = nil
@@ -73,7 +155,7 @@ struct ThemedMessageBubble: View {
     var onReplyTap: ((String) -> Void)? = nil
     var onStoryReplyTap: ((String) -> Void)? = nil
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
-    /// LOI DES ZONES (2026-08-24) — les deux portes de la citation : ZONE 1
+    /// LOI DES ZONES — les deux portes de la citation : ZONE 1
     /// (avatar de l'auteur cite -> profil) et ZONE 2 (miniature ou icone de
     /// lecture -> media en plein ecran). Descendues jusqu'a
     /// `BubbleQuotedReply` ; `nil` sur les surfaces sans hote de resolution
@@ -92,9 +174,11 @@ struct ThemedMessageBubble: View {
     /// Nil-default keeps preview / overlay call sites unchanged.
     var onPlayAudio: ((String) -> Void)? = nil
     var allAudioItems: [ConversationViewModel.AudioItem] = []
+    /// Tranche de `allAudioItems` pour CE message (`ConversationViewModel.audioItemsByMessageId`) : `==` la balaie en O(k) au lieu d'un O(N) sur toute la conversation.
+    var messageAudioItems: [ConversationViewModel.AudioItem] = []
     /// Cold-open (F1) : nom de conversation / file "à suivre" — forwardés
     /// jusqu'à `AudioMediaView` (`BubbleStandardLayout` -> `AudioMediaView`/
-    /// `AudioCarouselView`) pour que le plein écran audio ouvert SANS
+    /// `AudioStackView`) pour que le plein écran audio ouvert SANS
     /// lecture déjà active porte la même carte Now Playing / avance auto que
     /// `ConversationViewModel.playAudio(attachmentId:)`. `nil`-default garde
     /// les surfaces sans conversation (previews) inchangées.
@@ -128,16 +212,16 @@ struct ThemedMessageBubble: View {
 
     // MARK: - Language selection (VM-owned when wired, local @State fallback)
     //
-    // The flag-strip selection used to be two private `@State`s here — which
-    // is precisely what made the Equatable re-render gate unsafe (`==` can't
-    // see another instance's @State; on iOS 18+ the gate then swallows the
-    // flag tap — observed 2026-05-25, revert b9a39c2c). The conversation
-    // list now passes the selection as plain INPUTS (snapped from
+    // The flag-strip selection is not two private `@State`s here — that
+    // is precisely what would make the Equatable re-render gate unsafe (`==`
+    // can't see another instance's @State; on iOS 18+ the gate then swallows
+    // the flag tap). The conversation
+    // list passes the selection as plain INPUTS (snapped from
     // `ConversationViewModel.bubbleLanguageSelections[messageId]`) plus
     // change callbacks, so the values flow through `==` and a tap round-trips
     // VM → targeted reconfigure → fresh inputs. Call sites that don't wire
     // the callbacks (overlay copies, onboarding demos, previews) fall back to
-    // the legacy local @State so their flag taps keep working unchanged.
+    // a local @State so their flag taps keep working.
     var activeDisplayLangCode: String? = nil
     var secondaryLangCode: String? = nil
     var onSetActiveDisplayLanguage: ((String?) -> Void)? = nil
@@ -152,12 +236,14 @@ struct ThemedMessageBubble: View {
     /// l'avis mène toujours à la fiche de participation, quelle que soit la
     /// porte empruntée.
     var onOpenParticipantProfile: ((String) -> Void)? = nil
+    /// « dis-lui salut » (#16338) — l'id de l'avis d'arrivée touché.
+    var onGreetArrivals: ((String) -> Void)? = nil
     var voiceConsentMissing: Bool = false
     var onTapConsentNotice: (() -> Void)? = nil
     /// Rendu « standalone » (aperçu du `.contextMenu` natif) : supprime les
     /// `Spacer` d'alignement de la row pour que la vue épouse la LARGEUR de la
     /// bulle. Le platter système de l'aperçu coïncide alors avec la bulle elle-
-    /// même — plus de grand « card » pleine largeur (feedback device 2026-07-14).
+    /// même — pas de grand « card » pleine largeur.
     /// Défaut `false` : la cellule live garde son alignement isMe / reçu.
     var standalone: Bool = false
 
@@ -185,14 +271,6 @@ struct ThemedMessageBubble: View {
     // MARK: - Lifecycle controllers (encapsulate timers + animations)
 
     @StateObject private var blurController = BubbleBlurRevealController()
-    @StateObject private var ephemeralController = BubbleEphemeralController()
-
-    // MARK: - Derived state for kind dispatch
-
-    private var isEphemeralExpired: Bool {
-        if case .expired = ephemeralController.state { return true }
-        return false
-    }
 
     // MARK: - Body (kind dispatch + lifecycle modifiers)
 
@@ -229,34 +307,156 @@ struct ThemedMessageBubble: View {
 
         // Kind dispatch (mirrors legacy `body`):
         //   - `.deleted`         → `BubbleDeletedView`
-        //   - `.burned` && !blurController.isRevealed → `BubbleBurnedView`
+        //   - `.viewOnceSealed` / `.viewOnceOpened` → la puce de vue unique
         //   - ephemeral expired  → `EmptyView`
-        //   - otherwise (`.standard`, or `.burned` + revealed) → `BubbleStandardLayout`
-        // Note: `.burned` includes `isMe` — the sender also sees "Vu et efface"
-        // once their view-once is consumed (see BubbleContentBuilder).
+        //   - otherwise (`.standard`) → `BubbleStandardLayout`
         switch content.kind {
         case .system:
-            if let callNotice = content.callNotice {
-                BubbleCallNoticeView(notice: callNotice, accentHex: contactColor, isDark: isDark, onCallBack: onCallBack, onLongPress: onLongPressCallDetail)
-            } else if let joinNotice = content.joinNotice {
-                // Avant cette branche, une arrivée retombait sur la notice
-                // générique — dont l'icône est un TÉLÉPHONE, héritée des
-                // résumés d'appel.
-                BubbleJoinNoticeView(notice: joinNotice, isDark: isDark, onOpenProfile: onOpenParticipantProfile, timeString: content.meta.timeString)
-            } else {
-                BubbleSystemNoticeView(text: content.text?.raw ?? message.content, isDark: isDark, timeString: content.meta.timeString)
-            }
+            systemNotice(content)
+        case .deleted where content.protection.isExpired:
+            EmptyView()
         case .deleted:
             BubbleDeletedView(isMe: message.isMe, isDark: isDark)
-        case .burned where !blurController.isRevealed:
-            BubbleBurnedView(isMe: message.isMe, isDark: isDark)
-        default:
-            if isEphemeralExpired {
+        case .viewOnceSealed, .viewOnceOpened:
+            if content.protection.isExpired {
                 EmptyView()
             } else {
-                standardLayout(content: content)
+                viewOnceLayout(content: content)
+            }
+        default:
+            if content.protection.isExpired {
+                EmptyView()
+            } else {
+                Group {
+                    // Un sticker se rend SANS chrome de bulle, comme
+                    // un emoji libre : la feuille `BubbleSticker` remplace la
+                    // bulle standard. Les gestes (double tap ci-dessous, appui
+                    // long du menu — porté par la cellule) et le cycle de vie
+                    // ci-dessous restent ceux de toute bulle standard : c'est
+                    // pour cela qu'ils sont posés sur le `Group`, pas sur
+                    // l'une des deux branches.
+                    if let sticker = content.sticker {
+                        stickerLayout(content: content, sticker: sticker)
+                    } else {
+                        standardLayout(content: content).environment(\.bubbleSenderMoodTap, onSenderMoodTap)
+                    }
+                }
+                // Annoncé OU noir : une vue unique, et une
+                // flamme hors d'une surface qui annonce, se rendent dans la
+                // couche sécurisée. Posé AVANT le cycle de vie : la brûlure et
+                // le filigrane enveloppent la bulle protégée.
+                .captureShield(content.captureVerdict.shieldsCapture(surfaceAnnounces: announcesCapture))
+                // Le double tap n'est pas posé ici : il ouvre le menu SYSTÈME, et vit sur
+                // `BubbleSwipeContainer`, le conteneur commun aux trois peaux
+                // (`.bubbles`, `.script`, `.focal`) — posé dans la bulle, il n'existerait ni
+                // en `.script` ni en `.focal`, rendus par `FocalRow`.
+                //
+                // `QuickReactionDoubleTap` et `QuickReactionGesture` RESTENT :
+                // la grille média s'en sert pour la réaction sur UNE PIÈCE,
+                // qui n'est pas le même geste sur le même objet.
+                // Pas de `.messageEffects` ici : monté à ce niveau, il
+                // s'appliquerait au `HStack` de rangée de `BubbleStandardLayout`
+                // — avatar, bulle, réactions et tout l'espace vide jusqu'au
+                // bord de l'écran. Le liseré arc-en-ciel encadrerait donc du
+                // vide. Les effets sont posés sur la bulle elle-
+                // même, dans `BubbleStandardLayout` (et sur le sticker, dans
+                // `BubbleSticker`).
+                //
+                // Conséquence assumée : les chemins `.deleted` et de vue unique,
+                // qui ne passent pas par ici, ne portent pas d'effets. Un
+                // tombstone « message supprimé » n'a ni arc-en-ciel ni
+                // confettis.
+                //
+                // Pas de minuteur de cellule ici. La disparition d'un
+                // éphémère est ordonnancée UNE fois pour tout le fil
+                // (`EphemeralExpiryCoordinator`), qui retire le message de
+                // `messages` à son échéance ; la branche `isExpired` ci-dessus
+                // reste le filet de sécurité d'une passe de rendu qui
+                // précéderait ce retrait.
+                // La destruction se VOIT. Posé sur le `Group`, donc
+                // sur la bulle comme sur le sticker : un éphémère détruit sous
+                // les yeux du lecteur se consume, puis l'hôte retire la ligne.
+                .ephemeralBurn(isBurning: content.isBurning, side: .init(isMine: content.isMe))
+                // La flamme-œil en filigrane, à cheval sur le bord d'attaque de la bulle.
+                .afterReadWatermark(content.protection.isAfterRead, gutter: 24, tint: ComposerProtection.ephemeral.tint,
+                                    edge: content.isMe ? .trailing : .leading, overhang: 10)
+                .viewOnceRetouch(isActive: content.viewOnceRetouchIsActive) { [messageId = content.messageId, onConsumeViewOnce] in
+                    onConsumeViewOnce?(messageId) { _ in }
+                }
+                .onAppear {
+                    applyBlurRevealDurationFromPrefs()
+                }
+                .onDisappear {
+                    blurController.cancel()
+                }
+                .adaptiveOnChange(of: selectedProfileUser) { _, newValue in
+                    if let user = newValue {
+                        selectedProfileUser = nil
+                        onOpenProfile?(user)
+                    }
+                }
             }
         }
+    }
+
+    /// La couleur de la bulle REÇUE — l'accent de l'expéditeur mêlé à
+    /// l'indigo de marque. Une seule définition pour la bulle standard et le
+    /// strip de réactions d'un sticker, qui doit porter le même accent.
+    private var otherBubbleColor: String {
+        DynamicColorGenerator.blendTwo(
+            message.senderColor ?? contactColor,
+            weight1: 0.30,
+            MeeshyColors.brandPrimaryHex,
+            weight2: 0.70
+        )
+    }
+
+    // MARK: - Sticker layout
+
+    /// La feuille sticker, à entrées primitives — tout ce qu'elle lit vient de
+    /// `content` ou des rappels déjà résolus par l'hôte. `NetworkMonitor` est
+    /// lu en direct, pas observé : c'est le parent qui fait bouger
+    /// `deliveryStatus` / `updatedAt`, comme pour la bulle standard.
+    @ViewBuilder
+    private func stickerLayout(content: BubbleContent, sticker: BubbleContent.Sticker) -> some View {
+        BubbleSticker(
+            sticker: sticker,
+            senderName: content.senderName,
+            messageId: content.messageId,
+            isMe: content.isMe,
+            isDark: isDark,
+            accentHex: skin.accentHex(isMe: content.isMe, received: otherBubbleColor),
+            timeString: content.meta.timeString,
+            // Statut RÉSOLU (tout-ou-rien pour un groupe), déjà posé
+            // par `BubbleContentBuilder` sur `content.meta` ; le brut
+            // `message.deliveryStatus` vaut « lu » dès UN lecteur sur N.
+            deliveryStatus: content.meta.deliveryStatus ?? .sent,
+            sendStartedAt: message.createdAt,
+            isOnline: NetworkMonitor.shared.isOnline,
+            effects: message.effects,
+            reactions: content.reactions,
+            isLastReceivedMessage: isLastReceivedMessage,
+            isLastInGroup: isLastInGroup,
+            standalone: standalone,
+            // La protection ENTRE dans la feuille sticker : sans elle
+            // cette branche rendrait un message à vue unique en clair.
+            protection: content.protection,
+            onConsumeViewOnce: onConsumeViewOnce,
+            onRetry: onRetry == nil ? nil : { onRetry?(message.id) },
+            onShowReadStatus: onShowReadStatus == nil ? nil : { onShowReadStatus?(message.id) },
+            onAddReaction: onAddReaction,
+            onToggleReaction: onToggleReaction,
+            onOpenReactPicker: onOpenReactPicker,
+            onShowReactions: onShowReactions
+        )
+        .equatable()
+        // Identité par MESSAGE, posée par l'HÔTE : l'état de la feuille
+        // (gabarit rasterisé, instant d'apparition) vit sur SON nœud, qu'un
+        // `.id` à l'intérieur de son corps ne toucherait pas. Une cellule
+        // réutilisée qui reçoit un autre sticker repart ainsi d'un état neuf
+        // — un coup unique rejoue pour le message qui vient d'arriver, au
+        // lieu d'hériter de l'horloge du précédent.
+        .id(content.messageId)
     }
 
     // MARK: - Standard layout factory (extracted for branch clarity)
@@ -267,12 +467,7 @@ struct ThemedMessageBubble: View {
             content: content,
             message: message,
             contactColor: contactColor,
-            otherBubbleColor: DynamicColorGenerator.blendTwo(
-                message.senderColor ?? contactColor,
-                weight1: 0.30,
-                MeeshyColors.brandPrimaryHex,
-                weight2: 0.70
-            ),
+            otherBubbleColor: otherBubbleColor,
             isDirect: isDirect,
             isDark: isDark,
             transcription: transcription,
@@ -281,6 +476,7 @@ struct ThemedMessageBubble: View {
             preferredTranslation: preferredTranslation,
             showAvatar: showAvatar,
             presenceState: presenceState,
+            senderIsHere: senderIsHere,
             senderMoodEmoji: senderMoodEmoji,
             senderStoryRingState: senderStoryRingState,
             allAudioItems: allAudioItems,
@@ -342,44 +538,18 @@ struct ThemedMessageBubble: View {
             carouselIndex: $carouselIndex,
             revealedAttachmentIds: $revealedAttachmentIds,
             blurController: blurController,
-            ephemeralController: ephemeralController,
             voiceConsentMissing: voiceConsentMissing,
             onTapConsentNotice: onTapConsentNotice,
             standalone: standalone
         )
-        // Pas de `.messageEffects` ici : monté à ce niveau, il s'appliquait au
-        // `HStack` de rangée de `BubbleStandardLayout` — avatar, bulle,
-        // réactions et tout l'espace vide jusqu'au bord de l'écran. Le liseré
-        // arc-en-ciel encadrait donc du vide. Les effets sont désormais posés
-        // sur la bulle elle-même, dans `BubbleStandardLayout`.
-        //
-        // Conséquence assumée : les chemins `.deleted` et `.burned`, qui ne
-        // passent pas par `BubbleStandardLayout`, ne portent plus d'effets. Un
-        // tombstone « message supprimé » n'a ni arc-en-ciel ni confettis.
-        .opacity(isEphemeralExpired ? 0 : 1)
-        .scaleEffect(isEphemeralExpired ? 0.8 : 1)
-        .onAppear {
-            startEphemeralTimerIfNeeded()
-            applyBlurRevealDurationFromPrefs()
-        }
-        .onDisappear {
-            ephemeralController.stop()
-            blurController.cancel()
-        }
-        .adaptiveOnChange(of: selectedProfileUser) { _, newValue in
-            if let user = newValue {
-                selectedProfileUser = nil
-                onOpenProfile?(user)
-            }
-        }
+        // Ce que les visionneuses ouvertes depuis cette bulle peuvent laisser
+        // sortir — enregistrer, partager, copier (`Message.exitGate`).
+        .contentExitGate(message.exitGate)
+        // Cycle de vie (éphémère, flou, profil) et effets : voir le `Group`
+        // du `body`, commun à la bulle standard et au sticker.
     }
 
     // MARK: - Lifecycle helpers (delegated to controllers)
-
-    private func startEphemeralTimerIfNeeded() {
-        guard let expiresAt = message.expiresAt else { return }
-        ephemeralController.start(expiresAt: expiresAt)
-    }
 
     private func applyBlurRevealDurationFromPrefs() {
         if case .double(let value) = UserPreferencesManager.shared.message.extras["blurRevealDuration"] {
@@ -436,10 +606,33 @@ extension ThemedMessageBubble: @MainActor Equatable {
     private static func audioEnrichmentSignature(_ bubble: ThemedMessageBubble) -> [AudioEnrichmentKey] {
         let ownedIds = Set(bubble.message.attachments.filter { $0.type == .audio }.map(\.id))
         guard !ownedIds.isEmpty else { return [] }
-        return bubble.allAudioItems
+        return bubble.messageAudioItems
             .filter { ownedIds.contains($0.id) }
             .sorted { $0.id < $1.id }
             .map { AudioEnrichmentKey(id: $0.id, transcription: $0.transcription, translatedAudios: $0.translatedAudios) }
+    }
+
+    /// La puce d'une vue unique et son pied (#16130) : le statut de MON envoi, le renvoi
+    /// d'un échec, et les détails de lecture, dont le menu ne dit rien du contenu
+    /// (`MessageActionResolver.viewOnceSections`).
+    private func viewOnceLayout(content: BubbleContent) -> some View {
+        BubbleViewOnceSealedView(
+            state: content.viewOnceChipState ?? .sealed,
+            isMe: message.isMe,
+            isDark: isDark,
+            protection: content.protection,
+            footer: BubbleViewOnceSealedView.footerModel(for: content, isOnline: NetworkMonitor.shared.isOnline),
+            footerActions: BubbleFooterActions(
+                onRetry: onRetry == nil ? nil : { onRetry?(message.id) },
+                onShowReadStatus: content.isMe && onShowReadStatus != nil ? { onShowReadStatus?(message.id) } : nil
+            ),
+            hint: content.protectedTap().accessibilityHint,
+            onOpen: { [messageId = content.messageId, onConsumeViewOnce] in
+                HapticFeedback.medium()
+                onConsumeViewOnce?(messageId) { _ in }
+            }
+        )
+        .ephemeralBurn(isBurning: content.isBurning, side: .init(isMine: content.isMe))
     }
 
     static func == (lhs: ThemedMessageBubble, rhs: ThemedMessageBubble) -> Bool {
@@ -460,6 +653,10 @@ extension ThemedMessageBubble: @MainActor Equatable {
         lhs.message.attachments.count == rhs.message.attachments.count &&
         lhs.message.reactions.count == rhs.message.reactions.count &&
         lhs.message.viewOnceCount == rhs.message.viewOnceCount &&
+        // Ouvrir une vue unique ne bouge ni `updatedAt` ni un compteur :
+        // sans ces deux champs, la puce touchée ne se changerait pas en texte.
+        lhs.message.isViewOnceRevealed == rhs.message.isViewOnceRevealed &&
+        lhs.message.viewOnceOpenedAt == rhs.message.viewOnceOpenedAt &&
         // Effects (flags can flip without updatedAt for some appearance changes)
         lhs.message.effects.flags.rawValue == rhs.message.effects.flags.rawValue &&
         // Reaction identity, not just count (emoji swap with same count)
@@ -482,6 +679,7 @@ extension ThemedMessageBubble: @MainActor Equatable {
         lhs.highlightSearchTerm == rhs.highlightSearchTerm &&
         // Sender state — pushed by the server without bumping message.updatedAt
         lhs.presenceState == rhs.presenceState &&
+        lhs.senderIsHere == rhs.senderIsHere &&
         lhs.senderMoodEmoji == rhs.senderMoodEmoji &&
         lhs.senderStoryRingState == rhs.senderStoryRingState &&
         // Group state — recomputed by parent on neighbor changes
@@ -513,8 +711,7 @@ extension ThemedMessageBubble: @MainActor Equatable {
 // the bubble owns @State (sheets, fullscreen, carousel, local language
 // fallback) and on iOS 18+ an EquatableView re-consults `==` even on @State
 // invalidation of its *content* — since `==` can't see @State, the
-// interaction writes state but never re-renders (observed 2026-05-25,
-// revert b9a39c2c). This wrapper carries ZERO state of its own, so the only
+// interaction writes state but never re-renders. This wrapper carries ZERO state of its own, so the only
 // invalidations that consult `==` are parent-driven reconfigurations — the
 // exact storm it exists to short-circuit. The bubble's own @State lives on a
 // CHILD node and invalidates it directly, bypassing the gate (same topology

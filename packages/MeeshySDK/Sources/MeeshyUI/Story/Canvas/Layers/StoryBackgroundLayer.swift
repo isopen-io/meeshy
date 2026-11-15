@@ -3,52 +3,11 @@ import UIKit
 import MeeshySDK
 import os
 
-/// Diagnostics du pipeline vidéo de fond des stories — chemin historiquement
-/// aveugle (régressions 2026-05-22, 2026-06-09, 2026-06-11 toutes invisibles
+/// Diagnostics du pipeline vidéo de fond des stories — chemin sinon
+/// aveugle (une régression y est invisible
 /// dans les logs). Couvre : choix de sous-chemin dans `configure(.video)`,
 /// résolution cache vs streaming distant, attach du player.
-let storyMediaLog = os.Logger(subsystem: "me.meeshy.app", category: "story-media")
-
-/// Affine transform applied to the background layer (zoom + pan + rotation).
-/// Mirrors `StoryBackgroundTransform` from the SDK schema, in render-space.
-///
-/// All members are `nonisolated` so the struct can be used freely from both
-/// the MeeshyUI (defaultIsolation MainActor) and nonisolated contexts.
-public struct BackgroundTransform: Sendable, Equatable {
-    public nonisolated var scale: Double
-    public nonisolated var offsetX: Double
-    public nonisolated var offsetY: Double
-    public nonisolated var rotation: Double  // degrees
-    /// Background fit mode override. `nil` = auto-by-orientation (landscape
-    /// videos/images → letterbox, portrait → aspectFill). `"fit"` = forced
-    /// letterbox. `"fill"` = forced aspectFill. Despite its `videoFitMode`
-    /// name (legacy from the original spec), this override applies to BOTH
-    /// `.video` and `.image` backgrounds — the resolver helpers
-    /// `resolveVideoGravity` and `resolveImageGravity` share identical
-    /// orientation logic and both consume this same field.
-    public nonisolated var videoFitMode: String?
-
-    public nonisolated init(scale: Double = 1.0, offsetX: Double = 0,
-                            offsetY: Double = 0, rotation: Double = 0,
-                            videoFitMode: String? = nil) {
-        self.scale = scale
-        self.offsetX = offsetX
-        self.offsetY = offsetY
-        self.rotation = rotation
-        self.videoFitMode = videoFitMode
-    }
-
-    public nonisolated static let identity = BackgroundTransform()
-
-    public nonisolated func caTransform() -> CATransform3D {
-        let r = CGFloat(rotation * .pi / 180)
-        var t = CATransform3DIdentity
-        t = CATransform3DTranslate(t, CGFloat(offsetX), CGFloat(offsetY), 0)
-        t = CATransform3DRotate(t, r, 0, 0, 1)
-        t = CATransform3DScale(t, CGFloat(scale), CGFloat(scale), 1)
-        return t
-    }
-}
+let storyMediaLog = MeeshyLog.logger(.storyMedia)
 
 /// Visual background of the story canvas (color/gradient/image+thumbHash/video).
 /// Lives below `itemsContainer` in `StoryCanvasUIView.rootLayer`.
@@ -66,7 +25,7 @@ public final class StoryBackgroundLayer: CALayer {
         /// `true` si le fond est un média VISUEL (image/vidéo) — par opposition à un
         /// fond coloré (solidColor/gradient). Source de vérité du Prisme visuel : aucun
         /// fond coloré (ni letterbox colorée) n'est peint quand `isVisualMedia` est vrai,
-        /// le média couvre le canvas (user 2026-06-03). Le fond coloré n'apparaît QUE
+        /// le média couvre le canvas. Le fond coloré n'apparaît QUE
         /// sans média de fond visuel (texte, dessin, foreground media, son).
         public nonisolated var isVisualMedia: Bool {
             switch self {
@@ -80,15 +39,17 @@ public final class StoryBackgroundLayer: CALayer {
         case topToBottom, leftToRight, topLeftToBottomRight
     }
 
-    public private(set) nonisolated(unsafe) var kind: Kind = .solidColor(.black)
-    public private(set) nonisolated(unsafe) var transform3D: BackgroundTransform = BackgroundTransform()
+    private nonisolated let layerState = Locked(uncheckedState: StoryBackgroundLayerState())
+    nonisolated let driftSeekGate = DriftSeekGate()
+    public private(set) nonisolated var kind: Kind { get { layerState[unchecked: \.kind] } set { layerState[unchecked: \.kind] = newValue } }
+    public private(set) nonisolated var transform3D: BackgroundTransform { get { layerState[unchecked: \.transform3D] } set { layerState[unchecked: \.transform3D] = newValue } }
 
     /// Reflète l'état mute global du reader (bouton Mute / Son de la sidebar).
     /// Le canvas (`StoryCanvasUIView`) synchronise cette propriété à chaque
     /// `handleComposerMute()` / `handleComposerUnmute()` et au moment du
     /// `setReaderContext` pour propager le toggle au player vidéo de fond
-    /// sans recréer la layer. Avant cette propriété, le renderer hardcodait
-    /// `mute: true` à l'attach, donc l'audio des vidéos de fond restait
+    /// sans recréer la layer. Sans cette propriété, le renderer hardcoderait
+    /// `mute: true` à l'attach, donc l'audio des vidéos de fond resterait
     /// inaccessible quelle que soit l'intention de l'utilisateur.
     @MainActor
     public var isMuted: Bool = false {
@@ -140,25 +101,35 @@ public final class StoryBackgroundLayer: CALayer {
     /// (resume en place / bascule plein écran = aucun saut).
     @MainActor public var slidePlayheadSeconds: Double = 0
 
-    private static let timelineSeekDriftThreshold: Double = 0.30
+    static let timelineSeekDriftThreshold: Double = 0.30
 
-    nonisolated(unsafe) var contentLayer: CALayer?
+    nonisolated var contentLayer: CALayer? { get { layerState[unchecked: \.contentLayer] } set { layerState[unchecked: \.contentLayer] = newValue } }
+    /// Le flou qui habille les bandes d'un média AJUSTÉ — voir
+    /// `StoryBackgroundLayer+LetterboxFill.swift`. Stocké ici parce qu'une
+    /// extension ne porte pas de propriété.
+    nonisolated var letterboxFillLayer: CALayer? { get { layerState[unchecked: \.letterboxFillLayer] } set { layerState[unchecked: \.letterboxFillLayer] = newValue } }
+    /// Les sources candidates, RETENUES pour le chemin rapide : lui ne repasse
+    /// pas par la branche qui les connaît.
+    nonisolated var letterboxFillHashes: [String] { get { layerState[unchecked: \.letterboxFillHashes] } set { layerState[unchecked: \.letterboxFillHashes] = newValue } }
+    /// Le bitmap de fond DÉJÀ posé — la source la plus fidèle de la bande, et
+    /// la seule dont dispose l'atelier : `StoryThumbHashEnricher` ne calcule les
+    /// hachages qu'à la PUBLICATION.
+    nonisolated var letterboxSourceImage: UIImage? { get { layerState[unchecked: \.letterboxSourceImage] } set { layerState[unchecked: \.letterboxSourceImage] = newValue } }
+    /// Le lecteur présente l'image SEULE : la bande sort du cadre visible
+    /// et ne se peint plus — voir `setLetterboxFillSuppressed(_:)`.
+    nonisolated var isLetterboxFillSuppressed: Bool { get { layerState[unchecked: \.isLetterboxFillSuppressed] } set { layerState[unchecked: \.isLetterboxFillSuppressed] = newValue } }
     /// Fournisseur du player du média porteur (O16), posé par `configure` depuis
     /// le contexte de LECTURE. `nil` en composition : la couche ouvre le sien.
-    private nonisolated(unsafe) var playerProvider: (any StoryCarrierPlayerProviding)?
-    nonisolated(unsafe) var avPlayer: AVPlayer?
-    nonisolated(unsafe) var avPlayerLayer: AVPlayerLayer?
-    nonisolated(unsafe) var avPlayerLooper: AVPlayerLooper?
-    private nonisolated(unsafe) var backgroundLoopObserver: NSObjectProtocol?
+    nonisolated var playerProvider: (any StoryCarrierPlayerProviding)? { get { layerState[unchecked: \.playerProvider] } set { layerState[unchecked: \.playerProvider] = newValue } }
+    nonisolated var avPlayer: AVPlayer? { get { layerState[unchecked: \.avPlayer] } set { layerState[unchecked: \.avPlayer] = newValue } }
+    nonisolated var avPlayerLayer: AVPlayerLayer? { get { layerState[unchecked: \.avPlayerLayer] } set { layerState[unchecked: \.avPlayerLayer] = newValue } }
+    nonisolated var avPlayerLooper: AVPlayerLooper? { get { layerState[unchecked: \.avPlayerLooper] } set { layerState[unchecked: \.avPlayerLooper] = newValue } }
 
-    // Même pattern que `StoryMediaLayer.deinit` : sans ce retrait, une layer
-    // vidéo-loop libérée sans reconfigure laissait un observer zombie
-    // enregistré dans NotificationCenter pour toujours.
-    nonisolated deinit {
-        if let token = backgroundLoopObserver {
-            NotificationCenter.default.removeObserver(token)
-        }
-    }
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free au démontage hors d'une tâche. Garde :
+    // MeeshyUIDeinitSourceGuardTests. (La boucle est l'affaire de
+    // l'`AVPlayerLooper`, aucun observateur de boucle à retirer.)
+    nonisolated deinit {}
 
     /// `true` quand `configure(kind:)` a stampé `contentLayer.contents` avec
     /// une image FINALE (warm L1 cache hit OU bytes téléchargés via HTTP),
@@ -167,8 +138,7 @@ public final class StoryBackgroundLayer: CALayer {
     /// court-circuiter le KVO observer : quand le NSCache rend la même
     /// instance UIImage entre le warm-hit synchrone et le re-stamp async,
     /// `contents` ne change pas d'identité et l'observer ne fire jamais —
-    /// d'où le loader infini à 0% sur les stories image (régression du
-    /// commit a60f636b5 / 2026-05-20).
+    /// d'où le loader infini à 0% sur les stories image.
     @MainActor public private(set) var hasFinalContentStamped: Bool = false
 
     /// Fired exactly when the FINAL background image bitmap is stamped (warm hit
@@ -177,17 +147,25 @@ public final class StoryBackgroundLayer: CALayer {
     /// photo lands: in `.play` the image loads asynchronously, so the filter
     /// snapshot taken during the initial layout captured only the blurry
     /// ThumbHash, and the opaque overlay then covered the loaded photo with that
-    /// placeholder (« le preview affiche le thumbHash, pas l'image » 2026-06-03).
+    /// placeholder.
     @MainActor public var onFinalImageStamped: (() -> Void)?
 
     /// Fired chaque fois qu'un `AVPlayer` de fond vient d'être attaché —
     /// chemin chaud (fichier local immédiat) comme chemin froid (attach
     /// différé après download). Le canvas s'en sert pour (ré)armer son
     /// observation de readiness vidéo : sans ce signal, un download plus
-    /// long que la fenêtre de sondage initiale (~1,5 s) laissait la slide
-    /// gelée sur son thumbnail, progression sans frames ni audio
-    /// (bug user 2026-06-11).
+    /// long que la fenêtre de sondage initiale (~1,5 s) laisserait la slide
+    /// gelée sur son thumbnail, progression sans frames ni audio.
     @MainActor public var onPlayerAttached: (() -> Void)?
+
+    /// La session de qualité de lecture du fond vidéo (#11287) : la couche
+    /// possède le player, elle en ouvre et en ferme la session. Pas de valeur
+    /// par défaut : son évaluation est MainActor, et les deux initialiseurs de
+    /// cette classe sont `nonisolated` pour interopérer avec `CALayer` — elle
+    /// est donc posée après `super.init()`, jamais avant (voir les deux inits).
+    @MainActor public let playbackQoE: StoryBackgroundPlaybackQoE
+    /// Le voile d'un fond vidéo qui attend sa première image (#14180).
+    @MainActor lazy var videoWaitVeil = StoryVideoWaitVeil()
 
     /// Marks the final bitmap as stamped and notifies `onFinalImageStamped`.
     @MainActor
@@ -205,42 +183,116 @@ public final class StoryBackgroundLayer: CALayer {
     /// standard photo-filter behaviour).
     @MainActor public private(set) var activeFilter: StoryFilter?
     @MainActor public private(set) var activeFilterIntensity: Float = 1.0
+    /// **Les réglages du média de fond**, déjà projetés sur son genre
+    /// (`StoryBackgroundLook.painted`) : cuits après le filtre dans le bitmap
+    /// d'un fond image, posés en composition sur l'item d'un fond vidéo.
+    @MainActor public private(set) var activeAdjustments: ImageAdjustments?
+    /// Le look de la retouche du média de fond (#13840), peint avant le filtre.
+    @MainActor public private(set) var activeMediaLook: StoryMediaLook?
+    /// Le bitmap BRUT du dernier stamp final et sa clé de filtre — ce qu'un
+    /// changement de rendu seul (filtre, réglages) repeint en place. Une autre
+    /// source rend caduque toute cuisson en vol.
+    @MainActor var stampedSource: (image: UIImage, imageId: String?)? { didSet { liveLookStorage?.supersede() } }
+    /// **Le canvas du COMPOSER lève ce drapeau** (`StoryComposerCanvasView`) :
+    /// un changement de rendu seul (curseur de filtre, d'intensité, de réglage)
+    /// se cuit alors HORS du fil principal, le bitmap affiché restant jusqu'au
+    /// suivant (`StoryBackgroundLayer+Look`). Baissé — lecteur et son prefetcher,
+    /// export, instantanés —, le repeint reste synchrone.
+    @MainActor public var bakesLookOffMainThread = false
+    /// L'outil de cuisson hors du fil principal, monté au premier glissé.
+    @MainActor var liveLookStorage: StoryLiveLook?
+    /// La composition posée sur les items du player de fond : quel player, pour
+    /// quels réglages — rien ne se refait tant que les deux sont les mêmes.
+    nonisolated var appliedBackgroundVideoLook: (player: ObjectIdentifier, signature: String)? { get { layerState[unchecked: \.appliedBackgroundVideoLook] } set { layerState[unchecked: \.appliedBackgroundVideoLook] = newValue } }
+    nonisolated var backgroundVideoLookTask: Task<Void, Never>? { get { layerState[unchecked: \.backgroundVideoLookTask] } set { layerState[unchecked: \.backgroundVideoLookTask] = newValue } }
+    /// L'asset que la dernière attache a ouvert — la source de la composition
+    /// quand aucun item n'est encore en file.
+    nonisolated var attachedVideoAsset: AVAsset? { get { layerState[unchecked: \.attachedVideoAsset] } set { layerState[unchecked: \.attachedVideoAsset] = newValue } }
     /// Monotonic token from the composer (`loadedImagesVersion`); a change forces
     /// a re-fetch + re-stamp even when the media identity is unchanged, so an
     /// in-place bitmap edit under the same id is reflected on the canvas.
     @MainActor private var lastContentVersion: UInt64 = 0
 
-    /// Applies the active filter (if any) to `image`, stamps it into `img.contents`
-    /// with the resolved gravity, and marks final content. The single choke point
-    /// for every FINAL image stamp (warm hit / composer cache / URL load) so the
-    /// filter is baked uniformly. Filtering preserves dimensions, so gravity is
-    /// computed from the (filtered) bitmap size.
+    /// **La taille à laquelle cette couche a été CONFIGURÉE pour la dernière
+    /// fois** — et non celle de son cadre, que l'hôte réécrit avant d'appeler
+    /// `configure`.
+    ///
+    /// `StoryCanvasUIView.rebuildLayers` pose `backgroundLayer.frame` à la
+    /// nouvelle taille douze lignes avant son `configure`. Un diff qui lirait
+    /// `self.frame.size` comparerait donc la géométrie à ce que son APPELANT
+    /// vient d'y écrire : toujours égale, y compris sur la passe où le canvas
+    /// vient de changer de cotes. Le fond resterait alors peint aux cotes
+    /// précédentes, ancré en haut à gauche (canvas 378 × 672 conservé dans des
+    /// bornes de 402 × 714,67 sur le plein écran immersif de la galerie).
+    ///
+    /// `nil` tant qu'aucune configuration n'a abouti : une couche neuve ne
+    /// prétend pas avoir déjà projeté quoi que ce soit.
+    @MainActor private var configuredRenderSize: CGSize?
+
+    /// Pose le RENDU courant — filtre, intensité, réglages — sans rien peindre.
     @MainActor
-    private func stampFinalImage(_ image: UIImage, imageId: String?, on img: CALayer?) {
-        let display: UIImage = activeFilter.map {
-            StoryFilterProcessor.apply($0, to: image, imageId: imageId, intensity: activeFilterIntensity)
-        } ?? image
+    func setLook(filter: StoryFilter?, filterIntensity: Float, adjustments: ImageAdjustments?,
+                 mediaLook: StoryMediaLook? = nil) {
+        activeFilter = filter
+        activeFilterIntensity = filterIntensity
+        activeAdjustments = adjustments
+        activeMediaLook = mediaLook
+    }
+
+    /// Applies the active look — slide filter, then the background media's
+    /// adjustments, through `StoryBackgroundLook` — to `image`, stamps it
+    /// into `img.contents` with the resolved gravity, and marks final content.
+    /// The single choke point for every FINAL image stamp (warm hit / composer
+    /// cache / URL load) so the look is baked uniformly; the raw bitmap is kept
+    /// (`stampedSource`) so a look-only change repaints in place. The look
+    /// preserves dimensions, so gravity is computed from the painted bitmap size.
+    @MainActor
+    func stampFinalImage(_ image: UIImage, imageId: String?, on img: CALayer?) {
+        stampedSource = (image, imageId)
+        stampDisplay(StoryBackgroundLook.image(image, filter: activeFilter, intensity: activeFilterIntensity,
+                                               adjustments: activeAdjustments, imageId: imageId,
+                                               look: activeMediaLook), on: img)
+    }
+
+    /// Pose un bitmap DÉJÀ peint — par `stampFinalImage`, ou par la cuisson
+    /// hors du fil principal d'un curseur.
+    @MainActor
+    func stampDisplay(_ display: UIImage, on img: CALayer?) {
         Self.withDisabledCAActions {
-            img?.contents = display.cgImage
-            if let layer = img, let cg = display.cgImage {
+            // **Le FOND porte l'orientation comme les autres couches.**
+            // Le média d'un post-photo est un FOND (`isBackground`), donc c'est ICI
+            // qu'il se peint — et pas dans `StoryMediaLayer` : un `.cgImage` nu
+            // ferait afficher la même photo droite en détail à 180° dans la carte
+            // (`EXIF Orientation = 3`).
+            //
+            // > **Un correctif posé sur « la couche des médias » ne couvre pas
+            // > le média qui n'est pas dans cette couche.** Le nom du fichier
+            // > décrit la famille qu'on croit viser ; la géographie du
+            // > rendu en décide autrement, et le fond a sa propre couche.
+            let redresse = CanvasImageOrientation.displayCGImage(display)
+            img?.contents = redresse
+            if let layer = img, let cg = redresse {
                 layer.contentsGravity = StoryBackgroundLayer.resolveImageGravity(
                     naturalSize: CGSize(width: cg.width, height: cg.height),
                     canvasSize: self.bounds.size,
                     override: self.transform3D.videoFitMode)
             }
         }
+        noteStampedBackground(display)
         markFinalContentStamped()
     }
 
     public override nonisolated init() {
+        self.playbackQoE = StoryBackgroundPlaybackQoE()
         super.init()
         // Clip le contenu interne aux bounds du backgroundLayer pour le
         // pinch/pan "INSIDE the bg" (style Instagram) — sinon scaler le
         // content fait déborder l'image / vidéo au-delà du canvas et le user
-        // perçoit "tout le canvas zoom" (bug reporté 2026-05-27).
+        // perçoit "tout le canvas zoom".
         self.masksToBounds = true
     }
     public override nonisolated init(layer: Any) {
+        self.playbackQoE = StoryBackgroundPlaybackQoE()
         super.init(layer: layer)
         self.masksToBounds = true
     }
@@ -275,8 +327,8 @@ extension StoryBackgroundLayer {
     ///
     /// Why not scale `self.transform` ? Because that scales the WHOLE
     /// backgroundLayer relative to the rootLayer parent — the bg overflows
-    /// the canvas and the user perceives "everything is zooming" (bug
-    /// reported 2026-05-27 in `.background` manipulation layer). Items in
+    /// the canvas and the user perceives "everything is zooming" (seen in the
+    /// `.background` manipulation layer). Items in
     /// `itemsContainer` (sibling of backgroundLayer) stay in place because
     /// they're not affected by `backgroundLayer.transform`, but the bg
     /// growing past its bounds is what the user sees.
@@ -310,8 +362,7 @@ extension StoryBackgroundLayer {
     /// le slide mis à jour) et SKIP la reconfiguration des contentLayer
     /// frames — sinon le `contentLayer?.frame = bounds` du chemin reuse-content
     /// sur un sublayer encore transformé produit un glitch visuel au release
-    /// ("bg grandi momentanément puis se replace incorrectement", bug
-    /// 2026-05-27).
+    /// ("bg grandi momentanément puis se replace incorrectement").
     @MainActor
     public func commitLiveTransform(_ transform: BackgroundTransform) {
         self.transform3D = transform
@@ -322,20 +373,20 @@ extension StoryBackgroundLayer {
         applyContentTransform(transform.caTransform())
     }
 
-    /// Loads a UIImage from a URL, supporting both `file://` (sync read) and
-    /// HTTP(S) (via CacheCoordinator with NSCache + disk TTL + dedup). Returns
-    /// `nil` on any error — the caller decides whether to fallback to another
-    /// URL or give up.
+    /// Loads a UIImage from a URL, supporting both `file://` and HTTP(S) (via
+    /// CacheCoordinator with NSCache + disk TTL + dedup). Returns `nil` on any
+    /// error — the caller decides whether to fallback to another URL or give up.
+    /// Lecture ET décodage vivent hors du MainActor : voir
+    /// `StoryLayerImageDecoding`.
     @MainActor
     static func loadImage(from url: URL) async -> UIImage? {
         if url.isFileURL {
-            guard let data = try? Data(contentsOf: url) else { return nil }
-            return UIImage(data: data)
+            return await StoryLayerImageDecoding.decodedImage(fileAt: url)
         }
         guard let data = try? await CacheCoordinator.shared.images.data(for: url.absoluteString) else {
             return nil
         }
-        return UIImage(data: data)
+        return await StoryLayerImageDecoding.decodedImage(from: data)
     }
 
     @MainActor
@@ -347,8 +398,10 @@ extension StoryBackgroundLayer {
                           playerProvider: (any StoryCarrierPlayerProviding)? = nil,
                           letterboxColor: UIColor? = nil,
                           slidePreviewThumbHash: String? = nil,
+                          letterboxFillHashes: [String] = [],
                           filter: StoryFilter? = nil,
                           filterIntensity: Float = 1.0,
+                          adjustments: ImageAdjustments? = nil, mediaLook: StoryMediaLook? = nil,
                           contentVersion: UInt64 = 0) {
         // FAST PATH ANTI-FLASH :
         // `configure(...)` est appelé à CHAQUE `rebuildLayers()` du canvas
@@ -400,12 +453,64 @@ extension StoryBackgroundLayer {
         let filterUnchanged = (self.activeFilter == filter)
             && (self.activeFilterIntensity == filterIntensity)
             && (self.lastContentVersion == contentVersion)
-        let nothingChanged = (previousContentIdentity == nextContentIdentity)
+        let adjustmentsUnchanged = (self.activeAdjustments == adjustments) && (self.activeMediaLook == mediaLook)
+        let sameScene = (previousContentIdentity == nextContentIdentity)
             && (self.transform3D == transform)
-            && (self.frame.size == geometry.renderSize)
+            && (self.configuredRenderSize == geometry.renderSize)
             && hasVisibleContent
-            && filterUnchanged
-        if nothingChanged { return }
+            && (self.lastContentVersion == contentVersion)
+        if sameScene && filterUnchanged && adjustmentsUnchanged { return }
+
+        // **Seul le RENDU change** : un curseur de réglage, un autre
+        // filtre : le fond se repeint EN PLACE, sans détacher son contenu. Une
+        // image repart de son bitmap brut retenu ; une vidéo garde son player
+        // (la lecture ne saute pas) et reçoit la composition de ses réglages.
+        if sameScene, restyleInPlace(filter: filter, filterIntensity: filterIntensity, adjustments: adjustments, mediaLook: mediaLook) {
+            return
+        }
+
+        // **Une reconfiguration qui ne sait pas résoudre son NOUVEAU sujet n'a
+        // rien à dire sur l'ANCIEN.**
+        //
+        // Quand un média de fond reçoit son id SERVEUR (pré-montée aboutie), la
+        // couche est reconfigurée sur cette nouvelle identité. Le média n'a pas
+        // disparu : **il a changé de nom**, et la couche peut ne pas savoir résoudre
+        // le nouveau (`resolved=nil`) — le fond se serait affiché si le
+        // téléversement avait duré une seconde de plus.
+        //
+        // Les deux branches replient sur une ABSENCE, chacune en supposant que la
+        // résolution reviendra : la vidéo laisse la couche transparente (« le
+        // resolver peut retourner nil 1-2 frames le temps que le postMediaId soit
+        // enregistré côté cache ») et l'image sort par un `guard let uiImage else
+        // { return }` muet. Ces replis sont justes pour une attente de deux frames ;
+        // ici le `nil` est DÉFINITIF — rien ne reconfigure une troisième fois — et
+        // une garde écrite pour un état transitoire tient une absence permanente.
+        //
+        // > **Attendre n'est pas abandonner.** C'est le pendant, un étage plus
+        // > bas, du « ne rien faire n'est pas laisser passer » des gestes de
+        // > lecture : une décision juste dont l'hypothèse implicite ne tient
+        // > plus.
+        //
+        // ## Ce que cette garde fait, et ce qu'elle NE fait pas
+        //
+        // Elle refuse la SEULE reconfiguration nuisible : celle qui change
+        // l'identité, ne sait pas résoudre la nouvelle, et détruirait un
+        // contenu visible. Détruire est une affirmation ; ici la couche n'en a
+        // aucune à faire. Tout le reste passe — même identité, identité
+        // résolvable, ou absence de contenu à préserver (auquel cas les replis
+        // d'origine gardent leur rôle, y compris le placeholder ThumbHash).
+        //
+        // Elle ne touche PAS au modèle : `self.kind` n'est pas réécrit, donc
+        // la couche continue de peindre ce qu'elle peignait, pendant que le
+        // document porte bien le nouvel id — c'est lui, et non cette couche,
+        // que la publication relit. Une résolution ultérieure du même id
+        // repassera d'elle-même par ce point et sera acceptée.
+        if hasVisibleContent,
+           previousContentIdentity != nextContentIdentity,
+           !Self.canResolve(kind, resolver: resolver) {
+            storyMediaLog.info("bg configure IGNORÉE — nouvelle identité non résolvable, fond conservé")
+            return
+        }
 
         // Reuse the existing content sublayer ONLY when identity AND filter AND
         // content version are unchanged. A filter switch or an in-place bitmap
@@ -414,13 +519,14 @@ extension StoryBackgroundLayer {
         let canReuseContent = (previousContentIdentity == nextContentIdentity)
             && (contentLayer != nil)
             && filterUnchanged
+            && adjustmentsUnchanged
 
         self.kind = kind
         self.transform3D = transform
-        self.activeFilter = filter
-        self.activeFilterIntensity = filterIntensity
+        setLook(filter: filter, filterIntensity: filterIntensity, adjustments: adjustments, mediaLook: mediaLook)
         self.lastContentVersion = contentVersion
         self.frame = CGRect(origin: .zero, size: geometry.renderSize)
+        self.configuredRenderSize = geometry.renderSize
 
         if canReuseContent {
             // Même contenu visuel : on garde le sublayer en place pour éviter
@@ -435,14 +541,13 @@ extension StoryBackgroundLayer {
             // posé un transform live sur `contentLayer` SANS mettre à jour
             // `transform3D` ; au `.ended`, ce `rebuildLayers → configure` arrive
             // donc ici avec un sublayer encore transformé. Sans reset préalable,
-            // `frame = bounds` corrompait les bounds (÷ scale du drag) et le
-            // fond « revenait à sa position initiale » au relâchement, alors que
-            // le mini-preview restait correct (piloté par `mediaObjects[bg]`).
+            // `frame = bounds` corromprait les bounds (÷ scale du drag) et le
+            // fond « reviendrait à sa position initiale » au relâchement, alors que
+            // le mini-preview resterait correct (piloté par `mediaObjects[bg]`).
             // On remet le transform à l'identité AVANT de réécrire le frame,
-            // puis `applyContentTransform` réapplique le transform résolu. Bug
-            // exposé quand l'unification BG/FG (2026-05-29) a retiré le seam
-            // `commitLiveTransform` qui court-circuitait ce chemin via
-            // `nothingChanged`.
+            // puis `applyContentTransform` réapplique le transform résolu. Ce
+            // chemin est atteint parce que l'unification BG/FG n'a plus de seam
+            // `commitLiveTransform` qui le court-circuitait via `nothingChanged`.
             Self.withDisabledCAActions {
                 contentLayer?.transform = CATransform3DIdentity
                 avPlayerLayer?.transform = CATransform3DIdentity
@@ -475,21 +580,27 @@ extension StoryBackgroundLayer {
                     }
                 }
             }
+            // Le double-tap OUVRE ou REFERME les bandes sans rebuild : elles se
+            // peignent (ou se retirent) ici, sur le même geste qui change la
+            // gravity. Sans cette ligne, basculer en AJUSTÉ laisserait la bande
+            // nue jusqu'au prochain rebuild — un même geste avec deux résultats,
+            // selon un chemin que l'auteur ne voit pas.
+            refreshLetterboxFill(hashes: letterboxFillHashes)
             return
         }
 
         // Clear existing content
         contentLayer?.removeFromSuperlayer()
-        avPlayerLayer?.removeFromSuperlayer()
-        avPlayer?.pause()
-        if let observer = backgroundLoopObserver {
-            NotificationCenter.default.removeObserver(observer)
-            backgroundLoopObserver = nil
-        }
-        avPlayer = nil
-        avPlayerLayer = nil
-        avPlayerLooper = nil
+        letterboxFillLayer?.removeFromSuperlayer()
+        letterboxFillLayer = nil
+        letterboxSourceImage = nil
+        releaseBackgroundPlayer()
         contentLayer = nil
+        stampedSource = nil
+        backgroundVideoLookTask?.cancel()
+        backgroundVideoLookTask = nil
+        appliedBackgroundVideoLook = nil
+        attachedVideoAsset = nil
         // Reset readiness flag — sera re-armé par les fast-paths (warm hit /
         // HTTP load) en `case .image`. Couleur / gradient n'utilisent pas ce
         // flag (ils ont leur propre chemin `.solidColor` / `.gradient` dans
@@ -501,11 +612,10 @@ extension StoryBackgroundLayer {
             backgroundColor = color.cgColor
             // Overlay the slide-level thumbHash ON TOP of the solid color so
             // the preview image is visible during loading AND after (until
-            // foreground media stamps a real bitmap). User request 2026-05-28:
-            // « Je veux le thumbHash ou le thumbnail de la story par dessus
-            // la couleur unie et non en dessous ». Without this, color-only
-            // stories with a published thumbHash showed only the flat colour
-            // and the preview was confined to the letterbox bands via
+            // foreground media stamps a real bitmap): the thumbHash or thumbnail of
+            // the story goes above the flat colour, not below it. Without this,
+            // color-only stories with a published thumbHash would show only the flat
+            // colour and the preview would be confined to the letterbox bands via
             // `storyBlurredBackdrop`.
             stampSlidePreviewThumbHashLayerIfAvailable(slidePreviewThumbHash)
         case .gradient(let colors, let direction):
@@ -550,7 +660,7 @@ extension StoryBackgroundLayer {
             var hasVisual = false
 
             // (0) SYNCHRONOUS composer-cache prime — an edited bitmap written by
-            // `MeeshyImageEditorView` onAccept (loadedImages[id]) wins over the
+            // the composer (loadedImages[id]) wins over the
             // on-disk file:// (which still holds the ORIGINAL). This is what makes
             // an image edit appear live on the canvas; the filter is baked via
             // `stampFinalImage` so the canvas shows the edited+filtered bitmap.
@@ -574,19 +684,18 @@ extension StoryBackgroundLayer {
                let hash = thumbHash,
                let placeholderImage = ThumbHashDecoder.decodeIfAvailable(hash) {
                 Self.withDisabledCAActions {
-                    img.contents = placeholderImage.cgImage
+                    img.contents = CanvasImageOrientation.displayCGImage(placeholderImage)
                 }
                 hasVisual = true
             }
 
             // Toujours `.clear` : le parent (`StoryCanvasUIView` lui-même
             // déjà `.clear`, qui laisse voir le composer ou le viewer
-            // derrière) porte le fond cinéma. Avant ce changement on posait
-            // un `.black` cgColor en fallback "aucun visuel" ; pendant les
+            // derrière) porte le fond cinéma. Un `.black` cgColor en fallback
+            // "aucun visuel" ferait flasher cette couche NOIR ~1 frame pendant les
             // transitions (slide change, rebuildLayers pendant un edit /
-            // validation d'élément) cette couche flashait NOIR ~1 frame
-            // avant que le bitmap réel arrive — exactement le scintillement
-            // décrit par l'utilisateur. Garder `.clear` rend la couche
+            // validation d'élément), avant que le bitmap réel arrive — un
+            // scintillement. Garder `.clear` rend la couche
             // muette pendant la latence d'async ; le parent reste visible.
             backgroundColor = letterboxColor?.cgColor ?? UIColor.clear.cgColor
 
@@ -597,13 +706,12 @@ extension StoryBackgroundLayer {
             // (file:// du composer après PhotosPicker, ou URL distante),
             // (3) resolver `postMediaId` distant → URL → cache global.
             //
-            // BUGFIX : le chemin (3) était auparavant imbriqué dans un
-            // `if let imageCache` — or le viewer en ligne passe `imageCache: nil`
-            // (seul le preview en fournit un). Résultat : une story publiée
-            // dont le background référence un `postMediaId` distant ne chargeait
-            // jamais son image (rectangle noir + loader infini, le timer ne
-            // démarrant jamais car `onContentReady` ne se déclenchait pas). Le
-            // chemin (3) est désormais gardé par le `resolver` seul, et passe
+            // Le chemin (3) n'est pas imbriqué dans un `if let imageCache` : le viewer
+            // en ligne passe `imageCache: nil` (seul le preview en fournit un), et une
+            // story publiée dont le background référence un `postMediaId` distant ne
+            // chargerait jamais son image (rectangle noir + loader infini, le timer ne
+            // démarrant jamais car `onContentReady` ne se déclencherait pas). Le
+            // chemin (3) est gardé par le `resolver` seul, et passe
             // par `CacheCoordinator.shared.images` (NSCache → disque TTL 1 an →
             // réseau, requêtes dédupliquées) : une slide déjà vue — ou
             // préchauffée par le prefetcher — s'affiche sans re-télécharger.
@@ -665,24 +773,20 @@ extension StoryBackgroundLayer {
                 break
             }
 
-            // Fast-path : URL locale immédiate ou cache disk hit → AVPlayer
-            // direct, sans placeholder noir ni ThumbHash (la première frame
-            // de la vidéo est rendue très vite).
-            if remoteURL.isFileURL {
-                storyMediaLog.info("bg video path=local-file")
-                backgroundColor = letterboxColor?.cgColor ?? UIColor.clear.cgColor
-                attachBackgroundPlayer(url: remoteURL, looping: looping, mute: mute,
-                                       fitOverride: self.transform3D.videoFitMode)
-                break
-            }
-            if let local = CacheCoordinator.videoLocalFileURL(for: remoteURL.absoluteString) {
-                storyMediaLog.info("bg video path=disk-hit")
+            // Fast-path : fichier local ou cache disque → AVPlayer direct, sans
+            // placeholder noir ; la scène du composer y attend la première image
+            // sous l'affiche du fond, comme une vidéo posée (#14180).
+            if let local = remoteURL.isFileURL ? remoteURL
+                : CacheCoordinator.videoLocalFileURL(for: remoteURL.absoluteString) {
+                storyMediaLog.info("bg video path=\(remoteURL.isFileURL ? "local-file" : "disk-hit", privacy: .public)")
                 backgroundColor = letterboxColor?.cgColor ?? UIColor.clear.cgColor
                 attachBackgroundPlayer(url: local, looping: looping, mute: mute,
                                        fitOverride: self.transform3D.videoFitMode)
+                videoWaitVeil.cover(avPlayerLayer, playing: local, thumbHash: thumbHash, look: activeMediaLook,
+                                    adjustments: activeAdjustments, fitMode: transform3D.videoFitMode)
                 break
             }
-            storyMediaLog.info("bg video path=cache-miss → stream remote + cache bg")
+            storyMediaLog.info("bg video path=cache-miss → readable cache transfer")
 
             // Cache miss : placeholder ThumbHash dans un sublayer si dispo,
             // sinon on garde le layer transparent (le parent porte le fond
@@ -692,7 +796,7 @@ extension StoryBackgroundLayer {
                let placeholderImage = ThumbHashDecoder.decodeIfAvailable(hash) {
                 let placeholder = CALayer()
                 placeholder.frame = bounds
-                placeholder.contents = placeholderImage.cgImage
+                placeholder.contents = CanvasImageOrientation.displayCGImage(placeholderImage)
                 placeholder.contentsGravity = .resizeAspectFill
                 placeholder.masksToBounds = true
                 addSublayer(placeholder)
@@ -700,29 +804,21 @@ extension StoryBackgroundLayer {
             }
             backgroundColor = letterboxColor?.cgColor ?? UIColor.clear.cgColor
 
-            // Stream l'URL distante IMMÉDIATEMENT : `AVPlayer` fait du
-            // progressive/range loading (l'endpoint sert `Accept-Ranges: bytes`
-            // / 206), donc la 1ère frame arrive en ~centaines de ms quelle que
-            // soit la taille du fichier. L'AVPlayerLayer s'ajoute par-dessus le
-            // placeholder ThumbHash, qui disparaît visuellement quand la vidéo
-            // joue. Bloquer sur un download INTÉGRAL (`videoLocalFileURLAwait`)
-            // rendait les grosses stories injouables sur réseau device
-            // (cellulaire/wifi) : un clip de 30+ Mo ne finissait pas de descendre
-            // avant l'auto-advance de la slide → la vidéo n'apparaissait jamais
-            // (ne marchait que sur le réseau rapide du simulateur, et le failsafe
-            // 2s faisait avancer la barre sur le flou). Régression 2026-05-20
-            // (f917d30b94) ; on restaure le streaming d'avant.
-            let fitOverride = self.transform3D.videoFitMode
+            // UN transfert, lu pendant sa course (#9881) : l'asset lit le
+            // fichier que le cache écrit — la 1ère frame arrive dès la tête,
+            // quelle que soit la taille du clip, et une revisite joue le
+            // fichier local. Bloquer sur un téléchargement INTÉGRAL rendrait
+            // les grosses stories injouables sur réseau d'appareil ; streamer
+            // l'URL ET la télécharger à part en coûtait deux.
             attachBackgroundPlayer(url: remoteURL, looping: looping, mute: mute,
-                                   fitOverride: fitOverride)
-            // Peuple le cache disque HORS du chemin de lecture pour qu'une
-            // revisite joue depuis un fichier local. Détaché + priorité utility
-            // pour ne jamais concurrencer le stream live.
-            let cacheKey = remoteURL.absoluteString
-            Task.detached(priority: .utility) {
-                _ = try? await CacheCoordinator.shared.video.data(for: cacheKey)
-            }
+                                   fitOverride: self.transform3D.videoFitMode)
         }
+
+        // **Le remplissage de bande se pose ICI, une seule fois pour les cinq
+        // branches** — jamais dans chacune. `insertSublayer(at: 0)` le range
+        // sous tout ce que le `switch` vient d'ajouter, quel que soit l'ordre,
+        // et une pose par branche aurait divergé au premier `case` ajouté.
+        refreshLetterboxFill(hashes: letterboxFillHashes)
 
         // Transform appliqué au CONTENT — voir `applyContentTransform`.
         applyContentTransform(transform.caTransform())
@@ -731,8 +827,7 @@ extension StoryBackgroundLayer {
     /// Stamps the slide-level thumbHash as a sublayer ON TOP of the current
     /// solid color / gradient bg. Used by the `.solidColor` and `.gradient`
     /// cases of `configure(...)` so color-only stories that ship a published
-    /// preview show that preview rather than just the flat tint
-    /// (user spec 2026-05-28 « thumbnail par dessus la couleur unie »).
+    /// preview show that preview rather than just the flat tint.
     /// No-op when the hash is nil, empty, or fails to decode.
     private func stampSlidePreviewThumbHashLayerIfAvailable(_ thumbHash: String?) {
         guard let hash = thumbHash, !hash.isEmpty,
@@ -746,324 +841,5 @@ extension StoryBackgroundLayer {
         preview.masksToBounds = true
         addSublayer(preview)
         contentLayer = preview
-    }
-
-    /// Identité visuelle du `Kind`, utilisée par le fast-path de `configure()`
-    /// pour décider si on peut garder le `contentLayer` actuel (même contenu)
-    /// ou s'il faut tout reconstruire (changement réel de slide bg).
-    ///
-    /// On ignore les paramètres dynamiques (mute) car leur changement n'impose
-    /// pas de recréer le layer (mute = property AVPlayer). Pour les fonds
-    /// COULEUR/GRADIENT, la valeur fait partie de l'identité (BUG-1 user
-    /// 2026-07-04) : « color » constant faisait passer un changement de
-    /// pastille par le no-op diff (`hasVisibleContent` satisfait par
-    /// l'ANCIENNE couleur) → la nouvelle couleur n'atterrissait jamais sur le
-    /// canvas (la mini-preview SwiftUI, elle, se mettait à jour). La
-    /// reconstruction d'un fond couleur est SYNCHRONE — aucun risque de flash,
-    /// le fast-path ne protège que les fetchs async image/vidéo.
-    /// `internal` (pas private) : seam de test du contrat d'identité.
-    nonisolated static func contentIdentity(for kind: Kind) -> String {
-        switch kind {
-        case .solidColor(let color):
-            return "color:\(Self.colorKey(color))"
-        case .gradient(let colors, let direction):
-            let key = colors.map(Self.colorKey).joined(separator: "|")
-            return "gradient:\(key):\(String(describing: direction))"
-        case .image(let postMediaId, _):        return "image:\(postMediaId)"
-        case .video(let postMediaId, let looping, _, _):
-            return "video:\(postMediaId):\(looping)"
-        }
-    }
-
-    nonisolated private static func colorKey(_ color: UIColor) -> String {
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        if color.getRed(&r, green: &g, blue: &b, alpha: &a) {
-            return String(format: "%.3f,%.3f,%.3f,%.3f", r, g, b, a)
-        }
-        return String(describing: color)
-    }
-}
-
-// MARK: - App Lifecycle
-
-extension StoryBackgroundLayer {
-
-    /// Attache un AVPlayer pour une URL vidéo. Factorisé pour les trois chemins :
-    /// `file://` (composer / cache disque déjà téléchargé), cache disque chaud,
-    /// et URL distante HTTPS streamée en direct. `AVPlayerItem(url:)` gère les
-    /// trois — pour une URL distante, `AVPlayer` fait du progressive/range
-    /// loading (premier frame en ~centaines de ms) et le cache disque se peuple
-    /// en arrière-plan via le caller. NE PAS bloquer sur un download intégral
-    /// avant d'appeler ceci (régression 2026-05-20 → grosses stories injouables
-    /// sur réseau device).
-    @MainActor
-    func attachBackgroundPlayer(url: URL, looping: Bool, mute: Bool, fitOverride: String? = nil) {
-        let item = AVPlayerItem(url: url)
-        item.preferredForwardBufferDuration = 2.0
-        if looping {
-            let queuePlayer = AVQueuePlayer()
-            self.avPlayerLooper = AVPlayerLooper(player: queuePlayer, templateItem: item)
-            self.avPlayer = queuePlayer
-        } else {
-            self.avPlayer = providedCarrierPlayer() ?? AVPlayer(playerItem: item)
-        }
-        // Le paramètre `mute` reste pris en compte pour compat avec les call
-        // sites existants (renderer), mais on respecte aussi l'état dynamique
-        // `self.isMuted` mis à jour par le canvas. Le OR garantit que si l'un
-        // OU l'autre demande mute, le player démarre silencieux ; le toggle
-        // unmute du sidebar passera ensuite par `isMuted.didSet`.
-        self.avPlayer?.isMuted = mute || self.isMuted
-        // Volume explicite : le player est recréé à chaque re-attache (cache
-        // LRU), il faut donc lui réappliquer la valeur courante de la couche —
-        // et surtout pas un 1.0 codé en dur, qui rendait le réglage de l'auteur
-        // inopérant sur toute vidéo de fond.
-        self.avPlayer?.volume = self.volume
-        // Defensive : assurer la catégorie `.playback` avant de jouer. La
-        // session est normalement déjà `.playback` (via `StoryMediaCoordinator
-        // .activate` sync depuis `onAppear`), mais le re-attach peut intervenir
-        // entre un retour foreground et l'activation `MediaSessionCoordinator`
-        // — sans cette ligne, la vidéo joue sous `.ambient` et reste silencieuse
-        // en mode silent (simulator OU device avec switch).
-        // Pose la session de lecture via la source UNIQUE (call-aware) si pas déjà
-        // `.playback` — idempotent, no-op pendant un appel (micro préservé).
-        if AVAudioSession.sharedInstance().category != .playback {
-            MediaSessionCoordinator.shared.activatePlaybackSync(options: [.mixWithOthers, .duckOthers])
-        }
-        let pl = AVPlayerLayer(player: avPlayer)
-        pl.frame = bounds
-        // Initial gravity: aspectFill as fallback until naturalSize loads.
-        // If override is set, apply immediately.
-        pl.videoGravity = {
-            if let o = fitOverride {
-                return o == "fit" ? .resizeAspect : .resizeAspectFill
-            }
-            return .resizeAspectFill
-        }()
-        Self.withDisabledCAActions {
-            addSublayer(pl)
-        }
-        self.avPlayerLayer = pl
-
-        // Async resolve naturalSize to refine gravity once available.
-        // `[weak pl]` so we don't strand the AVPlayerLayer alive if the bg is
-        // re-attached (slide change / configure() with different kind) between
-        // the Task launch and the asset load completion.
-        let canvasSize = self.bounds.size
-        let asset = AVURLAsset(url: url)
-        Task { @MainActor [weak self, weak pl] in
-            guard self != nil else { return }
-            let tracks: [AVAssetTrack]
-            if #available(iOS 16.0, *) {
-                tracks = (try? await asset.loadTracks(withMediaType: .video)) ?? []
-            } else {
-                tracks = asset.tracks(withMediaType: .video)
-            }
-            guard let videoTrack = tracks.first else { return }
-            let naturalSize: CGSize
-            if #available(iOS 16.0, *) {
-                naturalSize = (try? await videoTrack.load(.naturalSize)) ?? .zero
-            } else {
-                naturalSize = videoTrack.naturalSize
-            }
-            guard naturalSize.width > 0, naturalSize.height > 0 else { return }
-            guard let pl else { return }
-            let resolved = StoryBackgroundLayer.resolveVideoGravity(
-                naturalSize: naturalSize, canvasSize: canvasSize, override: fitOverride)
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            pl.videoGravity = resolved
-            CATransaction.commit()
-        }
-        // IMPORTANT — on n'appelle PLUS `play()` ici inconditionnellement.
-        // `attachBackgroundPlayer` peut être invoqué depuis un canvas en
-        // `.edit` mode (prefetcher, composer preview), auquel cas démarrer
-        // la lecture leakerait l'audio d'une story qui n'est PAS encore à
-        // l'écran (« vidéo joue avant son tour »). C'est désormais le canvas
-        // qui décide via `isPlaybackActive` (drapeau levé en mode `.play`).
-        // La vidéo prefetchée reste prête à jouer instantanément sans
-        // gaspiller le décodeur audio.
-        if isPlaybackActive {
-            alignToTimelineThenPlay()
-        }
-
-        // Background loop observer — ensures the video repeats until the slide
-        // duration is reached (Section 5 of the review). Background videos are
-        // authoritative for slide duration only when NOT looping; when looping,
-        // they must fill the user-defined duration.
-        if looping {
-            if let observer = backgroundLoopObserver {
-                NotificationCenter.default.removeObserver(observer)
-            }
-            backgroundLoopObserver = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: item,
-                queue: .main
-            ) { [weak player = avPlayer] _ in
-                player?.seek(to: .zero)
-                player?.play()
-            }
-        }
-
-        onPlayerAttached?()
-    }
-
-    /// Le player que le chemin de LECTURE porte déjà pour ce média de fond, ou
-    /// `nil` — auquel cas la couche ouvre le sien (composition, prefetch).
-    @MainActor
-    func providedCarrierPlayer() -> AVPlayer? {
-        guard let identity = Self.mediaIdentity(for: kind),
-              let provided = playerProvider?.player(for: identity),
-              provided.currentItem != nil else { return nil }
-        return provided
-    }
-
-    /// Identité du média porté par ce fond — la clé du fournisseur (O16).
-    nonisolated static func mediaIdentity(for kind: Kind) -> String? {
-        switch kind {
-        case .image(let postMediaId, _):      return postMediaId
-        case .video(let postMediaId, _, _, _): return postMediaId
-        case .solidColor, .gradient:          return nil
-        }
-    }
-
-    /// Cale la vidéo de fond sur le playhead unifié puis lance la lecture.
-    ///
-    /// On ne cale QUE les fonds **non loopés** (`avPlayerLooper == nil`, clip ≥
-    /// durée du slide) : leur temps interne doit suivre le playhead, donc une
-    /// ouverture/scrub à `t>0` les positionne correctement. Un fond **loopé**
-    /// remplit la durée du slide et sa phase exacte n'a aucun sens timeline — le
-    /// recaler risquerait un saut visible sur un resume en place, donc on le
-    /// laisse boucler librement. `seek` uniquement au-delà du seuil de dérive
-    /// (resume déjà aligné / bascule plein écran = aucun saut).
-    @MainActor
-    private func alignToTimelineThenPlay() {
-        guard let player = avPlayer else { return }
-        if avPlayerLooper == nil {
-            let target = max(0, slidePlayheadSeconds)
-            let current = player.currentTime().seconds
-            if target.isFinite, current.isFinite,
-               abs(current - target) > Self.timelineSeekDriftThreshold {
-                player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
-                            toleranceBefore: .zero, toleranceAfter: .zero)
-            }
-        }
-        player.play()
-    }
-
-    /// Scrub de preview timeline : pause puis cale le player de fond sur le
-    /// playhead unifié avec une tolérance large. Même règle que
-    /// `alignToTimelineThenPlay` pour un fond bouclé (`avPlayerLooper`) : sa
-    /// phase n'a aucun sens timeline, on le fige sans le recaler.
-    @MainActor
-    public func alignPausedToSlidePlayhead() {
-        guard let player = avPlayer else { return }
-        player.pause()
-        guard avPlayerLooper == nil else { return }
-        let target = max(0, slidePlayheadSeconds)
-        guard target.isFinite else { return }
-        let tolerance = CMTime(seconds: 0.05, preferredTimescale: 600)
-        player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
-                    toleranceBefore: tolerance, toleranceAfter: tolerance)
-    }
-
-    @MainActor
-    public func handleAppLifecycle(active: Bool) {
-        guard let player = avPlayer else { return }
-        if active {
-            // Reprise gated sur l'autorisation canonique : un retour
-            // foreground ne doit JAMAIS relancer un player dont la lecture
-            // n'est pas active (canvas détaché/retenu, prefetcher, viewer
-            // fermé). Sans ce guard, la dernière story jouée reprenait son
-            // audio à la réouverture de l'app, sans aucun viewer à l'écran
-            // (bug user 2026-06-11) — violation de l'invariant « seuls les
-            // audios de conversation ou le PiP jouent hors de leur vue ».
-            guard isPlaybackActive else { return }
-            player.play()
-        } else {
-            player.pause()
-        }
-    }
-
-    /// Helper de routage du `postMediaId` en édition composer.
-    ///
-    /// En édition, `StoryRenderer.renderBackground` peut pousser la `mediaURL`
-    /// de l'élément (`file://…` pour un media fraîchement issu de PhotosPicker,
-    /// ou une URL distante) dans le champ `postMediaId` de la `Kind`, parce que
-    /// le `resolver`/`imageCache` ne sont jamais branchés en édition (ils sont
-    /// fournis uniquement par le reader). Cette détection limite la confusion
-    /// aux strings parsables en URL avec un scheme connu.
-    nonisolated static func directURLIfAny(from candidate: String) -> URL? {
-        guard !candidate.isEmpty else { return nil }
-        // Local composer asset — returned verbatim, never network-normalized.
-        if candidate.hasPrefix("file://") { return URL(string: candidate) }
-        // Absolute http(s) OR a server-relative media path (getAttachmentPath /
-        // forward / repost emit `/api/v1/attachments/...`). Normalize both via
-        // the SSRF-guarded resolver so a relative background URL still loads
-        // instead of dropping to the solid-color fallback (black background on
-        // another user's story).
-        if candidate.hasPrefix("http://")
-            || candidate.hasPrefix("https://")
-            || candidate.hasPrefix("/") {
-            return MeeshyConfig.resolveMediaURL(candidate)
-        }
-        return nil
-    }
-}
-
-// MARK: - ThumbHash Placeholder
-
-/// Decoder seam wired to `UIImage.fromThumbHash(_:)` (Wolt spec, MeeshySDK/Utils).
-/// Returns a small `UIImage` (≤ 32 px on the long edge) ready to be assigned as
-/// `CALayer.contents`. The hash MUST be base64-encoded; the underlying decoder
-/// guards against short/invalid inputs and returns `nil` in that case.
-///
-/// `nonisolated` so it can be called from `configure(...)` (`@MainActor`) and
-/// from background `Task` resolution without crossing actor boundaries — the
-/// decoder is pure CPU work over a fresh `[UInt8]` and produces an immutable
-/// `UIImage` value. No target size is needed: resampling to the canvas size
-/// happens implicitly when the layer assigns `contents` and respects
-/// `contentsGravity`. Pre-scaling here would waste CPU and degrade quality on
-/// retina displays.
-public enum ThumbHashDecoder {
-    public nonisolated static func decodeIfAvailable(_ hash: String) -> UIImage? {
-        guard !hash.isEmpty else { return nil }
-        return UIImage.fromThumbHash(hash)
-    }
-}
-
-// MARK: - Gravity Resolution
-
-extension StoryBackgroundLayer {
-    /// Resolves the AVLayerVideoGravity for a video background.
-    /// `nil` override = auto by orientation: landscape→letterbox, portrait→fill.
-    public nonisolated static func resolveVideoGravity(
-        naturalSize: CGSize,
-        canvasSize: CGSize,
-        override: String?
-    ) -> AVLayerVideoGravity {
-        if let o = override {
-            return o == "fit" ? .resizeAspect : .resizeAspectFill
-        }
-        // Mode libre (override == nil) : TOUJOURS `.resizeAspectFill` — pas
-        // d'auto-pick basé sur les ratios. L'auto-pick (mediaRatio > canvasRatio
-        // → fit, sinon fill) sautait visuellement quand le bitmap arrivait async :
-        // la gravity initiale `.resizeAspectFill` (posée à l.381) basculait sur
-        // `.resizeAspect` (letterbox) pour les images paysage → le BG "se
-        // cachait" derrière sa propre letterbox (user feedback 2026-05-29).
-        // Fit/Fill sont maintenant exclusivement déclenchés par le double-tap.
-        return .resizeAspectFill
-    }
-
-    /// Resolves the contentsGravity for an image background. Same logic as video.
-    public nonisolated static func resolveImageGravity(
-        naturalSize: CGSize,
-        canvasSize: CGSize,
-        override: String?
-    ) -> CALayerContentsGravity {
-        if let o = override {
-            return o == "fit" ? .resizeAspect : .resizeAspectFill
-        }
-        // Mode libre — voir `resolveVideoGravity` pour la justification.
-        return .resizeAspectFill
     }
 }

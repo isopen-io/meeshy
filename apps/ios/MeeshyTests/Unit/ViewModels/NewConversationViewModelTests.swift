@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import Meeshy
 import MeeshySDK
 
@@ -34,13 +35,15 @@ final class NewConversationViewModelTests: XCTestCase {
     private func makeSUT(
         api: MockAPIClientForApp? = nil,
         friendService: MockFriendService? = nil,
-        currentUserId: String = "current-user"
+        currentUserId: String = "current-user",
+        platformRole: String? = "USER"
     ) -> (sut: NewConversationViewModel, api: MockAPIClientForApp) {
         let api = api ?? MockAPIClientForApp()
         let sut = NewConversationViewModel(
             api: api,
             friendService: friendService ?? MockFriendService(),
-            currentUserIdProvider: { currentUserId }
+            currentUserIdProvider: { currentUserId },
+            platformRoleProvider: { platformRole }
         )
         return (sut, api)
     }
@@ -62,6 +65,16 @@ final class NewConversationViewModelTests: XCTestCase {
         JSONStub.decode("""
         {"id":"\(id)","username":"\(username)","firstName":null,"lastName":null,"displayName":null,"email":null,"isOnline":null,"lastActiveAt":null,"avatar":null}
         """)
+    }
+
+    /// #10946 — la recherche de personnes sert le contour équipé ; le résultat le garde.
+    func test_searchedUser_decodesTheServedRing() {
+        let user: SearchedUser = JSONStub.decode("""
+        {"id":"u1","username":"ana","firstName":null,"lastName":null,"displayName":null,"email":null,"isOnline":null,"lastActiveAt":null,"avatar":null,
+         "profileDecor":{"avatarRing":{"pack":"contours-essentiels","item":"filet","origin":"builtin"}}}
+        """)
+
+        XCTAssertEqual(user.avatarRing, ServedProfileDecorItem(pack: "contours-essentiels", item: "filet", origin: .builtin))
     }
 
     private static func makeConversationResponse(id: String, type: String = "direct") -> APIResponse<APIConversation> {
@@ -226,6 +239,151 @@ final class NewConversationViewModelTests: XCTestCase {
         XCTAssertEqual(api.postCount, 1)
     }
 
+    // MARK: - openDirect (décision porteur du 2026-11-04, #14646)
+
+    func test_openDirect_oneTap_postsADirectAndOpensIt() async {
+        let (sut, api) = makeSUT(currentUserId: "u-current")
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-1"))
+
+        await sut.openDirect(with: Self.makeUser(id: "u-1", username: "alice"))
+
+        XCTAssertEqual(api.postCount, 1)
+        XCTAssertEqual(lastPostedBody(api)?["type"] as? String, "direct")
+        XCTAssertEqual(lastPostedBody(api)?["participantIds"] as? [String], ["u-1"])
+        XCTAssertNil(lastPostedBody(api)?["title"])
+        XCTAssertEqual(sut.createdConversation?.id, "conv-1")
+        XCTAssertFalse(sut.isCreating)
+        XCTAssertNil(sut.openingUserId)
+    }
+
+    func test_openDirect_carriesTheCheckedEncryptionMode() async {
+        let (sut, api) = makeSUT(platformRole: "USER")
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-1"))
+        sut.chooseEncryptionMode(.hybrid, isGroup: false)
+
+        await sut.openDirect(with: Self.makeUser(id: "u-1", username: "alice"))
+
+        XCTAssertEqual(lastPostedBody(api)?["encryptionMode"] as? String, "hybrid")
+    }
+
+    func test_openDirect_marksTheTouchedRowWhileItOpens() async {
+        let (sut, api) = makeSUT()
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-1"))
+        var seen: [String?] = []
+        let watch = sut.$openingUserId.sink { seen.append($0) }
+
+        await sut.openDirect(with: Self.makeUser(id: "u-1", username: "alice"))
+        watch.cancel()
+
+        XCTAssertEqual(seen, [nil, "u-1", nil])
+    }
+
+    func test_openDirect_failure_keepsTheSheetWithTheMessage() async {
+        let (sut, api) = makeSUT()
+        api.errorToThrow = NSError(domain: "TestNetwork", code: 500)
+
+        await sut.openDirect(with: Self.makeUser(id: "u-1", username: "alice"))
+
+        XCTAssertNil(sut.createdConversation)
+        XCTAssertNotNil(sut.errorMessage)
+        XCTAssertFalse(sut.isCreating)
+        XCTAssertNil(sut.openingUserId)
+    }
+
+    // MARK: - Encryption (directive porteur du 2026-11-01)
+
+    private func lastPostedBody(_ api: MockAPIClientForApp) -> [String: Any]? {
+        api.lastPostBodies.last.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+    }
+
+    func test_encryptionOffer_ordinaryUser_offersServerAndHybrid_serverByDefault() {
+        let (sut, _) = makeSUT(platformRole: "USER")
+
+        let offer = sut.encryptionOffer(isGroup: false)
+
+        XCTAssertEqual(offer.choices.map(\.mode), [.server, .hybrid])
+        XCTAssertEqual(sut.encryptionMode(isGroup: false), .server)
+    }
+
+    func test_encryptionOffer_analystInADirect_preselectsEndToEnd() {
+        let (sut, _) = makeSUT(platformRole: "ANALYST")
+
+        XCTAssertEqual(sut.encryptionOffer(isGroup: false).choices.map(\.mode), [.server, .hybrid, .e2ee])
+        XCTAssertEqual(sut.encryptionMode(isGroup: false), .e2ee)
+    }
+
+    func test_encryptionOffer_analystInAGroup_endToEndIsSoon_serverByDefault() {
+        let (sut, _) = makeSUT(platformRole: "ADMIN")
+
+        let offer = sut.encryptionOffer(isGroup: true)
+
+        XCTAssertEqual(offer.choices.last, ConversationCreationEncryption.Choice(mode: .e2ee, available: false, unavailability: .groupsNotYet))
+        XCTAssertEqual(sut.encryptionMode(isGroup: true), .server)
+    }
+
+    func test_chooseEncryptionMode_unavailableMode_isIgnored() {
+        let (sut, _) = makeSUT(platformRole: "USER")
+
+        sut.chooseEncryptionMode(.e2ee, isGroup: false)
+
+        XCTAssertNil(sut.chosenEncryptionMode)
+        XCTAssertEqual(sut.encryptionMode(isGroup: false), .server)
+    }
+
+    func test_encryptionMode_chosenEndToEnd_fallsBackToServerInAGroup_andReturnsInADirect() {
+        let (sut, _) = makeSUT(platformRole: "ANALYST")
+
+        sut.chooseEncryptionMode(.e2ee, isGroup: false)
+
+        XCTAssertEqual(sut.encryptionMode(isGroup: true), .server)
+        XCTAssertEqual(sut.encryptionMode(isGroup: false), .e2ee)
+    }
+
+    func test_encryptionMode_chosenHybrid_survivesTheSwitchToAGroup() {
+        let (sut, _) = makeSUT(platformRole: "ANALYST")
+
+        sut.chooseEncryptionMode(.hybrid, isGroup: false)
+
+        XCTAssertEqual(sut.encryptionMode(isGroup: true), .hybrid)
+    }
+
+    func test_createConversation_analystDirect_sendsEndToEnd() async {
+        let (sut, api) = makeSUT(platformRole: "ANALYST")
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-1"))
+
+        await sut.createConversation(selectedUsers: [Self.makeUser(id: "u-1", username: "alice")], groupTitle: "")
+
+        XCTAssertEqual(lastPostedBody(api)?["encryptionMode"] as? String, "e2ee")
+        XCTAssertEqual(lastPostedBody(api)?["type"] as? String, "direct")
+    }
+
+    func test_createConversation_ordinaryUserGroup_sendsServer() async {
+        let (sut, api) = makeSUT(platformRole: "USER")
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-2", type: "group"))
+
+        await sut.createConversation(
+            selectedUsers: [Self.makeUser(id: "u-1", username: "alice"), Self.makeUser(id: "u-2", username: "bob")],
+            groupTitle: " Amis "
+        )
+
+        let body = lastPostedBody(api)
+        XCTAssertEqual(body?["encryptionMode"] as? String, "server")
+        XCTAssertEqual(body?["type"] as? String, "group")
+        XCTAssertEqual(body?["title"] as? String, "Amis")
+        XCTAssertEqual(body?["participantIds"] as? [String], ["u-1", "u-2"])
+    }
+
+    func test_createConversation_chosenHybrid_sendsHybrid() async {
+        let (sut, api) = makeSUT(platformRole: "USER")
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-3"))
+        sut.chooseEncryptionMode(.hybrid, isGroup: false)
+
+        await sut.createConversation(selectedUsers: [Self.makeUser(id: "u-1", username: "alice")], groupTitle: "")
+
+        XCTAssertEqual(lastPostedBody(api)?["encryptionMode"] as? String, "hybrid")
+        XCTAssertNil(lastPostedBody(api)?["title"], "un tête-à-tête n'envoie pas de titre")
+    }
+
     func test_createConversation_failure_surfacesErrorMessage() async {
         let (sut, api) = makeSUT()
         api.errorToThrow = NSError(domain: "TestNetwork", code: 500)
@@ -246,6 +404,75 @@ final class NewConversationViewModelTests: XCTestCase {
         XCTAssertEqual(api.postCount, 0)
         XCTAssertFalse(sut.isCreating)
         XCTAssertNil(sut.createdConversation)
+    }
+
+    // MARK: - Un groupe dont je suis le seul membre (#14646)
+
+    func test_shape_noInviteeWithoutGroupRequest_isNone() {
+        XCTAssertEqual(NewConversationShape.resolve(selectedCount: 0, groupRequested: false), .none)
+    }
+
+    func test_shape_oneInvitee_isDirect_unlessAGroupIsRequested() {
+        XCTAssertEqual(NewConversationShape.resolve(selectedCount: 1, groupRequested: false), .direct)
+        XCTAssertEqual(NewConversationShape.resolve(selectedCount: 1, groupRequested: true), .group)
+    }
+
+    func test_shape_noInviteeWithGroupRequest_isGroup() {
+        XCTAssertEqual(NewConversationShape.resolve(selectedCount: 0, groupRequested: true), .group)
+    }
+
+    func test_shape_twoInvitees_isGroup() {
+        XCTAssertEqual(NewConversationShape.resolve(selectedCount: 2, groupRequested: false), .group)
+    }
+
+    func test_canCreate_soloGroupWithoutTitle_isFalse() {
+        XCTAssertFalse(NewConversationShape.canCreate(selectedCount: 0, groupRequested: true, groupTitle: "   "))
+    }
+
+    func test_canCreate_soloGroupWithTitle_isTrue() {
+        XCTAssertTrue(NewConversationShape.canCreate(selectedCount: 0, groupRequested: true, groupTitle: "Avis clients"))
+    }
+
+    func test_canCreate_directWithoutTitle_isTrue() {
+        XCTAssertTrue(NewConversationShape.canCreate(selectedCount: 1, groupRequested: false, groupTitle: ""))
+    }
+
+    func test_canCreate_nothingChosen_isFalse() {
+        XCTAssertFalse(NewConversationShape.canCreate(selectedCount: 0, groupRequested: false, groupTitle: "Titre"))
+    }
+
+    func test_createConversation_soloGroupWithTitle_postsAGroupWithoutParticipants() async {
+        let (sut, api) = makeSUT(platformRole: "USER")
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-solo", type: "group"))
+
+        await sut.createConversation(selectedUsers: [], groupTitle: " Audit ", groupRequested: true)
+
+        let body = lastPostedBody(api)
+        XCTAssertEqual(body?["type"] as? String, "group")
+        XCTAssertEqual(body?["title"] as? String, "Audit")
+        XCTAssertEqual(body?["participantIds"] as? [String], [])
+        XCTAssertEqual(sut.createdConversation?.id, "conv-solo")
+    }
+
+    func test_createConversation_soloGroupWithoutTitle_isNoOp() async {
+        let (sut, api) = makeSUT()
+
+        await sut.createConversation(selectedUsers: [], groupTitle: "  ", groupRequested: true)
+
+        XCTAssertEqual(api.postCount, 0)
+        XCTAssertNil(sut.createdConversation)
+    }
+
+    func test_createConversation_oneInviteeAsGroup_postsAGroup() async {
+        let (sut, api) = makeSUT()
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-g", type: "group"))
+
+        await sut.createConversation(
+            selectedUsers: [Self.makeUser(id: "u-1", username: "alice")], groupTitle: "Duo", groupRequested: true
+        )
+
+        XCTAssertEqual(lastPostedBody(api)?["type"] as? String, "group")
+        XCTAssertEqual(lastPostedBody(api)?["participantIds"] as? [String], ["u-1"])
     }
 
     func test_createConversation_userBlocked_setsBlockSpecificError() async {
@@ -458,5 +685,16 @@ final class NewConversationViewModelTests: XCTestCase {
         XCTAssertTrue(sut.contacts.isEmpty)
         XCTAssertFalse(sut.isLoadingContacts,
                        "A failed contacts fetch must clear the loading flag so the empty state can render")
+    }
+
+    /// La frappe suivante annule la recherche en vol : l'annulation n'est pas
+    /// une panne. Elle vidait la liste et montrait l'échec à chaque lettre.
+    func test_performSearch_cancelledByTheNextKeystroke_isNotAFailure() async {
+        let (sut, api) = makeSUT()
+        api.errorToThrow = CancellationError()
+
+        await sut.performSearch(query: "ab")
+
+        XCTAssertFalse(sut.searchFailed)
     }
 }

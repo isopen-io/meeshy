@@ -1,0 +1,442 @@
+#!/usr/bin/env node
+/**
+ * SUR UN TÉLÉPHONE, LE CADRE NE DÉFILE JAMAIS DE CÔTÉ, ET LA CONNEXION TIENT
+ * DANS LA VUE (#8418).
+ *
+ * Signalé par le porteur le 2026-09-27 depuis son smartphone, sur meeshy.me :
+ * « la page qui demande de se connecter ne prend pas toute la page, on doit
+ * scroller la scène ; il en va de même sur toutes les autres pages ; il faut
+ * éviter de faire scroller tout le frame horizontalement ».
+ *
+ * POURQUOI LE GATE D'ACCÈS NE L'A PAS VU. `check-access-column.mjs` mesure
+ * `document.documentElement.scrollWidth` à 390 px, et il avait raison : le
+ * DOCUMENT ne débordait jamais. Chaque écran de la v2 est une racine `h-dvh`
+ * qui porte SON propre défilement (`overflow-y-auto`) — et `overflow-y: auto`
+ * rend `overflow-x` défilant lui aussi (CSS Overflow 3 : un axe `visible` en
+ * face d'un axe défilant se calcule `auto`). Un contenu trop large ne pousse
+ * donc pas la page : il fait défiler de côté la COLONNE entière, que le doigt
+ * emporte. Le témoin mesure ici chaque conteneur défilant, pas le seul
+ * document.
+ *
+ * CE QU'IL MESURE, pour chaque adresse servie (écrans du routeur et documents
+ * institutionnels, lus par `v31Routes()` — un écran ajouté demain entre sous
+ * garde sans que personne y pense), à 320 × 568, 375 × 667 et 390 × 844 :
+ *
+ *   1. le document ne défile pas horizontalement ;
+ *   2. aucun conteneur défilant ne défile horizontalement, SAUF une BANDE —
+ *      un conteneur qui coupe son axe vertical, ou qui (lui ou son unique
+ *      enfant) se range en LIGNE (`flex` en rangée sans retour, ou `grid` en
+ *      flux de colonnes) : le plateau des stories,
+ *      les filtres, le carrousel d'un post sont faits pour glisser de côté.
+ *      Une colonne qui déborde nomme son COUPABLE (l'élément le plus
+ *      extérieur qui dépasse son bord), jamais le seul symptôme ;
+ *   3. chaque champ de saisie visible est écrit à 16 px au moins. Sous ce
+ *      seuil, Safari iOS ZOOME la page au focus et ne la rend jamais : le
+ *      cadre entier se met alors à glisser de côté, sur l'écran touché ET sur
+ *      tous ceux que l'on ouvre ensuite — le symptôme exact du signalement,
+ *      que Chromium ne reproduit pas — et il mesure au moins 44 px de large :
+ *      la correction d'un champ qui élargissait sa rangée (`w-0` sur une
+ *      saisie `flex-1`, pour que sa largeur intrinsèque ne compte plus) ne
+ *      doit jamais l'écraser à zéro dans une colonne ;
+ *
+ * et, pour la connexion (porte par défaut ET porte du mot de passe), à
+ * 375 × 667 (iPhone SE, le plus petit téléphone courant) :
+ *
+ *   4. rien ne défile : l'écran tient entier dans la vue — SAUF le pied du
+ *      site (`[data-auth-site-footer]`, #16452 : badges des boutiques et pages
+ *      institutionnelles), posé SOUS le formulaire par dessein, qu'on atteint
+ *      en défilant ; le formulaire, lui, tient toujours en entier.
+ *
+ * et, pour « PROGRESSION » (#9563, amendement n° 3 du porteur : « la vue
+ * Progression ne doit pas défiler horizontalement »), avec le jeu aux VALEURS
+ * LONGUES (niveau 97 et record 100, des millions de points, « Ambassadeur III »,
+ * 999 jours de Flamme — `src/lib/api/game-fixture-long.ts`, armé par le drapeau
+ * `meeshy.fixtures.gameLong`), à 320 px dans les sept langues, 375 px en
+ * allemand et en arabe, 260 px en allemand (le texte agrandi par le système) :
+ *
+ *   5. sur la première page, les quinze fiches et les onze
+ *      sous-pages, AUCUN conteneur ne défile de côté — bande comprise : ici une
+ *      rangée trop longue passe à la ligne entre ses éléments — rien ne dépasse
+ *      le conteneur qui défile, et ce conteneur verrouille l'axe horizontal
+ *      sans rien cacher (`scrollWidth` égale `clientWidth`).
+ *
+ * et, dans les SEPT langues, à 320, 375 et 390 px (#10124) :
+ *
+ *   6. sur chaque landing, les portes de l'en-tête (« Mes conversations »,
+ *      seule depuis #12500 — « Entrer sans compte » a quitté la page, #10784,
+ *      « Se connecter » aussi — et « Télécharger » vers /download, #16407)
+ *      tiennent chacune sur UNE ligne, sans rien rogner. (La carte World Wide de `/login`, qu'on mesurait aussi, est
+ *      retirée — #10784.)
+ *
+ * La démonstration ordinaire est confortable : la mesure de 1. et 2. était verte
+ * sur elle pendant que « Ligue » s'écrasait lettre à lettre à côté de
+ * « Améthyste · rang 30 ».
+ *
+ * GARDES DE VACUITÉ — un témoin d'absence est vert sur une page vide : chaque
+ * adresse doit avoir peint au moins un contenu perceptible, et le relevé doit
+ * avoir mesuré au moins un champ de saisie et au moins une bande.
+ */
+import { launchChromium } from './lib/browser.mjs';
+import { documentNetwork } from './lib/document-network.mjs';
+import { startDistServer } from './lib/gate-server.mjs';
+import { runBounded } from './lib/run-bounded.mjs';
+import { waitForValueSettled } from './lib/settle-value.mjs';
+import { v31Routes } from './lib/v31-routes.mjs';
+import {
+  GAME_LONG_FLAG,
+  LANGUAGE_KEY,
+  LONG_LEVEL,
+  PROGRESSION_GABARITS,
+  PROGRESSION_PAGES,
+  sidewaysReleve,
+} from './lib/progression-sideways.mjs';
+
+const TELEPHONES = [
+  { width: 320, height: 568 },
+  { width: 375, height: 667 },
+  { width: 390, height: 844 },
+];
+const IPHONE_SE = { width: 375, height: 667 };
+const TOLERANCE = 1;
+const CHAMP_MIN_PX = 16;
+
+/** Une valeur plausible du corpus pour chaque paramètre d'adresse — un écran
+ * « introuvable » reste un écran, et il doit tenir dans le cadre lui aussi. */
+const EXEMPLES = {
+  conversation: 'c-salon-riviere',
+  post: 'post-mine',
+  username: 'kwame-mensah',
+  tag: 'meeshy',
+  link: 'mshy_inconnu',
+  callId: 'call-amina-manque',
+  community: 'communaute-inconnue',
+  token: 'jeton-du-temoin',
+  user: 'membre-inconnu',
+  participant: 'participant-inconnu',
+  broadcast: 'diffusion-inconnue',
+  invitation: 'demande-inconnue',
+  report: 'signalement-inconnu',
+  concept: 'level',
+  semaine: '2026-11-02',
+  saison: '1',
+};
+
+const concretise = (pattern) =>
+  pattern.replace(/:([A-Za-z0-9_]+)/g, (_, nom) => {
+    const valeur = EXEMPLES[nom];
+    if (valeur === undefined) throw new Error(`check-phone-frame : aucun exemple pour le paramètre « ${nom} » de ${pattern}`);
+    return valeur;
+  });
+
+/**
+ * `PHONE_FRAME_ONLY=progression` ne joue que la mesure 5 (Progression aux valeurs
+ * longues) : c'est la boucle courte de qui retouche ces pages. La CI ne pose
+ * jamais la variable, elle joue tout.
+ */
+const SEULEMENT_PROGRESSION = process.env.PHONE_FRAME_ONLY === 'progression';
+
+const ADRESSES = SEULEMENT_PROGRESSION ? [] : v31Routes().map(({ url }) => concretise(url));
+const CONNEXION = SEULEMENT_PROGRESSION ? [] : ['/login', '/login?methode=password'];
+
+/** `DIST=<dossier>` mesure une construction de recette, jamais `dist/` par défaut écrasé. */
+const DIST = process.env.DIST ?? new URL('../dist/', import.meta.url).pathname;
+
+/** 6. Les sept landings prérendues (`landingFiles`), dans les sept langues. */
+const LANGUES = ['fr', 'en', 'es', 'pt', 'de', 'it', 'ar'];
+const LANDING_DE = (langue) => (langue === 'fr' ? '/landing' : `/${langue}`);
+const TEXTES_ENTIERS = SEULEMENT_PROGRESSION ? [] : LANGUES;
+const served = await startDistServer(DIST, { serviceWorker: false });
+const BASE = served.base;
+
+const browser = await launchChromium();
+const failures = [];
+const constate = (vrai, quoi) => {
+  if (!vrai) failures.push(quoi);
+};
+const bilan = { mesures: 0, champs: 0, bandes: 0, progression: 0, textes: 0 };
+
+/** Le relevé de 6. : pour chaque sélecteur, ses lignes de texte et s'il rogne. */
+const releveTextes = (selecteurs) =>
+  selecteurs.map((selecteur) => {
+    const el = document.querySelector(selecteur);
+    if (el === null) return { selecteur, absent: true };
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const lignes = new Set([...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0).map((r) => Math.round(r.top))).size;
+    return { selecteur, absent: false, lignes, rogne: el.scrollWidth > el.clientWidth + 1, texte: (el.textContent ?? '').trim() };
+  });
+
+const PORTES_LANDING = ['.ld-bar > a[href="/download"]', '.ld-bar > a[href="/chats"]'];
+
+/** Le relevé, dans la page — voir le doc-comment de tête. */
+const releve = () => {
+  const vw = document.documentElement.clientWidth;
+  const visible = (el) => {
+    if (el.closest('[aria-hidden="true"]') !== null) return false;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 1 || r.height <= 1) return false;
+    const s = getComputedStyle(el);
+    return s.visibility !== 'hidden' && s.display !== 'none';
+  };
+  const nom = (el) => {
+    const id = el.id === '' ? '' : `#${el.id}`;
+    const classes = [...el.classList].slice(0, 6).join('.');
+    return `${el.tagName.toLowerCase()}${id}${classes === '' ? '' : `.${classes}`}`;
+  };
+  const enLigne = (el) => {
+    const s = getComputedStyle(el);
+    if (s.display.endsWith('flex')) return s.flexDirection.startsWith('row') && s.flexWrap === 'nowrap';
+    if (s.display.endsWith('grid')) return s.gridAutoFlow.startsWith('column');
+    return false;
+  };
+  /* Un conteneur qui COUPE son axe vertical (`overflow-y: hidden | clip`) ne
+     défile, par déclaration, que de côté : c'est une bande, quel que soit
+     l'agencement de ses enfants (le carrousel d'un post pose ses pages en
+     absolu). */
+  const verticalCoupe = (el) => /(hidden|clip)/.test(getComputedStyle(el).overflowY);
+  const estBande = (el) => verticalCoupe(el) || enLigne(el) || (el.children.length === 1 && enLigne(el.children[0]));
+  const defileEnX = (el) => /(auto|scroll)/.test(getComputedStyle(el).overflowX);
+
+  /** L'élément le plus EXTÉRIEUR qui dépasse le bord droit du conteneur. */
+  const coupables = (conteneur) => {
+    const bord = conteneur.getBoundingClientRect().right + 0.5;
+    const depasse = (el) => el.getBoundingClientRect().right > bord;
+    return [...conteneur.querySelectorAll('*')]
+      .filter((el) => visible(el) && depasse(el) && (el.parentElement === conteneur || !depasse(el.parentElement)))
+      .slice(0, 3)
+      .map((el) => `${nom(el)} (bord droit ${Math.round(el.getBoundingClientRect().right)} px)`);
+  };
+
+  const colonnes = [];
+  let bandes = 0;
+  for (const el of document.querySelectorAll('body *')) {
+    if (!defileEnX(el) || el.scrollWidth <= el.clientWidth + 1) continue;
+    if (estBande(el)) {
+      bandes += 1;
+      continue;
+    }
+    colonnes.push({ conteneur: nom(el), debord: el.scrollWidth - el.clientWidth, coupables: coupables(el) });
+  }
+
+  const champs = [
+    ...document.querySelectorAll(
+      'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="hidden"]):not([type="submit"]):not([type="button"]), textarea, select, [contenteditable="true"], [contenteditable=""]',
+    ),
+  ].filter(visible);
+  const petits = champs
+    .map((el) => ({ el, taille: parseFloat(getComputedStyle(el).fontSize) }))
+    .filter(({ taille }) => taille < 16)
+    .map(({ el, taille }) => `${nom(el)} à ${taille} px`);
+  const etroits = champs.filter((el) => el.getBoundingClientRect().width < 44).map((el) => `${nom(el)} (${Math.round(el.getBoundingClientRect().width)} px)`);
+
+  const defileEnY = [...document.querySelectorAll('body *')]
+    .filter((el) => /(auto|scroll)/.test(getComputedStyle(el).overflowY) && el.scrollHeight > el.clientHeight + 1)
+    .map((el) => ({ conteneur: nom(el), debord: el.scrollHeight - el.clientHeight }));
+  const documentY = document.documentElement.scrollHeight - innerHeight;
+  if (documentY > 1) defileEnY.push({ conteneur: 'document', debord: documentY });
+
+  const perceptible = [...document.querySelectorAll('body *')].some(
+    (el) => visible(el) && ([...el.childNodes].some((n) => n.nodeType === 3 && (n.textContent ?? '').trim() !== '') || el.matches('input, button, a, img, svg, video, canvas')),
+  );
+
+  const piedDuSite = document.querySelector('[data-auth-site-footer]');
+
+  return {
+    chemin: location.pathname + location.search,
+    piedSite: piedDuSite === null ? 0 : piedDuSite.getBoundingClientRect().height,
+    documentX: document.documentElement.scrollWidth - vw,
+    colonnes,
+    bandes,
+    champs: champs.length,
+    petits,
+    etroits,
+    defileEnY,
+    perceptible,
+  };
+};
+
+const cors = (request) => ({
+  'access-control-allow-origin': request.headers().origin ?? '*',
+  'access-control-allow-credentials': 'true',
+});
+
+const ouvre = async (viewport) => {
+  const context = await browser.newContext({ viewport, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+  await context.route('**/*', (route) => {
+    const request = route.request();
+    if (new URL(request.url()).origin === BASE) return route.continue();
+    if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors(request) });
+    return route.abort();
+  });
+  return context;
+};
+
+/** Ce que la page montrait quand l'attente a buté — la cause d'un « rien de peint », jamais le seul symptôme. */
+const etatDe = async (page, network) => {
+  const vu = await page
+    .evaluate(() => {
+      const main = document.getElementById('contenu');
+      const contenu = main === null ? 'absent' : main.querySelector('[aria-busy="true"]') === null ? 'présent' : 'encore en chargement (aria-busy)';
+      return { adresse: location.pathname, contenu, texte: (document.body?.innerText ?? '').trim().replace(/\s+/g, ' ').slice(0, 80) };
+    })
+    .catch((cause) => ({ adresse: '?', contenu: 'illisible', texte: `page illisible : ${cause?.message ?? cause}` }));
+  const vol = network.enVol();
+  const reseau = vol.length === 0 ? 'réseau au repos' : `${vol.length} requête(s) en vol : ${vol.slice(0, 3).join(', ')}`;
+  return `${vu.adresse}, #contenu ${vu.contenu}, ${reseau}, texte « ${vu.texte} »`;
+};
+
+const mesure = async (context, adresse) => {
+  const page = await context.newPage();
+  const network = documentNetwork(page);
+  await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
+  const m = await waitForValueSettled(page, releve, undefined, { network, pret: (r) => r.perceptible });
+  await page.close();
+  return m;
+};
+
+/* #12622 — chaque contexte est une TÂCHE, et `runBounded` en fait tourner
+ * `PHONE_FRAME_PARALLEL` (3 par défaut) à la fois. */
+const PARALLELE = Number(process.env.PHONE_FRAME_PARALLEL ?? 3);
+
+const telephone = (viewport) => async (constate) => {
+  const gabarit = `${viewport.width}×${viewport.height}`;
+  const context = await ouvre(viewport);
+  for (const adresse of ADRESSES) {
+    const tag = `${adresse} @ ${gabarit}`;
+    const m = await mesure(context, adresse);
+    if (m === undefined) {
+      constate(false, `${tag} : le relevé ne s'est jamais stabilisé — le témoin ne mesure rien`);
+      continue;
+    }
+    bilan.mesures += 1;
+    bilan.champs += m.champs;
+    bilan.bandes += m.bandes;
+    constate(m.perceptible, `${tag} : aucun contenu perceptible — le témoin ne mesure rien (${m.chemin})`);
+    constate(m.documentX <= TOLERANCE, `${tag} : la page défile horizontalement (${m.documentX} px de trop, ${m.chemin})`);
+    for (const c of m.colonnes) {
+      constate(false, `${tag} : ${c.conteneur} défile de côté (${c.debord} px de trop, ${m.chemin}) — coupable : ${c.coupables.join(' · ') || 'introuvable'}`);
+    }
+    for (const e of m.etroits) {
+      constate(false, `${tag} : champ ${e} — plus étroit qu'un doigt, il ne se saisit pas (${m.chemin})`);
+    }
+    for (const p of m.petits) {
+      constate(false, `${tag} : champ ${p} — sous ${CHAMP_MIN_PX} px, Safari iOS zoome au focus et le cadre glisse de côté (${m.chemin})`);
+    }
+  }
+  await context.close();
+};
+
+/* 5. PROGRESSION, AUX VALEURS LONGUES — voir le doc-comment de tête. */
+const progression = (viewport, langue) => async (constate) => {
+  const context = await ouvre(viewport);
+  await context.addInitScript(
+    ([drapeau, clef, valeur]) => {
+      localStorage.setItem(drapeau, '1');
+      localStorage.setItem(clef, valeur);
+    },
+    [GAME_LONG_FLAG, LANGUAGE_KEY, langue],
+  );
+  /* UN onglet par langue, rechargé d'adresse en adresse : 280 relevés ne paient pas 280 ouvertures. */
+  const page = await context.newPage();
+  const network = documentNetwork(page);
+  for (const adresse of PROGRESSION_PAGES) {
+    const tag = `${adresse} @ ${viewport.width} px, ${langue}, valeurs longues`;
+    await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
+    const m = await waitForValueSettled(page, sidewaysReleve, undefined, { network, pret: (r) => !r.sansContenu && !r.enChargement });
+    if (m === undefined) {
+      constate(false, `${tag} : la page n'a rien peint de mesurable — le témoin ne mesure rien (${await etatDe(page, network)})`);
+      continue;
+    }
+    bilan.progression += 1;
+    constate(m.elements >= 10, `${tag} : ${m.elements} élément(s) seulement — la page n'est pas celle attendue (${m.chemin})`);
+    if (adresse === '/me/progression') {
+      constate((m.niveau ?? '').includes(LONG_LEVEL), `${tag} : la première page ne sert pas les valeurs longues (niveau lu : ${m.niveau}) — la mesure porterait sur les valeurs confortables`);
+    }
+    for (const d of m.defilants) constate(false, `${tag} : ${d} — dans Progression, rien ne défile de côté`);
+    for (const d of m.debords) constate(false, `${tag} : ${d} dépasse la page`);
+    constate(m.rogne <= TOLERANCE, `${tag} : le conteneur rogne ${m.rogne} px de contenu — le verrou cache un débordement (un mot insécable, souvent)`);
+    constate(m.verrou, `${tag} : le conteneur qui défile ne verrouille pas l'axe horizontal (overflow-x-clip)`);
+    constate(m.surdefilement === 'none', `${tag} : le conteneur laisse le surdéfilement horizontal (overscroll-behavior-x : ${m.surdefilement})`);
+  }
+  await context.close();
+};
+
+/* 6. LE TEXTE ENTIER, DANS LES SEPT LANGUES — voir le doc-comment de tête. */
+const texteEntier = (viewport, langue) => async (constate) => {
+  const context = await ouvre(viewport);
+  await context.addInitScript(([clef, valeur]) => localStorage.setItem(clef, valeur), [LANGUAGE_KEY, langue]);
+  const page = await context.newPage();
+  const network = documentNetwork(page);
+  for (const [adresse, selecteurs, uneLigne] of [
+    [LANDING_DE(langue), PORTES_LANDING, true],
+  ]) {
+    const tag = `${adresse} @ ${viewport.width} px, ${langue}`;
+    await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
+    const m = await waitForValueSettled(page, releveTextes, selecteurs, { network, pret: (r) => r.every((t) => !t.absent) });
+    if (m === undefined) {
+      constate(false, `${tag} : le relevé du texte ne s'est jamais stabilisé`);
+      continue;
+    }
+    for (const t of m) {
+      if (t.absent) {
+        constate(false, `${tag} : ${t.selecteur} absent — le témoin ne mesure rien`);
+        continue;
+      }
+      bilan.textes += 1;
+      constate(!t.rogne, `${tag} : « ${t.texte} » est rogné (${t.selecteur})`);
+      if (uneLigne) constate(t.lignes === 1, `${tag} : « ${t.texte} » passe sur ${t.lignes} lignes (${t.selecteur})`);
+    }
+  }
+  await context.close();
+};
+
+const connexion = async (constate) => {
+  const context = await ouvre(IPHONE_SE);
+  for (const adresse of CONNEXION) {
+    const tag = `${adresse} @ ${IPHONE_SE.width}×${IPHONE_SE.height}`;
+    const m = await mesure(context, adresse);
+    if (m === undefined) {
+      constate(false, `${tag} : le relevé ne s'est jamais stabilisé`);
+      continue;
+    }
+    constate(m.champs > 0, `${tag} : aucun champ mesuré — ce n'est pas l'écran de connexion (${m.chemin})`);
+    for (const y of m.defileEnY.filter((y) => y.debord - m.piedSite > 1)) {
+      constate(false, `${tag} : l'écran de connexion ne tient pas dans la vue — ${y.conteneur} défile de ${y.debord} px (pied du site : ${Math.round(m.piedSite)} px)`);
+    }
+  }
+  await context.close();
+};
+
+/* Les plus longues d'abord : un téléphone tardif ne se joue jamais seul en fin de course. */
+const TACHES = [
+  ...(ADRESSES.length === 0 ? [] : TELEPHONES.map(telephone)),
+  ...PROGRESSION_GABARITS.flatMap(({ viewport, langues }) => langues.map((langue) => progression(viewport, langue))),
+  ...(TEXTES_ENTIERS.length === 0 ? [] : TELEPHONES).flatMap((viewport) => TEXTES_ENTIERS.map((langue) => texteEntier(viewport, langue))),
+  connexion,
+];
+
+try {
+  for (const f of await runBounded(TACHES, PARALLELE)) constate(false, f);
+} finally {
+  await browser.close();
+  served.close();
+}
+
+if (!SEULEMENT_PROGRESSION) {
+  constate(bilan.champs > 0, 'aucun champ de saisie mesuré sur toutes les adresses — la règle des 16 px ne mesure rien');
+  constate(bilan.bandes > 0, 'aucune bande horizontale rencontrée — l’exemption des bandes ne se prouve sur rien');
+}
+constate(bilan.progression > 0, 'aucune page de Progression mesurée aux valeurs longues');
+if (!SEULEMENT_PROGRESSION) constate(bilan.textes > 0, 'aucun texte de la landing mesuré — la mesure 6 ne mesure rien');
+
+if (failures.length > 0) {
+  console.error(`\ncheck-phone-frame : ${failures.length} échec(s)`);
+  for (const f of failures) console.error(`  ✗ ${f}`);
+  process.exit(1);
+}
+console.log(
+  `\ncheck-phone-frame : vert — ${ADRESSES.length} adresses × ${TELEPHONES.length} téléphones (${bilan.mesures} relevés, ${bilan.champs} champs, ${bilan.bandes} bandes) : ` +
+    `aucun cadre ne défile de côté, aucun champ sous ${CHAMP_MIN_PX} px, la connexion tient dans ${IPHONE_SE.width}×${IPHONE_SE.height} ; ` +
+    `Progression aux valeurs longues : ${bilan.progression} relevés (${PROGRESSION_PAGES.length} pages), rien ne glisse ni ne dépasse ; ` +
+    `${bilan.textes} textes de la landing lus en entier dans les ${LANGUES.length} langues.\n`,
+);

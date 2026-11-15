@@ -1,0 +1,111 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+// MARK: - Themed Action Button
+struct ThemedActionButton: View {
+    let icon: String
+    let color: String
+    let label: String
+    let hint: String
+    var badge: Int = 0
+    /// Le point de coin sans chiffre (#18165) : « quelque chose t'attend ici ». Même coin et même blanc que la pastille,
+    /// qu'il ne double jamais — une pastille de compte prend la place.
+    var showsDot: Bool = false
+    var size: CGFloat = 46
+    /// `false` = glow ET pulse ÉTEINTS. L'échelle de menu (`menuLadder`) reste
+    /// MONTÉE menu fermé (opacité 0 via `menuAnimation`, zIndex −1) pour que le
+    /// ressort d'ouverture anime depuis un état existant — mais un `onAppear`
+    /// inconditionnel y démarrait le glow `repeatForever` (ombre re-rasterisée
+    /// à CHAQUE frame) sur six boutons INVISIBLES, en permanence, derrière la
+    /// liste de conversations. Le décor ne respire
+    /// que quand il est visible.
+    var isGlowEnabled: Bool = true
+    let action: () -> Void
+
+    @State private var isGlowing = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
+
+    private var iconSize: CGFloat { round(size * 0.39) }
+
+    var body: some View {
+        Button(action: {
+            HapticFeedback.light()
+            action()
+        }) {
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(hex: color), Color(hex: color).opacity(0.7)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: size, height: size)
+                    .shadow(
+                        color: Color(hex: color).opacity(isGlowing ? 0.65 : 0.45),
+                        radius: isGlowing ? MeeshyShadow.strong.radius : MeeshyShadow.medium.radius,
+                        y: 4
+                    )
+
+                Image(systemName: icon)
+                    .font(MeeshyFont.relative(iconSize, weight: .semibold))
+                    .foregroundStyle(Color.white)
+
+                if showsDot && badge <= 0 {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 10, height: 10)
+                        .shadow(color: Color.black.opacity(0.25), radius: 1.5, y: 1)
+                        .offset(x: size * 0.33, y: -size * 0.33)
+                        .accessibilityHidden(true)
+                }
+
+                if badge > 0 {
+                    Text(NotificationBadge.displayed(badge))
+                        .font(MeeshyFont.relative(MeeshyFont.microSize, weight: NotificationBadge.fontWeight))
+                        .foregroundStyle(Color(hex: color))
+                        .lineLimit(1)
+                        .padding(.horizontal, MeeshySpacing.xs)
+                        .frame(minWidth: 16, minHeight: 16)
+                        .background(Capsule().fill(Color.white))
+                        .offset(x: size * 0.33, y: -size * 0.33)
+                        // Même règle que le glow : pas de respiration infinie
+                        // sur une pastille que personne ne voit (menu fermé).
+                        .ifTrue(isGlowEnabled) { $0.pulse(intensity: 0.08) }
+                }
+            }
+        }
+        // L'appui du kit (#18428) : le barreau s'enfonce dès que le doigt se pose,
+        // par `springFast`, et garde son voile sans échelle sous « Réduire les animations ».
+        .buttonStyle(PressableButtonStyle())
+        .accessibilityLabel(label)
+        .accessibilityHint(hint)
+        .onAppear { syncGlow() }
+        // Le menu s'ouvre/se ferme SANS remonter les boutons (l'échelle reste
+        // dans la hiérarchie) : c'est ce changement-ci, pas `onAppear`, qui
+        // démarre et arrête réellement la respiration.
+        .adaptiveOnChange(of: isGlowEnabled) { _, _ in syncGlow() }
+        .onDisappear { stopGlow() }
+    }
+
+    /// Reduce Motion: keep the static base shadow, no breathing glow.
+    private func syncGlow() {
+        guard isGlowEnabled, !reduceMotion else {
+            stopGlow()
+            return
+        }
+        withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+            isGlowing = true
+        }
+    }
+
+    private func stopGlow() {
+        withTransaction(Transaction(animation: nil)) {
+            isGlowing = false
+        }
+    }
+}

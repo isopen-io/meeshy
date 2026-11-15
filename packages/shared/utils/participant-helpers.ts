@@ -1,11 +1,28 @@
+import { isPrivilegedPlatformRole } from './platform-privilege.js';
+
+/**
+ * **LES DEUX FORMES DE L'ABSENCE SONT ACCEPTÉES** (#6985). Sous
+ * `exactOptionalPropertyTypes` — actif dans `apps/web-v2` —, `avatar?: string |
+ * null` décrit une propriété ABSENTE ou valant `string | null`, mais REFUSE une
+ * propriété PRÉSENTE valant `undefined`. Or c'est exactement la forme du
+ * `Participant` du web (`avatar: string | undefined`), et la rampe des visages
+ * ne pouvait donc pas appeler la loi partagée sans un cast.
+ *
+ * Élargir un paramètre d'ENTRÉE ne casse aucun appelant : ces deux types ne
+ * décrivent que ce que les fonctions ci-dessous acceptent de LIRE, et
+ * `isNonBlank` traite déjà `undefined` et `null` à l'identique. Les deux types
+ * bougent ensemble — leur doc-comment les dit « miroir strict », et un miroir
+ * qui ne suit qu'à moitié est le début d'une divergence.
+ */
+
 /**
  * Forme minimale d'un participant porteur d'un avatar : avatar local optionnel
  * (`Participant.avatar`) + avatar du compte utilisateur lié optionnel (`User.avatar`).
  * Couvre les participants enregistrés, anonymes et les `sender` de message.
  */
 export type AvatarBearingParticipant = {
-  readonly avatar?: string | null;
-  readonly user?: { readonly avatar?: string | null } | null;
+  readonly avatar?: string | null | undefined;
+  readonly user?: { readonly avatar?: string | null | undefined } | null | undefined;
 };
 
 /**
@@ -14,8 +31,8 @@ export type AvatarBearingParticipant = {
  * lié optionnel (`User.displayName`).
  */
 export type DisplayNameBearingParticipant = {
-  readonly displayName?: string | null;
-  readonly user?: { readonly displayName?: string | null } | null;
+  readonly displayName?: string | null | undefined;
+  readonly user?: { readonly displayName?: string | null | undefined } | null | undefined;
 };
 
 const isNonBlank = (value?: string | null): value is string =>
@@ -90,6 +107,39 @@ export const resolveAnonymousSenderIdentity = (participant: {
   return { displayName: givenName || pseudo, username: pseudo };
 };
 
+type AnonymousSessionNames = {
+  readonly profile?: {
+    readonly firstName?: string | null;
+    readonly lastName?: string | null;
+  } | null;
+};
+
+/**
+ * L'auteur d'un message NEUF tel qu'il part vers les clients (#10120) — la
+ * réponse de `POST /conversations/:id/messages`, l'accusé de `message:send` et
+ * `message:new`. Même forme que la liste des messages : pour un invité, le nom
+ * DONNÉ en `displayName` et le pseudo `ano_…` en `username`, résolus par
+ * `resolveAnonymousSenderIdentity` ; le profil de session ne sort jamais.
+ *
+ * Idempotente : un auteur sans `anonymousSession` (un compte, ou un invité
+ * déjà servi) repart tel quel — les deux producteurs de `message:new` la
+ * rejouent sur la réponse déjà servie.
+ */
+export const servedMessageSender = <
+  T extends {
+    readonly type?: string | null;
+    readonly displayName?: string | null;
+    readonly anonymousSession?: AnonymousSessionNames | null;
+  },
+>(
+  sender: T,
+): Omit<T, 'anonymousSession'> & { readonly username?: string } => {
+  const { anonymousSession, ...rest } = sender;
+  if (sender.type !== 'anonymous' || anonymousSession === undefined || anonymousSession === null) return rest;
+  const identity = resolveAnonymousSenderIdentity(sender);
+  return { ...rest, displayName: identity.displayName, username: identity.username };
+};
+
 /**
  * Forme minimale d'un rang `Participant` sérialisable vers le fil. Structurelle
  * — la fabrique ne dépend pas du client Prisma, elle ne lit que ce qu'elle
@@ -128,13 +178,43 @@ export type SerializableParticipantRow = {
     readonly customDestinationLanguage?: string | null;
     readonly createdAt?: Date | null;
     readonly updatedAt?: Date | null;
+    readonly isActive?: boolean | null;
   } | null;
 };
 
 /**
- * Visibilité de présence telle que la rend `resolvePrefsOnly` : deux drapeaux,
- * ou RIEN quand la cible n'a pas de préférences (un anonyme n'a pas de compte).
- * Régime PREFS-ONLY — l'entrée absente RÉVÈLE, elle ne masque pas.
+ * Ce que la loi de fermeture lit d'une ligne de participant : le type, le
+ * compte rattaché et l'état `isActive` du COMPTE (jamais celui du participant,
+ * qui dit l'appartenance à la conversation).
+ */
+export type AccountClosureSource = {
+  readonly type?: string | null;
+  readonly userId?: string | null;
+  readonly user?: { readonly isActive?: boolean | null } | null;
+};
+
+/** La clé n'existe que fermée : absente, un ancien client et le fil ne bougent pas. */
+export type ServedAccountClosure = { readonly accountClosed?: true };
+
+/**
+ * LOI UNIQUE « le compte de cet interlocuteur est fermé » — supprimé ou
+ * désactivé, sans distinction ni horodatage : un booléen, présent seulement à
+ * vrai. Un anonyme (type `anonymous` ou sans `userId`) n'a pas de compte à
+ * fermer ; un `isActive` non lu (absent ou nul) n'est jamais une fermeture.
+ * Indépendante de la présence : elle ne passe par aucune porte de présence.
+ */
+export const participantAccountClosure = (
+  participant: AccountClosureSource,
+): ServedAccountClosure =>
+  participant.type !== 'anonymous' && !!participant.userId && participant.user?.isActive === false
+    ? { accountClosed: true }
+    : {};
+
+/**
+ * Visibilité de présence telle que la rend `resolveForTargets(viewer, ids)` :
+ * deux drapeaux, ou RIEN quand la cible n'a pas de compte (un anonyme n'a pas
+ * de `userId`). L'entrée absente MASQUE, sauf pour un viewer ADMIN/BIGBOSS —
+ * l'appelant le dit par `PresenceMissingEntryPolicy`.
  * @see utils/presence-visibility.ts, `PresenceMissingEntryPolicy`
  */
 export type ParticipantPresenceVisibility = {
@@ -143,7 +223,12 @@ export type ParticipantPresenceVisibility = {
 };
 
 export type SerializeParticipantOptions = {
-  /** Préférences de la CIBLE. Absente ⇒ révèle (régime prefs-only). */
+  /**
+   * Visibilité SERVIE pour la cible, résolue par l'appelant PAR VIEWER
+   * (`resolveForTarget(s)`, puis `presenceFor` pour une entrée absente).
+   * Absente ⇒ MASQUE : la fabrique ne révèle jamais par défaut — un appelant
+   * qui l'omet sert `isOnline:false` / `lastActiveAt:null`, pas la colonne.
+   */
   readonly presence?: ParticipantPresenceVisibility;
   /**
    * Présence VIVE du `SocketIOManager` quand on l'a : la colonne
@@ -172,7 +257,11 @@ const ADMIN_ROLES = ['ADMIN', 'BIGBOSS'];
  *    `member` là où le contrat promet `USER`, en laissant `conversationRole` vide.
  * 2. **La présence ne sort jamais toute seule.** `isOnline`/`lastActiveAt` sont
  *    DÉCLARÉS par le schéma : sur un rang brut ils traversent sans garde. Ici
- *    ils ne peuvent sortir qu'à travers `options.presence`.
+ *    ils ne sortent qu'à travers `options.presence`, et seulement quand elle
+ *    le DIT (`showOnline === true`, `showLastSeenTimestamp === true`) : sans
+ *    visibilité fournie, la fabrique sert `false` / `null`. Le défaut FERME —
+ *    les trois appelants du gateway passent déjà `presenceFor` ; le quatrième,
+ *    qui l'oublierait, ne fuit plus.
  */
 export const serializeConversationParticipant = (
   participant: SerializableParticipantRow,
@@ -200,14 +289,23 @@ export const serializeConversationParticipant = (
     role: user?.role ?? 'USER',
     conversationRole: participant.role ?? null,
     joinedAt,
-    isOnline: presence?.showOnline === false ? false : effectiveOnline,
+    isOnline: presence?.showOnline === true ? effectiveOnline : false,
     lastActiveAt:
-      presence?.showLastSeenTimestamp === false ? null : participant.lastActiveAt ?? null,
+      presence?.showLastSeenTimestamp === true ? participant.lastActiveAt ?? null : null,
     systemLanguage: user?.systemLanguage ?? language,
     regionalLanguage: user?.regionalLanguage ?? language,
     customDestinationLanguage: user?.customDestinationLanguage ?? language,
-    autoTranslateEnabled: true,
+    // `autoTranslateEnabled: true` était écrit EN DUR — un champ de contrat
+    // qui ne disait rien de vrai (`User` ne porte aucune colonne de ce nom ;
+    // le magasin réel est `UserPreferences.application`). #4161 avait retiré
+    // le même littéral du profil PUBLIC ; ce chemin PARTICIPANT portait le
+    // défaut identique, jamais compté par ce correctif. Retiré (#4643) plutôt
+    // que servi depuis le magasin réel : la directive du 2026-08-25 sur la
+    // présence est explicite — la co-participation à une conversation ne
+    // donne accès à AUCUNE préférence personnelle d'un tiers, et
+    // `autoTranslateEnabled` en est une, au même titre que `isOnline`.
     isActive: participant.isActive ?? false,
+    ...participantAccountClosure(participant),
     createdAt: user?.createdAt ?? joinedAt,
     updatedAt: user?.updatedAt ?? joinedAt,
     isAnonymous: participant.type === 'anonymous',
@@ -220,7 +318,7 @@ export const serializeConversationParticipant = (
       canManageGroups: isGlobalAdmin,
       canManageConversations: isGlobalAdmin,
       canViewAnalytics: isGlobalAdmin,
-      canModerateContent: isGlobalAdmin,
+      canModerateContent: isPrivilegedPlatformRole(user?.role),
       canViewAuditLogs: isGlobalAdmin,
       canManageNotifications: isGlobalAdmin,
       canManageTranslations: isGlobalAdmin,

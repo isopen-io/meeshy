@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_text_format_bar">Formato</string>
+    <string name="composer_text_format_bold">Negrita</string>
+    <string name="composer_text_format_italic">Cursiva</string>
+    <string name="composer_text_format_underline">Subrayado</string>
+    <string name="composer_text_format_strikethrough">Tachado</string>
+</resources>

@@ -5,27 +5,67 @@
  * - SHA-256 hashed tokens
  * - 10 minute token expiry (returned as expiresInSeconds to clients)
  * - Single-use tokens
- * - Rate limiting (3 requests per hour per email)
+ * - Rate limiting (3 requests per hour per email, 10 per hour per IP)
  * - Device tracking (IP, location, browser)
  * - Security event logging
  * - Automatic session creation with full context
  */
 
+import { AgeBelowMinimumError } from '../errors/custom-errors';
 import crypto from 'crypto';
+import { passwordSettingsUrl, profileEditUrl } from './email/account-identity-block';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CacheStore } from './CacheStore';
 import { EmailService } from './EmailService';
 import { GeoIPService, RequestContext } from './GeoIPService';
-import { createSession, initSessionService, generateSessionToken } from './SessionService';
+import { createSession, initSessionService, generateSessionToken, type SessionData } from './SessionService';
+import { signSessionToken } from './auth/session-jwt';
+import { proveEmailAddress } from './auth/email-address-proof';
+import { resolveAccountActivation } from './auth/account-activation';
+import { scheduleContactJoinedAnnouncement } from './notifications/contact-joined';
+import { mintPendingTwoFactorChallenge } from './auth/pending-two-factor';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { unsetOrNull } from '../utils/prisma-unset';
+import { getJwtSecret } from '../utils/secrets';
 import { RECIPIENT_LANG_SELECT, recipientLanguage, type RecipientLanguagePrefs } from '../utils/recipient-language';
+import { AUTO_TRANSLATE_PREFERENCE_SELECT, resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
+import { EMAIL_LINK_PATHS, emailSecretLink } from '../utils/email-secret-link';
+import { linkConfirmation, linkDeviceVerdict, type LinkAccountIdentity, type LinkConfirmationIntent } from './auth/link-device-binding';
 
 const logger = enhancedLogger.child({ module: 'MagicLinkService' });
 
 const TOKEN_EXPIRY_MINUTES = 10; // 10 minutes
 // Higher limit in development for testing, strict in production
 const MAX_REQUESTS_PER_HOUR = process.env.NODE_ENV === 'production' ? 3 : 20;
+// Second, wider bound on the CALLER's address — mirrors
+// `PasswordResetService.checkRateLimit`. Without it, a single IP throttled
+// only by email could exhaust the magic-link pipeline (SMTP sends, token
+// creation) by rotating through distinct addresses, each under its own
+// untouched quota.
+const MAX_IP_REQUESTS_PER_HOUR = process.env.NODE_ENV === 'production' ? 10 : 50;
+
+/**
+ * L'état du second facteur d'un compte, en TROIS valeurs — pas deux (#4534).
+ *
+ * `absent` et `required` se lisent ; `indeterminate` est le troisième cas que
+ * les booléens escamotent : le champ n'a pas été projeté, ou porte autre chose
+ * qu'une date. On ne SAIT alors pas si le compte est protégé, et le sens sûr
+ * est le refus. Une garde qui replierait ce cas sur « pas de second facteur »
+ * rouvrirait le contournement le jour où quelqu'un retire `twoFactorEnabledAt`
+ * du `select` — sans qu'aucun témoin ne rougisse.
+ */
+export type SecondFactorState = 'absent' | 'required' | 'indeterminate';
+
+export function resolveSecondFactor(twoFactorEnabledAt: unknown): SecondFactorState {
+  if (twoFactorEnabledAt === null) return 'absent';
+  if (twoFactorEnabledAt instanceof Date) {
+    return Number.isNaN(twoFactorEnabledAt.getTime()) ? 'indeterminate' : 'required';
+  }
+  if (typeof twoFactorEnabledAt === 'string') {
+    return Number.isNaN(Date.parse(twoFactorEnabledAt)) ? 'indeterminate' : 'required';
+  }
+  return 'indeterminate';
+}
 
 export interface MagicLinkRequest {
   email: string;
@@ -33,11 +73,43 @@ export interface MagicLinkRequest {
   ipAddress: string;
   userAgent: string;
   rememberDevice?: boolean; // Stored server-side for security
+  /**
+   * OÙ REVENIR une fois connecté (#6742) — `/login?next=` clampé côté client
+   * (`safeNextPath`, web-v2), jamais crue ici pour autant : embarquée dans un
+   * lien envoyé PAR E-MAIL, elle est reclampée à la sortie
+   * (`clampMagicLinkReturnUrl`) avant d'atteindre `sendMagicLinkEmail`.
+   */
+  returnUrl?: string;
+}
+
+/**
+ * `returnUrl` clampé à un chemin MÊME-ORIGINE, jamais une URL absolue ni un
+ * chemin protocole-relatif (#6742) — même doctrine que le web
+ * (`apps/web/src/lib/view/magic-link.ts:safeReturnPath`, la garde qui lit
+ * `returnUrl` en sortie du lien de digest, `jobs/notification-digest.ts`).
+ * Une valeur suspecte est ABSENTE du lien envoyé, jamais recopiée telle
+ * quelle : la valeur vient du CLIENT et n'est jamais crue avant d'être
+ * embarquée dans un lien qui quitte l'application.
+ */
+export function clampMagicLinkReturnUrl(raw: string | null | undefined): string | undefined {
+  if (raw === null || raw === undefined || raw === '') return undefined;
+  if (!raw.startsWith('/')) return undefined;
+  if (raw.startsWith('//')) return undefined;
+  if (raw.includes('\\')) return undefined;
+  for (const character of raw) {
+    const code = character.charCodeAt(0);
+    if (character.trim() === '' || code < 0x20 || code === 0x7f) return undefined;
+  }
+  return raw;
 }
 
 export interface MagicLinkValidation {
   token: string;
   requestContext: RequestContext;
+  /** #10872 — le secret de l'appareil qui présente le lien. */
+  linkDeviceSecret?: string;
+  /** #10872 — l'utilisateur a vu le compte cible et dit oui. */
+  confirmed?: boolean;
 }
 
 export interface IssueLoginTokenOptions {
@@ -47,13 +119,22 @@ export interface IssueLoginTokenOptions {
 
 const DIGEST_TOKEN_TTL_MINUTES = 24 * 60; // 24h — proactive email, opened with delay
 
+export type MagicLinkServiceOptions = {
+  /** L'horloge de la preuve d'adresse et du délai de grâce (#8238) — injectée par les témoins. */
+  readonly now?: () => Date;
+};
+
 export class MagicLinkService {
+  private readonly now: () => Date;
+
   constructor(
     private prisma: PrismaClient,
     private cache: CacheStore,
     private emailService: EmailService,
-    private geoIPService: GeoIPService
+    private geoIPService: GeoIPService,
+    options: MagicLinkServiceOptions = {}
   ) {
+    this.now = options.now ?? (() => new Date());
     // Initialize session service with prisma
     initSessionService(prisma);
   }
@@ -65,8 +146,9 @@ export class MagicLinkService {
   async requestMagicLink(
     request: MagicLinkRequest
   ): Promise<{ success: boolean; message: string; expiresInSeconds?: number; error?: string }> {
-    const { email, deviceFingerprint, ipAddress, userAgent, rememberDevice } = request;
+    const { email, deviceFingerprint, ipAddress, userAgent, rememberDevice, returnUrl } = request;
     const normalizedEmail = email.toLowerCase().trim();
+    const clampedReturnUrl = clampMagicLinkReturnUrl(returnUrl);
 
     try {
       // 1. Check rate limit
@@ -91,8 +173,19 @@ export class MagicLinkService {
         select: {
           id: true,
           email: true,
+          username: true,
+          displayName: true,
           firstName: true,
           lastName: true,
+          /**
+           * LU pour être réduit à un booléen, jamais pour être confronté
+           * (#6424). Tant qu'aucun mot de passe n'est posé, cet e-mail est la
+           * seule porte du compte — c'est donc le seul endroit où rappeler
+           * qu'on peut cesser d'en dépendre, et le savoir demande de lire la
+           * colonne. La valeur est convertie deux lignes plus bas et n'est
+           * plus jamais référencée : elle ne voyage pas jusqu'au gabarit.
+           */
+          password: true,
           ...RECIPIENT_LANG_SELECT
         }
       });
@@ -141,15 +234,16 @@ export class MagicLinkService {
           userAgent,
           deviceFingerprint,
           geoLocation: geoData?.location || 'Unknown',
-          geoCoordinates: geoData?.latitude && geoData?.longitude
-            ? `${geoData.latitude},${geoData.longitude}`
-            : null,
           rememberDevice: rememberDevice || false // Store server-side for security
         }
       });
 
       // 7. Send magic link email
-      await this.sendMagicLinkEmail(user, rawToken, geoData?.location || 'Unknown');
+      await this.sendMagicLinkEmail(user, rawToken, geoData?.location || 'Unknown', {
+        username: user.username,
+        displayName: user.displayName ?? user.username,
+        hasPassword: user.password !== null && user.password !== undefined,
+      }, clampedReturnUrl);
 
       // 8. Log security event
       await this.logSecurityEvent(user.id, 'MAGIC_LINK_REQUESTED', 'LOW', {
@@ -222,8 +316,25 @@ export class MagicLinkService {
     user?: any;
     token?: string;
     sessionToken?: string;
-    session?: any;
+    session?: SessionData;
     rememberDevice?: boolean; // Retrieved from server-side storage
+    /**
+     * Branche EXCLUSIVE de la session complète (#4534) : quand elle vaut
+     * `true`, ni `token`, ni `sessionToken`, ni `session` ne sont rendus —
+     * aucun accès n'est accordé avant que le second facteur soit vérifié.
+     */
+    requires2FA?: boolean;
+    /** Jeton d'étape 2, à présenter à `POST /auth/login/2fa` avec le code. */
+    twoFactorToken?: string;
+    /**
+     * #10872 — branche EXCLUSIVE : le lien n'a pas été consommé, aucune
+     * session n'existe ; `account` est le compte que le oui ouvrirait.
+     */
+    requiresConfirmation?: boolean;
+    account?: LinkAccountIdentity;
+    /** #10879 — ce que le oui fera, et l'adresse du compte, MASQUÉE. */
+    intent?: LinkConfirmationIntent;
+    maskedEmail?: string;
   }> {
     const { token, requestContext } = validation;
 
@@ -254,8 +365,10 @@ export class MagicLinkService {
               createdAt: true,
               updatedAt: true,
               emailVerifiedAt: true,
+              emailReleasedAt: true,
               phoneVerifiedAt: true,
-              twoFactorEnabledAt: true
+              twoFactorEnabledAt: true,
+              ...AUTO_TRANSLATE_PREFERENCE_SELECT
             }
           }
         }
@@ -306,41 +419,157 @@ export class MagicLinkService {
         return { success: false, error: 'This link is no longer valid. Please request a new one.' };
       }
 
-      // 7. Mark token as used
-      await this.prisma.magicLinkToken.update({
-        where: { id: magicLinkToken.id },
+      // 6 bis. #10872 — le lien du digest n'est lié à aucun appareil : il ne
+      // se consomme qu'après le oui de l'utilisateur, à qui l'on a montré le
+      // compte cible. Avant, RIEN n'est écrit (Login CSRF).
+      const verdict = linkDeviceVerdict({
+        boundHash: null,
+        presentedSecret: validation.linkDeviceSecret,
+        confirmed: validation.confirmed === true,
+      });
+      if (verdict === 'confirmation-required') {
+        return {
+          success: false,
+          requiresConfirmation: true,
+          ...linkConfirmation(user, { intent: 'sign-in', email: user.email }),
+          error: 'Confirm the account before signing in.'
+        };
+      }
+
+      // 7. Mark token as used — par une écriture CONDITIONNELLE (#10475) : la
+      // lecture de `usedAt` (étape 4) ne suffit pas, deux validations
+      // concurrentes la passaient toutes deux et ouvraient chacune une session.
+      // Seule celle dont l'écriture gagne continue ; la condition relit aussi
+      // la révocation. `usedAt` d'un lien frais est ABSENT du document
+      // (`create` ne l'écrit pas) : `unsetOrNull`, jamais `usedAt: null` seul.
+      const consumed = await this.prisma.magicLinkToken.updateMany({
+        where: { id: magicLinkToken.id, isRevoked: false, ...unsetOrNull('usedAt') },
         data: { usedAt: new Date() }
       });
+      if (consumed.count !== 1) {
+        logger.warn('Token consumed concurrently');
+        await this.logSecurityEvent(magicLinkToken.userId, 'MAGIC_LINK_REUSE_ATTEMPT', 'MEDIUM', {
+          ipAddress: requestContext.ip
+        });
+        return { success: false, error: 'This link has already been used. Please request a new one.' };
+      }
 
-      // 8. Generate JWT token
-      const jwt = require('jsonwebtoken');
-      const jwtSecret = process.env.JWT_SECRET || 'meeshy-secret-key-dev';
-      const jwtToken = jwt.sign(
-        { userId: user.id, username: user.username },
-        jwtSecret,
-        { expiresIn: '24h' }
+      // 7 bis. Le lien a été ouvert depuis la boîte : l'adresse est PROUVÉE
+      // (#8238, absorbe #8236) — lien interactif ET lien du résumé, avant le
+      // second facteur, et même passé le délai de grâce. Site unique :
+      // `./auth/email-address-proof`.
+      const provenAt = this.now();
+      const { newlyProven } = await proveEmailAddress(
+        {
+          prisma: this.prisma,
+          cache: this.cache,
+          announce: (userId) => scheduleContactJoinedAnnouncement(this.prisma, userId),
+        },
+        { userId: user.id, now: provenAt, known: { emailVerifiedAt: user.emailVerifiedAt } }
       );
+      const emailVerifiedAt = newlyProven ? provenAt : user.emailVerifiedAt;
 
-      // 9. Create session with full device tracking
+      // 8. Le second facteur, quand le compte en porte un (#4534)
+      //
+      // Ce site rendait `token` ET `sessionToken` INCONDITIONNELLEMENT : un
+      // compte protégé par un second facteur était entièrement joignable par
+      // un lien reçu PAR E-MAIL, c'est-à-dire exactement le scénario contre
+      // lequel ce facteur existe. `twoFactorEnabledAt` était déjà chargé
+      // (quelqu'un a su qu'il faudrait le regarder) et rien ne le lisait.
+      //
+      // La garde vit dans le SERVICE, pas dans la route : `validateMagicLink`
+      // est le passage unique des DEUX producteurs de lien — la demande
+      // interactive et le lien de 24 h glissé dans l'e-mail de digest
+      // (`issueLoginTokenForUser`). Même raison que la revérification de
+      // `isActive` douze lignes plus haut.
+      //
+      // Le lien est déjà consommé à ce stade, et c'est voulu : il a prouvé la
+      // possession de la boîte, il ne se rejoue pas pour émettre un second
+      // jeton d'étape 2. Celui-ci vit cinq minutes et se represente autant de
+      // fois qu'il faut pour saisir le code.
+      const secondFactor = resolveSecondFactor(user.twoFactorEnabledAt);
+
+      if (secondFactor === 'indeterminate') {
+        logger.error('État du second facteur indéterminé — session refusée');
+        await this.logSecurityEvent(user.id, 'MAGIC_LINK_2FA_INDETERMINATE', 'HIGH', {
+          ipAddress: requestContext.ip
+        });
+        return { success: false, error: 'An error occurred. Please try again.' };
+      }
+
+      if (secondFactor === 'required') {
+        const twoFactorToken = await mintPendingTwoFactorChallenge({ prisma: this.prisma, userId: user.id });
+
+        await this.logSecurityEvent(user.id, 'MAGIC_LINK_2FA_REQUIRED', 'LOW', {
+          ipAddress: requestContext.ip,
+          geoLocation: requestContext.geoData?.location
+        });
+
+        logger.info('Second facteur requis — aucune session ouverte');
+
+        // Ce que la réponse PARTIELLE transporte est aussi ce qu'elle NE
+        // transporte pas : ni jeton, ni session, ni le profil complet. Le
+        // porteur du lien n'a encore prouvé que la possession de la boîte —
+        // il n'a pas à en recevoir le rôle, le téléphone ni la biographie.
+        return {
+          success: true,
+          requires2FA: true,
+          twoFactorToken,
+          user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            displayName: user.displayName || `${user.firstName} ${user.lastName}`,
+            avatar: user.avatar
+          },
+          rememberDevice: magicLinkToken.rememberDevice
+        };
+      }
+
+      // 9. Créer la session AVANT de signer — l'ordre est le correctif (#4264)
+      //
+      // Ce site signait son JWT douze lignes plus haut, avec son PROPRE
+      // `require('jsonwebtoken')` et une charge à deux champs : pas de `role`,
+      // là où les quatre autres sites d'émission en posent un. Une divergence
+      // de forme entre deux jetons du même service, invisible parce qu'aucun
+      // appelant ne lisait `role` — jusqu'à ce qu'un jour l'un le lise.
+      //
+      // Signer d'abord rendait surtout IMPOSSIBLE de nommer la session : elle
+      // n'existait pas encore. Le mode de panne change et c'est voulu — si
+      // `createSession` échoue, aucun JWT n'est plus fabriqué du tout, au lieu
+      // d'un jeton signé puis jeté avec l'erreur. Le lien magique rejoint le
+      // site unique d'émission plutôt que d'en reproduire une moitié.
       const sessionToken = generateSessionToken();
       const session = await createSession({
         userId: user.id,
         token: sessionToken,
-        requestContext
+        requestContext,
+        loginMethod: 'magic_link'
       });
 
-      // 10. Update user's last login info
+      // 10. Signer le JWT, rattaché à la session qui vient de naître
+      const jwtSecret = getJwtSecret();
+      const jwtToken = signSessionToken({
+        user: { id: user.id, username: user.username, role: user.role },
+        secret: jwtSecret,
+        sessionId: session.id
+      });
+
+      // 11. Update user's last login info
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
           lastActiveAt: new Date(),
+          lastLoginAt: new Date(),
           lastLoginIp: requestContext.ip,
           lastLoginLocation: requestContext.geoData?.location || null,
           lastLoginDevice: requestContext.deviceInfo?.type || null
         }
       });
 
-      // 11. Log security event
+      // 12. Log security event
       await this.logSecurityEvent(user.id, 'MAGIC_LINK_LOGIN_SUCCESS', 'LOW', {
         ipAddress: requestContext.ip,
         geoLocation: requestContext.geoData?.location,
@@ -349,7 +578,7 @@ export class MagicLinkService {
 
       logger.info('Login successful');
 
-      // 12. Return user data (convert to SocketIOUser format)
+      // 13. Return user data (convert to SocketIOUser format)
       const socketIOUser = {
         id: user.id,
         username: user.username,
@@ -366,14 +595,14 @@ export class MagicLinkService {
         systemLanguage: user.systemLanguage,
         regionalLanguage: user.regionalLanguage,
         customDestinationLanguage: user.customDestinationLanguage,
-        // TODO: Load from UserPreferences.application
-        autoTranslateEnabled: true,
+        autoTranslateEnabled: resolveAutoTranslateEnabled(user),
         isActive: user.isActive,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
-        emailVerifiedAt: user.emailVerifiedAt,
+        emailVerifiedAt,
         phoneVerifiedAt: user.phoneVerifiedAt,
-        twoFactorEnabledAt: user.twoFactorEnabledAt ?? null
+        twoFactorEnabledAt: user.twoFactorEnabledAt ?? null,
+        activation: resolveAccountActivation({ ...user, emailVerifiedAt }, this.now())
       };
 
       return {
@@ -386,6 +615,7 @@ export class MagicLinkService {
       };
 
     } catch (error) {
+      if (error instanceof AgeBelowMinimumError) throw error;
       logger.error('Error validating token', error as Error);
       return { success: false, error: 'An error occurred. Please try again.' };
     }
@@ -396,6 +626,7 @@ export class MagicLinkService {
    */
   private async checkRateLimit(email: string, ipAddress: string): Promise<boolean> {
     const emailKey = `ratelimit:magic-link:email:${email}`;
+    const ipKey = `ratelimit:magic-link:ip:${ipAddress}`;
 
     try {
       // Check email rate limit
@@ -406,9 +637,17 @@ export class MagicLinkService {
         return true;
       }
 
-      // Increment counter using set with expiry
-      const newCount = count + 1;
-      await this.cache.set(emailKey, newCount.toString(), 3600); // 1 hour
+      // Check IP rate limit — see MAX_IP_REQUESTS_PER_HOUR above
+      const ipCount = await this.cache.get(ipKey);
+      const ipCountNum = ipCount ? parseInt(ipCount) : 0;
+
+      if (ipCountNum >= MAX_IP_REQUESTS_PER_HOUR) {
+        return true;
+      }
+
+      // Increment counters using set with expiry
+      await this.cache.set(emailKey, (count + 1).toString(), 3600); // 1 hour
+      await this.cache.set(ipKey, (ipCountNum + 1).toString(), 3600); // 1 hour
 
       return false;
     } catch (error) {
@@ -423,17 +662,32 @@ export class MagicLinkService {
   private async sendMagicLinkEmail(
     user: { email: string; firstName: string; lastName: string } & RecipientLanguagePrefs,
     token: string,
-    location: string
+    location: string,
+    /**
+     * L'identité SANS son hash (#6424) — le booléen est calculé par l'appelant,
+     * qui seul a lu la colonne. Passer l'utilisateur entier ferait voyager le
+     * hash jusqu'au gabarit, où rien n'en a l'usage : c'est la question
+     * « qu'est-ce qui part À CÔTÉ ? » posée à un argument.
+     */
+    identite: { username: string; displayName: string; hasPassword: boolean },
+    /** Déjà clampé par l'appelant (`clampMagicLinkReturnUrl`) — absent quand la
+     * demande n'en portait aucun, ou qu'il sortait de la même origine. */
+    returnUrl?: string,
   ): Promise<void> {
     const baseUrl = process.env.FRONTEND_URL || 'https://meeshy.me';
-    const magicLinkUrl = `${baseUrl}/auth/magic-link?token=${encodeURIComponent(token)}`;
+    const magicLinkUrl = emailSecretLink({ base: baseUrl, path: EMAIL_LINK_PATHS.magicLink, secret: { token }, query: returnUrl ? { returnUrl } : {} });
 
     await this.emailService.sendMagicLinkEmail({
       to: user.email,
       name: user.firstName,
       magicLink: magicLinkUrl,
       location,
-      language: recipientLanguage(user, 'fr')
+      language: recipientLanguage(user, 'fr'),
+      identity: {
+        ...identite,
+        profileUrl: profileEditUrl(baseUrl),
+        passwordUrl: passwordSettingsUrl(baseUrl),
+      },
     });
   }
 

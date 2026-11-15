@@ -10,7 +10,7 @@ import MeeshySDK
 // des lanes) → aperçu jouable + partage. L'export sert à PRÉVISUALISER le
 // rendu final de la timeline — il ne publie rien.
 //
-// Task 9 (2026-07-26) : cet export bakait le filigrane SANS pseudo et
+// Task 9 : cet export bakait le filigrane SANS pseudo et
 // n'ajoutait jamais l'interlude de marque — divergence avec les 3 autres
 // chemins d'export de story (`StoryPhotoSaveService`,
 // `StoryExportShareViewModel`, `StoryVideoExportService`). Fixé en appelant
@@ -19,13 +19,13 @@ import MeeshySDK
 // « bake, puis prépose l'interlude » que `StoryVideoExportService.
 // prepareExport` — voir `SystemTimelineStoryExporter` ci-dessous.
 //
-// Revue finale (2026-07-26, item 1) : la CARTE DE FIN (`StoryExportOutro`)
+// Revue finale : la CARTE DE FIN (`StoryExportOutro`)
 // manquait encore sur ce chemin — la même story se terminait sur le logo
 // Meeshy + signature sonore depuis « Mes stories », et sur sa dernière frame
 // depuis le composer timeline. Elle est désormais appliquée ici, avec le même
 // atome SDK, et INDÉPENDAMMENT de l'interlude.
 
-private let timelineExportLogger = Logger(subsystem: "me.meeshy.app", category: "story-timeline-export")
+private let timelineExportLogger = MeeshyLog.logger(.storyTimelineExport)
 
 // MARK: - Timeline story export seam (test injection)
 
@@ -33,7 +33,7 @@ private let timelineExportLogger = Logger(subsystem: "me.meeshy.app", category: 
 /// puis prépose l'interlude de marque via `StoryExportIntro.prepend` ».
 ///
 /// Miroir SDK-local de `StoryVideoExportServiceProviding`
-/// (`apps/ios/Meeshy/Features/Main/Services/StoryVideoExportService.swift`) :
+/// (`apps/ios/Meeshy/Features/Stories/Services/StoryVideoExportService.swift`) :
 /// même FORME (protocole `@MainActor`, pas `Sendable` — les doubles de test
 /// restent de simples classes `@MainActor`), jamais la même DÉPENDANCE — le
 /// SDK ne peut pas importer le target app, donc ce protocole vit ici plutôt
@@ -48,7 +48,7 @@ protocol TimelineStoryExporting {
         to outputURL: URL,
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
-        audioResolver: (@Sendable (StoryAudioPlayerObject) -> URL?)?,
+        inputs: StoryExportInputs,
         progress: ((Double) -> Void)?
     ) async throws -> URL
 }
@@ -67,17 +67,13 @@ struct SystemTimelineStoryExporter: TimelineStoryExporting {
         to outputURL: URL,
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
-        audioResolver: (@Sendable (StoryAudioPlayerObject) -> URL?)?,
+        inputs: StoryExportInputs,
         progress: ((Double) -> Void)?
     ) async throws -> URL {
         // Trampoline @MainActor → @Sendable : `StoryExporter.export` exige un
         // callback @Sendable, le nôtre capture potentiellement `self`/
         // `@Published` (non-Sendable). Même pattern que
         // `StoryVideoExportService.prepareExport`.
-        final class ProgressSinkBox: @unchecked Sendable {
-            let sink: (Double) -> Void
-            init(_ sink: @escaping (Double) -> Void) { self.sink = sink }
-        }
         let progressTrampoline: (@Sendable (Double) -> Void)?
         if let progress {
             let box = ProgressSinkBox(progress)
@@ -111,21 +107,20 @@ struct SystemTimelineStoryExporter: TimelineStoryExporting {
             // fonctionnellement équivalent mais mesuré 5 à 20× plus lent —
             // voir `tasks/todo-story-export-single-pass.md`.
             branding: nil,
-            audioResolver: audioResolver,
+            inputs: inputs,
             progress: progressTrampoline
         )
 
         // `outro: nil` = fermeture sur le LOGO SEUL, sans identité d'auteur :
         // divergence volontaire avec partage / Photos, préservée telle quelle.
-        do {
-            let finalURL = try await StoryExportBranding.wrap(
-                storyURL: outputURL, intro: intro, outro: nil, renderSize: renderSize)
-            removeTemporaryFile(at: outputURL, reason: "pré-emballage-de-marque")
-            return finalURL
-        } catch {
-            timelineExportLogger.warning("emballage de marque ignoré pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
-            return outputURL
+        // Un emballage qui échoue livre la story nue ET se signale (#14488).
+        let branding = await StoryExportBrandingFallback.deliver(bareStory: outputURL, path: .timeline, slideId: slide.id) {
+            try await StoryExportBranding.wrap(storyURL: outputURL, intro: intro, outro: nil, renderSize: renderSize)
         }
+        if case .branded = branding {
+            removeTemporaryFile(at: outputURL, reason: "pré-emballage-de-marque")
+        }
+        return branding.url
     }
 
     /// Purge d'un intermédiaire de composition. Échec non fatal (l'OS purge le
@@ -143,6 +138,11 @@ struct SystemTimelineStoryExporter: TimelineStoryExporting {
 /// résout les URLs locales, lance `StoryExporter` et publie la progression.
 @MainActor
 final class TimelineExportController: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     enum Phase: Equatable {
         case idle
@@ -216,7 +216,9 @@ final class TimelineExportController: ObservableObject {
         }
         pausedTimelineViewModel = timelineViewModel
         let slide = composer.exportableCurrentSlide()
-        let mediaURLs = composer.collectMediaURLs(for: slide)
+        // Même construction que le `⋯` du composer (#8599) : bitmaps en
+        // mémoire, stickers adoptés et sons de session — pas seulement l'audio.
+        let inputs = composer.exportInputs(for: slide)
         // Filigrane Meeshy animé (logo + « meeshy » + pseudo de l'auteur) —
         // MÊME appel que les 3 autres chemins d'export (Task 9 : avant ce
         // fix, ce chemin appelait `.make()` SANS `username:`, filigrane
@@ -255,7 +257,7 @@ final class TimelineExportController: ObservableObject {
                     to: outputURL,
                     watermark: watermark,
                     intro: introContent,
-                    audioResolver: { audio in mediaURLs[audio.id] },
+                    inputs: inputs,
                     progress: { [weak self] fraction in
                         guard let self, self.isExporting else { return }
                         self.phase = .exporting(fraction)
@@ -311,6 +313,22 @@ final class TimelineExportController: ObservableObject {
 
 /// Contenu de la sheet timeline du composer : switcher Quick/Pro + flux
 /// d'export (overlay de progression, aperçu partageable, alerte d'échec).
+/// **La frise, montable hors de l'atelier** (#8415) : la scène plein écran du
+/// meuble l'ouvre par sa bascule « Animé ». Même contenu que le panneau de
+/// l'atelier — export compris —, le cycle de vie restant chez l'hôte
+/// (`openTimelinePanel` / `closeTimelinePanel`).
+public struct SceneTimelinePanel: View {
+    private let composer: StoryComposerViewModel
+
+    public init(composer: StoryComposerViewModel) {
+        self.composer = composer
+    }
+
+    public var body: some View {
+        TimelineSheetContent(composer: composer)
+    }
+}
+
 struct TimelineSheetContent: View {
 
     let composer: StoryComposerViewModel
@@ -318,7 +336,7 @@ struct TimelineSheetContent: View {
 
     /// L'export terminé se présente en PLEIN ÉCRAN — la vidéo se consulte
     /// comme n'importe quelle vidéo : lecture immersive, Enregistrer dans
-    /// Photos, Partager (retour user 2026-07-11). Pin testé par
+    /// Photos, Partager. Pin testé par
     /// `TimelineExportPreviewTests`.
     static let presentsFinishedExportFullscreen = true
 
@@ -374,7 +392,7 @@ struct TimelineSheetContent: View {
         if case .exporting(let fraction) = exportController.phase {
             ZStack {
                 Color.black.opacity(0.45).ignoresSafeArea()
-                VStack(spacing: 16) {
+                VStack(spacing: MeeshySpacing.lg) {
                     ProgressView(value: max(0, min(1, fraction)))
                         .progressViewStyle(.linear)
                         .tint(MeeshyColors.indigo400)
@@ -392,7 +410,7 @@ struct TimelineSheetContent: View {
                 }
                 .padding(26)
                 .background(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous)
                         .fill(.ultraThinMaterial)
                 )
             }
@@ -411,15 +429,17 @@ struct TimelineExportPreviewSheet: View {
 
     let url: URL
     @Environment(\.dismiss) private var dismiss
-    @State private var player: AVPlayer
+    /// Construit à l'apparition, pas dans `init` : `State(initialValue:)`
+    /// n'est pas paresseux, et chaque ré-évaluation du parent allouait un
+    /// `AVPlayer` + `AVPlayerItem` jetés aussitôt.
+    @State private var player: AVPlayer?
     @State private var loopObserver: NSObjectProtocol?
     @State private var saveState: SaveState = .idle
 
-    internal enum SaveState { case idle, saving, saved, failed }
+    internal nonisolated enum SaveState: Equatable, Sendable { case idle, saving, saved, failed }
 
     init(url: URL) {
         self.url = url
-        _player = State(initialValue: AVPlayer(url: url))
     }
 
     /// Icône du bouton Enregistrer par état ; `nil` = ProgressView (saving).
@@ -447,6 +467,9 @@ struct TimelineExportPreviewSheet: View {
             controlsOverlay
         }
         .onAppear {
+            let player = self.player ?? AVPlayer(url: url)
+            MediaPolicyMonitor.shared.adopt(player, role: .watched)
+            self.player = player
             loopObserver = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,
                 object: player.currentItem,
@@ -462,17 +485,18 @@ struct TimelineExportPreviewSheet: View {
                 NotificationCenter.default.removeObserver(loopObserver)
             }
             loopObserver = nil
-            player.pause()
+            player?.pause()
         }
+        .settling($saveState, to: .idle, after: .seconds(2), animation: .default, when: { $0 == .failed })
     }
 
     private var controlsOverlay: some View {
         VStack {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Button { dismiss() } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundColor(.white.opacity(0.85))
+                        .meeshyScaledFont(MeeshyIconSize.xxxl)
+                        .foregroundStyle(Color.white.opacity(0.85))
                         .padding()
                 }
                 .accessibilityLabel(String(localized: "story.timeline.export.preview.close",
@@ -484,14 +508,14 @@ struct TimelineExportPreviewSheet: View {
 
                 ShareLink(item: url) {
                     Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.9))
+                        .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.9))
                         .frame(width: 40, height: 40)
                         .background(Circle().fill(Color.white.opacity(0.2)))
                 }
                 .accessibilityLabel(String(localized: "story.timeline.export.preview.share",
                                            defaultValue: "Partager la vidéo", bundle: .module))
-                .padding(.trailing, 16)
+                .padding(.trailing, MeeshySpacing.lg)
             }
             Spacer()
         }
@@ -507,9 +531,11 @@ struct TimelineExportPreviewSheet: View {
                 }
             }
             .font(.system(size: 18, weight: .semibold))
-            .foregroundColor(.white.opacity(0.9))
+            .foregroundStyle(Color.white.opacity(0.9))
             .frame(width: 40, height: 40)
             .background(Circle().fill(Color.white.opacity(0.2)))
+            .meeshyTapTarget()
+            .padding(-MeeshyTapTarget.inset(forVisualSide: 40))
         }
         .disabled(Self.isSaveDisabled(saveState))
         .accessibilityLabel(String(localized: saveState == .saved
@@ -538,9 +564,6 @@ struct TimelineExportPreviewSheet: View {
                     HapticFeedback.success()
                 } else {
                     HapticFeedback.error()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation { saveState = .idle }
-                    }
                 }
             }
         }

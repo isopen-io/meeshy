@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #9238 — le message vocal en cours tient le micro au premier plan.
+     Sept langues, les memes cles partout. -->
+<resources>
+    <string name="recording_channel_name">Mensajes de voz</string>
+    <string name="recording_ongoing">Grabando un mensaje de voz</string>
+    <string name="recording_return">Toca para volver a la conversación</string>
+</resources>

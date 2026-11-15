@@ -5,6 +5,8 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiAttachmentTranscription
 import me.meeshy.sdk.model.ApiAttachmentTranslation
 import me.meeshy.sdk.model.ApiForwardedConversation
+import me.meeshy.sdk.model.ApiForwardedFrom
+import me.meeshy.sdk.model.ForwardAttribution
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageSender
@@ -34,10 +36,12 @@ private fun message(
     forwardedFromId: String? = null,
     forwardedFromConversationId: String? = null,
     forwardedFromConversation: ApiForwardedConversation? = null,
+    forwardedFrom: ApiForwardedFrom? = null,
     effectFlags: Int? = null,
     isBlurred: Boolean? = null,
     isViewOnce: Boolean? = null,
     expiresAt: String? = null,
+    messageSource: String? = null,
 ) = ApiMessage(
     id = id,
     conversationId = "c1",
@@ -55,13 +59,71 @@ private fun message(
     forwardedFromId = forwardedFromId,
     forwardedFromConversationId = forwardedFromConversationId,
     forwardedFromConversation = forwardedFromConversation,
+    forwardedFrom = forwardedFrom,
     effectFlags = effectFlags,
     isBlurred = isBlurred,
     isViewOnce = isViewOnce,
     expiresAt = expiresAt,
+    messageSource = messageSource,
 )
 
 class BubbleContentBuilderTest {
+    private fun built(msg: ApiMessage, isSlowSend: Boolean = false) =
+        BubbleContentBuilder.build(msg, currentUserId = "me", preferences = french, isSlowSend = isSlowSend)
+
+    @Test
+    fun `the bubble remembers its conversation so that here can be read for its author`() {
+        assertThat(built(message()).viewingConversationId).isEqualTo("c1")
+        assertThat(built(message().copy(conversationId = "")).viewingConversationId).isNull()
+    }
+
+    @Test
+    fun `video attachments are counted and flagged apart from documents`() {
+        val content = built(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(id = "v", mimeType = "video/mp4", originalName = "c.mp4"),
+                    ApiMessageAttachment(id = "d", mimeType = "application/pdf", originalName = "a.pdf"),
+                ),
+            ),
+        )
+        assertThat(content.videoCount).isEqualTo(1)
+        assertThat(content.files.map { it.isVideo }).containsExactly(true, false).inOrder()
+    }
+
+    @Test
+    fun `a vcard attachment becomes a contact card named after its file`() {
+        val content = built(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(id = "c", mimeType = "text/vcard", originalName = "Bob Martin.vcf"),
+                ),
+            ),
+        )
+        assertThat(content.contactCards.map { it.name }).containsExactly("Bob Martin")
+        assertThat(content.files.single().isContactCard).isTrue()
+    }
+
+    @Test
+    fun `a blurred message flags isBlurred and a plain one does not`() {
+        assertThat(built(message(effectFlags = MessageEffectFlags.BLURRED.toInt())).isBlurred).isTrue()
+        assertThat(built(message()).isBlurred).isFalse()
+    }
+
+    @Test
+    fun `a reply to a message written by the current user flags replyToIsMe`() {
+        val own = built(message().copy(replyTo = me.meeshy.sdk.model.ApiMessageReplyPreview(id = "r", content = "x", senderId = "me")))
+        val other = built(message().copy(replyTo = me.meeshy.sdk.model.ApiMessageReplyPreview(id = "r", content = "x", senderId = "bob")))
+        assertThat(own.replyToIsMe).isTrue()
+        assertThat(other.replyToIsMe).isFalse()
+    }
+
+    @Test
+    fun `slow send is carried only for an outgoing message`() {
+        assertThat(built(message(senderId = "me"), isSlowSend = true).isSlowSend).isTrue()
+        assertThat(built(message(senderId = "bob"), isSlowSend = true).isSlowSend).isFalse()
+    }
+
 
     private val french = Prefs(systemLanguage = "fr")
 
@@ -77,6 +139,28 @@ class BubbleContentBuilderTest {
         val content = BubbleContentBuilder.build(message(senderId = "other"), currentUserId = "me", preferences = french)
 
         assertThat(content.isOutgoing).isFalse()
+    }
+
+    @Test
+    fun `a system-source message is flagged isSystem so it renders as a centered notice`() {
+        val content = BubbleContentBuilder.build(
+            message(messageSource = "system", content = "Alice a rejoint la conversation"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.isSystem).isTrue()
+    }
+
+    @Test
+    fun `an ordinary user message is not flagged isSystem`() {
+        val content = BubbleContentBuilder.build(
+            message(messageSource = "user"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.isSystem).isFalse()
     }
 
     @Test
@@ -768,6 +852,68 @@ class BubbleContentBuilderTest {
     }
 
     @Test
+    fun `an attachment's alt text becomes the bubble image's alt`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "a1",
+                        mimeType = "image/jpeg",
+                        fileUrl = "/files/photo.jpg",
+                        alt = "A red bicycle leaning on a brick wall",
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://gate.meeshy.me",
+        )
+
+        assertThat(content.images.single().alt).isEqualTo("A red bicycle leaning on a brick wall")
+    }
+
+    @Test
+    fun `a blank attachment alt becomes no alt, not a blank announcement`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "a1",
+                        mimeType = "image/jpeg",
+                        fileUrl = "/files/photo.jpg",
+                        alt = "   ",
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://gate.meeshy.me",
+        )
+
+        assertThat(content.images.single().alt).isNull()
+    }
+
+    @Test
+    fun `no attachment alt at all leaves the bubble image's alt null`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "a1",
+                        mimeType = "image/jpeg",
+                        fileUrl = "/files/photo.jpg",
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://gate.meeshy.me",
+        )
+
+        assertThat(content.images.single().alt).isNull()
+    }
+
+    @Test
     fun `an absolute attachment url is kept as-is`() {
         val content = BubbleContentBuilder.build(
             message().copy(
@@ -810,6 +956,7 @@ class BubbleContentBuilderTest {
         val file = content.files.single()
         assertThat(file.name).isEqualTo("rapport.pdf")
         assertThat(file.sizeBytes).isEqualTo(2048)
+        assertThat(file.url).isEqualTo("https://gate.meeshy.me/files/stored-1234.pdf")
         assertThat(content.images).isEmpty()
     }
 
@@ -1148,7 +1295,26 @@ class BubbleContentBuilderTest {
     }
 
     @Test
-    fun `a forward from a group names the source conversation`() {
+    fun `a forward from a public conversation names the source conversation`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                forwardedFromId = "orig-msg",
+                forwardedFromConversationId = "orig-conv",
+                forwardedFromConversation = ApiForwardedConversation(
+                    id = "orig-conv",
+                    title = "Team Meeshy",
+                    type = "public",
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.forwardAttribution).isEqualTo(ForwardAttribution.Group("Team Meeshy"))
+    }
+
+    @Test
+    fun `a forward from a private group never names the source conversation`() {
         val content = BubbleContentBuilder.build(
             message(
                 forwardedFromId = "orig-msg",
@@ -1163,7 +1329,28 @@ class BubbleContentBuilderTest {
             preferences = french,
         )
 
-        assertThat(content.forwardedFromName).isEqualTo("Team Meeshy")
+        assertThat(content.isForwarded).isTrue()
+        assertThat(content.forwardAttribution).isEqualTo(ForwardAttribution.Anonymous)
+    }
+
+    @Test
+    fun `a forward whose source conversation type is unknown never names it`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                forwardedFromId = "orig-msg",
+                forwardedFromConversationId = "orig-conv",
+                forwardedFromConversation = ApiForwardedConversation(
+                    id = "orig-conv",
+                    title = "Legacy",
+                    type = null,
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.isForwarded).isTrue()
+        assertThat(content.forwardAttribution).isEqualTo(ForwardAttribution.Anonymous)
     }
 
     @Test
@@ -1183,11 +1370,11 @@ class BubbleContentBuilderTest {
             preferences = french,
         )
 
-        assertThat(content.forwardedFromName).isEqualTo("meeshy-lobby")
+        assertThat(content.forwardAttribution).isEqualTo(ForwardAttribution.Group("meeshy-lobby"))
     }
 
     @Test
-    fun `a forward from a direct conversation is not named`() {
+    fun `a forward from a direct conversation without a known author stays anonymous`() {
         val content = BubbleContentBuilder.build(
             message(
                 forwardedFromId = "orig-msg",
@@ -1203,7 +1390,49 @@ class BubbleContentBuilderTest {
         )
 
         assertThat(content.isForwarded).isTrue()
-        assertThat(content.forwardedFromName).isNull()
+        assertThat(content.forwardAttribution).isEqualTo(ForwardAttribution.Anonymous)
+    }
+
+    @Test
+    fun `a forward from a direct conversation names the person who wrote it`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                forwardedFromId = "orig-msg",
+                forwardedFrom = ApiForwardedFrom(id = "orig-msg", sender = ApiMessageSender(displayName = "Belva Tano")),
+                forwardedFromConversation = ApiForwardedConversation(id = "orig-conv", title = "Belva", type = "direct"),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.forwardAttribution).isEqualTo(ForwardAttribution.Person("Belva Tano"))
+    }
+
+    @Test
+    fun `a forward from a private group never names the group nor the person`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                forwardedFromId = "orig-msg",
+                forwardedFrom = ApiForwardedFrom(id = "orig-msg", sender = ApiMessageSender(displayName = "Belva Tano")),
+                forwardedFromConversation = ApiForwardedConversation(id = "orig-conv", title = "Secret", type = "group"),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.forwardAttribution).isEqualTo(ForwardAttribution.Anonymous)
+    }
+
+    @Test
+    fun `a pinned message that was deleted carries no pin`() {
+        val content = BubbleContentBuilder.build(
+            message(deletedAt = "2026-07-08T09:00:00Z", pinnedAt = "2026-07-07T09:00:00Z"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.pinnedAtIso).isNull()
+        assertThat(BubbleTopBadges.of(content)).isEqualTo(BubbleTopBadges(pinned = false, forwarded = false))
     }
 
     @Test
@@ -1215,7 +1444,7 @@ class BubbleContentBuilderTest {
         )
 
         assertThat(content.isForwarded).isTrue()
-        assertThat(content.forwardedFromName).isNull()
+        assertThat(content.forwardAttribution).isEqualTo(ForwardAttribution.Anonymous)
     }
 
     @Test
@@ -1224,13 +1453,13 @@ class BubbleContentBuilderTest {
             message(
                 deletedAt = "2026-07-08T09:00:00Z",
                 forwardedFromId = "orig-msg",
-                forwardedFromConversation = ApiForwardedConversation(title = "Team Meeshy", type = "group"),
+                forwardedFromConversation = ApiForwardedConversation(title = "Team Meeshy", type = "public"),
             ),
             currentUserId = "me",
             preferences = french,
         )
 
-        assertThat(content.forwardedFromName).isNull()
+        assertThat(content.forwardAttribution).isEqualTo(ForwardAttribution.Anonymous)
     }
 
     // --- Story / mood reply previews (postReplyTo / storyReplyToId) ---
@@ -1275,6 +1504,44 @@ class BubbleContentBuilderTest {
         assertThat(story.previewText).isEqualTo("beach sunset")
         assertThat(story.thumbnailUrl).isEqualTo("https://cdn.meeshy.me/thumbs/p1.jpg")
         assertThat(story.moodEmoji).isNull()
+    }
+
+    @Test
+    fun `a quoted story carries its id and publication date, and its card opens it`() {
+        val story = BubbleContentBuilder.build(
+            message().copy(postReplyTo = ApiPostReplyTarget(id = "p1", createdAt = "2026-10-20T10:00:00Z", previewText = "plage")),
+            currentUserId = "me",
+            preferences = french,
+        ).storyReply!!
+
+        assertThat(story.postId).isEqualTo("p1")
+        assertThat(story.publishedAtIso).isEqualTo("2026-10-20T10:00:00Z")
+        assertThat(story.opensTarget).isTrue()
+    }
+
+    @Test
+    fun `a withdrawn story keeps only its id and opens nothing`() {
+        val story = BubbleContentBuilder.build(
+            message().copy(postReplyTo = ApiPostReplyTarget(id = "p1", unavailable = true)),
+            currentUserId = "me",
+            preferences = french,
+        ).storyReply!!
+
+        assertThat(story.isUnavailable).isTrue()
+        assertThat(story.opensTarget).isFalse()
+        assertThat(story.thumbnailUrl).isNull()
+    }
+
+    @Test
+    fun `a bare story id still opens its story`() {
+        val story = BubbleContentBuilder.build(
+            message().copy(storyReplyToId = "p9"),
+            currentUserId = "me",
+            preferences = french,
+        ).storyReply!!
+
+        assertThat(story.postId).isEqualTo("p9")
+        assertThat(story.opensTarget).isTrue()
     }
 
     @Test
@@ -1436,7 +1703,7 @@ class BubbleContentBuilderTest {
                         mimeType = "audio/mp4",
                         fileUrl = "/media/voice.m4a",
                         fileSize = 20480,
-                        duration = 12,
+                        duration = 12_000,
                     ),
                 ),
             ),
@@ -1804,7 +2071,7 @@ class BubbleContentBuilderTest {
                         id = "aud1",
                         mimeType = "audio/mp4",
                         fileUrl = "/media/original.m4a",
-                        duration = 12,
+                        duration = 12_000,
                         transcription = ApiAttachmentTranscription(text = "hello", language = "en"),
                         translations = mapOf(
                             "fr" to ApiAttachmentTranslation(

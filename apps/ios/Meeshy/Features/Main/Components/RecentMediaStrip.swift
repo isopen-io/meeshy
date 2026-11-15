@@ -2,6 +2,7 @@ import SwiftUI
 import Photos
 import AVFoundation
 import UIKit
+import os
 import MeeshySDK
 import MeeshyUI
 
@@ -21,11 +22,15 @@ enum RecentMediaPick {
 /// boundary (callbacks run off the main actor). The image is only read on the
 /// main actor after the continuation resumes, so the unchecked conformance is
 /// safe.
-private struct ImageBox: @unchecked Sendable { let image: UIImage? }
+struct RecentMediaImageBox: @unchecked Sendable { let image: UIImage? }
 
-/// Same boundary-crossing pattern as `ImageBox`, for the `AVPlayerItem`
+/// Same boundary-crossing pattern as `RecentMediaImageBox`, for the `AVPlayerItem`
 /// resolved for the long-press video preview.
 private struct PlayerItemBox: @unchecked Sendable { let item: AVPlayerItem? }
+
+/// Le gestionnaire PhotoKit, porté dans la fin d'un flux de vignettes pour
+/// annuler sa requête. `cancelImageRequest` est sûr depuis n'importe quel fil.
+private struct ImageManagerBox: @unchecked Sendable { let manager: PHImageManager }
 
 // ============================================================================
 // MARK: - RecentMediaSelection
@@ -48,6 +53,18 @@ nonisolated struct RecentMediaSelection: Equatable {
     mutating func begin(with id: String) {
         isActive = true
         if !ids.contains(id) { ids.append(id) }
+    }
+
+    /// Le bouton « Sélectionner » de la grille : entrer en sélection sans
+    /// rien choisir encore (#9683) — l'appui long n'est plus le seul chemin.
+    mutating func activate() {
+        isActive = true
+    }
+
+    /// Les assets qui ont rejoint la zone d'attachement (par le sélecteur
+    /// système) quittent la sélection : ils ne se choisissent plus.
+    mutating func discard(_ attached: Set<String>) {
+        ids.removeAll { attached.contains($0) }
     }
 
     mutating func toggle(_ id: String) {
@@ -82,15 +99,20 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
     @Published private(set) var status: PHAuthorizationStatus =
         PHPhotoLibrary.authorizationStatus(for: .readWrite)
 
-    private let imageManager = PHImageManager.default()
+    /// `PHCachingImageManager` (#9683) : les vignettes de la fenêtre qui va
+    /// défiler sont préparées d'avance (`startCachingImages`) et relâchées à
+    /// sa sortie — une cellule qui apparaît trouve son image déjà prête.
+    private let imageManager = PHCachingImageManager()
+    private var cachedIds: [String] = []
+    private var cachedPixelSide: CGFloat = 0
 
     /// True once a fetch attempt has run, so the view never re-prompts.
     private var didLoad = false
-    private var fetchLimit = 40
-    private var isObservingLibrary = false
+    private var fetchLimit = RecentMediaStrip.headSampleCount
+    private let isObservingLibrary = OSAllocatedUnfairLock(initialState: false)
 
-    deinit {
-        if isObservingLibrary {
+    nonisolated deinit {
+        if isObservingLibrary.withLock({ $0 }) {
             PHPhotoLibrary.shared().unregisterChangeObserver(self)
         }
     }
@@ -102,7 +124,7 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
     /// un prompt sans contexte, souvent refusé définitivement. Tant que l'accès
     /// n'est pas accordé, la vue affiche une tuile d'invitation dont le tap
     /// appelle `requestAccess()`.
-    func load(limit: Int = 40) {
+    func load(limit: Int = RecentMediaStrip.headSampleCount) {
         guard !didLoad else { return }
         didLoad = true
         fetchLimit = limit
@@ -141,9 +163,11 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         var fetched: [PHAsset] = []
         fetched.reserveCapacity(result.count)
         result.enumerateObjects { asset, _, _ in fetched.append(asset) }
+        imageManager.stopCachingImagesForAllAssets()
+        cachedIds = []
         assets = fetched
-        if !isObservingLibrary {
-            isObservingLibrary = true
+        if !isObservingLibrary.withLock({ $0 }) {
+            isObservingLibrary.withLock { $0 = true }
             PHPhotoLibrary.shared().register(self)
         }
     }
@@ -176,7 +200,7 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
     // `PHImageManager.h` documents the video handlers verbatim as "The result
     // handler is called on an arbitrary queue" — so `requestAVAsset` and
     // `requestPlayerItem` trapped every single time. That is the crash in
-    // Meeshy-2026-07-11-131634.ips (thread `com.apple.photos.requestAVAsset`,
+    // Meeshy--131634.ips (thread `com.apple.photos.requestAVAsset`,
     // EXC_BREAKPOINT in `closure #1 in closure #1 in resolveVideo(_:)`), seen
     // 7× across builds 1201→1235: tapping any video in the strip killed the app.
     //
@@ -194,41 +218,80 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
     /// photothèque ni contexte d'acteur : c'est le comportement des réglages qui
     /// doit être verrouillé, pas leur présence dans le fichier.
     ///
-    /// `.highQualityFormat` et NON `.fastFormat`. L'invariant que `.fastFormat`
-    /// protégeait est le callback UNIQUE — `withCheckedContinuation` plante si
-    /// on le reprend deux fois — et non la vitesse. Or `.highQualityFormat` est
-    /// mono-callback lui aussi : c'est déjà ce que font `preview(for:)` et
-    /// `resolveImage(_:)` juste en dessous. Seul `.opportunistic` (le défaut)
-    /// rappelle plusieurs fois. `.fastFormat` livrait un rendu dégradé que
-    /// PhotoKit ne remplace JAMAIS par une meilleure version, donc la bande
-    /// restait floue pour toujours — un prix payé pour une sûreté qui ne le
-    /// demandait pas.
+    /// `.opportunistic` (#9683) : une version rapide d'abord — souvent tirée
+    /// du cache préparé par `startCachingImages` —, puis la version nette.
+    /// Jamais `.fastFormat`, qui livrait un rendu dégradé que PhotoKit ne
+    /// remplace JAMAIS : la bande restait floue pour toujours.
+    ///
+    /// Le rappel MULTIPLE d'`.opportunistic` interdisait autrefois ce mode,
+    /// parce que la vignette passait par `withCheckedContinuation`, qui plante
+    /// si on la reprend deux fois. Elle passe désormais par un `AsyncStream`
+    /// (`thumbnails(for:size:)`), fait pour recevoir plusieurs valeurs, et
+    /// dont la fin annule la requête.
     ///
     /// `.exact` et non `.fast` : `.fast` rend une taille seulement « proche de »
     /// la cible, ce qui ajoute un rééchantillonnage par-dessus le rendu.
     nonisolated static func thumbnailRequestOptions() -> PHImageRequestOptions {
         let options = PHImageRequestOptions()
-        options.deliveryMode = .highQualityFormat
+        options.deliveryMode = .opportunistic
         options.resizeMode = .exact
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false
         return options
     }
 
-    /// Square thumbnail for a cell. La taille demandée est déjà en PIXELS
-    /// (`cell * displayScale`, côté `RecentMediaCell`) : demander des points
-    /// rendrait une image au tiers de la résolution sur un écran 3x.
-    func thumbnail(for asset: PHAsset, size: CGSize) async -> UIImage? {
+    /// Square thumbnails for a cell — the fast version, then the sharp one.
+    /// La taille demandée est déjà en PIXELS (`cell * displayScale`, côté
+    /// `RecentMediaCell`) : demander des points rendrait une image au tiers de
+    /// la résolution sur un écran 3x.
+    ///
+    /// Le flux se termine à la version définitive (non dégradée) ; s'il est
+    /// abandonné avant — la cellule quitte l'écran, sa tâche est annulée —,
+    /// sa fin annule la requête PhotoKit (`cancelImageRequest`).
+    func thumbnails(for asset: PHAsset, size: CGSize) -> AsyncStream<RecentMediaImageBox> {
         let options = Self.thumbnailRequestOptions()
-        return await withCheckedContinuation { (continuation: CheckedContinuation<ImageBox, Never>) in
-            let completion: @Sendable (UIImage?, [AnyHashable: Any]?) -> Void = { image, _ in
-                continuation.resume(returning: ImageBox(image: image))
+        let box = ImageManagerBox(manager: imageManager)
+        return AsyncStream { continuation in
+            let completion: @Sendable (UIImage?, [AnyHashable: Any]?) -> Void = { image, info in
+                let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
+                if let image { continuation.yield(RecentMediaImageBox(image: image)) }
+                if !isDegraded { continuation.finish() }
             }
-            imageManager.requestImage(
+            let requestId = imageManager.requestImage(
                 for: asset, targetSize: size, contentMode: .aspectFill, options: options,
                 resultHandler: completion
             )
-        }.image
+            let cancel: @Sendable (AsyncStream<RecentMediaImageBox>.Continuation.Termination) -> Void = { _ in
+                box.manager.cancelImageRequest(requestId)
+            }
+            continuation.onTermination = cancel
+        }
+    }
+
+    /// Fait glisser la fenêtre préparée autour de la cellule qui vient
+    /// d'apparaître : ce qui y entre est mis en cache, ce qui en sort relâché.
+    func cacheThumbnails(around assetId: String, pixelSide: CGFloat) {
+        guard pixelSide > 0 else { return }
+        if pixelSide != cachedPixelSide {
+            imageManager.stopCachingImagesForAllAssets()
+            cachedIds = []
+            cachedPixelSide = pixelSide
+        }
+        let ids = assets.map(\.localIdentifier)
+        let window = RecentMediaCachingWindow.ids(around: assetId, in: ids, columns: RecentMediaStrip.columnCount)
+        let delta = RecentMediaCachingWindow.delta(from: cachedIds, to: window)
+        cachedIds = window
+        let byId = Dictionary(assets.map { ($0.localIdentifier, $0) }, uniquingKeysWith: { first, _ in first })
+        let size = CGSize(width: pixelSide, height: pixelSide)
+        let options = Self.thumbnailRequestOptions()
+        let started = delta.start.compactMap { byId[$0] }
+        let stopped = delta.stop.compactMap { byId[$0] }
+        if !started.isEmpty {
+            imageManager.startCachingImages(for: started, targetSize: size, contentMode: .aspectFill, options: options)
+        }
+        if !stopped.isEmpty {
+            imageManager.stopCachingImages(for: stopped, targetSize: size, contentMode: .aspectFill, options: options)
+        }
     }
 
     /// Larger aspect-fit image for the long-press quick-look preview. Reuses
@@ -240,9 +303,9 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         options.resizeMode = .fast
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false
-        return await withCheckedContinuation { (continuation: CheckedContinuation<ImageBox, Never>) in
+        return await withCheckedContinuation { (continuation: CheckedContinuation<RecentMediaImageBox, Never>) in
             let completion: @Sendable (UIImage?, [AnyHashable: Any]?) -> Void = { image, _ in
-                continuation.resume(returning: ImageBox(image: image))
+                continuation.resume(returning: RecentMediaImageBox(image: image))
             }
             imageManager.requestImage(
                 for: asset,
@@ -279,15 +342,39 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         return await resolveImage(asset)
     }
 
+    /// Résout un asset pour la zone d'attachement liée (#9683) : il garde son
+    /// `localIdentifier`, et une photo part en OCTETS d'origine — aucune
+    /// `UIImage` 2048 n'est décodée ici, la préparation compresse depuis les
+    /// octets, comme pour le sélecteur système.
+    func resolveForAttachment(_ asset: PHAsset) async -> RecentMediaAsset? {
+        let assetId = asset.localIdentifier
+        if asset.mediaType == .video {
+            guard case .video(let url)? = await resolveVideo(asset) else { return nil }
+            return RecentMediaAsset(assetId: assetId, payload: .video(url))
+        }
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .highQualityFormat
+        options.version = .current
+        options.isNetworkAccessAllowed = true
+        options.isSynchronous = false
+        let data: Data? = await withCheckedContinuation { (continuation: CheckedContinuation<Data?, Never>) in
+            let completion: @Sendable (Data?, String?, CGImagePropertyOrientation, [AnyHashable: Any]?) -> Void = { data, _, _, _ in
+                continuation.resume(returning: data)
+            }
+            imageManager.requestImageDataAndOrientation(for: asset, options: options, resultHandler: completion)
+        }
+        return data.map { RecentMediaAsset(assetId: assetId, payload: .imageData($0)) }
+    }
+
     private func resolveImage(_ asset: PHAsset) async -> RecentMediaPick? {
         let options = PHImageRequestOptions()
         options.deliveryMode = .highQualityFormat
         options.resizeMode = .exact
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false
-        let box = await withCheckedContinuation { (continuation: CheckedContinuation<ImageBox, Never>) in
+        let box = await withCheckedContinuation { (continuation: CheckedContinuation<RecentMediaImageBox, Never>) in
             let completion: @Sendable (UIImage?, [AnyHashable: Any]?) -> Void = { image, _ in
-                continuation.resume(returning: ImageBox(image: image))
+                continuation.resume(returning: RecentMediaImageBox(image: image))
             }
             imageManager.requestImage(
                 for: asset,
@@ -329,9 +416,9 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
 // MARK: - RecentMediaStrip
 // ============================================================================
 
-/// Two-row strip of the 19 most recent photos/videos, shown beneath the
-/// attachment carousel. Tapping a thumbnail hands the resolved media to
-/// `onSelect`.
+/// Scrollable four-column grid of the most recent photos/videos, shown beneath
+/// the attachment carousel and filling the rest of the panel. Tapping a
+/// thumbnail hands the resolved media to `onSelect`.
 ///
 /// La tuile « ouvrir la photothèque » (`onOpenLibrary`) est la PREMIÈRE cellule,
 /// avant la première image : la sortie vers la photothèque complète doit être
@@ -353,49 +440,40 @@ struct RecentMediaStrip: View {
     /// same assets — same invariant as `onOpenLibrary`: leaving the strip for
     /// the picker must never lose the user's picks.
     var onSelectionChanged: (([String]) -> Void)? = nil
+    /// Hôte à zone d'attachement LIÉE (#9683) : reçoit le média avec son
+    /// `localIdentifier` (photo en octets d'origine) à la place d'`onSelect`.
+    var onSelectAsset: ((RecentMediaAsset) -> Void)? = nil
+    /// Les assets déjà dans la zone d'attachement, DÉRIVÉS d'elle par l'hôte
+    /// (`RecentMediaAttachmentLink`) : leur tuile est marquée et refuse d'être
+    /// reprise ; retirer la pièce de la zone libère la tuile.
+    var attachedAssetIds: Set<String> = []
 
     @StateObject private var model = RecentMediaStripModel()
     @State private var resolvingId: String?
     @State private var selection = RecentMediaSelection()
     @State private var isBatchResolving = false
 
-    private let columns = 4
+    nonisolated static let columnCount = 4
+    private let columns = RecentMediaStrip.columnCount
     private let spacing: CGFloat = 8
     private let hPadding: CGFloat = 12
 
-    /// iPad / macOS use the roomy vertical grid; iPhone keeps the horizontal
-    /// strip. Keyed on the device idiom (NOT horizontalSizeClass) because a sheet
-    /// on iPad can report a `.compact` width even with ample room — and the
-    /// screen-width cell sizing only misfires on iPad/macOS where the sheet is far
-    /// narrower than the screen.
-    private var usesGridLayout: Bool { DeviceLayout.isPad }
-
-    /// Compact (iPhone): the composer fills the window width, so the window is a
-    /// faithful proxy for the container. Regular (iPad / macOS) MUST size from the
-    /// real container width — the comments sheet is far narrower than the window,
-    /// and sizing four cells off the full window is exactly what made the old
-    /// strip overflow into the unstructured mess.
-    ///
-    /// The window, not `UIScreen.main.bounds`: identical on iPhone (where this
-    /// branch runs, `usesGridLayout` being `false` only there), and correct by
-    /// construction if the compact branch is ever reached in a narrow window.
-    private var compactCell: CGFloat { cell(forContainerWidth: DeviceLayout.windowSize.width) }
-
+    /// Cells are sized from the REAL container width, never the window: the
+    /// composer panel is inset from the window edges (and a comments sheet on
+    /// iPad is far narrower), so window-sized cells overflowed the panel.
     private func cell(forContainerWidth width: CGFloat) -> CGFloat {
         max(40, ((width - hPadding * 2) - spacing * CGFloat(columns - 1)) / CGFloat(columns))
     }
 
-    /// Échantillon de tête : 19 médias. Avec la tuile « ouvrir la photothèque »
-    /// EN PREMIER, la bande compte 20 cellules — exactement 10 colonnes de deux
-    /// rangées sur iPhone, 5 rangées de quatre sur iPad. Aucun reste boiteux.
+    /// Échantillon de tête : TOUT ce que le modèle va chercher, 40 médias
+    /// (#8869). Le plafond de 19 masquait 21 médias déjà chargés, et la bande
+    /// horizontale de deux rangées n'en montrait que 7 sans défiler.
     ///
     /// `nonisolated static` pour être vérifiable telle quelle par un test, sans
     /// photothèque ni contexte d'acteur — même précédent que
     /// `RecentMediaStripModel.thumbnailRequestOptions()`.
-    nonisolated static let headSampleCount = 19
+    nonisolated static let headSampleCount = 40
 
-    /// Les deux dispositions montrent le même échantillon de tête ; seule la
-    /// géométrie change (bande horizontale iPhone / grille verticale iPad).
     private var samples: [PHAsset] { Array(model.assets.prefix(Self.headSampleCount)) }
 
     var body: some View {
@@ -403,20 +481,50 @@ struct RecentMediaStrip: View {
             if selection.isActive {
                 selectionBar
                     .transition(.move(edge: .top).combined(with: .opacity))
+            } else if !model.needsAuthorization && !model.assets.isEmpty {
+                selectButtonRow
+                    .transition(.opacity)
             }
             Group {
                 if model.needsAuthorization {
                     authorizationTile
-                } else if usesGridLayout {
-                    regularGrid
                 } else {
-                    compactStrip
-                        .frame(maxHeight: .infinity, alignment: .top)
+                    grid
                 }
             }
+            .frame(maxHeight: .infinity, alignment: .top)
         }
         .task { model.load() }
         .adaptiveOnChange(of: selection.ids) { _, ids in onSelectionChanged?(ids) }
+        .adaptiveOnChange(of: attachedAssetIds) { _, attached in selection.discard(attached) }
+    }
+
+    /// La sélection multiple se voit (#9683) : un « Sélectionner » à droite,
+    /// au-dessus de la grille — l'appui long n'en est plus le seul chemin.
+    private var selectButtonRow: some View {
+        HStack {
+            Spacer()
+            Button {
+                HapticFeedback.light()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { selection.activate() }
+            } label: {
+                Label(
+                    String(localized: "composer.recent.select", defaultValue: "Sélectionner", bundle: .main),
+                    systemImage: "checkmark.circle"
+                )
+                .font(.caption.weight(.semibold))
+                .foregroundColor(Color(hex: accentColor))
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.xsPlus)
+                .frame(minHeight: 32)
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .adaptiveGlass(in: Capsule(), interactive: true)
+        }
+        .padding(.horizontal, hPadding)
+        .padding(.top, MeeshySpacing.sm)
+        .padding(.bottom, MeeshySpacing.xxs)
     }
 
     /// Remplace la grille tant que la photothèque n'est pas accessible.
@@ -433,26 +541,26 @@ struct RecentMediaStrip: View {
                 Task { await model.requestAccess() }
             }
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 Image(systemName: "photo.on.rectangle.angled")
-                    .font(MeeshyFont.relative(18, weight: .medium))
-                    .foregroundColor(Color(hex: accentColor))
-                VStack(alignment: .leading, spacing: 2) {
+                    .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .medium))
+                    .foregroundStyle(Color(hex: accentColor))
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(model.isAuthorizationRefused
                          ? String(localized: "composer.recent.accessDenied", defaultValue: "Accès aux photos refusé", bundle: .main)
                          : String(localized: "composer.recent.grantAccess", defaultValue: "Autoriser l'accès aux photos", bundle: .main))
-                        .font(MeeshyFont.relative(13, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                        .foregroundStyle(Color.primary)
                     Text(model.isAuthorizationRefused
                          ? String(localized: "composer.recent.accessDenied.hint", defaultValue: "Toucher pour ouvrir les Réglages", bundle: .main)
                          : String(localized: "composer.recent.grantAccess.hint", defaultValue: "Pour retrouver vos médias récents ici", bundle: .main))
-                        .font(MeeshyFont.relative(11))
-                        .foregroundColor(.secondary)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                        .foregroundStyle(Color.secondary)
                 }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, hPadding)
-            .padding(.vertical, 14)
+            .padding(.vertical, MeeshySpacing.mdPlus)
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -466,27 +574,27 @@ struct RecentMediaStrip: View {
     /// `.ultraThinMaterial` / solid accent — same layout, no behavior change.
     private var selectionBar: some View {
         AdaptiveGlassContainer(spacing: 12) {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 Button {
                     HapticFeedback.light()
                     exitSelection()
                 } label: {
                     Text(String(localized: "composer.recent.cancelSelection", defaultValue: "Annuler", bundle: .main))
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
+                        .foregroundStyle(Color.secondary)
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                 }
                 .buttonStyle(.plain)
                 .adaptiveGlass(in: Capsule(), interactive: true)
-                .accessibilityLabel(String(localized: "composer.a11y.cancelSelection", defaultValue: "Annuler la s\u{00E9}lection", bundle: .main))
+                .accessibilityLabel(String(localized: "composer.a11y.cancelSelection", defaultValue: "Annuler la sélection", bundle: .main))
 
                 Spacer()
 
                 Button {
                     confirmSelection()
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         if isBatchResolving {
                             ProgressView()
                                 .tint(.white)
@@ -498,25 +606,27 @@ struct RecentMediaStrip: View {
                         Text(String(localized: "composer.recent.addSelected", defaultValue: "Ajouter (\(selection.count))", bundle: .main))
                             .font(.caption.weight(.bold))
                     }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
+                    .foregroundStyle(Color.white)
+                    .padding(.horizontal, MeeshySpacing.mdPlus)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                 }
                 .buttonStyle(.plain)
                 .adaptiveGlassProminent(in: Capsule(), tint: Color(hex: accentColor))
                 .disabled(selection.isEmpty || isBatchResolving)
                 .opacity(selection.isEmpty ? 0.5 : 1)
-                .accessibilityLabel(String(localized: "composer.a11y.addSelection", defaultValue: "Ajouter la s\u{00E9}lection", bundle: .main))
+                .accessibilityLabel(String(localized: "composer.a11y.addSelection", defaultValue: "Ajouter la sélection", bundle: .main))
             }
             .padding(.horizontal, hPadding)
-            .padding(.top, 8)
-            .padding(.bottom, 2)
+            .padding(.top, MeeshySpacing.sm)
+            .padding(.bottom, MeeshySpacing.xxs)
         }
     }
 
-    /// iPad / macOS — a roomy four-column vertical grid sized to the REAL
-    /// container width, scrollable so every recent item is reachable.
-    private var regularGrid: some View {
+    /// One layout for every idiom (#8869): a four-column vertical grid sized to
+    /// the REAL container width and scrolling inside the height the panel
+    /// gives it. The former iPhone strip — two fixed rows scrolling sideways —
+    /// sat mid-panel with a void above and below, and showed 7 media.
+    private var grid: some View {
         GeometryReader { geo in
             let c = cell(forContainerWidth: geo.size.width)
             let cols = Array(repeating: GridItem(.fixed(c), spacing: spacing), count: columns)
@@ -528,27 +638,8 @@ struct RecentMediaStrip: View {
                     }
                 }
                 .padding(.horizontal, hPadding)
-                .padding(.vertical, 10)
+                .padding(.vertical, MeeshySpacing.smPlus)
             }
-        }
-    }
-
-    /// iPhone — the original two-row horizontal strip.
-    private var compactStrip: some View {
-        let c = compactCell
-        let rows = [
-            GridItem(.fixed(c), spacing: spacing),
-            GridItem(.fixed(c), spacing: spacing)
-        ]
-        return ScrollView(.horizontal, showsIndicators: false) {
-            LazyHGrid(rows: rows, spacing: spacing) {
-                openLibraryTile(c)
-                ForEach(samples, id: \.localIdentifier) { asset in
-                    cellView(asset, size: c)
-                }
-            }
-            .padding(.horizontal, hPadding)
-            .padding(.vertical, 6)
         }
     }
 
@@ -559,6 +650,7 @@ struct RecentMediaStrip: View {
             cell: size,
             accentColor: accentColor,
             isResolving: resolvingId == asset.localIdentifier,
+            isAttached: attachedAssetIds.contains(asset.localIdentifier),
             isSelecting: selection.isActive,
             selectionIndex: selection.index(of: asset.localIdentifier),
             canEdit: onEdit != nil,
@@ -572,6 +664,10 @@ struct RecentMediaStrip: View {
     /// Plain tap: stages the media in normal mode, toggles membership while
     /// multi-selecting.
     private func tap(_ asset: PHAsset) {
+        if attachedAssetIds.contains(asset.localIdentifier) {
+            refuseAttached()
+            return
+        }
         if selection.isActive {
             HapticFeedback.light()
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
@@ -601,21 +697,46 @@ struct RecentMediaStrip: View {
         )
     }
 
-    /// Resolves the asset and hands it to the host — the "Ajouter" path.
+    /// Une tuile déjà jointe REFUSE d'être reprise, et ne retire rien (#9683) :
+    /// la pièce de la zone peut avoir été retouchée, et un toucher sur la
+    /// grille ne doit jamais défaire ce travail en silence. On la retire
+    /// depuis la zone d'attachement — le geste qui existe déjà —, ce qui
+    /// libère la tuile.
+    private func refuseAttached() {
+        HapticFeedback.warning()
+    }
+
+    /// Resolves the asset and hands it to the host. A linked host
+    /// (`onSelectAsset`) receives it with its identifier, photo as original
+    /// bytes; the others keep the decoded `RecentMediaPick`.
+    private func deliver(_ asset: PHAsset) async -> Bool {
+        if let onSelectAsset {
+            guard let resolved = await model.resolveForAttachment(asset) else { return false }
+            onSelectAsset(resolved)
+            return true
+        }
+        guard let pick = await model.resolve(asset) else { return false }
+        onSelect(pick)
+        return true
+    }
+
+    /// The "Ajouter" path.
     private func addSingle(_ asset: PHAsset) {
-        guard resolvingId == nil, !isBatchResolving else { return }
+        guard resolvingId == nil, !isBatchResolving,
+              !attachedAssetIds.contains(asset.localIdentifier) else { return }
         HapticFeedback.light()
         resolvingId = asset.localIdentifier
         Task {
-            let pick = await model.resolve(asset)
+            let delivered = await deliver(asset)
             resolvingId = nil
-            if let pick { onSelect(pick) } else { announceResolutionFailure() }
+            if !delivered { announceResolutionFailure() }
         }
     }
 
     /// "Sélectionner" from the context menu: enters (or extends) the
     /// multi-selection with this asset; toggles it off when already selected.
     private func toggleSelection(_ asset: PHAsset) {
+        guard !attachedAssetIds.contains(asset.localIdentifier) else { return refuseAttached() }
         HapticFeedback.medium()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             if selection.isActive {
@@ -639,13 +760,14 @@ struct RecentMediaStrip: View {
         guard !selection.isEmpty, !isBatchResolving else { return }
         HapticFeedback.medium()
         isBatchResolving = true
-        let ids = selection.ids
+        let ids = RecentMediaAttachmentLink.fresh(selection.ids, excluding: attachedAssetIds)
         Task {
             var failures = 0
             for id in ids {
                 guard let asset = model.assets.first(where: { $0.localIdentifier == id }) else { continue }
                 resolvingId = id
-                if let pick = await model.resolve(asset) { onSelect(pick) } else { failures += 1 }
+                let delivered = await deliver(asset)
+                if !delivered { failures += 1 }
             }
             resolvingId = nil
             isBatchResolving = false
@@ -675,13 +797,13 @@ struct RecentMediaStrip: View {
             onOpenLibrary(selection.ids)
         } label: {
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(Color(hex: accentColor).opacity(0.12))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                             .stroke(Color(hex: accentColor).opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
                     )
-                VStack(spacing: 4) {
+                VStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "photo.on.rectangle.angled")
                         .font(.title3)
                     Image(systemName: "plus")
@@ -691,265 +813,6 @@ struct RecentMediaStrip: View {
             }
             .frame(width: size, height: size)
         }
-        .accessibilityLabel(String(localized: "composer.a11y.openFullLibrary", defaultValue: "Ouvrir toute la phototh\u{00E8}que", bundle: .main))
-    }
-}
-
-// ============================================================================
-// MARK: - RecentMediaCell
-// ============================================================================
-
-private struct RecentMediaCell: View {
-    let asset: PHAsset
-    let model: RecentMediaStripModel
-    let cell: CGFloat
-    let accentColor: String
-    let isResolving: Bool
-    let isSelecting: Bool
-    let selectionIndex: Int?
-    let canEdit: Bool
-    let onTap: () -> Void
-    let onAdd: () -> Void
-    let onToggleSelect: () -> Void
-    let onEditTap: () -> Void
-
-    @State private var thumbnail: UIImage?
-    @Environment(\.displayScale) private var displayScale
-
-    var body: some View {
-        Button(action: onTap) {
-            ZStack {
-                if let thumbnail {
-                    Image(uiImage: thumbnail)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: cell, height: cell)
-                        .clipped()
-                } else {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.gray.opacity(0.18))
-                        .frame(width: cell, height: cell)
-                        .overlay(ProgressView().scaleEffect(0.7))
-                }
-
-                if asset.mediaType == .video {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Image(systemName: "video.fill")
-                                .font(.caption2)
-                            Text(formatDuration(asset.duration))
-                                .font(.caption2.weight(.semibold))
-                            Spacer()
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 3)
-                        .background(LinearGradient(colors: [.black.opacity(0.5), .clear], startPoint: .bottom, endPoint: .top))
-                    }
-                }
-
-                if isSelecting {
-                    selectionBadge
-                }
-
-                if isResolving {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.black.opacity(0.35))
-                    ProgressView().tint(.white)
-                }
-            }
-            .frame(width: cell, height: cell)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color(hex: accentColor), lineWidth: selectionIndex != nil ? 2 : 0)
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(asset.mediaType == .video
-            ? String(localized: "composer.a11y.recentVideo", defaultValue: "Vid\u{00E9}o r\u{00E9}cente", bundle: .main)
-            : String(localized: "composer.a11y.recentPhoto", defaultValue: "Photo r\u{00E9}cente", bundle: .main))
-        .accessibilityValue(selectionIndex != nil
-            ? String(localized: "composer.a11y.selectedState", defaultValue: "S\u{00E9}lectionn\u{00E9}", bundle: .main)
-            : "")
-        .contextMenu {
-            // `.compactMenu` (iOS 16.4+) renders the three actions as the
-            // system horizontal medium-size row (the Messages/Photos pattern);
-            // 16.0–16.3 falls back to a plain ControlGroup (stacked items).
-            if #available(iOS 16.4, *) {
-                ControlGroup { contextActionButtons }
-                    .controlGroupStyle(.compactMenu)
-            } else {
-                ControlGroup { contextActionButtons }
-            }
-        } preview: {
-            RecentMediaPreview(asset: asset, model: model)
-        }
-        .task(id: asset.localIdentifier) {
-            let px = cell * displayScale
-            thumbnail = await model.thumbnail(for: asset, size: CGSize(width: px, height: px))
-        }
-    }
-
-    /// The three context-menu actions: Ajouter / Sélectionner / Éditer.
-    /// Éditer only appears when the host wired an editor flow.
-    @ViewBuilder private var contextActionButtons: some View {
-        Button(action: onAdd) {
-            Label(
-                String(localized: "composer.recent.add", defaultValue: "Ajouter", bundle: .main),
-                systemImage: "plus.circle"
-            )
-        }
-        Button(action: onToggleSelect) {
-            Label(
-                String(localized: "composer.recent.select", defaultValue: "S\u{00E9}lectionner", bundle: .main),
-                systemImage: selectionIndex != nil ? "checkmark.circle.fill" : "checkmark.circle"
-            )
-        }
-        if canEdit {
-            Button(action: onEditTap) {
-                Label(
-                    String(localized: "composer.recent.edit", defaultValue: "\u{00C9}diter", bundle: .main),
-                    systemImage: "pencil"
-                )
-            }
-        }
-    }
-
-    /// Top-trailing selection indicator: hollow circle when unselected, an
-    /// accent-filled badge carrying the 1-based pick order when selected.
-    private var selectionBadge: some View {
-        VStack {
-            HStack {
-                Spacer()
-                ZStack {
-                    Circle()
-                        .fill(selectionIndex != nil ? Color(hex: accentColor) : Color.black.opacity(0.25))
-                        .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
-                        .frame(width: 22, height: 22)
-                    if let selectionIndex {
-                        Text("\(selectionIndex + 1)")
-                            .font(.caption2.weight(.bold))
-                            .foregroundColor(.white)
-                    }
-                }
-                .padding(4)
-            }
-            Spacer()
-        }
-    }
-
-    private func formatDuration(_ seconds: TimeInterval) -> String {
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return String(format: "%d:%02d", mins, secs)
-    }
-}
-
-// ============================================================================
-// MARK: - RecentMediaPreview (long-press quick look)
-// ============================================================================
-
-/// Preview shown on long-press of a recent-media cell, via the system
-/// context-menu preview, sized to the asset's real aspect ratio. Photos render
-/// full quality; videos show their poster frame instantly, then start looping
-/// playback AVEC LE SON as soon as the player item resolves.
-///
-/// Le son n'est pas qu'un `isMuted = false` : sans catégorie `.playback` posée,
-/// l'aperçu reste muet dès que l'interrupteur Silence est enclenché (catégorie
-/// par défaut `.soloAmbient`). La session passe donc par la source UNIQUE
-/// call-aware du SDK, comme `SharedAVPlayerManager.play()` — pendant un appel
-/// VoIP elle est un no-op, l'aperçu joue alors sous la session de l'appel et le
-/// micro reste intact.
-private struct RecentMediaPreview: View {
-    let asset: PHAsset
-    let model: RecentMediaStripModel
-
-    @State private var image: UIImage?
-    @State private var player: AVQueuePlayer?
-    @State private var looper: AVPlayerLooper?
-
-    private var previewSize: CGSize {
-        let width = CGFloat(max(asset.pixelWidth, 1))
-        let height = CGFloat(max(asset.pixelHeight, 1))
-        let maxSide: CGFloat = 320
-        let scale = min(maxSide / width, maxSide / height)
-        return CGSize(width: width * scale, height: height * scale)
-    }
-
-    var body: some View {
-        ZStack {
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-            } else {
-                Color.black.opacity(0.05)
-                ProgressView()
-            }
-            if let player {
-                PreviewVideoSurface(player: player)
-            }
-        }
-        .frame(width: previewSize.width, height: previewSize.height)
-        .task {
-            image = await model.preview(for: asset)
-            guard asset.mediaType == .video,
-                  let item = await model.videoPlayerItem(for: asset) else { return }
-            let queue = AVQueuePlayer()
-            queue.allowsExternalPlayback = false
-            queue.preventsDisplaySleepDuringVideoPlayback = false
-            // L'aperçu sonne : les autres lecteurs de l'app se taisent d'abord.
-            // AVANT d'armer la session — `stopAll()` passe par
-            // `SharedAVPlayerManager.stop()`, qui désactive la session ; l'ordre
-            // inverse la désarmerait juste après l'avoir posée.
-            PlaybackCoordinator.shared.stopAll()
-            MediaSessionCoordinator.shared.activatePlaybackSync(options: [.duckOthers])
-            looper = AVPlayerLooper(player: queue, templateItem: item)
-            player = queue
-            queue.play()
-        }
-        // Le looper est démonté AVANT le player : il garde des observateurs KVO
-        // dessus, et l'ordre inverse risque un callback sur un player en cours
-        // de désallocation (même règle que `AttachmentQuickLookPreview`).
-        .onDisappear {
-            player?.pause()
-            looper = nil
-            player = nil
-            MediaSessionCoordinator.shared.deactivatePlaybackSync()
-        }
-    }
-}
-
-/// Chrome-less `AVPlayerLayer` host for the context-menu video preview.
-/// AVKit's `VideoPlayer` is the wrong tool here: it draws transport controls
-/// (unusable inside a context-menu preview) over a black backdrop that hides
-/// the poster frame while the stream buffers. A bare player layer stays
-/// transparent until the first frame renders, so the poster shows through.
-private struct PreviewVideoSurface: UIViewRepresentable {
-    let player: AVPlayer
-
-    func makeUIView(context: Context) -> PlayerLayerView {
-        let view = PlayerLayerView()
-        view.playerLayer.videoGravity = .resizeAspect
-        view.playerLayer.player = player
-        return view
-    }
-
-    func updateUIView(_ uiView: PlayerLayerView, context: Context) {
-        if uiView.playerLayer.player !== player {
-            uiView.playerLayer.player = player
-        }
-    }
-
-    final class PlayerLayerView: UIView {
-        override class var layerClass: AnyClass { AVPlayerLayer.self }
-        var playerLayer: AVPlayerLayer {
-            guard let layer = layer as? AVPlayerLayer else {
-                preconditionFailure("PlayerLayerView layer must be AVPlayerLayer")
-            }
-            return layer
-        }
+        .accessibilityLabel(String(localized: "composer.a11y.openFullLibrary", defaultValue: "Ouvrir toute la photothèque", bundle: .main))
     }
 }

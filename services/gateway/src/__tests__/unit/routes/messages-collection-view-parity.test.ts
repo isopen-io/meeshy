@@ -1,0 +1,889 @@
+/**
+ * #4340 critère 1 — `GET /conversations/:id/messages?view=` EST la collection.
+ *
+ * ## Ce que ce fichier mesure, et pourquoi il ne mesure pas `statusCode`
+ *
+ * Trois adresses lisent aujourd'hui la MÊME collection de messages :
+ * `GET .../messages` (chronologie et fil de réponses), `GET .../messages/search`
+ * et `GET .../pinned-messages`. Le lot #4340 en fait UNE collection paramétrée
+ * par `?view=timeline|thread|pinned|search`, sans retirer aucune adresse.
+ *
+ * Un paramètre qui SÉLECTIONNE n'a de valeur que si ce qu'il sélectionne porte
+ * les mêmes GARDES que le reste. Les trois routes dédiées n'en portaient pas
+ * les mêmes — la mesure du 2026-09-02 :
+ *
+ * | garde | `…/messages` | `…/messages/search` | `…/pinned-messages` |
+ * |---|:--:|:--:|:--:|
+ * | plancher d'historique | oui | oui | oui |
+ * | masquage personnel | oui | oui | oui |
+ * | `deletedAt: null` | oui | oui | oui |
+ * | appartenance | oui | oui | oui |
+ * | **lien de partage ÉCHU → 403** | **oui** | **NON** | **NON** |
+ *
+ * (Depuis #7388, les deux routes dédiées portent aussi la porte du lien échu :
+ * voir le bloc `#7388` plus bas.)
+ *
+ * La quatrième ligne est l'absence que ce lot ne veut pas propager : unifier
+ * sans la voir aurait rendu `view=pinned` lisible par un invité dont le lien
+ * est mort, ou aurait retiré la garde du chemin nominal. Le chemin unifié la
+ * porte pour les QUATRE vues, et c'est le tableau ci-dessous qui le dit.
+ *
+ * ## La forme des témoins
+ *
+ * Le double Prisma de ce fichier ÉVALUE le `where` reçu contre un jeu de quatre
+ * messages, au lieu de rendre une liste fixe. C'est ce qui permet à chaque
+ * témoin d'asserter sur ce que la RÉPONSE dit — « ce message n'est pas dans
+ * `data` » — plutôt que sur la forme de l'appel Prisma ou sur un `statusCode`.
+ * Un témoin qui vérifierait `prisma.message.findMany` a reçu `createdAt.gte`
+ * passerait au vert sur un chemin qui construit la clause et ne s'en sert pas.
+ *
+ * Les quatre messages du jeu appartiennent aux QUATRE vues à la fois (chacun
+ * est épinglé, répond au même parent, et contient le mot cherché) : c'est ce
+ * qui rend le tableau garde × vue lisible d'un seul jeu de données.
+ *
+ * @jest-environment node
+ */
+
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import Fastify, { FastifyInstance } from 'fastify';
+
+// ─── Mocks (avant l'import du module de route) ────────────────────────────────
+
+jest.mock('../../../utils/logger-enhanced', () => ({
+  enhancedLogger: { child: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() }) },
+  performanceLogger: { child: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() }) },
+}));
+
+const mockResolveConversationId = jest.fn();
+jest.mock('../../../utils/conversation-id-cache', () => ({
+  resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
+}));
+
+const mockVerdict = jest.fn();
+jest.mock('../../../routes/conversations/utils/access-control', () => ({
+  ...(jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>),
+  verdictAccesConversation: (...args: any[]) => mockVerdict(...args),
+  canAccessConversation: async (...args: any[]) => (await mockVerdict(...args)).genre === 'ok',
+}));
+
+jest.mock('../../../services/MentionService', () => ({ resolveMentionedUsers: jest.fn().mockResolvedValue([]) }));
+jest.mock('../../../services/message-translation/MessageTranslationService', () => ({
+  MessageTranslationService: jest.fn().mockImplementation(() => ({})),
+}));
+jest.mock('../../../services/messaging/MessagingService', () => ({
+  MessagingService: jest.fn().mockImplementation(() => ({})),
+}));
+jest.mock('../../../services/TrackingLinkService', () => ({ TrackingLinkService: jest.fn().mockImplementation(() => ({})) }));
+jest.mock('../../../services/attachments', () => ({ AttachmentService: jest.fn().mockImplementation(() => ({})) }));
+jest.mock('../../../services/PrivacyPreferencesService', () => ({
+  PrivacyPreferencesService: jest.fn().mockImplementation(() => ({})),
+}));
+jest.mock('../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({ resolveForTargets: jest.fn().mockResolvedValue(new Map()) }),
+}));
+
+// ─── Import après les mocks ───────────────────────────────────────────────────
+
+import { registerMessagesRoutes } from '../../../routes/conversations/messages';
+
+// ─── Le jeu de messages ───────────────────────────────────────────────────────
+
+const CONV_ID = '507f1f77bcf86cd799439301';
+const USER_ID = '507f1f77bcf86cd799439322';
+const SENDER_PARTICIPANT_ID = '507f1f77bcf86cd799439333';
+const SENDER_USER_ID = '507f1f77bcf86cd799439344';
+const PARENT_ID = '507f1f77bcf86cd799439350';
+const SHARE_LINK_ID = '507f1f77bcf86cd799439360';
+
+/** Les quatre messages : trois qu'une garde doit retirer, un qui reste. */
+const M_OK = '507f1f77bcf86cd799439401';
+const M_SOUS_PLANCHER = '507f1f77bcf86cd799439402';
+const M_MASQUE = '507f1f77bcf86cd799439403';
+const M_SUPPRIME = '507f1f77bcf86cd799439404';
+/** Le témoin de la SÉLECTION : ni épinglé, ni réponse, ni porteur du mot. */
+const M_ORDINAIRE = '507f1f77bcf86cd799439405';
+
+const PLANCHER = new Date('2026-08-15T00:00:00.000Z');
+
+const senderParticipant = {
+  id: SENDER_PARTICIPANT_ID,
+  userId: SENDER_USER_ID,
+  displayName: 'Alice',
+  avatar: null,
+  type: 'member',
+  isOnline: false,
+  lastActiveAt: null,
+  user: {
+    id: SENDER_USER_ID, username: 'alice', displayName: 'Alice', avatar: null,
+    isOnline: false, lastActiveAt: null, firstName: null, lastName: null,
+  },
+};
+
+type Fixture = Record<string, unknown>;
+
+/**
+ * Chaque ligne est épinglée, répond au MÊME parent et contient « cible » : elle
+ * appartient donc aux quatre vues à la fois. Seules varient les colonnes que
+ * les gardes lisent (`createdAt`, `deletedAt`) et l'identité, dont le masquage
+ * personnel se sert.
+ */
+function ligne(
+  id: string,
+  createdAt: Date,
+  deletedAt: Date | null,
+  hors: { readonly ordinaire?: boolean } = {},
+): Fixture {
+  return {
+    id,
+    clientMessageId: null,
+    conversationId: CONV_ID,
+    senderId: SENDER_PARTICIPANT_ID,
+    content: hors.ordinaire ? `banal ${id}` : `cible ${id}`,
+    originalLanguage: 'fr',
+    messageType: 'text',
+    messageSource: 'api',
+    isEdited: false,
+    editedAt: null,
+    deletedAt,
+    replyToId: hors.ordinaire ? null : PARENT_ID,
+    storyReplyToId: null,
+    forwardedFromId: null,
+    forwardedFromConversationId: null,
+    isViewOnce: false,
+    maxViewOnceCount: null,
+    viewOnceCount: 0,
+    isBlurred: false,
+    effectFlags: 0,
+    ephemeralDuration: null,
+    expiresAt: null,
+    pinnedAt: hors.ordinaire ? null : new Date('2026-08-20T12:00:00.000Z'),
+    pinnedBy: SENDER_PARTICIPANT_ID,
+    reactionSummary: {},
+    reactionCount: 0,
+    isEncrypted: false,
+    encryptionMode: null,
+    translations: { en: { text: 'target', targetLanguage: 'en' } },
+    // Une valeur RÉELLE, pas `null` : c'est la seule façon de comparer ce que
+    // les deux surfaces servent de ce champ. Sur `null`, elles divergent — et
+    // la divergence est nommée par son propre témoin plus bas.
+    metadata: { note: 'porte' },
+    validatedMentions: [],
+    createdAt,
+    updatedAt: createdAt,
+    sender: senderParticipant,
+    replyTo: null,
+    attachments: [],
+    _count: { reactions: 0, replies: 0 },
+  };
+}
+
+const JEU: readonly Fixture[] = [
+  ligne(M_OK, new Date('2026-08-20T10:00:00.000Z'), null),
+  ligne(M_SOUS_PLANCHER, new Date('2026-08-10T10:00:00.000Z'), null),
+  ligne(M_MASQUE, new Date('2026-08-21T10:00:00.000Z'), null),
+  ligne(M_SUPPRIME, new Date('2026-08-22T10:00:00.000Z'), new Date('2026-08-23T10:00:00.000Z')),
+  ligne(M_ORDINAIRE, new Date('2026-08-19T10:00:00.000Z'), null, { ordinaire: true }),
+];
+
+/** Une pièce jointe, à la forme que le `select` de la route projette. */
+function piece(id: string, messageId: string, mimeType: string, extra: Fixture = {}): Fixture {
+  return {
+    id,
+    messageId,
+    fileName: `${id}.bin`,
+    originalName: `${id}.bin`,
+    mimeType,
+    fileSize: 1024,
+    filePath: `attachments/${id}.bin`,
+    fileUrl: `https://cdn.example/${id}.bin`,
+    thumbnailUrl: null,
+    width: 100,
+    height: 100,
+    duration: null,
+    isViewOnce: false,
+    isBlurred: false,
+    effectFlags: 0,
+    createdAt: new Date('2026-08-01T00:00:00.000Z'),
+    ...extra,
+  };
+}
+
+/** Le jeu de la table des gardes, chaque ligne non ordinaire portant une image. */
+const JEU_MEDIAS: readonly Fixture[] = JEU.map((r) =>
+  r.id === M_ORDINAIRE ? r : { ...r, attachments: [piece(`607f${String(r.id).slice(4)}`, String(r.id), 'image/jpeg')] }
+);
+
+/**
+ * #8098 — le jeu de la table des gardes pour UN genre de l'index : chaque ligne
+ * non ordinaire porte ce qui la fait entrer dans ce genre (une pièce de ce
+ * type, une URL dans son contenu, ou le type `location`). La ligne ordinaire
+ * n'en porte aucun : elle témoigne que la SÉLECTION a bien eu lieu.
+ */
+const PORTEUR_DE_GENRE: Readonly<Record<string, (r: Fixture) => Fixture>> = {
+  visual: (r) => ({ ...r, attachments: [piece(`607f${String(r.id).slice(4)}`, String(r.id), 'image/jpeg')] }),
+  audio: (r) => ({ ...r, attachments: [piece(`607f${String(r.id).slice(4)}`, String(r.id), 'audio/mp4')] }),
+  document: (r) => ({ ...r, attachments: [piece(`607f${String(r.id).slice(4)}`, String(r.id), 'application/pdf')] }),
+  contact: (r) => ({ ...r, attachments: [piece(`607f${String(r.id).slice(4)}`, String(r.id), 'text/vcard')] }),
+  link: (r) => ({ ...r, content: `${String(r.content)} https://example.com/page` }),
+  conversation: (r) => ({ ...r, content: `${String(r.content)} https://meeshy.me/chat/mshy_equipe` }),
+  location: (r) => ({ ...r, messageType: 'location' }),
+};
+const jeuDuGenre = (genre: string): readonly Fixture[] =>
+  JEU.map((r) => (r.id === M_ORDINAIRE ? r : PORTEUR_DE_GENRE[genre]!(r)));
+
+// ─── Le double Prisma qui ÉVALUE le `where` ───────────────────────────────────
+
+function asDate(v: unknown): Date | null {
+  if (v instanceof Date) return v;
+  if (typeof v === 'string') { const d = new Date(v); return Number.isNaN(d.getTime()) ? null : d; }
+  return null;
+}
+
+function champCorrespond(valeur: unknown, contrainte: unknown): boolean {
+  if (contrainte === null) return valeur === null || valeur === undefined;
+  if (contrainte instanceof Date) return asDate(valeur)?.getTime() === contrainte.getTime();
+  if (typeof contrainte !== 'object') return valeur === contrainte;
+
+  const c = contrainte as Record<string, unknown>;
+  if ('some' in c) {
+    return Array.isArray(valeur) && valeur.some((r) => correspond(r as Fixture, c.some as Record<string, unknown>));
+  }
+  if ('startsWith' in c) return typeof valeur === 'string' && valeur.startsWith(String(c.startsWith));
+  if ('in' in c) return (c.in as unknown[]).includes(valeur);
+  if ('notIn' in c) return !(c.notIn as unknown[]).includes(valeur);
+  if ('contains' in c) {
+    const attendu = String(c.contains).toLowerCase();
+    return String(valeur ?? '').toLowerCase().includes(attendu);
+  }
+  if ('not' in c) {
+    const not = c.not as Record<string, unknown> | null;
+    if (not === null) return valeur !== null && valeur !== undefined;
+    if (not && 'equals' in not && not.equals === null) return valeur !== null && valeur !== undefined;
+    return !champCorrespond(valeur, not);
+  }
+
+  const bornes = ['gte', 'gt', 'lt', 'lte'] as const;
+  if (bornes.some((b) => b in c)) {
+    // `prefixRange()` (utils/prefix-range.ts, #11492) borne un préfixe calculé
+    // par un intervalle de CHAÎNES — mimeType, filePath — pas seulement de dates.
+    if (typeof valeur === 'string') {
+      if (typeof c.gte === 'string' && valeur < c.gte) return false;
+      if (typeof c.gt === 'string' && valeur <= c.gt) return false;
+      if (typeof c.lt === 'string' && valeur >= c.lt) return false;
+      if (typeof c.lte === 'string' && valeur > c.lte) return false;
+      return true;
+    }
+    const d = asDate(valeur);
+    if (!d) return false;
+    const gte = asDate(c.gte); if (gte && d.getTime() < gte.getTime()) return false;
+    const gt = asDate(c.gt); if (gt && d.getTime() <= gt.getTime()) return false;
+    const lt = asDate(c.lt); if (lt && d.getTime() >= lt.getTime()) return false;
+    const lte = asDate(c.lte); if (lte && d.getTime() > lte.getTime()) return false;
+    return true;
+  }
+  return true;
+}
+
+function correspond(row: Fixture, where: Record<string, unknown> | undefined): boolean {
+  if (!where) return true;
+  for (const [cle, contrainte] of Object.entries(where)) {
+    if (cle === 'AND') { if (!(contrainte as any[]).every((w) => correspond(row, w))) return false; continue; }
+    if (cle === 'OR') { if (!(contrainte as any[]).some((w) => correspond(row, w))) return false; continue; }
+    if (cle === 'NOT') { if (correspond(row, contrainte as Record<string, unknown>)) return false; continue; }
+    if (!champCorrespond(row[cle], contrainte)) return false;
+  }
+  return true;
+}
+
+/** Projette comme Prisma : seuls les champs du `select` sortent. */
+function projette(row: any, select: any): any {
+  if (!select) return row;
+  const out: any = {};
+  for (const [k, v] of Object.entries(select)) {
+    if (!v) continue;
+    const val = row[k];
+    if (val === undefined) continue;
+    if (v === true) { out[k] = val; continue; }
+    const sub = (v as any).select;
+    if (!sub) { out[k] = val; continue; }
+    out[k] = Array.isArray(val) ? val.map((r: any) => projette(r, sub)) : (val ? projette(val, sub) : val);
+  }
+  return out;
+}
+
+type Options = {
+  readonly floorAt?: Date | null;
+  readonly hidden?: readonly string[];
+  readonly shareLink?: { readonly allowViewHistory: boolean; readonly expiresAt: Date | null } | null;
+  /** Jeu de lignes alternatif, pour les témoins qui font varier une colonne. */
+  readonly jeu?: readonly Fixture[];
+};
+
+function buildApp(options: Options = {}): FastifyInstance {
+  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+  (app as any).socketIOHandler = { getManager: () => null };
+  (app as any).notificationService = null;
+
+  const lignes0 = options.jeu ?? JEU;
+  const findMany = jest.fn(async (args: any) => {
+    const lignes = lignes0.filter((r) => correspond(r, args?.where));
+    const champ = args?.orderBy?.pinnedAt ? 'pinnedAt' : 'createdAt';
+    const sens = (args?.orderBy?.[champ] ?? 'desc') === 'asc' ? 1 : -1;
+    const triees = [...lignes].sort((a, b) => sens * ((a[champ] as Date).getTime() - (b[champ] as Date).getTime()));
+    const depuis = triees.slice(args?.skip ?? 0);
+    const page = args?.take ? depuis.slice(0, args.take) : depuis;
+    return page.map((r) => projette(r, args?.select));
+  });
+
+  const prisma: any = {
+    participant: {
+      findFirst: jest.fn(async () => ({
+        id: 'reader-part-id',
+        role: 'member',
+        joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+        shareLinkId: options.shareLink ? SHARE_LINK_ID : null,
+        historyVisibleFrom: options.floorAt ?? null,
+        permissions: null,
+        anonymousSession: null,
+        user: { role: 'USER' },
+      })),
+    },
+    conversationShareLink: {
+      findFirst: jest.fn(async () => options.shareLink ?? null),
+      findUnique: jest.fn(async () => options.shareLink ?? null),
+    },
+    userConversationPreferences: { findFirst: jest.fn(async () => null) },
+    userMessageDeletion: {
+      findMany: jest.fn(async () => (options.hidden ?? []).map((messageId) => ({ messageId }))),
+    },
+    message: {
+      findMany,
+      count: jest.fn(async (args: any) => lignes0.filter((r) => correspond(r, args?.where)).length),
+      findFirst: jest.fn(async (args: any) => {
+        const trouve = lignes0.find((r) => correspond(r, args?.where));
+        return trouve ? projette(trouve, args?.select) : null;
+      }),
+    },
+    user: {
+      findFirst: jest.fn(async () => ({
+        systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
+      })),
+    },
+    attachmentStatusEntry: { findMany: jest.fn(async () => []) },
+  };
+
+  const auth = async (req: any) => {
+    req.authContext = {
+      type: 'registered', isAuthenticated: true, isAnonymous: false,
+      userId: USER_ID, registeredUser: { id: USER_ID, role: 'USER' },
+    };
+  };
+
+  registerMessagesRoutes(app, prisma, {} as any, auth, auth);
+  return app;
+}
+
+async function lire(url: string, options: Options = {}): Promise<{ statut: number; corps: any }> {
+  const app = buildApp(options);
+  await app.ready();
+  try {
+    const res = await app.inject({ method: 'GET', url });
+    return { statut: res.statusCode, corps: JSON.parse(res.payload) };
+  } finally {
+    await app.close();
+  }
+}
+
+const ids = (corps: any): string[] => (corps.data ?? []).map((m: any) => m.id);
+
+/** Les quatre vues de la collection unique, avec l'URL qui les demande. */
+/**
+ * « La vue rend ce que la route dédiée rendait » se vérifie en SOUS-ENSEMBLE, à
+ * toute profondeur : chaque FEUILLE servie par la route dédiée doit être servie
+ * à l'identique par la vue. L'égalité stricte serait la mauvaise assertion —
+ * la collection unifiée sert DAVANTAGE (les drapeaux de protection du message,
+ * le `type` de l'expéditeur), et c'est le but du lot.
+ */
+function porteAuMoins(servi: any, attendu: any, chemin: string): void {
+  if (attendu !== null && typeof attendu === 'object' && !Array.isArray(attendu)) {
+    for (const [cle, valeur] of Object.entries(attendu)) porteAuMoins(servi?.[cle], valeur, `${chemin}.${cle}`);
+    return;
+  }
+  expect({ chemin, valeur: servi }).toEqual({ chemin, valeur: attendu });
+}
+
+const VUES: ReadonlyArray<readonly [string, string, Options]> = [
+  ['timeline', `/conversations/${CONV_ID}/messages?view=timeline`, {}],
+  ['thread', `/conversations/${CONV_ID}/messages?view=thread&parentId=${PARENT_ID}`, {}],
+  ['pinned', `/conversations/${CONV_ID}/messages?view=pinned`, {}],
+  ['search', `/conversations/${CONV_ID}/messages?view=search&q=cible`, {}],
+  // #8095 — la vue des médias lit le jeu où chaque ligne non ordinaire porte
+  // une image : c'est ce qui la fait entrer dans la même table de gardes.
+  ['media', `/conversations/${CONV_ID}/messages?view=media`, { jeu: JEU_MEDIAS }],
+  // #8098 — chaque GENRE de l'index entre dans la même table : un genre qui
+  // aurait son propre chemin de requête devrait prouver qu'il garde tout.
+  ...Object.keys(PORTEUR_DE_GENRE).map(
+    (genre) =>
+      [`media kinds=${genre}`, `/conversations/${CONV_ID}/messages?view=media&kinds=${genre}`, { jeu: jeuDuGenre(genre) }] as const
+  ),
+  ['media kinds=document&q', `/conversations/${CONV_ID}/messages?view=media&kinds=document&q=cible`, { jeu: jeuDuGenre('document') }],
+];
+
+// ─── Tests ────────────────────────────────────────────────────────────────────
+
+beforeEach(() => {
+  mockResolveConversationId.mockResolvedValue(CONV_ID);
+  mockVerdict.mockResolvedValue({ genre: 'ok' });
+});
+
+describe('#4340 — `?view=` sélectionne bien la sous-collection annoncée', () => {
+  it('view=pinned ne rend que des messages épinglés (et le dit dans data)', async () => {
+    const { corps } = await lire(`/conversations/${CONV_ID}/messages?view=pinned`);
+    expect(ids(corps)).toContain(M_OK);
+    expect(ids(corps)).not.toContain(M_ORDINAIRE);
+    for (const m of corps.data) expect(m.pinnedAt).not.toBeNull();
+  });
+
+  it('view=thread ne rend que les réponses du parent demandé', async () => {
+    const { corps } = await lire(`/conversations/${CONV_ID}/messages?view=thread&parentId=${PARENT_ID}`);
+    expect(ids(corps)).toContain(M_OK);
+    expect(ids(corps)).not.toContain(M_ORDINAIRE);
+    for (const m of corps.data) expect(m.replyToId).toBe(PARENT_ID);
+  });
+
+  it("view=search ne rend que les messages qui portent le mot cherché", async () => {
+    const { corps } = await lire(`/conversations/${CONV_ID}/messages?view=search&q=cible`);
+    expect(ids(corps)).toContain(M_OK);
+    expect(ids(corps)).not.toContain(M_ORDINAIRE);
+  });
+
+  it('view=search sans `q` refuse, et dit pourquoi', async () => {
+    const { corps } = await lire(`/conversations/${CONV_ID}/messages?view=search`);
+    expect(corps.success).toBe(false);
+    expect(String(corps.error)).toMatch(/\bq\b/i);
+  });
+
+  it('view=thread sans `parentId` refuse, et dit pourquoi', async () => {
+    const { corps } = await lire(`/conversations/${CONV_ID}/messages?view=thread`);
+    expect(corps.success).toBe(false);
+    expect(String(corps.error)).toMatch(/parentId/i);
+  });
+
+  it("`replyToId` sur une vue qui n'est pas le fil refuse, plutôt que de perdre le filtre", async () => {
+    const { corps } = await lire(`/conversations/${CONV_ID}/messages?view=pinned&replyToId=${PARENT_ID}`);
+    expect(corps.success).toBe(false);
+    expect(String(corps.error)).toMatch(/replyToId/);
+  });
+
+  it('une vue inconnue refuse plutôt que de servir la chronologie en silence', async () => {
+    const { corps } = await lire(`/conversations/${CONV_ID}/messages?view=inventee`);
+    expect(corps.success).toBe(false);
+  });
+});
+
+describe('#8095 — `view=media` rend les messages porteurs de médias VISUELS, jamais la vue unique', () => {
+  const M_IMAGE = '507f1f77bcf86cd799439501';
+  const M_VIDEO = '507f1f77bcf86cd799439502';
+  const M_AUDIO = '507f1f77bcf86cd799439503';
+  const M_PDF = '507f1f77bcf86cd799439504';
+  const M_MSG_VUE_UNIQUE = '507f1f77bcf86cd799439505';
+  const M_PIECE_VUE_UNIQUE = '507f1f77bcf86cd799439506';
+  const M_MIXTE = '507f1f77bcf86cd799439507';
+  const M_ANCIEN = '507f1f77bcf86cd799439508';
+  const M_TEXTE = '507f1f77bcf86cd799439509';
+
+  const jour = (j: number): Date => new Date(`2026-08-${String(j).padStart(2, '0')}T10:00:00.000Z`);
+  const avec = (id: string, j: number, pieces: readonly Fixture[], extra: Fixture = {}): Fixture => ({
+    ...ligne(id, jour(j), null, { ordinaire: true }),
+    attachments: pieces,
+    ...extra,
+  });
+  /** Un document d'AVANT le champ : ni le message ni sa pièce ne portent `isViewOnce`. */
+  const sansDrapeau = (r: Fixture): Fixture => {
+    const { isViewOnce: _m, ...reste } = r;
+    const pieces = (reste.attachments as Fixture[]).map(({ isViewOnce: _p, ...p }) => p);
+    return { ...reste, attachments: pieces };
+  };
+
+  const JEU_GALERIE: readonly Fixture[] = [
+    avec(M_IMAGE, 20, [piece('607f1f77bcf86cd799439601', M_IMAGE, 'image/jpeg')]),
+    avec(M_VIDEO, 19, [piece('607f1f77bcf86cd799439602', M_VIDEO, 'video/mp4')]),
+    avec(M_AUDIO, 18, [piece('607f1f77bcf86cd799439603', M_AUDIO, 'audio/m4a')]),
+    avec(M_PDF, 17, [piece('607f1f77bcf86cd799439604', M_PDF, 'application/pdf')]),
+    avec(M_MSG_VUE_UNIQUE, 16, [piece('607f1f77bcf86cd799439605', M_MSG_VUE_UNIQUE, 'image/png')], { isViewOnce: true }),
+    avec(M_PIECE_VUE_UNIQUE, 15, [
+      piece('607f1f77bcf86cd799439606', M_PIECE_VUE_UNIQUE, 'image/png', { isViewOnce: true }),
+    ]),
+    avec(M_MIXTE, 14, [
+      piece('607f1f77bcf86cd799439607', M_MIXTE, 'image/png', { isViewOnce: true }),
+      piece('607f1f77bcf86cd799439608', M_MIXTE, 'video/quicktime'),
+    ]),
+    sansDrapeau(avec(M_ANCIEN, 13, [piece('607f1f77bcf86cd799439609', M_ANCIEN, 'image/heic')])),
+    avec(M_TEXTE, 12, []),
+  ];
+  const ATTENDUS = [M_IMAGE, M_VIDEO, M_MIXTE, M_ANCIEN];
+
+  it('rend les seuls porteurs d’image ou de vidéo non vue-unique, du plus récent au plus ancien', async () => {
+    const { corps } = await lire(`/conversations/${CONV_ID}/messages?view=media`, { jeu: JEU_GALERIE });
+    expect(corps.success).toBe(true);
+    expect(ids(corps)).toEqual(ATTENDUS);
+  });
+
+  it('le COUNT porte le même prédicat que la page : `hasMore` ne promet pas de page vide', async () => {
+    const { corps } = await lire(`/conversations/${CONV_ID}/messages?view=media&limit=4`, { jeu: JEU_GALERIE });
+    expect(ids(corps)).toEqual(ATTENDUS);
+    expect(corps.cursorPagination.hasMore).toBe(false);
+    expect(corps.pagination.total).toBe(ATTENDUS.length);
+  });
+
+  it('se feuillette par `before` jusqu’au PREMIER média de la conversation', async () => {
+    const vus: string[] = [];
+    let url = `/conversations/${CONV_ID}/messages?view=media&limit=1`;
+    for (let tour = 0; tour < 10; tour++) {
+      const { corps } = await lire(url, { jeu: JEU_GALERIE });
+      vus.push(...ids(corps));
+      if (!corps.cursorPagination.hasMore) break;
+      url = `/conversations/${CONV_ID}/messages?view=media&limit=1&before=${corps.cursorPagination.nextCursor}`;
+    }
+    expect(vus).toEqual(ATTENDUS);
+  });
+
+  it('refuse `replyToId`, plutôt que de perdre le filtre', async () => {
+    const { corps } = await lire(`/conversations/${CONV_ID}/messages?view=media&replyToId=${PARENT_ID}`);
+    expect(corps.success).toBe(false);
+    expect(String(corps.error)).toMatch(/replyToId/);
+  });
+
+  it('ignore `around` : la fenêtre ne connaît pas le prédicat', async () => {
+    const { corps } = await lire(`/conversations/${CONV_ID}/messages?view=media&around=${M_TEXTE}`, { jeu: JEU_GALERIE });
+    expect(ids(corps)).toEqual(ATTENDUS);
+  });
+});
+
+describe('#8098 — `view=media&kinds=` : l\'index couvre TOUT ce qui s\'est échangé, genre par genre', () => {
+  const n = (k: number): string => `507f1f77bcf86cd7994397${String(k).padStart(2, '0')}`;
+  const M = {
+    image: n(1), video: n(2), audio: n(3), pdf: n(4), vcard: n(5), xvcard: n(6),
+    lien: n(7), lienMaj: n(8), suivi: n(9), chat: n(10), direct: n(11), rejoindre: n(12),
+    ancienneForme: n(13), schema: n(14), lieu: n(15), texte: n(16), faussePiste: n(17),
+    voPdf: n(18), voPieceAudio: n(19), voLien: n(20), rapport: n(21),
+  } as const;
+
+  type Entree = readonly [id: string, contenu: string, pieces?: readonly Fixture[], extra?: Fixture];
+  /** Le rang dans le jeu fait la date : le premier est le plus récent. */
+  const entree = (rang: number, [id, contenu, pieces = [], extra = {}]: Entree): Fixture => ({
+    ...ligne(id, new Date(`2026-07-${String(28 - rang).padStart(2, '0')}T10:00:00.000Z`), null, { ordinaire: true }),
+    content: contenu,
+    attachments: pieces,
+    ...extra,
+  });
+  const p = (message: string, mime: string, extra: Fixture = {}): Fixture =>
+    piece(`60${message.slice(2)}`, message, mime, extra);
+
+  const JEU_INDEX: readonly Fixture[] = ([
+    [M.image, '', [p(M.image, 'image/jpeg')]],
+    [M.video, '', [p(M.video, 'video/mp4')]],
+    [M.audio, '', [p(M.audio, 'audio/mpeg')]],
+    [M.pdf, '', [p(M.pdf, 'application/pdf')]],
+    [M.vcard, '', [p(M.vcard, 'text/vcard')]],
+    [M.xvcard, '', [p(M.xvcard, 'text/x-vcard')]],
+    [M.lien, 'lis ça https://example.com/article'],
+    [M.lienMaj, 'VOIR HTTP://EXAMPLE.ORG'],
+    [M.suivi, 'le post https://meeshy.me/l/AbCd12'],
+    [M.chat, 'rejoins-nous https://meeshy.me/chat/mshy_equipe_7f3a'],
+    [M.direct, 'ici https://www.meeshy.me/c/507f1f77bcf86cd799439011'],
+    [M.rejoindre, 'https://meeshy.me/join/mshy_club'],
+    [M.ancienneForme, 'https://app.meeshy.me/conversation/507f1f77bcf86cd799439012'],
+    [M.schema, 'ouvre meeshy://c/507f1f77bcf86cd799439013'],
+    [M.lieu, 'Paris, France', [], { messageType: 'location' }],
+    [M.texte, 'bonjour'],
+    [M.faussePiste, 'http est un protocole, meeshy.me un domaine'],
+    [M.voPdf, '', [p(M.voPdf, 'application/pdf')], { isViewOnce: true }],
+    [M.voPieceAudio, '', [p(M.voPieceAudio, 'audio/mpeg', { isViewOnce: true })]],
+    [M.voLien, 'secret https://example.com/x', [], { isViewOnce: true }],
+    [M.rapport, 'ci-joint', [p(M.rapport, 'application/pdf', { originalName: 'Rapport-Annuel.pdf' })]],
+  ] satisfies readonly Entree[]).map((e, rang) => entree(rang, e));
+
+  const lireIndex = (requete: string) =>
+    lire(`/conversations/${CONV_ID}/messages?view=media&${requete}`, { jeu: JEU_INDEX });
+
+  it('sans `kinds`, sert le VISUEL seul — le client iOS de #8095 n\'envoie rien', async () => {
+    const sans = await lire(`/conversations/${CONV_ID}/messages?view=media`, { jeu: JEU_INDEX });
+    const visuel = await lireIndex('kinds=visual');
+    expect(ids(sans.corps)).toEqual([M.image, M.video]);
+    expect(ids(visuel.corps)).toEqual([M.image, M.video]);
+  });
+
+  it.each([
+    ['audio', [M.audio]],
+    ['document', [M.pdf, M.rapport]],
+    ['contact', [M.vcard, M.xvcard]],
+    ['link', [M.lien, M.lienMaj, M.suivi, M.chat, M.direct, M.rejoindre, M.ancienneForme]],
+    ['conversation', [M.chat, M.direct, M.rejoindre, M.ancienneForme, M.schema]],
+    ['location', [M.lieu]],
+  ] as const)('kinds=%s rend ses seuls porteurs, jamais la vue unique', async (genre, attendus) => {
+    const { statut, corps } = await lireIndex(`kinds=${genre}`);
+    expect(statut).toBe(200);
+    expect(ids(corps)).toEqual(attendus);
+    expect(corps.pagination.total).toBe(attendus.length);
+  });
+
+  it('plusieurs genres font une UNION, dans l\'ordre chronologique inverse', async () => {
+    const { corps } = await lireIndex('kinds=audio,%20contact,location');
+    expect(ids(corps)).toEqual([M.audio, M.vcard, M.xvcard, M.lieu]);
+  });
+
+  it('un genre inconnu refuse en 400 INVALID_VIEW et nomme `kinds`', async () => {
+    const { statut, corps } = await lireIndex('kinds=visual,sticker');
+    expect(statut).toBe(400);
+    expect(corps.success).toBe(false);
+    expect(corps.code).toBe('INVALID_VIEW');
+    expect(String(corps.error)).toMatch(/kinds/);
+    expect(String(corps.error)).toMatch(/sticker/);
+  });
+
+  it('`kinds` sur une vue qui n\'est pas l\'index refuse, plutôt que de perdre le filtre', async () => {
+    const epingles = await lire(`/conversations/${CONV_ID}/messages?view=pinned&kinds=audio`);
+    const chronologie = await lire(`/conversations/${CONV_ID}/messages?kinds=audio`);
+    for (const { statut, corps } of [epingles, chronologie]) {
+      expect(statut).toBe(400);
+      expect(corps.code).toBe('INVALID_VIEW');
+      expect(String(corps.error)).toMatch(/kinds/);
+    }
+  });
+
+  it('`q` cherche dans le NOM d\'origine des pièces, sans tenir compte de la casse', async () => {
+    const { corps } = await lireIndex('kinds=document&q=rapport-ANN');
+    expect(ids(corps)).toEqual([M.rapport]);
+    expect(corps.pagination.total).toBe(1);
+  });
+
+  it('`q` cherche dans le CONTENU du message, genre par genre', async () => {
+    const { corps } = await lireIndex('kinds=link,conversation&q=MSHY_');
+    expect(ids(corps)).toEqual([M.chat, M.rejoindre]);
+  });
+
+  it('`q` de moins de deux caractères refuse en 400 INVALID_VIEW et nomme `q`', async () => {
+    const { statut, corps } = await lireIndex('kinds=document&q=%20r%20');
+    expect(statut).toBe(400);
+    expect(corps.code).toBe('INVALID_VIEW');
+    expect(String(corps.error)).toMatch(/\bq\b/);
+  });
+
+  it('`q` sur `view=search` garde son sens : le terme cherché, sans genre', async () => {
+    const { corps } = await lire(`/conversations/${CONV_ID}/messages?view=search&q=protocole`, { jeu: JEU_INDEX });
+    expect(ids(corps)).toEqual([M.faussePiste]);
+  });
+});
+
+describe('#4340 critère 4 — `?view=thread&parentId=` et `?replyToId=` rendent le MÊME corps', () => {
+  it('les deux moyens servent le même fil, champ pour champ', async () => {
+    const parVue = await lire(`/conversations/${CONV_ID}/messages?view=thread&parentId=${PARENT_ID}`);
+    const parFiltre = await lire(`/conversations/${CONV_ID}/messages?replyToId=${PARENT_ID}`);
+    expect(parVue.corps).toEqual(parFiltre.corps);
+  });
+});
+
+describe('#4340 critère 2 — la TABLE des gardes × des cinq vues', () => {
+  describe.each(VUES)('vue %s', (_nom, url, base) => {
+    const lireVue = (u: string, o: Options = {}) => lire(u, { ...base, ...o });
+
+    it("ne rend pas un message d'AVANT le plancher d'historique du lecteur", async () => {
+      const { corps } = await lireVue(url, { floorAt: PLANCHER });
+      expect(ids(corps)).not.toContain(M_SOUS_PLANCHER);
+      expect(ids(corps)).toContain(M_OK);
+    });
+
+    it('ne rend pas un message que le lecteur a retiré de sa propre vue', async () => {
+      const { corps } = await lireVue(url, { hidden: [M_MASQUE] });
+      expect(ids(corps)).not.toContain(M_MASQUE);
+      expect(ids(corps)).toContain(M_OK);
+    });
+
+    it('ne rend pas un message supprimé pour tout le monde', async () => {
+      const { corps } = await lireVue(url);
+      expect(ids(corps)).not.toContain(M_SUPPRIME);
+      expect(ids(corps)).toContain(M_OK);
+    });
+
+    it("refuse le lecteur dont le lien de partage est ÉCHU, et le NOMME", async () => {
+      const { corps } = await lireVue(url, {
+        shareLink: { allowViewHistory: true, expiresAt: new Date('2020-01-01T00:00:00.000Z') },
+      });
+      expect(corps.success).toBe(false);
+      expect(corps.code).toBe('SHARE_LINK_EXPIRED');
+      expect(corps.data).toBeUndefined();
+    });
+
+    it("refuse un non-membre comme une conversation inexistante, sans rien servir (#8099)", async () => {
+      mockVerdict.mockResolvedValue({ genre: 'non-membre' });
+      const { corps } = await lireVue(url);
+      expect(corps.success).toBe(false);
+      expect(corps.error).toBe('Conversation not found');
+      expect(corps.code).toBe('CONVERSATION_NOT_FOUND');
+      expect(corps.data).toBeUndefined();
+    });
+
+    it("refuse une session absente en la nommant, sans rien servir", async () => {
+      mockVerdict.mockResolvedValue({ genre: 'sans-session' });
+      const { corps } = await lireVue(url);
+      expect(corps.success).toBe(false);
+      expect(corps.code).toBe('UNAUTHORIZED');
+      expect(corps.data).toBeUndefined();
+    });
+
+    it("n'accepte pas un curseur `before` emprunté à une AUTRE conversation", async () => {
+      const { corps } = await lireVue(`${url}&before=507f1f77bcf86cd7994399ff`);
+      expect(ids(corps)).toContain(M_OK);
+    });
+  });
+});
+
+/**
+ * #7388 — la porte d'un lien de partage ÉCHU vaut aussi sur les deux routes
+ * DÉDIÉES. Elles lisaient le lien pour son seul `allowViewHistory` : un invité
+ * dont le lien est mort ne lisait plus le fil, et pouvait encore en chercher un
+ * mot ou en lire les épingles.
+ */
+describe('#7388 — les routes dédiées ferment la porte d’un lien ÉCHU comme le fil', () => {
+  const DEDIEES: ReadonlyArray<readonly [string, string]> = [
+    ['GET .../messages/search', `/conversations/${CONV_ID}/messages/search?q=cible`],
+    ['GET .../pinned-messages', `/conversations/${CONV_ID}/pinned-messages`],
+  ];
+
+  it.each(DEDIEES)('%s refuse 403 SHARE_LINK_EXPIRED, sans rien servir', async (_nom, url) => {
+    const { statut, corps } = await lire(url, {
+      shareLink: { allowViewHistory: true, expiresAt: new Date('2020-01-01T00:00:00.000Z') },
+    });
+    expect(statut).toBe(403);
+    expect(corps.success).toBe(false);
+    expect(corps.code).toBe('SHARE_LINK_EXPIRED');
+    expect(corps.data).toBeUndefined();
+  });
+
+  it.each(DEDIEES)('%s sert toujours le lecteur dont le lien est VIVANT', async (_nom, url) => {
+    const { statut, corps } = await lire(url, {
+      shareLink: { allowViewHistory: true, expiresAt: new Date('2999-01-01T00:00:00.000Z') },
+    });
+    expect(statut).toBe(200);
+    expect(ids(corps)).toContain(M_OK);
+  });
+});
+
+describe('#4340 critère 1 — la vue rend ce que la route dédiée rendait', () => {
+  it('view=pinned porte tous les champs de `GET .../pinned-messages`, aux mêmes valeurs', async () => {
+    const vue = await lire(`/conversations/${CONV_ID}/messages?view=pinned`);
+    const dediee = await lire(`/conversations/${CONV_ID}/pinned-messages`);
+
+    const parId = new Map<string, any>((vue.corps.data ?? []).map((m: any) => [m.id, m]));
+    expect(dediee.corps.data.length).toBeGreaterThan(0);
+    for (const attendu of dediee.corps.data) {
+      const servi = parId.get(attendu.id);
+      expect(servi).toBeDefined();
+      for (const [champ, valeur] of Object.entries(attendu)) {
+        // `reactionCount` est le SEUL écart de VALEUR, et il est à l'avantage
+        // de la vue : le `select` de la route dédiée ne demande pas `_count`,
+        // donc son 0 est le `default` du schéma partagé, jamais un comptage.
+        if (champ === 'reactionCount') continue;
+        porteAuMoins(servi[champ], valeur, champ);
+      }
+    }
+  });
+
+  it('view=search porte tous les champs de `GET .../messages/search`, aux mêmes valeurs', async () => {
+    const vue = await lire(`/conversations/${CONV_ID}/messages?view=search&q=cible`);
+    const dediee = await lire(`/conversations/${CONV_ID}/messages/search?q=cible`);
+
+    const parId = new Map<string, any>((vue.corps.data ?? []).map((m: any) => [m.id, m]));
+    expect(dediee.corps.data.length).toBeGreaterThan(0);
+    for (const attendu of dediee.corps.data) {
+      const servi = parId.get(attendu.id);
+      expect(servi).toBeDefined();
+      for (const [champ, valeur] of Object.entries(attendu)) {
+        if (champ === 'reactionCount') continue;
+        porteAuMoins(servi[champ], valeur, champ);
+      }
+    }
+  });
+
+  it("un `metadata` ABSENT est le seul écart de nullité, et il est dans le sens de l'omission", async () => {
+    // `GET .../messages/search` étale la ligne Prisma, donc sert `metadata: null` ;
+    // `GET .../messages` — pour TOUS ses appelants depuis toujours — le
+    // normalise en `undefined`, que fast-json-stringify omet. Aligner la vue
+    // sur la route dédiée changerait la forme de fil de la CHRONOLOGIE, qui
+    // est la surface la plus appelée du service : l'écart est nommé, pas
+    // corrigé dans ce lot.
+    const sansMetadata = JEU.map((r) => ({ ...r, metadata: null }));
+    const vue = await lire(`/conversations/${CONV_ID}/messages?view=search&q=cible`, { jeu: sansMetadata });
+    const dediee = await lire(`/conversations/${CONV_ID}/messages/search?q=cible`, { jeu: sansMetadata });
+    expect(dediee.corps.data[0]).toHaveProperty('metadata', null);
+    expect(vue.corps.data[0].metadata).toBeUndefined();
+  });
+
+  it('la vue sert DAVANTAGE que la route dédiée, mais les deux servent les drapeaux de protection (#4885)', async () => {
+    const vue = await lire(`/conversations/${CONV_ID}/messages?view=search&q=cible`);
+    const dediee = await lire(`/conversations/${CONV_ID}/messages/search?q=cible`);
+    const champsVue = Object.keys(vue.corps.data[0]);
+    const champsDediee = Object.keys(dediee.corps.data[0]);
+    // #4885 — la recherche DÉDIÉE sert désormais les drapeaux de PROTECTION du
+    // message elle aussi (source unique avec la vue : `MESSAGE_PROTECTION_SELECT`
+    // / `mapMessageProtectionFields`, `messages-list-query.ts`). Avant ce
+    // correctif, un message à vue unique trouvé par la route dédiée arrivait
+    // sans le dire, et restait donc FORWARDABLE.
+    expect(champsDediee).toContain('isViewOnce');
+    expect(champsDediee).toContain('isBlurred');
+    expect(champsDediee).toContain('expiresAt');
+    expect(champsVue).toContain('isViewOnce');
+    expect(champsVue).toContain('isBlurred');
+    expect(champsVue).toContain('expiresAt');
+    // La vue reste plus riche : attachments, isEncrypted, pinnedAt, etc. —
+    // que la route dédiée de recherche ne sélectionne toujours pas.
+    expect(champsVue.length).toBeGreaterThan(champsDediee.length);
+  });
+
+  it('sert la VALEUR réelle des drapeaux, pas seulement leur présence — un message flouté reste `isBlurred: true` (#4885)', async () => {
+    // Le témoin ci-dessus ne prouve que la présence de la clé — un `undefined`
+    // aurait aussi bien traversé `toContain`. Le témoin décisif porte sur la
+    // CONSÉQUENCE : le client doit lire `true`, pas une clé vidée. Depuis
+    // #10429, un message à vue unique n'est plus TROUVÉ du tout (témoin
+    // suivant) : le flou, qui n'est pas une disparition, porte la preuve.
+    const protege = JEU.map((r) =>
+      r.id === M_OK ? { ...r, isBlurred: true, effectFlags: 2 } : r
+    );
+    const dediee = await lire(`/conversations/${CONV_ID}/messages/search?q=cible`, { jeu: protege });
+    const servi = dediee.corps.data.find((m: any) => m.id === M_OK);
+    expect(servi.isViewOnce).toBe(false);
+    expect(servi.isBlurred).toBe(true);
+    expect(servi.effectFlags).toBe(2);
+  });
+
+  it('un message à vue unique ne sort plus par aucune des deux surfaces de recherche (#10429)', async () => {
+    const vueUnique = JEU.map((r) =>
+      r.id === M_OK ? { ...r, isViewOnce: true, isBlurred: true, effectFlags: 5 } : r
+    );
+    const dediee = await lire(`/conversations/${CONV_ID}/messages/search?q=cible`, { jeu: vueUnique });
+    const vue = await lire(`/conversations/${CONV_ID}/messages?view=search&q=cible`, { jeu: vueUnique });
+    expect(ids(dediee.corps)).not.toContain(M_OK);
+    expect(ids(vue.corps)).not.toContain(M_OK);
+  });
+});
+
+describe('#4340 critère 3 — aucune route retirée, aucune route changée', () => {
+  it('`GET .../messages/search` répond toujours, avec son enveloppe historique', async () => {
+    const { statut, corps } = await lire(`/conversations/${CONV_ID}/messages/search?q=cible`);
+    expect(statut).toBe(200);
+    expect(Object.keys(corps)).toEqual(['success', 'data', 'cursorPagination']);
+  });
+
+  it('`GET .../pinned-messages` répond toujours, avec son enveloppe historique', async () => {
+    const { statut, corps } = await lire(`/conversations/${CONV_ID}/pinned-messages`);
+    expect(statut).toBe(200);
+    expect(Object.keys(corps)).toEqual(['success', 'data', 'pagination']);
+  });
+
+  it('`GET .../messages` sans `view` sert la chronologie, inchangée', async () => {
+    const { corps } = await lire(`/conversations/${CONV_ID}/messages`);
+    expect(ids(corps).sort()).toEqual([M_OK, M_SOUS_PLANCHER, M_MASQUE, M_ORDINAIRE].sort());
+    expect(Object.keys(corps)).toEqual(['success', 'data', 'pagination', 'cursorPagination', 'meta']);
+  });
+});

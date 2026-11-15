@@ -1,7 +1,6 @@
 package me.meeshy.app.settings
 
-import android.content.Intent
-import android.net.Uri
+import me.meeshy.ui.component.link.openExternalLink
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,11 +13,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -29,23 +29,35 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.settings.R
-import me.meeshy.sdk.model.licenses.OpenSourceLicense
+import me.meeshy.sdk.model.licenses.GloryFrameFontCredits
+import me.meeshy.sdk.model.licenses.LicenseNotice
+import me.meeshy.sdk.model.licenses.MeeshySourceOffer
+import me.meeshy.sdk.model.licenses.LicenseBadge
+import me.meeshy.sdk.model.licenses.OpenSourceLicenseCard
 import me.meeshy.sdk.model.licenses.OpenSourceLicenseCatalog
-import me.meeshy.sdk.model.licenses.OpenSourceLicenseGroup
 import me.meeshy.sdk.model.licenses.OpenSourceLicenseType
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 /**
  * Open-source licenses screen (feature-parity §L) — the Android port of the iOS `LicensesView`, but
@@ -57,8 +69,11 @@ import me.meeshy.ui.theme.MeeshyTheme
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LicensesScreen(onBack: () -> Unit) {
-    val groups = remember { OpenSourceLicenseCatalog.groups() }
+fun LicensesScreen(onBack: () -> Unit, sourceCommit: String? = null) {
+    val cards = remember { OpenSourceLicenseCatalog.cards() }
+    val offer = remember(sourceCommit) { MeeshySourceOffer.of(sourceCommit) }
+    val libsignalLinked = remember { isLibsignalLinked() }
+    var openedNotice by remember { mutableStateOf<LicenseNotice?>(null) }
 
     MeeshyBackground {
         Scaffold(
@@ -75,8 +90,8 @@ fun LicensesScreen(onBack: () -> Unit) {
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.settings_back),
+                                leadingNavigationIcon(),
+                                contentDescription = leadingNavigationLabel(stringResource(R.string.settings_back)),
                             )
                         }
                     },
@@ -91,28 +106,42 @@ fun LicensesScreen(onBack: () -> Unit) {
                     .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
             ) {
+                MeeshyLicenseSection(offer = offer, libsignalLinked = libsignalLinked, onOpenNotice = { openedNotice = it })
+
+                if (libsignalLinked) {
+                    LibsignalNoticesSection(onOpenNotice = { openedNotice = it })
+                }
+
                 Text(
-                    text = stringResource(R.string.licenses_intro),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MeeshyTheme.tokens.textMuted,
+                    text = stringResource(R.string.licenses_section_open_source).uppercase(),
+                    modifier = Modifier.semantics { heading() },
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MeeshyPalette.Indigo500,
                 )
 
-                groups.forEach { group ->
-                    LicenseGroupCard(group)
+                cards.forEach { card ->
+                    LicenseCard(card)
                 }
+
+                GloryFrameFontsCard()
 
                 Spacer(Modifier.height(MeeshySpacing.xl))
             }
         }
     }
+
+    openedNotice?.let { notice -> LicenseTextDialog(notice = notice, onDismiss = { openedNotice = null }) }
 }
 
 @Composable
-private fun LicenseGroupCard(group: OpenSourceLicenseGroup) {
-    val accent = group.type.accent()
+private fun GloryFrameFontsCard() {
+    val accent = OpenSourceLicenseType.OTHER.accent()
+    val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
         Text(
-            text = stringResource(group.type.labelRes()).uppercase(),
+            text = stringResource(R.string.licenses_glory_fonts_title).uppercase(),
+            modifier = Modifier.semantics { heading() },
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             color = accent,
@@ -125,38 +154,84 @@ private fun LicenseGroupCard(group: OpenSourceLicenseGroup) {
                 .padding(MeeshySpacing.lg),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
         ) {
-            group.licenses.forEach { license ->
-                LicenseRow(license = license, accent = accent)
+            GloryFrameFontCredits.CREDITS.forEach { credit ->
+                val description = stringResource(
+                    R.string.licenses_glory_fonts_row_description,
+                    credit.family,
+                    GloryFrameFontCredits.LICENSE_NAME,
+                    credit.copyright,
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { context.openExternalLink(credit.url) }
+                        .semantics(mergeDescendants = true) { contentDescription = description },
+                ) {
+                    Text(
+                        credit.family,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MeeshyTheme.tokens.textPrimary,
+                    )
+                    Text(
+                        GloryFrameFontCredits.LICENSE_NAME,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MeeshyTheme.tokens.textMuted,
+                    )
+                    Text(
+                        credit.copyright,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MeeshyTheme.tokens.textMuted,
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun LicenseRow(license: OpenSourceLicense, accent: Color) {
+private fun LicenseCard(card: OpenSourceLicenseCard) {
     val context = LocalContext.current
+    val accent = MeeshyPalette.Indigo500
+    val shape = RoundedCornerShape(MeeshyRadius.lg)
+    val typeName = card.typeName ?: stringResource(card.type.labelRes())
+    val label = stringResource(R.string.licenses_card_label, card.name, card.author, typeName)
+    val hint = stringResource(R.string.licenses_card_hint)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(license.url)))
-            },
+            .background(MeeshyTheme.tokens.backgroundSecondary, shape)
+            .border(1.dp, accent.copy(alpha = 0.15f), shape)
+            .clip(shape)
+            .clickable(onClickLabel = hint) { context.openExternalLink(card.url) }
+            .semantics(mergeDescendants = true) { contentDescription = label }
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                license.name,
-                style = MaterialTheme.typography.bodyMedium,
+                card.name,
+                style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = MeeshyTheme.tokens.textPrimary,
             )
             Text(
-                license.author,
+                card.author,
                 style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
                 color = MeeshyTheme.tokens.textMuted,
             )
         }
+        Text(
+            text = typeName,
+            modifier = Modifier
+                .background(card.badge.color(), CircleShape)
+                .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+        )
         Icon(
             Icons.AutoMirrored.Filled.OpenInNew,
             contentDescription = null,
@@ -164,6 +239,13 @@ private fun LicenseRow(license: OpenSourceLicense, accent: Color) {
             modifier = Modifier.size(16.dp),
         )
     }
+}
+
+private fun LicenseBadge.color(): Color = when (this) {
+    LicenseBadge.SUCCESS -> MeeshyPalette.Success
+    LicenseBadge.WARNING -> MeeshyPalette.Warning
+    LicenseBadge.INFO -> MeeshyPalette.Info
+    LicenseBadge.NEUTRAL -> MeeshyPalette.Neutral500
 }
 
 private fun OpenSourceLicenseType.labelRes(): Int = when (this) {

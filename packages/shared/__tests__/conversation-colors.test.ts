@@ -12,7 +12,7 @@
  * l'exactitude sur ≥ 5 cas dérivés à la main, ce qu'elle fait (7 palettes +
  * les cas de repli).
  */
-import { conversationAccentPalette, colorForName, authorAccentColor, ISO_TO_CONVERSATION_LANGUAGE } from '../utils/conversation-colors.js';
+import { conversationAccentPalette, colorForName, authorAccentColor, ISO_TO_CONVERSATION_LANGUAGE, DEFAULT_AUTHOR_ACCENT, VIBRANT_PALETTE } from '../utils/conversation-colors.js';
 
 const HEX_RE = /^#[0-9A-F]{6}$/;
 
@@ -263,5 +263,25 @@ describe('divergence Swift/Kotlin/documentation constatée (palette de repli)', 
     );
     // 39 couleurs distinctes doivent être atteignables sur un échantillon large.
     expect(distinctColorsAcrossManyNames.size).toBe(39);
+  });
+});
+
+describe("accent de repli AVANT qu'un auteur soit connu (source UNIQUE, jamais un littéral dupliqué)", () => {
+  // Trois surfaces web (en-tête de MON profil `routes/profile-sections.tsx`,
+  // liste de décors `components/decor-preview.tsx`, boutique de packs
+  // `components/pack-sheet.tsx`) affichaient l'indigo de marque EN DUR (`#6366F1`
+  // ×3) comme accent avant que `authorAccentColor(id, name)` ait une entrée.
+  // Ces trois littéraux étaient des jumelles qui divergeraient en silence si
+  // l'indigo de marque changeait. Source unique désormais : cette constante.
+  it('est un hex à six chiffres', () => {
+    expect(DEFAULT_AUTHOR_ACCENT).toMatch(HEX_RE);
+  });
+
+  it("est l'indigo de marque Meeshy (`#6366F1` — `ColorGeneration.swift` indigo500, le jeton `--ios-indigo-500`)", () => {
+    expect(DEFAULT_AUTHOR_ACCENT).toBe('#6366F1');
+  });
+
+  it('APPARTIENT à la palette vibrante (le repli est visuellement cohérent avec les accents calculés, et ne peut plus diverger de la palette en silence)', () => {
+    expect(VIBRANT_PALETTE).toContain(DEFAULT_AUTHOR_ACCENT.slice(1).toUpperCase());
   });
 });

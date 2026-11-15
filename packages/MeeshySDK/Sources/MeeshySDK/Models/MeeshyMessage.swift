@@ -1,0 +1,475 @@
+import Foundation
+
+// Extrait de `CoreModels.swift` (2 113 lignes, deux fois le budget 800-1100 de
+// la directive 2026-08-28, qui interdit d'AJOUTER à un fichier hors budget).
+// Le lot #4823 ajoute un champ à `MeeshyMessage` : on extrait d'abord, on
+// ajoute ensuite. Découpe par RESPONSABILITÉ : ce fichier tient le message de
+// conversation — son modèle, son init, son codage — et rien d'autre.
+
+// MARK: - Message Model
+
+public struct MeeshyMessage: Identifiable, Codable, Sendable {
+    public let id: String
+    /// Stable end-to-end identifier (`cid_<uuid v4 lowercase>`) used for
+    /// idempotent dedup with the gateway and for reconciliation between the
+    /// optimistic local row and the authoritative server message arriving via
+    /// socket ACK or `message:new` broadcast.
+    public let clientMessageId: String?
+    public let conversationId: String
+    public var senderId: String
+    /// Réécrire le texte sans repasser par le déchiffrement emporte sa
+    /// provenance : aucune empreinte ne survit au clair qu'elle couvrait.
+    public var content: String {
+        didSet {
+            guard contentOrigin != .wire, !contentOrigin.vouches(for: content, messageId: id) else { return }
+            contentOrigin = .wire
+        }
+    }
+    public var originalLanguage: String = "fr"
+    public var messageType: MessageType = .text
+    public var messageSource: MessageSource = .user
+    public var isEdited: Bool = false
+    public var editedAt: Date?
+    /// #11375 — `User.id` du modérateur de plateforme qui a fait la dernière
+    /// modification ; `nil` quand c'est l'auteur (voir `editedByModerator`).
+    public var editedById: String?
+    public var deletedAt: Date?
+    public var isDeleted: Bool { deletedAt != nil }
+    public var replyToId: String?
+    public var storyReplyToId: String?
+    public var forwardedFromId: String?
+    public var forwardedFromConversationId: String?
+    public var expiresAt: Date?
+    public var effects: MessageEffects = .none
+    public var maxViewOnceCount: Int?
+    public var viewOnceCount: Int = 0
+    public var pinnedAt: Date?
+
+    public var isViewOnce: Bool {
+        get { effects.flags.contains(.viewOnce) }
+        set { if newValue { effects.flags.insert(.viewOnce) } else { effects.flags.remove(.viewOnce) } }
+    }
+
+    public var isBlurred: Bool {
+        get { effects.flags.contains(.blurred) }
+        set { if newValue { effects.flags.insert(.blurred) } else { effects.flags.remove(.blurred) } }
+    }
+    public var pinnedBy: String?
+    public var isEncrypted: Bool = false
+    public var encryptionMode: String?
+    public let createdAt: Date
+    public var updatedAt: Date
+    public var attachments: [MeeshyMessageAttachment] = []
+    public var reactions: [MeeshyReaction] = []
+    public var replyTo: ReplyReference?
+    public var forwardedFrom: ForwardReference?
+    public var senderName: String?
+    public var senderUsername: String?
+    public var senderColor: String?
+    public var senderAvatarURL: String?
+    public var senderUserId: String?
+    /// L'auteur n'a pas de compte (`Participant.type == "anonymous"`).
+    ///
+    /// C'est LUI qui décide du glyphe fantôme, jamais le pseudo : le préfixe
+    /// `ano_` est lisible mais pas réservé, et un compte peut le porter.
+    public var senderIsAnonymous: Bool = false
+    /// L'auteur a PROUVÉ un compte (`sender.type` user ou bot, #10286). Ce
+    /// n'est pas l'inverse de `senderIsAnonymous`, qui n'affirme rien sur un
+    /// type absent : ici l'absence ne prouve rien, donc ses liens restent
+    /// inertes (fail-closed). Ne gouverne QUE les liens.
+    public var senderHasAccount: Bool = true
+    /// Le contour d'avatar équipé de l'auteur (#10713) ; `nil` sans contour ou ancien serveur.
+    public var senderRing: ServedProfileDecorItem?
+    public var deliveryStatus: DeliveryStatus = .sent
+    public var isMe: Bool = false
+    public var deliveredToAllAt: Date?
+    public var readByAllAt: Date?
+    public var deliveredCount: Int = 0
+    public var readCount: Int = 0
+    /// Authoritative denominator for the all-or-nothing delivery indicator: the
+    /// server's count of ACTIVE recipients (conversation participants excluding
+    /// this message's sender), projected per message by the gateway. `0` means
+    /// the server did not provide it (older payload, socket `message:new`, or an
+    /// optimistic local row) — the display then falls back to `memberCount − 1`.
+    /// Using the server value removes the client's dependency on a possibly
+    /// stale local membership count.
+    public var recipientCount: Int = 0
+
+    // Pre-computed "HH:mm" string set at ingestion time — avoids DateFormatter in bubble body
+    public var cachedTimeString: String?
+
+    /// Structured call facts for a call-summary system message
+    /// (`messageSource == .system`). Drives the rich, actionable call bubble.
+    /// `nil` for ordinary messages.
+    public var callSummary: CallSummaryMetadata?
+    /// Avis d'arrivée porté par ce message système (`metadata.kind ==
+    /// "member-joined"`). Le rendu dédié court-circuite le rendu ordinaire —
+    /// une arrivée n'est pas une prise de parole.
+    public var joinNotice: JoinNoticeMetadata?
+    /// Avis de capture (`metadata.kind == "content-capture"`, #9617) : la
+    /// phrase se compose chez le lecteur (`CaptureNoticeText`), `content`
+    /// n'en est que le repli français.
+    public var captureNotice: CaptureNoticeMetadata?
+    /// Ligne d'arrivées regroupées de Meeshy Global (`metadata.kind ==
+    /// "members-arrived"`, #7759) : la phrase se compose chez le lecteur,
+    /// `content` n'en est que le repli français.
+    public var arrivalsNotice: ArrivalsNoticeMetadata?
+    /// Avis de bascule du chiffrement, daté de son époque (#12846).
+    public var encryptionSwitchNotice: EncryptionSwitchNoticeMetadata?
+
+    /// Lieu partagé, restitué depuis la colonne `locationJson` du cache GRDB
+    /// (`APIMessage.location` hissé côté serveur). `nil` pour un message sans
+    /// position.
+    public var location: SharedPlace?
+
+    /// Sticker porté par le message (#4823), restitué depuis la colonne
+    /// `stickerJson` du cache GRDB ou depuis `APIMessage.sticker`. `nil` pour
+    /// un message sans sticker — et pour un sticker NON RENDABLE, ramené à
+    /// l'absence dès le décodage (`MessageSticker.ifWireWorthy` : un `stickerId` de
+    /// bibliothèque seul est gardé, son image jointe le rend, #10655) : une bulle
+    /// ne dessine jamais un sticker vide.
+    public var sticker: MessageSticker?
+
+    /// `[rawURL: token]` outbound-link tracking map carried from the gateway
+    /// (`APIMessage.trackedLinkMap`). Empty when the message has no tracked
+    /// links. Consumed by the bubble renderer (tappable `/l/<token>` rewrite)
+    /// and the embedded-video façade destination. Backward-compatible: cached
+    /// rows predating the field decode to `[:]`.
+    public var trackedLinkMap: [String: String] = [:]
+
+    /// **Ce message est en train d'être DÉTRUIT, sous les yeux du lecteur**
+    /// (#7467).
+    ///
+    /// Un vrai état, pas un doublon d'`expiresAt` : l'échéance dit QUAND le
+    /// message meurt, celui-ci dit qu'on est en train de le regarder mourir.
+    /// Il ne vaut `true` que pendant `EphemeralBurn.duration`, entre l'échéance
+    /// et le retrait de la ligne — le temps que la combustion se voie.
+    ///
+    /// Hors du `Codable` (défaut `false`, jamais encodé) : il n'a aucun sens à
+    /// survivre à la session, et un message restauré du cache en état de
+    /// combustion serait invisible pour rien.
+    public var isBurning: Bool = false
+
+    /// **Le lecteur a touché cette vue unique pour la lire, ici et maintenant**
+    /// (#7618). Tant qu'il vaut `false`, le message est SCELLÉ
+    /// (`isViewOnceSealed`) : aucun mode de lecture ne rend son contenu.
+    ///
+    /// Hors du `Codable`, comme `isBurning` : la révélation appartient à la
+    /// visite, jamais au cache. L'hôte la pose depuis son état de visite.
+    public var isViewOnceRevealed: Bool = false
+
+    /// **Ce que la couche appareil d'un message hybride dit du texte servi**
+    /// (#14369), `nil` tant qu'aucune enveloppe n'a été ouverte pour lui sur
+    /// cet appareil. Hors du `Codable`, comme `isBurning` : le verdict se
+    /// recalcule à chaque visite depuis le coffre libsignal, jamais du cache.
+    public var deviceLayerIntegrity: HybridDeviceLayerIntegrity? = nil
+
+    /// **L'identifiant client que la passerelle a servi pour ce message**
+    /// (#14369), restitué de la colonne GRDB du même nom : une ligne du magasin
+    /// ne porte pas `clientMessageId`, que l'envoi et la réconciliation lisent
+    /// à d'autres fins. Hors du `Codable`. La couche appareil d'un hybride s'y
+    /// rattache (`servedClientMessageId ?? clientMessageId`).
+    public var servedClientMessageId: String? = nil
+
+    /// **Quand CE lecteur a ouvert cette vue unique** (#7579), `nil` sinon.
+    /// Restitué de la colonne GRDB du même nom, ou posé par le serveur
+    /// (`APIMessage.consumedByMe`). Non nul, il est permanent : la bulle dit
+    /// `(1) · Déjà ouvert`, et le contenu est purgé.
+    public var viewOnceOpenedAt: Date?
+
+    /// **D'où vient `content` SUR CET APPAREIL** (#11382) : `.wire` pour tout
+    /// texte reçu, `.decryptedOnDevice` posée par le SEUL déchiffrement
+    /// (`adoptDecryptedContent`) et liée par empreinte au clair ET à l'id.
+    /// Hors de l'init : aucun producteur ne la déclare. Persistée dans le
+    /// cache SEULEMENT à côté du clair qu'elle couvre, absente (`.wire`) sur
+    /// une ligne écrite avant elle ; réécrire `content` la retire.
+    public internal(set) var contentOrigin: MessageContentOrigin = .wire
+
+    public enum DeliveryStatus: String, Codable, Sendable {
+        case sending    // optimistic, not yet sent
+        case invisible  // < 200ms, status hidden in UI (debounce — spec §6.2)
+        case clock      // 200ms-5s, "clock" icon (small spinner) shown
+        case slow       // 5s-30s, slow connection state (spec §6.2 timeouts)
+        case sent       // server confirmed (single check)
+        case delivered  // recipient received (double gray check)
+        case read       // recipient read (double blue check)
+        case failed     // send failed, retry available
+
+        public func isBetterThan(_ other: DeliveryStatus) -> Bool {
+            switch (self, other) {
+            case (.read, .sent), (.read, .delivered), (.read, .sending),
+                 (.read, .invisible), (.read, .clock), (.read, .slow):
+                return true
+            case (.delivered, .sent), (.delivered, .sending),
+                 (.delivered, .invisible), (.delivered, .clock), (.delivered, .slow):
+                return true
+            case (.sent, .sending), (.sent, .invisible), (.sent, .clock), (.sent, .slow):
+                return true
+            case (.slow, .sending), (.slow, .invisible), (.slow, .clock):
+                return true
+            case (.clock, .sending), (.clock, .invisible):
+                return true
+            case (.invisible, .sending):
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
+    public enum MessageType: String, Codable, CaseIterable, Sendable {
+        case text, image, file, audio, video, location
+    }
+
+    public enum MessageSource: String, Codable, CaseIterable, Sendable {
+        case user, system, ads, app, agent, authority
+    }
+
+    public init(id: String = UUID().uuidString, clientMessageId: String? = nil,
+                conversationId: String, senderId: String = "",
+                content: String, originalLanguage: String = "fr",
+                messageType: MessageType = .text, messageSource: MessageSource = .user,
+                isEdited: Bool = false, editedAt: Date? = nil, editedById: String? = nil, deletedAt: Date? = nil,
+                replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil,
+                expiresAt: Date? = nil, effects: MessageEffects = .none, maxViewOnceCount: Int? = nil,
+                viewOnceCount: Int = 0, pinnedAt: Date? = nil, pinnedBy: String? = nil,
+                isEncrypted: Bool = false, encryptionMode: String? = nil,
+                createdAt: Date = Date(), updatedAt: Date = Date(),
+                attachments: [MeeshyMessageAttachment] = [], reactions: [MeeshyReaction] = [],
+                replyTo: ReplyReference? = nil, forwardedFrom: ForwardReference? = nil,
+                senderName: String? = nil, senderUsername: String? = nil, senderColor: String? = nil, senderAvatarURL: String? = nil, senderUserId: String? = nil,
+                senderIsAnonymous: Bool = false,
+                senderHasAccount: Bool = true,
+                senderRing: ServedProfileDecorItem? = nil,
+                deliveryStatus: DeliveryStatus = .sent, isMe: Bool = false,
+                deliveredToAllAt: Date? = nil, readByAllAt: Date? = nil,
+                deliveredCount: Int = 0, readCount: Int = 0, recipientCount: Int = 0,
+                cachedTimeString: String? = nil,
+                callSummary: CallSummaryMetadata? = nil,
+                joinNotice: JoinNoticeMetadata? = nil,
+                captureNotice: CaptureNoticeMetadata? = nil,
+                arrivalsNotice: ArrivalsNoticeMetadata? = nil,
+                encryptionSwitchNotice: EncryptionSwitchNoticeMetadata? = nil,
+                location: SharedPlace? = nil,
+                sticker: MessageSticker? = nil,
+                trackedLinkMap: [String: String] = [:]) {
+        self.id = id; self.clientMessageId = clientMessageId
+        self.conversationId = conversationId; self.senderId = senderId
+        self.content = content
+        self.originalLanguage = originalLanguage; self.messageType = messageType; self.messageSource = messageSource
+        self.isEdited = isEdited; self.editedAt = editedAt; self.editedById = editedById; self.deletedAt = deletedAt
+        self.replyToId = replyToId; self.storyReplyToId = storyReplyToId; self.forwardedFromId = forwardedFromId
+        self.forwardedFromConversationId = forwardedFromConversationId
+        self.expiresAt = expiresAt; self.effects = effects; self.maxViewOnceCount = maxViewOnceCount
+        self.viewOnceCount = viewOnceCount
+        self.pinnedAt = pinnedAt; self.pinnedBy = pinnedBy
+        self.isEncrypted = isEncrypted; self.encryptionMode = encryptionMode
+        self.createdAt = createdAt; self.updatedAt = updatedAt
+        self.attachments = attachments; self.reactions = reactions; self.replyTo = replyTo; self.forwardedFrom = forwardedFrom
+        self.senderName = senderName; self.senderUsername = senderUsername; self.senderColor = senderColor; self.senderAvatarURL = senderAvatarURL; self.senderUserId = senderUserId
+        self.senderIsAnonymous = senderIsAnonymous
+        self.senderHasAccount = senderHasAccount
+        self.senderRing = senderRing
+        self.deliveryStatus = deliveryStatus; self.isMe = isMe
+        self.deliveredToAllAt = deliveredToAllAt; self.readByAllAt = readByAllAt
+        self.deliveredCount = deliveredCount; self.readCount = readCount
+        self.recipientCount = recipientCount
+        self.cachedTimeString = cachedTimeString
+        self.callSummary = callSummary
+        self.joinNotice = joinNotice
+        self.captureNotice = captureNotice
+        self.arrivalsNotice = arrivalsNotice
+        self.encryptionSwitchNotice = encryptionSwitchNotice
+        self.location = location
+        self.sticker = sticker
+        self.trackedLinkMap = trackedLinkMap
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, clientMessageId, conversationId, senderId, content, originalLanguage
+        case messageType, messageSource, isEdited, editedAt, editedById, deletedAt
+        case replyToId, storyReplyToId, forwardedFromId, forwardedFromConversationId
+        case expiresAt, effects, maxViewOnceCount, viewOnceCount
+        case pinnedAt, pinnedBy, isEncrypted, encryptionMode
+        case createdAt, updatedAt, attachments, reactions
+        case replyTo, forwardedFrom
+        case senderName, senderUsername, senderColor, senderAvatarURL, senderUserId, senderIsAnonymous, senderHasAccount, senderRing
+        case deliveryStatus, isMe
+        case deliveredToAllAt, readByAllAt, deliveredCount, readCount, recipientCount
+        case cachedTimeString
+        case callSummary
+        case joinNotice
+        case captureNotice
+        case arrivalsNotice
+        case encryptionSwitchNotice
+        case location
+        case sticker
+        case trackedLinkMap
+        case contentOrigin
+        // Legacy keys for migration from old cached data
+        case isViewOnce, isBlurred
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        clientMessageId = try c.decodeIfPresent(String.self, forKey: .clientMessageId)
+        conversationId = try c.decode(String.self, forKey: .conversationId)
+        senderId = try c.decodeIfPresent(String.self, forKey: .senderId) ?? ""
+        content = try c.decodeIfPresent(String.self, forKey: .content) ?? ""
+        originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage) ?? "fr"
+        messageType = try c.decodeIfPresent(MessageType.self, forKey: .messageType) ?? .text
+        messageSource = try c.decodeIfPresent(MessageSource.self, forKey: .messageSource) ?? .user
+        isEdited = try c.decodeIfPresent(Bool.self, forKey: .isEdited) ?? false
+        editedAt = try c.decodeIfPresent(Date.self, forKey: .editedAt)
+        editedById = try c.decodeIfPresent(String.self, forKey: .editedById)
+        deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
+        replyToId = try c.decodeIfPresent(String.self, forKey: .replyToId)
+        storyReplyToId = try c.decodeIfPresent(String.self, forKey: .storyReplyToId)
+        forwardedFromId = try c.decodeIfPresent(String.self, forKey: .forwardedFromId)
+        forwardedFromConversationId = try c.decodeIfPresent(String.self, forKey: .forwardedFromConversationId)
+        expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
+        effects = try c.decodeIfPresent(MessageEffects.self, forKey: .effects) ?? .none
+        maxViewOnceCount = try c.decodeIfPresent(Int.self, forKey: .maxViewOnceCount)
+        viewOnceCount = try c.decodeIfPresent(Int.self, forKey: .viewOnceCount) ?? 0
+        pinnedAt = try c.decodeIfPresent(Date.self, forKey: .pinnedAt)
+        pinnedBy = try c.decodeIfPresent(String.self, forKey: .pinnedBy)
+        isEncrypted = try c.decodeIfPresent(Bool.self, forKey: .isEncrypted) ?? false
+        encryptionMode = try c.decodeIfPresent(String.self, forKey: .encryptionMode)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
+        attachments = try c.decodeIfPresent([MeeshyMessageAttachment].self, forKey: .attachments) ?? []
+        reactions = try c.decodeIfPresent([MeeshyReaction].self, forKey: .reactions) ?? []
+        replyTo = try c.decodeIfPresent(ReplyReference.self, forKey: .replyTo)
+        forwardedFrom = try c.decodeIfPresent(ForwardReference.self, forKey: .forwardedFrom)
+        senderName = try c.decodeIfPresent(String.self, forKey: .senderName)
+        senderUsername = try c.decodeIfPresent(String.self, forKey: .senderUsername)
+        senderColor = try c.decodeIfPresent(String.self, forKey: .senderColor)
+        senderAvatarURL = try c.decodeIfPresent(String.self, forKey: .senderAvatarURL)
+        senderUserId = try c.decodeIfPresent(String.self, forKey: .senderUserId)
+        senderIsAnonymous = try c.decodeIfPresent(Bool.self, forKey: .senderIsAnonymous) ?? false
+        deliveryStatus = try c.decodeIfPresent(DeliveryStatus.self, forKey: .deliveryStatus) ?? .sent
+        isMe = try c.decodeIfPresent(Bool.self, forKey: .isMe) ?? false
+        // #10286 — blob antérieur : compte inconnu ⇒ liens inertes chez autrui.
+        senderHasAccount = try c.decodeIfPresent(Bool.self, forKey: .senderHasAccount)
+            ?? (isMe || messageSource != .user)
+        senderRing = try? c.decodeIfPresent(ServedProfileDecorItem.self, forKey: .senderRing)
+        deliveredToAllAt = try c.decodeIfPresent(Date.self, forKey: .deliveredToAllAt)
+        readByAllAt = try c.decodeIfPresent(Date.self, forKey: .readByAllAt)
+        deliveredCount = try c.decodeIfPresent(Int.self, forKey: .deliveredCount) ?? 0
+        readCount = try c.decodeIfPresent(Int.self, forKey: .readCount) ?? 0
+        recipientCount = try c.decodeIfPresent(Int.self, forKey: .recipientCount) ?? 0
+        cachedTimeString = try c.decodeIfPresent(String.self, forKey: .cachedTimeString)
+        // Tolerant: a malformed / future-shape call-summary blob must not fail
+        // the whole cached-message decode (mirrors the APIMessage path).
+        callSummary = try? c.decodeIfPresent(CallSummaryMetadata.self, forKey: .callSummary)
+        // Même tolérance que callSummary — et surtout : sans ce décodage, le
+        // round-trip GRDB PERDAIT l'avis d'arrivée (CodingKey déclarée mais
+        // jamais lue) et toute conversation rouverte retombait sur la vue
+        // système générique (icône téléphone) avec le repli français.
+        joinNotice = try? c.decodeIfPresent(JoinNoticeMetadata.self, forKey: .joinNotice)
+        captureNotice = try? c.decodeIfPresent(CaptureNoticeMetadata.self, forKey: .captureNotice)
+        arrivalsNotice = try? c.decodeIfPresent(ArrivalsNoticeMetadata.self, forKey: .arrivalsNotice); encryptionSwitchNotice = try? c.decodeIfPresent(EncryptionSwitchNoticeMetadata.self, forKey: .encryptionSwitchNotice)
+        // Same tolerance as callSummary: a malformed location blob must not fail the decode.
+        location = try? c.decodeIfPresent(SharedPlace.self, forKey: .location)
+        // Même tolérance — et la règle « non rendable ⇒ absent » appliquée dès
+        // la relecture du cache, pour qu'une ligne ancienne ou malformée ne
+        // ressuscite jamais un sticker vide.
+        let cachedSticker: MessageSticker? = try? c.decodeIfPresent(MessageSticker.self, forKey: .sticker)
+        sticker = cachedSticker?.ifWireWorthy
+        // Backward-compatible: rows cached before this field decode to `[:]`.
+        trackedLinkMap = try c.decodeIfPresent([String: String].self, forKey: .trackedLinkMap) ?? [:]
+        let cachedOrigin = (try? c.decodeIfPresent(MessageContentOrigin.self, forKey: .contentOrigin)) ?? .wire
+        // Legacy migration: merge old isViewOnce/isBlurred bools into effects
+        if let legacyViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce), legacyViewOnce {
+            effects.flags.insert(.viewOnce)
+        }
+        if let legacyBlurred = try c.decodeIfPresent(Bool.self, forKey: .isBlurred), legacyBlurred {
+            effects.flags.insert(.blurred)
+        }
+        // Une empreinte qui ne couvre plus le texte relu se perd (#11382).
+        contentOrigin = adoptingCachedOrigin(cachedOrigin)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encodeIfPresent(clientMessageId, forKey: .clientMessageId)
+        try c.encode(conversationId, forKey: .conversationId)
+        try c.encode(senderId, forKey: .senderId)
+        try c.encode(EndToEndDiskPlaintextLaw.persistableContent(of: self), forKey: .content)
+        try c.encode(originalLanguage, forKey: .originalLanguage)
+        try c.encode(messageType, forKey: .messageType)
+        try c.encode(messageSource, forKey: .messageSource)
+        try c.encode(isEdited, forKey: .isEdited)
+        try c.encodeIfPresent(editedAt, forKey: .editedAt)
+        try c.encodeIfPresent(editedById, forKey: .editedById)
+        try c.encodeIfPresent(deletedAt, forKey: .deletedAt)
+        try c.encodeIfPresent(replyToId, forKey: .replyToId)
+        try c.encodeIfPresent(storyReplyToId, forKey: .storyReplyToId)
+        try c.encodeIfPresent(forwardedFromId, forKey: .forwardedFromId)
+        try c.encodeIfPresent(forwardedFromConversationId, forKey: .forwardedFromConversationId)
+        try c.encodeIfPresent(expiresAt, forKey: .expiresAt)
+        try c.encode(effects, forKey: .effects)
+        try c.encodeIfPresent(maxViewOnceCount, forKey: .maxViewOnceCount)
+        try c.encode(viewOnceCount, forKey: .viewOnceCount)
+        try c.encodeIfPresent(pinnedAt, forKey: .pinnedAt)
+        try c.encodeIfPresent(pinnedBy, forKey: .pinnedBy)
+        try c.encode(isEncrypted, forKey: .isEncrypted)
+        try c.encodeIfPresent(encryptionMode, forKey: .encryptionMode)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(attachments, forKey: .attachments)
+        try c.encode(reactions, forKey: .reactions)
+        try c.encodeIfPresent(replyTo, forKey: .replyTo)
+        try c.encodeIfPresent(forwardedFrom, forKey: .forwardedFrom)
+        try c.encodeIfPresent(senderName, forKey: .senderName)
+        try c.encodeIfPresent(senderUsername, forKey: .senderUsername)
+        try c.encodeIfPresent(senderColor, forKey: .senderColor)
+        try c.encodeIfPresent(senderAvatarURL, forKey: .senderAvatarURL)
+        try c.encodeIfPresent(senderUserId, forKey: .senderUserId)
+        if senderIsAnonymous { try c.encode(true, forKey: .senderIsAnonymous) }
+        try c.encode(senderHasAccount, forKey: .senderHasAccount)
+        try c.encodeIfPresent(senderRing, forKey: .senderRing)
+        try c.encode(deliveryStatus, forKey: .deliveryStatus)
+        try c.encode(isMe, forKey: .isMe)
+        try c.encodeIfPresent(deliveredToAllAt, forKey: .deliveredToAllAt)
+        try c.encodeIfPresent(readByAllAt, forKey: .readByAllAt)
+        try c.encode(deliveredCount, forKey: .deliveredCount)
+        try c.encode(readCount, forKey: .readCount)
+        try c.encode(recipientCount, forKey: .recipientCount)
+        try c.encodeIfPresent(cachedTimeString, forKey: .cachedTimeString)
+        try c.encodeIfPresent(callSummary, forKey: .callSummary)
+        try c.encodeIfPresent(joinNotice, forKey: .joinNotice)
+        try c.encodeIfPresent(captureNotice, forKey: .captureNotice)
+        try c.encodeIfPresent(arrivalsNotice, forKey: .arrivalsNotice)
+        try c.encodeIfPresent(encryptionSwitchNotice, forKey: .encryptionSwitchNotice)
+        try c.encodeIfPresent(location, forKey: .location)
+        try c.encodeIfPresent(sticker, forKey: .sticker)
+        if !trackedLinkMap.isEmpty {
+            try c.encode(trackedLinkMap, forKey: .trackedLinkMap)
+        }
+    }
+
+    public var text: String { content }
+    public var timestamp: Date { createdAt }
+    public var attachment: MeeshyMessageAttachment? { attachments.first }
+
+    /// #11375 — « modifié par un modérateur » plutôt que « modifié » : la
+    /// dernière modification est celle d'un TIERS (modérateur de plateforme),
+    /// enregistrée par la passerelle. Miroir de `editedByThirdParty`
+    /// (`packages/shared/utils/message-edit-attribution.ts`).
+    public var editedByModerator: Bool {
+        isEdited && !(editedById ?? "").isEmpty
+    }
+
+    /// Whether the message is ephemeral and has not yet expired.
+    public var isEphemeralActive: Bool {
+        guard let expiresAt else { return false }
+        return expiresAt > Date()
+    }
+}
+
+public typealias MeeshyChatMessage = MeeshyMessage
+
+extension MeeshyMessage: CacheIdentifiable {}

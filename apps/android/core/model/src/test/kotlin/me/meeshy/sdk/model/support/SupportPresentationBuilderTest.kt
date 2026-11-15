@@ -117,4 +117,39 @@ class SupportPresentationBuilderTest {
         val value = infoValue(SupportPresentationBuilder.build(params(osRelease = "   ")), SupportInfoKey.PLATFORM)
         assertThat(value).isEqualTo(SupportPresentationBuilder.PLATFORM_PREFIX)
     }
+
+    @Test
+    fun build_helpSection_offersTheRateAppAction() {
+        val help = SupportPresentationBuilder.build(params()).linkSections
+            .first { it.key == SupportSectionKey.HELP }
+        assertThat(help.actions).containsExactly(SupportActionKind.RATE_APP)
+    }
+
+    @Test
+    fun build_contactAndReportSections_haveNoAction() {
+        val others = SupportPresentationBuilder.build(params()).linkSections
+            .filter { it.key != SupportSectionKey.HELP }
+        assertThat(others.flatMap { it.actions }).isEmpty()
+    }
+
+    @Test
+    fun ratingFallbackUrl_opensThePlayListingOfTheApplication() {
+        assertThat(SupportPresentationBuilder.playListingUrl("me.meeshy.app"))
+            .isEqualTo("https://play.google.com/store/apps/details?id=me.meeshy.app")
+    }
+
+    @Test
+    fun ratingFallbackUrl_blankApplicationId_usesTheNativeApplication() {
+        assertThat(SupportPresentationBuilder.playListingUrl("  "))
+            .isEqualTo("https://play.google.com/store/apps/details?id=me.meeshy.app")
+    }
+
+    @Test
+    fun build_infoSection_isVersionBuildPlatformWithAndroidPlatform() {
+        val rows = SupportPresentationBuilder.build(params(osRelease = "15")).infoRows
+        assertThat(rows.map { it.key })
+            .containsExactly(SupportInfoKey.VERSION, SupportInfoKey.BUILD, SupportInfoKey.PLATFORM)
+            .inOrder()
+        assertThat(rows.last().value).isEqualTo("Android 15")
+    }
 }

@@ -1,0 +1,518 @@
+import SwiftUI
+import MeeshyUI
+import AVFoundation
+import Combine
+import MeeshySDK
+
+// MARK: - Extracted from UniversalComposerBar.swift
+
+// ============================================================================
+// MARK: - Envoi & détection de langue
+// ============================================================================
+//
+// Découpage mécanique du fichier (#4104, budget 800–1100 lignes/fichier) —
+// porte l'acte d'envoi et ce qui l'entoure : bouton d'action (micro/envoi),
+// transition tourbillon, emojis rapides, bouton d'envoi, logique d'envoi,
+// détection de langue en temps réel, et l'expansion/mise au focus du
+// champ. Aucun changement de comportement, seulement un déplacement de
+// lignes.
+
+extension UniversalComposerBar {
+
+    // ========================================================================
+    // MARK: - Action Button: Mic / Send
+    // ========================================================================
+
+    /// Always MOUNTS the same 44×44 slot — it never collapses, so nothing
+    /// reflows the moment content lands (bug 2026-05-28: « on ne voit pas le
+    /// bouton envoyer », caused by the slot disappearing entirely when
+    /// empty). Directive porteur 2026-08-26 (#3920) wants the button itself
+    /// gone from view until there is something to send — so idle state fades
+    /// the button to fully INVISIBLE (opacity 0), not merely dimmed.
+    ///
+    /// #3927 — tant qu'il n'y a rien à envoyer (et hors édition), le slot
+    /// affiche plutôt deux emojis rapides (`quickEmojiButtons`) au lieu du
+    /// bouton invisible : l'espace réservé sert désormais à quelque chose.
+    /// La bascule entre les deux contenus, et l'apparition/disparition du
+    /// bouton d'envoi lui-même, passent par `tourbillonTransition` — un
+    /// grossissement/rotation à l'arrivée, l'inverse au départ.
+    /// **Le slot s'ÉLARGIT pour deux cibles, il ne les comprime pas**
+    /// (demande porteur 2026-08-31).
+    ///
+    /// Il avait été taillé pour UN bouton — 44 pt — et la bascule de #3927 y a
+    /// serré deux pastilles et leur gouttière : mesuré au simulateur, chacune
+    /// rendait 30×30, sous le minimum tactile de 44 pt (dimension 5). La cause
+    /// n'était pas la taille des pastilles mais celle du SLOT, restée celle
+    /// d'avant leur arrivée.
+    ///
+    /// Ce que le champ de texte cède, il ne le cède QUE tant qu'il est vide :
+    /// `showsQuickEmoji` retombe à la première frappe, le slot revient à 44 et
+    /// le champ reprend sa largeur. La réduction porte donc exactement sur
+    /// l'état où le champ n'a rien à montrer.
+    static let sendSlotWidth: CGFloat = 44
+    /// La largeur du cadre des emojis rapides, que la ligne lui réserve.
+    static let quickEmojiSlotWidth: CGFloat = QuickEmojiGrid.frameWidth
+
+    /// **L'hôte sait envoyer un cadre à mots** — sans lui, l'appui long du
+    /// bouton d'envoi n'ouvrirait rien, et un geste qui ne fait rien ne se
+    /// pose pas (loi 4).
+    var offersTextStickers: Bool {
+        onSendTextSticker != nil && hasText && !isEditMode
+    }
+
+    /// Ce que l'emplacement de 44 points MONTRE — la règle est dans
+    /// `ComposerActionSlot`, éprouvée état par état ; ici on ne fait que la
+    /// rendre.
+    var actionSlot: ComposerActionSlot {
+        ComposerActionSlot.resolve(
+            hasText: hasText,
+            hasOtherContent: effectiveIsRecording || !allAttachments.isEmpty || externalHasContent,
+            isEditMode: isEditMode,
+            offersQuickEmoji: showEmoji
+        )
+    }
+
+    @ViewBuilder
+    var actionButton: some View {
+        let isReady = (effectiveIsRecording || hasContent) && !externalIsSending
+        let slot = actionSlot
+        // `slot == .quickEmoji` implique déjà « rien à envoyer » — donc
+        // `isReady == false`. Le redoubler ici ferait croire à deux conditions
+        // là où il n'y en a qu'une, et la seconde ne pourrait jamais tomber.
+        let showsQuickEmoji = slot == .quickEmoji
+
+        ZStack {
+            if showsQuickEmoji {
+                quickEmojiButtons
+                    .transition(tourbillonTransition)
+            } else {
+                sendButton
+                    .opacity(isReady ? 1.0 : 0)
+                    .allowsHitTesting(isReady)
+                    .transition(tourbillonTransition)
+            }
+        }
+        .frame(width: showsQuickEmoji ? quickEmojiBandWidth : Self.sendSlotWidth, height: 44)
+        .animation(.spring(response: ComposerSlotMotion.response, dampingFraction: ComposerSlotMotion.damping), value: showsQuickEmoji)
+        .animation(.spring(response: ComposerSlotMotion.response, dampingFraction: ComposerSlotMotion.damping), value: hasContent)
+        .animation(.spring(response: 0.25, dampingFraction: ComposerSlotMotion.damping), value: sendBounce)
+        // La feuille vit sur l'EMPLACEMENT, toujours monté, et pas sur la
+        // grille : envoyer vide le champ puis remplit l'emplacement d'autre
+        // chose — une feuille posée sur la grille disparaîtrait avec elle.
+        .sheet(isPresented: $showQuickEmojiPicker) {
+            EmojiKeyboardPanel(style: isDark ? .dark : .light) { emoji in
+                showQuickEmojiPicker = false
+                sendQuickEmoji(emoji)
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    // ========================================================================
+    // MARK: - Envoi d'un cadre à mots (#5326)
+    // ========================================================================
+
+    /// **Le texte part DESSINÉ dans le cadre, et le champ se vide.**
+    ///
+    /// L'usage est noté ici, au moment de l'envoi, dans le MÊME magasin que la
+    /// palette (`StickerUsageStore.noteUse`) : c'est ce qui met ce cadre en
+    /// tête de la feuille au prochain appui long (`ComposerTextStickerChoice`).
+    ///
+    /// Le champ se vide SANS attendre l'hôte : contrairement à `handleSend`,
+    /// rien ici ne peut être refusé plus loin — le texte est déjà rendu dans
+    /// une image, et la même trimmed-string part au même instant. Le
+    /// `textBinding` est poussé d'abord pour que l'hôte ne relise pas un
+    /// brouillon que la barre vient d'effacer.
+    func sendTextSticker(_ template: StickerTemplate) {
+        let mots = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !mots.isEmpty, let envoi = onSendTextSticker else { return }
+        onAnyInteraction?()
+        StickerUsageStore.shared.noteUse(.template(template))
+        envoi(template, mots)
+        text = ""
+        textBinding?.wrappedValue = ""
+        textAnalyzer.reset()
+        if let id = storyId {
+            onSaveDraft?(id, "", [])
+        }
+        HapticFeedback.light()
+    }
+
+    // ========================================================================
+    // MARK: - Tourbillon Transition
+    // ========================================================================
+
+    /// #3927 — apparition/disparition en tourbillon : grossit en tournant à
+    /// l'arrivée, rétrécit en tournant en SENS INVERSE au départ. Remplace le
+    /// simple fondu pour le contenu de `actionButton` (bouton d'envoi ET
+    /// emojis rapides, quel que soit celui qui entre/sort).
+    private var tourbillonTransition: AnyTransition {
+        .asymmetric(
+            insertion: .modifier(
+                active: TourbillonEffect(scale: ComposerSlotMotion.startScale, rotation: .degrees(-ComposerSlotMotion.rotationDegrees), opacity: 0),
+                identity: TourbillonEffect(scale: 1, rotation: .zero, opacity: 1)
+            ),
+            removal: .modifier(
+                active: TourbillonEffect(scale: ComposerSlotMotion.startScale, rotation: .degrees(ComposerSlotMotion.rotationDegrees), opacity: 0),
+                identity: TourbillonEffect(scale: 1, rotation: .zero, opacity: 1)
+            )
+        )
+    }
+
+    private struct TourbillonEffect: ViewModifier {
+        let scale: CGFloat
+        let rotation: Angle
+        let opacity: Double
+
+        func body(content: Content) -> some View {
+            content
+                .scaleEffect(scale)
+                .rotationEffect(rotation)
+                .opacity(opacity)
+        }
+    }
+
+    // ========================================================================
+    // MARK: - Quick-Send Emoji (idle-state replacement for the send button)
+    // ========================================================================
+
+    /// #3927 — deux emojis rapides occupent l'emplacement du bouton d'envoi
+    /// tant qu'il n'y a rien à envoyer, sourcés par le même tracker que les
+    /// réactions rapides (`EmojiUsageTracker`, `MessageOverlayMenu.swift`) —
+    /// source unique du « plus utilisé », jamais une seconde liste divergente.
+    private static let quickSendDefaultEmojis = ["😂", "❤️", "👍", "😮", "😢", "🔥"]
+
+    private var quickSendEmojis: [String] {
+        RecentEmojiHistory.row(history: RecentEmojiStore.load(), defaults: Self.quickSendDefaultEmojis)
+    }
+
+    /// Le défilement en cours, borné ; la bande s'élargit de ce qu'il a gagné
+    /// vers la gauche, et le GARDE au relâcher : elle ne revient au repos
+    /// qu'au texte touché ou à l'émoji choisi (#12440).
+    private var quickEmojiLiveScroll: CGFloat {
+        QuickEmojiGrid.clampedScroll(quickEmojiScroll + quickEmojiDrag, itemCount: QuickEmojiGrid.row(quickSendEmojis).count)
+    }
+
+    var quickEmojiBandWidth: CGFloat {
+        QuickEmojiExpansion.bandWidth(sharedWidth: quickEmojiFieldWidth + Self.quickEmojiSlotWidth, restingWidth: Self.quickEmojiSlotWidth,
+                                      leftwardTravel: QuickEmojiExpansion.leftwardTravel(
+                                          held: quickEmojiHeld,
+                                          gestureTravel: quickEmojiDrag == 0 ? 0 : quickEmojiScroll - quickEmojiLiveScroll))
+    }
+
+    @ViewBuilder
+    private var quickEmojiButtons: some View {
+        // Trois et demi visibles, le reste au défilement (#10842). Défilement
+        // MAIN — mesuré au simulateur, un `ScrollView` posé ici ne défilait
+        // pas dans la conversation (les glissés arrivaient, la vue ne bougeait
+        // pas). Le glissé est prioritaire dès 8 pt : un émoji survolé au
+        // relâcher ne part jamais.
+        let emojis = QuickEmojiGrid.row(quickSendEmojis)
+        HStack(spacing: QuickEmojiGrid.spacing) {
+            ForEach(emojis, id: \.self) { emoji in
+                Button {
+                    guard QuickEmojiArrivalGuard.acceptsTap(arrivedAt: quickEmojiArrivedAt, now: Date()) else { return }
+                    sendQuickEmoji(emoji)
+                } label: {
+                    Text(emoji)
+                        .font(MeeshyFont.emoji(QuickEmojiGrid.emojiSize))
+                        .frame(width: QuickEmojiGrid.cell, height: QuickEmojiGrid.cell)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                // L'appui long ouvre la feuille des emojis : l'emoji
+                // choisi part directement (#7931). En
+                // `simultaneousGesture` pour ne pas manger le tap.
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+                        HapticFeedback.medium()
+                        showQuickEmojiPicker = true
+                    }
+                )
+                .accessibilityLabel(
+                    String(localized: "composer.quickEmoji.label", defaultValue: "Envoyer directement", bundle: .main) + " " + emoji
+                )
+                .accessibilityAction(named: Text(String(localized: "composer.quickEmoji.more",
+                                                        defaultValue: "Choisir un autre emoji",
+                                                        bundle: .main))) {
+                    showQuickEmojiPicker = true
+                }
+                .accessibilityIdentifier(MeeshyA11yID.composerQuickEmoji)
+            }
+        }
+        .padding(.horizontal, QuickEmojiGrid.inset)
+        .fixedSize()
+        .offset(x: QuickEmojiExpansion.contentOffset(scroll: quickEmojiLiveScroll, bandWidth: quickEmojiBandWidth,
+                                                     restingWidth: Self.quickEmojiSlotWidth))
+        .frame(width: quickEmojiBandWidth, height: QuickEmojiGrid.rowHeight, alignment: .leading)
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
+        .contentShape(Rectangle())
+        .highPriorityGesture(
+            DragGesture(minimumDistance: 8, coordinateSpace: .global)
+                .onChanged { quickEmojiDrag = $0.translation.width }
+                .onEnded { value in
+                    let landing = QuickEmojiGrid.clampedScroll(quickEmojiScroll + value.predictedEndTranslation.width,
+                                                               itemCount: emojis.count)
+                    let held = QuickEmojiExpansion.heldWidth(after: .released(bandWidth: quickEmojiBandWidth),
+                                                             restingWidth: Self.quickEmojiSlotWidth)
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        quickEmojiHeld = held
+                        quickEmojiScroll = landing
+                        quickEmojiDrag = 0
+                    }
+                }
+        )
+        .adaptiveLiquidGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
+        // La rangée revient à l'emplacement même du bouton d'envoi : le second
+        // appui d'un double appui sur « Envoyer » tombe sur elle (#7985).
+        // …et elle revient au DÉBUT : le dernier émoji employé est le premier.
+        .onAppear { quickEmojiArrivedAt = Date(); quickEmojiScroll = 0; quickEmojiHeld = 0 }
+    }
+
+    /// Envoi direct d'un emoji : pose `text` puis réutilise `handleSend()` —
+    /// SOURCE UNIQUE du dispatch (`onCustomSend`/`onSendMessage`/`onSend`),
+    /// identique au bouton d'envoi. Ne réimplémente jamais cette
+    /// ramification : les hôtes réels (ex. `ConversationView`) câblent
+    /// toujours `onCustomSend`, qui lit l'état courant du champ — le
+    /// contourner enverrait le champ VIDE au lieu de l'emoji.
+    ///
+    /// `text = emoji` seul ne suffit PAS (retour porteur 2026-08-27, bug
+    /// vécu : le tap laissait l'emoji DANS le champ au lieu d'envoyer) :
+    /// `text` est un `@State` LOCAL, synchronisé vers `textBinding` (source
+    /// lue par `onCustomSend` chez l'hôte, ex. `composerText.text`) par un
+    /// `.adaptiveOnChange(of: text)` — donc APRÈS ce tour de run loop.
+    /// `handleSend()` appelle `onCustomSend()` SYNCHRONEMENT, avant que ce
+    /// sync différé n'ait tourné : l'hôte lisait encore l'ancien texte (vide).
+    /// Pousser `textBinding` ICI, à la MÊME frappe, ferme cet écart.
+    ///
+    /// Vider `text` (local) APRÈS `handleSend()` est tout aussi nécessaire :
+    /// sans ça, `text` reste à `emoji` pour ce tour de run loop, et le MÊME
+    /// `.adaptiveOnChange(of: text)` — désormais différé — re-pousse `emoji`
+    /// dans `textBinding` APRÈS que l'hôte l'a vidé (`composerText.text =
+    /// ""` dans `sendMessageWithAttachments()`), ressuscitant l'emoji dans
+    /// le champ juste après l'envoi. `text` transite `"" → emoji → ""` dans
+    /// la MÊME passe synchrone : SwiftUI ne diffuse que le changement NET
+    /// au prochain rendu, donc ce second `onChange` ne se déclenche jamais.
+    private func sendQuickEmoji(_ emoji: String) {
+        EmojiUsageTracker.recordUsage(emoji: emoji)
+        collapseQuickEmojiBand(after: .emojiChosen)
+        quickEmojiScroll = 0
+        text = emoji
+        textBinding?.wrappedValue = emoji
+        handleSend()
+        text = ""
+    }
+
+    /// La bande élargie revient au repos, et le champ à sa position (#12440).
+    func collapseQuickEmojiBand(after event: QuickEmojiExpansion.Event) {
+        guard quickEmojiHeld != 0 else { return }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            quickEmojiHeld = QuickEmojiExpansion.heldWidth(after: event, restingWidth: Self.quickEmojiSlotWidth)
+        }
+    }
+
+    // See UniversalComposerBar+Recording.swift for textInputField
+
+    // ========================================================================
+    // MARK: - Send Button
+    // ========================================================================
+
+    var sendButton: some View {
+        let editColors = [MeeshyColors.warning, MeeshyColors.warning.opacity(0.75)]
+        // Le bouton d'envoi porte l'accent de la CONVERSATION (ou du post /
+        // de la story qui héberge le composer), miroir exact du bouton
+        // « Écrire » de la variante minimisée. `editColors` reste sémantique.
+        let sendColors = [servedAccent, servedSecondary]
+        let colors = isEditMode ? editColors : sendColors
+        let icon = isEditMode ? "checkmark" : "paperplane.fill"
+
+        return Button {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
+                sendBounce = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                sendBounce = false
+                handleSend()
+            }
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: colors,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 44, height: 44)
+                    .shadow(color: colors[0].opacity(0.4), radius: sendBounce ? 12 : 8, x: 0, y: 4)
+
+                Image(systemName: icon)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(Color.white)
+                    .rotationEffect(isEditMode ? .zero : .degrees(sendBounce ? 55 : 45))
+                    .offset(
+                        x: isEditMode ? 0 : (sendBounce ? 2 : -1),
+                        y: isEditMode ? 0 : (sendBounce ? -2 : 1)
+                    )
+            }
+            .scaleEffect(sendBounce ? ComposerSlotMotion.sendBounceScale : 1)
+        }
+        .frame(width: 44, height: 44)
+        // Les cadres à mots de #5326, à un appui long du bouton d'envoi
+        // (directive porteur 2026-09-25). En `simultaneousGesture` : enchaîné
+        // avec `.onLongPressGesture`, il mangerait le tap sur certaines
+        // versions d'iOS — le geste le plus fréquent paierait pour le plus rare.
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+                guard offersTextStickers else { return }
+                HapticFeedback.medium()
+                showTextStickerSheet = true
+            }
+        )
+        .accessibilityAction(named: Text(String(localized: "composer.textSticker.browse",
+                                                defaultValue: "Choisir un autre cadre",
+                                                bundle: .main))) {
+            guard offersTextStickers else { return }
+            showTextStickerSheet = true
+        }
+        .accessibilityLabel(isEditMode
+            ? String(localized: "composer.send.editLabel", defaultValue: "Enregistrer les modifications", bundle: .main)
+            : String(localized: "composer.send.label", defaultValue: "Envoyer le message", bundle: .main))
+        .accessibilityHint(isEditMode
+            ? ""
+            : String(localized: "composer.send.hint", defaultValue: "Envoie le texte saisi", bundle: .main))
+        .accessibilityIdentifier(MeeshyA11yID.composerSend)
+    }
+
+    // ========================================================================
+    // MARK: - Send Logic
+    // ========================================================================
+
+    func handleSend() {
+        onAnyInteraction?()
+        RecentEmojiStore.record(RecentEmojiHistory.emojis(in: text))
+
+        if let onCustomSend {
+            onCustomSend()
+            // **Le champ ressuscitait son texte juste après l'envoi** (#5961).
+            //
+            // `text` est un `@State` LOCAL, poussé vers `textBinding` par un
+            // `.adaptiveOnChange(of: text)` — donc APRÈS ce tour de run loop.
+            // `onCustomSend()` vient de rendre la main : l'hôte a vidé SA
+            // source (`composerText.text = ""`), et la synchro différée y
+            // re-pousserait l'ancien `text`. Le texte réapparaît, l'auteur tape
+            // la suite, et l'envoi suivant emporte tout — un message par
+            // accumulation.
+            //
+            // Le dépôt connaissait ce piège : le doc-comment de
+            // `sendQuickEmoji` le décrit mot pour mot et le referme, pour
+            // l'emoji SEUL. Le geste d'envoi ordinaire, son voisin, ne l'avait
+            // jamais reçu.
+            //
+            // **On ALIGNE, on ne vide pas.** Vider inconditionnellement
+            // perdrait la saisie quand l'hôte REFUSE l'envoi — une édition
+            // qu'il garde pour correction. La barre ne suit qu'une décision
+            // déjà prise : si l'hôte a vidé sa source, elle s'aligne.
+            if ComposerSendAlignment.shouldClearLocalText(hostText: textBinding?.wrappedValue,
+                                                          localText: text) {
+                text = ""
+                textAnalyzer.reset()
+            }
+            HapticFeedback.light()
+            return
+        }
+
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty || !allAttachments.isEmpty else { return }
+
+        if let onSendMessage = onSendMessage {
+            onSendMessage(trimmed, allAttachments, currentLanguage)
+        }
+
+        if let onSend = onSend, !trimmed.isEmpty {
+            onSend(trimmed)
+        }
+
+        text = ""
+        attachments.removeAll()
+        isFocused = false
+        textAnalyzer.reset()
+        if let id = storyId {
+            onSaveDraft?(id, "", [])
+        }
+        HapticFeedback.light()
+    }
+
+    // ========================================================================
+    // MARK: - Helpers
+    // ========================================================================
+
+    var mutedColor: Color {
+        style == .dark ? .white.opacity(0.5) : theme.textMuted
+    }
+
+    /// Notify parent that composer has content requiring timer pause (text, attachments, or recording).
+    func notifyContentChange() {
+        onHasContentChange?(hasText || !attachments.isEmpty || effectiveIsRecording)
+    }
+
+    // ========================================================================
+    // MARK: - Language detection
+    // ========================================================================
+
+    /// Propagate the detected language (or an explicit user override) to
+    /// `currentLanguage` and notify the parent. Called in real-time as
+    /// `TextAnalyzer.language` updates — restores the « detection visible
+    /// before the 18-word lock » behaviour that was previously gated on
+    /// `isLanguageLocked` alone.
+    ///
+    /// - Parameter force: skip the confidence floor (used when the analyzer
+    ///   transitions to locked or the user picks a language explicitly).
+    func applyDetectedLanguage(force: Bool = false) {
+        let resolution = ComposerLanguageResolver.resolve(
+            current: currentLanguage,
+            override: textAnalyzer.languageOverride?.code,
+            detected: textAnalyzer.language?.code,
+            confidence: textAnalyzer.languageConfidence,
+            force: force
+        )
+        guard let next = resolution else { return }
+        currentLanguage = next
+        onLanguageChange?(next)
+    }
+
+    // ========================================================================
+    // MARK: - Minimize / Expand Logic
+    // ========================================================================
+
+    func expandComposer() {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            isMinimized = false
+        }
+        // Show keyboard after a short delay. The attachment carousel and the
+        // keyboard are now mutually exclusive surfaces, so expanding goes
+        // straight to the keyboard — the user opens the carousel via (+).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            isFocused = true
+        }
+        onExpand?()
+    }
+
+    // MARK: - Focus the text field (bring the keyboard back)
+
+    /// Brings the system keyboard back, dismissing the attachment carousel if it
+    /// was open. Wired to a tap on the text field so the user can always summon
+    /// the keyboard by tapping where they type — even mid-carousel.
+    func focusTextField() {
+        if showAttachOptions {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                showAttachOptions = false
+            }
+        }
+        if !isFocused {
+            isFocused = true
+        }
+    }
+}

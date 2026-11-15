@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "conversation.encryption.detail.switchToEndToEndConfirmTitle", "androidName": "encryption_detail_switch_to_end_to_end_confirm_title", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversation.encryption.detail.switchToEndToEndConfirm", "androidName": "encryption_detail_switch_to_end_to_end_confirm", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversation.encryption.create.footer", "androidName": "encryption_switch_end_to_end_final", "status": "adopted"},
+        {"catalog": "app", "iosKey": "common.cancel", "androidName": "encryption_confirm_cancel", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversation.encryption.detail.directAlreadyEndToEnd", "androidName": "encryption_detail_direct_already_end_to_end", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversation.encryption.detail.directNotAPair", "androidName": "encryption_detail_direct_not_a_pair", "status": "adopted"},
+        {"androidName": "encryption_activation_restricted", "status": "android-only"},
+        {"androidName": "encryption_already_enabled", "status": "android-only"}
+      ]
+    }
+  }
+}

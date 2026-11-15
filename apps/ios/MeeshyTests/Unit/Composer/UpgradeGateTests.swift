@@ -191,6 +191,11 @@ final class UpgradeGateTests: XCTestCase {
                        "Le bootstrap ne connaît pas de storeUrl : le bouton doit quand même mener quelque part.")
     }
 
+    func test_defaultStoreURL_estLaFicheQuiRepond() {
+        XCTAssertEqual(UpgradeGateView.defaultStoreURL.absoluteString, "https://apps.apple.com/app/id6760208591",
+                       "`apps.apple.com/app/meeshy` rendait 404 : un utilisateur bloqué par la porte tombait sur une erreur (#8802).")
+    }
+
     func test_storeURL_quandLeServeurEnDonneUne_laPrefere() {
         let avecUrl = UpgradeRequirement(minVersion: "1.2.0", storeUrl: "https://apps.apple.com/fr/app/meeshy/id123")
 
@@ -222,7 +227,9 @@ final class UpgradeGateTests: XCTestCase {
     /// c'est exactement le genre d'oubli qu'aucun test de comportement ne
     /// rattrape — les deux racines ne partagent pas une ligne.
     func test_lesDeuxRacines_montentLaPorte_enFullScreenCover() throws {
-        for racine in ["Meeshy/Features/Main/Views/RootView.swift",
+        // Sur iPhone la porte est la dernière ligne de `RootSheetsLayer`
+        // (RootLayers/RootViewLayers.swift, #5837) ; l'iPad la garde sur sa racine.
+        for racine in ["Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift",
                        "Meeshy/Features/Main/Views/iPadRootView.swift"] {
             let texte = try source(racine)
 
@@ -257,7 +264,7 @@ final class UpgradeGateTests: XCTestCase {
     /// ci-dessous est précisément ce qu'écrirait quelqu'un qui rajouterait une
     /// sortie (`dismiss()`, un `isPresented = false`, un bouton « Plus tard »).
     func test_upgradeGateView_nOffreAucuneSortie() throws {
-        let texte = try source("Meeshy/Features/Main/Composer/UpgradeGateView.swift")
+        let texte = try source("Meeshy/Features/Composer/UpgradeGateView.swift")
 
         for sortie in ["\\.dismiss", "dismiss()", "isPresented = false",
                        "presentationDragIndicator", "interactiveDismissDisabled(false)"] {
@@ -267,5 +274,22 @@ final class UpgradeGateTests: XCTestCase {
                 + "Une porte avec une poignée est un avertissement, pas une rupture."
             )
         }
+    }
+
+    /// VoiceOver (#13954) : le titre, le message et le bouton « Mettre à jour »
+    /// sont lus ; seule l'icône décorative est muette. Pose le contrat par la
+    /// source — une icône non masquée ferait annoncer « flèche vers le haut »
+    /// avant le titre, et un titre masqué laisserait la porte sans nom.
+    func test_upgradeGateView_voiceOverLitLesTextesEtTaisLIcone() throws {
+        let texte = try source("Meeshy/Features/Composer/UpgradeGateView.swift")
+
+        XCTAssertTrue(texte.contains("\"upgradeGate.title\""), "le titre doit être une chaîne localisée lue")
+        XCTAssertTrue(texte.contains("\"upgradeGate.message\""), "le message doit être une chaîne localisée lue")
+        XCTAssertTrue(texte.contains("\"upgradeGate.action\""), "le bouton doit porter son libellé localisé")
+        XCTAssertEqual(
+            texte.components(separatedBy: ".accessibilityHidden(true)").count - 1, 1,
+            "une seule chose est muette : l'icône décorative — rien d'autre ne doit disparaître de VoiceOver"
+        )
+        XCTAssertTrue(texte.contains("Image(systemName: \"arrow.up.circle.fill\")"))
     }
 }

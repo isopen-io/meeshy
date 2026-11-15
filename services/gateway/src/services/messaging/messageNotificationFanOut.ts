@@ -1,19 +1,34 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { isEndToEndMode } from './e2eePlaintextAdmission';
+import { MESSAGE_ATTACHMENT_ORDER } from '../attachments/attachmentIncludes';
 import {
   maskedAttachment,
   protectedPreview,
   type NotificationActorProfile,
+  type NotificationAttachmentSummary,
   type PreviewPrismBasis,
-} from '../notifications/NotificationService';
+} from '../notifications/notification-preview';
+import { contactCardNameFromFileName, isContactCardAttachment } from '@meeshy/shared/utils/vcard';
+import { deviceEnvelopeForPush } from '../messages/push-envelope-protection';
 import {
   transcriptTranslationTexts,
   transcriptTranslationTracks,
 } from '@meeshy/shared/types/attachment-audio';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
+import { resolveContentDetail, shareLinkInviteLookup } from '../notifications/content-detail';
 import {
   retractMessageNotifications,
   type RetractedNotificationAnnouncer,
 } from './retractMessageNotifications';
+import { loadQuoteCascadeAudience } from './quoteCascade';
+import { settleWithConcurrency } from '../../utils/settle-with-concurrency';
+// La borne — et la mesure qui la justifie — vit avec le COÛT qu'elle borne
+// (`createNotification`), pas avec l'éventail qui l'a mesurée la première
+// (#17081). Elle n'est PAS réexportée d'ici : un ré-export ne traverse pas un
+// double qui énumère ses clés à la main, et ce module est doublé partout.
+import { NOTIFICATION_FANOUT_CONCURRENCY } from '../notifications/notificationFanOutBudget';
+import { pendingRequestUserIds } from './pendingMessageRequests';
+
 
 export type { NotificationActorProfile };
 
@@ -38,8 +53,13 @@ export interface FanOutMessage {
   readonly isBlurred?: boolean | null;
   readonly effectFlags?: number | null;
   readonly expiresAt?: Date | null;
+  /** La durée DÉCLARÉE (secondes) — le suffixe de la bannière (#8344). */
+  readonly ephemeralDuration?: number | null;
   readonly createdAt?: Date | null;
   readonly encryptedContent?: string | null;
+  /** #8857 — `location`, `sticker`, `postReplyTo` : ce que la bannière DÉTAILLE. */
+  readonly metadata?: unknown;
+  readonly storyReplyToId?: string | null;
 }
 
 /**
@@ -61,6 +81,8 @@ export type FanOutPrisma = Pick<
   | 'messageAttachment'
   | 'userConversationPreferences'
   | 'notification'
+  | 'messageStatusEntry'
+  | 'conversationShareLink'
 >;
 
 /**
@@ -182,6 +204,62 @@ const attachmentTypeOf = (mimeType?: string | null): 'image' | 'video' | 'audio'
   mimeType?.startsWith('audio/') ? 'audio' : 'document';
 
 /**
+ * #14309 — le FICHIER qu'une bannière de message attache, et rien de plus
+ * (décision porteur du 2026-11-01) : une image ne voyage plus qu'en VIGNETTE,
+ * jamais en haute définition ; une vidéo, jamais (sa vignette part par
+ * `contentDetail.videoThumbnailUrl`) ; un document, jamais. Un audio garde son
+ * fichier : il ne se VOIT pas, et l'écoute depuis la notification (#10641)
+ * s'adresse à lui.
+ *
+ * La vignette remplace le fichier : son type annoncé est celui d'une vignette
+ * du serveur (JPEG), et aucune taille ne l'accompagne — celle de l'original
+ * décrirait un autre fichier (cf. `servedAttachmentMedia`).
+ */
+function pushedAttachmentFile(first: { readonly mimeType?: string | null; readonly fileUrl?: string | null; readonly thumbnailUrl?: string | null } | undefined): {
+  readonly firstAttachmentUrl?: string;
+  readonly firstAttachmentMimeType?: string;
+  readonly firstAttachmentIsThumbnail?: true;
+} {
+  const mime = first?.mimeType ?? '';
+  if (mime.startsWith('audio/')) {
+    return { firstAttachmentUrl: first?.fileUrl || undefined, firstAttachmentMimeType: mime || undefined };
+  }
+  if (mime.startsWith('image/') && first?.thumbnailUrl) {
+    return { firstAttachmentUrl: first.thumbnailUrl, firstAttachmentMimeType: 'image/jpeg', firstAttachmentIsThumbnail: true };
+  }
+  return { firstAttachmentMimeType: mime || undefined };
+}
+
+type BannerAttachmentRow = {
+  readonly mimeType?: string | null;
+  readonly fileName?: string | null;
+  readonly originalName?: string | null;
+  readonly pageCount?: number | null;
+  readonly lineCount?: number | null;
+};
+
+/**
+ * Ce qu'une pièce jointe DIT dans une bannière (#8122). Une carte de visite se
+ * dit par son contact — le nom lu dans son nom d'ORIGINE, jamais le nom de
+ * fichier STOCKÉ (`contact_<…>_<uuid>.vcf`), qui ne part plus avec l'annonce ;
+ * `contact.vcf` quand aucun nom n'est lisible.
+ */
+function bannerAttachmentOf(att: BannerAttachmentRow): NotificationAttachmentSummary {
+  if (!isContactCardAttachment({ mimeType: att.mimeType, fileName: att.originalName ?? att.fileName })) {
+    return {
+      type: attachmentTypeOf(att.mimeType),
+      filename: att.fileName,
+      mimeType: att.mimeType,
+      originalName: att.originalName,
+      pageCount: att.pageCount,
+      lineCount: att.lineCount,
+    };
+  }
+  const contactName = contactCardNameFromFileName(att.originalName);
+  return { type: 'contact', filename: `${contactName ?? 'contact'}.vcf`, contactName };
+}
+
+/**
  * Un éventail, isolé de ses frères.
  *
  * Réponse, mentions et messages réguliers sont indépendants par construction —
@@ -280,6 +358,7 @@ async function listeningRegularRecipients(
  * envoi réussi en 500. `onError` laisse l'appelant journaliser dans le contexte
  * de sa requête.
  */
+
 export async function notifyMessageRecipients(params: {
   prisma: FanOutPrisma;
   notificationService: MessageNotificationTarget | null | undefined;
@@ -316,19 +395,55 @@ export async function notifyMessageRecipients(params: {
   } = params;
   if (!notificationService) return;
 
-  const validatedMentionUserIds = params.validatedMentionUserIds ?? [];
-
   try {
+    // #8630 — une réponse à ce qui est déjà MORT pour un membre (flamme-œil
+    // consommée, éphémère échu, transitivement) est morte pour lui dès sa
+    // naissance : aucune bannière ne lui annonce son texte.
+    const deadFor = await loadQuoteCascadeAudience(prisma, message.replyToId);
+
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: {
+        title: true,
+        type: true,
+        encryptionMode: true,
+        participants: {
+          where: { isActive: true, type: 'user' },
+          select: { userId: true, messageRequestAt: true },
+        },
+      },
+    });
+    if (!conversation) return;
+
+    // #14107 (MSG-02, MIN-03) — une DEMANDE de message en attente ne sonne pas :
+    // son destinataire la découvre dans sa boîte de demandes, ni bannière, ni
+    // mention, ni réponse ne la lui annoncent.
+    // Le prédicat est PARTAGÉ avec l'éventail de notification d'une ÉDITION
+    // depuis #17074 : il était formulé ici et nulle part ailleurs, si bien que
+    // l'édition laissait sonner ce que l'envoi taisait.
+    const silenced = new Set<string>([
+      ...deadFor.keys(),
+      ...pendingRequestUserIds(conversation.participants),
+    ]);
+    const validatedMentionUserIds = (params.validatedMentionUserIds ?? []).filter((id) => !silenced.has(id));
+
     // Le contenu qu'un message PROTÉGÉ (éphémère, vue unique, flouté, chiffré)
     // est autorisé à montrer sur un écran verrouillé — jamais le contenu lui-même.
+    //
+    // #12518 — le chiffrement se lit sur le MODE DE LA CONVERSATION, pas sur les
+    // seuls champs de la ligne : un message hérité, ou écrit par un chemin qui
+    // n'a pas posé `encryptionMode`, ne rouvre pas l'écran verrouillé.
     const protectedOverride = protectedPreview({
       messageType: message.messageType,
-      isEncrypted: message.isEncrypted === true || message.encryptionMode === 'e2ee',
+      isEncrypted:
+        message.isEncrypted === true
+        || isEndToEndMode(message.encryptionMode)
+        || isEndToEndMode(conversation.encryptionMode),
       isViewOnce: message.isViewOnce,
       isBlurred: message.isBlurred,
       effectFlags: message.effectFlags,
       expiresAt: message.expiresAt ?? null,
-      createdAt: message.createdAt ?? null,
+      ephemeralDuration: message.ephemeralDuration ?? null,
     });
     const notificationPreview = protectedOverride?.preview ?? processedContent;
     const notificationLocKey = protectedOverride?.locKey;
@@ -342,22 +457,9 @@ export async function notifyMessageRecipients(params: {
     const sender = await resolveNotificationSender({ prisma, senderParticipantId });
     if (!sender) return;
 
-    const conversation = await prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: {
-        title: true,
-        type: true,
-        participants: {
-          where: { isActive: true, type: 'user' },
-          select: { userId: true },
-        },
-      },
-    });
-    if (!conversation) return;
-
     const memberIds = conversation.participants
       .map(p => p.userId)
-      .filter((id): id is string => id !== null);
+      .filter((id): id is string => id !== null && !silenced.has(id));
 
     // L'auteur du message auquel celui-ci répond, en `User.id`. Un auteur
     // anonyme n'a pas de ligne `Notification` possible : il reste `null`.
@@ -380,8 +482,11 @@ export async function notifyMessageRecipients(params: {
     // attache le média en natif (waveform audio, preview image, thumb vidéo).
     const attachments = await prisma.messageAttachment.findMany({
       where: { messageId: message.id },
+      orderBy: MESSAGE_ATTACHMENT_ORDER,
       select: {
-        mimeType: true, fileName: true, fileSize: true, duration: true,
+        // #10641 — l'identité sur laquelle la coque Android rapporte une écoute faite depuis la notification.
+        id: true,
+        mimeType: true, fileName: true, originalName: true, fileSize: true, duration: true,
         width: true, height: true, fileUrl: true, transcription: true,
         // Cycle 123 — les traductions de la TRANSCRIPTION, que la bannière d'un
         // vocal sert : elles vivent ici, jamais sur `Message.translations`.
@@ -390,6 +495,10 @@ export async function notifyMessageRecipients(params: {
         // `select` ne lisait pas : `MessageAttachment` porte les siens, et ils
         // ne suivent pas ceux du message qui la porte. Cf. `maskedAttachment`.
         isViewOnce: true, isBlurred: true, effectFlags: true,
+        // #8857 — la vignette d'une VIDÉO, déjà en base : la bannière la montre.
+        thumbnailUrl: true,
+        // #14309 — ce que la synthèse du corps compte : pages d'un document, lignes d'un texte.
+        pageCount: true, lineCount: true,
       },
     });
 
@@ -422,12 +531,24 @@ export async function notifyMessageRecipients(params: {
     // ces champs, répondre par un vocal ou mentionner quelqu'un sous une photo
     // sans légende poussait une bannière au corps VIDE, pendant que les autres
     // membres du fil recevaient la transcription.
+    // Cycle 125 / #16551 — la garde ci-dessus décide si le média du message a le
+    // droit de voyager ; elle ne dit RIEN des pièces 2..n. `maskedAttachment` le
+    // dit chez elle : « le fail-closed de ce domaine vit dans l'appelant, qui
+    // doit poser la question pour CHAQUE pièce et non pour la première ». Ce
+    // site ne la posait que pour `first`, puis remettait la liste ENTIÈRE —
+    // nature, nom de fichier, nom d'origine, pages, lignes, nom du contact — et
+    // comptait les pièces masquées dans `attachmentCount`. Une photo ordinaire
+    // suivie d'un PDF à VUE UNIQUE annonçait donc « 2 pièces » et le NOM du PDF.
+    //
+    // L'inventaire qui voyage est donc celui des pièces NON masquées. Le verdict
+    // reste par pièce et ne s'élargit pas : une pièce masquée au rang 1 garde le
+    // fail-closed EN BLOC de `mediaMayTravel` (`first` est alors masqué), parce
+    // qu'un correctif de confidentialité ne doit jamais faire voyager plus qu'avant.
+    const travellingAttachments = attachments.filter((att) => !maskedAttachment(att));
+
     const bannerMedia = mediaMayTravel
       ? {
-          attachments: attachments.map(att => ({
-            type: attachmentTypeOf(att.mimeType),
-            filename: att.fileName,
-          })),
+          attachments: travellingAttachments.map(bannerAttachmentOf),
           firstAttachmentFileSize: first?.fileSize,
           firstAttachmentDuration: first?.duration,
           firstAttachmentWidth: first?.width,
@@ -441,16 +562,34 @@ export async function notifyMessageRecipients(params: {
     // d'usage aujourd'hui — cf. le suivi du lot.
     const richPushMedia = mediaMayTravel
       ? {
-          hasAttachments: attachments.length > 0,
-          attachmentCount: attachments.length,
+          hasAttachments: travellingAttachments.length > 0,
+          attachmentCount: travellingAttachments.length,
           firstAttachmentType: attachmentTypeOf(first?.mimeType),
-          firstAttachmentFilename: first?.fileName,
-          firstAttachmentUrl: first?.fileUrl || undefined,
-          firstAttachmentMimeType: first?.mimeType || undefined,
+          firstAttachmentFilename: first ? bannerAttachmentOf(first).filename ?? undefined : undefined,
+          ...pushedAttachmentFile(first),
+          firstAttachmentId: first?.id || undefined,
         }
       : {};
 
     const attachmentInfo = { ...bannerMedia, ...richPushMedia };
+
+    // #8857 — le DÉTAIL du contenu (position, contact, invitation, lien,
+    // sticker, vignette vidéo, réponse à une story), sous le MÊME prédicat que
+    // le média : une position ou une invitation est le contenu d'un message
+    // protégé au même titre que sa photo. Lu UNE fois pour les trois lots ;
+    // best-effort — un détail manquant appauvrit la bannière, il ne la tait pas.
+    const contentDetail = mediaMayTravel
+      ? await resolveContentDetail(
+          {
+            text: processedContent,
+            metadata: message.metadata,
+            storyReplyToId: message.storyReplyToId,
+            firstAttachment: first,
+          },
+          shareLinkInviteLookup(prisma),
+        ).catch(() => null)
+      : null;
+    const detailFields = contentDetail ? { contentDetail } : {};
 
     // Phase A — un vocal déjà transcrit affiche son texte sur l'écran verrouillé ;
     // le fichier reste attaché pour la lecture inline.
@@ -523,6 +662,42 @@ export async function notifyMessageRecipients(params: {
         }
       : previewBasis;
 
+    // #17080 — l'ENVELOPPE de l'appareil, élue UNE fois pour les trois lots.
+    //
+    // Elle ne partait que sur `regular`, et pour la raison exacte du cycle 126 :
+    // **elle ne compose aucune chaîne.** Ce n'est ni un texte, ni un
+    // qualificatif de texte — c'est la charge que le LECTEUR déchiffre. On ne la
+    // trouve donc pas en cherchant « qui compose ce corps ? », la question qui a
+    // guidé les cycles 125 bis à 128.
+    //
+    // Conséquence mesurée : la NSE ne remplace le corps que si
+    // `userInfo["encryptedContent"]` est non vide, et sa branche de repli
+    // (`locKey`) exige `isEncryptedPush`, dérivé du MÊME champ. Avec `''`,
+    // aucune des deux ne tire — une RÉPONSE ou une MENTION en conversation
+    // chiffrée restait « 🔒 💬 » à vie, pendant qu'un message simple du même
+    // fil arrivait déchiffré.
+    //
+    // Aucune audience n'est élargie : les destinataires de ces deux lots sortent
+    // de `memberIds`, et ce sont exactement ceux que `regular` aurait servis si
+    // `alreadyNotified` ne les en avait pas retirés.
+    // Les cinq champs de protection sont ÉNUMÉRÉS ici parce que la garde les
+    // exige : un appelant qui n'en dit rien ne compile pas (cf. le doc-comment
+    // de `deviceEnvelopeForPush`). `FanOutMessage` les déclare optionnels, donc
+    // la coercition vers `null` se fait AU SITE, visible, et non en silence
+    // dans la garde.
+    const deviceEnvelope = deviceEnvelopeForPush(
+      {
+        encryptedContent: message.encryptedContent,
+        encryptionMode: message.encryptionMode,
+        isViewOnce: message.isViewOnce ?? null,
+        isBlurred: message.isBlurred ?? null,
+        effectFlags: message.effectFlags ?? null,
+        expiresAt: message.expiresAt ?? null,
+        ephemeralDuration: message.ephemeralDuration ?? null,
+      },
+      conversation.encryptionMode,
+    );
+
     // Les trois valeurs ci-dessous disent ce qui est réellement PARTI, pas ce
     // qui était visé — même règle de compte rendu que
     // `createMemberJoinedNotificationsBatch`. Une préférence, un DND ou une
@@ -530,8 +705,32 @@ export async function notifyMessageRecipients(params: {
     // sans cela, un éventail entièrement tombé continuerait d'annoncer son
     // audience comme si elle avait été servie.
 
+    // #17194 — l'auteur du message CITÉ est-il encore membre ?
+    //
+    // Les deux lectures qui décident de cette audience étaient ASYMÉTRIQUES, et
+    // c'est l'asymétrie qui portait le défaut : `memberIds` vient de
+    // `conversation.participants` sous `where: { isActive: true, type: 'user' }`,
+    // quand le destinataire de la réponse vient d'un
+    // `participant.findUnique({ where: { id: … } })` SANS aucun filtre. Un
+    // auteur qui a quitté la conversation, en a été retiré, banni, ou dont la
+    // participation a été désactivée par une action souveraine admin reste donc
+    // résolu — et le lot `reply` le servait, seul des trois : le lot de mentions
+    // pose la question (`NotificationService.createMentionNotificationsBatch`),
+    // et `regular` ne lit que `memberIds`.
+    //
+    // Ce que ça coûtait AVANT ce cycle : une bannière `🔒 💬` et des métadonnées
+    // (le défaut de métadonnées est HÉRITÉ, et il a son issue). Ce que ça
+    // coûterait APRÈS : l'ENVELOPPE, que la clé de session de l'ex-membre ouvre
+    // — elle est par PAIR, indépendante de la conversation, et rien ne la rote
+    // quand quelqu'un part. Le texte entier d'un message écrit après son départ
+    // s'afficherait sur son écran verrouillé.
+    //
+    // C'est pourquoi la garde part dans le MÊME lot que #17080 : l'audience
+    // d'un éventail se vérifie AVANT de lui confier du contenu déchiffrable.
     const owesReplyNotification =
       !!originalMessageAuthorUserId &&
+      memberIds.includes(originalMessageAuthorUserId) &&
+      !silenced.has(originalMessageAuthorUserId) &&
       originalMessageAuthorUserId !== sender.actorId &&
       !validatedMentionUserIds.includes(originalMessageAuthorUserId);
 
@@ -554,6 +753,7 @@ export async function notifyMessageRecipients(params: {
             messageExpiresAt: message.expiresAt ?? null,
             previewBasis: pushPreviewBasis,
             ...bannerMedia,
+            ...detailFields,
             // Cycle 126 — la clé de PROTECTION, que seul le lot regular
             // recevait. Le cycle 125 bis a fait converger le TEXTE des trois
             // bannières ; celle-ci ne compose aucun texte, elle le QUALIFIE —
@@ -561,6 +761,8 @@ export async function notifyMessageRecipients(params: {
             // localisation cliente du placeholder et le second verrou de
             // `createNotification`.
             notificationLocKey,
+            // #17080 — cf. `deviceEnvelope` : la charge que le LECTEUR ouvre.
+            encryptedContent: deviceEnvelope,
           });
           return created != null;
         })
@@ -579,18 +781,29 @@ export async function notifyMessageRecipients(params: {
               // recevait un corps vide.
               messageContent: notificationPreviewForPush,
               ...bannerMedia,
+              ...detailFields,
               conversationId,
               messageId: message.id,
               // L'éventail tient déjà l'échéance du message : la transmettre
-              // évite une relecture PAR MENTIONNÉ, et `Message.expiresAt` étant
-              // écrit à l'insertion et jamais modifié, cette copie ne dérive
-              // pas. Le chemin `new_message`, lui, la prend de sa propre
-              // relecture vivante — il en fait une de toute façon.
+              // évite une relecture PAR MENTIONNÉ.
+              //
+              // #18030 — ce commentaire affirmait de plus que « `Message.
+              // expiresAt` étant écrit à l'insertion et jamais modifié, cette
+              // copie ne dérive pas ». C'est FAUX : quatre écrivains la
+              // réécrivent après l'insertion, dont trois ne font que la
+              // RAPPROCHER (`ephemeralCountdown`, `consumeAfterReadMessages`,
+              // `captureNoticeRetention`). Ce qu'on passe ici est donc une
+              // OBSERVATION, pas un fait : le lot la confronte à sa propre
+              // relecture vivante (`servedMessageDeadline`), et sert la plus
+              // proche des deux.
               messageExpiresAt: message.expiresAt ?? null,
               previewBasis: pushPreviewBasis,
               // Cycle 126 — cf. `createReplyNotification` : la clé de protection
               // qualifie l'aperçu que ce lot vient de recevoir.
               notificationLocKey,
+              // #17080 — cf. `deviceEnvelope`. Le relais la RÉPAND
+              // (`...banner`) : rien à recopier par mentionné.
+              encryptedContent: deviceEnvelope,
             },
             memberIds
           )
@@ -618,7 +831,8 @@ export async function notifyMessageRecipients(params: {
       // `allSettled` et non `all` : le destinataire dont la lecture de contexte
       // hoquette ne doit pas emporter le compte rendu de ses voisins, dont les
       // notifications sont déjà parties.
-      const results = await Promise.allSettled(regularRecipients.map(recipientUserId =>
+      // Débit BORNÉ (#10819) : cf. `NOTIFICATION_FANOUT_CONCURRENCY`.
+      const results = await settleWithConcurrency(regularRecipients, NOTIFICATION_FANOUT_CONCURRENCY, recipientUserId =>
         notificationService.createMessageNotification({
           recipientUserId,
           senderId: sender.actorId,
@@ -626,7 +840,7 @@ export async function notifyMessageRecipients(params: {
           messageId: message.id,
           conversationId,
           messagePreview: notificationPreviewForPush,
-          encryptedContent: message.encryptedContent || undefined,
+          encryptedContent: deviceEnvelope,
           notificationLocKey,
           // La transcription d'un vocal n'est PAS `Message.content` : ses
           // traductions vivent sur `MessageAttachment.translations`. Le cycle 122
@@ -634,11 +848,12 @@ export async function notifyMessageRecipients(params: {
           // source, et la bannière d'un vocal descend enfin le Prisme.
           previewBasis: pushPreviewBasis,
           ...attachmentInfo,
+          ...detailFields,
           // Cycle 128 — les candidates de PISTE. L'élection est par lecteur, et
           // elle suit la langue du texte SERVI : cf. `servedAttachmentMedia`.
           attachmentTracks,
         })
-      ));
+      );
 
       // Un signalement pour tout l'éventail, pas un par destinataire : sur un
       // groupe large, une panne commune produirait autant de lignes de log que

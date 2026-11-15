@@ -25,6 +25,13 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
   const prisma = fastify.prisma as PrismaClient;
   const attachmentService = new AttachmentService(prisma);
   const maintenanceService = new MaintenanceService(prisma, attachmentService);
+  // #10449 — le nettoyage déclenché ici révoque les invités des liens expirés
+  // comme le balayage journalier : avec le vivant, pour couper leurs sockets
+  // sur-le-champ. Résolu à l'appel, le manager naissant après les routes.
+  maintenanceService.setShareLinkRevocationLive({
+    resolveIO: () => fastify.socketIOHandler?.getManager()?.getIO(),
+    resolveManager: () => fastify.socketIOHandler?.getManager(),
+  });
   const statusService = new StatusService(prisma);
 
   // Route pour obtenir les statistiques de maintenance
@@ -56,7 +63,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
         500: errorResponseSchema
       }
     }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const stats = await maintenanceService.getMaintenanceStats();
 
@@ -96,7 +103,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
         500: errorResponseSchema
       }
     }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       await maintenanceService.cleanupExpiredData();
 
@@ -185,7 +192,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
         500: errorResponseSchema
       }
     }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const metrics = statusService.getMetrics();
       const throttleRate = metrics.totalRequests > 0
@@ -224,7 +231,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
         500: errorResponseSchema
       }
     }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       statusService.resetMetrics();
 

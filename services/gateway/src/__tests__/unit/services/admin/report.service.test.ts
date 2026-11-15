@@ -6,9 +6,11 @@
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ReportService, getReportService } from '../../../../services/admin/report.service';
+import { reportTable, type ReportRow } from '../../../helpers/report-table';
 
 function makePrisma(methods: Partial<{
   create: jest.Mock;
+  findFirst: jest.Mock;
   findUnique: jest.Mock;
   findMany: jest.Mock;
   count: jest.Mock;
@@ -19,6 +21,7 @@ function makePrisma(methods: Partial<{
   return {
     report: {
       create: methods.create ?? jest.fn(),
+      findFirst: methods.findFirst ?? jest.fn().mockResolvedValue(null),
       findUnique: methods.findUnique ?? jest.fn(),
       findMany: methods.findMany ?? jest.fn(),
       count: methods.count ?? jest.fn(),
@@ -74,6 +77,17 @@ describe('ReportService.createReport', () => {
     expect(result.id).toBe(report.id);
   });
 
+  it('écrit la priorité calculée par la passerelle, ordinaire à défaut (#14110)', async () => {
+    const create = jest.fn().mockResolvedValue(makeReport());
+    const svc = makeService(makePrisma({ create }));
+
+    await svc.createReport({ reportedType: 'user', reportedEntityId: 'e', reportType: 'harassment', priority: 1, priorityReasons: ['minor'] });
+    await svc.createReport({ reportedType: 'user', reportedEntityId: 'e', reportType: 'harassment' });
+
+    expect(create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({ priority: 1, priorityReasons: ['minor'] }) });
+    expect(create).toHaveBeenNthCalledWith(2, { data: expect.objectContaining({ priority: 0, priorityReasons: [] }) });
+  });
+
   it('sets optional reporter fields to null when omitted', async () => {
     const report = makeReport({ reporterId: null, reporterName: null });
     const create = jest.fn().mockResolvedValue(report);
@@ -88,6 +102,95 @@ describe('ReportService.createReport', () => {
     expect(create).toHaveBeenCalledWith({
       data: expect.objectContaining({ reporterId: null, reporterName: null, reason: null }),
     });
+  });
+});
+
+// ─── createReport : un seul signalement OUVERT par paire (#14627, audit 3 M1) ──
+
+const SIGNALANT = '507f1f77bcf86cd799439003';
+const CIBLE = '507f1f77bcf86cd799439002';
+
+const ligne = (overrides: Partial<ReportRow> = {}): ReportRow => ({
+  id: '507f1f77bcf86cd7994390a1',
+  createdAt: new Date('2026-11-01T10:00:00Z'),
+  status: 'pending',
+  reportType: 'spam',
+  reportedType: 'user',
+  reportedEntityId: CIBLE,
+  reporterId: SIGNALANT,
+  priority: 0,
+  ...overrides,
+});
+
+function serviceSur(rows: readonly ReportRow[]) {
+  const table = reportTable(rows);
+  const create = jest.fn(async (args: { data: Record<string, unknown> }) => ({ id: '507f1f77bcf86cd7994390ff', createdAt: new Date(), ...args.data }));
+  const prisma = { report: { ...table, create } } as unknown as PrismaClient;
+  return { svc: new ReportService(prisma), create };
+}
+
+const nouveau = (overrides: Record<string, unknown> = {}) => ({
+  reportedType: 'user',
+  reportedEntityId: CIBLE,
+  reportType: 'harassment',
+  reporterId: SIGNALANT,
+  reporterName: 'alice',
+  priority: 1 as const,
+  priorityReasons: ['minor' as const],
+  ...overrides,
+});
+
+describe('ReportService.createReport — un signalement ouvert par signalant et par cible', () => {
+  it.each(['pending', 'under_review'])('un doublon d\'une ligne %s rend cette ligne, sans écriture', async (status) => {
+    const existante = ligne({ status });
+    const { svc, create } = serviceSur([existante]);
+
+    const rendu = await svc.createReport(nouveau());
+
+    expect(create).not.toHaveBeenCalled();
+    expect(rendu).toEqual(existante);
+  });
+
+  it('un signalement CLOS ne retient pas le suivant', async () => {
+    const { svc, create } = serviceSur([ligne({ status: 'resolved' }), ligne({ id: '507f1f77bcf86cd7994390a2', status: 'dismissed' })]);
+
+    await svc.createReport(nouveau());
+
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('un autre signalant, un autre type ou une autre cible s\'écrit', async () => {
+    const { svc, create } = serviceSur([ligne()]);
+
+    await svc.createReport(nouveau({ reporterId: '507f1f77bcf86cd799439004' }));
+    await svc.createReport(nouveau({ reportedType: 'message' }));
+    await svc.createReport(nouveau({ reportedEntityId: '507f1f77bcf86cd799439005' }));
+
+    expect(create).toHaveBeenCalledTimes(3);
+  });
+
+  it('un autre MOTIF sur la même cible ne fait pas un second signalement ouvert', async () => {
+    const { svc, create } = serviceSur([ligne({ reportType: 'spam' })]);
+
+    await svc.createReport(nouveau({ reportType: 'violence' }));
+
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('un signalant ANONYME n\'est pas dédoublonné : rien ne l\'identifie d\'un signalement à l\'autre', async () => {
+    const { svc, create } = serviceSur([ligne({ reporterId: null })]);
+
+    await svc.createReport(nouveau({ reporterId: undefined, reporterName: 'invité' }));
+
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('de deux lignes ouvertes antérieures, c\'est la plus ANCIENNE qui est rendue', async () => {
+    const ancienne = ligne({ id: '507f1f77bcf86cd7994390a1', createdAt: new Date('2026-10-01T10:00:00Z') });
+    const recente = ligne({ id: '507f1f77bcf86cd7994390a2', createdAt: new Date('2026-11-01T10:00:00Z') });
+    const { svc } = serviceSur([recente, ancienne]);
+
+    await expect(svc.createReport(nouveau())).resolves.toEqual(ancienne);
   });
 });
 
@@ -115,20 +218,17 @@ describe('ReportService.getReportById', () => {
 // ─── listReports ──────────────────────────────────────────────────────────────
 
 describe('ReportService.listReports', () => {
-  it('queries with no filters and default pagination', async () => {
+  it('queries with no filters and default pagination — the priority tier first, oldest first (#14110, MIN-04)', async () => {
     const findMany = jest.fn().mockResolvedValue([]);
-    const count = jest.fn().mockResolvedValue(0);
+    const count = jest.fn((a: any) => Promise.resolve(a?.where?.AND ? 2 : 5));
     const svc = makeService(makePrisma({ findMany, count }));
 
     const result = await svc.listReports();
 
-    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: {},
-      skip: 0,
-      take: 20,
-      orderBy: { createdAt: 'desc' },
-    }));
-    expect(result).toEqual({ reports: [], total: 0 });
+    const open = { priority: { gte: 1 }, status: { in: ['pending', 'under_review'] } };
+    expect(findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: { AND: [{}, open] }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], skip: 0, take: 20 }));
+    expect(findMany).toHaveBeenNthCalledWith(2, expect.objectContaining({ where: { AND: [{}, { NOT: open }] }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], skip: 0, take: 20 }));
+    expect(result).toEqual({ reports: [], total: 5 });
   });
 
   it('applies all filter types to where clause', async () => {
@@ -149,13 +249,13 @@ describe('ReportService.listReports', () => {
     });
 
     const callArg = (findMany.mock.calls[0] as any[])[0];
-    expect(callArg.where.reportedType).toBe('message');
-    expect(callArg.where.reportType).toBe('spam');
-    expect(callArg.where.status).toBe('pending');
-    expect(callArg.where.reporterId).toBe('reporter-1');
-    expect(callArg.where.moderatorId).toBe('mod-1');
-    expect(callArg.where.createdAt.gte).toBe(after);
-    expect(callArg.where.createdAt.lte).toBe(before);
+    expect(callArg.where.AND[0].reportedType).toBe('message');
+    expect(callArg.where.AND[0].reportType).toBe('spam');
+    expect(callArg.where.AND[0].status).toBe('pending');
+    expect(callArg.where.AND[0].reporterId).toBe('reporter-1');
+    expect(callArg.where.AND[0].moderatorId).toBe('mod-1');
+    expect(callArg.where.AND[0].createdAt.gte).toBe(after);
+    expect(callArg.where.AND[0].createdAt.lte).toBe(before);
   });
 
   it('applies only createdAfter when createdBefore is omitted', async () => {
@@ -167,8 +267,8 @@ describe('ReportService.listReports', () => {
     await svc.listReports({ createdAfter: after });
 
     const callArg = (findMany.mock.calls[0] as any[])[0];
-    expect(callArg.where.createdAt.gte).toBe(after);
-    expect(callArg.where.createdAt.lte).toBeUndefined();
+    expect(callArg.where.AND[0].createdAt.gte).toBe(after);
+    expect(callArg.where.AND[0].createdAt.lte).toBeUndefined();
   });
 
   it('applies custom sortBy and sortOrder', async () => {
@@ -179,12 +279,12 @@ describe('ReportService.listReports', () => {
     await svc.listReports({ sortBy: 'updatedAt', sortOrder: 'asc' });
 
     const callArg = (findMany.mock.calls[0] as any[])[0];
-    expect(callArg.orderBy).toEqual({ updatedAt: 'asc' });
+    expect(callArg.orderBy).toEqual([{ updatedAt: 'asc' }, { id: 'asc' }]);
   });
 
   it('applies pagination offset and limit', async () => {
     const findMany = jest.fn().mockResolvedValue([makeReport()]);
-    const count = jest.fn().mockResolvedValue(100);
+    const count = jest.fn((a: any) => Promise.resolve(a?.where?.AND ? 0 : 100));
     const svc = makeService(makePrisma({ findMany, count }));
 
     const result = await svc.listReports({}, { offset: 20, limit: 10 });
@@ -227,6 +327,20 @@ describe('ReportService.updateReport', () => {
 
     const callData = (update.mock.calls[0] as any[])[0].data;
     expect(callData.moderatorId).toBe('mod-1');
+  });
+
+  // Spec 2026-10-04 § 7 : rouvrir efface la résolution précédente et laisse
+  // le signalement sans modérateur — sinon il réapparaît « résolu le … par … ».
+  it('rouvrir (pending) remet resolvedAt, actionTaken et moderatorId à null', async () => {
+    const update = jest.fn().mockResolvedValue(makeReport({ status: 'pending' }));
+    const svc = makeService(makePrisma({ update }));
+
+    await svc.updateReport('report-id', 'mod-1', { status: 'pending' });
+
+    const callData = (update.mock.calls[0] as any[])[0].data;
+    expect(callData.resolvedAt).toBeNull();
+    expect(callData.actionTaken).toBeNull();
+    expect(callData.moderatorId).toBeNull();
   });
 
   it('always sets updatedAt', async () => {
@@ -350,13 +464,31 @@ describe('ReportService.getReportStats', () => {
 describe('ReportService.getReportsForEntity', () => {
   it('queries by entityType and entityId', async () => {
     const findMany = jest.fn().mockResolvedValue([makeReport()]);
-    const svc = makeService(makePrisma({ findMany }));
+    const count = jest.fn().mockResolvedValue(1);
+    const svc = makeService(makePrisma({ findMany, count }));
 
     await svc.getReportsForEntity('message', 'entity-id');
 
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { reportedType: 'message', reportedEntityId: 'entity-id' },
+      where: { AND: [{ reportedType: 'message', reportedEntityId: 'entity-id' }, expect.anything()] },
     }));
+  });
+
+  // #4165 — la borne doit vivre DANS la requete Prisma. Un temoin qui n'assert
+  // que la forme du retour resterait vert si le service chargeait TOUT puis
+  // tranchait en memoire : c'est exactement le cout qu'on cherche a supprimer.
+  it('borne la lecture dans la requete, jamais apres coup', async () => {
+    const findMany = jest.fn().mockResolvedValue([makeReport()]);
+    const count = jest.fn((a: any) => Promise.resolve(a?.where?.AND ? 0 : 4_200));
+    const svc = makeService(makePrisma({ findMany, count }));
+
+    const result = await svc.getReportsForEntity('message', 'entity-id', 40, 20);
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 40, take: 20 }));
+    // `total` est le VRAI compte, pas la taille de la page : c'est lui que la
+    // fiche de moderation affiche.
+    expect(result.total).toBe(4_200);
+    expect(result.reports).toHaveLength(1);
   });
 });
 
@@ -412,8 +544,8 @@ describe('ReportService.getRecentReports', () => {
 
     const callArg = (findMany.mock.calls[0] as any[])[0];
     expect(callArg.take).toBe(5);
-    expect(callArg.where.createdAt.gte).toBeInstanceOf(Date);
-    const diff = Date.now() - (callArg.where.createdAt.gte as Date).getTime();
+    expect(callArg.where.AND[0].createdAt.gte).toBeInstanceOf(Date);
+    const diff = Date.now() - (callArg.where.AND[0].createdAt.gte as Date).getTime();
     expect(diff).toBeLessThan(24 * 60 * 60 * 1000 + 1000); // within 24h + 1s tolerance
   });
 
@@ -453,10 +585,7 @@ describe('ReportService.getModeratorReports', () => {
     const results = await svc.getModeratorReports('mod-1');
 
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({
-        moderatorId: 'mod-1',
-        status: { in: ['under_review', 'pending'] },
-      }),
+      where: { AND: [{ moderatorId: 'mod-1', status: { in: ['under_review', 'pending'] } }, expect.anything()] },
     }));
     expect(results).toHaveLength(1);
   });

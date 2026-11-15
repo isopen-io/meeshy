@@ -14,6 +14,19 @@ enum ComposerAttachmentType: String, Equatable {
     case image, file, voice, location, video
 }
 
+extension ComposerAttachmentType {
+    /// Glyphe SF Symbols d'une pièce jointe de composeur — site unique.
+    var glyph: String {
+        switch self {
+        case .voice: return "mic.fill"
+        case .location: return "location.fill"
+        case .image: return "photo.fill"
+        case .file: return "doc.fill"
+        case .video: return "video.fill"
+        }
+    }
+}
+
 struct ComposerAttachment: Identifiable, Equatable {
     let id: String
     let type: ComposerAttachmentType
@@ -21,35 +34,30 @@ struct ComposerAttachment: Identifiable, Equatable {
     var url: URL?
     var size: Int?
     var duration: TimeInterval?
-    var latitude: Double?
-    var longitude: Double?
     var thumbnailColor: String = "808080"
 
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+    /// **Égales seulement si ELLES SONT les mêmes** (#9743). Comparer le seul
+    /// identifiant faisait tenir pour inchangée une pièce dont le fichier
+    /// venait d'arriver : SwiftUI sautait le rendu de la zone et de la barre,
+    /// la tuile tournait sans fin, et l'envoi lisait une pièce « en
+    /// préparation » qui ne l'était plus.
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.id == rhs.id && lhs.url == rhs.url && lhs.size == rhs.size
+            && lhs.duration == rhs.duration && lhs.type == rhs.type && lhs.name == rhs.name
+    }
 
     // Convenience factories
     static func voice(duration: TimeInterval) -> ComposerAttachment {
         ComposerAttachment(
             id: "voice-\(Int(Date().timeIntervalSince1970 * 1000))",
             type: .voice,
-            name: "Message vocal (\(Self.formatDur(duration)))",
+            name: MediaKindLabel.voiceRecording(duration: duration),
             duration: duration,
             thumbnailColor: "FF6B6B"
         )
     }
 
-    static func location(lat: Double, lng: Double) -> ComposerAttachment {
-        ComposerAttachment(
-            id: "location-\(Int(Date().timeIntervalSince1970 * 1000))",
-            type: .location,
-            name: "Position actuelle",
-            latitude: lat,
-            longitude: lng,
-            thumbnailColor: "2ECC71"
-        )
-    }
-
-    static func image(url: URL? = nil, name: String = "Photo", color: String = "9B59B6") -> ComposerAttachment {
+    static func image(url: URL? = nil, name: String = MediaKindLabel.name(.photo), color: String = "9B59B6") -> ComposerAttachment {
         ComposerAttachment(
             id: "image-\(Int(Date().timeIntervalSince1970 * 1000))-\(Int.random(in: 0...9999))",
             type: .image,
@@ -59,7 +67,7 @@ struct ComposerAttachment: Identifiable, Equatable {
         )
     }
 
-    static func file(url: URL? = nil, name: String = "Fichier", size: Int? = nil, color: String = "45B7D1") -> ComposerAttachment {
+    static func file(url: URL? = nil, name: String = MediaKindLabel.name(.file), size: Int? = nil, color: String = "45B7D1") -> ComposerAttachment {
         ComposerAttachment(
             id: "file-\(Int(Date().timeIntervalSince1970 * 1000))-\(Int.random(in: 0...9999))",
             type: .file,
@@ -68,12 +76,6 @@ struct ComposerAttachment: Identifiable, Equatable {
             size: size,
             thumbnailColor: color
         )
-    }
-
-    private static func formatDur(_ seconds: TimeInterval) -> String {
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return String(format: "%d:%02d", mins, secs)
     }
 }
 
@@ -113,17 +115,37 @@ enum DefaultComposerLanguage {
     /// The keyboard layout intentionally does NOT drive this — see the
     /// Prisme Linguistique section in the root `CLAUDE.md`.
     static func resolve() -> String { "fr" }
+
+    /// La langue sur laquelle la pastille s'OUVRE quand on corrige un
+    /// commentaire (#6600) : celle du texte corrigé, normalisée. L'édition la
+    /// DÉCLARE au serveur — ouverte sur le défaut « fr », elle réécrirait la
+    /// langue d'un commentaire espagnol à la première faute corrigée. Sans
+    /// langue exploitable, la pastille garde ce qu'elle montre.
+    static func resolve(editing originalLanguage: String?, current: String) -> String {
+        MeeshyUser.normalizeLanguageCode(originalLanguage) ?? current
+    }
 }
 
 /// Rendu compact du bouton langue du composer de post : le bouton replié ne
 /// montre QUE le drapeau — le nom de la langue n'apparaît que dans la liste
-/// du picker (directive 2026-07-30). Le nom reste porté par l'accessibilité
+/// du picker. Le nom reste porté par l'accessibilité
 /// (`accessibilityValue`), VoiceOver ne lit pas un emoji de drapeau utilement.
 /// `nonisolated` au niveau du type : la cible app compile sous
 /// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, le bundle de tests non.
 nonisolated enum ComposerLanguageFlag {
-    /// Code hors du référentiel `LanguageData` → code brut en capitales,
-    /// jamais un bouton vide.
+    /// Code hors référentiel → code brut en capitales, jamais un bouton vide.
+    ///
+    /// Cette règle a été REDÉCOUVERTE ici, mot pour mot, sans savoir que #4248
+    /// l'avait déjà choisie pour la puce de langue : deux sites, même
+    /// raisonnement, aucun ne connaissait l'autre.
+    ///
+    /// **Ce site NE rejoint PAS la source unique, et la raison est mesurée**
+    /// (252i, #4260) : sur les 39 codes que les deux tables partagent, elles
+    /// s'accordent sur 38 et divergent sur UN — `pt`, que `LanguageDisplay`
+    /// rend 🇵🇹 et `LanguageData` 🇧🇷. Le banc voisin épingle `pt-BR` → 🇧🇷.
+    /// Trancher « quel drapeau porte le portugais » est une décision PRODUIT,
+    /// pas un détail de refactor : elle a son issue, et ce helper garde sa
+    /// table jusqu'à ce qu'elle soit prise.
     static func label(for code: String) -> String {
         let base = MeeshyUser.normalizeLanguageCode(code) ?? code.lowercased()
         return LanguageData.info(for: base)?.flag ?? code.uppercased()
@@ -182,15 +204,27 @@ enum ComposerLanguageResolver {
 
 @MainActor
 class KeyboardObserver: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published var height: CGFloat = 0
     @Published var isVisible = false
 
+    /// Hauteur servie tant qu'aucun clavier n'a été mesuré.
+    static let fallbackHeight: CGFloat = 280
+
     /// Last non-zero keyboard height — useful for sizing emoji panel
-    var lastKnownHeight: CGFloat = 280
+    var lastKnownHeight: CGFloat = KeyboardObserver.fallbackHeight
 
     private var cancellables = Set<AnyCancellable>()
 
-    init() {
+    /// La hauteur de la fenêtre contre laquelle le clavier se mesure — injectable pour les témoins.
+    private let windowHeight: () -> CGFloat
+
+    init(windowHeight: @escaping () -> CGFloat = { DeviceLayout.windowSize.height }) {
+        self.windowHeight = windowHeight
         NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] notification in
@@ -202,19 +236,81 @@ class KeyboardObserver: ObservableObject {
                 // Use the keyboard-hosting window's height (not the full
                 // display) so split-screen on iPad produces the correct
                 // visible keyboard portion.
-                let screenHeight = DeviceLayout.windowSize.height
-                let newHeight = max(screenHeight - endFrame.origin.y, 0)
+                // A degenerate or floating end frame is not a measurement
+                // (#8869): it docks nothing, and it must never become the
+                // height the attachment panel reopens at.
+                let windowHeight = self.windowHeight()
+                let measured = ComposerPanelHeightLaw.keyboardHeight(
+                    endFrame: endFrame,
+                    windowHeight: windowHeight
+                )
 
-                if newHeight > 0 {
-                    self.lastKnownHeight = newHeight
+                if let measured, measured > 0 {
+                    self.lastKnownHeight = measured
                 }
 
-                withAnimation(.easeInOut(duration: max(duration, 0.15))) {
-                    self.height = newHeight
-                    self.isVisible = newHeight > 0
-                }
+                // Une trame nulle garde la hauteur levée (#10544) ; c'est
+                // `keyboardDidHide`, ci-dessous, qui garantit le retour à zéro.
+                self.publish(
+                    ComposerPanelHeightLaw.liftHeight(
+                        endFrame: endFrame, windowHeight: windowHeight, current: self.height),
+                    duration: duration
+                )
             }
             .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.publish(0, duration: 0)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func publish(_ newHeight: CGFloat, duration: Double) {
+        guard newHeight != height else { return }
+        withAnimation(.easeInOut(duration: max(duration, 0.15))) {
+            height = newHeight
+            isVisible = newHeight > 0
+        }
+    }
+}
+
+/// **Un écran, un observateur de clavier** (#10544).
+///
+/// Chaque `UniversalComposerBar` créait le sien, en plus de celui de son hôte :
+/// deux par écran de story, chacun rejouant sa transaction animée à chaque
+/// notification. La barre ne lit que la dernière hauteur connue (son panneau
+/// la reprend) : elle la prend chez l'hôte s'il en publie un
+/// (`composerHostKeyboard`), et n'en crée un que sinon.
+final class ComposerKeyboardSource {
+    nonisolated deinit {}
+    private var own: KeyboardObserver?
+
+    var ownsObserver: Bool { own != nil }
+
+    func adopt(host: KeyboardObserver?) {
+        guard host == nil else {
+            own = nil
+            return
+        }
+        if own == nil { own = KeyboardObserver() }
+    }
+
+    func lastKnownHeight(host: KeyboardObserver?) -> CGFloat {
+        (host ?? own)?.lastKnownHeight ?? KeyboardObserver.fallbackHeight
+    }
+}
+
+private struct ComposerHostKeyboardKey: EnvironmentKey {
+    static let defaultValue: KeyboardObserver? = nil
+}
+
+extension EnvironmentValues {
+    /// L'observateur de clavier de l'hôte, quand il en tient déjà un.
+    var composerHostKeyboard: KeyboardObserver? {
+        get { self[ComposerHostKeyboardKey.self] }
+        set { self[ComposerHostKeyboardKey.self] = newValue }
     }
 }
 
@@ -229,11 +325,20 @@ struct ComposerWaveformBar: View {
 
     @State private var height: CGFloat = 4
 
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
+    private static let restingMin: CGFloat = 4
+    private static let restingMax: CGFloat = 24
+
     var body: some View {
         RoundedRectangle(cornerRadius: 2)
             .fill(
                 LinearGradient(
-                    colors: [Color(hex: accentColor).opacity(0.8), Color(hex: accentColor).opacity(0.4)],
+                    colors: [Color(hex: accentColor).opacity(MeeshyOpacity.intense), Color(hex: accentColor).opacity(0.4)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -252,6 +357,22 @@ struct ComposerWaveformBar: View {
 
     private func animate() {
         guard isRecording else { return }
+        // Sous Reduce Motion la barre se POSE au lieu de battre. Elle ne se pose
+        // NI sur la cible (tirée au hasard, donc instable d'un rendu à l'autre)
+        // NI sur `minHeight` (toutes les barres à la même hauteur = un trait
+        // plat, qui se lit « enregistreur cassé »). Le chrono d'enregistrement
+        // continue de dire que c'est en cours ; la forme d'onde doit seulement
+        // rester lisible comme une forme d'onde.
+        guard !reduceMotion else {
+            withTransaction(Transaction(animation: nil)) {
+                height = RestingWaveform.height(
+                    index: index,
+                    minHeight: Self.restingMin,
+                    maxHeight: Self.restingMax
+                )
+            }
+            return
+        }
         let delay = Double(index) * 0.05
         withAnimation(
             .easeInOut(duration: Double.random(in: 0.3...0.6))
@@ -259,6 +380,23 @@ struct ComposerWaveformBar: View {
             .delay(delay)
         ) {
             height = CGFloat.random(in: 6...24)
+        }
+    }
+}
+
+/// **La porte vocale du composeur** (#12918). `byMode` suit le mode de la barre ;
+/// `open` l'ouvre là où le mode la cache (commentaires) ; `closed` la ferme
+/// quoi qu'en dise le mode : une conversation chiffrée de bout en bout, dont
+/// les vocaux ne se chiffrent pas encore (#10789), ou un lien invité sans audio.
+/// Ni micro ni tuile « Vocal » : jamais un geste que l'envoi refuserait.
+enum ComposerVoiceDoor: Equatable {
+    case byMode, open, closed
+
+    func isOpen(byMode modeShowsVoice: Bool) -> Bool {
+        switch self {
+        case .byMode: modeShowsVoice
+        case .open: true
+        case .closed: false
         }
     }
 }

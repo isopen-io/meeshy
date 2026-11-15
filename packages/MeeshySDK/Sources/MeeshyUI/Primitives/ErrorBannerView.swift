@@ -7,6 +7,7 @@ public struct ErrorBannerView: View {
 
     @State private var isVisible = false
     @State private var dismissTask: Task<Void, Never>?
+    @State private var clearTask: Task<Void, Never>?
 
     public init(error: Binding<MeeshyError?>) {
         self._error = error
@@ -35,11 +36,11 @@ public struct ErrorBannerView: View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: currentError.iconName)
                 .font(.system(size: MeeshyFont.headlineSize, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
 
             Text(currentError.errorDescription ?? "")
-                .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
-                .foregroundColor(.white)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                .foregroundStyle(Color.white)
                 .lineLimit(2)
 
             Spacer()
@@ -49,9 +50,10 @@ public struct ErrorBannerView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: MeeshyFont.footnoteSize, weight: .bold))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundStyle(.white.opacity(MeeshyOpacity.intense))
                     .meeshyTapTarget()
             }
+            .accessibilityLabel(String(localized: "common.close", bundle: .module))
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.md)
@@ -79,7 +81,7 @@ public struct ErrorBannerView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(currentError.errorDescription ?? "")
         .accessibilityAddTraits(.isButton)
-        .accessibilityHint(String(localized: "Double-tap to dismiss this error message.", defaultValue: "Double-tap to dismiss this error message."))
+        .accessibilityHint(ErrorBannerView.dismissHint(in: .module))
         .accessibilityAction {
             dismiss()
         }
@@ -92,8 +94,7 @@ public struct ErrorBannerView: View {
         }
         HapticFeedback.error()
         dismissTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(4))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(4)) else { return }
             dismiss()
         }
     }
@@ -103,8 +104,13 @@ public struct ErrorBannerView: View {
         withAnimation(MeeshyAnimation.springDefault) {
             isVisible = false
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            error = nil
-        }
+        clearTask?.cancel()
+        clearTask = Task { await DelayedUI.perform(after: .milliseconds(400)) { error = nil } }
+    }
+}
+
+extension ErrorBannerView {
+    static func dismissHint(in bundle: Bundle) -> String {
+        String(localized: "error.banner.dismiss.hint", defaultValue: "Ferme ce message d'erreur.", bundle: bundle)
     }
 }

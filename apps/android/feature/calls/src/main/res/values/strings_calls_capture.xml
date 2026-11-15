@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_capture_denied">Allow Meeshy to save to your gallery in Settings to keep your captures.</string>
+    <string name="call_mode_record_stop_hint">Saves the video to your gallery</string>
+    <string name="call_capture_faces_hint">Saves a square portrait of each participant to your gallery</string>
+</resources>

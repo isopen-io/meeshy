@@ -5,7 +5,7 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
+import { sendSuccess, sendInternalError, sendBadRequest, sendError } from '../utils/response';
 import { PasswordResetService } from '../services/PasswordResetService';
 import { PhonePasswordResetService } from '../services/PhonePasswordResetService';
 import { getCacheStore } from '../services/CacheStore';
@@ -19,11 +19,15 @@ import {
   createPhoneResetLookupRateLimiter,
   createPhoneResetIdentityRateLimiter,
   createPhoneResetCodeRateLimiter,
-  createPhoneResetResendRateLimiter
+  createPhoneResetResendRateLimiter,
+  createResetTokenVerifyIpRateLimiter,
+  createResetTokenVerifyTokenRateLimiter
 } from '../utils/rate-limiter.js';
 import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shared/types';
 import { disconnectRevokedSessions } from '../socketio/disconnectRevokedSessions';
+import { createResetSecondFactorAttempts } from '../services/auth/reset-second-factor-attempts';
 import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
+import { logError, logWarn } from '../utils/logger.js';
 
 // Zod schemas for request validation
 // Note: captchaToken is now optional as we use built-in bot protection instead
@@ -65,6 +69,67 @@ const phoneResendCodeSchema = z.object({
   tokenId: z.string().min(1, 'Token ID is required')
 });
 
+/**
+ * Le verdict sur un jeton de réinitialisation, sans le consommer — partagé par
+ * le `GET` (clients déjà déployés) et le `POST` (#10859, jeton dans le corps).
+ */
+async function replyWithResetTokenState(fastify: FastifyInstance, token: string, reply: FastifyReply) {
+  try {
+    if (!token) {
+      return sendBadRequest(reply, 'Token is required');
+    }
+
+    // Hash the token to lookup in database
+    const crypto = await import('crypto');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find token in database
+    const resetToken = await fastify.prisma.passwordResetToken.findUnique({
+      where: { tokenHash },
+      include: {
+        user: {
+          select: {
+            id: true,
+            twoFactorEnabledAt: true
+          }
+        }
+      }
+    });
+
+    if (!resetToken) {
+      return sendSuccess(reply, { valid: false, requires2FA: false });
+    }
+
+    // Check if token is expired
+    if (resetToken.expiresAt < new Date()) {
+      return sendSuccess(reply, { valid: false, requires2FA: false });
+    }
+
+    // Check if token was already used
+    if (resetToken.usedAt) {
+      return sendSuccess(reply, { valid: false, requires2FA: false });
+    }
+
+    // Check if token is revoked
+    if (resetToken.isRevoked) {
+      return sendSuccess(reply, { valid: false, requires2FA: false });
+    }
+
+    return sendSuccess(reply, {
+      valid: true,
+      // Le MÊME prédicat que l'envoi (`completePasswordReset` exige le code dès
+      // `twoFactorEnabledAt`) : un secret posé par une activation inachevée
+      // n'oblige à rien, et l'écran ne doit pas demander un code inutile.
+      requires2FA: !!resetToken.user.twoFactorEnabledAt,
+      expiresAt: resetToken.expiresAt.toISOString()
+    });
+
+  } catch (error) {
+    logError(fastify.log, '[PasswordReset] Error verifying token', error);
+    return sendInternalError(reply, 'Error verifying token');
+  }
+}
+
 export async function passwordResetRoutes(fastify: FastifyInstance) {
   // Use shared singleton instance to avoid multiple Redis connections
   const cacheStore = getCacheStore();
@@ -86,12 +151,22 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
   const phoneResetCodeRateLimiter = createPhoneResetCodeRateLimiter(redis);
   const phoneResetResendRateLimiter = createPhoneResetResendRateLimiter(redis);
 
+  // #10864 — la vérification d'un jeton est un oracle : bornée par adresse ET
+  // par jeton, le GET historique et le POST du lot #10859 dans les mêmes seaux.
+  // #10866 — l'ENVOI (`POST /reset-password`) puise dans ces mêmes seaux :
+  // sonder un jeton et le soumettre partagent un seul quota.
+  const resetTokenVerifyPreHandler = [
+    createResetTokenVerifyIpRateLimiter(redis).middleware(),
+    createResetTokenVerifyTokenRateLimiter(redis).middleware()
+  ];
+
   const passwordResetService = new PasswordResetService(
     fastify.prisma,
     cacheStore,
     emailService,
     geoIPService,
-    process.env.HCAPTCHA_SECRET || '' // Optional now - rate limiting provides protection
+    process.env.HCAPTCHA_SECRET || '', // Optional now - rate limiting provides protection
+    createResetSecondFactorAttempts({ redis })
   );
 
   // Phone password reset service
@@ -140,6 +215,18 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
+            // `message` est declare aux DEUX niveaux parce que les deux chemins
+            // de ce handler repondent differemment, et que fast-json-stringify
+            // supprime ce qui n'est pas declare la ou il arrive :
+            //   nominal → sendSuccess(reply, undefined, { message })  ⇒ RACINE
+            //   erreur  → sendSuccess(reply, { message })             ⇒ data
+            // Seul le second etait declare : le chemin NOMINAL servait donc
+            // `{"success":true}` sans sa phrase, et le chemin d'ERREUR la
+            // servait — exactement l'inverse de l'utile (#4139).
+            message: {
+              type: 'string',
+              example: 'If an account exists with this email, a password reset link has been sent.'
+            },
             data: {
               type: 'object',
               properties: {
@@ -195,7 +282,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, 'Invalid request data');
       }
 
-      fastify.log.error({ err: error }, '[PasswordReset] Error in forgot-password');
+      logError(fastify.log, '[PasswordReset] Error in forgot-password', error);
       // Return generic success response even on error (security)
       return sendSuccess(reply, { message: 'If an account exists with this email, a password reset link has been sent.' });
     }
@@ -207,7 +294,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
    */
   fastify.post('/reset-password', {
     schema: {
-      description: 'Complete password reset using the token received via email. The new password must be at least 6 characters and include uppercase, lowercase, digit, and special character. If 2FA is enabled, a valid 2FA code must be provided.',
+      description: 'Complete password reset using the token received via email. The new password must be at least PASSWORD_MIN_LENGTH characters and include uppercase, lowercase, digit, and special character. If 2FA is enabled, a valid 2FA code must be provided.',
       tags: ['auth'],
       summary: 'Complete password reset',
       body: {
@@ -222,14 +309,14 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
           },
           newPassword: {
             type: 'string',
-            minLength: 6,
+            minLength: PASSWORD_MIN_LENGTH,
             maxLength: 128,
-            description: 'New password (minimum 6 characters — PASSWORD_MIN_LENGTH)',
+            description: 'New password (minimum PASSWORD_MIN_LENGTH characters)',
             example: 'MyS3cur3P@ssw0rd!'
           },
           confirmPassword: {
             type: 'string',
-            minLength: 6,
+            minLength: PASSWORD_MIN_LENGTH,
             maxLength: 128,
             description: 'Password confirmation - must match newPassword exactly',
             example: 'MyS3cur3P@ssw0rd!'
@@ -273,10 +360,20 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
           }
         },
         401: errorResponseSchema,
+        503: errorResponseSchema,
+        429: {
+          description: 'Too many reset attempts for this address or this link',
+          ...errorResponseSchema,
+          properties: {
+            ...errorResponseSchema.properties,
+            retryAfter: { type: 'number' },
+          }
+        },
         500: errorResponseSchema
       },
       security: []
-    }
+    },
+    preHandler: resetTokenVerifyPreHandler
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Validate request body
@@ -307,11 +404,16 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
           io: fastify.socketIOHandler?.getManager?.()?.getIO(),
           userId: result.userId ?? '',
           reason: 'password_changed',
-          onError: (err) => fastify.log.warn({ err }, '[PasswordReset] socket fanout failed after reset'),
+          onError: (err) => logWarn(fastify.log, '[PasswordReset] socket fanout failed after reset', err),
         });
         return sendSuccess(reply, { message: result.message });
       } else {
-        return sendBadRequest(reply, result.error);
+        // Un refus qui ne dit rien de la saisie (panne) n'est pas un 400 : un
+        // ancien client lirait « lien invalide » (#10866).
+        if (result.code === 'RESET_UNAVAILABLE') {
+          return sendError(reply, 503, result.error, { code: result.code });
+        }
+        return sendBadRequest(reply, result.error, { code: result.code });
       }
 
     } catch (error) {
@@ -319,7 +421,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, 'Invalid request data');
       }
 
-      fastify.log.error({ err: error }, '[PasswordReset] Error in reset-password');
+      logError(fastify.log, '[PasswordReset] Error in reset-password', error);
       return sendInternalError(reply, 'An error occurred while resetting your password. Please try again.');
     }
   });
@@ -347,25 +449,35 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         }
       },
       response: {
+        // Enveloppe `sendSuccess`. Declaree a plat, cette reponse partait
+        // litteralement a `{}` : le front ne pouvait pas distinguer un jeton
+        // valide d'un jeton perime, `valid` etant indiscernable de `undefined`
+        // (#4139).
         200: {
           description: 'Token verification result with validity status and additional information',
           type: 'object',
           properties: {
-            valid: {
-              type: 'boolean',
-              description: 'Whether the token is valid and can be used for password reset',
-              example: true
-            },
-            requires2FA: {
-              type: 'boolean',
-              description: 'Whether the user has 2FA enabled and will need to provide a code during reset',
-              example: false
-            },
-            expiresAt: {
-              type: 'string',
-              format: 'date-time',
-              description: 'Token expiration timestamp (ISO 8601 format)',
-              example: '2026-01-11T15:30:00.000Z'
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                valid: {
+                  type: 'boolean',
+                  description: 'Whether the token is valid and can be used for password reset',
+                  example: true
+                },
+                requires2FA: {
+                  type: 'boolean',
+                  description: 'Whether the user has 2FA enabled and will need to provide a code during reset',
+                  example: false
+                },
+                expiresAt: {
+                  type: 'string',
+                  format: 'date-time',
+                  description: 'Token expiration timestamp (ISO 8601 format)',
+                  example: '2026-01-11T15:30:00.000Z'
+                }
+              }
             }
           }
         },
@@ -389,61 +501,89 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         }
       },
       security: []
-    }
+    },
+    preHandler: resetTokenVerifyPreHandler
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const { token } = request.query as { token: string };
+    const { token } = request.query as { token: string };
+    return replyWithResetTokenState(fastify, token, reply);
+  });
 
-      if (!token) {
-        return sendBadRequest(reply, 'Token is required');
-      }
-
-      // Hash the token to lookup in database
-      const crypto = await import('crypto');
-      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-
-      // Find token in database
-      const resetToken = await fastify.prisma.passwordResetToken.findUnique({
-        where: { tokenHash },
-        include: {
-          user: {
-            select: {
-              id: true,
-              twoFactorSecret: true
+  /**
+   * POST /auth/reset-password/verify-token (#10859)
+   * Même verdict que le GET, le jeton dans le CORPS : la page web le lit dans
+   * le fragment de son lien et ne le met plus jamais dans une adresse qu'un
+   * journal d'accès garde. Le GET reste pour les clients déjà déployés.
+   */
+  fastify.post('/reset-password/verify-token', {
+    schema: {
+      description: 'Verify if a password reset token is valid without consuming it (token in the body, never in a logged URL).',
+      tags: ['auth'],
+      summary: 'Verify reset token (body)',
+      body: {
+        type: 'object',
+        required: ['token'],
+        properties: {
+          token: { type: 'string', minLength: 1, description: 'Password reset token to verify (from the email link fragment)' }
+        }
+      },
+      response: {
+        // Enveloppe `sendSuccess`. Declaree a plat, cette reponse partait
+        // litteralement a `{}` : le front ne pouvait pas distinguer un jeton
+        // valide d'un jeton perime, `valid` etant indiscernable de `undefined`
+        // (#4139).
+        200: {
+          description: 'Token verification result with validity status and additional information',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                valid: {
+                  type: 'boolean',
+                  description: 'Whether the token is valid and can be used for password reset',
+                  example: true
+                },
+                requires2FA: {
+                  type: 'boolean',
+                  description: 'Whether the user has 2FA enabled and will need to provide a code during reset',
+                  example: false
+                },
+                expiresAt: {
+                  type: 'string',
+                  format: 'date-time',
+                  description: 'Token expiration timestamp (ISO 8601 format)',
+                  example: '2026-01-11T15:30:00.000Z'
+                }
+              }
             }
           }
+        },
+        400: {
+          description: 'Bad request - missing token parameter',
+          ...errorResponseSchema,
+          properties: {
+            ...errorResponseSchema.properties,
+            valid: { type: 'boolean', example: false },
+            error: { type: 'string', example: 'Token is required' },
+          }
+        },
+        500: {
+          description: 'Internal server error during token verification',
+          ...errorResponseSchema,
+          properties: {
+            ...errorResponseSchema.properties,
+            valid: { type: 'boolean', example: false },
+            error: { type: 'string', example: 'Error verifying token' },
+          }
         }
-      });
-
-      if (!resetToken) {
-        return sendSuccess(reply, { valid: false, requires2FA: false });
-      }
-
-      // Check if token is expired
-      if (resetToken.expiresAt < new Date()) {
-        return sendSuccess(reply, { valid: false, requires2FA: false });
-      }
-
-      // Check if token was already used
-      if (resetToken.usedAt) {
-        return sendSuccess(reply, { valid: false, requires2FA: false });
-      }
-
-      // Check if token is revoked
-      if (resetToken.isRevoked) {
-        return sendSuccess(reply, { valid: false, requires2FA: false });
-      }
-
-      return sendSuccess(reply, {
-        valid: true,
-        requires2FA: !!resetToken.user.twoFactorSecret,
-        expiresAt: resetToken.expiresAt.toISOString()
-      });
-
-    } catch (error) {
-      fastify.log.error({ err: error }, '[PasswordReset] Error verifying token');
-      return sendInternalError(reply, 'Error verifying token');
-    }
+      },
+      security: []
+    },
+    preHandler: resetTokenVerifyPreHandler
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = (request.body as { token?: string } | undefined)?.token ?? '';
+    return replyWithResetTokenState(fastify, token, reply);
   });
 
   // ============================================
@@ -480,23 +620,34 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         }
       },
       response: {
+        // L'ENVELOPPE est celle de `sendSuccess` — `{ success, data }` — et non
+        // les champs a plat. Declares a la racine, `tokenId` et `maskedUserInfo`
+        // ne matchaient rien, `data` n'etait pas declare donc SUPPRIME par
+        // fast-json-stringify, et la reponse partait a `{"success":true}` : le
+        // client n'avait pas le `tokenId` qui conditionne l'etape suivante
+        // (#4139).
         200: {
           description: 'Lookup result with masked user info',
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            tokenId: { type: 'string', description: 'Token ID for next steps' },
-            maskedUserInfo: {
+            data: {
               type: 'object',
               properties: {
-                displayName: { type: 'string', description: 'Masked display name (e.g., J**n D*e)' },
-                username: { type: 'string', description: 'Masked username (e.g., t******5)' },
-                email: { type: 'string', description: 'Masked email (e.g., je....n@f*****om)' },
-                hasAvatar: { type: 'boolean' },
-                avatar: { type: 'string' }
+                tokenId: { type: 'string', description: 'Token ID for next steps' },
+                maskedUserInfo: {
+                  type: 'object',
+                  properties: {
+                    displayName: { type: 'string', description: 'Masked display name (e.g., J**n D*e)' },
+                    username: { type: 'string', description: 'Masked username (e.g., t******5)' },
+                    email: { type: 'string', description: 'Masked email (e.g., je....n@f*****om)' },
+                    hasAvatar: { type: 'boolean' },
+                    avatar: { type: 'string' }
+                  }
+                },
+                error: { type: 'string' }
               }
-            },
-            error: { type: 'string' }
+            }
           }
         },
         429: {
@@ -532,7 +683,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       if (error instanceof z.ZodError) {
         return sendBadRequest(reply, 'validation_error');
       }
-      fastify.log.error({ err: error }, '[PhonePasswordReset] Error in phone lookup');
+      logError(fastify.log, '[PhonePasswordReset] Error in phone lookup', error);
       return sendInternalError(reply, 'internal_error');
     }
   });
@@ -569,14 +720,20 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         }
       },
       response: {
+        // Enveloppe `sendSuccess` — cf. le commentaire du lookup ci-dessus (#4139).
         200: {
           description: 'Identity verification result',
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            codeSent: { type: 'boolean', description: 'Whether SMS code was sent' },
-            attemptsRemaining: { type: 'number', description: 'Remaining identity verification attempts' },
-            error: { type: 'string' }
+            data: {
+              type: 'object',
+              properties: {
+                codeSent: { type: 'boolean', description: 'Whether SMS code was sent' },
+                attemptsRemaining: { type: 'number', description: 'Remaining identity verification attempts' },
+                error: { type: 'string' }
+              }
+            }
           }
         },
         429: {
@@ -613,7 +770,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       if (error instanceof z.ZodError) {
         return sendBadRequest(reply, 'validation_error');
       }
-      fastify.log.error({ err: error }, '[PhonePasswordReset] Error in identity verification');
+      logError(fastify.log, '[PhonePasswordReset] Error in identity verification', error);
       return sendInternalError(reply, 'internal_error');
     }
   });
@@ -643,16 +800,24 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         }
       },
       response: {
+        // Enveloppe `sendSuccess`. C'est l'etape la plus couteuse du parcours :
+        // sans `resetToken`, un code SMS a ete envoye, saisi et CONSOMME pour
+        // un jeton qui n'atteignait jamais l'appelant (#4139).
         200: {
           description: 'Code verification result',
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            resetToken: {
-              type: 'string',
-              description: 'Password reset token (use with /auth/reset-password)'
-            },
-            error: { type: 'string' }
+            data: {
+              type: 'object',
+              properties: {
+                resetToken: {
+                  type: 'string',
+                  description: 'Password reset token (use with /auth/reset-password)'
+                },
+                error: { type: 'string' }
+              }
+            }
           }
         },
         429: {
@@ -688,7 +853,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       if (error instanceof z.ZodError) {
         return sendBadRequest(reply, 'validation_error');
       }
-      fastify.log.error({ err: error }, '[PhonePasswordReset] Error in code verification');
+      logError(fastify.log, '[PhonePasswordReset] Error in code verification', error);
       return sendInternalError(reply, 'internal_error');
     }
   });
@@ -747,7 +912,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       if (error instanceof z.ZodError) {
         return sendBadRequest(reply, 'validation_error');
       }
-      fastify.log.error({ err: error }, '[PhonePasswordReset] Error in code resend');
+      logError(fastify.log, '[PhonePasswordReset] Error in code resend', error);
       return sendInternalError(reply, 'internal_error');
     }
   });

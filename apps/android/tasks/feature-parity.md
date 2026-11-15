@@ -292,7 +292,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       Pure `:core:model` `SavedAccount` + `SavedAccounts` (faithful port of iOS `AuthManager`'s
       saved-account logic, `packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift`, +
       `SavedAccount`, `packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthModels.swift`, + `LoginView`'s
-      picker, `apps/ios/Meeshy/Features/Main/Views/LoginView.swift`). `SavedAccount` (id/username/
+      picker, `apps/ios/Meeshy/Features/Auth/Views/LoginView.swift`). `SavedAccount` (id/username/
       displayName?/avatarUrl?/lastActiveAtMillis) exposes `shortName` (iOS `displayName ?? username`,
       **hardened** so a blank display name also falls back to the username — a row never renders empty).
       `SavedAccounts` is a pure SSOT of immutable list→list transforms iOS scatters as mutating methods
@@ -440,7 +440,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       **countdown state-machine + strict email gate core shipped** (slice
       `auth-magic-link-countdown`, 2026-07-21). Pure `:core:model` `MagicLinkCountdown`
       (immutable value + pure `start`/`tick` transitions) + `MagicLinkEmail` (faithful
-      port of iOS `MagicLinkView`, `apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift`:
+      port of iOS `MagicLinkView`, `apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift`:
       the `isValidEmail` regex, the `startCountdown` per-second loop that flips `linkExpired`
       at zero, `formattedCountdown` `"m:ss"`, and the resend `.disabled(countdownRemaining > 0
       || isLoading)` gate). `MagicLinkCountdown.start(expiresInSeconds)` seeds a fresh
@@ -1381,6 +1381,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       resulting store state, not literals the test itself set; no coverage floor lowered, no existing
       test weakened — the two adapted tests keep their original assertions, only their execution
       mechanics catch up with the new suspend/async signature).
+      **Follow-up shipped (slice `story-composer-draft-wipe-on-teardown`, 2026-08-27):** the story
+      composer draft store — a per-account, non-namespaced on-device store added later by
+      `story-composer-draft-autosave` — was NOT covered by `wipe()`, so a second account on a shared
+      device inherited the previous account's half-written story (caption + attached media +
+      audience). `DefaultSessionTeardown` now takes `StoryComposerDraftStore` and calls `clear()` in
+      `wipe()` (same rule as the chat draft store; injected via `SdkModule.providesSessionTeardown`).
+      **+1 behavioural test** `SessionTeardownTest.wipe_removesTheStoryComposerDraft` (seeds a real
+      draft, asserts `load()` is null post-wipe) + a story-draft assertion added to the idempotent
+      test. **Mutation (RED proof):** dropping `storyComposerDraftStore.clear()` fails **exactly**
+      `wipe_removesTheStoryComposerDraft` (6 run, 1 failed); every other teardown test stays green.
+      This closes the last of the three story-draft follow-ups (rich-content serialization + in-canvas
+      re-capture affordance remain, tracked on the E. Stories draft line).
 - [x] Splash screen with brand animation + minimum display duration — **shipped** (slice
       `splash-screen`, 2026-08-10). System pre-Compose splash (`androidx.core:core-splashscreen`,
       `Theme.Meeshy.Starting` → `postSplashScreenTheme` → `Theme.Meeshy`) bridges the truly-first
@@ -2136,6 +2148,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       proprement l'insert sur échec ; cancellation-safe — rethrow `CancellationException`) ; `MeeshyImageViewer`
       gagne un bouton Save (icône FileDownload, TopEnd, opt-in via `onImageSaved`, masqué < Android 10) ;
       `ChatScreen` affiche un Toast succès/échec. Reste : contact card) ; contact pending
+- [~] Message système → notice centrée — **fondation done** (slice `chat-system-notice`, 2026-08-30) :
+      un message `messageSource == "system"` (avis d'arrivée/départ, résumés hérités) se rendait comme
+      le premier message SIGNÉ de l'arrivant, faute d'un arm dédié. Ajoute `BubbleRenderKind.Kind.System`
+      résolu **EN PREMIER** dans `resolve(...)` (parité iOS `ThemedMessageBubble` `case .system`, vérifié
+      avant deleted/burned/ephemeral ; le presenter court-circuite avant toute lecture d'horloge) ;
+      `BubbleContent.isSystem` ← `ApiMessage.isSystemMessage` dans `BubbleContentBuilder` ; `MessageBubble`
+      rend une `BubbleSystemNoticeView` centrée, sans avatar ni nom (port iOS `BubbleSystemNoticeView`,
+      capsule subtile `backgroundTertiary`, texte muté centré ; notice vide → rien). +10 tests, RED-prouvés
+      (retirer l'arm `isSystem` → exactement les 4 cas système échouent — le cas de base + 3 collisions de
+      précédence —, aucun collatéral). Diff `apps/android`
+      only. **Reste** : notices d'appel enrichies (`BubbleCallNoticeView`) et d'arrivée
+      (`BubbleJoinNoticeView` + catalogue localisé + règles de lien) — lots suivants sur cet arm.
 - [~] Message-bubble VoiceOver/TalkBack composed label — **pure composer done** (slice
       `chat-bubble-a11y-label`, 2026-08-21 : port iOS `MessageAccessibilityLabelComposer.compose`
       (`apps/ios/Meeshy/Features/Main/Focal/Preferences/MessageAccessibilityLabelComposer.swift`).
@@ -2159,7 +2183,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`chat-rich-text-segments` 2026-07-06): pure `:core:model` `MessageTextParser` SSOT (port of iOS
       `MessageTextRenderer`) — one earliest-match-wins pass over markdown **bold**/*italic*/~~strike~~/
       `__underline__` (recursive nesting), `@username` (+ display-name resolution), `m+TOKEN`, `http(s)`
-      URLs; plus `highlightRanges` (case-insensitive/non-overlapping), `extractUrls` (meeshy→mention→http),
+      URLs; plus `highlightRanges` (accent- **and** case-insensitive/non-overlapping — `search-accent-fold-highlight`
+      2026-08-30, iOS `.diacriticInsensitive`/`.caseInsensitive` parity via pure `SearchTextFolder`, ranges mapped
+      back to original indices even when folding changes length, decomposed graphemes highlighted whole),
+      `extractUrls` (meeshy→mention→http),
       `resolvedLinkUrl` (tracked-link redirect). Rendered via `:sdk-ui` `RichMessageText` (`AnnotatedString`
       + `LinkAnnotation.Url`/`withLink` real taps, highlight over rendered plain text) wired into the bubble;
       `mentionDisplayNames`/`highlightTerm`/`trackedLinks` params ready for `ChatScreen` to feed. +34 tests.
@@ -3127,6 +3154,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       it survives a fetch failure); `ConversationStatsSheet` renders the three emoji/percent columns
       + a segmented success/warning/error bar. Strings en/fr/es/pt. Box now `[x]`. (The `AI
       participant persona` box below, same `/analysis` endpoint, shipped separately 2026-08-22.)
+      **Client-side fallback landed 2026-08-31** (slice `conversation-stats-client-fallback`) — the
+      dashboard was SERVER-ONLY: a failed/lagging `/stats` fetch showed an error screen even though the
+      loaded page already holds the messages to compute the same figures (iOS's `clientComputed*`
+      fallback). New pure `ConversationStatsProjection.clientComputed(...)` (+ `ClientStatMessage` /
+      `ClientAttachmentKind`) reduces the on-screen messages into the SAME `ConversationMessageStatsResponse`
+      the server returns — messages, words, characters, content-type counts, per-participant shares
+      (grouped by **id**, SOTA over iOS's group-by-display-name), and per-day activity — so a single
+      projection path renders either source. The ViewModel now seeds the sheet from that snapshot
+      INSTANTLY (cache-first, no spinner) and, on a fetch failure, KEEPS it instead of erroring
+      (offline graceful degradation). `BubbleContent → ClientStatMessage` mapping extracted to its own
+      file (a video thumbnail folds into the IMAGE tally — the bubble layer carries no video/author-id;
+      the server split stays authoritative). Matures dimensions 2/8/13 (performance, UX offline, complétude).
 - [x] AI participant persona profiles + trait bars — **shipped 2026-08-22** (slice
       `conversation-analysis-personas`). The `ParticipantProfile`/`ParticipantTraits` model tree shipped
       orphaned (grep-confirmed zero consumers); this slice turns it real. Pure
@@ -3177,9 +3216,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       Mutation (RED proof): dropping the reduction-target re-validation (`… && reduced in supportedCodeSet` →
       `… reduced`) fails **exactly** `normalize_rejectsReductionWhoseTargetIsNotSupported` (14 run, 1 failed,
       no collateral). `:core:model` + `:sdk-ui` + all feature-module `testDebugUnitTest` green; full
-      `:app:assembleDebug` → BUILD SUCCESSFUL. **Follow-up:** app-side device-locale sourcing — inject
-      `Locale.getDefault()` into the resolution context + send the `X-Device-Locale` header (iOS parity) so
-      the gateway persists it; the pure resolution + API-decoded field are complete.
+      `:app:assembleDebug` → BUILD SUCCESSFUL. **Header sourcing shipped 2026-09-01** (slice
+      `device-locale-header`): the client now SENDS `X-Device-Locale` on every request, closing the loop so
+      the 4th-priority arm — dead until now on Android (nothing ever fed `User.deviceLocale`) — actually
+      fires. New pure `:core:model` `DeviceLocaleTag.of(locale) → String?`: the RAW BCP-47 tag
+      (`Locale.getDefault().toLanguageTag()`, so `"fr-FR"`/`"zh-Hant-HK"` travel intact for the gateway to
+      reduce, exactly as iOS's `Locale.current.identifier`), or `null` when there is no usable language subtag
+      (`Locale.ROOT`/region-only → `"und"`/`"und-FR"`, or an ill-formed subtag → `"und"`) so the header is
+      omitted rather than sending `"und"` on every call. New `:core:network` `DeviceLocaleInterceptor` (twin
+      of `ClientCapabilitiesInterceptor`): reads the locale per request through an injectable provider, adds
+      the header, never clobbers a caller-set one, sends nothing for an unusable locale; registered in
+      `MeeshyApi`'s OkHttp chain. +12 tests (8 `DeviceLocaleTagTest` — region tag / bare language / script+
+      region verbatim / regional variant / root omitted / region-only omitted / ill-formed omitted / legacy→
+      modern; 4 `DeviceLocaleInterceptorTest` — announced / unusable→no-header / caller-header-wins / read-
+      per-request). Mutation (RED proof): dropping the `und` guard fails **exactly** the ill-formed-subtag
+      test (14 run, 1 failed, no collateral). **Remaining follow-up:** injecting the LIVE `Locale.getDefault()`
+      straight into the client-side resolution context (an optimisation over iOS, which resolves off the
+      persisted `User.deviceLocale`) is deliberately deferred to avoid diverging from the server-persisted
+      value — tracked as a separate note, not a gap.
 - [~] Original exploration: long-press → « Voir l'original / la traduction »
       (toggle par message, builder Prisme-aware) ; flag strip read-only shipped
       (slice `chat-translation-language-strip`, 2026-07-10) ; **tap-to-switch active language shipped**
@@ -3722,7 +3776,33 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       depends on this same `TusUploadRepository`/`TusUploadContext.POST` building block rather
       than the `MediaRepository` pipeline the routine had assumed reusable.
 - [ ] Audio elements (≤5/slide): voice recording (60s), audio file import, on-canvas player widget
-- [ ] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
+- [~] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
+      **Pure board core done** (`story-drawing-board`): a pure, immutable `StoryDrawingBoard`
+      (`:feature:stories`) porting the iOS `StoryComposerViewModel+DrawingEditing` reducer —
+      committed `strokes` + a `redoStack` + a `selectedStrokeId`, with `commit` / `undo` / `redo` /
+      `clear` / `delete` / `select` and per-stroke `recolorSelected` / `resizeSelected` /
+      `smoothSelected`. The redo-invariant lives in one place: `redoStack` is populated only by
+      `undo`, and any fresh action (`commit`, a real `delete`) invalidates it, while a property tweak
+      (recolour/resize/smooth) is NOT a new stroke so it leaves redo intact. `StoryDrawingStroke` /
+      `StoryDrawingStrokePoint` / `StrokeTool` (pen/marker/eraser) / `StrokeSmoothing` (raw/curve/line)
+      mirror the iOS models with the exact gateway wire strings.
+      Two deliberate improvements over iOS: `undo`/`delete`/`select`/mutate no-ops return the same board
+      unchanged, and `delete` of an absent id keeps the redo history (iOS clears it unconditionally).
+      +33 tests, RED-proven (dropping `commit`'s `redoStack = emptyList()` fails exactly the
+      redo-invalidation test).
+      **Wire serialization done** (`story-drawing-strokes-wire`): the stroke wire model was promoted
+      from `:feature:stories` to `:core:model` (`StoryDrawingStroke`/`StoryDrawingStrokePoint`/
+      `StrokeTool`/`StrokeSmoothing`, now `@Serializable` with `@SerialName` = the exact gateway strings)
+      so it is the SINGLE type the reducer AND the `StoryEffects.drawingStrokes` wire field both hold —
+      exactly as iOS keeps one `MeeshySDK/Models/StoryDrawingStroke` for both (no divergent twin).
+      `createdAt` is now carried as an optional `Double?` passthrough (epoch seconds) for round-trip
+      fidelity; the reducer still never reads it. `StoryEffects.drawingStrokes` decodes flat on the v1
+      wire and rides the v3 `kind:"drawing"` object's `payload.strokes`, projected back by
+      `CanvasV3Projection` (port of iOS `CanvasV3Migration.swift:580-583`); the legacy PKDrawing blob
+      (`payload.data`) has no Android renderer and is read as nothing to paint, an empty/absent `strokes`
+      normalises to `null`. +9 tests, RED-proven (neutering the projection branch fails exactly the 3
+      strokes-projection tests, oracle = shared `v1-legacy-rich` v1/v3 fixture pair). Pending: the Compose
+      capture surface (variable-width pressure render) + composer VM wiring — device/Compose-bound.
 - [x] Emoji sticker picker — **categorised + searchable** (`story-sticker-picker-search`): a pure
       `StickerCatalog` (8 iOS-parity categories — smileys/animals/food/activities/travel/objects/
       symbols/flags, ~16 keyworded emojis each, every glyph in exactly one category) owns the emoji
@@ -3779,8 +3859,85 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       pastel brightness/saturation bands + preset-avoidance; 7 deck set/clear/inert/selection; 4 draft
       serialise incl. gradient wire form + effects-materialisation; 3 VM intent/publish). Mutation-RED-proven
       (neutering `hsbToHex` reddens exactly the 4 conversion tests; neutering the inert guard reddens exactly
-      the 2 inert tests). Pending: background IMAGE with transform, and looping/non-looping background video
-      designation.
+      the 2 inert tests). **Looping/non-looping background VIDEO designation done**
+      (`story-composer-background-video-loop`): before this the composer hard-coded `loop = true` on every
+      designated background — the author could not publish a background video that plays ONCE. Ports iOS's
+      `ClipInspector.supportsLoop` semantics (looping is a VIDEO/audio-background affordance, never an image's).
+      `StoryBackgroundMedia.loop` (default true) is honoured only for a video — `toMediaObject()` emits
+      `loop = if (isVideo) loop else true` so a stale `loop = false` never rides onto an image object (the
+      reader's image branch is unconditionally looping, its video branch reads `backgroundObject?.loop ?: true`).
+      `StorySlide.backgroundLoop`; `StorySlideDeck.setSelectedBackgroundLoop` (inert with no designated
+      background or on equal value) + `selectedSlideBackgroundLoop`; a FRESH designation
+      (`toggleSelectedBackgroundMedia`) and a background-clearing `removeMedia` both RESET loop to the default,
+      so no stale off-state leaks to a new background. VM `onSetSlideBackgroundLoop` + derived
+      `selectedSlideBackgroundIsVideo`/`selectedSlideBackgroundLoop`; the resolver carries the slide's loop onto
+      publish. A `Loop` toggle badge appears on the designated-background thumbnail **only when it is a video**
+      (the control is never a no-op), localised en/fr/es/pt. +13 tests (7 deck default/set/inert×2/only-selected/
+      reset-on-redesignate/reset-on-remove; 2 draft video-loop-false + image-always-loops; 4 VM
+      intent/publish-loop-false/is-video-derivation). Mutation-RED-proven (forcing `loop = true` in
+      `toMediaObject` reddened EXACTLY the 2 loop-false tests while image-always-loops stayed green).
+      **Reader honours a background IMAGE's framing transform done** (`story-viewer-background-media-transform`):
+      the viewer previously drew any background image as a plain `ContentScale.Crop` fill, silently dropping the
+      pan/zoom framing an iOS/web/backend author put on the background `StoryMediaObject` (`x`/`y`/`scale`/
+      `rotation`) — a real cross-client parity gap (a story framed on iOS rendered un-framed on Android). A pure
+      `StoryBackgroundObjectTransform.from(StoryMediaObject)` (`:feature:stories`) ports iOS's render conversion
+      exactly (`StoryCanvasUIView+Rendering.swift`): aspect-fill base, then `scale` + a pixel offset FROM CENTRE
+      `((x-0.5), (y-0.5))` kept as canvas FRACTIONS (resolution-independent) + `rotation`, ignoring `anchor`/
+      `aspectRatio` (background-only, unlike a foreground object). Decays TOLERANTLY — a non-finite/non-positive
+      `scale` → neutral 1×, a non-finite position/rotation → its neutral component — so a malformed object never
+      blanks or inverts the slide. `StoryViewerViewModel.resolveBackgroundMedia` projects it onto
+      `StorySlideView.backgroundTransform` for an IMAGE background only (the transform rides only on a modern
+      `isBackground` object whose own URL is what renders; a legacy/flat fallback keeps IDENTITY); the viewer's
+      image branch applies it via `graphicsLayer` (offset fractions × measured `size`, clipped by the frame,
+      mirroring iOS's "zoom inside the background"). +14 tests (10 `StoryBackgroundObjectTransformTest` pure
+      conversion incl. every decay branch; 4 VM projection: framed image / default-framed image / video / no-bg).
+      Mutation-RED-proven twice (dropping the `-0.5` centre offset reddened EXACTLY the 4 offset tests while
+      scale/rotation stayed green; forcing the VM projection to IDENTITY reddened EXACTLY the framed-image test).
+      **Composer AUTHORING of a background IMAGE's framing done** (`story-composer-background-image-transform`):
+      closes the author→reader loop the reader slice opened. The composer already persisted the background's
+      pan/zoom as a per-slide `StoryCanvasTransform` (viewport **pixels**: scale + offsetX/Y px) but published the
+      background object with the bare `x`/`y`/`scale` defaults — a story framed by an Android author rendered
+      un-framed on every client (including Android's own reader). A pure `StoryBackgroundFraming` value + the
+      conversion `StoryCanvasTransform.toBackgroundFraming(w,h)` project the pixel offset onto the wire's
+      **normalised** coordinates (`x = 0.5 + offsetX / canvasWidth`), the exact inverse of the reader's
+      `StoryBackgroundObjectTransform.from` — proven by a round-trip test. Total on a degenerate input (a
+      not-yet-measured/non-finite canvas → centred axis; non-finite offset → centre; non-finite/non-positive
+      scale → 1×). The wrinkle NOTES flagged — the canvas width isn't retained in the VM — is closed by capturing
+      the measured size in `onCanvasTransform` (the sole producer of a non-identity transform, so the size that
+      made the offset is always the size that inverts it); it rides on `StoryComposerUiState.canvasWidthPx/HeightPx`.
+      `StoryBackgroundMedia.framing` is honoured **only for an image** (a video keeps IDENTITY — the reader's video
+      render path is still the scoped-out follow-up); and only when the designated background IS the media the canvas
+      frames (its first resolved attachment), so a pan applied to one image never mis-frames a differently-designated
+      background. +14 tests (11 `StoryBackgroundFramingTest` pure conversion incl. every degrade branch + isIdentity
+      + reader round-trip; 3 draft image-framed/image-default/video-ignores; 4 VM publish framed/unframed/
+      designated≠framed/video). Mutation-RED-proven ×3 (forcing `x=0.5` reddened exactly the offset+round-trip tests;
+      dropping the image-only guard reddened exactly the 2 video tests; neutering the designated-vs-framed guard
+      reddened exactly that 1 test). **Reader honours a background VIDEO's framing transform done**
+      (`story-viewer-background-video-transform`): closes the scoped-out follow-up the two prior slices named — the
+      last cross-client parity gap in §E backgrounds. Before this the viewer drew any background video through a
+      plain fill, silently dropping the pan/zoom/rotation an iOS/web/backend author placed on a background VIDEO
+      `StoryMediaObject` (a video framed on iOS rendered un-framed on Android). `StoryViewerViewModel.resolveBackgroundMedia`'s
+      video branch now projects the same pure `StoryBackgroundObjectTransform.from` onto `StorySlideView.backgroundTransform`,
+      gated on the object's OWN `mediaURL` producing the resolved url (a legacy/flat fallback video keeps IDENTITY —
+      the framing never steals an unrelated fallback item's pixels); the viewer's video branch applies it to the
+      `ReelVideoSurface` via `graphicsLayer` (offset fractions × measured `size`, `rotationZ`, clipped by the 9:16
+      frame), the exact mirror of the image branch. The pure conversion is reused unchanged (already fully covered).
+      +4 tests (video framed → x=0.3/scale=2.0; video default → IDENTITY; legacy video-only → IDENTITY; background
+      video object with null own-url + fallback video → IDENTITY, guard). Mutation-RED-proven (forcing the video
+      branch back to IDENTITY reddened EXACTLY the one framed-video test while the three IDENTITY-expecting tests
+      stayed green). **Composer AUTHORING of a background VIDEO's framing done**
+      (`story-composer-background-video-transform`): closes the last open piece of §E "Backgrounds" — the WRITE half
+      the reader-video slice above opened. The VM's `resolveBackgroundFraming` already projected the canvas pan/zoom
+      onto ANY designated background (type-agnostic); the only remaining gap was `StoryBackgroundMedia.toMediaObject`,
+      which still forced IDENTITY for a video (the framing was a wire value no reader honoured while the reader video
+      path kept IDENTITY). Now that the reader honours a background video's `x`/`y`/`scale`, `toMediaObject` emits the
+      author's `framing` for a video exactly as for an image; `loop`/`intrinsicDuration`/`duration` stay video-only and
+      ride alongside the framing unclobbered. +3 tests replacing/adding around the old `video ignores framing` cases
+      (draft: video carries framing incl. loop+duration regression, unframed video → centred defaults; VM: publish a
+      panned+zoomed video background carries `x=0.5+200/1080`, `y=0.5+100/1920`, `scale=2.0`, loop=true). Mutation-RED-
+      proven (re-introducing the `if (isVideo) IDENTITY` guard reddened EXACTLY the two framed-video tests while the
+      unframed-video test and every other suite stayed green). §E Backgrounds is now closed author→reader on both
+      image and video.
 - [x] 8 photo filters (vintage/bw/warm/cool/dramatic/vivid/fade/chrome) with intensity
       (`story-photo-filters`): the look of each preset lives in **one** pure, Compose-agnostic place —
       `StoryFilterMatrix.baseMatrix(StoryFilter)` → a `StoryColorMatrix` (4×5 `List<Float>`, value
@@ -3795,7 +3952,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `storyEffects.filter`/`filterIntensity` (a filter-only slide still emits a `storyEffects` payload).
       +31 tests (21 matrix, 10 deck) + 7 VM + 5 draft; +11 strings × 4 locales. Mirrors iOS's per-slide
       photo filter with an adjustable strength.
-- [~] Frosted-glass text backdrops; safe-zone overlay; snap-to-guide + out-of-bounds warning
+- [x] Frosted-glass text backdrops; safe-zone overlay; snap-to-guide + out-of-bounds warning
       **Snap-to-guide + out-of-bounds warning done** (`story-canvas-snap-guides`): a pure
       `StorySnapResolver.resolve(x, y, …)` → `SnapResult(x, y, verticalGuide, horizontalGuide,
       withinSafeZone)` is the single source of truth for where a dragged element settles. Each axis
@@ -3810,8 +3967,40 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       draws the active guide line(s) (accent `primary`) and an `error`-coloured warning border when
       out of bounds; the drag-end signal is a non-consuming `Final`-pass `awaitEachGesture` that
       runs alongside the transform detector (glue). A natural magnetic-alignment gesture — surpasses
-      iOS, whose snapping has no per-axis guide overlay here. +25 tests (18 resolver, 7 VM). Pending:
-      frosted-glass text backdrops, persistent safe-zone overlay grid.
+      iOS, whose snapping has no per-axis guide overlay here. +25 tests (18 resolver, 7 VM).
+      **Frosted-glass / solid text backdrops READER done** (`story-viewer-text-backdrop`): the composer
+      already AUTHORED a text element's backing (`StoryTextElement.background` → `toTextObject` writes the
+      `backgroundStyle` tagged union) and painted it live on the composer canvas, but the VIEWER dropped it
+      entirely — `StoryTextObjectProjection.project` never resolved `backgroundStyle`/`textBg`, so an
+      iOS/web/backend-authored `.solid(hex)` or `.glass(radius)` text backdrop rendered on Android as plain
+      floating glyphs (a real cross-client parity gap). A pure `StoryTextBackground.resolve(backgroundStyle,
+      textBg)` ports iOS `StoryTextObject.resolvedBackgroundStyle` exactly (priority: modern `backgroundStyle`
+      > legacy `textBg`→Solid > None — the modern style wins even when it resolves to None, suppressing a
+      stale legacy hex), decoding TOLERANTLY (a Solid with no usable hex / an unknown `type` / a blank legacy
+      hex → None; a Glass with an absent/non-finite/non-positive radius keeps the glass intent and clamps the
+      sigma to `DEFAULT_GLASS_RADIUS`). `project()` resolves it once onto `StoryTextObjectView.background`;
+      the viewer's `StoryTextObjectLayer` paints the backing behind the glyphs (rounded solid fill honouring
+      an 8-digit alpha hex, translucent frosted scrim for glass), mirroring the composer's own `storyTextBacking`
+      so author and reader agree on the look. +19 tests (14 `StoryTextBackgroundTest.resolve` covering every
+      priority + tolerant-decay branch + a toStyleWire round-trip; 4 projection: none/glass/solid/legacy;
+      +1 net accounting). Mutation-RED-proven twice (dropping the projection's resolution reddened EXACTLY the
+      3 non-None projection tests while the None test stayed green; dropping the glass radius guard reddened
+      EXACTLY the 2 non-positive/non-finite tests while the missing-radius test stayed green).
+      **Persistent safe-zone overlay grid done** (`story-composer-safe-zone-overlay`): closes this line. The
+      transient snap feedback above lit only the guide line(s) NEAR the drag; the persistent overlay draws the
+      full composition frame while dragging (parity with iOS `SafeZoneOverlay`). A pure `StorySafeZoneGrid.geometry(width,
+      height)` → `SafeZoneGeometry(safeLeft/Top/Right/Bottom, verticalThirds, horizontalThirds)` ports iOS
+      `StorySafeZone`'s ASYMMETRIC insets (`TOP_INSET 0.18` / `BOTTOM_INSET 0.25` / `HORIZONTAL_INSET 0.05` —
+      the viewer's top chrome and bottom reply-bar eat unequal margins, so a centred safe zone would lie) plus
+      the classic rule-of-thirds lines (`THIRDS [1/3, 2/3]`, the centre deliberately OMITTED so it never
+      double-draws the transient snap guide). A non-finite or non-positive dimension collapses to an `isEmpty`
+      geometry (zeroed rect + empty line lists) so an unmeasured/zero canvas draws nothing. The composer's drag
+      `Canvas` (already shown only while `snapFeedback != null`) strokes the dashed safe rect + faint thirds
+      lines at `primary@35%` beneath the existing accent snap guides — pure glue over the resolver. +9 tests
+      (all `StorySafeZoneGridTest`: unit-rect equals the iOS insets, per-axis denormalisation, the two thirds
+      lines per axis, centre-omission, and every degenerate guard — zero/negative/non-finite width & height).
+      Mutation-RED-proven: dropping the degenerate guard reddened EXACTLY the zero/non-finite tests (the
+      negative case is geometrically empty regardless — `safeRight < safeLeft` — and correctly stayed green).
 - [x] Z-order management (front/back, forward/backward) persisted for WYSIWYG playback
       (`story-text-element-zorder`): the slide's `elements` list order *is* the paint order (index 0 =
       back, last = front), so a pure `StorySlideDeck.reorderTextElement(id, StoryZOrder)` restacks the
@@ -3823,7 +4012,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `TextStyleToolbar` gains a 4-button z-order row (send-to-back / backward / forward / bring-to-front)
       whose order rides into publish via the existing element serialisation. +16 tests (13 reducer, 3 VM);
       +4 strings × 4 locales. Mirrors iOS's front/back + forward/backward layering controls.
-- [~] Multi-element context menu (edit, duplicate, reorder, delete) — **edit** (tap-to-select +
+- [x] Multi-element context menu (edit, duplicate, reorder, delete) — **edit** (tap-to-select +
       caption/element routing), **delete** (per-element remove handle), **duplicate**
       (`story-text-element-duplicate`), and **reorder** (`story-text-element-zorder`, z-order row in the
       floating toolbar) done. Duplicate: pure `StorySlideDeck.duplicateTextElement`
@@ -3831,8 +4020,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       normalised offset (clamped into the canvas) so the copy is visible, inert when the source id is
       unknown / the new id collides / the slide is at the ≤5 cap; `StoryComposerViewModel.onDuplicateTextElement`
       mints the id, selects the copy, and warns-without-adding at the cap; a duplicate `ContentCopy`
-      handle sits in the floating `TextStyleToolbar`. Pending: a single unified long-press context menu
-      consolidating these per-element actions.
+      handle sits in the floating `TextStyleToolbar`. **Unified long-press context menu done** (slice
+      `story-element-context-menu`, 2026-08-26): a long-press on any on-canvas text element opens ONE
+      `DropdownMenu` gathering all seven actions (edit · duplicate · send-to-back · backward · forward ·
+      bring-to-front · delete). The pure `StoryElementMenu.resolve(deck, elementId)` decides each row's
+      `enabled` flag from the SAME rules the deck reducers enforce — a reorder row is enabled iff
+      `reorderTextElement` would actually restack (not already at that extreme) and duplicate iff below
+      the ≤5 cap — so a greyed row can never dispatch an inert op. `StoryElementAction.zOrder` is the one
+      projection onto `StoryZOrder`, so the menu and the reducer cannot drift. VM: `onOpenElementMenu`
+      (selects + opens, inert off-slide), `onDismissElementMenu`, and `onElementMenuAction` (routes to the
+      existing duplicate/reorder/remove/select intents and closes; disabled or stale action = safe no-op).
+      +22 tests (14 resolver: presence/selected-slide gate, seven-action order, edit/delete always on,
+      per-position reorder enablement each tied to the real reducer's inert-ness, cap-gated duplicate tied
+      to the real reducer, zOrder mapping, absent-row isEnabled; 8 VM: open/dismiss/select, each action's
+      observable deck outcome + menu close, disabled no-op, no-menu no-op). Mutation-RED-proven (forcing
+      every row `enabled = true` reddens exactly the 6 position/cap behavioural tests). +2 strings × 4 locales.
 - [~] Per-element + per-slide duration; background designation toggle (1 visual + 1 audio/slide) —
       **per-slide duration RESOLUTION done** (slice `story-viewer-slide-duration`, 2026-08-25): the
       viewer honours the author-pinned/content-derived slide duration via the pure `StorySlideDuration`
@@ -3867,17 +4069,242 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       advance each end independently (inert on unknown id); two toolbar controls (clock / timelapse, tinted
       when active) author them, localised in 4 locales. +18 tests (10 model/cycle + 4 `toTextObject`
       projection + 4 VM intent). Mutation-RED-proven (neutering `advance` to a constant reddens exactly the
-      9 advance/cycle/VM-advance assertions, the model-shape + inert-id ones stay green). **Pending**: the
-      background-designation toggle.
-- [ ] Repost flow: clone source story + locked attribution badge
-- [ ] Draft save/restore with media persistence + lost-media detection / re-capture prompt
+      9 advance/cycle/VM-advance assertions, the model-shape + inert-id ones stay green). **Background-designation
+      toggle (VISUAL half) done** (slice `story-composer-background-media`, 2026-08-25): the composer now AUTHORS
+      which of a slide's attached media is its single looping background — before this, every media rode as a flat
+      `mediaIds` list and the reader fell back to "first video else first image" as the background, so the author
+      could not choose. `StorySlide.backgroundMediaId` + `StorySlideDeck.toggleSelectedBackgroundMedia` enforce
+      **at most one visual background per slide** (designating replaces the prior; re-designating clears it; inert
+      on an unattached id), and `removeMedia` clears the designation when it drops the background media (no orphan
+      pointer). On publish the VM resolves the id to the uploaded media's URL/MIME/duration
+      (`StoryBackgroundMedia.toMediaObject`) into a single `effects.mediaObjects` entry flagged
+      `isBackground = true, loop = true` — a **video** carries its duration onto `duration`+`intrinsicDuration`
+      (feeding the reader's `StorySlideDuration` `bgVideoDur` loop-extend), an **image** carries none — exactly the
+      shape the reader's `resolveBackgroundMedia` (`firstOrNull { it.isBackground }`) already honours. A `Wallpaper`
+      toggle badge on each real media thumbnail authors it (tinted `primary` when active), localised in 4 locales.
+      +21 tests (8 deck reducer/invariant + 5 draft serialisation + 5 VM intent/publish-resolution + 3 boundary).
+      **Pending**: the AUDIO half (mark one audio track per slide as background → `audioPlayerObjects[].isBackground`),
+      blocked until the composer gains an audio-track authoring surface.
+- [~] Repost flow: clone source story + locked attribution badge — **reader-side locked
+      attribution badge done** (slice `story-viewer-repost-attribution`, 2026-08-26): the story
+      viewer header now shows, after the author's name, the repost glyph + `@handle` (no "via" —
+      the icon says it), exactly gating like iOS `StoryViewerView+Sidebar` (glyph on
+      `repostOfId != null`; handle on `repostAuthorUsername ?? repostAuthorName`). Pure
+      `StoryRepostAttribution.resolve(...)` returns `null` for a non-repost (no glyph) else a
+      `StoryRepostAttribution(handle)` where `handle` is the first NON-blank of
+      username→name, trimmed (improving on iOS's `??`, which renders a lone `@` for a
+      present-but-empty username). Wired: `StoryItem.repostAuthorUsername` (new, optional wire
+      field), `StoryGrouping.toStoryItem` populates it from `repostOf.author.username`,
+      `StorySlideView.repostAttribution` resolved once at projection, header Compose glue
+      (merged a11y label `stories_reposted_from`/`stories_reposted`, EN/FR/ES/PT). +15 tests
+      (10 pure `StoryRepostAttributionTest` + 3 `StoryGroupingTest` mapping + 2
+      `StoryViewerViewModelTest` projection). **AUTHOR link half done** (slice
+      `story-composer-repost-link`, 2026-08-26): the viewer's options menu now offers "Repost" on
+      someone else's story → opens the composer carrying the source id, which rides onto **every**
+      published slide's `CreateStoryRequest.repostOfId`. The gateway records the repost chain and
+      the reader half above renders the attribution from the published story's server-resolved
+      fields — so the author side is a pure link, no composer-side locked badge (an improvement on
+      iOS's brittle locked-text-element badge). `StoryComposerDraft.repostOfId` + `withRepostOf`
+      (blank/whitespace/null → dropped, never a repost of "nothing"), `toCreateStoryRequest` carries
+      it, `publishPlans` threads it per slide, VM `onRepostSource` (inert on blank), composer-screen
+      `LaunchedEffect` seam, viewer `onRepost` menu item (EN/FR/ES/PT), `story_composer?repostOfId=`
+      nav arg. +11 tests (5 `StoryComposerDraftTest` wire/normalise + 6 `StoryComposerViewModelTest`
+      intent/publish incl. multi-slide). Mutation-RED-proven (neutering the wire mapping reddens
+      EXACTLY the 3 link-carrying tests; the null-default, blank-drop, `withRepostOf` and
+      `onRepostSource`-state tests stay green). **Pending**: cloning the source story's slide
+      CONTENT (caption/text-elements/effects) into the composer as an editable starting point.
+- [x] Draft save/restore with media persistence + lost-media detection / re-capture prompt —
+      **caption + media + structure + audience + repost persistence done** (slice
+      `story-composer-draft-autosave`, 2026-08-26): the composer now survives leaving and
+      reopening — iOS `StoryDraftStore.save/load` + `resetLocalState`/`isEmpty` purge parity.
+      SSOT split mirrors chat drafts: `StoryComposerDraftSnapshot` (`@Serializable`, primitive-only
+      `{slides:[{id,text,mediaIds}], selectedId, visibility, repostOfId, updatedAt}`) in
+      `core:model`; single-slot `StoryComposerDraftStore` (interface + `InMemory` + `DataStore`,
+      corrupt→null) in `sdk-core`; pure `StoryComposerAutosave` (resolve → Save/Clear/None; restore
+      → snapshot|null; deck↔snapshot mapping) in `:feature:stories`. Wired: VM `onEnterComposer`
+      (silent, **pristine-only** restore — never clobbers work begun in the async gap),
+      `persistDraft` (save-on-leave), `publish` clears; `DisposableEffect` glue; `SdkModule`
+      provider; `StoryVisibility.fromWire` (tolerant). **Fidelity gate (load-bearing)**: a draft
+      carrying rich on-canvas content (text/sticker elements, filter, background, pinned duration,
+      non-identity canvas transform) is *not yet persistable* — the primitive snapshot can't
+      represent it, so `resolve` purges any stale stored draft rather than restoring lossily. +33
+      tests (12 `StoryComposerDraftSnapshotTest` round-trip/validity/predicates, 7
+      `StoryComposerDraftStoreTest` InMemory+DataStore+corrupt, 20 `StoryComposerAutosaveTest`
+      resolve/restore/rich-gate/mapping, 6 `StoryComposerViewModelTest` restore/save/purge/publish).
+      Mutation-RED-proven (neutering the rich-content gate reddens EXACTLY the 7 gate tests; the
+      Save/None/Clear-simple, restore and round-trip tests stay green).
+      **Lost-media detection / re-capture done** (slice `story-draft-lost-media-reconcile`,
+      2026-08-26): on restore a persisted media id can dangle — an offline `cmid_` placeholder whose
+      durable blob was swept, or an upload chain abandoned — which would resurrect a broken tile or a
+      publish of media that is gone. Pure `StoryDraftMediaReconciler.reconcile(snapshot, isAvailable)`
+      strips every unavailable id from each slide (surviving order preserved, no slide ever dropped so
+      the deck's ≥1-slide / valid-selection invariants hold), returning `lostMediaIds` (first-seen order,
+      deduped) + `recaptureSlideIds` (slides the loss emptied of ALL content). Availability is real:
+      `OutboxIds.isCmid` classifies the id, an offline placeholder resolves against the durable blob
+      store via the new cheap `MediaBlobStore.has` (DAO `EXISTS`, never loads bytes), a server id is
+      available server-side. Wired into `onEnterComposer`: it seeds the CLEANED deck, surfaces
+      "Some media couldn't be restored" through the existing supportingText notice, and PURGES rather
+      than seeds a draft the loss emptied entirely. +22 tests (13 `StoryDraftMediaReconcilerTest`
+      all-available/drop/order/recapture/whitespace/idempotent/empties-whole-draft/repost-survives,
+      4 `StoryComposerViewModelTest` swept-drops+notifies / survivor-kept / server-id-no-probe /
+      emptied-purges, 2 `MediaBlobStoreTest` has, 2 `MediaBlobDaoTest` exists, 4 `OutboxIdsTest` isCmid).
+      Mutation-RED-proven (neutering the availability filter reddens EXACTLY the 8 cleaning-dependent
+      tests; the pure loss-reporting/order and no-media-slide tests stay green).
+      **Canvas framing persistence done** (slice `story-draft-persist-canvas-transform`, 2026-08-27):
+      the first dimension of the fidelity gate is lifted — a slide's 9:16 pan/zoom
+      (`StoryCanvasTransform`) now round-trips through the snapshot, so a user who framed a photo and
+      left the composer gets that framing back on return. New primitive-only
+      `StoryDraftTransformSnapshot(scale,offsetX,offsetY)` on `StoryDraftSlideSnapshot` (nullable,
+      `null` = identity, so legacy blobs and fresh slides decode without carrying the default triple);
+      `toDraftSnapshot`/`toDeck` map `StorySlide.transform` ↔ the snapshot; `deckHasRichContent` no
+      longer counts a non-identity transform (it is now representable), while `deckIsPristine` gained an
+      explicit identity-transform check so a silently panned empty canvas still counts as touched and a
+      restore never clobbers it. A transform is *fidelity* not *content* — it never makes a draft worth
+      restoring on its own (a pan with no media to frame is meaningless). +11 tests (5
+      `StoryComposerDraftSnapshotTest` transform round-trip/legacy-null/worth-restoring/same-content×2, 4
+      `StoryComposerAutosaveTest` gate-false/pristine-false/map-both-ways/round-trip + 2 resolve Save, 2
+      `StoryComposerViewModelTest` persist-framing/restore-framing). Mutation-RED-proven: re-adding the
+      transform to the rich-content gate reddens EXACTLY the 3 transform-persistence autosave tests
+      (gate-false + both resolve-Save); mapping and pristine tests stay green.
+      **Photo-filter persistence done** (slice `story-draft-persist-filter`, 2026-08-27): the second
+      fidelity-gate dimension is lifted — a slide's photo filter (`StoryFilter`) and its
+      `filterIntensity` now round-trip through the snapshot, so a user who tinted a photo and left the
+      composer gets that look back on return. New primitive-only
+      `StoryDraftFilterSnapshot(filter,intensity)` on `StoryDraftSlideSnapshot` (nullable, `null` = no
+      filter, so legacy blobs and fresh slides decode without inventing a default; intensity rides only
+      alongside a set filter — strength tints nothing on its own); `StorySlide.toFilterSnapshot()` maps
+      `filter`+`filterIntensity` ↔ the snapshot (`toDeck` restores `null`→no-filter at
+      `StoryFilterMatrix.DEFAULT_INTENSITY`); `deckHasRichContent` no longer counts a filter (now
+      representable), while `deckIsPristine` gained an explicit `filter == null` check so a silently
+      picked filter still counts as touched and a restore never clobbers it. A filter is *fidelity* not
+      *content* — it never makes a draft worth restoring on its own. +12 tests (5
+      `StoryComposerDraftSnapshotTest` filter round-trip/legacy-null/worth-restoring/changed-filter/
+      changed-intensity/cleared, 5 `StoryComposerAutosaveTest` gate-false/pristine-false/map-both-ways/
+      round-trip + 2 resolve Save, 2 `StoryComposerViewModelTest` persist-filter/restore-filter; the
+      pre-existing rich-gate purge test retargeted from a (now-liftable) filter to a still-gated sticker).
+      Mutation-RED-proven twice: re-adding the filter to the rich-content gate reddens EXACTLY the 3
+      filter-persistence autosave tests; removing the `filter == null` pristine guard reddens EXACTLY the
+      one pristine test; everything else stays green.
+      **Pinned-duration persistence done** (slice `story-draft-persist-duration`, 2026-08-28): the third
+      fidelity-gate dimension is lifted — a slide's author-pinned on-screen duration
+      (`StorySlide.durationSecondsPin: Double?`) now round-trips through the snapshot, so a user who set a
+      slide's timeline duration and left the composer gets it back on return. New nullable primitive
+      `StoryDraftSlideSnapshot.durationSecondsPin: Double? = null` (`null` = duration derived from content,
+      not pinned, so legacy blobs and fresh slides decode without inventing a default); `toDraftSnapshot`/
+      `toDeck` map `StorySlide.durationSecondsPin` ↔ the field; `deckHasRichContent` no longer counts a
+      pinned duration (now representable), while `deckIsPristine` gained an explicit `durationSecondsPin ==
+      null` check so a silently pinned duration on an empty canvas still counts as touched and a restore
+      never clobbers it. A pinned duration is *fidelity* not *content* — it never makes a draft worth
+      restoring on its own (a duration with no media to time is meaningless). +13 tests (5
+      `StoryComposerDraftSnapshotTest` duration round-trip/legacy-null/worth-restoring/changed/cleared, 6
+      `StoryComposerAutosaveTest` gate-false/pristine-false/map-both-ways/round-trip + 2 resolve Save, 2
+      `StoryComposerViewModelTest` persist-duration/restore-duration; the pre-existing `deckHasRichContent
+      is true for a pinned duration` test flipped to assert the new persistable behaviour).
+      Mutation-RED-proven twice: re-adding the duration to the rich-content gate reddens EXACTLY the 4
+      duration gate/save tests (3 autosave + 1 VM persist); removing the `durationSecondsPin == null`
+      pristine guard reddens EXACTLY the one pristine test; everything else stays green.
+      **Background persistence done** (slice `story-draft-persist-background`, 2026-08-29): the fourth
+      fidelity-gate dimension is lifted — a slide's author-chosen colour/gradient backdrop
+      (`StorySlide.background: StoryBackgroundValue?`) and its designated looping-background media
+      (`backgroundMediaId: String?` / `backgroundLoop: Boolean`) now round-trip through the snapshot, so a
+      user who picked a backdrop (or set a video-background loop) and left the composer gets it back on
+      return. The backdrop rides as its already-total `StoryBackgroundValue.serialized()` wire string — no
+      polymorphic serialiser — restored through the tolerant `StoryBackgroundValue.parse` (a malformed value
+      decays to a solid colour, never throws). New fields `StoryDraftSlideSnapshot.background: String? = null`
+      / `backgroundMediaId: String? = null` / `backgroundLoop: Boolean = true` (legacy blobs and fresh slides
+      decode to no-backdrop + looping default); `toDraftSnapshot`/`toDeck` map the three ↔ the deck fields;
+      `deckHasRichContent` no longer counts a background (now representable — the gate now holds only
+      text/sticker elements), while `deckIsPristine` gained explicit `background == null && backgroundMediaId
+      == null` checks so a silently-picked backdrop on an empty canvas still counts as touched and a restore
+      never clobbers it (`backgroundLoop` needs no check — it can only leave its `true` default once a
+      background media is designated, which the media check already rejects). A backdrop is *fidelity* not
+      *content* — it never makes a draft worth restoring on its own (a colour with no other content is not
+      publishable; a background media always rides an existing `mediaIds` entry). +18 tests (6
+      `StoryComposerDraftSnapshotTest` round-trip/legacy-defaults/worth-restoring/changed-bg/cleared-bg/
+      changed-media-id/changed-loop, 10 `StoryComposerAutosaveTest` gate-false×2/pristine-false/map-both-ways
+      ×3/round-trip×2 + 2 resolve Save, 2 `StoryComposerViewModelTest` persist-bg/restore-bg; the pre-existing
+      `deckHasRichContent is true for a background` test flipped to assert the new persistable behaviour).
+      Mutation-RED-proven twice: re-adding the background to the rich-content gate reddens EXACTLY the 5
+      background gate/save tests (4 autosave + 1 VM persist); removing the `background/backgroundMediaId ==
+      null` pristine guards reddens EXACTLY the one pristine test; everything else stays green.
+      **Text-element persistence done** (slice `story-draft-persist-text-elements`, 2026-08-29): the fifth
+      fidelity-gate dimension is lifted — a slide's on-canvas text elements (`StoryTextElement`, with every
+      styled field: text, style, colour, alignment, size, backing, outline, fade, timing, position/scale/
+      rotation) now round-trip through the snapshot, so a user who typed and styled on-canvas text and left
+      the composer gets it back on return. New flat, primitive-only `StoryDraftTextElementSnapshot` on
+      `StoryDraftSlideSnapshot.elements` (the three enums ride as their Kotlin `.name`, tolerant to an
+      unknown name at restore; the sealed `StoryTextBackground` rides as the already-`@Serializable`
+      `StoryTextBackgroundStyle` tagged union via the single-source `toStyleWire()`/`resolve()` — no new
+      tagged-union spelling, no polymorphic serialiser; the outline/fade/timing pairs and the position ride
+      as scalars); `toDraftSnapshot`/`toDeck` map `StorySlide.elements` ↔ the list via `toDraftSnapshot()`/
+      `toTextElement()`; `deckHasRichContent` no longer counts text elements (now representable — the gate
+      now holds only stickers), while `deckIsPristine` gained an explicit `elements.isEmpty()` check so a
+      silently-added text element still counts as touched and a restore never clobbers it. A **publishable**
+      (non-blank) text element makes a slide worth restoring (a text-element-only slide publishes, iOS
+      parity); a blank one carries nothing to restore. +21 tests (10 `StoryComposerDraftSnapshotTest`
+      element round-trip/rides-a-slide/legacy-empty/legacy-defaults/publishable×2/worth-restoring×2/
+      changed-element/added-element, 9 `StoryComposerAutosaveTest` gate-false/pristine-false/map-both-ways×2/
+      round-trip/tolerant-decode + 2 resolve Save + the flipped `a draft with a text element resolves to
+      Save`, 2 `StoryComposerViewModelTest` persist-elements/restore-elements; the pre-existing VM
+      rich-content purge test retargeted from a (now-liftable) text element to a still-gated sticker).
+      Mutation-RED-proven three times: re-adding the elements arm to `deckHasRichContent` reddens EXACTLY the
+      5 text-element persistence tests (4 autosave + 1 VM persist); removing the `elements.isEmpty()`
+      pristine guard reddens EXACTLY the one pristine test; dropping the `elements.any { isPublishable }`
+      arm from `hasContent` reddens EXACTLY the worth-restoring test; everything else stays green.
+      **Sticker persistence done — the fidelity gate is RETIRED** (slice `story-draft-persist-sticker-elements`,
+      2026-08-29): the sixth and LAST rich dimension is lifted — a slide's on-canvas emoji stickers
+      (`StoryStickerElement`: id/emoji/normalised x,y/scale/rotation) now round-trip through the snapshot, so a
+      user who placed and transformed a sticker and left the composer gets it back on return. New flat,
+      primitive-only `StoryDraftStickerElementSnapshot` on `StoryDraftSlideSnapshot.stickers` (thinner than a
+      text element — no enums, no backing, no outline/fade/timing; the position/scale/rotation ride as scalars,
+      the canvas-geometry defaults reused from `StoryDraftTextElementSnapshot.CANVAS_CENTER`/`UNIT_SCALE` so the
+      neutrals live in one place); `toDraftSnapshot`/`toDeck` map `StorySlide.stickers` ↔ the list via
+      `toDraftSnapshot()`/`toStickerElement()` (the latter re-`normalised()` so a corrupt out-of-range blob
+      decays into the canvas). A **publishable** (non-blank emoji) sticker makes a slide worth restoring; a blank
+      one carries nothing. With every dimension now representable, `deckHasRichContent` would be constant
+      `false` — so it, its `resolve` "rich content → purge" arm and its `deckIsPristine` call are **retired**
+      (not left as a dead branch): `resolve` now always projects a snapshot and decides purely on
+      `isWorthRestoring` + changed, and `deckIsPristine` checks `stickers.isEmpty()` explicitly. +21 tests (12
+      `StoryComposerDraftSnapshotTest` sticker round-trip/rides-a-slide/legacy-empty/legacy-defaults/
+      publishable×2/worth-restoring×2/changed/added, 7 `StoryComposerAutosaveTest` map-both-ways/round-trip/
+      re-normalise/pristine-false/sticker-only-Save/added-Save + the flipped `a draft that gained a sticker now
+      saves it`, 2 `StoryComposerViewModelTest` persist-stickers/restore-stickers flipped from the old
+      does-not-save; the six retired-function `deckHasRichContent is …` unit tests removed with the function).
+      Mutation-RED-proven three times: dropping the `stickers.any { isPublishable }` arm from `hasContent`
+      reddens EXACTLY the worth-restoring test; removing the `stickers.isEmpty()` pristine guard reddens EXACTLY
+      the one pristine test; dropping the `toDeck` sticker restore reddens EXACTLY the 3 restore tests;
+      everything else stays green. Full local CI-mirror gate (`assembleDebug testDebugUnitTest`, ALL modules)
+      BUILD SUCCESSFUL.
 - [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on
       reconnect via `OutboxFlushWorker`); **failed-publish recovery** done (exhausted publishes
-      surface a Retry/Discard strip above the tray — no silent loss); preview-before-publish and
-      RAW background publish-all still pending.
+      surface a Retry/Discard strip above the tray — no silent loss); **RAW background publish-all**
+      done (slice `story-publish-queue-media-only`, 2026-08-29): `StoryRepository.decodeStoryPublish`
+      no longer requires text — a media-only (image/video, no caption) publish, exactly what the
+      composer's `toCreateStoryRequest` emits (`content = null`, `mediaIds = [...]`), now decodes and
+      so surfaces BOTH its optimistic self-ring AND its failure-recovery strip instead of being
+      silently dropped; `Pending`/`FailedStoryPublish.content` are nullable and carry `mediaIds`, the
+      strip shows a localised `stories_publish_media_summary` when there is no caption. +14 tests,
+      mutation-RED-proven (dropping the media clause reddens exactly the 3 media-only decode tests).
+      A media-preview THUMBNAIL in the ring (needs the local media URI on the outbox row) still pending.
 - [x] Visibility selection (Public / Friends / Community / Private) — accent `FilterChip` row
       in the composer; wire value carried on `StoryVisibility.wire` → `CreateStoryRequest.visibility`.
-- [ ] thumbHash blur-placeholder generation per slide
+- [~] thumbHash blur-placeholder per slide — **display/read path DONE** (slice
+      `story-slide-thumbhash-placeholder`, 2026-08-29): the viewer now decodes a slide's ThumbHash into an
+      instant blur behind the loading background image (no black flash on cold load), mirroring iOS
+      `StorySlideRenderer`. Pure `StorySlidePlaceholder` resolver (`:feature:stories`) picks the hash — slide-level
+      `StoryEffects.thumbHash` (modern composer) → the flat background `FeedMedia.thumbHash` (legacy/RAW), first
+      non-blank trimmed wins, else null — carried on `StorySlideView.backgroundThumbHash` and painted via the
+      already-shipped `rememberThumbHashPainter` (the exact idiom the feed's `AsyncImage` uses). +13 tests,
+      mutation-RED-proven (reversing the cascade reddens exactly the priority test). Pending: write-path
+      **generation** (encode a ThumbHash from the composed slide bitmap into `effects.thumbHash` at publish) —
+      needs `Bitmap`→RGBA. Its JVM-testable half now shipped (slice `thumbhash-source-plan`, 2026-08-29):
+      `ThumbHash.sourcePlan(width, height) → ThumbHashSourcePlan(width, height, downscaled)` in `:core:model`
+      computes the legal `encode` input dimensions — caps the long edge at 100px, derives the short edge by
+      aspect ratio (round-half-up), clamps each side to ≥1 so an extreme banner ratio never rounds to a 0-side
+      encode input, and passes an already-in-budget source through verbatim (`downscaled=false`, no upscale).
+      +15 tests, mutation-RED-proven (dropping the ≥1 clamp reddens the extreme-ratio tests; `<` vs `<=`
+      on the budget boundary reddens the pass-through test). Remaining glue: the app-side `Bitmap` scale to
+      the plan + RGBA read-back + `ThumbHash.encode` at publish (device-bound).
 - [ ] **V2 timeline editor**: multi-track, Quick + Pro modes, size-class adaptive, zoomable
 - [ ] Clip add / move / trim / split / delete with full undo/redo (command stack, FIFO 50, persisted)
 - [~] Keyframe animation (position/scale/opacity, easing) per clip/element — **reader/playback
@@ -4541,7 +4968,27 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       post composer now covers every base attachment/option iOS's `composerOverlay` toolbar
       exposes except on-device transcription and the emoji picker.
 - [ ] Unified post composer (Post / Status / Story tabs)
-- [ ] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
+- [~] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
+      — **pure canvas-reprojection core shipped** (slice `story-canvas-reprojection`, 2026-08-30): the
+      JVM-testable heart of reposting a story's canvas into a post of a different aspect ratio. Pure
+      `:feature:stories` `CanvasReprojector(source, target)` ports iOS `CanvasReprojector`
+      (`MeeshyUI/Story/Canvas`): normalized `[0,1]` positions are reprojected center-anchored
+      (`(0.5,0.5)` a fixed point, scaled by the source/target aspect ratio), out-of-bounds results
+      clamped back into `[0,1]` and reported with a `ReprojectionWarning.Clamped(originalX, originalY)`;
+      scale/aspect/rotation invariant. `reproject(text/media/sticker)` per family; `reproject(audio)`
+      identity (no spatial position). Batch `reprojectAll(CanvasObjects) → RepostReprojection` collects
+      warnings in encounter order and exposes `repositionedCount`/`hasClampedItems` — the pure decision
+      the "N item(s) repositioned for the new aspect ratio" banner reads (iOS
+      `RepostReprojectionResult`/`reprojectionWarnings.count`). **SOTA over iOS:** a degenerate target
+      (non-positive width/height, which iOS's raw `CGSize` division turns into `Infinity`/`NaN`) is an
+      identity reprojection — a malformed canvas size can never corrupt coordinates. +15 tests
+      (`CanvasReprojectorTest`), mutation-RED-proven (suppressing the clamp warning reddens EXACTLY the
+      4 warning/count tests, the 10 centered/invariance/identity/empty tests stay green). **Pending
+      (device/Compose-bound):** the `RepostPayload` extractor from a `StorySlide`/`StoryItem` (needs the
+      source-canvas-aspect → size mapping, iOS `repostSourceCanvasSize`), reprojecting the freehand
+      `StoryDrawingStroke` set (Android's pure stroke model, not iOS's PencilKit blob — its own
+      follow-up once the stroke coordinate space is confirmed), `StoryLocationObject` (no Android model
+      yet), and the Compose "items repositioned" banner glue + `UnifiedPostComposer` import wiring.
 - [x] Post reactions (heart like) — optimistic toggle + live `post:liked`/`post:unliked` socket
       count sync **done** (slice `feed-realtime-like-sync`, 2026-07-17)
 - [x] Bookmark / un-bookmark — optimistic `toggleBookmark` (flips `isBookmarkedByMe` + count,
@@ -4722,11 +5169,110 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       an explicit `flushNow`/`flushNowAsync` are ported; iOS's OTHER two nets —
       app-backgrounding flush (`willResignActive`/`didEnterBackground`) and kill-survival
       persistence (UserDefaults, replayed on relaunch) — are NOT, Android has no equivalent
-      wiring point yet for either. **Still fully open: dwell-time tracking** — iOS's own
-      `EngagementTracker`/`TrackEngagementModifier` is a materially bigger, separate system
-      (durable SQLite outbox, session begin/pause/resume with a "topmost owns the clock" rule for
-      overlays, `minDwellMs`/`minWatchMs` qualification thresholds, its own
-      `POST /posts/engagement/batch` endpoint) — not attempted here, left as its own future slice.
+      wiring point yet for either. **Dwell-time tracking — pure core + reels surface shipped 2026-08-31** (slice
+      `reels-engagement-dwell`). New pure `:core:model` `EngagementSessions` — a faithful port of
+      iOS `EngagementTracker`'s bookkeeping: an immutable per-surface state machine (surfaces
+      `DETAIL`/`REELS`/`STORY_VIEWER`/`STATUS_BUBBLE`, the four single-focus regions iOS tracks — the
+      scrolling feed is deliberately NOT one), monotonic dwell with the **topmost-owns-the-clock**
+      rule (`begin` pauses the covered surface, `end` resumes it — the overlay's window is excluded
+      from the surface underneath), and the `MIN_DWELL_MS = 1000` / `MIN_WATCH_MS = 2000`
+      qualification (`end` yields a `QualifiedView(postId, dwellMs)` when dwell OR watch OR completed
+      crosses the floor, else `null` — a sub-threshold bounce, matching iOS `guard qualifies`). The
+      clock is injected as `nowMs`, so the type carries no time/I-O/framework. Wired on the **reels**
+      surface via the existing `ReelsViewModel.setCurrentReel` hook: the reel scrolled away from is
+      ended (a qualified view records its measured duration through `PostRepository.viewPost(id,
+      duration)` — the `posts/{id}/view` endpoint already documents an optional dwell duration, and
+      reels had NO view metric before, so this is purely additive, no double-count), the reel landed
+      on begins a fresh session, and `ReelsScreen`'s `onDispose` ends the last one. Chose Android's
+      `viewPost(duration)` sink over iOS's separate `POST /posts/engagement/batch` — the duration
+      endpoint is the platform-appropriate dwell sink. +17 tests (13 `EngagementSessionsTest`: floor
+      qualify / sub-threshold drop / inclusive boundary / unknown-surface inert / other-surface inert
+      / watch-time qualify / watch-below-floor / completed-qualifies / backwards-clock-never-negative /
+      overlay pauses the surface underneath / paused surface excludes the covered span / re-begin
+      restarts dwell / thresholds; +4 `ReelsViewModelTest`: dwell past floor records duration on
+      page-move, bounce records nothing, leaving records the final reel, re-settle keeps one session).
+      Mutation-proven: neutralising `pauseTop` fails exactly the two nesting tests; flipping the dwell
+      floor `>=`→`>` fails exactly the boundary tests. **Detail surface shipped 2026-08-31** (slice
+      `post-detail-dwell`): `PostDetailViewModel` now opens a `DETAIL` session on init (right after its
+      immediate `viewPost` impression) and closes it from `PostDetailScreen`'s `onDispose` via a public
+      `endDwellSession()` — a qualified dwell records `viewPost(id, dwellMs)`. This is the port of iOS
+      `PostDetailView`'s `.trackEngagement(surface: .detail)` sitting BESIDE its `.task` impression,
+      **not** replacing it: verified against the gateway that `creditPostView` is a `(postId, userId)`
+      singleton, so the second (duration-carrying) call never re-increments `viewCount` — it only raises
+      the stored dwell `duration` to its max. So the impression counts the open and the dwell enriches
+      it, no double-count, one endpoint. +6 tests (`PostDetailViewModelTest`): dwell past floor records
+      the measured watch-time; the record enriches the same view (impression still fires exactly once +
+      one duration-carrying call); a sub-floor glance records no watch-time; a blank postId opens no
+      session; ending twice records once (idempotent); a failed dwell record does not throw. RED-proven:
+      neutralising `beginDwell` fails exactly the 4 tests that expect a recorded dwell while the two
+      assert-no-record tests stay green. **Status-bubble surface shipped 2026-08-31** (slice
+      `status-bubble-dwell`): `StatusesViewModel.markStatusViewed` now opens a `STATUS_BUBBLE` session
+      beside the impression it already fired, and a new `endStatusDwell()` — driven by `StatusBarView`'s
+      popover `DisposableEffect(entry.id) { onDispose { … } }` (every dismiss path: tap-outside, react,
+      republish) — records `viewPost(id, dwellMs)` when the popover stayed up past the dwell floor.
+      This is the port of iOS `StatusBubbleController`, whose `present(_:)` fires `viewPost` +
+      `EngagementTracker.begin(.statusBubble)` together and whose every dismiss calls `end(.statusBubble)`;
+      the viewer's OWN status opens the popover but records no view, so it opens no session (iOS's early
+      `guard`). Same gateway dedup as detail — `creditPostView` `(postId, userId)` singleton, so the
+      dwell call never re-increments `viewCount`, only raises the stored `duration` to its max. +7 tests
+      (`StatusesViewModelTest`): dwell past floor records the measured watch-time; the dwell enriches the
+      same view (impression fires exactly once + one duration call); a sub-floor glance records no
+      watch-time; a blank statusId opens no session; ending twice records once (idempotent); ending a
+      dwell that never opened records nothing (the own-status path); a failed dwell record does not
+      disturb the bar. RED-proven: neutralising the `begin` fails exactly the 4 dwell-recording tests
+      while the 3 assert-no-record tests stay green. **Story-viewer surface shipped 2026-08-31** (slice
+      `story-viewer-dwell`): the 4th and LAST single-focus surface, bringing dwell tracking to full iOS
+      parity (reels + detail + status + story). `StoryViewerViewModel` now moves a `STORY_VIEWER`
+      `EngagementSessions` session WITH the slide on screen — begun on the slide landed on, ended on the
+      one left — via `transitionDwell` in `emit()` (the dwell twin of `transitionPostRoom`, guarded by
+      `currentDwellStoryId` so a same-slide re-emit neither closes nor restarts the running session).
+      The session also ends on dismiss (`emit` maps `isDismissed`→`null`) and on teardown
+      (`onCleared`→`endCurrentDwell`), and a qualified dwell records `postRepository.viewPost(slideId,
+      dwellMs)`. The SDK-look the prior note asked for resolved cleanly: **a story slide id IS a post
+      id** — `StoryApi.markViewed` already POSTs to `posts/{id}/view`, the identical route that carries
+      the optional `duration`, and the gateway (`routes/posts/interactions.ts`) already binds/persists
+      it (bounded [0,300000]ms) for the story case — so the measured watch-time rides the very endpoint
+      the impression uses, apps/android-only, no gateway/shared change. Same `(postId, userId)`-singleton
+      dedup as detail/status: the impression (`storyRepository.markViewed`) increments `viewCount` once,
+      the dwell only raises the stored `duration` to its max. +8 tests (`StoryViewerViewModelTest`, 96
+      total green): advancing past the floor records the left slide's measured watch-time; a sub-floor
+      glance records nothing; each advance records the slide it leaves re-arming the clock on the next;
+      stepping back records the slide left; `endCurrentDwell` records once then a second end is inert;
+      a same-slide re-emit does not restart the dwell clock; dismissing ends the current dwell; a failed
+      dwell record does not crash or disturb the viewer. RED-proven by mutation: neutralising the `begin`
+      fails EXACTLY the 6 dwell-recording tests while the 2 assert-no-record tests stay green.
+      **Analytics-consent gate shipped 2026-09-01** (slice `engagement-consent-gate-detail`): the four
+      dwell surfaces reported watch-time regardless of the reader's `allowAnalytics` privacy toggle,
+      while iOS gates ALL engagement at `EngagementTracker.begin`'s `guard consentProvider()` — a
+      dimension-1 (Sécurité/privacy) parity gap and a dead privacy control. The gate now lives on the
+      one machine every surface shares: `EngagementSessions.begin` gained a `consentGranted: Boolean`
+      (default `true`, the domain default) whose `false` arm returns inert BEFORE the topmost-owns-the-clock
+      pause — no session opens, so `end` reports nothing, and a non-consented overlay never pauses the
+      consented session underneath (the guard-first placement mirrors iOS returning before `pauseTop`).
+      The deduplicated `viewPost` impression stays **un-gated** — it is a view-count credit, not analytics
+      telemetry, exactly as iOS fires `viewPost` regardless of consent. **PostDetail wired this slice**
+      (`PrivacyPreferencesStore` injected; `beginDwell` passes `preferences.value.allowAnalytics`). +3
+      pure `EngagementSessionsTest` (non-consented begin opens no session / reports nothing; non-consented
+      begin does not pause the running session underneath — 1200 ms vs the consented 1000; explicit
+      `consentGranted=true` parity) + 3 `PostDetailViewModelTest` (consent withheld → no dwell record but
+      impression still credited; consent granted → dwell records). RED-proven by mutation: neutralising the
+      guard fails EXACTLY the 2 consent pure tests. **All four dwell surfaces now obey the toggle
+      (slice `engagement-consent-gate-surfaces`, 2026-09-01):** `ReelsViewModel`, `StatusesViewModel`
+      and `StoryViewerViewModel` each inject the existing Hilt-provided `PrivacyPreferencesStore` and
+      pass `consentGranted = preferences.value.allowAnalytics` into their `begin` call, closing the
+      dimension-1 gap the detail slice opened — the privacy toggle is now live across reels / post
+      detail / status bubble / story viewer. Each surface's un-gated impression stays un-gated (status
+      still fires `viewPost(id)` on open; story still fires `storyRepository.markViewed`). +4 behavioural
+      tests (reels: withheld consent → no dwell record; status: withheld → no dwell but impression still
+      credits + a second test the impression fires; story: withheld → no dwell record), RED-proven by
+      mutation: stripping the reels wiring fails EXACTLY that surface's consent test (1 of 18), the other
+      17 green.
+      **Still open (deferred, deliberately narrower than iOS):**
+      watch-time samples + completion from the reels player (the `end` params exist, fed dwell-only for
+      now — Android reels loop `REPEAT_MODE_ONE`, so completion is not meaningful there), micro-action
+      recording, and the durable outbox / crash-recovery net (iOS's SQLite `EngagementOutbox` +
+      `/posts/engagement/batch` — the Android dwell surfaces all ride the legacy `posts/{id}/view?duration`
+      sink, a faithfully narrower boundary; the batch subsystem is a much larger, multi-slice effort).
       **Post view recording + author-only reach stats shipped 2026-08-17** (slice
       `post-detail-reach-stats`) — `PostRepository.viewPost(postId)` (`POST /posts/{id}/view`) was
       fully implemented, tested, and unwired, same gap pattern as impression batching but a
@@ -5382,10 +5928,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       stateful `nonisolated` class with unbounded `Int` counters (untestable without a live GPU); Android
       is a total reducer whose two counters are **clamped** so state is O(1) over a multi-minute call.
       +30 behavioural tests. Mutation (RED proof): removing the over-budget clamp fails **exactly** the
-      unbounded-counter test (17 tests, 1 failed, no collateral). **Pending:** the WebRTC `VideoProcessor`/
-      `VideoSink` actuator (RenderEffect/GPU colorimetry + ML-Kit segmentation blur + face-detect smoothing)
-      that applies `effectiveConfig` per captured frame, the low-light boost pass (folding `FrameLuminance`),
-      and the accent-coherent filter panel UI (preset chips + advanced toggles).
+      unbounded-counter test (17 tests, 1 failed, no collateral). **Low-light-boost decision core landed**
+      (slice `call-low-light-boost`): the pure `core:model` `LowLightBoostPolicy` is the SSOT for the
+      automatic low-light pass — a total, side-effect-free port of iOS `VideoFilterPipeline.applyLowLightBoost`
+      (§14.2.4). `plan(averageBrightness)` decides whether to lift a dim frame and by how much: `null` (forward
+      untouched) for no reading or any normalized brightness `≥ 0.3`, else a `LowLightBoost`
+      (exposureEv/noiseReductionLevel/noiseReductionSharpness/saturation) scaled by
+      `boostFactor = (0.3 − normalized)/0.3` at exact iOS numeric parity (EV×1.5, noise×0.02, sharpness 0.4,
+      saturation 1+×0.2). **SOTA hardening over iOS:** `boostFactor` is **clamped to 0..1** so a degenerate
+      negative reading can never over-boost (iOS never clamps — its luma is always 0..255). `planForFrame(...)`
+      is the actuator's one-call seam that **folds `FrameLuminance.averageOfYPlane`** straight into `plan` —
+      literally the "folding `FrameLuminance`" clause. +13 behavioural tests. Mutation (RED proof): dropping
+      the clamp fails **exactly** the negative-reading test (13 tests, 1 failed, no collateral). **Pending:**
+      the WebRTC `VideoProcessor`/`VideoSink` actuator (RenderEffect/GPU colorimetry + ML-Kit segmentation
+      blur + face-detect smoothing) that applies `effectiveConfig` per captured frame, the actuator glue that
+      applies the `LowLightBoost` filters to the frame, and the accent-coherent filter panel UI (preset
+      chips + advanced toggles).
 - [ ] In-call audio effects (voice changer, baby/demon voice, looping background sound)
 - [~] Camera-covered ("dark frame") detection during video calls — **pure detection
       core landed** (slice `call-dark-frame-detection`): the `core:model`
@@ -5409,8 +5967,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       the in-call "camera may be covered" UI hint.
 - [~] Thermal-aware quality degradation (fps/resolution caps, video disable) — **policy layer landed**
       (slice `call-sender-cap-plan`): pure `ThermalCeiling`/`VideoSenderCapPlan` in `core:model` (port of
-      iOS `VideoThermalProfile`) composes a device thermal tier onto the network sender cap. Pending: the
-      app-side `PowerManager.THERMAL_STATUS_*` → `ThermalState` mapping + the live RTP-sender actuator.
+      iOS `VideoThermalProfile`) composes a device thermal tier onto the network sender cap. **Thermal-source
+      mapping landed** (slice `call-thermal-status-mapping`): pure `ThermalState.fromAndroidThermalStatus(Int)`
+      collapses the seven raw `PowerManager.THERMAL_STATUS_*` tiers onto the four `ThermalState` tiers,
+      monotonic & clamped at both ends, so the `:app` layer only forwards `getCurrentThermalStatus()`.
+      Pending: only the live RTP-sender actuator (needs an emulator/WebRTC, not JVM-testable).
 - [~] Adaptive call quality (bitrate ladder, auto video-disable on critical link) —
       **quality-tier SSOT landed** (slice `call-quality-level`): pure `core:model`
       `VideoQualityLevel` (5-tier `CRITICAL<POOR<FAIR<GOOD<EXCELLENT`, port of iOS
@@ -5433,9 +5994,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       tier and floors CRITICAL to 360p15 @ 100 kbps (never a zero encoder / never an upscale);
       `forConditions` composes it with a `ThermalCeiling` (port of iOS `VideoThermalProfile`,
       `NOMINAL` a no-op) taking the more conservative value per axis. Closes the
-      "Thermal-aware quality degradation" line at the policy layer. +17 tests. **Pending:** the real
-      WebRTC actuator seam (map `PowerManager.THERMAL_STATUS_*` → `ThermalState`, apply the cap to the
-      live RTP video sender, debounce re-apply) + consuming `Suspend`/`Resume`.
+      "Thermal-aware quality degradation" line at the policy layer. +17 tests. **Thermal-source mapping
+      landed** (slice `call-thermal-status-mapping`, 2026-08-29): pure `ThermalState.fromAndroidThermalStatus(Int)`
+      collapses the raw `PowerManager.THERMAL_STATUS_*` int the `:app` layer forwards. **Pending:** only the real
+      WebRTC actuator seam (apply the cap to the live RTP video sender, debounce re-apply) + consuming
+      `Suspend`/`Resume`.
 - [~] Connection-quality indicator; call-waiting banner (second incoming call) —
       **connection-quality indicator landed** (slice `call-quality-level`): the pure
       four-tier `ConnectionQuality` (`VideoQualityLevel` collapsed `CRITICAL→POOR`,
@@ -5456,7 +6019,33 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       of a `call:ended`/`call:missed` frame's `callId`, a `CallSignalManager.endedCalls`
       identity stream (parallel to `incomingOffers`), and a `CallViewModel.onRemoteEnded`
       fold that auto-dismisses the banner + cancels its timer (no `emitEnd`) only for the
-      *pending* call's id. +15 tests. The **identity-aware active-call teardown** landed (slice
+      *pending* call's id. +15 tests. The **long-haul RTT recalibration** landed (slice
+      `call-quality-rtt-longhaul-parity`, 2026-08-29): the three Android RTT boundaries had been
+      ported at iOS's PRE-recalibration values (fair `200` / poor `300` / critical `500`) and never
+      followed iOS's move out to `300`/`500`/`800`. On a healthy Africa↔Asia call (RTT 250-450 ms,
+      already 155-221 ms on the backbone before the mobile last mile) Android misclassified the tier —
+      a 250 ms hop showed FAIR not GOOD, a 350 ms call showed POOR (weak-link error hue) not FAIR, a
+      550 ms link showed CRITICAL not POOR — so the very calls this ladder exists to serve were
+      painted red at 00:06 while iOS showed them healthy. `CallQualityThresholds.{VIDEO_FAIR_RTT_MS,
+      VIDEO_POOR_RTT_MS,POOR_RTT_MS}` are now at exact iOS `WebRTCTypes.QualityThresholds` parity;
+      packet-loss bands (the true congestion signal) were already correct and unchanged. +9 tests
+      (both-sides-of-boundary re-pins at 300/500/800 + three named intercontinental regressions),
+      RED-proven (9 fail against the stale constants, compile healthy). The **WebRTC stats reducer +
+      interval loss-ratio landed** (slice `call-stats-reduce`, 2026-08-29): the pure `core:model`
+      `CallStats` + `CallStats.RawEntry` + `CallStats.reduce(entries)` is the SSOT projection of a WebRTC
+      stats report — a faithful port of iOS `CallStats.reduce` (`WebRTCTypes.swift` §5.7): `candidate-pair`
+      sets rtt (`currentRoundTripTime`×1000) + `availableOutgoingBitrate`; `inbound-rtp` sums packetsLost/
+      bytesReceived, splits `packetsReceived` into audio/video by `kind`, means the audio jitter, and resolves
+      the primary codec via the FIRST inbound entry's `codecId → codec.mimeType` (`"audio/opus"`→`"opus"`);
+      `outbound-rtp` sums sent packets + bandwidth. `CallStats.intervalQualitySample(previous)` derives the
+      loss FRACTION `Δlost/(Δlost+Δreceived)` from two cumulative snapshots (port of `WebRTCService.adjustBitrate`)
+      — never the raw cumulative count (the P1-4 >100 %-loss bug), and **clamps each delta at 0** so a counter
+      reset (ICE restart) never yields negative/spurious loss. This is the pure half of the "live WebRTC stats
+      source" — the device actuator now only adapts `RTCStatsReport → List<RawEntry>` then calls `reduce` +
+      `intervalQualitySample`. +25 tests, RED-proven (drop the reset clamp → exactly the negative-loss test
+      fails; drop rtt×1000 → exactly the ms test; make codec last-wins → exactly the first-wins test; each 1
+      failed, no collateral). **Pending:** only the device WebRTC stats-report adapter that feeds `reduce`.
+      The **identity-aware active-call teardown** landed (slice
       `call-ended-identity-teardown`, 2026-07-03): `call:ended`/`call:missed` are now `null` in
       `CallSignalMapper.map` (off the identity-less `events`); the single pure `endedSignal →
       CallEndedSignal(callId, event)` decode on `endedCalls: SharedFlow<CallEndedSignal>` is the
@@ -6016,6 +6605,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       iOS's `notifToggle` helper carries no such dependency for any of its rows, and email is a
       genuinely independent delivery channel. +1 test (`setEmailEnabled_persists`). 1 new string
       across EN/FR/ES/PT.
+      **Foreground-push presentation gate landed 2026-08-31** (slice `push-foreground-presentation-gate`)
+      — those preferences (push master · quiet hours · per-type toggles) were HONOURED by the in-app toast
+      (`NotificationToastPolicy`) but IGNORED by the FCM banner: `MeeshyFcmService.handleMessagePush` raised
+      a system banner for EVERY foreground push with no gate — push disabled, inside quiet hours, a muted
+      type, or the very conversation on screen still buzzed (the iOS pre-`NotificationPresentationResolver`
+      bug). New pure `:core:model` `PushPresentationPolicy.decide(...)` → `PushPresentationDecision`
+      (`Suppress` | `Alert(playSound)`): on-screen thread → suppress; socket alive → suppress (the toast
+      already surfaces it, no double banner); socket down → gate exactly as a background push
+      (`pushEnabled` → `DndWindow.isActive` → `NotificationTypeToggle.isEnabled`, all REUSED, no
+      re-implementation); a raised banner follows `soundEnabled` via `setSilent`. New `:sdk-core`
+      `@Singleton ActiveConversationStore` carries the one on-screen-thread nav truth across the process
+      boundary (written at the root banner host's active-context effect, read by the service). +15 pure
+      tests, RED-proven. Matures dimensions 1/5/8/13 (right people/attention, accessibility of quiet hours,
+      offline-first delivery doctrine, completeness). iOS `.badge` presentation option has no Android analog
+      (the app-icon badge is a side effect of a posted notification) — deliberately not modelled.
 - [x] Privacy settings (visibility, contacts, media/data, encryption preference) — **shipped**
       (slice `settings-privacy-preferences`, 2026-07-11). Port of iOS `PrivacySettingsView` +
       the visibility/contacts/media legs of `PrivacyPreferences`. **Reuses the existing**
@@ -6258,8 +6862,98 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       confirming they are behavioural not tautological. **§L static screens now complete.**
 
 ## M. Notifications
-- [ ] Notification center with category filters (messages, reactions, mentions, social,
-      contacts, groups, calls, translations, system)
+- [x] Notification center with category filters (messages, reactions, mentions, social,
+      contacts, groups, calls, translations, system) — **shipped 2026-08-30** (slice
+      `notification-center-category-filter`): pure `:core:model` `NotificationFilterCategory`
+      (11 chips — ALL/UNREAD + 9 type chips) + `NotificationTypeVocabulary`, a faithful port of
+      iOS `NotificationCategory` (`MeeshyUI/Notifications/NotificationListView.swift`). Each chip
+      owns its backend-`type` set + `matches(type)`; `filter(list)` reproduces iOS
+      `filteredNotifications` exactly (ALL keeps all, UNREAD keeps unread of any type, a type chip
+      keeps matching rows read-or-not). Unknown wire type → `system` (iOS `rawValue ?? .system`),
+      known-but-uncategorised types surface only under ALL. Wired into `NotificationsViewModel`
+      (`selectedCategory` + `filteredNotifications` projection + `selectCategory`, `loadMore`
+      ALL-gated) and the `NotificationsScreen` 11-chip `FilterChip` bar (accent-coherent, per-category
+      empty state). EN/FR/ES/PT strings. +25 tests (18 core + 7 VM).
+- [x] In-app real-time notification toast — **shipped 2026-08-30** (slice
+      `notification-toast-orchestrator`): the stateful glue that finally makes the three previously
+      ORPHAN §M building blocks live — `NotificationToastPolicy` (active-screen/dedup/push/DND/per-type
+      gate), the new pure `ToastDedupWindow`, and the `MeeshyNotificationToast` atom. Port of the toast
+      half of iOS `NotificationToastManager` (`handleNewNotification`/`showToast`/`onConversationOpened`).
+      New pure `:core:model` `ToastDedupWindow` (immutable, 2 s TTL, `admit(id, now)→(window,isDuplicate)`,
+      prune-on-admit, blank-id-safe, referential-stable) replaces iOS's mutable `Set<String>` + one 2 s
+      removal `Task` per id. `NotificationToastViewModel` (`:feature:notifications`) threads it through the
+      policy off the `notificationReceived` socket seam, exposes `currentToast: StateFlow<ApiNotification?>`,
+      auto-dismisses after 7 s (iOS parity, cancelled when replaced), and offers
+      `onConversationOpened/Closed`, `onPostOpened/Closed`, `dismiss` hooks. `NotificationToastClock`
+      (interface + `@Binds`) makes both the dedup millis and the DND `LocalDateTime` test-pinnable.
+      `NotificationToastHost` composable mounts the atom (slide-in, tap-to-open) with pure
+      `notificationToastSenderName`/`notificationToastSubtitle` projections. +25 tests (13 `ToastDedupWindow`
+      + 6 host projection + 14 VM incl. the 2 s dedup window, 7 s auto-dismiss and its non-clobber, and every
+      active-screen hook), RED-proven (dedup boundary `<`→`<=`; VM `isDuplicate`→`false`; auto-dismiss guard).
+      **Still open (§M):** placing `NotificationToastHost` at the app scaffold + calling the
+      `onConversationOpened/Closed` hooks from the chat/feed screens (cross-cutting app wiring).
+- [x] In-app banner dedup — one SSOT window, not a re-coded twin — **shipped 2026-08-31** (slice
+      `notification-banner-dedup-ssot`): the LIVE orchestrator wired at the app scaffold is
+      `NotificationBannerHost`/`NotificationBannerViewModel` (#4457, richer framing than the toast:
+      group-name resolution, media/reaction summary, tap-to-navigate). It carried its OWN dedup
+      window — a private `LinkedHashMap<String, Long>` + hand-rolled `isDuplicate`/`pruneDedupWindow`
+      + local `DEDUP_WINDOW_MS`/`MAX_REMEMBERED`, plus a direct `System.currentTimeMillis()`/
+      `LocalDateTime.now()` — a re-implementation of the pure `ToastDedupWindow` the toast twin
+      already used (dimension 11 divergent twin; the buried window was also entirely UNTESTED, no
+      `NotificationBannerViewModelTest` existed). This slice converges it: the banner VM now uses the
+      shared `ToastDedupWindow.admit(id, now)` (same 2 s window, admit-first ordering identical to
+      `NotificationToastViewModel`) and the injected `NotificationToastClock` seam, and its
+      auto-dismiss became a cancellable `dismissJob` (a banner arriving during another's window no
+      longer waits out the first's 4 s inside the collector, and a newer banner cancels the older
+      timer) — structurally the same shape as the toast VM. +12 tests (new `NotificationBannerViewModelTest`,
+      mirroring the toast harness: fresh→banner, 2 s dedup suppression, same-id-after-window re-shows,
+      active-conversation/post suppression, different-conversation still shows, push-disabled blocked,
+      conversation/post navigation payload, 4 s auto-dismiss, older-timer-doesn't-clobber-newer,
+      dismiss-clears). RED-proven (`isDuplicateDelivery = admit.isDuplicate`→`false` fails exactly the
+      dedup-suppression test). No new `:core:model` type — the SSOT already existed; the fix was to
+      DELETE the duplicate, not add one.
+      **Still open (§M) — the deeper twin:** two orchestrators (`NotificationBannerViewModel` LIVE
+      vs `NotificationToastViewModel` orphan) still wrap the SAME `MeeshyNotificationToast` atom off
+      the SAME socket seam. Dedup + clock are now shared, but the two VMs+Hosts should collapse into
+      ONE (the banner's framing+navigation is the superset). A product-level merge (retire the toast
+      host, fold its remaining hooks into the banner, then wire it) is a separate slice.
+- [x] In-app banner pulls down when the reader opens its thread — **shipped 2026-08-31** (slice
+      `banner-active-context-dismiss`): the LIVE `NotificationBannerViewModel.setActiveContext` set the
+      on-screen context (and published it process-wide for the FCM gate) but did NOT dismiss a banner
+      already on screen for the very conversation/post the reader just opened — iOS
+      `NotificationToastManager.onConversationOpened`/`onPostOpened` do exactly that (`if currentToast.
+      conversationId == conversationId { dismissToast() }`), and the orphan toast VM did too, so the
+      live surface was the poorer one (dimension 8 UX + dimension 13 complétude: a banner about thread X
+      kept counting down over the reader's face while they read thread X). This slice closes it AND makes
+      the "belongs to the open thread?" test a single SSOT: new pure `:core:model` `ActiveContextMatch.
+      matches(contentConversationId, contentPostId, activeConversationId, activePostId)` (a null active id
+      never matches — an empty screen silences nothing), which `NotificationToastPolicy` now calls for the
+      FRESH-notification active-screen suppression (behaviour identical — its inline null-guarded pair was
+      the same predicate) and `setActiveContext` calls for the ALREADY-SHOWN banner. +17 tests (11
+      `ActiveContextMatch` covering both arms true/false, both null guards, the OR, all-null; 6
+      `NotificationBannerViewModel`: opening the shown banner's conversation/post dismisses it, a different
+      conversation leaves it, leaving all screens leaves it, no-banner is inert). RED-proven (stripping the
+      predicate's null guards fails 6 predicate + 9 `NotificationToastPolicy` tests — proving the policy
+      genuinely consults it; removing the dismiss wiring fails exactly the two open-the-thread tests).
+      **Local-first group name shipped 2026-09-01** (slice `banner-group-name-favorite-emoji`): the banner's
+      "X dans <groupe>" framing named the group by `customName ?: title` and DROPPED the favorite-classification
+      emoji — the VM doc-comment promised "renommage + emoji favori" but the code only carried the rename, so a
+      thread the reader had starred (⭐️) or classified (🔥) showed a bare name where iOS
+      `NotificationToastManager.ConversationPresentation.composedSubtitle` leads with the favorite (dimension 6
+      Cohérence + dimension 13 Complétude gap; the emoji + local rename live ONLY on the device, the one piece the
+      gateway cannot compose). New pure `:core:model` `ConversationBannerName.composed(customName, title,
+      favoriteEmoji) → String?` (port of iOS `composedSubtitle` + its `name = customName ?? title` resolution):
+      `<favorite> <name>` favorite-first, `<name>` alone with no favorite, blank/whitespace favorite treated as
+      absent (iOS `trimmingCharacters` guard), the rename winning over the server title, and `null` when the device
+      knows no local name at all so `NotificationBannerFraming.present` falls back to the server title (the Android
+      addition over iOS's pure surface). Wired into `NotificationBannerViewModel` (the sole local-name resolver).
+      +11 tests (10 `ConversationBannerNameTest` — favorite-first / no-favorite / blank-favorite / whitespace-favorite
+      trimmed / rename-wins / blank-rename→title still favorite-first / title-only / both-blank→null / both-absent→null
+      / whitespace-name trimmed; +1 `NotificationBannerViewModelTest` — a group banner leads its headline with the
+      local rename + favorite emoji). RED-proven by mutation (dropping the favorite prepend fails exactly the 4
+      favorite-prepend tests, the 6 no-favorite/null tests stay green). **Still open (§M):** the in-app TOAST surface
+      (`NotificationToastHost.notificationToastSubtitle`) still reads the RAW server `conversationTitle` with no
+      local-first name at all (its VM holds no conversation snapshot) — a larger, separate local-first gap.
 - [~] Notification list — real-time socket updates — **shipped 2026-08-17** (slice
       `notification-realtime-socket`): `MessageSocketManager` now listens for `notification:new`
       (gateway's socket payload is the durable `ApiNotification` shape plus toast-only
@@ -6350,17 +7044,46 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       id already shown in the last 2s" boolean is precomputed by the caller — inherently
       stateful, not this pure function's job), then push-enabled + DND-window gating (both reuse
       already-existing pure predicates, `UserNotificationPreferences.pushEnabled`/
-      `DndWindow.isActive`). +8 tests. **Deliberately narrower than iOS's own gate**: the
-      PER-TYPE toggle check (iOS `isTypeEnabled`, an 80-case switch over `MeeshyNotificationType`)
-      is NOT ported — Android has no raw-wire-type→toggle resolver to reuse
-      (`NotificationTypeCatalog` maps a coarser 17-case UI category, not the 80-case wire enum);
-      building one is real, separate work, left open rather than invented under this slice's
-      budget. Until then every type passes once push+DND clear.
+      `DndWindow.isActive`). +8 tests. **The PER-TYPE toggle check was originally deferred**: iOS
+      `isTypeEnabled` is an 80-case switch over `MeeshyNotificationType`
+      and Android had no raw-wire-type→toggle resolver to reuse
+      (`NotificationTypeCatalog` maps a coarser 17-case UI category, not the 80-case wire enum).
+      **That resolver shipped 2026-08-30** (slice `notification-toast-per-type-gate`): new pure
+      `:core:model` `NotificationTypeToggle.isEnabled(type, preferences)` faithfully ports iOS
+      `isTypeEnabled`, keyed directly on the raw wire `type` string (both lowercase canonical and
+      legacy uppercase alias) so no `MeeshyNotificationType` enum is needed. The switch is
+      expressed once as data (type-set → prefs predicate) built into an immutable class-load
+      lookup — SOTA over iOS's per-call `switch` re-walk. Unknown types collapse onto
+      `systemEnabled` via the existing `NotificationTypeVocabulary.canonical` (iOS
+      `rawValue ?? .system`). Wired into `NotificationToastPolicy.decide` as a third preference
+      layer after push+DND (fail → `BlockedByPreferences`). **Faithful boundary**: iOS gates
+      incoming-call on `callsEnabled` and friend feed/story/mood on `friendContentEnabled`;
+      Android's model has neither field yet, so those types resolve to always-enabled exactly like
+      iOS's toggle-less power-user types (translation, gamification) — tracked follow-up below.
+      +21 tests (17 `NotificationTypeToggle` incl. all-on / all-off completeness sweeps over
+      `KNOWN_TYPES`, cross-grouping cases `STORY_REPLY`→storyReaction /
+      `comment_reaction`→commentLike / `community_joined`→memberLeft, unknown+blank→system;
+      4 `NotificationToastPolicy` incl. toggle-off→blocked / toggle-on→show / toggle-less→show /
+      push-master-overrides-type).
       **Still open**: the STATEFUL wiring (dedup-window bookkeeping, the 7s dismiss timer, a
       Hilt-singleton `CoroutineScope`, `onConversationOpened/Closed`/`onPostOpened/Closed` hooks
       called from `ChatViewModel`/post-detail lifecycle — Android has no equivalent to iOS's
-      `ConversationSocketHandler.init`/`deinit` today), the per-type toggle resolver noted
-      above, and sub-slice (3) (UI mount + navigation).
+      `ConversationSocketHandler.init`/`deinit` today) and sub-slice (3) (UI mount + navigation).
+- [x] `callsEnabled` + `friendContentEnabled` notification toggles (model field + sync-body
+      mapping + Settings ▸ Notifications rows) — iOS gates incoming-call and friend
+      feed/story/mood on these two per-type toggles (`UserNotificationPreferences+Filter.swift`).
+      **Shipped 2026-08-30** (slice `notification-prefs-calls-friend-content`): both fields added
+      to `UserNotificationPreferences` (default `true`, gateway `NotificationPreferenceSchema`
+      parity), carried in `NotificationPreferenceSyncBody` (`from`/`toPreferences`, gateway-schema
+      order) so a toggle set on any device round-trips; `NotificationTypeToggle` now gates
+      `incoming_call`/`call`/`CALL_INCOMING` on `callsEnabled` and
+      `friend_new_story`/`friend_new_post`/`friend_new_mood` on `friendContentEnabled` — those six
+      leave the always-on set, closing the last `isTypeEnabled` parity gap; and `NotificationTypeCatalog`
+      gains `INCOMING_CALL` (CALLS, before MISSED_CALL — iOS order) + `FRIEND_CONTENT` (SOCIAL, last),
+      so the Settings ▸ Notifications editor auto-renders two reachable rows (+2 labels ×4 locales).
+      +8 tests (calls/friend gating both ways with neighbour-toggle isolation; CALLS/SOCIAL section
+      order; catalog lens read/write; sync-body field set = gateway contract + round-trip). RED-proven
+      (mutating the `callsEnabled` gate to always-on fails exactly the calls-gating + all-off sweep).
 - [ ] FCM push: permission request, tap-to-navigate, foreground/silent activity signal, badge sync
 - [ ] Rich push: decryption, message-media attachments, sender-avatar style, category quick
       actions (reply / mark-read / accept-friend / call), conversation threading, per-push badge
@@ -6447,7 +7170,49 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       parity, blank→null, unparseable→null, unix-epoch preserved).
 
 ## N. Search
-- [ ] Global search (messages, conversations, users) with recent searches + query highlighting
+- [~] Global search (messages, conversations, users) with recent searches + query highlighting —
+      three-tab search (`GlobalSearchViewModel` + `GlobalSearchRepository`, debounce 300 ms / 2-char
+      floor / single query feeds all tabs), recent searches (`RecentSearches`/`RecentSearchesStore`),
+      and accent-folded highlight ranges (`MessageTextParser.highlightRanges` via `SearchTextFolder`)
+      all done in earlier slices. **Cache-first query cache + socket invalidation done** (slice
+      `global-search-query-cache`, 2026-08-30): pure `:core:model` `SearchQueryCache<V>` — immutable
+      LRU (capacity 5) + TTL (120 s) keyed by normalised query (trim+lowercase), faithful port of iOS
+      `GlobalSearchViewModel.messageQueryCache` (`get` a pure read — an expired entry is a MISS, never a
+      mutation; `put` evicts the oldest past capacity and never a slot on re-put; `invalidate` clears).
+      `GlobalSearchViewModel` now serves a repeated in-TTL query from the cache with NO network round-trip
+      and NO spinner (dimension 2 Performance), and invalidates on `conversation:updated`/`conversation:deleted`
+      socket events (parity iOS `setupSocketInvalidation`), so a stale result never survives a data change.
+      +20 `SearchQueryCacheTest` (RED-proven: `>=`→`>` on the TTL boundary flips the boundary miss to a hit)
+      +5 `GlobalSearchViewModelTest` (cache-hit skips network, TTL-expiry re-fetches, `invalidateSearchCache`
+      re-fetches, both socket events invalidate). Full `assembleDebug` + all-module `testDebugUnitTest` green.
+      **Message-row highlighting done** (slice `global-search-result-highlight`, 2026-08-31): the message
+      result row now washes the query match in the content preview, iOS `highlightedText` parity. New pure
+      `:core:model` `MessageTextParser.highlightedSegments(text, term)` splits the plain content into
+      alternating highlighted/plain `HighlightSegment` runs (reusing the existing `highlightRanges` SSOT —
+      not a twin), and `GlobalSearchScreen.MessageHitRow` maps those runs onto a washed `AnnotatedString`
+      (same `MeeshyPalette.Warning.copy(alpha=0.45f)` wash as the chat bubble, so a term reads identically
+      in the row and in the opened conversation). Plain content, no markdown/link parsing in the row (iOS
+      does the same — a tappable link inside a result row would dead-end the tap). +12 `MessageTextParserHighlightSegmentsTest`
+      (empty text→no runs; empty/folds-away/unmatched term→single plain run; match at start/middle/end;
+      whole-string match; several matches with plain fillers; adjacent matches→back-to-back highlighted, no
+      empty filler; case-insensitive keeps original casing; accent-folded `cafe`→`café` highlighted whole;
+      the reassembly invariant on every non-trivial case). RED-proven (highlighted-run flag `true`→`false`
+      fails exactly the 8 match-bearing tests, the 4 no-match cases stay green).
+      **Highlight now washes the query that PRODUCED the results, not the live input** (slice
+      `global-search-results-query`, 2026-08-31): iOS keeps a `resultsQuery` distinct from the live
+      `searchText` and highlights each row against it (`highlightedText(result.content, query:
+      viewModel.resultsQuery)`); Android highlighted against the live `state.query`, so while a new
+      query was being typed (during the 300 ms debounce + network window) the OLD results re-washed
+      against the NEW partial term — a stale, mismatched highlight (dimension 4 Fluidité / 13
+      Complétude). New `GlobalSearchUiState.resultsQuery` snapshot, set on BOTH the network path and
+      the cache-hit path to the term that produced the shown results, and reset to `""` when the query
+      shrinks below the floor (parity iOS `clearResults`); `MessageHitRow` now washes against
+      `resultsQuery`. +4 `GlobalSearchViewModelTest` (a successful search anchors `resultsQuery`; a
+      cache hit reports the cached term; shrinking below the floor resets it; the anchor stays on the
+      shown results while a newer query is being typed). RED-proven (blanking the anchor on both paths
+      fails exactly the 4 new tests).
+      **Remaining:** highlighting the Conversations/Users result rows (their preview is the title/username,
+      a lighter follow-up — iOS does not do this, so it would be an Android surpass), and the local FTS leg below.
 - [ ] Local full-text search (FTS, accent-folded, BM25-ranked) + network merge
 - [x] User search (paginated) — closed 2026-08-16 (slice `user-search-pagination`). The search
       itself already existed (`NewConversationViewModel`'s debounced `UserRepository.searchUsers`,
@@ -6567,8 +7332,45 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Inline video playback (thumbnail → play, auto-hiding controls); fullscreen immersive
       player (seek bar, ±10s, speed 1.0–2.0×, swipe-to-dismiss); Picture-in-Picture
 - [ ] Single-active-player coordination across audio + video; save video to gallery
-- [ ] Video watch-progress reporting; synchronized karaoke-style transcription (tap-to-seek)
-- [ ] Audio message player (waveform, speed control, seek); disk-cache-first instant replay
+- [~] Video watch-progress reporting; synchronized karaoke-style transcription (tap-to-seek)
+      — **karaoke sync pure core shipped** (slice `transcription-active-segment-resolver`,
+      2026-08-30): pure `:core:model` `TranscriptionKaraokeResolver.activeSegmentIndex`
+      (segments + currentTime + progress + isPlaying → lit segment index | `null`), a faithful
+      port of iOS `AudioPlayerView.activeSegmentIndex` — the single source of truth iOS shares
+      between the bubble player and `MediaTranscriptionView`. Three layers: idle/empty → `null`
+      (iOS "BUG D" guard against false-highlighting segment 0 at rest); real timing → first
+      half-open `[start,end)` window containing the position (start inclusive, end exclusive),
+      `null` before-first / in-gap / past-last; no usable timing (all `start==end`) →
+      proportional `floor(progress·count)` clamped to range. Android's nullable segment bounds
+      read as `0.0` (iOS's non-optional default). +19 branch tests, RED-proven. Remaining
+      app-side glue (pending): the Compose flow-layout that paints the coloured spans +
+      tap-to-seek + auto-scroll, and video watch-progress reporting.
+      **Watch-report double-fire guard shipped** (slice `video-dismiss-watch-report`,
+      2026-08-31): pure `:core:model` `VideoDismissWatchReport.shouldReport(complete,
+      watchedSeconds, playerStillHoldsAttachment)`, a faithful port of iOS
+      `VideoDismissWatchReport.shouldReport` (the fix for issue #3908). A watch is
+      reported by TWO owners — the shared player's `cleanup()` (persists resume position,
+      then zeroes its counters) and the fullscreen `.onDisappear` (runs after). Closing a
+      PAUSED video routed the second reporter through a DETACHED player that read zero and
+      ERASED the resume position the first owner just wrote. The guard asks one question
+      before reading the player — does it still hold this attachment? — and stays silent
+      once detached; a partial watch reports only past a 3 s minimum (inclusive), a
+      completed watch escapes that threshold. +9 branch tests, RED-proven (detachment gate
+      mutation fails exactly the 3 detached-silence tests). Remaining app-side glue
+      (pending): the Compose fullscreen player `.onDisappear` that calls this guard before
+      emitting the watch-progress telemetry.
+- [~] Audio message player (waveform, speed control, seek); disk-cache-first instant replay
+      — **render-posture pure core shipped** (slice `audio-player-chrome-plan`, 2026-08-30):
+      pure `:core:model` `AudioPlayerChrome` (Card / FlatMinimal / FlatFocused) +
+      `AudioPlayerChromePlan.plan(chrome)`, a faithful port of iOS
+      `AudioPlayerChromePlan.plan(for:)` — the value type deciding WHO appears in the player
+      (card background, right chips, language strip, re-transcribe, transcribe-CTA, flat
+      transcription + its line/word limits + whether it follows playback). `.card` = historic
+      rich card (bubble default); `.flatMinimal` = bare strip, static 2-line quote; `.flatFocused`
+      = enriched bare strip, full karaoke-following transcription word-capped at 30 → fullscreen.
+      Chrome is an OPAQUE posture — WHICH row gets WHICH posture stays app-side (SDK purity).
+      +13 branch tests, RED-proven. Remaining app-side glue (pending): the Compose player chrome
+      that paints these decisions, speed control, seek, disk-cache-first instant replay.
 - [ ] Voice-message autoplay-next chaining; full-screen swipeable audio viewer (reels-style)
 - [~] Universal audio recorder (live waveform, duration/min-duration limits, presets)
       — **live-waveform pure core shipped** (slice `media-waveform-interpolation`, 2026-07-12):

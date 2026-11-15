@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversations_action_make_obsolete">Rendre obsolète</string>
+    <string name="conversations_obsolete_confirm_title">Rendre cette conversation obsolète ?</string>
+    <string name="conversations_obsolete_confirm_message">« %1$s » disparaît tout de suite pour tous ses membres et son contenu est effacé sous 48 heures. C\'est irréversible.</string>
+    <string name="conversations_obsolete_confirm_button">Rendre obsolète</string>
+    <string name="conversations_obsolete_refused_pending_request">Seul le destinataire d\'une demande de message non acceptée peut rendre cette conversation obsolète.</string>
+</resources>

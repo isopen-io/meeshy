@@ -8,6 +8,7 @@ package me.meeshy.sdk.model
  * resources (a UI concern), never in this pure model.
  */
 enum class EphemeralDuration(val seconds: Int) {
+    FIFTEEN_SECONDS(15),
     THIRTY_SECONDS(30),
     ONE_MINUTE(60),
     FIVE_MINUTES(300),
@@ -40,7 +41,8 @@ object MessageEffectsEditor {
      */
     fun toggle(effects: MessageEffects, flag: Long): MessageEffects =
         if (MessageEffectFlags.has(effects.flags, flag)) {
-            effects.copy(flags = effects.flags and flag.inv())
+            val cleared = if (flag == MessageEffectFlags.EPHEMERAL) flag or MessageEffectFlags.EPHEMERAL_AFTER_READ else flag
+            effects.copy(flags = effects.flags and cleared.inv())
         } else {
             effects.copy(flags = effects.flags or flag)
         }
@@ -52,7 +54,46 @@ object MessageEffectsEditor {
      * once that chip is already on), so the flags bitfield is left unchanged.
      */
     fun withEphemeralDuration(effects: MessageEffects, duration: EphemeralDuration): MessageEffects =
-        effects.copy(ephemeralDuration = duration.seconds)
+        effects.copy(
+            flags = effects.flags and MessageEffectFlags.EPHEMERAL_AFTER_READ.inv(),
+            ephemeralDuration = duration.seconds,
+        )
+
+    /**
+     * Arm the composer with [choice], or disarm it with `null` — iOS
+     * `ephemeralChoice.wrappedValue = choice` (#8303). The flamme-œil sets
+     * `EPHEMERAL` + `EPHEMERAL_AFTER_READ` and no duration (none travels on the wire);
+     * a duration sets `EPHEMERAL` alone with its seconds; `null` clears all three.
+     * Every other effect is kept.
+     */
+    fun withEphemeralChoice(effects: MessageEffects, choice: EphemeralChoice?): MessageEffects {
+        val bare = effects.flags and (MessageEffectFlags.EPHEMERAL or MessageEffectFlags.EPHEMERAL_AFTER_READ).inv()
+        return when (choice) {
+            null -> effects.copy(flags = bare, ephemeralDuration = null)
+            EphemeralChoice.AfterRead -> effects.copy(
+                flags = bare or MessageEffectFlags.EPHEMERAL or MessageEffectFlags.EPHEMERAL_AFTER_READ,
+                ephemeralDuration = null,
+            )
+            is EphemeralChoice.Duration -> effects.copy(
+                flags = bare or MessageEffectFlags.EPHEMERAL,
+                ephemeralDuration = choice.duration.seconds,
+            )
+        }
+    }
+
+    /**
+     * Les drapeaux que le petit panneau arme (animations d'entrée + effets permanents) —
+     * iOS `EffectsPickerView.panelFlags`. Les protections (éphémère, flou, vue unique)
+     * n'en font pas partie : la barre d'outils les règle.
+     */
+    const val PANEL_FLAGS: Long = MessageEffectFlags.APPEARANCE_MASK or MessageEffectFlags.PERSISTENT_MASK
+
+    /** « Tout effacer » du panneau : ne retire que [PANEL_FLAGS], jamais les protections. */
+    fun clearPanelFlags(effects: MessageEffects): MessageEffects =
+        effects.copy(flags = effects.flags and PANEL_FLAGS.inv())
+
+    /** Vrai si au moins un effet du panneau est armé (le lien « Tout effacer » n'apparaît qu'alors). */
+    fun hasPanelEffect(effects: MessageEffects): Boolean = effects.flags and PANEL_FLAGS != 0L
 
     /** The empty effects — the picker's "Tout effacer" resetting to iOS `.none`. */
     fun cleared(): MessageEffects = MessageEffects()

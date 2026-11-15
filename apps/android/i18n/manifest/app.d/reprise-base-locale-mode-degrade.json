@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        {
+          "androidName": "degraded_mode_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "degraded_mode_export",
+          "status": "android-only"
+        },
+        {
+          "androidName": "degraded_mode_retry",
+          "status": "android-only"
+        },
+        {
+          "androidName": "degraded_mode_title",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

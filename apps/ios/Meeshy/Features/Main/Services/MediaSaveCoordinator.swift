@@ -3,7 +3,7 @@ import MeeshySDK
 import MeeshyUI
 import os
 
-private let mediaSaveLog = Logger(subsystem: "me.meeshy.app", category: "media-save")
+private let mediaSaveLog = MeeshyLog.logger(.mediaSave)
 
 // MARK: - Request
 
@@ -15,21 +15,35 @@ private let mediaSaveLog = Logger(subsystem: "me.meeshy.app", category: "media-s
 struct MediaSaveRequest: Identifiable, Equatable {
     let id: UUID
     let kind: AttachmentKind
+    /// Œuvre composée dans Meeshy, ou média seulement transmis — ce qui décide
+    /// de la marque (cf. `MediaOrigin`).
+    ///
+    /// **Sans valeur par défaut, délibérément.** Seul le point d'entrée sait sur
+    /// quelle surface il se trouve ; un défaut le dispenserait de le dire et
+    /// ferait sortir un média sous une règle qu'aucun auteur n'aurait choisie.
+    let origin: MediaOrigin
     let remoteURLString: String
     let suggestedFileName: String?
     /// Attachment id serveur — pour le report best-effort « downloaded »
     /// (panneau « Qui a vu ») au moment du câblage des points d'entrée.
     let attachmentId: String?
+    /// L'auteur d'une œuvre COMPOSÉE, que la marque nomme (« "" » = inconnu :
+    /// aucun nom). `nil` = l'œuvre de l'utilisateur connecté lui-même.
+    let authorUsername: String?
 
     init(kind: AttachmentKind,
+         origin: MediaOrigin,
          remoteURLString: String,
          suggestedFileName: String? = nil,
-         attachmentId: String? = nil) {
+         attachmentId: String? = nil,
+         authorUsername: String? = nil) {
         self.id = UUID()
         self.kind = kind
+        self.origin = origin
         self.remoteURLString = remoteURLString
         self.suggestedFileName = suggestedFileName
         self.attachmentId = attachmentId
+        self.authorUsername = authorUsername
     }
 
     var destinations: [MediaSaveDestination] {
@@ -51,6 +65,38 @@ protocol MediaSaveSourceResolving: Sendable {
 protocol PhotoLibrarySaving: Sendable {
     func saveImage(_ data: Data) async throws
     func saveVideo(at url: URL) async throws
+    /// Écriture PAR FICHIER (#9685) : Photos lit le fichier lui-même, rien n'est
+    /// chargé ni décodé en mémoire. `moveFile` seulement pour un temporaire possédé.
+    func saveImageFile(at url: URL, moveFile: Bool) async throws
+    func saveVideo(at url: URL, moveFile: Bool) async throws
+    /// L'album Meeshy contient-il déjà ce média (#10370) ? Sans rien écrire.
+    func albumContains(_ signature: PhotoLibraryMediaSignature, alias: String?) async -> Bool
+    /// Écriture dédoublonnée (#10370) : `signature` est l'empreinte de la SOURCE
+    /// (avant marquage), `alias` l'identifiant de la pièce jointe.
+    func addToAlbum(_ file: URL, kind: AttachmentKind, moveFile: Bool,
+                    signature: PhotoLibraryMediaSignature?, alias: String?) async throws -> PhotoLibrarySaveOutcome
+}
+
+extension PhotoLibrarySaving {
+    func albumContains(_ signature: PhotoLibraryMediaSignature, alias: String?) async -> Bool { false }
+
+    func addToAlbum(_ file: URL, kind: AttachmentKind, moveFile: Bool,
+                    signature: PhotoLibraryMediaSignature?, alias: String?) async throws -> PhotoLibrarySaveOutcome {
+        if kind == .image {
+            try await saveImageFile(at: file, moveFile: moveFile)
+        } else {
+            try await saveVideo(at: file, moveFile: moveFile)
+        }
+        return .saved
+    }
+
+    func saveImageFile(at url: URL, moveFile: Bool) async throws {
+        try await saveImage(Data(contentsOf: url))
+    }
+
+    func saveVideo(at url: URL, moveFile: Bool) async throws {
+        try await saveVideo(at: url)
+    }
 }
 
 /// Report best-effort de la consommation « downloaded » (panneau « Qui a
@@ -84,8 +130,15 @@ enum MediaSaveError: LocalizedError, Equatable {
 /// historiques (Photos silencieux / Documents invisible / ShareLink).
 @MainActor
 final class MediaSaveCoordinator: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     enum Outcome: Equatable {
         case saved(MediaSaveDestination)
+        /// Le média est déjà dans l'album Meeshy : rien n'a été écrit (#10370).
+        case alreadyInPhotoLibrary
         case failed(String)
     }
 
@@ -98,6 +151,24 @@ final class MediaSaveCoordinator: ObservableObject {
     @Published private(set) var isProcessing = false
     @Published private(set) var lastOutcome: Outcome?
 
+    /// **Le portillon de sortie de l'hôte qui possède ce coordinateur** (#9573).
+    ///
+    /// FERMÉ tant qu'il n'est pas posé : `nil` refuse toute requête — ni feuille
+    /// de destinations, ni Photos, ni Fichiers, ni partage. La garde vit ICI,
+    /// dans le gestionnaire, pas seulement dans le bouton de l'hôte.
+    ///
+    /// - Une visionneuse de conversation y pose le portillon de son
+    ///   environnement, dérivé du message qui porte la pièce.
+    /// - Le menu d'un message y pose celui du message (`MessageExitTransport`).
+    /// - Un hôte de PUBLICATION (post, réel) le crée ouvert, et le dit :
+    ///   `MediaSaveCoordinator(exitGate: .open)`.
+    var exitGate: ContentExitGate?
+
+    /// La pièce de cette requête peut-elle partir par ce coordinateur ?
+    func mayLeave(_ attachmentId: String?) -> Bool {
+        exitGate?.mayLeave(attachmentId) ?? false
+    }
+
     /// Requête en cours de traitement (après le choix de destination) —
     /// portée jusqu'à la complétion différée de l'export Fichiers pour le
     /// report « downloaded ».
@@ -108,10 +179,12 @@ final class MediaSaveCoordinator: ObservableObject {
     private let downloadReporter: MediaSaveDownloadReporting
     private let branding: MediaSaveBranding
 
-    init(resolver: MediaSaveSourceResolving = AttachmentMediaSaveResolver(),
+    init(exitGate: ContentExitGate? = nil,
+         resolver: MediaSaveSourceResolving = AttachmentMediaSaveResolver(),
          photoSaver: PhotoLibrarySaving = PhotoLibraryManagerAdapter(),
          downloadReporter: MediaSaveDownloadReporting = AttachmentStatusDownloadReporter(),
          branding: MediaSaveBranding = MeeshyMediaSaveBranding()) {
+        self.exitGate = exitGate
         self.resolver = resolver
         self.photoSaver = photoSaver
         self.downloadReporter = downloadReporter
@@ -119,9 +192,26 @@ final class MediaSaveCoordinator: ObservableObject {
     }
 
     func requestSave(_ request: MediaSaveRequest) {
+        guard mayLeave(request.attachmentId) else { return }
         lastOutcome = nil
         activeRequest = nil
         pendingRequest = request
+    }
+
+    /// **« Enregistrer » d'une image ou d'une vidéo : directement dans l'album
+    /// Meeshy, sans demander où** (#8307). Les
+    /// documents et l'audio gardent le choix de destination (Fichiers, partage).
+    func save(_ request: MediaSaveRequest) {
+        guard mayLeave(request.attachmentId) else { return }
+        guard Self.savesStraightToAlbum(request.kind) else { return requestSave(request) }
+        lastOutcome = nil
+        activeRequest = nil
+        pendingRequest = nil
+        Task { await pick(.photoLibrary, request: request) }
+    }
+
+    nonisolated static func savesStraightToAlbum(_ kind: AttachmentKind) -> Bool {
+        kind == .image || kind == .video
     }
 
     func cancel() {
@@ -138,6 +228,7 @@ final class MediaSaveCoordinator: ObservableObject {
     func pick(_ destination: MediaSaveDestination, request explicitRequest: MediaSaveRequest? = nil) async {
         guard let request = explicitRequest ?? pendingRequest else { return }
         pendingRequest = nil
+        guard mayLeave(request.attachmentId) else { return }
         guard destination.accepts(request.kind) else {
             lastOutcome = .failed(MediaSaveError.destinationUnsupported.localizedDescription)
             return
@@ -147,21 +238,37 @@ final class MediaSaveCoordinator: ObservableObject {
         defer { isProcessing = false }
         do {
             let localFile = try await resolver.resolveLocalFile(for: request)
-            // Un média qui quitte Meeshy porte sa marque — filigrane sur les
-            // images et les vidéos, signature sonore sur les audios. Le
-            // marquage produit TOUJOURS une copie : `localFile` est très
-            // souvent le fichier du cache disque, qui doit rester la copie
-            // fidèle de l'original. Un marquage impossible retombe sur
-            // l'original (cf. `MeeshyMediaSaveBranding`).
-            let branded = await branding.stamp(localFile, kind: request.kind)
+            // L'empreinte de la SOURCE, avant toute marque : enregistrer deux fois
+            // la même story produit deux copies marquées différentes, mais c'est
+            // le même média (#10370). Déjà dans l'album ⇒ rien à préparer.
+            let signature = await Self.sourceSignature(of: localFile, for: destination)
+            if let signature, await photoSaver.albumContains(signature, alias: request.attachmentId) {
+                lastOutcome = .alreadyInPhotoLibrary
+                activeRequest = nil
+                return
+            }
+            // On marque ce que Meeshy a COMPOSÉ — story, scène de post, scène
+            // de réel —, jamais ce que l'utilisateur a seulement TRANSMIS
+            // (cf. `MeeshyMediaSaveBranding`).
+            // Quand marque il y a, elle produit TOUJOURS une copie : `localFile`
+            // est très souvent le fichier du cache disque, qui doit rester la
+            // copie fidèle de l'original. Un marquage impossible, comme un média
+            // transmis, retombe sur ce fichier d'origine — et `isStamped`
+            // interdit alors de le supprimer.
+            let branded = await branding.stamp(localFile, kind: request.kind, origin: request.origin,
+                                               author: request.authorUsername)
             defer { if branded.isStamped { Self.discardStagingDirectory(of: branded.url) } }
             switch destination {
             case .photoLibrary:
-                if request.kind == .image {
-                    let data = try Data(contentsOf: branded.url)
-                    try await photoSaver.saveImage(data)
-                } else {
-                    try await photoSaver.saveVideo(at: branded.url)
+                // Par fichier, jamais par `UIImage` (#9685). La copie marquée nous
+                // appartient : Photos la DÉPLACE. Le fichier du cache, jamais.
+                let written = try await photoSaver.addToAlbum(branded.url, kind: request.kind,
+                                                              moveFile: branded.isStamped,
+                                                              signature: signature, alias: request.attachmentId)
+                guard written == .saved else {
+                    lastOutcome = .alreadyInPhotoLibrary
+                    activeRequest = nil
+                    return
                 }
                 lastOutcome = .saved(.photoLibrary)
                 await reportDownloadedOnce()
@@ -180,12 +287,15 @@ final class MediaSaveCoordinator: ObservableObject {
     }
 
     func reportExportCompleted() {
+        // La copie de mise en scène a servi : elle part, sinon chaque export laissait le fichier entier dans `tmp`.
+        if let exportURL { Self.discardExportStaging(of: exportURL) }
         exportURL = nil
         lastOutcome = .saved(.files)
         Task { await reportDownloadedOnce() }
     }
 
     func reportExportCancelled() {
+        if let exportURL { Self.discardExportStaging(of: exportURL) }
         exportURL = nil
         activeRequest = nil
     }
@@ -202,6 +312,18 @@ final class MediaSaveCoordinator: ObservableObject {
 
     // MARK: - Pure helpers (testables sans I/O réseau)
 
+    /// L'empreinte du fichier résolu, seulement quand il part vers l'album.
+    nonisolated static func sourceSignature(of file: URL,
+                                            for destination: MediaSaveDestination) async -> PhotoLibraryMediaSignature? {
+        guard destination == .photoLibrary else { return nil }
+        do {
+            return try await PhotoLibraryMediaSignature.of(fileAt: file)
+        } catch {
+            MeeshyLog.logger(.mediaSave).error("media-save signature unreadable: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
     /// Copie le fichier résolu vers un dossier temporaire UNIQUE sous son
     /// nom lisible (les fichiers du cache sont nommés par hash SHA256 —
     /// inutilisables tels quels comme nom d'export).
@@ -213,6 +335,16 @@ final class MediaSaveCoordinator: ObservableObject {
             exportFileName(for: request, actualExtension: source.pathExtension))
         try FileManager.default.copyItem(at: source, to: destination)
         return destination
+    }
+
+    /// Supprime le dossier UNIQUE de `stageForExport` (`media-save-<UUID>`), qui ne contient que la copie
+    /// d'export. Tout autre dossier est laissé : le fichier résolu appartient au cache disque.
+    nonisolated static func discardExportStaging(of file: URL) {
+        let directory = file.deletingLastPathComponent()
+        let name = directory.lastPathComponent
+        let prefix = "media-save-"
+        guard name.hasPrefix(prefix), UUID(uuidString: String(name.dropFirst(prefix.count))) != nil else { return }
+        FileManager.default.removeItemLogging(at: directory, context: "media-save export staging cleanup")
     }
 
     /// Supprime le dossier temporaire d'une COPIE MARQUÉE, une fois celle-ci
@@ -298,10 +430,36 @@ struct AttachmentMediaSaveResolver: MediaSaveSourceResolving {
         }
     }
 
-    /// `data(for:)` télécharge+cache sur miss ; le fichier disque du store est
-    /// préféré, avec repli sur une écriture temporaire si le flush L2 n'a pas
-    /// encore touché le disque (timing interne du store).
-    private func materialize(from store: DiskCacheStore, key: String, ext: String) async throws -> URL {
+    /// **Le disque d'abord, le réseau seulement s'il n'y a rien** (#6810).
+    ///
+    /// L'ordre comptait, et il était inversé : `data(for:)` était inconditionnel
+    /// et `localFileURL` venait après lui. L'ordre des `return` donnait le
+    /// change — ce doc-comment affirmait même que « le fichier disque du store
+    /// est préféré » — mais l'ordre des EFFETS disait l'inverse, et le payait
+    /// deux fois : une relecture intégrale en RAM sur un cache valide (des
+    /// pièces de l'ordre de 275 Mo pour une vidéo, cf. `CachePolicy`), et un
+    /// vrai retéléchargement sur une entrée périmée dont le fichier était
+    /// pourtant toujours là — `load` rend `.expired` sans rien supprimer.
+    ///
+    /// Le repli d'écriture temporaire reste en bas : il couvre le cas où le
+    /// store a les octets sans les avoir encore posés sur le disque.
+    ///
+    /// **Interne, et non privée, pour être INTERROGEABLE** : les quatre suites
+    /// qui traversent le chemin « Créer avec ce média » remplacent toutes ce
+    /// resolver par un double, de sorte que le resolver de production n'était
+    /// éprouvé nulle part.
+    func materialize(from store: DiskCacheStore, key: String, ext: String) async throws -> URL {
+        // `cachedFileURL` est `nonisolated` et ne coûte qu'un `stat`. Il rend le
+        // fichier dès qu'il EXISTE, sans consulter sa fraîcheur — et c'est la
+        // bonne question ici : réutiliser un média qu'on vient de regarder ne
+        // doit dépendre d'aucun TTL. Il compte de surcroît l'ACCÈS pour le LRU,
+        // ce qui est juste — rouvrir un média EST un usage, et l'oublier ferait
+        // vieillir précisément ce qui sert le plus.
+        if let dejaSurLeDisque = store.cachedFileURL(for: key) {
+            return dejaSurLeDisque
+        }
+        // Vrai défaut de cache : c'est ici, et ici seulement, que le réseau a sa
+        // place.
         let data = try await store.data(for: key)
         if let onDisk = await store.localFileURL(for: key) {
             return onDisk
@@ -340,5 +498,30 @@ struct PhotoLibraryManagerAdapter: PhotoLibrarySaving {
         guard await PhotoLibraryManager.shared.saveVideo(at: url) else {
             throw MediaSaveError.photoLibraryDenied
         }
+    }
+
+    func saveImageFile(at url: URL, moveFile: Bool) async throws {
+        guard await PhotoLibraryManager.shared.saveImageFile(at: url, moveFile: moveFile) else {
+            throw MediaSaveError.photoLibraryDenied
+        }
+    }
+
+    func saveVideo(at url: URL, moveFile: Bool) async throws {
+        guard await PhotoLibraryManager.shared.saveVideo(at: url, moveFile: moveFile) else {
+            throw MediaSaveError.photoLibraryDenied
+        }
+    }
+
+    func albumContains(_ signature: PhotoLibraryMediaSignature, alias: String?) async -> Bool {
+        await PhotoLibraryManager.shared.contains(signature, alias: alias)
+    }
+
+    func addToAlbum(_ file: URL, kind: AttachmentKind, moveFile: Bool,
+                    signature: PhotoLibraryMediaSignature?, alias: String?) async throws -> PhotoLibrarySaveOutcome {
+        let outcome = kind == .image
+            ? await PhotoLibraryManager.shared.addImageFile(at: file, moveFile: moveFile, signature: signature, alias: alias)
+            : await PhotoLibraryManager.shared.addVideo(at: file, moveFile: moveFile, signature: signature, alias: alias)
+        guard outcome.isInAlbum else { throw MediaSaveError.photoLibraryDenied }
+        return outcome
     }
 }

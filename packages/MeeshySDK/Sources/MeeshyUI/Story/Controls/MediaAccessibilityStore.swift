@@ -9,17 +9,38 @@ import MeeshySDK
 /// (`CreatePostSchema.mediaAlt` / `.allowSoundExtraction`,
 /// `services/gateway/src/routes/posts/types.ts`), SDK
 /// (`PostService.create/update(… allowSoundExtraction: mediaAlt:)`) — mais
-/// rien ne les COLLECTAIT côté UI avant ce fichier (C7-UI, 2026-08-23).
+/// rien ne les COLLECTAIT côté UI avant ce fichier.
 ///
 /// Ce store est la SURFACE de collecte, pas le point de persistance final :
-/// `mediaAltPayload()` rend exactement la forme attendue par
+/// `payload(.alt)` rend exactement la forme attendue par
 /// `PostService.create(… mediaAlt:)` (dictionnaire id de média → texte), prête
 /// à être relayée par l'appelant qui tient déjà le VM/publish (hors du
 /// périmètre `Story/Controls/`).
 @MainActor
 public final class MediaAccessibilityStore: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
-    @Published private(set) var altText: [String: String] = [:]
+    /// Les textes collectés, PAR NATURE puis par média.
+    ///
+    /// Une seule case pour les deux textes : `alt` et `caption` ont exactement
+    /// le même transport (`PostMediaText`), et écrire deux dictionnaires
+    /// jumeaux côte à côte est la façon la plus sûre de les faire diverger —
+    /// c'est ce qui est arrivé au serveur avant `applyMediaText(column:)`.
+    ///
+    /// **Séparés par la CLÉ, jamais par le champ** : `texts[.alt]` et
+    /// `texts[.caption]` ne se touchent pas, et `MediaCaptionCollectionTests`
+    /// garde précisément ce point — le seul défaut qu'une mutualisation
+    /// puisse introduire.
+    @Published private(set) var texts: [PostMediaText: [String: String]] = [:]
+
+    /// Projection historique. Conservée parce qu'elle est PUBLIQUE et lue par
+    /// le panneau, les tests et le hand-off : la généralisation ne casse aucun
+    /// appelant.
+    var altText: [String: String] { texts[.alt] ?? [:] }
     /// `nil` tant que l'auteur n'a pas touché l'interrupteur. Contrairement à
     /// `altText`, ce n'est PAS un champ par média : `Post.allowSoundExtraction`
     /// (`schema.prisma:3125`) est un flag UNIQUE sur le post entier — « autorise
@@ -27,39 +48,56 @@ public final class MediaAccessibilityStore: ObservableObject {
     /// « … de CE média ». Un seul interrupteur composer-wide, pas un par clip.
     @Published private(set) var allowSoundExtractionOverride: Bool?
 
-    /// Miroir de `CreatePostSchema.mediaAlt` côté gateway
+    /// Miroir de `CreatePostSchema.mediaAlt` / `.mediaCaption` côté gateway
     /// (`z.record(z.string(), z.string().max(1000))`,
-    /// `services/gateway/src/routes/posts/types.ts:249`) — on ne collecte
-    /// jamais plus que ce que le transport accepte.
-    public static let maxAltLength = 1000
+    /// `services/gateway/src/routes/posts/types.ts`) — on ne collecte jamais
+    /// plus que ce que le transport accepte.
+    ///
+    /// DÉLÉGUÉ à `PostMediaText.maxLength` : la borne appartient au contrat,
+    /// pas à ce store, et deux constantes valant 1000 auraient fini par
+    /// diverger.
+    public static var maxAltLength: Int { PostMediaText.maxLength }
 
     public init() {}
 
-    /// Texte alternatif courant d'un média — `""` tant que l'auteur ne l'a
-    /// pas encore renseigné (jamais `nil` : le champ d'UI a toujours une
-    /// valeur à afficher).
-    public func alt(for mediaId: String) -> String {
-        altText[mediaId] ?? ""
+    /// Texte courant d'un média pour l'une des deux natures — `""` tant que
+    /// l'auteur ne l'a pas renseigné (jamais `nil` : le champ d'UI a toujours
+    /// une valeur à afficher).
+    public func text(_ kind: PostMediaText, for mediaId: String) -> String {
+        texts[kind]?[mediaId] ?? ""
     }
 
     /// Une chaîne vide RETIRE l'entrée plutôt que de stocker `""` — un média
     /// jamais touché et un média dont l'auteur a effacé le texte doivent
     /// produire le même payload (rien pour cet id), pas une chaîne vide qui
     /// écraserait un texte serveur existant au prochain update.
-    public func setAlt(_ text: String, for mediaId: String) {
-        let trimmed = String(text.prefix(Self.maxAltLength))
-        guard !trimmed.isEmpty else {
-            altText.removeValue(forKey: mediaId)
+    public func setText(_ value: String, _ kind: PostMediaText, for mediaId: String) {
+        let clamped = String(value.prefix(PostMediaText.maxLength))
+        guard !clamped.isEmpty else {
+            texts[kind]?.removeValue(forKey: mediaId)
             return
         }
-        altText[mediaId] = trimmed
+        texts[kind, default: [:]][mediaId] = clamped
     }
 
-    /// Défaut CONSERVATEUR : `false` tant que l'auteur n'a pas explicitement
-    /// activé l'extraction — c'est un choix sur SON contenu, jamais un
-    /// opt-out.
+    /// Texte alternatif courant d'un média (accessibilité).
+    public func alt(for mediaId: String) -> String { text(.alt, for: mediaId) }
+
+    public func setAlt(_ value: String, for mediaId: String) { setText(value, .alt, for: mediaId) }
+
+    /// LÉGENDE courante d'un média — ce que l'auteur écrit et que les lecteurs
+    /// VOIENT, à ne pas confondre avec `alt(for:)`, que seul VoiceOver annonce.
+    public func caption(for mediaId: String) -> String { text(.caption, for: mediaId) }
+
+    public func setCaption(_ value: String, for mediaId: String) { setText(value, .caption, for: mediaId) }
+
+    /// Défaut `true` (#8012) : un contenu PUBLIC
+    /// verse la bande-son de ses vidéos à la bibliothèque, et la passerelle lit
+    /// l'ABSENCE de choix comme un accord (`videoSoundExtractionAllowed`).
+    /// L'interrupteur affiche donc ce qui se passera ; seul un refus explicite
+    /// de l'auteur (`false`) retient la bande-son.
     public func allowsSoundExtraction() -> Bool {
-        allowSoundExtractionOverride ?? false
+        allowSoundExtractionOverride ?? true
     }
 
     public func setAllowsSoundExtraction(_ allowed: Bool) {
@@ -72,18 +110,26 @@ public final class MediaAccessibilityStore: ObservableObject {
     /// touché ici : c'est un choix composer-wide, la suppression d'UN média
     /// ne l'efface pas (les autres vidéos restantes portent toujours le
     /// même choix).
+    ///
+    /// Efface les DEUX textes : un `remove` qui n'en effacerait qu'un
+    /// laisserait un id orphelin fuiter dans un payload ultérieur — c'est
+    /// exactement ce que la version alt-seule évitait déjà, et l'oublier pour
+    /// la légende aurait rouvert le défaut sous un autre nom.
     public func remove(mediaId: String) {
-        altText.removeValue(forKey: mediaId)
+        for kind in PostMediaText.allCases {
+            texts[kind]?.removeValue(forKey: mediaId)
+        }
     }
 
     /// Ce que le BROUILLON retient de la collecte (F2).
     ///
-    /// Rend le dictionnaire tel quel, vide compris, là où `mediaAltPayload()`
+    /// Rend le dictionnaire tel quel, vide compris, là où `payload(_:)`
     /// rend `nil` : un brouillon persiste un état d'édition, pas une requête —
     /// « aucun texte » n'y dit rien de plus que « dictionnaire vide », alors
     /// que le transport, lui, distingue les deux.
     public func draftSnapshot() -> StoryDraftAccessibility {
-        StoryDraftAccessibility(mediaAlt: altText,
+        StoryDraftAccessibility(mediaAlt: texts[.alt] ?? [:],
+                                mediaCaption: texts[.caption] ?? [:],
                                 allowSoundExtraction: allowSoundExtractionOverride)
     }
 
@@ -95,25 +141,21 @@ public final class MediaAccessibilityStore: ObservableObject {
     /// Les textes repassent par `setAlt` : un brouillon a pu être écrit sous
     /// une limite de transport différente.
     public func restore(from accessibility: StoryDraftAccessibility) {
-        altText = [:]
-        for (mediaId, text) in accessibility.mediaAlt {
-            setAlt(text, for: mediaId)
-        }
+        texts = [:]
+        for (mediaId, value) in accessibility.mediaAlt { setText(value, .alt, for: mediaId) }
+        for (mediaId, value) in accessibility.mediaCaption { setText(value, .caption, for: mediaId) }
         allowSoundExtractionOverride = accessibility.allowSoundExtraction
     }
 
     /// Snapshot prêt pour `PostService.create/update(… mediaAlt:)`. `nil`
     /// quand aucun média n'a de texte — un dictionnaire vide enverrait un
     /// signal différent (« tous les textes sont vides ») de « rien à dire ».
-    public func mediaAltPayload() -> [String: String]? {
-        altText.isEmpty ? nil : altText
+    public func payload(_ kind: PostMediaText) -> [String: String]? {
+        let collected = texts[kind] ?? [:]
+        return collected.isEmpty ? nil : collected
     }
 
-    /// Snapshot prêt pour `PostService.create/update(… allowSoundExtraction:)`.
-    /// `nil` tant que l'auteur n'a jamais touché l'interrupteur — le
-    /// transport doit alors garder son défaut serveur (`false`), pas recevoir
-    /// un `false` explicite qui écraserait un update partiel différent.
-    public func allowSoundExtractionPayload() -> Bool? {
-        allowSoundExtractionOverride
-    }
+    /// Snapshot prêt pour `PostService.create/update(… mediaCaption:)` (#4055).
+    /// Même règle de `nil` que pour le texte alternatif.
+    public func mediaCaptionPayload() -> [String: String]? { payload(.caption) }
 }

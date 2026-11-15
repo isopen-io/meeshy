@@ -1,0 +1,235 @@
+import { describe, expect, test } from 'bun:test';
+
+// @ts-expect-error — module .mjs sans déclaration de types ; ce témoin
+// interroge son API publique exactement comme le pilote le fait.
+import { escapeForCss, findRuleBody, isWitnessFile, sizelessTextClasses, sourceFiles, textSizeRoles, usedClasses } from './check-utilities.mjs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { unlinkSync, writeFileSync } from 'node:fs';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * LE TÉMOIN DU GATE DE TAILLE MASQUÉE (#5606, revue-correction, défaut 1).
+ *
+ * `check-utilities.mjs` ne vérifiait, avant ce lot, que « la classe a-t-elle
+ * UNE règle ? ». `.text-meta{color:...}` répond oui, alors que le jeton
+ * `--text-meta` promettait un `font-size` qu'un `--color-meta` homonyme a
+ * fait disparaître de la résolution Tailwind. Ce fichier fixe le comportement
+ * qui a manqué le défaut, pour qu'une future collision de nom ne repasse plus
+ * en silence.
+ */
+/**
+ * LE TÉMOIN DU FAUX-POSITIF DE COMMENTAIRE (régression CI 2026-09-10, #5958).
+ *
+ * Un commentaire JSDoc qui CITE un extrait JSX d'un AUTRE fichier, avec un
+ * `className="…"` qui franchit un saut de ligne, faisait capturer par la
+ * regex le marqueur de continuation ` * ` comme un TOKEN de classe à part
+ * entière : `className="flex\n * justify-center py-1.5"` rendait les tokens
+ * `flex`, `*`, `justify-center`, `py-1.5` — `*` n'a jamais été une classe,
+ * et n'avait donc aucune règle dans la feuille produite, ce qui a fait
+ * échouer `Gates web-v2` sur `dev` pour TOUTE PR (pas seulement celle qui
+ * touchait le fichier). Deux correctifs complémentaires ont atterri côte à
+ * côte (#5958, le commentaire réel reformulé sans guillemets JSX ; #5960,
+ * `usedClasses` dépouille désormais les commentaires avant de scanner) :
+ * ce témoin verrouille le second, sur un fixture qui reproduit EXACTEMENT
+ * le motif fautif — il doit rendre zéro token, quelle que soit la forme du
+ * commentaire qui le porte.
+ */
+describe('usedClasses — un commentaire ne doit jamais injecter de faux token', () => {
+  /**
+   * **CE TÉMOIN A ÉTÉ RETOURNÉ le 2026-09-10, et son titre disait déjà pourquoi.**
+   *
+   * Deux sessions ont corrigé le même défaut à une heure d'écart, par deux
+   * chemins DIFFÉRENTS et complémentaires :
+   * - #5958 a reformaté le commentaire de `thread-chrome.ts` pour qu'il ne
+   *   porte plus la syntaxe d'attribut JSX — le fichier réel cesse de piéger
+   *   l'extracteur ;
+   * - #5960 a fait DÉPOUILLER les commentaires par `usedClasses` — l'extracteur
+   *   cesse de trébucher sur n'importe quel fichier, présent ou futur.
+   *
+   * Le premier soigne un site, le second la classe entière. Ce témoin épinglait
+   * l'ancien comportement (`toContain('*')`) : il caractérisait le DÉFAUT, alors
+   * que le titre de son bloc énonce la RÈGLE — « un commentaire ne doit jamais
+   * injecter de faux token ». Les deux se contredisaient ; c'est la règle qui
+   * gagne, et l'assertion la rejoint.
+   *
+   * > Un témoin qui ÉPINGLE un défaut au lieu d'affirmer la règle devient faux
+   * > le jour où le défaut est corrigé — et il fait alors rougir la correction.
+   */
+  test('un className="…" multi-lignes à l’intérieur d’un JSDoc n’injecte AUCUN token', () => {
+    const fixture = [
+      '/**',
+      ' * au navigateur (`thread-modes.tsx`, le `<div className="flex',
+      ' * justify-center py-1.5">` qui précède chaque rangée)',
+      ' */',
+      'export const x = 1;',
+      '',
+    ].join('\n');
+    const file = join(HERE, '__fixtures-regression-comment.tsx');
+    writeFileSync(file, fixture);
+    try {
+      const found = usedClasses([file]);
+      expect([...found.keys()]).toEqual([]);
+    } finally {
+      unlinkSync(file);
+    }
+  });
+
+  test('thread-chrome.ts (réel) ne contient plus aucun className littéral — zéro token', () => {
+    const file = join(HERE, '..', 'src', 'lib', 'view', 'thread-chrome.ts');
+    const found = usedClasses([file]);
+    expect([...found.keys()]).toEqual([]);
+  });
+});
+
+describe('textSizeRoles — les rôles de taille déclarés par une source de thème', () => {
+  test('extrait le nom qui suit chaque `--text-<rôle>:`', () => {
+    const source = '@theme inline {\n  --text-meta: var(--text-sm);\n  --text-chip: var(--text-xs);\n}';
+    expect(textSizeRoles(source)).toEqual(new Set(['meta', 'chip']));
+  });
+
+  test('une source sans déclaration `--text-` rend un ensemble vide', () => {
+    expect(textSizeRoles('@theme inline {\n  --color-brand: #000;\n}')).toEqual(new Set());
+  });
+});
+
+describe('escapeForCss — le sélecteur que Tailwind émet réellement', () => {
+  test('une apostrophe se protège comme Tailwind la protège : `content-[\'\']` a sa règle', () => {
+    const emitted = ".before\\:content-\\[\\'\\'\\]:before{--tw-content:\"\";content:var(--tw-content)}";
+    expect(emitted.includes(`.${escapeForCss("before:content-['']")}`)).toBe(true);
+  });
+
+  test('un guillemet double aussi : `content-["→"]`', () => {
+    const emitted = '.after\\:content-\\[\\"→\\"\\]:after{--tw-content:"→";content:var(--tw-content)}';
+    expect(emitted.includes(`.${escapeForCss('after:content-["→"]')}`)).toBe(true);
+  });
+
+  test('l’arobase des requêtes de conteneur se protège : `@container` et `@xl:grid-cols-4` ont leur règle', () => {
+    const emitted =
+      '.\\@container{container-type:inline-size}.\\@xl\\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}';
+    expect(emitted.includes(`.${escapeForCss('@container')}`)).toBe(true);
+    expect(emitted.includes(`.${escapeForCss('@xl:grid-cols-4')}`)).toBe(true);
+  });
+
+  test('une valeur arbitraire sous variante de conteneur : `@2xl:grid-cols-[minmax(0,1fr)_auto]`', () => {
+    const emitted = '.\\@2xl\\:grid-cols-\\[minmax\\(0\\,1fr\\)_auto\\]{grid-template-columns:minmax(0,1fr) auto}';
+    expect(emitted.includes(`.${escapeForCss('@2xl:grid-cols-[minmax(0,1fr)_auto]')}`)).toBe(true);
+  });
+
+  test('une variante de conteneur INEXISTANTE reste morte : l’échappement ne rend pas le gate complaisant', () => {
+    const emitted = '.\\@xl\\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}';
+    expect(emitted.includes(`.${escapeForCss('@xxl:grid-cols-4')}`)).toBe(false);
+    expect(emitted.includes(`.${escapeForCss('@xl:grid-cols-5')}`)).toBe(false);
+  });
+
+  /**
+   * LE TÉMOIN DE L'ASTÉRISQUE (régression CI 2026-10-12, #10293).
+   *
+   * `w-[min(100%,calc(62dvh*9/16))]` (la scène caméra du déroulé photo,
+   * `game-photo-flow.tsx`) a été la première classe du dépôt à porter un `*`
+   * dans sa valeur arbitraire. Tailwind l'a compilée et émise comme toute
+   * autre classe spéciale déjà couverte ci-dessus — mais `escapeForCss`
+   * n'échappait pas l'astérisque, donc la recherche par sous-chaîne ne
+   * retrouvait jamais la règle pourtant présente : la classe passait pour
+   * morte sur `dev`, pour toute PR, sans rapport avec ce que cette classe
+   * change réellement.
+   */
+  test('l’astérisque d’une multiplication `calc()` se protège : `w-[min(100%,calc(62dvh*9/16))]` a sa règle', () => {
+    const emitted = '.w-\\[min\\(100\\%\\,calc\\(62dvh\\*9\\/16\\)\\)\\]{width:min(100%,calc(62dvh*9/16))}';
+    expect(emitted.includes(`.${escapeForCss('w-[min(100%,calc(62dvh*9/16))]')}`)).toBe(true);
+  });
+});
+
+describe('findRuleBody — le corps de la règle compilée pour une classe', () => {
+  test('rend le corps entre accolades quand la règle existe', () => {
+    expect(findRuleBody('.text-meta{color:#000}', 'text-meta')).toBe('color:#000');
+  });
+
+  test('rend `null` quand la règle est absente', () => {
+    expect(findRuleBody('.text-body{font-size:17px}', 'text-meta')).toBeNull();
+  });
+});
+
+describe('sizelessTextClasses — la taille promise mais masquée par une couleur homonyme', () => {
+  test('signale une classe dont le rôle a un jeton de taille mais dont la règle ne porte aucun `font-size`', () => {
+    const used = new Map([['text-meta', 'src/institutional/page.tsx']]);
+    const css = '.text-meta{color:var(--ios-bubble-meta)}';
+    const findings = sizelessTextClasses(used, css, new Set(['meta']));
+    expect(findings).toEqual([{ name: 'text-meta', file: 'src/institutional/page.tsx' }]);
+  });
+
+  test('ne signale rien quand la règle compilée porte bien `font-size`', () => {
+    const used = new Map([['text-caption', 'src/institutional/page.tsx']]);
+    const css = '.text-caption{font-size:.875rem}';
+    expect(sizelessTextClasses(used, css, new Set(['caption']))).toEqual([]);
+  });
+
+  test('ignore un rôle sans jeton de taille déclaré — rien à promettre, rien à masquer', () => {
+    const used = new Map([['text-brand', 'src/institutional/page.tsx']]);
+    const css = '.text-brand{color:#000}';
+    expect(sizelessTextClasses(used, css, new Set())).toEqual([]);
+  });
+
+  test('ignore une classe morte (absente de la feuille) — déjà couverte par `dead`', () => {
+    const used = new Map([['text-meta', 'src/institutional/page.tsx']]);
+    const css = '.text-body{font-size:17px}';
+    expect(sizelessTextClasses(used, css, new Set(['meta']))).toEqual([]);
+  });
+
+  test('ignore une classe qui n’est pas de la forme `text-<rôle>` (variante ou autre préfixe)', () => {
+    const used = new Map([['placeholder:text-meta', 'src/institutional/page.tsx']]);
+    const css = '.placeholder\\:text-meta::placeholder{color:#000}';
+    expect(sizelessTextClasses(used, css, new Set(['meta']))).toEqual([]);
+  });
+});
+
+/**
+ * LE TÉMOIN DU PÉRIMÈTRE (#18399).
+ *
+ * Ce gate mesure ce que l'APPLICATION peint. Il lisait aussi les TÉMOINS —
+ * 2 440 fichiers sur 5 995 au 2026-11-14 — et une classe inventée par un test
+ * pour servir de marqueur à une assertion n'a, par construction, aucune règle
+ * dans la feuille. `probe-sheet` (`dialog-exit.test.tsx`, #18362) a rendu
+ * `dev` ROUGE pour tout le monde le jour de son arrivée.
+ *
+ * C'est la deuxième fois sous une autre forme : #5958 / #5960, ci-dessus, est
+ * le même rayon de souffle (« `Gates web-v2` a échoué sur `dev` pour TOUTE
+ * PR ») pour une autre source de bruit. Ce lot-là a répondu en retirant le
+ * bruit du PÉRIMÈTRE, pas en exemptant une classe — même réponse ici.
+ *
+ * Le prédicat est exercé sur des noms qui RESSEMBLENT sans en être
+ * (`latest.ts`, `contest.tsx`, `manifest.ts`) : un filtre trop large retirerait
+ * de vrais écrans du périmètre, ce qu'aucun rouge ne signalerait — le gate
+ * deviendrait silencieusement aveugle, le pire des deux défauts.
+ */
+describe('le périmètre du gate exclut les témoins (#18399)', () => {
+  test('un fichier de témoin est reconnu, sous ses trois formes', () => {
+    expect(isWitnessFile('src/lib/view/dialog-exit.test.tsx')).toBe(true);
+    expect(isWitnessFile('src/lib/api/socket.test.ts')).toBe(true);
+    expect(isWitnessFile('src/routes/thread.spec.tsx')).toBe(true);
+    expect(isWitnessFile('src/routes/thread.spec.ts')).toBe(true);
+  });
+
+  test("un fichier d'application qui RESSEMBLE à un témoin reste dans le périmètre", () => {
+    for (const name of ['src/lib/latest.ts', 'src/routes/contest.tsx', 'src/lib/manifest.ts', 'src/lib/test-ids.ts', 'src/lib/protest.tsx']) {
+      expect(isWitnessFile(name)).toBe(false);
+    }
+  });
+
+  test('le balayage réel ne rend plus aucun témoin', () => {
+    const files: string[] = sourceFiles(join(HERE, '..', 'src'));
+    // Le balayage LIT bien quelque chose — une garde négative dont la lecture
+    // rend `[]` resterait verte quoi qu'il arrive.
+    expect(files.length).toBeGreaterThan(1000);
+    expect(files.filter((f) => isWitnessFile(f))).toEqual([]);
+  });
+
+  test("`probe-sheet` — la classe qui a rendu `dev` rouge — n'est plus vue", () => {
+    const used: Map<string, string> = usedClasses(sourceFiles(join(HERE, '..', 'src')));
+    expect(used.has('probe-sheet')).toBe(false);
+    // Et le balayage voit toujours de vraies classes : sans cette ligne, un
+    // périmètre devenu VIDE passerait ce témoin au vert.
+    expect(used.size).toBeGreaterThan(100);
+  });
+});

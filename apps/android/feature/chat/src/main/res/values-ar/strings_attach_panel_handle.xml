@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_panel_handle_label">مقبض لوحة المرفقات</string>
+    <string name="composer_panel_handle_open_library">فتح مكتبة الصور كاملة</string>
+    <string name="composer_panel_handle_close">إغلاق المرفقات</string>
+</resources>

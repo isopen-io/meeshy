@@ -125,3 +125,38 @@ private final class MockBGTaskCanceller: BGTaskCancelling {
         cancelledIdentifiers.append(identifier)
     }
 }
+
+/// L'expiration d'une tâche d'arrière-plan doit la rendre TOUT DE SUITE ; la
+/// fin du travail, si elle arrive ensuite, ne la rend pas une seconde fois.
+final class BackgroundTaskCompletionTests: XCTestCase {
+
+    private final class Recorder: @unchecked Sendable {
+        private let lock = NSLock()
+        private var values: [Bool] = []
+        func add(_ value: Bool) { lock.lock(); values.append(value); lock.unlock() }
+        var all: [Bool] { lock.lock(); defer { lock.unlock() }; return values }
+    }
+
+    func test_expirationThenWorkEnd_completesOnceWithFailure() {
+        let recorder = Recorder()
+        let completion = BackgroundTaskCompletion { recorder.add($0) }
+        completion.complete(success: false)
+        completion.complete(success: true)
+        XCTAssertEqual(recorder.all, [false])
+    }
+
+    func test_workEndWithoutExpiration_completesWithItsOutcome() {
+        let recorder = Recorder()
+        let completion = BackgroundTaskCompletion { recorder.add($0) }
+        completion.complete(success: true)
+        XCTAssertEqual(recorder.all, [true])
+    }
+
+    /// Les deux tâches rendent par la même porte, et l'expiration y passe.
+    func test_bothHandlers_completeThroughTheOnceGate() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Services/BackgroundTaskManager.swift"))
+        XCTAssertEqual(source.components(separatedBy: "completion.complete(success: false)").count - 1, 2)
+        XCTAssertTrue(source.contains("guard !Task.isCancelled else { return synced }"))
+    }
+}
+

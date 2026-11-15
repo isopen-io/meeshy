@@ -34,6 +34,16 @@ final class CallTranscriptStoreTests: XCTestCase {
         await CallTranscriptStore.shared.invalidate(for: "call-1")
     }
 
+    func test_saveMerging_keepsEachCaptureOnceByIdentifier() async {
+        let shot = CallTranscriptCapture(id: "cap-1", userId: "user-2", displayName: "Awa", kind: .screenshot, capturedAt: Date(timeIntervalSince1970: 3))
+        let started = CallTranscriptCapture(id: "cap-2", userId: "user-1", displayName: "Alice", kind: .callRecordingStarted, capturedAt: Date(timeIntervalSince1970: 1))
+        await CallTranscriptStore.shared.saveMerging(CallTranscript(callId: "call-cap", conversationId: "conv-1", callStartedAt: Date(timeIntervalSince1970: 0), segments: [], captures: [shot]))
+        await CallTranscriptStore.shared.saveMerging(CallTranscript(callId: "call-cap", conversationId: "conv-1", callStartedAt: Date(timeIntervalSince1970: 0), segments: [], captures: [shot, started]))
+        let loaded = await CallTranscriptStore.shared.transcript(for: "call-cap")
+        XCTAssertEqual(loaded?.captures.map(\.id), ["cap-2", "cap-1"], "deduplicated by id, ordered by time")
+        await CallTranscriptStore.shared.invalidate(for: "call-cap")
+    }
+
     func test_invalidate_clearsSavedEntry() async {
         await CallTranscriptStore.shared.saveMerging(makeTranscript())
         await CallTranscriptStore.shared.invalidate(for: "call-1")

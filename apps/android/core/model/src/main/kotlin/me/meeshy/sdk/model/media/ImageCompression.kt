@@ -47,6 +47,8 @@ data class ImageCompressionPlan(
     val targetHeightPx: Int,
     val quality: Int,
     val resizeRequired: Boolean,
+    val outputFormat: ImageOutputFormat = ImageOutputFormat.JPEG,
+    val passthrough: Boolean = false,
 )
 
 /**
@@ -101,6 +103,97 @@ object ImageCompressionPlanner {
         )
     }
 
+    /**
+     * Le plan qui garde le FORMAT de la source (miroir de `compressImageData` d'iOS) :
+     * un GIF et toute image animée passent tels quels, un PNG déjà sous le plafond aussi,
+     * jpeg/png/webp réduits gardent leur type, et HEIC ou format inconnu devient un vrai JPEG.
+     * [ImageSource] porte les dimensions déjà orientées (EXIF appliqué).
+     */
+    fun planFor(
+        source: ImageSource,
+        context: ImageUploadContext,
+        quality: Int = DEFAULT_QUALITY,
+    ): ImageCompressionPlan {
+        val base = plan(context, source.widthPx, source.heightPx, quality)
+        val output = ImageOutputFormat.forSource(source.format)
+        val untouched = when (source.format) {
+            ImageSourceFormat.GIF -> true
+            ImageSourceFormat.WEBP, ImageSourceFormat.PNG ->
+                source.animated || !base.resizeRequired
+            ImageSourceFormat.JPEG, ImageSourceFormat.HEIC, ImageSourceFormat.UNKNOWN -> false
+        }
+        return base.copy(outputFormat = output, passthrough = untouched)
+    }
+
     private fun scaledEdge(edgePx: Int, scale: Double): Int =
         floor(edgePx * scale).toInt().coerceAtLeast(1)
+}
+
+/** Les formats que le sélecteur peut remettre, lus dans les OCTETS et non dans le nom. */
+enum class ImageSourceFormat {
+    JPEG, PNG, GIF, WEBP, HEIC, UNKNOWN;
+
+    companion object {
+        private const val HEADER = 12
+        private const val WEBP_FLAGS_INDEX = 20
+        private const val WEBP_ANIMATION_BIT = 0x02
+
+        fun sniff(bytes: ByteArray): ImageSourceFormat {
+            if (bytes.size < HEADER) return UNKNOWN
+            fun at(vararg expected: Int, offset: Int = 0) =
+                expected.indices.all { bytes[offset + it].toInt() and 0xFF == expected[it] }
+            return when {
+                at(0xFF, 0xD8, 0xFF) -> JPEG
+                at(0x89, 0x50, 0x4E, 0x47) -> PNG
+                at(0x47, 0x49, 0x46, 0x38) -> GIF
+                at(0x52, 0x49, 0x46, 0x46) && at(0x57, 0x45, 0x42, 0x50, offset = 8) -> WEBP
+                at(0x66, 0x74, 0x79, 0x70, offset = 4) -> HEIC
+                else -> UNKNOWN
+            }
+        }
+
+        fun isAnimated(bytes: ByteArray, format: ImageSourceFormat): Boolean = when (format) {
+            WEBP -> bytes.size > WEBP_FLAGS_INDEX &&
+                bytes[WEBP_FLAGS_INDEX].toInt() and WEBP_ANIMATION_BIT != 0
+            GIF -> countGraphicControls(bytes) > 1
+            else -> false
+        }
+
+        private fun countGraphicControls(bytes: ByteArray): Int {
+            var count = 0
+            for (index in 0..bytes.size - 4) {
+                if (bytes[index].toInt() == 0x00 && bytes[index + 1].toInt() == 0x21 &&
+                    bytes[index + 2].toInt() and 0xFF == 0xF9 && bytes[index + 3].toInt() == 0x04
+                ) {
+                    count++
+                }
+            }
+            return count
+        }
+    }
+}
+
+/** Une image décodée en tête : format et dimensions orientées, sans pixels. */
+data class ImageSource(
+    val format: ImageSourceFormat,
+    val widthPx: Int,
+    val heightPx: Int,
+    val animated: Boolean = false,
+)
+
+/** Le type de sortie : extension et MIME restent ceux de la source. */
+enum class ImageOutputFormat(val mimeType: String, val fileExtension: String) {
+    JPEG("image/jpeg", "jpg"),
+    PNG("image/png", "png"),
+    GIF("image/gif", "gif"),
+    WEBP("image/webp", "webp");
+
+    companion object {
+        fun forSource(format: ImageSourceFormat): ImageOutputFormat = when (format) {
+            ImageSourceFormat.PNG -> PNG
+            ImageSourceFormat.GIF -> GIF
+            ImageSourceFormat.WEBP -> WEBP
+            ImageSourceFormat.JPEG, ImageSourceFormat.HEIC, ImageSourceFormat.UNKNOWN -> JPEG
+        }
+    }
 }

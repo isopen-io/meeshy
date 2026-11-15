@@ -21,7 +21,21 @@ final class PiPVideoRendererTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/PiPVideoRenderer.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTC/PiPVideoRenderer.swift")
+        return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+    }()
+
+    /// `flush`/`enqueue`/`isReadyForMoreMediaData`/`flushIfFailed` moved to the
+    /// shared `AVSampleBufferDisplayLayer` extension (dedup with
+    /// `PiPCallController.flushSurface()`) — the iOS 16/17 branching anchors
+    /// below now live there, not in `PiPVideoRenderer.swift`.
+    private static let layerSource: String = {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Services/
+            .deletingLastPathComponent()   // Unit/
+            .deletingLastPathComponent()   // MeeshyTests/
+            .deletingLastPathComponent()   // ios/
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTC/AVSampleBufferDisplayLayer+Meeshy.swift")
         return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }()
 
@@ -111,7 +125,7 @@ final class PiPVideoRendererTests: XCTestCase {
 
     func test_flushIfFailed_checksFailedStatus() {
         XCTAssertTrue(
-            Self.source.contains("== .failed"),
+            Self.layerSource.contains("== .failed"),
             "flushIfFailed must check status == .failed before flushing (avoid flushing healthy layers)"
         )
     }
@@ -120,16 +134,23 @@ final class PiPVideoRendererTests: XCTestCase {
 
     func test_enqueue_branchesOnOS17() {
         XCTAssertTrue(
-            Self.source.contains("if #available(iOS 17.0, *)"),
+            Self.layerSource.contains("if #available(iOS 17.0, *)"),
             "PiPVideoRenderer must branch on iOS 17 availability for the sampleBufferRenderer API"
         )
+        // #11043 (b795c0e03b) : the receiver is resolved ONCE on the MainActor
+        // (`PiPSampleSink.init`) — `sampleBufferRenderer` on iOS 17+, the layer
+        // itself before — and every frame is enqueued on that receiver.
         XCTAssertTrue(
-            Self.source.contains("sampleBufferRenderer.enqueue"),
+            Self.layerSource.contains("target = layer.sampleBufferRenderer"),
             "iOS 17+ path must enqueue via sampleBufferRenderer"
         )
         XCTAssertTrue(
-            Self.source.contains("displayLayer.enqueue("),
-            "iOS <17 fallback must enqueue directly on displayLayer"
+            Self.layerSource.contains("} else {\n            target = layer\n"),
+            "iOS <17 fallback must enqueue directly on the display layer"
+        )
+        XCTAssertTrue(
+            Self.layerSource.contains("func enqueue(_ sample: sending CMSampleBuffer) { target.enqueue(sample) }"),
+            "every frame is enqueued on the resolved receiver"
         )
     }
 

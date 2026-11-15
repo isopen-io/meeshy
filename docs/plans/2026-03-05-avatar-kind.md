@@ -15,7 +15,7 @@
 ### Fichiers modifiés
 - `packages/MeeshySDK/Sources/MeeshyUI/Primitives/MeeshyAvatar.swift` — ajout `AvatarKind`
 - `packages/MeeshySDK/Sources/MeeshyUI/Community/CommunitySettingsView.swift` — AsyncImage → MeeshyAvatar (kind: .entity)
-- `apps/ios/Meeshy/Features/Main/Views/LoginView.swift` — accountAvatar/initialsAvatar → MeeshyAvatar (kind: .user)
+- `apps/ios/Meeshy/Features/Auth/Views/LoginView.swift` — accountAvatar/initialsAvatar → MeeshyAvatar (kind: .user)
 
 ### Hors périmètre (imports MeeshyUI impossibles sans xcodeproj)
 - `apps/ios/MeeshyShareExtension/ShareViewController.swift` — Share Extension, uniquement UIKit/SwiftUI
@@ -157,7 +157,7 @@ settingsField(label: "Avatar") {
 
 ## Task 3 : Corriger LoginView (kind: .user)
 
-**Fichier :** `apps/ios/Meeshy/Features/Main/Views/LoginView.swift`
+**Fichier :** `apps/ios/Meeshy/Features/Auth/Views/LoginView.swift`
 
 `SavedAccount` a : `displayName: String?`, `username: String`, `avatarURL: String?`, `shortName: String` (= displayName ?? username).
 

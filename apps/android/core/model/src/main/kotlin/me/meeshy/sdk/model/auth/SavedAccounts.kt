@@ -18,6 +18,7 @@ import kotlinx.serialization.Serializable
  * @property avatarUrl the avatar image URL, when known.
  * @property lastActiveAtMillis epoch-millis of the account's last activity, the
  *   primary sort key so the most recently used account floats to the top.
+ * @property keepsSession whether the account keeps a dormant session when left.
  */
 @Serializable
 data class SavedAccount(
@@ -26,6 +27,12 @@ data class SavedAccount(
     val displayName: String?,
     val avatarUrl: String?,
     val lastActiveAtMillis: Long,
+    /**
+     * Whether this account's session survives when it is left (iOS `keepsSession`,
+     * #8286). An entry written before multi-account support has no such field:
+     * every account then kept its session, so absence means `true`.
+     */
+    val keepsSession: Boolean = true,
 ) {
     /**
      * The name rendered on the picker row — iOS `shortName` (`displayName ??

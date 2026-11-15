@@ -1,0 +1,679 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+
+import type { FeedPost } from '@/lib/api/feed-pages';
+import type { PostActionOutcome } from '@/lib/api/publication-actions';
+import type { ReportReason } from '@/lib/api/reports';
+import { closePublicationImage, publicationImageRequest } from '@/lib/export/publication-image-store';
+import * as exportJobs from '@/lib/export/scene/scene-export-jobs';
+import { createDraftStore } from '@/lib/send/draft-store';
+import { resolveFeedCardModel } from '@/lib/feed/card-model';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadSceneExportCatalog } from '@/lib/i18n-scene-export-catalog';
+import { LAYER_MOTION_MS } from '@/lib/view/layer-presence';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+
+import { FeedPostCard } from './feed-post-card';
+import type { PostMenuHost } from './feed-post-menu';
+
+/**
+ * LE « ⋯ » EN HAUT À DROITE DES CARTES DU FIL (#7533, directive porteur du
+ * 2026-09-23) — sur la carte POST comme sur la carte RÉEL, et chaque entrée a
+ * un effet (loi 4).
+ */
+describe('FeedPostCard — le menu « ⋯ »', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeAll(async () => {
+    ensureHappyDomRegistered({ url: 'http://localhost/' });
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+    await loadInterfaceCatalog('fr');
+  });
+  afterAll(async () => {
+    await act(async () => {});
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+    document.querySelectorAll('[role="menu"]').forEach((node) => node.remove());
+  });
+
+  const post = (overrides: Partial<FeedPost> = {}): FeedPost => ({
+    id: 'p1',
+    type: 'POST',
+    createdAt: '2026-09-13T11:55:00.000Z',
+    content: 'Bonjour le fil',
+    originalLanguage: 'fr',
+    author: { id: 'u-other', displayName: 'Nour', username: 'nour' },
+    ...overrides,
+  });
+
+  const host = (
+    viewerId: string | null,
+    editOutcome: PostActionOutcome | (() => Promise<PostActionOutcome>) = 'done',
+    viewerIsAdministrator = false,
+  ) => {
+    const journal: string[] = [];
+    const menu: PostMenuHost = {
+      viewerId,
+      viewerIsAdministrator,
+      onCopyText: (text) => journal.push(`copy:${text}`),
+      onPin: (id) => journal.push(`pin:${id}`),
+      onEdit: (id, content) => {
+        journal.push(`edit:${id}:${content}`);
+        return typeof editOutcome === 'function' ? editOutcome() : Promise.resolve(editOutcome);
+      },
+      onDelete: (id) => journal.push(`delete:${id}`),
+      onReport: (id, reason: ReportReason) => journal.push(`report:${id}:${reason}`),
+    };
+    return { menu, journal };
+  };
+
+  const monte = (feedPost: FeedPost, menu?: PostMenuHost, preferredLanguages: readonly string[] = ['fr']) => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(
+        <FeedPostCard
+          model={resolveFeedCardModel(feedPost, { preferredLanguages, now: new Date('2026-09-13T12:00:00.000Z') })}
+          onShare={() => {}}
+          onGesture={() => {}}
+          {...(menu === undefined ? {} : { menu })}
+        />,
+      );
+    });
+  };
+
+  /* Le panneau se charge À LA DEMANDE (`lazy`) : l'import se résout avant
+     que le menu ne se peigne. */
+  const ouvre = async () => {
+    const bouton = container.querySelector<HTMLButtonElement>('[data-feed-post-menu]');
+    expect(bouton?.getAttribute('aria-label')).toBe('Plus d’options');
+    act(() => bouton?.click());
+    await act(async () => {
+      await Promise.all([import('./publication-menu-panel'), import('@/lib/export/publication-image'), loadSceneExportCatalog('fr')]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    return [...document.querySelectorAll<HTMLButtonElement>('[data-feed-post-action]')];
+  };
+
+  /* « Modifier » ouvre une SECONDE feuille, chargée à la demande de la
+     même façon — un import de plus à attendre avant qu'elle ne se peigne. */
+  const ouvreEdition = async () => {
+    const entrees = await ouvre();
+    const modifier = entrees.find((e) => e.dataset.feedPostAction === 'edit');
+    act(() => modifier?.click());
+    await act(async () => {
+      await import('./publication-edit-sheet');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    return document.querySelector('[data-publication-edit-sheet]');
+  };
+
+  const tape = (champ: HTMLTextAreaElement, texte: string) => {
+    act(() => {
+      champ.value = texte;
+      champ.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
+
+  test('« Retirer » (#11150) : la modération demande le motif, puis remet la publication et le motif nettoyé', async () => {
+    const { menu, journal } = host('u-me');
+    monte(post(), { ...menu, viewerModerates: true, onRemove: (id, reason) => journal.push(`remove:${id}:${reason}`) });
+    const entrees = await ouvre();
+    expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'imager', 'save', 'remove', 'report']);
+    act(() => entrees.find((e) => e.dataset.feedPostAction === 'remove')?.click());
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    const champ = document.querySelector<HTMLTextAreaElement>('[data-content-removal-reason]');
+    expect(champ).not.toBeNull();
+    const confirme = document.querySelector<HTMLButtonElement>('[data-content-removal="confirm"]');
+    expect(confirme?.disabled).toBe(true);
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+    act(() => {
+      setter?.call(champ, '  Contenu violent ');
+      champ?.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    act(() => document.querySelector<HTMLButtonElement>('[data-content-removal="confirm"]')?.click());
+    expect(journal).toEqual(['remove:p1:Contenu violent']);
+  });
+
+  test('« Désactiver les commentaires » (#16541) : à l’auteur ; le libellé suit le réglage, le geste part vers l’hôte', async () => {
+    const { menu, journal } = host('u-other');
+    monte(post(), { ...menu, onToggleComments: (id, disable) => journal.push(`comments:${id}:${String(disable)}`) });
+    const ouvertes = await ouvre();
+    const entree = ouvertes.find((e) => e.dataset.feedPostAction === 'comments');
+    expect(entree?.textContent).toContain('Désactiver les commentaires');
+    act(() => entree?.click());
+    expect(journal).toEqual(['comments:p1:true']);
+  });
+
+  test('« Réactiver les commentaires » sur une publication qui les a fermés ; rien pour un lecteur ordinaire', async () => {
+    const { menu, journal } = host('u-other');
+    monte(post({ commentsDisabled: true }), { ...menu, onToggleComments: (id, disable) => journal.push(`comments:${id}:${String(disable)}`) });
+    const entree = (await ouvre()).find((e) => e.dataset.feedPostAction === 'comments');
+    expect(entree?.textContent).toContain('Réactiver les commentaires');
+    act(() => entree?.click());
+    expect(journal).toEqual(['comments:p1:false']);
+    act(() => root.unmount());
+    container.remove();
+    const lecteur = host('u-reader');
+    monte(post(), { ...lecteur.menu, onToggleComments: () => undefined });
+    expect((await ouvre()).map((e) => e.dataset.feedPostAction)).not.toContain('comments');
+  });
+
+  test('« Retirer » ne s’offre pas sans le rôle, ni sur sa propre publication', async () => {
+    const { menu } = host('u-me');
+    monte(post({ author: { id: 'u-me', displayName: 'Moi', username: 'moi' } }), { ...menu, viewerModerates: true, onRemove: () => undefined });
+    expect((await ouvre()).map((e) => e.dataset.feedPostAction)).not.toContain('remove');
+  });
+
+  test('sans hôte de menu, aucun bouton — un contrôle sans effet n’existe pas', () => {
+    monte(post());
+    expect(container.querySelector('[data-feed-post-menu]')).toBeNull();
+  });
+
+  test('la publication d’un autre : les entrées d’iOS, et « Copier » copie le texte', async () => {
+    const { menu, journal } = host('u-me');
+    monte(post(), menu);
+
+    const entrees = await ouvre();
+    expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'imager', 'save', 'report']);
+
+    act(() => entrees.find((e) => e.dataset.feedPostAction === 'copyText')?.click());
+    expect(journal).toEqual(['copy:Bonjour le fil']);
+  });
+
+  test('refermé par un choix, le panneau SORT en fondu : encore peint, inerte, puis retiré (#18327)', async () => {
+    const { menu } = host('u-me');
+    monte(post(), menu);
+    const entrees = await ouvre();
+    act(() => entrees.find((e) => e.dataset.feedPostAction === 'copyText')?.click());
+    const sortant = document.querySelector('[role="menu"]');
+    expect(sortant?.hasAttribute('data-leaving')).toBe(true);
+    expect(sortant?.hasAttribute('inert')).toBe(true);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, LAYER_MOTION_MS + 30));
+    });
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+  });
+
+  test('MA publication : « Supprimer » part vers l’hôte', async () => {
+    const { menu, journal } = host('u-other');
+    monte(post(), menu);
+
+    const supprimer = (await ouvre()).find((e) => e.dataset.feedPostAction === 'delete');
+    expect(supprimer?.textContent).toContain('Supprimer');
+    act(() => supprimer?.click());
+    expect(journal).toEqual(['delete:p1']);
+  });
+
+  test('« Signaler » demande un MOTIF, et c’est le motif qui part', async () => {
+    const { menu, journal } = host('u-me');
+    monte(post(), menu);
+
+    const signaler = (await ouvre()).find((e) => e.dataset.feedPostAction === 'report');
+    act(() => signaler?.click());
+    const motif = document.querySelector<HTMLButtonElement>('[data-report-reason="harassment"]');
+    expect(motif).not.toBeNull();
+    act(() => motif?.click());
+    expect(journal).toEqual(['report:p1:harassment']);
+  });
+
+  /**
+   * LE MENU EST UNE COUCHE, ET LA FEUILLE QU'IL OUVRE REPREND SON ENTRÉE (#18460, #7527).
+   * « Signaler » ferme le menu et ouvre la feuille dans le même commit : la feuille
+   * adopte l'entrée du menu. Sans adoption, le retour rendu par le menu (posté à
+   * la tâche suivante par le navigateur) fermerait la feuille à peine ouverte, ou
+   * laisserait une entrée orpheline qui avalerait un retour.
+   */
+  test('« Signaler » : la feuille adopte l’entrée du menu, et un seul retour la ferme', async () => {
+    const { menu } = host('u-me');
+    monte(post(), menu);
+    let pushes = 0;
+    const originalPush = window.history.pushState.bind(window.history);
+    const originalBack = window.history.back.bind(window.history);
+    window.history.pushState = (...args: Parameters<History['pushState']>) => {
+      pushes += 1;
+      originalPush(...args);
+    };
+    window.history.back = () => {
+      originalBack();
+      setTimeout(() => window.dispatchEvent(new PopStateEvent('popstate')), 0);
+    };
+    try {
+      window.history.replaceState(null, '', window.location.href);
+      const signaler = (await ouvre()).find((e) => e.dataset.feedPostAction === 'report');
+      await act(async () => {
+        signaler?.click();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+      const ouverte = document.querySelector('[data-report-reason="harassment"]') !== null;
+      await act(async () => {
+        window.history.back();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+      const state = window.history.state as { readonly backDismiss?: unknown } | null;
+      expect({
+        pushes,
+        ouverte,
+        fermee: document.querySelector('[data-report-reason="harassment"]') === null,
+        entreeRestante: typeof state?.backDismiss,
+      }).toEqual({ pushes: 1, ouverte: true, fermee: true, entreeRestante: 'undefined' });
+    } finally {
+      window.history.pushState = originalPush;
+      window.history.back = originalBack;
+    }
+  });
+
+  test('ouvrir la feuille de signalement le dit à l’hôte (#10503), avant tout motif', async () => {
+    const { menu, journal } = host('u-me');
+    monte(post(), { ...menu, onReportOpen: (id) => journal.push(`report-open:${id}`) });
+
+    const signaler = (await ouvre()).find((e) => e.dataset.feedPostAction === 'report');
+    act(() => signaler?.click());
+    expect(journal).toEqual(['report-open:p1']);
+  });
+
+  test('« Vues » ne paraît que pour un ADMINISTRATEUR (#9727) — et ouvre la liste de qui a vu', async () => {
+    const { menu } = host('u-me', 'done', true);
+    monte(post(), menu);
+
+    const vues = (await ouvre()).find((e) => e.dataset.feedPostAction === 'views');
+    expect(vues?.textContent).toContain('Vues');
+  });
+
+  test('la carte RÉEL porte le même bouton, en haut à droite', () => {
+    const { menu } = host('u-me');
+    monte(post({ type: 'REEL' }), menu);
+
+    expect(container.querySelector('[data-feed-card="reel"] [data-feed-post-menu]')).not.toBeNull();
+  });
+
+  /**
+   * **« MODIFIER » LE TEXTE D'UNE PUBLICATION** (#7534) — miroir
+   * `FeedPostCard+Header.swift:208-215` : entre Épingler et Supprimer, sans
+   * séparateur, et une feuille chargée à la demande qui reste ouverte sur un
+   * refus.
+   */
+  describe('« Modifier »', () => {
+    test('MA publication : entre Épingler et Supprimer, sans séparateur avant elle', async () => {
+      const { menu } = host('u-other');
+      monte(post(), menu);
+
+      const entrees = await ouvre();
+      // #9727, décision porteur 2026-10-09 — l'auteur d'un post n'en voit que le
+      // NOMBRE de vues : « Vues » n'est pas dans SON menu.
+      expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'imager', 'save', 'pin', 'edit', 'delete']);
+
+      const modifier = entrees.find((e) => e.dataset.feedPostAction === 'edit')!;
+      expect(modifier.textContent).toContain('Modifier');
+      expect(modifier.style.borderTop).toBe('');
+    });
+
+    test('MA publication avec un MÉDIA : « Modifier » rouvre le STUDIO à `/posts/:id/edit` (#9317), aucune feuille de texte', async () => {
+      const { menu } = host('u-other');
+      monte(post({ media: [{ id: 'pm-1', fileUrl: '2026/10/u/pm-1.jpg', mimeType: 'image/jpeg' }] }), menu);
+      window.history.replaceState(null, '', '/feed');
+
+      const entrees = await ouvre();
+      act(() => entrees.find((e) => e.dataset.feedPostAction === 'edit')?.click());
+      expect(window.location.pathname).toBe('/posts/p1/edit');
+      expect(document.querySelector('[data-publication-edit-sheet]')).toBeNull();
+      window.history.replaceState(null, '', '/');
+    });
+
+    test('MA publication de TEXTE seul : « Modifier » garde la feuille de texte', async () => {
+      const { menu } = host('u-other');
+      monte(post(), menu);
+      window.history.replaceState(null, '', '/feed');
+      expect(await ouvreEdition()).not.toBeNull();
+      expect(window.location.pathname).toBe('/feed');
+      window.history.replaceState(null, '', '/');
+    });
+
+    test('la publication d’un AUTRE n’offre jamais « Modifier »', async () => {
+      const { menu } = host('u-me');
+      monte(post(), menu);
+
+      expect((await ouvre()).map((e) => e.dataset.feedPostAction)).not.toContain('edit');
+    });
+
+    test('ouvre la feuille sur l’ORIGINAL, jamais la traduction affichée (rang ≠ 1)', async () => {
+      const { menu } = host('u-other');
+      monte(
+        post({ originalLanguage: 'es', content: 'La reunión se traslada', translations: { fr: { text: 'La réunion est déplacée' } } }),
+        menu,
+        ['fr'],
+      );
+
+      /* La CARTE affiche le français résolu… */
+      expect(container.textContent).toContain('La réunion est déplacée');
+
+      const sheet = await ouvreEdition();
+      expect(sheet).not.toBeNull();
+      const champ = sheet!.querySelector<HTMLTextAreaElement>('[data-publication-edit-field]');
+      /* …le CHAMP, lui, ouvre sur l'espagnol — l'original — et le DIT
+         (`lang`) : la page est en français, le texte ne l'est pas. */
+      expect(champ?.value).toBe('La reunión se traslada');
+      expect(champ?.getAttribute('lang')).toBe('es');
+    });
+
+    test('« Publier » est désactivé à l’ouverture, s’active au changement, se redésactive au retour au texte d’origine', async () => {
+      const { menu } = host('u-other');
+      monte(post({ content: 'Texte original' }), menu);
+
+      const sheet = await ouvreEdition();
+      const champ = sheet!.querySelector<HTMLTextAreaElement>('[data-publication-edit-field]')!;
+      const publier = sheet!.querySelector<HTMLButtonElement>('[data-publication-edit-save]')!;
+      expect(publier.disabled).toBe(true);
+
+      tape(champ, 'Texte corrigé');
+      expect(publier.disabled).toBe(false);
+
+      tape(champ, 'Texte original');
+      expect(publier.disabled).toBe(true);
+    });
+
+    test('« Publier » appelle l’hôte ; sur `done`, la feuille se ferme et le focus revient au « ⋯ »', async () => {
+      const { menu, journal } = host('u-other', 'done');
+      monte(post({ content: 'Texte original' }), menu);
+
+      const sheet = await ouvreEdition();
+      const champ = sheet!.querySelector<HTMLTextAreaElement>('[data-publication-edit-field]')!;
+      tape(champ, 'Texte corrigé');
+      const publier = sheet!.querySelector<HTMLButtonElement>('[data-publication-edit-save]')!;
+
+      act(() => publier.click());
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      expect(journal).toEqual(['edit:p1:Texte corrigé']);
+      expect(document.querySelector('[data-publication-edit-sheet]')).toBeNull();
+      expect(document.activeElement).toBe(container.querySelector('[data-feed-post-menu]'));
+    });
+
+    test('sur `offline`, la feuille RESTE ouverte, le brouillon est intact, et « Réessayer » rejoue le MÊME texte', async () => {
+      const { menu, journal } = host('u-other', 'offline');
+      monte(post({ content: 'Texte original' }), menu);
+
+      const sheet = await ouvreEdition();
+      const champ = sheet!.querySelector<HTMLTextAreaElement>('[data-publication-edit-field]')!;
+      tape(champ, 'Texte corrigé');
+      const publier = sheet!.querySelector<HTMLButtonElement>('[data-publication-edit-save]')!;
+
+      act(() => publier.click());
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      expect(document.querySelector('[data-publication-edit-sheet]')).not.toBeNull();
+      const erreur = document.querySelector('[data-publication-edit-error]');
+      expect(erreur).not.toBeNull();
+      const retry = erreur?.querySelector<HTMLButtonElement>('[data-publication-edit-retry]');
+      expect(retry).not.toBeNull();
+      /* Une cible de doigt, pas un mot souligné de 16 px (dimension 5). */
+      expect(retry?.style.minHeight).toBe('44px');
+      expect(champ.value).toBe('Texte corrigé');
+
+      act(() => retry?.click());
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(journal).toEqual(['edit:p1:Texte corrigé', 'edit:p1:Texte corrigé']);
+    });
+
+    test('sur `failed`, une erreur SANS bouton de rejeu', async () => {
+      const { menu } = host('u-other', 'failed');
+      monte(post({ content: 'Texte original' }), menu);
+
+      const sheet = await ouvreEdition();
+      const champ = sheet!.querySelector<HTMLTextAreaElement>('[data-publication-edit-field]')!;
+      tape(champ, 'Texte corrigé');
+      const publier = sheet!.querySelector<HTMLButtonElement>('[data-publication-edit-save]')!;
+
+      act(() => publier.click());
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      const erreur = document.querySelector('[data-publication-edit-error]');
+      expect(erreur).not.toBeNull();
+      expect(erreur?.querySelector('[data-publication-edit-retry]')).toBeNull();
+    });
+
+    /**
+     * **L'ÉDITION EN COURS SE SAUVEGARDE SEULE** (#8849, jumelle de #8848 :
+     * « Modifier » relit le brouillon d'édition de la publication) — une
+     * feuille fermée par la croix, un onglet rechargé, rendent le texte en
+     * cours à la réouverture ; une publication acceptée ou « Annuler »
+     * l'effacent.
+     */
+    const avecBrouillons = (outcome: PostActionOutcome = 'done') => {
+      const { menu, journal } = host('u-other', outcome);
+      return { menu: { ...menu, editDrafts: createDraftStore(null) }, journal };
+    };
+    const rouvre = async (menu: PostMenuHost) => {
+      act(() => root.unmount());
+      container.remove();
+      monte(post({ content: 'Texte original' }), menu);
+      return (await ouvreEdition())!.querySelector<HTMLTextAreaElement>('[data-publication-edit-field]')!;
+    };
+
+    test('le texte en cours revient à la réouverture, « Publier » déjà actif', async () => {
+      const { menu } = avecBrouillons();
+      monte(post({ content: 'Texte original' }), menu);
+      const sheet = await ouvreEdition();
+      tape(sheet!.querySelector<HTMLTextAreaElement>('[data-publication-edit-field]')!, 'Texte en cours');
+
+      const champ = await rouvre(menu);
+      expect(champ.value).toBe('Texte en cours');
+      expect(document.querySelector<HTMLButtonElement>('[data-publication-edit-save]')?.disabled).toBe(false);
+    });
+
+    test('une publication acceptée efface le brouillon : la réouverture repart de la publication', async () => {
+      const { menu } = avecBrouillons('done');
+      monte(post({ content: 'Texte original' }), menu);
+      const sheet = await ouvreEdition();
+      tape(sheet!.querySelector<HTMLTextAreaElement>('[data-publication-edit-field]')!, 'Texte corrigé');
+      act(() => sheet!.querySelector<HTMLButtonElement>('[data-publication-edit-save]')!.click());
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      expect((await rouvre(menu)).value).toBe('Texte original');
+    });
+
+    test('« Annuler » renonce : le brouillon est effacé', async () => {
+      const { menu } = avecBrouillons();
+      monte(post({ content: 'Texte original' }), menu);
+      const sheet = await ouvreEdition();
+      tape(sheet!.querySelector<HTMLTextAreaElement>('[data-publication-edit-field]')!, 'Texte abandonné');
+      act(() => sheet!.querySelector<HTMLButtonElement>('[data-publication-edit-cancel]')!.click());
+
+      expect((await rouvre(menu)).value).toBe('Texte original');
+    });
+
+    test('« Annuler » ferme SANS appeler l’hôte', async () => {
+      const { menu, journal } = host('u-other');
+      monte(post(), menu);
+
+      const sheet = await ouvreEdition();
+      const annuler = sheet!.querySelector<HTMLButtonElement>('[data-publication-edit-cancel]')!;
+      act(() => annuler.click());
+
+      expect(journal).toEqual([]);
+      expect(document.querySelector('[data-publication-edit-sheet]')).toBeNull();
+    });
+
+    test('PENDANT LE VOL : « Publier », « Annuler » désactivés et le champ en LECTURE SEULE', async () => {
+      let resolveOutcome: (value: PostActionOutcome) => void = () => {};
+      const pending = new Promise<PostActionOutcome>((resolve) => {
+        resolveOutcome = resolve;
+      });
+      const { menu } = host('u-other', () => pending);
+      monte(post({ content: 'Texte original' }), menu);
+
+      const sheet = await ouvreEdition();
+      const champ = sheet!.querySelector<HTMLTextAreaElement>('[data-publication-edit-field]')!;
+      tape(champ, 'Texte corrigé');
+      const publier = sheet!.querySelector<HTMLButtonElement>('[data-publication-edit-save]')!;
+      const annuler = sheet!.querySelector<HTMLButtonElement>('[data-publication-edit-cancel]')!;
+
+      act(() => publier.click());
+
+      expect(publier.disabled).toBe(true);
+      expect(annuler.disabled).toBe(true);
+      expect(champ.readOnly).toBe(true);
+
+      await act(async () => {
+        resolveOutcome('done');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    });
+
+    /**
+     * **FERMER PENDANT LE VOL FERME VRAIMENT** (revue-correction #7534, § Q5
+     * de la spécification). La croix de `Sheet`, Échap et le retour matériel
+     * ferment le `<dialog>` NATIVEMENT puis passent par son événement `close` :
+     * une feuille qui IGNORE ce `onClose` pendant le vol reste montée pour
+     * React, fermée pour le navigateur — l'erreur s'affiche alors dans une
+     * feuille invisible, et « Modifier » (`setEditing(true)` sur un état déjà
+     * vrai) ne la rouvre plus jamais : le contrôle inerte de la loi 4.
+     */
+    const enVol = async () => {
+      let resolveOutcome: (value: PostActionOutcome) => void = () => {};
+      const pending = new Promise<PostActionOutcome>((resolve) => {
+        resolveOutcome = resolve;
+      });
+      const { menu, journal } = host('u-other', () => pending);
+      monte(post({ content: 'Texte original' }), menu);
+      const sheet = await ouvreEdition();
+      tape(sheet!.querySelector<HTMLTextAreaElement>('[data-publication-edit-field]')!, 'Texte corrigé');
+      act(() => sheet!.querySelector<HTMLButtonElement>('[data-publication-edit-save]')!.click());
+      return { resolve: (value: PostActionOutcome) => resolveOutcome(value), journal };
+    };
+
+    const fermeParLaCroix = async () => {
+      const croix = document.querySelector<HTMLButtonElement>('dialog [aria-label="Fermer"]');
+      expect(croix === null).toBe(false);
+      await act(async () => {
+        croix!.click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    };
+
+    test('la croix PENDANT le vol démonte la feuille — jamais un dialogue fermé mais monté', async () => {
+      const vol = await enVol();
+
+      await fermeParLaCroix();
+      expect(document.querySelector('[data-publication-edit-sheet]') === null).toBe(true);
+
+      await act(async () => {
+        vol.resolve('offline');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      /* L'issue arrive APRÈS la fermeture : « Modifier » rouvre une feuille
+         VISIBLE, sur le texte d'origine. */
+      const reouverte = await ouvreEdition();
+      expect(reouverte?.closest('dialog')?.open).toBe(true);
+    });
+
+    test('une issue arrivée APRÈS la fermeture ne vole pas le focus que l’auteur a posé ailleurs', async () => {
+      const vol = await enVol();
+      await fermeParLaCroix();
+
+      const ailleurs = document.createElement('button');
+      document.body.appendChild(ailleurs);
+      ailleurs.focus();
+
+      await act(async () => {
+        vol.resolve('done');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(document.activeElement === ailleurs).toBe(true);
+      ailleurs.remove();
+    });
+  });
+  const ouvreAvecImager = async () => {
+    const bouton = container.querySelector<HTMLButtonElement>('[data-feed-post-menu]');
+    act(() => bouton?.click());
+    await act(async () => {
+      await Promise.all([import('./publication-menu-panel'), import('@/lib/export/publication-image'), loadSceneExportCatalog('fr')]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    return [...document.querySelectorAll<HTMLButtonElement>('[data-feed-post-action]')];
+  };
+
+  const SCENE = { v: 3, scenes: [{ id: 's', objects: [{ id: 't', kind: 'text', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'content', z: 1, transform: {}, payload: { text: 'Salut' } }] }] };
+
+  test('une publication à SCÈNE offre « Sauvegarder » et « Imager » (#13873) ; « Sauvegarder » lance l’export au bandeau', async () => {
+    const { menu } = host('u-me');
+    monte(post({ storyEffects: SCENE }), menu);
+    const entrees = await ouvreAvecImager();
+    expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'saveMedia', 'imager', 'save', 'report']);
+    expect(entrees.find((e) => e.dataset.feedPostAction === 'saveMedia')?.textContent).toContain('Sauvegarder');
+    expect(entrees.find((e) => e.dataset.feedPostAction === 'imager')?.textContent).toContain('Imager');
+    act(() => entrees.find((e) => e.dataset.feedPostAction === 'saveMedia')?.click());
+    expect(exportJobs.getSnapshot().jobs.map((job) => job.key)).toEqual(['post:p1']);
+    act(() => exportJobs.cancel('post:p1'));
+  });
+
+  test('« Imager » une œuvre composée ouvre l’ATELIER DE CARTE avec sa scène à rendre — jamais l’export de scène (#16393)', async () => {
+    const { menu } = host('u-me');
+    monte(post({ storyEffects: SCENE }), menu);
+    const entrees = await ouvreAvecImager();
+    act(() => entrees.find((e) => e.dataset.feedPostAction === 'imager')?.click());
+    const request = publicationImageRequest();
+    expect(request?.key).toBe('post:p1');
+    expect(request?.scene?.fileStem).toBe('post-p1');
+    expect(request?.scene?.watermark).toBeNull();
+    expect(request?.subject.reply).toEqual({ author: 'Nour', text: 'Bonjour le fil', handle: 'nour' });
+    expect(exportJobs.getSnapshot().jobs).toEqual([]);
+    closePublicationImage();
+  });
+
+  test('une publication de TEXTE seul n’offre pas « Sauvegarder », mais « Imager » ouvre l’atelier avec son texte (#16166)', async () => {
+    const { menu } = host('u-me');
+    monte(post(), menu);
+    const entrees = await ouvreAvecImager();
+    expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'imager', 'save', 'report']);
+    act(() => entrees.find((e) => e.dataset.feedPostAction === 'imager')?.click());
+    const request = publicationImageRequest();
+    expect(request?.scene).toBeNull();
+    expect(request?.subject.reply.text).toBe('Bonjour le fil');
+    expect(request?.subject.media).toEqual([]);
+    closePublicationImage();
+  });
+
+  test('une publication PHOTO s’image avec sa photo, signée par son auteur', async () => {
+    const { menu } = host('u-me');
+    monte(post({ content: null, media: [{ id: 'm1', fileUrl: 'https://static.meeshy.me/m1.jpg', mimeType: 'image/jpeg', width: 1080, height: 1350 }] }), menu);
+    const entrees = await ouvreAvecImager();
+    act(() => entrees.find((e) => e.dataset.feedPostAction === 'imager')?.click());
+    expect(publicationImageRequest()?.subject.media.map((item) => [item.id, item.card.kind, item.author?.name])).toEqual([['m1', 'image', 'Nour']]);
+    closePublicationImage();
+  });
+
+  test('TÉMOIN DE RANG — la carte d’un post dont la langue d’origine n’est pas au rang 1 porte le texte SERVI', async () => {
+    const { menu } = host('u-me');
+    monte(post({ content: 'Good morning', originalLanguage: 'en', translations: { fr: { text: 'Bonjour' } } }), menu, ['fr', 'en']);
+    const entrees = await ouvreAvecImager();
+    act(() => entrees.find((e) => e.dataset.feedPostAction === 'imager')?.click());
+    expect(publicationImageRequest()?.subject.reply.text).toBe('Bonjour');
+    closePublicationImage();
+  });
+
+  test('une publication vide n’offre pas « Imager »', async () => {
+    const { menu } = host('u-me');
+    monte(post({ content: null }), menu);
+    const entrees = await ouvreAvecImager();
+    expect(entrees.map((e) => e.dataset.feedPostAction)).not.toContain('imager');
+  });
+});

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "settings.interface.reading_modes.subtitle",
+          "androidName": "settings_interface_reading_modes_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.interface.riviere_mode.hint",
+          "androidName": "settings_interface_riviere_mode_hint",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

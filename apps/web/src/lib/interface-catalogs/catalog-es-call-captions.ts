@@ -1,0 +1,44 @@
+/**
+ * LES SOUS-TITRES D'UN APPEL ET SA TRANSCRIPTION (#8048) — tranche du catalogue,
+ * RÉPANDUE par `catalog-es.ts` comme `catalog-es-call-quality.ts` : le bouton
+ * Sous-titres de l'écran d'appel, le panneau et son journal
+ * (`call-captions-panel.tsx`), la transcription d'après l'appel dans la bulle
+ * du fil (`call-transcript-panel.tsx`).
+ */
+const esCallCaptions = {
+  'call.captions.original': 'Mostrar subtítulos originales',
+  'call.captions.invited': 'Mostrar subtítulos — tu interlocutor ya los está leyendo',
+  'callCaptions.footer.touchForOriginal': '{pair} · tocar = original',
+  'callCaptions.footer.translating': '{language} · traduciendo',
+  'callCaptions.footer.translatedLanguages.one': 'Traducido · {count} idioma',
+  'callCaptions.footer.translatedLanguages.two': 'Traducido · dos idiomas',
+  'callCaptions.footer.translatedLanguages.few': 'Traducido · {count} idiomas',
+  'callCaptions.footer.translatedLanguages.many': 'Traducido · {count} de idiomas',
+  'callCaptions.footer.translatedLanguages.other': 'Traducido · {count} idiomas',
+  'callCaptions.self': 'Yo',
+  'callCaptions.regionLabel': 'Subtítulos de la llamada',
+  'callCaptions.translating': 'Traduciendo',
+  'callCaptions.region': 'Subtítulos',
+  'callCaptions.waiting': 'Los subtítulos aparecen aquí en cuanto alguien habla',
+  'callCaptions.listening': 'Tu voz se está transcribiendo',
+  'callCaptions.unsupported': 'Tu voz no se transcribe en este dispositivo: lees a los demás',
+  'callCaptions.denied': 'Reconocimiento de voz denegado: lees a los demás',
+  'callCaptions.sealed': 'Subtítulos no disponibles: esta conversación está cifrada de extremo a extremo, o no se pudo verificar su cifrado',
+  'callCaptions.journal.title': 'Registro de la llamada',
+  'callCaptions.participant': 'Participante',
+  'callTranscript.show': 'Mostrar la transcripción',
+  'callTranscript.hide': 'Ocultar la transcripción',
+  'callTranscript.title': 'Transcripción de la llamada',
+  'callTranscript.loading': 'Cargando la transcripción…',
+  'callTranscript.empty': 'Sin transcripción',
+  'callTranscript.error': 'Transcripción no disponible',
+  'callTranscript.retry': 'Reintentar',
+  'callTranscript.showOriginal': 'Ver el original',
+  'callTranscript.showTranslated': 'Ver la traducción',
+  'callJournal.capture.screenshot': 'hizo una captura de pantalla',
+  'callJournal.capture.recording': 'está grabando la pantalla',
+  'callJournal.recording.started': 'La grabación de la llamada ha comenzado',
+  'callJournal.recording.stopped': 'La grabación de la llamada se ha detenido',
+} as const;
+
+export default esCallCaptions;

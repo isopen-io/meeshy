@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="connection_toast_accept_failed">Couldn\'t accept</string>
+    <string name="connection_toast_decline_failed">Couldn\'t decline</string>
+    <string name="connection_toast_cancel_failed">Couldn\'t cancel</string>
+</resources>

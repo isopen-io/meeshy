@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import os
 @testable import Meeshy
 
 final class NowPlayingArtworkTests: XCTestCase {
@@ -100,17 +101,18 @@ final class NowPlayingArtworkTests: XCTestCase {
     // from any thread, exactly as MediaPlayer requires.
     func test_makeArtwork_requestHandler_invokedFromBackgroundThread_doesNotRequireMainActor() {
         let image = Self.solidImage(color: .red)
-        let artwork = NowPlayingArtwork.makeArtwork(image: image)
+        nonisolated(unsafe) let artwork = NowPlayingArtwork.makeArtwork(image: image)
 
         let expectation = expectation(description: "requestHandler invoked off-main")
-        var resolvedSize: CGSize?
+        let resolvedSize = OSAllocatedUnfairLock<CGSize?>(initialState: nil)
         DispatchQueue.global(qos: .utility).async {
-            resolvedSize = artwork.image(at: CGSize(width: 40, height: 40))?.size
+            let size = artwork.image(at: CGSize(width: 40, height: 40))?.size
+            resolvedSize.withLock { $0 = size }
             expectation.fulfill()
         }
         wait(for: [expectation], timeout: 2.0)
 
-        XCTAssertEqual(resolvedSize, image.size)
+        XCTAssertEqual(resolvedSize.withLock { $0 }, image.size)
     }
 
     // MARK: - Helpers

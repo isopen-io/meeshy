@@ -1,64 +1,46 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { guestAccessEnd } from '../../services/guestAccessEnd';
+import { guestShareLinkId } from '../../services/shareLinkReadGate';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError, sendError } from '../../utils/response.js';
-import { TrackingLinkService } from '../../services/TrackingLinkService';
-import {
-  createUnifiedAuthMiddleware,
-  UnifiedAuthRequest,
-  isRegisteredUser
-} from '../../middleware/auth';
+import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace, sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
+import { stickerFromMetadata } from '../../services/stickers/messageSticker';
 import { stripClientMessageId } from '../../socketio/utils/message-ack-shaping.js';
 import { broadcastLinkMessage } from '../../socketio/broadcastLinkMessage.js';
 import { runMessagePostSaveEffects } from '../../services/messaging/messagePostSaveEffects.js';
+import { startedGroupAnnouncer } from '../../services/conversations/announceStartedGroup';
 import { notifyMessageRecipients } from '../../services/messaging/messageNotificationFanOut.js';
 import { resolveMessageMentions } from '../../services/messaging/messageMentions.js';
 import {
   admitConversationWriteFor,
   isConversationWriteRefused,
-  describeConversationWriteRefusal
+  describeConversationWriteRefusal,
+  writeRefusalHttpResponse
 } from '../../services/messaging/conversationWriteAdmission.js';
+import { sealMessageIfConversationObsoleted } from '../../services/conversations/obsoleteMessageSeal';
 import type { ConversationWriteRefused } from '../../services/messaging/conversationWriteAdmission.js';
+import { sharedSendReservations } from '../../services/messaging/newcomerSendReservations.js';
+import { resolveParticipantRights } from '../../services/participantRights.js';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import {
   sendMessageSchema,
   sendMessageBodySchema,
-  sendLinkMessageResponseSchema,
-  SendMessageInput
+  sendLinkMessageResponseSchema
 } from './types';
 import type { SharedPlace } from '../../services/location/sharedPlace';
 import { LIVE_MESSAGE_MARK } from '../../services/messaging/liveMessage';
-
-/**
- * La projection de conversation des DEUX branches de résolution du lien
- * authentifié — `mshy_…` et id brut.
- *
- * Nommée plutôt que recopiée parce qu'elle a déjà divergé une fois : la garde
- * d'état terminal ajoutée plus bas avait d'abord été posée sur la seule
- * seconde branche, ce qui la rendait INERTE sur la première — celle que
- * produisent les URLs réelles. Deux `select` jumeaux à quinze lignes d'écart
- * sont une garde à moitié posée qui en a l'air d'une entière.
- */
-const SHARE_LINK_CONVERSATION_SELECT = {
-  id: true,
-  identifier: true,
-  title: true,
-  type: true,
-  // L'état TERMINAL du conteneur ET sa police d'écriture (canal d'annonces,
-  // `defaultWriteRole`, mode lent). Ramenés par la relation déjà chargée : la
-  // garde ne coûte aucune lecture supplémentaire.
-  //
-  // Chaque champ est LOAD-BEARING : celui qu'on retirerait ici rendrait sa règle
-  // inerte sur ces deux chemins SANS rougir un seul témoin de la règle elle-même.
-  isActive: true,
-  closedAt: true,
-  isAnnouncementChannel: true,
-  defaultWriteRole: true,
-  slowModeSeconds: true
-} as const;
+import { getEncryptionService } from '../../services/EncryptionService';
+import { sealsAtRest, sealTextAtRest } from '../../services/messaging/atRestWrite';
+import { isServerAtRestUnavailable, servedClearAtRest } from '../../services/messaging/serverAtRest';
+import {
+  E2EE_PLAINTEXT_REFUSAL_MESSAGE,
+  E2EE_PLAINTEXT_REFUSED,
+  plaintextRefusedIn,
+} from '../../services/messaging/e2eePlaintextAdmission';
 
 /**
  * La réponse à un refus d'admission, pour les DEUX chemins de lien.
@@ -76,20 +58,15 @@ const SHARE_LINK_CONVERSATION_SELECT = {
  */
 function sendWriteRefusal(reply: FastifyReply, refusal: ConversationWriteRefused): void {
   const message = describeConversationWriteRefusal(refusal);
+  const response = writeRefusalHttpResponse(refusal);
 
-  if (refusal.reason === 'conversation-closed') {
-    return sendError(reply, 410, message);
+  if (response.status === 429) {
+    reply.header('Retry-After', String(response.retryAfterSeconds));
+    return sendError(reply, 429, message, { code: response.code });
   }
 
-  if (refusal.reason === 'slow-mode-active') {
-    // Le décompte est toujours porté par la règle ; le repli à 1 s évite
-    // d'annoncer « réessayez dans 0 s » sur un refus, ce qui inviterait à une
-    // boucle serrée.
-    reply.header('Retry-After', String(refusal.retryAfterSeconds ?? 1));
-    return sendError(reply, 429, message, { code: 'SLOW_MODE_ACTIVE' });
-  }
-
-  return sendForbidden(reply, message);
+  if (response.status === 410) return sendError(reply, 410, message);
+  return 'code' in response ? sendForbidden(reply, message, { code: response.code }) : sendForbidden(reply, message);
 }
 
 /**
@@ -162,14 +139,17 @@ function buildLinkMessagePayload(params: {
   };
 }
 
+/**
+ * Ce que ce chemin range dans `Message.metadata` : le lieu partagé, et lui
+ * seul. Jamais de carte de liens suivis : l'expéditeur de ce chemin est
+ * toujours un invité anonyme, dont les adresses ne sont pas suivies (#10286).
+ * Rien ⇒ aucune clé `metadata`.
+ */
+function linkMessageMetadata(place: SharedPlace | null): { metadata?: Prisma.InputJsonValue } {
+  return place ? { metadata: { location: place } as unknown as Prisma.InputJsonValue } : {};
+}
+
 export async function registerMessageRoutes(fastify: FastifyInstance) {
-  const authRequired = createUnifiedAuthMiddleware(fastify.prisma, {
-    requireAuth: true,
-    allowAnonymous: false
-  });
-
-  const trackingLinkService = new TrackingLinkService(fastify.prisma);
-
   // Envoyer un message via un lien partagé (sessionToken uniquement)
   fastify.post('/links/:identifier/messages', {
     schema: {
@@ -245,7 +225,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       const sessionToken = request.headers['x-session-token'] as string;
 
       if (!sessionToken) {
-        return sendUnauthorized(reply, 'Session token requis pour envoyer un message');
+        return sendUnauthorized(reply, 'Session token requis pour envoyer un message', { code: AUTH_ERROR_CODES.LINK_SESSION_REQUIRED });
       }
 
       const isLinkId = identifier.startsWith('mshy_');
@@ -275,15 +255,19 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         }
       });
 
-      const participantShareLink = anonymousParticipant?.anonymousSession?.shareLinkId
+      // #10492 — le lien de l'invité se lit comme aux autres portes : la
+      // colonne de la participation d'abord, la session embarquée en repli.
+      const participantShareLinkId = anonymousParticipant ? guestShareLinkId(anonymousParticipant) : null;
+      const participantShareLink = participantShareLinkId
         ? await fastify.prisma.conversationShareLink.findUnique({
-            where: { id: anonymousParticipant.anonymousSession.shareLinkId },
+            where: { id: participantShareLinkId },
             select: {
               id: true,
               conversationId: true,
               isActive: true,
               allowAnonymousMessages: true,
               expiresAt: true,
+              guestRevocationPendingAt: true,
               // L'état TERMINAL du conteneur ET sa police d'écriture. Le lien
               // de partage est le SEUL transport d'envoi d'un invité anonyme :
               // sans cette lecture, fermer une conversation ne fermait rien
@@ -295,15 +279,34 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
                   isActive: true,
                   closedAt: true,
                   isAnnouncementChannel: true,
-                  defaultWriteRole: true
+                  defaultWriteRole: true,
+                  // #11216 — ce transport contourne `saveMessage` : il lit
+                  // lui-même le régime pour ne jamais écrire de clair en e2ee,
+                  // et (#11381) pour sceller au repos en server/hybrid.
+                  encryptionMode: true,
+                  encryptionEnabledAt: true,
+                  serverEncryptionKeyId: true
                 }
               }
             }
           })
         : null;
 
+      // #10492 — un accès FINI ne se lit pas comme une session inconnue : la
+      // participation désactivée, ou celle dont le lien n'existe plus, reçoit
+      // le 410 `GUEST_ACCESS_REVOKED` des autres portes. Un 401 se rejoue.
+      const guestAccessEnded = anonymousParticipant
+        ? participantShareLinkId !== null && !participantShareLink
+        : (await fastify.prisma.participant.findFirst({
+            where: { sessionTokenHash: tokenHash, type: 'anonymous' },
+            select: { id: true },
+          })) !== null;
+      if (guestAccessEnded) {
+        return sendError(reply, 410, 'GUEST_ACCESS_REVOKED', { message: "L'accès de cet invité a été retiré" });
+      }
+
       if (!anonymousParticipant || !participantShareLink) {
-        return sendUnauthorized(reply, 'Session invalide ou non autorisée pour ce lien');
+        return sendUnauthorized(reply, 'Session invalide ou non autorisée pour ce lien', { code: AUTH_ERROR_CODES.SESSION_INVALID });
       }
 
       if (!participantShareLink.isActive) {
@@ -312,6 +315,19 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
 
       if (participantShareLink.expiresAt && new Date() > participantShareLink.expiresAt) {
         return sendError(reply, 410, 'Ce lien a expiré');
+      }
+
+      // #10470 — la garde commune d'un invité (`guestAccessEnd`) : révocation
+      // DIFFÉRÉE d'un gros lien en attente pour un invité entré avant elle, ou
+      // invité banni. Même refus que la résolution de session REST.
+      if (guestAccessEnd({
+        linkExpiresAt: null,
+        linkIsActive: participantShareLink.isActive,
+        linkRevocationPendingAt: participantShareLink.guestRevocationPendingAt,
+        participation: anonymousParticipant,
+        now: new Date(),
+      }) === 'revoked') {
+        return sendError(reply, 410, 'GUEST_ACCESS_REVOKED', { message: "L'accès de cet invité a été retiré" });
       }
 
       if (!participantShareLink.allowAnonymousMessages) {
@@ -326,30 +342,42 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       const anonymousAdmission = await admitConversationWriteFor(fastify.prisma, {
         conversation: participantShareLink.conversation,
         conversationId: participantShareLink.conversationId,
-        senderParticipantId: anonymousParticipant.id
+        senderParticipantId: anonymousParticipant.id,
+        reservations: sharedSendReservations
       });
       if (isConversationWriteRefused(anonymousAdmission)) {
         return sendWriteRefusal(reply, anonymousAdmission);
       }
 
-      if (!anonymousParticipant.permissions.canSendMessages) {
+      // `resolveParticipantRights` — jamais `permissions` brut : un hôte peut
+      // avoir retiré `canSendMessages` APRÈS le join via
+      // `PATCH …/participants/:id/rights`, et cette surcharge vit dans
+      // `anonymousSession.rights`, pas dans l'instantané (#4855, même loi que
+      // `participantConversationPayload` / `historyFloorFor`).
+      if (!resolveParticipantRights(anonymousParticipant).canSendMessages) {
         return sendForbidden(reply, 'Vous n\'êtes pas autorisé à envoyer des messages');
       }
 
+      if (plaintextRefusedIn({
+        encryptionMode: participantShareLink.conversation?.encryptionMode,
+        plaintext: body.content,
+      })) {
+        return sendBadRequest(reply, E2EE_PLAINTEXT_REFUSAL_MESSAGE, { code: E2EE_PLAINTEXT_REFUSED });
+      }
 
-      // Traiter les liens dans le message AVANT la sauvegarde
-      const { processedContent, trackingLinks } = await trackingLinkService.processMessageLinks({
-        content: body.content,
-        conversationId: participantShareLink.conversationId,
-        createdBy: undefined
-      });
+
+      // Un invité anonyme ne fait JAMAIS de ses adresses des liens suivis
+      // (#10286) : ni `m+<token>`, ni carte `trackingLinks`, ni `TrackingLink`.
+      // Le texte part tel qu'écrit — le domaine Meeshy ne blanchit pas
+      // l'adresse d'un inconnu. Même loi que `linkTrackingAuthorOf`.
 
       // Lieu partagé — ce chemin (participant anonyme via lien de partage)
       // CONTOURNE MessagingService.handleMessage / MessageProcessor.saveMessage,
       // donc la validation `parseSharedPlace` + l'écriture dans
       // `metadata.location` doivent être refaites ICI. Chiffrement : stockage
-      // EN CLAIR, même décision assumée que pour le chemin nominal (cf.
-      // sharedPlace.ts).
+      // EN CLAIR hors bout en bout. En `e2ee` rien n'arrive jusqu'ici : le
+      // contenu est REQUIS par le schéma et `plaintextRefusedIn` vient de le
+      // refuser ; un lieu en clair n'y est donc jamais écrit (#12526).
       const sharedPlace = parseSharedPlace(body.location);
 
       // Créer le message avec le contenu transformé.
@@ -357,16 +385,30 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       // Pas de catch-P2002 ici (chemin anonyme simple) — un retry serveur
       // produit le même cid donc Prisma renvoie une 409 que la couche
       // Fastify mappe en réponse 409 Conflict côté client.
-      const message = await fastify.prisma.message.create({
+      // #11381 — dans une conversation `server`/`hybrid`, la base ne reçoit que le chiffré.
+      const regime = participantShareLink.conversation;
+      const sealedText = sealsAtRest(regime)
+        ? await sealTextAtRest({
+          sealer: await getEncryptionService(fastify.prisma),
+          mode: regime?.encryptionMode ?? '',
+          conversationId: participantShareLink.conversationId,
+          plaintext: body.content,
+          preferredKeyId: regime?.serverEncryptionKeyId ?? null,
+        })
+        : null;
+
+      const stored = await fastify.prisma.message.create({
         data: {
           conversationId: participantShareLink.conversationId,
           senderId: anonymousParticipant.id,
-          content: processedContent,
+          ...(sealedText
+            ? { content: '', isEncrypted: true, encryptionMode: sealedText.mode, encryptedContent: sealedText.encryptedContent, encryptionMetadata: sealedText.encryptionMetadata }
+            : { content: body.content }),
           originalLanguage,
           messageType: body.messageType,
           clientMessageId: body.clientMessageId,
           ...LIVE_MESSAGE_MARK,
-          ...(sharedPlace ? { metadata: { location: sharedPlace } as unknown as Prisma.InputJsonValue } : {})
+          ...linkMessageMetadata(sharedPlace)
         },
         include: {
           sender: {
@@ -391,12 +433,13 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           }
         }
       });
-
-      // Mettre à jour les messageIds des TrackingLinks
-      if (trackingLinks.length > 0) {
-        const tokens = trackingLinks.map(link => link.token);
-        await trackingLinkService.updateTrackingLinksMessageId(tokens, message.id);
+      // #14643 — admis quand la conversation était ouverte, écrit pendant son obsolescence : né effacé, diffusé à personne.
+      if (await sealMessageIfConversationObsoleted(fastify.prisma, { conversationId: participantShareLink.conversationId, messageId: stored.id })) {
+        return sendWriteRefusal(reply, { admitted: false, reason: 'conversation-closed' });
       }
+
+      // L'invité, `message:new` et la traduction reçoivent le CLAIR ; la notification, la ligne scellée.
+      const message = sealedText ? servedClearAtRest(stored, body.content) : stored;
 
       // Lieu partagé : hisser `metadata.location` en top-level `location`,
       // même contrat que le chemin nominal (messages.ts / MessageHandler).
@@ -441,6 +484,11 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       runMessagePostSaveEffects({
         prisma: fastify.prisma,
         translationService: fastify.translationService,
+        startedGroupAnnouncer: startedGroupAnnouncer(() => ({
+          prisma: fastify.prisma,
+          io: fastify.socketIOHandler?.getManager()?.getIO(),
+          notificationService: fastify.notificationService,
+        })),
         message: {
           id: message.id,
           conversationId: participantShareLink.conversationId,
@@ -449,9 +497,11 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           // son `Participant.id`, exactement comme le fait `recompute()`.
           senderUserId: null,
           attachmentMimeTypes: [],
+          hasSticker: Boolean(stickerFromMetadata(message.metadata)),
           content: message.content,
           messageType: message.messageType,
-          replyToId: message.replyToId
+          replyToId: message.replyToId,
+          encryptionMode: participantShareLink.conversation?.encryptionMode ?? null
         },
         originalLanguage,
         onError: (effect, err) => logError(fastify.log, `Link message post-save effect failed (${effect}):`, err)
@@ -468,7 +518,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       void notifyMessageRecipients({
         prisma: fastify.prisma,
         notificationService: fastify.notificationService,
-        message,
+        message: stored,
         senderParticipantId: anonymousParticipant.id,
         conversationId: participantShareLink.conversationId,
         processedContent: message.content,
@@ -485,6 +535,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         senderParticipantId: anonymousParticipant.id,
         messageId: message.id,
         payload: { message: stripClientMessageId(payload) },
+        atRest: sealsAtRest(regime),
         onError: (err) => logError(fastify.log, 'Link message broadcast error:', err)
       });
 
@@ -496,292 +547,12 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
     } catch (error) {
       if (error instanceof z.ZodError) {
         return sendBadRequest(reply, 'Données invalides');
+      }
+      // #11381 — sans clé maîtresse, un message server/hybrid est refusé, jamais écrit en clair.
+      if (isServerAtRestUnavailable(error)) {
+        return sendError(reply, 503, error.message, { code: error.code });
       }
       logError(fastify.log, 'Send link message error:', error);
-      return sendInternalError(reply, 'Erreur interne du serveur');
-    }
-  });
-
-  // Envoyer un message via un lien partagé (utilisateurs authentifiés)
-  fastify.post('/links/:identifier/messages/auth', {
-    onRequest: [authRequired],
-    schema: {
-      description: 'Send a message as an authenticated user via share link. User must be a member of the associated conversation. For the global "meeshy" conversation, all authenticated users have access. The share link must be active and not expired. Automatically processes and tracks links in message content.',
-      tags: ['links', 'messages'],
-      summary: 'Send message (authenticated)',
-      params: {
-        type: 'object',
-        required: ['identifier'],
-        properties: {
-          identifier: {
-            type: 'string',
-            description: 'Link identifier (linkId or database ID)',
-            example: 'mshy_67890abcdef12345_a1b2c3d4'
-          }
-        }
-      },
-      body: sendMessageBodySchema,
-      response: {
-        201: {
-          description: 'Message sent successfully',
-          ...sendLinkMessageResponseSchema
-        },
-        400: {
-          description: 'Bad request - invalid data',
-          ...errorResponseSchema
-        },
-        401: {
-          description: 'Authentication required',
-          ...errorResponseSchema
-        },
-        403: {
-          description: 'Forbidden - not a member of this conversation',
-          ...errorResponseSchema
-        },
-        404: {
-          description: 'Share link not found',
-          ...errorResponseSchema
-        },
-        410: {
-          description: 'Link expired or inactive',
-          ...errorResponseSchema
-        },
-        500: {
-          description: 'Internal server error',
-          ...errorResponseSchema
-        }
-      }
-    }
-  }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
-    try {
-      const { identifier } = request.params as { identifier: string };
-      const body = sendMessageSchema.parse(request.body);
-      // Canonicalise the client-claimed locale at the write boundary — cf. the
-      // anonymous sibling above; this authenticated share-link path also
-      // bypasses the MessagingService funnel.
-      const originalLanguage = normalizeLanguageCode(body.originalLanguage) ?? body.originalLanguage;
-
-      if (!isRegisteredUser(request.authContext)) {
-        return sendForbidden(reply, 'Utilisateur enregistré requis');
-      }
-
-      const userId = request.authContext.registeredUser!.id;
-
-      const isLinkId = identifier.startsWith('mshy_');
-
-      let shareLink;
-      if (isLinkId) {
-        shareLink = await fastify.prisma.conversationShareLink.findUnique({
-          where: { linkId: identifier },
-          include: { conversation: { select: SHARE_LINK_CONVERSATION_SELECT } }
-        });
-      } else {
-        shareLink = await fastify.prisma.conversationShareLink.findUnique({
-          where: { id: identifier },
-          include: { conversation: { select: SHARE_LINK_CONVERSATION_SELECT } }
-        });
-      }
-
-      if (!shareLink) {
-        return sendNotFound(reply, 'Lien de partage non trouvé');
-      }
-
-      if (!shareLink.isActive) {
-        return sendError(reply, 410, 'Ce lien n\'est plus actif');
-      }
-
-      if (shareLink.expiresAt && new Date() > shareLink.expiresAt) {
-        return sendError(reply, 410, 'Ce lien a expiré');
-      }
-
-      let participant = null;
-
-      if (shareLink.conversation.identifier === "meeshy") {
-        participant = await fastify.prisma.participant.findFirst({
-          where: {
-            conversationId: shareLink.conversationId,
-            userId: userId,
-            isActive: true
-          }
-        });
-        if (!participant) {
-          participant = { id: userId } as any;
-        }
-      } else {
-        participant = await fastify.prisma.participant.findFirst({
-          where: {
-            conversationId: shareLink.conversationId,
-            userId: userId,
-            isActive: true
-          }
-        });
-      }
-
-      if (!participant) {
-        return sendForbidden(reply, 'Vous n\'êtes pas membre de cette conversation');
-      }
-
-      // Ce chemin CONTOURNE `MessagingService.handleMessage`, où la règle est
-      // posée pour REST et socket : la garde doit donc être recopiée ici, mais
-      // le PRÉDICAT est partagé — la règle n'existe qu'en un exemplaire.
-      // Les deux gardes plus haut lisent l'état terminal du LIEN ; celle-ci lit
-      // celui de la CONVERSATION, que rien ne regardait. Elle vient APRÈS la
-      // résolution du participant parce que le rang d'écriture est le sien, et
-      // la conversation ne restreint que rarement : le chemin nominal n'ajoute
-      // toujours aucune lecture.
-      const linkAdmission = await admitConversationWriteFor(fastify.prisma, {
-        conversation: shareLink.conversation,
-        conversationId: shareLink.conversationId,
-        senderParticipantId: participant.id
-      });
-      if (isConversationWriteRefused(linkAdmission)) {
-        return sendWriteRefusal(reply, linkAdmission);
-      }
-
-
-      // Traiter les liens dans le message AVANT la sauvegarde
-      const { processedContent, trackingLinks } = await trackingLinkService.processMessageLinks({
-        content: body.content,
-        conversationId: shareLink.conversationId,
-        createdBy: userId
-      });
-
-      // Lieu partagé — ce chemin (lien de partage, utilisateur authentifié)
-      // CONTOURNE lui aussi MessagingService.handleMessage ; même contrat
-      // que le jumeau anonyme ci-dessus (validation + stockage en clair).
-      const sharedPlace = parseSharedPlace(body.location);
-
-      // Créer le message avec le contenu transformé.
-      // Phase 4 §6.2 — `clientMessageId` propagé pour le dedup contract.
-      const message = await fastify.prisma.message.create({
-        data: {
-          conversationId: shareLink.conversationId,
-          senderId: participant.id,
-          content: processedContent,
-          originalLanguage,
-          messageType: body.messageType,
-          clientMessageId: body.clientMessageId,
-          ...LIVE_MESSAGE_MARK,
-          ...(sharedPlace ? { metadata: { location: sharedPlace } as unknown as Prisma.InputJsonValue } : {})
-        },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              userId: true,
-              displayName: true,
-              avatar: true,
-              type: true,
-              language: true,
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  firstName: true,
-                  lastName: true,
-                  displayName: true,
-                  avatar: true,
-                  systemLanguage: true
-                }
-              }
-            }
-          }
-        }
-      });
-
-      // Mettre à jour les messageIds des TrackingLinks
-      if (trackingLinks.length > 0) {
-        const tokens = trackingLinks.map(link => link.token);
-        await trackingLinkService.updateTrackingLinksMessageId(tokens, message.id);
-      }
-
-      // Lieu partagé : hisser `metadata.location` en top-level `location`.
-      const place = sharedPlaceFromMetadata(message.metadata);
-
-      // Mêmes trois effets de mention que le jumeau anonyme, par le même point
-      // d'appel unique : deux routes qui écrivent dans la même conversation ne
-      // peuvent pas en honorer des sous-ensembles différents.
-      const mentions = await resolveMessageMentions({
-        prisma: fastify.prisma,
-        mentionService: fastify.mentionService,
-        message: {
-          id: message.id,
-          conversationId: shareLink.conversationId,
-          senderId: participant.id
-        },
-        content: message.content,
-        onError: (err) => logError(fastify.log, 'Link message mention resolution failed:', err)
-      });
-
-      const payload = buildLinkMessagePayload({
-        message,
-        conversationId: shareLink.conversationId,
-        senderId: participant.id,
-        place,
-        validatedMentions: mentions.validatedUsernames
-      });
-
-      // Mêmes obligations post-commit que le jumeau anonyme, par le même point
-      // d'appel unique : deux routes qui écrivent dans la même conversation ne
-      // peuvent pas en honorer des sous-ensembles différents.
-      runMessagePostSaveEffects({
-        prisma: fastify.prisma,
-        translationService: fastify.translationService,
-        message: {
-          id: message.id,
-          conversationId: shareLink.conversationId,
-          senderId: participant.id,
-          // `participant` peut être SYNTHÉTIQUE (`{ id: userId }`) pour la
-          // conversation globale `meeshy` : nommer l'utilisateur explicitement
-          // est la seule façon de créditer la même clé que `recompute()`, qui
-          // lit `sender.userId` en base.
-          senderUserId: userId,
-          attachmentMimeTypes: [],
-          content: message.content,
-          messageType: message.messageType,
-          replyToId: message.replyToId
-        },
-        originalLanguage,
-        onError: (effect, err) => logError(fastify.log, `Link message post-save effect failed (${effect}):`, err)
-      });
-
-      // Même éventail de notifications que le jumeau anonyme, pour la même
-      // raison : ce chemin contourne `MessageProcessor`, donc rien d'autre
-      // n'enverra le moindre push à un destinataire qui ne regarde pas.
-      void notifyMessageRecipients({
-        prisma: fastify.prisma,
-        notificationService: fastify.notificationService,
-        message,
-        senderParticipantId: participant.id,
-        conversationId: shareLink.conversationId,
-        processedContent: message.content,
-        validatedMentionUserIds: mentions.validatedUserIds,
-        onError: (err) => logError(fastify.log, 'Link message notification fan-out failed:', err)
-      }).catch((err) => logError(fastify.log, 'Link message notification fan-out failed:', err));
-
-      // Même diffuseur unique que le jumeau anonyme : les deux routes servent la
-      // même conversation aux mêmes participants, une seule des deux couvrant
-      // les pairs déconnectés serait exactement l'asymétrie que ce point unique
-      // rend inécrivable.
-      await broadcastLinkMessage({
-        manager: fastify.socketIOHandler.getManager(),
-        conversationId: shareLink.conversationId,
-        senderParticipantId: participant.id,
-        messageId: message.id,
-        payload: { message: stripClientMessageId(payload) },
-        onError: (err) => logError(fastify.log, 'Link message broadcast error:', err)
-      });
-
-      return sendSuccess(reply, {
-        messageId: message.id,
-        message: payload
-      }, { statusCode: 201 });
-
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return sendBadRequest(reply, 'Données invalides');
-      }
-      logError(fastify.log, 'Send authenticated link message error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });

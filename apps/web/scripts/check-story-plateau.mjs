@@ -1,0 +1,623 @@
+/**
+ * **LE PLATEAU DE STORY PUBLIE CE QUE L'AUTEUR A POSÉ** (#6943, #6944) — dans
+ * un VRAI navigateur, et prouvé sur le DOCUMENT QUI PART, pas sur celui qu'on
+ * espère.
+ *
+ * `check-story-studio.mjs` prouve la GÉOMÉTRIE du studio (carte 9:16 centrée,
+ * cibles, saisie alignée, brouillon) sur le `dist/` de fixtures ; les témoins
+ * unitaires prouvent les LOIS. Ce gate-ci prouve la seule chose que ni l'un ni
+ * les autres ne peuvent : qu'un parcours RÉEL — poser deux textes, en déplacer
+ * un au pointeur PUIS au clavier, le tourner, l'agrandir, changer sa langue et
+ * son style, placer un son sur la scène, écrire une légende — dépose CHACUNE
+ * de ces valeurs dans le corps de `POST /api/v1/posts`.
+ *
+ * **Pourquoi une SECONDE construction.** Le `dist/` par défaut est bâti en
+ * `fixtures` : `publishStory` y court-circuite avant tout octet réseau
+ * (`stories-publish.ts`, branche `__FIXTURES__`), donc il n'y a AUCUN document
+ * à relire. Ce gate bâtit donc `dist-gateway/` avec `VITE_DATA_SOURCE=gateway`
+ * et INTERCEPTE la requête. Relire ce que le studio a composé depuis son propre
+ * DOM aurait mesuré l'aperçu, pas la publication — et la question du cycle 122
+ * (« qui AFFICHE ce que le résolveur élit ? ») a sa jumelle ici : **qu'est-ce
+ * qui PART de ce que l'écran montre ?**
+ *
+ * **Ce que ce gate NE couvre PAS, délibérément** : la montée TUS d'un fichier.
+ * Le brouillon est SEMÉ avec trois médias déjà PRÊTS (`postMediaId` +
+ * `fileUrl`), ce que le studio restaure sans jamais remonter — la loi « un
+ * média PRÊT n'est jamais remonté » (§ 1.4). Les PORTES elles-mêmes sont déjà
+ * prouvées par `check-story-studio.mjs` (poser un fichier fait PEINDRE le
+ * moteur). Ce gate mesure le PLATEAU, pas le transport.
+ *
+ * Sélecteurs préfixés `[data-story-*]`, comme l'écran les pose — jamais un
+ * libellé francophone en dur, qui romprait au premier changement de catalogue.
+ */
+import { spawnSync } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import { launchChromium } from './lib/browser.mjs';
+import { startDistServer } from './lib/gate-server.mjs';
+import { writeOnStage } from './lib/stage-typing.mjs';
+
+const ROOT = new URL('../', import.meta.url).pathname;
+const DIST = join(ROOT, 'dist-gateway');
+const ICON = join(ROOT, 'public/icon-192.png');
+/* ── la construction « gateway », la seule où un document PART ────────────── */
+const build = spawnSync(
+  'npx',
+  ['vite', 'build', '--outDir', 'dist-gateway', '--emptyOutDir', '--logLevel', 'warn'],
+  { cwd: ROOT, env: { ...process.env, VITE_DATA_SOURCE: 'gateway', VITE_API_BASE: 'https://gate.meeshy.test' }, encoding: 'utf8' },
+);
+if (build.status !== 0) {
+  console.error('check-story-plateau : la construction « gateway » a échoué');
+  console.error(build.stdout ?? '');
+  console.error(build.stderr ?? '');
+  process.exit(1);
+}
+
+/* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
+   repliait TOUT sur `index.html`, y compris un `/assets/*.js` dont la lecture
+   échouait — le navigateur rendait alors « Failed to fetch dynamically imported
+   module » pour une panne transitoire, sans aucune trace au journal. */
+const served = await startDistServer(DIST);
+const BASE = served.base;
+
+const failures = [];
+let invariants = 0;
+const check = (ok, what) => {
+  invariants += 1;
+  if (!ok) failures.push(what);
+};
+
+const VIEWER = 'a'.repeat(24);
+const BG = { postMediaId: 'pm-bg', fileUrl: '2026/09/u1/bg.png' };
+const OV = { postMediaId: 'pm-ov', fileUrl: '2026/09/u1/ov.png' };
+const SND = { postMediaId: 'pm-snd', fileUrl: '2026/09/u1/snd.mp3' };
+
+const session = JSON.stringify({
+  token: 'gate-token',
+  sessionToken: 'gate-session',
+  user: { id: VIEWER, username: 'auteur-gate' },
+  expiresAt: Date.now() + 3_600_000,
+});
+
+/** Le brouillon SEMÉ — trois médias déjà PRÊTS et UN texte, la forme exacte
+ * que `studioSnapshotOf` écrit (`lib/stories/studio.ts`). */
+const draft = JSON.stringify({
+  texts: [{ id: 'text-1', text: 'Bonjour', language: 'fr', style: 'bold', effect: 'none', color: 'FFFFFF', align: 'center', pose: { x: 0.5, y: 0.5, scale: 1, rotation: 0 } }],
+  language: 'fr',
+  background: { ...BG, mediaType: 'image', pose: { x: 0.5, y: 0.5, scale: 1, rotation: 0 } },
+  overlay: { ...OV, mediaType: 'image', pose: { x: 0.3, y: 0.7, scale: 1, rotation: 0 } },
+  sound: { ...SND, plane: 'background' },
+});
+
+const icon = await readFile(ICON);
+const browser = await launchChromium();
+const context = await browser.newContext({ colorScheme: 'light', locale: 'fr-FR', viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+await context.addInitScript(
+  ([sessionJson, draftJson, viewerId]) => {
+    localStorage.setItem('meeshy.session', sessionJson);
+    localStorage.setItem(`meeshy.draft.story.${viewerId}`, draftJson);
+  },
+  [session, draft, VIEWER],
+);
+
+/** Les médias du brouillon se prévisualisent DEPUIS LE SERVEUR (le fichier
+ * local n'existe plus) : on sert l'icône, sinon le moteur ne peint rien. */
+await context.route('**/attachments/**', (route) => route.fulfill({ status: 200, contentType: 'image/png', body: icon }));
+await context.route('**/api/v1/uploads**', (route) => route.fulfill({ status: 500, body: 'ce gate ne monte AUCUN fichier' }));
+
+// Tout autre appel réseau rend une réponse VIDE plutôt qu'une erreur : le
+// studio ne lit rien, mais le socle (session, temps réel) peut sonder.
+// **ENREGISTRÉ EN PREMIER, et c'est l'inverse de l'intuition** : Playwright
+// résout ses routes dans l'ORDRE INVERSE de leur enregistrement — la dernière
+// posée gagne. Un attrape-tout posé après la route de publication l'aurait
+// avalée, et le gate aurait dit « aucun POST n'est parti » alors que l'écran
+// publiait très bien.
+await context.route('**/api/v1/**', (route) =>
+  route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: null }) }),
+);
+
+let published = null;
+await context.route('**/api/v1/posts', async (route) => {
+  if (route.request().method() !== 'POST') return route.fallback();
+  published = JSON.parse(route.request().postData() ?? '{}');
+  await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ success: true, data: { id: 'post-gate-1' } }) });
+});
+
+const page = await context.newPage();
+const pageErrors = [];
+page.on('pageerror', (e) => pageErrors.push(String(e)));
+
+/**
+ * LE LEVIER QUI A FALSIFIÉ L'HYPOTHÈSE DE COURSE (#6951).
+ *
+ * `MEESHY_FONT_DELAY_MS=2500 node scripts/check-story-plateau.mjs` retarde
+ * CHAQUE `.woff2` : c'est la machine froide, en une variable. Il reste ici
+ * parce qu'une hypothèse de course ne se réfute pas une fois pour toutes —
+ * elle se REJOUE, et sans ce levier il faudrait réinventer l'expérience.
+ *
+ * Ce qu'il a rendu : largeurs identiques au centième, gate vert. La lenteur
+ * n'était pas la cause, et `await document.fonts.load(…)` suffit.
+ */
+if (process.env.MEESHY_FONT_DELAY_MS) {
+  const delai = Number(process.env.MEESHY_FONT_DELAY_MS);
+  await page.route('**/*.woff2', async (route) => {
+    await new Promise((r) => setTimeout(r, delai));
+    await route.continue();
+  });
+}
+
+await page.goto(`${BASE}/stories/new`, { waitUntil: 'load' });
+await page.waitForSelector('[data-story-studio]', { timeout: 15000 });
+await page.waitForSelector('[data-scene-player]', { timeout: 15000 });
+
+const twoFrames = () =>
+  page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+  );
+await twoFrames();
+
+/* ── 1. le brouillon SEMÉ est restauré, avec sa sélection ────────────────── */
+check(
+  (await page.evaluate(() => document.querySelector('#story-studio-text')?.value ?? null)) === 'Bonjour',
+  'le texte du brouillon semé n’est pas restauré dans la saisie',
+);
+check(
+  (await page.evaluate(() => document.querySelectorAll('[data-scene-object="text"]').length)) === 1,
+  'le moteur devrait peindre UN objet texte avant l’ajout',
+);
+
+/* ── 1 bis. LA PREMIÈRE PORTE OUVRE DIRECTEMENT LA PHOTOTHÈQUE (#8681) ──────
+   Le disque est l'étiquette d'un `input[type=file]` : un clic ouvre le
+   sélecteur du système dans le même geste — aucune feuille, aucun menu. */
+const firstDoor = await page.evaluate(() => {
+  const input = document.querySelector('[data-story-studio-rail="leading"]')?.querySelector('input, button, [role="button"], [aria-haspopup]');
+  return input === null || input === undefined ? null : { tag: input.tagName, type: input.getAttribute('type'), door: input.dataset.door, accept: input.getAttribute('accept') };
+});
+check(
+  firstDoor?.tag === 'INPUT' && firstDoor.type === 'file' && firstDoor.door === 'visual' && firstDoor.accept === 'image/*,video/*',
+  `la première porte du couloir n’est pas le sélecteur des photos et vidéos — ${JSON.stringify(firstDoor)}`,
+);
+const chooser = await Promise.all([
+  page.waitForEvent('filechooser', { timeout: 4000 }),
+  page.click('[data-story-studio-rail="leading"] label:has(input[data-door="visual"])'),
+])
+  .then(([opened]) => opened)
+  .catch(() => null);
+check(chooser !== null, 'toucher la première porte n’ouvre PAS le sélecteur de fichiers — un intermédiaire s’interpose');
+check((await page.locator('[role="menu"], [role="dialog"]').count()) === 0, 'toucher la première porte ouvre un menu ou une feuille au lieu de la photothèque');
+
+/* ── 2. AJOUTER un second texte ⇒ deux objets, le neuf sélectionné ───────── */
+check(
+  (await page.evaluate(() => document.querySelectorAll('[data-story-option]').length)) > 0,
+  'aucun contrôle du rail n’est rendu',
+);
+/* « T+ » pose le texte ET ouvre sa saisie : on tape au CLAVIER, jamais par
+   `page.fill`, qui écrivait sous le calque des gestes (#8515). */
+/* L'invite du texte AJOUTÉ s'écrit à SA place — l'ancre du texte neuf, sur
+   88 % de la scène (la coupe d'iOS, SCENE_TEXT_WRAP_FRACTION, #9140) — jamais
+   dans la boîte du texte déjà écrit (#8681). */
+await page.click('[data-story-option="add-text"]');
+await page.waitForFunction(() => document.activeElement?.id === 'story-studio-text', null, { timeout: 4000 });
+await twoFrames();
+const invite = await page.evaluate(() => {
+  const stage = document.querySelector('[data-scene-stage]')?.getBoundingClientRect();
+  const field = document.querySelector('#story-studio-text');
+  if (stage === undefined || field === null) return null;
+  const r = field.getBoundingClientRect();
+  return { target: field.dataset.storyTextTarget, width: r.width / stage.width, cx: (r.x + r.width / 2 - stage.x) / stage.width, cy: (r.y + r.height / 2 - stage.y) / stage.height };
+});
+check(invite?.target === 'text-2', `l’invite n’écrit pas le texte ajouté — ${JSON.stringify(invite)}`);
+check(
+  invite !== null && Math.abs(invite.width - 0.88) < 0.01 && Math.abs(invite.cx - 0.5) < 0.01 && Math.abs(invite.cy - 0.5) < 0.01,
+  `l’invite du texte ajouté ne s’écrit pas à son ancre, sur 88 % de la scène — ${JSON.stringify(invite)}`,
+);
+const tPlus = await writeOnStage(page, 'Hello', { finish: false });
+if (tPlus !== null) console.error(`  « T+ » puis le clavier : ${tPlus}`);
+check(tPlus === null, `« T+ » puis le clavier : ${tPlus}`);
+await twoFrames();
+check(
+  (await page.evaluate(() => document.querySelectorAll('[data-scene-object="text"]').length)) === 2,
+  'après l’ajout, le moteur devrait peindre DEUX objets texte',
+);
+check(
+  (await page.evaluate(() => document.querySelector('#story-studio-text')?.dataset.storyTextTarget ?? null)) === 'text-2',
+  'le texte AJOUTÉ devrait être celui que la saisie édite',
+);
+
+/* ── 3. les RÉGLAGES de l'objet — langue, police, effet, couleur, alignement ── */
+/* « T+ » a ouvert l'ÉDITION du texte posé : ses SOUS-OUTILS sont au rail
+   droit ; chacun ouvre ses options dans un panneau à droite, depuis le haut
+   (#9140, jumelle de #9138). */
+await page.waitForSelector('[data-story-option="section:style"]', { timeout: 8000 });
+const openSection = async (section) => {
+  const tile = `[data-story-option="section:${section}"]`;
+  if ((await page.getAttribute(tile, 'aria-pressed')) !== 'true') await page.click(tile);
+  await page.waitForSelector(`[data-story-inline-panel="${section}"] [data-story-object-editor="text-2"]`, { timeout: 8000 });
+};
+const pick = async (section, value) => {
+  await openSection(section === 'textbg' ? 'background' : section);
+  const selector = `[data-story-inline-panel] [data-story-option="${section}:${value}"]`;
+  await page.waitForSelector(selector, { timeout: 8000 });
+  await page.click(selector);
+  await twoFrames();
+};
+await pick('language', 'en');
+/* LE PANNEAU EST À DROITE, DEPUIS LE HAUT : aligné sur le haut de la colonne
+   des sous-outils, finissant une gouttière avant elle, sans déborder ni
+   recouvrir le rail. */
+const panelPlace = await page.evaluate(() => {
+  const panel = document.querySelector('[data-story-inline-panel]')?.getBoundingClientRect();
+  const column = document.querySelector('[data-story-trailing-options]')?.getBoundingClientRect();
+  const plateau = document.querySelector('[data-story-studio-plateau]')?.getBoundingClientRect();
+  if (panel === undefined || column === undefined || plateau === undefined) return null;
+  return {
+    topGap: Math.abs(panel.top - column.top),
+    gutter: column.left - panel.right,
+    start: panel.left - plateau.left,
+    bottomInside: panel.bottom <= plateau.bottom + 0.5,
+    overflow: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth,
+  };
+});
+check(
+  panelPlace !== null && panelPlace.topGap < 4 && panelPlace.gutter >= 4 && panelPlace.start >= 9 && panelPlace.bottomInside && panelPlace.overflow <= 0,
+  `les options du texte ne s’ouvrent pas à droite depuis le haut, à côté du rail — ${JSON.stringify(panelPlace)}`,
+);
+await pick('style', 'typewriter');
+await pick('effect', 'longShadow');
+await pick('color', 'F8B500');
+await pick('align', 'right');
+
+/* Le style est-il PEINT, ou seulement annoncé ? (cycle 123) */
+const painted = await page.evaluate(() => {
+  const el = document.querySelector('[data-scene-object-id="text-2"] [data-scene-text]');
+  if (el === null) return null;
+  const cs = getComputedStyle(el);
+  return { fontFamily: cs.fontFamily, textAlign: cs.textAlign, color: cs.color, textShadow: cs.textShadow, lang: el.getAttribute('lang') };
+});
+check(painted !== null, 'le second objet texte n’est pas peint');
+if (painted !== null) {
+  check(/courier|monospace/i.test(painted.fontFamily), `la police « machine » n’est pas peinte — ${painted.fontFamily}`);
+  check(painted.textAlign === 'right', `l’alignement n’est pas peint — ${painted.textAlign}`);
+  check(painted.color === 'rgb(248, 181, 0)', `la couleur n’est pas peinte — ${painted.color}`);
+  check(painted.textShadow !== 'none' && painted.textShadow !== '', `l’effet n’est pas peint — ${painted.textShadow}`);
+  check(painted.lang === 'en', `la langue de l’objet n’est pas portée par le texte peint — ${painted.lang}`);
+}
+
+/* ── 3 bis. LES TREIZE FAMILLES À POLICE EMBARQUÉE SONT-ELLES PEINTES ? (#6951) ──
+   La table est LUE à sa source (`lib/canvas/story-fonts.ts`), jamais recopiée
+   ici : une jumelle de treize lignes aurait divergé au premier remplacement de
+   police, et c'est exactement le cas que ce gate doit attraper.
+
+   Quatre questions, parce que « servie » en recouvre quatre :
+   · la famille est-elle APPLIQUÉE au texte peint (`getComputedStyle`) ?
+   · le REPLI derrière elle est-il la pile native — jamais un générique qui
+     ferait croire que le fichier a chargé ?
+   · le FICHIER est-il servi et lisible (`document.fonts.check` après un `load`
+     explicite) ? Une `@font-face` dont l'URL casse laisse un `fontFamily`
+     parfaitement conforme : la chaîne ne dit rien du fichier.
+   · et ses GLYPHES diffèrent-ils de ceux du système ? C'est la seule question
+     dont la réponse soit un PIXEL.
+
+   ## CE QU'IL NE FAUT PAS MESURER : la boîte du texte peint
+
+   La première forme lisait `el.getBoundingClientRect().width` et exigeait que
+   les treize largeurs soient distinctes. **Verte ici, rouge en intégration
+   continue** — « 9 largeur(s) distinctes » — sur un gate dont les 108 autres
+   invariants passaient, `document.fonts.check` compris : les polices étaient
+   donc bien chargées ET appliquées, et l'hypothèse d'une course a été
+   FALSIFIÉE (rejouée avec 1500 ms de délai sur chaque `.woff2`, elle rend des
+   largeurs identiques au millième près).
+
+   La cause est la MESURE, et voici exactement ce qui est ÉTABLI — le reste
+   est resté hypothèse, donc n'est pas écrit comme un fait :
+   · ce n'est pas une course. Rejoué avec 1500 puis 2500 ms de délai injecté
+     sur chaque `.woff2` (`MEESHY_FONT_DELAY_MS`, plus bas), le gate rend des
+     largeurs IDENTIQUES au centième et reste vert ;
+   · les polices étaient bien chargées ET appliquées en intégration continue :
+     un seul échec sur 109, donc les treize `document.fonts.check` et les
+     treize familles calculées passaient ;
+   · la quantité mesurée était une BOÎTE mise en page — taille en `cqw` (donc
+     fonction de la largeur du conteneur), `max-width: 85cqw`, retour à la
+     ligne —, rendue ici à 13,4 px, les treize boîtes tenant entre 21 et
+     43 px, avec des écarts descendant à 0,17 px pour un arrondi au centième ;
+   · ce n'est PAS le plafond de 85cqw : la boîte ET le plafond sont tous deux
+     proportionnels à la largeur du conteneur, donc leur rapport ne dépend pas
+     de la géométrie — le plafond ne mordrait qu'à partir d'une encre de
+     956 px là où la plus large mesurée est 320,77 px. Cette piste a été
+     calculée puis ABANDONNÉE, pas retenue faute de mieux.
+
+   Ce qui reste — une boîte de treize valeurs séparées par un sixième de pixel,
+   dont la valeur dépend de la géométrie de la machine — suffit à condamner la
+   mesure sans qu'on ait besoin de nommer le mécanisme exact : **un verdict ne
+   doit pas reposer sur une quantité dont on ne sait pas dire ce qui la fait
+   bouger.** La boîte reste RELEVÉE au journal (ci-dessous) pour que la
+   prochaine occurrence, elle, soit lisible.
+
+   On mesure donc l'ENCRE : la même chaîne, à une taille FIXE, hors flux, sans
+   retour à la ligne — indépendante du conteneur, du `cqw`, du plafond et de
+   la mise en page. Et on la compare à la pile SYSTÈME seule, famille par
+   famille : un fichier qui n'a pas chargé retombe sur cette même pile et rend
+   la même encre, ce qui NOMME la famille fautive au lieu de rendre un compte
+   agrégé. */
+const FONT_TABLE = [
+  ...(await readFile(join(ROOT, 'src/lib/canvas/story-fonts.ts'), 'utf8')).matchAll(
+    /^ {2}(\w+): \{ ios: '[^']*', css: '([^']*)'/gm,
+  ),
+].map((m) => ({ style: m[1], css: m[2] }));
+check(FONT_TABLE.length === 13, `la table des polices rend ${FONT_TABLE.length} familles — attendu 13`);
+
+/** La taille de la sonde : assez grande pour qu'un dixième de pixel de
+ * différence de chasse se voie, et FIXE — c'est ce qui la rend insensible à
+ * la géométrie de l'écran qui l'accueille. */
+const INK_PX = 100;
+const familyInks = [];
+for (const { style, css } of FONT_TABLE) {
+  await pick('style', style);
+  const seen = await page.evaluate(async ({ family, inkPx }) => {
+    const el = document.querySelector('[data-scene-object-id="text-2"] [data-scene-text]');
+    if (el === null) return null;
+    /* `document.fonts.load` REJETTE sur un fichier absent ou illisible, et une
+       exception ici tuerait le gate entier au lieu de nommer la famille
+       fautive — mesuré en falsifiant ce témoin (fichier corrompu : le gate
+       rendait « uncaughtException : NetworkError », sans dire laquelle). Un
+       gate qui plante n'est pas un gate qui accuse. */
+    const loaded = await document.fonts.load(`16px "${family}"`, 'Bonjour').then(
+      () => document.fonts.check(`16px "${family}"`),
+      () => false,
+    );
+    /* Hors flux, sans retour à la ligne, à taille fixe : aucune entrée de
+       mise en page ne peut la déplacer — ni le conteneur, ni le plafond. */
+    const encre = (stack) => {
+      const sonde = document.createElement('span');
+      sonde.textContent = el.textContent;
+      sonde.style.cssText = `position:absolute;left:-9999px;top:0;white-space:pre;font-size:${inkPx}px;font-family:${stack}`;
+      document.body.appendChild(sonde);
+      const largeur = Math.round(sonde.getBoundingClientRect().width * 100) / 100;
+      sonde.remove();
+      return largeur;
+    };
+    return {
+      fontFamily: getComputedStyle(el).fontFamily,
+      loaded,
+      ink: encre(`'${family}', var(--font-native)`),
+      system: encre('var(--font-native)'),
+      /* La BOÎTE n'est plus un invariant — elle reste RELEVÉE : c'est elle qui
+         a rendu un verdict différent ici et en intégration continue, et son
+         journal est la seule façon de savoir, le jour où ça recommence, quelle
+         géométrie la machine avait. Une mesure qu'on retire d'un verdict ne se
+         retire pas du journal. */
+      box: Math.round(el.getBoundingClientRect().width * 100) / 100,
+      fontSize: getComputedStyle(el).fontSize,
+    };
+  }, { family: css, inkPx: INK_PX });
+  if (seen !== null) {
+    console.log(
+      `  encre ${style.padEnd(12)} ${css.padEnd(18)} ${String(seen.ink).padStart(7)}px contre ${seen.system}px systeme` +
+        ` (a ${INK_PX}px) · boite peinte ${seen.box}px a ${seen.fontSize}`,
+    );
+  }
+  check(seen !== null, `« ${style} » : aucun texte peint`);
+  if (seen === null) continue;
+  familyInks.push(seen.ink);
+  /* Le navigateur normalise les guillemets et l'espace ; on compare donc sur
+     le NOM et sur la présence du repli, pas sur la chaîne caractère à caractère. */
+  check(seen.fontFamily.includes(css), `« ${style} » n’est pas peinte par ${css} — ${seen.fontFamily}`);
+  check(
+    /-apple-system|BlinkMacSystemFont|system-ui|sans-serif/.test(seen.fontFamily),
+    `« ${style} » n’a pas la pile NATIVE derrière elle — ${seen.fontFamily}`,
+  );
+  check(
+    !/(^|,)\s*(cursive|fantasy|serif|monospace)\s*$/.test(seen.fontFamily.replace(/sans-serif\s*$/, '')),
+    `« ${style} » retombe sur un générique, qui ferait croire à la bonne famille — ${seen.fontFamily}`,
+  );
+  check(seen.loaded, `le FICHIER de « ${style} » (${css}) n’est pas servi ou pas lisible — @font-face conforme, police absente`);
+  /* LE PIXEL, famille par famille. Un fichier absent retombe sur la pile
+     native, qui est le second terme de la sonde : son encre vaut alors
+     EXACTEMENT celle du système, et c'est cette égalité qui accuse. */
+  check(
+    seen.ink !== seen.system,
+    `« ${style} » (${css}) peint les MÊMES glyphes que la police système — ${seen.ink}px contre ${seen.system}px à ${INK_PX}px : la famille est nommée, pas appliquée`,
+  );
+}
+/* L'encre étant mesurée hors mise en page, deux familles ne peuvent plus
+   coïncider par PLAFONNEMENT — seulement en étant métriquement identiques,
+   c'est-à-dire en pointant le même fichier. Le compte attendu est donc
+   TREIZE, et non un seuil. */
+check(
+  new Set(familyInks).size === FONT_TABLE.length,
+  `les treize familles rendent ${new Set(familyInks).size} encre(s) distincte(s) — deux familles partagent le même dessin`,
+);
+/* On rend le plateau à l'état que la suite du gate publie. */
+await pick('style', 'typewriter');
+
+/* ── 4. DÉPLACER au POINTEUR, puis TOURNER et AGRANDIR au CLAVIER ────────── */
+/* LOT 6 : la sélection est SILENCIEUSE — aucun contour, aucune poignée. On
+   referme l'édition, puis on GLISSE l'objet lui-même ; le clavier passe par
+   le bouton de l'objet (flèches, `+`, `]`). */
+await page.click('[data-story-option="edit:exit"]');
+check(
+  (await page.evaluate(() => document.querySelector('[data-story-object-frame], [data-story-object-move], [data-story-object-grip]') === null)),
+  'la sélection ne doit plus entourer l’objet (ni contour, ni poignée)',
+);
+const objectBox = await page.evaluate(() => {
+  const el = document.querySelector('[data-scene-object-id="text-2"]');
+  if (el === null) return null;
+  const r = el.getBoundingClientRect();
+  return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+});
+check(objectBox !== null, 'le texte sélectionné n’est pas peint sur la scène');
+if (objectBox !== null) {
+  await page.mouse.move(objectBox.x, objectBox.y);
+  await page.mouse.down();
+  await page.mouse.move(objectBox.x + 40, objectBox.y - 60, { steps: 8 });
+  await page.mouse.up();
+  await twoFrames();
+}
+
+// Le CLAVIER fait tout ce que le pointeur fait (dimension 5).
+await page.focus('[data-story-object-edit="text-2"]');
+for (let i = 0; i < 4; i += 1) await page.keyboard.press(']');
+for (let i = 0; i < 3; i += 1) await page.keyboard.press('+');
+await page.keyboard.press('ArrowDown');
+await twoFrames();
+
+/* ── 4 bis. LE DOUBLE-TOUCHER ROUVRE L'ÉDITION DE L'AJOUT, À L'ÉCHELLE DE LA
+   SCÈNE (#8681, jumelle de #8680) ─────────────────────────────────────────────
+   Le texte est maintenant déplacé, tourné et agrandi, dans la famille
+   « machine ». Le double-toucher doit rouvrir la MÊME édition que « T+ »
+   (outil qui prend toute la place, #8654) et la saisie doit avoir la pose,
+   la famille et la taille du texte peint — donc la taille PUBLIÉE rapportée
+   à la scène visible. Les options vivent à droite depuis le haut (#9140) :
+   aucune plaque ne monte du bas, la scène n'est plus réduite par l'outil. */
+if ((await page.locator('[data-story-option="edit:exit"]').count()) > 0) await page.click('[data-story-option="edit:exit"]');
+await twoFrames();
+const idleStage = await page.evaluate(() => document.querySelector('[data-scene-stage]')?.getBoundingClientRect().width ?? null);
+const target2 = await page.evaluate(() => {
+  const r = document.querySelector('[data-scene-object-id="text-2"] [data-scene-text]')?.getBoundingClientRect();
+  return r === undefined ? null : { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+});
+check(target2 !== null, 'le texte déplacé n’est plus peint');
+if (target2 !== null) {
+  await page.mouse.dblclick(target2.x, target2.y);
+  await page.waitForSelector('[data-story-option="section:style"]', { timeout: 8000 });
+  await page.waitForFunction(() => document.activeElement?.id === 'story-studio-text', null, { timeout: 4000 });
+  await twoFrames();
+  const writing = await page.evaluate(() => {
+    const stage = document.querySelector('[data-scene-stage]');
+    const field = document.querySelector('#story-studio-text');
+    const paintedText = document.querySelector('[data-scene-object-id="text-2"] [data-scene-text]');
+    const frame = document.querySelector('[data-scene-object-id="text-2"]');
+    if (stage === null || field === null || paintedText === null || frame === null) return null;
+    const matrix = (el) => new DOMMatrixReadOnly(getComputedStyle(el).transform);
+    const f = matrix(field);
+    const p = matrix(frame);
+    const scale = Math.hypot(p.a, p.b);
+    return {
+      focused: document.activeElement === field,
+      target: field.dataset.storyTextTarget,
+      chrome: document.querySelector('[data-story-studio-rail="leading"]')?.getAttribute('data-studio-chrome'),
+      stageWidth: stage.getBoundingClientRect().width,
+      fieldFont: Number.parseFloat(getComputedStyle(field).fontSize),
+      paintedFont: Number.parseFloat(getComputedStyle(paintedText).fontSize),
+      fieldFamily: getComputedStyle(field).fontFamily,
+      paintedFamily: getComputedStyle(paintedText).fontFamily,
+      linear: Math.max(Math.abs(f.a - p.a), Math.abs(f.b - p.b), Math.abs(f.c - p.c), Math.abs(f.d - p.d)),
+      scale,
+      centreGap: (() => {
+        const a = field.getBoundingClientRect();
+        const b = paintedText.getBoundingClientRect();
+        return Math.hypot(a.x + a.width / 2 - (b.x + b.width / 2), a.y + a.height / 2 - (b.y + b.height / 2));
+      })(),
+    };
+  });
+  check(writing !== null, 'le double-toucher n’a monté ni saisie ni texte peint');
+  if (writing !== null) {
+    check(writing.focused && writing.target === 'text-2', `le double-toucher ne rouvre pas la saisie du texte — ${JSON.stringify(writing)}`);
+    check(writing.chrome === 'hidden', `le double-toucher n’ouvre pas l’outil qui prend toute la place (#8654) — rail ${writing.chrome}`);
+    check(idleStage !== null && writing.stageWidth >= idleStage - 1, `l’outil a réduit la scène : ses options devraient s’ouvrir à droite, pas sous elle (#9140) — ${idleStage} → ${writing.stageWidth}`);
+    check(writing.scale > 1.05, `le texte n’a pas été agrandi avant la mesure — échelle ${writing.scale}`);
+    check(Math.abs(writing.fieldFont - writing.paintedFont) < 0.01, `la saisie n’a pas la police du texte peint — ${writing.fieldFont} ≠ ${writing.paintedFont}`);
+    check(writing.linear < 1e-3, `la saisie n’a pas l’angle ni l’échelle du texte peint — écart ${writing.linear}`);
+    check(writing.fieldFamily === writing.paintedFamily, `la saisie n’a pas la famille du texte peint — ${writing.fieldFamily}`);
+    check(writing.centreGap < 1.5, `la saisie n’est pas centrée sur le texte peint — ${writing.centreGap} px`);
+    /* LA LOI : taille rendue = fontSize/1080 × échelle × largeur de la scène VISIBLE. */
+    const rendered = (writing.fieldFont * writing.scale) / writing.stageWidth;
+    const published = (96 / 1080) * writing.scale;
+    check(Math.abs(rendered - published) < 1e-3, `la saisie n’est pas à l’échelle de la scène — ${rendered} ≠ ${published}`);
+  }
+  await page.click('[data-story-option="edit:exit"]');
+  await twoFrames();
+}
+
+/* ── 5. le SON se place SUR LA SCÈNE, la LÉGENDE s'écrit dans l'outil « Décrire »
+   du fond (#8849), ouvert depuis le rail droit ─────────────────────────────── */
+await page.click('[data-story-option="sound-plane:foreground"]');
+await page.click('[data-story-option="frame"]');
+await page.waitForSelector('[data-story-option="background:describe"]', { timeout: 8000 });
+await page.click('[data-story-option="background:describe"]');
+await page.waitForSelector('#story-studio-caption-visual', { timeout: 8000 });
+await page.fill('#story-studio-caption-visual', 'Au lever du jour');
+await page.click('[data-story-option="background:exit"]');
+await twoFrames();
+
+/* ── 6. PUBLIER, puis RELIRE le document qui part ────────────────────────── */
+await page.click('[data-story-publish]');
+for (let i = 0; i < 60 && published === null; i += 1) await page.waitForTimeout(150);
+
+check(published !== null, 'AUCUN POST /api/v1/posts n’est parti — rien à relire');
+if (published !== null) {
+  const objects = published.storyEffects?.scenes?.[0]?.objects ?? [];
+  const byId = Object.fromEntries(objects.map((o) => [o.id, o]));
+  const texts = objects.filter((o) => o.kind === 'text');
+
+  check(published.type === 'STORY', `type publié ${published.type} — attendu STORY`);
+  check(!('content' in published), 'une story ne porte JAMAIS de `content` : son texte vit dans storyEffects');
+
+  /* les DEUX objets texte, chacun le sien */
+  check(texts.length === 2, `${texts.length} objet(s) texte publié(s) — attendu 2`);
+  check(texts.map((o) => o.id).join(',') === 'text-1,text-2', `identifiants publiés ${texts.map((o) => o.id).join(',')}`);
+  check(byId['text-1']?.payload?.text === 'Bonjour', `text-1 porte « ${byId['text-1']?.payload?.text} »`);
+  check(byId['text-2']?.payload?.text === 'Hello', `text-2 porte « ${byId['text-2']?.payload?.text} »`);
+
+  /* la LANGUE choisie, sur l'ENVELOPPE */
+  check(byId['text-1']?.locale === 'fr', `locale de text-1 ${byId['text-1']?.locale}`);
+  check(byId['text-2']?.locale === 'en', `locale de text-2 ${byId['text-2']?.locale} — la langue CHOISIE ne voyage pas`);
+  check(!('sourceLanguage' in (byId['text-2']?.payload ?? {})), 'la langue ne doit PAS voyager dans le payload');
+
+  /* le STYLE choisi */
+  const p2 = byId['text-2']?.payload ?? {};
+  check(p2.textStyle === 'typewriter', `textStyle publié ${p2.textStyle}`);
+  check(p2.textEffect === 'longShadow', `textEffect publié ${p2.textEffect}`);
+  check(p2.textColor === 'F8B500', `textColor publié ${p2.textColor}`);
+  check(p2.textAlign === 'right', `textAlign publié ${p2.textAlign}`);
+
+  /* la POSE — déplacée, tournée, agrandie */
+  const t2 = byId['text-2']?.transform ?? {};
+  const a2 = byId['text-2']?.anchor ?? {};
+  check(a2.x !== 0.5 || a2.y !== 0.5, `l’ancre publiée n’a pas bougé — ${JSON.stringify(a2)}`);
+  check(typeof t2.rotation === 'number' && t2.rotation !== 0, `la rotation publiée est ${t2.rotation} — le geste ne la grave pas`);
+  check(typeof t2.scale === 'number' && t2.scale > 1, `l’échelle publiée est ${t2.scale} — l’agrandissement ne se grave pas`);
+  check(typeof t2.scale === 'number' && t2.scale <= 4, `l’échelle publiée ${t2.scale} dépasse la borne 4`);
+  /* text-1, NON touché, reste où il est : un geste ne touche QUE son objet */
+  check(byId['text-1']?.anchor?.x === 0.5 && byId['text-1']?.transform?.rotation === 0, 'un geste a déplacé un objet NON sélectionné');
+
+  /* les PLANS — fond, calque, son posé */
+  check(byId['background']?.plane === 'content' && byId['background']?.payload?.isBackground === true, 'le fond publié n’est pas un fond');
+  check(byId['overlay']?.plane === 'fg', `le calque publié est en plan ${byId['overlay']?.plane} — attendu fg`);
+  check(!('isBackground' in (byId['overlay']?.payload ?? {})), 'le calque ne doit PAS se déclarer fond');
+  check(byId['sound']?.plane === 'fg', `le son POSÉ est en plan ${byId['sound']?.plane} — attendu fg`);
+  check(byId['sound']?.payload?.isBackground === false, `le son POSÉ se déclare encore fond — ${byId['sound']?.payload?.isBackground}`);
+
+  /* la LÉGENDE du média (#6944) — et elle s'adresse par identité SERVEUR */
+  check(published.mediaCaption?.[BG.postMediaId] === 'Au lever du jour', `mediaCaption publié ${JSON.stringify(published.mediaCaption)}`);
+  check(published.mediaCaption?.[OV.postMediaId] === undefined, 'une légende NON écrite ne doit pas voyager');
+
+  /* les trois médias RÉCLAMÉS, sans quoi la passerelle refuse tout */
+  check(
+    JSON.stringify(published.mediaIds) === JSON.stringify([BG.postMediaId, OV.postMediaId, SND.postMediaId]),
+    `mediaIds publiés ${JSON.stringify(published.mediaIds)}`,
+  );
+}
+
+check(pageErrors.length === 0, `erreurs de page — ${pageErrors.join(' | ')}`);
+
+await browser.close();
+served.close();
+
+if (failures.length > 0) {
+  console.error(`check-story-plateau : ${failures.length} échec(s) sur ${invariants} invariants`);
+  for (const f of failures) console.error(`  ✗ ${f}`);
+  process.exit(1);
+}
+console.log(
+  `check-story-plateau : vert — ${invariants} invariants : deux objets texte posés, celui-ci déplacé au POINTEUR puis tourné et ` +
+    'agrandi au CLAVIER, sa langue et son style choisis ET PEINTS, les TREIZE familles à police embarquée peintes par leur ' +
+    'propre fichier avec la pile native derrière elles (#6951), la première porte ouvrant la photothèque sans intermédiaire, le ' +
+    'double-toucher rouvrant l’édition de l’ajout avec une saisie à la pose et à l’échelle de la scène (#8681), ses options ouvertes à droite depuis le haut (#9140), un son ' +
+    'placé sur la scène, une légende écrite — et CHACUNE de ces ' +
+    'valeurs relue dans le corps de POST /api/v1/posts, un objet non sélectionné restant intact.',
+);

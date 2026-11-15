@@ -178,8 +178,23 @@ function makePublisher() {
   } as any;
 }
 
-function makePersistence(recentCount = 0) {
-  return { getRecentMessageCount: jest.fn().mockResolvedValue(recentCount) } as any;
+/**
+ * Le double PROLONGE le contrat au lieu de l'énumérer : la file interroge
+ * désormais la présence avant de livrer (#5703), et un mock-inventaire aurait
+ * rendu `undefined` sur chaque méthode ajoutée en amont.
+ *
+ * Par défaut la personne est ABSENTE — sans session vivante, hors ligne — ce
+ * qui est le cas nominal de tous ces témoins : ils vérifient la mécanique de la
+ * file, pas la garde de présence, qui a ses propres témoins.
+ */
+function makePersistence(recentCount = 0, presence?: { isOnline: boolean; derniereConnexionMs: number | null }) {
+  return {
+    getRecentMessageCount: jest.fn().mockResolvedValue(recentCount),
+    getAgentConfig: jest.fn().mockResolvedValue({ inactivityThresholdHours: 72 }),
+    getPresenceForDelivery: jest.fn().mockResolvedValue(
+      presence ?? { isOnline: false, derniereConnexionMs: null },
+    ),
+  } as any;
 }
 
 function makeMessage(overrides: Partial<PendingMessage> = {}): PendingMessage {
@@ -451,6 +466,37 @@ describe('RedisDeliveryQueue — poll delivers ready items', () => {
       metadata: { agentType: 'orchestrator', roleConfidence: 1.0 },
     });
   });
+
+  it('carries the illustration source of a fresh-topic message to the gateway', async () => {
+    const redis = createMockRedis();
+    const publisher = makePublisher();
+    const queue = new RedisDeliveryQueue(redis as any, publisher, makePersistence());
+
+    await queue.enqueue('conv-1', makeMessage({
+      content: 'Vous avez vu ça à Douala ?',
+      asUserId: 'bot1',
+      illustration: { sourceUrl: 'https://www.camerounweb.com/faits-divers/douala-1' },
+    }));
+
+    await queue.poll();
+
+    expect(publisher.publish.mock.calls[0][0]).toMatchObject({
+      type: 'agent:response',
+      content: 'Vous avez vu ça à Douala ?',
+      illustration: { sourceUrl: 'https://www.camerounweb.com/faits-divers/douala-1' },
+    });
+  });
+
+  it('omits the illustration key entirely when the message has none', async () => {
+    const redis = createMockRedis();
+    const publisher = makePublisher();
+    const queue = new RedisDeliveryQueue(redis as any, publisher, makePersistence());
+
+    await queue.enqueue('conv-1', makeMessage({ content: 'Oui', asUserId: 'bot1' }));
+    await queue.poll();
+
+    expect(publisher.publish.mock.calls[0][0]).not.toHaveProperty('illustration');
+  });
 });
 
 describe('RedisDeliveryQueue — getAll', () => {
@@ -719,5 +765,54 @@ describe('RedisDeliveryQueue — admin notifications (agent:admin-event)', () =>
 
     expect(typeof id).toBe('string');
     expect(await queue.pendingCount).toBe(1);
+  });
+});
+
+/**
+ * La garde de #5703 vue depuis la FILE, et non depuis sa loi : une loi juste
+ * qu'aucun appelant n'invoque ne garde rien.
+ */
+describe('RedisDeliveryQueue — abandonne ce qui n\'a plus lieu d\'être livré', () => {
+  it('ne publie RIEN quand la personne est revenue en ligne', async () => {
+    const redis = createMockRedis();
+    const publisher = makePublisher();
+    const persistence = makePersistence(0, { isOnline: true, derniereConnexionMs: null });
+    const queue = new RedisDeliveryQueue(redis as any, publisher, persistence);
+
+    await queue.enqueue('conv-1', makeMessage({ delaySeconds: 0 }));
+    await queue.poll();
+
+    expect(publisher.publish).not.toHaveBeenCalled();
+    expect(publisher.publishReaction).not.toHaveBeenCalled();
+  });
+
+  it('ne publie RIEN quand elle s\'est reconnectée depuis la mise en file', async () => {
+    const redis = createMockRedis();
+    const publisher = makePublisher();
+    const persistence = makePersistence(0, {
+      isOnline: false,
+      derniereConnexionMs: Date.now() - 2 * 3_600_000,
+    });
+    const queue = new RedisDeliveryQueue(redis as any, publisher, persistence);
+
+    await queue.enqueue('conv-1', makeMessage({ delaySeconds: 0 }));
+    await queue.poll();
+
+    expect(publisher.publish).not.toHaveBeenCalled();
+  });
+
+  it('publie quand elle est TOUJOURS absente', async () => {
+    const redis = createMockRedis();
+    const publisher = makePublisher();
+    const persistence = makePersistence(0, {
+      isOnline: false,
+      derniereConnexionMs: Date.now() - 500 * 3_600_000,
+    });
+    const queue = new RedisDeliveryQueue(redis as any, publisher, persistence);
+
+    await queue.enqueue('conv-1', makeMessage({ delaySeconds: 0 }));
+    await queue.poll();
+
+    expect(publisher.publish).toHaveBeenCalledTimes(1);
   });
 });

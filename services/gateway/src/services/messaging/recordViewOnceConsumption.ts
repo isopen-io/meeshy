@@ -100,6 +100,12 @@ export interface ViewOnceConsumptionParams {
   /** Le compte lu avant l'ouverture — ce que la réponse rend quand rien n'est dépensé. */
   readonly currentViewOnceCount: number;
   readonly at: Date;
+  /**
+   * Faux pour l'AUTEUR (#7578) : son ouverture est enregistrée — il ne rouvre
+   * pas — mais elle n'entre jamais dans le compte des destinataires qui ont
+   * ouvert, donc jamais dans la décision de purge.
+   */
+  readonly countsTowardAudience?: boolean;
 }
 
 /** `pas encore vu` : la colonne absente ET la colonne présente-et-nulle. */
@@ -131,6 +137,10 @@ export async function recordViewOnceConsumption(
       if (!isUniqueViolation(error)) throw error;
       return { viewOnceCount: currentViewOnceCount, firstConsumption: false };
     }
+  }
+
+  if (params.countsTowardAudience === false) {
+    return { viewOnceCount: currentViewOnceCount, firstConsumption: true };
   }
 
   const updated = await prisma.message.update({

@@ -1,0 +1,377 @@
+import { describe, expect, test } from 'bun:test';
+
+import {
+  closeViewOnce,
+  formatRemaining,
+  holdReveal,
+  openViewOnce,
+  rearmReveal,
+  protectionOf,
+  requiresConsume,
+  rendersContent,
+  reveal,
+  settle,
+  settleFog,
+  showsAffordance,
+  surrogateOf,
+  viewOnceOpeningOf,
+} from './protection';
+import type { ProtectionKind, RevealPhase } from './protection';
+
+/**
+ * `exactOptionalPropertyTypes` refuse `deletedAt: undefined` — les champs
+ * optionnels s'OMETTENT, ils ne se posent jamais à `undefined`. `fields()`
+ * part d'une base « rien de protégé » et ne surcharge que ce que le test
+ * nomme.
+ */
+type Fields = {
+  deletedAt?: Date;
+  isViewOnce: boolean;
+  viewOnceCount: number;
+  isBlurred: boolean;
+  expiresAt?: Date;
+  consumedByMe?: boolean;
+  isFullyConsumed?: boolean;
+  ephemeralDuration?: number;
+};
+const fields = (overrides: Partial<Fields> = {}): Fields => ({
+  isViewOnce: false,
+  viewOnceCount: 0,
+  isBlurred: false,
+  ...overrides,
+});
+
+describe("protectionOf — le kind, dans l'ordre d'iOS", () => {
+  test('deletedAt posé ET vue unique consommée ET flouté ⇒ deleted (supprimé gagne)', () => {
+    expect(
+      protectionOf(fields({ deletedAt: new Date(0), isViewOnce: true, viewOnceCount: 1, isBlurred: true }), 1000),
+    ).toBe('deleted');
+  });
+
+  test('vue unique que J\'AI ouverte (consumedByMe) ⇒ opened, jamais un mot de suppression (#7580)', () => {
+    expect(protectionOf(fields({ isViewOnce: true, consumedByMe: true }), 1000)).toBe('opened');
+  });
+
+  test('vue unique ouverte par un AUTRE : compteur global à 1 mais consumedByMe: false ⇒ encore à ouvrir chez moi (#7578)', () => {
+    expect(protectionOf(fields({ isViewOnce: true, viewOnceCount: 1, consumedByMe: false }), 1000)).toBe('viewOnce');
+  });
+
+  test('vue unique PURGÉE que je n\'ai jamais ouverte (isFullyConsumed, consumedByMe: false) ⇒ opened : il n\'y a plus rien à ouvrir (#7644)', () => {
+    expect(protectionOf(fields({ isViewOnce: true, consumedByMe: false, isFullyConsumed: true }), 1000)).toBe('opened');
+  });
+
+  test('passerelle antérieure à #7578 (consumedByMe absent) : le compteur global reste le repli', () => {
+    expect(protectionOf(fields({ isViewOnce: true, viewOnceCount: 1 }), 1000)).toBe('opened');
+  });
+
+  test('vue unique NON éphémère dont l\'échéance serveur passe ⇒ opened, la bulle RESTE (#7580)', () => {
+    expect(protectionOf(fields({ isViewOnce: true, expiresAt: new Date(1000) }), 1000)).toBe('opened');
+  });
+
+  test('vue unique ET éphémère à l\'échéance ⇒ expired : elle part avec l\'éphémère', () => {
+    expect(protectionOf(fields({ isViewOnce: true, consumedByMe: true, ephemeralDuration: 60, expiresAt: new Date(1000) }), 1000)).toBe('expired');
+  });
+
+  test('expiresAt <= now ⇒ expired', () => {
+    expect(protectionOf(fields({ expiresAt: new Date(1000) }), 1000)).toBe('expired');
+  });
+
+  test('expiresAt > now ⇒ pas expired (voilé si isBlurred, sinon standard)', () => {
+    expect(protectionOf(fields({ expiresAt: new Date(1001) }), 1000)).toBe('standard');
+  });
+
+  test('isBlurred: true seul ⇒ veiled', () => {
+    expect(protectionOf(fields({ isBlurred: true }), 1000)).toBe('veiled');
+  });
+
+  test('vue unique non ouverte ⇒ viewOnce, flouée ou non : UNE puce, jamais le flou en plus (#7580)', () => {
+    expect(protectionOf(fields({ isViewOnce: true, viewOnceCount: 0 }), 1000)).toBe('viewOnce');
+    expect(protectionOf(fields({ isViewOnce: true, isBlurred: true }), 1000)).toBe('viewOnce');
+  });
+
+  test('tout à false/absent ⇒ standard', () => {
+    expect(protectionOf(fields(), 1000)).toBe('standard');
+  });
+
+  /**
+   * Second verrou (défaut 4, revue #5668) : `protectionOf` reste
+   * fail-closed même si une charge NON DÉCODÉE — un `null` explicite tel
+   * que la passerelle le sert, que `decodeMessage` est censé retirer —
+   * l'atteint malgré tout. `!= null` plutôt que `!== undefined`.
+   */
+  test("charge NON décodée : deletedAt/expiresAt à `null` (jamais `undefined`) ⇒ standard, pas deleted/expired", () => {
+    const rawFromGateway = { ...fields(), deletedAt: null, expiresAt: null } as unknown as {
+      deletedAt?: Date;
+      isViewOnce: boolean;
+      viewOnceCount: number;
+      isBlurred: boolean;
+      expiresAt?: Date;
+    };
+    expect(protectionOf(rawFromGateway, 1000)).toBe('standard');
+  });
+});
+
+describe('formatRemaining', () => {
+  const FORMAT_CASES: readonly (readonly [number, string])[] = [
+    [7, '7s'],
+    [65, '1m 05s'],
+    [7380, '2h 03m'],
+    [59, '59s'],
+    [0, '0s'],
+    [-3, '0s'],
+  ];
+  for (const [seconds, expected] of FORMAT_CASES) {
+    test(`formatRemaining(${seconds}) === ${JSON.stringify(expected)}`, () => {
+      expect(formatRemaining(seconds)).toBe(expected);
+    });
+  }
+});
+
+describe('reveal — hidden → revealed(until) → fogging(until,next) → hidden | consumed', () => {
+  test('hidden ⇒ revealed(until = now + 5s)', () => {
+    expect(reveal({ phase: 'hidden' }, { now: 1000 })).toEqual({ phase: 'revealed', until: 6000 });
+  });
+
+  test('settle : avant `until`, inchangé', () => {
+    expect(settle({ phase: 'revealed', until: 6000 }, { now: 5999, isViewOnce: false })).toEqual({
+      phase: 'revealed',
+      until: 6000,
+    });
+  });
+
+  /**
+   * `settle` n'atterrit plus directement sur `hidden`/`consumed` (revue
+   * #5676, défaut 5) : la fenêtre s'éteint dans `fogging`, où le brouillard
+   * ferme sur le contenu ENCORE monté (`rendersContent` le couvre) —
+   * `settleFog` achève le passage 400 ms plus tard.
+   */
+  test('settle : à `until`, fogging → hidden (message non vue-unique)', () => {
+    expect(settle({ phase: 'revealed', until: 6000 }, { now: 6000, isViewOnce: false })).toEqual({
+      phase: 'fogging',
+      until: 6400,
+      next: 'hidden',
+    });
+  });
+
+  test('settle : à `until`, fogging → consumed (vue unique)', () => {
+    expect(settle({ phase: 'revealed', until: 6000 }, { now: 6000, isViewOnce: true })).toEqual({
+      phase: 'fogging',
+      until: 6400,
+      next: 'consumed',
+    });
+  });
+
+  test('settleFog : avant `until`, inchangé', () => {
+    expect(settleFog({ phase: 'fogging', until: 6400, next: 'hidden' }, { now: 6399 })).toEqual({
+      phase: 'fogging',
+      until: 6400,
+      next: 'hidden',
+    });
+  });
+
+  test('settleFog : à `until`, hidden', () => {
+    expect(settleFog({ phase: 'fogging', until: 6400, next: 'hidden' }, { now: 6400 })).toEqual({ phase: 'hidden' });
+  });
+
+  test('settleFog : à `until`, consumed', () => {
+    expect(settleFog({ phase: 'fogging', until: 6400, next: 'consumed' }, { now: 6400 })).toEqual({
+      phase: 'consumed',
+    });
+  });
+
+  test('settleFog : ignore toute autre phase', () => {
+    expect(settleFog({ phase: 'hidden' }, { now: 6400 })).toEqual({ phase: 'hidden' });
+    expect(settleFog({ phase: 'revealed', until: 6000 }, { now: 6400 })).toEqual({ phase: 'revealed', until: 6000 });
+  });
+
+  test('reveal(consumed) ⇒ consumed (une vue unique révélée une fois ne se révèle plus)', () => {
+    expect(reveal({ phase: 'consumed' }, { now: 9000 })).toEqual({ phase: 'consumed' });
+  });
+
+  test('reveal(revealed) ⇒ inchangé (aucune affordance pendant la fenêtre)', () => {
+    expect(reveal({ phase: 'revealed', until: 6000 }, { now: 5500 })).toEqual({ phase: 'revealed', until: 6000 });
+  });
+
+  test('reveal(fogging) ⇒ inchangé (aucune affordance pendant la fermeture)', () => {
+    expect(reveal({ phase: 'fogging', until: 6400, next: 'hidden' }, { now: 6200 })).toEqual({
+      phase: 'fogging',
+      until: 6400,
+      next: 'hidden',
+    });
+  });
+
+  test('requiresConsume', () => {
+    expect(requiresConsume({ isViewOnce: true })).toBe(true);
+    expect(requiresConsume({ isViewOnce: false })).toBe(false);
+  });
+});
+
+describe('openViewOnce / closeViewOnce — la vue unique n\'a pas d\'horloge (#7580)', () => {
+  test('ouverte, elle ne se referme jamais seule : settle la laisse, quel que soit le temps écoulé', () => {
+    const opened = openViewOnce({ phase: 'hidden' });
+    expect(opened.phase).toBe('revealed');
+    expect(settle(opened, { now: Number.MAX_SAFE_INTEGER, isViewOnce: true })).toBe(opened);
+  });
+
+  test('retouchée, elle passe par le brouillard puis « déjà ouvert »', () => {
+    const closing = closeViewOnce(openViewOnce({ phase: 'hidden' }), { now: 1000 });
+    expect(closing).toEqual({ phase: 'fogging', until: 1400, next: 'consumed' });
+    expect(settleFog(closing, { now: 1400 })).toEqual({ phase: 'consumed' });
+  });
+
+  test('le plein écran d\'un média fermé passe directement à « déjà ouvert »', () => {
+    expect(closeViewOnce(openViewOnce({ phase: 'hidden' }), { now: 1000, immediate: true })).toEqual({ phase: 'consumed' });
+  });
+
+  test('une vue unique déjà ouverte ne se rouvre pas', () => {
+    expect(openViewOnce({ phase: 'consumed' })).toEqual({ phase: 'consumed' });
+  });
+});
+
+describe('holdReveal / rearmReveal — un flou révélé ouvert en plein écran ne se referme pas sous le lecteur (#8389)', () => {
+  test('tenu, la fenêtre ne se referme plus seule : settle la laisse, quel que soit le temps écoulé', () => {
+    const held = holdReveal(reveal({ phase: 'hidden' }, { now: 0 }));
+    expect(held.phase).toBe('revealed');
+    expect(settle(held, { now: Number.MAX_SAFE_INTEGER, isViewOnce: false })).toBe(held);
+  });
+
+  test('tenu pendant le brouillard d’un flou, le contenu revient en clair', () => {
+    const fogging = settle(reveal({ phase: 'hidden' }, { now: 0 }), { now: 5000, isViewOnce: false });
+    expect(holdReveal(fogging)).toEqual({ phase: 'revealed', until: Number.POSITIVE_INFINITY });
+  });
+
+  test('jamais une vue unique qui se referme, jamais un voile au repos', () => {
+    const closing = closeViewOnce(openViewOnce({ phase: 'hidden' }), { now: 1000 });
+    expect(holdReveal(closing)).toBe(closing);
+    expect(holdReveal({ phase: 'hidden' })).toEqual({ phase: 'hidden' });
+    expect(holdReveal({ phase: 'consumed' })).toEqual({ phase: 'consumed' });
+  });
+
+  test('relâché, une fenêtre neuve de cinq secondes repart de maintenant', () => {
+    const held = holdReveal(reveal({ phase: 'hidden' }, { now: 0 }));
+    expect(rearmReveal(held, { now: 60_000 })).toEqual({ phase: 'revealed', until: 65_000 });
+  });
+
+  test('relâcher ne touche à rien d’autre qu’une fenêtre ouverte', () => {
+    expect(rearmReveal({ phase: 'hidden' }, { now: 60_000 })).toEqual({ phase: 'hidden' });
+    expect(rearmReveal({ phase: 'consumed' }, { now: 60_000 })).toEqual({ phase: 'consumed' });
+  });
+});
+
+describe('rendersContent / showsAffordance — la matrice kind × phase', () => {
+  const hidden = { phase: 'hidden' as const };
+  const revealed = { phase: 'revealed' as const, until: 6000 };
+  const fogging = { phase: 'fogging' as const, until: 6400, next: 'hidden' as const };
+  const foggingToConsumed = { phase: 'fogging' as const, until: 6400, next: 'consumed' as const };
+  const consumed = { phase: 'consumed' as const };
+
+  const RENDERS_CASES: readonly (readonly [ProtectionKind, RevealPhase, boolean])[] = [
+    ['standard', hidden, true],
+    ['standard', revealed, true],
+    ['standard', fogging, true],
+    ['standard', consumed, true],
+    ['veiled', hidden, false],
+    ['veiled', revealed, true],
+    ['veiled', fogging, true],
+    ['veiled', consumed, false],
+    ['viewOnce', hidden, false],
+    ['viewOnce', revealed, true],
+    ['viewOnce', consumed, false],
+    ['opened', hidden, false],
+    ['opened', revealed, true],
+    ['opened', foggingToConsumed, true],
+    ['opened', consumed, false],
+    ['deleted', hidden, false],
+    ['deleted', revealed, false],
+    ['deleted', fogging, false],
+    ['deleted', consumed, false],
+    ['expired', hidden, false],
+    ['expired', revealed, false],
+    ['expired', fogging, false],
+    ['expired', consumed, false],
+  ];
+  for (const [kind, phase, expected] of RENDERS_CASES) {
+    test(`rendersContent(${kind}, ${phase.phase}) === ${expected}`, () => {
+      expect(rendersContent(kind, phase)).toBe(expected);
+    });
+  }
+
+  test('showsAffordance : un état À OUVRIR, au repos — jamais pendant fogging, jamais une fois ouvert', () => {
+    expect(showsAffordance('veiled', hidden)).toBe(true);
+    expect(showsAffordance('viewOnce', hidden)).toBe(true);
+    expect(showsAffordance('veiled', revealed)).toBe(false);
+    expect(showsAffordance('veiled', fogging)).toBe(false);
+    expect(showsAffordance('opened', hidden)).toBe(false);
+    expect(showsAffordance('standard', hidden)).toBe(false);
+  });
+});
+
+describe('surrogateOf — le substitut ne transporte rien du contenu', () => {
+  const content = 'Le code du coffre est 4817-2290.';
+
+  test('aucun caractère alphanumérique du contenu, ne contient pas « 4817 »', () => {
+    const surrogate = surrogateOf(content.length);
+    expect(/[a-zA-Z0-9]/.test(surrogate)).toBe(false);
+    expect(surrogate).not.toContain('4817');
+  });
+
+  /**
+   * La cible est la LARGEUR OCCUPÉE, pas le nombre de caractères : un `▇`
+   * avance deux fois plus qu'une lettre latine (`SURROGATE_ADVANCE_RATIO`).
+   * La borne porte donc sur la MOITIÉ de la longueur, plus un pas de 8 et les
+   * espaces qui séparent les blocs.
+   */
+  test('la largeur visée est la MOITIÉ de la longueur, à un pas de 8 près', () => {
+    const surrogate = surrogateOf(content.length);
+    const half = content.length / 2;
+    expect(surrogate.length).toBeGreaterThanOrEqual(half - 8);
+    expect(surrogate.length).toBeLessThanOrEqual(half + 8);
+  });
+
+  test('déterministe : deux appels avec la même longueur rendent la même sortie', () => {
+    expect(surrogateOf(content.length)).toBe(surrogateOf(content.length));
+  });
+
+  test('deux contenus de même longueur ⇒ même substitut (la longueur est la SEULE information)', () => {
+    const other = 'On se voit demain a neuf heures.';
+    expect(other.length).toBe(content.length);
+    expect(surrogateOf(other.length)).toBe(surrogateOf(content.length));
+  });
+
+  /**
+   * LE SUBSTITUT OCCUPE LA PLACE DU CONTENU, PAS DAVANTAGE (revue) — un `▇`
+   * avance d'un cadratin quand une lettre latine avance d'un demi : autant de
+   * blocs que de caractères doublait la hauteur du voile et faisait sauter le
+   * fil à la révélation. Le témoin porte sur le RAPPORT, jamais sur un nombre
+   * gravé : c'est lui qui rougirait si quelqu'un revenait à « un bloc par
+   * caractère ».
+   */
+  test('un substitut n’occupe jamais plus de blocs que la moitié du contenu (+ un pas de 8)', () => {
+    for (const length of [24, 60, 120, 300]) {
+      const blocks = surrogateOf(length).replace(/ /g, '').length;
+      expect(blocks).toBeLessThanOrEqual(Math.round(length / 2) + 8);
+      expect(blocks).toBeGreaterThan(0);
+    }
+  });
+});
+
+/**
+ * CE QUE L'OUVERTURE D'UNE VUE UNIQUE LÈVE (#8567, décision porteur du
+ * 2026-09-29) : « l'ouverture de la vue unique n'enlève pas le flou, sauf si
+ * c'est un attachement directement, alors c'est ouvert en plein écran en
+ * clair ».
+ */
+describe('viewOnceOpeningOf — ce que l’ouverture d’une vue unique lève (#8567)', () => {
+  test('un TEXTE flouté s’ouvre à sa place ET reste flouté', () => {
+    expect(viewOnceOpeningOf({ isBlurred: true, attachmentCount: 0 })).toBe('veiled-text');
+  });
+
+  test('un TEXTE non flouté s’ouvre à sa place, en clair', () => {
+    expect(viewOnceOpeningOf({ isBlurred: false, attachmentCount: 0 })).toBe('text');
+  });
+
+  test('une PIÈCE JOINTE s’ouvre en plein écran, en clair, flou ou non', () => {
+    expect(viewOnceOpeningOf({ isBlurred: true, attachmentCount: 1 })).toBe('fullscreen');
+    expect(viewOnceOpeningOf({ isBlurred: false, attachmentCount: 2 })).toBe('fullscreen');
+  });
+});

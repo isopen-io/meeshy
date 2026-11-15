@@ -50,6 +50,7 @@ function createMockPrisma() {
       update: jest.fn(),
       deleteMany: jest.fn(),
     },
+    user: { findUnique: jest.fn().mockResolvedValue(null) },
     postView: { deleteMany: jest.fn() },
     postReaction: { deleteMany: jest.fn() },
     postImpression: { deleteMany: jest.fn() },
@@ -163,6 +164,58 @@ describe('createPost — loi d\'audience de la republication', () => {
     );
   });
 
+  it.each(['ACQUAINTANCES', 'CLOSE', 'BLOOD', 'PRIVATE'])(
+    'RG-18 — un contenu Connaissances se repartage en %s, jamais plus large',
+    async (requested) => {
+      prisma.post.findFirst.mockResolvedValue(makeSource({ visibility: 'ACQUAINTANCES' }));
+
+      await service.createPost({ visibility: requested as never, repostOfId: 'source-1', content: 'hop' }, 'user-2');
+
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ visibility: requested }) }),
+      );
+    },
+  );
+
+  it('RG-18 — un contenu Connaissances ne se repartage pas en Amis, qui admet les contacts de message direct', async () => {
+    prisma.post.findFirst.mockResolvedValue(makeSource({ visibility: 'ACQUAINTANCES' }));
+
+    const err: any = await service
+      .createPost({ visibility: 'FRIENDS', repostOfId: 'source-1', content: 'hop' }, 'user-2')
+      .catch((e) => e);
+
+    expect(err.statusCode).toBe(403);
+    expect(err.code).toBe('REPOST_AUDIENCE_WIDENING');
+    expect(prisma.post.create).not.toHaveBeenCalled();
+  });
+
+  it.each(['PUBLIC', 'COMMUNITY', 'EXCEPT'])('RG-18 — un contenu Proches ne se repartage pas en %s', async (requested) => {
+    prisma.post.findFirst.mockResolvedValue(makeSource({ visibility: 'CLOSE' }));
+
+    const err: any = await service
+      .createPost({ visibility: requested as never, visibilityUserIds: ['507f1f77bcf86cd799439011'], repostOfId: 'source-1', content: 'hop' }, 'user-2')
+      .catch((e) => e);
+
+    expect(err.statusCode).toBe(403);
+    expect(err.code).toBe('REPOST_AUDIENCE_WIDENING');
+    expect(prisma.post.create).not.toHaveBeenCalled();
+  });
+
+  it.each(['BLOOD', 'CLOSE', 'PRIVATE', 'PUBLIC'])(
+    'RG-18 — un contenu Sang n\'est jamais repartageable, pas même en %s',
+    async (requested) => {
+      prisma.post.findFirst.mockResolvedValue(makeSource({ visibility: 'BLOOD' }));
+
+      const err: any = await service
+        .createPost({ visibility: requested as never, repostOfId: 'source-1', content: 'hop' }, 'user-2')
+        .catch((e) => e);
+
+      expect(err.statusCode).toBe(403);
+      expect(err.code).toBe('REPOST_AUDIENCE_WIDENING');
+      expect(prisma.post.create).not.toHaveBeenCalled();
+    },
+  );
+
   it('leaves an ordinary creation (no repostOfId) untouched by the law', async () => {
     await service.createPost(
       { visibility: PostVisibility.PUBLIC, content: 'un post normal' },
@@ -174,3 +227,34 @@ describe('createPost — loi d\'audience de la republication', () => {
     expect(prisma.post.create).toHaveBeenCalled();
   });
 });
+
+describe('createPost — une republication reste dans la communauté de sa source (#16892)', () => {
+  const X = '64b000000000000000000001';
+  const Y = '64b000000000000000000002';
+
+  const setup = () => {
+    const prisma = createMockPrisma();
+    prisma.postMedia.findMany.mockResolvedValue([]);
+    prisma.post.create.mockResolvedValue(makeSource({ id: 'repost-1' }));
+    prisma.post.findFirst.mockResolvedValue(makeSource({ visibility: 'COMMUNITY', communityId: X }));
+    return { prisma, service: new PostService(prisma as unknown as PrismaClient, new MediaService()) };
+  };
+
+  it('hérite de la communauté de la source quand le client n’en nomme aucune', async () => {
+    const { prisma, service } = setup();
+    await service.createPost({ visibility: PostVisibility.COMMUNITY, repostOfId: 'source-1', content: 'hop' }, 'user-2');
+    const created = (prisma.post.create.mock.calls[0] as unknown as [{ data: { communityId?: string } }])[0];
+    expect(created.data.communityId).toBe(X);
+  });
+
+  it('refuse de la poser dans une autre communauté', async () => {
+    const { prisma, service } = setup();
+    const err: any = await service
+      .createPost({ visibility: PostVisibility.COMMUNITY, repostOfId: 'source-1', content: 'hop', communityId: Y }, 'user-2')
+      .catch((e) => e);
+    expect(err.statusCode).toBe(403);
+    expect(err.code).toBe('REPOST_COMMUNITY_MISMATCH');
+    expect(prisma.post.create).not.toHaveBeenCalled();
+  });
+});
+

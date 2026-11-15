@@ -1,0 +1,106 @@
+/*
+ * LE CADRE CÔTE À CÔTE ET SON SÉPARATEUR (#10073, #10101) — feuille du chunk
+ * du cadre, chargée à la demande avec lui (D-189) : un téléphone ne la
+ * télécharge jamais.
+ *
+ * LE CADRE EST UNE GRILLE DE TROIS COLONNES — la liste, le filet, le fil — et
+ * c'est LUI qui borne la liste, sur les cotes qu'il porte
+ * (`splitFrameStyleVars`, `lib/view/split-width.ts`) : jamais sous sa largeur
+ * minimale, jamais au-delà de 40 % — le fil en garde 60 %. Une fenêtre qui
+ * rétrécit sous une préférence trop large la ramène d'elle-même, sans script.
+ *
+ * `--split-list-w` NE S'HÉRITE PAS, ET C'EST MESURÉ. Pendant le glisser, elle
+ * change à chaque image ; héritée (le défaut d'une propriété personnalisée),
+ * elle invalidait le style de TOUS les descendants du cadre — la liste et le
+ * fil entiers : 35 à 50 ms de « style et mise en page » par image dans
+ * Chromium, aucune milliseconde de script (Long Animation Frames, 1280 px,
+ * `/c/c-deploiement`). Déclarée non héritée et lue par le cadre seul, elle ne
+ * recalcule que lui : la grille se réajuste, rien d'autre ne change de style.
+ */
+@property --split-list-w {
+  syntax: '*';
+  inherits: false;
+}
+
+[data-split-frame] {
+  display: grid;
+  grid-template-columns:
+    clamp(var(--split-list-min), var(--split-list-w, var(--split-list-default)), var(--split-list-max))
+    1px minmax(0, 1fr);
+}
+
+/*
+ * LE SÉPARATEUR EST LE FILET : un pixel à l'encre discrète, comme la bordure
+ * qu'il remplace. Sa prise est plus large que son trait (`::before`, 12 px, et
+ * 24 au doigt) et déborde sur les deux colonnes, au-dessus d'elles. Au
+ * survol, au focus et pendant le glisser, une barre de marque se lève
+ * (`::after`) : elle dit qu'on tient quelque chose, sans peser au repos.
+ */
+[data-split-handle] {
+  position: relative;
+  z-index: 10;
+  background: var(--color-ios-hairline);
+  cursor: col-resize;
+  touch-action: none;
+}
+[data-split-handle]::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline: -6px;
+}
+[data-split-handle]::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: -1px;
+  width: 3px;
+  border-radius: 9999px;
+  background: var(--color-ios-brand);
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+  pointer-events: none;
+}
+@media (pointer: coarse) {
+  [data-split-handle]::before {
+    inset-inline: -12px;
+  }
+}
+@media (hover: hover) {
+  [data-split-handle]:hover::after {
+    opacity: 0.6;
+  }
+}
+/* PENDANT LE GLISSER, l'état est posé sur le SÉPARATEUR, jamais sur le cadre :
+   un attribut du cadre lu par un sélecteur hérité (`cursor`, `user-select`)
+   recalculait le style de toute la liste et de tout le fil au premier appui —
+   une image perdue d'entrée. La capture du pointeur garde au curseur sa
+   forme hors du filet, et l'appui annulé (`preventDefault`) n'ouvre aucune
+   sélection de texte. */
+[data-split-handle]:focus-visible::after,
+[data-split-handle][data-dragging]::after {
+  opacity: 1;
+}
+
+/*
+ * LE VOLET VIDE (« choisissez une conversation », `split-empty-pane.tsx`) —
+ * une lueur radiale de marque derrière son repère, celle des boutons
+ * d'entrée de la landing (note « base » de la planche) : le volet a l'air
+ * d'attendre quelque chose, plus d'être éteint. Le disque passe du gris de
+ * remplissage à la marque teintée, cerné d'un anneau d'air.
+ */
+[data-split-empty] {
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--color-ios-brand) 16%, transparent),
+    transparent
+  )
+    center / min(36rem, 90%) min(36rem, 90%) no-repeat;
+}
+:root.light [data-split-empty] {
+  background-image: radial-gradient(closest-side, color-mix(in srgb, var(--color-ios-brand) 10%, transparent), transparent);
+}
+[data-split-empty-mark] {
+  background-color: color-mix(in srgb, var(--color-ios-brand) 14%, transparent);
+  box-shadow: 0 0 0 10px color-mix(in srgb, var(--color-ios-brand) 6%, transparent);
+}

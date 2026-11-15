@@ -16,6 +16,13 @@ import Foundation
 /// - L'**audio**, lui, retombe sur `nil` comme le texte : sans variante dans la
 ///   langue voulue, la piste d'origine continue. Faire jouer une langue
 ///   arbitraire serait plus déroutant que de ne rien changer.
+///
+/// **La DESCENTE, elle, est commune** : les deux délèguent à
+/// `PrismTranslationResolver` et ne diffèrent que par ce qu'elles font de son
+/// `nil`. C'est la seule divergence qui se justifie — la boucle, non : écrite
+/// deux fois ici, elle perdait le saut d'une entrée VIDE (une transcription
+/// blanche gagnait son rang et s'affichait comme un sous-titre vide) et le
+/// départage déterministe de deux entrées qui se canonisent pareil.
 public enum StoryAudioTranscript {
 
     /// Codes de langue dans lesquels le son de la story peut être LU ou ÉCOUTÉ,
@@ -40,13 +47,13 @@ public enum StoryAudioTranscript {
     public static func resolve(effects: StoryEffects?,
                                preferredLanguages: [String]) -> StoryVoiceTranscription? {
         guard let transcripts = effects?.voiceTranscriptions, !transcripts.isEmpty else { return nil }
-        for language in preferredLanguages {
-            let wanted = StoryPrismeMatch.base(language)
-            if let hit = transcripts.first(where: { StoryPrismeMatch.base($0.language) == wanted }) {
-                return hit
-            }
-        }
-        return transcripts.first
+        let served = PrismTranslationResolver.resolve(
+            originalLanguage: nil,
+            candidates: transcripts.map { PrismCandidate(language: $0.language, value: $0) },
+            preferredLanguages: preferredLanguages,
+            isServable: { !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        )
+        return served?.value ?? transcripts.first
     }
 
     /// Variante audio à jouer pour `preferredLanguages`. `nil` = aucune variante
@@ -54,13 +61,12 @@ public enum StoryAudioTranscript {
     public static func variant(effects: StoryEffects?,
                                preferredLanguages: [String]) -> StoryAudioVariant? {
         guard let variants = effects?.backgroundAudioVariants, !variants.isEmpty else { return nil }
-        for language in preferredLanguages {
-            let wanted = StoryPrismeMatch.base(language)
-            if let hit = variants.first(where: { StoryPrismeMatch.base($0.language) == wanted }) {
-                return hit
-            }
-        }
-        return nil
+        return PrismTranslationResolver.resolve(
+            originalLanguage: nil,
+            candidates: variants.map { PrismCandidate(language: $0.language, value: $0) },
+            preferredLanguages: preferredLanguages,
+            isServable: { !$0.postMediaId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        )?.value
     }
 
     /// `true` dès qu'une transcription porte du texte. Pilote l'apparition de

@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "circles_action_request",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_action_request_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_level_acquaintance",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_level_blood",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_level_close",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_level_community",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_level_friend",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_level_public",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_missing_audio",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_missing_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_missing_other",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_missing_post_view",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_missing_reaction",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_pending",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_progress_eligible",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_progress_missing",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_progress_weeks",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

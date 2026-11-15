@@ -1,0 +1,61 @@
+package me.meeshy.app.conversations.links
+
+import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.AffiliateToken
+import me.meeshy.sdk.model.CommunityLink
+import me.meeshy.sdk.model.TrackingLink
+import org.junit.Test
+
+class LinkRowFactsTest {
+
+    private fun tracking(lastClickedAt: String? = null, createdAt: String? = null) =
+        TrackingLink(id = "t1", name = "Instagram", lastClickedAt = lastClickedAt, createdAt = createdAt)
+
+    private fun token(createdAt: String? = null, maxUses: Int? = null, currentUses: Int = 0) =
+        AffiliateToken(id = "a1", token = "abc", name = "Amis", createdAt = createdAt, maxUses = maxUses, currentUses = currentUses)
+
+    @Test
+    fun `a tracking row names both its creation and its last click`() {
+        val facts = trackingRowFacts(tracking(lastClickedAt = "2026-11-10T12:00:00.000Z", createdAt = "2026-10-01T08:00:00.000Z"))
+        assertThat(facts).isEqualTo(TrackingRowFacts(createdMillis = 1_790_841_600_000L, lastClickMillis = 1_794_312_000_000L))
+    }
+
+    @Test
+    fun `a tracking row nobody clicked yet names its creation alone`() {
+        val facts = trackingRowFacts(tracking(createdAt = "2026-10-01T08:00:00.000Z"))
+        assertThat(facts).isEqualTo(TrackingRowFacts(createdMillis = 1_790_841_600_000L, lastClickMillis = null))
+    }
+
+    @Test
+    fun `a tracking row with no readable date names none`() {
+        assertThat(trackingRowFacts(tracking())).isEqualTo(TrackingRowFacts(createdMillis = null, lastClickMillis = null))
+        assertThat(trackingRowFacts(tracking(lastClickedAt = "n'importe quoi", createdAt = "n'importe quoi")))
+            .isEqualTo(TrackingRowFacts(createdMillis = null, lastClickMillis = null))
+    }
+
+    @Test
+    fun `a referral row names its creation and its cap only when it has one`() {
+        val capped = affiliateRowFacts(token(createdAt = "2026-10-01T08:00:00.000Z", maxUses = 10, currentUses = 3))
+        assertThat(capped.createdMillis).isNotNull()
+        assertThat(capped.used).isEqualTo(3)
+        assertThat(capped.max).isEqualTo(10)
+        val open = affiliateRowFacts(token(createdAt = "2026-10-01T08:00:00.000Z", currentUses = 3))
+        assertThat(open.used).isNull()
+        assertThat(open.max).isNull()
+        assertThat(affiliateRowFacts(token(maxUses = 0, currentUses = 2)).max).isNull()
+    }
+
+    @Test
+    fun `a referral row with neither date nor cap shows nothing`() {
+        val facts = affiliateRowFacts(token())
+        assertThat(facts).isEqualTo(AffiliateRowFacts(createdMillis = null, used = null, max = null))
+    }
+
+    @Test
+    fun `a community row names its creation date, like the other link rows`() {
+        val created = communityRowCreatedMillis(CommunityLink(id = "c1", name = "Voisins", createdAt = "2026-10-01T08:00:00.000Z"))
+        assertThat(created).isEqualTo(1_790_841_600_000L)
+        assertThat(communityRowCreatedMillis(CommunityLink(id = "c2", name = "Voisins"))).isNull()
+        assertThat(communityRowCreatedMillis(CommunityLink(id = "c3", name = "Voisins", createdAt = "n'importe quoi"))).isNull()
+    }
+}

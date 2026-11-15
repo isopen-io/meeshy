@@ -1,5 +1,6 @@
 package me.meeshy.sdk.socket
 
+import me.meeshy.sdk.model.socket.SocketEventNames
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,7 +17,7 @@ import javax.inject.Singleton
  * (`socket.data.appForeground`, CallEventsHandler) : sans cette émission, un
  * Android app-ouverte-socket-vif recevait le push full-screen EN PLUS de l'UI
  * d'appel entrant in-app — double sonnerie. Miroir de l'émission iOS
- * (`MessageSocketManager.emit("presence:app-state", ...)`).
+ * (`MessageSocketManager.emit(SocketEventNames.PRESENCE_APP_STATE, ...)`).
  *
  * Deux règles, symétriques d'iOS :
  * - **Edge-only** sur [onAppStateChanged] — un état identique répété n'émet pas.
@@ -53,6 +54,6 @@ class AppStatePresenceReporter @Inject constructor(
     }
 
     private fun emit(foreground: Boolean) {
-        socketManager.emit("presence:app-state", JSONObject().put("foreground", foreground))
+        socketManager.emit(SocketEventNames.PRESENCE_APP_STATE, JSONObject().put("foreground", foreground))
     }
 }

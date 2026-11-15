@@ -29,7 +29,10 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
 // toute assertion sur ce `user` passait pour la mauvaise raison.
 
 jest.mock('../../../routes/communities/types', () => ({
-  CreateCommunitySchema: { parse: (data: any) => ({ isPrivate: true, ...data }) },
+  CreateCommunitySchema: {
+    parse: (data: any) => ({ isPrivate: true, ...data }),
+    safeParse: (data: any) => ({ success: true, data: { isPrivate: true, ...data } }),
+  },
   UpdateCommunitySchema: { parse: (data: any) => data },
   CommunityRole: { ADMIN: 'admin', MODERATOR: 'moderator', MEMBER: 'member' },
   generateIdentifier: jest.fn<any>().mockReturnValue('mshy_test-community'),
@@ -76,7 +79,10 @@ const mockConversation = {
   communityId: COMMUNITY_ID,
   createdAt: new Date('2025-01-01'),
   updatedAt: new Date('2025-01-01'),
-  participants: [{ userId: USER_ID, role: 'member', user: { id: USER_ID, username: 'alice', displayName: 'Alice', avatar: null, isOnline: true } }],
+  // `admin` et non `member` : rattacher une conversation à une communauté exige
+  // depuis #4191 un droit sur la CONVERSATION elle-même — ce que le Swagger de
+  // la route promettait déjà (« admin/creator of BOTH »).
+  participants: [{ userId: USER_ID, role: 'admin', isActive: true, user: { id: USER_ID, username: 'alice', displayName: 'Alice', avatar: null, isOnline: true } }],
   _count: { messages: 0, participants: 1 },
 };
 
@@ -95,6 +101,10 @@ function makePrisma(overrides: any = {}) {
     },
     conversation: {
       findMany: jest.fn<any>().mockResolvedValue([mockConversation]),
+      // #4165 : `GET /communities/:id/conversations` borne désormais la liste
+      // et compte le VRAI total séparément (`.count()`), en plus du `.findMany`
+      // déjà mocké — sans ce double, l'appel réel lève et la route répond 500.
+      count: jest.fn<any>().mockResolvedValue(1),
       findFirst: jest.fn<any>().mockResolvedValue(mockConversation),
       update: jest.fn<any>().mockResolvedValue({ ...mockConversation, communityId: COMMUNITY_ID }),
       ...overrides.conversation,

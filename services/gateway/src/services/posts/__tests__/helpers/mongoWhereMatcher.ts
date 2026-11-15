@@ -29,7 +29,11 @@ type FieldPredicate =
   | null
   | { isSet: boolean }
   | { in: readonly unknown[] }
+  | { notIn: readonly unknown[] }
+  | { not: null }
+  | { equals: string; mode?: 'insensitive' }
   | { lt: Date }
+  | { gte: Date }
   | { startsWith: string };
 
 function fieldMatches(doc: MongoDoc, field: string, predicate: FieldPredicate): boolean {
@@ -38,7 +42,20 @@ function fieldMatches(doc: MongoDoc, field: string, predicate: FieldPredicate): 
   if (predicate !== null && typeof predicate === 'object' && !(predicate instanceof Date)) {
     if ('isSet' in predicate) return predicate.isSet === present;
     if ('in' in predicate) return present && predicate.in.includes(value);
+    // `$nin` de MongoDB matche aussi un champ ABSENT ou `null` — c'est la
+    // sémantique que Prisma traduit, et elle diffère de `NOT IN` en SQL.
+    if ('notIn' in predicate) return !present || !predicate.notIn.includes(value);
+    // `{ not: null }` exige un champ PRÉSENT et non nul.
+    if ('not' in predicate) return present && value !== null;
+    // `mode: 'insensitive'` — pris en charge par le connecteur MongoDB.
+    if ('equals' in predicate) {
+      if (!present) return false;
+      return predicate.mode === 'insensitive'
+        ? String(value).toLowerCase() === predicate.equals.toLowerCase()
+        : value === predicate.equals;
+    }
     if ('lt' in predicate) return present && (value as Date) < predicate.lt;
+    if ('gte' in predicate) return present && (value as Date) >= predicate.gte;
     if ('startsWith' in predicate) return present && String(value).startsWith(predicate.startsWith);
   }
   if (predicate === null) return present && value === null;
@@ -50,6 +67,11 @@ export function matchesWhere(doc: MongoDoc, where: WhereShape): boolean {
   return Object.entries(where).every(([key, predicate]) => {
     if (key === 'AND') return (predicate as WhereShape[]).every((clause) => matchesWhere(doc, clause));
     if (key === 'OR') return (predicate as WhereShape[]).some((clause) => matchesWhere(doc, clause));
+    // `NOT` en LISTE vaut « aucune de ces clauses » (conjonction de négations).
+    if (key === 'NOT') {
+      const clauses = Array.isArray(predicate) ? (predicate as WhereShape[]) : [predicate as WhereShape];
+      return clauses.every((clause) => !matchesWhere(doc, clause));
+    }
     return fieldMatches(doc, key, predicate as FieldPredicate);
   });
 }

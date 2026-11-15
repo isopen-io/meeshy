@@ -15,6 +15,41 @@ enum NearbyDiscoveryMode: String, CaseIterable, Sendable {
     case density
     case pins
     case list
+    /// **La chaleur par POPULARITÉ** — dans la section
+    /// Discover, chauffe les points selon les vues et impressions des
+    /// publications, distincte de la densité (« le plus de posts »).
+    case popular
+}
+
+/// **Les deux SECTIONS de l'écran (switch du haut).**
+/// `nearby` = autour de moi (Densité · Points · Liste) ; `discover` = la
+/// plateforme (Densité · Populaire), réservée au staff (`NearbyDiscoverAccess`).
+enum NearbyDiscoverySection: String, CaseIterable, Sendable {
+    case nearby
+    case discover
+
+    /// Les sous-modes offerts par la section — l'ordre est celui du picker.
+    var modes: [NearbyDiscoveryMode] {
+        switch self {
+        case .nearby: return [.density, .pins, .list]
+        case .discover: return [.density, .popular]
+        }
+    }
+}
+
+// MARK: - Qui peut voir Discover
+
+/// Le staff de la plateforme, et lui seul : modérateurs, admins, bigboss.
+/// Même famille que l'ancien `ConversationView.isCurrentUserAdminOrMod` (retiré, #11214), mais le rôle
+/// de CONVERSATION n'y entre pas — Discover est une vue de plateforme.
+///
+/// `nonisolated` sur le TYPE : la cible app compile sous
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, le bundle de tests sous
+/// `nonisolated`.
+nonisolated enum NearbyDiscoverAccess {
+    static func isAllowed(role: String?) -> Bool {
+        PlatformRole(raw: role)?.isPrivileged ?? false
+    }
 }
 
 // MARK: - Pourquoi c'est vide
@@ -55,6 +90,10 @@ enum NearbyEmptyReason: Equatable, Sendable {
     /// rayon — ou pas du tout, tant que personne n'a publié de contenu
     /// découvrable ici.
     case noneInRadius
+    /// Mode Discover : aucune publication du fil ne porte de lieu. Ne dépend
+    /// ni de la position, ni du réseau — seulement du cache du fil. Se lève en
+    /// relisant.
+    case nothingOnTheMap
 }
 
 // MARK: - Où planter un pin
@@ -123,7 +162,7 @@ protocol NearbyPostCaching: Sendable {
 /// L'implémentation réelle : le magasin de feed déjà en place, sous une clé
 /// préfixée `nearby:` pour ne jamais écraser « main-feed » ni « bookmarks ».
 struct NearbyFeedPostCache: NearbyPostCaching {
-    private static let log = Logger(subsystem: "me.meeshy.app", category: "nearby-cache")
+    private static let log = MeeshyLog.logger(.nearbyCache)
 
     func load(key: String) async -> CacheResult<[FeedPost]> {
         await CacheCoordinator.shared.feed.load(for: key)
@@ -158,9 +197,12 @@ nonisolated final class NearbyLocationProvider: NSObject, CLLocationManagerDeleg
     static let shared = NearbyLocationProvider()
 
     private let manager = CLLocationManager()
-    private let lock = NSLock()
-    private var waiters: [CheckedContinuation<CLLocationCoordinate2D?, Never>] = []
-    private var isAwaitingFix = false
+    nonisolated private struct Pending {
+        var waiters: [CheckedContinuation<CLLocationCoordinate2D?, Never>] = []
+        var isAwaitingFix = false
+    }
+
+    private let pending = Locked(uncheckedState: Pending())
 
     override init() {
         super.init()
@@ -201,11 +243,11 @@ nonisolated final class NearbyLocationProvider: NSObject, CLLocationManagerDeleg
             return nil
         }
         return await withCheckedContinuation { continuation in
-            lock.lock()
-            waiters.append(continuation)
-            let shouldRequest = !isAwaitingFix
-            isAwaitingFix = true
-            lock.unlock()
+            let shouldRequest = pending.mutateUnchecked { state -> Bool in
+                state.waiters.append(continuation)
+                defer { state.isAwaitingFix = true }
+                return !state.isAwaitingFix
+            }
             // Deux `requestLocation()` concurrents font annuler le premier par
             // CoreLocation, qui répond alors `kCLErrorLocationUnknown` — le
             // même piège que le picker a déjà payé. Et tant que la permission
@@ -221,12 +263,11 @@ nonisolated final class NearbyLocationProvider: NSObject, CLLocationManagerDeleg
     }
 
     private func resumeWaiters(with coordinate: CLLocationCoordinate2D?) {
-        lock.lock()
-        let pending = waiters
-        waiters.removeAll()
-        isAwaitingFix = false
-        lock.unlock()
-        pending.forEach { $0.resume(returning: coordinate) }
+        let released = pending.mutateUnchecked { state -> [CheckedContinuation<CLLocationCoordinate2D?, Never>] in
+            defer { state = Pending() }
+            return state.waiters
+        }
+        released.forEach { $0.resume(returning: coordinate) }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -243,9 +284,7 @@ nonisolated final class NearbyLocationProvider: NSObject, CLLocationManagerDeleg
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
         if Self.isAuthorized(status) {
-            lock.lock()
-            let hasWaiters = !waiters.isEmpty
-            lock.unlock()
+            let hasWaiters = pending.mutateUnchecked { !$0.waiters.isEmpty }
             guard hasWaiters else { return }
             manager.requestLocation()
             return
@@ -278,6 +317,11 @@ nonisolated final class NearbyLocationProvider: NSObject, CLLocationManagerDeleg
 /// faux. Mieux vaut le dire que d'inventer une optimisation qui mentirait.
 @MainActor
 final class NearbyDiscoveryViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     /// Rayon de départ. Assez large pour qu'une ville dense rende quelque
     /// chose, assez étroit pour que « à proximité » veuille encore dire
@@ -289,8 +333,42 @@ final class NearbyDiscoveryViewModel: ObservableObject {
 
     private static let pageLimit = 30
 
+    /// **La SECTION courante (switch du haut).** Discover ne se pose que si le
+    /// rôle le permet ; changer de section ramène le sous-mode au premier
+    /// offert par la nouvelle section (jamais un mode d'une autre section).
+    @Published var section: NearbyDiscoverySection = .nearby {
+        didSet {
+            if section == .discover, !canDiscover { section = .nearby; return }
+            if !section.modes.contains(mode) { mode = section.modes.first ?? .density }
+        }
+    }
+    /// Le sous-mode courant, TOUJOURS dans `section.modes`.
     @Published var mode: NearbyDiscoveryMode = .density
     @Published private(set) var posts: [FeedPost] = []
+    /// **Discover** : les publications du fil qui portent un lieu affiché,
+    /// servies depuis le cache `main-feed` — la source même de l'ancienne
+    /// carte du header. Jamais lues pour un rôle non autorisé.
+    @Published private(set) var discoverPosts: [FeedPost] = []
+    /// Le rôle du lecteur tranche UNE fois, à la construction.
+    let canDiscover: Bool
+
+    static let discoverSourceKey = "main-feed"
+
+    /// Les SECTIONS offertes — le SEUL site où le rôle décide si Discover
+    /// existe. Nearby pour tous ; Discover pour le staff.
+    var availableSections: [NearbyDiscoverySection] {
+        canDiscover ? NearbyDiscoverySection.allCases : [.nearby]
+    }
+
+    /// Les sous-modes de la section courante (pour le picker contextuel).
+    var availableModes: [NearbyDiscoveryMode] { section.modes }
+
+    /// L'écran vide du mode Discover, distinct des raisons de proximité : une
+    /// position refusée n'empêche pas de voir le fil sur la carte.
+    var discoverEmptyReason: NearbyEmptyReason? {
+        guard canDiscover, section == .discover, discoverPosts.isEmpty else { return nil }
+        return .nothingOnTheMap
+    }
     @Published private(set) var cells: [NearbyDensityCell] = []
     @Published private(set) var center: CLLocationCoordinate2D?
     @Published private(set) var radiusKm: Double = NearbyDiscoveryViewModel.defaultRadiusKm
@@ -336,7 +414,7 @@ final class NearbyDiscoveryViewModel: ObservableObject {
     private var pendingForceRefresh: Bool?
     private var cancellables = Set<AnyCancellable>()
 
-    private static let log = Logger(subsystem: "me.meeshy.app", category: "nearby")
+    private static let log = MeeshyLog.logger(.nearby)
 
     init(
         initialCoordinate: CLLocationCoordinate2D? = nil,
@@ -344,13 +422,15 @@ final class NearbyDiscoveryViewModel: ObservableObject {
         location: NearbyLocationProviding = NearbyLocationProvider.shared,
         network: NetworkMonitorProviding = NetworkMonitor.shared,
         cache: NearbyPostCaching = NearbyFeedPostCache(),
-        languageProvider: LanguageProviding = AuthManagerLanguageProvider()
+        languageProvider: LanguageProviding = AuthManagerLanguageProvider(),
+        viewerRole: String? = AuthManager.shared.currentUser?.role
     ) {
         self.service = service
         self.location = location
         self.network = network
         self.cache = cache
         self.languageProvider = languageProvider
+        self.canDiscover = NearbyDiscoverAccess.isAllowed(role: viewerRole)
         // La coordonnée d'entrée n'est qu'une GRAINE — voir `resolveCenter`.
         self.center = initialCoordinate
         self.isOffline = !network.isOnline
@@ -361,17 +441,28 @@ final class NearbyDiscoveryViewModel: ObservableObject {
     /// le retour du réseau ne relançait RIEN, et les surfaces carte n'offrent
     /// aucun tirer-pour-rafraîchir. L'écran restait sur ses dernières données
     /// et sur son bandeau hors ligne jusqu'à ce qu'on le quitte.
+    ///
+    /// **Le saut sur le main n'est pas décoratif.** `isOfflinePublisher`
+    /// débounce sur `DispatchQueue.global(qos: .utility)` et LIVRE sur cette
+    /// file ; la fermeture du `sink` appartient à une classe `@MainActor`, et
+    /// le runtime vérifie l'exécuteur à son entrée. Sans `receive(on:)`, la
+    /// première transition réseau après l'ouverture de l'écran trappait
+    /// (`SIGTRAP`, `_dispatch_assert_queue_fail`) — le crash « Find nearby »
+    /// quelques secondes après le tap. Même forme que
+    /// `SyncPillViewModel`, l'autre abonné de ce publisher.
     private func observeNetwork() {
         network.isOfflinePublisher
-            .sink { [weak self] offline in
-                Task { @MainActor in
-                    guard let self else { return }
-                    self.isOffline = offline
-                    guard !offline else { return }
-                    await self.load()
-                }
+            .receive(on: DispatchQueue.main)
+            .relay(through: OrderedEventLane()) { [weak self] offline in
+                await self?.applyReachability(offline: offline)
             }
             .store(in: &cancellables)
+    }
+
+    private func applyReachability(offline: Bool) async {
+        isOffline = offline
+        guard !offline else { return }
+        await load()
     }
 
     // MARK: - Lecture
@@ -469,6 +560,11 @@ final class NearbyDiscoveryViewModel: ObservableObject {
         // et l'écran affichait « Hors ligne » à un utilisateur connecté.
         isOffline = !network.isOnline
 
+        // AVANT la position : Discover ne dépend ni d'un relevé ni du réseau,
+        // et un modérateur qui a refusé la localisation doit quand même voir
+        // le fil sur la carte.
+        await serveDiscoverPosts()
+
         guard let coordinate = await resolveCenter() else { return }
         center = coordinate
         let key = NearbyDiscoveryQuery.cacheKey(
@@ -541,20 +637,39 @@ final class NearbyDiscoveryViewModel: ObservableObject {
             return
         }
         isLoading = true
-        defer { isLoading = false }
+        let radius = radiusKm
         do {
             let page = try await service.nearby(
                 latitude: coordinate.latitude,
                 longitude: coordinate.longitude,
-                radiusKm: radiusKm,
+                radiusKm: radius,
                 cursor: offset,
                 limit: Self.pageLimit
             )
-            append(page: page.data)
-            nextOffset = NearbyDiscoveryPage.nextOffset(from: page.pagination?.nextCursor)
+            // Recentré ou rayon changé pendant l'attente : cette page suivait une
+            // AUTRE recherche. L'ajouter montrait les posts de l'ancien centre
+            // sous le nouveau, et son décalage faisait sauter les premiers
+            // résultats du nouveau.
+            if Self.sameSearch(coordinate, radius, as: center, radiusKm) {
+                append(page: page.data)
+                nextOffset = NearbyDiscoveryPage.nextOffset(from: page.pagination?.nextCursor)
+            }
         } catch {
-            apply(failure: error)
+            if Self.sameSearch(coordinate, radius, as: center, radiusKm) { apply(failure: error) }
         }
+        isLoading = false
+        // Le rechargement demandé PENDANT la page (`recenter`, `setRadius`) était
+        // mis en file par `load()`, que seul `load()` vidait : il ne partait jamais.
+        if let queued = pendingForceRefresh {
+            pendingForceRefresh = nil
+            await load(forceRefresh: queued)
+        }
+    }
+
+    private static func sameSearch(_ coordinate: CLLocationCoordinate2D, _ radius: Double,
+                                   as current: CLLocationCoordinate2D?, _ currentRadius: Double) -> Bool {
+        guard let current else { return false }
+        return current.latitude == coordinate.latitude && current.longitude == coordinate.longitude && radius == currentRadius
     }
 
     // MARK: - Résolution du point de départ
@@ -696,6 +811,20 @@ final class NearbyDiscoveryViewModel: ObservableObject {
     }
 
     // MARK: - Publication de l'état
+
+    /// Cache-first et cache-SEUL : le fil est déjà chargé et persisté par
+    /// `FeedViewModel` sous `main-feed` ; ne retenir que ce qui porte un lieu.
+    /// Un cache expiré ou vide rend une carte vide qui le DIT
+    /// (`discoverEmptyReason`), jamais un appel réseau de plus.
+    private func serveDiscoverPosts() async {
+        guard canDiscover else { return }
+        switch await cache.load(key: Self.discoverSourceKey) {
+        case .fresh(let feed, _), .stale(let feed, _):
+            discoverPosts = feed.filter { $0.location != nil }
+        case .expired, .empty:
+            discoverPosts = []
+        }
+    }
 
     private func serve(cached: [FeedPost], age: TimeInterval) {
         posts = cached

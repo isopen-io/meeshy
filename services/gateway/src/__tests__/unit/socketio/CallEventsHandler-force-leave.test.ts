@@ -22,6 +22,11 @@ const mockCreateCallSummaryMessage5 = jest.fn<any>();
 const mockClearRingingTimeout5 = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
+  // Vague 182 — `CallAlreadyEndedError` must be the REAL class: the
+  // per-participant catch below now does
+  // `error instanceof CallAlreadyEndedError`, which mis-resolves under a
+  // mock that omits it.
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn().mockImplementation(() => ({
     leaveCall: mockLeaveCall5,
     createCallSummaryMessage: mockCreateCallSummaryMessage5,
@@ -85,6 +90,7 @@ jest.mock('../../../utils/logger', () => ({
 // ---------------------------------------------------------------------------
 
 import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
+import { CallAlreadyEndedError } from '../../../services/CallService';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../../middleware/validation';
@@ -198,10 +204,51 @@ describe('CallEventsHandler — call:force-leave handler', () => {
   // Line 1130: cleanupParticipantId || userId
   // -------------------------------------------------------------------------
 
-  describe('cleanupParticipantId || userId fallback (line 1130)', () => {
-    it('falls back to userId when resolveParticipantIdFromCall returns null', async () => {
-      // callSession.findUnique returns null → resolveParticipantIdFromCall → null
-      // → cleanupParticipantId is null → participantId: null || userId = userId
+  describe('un appel DÉCROCHÉ qui garde un autre participant n’est pas un fantôme (#9111)', () => {
+    function liveDuoInGrace() {
+      const call = makeActiveCallWithParticipant(USER_ID);
+      return {
+        ...call,
+        answeredAt: new Date(Date.now() - 120_000),
+        participants: [
+          ...call.participants,
+          { id: 'call-participant-peer', participantId: 'membership-peer', callSessionId: CALL_ID, leftAt: null, participant: { userId: 'user-peer' } },
+        ],
+      };
+    }
+
+    it('le revenant qui touche « Appeler » ne quitte pas sa ligne et ne termine pas le duo', async () => {
+      const prisma = makePrisma({ callSessionFindMany: jest.fn<any>().mockResolvedValue([liveDuoInGrace()]) });
+      const { socket, handlers } = makeSocket();
+      const { io, roomEmit } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['call:force-leave'](FORCE_LEAVE_DATA);
+
+      expect(mockLeaveCall5).not.toHaveBeenCalled();
+      expect(roomEmit).not.toHaveBeenCalledWith(CALL_EVENTS.ENDED, expect.anything());
+      expect(roomEmit).not.toHaveBeenCalledWith(CALL_EVENTS.PARTICIPANT_LEFT, expect.anything());
+    });
+
+    it('un appel décroché où l’on est seul reste nettoyé', async () => {
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([{ ...makeActiveCallWithParticipant(USER_ID), answeredAt: new Date() }]),
+      });
+      mockLeaveCall5.mockResolvedValue(makeEndedCallSession());
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['call:force-leave'](FORCE_LEAVE_DATA);
+
+      expect(mockLeaveCall5).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('la sortie forcée vise la participation de la ligne d’appel (#8433)', () => {
+    it('quitte par la participation de la ligne active, sans relire la conversation', async () => {
       const prisma = makePrisma({
         callSessionFindMany: jest.fn<any>().mockResolvedValue([
           makeActiveCallWithParticipant(USER_ID),
@@ -218,9 +265,8 @@ describe('CallEventsHandler — call:force-leave handler', () => {
       handler.setupCallEvents(socket as any, io, () => USER_ID);
       await handlers['call:force-leave'](FORCE_LEAVE_DATA);
 
-      // leaveCall must have been called with participantId === USER_ID (the fallback)
       expect(mockLeaveCall5).toHaveBeenCalledWith(
-        expect.objectContaining({ participantId: USER_ID })
+        expect.objectContaining({ participantId: MEMBERSHIP_ID, userId: USER_ID })
       );
     });
   });
@@ -551,6 +597,38 @@ describe('CallEventsHandler — call:force-leave handler', () => {
         .flat();
       expect(roomsPassedToIo).toContain(ROOMS.user('still-ringing-callee'));
       expect(roomEmit).toHaveBeenCalledWith(CALL_EVENTS.ENDED, expect.objectContaining({ callId: CALL_ID }));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Vague 182 (#4202/Vague 181 follow-up) — the per-participant catch must
+  // absorb CallAlreadyEndedError as an idempotent no-op instead of falling
+  // into forceEndOrphanedCallAfterOptimisticBroadcast, which would force-end
+  // an already-ended call a second time.
+  // -------------------------------------------------------------------------
+
+  describe('per-participant catch absorbs CallAlreadyEndedError as a no-op', () => {
+    it('does NOT force-end the call or re-broadcast, and continues the loop cleanly', async () => {
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([
+          makeActiveCallWithParticipant(USER_ID),
+        ]),
+      });
+      mockLeaveCall5.mockRejectedValue(new CallAlreadyEndedError('completed'));
+
+      const { socket, handlers, directEmit } = makeSocket();
+      const { io, roomEmit } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['call:force-leave'](FORCE_LEAVE_DATA);
+
+      expect(roomEmit).not.toHaveBeenCalled();
+      expect(mockCreateCallSummaryMessage5).not.toHaveBeenCalled();
+      expect(directEmit).not.toHaveBeenCalledWith(
+        CALL_EVENTS.ERROR,
+        expect.anything()
+      );
     });
   });
 });

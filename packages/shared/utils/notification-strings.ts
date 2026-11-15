@@ -4,32 +4,97 @@
  * @see docs/superpowers/specs/2026-06-16-notification-system-i18n-design.md
  */
 
+import type { SocialPostType } from '../types/notification.js';
+import { TEMPLATES } from './notification-string-templates.js';
+
 export const NOTIFICATION_LANGUAGES = [
   'ar', 'de', 'en', 'es', 'fr', 'it', 'pt', 'zh-Hans',
 ] as const;
 export type NotificationLanguage = typeof NOTIFICATION_LANGUAGES[number];
 
 export const NOTIFICATION_STRING_KEYS = [
-  'reaction.message', 'reaction.comment', 'reaction.commentVerbose', 'reaction.post',
+  'reaction.message', 'reaction.comment', 'reaction.commentVerbose', 'reaction.commentContext', 'reaction.post',
   'comment.your', 'comment.generic', 'comment.repliedIn', 'comment.reply', 'comment.replyWithParent',
   'comment.genericFrom', 'comment.repliedInFrom',
+  'activity.reaction',
+  'activity.reactionFrom',
+  'activity.share',
+  'activity.shareFrom',
+  'activity.repost',
+  'activity.repostFrom',
+  'activity.quote',
+  'activity.quoteFrom',
   'comment.repliedToYours',
   'comment.subtitleOwner', 'comment.subtitleFrom', 'comment.subtitleBare',
   'mention', 'someone',
   'reference.post', 'reference.reel', 'reference.story', 'reference.status',
   'friend.story', 'friend.post', 'friend.reel', 'friend.mood', 'friend.subtitleNew',
-  'call.missed', 'call.incoming.title', 'call.incoming.body',
+  'call.missed', 'call.incoming.title', 'call.incoming.body', 'call.action.answer', 'call.action.decline', 'call.action.callBack',
+  'call.recordingReady', 'call.recordingReady.video',
+  'bring.ring.title', 'bring.ring.titleHidden', 'bring.ring.body', 'bring.action.stop', 'bring.stopped.title',
+  'talkie.incoming.title', 'talkie.incoming.titleHidden', 'talkie.incoming.body',
   'contact.request', 'contact.accepted',
+  'contact.requestAction', 'contact.acceptedAction',
+  'contact.joinedAction', 'contact.joinedBody', 'contact.joinedMany', 'contact.joinedManyBody',
+  'contact.recentlyActiveAction', 'contact.recentlyActiveBody',
+  'contact.acquaintanceAction', 'contact.acquaintanceBody',
+  'battery.criticalAction', 'battery.probablyOffAction', 'battery.backOnAction', 'battery.chargingAction', 'battery.rechargedAction',
+  'battery.levelBody', 'battery.offBody',
+  'game.duoInvitedAction', 'game.duoInvitedBody', 'game.duoAcceptedAction', 'game.duoAcceptedBody',
+  'game.leaguePromoted', 'game.leagueStayed', 'game.leagueRelegated',
+  'game.leagueCupGold', 'game.leagueCupSilver', 'game.leagueCupBronze',
+  'game.seasonStep', 'game.seasonDone', 'game.missionWindow',
+  'game.photoMoment', 'game.photoMoments',
   'repost',
   'invitation.group', 'invitation.direct',
   'group.added', 'group.newContact',
+  'community.added',
   'attachment.photo', 'attachment.video', 'attachment.audio', 'attachment.document', 'attachment.files',
+  'attachment.contact',
+  'content.location', 'content.sticker', 'content.invitation',
+  'content.storyReply.yours', 'content.storyReply.other',
+  'content.action.openMap', 'content.action.join', 'message.action.reply',
   'login.newDevice.title',
   'push.private',
+  'engagement.badgeEarned', 'engagement.streakMilestone', 'engagement.levelUp',
+  'engagement.achievementUnlocked',
+  'engagement.tierTitle', 'engagement.tierBody', 'engagement.badgeExploit', 'engagement.levelUpBody',
+  'member.joinedAction', 'member.joinedConversationAction',
+  'moderation.removedMessageIn', 'moderation.removedMessage', 'moderation.removedPost',
+  'moderation.removedReel', 'moderation.removedStory', 'moderation.removedComment', 'moderation.reason',
+  'moderation.madePrivatePost', 'moderation.madePrivateReel', 'moderation.madePrivateStory',
 ] as const;
 export type NotificationStringKey = typeof NOTIFICATION_STRING_KEYS[number];
 
-export type NotificationPostKind = 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
+/**
+ * Le kind qui traverse le FIL — exactement `SocialPostType`, donc exactement
+ * `enum PostType`. Le catalogue et le fil ne peuvent pas diverger : c'est le
+ * même type, pas deux listes tenues à jour en parallèle (#4906).
+ */
+export type NotificationPostKind = SocialPostType;
+
+/**
+ * La clé de PROSE du catalogue — ce n'est PAS un identifiant de fil.
+ *
+ * Elle porte `'MOOD'` en plus des quatre valeurs du fil, et c'est voulu :
+ * `docs/product/meeshy-composer-modele.md` § 7 dit que le quatrième profil
+ * s'appelle `status` dans le CODE et « mood » dans la PROSE, **et que les deux
+ * sont justes**. Ce type est la moitié PROSE de cette frontière. Il sert à
+ * deux choses, toutes deux des lectures :
+ *
+ *  1. **nommer le libellé** — « Nouvelle humeur », « votre humeur », « on
+ *     {author}'s mood » : le mot que l'auteur lit, et que le § 7 protège ;
+ *  2. **tolérer une charge déjà persistée** qui porte encore `'MOOD'` — un
+ *     contrat neuf s'ajoute à l'ancien, il ne le remplace pas, et le serveur
+ *     ne doit pas moins bien rendre une notification qu'il rendait hier.
+ *
+ * Ce qui est INTERDIT est l'inverse : émettre `'MOOD'` comme discriminant.
+ * `SocialPostType` (`types/notification.ts`) est le seul type des champs qui
+ * voyagent, et il ne le connaît plus. Cliquet :
+ * `__tests__/types/social-post-type-wire-guard.test.ts`.
+ */
+export type NotificationPostLabelKind = NotificationPostKind | 'MOOD';
+
 export type NotificationCallKind = 'audio' | 'video';
 
 export type NotificationStringParams = {
@@ -40,474 +105,129 @@ export type NotificationStringParams = {
   readonly author?: string;
   readonly count?: number;
   readonly callIcon?: string;
-  readonly postType?: NotificationPostKind;
+  /** `game.missionWindow` : l'activité de la mission et les deux bornes de sa plage, déjà localisées. */
+  readonly mission?: string;
+  readonly start?: string;
+  readonly end?: string;
+  /** Une grandeur déjà formatée à la locale du lecteur (« 1 000 ») — l'exploit d'un palier (#10298). */
+  readonly value?: string;
+  /**
+   * L'entité nommée par le libellé. Typée en clé de PROSE, pas en valeur de
+   * fil : le catalogue est un dictionnaire, il RENDRA ce qu'on lui donne — y
+   * compris le nom produit « MOOD » d'une charge déjà persistée.
+   */
+  readonly postType?: NotificationPostLabelKind;
   readonly callType?: NotificationCallKind;
   readonly isStory?: boolean;
 };
 
-type Templates = Record<NotificationStringKey, string>;
-type ObjMap = Record<NotificationPostKind, string>;
-type CallMap = Record<NotificationCallKind, string>;
+/**
+ * La clé que les tables de PROSE indexent : un STATUS s'y lit « humeur »
+ * (§ 7), donc les tables n'ont pas de colonne STATUS — aucune notification ne
+ * peut plus dire « votre statut » d'un mood (#10526). `postProseKind` est la
+ * seule traduction STATUS → MOOD du catalogue.
+ */
+export type NotificationProseKind = Exclude<NotificationPostLabelKind, 'STATUS'>;
 
-const TEMPLATES: Record<NotificationLanguage, Templates> = {
-  fr: {
-    'reaction.message': 'a réagi {emoji} à votre message',
-    'reaction.comment': 'a réagi {emoji} à votre commentaire',
-    'reaction.commentVerbose': '{actor} a réagi {emoji} à votre commentaire{context}',
-    'reaction.post': 'a réagi {emoji} {reactObj}',
-    'comment.your': 'a commenté {possObj}',
-    'comment.generic': 'a commenté {indefObj}',
-    'comment.repliedIn': 'a répondu {locObj}',
-    'comment.reply': 'En réponse à votre commentaire',
-    'comment.replyWithParent': 'En réponse à « {preview} »',
-    'comment.repliedToYours': 'a répondu à votre commentaire',
-    'comment.genericFrom': 'a commenté {indefObj} de {author}',
-    'comment.repliedInFrom': 'a répondu {locObj} de {author}',
-    'someone': 'Quelqu’un',
-    'comment.subtitleOwner': '{ownerSubtitle}',
-    'comment.subtitleFrom': '{nounCap} de {author}',
-    'comment.subtitleBare': '{nounCap}',
-    'mention': 'vous a mentionné',
-    'reference.post': 'vous a référencé dans sa publication',
-    'reference.reel': 'vous a référencé dans son réel',
-    'reference.story': 'vous a référencé dans sa story',
-    'reference.status': 'vous a référencé dans son statut',
-    'friend.story': 'a publié une nouvelle story',
-    'friend.post': 'a publié un nouveau post',
-    'friend.reel': 'a publié un nouveau réel',
-    'friend.mood': 'a publié une nouvelle humeur',
-    'friend.subtitleNew': '{friendSubtitle}',
-    'call.missed': '{callIcon} Appel {callLabel} manqué',
-    'call.incoming.title': '{actor} vous appelle',
-    'call.incoming.body': '{callBody}',
-    'contact.request': 'Nouvelle demande de contact',
-    'contact.accepted': 'Demande de contact acceptée',
-    'repost': 'a partagé {possObj}',
-    'invitation.group': 'Invitation au groupe {title}',
-    'invitation.direct': 'Nouvelle conversation avec {actor}',
-    'group.added': 'Ajouté au groupe {title}',
-    'group.newContact': 'Nouveau contact',
-    'attachment.photo': '📷 Photo',
-    'attachment.video': '🎬 Vidéo',
-    'attachment.audio': '🎵 Audio',
-    'attachment.document': '📎 Document',
-    'attachment.files': '📎 {count} fichiers',
-    'login.newDevice.title': 'Nouvelle connexion détectée',
-    'push.private': 'Nouvelle notification',
-  },
-  en: {
-    'reaction.message': 'reacted {emoji} to your message',
-    'reaction.comment': 'reacted {emoji} to your comment',
-    'reaction.commentVerbose': '{actor} reacted {emoji} to your comment{context}',
-    'reaction.post': 'reacted {emoji} {reactObj}',
-    'comment.your': 'commented on {possObj}',
-    'comment.generic': 'commented on {indefObj}',
-    'comment.repliedIn': 'replied {locObj}',
-    'comment.reply': 'Replied to your comment',
-    'comment.replyWithParent': 'Replying to “{preview}”',
-    'comment.repliedToYours': 'replied to your comment',
-    'comment.genericFrom': 'commented on {author}’s {bareObj}',
-    'comment.repliedInFrom': 'replied in {author}’s {bareObj}',
-    'someone': 'Someone',
-    'comment.subtitleOwner': '{ownerSubtitle}',
-    'comment.subtitleFrom': '{nounCap} from {author}',
-    'comment.subtitleBare': '{nounCap}',
-    'mention': 'mentioned you',
-    'reference.post': 'referenced you in their post',
-    'reference.reel': 'referenced you in their reel',
-    'reference.story': 'referenced you in their story',
-    'reference.status': 'referenced you in their status',
-    'friend.story': 'shared a new story',
-    'friend.post': 'shared a new post',
-    'friend.reel': 'shared a new reel',
-    'friend.mood': 'shared a new mood',
-    'friend.subtitleNew': '{friendSubtitle}',
-    'call.missed': '{callIcon} Missed {callLabel} call',
-    'call.incoming.title': '{actor} is calling you',
-    'call.incoming.body': '{callBody}',
-    'contact.request': 'New contact request',
-    'contact.accepted': 'Contact request accepted',
-    'repost': 'shared {possObj}',
-    'invitation.group': 'Invitation to group {title}',
-    'invitation.direct': 'New conversation with {actor}',
-    'group.added': 'Added to group {title}',
-    'group.newContact': 'New contact',
-    'attachment.photo': '📷 Photo',
-    'attachment.video': '🎬 Video',
-    'attachment.audio': '🎵 Audio',
-    'attachment.document': '📎 Document',
-    'attachment.files': '📎 {count} files',
-    'login.newDevice.title': 'New login detected',
-    'push.private': 'New notification',
-  },
-  es: {
-    'reaction.message': 'reaccionó {emoji} a tu mensaje',
-    'reaction.comment': 'reaccionó {emoji} a tu comentario',
-    'reaction.commentVerbose': '{actor} reaccionó {emoji} a tu comentario{context}',
-    'reaction.post': 'reaccionó {emoji} {reactObj}',
-    'comment.your': 'comentó {possObj}',
-    'comment.generic': 'comentó {indefObj}',
-    'comment.repliedIn': 'respondió {locObj}',
-    'comment.reply': 'Respondió a tu comentario',
-    'comment.replyWithParent': 'Respondiendo a «{preview}»',
-    'comment.repliedToYours': 'respondió a tu comentario',
-    'comment.genericFrom': 'comentó {indefObj} de {author}',
-    'comment.repliedInFrom': 'respondió {locObj} de {author}',
-    'someone': 'Alguien',
-    'comment.subtitleOwner': '{ownerSubtitle}',
-    'comment.subtitleFrom': '{nounCap} de {author}',
-    'comment.subtitleBare': '{nounCap}',
-    'mention': 'te mencionó',
-    'reference.post': 'te referenció en su publicación',
-    'reference.reel': 'te referenció en su reel',
-    'reference.story': 'te referenció en su historia',
-    'reference.status': 'te referenció en su estado',
-    'friend.story': 'publicó una nueva historia',
-    'friend.post': 'publicó una nueva publicación',
-    'friend.reel': 'publicó un nuevo reel',
-    'friend.mood': 'publicó un nuevo estado de ánimo',
-    'friend.subtitleNew': '{friendSubtitle}',
-    'call.missed': '{callIcon} Llamada {callLabel} perdida',
-    'call.incoming.title': '{actor} te está llamando',
-    'call.incoming.body': '{callBody}',
-    'contact.request': 'Nueva solicitud de contacto',
-    'contact.accepted': 'Solicitud de contacto aceptada',
-    'repost': 'compartió {possObj}',
-    'invitation.group': 'Invitación al grupo {title}',
-    'invitation.direct': 'Nueva conversación con {actor}',
-    'group.added': 'Añadido al grupo {title}',
-    'group.newContact': 'Nuevo contacto',
-    'attachment.photo': '📷 Foto',
-    'attachment.video': '🎬 Vídeo',
-    'attachment.audio': '🎵 Audio',
-    'attachment.document': '📎 Documento',
-    'attachment.files': '📎 {count} archivos',
-    'login.newDevice.title': 'Nuevo inicio de sesión detectado',
-    'push.private': 'Nueva notificación',
-  },
-  pt: {
-    'reaction.message': 'reagiu {emoji} à sua mensagem',
-    'reaction.comment': 'reagiu {emoji} ao seu comentário',
-    'reaction.commentVerbose': '{actor} reagiu {emoji} ao seu comentário{context}',
-    'reaction.post': 'reagiu {emoji} {reactObj}',
-    'comment.your': 'comentou {possObj}',
-    'comment.generic': 'comentou {indefObj}',
-    'comment.repliedIn': 'respondeu {locObj}',
-    'comment.reply': 'Respondeu ao seu comentário',
-    'comment.replyWithParent': 'Respondendo a “{preview}”',
-    'comment.repliedToYours': 'respondeu ao seu comentário',
-    'comment.genericFrom': 'comentou {indefObj} de {author}',
-    'comment.repliedInFrom': 'respondeu {locObj} de {author}',
-    'someone': 'Alguém',
-    'comment.subtitleOwner': '{ownerSubtitle}',
-    'comment.subtitleFrom': '{nounCap} de {author}',
-    'comment.subtitleBare': '{nounCap}',
-    'mention': 'mencionou você',
-    'reference.post': 'referenciou você na publicação dele(a)',
-    'reference.reel': 'referenciou você no reel dele(a)',
-    'reference.story': 'referenciou você na story dele(a)',
-    'reference.status': 'referenciou você no status dele(a)',
-    'friend.story': 'publicou uma nova story',
-    'friend.post': 'publicou uma nova publicação',
-    'friend.reel': 'publicou um novo reel',
-    'friend.mood': 'publicou um novo humor',
-    'friend.subtitleNew': '{friendSubtitle}',
-    'call.missed': '{callIcon} Chamada {callLabel} perdida',
-    'call.incoming.title': '{actor} está ligando para você',
-    'call.incoming.body': '{callBody}',
-    'contact.request': 'Novo pedido de contato',
-    'contact.accepted': 'Pedido de contato aceito',
-    'repost': 'compartilhou {possObj}',
-    'invitation.group': 'Convite para o grupo {title}',
-    'invitation.direct': 'Nova conversa com {actor}',
-    'group.added': 'Adicionado ao grupo {title}',
-    'group.newContact': 'Novo contato',
-    'attachment.photo': '📷 Foto',
-    'attachment.video': '🎬 Vídeo',
-    'attachment.audio': '🎵 Áudio',
-    'attachment.document': '📎 Documento',
-    'attachment.files': '📎 {count} arquivos',
-    'login.newDevice.title': 'Novo login detectado',
-    'push.private': 'Nova notificação',
-  },
-  de: {
-    'reaction.message': 'hat {emoji} auf deine Nachricht reagiert',
-    'reaction.comment': 'hat {emoji} auf deinen Kommentar reagiert',
-    'reaction.commentVerbose': '{actor} hat {emoji} auf deinen Kommentar reagiert{context}',
-    'reaction.post': 'hat {emoji} {reactObj} reagiert',
-    'comment.your': 'hat {possObj} kommentiert',
-    'comment.generic': 'hat {indefObj} kommentiert',
-    'comment.repliedIn': 'hat {locObj} geantwortet',
-    'comment.reply': 'Hat auf deinen Kommentar geantwortet',
-    'comment.replyWithParent': 'Antwort auf „{preview}“',
-    'comment.repliedToYours': 'hat auf deinen Kommentar geantwortet',
-    'comment.genericFrom': 'hat {indefObj} von {author} kommentiert',
-    'comment.repliedInFrom': 'hat {locObj} von {author} geantwortet',
-    'someone': 'Jemand',
-    'comment.subtitleOwner': '{ownerSubtitle}',
-    'comment.subtitleFrom': '{nounCap} von {author}',
-    'comment.subtitleBare': '{nounCap}',
-    'mention': 'hat dich erwähnt',
-    'reference.post': 'hat dich in einem Beitrag erwähnt',
-    'reference.reel': 'hat dich in einem Reel erwähnt',
-    'reference.story': 'hat dich in einer Story erwähnt',
-    'reference.status': 'hat dich in einem Status erwähnt',
-    'friend.story': 'hat eine neue Story geteilt',
-    'friend.post': 'hat einen neuen Beitrag geteilt',
-    'friend.reel': 'hat einen neuen Reel geteilt',
-    'friend.mood': 'hat eine neue Stimmung geteilt',
-    'friend.subtitleNew': '{friendSubtitle}',
-    'call.missed': '{callIcon} Verpasster {callLabel}',
-    'call.incoming.title': '{actor} ruft dich an',
-    'call.incoming.body': '{callBody}',
-    'contact.request': 'Neue Kontaktanfrage',
-    'contact.accepted': 'Kontaktanfrage angenommen',
-    'repost': 'hat {possObj} geteilt',
-    'invitation.group': 'Einladung zur Gruppe {title}',
-    'invitation.direct': 'Neue Unterhaltung mit {actor}',
-    'group.added': 'Zur Gruppe {title} hinzugefügt',
-    'group.newContact': 'Neuer Kontakt',
-    'attachment.photo': '📷 Foto',
-    'attachment.video': '🎬 Video',
-    'attachment.audio': '🎵 Audio',
-    'attachment.document': '📎 Dokument',
-    'attachment.files': '📎 {count} Dateien',
-    'login.newDevice.title': 'Neue Anmeldung erkannt',
-    'push.private': 'Neue Benachrichtigung',
-  },
-  it: {
-    'reaction.message': 'ha reagito {emoji} al tuo messaggio',
-    'reaction.comment': 'ha reagito {emoji} al tuo commento',
-    'reaction.commentVerbose': '{actor} ha reagito {emoji} al tuo commento{context}',
-    'reaction.post': 'ha reagito {emoji} {reactObj}',
-    'comment.your': 'ha commentato {possObj}',
-    'comment.generic': 'ha commentato {indefObj}',
-    'comment.repliedIn': 'ha risposto {locObj}',
-    'comment.reply': 'Ha risposto al tuo commento',
-    'comment.replyWithParent': 'In risposta a «{preview}»',
-    'comment.repliedToYours': 'ha risposto al tuo commento',
-    'comment.genericFrom': 'ha commentato {indefObj} di {author}',
-    'comment.repliedInFrom': 'ha risposto {locObj} di {author}',
-    'someone': 'Qualcuno',
-    'comment.subtitleOwner': '{ownerSubtitle}',
-    'comment.subtitleFrom': '{nounCap} di {author}',
-    'comment.subtitleBare': '{nounCap}',
-    'mention': 'ti ha menzionato',
-    'reference.post': 'ti ha menzionato nel suo post',
-    'reference.reel': 'ti ha menzionato nel suo reel',
-    'reference.story': 'ti ha menzionato nella sua storia',
-    'reference.status': 'ti ha menzionato nel suo stato',
-    'friend.story': 'ha pubblicato una nuova storia',
-    'friend.post': 'ha pubblicato un nuovo post',
-    'friend.reel': 'ha pubblicato un nuovo reel',
-    'friend.mood': 'ha pubblicato un nuovo stato d’animo',
-    'friend.subtitleNew': '{friendSubtitle}',
-    'call.missed': '{callIcon} Chiamata {callLabel} persa',
-    'call.incoming.title': '{actor} ti sta chiamando',
-    'call.incoming.body': '{callBody}',
-    'contact.request': 'Nuova richiesta di contatto',
-    'contact.accepted': 'Richiesta di contatto accettata',
-    'repost': 'ha condiviso {possObj}',
-    'invitation.group': 'Invito al gruppo {title}',
-    'invitation.direct': 'Nuova conversazione con {actor}',
-    'group.added': 'Aggiunto al gruppo {title}',
-    'group.newContact': 'Nuovo contatto',
-    'attachment.photo': '📷 Foto',
-    'attachment.video': '🎬 Video',
-    'attachment.audio': '🎵 Audio',
-    'attachment.document': '📎 Documento',
-    'attachment.files': '📎 {count} file',
-    'login.newDevice.title': 'Nuovo accesso rilevato',
-    'push.private': 'Nuova notifica',
-  },
-  ar: {
-    'reaction.message': 'تفاعل {emoji} مع رسالتك',
-    'reaction.comment': 'تفاعل {emoji} مع تعليقك',
-    'reaction.commentVerbose': '{actor} تفاعل {emoji} مع تعليقك{context}',
-    'reaction.post': 'تفاعل {emoji} {reactObj}',
-    'comment.your': 'علّق على {possObj}',
-    'comment.generic': 'علّق على {indefObj}',
-    'comment.repliedIn': 'ردّ {locObj}',
-    'comment.reply': 'ردّ على تعليقك',
-    'comment.replyWithParent': 'ردًّا على «{preview}»',
-    'comment.repliedToYours': 'ردّ على تعليقك',
-    'comment.genericFrom': 'علّق على {indefObj} لـ{author}',
-    'comment.repliedInFrom': 'ردّ {locObj} لـ{author}',
-    'someone': 'شخص ما',
-    'comment.subtitleOwner': '{ownerSubtitle}',
-    'comment.subtitleFrom': '{nounCap} من {author}',
-    'comment.subtitleBare': '{nounCap}',
-    'mention': 'أشار إليك',
-    'reference.post': 'أشار إليك في منشور',
-    'reference.reel': 'أشار إليك في ريل',
-    'reference.story': 'أشار إليك في قصة',
-    'reference.status': 'أشار إليك في حالة',
-    'friend.story': 'نشر قصة جديدة',
-    'friend.post': 'نشر منشورًا جديدًا',
-    'friend.reel': 'نشر ريلًا جديدًا',
-    'friend.mood': 'شارك مزاجًا جديدًا',
-    'friend.subtitleNew': '{friendSubtitle}',
-    'call.missed': '{callIcon} مكالمة {callLabel} فائتة',
-    'call.incoming.title': '{actor} يتصل بك',
-    'call.incoming.body': '{callBody}',
-    'contact.request': 'طلب تواصل جديد',
-    'contact.accepted': 'تم قبول طلب التواصل',
-    'repost': 'شارك {possObj}',
-    'invitation.group': 'دعوة إلى مجموعة {title}',
-    'invitation.direct': 'محادثة جديدة مع {actor}',
-    'group.added': 'تمت إضافتك إلى مجموعة {title}',
-    'group.newContact': 'جهة اتصال جديدة',
-    'attachment.photo': '📷 صورة',
-    'attachment.video': '🎬 فيديو',
-    'attachment.audio': '🎵 صوت',
-    'attachment.document': '📎 مستند',
-    'attachment.files': '📎 {count} ملفات',
-    'login.newDevice.title': 'تم رصد تسجيل دخول جديد',
-    'push.private': 'إشعار جديد',
-  },
-  'zh-Hans': {
-    'reaction.message': '用 {emoji} 回应了你的消息',
-    'reaction.comment': '用 {emoji} 回应了你的评论',
-    'reaction.commentVerbose': '{actor} 用 {emoji} 回应了你的评论{context}',
-    'reaction.post': '用 {emoji} 回应了{reactObj}',
-    'comment.your': '评论了{possObj}',
-    'comment.generic': '评论了{indefObj}',
-    'comment.repliedIn': '{locObj}回复了',
-    'comment.reply': '回复了你的评论',
-    'comment.replyWithParent': '回复 “{preview}”',
-    'comment.repliedToYours': '回复了你的评论',
-    'comment.genericFrom': '评论了 {author} 的{bareObj}',
-    'comment.repliedInFrom': '在 {author} 的{bareObj}中回复了',
-    'someone': '有人',
-    'comment.subtitleOwner': '{ownerSubtitle}',
-    'comment.subtitleFrom': '{author} 的{nounCap}',
-    'comment.subtitleBare': '{nounCap}',
-    'mention': '提到了你',
-    'reference.post': '在帖子中提到了你',
-    'reference.reel': '在短视频中提到了你',
-    'reference.story': '在快拍中提到了你',
-    'reference.status': '在状态中提到了你',
-    'friend.story': '发布了新快拍',
-    'friend.post': '发布了新帖子',
-    'friend.reel': '发布了新短视频',
-    'friend.mood': '分享了新心情',
-    'friend.subtitleNew': '{friendSubtitle}',
-    'call.missed': '{callIcon} 未接{callLabel}',
-    'call.incoming.title': '{actor} 来电',
-    'call.incoming.body': '{callBody}',
-    'contact.request': '新的联系人请求',
-    'contact.accepted': '联系人请求已接受',
-    'repost': '分享了{possObj}',
-    'invitation.group': '邀请你加入群组 {title}',
-    'invitation.direct': '与 {actor} 的新对话',
-    'group.added': '已加入群组 {title}',
-    'group.newContact': '新联系人',
-    'attachment.photo': '📷 照片',
-    'attachment.video': '🎬 视频',
-    'attachment.audio': '🎵 音频',
-    'attachment.document': '📎 文档',
-    'attachment.files': '📎 {count} 个文件',
-    'login.newDevice.title': '检测到新登录',
-    'push.private': '新通知',
-  },
-};
+type ObjMap = Record<NotificationProseKind, string>;
+type CallMap = Record<NotificationCallKind, string>;
 
 // "votre X" (possessif) — comment.your, repost
 const POSS_OBJ: Record<NotificationLanguage, ObjMap> = {
-  fr: { POST: 'votre publication', STORY: 'votre story', MOOD: 'votre humeur', STATUS: 'votre statut', REEL: 'votre réel' },
-  en: { POST: 'your post', STORY: 'your story', MOOD: 'your mood', STATUS: 'your status', REEL: 'your reel' },
-  es: { POST: 'tu publicación', STORY: 'tu historia', MOOD: 'tu estado de ánimo', STATUS: 'tu estado', REEL: 'tu reel' },
-  pt: { POST: 'sua publicação', STORY: 'sua story', MOOD: 'seu humor', STATUS: 'seu status', REEL: 'seu reel' },
-  de: { POST: 'deinen Beitrag', STORY: 'deine Story', MOOD: 'deine Stimmung', STATUS: 'deinen Status', REEL: 'deinen Reel' },
-  it: { POST: 'il tuo post', STORY: 'la tua storia', MOOD: 'il tuo stato d’animo', STATUS: 'il tuo stato', REEL: 'il tuo reel' },
-  ar: { POST: 'منشورك', STORY: 'قصتك', MOOD: 'مزاجك', STATUS: 'حالتك', REEL: 'ريلك' },
-  'zh-Hans': { POST: '你的帖子', STORY: '你的快拍', MOOD: '你的心情', STATUS: '你的状态', REEL: '你的短视频' },
+  fr: { POST: 'votre publication', STORY: 'votre story', MOOD: 'votre humeur', REEL: 'votre réel' },
+  en: { POST: 'your post', STORY: 'your story', MOOD: 'your mood', REEL: 'your reel' },
+  es: { POST: 'tu publicación', STORY: 'tu historia', MOOD: 'tu estado de ánimo', REEL: 'tu reel' },
+  pt: { POST: 'sua publicação', STORY: 'sua story', MOOD: 'seu humor', REEL: 'seu reel' },
+  de: { POST: 'deinen Beitrag', STORY: 'deine Story', MOOD: 'deine Stimmung', REEL: 'deinen Reel' },
+  it: { POST: 'il tuo post', STORY: 'la tua storia', MOOD: 'il tuo stato d’animo', REEL: 'il tuo reel' },
+  ar: { POST: 'منشورك', STORY: 'قصتك', MOOD: 'مزاجك', REEL: 'ريلك' },
+  'zh-Hans': { POST: '你的帖子', STORY: '你的快拍', MOOD: '你的心情', REEL: '你的短视频' },
 };
 
 // "à votre X" (préposition de réaction + possessif) — reaction.post
 const REACT_OBJ: Record<NotificationLanguage, ObjMap> = {
-  fr: { POST: 'à votre publication', STORY: 'à votre story', MOOD: 'à votre humeur', STATUS: 'à votre statut', REEL: 'à votre réel' },
-  en: { POST: 'to your post', STORY: 'to your story', MOOD: 'to your mood', STATUS: 'to your status', REEL: 'to your reel' },
-  es: { POST: 'a tu publicación', STORY: 'a tu historia', MOOD: 'a tu estado de ánimo', STATUS: 'a tu estado', REEL: 'a tu reel' },
-  pt: { POST: 'à sua publicação', STORY: 'à sua story', MOOD: 'ao seu humor', STATUS: 'ao seu status', REEL: 'ao seu reel' },
-  de: { POST: 'auf deinen Beitrag', STORY: 'auf deine Story', MOOD: 'auf deine Stimmung', STATUS: 'auf deinen Status', REEL: 'auf deinen Reel' },
-  it: { POST: 'al tuo post', STORY: 'alla tua storia', MOOD: 'al tuo stato d’animo', STATUS: 'al tuo stato', REEL: 'al tuo reel' },
-  ar: { POST: 'على منشورك', STORY: 'على قصتك', MOOD: 'على مزاجك', STATUS: 'على حالتك', REEL: 'على ريلك' },
-  'zh-Hans': { POST: '你的帖子', STORY: '你的快拍', MOOD: '你的心情', STATUS: '你的状态', REEL: '你的短视频' },
+  fr: { POST: 'à votre publication', STORY: 'à votre story', MOOD: 'à votre humeur', REEL: 'à votre réel' },
+  en: { POST: 'to your post', STORY: 'to your story', MOOD: 'to your mood', REEL: 'to your reel' },
+  es: { POST: 'a tu publicación', STORY: 'a tu historia', MOOD: 'a tu estado de ánimo', REEL: 'a tu reel' },
+  pt: { POST: 'à sua publicação', STORY: 'à sua story', MOOD: 'ao seu humor', REEL: 'ao seu reel' },
+  de: { POST: 'auf deinen Beitrag', STORY: 'auf deine Story', MOOD: 'auf deine Stimmung', REEL: 'auf deinen Reel' },
+  it: { POST: 'al tuo post', STORY: 'alla tua storia', MOOD: 'al tuo stato d’animo', REEL: 'al tuo reel' },
+  ar: { POST: 'على منشورك', STORY: 'على قصتك', MOOD: 'على مزاجك', REEL: 'على ريلك' },
+  'zh-Hans': { POST: '你的帖子', STORY: '你的快拍', MOOD: '你的心情', REEL: '你的短视频' },
 };
 
 // "une X" (indéfini, accusatif) — comment.generic
 const INDEF_OBJ: Record<NotificationLanguage, ObjMap> = {
-  fr: { POST: 'une publication', STORY: 'une story', MOOD: 'une humeur', STATUS: 'un statut', REEL: 'un réel' },
-  en: { POST: 'a post', STORY: 'a story', MOOD: 'a mood', STATUS: 'a status', REEL: 'a reel' },
-  es: { POST: 'una publicación', STORY: 'una historia', MOOD: 'un estado de ánimo', STATUS: 'un estado', REEL: 'un reel' },
-  pt: { POST: 'uma publicação', STORY: 'uma story', MOOD: 'um humor', STATUS: 'um status', REEL: 'um reel' },
-  de: { POST: 'einen Beitrag', STORY: 'eine Story', MOOD: 'eine Stimmung', STATUS: 'einen Status', REEL: 'einen Reel' },
-  it: { POST: 'un post', STORY: 'una storia', MOOD: 'uno stato d’animo', STATUS: 'uno stato', REEL: 'un reel' },
-  ar: { POST: 'منشورًا', STORY: 'قصة', MOOD: 'مزاجًا', STATUS: 'حالة', REEL: 'ريلًا' },
-  'zh-Hans': { POST: '帖子', STORY: '快拍', MOOD: '心情', STATUS: '状态', REEL: '短视频' },
+  fr: { POST: 'une publication', STORY: 'une story', MOOD: 'une humeur', REEL: 'un réel' },
+  en: { POST: 'a post', STORY: 'a story', MOOD: 'a mood', REEL: 'a reel' },
+  es: { POST: 'una publicación', STORY: 'una historia', MOOD: 'un estado de ánimo', REEL: 'un reel' },
+  pt: { POST: 'uma publicação', STORY: 'uma story', MOOD: 'um humor', REEL: 'um reel' },
+  de: { POST: 'einen Beitrag', STORY: 'eine Story', MOOD: 'eine Stimmung', REEL: 'einen Reel' },
+  it: { POST: 'un post', STORY: 'una storia', MOOD: 'uno stato d’animo', REEL: 'un reel' },
+  ar: { POST: 'منشورًا', STORY: 'قصة', MOOD: 'مزاجًا', REEL: 'ريلًا' },
+  'zh-Hans': { POST: '帖子', STORY: '快拍', MOOD: '心情', REEL: '短视频' },
 };
 
 // "dans une X" (locatif/datif) — comment.repliedIn
 const LOC_OBJ: Record<NotificationLanguage, ObjMap> = {
-  fr: { POST: 'dans une publication', STORY: 'dans une story', MOOD: 'dans une humeur', STATUS: 'dans un statut', REEL: 'dans un réel' },
-  en: { POST: 'in a post', STORY: 'in a story', MOOD: 'in a mood', STATUS: 'in a status', REEL: 'in a reel' },
-  es: { POST: 'en una publicación', STORY: 'en una historia', MOOD: 'en un estado de ánimo', STATUS: 'en un estado', REEL: 'en un reel' },
-  pt: { POST: 'em uma publicação', STORY: 'em uma story', MOOD: 'em um humor', STATUS: 'em um status', REEL: 'em um reel' },
-  de: { POST: 'in einem Beitrag', STORY: 'in einer Story', MOOD: 'in einer Stimmung', STATUS: 'in einem Status', REEL: 'in einem Reel' },
-  it: { POST: 'in un post', STORY: 'in una storia', MOOD: 'in uno stato d’animo', STATUS: 'in uno stato', REEL: 'in un reel' },
-  ar: { POST: 'في منشور', STORY: 'في قصة', MOOD: 'في مزاج', STATUS: 'في حالة', REEL: 'في ريل' },
-  'zh-Hans': { POST: '在帖子中', STORY: '在快拍中', MOOD: '在心情中', STATUS: '在状态中', REEL: '在短视频中' },
+  fr: { POST: 'dans une publication', STORY: 'dans une story', MOOD: 'dans une humeur', REEL: 'dans un réel' },
+  en: { POST: 'in a post', STORY: 'in a story', MOOD: 'in a mood', REEL: 'in a reel' },
+  es: { POST: 'en una publicación', STORY: 'en una historia', MOOD: 'en un estado de ánimo', REEL: 'en un reel' },
+  pt: { POST: 'em uma publicação', STORY: 'em uma story', MOOD: 'em um humor', REEL: 'em um reel' },
+  de: { POST: 'in einem Beitrag', STORY: 'in einer Story', MOOD: 'in einer Stimmung', REEL: 'in einem Reel' },
+  it: { POST: 'in un post', STORY: 'in una storia', MOOD: 'in uno stato d’animo', REEL: 'in un reel' },
+  ar: { POST: 'في منشور', STORY: 'في قصة', MOOD: 'في مزاج', REEL: 'في ريل' },
+  'zh-Hans': { POST: '在帖子中', STORY: '在快拍中', MOOD: '在心情中', REEL: '在短视频中' },
 };
 
 // Nom capitalisé nu (subtitle "{nounCap} de {author}" / bare)
 const POST_NOUN_CAP: Record<NotificationLanguage, ObjMap> = {
-  fr: { POST: 'Publication', STORY: 'Story', MOOD: 'Humeur', STATUS: 'Statut', REEL: 'Réel' },
-  en: { POST: 'Post', STORY: 'Story', MOOD: 'Mood', STATUS: 'Status', REEL: 'Reel' },
-  es: { POST: 'Publicación', STORY: 'Historia', MOOD: 'Estado de ánimo', STATUS: 'Estado', REEL: 'Reel' },
-  pt: { POST: 'Publicação', STORY: 'Story', MOOD: 'Humor', STATUS: 'Status', REEL: 'Reel' },
-  de: { POST: 'Beitrag', STORY: 'Story', MOOD: 'Stimmung', STATUS: 'Status', REEL: 'Reel' },
-  it: { POST: 'Post', STORY: 'Storia', MOOD: 'Stato d’animo', STATUS: 'Stato', REEL: 'Reel' },
-  ar: { POST: 'منشور', STORY: 'قصة', MOOD: 'مزاج', STATUS: 'حالة', REEL: 'ريل' },
-  'zh-Hans': { POST: '帖子', STORY: '快拍', MOOD: '心情', STATUS: '状态', REEL: '短视频' },
+  fr: { POST: 'Publication', STORY: 'Story', MOOD: 'Humeur', REEL: 'Réel' },
+  en: { POST: 'Post', STORY: 'Story', MOOD: 'Mood', REEL: 'Reel' },
+  es: { POST: 'Publicación', STORY: 'Historia', MOOD: 'Estado de ánimo', REEL: 'Reel' },
+  pt: { POST: 'Publicação', STORY: 'Story', MOOD: 'Humor', REEL: 'Reel' },
+  de: { POST: 'Beitrag', STORY: 'Story', MOOD: 'Stimmung', REEL: 'Reel' },
+  it: { POST: 'Post', STORY: 'Storia', MOOD: 'Stato d’animo', REEL: 'Reel' },
+  ar: { POST: 'منشور', STORY: 'قصة', MOOD: 'مزاج', REEL: 'ريل' },
+  'zh-Hans': { POST: '帖子', STORY: '快拍', MOOD: '心情', REEL: '短视频' },
 };
 
 // Nom nu, non capitalisé — pour les langues qui placent le possesseur AVANT
 // l'objet (« Windie Nh’s reel », « Windie Nh 的短视频 ») et ne peuvent donc pas
 // réutiliser la forme indéfinie (« a reel »).
 const BARE_OBJ: Record<NotificationLanguage, ObjMap> = {
-  fr: { POST: 'publication', STORY: 'story', MOOD: 'humeur', STATUS: 'statut', REEL: 'réel' },
-  en: { POST: 'post', STORY: 'story', MOOD: 'mood', STATUS: 'status', REEL: 'reel' },
-  es: { POST: 'publicación', STORY: 'historia', MOOD: 'estado de ánimo', STATUS: 'estado', REEL: 'reel' },
-  pt: { POST: 'publicação', STORY: 'story', MOOD: 'humor', STATUS: 'status', REEL: 'reel' },
-  de: { POST: 'Beitrag', STORY: 'Story', MOOD: 'Stimmung', STATUS: 'Status', REEL: 'Reel' },
-  it: { POST: 'post', STORY: 'storia', MOOD: 'stato d’animo', STATUS: 'stato', REEL: 'reel' },
-  ar: { POST: 'منشور', STORY: 'قصة', MOOD: 'مزاج', STATUS: 'حالة', REEL: 'ريل' },
-  'zh-Hans': { POST: '帖子', STORY: '快拍', MOOD: '心情', STATUS: '状态', REEL: '短视频' },
+  fr: { POST: 'publication', STORY: 'story', MOOD: 'humeur', REEL: 'réel' },
+  en: { POST: 'post', STORY: 'story', MOOD: 'mood', REEL: 'reel' },
+  es: { POST: 'publicación', STORY: 'historia', MOOD: 'estado de ánimo', REEL: 'reel' },
+  pt: { POST: 'publicação', STORY: 'story', MOOD: 'humor', REEL: 'reel' },
+  de: { POST: 'Beitrag', STORY: 'Story', MOOD: 'Stimmung', REEL: 'Reel' },
+  it: { POST: 'post', STORY: 'storia', MOOD: 'stato d’animo', REEL: 'reel' },
+  ar: { POST: 'منشور', STORY: 'قصة', MOOD: 'مزاج', REEL: 'ريل' },
+  'zh-Hans': { POST: '帖子', STORY: '快拍', MOOD: '心情', REEL: '短视频' },
 };
 
 // Subtitle "Votre X" (forme nominative possessive, gérée par langue)
 const SUBTITLE_OWNER: Record<NotificationLanguage, ObjMap> = {
-  fr: { POST: 'Votre publication', STORY: 'Votre story', MOOD: 'Votre humeur', STATUS: 'Votre statut', REEL: 'Votre réel' },
-  en: { POST: 'Your post', STORY: 'Your story', MOOD: 'Your mood', STATUS: 'Your status', REEL: 'Your reel' },
-  es: { POST: 'Tu publicación', STORY: 'Tu historia', MOOD: 'Tu estado de ánimo', STATUS: 'Tu estado', REEL: 'Tu reel' },
-  pt: { POST: 'Sua publicação', STORY: 'Sua story', MOOD: 'Seu humor', STATUS: 'Seu status', REEL: 'Seu reel' },
-  de: { POST: 'Dein Beitrag', STORY: 'Deine Story', MOOD: 'Deine Stimmung', STATUS: 'Dein Status', REEL: 'Dein Reel' },
-  it: { POST: 'Il tuo post', STORY: 'La tua storia', MOOD: 'Il tuo stato d’animo', STATUS: 'Il tuo stato', REEL: 'Il tuo reel' },
-  ar: { POST: 'منشورك', STORY: 'قصتك', MOOD: 'مزاجك', STATUS: 'حالتك', REEL: 'ريلك' },
-  'zh-Hans': { POST: '你的帖子', STORY: '你的快拍', MOOD: '你的心情', STATUS: '你的状态', REEL: '你的短视频' },
+  fr: { POST: 'Votre publication', STORY: 'Votre story', MOOD: 'Votre humeur', REEL: 'Votre réel' },
+  en: { POST: 'Your post', STORY: 'Your story', MOOD: 'Your mood', REEL: 'Your reel' },
+  es: { POST: 'Tu publicación', STORY: 'Tu historia', MOOD: 'Tu estado de ánimo', REEL: 'Tu reel' },
+  pt: { POST: 'Sua publicação', STORY: 'Sua story', MOOD: 'Seu humor', REEL: 'Seu reel' },
+  de: { POST: 'Dein Beitrag', STORY: 'Deine Story', MOOD: 'Deine Stimmung', REEL: 'Dein Reel' },
+  it: { POST: 'Il tuo post', STORY: 'La tua storia', MOOD: 'Il tuo stato d’animo', REEL: 'Il tuo reel' },
+  ar: { POST: 'منشورك', STORY: 'قصتك', MOOD: 'مزاجك', REEL: 'ريلك' },
+  'zh-Hans': { POST: '你的帖子', STORY: '你的快拍', MOOD: '你的心情', REEL: '你的短视频' },
 };
 
 // Subtitle "Nouvelle X" (forme avec accord de genre, gérée par langue)
 const FRIEND_SUBTITLE: Record<NotificationLanguage, ObjMap> = {
-  fr: { POST: 'Nouvelle publication', STORY: 'Nouvelle story', MOOD: 'Nouvelle humeur', STATUS: 'Nouveau statut', REEL: 'Nouveau réel' },
-  en: { POST: 'New post', STORY: 'New story', MOOD: 'New mood', STATUS: 'New status', REEL: 'New reel' },
-  es: { POST: 'Nueva publicación', STORY: 'Nueva historia', MOOD: 'Nuevo estado de ánimo', STATUS: 'Nuevo estado', REEL: 'Nuevo reel' },
-  pt: { POST: 'Nova publicação', STORY: 'Nova story', MOOD: 'Novo humor', STATUS: 'Novo status', REEL: 'Novo reel' },
-  de: { POST: 'Neuer Beitrag', STORY: 'Neue Story', MOOD: 'Neue Stimmung', STATUS: 'Neuer Status', REEL: 'Neuer Reel' },
-  it: { POST: 'Nuovo post', STORY: 'Nuova storia', MOOD: 'Nuovo stato d’animo', STATUS: 'Nuovo stato', REEL: 'Nuovo reel' },
-  ar: { POST: 'منشور جديد', STORY: 'قصة جديدة', MOOD: 'مزاج جديد', STATUS: 'حالة جديدة', REEL: 'ريل جديد' },
-  'zh-Hans': { POST: '新帖子', STORY: '新快拍', MOOD: '新心情', STATUS: '新状态', REEL: '新短视频' },
+  fr: { POST: 'Nouvelle publication', STORY: 'Nouvelle story', MOOD: 'Nouvelle humeur', REEL: 'Nouveau réel' },
+  en: { POST: 'New post', STORY: 'New story', MOOD: 'New mood', REEL: 'New reel' },
+  es: { POST: 'Nueva publicación', STORY: 'Nueva historia', MOOD: 'Nuevo estado de ánimo', REEL: 'Nuevo reel' },
+  pt: { POST: 'Nova publicação', STORY: 'Nova story', MOOD: 'Novo humor', REEL: 'Novo reel' },
+  de: { POST: 'Neuer Beitrag', STORY: 'Neue Story', MOOD: 'Neue Stimmung', REEL: 'Neuer Reel' },
+  it: { POST: 'Nuovo post', STORY: 'Nuova storia', MOOD: 'Nuovo stato d’animo', REEL: 'Nuovo reel' },
+  ar: { POST: 'منشور جديد', STORY: 'قصة جديدة', MOOD: 'مزاج جديد', REEL: 'ريل جديد' },
+  'zh-Hans': { POST: '新帖子', STORY: '新快拍', MOOD: '新心情', REEL: '新短视频' },
 };
 
 // Corps du push VoIP d'appel entrant — phrase complète par type d'appel
@@ -536,17 +256,17 @@ const CALL_LABEL: Record<NotificationLanguage, CallMap> = {
 };
 
 // Contexte de reaction.commentVerbose : " sur le <entité> de {author}", entité-conscient.
-// Couvre les 5 NotificationPostKind — une réaction à un commentaire sur un REEL/STATUS
+// Couvre les clés de PROSE (`NotificationProseKind`) — une réaction à un commentaire sur un REEL/STATUS
 // ne s'effondre plus vers « post » (symétrie avec reaction.post qui porte déjà le postType).
 const COMMENT_CONTEXT: Record<NotificationLanguage, ObjMap> = {
-  fr: { POST: ' sur le post de {author}', STORY: ' sur la story de {author}', MOOD: ' sur l’humeur de {author}', STATUS: ' sur le statut de {author}', REEL: ' sur le réel de {author}' },
-  en: { POST: ' on {author}’s post', STORY: ' on {author}’s story', MOOD: ' on {author}’s mood', STATUS: ' on {author}’s status', REEL: ' on {author}’s reel' },
-  es: { POST: ' en la publicación de {author}', STORY: ' en la historia de {author}', MOOD: ' en el estado de ánimo de {author}', STATUS: ' en el estado de {author}', REEL: ' en el reel de {author}' },
-  pt: { POST: ' na publicação de {author}', STORY: ' na story de {author}', MOOD: ' no humor de {author}', STATUS: ' no status de {author}', REEL: ' no reel de {author}' },
-  de: { POST: ' im Beitrag von {author}', STORY: ' in der Story von {author}', MOOD: ' in der Stimmung von {author}', STATUS: ' im Status von {author}', REEL: ' im Reel von {author}' },
-  it: { POST: ' nel post di {author}', STORY: ' nella storia di {author}', MOOD: ' nello stato d’animo di {author}', STATUS: ' nello stato di {author}', REEL: ' nel reel di {author}' },
-  ar: { POST: ' على منشور {author}', STORY: ' على قصة {author}', MOOD: ' على مزاج {author}', STATUS: ' على حالة {author}', REEL: ' على ريل {author}' },
-  'zh-Hans': { POST: '（在 {author} 的帖子中）', STORY: '（在 {author} 的快拍中）', MOOD: '（在 {author} 的心情中）', STATUS: '（在 {author} 的状态中）', REEL: '（在 {author} 的短视频中）' },
+  fr: { POST: ' sur le post de {author}', STORY: ' sur la story de {author}', MOOD: ' sur l’humeur de {author}', REEL: ' sur le réel de {author}' },
+  en: { POST: ' on {author}’s post', STORY: ' on {author}’s story', MOOD: ' on {author}’s mood', REEL: ' on {author}’s reel' },
+  es: { POST: ' en la publicación de {author}', STORY: ' en la historia de {author}', MOOD: ' en el estado de ánimo de {author}', REEL: ' en el reel de {author}' },
+  pt: { POST: ' na publicação de {author}', STORY: ' na story de {author}', MOOD: ' no humor de {author}', REEL: ' no reel de {author}' },
+  de: { POST: ' im Beitrag von {author}', STORY: ' in der Story von {author}', MOOD: ' in der Stimmung von {author}', REEL: ' im Reel von {author}' },
+  it: { POST: ' nel post di {author}', STORY: ' nella storia di {author}', MOOD: ' nello stato d’animo di {author}', REEL: ' nel reel di {author}' },
+  ar: { POST: ' على منشور {author}', STORY: ' على قصة {author}', MOOD: ' على مزاج {author}', REEL: ' على ريل {author}' },
+  'zh-Hans': { POST: '（在 {author} 的帖子中）', STORY: '（在 {author} 的快拍中）', MOOD: '（在 {author} 的心情中）', REEL: '（在 {author} 的短视频中）' },
 };
 
 const SUPPORTED = new Set<string>(NOTIFICATION_LANGUAGES);
@@ -623,26 +343,31 @@ export function notificationString(
     author: params.author ?? '',
     count: params.count != null ? String(params.count) : '',
     callIcon: params.callIcon ?? '',
+    mission: params.mission ?? '',
+    start: params.start ?? '',
+    end: params.end ?? '',
+    value: params.value ?? '',
   };
 
-  if (params.postType) {
-    tokens.possObj = POSS_OBJ[L][params.postType];
-    tokens.reactObj = REACT_OBJ[L][params.postType];
-    tokens.indefObj = INDEF_OBJ[L][params.postType];
-    tokens.locObj = LOC_OBJ[L][params.postType];
-    tokens.nounCap = POST_NOUN_CAP[L][params.postType];
-    tokens.bareObj = BARE_OBJ[L][params.postType];
-    tokens.ownerSubtitle = SUBTITLE_OWNER[L][params.postType];
-    tokens.friendSubtitle = FRIEND_SUBTITLE[L][params.postType];
+  const prose = postProseKind(params.postType);
+  if (prose) {
+    tokens.possObj = POSS_OBJ[L][prose];
+    tokens.reactObj = REACT_OBJ[L][prose];
+    tokens.indefObj = INDEF_OBJ[L][prose];
+    tokens.locObj = LOC_OBJ[L][prose];
+    tokens.nounCap = POST_NOUN_CAP[L][prose];
+    tokens.bareObj = BARE_OBJ[L][prose];
+    tokens.ownerSubtitle = SUBTITLE_OWNER[L][prose];
+    tokens.friendSubtitle = FRIEND_SUBTITLE[L][prose];
   }
   if (params.callType) {
     tokens.callLabel = CALL_LABEL[L][params.callType];
     tokens.callBody = INCOMING_CALL_BODY[L][params.callType];
   }
 
-  if (key === 'reaction.commentVerbose') {
+  if (key === 'reaction.commentVerbose' || key === 'reaction.commentContext') {
     // postType (entité réelle) prime ; `isStory` reste un repli legacy binaire.
-    const kind: NotificationPostKind = params.postType ?? (params.isStory ? 'STORY' : 'POST');
+    const kind: NotificationProseKind = prose ?? (params.isStory ? 'STORY' : 'POST');
     tokens.context = params.author
       ? interpolate(COMMENT_CONTEXT[L][kind], { author: params.author })
       : '';
@@ -690,6 +415,11 @@ export type NotificationDisplayInput = {
    * votre réel de Windie Nh » désignerait deux propriétaires.
    */
   readonly authorName?: string | null;
+  /**
+   * Nom CANONIQUE de la conversation visée, quand la phrase doit la nommer —
+   * « a rejoint Les Amis » (#10299). Absent ou vide ⇒ « la conversation ».
+   */
+  readonly conversationTitle?: string | null;
 };
 
 export type NotificationDisplay = {
@@ -711,27 +441,62 @@ export type NotificationDisplay = {
 };
 
 /**
- * La clé de libellé par type de contenu référençant.
+ * La clé de libellé par type de contenu référençant — UNE ligne par valeur que
+ * la base sait produire.
  *
- * MOOD et STATUS partagent la même : `PostType` n'a que quatre valeurs, MOOD
- * étant le nom PRODUIT de STATUS. `NotificationPostKind` en connaît cinq, et
- * les notifications déjà en base peuvent porter l'une ou l'autre.
+ * Elle en portait une cinquième, `MOOD: 'reference.status'`, qui était une
+ * TRADUCTION INTERNE entre deux noms d'une même chose. Le § 7 dit qu'il n'y en
+ * a qu'un sur le fil : la traduction se fait maintenant UNE fois, à la
+ * frontière (`wirePostKind`), et cette table n'a plus à la connaître (#4906).
  */
 const REFERENCE_KEY_BY_KIND: Record<NotificationPostKind, NotificationStringKey> = {
   POST: 'reference.post',
   REEL: 'reference.reel',
   STORY: 'reference.story',
   STATUS: 'reference.status',
-  MOOD: 'reference.status',
 };
 
-/** Normalise un postType potentiellement absent/inconnu vers une clé sûre. */
-function normalizePostKind(value?: string | null): NotificationPostKind | undefined {
-  if (!value) return undefined;
-  const up = value.toUpperCase();
-  return (['POST', 'STORY', 'MOOD', 'STATUS', 'REEL'] as const).includes(up as NotificationPostKind)
-    ? (up as NotificationPostKind)
-    : undefined;
+/**
+ * Les clés que le catalogue sait rendre — PROJECTION d'un `ObjMap`, jamais une
+ * liste tenue à la main. Une liste recopiée est exactement ce qui laisse un
+ * membre neuf de `PostType` passer pour « inconnu » et retomber sur le libellé
+ * générique : ici, le membre neuf casse d'abord les neuf tables de libellés
+ * (elles sont exhaustives par type), puis entre ici tout seul.
+ */
+const POST_LABEL_KINDS: ReadonlySet<string> = new Set(Object.keys(POST_NOUN_CAP.fr));
+
+/**
+ * La frontière, en une fonction : une clé de PROSE devient l'identifiant que
+ * le FIL connaît. C'est le SEUL endroit du catalogue où « MOOD » se traduit
+ * vers le fil — partout ailleurs il reste un mot, jamais un discriminant.
+ */
+const wirePostKind = (kind: NotificationProseKind): NotificationPostKind =>
+  kind === 'MOOD' ? 'STATUS' : kind;
+
+/**
+ * Le mot qu'un lecteur lit pour un contenu : un STATUS est une « humeur »
+ * (§ 7) — qu'on le republie, y réagisse, le commente ou y soit mentionné
+ * (#10525, #10526). Prose seulement : le discriminant du fil reste STATUS.
+ * Tolérante par contrat : une charge déjà persistée en `'MOOD'` se rend
+ * encore, un type absent ou inconnu rend `undefined`.
+ */
+export function postProseKind(kind?: string | null): NotificationProseKind | undefined {
+  if (!kind) return undefined;
+  const up = kind.toUpperCase();
+  const prose = up === 'STATUS' ? 'MOOD' : up;
+  return POST_LABEL_KINDS.has(prose) ? (prose as NotificationProseKind) : undefined;
+}
+
+/**
+ * L'action d'une arrivée de membre, SANS l'acteur — « a rejoint Les Amis ».
+ * Site UNIQUE : le titre persisté (`buildNotificationDisplay`) et le corps de
+ * push (`fanout/member-joined.ts`) la composent ici, donc ne divergent pas.
+ */
+export function memberJoinedAction(lang: string | null | undefined, conversationTitle?: string | null): string {
+  const title = conversationTitle?.trim();
+  return title
+    ? notificationString(lang, 'member.joinedAction', { title })
+    : notificationString(lang, 'member.joinedConversationAction');
 }
 
 export function buildNotificationDisplay(
@@ -743,8 +508,8 @@ export function buildNotificationDisplay(
     ? input.actorName.trim()
     : notificationString(L, 'someone');
   const emoji = input.emoji ?? undefined;
-  const kind = normalizePostKind(input.postType);
-  const ns = (key: NotificationStringKey, postType?: NotificationPostKind) =>
+  const kind = postProseKind(input.postType);
+  const ns = (key: NotificationStringKey, postType?: NotificationProseKind) =>
     notificationString(L, key, { ...(emoji ? { emoji } : {}), ...(postType ? { postType } : {}) });
   const nounCap = kind ? notificationString(L, 'comment.subtitleBare', { postType: kind }) : null;
   const author = (input.authorName && input.authorName.trim() !== '') ? input.authorName.trim() : null;
@@ -757,7 +522,7 @@ export function buildNotificationDisplay(
   });
 
   switch (input.type) {
-    // ── Réactions sur contenu (post / story / humeur / statut / réel) ──
+    // ── Réactions sur contenu (post / story / humeur / réel) ──
     case 'post_like':
     case 'story_reaction':
     case 'status_reaction':
@@ -789,6 +554,33 @@ export function buildNotificationDisplay(
           : ns('comment.generic', kind ?? 'STORY'),
         nounCap,
       );
+    // ── Réaction d'un tiers au contenu d'un proche, relayée (#14068) ──
+    case 'friend_content_reaction':
+      return framed(
+        author
+          ? notificationString(L, 'activity.reactionFrom', { ...(emoji ? { emoji } : {}), postType: kind ?? 'POST', author })
+          : ns('activity.reaction', kind ?? 'POST'),
+        nounCap,
+      );
+    // ── Partage, relayé à l'entourage (#14069) — sans auteur tiers : son propre contenu ──
+    case 'friend_content_share':
+      return framed(
+        author
+          ? notificationString(L, 'activity.shareFrom', { postType: kind ?? 'POST', author })
+          : ns('activity.share', kind ?? 'POST'),
+        nounCap,
+      );
+    // ── Republication (#14070) et citation (#14072), relayées à l'entourage de l'auteur ──
+    case 'friend_content_repost':
+      return framed(
+        author ? notificationString(L, 'activity.repostFrom', { postType: kind ?? 'POST', author }) : ns('activity.repost', kind ?? 'POST'),
+        nounCap,
+      );
+    case 'friend_content_quote':
+      return framed(
+        author ? notificationString(L, 'activity.quoteFrom', { postType: kind ?? 'POST', author }) : ns('activity.quote', kind ?? 'POST'),
+        nounCap,
+      );
     case 'story_thread_reply':
       return framed(
         author
@@ -813,7 +605,53 @@ export function buildNotificationDisplay(
     case 'comment_reaction':
       return framed(ns('reaction.comment'), nounCap);
 
-    // ── Partage / repost ──
+    // ── Relation : demande reçue / demande acceptée ──
+    //
+    // Sans phrase d'action, ces deux types n'avaient qu'un `content` en GROUPE
+    // NOMINAL (« Nouvelle demande de contact ») : une bannière ne peut pas en
+    // tirer « X veut se connecter » sans réécrire du français en dur, ce que le
+    // Prisme (i18n serveur) interdit. Aucun sous-titre : il n'y a pas de
+    // contenu visé dont on nommerait l'entité.
+    case 'friend_request':
+    case 'contact_request':
+      return framed(notificationString(L, 'contact.requestAction'), null);
+    case 'friend_accepted':
+    case 'contact_accepted':
+      return framed(notificationString(L, 'contact.acceptedAction'), null);
+
+    // ── Un contact du carnet vient d'arriver (#8105) : « Marie est sur Meeshy ! » ──
+    case 'contact_joined':
+      return framed(notificationString(L, 'contact.joinedAction'), null);
+
+    // ── Un contact est revenu (#8285) : « Marie était sur Meeshy récemment » ──
+    case 'contact_recently_active':
+      return framed(notificationString(L, 'contact.recentlyActiveAction'), null);
+
+    // ── La Connaissance est née toute seule (#13932) : « Marie est maintenant une Connaissance » ──
+    case 'relation_acquaintance':
+      return framed(notificationString(L, 'contact.acquaintanceAction'), null);
+
+    // ── Le jeu (#9490) : un duo se joue entre amis, on nomme l'ami. La ligue et la saison
+    //    n'ont pas d'acteur : le titre reste au client, la phrase est dans le corps. ──
+    case 'game_duo_invited':
+      return framed(notificationString(L, 'game.duoInvitedAction'), null);
+    case 'game_duo_accepted':
+      return framed(notificationString(L, 'game.duoAcceptedAction'), null);
+
+    // ── Un membre arrive dans une conversation (#10299) : « Awa a rejoint Les Amis » ──
+    //
+    // La phrase NOMME la conversation, comme le sous-titre d'un message de
+    // groupe. L'action est aussi le CORPS que l'éventail pousse
+    // (`memberJoinedAction`) : la bannière iOS la dédoublonne contre le corps,
+    // FCM et WebPush — sans sous-titre — la lisent dans le corps.
+    case 'member_joined':
+      return framed(memberJoinedAction(L, input.conversationTitle), null);
+
+    // ── Republication (#10525) : « a republié votre réel / story / humeur / publication » ──
+    //
+    // Le verbe est celui du bouton (« Republier »), jamais « partager » — qui
+    // nomme l'envoi d'un lien dans une conversation. Un STATUS se DIT « humeur »
+    // (`postProseKind`), le fil garde STATUS.
     case 'post_repost':
       return framed(
         ns('repost', kind ?? 'POST'),
@@ -838,6 +676,10 @@ export function buildNotificationDisplay(
         notificationString(L, 'friend.subtitleNew', { postType: kind === 'REEL' ? 'REEL' : 'POST' }),
       );
     case 'friend_new_mood':
+      // « MOOD » est ici une clé de PROSE, jamais un discriminant : le
+      // sous-titre que l'auteur lit dit « Nouvelle humeur », et c'est
+      // exactement la moitié de la frontière que le § 7 protège. Le
+      // discriminant qui voyage avec la notification, lui, dit STATUS.
       return framed(
         notificationString(L, 'friend.mood'),
         notificationString(L, 'friend.subtitleNew', { postType: 'MOOD' }),
@@ -848,8 +690,12 @@ export function buildNotificationDisplay(
     case 'user_mentioned':
       // Le type du contenu décide du libellé. Absent, c'est une mention en
       // conversation ou en commentaire : le libellé générique reste le bon.
+      //
+      // Deux variables parce que deux questions : `kind` NOMME l'entité (prose,
+      // le mot que l'auteur lit), `wirePostKind(kind)` la ROUTE vers sa clé de
+      // libellé (identifiant, ce que la base sait produire).
       return kind
-        ? framed(ns(REFERENCE_KEY_BY_KIND[kind]), nounCap)
+        ? framed(ns(REFERENCE_KEY_BY_KIND[wirePostKind(kind)]), nounCap)
         : framed(notificationString(L, 'mention'), nounCap);
 
     default:

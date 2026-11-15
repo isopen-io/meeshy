@@ -79,4 +79,37 @@ final class CommentDraftStoreTests: XCTestCase {
         XCTAssertTrue(sut.pendingSaves.isEmpty)
         XCTAssertEqual(sut.load(postId: "p1"), "brouillon long")
     }
+
+    /// Les brouillons persistés sont BORNÉS : au-delà de `maxDrafts`, le plus ancien part — un brouillon
+    /// abandonné restait sinon dans `UserDefaults` jusqu'à la déconnexion.
+    func test_lesBrouillonsSontBornes_lePlusAncienPart() {
+        let (sut, _) = makeSUT()
+        let total = CommentDraftStore.maxDrafts + 1
+        for index in 0..<total {
+            sut.save(postId: "post-\(index)", text: "brouillon \(index)")
+            sut.flushPendingSaves()
+        }
+
+        XCTAssertNil(sut.load(postId: "post-0"), "Le plus ancien brouillon est évincé.")
+        XCTAssertEqual(sut.load(postId: "post-1"), "brouillon 1")
+        XCTAssertEqual(sut.load(postId: "post-\(total - 1)"), "brouillon \(total - 1)")
+    }
+
+    /// Réécrire un brouillon le remet en tête : il ne part pas avant des brouillons plus récents.
+    func test_reecrireUnBrouillonLeRemetEnTete() {
+        let (sut, _) = makeSUT()
+        sut.save(postId: "ancien", text: "premier jet")
+        sut.flushPendingSaves()
+        for index in 0..<(CommentDraftStore.maxDrafts - 1) {
+            sut.save(postId: "post-\(index)", text: "x")
+            sut.flushPendingSaves()
+        }
+        sut.save(postId: "ancien", text: "repris")
+        sut.flushPendingSaves()
+        sut.save(postId: "nouveau", text: "y")
+        sut.flushPendingSaves()
+
+        XCTAssertEqual(sut.load(postId: "ancien"), "repris", "Repris récemment, il reste.")
+        XCTAssertNil(sut.load(postId: "post-0"), "Le plus ancien non repris part à sa place.")
+    }
 }

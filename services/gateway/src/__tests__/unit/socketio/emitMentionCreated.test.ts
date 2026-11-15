@@ -94,3 +94,78 @@ describe('emitMentionCreated', () => {
     expect(emits['user:u-carol']).toHaveBeenCalled();
   });
 });
+
+/**
+ * Le PLANCHER D'HISTORIQUE sur cette charge, qui porte `content` — le texte
+ * APRÈS édition.
+ *
+ * Un audit adversarial a mesuré que la garde n'avait AUCUN témoin :
+ * neutralisée, 2 400 témoins de `src/socketio` restaient verts, et aucun
+ * fichier de test du gateway ne nommait son paramètre. Elle était juste, et le
+ * prochain refactor l'aurait retirée en silence.
+ *
+ * Elle prend le VERDICT entier, jamais l'ensemble de clés qu'il contient : un
+ * `ReadonlySet` ne peut pas dire « je ne sais pas », donc l'aplatir rendait un
+ * ensemble VIDE sur `'unknown'` et poussait le texte à TOUS les nommés
+ * exactement quand `message:edited` se taisait — deux sorties de la même
+ * résolution, arbitrées en sens opposés. Les trois témoins ci-dessous couvrent
+ * les trois états du verdict.
+ */
+describe('emitMentionCreated — le plancher d’historique', () => {
+  it('n’émet RIEN vers un nommé que le plancher écarte', () => {
+    const { io, emitsTo } = makeIO();
+
+    emitMentionCreated({
+      io,
+      newlyMentionedUserIds: ['u-bob', 'u-carol'],
+      ...CONTEXT,
+      readership: { kind: 'readers', rooms: ['user:u-carol'], excludedQueueKeys: new Set(['u-bob']) },
+    });
+
+    expect(emitsTo('user:u-bob')).toEqual([]);
+    // Et l'autre nommé est servi : la garde retire un lecteur, pas le canal.
+    expect(emitsTo('user:u-carol')).toHaveLength(1);
+  });
+
+  it('sur `unknown`, rien ne part — l’ignorance ne vaut pas « personne n’est bloqué »', () => {
+    const { io, emitsTo } = makeIO();
+
+    emitMentionCreated({
+      io,
+      newlyMentionedUserIds: ['u-bob', 'u-carol'],
+      ...CONTEXT,
+      readership: { kind: 'unknown' },
+    });
+
+    expect(emitsTo('user:u-bob')).toEqual([]);
+    expect(emitsTo('user:u-carol')).toEqual([]);
+  });
+
+  it('sur `room`, tout le monde est servi — le verdict nominal ne restreint rien', () => {
+    const { io, emitsTo } = makeIO();
+
+    emitMentionCreated({
+      io,
+      newlyMentionedUserIds: ['u-bob', 'u-carol'],
+      ...CONTEXT,
+      readership: { kind: 'room' },
+    });
+
+    expect(emitsTo('user:u-bob')).toHaveLength(1);
+    expect(emitsTo('user:u-carol')).toHaveLength(1);
+  });
+
+  /**
+   * Un verdict ABSENT ne restreint rien : c'est le défaut d'un véritable chemin
+   * d'ENVOI. Ce témoin est ce qui rend le précédent vérifiable — sans lui,
+   * « rien ne part » ne distingue pas « écarté » de « cette fonction n'émet
+   * plus ».
+   */
+  it('sans verdict, le comportement d’origine est intact', () => {
+    const { io, emitsTo } = makeIO();
+
+    emitMentionCreated({ io, newlyMentionedUserIds: ['u-bob'], ...CONTEXT });
+
+    expect(emitsTo('user:u-bob')).toHaveLength(1);
+  });
+});

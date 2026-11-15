@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_column_text_style">Estilo</string>
+    <string name="composer_column_text_effect">Fundidos</string>
+    <string name="composer_column_text_color">Cor</string>
+    <string name="composer_column_text_align">Alinhamento</string>
+    <string name="composer_column_text_background">Fundo</string>
+    <string name="composer_column_text_timing">Tempo</string>
+    <string name="composer_column_draw_color">Cor do pincel</string>
+    <string name="composer_column_draw_width">Espessura do pincel</string>
+    <string name="composer_column_exit_tool">Terminar a ferramenta</string>
+</resources>

@@ -1,20 +1,25 @@
 /**
- * TrackingLinkService — clicksByHour UTC coherence
+ * TrackingLinkService — clicksByHour / clicksByDate, cohérence UTC
  *
- * getTrackingLinkStats derives two time histograms from the SAME click set:
- *   - clicksByDate  → click.clickedAt.toISOString()  (UTC calendar day)
- *   - clicksByHour  → click.clickedAt.getUTCHours()  (UTC hour)
+ * getTrackingLinkStats dérive deux histogrammes temporels du MÊME jeu de clics :
+ *   - clicksByDate  → le jour calendaire
+ *   - clicksByHour  → l'heure
  *
- * Both MUST bucket in the same (UTC) reference frame so the histograms stay
- * coherent regardless of the deployment/runner timezone. A prior version used
- * getHours() (server-local time) for the hour bucket — masked in production
- * (node:22-slim runs TZ=UTC, so getHours() === getUTCHours()) but silently
- * wrong on any non-UTC host.
+ * Les deux DOIVENT bucketer dans le même référentiel (UTC) pour rester
+ * cohérents quel que soit le fuseau de la machine qui exécute. Une version
+ * antérieure utilisait `getHours()` (heure LOCALE du serveur) pour l'heure —
+ * masqué en production (node:22-slim tourne en TZ=UTC, où getHours() ===
+ * getUTCHours()) mais silencieusement faux sur tout hôte non-UTC.
  *
- * Because CI runs under TZ=UTC (where local and UTC hours coincide) an
- * ambient-timezone test cannot distinguish the two implementations. Instead we
- * feed a click whose clickedAt reports a DIFFERENT local vs UTC hour, so the
- * assertion has teeth under any runner timezone.
+ * Depuis #4391 le bucketing n'est plus fait en JavaScript sur des lignes
+ * rapatriées : il est fait par MongoDB, dans le `$facet` de
+ * `clickStatsPipeline`. Le référentiel n'est donc plus une propriété du pliage
+ * mais une DÉCLARATION du pipeline — `$dateToString` prend son fuseau du champ
+ * `timezone`, et l'OMETTRE le ferait retomber sur un défaut implicite. Ces
+ * témoins gardent donc les deux moitiés qui restent du dépôt :
+ *   1. les deux tranches temporelles déclarent explicitement `timezone: 'UTC'` ;
+ *   2. le dépouillement reporte les clés que Mongo a produites, sans les
+ *      retraduire (une seconde conversion rouvrirait exactement le défaut).
  *
  * @jest-environment node
  */
@@ -26,9 +31,10 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 import { TrackingLinkService } from '../../../services/TrackingLinkService';
+import { clickStatsPipeline, foldClickStatsFacet } from '../../../services/trackingLinkClickAggregation';
 
 const LINK_FIXTURE = {
-  id: 'link_001',
+  id: '507f1f77bcf86cd799439099',
   token: 'AbCd12',
   shortUrl: '/l/AbCd12',
   originalUrl: 'https://example.com/page',
@@ -49,56 +55,72 @@ const LINK_FIXTURE = {
   lastClickedAt: null,
 };
 
-function makePrisma(clicks: unknown[]) {
-  return {
-    trackingLink: { findUnique: jest.fn().mockResolvedValue(LINK_FIXTURE) },
-    trackingLinkClick: { findMany: jest.fn().mockResolvedValue(clicks) },
-    conversationShareLink: { findFirst: jest.fn().mockResolvedValue(null) },
-  } as any;
+type TrancheDate = { $group: { _id: { $dateToString: { format: string; date: string; timezone?: string } } } };
+
+function trancheTemporelle(nom: 'hour' | 'date'): TrancheDate['$group']['_id']['$dateToString'] {
+  const pipeline = clickStatsPipeline({ trackingLinkId: LINK_FIXTURE.id }) as unknown as Array<{
+    $facet?: Record<string, TrancheDate[]>;
+  }>;
+  const facet = pipeline[1].$facet!;
+  return facet[nom][0].$group._id.$dateToString;
 }
 
-/**
- * A clickedAt double whose local hour (getHours) and UTC hour (getUTCHours)
- * deliberately differ, so the histogram bucketing reveals which one the code
- * uses — independent of the runner timezone.
- */
-function clickAt(opts: { utcHour: number; localHour: number; isoDay: string }) {
-  const iso = `${opts.isoDay}T${String(opts.utcHour).padStart(2, '0')}:30:00.000Z`;
-  return {
-    country: null, device: null, browser: null, os: null, language: null,
-    socialSource: null, referrer: null, ipAddress: null, deviceFingerprint: null,
-    redirectStatus: null,
-    clickedAt: {
-      getHours: () => opts.localHour,
-      getUTCHours: () => opts.utcHour,
-      toISOString: () => iso,
-    },
-  };
-}
+describe('clickStatsPipeline — les deux histogrammes temporels bucketent en UTC', () => {
+  it("déclare explicitement timezone: 'UTC' sur l'heure", () => {
+    expect(trancheTemporelle('hour')).toEqual({
+      format: '%H',
+      date: '$clickedAt',
+      timezone: 'UTC',
+    });
+  });
 
-describe('getTrackingLinkStats — clicksByHour buckets by UTC, coherent with clicksByDate', () => {
-  it('uses the UTC hour, not the server-local hour', async () => {
-    // Local hour 08 (e.g. Asia/Tokyo) vs UTC hour 23 for the same instant.
-    const clicks = [clickAt({ utcHour: 23, localHour: 8, isoDay: '2024-06-01' })];
-    const svc = new TrackingLinkService(makePrisma(clicks));
+  it("déclare explicitement timezone: 'UTC' sur le jour — même référentiel que l'heure", () => {
+    const heure = trancheTemporelle('hour');
+    const jour = trancheTemporelle('date');
 
-    const stats = await svc.getTrackingLinkStats('AbCd12');
+    expect(jour).toEqual({ format: '%Y-%m-%d', date: '$clickedAt', timezone: 'UTC' });
+    expect(jour.timezone).toBe(heure.timezone);
+    expect(jour.date).toBe(heure.date);
+  });
+});
+
+describe('foldClickStatsFacet — reporte les clés produites par Mongo sans les retraduire', () => {
+  it("garde l'heure telle quelle, sur deux chiffres", () => {
+    const stats = foldClickStatsFacet({
+      hour: [{ _id: '23', n: 1 }],
+      date: [{ _id: '2024-06-01', n: 1 }],
+    });
 
     expect(stats.clicksByHour).toEqual({ '23': 1 });
-    // Same instant → same UTC day, so the two histograms agree.
     expect(stats.clicksByDate).toEqual({ '2024-06-01': 1 });
   });
 
-  it('aggregates multiple clicks by their UTC hour', async () => {
-    const clicks = [
-      clickAt({ utcHour: 0, localHour: 9, isoDay: '2024-06-01' }),
-      clickAt({ utcHour: 0, localHour: 9, isoDay: '2024-06-01' }),
-      clickAt({ utcHour: 15, localHour: 0, isoDay: '2024-06-01' }),
-    ];
-    const svc = new TrackingLinkService(makePrisma(clicks));
-
-    const stats = await svc.getTrackingLinkStats('AbCd12');
+  it('agrège plusieurs heures distinctes', () => {
+    const stats = foldClickStatsFacet({
+      hour: [{ _id: '00', n: 2 }, { _id: '15', n: 1 }],
+    });
 
     expect(stats.clicksByHour).toEqual({ '00': 2, '15': 1 });
+  });
+});
+
+describe('getTrackingLinkStats — sert les histogrammes du facet', () => {
+  it('rend clicksByHour et clicksByDate cohérents pour un même instant', async () => {
+    const prisma = {
+      trackingLink: { findUnique: jest.fn().mockResolvedValue(LINK_FIXTURE) },
+      trackingLinkClick: {
+        aggregateRaw: jest.fn().mockResolvedValue([
+          { total: [{ n: 1 }], hour: [{ _id: '23', n: 1 }], date: [{ _id: '2024-06-01', n: 1 }] },
+        ]),
+        findMany: jest.fn(),
+      },
+      conversationShareLink: { findFirst: jest.fn().mockResolvedValue(null) },
+    } as any;
+
+    const stats = await new TrackingLinkService(prisma).getTrackingLinkStats('AbCd12');
+
+    expect(stats.clicksByHour).toEqual({ '23': 1 });
+    expect(stats.clicksByDate).toEqual({ '2024-06-01': 1 });
+    expect(prisma.trackingLinkClick.findMany).not.toHaveBeenCalled();
   });
 });

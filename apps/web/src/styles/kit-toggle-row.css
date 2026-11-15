@@ -1,0 +1,207 @@
+/* LA LIGNE DU KIT (K06) — une ligne de liste qui se touche tout entière : tête,
+   titre, sous-titre, accessoire, filet, variante. `meeshy-toggle-row.tsx` écrit
+   les encres et la hauteur en variables ; ce fichier dessine. Aucune couleur ni
+   rayon en dur : jetons de packages/design-tokens. Le voile d'appui est une
+   opacité (le fondu de 0,2 s au relâcher ; l'appui est instantané), peinte
+   sous le contenu. La tête et le texte forment un bloc qui réserve 10em :
+   l'accessoire ne passe dessous, en entier, que lorsque la police grandit. */
+
+.kit-row {
+  position: relative;
+  display: block;
+  inline-size: 100%;
+  min-block-size: var(--kit-row-min, 46px);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--kit-row-ink);
+  font: inherit;
+  text-align: start;
+  cursor: default;
+  isolation: isolate;
+}
+
+.kit-row--action {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.kit-row--action:focus-visible {
+  outline: 2px solid var(--kit-row-track);
+  outline-offset: -2px;
+}
+
+.kit-row__divider {
+  display: block;
+  block-size: 1px;
+  background: var(--kit-row-divider);
+}
+
+.kit-row__dimmed {
+  opacity: var(--kit-row-opacity, 1);
+}
+
+.kit-row__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-block-size: var(--kit-row-min, 46px);
+  padding-inline: var(--ios-space-lg);
+  padding-block: var(--ios-space-xs);
+  gap: var(--ios-space-xs) var(--ios-space-sm);
+}
+
+.kit-row__main {
+  display: flex;
+  flex: 1 1 0;
+  min-inline-size: min(10em, 100%);
+  align-items: center;
+  gap: var(--ios-space-md);
+  font-size: var(--ios-font-body);
+}
+
+.kit-row__lead {
+  display: inline-flex;
+  flex: none;
+  color: var(--kit-row-ink);
+}
+
+.kit-row__text {
+  display: flex;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  flex-direction: column;
+  gap: var(--ios-space-xxs);
+}
+
+.kit-row__title-line {
+  display: flex;
+  align-items: center;
+  gap: var(--ios-space-xs);
+}
+
+.kit-row__title {
+  font-size: var(--ios-font-body);
+  font-weight: 500;
+  color: var(--kit-row-ink);
+  overflow-wrap: anywhere;
+}
+
+.kit-row__subtitle {
+  font-size: var(--ios-font-small);
+  color: var(--kit-row-sub);
+  overflow-wrap: anywhere;
+}
+
+.kit-row__accessories {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--ios-space-md);
+  color: var(--kit-row-accessory);
+}
+
+.kit-row__value {
+  font-size: var(--ios-font-label);
+  color: var(--kit-row-accessory);
+}
+
+.kit-row__check {
+  inline-size: 20px;
+  block-size: 20px;
+  stroke-width: 2.5;
+}
+
+.kit-row__box {
+  inline-size: 24px;
+  block-size: 24px;
+}
+
+.kit-row__chevron {
+  inline-size: 18px;
+  block-size: 18px;
+  stroke-width: 2.4;
+}
+
+:dir(rtl) .kit-row__chevron {
+  transform: scaleX(-1);
+}
+
+.kit-row__switch {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  inline-size: 51px;
+  block-size: 31px;
+  border-radius: var(--ios-radius-full);
+  background: color-mix(in srgb, var(--kit-row-ink) 20%, transparent);
+}
+
+.kit-row__switch[data-on] {
+  background: var(--kit-row-track);
+}
+
+.kit-row__thumb {
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-start: 2px;
+  inline-size: 27px;
+  block-size: 27px;
+  border-radius: var(--ios-radius-full);
+  background: var(--color-on-media);
+  transition: transform 200ms ease-out;
+}
+
+.kit-row__switch[data-on] .kit-row__thumb {
+  transform: translateX(20px);
+}
+
+:dir(rtl) .kit-row__switch[data-on] .kit-row__thumb {
+  transform: translateX(-20px);
+}
+
+.kit-row__veil {
+  position: absolute;
+  inset-block: 0;
+  inset-inline: calc(var(--ios-space-sm) * -1);
+  border-radius: var(--ios-radius-sm);
+  background: var(--kit-row-ink);
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+  transition: opacity 200ms ease-out;
+}
+
+@media (hover: hover) {
+  .kit-row--action:not(:disabled):hover .kit-row__veil {
+    opacity: var(--kit-row-hover-veil, 0);
+  }
+}
+
+.kit-row--action:not(:disabled):active .kit-row__veil,
+.kit-row[data-pressed] .kit-row__veil {
+  opacity: var(--kit-row-pressed-veil, 0);
+  transition: none;
+}
+
+.kit-row[data-disabled],
+.kit-row--action:disabled {
+  cursor: not-allowed;
+}
+
+:root.light .kit-row {
+  --kit-row-mention: var(--ios-indigo-600);
+  --kit-row-destructive-theme: var(--ios-error-ink);
+}
+
+:root:not(.light) .kit-row {
+  --kit-row-mention: var(--ios-indigo-300);
+  --kit-row-destructive-theme: var(--ios-error);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-row__thumb,
+  .kit-row__veil {
+    transition: none;
+  }
+}

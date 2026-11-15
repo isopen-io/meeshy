@@ -401,13 +401,13 @@ describe('AudioTranslateService', () => {
       expect(req.type).toBe('voice_translate');
     });
 
-    it('defaults generateVoiceClone to true', async () => {
-      const promise = service.translateSync('user-1', { targetLanguages: ['de'] });
+    it('ne clone jamais par défaut, en sync comme en async : l’appelant décide après la porte d’âge (#17309)', async () => {
+      const sync = service.translateSync('user-1', { targetLanguages: ['de'] });
       emitVoiceSuccess(zmq, mockTranslationResult);
-      await promise;
-
-      const req = zmq.sendVoiceAPIRequest.mock.calls[0][0] as any;
-      expect(req.generateVoiceClone).toBe(true);
+      const asyncJob = service.translateAsync('user-1', { targetLanguages: ['de'] });
+      emitVoiceSuccess(zmq, { jobId: 'j', status: 'queued' });
+      await Promise.all([sync, asyncJob]);
+      expect(zmq.sendVoiceAPIRequest.mock.calls.map((c: any) => c[0].generateVoiceClone)).toEqual([false, false]);
     });
 
     it('forwards existingTranscription as mobileTranscription', async () => {

@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 import AVFoundation
 import CoreLocation
@@ -16,22 +17,21 @@ extension UniversalComposerBar {
 
     var attachmentsPreview: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(allAttachments) { attachment in
                     attachmentChip(attachment)
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.sm)
         }
     }
 
     func attachmentChip(_ attachment: ComposerAttachment) -> some View {
-        HStack(spacing: 6) {
-            // Type icon
-            Image(systemName: iconForType(attachment.type))
+        HStack(spacing: MeeshySpacing.xsPlus) {
+            Image(systemName: attachment.type.glyph)
                 .font(.caption)
-                .foregroundColor(Color(hex: attachment.thumbnailColor))
+                .foregroundStyle(Color(hex: attachment.thumbnailColor))
 
             Text(attachment.name)
                 .font(.caption.weight(.medium))
@@ -39,12 +39,11 @@ extension UniversalComposerBar {
                 .frame(maxWidth: 120)
 
             if let size = attachment.size {
-                Text(formatFileSize(size))
+                Text(MediaFormat.bytes(Int64(size)))
                     .font(.caption2)
                     .opacity(0.6)
             }
 
-            // Remove button
             Button {
                 HapticFeedback.light()
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
@@ -59,10 +58,10 @@ extension UniversalComposerBar {
                         Circle().fill(style == .dark ? Color.white.opacity(0.15) : theme.textMuted.opacity(0.15))
                     )
             }
-            .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pi\u{00E8}ce jointe", bundle: .main))
+            .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.smPlus)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(
             Capsule()
                 .fill(style == .dark ? Color.white.opacity(0.12) : theme.inputBackground)
@@ -93,38 +92,42 @@ extension UniversalComposerBar {
             mediaPanelGrabHandle
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
+                HStack(spacing: Self.carouselTileSpacing) {
                     ForEach(Array(tiles.enumerated()), id: \.element.id) { index, tile in
                         carouselTile(tile, index: index)
                     }
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 12)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.md)
             }
 
             // Inline recent photos/videos — selectable straight into the
             // attachment tray, with a leading "+" to open the full library. The
-            // strip fills the remaining panel height (iPad shows a roomy
-            // scrollable grid); only hosts WITHOUT it need the trailing spacer.
+            // scrollable grid fills the remaining panel height on every idiom;
+            // only hosts WITHOUT it need the trailing spacer.
             if let onRecentMediaSelected {
-                Divider().opacity(0.4).padding(.horizontal, 14)
+                Divider().opacity(0.4).padding(.horizontal, MeeshySpacing.mdPlus)
                 RecentMediaStrip(
-                    accentColor: accentColor,
+                    accentColor: servedAccentHex,
                     onOpenLibrary: { openFullPhotoLibrary(preselecting: $0) },
                     onSelect: onRecentMediaSelected,
                     onEdit: onRecentMediaEdit,
-                    onSelectionChanged: { recentStripSelectionIds = $0 }
+                    onSelectionChanged: { recentStripSelectionIds = $0 },
+                    onSelectAsset: onRecentLibraryAssetSelected,
+                    attachedAssetIds: recentAttachedAssetIds
                 )
             } else {
                 Spacer(minLength: 0)
             }
         }
-        .frame(maxWidth: .infinity)
+        // Top-aligned and filling the height its host gives it: centred, the
+        // content floated mid-panel with a void above and below (#8869).
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(
             (style == .dark ? Color.black.opacity(0.18) : theme.inputBackground.opacity(0.6))
         )
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(String(localized: "composer.a11y.attachCarousel", defaultValue: "Types de pi\u{00E8}ces jointes", bundle: .main))
+        .accessibilityLabel(String(localized: "composer.a11y.attachCarousel", defaultValue: "Types de pièces jointes", bundle: .main))
     }
 
     // MARK: - Grab Handle
@@ -135,7 +138,7 @@ extension UniversalComposerBar {
     /// Albums en haut, exactement le picker que le composer de story ouvre.
     ///
     /// Le geste est directionnel et reprend la grammaire de la feuille système :
-    /// tirer vers le HAUT agrandit (on passe de l'échantillon de 19 vignettes à
+    /// tirer vers le HAUT agrandit (on passe de l'échantillon de 40 médias récents à
     /// toute la photothèque), tirer vers le BAS referme le panneau. Sans la branche
     /// « bas », la poignée avalerait le drag et casserait le swipe-to-dismiss
     /// que le geste global de `expandedComposer` assure partout ailleurs.
@@ -157,11 +160,11 @@ extension UniversalComposerBar {
                 // n'arrive jamais jusqu'ici.
                 .highPriorityGesture(mediaPanelHandleDrag)
                 .accessibilityElement()
-                .accessibilityLabel(String(localized: "composer.a11y.panelHandle", defaultValue: "Poign\u{00E9}e du panneau", bundle: .main))
-                .accessibilityHint(String(localized: "composer.a11y.panelHandleHint", defaultValue: "Glisser vers le haut pour ouvrir toute la phototh\u{00E8}que", bundle: .main))
+                .accessibilityLabel(String(localized: "composer.a11y.panelHandle", defaultValue: "Poignée du panneau", bundle: .main))
+                .accessibilityHint(String(localized: "composer.a11y.panelHandleHint", defaultValue: "Glisser vers le haut pour ouvrir toute la photothèque", bundle: .main))
                 // VoiceOver ne peut pas produire le drag : il lui faut l'action
                 // nommée, sinon le raccourci n'existe que pour la souris/doigt.
-                .accessibilityAction(named: Text(String(localized: "composer.a11y.openFullLibrary", defaultValue: "Ouvrir toute la phototh\u{00E8}que", bundle: .main))) {
+                .accessibilityAction(named: Text(String(localized: "composer.a11y.openFullLibrary", defaultValue: "Ouvrir toute la photothèque", bundle: .main))) {
                     openFullPhotoLibrary(preselecting: recentStripSelectionIds)
                 }
         } else {
@@ -174,8 +177,8 @@ extension UniversalComposerBar {
         Capsule()
             .fill(mutedColor.opacity(emphasis))
             .frame(width: 36, height: 4)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
+            .padding(.top, MeeshySpacing.sm)
+            .padding(.bottom, MeeshySpacing.xs)
     }
 
     /// La décision vit dans `ComposerPanelHandleLaw` (pure, testée) ; ce geste
@@ -238,7 +241,8 @@ extension UniversalComposerBar {
     /// The attachment types offered by the carousel. Each tile is included only
     /// when the host actually wired its callback (or, for voice, when the mode
     /// allows it) — so a context like comments that only wires photo/file/voice
-    /// never shows a dead camera or emoji tile.
+    /// never shows a dead camera or emoji tile. Camera and sticker are not
+    /// listed: the glass doors of the toolbar already serve them (#9173).
     private var carouselTiles: [CarouselTile] {
         var tiles: [CarouselTile] = []
         // The dedicated "Photos" tile is only listed when there is NO recent-media
@@ -247,25 +251,25 @@ extension UniversalComposerBar {
         // access never disappears.
         if onPhotoLibrary != nil && onRecentMediaSelected == nil {
             tiles.append(CarouselTile(
-                id: "photo", icon: "photo.fill", color: "9B59B6",
+                id: "photo", icon: "photo.fill", color: MeeshyColors.tileAmethystHex,
                 label: String(localized: "composer.attach.photo", defaultValue: "Photos", bundle: .main)
             ) { fire { onPhotoLibrary?() } })
         }
-        if onCamera != nil {
-            tiles.append(CarouselTile(
-                id: "camera", icon: "camera.fill", color: "F8B500",
-                label: String(localized: "composer.attach.camera", defaultValue: "Cam\u{00E9}ra", bundle: .main)
-            ) { fire { onCamera?() } })
-        }
         if onFilePicker != nil {
             tiles.append(CarouselTile(
-                id: "file", icon: "doc.fill", color: "45B7D1",
+                id: "file", icon: "doc.fill", color: MeeshyColors.tileSkyHex,
                 label: String(localized: "composer.attach.file", defaultValue: "Fichier", bundle: .main)
             ) { fire { onFilePicker?() } })
         }
+        if onContactPicker != nil {
+            tiles.append(CarouselTile(
+                id: "contact", icon: "person.crop.circle.fill", color: "5B8DEF",
+                label: String(localized: "composer.attach.contact", defaultValue: "Contact", bundle: .main)
+            ) { fire { onContactPicker?() } })
+        }
         if showLocation && onLocationRequest != nil {
             tiles.append(CarouselTile(
-                id: "location", icon: "location.fill", color: "2ECC71",
+                id: "location", icon: "location.fill", color: MeeshyColors.tileEmeraldHex,
                 label: String(localized: "composer.attach.location", defaultValue: "Position", bundle: .main)
             ) { fire { onLocationRequest?() } })
         }
@@ -304,13 +308,19 @@ extension UniversalComposerBar {
         let action: () -> Void
     }
 
+    /// Le disque d'une tuile d'action du (+) : 58 pt réduits de 20 %
+    /// la gouttière dans la même proportion.
+    /// Avec son libellé, la tuile garde une cible tactile au-dessus de 44 pt.
+    static let carouselTileDiameter: CGFloat = 46
+    static let carouselTileSpacing: CGFloat = 11
+
     func carouselTile(_ tile: CarouselTile, index: Int) -> some View {
         Button {
             onAnyInteraction?()
             HapticFeedback.light()
             tile.action()
         } label: {
-            VStack(spacing: 7) {
+            VStack(spacing: MeeshySpacing.xsPlus) {
                 ZStack {
                     Circle()
                         .fill(
@@ -320,16 +330,16 @@ extension UniversalComposerBar {
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .frame(width: 58, height: 58)
-                        .shadow(color: Color(hex: tile.color).opacity(0.4), radius: 8, y: 3)
+                        .frame(width: Self.carouselTileDiameter, height: Self.carouselTileDiameter)
+                        .shadow(color: Color(hex: tile.color).opacity(0.4), radius: 6, y: 2)
 
                     Image(systemName: tile.icon)
-                        .font(.title3.weight(.semibold))
-                        .foregroundColor(.white)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(Color.white)
                 }
                 Text(tile.label)
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(style == .dark ? .white.opacity(0.85) : theme.textSecondary)
+                    .foregroundStyle(style == .dark ? Color.white.opacity(0.85) : theme.textSecondary)
                     .lineLimit(1)
             }
         }
@@ -346,10 +356,7 @@ extension UniversalComposerBar {
     /// - When the carousel is shown it shows a `keyboard` glyph — tapping hides
     ///   the carousel and brings the system keyboard back.
     var attachButton: some View {
-        let accent = Color(hex: accentColor)
-        let iconColor = style == .dark ? Color.white.opacity(0.7) : accent
-        let bgFill = style == .dark ? Color.white.opacity(0.1) : accent.opacity(0.1)
-        let borderColor = style == .dark ? Color.white.opacity(0.2) : accent.opacity(0.2)
+        let iconColor = iconTint
 
         return Button(action: {
             onAnyInteraction?()
@@ -366,19 +373,12 @@ extension UniversalComposerBar {
                 .foregroundColor(iconColor)
                 .rotationEffect(.degrees(showAttachOptions ? 0 : attachRotation))
                 .frame(width: 44, height: 44)
-                .background(
-                    Circle()
-                        .fill(bgFill)
-                        .overlay(
-                            Circle()
-                                .stroke(borderColor, lineWidth: 1)
-                        )
-                )
+                .adaptiveLiquidGlass(in: Circle(), interactive: true)
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showAttachOptions)
         }
         .accessibilityLabel(showAttachOptions
             ? String(localized: "composer.a11y.showKeyboard", defaultValue: "Afficher le clavier", bundle: .main)
-            : String(localized: "composer.a11y.openAttachMenu", defaultValue: "Ouvrir le menu des pi\u{00E8}ces jointes", bundle: .main))
+            : String(localized: "composer.a11y.openAttachMenu", defaultValue: "Ouvrir le menu des pièces jointes", bundle: .main))
     }
 
     // MARK: - Carousel <-> Keyboard switching
@@ -408,14 +408,13 @@ extension UniversalComposerBar {
 
     // MARK: - Clipboard Content Handling
 
-    func handleClipboardCheck(_ newText: String) {
-        // Collage d'une URL `file://` → pièce jointe, pas du texte. Delta
-        // HONNÊTE, distinct de l'expression historique ci-dessous (qui compte
-        // le double de la croissance réelle et dont le seuil ne doit pas
-        // bouger) : seule une INSERTION assez grande pour contenir
-        // « file:// » déclenche la détection — un utilisateur qui tape ces
-        // caractères un par un n'a jamais une insertion de cette taille.
-        let insertedCount = newText.count - text.count
+    /// `previous` : le texte d'AVANT l'écriture — dans `onChange`, `text` vaut déjà `newText`.
+    func handleClipboardCheck(_ newText: String, previous: String) {
+        // Collage d'une URL `file://` → pièce jointe, pas du texte : seule
+        // une INSERTION assez grande pour contenir « file:// » déclenche la
+        // détection — un utilisateur qui tape ces caractères un par un n'a
+        // jamais une insertion de cette taille.
+        let insertedCount = newText.count - previous.count
         if insertedCount >= "file://".count, newText.contains("file://") {
             let (cleaned, urls) = FileURLPasteDetector.detect(in: newText)
             if !urls.isEmpty {
@@ -433,42 +432,46 @@ extension UniversalComposerBar {
             }
         }
 
-        // Detect if a paste of 2000+ chars just happened
-        let delta = newText.count - (text.count - (newText.count - text.count))
-        if newText.count > 2000 && delta > 500 {
-            // Likely a paste — create clipboard content
-            let clip = ClipboardContent(text: newText)
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                clipboardContent = clip
-            }
-            // Clear the text field since it's now an attachment
-            DispatchQueue.main.async {
-                text = ""
-            }
-            onClipboardContent?(clip)
-            HapticFeedback.medium()
+        // **Le filet de la limite d'un message** (#9037). L'intercepteur du
+        // champ (`ComposerPasteInterceptor`) décide AVANT l'insertion ; si la
+        // vue de texte ne lui a pas été trouvée, un collage massif arrive
+        // ici. Ce qui ferait dépasser la limite part en `.txt` et le champ
+        // retrouve son texte d'avant — jamais un texte perdu, jamais un
+        // message refusé. Une frappe n'insère jamais 500 unités d'un coup.
+        guard let onIngest,
+              PastedContentRouter.length(newText) > pasteLimit,
+              let run = PastedContentRouter.insertion(from: previous, to: newText),
+              PastedContentRouter.length(run.inserted) >= Self.pasteInsertionFloor,
+              let ingest = try? PastedTextFile.write(run.inserted) else { return }
+        DispatchQueue.main.async {
+            text = run.restored
         }
+        onIngest([ingest])
+        HapticFeedback.medium()
     }
 
+    /// En deçà, une écriture est une frappe, une dictée ou une correction.
+    static var pasteInsertionFloor: Int { 500 }
+
     func clipboardContentPreview(_ clip: ClipboardContent) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "doc.plaintext.fill")
                 .font(.body)
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundStyle(MeeshyColors.indigo500)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(String(localized: "composer.clipboard.title", defaultValue: "Contenu du presse-papier", bundle: .main))
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                Text(String(localized: "composer.clipboard.title", defaultValue: "Contenu du presse-papiers", bundle: .main))
                     .font(.caption2.weight(.bold))
-                    .foregroundColor(style == .dark ? .white : theme.textPrimary)
+                    .foregroundStyle(style == .dark ? Color.white : theme.textPrimary)
 
                 Text(clip.truncatedPreview)
                     .font(.caption2)
-                    .foregroundColor(style == .dark ? .white.opacity(0.6) : theme.textSecondary)
+                    .foregroundStyle(style == .dark ? Color.white.opacity(0.6) : theme.textSecondary)
                     .lineLimit(2)
 
                 Text(String(localized: "composer.clipboard.charCount", defaultValue: "\(clip.charCount) caract\u{00E8}res", bundle: .main))
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .foregroundStyle(MeeshyColors.indigo500)
             }
 
             Spacer()
@@ -480,37 +483,21 @@ extension UniversalComposerBar {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.callout)
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
             }
             .accessibilityLabel(String(localized: "composer.a11y.removeClipboardContent", defaultValue: "Retirer le contenu du presse-papier", bundle: .main))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                 .fill(style == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .stroke(MeeshyColors.indigo500.opacity(0.3), lineWidth: 1)
                 )
         )
-        .padding(.horizontal, 12)
-        .padding(.bottom, 4)
-    }
-
-    // MARK: - Helpers
-
-    func iconForType(_ type: ComposerAttachmentType) -> String {
-        switch type {
-        case .voice: return "mic.fill"
-        case .location: return "location.fill"
-        case .image: return "photo.fill"
-        case .file: return "doc.fill"
-        case .video: return "video.fill"
-        }
-    }
-
-    func formatFileSize(_ bytes: Int) -> String {
-        Int64(bytes).formatted(.byteCount(style: .file))
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.bottom, MeeshySpacing.xs)
     }
 }

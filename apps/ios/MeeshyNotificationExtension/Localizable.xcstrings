@@ -22,8 +22,7 @@
             "state" : "new",
             "value" : "🎵 Message vocal"
           }
-        }
-      ,
+        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
@@ -41,19 +40,125 @@
             "state" : "translated",
             "value" : "🎵 Messaggio vocale"
           }
-        }
-      ,
+        },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "🎵 Mensagem de voz"
           }
-        }
-      ,
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "🎵 语音消息"
+          }
+        }
+      }
+    },
+    "notification.detail.invitation" : {
+      "comment" : "Corps d'une notification d'invitation à une conversation (#8858) : « ✉️ <libellé> · <titre> ».",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "دعوة"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einladung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invitation"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invitación"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invitation"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invito"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convite"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "邀请"
+          }
+        }
+      }
+    },
+    "notification.detail.sharedLocation" : {
+      "comment" : "Corps d'une notification de position partagée sans nom de lieu (#8858) : « 📍 <libellé> ».",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "موقع مُشارَك"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geteilter Standort"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shared location"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ubicación compartida"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Position partagée"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Posizione condivisa"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Localização partilhada"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "共享的位置"
           }
         }
       }
@@ -111,6 +216,60 @@
         }
       }
     },
+    "notification.ephemeral_message.deadline" : {
+      "comment" : "Push body for an ephemeral message, carrying the local deadline time (#7453). The flame is the ephemeral's pictogram (directive 2026-09-22).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔥 رسالة مؤقتة · تختفي عند %@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔥 Kurzlebige Nachricht · verschwindet um %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔥 Ephemeral message · disappears at %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔥 Mensaje efímero · desaparece a las %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔥 Message éphémère · disparaît à %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔥 Messaggio effimero · scompare alle %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔥 Mensagem efêmera · desaparece às %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔥 限时消息 · %@ 后消失"
+          }
+        }
+      }
+    },
     "notification.hidden_message" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -164,6 +323,59 @@
         }
       }
     },
+    "notification.locked_conversation" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "محادثة مقفلة"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gesperrte Unterhaltung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Locked conversation"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversación bloqueada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversation verrouillée"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversazione bloccata"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversa bloqueada"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已锁定的对话"
+          }
+        }
+      }
+    },
     "notification.view_once_message" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -194,7 +406,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Message éphémère"
+            "value" : "Message à vue unique"
           }
         },
         "it" : {
@@ -206,7 +418,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mensagem temporária"
+            "value" : "Mensagem de visualização única"
           }
         },
         "zh-Hans" : {

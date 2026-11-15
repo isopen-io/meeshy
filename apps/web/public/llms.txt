@@ -1,0 +1,28 @@
+# Meeshy
+
+> Messagerie temps réel multilingue : traduction automatique de bout en bout du
+> contenu (NLLB-200), transcription et synthèse vocale, chiffrement de bout en
+> bout (E2EE) OPTIONNEL par conversation. Chaque utilisateur lit le contenu dans
+> sa langue préférée (le « Prisme Linguistique »), la traduction s'appliquant de
+> façon transparente.
+
+## API
+
+- [Spécification OpenAPI 3.1 (JSON machine)](https://gate.meeshy.me/docs/json) : la source de vérité de l'API, à charger par un agent.
+- [Documentation interactive (Swagger UI)](https://gate.meeshy.me/docs) : la même spécification, pour un lecteur humain.
+- Toutes les routes sont préfixées par `/api/v1/` ; base de production `https://gate.meeshy.me/api/v1/`.
+
+## Authentification
+
+- **Utilisateurs inscrits** : JWT via l'en-tête `Authorization: Bearer {token}`. Obtenir le jeton par `POST /api/v1/auth/login` (`{ "username": "...", "password": "..." }`).
+- **Utilisateurs anonymes** : jeton de session via l'en-tête `X-Session-Token` (aucun chiffrement).
+
+## Chiffrement de bout en bout (E2EE)
+
+- L'E2EE est OPTIONNEL et s'active par conversation. Hors E2EE, toutes les features serveur sont disponibles (y compris la traduction automatique côté serveur).
+- **Dans une conversation chiffrée, le serveur ne voit JAMAIS le clair.** La traduction s'y fait sur l'appareil. Un agent qui opère côté serveur n'a donc PAS accès au contenu d'une conversation E2EE : aucune API serveur ne peut le lui restituer en clair.
+
+## Notes pour un agent
+
+- Meeshy est gratuit.
+- L'API respecte un format de réponse uniforme : `{ success, data?, error?, message?, code?, pagination? }`.

@@ -1,0 +1,54 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { describe, expect, test } from 'bun:test';
+
+/**
+ * LA COQUE ANDROID REÇOIT UN GROS FICHIER PAR TRANCHES (#9514) — le récepteur
+ * que `shellGallerySaver` appelle (`src/lib/gallery/gallery-saver.ts`) pour une
+ * vidéo plus lourde que le pont. Les bornes (extension, taille) sont tenues par
+ * `FileSinkRulesTest.java`.
+ */
+
+const JAVA = join(dirname(fileURLToPath(import.meta.url)), '..', 'android', 'app', 'src', 'main', 'java', 'me', 'meeshy', 'app');
+const lire = (fichier: string): string =>
+  readFileSync(join(JAVA, fichier), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+
+describe('le récepteur de fichiers de la coque Android (#9514)', () => {
+  test('le plugin porte le nom que la page appelle, et ses quatre méthodes', () => {
+    const plugin = lire('MeeshyFileSinkPlugin.java');
+    expect(plugin).toContain('name = "MeeshyFileSink"');
+    for (const methode of ['open', 'append', 'close', 'discard']) expect(plugin).toMatch(new RegExp(`@PluginMethod\\s+public void ${methode}\\(`));
+    expect(plugin).toContain('FileSinkRules.extensionAllowed(');
+    expect(plugin).toContain('FileSinkRules.fits(');
+    expect(plugin).toContain('getCacheDir()');
+  });
+
+  test('la coque l’enregistre avant de construire le pont', () => {
+    const activite = lire('MainActivity.java');
+    const enregistrement = activite.indexOf('registerPlugin(MeeshyFileSinkPlugin.class);');
+    expect(enregistrement).toBeGreaterThan(-1);
+    expect(enregistrement).toBeLessThan(activite.indexOf('super.onCreate(savedInstanceState);'));
+  });
+});
+
+describe('le partage d’un fichier écrit par le récepteur (#9553)', () => {
+  test('`MeeshyShare.shareFileAt` ne partage qu’un fichier du récepteur, jamais un chemin quelconque', () => {
+    const plugin = lire('MeeshySharePlugin.java');
+    expect(plugin).toMatch(/@PluginMethod\s+public void shareFileAt\(/);
+    expect(plugin).toContain('FileSinkRules.insideSink(');
+  });
+});
+
+describe('le démarrage de la coque n’efface rien sur le thread principal (#10547)', () => {
+  test('`load()` met les restes à la corbeille d’un renommage, puis la vide en arrière-plan', () => {
+    const plugin = lire('MeeshyFileSinkPlugin.java');
+    const load = plugin.slice(plugin.indexOf('public void load()'), plugin.indexOf('@PluginMethod'));
+    expect(load).toContain('.renameTo(');
+    expect(load).toContain('new Thread(');
+    expect(load).toContain('FileSinkRules.emptyTrash(');
+    expect(load).not.toContain('.delete()');
+  });
+});
+

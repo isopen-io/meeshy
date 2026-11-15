@@ -72,7 +72,7 @@ public protocol OfflineQueueProviding: Sendable {
 public actor StoryOfflineQueue: OfflineQueueProviding {
     public static let shared = StoryOfflineQueue()
 
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "story-offline-queue")
+    private let logger = MeeshyLog.logger(.storyOfflineQueue, subsystem: .legacySDK)
     private let publishQueue: any PublishQueueForwarding
 
     private init() {
@@ -187,7 +187,7 @@ extension StoryQueueItemConverter {
             root = try JSONSerialization.jsonObject(with: data)
         } catch {
             // Sans ids de slides, les médias associés ne seront pas réclamés.
-            Logger(subsystem: "com.meeshy.sdk", category: "story-offline-queue")
+            MeeshyLog.logger(.storyOfflineQueue, subsystem: .legacySDK)
                 .error("Story payload is not valid JSON, slide ids not extracted: \(error.localizedDescription, privacy: .public)")
             return []
         }

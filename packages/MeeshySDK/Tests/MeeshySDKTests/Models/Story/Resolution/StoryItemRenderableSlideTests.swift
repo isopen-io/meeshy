@@ -40,10 +40,16 @@ struct StoryItemRenderableSlideTests {
     // MARK: - WS1.5 — aspectRatio legacy hydration depuis FeedMedia
 
     @Test func toRenderableSlide_hydratesLegacyAspectRatio_fromFeedMediaDimensions() throws {
-        // Média avec aspectRatio legacy (≈1.0, sentinelle d'avant le champ) + un
-        // FeedMedia correspondant portant width/height → le reader doit recadrer
-        // à la vraie proportion (1080×1920 = 0.5625), pas en carré squishé.
-        let obj = StoryMediaObject(id: "obj1", postMediaId: "m1", kind: .image, aspectRatio: 1.0)
+        // Média SANS mesure (`nil`) + un FeedMedia correspondant portant
+        // width/height → le reader doit recadrer à la vraie proportion
+        // (1080×1920 = 0.5625), pas en carré squishé.
+        //
+        // **Ce témoin passait `1.0` avant #5182**, c'est-à-dire la langue
+        // d'AVANT #5100 : la sentinelle et le carré s'y écrivaient pareil. Sous
+        // la règle neuve, un `1.0` explicite est une MESURE et doit traverser
+        // intact — ce que le témoin voisin `…_aMeasuredSquare…` éprouve
+        // désormais. Le cas « je ne sais pas » a un nom, et c'est `nil`.
+        let obj = StoryMediaObject(id: "obj1", postMediaId: "m1", kind: .image, aspectRatio: nil)
         var effects = StoryEffects()
         effects.mediaObjects = [obj]
         let feed = FeedMedia(id: "m1", type: .image, thumbnailColor: "000000",
@@ -55,6 +61,28 @@ struct StoryItemRenderableSlideTests {
         let slide = item.toRenderableSlide(preferredLanguages: [])
         let ratio = try #require(slide.effects.mediaObjects?.first?.aspectRatio)
         #expect(abs(ratio - (1080.0 / 1920.0)) < 0.001)
+    }
+
+    /// **Le cas qui était irreprésentable** (#5100), et que rien n'éprouvait
+    /// jusqu'à #5182 : une photo RÉELLEMENT carrée.
+    ///
+    /// Elle ne peut pas se distinguer d'un inconnu par sa VALEUR — les deux
+    /// valent 1. Elle s'en distingue parce que la mesure EXISTE. Le témoin
+    /// choisit donc un `FeedMedia` non carré : si l'hydratation s'appliquait
+    /// quand même, le ratio servi deviendrait 0.5625 et la mesure serait perdue.
+    @Test func toRenderableSlide_aMeasuredSquare_isNeverRewrittenByTheCarrier() throws {
+        let obj = StoryMediaObject(id: "obj1", postMediaId: "m1", kind: .image, aspectRatio: 1.0)
+        var effects = StoryEffects()
+        effects.mediaObjects = [obj]
+        let feed = FeedMedia(id: "m1", type: .image, thumbnailColor: "000000",
+                             width: 1080, height: 1920)
+        let item = StoryItem(id: "story-1", content: nil, media: [feed],
+                             storyEffects: effects, createdAt: Date(),
+                             expiresAt: nil, isViewed: false)
+
+        let ratio = try #require(item.toRenderableSlide(preferredLanguages: [])
+                                     .effects.mediaObjects?.first?.aspectRatio)
+        #expect(abs(ratio - 1.0) < 0.001)
     }
 
     @Test func toRenderableSlide_keepsRealAspectRatio_whenAlreadyPersisted() throws {
@@ -269,5 +297,60 @@ struct StoryItemRenderableSlideTests {
 
         #expect(slide.effects.audioPlayerObjects?.first?.mediaURL
                 == "https://cdn.example.com/persisted.m4a")
+    }
+
+    // MARK: - Hydratation de l'URL des objets média (#13972)
+
+    /// L'exporteur (« Enregistrer », « Partager », « Imager ») ne reçoit qu'un
+    /// slide : il rapatrie chaque `StoryMediaObject.mediaURL` avant de composer.
+    /// Un objet publié ne porte que son `postMediaId` ; sans l'URL de son
+    /// `FeedMedia`, la photo comme la vidéo — posées ou en fond — sortaient
+    /// noires (fixture staging `6a9d051cdf14f4a6e6d5d1fb`).
+    @Test func toRenderableSlide_hydratesPosedAndBackgroundMediaURLs_fromFeedMedia() throws {
+        let fond = StoryMediaObject(id: "bg", postMediaId: "pm-bg", kind: .video,
+                                    aspectRatio: 0.5625, isBackground: true)
+        let posee = StoryMediaObject(id: "fg", postMediaId: "pm-fg", kind: .image, aspectRatio: 1.0)
+        var effects = StoryEffects()
+        effects.mediaObjects = [fond, posee]
+        let media = [
+            FeedMedia(id: "pm-bg", type: .video, url: "https://cdn.example.com/fond.mp4",
+                      thumbnailColor: "000000"),
+            FeedMedia(id: "pm-fg", type: .image, url: "https://cdn.example.com/photo.jpg",
+                      thumbnailColor: "000000"),
+        ]
+        let item = StoryItem(id: "post-1", content: nil, media: media,
+                             storyEffects: effects, createdAt: Date(),
+                             expiresAt: nil, isViewed: false)
+
+        let slide = item.toRenderableSlide(preferredLanguages: [])
+
+        let objets = try #require(slide.effects.mediaObjects)
+        #expect(objets.first { $0.id == "bg" }?.mediaURL == "https://cdn.example.com/fond.mp4")
+        #expect(objets.first { $0.id == "fg" }?.mediaURL == "https://cdn.example.com/photo.jpg")
+        #expect(slide.mediaURL == nil)
+    }
+
+    /// Une URL déjà portée par l'objet gagne, comme pour les pistes audio ; un
+    /// `FeedMedia` sans adresse ne pose rien.
+    @Test func toRenderableSlide_keepsPersistedMediaURL_andIgnoresAnEmptyCarrier() throws {
+        var persistee = StoryMediaObject(id: "a", postMediaId: "pm-a", kind: .image, aspectRatio: 1.0)
+        persistee.mediaURL = "https://cdn.example.com/persisted.jpg"
+        let sansAdresse = StoryMediaObject(id: "b", postMediaId: "pm-b", kind: .image, aspectRatio: 1.0)
+        var effects = StoryEffects()
+        effects.mediaObjects = [persistee, sansAdresse]
+        let media = [
+            FeedMedia(id: "pm-a", type: .image, url: "https://cdn.example.com/other.jpg",
+                      thumbnailColor: "000000"),
+            FeedMedia(id: "pm-b", type: .image, url: "", thumbnailColor: "000000"),
+        ]
+        let item = StoryItem(id: "post-1", content: nil, media: media,
+                             storyEffects: effects, createdAt: Date(),
+                             expiresAt: nil, isViewed: false)
+
+        let slide = item.toRenderableSlide(preferredLanguages: [])
+
+        let objets = try #require(slide.effects.mediaObjects)
+        #expect(objets.first { $0.id == "a" }?.mediaURL == "https://cdn.example.com/persisted.jpg")
+        #expect(objets.first { $0.id == "b" }?.mediaURL == nil)
     }
 }

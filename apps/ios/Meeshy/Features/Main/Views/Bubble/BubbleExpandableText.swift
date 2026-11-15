@@ -2,25 +2,67 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Texte de bulle avec troncature « Voir plus » (depliage a sens unique) gere localement.
+/// L'état de dépliage d'un message long, remis par l'hôte de la liste
+/// (#8147) : c'est l'hôte qui le sait — lui seul garde le message déplié
+/// tant que la conversation est ouverte (#16463) et pose la hauteur sans
+/// saut de défilement.
 ///
-/// Was: ThemedMessageBubble.expandableTextView (lignes 771-819) +
-/// `textTruncateLimit` (ligne 761) + `truncateAtWord` (lignes 859-864).
+/// Voyage par l'environnement jusqu'à la bulle, dont la chaîne
+/// `ThemedMessageBubble` → `BubbleStandardLayout` n'a pas à le connaître ;
+/// la rangée plate le reçoit par son `FocalRowInput`. Égalité sur le
+/// MESSAGE et l'état, jamais sur la fermeture, reconstruite à chaque
+/// configuration : sans le message, une cellule réutilisée gardait la
+/// fermeture de son occupant précédent — deux messages repliés sont
+/// « égaux » — et « Lire la suite » dépliait l'autre (#8161).
+struct LongMessageExpansion: Equatable {
+    let messageId: String
+    let isExpanded: Bool
+    let expand: () -> Void
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.messageId == rhs.messageId && lhs.isExpanded == rhs.isExpanded
+    }
+}
+
+private struct LongMessageExpansionKey: EnvironmentKey {
+    static let defaultValue: LongMessageExpansion? = nil
+}
+
+extension EnvironmentValues {
+    var longMessageExpansion: LongMessageExpansion? {
+        get { self[LongMessageExpansionKey.self] }
+        set { self[LongMessageExpansionKey.self] = newValue }
+    }
+}
+
+/// Texte d'un message, replié sur son EXTRAIT quand il est long (#8147).
 ///
-/// L'etat `isExpanded` est encapsule via `@State` pour que la god view
-/// n'ait pas a le tracker. Equatable manuel : on exclut `onLongPress` (callback)
-/// et `@State` (interne) du test d'egalite.
+/// La loi de l'extrait est `LongMessageExcerpt` (SDK, miroir de la loi
+/// partagée) : au-delà du seuil, un quart du texte coupé au mot, suivi de
+/// « … Lire la suite ». Le dépliage se fait EN PLACE, dans le fil — il
+/// n'existe plus de feuille de lecture. Déplié, le texte est un texte
+/// ordinaire : aucun « Réduire » (#16463).
+///
+/// Le texte reçu est le texte SERVI par le Prisme : l'extrait porte sur la
+/// langue affichée, jamais sur l'original quand une traduction est servie.
+///
+/// Équatable manuel : on exclut les fermetures et l'état local.
 struct BubbleExpandableText: View, Equatable {
-    static let truncateLimit = 512
 
     /// Etat pur, testable sans SwiftUI.
     struct State: Equatable {
         let content: String
         let isExpanded: Bool
 
-        func needsTruncation(limit: Int = BubbleExpandableText.truncateLimit) -> Bool {
-            !isExpanded && BubbleExpandableText.exceeds(content, limit)
+        var isLong: Bool { LongMessageExcerpt.isLong(content) }
+
+        /// Le texte à rendre : l'extrait replié, le message entier sinon.
+        var displayedText: String {
+            guard !isExpanded, let excerpt = LongMessageExcerpt.excerpt(content) else { return content }
+            return excerpt + "…"
         }
+
+        var showsReadMore: Bool { isLong && !isExpanded }
     }
 
     let content: String
@@ -39,32 +81,26 @@ struct BubbleExpandableText: View, Equatable {
     /// `[rawURL: token]` outbound-link tracking map → raw URLs link to
     /// `/l/<token>`. Empty by default (no rewrite) for non-message callers.
     var trackedLinks: [String: String] = [:]
-    /// Taille de rendu du texte. `15` = la cote de bulle historique
-    /// (`thread.line2.size`), valeur par DÉFAUT : tous les sites d'appel
-    /// existants gardent leur rendu bit-à-bit sans rien passer.
-    ///
-    /// Paramétrée pour la rangée ÉLUE du mode Focal, dont §4.6 exige le
-    /// passage à `16`. Un `.font()` externe ne pouvait pas l'obtenir :
+    /// L'auteur n'a pas de compte (#10286) : ses adresses restent du texte brut.
+    var linksAreInert: Bool = false
+    /// Taille de rendu du texte. `15` = la cote de bulle historique ; la
+    /// rangée plate passe la sienne (`FocalMetrics.Text.size`).
     /// `MessageTextRenderer.render` produit une `AttributedString` dont
-    /// chaque run porte sa police explicite, et une police posée par le
-    /// parent ne surcharge pas des runs attribués — l'écart aurait été un
+    /// chaque run porte sa police explicite : un `.font()` externe serait un
     /// no-op silencieux.
     var fontSize: CGFloat = 15
+    /// Dépliage piloté par l'hôte. `nil` ⇒ l'environnement
+    /// (`longMessageExpansion`) ; à défaut, un état local — un hôte qui ne
+    /// sait rien du dépliage garde un texte qui se déplie et se replie.
+    var expansion: LongMessageExpansion? = nil
+    /// Mode Script, message arc-en-ciel : chaque lettre d'une couleur graînée par l'id du message
+    /// (`RainbowLetters`). `nil` : l'encre ordinaire.
+    var rainbowSeed: String? = nil
 
-    var onLongPress: (() -> Void)? = nil
-    /// Libellé du bouton d'expansion — `nil` = « Voir plus » historique
-    /// (aucun site d'appel existant ne change). Focal passe « Lire plus ».
-    var expandLabel: String? = nil
-    /// Plafond de caractères de CETTE instance (défaut : la constante
-    /// historique). Le message en focus de Focal en pose un plus bas.
-    var truncateLimit: Int = BubbleExpandableText.truncateLimit
-    /// Détournement d'expansion : quand posé, le tap N'ÉTEND PAS inline —
-    /// il route vers l'appelant (Focal ouvre sa sheet scrollable, spec
-    /// Magnificence §3 : un message de 3 écrans casserait la loupe).
-    var onExpandOverride: (() -> Void)? = nil
-
-    @SwiftUI.State private var isExpanded: Bool = false
+    @SwiftUI.State private var localExpanded = false
+    @Environment(\.longMessageExpansion) private var hostExpansion
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.bubbleSkin) private var skin
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.content == rhs.content &&
@@ -76,108 +112,104 @@ struct BubbleExpandableText: View, Equatable {
         lhs.linkTint == rhs.linkTint &&
         lhs.isDark == rhs.isDark &&
         lhs.trackedLinks == rhs.trackedLinks &&
+        lhs.linksAreInert == rhs.linksAreInert &&
         lhs.fontSize == rhs.fontSize &&
-        lhs.expandLabel == rhs.expandLabel
+        lhs.expansion == rhs.expansion &&
+        lhs.rainbowSeed == rhs.rainbowSeed
+    }
+
+    private var resolvedExpansion: LongMessageExpansion? { expansion ?? hostExpansion }
+
+    private var state: State {
+        State(content: content, isExpanded: resolvedExpansion?.isExpanded ?? localExpanded)
     }
 
     var body: some View {
-        let needsTruncation = !isExpanded && Self.exceeds(content, truncateLimit)
-        let textColor = isMe ? Color.white : MeeshyColors.textPrimary(isDark: isDark)
+        let state = state
+        let textColor = isMe ? skin.ink : MeeshyColors.textPrimary(isDark: isDark)
 
-        if needsTruncation {
-            let truncated = Self.truncateAtWord(content, limit: truncateLimit)
-            VStack(alignment: .leading, spacing: 4) {
-                MessageTextRenderer.render(truncated + "...", fontSize: fontSize, color: textColor, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .tint(linkTint)
-                    // Pas de `.textSelection(.enabled)` : le long-press doit ouvrir
-                    // le menu contextuel custom Meeshy (`MessageActionsMenu`, qui
-                    // porte « Copier »), jamais le menu d'édition natif iOS
-                    // (liquid glass « Copier / Rechercher / Traduire »).
-
-                // Bouton texte « Voir plus » aligné en bas à droite (spec produit).
-                //
-                // AMÉLIORATION FIABILITÉ (Task ExpandableTextFix) :
-                // 1. Décalage horizontal (`.padding(.trailing, 48)`) pour garantir
-                //    l'exclusion de la zone de contact du coin inférieur droit.
-                //    L'overlay des réactions (bouton "+") fait 40pt de large et
-                //    déborde de 4pt vers l'extérieur : 48pt assure une séparation
-                //    géométrique absolue.
-                // 2. Utilisation de `.highPriorityGesture` avec un `TapGesture`
-                //    pour garantir que le tap gagne sur le `LongPressGesture`
-                //    simultané du parent (`BubbleSwipeContainer`) et sur la
-                //    sélection de texte (`.textSelection(.enabled)`).
-                // 3. `.textSelection(.disabled)` explicite sur le bouton pour
-                //    qu'un tap imprécis ne déclenche pas le mode sélection.
-                Text(expandLabel ?? String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
-                    .font(MeeshyFont.relative(12, weight: .semibold))
-                    .foregroundColor(textColor.opacity(0.6))
-                    // Hauteur de layout compacte (24pt) : l'ancien minHeight 44
-                    // creusait ~16pt de vide au-dessus ET en dessous du libellé
-                    // avant la date (feedback produit 2026-07-08). La cible
-                    // tactile atteint les 44pt HIG via un contentShape étendu
-                    // UNIQUEMENT vers le bas (`DownwardExtendedTapShape`, +20pt)
-                    // — jamais vers le haut, pour ne pas mordre sur le texte
-                    // tronqué / les liens juste au-dessus.
-                    .frame(maxWidth: .infinity, minHeight: 24, alignment: .trailing)
-                    .padding(.trailing, 48)
-                    .contentShape(DownwardExtendedTapShape(extraBottom: 20))
-                    .textSelection(.disabled)
-                    .highPriorityGesture(
-                        TapGesture().onEnded { expand() }
-                    )
-                    .accessibilityIdentifier("bubble.expand.more")
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityLabel(String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
-                    .accessibilityHint(Text(String(localized: "bubble.expand.more.hint", defaultValue: "Affiche le message complet", bundle: .main)))
-                    // Le libellé n'est pas un vrai `Button` (il porte un
-                    // `.highPriorityGesture` custom pour battre le long-press du
-                    // parent) : la double-tape VoiceOver n'atteint pas ce geste.
-                    // On câble donc l'action d'activation par défaut explicitement.
-                    .accessibilityAction { expand() }
-            }
-        } else {
-            // Déplié (ou court) : on affiche le message COMPLET sans aucun
-            // bouton. Le dépliage est à sens unique — le chevron "V" a rempli
-            // son rôle et disparaît (spec : « déplier uniquement et disparaître,
-            // pas de repli »). `isExpanded` reste local à la sous-vue.
-            MessageTextRenderer.render(content, fontSize: fontSize, color: textColor, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+            renderedText(state.displayedText, textColor: textColor)
                 .fixedSize(horizontal: false, vertical: true)
                 .tint(linkTint)
-                // Pas de `.textSelection(.enabled)` : voir note ci-dessus — le
-                // long-press passe par le menu contextuel custom Meeshy, pas par
-                // le menu d'édition natif iOS.
-        }
-    }
+                // Pas de `.textSelection(.enabled)` : le long-press doit ouvrir
+                // le menu contextuel custom Meeshy (`MessageActionsMenu`, qui
+                // porte « Copier »), jamais le menu d'édition natif iOS.
 
-    /// Dépliage à sens unique, partagé par le tap et l'action VoiceOver.
-    /// Respecte Reduce Motion : pas d'animation quand l'utilisateur l'a désactivée.
-    private func expand() {
-        HapticFeedback.light()
-        if let onExpandOverride {
-            onExpandOverride()
-            return
-        }
-        if reduceMotion {
-            isExpanded = true
-        } else {
-            withAnimation(.easeInOut(duration: 0.25)) {
-                isExpanded = true
+            if state.showsReadMore {
+                readMoreLabel(textColor: textColor)
             }
         }
     }
 
-    /// `true` iff `s` has MORE than `limit` characters, scanning at most
-    /// `limit + 1` of them. Avoids an O(n) full `count` of long messages on
-    /// every render — we only need the threshold, not the exact length.
-    static func exceeds(_ s: String, _ limit: Int) -> Bool {
-        s.index(s.startIndex, offsetBy: limit + 1, limitedBy: s.endIndex) != nil
+    private func renderedText(_ text: String, textColor: Color) -> Text {
+        guard let rainbowSeed, !text.isEmpty else {
+            return MessageTextRenderer.render(text, fontSize: fontSize, color: textColor, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks, linksAreInert: linksAreInert)
+        }
+        let attributed = MessageTextRenderer.attributed(text, fontSize: fontSize, color: textColor, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks, linksAreInert: linksAreInert)
+        return Text(RainbowLetters.painting(attributed, baseColor: textColor, seed: rainbowSeed, isDark: isDark))
     }
 
-    static func truncateAtWord(_ text: String, limit: Int) -> String {
-        guard exceeds(text, limit) else { return text }
-        let prefix = String(text.prefix(limit))
-        guard let lastSpace = prefix.lastIndex(of: " ") else { return prefix }
-        return String(prefix[prefix.startIndex..<lastSpace])
+    /// « Lire la suite », aligné en bas à droite. Il disparaît au dépliage :
+    /// rien ne replie (#16463).
+    ///
+    /// - `.padding(.trailing, 48)` : exclut le coin où l'overlay des réactions
+    ///   (bouton « + », 40 pt débordant de 4) prend ses touches.
+    /// - `.highPriorityGesture` : le tap gagne sur l'appui long du parent
+    ///   (`BubbleSwipeContainer`).
+    /// - Hauteur de layout compacte (24 pt) : la cible atteint les 44 pt HIG
+    ///   par une forme de contact étendue vers le BAS seulement, jamais vers
+    ///   le texte au-dessus.
+    /// - Ce n'est pas un vrai `Button` : l'activation VoiceOver passe par
+    ///   `.accessibilityAction`, et l'état se dit par `accessibilityValue`.
+    private func readMoreLabel(textColor: Color) -> some View {
+        // À l'ENCRE du texte et souligné (parité web, #8147) : la couleur de
+        // marque posée sur le verre mesurait 2,6:1, sous le seuil AA.
+        Text(Self.readMoreTitle)
+            .underline()
+            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+            .foregroundColor(textColor)
+            .frame(maxWidth: .infinity, minHeight: 24, alignment: .trailing)
+            .padding(.trailing, 48)
+            .contentShape(DownwardExtendedTapShape(extraBottom: 20))
+            .textSelection(.disabled)
+            .highPriorityGesture(TapGesture().onEnded { expand() })
+            .accessibilityIdentifier("bubble.expand.more")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(Self.readMoreTitle)
+            .accessibilityValue(Self.collapsedValue)
+            .accessibilityHint(Text(Self.readMoreHint))
+            .accessibilityAction { expand() }
+    }
+
+    /// Partagé par le tap et l'action VoiceOver. L'hôte anime la hauteur de
+    /// la cellule ; seul l'état local (hôte muet) s'anime ici — jamais sous
+    /// Réduire le mouvement.
+    private func expand() {
+        HapticFeedback.light()
+        if let resolvedExpansion {
+            resolvedExpansion.expand()
+            return
+        }
+        guard !reduceMotion else { return localExpanded = true }
+        withAnimation(.easeInOut(duration: 0.25)) { localExpanded = true }
+    }
+
+    // MARK: - Libellés (un seul vocabulaire pour tous les modes de lecture)
+
+    static var readMoreTitle: String {
+        String(localized: "message.long.readMore", defaultValue: "Lire la suite", bundle: .main)
+    }
+
+    static var readMoreHint: String {
+        String(localized: "bubble.expand.more.hint", defaultValue: "Affiche le message complet", bundle: .main)
+    }
+
+    static var expandedValue: String {
+        String(localized: "message.long.expanded", defaultValue: "Déplié", bundle: .main)
+    }
+
+    static var collapsedValue: String {
+        String(localized: "message.long.collapsed", defaultValue: "Replié", bundle: .main)
     }
 }

@@ -1,0 +1,177 @@
+import XCTest
+import MeeshySDK
+@testable import Meeshy
+
+/// **B (#3883) — on VOIT le média choisi, et le type POST↔RÉEL suit le média.**
+///
+/// Sélectionner une photo ne montrait RIEN : `documentLocalMedia` alimentait le
+/// prédicat de format et partait à la publication, mais n'était jamais peint. Ce
+/// lot le rend visible — un ruban de vignettes RETIRABLES (`mediaStrip`) — et
+/// vérifie que le toggle POST↔RÉEL réagit à la composition (loi 4, déjà câblé au
+/// T2.4). Le choix STORY dépend de la scène → LOT 2 (milestone F).
+final class ComposerMediaStripTests: XCTestCase {
+
+    private static let iosRoot = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+
+    private func source(_ relativePath: String) throws -> String {
+        try String(contentsOf: Self.iosRoot.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+
+    private func compact(_ text: String) -> String {
+        AppSourceGuard.stripComments(text)
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    // 1 — le type SUIT le média (le prédicat du toggle POST↔RÉEL), par comportement.
+    func test_leType_suitLeMedia() {
+        XCTAssertFalse(
+            ReelComposition.qualifiesAsReel(mimeTypes: ["image/jpeg"]),
+            "Une seule image reste un POST — l'interrupteur POST↔RÉEL ne doit pas apparaître."
+        )
+        XCTAssertTrue(
+            ReelComposition.qualifiesAsReel(mimeTypes: ["image/jpeg", "image/png"]),
+            "Deux images qualifient RÉEL — l'interrupteur apparaît (loi 4)."
+        )
+        XCTAssertTrue(
+            ReelComposition.qualifiesAsReel(mimeTypes: ["video/quicktime"], durationsMs: [5000]),
+            "Une vidéo ≥ 3 s qualifie RÉEL."
+        )
+        XCTAssertFalse(
+            ReelComposition.qualifiesAsReel(mimeTypes: ["video/quicktime"], durationsMs: [1000]),
+            "Une vidéo trop courte reste un POST."
+        )
+    }
+
+    // 2 — la surface PEINT le média reçu, en vignettes retirables.
+    func test_laSurface_peintLeMedia_enVignettesRetirables() throws {
+        // Le ruban a été MONTÉ en barre haute au 2026-08-27 (#4047) et s'appelle
+        // désormais `slideRail`. Ce que cette garde protège n'a pas changé d'un
+        // mot : le média choisi est VISIBLE et RETIRABLE. Seul son logement a
+        // bougé — DEUX fois.
+        //
+        // **Ce qui a changé au #4724, c'est la LISTE qu'il peint.** « En Post
+        // une slide EST un média » reste vrai ; « donc le rail des slides et
+        // l'inventaire des pièces jointes sont le MÊME objet » ne l'est plus,
+        // depuis qu'un média peut être posé SUR la scène sans ouvrir de page.
+        // Un son, un document, une image de premier plan sont des pièces
+        // jointes qui ne sont aucune page.
+        //
+        // **#13907 — la barre haute a quitté le projet**, et avec elle le
+        // logement que ce témoin relisait depuis le #4064 : le rail des slides
+        // vit dans `ComposerSlideRail`, lu plus bas.
+        XCTAssertFalse(
+            try AppSourceGuard.composerSurfaceSource()
+                .contains("private var mediaStrip"),
+            "L'ancien ruban est revenu dans le document : c'est le second inventaire que #4047 interdit."
+        )
+        // **#5599 — la BANDE a été remplacée par le RAIL, et ce témoin gardait
+        // la bande.** Ce qui se peint n'est plus un média par vignette mais une
+        // SLIDE par vignette : un média posé sur la scène sans ouvrir de page
+        // n'est aucune vignette, et c'est exactement la distinction que le
+        // commentaire ci-dessus annonçait sans encore la mesurer.
+        //
+        // Les trois capacités restent EXIGÉES, sur leur porteur actuel
+        // (`ComposerSlideRail`) : recevoir sans amender, peindre une vignette
+        // par élément, pouvoir en retirer une. Le doc-comment du rail dit
+        // lui-même que la troisième avait été perdue au passage d'un lot et
+        // rétablie sur constat porteur (2026-09-06) — raison de plus pour
+        // qu'un témoin la tienne.
+        let rail = compact(try source("Meeshy/Features/Composer/ComposerSlideRail.swift"))
+        XCTAssertTrue(
+            rail.contains("letslides:[StorySlide]"),
+            "Le rail doit RECEVOIR ses slides — il reste sans état, le meuble le possède."
+        )
+        XCTAssertTrue(
+            rail.contains("ForEach(Array(slides.enumerated()),id:\\.element.id)"),
+            "Le rail doit peindre UNE vignette par slide — la preuve visible."
+        )
+        XCTAssertTrue(
+            // #9126 : la croix est OPTIONNELLE — le meuble la retire quand il retouche
+            // pour la conversation, où une scène est une pièce du message. Quand elle est
+            // fournie, la vignette la peint et la touche demande confirmation avant de retirer.
+            rail.contains("letonDelete:((Int)->Void)?")
+                && (rail.contains("ifletonDelete,") || rail.contains("ifonDelete!=nil,"))
+                && rail.contains("Button{deletion=deletion.asking(index:index)}")
+                && rail.contains("onDelete?(cible)"),
+            "Chaque vignette doit pouvoir se RETIRER — la croix que le constat porteur du "
+                + "2026-09-06 a fait rétablir après qu'un lot l'eut perdue."
+        )
+        XCTAssertTrue(
+            ComposerHeaderTiles.showsDelete(sceneIndex: 1, currentIndex: 1, sceneCount: 2),
+            "La vignette COURANTE d'une série porte sa croix."
+        )
+        XCTAssertFalse(
+            ComposerHeaderTiles.showsDelete(sceneIndex: 0, currentIndex: 0, sceneCount: 1),
+            "Une scène seule ne se retire pas par sa vignette."
+        )
+    }
+
+    // 3 — le meuble CÂBLE son média à la surface, et le retrait ôte du modèle.
+    func test_leMeuble_cableSonMediaEtLeRetrait() throws {
+        let src = compact(try AppSourceGuard.composerHostSource())
+        XCTAssertTrue(src.contains("structMeeshyComposerHost"), "MeeshyComposerHost introuvable ou vide")
+        // **RE-POINTÉE au #4724, et la raison n'est pas cosmétique.** La barre
+        // haute ne reçoit plus l'inventaire ENTIER : elle reçoit les médias qui
+        // ont fondé une page (`headerTileMedia`). Garder l'ancienne chaîne ici
+        // aurait rougi sur un câblage devenu JUSTE, et — pire — aurait poussé à
+        // « réparer » en re-branchant la liste entière, rouvrant le défaut.
+        // **#5599 — même bascule que ci-dessus, côté CÂBLAGE.** Le meuble ne
+        // passe plus une liste de médias : il passe les SLIDES, et la règle qui
+        // les dérive a changé de signature avec elles
+        // (`ComposerHeaderTiles.tiles(for:)`). Ce que ce témoin doit tenir est
+        // inchangé et se lit toujours en trois temps : la liste vient de la
+        // RÈGLE, taper sélectionne, la croix retire.
+        XCTAssertTrue(
+            src.contains("ComposerHeaderTiles.tiles(for:viewModel.slides)"),
+            "La liste des vignettes doit venir de la RÈGLE, jamais d'un filtre réécrit en ligne "
+                + "dans un `body` — c'est ce qui garde les deux surfaces d'accord."
+        )
+        XCTAssertTrue(
+            src.contains("onSelect:{viewModel.selectSlide(at:$0)}"),
+            "Taper une vignette doit SÉLECTIONNER sa slide — sans quoi le rail est décoratif."
+        )
+        // **#6577 — la croix passe par le RETRAIT du meuble, pas par le SDK.**
+        // `removeSlide` ne nettoie que ce que la vue peint ; le fichier restait
+        // dans `documentLocalMedia` et repartait à la publication. Ce que ce
+        // témoin tient est inchangé — la croix a un EFFET sur le modèle — mais
+        // son site a bougé d'un cran, et il fallait qu'il bouge.
+        XCTAssertTrue(
+            src.contains("onDelete:{retractScene(at:$0)}"),
+            "La croix d'une vignette doit RETIRER sa scène ET son fichier — par le point "
+                + "d'entrée du meuble, seul lieu qui voie les deux porteurs (#6577)."
+        )
+    }
+
+    // 4 — le choix de mode RESPIRE avec la composition, via l'ÉVENTAIL (B3,
+    // #3926) : le gate du réel lit `documentComposesReel`, si bien que l'éventail
+    // offre RÉEL dès que le média du document qualifie — plus de sélecteur de
+    // destination séparé (loi 4 : un seul contrôle, jamais deux).
+    func test_leType_respireAvecLaComposition_viaLEventail() throws {
+        let src = compact(try AppSourceGuard.composerHostSource())
+        XCTAssertTrue(
+            src.contains("varreelGate:Bool") && src.contains("documentComposesReel"),
+            "Le gate du réel de l'éventail respire sur la composition du DOCUMENT (`documentComposesReel`), "
+                + "pas seulement sur l'atelier — l'offre RÉEL apparaît à temps pour servir à basculer."
+        )
+        XCTAssertFalse(
+            src.contains("documentDestinationSelector"),
+            "Le sélecteur de destination contextuel est RETIRÉ (B3) : l'éventail est le seul sélecteur de mode."
+        )
+    }
+
+    // 5 — le libellé du ruban est traduit dans les 7 locales (cliquet i18n).
+    func test_leLibelleDuRuban_estTraduit_7Locales() throws {
+        let catalog = try source("Meeshy/Localizable.xcstrings")
+        let json = try JSONSerialization.jsonObject(with: Data(catalog.utf8)) as? [String: Any]
+        let strings = json?["strings"] as? [String: Any]
+        guard let entry = strings?["composer.document.a11y.media"] as? [String: Any],
+              let locs = entry["localizations"] as? [String: Any] else {
+            return XCTFail("Clé « composer.document.a11y.media » absente du catalogue")
+        }
+        for loc in ["ar", "de", "en", "es", "fr", "it", "pt-BR"] {
+            XCTAssertNotNil(locs[loc], "Clé du ruban : locale « \(loc) » manquante (cliquet i18n)")
+        }
+    }
+}

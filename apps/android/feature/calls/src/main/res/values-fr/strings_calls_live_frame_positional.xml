@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_live_frame_answer_accepted">%1$s a appliqué votre cadre</string>
+    <string name="call_live_frame_answer_declined">%1$s garde son affichage</string>
+    <string name="call_live_frame_proposal_anonymous">Votre correspondant vous propose le cadre « %1$s »</string>
+    <string name="call_live_frame_surface">Cadre %1$s autour des deux vidéos</string>
+    <string name="call_zoom_lens">Zoom %1$s</string>
+</resources>

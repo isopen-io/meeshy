@@ -40,14 +40,8 @@ final class ConversationPreviewPrismSourceGuardTests: XCTestCase {
         // `event.lastMessagePreview` dans le modèle. C'est ce champ-là que
         // `resolvedLastMessagePreview` consommera ensuite — le résoudre ici
         // figerait la langue du lecteur DANS le cache.
-        "Features/Main/ViewModels/ConversationListViewModel.swift":
+        "Features/Main/ViewModels/ConversationListViewModel+SocketEvents.swift":
             "écrit le champ depuis conversation:updated ; la résolution est en aval, à l'affichage",
-        // Homonymie : `GlobalSearchViewModel.SearchResult.lastMessagePreview`
-        // est un champ DE LA VUE, rempli lignes 329/358 par
-        // `conv.resolvedLastMessagePreview(preferredLanguages:)`. La vue lit
-        // donc une valeur déjà passée par le Prisme.
-        "Features/Main/Views/GlobalSearchView.swift":
-            "lit SearchResult.lastMessagePreview, déjà résolu par GlobalSearchViewModel",
     ]
 
     // MARK: - Balayage
@@ -209,35 +203,47 @@ final class ConversationPreviewPrismSourceGuardTests: XCTestCase {
     /// Les trois surfaces corrigées ce cycle ne doivent pas régresser : elles
     /// doivent APPELER le résolveur, pas seulement avoir cessé de lire le brut
     /// (supprimer l'aperçu ferait passer le test précédent aussi).
+    ///
+    /// #9622 — les trois résolvent par `OutsidePreview.lastMessage(`, qui garde
+    /// le texte d'un message qui disparaît puis descend le Prisme
+    /// (`resolvedLastMessagePreview`) : le témoin suit les deux maillons.
     func test_theThreeFixedSurfaces_callTheResolver() throws {
         let expectations = [
-            "Features/Main/Services/WidgetDataManager.swift",
-            "Features/Main/Views/SharePickerView.swift",
-            "Features/Main/Views/WidgetPreviewView.swift",
+            ("Features/Main/Services/WidgetDataManager.swift", "OutsidePreview.lastMessage("),
+            ("Features/Main/Models/Message.swift", "resolvedLastMessagePreview"),
+            ("Features/Main/Views/WidgetPreviewView.swift", "OutsidePreview.lastMessage("),
         ]
-        for relative in expectations {
+        for (relative, resolver) in expectations {
             let url = appSourcesDirectory.appendingPathComponent(relative)
             let code = strippingComments(try String(contentsOf: url, encoding: .utf8))
             XCTAssertTrue(
-                code.contains("resolvedLastMessagePreview"),
-                "\(relative) doit résoudre l'aperçu par le Prisme — l'appel a disparu"
+                code.contains(resolver),
+                "\(relative) doit résoudre l'aperçu par le Prisme — l'appel (\(resolver)) a disparu"
             )
         }
     }
 
     /// La ligne de liste et la recherche globale restent les deux lecteurs
     /// canoniques : la garde ne doit pas les laisser régresser non plus.
+    ///
+    /// #7548 — la ligne de liste ne résout plus l'aperçu elle-même : elle
+    /// monte `ConversationPreviewLine`, qui le fait COMPOSER par le SDK
+    /// (`ConversationPreviewComposer`, dont le corps descend le Prisme par
+    /// `PrismTranslationResolver` et rejoue le fichier de cas commun au web).
+    /// Le témoin suit la chaîne jusqu'au composeur, maillon par maillon.
     func test_canonicalReaders_stillResolveThroughThePrism() throws {
         let expectations = [
-            "Features/Main/Views/ThemedConversationRow.swift",
-            "Features/Main/ViewModels/GlobalSearchViewModel.swift",
+            ("Features/Main/Views/ThemedConversationRow.swift", "ConversationPreviewLine("),
+            ("Features/Lens/Row/LentilleConversationRow.swift", "ConversationPreviewLine("),
+            ("Features/Main/Views/ConversationPreviewLine.swift", "ConversationPreviewComposer.compose("),
+            ("Features/Main/Models/Message.swift", "resolvedLastMessagePreview"),
         ]
-        for relative in expectations {
+        for (relative, resolver) in expectations {
             let url = appSourcesDirectory.appendingPathComponent(relative)
             let code = strippingComments(try String(contentsOf: url, encoding: .utf8))
             XCTAssertTrue(
-                code.contains("resolvedLastMessagePreview"),
-                "\(relative) est un lecteur canonique du Prisme — son appel a disparu"
+                code.contains(resolver),
+                "\(relative) est un lecteur canonique du Prisme — son appel (\(resolver)) a disparu"
             )
         }
     }

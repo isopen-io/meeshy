@@ -5,18 +5,28 @@
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
+import { buildDeletionPageUrl } from '../utils/email-secret-link';
 import { AttachmentService } from './attachments';
 import { EmailService } from './EmailService';
 import { recomputeConversationLastMessageAt } from './messaging/messageRemovalEffects';
+import { anonymizeMessagesOfDeletedAccount } from './messaging/anonymizeDeletedAccountMessages';
 import { MediaService } from './MediaService';
 import { sweepPendingPostMedia } from './posts/sweepPendingPostMedia';
 import type { PostMediaByteRemover } from './posts/reclaimPostMediaBytes';
 import { conversationMessageStatsService } from './ConversationMessageStatsService';
+import type { SessionRevoker } from './admin/user-management.service';
+import { purgeAccountIsolatedData, anonymizeUserIdentity } from './AccountPurgeService';
+import { endSharedLocationAfter } from './sharedLocation/sharedLocationDeps';
+import { purgeMediaOfDeletedAccount } from './purgeDeletedAccountMedia';
+import { deactivateCommunityMembershipsOfDeletedAccount } from './deactivateDeletedAccountCommunityMemberships';
+import { cleanupExpiredData as sweepExpiredData, type ShareLinkRevocationLive } from './cleanupExpiredData';
 import {
   RECIPIENT_LANG_SELECT,
   recipientDateLocale,
   recipientLanguage,
 } from '../utils/recipient-language';
+import { guardedInterval } from '../utils/guarded-timer';
+import { cutTogetherWhere } from './together/togetherDeps';
 
 export class MaintenanceService {
   private prisma: PrismaClient;
@@ -36,6 +46,17 @@ export class MaintenanceService {
    * depuis 30min) se voit marqué offline par le cleanup périodique.
    */
   private isCurrentlyConnected: ((userId: string, isAnonymous: boolean) => boolean) | null = null;
+  /**
+   * Coupe les sockets d'un compte que le balayage vient de mettre hors service
+   * (fin de période de grâce). Même contrat que `UserManagementService` (F9) :
+   * injecté par le manager, résolu à l'appel, best-effort.
+   */
+  private sessionRevoker: SessionRevoker | null = null;
+  /**
+   * Le vivant qu'éteint la révocation des invités d'un lien expiré au
+   * balayage journalier (#10440). Injecté par le manager, résolu à l'appel.
+   */
+  private shareLinkRevocationLive: ShareLinkRevocationLive = {};
   private lastDailyCleanup: Date | null = null;
 
   private emailService?: EmailService;
@@ -72,6 +93,26 @@ export class MaintenanceService {
    */
   setIsCurrentlyConnected(predicate: (userId: string, isAnonymous: boolean) => boolean): void {
     this.isCurrentlyConnected = predicate;
+  }
+
+  /**
+   * Injecter la coupure des sockets d'un compte mis hors service par le
+   * balayage. Comme les deux capacités ci-dessus, elle vient du manager
+   * Socket.IO — qui naît APRÈS ce service — et ce service ne l'atteint jamais
+   * lui-même.
+   */
+  setSessionRevoker(revoker: SessionRevoker): void {
+    this.sessionRevoker = revoker;
+  }
+
+  /**
+   * Injecter le vivant (`io`, manager) dont `revokeShareLinkGuests` a besoin
+   * pour annoncer le départ des invités d'un lien expiré et couper leurs
+   * sockets (#10440) — même origine et même raison que les trois capacités
+   * ci-dessus.
+   */
+  setShareLinkRevocationLive(live: ShareLinkRevocationLive): void {
+    this.shareLinkRevocationLive = live;
   }
 
   /**
@@ -115,16 +156,29 @@ export class MaintenanceService {
 
     // OPTIMISATION: Tâche de maintenance pour l'état en ligne/hors ligne (toutes les 15 secondes)
     // Ancien: 60000ms (60s) -> Nouveau: 15000ms (15s) = 4x plus rapide
-    this.maintenanceInterval = setInterval(async () => {
+    //
+    // Callback NON-async + `void … .catch(…)` — forme bénie des services frères
+    // (ExpiredMessagesCleanupService, CallService). Un `setInterval(async () =>
+    // { await … })` n'attend pas son callback : un rejet n'a aucun try/catch
+    // englobant où être vu, et sous le `--unhandled-rejections=throw` par défaut
+    // de Node 22 son seul effet serait l'ARRÊT du process — toute la passerelle
+    // tombée pour une passe de maintenance best-effort (leçon 230/307). Ne jamais
+    // s'appuyer sur le try/catch interne du callee : il est faux dès qu'une
+    // instruction non gardée précède son propre catch.
+    this.maintenanceInterval = guardedInterval({ name: 'maintenance', everyMs: 15000, logger, run: () => {
       logger.debug('🔄 Exécution de la tâche de maintenance automatique...');
-      await this.updateOfflineUsers();
-    }, 15000); // Vérifier toutes les 15 secondes (4x plus rapide)
+      void this.updateOfflineUsers().catch((error) =>
+        logger.error('❌ Tâche de maintenance périodique échouée:', error)
+      );
+    } }); // Vérifier toutes les 15 secondes (4x plus rapide)
     this.maintenanceInterval.unref?.();
 
     // Tâche de nettoyage journalier (toutes les heures, mais ne s'exécute qu'une fois par jour)
-    this.dailyCleanupInterval = setInterval(async () => {
-      await this.runDailyCleanup();
-    }, 60 * 60 * 1000); // Vérifier toutes les heures
+    this.dailyCleanupInterval = guardedInterval({ name: 'maintenance-daily-cleanup', everyMs: 60 * 60 * 1000, logger, run: () => {
+      void this.runDailyCleanup().catch((error) =>
+        logger.error('❌ Nettoyage journalier périodique échoué:', error)
+      );
+    } }); // Vérifier toutes les heures
     this.dailyCleanupInterval.unref?.();
 
     // Exécuter immédiatement le nettoyage journalier au démarrage
@@ -540,15 +594,23 @@ export class MaintenanceService {
     try {
       logger.info('🧹 [CLEANUP] Démarrage du nettoyage des messages vides...');
 
-      const staleThreshold = new Date();
-      staleThreshold.setHours(staleThreshold.getHours() - this.ORPHANED_ATTACHMENT_THRESHOLD_HOURS);
+      // Un âge se compte en heures RÉELLES : `setHours(getHours() - 24)` compte en
+      // heures d'horloge locale et vaut 25 h le jour du passage à l'heure d'hiver.
+      const staleThreshold = new Date(Date.now() - this.ORPHANED_ATTACHMENT_THRESHOLD_HOURS * 3_600_000);
 
       // Trouver les messages vides via MongoDB raw query :
       // content whitespace-only ($regex), pas de soft-delete, >24h,
-      // et pas d'attachements liés (lookup + match vide)
+      // et pas d'attachements liés (lookup + match vide).
+      //
+      // #13027 — un message CHIFFRÉ n'est jamais vide : `MessageProcessor`
+      // enregistre `content: ''` pour les modes `server` et `hybrid`, le texte
+      // vivant dans `encryptedContent`. Les deux marques l'excluent, chacune
+      // seule suffit : `encryptedContent: null` ne retient que l'absent ou le nul.
       const emptyMessages = await this.prisma.message.findRaw({
         filter: {
           content: { $regex: '^\\s*$' },
+          isEncrypted: { $ne: true },
+          encryptedContent: null,
           deletedAt: null,
           createdAt: { $lt: { $date: staleThreshold.toISOString() } },
         },
@@ -638,42 +700,117 @@ export class MaintenanceService {
    * Nettoyer les sessions expirées et les données temporaires
    */
   async cleanupExpiredData(): Promise<void> {
+    await sweepExpiredData(this.prisma, this.shareLinkRevocationLive);
+  }
+
+  /**
+   * Un compte dont la période de grâce est échue est hors service dès la
+   * transaction ci-dessus ; un socket qui lui resterait ouvert continuerait de
+   * recevoir ses fils temps réel et d'émettre des `typing:start` lus « en
+   * ligne ». Après l'écriture, jamais avant ; ne lève jamais — la ligne est
+   * déjà posée, et un échec ici ne doit pas être compté comme une expiration
+   * ratée par l'appelant.
+   */
+  private async revokeSessionsOfDeletedAccount(userId: string): Promise<void> {
+    // #17022 — ses séances « ensemble » s'arrêtent chez les deux ; ne rejette jamais.
+    await cutTogetherWhere({ userId });
+    const revoke = this.sessionRevoker;
+    if (!revoke) return;
     try {
-      // Nettoyer les sessions anonymes expirées (plus de 24h)
-      const expiredAnonymousSessions = await this.prisma.participant.deleteMany({
-        where: {
-          type: 'anonymous',
-          lastActiveAt: {
-            lt: new Date(Date.now() - 24 * 60 * 60 * 1000) // 24 heures
-          }
-        }
-      });
-
-      if (expiredAnonymousSessions.count > 0) {
-        logger.info(`🧹 ${expiredAnonymousSessions.count} sessions anonymes expirées supprimées`);
-      }
-
-      // Nettoyer les liens de partage expirés (plus de 7 jours)
-      const expiredShareLinks = await this.prisma.conversationShareLink.deleteMany({
-        where: {
-          expiresAt: {
-            lt: new Date()
-          }
-        }
-      });
-
-      if (expiredShareLinks.count > 0) {
-        logger.info(`🧹 ${expiredShareLinks.count} liens de partage expirés supprimés`);
-      }
-
+      await revoke(userId);
     } catch (error) {
-      logger.error('❌ Erreur lors du nettoyage des données expirées:', error);
+      logger.warn(`⚠️ [DELETION] Session revocation failed for deleted account user=${userId}:`, error);
     }
   }
 
   /**
+   * Motif commun aux cinq catégories de purge/anonymisation d'un compte
+   * expiré, ci-dessous : un appel best-effort, après l'écriture qui a déjà
+   * fait passer la ligne en `GRACE_PERIOD_EXPIRED` — un échec ne doit jamais
+   * faire compter l'expiration elle-même comme ratée par l'appelant.
+   *
+   * L'échec est JOURNALISÉ, il n'est PAS rejoué : la passe n'élit que les
+   * demandes `CONFIRMED` (`processAccountDeletionRequests`), et celle-ci ne
+   * l'est plus — la prochaine passe horaire ne revient pas sur l'étape. Chacune
+   * est idempotente par construction (cf. son propre module), ce qui PERMET un
+   * rejeu sans le faire exister ; rejouer jusqu'au succès est #10021. Le seul
+   * rejeu actuel est le second appel de la route « supprimer maintenant » (au
+   * clic de la personne, erreurs avalées), pour deux de ces étapes seulement.
+   */
+  private async bestEffortDeletionStep(userId: string, label: string, step: () => Promise<unknown>): Promise<void> {
+    try {
+      await step();
+    } catch (error) {
+      logger.warn(`⚠️ [DELETION] ${label} failed for expired account user=${userId}:`, error);
+    }
+  }
+
+  /**
+   * Les trois tables ISOLÉES d'un compte supprimé (#3632) — sessions, profil
+   * vocal, liens de partage créés. Ne dépend PAS d'un clic sur le lien
+   * « supprimer maintenant » du rappel hebdomadaire : la promesse publique
+   * (« après 30 jours, suppression définitive ») est une échéance, pas une
+   * action que l'utilisateur doit encore déclencher lui-même.
+   */
+  private purgeIsolatedDataOfExpiredAccount(userId: string): Promise<void> {
+    return this.bestEffortDeletionStep(userId, 'Isolated-data purge', () => purgeAccountIsolatedData(this.prisma, userId, {
+      shareLinkLive: this.shareLinkRevocationLive,
+      endSharedLocation: (id) =>
+        endSharedLocationAfter({ prisma: this.prisma, io: this.shareLinkRevocationLive?.resolveIO?.() ?? undefined, report: (error) => logger.warn(`[DELETION] shared location not ended user=${id}`, error) }, id, { forget: true }),
+    }));
+  }
+
+  /**
+   * `privacy.json` promet, à la fin de la grâce : « les messages dans les
+   * conversations partagées sont anonymisés » — une exception NOMMÉE à
+   * « suppression définitive de toutes vos données personnelles », pas une
+   * omission. Détail : `services/messaging/anonymizeDeletedAccountMessages.ts`.
+   */
+  private purgeMessagesOfDeletedAccount(userId: string): Promise<void> {
+    return this.bestEffortDeletionStep(userId, 'Message anonymization', () => anonymizeMessagesOfDeletedAccount(this.prisma, userId));
+  }
+
+  /**
+   * Les médias physiques du compte — `MessageAttachment`/`PostMedia` — la
+   * classe que ni #5688 (tables isolées, sans octets) ni #5689 (messages,
+   * lignes déjà anonymisées) ne couvraient. Exécuté APRÈS
+   * `purgeMessagesOfDeletedAccount` : les attachments des messages du compte
+   * sont déjà supprimés par #5689 à ce stade, ce balayage-ci couvre ce qui
+   * reste (attachments en attente, messages déjà `deletedAt` avant #5689,
+   * tout `PostMedia`). Détail : `services/purgeDeletedAccountMedia.ts`.
+   */
+  private purgeMediaOfExpiredAccount(userId: string): Promise<void> {
+    return this.bestEffortDeletionStep(userId, 'Media purge', () => purgeMediaOfDeletedAccount(this.prisma, this.attachmentService, this.mediaService, userId));
+  }
+
+  /**
+   * L'identité (#5691) de la ligne `User` — `updateMany` filtré sur le
+   * marqueur déjà posé, rejouable sans effet de bord. Dernière des quatre
+   * catégories promises par `privacy.json` (#4183 critère 7) : après cet
+   * appel, la ligne `User` ne porte plus aucun champ PII identifiant.
+   */
+  private anonymizeIdentityOfExpiredAccount(userId: string): Promise<void> {
+    return this.bestEffortDeletionStep(userId, 'Identity anonymization', () => anonymizeUserIdentity(this.prisma, userId));
+  }
+
+  /**
+   * Aucun des trois chemins de suppression de compte ne touchait
+   * `CommunityMember` (#5801) : un compte purgé restait compté comme membre
+   * ACTIF de chaque communauté qu'il avait rejointe. Même geste que le
+   * départ volontaire et le retrait admin (#5760/#5799/#5800) —
+   * `isActive: false` + `leftAt` — jamais un `deleteMany`, pour la même
+   * raison qu'eux : l'historique de modération de la communauté survit.
+   */
+  private deactivateCommunityMembershipsOfExpiredAccount(userId: string): Promise<void> {
+    return this.bestEffortDeletionStep(userId, 'Community membership deactivation', () => deactivateCommunityMembershipsOfDeletedAccount(this.prisma, userId));
+  }
+
+  /**
    * Traiter les demandes de suppression de compte :
-   * 1. Expirer les grace periods terminées (CONFIRMED -> GRACE_PERIOD_EXPIRED)
+   * 1. Expirer les grace periods terminées (CONFIRMED -> GRACE_PERIOD_EXPIRED),
+   *    révoquer les sessions, purger les données isolées (#3632), anonymiser
+   *    les messages (#5689) puis les médias (#5690) du compte, anonymiser son
+   *    identité (#5691), désactiver ses adhésions aux communautés (#5801)
    * 2. Envoyer les rappels hebdomadaires pour les requests GRACE_PERIOD_EXPIRED
    */
   private async processAccountDeletionRequests(): Promise<void> {
@@ -703,6 +840,12 @@ export class MaintenanceService {
               })
             ]);
             expiredCount++;
+            await this.revokeSessionsOfDeletedAccount(req.userId);
+            await this.purgeIsolatedDataOfExpiredAccount(req.userId);
+            await this.purgeMessagesOfDeletedAccount(req.userId);
+            await this.purgeMediaOfExpiredAccount(req.userId);
+            await this.anonymizeIdentityOfExpiredAccount(req.userId);
+            await this.deactivateCommunityMembershipsOfExpiredAccount(req.userId);
           } catch (error) {
             logger.error(`❌ [DELETION] Failed to expire request=${req.id} for user=${req.userId}:`, error);
           }
@@ -735,7 +878,6 @@ export class MaintenanceService {
             if (!user?.email) continue;
 
             const name = user.displayName || user.firstName || 'Utilisateur';
-            const baseUrl = process.env.GATEWAY_URL || process.env.API_URL || 'https://gate.meeshy.me';
 
             // We need the raw tokens to build links, but we only store hashes.
             // The reminder email uses confirmTokenHash for delete-now and cancelTokenHash for cancel.
@@ -758,8 +900,11 @@ export class MaintenanceService {
               }
             });
 
-            const deleteNowLink = `${baseUrl}/api/v1/me/delete-account/delete-now?token=${newConfirmToken}`;
-            const cancelLink = `${baseUrl}/api/v1/me/delete-account/cancel?token=${newCancelToken}`;
+            // #10859 — la page web, jeton dans le fragment : les anciennes
+            // adresses `GET` de la passerelle (`delete-now`, `cancel`) ne font
+            // plus que rediriger vers elle, et journalisaient le jeton.
+            const deleteNowLink = buildDeletionPageUrl('purge', newConfirmToken);
+            const cancelLink = buildDeletionPageUrl('cancel', newCancelToken);
             // La date se lit DANS l'e-mail, donc dans la langue de l'e-mail :
             // un `'fr-FR'` en dur datait « à la française » un courrier
             // allemand ou espagnol.

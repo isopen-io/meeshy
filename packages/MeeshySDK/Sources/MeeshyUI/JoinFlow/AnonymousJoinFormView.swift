@@ -2,11 +2,12 @@ import SwiftUI
 import Combine
 import MeeshySDK
 
-public struct AnonymousJoinFormView: View {
-    @ObservedObject var viewModel: JoinFlowViewModel
+public struct AnonymousJoinFormView<ViewModel: JoinFlowModeling>: View {
+    @ObservedObject var viewModel: ViewModel
     let onBack: () -> Void
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
     @FocusState private var focusedField: FormField?
 
     private var isDark: Bool { theme.mode.isDark }
@@ -15,7 +16,7 @@ public struct AnonymousJoinFormView: View {
         case firstName, lastName, username, email
     }
 
-    public init(viewModel: JoinFlowViewModel, onBack: @escaping () -> Void) {
+    public init(viewModel: ViewModel, onBack: @escaping () -> Void) {
         self.viewModel = viewModel
         self.onBack = onBack
     }
@@ -43,11 +44,11 @@ public struct AnonymousJoinFormView: View {
                 Button(action: onBack) {
                     HStack(spacing: MeeshySpacing.xs + 2) {
                         Image(systemName: "chevron.backward")
-                            .font(MeeshyFont.relative(13, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         Text(String(localized: "joinFlow.form.back", defaultValue: "Retour", bundle: .module))
-                            .font(MeeshyFont.relative(14, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                     }
-                    .foregroundColor(MeeshyColors.indigo400)
+                    .foregroundStyle(MeeshyColors.indigo400)
                     .meeshyTapTarget()
                 }
 
@@ -56,13 +57,13 @@ public struct AnonymousJoinFormView: View {
 
             Text(String(localized: "joinFlow.form.title", defaultValue: "Rejoindre la conversation", bundle: .module))
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             if let title = viewModel.linkInfo?.conversation.title {
                 Text(title)
-                    .font(MeeshyFont.relative(14, weight: .medium))
-                    .foregroundColor(theme.textSecondary)
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                    .foregroundStyle(theme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
@@ -73,15 +74,16 @@ public struct AnonymousJoinFormView: View {
     private var requiredFields: some View {
         VStack(spacing: MeeshySpacing.lg) {
             Text(String(localized: "joinFlow.form.requiredSection", defaultValue: "Informations requises", bundle: .module))
-                .font(MeeshyFont.relative(13, weight: .semibold))
-                .foregroundColor(theme.textMuted)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                .foregroundStyle(theme.textMuted)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             formField(
                 icon: "person.fill",
-                placeholder: String(localized: "joinFlow.form.firstName", defaultValue: "Prenom", bundle: .module),
+                placeholder: String(localized: "joinFlow.form.firstName", defaultValue: "Prénom", bundle: .module),
                 text: $viewModel.firstName,
                 field: .firstName,
+                identity: .firstName,
                 autocapitalization: .words
             )
 
@@ -90,6 +92,7 @@ public struct AnonymousJoinFormView: View {
                 placeholder: String(localized: "joinFlow.form.lastName", defaultValue: "Nom", bundle: .module),
                 text: $viewModel.lastName,
                 field: .lastName,
+                identity: .lastName,
                 autocapitalization: .words
             )
 
@@ -98,7 +101,8 @@ public struct AnonymousJoinFormView: View {
                     icon: "at",
                     placeholder: String(localized: "joinFlow.form.username", defaultValue: "Nom d'utilisateur", bundle: .module),
                     text: $viewModel.username,
-                    field: .username
+                    field: .username,
+                    identity: .pseudo
                 )
             }
 
@@ -128,8 +132,8 @@ public struct AnonymousJoinFormView: View {
         if hasOptional {
             VStack(spacing: MeeshySpacing.lg) {
                 Text(String(localized: "joinFlow.form.optionalSection", defaultValue: "Optionnel", bundle: .module))
-                    .font(MeeshyFont.relative(13, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                    .foregroundStyle(theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 if viewModel.linkInfo?.requireNickname != true {
@@ -137,7 +141,8 @@ public struct AnonymousJoinFormView: View {
                         icon: "at",
                         placeholder: String(localized: "joinFlow.form.usernameOptional", defaultValue: "Nom d'utilisateur (optionnel)", bundle: .module),
                         text: $viewModel.username,
-                        field: .username
+                        field: .username,
+                    identity: .pseudo
                     )
                 }
 
@@ -165,8 +170,29 @@ public struct AnonymousJoinFormView: View {
         placeholder: String,
         text: Binding<String>,
         field: FormField,
+        identity: IdentityRules.Field? = nil,
         keyboardType: UIKeyboardType = .default,
         autocapitalization: TextInputAutocapitalization = .never
+    ) -> some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+            fieldRow(icon: icon, placeholder: placeholder, text: text, field: field, keyboardType: keyboardType, autocapitalization: autocapitalization)
+            if let identity, let message = viewModel.minimumLengthMessage(for: identity) {
+                Text(message)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                    .foregroundStyle(MeeshyColors.error)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .accessibilityIdentifier("joinFlow.form.minimumLength")
+            }
+        }
+    }
+
+    private func fieldRow(
+        icon: String,
+        placeholder: String,
+        text: Binding<String>,
+        field: FormField,
+        keyboardType: UIKeyboardType,
+        autocapitalization: TextInputAutocapitalization
     ) -> some View {
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
@@ -178,7 +204,7 @@ public struct AnonymousJoinFormView: View {
                 .keyboardType(keyboardType)
                 .textInputAutocapitalization(autocapitalization)
                 .autocorrectionDisabled()
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.md)
@@ -210,7 +236,7 @@ public struct AnonymousJoinFormView: View {
                 displayedComponents: .date
             )
             .datePickerStyle(.compact)
-            .foregroundColor(theme.textPrimary)
+            .foregroundStyle(theme.textPrimary)
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.sm)
@@ -229,8 +255,8 @@ public struct AnonymousJoinFormView: View {
                 .frame(width: 20)
 
             Text(String(localized: "joinFlow.form.language", defaultValue: "Langue", bundle: .module))
-                .font(MeeshyFont.relative(14))
-                .foregroundColor(theme.textSecondary)
+                .font(MeeshyFont.relative(MeeshyFont.labelSize))
+                .foregroundStyle(theme.textSecondary)
 
             Spacer()
 
@@ -238,20 +264,9 @@ public struct AnonymousJoinFormView: View {
                 // Endonyms — a language is always listed in its own name, so these
                 // are `verbatim` on purpose: they must never be localized, and
                 // must never land in Localizable.xcstrings as translatable keys.
-                Text(verbatim: "Français").tag("fr")
-                Text(verbatim: "English").tag("en")
-                Text(verbatim: "Español").tag("es")
-                Text(verbatim: "Deutsch").tag("de")
-                Text(verbatim: "Italiano").tag("it")
-                Text(verbatim: "Português").tag("pt")
-                Text(verbatim: "Nederlands").tag("nl")
-                Text(verbatim: "Polski").tag("pl")
-                Text(verbatim: "Türkçe").tag("tr")
-                Text(verbatim: "Русский").tag("ru")
-                Text(verbatim: "العربية").tag("ar")
-                Text(verbatim: "中文").tag("zh")
-                Text(verbatim: "日本語").tag("ja")
-                Text(verbatim: "한국어").tag("ko")
+                ForEach(JoinFlowLanguages.offered, id: \.code) { option in
+                    Text(verbatim: option.endonym).tag(option.code)
+                }
             }
             .tint(MeeshyColors.indigo400)
         }
@@ -270,10 +285,10 @@ public struct AnonymousJoinFormView: View {
         if let error = viewModel.errorMessage {
             HStack(spacing: MeeshySpacing.sm + 2) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                 Text(error)
-                    .font(MeeshyFont.relative(13, weight: .medium))
-                    .foregroundColor(MeeshyColors.error)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                    .foregroundStyle(MeeshyColors.error)
             }
             .padding(MeeshySpacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -296,12 +311,12 @@ public struct AnonymousJoinFormView: View {
                         .tint(.white)
                 } else {
                     Image(systemName: "arrow.forward.circle.fill")
-                        .font(MeeshyFont.relative(18))
+                        .font(MeeshyFont.relative(MeeshyIconSize.lg))
                     Text(String(localized: "joinFlow.form.submit", defaultValue: "Rejoindre", bundle: .module))
-                        .font(MeeshyFont.relative(16, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .bold))
                 }
             }
-            .foregroundColor(.white)
+            .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, MeeshySpacing.lg)
             .background(

@@ -1,0 +1,913 @@
+import SwiftUI
+import Combine
+import MeeshySDK
+import MeeshyUI
+
+/// #8287, #17050 — le choix du serveur existe au simulateur et dans toute build
+/// Debug, y compris sur un vrai iPhone. La décision se prend à la COMPILATION :
+/// un binaire Release ne contient pas la branche.
+enum LoginServerPicker {
+    static var isAvailable: Bool {
+        #if targetEnvironment(simulator) || DEBUG
+        return true
+        #else
+        return false
+        #endif
+    }
+}
+
+struct LoginView: View {
+    @State private var delayed = DelayedActions()
+    @EnvironmentObject var authManager: AuthManager
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
+
+    // Normal login form state
+    @State private var username = ""
+    @State private var password = ""
+
+    // Account picker state
+    @State private var selectedAccount: SavedAccount? = nil
+    @State private var accountPassword = ""
+    @State private var showNormalLogin = false
+    /// #8286 — « Rester connecté sur cet appareil », proposée au compte
+    /// SUPPLÉMENTAIRE seulement (`AuthManager.offersKeepSignedIn`).
+    @State private var keepSignedIn = true
+
+    // UI state
+    @State private var glowPulse = false
+    @State private var showFields = false
+    @State private var showError = false
+    @State private var showRegister = false
+    @State private var showForgotPassword = false
+    @State private var showMagicLink = false
+    @State private var twoFactorCode = ""
+    /// Adresse inconnue à la connexion (#8035) : l'écran du code, avec le mot
+    /// de passe tapé tenu en mémoire jusqu'à sa fermeture — jamais persisté.
+    @State private var codeEntry: CodeEntryContext?
+    /// Le point UNIQUE où une session prouvée s'ouvre (#8059, #8076) : jamais
+    /// pendant qu'une présentation d'accès est là — ouvrir la session démonte
+    /// cet écran, et sa feuille resterait orpheline, figée, « Fermer » inerte.
+    /// Code, lien reçu par e-mail, inscription : la session attend le
+    /// `onDismiss` de la présentation.
+    private let sessionGate = SessionOpeningGate.shared
+
+    /// Une porte d'accès est-elle présentée par cet écran ?
+    private var hasAccessPresentation: Bool {
+        codeEntry != nil || showMagicLink || showRegister || showForgotPassword
+    }
+
+    private struct CodeEntryContext: Identifiable {
+        let pending: PendingEmailVerification
+        let password: String
+        var id: String { pending.email }
+    }
+
+    // Environment selector
+    @State private var selectedEnv: MeeshyConfig.ServerEnvironment = MeeshyConfig.shared.selectedEnvironment
+    @State private var customHost: String = MeeshyConfig.shared.customHost
+    @State private var showCustomInput = false
+
+    @FocusState private var focusedField: Field?
+
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
+    private enum Field { case username, password, accountPassword, customHost, twoFactorCode }
+
+    private var isDark: Bool { theme.mode.isDark }
+    private var showPicker: Bool { !authManager.savedAccounts.isEmpty && !showNormalLogin }
+
+    // On simulator only: prefill test credentials
+    private static let isSimulator = ProcessInfo.processInfo.environment["SIMULATOR_DEVICE_NAME"] != nil
+
+    /// Optional DX hook: when running Debug builds, the dev can populate the
+    /// Xcode scheme env with `DEBUG_AUTOFILL_USERNAME` / `DEBUG_AUTOFILL_PASSWORD`
+    /// to skip the login form. The values are read at runtime — they NEVER
+    /// ship inside the Release binary because the whole branch is gated by
+    /// `#if DEBUG`.
+    private static var debugAutofillUsername: String? {
+        #if DEBUG
+        return ProcessInfo.processInfo.environment["DEBUG_AUTOFILL_USERNAME"]
+        #else
+        return nil
+        #endif
+    }
+    private static var debugAutofillPassword: String? {
+        #if DEBUG
+        return ProcessInfo.processInfo.environment["DEBUG_AUTOFILL_PASSWORD"]
+        #else
+        return nil
+        #endif
+    }
+
+    init() {
+        if Self.isSimulator, let user = Self.debugAutofillUsername {
+            _username = State(initialValue: user)
+        }
+        if Self.isSimulator, let pwd = Self.debugAutofillPassword {
+            _password = State(initialValue: pwd)
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            theme.backgroundGradient
+                .ignoresSafeArea()
+
+            ForEach(Array(theme.ambientOrbs.enumerated()), id: \.offset) { index, orb in
+                Circle()
+                    .fill(Color(hex: orb.color).opacity(orb.opacity))
+                    .frame(width: orb.size, height: orb.size)
+                    .blur(radius: orb.size * 0.2)
+                    .offset(x: orb.offset.x, y: orb.offset.y)
+                    .scaleEffect(glowPulse ? 1.3 - CGFloat(index) * 0.05 : 0.8 + CGFloat(index) * 0.05)
+            }
+            .accessibilityHidden(true)
+
+            VStack(spacing: 0) {
+                Spacer()
+
+                AnimatedLogoView(
+                    color: isDark ? .white : MeeshyColors.indigo950,
+                    lineWidth: 10,
+                    continuous: false
+                )
+                .frame(width: 100, height: 100)
+                .padding(.bottom, MeeshySpacing.xxl)
+                .accessibilityHidden(true)
+
+                Text(verbatim: "Meeshy")
+                    .font(MeeshyFont.relative(MeeshyFont.largeTitleSize + 6, weight: .bold, design: .rounded))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [MeeshyColors.purple700, MeeshyColors.purple600, MeeshyColors.purple500],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .shadow(color: MeeshyColors.purple700.opacity(isDark ? 0.5 : 0.25), radius: MeeshyShadow.strong.radius, x: 0, y: MeeshyShadow.medium.y)
+                    .padding(.bottom, MeeshySpacing.xxxl + MeeshySpacing.lg)
+                    .accessibilityAddTraits(.isHeader)
+
+                if authManager.requires2FA {
+                    twoFactorSection
+                } else if showPicker {
+                    accountPickerSection
+                } else {
+                    normalLoginSection
+                }
+
+                Spacer()
+
+                Button { showRegister = true } label: {
+                    HStack(spacing: MeeshySpacing.xs) {
+                        Text(String(localized: "auth.login.no_account", bundle: .main))
+                            .foregroundStyle(theme.textMuted)
+                        Text(String(localized: "auth.login.create_account", bundle: .main))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [MeeshyColors.purple700, MeeshyColors.purple600],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                    }
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                }
+                .bounceOnTap(scale: 0.94)
+                .accessibilityLabel(String(localized: "auth.login.create_account", bundle: .main))
+                .padding(.bottom, MeeshySpacing.md)
+                .opacity(showFields ? 1 : 0)
+
+                // Sélecteur d'environnement (Production/Staging/Localhost/Custom +
+                // « Connecté à … ») : au SIMULATEUR seulement, décidé à la
+                // compilation (#8287) — jamais dans un binaire d'appareil.
+                if LoginServerPicker.isAvailable {
+                    environmentSelector
+                        .padding(.bottom, MeeshySpacing.md)
+                        .opacity(showFields ? 1 : 0)
+                }
+
+                // Signature de marque partagée avec le splash (BrandSignature) :
+                // « Meeshy <version> · <build> » + « by services.ceo » (lien vers la
+                // plateforme, #10096) + logo.
+                BrandSignature()
+                    .padding(.top, MeeshySpacing.md)
+                    .opacity(showFields ? 1 : 0)
+
+                // 3e spacer (avec ceux du haut et du milieu) : remonte l'ensemble de
+                // la page et décolle la signature du bord bas.
+                Spacer()
+            }
+            // La colonne se borne ICI, pas chez l'hôte (#6644) : posée par
+            // `MeeshyApp` autour de l'écran entier, la borne rétrécissait aussi
+            // le fond et les halos à 600 pt, et `LoginView` montée seule — la
+            // seule façon de mesurer son étape 2FA — s'étirait sur l'iPad.
+            .iPadFormWidth()
+        }
+        .sheet(isPresented: $showForgotPassword, onDismiss: accessPresentationDismissed) {
+            MeeshyForgotPasswordView(prefilledEmail: prefillableEmail)
+                .feedbackToastOverlay()
+        }
+        .sheet(item: $codeEntry, onDismiss: accessPresentationDismissed) { entry in
+            EmailVerificationView(
+                email: entry.pending.email,
+                password: entry.password,
+                accountCreated: entry.pending.accountCreated,
+                pendingSessionToken: entry.pending.pendingSessionToken,
+                onVerified: { sessionGate.openWhenDismissed($0) }
+            )
+            .feedbackToastOverlay()
+        }
+        .sheet(isPresented: $showMagicLink, onDismiss: accessPresentationDismissed) {
+            MagicLinkView(onVerified: { sessionGate.openWhenDismissed($0) }, prefilledEmail: prefillableEmail)
+                .environmentObject(authManager)
+                .feedbackToastOverlay()
+        }
+        .fullScreenCover(isPresented: $showRegister, onDismiss: accessPresentationDismissed) {
+            // #5218 — UN écran remplace l'assistant en huit étapes. `onComplete`
+            // se contente de refermer : la session est déjà appliquée par
+            // `AuthManager.registerThrowing`, et `MeeshyApp` bascule sur
+            // `AdaptiveRootView` à l'instant où `isAuthenticated` passe.
+            SignupView(
+                onComplete: { showRegister = false },
+                onSwitchToLogin: { email in
+                    adoptSignupEmail(email)
+                    showRegister = false
+                },
+                onVerified: { opener in
+                    sessionGate.openWhenDismissed(opener)
+                    showRegister = false
+                }
+            )
+            .feedbackToastOverlay()
+        }
+        .adaptiveOnChange(of: hasAccessPresentation) { _, presenting in
+            if presenting { sessionGate.presentationBegan() }
+        }
+        // Un lien reçu par e-mail a prouvé une session pendant qu'une porte
+        // d'accès est affichée (#8076) : la refermer, la session s'ouvrira
+        // dans son `onDismiss`.
+        .onReceive(sessionGate.$dismissalRequested.filter { $0 }) { _ in
+            codeEntry = nil
+            showMagicLink = false
+            showRegister = false
+            showForgotPassword = false
+        }
+        .onAppear {
+            if !hasAccessPresentation { sessionGate.presentationEnded() }
+            // L'accueil referme l'inscription AVANT que cet écran n'existe
+            // (#8216) : l'adresse qu'on y avait tapée l'attend ici.
+            adoptSignupEmail(LoginEmailHandoff.shared.take())
+            adoptAccountIntent(LoginAccountHandoff.shared.take())
+        }
+        // « Créer un compte » depuis une invitation (#7795) ouvre l'inscription ;
+        // « Se connecter » n'a rien à ouvrir de plus que cet écran même.
+        .onReceive(DeepLinkRouter.shared.$requestedAccountEntry.compactMap { $0 }) { entry in
+            DeepLinkRouter.shared.requestedAccountEntry = nil
+            if entry == .signUp { showRegister = true }
+        }
+        .onAppear {
+            // Halo décoratif, même traitement que l'écran de démarrage : sous
+            // Reduce Motion il n'a pas de valeur de repos à rejoindre, il ne
+            // démarre pas. L'apparition des champs juste en dessous, elle,
+            // reste animée — c'est une transition qui se TERMINE, pas
+            // l'ambiance sans fin que Reduce Motion vise.
+            if !reduceMotion {
+                withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                    glowPulse = true
+                }
+            }
+            withAnimation(.spring(response: 0.7, dampingFraction: 0.8).delay(0.2)) {
+                showFields = true
+            }
+        }
+        .onDisappear {
+            withTransaction(Transaction(animation: nil)) {
+                glowPulse = false
+            }
+        }
+        .adaptiveOnChange(of: authManager.errorMessage) { _, newValue in
+            if newValue != nil {
+                withAnimation(MeeshyAnimation.springDefault) {
+                    showError = true
+                }
+            }
+        }
+        .onTapGesture { focusedField = nil }
+    }
+
+    // MARK: - Adresse venue de l'inscription (#8216)
+
+    /// L'identifiant tapé, quand c'est une ADRESSE : la connexion par e-mail
+    /// et le mot de passe oublié la reçoivent au lieu d'un champ vide.
+    private var prefillableEmail: String {
+        SignupForm.isEmailValid(username) ? username.trimmingCharacters(in: .whitespacesAndNewlines) : ""
+    }
+
+    /// L'inscription bascule vers la connexion avec l'adresse qu'on venait de
+    /// taper : elle devient l'identifiant, sur le formulaire qui la montre.
+    private func adoptSignupEmail(_ email: String?) {
+        guard let email, !email.isEmpty else { return }
+        username = email
+        showNormalLogin = true
+    }
+
+    /// « Changer de compte » a quitté le compte actuel pour en ouvrir un
+    /// autre (#8286) : son formulaire attend ici, sans passer par le sélecteur.
+    private func adoptAccountIntent(_ intent: LoginAccountHandoff.Intent?) {
+        switch intent {
+        case .addAccount:
+            showNormalLogin = true
+        case .account(let id):
+            if let account = authManager.savedAccounts.first(where: { $0.id == id }) { select(account) }
+        case nil:
+            break
+        }
+    }
+
+    // MARK: - Account Picker Section
+
+    private var accountPickerSection: some View {
+        VStack(spacing: MeeshySpacing.lg) {
+            if let account = selectedAccount {
+                selectedAccountView(account)
+            } else {
+                savedAccountsList
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.xxxl)
+        .opacity(showFields ? 1 : 0)
+        .offset(y: showFields ? 0 : MeeshySpacing.xxxl)
+    }
+
+    private var savedAccountsList: some View {
+        VStack(spacing: MeeshySpacing.md) {
+            ForEach(authManager.savedAccounts) { account in
+                savedAccountRow(account)
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                authManager.removeSavedAccount(userId: account.id)
+                            }
+                        } label: {
+                        Label(String(localized: "auth.login.remove_account", bundle: .main), systemImage: "trash")
+                        }
+                    }
+            }
+
+            errorRow
+
+            Button {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    showNormalLogin = true
+                }
+            } label: {
+                Text(String(localized: "auth.login.other_account", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                    .foregroundStyle(theme.textMuted)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, MeeshySpacing.md)
+            }
+            .bounceOnTap(scale: 0.94)
+            .padding(.top, MeeshySpacing.xs)
+        }
+    }
+
+    private func savedAccountRow(_ account: SavedAccount) -> some View {
+        let status = SavedAccountStatus.of(
+            account,
+            activeId: nil,
+            isPreserved: authManager.hasPreservedSession(for: account.id)
+        )
+        return Button {
+            HapticFeedback.light()
+            // #8286 — un compte GARDÉ s'ouvre sans mot de passe.
+            if status.opensWithoutPassword {
+                Task { await authManager.switchAccount(to: account.id) }
+                return
+            }
+            select(account)
+        } label: {
+            SavedAccountRow(
+                account: account,
+                status: status,
+                textPrimary: theme.textPrimary,
+                textMuted: theme.textMuted,
+                fill: theme.inputBackground,
+                stroke: theme.inputBorder.opacity(0.3)
+            )
+        }
+        .buttonStyle(.plain)
+        .bounceOnTap()
+        .accessibilityIdentifier("auth.login.account.\(account.username)")
+    }
+
+    private func select(_ account: SavedAccount) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+            selectedAccount = account
+            username = account.username
+            accountPassword = Self.isSimulator ? (Self.debugAutofillPassword ?? "") : ""
+        }
+        delayed.run(after: .milliseconds(350)) {
+            focusedField = .accountPassword
+        }
+    }
+
+    /// #8286 — proposée dès qu'un AUTRE compte garde sa session ; le premier
+    /// compte de l'appareil est gardé sans question.
+    @ViewBuilder
+    private var keepSignedInToggle: some View {
+        if authManager.offersKeepSignedIn {
+            Toggle(isOn: $keepSignedIn) {
+                Text(String(localized: "accounts.keep_signed_in", defaultValue: "Rester connecté sur cet appareil", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                    .foregroundStyle(theme.textPrimary)
+            }
+            .tint(MeeshyColors.indigo500)
+            .accessibilityIdentifier("auth.login.keep_signed_in")
+        }
+    }
+
+    private func selectedAccountView(_ account: SavedAccount) -> some View {
+        VStack(spacing: MeeshySpacing.lg) {
+            // Back + selected account header
+            HStack(spacing: MeeshySpacing.md) {
+                Button {
+                    HapticFeedback.light()
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        selectedAccount = nil
+                        accountPassword = ""
+                    }
+                } label: {
+                    // Chrome de retour : glyphe centré dans un cadre de tap fixe 36×36
+                    // (doctrine 82i) — gardé figé pour ne pas déborder le cercle.
+                    Image(systemName: "chevron.backward")
+                        .font(MeeshyFont.relative(MeeshyFont.headlineSize - 1, weight: .semibold))
+                        .foregroundStyle(theme.textMuted)
+                        .meeshyTapTarget() // HIG minimum 44pt
+                        .background(
+                            Circle().fill(theme.inputBackground)
+                        )
+                }
+                .bounceOnTap(scale: 0.90)
+                .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
+
+                accountAvatar(account, size: 40)
+
+                VStack(alignment: .leading, spacing: 1) { // Tight typography
+                    Text(account.shortName)
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                        .foregroundStyle(theme.textPrimary)
+                    Text("@\(account.username)")
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize))
+                        .foregroundStyle(theme.textMuted)
+                }
+
+                Spacer()
+            }
+
+            // Password field
+            HStack(spacing: MeeshySpacing.md) {
+                Image(systemName: "lock.fill")
+                    .foregroundStyle(MeeshyColors.purple600.opacity(0.7))
+                    .frame(width: MeeshySpacing.xl)
+                    .accessibilityHidden(true)
+                MeeshyPasswordField(
+                    String(localized: "auth.password.placeholder", bundle: .main),
+                    text: $accountPassword,
+                    role: .current,
+                    focus: $focusedField,
+                    equals: .accountPassword,
+                    eyeColor: theme.textMuted
+                )
+                .foregroundColor(theme.textPrimary)
+                .submitLabel(.go)
+                .onSubmit { attemptAccountLogin() }
+            }
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.mdPlus)
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .fill(theme.inputBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                            .stroke(
+                                focusedField == .accountPassword
+                                    ? MeeshyColors.purple600.opacity(0.6)
+                                    : theme.inputBorder.opacity(0.3),
+                                lineWidth: 1
+                            )
+                    )
+            )
+            .bounceOnFocus(focusedField == .accountPassword)
+
+            keepSignedInToggle
+
+            errorRow
+
+            // Login button
+            loginButton(action: attemptAccountLogin, disabled: accountPassword.isEmpty)
+        }
+    }
+
+    // MARK: - Normal Login Section
+
+    private var normalLoginSection: some View {
+        VStack(spacing: MeeshySpacing.lg) {
+            if showNormalLogin && !authManager.savedAccounts.isEmpty {
+                // Back to picker button
+                HStack {
+                    Button {
+                        HapticFeedback.light()
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            showNormalLogin = false
+                        }
+                    } label: {
+                        HStack(spacing: MeeshySpacing.sm - 2) {
+                            Image(systemName: "chevron.backward")
+                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                            Text(String(localized: "auth.login.saved_accounts", bundle: .main))
+                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                        }
+                        .foregroundColor(theme.textMuted)
+                    }
+                    .bounceOnTap(scale: 0.94)
+                    Spacer()
+                }
+            }
+
+            // Username
+            HStack(spacing: MeeshySpacing.md) {
+                Image(systemName: "person.fill")
+                    .foregroundStyle(MeeshyColors.purple600.opacity(0.7))
+                    .frame(width: MeeshySpacing.xl)
+                    .accessibilityHidden(true)
+                TextField(String(localized: "auth.username.placeholder", bundle: .main), text: $username)
+                    .textContentType(.username)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .focused($focusedField, equals: .username)
+                    .foregroundStyle(theme.textPrimary)
+                    .submitLabel(.next)
+                    .onSubmit { focusedField = .password }
+                    .accessibilityLabel(String(localized: "auth.username.placeholder", bundle: .main))
+            }
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.mdPlus)
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .fill(theme.inputBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                            .stroke(
+                                focusedField == .username
+                                    ? MeeshyColors.purple600.opacity(0.6)
+                                    : theme.inputBorder.opacity(0.3),
+                                lineWidth: 1
+                            )
+                    )
+            )
+            .bounceOnFocus(focusedField == .username)
+
+            // Password
+            HStack(spacing: MeeshySpacing.md) {
+                Image(systemName: "lock.fill")
+                    .foregroundStyle(MeeshyColors.purple600.opacity(0.7))
+                    .frame(width: MeeshySpacing.xl)
+                    .accessibilityHidden(true)
+                MeeshyPasswordField(
+                    String(localized: "auth.password.placeholder", bundle: .main),
+                    text: $password,
+                    role: .current,
+                    focus: $focusedField,
+                    equals: .password,
+                    eyeColor: theme.textMuted
+                )
+                .foregroundColor(theme.textPrimary)
+                .submitLabel(.go)
+                .onSubmit { attemptLogin() }
+            }
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.mdPlus)
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .fill(theme.inputBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                            .stroke(
+                                focusedField == .password
+                                    ? MeeshyColors.purple600.opacity(0.6)
+                                    : theme.inputBorder.opacity(0.3),
+                                lineWidth: 1
+                            )
+                    )
+            )
+            .bounceOnFocus(focusedField == .password)
+
+            keepSignedInToggle
+
+            errorRow
+
+            loginButton(action: attemptLogin, disabled: username.isEmpty || password.isEmpty)
+
+            VStack(spacing: MeeshySpacing.sm) {
+                // « Se connecter par e-mail » en premier (action mise en avant),
+                // « Mot de passe oublié » en dessous — empilés, plus côte à côte.
+                // Le libellé dit CE QU'ON FAIT, jamais la technique : la baguette
+                // reste le signe, le mot « magique » est parti (#6626).
+                Button { showMagicLink = true } label: {
+                    HStack(spacing: MeeshySpacing.xs) {
+                        Image(systemName: "wand.and.stars")
+                            .accessibilityHidden(true)
+                        Text(String(localized: "auth.login.passwordless", bundle: .main))
+                    }
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [MeeshyColors.purple500, MeeshyColors.indigo400],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                }
+                .bounceOnTap(scale: 0.94)
+                .accessibilityLabel(String(localized: "auth.login.passwordless", bundle: .main))
+
+                Button { showForgotPassword = true } label: {
+                    Text(String(localized: "auth.login.forgot_password", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                        .foregroundStyle(theme.textMuted)
+                }
+                .bounceOnTap(scale: 0.94)
+                .accessibilityLabel(String(localized: "auth.login.forgot_password.label", bundle: .main))
+            }
+            .padding(.top, MeeshySpacing.xs)
+        }
+        .padding(.horizontal, MeeshySpacing.xxxl)
+        .opacity(showFields ? 1 : 0)
+        .offset(y: showFields ? 0 : MeeshySpacing.xxxl)
+    }
+
+    // MARK: - Reusable subviews
+
+    private var errorRow: some View {
+        Group {
+            if let error = authManager.errorMessage, showError {
+                Text(error)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                    .foregroundStyle(MeeshyColors.error)
+                    .multilineTextAlignment(.center)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private func loginButton(action: @escaping () -> Void, disabled: Bool) -> some View {
+        Button(action: action) {
+            ZStack {
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .fill(
+                        LinearGradient(
+                            colors: [MeeshyColors.error, MeeshyColors.indigo400],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(height: 52) // Standard action height
+                    .shadow(color: MeeshyColors.error.opacity(isDark ? 0.4 : 0.2), radius: MeeshyShadow.strong.radius, y: MeeshyShadow.strong.y)
+
+                if authManager.isLoading {
+                    ProgressView().tint(.white)
+                } else {
+                    Text(String(localized: "auth.login.submit", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
+                        .foregroundStyle(Color.white)
+                }
+            }
+        }
+        .disabled(authManager.isLoading || disabled)
+        .opacity(disabled ? 0.6 : 1)
+        .bounceOnTap()
+        .padding(.top, MeeshySpacing.sm)
+        .accessibilityLabel(String(localized: "auth.login.submit", bundle: .main))
+        .accessibilityIdentifier("auth.login.submit")
+    }
+
+    private func accountAvatar(_ account: SavedAccount, size: CGFloat) -> some View {
+        MeeshyAvatar(
+            name: account.shortName,
+            context: .custom(size),
+            kind: .user,
+            avatarURL: account.avatarURL,
+            enablePulse: false
+        )
+    }
+
+    // MARK: - Environment Selector
+
+    private var environmentSelector: some View {
+        VStack(spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.sm) {
+                ForEach(MeeshyConfig.ServerEnvironment.allCases, id: \.rawValue) { env in
+                    Button {
+                        HapticFeedback.light()
+                        withAnimation(MeeshyAnimation.springFast) {
+                            selectedEnv = env
+                            showCustomInput = env == .custom
+                        }
+                        if env != .custom {
+                            MeeshyConfig.shared.applyEnvironment(env)
+                        }
+                    } label: {
+                        Text(env.label)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: selectedEnv == env ? .bold : .medium))
+                            .foregroundColor(selectedEnv == env ? .white : theme.textMuted)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
+                        .padding(.vertical, MeeshySpacing.xs + 1)
+                            .background(
+                                Capsule().fill(
+                                    selectedEnv == env
+                                        ? AnyShapeStyle(MeeshyColors.brandGradient)
+                                        : AnyShapeStyle(theme.inputBackground)
+                                )
+                            )
+                    }
+                    .bounceOnTap(scale: 0.92)
+                }
+            }
+
+            if showCustomInput || selectedEnv == .custom {
+                HStack(spacing: MeeshySpacing.sm) {
+                    TextField("gate.example.com", text: $customHost)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium, design: .monospaced))
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .focused($focusedField, equals: .customHost)
+                        .foregroundStyle(theme.textPrimary)
+                        .submitLabel(.done)
+                        .onSubmit { applyCustomHost() }
+
+                    Button {
+                        applyCustomHost()
+                    } label: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(MeeshyColors.brandGradient)
+                            .font(MeeshyFont.relative(MeeshyFont.headlineSize + 1, weight: .semibold))
+                            .meeshyTapTarget()
+                    }
+                    .disabled(customHost.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .bounceOnTap(scale: 0.90)
+                    .accessibilityLabel(String(localized: "common.confirm", defaultValue: "Confirmer", bundle: .main))
+                }
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                        .fill(theme.inputBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                                .stroke(theme.inputBorder.opacity(0.3), lineWidth: 1)
+                        )
+                )
+                .padding(.horizontal, MeeshySpacing.xxxl)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            Text(String(format: String(localized: "auth.login.server_origin", defaultValue: "Connecté à : %@", bundle: .main), MeeshyConfig.shared.serverOrigin))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .regular, design: .monospaced))
+                .foregroundStyle(theme.textMuted.opacity(0.5))
+        }
+    }
+
+    private func applyCustomHost() {
+        let host = customHost.trimmingCharacters(in: .whitespaces)
+        guard !host.isEmpty else { return }
+        focusedField = nil
+        MeeshyConfig.shared.applyEnvironment(.custom, customHost: host)
+    }
+
+    // MARK: - Actions
+
+    /// Le premier compte est gardé ; les suivants, selon la case.
+    private var keepsNewSession: Bool {
+        authManager.offersKeepSignedIn ? keepSignedIn : true
+    }
+
+    private func attemptLogin() {
+        focusedField = nil
+        showError = false
+        Task {
+            let outcome = await authManager.login(username: username, password: password, keepSignedIn: keepsNewSession)
+            presentCodeEntryIfNeeded(outcome, password: password)
+        }
+    }
+
+
+    /// La présentation d'accès est partie : la session prouvée peut s'ouvrir
+    /// (#8059, #8076) — sauf si une autre porte a pris sa place.
+    private func accessPresentationDismissed() {
+        guard !hasAccessPresentation else { return }
+        sessionGate.presentationEnded()
+    }
+
+    private func presentCodeEntryIfNeeded(_ outcome: LoginOutcome, password: String) {
+        guard case .verificationRequired(let pending) = outcome else { return }
+        codeEntry = CodeEntryContext(pending: pending, password: password)
+    }
+
+    private func attemptAccountLogin() {
+        focusedField = nil
+        showError = false
+        guard let account = selectedAccount else { return }
+        Task {
+            let outcome = await authManager.login(username: account.username, password: accountPassword, keepSignedIn: keepsNewSession)
+            presentCodeEntryIfNeeded(outcome, password: accountPassword)
+        }
+    }
+
+    private var twoFactorSection: some View {
+        VStack(spacing: MeeshySpacing.lg) {
+            Text(String(localized: "auth.login.two_factor.title", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize + 2, weight: .bold, design: .rounded))
+                .foregroundColor(theme.textPrimary)
+                .padding(.bottom, MeeshySpacing.xs)
+
+            Text(String(localized: "auth.login.two_factor.description", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                .foregroundStyle(theme.textMuted)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.bottom, MeeshySpacing.md)
+
+            // Code Input
+            HStack(spacing: MeeshySpacing.md) {
+                Image(systemName: "key.fill")
+                    .foregroundStyle(MeeshyColors.purple600.opacity(0.7))
+                    .frame(width: MeeshySpacing.xl)
+                    .accessibilityHidden(true)
+                TextField(String(localized: "auth.login.two_factor.placeholder", bundle: .main), text: $twoFactorCode)
+                    .keyboardType(.numberPad)
+                    .focused($focusedField, equals: .twoFactorCode)
+                    .foregroundStyle(theme.textPrimary)
+                    .submitLabel(.go)
+                    .onSubmit { attempt2FALogin() }
+                    .accessibilityLabel(String(localized: "auth.login.two_factor.label", bundle: .main))
+            }
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.mdPlus)
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .fill(theme.inputBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                            .stroke(
+                                focusedField == .twoFactorCode
+                                    ? MeeshyColors.purple600.opacity(0.6)
+                                    : theme.inputBorder.opacity(0.3),
+                                lineWidth: 1
+                            )
+                    )
+            )
+            .bounceOnFocus(focusedField == .twoFactorCode)
+
+            errorRow
+
+            // Action Buttons
+            VStack(spacing: MeeshySpacing.sm) {
+                loginButton(action: attempt2FALogin, disabled: twoFactorCode.count < 6)
+                
+                Button {
+                    HapticFeedback.light()
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        authManager.requires2FA = false
+                        authManager.twoFactorToken = nil
+                        twoFactorCode = ""
+                    }
+                } label: {
+                    Text(String(localized: "common.cancel", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                        .foregroundStyle(theme.textMuted)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, MeeshySpacing.md)
+                }
+                .bounceOnTap(scale: 0.94)
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.xxxl)
+        .opacity(showFields ? 1 : 0)
+        .offset(y: showFields ? 0 : MeeshySpacing.xxxl)
+        .onAppear(after: .milliseconds(350)) { focusedField = .twoFactorCode }
+    }
+
+    private func attempt2FALogin() {
+        focusedField = nil
+        Task {
+            await authManager.completeLoginWith2FA(code: twoFactorCode)
+        }
+    }
+}

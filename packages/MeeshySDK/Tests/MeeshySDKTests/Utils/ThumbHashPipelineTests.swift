@@ -48,6 +48,16 @@ final class ThumbHashPipelineTests: XCTestCase {
         XCTAssertGreaterThan(image?.size.height ?? 0, 0)
     }
 
+    func test_decode_sameHashTwice_servesTheDecodedImageOnce() {
+        let base64 = Data(rgbaToThumbHash(w: 24, h: 24, rgba: makeRGBA(w: 24, h: 24))).base64EncodedString()
+
+        let first = UIImage.fromThumbHash(base64)
+        let second = UIImage.fromThumbHash(base64)
+
+        XCTAssertNotNil(first)
+        XCTAssertTrue(first === second, "A hash already decoded must be served from the cache, not decoded again")
+    }
+
     func test_encode_decode_roundtrip_withAlpha_producesNonNilImage() {
         // Force hasAlpha by using a non-opaque pixel buffer.
         let rgba = makeRGBA(w: 20, h: 16, alpha: 180)

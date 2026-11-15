@@ -2,13 +2,14 @@ import { promises as fs, constants as fsConstants } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import type { MediaStorage, MediaDuplicateResult, MediaDuplicatePlan } from './storage/MediaStorage';
+import { storageKeyFromMediaUrl } from './attachments/mediaStorageKey';
+import { eraseMirroredCopy } from './storage/objects/mirroredErasure';
+import { isSealedStorageKey, processAtRestFileAccess, readStoredFileBytes, storageKeyOfPath } from './attachments/atRest/atRestFiles';
 
 // Re-export for backwards compatibility with call sites that imported the
 // type from `MediaService` rather than from the new `storage/MediaStorage`
 // module. New code should import from `storage/MediaStorage`.
 export type { MediaDuplicateResult };
-
-const ATTACHMENTS_FILE_PREFIX = '/api/v1/attachments/file/';
 
 /**
  * Local-filesystem implementation of {@link MediaStorage}. Targets the
@@ -27,14 +28,11 @@ const ATTACHMENTS_FILE_PREFIX = '/api/v1/attachments/file/';
  */
 export class MediaService implements MediaStorage {
   private readonly uploadBasePath: string;
-  private readonly publicUrl: string;
 
   constructor(
     uploadBasePath: string = process.env['UPLOAD_PATH'] ?? '/app/uploads',
-    publicUrl: string = process.env['PUBLIC_URL'] ?? '',
   ) {
     this.uploadBasePath = uploadBasePath;
-    this.publicUrl = publicUrl;
   }
 
   /**
@@ -44,24 +42,7 @@ export class MediaService implements MediaStorage {
    * Returns null if the URL does not match the expected pattern.
    */
   relativePathFromUrl(fileUrl: string): string | null {
-    let pathname = fileUrl;
-    if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
-      try {
-        pathname = new URL(fileUrl).pathname;
-      } catch {
-        return null;
-      }
-    }
-
-    const idx = pathname.indexOf(ATTACHMENTS_FILE_PREFIX);
-    if (idx === -1) return null;
-
-    const encoded = pathname.slice(idx + ATTACHMENTS_FILE_PREFIX.length);
-    try {
-      return decodeURIComponent(encoded);
-    } catch {
-      return encoded;
-    }
+    return storageKeyFromMediaUrl(fileUrl);
   }
 
   /**
@@ -104,11 +85,14 @@ export class MediaService implements MediaStorage {
         // Note : `fsConstants.COPYFILE_FICLONE` is undefined on macOS in
         // Node — coalesce to 0 so we don't OR `undefined` with EXCL and
         // silently drop the EXCL guard.
-        const ficlone = (fsConstants.COPYFILE_FICLONE as number | undefined) ?? 0;
-        await fs.copyFile(srcPath, destPath, ficlone | fsConstants.COPYFILE_EXCL);
+        await this.copyStored(srcPath, destPath);
 
         const stat = await fs.stat(destPath);
-        const newFileUrl = `${ATTACHMENTS_FILE_PREFIX}${encodeURIComponent(newRelativePath)}`;
+        // #4324 — ce qui se PERSISTE est la clé de stockage, pas une adresse : ni
+        // hôte, ni préfixe d'API, ni version. Les trois clients posent la route
+        // (`buildAttachmentUrl` web, `MeeshyConfig.resolveMediaURL` iOS,
+        // `me.meeshy.sdk.util.resolveMediaUrl` Android).
+        const newFileUrl = newRelativePath;
         return {
           fileUrl: newFileUrl,
           filePath: newRelativePath,
@@ -144,6 +128,7 @@ export class MediaService implements MediaStorage {
 
     const fullPath = path.join(this.uploadBasePath, relativePath);
     await fs.unlink(fullPath).catch(() => {});
+    await eraseMirroredCopy(fullPath, this.uploadBasePath);
   }
 
   // MARK: - MediaStorage interface conformance
@@ -174,7 +159,11 @@ export class MediaService implements MediaStorage {
     const newFileName = `snapshot_${uuidv4()}${ext}`;
     const newRelativePath = path.join('snapshots', newFileName);
     const destPath = path.join(this.uploadBasePath, newRelativePath);
-    const newFileUrl = `${ATTACHMENTS_FILE_PREFIX}${encodeURIComponent(newRelativePath)}`;
+    // #4324 — ce qui se PERSISTE est la clé de stockage, pas une adresse : ni
+        // hôte, ni préfixe d'API, ni version. Les trois clients posent la route
+        // (`buildAttachmentUrl` web, `MeeshyConfig.resolveMediaURL` iOS,
+        // `me.meeshy.sdk.util.resolveMediaUrl` Android).
+        const newFileUrl = newRelativePath;
     const guessedMimeType = this.guessMimeType(ext);
 
     const commit = async (): Promise<MediaDuplicateResult> => {
@@ -189,8 +178,7 @@ export class MediaService implements MediaStorage {
       // Note : `fsConstants.COPYFILE_FICLONE` is undefined on macOS in
       // Node — bitwise OR with undefined yields the EXCL flag alone, which
       // is acceptable (just no reflink optimization on dev).
-      const ficlone = (fsConstants.COPYFILE_FICLONE as number | undefined) ?? 0;
-      await fs.copyFile(srcPath, destPath, ficlone | fsConstants.COPYFILE_EXCL);
+      await this.copyStored(srcPath, destPath);
       const stat = await fs.stat(destPath);
       return {
         fileUrl: newFileUrl,
@@ -206,6 +194,25 @@ export class MediaService implements MediaStorage {
       plannedFilePath: newRelativePath,
       commit,
     };
+  }
+
+  /**
+   * #13100 — une pièce scellée au repos se recopie en CLAIR : la copie (un
+   * post, une story) n'est pas sous le régime de la conversation et se sert
+   * telle quelle. Une pièce scellée illisible fait échouer la copie, jamais
+   * une copie du chiffré.
+   */
+  private async copyStored(srcPath: string, destPath: string): Promise<void> {
+    const access = processAtRestFileAccess();
+    const key = storageKeyOfPath(srcPath, this.uploadBasePath);
+    const sealed = key !== null && ((access !== null && (await access.store.find(key)) !== null) || (access === null && isSealedStorageKey(key)));
+    if (sealed) {
+      const bytes = await readStoredFileBytes(srcPath, { uploadRoot: this.uploadBasePath, access });
+      await fs.writeFile(destPath, bytes, { flag: 'wx', mode: 0o644 });
+      return;
+    }
+    const ficlone = (fsConstants.COPYFILE_FICLONE as number | undefined) ?? 0;
+    await fs.copyFile(srcPath, destPath, ficlone | fsConstants.COPYFILE_EXCL);
   }
 
   private guessMimeType(ext: string): string {

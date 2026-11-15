@@ -1,4 +1,5 @@
 import { UserRoleEnum } from '@meeshy/shared/types';
+import { permissionsService as adminPermissionsService } from '../../../services/admin/permissions.service';
 
 type UserRole = UserRoleEnum;
 
@@ -14,100 +15,57 @@ export interface UserPermissions {
   canManageTranslations: boolean;
 }
 
+/**
+ * PROJECTION de la matrice centrale — plus aucune matrice ici (#4152).
+ *
+ * ## Ce que ce fichier était
+ *
+ * Une SECONDE matrice, 9 permissions × 6 rôles, écrite à la main, servant
+ * `content.ts`, `posts.ts` et `roles.ts`. Elle divergeait de la centrale sur
+ * `ADMIN.canManageTranslations` — `false` ici, `true` là-bas : la même
+ * question, deux réponses, selon la route qui la posait.
+ *
+ * ## Ce qu'il est
+ *
+ * La forme `UserPermissions` (9 clés) SURVIT, parce que ses trois consommateurs
+ * la lisent et qu'un lot qui unifie la loi ne doit pas en même temps réécrire
+ * ceux qui l'appliquent. Mais chaque champ est désormais DÉRIVÉ de la matrice
+ * centrale : il n'y a plus de valeur à tenir à jour, donc plus rien qui puisse
+ * diverger.
+ *
+ * `canManageUsers` n'existe pas au central, qui décompose ce droit en
+ * `canCreateUsers` / `canUpdateUsers` / `canDeleteUsers`. Il projette
+ * `canUpdateUsers` — mesuré rôle par rôle, les six valeurs coïncident, et c'est
+ * le droit d'ÉCRITURE que les appelants testent.
+ */
 export class PermissionsService {
-  private readonly ROLE_HIERARCHY: Record<string, number> = {
-    'BIGBOSS': 7,
-    'ADMIN': 5,
-    'MODERATOR': 4,
-    'AUDIT': 3,
-    'ANALYST': 2,
-    'USER': 1,
-  };
-
-  private readonly DEFAULT_PERMISSIONS: Record<string, UserPermissions> = {
-    'BIGBOSS': {
-      canAccessAdmin: true,
-      canManageUsers: true,
-      canManageCommunities: true,
-      canManageConversations: true,
-      canViewAnalytics: true,
-      canModerateContent: true,
-      canViewAuditLogs: true,
-      canManageNotifications: true,
-      canManageTranslations: true,
-    },
-    'ADMIN': {
-      canAccessAdmin: true,
-      canManageUsers: true,
-      canManageCommunities: true,
-      canManageConversations: true,
-      canViewAnalytics: true,
-      canModerateContent: true,
-      canViewAuditLogs: false,
-      canManageNotifications: true,
-      canManageTranslations: false,
-    },
-    'MODERATOR': {
-      canAccessAdmin: true,
-      canManageUsers: false,
-      canManageCommunities: true,
-      canManageConversations: true,
-      canViewAnalytics: false,
-      canModerateContent: true,
-      canViewAuditLogs: false,
-      canManageNotifications: false,
-      canManageTranslations: false,
-    },
-    'AUDIT': {
-      canAccessAdmin: true,
-      canManageUsers: false,
-      canManageCommunities: false,
-      canManageConversations: false,
-      canViewAnalytics: true,
-      canModerateContent: false,
-      canViewAuditLogs: true,
-      canManageNotifications: false,
-      canManageTranslations: false,
-    },
-    'ANALYST': {
-      canAccessAdmin: false,
-      canManageUsers: false,
-      canManageCommunities: false,
-      canManageConversations: false,
-      canViewAnalytics: true,
-      canModerateContent: false,
-      canViewAuditLogs: false,
-      canManageNotifications: false,
-      canManageTranslations: false,
-    },
-    'USER': {
-      canAccessAdmin: false,
-      canManageUsers: false,
-      canManageCommunities: false,
-      canManageConversations: false,
-      canViewAnalytics: false,
-      canModerateContent: false,
-      canViewAuditLogs: false,
-      canManageNotifications: false,
-      canManageTranslations: false,
-    },
-  };
-
   getUserPermissions(role: UserRole): UserPermissions {
-    return this.DEFAULT_PERMISSIONS[role] || this.DEFAULT_PERMISSIONS.USER;
+    const central = adminPermissionsService.getPermissions(role as UserRoleEnum);
+
+    return {
+      canAccessAdmin: central.canAccessAdmin,
+      canManageUsers: central.canUpdateUsers,
+      canManageCommunities: central.canManageCommunities,
+      canManageConversations: central.canManageConversations,
+      canViewAnalytics: central.canViewAnalytics,
+      canModerateContent: central.canModerateContent,
+      canViewAuditLogs: central.canViewAuditLogs,
+      canManageNotifications: central.canManageNotifications,
+      canManageTranslations: central.canManageTranslations,
+    };
   }
 
   hasPermission(userRole: UserRole, permission: keyof UserPermissions): boolean {
-    const permissions = this.getUserPermissions(userRole);
-    return permissions[permission];
+    return this.getUserPermissions(userRole)[permission];
   }
 
+  /** La hiérarchie vit au central : la redéclarer, c'est la faire diverger. */
   canManageUser(adminRole: UserRole, targetRole: UserRole): boolean {
-    return this.ROLE_HIERARCHY[adminRole] > this.ROLE_HIERARCHY[targetRole];
+    return adminPermissionsService.canManageUser(adminRole as UserRoleEnum, targetRole as UserRoleEnum);
   }
 
   getRoleLevel(role: UserRole): number {
-    return this.ROLE_HIERARCHY[role] || 0;
+    return adminPermissionsService.getRoleLevel(role as UserRoleEnum);
   }
 }
 

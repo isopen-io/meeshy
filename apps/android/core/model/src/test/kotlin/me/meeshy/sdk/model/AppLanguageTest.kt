@@ -16,7 +16,7 @@ class AppLanguageTest {
     @Test
     fun supportedCodes_areTheInterfaceLanguages() {
         assertThat(AppLanguage.supportedCodes)
-            .containsExactly("fr", "en", "es", "ar")
+            .containsExactly("fr", "en", "es", "de", "it", "ar")
             .inOrder()
     }
 
@@ -44,7 +44,7 @@ class AppLanguageTest {
         assertThat(AppLanguage.isSupported(null)).isFalse()
         assertThat(AppLanguage.isSupported("")).isFalse()
         assertThat(AppLanguage.isSupported("   ")).isFalse()
-        assertThat(AppLanguage.isSupported("de")).isFalse()
+        assertThat(AppLanguage.isSupported("ja")).isFalse()
         assertThat(AppLanguage.isSupported("xyz")).isFalse()
     }
 
@@ -66,7 +66,7 @@ class AppLanguageTest {
 
     @Test
     fun fromStorage_unsupportedOrGarbageDecodesToSystem() {
-        assertThat(AppLanguage.fromStorage("de")).isNull()
+        assertThat(AppLanguage.fromStorage("ja")).isNull()
         assertThat(AppLanguage.fromStorage("klingon")).isNull()
     }
 
@@ -83,7 +83,7 @@ class AppLanguageTest {
 
     @Test
     fun storageValue_unsupportedPreferenceEncodesToSystemToken() {
-        assertThat(AppLanguage.storageValue("de")).isEqualTo("system")
+        assertThat(AppLanguage.storageValue("ja")).isEqualTo("system")
         assertThat(AppLanguage.storageValue("")).isEqualTo("system")
     }
 
@@ -108,7 +108,7 @@ class AppLanguageTest {
 
     @Test
     fun resolveInterfaceLocaleTag_unsupportedCodeFollowsDeviceDefensively() {
-        assertThat(AppLanguage.resolveInterfaceLocaleTag("de")).isNull()
+        assertThat(AppLanguage.resolveInterfaceLocaleTag("ja")).isNull()
         assertThat(AppLanguage.resolveInterfaceLocaleTag("")).isNull()
     }
 
@@ -116,7 +116,7 @@ class AppLanguageTest {
     fun info_returnsMetadataForSupportedCode() {
         val fr = AppLanguage.info("fr")
         assertThat(fr).isNotNull()
-        assertThat(fr!!.nativeName).isEqualTo("Francais")
+        assertThat(fr!!.nativeName).isEqualTo("Français")
     }
 
     @Test
@@ -127,6 +127,41 @@ class AppLanguageTest {
     @Test
     fun info_nullForSystemAndUnsupported() {
         assertThat(AppLanguage.info(null)).isNull()
-        assertThat(AppLanguage.info("de")).isNull()
+        assertThat(AppLanguage.info("ja")).isNull()
+    }
+
+    @Test
+    fun `effectiveTag - un choix explicite prime sur la langue du profil`() {
+        assertThat(AppLanguage.resolveEffectiveTag(explicit = "es", profileLanguage = "fr")).isEqualTo("es")
+    }
+
+    @Test
+    fun `effectiveTag - sans choix explicite la langue du profil s'applique`() {
+        assertThat(AppLanguage.resolveEffectiveTag(explicit = null, profileLanguage = "de")).isEqualTo("de")
+    }
+
+    @Test
+    fun `effectiveTag - le portugais du profil est livre meme absent du selecteur`() {
+        assertThat(AppLanguage.resolveEffectiveTag(null, "pt-BR")).isEqualTo("pt")
+        assertThat(AppLanguage.resolveEffectiveTag(null, "PT_pt")).isEqualTo("pt")
+    }
+
+    @Test
+    fun `effectiveTag - sans choix ni profil exploitable on suit l'appareil`() {
+        assertThat(AppLanguage.resolveEffectiveTag(null, null)).isNull()
+        assertThat(AppLanguage.resolveEffectiveTag(null, "ja")).isNull()
+        assertThat(AppLanguage.resolveEffectiveTag("  ", "")).isNull()
+    }
+
+    @Test
+    fun `effectiveTag - un choix explicite non livre laisse la main au profil`() {
+        assertThat(AppLanguage.resolveEffectiveTag("ja", "it")).isEqualTo("it")
+    }
+
+    @Test
+    fun `isShipped - les sept langues livrees dont le portugais`() {
+        assertThat(AppLanguage.shippedCodes).containsExactly("fr", "en", "es", "de", "it", "ar", "pt")
+        assertThat(AppLanguage.isShipped("pt")).isTrue()
+        assertThat(AppLanguage.isShipped("ja")).isFalse()
     }
 }

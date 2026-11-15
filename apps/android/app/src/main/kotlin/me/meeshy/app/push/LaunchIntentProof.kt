@@ -1,0 +1,118 @@
+package me.meeshy.app.push
+
+import android.content.Context
+import android.content.Intent
+import android.util.Base64
+import dagger.hilt.android.qualifiers.ApplicationContext
+import java.security.MessageDigest
+import java.security.SecureRandom
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * **La preuve qu'un intent d'appel a été fabriqué par Meeshy** (#13504).
+ *
+ * `MainActivity` est exportée : n'importe quelle app installée peut lui envoyer un intent EXPLICITE portant les extras
+ * du push d'appel. Seul le processus Meeshy connaît le secret de cette installation (32 octets de [SecureRandom], en
+ * stockage privé, hors sauvegarde : `allowBackup="false"`) : [stamp] pose dans [EXTRA_PROOF] un HMAC-SHA256 des extras
+ * d'appel (identifiant, conversation, nom affiché, vidéo, décroché auto, appelant), [admits] le recalcule et le compare en temps
+ * constant. Le secret survit à la mort du processus, donc une notification posée avant reste valable ; une preuve ne
+ * vaut que pour les valeurs qu'elle signe — elle ne transforme pas une sonnerie en décroché, ni un appel en un autre.
+ */
+@Singleton
+class LaunchIntentProof @Inject constructor(@ApplicationContext private val context: Context) {
+
+    private val key: ByteArray by lazy(::loadOrCreateKey)
+
+    fun stamp(intent: Intent): Intent = intent.putExtra(EXTRA_PROOF, signature(intent))
+
+    fun admits(intent: Intent): Boolean {
+        val presented = runCatching { intent.getStringExtra(EXTRA_PROOF) }.getOrNull() ?: return false
+        val expected = runCatching { signature(intent) }.getOrNull() ?: return false
+        return MessageDigest.isEqual(presented.toByteArray(Charsets.US_ASCII), expected.toByteArray(Charsets.US_ASCII))
+    }
+
+    fun stampAction(intent: Intent): Intent = intent.putExtra(EXTRA_PROOF, sign(actionCanonical(intent)))
+
+    fun admitsAction(intent: Intent): Boolean {
+        val presented = runCatching { intent.getStringExtra(EXTRA_PROOF) }.getOrNull() ?: return false
+        val expected = runCatching { sign(actionCanonical(intent)) }.getOrNull() ?: return false
+        return MessageDigest.isEqual(presented.toByteArray(Charsets.US_ASCII), expected.toByteArray(Charsets.US_ASCII))
+    }
+
+    private fun signature(intent: Intent): String = sign(canonical(intent))
+
+    private fun sign(canonical: String): String {
+        val mac = Mac.getInstance(ALGORITHM).apply { init(SecretKeySpec(key, ALGORITHM)) }
+        return Base64.encodeToString(mac.doFinal(canonical.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE)
+    }
+
+    /**
+     * Les cinq champs historiques, puis la cible détaillée (message cité, post, commentaire, type, notification de la
+     * cloche) QUAND l'intent en porte une. Une bannière posée avant l'arrivée de ces extras garde sa preuve : sa forme
+     * canonique est inchangée.
+     */
+    private fun actionCanonical(intent: Intent): String {
+        val target = ACTION_TARGET_EXTRAS.map { intent.getStringExtra(it) }
+        return (
+            listOf(
+                ACTION_DOMAIN,
+                intent.action.field(),
+                intent.getStringExtra(PushActionReceiver.EXTRA_CONVERSATION_ID).field(),
+                intent.getIntExtra(PushActionReceiver.EXTRA_NOTIFICATION_ID, 0).toString(),
+                intent.getStringExtra(PushActionReceiver.EXTRA_ACCOUNT_ID).field(),
+            ) + if (target.all { it == null }) emptyList() else target.map { it.field() }
+            ).joinToString(separator = FIELD_SEPARATOR)
+    }
+
+    /**
+     * Les cinq champs historiques, puis l'appelant (#13875) QUAND l'intent en porte un : une sonnerie posée avant
+     * l'arrivée de cet extra garde sa preuve, et une preuve sans appelant ne vaut pour aucun appelant ajouté après.
+     */
+    private fun canonical(intent: Intent): String {
+        val callerId = intent.getStringExtra(MeeshyFcmService.EXTRA_CALLER_ID)
+        return (
+            listOf(
+                intent.getStringExtra(MeeshyFcmService.EXTRA_CALL_ID).field(),
+                intent.getStringExtra(MeeshyFcmService.EXTRA_CONVERSATION_ID).field(),
+                intent.getStringExtra(MeeshyFcmService.EXTRA_CALLER_NAME).field(),
+                intent.getBooleanExtra(MeeshyFcmService.EXTRA_IS_VIDEO, false).toString(),
+                intent.getBooleanExtra(MeeshyFcmService.EXTRA_AUTO_ANSWER, false).toString(),
+            ) + listOfNotNull(callerId?.let { "$CALLER_DOMAIN${it.field()}" })
+            ).joinToString(separator = FIELD_SEPARATOR)
+    }
+
+    private fun String?.field(): String = this?.let { "+${it.length}:$it" } ?: "-"
+
+    @Synchronized
+    private fun loadOrCreateKey(): ByteArray {
+        val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+        preferences.getString(KEY_SECRET, null)
+            ?.let { runCatching { Base64.decode(it, Base64.NO_WRAP) }.getOrNull() }
+            ?.takeIf { it.size == SECRET_BYTES }
+            ?.let { return it }
+        val secret = ByteArray(SECRET_BYTES).also(SecureRandom()::nextBytes)
+        preferences.edit().putString(KEY_SECRET, Base64.encodeToString(secret, Base64.NO_WRAP)).commit()
+        return secret
+    }
+
+    companion object {
+        const val EXTRA_PROOF = "me.meeshy.app.extra.LAUNCH_PROOF"
+        private const val ALGORITHM = "HmacSHA256"
+        private const val PREFERENCES = "meeshy.launch_proof"
+        private const val KEY_SECRET = "secret"
+        private const val SECRET_BYTES = 32
+        private const val ACTION_DOMAIN = "push-action"
+        private const val CALLER_DOMAIN = "caller"
+        private val ACTION_TARGET_EXTRAS = listOf(
+            PushActionReceiver.EXTRA_MESSAGE_ID,
+            PushActionReceiver.EXTRA_POST_ID,
+            PushActionReceiver.EXTRA_COMMENT_ID,
+            PushActionReceiver.EXTRA_TYPE,
+            PushActionReceiver.EXTRA_SERVER_NOTIFICATION_ID,
+        )
+        private const val FIELD_SEPARATOR = "\u0000"
+    }
+}

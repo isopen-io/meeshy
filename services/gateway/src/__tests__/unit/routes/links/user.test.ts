@@ -193,3 +193,67 @@ describe('GET /links/stats — DB error', () => {
     await app.close();
   });
 });
+
+// ─── GET /links — #3740 inactiveReason ───────────────────────────────────────
+//
+// Un lien qui disparaît de la liste sans explication est un second mystère :
+// `isActive: false` seul ne dit pas POURQUOI. `inactiveReason` porte la cause
+// la plus FORTE — clôture du conteneur avant expiration avant retrait manuel
+// — et `null` pour un lien actif, où il n'y a rien à expliquer.
+
+describe('GET /links — inactiveReason (#3740)', () => {
+  it('is null for an active link', async () => {
+    const { app } = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/links' });
+    expect(res.json().data[0].inactiveReason).toBeNull();
+    await app.close();
+  });
+
+  it('is CONVERSATION_CLOSED when the container is closed, even before expiry', async () => {
+    const prisma = makePrisma();
+    prisma.conversationShareLink.findMany = jest.fn<any>().mockResolvedValue([
+      {
+        ...mockLink,
+        isActive: false,
+        expiresAt: new Date('2099-01-01'), // pas encore expiré
+        conversation: { ...mockLink.conversation, closedAt: new Date('2026-09-02'), isActive: false },
+      },
+    ]);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: '/links' });
+    expect(res.json().data[0].inactiveReason).toBe('CONVERSATION_CLOSED');
+    await app.close();
+  });
+
+  it('is LINK_EXPIRED when the container is open but the link has lapsed', async () => {
+    const prisma = makePrisma();
+    prisma.conversationShareLink.findMany = jest.fn<any>().mockResolvedValue([
+      {
+        ...mockLink,
+        isActive: false,
+        expiresAt: new Date('2020-01-01'),
+        conversation: { ...mockLink.conversation, closedAt: null, isActive: true },
+      },
+    ]);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: '/links' });
+    expect(res.json().data[0].inactiveReason).toBe('LINK_EXPIRED');
+    await app.close();
+  });
+
+  it('is REVOKED when neither the container nor expiry explain the inactivity', async () => {
+    const prisma = makePrisma();
+    prisma.conversationShareLink.findMany = jest.fn<any>().mockResolvedValue([
+      {
+        ...mockLink,
+        isActive: false,
+        expiresAt: null,
+        conversation: { ...mockLink.conversation, closedAt: null, isActive: true },
+      },
+    ]);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: '/links' });
+    expect(res.json().data[0].inactiveReason).toBe('REVOKED');
+    await app.close();
+  });
+});

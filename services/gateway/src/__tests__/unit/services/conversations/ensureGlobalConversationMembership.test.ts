@@ -1,0 +1,454 @@
+/**
+ * `ensureGlobalConversationMembership` — SOURCE UNIQUE de l'ajout au salon
+ * global "meeshy", partagée par l'inscription publique
+ * (`AuthService.register`), la création d'un compte par un administrateur
+ * (`UserManagementService.createUser`) et le seed (`InitService`).
+ *
+ * Avant #3876, seule l'inscription publique ajoutait l'utilisateur au salon
+ * global — un compte créé par un administrateur n'y entrait JAMAIS.
+ *
+ * @jest-environment node
+ */
+
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import {
+  ensureGlobalConversationMembership,
+  type GlobalMembershipSocketManager,
+} from '../../../../services/conversations/ensureGlobalConversationMembership';
+import { matchesMongoWhere, type MongoDocument } from '../../../helpers/mongo-where';
+import {
+  subscribeConversationLanguageChanges,
+  type ConversationLanguageChange,
+} from '../../../../services/message-translation/conversationLanguageChanges';
+
+const GLOBAL_CONV = { id: 'conv-global', identifier: 'meeshy' };
+const USER_ID = 'user-new';
+
+type Harness = {
+  prisma: {
+    conversation: { findFirst: jest.Mock };
+    participant: {
+      findFirst: jest.Mock;
+      create: jest.Mock;
+      update: jest.Mock;
+      findMany: jest.Mock;
+      count: jest.Mock;
+    };
+    message: { create: jest.Mock; findMany: jest.Mock; update: jest.Mock };
+    user: { findUnique: jest.Mock };
+  };
+};
+
+/** Le compte rend ce que le `select` DEMANDE (#9711) — rang 2 de son prisme. */
+const COMPTE: Record<string, unknown> = {
+  id: USER_ID, systemLanguage: '', regionalLanguage: 'es', customDestinationLanguage: null, deviceLocale: null, username: 'new_user',
+};
+
+function harness(overrides: { globalConv?: any; existingMember?: any; memberCount?: number } = {}): Harness {
+  const { globalConv = GLOBAL_CONV, existingMember = null, memberCount = 3 } = overrides;
+  return {
+    prisma: {
+      conversation: { findFirst: jest.fn<any>().mockResolvedValue(globalConv) },
+      participant: {
+        findFirst: jest.fn<any>().mockResolvedValue(existingMember),
+        create: jest.fn<any>().mockResolvedValue({ id: 'part-new' }),
+        update: jest.fn<any>().mockResolvedValue({}),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+        count: jest.fn<any>().mockResolvedValue(memberCount),
+      },
+      message: {
+        create: jest.fn<any>().mockResolvedValue({ id: 'msg-1' }),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+        update: jest.fn<any>().mockResolvedValue({ id: 'msg-1' }),
+      },
+      user: {
+        findUnique: jest.fn<any>(async (args: any) =>
+          args?.select
+            ? Object.fromEntries(Object.keys(args.select).filter((k) => args.select[k]).map((k) => [k, COMPTE[k]]))
+            : COMPTE
+        ),
+      },
+    },
+  };
+}
+
+function makeIo() {
+  const broadcast = { to: jest.fn(), except: jest.fn(), emit: jest.fn() };
+  broadcast.to.mockReturnValue(broadcast);
+  broadcast.except.mockReturnValue(broadcast);
+  const io = { to: jest.fn<any>().mockReturnValue(broadcast) };
+  return { io, broadcast };
+}
+
+const baseInput = { userId: USER_ID, displayName: 'New User' };
+
+describe('ensureGlobalConversationMembership', () => {
+  let h: Harness;
+  beforeEach(() => { h = harness(); });
+
+  it('rend "no-global-conversation" et ne crée rien si le salon global est introuvable', async () => {
+    h = harness({ globalConv: null });
+
+    const result = await ensureGlobalConversationMembership({ prisma: h.prisma as never }, baseInput);
+
+    expect(result).toEqual({ outcome: 'no-global-conversation' });
+    expect(h.prisma.participant.create).not.toHaveBeenCalled();
+  });
+
+  it('rend "already-member" et ne crée rien si la participation existe déjà', async () => {
+    h = harness({ existingMember: { id: 'part-existing', isActive: true } });
+
+    const result = await ensureGlobalConversationMembership({ prisma: h.prisma as never }, baseInput);
+
+    expect(result).toEqual({ outcome: 'already-member', participantId: 'part-existing' });
+    expect(h.prisma.participant.create).not.toHaveBeenCalled();
+    expect(h.prisma.message.create).not.toHaveBeenCalled();
+  });
+
+  // Trouvé pendant ce lot : InitService.createBigbossUser/createAdminUser
+  // appellent AuthService.register() (qui rejoint DÉJÀ le salon global en
+  // "member") puis essayaient de créer une SECONDE ligne en "creator"/"admin"
+  // pour la même paire (conversationId, userId) — violation de l'index unique,
+  // qui laissait BIGBOSS/ADMIN coincés à "member" dans leur propre salon.
+  it('met À NIVEAU le rôle d\'une participation existante quand un rôle EXPLICITE est demandé (seed)', async () => {
+    h = harness({ existingMember: { id: 'part-existing', role: 'member', isActive: true } });
+
+    const result = await ensureGlobalConversationMembership(
+      { prisma: h.prisma as never },
+      { ...baseInput, role: 'creator' },
+    );
+
+    expect(result).toEqual({ outcome: 'already-member', participantId: 'part-existing' });
+    expect(h.prisma.participant.update).toHaveBeenCalledWith({
+      where: { id: 'part-existing' },
+      data: { role: 'creator' },
+    });
+  });
+
+  it('ne met PAS à niveau quand la participation existante a DÉJÀ le rôle demandé', async () => {
+    h = harness({ existingMember: { id: 'part-existing', role: 'creator', isActive: true } });
+
+    await ensureGlobalConversationMembership({ prisma: h.prisma as never }, { ...baseInput, role: 'creator' });
+
+    expect(h.prisma.participant.update).not.toHaveBeenCalled();
+  });
+
+  it('ne met JAMAIS à niveau sans rôle explicite — l\'inscription et la création admin ne rétrogradent/promeuvent personne', async () => {
+    h = harness({ existingMember: { id: 'part-existing', role: 'admin', isActive: true } });
+
+    const result = await ensureGlobalConversationMembership({ prisma: h.prisma as never }, baseInput);
+
+    expect(result).toEqual({ outcome: 'already-member', participantId: 'part-existing' });
+    expect(h.prisma.participant.update).not.toHaveBeenCalled();
+  });
+
+  it('crée la participation avec le rôle "member" par défaut', async () => {
+    await ensureGlobalConversationMembership({ prisma: h.prisma as never }, baseInput);
+
+    expect(h.prisma.participant.create).toHaveBeenCalledWith({
+      data: {
+        conversationId: GLOBAL_CONV.id,
+        userId: USER_ID,
+        type: 'user',
+        displayName: 'New User',
+        role: 'member',
+        language: 'es',
+        permissions: {
+          canSendMessages: true,
+          canSendFiles: true,
+          canSendImages: true,
+          canSendVideos: true,
+          canSendAudios: true,
+          canSendLocations: true,
+          canSendLinks: true,
+          canViewHistory: false,
+        },
+        joinedAt: expect.any(Date),
+        isActive: true,
+      },
+    });
+  });
+
+  it('respecte un rôle explicite (seed : creator/admin des comptes réservés)', async () => {
+    await ensureGlobalConversationMembership({ prisma: h.prisma as never }, { ...baseInput, role: 'creator' });
+
+    expect(h.prisma.participant.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ role: 'creator' }) }),
+    );
+  });
+
+  it('rend "joined" avec l\'id du participant créé', async () => {
+    const result = await ensureGlobalConversationMembership({ prisma: h.prisma as never }, baseInput);
+
+    expect(result).toEqual({ outcome: 'joined', participantId: 'part-new' });
+  });
+
+  // #7740 — le salon global ne poste plus « X a rejoint » par inscription :
+  // la ligne d'arrivées REGROUPÉES de la fenêtre (`globalArrivalsNotice.test.ts`).
+  it('ouvre la ligne d\'arrivées regroupées, signée du Participant.id créé', async () => {
+    await ensureGlobalConversationMembership({ prisma: h.prisma as never }, baseInput);
+
+    expect(h.prisma.message.create).toHaveBeenCalledTimes(1);
+    const { data } = h.prisma.message.create.mock.calls[0][0] as any;
+    expect(data).toMatchObject({
+      conversationId: GLOBAL_CONV.id,
+      senderId: 'part-new',
+      messageType: 'system',
+      messageSource: 'system',
+      content: 'New User vient d’arriver — dis-lui salut',
+      metadata: expect.objectContaining({
+        kind: 'members-arrived',
+        count: 1,
+        /* Le pseudo signe l'arrivée (#16338) : « dis-lui salut » l'écrit en mention. */
+        arrivals: [{ participantId: 'part-new', displayName: 'New User', username: 'new_user' }],
+      }),
+    });
+  });
+
+  it('met à jour la ligne ouverte et la rediffuse en message:edited plutôt que d\'en poster une autre', async () => {
+    const openLine = {
+      id: 'msg-open',
+      metadata: {
+        kind: 'members-arrived',
+        arrivals: [{ participantId: 'part-old', displayName: 'Aïcha' }],
+        count: 1,
+        windowStartedAt: new Date().toISOString(),
+      },
+    };
+    h.prisma.message.findMany.mockResolvedValue([openLine]);
+    h.prisma.message.update.mockImplementation(async ({ data }: any) => ({
+      id: 'msg-open', conversationId: GLOBAL_CONV.id, senderId: 'part-old', createdAt: new Date(), ...data,
+    }));
+    const { io, broadcast } = makeIo();
+    const broadcastMessage = jest.fn<any>().mockResolvedValue(undefined);
+    const resolveSocketManager = jest.fn<any>().mockReturnValue({ broadcastMessage, getIO: () => io });
+
+    await ensureGlobalConversationMembership({ prisma: h.prisma as never, resolveSocketManager }, baseInput);
+
+    expect(h.prisma.message.create).not.toHaveBeenCalled();
+    expect(broadcastMessage).not.toHaveBeenCalled();
+    expect(io.to).toHaveBeenCalledWith(`conversation:${GLOBAL_CONV.id}`);
+    expect(broadcast.emit).toHaveBeenCalledWith(
+      'message:edited',
+      expect.objectContaining({
+        id: 'msg-open',
+        content: 'New User et Aïcha viennent d’arriver — dis-leur salut',
+        isEdited: false,
+        metadata: expect.objectContaining({ count: 2 }),
+      }),
+    );
+  });
+
+  it('diffuse l\'avis via le manager résolu, quand il en existe un', async () => {
+    const broadcastMessage = jest.fn<any>().mockResolvedValue(undefined);
+    const resolveSocketManager = jest.fn<any>().mockReturnValue({ broadcastMessage } as GlobalMembershipSocketManager);
+
+    await ensureGlobalConversationMembership({ prisma: h.prisma as never, resolveSocketManager }, baseInput);
+
+    expect(broadcastMessage).toHaveBeenCalledTimes(1);
+    expect(broadcastMessage.mock.calls[0][1]).toBe(GLOBAL_CONV.id);
+  });
+
+  it('ne casse rien sans manager résolu — l\'ajout reste acquis sans socket', async () => {
+    const result = await ensureGlobalConversationMembership({ prisma: h.prisma as never }, baseInput);
+
+    expect(result.outcome).toBe('joined');
+  });
+
+  it('émet l\'effectif temps réel quand le manager expose getIO', async () => {
+    const { io } = makeIo();
+    const resolveSocketManager = jest.fn<any>().mockReturnValue({
+      broadcastMessage: jest.fn<any>().mockResolvedValue(undefined),
+      getIO: () => io,
+    } as GlobalMembershipSocketManager);
+
+    await ensureGlobalConversationMembership({ prisma: h.prisma as never, resolveSocketManager }, baseInput);
+
+    expect(io.to).toHaveBeenCalled();
+  });
+
+  it('n\'émet AUCUN effectif quand le manager n\'expose pas getIO (ex: seed au boot)', async () => {
+    const resolveSocketManager = jest.fn<any>().mockReturnValue({
+      broadcastMessage: jest.fn<any>().mockResolvedValue(undefined),
+    } as GlobalMembershipSocketManager);
+
+    await ensureGlobalConversationMembership({ prisma: h.prisma as never, resolveSocketManager }, baseInput);
+
+    // Rien à vérifier côté io — le manager n'en a pas exposé. Le test prouve
+    // surtout l'absence de throw (pas de `getIO!()` non gardé).
+    expect(h.prisma.participant.create).toHaveBeenCalledTimes(1);
+  });
+
+  // Le salon global contient TOUS les inscrits : c'est le seul des six
+  // appelants d'`emitConversationMemberCountEvent` dont l'audience n'est pas
+  // bornée par la taille d'une conversation ordinaire. Charger la liste
+  // entière pour en prendre la LONGUEUR ramenait N lignes en mémoire à chaque
+  // création de compte, puis chaînait un `.to()` par destinataire — or
+  // `BroadcastOperator.to()` recopie son Set de rooms à chaque appel, donc
+  // N(N+1)/2 insertions synchrones sur la boucle d'événements. Les deux
+  // témoins ci-dessous gardent la borne, chacun d'un côté du plafond.
+  it('COMPTE l\'effectif au lieu de charger la liste entière', async () => {
+    const { io } = makeIo();
+    const resolveSocketManager = jest.fn<any>().mockReturnValue({
+      broadcastMessage: jest.fn<any>().mockResolvedValue(undefined),
+      getIO: () => io,
+    } as GlobalMembershipSocketManager);
+
+    await ensureGlobalConversationMembership({ prisma: h.prisma as never, resolveSocketManager }, baseInput);
+
+    expect(h.prisma.participant.count).toHaveBeenCalledWith({
+      where: { conversationId: GLOBAL_CONV.id, isActive: true },
+    });
+    // Toute lecture de l'audience est BORNÉE — jamais un `findMany` nu.
+    for (const call of h.prisma.participant.findMany.mock.calls) {
+      expect(typeof (call[0] as any).take).toBe('number');
+    }
+  });
+
+  it('AU-DESSUS du plafond, ne charge QUE les lecteurs à effectif exact', async () => {
+    const { io } = makeIo();
+    h = harness({ memberCount: 50_000 });
+    const resolveSocketManager = jest.fn<any>().mockReturnValue({
+      broadcastMessage: jest.fn<any>().mockResolvedValue(undefined),
+      getIO: () => io,
+    } as GlobalMembershipSocketManager);
+
+    await ensureGlobalConversationMembership({ prisma: h.prisma as never, resolveSocketManager }, baseInput);
+
+    const where = (h.prisma.participant.findMany.mock.calls[0][0] as any).where;
+    // Sans ce `OR`, la requête ramenait les 50 000 lignes : au-dessus du
+    // plafond, tout lecteur non autorisé à l'effectif exact reçoit une charge
+    // IDENTIQUE à celle de la room de conversation, donc sa room personnelle
+    // n'apporte rien.
+    const titles = where.AND?.find((clause: any) => clause.OR?.some((branch: any) => 'role' in branch));
+    expect(titles?.OR).toHaveLength(2);
+  });
+
+  // #9106 — un invité par lien n'a pas de clé `userId`, et sur MongoDB une
+  // négation écarte la clé ABSENTE : `NOT: { userId }` seul le retirait de
+  // l'audience. Le double évalue le `where` avec les sémantiques mesurées.
+  it('adresse l\'effectif aux invités par lien, nommés par leur Participant.id', async () => {
+    const { io, broadcast } = makeIo();
+    const rows: MongoDocument[] = [
+      { id: 'p-member', conversationId: GLOBAL_CONV.id, isActive: true, userId: 'user-member', role: 'member', user: null },
+      { id: 'p-guest', conversationId: GLOBAL_CONV.id, isActive: true, role: 'member', user: null },
+      { id: 'part-new', conversationId: GLOBAL_CONV.id, isActive: true, userId: USER_ID, role: 'member', user: null },
+    ];
+    h.prisma.participant.findMany.mockImplementation(async (args: any) =>
+      rows.filter((row) => matchesMongoWhere(row, args.where)).map((row) => ({ userId: null, ...row })),
+    );
+    const resolveSocketManager = jest.fn<any>().mockReturnValue({
+      broadcastMessage: jest.fn<any>().mockResolvedValue(undefined),
+      getIO: () => io,
+    } as GlobalMembershipSocketManager);
+
+    await ensureGlobalConversationMembership({ prisma: h.prisma as never, resolveSocketManager }, baseInput);
+
+    const rooms = [...io.to.mock.calls, ...broadcast.to.mock.calls].map((call) => call[0]);
+    expect(rooms).toEqual(expect.arrayContaining(['user:user-member', 'user:p-guest']));
+    expect(rooms).not.toContain(`user:${USER_ID}`);
+  });
+
+  it('AVALE une panne de l\'effectif temps réel — accessoire, jamais une condition de l\'ajout', async () => {
+    const { io } = makeIo();
+    h.prisma.participant.count.mockRejectedValue(new Error('mongo down'));
+    const resolveSocketManager = jest.fn<any>().mockReturnValue({
+      broadcastMessage: jest.fn<any>().mockResolvedValue(undefined),
+      getIO: () => io,
+    } as GlobalMembershipSocketManager);
+
+    const result = await ensureGlobalConversationMembership(
+      { prisma: h.prisma as never, resolveSocketManager },
+      baseInput,
+    );
+
+    expect(result.outcome).toBe('joined');
+  });
+});
+
+/**
+ * **Un départ du salon global est RESPECTÉ** (issue #4010, décision porteur du
+ * 2026-08-27).
+ *
+ * La recherche de participation existante ne filtrait pas `isActive` : une
+ * personne qui avait QUITTÉ le salon global était rendue `already-member` et
+ * n'était jamais réactivée. Comportement identique à avant #3876 — donc pas une
+ * régression — mais jamais assumé : l'état « a quitté » n'était tout simplement
+ * pas un cas géré, et rien ne distinguait « membre actif » de « ligne morte ».
+ *
+ * La décision porteur retient le respect du départ. Ce que la fonction gagne
+ * n'est donc pas un comportement neuf : c'est un **état nommé**, un test qui
+ * l'ancre, et l'impossibilité qu'un futur lot le change par inadvertance.
+ *
+ * `left` couvre toute ligne INACTIVE — départ volontaire, retrait par un hôte,
+ * bannissement. Aucune n'est ressuscitée : ressusciter un banni serait pire
+ * encore que ramener quelqu'un qui est parti de lui-même.
+ */
+describe('ensureGlobalConversationMembership — un départ est respecté (#4010)', () => {
+  it('rend "left" pour une ligne inactive, et ne la réactive pas', async () => {
+    const h = harness({ existingMember: { id: 'part-gone', isActive: false } });
+
+    const result = await ensureGlobalConversationMembership({ prisma: h.prisma as never }, baseInput);
+
+    expect(result).toEqual({ outcome: 'left', participantId: 'part-gone' });
+    expect(h.prisma.participant.update).not.toHaveBeenCalled();
+    expect(h.prisma.participant.create).not.toHaveBeenCalled();
+  });
+
+  it('ne reposte AUCUN avis d’arrivée pour quelqu’un qui est parti', async () => {
+    const h = harness({ existingMember: { id: 'part-gone', isActive: false } });
+
+    await ensureGlobalConversationMembership({ prisma: h.prisma as never }, baseInput);
+
+    expect(h.prisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it('ne met PAS à niveau le rang d’une ligne inactive, même quand le seed en demande un', async () => {
+    const h = harness({ existingMember: { id: 'part-gone', role: 'member', isActive: false } });
+
+    const result = await ensureGlobalConversationMembership(
+      { prisma: h.prisma as never },
+      { ...baseInput, role: 'creator' },
+    );
+
+    expect(result.outcome).toBe('left');
+    expect(h.prisma.participant.update).not.toHaveBeenCalled();
+  });
+
+  it('une ligne ACTIVE reste "already-member" — le nouvel état ne mord que sur l’inactif', async () => {
+    const h = harness({ existingMember: { id: 'part-here', isActive: true } });
+
+    const result = await ensureGlobalConversationMembership({ prisma: h.prisma as never }, baseInput);
+
+    expect(result).toEqual({ outcome: 'already-member', participantId: 'part-here' });
+  });
+});
+
+describe('#9711 — le participant du salon global porte la langue de son compte', () => {
+  it('descendue de son prisme (rang 2 ici), jamais le défaut `"en"` du schéma', async () => {
+    const h = harness();
+
+    await ensureGlobalConversationMembership({ prisma: h.prisma as never }, baseInput);
+
+    const data = (h.prisma.participant.create.mock.calls[0] as any[])[0].data;
+    expect(data.language).toBe('es');
+  });
+});
+
+describe('#9708 — l’entrée au salon global est annoncée à la composition linguistique', () => {
+  it('avec la langue du compte, une seule fois, et rien pour un déjà-membre', async () => {
+    const annonces: ConversationLanguageChange[] = [];
+    const desabonner = subscribeConversationLanguageChanges((change) => { annonces.push(change); });
+    try {
+      await ensureGlobalConversationMembership({ prisma: harness().prisma as never }, baseInput);
+      await ensureGlobalConversationMembership(
+        { prisma: harness({ existingMember: { id: 'p', isActive: true } }).prisma as never },
+        baseInput,
+      );
+    } finally {
+      desabonner();
+    }
+
+    expect(annonces).toEqual([{ kind: 'arrival', conversationId: GLOBAL_CONV.id, language: 'es', readerUserId: USER_ID }]);
+  });
+});

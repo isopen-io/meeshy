@@ -9,7 +9,7 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { logError } from '../utils/logger';
+import { logError, logWarn } from '../utils/logger';
 import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
@@ -59,6 +59,32 @@ const unregisterDeviceTokenSchema = z.object({
   // Device ID to unregister all tokens for
   deviceId: z.string().max(255).optional(),
 });
+
+/**
+ * Clients that send no `deviceId` (iOS up to 2026-10, #10856) leave one row per
+ * install: every reinstall, simulator run or test host mints a fresh token, and
+ * APNs keeps accepting pushes to most of them. A user carries a handful of real
+ * devices, so only the most recently REGISTERED tokens of a type stay active —
+ * `registeredAt`, not `updatedAt`, which every successful send bumps.
+ */
+export const MAX_ACTIVE_PUSH_TOKENS_PER_TYPE = 5;
+
+export async function retireSurplusTokens(
+  fastify: FastifyInstance,
+  { userId, type, keepId }: { userId: string; type: string; keepId: string }
+): Promise<void> {
+  const surplus = await fastify.prisma.pushToken.findMany({
+    where: { userId, type, isActive: true, id: { not: keepId } },
+    orderBy: [{ registeredAt: 'desc' }, { createdAt: 'desc' }],
+    skip: MAX_ACTIVE_PUSH_TOKENS_PER_TYPE - 1,
+    select: { id: true },
+  });
+  if (surplus.length === 0) return;
+  await fastify.prisma.pushToken.updateMany({
+    where: { id: { in: surplus.map(({ id }) => id) }, userId },
+    data: { isActive: false },
+  });
+}
 
 // ============================================
 // ROUTES
@@ -173,6 +199,16 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
 
       fastify.log.info(`[PUSH_TOKEN] Registering ${tokenType} token for user ${userId} on ${body.platform} (apnsEnv=${apnsEnvironment ?? 'n/a'})`);
 
+      const registeredAt = new Date();
+
+      // A token belongs to the LAST account that registered it: the previous
+      // owner's rows are detached first, so no instant has the token aimed at
+      // two accounts (#13570).
+      await fastify.prisma.pushToken.updateMany({
+        where: { isActive: true, token, userId: { not: userId } },
+        data: { isActive: false }
+      });
+
       // Upsert the token (create or update if exists)
       const pushToken = await fastify.prisma.pushToken.upsert({
         where: {
@@ -192,7 +228,8 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
           isActive: true,
           failedAttempts: 0, // Reset failed attempts on re-registration
           lastError: null,
-          updatedAt: new Date()
+          registeredAt,
+          updatedAt: registeredAt
         },
         create: {
           userId,
@@ -204,7 +241,8 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
           appVersion: body.appVersion,
           bundleId: body.bundleId,
           apnsEnvironment,
-          isActive: true
+          isActive: true,
+          registeredAt
         },
         select: {
           id: true,
@@ -215,6 +253,23 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
           updatedAt: true
         }
       });
+
+      // A device holds ONE live token per type: superseded tokens of the same
+      // (userId, deviceId, type) must stop receiving sends.
+      if (body.deviceId) {
+        await fastify.prisma.pushToken.updateMany({
+          where: {
+            isActive: true,
+            id: { not: pushToken.id },
+            userId,
+            deviceId: body.deviceId,
+            type: tokenType,
+          },
+          data: { isActive: false }
+        });
+      }
+
+      await retireSurplusTokens(fastify, { userId, type: tokenType, keepId: pushToken.id });
 
       // Determine if this was a new registration or update
       const isNew = pushToken.createdAt.getTime() === pushToken.updatedAt.getTime();
@@ -231,7 +286,7 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        fastify.log.warn(`[PUSH_TOKEN] Validation error: ${JSON.stringify(error.issues)}`);
+        logWarn(fastify.log, `[PUSH_TOKEN] Validation error: ${JSON.stringify(error.issues)}`);
         return sendBadRequest(reply, 'Invalid request data');
       }
 
@@ -322,7 +377,7 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        fastify.log.warn(`[PUSH_TOKEN] Validation error: ${JSON.stringify(error.issues)}`);
+        logWarn(fastify.log, `[PUSH_TOKEN] Validation error: ${JSON.stringify(error.issues)}`);
         return sendBadRequest(reply, 'Invalid request data');
       }
 

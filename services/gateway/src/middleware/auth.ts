@@ -3,13 +3,23 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ParticipantType, ParticipantPermissions } from '@meeshy/shared/types/participant';
 import { resolveParticipantRights } from '../services/participantRights';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import { PRIVILEGED_PLATFORM_ROLES } from '@meeshy/shared/utils/platform-privilege';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { StatusService } from '../services/StatusService';
 import { hashSessionToken } from '../utils/session-token';
-import { PermissionDeniedError } from '../errors/custom-errors';
+import { loadGuestShareLinkGate, refuseExpiredShareLink, ShareLinkExpiredError } from '../services/shareLinkReadGate';
+import { guestAccessEnd } from '../services/guestAccessEnd';
+import { sendUnauthorized, sendForbidden, sendError } from '../utils/response';
 import { getCacheStore } from '../services/CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { SESSION_CLAIM } from '../services/auth/session-jwt';
+import { SessionLookupUnavailableError, sessionAdmissionRefusal } from '../services/auth/session-admission';
+import { ActivationBlockedError, resolveAccountActivation } from '../services/auth/account-activation';
+import { AccountDeletedError, accountIsDeleted, inactiveAccountRefusal, sendAccountDeleted, type DeletedAccountReader } from '../services/auth/account-deleted';
+import type { AccountActivation } from '@meeshy/shared/types/account-activation';
+import { SessionActivitySampler, sharedSessionActivity } from '../services/auth/session-activity';
+import { rejectBelowAppVersionFloor } from './app-version-floor';
 
 const authLogger = enhancedLogger.child({ module: 'auth' });
 
@@ -42,6 +52,8 @@ export type RegisteredUser = {
   readonly lastActiveAt: Date;
   readonly emailVerifiedAt?: Date | null;
   readonly profileCompletionRate?: number;
+  /** Le délai de grâce de l'adresse (#8238), calculé ici pour `GET /me`. */
+  readonly activation?: AccountActivation;
 }
 
 export type UnifiedAuthContext = {
@@ -52,6 +64,14 @@ export type UnifiedAuthContext = {
   readonly userId?: string;
   readonly jwtToken?: string;
   readonly sessionToken?: string;
+  /**
+   * La session `UserSession` NOMMÉE par le claim `sid` du JWT vérifié (#9606) —
+   * la seule façon fiable de reconnaître « cet appareil-ci » : aucun client
+   * inscrit n'envoie `x-session-token` en REST. Absent pour un invité et pour
+   * un jeton sans `sid` (refusé à la porte depuis la fin de la fenêtre de
+   * transition, `legacyTokenRefusal`).
+   */
+  readonly sessionId?: string;
 
   readonly participantId?: string;
   readonly participant?: unknown;
@@ -134,24 +154,57 @@ export async function findTrustedSession(
   });
 }
 
+// ===== REFUS DE SESSION (#4264 critère 4, #10328) =====
+
+/**
+ * Motif de refus interne — jamais transmis au client, qui n'apprend que le
+ * message générique existant (`'Invalid JWT token'`), comme pour toute autre
+ * raison de refus JWT sur ce chemin. Sert uniquement à journaliser
+ * précisément côté serveur, sans faire classer ce refus comme une erreur
+ * JWT « inattendue » dans le bloc `catch` de `createRegisteredUserContext`.
+ */
+class SessionRevokedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SessionRevokedError';
+  }
+}
+
+export type AuthMiddlewareOptions = {
+  /** L'horloge du délai de grâce — injectée par les témoins. */
+  readonly now?: () => Date;
+  /** L'échantillonneur de dernière activité (#9607) — le partagé par défaut. */
+  readonly sessionActivity?: SessionActivitySampler;
+};
+
+export { ActivationBlockedError, AccountDeletedError };
+
 // ===== SERVICE =====
 
 export class AuthMiddleware {
+  private readonly now: () => Date;
+  private readonly sessionActivity: SessionActivitySampler;
+
   constructor(
     private prisma: PrismaClient,
-    private statusService?: StatusService
-  ) {}
+    private statusService?: StatusService,
+    options: AuthMiddlewareOptions = {}
+  ) {
+    this.now = options.now ?? (() => new Date());
+    this.sessionActivity = options.sessionActivity ?? sharedSessionActivity;
+  }
 
   async createAuthContext(
     authorizationHeader?: string,
-    sessionToken?: string
+    sessionToken?: string,
+    options: { readonly adoptsSession?: boolean } = {}
   ): Promise<UnifiedAuthContext> {
     const jwtToken = authorizationHeader?.startsWith('Bearer ')
       ? authorizationHeader.slice(7)
       : null;
 
     if (jwtToken) {
-      return this.createRegisteredUserContext(jwtToken, sessionToken);
+      return this.createRegisteredUserContext(jwtToken, sessionToken, options.adoptsSession !== false);
     }
 
     if (sessionToken) {
@@ -163,7 +216,8 @@ export class AuthMiddleware {
 
   private async createRegisteredUserContext(
     jwtToken: string,
-    sessionToken?: string
+    sessionToken: string | undefined,
+    adoptsSession: boolean
   ): Promise<UnifiedAuthContext> {
     try {
       // task-1-fix-round-6 — AVANT : un `jwt.TokenExpiredError` accompagné
@@ -197,6 +251,33 @@ export class AuthMiddleware {
 
       const jwtUserId = jwtPayload.userId as string;
 
+      // #4264 critère 4, #10328 — la session NOMMÉE par le jeton doit vivre :
+      // inconnue, révoquée ou échue ⇒ refus ; jeton sans `sid` ⇒ butoir daté.
+      // Posée avant tout accès au cache `auth:user:*` ou à la ligne `User`.
+      // Une lecture qui lève remonte en `SessionLookupUnavailableError` (503).
+      const sidClaim = jwtPayload[SESSION_CLAIM];
+      const sid = typeof sidClaim === 'string' ? sidClaim : undefined;
+      const refus = await sessionAdmissionRefusal(this.prisma, {
+        claims: jwtPayload,
+        userId: jwtUserId,
+        now: this.now(),
+        adopt: adoptsSession,
+      });
+      // #10493 — la purge d'un compte SUPPRIME ses sessions : son jeton nomme
+      // une session absente. La signature étant vérifiée, le refus garde le
+      // code de #10264, qui fait purger ce compte à l'appareil.
+      if (refus && (await accountIsDeleted(this.prisma as unknown as DeletedAccountReader, jwtUserId))) {
+        throw new AccountDeletedError(jwtUserId);
+      }
+      if (refus) {
+        authLogger.warn('[AUTH] Requête REST refusée : la session nommée par le jeton ne vit plus', {
+          userId: jwtUserId,
+          sid,
+          motif: refus,
+        });
+        throw new SessionRevokedError(refus);
+      }
+
       const cacheKey = `auth:user:${jwtUserId}`;
 
       type CachedUserRow = {
@@ -218,15 +299,17 @@ export class AuthMiddleware {
         isOnline: boolean;
         lastActiveAt: string;
         emailVerifiedAt: string | null;
+        emailReleasedAt?: string | null;
         createdAt: string;
         updatedAt: string;
         deviceLocale: string | null;
         profileCompletionRate: number | null;
       };
 
-      type FullUserRow = Omit<CachedUserRow, 'lastActiveAt' | 'emailVerifiedAt' | 'createdAt' | 'updatedAt'> & {
+      type FullUserRow = Omit<CachedUserRow, 'lastActiveAt' | 'emailVerifiedAt' | 'emailReleasedAt' | 'createdAt' | 'updatedAt'> & {
         lastActiveAt: Date;
         emailVerifiedAt: Date | null;
+        emailReleasedAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
         isActive: boolean;
@@ -236,6 +319,7 @@ export class AuthMiddleware {
         ...cached,
         lastActiveAt: new Date(cached.lastActiveAt),
         emailVerifiedAt: cached.emailVerifiedAt ? new Date(cached.emailVerifiedAt) : null,
+        emailReleasedAt: cached.emailReleasedAt ? new Date(cached.emailReleasedAt) : null,
         createdAt: new Date(cached.createdAt),
         updatedAt: new Date(cached.updatedAt),
       });
@@ -255,7 +339,7 @@ export class AuthMiddleware {
 
       if (cachedRow) {
         if (!cachedRow.isActive) {
-          throw new Error('User not found or inactive');
+          throw await inactiveAccountRefusal(this.prisma as unknown as DeletedAccountReader, jwtUserId);
         }
         user = deserializeCachedUser(cachedRow);
       }
@@ -282,6 +366,7 @@ export class AuthMiddleware {
             lastActiveAt: true,
             isActive: true,
             emailVerifiedAt: true,
+            emailReleasedAt: true,
             createdAt: true,
             updatedAt: true,
             deviceLocale: true,
@@ -311,6 +396,7 @@ export class AuthMiddleware {
             isOnline: user.isOnline,
             lastActiveAt: user.lastActiveAt.toISOString(),
             emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
+            emailReleasedAt: user.emailReleasedAt?.toISOString() ?? null,
             createdAt: user.createdAt.toISOString(),
             updatedAt: user.updatedAt.toISOString(),
             deviceLocale: user.deviceLocale,
@@ -325,27 +411,28 @@ export class AuthMiddleware {
       }
 
       if (!user || !user.isActive) {
-        throw new Error('User not found or inactive');
+        throw await inactiveAccountRefusal(this.prisma as unknown as DeletedAccountReader, jwtUserId);
       }
 
-      if (this.statusService) {
-        this.statusService.updateUserLastSeen(user.id);
-        if (!user.isOnline) {
-          this.statusService.ensureUserOnline(user.id, false);
-        }
+      // #8238 — lu sur la ligne, fraîche ou en cache : le délai dépend de
+      // l'heure, pas de la ligne, et se recalcule à chaque requête.
+      const activation = resolveAccountActivation(user, this.now());
+      if (activation.phase === 'blocked') {
+        authLogger.info('[AUTH] Requête refusée : délai de grâce de l\'adresse passé (#8238)', { userId: user.id });
+        throw new ActivationBlockedError();
       }
 
-      // round 6 — plus de concept de « JWT expiré mais accepté » à ce niveau
-      // (il aurait déjà levé plus haut) : dès qu'on atteint ce point, le JWT
-      // est valide et non expiré. Bookkeeping pur, ne décide jamais rien.
-      if (sessionToken) {
-        const hashedSessionToken = hashSessionToken(sessionToken);
-        this.prisma.userSession.update({
-          where: { sessionToken: hashedSessionToken },
-          data: { lastActivityAt: new Date() }
-        }).catch(err => {
-          authLogger.warn('Failed to update trusted session lastActivityAt (anon)', { err });
-        });
+      // REST date l'activité, jamais la présence (#10575) : les extensions iOS
+      // l'appellent en arrière-plan, et seule la socket au premier plan est « là ».
+      this.statusService?.updateUserLastSeen(user.id);
+
+      // #9607 — la dernière activité avance sur la session NOMMÉE par le JWT,
+      // échantillonnée (une écriture par session et par quart d'heure au plus)
+      // et détachée : bookkeeping pur, ne décide jamais rien, n'attend rien.
+      // L'en-tête `x-session-token` n'y est plus lu : il faisait réécrire la
+      // ligne à chaque requête, et aucun client inscrit ne l'envoie.
+      if (sid) {
+        this.sessionActivity.touch(this.prisma.userSession, { userId: user.id, sessionId: sid });
       }
 
       const userLanguage = resolveUserLanguage(user, { deviceLocale: user.deviceLocale ?? undefined });
@@ -358,17 +445,21 @@ export class AuthMiddleware {
         userId: user.id,
         jwtToken,
         sessionToken: sessionToken || undefined,
+        sessionId: sid,
 
         displayName: user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username,
         userLanguage,
         hasFullAccess: true,
         canSendMessages: true,
 
-        registeredUser: user as RegisteredUser,
+        registeredUser: { ...user, activation } as RegisteredUser,
         jwtPayload,
       };
 
     } catch (error) {
+      if (error instanceof ActivationBlockedError) throw error;
+      if (error instanceof AccountDeletedError) throw error;
+      if (error instanceof SessionLookupUnavailableError) throw error;
       if (error instanceof jwt.TokenExpiredError) {
         const tokenPrefix = jwtToken.slice(-8);
         const now = Date.now();
@@ -384,6 +475,10 @@ export class AuthMiddleware {
         }
       } else if (error instanceof jwt.JsonWebTokenError) {
         authLogger.warn('JWT invalid', { message: error.message });
+      } else if (error instanceof SessionRevokedError) {
+        // Déjà journalisé avec son motif précis au site d'appel (#4264
+        // critère 4) — ne pas dupliquer le log, ni le classer en erreur
+        // « inattendue » : c'est une garde qui vient de fonctionner.
       } else {
         authLogger.error('Unexpected JWT error', { error });
       }
@@ -396,10 +491,14 @@ export class AuthMiddleware {
       const tokenHash = hashSessionToken(sessionToken);
 
       const participant = await this.prisma.participant.findFirst({
+        // `isActive` ne filtre PLUS ici (#4410) : il se lit et se décide en
+        // aval. Tant qu'il était dans le `where`, un invité RÉVOQUÉ et un
+        // jeton INVENTÉ rendaient tous deux « aucune ligne », et la
+        // distinction n'était pas perdue à la remontée — elle n'était jamais
+        // faite. Le message d'erreur nommait pourtant les deux cas.
         where: {
           sessionTokenHash: tokenHash,
           type: 'anonymous',
-          isActive: true,
         },
         select: {
           id: true,
@@ -411,16 +510,38 @@ export class AuthMiddleware {
           language: true,
           permissions: true,
           isActive: true,
+          bannedAt: true,
+          joinedAt: true,
           isOnline: true,
           lastActiveAt: true,
           nickname: true,
+          shareLinkId: true,
           anonymousSession: true,
         }
       });
 
       if (!participant) {
-        throw new Error('Anonymous participant not found or inactive');
+        throw new Error('Anonymous participant not found');
       }
+
+      // #10437 — la garde COMMUNE du lien échu, puis (#4410, #10449) celle de
+      // la participation morte : un jeton VALIDE sur une ligne désactivée ou
+      // bannie ne reçoit pas le 401 nu d'un jeton inventé, qui l'enverrait
+      // retenter. Ordre unique des portes (#10457) : `guestAccessEnd`. Lien
+      // illisible ⇒ l'erreur propage, le `catch` ci-dessous refuse sans code.
+      // #10470 — la révocation DIFFÉRÉE d'un gros lien fermé retire l'accès
+      // dès la fermeture à tout invité entré avant elle.
+      const linkGate = await loadGuestShareLinkGate(this.prisma, participant);
+      const end = guestAccessEnd({
+        linkExpiresAt: linkGate.expiresAt,
+        linkRevocationPendingAt: linkGate.revocationPendingAt,
+        linkIsActive: linkGate.isActive,
+        linkMissing: linkGate.missing,
+        participation: participant,
+        now: new Date(),
+      });
+      if (end === 'link-expired') throw new ShareLinkExpiredError();
+      if (end === 'revoked') throw new GuestAccessRevokedError();
 
       if (this.statusService) {
         this.statusService.updateAnonymousLastSeen(participant.id);
@@ -466,6 +587,12 @@ export class AuthMiddleware {
       };
 
     } catch (error) {
+      // La cause TYPÉE traverse (#4410). Ce `catch` uniformisait TOUT en
+      // « Invalid session token » — c'est lui qui effaçait la distinction, et
+      // pas seulement le `catch` extérieur : une erreur qu'on vient de
+      // qualifier ne survit pas à un gestionnaire qui réécrit sans regarder.
+      if (error instanceof GuestAccessRevokedError) throw error;
+      if (error instanceof ShareLinkExpiredError) throw error;
       authLogger.warn('Invalid session token or inactive participant');
       throw new Error('Invalid session token');
     }
@@ -489,21 +616,85 @@ export class AuthMiddleware {
 
 // ===== MIDDLEWARE FASTIFY =====
 
+/**
+ * La clé sous laquelle chaque middleware rendu par
+ * `createUnifiedAuthMiddleware` DÉCLARE son régime (#4489).
+ *
+ * Deux appels de la même fabrique produisent deux fonctions dont la SOURCE
+ * compilée est identique — `options` est une variable capturée, que
+ * `Function.prototype.toString()` ne montre pas. Un lecteur qui reconnaît
+ * l'appel ne peut donc pas savoir si ce middleware GARDE (`requireAuth: true`
+ * ⇒ 401 sans jeton) ou s'il ENRICHIT seulement (`requireAuth: false` ⇒ sert
+ * l'anonyme, et pose `authContext` si un jeton est présent). Le manifeste des
+ * routes annonçait pour cette raison dix-huit routes ouvertes comme gardées.
+ *
+ * La fabrique ATTACHE donc son régime à ce qu'elle rend, plutôt que de laisser
+ * un lecteur le déduire d'un texte qui ne le porte pas. `Symbol.for` — pas un
+ * symbole de module — pour que la clé survive à deux instanciations du module.
+ * Non énumérable : rien de ce qui sérialise un hook ne doit changer de forme.
+ */
+/**
+ * L'accès d'un invité a été RETIRÉ — son jeton est valide, son participant est
+ * désactivé (#4410).
+ *
+ * Un type, pas une chaîne : c'est ce qui permet au `catch` du middleware de
+ * traduire la cause en code stable sans reconnaître un message. Un message se
+ * reformule, et le jour où il l'est, le refus redevient muet sans que rien ne
+ * rougisse.
+ *
+ * ## L'arbitrage de confidentialité, tranché
+ *
+ * Dire « ton accès a été retiré » confirme au porteur du jeton que le lien a
+ * EXISTÉ et qu'il y était admis. C'est acceptable, et pour une raison qui se
+ * mesure : seul un jeton qui CORRESPOND à un participant réel obtient cette
+ * réponse. Un jeton inventé ne trouve aucune ligne et reçoit le 401 générique.
+ * L'information n'est donc rendue qu'à quelqu'un qui détenait déjà la preuve
+ * de son admission.
+ *
+ * Ce qui reste tu, et qui n'est pas négociable : PAR QUI, QUAND, et quelle
+ * conversation. Le refus dit qu'il n'y a rien à retenter, pas ce qui s'est
+ * passé.
+ */
+export class GuestAccessRevokedError extends Error {
+  constructor() {
+    super('Guest access revoked');
+    this.name = 'GuestAccessRevokedError';
+  }
+}
+
+export const AUTH_REGIME = Symbol.for('meeshy.gateway.auth-regime');
+
+/** Ce que déclare un middleware d'authentification sur lui-même. */
+export interface AuthRegime {
+  /** `true` ⇒ refuse (401) un appelant sans identité. `false` ⇒ ne refuse jamais pour cette raison. */
+  readonly requireAuth: boolean;
+  /** `true` ⇒ un invité de lien partagé passe. */
+  readonly allowAnonymous: boolean;
+}
+
 export function createUnifiedAuthMiddleware(
   prisma: PrismaClient,
   options: {
     requireAuth?: boolean;
     allowAnonymous?: boolean;
     statusService?: StatusService;
+    now?: () => Date;
+    sessionActivity?: SessionActivitySampler;
   } = {}
 ) {
-  const authMiddleware = new AuthMiddleware(prisma, options.statusService);
+  const authMiddleware = new AuthMiddleware(prisma, options.statusService, {
+    now: options.now,
+    sessionActivity: options.sessionActivity,
+  });
 
-  return async function unifiedAuth(request: FastifyRequest, reply: FastifyReply) {
+  const unifiedAuth = async function unifiedAuth(request: FastifyRequest, reply: FastifyReply) {
     try {
+      // #10477 — franchir la porte adopte une session prouvée, sauf sur la
+      // route qui la refuse (`config.adoptsSession: false`, la déconnexion).
       const authContext = await authMiddleware.createAuthContext(
         request.headers.authorization,
-        request.headers['x-session-token'] as string
+        request.headers['x-session-token'] as string,
+        { adoptsSession: request.routeOptions?.config?.adoptsSession !== false }
       );
 
       if (options.requireAuth && !authContext.isAuthenticated) {
@@ -519,6 +710,10 @@ export function createUnifiedAuthMiddleware(
           code: 'REGISTERED_USER_REQUIRED'
         });
       }
+
+      // D-5 (#13954) — la session est admise : un client sous le plancher de
+      // sa plateforme n'ouvre pas la requête, même sur une route facultative.
+      if (authContext.isAuthenticated && isRegisteredUser(authContext) && rejectBelowAppVersionFloor(request, reply)) return reply;
 
       (request as UnifiedAuthRequest).authContext = authContext;
 
@@ -554,6 +749,47 @@ export function createUnifiedAuthMiddleware(
       const errorMessage = error instanceof Error ? error.message : 'Authentication failed';
       authLogger.warn('Auth failure', { errorMessage });
 
+      // 410 GONE, pas 401 : l'accès n'est pas à re-tenter, il n'existe plus.
+      // Même code de statut et même famille de motifs que
+      // `POST /anonymous/session/refresh`, qui rendait déjà `LINK_DEACTIVATED`
+      // pour ce cas exact — sur la seule porte qui RAFRAÎCHIT une session, pas
+      // sur celles qui la consomment. Un client distingue ainsi « réessaie »
+      // de « c'est fini », ce qu'aucun 401 ne lui permettait.
+      if (error instanceof GuestAccessRevokedError) {
+        return reply.status(410).send({
+          success: false,
+          error: 'GUEST_ACCESS_REVOKED',
+          message: "L'acces de cet invite a ete retire"
+        });
+      }
+
+      // Même code que les portes de lecture par route (#7388). Le client y
+      // oublie la session d'invité et cesse de se reconnecter, comme pour la
+      // révocation ci-dessus (#10442). Sur une route à authentification
+      // facultative aussi : retomber en visiteur tairait la cause.
+      if (error instanceof ShareLinkExpiredError) {
+        return refuseExpiredShareLink(reply);
+      }
+
+      if (options.requireAuth && error instanceof ActivationBlockedError) {
+        return sendUnauthorized(reply, 'Confirmez votre adresse e-mail pour continuer', { code: 'ACCOUNT_ACTIVATION_REQUIRED' });
+      }
+
+      // #10328 — la session n'a pas pu être lue : ni admis, ni 401 (qui ferait
+      // déconnecter le client sur un accroc de la base). Une route facultative
+      // retombe en visiteur, comme pour tout autre échec.
+      if (options.requireAuth && error instanceof SessionLookupUnavailableError) {
+        const cause = error.cause as { message?: string; code?: string } | undefined;
+        authLogger.error('[AUTH] Lecture de session en échec — 503 (#10328)', { message: cause?.message, code: cause?.code });
+        return sendError(reply, 503, 'Authentification momentanément indisponible', { code: 'AUTH_UNAVAILABLE' });
+      }
+
+      // #10264 — même statut que le 401 générique (un ancien client ne lit que
+      // lui) ; le code permet à l'appareil de purger les données de CE compte.
+      if (options.requireAuth && error instanceof AccountDeletedError) {
+        return sendAccountDeleted(reply, error.accountId);
+      }
+
       if (options.requireAuth) {
         return reply.status(401).send({
           error: errorMessage,
@@ -565,6 +801,14 @@ export function createUnifiedAuthMiddleware(
       (request as UnifiedAuthRequest).authContext = await fallbackMiddleware.createAuthContext();
     }
   };
+
+  const regime: AuthRegime = {
+    requireAuth: options.requireAuth === true,
+    allowAnonymous: options.allowAnonymous === true,
+  };
+  Object.defineProperty(unifiedAuth, AUTH_REGIME, { value: regime, enumerable: false });
+
+  return unifiedAuth;
 }
 
 // ===== CACHE HELPERS =====
@@ -627,57 +871,42 @@ export function getUserPermissions(authContext: UnifiedAuthContext) {
 
 // ===== LEGACY COMPATIBILITY =====
 
-/** @deprecated Use createUnifiedAuthMiddleware */
-export async function authenticate(request: FastifyRequest, reply: FastifyReply) {
-  authLogger.warn('authenticate() is deprecated, use createUnifiedAuthMiddleware instead');
-
-  try {
-    const authHeader = request.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new Error('No authorization header');
-    }
-
-    const token = authHeader.substring(7);
-
-    if (process.env.NODE_ENV === 'development') {
-      const { AuthService } = await import('../services/AuthTestService');
-      const decoded = AuthService.verifyToken(token);
-
-      if (decoded) {
-        const user = AuthService.getUserById(decoded.userId);
-        if (user) {
-          const req = request as unknown as Record<string, unknown>;
-          req.user = {
-            userId: user.id,
-            username: user.username,
-            email: user.email,
-            role: user.role
-          };
-          return;
-        }
-      }
-    }
-
-    await request.jwtVerify();
-
-    const reqUser = request.user as Record<string, unknown>;
-    const { userId } = reqUser;
-    if (!userId) {
-      throw new Error('Invalid token payload: missing userId');
-    }
-    reqUser.id = userId;
-
-  } catch (error) {
-    authLogger.error('Authentication failed (legacy)', { error });
-    reply.code(401).send({
-      success: false,
-      message: 'Token invalide ou manquant'
-    });
-  }
-}
-
-/** @deprecated Use getUserPermissions */
+/**
+ * DEUX REFUS STRUCTURELLEMENT DIFFÉRENTS, DEUX STATUTS (#4760).
+ *
+ * Cette garde rendait `403 PERMISSION_DENIED` pour l'ABSENCE de session comme
+ * pour un rôle trop bas. Le seul signal qui séparait les deux était la prose
+ * anglaise du `message` — « Authentication required » contre « Insufficient
+ * role ».
+ *
+ * CE QUE ÇA COÛTAIT, MESURÉ. `APIClient.mapUnauthorized`
+ * (`packages/MeeshySDK/Sources/MeeshySDK/Networking/APIClient.swift`) est le
+ * site UNIQUE qui décide qu'une réponse veut dire « ta session est morte », et
+ * il ne regarde QUE le 401 : `APIClient.swift:785` traduit tout 403 en
+ * `MeeshyError.forbidden`, « NOT an auth/session problem ». Un membre dont le
+ * JWT expirait en appelant une route gardée ici recevait donc 403, le SDK ne
+ * rafraîchissait rien, et le lecteur lisait « droits insuffisants » là où il
+ * fallait le reconnecter.
+ *
+ * ET LA PROSE N'ARRIVAIT MÊME PAS. `{ error: { code, message } }` est une
+ * forme IMBRIQUÉE que les 84 modules passant par `utils/response.ts`
+ * n'emploient pas : `sendError` pose `{ success, error, message, code }` À
+ * PLAT, et c'est cette forme-là que déclare `errorResponseSchema`
+ * (`error: { type: 'string' }`). Les cinq routes de `routes/maintenance.ts`
+ * déclarant `403: errorResponseSchema`, `fast-json-stringify` servait, MESURÉ :
+ *
+ *     {"success":false,"error":"[object Object]"}
+ *
+ * — le `code` supprimé, la phrase détruite. Brancher sur la prose était
+ * impossible parce qu'il n'y avait plus de prose. Les deux branches passent
+ * désormais par les aides partagées, seul producteur d'erreurs du gateway.
+ *
+ * `UNAUTHORIZED` n'est pas inventé : `ErrorCode.UNAUTHORIZED`
+ * (`packages/shared/types/errors.ts`) le déclare, `ErrorStatusMap` le mappe
+ * sur 401, et 49 des appels à `sendUnauthorized` du gateway le servent déjà.
+ *
+ * @deprecated Use getUserPermissions
+ */
 export function requireRole(allowedRoles: string | string[]) {
   const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
 
@@ -686,37 +915,34 @@ export function requireRole(allowedRoles: string | string[]) {
       const authContext = (request as UnifiedAuthRequest).authContext;
 
       if (!authContext?.isAuthenticated || !authContext.registeredUser) {
-        throw new PermissionDeniedError('Authentication required');
+        sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+        return;
       }
 
       if (!roles.includes(authContext.registeredUser.role)) {
-        throw new PermissionDeniedError('Insufficient role');
-      }
-    } catch (error) {
-      if (error instanceof PermissionDeniedError) {
-        reply.code(403).send({ success: false, error: { code: error.code, message: error.message } });
+        sendForbidden(reply, 'Insufficient role', { code: 'PERMISSION_DENIED' });
         return;
       }
-      reply.code(403).send({ success: false, error: { code: 'PERMISSION_DENIED', message: 'Insufficient permissions' } });
+    } catch {
+      // Les deux refus sortent par retour anticipé : ce `catch` ne rattrape
+      // plus un `throw` à nous, mais la LECTURE d'`authContext`, qu'un
+      // accesseur défaillant peut faire échouer. Fail-closed — un refus, jamais
+      // un laissez-passer — et le rôle reste le sujet, donc 403.
+      sendForbidden(reply, 'Insufficient permissions', { code: 'PERMISSION_DENIED' });
     }
   };
 }
 
 export const requireAdmin = requireRole(['BIGBOSS', 'ADMIN']);
-export const requireModerator = requireRole(['BIGBOSS', 'ADMIN', 'MODERATOR']);
+export const requireModerator = requireRole([...PRIVILEGED_PLATFORM_ROLES]);
 export const requireAnalyst = requireRole(['BIGBOSS', 'ADMIN', 'ANALYST']);
 
-export async function requireEmailVerification(request: FastifyRequest, reply: FastifyReply) {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-
-  if (!authContext?.isAuthenticated || !authContext.registeredUser) {
-    reply.code(403).send({ success: false, error: { code: 'PERMISSION_DENIED', message: 'Authentication required' } });
-    return;
-  }
-
-  if (!authContext.registeredUser.emailVerifiedAt) {
-    reply.code(403).send({ success: false, error: { code: 'EMAIL_NOT_VERIFIED', message: 'Email verification required' } });
-    return;
-  }
-}
-
+export {
+  requireEmailVerification,
+  requirePublishingGrace,
+  requireShareLinkGrace,
+  UNVERIFIED_ACTIVE_SHARE_LINK_CAP,
+  EMAIL_VERIFICATION_GATED_ROUTES,
+  PUBLISHING_GRACE_GATED_ROUTES,
+  SHARE_LINK_GRACE_GATED_ROUTES,
+} from './verification-gates';

@@ -115,6 +115,46 @@ describe('MessageValidator.validateRequest', () => {
     expect(result.isValid).toBe(true);
   });
 
+  // Un lieu partagé rend aussi le corps non-vide — même famille que
+  // forwardedFromId/copyAttachmentsFromMessageId/attachmentIds ci-dessus.
+  // Repro prod : une géolocalisation SEULE (pas de texte, pas d'attachment)
+  // meurt ici en CONTENT_EMPTY, à coup sûr, sur CHAQUE tentative — le message
+  // ne part jamais et l'entrée reste bloquée dans le SyncPill pour toujours
+  // (#4039).
+  it('allows empty content when location is present (location-only share)', async () => {
+    const result = await validator.validateRequest(makeRequest({
+      content: '',
+      location: { latitude: 48.8566, longitude: 2.3522, name: 'Paris' },
+    }));
+    expect(result.errors.find(e => e.code === 'CONTENT_EMPTY')).toBeUndefined();
+    expect(result.isValid).toBe(true);
+  });
+
+  // #7954 — un sticker SEUL est un contenu, comme un lieu seul. Le refine Zod
+  // de `messages-send.ts` l'admettait déjà ; cette porte le refusait en
+  // CONTENT_EMPTY. Seul un sticker VALIDE (`parseMessageSticker`) ouvre la porte.
+  it.each([
+    [{ emoji: '🎉' }],
+    [{ templateId: 'party.confetti', slots: { title: 'Bravo' }, animation: 'pulse' }],
+  ])('allows empty content when a valid sticker is present (sticker-only: %p)', async (sticker) => {
+    const result = await validator.validateRequest(makeRequest({ content: '', sticker }));
+    expect(result.errors.find(e => e.code === 'CONTENT_EMPTY')).toBeUndefined();
+    expect(result.isValid).toBe(true);
+  });
+
+  it.each([
+    [{}],
+    [{ emoji: '' }],
+    [{ templateId: '../../etc' }],
+    [{ emoji: '🎉', animation: 'explode-the-server' }],
+    ['🎉'],
+    [true],
+  ])('still rejects empty content with an INVALID sticker alone (%p)', async (sticker) => {
+    const result = await validator.validateRequest(makeRequest({ content: '', sticker }));
+    expect(result.errors.some(e => e.code === 'CONTENT_EMPTY')).toBe(true);
+    expect(result.isValid).toBe(false);
+  });
+
   it('errors when content exceeds MAX_MESSAGE_LENGTH (4000)', async () => {
     const result = await validator.validateRequest(makeRequest({ content: 'x'.repeat(4001) }));
     expect(result.errors.some(e => e.code === 'CONTENT_TOO_LONG')).toBe(true);

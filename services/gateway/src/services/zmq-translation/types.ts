@@ -14,6 +14,8 @@ export interface TranslationRequest {
   targetLanguages: string[];
   conversationId: string;
   modelType?: string;
+  /** #12822 — texte chiffré au repos : le translator ne le met pas en cache et ne le journalise pas. */
+  atRest?: boolean;
 }
 
 export interface TranslationResult {
@@ -49,13 +51,73 @@ export interface TranslationCompletedEvent {
   metadata?: any;
 }
 
+/**
+ * Code d'un refus TERMINAL du translator : la paire n'a pas de code NLLB-200
+ * (#3659). Il vise UNE langue (`targetLanguage`) et ne se relance jamais.
+ */
+export const UNSUPPORTED_LANGUAGE_ERROR_CODE = 'UNSUPPORTED_LANGUAGE';
+
+/**
+ * Code d'un refus TRANSITOIRE du translator : pool saturé ou arrêt en cours
+ * (#17189). La requête reste armée, le disjoncteur ne compte rien (#17004).
+ * Additif, donc non négocié par `acceptsErrorCodes` : le translator émet aussi
+ * le libellé historique, seul lu par les passerelles plus anciennes.
+ */
+export const TRANSLATION_POOL_FULL_ERROR_CODE = 'TRANSLATION_POOL_FULL';
+
+/** Libellé historique du même refus, seul émis par un translator plus ancien. */
+export const LEGACY_POOL_FULL_ERROR = 'translation pool full';
+
 export interface TranslationErrorEvent {
   type: 'translation_error';
   taskId: string;
   messageId: string;
   error: string;
   conversationId: string;
+  errorCode?: string;
+  targetLanguage?: string;
   metadata?: any;
+}
+
+/**
+ * Ce que `ZmqMessageHandler` puis `ZmqTranslationClient` émettent sous
+ * `translationError`. Chaque champ venu du fil est filtré par type (#18063) :
+ * `taskId`, `errorCode` et `targetLanguage` ne sont posés que s'ils sont des
+ * chaînes non vides, et `metadata` n'est jamais qu'un objet simple.
+ */
+export interface TranslationErrorPayload {
+  taskId?: string;
+  messageId: string;
+  error: string;
+  conversationId: string;
+  errorCode?: string;
+  targetLanguage?: string;
+  metadata: Record<string, unknown>;
+}
+
+/**
+ * Le translator n'a pas traduit, et ne le fera jamais : le texte dépasse
+ * `MAX_TRANSLATION_LENGTH` (#17204). `taskId` n'est porté que par un translator
+ * qui le connaît ; sans lui, rien ne se solde.
+ */
+export interface TranslationSkippedEvent {
+  type: 'translation_skipped';
+  taskId?: string;
+  messageId: string;
+  conversationId: string;
+  reason: string;
+  length?: number;
+  max_length?: number;
+}
+
+/** Ce que `ZmqMessageHandler` puis `ZmqTranslationClient` émettent sous `translationSkipped`. */
+export interface TranslationSkippedPayload {
+  taskId?: string;
+  messageId: string;
+  conversationId: string;
+  reason: string;
+  length?: number;
+  maxLength?: number;
 }
 
 export interface PongEvent {
@@ -70,6 +132,7 @@ export interface PongEvent {
 export type TranslationEvent =
   | TranslationCompletedEvent
   | TranslationErrorEvent
+  | TranslationSkippedEvent
   | TranslationReadyEvent
   | AudioTranslationReadyEvent
   | AudioTranslationsProgressiveEvent
@@ -117,6 +180,8 @@ export interface AudioProcessRequest {
   targetLanguages: string[];
   generateVoiceClone: boolean;
   modelType: string;
+  /** #13102 — rien de cette tâche ne se range au translator (cache, journaux). */
+  atRest?: boolean;
   originalSenderId?: string;
   existingVoiceProfile?: {
     profileId: string;
@@ -130,28 +195,29 @@ export interface AudioProcessRequest {
     totalDurationMs: number;
   };
   useOriginalVoice?: boolean;
+  /**
+   * Paramètres Chatterbox TTS, à PLAT — pas nichés sous `chatterbox` (#3735).
+   *
+   * `zmq_audio_handler.py` (`services/translator`) lit
+   * `request_data.get('cloningParams') or request_data.get('voiceCloneParams')`
+   * puis `raw_cloning.get('exaggeration')` / `.get('cfgWeight')` etc.
+   * DIRECTEMENT sur cet objet — jamais sous une clé `chatterbox` imbriquée.
+   * `translation.types.ts` (`VoiceCloneParameters`, ce même service) porte une
+   * forme imbriquée `{chatterbox, performance, quality}` : c'est la forme
+   * INTERNE au calcul des presets (`applyPreset`/`mergeVoiceCloneParams`),
+   * jamais la forme du fil — `performance`/`quality` n'ont d'ailleurs aucun
+   * lecteur côté translator. Aplatir `.chatterbox` au site d'appel avant
+   * d'assigner ce champ.
+   */
   voiceCloneParams?: {
-    chatterbox?: {
-      exaggeration?: number;
-      cfgWeight?: number;
-      temperature?: number;
-      topP?: number;
-      minP?: number;
-      repetitionPenalty?: number;
-      autoOptimize?: boolean;
-    };
-    performance?: {
-      parallel?: boolean;
-      maxWorkers?: number;
-      optimizeModel?: boolean;
-      useFp16?: boolean;
-      warmup?: boolean;
-    };
-    quality?: {
-      minSimilarityThreshold?: number;
-      autoRetryOnLowSimilarity?: boolean;
-      maxRetries?: number;
-    };
+    exaggeration?: number;
+    cfgWeight?: number;
+    temperature?: number;
+    topP?: number;
+    minP?: number;
+    repetitionPenalty?: number;
+    autoOptimize?: boolean;
+    qualityPreset?: string;
   };
 }
 
@@ -220,6 +286,8 @@ export interface TranscriptionOnlyRequest {
   audioData?: string;
   audioFormat?: string;
   binaryFrames?: BinaryFrameInfo;
+  /** #13102 — rien de cette tâche ne se range au translator (cache, journaux). */
+  atRest?: boolean;
   mobileTranscription?: {
     text: string;
     language: string;
@@ -289,6 +357,8 @@ export interface TranslationReadyEvent {
     voiceQuality: number;
     audioMimeType: string;
     segments?: TranscriptionSegment[];
+    /** #16340 — la TTS a échoué : le texte traduit voyage seul, sans piste. */
+    textOnly?: boolean;
   };
   timestamp: number;
 }
@@ -311,6 +381,8 @@ interface BaseTranslationEvent {
     voiceQuality: number;
     audioMimeType: string;
     segments?: TranscriptionSegment[];
+    /** #16340 — la TTS a échoué : le texte traduit voyage seul, sans piste. */
+    textOnly?: boolean;
   };
   timestamp: number;
 }
@@ -553,7 +625,28 @@ export interface StoryTextObjectTranslationCompletedEvent {
 export type StoryEvent = StoryTextObjectTranslationCompletedEvent;
 
 // ═══════════════════════════════════════════════════════════════
+// CACHE FORGET (#13102)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * L'oubli : la passerelle demande au translator d'effacer ce qu'il a rangé
+ * pour des pièces ou des messages effacés. Des IDENTIFIANTS seulement.
+ */
+export interface CacheForgetRequest {
+  readonly requestId: string;
+  readonly attachmentIds: readonly string[];
+  readonly messageIds: readonly string[];
+}
+
+/** L'acquittement d'un oubli, même `requestId`. */
+export interface CacheForgetDoneEvent {
+  type: 'cache_forget_done';
+  requestId: string;
+  deleted: number;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // COMBINED EVENT TYPE
 // ═══════════════════════════════════════════════════════════════
 
-export type ZMQEvent = TranslationEvent | AudioEvent | VoiceEvent | TranscriptionEvent | StoryEvent;
+export type ZMQEvent = TranslationEvent | AudioEvent | VoiceEvent | TranscriptionEvent | StoryEvent | CacheForgetDoneEvent;

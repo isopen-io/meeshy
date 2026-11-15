@@ -1,5 +1,6 @@
 import type { Message } from '@meeshy/shared/types/index';
 import type { SocketIOMessage } from '@meeshy/shared/types/socketio-events';
+import { servedEditAttribution, type MessageEditorColumns } from '@meeshy/shared/utils/message-edit-attribution';
 
 /**
  * Source UNIQUE du NOYAU de la charge utile `message:edited`.
@@ -46,8 +47,17 @@ import type { SocketIOMessage } from '@meeshy/shared/types/socketio-events';
  * - `sender` : passthrough BRUT côté socket (le `select` du handler porte
  *   `role`, pas `user`), reconstruit et aplati côté manager ;
  * - `translations` : chaque chemin les obtient par sa propre voie ;
- * - `attachments`, `metadata`, `messageSource` : servis par les seuls chemins
- *   qui les chargent.
+ * - `metadata`, `messageSource` : servis par les seuls chemins qui les chargent.
+ *
+ * `attachments` a QUITTÉ cette liste (#7070), et la nuance compte : ce champ
+ * reste servi « par les seuls chemins qui le chargent » — le transport REST
+ * (`broadcastMessageMutation`, alimenté par un `findUniqueOrThrow` sans
+ * `attachments`) n'en porte aucun, et son ABSENCE ne perd rien puisque les
+ * clients fusionnent `{ ...cached, ...editedPayload }`. Mais sa FORME n'est
+ * plus « propre à chaque transport » : les deux chemins qui le chargent
+ * (`MessageHandler.handleMessageEdit`, `MeeshySocketIOManager.broadcastMessageEdited`)
+ * servent la MÊME, `SocketAttachment`. Un troisième qui chargerait des pièces
+ * jointes n'a donc plus de forme à choisir — il a une forme à REJOINDRE.
  *
  * Toute famille de champs REQUISE PAR LE CONTRAT appartient à cette unité,
  * jamais au site d'appel : c'est la seule disposition où « ce transport sert le
@@ -62,7 +72,27 @@ export type MessageEditedCoreInputs = {
   readonly isEdited: boolean;
   /** L'instant de l'édition ; sert aussi d'`updatedAt` sur le fil. */
   readonly editedAt: Date;
+  /**
+   * #11375 — l'auteur de la modification que CE transport vient d'écrire.
+   * Absent, le noyau relit celui de la ligne : c'est juste dès que la ligne
+   * passée est relue APRÈS l'écriture (les trois entrées REST, les résumés
+   * d'appel). Le transport socket, qui compose depuis la ligne d'AVANT, le
+   * déclare — sans quoi il diffuserait l'attribution précédente.
+   */
+  readonly editedBy?: MessageEditorColumns;
 };
+
+type AttributedRow = Partial<MessageEditorColumns>;
+
+/**
+ * `message:edited` part à une ROOM — membres ordinaires et invités anonymes
+ * compris — : l'auteur de la modification y est servi SANS lecteur nommé, donc
+ * masqué (la mention, jamais l'identité ni le rang). `null` explicite, jamais
+ * une clé absente : un client qui fusionne `{ ...cached, ...payload }` efface
+ * ainsi une mention périmée.
+ */
+const wireEditAttribution = (message: AttributedRow, declared: MessageEditorColumns | undefined) =>
+  servedEditAttribution(declared ?? message);
 
 /**
  * `senderId` du FIL : un `User.id`, jamais le `Participant.id` de la colonne.
@@ -98,7 +128,7 @@ export function resolveWireSenderId(message: Message): string | undefined {
  * que sur `buildMessageNewPayload`.
  */
 export function buildMessageEditedCore(
-  message: Message,
+  message: Message & AttributedRow,
   inputs: MessageEditedCoreInputs
 ) {
   return {
@@ -112,6 +142,7 @@ export function buildMessageEditedCore(
     updatedAt: inputs.editedAt,
     isEdited: inputs.isEdited,
     editedAt: inputs.editedAt,
+    ...wireEditAttribution(message, inputs.editedBy),
   };
 }
 

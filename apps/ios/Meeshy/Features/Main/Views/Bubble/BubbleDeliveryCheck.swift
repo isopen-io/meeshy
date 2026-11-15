@@ -2,6 +2,20 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
+private struct PendingUploadProgressKey: EnvironmentKey {
+    static let defaultValue: MessageUploadProgress? = nil
+}
+
+extension EnvironmentValues {
+    /// La progression de téléversement de LA bulle de cette cellule (#14702), posée par la
+    /// cellule du fil. Une valeur d'environnement : la bulle reste `Equatable` sur ses seules
+    /// entrées, et seule la pastille d'envoi observe l'objet. `nil` ⇒ l'horloge d'envoi.
+    var pendingUploadProgress: MessageUploadProgress? {
+        get { self[PendingUploadProgressKey.self] }
+        set { self[PendingUploadProgressKey.self] = newValue }
+    }
+}
+
 /// The single delivery-status glyph used by every bubble footer. Covers all
 /// `DeliveryStatus` cases plus the offline-pending hourglass. Replaces
 /// `BubbleMediaDeliveryCheckmark` and the per-site re-implementations.
@@ -31,8 +45,8 @@ struct BubbleDeliveryCheck: View, Equatable {
     var body: some View {
         if isOffline, isInFlight {
             Image(systemName: "hourglass")
-                .font(MeeshyFont.relative(10, weight: .semibold))
-                .foregroundColor(MeeshyColors.warning)
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
+                .foregroundStyle(MeeshyColors.warning)
                 .accessibilityLabel(Self.label(.offlinePending))
         } else {
             glyph
@@ -45,22 +59,22 @@ struct BubbleDeliveryCheck: View, Equatable {
         case .invisible:
             EmptyView()
         case .sending:
-            SendingClockGlyph(sendStartedAt: sendStartedAt, tint: tint)
+            PendingUploadSendingGlyph(sendStartedAt: sendStartedAt, tint: tint)
         case .clock:
             Image(systemName: "clock")
-                .font(MeeshyFont.relative(10))
-                .foregroundColor(tint.opacity(0.7))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs))
+                .foregroundColor(tint.opacity(MeeshyOpacity.heavy))
                 .accessibilityLabel(Self.label(.sending))
         case .slow:
-            // Spec 2026-07-08 (message-send-failure-retry-flow, règle 2) : un
+            // (message-send-failure-retry-flow, règle 2): un
             // message encore en re-tentative automatique affiche une horloge
             // SIMPLE — le badge exclamation lisait comme un aperçu d'échec
             // alors que l'échec est un état terminal (`.failed`) atteint
             // seulement après épuisement du budget outbox. La teinte warning
             // distingue toujours l'envoi lent/retenté d'un envoi frais.
             Image(systemName: "clock")
-                .font(MeeshyFont.relative(10, weight: .semibold))
-                .foregroundColor(MeeshyColors.warning)
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
+                .foregroundStyle(MeeshyColors.warning)
                 .accessibilityLabel(Self.label(.slow))
         case .sent:
             // Poids `.regular` comme le double check (`.delivered`) et le
@@ -69,7 +83,7 @@ struct BubbleDeliveryCheck: View, Equatable {
             // (directive user — « le coche simple double et violet ne soient
             // pas en gras »). `.semibold` faisait ressortir la coche simple.
             Image(systemName: "checkmark")
-                .font(MeeshyFont.relative(10, weight: .regular))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .regular))
                 .foregroundColor(tint)
                 .accessibilityLabel(Self.label(.sent))
         case .delivered:
@@ -80,8 +94,8 @@ struct BubbleDeliveryCheck: View, Equatable {
                 .accessibilityLabel(Self.label(.read))
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
-                .font(MeeshyFont.relative(10, weight: .bold))
-                .foregroundColor(MeeshyColors.error)
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
+                .foregroundStyle(MeeshyColors.stateFailed)
                 .accessibilityLabel(Self.label(.failed))
         }
     }
@@ -109,7 +123,7 @@ struct BubbleDeliveryCheck: View, Equatable {
     static func label(_ label: DeliveryLabel) -> String {
         switch label {
         case .offlinePending:
-            return String(localized: "bubble.delivery.offlinePending", defaultValue: "En attente, hors-ligne", bundle: .main)
+            return String(localized: "bubble.delivery.offlinePending", defaultValue: "En attente, hors ligne", bundle: .main)
         case .sending:
             return String(localized: "bubble.delivery.sending", defaultValue: "Envoi en cours", bundle: .main)
         case .slow:
@@ -154,26 +168,80 @@ struct BubbleDeliveryCheck: View, Equatable {
             return now.timeIntervalSince(sendStartedAt) >= revealDelay
         }
 
+        /// L'horloge est TOUJOURS montée et seulement voilée : un `.task` posé
+        /// sur un `EmptyView` ne part jamais, et la bulle d'un vocal créée
+        /// moins de 200 ms avant son premier rendu restait sans horloge
+        /// jusqu'à la recréation de sa cellule (#18420).
         var body: some View {
-            Group {
-                if isRevealed {
-                    Image(systemName: "clock")
-                        .font(MeeshyFont.relative(10))
-                        .foregroundColor(tint)
-                        .accessibilityLabel(BubbleDeliveryCheck.label(.sending))
-                } else {
-                    EmptyView()
-                }
-            }
-            .task {
+            Image(systemName: "clock")
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs))
+                .foregroundColor(tint)
+                .opacity(isRevealed ? 1 : 0)
+                .accessibilityLabel(BubbleDeliveryCheck.label(.sending))
+                .accessibilityHidden(!isRevealed)
+                .task {
                 guard !isRevealed, let sendStartedAt else { return }
                 let remaining = Self.revealDelay - Date().timeIntervalSince(sendStartedAt)
                 if remaining > 0 {
-                    try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
+                    _ = await cancellableSleep(for: .seconds(remaining))
                 }
                 guard !Task.isCancelled else { return }
                 isRevealed = true
             }
+        }
+    }
+}
+
+/// L'envoi d'une bulle : sa progression de téléversement quand la cellule en porte une
+/// (#14702), sinon l'horloge.
+struct PendingUploadSendingGlyph: View {
+    let sendStartedAt: Date?
+    let tint: Color
+    @Environment(\.pendingUploadProgress) private var pendingUpload
+
+    var body: some View {
+        if let pendingUpload {
+            UploadProgressGlyph(progress: pendingUpload, sendStartedAt: sendStartedAt, tint: tint)
+        } else {
+            BubbleDeliveryCheck.SendingClockGlyph(sendStartedAt: sendStartedAt, tint: tint)
+        }
+    }
+}
+
+/// L'horloge d'envoi d'une bulle dont les pièces montent (#14702) : un anneau et le
+/// pourcentage de SA session. Seule vue qui observe la progression — le reste de la bulle
+/// ne se redessine pas à chaque point gagné.
+struct UploadProgressGlyph: View {
+    @ObservedObject var progress: MessageUploadProgress
+    let sendStartedAt: Date?
+    let tint: Color
+
+    var body: some View {
+        if let percent = progress.percent {
+            HStack(spacing: MeeshySpacing.xxs) {
+                ZStack {
+                    Circle()
+                        .stroke(tint.opacity(MeeshyOpacity.light), lineWidth: 1.5)
+                    Circle()
+                        .trim(from: 0, to: CGFloat(percent) / 100)
+                        .stroke(tint, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .animation(.linear(duration: 0.2), value: percent)
+                }
+                .frame(width: MeeshyIconSize.xxs, height: MeeshyIconSize.xxs)
+                ZStack(alignment: .trailing) {
+                    Text(MessageUploadProgress.reservedLabel()).hidden()
+                    Text(MessageUploadProgress.accessibilityValue(percent: percent))
+                }
+                .font(.caption2.weight(.semibold).monospacedDigit())
+                .foregroundStyle(tint)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(BubbleDeliveryCheck.label(.sending))
+            .accessibilityValue(MessageUploadProgress.accessibilityValue(percent: percent))
+            .accessibilityAddTraits(.updatesFrequently)
+        } else {
+            BubbleDeliveryCheck.SendingClockGlyph(sendStartedAt: sendStartedAt, tint: tint)
         }
     }
 }

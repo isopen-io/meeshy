@@ -1,0 +1,221 @@
+import Foundation
+import MeeshySDK
+
+/// **Ce que l'écran de partage unique reçoit** (#10947, planche
+/// `docs/product/partage-unique/planche-partage-unique.html`).
+///
+/// Toutes les portes — barre rapide, « Plus… », sélection multiple, pièce d'un
+/// message, story, publication, profil, invitation, lien profond — posent l'UNE
+/// de ces formes, et l'écran fait le reste. Le plan (`SharePlanner`, miroir de
+/// `planShare`) se lit depuis `entry` : la loi de sortie décide, l'écran masque.
+enum ShareSubject {
+    /// Un ou plusieurs messages, dans l'ordre de la conversation (D1, D6).
+    case messages([Message], sourceConversationId: String?, conversationIsEncrypted: Bool)
+    /// UNE pièce d'un message (V2) — « Tout le message » élargit sans fermer.
+    case piece(Message, attachmentId: String, sourceConversationId: String?, conversationIsEncrypted: Bool)
+    case text(String)
+    case link(URL)
+    /// Une story, un post, un réel, un profil (D15), une invitation : une carte
+    /// qui part comme un lien.
+    case card(ShareCard)
+    /// Ce qu'une autre app remet à l'extension de partage (V1, V9) : des
+    /// fichiers déjà copiés dans l'App Group, et le texte ou le lien joint.
+    case incoming(ShareIncoming)
+
+    var sourceConversationId: String? {
+        switch self {
+        case .messages(_, let source, _), .piece(_, _, let source, _): return source
+        case .text, .link, .card, .incoming: return nil
+        }
+    }
+
+    /// Les messages source, dans l'ordre — vides pour un contenu qui n'en vient pas.
+    var sourceMessages: [Message] {
+        switch self {
+        case .messages(let messages, _, _): return messages
+        case .piece(let message, _, _, _): return [message]
+        case .text, .link, .card, .incoming: return []
+        }
+    }
+
+    /// Les pièces venues d'une autre app, dans l'ordre d'envoi.
+    var incomingMediaIds: [String] {
+        guard case .incoming(let incoming) = self else { return [] }
+        return incoming.media.map(\.id)
+    }
+}
+
+/// **Ce qu'une autre app remet à l'extension de partage** — des fichiers déjà
+/// copiés dans le conteneur App Group, et le texte joint (déjà composé avec le
+/// lien, `ShareSender.composeContent`). Le texte joint devient le corps du
+/// message ; la légende s'y ajoute (D3, D9).
+nonisolated struct ShareIncoming: Equatable, Sendable {
+    var media: [ShareIncomingMedia]
+    var text: String?
+    /// Ce que la feuille n'a pas pu copier, et pourquoi : l'écran le DIT (V9).
+    var shortfalls: [ShareShortfall] = []
+    /// Un partage RELAYÉ par l'extension (`ShareRelayHandoff`) rouvre l'écran
+    /// sur les conversations que l'auteur y avait déjà choisies.
+    var preselectedConversationIds: [String] = []
+
+    /// Un texte qui n'est qu'une adresse web part comme un lien (aperçu, « Copier le lien »).
+    var link: URL? {
+        guard let text, text.hasPrefix("http://") || text.hasPrefix("https://"),
+              !text.contains(where: \.isWhitespace) else { return nil }
+        return URL(string: text)
+    }
+}
+
+/// Pourquoi des pièces remises par une autre app ne partent pas.
+nonisolated enum ShareShortfall: Hashable, Sendable {
+    /// iCloud non téléchargé, disque plein, copie échouée.
+    case unprepared
+    /// Ces pièces n'ont pas été copiées : elles dépassaient le plafond
+    /// d'octets d'un partage (`ShareLimits.maxTotalBytes`, D10, #11429).
+    case overBudget(uncopied: Int)
+    /// L'app n'a remis qu'un chemin de fichier, que Meeshy n'ouvre pas : seul
+    /// le fichier lui-même se partage (#11134, #11430).
+    case refusedSource
+}
+
+/// Une pièce venue d'une autre app — son fichier local sert l'aperçu.
+nonisolated struct ShareIncomingMedia: Identifiable, Equatable, Sendable {
+    let id: String
+    let mimeType: String
+    let bytes: Int
+    let fileURL: URL?
+    /// Le nom que le fichier portait chez l'app hôte (#11531) : ce que le
+    /// serveur garde, quand `fileURL` porte un nom technique (`0.jpeg`).
+    var originalName: String? = nil
+
+    var kind: AttachmentKind { AttachmentKind(mimeType: mimeType) }
+}
+
+/// Une carte : un contenu Meeshy qui part comme un lien qu'on ouvre.
+struct ShareCard: Equatable {
+    let kind: ShareCardKind
+    /// L'identifiant du contenu (post, story, utilisateur, conversation).
+    let contentId: String
+    let title: String
+    let subtitle: String?
+    var url: URL?
+    let imageURL: String?
+    /// L'auteur nommé dans le texte qui part (« Story de X : lien »).
+    var authorName: String?
+    /// L'identifiant de l'auteur — sa propre story ne se republie pas en story
+    /// par la feuille (#12644), comme elle ne se republie pas au rail.
+    var authorId: String? = nil
+    /// Une story PUBLIQUE seulement reçoit un lien suivi : `meeshy.me/l/…`
+    /// s'ouvre sans compte et élargirait l'audience d'une story FRIENDS ou
+    /// PRIVATE. Fermé par défaut.
+    var isPublicStory: Bool = false
+
+    /// **Le lien suivi de l'utilisateur se frappe pour cette carte** (#14310) :
+    /// une publication et un réel toujours (la passerelle vérifie l'audience
+    /// AVANT la frappe), une story seulement PUBLIQUE — `meeshy.me/l/…`
+    /// s'ouvre sans compte. Un profil et une invitation ont leur propre adresse.
+    var mintsTrackedLink: Bool {
+        switch kind {
+        case .post, .reel: return true
+        case .story: return isPublicStory
+        case .profile, .invitation: return false
+        }
+    }
+
+    /// Le texte qui part dans la conversation : la phrase qui nomme l'auteur
+    /// (story, publication, réel — #14323), sinon le lien.
+    var messageText: String? {
+        guard let link = url?.absoluteString else { return title.isEmpty ? nil : title }
+        guard let authorName, let phrase = sharePhrase else { return link }
+        return String(format: phrase, authorName, link)
+    }
+
+    private var sharePhrase: String? {
+        switch kind {
+        case .story: return String(localized: "share.story.shareText", defaultValue: "🔗 Story de %1$@ : %2$@", bundle: .meeshyShare)
+        case .post: return String(localized: "share.post.shareText", defaultValue: "🔗 Publication de %1$@ : %2$@", bundle: .meeshyShare)
+        case .reel: return String(localized: "share.reel.shareText", defaultValue: "🔗 Réel de %1$@ : %2$@", bundle: .meeshyShare)
+        case .profile, .invitation: return nil
+        }
+    }
+}
+
+extension ShareSubject {
+    /// Une story : elle part comme une carte, et se republie en story, post ou
+    /// réel (D14, revue par le porteur, #12644). Le lien suivi
+    /// `meeshy.me/l/<token>` n'est frappé qu'au moment où elle PART — envoi,
+    /// copie, partage hors de Meeshy ; d'ici là, l'adresse directe.
+    static func story(id: String, authorName: String, authorId: String? = nil, isPublic: Bool = false, imageURL: String? = nil) -> ShareSubject {
+        .card(ShareCard(
+            kind: .story, contentId: id,
+            title: String(format: String(localized: "share.preview.story", defaultValue: "Story de %@", bundle: .meeshyShare), authorName),
+            subtitle: nil, url: URL(string: "https://meeshy.me/story/\(id)"), imageURL: imageURL, authorName: authorName,
+            authorId: authorId, isPublicStory: isPublic
+        ))
+    }
+}
+
+extension ShareSubject {
+    /// Une publication ou un réel (#14310) : une carte qui part avec le lien
+    /// suivi de l'utilisateur, frappé dès l'ouverture de la feuille ; d'ici là,
+    /// l'adresse directe du post.
+    static func publication(id: String, isReel: Bool, authorName: String, authorId: String? = nil, imageURL: String? = nil) -> ShareSubject {
+        let title = isReel
+            ? String(format: String(localized: "share.preview.reel", defaultValue: "Réel de %@", bundle: .meeshyShare), authorName)
+            : String(format: String(localized: "share.preview.post", defaultValue: "Publication de %@", bundle: .meeshyShare), authorName)
+        return .card(ShareCard(
+            kind: isReel ? .reel : .post, contentId: id, title: title, subtitle: nil,
+            url: URL(string: "https://meeshy.me/feeds/post/\(id)"), imageURL: imageURL,
+            authorName: authorName, authorId: authorId
+        ))
+    }
+}
+
+extension ShareSubject {
+
+    /// L'entrée du plan — la forme que lit `SharePlanner`. `removedMessageIds`
+    /// retire les messages que l'utilisateur a ôtés de « Ce qui part ».
+    func entry(removedMessageIds: Set<String> = []) -> ShareEntry {
+        switch self {
+        case .messages(let messages, _, let encrypted):
+            return .messages(messages.filter { !removedMessageIds.contains($0.id) }.map { $0.shareMessage(conversationIsEncrypted: encrypted) })
+        case .piece(let message, let attachmentId, _, let encrypted):
+            return .piece(message: message.shareMessage(conversationIsEncrypted: encrypted), attachmentId: attachmentId)
+        case .text(let text):
+            return .text(text)
+        case .link(let url):
+            return .link(url: url.absoluteString, text: nil)
+        case .card(let card):
+            return .card(card.kind, url: card.url?.absoluteString)
+        case .incoming(let incoming):
+            guard incoming.media.isEmpty else {
+                return .media(incoming.media.map { ShareMedia(id: $0.id, mimeType: $0.mimeType, bytes: $0.bytes) }, text: incoming.text)
+            }
+            if let link = incoming.link { return .link(url: link.absoluteString, text: nil) }
+            return .text(incoming.text ?? "")
+        }
+    }
+
+    /// « Tout le message » (V2) : la pièce s'élargit au message qui la porte.
+    var widenedToWholeMessage: ShareSubject? {
+        guard case .piece(let message, _, let source, let encrypted) = self else { return nil }
+        return .messages([message], sourceConversationId: source, conversationIsEncrypted: encrypted)
+    }
+
+    /// Le texte qui part pour une entrée qui n'est pas un message : le texte
+    /// lui-même, le lien, ou la carte. La légende s'y joint (D3 : « le texte du
+    /// message ») ; elle reste à part pour un transfert (D4).
+    func composedText(caption: String) -> String? {
+        let trimmed = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body: String?
+        switch self {
+        case .text(let text): body = text
+        case .link(let url): body = url.absoluteString
+        case .card(let card): body = card.messageText
+        case .incoming(let incoming): body = incoming.text
+        case .messages, .piece: return nil
+        }
+        guard let body, !body.isEmpty else { return trimmed.isEmpty ? nil : trimmed }
+        return trimmed.isEmpty ? body : "\(trimmed)\n\(body)"
+    }
+}

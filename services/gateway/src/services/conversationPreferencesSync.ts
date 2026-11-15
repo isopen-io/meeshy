@@ -25,6 +25,8 @@
  */
 
 import type { FastifyInstance } from 'fastify';
+import type { Prisma } from '@meeshy/shared/prisma/client';
+import { readConversationAppearance, type ConversationAppearance } from '@meeshy/shared/types/conversation-appearance';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type {
   ConversationPreferencesPayload,
@@ -44,8 +46,9 @@ export interface ConversationPrefRow {
   customName: string | null;
   reaction: string | null;
   readingMode: string;
-  deletedForUserAt: Date | null;
   clearHistoryBefore: Date | null;
+  /** #10631 : le fond et l'accent PERSONNELS (JSON validé à l'écriture) ; absent des lignes d'avant. */
+  appearance?: unknown;
   version: number;
 }
 
@@ -60,8 +63,9 @@ export const toPreferencesPayload = (row: ConversationPrefRow): ConversationPref
   customName: row.customName,
   reaction: row.reaction,
   readingMode: row.readingMode,
-  deletedForUserAt: row.deletedForUserAt ? row.deletedForUserAt.toISOString() : null,
   clearHistoryBefore: row.clearHistoryBefore ? row.clearHistoryBefore.toISOString() : null,
+  // Additif (#10631) : lu tolérant, jamais bloquant ; `null` = Signature + accent calculé.
+  ...(row.appearance === undefined ? {} : { appearance: row.appearance === null ? null : readConversationAppearance(row.appearance) }),
 });
 
 /**
@@ -79,8 +83,9 @@ export interface ConversationPreferencesWrite {
   readonly customName?: string | null;
   readonly reaction?: string | null;
   readonly readingMode?: string;
-  readonly deletedForUserAt?: Date | null;
   readonly clearHistoryBefore?: Date | null;
+  /** #10631 : déjà validé par `validateConversationAppearance` ; `null` remet Signature + accent calculé. */
+  readonly appearance?: ConversationAppearance | null;
 }
 
 export interface WriteConversationPreferencesParams {
@@ -103,6 +108,13 @@ export class ConversationPreferencesScopeError extends Error {
     this.name = 'ConversationPreferencesScopeError';
   }
 }
+
+const asJson = (appearance: ConversationAppearance): Prisma.InputJsonObject => ({
+  v: appearance.v,
+  background: { ...appearance.background },
+  accent: appearance.accent,
+  animate: appearance.animate,
+});
 
 /**
  * Upsert the row, bump its version, broadcast the new snapshot, return the row
@@ -161,10 +173,13 @@ export async function writeConversationPreferences(
     }
   }
 
+  const { appearance, ...columns } = data;
+  // MongoDB : un Json? nullable s'écrit `null` tel quel (pas de `DbNull`/`JsonNull` sur ce connecteur).
+  const stored: { appearance?: Prisma.InputJsonObject | null } = appearance === undefined ? {} : { appearance: appearance === null ? null : asJson(appearance) };
   const row = await fastify.prisma.userConversationPreferences.upsert({
     where: { userId_conversationId: { userId, conversationId } },
-    create: { userId, conversationId, ...data, version: 1 },
-    update: { ...data, version: { increment: 1 } },
+    create: { userId, conversationId, ...columns, ...stored, version: 1 },
+    update: { ...columns, ...stored, version: { increment: 1 } },
     include: { category: true },
   });
 
@@ -254,4 +269,81 @@ export async function reorderConversationPreferences(
   broadcastToUser(fastify, userId, SERVER_EVENTS.USER_PREFERENCES_REORDERED, eventPayload);
 
   return applicable;
+}
+
+export interface DetachConversationsFromCategoryParams {
+  readonly userId: string;
+  readonly categoryId: string;
+}
+
+/**
+ * Detach every conversation attached to a category the user is deleting, and
+ * return the conversation ids actually written.
+ *
+ * It lives here for the reason the whole module exists: `categoryId` is a
+ * column of `UserConversationPreferences`, so clearing it is a preference write
+ * and owes the same three things as any other — persist, bump `version`,
+ * broadcast the resulting snapshot to `user:{id}`. The delete route did none of
+ * them: it wrote to `ConversationPreference`, the generic key/value store,
+ * which declares neither `categoryId` nor any link to a category. The generated
+ * client rejects that call before any round-trip (`PrismaClientValidationError`,
+ * "Unknown argument `categoryId`"), so the surrounding `$transaction` threw and
+ * **no conversation category could ever be deleted**.
+ *
+ * Two departures from `writeConversationPreferences`, both forced by the shape
+ * of the write:
+ *
+ * - **One `updateMany`, not N upserts.** Every row it touches already exists —
+ *   a row cannot carry a `categoryId` without existing — so there is nothing to
+ *   create, and the id set is bounded by one category's worth of conversations.
+ * - **The snapshot is re-read, not returned by the write.** `updateMany` gives
+ *   a count, never rows, and the broadcast must carry the version the write
+ *   just produced: a payload built from the pre-write snapshot would be dropped
+ *   by every client (`incoming.version <= local -> drop`).
+ *
+ * Scope is the `userId` in the filter itself: a category id belonging to
+ * someone else selects no row of this user's, so the batch is bounded by
+ * construction and the broadcast names only what was written.
+ *
+ * The events are `USER_PREFERENCES_UPDATED`, one per detached conversation —
+ * the event the three clients already decode for this row. Widening
+ * `CATEGORY_DELETED` to carry the ids instead would cost a contract change on
+ * three strict decoders for something the versioned per-row event already says.
+ */
+export async function detachConversationsFromCategory(
+  fastify: FastifyInstance,
+  { userId, categoryId }: DetachConversationsFromCategoryParams
+): Promise<string[]> {
+  const attached = await fastify.prisma.userConversationPreferences.findMany({
+    where: { userId, categoryId },
+    select: { conversationId: true },
+  });
+  if (attached.length === 0) return [];
+
+  const conversationIds = attached.map((row: { conversationId: string }) => row.conversationId);
+
+  await fastify.prisma.userConversationPreferences.updateMany({
+    where: { userId, categoryId },
+    data: { categoryId: null, version: { increment: 1 } },
+  });
+
+  // Pas d'`include: { category: true }` ici, contrairement à
+  // `writeConversationPreferences` : après le détachement la catégorie est
+  // `null` par construction, et `toPreferencesPayload` ne lit que `categoryId`.
+  const rows = await fastify.prisma.userConversationPreferences.findMany({
+    where: { userId, conversationId: { in: conversationIds } },
+  });
+
+  for (const row of rows as unknown as (ConversationPrefRow & { conversationId: string })[]) {
+    const eventPayload: UserPreferencesConversationUpdatedEventData = {
+      userId,
+      conversationId: row.conversationId,
+      version: row.version ?? 0,
+      reset: false,
+      preferences: toPreferencesPayload(row),
+    };
+    broadcastToUser(fastify, userId, SERVER_EVENTS.USER_PREFERENCES_UPDATED, eventPayload);
+  }
+
+  return conversationIds;
 }

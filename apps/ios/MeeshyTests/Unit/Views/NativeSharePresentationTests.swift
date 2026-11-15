@@ -35,16 +35,18 @@ final class NativeSharePresentationTests: XCTestCase {
         .deletingLastPathComponent()   // MeeshyTests
         .deletingLastPathComponent()   // apps/ios
 
+    /// L'UNITÉ du fichier (`Foo.swift` + `Foo+*.swift`) : un type découpé garde une adresse, sinon
+    /// les gardes négatives de cette suite lisent la moitié qui ne contient pas l'interdit.
     private func source(_ relativePath: String) throws -> String {
-        try String(contentsOf: Self.appRoot.appendingPathComponent(relativePath), encoding: .utf8)
+        try AppSourceGuard.unit(relativePath)
     }
 
     private static let conversationInfoSheet = "Meeshy/Features/Main/Components/ConversationInfoSheet.swift"
     private static let inviteFriendsSheet = "Meeshy/Features/Main/Components/InviteFriendsSheet.swift"
     private static let conversationListView = "Meeshy/Features/Main/Views/ConversationListView.swift"
-    private static let shareLinkDetailView = "Meeshy/Features/Main/Views/ShareLinkDetailView.swift"
-    private static let affiliateView = "Meeshy/Features/Main/Views/AffiliateView.swift"
-    private static let trackingLinkDetailView = "Meeshy/Features/Main/Views/TrackingLinkDetailView.swift"
+    private static let shareLinkDetailView = "Meeshy/Features/Links/Views/ShareLinkDetailView.swift"
+    private static let affiliateView = "Meeshy/Features/Links/Views/AffiliateView.swift"
+    private static let trackingLinkDetailView = "Meeshy/Features/Links/Views/TrackingLinkDetailView.swift"
 
     /// Every file this doctrine has been applied to. Growing the list is how an
     /// iteration records that a surface is converged and locked.
@@ -124,8 +126,11 @@ final class NativeSharePresentationTests: XCTestCase {
             "onCreateShareLink → InviteFriendsSheet. It must stay deleted rather than be revived: " +
             "it carried a third copy of the window-hierarchy walk plus two hardcoded French strings."
         )
+        // The sheet targets moved onto the heap in 19a7e14189 (2026-09-13,
+        // `ConversationListSheetTargets`): `inviteSheetConversation` became
+        // `sheetTargets.inviteSheet`. The affordance itself never moved (#5599).
         XCTAssertTrue(
-            source.contains("inviteSheetConversation = conversation"),
+            source.contains("sheetTargets.inviteSheet = conversation"),
             "The live share affordance (onCreateShareLink → InviteFriendsSheet) must remain wired."
         )
     }

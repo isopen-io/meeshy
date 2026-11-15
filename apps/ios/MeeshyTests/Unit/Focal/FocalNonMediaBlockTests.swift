@@ -52,11 +52,11 @@ final class FocalNonMediaBlockTests: XCTestCase {
             reply: nil,
             attachments: attachments,
             location: location,
-            ephemeral: nil,
+            protection: .unprotected,
             isBlurred: false,
             isViewOnce: false,
             isPinned: false,
-            isForwarded: false,
+            forwardAttribution: nil,
             editedAt: nil,
             isEditSaving: false,
             hasEditHistory: false,
@@ -283,7 +283,7 @@ final class FocalNonMediaBlockTests: XCTestCase {
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Focal/Row/\(fileName)")
+            .appendingPathComponent("Meeshy/Features/Focal/Row/\(fileName)")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

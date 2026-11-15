@@ -31,28 +31,33 @@ enum MessageDraftMediaStore {
     static func persist(
         attachments: [MeeshyMessageAttachment],
         files: [String: URL],
+        assetLinks: [String: String] = [:],
         userId: String,
         conversationId: String
     ) -> [DraftAttachmentRef] {
         let dir = directory(userId: userId, conversationId: conversationId)
-        do {
-            try FileManager.default.removeItem(at: dir)
-        } catch {
-            // Ignore failure to remove non-existent directory
+        let fm = FileManager.default
+        guard !attachments.isEmpty else {
+            try? fm.removeItem(at: dir)
+            return []
         }
-        guard !attachments.isEmpty else { return [] }
+        // Copie dans un dossier de PRÉPARATION, puis échange. Un brouillon restauré a ses fichiers DANS
+        // `dir` : effacer `dir` avant de copier détruisait les sources — chaque pièce disparaissait du
+        // brouillon ET du plateau, qui pointe sur ces chemins. Les noms rangés sont stables (id de la
+        // pièce), donc les chemins du plateau redeviennent valides après l'échange.
+        let staging = dir.deletingLastPathComponent()
+            .appendingPathComponent(dir.lastPathComponent + ".staging-" + UUID().uuidString, isDirectory: true)
         do {
-            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try fm.createDirectory(at: staging, withIntermediateDirectories: true)
         } catch {
             return []
         }
-        return attachments.compactMap { attachment in
+        let refs: [DraftAttachmentRef] = attachments.compactMap { attachment in
             guard let source = files[attachment.id] else { return nil }
             let ext = source.pathExtension
             let storedName = sanitize(attachment.id) + (ext.isEmpty ? "" : ".\(ext)")
-            let destination = dir.appendingPathComponent(storedName)
             do {
-                try FileManager.default.copyItem(at: source, to: destination)
+                try fm.copyItem(at: source, to: staging.appendingPathComponent(storedName))
             } catch {
                 return nil
             }
@@ -65,8 +70,27 @@ enum MessageDraftMediaStore {
                 duration: attachment.duration,
                 width: attachment.width,
                 height: attachment.height,
-                thumbnailColor: attachment.thumbnailColor
+                thumbnailColor: attachment.thumbnailColor,
+                libraryAssetId: assetLinks[attachment.id]
             )
+        }
+        try? fm.removeItem(at: dir)
+        do {
+            try fm.moveItem(at: staging, to: dir)
+        } catch {
+            try? fm.removeItem(at: staging)
+            return []
+        }
+        return refs
+    }
+
+    /// La carte pièce → asset d'un brouillon (#9697), bornée aux pièces
+    /// réellement restaurées : un fichier disparu n'y laisse aucun lien.
+    static func assetLinks(of refs: [DraftAttachmentRef], restored attachmentIds: [String]) -> [String: String] {
+        let alive = Set(attachmentIds)
+        return refs.reduce(into: [:]) { links, ref in
+            guard alive.contains(ref.attachmentId), let assetId = ref.libraryAssetId else { return }
+            links[ref.attachmentId] = assetId
         }
     }
 

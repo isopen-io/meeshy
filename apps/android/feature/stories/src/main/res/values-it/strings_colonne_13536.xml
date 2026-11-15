@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_column_text_style">Stile</string>
+    <string name="composer_column_text_effect">Dissolvenze</string>
+    <string name="composer_column_text_color">Colore</string>
+    <string name="composer_column_text_align">Allineamento</string>
+    <string name="composer_column_text_background">Sfondo</string>
+    <string name="composer_column_text_timing">Tempo</string>
+    <string name="composer_column_draw_color">Colore del pennello</string>
+    <string name="composer_column_draw_width">Spessore del pennello</string>
+    <string name="composer_column_exit_tool">Termina lo strumento</string>
+</resources>

@@ -34,13 +34,30 @@ final class StoryCanvasTimelinePreviewTests: XCTestCase {
         canvas.itemsContainer.sublayers?.first { $0.name == id }
     }
 
-    func test_setTimelinePreview_atTimeOutsideWindow_hidesWindowedElement() {
+    /// **À l'arrêt, hors de sa fenêtre, l'objet est un FANTÔME** (#8370, lot 6
+    /// — maquette `Main.dc.html` : caché en lecture, `.25` à l'arrêt). Il était
+    /// retiré : l'auteur qui réglait l'entrée d'un texte le voyait disparaître
+    /// de la scène qu'il composait.
+    func test_setTimelinePreview_atTimeOutsideWindow_ghostsWindowedElementWhilePaused() {
         let canvas = makeCanvas()
 
         canvas.setTimelinePreview(seconds: 0)
 
+        XCTAssertEqual(itemLayer(canvas, id: "windowed-text")?.opacity ?? -1,
+                       StoryCanvasUIView.timelineGhostOpacity, accuracy: 0.001,
+                       "En preview à l'arrêt à t=0, un texte fenêtré [2,3] se montre en fantôme")
+    }
+
+    /// En LECTURE, rien : la scène est ce que le lecteur montrera.
+    func test_setTimelinePreview_atTimeOutsideWindow_hidesWindowedElementWhilePlaying() {
+        let canvas = makeCanvas()
+        canvas.setTimelinePreview(seconds: 0)
+        canvas.setTimelinePreviewPlaying(true)
+
+        canvas.setTimelinePreview(seconds: 0.5)
+
         XCTAssertNil(itemLayer(canvas, id: "windowed-text"),
-                     "En preview à t=0, un texte fenêtré [2,3] ne doit PAS être rendu (sémantique .play)")
+                     "En lecture à t=0.5, un texte fenêtré [2,3] ne doit PAS être rendu (sémantique .play)")
     }
 
     func test_setTimelinePreview_atTimeInsideWindow_showsWindowedElement() {

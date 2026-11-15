@@ -67,4 +67,67 @@ final class ConversationCreatorTests: XCTestCase {
             // bubble it up so any future caller can decide what to do.
         }
     }
+
+    // MARK: - L'en-tête n'ouvre le direct qu'une fois (#18297)
+
+    func test_directMessageOpener_secondTapWhileOpening_isAbsorbed() async {
+        let creator = SuspendedDirectCreator()
+        let opener = DirectMessageOpener(creator: creator)
+        let first = Task { await opener.open(with: "u-other", currentUserId: "u-self") }
+        while creator.calls == 0 { await Task.yield() }
+        let second = Task { await opener.open(with: "u-other", currentUserId: "u-self") }
+        for _ in 0..<20 { await Task.yield() }
+        creator.release()
+
+        let opened = await first.value
+        let absorbed = await second.value
+
+        XCTAssertEqual(absorbed, .busy, "un second toucher pendant la création n'en relance pas une autre")
+        XCTAssertEqual(opened, .opened(SuspendedDirectCreator.created))
+        XCTAssertEqual(creator.calls, 1)
+    }
+
+    func test_directMessageOpener_failure_isReported_andTheNextTapRetries() async {
+        let creator = SuspendedDirectCreator()
+        creator.outcome = .failure(NSError(domain: "TestNetwork", code: 503))
+        creator.release()
+        let opener = DirectMessageOpener(creator: creator)
+
+        let failed = await opener.open(with: "u-other", currentUserId: "u-self")
+        creator.outcome = .success(SuspendedDirectCreator.created)
+        let retried = await opener.open(with: "u-other", currentUserId: "u-self")
+
+        XCTAssertEqual(failed, .failed, "l'échec remonte à l'hôte, qui le dit")
+        XCTAssertEqual(retried, .opened(SuspendedDirectCreator.created), "après un échec, le toucher suivant réessaie")
+        XCTAssertEqual(creator.calls, 2)
+    }
+}
+
+/// Un créateur qui ne rend la main qu'à `release()` : la création reste EN
+/// COURS le temps qu'un second toucher arrive. Relâché, il répond aussitôt.
+@MainActor
+private final class SuspendedDirectCreator: ConversationCreating {
+    static let created = MeeshyConversation(id: "conv-dm", identifier: "conv-dm", type: .direct)
+
+    nonisolated deinit {}
+
+    var outcome: Result<Conversation, Error> = .success(SuspendedDirectCreator.created)
+    private(set) var calls = 0
+    private var isReleased = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func createDirectConversation(with userId: String, currentUserId: String) async throws -> Conversation {
+        calls += 1
+        if !isReleased {
+            await withCheckedContinuation { waiters.append($0) }
+        }
+        return try outcome.get()
+    }
+
+    func release() {
+        isReleased = true
+        let pending = waiters
+        waiters = []
+        pending.forEach { $0.resume() }
+    }
 }

@@ -55,7 +55,10 @@ public struct MeeshyPullIndicator: View {
         }
     }
 
-    private var logoScale: CGFloat {
+    /// Sous « Réduire les animations », le logo garde sa taille : seuls le
+    /// fondu et la couleur disent le tirage.
+    nonisolated static func logoScale(phase: MeeshyPullPhase, reduceMotion: Bool) -> CGFloat {
+        guard !reduceMotion else { return 1 }
         switch phase {
         case .idle: return 0.6
         case .pulling(let p): return 0.6 + 0.4 * min(1, max(0, p))
@@ -67,7 +70,8 @@ public struct MeeshyPullIndicator: View {
     /// Rotation pendant le pull pour donner un feedback proportionnel,
     /// jusqu'à 180° au seuil. Pendant refresh, le logo ne tourne pas —
     /// le breathing du AnimatedLogoView suffit comme signe d'activité.
-    private var logoRotation: Double {
+    nonisolated static func logoRotation(phase: MeeshyPullPhase, reduceMotion: Bool) -> Double {
+        guard !reduceMotion else { return 0 }
         switch phase {
         case .idle: return 0
         case .pulling(let p): return Double(min(1, max(0, p))) * 180
@@ -81,10 +85,10 @@ public struct MeeshyPullIndicator: View {
     /// couleur, transition organique.
     private var logoColor: Color {
         switch phase {
-        case .idle: return MeeshyColors.indigo300.opacity(0.5)
+        case .idle: return MeeshyColors.indigo300.opacity(MeeshyOpacity.strong)
         case .pulling(let p):
             let t = min(1, max(0, p))
-            return MeeshyColors.indigo300.opacity(0.5).interpolated(to: MeeshyColors.indigo500, t: t)
+            return MeeshyColors.indigo300.opacity(MeeshyOpacity.strong).interpolated(to: MeeshyColors.indigo500, t: t)
         case .armed, .refreshing, .completing: return MeeshyColors.indigo500
         }
     }
@@ -105,17 +109,17 @@ public struct MeeshyPullIndicator: View {
                             gradient: Gradient(colors: [
                                 MeeshyColors.indigo500,
                                 MeeshyColors.indigo700,
-                                MeeshyColors.indigo500.opacity(0.3),
+                                MeeshyColors.indigo500.opacity(MeeshyOpacity.medium),
                                 MeeshyColors.indigo500
                             ]),
                             center: .center
                         ),
-                        style: StrokeStyle(lineWidth: 2, lineCap: .round)
+                        style: StrokeStyle(lineWidth: MeeshyBorder.strong, lineCap: .round)
                     )
                     .frame(width: Self.ringSize, height: Self.ringSize)
                     .rotationEffect(.degrees(ringRotation))
                     .onAppear { startRingRotation() }
-                    .transition(.opacity.combined(with: .scale))
+                    .meeshyTransition(.opacity.combined(with: .scale))
             }
 
             AnimatedLogoView(
@@ -124,14 +128,14 @@ public struct MeeshyPullIndicator: View {
                 continuous: isRefreshing
             )
             .frame(width: Self.logoSize, height: Self.logoSize)
-            .scaleEffect(logoScale)
-            .rotationEffect(.degrees(logoRotation))
+            .scaleEffect(Self.logoScale(phase: phase, reduceMotion: reduceMotion))
+            .rotationEffect(.degrees(Self.logoRotation(phase: phase, reduceMotion: reduceMotion)))
             .opacity(logoOpacity)
         }
         .frame(maxWidth: .infinity)
         .frame(height: visibleHeight)
         .clipped()
-        .animation(.spring(response: 0.45, dampingFraction: 0.85), value: phase)
+        .meeshyAnimation(MeeshyAnimation.springDefault, value: phase)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(.updatesFrequently)
@@ -140,11 +144,14 @@ public struct MeeshyPullIndicator: View {
     @State private var ringRotation: Double = 0
     @Environment(\.accessibilityReduceMotion) private var systemReduce
     @Environment(\.meeshyForceReduceMotion) private var userForced
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced)
+    }
 
     private func startRingRotation() {
         // Reduce Motion (system or in-app): the gradient ring still marks the
         // refreshing state, but stays still.
-        guard !MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced) else { return }
+        guard !reduceMotion else { return }
         withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
             ringRotation = 360
         }

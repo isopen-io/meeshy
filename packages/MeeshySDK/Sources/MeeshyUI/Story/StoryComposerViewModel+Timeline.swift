@@ -30,7 +30,7 @@ extension StoryComposerViewModel {
             guard let self, self.isTimelineVisible else { return }
             // Fin de lecture : le canvas quitte la preview et REVIENT à
             // l'état statique du design — tous les éléments posés, positions
-            // et opacités de base (retour user 2026-07-20). Le playhead a
+            // et opacités de base. Le playhead a
             // déjà été remis à 0 par le VM avant cette notification.
             self.canvasTimelineBridge.end()
         }
@@ -45,6 +45,32 @@ extension StoryComposerViewModel {
     /// mixer jamais stoppé et un preview en cours jamais coupé. L'instance
     /// est nil-ée : le prochain `onAppear` → `loadCurrentSlideIntoTimeline()`
     /// recrée un moteur frais.
+    // MARK: - La frise hors de l'atelier (#8415, mode Animé)
+
+    /// **La scène est-elle en cours d'animation** — la frise est ouverte et
+    /// pilote le canvas. Lu par un hôte qui n'est pas l'atelier.
+    public var timelineIsOpen: Bool { isTimelineVisible }
+
+    /// **Ouvre la frise sur la slide courante**, depuis un hôte autre que
+    /// l'atelier (la scène plein écran du meuble). Le même cycle que le panneau
+    /// de l'atelier (`ComposerToolPanelHost.timelinePanel`) : charger la slide,
+    /// puis caler la tête — et marquer la frise visible, sans quoi les rappels
+    /// de lecture ne pilotent pas le canvas.
+    public func openTimelinePanel() {
+        isTimelineVisible = true
+        loadCurrentSlideIntoTimeline()
+        canvasTimelineBridge.scrub(seconds: Double(timelineViewModel.currentTime))
+    }
+
+    /// **Referme la frise et REND ses pistes à la slide** — sans ce commit, un
+    /// réglage de timing fait dans la frise mourrait à la publication.
+    public func closeTimelinePanel() {
+        if timelineViewModel.isPlaying { timelineViewModel.togglePlayback() }
+        canvasTimelineBridge.end()
+        commitTimelineToCurrentSlide()
+        isTimelineVisible = false
+    }
+
     public func shutdownTimelineIfNeeded() {
         stashTimelineHistoryIfLoaded()
         _timelineViewModel?.shutdown()
@@ -216,6 +242,12 @@ extension StoryComposerViewModel {
         project.mediaObjects.removeAll { Self.isSyntheticTimelineClipId($0.id) }
         var slide = currentSlide
         project.apply(to: &slide)
+        // La timeline d'une scène ignore les autres : les deux heures de la story se bornent ici (#13590).
+        let room = max(2, StoryComposerLimits.remainingDuration(excludingSceneAt: currentSlideIndex, of: slides))
+        if let pin = slide.effects.timelineDuration, Float(pin) > room {
+            (slide.effects.timelineDuration, slide.duration) = (Double(room), TimeInterval(room))
+            refuse(.duration)
+        }
         currentSlide = slide
     }
 

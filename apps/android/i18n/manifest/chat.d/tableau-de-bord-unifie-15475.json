@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "dashboard.stat.links",
+          "androidName": "dashboard_stat_links",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "dashboard.stat.documents",
+          "androidName": "dashboard_stat_documents",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "dashboard.health",
+          "androidName": "dashboard_health",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "dashboard.section.statistics",
+          "androidName": "dashboard_section_statistics",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "dashboard.period.week",
+          "androidName": "dashboard_period_week",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "dashboard.period.month",
+          "androidName": "dashboard_period_month",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "dashboard.period.all",
+          "androidName": "dashboard_period_all",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "dashboard.section.participant-activity",
+          "androidName": "dashboard_section_participant_activity",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "dashboard.tone",
+          "androidName": "dashboard_tone",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

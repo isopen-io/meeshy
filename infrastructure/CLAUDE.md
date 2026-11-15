@@ -1,5 +1,8 @@
 # infrastructure - Docker, Traefik & Deployment
 
+> ## ⛔ Aucune feature sans issue — règle de démarrage (directive 2026-08-26)
+> **Avant d'écrire la première ligne d'une feature, d'une amélioration ou d'un correctif non trivial**, ouvrir (ou retrouver) son **issue** dans `isopen-io/meeshy`, la placer dans un **milestone précis** (nommé par le résultat attendu, avec échéance) et l'inscrire au projet « Meeshy — pilotage » (https://github.com/orgs/isopen-io/projects/1) avec `Status = In Progress`. Le commit qui livre la ferme (`Closes #n`) avec sa preuve (gate, mesure, PR). **Une tâche sans issue n'existe pas ; un travail sans milestone n'est pas planifié.** Ce qu'on découvre en chemin (dette, dimension non mûre, suivi) devient une issue à son tour — jamais une ligne dans un fichier ou une page. Détail : § « Pilotage du développement » du `CLAUDE.md` racine.
+
 ## Directory Structure
 ```
 config/             → Traefik, TLS configs
@@ -43,6 +46,16 @@ environment:
 ```
 The `docker-entrypoint.sh` uses `sed` to replace `__RUNTIME_*__` placeholders. Quoted values cause `""value""` in JS = syntax error.
 
+### Release des images sur le serveur final — purge non interactive, et DEV seulement (#6556, directive porteur 2026-09-15)
+
+**Toute purge Docker du dépôt porte un drapeau non interactif** (`-f`, `-af`, `--force`). `docker image prune` demande `y/N` : au bout d'un `ssh` ou dans un job de CI il n'y a pas de terminal, l'entrée vide se lit « N », **rien n'est retiré, et on croit avoir purgé**. C'est ainsi que l'hôte de staging s'est rempli jusqu'au `no space left on device` du 2026-09-14 — le `pull` a échoué et staging a continué de servir la version précédente sans que rien ne le dise.
+
+**Et la purge PRÉCÈDE le `pull`** : après, elle arrive trop tard, puisque c'est l'écriture des couches téléchargées qui manque de place. `docker image prune -a` n'ôte jamais une image portée par un conteneur — la version servie survit ; la fenêtre `--filter "until=168h"` garde de quoi revenir en arrière d'une semaine. Les volumes ne se purgent pas au passage (`system prune --volumes` emporterait des données qu'on croit anonymes).
+
+**Le déploiement automatique s'arrête à `dev` → staging. La production ne part JAMAIS toute seule** — ni sur une poussée dans `main`, ni sur un tag. Elle se PROMEUT sur demande (directive 2026-10-04, #9223) par `.github/workflows/promote-production.yml` : un digest déjà servi par staging, `workflow_dispatch` seul, environnement protégé `production`, retour arrière en une commande. Côté hôte : `infrastructure/scripts/meeshy-promote-production.sh` ; installation unique : `infrastructure/scripts/meeshy-promote-production.md` (#9325).
+
+Sites : `infrastructure/scripts/meeshy-deploy-staging.sh` (**la source de `/usr/local/bin/meeshy-deploy-staging.sh`**, ce que la clé SSH contrainte de la CI exécute sur l'hôte — son installation reste un geste manuel, documenté en tête du fichier), les scripts de release de `infrastructure/scripts/` et `scripts/`, et le job `deploy-staging` de `.github/workflows/docker.yml`. Garde : `scripts/check-docker-prune-noninteractive.mjs` (job `quality` de `ci.yml`), qui tient les quatre règles ensemble.
+
 ### Production vs Repo Differences
 | | Repo | Production |
 |---|---|---|
@@ -58,6 +71,14 @@ Always backup docker-compose.yml before editing on production.
 - Routes defined via Docker labels on services
 - Middlewares: secure-headers, cors, basic auth (dashboard)
 - Healthcheck takes ~30s (start_period + first check) before routing traffic
+- **Staging and production share ONE network, the entry network `meeshy-staging-edge` (#11451)** — Traefik and the routed staging services only (`gateway-staging`, `frontend-staging`, `static-files-staging`, `coturn-staging`). It is `external` in BOTH composes: create it once on a new host (`docker network create meeshy-staging-edge`) before `docker compose up`, or the production stack refuses to start. No staging service ever joins another production network; production data (`database`, `redis`, `translator`, `agent`) lives on `meeshy-data` (`internal: true`), which Traefik never joins. Guard: `services/gateway/src/__tests__/unit/config/prod-data-network-isolated.test.ts` (fail-closed: a network form it cannot read fails it).
+- **Mongo/Redis admin UIs (`nosqlclient`, `p3x-redis-ui`) are NEVER routed by Traefik, in prod (#3640) or staging (#6254).** They bind to `127.0.0.1` on the host — prod: `MONGO_UI_PORT`/`REDIS_UI_PORT` (default 8081/8082); staging: `MONGO_UI_PORT_STAGING`/`REDIS_UI_PORT_STAGING` (default 8091/8092 — offset from prod's since both composes run on the same host, `root@meeshy.me`). Reach them with `ssh -L 8081:127.0.0.1:8081 -L 8082:127.0.0.1:8082 root@meeshy.me` (prod) or `ssh -L 8091:127.0.0.1:8091 -L 8092:127.0.0.1:8092 root@meeshy.me` (staging), then `http://localhost:<port>` locally. Guards: `services/gateway/src/__tests__/unit/config/admin-ui-ssh-tunnel-only.test.ts` (prod), `services/gateway/src/__tests__/unit/config/staging-admin-surfaces-ssh-tunnel-only.test.ts` (staging).
+- **The staging compose's raw debug ports (`database-staging` 27018, `redis-staging` 6380) are bound to `127.0.0.1` only, never on all interfaces (#6255)** — reach them through the same SSH tunnel as the admin UIs above, never by publishing them unqualified. Guard: `services/gateway/src/__tests__/unit/config/staging-admin-surfaces-ssh-tunnel-only.test.ts`.
+
+- **The `agent` service is NEVER routed by Traefik, in prod or staging (#10242)** — `traefik.enable=false`, private network only (`agent-staging` on `meeshy-staging-network` in staging; `agent` on `meeshy-agent-network` in production, shared ONLY with `gateway` — never with Traefik, the webapp, static-files or certs-dumper, #10289 — and on `meeshy-data` for the database and Redis, #11451). The gateway reaches it by service name when `AGENT_HOST` is set (HTTP 3200, ZMQ 5560/5561) — production: `AGENT_HOST=agent`; staging: `AGENT_HOST` is NOT set, the gateway does not call the agent (enabling it is a separate decision: LLM cost, agent replies on real data). Guard: `services/gateway/src/__tests__/unit/config/agent-internal-only.test.ts`.
+- **Every agent route except `GET /health` requires `AGENT_INTERNAL_TOKEN`** (header `x-meeshy-internal-token`, constant-time compare, `services/agent/src/routes/internal-guard.ts`). Same value for the gateway and the agent of ONE environment, distinct between staging and production, ≥ 32 characters (`openssl rand -hex 32`), set in the server's `.env` only. Missing on the agent ⇒ every route answers 503; missing on the gateway ⇒ the gateway does not call the agent (`AgentUnavailableError`). **Set it in the production `.env` BEFORE promoting an agent image that carries this guard**, or every admin agent action fails closed.
+- **The agent's ZMQ PULL (5560) accepts only events signed with that same secret (#10288)** : the gateway sends `[payload, v1.<ts>.<hmac>]` (`packages/shared/utils/agent-zmq-auth.ts` — HMAC-SHA256 under a key derived from `AGENT_INTERNAL_TOKEN`, ±60 s, replay refused). An unsigned, foreign-signed, stale or replayed event is dropped and counted in the agent log (`Unauthenticated message rejected`). Gateway and agent carrying this change are promoted TOGETHER, in one promotion (#10290) : a new gateway in front of an old agent loses nothing (the old agent reads frame 1 only), a new agent behind an old gateway drops every event (fail-closed) — the loss is bounded by the switch window.
+- **The agent's daily LLM budget in dollars is ENFORCED (#10287)** : every LLM call of the agent (scanner, reactive path, bridge reading, season proposal) goes through `services/agent/src/llm/budgeted-llm.ts`. Once today's spend (UTC, Redis `agent:budget:global:llm-cost-usd:<YYYY-MM-DD>`, estimated by `services/agent/src/tracing/cost-estimator.ts`) reaches `AgentGlobalConfig.globalDailyBudgetUsd` (default 10), the call is refused before reaching the provider and the scanner skips every conversation; `maxConcurrentCalls` caps simultaneous calls. Read the spend on the guarded `GET /debug/scanner-status` (`llmSpentTodayUsd`, `llmDailyBudgetUsd`).
 
 ## MongoDB Setup
 - Version 8.0 with replica set (`rs0`)
@@ -74,6 +95,8 @@ REDIS_URL=redis://redis:6379
 # Auth
 JWT_SECRET=<change-in-production>
 ATTACHMENT_MASTER_KEY=<base64-32-bytes>
+ENCRYPTION_MASTER_KEY=<base64-32-bytes>   # enveloppe les clés des messages server/hybrid chiffrés au repos (#11381) ; absente : la passerelle démarre et refuse ces modes (503)
+SECRETS_AT_REST_KEY=<base64-32-bytes>   # chiffre la clé d'API LLM de l'agent au repos ; sans elle hors development/test, son écriture est refusée
 
 # Services
 ZMQ_PUSH_URL=tcp://translator:5555
@@ -90,6 +113,12 @@ TTS_MAX_NEW_TOKENS=2048
 HF_TOKEN=<huggingface-token>
 HF_HOME=/workspace/models/huggingface
 ```
+
+**Mise en place de `SECRETS_AT_REST_KEY`** (base64 strict de 32 octets : `openssl rand -base64 32`) :
+1. poser la variable dans l'environnement du gateway (staging d'abord) et redéployer ;
+2. dans le conteneur du gateway, lancer `services/gateway/scripts/reseal-agent-llm-secrets.ts` avec `bunx tsx` : à blanc d'abord (n'affiche que des nombres de lignes), puis avec `--apply` ; relancé, il ne trouve plus rien à re-sceller ;
+3. production : mêmes étapes, seulement APRÈS le feu vert du porteur et une sauvegarde vérifiée ;
+4. faire tourner chez le fournisseur toute clé d'API LLM déjà enregistrée avant cette mise en place : elle a pu être stockée en clair et figurer dans des sauvegardes.
 
 ## Deployment Commands
 ```bash
@@ -125,6 +154,11 @@ make docker-start       # Full Docker Compose (dev)
 make docker-start-local # Docker with HTTPS (local)
 make test               # Run all tests
 ```
+
+## Pilotage & maturité (règle transverse — détail dans le `CLAUDE.md` racine)
+- **Le pilotage se fait EXCLUSIVEMENT sur GitHub** (projet « Meeshy — pilotage », milestones, issues) : toute tâche de ce répertoire est une issue au titre sémantique, passée `In Progress` au démarrage et fermée par le commit qui la livre (`Closes #n`). Pas de `todo.md`, pas de page « progress » ; les artifacts servent aux brouillons, au design et aux comptes rendus — jamais à l'état.
+- **Chaque feature est portée à maturité sur les treize dimensions** (sécurité, performance, mémoire, fluidité, accessibilité, cohérence de positionnement, facilité d'usage, UX, compatibilité, utilité, maintenabilité, simplicité d'usage, complétude). Ici, les témoins qui comptent d'abord : secrets hors dépôt et surface exposée minimale (sécurité), healthchecks et temps de démarrage (performance), limites mémoire des containers, observabilité (Sentry, métriques) qui permet de MESURER les autres dimensions, reproductibilité dev / local / prod (compatibilité, maintenabilité).
+- **La complexité se paie dans le code, jamais chez l'utilisateur.** Une lenteur, une saccade, une action sans feedback immédiat sont des bugs, pas de la dette : ils ont au moins la priorité de la feature qu'ils dégradent. Le commentaire de clôture d'une issue dit quelles dimensions sont mûres et ouvre une issue par dimension restante.
 
 ## Quality Gate
 Codex will review your output once you are done. Self-evaluate and ensure consistent, coherent code before marking any task as complete.

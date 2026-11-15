@@ -1,0 +1,154 @@
+import Foundation
+import MeeshySDK
+import os
+
+/// Les effets que la reprise demande à l'hôte : retirer la bulle d'un refus
+/// fermant le composeur, tenir la bulle d'un mode lent, poser le
+/// `tempId → serverId` que `message:new` réconcilie, et retenir que la
+/// conversation est chiffrée quand la passerelle refuse son clair (#11379).
+struct SendRecoveryHooks {
+    let withdraw: @MainActor (String, ConversationWriteRestriction) async -> Void
+    let holdSlowMode: @MainActor (String, NewcomerSlowMode, any Error) async -> Void
+    let registerServerId: (String, String) -> Void
+    var adoptEndToEnd: @MainActor () -> Void = {}
+}
+
+protocol SendFailureRecoveryProviding {
+    func recover(
+        from error: any Error,
+        outgoing: OutgoingMessage,
+        payload: SealedOutgoingPayload,
+        context: SendAttemptContext,
+        fallbackEligible: Bool,
+        coordinator: any ConversationSendCoordinatorProviding,
+        hooks: SendRecoveryHooks
+    ) async -> Result<SentMessageReceipt, SendFailure>
+}
+
+/// Un échec d'envoi se classe : refus DÉFINITIF (rien ne le fera réussir),
+/// repli socket, sinon l'outbox durable.
+struct SendFailureRecovery: SendFailureRecoveryProviding {
+    var toast: FeedbackToastSurfacing = FeedbackToastManager.shared
+
+    func recover(
+        from error: any Error,
+        outgoing: OutgoingMessage,
+        payload: SealedOutgoingPayload,
+        context: SendAttemptContext,
+        fallbackEligible: Bool,
+        coordinator: any ConversationSendCoordinatorProviding,
+        hooks: SendRecoveryHooks
+    ) async -> Result<SentMessageReceipt, SendFailure> {
+        let tempId = context.clientMessageId.rawValue
+        if let refusal = await classifyRefusal(error, tempId: tempId, coordinator: coordinator, hooks: hooks) {
+            return .failure(refusal)
+        }
+        if payload.isEncrypted, EndToEndSendGate.isServerEnvelopeRefusal(error) {
+            return .failure(await refuseEndToEnd(.envelopeRefusedByServer, tempId: tempId, coordinator: coordinator))
+        }
+
+        let failElapsedMs = Int(Date().timeIntervalSince(context.startedAt) * 1000)
+        Logger.messages.warning("perf:ios.send.fail clientMessageId=\(tempId, privacy: .public) durationMs=\(failElapsedMs, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+
+        if fallbackEligible,
+           let receipt = await emitSocketFallback(
+               outgoing, payload: payload, context: context, failedAfterMs: failElapsedMs,
+               coordinator: coordinator, hooks: hooks
+           ) {
+            return .success(receipt)
+        }
+
+        // #11379 — la file de relance porte `outgoing`, donc le texte EN CLAIR :
+        // un envoi qui était scellé n'y entre jamais. La bulle reste en échec,
+        // et « Réessayer » rescelle le texte au renvoi.
+        guard !payload.isEncrypted else {
+            return .failure(await refuseEndToEnd(.outboxUnsealable, tempId: tempId, coordinator: coordinator))
+        }
+        await coordinator.recordFailure(error, localId: tempId)
+        return .failure(await coordinator.enqueueForRetry(outgoing, context: context, cause: error))
+    }
+
+    private func refuseEndToEnd(
+        _ refusal: EndToEndSendRefusal,
+        tempId: String,
+        coordinator: any ConversationSendCoordinatorProviding
+    ) async -> SendFailure {
+        Logger.messages.warning("perf:ios.send.fail.e2ee clientMessageId=\(tempId, privacy: .public) reason=\(refusal.rawValue, privacy: .public) — never replayed in clear")
+        await coordinator.markFailed(localId: tempId, reason: refusal.userMessage)
+        toast.showError(refusal.userMessage)
+        return .endToEndUnsealed(refusal)
+    }
+
+    /// Refus DÉFINITIFS : retenter ne réussirait jamais, donc ni repli socket
+    /// ni outbox. Un blocage entrant, lui, n'est pas visible d'avance.
+    func classifyRefusal(
+        _ error: any Error,
+        tempId: String,
+        coordinator: any ConversationSendCoordinatorProviding,
+        hooks: SendRecoveryHooks
+    ) async -> SendFailure? {
+        if let restriction = ConversationWriteRestriction(refusal: error), restriction.closesComposer {
+            await hooks.withdraw(tempId, restriction)
+            return .writeRestricted(restriction)
+        }
+        // #11379 — la passerelle refuse le clair : la conversation est chiffrée
+        // sans que le fil le sût. Ni repli socket ni outbox — l'un et l'autre
+        // réémettraient le même clair —, et l'envoi suivant se scelle.
+        if EndToEndSendGate.isServerPlaintextRefusal(error) {
+            hooks.adoptEndToEnd()
+            return await refuseEndToEnd(.plaintextRefusedByServer, tempId: tempId, coordinator: coordinator)
+        }
+        // #16053 — le droit de CE type de pièce jointe manque : le même envoi
+        // rencontrerait le même droit, par le socket comme par l'outbox.
+        if AttachmentRightRefusal.matches(error) {
+            Logger.messages.warning("perf:ios.send.fail.attachmentRight clientMessageId=\(tempId, privacy: .public)")
+            await coordinator.markFailed(localId: tempId, reason: AttachmentRightRefusal.userMessage)
+            toast.showError(AttachmentRightRefusal.userMessage)
+            return .attachmentRightRefused
+        }
+        if let slowMode = NewcomerSlowMode.from(error) {
+            await hooks.holdSlowMode(tempId, slowMode, error)
+            return .slowMode(slowMode)
+        }
+        guard error.isUserBlockedError else { return nil }
+        Logger.messages.warning("perf:ios.send.fail.blocked clientMessageId=\(tempId, privacy: .public)")
+        await coordinator.recordFailure(error, localId: tempId)
+        toast.showError(
+            String(localized: "conversation.send.blocked", defaultValue: "Vous ne pouvez pas écrire à cet utilisateur.", bundle: .main)
+        )
+        return .recipientBlocked
+    }
+
+    /// Repli socket : le POST REST a échoué — le coordinateur réémet UNE fois
+    /// avec le MÊME clientMessageId (dedup gateway). Les envois que le canal
+    /// perdrait en silence restent sur le retry REST de l'outbox, qui les
+    /// préserve. `pendingServerIds` est posé AVANT l'acquittement GRDB : un
+    /// `message:new` qui arrive pendant l'attente se réconcilie sans doublon.
+    private func emitSocketFallback(
+        _ outgoing: OutgoingMessage,
+        payload: SealedOutgoingPayload,
+        context: SendAttemptContext,
+        failedAfterMs: Int,
+        coordinator: any ConversationSendCoordinatorProviding,
+        hooks: SendRecoveryHooks
+    ) async -> SentMessageReceipt? {
+        guard let receipt = await coordinator.emitSocketFallback(outgoing, payload: payload, context: context),
+              case .acknowledged(let serverId, let at, _) = receipt.delivery else { return nil }
+        let tempId = context.clientMessageId.rawValue
+        hooks.registerServerId(tempId, serverId.rawValue)
+        _ = await coordinator.acknowledge(localId: tempId, serverId: serverId.rawValue, at: at)
+        Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(serverId.rawValue, privacy: .public) transport=socket-fallback durationMs=\(failedAfterMs, privacy: .public)")
+        return receipt
+    }
+}
+
+nonisolated extension AttachmentRightRefusal {
+    /// Ce que la bulle en échec et le message d'erreur disent, dans la langue de l'app.
+    static var userMessage: String {
+        String(
+            localized: "conversation.send.attachmentRightNotPermitted",
+            defaultValue: "Ce type de pièce jointe n’est pas autorisé ici.",
+            bundle: .main
+        )
+    }
+}

@@ -1,0 +1,137 @@
+/**
+ * Poignée de main, session et erreurs de transport : `authenticate`,
+ * `authenticated`, `auth:token-expired`, `auth:session-revoked`, `error`,
+ * `heartbeat`.
+ *
+ * @see ../socketio-events.ts — la façade qui garde l'adresse historique.
+ */
+
+/**
+ * Données pour l'événement d'authentification
+ */
+/**
+ * L'identité MINIMALE que l'accusé d'authentification rend au socket qui vient
+ * de s'authentifier.
+ *
+ * Ce n'est PAS un `SocketIOUser`, et le déclarer ainsi était un mensonge de
+ * contrat (cycle 101) : les deux — et seuls — émetteurs de `AUTHENTICATED`
+ * (`AuthHandler._authenticateJWTUser` et `._authenticateAnonymousUser`)
+ * servent exactement ces trois champs. `language` n'existe pas sur
+ * `SocketIOUser` ; ses onze champs requis (`username`, `email`, `role`,
+ * `isOnline`, `lastActiveAt`…) n'ont jamais voyagé sur cet événement, et un
+ * participant ANONYME n'a pas de ligne `User` d'où les tirer.
+ *
+ * Le destinataire de cet accusé sait déjà QUI il est — il vient de présenter
+ * son jeton. Ce que l'événement lui apprend, c'est sous quelle identité la
+ * passerelle l'a admis (`id`), dans quelle langue elle le servira
+ * (`language`), et par quel régime (`isAnonymous`).
+ */
+export interface AuthenticatedEventUser {
+  readonly id: string;
+  readonly language: string;
+  readonly isAnonymous: boolean;
+}
+
+export interface AuthenticatedEventData {
+  readonly success: boolean;
+  readonly user?: AuthenticatedEventUser;
+  readonly error?: string;
+  /** `APP_VERSION` de la passerelle — émis par les deux producteurs. */
+  readonly version?: string;
+}
+
+/**
+ * Données pour l'événement d'erreur
+ */
+export interface ErrorEventData {
+  readonly message: string;
+  readonly code?: string;
+  /** Seconds to wait before retrying — only on a temporary refusal (`NEWCOMER_SLOW_MODE`, #7740). */
+  readonly retryAfter?: number;
+  /**
+   * #10264 — avec `code: 'ACCOUNT_DELETED'` seulement : l'identifiant du compte
+   * du jeton signé, dont la suppression est IRRÉVERSIBLE (purge confirmée).
+   * L'appareil purge les données locales de CE compte, jamais d'un autre.
+   */
+  readonly accountId?: string;
+  /**
+   * #13954 — avec `code: 'UPGRADE_REQUIRED'` seulement : le client est sous le
+   * plancher de version de sa plateforme (D-5). La socket est fermée ensuite ;
+   * le client monte l'écran « Mettre à jour Meeshy » vers `storeUrl`.
+   */
+  readonly minVersion?: string;
+  readonly storeUrl?: string;
+}
+
+export interface AuthTokenExpiredEventData {
+  readonly code: 'token_expired';
+  readonly message: string;
+}
+
+export interface AuthSessionRevokedEventData {
+  readonly code: 'session_revoked';
+  readonly message: string;
+  /**
+   * `session_expired` (#5712) — la `UserSession` nommée par le claim `sid`
+   * du JWT (`services/auth/session-jwt.ts`) n'est plus valide OU a dépassé
+   * son `expiresAt` au moment où le socket tente de s'authentifier. Distinct
+   * des trois autres motifs : ceux-ci décrivent une révocation ACTIVE d'un
+   * socket déjà connecté (`disconnectSession`/`disconnectRevokedSessions`),
+   * celui-ci un REFUS à la connexion — aucun client ne switche sur `reason`
+   * aujourd'hui (web/iOS déclenchent la même déconnexion pour les quatre),
+   * l'ajout est donc sans risque de décodage strict.
+   *
+   * `activation_required` (#8238) — le délai de grâce de l'adresse est passé
+   * (28 jours sans preuve, aucun numéro) : le socket est refusé à la
+   * connexion, et la prochaine connexion mène au code d'activation.
+   *
+   * `user_revoke` (#9613) — le membre a fermé CETTE session depuis un autre de
+   * ses appareils ; `logout` — l'appareil s'est déconnecté lui-même. Jusqu'à
+   * #9613, ces deux gestes partaient sous `admin_revoke` : le membre lisait
+   * qu'un administrateur l'avait déconnecté. `admin_revoke` ne nomme jamais
+   * l'administrateur : c'est « l'équipe Meeshy ».
+   */
+  readonly reason:
+    | 'password_changed'
+    | 'logout_all_devices'
+    | 'admin_revoke'
+    | 'user_revoke'
+    | 'logout'
+    | 'session_expired'
+    | 'activation_required';
+  /**
+   * #10264 — présent SEULEMENT quand la fermeture vient de la purge CONFIRMÉE
+   * du compte (`AccountDeletionRequest` passée à `COMPLETED`, irréversible) :
+   * l'identifiant du compte supprimé. Jamais à la fin de grâce, encore
+   * annulable. Un appareil y purge les données locales de CE compte, jamais
+   * celles du compte actif au moment de la réception. `reason` reste
+   * `logout_all_devices` pour les clients qui ne lisent pas ce champ.
+   */
+  readonly deletedAccountId?: string;
+}
+
+/**
+ * Payload emitted by the server in response to a client `heartbeat` event.
+ * Clients can measure RTT = (received at) - clientTime, and detect stalled
+ * gateway event loops even while the WebSocket connection appears healthy.
+ */
+export interface HeartbeatAckEventData {
+  /** ISO-8601 timestamp of the server's response — use for clock-skew diagnostics */
+  readonly serverTime: string;
+  /**
+   * Round-trip latency hint computed by the gateway when the client includes
+   * a `clientTime` in the heartbeat payload (optional, for backwards compat
+   * with older clients that emit bare `heartbeat` with no payload).
+   * Undefined when the client did not supply `clientTime`.
+   */
+  readonly latencyHintMs?: number;
+}
+
+/**
+ * Données pour l'authentification
+ */
+export interface AuthenticateData {
+  readonly userId?: string;
+  readonly sessionToken?: string;
+  readonly language?: string;
+}

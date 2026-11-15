@@ -1,0 +1,292 @@
+import { lazy, Suspense, type ReactNode, type RefObject, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
+
+import type { PostToggleKind } from '@/lib/feed/interactions';
+import type { PostMenuEntry } from '@/lib/feed/publication-menu';
+import { openPublicationImage, type PublicationImageRequest } from '@/lib/export/publication-image-store';
+import { launchSceneExport } from '@/lib/export/scene/scene-export-launch';
+import { postExportSubject } from '@/lib/export/scene/scene-export-subject';
+import { translate } from '@/lib/i18n-catalog';
+import { translateSceneExport } from '@/lib/i18n-scene-export-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { readingModeScopeOf } from '@/lib/reading-mode/scope';
+import { layerMotion } from '@/lib/view/dialog-exit';
+import { href, navigate } from '@/routes/route-table';
+
+import { ContentRemovalSheet } from './content-removal-sheet';
+import type { PostMenuHost, PostMenuSceneExport } from './feed-post-menu';
+import { Glyph, GlyphSvg } from './glyph';
+import { FEED_GLYPHS } from './glyphs-feed';
+import { LINKS_GLYPHS } from './glyphs-links';
+import { NOTIFICATIONS_GLYPHS } from './glyphs-notifications';
+import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
+import { PublicationViewersSheetLazy } from './publication-viewers-sheet-lazy';
+import { ReportSheet } from './report-sheet';
+
+/**
+ * LA FEUILLE D'ÉDITION, CHARGÉE À LA DEMANDE (#7534) — même discipline que ce
+ * panneau lui-même : « Modifier » est plus rare qu'un simple survol du menu,
+ * son chunk (`publication_edit_sheet`, `budgets.json`) n'arrive qu'au tap.
+ */
+const PublicationEditSheet = lazy(() => import('./publication-edit-sheet').then((m) => ({ default: m.PublicationEditSheet })));
+
+
+/**
+ * **LE PANNEAU DU MENU « ⋯ », CHARGÉ À LA DEMANDE** (#7533) — même discipline
+ * que les feuilles du composeur (`effects-sheet`, `language-sheet`) : le fil
+ * ne paie que le BOUTON ; les entrées, leurs icônes et la feuille de motifs
+ * n'arrivent qu'au premier toucher. Le clavier (`useRovingMenu`) et le
+ * placement restent chez le bouton, qui connaît l'ancre.
+ */
+const MENU_ITEM_HEIGHT = 44;
+const DESTRUCTIVE: ReadonlySet<PostMenuEntry> = new Set(['delete', 'remove', 'report']);
+
+export type PostMenuPanelProps = {
+  readonly open: boolean;
+  /** Refermé, le panneau reste peint le temps de son fondu (#18327) : inerte, il ne prend plus rien. */
+  readonly leaving?: boolean;
+  readonly entries: readonly PostMenuEntry[];
+  readonly postId: string;
+  readonly authorName: string;
+  readonly text: string | undefined;
+  readonly originalText: string | undefined;
+  readonly originalLanguage: string | undefined;
+  readonly bookmarked: boolean;
+  /** Voir `FeedPostMenu` — « Désactiver » ou « Réactiver les commentaires » (#16541). */
+  readonly commentsDisabled: boolean;
+  /** Voir `FeedPostMenu` — « Modifier » rouvre le studio (#9317). */
+  readonly studioEditable: boolean;
+  /** Voir `FeedPostMenu` — « Sauvegarder » (#13873). */
+  readonly sceneExport?: PostMenuSceneExport | undefined;
+  /** « Imager » (#16166, #16393) — la demande que l'atelier de carte reçoit ; `null` : rien ne s'image. */
+  readonly imageRequest?: PublicationImageRequest | null;
+  readonly menu: PostMenuHost;
+  readonly onShare?: ((postId: string) => void) | undefined;
+  readonly onGesture?: ((postId: string, kind: PostToggleKind) => void) | undefined;
+  readonly box: { readonly top: number; readonly right: number; readonly width: number };
+  readonly label: string;
+  readonly activeIndex: number;
+  readonly menuRef: RefObject<HTMLDivElement | null>;
+  readonly itemRefs: RefObject<(HTMLElement | null)[]>;
+  readonly onMenuKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
+  readonly closeAndFocusButton: () => void;
+  readonly reporting: boolean;
+  readonly setReporting: (value: boolean) => void;
+  readonly editing: boolean;
+  readonly setEditing: (value: boolean) => void;
+  readonly viewing: boolean;
+  readonly setViewing: (value: boolean) => void;
+  /** « RETIRER » (#11150) — la feuille du motif est ouverte. */
+  readonly removing: boolean;
+  readonly setRemoving: (value: boolean) => void;
+};
+
+export function PostMenuPanel(props: PostMenuPanelProps) {
+  const {
+    open,
+    leaving = false,
+    entries,
+    postId,
+    authorName,
+    text,
+    originalText,
+    originalLanguage,
+    bookmarked,
+    commentsDisabled,
+    studioEditable,
+    sceneExport,
+    imageRequest = null,
+    menu,
+    onShare,
+    onGesture,
+    box,
+    label,
+    activeIndex,
+    menuRef,
+    itemRefs,
+    onMenuKeyDown,
+    closeAndFocusButton,
+    reporting,
+    setReporting,
+    editing,
+    setEditing,
+    viewing,
+    setViewing,
+    removing,
+    setRemoving,
+  } = props;
+  const language = currentInterfaceLanguage();
+  const saveScene = () => {
+    const subject = sceneExport === undefined ? null : postExportSubject(sceneExport);
+    if (subject !== null) void launchSceneExport({ subject, mode: 'save' });
+  };
+  const image = () => {
+    if (imageRequest !== null) openPublicationImage(imageRequest);
+  };
+
+  const items: readonly { readonly id: PostMenuEntry; readonly label: string; readonly icon: ReactNode; readonly run: () => void }[] = entries.map(
+    (id) => {
+      switch (id) {
+        case 'open':
+          return { id, label: translate(language, 'feed.post.menu.open'), icon: <GlyphSvg glyph={LINKS_GLYPHS.export} size={16} />, run: () => navigate(href('post', { post: postId })) };
+        case 'copyText':
+          return { id, label: translate(language, 'feed.post.menu.copy_text'), icon: <GlyphSvg glyph={THREAD_MENU_GLYPHS.copy} size={16} />, run: () => menu.onCopyText(text ?? '') };
+        case 'share':
+          return { id, label: translate(language, 'feed.post.action.share'), icon: <GlyphSvg glyph={FEED_GLYPHS.shareNetwork} size={16} />, run: () => onShare?.(postId) };
+        case 'saveMedia':
+          return { id, label: translateSceneExport(language, 'sceneExport.menu.save'), icon: <GlyphSvg glyph={THREAD_MENU_GLYPHS.downloadSimple} size={16} />, run: saveScene };
+        case 'imager':
+          return { id, label: translateSceneExport(language, 'sceneExport.menu.imager'), icon: <GlyphSvg glyph={THREAD_MENU_GLYPHS.imageSquare} size={16} />, run: image };
+        case 'save':
+          return {
+            id,
+            label: translate(language, bookmarked ? 'feed.post.menu.unsave' : 'feed.post.action.bookmark'),
+            icon: <GlyphSvg glyph={bookmarked ? FEED_GLYPHS.bookmarkFill : FEED_GLYPHS.bookmark} size={16} />,
+            run: () => onGesture?.(postId, 'bookmark'),
+          };
+        case 'views':
+          return { id, label: translate(language, 'story.action.views'), icon: <Glyph name="eye" size={16} />, run: () => setViewing(true) };
+        case 'pin':
+          return { id, label: translate(language, 'feed.post.menu.pin'), icon: <Glyph name="pushPin" size={16} />, run: () => menu.onPin(postId) };
+        case 'edit':
+          return { id, label: translate(language, 'feed.post.edit'), icon: <GlyphSvg glyph={THREAD_MENU_GLYPHS.pencilSimple} size={16} />, run: () => (studioEditable ? navigate(href('postEdit', { post: postId })) : setEditing(true)) };
+        case 'comments':
+          return {
+            id,
+            label: translate(language, commentsDisabled ? 'feed.post.menu.comments_on' : 'feed.post.menu.comments_off'),
+            icon: <GlyphSvg glyph={FEED_GLYPHS.chatCircle} size={16} />,
+            run: () => menu.onToggleComments?.(postId, !commentsDisabled),
+          };
+        case 'delete':
+          return { id, label: translate(language, 'feed.post.menu.delete'), icon: <GlyphSvg glyph={NOTIFICATIONS_GLYPHS.trash} size={16} />, run: () => menu.onDelete(postId) };
+        case 'remove':
+          return { id, label: translate(language, 'moderation.remove.action'), icon: <GlyphSvg glyph={NOTIFICATIONS_GLYPHS.trash} size={16} />, run: () => setRemoving(true) };
+        case 'report':
+          return {
+            id,
+            label: translate(language, 'report.action'),
+            icon: <Glyph name="warningCircle" size={16} />,
+            run: () => {
+              menu.onReportOpen?.(postId);
+              setReporting(true);
+            },
+          };
+      }
+    },
+  );
+
+  return (
+    <>
+      {open && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              ref={menuRef}
+              role="menu"
+              aria-label={label}
+              onKeyDown={onMenuKeyDown}
+              className="fixed z-30 overflow-hidden rounded-card py-1 shadow-cast"
+              {...layerMotion(leaving, { top: box.top, right: box.right, width: box.width, backgroundColor: 'var(--color-ios-card)', border: '1px solid var(--color-edge)' })}
+            >
+              {items.map((item, index) => {
+                const destructive = DESTRUCTIVE.has(item.id);
+                /* Le séparateur d'iOS (`Divider()`) : AVANT « Supprimer » ou
+                   « Retirer », et avant « Signaler » quand il ferme seul la liste. */
+                const separe = item.id === 'delete' || item.id === 'remove' || (item.id === 'report' && !entries.includes('delete') && !entries.includes('remove'));
+                return (
+                  <button
+                    key={item.id}
+                    ref={(element) => {
+                      itemRefs.current[index] = element;
+                    }}
+                    type="button"
+                    role="menuitem"
+                    data-feed-post-action={item.id}
+                    tabIndex={index === activeIndex ? 0 : -1}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      closeAndFocusButton();
+                      item.run();
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-start text-title font-medium"
+                    style={{
+                      color: destructive ? 'var(--color-error)' : 'var(--color-ios-ink)',
+                      minHeight: MENU_ITEM_HEIGHT,
+                      ...(separe ? { borderTop: '0.5px solid var(--color-edge)' } : {}),
+                    }}
+                  >
+                    <span className="grid place-items-center" style={{ color: destructive ? 'var(--color-error)' : 'var(--color-ios-ink-2)' }}>
+                      {item.icon}
+                    </span>
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {reporting ? (
+        <ReportSheet
+          name={authorName}
+          title={translate(language, 'report.post.title')}
+          busy={false}
+          onPick={(reason) => {
+            setReporting(false);
+            menu.onReport(postId, reason);
+          }}
+          onClose={() => setReporting(false)}
+        />
+      ) : null}
+
+      {removing ? (
+        <ContentRemovalSheet
+          onConfirm={(reason) => {
+            setRemoving(false);
+            menu.onRemove?.(postId, reason);
+          }}
+          onCancel={() => {
+            setRemoving(false);
+            closeAndFocusButton();
+          }}
+        />
+      ) : null}
+
+      {/* « VUES » (#9727) — la feuille des stories ; son chunk n'arrive qu'au tap. */}
+      {viewing ? (
+        <PublicationViewersSheetLazy
+          postId={postId}
+          viewCount={undefined}
+          subject="publication"
+          onClose={() => {
+            setViewing(false);
+            closeAndFocusButton();
+          }}
+        />
+      ) : null}
+
+      {editing ? (
+        <Suspense fallback={null}>
+          <PublicationEditSheet
+            postId={postId}
+            original={originalText ?? ''}
+            originalLanguage={originalLanguage ?? ''}
+            onSave={menu.onEdit}
+            {...(menu.editDrafts !== undefined && menu.viewerId !== null
+              ? { drafts: { store: menu.editDrafts, scope: readingModeScopeOf({ id: menu.viewerId }) } }
+              : {})}
+            /* LE FOCUS REVIENT AU « ⋯ » — la feuille a démonté le bouton qui
+               vient de l'ouvrir (`closeAndFocusButton`, déjà appelé à
+               l'ouverture de la feuille, le referme une seconde fois sans
+               effet puisque `open` est déjà faux). */
+            onClose={() => {
+              setEditing(false);
+              closeAndFocusButton();
+            }}
+          />
+        </Suspense>
+      ) : null}
+    </>
+  );
+}

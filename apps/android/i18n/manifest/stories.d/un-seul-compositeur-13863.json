@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "composer.publish.as.post",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.publish.as.reel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.socle.postText",
+          "androidName": "composer_post_text",
+          "status": "adopted"
+        },
+        {
+          "androidName": "composer_post_text_counter",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

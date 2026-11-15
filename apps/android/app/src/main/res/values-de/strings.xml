@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="brand_signature_credit">Services CEO</string>
+
+    <!-- Navigation tabs -->
+
+    <!-- Login screen -->
+
+    <!-- Chat screen -->
+    <string name="chat_no_messages">Noch keine Nachrichten</string>
+
+    <!-- Conversation list screen -->
+    <string name="conversations_title">Meeshy Chats</string>
+    <string name="conversations_empty">Noch keine Unterhaltungen</string>
+    <string name="conversations_no_messages">Noch keine Nachrichten</string>
+
+    <!-- Notifications screen -->
+    <string name="notifications_mark_all_read">Alle als gelesen markieren</string>
+
+    <!-- Feed screen -->
+
+    <!-- Profile screen -->
+    <string name="bring_channel_name">Bring</string>
+    <string name="bring_channel_description">Klingelt, wenn eine vertraute Person einen Bring auslöst, auch lautlos</string>
+    <string name="call_channel_description">Eingehende Sprach- und Videoanrufe</string>
+    <string name="a11y_floating_menu">Navigationsmenü</string>
+
+    <!-- Widget écran d'accueil : compteur de non-lus -->
+
+    <!-- Widget écran d'accueil : conversations récentes -->
+
+    <!-- Widget écran d'accueil : contacts favoris -->
+    <string name="widget_favorite_contacts_empty">Pinne eine direkte Unterhaltung, um einen Favoriten hinzuzufügen</string>
+
+    <!-- Widget écran d'accueil : réponse rapide -->
+</resources>

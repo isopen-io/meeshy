@@ -437,7 +437,7 @@ describe('broadcastRoutes', () => {
 
     it('returns 200 with broadcast when found', async () => {
       const broadcast = fakeBroadcast();
-      mockPrisma.adminBroadcast.findUnique.mockResolvedValue(broadcast);
+      mockPrisma.adminBroadcast.findUnique.mockResolvedValue(broadcast); mockPrisma.user.findMany.mockResolvedValue([]); // #8876 : la fiche nomme ses acteurs
 
       const res = await app.inject({ method: 'GET', url: `/${VALID_ID}` });
       expect(res.statusCode).toBe(200);
@@ -589,9 +589,9 @@ describe('broadcastRoutes', () => {
         fakeBroadcast({ targeting, status: 'DRAFT' })
       );
       mockPrisma.user.count.mockResolvedValue(10);
+      mockPrisma.user.findMany.mockResolvedValue([]); // #5161 variantes + #5334 rapport de langue (findMany paginé)
       mockPrisma.user.groupBy
-        .mockResolvedValueOnce([{ systemLanguage: 'en', _count: 5 }, { systemLanguage: 'fr', _count: 5 }])
-        .mockResolvedValueOnce([{ registrationCountry: 'US', _count: 10 }]);
+        .mockResolvedValueOnce([{ registrationCountry: 'US', _count: 10 }]); // #5334: seul le groupBy PAYS reste
       mockTranslateContent.mockResolvedValue({ subjects: { fr: 'Bonjour' }, bodies: { fr: 'Corps' } });
       mockPrisma.adminBroadcast.update.mockResolvedValue(fakeBroadcast({ status: 'READY' }));
     }
@@ -664,8 +664,8 @@ describe('broadcastRoutes', () => {
       const res = await app.inject({ method: 'POST', url: `/${VALID_ID}/preview` });
       expect(res.statusCode).toBe(200);
       const whereArg = mockPrisma.user.count.mock.calls[0][0].where;
-      expect(whereArg.OR).toBeDefined();
-      expect(Array.isArray(whereArg.OR)).toBe(true);
+      expect(whereArg.lastActiveAt?.lt).toBeInstanceOf(Date);
+      expect(whereArg.OR).toBeUndefined();
     });
 
     it('applies activityStatus=new filter (registered in last 7 days)', async () => {
@@ -1190,7 +1190,7 @@ describe('adminPostRoutes', () => {
       const res = await app.inject({ method: 'GET', url: '/posts' });
       expect(res.statusCode).toBe(200);
       const whereArg = mockPrisma.post.findMany.mock.calls[0][0].where;
-      expect(whereArg.deletedAt).toBeNull();
+      expect(whereArg.deletedAt).toEqual({ isSet: false }); // NOT_DELETED — leçon 318
     });
 
     it('filters non-deleted posts when isDeleted=false', async () => {
@@ -1199,7 +1199,7 @@ describe('adminPostRoutes', () => {
       const res = await app.inject({ method: 'GET', url: '/posts?isDeleted=false' });
       expect(res.statusCode).toBe(200);
       const whereArg = mockPrisma.post.findMany.mock.calls[0][0].where;
-      expect(whereArg.deletedAt).toBeNull();
+      expect(whereArg.deletedAt).toEqual({ isSet: false });
     });
 
     it('applies search filter', async () => {
@@ -1374,7 +1374,7 @@ describe('adminPostRoutes', () => {
     // The DELETE route defines a JSON body schema in Fastify, so Fastify 5
     // requires either a JSON body or content-type header for body parsing.
     // Use `headers` + empty payload to satisfy the schema validator.
-    const deleteInject = (app: FastifyInstance, postId: string, payload: Record<string, unknown> = {}) =>
+    const deleteInject = (app: FastifyInstance, postId: string, payload: Record<string, unknown> = { reason: 'Contenu signalé' }) =>
       app.inject({
         method: 'DELETE',
         url: `/posts/${postId}`,

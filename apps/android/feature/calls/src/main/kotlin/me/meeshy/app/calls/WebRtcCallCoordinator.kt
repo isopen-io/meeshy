@@ -1,24 +1,28 @@
 package me.meeshy.app.calls
 
 import android.content.Context
-import android.media.AudioManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
+import me.meeshy.sdk.call.CallQualityStatsFeed
+import me.meeshy.sdk.call.CallStatsCollector
 import me.meeshy.sdk.call.WebRtcEngine
-import me.meeshy.sdk.model.call.CallSignalEnvelope
+import me.meeshy.sdk.call.audioLevels
+import me.meeshy.sdk.call.inboundAudioLevel
+import me.meeshy.sdk.model.call.CallMediaTogglePayload
+import me.meeshy.sdk.model.call.CallParticipantArrival
+import me.meeshy.sdk.model.call.CallParticipantLeftPayload
+import me.meeshy.sdk.model.call.CallVideoFallback
 import me.meeshy.sdk.model.call.SocketIceServer
+import me.meeshy.sdk.model.call.ThermalState
+import me.meeshy.sdk.model.call.WebRtcError
+import me.meeshy.sdk.playback.CallHandoff
 import me.meeshy.sdk.socket.CallSignalManager
-import org.webrtc.IceCandidate
-import org.webrtc.PeerConnection
-import org.webrtc.SessionDescription
 import javax.inject.Inject
 
 /**
@@ -28,36 +32,115 @@ import javax.inject.Inject
  * link that left Android calls stuck on "Connecting…".
  *
  * The engine and the signaling are SDK building blocks (opaque, agnostic); the
- * *policy* — who offers, on which event, glare handling — lives here, per the SDK
- * purity rule. One instance per [CallViewModel]; the engine it uses is shared.
+ * *policy* lives here, per the SDK purity rule, split by concern: the SDP / ICE
+ * conversation is the [CallNegotiator]'s, the reconciliation of ICE state with
+ * the FSM and the server is the [CallIceStateMonitor]'s, the platform audio route
+ * is the [CallAudioSession]'s. This class keeps the call's lifetime and the
+ * public surface the [CallViewModel] drives. One instance per [CallViewModel];
+ * the engine it uses is shared.
  */
 class WebRtcCallCoordinator @Inject constructor(
     private val engine: WebRtcEngine,
     private val signals: CallSignalManager,
-    @ApplicationContext private val appContext: Context,
-) {
-    private val audioManager: AudioManager by lazy {
-        appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    @ApplicationContext appContext: Context,
+    names: GroupCallNameSource,
+    statsFeed: CallQualityStatsFeed = CallQualityStatsFeed(),
+    private val handoff: CallHandoff? = null,
+    private val dataProfile: CallDataProfileController? = null,
+    private val videoHealth: CallVideoHealthImpl? = null,
+    private val thermalMonitor: ThermalStateMonitor? = null,
+) : CallReliabilityMedia {
+    private val negotiator = CallNegotiator(engine, signals)
+    private val iceMonitor = CallIceStateMonitor(engine, signals)
+    private val statsCollector = CallStatsCollector(engine)
+    /** Le focus audio est perdu ou rendu (appel GSM, alarme) : la mise en attente de l'appel s'en nourrit. */
+    var onAudioFocusChanged: ((hasFocus: Boolean) -> Unit)? = null
+
+    private val audio = CallAudioSession(appContext) { hasFocus ->
+        interrupted = !hasFocus
+        applyMicrophone()
+        onAudioFocusChanged?.invoke(hasFocus)
     }
 
+    private var userMuted = false
+    private var interrupted = false
+
     private var callScope: CoroutineScope? = null
-    private var callId: String = ""
-    private var peerId: String = ""
-    private var selfId: String = ""
-    private var negotiationId: Int = 0
-    private var connected: Boolean = false
-    private var onMediaConnected: (() -> Unit)? = null
 
-    /** Whether WE placed this call — the initial caller re-offers on an ICE restart (anti-glare). */
-    private var isCaller: Boolean = false
+    /**
+     * Le maillage d'un appel de groupe (#13740) : une connexion par membre AUTRE que le principal. Il ne prend un
+     * signal ou une arrivée qu'une fois le groupe prouvé ; un duo ne le traverse jamais.
+     */
+    private val mesh = GroupCallMesh(
+        factory = EngineGroupMeshPeerFactory(engine),
+        names = names,
+        primaryAudioLevels = { engine.peerHandle?.audioLevels() },
+        isLocalMicMuted = { userMuted },
+        isPrimaryReconnecting = { iceMonitor.stalled },
+        primaryVideoCeiling = { engine.setGroupVideoCeiling(it) },
+        sender = { callId, to, from, signal ->
+            when (signal.kind) {
+                GroupMeshSignalKind.Offer -> signals.emitOffer(callId, signal.sdp.orEmpty(), to = to, from = from, negotiationId = signal.negotiationId)
+                GroupMeshSignalKind.Answer -> signals.emitAnswer(callId, signal.sdp.orEmpty(), to = to, from = from, negotiationId = signal.negotiationId)
+                GroupMeshSignalKind.Candidate -> signals.emitIceCandidate(
+                    callId = callId,
+                    candidate = signal.candidate.orEmpty(),
+                    sdpMLineIndex = signal.sdpMLineIndex ?: 0,
+                    sdpMid = signal.sdpMid,
+                    to = to,
+                    from = from,
+                    negotiationId = signal.negotiationId,
+                )
+            }
+        },
+    )
 
-    /** `true` between a mid-call ICE stall and its recovery; gates the reconnect signalling. */
-    private var stalled: Boolean = false
+    /** L'échelle adaptative de ma caméra et la survie vidéo, propagée au maillage (#13767, #13752). */
+    private val videoEncoding = CallVideoEncodingController(
+        ticks = statsFeed.ticks,
+        thermal = { thermalMonitor?.state?.value ?: appContext.callThermalState() },
+        apply = { budget, frozen -> engine.setCameraVideoBudget(dataProfile?.capVideo(budget) ?: budget, frozen) },
+        onSurvivalFloor = {
+            mesh.setSurvivalFloor(it)
+            videoHealth?.setAutoPaused(it)
+        },
+    )
 
-    /** 1-based count of stall cycles this call, carried on `call:reconnecting`. */
-    private var reconnectAttempt: Int = 0
+    init {
+        negotiator.router = mesh::claims
+    }
 
-    private var onMediaStalled: (() -> Unit)? = null
+    /** Ce que la scène d'un appel de groupe lit : registre, principal, vidéo de chaque membre du maillage. */
+    val groupMesh: StateFlow<GroupCallMeshUi> get() = mesh.ui
+
+    /** L'appel est prouvé réunir plus de deux personnes (le plafond de reconnexion quitte au lieu de raccrocher). */
+    val isGroupCall: Boolean get() = mesh.isGroup
+
+    /** Le principal a quitté un groupe qui continue : sa connexion n'est plus surveillée, l'appel tient par le maillage. */
+    var onPrimaryVacated: (() -> Unit)? = null
+
+    private val dataChannel = CallDataChannelController(engine)
+
+    /** Le pair a raccroché in-band (`bye`) : coupure immédiate, le `call:ended` qui suit est dédupliqué. */
+    var onRemoteBye: ((reason: String?) -> Unit)? = null
+
+    /** L'installation du pair a échoué (fabrique sans pair) : message précis, l'appel est abandonné. */
+    var onSetupFailed: ((message: String) -> Unit)? = null
+
+    /**
+     * La caméra demandée n'a pas pu démarrer (accès refusé, aucune caméra) : l'appel continue en audio seul, le
+     * pair doit l'apprendre comme une caméra coupée (iOS `continueAudioOnly`).
+     */
+    var onVideoUnavailable: ((CallVideoFallback) -> Unit)? = null
+
+    /**
+     * L'appareil est au palier critique : la vidéo ne peut plus continuer. L'hôte coupe la caméra, prévient le
+     * pair et dit pourquoi ; l'appel continue en audio (iOS `shouldDisableVideo`).
+     */
+    var onThermalCritical: (() -> Unit)? = null
+
+    /** Les entrées de sous-titres reçues du pair sur le canal de données. */
+    val peerCaptions get() = dataChannel.captions
 
     /** The EGL context every [org.webrtc.SurfaceViewRenderer] must init with. */
     val eglBaseContext get() = engine.eglBase.eglBaseContext
@@ -65,8 +148,22 @@ class WebRtcCallCoordinator @Inject constructor(
     /** The local camera preview track (video calls only), for the self PiP. */
     val localVideoTrack get() = engine.localVideoTrack
 
+    /** Avant le décroché : ma caméra pour MON aperçu, sans pair ; `true` si elle tourne (accès refusé ou aucune caméra ⇒ `false`). */
+    fun startSelfPreview(): Boolean = engine.startSelfPreview() == null
+
+    /** Ma caméra d'aperçu s'éteint avant le décroché. */
+    fun stopSelfPreview() = engine.stopSelfPreview()
+
     /** The remote video track stream, for the full-screen remote renderer. */
     val remoteVideoTracks get() = engine.remoteVideoTracks
+
+    /**
+     * Callee, BEFORE the join: start keeping [callId]'s signals. The gateway relays the
+     * caller's offer right after the join ACK, while the connection is still opening, and
+     * the incoming flow replays nothing — without this hold the offer was lost and the
+     * answered call stayed on « Connexion… » until the caller gave up.
+     */
+    fun holdIncomingSignals(scope: CoroutineScope, callId: String) = negotiator.hold(scope, callId)
 
     /** Caller: opens the connection now; the SDP offer is sent on [onParticipantJoined]. */
     fun startOutgoing(
@@ -78,9 +175,14 @@ class WebRtcCallCoordinator @Inject constructor(
         isVideo: Boolean,
         onMediaConnected: () -> Unit,
         onMediaStalled: () -> Unit = {},
-    ) = begin(scope, callId, iceServers, peerId, selfId, isVideo, isCaller = true, onMediaConnected, onMediaStalled)
+        speakerOn: Boolean = isVideo,
+        conversationId: String = "",
+    ) = begin(
+        scope, callId, iceServers, peerId, selfId, isVideo, isCaller = true,
+        onMediaConnected, onMediaStalled, speakerOn, conversationId,
+    )
 
-    /** Callee: opens the connection now; the remote offer arrives via [incomingSignals]. */
+    /** Callee: opens the connection now; the remote offer arrives via the incoming signals. */
     fun startIncoming(
         scope: CoroutineScope,
         callId: String,
@@ -90,7 +192,12 @@ class WebRtcCallCoordinator @Inject constructor(
         isVideo: Boolean,
         onMediaConnected: () -> Unit,
         onMediaStalled: () -> Unit = {},
-    ) = begin(scope, callId, iceServers, peerId, selfId, isVideo, isCaller = false, onMediaConnected, onMediaStalled)
+        speakerOn: Boolean = isVideo,
+        conversationId: String = "",
+    ) = begin(
+        scope, callId, iceServers, peerId, selfId, isVideo, isCaller = false,
+        onMediaConnected, onMediaStalled, speakerOn, conversationId,
+    )
 
     private fun begin(
         scope: CoroutineScope,
@@ -102,130 +209,182 @@ class WebRtcCallCoordinator @Inject constructor(
         isCaller: Boolean,
         onMediaConnected: () -> Unit,
         onMediaStalled: () -> Unit,
+        speakerOn: Boolean,
+        conversationId: String,
     ) {
-        end()
-        this.callId = callId
-        this.peerId = peerId
-        this.selfId = selfId
-        this.connected = false
-        this.negotiationId = 0
-        this.isCaller = isCaller
-        this.stalled = false
-        this.reconnectAttempt = 0
-        this.onMediaConnected = onMediaConnected
-        this.onMediaStalled = onMediaStalled
+        val mutedBeforeTrack = userMuted
+        teardown()
+        handoff?.onCallStarted()
+        userMuted = mutedBeforeTrack
+        negotiator.begin(callId, peerId, selfId, isCaller)
+        iceMonitor.begin(callId, selfId, onMediaConnected, onMediaStalled)
         val cs = scope + SupervisorJob(scope.coroutineContext[Job])
         callScope = cs
-        routeAudioToCall()
-        engine.createConnection(iceServers, enableVideo = isVideo)
-        observe(cs)
+        // Parity iOS `CallManager` (`isSpeaker = isVideo`): a video call defaults to
+        // the loudspeaker (the phone is held away from the ear), an audio call to
+        // the earpiece — but the CALLER'S current intent wins over that default when
+        // it is already known (e.g. the user toggled the speaker button while
+        // `accept()` was still awaiting the join ACK, before this ran).
+        audio.route(speakerOn = speakerOn, isVideo = isVideo)
+        val videoUnavailable = try {
+            engine.createConnection(iceServers, enableVideo = isVideo)
+        } catch (error: WebRtcError) {
+            end()
+            onSetupFailed?.invoke(error.message ?: "WebRTC setup failed")
+            return
+        }
+        applyMicrophone()
+        if (mutedBeforeTrack) signals.emitToggleAudio(callId, enabled = false)
+        val sendsVideo = isVideo && !videoUnavailable
+        mesh.bind(cs, callId, selfId, isOutgoing = isCaller, primaryUserId = peerId, iceServers = iceServers,
+            sendsAudio = !userMuted && !interrupted, sendsVideo = sendsVideo, conversationId = conversationId)
+        dataProfile?.let {
+            it.onChanged = videoEncoding::reapply
+            it.begin(cs)
+        }
+        videoEncoding.begin(cs, wantsVideo = sendsVideo)
+        watchThermal(cs)
+        videoEncoding.reapply()
+        negotiator.observe(cs)
+        iceMonitor.observe(cs, restartIce = ::restartIceAndRenegotiate)
+        dataChannel.observe(cs) { reason ->
+            if (mesh.primaryDidLeave()) vacatePrimary() else onRemoteBye?.invoke(reason)
+        }
+        if (videoUnavailable) onVideoUnavailable?.invoke(engine.videoFallback ?: CallVideoFallback.NoCamera)
+    }
+
+    private fun watchThermal(scope: CoroutineScope) {
+        val monitor = thermalMonitor ?: return
+        monitor.start()
+        scope.launch {
+            monitor.state.collect { state ->
+                videoHealth?.setThermal(state)
+                if (state == ThermalState.CRITICAL) onThermalCritical?.invoke()
+            }
+        }
+    }
+
+    /** Raccroche in-band : le pair passe à Ended immédiatement. `false` si le canal n'est pas ouvert. */
+    fun sendHangupBye(reason: String? = null): Boolean = dataChannel.sendHangupBye(reason)
+
+    /** Rafraîchissement TURN en cours d'appel : appliqué par `setConfiguration`, sans reconnexion. */
+    fun updateIceServers(iceServers: List<SocketIceServer>): Boolean {
+        mesh.updateIceServers(iceServers)
+        return engine.updateIceServers(iceServers)
     }
 
     /** Caller only: the peer joined the room → create and send the SDP offer. */
     fun onParticipantJoined(joinerId: String? = null) {
         val cs = callScope ?: return
-        // An outgoing call carries no peerId through the route; the joiner IS the
-        // callee we must address, so adopt their id before offering — otherwise the
-        // offer's `to` is blank and the gateway rejects it ("to field is required").
-        joinerId?.takeIf { it.isNotBlank() }?.let { peerId = it }
-        cs.launch {
-            val offer = engine.createOffer()
-            engine.setLocalDescription(offer)
-            signals.emitOffer(callId, offer.description, to = peerId, from = selfId, negotiationId = negotiationId)
+        // Un membre d'un appel de groupe autre que le principal : le maillage lui offre, la connexion de l'appel
+        // ne change ni de destinataire ni d'offre.
+        val wasVacated = mesh.isPrimaryVacated
+        if (mesh.claimsArrival(joinerId)) {
+            if (!wasVacated && mesh.isPrimaryVacated) vacatePrimary()
+            return
         }
+        negotiator.onParticipantJoined(cs, joinerId)
     }
 
-    fun setMuted(muted: Boolean) = engine.setAudioEnabled(!muted)
+    /** Le nom, l'avatar et les médias d'un arrivant (`call:participant-joined`, charge complète). */
+    fun onParticipantArrival(arrival: CallParticipantArrival) = mesh.onArrivalDetails(arrival.callId, arrival.arrival)
 
-    fun setCameraEnabled(enabled: Boolean) = engine.setVideoEnabled(enabled)
-
-    fun end() {
-        callScope?.cancel()
-        callScope = null
-        engine.close()
-        onMediaConnected = null
-        onMediaStalled = null
-        connected = false
-        stalled = false
-        reconnectAttempt = 0
-        restoreAudio()
+    /** `call:participant-left` : un membre du maillage s'en va, ou le principal laisse son siège à un groupe qui continue. */
+    fun onParticipantLeft(left: CallParticipantLeftPayload) {
+        val wasVacated = mesh.isPrimaryVacated
+        mesh.onParticipantLeft(left.callId, left.userId)
+        if (!wasVacated && mesh.isPrimaryVacated) vacatePrimary()
     }
 
-    private fun observe(scope: CoroutineScope) {
-        signals.incomingSignals
-            .filter { it.callId == callId }
-            .onEach { onRemoteSignal(it) }
-            .launchIn(scope)
+    /** `true` quand la bascule vient d'un membre du maillage : les indicateurs du principal ne la lisent pas. */
+    fun routesGroupMediaToggle(toggle: CallMediaTogglePayload): Boolean =
+        mesh.onMediaToggled(toggle.callId, toggle.userId, toggle.mediaType, toggle.enabled)
 
-        engine.localIceCandidates
-            .onEach { candidate ->
-                signals.emitIceCandidate(
-                    callId = callId,
-                    candidate = candidate.sdp,
-                    sdpMLineIndex = candidate.sdpMLineIndex,
-                    sdpMid = candidate.sdpMid,
-                    to = peerId,
-                    from = selfId,
-                    negotiationId = negotiationId,
-                )
-            }
-            .launchIn(scope)
+    private fun vacatePrimary() {
+        iceMonitor.end()
+        onPrimaryVacated?.invoke()
+    }
 
-        engine.iceConnectionState
-            .onEach(::onIceState)
-            .launchIn(scope)
+    fun setMuted(muted: Boolean) {
+        userMuted = muted
+        applyMicrophone()
+    }
+
+    /** Le micro porte la voix sauf si l'utilisateur l'a coupé ou si une interruption (GSM, alarme) tient le focus. */
+    private fun applyMicrophone() {
+        val sends = !userMuted && !interrupted
+        engine.setAudioEnabled(sends)
+        mesh.setSendsAudio(sends)
+    }
+
+    fun setCameraEnabled(enabled: Boolean) {
+        engine.setVideoEnabled(enabled)
+        mesh.setSendsVideo(enabled)
+        videoEncoding.setUserWantsVideo(enabled)
     }
 
     /**
-     * Réconciliation ICE ↔ FSM/serveur — le maillon résilience qui manquait :
-     * avant lui, un handoff réseau (WiFi→LTE) figeait le média Android pour
-     * toujours, l'appel restant « actif » côté serveur (les heartbeats de la
-     * socket survivent au média mort). Parité iOS `CallManager` :
-     *  - `DISCONNECTED` mid-call = stall transitoire (souvent auto-guéri) —
-     *    FSM Reconnecting + `call:reconnecting` (le serveur suspend son cleanup),
-     *    sans restart : s'il dégénère, `FAILED` suit et restart alors.
-     *  - `FAILED` mid-call = restart ICE immédiat + renégociation par
-     *    l'APPELANT INITIAL seul (anti-glare), negotiationId incrémenté.
-     *  - retour `CONNECTED`/`COMPLETED` après un stall = `call:reconnected`
-     *    + MediaConnected (FSM Reconnecting → Connected).
-     * L'ICE pré-connexion (checking initial) reste hors sujet : c'est la phase
-     * Connecting de la FSM, pas un stall.
+     * Audio vers vidéo en plein appel (iOS `upgradeToVideo`) : la caméra est acquise, sa piste prend l'émetteur vidéo
+     * et le négociateur émet l'offre, sans couper l'audio. `null` : fait ; sinon pourquoi l'appel reste en audio.
      */
-    private fun onIceState(state: PeerConnection.IceConnectionState) {
-        when (state) {
-            PeerConnection.IceConnectionState.CONNECTED,
-            PeerConnection.IceConnectionState.COMPLETED,
-            -> onIceUp()
-            PeerConnection.IceConnectionState.DISCONNECTED -> onIceStalled(restart = false)
-            PeerConnection.IceConnectionState.FAILED -> onIceStalled(restart = true)
-            else -> Unit
-        }
+    fun upgradeToVideo(): CallVideoFallback? {
+        val failure = engine.upgradeToVideo()
+        if (failure != null) return failure
+        mesh.setSendsVideo(true)
+        videoEncoding.setUserWantsVideo(true)
+        return null
     }
 
-    private fun onIceUp() {
-        if (!connected) {
-            connected = true
-            onMediaConnected?.invoke()
+    /** Vidéo vers audio (iOS `downgradeFromVideo`) : la caméra est libérée (voyant éteint) et le pair renégocie. */
+    fun downgradeFromVideo() {
+        engine.downgradeFromVideo()
+        mesh.setSendsVideo(false)
+        videoEncoding.setUserWantsVideo(false)
+    }
+
+    /** Le zoom de ma caméra (pincement, objectifs, retour à 1×). */
+    val cameraZoom get() = engine.cameraZoom
+
+    /** Caméra avant ⇄ arrière : local, jamais signalé au pair ; [onSwitched] dit la face active, `null` si rien n'a basculé. */
+    fun switchCamera(onSwitched: (isFront: Boolean?) -> Unit) = engine.switchCamera(onSwitched)
+
+    /** Speaker/earpiece toggle — local audio routing only, never signalled to the peer. */
+    fun setSpeakerEnabled(enabled: Boolean) = audio.setSpeaker(enabled)
+
+    /** Le niveau sonore reçu du pair de l'appel (0…1) : le maillage et l'avatar caméra coupée du duo le relèvent (G4.2). */
+    suspend fun peerAudioLevel(): Double? = engine.peerHandle?.inboundAudioLevel()
+
+    /**
+     * L'aperçu avant décroché devient audible (ou se tait) : la route s'ouvre sur le haut-parleur,
+     * et ne se rend que si l'appel lui-même n'a pas encore pris l'audio (au décroché, [begin] la reprend).
+     */
+    fun routePreviewAudio(audible: Boolean, isVideo: Boolean) {
+        if (audible) {
+            audio.route(speakerOn = true, isVideo = isVideo)
             return
         }
-        if (!stalled) return
-        stalled = false
-        signals.emitReconnected(callId, selfId)
-        onMediaConnected?.invoke()
+        if (callScope == null) audio.restore()
     }
 
-    private fun onIceStalled(restart: Boolean) {
-        if (!connected) return
-        if (!stalled) {
-            stalled = true
-            // Clampé à la borne du schéma gateway (attempt ≤ 10, Zod) : au-delà
-            // la validation rejetterait le signal en silence (fire-and-forget)
-            // et le serveur ne saurait plus que l'appel se reconnecte encore.
-            reconnectAttempt = minOf(reconnectAttempt + 1, MAX_WIRE_ATTEMPT)
-            signals.emitReconnecting(callId, selfId, attempt = reconnectAttempt)
-            onMediaStalled?.invoke()
-        }
-        if (restart) restartIceAndRenegotiate()
+    fun end() {
+        teardown()
+        negotiator.release()
+    }
+
+    private fun teardown() {
+        thermalMonitor?.stop()
+        videoHealth?.reset()
+        videoEncoding.end()
+        dataProfile?.end()
+        mesh.teardown()
+        callScope?.cancel()
+        callScope = null
+        interrupted = false
+        userMuted = false
+        engine.close()
+        iceMonitor.end()
+        audio.restore()
+        handoff?.onCallEnded()
     }
 
     /**
@@ -235,86 +394,38 @@ class WebRtcCallCoordinator @Inject constructor(
      * restart perdue en route. Inerte hors stall.
      */
     fun retryIceRestart() {
-        if (!stalled) return
+        if (!iceMonitor.stalled) return
         restartIceAndRenegotiate()
     }
 
-    private fun restartIceAndRenegotiate() {
-        engine.restartIce()
-        if (!isCaller) return
-        val cs = callScope ?: return
-        cs.launch {
-            negotiationId += 1
-            val offer = engine.createOffer()
-            engine.setLocalDescription(offer)
-            signals.emitOffer(callId, offer.description, to = peerId, from = selfId, negotiationId = negotiationId)
-        }
-    }
-
-    private suspend fun onRemoteSignal(envelope: CallSignalEnvelope) {
-        val signal = envelope.signal
-        // §3.5 (mirrors iOS `CallManager.acceptIncomingNegotiation`) — drop a signal
-        // from an older negotiation epoch before touching the engine. Checked first,
-        // exactly like iOS's ordering, so a stale offer/answer/candidate cannot even
-        // adopt its sender's `peerId` on its way to being ignored.
-        if (!acceptIncomingNegotiation(signal.negotiationId)) return
-        when (signal.type) {
-            "offer" -> {
-                val sdp = signal.sdp ?: return
-                // The offer's sender is our reply target. An incoming call carries no
-                // peerId through the ring/route (CallConfig.peerId is blank), so the
-                // answer + ICE candidates would otherwise be sent with a blank `to`
-                // and the gateway rejects the whole signal ("to field is required").
-                signal.from?.takeIf { it.isNotBlank() }?.let { peerId = it }
-                engine.setRemoteDescription(SessionDescription(SessionDescription.Type.OFFER, sdp))
-                val answer = engine.createAnswer()
-                engine.setLocalDescription(answer)
-                signals.emitAnswer(callId, answer.description, to = peerId, from = selfId, negotiationId = negotiationId)
-            }
-            "answer" -> {
-                val sdp = signal.sdp ?: return
-                engine.setRemoteDescription(SessionDescription(SessionDescription.Type.ANSWER, sdp))
-            }
-            "ice-candidate" -> {
-                val candidate = signal.candidate ?: return
-                engine.addIceCandidate(IceCandidate(signal.sdpMid, signal.sdpMLineIndex ?: 0, candidate))
-            }
-        }
-    }
-
     /**
-     * §3.5 — accept an incoming signal's generation unless it is STALE (older than
-     * the highest generation this coordinator has sent or seen). Advances the
-     * high-water mark on accept, exactly mirroring iOS's
-     * `CallManager.acceptIncomingNegotiation`/`isStaleNegotiation`. A missing
-     * generation (`null` — a legacy or malformed signal) is treated as `0`, same as
-     * iOS's `event.signal.negotiationId ?? 0` at the decode boundary: never stale,
-     * always accepted.
-     *
-     * Without this guard, `onRemoteSignal` adopted every incoming `negotiationId`
-     * (offer branch) or applied a remote answer/candidate unconditionally (answer/
-     * ice-candidate branches) regardless of arrival order — the gateway's §4.6
-     * buffered-offer replay and an overlapping ICE-restart racing a peer's in-flight
-     * answer could both deliver a signal from an OLDER negotiation after a newer one
-     * was already sent, corrupting the SDP state with no error surfaced.
+     * Des identifiants TURN frais viennent d'être posés sur un appel établi (#13773, iOS `restartIceOnLiveCall`) :
+     * `setConfiguration` ne touche pas les allocations déjà faites, qui garderaient les anciens identifiants jusqu'à
+     * leur expiration. Une relance ICE discrète re-collecte les relais ; la paire en service porte le média jusqu'à
+     * l'élection d'une nouvelle, l'appel ne passe pas par « Reconnexion… ». Inerte sans appel, et quand le principal
+     * a laissé son siège : il n'y a plus personne au bout de la connexion de l'appel (les liens du maillage ont déjà
+     * reçu le jeu, iOS `handleIceServersRefreshed`).
      */
-    private fun acceptIncomingNegotiation(generation: Int?): Boolean {
-        val incoming = generation ?: 0
-        if (incoming < negotiationId) return false
-        negotiationId = maxOf(negotiationId, incoming)
-        return true
+    fun restartIceOnFreshCredentials() {
+        if (callScope == null || mesh.isPrimaryVacated) return
+        restartIceAndRenegotiate()
     }
 
-    private fun routeAudioToCall() {
-        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-    }
+    private fun restartIceAndRenegotiate() = negotiator.restartIce(callScope)
 
-    private fun restoreAudio() {
-        audioManager.mode = AudioManager.MODE_NORMAL
-    }
+    override val peerConnected: Boolean get() = iceMonitor.isPeerConnected
 
-    private companion object {
-        /** Borne du schéma gateway `socketReconnectingSchema` (`attempt ≤ 10`). */
-        const val MAX_WIRE_ATTEMPT = 10
+    override val awaitingRemoteOffer: Boolean get() = callScope == null || negotiator.awaitingRemoteOffer
+
+    override suspend fun packetCounts(): CallPacketCounts? =
+        statsCollector.collect()?.let { CallPacketCounts(it.inboundPacketsReceived, it.outboundPacketsSent) }
+
+    override fun beginReconnectCycle() = iceMonitor.beginExternalCycle()
+
+    override fun catchUpConnected() = iceMonitor.catchUpConnected()
+
+    override fun restartIceNow() {
+        if (callScope == null || mesh.isPrimaryVacated) return
+        restartIceAndRenegotiate()
     }
 }

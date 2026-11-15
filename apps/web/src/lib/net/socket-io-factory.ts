@@ -1,0 +1,87 @@
+import { io } from 'socket.io-client';
+
+import type { SocketAuth, SocketClient, SocketFactory } from './socket';
+
+/**
+ * LA FABRIQUE RÉELLE (#5793) — le SEUL fichier du dépôt qui importe
+ * `socket.io-client`. Statique, mais atteint UNIQUEMENT par `api/realtime.ts`
+ * (chargé en `import()` après la première peinture, `main.tsx`) : c'est ce
+ * qui tient les ~13 Ko gzip de la bibliothèque hors du socle (§ 7 de la
+ * spécification #5793 ; `vite.config.ts` § `manualChunks` la nomme `socketio`
+ * pour que le gate de poids désigne un coupable si elle grossit).
+ *
+ * Miroir `MessageSocketManager.swift` (§ 1.1 de la spécification) :
+ *  - poignée de main par `auth`, jamais un en-tête (`net/socket.ts`) ;
+ *  - reconnexion INFINIE, 1 s → 16 s, gigue ±20 % (le comportement PAR DÉFAUT
+ *    de `socket.io-client` applique la gigue AVANT le plafond, exactement ce
+ *    que le doc-comment iOS exige) ;
+ *  - AUCUNE option `transports` : l'ordre par défaut (polling puis upgrade
+ *    WebSocket) reproduit déjà la forme iOS (poll → upgrade, jamais
+ *    `forceWebsockets`) ;
+ *  - `autoConnect: false` — c'est `createRealtimeConnection` (`api/socket.ts`)
+ *    qui décide QUAND se connecter, jamais cette fabrique à sa construction.
+ *
+ * `base === ''` (DEV, proxy Vite) passe `undefined` à `io()` : même origine
+ * que le document, comme `api/client.ts` le fait déjà pour `fetch`.
+ */
+/**
+ * LA POIGNÉE DE MAIN (#9611) — le crédential, et ce que le client déclare de
+ * lui-même sous `client` (`CLIENT_SESSION_AUTH_KEY`, que le témoin relit par
+ * le lecteur de la passerelle) : la liste CORS de Socket.IO est fermée, la
+ * socket ne peut pas porter les en-têtes `X-Meeshy-*`.
+ */
+export function handshakeAuth(
+  auth: SocketAuth,
+  declared: Readonly<Record<string, string>>,
+): { readonly token?: string; readonly sessionToken: string; readonly client?: Readonly<Record<string, string>> } {
+  const base = auth.token === undefined ? { sessionToken: auth.sessionToken } : { token: auth.token, sessionToken: auth.sessionToken };
+  return Object.keys(declared).length === 0 ? base : { ...base, client: declared };
+}
+
+export const createSocketIOClient: SocketFactory = ({ base, auth }) => {
+  const socket = io(base === '' ? undefined : base, {
+    path: '/socket.io/',
+    /* Relue à CHAQUE (re)connexion, chargée à la demande (`client-session.ts`) ;
+       un chargement refusé n'empêche pas de se connecter. */
+    auth: (callback) => {
+      void import('./client-session')
+        .then(({ learnedClientAuth }) => learnedClientAuth())
+        .catch(() => ({}))
+        .then((declared) => callback(handshakeAuth(auth, declared)));
+    },
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 16000,
+    randomizationFactor: 0.2,
+    reconnectionAttempts: Number.POSITIVE_INFINITY,
+    autoConnect: false,
+  });
+
+  const client: SocketClient = {
+    get connected() {
+      return socket.connected;
+    },
+    /* `connect()` PENDANT LE BACKOFF TENTE TOUT DE SUITE (#8839) —
+       `socket.io-client` l'ignore tant qu'il attend sa prochaine tentative
+       (`if (!this.io._reconnecting) this.io.open()`) : le retour au premier
+       plan ou au réseau attendait jusqu'à 16 s. `disconnect()` annule
+       l'attente, `connect()` rouvre aussitôt — miroir `forceReconnect()` iOS. */
+    connect: () => {
+      if (socket.connected) return;
+      if (socket.io._reconnecting) socket.disconnect();
+      socket.connect();
+    },
+    disconnect: () => socket.disconnect(),
+    on: (event, handler) => {
+      socket.on(event, handler as (...args: readonly unknown[]) => void);
+    },
+    off: (event, handler) => {
+      socket.off(event, handler as (...args: readonly unknown[]) => void);
+    },
+    emit: (event, payload) => {
+      socket.emit(event, payload);
+    },
+    emitWithAck: (event, payload, timeoutMs) => socket.timeout(timeoutMs).emitWithAck(event, payload),
+  };
+  return client;
+};

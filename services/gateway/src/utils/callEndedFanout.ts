@@ -56,5 +56,15 @@ export async function resolveCallEndedRooms(
       error
     });
   }
+  try {
+    // Une personne INVITÉE dans l'appel en cours (#8433) a été sonnée sur sa
+    // room personnelle sans être membre : sa sonnerie se tait par la même porte.
+    const call = await prisma.callSession.findUnique({ where: { id: callId }, select: { invitedUserIds: true } });
+    for (const invitee of call?.invitedUserIds ?? []) {
+      if (!rooms.includes(ROOMS.user(invitee))) rooms.push(ROOMS.user(invitee));
+    }
+  } catch (error) {
+    logger.error('resolveCallEndedRooms: invitee fanout lookup failed', { callId, error });
+  }
   return rooms;
 }

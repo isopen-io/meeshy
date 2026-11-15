@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:notifications": {
+      "resDir": "feature/notifications/src/main/res",
+      "entries": [
+        {
+          "androidName": "notification_banner_someone",
+          "status": "android-only"
+        },
+        {
+          "androidName": "notification_detail_invitation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "notification_detail_shared_location",
+          "status": "android-only"
+        },
+        {
+          "androidName": "notification_game_league_result_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "notification_game_mission_window_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "notification_game_season_step_title",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

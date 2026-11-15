@@ -17,11 +17,18 @@ extension StoryCanvasUIView {
         super.didMoveToWindow()
         if window != nil {
             startEditDisplayLinkIfNeeded()
+            // Le canevas sonore d'édition qui arrive à l'écran prend la main
+            // sur le son de la scène, à la phase où elle en était (#10362).
+            if mode == .edit, playsAudioInEditMode {
+                claimEditAudio()
+                resumeEditAudioIfSilenced()
+            }
             // Ré-arme le link de lecture invalidé par `willMove(toWindow: nil)`
             // quand le canvas revient à l'écran sans repasser par `setMode`
             // (cover/sheet présenté au-dessus du viewer puis dismissé).
             if mode == .play, displayLink == nil {
-                registerAsActiveAndPreemptOthers()
+                // Un canvas en pause qui revient à l'écran ne coupe personne (#9827).
+                if !isPlaybackPaused { registerAsActiveAndPreemptOthers() }
                 startPlayback()
                 if isPlaybackPaused {
                     // Le canvas était long-press pausé au détachement : on
@@ -49,7 +56,12 @@ extension StoryCanvasUIView {
         super.traitCollectionDidChange(previousTraitCollection)
         // Stage Manager / Split View on iPad can change horizontal/vertical
         // size classes without bounds changing; force a rebuild defensively.
-        rebuildLayers()
+        // La reconstruction part à la passe de MISE EN PAGE (`layoutSubviews`),
+        // jamais ici : UIKit notifie les traits PENDANT la mise à jour SwiftUI
+        // qui insère le canvas, et `rebuildLayers` y relayait
+        // `onContentProgress` — l'hôte écrivait son `@State` en pleine mise à
+        // jour, puis plantait au passage d'un auteur à l'autre (#10803).
+        setNeedsLayout()
     }
 
     // MARK: - App lifecycle (UIScene-aware)
@@ -115,6 +127,9 @@ extension StoryCanvasUIView {
                        selector: #selector(handleStoryPlayerResume),
                        name: .storyPlayerResume,
                        object: nil)
+        playbackInterruptionCancellable = PlaybackInterruption.shared.$isActive
+            .removeDuplicates()
+            .sink { [weak self] active in self?.setPlaybackInterrupted(active) }
     }
 
     @objc func handleDidEnterBackground() {
@@ -137,7 +152,7 @@ extension StoryCanvasUIView {
         // (viewer fermé mais instance vivante, canvas sortant de cross-fade)
         // reçoit aussi cette notification — sans le guard, ses AVPlayer
         // foreground + le fond vidéo rejouaient à la réouverture de l'app
-        // alors qu'aucun viewer n'était visible (bug user 2026-06-11).
+        // alors qu'aucun viewer n'était visible.
         guard mode == .play, window != nil else { return }
         // Une story mise en pause AVANT le passage en arrière-plan doit revenir
         // en pause : sans ce gate, quitter l'app puis y revenir relançait les
@@ -172,7 +187,11 @@ extension StoryCanvasUIView {
     /// 2026-05-27 « les média semblent jouent en double ou s'entrevauche ».
     public override func willMove(toWindow newWindow: UIWindow?) {
         super.willMove(toWindow: newWindow)
+        // Un canvas qui quitte l'écran en plein geste le TERMINE : l'historique
+        // ne reste jamais suspendu à un doigt disparu (#14208).
+        if newWindow == nil { manipulatedItemId = nil }
         guard newWindow == nil else { return }
+        endTransitionRehearsal()
         unregisterFromActive()
         // RC5 — `stopPlayback()` (pas seulement la pause des médias) : le
         // CADisplayLink de lecture cible `self` et le RETIENT. Détaché de la
@@ -182,8 +201,15 @@ extension StoryCanvasUIView {
         // AVAudioEngine leakés à chaque fermeture). Ré-armé symétriquement
         // dans `didMoveToWindow` pour le cas re-attach sans `setMode`.
         stopPlayback()
+        // La capture plein cadre du verre (une texture Metal à la taille du
+        // rendu) ne sert qu'à l'écran : hors fenêtre, elle se rend, et la
+        // lecture la refait au retour — sa clé part avec elle (#9864).
+        backdropCapture.invalidate()
         forEachAVPlayer { $0.pause() }
         audioMixer.stop()
         releasePlaybackSessionIfNeeded()
+        // Rend la main APRÈS s'être tu : le canevas d'en dessous reprend le
+        // son à la phase partagée (#10362).
+        releaseEditAudio()
     }
 }

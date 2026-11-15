@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {
+          "androidName": "login_two_factor_error_invalid_code",
+          "status": "android-only"
+        },
+        {
+          "androidName": "login_two_factor_error_token_expired",
+          "status": "android-only"
+        },
+        {
+          "androidName": "login_two_factor_error_too_many_attempts",
+          "status": "android-only"
+        },
+        {
+          "androidName": "login_two_factor_description_with_backup",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

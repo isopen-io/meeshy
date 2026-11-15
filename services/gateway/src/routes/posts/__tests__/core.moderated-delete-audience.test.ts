@@ -59,6 +59,7 @@ jest.mock('../../../middleware/rate-limiter', () => ({
 }));
 
 jest.mock('../../../utils/withMutationLog', () => ({
+  ...(jest.requireActual('../../../utils/withMutationLog') as object),
   withMutationLog: jest.fn<any>().mockImplementation(({ op }: any) => op()),
 }));
 
@@ -78,7 +79,7 @@ type SocialEventsMock = {
   broadcastStatusDeleted: jest.Mock<any>;
 };
 
-async function buildApp(actorId: string): Promise<{ app: FastifyInstance; socialEvents: SocialEventsMock }> {
+async function buildApp(actorId: string, postType: 'POST' | 'STORY' | 'STATUS' = 'POST'): Promise<{ app: FastifyInstance; socialEvents: SocialEventsMock }> {
   const app = Fastify({ logger: false });
 
   const socialEvents: SocialEventsMock = {
@@ -99,7 +100,11 @@ async function buildApp(actorId: string): Promise<{ app: FastifyInstance; social
     };
   };
 
-  registerCoreRoutes(app, {} as any, requiredAuth);
+  const prisma = {
+    post: { findFirst: jest.fn<any>().mockResolvedValue({ authorId: AUTHOR_ID, type: postType }) },
+    user: { findUnique: jest.fn<any>().mockResolvedValue({ role: 'USER' }) },
+  };
+  registerCoreRoutes(app, prisma as any, requiredAuth);
   await app.ready();
   return { app, socialEvents };
 }
@@ -116,9 +121,9 @@ describe('DELETE /posts/:postId — audience du retrait modéré', () => {
 
   it("diffuse le retrait d'un POST depuis le graphe de l'AUTEUR quand un modérateur le supprime", async () => {
     mockDeletePost.mockResolvedValue(deletedPost('POST'));
-    const { app, socialEvents } = await buildApp(MODERATOR_ID);
+    const { app, socialEvents } = await buildApp(MODERATOR_ID, 'POST');
 
-    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}` });
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}`, payload: { reason: 'Contenu contraire aux règles' } });
 
     expect(res.statusCode).toBe(200);
     expect(socialEvents.broadcastPostDeleted).toHaveBeenCalledWith(POST_ID, AUTHOR_ID);
@@ -127,9 +132,9 @@ describe('DELETE /posts/:postId — audience du retrait modéré', () => {
 
   it("diffuse le retrait d'une STORY depuis le graphe de l'AUTEUR quand un modérateur la supprime", async () => {
     mockDeletePost.mockResolvedValue(deletedPost('STORY'));
-    const { app, socialEvents } = await buildApp(MODERATOR_ID);
+    const { app, socialEvents } = await buildApp(MODERATOR_ID, 'STORY');
 
-    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}` });
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}`, payload: { reason: 'Contenu contraire aux règles' } });
 
     expect(res.statusCode).toBe(200);
     expect(socialEvents.broadcastStoryDeleted).toHaveBeenCalledWith(POST_ID, AUTHOR_ID);
@@ -138,9 +143,9 @@ describe('DELETE /posts/:postId — audience du retrait modéré', () => {
 
   it("diffuse le retrait d'un STATUS depuis le graphe de l'AUTEUR quand un modérateur le supprime", async () => {
     mockDeletePost.mockResolvedValue(deletedPost('STATUS'));
-    const { app, socialEvents } = await buildApp(MODERATOR_ID);
+    const { app, socialEvents } = await buildApp(MODERATOR_ID, 'STATUS');
 
-    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}` });
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}`, payload: { reason: 'Contenu contraire aux règles' } });
 
     expect(res.statusCode).toBe(200);
     expect(socialEvents.broadcastStatusDeleted).toHaveBeenCalledWith(POST_ID, AUTHOR_ID, 'FRIENDS', []);

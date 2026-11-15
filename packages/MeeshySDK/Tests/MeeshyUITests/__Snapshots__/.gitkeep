@@ -1,0 +1,17 @@
+Ce dossier est VERSIONNÉ pour une raison de build, pas pour son contenu.
+
+`Package.swift` déclare `exclude: ["__Snapshots__"]` sur la cible `MeeshyUITests`.
+SwiftPM VALIDE ses excludes à la résolution du graphe : un exclude qui désigne un
+chemin absent fait échouer la résolution entière —
+
+    Invalid Exclude '.../MeeshyUITests/__Snapshots__': File not found.
+
+— et donc TOUT build, y compris celui de l'app.
+
+Le dossier est créé au RUNTIME par swift-snapshot-testing (`assertSnapshot`), donc
+il existait sur les machines qui avaient déjà lancé ces tests, et nulle part
+ailleurs. Il n'était suivi par aucun commit : un `git clean -fd`, un clone frais
+ou une machine neuve rendaient le dépôt inconstructible, sans que rien ne relie
+la panne à sa cause.
+
+Ce fichier rend le dossier présent dès le clone. Ne pas le supprimer.

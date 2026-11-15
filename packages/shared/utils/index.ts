@@ -13,13 +13,27 @@ export * from './conversation-colors.js';
 export * from './attachment-validators.js';
 export * from './language-normalize.js';
 export * from './notification-strings.js';
+/**
+ * LA LOI DE LA BANNIÈRE (#4454) — une seule, trois clients (iOS, web legacy,
+ * web v3). Elle était écrite deux fois quand le troisième client est arrivé.
+ * AJOUT PUR : aucun export existant n'est modifié, aucun consommateur actuel
+ * n'a à changer.
+ */
+export * from './notification-banner.js';
 export * from './notification-read-bulk.js';
 export * from './duration-format.js';
+export * from './text-truncate.js';
 export * from './call-transcript.js';
 export * from './relative-time.js';
 export * from './time-remaining.js';
 export * from './calendar-date.js';
+export * from './age.js';
 export * from './presence-visibility.js';
+export * from './call-permission.js';
+export * from './message-content-kind.js';
+export * from './message-action-policy.js';
+export * from './quotable-notice.js';
+export * from './conversation-action-policy.js';
 export * from './forward-source-visibility.js';
 export * from './participant-helpers.js';
 export * from './member-visibility.js';
@@ -29,7 +43,12 @@ export * from './reel-composition.js';
 export * from './composer-contract.js';
 export * from './anonymous-username.js';
 export * from './join-notice.js';
+export * from './arrivals-notice.js';
+export * from './conversation-notice.js';
 export * from './conversation-join-error.js';
+export * from './last-message-protection.js';
+export * from './ephemeral-countdown.js';
+export * from './ephemeral-burn.js';
 export { getSenderUserId, isAnonymousSender } from './sender-identity.js';
 export {
   type AttachmentMessageType,
@@ -37,8 +56,15 @@ export {
   messageTypeForClientAttachments,
   deriveMessageTypeForAttachments,
 } from './attachment-message-type.js';
+export { canonicalMediaMimeType } from './media-mime-type.js';
 export {
   generateClientMessageId,
   isValidClientMessageId,
   CLIENT_MESSAGE_ID_REGEX,
 } from './client-message-id.js';
+export * from './message-protection.js';
+export * from './content-exit-law.js';
+export * from './capture-notice.js';
+export * from './conversation-preview-strings.js';
+export * from './conversation-preview.js';
+export * from './conversation-list-rank.js';

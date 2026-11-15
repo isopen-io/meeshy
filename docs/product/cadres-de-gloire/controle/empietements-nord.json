@@ -1,0 +1,257 @@
+[
+ {
+  "file": "nord-ambassadeur-1",
+  "overlap": 4,
+  "face": 0,
+  "depth": 2,
+  "bbox": [
+   389,
+   662,
+   392,
+   666
+  ],
+  "windowPx": 127831,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "nord-ambassadeur-2",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 160154,
+  "layout": "perches",
+  "verdict": "ok"
+ },
+ {
+  "file": "nord-ambassadeur-3",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 121232,
+  "layout": "perches",
+  "verdict": "ok"
+ },
+ {
+  "file": "nord-ambassadeur-4",
+  "overlap": 35,
+  "face": 0,
+  "depth": 3,
+  "bbox": [
+   126,
+   316,
+   451,
+   481
+  ],
+  "windowPx": 150524,
+  "layout": "cotes",
+  "verdict": "ok"
+ },
+ {
+  "file": "nord-ambassadeur-5",
+  "overlap": 86,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   126,
+   703,
+   471,
+   725
+  ],
+  "windowPx": 180416,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "nord-legende-1",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 105661,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "nord-legende-2",
+  "overlap": 125,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   83,
+   688,
+   456,
+   701
+  ],
+  "windowPx": 154340,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "nord-legende-3",
+  "overlap": 65,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   103,
+   660,
+   437,
+   721
+  ],
+  "windowPx": 142878,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "nord-legende-4",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 128650,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "nord-legende-5",
+  "overlap": 67,
+  "face": 0,
+  "depth": 5,
+  "bbox": [
+   102,
+   715,
+   441,
+   723
+  ],
+  "windowPx": 142142,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "nord-mythe-a",
+  "overlap": 63,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   99,
+   694,
+   446,
+   713
+  ],
+  "windowPx": 142425,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "nord-mythe-b",
+  "overlap": 451,
+  "face": 0,
+  "depth": 14,
+  "bbox": [
+   329,
+   635,
+   405,
+   700
+  ],
+  "windowPx": 116715,
+  "layout": "selfie",
+  "verdict": "ok"
+ },
+ {
+  "file": "nord-mythe-c",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 128385,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "nord-oracle-a",
+  "overlap": 6440,
+  "face": 0,
+  "depth": 81,
+  "bbox": [
+   350,
+   623,
+   453,
+   727
+  ],
+  "windowPx": 147634,
+  "layout": "selfie",
+  "verdict": "ok"
+ },
+ {
+  "file": "nord-oracle-b",
+  "overlap": 64,
+  "face": 0,
+  "depth": 3,
+  "bbox": [
+   134,
+   723,
+   412,
+   725
+  ],
+  "windowPx": 153626,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "nord-oracle-c",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 123342,
+  "layout": "perches",
+  "verdict": "ok"
+ },
+ {
+  "file": "nord-orateur-a",
+  "overlap": 50,
+  "face": 0,
+  "depth": 3,
+  "bbox": [
+   145,
+   725,
+   399,
+   727
+  ],
+  "windowPx": 152821,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "nord-orateur-b",
+  "overlap": 70,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   109,
+   641,
+   429,
+   665
+  ],
+  "windowPx": 141649,
+  "layout": "cotes",
+  "verdict": "ok"
+ },
+ {
+  "file": "nord-orateur-c",
+  "overlap": 99,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   78,
+   697,
+   455,
+   725
+  ],
+  "windowPx": 169632,
+  "layout": "pied",
+  "verdict": "ok"
+ }
+]

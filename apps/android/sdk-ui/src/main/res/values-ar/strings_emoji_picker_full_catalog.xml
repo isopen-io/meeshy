@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="emoji_search">ابحث عن رمز تعبيري</string>
+    <string name="emoji_quick_reactions">تفاعلات سريعة</string>
+    <string name="emoji_recent">المستخدمة مؤخرًا</string>
+    <string name="emoji_search_no_results">لم يتم العثور على رمز تعبيري</string>
+</resources>

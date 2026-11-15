@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "story.drawEdit.tool.tool",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.drawEdit.tool.color",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.drawEdit.tool.thickness",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.drawEdit.tool.smoothing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.drawEdit.undo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.drawEdit.redo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.drawEdit.unavailable",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.drawEdit.finish",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.drawEdit.finish.hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.drawEdit.smoothing.raw",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.drawEdit.smoothing.curve",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.drawEdit.smoothing.line",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.drawEdit.strokeTool.pen",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.drawEdit.strokeTool.marker",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.drawEdit.strokeTool.eraser",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.drawEdit.strokeList.count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.drawEdit.strokeList.style",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.drawEdit.strokeList.delete",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

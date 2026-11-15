@@ -31,7 +31,7 @@ import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logError: jest.fn(), logWarn: jest.fn() }));
 
 jest.mock('../../../services/message-translation/MessageTranslationService', () => ({
   MessageTranslationService: jest.fn().mockImplementation(() => ({})),
@@ -44,6 +44,7 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { translationRoutes } from '../../../routes/translation';
+import { makePrisma, makeStore, messageRow, participantRow } from './me/starred-messages-harness';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -51,9 +52,9 @@ const MSG_ID = '507f1f77bcf86cd799439011';
 const CONV_ID = '507f1f77bcf86cd799439033';
 
 // Le message appartient à une conversation entre Alice et Bob UNIQUEMENT.
-const ALICE = 'alice-participant-id';
-const BOB = 'bob-participant-id';
-const INTRUDER = 'intruder-not-a-participant';
+const ALICE = '68b0000000000000000000a5';
+const BOB = '68b0000000000000000000b5';
+const INTRUDER = '68b0000000000000000000ee';
 
 const SECRET_MESSAGE_CONTENT = 'Rendez-vous secret à 18h, ne le répète à personne';
 
@@ -66,15 +67,30 @@ const mockTranslationResult = {
   modelType: 'basic',
 };
 
-function makeMessage() {
-  return {
-    id: MSG_ID,
-    content: SECRET_MESSAGE_CONTENT,
-    originalLanguage: 'fr',
-    encryptionMode: null,
-    conversationId: CONV_ID,
-    conversation: { participants: [{ userId: ALICE }, { userId: BOB }] },
-  };
+/**
+ * #16557 — une VRAIE base en mémoire (celle du favori, qui évalue les `where`) :
+ * la garde est la loi de lecture partagée, et elle se juge sur la ligne de
+ * participation, plus sur un tableau `participants` que la route ne lit plus.
+ */
+function database() {
+  return makePrisma(
+    makeStore({
+      messages: [
+        messageRow({
+          id: MSG_ID,
+          conversationId: CONV_ID,
+          content: SECRET_MESSAGE_CONTENT,
+          originalLanguage: 'fr',
+          encryptionMode: null,
+          conversation: { encryptionMode: null },
+        }),
+      ],
+      participants: [
+        participantRow({ id: '68b0000000000000000000a6', conversationId: CONV_ID, userId: ALICE }),
+        participantRow({ id: '68b0000000000000000000b6', conversationId: CONV_ID, userId: BOB }),
+      ],
+    }),
+  );
 }
 
 /**
@@ -97,12 +113,10 @@ async function buildApp(auth: false | string): Promise<FastifyInstance> {
       return reply.status(401).send({ error: 'Authentication required', code: 'AUTH_REQUIRED' });
     }
     (req as unknown as { user?: { userId: string } }).user = { userId: auth };
+    (req as unknown as { authContext?: object }).authContext = { type: 'user', isAuthenticated: true, isAnonymous: false, userId: auth };
   });
 
-  app.decorate('prisma', {
-    message: { findUnique: jest.fn<any>().mockResolvedValue(makeMessage()) },
-    participant: { findFirst: jest.fn<any>().mockResolvedValue(null) },
-  });
+  app.decorate('prisma', database() as never);
 
   app.decorate('translationService', {
     handleNewMessage: jest.fn<any>().mockResolvedValue({ messageId: MSG_ID }),
@@ -134,7 +148,7 @@ describe("POST /translate-blocking — SECURITY: la vérification d'appartenance
     await app.close();
   });
 
-  it("refuse avec 403 un appelant AUTHENTIFIÉ qui n'est pas participant de la conversation du message", async () => {
+  it("refuse un appelant AUTHENTIFIÉ qui n'est pas participant de la conversation du message, par le même 404 qu'un message inconnu (#16557)", async () => {
     const app = await buildApp(INTRUDER);
 
     const res = await app.inject({
@@ -143,7 +157,7 @@ describe("POST /translate-blocking — SECURITY: la vérification d'appartenance
       payload: { message_id: MSG_ID, target_language: 'en' },
     });
 
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
     expect(res.body).not.toContain('Secret meeting');
 
     await app.close();

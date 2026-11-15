@@ -1,0 +1,371 @@
+import { beforeAll, describe, expect, test } from 'bun:test';
+
+import type { Message } from '@/lib/api/types';
+
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+
+import { badgesOf, editedByModeratorOf, editedOf, forwardAttributionOf, forwardLabelOf, isSystemMessage, systemRowOf, systemRowText, takesMessageGestures } from './message-badges';
+
+/* Les trois libellés de transfert viennent du catalogue (#7337) ; `translate()`
+   LÈVE sur un catalogue non chargé, par contrat (`i18n-catalog.ts`). */
+beforeAll(async () => {
+  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('en')]);
+});
+
+const message = (partial: Partial<Message> = {}): Message =>
+  ({
+    id: 'm1',
+    conversationId: 'c-a',
+    senderId: 'u-bruno',
+    content: 'Bonjour',
+    originalLanguage: 'fr',
+    messageType: 'text',
+    messageSource: 'user',
+    isEdited: false,
+    isViewOnce: false,
+    viewOnceCount: 0,
+    isBlurred: false,
+    deliveredCount: 0,
+    readCount: 0,
+    reactionCount: 0,
+    isEncrypted: false,
+    translations: [],
+    createdAt: new Date('2026-09-10T09:00:00.000Z'),
+    ...partial,
+  }) as Message;
+
+describe('badgesOf — l’ordre iOS et rien d’autre', () => {
+  test('épinglé + transféré (groupe public) + modifié, dans cet ordre', () => {
+    const badges = badgesOf(
+      message({
+        pinnedAt: new Date('2026-09-10T09:30:00.000Z'),
+        forwardedFromId: 'm-far',
+        forwardedFromConversation: { id: 'c-salon', title: 'Salon', type: 'public' },
+        isEdited: true,
+      }));
+
+    expect(badges).toEqual([
+      { kind: 'pinned' },
+      { kind: 'forwarded', attribution: { kind: 'group', name: 'Salon' } },
+      { kind: 'edited', byModerator: false },
+    ]);
+  });
+
+  /**
+   * #11375 — un modérateur de plateforme modifie le message d'un autre À VISAGE
+   * DÉCOUVERT : la passerelle sert `editedById`, et « modifié » devient
+   * « modifié par un modérateur ». L'auteur qui réécrit efface la mention.
+   */
+  test('modifié par un modérateur : le badge le dit, `editedByModeratorOf` le lit', () => {
+    const badges = badgesOf(message({ isEdited: true, editedById: 'u-mod', editedByRole: 'MODERATOR' }));
+
+    expect(badges).toEqual([{ kind: 'edited', byModerator: true }]);
+    expect(editedOf(badges)).toBe(true);
+    expect(editedByModeratorOf(badges)).toBe(true);
+  });
+
+  test('modifié par son auteur : aucune mention de modérateur', () => {
+    const badges = badgesOf(message({ isEdited: true }));
+
+    expect(editedOf(badges)).toBe(true);
+    expect(editedByModeratorOf(badges)).toBe(false);
+  });
+
+  test('un message nu ne porte aucun badge', () => {
+    expect(badgesOf(message())).toEqual([]);
+  });
+
+  test('l’ORDRE tient sans l’éphémère, qui a quitté cette loi (#7454)', () => {
+    const badges = badgesOf(
+      message({
+        pinnedAt: new Date('2026-09-10T09:30:00.000Z'),
+        forwardedFromId: 'm-far',
+        forwardedFromConversation: { id: 'c-salon', title: 'Salon', type: 'public' },
+        expiresAt: new Date('2026-09-10T11:00:00.000Z'),
+        isEdited: true,
+      }));
+
+    expect(badges.map((b) => b.kind)).toEqual(['pinned', 'forwarded', 'edited']);
+  });
+
+  /**
+   * `expiresAt` NE DIT PLUS qu'un message décompte (#7454) : sur `message:new`
+   * il est absent pour un éphémère, et l'échéance qui vaut se compose depuis la
+   * RÉCEPTION locale (`resolveEphemeralDeadline`). Cette loi ne doit donc plus
+   * en produire aucun badge — sinon la présence du badge et le calcul du
+   * décompte reposeraient sur deux conditions différentes.
+   */
+  test('aucun `expiresAt`, futur ou échu, ne pose de badge ici', () => {
+    for (const expiresAt of [new Date('2026-09-10T11:00:00.000Z'), new Date('2026-09-10T09:00:00.000Z')]) {
+      expect(badgesOf(message({ expiresAt })).map((b) => b.kind)).toEqual([]);
+    }
+  });
+});
+
+describe('forwardAttributionOf — la liste blanche iOS', () => {
+  test('forwardedFromId sans conversation ⇒ anonymous', () => {
+    expect(forwardAttributionOf(message({ forwardedFromId: 'm-far' }))).toEqual({ kind: 'anonymous' });
+  });
+
+  test('{type:"public", title:"Salon"} ⇒ group("Salon")', () => {
+    expect(
+      forwardAttributionOf(
+        message({ forwardedFromId: 'm-far', forwardedFromConversation: { id: 'c1', title: 'Salon', type: 'public' } }),
+      ),
+    ).toEqual({ kind: 'group', name: 'Salon' });
+  });
+
+  test('{type:"global"|"broadcast"|"channel"|"community"} ⇒ group', () => {
+    for (const type of ['global', 'broadcast', 'channel', 'community'] as const) {
+      expect(
+        forwardAttributionOf(
+          message({ forwardedFromId: 'm-far', forwardedFromConversation: { id: 'c1', title: 'Diffusion', type } }),
+        ),
+      ).toEqual({ kind: 'group', name: 'Diffusion' });
+    }
+  });
+
+  test('{type:"group", title:"Privé"} ⇒ anonymous — sous le seuil (ForwardBadgePolicy.swift:56-60)', () => {
+    expect(
+      forwardAttributionOf(
+        message({ forwardedFromId: 'm-far', forwardedFromConversation: { id: 'c1', title: 'Privé', type: 'group' } }),
+      ),
+    ).toEqual({ kind: 'anonymous' });
+  });
+
+  test('{type:null} ⇒ anonymous', () => {
+    expect(
+      forwardAttributionOf(
+        message({ forwardedFromId: 'm-far', forwardedFromConversation: { id: 'c1', title: 'X', type: null } }),
+      ),
+    ).toEqual({ kind: 'anonymous' });
+  });
+
+  test('{type:"public", title:"  "} ⇒ anonymous (titre blanc, aucun repli)', () => {
+    expect(
+      forwardAttributionOf(
+        message({ forwardedFromId: 'm-far', forwardedFromConversation: { id: 'c1', title: '  ', type: 'public' } }),
+      ),
+    ).toEqual({ kind: 'anonymous' });
+  });
+
+  test('{type:"public", title:null, identifier:"salon-public"} ⇒ group("salon-public") — repli identifier', () => {
+    expect(
+      forwardAttributionOf(
+        message({
+          forwardedFromId: 'm-far',
+          forwardedFromConversation: { id: 'c1', title: null, identifier: 'salon-public', type: 'public' },
+        }),
+      ),
+    ).toEqual({ kind: 'group', name: 'salon-public' });
+  });
+
+  test('{type:"direct"} ⇒ anonymous — la personne n’est pas servie au type', () => {
+    expect(
+      forwardAttributionOf(
+        message({ forwardedFromId: 'm-far', forwardedFromConversation: { id: 'c1', title: 'Bruno', type: 'direct' } }),
+      ),
+    ).toEqual({ kind: 'anonymous' });
+  });
+
+  test('aucun champ de transfert ⇒ null', () => {
+    expect(forwardAttributionOf(message())).toBeNull();
+  });
+});
+
+describe('forwardLabelOf', () => {
+  test('anonymous ⇒ « Transféré »', () => {
+    expect(forwardLabelOf({ kind: 'anonymous' }, 'fr')).toBe('Transféré');
+  });
+  test('group("Salon") ⇒ « Transféré depuis Salon »', () => {
+    expect(forwardLabelOf({ kind: 'group', name: 'Salon' }, 'fr')).toBe('Transféré depuis Salon');
+  });
+  test('person("Bruno") ⇒ « Transféré de Bruno »', () => {
+    expect(forwardLabelOf({ kind: 'person', name: 'Bruno' }, 'fr')).toBe('Transféré de Bruno');
+  });
+
+  /**
+   * LE TÉMOIN QUI NE POUVAIT PAS EXISTER AVANT (#7337) — le libellé était EN
+   * DUR : `forwardLabelOf` rendait du français quelle que soit la langue du
+   * lecteur, et aucune assertion française ne pouvait le dire. Celle-ci
+   * varie la SEULE dimension qui change, et asserte un TEXTE anglais — qu'une
+   * clé absente ne peut pas produire (elle rendrait `message.forwarded`).
+   *
+   * Le NOM du fixture reste le nom : « Salon » est une donnée, pas un
+   * libellé, donc identique dans les sept catalogues.
+   */
+  test('la LANGUE change le libellé — anglais, jamais une recopie du français', () => {
+    expect(forwardLabelOf({ kind: 'anonymous' }, 'en')).toBe('Forwarded');
+    expect(forwardLabelOf({ kind: 'group', name: 'Salon' }, 'en')).toBe('Forwarded from Salon');
+  });
+});
+
+describe('isSystemMessage / systemRowOf', () => {
+  test('messageSource:"system" ⇒ vrai', () => {
+    expect(isSystemMessage(message({ messageSource: 'system' }))).toBe(true);
+  });
+
+  test('messageType:"system" seul (notice de chiffrement) ⇒ vrai', () => {
+    expect(isSystemMessage(message({ messageType: 'system', messageSource: 'user' }))).toBe(true);
+  });
+
+  test('"user"/"text" ⇒ faux', () => {
+    expect(isSystemMessage(message())).toBe(false);
+  });
+
+  test('résumé d’appel : metadata.kind="call" ⇒ {kind:"call", text: content}', () => {
+    const row = systemRowOf(
+      message({
+        messageType: 'system',
+        messageSource: 'system',
+        content: 'Appel vidéo · 04:32',
+        metadata: { kind: 'call', callId: 'call-1', initiatorId: 'u-kwame', callType: 'video', outcome: 'completed', durationSeconds: 272, bytesTotal: null, bytesEstimated: false, networkQuality: null },
+      }),
+    );
+    expect(row).toEqual({ kind: 'call', text: 'Appel vidéo · 04:32', callType: 'video' });
+  });
+
+  test('avis d’arrivée (parseJoinNotice) ⇒ {kind:"join", displayName, isAnonymous, handle}', () => {
+    const row = systemRowOf(
+      message({
+        messageType: 'system',
+        messageSource: 'system',
+        content: 'Bruno Bêta a rejoint la conversation',
+        metadata: { kind: 'member-joined', participantId: 'p-bruno', displayName: 'Bruno Bêta', isAnonymous: false, viaShareLink: false },
+      }),
+    );
+    expect(row).toEqual({ kind: 'join', displayName: 'Bruno Bêta', handle: null, isAnonymous: false });
+  });
+
+  /* #9710 — le pseudo d'un participant SANS COMPTE (`ano_…`) est un
+     identifiant technique : la pastille « sans compte » dit déjà qui il est,
+     et « joined the conversation@ano_Emma » l'exposait au fil. Décidé par
+     `isAnonymous`, jamais par le préfixe — un compte peut s'appeler `ano_bob`. */
+  test('avis d’arrivée sans compte : le nom DONNÉ prime, et le pseudo technique ne s’affiche pas', () => {
+    const row = systemRowOf(
+      message({
+        messageType: 'system',
+        messageSource: 'system',
+        content: 'repli',
+        metadata: {
+          kind: 'member-joined',
+          participantId: 'p-ano',
+          displayName: 'ano_7f3',
+          givenName: 'Camille',
+          username: 'ano_7f3',
+          isAnonymous: true,
+          viaShareLink: true,
+        },
+      }),
+    );
+    expect(row).toEqual({ kind: 'join', displayName: 'Camille', handle: null, isAnonymous: true });
+  });
+
+  test('avis d’arrivée d’un COMPTE : le pseudo descend en handle, même s’il commence par ano_', () => {
+    const row = systemRowOf(
+      message({
+        messageType: 'system',
+        messageSource: 'system',
+        content: 'repli',
+        metadata: {
+          kind: 'member-joined',
+          participantId: 'p-bob',
+          displayName: 'Bob Martin',
+          username: 'ano_bob',
+          isAnonymous: false,
+          viaShareLink: true,
+        },
+      }),
+    );
+    expect(row).toEqual({ kind: 'join', displayName: 'Bob Martin', handle: '@ano_bob', isAnonymous: false, username: 'ano_bob' });
+  });
+
+  test('système sans metadata ⇒ {kind:"notice", text: content}', () => {
+    const row = systemRowOf(message({ messageType: 'system', messageSource: 'user', content: 'Le chiffrement de bout en bout est activé' }));
+    expect(row).toEqual({ kind: 'notice', text: 'Le chiffrement de bout en bout est activé' });
+  });
+
+  test('système au content vide et sans metadata ⇒ null (EmptyView, FocalSystemRows.swift:151)', () => {
+    expect(systemRowOf(message({ messageType: 'system', messageSource: 'system', content: '' }))).toBeNull();
+  });
+
+  test('un message système est système AVANT d’être supprimé', () => {
+    const row = systemRowOf(
+      message({ messageType: 'system', messageSource: 'system', content: 'Appel manqué', deletedAt: new Date() }),
+    );
+    expect(row).not.toBeNull();
+  });
+
+  test('un message ordinaire ⇒ null', () => {
+    expect(systemRowOf(message())).toBeNull();
+  });
+});
+
+describe('systemRowText', () => {
+  test('call/notice rendent leur texte tel quel', () => {
+    expect(systemRowText({ kind: 'call', text: 'Appel vidéo · 04:32', callType: 'video' })).toBe('Appel vidéo · 04:32');
+    expect(systemRowText({ kind: 'notice', text: 'Le chiffrement est activé' })).toBe('Le chiffrement est activé');
+  });
+
+  test('join compose « {nom} a rejoint la conversation »', () => {
+    expect(systemRowText({ kind: 'join', displayName: 'Bruno Bêta', handle: null, isAnonymous: false })).toBe(
+      'Bruno Bêta a rejoint la conversation',
+    );
+  });
+});
+
+describe('les avis de vie du groupe se disent dans la langue du lecteur (#7673)', () => {
+  const notice = (metadata: Record<string, unknown>, content: string) =>
+    systemRowOf(message({ messageType: 'system', messageSource: 'system', content, metadata }));
+  const demo = { participantId: 'p-demo', displayName: 'Demo' };
+  const bob = { participantId: 'p-bob', displayName: 'Bob' };
+
+  test('un retrait nomme QUI a retiré QUI, en anglais pour un lecteur anglais', () => {
+    const row = notice({ kind: 'member-removed', actor: demo, target: bob }, 'Demo a retiré Bob');
+    expect(row === null ? null : systemRowText(row, 'en')).toBe('Demo removed Bob');
+  });
+
+  test('un départ se dit « Bob left the conversation »', () => {
+    const row = notice({ kind: 'member-left', actor: bob }, 'Bob a quitté la conversation');
+    expect(row === null ? null : systemRowText(row, 'en')).toBe('Bob left the conversation');
+  });
+
+  test('un renommage et un changement de photo se disent comme sur la liste', () => {
+    const renamed = notice({ kind: 'conversation-renamed', actor: demo }, 'Demo a modifié le nom du groupe');
+    const image = notice({ kind: 'conversation-image', actor: demo }, 'Demo a modifié la photo du groupe');
+    expect(renamed === null ? null : systemRowText(renamed, 'en')).toBe('Group name changed');
+    expect(image === null ? null : systemRowText(image, 'en')).toBe('Group photo changed');
+  });
+
+  test('un ajout par un tiers se dit « Demo added Bob », jamais « Bob joined »', () => {
+    const row = notice(
+      { kind: 'member-joined', participantId: 'p-bob', displayName: 'Bob', isAnonymous: false, viaShareLink: false, addedBy: demo },
+      'Bob a rejoint la conversation',
+    );
+    expect(row === null ? null : systemRowText(row, 'en')).toBe('Demo added Bob');
+  });
+
+  test('une arrivée d\'elle-même se dit dans la langue du lecteur', () => {
+    const row = notice(
+      { kind: 'member-joined', participantId: 'p-bob', displayName: 'Bob', isAnonymous: false, viaShareLink: true },
+      'Bob a rejoint la conversation',
+    );
+    expect(row === null ? null : systemRowText(row, 'en')).toBe('Bob joined the conversation');
+  });
+});
+
+describe('takesMessageGestures — #17441 : un avis citable prend l’appui long et le glissé', () => {
+  test('une prise de parole les prend ; un appel, une arrivée et un départ annoncé aussi', () => {
+    expect(takesMessageGestures({ messageType: 'text', messageSource: 'user' })).toBe(true);
+    for (const kind of ['call', 'call-live', 'member-joined', 'members-arrived', 'member-left']) {
+      expect(takesMessageGestures({ messageType: 'system', messageSource: 'system', metadata: { kind } })).toBe(true);
+    }
+  });
+
+  test('un avis non citable (capture, retrait, chiffrement) reste hors de la surface de gestes', () => {
+    for (const metadata of [{ kind: 'content-capture' }, { kind: 'member-removed' }]) {
+      expect(takesMessageGestures({ messageType: 'system', messageSource: 'system', metadata })).toBe(false);
+    }
+    expect(takesMessageGestures({ messageType: 'system', messageSource: 'system' })).toBe(false);
+  });
+});

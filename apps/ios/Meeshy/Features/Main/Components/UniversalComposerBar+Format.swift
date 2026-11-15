@@ -1,0 +1,102 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+// MARK: - La mise en forme de la sélection (#7849)
+
+/// Gras, italique, souligné, barré en UN geste : sélectionner, toucher.
+///
+/// La sélection d'un `TextField` n'est lisible qu'à partir d'iOS 18
+/// (`TextField(text:selection:axis:)`). Sur iOS 16–17 la barre ne paraît donc
+/// pas, et les marqueurs se tapent à la main — le RENDU, lui, est le même sur
+/// toute la plage servie. `TextSelection` n'existant pas avant iOS 18, elle est
+/// rangée dans un `Any?` (`formatSelectionStorage`) : une propriété stockée ne
+/// peut pas être marquée `@available`.
+extension UniversalComposerBar {
+
+    @available(iOS 18.0, *)
+    var formatSelection: Binding<TextSelection?> {
+        Binding(
+            get: { formatSelectionStorage as? TextSelection },
+            set: { formatSelectionStorage = $0 }
+        )
+    }
+
+    /// Le champ, avec la sélection quand le système la donne.
+    @ViewBuilder
+    var composerTextFieldBase: some View {
+        if #available(iOS 18.0, *) {
+            TextField("", text: typedText, selection: formatSelection, axis: .vertical)
+        } else {
+            TextField("", text: $text, axis: .vertical)
+        }
+    }
+
+    /// **Ce qu'on colle part toujours** (#9037) : l'objet collé devient pièce
+    /// jointe, un texte trop long un `.txt`. Seulement chez un hôte qui reçoit
+    /// les pièces (`onIngest`) — sinon le collage reste celui du système.
+    @ViewBuilder
+    var composerPasteInterceptor: some View {
+        if let onIngest {
+            ComposerPasteInterceptor(limit: pasteLimit, onIngest: onIngest)
+        }
+    }
+
+    /// La limite du mode, sinon celle d'un message (`MessageLimits`, 2000 comme `@meeshy/shared`).
+    var pasteLimit: Int { resolvedMaxLength ?? MessageLimits.maxMessageLength }
+
+    /// Ce que le champ écrit arrive avec la sélection qu'il vient de poser.
+    var typedText: Binding<String> {
+        Binding(
+            get: { text },
+            set: { typed in
+                selectionText = typed
+                text = typed
+            }
+        )
+    }
+
+    /// **Un texte écrit par programme pose le curseur à SA fin** (#8791).
+    ///
+    /// La sélection désigne des positions du texte pour lequel elle a été
+    /// posée. Une mention validée, un emoji ajouté, un brouillon rechargé
+    /// écrivent un AUTRE texte : la garder replaçait le curseur à l'ancienne
+    /// position — après `@al`, au milieu de `@alice`.
+    func caretFollowsWrite(_ written: String) {
+        guard #available(iOS 18.0, *), written != selectionText else { return }
+        selectionText = written
+        formatSelectionStorage = TextSelection(insertionPoint: written.endIndex)
+    }
+
+    /// La sélection NON VIDE, en positions de `Character` dans `text` — `nil`
+    /// si rien n'est sélectionné, avant iOS 18, ou si la sélection a été
+    /// posée sur un texte qui a changé depuis.
+    var selectedCharacterRange: (start: Int, end: Int)? {
+        guard #available(iOS 18.0, *) else { return nil }
+        guard let selection = formatSelectionStorage as? TextSelection,
+              case .selection(let range) = selection.indices,
+              !range.isEmpty,
+              range.lowerBound >= text.startIndex, range.upperBound <= text.endIndex
+        else { return nil }
+        return (
+            text.distance(from: text.startIndex, to: range.lowerBound),
+            text.distance(from: text.startIndex, to: range.upperBound)
+        )
+    }
+
+    var showsFormatBar: Bool {
+        isFocused && selectedCharacterRange != nil
+    }
+
+    /// Pose ou retire l'emphase sur la sélection ; la sélection SUIT le texte
+    /// mis en forme, pour enchaîner gras puis italique sans resélectionner.
+    func applyEmphasis(_ style: ComposerTextFormat.Style) {
+        guard #available(iOS 18.0, *), let range = selectedCharacterRange else { return }
+        let result = ComposerTextFormat.toggle(text: text, start: range.start, end: range.end, style: style)
+        text = result.text
+        selectionText = result.text
+        let lower = text.index(text.startIndex, offsetBy: result.start, limitedBy: text.endIndex) ?? text.endIndex
+        let upper = text.index(text.startIndex, offsetBy: result.end, limitedBy: text.endIndex) ?? text.endIndex
+        formatSelectionStorage = TextSelection(range: lower..<upper)
+    }
+}

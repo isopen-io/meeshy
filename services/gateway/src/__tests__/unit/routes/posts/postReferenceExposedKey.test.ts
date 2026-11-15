@@ -25,6 +25,14 @@ const mockRepublishStory = jest.fn<any>();
 const mockRepostPost = jest.fn<any>();
 const mockGetPostById = jest.fn<any>().mockResolvedValue(null);
 
+// #10315 — la porte de republication et le verdict d'audience ont leurs propres témoins
+// (`services/posts/__tests__/moderationHold.test.ts`) ; cette suite parle d'autre chose.
+jest.mock('../../../../services/posts/moderationHold', () => ({
+  ...(jest.requireActual('../../../../services/posts/moderationHold') as object),
+  mayRepostSource: async () => true,
+  audienceChangeVerdict: async () => ({ refusal: null, clearsPriorVisibility: false }),
+}));
+
 jest.mock('../../../../services/PostService', () => ({
   PostService: jest.fn().mockImplementation(() => ({
     createPost: (...args: any[]) => mockCreatePost(...args),
@@ -92,7 +100,24 @@ jest.mock('../../../../utils/sanitize.js', () => ({
   SecuritySanitizer: { sanitizeText: jest.fn((t: string) => t) },
 }));
 
-// ─── Import after mocks ───────────────────────────────────────────────────────
+// #4147 — POST /posts / from-attachment / repost tirent leur plafond de
+// création d'un compteur PARTAGÉ qui lit Redis directement, fail-closed
+// (createSharedWriteRateLimitPreHandler, routes/posts/socialRateLimit.ts) :
+// sans ce double, `getCacheStore().getNativeClient()` rend `null` en test
+// (aucun REDIS_URL) et CHAQUE écriture de ce type serait refusée avant
+// d'atteindre ce que ce fichier vérifie — détail complet dans core.test.ts,
+// premier fichier de la série à le poser. `incr` répond toujours « premier
+// appel » : ce fichier ne teste PAS le plafond (son témoin dédié vit dans
+// social-write-rate-limit.test.ts) — juste un Redis DISPONIBLE.
+jest.mock('../../../../services/CacheStore', () => ({
+  getCacheStore: () => ({
+    getNativeClient: () => ({
+      incr: async () => 1,
+      pexpire: async () => 1,
+      pttl: async () => -1,
+    }),
+  }),
+}));// ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerCoreRoutes } from '../../../../routes/posts/core';
 import { registerInteractionRoutes } from '../../../../routes/posts/interactions';
@@ -141,7 +166,7 @@ async function buildApp(): Promise<{ app: FastifyInstance; socialEvents: ReturnT
   const requiredAuth = async (req: FastifyRequest) => {
     (req as any).authContext = {
       isAuthenticated: true,
-      registeredUser: { id: USER_ID, role: 'USER', username: 'alice' },
+      registeredUser: { emailVerifiedAt: new Date(), id: USER_ID, role: 'USER', username: 'alice' },
     };
   };
 
@@ -271,14 +296,18 @@ describe('la relation `postMentions` ne quitte jamais le serveur sous son nom', 
    * client, qui linkifie n'importe quel `@handle` vers un profil inexistant.
    */
   it('aplatit les références de l\'ORIGINAL sur la route de détail', async () => {
+    // ObjectId VALIDE mais distinct de `POST_ID` — un `postId` non conforme
+    // (ex. `'repost-1'`) est désormais refusé en 400 par `postIdParamsSchema`
+    // avant d'atteindre `getPostById` (#6853).
+    const REPOST_ID = '507f1f77bcf86cd799439033';
     mockGetPostById.mockResolvedValue({
-      id: 'repost-1', type: 'POST', authorId: USER_ID, visibility: 'PUBLIC',
+      id: REPOST_ID, type: 'POST', authorId: USER_ID, visibility: 'PUBLIC',
       visibilityUserIds: [], mentions: [FLAT_MENTION],
       repostOf: { id: POST_ID, content: 'bravo @alice', postMentions: [MENTION_ROW] },
     });
     const { app } = await buildApp();
 
-    const res = await app.inject({ method: 'GET', url: '/posts/repost-1' });
+    const res = await app.inject({ method: 'GET', url: `/posts/${REPOST_ID}` });
 
     expect(res.statusCode).toBe(200);
     const nested = res.json().data.repostOf;

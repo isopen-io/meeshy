@@ -60,7 +60,7 @@ public protocol DataExportServiceProviding: AnyObject, Sendable {
     func requestExport(format: String, types: [String]) async throws -> DataExportData
 }
 
-public final class DataExportService: DataExportServiceProviding, @unchecked Sendable {
+public final class DataExportService: DataExportServiceProviding, Sendable {
     public static let shared = DataExportService()
     private let api: APIClientProviding
 
@@ -75,7 +75,7 @@ public final class DataExportService: DataExportServiceProviding, @unchecked Sen
             URLQueryItem(name: "types", value: typesStr),
         ]
         let response: APIResponse<DataExportData> = try await api.request(
-            endpoint: "/me/export",
+            MeEndpoint.export,
             queryItems: queryItems
         )
         return response.data

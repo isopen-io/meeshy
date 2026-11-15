@@ -11,10 +11,11 @@
  * d'une règle tenues par la vigilance dérivent : la première qui change casse
  * la sémantique sans qu'aucune autre ne le sache.
  *
- * Miroir des SSOT sœurs, un par package : `apps/web/utils/object-id.ts`
- * (`OBJECT_ID_REGEX` / `isValidObjectId`) et `services/gateway/src/utils/object-id.ts`.
- * Les trois portent le même nom de constante et de fonction pour rester
- * repérables d'un package à l'autre.
+ * Miroir de la SSOT sœur `services/gateway/src/utils/object-id.ts` : les deux
+ * portent le même nom de constante et de fonction pour rester repérables d'un
+ * package à l'autre. Il y en avait une troisième, `apps/web/utils/object-id.ts`,
+ * partie avec le tronc Next.js hérité (#7725) ; rien ne l'a reprise dans le
+ * nouveau tronc. Inutile de la chercher.
  *
  * Module feuille (aucun import) : consommable depuis `utils/` comme depuis
  * `types/` sans risque de cycle, à l'image de `client-message-id.ts`.

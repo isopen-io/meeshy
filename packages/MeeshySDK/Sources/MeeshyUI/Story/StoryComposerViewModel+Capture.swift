@@ -34,7 +34,7 @@ extension StoryComposerViewModel {
         }
         // `registerLoadedImage` bump `loadedImagesVersion` : sans ça le
         // `ComposerImageCacheReader` du canvas reste périmé et le bitmap frais
-        // n'est jamais stampé → canvas noir (bug 2026-07-20).
+        // n'est jamais stampé → canvas noir.
         registerLoadedImage(image, for: obj.id)
         // Pont critique entre l'UIImage en mémoire et le pipeline CALayer :
         // sans `mediaURL`, la layer n'a aucune source à charger.

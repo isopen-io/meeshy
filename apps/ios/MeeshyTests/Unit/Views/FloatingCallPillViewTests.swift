@@ -114,7 +114,7 @@ final class FloatingCallPillViewTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Views/FloatingCallPillView.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Views/FloatingCallPillView.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -129,31 +129,52 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
-    func test_pill_transition_usesConditionalOpacityWhenReduceMotion() throws {
+    private func layerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Views/
+            .deletingLastPathComponent()   // Unit/
+            .deletingLastPathComponent()   // MeeshyTests/
+            .deletingLastPathComponent()   // ios/
+            .appendingPathComponent("Meeshy/Features/Main/Views/RootLayers/CallPresentationLayer.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// #9048 — la pilule prend le mouvement PARTAGÉ des barres du haut et lui passe la
+    /// préférence ; sous « Réduire les animations », ce mouvement est un fondu sans translation.
+    func test_pill_transition_isTheSharedTopChromeMotion_fadingWhenReduceMotion() throws {
         let source = try pillSource()
         XCTAssertTrue(
-            source.contains("reduceMotion ? .opacity"),
-            "FloatingCallPillView transition must collapse to .opacity when reduceMotion " +
-            "is true — .move animations can trigger vestibular discomfort."
+            source.contains("TopChromeBarMotion.transition(isLastBar: isLastBar, reduceMotion: reduceMotion, safeAreaTop: topInset)"),
+            "FloatingCallPillView must enter and leave with the shared top-chrome motion, handing it " +
+            "the Reduce Motion preference — .move animations can trigger vestibular discomfort."
+        )
+        XCTAssertEqual(TopChromeBarMotion.exit(isLastBar: true, reduceMotion: true, safeAreaTop: 62), .fade)
+    }
+
+    /// L'arrivée et le départ de la pilule sont animés par `CallPresentationLayer`, indexés sur
+    /// sa visibilité (#9048) : posé dans la branche que la fin d'un appel retire, le ressort
+    /// n'animait rien. Sous « Réduire les animations », il est coupé.
+    func test_pill_appearance_animation_isNilWhenReduceMotion() throws {
+        XCTAssertNil(TopChromeBarMotion.animation(reduceMotion: true))
+        XCTAssertTrue(
+            try layerSource().contains(".animation(TopChromeBarMotion.animation(reduceMotion: reduceMotion), value: pillShowing)"),
+            "The pill must arrive and leave under the shared spring, switched off under Reduce Motion, " +
+            "so it appears/disappears without a spring bounce."
         )
     }
 
-    func test_pill_animation_isNilWhenReduceMotion() throws {
-        let source = try pillSource()
-        XCTAssertTrue(
-            source.contains("reduceMotion ? nil"),
-            "FloatingCallPillView spring animation must be nil when reduceMotion is true " +
-            "so the pill appears/disappears without a spring bounce."
-        )
-    }
-
+    /// P18.4 — la bannière et la bulle partagent LE déploiement (`CallPipMorph.expand`) :
+    /// c'est lui qui saute le morphisme sous « Réduire les animations ».
     func test_expandToFullScreen_respectsReduceMotion() throws {
         let source = try pillSource()
+        let fn = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func expandToFullScreen()", in: source), "expandToFullScreen not found")
+        XCTAssertTrue(fn.contains("reduceMotion: reduceMotion)"), "the pill hands its Reduce Motion preference to the shared expansion")
+        let morph = try AppSourceGuard.unit("Meeshy/Features/Call/Models/CallPipMorph.swift")
+        let expand = try XCTUnwrap(DeclarationBodyScanner.body(containing: "static func expand(", in: morph))
         XCTAssertTrue(
-            source.contains("reduceMotion ? nil : .spring(response: 0.5"),
-            "expandToFullScreen() must gate its withAnimation on reduceMotion — " +
-            "unconditional .spring when reduceMotion is enabled triggers a spring " +
-            "bounce that can cause vestibular discomfort."
+            expand.contains("guard !reduceMotion else"),
+            "The shared expansion must skip the morph when reduceMotion is enabled — " +
+            "the morph is a large movement that can cause vestibular discomfort."
         )
     }
 
@@ -162,46 +183,37 @@ final class FloatingCallPillViewTests: XCTestCase {
     // La réduction/expansion entre le plein écran et la bannière est un MORPH
     // interne (contraction/étirement vers le haut), pas l'animation système du
     // fullScreenCover : les deux bascules de displayMode passent par
-    // withTransaction(disablesAnimations) et CallView porte le trio
-    // scale/opacité/coins (pipMorphProgress).
+    // withTransaction(disablesAnimations) et CallView porte l'échelle et
+    // l'opacité (pipMorphProgress, `CallPipMorphEffect`).
 
     func test_expandToFullScreen_usesMorphNotSystemCoverAnimation() throws {
         let source = try pillSource()
         XCTAssertTrue(
-            source.contains("callManager.requestPipExpansionMorph()"),
-            "expandToFullScreen() must arm the one-shot expansion hint so " +
-            "CallView plays the grow-from-banner morph on appear."
+            source.contains("CallPipMorph.expand(callManager, from:"),
+            "expandToFullScreen() must go through the shared expansion, which arms the " +
+            "one-shot expansion hint so CallView plays the grow-from-banner morph on appear."
         )
-        guard let fnRange = source.range(of: "private func expandToFullScreen()") else {
-            XCTFail("expandToFullScreen not found"); return
-        }
-        let body = String(source[fnRange.lowerBound...].prefix(900))
+        let morph = try AppSourceGuard.unit("Meeshy/Features/Call/Models/CallPipMorph.swift")
+        let body = try XCTUnwrap(DeclarationBodyScanner.body(containing: "static func expand(", in: morph))
+        XCTAssertTrue(body.contains("manager.requestPipExpansionMorph(from: origin)"))
         XCTAssertTrue(
             body.contains("disablesAnimations = true"),
-            "expandToFullScreen() must present the fullScreenCover without the " +
-            "system slide animation — the CallView morph IS the transition."
+            "The expansion must present the call without the system animation — " +
+            "the CallView morph IS the transition."
         )
     }
 
     func test_callView_carriesPipMorphTrioAndCollapseHelper() throws {
-        let viewsDir = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views")
-        let source = try String(
-            contentsOf: viewsDir.appendingPathComponent("CallView.swift"),
-            encoding: .utf8
+        // L'unité de l'écran d'appel (#8276) : `collapseIntoPip()` vit dans
+        // `CallView+Header.swift` depuis le découpage.
+        let source = try AppSourceGuard.callViewSource()
+        XCTAssertTrue(
+            source.contains(".modifier(CallPipMorphEffect(target: pipMorphTarget, progress: $pipMorphProgress))"),
+            "CallView must scale its root content toward the reduced call during the PiP " +
+            "morph — the banner at the top, the bubble where it floats (P18.4)."
         )
         XCTAssertTrue(
-            source.contains("pipMorphProgress, anchor: .top") ||
-            source.contains("scaleEffect(1 - 0.9 * pipMorphProgress, anchor: .top)"),
-            "CallView must scale its root content toward .top during the PiP " +
-            "morph — the banner lives at the top of the viewport."
-        )
-        XCTAssertTrue(
-            source.contains("private func collapseIntoPip()"),
+            source.contains("func collapseIntoPip()"),
             "All collapse paths (chevron, swipe-down, open-conversation) must " +
             "route through collapseIntoPip() so the shrink morph plays before " +
             "the cover swap."
@@ -229,13 +241,59 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
-    func test_speakerButton_hasAccessibilityLabel() throws {
-        let source = try pillSource()
+    func test_speakerButton_mountsTheSharedOutputMenu_wiredToToggleSpeaker() throws {
+        let source = AppSourceGuard.stripComments(try pillSource())
+        guard let body = DeclarationBodyScanner.body(containing: "private var speakerButton", in: source) else {
+            return XCTFail("FloatingCallPillView must define speakerButton")
+        }
         XCTAssertTrue(
-            source.contains("call.pill.speaker.on") && source.contains("call.pill.speaker.off"),
-            "The speaker button must carry dynamic accessibility labels reflecting the " +
-            "current speaker state."
+            body.contains("CallOutputMenu(") && body.contains("callManager.toggleSpeaker()"),
+            "#8208 — la sortie de la pastille est le MÊME menu que l'écran d'appel " +
+            "(CallDeviceControls) : toucher bascule le haut-parleur, maintenir ouvre " +
+            "le sélecteur de sortie et le choix du micro."
         )
+    }
+
+    /// L1.3 — même règle, deux surfaces : la bannière réduite d'un appel vidéo
+    /// n'allume pas sa sortie quand le haut-parleur est celui d'office ; elle
+    /// demande son état à `CallOutputButtonRule`, comme la pilule de l'écran.
+    func test_speakerButton_takesItsLitStateFromTheOutputRule_withTheCallKind() throws {
+        let source = AppSourceGuard.stripComments(try pillSource())
+        let body = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var speakerButton", in: source))
+        XCTAssertEqual(body.components(separatedBy: "isOutputLit(route)").count - 1, 2, "la teinte ET le disque suivent la loi")
+        XCTAssertFalse(body.contains("callManager.isSpeaker || route.routesExternally"),
+                       "la bannière ne recompose pas l'état allumé à côté de la loi")
+        let lit = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func isOutputLit(", in: source))
+        XCTAssertTrue(lit.contains("CallOutputButtonRule.kind("))
+        XCTAssertTrue(lit.contains("isVideoCall: callManager.isVideoUIActive"))
+    }
+
+    func test_pill_neverReimplementsTheRoutePickerOrTheQualitySheet() throws {
+        let source = AppSourceGuard.stripComments(try pillSource())
+        XCTAssertFalse(source.contains("AVRoutePickerView"),
+                       "le sélecteur de sortie vit dans CallDeviceControls, jamais recopié dans la pastille")
+        XCTAssertFalse(source.contains("CallQualityDetailViewModel"),
+                       "la qualité passe par CallQualitySheet, jamais par une feuille jumelle")
+        XCTAssertFalse(source.contains("CallAudioRouteViewModel"),
+                       "la route audio est lue par CallOutputMenu, pas par un second modèle dans la pastille")
+    }
+
+    func test_pill_presentsTheSharedQualitySheet() throws {
+        let source = AppSourceGuard.stripComments(try pillSource())
+        XCTAssertTrue(source.contains(".callQualityDetailSheet(isPresented: $showQualityDetail)"),
+                      "#8208 — la pastille présente la feuille « Qualité » de l'écran d'appel")
+        XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: "callQualityDetailTrigger", in: source), 1,
+                       "un seul déclencheur, sur la ligne d'état : la durée et le glyphe signal")
+    }
+
+    func test_qualityTrigger_isOfferedOnlyOnceConnected() throws {
+        let source = AppSourceGuard.stripComments(try pillSource())
+        guard let body = DeclarationBodyScanner.body(containing: "private var statusEntry", in: source) else {
+            return XCTFail("FloatingCallPillView must define statusEntry")
+        }
+        XCTAssertTrue(body.contains("if pillStatus.isConnected"),
+                      "avant la connexion, rien à mesurer : toucher la ligne d'état revient au plein écran")
+        XCTAssertTrue(body.contains("callQualityDetailTrigger(isPresented: $showQualityDetail)"))
     }
 
     func test_hangupButton_hasAccessibilityLabel() throws {
@@ -273,37 +331,63 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
-    // 2026-08-12 — barre immersive façon WhatsApp : le fond de la bannière
-    // remonte sous la status bar jusqu'au bord haut du viewport. Sans cette
-    // extension, la zone status bar laisse voir le contenu scrollé derrière
-    // (bulles de messages au-dessus de la barre — capture user 2026-08-12).
-    func test_banner_backgroundBleedsIntoTopSafeArea_immersive() throws {
-        let source = try pillSource()
-        XCTAssertTrue(
-            source.contains(".ignoresSafeArea(.container, edges: .top)"),
-            "The banner background must extend under the status bar to the top of the " +
-            "viewport (WhatsApp-style immersive bar) — otherwise scrolled content stays " +
-            "visible in the status-bar strip above the banner."
+    // 2026-08-12 — barre immersive façon WhatsApp : la zone status bar ne doit
+    // pas laisser voir le contenu scrollé derrière (bulles de messages au-dessus
+    // de la barre — capture user 2026-08-12).
+    //
+    // 2026-09-14 (#6579) — L'EXIGENCE TIENT, SON PROPRIÉTAIRE A CHANGÉ. La
+    // bannière posait elle-même `.ignoresSafeArea(.container, edges: .top)` sur
+    // son décor ; le mini-lecteur audio ne posait rien, donc une écoute sans
+    // appel laissait la bande au fond thématique. Une peinture portée par chaque
+    // barre est présente chez l'une et absente chez l'autre : elle appartient
+    // désormais à `TopChromeBand`, monté UNE fois sur le conteneur qui les
+    // empile. Le détail de la bande est gardé par `TopChromeBandGuardTests`.
+    //
+    // 2026-09-15 — deux formes, deux sens OPPOSÉS : `.ignoresSafeArea(…)`
+    // RÉCLAME l'encart, `ignoresSafeAreaEdges: []` y RENONCE. La seconde est
+    // exigée parce que le défaut de `.background(_:)` est `.all` — sans elle,
+    // la bannière reprend la bande en silence, sans qu'une ligne ne change.
+    func test_banner_noLongerOwnsTheStatusBarBleed_theTopChromeBandDoes() throws {
+        XCTAssertFalse(
+            try pillSource().contains("ignoresSafeArea("),
+            "La bannière ne peint plus que sa propre hauteur — sinon la bande " +
+            "a deux propriétaires, donc deux comportements."
         )
-        guard let backgroundRange = source.range(of: ".background("),
-              let offsetRange = source.range(of: ".offset(x: pillDragOffset)") else {
-            XCTFail("expected pillContent to keep its .background + .offset chain")
-            return
-        }
-        let backgroundBlock = String(source[backgroundRange.lowerBound..<offsetRange.lowerBound])
         XCTAssertTrue(
-            backgroundBlock.contains(".ignoresSafeArea(.container, edges: .top)"),
-            "ignoresSafeArea must apply to the banner BACKGROUND only (decor bleed), " +
-            "never to the banner content — the controls must stay inside the safe area."
+            try pillSource().contains("ignoresSafeAreaEdges: []"),
+            "…et elle doit y renoncer EXPLICITEMENT : `.background(_:)` étend " +
+            "son fond dans l'encart par défaut (`.all`)."
+        )
+        let band = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Meeshy/Features/Main/Components/TopChromeTint.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(
+            AppSourceGuard.stripComments(band).contains(".offset(y: -topInset)"),
+            "…et c'est `TopChromeBand` qui remonte dans la bande système " +
+            "jusqu'au bord haut du viewport, pour l'appel COMME pour l'écoute."
         )
     }
 
     // 2026-08-12 — retour user (second passage, remplace le fondu demandé le
     // matin même) : la bannière est PLEINEMENT indigo. Pas de voile noir
     // (l'ancien scrim 40 % la faisait lire comme une « barre noire » sur la
-    // status bar), pas de fondu transparent en bas — un aplat indigo net dont
-    // les arrêts (CallBannerContrast.bannerTop/bannerBottom) portent seuls le
-    // contraste WCAG (CallBannerContrastTests).
+    // status bar), pas de fondu transparent en bas.
+    //
+    // 2026-09-15 (#6579) — APLAT, plus un dégradé. La bannière TOUCHE la bande
+    // du haut : leur joint est un pixel, et un dégradé DIAGONAL n'offre pas UNE
+    // couleur à ce joint mais une rampe (`#4F45E4` à gauche → `#3831A5` à
+    // droite) qu'aucun aplat ne raccorde ailleurs qu'en un point. Le producteur
+    // unique de la couleur du chrome haut est `TopChromeTint` — la bande et les
+    // DEUX barres lisent la même valeur, donc la couture est continue par
+    // construction. Mesure de pixels de part et d'autre du joint :
+    // `TopChromeBandRenderTests`. Cette garde-ci empêche seulement qu'un lot
+    // futur repose un dégradé ou un voile : elle ne prouve rien à elle seule.
     func test_banner_isFullIndigo_noScrimNoFade() throws {
         let source = try pillSource()
         guard let backgroundRange = source.range(of: ".background("),
@@ -321,21 +405,19 @@ final class FloatingCallPillViewTests: XCTestCase {
         XCTAssertFalse(
             backgroundBlock.contains("Color.black.opacity"),
             "No black scrim over the banner — the status-bar strip must read " +
-            "as plain indigo, never as a dark band (user feedback 2026-08-12). " +
-            "Contrast comes from the gradient stops, calibrated in " +
-            "CallBannerContrastTests."
+            "as plain indigo, never as a dark band (user feedback 2026-08-12)."
+        )
+        XCTAssertFalse(
+            backgroundBlock.contains("LinearGradient"),
+            "Plus de dégradé sous la bannière (#6579) : son bord HAUT porterait " +
+            "une couleur différente à chaque abscisse, et la bande du haut — un " +
+            "aplat — ne pourrait raccorder qu'en un point de l'écran."
         )
         XCTAssertTrue(
-            backgroundBlock.contains("CallBannerContrast.bannerTop") &&
-            backgroundBlock.contains("CallBannerContrast.bannerBottom"),
-            "The banner decor must use the calibrated CallBannerContrast " +
-            "stops so the WCAG tests and the shipped gradient can never drift " +
-            "apart."
-        )
-        XCTAssertTrue(
-            backgroundBlock.contains(".ignoresSafeArea(.container, edges: .top)"),
-            "The indigo decor must keep bleeding under the status bar / " +
-            "Dynamic Island — the call details sit right below the island."
+            backgroundBlock.contains("TopChromeTint.call.bandColor"),
+            "Le fond de la bannière vient du producteur UNIQUE du chrome haut. " +
+            "Une constante recopiée ici se prouverait par une égalité de " +
+            "littéraux ; lue là-bas, la continuité de la couture est structurelle."
         )
     }
 
@@ -367,8 +449,13 @@ final class FloatingCallPillViewTests: XCTestCase {
             "own `callManager` rather than letting the child default to `.shared`."
         )
         XCTAssertFalse(
-            source.contains("UserService.shared.getProfileById"),
-            "The pill must NOT hit the network for the profile directly."
+            source.contains("UserService.shared.getProfile"),
+            "The pill must NOT hit the network for the profile directly. " +
+            "Le PRÉFIXE, et non `getProfileById` : ce site a changé de nom en " +
+            "migrant vers l'adresse canonique (#4161), et une garde négative " +
+            "qui épingle un nom devenu obsolète passe au vert en cessant de " +
+            "protéger. `getProfile` couvre les trois variantes — `handle:`, " +
+            "`idOrUsername:` et `ById` — donc aussi la prochaine."
         )
     }
 
@@ -421,16 +508,16 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
-    func test_speakerButton_hasAccessibilityHint() throws {
+    func test_speakerButton_leavesItsHintToTheSharedMenu() throws {
         let source = try pillSource()
         guard let vicinity = pillMemberBody(source, "private var speakerButton") else {
             XCTFail("FloatingCallPillView must define speakerButton")
             return
         }
         XCTAssertTrue(
-            vicinity.contains(".accessibilityHint(") && vicinity.contains("call.control.speaker.hint"),
-            "The speaker button must carry an accessibility hint, sharing the call.control.speaker.hint " +
-            "key already used by CallView's speaker control so both call surfaces read identically."
+            !vicinity.contains(".accessibilityHint("),
+            "The speaker button takes its label, value and hint from CallOutputMenu — the ones " +
+            "CallView's output control speaks — so both call surfaces read identically."
         )
     }
 
@@ -489,33 +576,33 @@ final class FloatingCallPillViewTests: XCTestCase {
     func test_muteButton_appliesToggleAccessibility() throws {
         let source = try pillSource()
         // Corps équilibré, pas une fenêtre de 1 000 caractères :
-        // `callToggleAccessibility` se trouvait à 1 001 — UN caractère de
+        // `toggleStateAccessibility` se trouvait à 1 001 — UN caractère de
         // trop — et la garde virait au rouge sur du code parfaitement juste.
         guard let vicinity = DeclarationBodyScanner.body(containing: "private var muteButton", in: source) else {
             XCTFail("FloatingCallPillView must define muteButton")
             return
         }
         XCTAssertTrue(
-            vicinity.contains("callToggleAccessibility(isToggle: true, isActive: callManager.isMuted)"),
-            "The mute button must apply .callToggleAccessibility so VoiceOver exposes the " +
+            vicinity.contains("toggleStateAccessibility(isToggle: true, isActive: callManager.isMuted)"),
+            "The mute button must apply .toggleStateAccessibility so VoiceOver exposes the " +
             "same toggle trait + on/off value as the equivalent control in CallView — a plain " +
             "label swap alone loses the toggle semantics and rotor navigation support."
         )
     }
 
-    func test_speakerButton_appliesToggleAccessibility() throws {
+    func test_speakerButton_handsTheSpeakerStateToTheSharedMenu() throws {
         let source = try pillSource()
         // Corps équilibré, pas une fenêtre de 1 000 caractères :
-        // `callToggleAccessibility` se trouvait à 1 001 — UN caractère de
+        // `toggleStateAccessibility` se trouvait à 1 001 — UN caractère de
         // trop — et la garde virait au rouge sur du code parfaitement juste.
         guard let vicinity = DeclarationBodyScanner.body(containing: "private var speakerButton", in: source) else {
             XCTFail("FloatingCallPillView must define speakerButton")
             return
         }
         XCTAssertTrue(
-            vicinity.contains("callToggleAccessibility(isToggle: true, isActive: callManager.isSpeaker)"),
-            "The speaker button must apply .callToggleAccessibility so VoiceOver exposes the " +
-            "same toggle trait + on/off value as the equivalent control in CallView."
+            vicinity.contains("isSpeaker: callManager.isSpeaker"),
+            "The speaker button must hand the speaker state to CallOutputMenu, which speaks it " +
+            "as the on/off value — the same one CallView's output control speaks."
         )
     }
 
@@ -524,9 +611,11 @@ final class FloatingCallPillViewTests: XCTestCase {
     func test_statusLine_showsDurationOnlyWhenConnected() throws {
         let source = try pillSource()
         XCTAssertTrue(
-            source.contains("pillStatus.isConnected ? formattedDuration"),
-            "The pill status line must show the live duration ONLY for the .connected state " +
-            "— pre-connection states must show a textual label, never 00:00."
+            source.contains("pillStatus.isConnected ? spokenDuration"),
+            "The pill status line must announce the live duration ONLY for the .connected " +
+            "state — pre-connection states must speak a textual label, never 00:00. The " +
+            "announced form is the SPOKEN twin since 247i: a speech synthesiser reads the " +
+            "clock spelling \"02:34\" as a time of day."
         )
     }
 
@@ -539,6 +628,18 @@ final class FloatingCallPillViewTests: XCTestCase {
             "reimplementing mm:ss locally — the pill's own reimplementation drops the " +
             "hours field past 60 minutes (\"125:33\" instead of \"2:05:33\"), unlike " +
             "every other duration label in CallView which already uses the shared helper."
+        )
+    }
+
+    /// The spoken twin obeys the same delegation rule, and for the same reason:
+    /// two spellings of one duration is how the pill's own reimplementation
+    /// drifted from CallView in the first place.
+    func test_spokenDuration_delegatesToCallManager_notLocalReimplementation() throws {
+        let source = try pillSource()
+        XCTAssertTrue(
+            source.contains("callManager.spokenDuration"),
+            "FloatingCallPillView.spokenDuration must delegate to CallManager.spokenDuration " +
+            "rather than re-deriving a spoken duration locally."
         )
     }
 
@@ -576,13 +677,16 @@ final class FloatingCallPillViewTests: XCTestCase {
 @MainActor
 final class CallPresentationLayerMountTests: XCTestCase {
 
-    private func rootViewSource() throws -> String {
+    /// EXTRAIT de `RootView.swift` le 2026-09-14 (#6579) : celui-ci dépassait le
+    /// plafond dur de 1200 lignes, donc y ajouter le montage de la bande du haut
+    /// était interdit.
+    private func layerSource() throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // Views/
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Views/RootView.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Views/RootLayers/CallPresentationLayer.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -591,13 +695,13 @@ final class CallPresentationLayerMountTests: XCTestCase {
     /// et matcheraient sinon les assertions négatives (même piège que la
     /// garde RTL, cf. RightToLeftLayoutGuardTests.strippingComments).
     private func callPresentationLayerBody() throws -> String {
-        let source = AppSourceGuard.stripComments(try rootViewSource())
-        guard let start = source.range(of: "struct CallPresentationLayer: ViewModifier {"),
-              let end = source.range(of: "\nstruct ", range: start.upperBound..<source.endIndex) else {
-            XCTFail("CallPresentationLayer not found in RootView.swift")
+        let source = AppSourceGuard.stripComments(try layerSource())
+        guard let start = source.range(of: "struct CallPresentationLayer: ViewModifier {") else {
+            XCTFail("CallPresentationLayer not found in CallPresentationLayer.swift")
             return ""
         }
-        return String(source[start.lowerBound..<end.lowerBound])
+        let end = source.range(of: "\nstruct ", range: start.upperBound..<source.endIndex)
+        return String(source[start.lowerBound..<(end?.lowerBound ?? source.endIndex)])
     }
 
     func test_pill_isMountedAsFrameCompressingVStack_notSafeAreaInset() throws {
@@ -620,7 +724,7 @@ final class CallPresentationLayerMountTests: XCTestCase {
 
     func test_pill_precedesContentInCompressionStack() throws {
         let body = try callPresentationLayerBody()
-        guard let pillRange = body.range(of: "FloatingCallPillView(callManager: callManager)"),
+        guard let pillRange = body.range(of: "FloatingCallPillView(callManager: callManager"),
               let contentRange = body.range(of: "content", range: pillRange.upperBound..<body.endIndex) else {
             XCTFail("expected FloatingCallPillView mounted before content in CallPresentationLayer")
             return
@@ -644,7 +748,7 @@ final class CallParticipantVisualTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Views/CallParticipantVisual.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Views/CallParticipantVisual.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -656,9 +760,12 @@ final class CallParticipantVisualTests: XCTestCase {
             "(Instant App) instead of always showing the initial fallback."
         )
         XCTAssertFalse(
-            src.contains("UserService.shared.getProfileById"),
+            src.contains("UserService.shared.getProfile"),
             "CallParticipantVisual must NOT hit the network for the profile — CallView " +
-            "already refreshes and re-feeds the cache; this component serves cached data only."
+            "already refreshes and re-feeds the cache; this component serves cached data only. " +
+            "Le PRÉFIXE, et non `getProfileById` : voir la garde jumelle de " +
+            "`FloatingCallPillView` — épingler un nom qu'un renommage périme " +
+            "fait passer la garde au vert en lui retirant sa protection."
         )
     }
 
@@ -699,5 +806,112 @@ final class CallParticipantVisualTests: XCTestCase {
             "The avatar fallback must size itself from the smaller dimension so it never " +
             "stretches out of its circular aspect at a rectangle PiP tier."
         )
+    }
+}
+
+// Libellés d'accessibilité de la pilule d'appel, nommés comme la planche
+// `docs/product/appels-vue-finale.md` (P1.13, P2.5, P2.6, #17417).
+
+// MARK: - CallPillLabelsTests (#17417, planche appels-vue-finale P1.13 P2.5 P2.6)
+
+@MainActor
+final class CallPillLabelsTests: XCTestCase {
+
+    private static let langues = ["ar", "de", "en", "es", "fr", "it", "pt-BR"]
+
+    private static let clesDuCatalogue = [
+        "call.control.more.show",
+        "call.control.more.hide",
+        "call.control.camera.on",
+        "call.control.camera.off",
+        "call.control.output.a11y",
+        "call.minimize",
+    ]
+
+    private static func catalogue() throws -> [String: [String: Any]] {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let url = racine.appendingPathComponent("apps/ios/Meeshy/Localizable.xcstrings")
+        let racineJSON = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        return try XCTUnwrap(racineJSON["strings"] as? [String: [String: Any]])
+    }
+
+    private static func valeur(_ chaines: [String: [String: Any]], cle: String, langue: String) throws -> String {
+        let entree = try XCTUnwrap(chaines[cle], "clé absente du catalogue : \(cle)")
+        let localisations = try XCTUnwrap(entree["localizations"] as? [String: Any], "aucune localisation : \(cle)")
+        let loc = try XCTUnwrap(localisations[langue] as? [String: Any], "\(cle) sans \(langue)")
+        let unite = try XCTUnwrap(loc["stringUnit"] as? [String: Any], "\(cle) sans stringUnit \(langue)")
+        return try XCTUnwrap(unite["value"] as? String)
+    }
+
+    // Les tests d'exécution tournent dans la langue du simulateur (en en CI) :
+    // on compare au catalogue dans cette langue, la langue française est gardée
+    // par le test de catalogue ci-dessous.
+    func test_moreLabel_whenExpanded_isTheHideAction() throws {
+        let chaines = try Self.catalogue()
+        XCTAssertEqual(CallControlsCopy.moreLabel(isExpanded: true), try Self.valeur(chaines, cle: "call.control.more.hide", langue: "en"))
+    }
+
+    func test_moreLabel_whenCollapsed_isTheShowAction() throws {
+        let chaines = try Self.catalogue()
+        XCTAssertEqual(CallControlsCopy.moreLabel(isExpanded: false), try Self.valeur(chaines, cle: "call.control.more.show", langue: "en"))
+    }
+
+    func test_cameraLabel_whenEnabled_isTurnOff() throws {
+        let chaines = try Self.catalogue()
+        XCTAssertEqual(CallControlsCopy.cameraLabel(isEnabled: true), try Self.valeur(chaines, cle: "call.control.camera.off", langue: "en"))
+    }
+
+    func test_cameraLabel_whenDisabled_isTurnOn() throws {
+        let chaines = try Self.catalogue()
+        XCTAssertEqual(CallControlsCopy.cameraLabel(isEnabled: false), try Self.valeur(chaines, cle: "call.control.camera.on", langue: "en"))
+    }
+
+    // Le bouton Caméra autour de ma vignette est le même bouton que celui de la
+    // pilule (planche, loi 2 : « Gauche = mon image : Caméra… ») : même mot.
+    func test_myImageCameraLabel_isThePillCameraLabel() throws {
+        XCTAssertEqual(CallMyImageCopy.video(isEnabled: true, isPaused: false), CallControlsCopy.cameraLabel(isEnabled: true))
+        XCTAssertEqual(CallMyImageCopy.video(isEnabled: false, isPaused: false), CallControlsCopy.cameraLabel(isEnabled: false))
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let rail = try String(
+            contentsOf: racine.appendingPathComponent("Meeshy/Features/Call/Views/CallView+CameraRail.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(rail.contains("CallControlsCopy.cameraLabel(isEnabled:"), "le rail de ma caméra doit lire le libellé de la pilule")
+        XCTAssertFalse(rail.contains("\"call.control.videoOff\""), "« Désactiver la vidéo » n'est pas le mot de la planche")
+        XCTAssertFalse(rail.contains("\"call.control.videoOn\""), "« Activer la vidéo » n'est pas le mot de la planche")
+    }
+
+    func test_outputLabel_isTheAudioOutput() throws {
+        let chaines = try Self.catalogue()
+        XCTAssertEqual(CallControlsCopy.outputAudioLabel, try Self.valeur(chaines, cle: "call.control.output.a11y", langue: "en"))
+    }
+
+    func test_catalogue_francais_portLesMotsDeLaPlanche() throws {
+        let chaines = try Self.catalogue()
+        let attendu = [
+            "call.control.more.show": "Afficher les actions",
+            "call.control.more.hide": "Masquer les actions",
+            "call.control.camera.on": "Activer la caméra",
+            "call.control.camera.off": "Couper la caméra",
+            "call.control.output.a11y": "Sortie audio",
+            "call.minimize": "Réduire",
+        ]
+        for (cle, mot) in attendu {
+            XCTAssertEqual(try Self.valeur(chaines, cle: cle, langue: "fr"), mot, cle)
+        }
+    }
+
+    func test_catalogue_libellesDesCommandes_existentDansLesSeptLangues() throws {
+        let chaines = try Self.catalogue()
+        for cle in Self.clesDuCatalogue {
+            for langue in Self.langues {
+                XCTAssertFalse(try Self.valeur(chaines, cle: cle, langue: langue).isEmpty, "\(cle) vide en \(langue)")
+            }
+        }
     }
 }

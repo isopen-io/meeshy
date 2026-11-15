@@ -27,25 +27,17 @@ final class DeepLinkSurfaceRoutingGuardTests: XCTestCase {
         "conversation": "meeshy://conversation/conv1",
         "contact": "meeshy://contact/conv1",
         "quickreply": "meeshy://quickreply/conv1?text=OK",
-        "send": "meeshy://send?contactId=conv1&message=Salut"
+        "send": "meeshy://send?contactId=conv1&message=Salut",
+        // Widgets « Non lus » / « Récentes » et App Shortcut « Open Recent
+        // Conversation » : élus par `ConversationListEntry` (#7811).
+        "conversations": "meeshy://conversations/unread",
+        "call": "meeshy://call?contactId=conv1&type=video"
     ]
 
     /// Hosts émis SANS destination, et pourquoi ils le restent. Chacun demande
     /// une surface produit qui n'existe pas aujourd'hui — les brancher sur une
     /// destination approximative serait pire que l'inaction actuelle.
     private static let deliberatelyUnroutedHosts: Set<String> = [
-        // `meeshy://conversations/recent` et `…/unread` (fond des widgets
-        // Conversations récentes / Non lus, et App Shortcut « Open Recent
-        // Conversation »). « Récente » et « non lue » désignent une
-        // conversation que seul l'app-side sait élire ; aucune destination
-        // `DeepLink` ne porte cette élection aujourd'hui.
-        "conversations",
-        // `meeshy://call/mute`, `meeshy://call/end` (boutons de la Live
-        // Activity) et `meeshy://call?contactId=…&type=…` (App Shortcut
-        // « Call Contact »). Les deux premiers sont hors d'atteinte : le
-        // démarrage d'une Live Activity passe par `LiveActivityBridge`, encore
-        // un stub. Le troisième demande l'amorçage d'un appel depuis un lien.
-        "call",
         // `meeshy://translate?text=…&target=…` (App Shortcut « Translate
         // Text »). Traduire un texte ARBITRAIRE — hors de toute conversation —
         // n'a pas d'écran dans l'app.
@@ -125,14 +117,20 @@ final class DeepLinkSurfaceRoutingGuardTests: XCTestCase {
         return output
     }
 
+    /// Deux formes d'écriture : l'URL littérale (`"meeshy://conversations/unread"`)
+    /// et la fabrique des widgets (`WidgetDeepLink`, e423684dfb), qui compose
+    /// `"meeshy://\(host)/…"` et reçoit chaque host en littéral `host: "…"`.
+    /// Sans la seconde, `contact` et `quickreply` passeraient pour orphelins
+    /// alors qu'un widget les émet.
     private func emittedHosts() throws -> Set<String> {
-        let pattern = try NSRegularExpression(pattern: "meeshy://([A-Za-z]+)")
+        let patterns = try ["meeshy://([A-Za-z]+)", "url\\(host: \"([A-Za-z]+)\""]
+            .map { try NSRegularExpression(pattern: $0) }
         var hosts: Set<String> = []
 
         for file in try handwrittenSources() {
             let code = strippingComments(file.code)
             let range = NSRange(code.startIndex..., in: code)
-            for match in pattern.matches(in: code, range: range) {
+            for match in patterns.flatMap({ $0.matches(in: code, range: range) }) {
                 guard let hostRange = Range(match.range(at: 1), in: code) else { continue }
                 hosts.insert(String(code[hostRange]).lowercased())
             }
@@ -144,6 +142,15 @@ final class DeepLinkSurfaceRoutingGuardTests: XCTestCase {
 
     /// Tout host émis est classé. Un widget qui invente `meeshy://reaction/…`
     /// fait rougir ici, au lieu de livrer un bouton inerte.
+    /// Siri « Envoyer un message » : la dictée voyage dans la requête ; `&`, `=`,
+    /// `+` et `#` doivent arriver intacts.
+    func test_intentQueryValue_roundTripsReservedCharacters() throws {
+        let dictated = "Tom & Jerry = 1+1 ? #ce soir"
+        let url = try XCTUnwrap(URL(string: "meeshy://send?contactId=c1&message=\(IntentURLQuery.encode(dictated))"))
+        XCTAssertEqual(DeepLinkParser.queryValue("message", in: url), dictated)
+        XCTAssertEqual(DeepLinkParser.queryValue("contactId", in: url), "c1")
+    }
+
     func test_everyHandwrittenHost_isClassified() throws {
         let emitted = try emittedHosts()
         let classified = Set(Self.routedHosts.keys).union(Self.deliberatelyUnroutedHosts)
@@ -186,7 +193,8 @@ final class DeepLinkSurfaceRoutingGuardTests: XCTestCase {
             // simulateur pour vérifier un routage.
             let defaults = UserDefaults(suiteName: "DeepLinkSurfaceRoutingGuard.\(UUID().uuidString)")!
             let router = DeepLinkRouter(
-                drafts: DraftStore(userDefaults: defaults, userIdProvider: { "guard" })
+                drafts: DraftStore(userDefaults: defaults, userIdProvider: { "guard" }),
+                isAuthenticated: { true }
             )
             XCTAssertTrue(
                 router.handle(url: url),
@@ -222,7 +230,6 @@ final class DeepLinkSurfaceRoutingGuardTests: XCTestCase {
     func test_everyDeliberatelyUnroutedHost_stillHasNoDestination() {
         let samples = [
             "conversations": "meeshy://conversations/recent",
-            "call": "meeshy://call/end",
             "translate": "meeshy://translate?text=bonjour&target=es"
         ]
 

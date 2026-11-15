@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import AVFoundation
 import AVKit
 import Combine
@@ -15,6 +16,8 @@ internal struct _InlineOverlayControls: View {
     let accentColor: String
     let controls: MeeshyVideoPlayer.ControlSet
     let onExpand: (() -> Void)?
+    /// La pièce dont le lecture/pause déclare son cadre (`MediaPlayControlAnchorKey`).
+    let attachmentId: String
 
     /// `@GestureState` (pas `@State`) : remis à `false` automatiquement par
     /// SwiftUI si le drag est interrompu, même sans `.onEnded` — voir la
@@ -37,7 +40,13 @@ internal struct _InlineOverlayControls: View {
     /// `AVPictureInPictureController.isPictureInPictureSupported()`, donc le
     /// test ne dépend jamais de l'environnement (faux en CI/simulateur).
     nonisolated static func showsPipButton(controls: MeeshyVideoPlayer.ControlSet, isPipSupported: Bool) -> Bool {
-        controls.contains(.pip) && isPipSupported
+        MeeshyVideoPlayer.surfaceEnablesPip(style: .inline, controls: controls) && isPipSupported
+    }
+
+    /// Les sauts ±10 s suivent le jeu de contrôles, comme tous les autres
+    /// boutons de cet overlay (#8231).
+    nonisolated static func showsSkipButtons(controls: MeeshyVideoPlayer.ControlSet) -> Bool {
+        controls.contains(.skip)
     }
 
     var body: some View {
@@ -50,11 +59,11 @@ internal struct _InlineOverlayControls: View {
                 Spacer()
                 bottomBar
             }
-            .padding(.horizontal, 8)
-            .padding(.top, 6)
-            .padding(.bottom, 8)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.top, MeeshySpacing.xsPlus)
+            .padding(.bottom, MeeshySpacing.sm)
         }
-        .buttonStyle(BouncyControlButtonStyle())
+        .buttonStyle(MeeshyGlassPressStyle())
         .allowsHitTesting(true)
         // Signale le scrub en cours à l'hôte (voir MediaScrubbingPreferenceKey) :
         // le conteneur de swipe de la bulle désengage reply/forward tant que le
@@ -81,93 +90,131 @@ internal struct _InlineOverlayControls: View {
         .allowsHitTesting(false)
     }
 
-    // MARK: - Top Bar (plein écran + PiP + AirPlay + vitesse)
+    // MARK: - Top Bar (agrandir à gauche · PiP + AirPlay + vitesse + son à droite)
     //
-    // Lifting Liquid Glass 2026-08-11 (§ B) : un unique `AdaptiveGlassContainer`
-    // regroupe jusqu'à 4 boutons circulaires 28×28 (taille INCHANGÉE — c'est la
-    // taille inline réelle, pas celle du plein écran 36×36). Budget :
-    // 4 × 28 + 3 × 10 = 142pt, tient sur iPhone SE. Le PiP est MASQUÉ (pas
-    // désactivé) hors support device — cf. `showsPipButton`. Cluster centrée
-    // horizontalement via `.frame(maxWidth: .infinity)`, comme avant.
+    // **Agrandir au bord GAUCHE, le son au bord DROIT** (#9575).
+    // Le groupe centré du 2026-08-10 posait les deux
+    // contrôles les plus touchés au milieu de l'image ; chacun a maintenant son
+    // coin, et les autres (PiP, AirPlay, vitesse) restent groupés à droite,
+    // AVANT le son. La répartition est la fonction pure `topBarLayout` ; ce
+    // corps ne fait que la peindre. Boutons 28×28 INCHANGÉS (taille inline).
+    // Le PiP est MASQUÉ (pas désactivé) hors support device.
+
+    nonisolated enum TopBarItem: Hashable, Sendable {
+        case expand, pip, airplay, speed, mute
+    }
+
+    nonisolated struct TopBarLayout: Equatable, Sendable {
+        let leading: [TopBarItem]
+        let trailing: [TopBarItem]
+    }
+
+    nonisolated static func topBarLayout(controls: MeeshyVideoPlayer.ControlSet,
+                                         hasExpandHandler: Bool,
+                                         isPipSupported: Bool) -> TopBarLayout {
+        var leading: [TopBarItem] = []
+        if controls.contains(.expand), hasExpandHandler { leading.append(.expand) }
+        var trailing: [TopBarItem] = []
+        if showsPipButton(controls: controls, isPipSupported: isPipSupported) { trailing.append(.pip) }
+        if controls.contains(.airplay) { trailing.append(.airplay) }
+        if controls.contains(.speed) { trailing.append(.speed) }
+        // S2, exigence produit 2026-08-22 (« reels ET vidéos de post ») : sans
+        // ce cas, un appelant `.inline` qui demandait `.mute` n'obtenait
+        // silencieusement AUCUN bouton.
+        if controls.contains(.mute) {
+            trailing.append(.mute)
+        }
+        return TopBarLayout(leading: leading, trailing: trailing)
+    }
 
     private var topBar: some View {
-        AdaptiveGlassContainer(spacing: 10) {
-            HStack(spacing: 10) {
-                if controls.contains(.expand), let onExpand {
-                    Button {
-                        onExpand()
-                        HapticFeedback.light()
-                    } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 28, height: 28)
-                            .adaptiveGlass(in: Circle(), interactive: true)
-                    }
-                }
-                if Self.showsPipButton(controls: controls, isPipSupported: AVPictureInPictureController.isPictureInPictureSupported()) {
-                    Button {
-                        if manager.isPipActive {
-                            manager.stopPip()
-                        } else {
-                            manager.startPip()
-                        }
-                        HapticFeedback.light()
-                    } label: {
-                        Image(systemName: manager.isPipActive ? "pip.exit" : "pip.enter")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 28, height: 28)
-                            .adaptiveGlass(in: Circle(), interactive: true)
-                    }
-                    .accessibilityLabel(manager.isPipActive
-                        ? String(localized: "media.video.pip.exit", defaultValue: "Quitter le Picture in Picture", bundle: .module)
-                        : String(localized: "media.video.pip.enter", defaultValue: "Picture in Picture", bundle: .module))
-                }
-                if controls.contains(.airplay) {
-                    AirPlayRoutePicker(tintColor: .white)
-                        .frame(width: 28, height: 28)
-                        .accessibilityLabel(String(localized: "media.video.airplay", defaultValue: "AirPlay", bundle: .module))
-                }
-                if controls.contains(.mute) {
-                    // S2, exigence produit 2026-08-22 (« reels ET vidéos de post ») :
-                    // `_InlineOverlayControls` n'avait aucun cas `.mute` — le
-                    // drapeau existait dans `ControlSet` (consommé par
-                    // `VideoTransportControls`, plein écran) mais un appelant
-                    // `.inline` qui l'ajoutait à ses `controls` n'obtenait
-                    // silencieusement AUCUN bouton. Réutilise EXACTEMENT le
-                    // même toggle/icônes/clés que `VideoTransportControls
-                    // .muteButton` — un seul jeu d'icônes, aucune clé neuve.
-                    Button {
-                        manager.isMuted.toggle()
-                        HapticFeedback.light()
-                    } label: {
-                        Image(systemName: manager.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 28, height: 28)
-                            .adaptiveGlass(in: Circle(), interactive: true)
-                    }
-                    .accessibilityLabel(manager.isMuted
-                        ? String(localized: "media.video.unmute", defaultValue: "Réactiver le son", bundle: .module)
-                        : String(localized: "media.video.mute", defaultValue: "Couper le son", bundle: .module))
-                }
-                if controls.contains(.speed) {
-                    Button {
-                        manager.cycleSpeed()
-                        HapticFeedback.light()
-                    } label: {
-                        Text(manager.playbackSpeed.label)
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .adaptiveGlass(in: Capsule())
+        let layout = Self.topBarLayout(
+            controls: controls,
+            hasExpandHandler: onExpand != nil,
+            isPipSupported: AVPictureInPictureController.isPictureInPictureSupported())
+        return HStack(spacing: MeeshySpacing.smPlus) {
+            topBarCluster(layout.leading)
+            Spacer(minLength: MeeshySpacing.smPlus)
+            topBarCluster(layout.trailing)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private func topBarCluster(_ items: [TopBarItem]) -> some View {
+        if !items.isEmpty {
+            AdaptiveGlassContainer(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
+                    ForEach(items, id: \.self) { item in
+                        topBarButton(item)
                     }
                 }
             }
         }
-        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private func topBarButton(_ item: TopBarItem) -> some View {
+        switch item {
+        case .expand:
+            Button {
+                onExpand?()
+                HapticFeedback.light()
+            } label: {
+                topBarGlyph("arrow.up.left.and.arrow.down.right")
+            }
+            .accessibilityLabel(String(localized: "media.video.expand", defaultValue: "Plein écran", bundle: .module))
+        case .pip:
+            Button {
+                if manager.isPipActive {
+                    manager.stopPip()
+                } else {
+                    manager.startPip()
+                }
+                HapticFeedback.light()
+            } label: {
+                topBarGlyph(manager.isPipActive ? "pip.exit" : "pip.enter")
+            }
+            .accessibilityLabel(manager.isPipActive
+                ? String(localized: "media.video.pip.exit", defaultValue: "Quitter le Picture in Picture", bundle: .module)
+                : String(localized: "media.video.pip.enter", defaultValue: "Picture in Picture", bundle: .module))
+        case .airplay:
+            AirPlayRoutePicker(tintColor: .white)
+                .frame(width: 28, height: 28)
+                .accessibilityLabel(String(localized: "media.video.airplay", defaultValue: "AirPlay", bundle: .module))
+        case .speed:
+            Button {
+                manager.cycleSpeed()
+                HapticFeedback.light()
+            } label: {
+                Text(manager.playbackSpeed.label)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.vertical, MeeshySpacing.xs)
+                    .meeshyGlass(in: Capsule(), isInteractive: true)
+            }
+        case .mute:
+            // Réutilise EXACTEMENT le même toggle/icônes/clés que
+            // `VideoTransportControls` — un seul jeu d'icônes, aucune clé neuve.
+            Button {
+                manager.isMuted.toggle()
+                HapticFeedback.light()
+            } label: {
+                topBarGlyph(manager.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+            }
+            .accessibilityLabel(manager.isMuted
+                ? String(localized: "media.video.unmute", defaultValue: "Réactiver le son", bundle: .module)
+                : String(localized: "media.video.mute", defaultValue: "Couper le son", bundle: .module))
+        }
+    }
+
+    private func topBarGlyph(_ systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 28, height: 28)
+            .meeshyGlass(in: Circle(), isInteractive: true)
     }
 
     // MARK: - Center Controls (skip + play/pause)
@@ -183,10 +230,14 @@ internal struct _InlineOverlayControls: View {
 
     private var centerControls: some View {
         AdaptiveGlassContainer(spacing: 24) {
-            HStack(spacing: 24) {
-                skipButton(systemName: "gobackward.10", seconds: -10)
+            HStack(spacing: MeeshySpacing.xxl - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular)) {
+                if Self.showsSkipButtons(controls: controls) {
+                    skipButton(systemName: "gobackward.10", seconds: -10)
+                }
                 playPauseButton
-                skipButton(systemName: "goforward.10", seconds: 10)
+                if Self.showsSkipButtons(controls: controls) {
+                    skipButton(systemName: "goforward.10", seconds: 10)
+                }
             }
         }
     }
@@ -197,11 +248,13 @@ internal struct _InlineOverlayControls: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: systemName)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(.white)
+                .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
+                .foregroundStyle(.white)
                 .frame(width: 36, height: 36)
-                .adaptiveGlass(in: Circle(), interactive: true)
+                .meeshyGlass(in: Circle(), isInteractive: true)
+                .meeshyTapTarget()
         }
+        .accessibilityLabel(seconds < 0 ? String(localized: "media.video.seek.backward", bundle: .module) : String(localized: "media.video.seek.forward", bundle: .module))
     }
 
     private var playPauseButton: some View {
@@ -213,17 +266,19 @@ internal struct _InlineOverlayControls: View {
                 .frame(width: 54, height: 54)
                 .adaptiveGlassProminent(in: Circle(), tint: accent.opacity(0.85))
         }
+        .buttonStyle(PressableButtonStyle())
         .accessibilityLabel(manager.isPlaying
             ? String(localized: "media.video.pause", defaultValue: "Pause", bundle: .module)
             : String(localized: "media.video.play", defaultValue: "Lire la vidéo", bundle: .module))
+        .mediaPlayControlAnchor(attachmentId: attachmentId)
     }
 
     /// Cross-fade entre `play.fill` et `pause.fill`. Gestion versionnée
     /// déléguée à `adaptiveSymbolReplace` (cf. `Compatibility/AdaptiveSymbolEffects`).
     private var playPauseIcon: some View {
         Image(systemName: manager.isPlaying ? "pause.fill" : "play.fill")
-            .font(.system(size: 22, weight: .bold))
-            .foregroundColor(.white)
+            .font(.system(size: MeeshyIconSize.xxl, weight: .bold))
+            .foregroundStyle(.white)
             .offset(x: manager.isPlaying ? 0 : 2)
             .adaptiveSymbolReplace(id: manager.isPlaying)
     }
@@ -231,21 +286,21 @@ internal struct _InlineOverlayControls: View {
     // MARK: - Bottom Bar (seek + time)
 
     private var bottomBar: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             if controls.contains(.scrubber) {
                 seekBar
             }
             if controls.contains(.duration) {
                 HStack {
-                    Text(formatMediaDuration(isSeeking ? seekValue * manager.duration : manager.currentTime))
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.8))
+                    Text(MediaFormat.duration(isSeeking ? seekValue * manager.duration : manager.currentTime))
+                        .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold, design: .monospaced)
+                        .foregroundStyle(.white.opacity(0.8))
                     Spacer()
-                    Text(formatMediaDuration(manager.duration))
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.8))
+                    Text(MediaFormat.duration(manager.duration))
+                        .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold, design: .monospaced)
+                        .foregroundStyle(.white.opacity(0.8))
                 }
-                .padding(.horizontal, 2)
+                .padding(.horizontal, MeeshySpacing.xxs)
             }
         }
     }
@@ -280,11 +335,20 @@ internal struct _InlineOverlayControls: View {
                         state = true
                     }
                     .onChanged { value in
-                        seekValue = max(0, min(1, value.location.x / geo.size.width))
+                        // L'image suit le doigt : déplacement TOLÉRANT pendant
+                        // le geste (image-clé la plus proche, coalescé par
+                        // `SharedAVPlayerManager`). Même correction que la barre
+                        // du couloir — jusqu'ici seule la pastille bougeait,
+                        // au-dessus d'une image figée. Directive « gestes
+                        // progressifs et annulables ».
+                        let fraction = max(0, min(1, value.location.x / geo.size.width))
+                        seekValue = fraction
+                        manager.seek(to: fraction * manager.duration, precise: false)
                     }
                     .onEnded { value in
+                        // CONCLUT sur la frame exacte ; ne décide plus.
                         let fraction = max(0, min(1, value.location.x / geo.size.width))
-                        manager.seek(to: fraction * manager.duration)
+                        manager.seek(to: fraction * manager.duration, precise: true)
                         seekValue = 0
                     }
             )
@@ -299,6 +363,8 @@ internal struct _InlineOverlayControls: View {
 // at the bottom. Drawn ON the video. Used by `_FullscreenRenderer`.
 
 internal struct _FullscreenOverlayControls: View {
+    /// Les marges sûres de la fenêtre qui porte le lecteur, mesurées par sa racine.
+    @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets
     @ObservedObject var manager: SharedAVPlayerManager
     let accentColor: String
     let controls: MeeshyVideoPlayer.ControlSet
@@ -307,102 +373,133 @@ internal struct _FullscreenOverlayControls: View {
     let onSave: (() -> Void)?
     let onShare: (() -> Void)?
     let saveState: _FullscreenRenderer.SaveState
+    /// Le portillon de sortie posé par l'hôte (#9573) : fermé, ni partage ni enregistrement.
+    @Environment(\.contentExitGate) private var exitGate
+    /// La ligne `largeur × hauteur · poids · durée` (#9577) — `nil` ⇒ aucune.
+    var infoSegments: [MediaInfoLine.Segment] = []
+    var declaredDuration: Double = 0
+    /// Le média est déjà dans l'album Meeshy (#10370) : une coche, pas une flèche.
+    var isInAlbum = false
 
+    /// **De haut en bas : barre haute, scène, progression sur toute la largeur
+    /// de l'écran, ligne d'informations** (#9577).
+    /// Le son, AirPlay et (...) ont quitté la ligne de la barre
+    /// pour une colonne à droite ; le bouton central n'est plus ici — il vit
+    /// dans le renderer, sous sa propre règle d'effacement.
     var body: some View {
         ZStack {
-            scrimGradients
+            FullscreenScrims(topInset: SceneWindowSize.resolveInsets(sceneSafeAreaInsets).top, chromeVisible: true)
             VStack(spacing: 0) {
                 topBar
-                    .padding(.top, 8)
-                    .padding(.horizontal, 16)
-                // Transport délégué au composant partagé `VideoTransportControls`
-                // (source unique, idem galerie média) — dédup des ~240 lignes qui
-                // dupliquaient center/seek/speed/mini-toolbar. La top bar fichier
-                // (close/save/share) reste propre au fullscreen.
-                VideoTransportControls(manager: manager, accentColor: accentColor, controls: controls)
-                    .padding(.bottom, 16)
+                    .padding(.top, FullscreenChromeMetrics.topInset)
+                    .padding(.horizontal, FullscreenTopBarLayout.horizontalPadding)
+                Spacer(minLength: 0)
+                VideoTransportControls(manager: manager,
+                                       accentColor: accentColor,
+                                       controls: controls,
+                                       placement: .rail,
+                                       railTone: .onMedia)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.trailing, FullscreenTopBarLayout.horizontalPadding)
+                    .padding(.bottom, MeeshySpacing.sm)
+                VideoTransportControls(manager: manager,
+                                       accentColor: accentColor,
+                                       controls: Self.progressControls(controls),
+                                       placement: .corridor)
+                    .frame(maxWidth: .infinity)
+                infoLine
+                    .padding(.bottom, MeeshySpacing.lg)
             }
         }
-        .buttonStyle(BouncyControlButtonStyle())
     }
 
-    private var scrimGradients: some View {
-        VStack(spacing: 0) {
-            LinearGradient(colors: [Color.black.opacity(0.7), Color.clear], startPoint: .top, endPoint: .bottom)
-                .frame(height: 80)
-            Spacer()
-            LinearGradient(colors: [Color.clear, Color.black.opacity(0.7)], startPoint: .top, endPoint: .bottom)
-                .frame(height: 180)
+    /// La bande ne porte que la progression : ce que le jeu demande d'autre
+    /// (temps écoulé, durée) est dit par la ligne d'informations.
+    nonisolated static func progressControls(_ controls: MeeshyVideoPlayer.ControlSet) -> MeeshyVideoPlayer.ControlSet {
+        controls.intersection([.scrubber])
+    }
+
+    @ViewBuilder
+    private var infoLine: some View {
+        if !infoSegments.isEmpty {
+            HStack(spacing: MeeshySpacing.xs) {
+                ForEach(Array(infoSegments.enumerated()), id: \.offset) { index, segment in
+                    if index > 0 {
+                        Text(MediaInfoLine.separatorGlyph).accessibilityHidden(true)
+                    }
+                    switch segment {
+                    case .dimensions(let text), .fileSize(let text):
+                        Text(text)
+                    case .duration:
+                        MediaPlaybackDurationText(manager: manager,
+                                                  declaredSeconds: declaredDuration,
+                                                  followsEngine: true)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .font(.system(size: MeeshyFont.footnoteSize, weight: .medium, design: .monospaced))
+            .foregroundStyle(MeeshyColors.mediaChromeTertiary)
+            .lineLimit(1)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .accessibilityElement(children: .combine)
         }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
     }
 
     private var topBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: FullscreenChromeMetrics.barSpacing) {
             if controls.contains(.close) {
-                Button {
-                    onClose?()
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 36, height: 36)
-                        .adaptiveGlass(in: Circle(), interactive: true)
-                }
+                FullscreenCloseButton { onClose?() }
             }
             if let fileName, !fileName.isEmpty {
                 Text(fileName)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.9))
+                    .meeshyScaledFont(MeeshyFont.labelSize, weight: .semibold)
+                    .foregroundStyle(MeeshyColors.mediaChromeSecondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
             Spacer()
-            if controls.contains(.share), onShare != nil {
-                Button {
-                    onShare?()
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.9))
-                        .frame(width: 36, height: 36)
-                        .adaptiveGlass(in: Circle(), interactive: true)
+            if controls.contains(.share), onShare != nil, exitGate.mayLeave() {
+                FullscreenChromeButton(
+                    systemImage: FullscreenChromeSymbol.share,
+                    label: String(localized: "story.timeline.export.preview.share",
+                                  defaultValue: "Partager la vidéo", bundle: .module)
+                ) {
+                    exitGate.perform { onShare?() }
                 }
             }
-            if controls.contains(.save) {
-                Button {
-                    onSave?()
-                } label: {
-                    Group {
-                        switch saveState {
-                        case .idle:   Image(systemName: "arrow.down.to.line")
-                        case .saving: ProgressView().tint(.white)
-                        case .saved:  Image(systemName: "checkmark")
-                        case .failed: Image(systemName: "xmark")
-                        }
-                    }
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.9))
-                    .frame(width: 36, height: 36)
-                    .adaptiveGlass(in: Circle(), interactive: true)
-                }
-                .disabled(saveState == .saving || saveState == .saved)
+            if controls.contains(.save), exitGate.mayLeave() {
+                saveButton
             }
         }
     }
 
-}
+    @ViewBuilder
+    private var saveButton: some View {
+        if saveState == .saving {
+            ProgressView()
+                .tint(MeeshyColors.mediaChromeForeground)
+                .frame(width: FullscreenChromeMetrics.tapTarget,
+                       height: FullscreenChromeMetrics.tapTarget)
+        } else {
+            FullscreenChromeButton(
+                systemImage: saveGlyph,
+                label: isInAlbum && saveState == .idle
+                    ? PhotoAlbumSaveFeedback.alreadyInAlbumMessage
+                    : String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module)
+            ) {
+                exitGate.perform { onSave?() }
+            }
+            .disabled(saveState == .saved)
+        }
+    }
 
-// MARK: - Bouncy press feedback (legacy parity)
-
-private struct BouncyControlButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.86 : 1.0)
-            .opacity(configuration.isPressed ? 0.85 : 1.0)
-            .animation(.spring(response: 0.28, dampingFraction: 0.55), value: configuration.isPressed)
+    private var saveGlyph: String {
+        switch saveState {
+        case .idle: return isInAlbum ? FullscreenChromeSymbol.saved : FullscreenChromeSymbol.save
+        case .saving: return FullscreenChromeSymbol.save
+        case .saved: return FullscreenChromeSymbol.saved
+        case .failed: return FullscreenChromeSymbol.close
+        }
     }
 }

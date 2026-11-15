@@ -50,10 +50,10 @@ final class StoryVisibilityMenuResolverTests: XCTestCase {
                        PostVisibility.friends.icon)
     }
 
-    /// Contrat du menu : exactement les 6 modes demandés, dans cet ordre.
-    func test_composerSelectableCases_isTheSixRequestedModes() {
+    /// Contrat du menu : l'échelle des cercles, puis les audiences nommées et le privé (#13939).
+    func test_composerSelectableCases_climbTheCirclesThenTheNamedModes() {
         XCTAssertEqual(PostVisibility.composerSelectableCases,
-                       [.public, .community, .friends, .except, .only, .private])
+                       [.public, .community, .acquaintances, .friends, .close, .blood, .except, .only, .private])
     }
 
     /// Un seul checkmark à la fois — sinon le menu affirmerait deux modes actifs.

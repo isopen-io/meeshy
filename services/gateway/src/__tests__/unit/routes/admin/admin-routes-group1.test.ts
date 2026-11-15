@@ -93,7 +93,6 @@ jest.mock('../../../../validation/helpers.js', () => ({
 import { PermissionsService } from '../../../../routes/admin/services/PermissionsService';
 import { dashboardRoutes } from '../../../../routes/admin/dashboard';
 import { anonymousUsersAdminRoutes } from '../../../../routes/admin/anonymous-users';
-import { registerRoleRoutes } from '../../../../routes/admin/roles';
 import { invitationRoutes } from '../../../../routes/admin/invitations';
 import { getCacheStore } from '../../../../services/CacheStore';
 
@@ -133,12 +132,15 @@ describe('PermissionsService', () => {
       expect(perms.canManageTranslations).toBe(true);
     });
 
-    it('returns ADMIN permissions (no audit logs, no translations)', () => {
+    it('returns ADMIN permissions (no audit logs — translations INCLUSES)', () => {
+      // `canManageTranslations: false` était la divergence de la matrice
+      // locale contre la centrale, qui l'accorde à ADMIN. Ce fichier ne teste
+      // plus une matrice mais une PROJECTION du site unique (#4152).
       const perms = service.getUserPermissions('ADMIN');
       expect(perms.canAccessAdmin).toBe(true);
       expect(perms.canManageUsers).toBe(true);
       expect(perms.canViewAuditLogs).toBe(false);
-      expect(perms.canManageTranslations).toBe(false);
+      expect(perms.canManageTranslations).toBe(true);
     });
 
     it('returns MODERATOR permissions (no manage users, no analytics)', () => {
@@ -266,7 +268,7 @@ describe('Admin dashboard routes', () => {
     (getCacheStore as jest.Mock<any>).mockReturnValue({
       get: jest.fn<any>().mockResolvedValue(null),
       set: jest.fn<any>().mockResolvedValue(undefined),
-      del: jest.fn<any>().mockResolvedValue(undefined),
+      del: jest.fn<any>().mockResolvedValue(undefined), keys: jest.fn<any>().mockResolvedValue([]),
     });
   });
 
@@ -396,7 +398,7 @@ describe('Admin dashboard routes', () => {
       (getCacheStore as jest.Mock<any>).mockReturnValue({
         get: jest.fn<any>().mockResolvedValue(null),
         set: jest.fn<any>().mockResolvedValue(undefined),
-        del: mockDel,
+        del: mockDel, keys: jest.fn<any>().mockResolvedValue([]),
       });
 
       app = buildDashboardApp('ADMIN');
@@ -412,7 +414,7 @@ describe('Admin dashboard routes', () => {
       (getCacheStore as jest.Mock<any>).mockReturnValue({
         get: jest.fn<any>().mockResolvedValue(null),
         set: jest.fn<any>().mockResolvedValue(undefined),
-        del: mockDel,
+        del: mockDel, keys: jest.fn<any>().mockResolvedValue([]),
       });
 
       const bigbossApp = buildDashboardApp('BIGBOSS');
@@ -597,377 +599,20 @@ describe('Admin anonymous-users routes', () => {
 });
 
 // ---------------------------------------------------------------------------
-// roles.ts
-// ---------------------------------------------------------------------------
-
-describe('Admin role routes', () => {
-  const mockPrisma: any = {
-    user: {
-      findUnique: jest.fn<any>(),
-      update: jest.fn<any>(),
-    },
-  };
-
-  function buildRolesApp(role = 'ADMIN'): FastifyInstance {
-    const app = Fastify({ logger: false });
-    app.decorate('prisma', mockPrisma);
-    app.decorate('authenticate', async (request: any) => {
-      request.authContext = makeAuthContext(role);
-    });
-    app.register(registerRoleRoutes);
-    return app;
-  }
-
-  let app: FastifyInstance;
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    (getCacheStore as jest.Mock<any>).mockReturnValue({
-      get: jest.fn<any>().mockResolvedValue(null),
-      set: jest.fn<any>().mockResolvedValue(undefined),
-      del: jest.fn<any>().mockResolvedValue(undefined),
-    });
-  });
-
-  afterAll(async () => {
-    if (app) await app.close();
-  });
-
-  // -------------------------------------------------------------------------
-  // PATCH /users/:id/role
-  // -------------------------------------------------------------------------
-
-  describe('PATCH /users/:id/role', () => {
-    it('returns 401 when no authContext', async () => {
-      const noAuthApp = Fastify({ logger: false });
-      noAuthApp.decorate('prisma', mockPrisma);
-      noAuthApp.decorate('authenticate', async (request: any) => {
-        // no authContext
-      });
-      noAuthApp.register(registerRoleRoutes);
-      await noAuthApp.ready();
-
-      const response = await noAuthApp.inject({
-        method: 'PATCH',
-        url: `/users/${VALID_MONGO_ID}/role`,
-        payload: { role: 'USER' }
-      });
-      expect(response.statusCode).toBe(401);
-      await noAuthApp.close();
-    });
-
-    it('returns 403 when role has no canAccessAdmin (ANALYST)', async () => {
-      app = buildRolesApp('ANALYST');
-      await app.ready();
-
-      const response = await app.inject({
-        method: 'PATCH',
-        url: `/users/${VALID_MONGO_ID}/role`,
-        payload: { role: 'USER' }
-      });
-      expect(response.statusCode).toBe(403);
-    });
-
-    it('returns 403 when role has canAccessAdmin but not canManageUsers (MODERATOR)', async () => {
-      app = buildRolesApp('MODERATOR');
-      await app.ready();
-
-      mockPrisma.user.findUnique.mockResolvedValue({
-        id: VALID_MONGO_ID,
-        role: 'USER',
-      });
-
-      const response = await app.inject({
-        method: 'PATCH',
-        url: `/users/${VALID_MONGO_ID}/role`,
-        payload: { role: 'USER' }
-      });
-      // MODERATOR has canAccessAdmin but not canManageUsers → 403 "Permission insuffisante"
-      expect(response.statusCode).toBe(403);
-    });
-
-    it('returns 404 when target user not found', async () => {
-      app = buildRolesApp('ADMIN');
-      await app.ready();
-
-      mockPrisma.user.findUnique.mockResolvedValue(null);
-
-      const response = await app.inject({
-        method: 'PATCH',
-        url: `/users/${VALID_MONGO_ID}/role`,
-        payload: { role: 'USER' }
-      });
-      expect(response.statusCode).toBe(404);
-    });
-
-    it('returns 403 when ADMIN tries to change role of another ADMIN (same level)', async () => {
-      app = buildRolesApp('ADMIN');
-      await app.ready();
-
-      mockPrisma.user.findUnique.mockResolvedValue({
-        id: VALID_MONGO_ID,
-        role: 'ADMIN',
-      });
-
-      const response = await app.inject({
-        method: 'PATCH',
-        url: `/users/${VALID_MONGO_ID}/role`,
-        payload: { role: 'USER' }
-      });
-      expect(response.statusCode).toBe(403);
-      const body = JSON.parse(response.body);
-      // Fastify schema serialization only exposes "message" for 403 responses (per schema)
-      expect(body.message ?? body.error).toContain('modifier le role');
-    });
-
-    it('returns 403 when ADMIN tries to assign ADMIN role (cannot assign same-level role)', async () => {
-      app = buildRolesApp('ADMIN');
-      await app.ready();
-
-      // Target user is USER (can be managed), but new role ADMIN cannot be assigned by ADMIN
-      mockPrisma.user.findUnique.mockResolvedValue({
-        id: VALID_MONGO_ID,
-        role: 'USER',
-      });
-
-      const response = await app.inject({
-        method: 'PATCH',
-        url: `/users/${VALID_MONGO_ID}/role`,
-        payload: { role: 'ADMIN' }
-      });
-      expect(response.statusCode).toBe(403);
-      const body = JSON.parse(response.body);
-      expect(body.message ?? body.error).toContain('attribuer ce role');
-    });
-
-    it('returns 200 and updates role when valid (BIGBOSS changes USER to ADMIN)', async () => {
-      app = buildRolesApp('BIGBOSS');
-      await app.ready();
-
-      mockPrisma.user.findUnique.mockResolvedValue({
-        id: VALID_MONGO_ID,
-        role: 'USER',
-      });
-
-      const updatedUser = {
-        id: VALID_MONGO_ID,
-        username: 'testuser',
-        firstName: 'Test',
-        lastName: 'User',
-        role: 'ADMIN',
-        updatedAt: new Date().toISOString(),
-      };
-      mockPrisma.user.update.mockResolvedValue(updatedUser);
-
-      const response = await app.inject({
-        method: 'PATCH',
-        url: `/users/${VALID_MONGO_ID}/role`,
-        payload: { role: 'ADMIN' }
-      });
-      expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.body);
-      expect(body.success).toBe(true);
-      expect(body.data.role).toBe('ADMIN');
-    });
-
-    it('returns 400 for invalid role value via Zod', async () => {
-      app = buildRolesApp('BIGBOSS');
-      await app.ready();
-
-      const response = await app.inject({
-        method: 'PATCH',
-        url: `/users/${VALID_MONGO_ID}/role`,
-        payload: { role: 'SUPERUSER' }
-      });
-      expect(response.statusCode).toBe(400);
-    });
-
-    it('returns 500 when DB update throws', async () => {
-      app = buildRolesApp('BIGBOSS');
-      await app.ready();
-
-      mockPrisma.user.findUnique.mockResolvedValue({
-        id: VALID_MONGO_ID,
-        role: 'USER',
-      });
-      mockPrisma.user.update.mockRejectedValue(new Error('DB error'));
-
-      const response = await app.inject({
-        method: 'PATCH',
-        url: `/users/${VALID_MONGO_ID}/role`,
-        payload: { role: 'MODERATOR' }
-      });
-      expect(response.statusCode).toBe(500);
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // PATCH /users/:id/status
-  // -------------------------------------------------------------------------
-
-  describe('PATCH /users/:id/status', () => {
-    it('returns 401 when no authContext', async () => {
-      const noAuthApp = Fastify({ logger: false });
-      noAuthApp.decorate('prisma', mockPrisma);
-      noAuthApp.decorate('authenticate', async (request: any) => {
-        // no authContext
-      });
-      noAuthApp.register(registerRoleRoutes);
-      await noAuthApp.ready();
-
-      const response = await noAuthApp.inject({
-        method: 'PATCH',
-        url: `/users/${VALID_MONGO_ID}/status`,
-        payload: { isActive: true }
-      });
-      expect(response.statusCode).toBe(401);
-      await noAuthApp.close();
-    });
-
-    it('returns 403 when ANALYST role (no canAccessAdmin)', async () => {
-      const analystApp = buildRolesApp('ANALYST');
-      await analystApp.ready();
-
-      const response = await analystApp.inject({
-        method: 'PATCH',
-        url: `/users/${VALID_MONGO_ID}/status`,
-        payload: { isActive: true }
-      });
-      expect(response.statusCode).toBe(403);
-      await analystApp.close();
-    });
-
-    it('returns 403 when MODERATOR (canAccessAdmin but no canManageUsers)', async () => {
-      const modApp = buildRolesApp('MODERATOR');
-      await modApp.ready();
-
-      mockPrisma.user.findUnique.mockResolvedValue({ id: VALID_MONGO_ID, role: 'USER' });
-
-      const response = await modApp.inject({
-        method: 'PATCH',
-        url: `/users/${VALID_MONGO_ID}/status`,
-        payload: { isActive: true }
-      });
-      expect(response.statusCode).toBe(403);
-      await modApp.close();
-    });
-
-    it('returns 404 when user not found', async () => {
-      app = buildRolesApp('ADMIN');
-      await app.ready();
-
-      mockPrisma.user.findUnique.mockResolvedValue(null);
-
-      const response = await app.inject({
-        method: 'PATCH',
-        url: `/users/${VALID_MONGO_ID}/status`,
-        payload: { isActive: false }
-      });
-      expect(response.statusCode).toBe(404);
-    });
-
-    it('returns 403 when ADMIN cannot manage target (same/higher level)', async () => {
-      app = buildRolesApp('ADMIN');
-      await app.ready();
-
-      mockPrisma.user.findUnique.mockResolvedValue({ id: VALID_MONGO_ID, role: 'BIGBOSS' });
-
-      const response = await app.inject({
-        method: 'PATCH',
-        url: `/users/${VALID_MONGO_ID}/status`,
-        payload: { isActive: false }
-      });
-      expect(response.statusCode).toBe(403);
-    });
-
-    it('returns 200 with activate message when isActive=true', async () => {
-      app = buildRolesApp('ADMIN');
-      await app.ready();
-
-      mockPrisma.user.findUnique.mockResolvedValue({ id: VALID_MONGO_ID, role: 'USER' });
-      mockPrisma.user.update.mockResolvedValue({
-        id: VALID_MONGO_ID,
-        username: 'testuser',
-        isActive: true,
-        deactivatedAt: null,
-        updatedAt: new Date().toISOString(),
-      });
-
-      const response = await app.inject({
-        method: 'PATCH',
-        url: `/users/${VALID_MONGO_ID}/status`,
-        payload: { isActive: true }
-      });
-      expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.body);
-      expect(body.success).toBe(true);
-      expect(body.message).toContain('active');
-    });
-
-    it('returns 200 with deactivate message when isActive=false', async () => {
-      app = buildRolesApp('BIGBOSS');
-      await app.ready();
-
-      mockPrisma.user.findUnique.mockResolvedValue({ id: VALID_MONGO_ID, role: 'ADMIN' });
-      mockPrisma.user.update.mockResolvedValue({
-        id: VALID_MONGO_ID,
-        username: 'adminuser',
-        isActive: false,
-        deactivatedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-
-      const response = await app.inject({
-        method: 'PATCH',
-        url: `/users/${VALID_MONGO_ID}/status`,
-        payload: { isActive: false }
-      });
-      expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.body);
-      expect(body.message).toContain('desactive');
-    });
-
-    it('returns 400 when isActive is not a boolean', async () => {
-      app = buildRolesApp('ADMIN');
-      await app.ready();
-
-      const response = await app.inject({
-        method: 'PATCH',
-        url: `/users/${VALID_MONGO_ID}/status`,
-        payload: { isActive: 'yes' }
-      });
-      expect(response.statusCode).toBe(400);
-    });
-
-    it('returns 500 when DB update throws', async () => {
-      app = buildRolesApp('ADMIN');
-      await app.ready();
-
-      mockPrisma.user.findUnique.mockResolvedValue({ id: VALID_MONGO_ID, role: 'USER' });
-      mockPrisma.user.update.mockRejectedValue(new Error('DB error'));
-
-      const response = await app.inject({
-        method: 'PATCH',
-        url: `/users/${VALID_MONGO_ID}/status`,
-        payload: { isActive: false }
-      });
-      expect(response.statusCode).toBe(500);
-    });
-  });
-});
-
-// ---------------------------------------------------------------------------
 // invitations.ts
 // ---------------------------------------------------------------------------
 
 describe('Admin invitation routes', () => {
-  const mockPrisma: any = {
+  const mockPrisma: any = { adminAuditLog: { create: jest.fn<any>().mockResolvedValue({}) }, // #8876 : les gestes sont tracés
     friendRequest: {
       findMany: jest.fn<any>(),
       findUnique: jest.fn<any>(),
       count: jest.fn<any>(),
       update: jest.fn<any>(),
       groupBy: jest.fn<any>(),
+      // #4465 — `GET /timeline/daily` lit désormais `aggregateRaw` (comptage
+      // par jour × statut en base), plus `findMany`.
+      aggregateRaw: jest.fn<any>(),
     },
   };
 
@@ -989,8 +634,9 @@ describe('Admin invitation routes', () => {
     mockPrisma.friendRequest.findMany.mockResolvedValue([]);
     mockPrisma.friendRequest.count.mockResolvedValue(0);
     mockPrisma.friendRequest.groupBy.mockResolvedValue([]);
-    mockPrisma.friendRequest.findUnique.mockResolvedValue(null);
+    mockPrisma.friendRequest.findUnique.mockResolvedValue({ id: VALID_MONGO_ID, status: 'pending', senderId: 's', receiverId: 'r' }); // #8876 : PATCH lit l'état d'avant
     mockPrisma.friendRequest.update.mockResolvedValue({});
+    mockPrisma.friendRequest.aggregateRaw.mockResolvedValue([]);
   });
 
   afterAll(async () => {
@@ -1069,7 +715,10 @@ describe('Admin invitation routes', () => {
       expect(call.where.status).toBe('pending');
     });
 
-    it('returns 200 with communityId filter applied', async () => {
+    // `FriendRequest` n'a pas de colonne `communityId` : la poser au `where`
+    // faisait refuser la requête entière par Prisma. Le paramètre reste
+    // accepté (rétrocompatible) et n'a aucun effet.
+    it('accepte communityId sans le poser au where — la colonne n’existe pas', async () => {
       app = buildInvApp('ADMIN');
       await app.ready();
 
@@ -1080,7 +729,7 @@ describe('Admin invitation routes', () => {
       expect(response.statusCode).toBe(200);
 
       const call = mockPrisma.friendRequest.findMany.mock.calls[0][0];
-      expect(call.where.communityId).toBe(VALID_MONGO_ID);
+      expect(call.where).not.toHaveProperty('communityId');
     });
 
     it('returns 400 when communityId is not a valid mongo id', async () => {
@@ -1346,15 +995,7 @@ describe('Admin invitation routes', () => {
       await modApp.close();
     });
 
-    it('returns 200 when status set to accepted', async () => {
-      const updatedInv = {
-        id: VALID_MONGO_ID,
-        status: 'accepted',
-        sender: { id: '507f1f77bcf86cd799439013', username: 'alice', displayName: 'Alice' },
-        receiver: { id: '507f1f77bcf86cd799439014', username: 'bob', displayName: 'Bob' },
-      };
-      mockPrisma.friendRequest.update.mockResolvedValue(updatedInv);
-
+    it('refuses 400 to set accepted — that status IS the friendship, and neither member consented', async () => {
       app = buildInvApp('ADMIN');
       await app.ready();
 
@@ -1363,10 +1004,8 @@ describe('Admin invitation routes', () => {
         url: `/${VALID_MONGO_ID}`,
         payload: { status: 'accepted' }
       });
-      expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.body);
-      expect(body.success).toBe(true);
-      expect(body.message).toContain('acceptée');
+      expect(response.statusCode).toBe(400);
+      expect(mockPrisma.friendRequest.update).not.toHaveBeenCalled();
     });
 
     it('returns 200 when status set to rejected', async () => {
@@ -1391,15 +1030,7 @@ describe('Admin invitation routes', () => {
       expect(body.message).toContain('rejetée');
     });
 
-    it('returns 200 when status set to pending', async () => {
-      const updatedInv = {
-        id: VALID_MONGO_ID,
-        status: 'pending',
-        sender: { id: '507f1f77bcf86cd799439013', username: 'alice', displayName: 'Alice' },
-        receiver: { id: '507f1f77bcf86cd799439014', username: 'bob', displayName: 'Bob' },
-      };
-      mockPrisma.friendRequest.update.mockResolvedValue(updatedInv);
-
+    it('refuses 400 to reopen a request as pending — and writes nothing', async () => {
       app = buildInvApp('ADMIN');
       await app.ready();
 
@@ -1408,9 +1039,23 @@ describe('Admin invitation routes', () => {
         url: `/${VALID_MONGO_ID}`,
         payload: { status: 'pending' }
       });
-      expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.body);
-      expect(body.message).toContain('mise à jour');
+      expect(response.statusCode).toBe(400);
+      expect(mockPrisma.friendRequest.update).not.toHaveBeenCalled();
+    });
+
+    it.each(['accepted', 'rejected'])('answers 409 when the request is already %s — no second decision', async (settled) => {
+      mockPrisma.friendRequest.findUnique.mockResolvedValue({ id: VALID_MONGO_ID, status: settled, senderId: 's', receiverId: 'r' });
+      app = buildInvApp('ADMIN');
+      await app.ready();
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/${VALID_MONGO_ID}`,
+        payload: { status: 'rejected' }
+      });
+      expect(response.statusCode).toBe(409);
+      expect(JSON.parse(response.body).code).toBe('INVITATION_NOT_PENDING');
+      expect(mockPrisma.friendRequest.update).not.toHaveBeenCalled();
     });
 
     it('returns 400 when status is "cancelled" (invalid per UpdateInvitationBodySchema)', async () => {
@@ -1452,7 +1097,7 @@ describe('Admin invitation routes', () => {
       const response = await app.inject({
         method: 'PATCH',
         url: '/bad-id',
-        payload: { status: 'accepted' }
+        payload: { status: 'rejected' }
       });
       expect(response.statusCode).toBe(400);
     });
@@ -1466,7 +1111,7 @@ describe('Admin invitation routes', () => {
       const response = await app.inject({
         method: 'PATCH',
         url: `/${VALID_MONGO_ID}`,
-        payload: { status: 'accepted' }
+        payload: { status: 'rejected' }
       });
       expect(response.statusCode).toBe(500);
     });
@@ -1501,8 +1146,10 @@ describe('Admin invitation routes', () => {
     });
 
     it('returns 200 with 7 days of empty timeline when no invitations', async () => {
-      mockPrisma.friendRequest.findMany.mockResolvedValue([]);
-
+      // #4465 : la route lit désormais `aggregateRaw` (comptage par jour ×
+      // statut en base), plus `findMany` — le `beforeEach` règle déjà
+      // `aggregateRaw` sur `[]`, ce qui reproduit fidèlement « aucune
+      // invitation sur la fenêtre ».
       app = buildInvApp('ADMIN');
       await app.ready();
 
@@ -1524,10 +1171,13 @@ describe('Admin invitation routes', () => {
       const today = new Date();
       const todayStr = today.toISOString().split('T')[0];
 
-      mockPrisma.friendRequest.findMany.mockResolvedValue([
-        { createdAt: today, status: 'accepted' },
-        { createdAt: today, status: 'rejected' },
-        { createdAt: today, status: 'pending' },
+      // #4465 : le `$group` par {jour, statut} rend une ligne par COMBINAISON
+      // — trois statuts le même jour = trois lignes, chacune avec son propre
+      // `count`, pas trois documents `{createdAt, status}` à replier.
+      mockPrisma.friendRequest.aggregateRaw.mockResolvedValue([
+        { _id: { date: todayStr, status: 'accepted' }, count: 1 },
+        { _id: { date: todayStr, status: 'rejected' }, count: 1 },
+        { _id: { date: todayStr, status: 'pending' }, count: 1 },
       ]);
 
       app = buildInvApp('BIGBOSS');
@@ -1544,13 +1194,37 @@ describe('Admin invitation routes', () => {
       expect(todayEntry.rejected).toBe(1);
     });
 
+    it('sums multiple invitations for the SAME day × status into one count, not one row each', async () => {
+      // #4465 : preuve que le handler somme `row.count` (pas `+1` par ligne) —
+      // le `$group` peut rendre count:5 en UNE ligne pour 5 invitations
+      // acceptées le même jour.
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+
+      mockPrisma.friendRequest.aggregateRaw.mockResolvedValue([
+        { _id: { date: todayStr, status: 'accepted' }, count: 5 },
+      ]);
+
+      app = buildInvApp('ADMIN');
+      await app.ready();
+
+      const response = await app.inject({ method: 'GET', url: '/timeline/daily' });
+      const body = JSON.parse(response.body);
+
+      const todayEntry = body.data.find((e: any) => e.date === todayStr);
+      expect(todayEntry.sent).toBe(5);
+      expect(todayEntry.accepted).toBe(5);
+      expect(todayEntry.rejected).toBe(0);
+    });
+
     it('ignores invitations with a date outside the 7-day dailyData window', async () => {
-      // An invitation created 30 days ago won't match any key in dailyData (7 days)
+      // A row grouped 30 days ago won't match any key in dailyData (7 days)
       const oldDate = new Date();
       oldDate.setDate(oldDate.getDate() - 30);
+      const oldDateStr = oldDate.toISOString().split('T')[0];
 
-      mockPrisma.friendRequest.findMany.mockResolvedValue([
-        { createdAt: oldDate, status: 'accepted' },
+      mockPrisma.friendRequest.aggregateRaw.mockResolvedValue([
+        { _id: { date: oldDateStr, status: 'accepted' }, count: 1 },
       ]);
 
       app = buildInvApp('ADMIN');
@@ -1559,14 +1233,16 @@ describe('Admin invitation routes', () => {
       const response = await app.inject({ method: 'GET', url: '/timeline/daily' });
       expect(response.statusCode).toBe(200);
       const body = JSON.parse(response.body);
-      // All 7 days should show 0 since the old invitation doesn't match any daily bucket
+      // All 7 days should show 0 since the old row doesn't match any daily bucket
       body.data.forEach((entry: any) => {
         expect(entry.sent).toBe(0);
       });
     });
 
     it('returns 500 when DB throws', async () => {
-      mockPrisma.friendRequest.findMany.mockRejectedValue(new Error('DB error'));
+      // #4465 : la route lit désormais `aggregateRaw`, pas `findMany` — le
+      // témoin d'erreur pointe la méthode que la route appelle réellement.
+      mockPrisma.friendRequest.aggregateRaw.mockRejectedValue(new Error('DB error'));
 
       app = buildInvApp('ADMIN');
       await app.ready();

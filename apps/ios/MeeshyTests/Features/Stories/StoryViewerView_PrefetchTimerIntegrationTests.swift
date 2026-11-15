@@ -104,9 +104,10 @@ final class StoryViewerView_PrefetchTimerIntegrationTests: XCTestCase {
         let (sut, stories, _) = makeSUT(storyCount: 3, currentIndex: 0)
         let prefetcher = StoryReaderPrefetcher()
         let timer = StoryReaderTimerController(useDisplayLink: false)
+        let pipeline = StoryPlaybackPipeline(prefetcher: prefetcher, timer: timer)
 
-        sut.installPrefetchPipelineIfNeeded(prefetcher: prefetcher, timer: timer)
-        sut.refreshPrefetchWindowAndTimer(prefetcher: prefetcher, timer: timer)
+        sut.installPrefetchPipelineIfNeeded(pipeline)
+        sut.refreshPrefetchWindowAndTimer(pipeline)
 
         XCTAssertEqual(timer.currentSlideId,
                        stories[0].id,
@@ -128,9 +129,10 @@ final class StoryViewerView_PrefetchTimerIntegrationTests: XCTestCase {
         let (sut, stories, _) = makeSUT(storyCount: 2, currentIndex: 0)
         let prefetcher = StoryReaderPrefetcher()
         let timer = StoryReaderTimerController(useDisplayLink: false)
+        let pipeline = StoryPlaybackPipeline(prefetcher: prefetcher, timer: timer)
 
-        sut.installPrefetchPipelineIfNeeded(prefetcher: prefetcher, timer: timer)
-        sut.refreshPrefetchWindowAndTimer(prefetcher: prefetcher, timer: timer)
+        sut.installPrefetchPipelineIfNeeded(pipeline)
+        sut.refreshPrefetchWindowAndTimer(pipeline)
 
         // Sanity : the prefetcher exposes a canvas for the current slide.
         let canvas = prefetcher.view(for: stories[0].id)
@@ -165,9 +167,10 @@ final class StoryViewerView_PrefetchTimerIntegrationTests: XCTestCase {
         let (sut, stories, _) = makeSUT(storyCount: 2, currentIndex: 0)
         let prefetcher = StoryReaderPrefetcher()
         let timer = StoryReaderTimerController(useDisplayLink: false)
+        let pipeline = StoryPlaybackPipeline(prefetcher: prefetcher, timer: timer)
 
-        sut.installPrefetchPipelineIfNeeded(prefetcher: prefetcher, timer: timer)
-        sut.refreshPrefetchWindowAndTimer(prefetcher: prefetcher, timer: timer)
+        sut.installPrefetchPipelineIfNeeded(pipeline)
+        sut.refreshPrefetchWindowAndTimer(pipeline)
 
         XCTAssertNotNil(timer.onCompletion,
                         "Install must wire onCompletion so a follow-up patch can pivot to gated advance without rewiring")
@@ -184,6 +187,26 @@ final class StoryViewerView_PrefetchTimerIntegrationTests: XCTestCase {
                        "Gated timer completion must not mutate currentSlideId — only setCurrentSlide may")
     }
 
+    // MARK: - #9859 — le tick publie dans l'horloge de la barre
+
+    /// Le compte à rebours ne réécrit plus aucun état du lecteur : sa
+    /// fraction arrive dans `progressClock`, que seule la barre observe.
+    func test_aProgressTick_publishesIntoTheBarClock() {
+        let (sut, stories, _) = makeSUT(storyCount: 2, currentIndex: 0)
+        let prefetcher = StoryReaderPrefetcher()
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+        let pipeline = StoryPlaybackPipeline(prefetcher: prefetcher, timer: timer)
+
+        sut.installPrefetchPipelineIfNeeded(pipeline)
+        sut.refreshPrefetchWindowAndTimer(pipeline)
+        timer.markContentReady(slideId: stories[0].id)
+        timer._advanceClockForTesting(by: 1.0)
+
+        XCTAssertGreaterThan(timer.progress, 0)
+        XCTAssertEqual(Double(sut.progressClock.fraction), timer.progress,
+                       accuracy: Double(StoryPlaybackProgressClock.granularity))
+    }
+
     // MARK: - test_viewerOnDisappear_detachesPrefetcher
 
     /// `.onDisappear` releases the bootstrapped canvas views so the 3
@@ -194,9 +217,10 @@ final class StoryViewerView_PrefetchTimerIntegrationTests: XCTestCase {
         let (sut, stories, _) = makeSUT(storyCount: 3, currentIndex: 1)
         let prefetcher = StoryReaderPrefetcher()
         let timer = StoryReaderTimerController(useDisplayLink: false)
+        let pipeline = StoryPlaybackPipeline(prefetcher: prefetcher, timer: timer)
 
-        sut.installPrefetchPipelineIfNeeded(prefetcher: prefetcher, timer: timer)
-        sut.refreshPrefetchWindowAndTimer(prefetcher: prefetcher, timer: timer)
+        sut.installPrefetchPipelineIfNeeded(pipeline)
+        sut.refreshPrefetchWindowAndTimer(pipeline)
 
         XCTAssertEqual(prefetcher.bootstrapped.count, 3,
                        "Middle-slide window must bootstrap N-1, N, N+1 — \(stories.map(\.id))")
@@ -223,9 +247,10 @@ final class StoryViewerView_PrefetchTimerIntegrationTests: XCTestCase {
         let (sut, stories, _) = makeSUT(storyCount: 4, currentIndex: 0)
         let prefetcher = StoryReaderPrefetcher()
         let timer = StoryReaderTimerController(useDisplayLink: false)
+        let pipeline = StoryPlaybackPipeline(prefetcher: prefetcher, timer: timer)
 
-        sut.installPrefetchPipelineIfNeeded(prefetcher: prefetcher, timer: timer)
-        sut.refreshPrefetchWindowAndTimer(prefetcher: prefetcher, timer: timer)
+        sut.installPrefetchPipelineIfNeeded(pipeline)
+        sut.refreshPrefetchWindowAndTimer(pipeline)
 
         XCTAssertEqual(Set(prefetcher.bootstrapped.keys),
                        Set([stories[0].id, stories[1].id, stories[2].id]),
@@ -233,7 +258,7 @@ final class StoryViewerView_PrefetchTimerIntegrationTests: XCTestCase {
         XCTAssertEqual(timer.currentSlideId, stories[0].id)
 
         // Advance to slide 2 (centre of a 4-slide group).
-        sut.refreshPrefetchWindowAndTimer(prefetcher: prefetcher, timer: timer, currentIndex: 2)
+        sut.refreshPrefetchWindowAndTimer(pipeline, currentIndex: 2)
 
         XCTAssertEqual(Set(prefetcher.bootstrapped.keys),
                        Set([stories[1].id, stories[2].id, stories[3].id]),

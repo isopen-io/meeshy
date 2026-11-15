@@ -153,7 +153,7 @@ class HiggsAudioBackend(BaseTTSBackend):
             raise RuntimeError("Higgs Audio V2 non initialisé")
 
         import torch
-        import torchaudio
+        from utils.wav_write import write_wav
 
         loop = asyncio.get_event_loop()
 
@@ -181,7 +181,7 @@ class HiggsAudioBackend(BaseTTSBackend):
 
         await loop.run_in_executor(
             None,
-            lambda: torchaudio.save(output_path, audio.unsqueeze(0), 24000)
+            lambda: write_wav(output_path, audio.unsqueeze(0), 24000)
         )
 
         return output_path

@@ -62,6 +62,46 @@ final class AudioMediaViewRenderTests: XCTestCase {
             "AudioMediaView Equatable doit détecter l'arrivée de l'avatar de l'auteur cité")
     }
 
+    /// La PROTECTION du média cité décide si la vignette est rendue et si sa
+    /// zone tactile est armée. Elle arrive après coup (bulle optimiste → écho
+    /// serveur, blob de cache ancien → refresh) : absente du comparateur, la
+    /// vignette d'un média à vue unique restait affichée pour toujours.
+    func test_audioMediaView_equatable_detectsQuotedMediaProtectionChange() {
+        let a = AudioMediaView.makeForTest(
+            replyReference: ReplyReference(messageId: "m-quote-1", authorName: "Bob", previewText: "Salut",
+                                           attachmentThumbnailUrl: "https://cdn.example/t.jpg")
+        )
+        let b = AudioMediaView.makeForTest(
+            replyReference: ReplyReference(messageId: "m-quote-1", authorName: "Bob", previewText: "Salut",
+                                           attachmentThumbnailUrl: "https://cdn.example/t.jpg",
+                                           attachmentIsProtected: true)
+        )
+
+        XCTAssertFalse(a == b,
+            "AudioMediaView Equatable doit détecter l'arrivée de la protection du média cité")
+    }
+
+    /// Les SEPT faits du média cité (#4945) — flou ThumbHash et ligne
+    /// « 1024×768 · 0:42 · 1,2 Mo ». Ils arrivent avec l'écho serveur ; absents
+    /// du comparateur, la citation restait figée sur sa version optimiste.
+    func test_audioMediaView_equatable_detectsQuotedAttachmentFactsChange() {
+        let a = AudioMediaView.makeForTest(
+            replyReference: ReplyReference(messageId: "m-quote-1", authorName: "Bob", previewText: "Salut")
+        )
+        let b = AudioMediaView.makeForTest(
+            replyReference: ReplyReference(
+                messageId: "m-quote-1", authorName: "Bob", previewText: "Salut",
+                attachmentFacts: ReplyReference.QuotedAttachmentFacts(
+                    thumbHash: "AQIDBA==", width: 1024, height: 768,
+                    durationMs: 42_000, fileSize: 1_200_000, pageCount: nil, mimeType: "image/jpeg"
+                )
+            )
+        )
+
+        XCTAssertFalse(a == b,
+            "AudioMediaView Equatable doit détecter l'arrivée des faits du média cité")
+    }
+
     /// Stabilité : deux instances avec exactement la même reply doivent rester égales.
     func test_audioMediaView_equatable_stableWhenReplyUnchanged() {
         let ref = ReplyReference(messageId: "m-quote-1", authorName: "Bob", previewText: "Salut")
@@ -229,6 +269,95 @@ final class AudioMediaViewRenderTests: XCTestCase {
     }
 }
 
+// MARK: - #7660 — la rangée audio garde sa hauteur au premier rendu
+
+/// Un vocal déjà présent sur l'appareil se dessinait d'abord comme « à
+/// télécharger » — bouton ↓ et libellé de taille sous le bouton — le temps que
+/// la résolution asynchrone du `.task` le déclare prêt. Mesuré au simulateur
+/// (fil « Meeshy Global ») : la rangée d'un vocal re-mesurée 89 → 79 pt
+/// quelques images après chaque réalisation, redimensionnement joué dans une
+/// passe animée, sous le doigt.
+@MainActor
+final class AudioMediaViewFirstRenderHeightTests: XCTestCase {
+
+    func test_firstRender_audioAlreadyOnDevice_measuresAsSettled() async throws {
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("audio-7660-\(UUID().uuidString).m4a")
+        try Data(repeating: 0, count: 1024).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let scene = try XCTUnwrap(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        )
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 402, height: 874)
+        let host = UIHostingController(rootView: AudioMediaView.makeForTest(fileUrl: file.absoluteString))
+        window.rootViewController = host
+        window.isHidden = false
+        defer { window.isHidden = true }
+        let proposal = CGSize(width: 360, height: CGFloat.greatestFiniteMagnitude)
+
+        let firstRender = host.sizeThatFits(in: proposal).height
+        for _ in 0..<20 {
+            try await Task.sleep(for: .milliseconds(25))
+            host.view.layoutIfNeeded()
+        }
+        let settled = host.sizeThatFits(in: proposal).height
+
+        XCTAssertEqual(firstRender, settled, "un vocal déjà sur l'appareil se dessine prêt dès le premier rendu")
+    }
+
+    func test_availableOnDeviceAtFirstRender_remoteAudioOnDisk_isReady() {
+        let availability = AudioMediaView.availableOnDeviceAtFirstRender(
+            urlString: "https://example.com/vocal.m4a",
+            isOnDisk: { _ in true }
+        )
+        guard case .ready = availability else {
+            return XCTFail("un vocal distant déjà en cache disque est prêt au premier rendu, pas \(availability)")
+        }
+    }
+
+    func test_availableOnDeviceAtFirstRender_remoteAudioNotOnDisk_needsDownload() {
+        let availability = AudioMediaView.availableOnDeviceAtFirstRender(
+            urlString: "https://example.com/vocal.m4a",
+            isOnDisk: { _ in false }
+        )
+        guard case .needsDownload = availability else {
+            return XCTFail("un vocal absent du disque reste à télécharger, pas \(availability)")
+        }
+    }
+}
+
+// MARK: - #10691 — les drapeaux du vocal partent de la langue de SA piste
+
+@MainActor
+final class AudioMediaViewTrackOriginFlagsTests: XCTestCase {
+    private func frenchTrack() -> MessageTranslatedAudio {
+        MessageTranslatedAudio(
+            id: "t-fr", attachmentId: "att-test-1", targetLanguage: "fr",
+            url: "https://cdn/voix-fr.m4a", transcription: "Bonjour", durationMs: 1_000,
+            format: "m4a", cloned: false, quality: 0.9, ttsModel: "tts"
+        )
+    }
+
+    /// Message étiqueté `fr`, piste transcrite en anglais, traduction française : le pied
+    /// montre la V.O. ANGLAISE et la traduction française — deux drapeaux. Lu depuis le
+    /// message, la traduction française se confondait avec l'« original » et disparaissait.
+    func test_audioFooter_trackTranscribedInEnglish_showsItsOriginalAndTheFrenchTranslation() {
+        let view = AudioMediaView.makeForTest(
+            originalLanguage: "fr",
+            translatedAudios: [frenchTrack()],
+            transcription: MessageTranscription(attachmentId: "att-test-1", text: "Hello", language: "en"),
+            footerModel: BubbleFooterModel(
+                sender: nil, flags: [], showsTranslate: false, timestamp: "10:00",
+                delivery: nil, isOffline: false, isMe: false, sendStartedAt: nil
+            )
+        )
+
+        let codes = view.audioFooter?.0.flags.map { $0.code }
+        XCTAssertEqual(codes, ["en", "fr"])
+    }
+}
+
 extension AudioMediaView {
     static func makeForTest(
         replyReference: ReplyReference? = nil,
@@ -236,7 +365,11 @@ extension AudioMediaView {
         originalLanguage: String = "fr",
         translatedAudios: [MessageTranslatedAudio] = [],
         conversationName: String? = nil,
-        audioQueueTailProvider: ((String) -> [QueuedAudio])? = nil
+        audioQueueTailProvider: ((String) -> [QueuedAudio])? = nil,
+        fileUrl: String = "https://example.com/test.m4a",
+        activeAudioLanguageOverride: String? = nil,
+        transcription: MessageTranscription? = nil,
+        footerModel: BubbleFooterModel? = nil
     ) -> AudioMediaView {
         let attachment = MeeshyMessageAttachment(
             id: "att-test-1",
@@ -246,7 +379,7 @@ extension AudioMediaView {
             mimeType: "audio/m4a",
             fileSize: 1024,
             filePath: "/test/test.m4a",
-            fileUrl: "https://example.com/test.m4a",
+            fileUrl: fileUrl,
             uploadedBy: "user-test-1"
         )
         // Dates fixées pour que deux appels successifs produisent des
@@ -268,7 +401,10 @@ extension AudioMediaView {
             visualAttachments: [],
             isDark: false,
             accentColor: "#6366F1",
+            transcription: transcription,
             translatedAudios: translatedAudios,
+            activeAudioLanguageOverride: activeAudioLanguageOverride,
+            footerModel: footerModel,
             replyReference: replyReference,
             replyIsStory: replyIsStory,
             conversationName: conversationName,

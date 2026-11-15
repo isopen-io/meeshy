@@ -20,7 +20,7 @@ final class MessageSendFlowTests: XCTestCase {
         let persistence = MessagePersistenceActor(dbWriter: dbQueue)
 
         let store = MessageStore(conversationId: "conv_t15_send", persistence: persistence)
-        store.startObserving(dbPool: dbQueue)
+        store.startObserving()
 
         let beforeCount = store.messages.count
 
@@ -62,7 +62,7 @@ final class MessageSendFlowTests: XCTestCase {
         let persistence = MessagePersistenceActor(dbWriter: dbQueue)
 
         let store = MessageStore(conversationId: "conv_t15_fail", persistence: persistence)
-        store.startObserving(dbPool: dbQueue)
+        store.startObserving()
 
         let tempId = "offline_t15_fail"
         let record = SendFlowMessageRecordFactory.make(
@@ -86,6 +86,77 @@ final class MessageSendFlowTests: XCTestCase {
         XCTAssertEqual(store.messages.last?.state, .queued)
 
         store.stopObserving()
+    }
+}
+
+// MARK: - stageOptimistic
+
+@MainActor
+final class MessageSendStageOptimisticTests: XCTestCase {
+
+    private let conversationId = "00000000000000000000ee01"
+
+    private func makeSUT() async throws -> (sut: ConversationViewModel, pool: DatabaseQueue) {
+        await CacheCoordinator.shared.messages.invalidate(for: conversationId)
+        let auth = MockAuthManager()
+        auth.simulateLoggedIn(user: MeeshyUser(id: "00000000000000000000ee99", username: "stage", displayName: "Stage"))
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        let sut = ConversationViewModel(
+            conversationId: conversationId,
+            authManager: auth,
+            messageService: MockMessageService(),
+            conversationService: MockConversationService(),
+            reactionService: MockReactionService(),
+            reportService: MockReportService(),
+            messageSocket: MockMessageSocket(),
+            dependencies: ConversationDependencies(persistence: MessagePersistenceActor(dbWriter: pool)),
+            networkMonitor: FakeNetworkMonitor(isOnline: true),
+            offlineQueue: FakeOfflineMessageQueue()
+        )
+        sut.start()
+        return (sut, pool)
+    }
+
+    private func makeOutgoing() -> OutgoingMessage {
+        OutgoingMessage(
+            conversationId: ConversationID(conversationId),
+            content: "Hello",
+            relation: .none,
+            attachments: OutgoingAttachments(ids: nil, previews: nil)
+        )
+    }
+
+    private func makeContext(reusesExistingRow: Bool) -> SendAttemptContext {
+        SendAttemptContext(
+            clientMessageId: MessageID(ClientMessageId.generate()),
+            startedAt: Date(),
+            intent: MessageProtectionIntent(ephemeralDurationSeconds: 60),
+            language: "en",
+            reusesExistingRow: reusesExistingRow
+        )
+    }
+
+    func test_stageOptimistic_insertsSendingRowWithResolvedLanguageAndDuration() async throws {
+        let (sut, pool) = try await makeSUT()
+        let context = makeContext(reusesExistingRow: false)
+
+        await sut.stageOptimistic(makeOutgoing(), context: context)
+
+        let record = try await pool.read { db in try MessageRecord.fetchOne(db, key: context.clientMessageId.rawValue) }
+        XCTAssertEqual(record?.state, .sending)
+        XCTAssertEqual(record?.content, "Hello")
+        XCTAssertEqual(record?.originalLanguage, "en")
+        XCTAssertEqual(record?.ephemeralDuration, 60)
+    }
+
+    func test_stageOptimistic_reusedClientMessageId_insertsNothing() async throws {
+        let (sut, pool) = try await makeSUT()
+
+        await sut.stageOptimistic(makeOutgoing(), context: makeContext(reusesExistingRow: true))
+
+        let count = try await pool.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM messages") ?? 0 }
+        XCTAssertEqual(count, 0)
     }
 }
 

@@ -39,6 +39,12 @@ function basePrisma(overrides: Record<string, unknown> = {}) {
     communityMember: {
       findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
     },
+    postReaction: {
+      findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
+    },
+    postBookmark: {
+      findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
+    },
     ...overrides,
   } as unknown as import('@meeshy/shared/prisma/client').PrismaClient & {
     hashtag: { findUnique: jest.Mock; findMany: jest.Mock };
@@ -109,7 +115,7 @@ describe('GET /posts/hashtag/:tag', () => {
     await app.inject({ method: 'GET', url: '/posts/hashtag/paris' });
     const where = (prisma.post.findMany as jest.Mock).mock.calls[0][0].where;
     const visibilitiesInOr = where.OR.map((clause: Record<string, unknown>) => clause.visibility).filter(Boolean);
-    expect(visibilitiesInOr).toEqual(['PUBLIC', 'COMMUNITY']);
+    expect(visibilitiesInOr).toEqual(['PUBLIC', 'COMMUNITY', 'COMMUNITY']);
     await app.close();
   });
 

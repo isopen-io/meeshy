@@ -49,7 +49,7 @@ class InterfaceLanguageStoreTest {
 
     @Test
     fun inMemory_normalisesGarbageInitialSeedToSystem() {
-        assertThat(InMemoryInterfaceLanguageStore("de").languageCode.value).isNull()
+        assertThat(InMemoryInterfaceLanguageStore("ja").languageCode.value).isNull()
         assertThat(InMemoryInterfaceLanguageStore("").languageCode.value).isNull()
     }
 
@@ -69,7 +69,7 @@ class InterfaceLanguageStoreTest {
     @Test
     fun inMemory_setUnsupportedCode_fallsBackToSystem() = runBlocking {
         val store = InMemoryInterfaceLanguageStore("fr")
-        store.setLanguageCode("de")
+        store.setLanguageCode("ja")
         assertThat(store.languageCode.value).isNull()
     }
 

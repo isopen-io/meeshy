@@ -44,9 +44,9 @@ class StoryStickerElementTest {
     }
 
     @Test
-    fun `normalised clamps scale and wraps rotation`() {
+    fun `normalised keeps a large scale and wraps rotation`() {
         val sticker = StoryStickerElement(id = "s1", emoji = "😀", scale = 99f, rotationDeg = 540f).normalised()
-        assertThat(sticker.scale).isEqualTo(StoryTextElement.MAX_SCALE)
+        assertThat(sticker.scale).isEqualTo(99f)
         assertThat(sticker.rotationDeg).isEqualTo(180f)
     }
 
@@ -74,21 +74,30 @@ class StoryStickerElementTest {
     }
 
     @Test
-    fun `transformed clamps the scale to the ceiling`() {
+    fun `transformed grows the scale without a ceiling`() {
         val sticker = StoryStickerElement(id = "s1", emoji = "😀", scale = 3f).transformed(scaleBy = 10f, rotateByDeg = 0f)
-        assertThat(sticker.scale).isEqualTo(StoryTextElement.MAX_SCALE)
+            .transformed(scaleBy = 10f, rotateByDeg = 0f)
+        assertThat(sticker.scale).isWithin(1e-3f).of(300f)
     }
 
     @Test
-    fun `transformed clamps the scale to the floor`() {
-        val sticker = StoryStickerElement(id = "s1", emoji = "😀", scale = 1f).transformed(scaleBy = 0.01f, rotateByDeg = 0f)
-        assertThat(sticker.scale).isEqualTo(StoryTextElement.MIN_SCALE)
+    fun `transformed shrinks the sticker down to a 5 design-pixel side and no further`() {
+        val sticker = StoryStickerElement(id = "s1", emoji = "😀", scale = 1f).transformed(scaleBy = 0.0001f, rotateByDeg = 0f)
+        assertThat(StoryStickerElement.BASE_DESIGN_SIDE).isEqualTo(140.0)
+        assertThat(sticker.scale).isWithin(1e-6f).of(5f / 140f)
+        assertThat(sticker.scale * StoryStickerElement.BASE_DESIGN_SIDE.toFloat()).isWithin(1e-4f).of(5f)
     }
 
     @Test
-    fun `transformed collapses a non-positive scale factor to the floor`() {
+    fun `transformed passes below the old 0,3 floor`() {
+        val sticker = StoryStickerElement(id = "s1", emoji = "😀", scale = 1f).transformed(scaleBy = 0.1f, rotateByDeg = 0f)
+        assertThat(sticker.scale).isWithin(1e-6f).of(0.1f)
+    }
+
+    @Test
+    fun `transformed leaves the scale where it is on a non-positive factor`() {
         val sticker = StoryStickerElement(id = "s1", emoji = "😀", scale = 2f).transformed(scaleBy = -1f, rotateByDeg = 0f)
-        assertThat(sticker.scale).isEqualTo(StoryTextElement.MIN_SCALE)
+        assertThat(sticker.scale).isEqualTo(2f)
     }
 
     @Test

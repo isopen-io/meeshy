@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "participants.add.no-results",
+          "androidName": "new_conversation_no_user_found",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.new.create.error",
+          "androidName": "new_conversation_error_create",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.clear-search",
+          "androidName": "conversations_search_clear",
+          "status": "adopted"
+        },
+        {
+          "androidName": "new_conversation_error_blocked",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

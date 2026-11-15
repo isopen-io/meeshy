@@ -1,7 +1,7 @@
 /**
  * Unit tests for story audio routes (audio.ts)
  * Tests GET /stories/audio, GET /static/:filename.
- * Note: POST /stories/audio (multipart upload) is excluded — requires @fastify/multipart integration.
+ * `POST /stories/audio` a été RETIRÉE (#4190) — voir la note en fin de fichier.
  *
  * @jest-environment node
  */
@@ -201,183 +201,22 @@ describe('GET /static/:filename — ogg content type', () => {
   });
 });
 
-// ─── POST /stories/audio — upload ────────────────────────────────────────────
-
-async function buildUploadApp(opts: {
-  authenticated?: boolean;
-  fileData?: any | null;
-  prisma?: any;
-} = {}): Promise<FastifyInstance> {
-  const { authenticated = true, fileData, prisma = makePrisma() } = opts;
-
-  const app = Fastify({ logger: false });
-  const requiredAuth = makePreValidationAuth(authenticated);
-
-  // Inject request.file() mock via preValidation hook
-  const capturedFileData = fileData;
-  app.decorateRequest('file', null);
-  app.addHook('preValidation', async (req: any) => {
-    req.file = async () => capturedFileData;
-  });
-
-  registerStoryAudioRoutes(app, prisma as any, requiredAuth);
-  await app.ready();
-  return app;
-}
-
-describe('POST /stories/audio — unauthenticated', () => {
-  it('returns 401 when no auth', async () => {
-    const app = await buildUploadApp({ authenticated: false });
-    const res = await app.inject({ method: 'POST', url: '/stories/audio', payload: {} });
-    expect(res.statusCode).toBe(401);
-    await app.close();
-  });
-});
-
-describe('POST /stories/audio — no file', () => {
-  it('returns 400 when no file provided', async () => {
-    const app = await buildUploadApp({ fileData: null });
-    const res = await app.inject({ method: 'POST', url: '/stories/audio', payload: {} });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().code).toBe('NO_FILE');
-    await app.close();
-  });
-});
-
-describe('POST /stories/audio — invalid MIME type', () => {
-  it('returns 400 when file has invalid MIME type', async () => {
-    const app = await buildUploadApp({
-      fileData: {
-        mimetype: 'video/mp4',
-        filename: 'video.mp4',
-        fields: {},
-        toBuffer: async () => Buffer.from('data'),
-      },
-    });
-    const res = await app.inject({ method: 'POST', url: '/stories/audio', payload: {} });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().code).toBe('INVALID_AUDIO_FORMAT');
-    await app.close();
-  });
-});
-
-describe('POST /stories/audio — success', () => {
-  it('returns 201 with created audio record', async () => {
-    const mockFs = fs as jest.Mocked<typeof fs>;
-    mockFs.mkdir.mockResolvedValueOnce(undefined as any);
-    mockFs.writeFile.mockResolvedValueOnce(undefined as any);
-
-    const app = await buildUploadApp({
-      fileData: {
-        mimetype: 'audio/mpeg',
-        filename: 'track.mp3',
-        fields: {
-          title: { value: 'My Track' },
-          isPublic: { value: 'true' },
-          duration: { value: '30' },
-        },
-        toBuffer: async () => Buffer.from('mp3 data'),
-      },
-    });
-    const res = await app.inject({ method: 'POST', url: '/stories/audio', payload: {} });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().success).toBe(true);
-    await app.close();
-  });
-});
-
-describe('POST /stories/audio — isPublic false', () => {
-  it('returns 201 with isPublic: false', async () => {
-    const mockFs = fs as jest.Mocked<typeof fs>;
-    mockFs.mkdir.mockResolvedValueOnce(undefined as any);
-    mockFs.writeFile.mockResolvedValueOnce(undefined as any);
-
-    const app = await buildUploadApp({
-      fileData: {
-        mimetype: 'audio/ogg',
-        filename: 'private.ogg',
-        fields: {
-          title: { value: 'Private Audio' },
-          isPublic: { value: 'false' },
-          duration: { value: '45' },
-        },
-        toBuffer: async () => Buffer.from('ogg data'),
-      },
-    });
-    const res = await app.inject({ method: 'POST', url: '/stories/audio', payload: {} });
-    expect(res.statusCode).toBe(201);
-    await app.close();
-  });
-});
-
-describe('POST /stories/audio — missing title and duration fields', () => {
-  it('returns 201 using default title and duration 0', async () => {
-    const mockFs = fs as jest.Mocked<typeof fs>;
-    mockFs.mkdir.mockResolvedValueOnce(undefined as any);
-    mockFs.writeFile.mockResolvedValueOnce(undefined as any);
-
-    const app = await buildUploadApp({
-      fileData: {
-        mimetype: 'audio/wav',
-        filename: '',
-        fields: {},
-        toBuffer: async () => Buffer.from('wav data'),
-      },
-    });
-    const res = await app.inject({ method: 'POST', url: '/stories/audio', payload: {} });
-    expect(res.statusCode).toBe(201);
-    await app.close();
-  });
-});
-
-// ─── POST /stories/audio — anonymous user reaches handler's own auth check ────
-
-describe('POST /stories/audio — NaN duration defaults to 0 (line 60)', () => {
-  it('returns 201 when duration field is a non-numeric string', async () => {
-    const mockFs = fs as jest.Mocked<typeof fs>;
-    mockFs.mkdir.mockResolvedValueOnce(undefined as any);
-    mockFs.writeFile.mockResolvedValueOnce(undefined as any);
-
-    const app = await buildUploadApp({
-      fileData: {
-        mimetype: 'audio/mpeg',
-        filename: 'track.mp3',
-        fields: {
-          title: { value: 'My Track' },
-          isPublic: { value: 'true' },
-          duration: { value: 'not-a-number' },
-        },
-        toBuffer: async () => Buffer.from('mp3 data'),
-      },
-    });
-    const res = await app.inject({ method: 'POST', url: '/stories/audio', payload: {} });
-    expect(res.statusCode).toBe(201);
-    await app.close();
-  });
-});
-
-describe('POST /stories/audio — anonymous user (no registeredUser, handler auth check, line 45-46)', () => {
-  it('returns 401 when authContext has no registeredUser but preValidation passes', async () => {
-    // Build app with a preValidation that lets the request through but sets authContext
-    // without a registeredUser (anonymous session). This hits the handler's own guard.
-    const app = Fastify({ logger: false });
-    const prisma = makePrisma();
-
-    // preValidation: set an anonymous authContext (no registeredUser) and let request proceed
-    const anonymousAuth = async (req: FastifyRequest) => {
-      (req as any).authContext = { isAuthenticated: false, registeredUser: null, userId: 'anon-123' };
-    };
-
-    app.decorateRequest('file', null);
-    app.addHook('preValidation', async (req: any) => {
-      req.file = async () => null;
-    });
-
-    registerStoryAudioRoutes(app, prisma as any, anonymousAuth);
-    await app.ready();
-
-    const res = await app.inject({ method: 'POST', url: '/stories/audio', payload: {} });
-    expect(res.statusCode).toBe(401);
-    await app.close();
-  });
-});
+// ─── POST /stories/audio — RETIRÉE (#4190) ───────────────────────────────────
+//
+// Les huit témoins de la moitié MORTE du couple homonyme sont partis avec la
+// route, et `buildUploadApp` avec eux — ce harnais ne servait qu'à elle.
+// Ce n'est pas une capacité qui disparaît mais une porte SANS APPELANT : aucun
+// des trois clients n'émettait ce POST, et il matérialisait tout l'envoi en
+// mémoire (`toBuffer()`), d'où la borne de 100 Mo qui part avec lui.
+//
+// La moitié VIVANTE du couple — `GET /stories/audio` (iOS `SoundLibraryService`)
+// et `GET /static/:filename` — garde ci-dessus TOUTE sa couverture ; c'est elle
+// que ce retrait pouvait emporter par accident, le verbe étant la seule chose
+// qui distingue les deux routes.
+//
+// L'ABSENCE du POST est gardée là où la table de routes se lit vraiment, et non
+// par le silence de ce fichier : `unit/routes/orphan-route-removal.test.ts`
+// § « la bibliothèque de sons garde sa moitié vivante » pose les DEUX moitiés
+// dans le même bloc — « ne monte plus POST /stories/audio » ET « monte toujours
+// GET /stories/audio » — ce qui empêche cette garde négative de mourir en
+// silence le jour où plus rien ne serait énuméré.

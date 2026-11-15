@@ -1,0 +1,463 @@
+{
+  "kit": "K10",
+  "recipe": {
+    "restingHeight": 64,
+    "inset": 8,
+    "gap": 6,
+    "radius": 32,
+    "spreadMaxWidth": 440,
+    "expandedMaxWidth": 560,
+    "spreadVerticalInset": 10,
+    "sideMargin": 12,
+    "bottomGap": 12,
+    "minimumBottom": 28,
+    "dividerInset": 16,
+    "dividerHeight": 0.5,
+    "dividerOpacity": 0.14,
+    "overflow": 8,
+    "edgeFade": 8,
+    "stowMs": 250,
+    "reducedStowMs": 150,
+    "reducedSizeMs": 200,
+    "springResponse": 0.35,
+    "springDamping": 0.85,
+    "androidSizeMs": 250,
+    "webSizeMs": 260,
+    "webEasing": [
+      0.2,
+      0.9,
+      0.3,
+      1
+    ],
+    "sizes": [
+      48,
+      44,
+      40
+    ],
+    "hostMargin": 24,
+    "tapTarget": {
+      "ios": 44,
+      "android": 48,
+      "web": 44
+    }
+  },
+  "fit": [
+    {
+      "hostWidth": 390,
+      "buttonCount": 7,
+      "primaryWidth": null,
+      "size": 44,
+      "scrolls": false,
+      "width": 360
+    },
+    {
+      "hostWidth": 360,
+      "buttonCount": 7,
+      "primaryWidth": null,
+      "size": 40,
+      "scrolls": false,
+      "width": 332
+    },
+    {
+      "hostWidth": 320,
+      "buttonCount": 7,
+      "primaryWidth": null,
+      "size": 40,
+      "scrolls": true,
+      "width": 296
+    },
+    {
+      "hostWidth": 390,
+      "buttonCount": 3,
+      "primaryWidth": null,
+      "size": 48,
+      "scrolls": false,
+      "width": 172
+    },
+    {
+      "hostWidth": 390,
+      "buttonCount": 5,
+      "primaryWidth": null,
+      "size": 48,
+      "scrolls": false,
+      "width": 280
+    },
+    {
+      "hostWidth": 390,
+      "buttonCount": 3,
+      "primaryWidth": 120,
+      "size": 48,
+      "scrolls": false,
+      "width": 298
+    },
+    {
+      "hostWidth": 390,
+      "buttonCount": 6,
+      "primaryWidth": 150,
+      "size": 40,
+      "scrolls": true,
+      "width": 366
+    },
+    {
+      "hostWidth": 320,
+      "buttonCount": 4,
+      "primaryWidth": 100,
+      "size": 40,
+      "scrolls": true,
+      "width": 296
+    },
+    {
+      "hostWidth": 360,
+      "buttonCount": 4,
+      "primaryWidth": 100,
+      "size": 48,
+      "scrolls": false,
+      "width": 332
+    },
+    {
+      "hostWidth": 390,
+      "buttonCount": 0,
+      "primaryWidth": 100,
+      "size": 48,
+      "scrolls": false,
+      "width": 116
+    },
+    {
+      "hostWidth": 390,
+      "buttonCount": 0,
+      "primaryWidth": null,
+      "size": 48,
+      "scrolls": false,
+      "width": 0
+    },
+    {
+      "hostWidth": 820,
+      "buttonCount": 12,
+      "primaryWidth": null,
+      "size": 48,
+      "scrolls": false,
+      "width": 658
+    },
+    {
+      "hostWidth": 390,
+      "buttonCount": 1,
+      "primaryWidth": null,
+      "size": 48,
+      "scrolls": false,
+      "width": 64
+    },
+    {
+      "hostWidth": 375,
+      "buttonCount": 4,
+      "primaryWidth": null,
+      "size": 48,
+      "scrolls": false,
+      "width": 226
+    },
+    {
+      "hostWidth": 430,
+      "buttonCount": 7,
+      "primaryWidth": null,
+      "size": 48,
+      "scrolls": false,
+      "width": 388
+    }
+  ],
+  "width": [
+    {
+      "layout": "hug",
+      "hasAbove": false,
+      "place": 366,
+      "natural": 172,
+      "width": 172
+    },
+    {
+      "layout": "hug",
+      "hasAbove": false,
+      "place": 100,
+      "natural": 172,
+      "width": 100
+    },
+    {
+      "layout": "spread",
+      "hasAbove": false,
+      "place": 366,
+      "natural": 172,
+      "width": 366
+    },
+    {
+      "layout": "spread",
+      "hasAbove": false,
+      "place": 796,
+      "natural": 172,
+      "width": 440
+    },
+    {
+      "layout": "hug",
+      "hasAbove": true,
+      "place": 796,
+      "natural": 172,
+      "width": 560
+    },
+    {
+      "layout": "hug",
+      "hasAbove": true,
+      "place": 366,
+      "natural": 172,
+      "width": 366
+    },
+    {
+      "layout": "spread",
+      "hasAbove": true,
+      "place": 796,
+      "natural": 172,
+      "width": 560
+    },
+    {
+      "layout": "hug",
+      "hasAbove": false,
+      "place": 796,
+      "natural": 0,
+      "width": 0
+    }
+  ],
+  "presence": {
+    "duration": [
+      {
+        "reduceMotion": false,
+        "seconds": 0.25
+      },
+      {
+        "reduceMotion": true,
+        "seconds": 0.15
+      }
+    ],
+    "leavesByItsEdge": [
+      {
+        "presence": "shown",
+        "reduceMotion": false,
+        "leaves": false
+      },
+      {
+        "presence": "shown",
+        "reduceMotion": true,
+        "leaves": false
+      },
+      {
+        "presence": "withoutRow",
+        "reduceMotion": false,
+        "leaves": false
+      },
+      {
+        "presence": "withoutRow",
+        "reduceMotion": true,
+        "leaves": false
+      },
+      {
+        "presence": "stowed",
+        "reduceMotion": false,
+        "leaves": true
+      },
+      {
+        "presence": "stowed",
+        "reduceMotion": true,
+        "leaves": false
+      }
+    ],
+    "travel": [
+      {
+        "extent": 64,
+        "margin": 28,
+        "travel": 92
+      },
+      {
+        "extent": 0,
+        "margin": 28,
+        "travel": 28
+      },
+      {
+        "extent": -10,
+        "margin": 28,
+        "travel": 28
+      },
+      {
+        "extent": "nan",
+        "margin": 28,
+        "travel": 28
+      },
+      {
+        "extent": "infinity",
+        "margin": 28,
+        "travel": 28
+      },
+      {
+        "extent": 200,
+        "margin": 0,
+        "travel": 200
+      }
+    ],
+    "acceptsTouches": [
+      {
+        "presence": "shown",
+        "stowedFor": null,
+        "reduceMotion": false,
+        "accepts": true
+      },
+      {
+        "presence": "stowed",
+        "stowedFor": 0,
+        "reduceMotion": false,
+        "accepts": true
+      },
+      {
+        "presence": "stowed",
+        "stowedFor": 0.24,
+        "reduceMotion": false,
+        "accepts": true
+      },
+      {
+        "presence": "stowed",
+        "stowedFor": 0.25,
+        "reduceMotion": false,
+        "accepts": false
+      },
+      {
+        "presence": "stowed",
+        "stowedFor": 0.14,
+        "reduceMotion": true,
+        "accepts": true
+      },
+      {
+        "presence": "stowed",
+        "stowedFor": 0.15,
+        "reduceMotion": true,
+        "accepts": false
+      },
+      {
+        "presence": "withoutRow",
+        "stowedFor": 5,
+        "reduceMotion": false,
+        "accepts": true
+      }
+    ]
+  },
+  "dock": [
+    {
+      "safeBottom": 34,
+      "bottom": 46
+    },
+    {
+      "safeBottom": 0,
+      "bottom": 28
+    },
+    {
+      "safeBottom": 20,
+      "bottom": 32
+    },
+    {
+      "safeBottom": 16,
+      "bottom": 28
+    }
+  ],
+  "offsets": [
+    {
+      "widths": [
+        48,
+        48,
+        48
+      ],
+      "gap": 6,
+      "available": 300,
+      "spreads": false,
+      "offsets": [
+        0,
+        54,
+        108
+      ]
+    },
+    {
+      "widths": [
+        48,
+        48,
+        48
+      ],
+      "gap": 6,
+      "available": 300,
+      "spreads": true,
+      "offsets": [
+        26,
+        126,
+        226
+      ]
+    },
+    {
+      "widths": [
+        48,
+        48,
+        48
+      ],
+      "gap": 6,
+      "available": 100,
+      "spreads": true,
+      "offsets": [
+        0,
+        54,
+        108
+      ]
+    },
+    {
+      "widths": [
+        48,
+        44
+      ],
+      "gap": 6,
+      "available": 200,
+      "spreads": true,
+      "offsets": [
+        26,
+        128
+      ]
+    },
+    {
+      "widths": [],
+      "gap": 6,
+      "available": 200,
+      "spreads": true,
+      "offsets": []
+    },
+    {
+      "widths": [
+        48
+      ],
+      "gap": 6,
+      "available": 0,
+      "spreads": false,
+      "offsets": [
+        0
+      ]
+    }
+  ],
+  "rowWidth": [
+    {
+      "widths": [
+        48,
+        48,
+        48
+      ],
+      "gap": 6,
+      "width": 156
+    },
+    {
+      "widths": [],
+      "gap": 6,
+      "width": 0
+    },
+    {
+      "widths": [
+        44
+      ],
+      "gap": 6,
+      "width": 44
+    }
+  ]
+}

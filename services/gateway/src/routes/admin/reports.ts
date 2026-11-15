@@ -1,102 +1,169 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
+import { sendSuccess, sendInternalError, sendNotFound, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { getReportService } from '../../services/admin/report.service';
+import { isNewlyResolvedReportTransition, notifyReportResolved } from '../../services/reports/reportResolvedNotification';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import type {
-  CreateReportDTO,
   UpdateReportDTO,
   ReportFilters
 } from '@meeshy/shared/types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { requirePermission, withAudit } from '../../middleware/authorize';
+import { signaler, limiteursDeSignalement } from '../reports';
+import { dateDeRetrait, depreciee } from '../../utils/deprecation';
+import { apiPath } from '@meeshy/shared/api/prefix';
+import { enrichReports, enrichmentFor } from './reports-enrichment';
+import {
+  reportArraySuccess,
+  reportOneSuccess,
+  reportPageSuccess,
+  reportsListQuerystring,
+  reportsListSuccess,
+} from './reports-schemas';
+import { reponsesEnErreur } from './oversight-schemas';
+import { adminViewer } from './oversight-viewer';
+import { refusedAsSelfModeration } from './report-self-moderation';
+
+const DEPUIS_REPORTS = '2026-08-29';
+
+/**
+ * Le sursis de `POST /admin/reports`.
+ *
+ * `depuis` est la date de fermeture de #4155 — le jour où `POST /api/v1/reports`
+ * est devenue l'adresse du geste. `retraitLe` s'en dérive par la fenêtre du
+ * dépôt (`identity.md` § 5, 180 jours) : il INFORME le client d'une échéance
+ * stable, il ne décide pas du retrait. Le retrait réel reste gouverné par le
+ * compteur d'accès nul des trois clients (#4155 c.5, mesuré par #4275).
+ */
+const ADAPTATEUR_SIGNALEMENT = {
+  depuis: DEPUIS_REPORTS,
+  successeur: apiPath('/reports'),
+  retraitLe: dateDeRetrait(DEPUIS_REPORTS),
+} as const;
 
 // Schemas de validation Zod
-const createReportSchema = z.object({
-  reportedType: z.enum(['message', 'user', 'conversation', 'community', 'post', 'story', 'sound']),
-  reportedEntityId: z.string().min(1, 'ID de l\'entite requis'),
-  reporterId: z.string().optional(),
-  reporterName: z.string().optional(),
-  reportType: z.enum(['spam', 'inappropriate', 'harassment', 'violence', 'hate_speech', 'fake_profile', 'impersonation', 'other']),
-  reason: z.string().optional()
-});
-
 const updateReportSchema = z.object({
   status: z.enum(['pending', 'under_review', 'resolved', 'rejected', 'dismissed']).optional(),
   moderatorNotes: z.string().optional(),
   actionTaken: z.enum(['none', 'warning_sent', 'content_removed', 'user_suspended', 'user_banned']).optional()
 });
 
+/**
+ * Ce qu'une décision de modération CHANGE, et que le journal d'audit consigne
+ * (#8876, § 6.10) : le statut, l'action retenue, les notes et le modérateur. Seuls
+ * les champs dont la valeur a bougé y figurent — une trace qui répète l'état
+ * inchangé noie la décision dans son propre bruit.
+ */
+const AUDITED_REPORT_FIELDS = ['status', 'actionTaken', 'moderatorNotes', 'moderatorId'] as const;
+
+type AuditedReportState = { readonly [Field in (typeof AUDITED_REPORT_FIELDS)[number]]?: string | null };
+
+const reportChanges = (before: AuditedReportState, after: AuditedReportState) =>
+  Object.fromEntries(
+    AUDITED_REPORT_FIELDS.filter((field) => (before[field] ?? null) !== (after[field] ?? null)).map((field) => [
+      field,
+      { before: before[field] ?? null, after: after[field] ?? null },
+    ])
+  );
+
+/**
+ * Les clés de tri que `GET /admin/reports` SERT — la liste blanche que
+ * `ReportFilters['sortBy']` (`packages/shared/types/report.ts`) déclare déjà et
+ * que la lecture `request.query as any` faisait sauter : le compilateur ne
+ * voyait plus le contrat, et `orderBy[sortBy] = sortOrder`
+ * (`services/admin/report.service.ts`, unique consommateur de ces deux champs)
+ * prenait la clé du client TELLE QUELLE.
+ *
+ * Directive du 2026-08-25 : « une SÉLECTION ou un ORDRE qui dépend de la
+ * présence révèle autant que le champ ». `routes/admin/users.ts` refuse déjà
+ * `isOnline`/`lastActiveAt` comme clé de tri (`PRESENCE_SORT_KEYS`) sur la
+ * route qui ordonne des lignes `User`. Ici la liste est CLOSE plutôt que noire,
+ * et c'est ce qui la rend tenable : `Report` ne porte aucune colonne de
+ * présence AUJOURD'HUI, mais il porte deux relations vers `User`
+ * (`reporter`, `moderator`) dont Prisma sait ordonner — une liste d'interdits
+ * devrait suivre le modèle, une liste close ne le suit pas.
+ *
+ * Une clé hors liste RETOMBE sur `createdAt` : c'est le régime déjà tenu par
+ * `resolveUserSortKey` et `presenceGatedFilters` du même répertoire — un 400
+ * confirmerait au client l'existence de la colonne qu'il vient de nommer.
+ */
+const REPORT_SORT_KEYS = ['createdAt', 'updatedAt', 'resolvedAt'] as const;
+
+type ReportSortKey = (typeof REPORT_SORT_KEYS)[number];
+
+const resolveReportSortKey = (value: unknown): ReportSortKey =>
+  (REPORT_SORT_KEYS as readonly unknown[]).includes(value) ? (value as ReportSortKey) : 'createdAt';
+
+/** `asc` demandé explicitement, `desc` pour tout le reste — y compris `DESC`. */
+const resolveReportSortOrder = (value: unknown): 'asc' | 'desc' => (value === 'asc' ? 'asc' : 'desc');
+
 // Middleware pour verifier les permissions de moderation
-const requireModeratorPermission = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return sendUnauthorized(reply, 'Authentification requise');
-  }
-
-  const userRole = authContext.registeredUser.role;
-  const canModerate = ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(userRole);
-
-  if (!canModerate) {
-    return sendForbidden(reply, 'Permission de moderation requise');
-  }
-};
+// `requireModeratorPermission` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+const requireModeratorPermission = requirePermission('canModerateContent');
 
 export async function reportRoutes(fastify: FastifyInstance) {
   const reportService = getReportService(fastify.prisma);
 
   /**
-   * POST /api/admin/reports
-   * Creer un nouveau signalement
+   * `POST /admin/reports` — ADAPTATEUR MINCE vers `POST /reports` (#4155).
+   *
+   * Signaler n'est pas un geste d'administration : c'était pourtant la seule
+   * route de ce répertoire ouverte à un utilisateur ordinaire, et la seule que
+   * les trois clients appelaient. L'adresse ment donc sur le privilège, et le
+   * jour où quelqu'un durcit le préfixe `/admin` — liste blanche d'IP, WAF —
+   * il casse le signalement sur iOS, Android et le web sans le savoir.
+   *
+   * Elle reste montée le temps que les trois clients migrent, et elle ne
+   * DÉCIDE plus rien : même corps validé, mêmes trois seuils de débit, même
+   * vérification de cible, même identité serveur. Un adaptateur qui recopierait
+   * le geste porterait sa propre loi — c'est la forme du défaut, pas sa
+   * correction.
+   *
+   * Avant de la retirer : COMPTER les appels des trois clients. Le client
+   * Kotlin (`core/network/.../ReportApi.kt`) n'avait pas été inventorié par
+   * l'audit qui a ouvert cette issue.
    */
+  // L'annonce est posée en `onRequest`, AVANT `authenticate` : un appelant dont
+  // le jeton a expiré reçoit 401 et apprend quand même par quoi migrer — c'est
+  // exactement celui qui a le plus besoin de le savoir (#4274).
   fastify.post('/', {
-    onRequest: [fastify.authenticate]
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      const body = createReportSchema.parse(request.body);
-
-      // Si l'utilisateur est authentifie, utiliser son ID
-      const reportData: CreateReportDTO = {
-        reportedType: body.reportedType,
-        reportedEntityId: body.reportedEntityId,
-        reportType: body.reportType,
-        reporterId: authContext.registeredUser?.id || body.reporterId,
-        reporterName: body.reporterName || authContext.anonymousUser?.username,
-        reason: body.reason
-      };
-
-      const report = await reportService.createReport(reportData);
-
-      return sendSuccess(reply, report, { statusCode: 201, message: 'Signalement cree avec succes' });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return sendBadRequest(reply, 'Donnees invalides');
-      }
-
-      logError(fastify.log, 'Create report error:', error);
-      return sendInternalError(reply, 'Erreur lors de la creation du signalement');
-    }
-  });
+    onRequest: [depreciee(ADAPTATEUR_SIGNALEMENT), fastify.authenticate],
+    preHandler: limiteursDeSignalement(fastify)
+  }, (request: FastifyRequest, reply: FastifyReply) => signaler(fastify, request, reply));
 
   /**
    * GET /api/admin/reports
    * Lister les signalements avec pagination et filtres
    */
   fastify.get('/', {
-    onRequest: [fastify.authenticate, requireModeratorPermission]
+    onRequest: [fastify.authenticate, requireModeratorPermission],
+    schema: {
+      description: 'Liste les signalements, nommés (signalant, modérateur, entité signalée). canModerateContent. #8876.',
+      tags: ['admin'],
+      summary: 'List reports (admin)',
+      security: [{ bearerAuth: [] }],
+      querystring: reportsListQuerystring,
+      response: { 200: reportsListSuccess, ...reponsesEnErreur },
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
+      const viewer = adminViewer(request);
 
       const filters: ReportFilters = {
         reportedType: query.reportedType,
         reportType: query.reportType,
         status: query.status,
         reporterId: query.reporterId,
-        moderatorId: query.moderatorId,
-        sortBy: query.sortBy || 'createdAt',
-        sortOrder: query.sortOrder || 'desc'
+        moderatorId: query.assigned === 'me' ? viewer.id : query.moderatorId,
+        unassigned: query.assigned === 'none',
+        reportedEntityId: query.reportedEntityId,
+        sortBy: resolveReportSortKey(query.sortBy),
+        sortOrder: resolveReportSortOrder(query.sortOrder)
       };
 
       if (query.createdAfter) {
@@ -117,7 +184,9 @@ export async function reportRoutes(fastify: FastifyInstance) {
         result.reports.length
       );
 
-      return sendSuccess(reply, { reports: result.reports, pagination: paginationMeta });
+      const reports = await enrichReports(fastify.prisma, result.reports, enrichmentFor(viewer));
+
+      return sendSuccess(reply, { reports, pagination: paginationMeta });
     } catch (error) {
       logError(fastify.log, 'List reports error:', error);
       return sendInternalError(reply, 'Erreur lors de la recuperation des signalements');
@@ -130,7 +199,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
    */
   fastify.get('/stats', {
     onRequest: [fastify.authenticate, requireModeratorPermission]
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const stats = await reportService.getReportStats();
 
@@ -146,7 +215,14 @@ export async function reportRoutes(fastify: FastifyInstance) {
    * Obtenir les signalements recents
    */
   fastify.get('/recent', {
-    onRequest: [fastify.authenticate, requireModeratorPermission]
+    onRequest: [fastify.authenticate, requireModeratorPermission],
+    schema: {
+      description: 'Les signalements des dernières 24 heures, nommés. canModerateContent. #8876.',
+      tags: ['admin'],
+      summary: 'Recent reports (admin)',
+      security: [{ bearerAuth: [] }],
+      response: { 200: reportArraySuccess, ...reponsesEnErreur },
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
@@ -156,7 +232,10 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
       const reports = await reportService.getRecentReports(limit);
 
-      return sendSuccess(reply, reports);
+      return sendSuccess(
+        reply,
+        await enrichReports(fastify.prisma, reports, enrichmentFor(adminViewer(request)))
+      );
     } catch (error) {
       logError(fastify.log, 'Get recent reports error:', error);
       return sendInternalError(reply, 'Erreur lors de la recuperation des signalements recents');
@@ -168,7 +247,14 @@ export async function reportRoutes(fastify: FastifyInstance) {
    * Obtenir un signalement par ID
    */
   fastify.get('/:id', {
-    onRequest: [fastify.authenticate, requireModeratorPermission]
+    onRequest: [fastify.authenticate, requireModeratorPermission],
+    schema: {
+      description: 'Un signalement, nommé (signalant, modérateur, entité signalée). canModerateContent. #8876.',
+      tags: ['admin'],
+      summary: 'Get one report (admin)',
+      security: [{ bearerAuth: [] }],
+      response: { 200: reportOneSuccess, ...reponsesEnErreur },
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
@@ -179,7 +265,9 @@ export async function reportRoutes(fastify: FastifyInstance) {
         return sendNotFound(reply, 'Signalement non trouve');
       }
 
-      return sendSuccess(reply, report);
+      const [served] = await enrichReports(fastify.prisma, [report], enrichmentFor(adminViewer(request)));
+
+      return sendSuccess(reply, served);
     } catch (error) {
       logError(fastify.log, 'Get report error:', error);
       return sendInternalError(reply, 'Erreur lors de la recuperation du signalement');
@@ -189,6 +277,13 @@ export async function reportRoutes(fastify: FastifyInstance) {
   /**
    * PATCH /api/admin/reports/:id
    * Mettre a jour un signalement (moderateur uniquement)
+   *
+   * #3718 — art. 16 DSA : le déclarant reçoit une réponse motivée quand son
+   * signalement BASCULE dans un statut terminal (resolved/rejected/dismissed).
+   * La transition se lit en comparant le statut AVANT et APRÈS l'écriture —
+   * sans le fetch préalable, un modérateur qui rouvre un signalement déjà
+   * résolu (ou n'en change que `moderatorNotes`) renotifierait le déclarant à
+   * chaque sauvegarde.
    */
   fastify.patch('/:id', {
     onRequest: [fastify.authenticate, requireModeratorPermission]
@@ -199,7 +294,34 @@ export async function reportRoutes(fastify: FastifyInstance) {
       const { id } = request.params as { id: string };
       const body = updateReportSchema.parse(request.body);
 
+      const existingReport = await reportService.getReportById(id);
+      if (!existingReport) {
+        return sendNotFound(reply, 'Signalement non trouve');
+      }
+      if (await refusedAsSelfModeration(fastify, request, reply, existingReport, { gesture: 'update' })) return;
+
       const report = await reportService.updateReport(id, moderatorId, body as UpdateReportDTO);
+
+      const changes = reportChanges(existingReport, report);
+      await withAudit(request, {
+        action: 'ADMIN_REPORT_UPDATED',
+        entity: 'Report',
+        entityId: id,
+        userId: report.reportedEntityId,
+        reason: body.moderatorNotes,
+        changes: Object.keys(changes).length > 0 ? changes : undefined,
+      });
+
+      if (isNewlyResolvedReportTransition(existingReport.status, report.status)) {
+        await notifyReportResolved(fastify.prisma, {
+          id: report.id,
+          reporterId: report.reporterId,
+          reportedType: report.reportedType,
+          reportType: report.reportType,
+          status: report.status as 'resolved' | 'rejected' | 'dismissed',
+          actionTaken: report.actionTaken,
+        });
+      }
 
       return sendSuccess(reply, report, { message: 'Signalement mis a jour' });
     } catch (error) {
@@ -215,6 +337,20 @@ export async function reportRoutes(fastify: FastifyInstance) {
   /**
    * DELETE /api/admin/reports/:id
    * Supprimer un signalement
+   *
+   * #4157 — la matrice n'a pas d'avis sur CE point précis (« — » dans le
+   * tableau de l'issue) : la question n'est pas « quel rôle ? » (MODERATOR
+   * reste le seuil juste, `canModerateContent`) mais « quel rapport entre
+   * l'appelant et la CIBLE du signalement ? ». Sans garde, un modérateur
+   * SIGNALÉ (reportedType === 'user', reportedEntityId === lui-même) pouvait
+   * effacer la preuve avant qu'un rang supérieur ne l'examine — et, jusqu'à
+   * #10458, celui de SA publication ou de SON commentaire aussi : la garde lit
+   * désormais l'auteur du contenu signalé (`report-self-moderation.ts`), et
+   * vaut pour PATCH, DELETE et la prise en charge — `deleteReport`
+   * est un DELETE Mongo définitif, pas une corbeille. Deux gestes séparés :
+   * REFUSER l'auto-suppression, et laisser une trace `AdminAuditLog` pour
+   * toute suppression qui a réellement lieu — la seule chose qui survit à la
+   * disparition définitive de la ligne `Report`.
    */
   fastify.delete('/:id', {
     onRequest: [fastify.authenticate, requireModeratorPermission]
@@ -222,7 +358,21 @@ export async function reportRoutes(fastify: FastifyInstance) {
     try {
       const { id } = request.params as { id: string };
 
+      const report = await reportService.getReportById(id);
+      if (!report) {
+        return sendNotFound(reply, 'Signalement non trouve');
+      }
+      if (await refusedAsSelfModeration(fastify, request, reply, report, { gesture: 'delete' })) return;
+
       await reportService.deleteReport(id);
+
+      await withAudit(request, {
+        action: 'ADMIN_REPORT_DELETED',
+        entity: 'Report',
+        entityId: id,
+        userId: report.reportedEntityId,
+        changes: { reportedType: report.reportedType, reportType: report.reportType, status: report.status },
+      });
 
       return sendSuccess(reply, { message: 'Signalement supprime' });
     } catch (error) {
@@ -233,17 +383,33 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
   /**
    * GET /api/admin/reports/entity/:type/:id
-   * Obtenir tous les signalements pour une entite specifique
+   * Obtenir une PAGE des signalements d'une entite specifique (#4165).
+   *
+   * La route rendait la collection entiere : une entite tres signalee servait
+   * TOUS ses signalements a chaque ouverture de la fiche. Elle reprend ici la
+   * convention offset/limit deja posee par GET / du meme fichier, plutot
+   * qu'une seconde convention inventee pour l'occasion.
    */
   fastify.get('/entity/:type/:id', {
-    onRequest: [fastify.authenticate, requireModeratorPermission]
+    onRequest: [fastify.authenticate, requireModeratorPermission],
+    schema: {
+      description: "Une page des signalements d'une entité, nommés. canModerateContent. #8876.",
+      tags: ['admin'],
+      summary: 'Reports of one entity (admin)',
+      security: [{ bearerAuth: [] }],
+      response: { 200: reportPageSuccess, ...reponsesEnErreur },
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { type, id } = request.params as { type: string; id: string };
+      const { offset: offsetRaw, limit: limitRaw } = request.query as { offset?: string; limit?: string };
+      const { offset, limit } = validatePagination(offsetRaw, limitRaw);
 
-      const reports = await reportService.getReportsForEntity(type, id);
+      const { reports, total } = await reportService.getReportsForEntity(type, id, offset, limit);
 
-      return sendSuccess(reply, reports);
+      const served = await enrichReports(fastify.prisma, reports, enrichmentFor(adminViewer(request)));
+
+      return sendPaginatedSuccess(reply, served, buildPaginationMeta(total, offset, limit, reports.length));
     } catch (error) {
       logError(fastify.log, 'Get entity reports error:', error);
       return sendInternalError(reply, 'Erreur lors de la recuperation des signalements');
@@ -262,7 +428,22 @@ export async function reportRoutes(fastify: FastifyInstance) {
       const moderatorId = authContext.registeredUser.id;
       const { id } = request.params as { id: string };
 
+      const existingReport = await reportService.getReportById(id);
+      if (!existingReport) {
+        return sendNotFound(reply, 'Signalement non trouve');
+      }
+      if (await refusedAsSelfModeration(fastify, request, reply, existingReport, { gesture: 'assign' })) return;
+
       const report = await reportService.assignModerator(id, moderatorId);
+
+      const changes = reportChanges(existingReport, report);
+      await withAudit(request, {
+        action: 'ADMIN_REPORT_ASSIGNED',
+        entity: 'Report',
+        entityId: id,
+        userId: report.reportedEntityId,
+        changes: Object.keys(changes).length > 0 ? changes : undefined,
+      });
 
       return sendSuccess(reply, report, { message: 'Moderateur assigne au signalement' });
     } catch (error) {
@@ -276,7 +457,14 @@ export async function reportRoutes(fastify: FastifyInstance) {
    * Obtenir les signalements assignes au moderateur connecte
    */
   fastify.get('/moderator/mine', {
-    onRequest: [fastify.authenticate, requireModeratorPermission]
+    onRequest: [fastify.authenticate, requireModeratorPermission],
+    schema: {
+      description: "Les signalements en cours assignés à l'appelant, nommés. canModerateContent. #8876.",
+      tags: ['admin'],
+      summary: 'My assigned reports (admin)',
+      security: [{ bearerAuth: [] }],
+      response: { 200: reportArraySuccess, ...reponsesEnErreur },
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -284,7 +472,10 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
       const reports = await reportService.getModeratorReports(moderatorId);
 
-      return sendSuccess(reply, reports);
+      return sendSuccess(
+        reply,
+        await enrichReports(fastify.prisma, reports, enrichmentFor(adminViewer(request)))
+      );
     } catch (error) {
       logError(fastify.log, 'Get moderator reports error:', error);
       return sendInternalError(reply, 'Erreur lors de la recuperation des signalements');

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="session_lost_pending_sends">Deine Sitzung wurde beendet: %1$d ausstehende Sendung(en) gingen verloren.</string>
+</resources>

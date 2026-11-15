@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_control_effects">Effekte</string>
+    <string name="call_effects_title">Effekte meiner Kamera</string>
+    <string name="call_effects_category_face">Gesicht</string>
+    <string name="call_effects_category_color">Farbe</string>
+    <string name="call_effects_face_none">Keiner</string>
+    <string name="call_effects_face_smoothing">Hautglättung</string>
+    <string name="call_effects_face_toad">Kröte</string>
+    <string name="call_effects_face_angel">Engel</string>
+    <string name="call_effects_face_demon">Dämon</string>
+    <string name="call_effects_face_volcano">Ausbruch</string>
+    <string name="call_effects_settings">Einstellungen</string>
+    <string name="call_effects_settings_hint">Zeigt Helligkeit und Hintergrundunschärfe statt der Effekte</string>
+    <string name="call_effects_back">Zurück zum Anruf</string>
+    <string name="call_effects_back_hint">Behält Ihren Look und kehrt zum Anruf zurück</string>
+    <string name="call_effects_add_look">Weiteren Look hinzufügen</string>
+    <string name="call_effects_add_look_hint">Wechselt zu einer anderen Art von Look, die sich kombinieren lässt</string>
+    <string name="call_effects_blur">Hintergrund unscharf</string>
+    <string name="call_effects_smoothing_strength">Stärke der Glättung</string>
+    <string name="call_effects_brightness">Helligkeit</string>
+    <string name="call_effects_percent">%1$d %%</string>
+    <string name="call_effects_next">Nächster Effekt</string>
+    <string name="call_effects_previous">Vorheriger Effekt</string>
+    <string name="call_effects_category_landscape">Landschaft</string>
+    <string name="call_effects_category_voice">Stimme</string>
+    <string name="call_effects_layer_entry">%1$s · %2$s</string>
+</resources>

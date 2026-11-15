@@ -41,6 +41,18 @@ object FrameLuminance {
         height: Int,
         rowStride: Int = width,
         step: Int = DEFAULT_SAMPLE_STEP,
+    ): Float? = averageOfYPlane(java.nio.ByteBuffer.wrap(yPlane), width, height, rowStride, step)
+
+    /**
+     * Même mesure sur le tampon direct d'une trame de capture (`I420Buffer.dataY`), sans copier le plan :
+     * seuls les pixels échantillonnés sont lus, par accès absolu (la position du tampon ne bouge pas).
+     */
+    fun averageOfYPlane(
+        yPlane: java.nio.ByteBuffer,
+        width: Int,
+        height: Int,
+        rowStride: Int = width,
+        step: Int = DEFAULT_SAMPLE_STEP,
     ): Float? {
         if (width <= 0 || height <= 0 || step <= 0 || rowStride < width) return null
 
@@ -52,8 +64,8 @@ object FrameLuminance {
             var x = 0
             while (x < width) {
                 val offset = rowBase + x
-                if (offset >= yPlane.size) return null
-                sum += (yPlane[offset].toInt() and 0xFF)
+                if (offset >= yPlane.limit()) return null
+                sum += (yPlane.get(offset).toInt() and 0xFF)
                 count++
                 x += step
             }
@@ -61,5 +73,18 @@ object FrameLuminance {
         }
         if (count == 0) return null
         return sum.toFloat() / count.toFloat()
+    }
+
+    /**
+     * Luminance relative WCAG 2.x (0 = noir … 1 = blanc) d'un pixel sRGB `0..255` : chaque canal
+     * est linéarisé puis pondéré (0,2126 / 0,7152 / 0,0722). Brique commune de la mesure du
+     * chrome posé sur un média (miroir de `CanvasChromeScheme.averageRelativeLuminance`, iOS).
+     */
+    fun relativeLuminance(red: Int, green: Int, blue: Int): Double =
+        0.2126 * linearize(red) + 0.7152 * linearize(green) + 0.0722 * linearize(blue)
+
+    private fun linearize(channel: Int): Double {
+        val c = channel.coerceIn(0, 255) / 255.0
+        return if (c <= 0.03928) c / 12.92 else Math.pow((c + 0.055) / 1.055, 2.4)
     }
 }

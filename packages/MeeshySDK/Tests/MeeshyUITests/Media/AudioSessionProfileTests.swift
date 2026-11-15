@@ -10,8 +10,11 @@ final class AudioSessionProfileTests: XCTestCase {
         XCTAssertEqual(AudioSessionProfile.content.categoryOptions, [])
     }
 
-    func test_transientProfile_ducksOthers() {
-        XCTAssertEqual(AudioSessionProfile.transient.categoryOptions, [.duckOthers])
+    /// #11039 — un aperçu ou un réel qui sonne met la musique des autres apps
+    /// en pause, comme le vocal : il ne l'atténue plus.
+    func test_transientProfile_pausesOthersLikeContent() {
+        XCTAssertEqual(AudioSessionProfile.transient.categoryOptions, ContentPlaybackSessionLaw.audibleOptions)
+        XCTAssertFalse(AudioSessionProfile.transient.categoryOptions.contains(.duckOthers))
     }
 
     func test_freshEngine_defaultsToTransient_failSafe() {

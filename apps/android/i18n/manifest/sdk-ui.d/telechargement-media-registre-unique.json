@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "a11y.media.download.action",
+          "androidName": "a11y_media_download_action",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.media.download.cancel",
+          "androidName": "a11y_media_download_cancel",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

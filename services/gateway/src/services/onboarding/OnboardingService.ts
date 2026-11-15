@@ -1,0 +1,522 @@
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { SPARKS_USER_SELECT, levelSparksOf, sparksOf } from '../game/SparksFacts';
+import { isDeclaredMinor, judgeDeclaredBirthDate } from '@meeshy/shared/utils/age';
+import { GLOBAL_CONVERSATION_TYPE, viewerWriteRestrictionOf } from '@meeshy/shared/utils/global-minor-restriction';
+import {
+  ONBOARDING_COMPLETION_STEP_IDS,
+  ONBOARDING_MAX_SUGGESTIONS,
+  ONBOARDING_START_AT,
+  ONBOARDING_STEP_IDS,
+  ONBOARDING_WINDOW_DAYS,
+  addOnboardingStep,
+  isOnboardingStepId,
+  type OnboardingPatchBody,
+  type OnboardingState,
+  type OnboardingStepId,
+  type OnboardingStepRewards,
+  type OnboardingSuggestion,
+} from '@meeshy/shared/types/onboarding';
+import { ACTIVATION_SELECT, mayPublish, resolveAccountActivation } from '../auth/account-activation';
+import { onboardingStepRewards } from './onboardingRewards';
+import { writeBirthDateOnce } from '../auth/birth-date-write';
+import { engagementScaleServiceFor } from '../engagement/EngagementScaleService';
+import { getBlockRelatedUserIds } from '../../utils/blocking';
+
+/**
+ * L'état d'onboarding post-inscription (#7729) — le SEUL site qui le calcule,
+ * servi par `GET`/`PATCH /api/v1/me/onboarding` à web-v2 et iOS.
+ *
+ * Source : docs/marketing/campagne-2026-09/onboarding-parcours.md § 2, § 3, § 5.
+ */
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const START_AT_MS = Date.parse(ONBOARDING_START_AT);
+const GLOBAL_CONVERSATION_IDENTIFIER = 'meeshy';
+/** Combien de messages récents de Global lire pour trouver des auteurs. */
+const GLOBAL_SENDERS_SCAN = 300;
+
+export type OnboardingWindow = 'open' | 'completed' | 'not-concerned' | 'expired';
+
+export function onboardingWindow(params: {
+  createdAt: Date;
+  completedAt: Date | null;
+  now: Date;
+}): OnboardingWindow {
+  const { createdAt, completedAt, now } = params;
+  if (completedAt) return 'completed';
+  if (createdAt.getTime() < START_AT_MS) return 'not-concerned';
+  if (now.getTime() - createdAt.getTime() > ONBOARDING_WINDOW_DAYS * DAY_MS) return 'expired';
+  return 'open';
+}
+
+/**
+ * La classe d'âge, lue UNE fois depuis `birthDate` : adulte VÉRIFIÉ, mineur
+ * VÉRIFIÉ, ou âge INCONNU. Deux classes ne suffisent pas : fondre l'inconnu
+ * avec le mineur rendait la garde fail-closed pour ce qu'on VOIT et fail-open
+ * pour l'APPARIEMENT — un mineur vérifié se voyait proposer la population
+ * d'âge inconnu, c'est-à-dire en pratique les adultes historiques de Global.
+ */
+export type AgeClass = 'adult' | 'minor' | 'unknown';
+
+export function ageClassOf(birthDate: Date | null | undefined, now: Date): AgeClass {
+  if (!birthDate) return 'unknown';
+  return isDeclaredMinor(birthDate, now) ? 'minor' : 'adult';
+}
+
+/**
+ * L'issue d'une déclaration de date de naissance (#9927). `declared` porte ce
+ * que la route rend ; les trois refus ne touchent à rien.
+ */
+export type BirthDateDeclarationOutcome =
+  | { readonly kind: 'declared'; readonly ageClass: 'adult' | 'minor'; readonly viewerWriteRestrictionGlobal: boolean }
+  | { readonly kind: 'already-set' }
+  /** La date est ÉCRITE (un refus est définitif) ; l'appelant révoque les sessions. */
+  | { readonly kind: 'below-minimum' }
+  | { readonly kind: 'invalid' }
+  | { readonly kind: 'user-not-found' };
+
+export type SuggestionViewer = {
+  readonly id: string;
+  readonly languages: readonly string[];
+  readonly ageClass: AgeClass;
+  readonly blockedUserIds: readonly string[];
+};
+
+export type SuggestionCandidate = {
+  readonly id: string;
+  readonly username: string;
+  readonly displayName: string | null;
+  readonly avatar: string | null;
+  readonly languages: readonly string[];
+  readonly ageClass: AgeClass;
+  readonly blockedUserIds: readonly string[];
+  readonly active: boolean;
+};
+
+/**
+ * Les profils à suggérer, dans l'ordre de récence des candidats. JAMAIS de
+ * suggestion croisée entre classes d'âge : un adulte vérifié ne voit que des
+ * adultes vérifiés, un mineur vérifié que des mineurs vérifiés, un âge inconnu
+ * que des âges inconnus. Aucune présence ne voyage : la sortie n'a pas de
+ * champ pour elle.
+ */
+export function selectOnboardingSuggestions(params: {
+  viewer: SuggestionViewer;
+  candidates: readonly SuggestionCandidate[];
+  excludedIds: ReadonlySet<string>;
+}): OnboardingSuggestion[] {
+  const { viewer, candidates, excludedIds } = params;
+  const viewerLanguages = new Set(viewer.languages);
+  const viewerBlocks = new Set(viewer.blockedUserIds);
+  return candidates
+    .filter(
+      (candidate) =>
+        candidate.id !== viewer.id &&
+        candidate.active &&
+        candidate.ageClass === viewer.ageClass &&
+        !excludedIds.has(candidate.id) &&
+        !viewerBlocks.has(candidate.id) &&
+        !candidate.blockedUserIds.includes(viewer.id) &&
+        candidate.languages.some((language) => viewerLanguages.has(language)),
+    )
+    .slice(0, ONBOARDING_MAX_SUGGESTIONS)
+    .map((candidate) => ({
+      id: candidate.id,
+      username: candidate.username,
+      displayName: candidate.displayName || candidate.username,
+      avatarUrl: candidate.avatar ?? null,
+      languages: [...candidate.languages],
+    }));
+}
+
+const USER_STATE_SELECT = {
+  id: true,
+  createdAt: true,
+  birthDate: true,
+  systemLanguage: true,
+  regionalLanguage: true,
+  blockedUserIds: true,
+  onboardingCompletedAt: true,
+  onboardingSteps: true,
+  avatar: true,
+  banner: true,
+  ...SPARKS_USER_SELECT,
+  ...ACTIVATION_SELECT,
+} as const;
+
+const CANDIDATE_SELECT = {
+  id: true,
+  username: true,
+  displayName: true,
+  avatar: true,
+  birthDate: true,
+  systemLanguage: true,
+  regionalLanguage: true,
+  blockedUserIds: true,
+  isActive: true,
+  deletedAt: true,
+} as const;
+
+type UserStateRow = {
+  id: string;
+  engagementScore: number | null;
+  sparksSincePrestige?: bigint | number | null;
+  sparksEarnedLifetime?: bigint | number | null;
+  levelRecord?: number | null;
+  levelMaxLifetime?: number | null;
+  createdAt: Date;
+  birthDate: Date | null;
+  systemLanguage: string;
+  regionalLanguage: string | null;
+  blockedUserIds: string[] | null;
+  onboardingCompletedAt: Date | null;
+  onboardingSteps: string[] | null;
+  avatar?: string | null;
+  banner?: string | null;
+  emailVerifiedAt: Date | null;
+  phoneNumber: string | null;
+  emailReleasedAt: Date | null;
+};
+
+type OnboardingPrisma = Pick<
+  PrismaClient,
+  | 'user'
+  | 'conversation'
+  | 'message'
+  | 'participant'
+  | 'friendRequest'
+  | 'post'
+  | 'engagementCounter'
+  | 'engagementConversationCredit'
+  | 'engagementMilestone'
+  | 'engagementScaleConfig'
+>;
+
+const languagesOf = (row: { systemLanguage: string; regionalLanguage: string | null }): string[] =>
+  [...new Set([row.systemLanguage, row.regionalLanguage].filter((l): l is string => Boolean(l)))];
+
+const knownSteps = (steps: readonly string[] | null): OnboardingStepId[] =>
+  ONBOARDING_STEP_IDS.filter((id) => (steps ?? []).includes(id));
+
+export class OnboardingService {
+  constructor(private readonly prisma: OnboardingPrisma) {}
+
+  async getState(
+    userId: string,
+    now: Date = new Date(),
+    client: OnboardingClient = LEGACY_ONBOARDING_CLIENT,
+  ): Promise<OnboardingState | null> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: USER_STATE_SELECT });
+    if (!user) return null;
+    return servedToClient(await this.stateOf(user, now), client);
+  }
+
+  async recordStep(
+    userId: string,
+    body: OnboardingPatchBody,
+    now: Date = new Date(),
+    client: OnboardingClient = LEGACY_ONBOARDING_CLIENT,
+  ): Promise<OnboardingState | null> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: USER_STATE_SELECT });
+    if (!user) return null;
+    const data = nextOnboardingWrite(user, body, now);
+    if (!data) return servedToClient(await this.stateOf(user, now), client);
+    await this.prisma.user.update({ where: { id: userId }, data });
+    return servedToClient(await this.stateOf({ ...user, ...data }, now), client);
+  }
+
+  /**
+   * `PUT /me/birth-date` (#9927) — la date s'écrit UNE fois, y compris quand
+   * elle donne moins de 13 ans : le refus est DÉFINITIF (une redéclaration ne
+   * le contourne pas), et c'est la date écrite qui ferme ensuite les sessions
+   * (`minimum-age-gate`) jusqu'aux 13 ans. L'écriture est
+   * conditionnée en base à l'absence de date (`birthDate` nul OU absent du
+   * document, les deux formes du connecteur Mongo) : deux déclarations
+   * simultanées n'en écrivent qu'une, et la relecture préalable ne sert qu'à
+   * répondre vite. L'étape `age` de l'onboarding est marquée faite dans la
+   * même écriture.
+   */
+  async declareBirthDate(userId: string, birthDate: Date, now: Date = new Date()): Promise<BirthDateDeclarationOutcome> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: USER_STATE_SELECT });
+    if (!user) return { kind: 'user-not-found' };
+    if (user.birthDate) return { kind: 'already-set' };
+    const verdict = judgeDeclaredBirthDate(birthDate, now);
+    if (verdict === 'in-future' || verdict === 'implausible') return { kind: 'invalid' };
+
+    const steps = nextOnboardingWrite(user, { step: 'age', outcome: 'done' }, now);
+    const written = await writeBirthDateOnce(this.prisma, userId, { birthDate, ...(steps ?? {}) });
+    if (!written) return { kind: 'already-set' };
+    if (verdict === 'below-minimum') return { kind: 'below-minimum' };
+    const restriction = viewerWriteRestrictionOf({ conversationType: GLOBAL_CONVERSATION_TYPE, birthDate, now });
+    return {
+      kind: 'declared',
+      ageClass: restriction === null ? 'adult' : 'minor',
+      viewerWriteRestrictionGlobal: restriction !== null,
+    };
+  }
+
+  private async stateOf(user: UserStateRow, now: Date): Promise<OnboardingState> {
+    const window = onboardingWindow({ createdAt: user.createdAt, completedAt: user.onboardingCompletedAt, now });
+    const completedAt = window === 'expired' ? await this.closeExpired(user.id, now) : user.onboardingCompletedAt;
+    const ageClass = ageClassOf(user.birthDate, now);
+    const protectedRegime = ageClass !== 'adult';
+    const emailVerified = user.emailVerifiedAt !== null;
+    const globalConversationId = await this.globalConversationId();
+    const storyDefaultVisibility = protectedRegime ? 'friends' : 'public';
+    const [prefilledSteps, suggestions, pendingFriendRequests, stepRewards] = await Promise.all([
+      this.prefilledSteps(user.id, globalConversationId, { emailVerified, profileDressed: Boolean(user.avatar && user.banner) }),
+      window === 'open' && globalConversationId
+        ? this.suggestions({ user, ageClass, globalConversationId, now })
+        : Promise.resolve([]),
+      this.pendingFriendRequestCount(user.id),
+      this.stepRewards(user.id, levelSparksOf(sparksOf(user)), storyDefaultVisibility, now),
+    ]);
+    return {
+      eligible: window === 'open',
+      completedAt: completedAt ? completedAt.toISOString() : null,
+      seenSteps: knownSteps(user.onboardingSteps),
+      prefilledSteps,
+      globalConversationId,
+      protectedRegime,
+      storyDefaultVisibility,
+      suggestions,
+      emailVerified,
+      canPublishStory: mayPublish(resolveAccountActivation(user, now)),
+      pendingFriendRequests,
+      stepRewards,
+      ...minorGlobalRestriction(user.birthDate, now),
+    };
+  }
+
+  /**
+   * Les demandes ENVOYÉES encore en attente, hors personne en relation de
+   * blocage avec le lecteur (#13350) : la liste qu'on lui sert les retire
+   * déjà (#13298), le compteur ne peut pas en annoncer davantage.
+   */
+  private async pendingFriendRequestCount(userId: string): Promise<number> {
+    const blocked = await getBlockRelatedUserIds(this.prisma, userId);
+    return this.prisma.friendRequest.count({
+      where: { senderId: userId, status: 'pending', ...(blocked.size > 0 ? { receiverId: { notIn: [...blocked] } } : {}) },
+    });
+  }
+
+  /**
+   * Les points de chaque geste à l'élan COURANT (#7908) : les compteurs
+   * touchés sur la fenêtre de l'élan et les paliers qui font l'assise — deux
+   * lectures indexées (`[userId]`, `[userId, milestoneType]`).
+   */
+  private async stepRewards(
+    userId: string,
+    engagementScore: number,
+    storyVisibility: 'public' | 'friends',
+    now: Date,
+  ): Promise<OnboardingStepRewards> {
+    const scale = await engagementScaleServiceFor(this.prisma).current();
+    const [counters, milestones] = await Promise.all([
+      this.prisma.engagementCounter.findMany({
+        where: { userId, updatedAt: { gte: new Date(now.getTime() - scale.multiplier.windowDays * DAY_MS) } },
+        select: { axisKey: true, updatedAt: true },
+      }),
+      this.prisma.engagementMilestone.findMany({
+        where: { userId, milestoneType: { in: ['achievement', 'badge'] } },
+        select: { milestoneType: true, milestoneKey: true },
+      }),
+    ]);
+    return onboardingStepRewards({ scale, counters, milestones, engagementScore, now, storyVisibility });
+  }
+
+  private async closeExpired(userId: string, now: Date): Promise<Date> {
+    await this.prisma.user.update({ where: { id: userId }, data: { onboardingCompletedAt: now } });
+    return now;
+  }
+
+  private async globalConversationId(): Promise<string | null> {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { identifier: GLOBAL_CONVERSATION_IDENTIFIER },
+      select: { id: true },
+    });
+    return conversation?.id ?? null;
+  }
+
+  /**
+   * Les étapes que l'engagement a déjà faites : une story publiée, un message
+   * déjà crédité dans Global (quel qu'en soit l'axe — avant #7739 il tombait
+   * sur `conversation.private`), une amitié acceptée.
+   */
+  private async prefilledSteps(
+    userId: string,
+    globalConversationId: string | null,
+    profile: { readonly emailVerified: boolean; readonly profileDressed: boolean },
+  ): Promise<OnboardingStepId[]> {
+    const [storyCounter, globalCredit, friendship] = await Promise.all([
+      this.prisma.engagementCounter.findUnique({
+        where: { userId_axisKey: { userId, axisKey: 'content.story' } },
+        select: { count: true },
+      }),
+      globalConversationId
+        ? this.prisma.engagementConversationCredit.findFirst({
+            where: { userId, conversationId: globalConversationId },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+      this.prisma.friendRequest.findFirst({
+        where: { status: 'accepted', OR: [{ senderId: userId }, { receiverId: userId }] },
+        select: { id: true },
+      }),
+    ]);
+    const done = new Set<OnboardingStepId>([
+      ...(profile.emailVerified ? (['email'] as const) : []),
+      ...(profile.profileDressed ? (['profile'] as const) : []),
+      ...(globalCredit ? (['global'] as const) : []),
+      ...((storyCounter?.count ?? 0) > 0 ? (['story'] as const) : []),
+      ...(friendship ? (['friends'] as const) : []),
+    ]);
+    return ONBOARDING_STEP_IDS.filter((id) => done.has(id));
+  }
+
+  private async suggestions(params: {
+    user: UserStateRow;
+    ageClass: AgeClass;
+    globalConversationId: string;
+    now: Date;
+  }): Promise<OnboardingSuggestion[]> {
+    const { user, ageClass, globalConversationId, now } = params;
+    const recent = await this.prisma.message.findMany({
+      where: {
+        conversationId: globalConversationId,
+        messageSource: 'user',
+        deletedAt: null,
+        createdAt: { gte: new Date(now.getTime() - ONBOARDING_WINDOW_DAYS * DAY_MS) },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: GLOBAL_SENDERS_SCAN,
+      select: { senderId: true },
+    });
+    const participantIds = [...new Set(recent.map((row) => row.senderId))];
+    if (participantIds.length === 0) return [];
+
+    const participants = await this.prisma.participant.findMany({
+      where: { id: { in: participantIds } },
+      select: { id: true, userId: true },
+    });
+    const userIdByParticipant = new Map(participants.map((p) => [p.id, p.userId]));
+    const candidateIds = [
+      ...new Set(
+        participantIds
+          .map((id) => userIdByParticipant.get(id))
+          .filter((id): id is string => Boolean(id) && id !== user.id),
+      ),
+    ];
+    if (candidateIds.length === 0) return [];
+
+    const [rows, requests] = await Promise.all([
+      this.prisma.user.findMany({ where: { id: { in: candidateIds } }, select: CANDIDATE_SELECT }),
+      this.prisma.friendRequest.findMany({
+        where: {
+          OR: [
+            { senderId: user.id, receiverId: { in: candidateIds } },
+            { receiverId: user.id, senderId: { in: candidateIds } },
+          ],
+        },
+        select: { senderId: true, receiverId: true },
+      }),
+    ]);
+    const rowById = new Map(rows.map((row) => [row.id, row]));
+    const candidates = candidateIds.flatMap((id) => {
+      const row = rowById.get(id);
+      if (!row) return [];
+      return [
+        {
+          id: row.id,
+          username: row.username,
+          displayName: row.displayName,
+          avatar: row.avatar,
+          languages: languagesOf(row),
+          ageClass: ageClassOf(row.birthDate, now),
+          blockedUserIds: row.blockedUserIds ?? [],
+          active: row.isActive && !row.deletedAt,
+        },
+      ];
+    });
+    const excludedIds = new Set(
+      requests.map((request) => (request.senderId === user.id ? request.receiverId : request.senderId)),
+    );
+    return selectOnboardingSuggestions({
+      viewer: { id: user.id, languages: languagesOf(user), ageClass, blockedUserIds: user.blockedUserIds ?? [] },
+      candidates,
+      excludedIds,
+    });
+  }
+}
+
+/**
+ * Ce que le client sait lire de l'état (#9927, rétrocompatibilité #9223).
+ * `ageStepAware` : il a annoncé la capacité `onboarding-age` — il connaît
+ * l'étape `age` et `viewerWriteRestriction`. Un client antérieur décode l'état
+ * en objet STRICT (web `z.strictObject`, énumération d'étapes fermée) : une
+ * étape ou une clé qu'il ne connaît pas lui rendrait l'état illisible.
+ */
+export type OnboardingClient = { readonly ageStepAware: boolean; readonly profileStepAware?: boolean };
+
+export const LEGACY_ONBOARDING_CLIENT: OnboardingClient = { ageStepAware: false, profileStepAware: false };
+
+/** Les étapes qu'un client n'a pas annoncé savoir lire (#9927 `age`, #17235 `profile`). */
+const stepsUnknownTo = (client: OnboardingClient): ReadonlySet<OnboardingStepId> =>
+  new Set<OnboardingStepId>([
+    ...(client.ageStepAware ? [] : (['age'] as const)),
+    ...(client.profileStepAware ? [] : (['profile'] as const)),
+  ]);
+
+/**
+ * Une étape que le client n'a pas annoncée ne voyage jamais : `age` sans
+ * `onboarding-age`, `profile` sans `onboarding-profile` (#17235).
+ * Sans la capacité `onboarding-age`, l'état servi est celui d'avant #9927 : ni
+ * l'étape `age` dans les listes d'étapes, ni `viewerWriteRestriction`. La
+ * règle elle-même ne dépend pas du client — un mineur reste refusé en écriture
+ * dans Global (403 `GLOBAL_ADULTS_ONLY`, message lisible par tout client).
+ */
+export function servedToClient(state: OnboardingState, client: OnboardingClient): OnboardingState {
+  const unknown = stepsUnknownTo(client);
+  const steps = {
+    seenSteps: state.seenSteps.filter((step) => !unknown.has(step)),
+    prefilledSteps: state.prefilledSteps.filter((step) => !unknown.has(step)),
+  };
+  if (client.ageStepAware) return { ...state, ...steps };
+  const { viewerWriteRestriction: _restriction, ...legacy } = state;
+  return { ...legacy, ...steps };
+}
+
+/**
+ * #9927 — `viewerWriteRestriction` est TOUJOURS servi au client qui annonce
+ * `onboarding-age` : `'minor-global'` pour un mineur déclaré, `null` sinon. Sa
+ * présence dit au client que la passerelle connaît l'étape `age` (le web n'en
+ * propose la carte qu'à cette condition).
+ */
+function minorGlobalRestriction(birthDate: Date | null, now: Date): Pick<OnboardingState, 'viewerWriteRestriction'> {
+  return { viewerWriteRestriction: viewerWriteRestrictionOf({ conversationType: GLOBAL_CONVERSATION_TYPE, birthDate, now }) };
+}
+
+/**
+ * Ce qu'un PATCH écrit — `null` quand il n'y a rien à écrire (idempotence).
+ * `finish` ou la cinquième étape vue posent `onboardingCompletedAt`, jamais
+ * deux fois.
+ */
+export function nextOnboardingWrite(
+  user: Pick<UserStateRow, 'onboardingCompletedAt' | 'onboardingSteps'>,
+  body: OnboardingPatchBody,
+  now: Date,
+): { onboardingSteps?: OnboardingStepId[]; onboardingCompletedAt?: Date } | null {
+  if ('finish' in body) {
+    return user.onboardingCompletedAt ? null : { onboardingCompletedAt: now };
+  }
+  const current = (user.onboardingSteps ?? []).filter(isOnboardingStepId);
+  const steps = addOnboardingStep(current, body.step);
+  const stepsChanged = steps.length !== current.length || (user.onboardingSteps ?? []).length !== current.length;
+  const completes =
+    ONBOARDING_COMPLETION_STEP_IDS.every((id) => steps.includes(id)) && !user.onboardingCompletedAt;
+  if (!stepsChanged && !completes) return null;
+  return {
+    ...(stepsChanged ? { onboardingSteps: steps } : {}),
+    ...(completes ? { onboardingCompletedAt: now } : {}),
+  };
+}

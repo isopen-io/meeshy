@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - Scroll Motion Visibility
 //
-// Loi d'affichage commune à l'application (directive produit 2026-08-14) :
+// Loi d'affichage commune à l'application :
 // **une vue en mouvement ne montre pas ses boutons d'action.** Pendant qu'une
 // liste défile, les boutons du chrome (appel, recherche, actions de header…)
 // s'effacent ; ils reviennent dès que le mouvement s'arrête. Le contenu, lui,
@@ -63,34 +63,51 @@ public extension EnvironmentValues {
 
 /// Dérive le mouvement d'un offset qui change à chaque frame puis se tait.
 ///
-/// `.task(id:)` EST le debounce : SwiftUI annule la tâche en cours à chaque
-/// nouvelle valeur d'`offset` et en relance une. Le `sleep` n'arrive donc à
-/// son terme que lorsque l'offset s'est tu — sans minuterie à retenir, sans
-/// `ObservableObject` à démonter (voir la note de `ScrollOffsetRelay` sur la
-/// deinit isolée qui tuait le processus sur iOS < 26).
+/// Le debounce est un `DispatchWorkItem` ré-armé en place — plus jamais
+/// `.task(id: offset)`. Ce dernier ANNULE et RE-CRÉE une `Task` structurée
+/// (continuation de `sleep`, machinerie d'annulation, hop d'acteur) à CHAQUE
+/// changement d'id — or l'id était l'offset, qui change à CHAQUE frame de
+/// défilement : ~120 créations/annulations de tâche par seconde sur le main
+/// actor, sur les quatre écrans qui montent cette source (liste de
+/// conversations, fil, feed, root), pour débouncer un booléen.
+/// `onChange` ne se déclenche pas au montage, donc la garde
+/// `hasMounted` de l'ancienne écriture disparaît avec lui — le montage n'est
+/// toujours pas un mouvement. Toujours aucun `ObservableObject` à démonter
+/// (voir la note de `ScrollOffsetRelay` sur la deinit isolée qui tuait le
+/// processus sur iOS < 26).
 private struct ScrollMotionFromOffset: ViewModifier {
     let offset: CGFloat
     let settleDelay: Duration
 
     @State private var isMoving = false
-    /// `.task(id:)` s'exécute AUSSI au montage, avec l'offset initial : sans
-    /// cette garde, tout écran ouvrirait sur des boutons d'action effacés le
-    /// temps du premier apaisement. Le montage n'est pas un mouvement.
-    @State private var hasMounted = false
+    /// L'apaisement en attente, ré-armé à chaque tick d'offset et annulé au
+    /// démontage — tenu par une CLASSE, jamais par l'état de ce modifieur.
+    ///
+    /// #7034 — c'était un `@State private var settleWork: DispatchWorkItem?`, et
+    /// c'est la forme qui fabrique la chaîne : une fermeture écrite dans un
+    /// `ViewModifier` capture la STRUCT entière, donc le work item rangé en
+    /// ligne dans son `@State`. Chaque réarmement ajoutait un maillon, et la
+    /// libération de la chaîne est récursive — douze débordements de pile
+    /// mesurés sur l'appareil du porteur, toujours à ~18 300 frames.
+    ///
+    /// Ce site est le plus exposé du dépôt : il arme **une fois par image de
+    /// défilement**, sur quatre écrans. Le doc-comment ci-dessus citait déjà le
+    /// bon patron — une classe, comme `LentilleSceneActivity` — sans le suivre.
+    @State private var settle = Debouncer()
 
     func body(content: Content) -> some View {
         content
             .environment(\.isScrollMotionActive, isMoving)
-            .task(id: offset) {
-                guard hasMounted else {
-                    hasMounted = true
-                    return
-                }
+            .adaptiveOnChange(of: offset) { _, _ in
                 if !isMoving { isMoving = true }
-                try? await Task.sleep(for: settleDelay)
-                guard !Task.isCancelled else { return }
-                isMoving = false
+                settle.arm(after: Self.seconds(settleDelay)) { isMoving = false }
             }
+            .onDisappear { settle.cancel() }
+    }
+
+    private static func seconds(_ duration: Duration) -> TimeInterval {
+        TimeInterval(duration.components.seconds)
+            + TimeInterval(duration.components.attoseconds) * 1e-18
     }
 }
 

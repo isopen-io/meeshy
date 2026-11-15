@@ -1,6 +1,6 @@
 /**
  * Unit tests for posts/audio.ts
- * Tests POST /stories/audio, GET /stories/audio, GET /static/:filename
+ * Tests GET /stories/audio, GET /static/:filename
  *
  * @jest-environment node
  */
@@ -92,122 +92,10 @@ async function buildApp({
   return app;
 }
 
-// ─── POST /stories/audio ──────────────────────────────────────────────────────
-
-describe('POST /stories/audio — not authenticated', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp({ authenticated: false }); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 401 when not authenticated', async () => {
-    const res = await app.inject({ method: 'POST', url: '/stories/audio' });
-    expect(res.statusCode).toBe(401);
-  });
-});
-
-describe('POST /stories/audio — no file provided', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp({ mockFile: null }); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 400 when no file provided', async () => {
-    const res = await app.inject({ method: 'POST', url: '/stories/audio' });
-    expect(res.statusCode).toBe(400);
-  });
-});
-
-describe('POST /stories/audio — invalid MIME type', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp({
-      mockFile: { ...DEFAULT_MOCK_FILE, mimetype: 'video/mp4' },
-    });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 400 for unsupported MIME type', async () => {
-    const res = await app.inject({ method: 'POST', url: '/stories/audio' });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error).toContain('Invalid audio format');
-  });
-});
-
-describe('POST /stories/audio — success', () => {
-  let app: FastifyInstance;
-  const mockCreate = jest.fn<any>().mockResolvedValue({
-    id: 'audio-1',
-    title: 'Test Audio',
-    fileUrl: '/api/v1/static/story_audio_test.mp3',
-    duration: 30,
-    isPublic: true,
-    uploader: { username: 'alice' },
-  });
-  beforeAll(async () => {
-    app = await buildApp({ prismaOverrides: { sound: { create: mockCreate } } });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 201 with created audio record', async () => {
-    const res = await app.inject({ method: 'POST', url: '/stories/audio' });
-    expect(res.statusCode).toBe(201);
-    const body = res.json();
-    expect(body.success).toBe(true);
-    expect(body.data.title).toBe('Test Audio');
-    expect(mockCreate).toHaveBeenCalled();
-    expect(mockMkdir).toHaveBeenCalled();
-    expect(mockWriteFile).toHaveBeenCalled();
-  });
-});
-
-describe('POST /stories/audio — isPublic false', () => {
-  let app: FastifyInstance;
-  const mockCreate = jest.fn<any>().mockResolvedValue({
-    id: 'audio-2', title: 'Private', fileUrl: '/api/v1/static/story_audio_priv.mp3', isPublic: false,
-    uploader: { username: 'alice' },
-  });
-  beforeAll(async () => {
-    app = await buildApp({
-      mockFile: { ...DEFAULT_MOCK_FILE, fields: { ...DEFAULT_MOCK_FILE.fields, isPublic: { value: 'false' } } },
-      prismaOverrides: { sound: { create: mockCreate } },
-    });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('creates private audio when isPublic=false', async () => {
-    const res = await app.inject({ method: 'POST', url: '/stories/audio' });
-    expect(res.statusCode).toBe(201);
-    const call = mockCreate.mock.calls[0][0] as any;
-    expect(call.data.isPublic).toBe(false);
-  });
-});
-
-/**
- * Le repli n'est plus un `.m4a` aveugle : quand le nom de fichier n'a pas
- * d'extension servable, elle est dérivée du MIME. Un payload `audio/mpeg`
- * nommé `.m4a` aurait été servi avec le mauvais `Content-Type`.
- */
-describe('POST /stories/audio — extension dérivée du MIME quand le nom n’en a pas', () => {
-  let app: FastifyInstance;
-  const mockCreate = jest.fn<any>().mockResolvedValue({
-    id: 'audio-3', title: 'No Ext', fileUrl: '/api/v1/static/story_audio_noext.m4a',
-    uploader: { username: 'alice' },
-  });
-  beforeAll(async () => {
-    app = await buildApp({
-      mockFile: { ...DEFAULT_MOCK_FILE, filename: '' },
-      prismaOverrides: { sound: { create: mockCreate } },
-    });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('derives the extension from the MIME type when the filename has none', async () => {
-    const res = await app.inject({ method: 'POST', url: '/stories/audio' });
-    expect(res.statusCode).toBe(201);
-    const call = mockCreate.mock.calls[0][0] as any;
-    // `DEFAULT_MOCK_FILE` déclare `audio/mpeg` → `.mp3`, pas `.m4a`.
-    expect(call.data.fileUrl).toContain('.mp3');
-  });
-});
+// ─── POST /stories/audio — RETIRÉE (#4190) ──────────────────────────────────
+// Les huit témoins de la moitié MORTE du couple sont partis avec la route.
+// La moitié VIVANTE — `GET /stories/audio` (iOS `SoundLibraryService`) et
+// `GET /static/:filename` — reste intégralement couverte ci-dessous.
 
 // ─── GET /stories/audio ───────────────────────────────────────────────────────
 
@@ -312,94 +200,6 @@ describe('GET /static/:filename — success', () => {
   });
 });
 
-// ─── POST /stories/audio — gardes ajoutées après la revue sécurité ───────────
-
-describe('POST /stories/audio — conteneur non servable', () => {
-  let app: FastifyInstance;
-  const mockCreate = jest.fn<any>().mockResolvedValue({ id: 'x' });
-  beforeAll(async () => {
-    app = await buildApp({
-      // MIME accepté par la liste d'upload, mais `.mpga` n'est pas servable :
-      // avant, la ligne était créée et son `fileUrl` renvoyait 400 À VIE.
-      mockFile: { ...DEFAULT_MOCK_FILE, filename: 'song.mpga', mimetype: 'audio/mpeg' },
-      prismaOverrides: { sound: { create: mockCreate } },
-    });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('accepts it under the MIME extension rather than creating a dead row', async () => {
-    const res = await app.inject({ method: 'POST', url: '/stories/audio' });
-    expect(res.statusCode).toBe(201);
-    // `.mpga` est remplacé par `.mp3`, l'extension canonique du MIME déclaré.
-    expect((mockCreate.mock.calls[0][0] as any).data.fileUrl).toContain('.mp3');
-  });
-});
-
-describe('POST /stories/audio — conteneur inconnu du MIME et du nom', () => {
-  let app: FastifyInstance;
-  const mockCreate = jest.fn<any>();
-  beforeAll(async () => {
-    app = await buildApp({
-      mockFile: { ...DEFAULT_MOCK_FILE, filename: 'voice.webm', mimetype: 'audio/webm' },
-      prismaOverrides: { sound: { create: mockCreate } },
-    });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('is rejected before anything is written', async () => {
-    const res = await app.inject({ method: 'POST', url: '/stories/audio' });
-    expect(res.statusCode).toBe(400);
-    expect(mockCreate).not.toHaveBeenCalled();
-  });
-});
-
-describe('POST /stories/audio — ré-envoi du même fichier', () => {
-  let app: FastifyInstance;
-  const mockCreate = jest.fn<any>();
-  const existing = { id: 'deja-la', title: 'Test Audio', fileUrl: '/api/v1/static/x.mp3' };
-  beforeAll(async () => {
-    app = await buildApp({
-      prismaOverrides: {
-        sound: {
-          create: mockCreate,
-          findFirst: jest.fn<any>().mockResolvedValue(existing),
-        },
-      },
-    });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('is idempotent instead of violating the unique index with a 500', async () => {
-    const res = await app.inject({ method: 'POST', url: '/stories/audio' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.id).toBe('deja-la');
-    expect(mockCreate).not.toHaveBeenCalled();
-  });
-});
-
-describe('POST /stories/audio — fichier trop gros', () => {
-  let app: FastifyInstance;
-  const mockCreate = jest.fn<any>();
-  beforeAll(async () => {
-    app = await buildApp({
-      // `@fastify/multipart` lève quand le plafond est franchi en cours de flux.
-      mockFile: {
-        ...DEFAULT_MOCK_FILE,
-        toBuffer: jest.fn<any>().mockRejectedValue(new Error('request file too large')),
-      },
-      prismaOverrides: { sound: { create: mockCreate } },
-    });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 413 rather than an anonymous 500', async () => {
-    const res = await app.inject({ method: 'POST', url: '/stories/audio' });
-    expect(res.statusCode).toBe(413);
-    expect(res.json().code).toBe('FILE_TOO_LARGE');
-    expect(mockCreate).not.toHaveBeenCalled();
-  });
-});
-
 describe('GET /stories/audio — recherche', () => {
   let app: FastifyInstance;
   const findMany = jest.fn<any>().mockResolvedValue([]);
@@ -416,7 +216,7 @@ describe('GET /stories/audio — recherche', () => {
   it('matches the uploader username as well as the title', async () => {
     await app.inject({ method: 'GET', url: '/stories/audio?q=alice' });
     const where = (findMany.mock.calls[0][0] as any).where;
-    expect(where.AND[1].OR).toEqual([
+    expect(where.AND[2].OR).toEqual([
       { title: { contains: 'alice', mode: 'insensitive' } },
       { uploader: { username: { contains: 'alice', mode: 'insensitive' } } },
     ]);
@@ -426,6 +226,8 @@ describe('GET /stories/audio — recherche', () => {
     // 2026-08-02 : bibliothèque entière invisible).
     expect(where.isPublic).toBe(true);
     expect(where.AND[0]).toEqual({ OR: [{ mutedAt: null }, { mutedAt: { isSet: false } }] });
+    // #9848 — ni retirés de la bibliothèque par leur auteur.
+    expect(where.AND[1]).toEqual({ OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] });
   });
 
   it('includes the uploader so the list can credit an author', async () => {

@@ -1,10 +1,19 @@
 import CoreGraphics
 
-/// Le média d'un réel détermine son rendu de fond dans le feed.
+/// Le média d'une surface de feed détermine son rendu de fond.
+///
+/// **`.scene` a rejoint l'énumération le 2026-09-05** (directive porteur :
+/// « repartage ou non, les scènes sont comme les vidéos »). Une scène — le
+/// canvas v3 d'un post composé, ou une story repartagée — concourt à
+/// l'élection du viewport au même titre qu'un réel vidéo. `mostCenteredReel`
+/// n'a jamais lu `kind` : ce cas ne change donc AUCUNE règle d'élection, il
+/// nomme ce que la surface porte, pour que le fil n'ait qu'une seule loi de
+/// lecture au lieu de trois politiques divergentes.
 enum ReelMediaKind: Equatable {
     case video
     case audio
     case imageOnly
+    case scene
 }
 
 /// Frame d'une carte réel rapportée au coordinateur d'autoplay (espace global).
@@ -32,6 +41,15 @@ func reelCardHeight(
     let ratio = CGFloat(h) / CGFloat(w)
     let clamped = min(max(ratio, minRatio), maxTallRatio)
     return (cardWidth * clamped).rounded()
+}
+
+/// Le rapport largeur / hauteur d'une carte réel — la loi de `reelCardHeight` sans largeur : la carte se mesure à SA
+/// colonne (iPad, fenêtre détachée, Split View). Estimée sur la fenêtre, elle recevait sur iPad une hauteur calculée pour
+/// une largeur trois fois plus grande que la sienne.
+func reelCardAspectRatio(mediaWidth: Int?, mediaHeight: Int?, maxTallRatio: CGFloat = 1.25, minRatio: CGFloat = 0.75) -> CGFloat {
+    let reference: CGFloat = 1000
+    return reference / reelCardHeight(mediaWidth: mediaWidth, mediaHeight: mediaHeight, cardWidth: reference,
+                                      maxTallRatio: maxTallRatio, minRatio: minRatio)
 }
 
 /// Élit l'id du réel dont le centre est le plus proche du centre du viewport,

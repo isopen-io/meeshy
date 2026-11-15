@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "composer_edit_remove_background_message",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.edit.background.removeConfirm.title",
+          "androidName": "composer_edit_remove_background_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.edit.replace",
+          "androidName": "composer_edit_replace",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

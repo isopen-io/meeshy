@@ -85,7 +85,7 @@ public struct AudioRecordingResult: Sendable {
 
 /// Réglages d'un enregistrement audio.
 ///
-/// **Aucun plafond de durée** (directive produit 2026-07-26) : story, message,
+/// **Aucun plafond de durée** : story, message,
 /// post et réel enregistrent aussi longtemps que l'utilisateur le souhaite. Le
 /// champ `maxDuration` a été RETIRÉ plutôt que mis à `nil` — seul `.story` le
 /// portait (60 s), sans même que le composer l'applique, si bien que la

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="piece_delete_confirm_title">Este item</string>
+    <string name="piece_delete_confirm_action">Excluir item</string>
+    <string name="piece_remove_failed">Não foi possível excluir este item.</string>
+</resources>

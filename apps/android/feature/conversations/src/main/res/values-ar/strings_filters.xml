@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversations_filter_row">عوامل تصفية المحادثات</string>
+    <string name="conversations_filter_hint">اضغط لإضافة هذا المرشح أو إزالته</string>
+    <string name="conversations_filter_state_selected">محدد</string>
+    <string name="conversations_filter_state_unselected">غير محدد</string>
+</resources>

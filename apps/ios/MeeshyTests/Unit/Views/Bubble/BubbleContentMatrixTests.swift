@@ -5,6 +5,52 @@ import MeeshySDK
 @MainActor
 final class BubbleContentMatrixTests: XCTestCase {
 
+    // MARK: - #7365 — la source résolue du statut de livraison (groupe)
+
+    /// La valeur que `BubbleStandardLayout`/`ThemedMessageBubble` doivent
+    /// TOUTES lire (`content.meta.deliveryStatus`) est déjà correcte : 1
+    /// lecteur sur 10 dans un groupe ne doit jamais produire `.read`, même
+    /// si le statut BRUT stocké sur le message vaut déjà `.read` (promu dès
+    /// `readCount > 0`, `MessageRecord+ToMessage.swift`). Verrouille la
+    /// source commune que `BubbleDeliveryStatusWiringSourceGuardTests`
+    /// vérifie être effectivement lue par les trois sites d'affichage.
+    func test_meta_groupOneReaderOfTen_deliveryStatusIsNotRead() {
+        let msg = makeMessage(content: "Salut", isMe: true, deliveryStatus: .read, readCount: 1)
+        let content = BubbleContent(
+            message: msg, translations: [], preferredTranslation: nil,
+            currentUserId: "u1", recipientCount: 10
+        )
+
+        XCTAssertNotEqual(content.meta.deliveryStatus, .read)
+    }
+
+    /// VoiceOver, par le COMPORTEMENT : le libellé que la bulle et la rangée
+    /// focale annoncent (`MessageAccessibilityLabelComposer`) ne dit jamais
+    /// « lu » pour 1 lecteur sur 10 — il dit « envoyé », localisé.
+    func test_voiceOverDelivery_groupOneReaderOfTen_announcesSentNotRead() {
+        let msg = makeMessage(content: "Salut", isMe: true, deliveryStatus: .read, readCount: 1)
+        let content = BubbleContent(
+            message: msg, translations: [], preferredTranslation: nil,
+            currentUserId: "u1", recipientCount: 10
+        )
+
+        let label = MessageAccessibilityLabelComposer.deliveryStatusAccessibilityLabel(content.meta.deliveryStatus)
+
+        XCTAssertEqual(label, String(localized: "a11y.delivery.sent", defaultValue: "envoyé", bundle: .main))
+        XCTAssertNotEqual(label, String(localized: "a11y.delivery.read", defaultValue: "lu", bundle: .main))
+    }
+
+    /// Symétrique positif : tous les 10 destinataires ont lu.
+    func test_meta_groupAllTenRead_deliveryStatusIsRead() {
+        let msg = makeMessage(content: "Salut", isMe: true, deliveryStatus: .read, readCount: 10)
+        let content = BubbleContent(
+            message: msg, translations: [], preferredTranslation: nil,
+            currentUserId: "u1", recipientCount: 10
+        )
+
+        XCTAssertEqual(content.meta.deliveryStatus, .read)
+    }
+
     func test_simpleText_hasOnlyTextAndMeta() {
         let msg = makeMessage(content: "Salut")
         let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
@@ -12,7 +58,7 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertNotNil(content.text)
         XCTAssertNil(content.reply)
         XCTAssertEqual(content.attachments, .none)
-        XCTAssertNil(content.ephemeral)
+        XCTAssertTrue(content.protection.isEmpty)
         XCTAssertNil(content.editedAt)
         XCTAssertTrue(content.reactions.isEmpty)
         XCTAssertNotNil(content.meta)
@@ -56,7 +102,7 @@ final class BubbleContentMatrixTests: XCTestCase {
 
         XCTAssertTrue(content.isEmojiOnly)
         XCTAssertNotNil(content.reply)
-        XCTAssertEqual(content.text?.emojiFontSize, 45)
+        XCTAssertEqual(content.text?.emojiFontSize, 51)
     }
 
     /// Un emoji-réponse possède bien un quote ET le flag emoji — l'orchestrateur
@@ -68,7 +114,7 @@ final class BubbleContentMatrixTests: XCTestCase {
 
         XCTAssertTrue(content.isEmojiOnly)
         XCTAssertEqual(content.text?.raw, "😍")
-        XCTAssertEqual(content.text?.emojiFontSize, 90)
+        XCTAssertEqual(content.text?.emojiFontSize, 68)
     }
 
     /// Non-régression : un emoji SANS réponse reste emoji-only (rendu libre,
@@ -128,21 +174,25 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertEqual(content.kind, .deleted)
     }
 
-    func test_burnedViewOnce_routesToBurnedKind() {
+    /// #7579 — le compteur GLOBAL du serveur ne dit rien de CE lecteur : un
+    /// destinataire qui n'a rien ouvert voyait « Vu et supprimé » dès qu'un
+    /// autre (l'auteur compris) avait ouvert la vue unique. Ce témoin gardait
+    /// l'ancien défaut ; il garde désormais la propriété.
+    func test_viewOnceConsumedBySomeoneElse_staysSealedForMe() {
         let msg = makeMessage(content: "secret", isViewOnce: true, viewOnceCount: 1)
         let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
 
-        XCTAssertEqual(content.kind, .burned)
+        XCTAssertEqual(content.kind, .viewOnceSealed)
     }
 
-    /// Legacy `ThemedMessageBubble.isViewOnceBurned` does NOT exclude `isMe`:
-    /// the sender also sees the "Vu et efface" state once their view-once
-    /// message has been consumed. BubbleContent.kind must mirror that.
-    func test_burnedViewOnce_includesSenderSide() {
-        let msg = makeMessage(content: "secret", isMe: true, isViewOnce: true, viewOnceCount: 1)
+    /// L'état « déjà ouvert » vaut pour l'auteur comme pour les autres : il
+    /// vient de SA colonne, jamais d'un compteur partagé.
+    func test_viewOnceOpenedByMe_includesSenderSide() {
+        var msg = makeMessage(content: "secret", isMe: true, isViewOnce: true, viewOnceCount: 1)
+        msg.viewOnceOpenedAt = Date()
         let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
 
-        XCTAssertEqual(content.kind, .burned)
+        XCTAssertEqual(content.kind, .viewOnceOpened)
     }
 
     /// P3 — call-summary messages arrive with `messageSource == .system` and
@@ -449,8 +499,8 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertFalse(content.visualHostsReply)
     }
 
-    /// Emoji-only + reply : l'emoji est rendu agrandi dans la bulle texte ;
-    /// ni audio ni visual ne hostent — comportement préservé.
+    /// Emoji-only + reply : ni audio ni visual n'hébergent la citation —
+    /// l'emoji se pose en grand SOUS sa carte citée, sans bulle (#10628).
     func test_neitherHostsReply_emojiOnlyWithReply_isFalse() {
         let reply = ReplyReference(messageId: "m0", authorName: "Bob", previewText: "Salut")
         let msg = makeMessage(content: "🔥", replyTo: reply)
@@ -750,6 +800,17 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertEqual(content.callNotice?.summary.isLive, true)
     }
 
+    func test_callNotice_carriesTheViewer_soTheCardNamesTheOthersThenYou() {
+        let msg = makeMessage(
+            content: "Appel vidéo · 12:40",
+            messageSource: .system,
+            callSummary: makeCallSummary(initiatorId: "u2", callType: .video, outcome: .completed, durationSeconds: 760)
+        )
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertEqual(content.callNotice?.viewerId, "u1")
+    }
+
     // MARK: - Helpers
 
     // MARK: - Avis d'arrivée enrichi (pseudo, nom donné, règles du lien)
@@ -781,10 +842,10 @@ final class BubbleContentMatrixTests: XCTestCase {
 
     // MARK: - Loi de présentation de l'avis d'arrivée
 
-    /// Le nom DONNÉ prime, le pseudo `ano_…` descend en @handle — chacun à sa
-    /// place. Sans nom donné, le pseudo reste le nom principal et le handle
-    /// disparaît : « ano_bob » suivi de « @ano_bob » ne dirait rien de plus.
-    func test_joinNoticePresentation_putsGivenNameFirstAndPseudoAsHandle() {
+    /// Le nom DONNÉ prime ; le pseudo `ano_…` d'un invité ne s'affiche jamais
+    /// (#9717) : la pastille « sans compte » dit déjà qui il est. Sans nom
+    /// donné, le pseudo reste le nom principal, toujours sans @handle.
+    func test_joinNoticePresentation_putsGivenNameFirstAndHidesGuestPseudo() {
         let notice = BubbleContent.JoinNotice(
             participantId: "participant-1",
             displayName: "ano_Jc_n045",
@@ -799,7 +860,7 @@ final class BubbleContentMatrixTests: XCTestCase {
         let presentation = JoinNoticePresentation(notice: notice)
 
         XCTAssertEqual(presentation.primaryName, "Jc Nm")
-        XCTAssertEqual(presentation.handle, "@ano_Jc_n045")
+        XCTAssertNil(presentation.handle)
         XCTAssertTrue(presentation.showsNoAccountBadge)
     }
 
@@ -875,7 +936,10 @@ final class BubbleContentMatrixTests: XCTestCase {
         createdAt: Date = Date(timeIntervalSince1970: 0),
         cachedTimeString: String? = "12:34",
         messageSource: MeeshyMessage.MessageSource = .user,
-        callSummary: CallSummaryMetadata? = nil
+        callSummary: CallSummaryMetadata? = nil,
+        deliveryStatus: MeeshyMessage.DeliveryStatus = .sent,
+        deliveredCount: Int = 0,
+        readCount: Int = 0
     ) -> MeeshyMessage {
         var effects = MessageEffects(flags: [])
         if isViewOnce {
@@ -915,12 +979,12 @@ final class BubbleContentMatrixTests: XCTestCase {
             senderColor: "#888",
             senderAvatarURL: nil,
             senderUserId: senderId,
-            deliveryStatus: .sent,
+            deliveryStatus: deliveryStatus,
             isMe: isMe,
             deliveredToAllAt: nil,
             readByAllAt: nil,
-            deliveredCount: 0,
-            readCount: 0,
+            deliveredCount: deliveredCount,
+            readCount: readCount,
             cachedTimeString: cachedTimeString,
             callSummary: callSummary
         )
@@ -951,6 +1015,87 @@ final class BubbleContentMatrixTests: XCTestCase {
             uploadedBy: "u1",
             createdAt: Date(timeIntervalSince1970: 0)
         )
+    }
+
+    // MARK: - #4020 — quelles bulles acceptent le double tap de réaction
+
+    /// **Le double tap est le geste de la barre de réaction rapide.**
+    ///
+    /// La règle est écrite comme une fonction PURE de la nature de la bulle,
+    /// et non par un `if` dans le corps de la vue : c'est ce qui la rend
+    /// mesurable ici, et ce qui empêche la deuxième surface (les cellules
+    /// média) d'en écrire une seconde version.
+    ///
+    /// Une bulle STANDARD l'accepte — c'est le seul cas où il y a quelque
+    /// chose à réagir.
+    func test_doubleTap_estAccepteParUneBulleStandard() {
+        XCTAssertTrue(QuickReactionGesture.acceptsDoubleTap(kind: .standard))
+    }
+
+    /// **Les quatre refus, et chacun a sa raison.** Sans eux, le geste
+    /// s'attacherait à des bulles où il ouvrirait une barre pour réagir à
+    /// RIEN — et le serveur refuserait la réaction, laissant l'utilisateur
+    /// devant un geste qui a l'air de marcher.
+    func test_doubleTap_estRefuseParToutCeQuiNaRienAReagir() {
+        XCTAssertFalse(QuickReactionGesture.acceptsDoubleTap(kind: .deleted),
+                       "un message supprimé n'a plus de contenu")
+        XCTAssertFalse(QuickReactionGesture.acceptsDoubleTap(kind: .viewOnceOpened),
+                       "une vue unique déjà ouverte n'a plus de contenu")
+        XCTAssertFalse(QuickReactionGesture.acceptsDoubleTap(kind: .ephemeralExpired),
+                       "un éphémère expiré n'est plus là")
+        XCTAssertFalse(QuickReactionGesture.acceptsDoubleTap(kind: .system),
+                       "un avis système n'est pas une parole de quelqu'un")
+    }
+
+    /// **Le témoin d'EXHAUSTIVITÉ.** Un cinquième `Kind` ajouté demain doit
+    /// forcer une décision explicite plutôt que de tomber dans un défaut
+    /// silencieux — et ce compte est ce qui fait rougir l'oubli.
+    ///
+    /// Condition de levée : si `BubbleContent.Kind` gagne un cas, trancher
+    /// dans `QuickReactionGesture` puis monter ce compte, jamais l'inverse.
+    func test_laRegleCouvreTousLesKinds() {
+        let tous: [BubbleContent.Kind] = [.standard, .deleted, .viewOnceOpened, .viewOnceSealed, .ephemeralExpired, .system]
+        XCTAssertEqual(tous.count, 6,
+                       "BubbleContent.Kind a changé — trancher le nouveau cas dans QuickReactionGesture")
+        XCTAssertEqual(tous.filter(QuickReactionGesture.acceptsDoubleTap(kind:)).count, 1,
+                       "une seule nature de bulle accepte le geste : la standard")
+    }
+
+    /// **Les deux gestes de la cellule média ont chacun UNE destination**
+    /// (#4020, puis #9907).
+    ///
+    /// Jusqu'au 2026-10-10, double tap et appui long ouvraient le MÊME
+    /// sélecteur. La directive porteur du 2026-10-10 rend l'appui long à
+    /// l'APERÇU de la pièce (« l'appui long sur une pièce montre CETTE pièce
+    /// seule »), dont le menu porte la réaction ; le double tap reste le chemin
+    /// court vers le sélecteur. Le témoin tient les deux destinations : un
+    /// sélecteur ouvert par UN geste, et l'aperçu par l'autre.
+    ///
+    /// Le témoin est BORNÉ au corps de `standardBody` : le fichier contient
+    /// d'autres `canReactPerImage` (la définition de la garde, la pastille),
+    /// donc un `contains` sur le fichier entier serait vert avant comme après.
+    func test_lesDeuxGestesDeLaCelluleMedia_ontChacunUneDestination() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift")
+        let texte = try String(contentsOf: url, encoding: .utf8)
+
+        guard let debut = texte.range(of: "private var standardBody: some View {"),
+              let fin = texte.range(of: "\n    /// BUG2 A'", range: debut.upperBound..<texte.endIndex) else {
+            return XCTFail("`standardBody` est introuvable — le témoin ne mesure plus rien.")
+        }
+        let corps = String(texte[debut.upperBound..<fin.lowerBound])
+
+        XCTAssertTrue(corps.contains("QuickReactionDoubleTap(isEnabled: canReactPerImage)"),
+                      "le double tap ouvre le sélecteur, sous la garde de la réaction par pièce")
+        XCTAssertEqual(corps.components(separatedBy: "showReactionPicker = true").count - 1, 1,
+                       "un seul geste ouvre le sélecteur : le double tap")
+        XCTAssertTrue(corps.contains("MessagePieceLongPress(attachmentId: attachment.id"),
+                      "l'appui long ouvre l'aperçu de CETTE pièce (#9907)")
+        XCTAssertFalse(corps.contains("AttachmentReactionLongPress"),
+                       "l'appui long n'ouvre plus le sélecteur de la tuile")
     }
 }
 

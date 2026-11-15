@@ -1,0 +1,140 @@
+package me.meeshy.app.conversations
+
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.cache.valueOrNull
+import me.meeshy.sdk.category.CategoryRepository
+import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.UserCategoryCatalog
+import me.meeshy.sdk.socket.CategorySocketManager
+import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.status.StatusBarCache
+import me.meeshy.sdk.status.StatusFeedMode
+import me.meeshy.sdk.story.StoryRepository
+import me.meeshy.sdk.story.toStoryGroups
+
+/**
+ * Observateurs decoratifs de la liste : catalogue de categories, frappe,
+ * anneaux de story et humeur. Tous tournent dans le [scope] du ViewModel.
+ */
+internal class ConversationListObservers(
+    private val scope: CoroutineScope,
+    private val state: MutableStateFlow<ConversationListUiState>,
+    private val messageSocketManager: MessageSocketManager,
+    private val categoryRepository: CategoryRepository,
+    private val categorySocketManager: CategorySocketManager,
+    private val storyRepository: StoryRepository,
+    private val statusBarCache: StatusBarCache,
+    private val sectionExpansion: ConversationSectionExpansionStore = ConversationSectionExpansionStore(),
+) {
+
+    /** Corpus vivant des categories : re-seme par le cache, plie par les evenements socket. */
+    private var categoryCatalog: UserCategoryCatalog = UserCategoryCatalog.EMPTY
+
+    /** Minuteries de securite de frappe, par `(conversationId, userId)`. */
+    private val typingCleanupJobs = mutableMapOf<String, Job>()
+
+    /** Hydratation cache-first du catalogue puis evenements temps reel. */
+    fun startCategories() {
+        scope.launch {
+            categoryRepository.categoriesStream().collect { categories ->
+                adopt(UserCategoryCatalog.of(categories))
+            }
+        }
+        scope.launch {
+            categorySocketManager.categoryEvents.collect { event ->
+                adopt(categoryCatalog.apply(event))
+            }
+        }
+    }
+
+    /** Frappe, anneaux de story, humeur (demarres tot : flux chauds sans rejeu). */
+    fun startLive() {
+        observeTyping()
+        observeStoryGroups()
+        paintMoodStatusesFromCache()
+    }
+
+    /** Adopte le nouveau catalogue ; un pli changé depuis un autre appareil s'applique à la mémoire de session. */
+    private fun adopt(next: UserCategoryCatalog) {
+        ConversationSectionExpansionStore.remoteChanges(categoryCatalog.sorted, next.sorted)
+            .forEach { (id, expanded) -> sectionExpansion.applyRemote(id, expanded) }
+        categoryCatalog = next
+        state.update { it.copy(categories = categoryCatalog.sorted) }
+    }
+
+    private fun paintMoodStatusesFromCache() {
+        val statuses = statusBarCache.load(StatusFeedMode.FRIENDS).valueOrNull.orEmpty()
+        if (statuses != state.value.moodStatuses) {
+            state.update { it.copy(moodStatuses = statuses) }
+        }
+    }
+
+    private fun observeStoryGroups() {
+        scope.launch {
+            storyRepository.storiesStream(onSyncError = { }).collect { result ->
+                val posts = when (result) {
+                    is CacheResult.Fresh -> result.value
+                    is CacheResult.Stale -> result.value
+                    is CacheResult.Syncing -> result.value
+                    CacheResult.Empty -> null
+                } ?: return@collect
+                val groups = posts.toStoryGroups(currentUserId = state.value.currentUserId)
+                state.update { it.copy(storyGroups = groups) }
+            }
+        }
+    }
+
+    private fun observeTyping() {
+        scope.launch {
+            messageSocketManager.typingStarted.collect { event ->
+                val before = state.value.typers
+                val after = ConversationTypingRoster.started(before, event, state.value.currentUserId)
+                if (after === before) return@collect
+                state.update { it.copy(typers = after) }
+                armTypingCleanup(event.conversationId, event.userId)
+            }
+        }
+        scope.launch { messageSocketManager.messageReceived.collect(::endTypingOnMessage) }
+        scope.launch {
+            messageSocketManager.typingStopped.collect { event ->
+                typingCleanupJobs.remove("${event.conversationId} ${event.userId}")?.cancel()
+                state.update {
+                    it.copy(typers = ConversationTypingRoster.stopped(it.typers, event.conversationId, event.userId))
+                }
+            }
+        }
+    }
+
+    /** Le message de X est la preuve qu'il a fini d'ecrire : sa frappe s'eteint sans attendre `typing:stop`. */
+    private fun endTypingOnMessage(message: ApiMessage) {
+        listOfNotNull(message.senderId, message.sender?.resolvedUserId).distinct().forEach { userId ->
+            typingCleanupJobs.remove("${message.conversationId} $userId")?.cancel()
+            state.update {
+                it.copy(typers = ConversationTypingRoster.stopped(it.typers, message.conversationId, userId))
+            }
+        }
+    }
+
+    private fun armTypingCleanup(conversationId: String, userId: String) {
+        val key = "$conversationId $userId"
+        typingCleanupJobs.remove(key)?.cancel()
+        typingCleanupJobs[key] = scope.launch {
+            delay(TYPING_SAFETY_TIMEOUT_MS)
+            state.update {
+                it.copy(typers = ConversationTypingRoster.stopped(it.typers, conversationId, userId))
+            }
+            typingCleanupJobs.remove(key)
+        }
+    }
+
+    private companion object {
+        /** iOS parity: a typer with no `typing:stop` is force-cleared after 15 seconds. */
+        const val TYPING_SAFETY_TIMEOUT_MS = 15_000L
+    }
+}

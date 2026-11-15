@@ -6,40 +6,46 @@
  * to prevent plaintext exposure in the database.
  */
 
+import { mergeTranslationEntries, saveTranslatedTrack } from './translatedTrackSave';
 import { EventEmitter } from 'events';
 import * as path from 'path';
-import { promises as fs } from 'fs';
-import * as crypto from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { ZmqTranslationClient, TranslationRequest, TranslationResult } from '../zmq-translation';
-import { isMessageTranslationTarget } from '../zmq-translation/utils/zmq-helpers';
+import { ZmqTranslationClient, TranslationRequest, TranslationResult, type TranslationErrorPayload } from '../zmq-translation';
+import { isMessageTranslationTarget, isTransientPoolRefusal } from '../zmq-translation/utils/zmq-helpers';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { ZMQSingleton } from '../ZmqSingleton';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { TranslationCache } from './TranslationCache';
-import { LanguageCache } from './LanguageCache';
+import { ConversationLanguages } from './ConversationLanguages';
+import { ArrivalHistoryBackfill } from './ArrivalHistoryBackfill';
 import { TranslationStats, TranslationServiceStats } from './TranslationStats';
 import { EncryptionHelper } from './EncryptionHelper';
+import { gatewayKeyring, translatableTextOf, translationRequestRegime } from '../messaging/atRestTranslationSource';
+import type { AtRestKeyring } from '../messaging/serverAtRest';
 import { ConsentValidationService } from '../ConsentValidationService';
 import { MultiLevelJobMappingCache } from '../MultiLevelJobMappingCache';
-import type { AttachmentTranscription, AttachmentTranslations, AttachmentTranslation, TranscriptionSegment } from '@meeshy/shared/types/attachment-audio';
+import type { AttachmentTranscription, AttachmentTranslations, TranscriptionSegment } from '@meeshy/shared/types/attachment-audio';
 import { toSocketIOTranslation } from '@meeshy/shared/types/attachment-audio';
 import { createTranslationJSON, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { isBlankTranscriptionText } from '../../utils/transcription';
 import { isUrlOnly } from '../../utils/url-content';
 import { KeyedMutex } from '../../utils/keyed-mutex';
 import { PostAudioService } from '../posts/PostAudioService';
-import { resolveUserLanguagesOrdered, generateConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
-import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { generateConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { resolveServerTargetLanguages } from './serverTargetLanguages';
+import { translateTextDirectly } from './directTextTranslation';
+import { attachmentAudioRichView, type AttachmentAudioRichView } from '../audio/attachmentAudioRichView';
 import { LIVE_MESSAGE_MARK } from '../messaging/liveMessage';
+import { diffTranslationTargets } from '../../utils/translation-targets';
+import { applyPreset, mergeVoiceCloneParams, type ChatterboxTTSParams, type VoiceCloneParameters } from '../../types/translation.types';
+import { isEmojiOnly } from '../../utils/emoji-only';
+import { guardedInterval } from '../../utils/guarded-timer';
+import { implicitConversationRegime } from '../conversations/creationRegime';
+import { isEndToEndMode } from '../messaging/e2eePlaintextAdmission';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
-// Emoji-only detection: matches strings containing only emoji (+ optional whitespace)
-const EMOJI_REGEX = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}\s]+$/u;
-function isEmojiOnly(text: string): boolean {
-  const trimmed = text.trim();
-  return trimmed.length > 0 && trimmed.length <= 40 && EMOJI_REGEX.test(trimmed);
-}
 
 export interface MessageData {
   id?: string;
@@ -51,7 +57,7 @@ export interface MessageData {
   replyToId?: string;
   targetLanguage?: string;
   isEncrypted?: boolean;
-  encryptionMode?: 'e2ee' | 'server' | 'hybrid' | null;
+  encryptionMode?: string | null;
   modelType?: string;
 }
 
@@ -70,7 +76,8 @@ export class MessageTranslationService extends EventEmitter {
 
   // Composition de modules
   private readonly translationCache: TranslationCache;
-  private readonly languageCache: LanguageCache;
+  private readonly conversationLanguages: ConversationLanguages;
+  private readonly arrivalBackfill: ArrivalHistoryBackfill;
   // Sérialise les updates de translations par attachment (évite le lost-update
   // quand plusieurs langues complètent en concurrence sur le même attachment).
   private readonly attachmentTranslationMutex = new KeyedMutex();
@@ -78,6 +85,7 @@ export class MessageTranslationService extends EventEmitter {
   private readonly messageTranslationMutex = new KeyedMutex();
   private readonly stats: TranslationStats;
   private readonly encryptionHelper: EncryptionHelper;
+  private readonly atRestKeyring: AtRestKeyring;
 
   // Déduplication — Map<key, timestampMs> avec TTL 1h pour éviter la fuite mémoire
   private readonly processedTasks = new Map<string, number>();
@@ -112,9 +120,17 @@ export class MessageTranslationService extends EventEmitter {
     super();
     this.prisma = prisma;
     this.translationCache = new TranslationCache(1000);
-    this.languageCache = new LanguageCache(5 * 60 * 1000, 100);
+    this.conversationLanguages = new ConversationLanguages(prisma);
+    // #9709 — une langue qui arrive reçoit l'historique récent par le pipeline
+    // existant : ZMQ, puis `translationReady`, puis `message:translation` aux
+    // lecteurs autorisés (`translationReaders`).
+    this.arrivalBackfill = new ArrivalHistoryBackfill({
+      prisma,
+      translate: (message, targetLanguage) => this._requestSnapshotTranslation(message, targetLanguage),
+    });
     this.stats = new TranslationStats();
     this.encryptionHelper = new EncryptionHelper(prisma);
+    this.atRestKeyring = gatewayKeyring(prisma);
 
     // Utiliser le cache partagé si fourni, sinon en créer un (rétro-compatibilité)
     this.jobMappingService = jobMappingCache || new MultiLevelJobMappingCache();
@@ -122,7 +138,7 @@ export class MessageTranslationService extends EventEmitter {
     // Periodic cleanup of processedTasks dedup cache (every 30 min).
     // Le même timer balaie aussi les entrées de retranslationTask expirées
     // (pas de nouveau timer — cf. idiome des caches bornés du gateway).
-    this.processedTasksCleanupInterval = setInterval(() => {
+    this.processedTasksCleanupInterval = guardedInterval({ name: 'processed-tasks-cleanup', everyMs: 30 * 60 * 1000, logger, run: () => {
       const now = Date.now();
       const expiry = now - this.PROCESSED_TASK_TTL_MS;
       for (const [key, ts] of this.processedTasks) {
@@ -132,7 +148,7 @@ export class MessageTranslationService extends EventEmitter {
       for (const [id, entry] of this.latestRetranslationTask) {
         if (entry.ts < retransExpiry) this.latestRetranslationTask.delete(id);
       }
-    }, 30 * 60 * 1000);
+    } });
     this.processedTasksCleanupInterval.unref?.();
   }
 
@@ -207,13 +223,12 @@ export class MessageTranslationService extends EventEmitter {
    */
   async handleNewMessage(messageData: MessageData): Promise<{ messageId: string; status: string }> {
     try {
-      const startTime = Date.now();
-
       // Skip translation for emoji-only messages (no translatable text)
       if (messageData.content && isEmojiOnly(messageData.content)) {
+        // #12822 — la longueur, jamais le texte : il peut être chiffré au repos.
         logger.debug('Skipping translation for emoji-only message', {
           conversationId: messageData.conversationId,
-          content: messageData.content.substring(0, 20)
+          contentLength: messageData.content.length
         });
 
         if (!messageData.id) {
@@ -230,7 +245,7 @@ export class MessageTranslationService extends EventEmitter {
       if (messageData.content && isUrlOnly(messageData.content)) {
         logger.debug('Skipping translation for URL-only message', {
           conversationId: messageData.conversationId,
-          content: messageData.content.substring(0, 40)
+          contentLength: messageData.content.length
         });
 
         if (!messageData.id) {
@@ -242,7 +257,7 @@ export class MessageTranslationService extends EventEmitter {
       }
 
       // SECURITY: Skip translation for E2EE messages
-      if (messageData.encryptionMode === 'e2ee') {
+      if (isEndToEndMode(messageData.encryptionMode)) {
         logger.debug('Skipping translation for E2EE message', {
           conversationId: messageData.conversationId,
           encryptionMode: messageData.encryptionMode
@@ -328,6 +343,7 @@ export class MessageTranslationService extends EventEmitter {
 
         await this.prisma.conversation.create({
           data: {
+            ...(await implicitConversationRegime(this.prisma, { enabledBy: messageData.senderId ?? 'system', conversationId: messageData.conversationId })),
             id: messageData.conversationId,
             identifier: conversationIdentifier,
             title: `Conversation ${messageData.conversationId}`,
@@ -403,6 +419,8 @@ export class MessageTranslationService extends EventEmitter {
   }
 
   async close(): Promise<void> {
+    this.conversationLanguages.dispose();
+    this.arrivalBackfill.dispose();
     try {
       await this.zmqClient.close();
     } catch (error) {
@@ -417,10 +435,6 @@ export class MessageTranslationService extends EventEmitter {
   // ============================================================================
   // ENCRYPTION HELPERS - DELEGATED TO EncryptionHelper MODULE
   // ============================================================================
-
-  private async _getConversationEncryptionKey(conversationId: string): Promise<{ keyId: string; key: Buffer } | null> {
-    return this.encryptionHelper.getConversationEncryptionKey(conversationId);
-  }
 
   private async _encryptTranslation(
     plaintext: string,
@@ -444,40 +458,17 @@ export class MessageTranslationService extends EventEmitter {
 
   // ==========================================================
 
-  /**
-   * Résout les langues cibles effectives d'un message : chaque code est ramené à
-   * sa forme canonique via le SSOT `normalizeLanguageCode` (le chemin client passe
-   * le code brut — `'EN'`, `'en-US'`), puis la langue source est retirée pour
-   * éviter une auto-traduction NLLB (`fr → fr`) qui altère le texte et stocke une
-   * fausse traduction du message de l'utilisateur.
-   *
-   * La comparaison se fait sur les formes normalisées : `originalLanguage` est
-   * persisté verbatim (les clients envoient `Locale.current`, ex. `'fr-FR'`, `'FR'`)
-   * tandis que les cibles issues de `_extractConversationLanguages` sont déjà
-   * normalisées lowercase — un `===` brut manquait `fr-FR`/`FR` vs `fr`. `'auto'`
-   * (détection de langue) n'est jamais traité comme une source à filtrer.
-   */
+  /** Cibles effectives d'un message — voir {@link resolveServerTargetLanguages}. */
   private _resolveTargetLanguages(
     originalLanguage: string | null | undefined,
     targetLanguages: readonly string[]
   ): string[] {
-    const source =
-      originalLanguage && originalLanguage !== 'auto'
-        ? normalizeLanguageCode(originalLanguage) ?? originalLanguage.toLowerCase()
-        : undefined;
-
-    const result: string[] = [];
-    for (const raw of targetLanguages) {
-      const code = normalizeLanguageCode(raw) ?? raw.toLowerCase();
-      if (code === source) continue;
-      result.push(code);
-    }
-    return result;
+    return resolveServerTargetLanguages(originalLanguage, targetLanguages);
   }
 
   /**
    * Canonicalise la langue SOURCE envoyée au translator, avec la MÊME parité que
-   * les cibles ({@link _resolveTargetLanguages}, SSOT `normalizeLanguageCode`).
+   * les cibles ({@link _resolveTargetLanguages}, SSOT `normalizeLanguageForDedup`).
    *
    * Les clients transmettent `originalLanguage` verbatim (`Locale.current` :
    * `'fr-FR'`, `'FR'`, `'pt-BR'`) et le champ est persisté sans normalisation.
@@ -499,7 +490,7 @@ export class MessageTranslationService extends EventEmitter {
     if (!originalLanguage || originalLanguage === 'auto') {
       return originalLanguage as string;
     }
-    return normalizeLanguageCode(originalLanguage) ?? originalLanguage.toLowerCase();
+    return normalizeLanguageForDedup(originalLanguage);
   }
 
   private async _processTranslationsAsync(message: any, targetLanguage?: string, modelType?: string) {
@@ -511,9 +502,10 @@ export class MessageTranslationService extends EventEmitter {
         return;
       }
 
-      // Valider que le texte n'est pas vide
-      if (!message.content || message.content.trim().length === 0) {
-        logger.warn(`⚠️ [TRANSLATION] Message ${message.id} ignoré: contenu vide`);
+      // #12822 — le clair de la ligne, ouvert par la passerelle si elle est scellée au repos.
+      const text = await translatableTextOf(message, this.atRestKeyring);
+      if (!text) {
+        logger.warn(`⚠️ [TRANSLATION] Message ${message.id} ignoré: aucun texte lisible`);
         return;
       }
 
@@ -532,7 +524,7 @@ export class MessageTranslationService extends EventEmitter {
       }
 
       // OPTIMISATION: Normaliser + filtrer les langues cibles (SSOT
-      // normalizeLanguageCode) pour éviter les auto-traductions inutiles.
+      // normalizeLanguageForDedup) pour éviter les auto-traductions inutiles.
       const filteredTargetLanguages = this._resolveTargetLanguages(
         message.originalLanguage,
         targetLanguages
@@ -604,19 +596,19 @@ export class MessageTranslationService extends EventEmitter {
       logger.info(`📤 [PARTIAL CACHE] Message ${message.id}: ${cacheResults.length} cached, ${cacheMisses.length} to translate`);
 
       // Déterminer le model type
-      const finalModelType = modelType ?? ((message.content?.length ?? 0) < 80 ? 'medium' : 'premium');
+      const finalModelType = modelType ?? (text.length < 80 ? 'medium' : 'premium');
 
       // 6. ENVOYER LA REQUÊTE DE TRADUCTION VIA ZMQ (seulement pour cache misses)
       const request: TranslationRequest = {
         messageId: message.id,
-        text: message.content,
+        text,
         sourceLanguage: this._normalizeSourceLanguage(message.originalLanguage),
         targetLanguages: cacheMisses,  // ✨ Seulement les langues non cachées
         conversationId: message.conversationId,
-        modelType: finalModelType
+        modelType: finalModelType, ...translationRequestRegime(message),
       };
 
-      const taskId = await this.zmqClient.sendTranslationRequest(request);
+      await this.zmqClient.sendTranslationRequest(request);
       this.stats.incrementRequestsSent();
 
       const processingTime = Date.now() - startTime;
@@ -628,6 +620,29 @@ export class MessageTranslationService extends EventEmitter {
     }
   }
 
+
+  /**
+   * Traduit l'INSTANTANÉ jugé par le rattrapage d'une arrivée (#9709) — jamais
+   * le document relu plus tard, dont la protection n'aurait pas été rejugée.
+   * Aucune tâche de retraduction n'est enregistrée et aucun cache n'est purgé :
+   * une traduction initiale en vol vers la même langue reste valide, et une
+   * édition postérieure, qui enregistre la sienne, périme celle-ci.
+   */
+  private async _requestSnapshotTranslation(
+    message: { id: string; conversationId: string; content: string; originalLanguage: string },
+    targetLanguage: string
+  ): Promise<void> {
+    if (!this.zmqClient) return;
+    await this.zmqClient.sendTranslationRequest({
+      messageId: message.id,
+      text: message.content,
+      sourceLanguage: this._normalizeSourceLanguage(message.originalLanguage),
+      targetLanguages: [targetLanguage],
+      conversationId: message.conversationId,
+      modelType: message.content.length < 80 ? 'medium' : 'premium',
+    });
+    this.stats.incrementRequestsSent();
+  }
 
   /**
    * Public entry-point for retranslating an edited message.
@@ -669,9 +684,10 @@ export class MessageTranslationService extends EventEmitter {
         throw new Error(`Message ${messageId} non trouvé pour retraduction`);
       }
 
-      // Valider que le texte n'est pas vide
-      if (!existingMessage.content || existingMessage.content.trim().length === 0) {
-        logger.warn(`⚠️ [RETRANSLATION] Message ${messageId} ignoré: contenu vide`);
+      // #12822 — le clair de la ligne (scellée au repos en server/hybrid), jamais `content: ''`.
+      const text = await translatableTextOf(existingMessage, this.atRestKeyring);
+      if (!text) {
+        logger.warn(`⚠️ [RETRANSLATION] Message ${messageId} ignoré: aucun texte lisible`);
         return;
       }
 
@@ -690,7 +706,7 @@ export class MessageTranslationService extends EventEmitter {
       }
       
       // OPTIMISATION: Normaliser + filtrer les langues cibles (SSOT
-      // normalizeLanguageCode) pour éviter les auto-traductions inutiles.
+      // normalizeLanguageForDedup) pour éviter les auto-traductions inutiles.
       const filteredTargetLanguages = this._resolveTargetLanguages(
         existingMessage.originalLanguage,
         targetLanguages
@@ -704,7 +720,7 @@ export class MessageTranslationService extends EventEmitter {
       
       // 2. DÉTERMINER LE MODEL TYPE
       // Priorité: 1) modelType du messageData (demandé par l'utilisateur), 2) auto-détection
-      const autoModelType = (existingMessage.content?.length ?? 0) < 80 ? 'medium' : 'premium';
+      const autoModelType = text.length < 80 ? 'medium' : 'premium';
       const finalModelType = messageData.modelType ?? autoModelType;
       
       
@@ -731,11 +747,11 @@ export class MessageTranslationService extends EventEmitter {
       // 4. ENVOYER LA REQUÊTE DE RETRADUCTION VIA ZMQ
       const request: TranslationRequest = {
         messageId: messageId,
-        text: existingMessage.content,
+        text,
         sourceLanguage: this._normalizeSourceLanguage(existingMessage.originalLanguage),
         targetLanguages: filteredTargetLanguages,
         conversationId: existingMessage.conversationId,
-        modelType: finalModelType
+        modelType: finalModelType, ...translationRequestRegime(existingMessage),
       };
       
       const taskId = await this.zmqClient.sendTranslationRequest(request);
@@ -751,12 +767,12 @@ export class MessageTranslationService extends EventEmitter {
 
   /**
    * Clé du garde d'ordonnancement : un message ET une langue, sous la forme
-   * canonique du SSOT `normalizeLanguageCode`. Les deux côtés (enregistrement
+   * canonique du SSOT `normalizeLanguageForDedup`. Les deux côtés (enregistrement
    * au dispatch, lecture à la réception) doivent normaliser, sinon une cible
    * demandée `'pt-BR'` et un résultat rendu `'pt'` ne se reconnaissent pas.
    */
   private _retranslationTaskKey(messageId: string, targetLanguage: string): string {
-    const code = normalizeLanguageCode(targetLanguage) ?? targetLanguage.toLowerCase();
+    const code = normalizeLanguageForDedup(targetLanguage);
     return `${messageId}::${code}`;
   }
 
@@ -810,143 +826,14 @@ export class MessageTranslationService extends EventEmitter {
   }
 
   /**
-   * Extrait les langues cibles des participants d'une conversation
-   * Inclut les langues des utilisateurs authentifiés ET des participants anonymes
-   * NOTE: Cette méthode retourne TOUTES les langues parlées dans la conversation,
-   * indépendamment des préférences de traduction automatique des utilisateurs.
-   * Le filtrage des langues identiques à la source se fait dans les méthodes de traitement.
-   * 
-   * OPTIMISATION: Les résultats sont mis en cache pendant 5 minutes pour éviter les requêtes répétées
+   * Les langues cibles d'une conversation — la composition vit chez
+   * `ConversationLanguages`, invalidée par les annonces d'arrivée, de départ
+   * et de changement de langue (#9708).
    */
-  private async _extractConversationLanguages(conversationId: string): Promise<string[]> {
-    try {
-      logger.info(`🔍 [LANG-TRACE] Extraction langues pour conversation: ${conversationId}`);
-
-      // OPTIMISATION: Vérifier le cache d'abord
-      const cached = this.languageCache.get(conversationId);
-
-      if (cached) {
-        logger.info(`💾 [LANG-TRACE] Langues depuis cache: [${cached.join(', ')}]`);
-        return cached;
-      }
-
-      const startTime = Date.now();
-      const languages = new Set<string>();
-
-      // Check conversation autoTranslateEnabled alongside participants query
-      const [conversation, participants] = await Promise.all([
-        this.prisma.conversation.findUnique({
-          where: { id: conversationId },
-          select: { autoTranslateEnabled: true }
-        }),
-        this.prisma.participant.findMany({
-          where: {
-            conversationId: conversationId,
-            isActive: true
-          },
-          select: {
-            id: true,
-            displayName: true,
-            type: true,
-            language: true,
-            user: {
-              select: {
-                id: true,
-                username: true,
-                systemLanguage: true,
-                regionalLanguage: true,
-                customDestinationLanguage: true,
-                deviceLocale: true
-              }
-            }
-          }
-        })
-      ]);
-
-      if (conversation?.autoTranslateEnabled === false) {
-        logger.info(`⛔ [LANG-TRACE] autoTranslateEnabled=false pour ${conversationId} — traduction désactivée`);
-        this.languageCache.set(conversationId, []);
-        return [];
-      }
-
-      logger.info(`[LANG-TRACE] Participants: ${participants.length}`);
-
-      for (const participant of participants) {
-        if (participant.type === 'user' && participant.user) {
-          const u = participant.user;
-          logger.debug(
-            `   [LANG-TRACE] Registered: ${u.username} (${u.id}) | ` +
-            `systemLang=${u.systemLanguage} | regionalLang=${u.regionalLanguage} | ` +
-            `customDest=${u.customDestinationLanguage ?? '-'} | deviceLocale=${u.deviceLocale ?? '-'}`
-          );
-
-          // Resolve via the shared 4-level priority helper:
-          //   systemLanguage > regionalLanguage > customDestinationLanguage > deviceLocale
-          // The helper deduplicates lowercase codes so two participants
-          // sharing the same locale only contribute once. deviceLocale is
-          // normalised via normalizeLanguageCode (`fr-FR` → `fr`).
-          const codes = resolveUserLanguagesOrdered(u, {
-            deviceLocale: u.deviceLocale ?? undefined,
-          });
-          for (const code of codes) {
-            languages.add(code);
-          }
-        } else {
-          // Anonymous or bot participant — use participant.language
-          logger.debug(
-            `   [LANG-TRACE] ${participant.type}: ${participant.displayName} (${participant.id}) | ` +
-            `language=${participant.language}`
-          );
-
-          // Normalise like the registered branch: an anonymous/bot participant
-          // stores `language` unvalidated (anonymous join schema is a bare
-          // `z.string()`), so it may hold `'EN'` or `'en-US'`. Adding it verbatim
-          // would inject an uppercase/locale-cased target that never matches the
-          // lowercase-keyed MessageTranslation store — a duplicated NLLB request
-          // and a Prisme rule #1 miss (client falls back to the original).
-          if (participant.language) {
-            languages.add(
-              normalizeLanguageCode(participant.language) ?? participant.language.toLowerCase()
-            );
-          }
-        }
-      }
-
-      // Retourner toutes les langues (le filtrage se fera dans les méthodes de traitement)
-      const allLanguages = Array.from(languages);
-
-      // OPTIMISATION: Mettre en cache le résultat
-      this.languageCache.set(conversationId, allLanguages);
-
-      const queryTime = Date.now() - startTime;
-
-      logger.info(
-        `✅ [LANG-TRACE] Langues extraites en ${queryTime}ms: [${allLanguages.join(', ')}] | ` +
-        `Total: ${allLanguages.length} langue(s) unique(s)`
-      );
-
-      return allLanguages;
-      
-    } catch (error) {
-      logger.error(`❌ [TranslationService] Erreur extraction langues: ${error}`);
-      return ['en', 'fr']; // Fallback
-    }
+  private _extractConversationLanguages(conversationId: string): Promise<string[]> {
+    return this.conversationLanguages.of(conversationId);
   }
 
-  private async _getMessageSourceLanguage(conversationId: string): Promise<string> {
-    try {
-      const lastMessage = await this.prisma.message.findFirst({
-        where: { conversationId: conversationId },
-        orderBy: { createdAt: 'desc' },
-        select: { originalLanguage: true }
-      });
-      
-      return lastMessage?.originalLanguage || 'fr';
-    } catch (error) {
-      logger.error(`❌ Erreur récupération langue source: ${error}`);
-      return 'fr';
-    }
-  }
 
   /**
    * Wraps an async ZMQ event handler so that a thrown exception or rejected
@@ -980,8 +867,6 @@ export class MessageTranslationService extends EventEmitter {
     metadata?: any;
   }) {
     try {
-      const startTime = Date.now();
-
       // Le bus `translationCompleted` est MULTIPLEXÉ : posts, commentaires et
       // stories y transitent sous un identifiant namespacé (`post:<id>`,
       // `comment:<id>`, `story:<id>`) et sont persistés par LEURS propres
@@ -1057,12 +942,12 @@ export class MessageTranslationService extends EventEmitter {
         return;
       }
 
-      this.stats.incrementTranslationsReceived();
+      this.stats.recordTranslationReceived(data.result.processingTime); // compte + moyenne (s → ms)
       
       // SAUVEGARDE EN BASE DE DONNÉES (traduction validée par le Translator)
       let translationId: string | null = null;
       try {
-        translationId = await this._saveTranslationToDatabase(data.result, data.metadata);
+        translationId = await this._saveTranslationToDatabase(data.result);
       } catch (error) {
         logger.error(`❌ [TranslationService] Erreur sauvegarde traduction: ${error}`);
         // Continuer même si la sauvegarde échoue
@@ -1083,9 +968,7 @@ export class MessageTranslationService extends EventEmitter {
         translationId: translationId, // Ajouter l'ID de la traduction
         metadata: data.metadata || {}
       });
-      
-      const processingTime = Date.now() - startTime;
-      
+
     } catch (error) {
       logger.error(`❌ [TranslationService] Erreur traitement: ${error}`);
       logger.error(`📋 [TranslationService] Données reçues: ${JSON.stringify(data, null, 2)}`);
@@ -1093,7 +976,7 @@ export class MessageTranslationService extends EventEmitter {
     }
   }
 
-  private async _handleTranslationError(data: { taskId: string; messageId: string; error: string; conversationId: string }) {
+  private async _handleTranslationError(data: TranslationErrorPayload) {
     // Même multiplexage que sur le chemin nominal : l'échec d'une traduction de
     // post/commentaire/story n'a pas de room de conversation à notifier — son
     // `conversationId` est un contexte social (`post_context:<id>`), pas une
@@ -1105,18 +988,17 @@ export class MessageTranslationService extends EventEmitter {
 
     logger.error(`❌ Erreur de traduction: ${data.error} pour ${data.messageId}`);
 
-    if (data.error === 'translation pool full') {
+    if (isTransientPoolRefusal(data)) {
       this.stats.incrementPoolFullRejections();
     }
 
     this.stats.incrementErrors();
 
-    this.emit('translationFailed', {
-      messageId: data.messageId,
-      conversationId: data.conversationId,
-      error: data.error,
-      taskId: data.taskId,
-    });
+    if (!isValidObjectId(data.conversationId)) {
+      logger.warn(`⏭️ [TranslationService] Échec de traduction sans conversation valide, non diffusé: ${data.messageId}`);
+      return;
+    }
+    this.emit('translationFailed', { messageId: data.messageId, conversationId: data.conversationId, error: data.error, taskId: data.taskId });
   }
 
   // ============================================================================
@@ -1162,6 +1044,7 @@ export class MessageTranslationService extends EventEmitter {
       // Rétrocompatibilité base64 (legacy)
       audioDataBase64?: string;
       segments?: TranscriptionSegment[];  // Segments de la transcription de l'audio traduit
+      textOnly?: boolean;  // #16340 — TTS en échec : texte traduit seul, aucune piste
     }>;
     voiceModelUserId: string;
     voiceModelQuality: number;
@@ -1266,48 +1149,23 @@ export class MessageTranslationService extends EventEmitter {
       // handler progressif _processTranslationEvent sur le même attachment.
       const newTranslationEntries: AttachmentTranslations = {};
 
-      // Dossier de sortie commun : calculé + créé UNE seule fois (pas par langue).
+      // Dossier de sortie commun, calculé une fois (pas par langue).
       const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
-      let translatedDirEnsured = false;
 
       for (const translatedAudio of data.translatedAudios) {
-        // Toujours générer le path et l'URL au format gateway (même sans binaire)
+        // Toujours l'adresse au format gateway ; annoncée seulement si la piste est écrite (#13100)
         const ext = translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3';
-        const expectedFilename = `${data.attachmentId}_${translatedAudio.targetLanguage}.${ext}`;
-        let localAudioPath = path.resolve(translatedDir, expectedFilename);
-        let localAudioUrl = `/api/v1/attachments/file/translated/${expectedFilename}`;
-
-        // MULTIPART: Priorité aux données binaires (efficace, pas de décodage)
-        // Fallback sur base64 pour rétrocompatibilité
-        const audioBinary = translatedAudio._audioBinary;
-        const audioBase64 = translatedAudio.audioDataBase64;
-
-        logger.debug('audio translation data presence', { language: translatedAudio.targetLanguage, hasBinary: !!audioBinary, binaryBytes: audioBinary?.length ?? 0, hasBase64: !!audioBase64 });
-
-        if (audioBinary || audioBase64) {
-          try {
-            if (!translatedDirEnsured) {
-              await fs.mkdir(translatedDir, { recursive: true });
-              translatedDirEnsured = true;
-            }
-
-            // Sauvegarder directement le buffer (multipart) ou décoder base64 (legacy)
-            const audioBuffer = audioBinary || Buffer.from(audioBase64!, 'base64');
-            await fs.writeFile(localAudioPath, audioBuffer);
-
-            const source = audioBinary ? 'multipart' : 'base64';
-            logger.info(`   📁 Audio sauvegardé (${source}): ${expectedFilename} (${(audioBuffer.length / 1024).toFixed(1)}KB)`);
-          } catch (fileError) {
-            logger.error(`   ❌ Erreur sauvegarde audio: ${fileError}`);
-          }
-        }
+        const trackLocation = await saveTranslatedTrack(this.prisma, {
+          translatedDir, filename: `${data.attachmentId}_${translatedAudio.targetLanguage}.${ext}`, attachmentId: data.attachmentId,
+          language: translatedAudio.targetLanguage, binary: translatedAudio._audioBinary, base64: translatedAudio.audioDataBase64,
+          textOnly: translatedAudio.textOnly,
+        });
 
         // Ajouter/mettre à jour la traduction dans le map avec segments (format BD)
         newTranslationEntries[translatedAudio.targetLanguage] = {
           type: 'audio',
           transcription: translatedAudio.translatedText,
-          path: localAudioPath,
-          url: localAudioUrl,
+          ...trackLocation,
           durationMs: translatedAudio.durationMs,
           format: translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3',
           cloned: translatedAudio.voiceCloned,
@@ -1333,10 +1191,7 @@ export class MessageTranslationService extends EventEmitter {
             where: { id: data.attachmentId },
             select: { translations: true }
           });
-          const merged: AttachmentTranslations = {
-            ...((fresh?.translations as unknown as AttachmentTranslations) || {}),
-            ...newTranslationEntries
-          };
+          const merged = mergeTranslationEntries((fresh?.translations as unknown as AttachmentTranslations) || {}, newTranslationEntries);
           await this.prisma.messageAttachment.update({
             where: { id: data.attachmentId },
             data: {
@@ -1813,6 +1668,7 @@ export class MessageTranslationService extends EventEmitter {
         segments?: TranscriptionSegment[];
         _audioBinary?: Buffer | null;  // AJOUT: support multipart
         audioDataBase64?: string;  // AJOUT: support base64 legacy
+        textOnly?: boolean;  // #16340 — TTS en échec : texte traduit seul, aucune piste
       };
     },
     eventName: string,
@@ -1842,35 +1698,14 @@ export class MessageTranslationService extends EventEmitter {
         return;
       }
 
-      // 1.5. Sauvegarder l'audio localement SI binaire disponible
-      // Toujours générer le path et l'URL au format gateway (même sans binaire)
+      // 1.5. Sauvegarder l'audio localement SI binaire disponible ; l'adresse
+      // n'est annoncée que si la piste est écrite (#13100)
       const ext = data.translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3';
-      const expectedFilename = `${data.attachmentId}_${data.language}.${ext}`;
-      const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
-      const localAudioPath = path.resolve(translatedDir, expectedFilename);
-      const localAudioUrl = `/api/v1/attachments/file/translated/${expectedFilename}`;
-
-      const audioBinary = data.translatedAudio._audioBinary;
-      const audioBase64 = data.translatedAudio.audioDataBase64;
-
-      logger.debug('progressive audio data presence', { language: data.language, hasBinary: !!audioBinary, binaryBytes: audioBinary?.length ?? 0, hasBase64: !!audioBase64 });
-
-      if (audioBinary || audioBase64) {
-        try {
-          await fs.mkdir(translatedDir, { recursive: true });
-
-          // Sauvegarder le buffer
-          const audioBuffer = audioBinary || Buffer.from(audioBase64!, 'base64');
-          await fs.writeFile(localAudioPath, audioBuffer);
-
-          const source = audioBinary ? 'multipart' : 'base64';
-          logger.info(`   📁 Audio sauvegardé (${source}): ${expectedFilename} (${(audioBuffer.length / 1024).toFixed(1)}KB)`);
-        } catch (fileError) {
-          logger.error(`   ❌ Erreur sauvegarde audio: ${fileError}`);
-        }
-      } else {
-        logger.warn(`   ⚠️ Aucun binaire disponible pour ${data.language}, path=${localAudioPath}, url=${localAudioUrl}`);
-      }
+      const trackLocation = await saveTranslatedTrack(this.prisma, {
+        translatedDir: path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated'), filename: `${data.attachmentId}_${data.language}.${ext}`,
+        attachmentId: data.attachmentId, language: data.language, binary: data.translatedAudio._audioBinary, base64: data.translatedAudio.audioDataBase64,
+        textOnly: data.translatedAudio.textOnly,
+      });
 
       // 2. Mettre à jour translations JSON — SÉRIALISÉ par attachment.
       // Plusieurs langues complètent en concurrence ; sans sérialisation, chaque
@@ -1884,22 +1719,21 @@ export class MessageTranslationService extends EventEmitter {
             where: { id: data.attachmentId },
             select: { translations: true }
           });
-          const existingTranslations = (fresh?.translations as unknown as AttachmentTranslations) || {};
-
-          existingTranslations[data.language] = {
-            type: 'audio',
-            transcription: data.translatedAudio.translatedText,
-            path: localAudioPath,  // Chemin local si sauvegardé
-            url: localAudioUrl,     // URL correcte si sauvegardé
-            durationMs: data.translatedAudio.durationMs,
-            format: data.translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3',
-            cloned: data.translatedAudio.voiceCloned,
-            quality: data.translatedAudio.voiceQuality,
-            ttsModel: 'xtts',
-            segments: data.translatedAudio.segments as any,
-            createdAt: new Date(),
-            updatedAt: new Date()
-          };
+          const existingTranslations = mergeTranslationEntries((fresh?.translations as unknown as AttachmentTranslations) || {}, {
+            [data.language]: {
+              type: 'audio',
+              transcription: data.translatedAudio.translatedText,
+              ...trackLocation,
+              durationMs: data.translatedAudio.durationMs,
+              format: data.translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3',
+              cloned: data.translatedAudio.voiceCloned,
+              quality: data.translatedAudio.voiceQuality,
+              ttsModel: 'xtts',
+              segments: data.translatedAudio.segments as any,
+              createdAt: new Date(),
+              updatedAt: new Date()
+            }
+          });
 
           await this.prisma.messageAttachment.update({
             where: { id: data.attachmentId },
@@ -2179,48 +2013,22 @@ export class MessageTranslationService extends EventEmitter {
         // incluse). Merge avec l'existant + update faits SOUS MUTEX plus bas.
         const newTranslationEntries: AttachmentTranslations = {};
 
-        // Dossier de sortie commun : calculé + créé UNE seule fois (pas par langue).
+        // Dossier de sortie commun, calculé une fois (pas par langue).
         const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
-        let translatedDirEnsured = false;
 
         for (const translation of data.result.translations) {
           // TOUJOURS générer le path et l'URL au format gateway (même sans binaire)
           // Cela garantit que l'URL du translator (/outputs/audio/translated/) n'est jamais exposée
-          const filename = `${jobMetadata.attachmentId}_${translation.targetLanguage}.mp3`;
-          const localAudioPath = path.resolve(translatedDir, filename);
-          const localAudioUrl = `/api/v1/attachments/file/translated/${filename}`;
-
-          // MULTIPART: Priorité aux données binaires (efficace, pas de décodage)
-          // Fallback sur base64 pour rétrocompatibilité
-          const audioBinary = (translation as any)._audioBinary;
-          const audioBase64 = translation.audioBase64;
-
-          if (audioBinary || audioBase64) {
-            try {
-              if (!translatedDirEnsured) {
-                await fs.mkdir(translatedDir, { recursive: true });
-                translatedDirEnsured = true;
-              }
-
-              // Sauvegarder directement le buffer (multipart) ou décoder base64 (legacy)
-              const audioBuffer = audioBinary || Buffer.from(audioBase64!, 'base64');
-              await fs.writeFile(localAudioPath, audioBuffer);
-
-              const source = audioBinary ? 'multipart' : 'base64';
-              logger.info(`📁 Audio sauvegardé (${source}): ${filename} (${(audioBuffer.length / 1024).toFixed(1)}KB)`);
-            } catch (fileError) {
-              logger.error(`   ❌ Erreur sauvegarde audio: ${fileError}`);
-            }
-          } else {
-            logger.warn(`   ⚠️ Aucun binaire disponible pour ${translation.targetLanguage}, url=${localAudioUrl}`);
-          }
+          const trackLocation = await saveTranslatedTrack(this.prisma, {
+            translatedDir, filename: `${jobMetadata.attachmentId}_${translation.targetLanguage}.mp3`, attachmentId: jobMetadata.attachmentId,
+            language: translation.targetLanguage, binary: (translation as any)._audioBinary, base64: translation.audioBase64,
+          });
 
           // Ajouter/mettre à jour la traduction dans le map avec segments (format BD)
           newTranslationEntries[translation.targetLanguage] = {
             type: 'audio',
             transcription: translation.translatedText,
-            path: localAudioPath,
-            url: localAudioUrl,
+            ...trackLocation,
             durationMs: translation.durationMs,
             format: 'mp3',
             cloned: translation.voiceCloned,
@@ -2246,10 +2054,7 @@ export class MessageTranslationService extends EventEmitter {
               where: { id: attachmentIdForUpdate },
               select: { translations: true }
             });
-            const merged: AttachmentTranslations = {
-              ...((fresh?.translations as unknown as AttachmentTranslations) || {}),
-              ...newTranslationEntries
-            };
+            const merged = mergeTranslationEntries((fresh?.translations as unknown as AttachmentTranslations) || {}, newTranslationEntries);
             // N'écrire `transcription` QUE si présente : data.result.originalAudio
             // peut être absent (transcriptionData=null) et écraser une
             // transcription déjà stockée par un autre handler (data-loss).
@@ -2384,6 +2189,8 @@ export class MessageTranslationService extends EventEmitter {
     generateVoiceClone?: boolean;
     modelType?: string;
     userLanguage?: string;
+    /** #13102 — un contenu au repos ou destiné à disparaître : rien ne se range au translator. */
+    atRest?: boolean;
   }): Promise<string | null> {
     try {
       if (!this.zmqClient) {
@@ -2415,10 +2222,23 @@ export class MessageTranslationService extends EventEmitter {
       // ═══════════════════════════════════════════════════════════════════════════
       // VÉRIFICATION DES CONSENTEMENTS VOCAUX
       // ═══════════════════════════════════════════════════════════════════════════
-      const bypassConsentCheck = process.env.BYPASS_VOICE_CONSENT_CHECK === 'true';
+      // #4348 — il n'y a PLUS de dérogation par variable d'environnement.
+      //
+      // `BYPASS_VOICE_CONSENT_CHECK === 'true'` forçait ici les trois
+      // consentements à `true`, y compris dans le `catch` plus bas. C'était le
+      // jumeau exact du court-circuit `NODE_ENV === 'development'` que ce même
+      // lot retire de `ConsentValidationService` — même forme, même pipeline,
+      // à un appelant de distance.
+      //
+      // Un consentement se prouve par une DONNÉE, jamais par un environnement
+      // d'exécution : une variable mal positionnée suffisait à réputer toute
+      // la population consentante, sans trace, sans horodatage, et sans rien à
+      // montrer à un régulateur. Ce qu'elle rendait commode — un environnement
+      // de développement qui parle — est désormais fourni par la graine, qui
+      // écrit de vrais consentements horodatés.
       logger.info(
         `🔍 [VOICE-PROFILE-TRACE] Vérification consentements | ` +
-        `Sender: ${params.senderId} | GenerateClone: ${params.generateVoiceClone} | Bypass: ${bypassConsentCheck}`
+        `Sender: ${params.senderId} | GenerateClone: ${params.generateVoiceClone}`
       );
 
       let hasVoiceCloningConsent = false;
@@ -2428,12 +2248,7 @@ export class MessageTranslationService extends EventEmitter {
       try {
         logger.info(`🔍 [VOICE-PROFILE-TRACE] Vérification consentements...`);
 
-        if (bypassConsentCheck) {
-          logger.warn(`🔍 [VOICE-PROFILE-TRACE] ⚠️ BYPASS activé - force consentements à TRUE`);
-          hasVoiceCloningConsent = true;
-          hasVoiceProfileConsent = true;
-          canGenerateTranslatedAudio = true;
-        } else {
+        {
           // Utilisation du ConsentValidationService pour vérifier les consentements
           const consentService = new ConsentValidationService(this.prisma);
           const consentStatus = await consentService.getConsentStatus(params.senderId);
@@ -2477,15 +2292,12 @@ export class MessageTranslationService extends EventEmitter {
       } catch (consentError) {
         logger.error(`🔍 [VOICE-PROFILE-TRACE] ❌ ERREUR vérification consentements: ${consentError}`);
         logger.error(`🔍 [VOICE-PROFILE-TRACE] Stack: ${consentError instanceof Error ? consentError.stack : 'N/A'}`);
-        // En cas d'erreur, on continue sans clonage vocal par sécurité
-        if (bypassConsentCheck) {
-          hasVoiceCloningConsent = true;
-          hasVoiceProfileConsent = true;
-        } else {
-          // Par sécurité, désactiver le clonage vocal en cas d'erreur
-          hasVoiceCloningConsent = false;
-          hasVoiceProfileConsent = false;
-        }
+        // FAIL-CLOSED, sans exception : une lecture qui ne conclut pas ne
+        // prouve aucun consentement. La branche de dérogation qui vivait ici
+        // était la pire des deux — elle s'appliquait précisément au moment où
+        // le service ne savait RIEN (#4348).
+        hasVoiceCloningConsent = false;
+        hasVoiceProfileConsent = false;
       }
 
       // Déterminer si on génère le clonage vocal
@@ -2495,9 +2307,12 @@ export class MessageTranslationService extends EventEmitter {
         logger.info(`   ℹ️ Clonage vocal désactivé (pas de consentement)`);
       }
 
-      // 1. Récupérer les langues cibles: explicites (appelant) ou dérivées de la conversation
+      // 1. Récupérer les langues cibles: explicites (appelant) ou dérivées de la conversation.
+      //    Les cibles explicites arrivent VERBATIM ('fr-FR', 'EN') et rien ne les
+      //    canonicalise en aval du dispatch audio — `diffTranslationTargets` (SSOT
+      //    des jumeaux) les canonicalise + déduplique ici ; la branche dérivée l'est déjà.
       let targetLanguages = params.targetLanguages && params.targetLanguages.length > 0
-        ? params.targetLanguages
+        ? diffTranslationTargets(params.targetLanguages, []).missing
         : await this._extractConversationLanguages(params.conversationId);
 
       if (targetLanguages.length === 0) {
@@ -2573,6 +2388,60 @@ export class MessageTranslationService extends EventEmitter {
         logger.debug(`   ℹ️ No existing voice profile for user ${params.senderId}`);
       }
 
+      // 2bis. Lire les réglages fins de clonage vocal de l'utilisateur (#3735) —
+      // `UserPreferences.audio` (voiceCloningExaggeration/CfgWeight/Temperature/
+      // TopP/QualityPreset), écrits par `VoiceProfileService.registerProfile()`.
+      // Sans clonage autorisé, Chatterbox synthétise sur la voix par défaut :
+      // ces réglages n'ont alors aucun effet et ne sont pas lus.
+      //
+      // `applyPreset`/`mergeVoiceCloneParams` (`../../types/translation.types`)
+      // rendent la forme IMBRIQUÉE `{chatterbox, performance, quality}` — celle
+      // qui sert au CALCUL du preset. Le fil ZMQ, lui, attend `chatterbox` à
+      // PLAT (`zmq-translation/types.ts` § doc-comment sur `voiceCloneParams`) :
+      // aplatir ici, au site d'appel, est ce qui évite qu'un futur lecteur
+      // recopie la forme imbriquée sans savoir qu'elle ne traverse pas le fil.
+      let voiceCloneParams: { [K in keyof ChatterboxTTSParams]: ChatterboxTTSParams[K] } & { qualityPreset?: string } | undefined;
+      if (shouldGenerateVoiceClone) {
+        try {
+          const audioPrefs = await this.prisma.userPreferences.findUnique({
+            where: { userId: params.senderId },
+            select: { audio: true }
+          });
+          const audio = audioPrefs?.audio as Record<string, unknown> | null | undefined;
+
+          if (audio && typeof audio === 'object') {
+            const overrides: ChatterboxTTSParams = {};
+            if (typeof audio.voiceCloningExaggeration === 'number') {
+              overrides.exaggeration = audio.voiceCloningExaggeration;
+            }
+            if (typeof audio.voiceCloningCfgWeight === 'number') {
+              overrides.cfgWeight = audio.voiceCloningCfgWeight;
+            }
+            if (typeof audio.voiceCloningTemperature === 'number') {
+              overrides.temperature = audio.voiceCloningTemperature;
+            }
+            if (typeof audio.voiceCloningTopP === 'number') {
+              overrides.topP = audio.voiceCloningTopP;
+            }
+
+            const preset = audio.voiceCloningQualityPreset;
+            const hasPreset = preset === 'fast' || preset === 'balanced' || preset === 'high_quality';
+
+            if (hasPreset || Object.keys(overrides).length > 0) {
+              const resolved: VoiceCloneParameters = hasPreset
+                ? applyPreset(preset as 'fast' | 'balanced' | 'high_quality', { chatterbox: overrides })
+                : mergeVoiceCloneParams({ chatterbox: overrides });
+              voiceCloneParams = {
+                ...resolved.chatterbox,
+                ...(hasPreset ? { qualityPreset: preset as string } : {})
+              };
+            }
+          }
+        } catch (prefsError) {
+          logger.debug(`   ℹ️ Impossible de lire les préférences de clonage vocal pour ${params.senderId}`);
+        }
+      }
+
       logger.info(
         `🔍 [VOICE-PROFILE-TRACE] Envoi requête Translator | ` +
         `Msg: ${params.messageId} | Att: ${params.attachmentId} | Conv: ${params.conversationId} | ` +
@@ -2605,7 +2474,8 @@ export class MessageTranslationService extends EventEmitter {
         originalSenderId: params.senderId,
         existingVoiceProfile: shouldGenerateVoiceClone ? existingVoiceProfile : undefined,
         useOriginalVoice: shouldGenerateVoiceClone,
-        userLanguage: userLanguage  // Langue de l'utilisateur pour fallback sur messages courts
+        userLanguage: userLanguage,  // Langue de l'utilisateur pour fallback sur messages courts
+        voiceCloneParams, ...(params.atRest ? { atRest: true } : {})
       });
 
       logger.info(`🔍 [VOICE-PROFILE-TRACE] ✅ Requête envoyée avec succès`);
@@ -2743,89 +2613,15 @@ export class MessageTranslationService extends EventEmitter {
    * @param attachmentId ID de l'attachement
    * @returns Attachement enrichi avec transcription et traductions
    */
-  async getAttachmentWithTranscription(attachmentId: string): Promise<{
-    attachment: any;
-    transcription: any | null;
-    translatedAudios: any[];
-  } | null> {
-    try {
-      const attachment = await this.prisma.messageAttachment.findUnique({
-        where: { id: attachmentId },
-        select: {
-          id: true,
-          messageId: true,
-          fileName: true,
-          originalName: true,
-          fileUrl: true,
-          mimeType: true,
-          fileSize: true,
-          duration: true,
-          bitrate: true,
-          sampleRate: true,
-          codec: true,
-          channels: true,
-          createdAt: true,
-          transcription: true,
-          translations: true
-        }
-      });
-
-      if (!attachment) {
-        return null;
-      }
-
-      // Convertir transcription JSON → ancien format
-      const transcriptionData = attachment.transcription as unknown as AttachmentTranscription | null;
-      const transcription = transcriptionData ? {
-        id: attachmentId,
-        text: transcriptionData.text,
-        language: transcriptionData.language,
-        confidence: transcriptionData.confidence,
-        source: transcriptionData.source,
-        segments: transcriptionData.segments,
-        durationMs: transcriptionData.durationMs,
-        createdAt: attachment.createdAt
-      } : null;
-
-      // Convertir translations JSON → ancien format
-      const translationsData = attachment.translations as unknown as AttachmentTranslations | undefined;
-      const translatedAudios = translationsData ? Object.entries(translationsData).map(([lang, t]) => ({
-        id: `${attachmentId}_${lang}`,
-        targetLanguage: lang,
-        translatedText: t.transcription,
-        audioUrl: t.url || '',
-        audioPath: t.path || '',
-        durationMs: t.durationMs || 0,
-        format: t.format || 'mp3',
-        voiceCloned: t.cloned || false,
-        voiceQuality: t.quality || 0,
-        createdAt: typeof t.createdAt === 'string' ? new Date(t.createdAt) : t.createdAt
-      })) : [];
-
-      return {
-        attachment: {
-          id: attachment.id,
-          messageId: attachment.messageId,
-          fileName: attachment.fileName,
-          originalName: attachment.originalName,
-          fileUrl: attachment.fileUrl,
-          mimeType: attachment.mimeType,
-          fileSize: attachment.fileSize,
-          duration: attachment.duration,
-          bitrate: attachment.bitrate,
-          sampleRate: attachment.sampleRate,
-          codec: attachment.codec,
-          channels: attachment.channels,
-          createdAt: attachment.createdAt
-        },
-        transcription,
-        translatedAudios
-      };
-
-    } catch (error) {
-      logger.error(`❌ [TranslationService] Erreur get attachment: ${error}`);
-      return null;
-    }
+  /**
+   * Le corps vit dans `../audio/attachmentAudioRichView.ts`, à côté de sa
+   * JUMELLE (`attachmentTranscriptionView`, celle d'`AudioTranslateService`)
+   * — les deux ont divergé sur cinq points observables, que le doc-comment de
+   * la vue riche met enfin en tableau. Rien n'est unifié ici : les unifier
+   * changerait ce que des routes servent.
+   */
+  async getAttachmentWithTranscription(attachmentId: string): Promise<AttachmentAudioRichView | null> {
+    return attachmentAudioRichView(this.prisma, attachmentId);
   }
 
   /**
@@ -3018,10 +2814,8 @@ export class MessageTranslationService extends EventEmitter {
    * SECURITY: Encrypts translation content for server/hybrid mode conversations
    * using the same encryption key as the parent message
    */
-  private async _saveTranslationToDatabase(result: TranslationResult, metadata?: any): Promise<string> {
+  private async _saveTranslationToDatabase(result: TranslationResult): Promise<string> {
     try {
-      const startTime = Date.now();
-
       // Extraire les informations techniques du modèle
       const modelInfo = result.translatorModel || result.modelType || 'basic';
       const confidenceScore = result.confidenceScore || 0.9;
@@ -3092,8 +2886,6 @@ export class MessageTranslationService extends EventEmitter {
         });
       });
 
-      const queryTime = Date.now() - startTime;
-
       // Retourner ID synthétique pour compatibilité logging
       return `${result.messageId}-${result.targetLanguage}`;
 
@@ -3142,14 +2934,11 @@ export class MessageTranslationService extends EventEmitter {
       if (message?.translations) {
         const translations = message.translations as unknown as Record<string, MessageTranslationJSON>;
         // Les écrivains stockent sous la forme CANONIQUE du SSOT
-        // `normalizeLanguageCode` ('pt-BR' → 'pt', 'fil' rejeté plutôt que
-        // tronqué). Lire verbatim manquait donc la traduction présente une clé
-        // plus loin, et l'appelant rendait un repli fabriqué
-        // `[PT-BR] <texte original>` — violation directe du Prisme.
-        // Verbatim d'abord : un document legacy portant RÉELLEMENT une clé
-        // régionale reste servi tel quel, la normalisation ne fait que rattraper
-        // ce que la lecture stricte laissait tomber.
-        const normalizedTarget = normalizeLanguageCode(targetLanguage) ?? targetLanguage.toLowerCase();
+        // `normalizeLanguageForDedup` ('pt-BR' → 'pt', 'fil-PH' → 'fil'). La
+        // lecture DOIT canoniser avec la MÊME SSOT que l'envoi, sinon un target
+        // neuf `'fil'` stocké ne se relit pas depuis un `'fil-PH'` demandé.
+        // Verbatim d'abord : une clé régionale legacy reste servie telle quelle.
+        const normalizedTarget = normalizeLanguageForDedup(targetLanguage);
         const translation = translations[targetLanguage] ?? translations[normalizedTarget];
 
         if (translation) {
@@ -3213,83 +3002,19 @@ export class MessageTranslationService extends EventEmitter {
    * Méthode pour les requêtes REST de traduction directe
    */
   async translateTextDirectly(
-    text: string, 
-    sourceLanguage: string, 
-    targetLanguage: string, 
+    text: string,
+    sourceLanguage: string,
+    targetLanguage: string,
     modelType: string = 'basic'
   ): Promise<TranslationResult> {
-    try {
-      
-      // Créer une requête de traduction
-      const request: TranslationRequest = {
-        messageId: `rest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        text: text,
-        sourceLanguage: this._normalizeSourceLanguage(sourceLanguage),
-        targetLanguages: [targetLanguage],
-        conversationId: 'rest-request',
-        modelType: modelType
-      };
-      
-      // Envoyer la requête et attendre la réponse
-      const taskId = await this.zmqClient.sendTranslationRequest(request);
-      this.stats.incrementRequestsSent();
-      
-      
-      // Attendre la réponse via un événement.
-      // `zmqClient` est un singleton partagé : les DEUX listeners doivent être
-      // détachés sur CHAQUE issue (succès, erreur, ET timeout). L'ancien code
-      // ne les retirait que sur une réponse au taskId correspondant — le
-      // branchement timeout rejetait sans nettoyer, fuyant deux listeners par
-      // requête expirée (MaxListenersExceededWarning + closures périmées
-      // rappelées à chaque événement de traduction ultérieur). Un unique
-      // `cleanup()` appelé depuis les trois sorties garantit le détachement.
-      const response = await new Promise<TranslationResult>((resolve, reject) => {
-        const cleanup = () => {
-          clearTimeout(timeout);
-          this.zmqClient.removeListener('translationCompleted', handleResponse);
-          this.zmqClient.removeListener('translationError', handleError);
-        };
-
-        const timeout = setTimeout(() => {
-          cleanup();
-          reject(new Error('Timeout waiting for translation response'));
-        }, 10000); // 10 secondes de timeout
-
-        const handleResponse = (data: any) => {
-          if (data.taskId === taskId) {
-            cleanup();
-            resolve(data.result);
-          }
-        };
-
-        const handleError = (data: any) => {
-          if (data.taskId === taskId) {
-            cleanup();
-            reject(new Error(`Translation error: ${data.error}`));
-          }
-        };
-
-        this.zmqClient.on('translationCompleted', handleResponse);
-        this.zmqClient.on('translationError', handleError);
-      });
-
-      return response;
-      
-    } catch (error) {
-      logger.error(`❌ [REST] Erreur traduction directe: ${error}`);
-      this.stats.incrementErrors();
-      
-      // Fallback en cas d'erreur
-      return {
-        messageId: `fallback_${Date.now()}`,
-        translatedText: `[${targetLanguage.toUpperCase()}] ${text}`,
-        sourceLanguage: sourceLanguage,
-        targetLanguage: targetLanguage,
-        confidenceScore: 0.1,
-        processingTime: 0.001,
-        modelType: 'fallback'
-      };
-    }
+    return translateTextDirectly(
+      {
+        zmqClient: this.zmqClient,
+        stats: this.stats,
+        normalizeSourceLanguage: (language) => this._normalizeSourceLanguage(language),
+      },
+      { text, sourceLanguage, targetLanguage, modelType }
+    );
   }
 
 }

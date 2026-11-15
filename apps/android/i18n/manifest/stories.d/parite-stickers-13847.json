@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "story_sticker_image_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sticker_lift_no_subject",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sticker_lift_saved",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_sticker_lift_unreadable",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.selection.makeSticker",
+          "androidName": "story_sticker_make",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

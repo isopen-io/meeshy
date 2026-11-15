@@ -14,7 +14,7 @@ fun MeeshyTheme(
     val colorScheme = if (darkTheme) MeeshyDarkColorScheme else MeeshyLightColorScheme
 
     CompositionLocalProvider(LocalMeeshyTokens provides tokens) {
-        MaterialTheme(colorScheme = colorScheme, typography = MeeshyTypography, content = content)
+        MaterialTheme(colorScheme = colorScheme, typography = MeeshyTypography, shapes = MeeshyShapes, content = content)
     }
 }
 

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "tab.posts",
+          "androidName": "global_search_tab_posts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "content.kind.post",
+          "androidName": "global_search_post_kind_post",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "content.kind.reel",
+          "androidName": "global_search_post_kind_reel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "content.kind.story",
+          "androidName": "global_search_post_kind_story",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

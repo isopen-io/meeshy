@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="media_hub_encrypted_notice">Encrypted conversation: files stay sealed, so their previews can’t be shown here.</string>
+    <string name="media_hub_encrypted_tile">Encrypted file</string>
+</resources>

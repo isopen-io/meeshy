@@ -45,8 +45,8 @@ public func setPaused(_ paused: Bool) {
 ### Task 2 : App — migration du timer legacy vers le controller
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift` (suppr. `StoryProgressDisplayLinkProxy` :15-54, réécriture `startTimer()` :548-622, `dismissViewer` :494)
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` (`installPrefetchPipelineIfNeeded` :625-641 → callbacks réels ; sites `timerCancellable` :142/408/423 ; pause via `adaptiveOnChange(of: shouldPauseTimer)` ; `markContentReady` aussi depuis le canvas VISIBLE)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift` (suppr. `StoryProgressDisplayLinkProxy` :15-54, réécriture `startTimer()` :548-622, `dismissViewer` :494)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` (`installPrefetchPipelineIfNeeded` :625-641 → callbacks réels ; sites `timerCancellable` :142/408/423 ; pause via `adaptiveOnChange(of: shouldPauseTimer)` ; `markContentReady` aussi depuis le canvas VISIBLE)
 
 - [ ] **Step 2.1 :** `installPrefetchPipelineIfNeeded` câble les vrais callbacks :
 

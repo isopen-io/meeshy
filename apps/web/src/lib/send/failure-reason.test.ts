@@ -1,0 +1,193 @@
+import { beforeAll, describe, expect, test } from 'bun:test';
+
+import type { ApiFailure } from '@/lib/api/http';
+import { isPermanentFailure } from '@/lib/api/outcome';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
+
+import { sendFailureReason as sendFailureReasonIn } from './failure-reason';
+
+beforeAll(async () => {
+  await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadInterfaceCatalog(language)));
+});
+
+const sendFailureReason = (failure: ApiFailure | undefined) => sendFailureReasonIn(failure, 'fr');
+
+const failure = (status: number, extra: Partial<ApiFailure> = {}): ApiFailure => ({
+  ok: false,
+  status,
+  error: 'You are not a participant of this conversation',
+  ...extra,
+});
+
+describe('sendFailureReason', () => {
+  test('aucune erreur (échec HORS LIGNE) ⇒ aucune cause : le bandeau la dit déjà', () => {
+    expect(sendFailureReason(undefined)).toBeUndefined();
+  });
+
+  test('la prose de la passerelle n’est JAMAIS servie telle quelle', () => {
+    for (const status of [0, 401, 403, 429, 400, 500]) {
+      expect(sendFailureReason(failure(status))).not.toContain('participant');
+    }
+  });
+
+  test('chaque statut a sa cause, et le délai de garde se distingue du réseau', () => {
+    expect(sendFailureReason(failure(0))).toBe('réseau indisponible');
+    expect(sendFailureReason(failure(0, { code: 'TIMEOUT' }))).toBe('la passerelle n’a pas répondu');
+    expect(sendFailureReason(failure(401))).toBe('session expirée — reconnectez-vous');
+    expect(sendFailureReason(failure(403))).toBe('envoi refusé pour cette conversation');
+    expect(sendFailureReason(failure(429))).toBe('trop de messages d’un coup — réessayez dans un instant');
+    expect(sendFailureReason(failure(422))).toBe('message refusé');
+    expect(sendFailureReason(failure(503))).toBe('la passerelle est indisponible');
+  });
+
+  /**
+   * #5668 — `UPLOAD_PARTIAL`, que ce client synthétise lui-même
+   * (`perform-send.ts § uploadPhase`).
+   */
+  test('UPLOAD_PARTIAL (statut 200 synthétique) ⇒ cause dédiée, jamais confondue avec un succès', () => {
+    expect(sendFailureReason(failure(200, { code: 'UPLOAD_PARTIAL' }))).toBe('une pièce n’a pas pu être téléversée');
+  });
+
+  /**
+   * #16053 — la passerelle SERT désormais `code: ATTACHMENT_RIGHT_NOT_PERMITTED`
+   * sur le 403 de `POST /conversations/:id/messages` (`messages-send.ts`,
+   * `sendForbidden(..., { code: result.code })`) : la cause dit à l'expéditeur
+   * que CE TYPE de pièce jointe ne passe pas encore ici, et l'échec reste
+   * PERMANENT (aucun rejeu).
+   */
+  test('403 ATTACHMENT_RIGHT_NOT_PERMITTED ⇒ ce type de pièce jointe ne passe pas encore ici, sans rejeu', () => {
+    const refused = failure(403, { code: 'ATTACHMENT_RIGHT_NOT_PERMITTED' });
+    expect(sendFailureReason(refused)).toBe('vous ne pouvez pas encore envoyer ce type de pièce jointe dans cette conversation');
+    expect(sendFailureReasonIn(refused, 'en')).toBe('you can’t send this type of attachment in this conversation yet');
+    expect(isPermanentFailure(refused)).toBe(true);
+  });
+
+  test('la cause du droit de pièce jointe se dit dans les sept langues, jamais par sa clé', () => {
+    const refused = failure(403, { code: 'ATTACHMENT_RIGHT_NOT_PERMITTED' });
+    const phrases = SUPPORTED_INTERFACE_LANGUAGES.map((language) => sendFailureReasonIn(refused, language));
+    expect(phrases).toHaveLength(7);
+    for (const phrase of phrases) {
+      expect(phrase).toBeDefined();
+      expect(phrase).not.toContain('send.failure');
+    }
+    expect(new Set(phrases).size).toBe(7);
+  });
+
+  test('un 403 sans code, ou WRITE_NOT_PERMITTED, reste le refus générique', () => {
+    expect(sendFailureReason(failure(403))).toBe('envoi refusé pour cette conversation');
+    expect(sendFailureReason(failure(403, { code: 'WRITE_NOT_PERMITTED' }))).toBe('envoi refusé pour cette conversation');
+  });
+
+  /* #9928 — un mineur qui écrit dans Global (état périmé) : la cause dit
+     quand Global s'ouvrira, jamais un refus générique. */
+  test('E2EE_PLAINTEXT_WITHHELD (refus local, statut 0) dit la conversation chiffrée, jamais « réseau indisponible » (audit #12986)', () => {
+    expect(sendFailureReason(failure(0, { code: 'E2EE_PLAINTEXT_WITHHELD' }))).toBe('Conversation chiffrée de bout en bout : écrivez depuis l’app Meeshy');
+    expect(sendFailureReasonIn(failure(0, { code: 'E2EE_PLAINTEXT_WITHHELD' }), 'en')).toBe('End-to-end encrypted conversation: write from the Meeshy app');
+  });
+
+  test('E2EE_PLAINTEXT_REFUSED dit que la conversation est chiffrée, jamais « envoi refusé »', () => {
+    expect(sendFailureReason(failure(400, { code: 'E2EE_PLAINTEXT_REFUSED' }))).toBe('Conversation chiffrée de bout en bout : écrivez depuis l’app Meeshy');
+    expect(sendFailureReasonIn(failure(400, { code: 'E2EE_PLAINTEXT_REFUSED' }), 'en')).toBe('End-to-end encrypted conversation: write from the Meeshy app');
+  });
+
+  test('GLOBAL_ADULTS_ONLY dit que Global s’ouvre à l’écriture à 18 ans', () => {
+    expect(sendFailureReason(failure(403, { code: 'GLOBAL_ADULTS_ONLY' }))).toBe('Global s’ouvre à l’écriture à tes 18 ans');
+    expect(sendFailureReasonIn(failure(403, { code: 'GLOBAL_ADULTS_ONLY' }), 'en')).toBe('Global opens for writing when you turn 18');
+  });
+
+  /* #7740 — le mode lent des nouveaux comptes dans Meeshy Global : un refus
+     TEMPORAIRE, qui dit pourquoi et combien de temps, jamais « trop de
+     messages » (le nouveau venu n'a rien fait de trop). */
+  test('le mode lent des nouveaux comptes dit pourquoi et le délai réel', () => {
+    expect(sendFailureReason(failure(429, { code: 'NEWCOMER_SLOW_MODE', retryAfter: 18 }))).toBe(
+      'bienvenue ! un message toutes les 30 s pour les nouveaux comptes — réessayez dans 18 s',
+    );
+    expect(sendFailureReason(failure(429, { code: 'NEWCOMER_SLOW_MODE' }))).toBe(
+      'bienvenue ! un message toutes les 30 s pour les nouveaux comptes — réessayez dans un instant',
+    );
+  });
+});
+
+/* #7740 — la cause se dit dans la LANGUE D'INTERFACE du lecteur, jamais en
+   français pour tous : c'est la phrase que l'annonce « Message non envoyé —
+   {reason} » (déjà au catalogue) embarque. */
+describe('sendFailureReason — dans la langue d’interface', () => {
+  test('le mode lent des nouveaux comptes se dit en anglais, délai réel compris', () => {
+    expect(sendFailureReasonIn(failure(429, { code: 'NEWCOMER_SLOW_MODE', retryAfter: 18 }), 'en')).toBe(
+      'welcome! new accounts can send one message every 30 s — try again in 18 s',
+    );
+  });
+
+  test('chaque cause change de texte d’une langue à l’autre et garde son délai', () => {
+    const failures: readonly ApiFailure[] = [
+      failure(0),
+      failure(0, { code: 'TIMEOUT' }),
+      failure(200, { code: 'UPLOAD_PARTIAL' }),
+      failure(429, { code: 'NEWCOMER_SLOW_MODE', retryAfter: 18 }),
+      failure(429, { code: 'NEWCOMER_SLOW_MODE' }),
+      failure(401),
+      failure(403),
+      failure(429),
+      failure(422),
+      failure(503),
+    ];
+    for (const f of failures) {
+      const french = sendFailureReasonIn(f, 'fr');
+      for (const language of SUPPORTED_INTERFACE_LANGUAGES.filter((l) => l !== 'fr')) {
+        const served = sendFailureReasonIn(f, language);
+        expect(served).not.toBe(french);
+        expect(served).not.toContain('{');
+      }
+    }
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      expect(sendFailureReasonIn(failure(429, { code: 'NEWCOMER_SLOW_MODE', retryAfter: 18 }), language)).toContain('18');
+    }
+  });
+});
+
+describe('sendFailureReason — une pièce jointe d’invité refusée sur son contenu (#10001, #10003)', () => {
+  test('la famille refusée se dit, jamais « envoi refusé »', () => {
+    expect(sendFailureReason(failure(403, { code: 'GUEST_ATTACHMENT_KIND_NOT_ALLOWED' }))).toBe('ce fichier n’est pas accepté ici');
+  });
+
+  test('le fichier trop lourd dit le plafond, dans chaque langue', () => {
+    expect(sendFailureReason(failure(413, { code: 'GUEST_ATTACHMENT_TOO_LARGE' }))).toContain('25');
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      expect(sendFailureReasonIn(failure(413, { code: 'GUEST_ATTACHMENT_TOO_LARGE' }), language)).not.toContain('{');
+    }
+  });
+});
+
+/**
+ * W9 (#11315) — un HEIC que la passerelle n'a pas su convertir : la cause dit
+ * le FORMAT, dans les sept langues, et pas « une pièce n'a pas pu être
+ * téléversée » qui laisserait croire à un incident réseau.
+ */
+describe('sendFailureReason — le format refusé (W9)', () => {
+  test('UPLOAD_FORMAT_REFUSED a sa cause, distincte du lot incomplet', () => {
+    const reason = sendFailureReason(failure(200, { code: 'UPLOAD_FORMAT_REFUSED' }));
+    expect(reason).toBe('ce format de photo (HEIC) n’est pas encore accepté');
+  });
+
+  test('la cause existe dans les sept langues, et aucune ne retombe sur le français', () => {
+    const french = sendFailureReasonIn(failure(200, { code: 'UPLOAD_FORMAT_REFUSED' }), 'fr');
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES.filter((code) => code !== 'fr')) {
+      const reason = sendFailureReasonIn(failure(200, { code: 'UPLOAD_FORMAT_REFUSED' }), language);
+      expect(reason).toContain('HEIC');
+      expect(reason).not.toBe(french);
+    }
+  });
+
+  test('dans la coque Android, un clair refusé renvoie vers un appareil chiffré, jamais vers l’app où l’on se trouve (#13066)', () => {
+    for (const code of ['E2EE_PLAINTEXT_WITHHELD', 'E2EE_PLAINTEXT_REFUSED']) {
+      const refused = failure(code === 'E2EE_PLAINTEXT_WITHHELD' ? 0 : 400, { code });
+      expect(sendFailureReasonIn(refused, 'fr', { shell: true })).toBe(
+        'Conversation chiffrée de bout en bout : écrivez depuis un de vos appareils chiffrés',
+      );
+      for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+        expect(sendFailureReasonIn(refused, language, { shell: true })).not.toBe(sendFailureReasonIn(refused, language));
+      }
+    }
+  });
+});

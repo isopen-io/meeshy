@@ -1,0 +1,138 @@
+import SwiftUI
+import AVFoundation
+import MeeshySDK
+import MeeshyUI
+
+/// Les règles du viseur servi SEUL, hors d'une scène (#9125).
+nonisolated enum ComposerViewfinderRules {
+
+    /// Le mode que la porte a promis (#4998) devient celui que la barre
+    /// annonce — jamais un viseur photo sous une porte vidéo.
+    static func sceneMode(for mode: CameraCaptureMode) -> ComposerSceneCameraMode {
+        switch mode {
+        case .photo: return .photo
+        case .video: return .video
+        }
+    }
+}
+
+/// **Le viseur du composeur, servi SEUL en plein écran** (#9125) — une COQUILLE
+/// autour du montage unique (#9351, décision porteur 2026-10-05).
+///
+/// > « Il faut réutiliser exactement le mode plein écran de la capture existant
+/// > dans le composer de story. »
+///
+/// Les portes qui n'ont PAS de scène — la barre de conversation, le statut, la
+/// page blanche de l'atelier, la citation du fil — reçoivent ici le montage du
+/// composer (`ComposerCaptureMount`), plein écran et sans carte où rentrer —
+/// seul un selfie éclairé par l'écran s'y réduit en scène (#9566). Elle ne garde ni chrome ni mise en page à elle : mêmes
+/// couches, mêmes gestes, même rail, même bande.
+///
+/// Ce que la prise rend part par `onCapture` — une photo regardée, peinte par
+/// le peintre unique sur le canevas 9:16 (#9347), ou la vidéo concaténée de ses
+/// segments — puis le viseur se retire.
+struct ComposerViewfinder: View {
+    let initialMode: CameraCaptureMode
+    /// La durée maximale d'une prise (A9) ; `nil` ⇒ sans limite ni barre en cases.
+    let recordingBudget: TimeInterval?
+    let onCapture: (CameraResult) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var capture: ComposerCaptureSession
+    @State private var life = ComposerCaptureCoverLife()
+    /// Cet hôte n'a pas de carte : la taille ne joue que sous le flash d'écran,
+    /// où le selfie se réduit en scène entourée de blanc, ou s'agrandit (#9566).
+    @State private var size = ComposerSceneCameraSize.card
+
+    /// Le viseur naît ARMÉ, au mode que la porte a promis : posé dans un
+    /// `.onAppear`, la barre annoncerait la photo une image avant de basculer.
+    init(initialMode: CameraCaptureMode = .photo,
+         recordingBudget: TimeInterval? = nil,
+         onCapture: @escaping (CameraResult) -> Void) {
+        self.initialMode = initialMode
+        self.recordingBudget = recordingBudget
+        self.onCapture = onCapture
+        _capture = StateObject(wrappedValue: ComposerWarmCapture.session(
+            stage: .armed, mode: ComposerViewfinderRules.sceneMode(for: initialMode)))
+    }
+
+    private var camera: CameraModel { capture.camera }
+
+    var body: some View {
+        ComposerCaptureMount(session: capture, size: $size, offersSizeToggle: false,
+                             onDisarm: { close() }, onDeliver: { deliver($0) }) {
+            Color.black
+                .ignoresSafeArea()
+                .anchorPreference(key: ComposerSceneCameraFrameKey.self, value: .bounds) { $0 }
+        }
+        // **Une disparition n'est pas une fermeture** (#11352, même cycle que
+        // #11347) : ouvert clavier levé, SwiftUI détache puis rattache ce plein
+        // écran sans le détruire. La session éteinte se réarme au mode promis.
+        .onAppear {
+            if life.attach(), !life.settled {
+                ComposerCaptureCoverLife.reattach(capture, mode: ComposerViewfinderRules.sceneMode(for: initialMode))
+            }
+            camera.configure(filming: initialMode == .video)
+            capture.recordingBudget = recordingBudget
+            capture.watchThermalState()
+            // La porte qui promet la vidéo arme le micro À L'OUVERTURE : le
+            // prompt n'arrive pas sous le doigt qui veut déjà filmer.
+            if initialMode == .video {
+                Task { @MainActor in await camera.enableAudioCaptureIfNeeded() }
+            }
+        }
+        .onDisappear {
+            life.detach()
+            capture.disarm()
+        }
+        .statusBarHidden()
+    }
+
+    /// **Une prise ne part qu'une fois** : deux validations rapprochées pendant
+    /// que le viseur se retire poseraient deux pièces — et jamais d'un viseur
+    /// détaché, dont la session est déjà désarmée.
+    private func deliver(_ result: CameraResult) {
+        guard life.settle() else { return }
+        capture.finishCapture()
+        HapticFeedback.success()
+        onCapture(result)
+        dismiss()
+    }
+
+    /// Quitter sans rendre emporte les segments abandonnés ET leurs fichiers,
+    /// éteint la lumière et coupe la session — `onDisappear` le fait quel que
+    /// soit le chemin de sortie (croix, glissé, fermeture par l'hôte).
+    private func close() {
+        dismiss()
+    }
+}
+
+#if DEBUG
+/// **La recette de la retouche au simulateur** (#10930) : `-MeeshyRetoucheRecette`
+/// avec `-MeeshyCaptureFixture` ouvre le viseur plein écran sur la fausse caméra,
+/// sans compte ni navigation — le test d'interface de l'alerte « Abandonner » y
+/// entre directement. DEBUG et simulateur seulement.
+nonisolated enum ComposerRetoucheRecette {
+    static let argument = "-MeeshyRetoucheRecette"
+
+    static func isActive(arguments: [String] = ProcessInfo.processInfo.arguments) -> Bool {
+        ComposerCaptureFixture.isActive(arguments: arguments) && arguments.contains(argument)
+    }
+}
+
+#endif
+
+/// Sans effet hors DEBUG.
+struct ComposerRetoucheRecetteCover: ViewModifier {
+    #if DEBUG
+    @State private var shown = ComposerRetoucheRecette.isActive()
+
+    func body(content: Content) -> some View {
+        content.fullScreenCover(isPresented: $shown) {
+            ComposerViewfinder { _ in }
+        }
+    }
+    #else
+    func body(content: Content) -> some View { content }
+    #endif
+}

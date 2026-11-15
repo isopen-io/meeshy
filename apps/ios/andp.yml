@@ -1,0 +1,201 @@
+# ANDP — configuration déclarative de l'app iOS Meeshy.
+#
+# Ce fichier décrit CE QU'ON CONSTRUIT ; `project.yml` (XcodeGen) décrit le
+# projet Xcode lui-même. Les deux sont complémentaires.
+#
+# Il ne contient aucun secret. Tout ce qu'ANDP produit ou lit sans jamais le
+# committer (logs, archives, .xcresult, credentials) vit dans .andp/.
+#
+#   andp targets                 ce qui peut être construit, avec les destinations
+#   andp build dev               compiler l'app pour le simulateur
+#   andp run dev --logs          lancer sur simulateur et suivre les logs
+#   andp test dev                exécuter MeeshyTests
+#   andp build prod --archive    archive + export vers .andp/build/exported/
+
+targets:
+  defaults:
+    scheme: Meeshy
+    platform: iOS
+    configuration: Debug
+
+  # --- développement -------------------------------------------------------
+
+  # iOS 18.2 : le runtime installé le plus proche des appareils réels
+  # (deploymentTarget du projet : 16.0).
+  dev:
+    destination: "iPhone 16 Pro"
+    os: "18.2"
+
+  # Simulateur dédié au projet, sur le runtime le plus récent.
+  dev-26:
+    destination: "Meeshy-iOS26"
+
+  # Le plus petit écran encore supporté — là où les régressions de mise en
+  # page apparaissent en premier.
+  dev-se:
+    destination: "iPhone SE (3rd generation)"
+    os: "18.2"
+
+  # --- extensions et paquets ----------------------------------------------
+
+  widgets:
+    scheme: MeeshyWidgets
+  notifications:
+    scheme: MeeshyNotificationExtension
+  share:
+    scheme: MeeshyShareExtension
+  sdk:
+    scheme: MeeshySDK
+  ui:
+    scheme: MeeshyUI
+
+  # --- distribution --------------------------------------------------------
+
+  # `generic` est requis pour l'archivage : archiver pour un simulateur ne
+  # produit rien d'installable.
+  prod:
+    destination: generic
+    configuration: Release
+
+# --- conformité à l'export -------------------------------------------------
+#
+# Reflète ITSAppUsesNonExemptEncryption = false (Meeshy/Info.plist) ; la
+# machine de release d'ANDP le pose sur chaque build. La justesse de cette
+# valeur pour le chiffrement de bout en bout est une question ouverte (#9752).
+
+compliance:
+  uses_non_exempt_encryption: false
+
+# --- fiche App Store ------------------------------------------------------
+#
+# Ce que l'App Store Connect affiche et ce que l'App Review exige, déclaré ici
+# et dans fastlane/metadata/ (format deliver : <langue>/name.txt, subtitle.txt,
+# privacy_url.txt, description.txt, keywords.txt, release_notes.txt,
+# promotional_text.txt, support_url.txt, marketing_url.txt ; copyright.txt,
+# primary_category.txt, secondary_category.txt, review_information/notes.txt).
+# andp.yml l'emporte sur les fichiers, champ par champ.
+#
+#   andp store plan me.meeshy.app     diff en lecture seule, n'écrit rien
+#   andp store apply me.meeshy.app    écrit ce diff (accord du porteur requis)
+#
+# Le dépôt est PUBLIC : aucun secret ni donnée personnelle ici. Le compte démo
+# vient de fastlane/.env (gitignoré) ; le contact App Review (nom, téléphone,
+# e-mail) reste celui saisi dans App Store Connect et n'est pas géré ici.
+
+store:
+  platform: IOS
+  metadata_dir: fastlane/metadata
+  env_file: fastlane/.env
+
+  app:
+    primary_locale: fr-FR
+    # Les aperçus de liens affichent titres et vignettes de sites tiers
+    # (LinkPreviewFetcher, vignettes YouTube) : l'app MONTRE du contenu tiers.
+    content_rights: USES_THIRD_PARTY_CONTENT
+
+  version:
+    release_type: MANUAL
+    downloadable: true
+    phased_release: false
+
+  review:
+    demo_account_required: true
+    demo_account_name_env: DEMO_USER
+    demo_account_password_env: DEMO_PASSWORD
+
+  pricing:
+    base_territory: USA
+    price: free
+
+  eula: standard
+
+  # Questionnaire d'âge 2025-2026 (API 4.5.1), répondu d'après le produit :
+  # messagerie entre inconnus (annuaire, liens d'invitation sans compte),
+  # contenu des utilisateurs public par défaut et modéré a posteriori
+  # (signalement, blocage, modération), fil / stories / réels diffusés
+  # largement. Aucune publicité, aucun achat, aucun contrôle parental, aucune
+  # vérification d'âge (pas de Declared Age Range) : socialMediaAgeRestricted
+  # reste faux. Le coffre quotidien du jeu est gratuit, sans valeur
+  # monétaire : ce n'est pas une loot box payante.
+  age_rating:
+    messagingAndChat: true
+    userGeneratedContent: true
+    socialMedia: true
+    socialMediaAgeRestricted: false
+    advertising: false
+    parentalControls: false
+    ageAssurance: false
+    healthOrWellnessTopics: false
+    lootBox: false
+    gambling: false
+    unrestrictedWebAccess: false
+    alcoholTobaccoOrDrugUseOrReferences: NONE
+    contests: NONE
+    gamblingSimulated: NONE
+    gunsOrOtherWeapons: NONE
+    horrorOrFearThemes: NONE
+    matureOrSuggestiveThemes: NONE
+    medicalOrTreatmentInformation: NONE
+    profanityOrCrudeHumor: NONE
+    sexualContentGraphicAndNudity: NONE
+    sexualContentOrNudity: NONE
+    violenceCartoonOrFantasy: NONE
+    violenceRealistic: NONE
+    violenceRealisticProlongedGraphicOrSadistic: NONE
+    ageRatingOverrideV2: NONE
+    koreaAgeRatingOverride: NONE
+
+  # Accessibility Nutrition Labels : seul ce qui est vérifié dans apps/ios.
+  # Mode sombre : choix système clair/sombre suivi partout (ThemeManager).
+  # Non déclarés faute de preuve suffisante (voir l'issue isopen-io/meeshy#9752) :
+  # VoiceOver, Voice Control, Larger Text, Reduced Motion, Sufficient
+  # Contrast, Differentiate Without Color Alone, Captions, Audio Descriptions.
+  accessibility:
+    IPHONE:
+      dark_interface: true
+    IPAD:
+      dark_interface: true
+
+  app_events:
+    - key: saison-1
+      reference_name: "Saison 1"
+      badge: NEW_SEASON
+      purpose: KEEP_ACTIVE_USERS_INFORMED
+      priority: HIGH
+      purchase_requirement: NO_COST_ASSOCIATED
+      deep_link: https://meeshy.me/me/progression/saison/1
+      primary_locale: fr-FR
+      territories: all
+      publish_start: 2026-12-14T00:00:00+01:00
+      event_start: 2026-12-21T00:00:00+01:00
+      event_end: 2027-01-17T20:00:00+01:00
+      submit: true
+      localizations:
+        fr-FR:
+          name: "Voyage 1"
+          short_description: "Huit semaines, 40 haltes"
+          long_description: "Un nouveau voyage en terre de langue dans le Jeu Meeshy : un rêve chaque nuit, des haltes et une coupe au bout."
+        en-US:
+          name: "Journey 1"
+          short_description: "Eight weeks, 40 stops"
+          long_description: "A new journey to the land of a language in the Meeshy Game: a dream each night, strides, stops and a cup at the end."
+        es-ES:
+          name: "Viaje 1"
+          short_description: "Ocho semanas, 40 paradas"
+          long_description: "Un nuevo viaje a tierra de idioma en el Juego Meeshy: un sueño cada noche, pasos, paradas y una copa al final."
+        de-DE:
+          name: "Reise 1"
+          short_description: "Acht Wochen, 40 Rasten"
+          long_description: "Eine neue Reise in ein Sprachland im Meeshy-Spiel: jede Nacht ein Traum, Schritte, Rasten und ein Pokal am Ziel."
+        it:
+          name: "Viaggio 1"
+          short_description: "Otto settimane, 40 soste"
+          long_description: "Un nuovo viaggio in terra di lingua nel Gioco Meeshy: un sogno ogni notte, passi, soste e una coppa alla fine."
+        pt-BR:
+          name: "Viagem 1"
+          short_description: "Oito semanas, 40 paradas"
+          long_description: "Uma nova viagem a uma terra de idioma no Jogo Meeshy: um sonho a cada noite, passos, paradas e uma taça no final."
+        ar-SA:
+          name: "الرحلة 1"
+          short_description: "ثمانية أسابيع و40 محطة"
+          long_description: "رحلة جديدة إلى أرض لغة في لعبة Meeshy: حلم كل ليلة، وخطوات، ومحطات، وكأس في النهاية."

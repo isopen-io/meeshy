@@ -14,7 +14,10 @@ data class GallerySaveTarget(
     val displayName: String,
     val mimeType: String,
     val relativePath: String,
-)
+) {
+    /** L'entrée de l'album que cette cible désigne. */
+    val entryName: GalleryEntryName get() = GalleryEntryName(displayName = displayName, relativePath = relativePath)
+}
 
 /**
  * Resolves a media URL (+ an optional MIME hint) into a [GallerySaveTarget].
@@ -73,6 +76,20 @@ object GallerySaveTargetResolver {
         val relativePath = if (mimeType.startsWith("video/")) VIDEO_DIR else IMAGE_DIR
         return GallerySaveTarget(displayName = displayName, mimeType = mimeType, relativePath = relativePath)
     }
+
+    /**
+     * **Le nom d'un média dans l'album dérive de son CONTENU** (#14651) : `meeshy-<32 premiers hex du SHA-256>.<ext>`.
+     * Le même média porte toujours le même nom, si bien qu'après une réinstallation — registre vide, entrées
+     * d'avant devenues étrangères à l'app — la galerie le reconnaît encore. Pendant du nom d'origine qu'iOS lit
+     * dans l'album (`PhotoLibraryDeduplicator`).
+     */
+    fun byContent(target: GallerySaveTarget, fingerprint: String): GallerySaveTarget {
+        val extension = MIME_TO_EXTENSION[target.mimeType] ?: extensionToken(target.displayName) ?: "bin"
+        return target.copy(displayName = "$CONTENT_PREFIX${fingerprint.lowercase().take(CONTENT_HEX_CHARS)}.$extension")
+    }
+
+    private const val CONTENT_PREFIX = "meeshy-"
+    private const val CONTENT_HEX_CHARS = 32
 
     private fun nameSegment(url: String): String =
         url.substringBefore('?').substringBefore('#').substringAfterLast('/')

@@ -15,7 +15,7 @@ final class MyStoriesBulkDeleteGuardTests: XCTestCase {
     }
 
     func test_myStoriesView_neverReadsSelectedIDsRaw_outsideItsOwnDeclarationAndToggle() throws {
-        let viewSource = try source("Meeshy/Features/Main/Views/MyStoriesView.swift")
+        let viewSource = try source("Meeshy/Features/Stories/Views/MyStoriesView.swift")
 
         XCTAssertTrue(
             viewSource.contains("private var selectedStoryIDs: Set<String>"),
@@ -28,7 +28,7 @@ final class MyStoriesBulkDeleteGuardTests: XCTestCase {
     }
 
     func test_publishedGrid_passesSelectionStateToEachCard() throws {
-        let viewSource = try source("Meeshy/Features/Main/Views/MyStoriesView.swift")
+        let viewSource = try source("Meeshy/Features/Stories/Views/MyStoriesView.swift")
 
         XCTAssertTrue(
             viewSource.contains("isSelecting: isSelecting"),
@@ -41,7 +41,7 @@ final class MyStoriesBulkDeleteGuardTests: XCTestCase {
     }
 
     func test_bulkDelete_reusesExistingDeleteStory_noNewViewModelMethod() throws {
-        let viewSource = try source("Meeshy/Features/Main/Views/MyStoriesView.swift")
+        let viewSource = try source("Meeshy/Features/Stories/Views/MyStoriesView.swift")
 
         guard let funcRange = viewSource.range(of: "private func bulkDelete()") else {
             XCTFail("MyStoriesView doit définir bulkDelete()")

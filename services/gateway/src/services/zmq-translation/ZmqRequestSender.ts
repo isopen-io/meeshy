@@ -20,11 +20,15 @@ import type {
   TranscriptionOnlyRequest,
   VoiceAPIRequest,
   VoiceProfileRequest,
-  BinaryFrameInfo
+  BinaryFrameInfo,
+  CacheForgetRequest
 } from './types';
+import { UNSUPPORTED_LANGUAGE_ERROR_CODE } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { withTimeout } from '../../utils/with-timeout';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { isServerTranslatableLanguage } from '@meeshy/shared/utils/server-translatable-language';
+import { guardedTimeout } from '../../utils/guarded-timer';
 // Logger dédié pour ZmqRequestSender
 const logger = enhancedLogger.child({ module: 'ZmqRequestSender' });
 
@@ -37,6 +41,23 @@ const logger = enhancedLogger.child({ module: 'ZmqRequestSender' });
 const canonicalLanguage = (language: string): string =>
   normalizeLanguageCode(language) ?? language.toLowerCase();
 
+/**
+ * Rien de servable : la source ou toutes les cibles n'ont pas de code
+ * NLLB-200 (#3659). Rien n'est parti, aucun deadman n'est armé — l'appelant
+ * sert l'original (règle 1 du Prisme), jamais au bout de cinq relances.
+ */
+export class UntranslatableRequestError extends Error {
+  constructor(readonly sourceLanguage: string, readonly targetLanguages: readonly string[]) {
+    super(`no server-translatable pair: ${sourceLanguage} → [${targetLanguages.join(', ')}]`);
+    this.name = 'UntranslatableRequestError';
+  }
+}
+
+const translatableSource = (source: string | undefined): boolean =>
+  !source || source === 'auto' || isServerTranslatableLanguage(canonicalLanguage(source));
+
+
+export type PendingRequestKind = 'translation' | 'audio_process' | 'transcription' | 'voice_api' | 'voice_profile';
 
 export interface RequestSenderStats {
   translationRequests: number;
@@ -56,6 +77,7 @@ export class ZmqRequestSender {
   // `translationCompleted`. Elle n'est soldée qu'une fois ce jeu vidé — sinon
   // les langues 2..N perdraient deadman, retry et erreur dès la première rendue.
   private pendingRequests: Map<string, {
+    kind: PendingRequestKind;
     request: any;
     timestamp: number;
     timeoutId?: NodeJS.Timeout;
@@ -81,10 +103,22 @@ export class ZmqRequestSender {
   async sendTranslationRequest(request: TranslationRequest, existingTaskId?: string): Promise<string> {
     const taskId = existingTaskId ?? randomUUID();
 
-    // Dédupliquer les langues cibles (normalisation lowercase)
-    const uniqueTargetLanguages = [...new Set(request.targetLanguages.map(l => l.toLowerCase()))];
+    // Dédupliquer les langues cibles — canonicalisation, pas un `.toLowerCase()`
+    // brut (#5143) : sans elle, un code région-tagué ('en-US') ou legacy ('iw')
+    // survivait au dédoublonnage à côté de sa forme canonique ('en', 'he'),
+    // dupliquant le travail ML et envoyant au translator une cible qu'aucun
+    // mapping NLLB ne reconnaît. Même fonction que le suivi (`pendingLanguages`
+    // ci-dessous) et le solde (`settleTranslationLanguage`) : la liste envoyée
+    // ne doit plus diverger de son propre suivi.
+    const uniqueTargetLanguages = [...new Set(request.targetLanguages.map(canonicalLanguage))];
     if (uniqueTargetLanguages.length === 0) {
       throw new Error('targetLanguages must not be empty after deduplication');
+    }
+    const servableTargetLanguages = translatableSource(request.sourceLanguage)
+      ? uniqueTargetLanguages.filter(isServerTranslatableLanguage)
+      : [];
+    if (servableTargetLanguages.length === 0) {
+      throw new UntranslatableRequestError(request.sourceLanguage, uniqueTargetLanguages);
     }
 
     // Préparer le message de commande
@@ -93,22 +127,18 @@ export class ZmqRequestSender {
       taskId: taskId,
       messageId: request.messageId,
       text: request.text,
-      sourceLanguage: request.sourceLanguage,
-      targetLanguages: uniqueTargetLanguages,
+      // La forme que `translatableSource` a jugée : le translator la compare
+      // brute à `LANGUAGE_MAPPINGS`, où `fr-FR` refuserait une paire servable.
+      sourceLanguage: request.sourceLanguage ? canonicalLanguage(request.sourceLanguage) : request.sourceLanguage,
+      targetLanguages: servableTargetLanguages,
       conversationId: request.conversationId,
       modelType: request.modelType || 'basic',
+      ...(request.atRest === true ? { atRest: true } : {}),
+      // Sans cette annonce, le translator se tait sur une langue refusée : une
+      // passerelle qui ne lit pas `errorCode` compterait le refus à son disjoncteur.
+      acceptsErrorCodes: [UNSUPPORTED_LANGUAGE_ERROR_CODE],
       timestamp: Date.now()
     };
-
-    logger.info('🔍 PRÉPARATION ENVOI PUSH:');
-    logger.info(`   📋 taskId: ${taskId}`);
-    logger.info(`   📋 messageId: ${request.messageId}`);
-    logger.info(`   📋 text: "${request.text}"`);
-    logger.info(`   📋 sourceLanguage: ${request.sourceLanguage}`);
-    logger.info(`   📋 targetLanguages: [${uniqueTargetLanguages.join(', ')}]`);
-    logger.info(`   📋 conversationId: ${request.conversationId}`);
-    logger.info(`   🎨 modelType: ${requestMessage.modelType}`);
-    logger.info(`   📋 message size: ${JSON.stringify(requestMessage).length} chars`);
 
     // Envoyer la commande via PUSH avec timeout (5s) pour détecter les pannes translator
     try {
@@ -124,16 +154,26 @@ export class ZmqRequestSender {
 
     // Stocker la requête en cours pour traçabilité, avec le jeu des langues
     // qu'elle attend encore (un renvoi avec `existingTaskId` REMPLACE ce jeu :
-    // il ne porte plus que les langues encore manquantes).
+    // il ne porte plus que les langues encore manquantes). `servableTargetLanguages`
+    // est déjà canonique (ci-dessus) — plus besoin de re-canonicaliser ici.
     this.pendingRequests.set(taskId, {
+      kind: 'translation',
       request: request,
       timestamp: Date.now(),
-      pendingLanguages: new Set(uniqueTargetLanguages.map(canonicalLanguage))
+      pendingLanguages: new Set(servableTargetLanguages)
     });
 
     this.stats.translationRequests++;
 
-    logger.info(`📤 [ZMQ-Client] Commande PUSH envoyée: taskId=${taskId}, conversationId=${request.conversationId}, langues=${uniqueTargetLanguages.length}`);
+    logger.info('translation push sent', {
+      taskId,
+      messageId: request.messageId,
+      conversationId: request.conversationId,
+      sourceLanguage: request.sourceLanguage,
+      targetLanguages: servableTargetLanguages,
+      modelType: requestMessage.modelType,
+      textLength: request.text.length
+    });
 
     return taskId;
   }
@@ -188,7 +228,6 @@ export class ZmqRequestSender {
           // L'embedding est transmis en frame binaire, pas dans le JSON
         };
 
-        logger.info(`   🎙️ Voice profile transmis en multipart: frame 2 (${embeddingBuffer.length} bytes)`);
       } catch (error) {
         logger.error('⚠️ Erreur décodage voice profile, ignoré', error);
       }
@@ -219,32 +258,35 @@ export class ZmqRequestSender {
       // Champs post audio (présents uniquement pour les requêtes post media)
       postId: request.postId,
       postMediaId: request.postMediaId,
+      // #13102 — un fichier scellé au repos, ou une tâche que l'appelant protège.
+      ...(request.atRest === true || audioData.sealed === true ? { atRest: true } : {}),
     };
-
-    const transferMode = `multipart binaire (${(audioData.size / 1024).toFixed(1)}KB, ${audioData.mimeType})`;
-
-    logger.info('🎤 ENVOI AUDIO PROCESS:');
-    logger.info(`   📋 taskId: ${taskId}`);
-    logger.info(`   📋 messageId: ${request.messageId}`);
-    logger.info(`   📋 attachmentId: ${request.attachmentId}`);
-    logger.info(`   📋 senderId: ${request.senderId}`);
-    logger.info(`   📋 targetLanguages: [${request.targetLanguages.join(', ')}]`);
-    logger.info(`   📋 audioDurationMs: ${request.audioDurationMs}`);
-    logger.info(`   📋 mobileTranscription: ${request.mobileTranscription ? 'provided' : 'none'}`);
-    logger.info(`   📋 transferMode: ${transferMode}`);
 
     // Envoyer via PUSH en multipart (TOUJOURS)
     await this.connectionManager.sendMultipart(requestMessage, binaryFrames);
 
     // Stocker la requête en cours pour traçabilité
     this.pendingRequests.set(taskId, {
+      kind: 'audio_process',
       request: requestMessage,
       timestamp: Date.now()
     });
 
     this.stats.audioProcessRequests++;
 
-    logger.info(`📤 [ZMQ-Client] Audio process PUSH envoyée: taskId=${taskId}, messageId=${request.messageId}`);
+    logger.info('audio process push sent', {
+      taskId,
+      messageId: request.messageId,
+      attachmentId: request.attachmentId,
+      conversationId: request.conversationId,
+      senderId: request.senderId,
+      targetLanguages: request.targetLanguages,
+      audioDurationMs: request.audioDurationMs,
+      hasMobileTranscription: Boolean(request.mobileTranscription),
+      audioSize: audioData.size,
+      audioMimeType: audioData.mimeType,
+      voiceProfileBytes: binaryFrameInfo.voiceProfileSize
+    });
 
     return taskId;
   }
@@ -262,52 +304,36 @@ export class ZmqRequestSender {
     request: Omit<TranscriptionOnlyRequest, 'type' | 'taskId'>,
     existingTaskId?: string
   ): Promise<string> {
-    logger.info(`🔍 [ZMQ-TRACE] ======== DÉBUT ENVOI TRANSCRIPTION ========`);
-    logger.info(`🔍 [ZMQ-TRACE] Request params:`);
-    logger.info(`   - messageId: ${request.messageId}`);
-    logger.info(`   - attachmentId: ${request.attachmentId}`);
-    logger.info(`   - audioPath: ${request.audioPath || 'N/A'}`);
-    logger.info(`   - audioData (base64): ${request.audioData ? `${request.audioData.substring(0, 50)}...` : 'N/A'}`);
-    logger.info(`   - audioFormat: ${request.audioFormat || 'N/A'}`);
-    logger.info(`   - mobileTranscription: ${request.mobileTranscription ? 'OUI' : 'NON'}`);
-
     // Valider qu'on a une source audio (fichier OU base64)
     if (!request.audioPath && !request.audioData) {
-      logger.error(`🔍 [ZMQ-TRACE] ❌ Aucune source audio fournie`);
       throw new Error('Either audioPath or audioData (base64) must be provided');
     }
 
     const taskId = existingTaskId ?? randomUUID();
-    logger.info(`🔍 [ZMQ-TRACE] Task ID généré: ${taskId}`);
 
     let audioBuffer: Buffer;
     let mimeType: string;
     let audioSize: number;
+    let sealed = false;
 
     if (request.audioPath) {
-      logger.info(`🔍 [ZMQ-TRACE] Mode FICHIER: chargement depuis ${request.audioPath}...`);
       // Mode fichier: charger depuis le disque
       const audioData = await loadAudioAsBinary(request.audioPath);
       if (!audioData) {
-        logger.error(`🔍 [ZMQ-TRACE] ❌ Impossible de charger le fichier`);
         throw new Error(`Impossible de charger le fichier audio: ${request.audioPath}`);
       }
       audioBuffer = audioData.buffer;
       mimeType = audioData.mimeType;
       audioSize = audioData.size;
-      logger.info(`🔍 [ZMQ-TRACE] ✅ Fichier chargé: ${(audioSize / 1024).toFixed(2)} KB`);
+      sealed = audioData.sealed === true;
     } else {
-      logger.info(`🔍 [ZMQ-TRACE] Mode BASE64: décodage...`);
       // Mode base64: décoder en Buffer (pas de fichier temporaire)
       audioBuffer = Buffer.from(request.audioData!, 'base64');
       audioSize = audioBuffer.length;
 
       // Déterminer le mime type depuis audioFormat
       mimeType = audioFormatToMimeType(request.audioFormat || 'wav');
-      logger.info(`🔍 [ZMQ-TRACE] ✅ Audio décodé: ${(audioSize / 1024).toFixed(2)} KB, MIME: ${mimeType}`);
     }
-
-    logger.info(`🔍 [ZMQ-TRACE] Préparation frames multipart...`);
 
     // Préparer les frames binaires
     const binaryFrames: Buffer[] = [audioBuffer];
@@ -325,40 +351,33 @@ export class ZmqRequestSender {
       attachmentId: request.attachmentId,
       audioFormat: mimeType.replace('audio/', ''),
       mobileTranscription: request.mobileTranscription,
-      binaryFrames: binaryFrameInfo
+      binaryFrames: binaryFrameInfo,
+      // #13102 — un fichier scellé au repos, ou une tâche que l'appelant protège.
+      ...(request.atRest === true || sealed ? { atRest: true } : {}),
     };
 
-    const sourceMode = request.audioPath ? 'fichier' : 'base64';
-    const transferMode = `multipart binaire (${(audioSize / 1024).toFixed(1)}KB, ${mimeType}, source: ${sourceMode})`;
-
-    logger.info('🔍 [ZMQ-TRACE] Message à envoyer:');
-    logger.info(`   - type: ${requestMessage.type}`);
-    logger.info(`   - taskId: ${taskId}`);
-    logger.info(`   - messageId: ${request.messageId}`);
-    logger.info(`   - attachmentId: ${request.attachmentId || 'N/A'}`);
-    logger.info(`   - audioFormat: ${requestMessage.audioFormat}`);
-    logger.info(`   - binaryFrames.audio: ${binaryFrameInfo.audio}`);
-    logger.info(`   - binaryFrames.audioMimeType: ${binaryFrameInfo.audioMimeType}`);
-    logger.info(`   - binaryFrames.audioSize: ${binaryFrameInfo.audioSize} bytes`);
-    logger.info(`   - transferMode: ${transferMode}`);
-    logger.info(`   - mobileTranscription: ${request.mobileTranscription ? 'provided' : 'none'}`);
-
-    logger.info(`🔍 [ZMQ-TRACE] Envoi via PUSH multipart...`);
     // Envoyer via PUSH en multipart
     await this.connectionManager.sendMultipart(requestMessage, binaryFrames);
 
-    logger.info(`🔍 [ZMQ-TRACE] ✅ Message envoyé avec succès`);
-
     // Stocker la requête en cours pour traçabilité
     this.pendingRequests.set(taskId, {
+      kind: 'transcription',
       request: requestMessage,
       timestamp: Date.now()
     });
 
     this.stats.transcriptionRequests++;
 
-    logger.info(`🔍 [ZMQ-TRACE] ======== FIN ENVOI TRANSCRIPTION ========`);
-    logger.info(`📤 [ZMQ-Client] Transcription only PUSH envoyée: taskId=${taskId}, messageId=${request.messageId}`);
+    logger.info('transcription push sent', {
+      taskId,
+      messageId: request.messageId,
+      attachmentId: request.attachmentId,
+      audioFormat: requestMessage.audioFormat,
+      sourceMode: request.audioPath ? 'file' : 'base64',
+      audioSize,
+      audioMimeType: mimeType,
+      hasMobileTranscription: Boolean(request.mobileTranscription)
+    });
 
     return taskId;
   }
@@ -373,23 +392,23 @@ export class ZmqRequestSender {
    * - voice_admin_metrics / voice_health / voice_languages
    */
   async sendVoiceAPIRequest(request: VoiceAPIRequest, _existingTaskId?: string): Promise<string> {
-    logger.info('🎤 ENVOI VOICE API REQUEST:');
-    logger.info(`   📋 type: ${request.type}`);
-    logger.info(`   📋 taskId: ${request.taskId}`);
-    logger.info(`   📋 userId: ${request.userId || 'N/A'}`);
-
     // Envoyer via PUSH
     await this.connectionManager.send(request);
 
     // Stocker la requête en cours pour traçabilité
     this.pendingRequests.set(request.taskId, {
+      kind: 'voice_api',
       request: request,
       timestamp: Date.now()
     });
 
     this.stats.voiceAPIRequests++;
 
-    logger.info(`📤 [ZMQ-Client] Voice API request envoyée: taskId=${request.taskId}, type=${request.type}`);
+    logger.info('voice api push sent', {
+      taskId: request.taskId,
+      type: request.type,
+      userId: request.userId
+    });
 
     return request.taskId;
   }
@@ -403,24 +422,34 @@ export class ZmqRequestSender {
    * - voice_profile_compare: Compare two fingerprints
    */
   async sendVoiceProfileRequest(request: VoiceProfileRequest, _existingTaskId?: string): Promise<string> {
-    logger.info('🎤 ENVOI VOICE PROFILE REQUEST:');
-    logger.info(`   📋 type: ${request.type}`);
-    logger.info(`   📋 request_id: ${request.request_id}`);
-
     // Envoyer via PUSH
     await this.connectionManager.send(request);
 
     // Stocker la requête en cours pour traçabilité
     this.pendingRequests.set(request.request_id, {
+      kind: 'voice_profile',
       request: request,
       timestamp: Date.now()
     });
 
     this.stats.voiceProfileRequests++;
 
-    logger.info(`📤 [ZMQ-Client] Voice Profile request envoyée: request_id=${request.request_id}, type=${request.type}`);
+    logger.info('voice profile push sent', {
+      requestId: request.request_id,
+      type: request.type
+    });
 
     return request.request_id;
+  }
+
+  /** #13102 — l'oubli de pièces ou de messages effacés : identifiants seuls. */
+  async sendCacheForgetRequest(request: CacheForgetRequest): Promise<void> {
+    await this.connectionManager.send({
+      type: 'cache_forget',
+      requestId: request.requestId,
+      attachmentIds: [...request.attachmentIds],
+      messageIds: [...request.messageIds],
+    });
   }
 
   /**
@@ -466,13 +495,13 @@ export class ZmqRequestSender {
     const entry = this.pendingRequests.get(taskId);
     if (!entry) return;
 
-    const timeoutId = setTimeout(() => {
+    const timeoutId = guardedTimeout({ name: 'zmq-request-timeout', afterMs: timeoutMs, logger, run: () => {
       const pending = this.pendingRequests.get(taskId);
       if (pending) {
         this.pendingRequests.delete(taskId);
         onTimeout(pending.pendingLanguages ? [...pending.pendingLanguages] : undefined);
       }
-    }, timeoutMs);
+    } });
 
     this.pendingRequests.set(taskId, { ...entry, timeoutId, onTimeout });
   }
@@ -505,6 +534,28 @@ export class ZmqRequestSender {
     }
 
     return { remaining: [...entry.pendingLanguages] };
+  }
+
+  /**
+   * Cette requête est-elle encore en cours ?
+   *
+   * Un refus transitoire du translator (« translation pool full ») doit laisser
+   * le deadman armé pour qu'il renvoie ; mais s'il arrive pour un taskId déjà
+   * soldé — dernière langue rendue, ou deadman déjà tombé — il n'y a plus rien à
+   * réarmer, et l'erreur doit remonter. C'est cette distinction que la question
+   * tranche.
+   */
+  hasPendingRequest(taskId: string): boolean {
+    return this.pendingRequests.has(taskId);
+  }
+
+  /**
+   * Vrai seulement si la requête en attente sous ce taskId est une traduction
+   * TEXTE : un refus propre à la traduction texte (`translation_skipped`) ne
+   * doit solder ni un audio, ni une transcription, ni un appel voix (#18042).
+   */
+  hasPendingTranslationRequest(taskId: string): boolean {
+    return this.pendingRequests.get(taskId)?.kind === 'translation';
   }
 
   /**

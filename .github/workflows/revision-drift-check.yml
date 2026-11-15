@@ -1,0 +1,166 @@
+# Un conteneur en retard sur ses routes se signale AVANT l'utilisateur (#5644).
+#
+# Incident du 2026-09-07 : `meeshy-gateway` tournait une révision de neuf jours
+# pendant que Traefik le déclarait `healthy` et que la CI restait verte — la
+# route que l'app iOS appelait n'existait tout simplement pas sur ce binaire.
+# Aucun témoin ne comparait ce qui TOURNE à ce qui est ÉCRIT sur SA branche
+# (`origin/dev` pour staging ET pour production depuis la promotion #9223 —
+# #5862, #10914).
+#
+# `/health` grave déjà `build.commit` (`packages/shared/utils/build-info.ts`,
+# posé par `VCS_REF`/`GIT_COMMIT` au build Docker) — ce job ne fait que le LIRE
+# et le confronter à l'historique du dépôt, sur un intervalle régulier.
+#
+# Le test de fumée du job `deploy-staging` (`docker.yml`) prouve la même classe
+# de défaut plus fort — une route absente, prouvée par une vraie requête — mais
+# seulement AU MOMENT du déploiement. Celui-ci couvre l'angle mort : une
+# révision qui dérive SANS nouveau déploiement (le cas exact de l'incident :
+# l'image était déjà sur l'hôte, seul le conteneur n'a jamais été recréé).
+name: Veille · révision servie contre sa branche
+
+on:
+  schedule:
+    - cron: '0 * * * *' # toutes les heures — un écart met au plus 60 min à se voir
+  workflow_dispatch:
+    inputs:
+      max_drift_commits:
+        description: "Commits de retard tolérés sur la branche de la cible avant alerte"
+        required: false
+        default: '15'
+
+jobs:
+  drift:
+    name: ${{ matrix.target.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # **Chaque cible déclare SA branche, et ce n'est pas un détail (#5862).**
+        # `deploy-staging` (docker.yml) porte `if: github.ref ==
+        # 'refs/heads/dev'` : staging sert `dev` (et la production aussi, par promotion).
+        # Comparer les deux à `main` exigeait de staging qu'il serve une
+        # révision de `main` — vert seulement si `dev == main`, donc jamais.
+        # Le job tournant toutes les heures, il rougissait une fois par heure
+        # sur une situation SAINE, et n'attrapait donc plus l'incident pour
+        # lequel il a été écrit.
+        # `paths` est le CONTEXTE DE BUILD de la cible — les mêmes répertoires
+        # que `detect` (docker.yml) lit pour décider de reconstruire l'image
+        # gateway (`services/gateway/**`, `packages/shared/**`). Les deux
+        # décisions se prennent ainsi sur la même donnée (#5907) : un commit
+        # hors de ce périmètre (ex. `apps/web-v2` pendant #5491) ne peut pas
+        # faire rougir la cible, puisqu'il n'aurait de toute façon pas
+        # déclenché de nouvelle image ni de redéploiement.
+        #
+        # **La production sert `dev`, par PROMOTION (#9223, #10914).**
+        # `promote-production.yml` (`--ref dev`) pose sur l'hôte de production
+        # les digests que staging exécute : une révision de `dev`, jamais de
+        # `main`. Son retard sur la tête de `dev` est VOULU — on ne promeut
+        # qu'après recette — donc publié, jamais un échec (`drift: report`) ;
+        # une révision HORS de `dev` reste une alerte.
+        target:
+          - name: production
+            url: https://gate.meeshy.me/health
+            ref: origin/dev
+            paths: 'services/gateway packages/shared'
+            drift: report
+          - name: staging
+            url: https://gate.staging.meeshy.me/health
+            ref: origin/dev
+            paths: 'services/gateway packages/shared'
+            drift: fail
+          # #6551 — le frontend a sa PROPRE image, construite et déployée
+          # indépendamment du gateway (`docker.yml` ne recrée que ce dont le
+          # digest a bougé). Le confondre avec la cible `staging` ci-dessus
+          # aurait laissé passer exactement l'incident qui a ouvert cette
+          # issue : `gateway-staging` recréé et à jour pendant que
+          # `frontend-staging` restait périmé, sans qu'aucun gate ne rougisse.
+          # Pas encore de pendant « production » : ce commentaire l'expliquait
+          # par le legacy, qui servait meeshy.me (#5609). Ce n'est plus vrai
+          # depuis le 2026-09-15 — `apps/web` (ex `apps/web-v2`) y est servi —
+          # et le legacy a quitté le dépôt (#7668) : l'entrée manquante est
+          # désormais un suivi (#7718), pas un choix.
+          - name: frontend-staging
+            url: https://staging.meeshy.me/build-info.json
+            ref: origin/dev
+            paths: 'apps/web packages/design-tokens packages/shared'
+            drift: fail
+    steps:
+      - name: Checkout (historique complet — requis par git merge-base/rev-list)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # #12595 — un passage qui tombe pendant « Deploy to staging » (docker.yml)
+      # trouve le conteneur en cours de recréation : Traefik rend 404 le temps
+      # du healthcheck. La lecture réessaie donc environ une minute et demie, et
+      # `--retry-all-errors` est requis pour qu'un 404 soit réessayé. Une cible
+      # vraiment absente rougit toujours.
+      - name: Lire la révision servie par /health
+        id: health
+        run: |
+          set -euo pipefail
+          BODY=$(curl -fsS --max-time 10 --retry 6 --retry-delay 15 --retry-all-errors "${{ matrix.target.url }}") || {
+            echo "::error::${{ matrix.target.name }} — /health injoignable sur ${{ matrix.target.url }}"
+            exit 1
+          }
+          COMMIT=$(echo "$BODY" | jq -r '.build.commit // empty')
+          echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
+
+      - name: Comparer à la branche de la cible
+        env:
+          COMMIT: ${{ steps.health.outputs.commit }}
+          REF: ${{ matrix.target.ref }}
+          PATHS: ${{ matrix.target.paths }}
+          DRIFT_MODE: ${{ matrix.target.drift }}
+          MAX_DRIFT: ${{ github.event.inputs.max_drift_commits || '15' }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$COMMIT" ]; then
+            echo "::error::${{ matrix.target.name }} — /health ne grave aucun build.commit (GIT_COMMIT absent de l'image en cours d'exécution)"
+            exit 1
+          fi
+
+          if ! git cat-file -e "${COMMIT}^{commit}" 2>/dev/null; then
+            echo "::error::${{ matrix.target.name }} — révision servie \`$COMMIT\` introuvable dans l'historique de ce dépôt"
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor "$COMMIT" "$REF"; then
+            echo "::error::${{ matrix.target.name }} — \`$COMMIT\` n'est PAS un ancêtre de \`$REF\` (branche inattendue, ou historique réécrit)"
+            exit 1
+          fi
+
+          # La référence n'est pas la tête de la branche mais le DERNIER commit
+          # qui pouvait entrer dans l'image de la cible — sans quoi le garde
+          # rougit à chaque livraison hors de son contexte de build, sans
+          # qu'aucun conteneur ne soit périmé (#5907).
+          REF_EFFECTIVE=$(git rev-list -1 "$REF" -- $PATHS)
+          if [ -z "$REF_EFFECTIVE" ]; then
+            echo "::error::${{ matrix.target.name }} — aucun commit de \`$REF\` ne touche son contexte de build ($PATHS)"
+            exit 1
+          fi
+
+          # Le comptage porte le MÊME filtre que la sélection de la référence
+          # ci-dessus (#8264). Sans `-- $PATHS`, `$DRIFT` compte TOUS les commits
+          # de l'intervalle — web, iOS, Android, documentation — alors que le
+          # résumé et le message d'erreur l'annoncent comme des commits « derrière
+          # son contexte de build ». Le seuil de 15, pensé pour des commits
+          # susceptibles de changer l'image, était donc consommé par des livraisons
+          # qui ne pouvaient en changer aucune : la moitié du correctif de #5907,
+          # qui avait filtré la RÉFÉRENCE pour cette raison précise, manquait ici.
+          DRIFT=$(git rev-list --count "${COMMIT}..${REF_EFFECTIVE}" -- $PATHS)
+          {
+            echo "### ${{ matrix.target.name }}"
+            echo ""
+            echo "Sert \`${COMMIT}\` — **$DRIFT** commit(s) derrière son contexte de build sur \`$REF\` (\`${REF_EFFECTIVE}\`, seuil : $MAX_DRIFT)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$DRIFT_MODE" = "report" ]; then
+            exit 0
+          fi
+
+          if [ "$DRIFT" -gt "$MAX_DRIFT" ]; then
+            echo "::error::${{ matrix.target.name }} est en retard de $DRIFT commits sur son contexte de build (\`$REF_EFFECTIVE\` sur \`$REF\`, seuil $MAX_DRIFT) — cf. #5644 : vérifier que le conteneur a bien été recréé après le dernier build"
+            exit 1
+          fi

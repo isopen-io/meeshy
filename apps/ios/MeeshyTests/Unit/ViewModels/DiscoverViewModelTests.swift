@@ -41,17 +41,6 @@ final class DiscoverViewModelTests: XCTestCase {
         return (sut, friendService, userService)
     }
 
-    /// Distinct factory (mirrors `RequestsViewModelTests.makeSUTWithQueue`) for
-    /// the `sendRequest` outbox tests, so the 13 pre-existing call sites above
-    /// keep destructuring a 3-tuple unchanged.
-    private func makeSUTWithQueue(
-        friendService: MockFriendService = MockFriendService(),
-        offlineQueue: MockOfflineQueue = MockOfflineQueue()
-    ) -> (sut: DiscoverViewModel, friendService: MockFriendService, offlineQueue: MockOfflineQueue) {
-        let sut = DiscoverViewModel(friendService: friendService, offlineQueue: offlineQueue)
-        return (sut, friendService, offlineQueue)
-    }
-
     private static let stubSearchResults: [UserSearchResult] = {
         let json = """
         [
@@ -116,48 +105,6 @@ final class DiscoverViewModelTests: XCTestCase {
 
         XCTAssertEqual(userService.searchUsersCallCount, 1)
         XCTAssertEqual(userService.lastSearchUsersQuery, "alice")
-    }
-
-    // MARK: - sendRequest (Wave 4 — routed through the `.sendFriendRequest`
-    // outbox instead of a direct `FriendService` REST call; see
-    // `DiscoverViewModel.sendRequest` for the rationale. `FriendService` is no
-    // longer touched by this path at all — `MockFriendService` stays at its
-    // default in these tests to prove that.)
-
-    func test_sendRequest_success_enqueuesSendFriendRequestViaOutbox() async {
-        let (sut, friendService, offlineQueue) = makeSUTWithQueue()
-
-        await sut.sendRequest(to: "u1")
-
-        XCTAssertEqual(offlineQueue.enqueueCalls.count, 1)
-        XCTAssertEqual(offlineQueue.enqueueCalls.first?.kind, .sendFriendRequest)
-        let payload = offlineQueue.lastPayload as? SendFriendRequestPayload
-        XCTAssertEqual(payload?.targetUserId, "u1")
-        XCTAssertEqual(friendService.sendRequestCallCount, 0, "sendRequest must no longer call FriendService directly")
-    }
-
-    /// Core fix: the cache must flip to `.pendingSent` synchronously, before
-    /// the enqueue is even awaited — the old code only flipped it inside the
-    /// (awaited) success branch, so the success haptic fired with no
-    /// accompanying optimistic state change at all.
-    func test_sendRequest_flipsFriendshipCacheToPendingSentOptimistically() async {
-        let (sut, _, _) = makeSUTWithQueue()
-
-        await sut.sendRequest(to: "u1")
-
-        guard case .pendingSent = FriendshipCache.shared.status(for: "u1") else {
-            return XCTFail("Expected .pendingSent immediately after sendRequest")
-        }
-    }
-
-    func test_sendRequest_enqueueFailure_rollsBackFriendshipCache() async {
-        let queue = MockOfflineQueue()
-        queue.enqueueResult = .failure(NSError(domain: "test", code: 500))
-        let (sut, _, _) = makeSUTWithQueue(offlineQueue: queue)
-
-        await sut.sendRequest(to: "u1")
-
-        XCTAssertEqual(FriendshipCache.shared.status(for: "u1"), .none)
     }
 
     // MARK: - sendEmailInvitation
@@ -329,5 +276,36 @@ final class DiscoverViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.searchResults.map(\.id), ["search-result"])
         XCTAssertEqual(userService.searchUsersCallCount, 1)
+    }
+
+    // MARK: - Réponses dans le désordre
+
+    /// « ab » part, puis « abc » ; la réponse de « ab » revient la DERNIÈRE.
+    /// Elle remplaçait les résultats de ce qui est tapé.
+    func test_performSearch_aSlowerOlderQuery_doesNotOverwriteTheCurrentResults() async {
+        let (sut, _, userService) = makeSUT()
+        let release = AsyncStream<Void>.makeStream()
+        let started = AsyncStream<Void>.makeStream()
+        userService.searchUsersGate = { query in
+            guard query == "ab" else { return }
+            started.continuation.yield()
+            for await _ in release.stream { break }
+        }
+        let old = UserSearchResult(id: "old", username: "abby", displayName: "Abby", avatar: nil, isOnline: false)
+        let current = UserSearchResult(id: "current", username: "abc", displayName: "Abc", avatar: nil, isOnline: false)
+
+        userService.searchUsersResult = .success([old])
+        sut.searchQuery = "ab"
+        let slow = Task { await sut.performSearch() }
+        for await _ in started.stream { break }
+
+        userService.searchUsersResult = .success([current])
+        sut.searchQuery = "abc"
+        await sut.performSearch()
+
+        release.continuation.yield()
+        await slow.value
+
+        XCTAssertEqual(sut.searchResults.map(\.id), ["current"])
     }
 }

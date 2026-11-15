@@ -1,0 +1,281 @@
+import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
+
+/**
+ * **UN PAIR QUI DÉCROCHE, POUR LES GATES** (#8063) — le bouchon de socket
+ * (`fixtures-realtime.ts`) accuse les appels mais personne n'y répond : un
+ * appel de gate sonne jusqu'à son délai, et rien de ce qui n'existe qu'une
+ * fois CONNECTÉ (le partage d'écran) ne s'y mesure. Ce pair répond, dans la
+ * page même, par une vraie `RTCPeerConnection` : il rejoint l'appel, répond à
+ * l'offre, échange ses candidats, et peut à son tour partager un écran
+ * dessiné (un canevas) — le chemin du RECEVEUR.
+ *
+ * Il ne s'arme que sur demande (`CALL_PEER_FLAG` de `fixtures-call-ack.ts`,
+ * posé par le gate avant le chargement) : les autres gates d'appel
+ * gardent un appel qui SONNE. Chargé par `import()` depuis le bouchon, donc
+ * absent de tout build `gateway` et de tout chemin qui n'appelle pas.
+ */
+
+export const CALL_PEER_USER_ID = 'u-fixture-call-peer';
+export const CALL_PEER_PARTICIPANT_ID = 'p-fixture-call-peer';
+export const CALL_PEER_NAME = 'Nadia Benali';
+const JOIN_DELAY_MS = 300;
+
+type Fire = (event: string, payload: unknown) => void;
+
+type SignalOut = { readonly type: string; readonly sdp?: string; readonly candidate?: string; readonly sdpMid?: string | null; readonly sdpMLineIndex?: number | null; readonly negotiationId?: number; readonly from?: string; readonly to?: string };
+
+export type FixtureCallPeerDeps = {
+  readonly fire: Fire;
+  readonly createConnection: () => RTCPeerConnection;
+  readonly createScreenTrack: () => MediaStreamTrack;
+  readonly schedule: (fn: () => void, ms: number) => void;
+};
+
+export type FixtureCallPeerProbe = {
+  /** Chaque annonce reçue du client : `call:toggle-screen`, `call:toggle-video`, `call:toggle-audio`. */
+  readonly toggles: ReadonlyArray<{ readonly event: string; readonly enabled: boolean }>;
+  /** Images vidéo décodées par le pair : > 0 quand l'écran partagé lui ARRIVE. */
+  readonly videoFrames: () => Promise<number>;
+  /** Paquets audio reçus par le pair : ils AUGMENTENT tant que l'audio n'est pas coupé (#8047). */
+  readonly audioPackets: () => Promise<number>;
+  /** `call:quality-report` et `call:analytics` émis par le client, dans l'ordre (#8047). */
+  readonly reports: ReadonlyArray<{ readonly event: string; readonly payload: unknown }>;
+  /** La passerelle signale que le lien du pair reste dégradé (`call:quality-alert`). */
+  readonly alertQuality: () => void;
+  /** La passerelle relaie une capture d'écran du pair (`call:screen-capture-alert`). */
+  readonly capture: (isCapturing: boolean) => void;
+  readonly share: () => void;
+  readonly stopShare: () => void;
+  /** L'appel que le pair a rejoint — celui que chaque charge du client doit nommer (#8048). */
+  readonly callId: () => string | null;
+  /** Le pair PARLE : la passerelle relaie son segment final, traduit dans la langue du lecteur (#8048). */
+  readonly speak: (line: { readonly id: string; readonly text: string; readonly translatedText?: string; readonly isFinal?: boolean }) => void;
+  /** Le pair ouvre ou ferme ses sous-titres (`call:transcription-active` diffusé, #8048). */
+  readonly transcribing: (active: boolean) => void;
+  /** `call:transcription-segment` et `call:transcription-active` émis par le client, dans l'ordre (#8048). */
+  readonly transcripts: ReadonlyArray<{ readonly event: string; readonly payload: unknown }>;
+  /** Chaque message BRUT reçu sur le canal de données `transcription` ouvert par le client (#8048). */
+  readonly channelMessages: readonly unknown[];
+  /** Les contrôles émis par le client — invitation, coupure, réaction — dans l'ordre (#8433, #8438, #8439). */
+  readonly controls: ReadonlyArray<{ readonly event: string; readonly payload: unknown }>;
+  /** Le pair, modérateur, coupe mon micro (`call:muted-by-moderator`, #8438). */
+  readonly muteMe: () => void;
+  /** Le pair réagit (`call:reaction-received`, #8439). */
+  readonly react: (emoji: string) => void;
+  /** Une AUTRE personne rejoint l'appel, caméra coupée (`call:participant-joined`) : l'appel passe à trois (#8743). */
+  readonly join: (person: { readonly userId: string; readonly name: string }) => void;
+};
+
+export type FixtureCallPeer = {
+  readonly initiated: (callId: string) => void;
+  readonly emitted: (event: string, payload: unknown) => void;
+  /** Un contrôle demandé avec accusé : la passerelle diffuse l'invitation à tout l'appel (#8433). */
+  readonly controlled: (event: string, payload: unknown) => void;
+  readonly probe: FixtureCallPeerProbe;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+
+export function createFixtureCallPeer(deps: FixtureCallPeerDeps): FixtureCallPeer {
+  let callId: string | null = null;
+  let viewerId: string | null = null;
+  let pc: RTCPeerConnection | null = null;
+  let epoch = 0;
+  let screen: MediaStreamTrack | null = null;
+  const toggles: Array<{ readonly event: string; readonly enabled: boolean }> = [];
+  const reports: Array<{ readonly event: string; readonly payload: unknown }> = [];
+  const transcripts: Array<{ readonly event: string; readonly payload: unknown }> = [];
+  const channelMessages: unknown[] = [];
+  const controls: Array<{ readonly event: string; readonly payload: unknown }> = [];
+
+  const signal = (payload: SignalOut): void => {
+    if (callId === null || viewerId === null) return;
+    deps.fire(SERVER_EVENTS.CALL_SIGNAL, { callId, signal: { ...payload, from: CALL_PEER_USER_ID, to: viewerId, negotiationId: epoch } });
+  };
+
+  const connection = (): RTCPeerConnection => {
+    if (pc !== null) return pc;
+    const created = deps.createConnection();
+    created.onicecandidate = (event) => {
+      const candidate = event.candidate;
+      if (candidate === null || candidate.candidate === '') return;
+      signal({ type: 'ice-candidate', candidate: candidate.candidate, sdpMid: candidate.sdpMid, sdpMLineIndex: candidate.sdpMLineIndex });
+    };
+    created.ondatachannel = (event) => {
+      if (event.channel.label !== 'transcription') return;
+      event.channel.onmessage = (message) => void channelMessages.push(message.data);
+    };
+    created.onnegotiationneeded = () => {
+      if (created.signalingState !== 'stable' || created.remoteDescription === null) return;
+      epoch += 1;
+      void created
+        .setLocalDescription()
+        .then(() => signal({ type: 'offer', sdp: created.localDescription?.sdp ?? '' }))
+        .catch(() => undefined);
+    };
+    pc = created;
+    return created;
+  };
+
+  const received = async (raw: unknown): Promise<void> => {
+    if (!isRecord(raw) || !isRecord(raw.signal)) return;
+    const incoming = raw.signal;
+    if (incoming.to !== CALL_PEER_USER_ID || typeof incoming.from !== 'string') return;
+    viewerId = incoming.from;
+    epoch = Math.max(epoch, typeof incoming.negotiationId === 'number' ? incoming.negotiationId : 0);
+    const peer = connection();
+    if (incoming.type === 'ice-candidate' && typeof incoming.candidate === 'string') {
+      await peer.addIceCandidate({ candidate: incoming.candidate, sdpMid: typeof incoming.sdpMid === 'string' ? incoming.sdpMid : null, sdpMLineIndex: typeof incoming.sdpMLineIndex === 'number' ? incoming.sdpMLineIndex : null });
+      return;
+    }
+    if (typeof incoming.sdp !== 'string') return;
+    if (incoming.type === 'answer') {
+      await peer.setRemoteDescription({ type: 'answer', sdp: incoming.sdp });
+      return;
+    }
+    await peer.setRemoteDescription({ type: 'offer', sdp: incoming.sdp });
+    await peer.setLocalDescription();
+    signal({ type: 'answer', sdp: peer.localDescription?.sdp ?? '' });
+  };
+
+  const videoSender = (): RTCRtpTransceiver | null => pc?.getTransceivers().find((transceiver) => transceiver.receiver.track.kind === 'video') ?? null;
+
+  const announce = (enabled: boolean): void => {
+    if (callId === null) return;
+    deps.fire(SERVER_EVENTS.CALL_MEDIA_TOGGLED, { callId, participantId: CALL_PEER_PARTICIPANT_ID, userId: CALL_PEER_USER_ID, mediaType: 'screen', enabled });
+  };
+
+  const TOGGLES: ReadonlySet<string> = new Set([CLIENT_EVENTS.CALL_TOGGLE_SCREEN, CLIENT_EVENTS.CALL_TOGGLE_VIDEO, CLIENT_EVENTS.CALL_TOGGLE_AUDIO]);
+  const REPORTS: ReadonlySet<string> = new Set([CLIENT_EVENTS.CALL_QUALITY_REPORT, CLIENT_EVENTS.CALL_ANALYTICS]);
+  const TRANSCRIPTS: ReadonlySet<string> = new Set([CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT, CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE]);
+  const CONTROLS: ReadonlySet<string> = new Set([CLIENT_EVENTS.CALL_INVITE_PARTICIPANT, CLIENT_EVENTS.CALL_MUTE_PARTICIPANT, CLIENT_EVENTS.CALL_REACTION]);
+  let spoken = 0;
+
+  const inbound = async (kind: 'audio' | 'video', field: 'framesDecoded' | 'packetsReceived'): Promise<number> => {
+    const report = await pc?.getStats();
+    let total = 0;
+    report?.forEach((entry: Record<string, unknown>) => {
+      const value = entry[field];
+      if (entry.type === 'inbound-rtp' && entry.kind === kind && typeof value === 'number') total += value;
+    });
+    return total;
+  };
+
+  const about = (): { readonly callId: string; readonly participantId: string; readonly userId: string } | null => (callId === null ? null : { callId, participantId: CALL_PEER_PARTICIPANT_ID, userId: CALL_PEER_USER_ID });
+
+  return {
+    initiated: (id) => {
+      if (callId === id) return;
+      callId = id;
+      deps.schedule(() => {
+        deps.fire(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, {
+          callId: id,
+          participant: { id: CALL_PEER_PARTICIPANT_ID, userId: CALL_PEER_USER_ID, username: 'nadia', displayName: CALL_PEER_NAME, isAudioEnabled: true, isVideoEnabled: false },
+        });
+      }, JOIN_DELAY_MS);
+    },
+    emitted: (event, payload) => {
+      if (event === CLIENT_EVENTS.CALL_SIGNAL) {
+        void received(payload).catch(() => undefined);
+        return;
+      }
+      if (TOGGLES.has(event) && isRecord(payload) && typeof payload.enabled === 'boolean') toggles.push({ event, enabled: payload.enabled });
+      if (REPORTS.has(event)) reports.push({ event, payload });
+      if (TRANSCRIPTS.has(event)) transcripts.push({ event, payload });
+    },
+    controlled: (event, payload) => {
+      if (!CONTROLS.has(event)) return;
+      controls.push({ event, payload });
+      if (event !== CLIENT_EVENTS.CALL_INVITE_PARTICIPANT || callId === null || !isRecord(payload) || typeof payload.userId !== 'string') return;
+      deps.fire(SERVER_EVENTS.CALL_PARTICIPANT_INVITED, { callId, invitedBy: viewerId, invitee: { userId: payload.userId } });
+    },
+    probe: {
+      toggles,
+      videoFrames: () => inbound('video', 'framesDecoded'),
+      audioPackets: () => inbound('audio', 'packetsReceived'),
+      reports,
+      alertQuality: () => {
+        const peer = about();
+        if (peer !== null) deps.fire(SERVER_EVENTS.CALL_QUALITY_ALERT, { ...peer, metric: 'packetLoss', value: 9, threshold: 5 });
+      },
+      capture: (isCapturing) => {
+        const peer = about();
+        if (peer !== null) deps.fire(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { ...peer, isCapturing });
+      },
+      share: () => {
+        const transceiver = videoSender();
+        if (transceiver === null || screen !== null) return;
+        screen = deps.createScreenTrack();
+        transceiver.direction = 'sendrecv';
+        void transceiver.sender.replaceTrack(screen).then(() => announce(true));
+      },
+      stopShare: () => {
+        const transceiver = videoSender();
+        screen?.stop();
+        screen = null;
+        void transceiver?.sender.replaceTrack(null).then(() => announce(false));
+      },
+      callId: () => callId,
+      speak: (line) => {
+        if (callId === null) return;
+        const startMs = spoken * 3_000;
+        spoken += 1;
+        deps.fire(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, {
+          callId,
+          segment: {
+            id: line.id,
+            text: line.text,
+            ...(line.translatedText === undefined ? {} : { translatedText: line.translatedText }),
+            speakerId: CALL_PEER_USER_ID,
+            speakerDisplayName: CALL_PEER_NAME,
+            startMs,
+            endMs: startMs + 2_000,
+            isFinal: line.isFinal ?? true,
+            sourceLanguage: 'en',
+            targetLanguage: 'fr',
+            confidence: 0.92,
+            capturedAtMs: Date.now(),
+          },
+        });
+      },
+      transcribing: (active) => {
+        if (callId !== null) deps.fire(SERVER_EVENTS.CALL_TRANSCRIPTION_ACTIVE, { callId, speakerId: CALL_PEER_USER_ID, active });
+      },
+      transcripts,
+      channelMessages,
+      controls,
+      muteMe: () => {
+        if (callId !== null) deps.fire(SERVER_EVENTS.CALL_MUTED_BY_MODERATOR, { callId, byUserId: CALL_PEER_USER_ID });
+      },
+      react: (emoji) => {
+        if (callId !== null) deps.fire(SERVER_EVENTS.CALL_REACTION_RECEIVED, { callId, userId: CALL_PEER_USER_ID, emoji, timestamp: Date.now() });
+      },
+      join: (person) => {
+        if (callId !== null) deps.fire(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, { callId, participant: { id: `p-${person.userId}`, userId: person.userId, displayName: person.name, isAudioEnabled: true, isVideoEnabled: false } });
+      },
+    },
+  };
+}
+
+/** Un « écran » dessiné — un canevas animé, ce qu'un vrai écran enverrait. */
+export function canvasScreenTrack(): MediaStreamTrack {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1280;
+  canvas.height = 720;
+  const context = canvas.getContext('2d');
+  let tick = 0;
+  const draw = (): void => {
+    if (context === null) return;
+    context.fillStyle = '#1e293b';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = '#f8fafc';
+    context.font = 'bold 64px sans-serif';
+    context.fillText(`Écran partagé ${tick}`, 80, 360);
+    tick += 1;
+  };
+  draw();
+  setInterval(draw, 100);
+  const track = canvas.captureStream(10).getVideoTracks()[0];
+  if (track === undefined) throw new Error('canvas-capture-missing');
+  return track;
+}

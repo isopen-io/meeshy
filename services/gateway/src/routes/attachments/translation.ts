@@ -6,11 +6,18 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AttachmentTranslateService } from '../../services/AttachmentTranslateService';
 import { ConsentValidationService } from '../../services/ConsentValidationService';
+import { attachmentTranslateSelect } from '../../services/attachments/attachmentIncludes';
+import { resolveAttachmentReadVerdict, denyAttachmentRead } from '../../services/attachments/attachmentReadVerdict';
+import { serverReadsAttachmentCarrier } from '../../services/attachments/attachmentCarrierServerReadable';
 import { messageAttachmentSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { AttachmentParams, TranslateBody, TranscribeBody } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendError, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
+import {
+  creditAcceptedTranslationRequest,
+  lazyTranslationRequestEngagement
+} from '../../services/messaging/translationRequestCredit';
 
 const logger = enhancedLogger.child({ module: 'AttachmentTranslationRoutes' });
 
@@ -31,6 +38,13 @@ export async function registerTranslationRoutes(
   prisma: PrismaClient,
   translateService: AttachmentTranslateService | null
 ) {
+  // #8959 — une traduction ou une transcription acceptée rapporte
+  // `tool.translation_request` ; le crochet ne voit que les réponses 2xx.
+  const creditAccepted = creditAcceptedTranslationRequest({
+    engagement: lazyTranslationRequestEngagement(() => prisma),
+    requesterOf: (request) => (request as UnifiedAuthRequest).authContext,
+    onError: (error) => logger.warn('tool.translation_request engagement credit failed', { error })
+  });
 
   /**
    * POST /attachments/:attachmentId/translate
@@ -40,6 +54,7 @@ export async function registerTranslationRoutes(
     '/attachments/:attachmentId/translate',
     {
       onRequest: [authRequired],
+      onResponse: creditAccepted,
       schema: {
         description: 'Translate an attachment to one or more target languages. Currently supports audio files with speech-to-text, translation, and text-to-speech (with optional voice cloning). Image, video, and document translation are planned but not yet implemented. Translation can be async with webhook notification.',
         tags: ['attachments', 'translation'],
@@ -160,16 +175,33 @@ export async function registerTranslationRoutes(
         const body = request.body as TranslateBody;
         const userId = authContext.userId;
 
+        // #4166, critère 4 — un seul aller-retour pour toute la requête :
+        // `attachmentTranslateSelect` porte à la fois `mimeType` (le gate de
+        // consentement ci-dessous) et tout ce que `translateService.translate`
+        // lit sur la ligne. La ligne chargée ici est PASSÉE à `translate`
+        // (dernier argument) au lieu de le laisser la relire.
         const attachment = await prisma.messageAttachment.findUnique({
           where: { id: attachmentId },
-          select: { mimeType: true }
+          select: attachmentTranslateSelect
         });
 
         if (!attachment) {
           return sendNotFound(reply, 'ATTACHMENT_NOT_FOUND', { message: 'Attachment not found' });
         }
 
+        const verdict = await resolveAttachmentReadVerdict(request, attachment, prisma);
+        if (verdict !== 'allow') {
+          return denyAttachmentRead(reply, verdict, 'Attachment not found');
+        }
+
         const mimeType = attachment.mimeType || '';
+
+        // #10726 — un vocal que la passerelle ne lit pas (bout en bout) se
+        // traduit sur l'appareil, jamais ici. Après le verdict d'accès, pour
+        // qu'un étranger n'apprenne rien du mode de chiffrement.
+        if (!(await serverReadsAttachmentCarrier(prisma, attachment.messageId))) {
+          return sendForbidden(reply, 'E2EE_NOT_TRANSLATABLE', { code: 'E2EE_NOT_TRANSLATABLE', message: 'End-to-end encrypted attachments cannot be translated by the server' });
+        }
 
         // Vérifier les consentements de l'utilisateur pour la traduction
         const consentService = new ConsentValidationService(prisma);
@@ -197,7 +229,7 @@ export async function registerTranslationRoutes(
           async: body.async,
           webhookUrl: body.webhookUrl,
           priority: body.priority
-        });
+        }, attachment);
 
         if (!result.success) {
           const statusCode = result.errorCode === 'ATTACHMENT_NOT_FOUND' ? 404 :
@@ -227,6 +259,7 @@ export async function registerTranslationRoutes(
     '/attachments/:attachmentId/transcribe',
     {
       onRequest: [authRequired],
+      onResponse: creditAccepted,
       schema: {
         description: 'Transcribe an audio attachment to text only, without translation or voice synthesis. Uses Whisper for accurate speech-to-text. Returns the attachment enriched with transcription data including text, detected language, confidence score, and word-level timestamps.',
         tags: ['attachments', 'transcription'],
@@ -304,11 +337,11 @@ export async function registerTranslationRoutes(
             ...errorResponseSchema
           },
           403: {
-            description: 'Feature not enabled',
+            description: 'Feature not enabled, or access denied to this attachment (caller is not a member of its conversation)',
             ...errorResponseSchema
           },
           404: {
-            description: 'Attachment not found',
+            description: 'Attachment not found (or its carrier message is gone — recalled, expired, or view-once burned)',
             ...errorResponseSchema
           },
           503: {
@@ -341,15 +374,32 @@ export async function registerTranslationRoutes(
 
         const attachment = await prisma.messageAttachment.findUnique({
           where: { id: attachmentId },
-          select: { id: true, mimeType: true, uploadedBy: true }
+          select: { id: true, messageId: true, mimeType: true, uploadedBy: true }
         });
 
         if (!attachment) {
           return sendNotFound(reply, 'ATTACHMENT_NOT_FOUND', { message: 'Attachment not found' });
         }
 
+        // #5152 — cette route déclenchait une transcription Whisper (coût de
+        // calcul) sur une pièce jointe de n'importe quelle conversation, sans
+        // vérifier l'appartenance : `uploadedBy` était chargé et jamais lu.
+        // Même verdict que le détail (#4923) et les octets, source unique.
+        const verdict = await resolveAttachmentReadVerdict(request, attachment, prisma);
+        if (verdict !== 'allow') {
+          return denyAttachmentRead(reply, verdict, 'Attachment not found');
+        }
+
         if (!attachment.mimeType?.startsWith('audio/')) {
           return sendBadRequest(reply, 'INVALID_ATTACHMENT_TYPE', { message: 'Only audio attachments can be transcribed' });
+        }
+
+        // #10726 — Whisper ne tourne que sur un vocal que la passerelle lit :
+        // dans une conversation chiffrée de bout en bout, la transcription se
+        // fait sur l'appareil. Après le verdict d'accès, pour qu'un étranger
+        // n'apprenne rien du mode de chiffrement.
+        if (!(await serverReadsAttachmentCarrier(prisma, attachment.messageId))) {
+          return sendForbidden(reply, 'E2EE_NOT_TRANSCRIBABLE', { code: 'E2EE_NOT_TRANSCRIBABLE', message: 'End-to-end encrypted attachments cannot be transcribed by the server' });
         }
 
         // Vérifier les consentements de l'utilisateur pour la transcription audio

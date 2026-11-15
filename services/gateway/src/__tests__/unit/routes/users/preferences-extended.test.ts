@@ -40,7 +40,14 @@ async function buildApp(conversations: any[]): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
   app.decorate('prisma', {
-    participant: { count: jest.fn<any>().mockResolvedValue(0) },
+    // #16590 — les surfaces que la résolution d'aperçu par lecteur LIT. Ces
+    // témoins portent sur le TITRE affiché, pas sur l'aperçu : une
+    // participation vide suffit, et rend `lastMessage: null`. Un double
+    // partiel ne se signale qu'au moment où le module GRANDIT.
+    participant: { count: jest.fn<any>().mockResolvedValue(0), findMany: jest.fn<any>().mockResolvedValue([]) },
+    messageStatusEntry: { findMany: jest.fn<any>().mockResolvedValue([]), findFirst: jest.fn<any>().mockResolvedValue(null) },
+    userConversationPreferences: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    userMessageDeletion: { findMany: jest.fn<any>().mockResolvedValue([]) },
     conversation: { findMany: jest.fn<any>().mockResolvedValue(conversations) },
     communityMember: { count: jest.fn<any>().mockResolvedValue(0) },
     community: { findMany: jest.fn<any>().mockResolvedValue([]) },
@@ -197,7 +204,14 @@ async function buildAppWithCommunities(
 ): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', {
-    participant: { count: jest.fn<any>().mockResolvedValue(0) },
+    // #16590 — les surfaces que la résolution d'aperçu par lecteur LIT. Ces
+    // témoins portent sur le TITRE affiché, pas sur l'aperçu : une
+    // participation vide suffit, et rend `lastMessage: null`. Un double
+    // partiel ne se signale qu'au moment où le module GRANDIT.
+    participant: { count: jest.fn<any>().mockResolvedValue(0), findMany: jest.fn<any>().mockResolvedValue([]) },
+    messageStatusEntry: { findMany: jest.fn<any>().mockResolvedValue([]), findFirst: jest.fn<any>().mockResolvedValue(null) },
+    userConversationPreferences: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    userMessageDeletion: { findMany: jest.fn<any>().mockResolvedValue([]) },
     conversation: { findMany: jest.fn<any>().mockResolvedValue(conversations) },
     communityMember: { count: jest.fn<any>().mockResolvedValue(0) },
     community: { findMany: jest.fn<any>().mockResolvedValue(communities) },
@@ -260,7 +274,14 @@ describe('GET /users/me/dashboard-stats — catch block (lines 322-325)', () => 
   it('returns 500 when prisma.conversation.findMany throws', async () => {
     const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
     app.decorate('prisma', {
-      participant: { count: jest.fn<any>().mockResolvedValue(0) },
+      // #16590 — les surfaces que la résolution d'aperçu par lecteur LIT. Ces
+    // témoins portent sur le TITRE affiché, pas sur l'aperçu : une
+    // participation vide suffit, et rend `lastMessage: null`. Un double
+    // partiel ne se signale qu'au moment où le module GRANDIT.
+    participant: { count: jest.fn<any>().mockResolvedValue(0), findMany: jest.fn<any>().mockResolvedValue([]) },
+    messageStatusEntry: { findMany: jest.fn<any>().mockResolvedValue([]), findFirst: jest.fn<any>().mockResolvedValue(null) },
+    userConversationPreferences: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    userMessageDeletion: { findMany: jest.fn<any>().mockResolvedValue([]) },
       conversation: { findMany: jest.fn<any>().mockRejectedValue('DB failure string') },
       communityMember: { count: jest.fn<any>().mockResolvedValue(0) },
       community: { findMany: jest.fn<any>().mockResolvedValue([]) },

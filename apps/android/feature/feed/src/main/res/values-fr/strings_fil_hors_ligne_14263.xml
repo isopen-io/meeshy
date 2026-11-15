@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_offline_banner">Hors ligne</string>
+    <string name="feed_offline_empty_title">Hors ligne</string>
+    <string name="feed_offline_empty_detail">Le fil s\'affichera au retour du réseau.</string>
+</resources>

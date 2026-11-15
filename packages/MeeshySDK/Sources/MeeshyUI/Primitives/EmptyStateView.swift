@@ -2,6 +2,8 @@ import SwiftUI
 import Combine
 import MeeshySDK
 
+/// Un état vide tient en une ligne, plus une action quand il y en a une (épure #17584, règle 4) : le sous-titre est
+/// facultatif, et seul un état qui explique quelque chose que le titre ne dit pas en porte un.
 public struct EmptyStateView: View {
     public let icon: String
     public let title: String
@@ -14,11 +16,22 @@ public struct EmptyStateView: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
     @State private var appeared = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
+    /// L'état vide monte de 12 pt en apparaissant ; sous « Réduire les
+    /// animations », il apparaît en place, en fondu.
+    nonisolated static func entryOffset(appeared: Bool, reduceMotion: Bool) -> CGFloat {
+        appeared || reduceMotion ? 0 : MeeshySpacing.md
+    }
 
     public init(
         icon: String,
         title: String,
-        subtitle: String,
+        subtitle: String = "",
         actionLabel: String? = nil,
         accentColor: String = MeeshyColors.brandPrimaryHex,
         compact: Bool = false,
@@ -39,7 +52,7 @@ public struct EmptyStateView: View {
 
             Image(systemName: icon)
                 .font(MeeshyFont.relative(compact ? 36 : 52, weight: .light))
-                .foregroundColor(Color(hex: accentColor).opacity(0.4))
+                .foregroundStyle(Color(hex: accentColor).opacity(0.4))
                 .padding(.bottom, compact ? 0 : MeeshySpacing.xs)
 
             if let actionLabel, let onAction, compact {
@@ -48,13 +61,13 @@ public struct EmptyStateView: View {
 
             Text(title)
                 .font(MeeshyFont.relative(compact ? 15 : 18, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .multilineTextAlignment(.center)
 
             if !subtitle.isEmpty {
                 Text(subtitle)
                     .font(MeeshyFont.relative(compact ? 12 : 14))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, MeeshySpacing.xxxl)
             }
@@ -68,9 +81,13 @@ public struct EmptyStateView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : MeeshySpacing.md)
+        .offset(y: Self.entryOffset(appeared: appeared, reduceMotion: reduceMotion))
         .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.15)) {
+            meeshyWithAnimation(
+                MeeshyAnimation.springDefault.delay(0.15),
+                reduced: MeeshyMotion.reducedFade,
+                reduceMotion: reduceMotion
+            ) {
                 appeared = true
             }
         }
@@ -83,7 +100,7 @@ public struct EmptyStateView: View {
         } label: {
             Text(label)
                 .font(MeeshyFont.relative(compact ? 13 : 14, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .padding(.horizontal, compact ? MeeshySpacing.lg : MeeshySpacing.xxl)
                 .padding(.vertical, compact ? MeeshySpacing.sm : MeeshySpacing.md)
                 .background(

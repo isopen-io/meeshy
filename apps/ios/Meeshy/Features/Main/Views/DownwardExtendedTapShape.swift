@@ -9,7 +9,7 @@ import SwiftUI
 /// that uniform growth bleeds upward into the sibling above it. This shape
 /// grows only toward the empty space below the label instead, reaching the
 /// same effective touch-target height without that risk.
-struct DownwardExtendedTapShape: Shape {
+nonisolated struct DownwardExtendedTapShape: Shape {
     /// Extra height added below the view's own frame.
     var extraBottom: CGFloat
 

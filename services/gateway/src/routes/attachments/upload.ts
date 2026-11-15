@@ -9,7 +9,11 @@ import {
   sendBadRequest,
   sendUnauthorized,
   sendForbidden,
+  sendNotFound,
   sendInternalError,
+  sendPayloadTooLarge,
+  sendUnsupportedMediaType,
+  sendError,
 } from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'AttachmentUploadRoutes' });
@@ -21,7 +25,24 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import type { UploadedFile, UploadTextBody } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { classifyAnonymousAttachment } from '../../services/attachments/ContentSignature.js';
+import {
+  classifyAnonymousAttachment,
+  guestAttachmentKindsOf,
+  type AnonymousAttachmentVerdict,
+} from '../../services/attachments/ContentSignature.js';
+import { GUEST_ATTACHMENT_REFUSAL_CODES } from '@meeshy/shared/types/guest-attachment-kinds';
+import { normalizeContactCardMimeType } from '@meeshy/shared/utils/vcard';
+import { admittedUploadMimeType } from '../../services/attachments/uploadMimeType';
+import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
+import { refusesMinorInConversationOfType } from '../../services/messaging/globalMinorGate';
+import {
+  E2EE_PLAINTEXT_ATTACHMENT_REFUSAL_MESSAGE,
+  E2EE_PLAINTEXT_REFUSED,
+} from '../../services/messaging/e2eePlaintextAdmission';
+import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
+import { discardFilePart, isFileSizeOverflow, judgeUploadDestination, UPLOAD_DESTINATION_FIELD, type UploadDestinationVerdict } from './uploadDestination';
+import { createUploadQuota, type UploadQuota, type UploadQuotaRedis } from '../../services/attachments/upload-quota';
+import { dailyQuotaRefusal, uploaderRole, uploadLimitPolicyFromEnv } from '../../services/attachments/upload-admission';
 
 /**
  * Plafond RÉEL, en OCTETS, du champ `content` de `POST /attachments/upload-
@@ -44,12 +65,33 @@ import { classifyAnonymousAttachment } from '../../services/attachments/ContentS
  */
 export const MAX_TEXT_ATTACHMENT_LENGTH = 10 * 1024 * 1024;
 
+/**
+ * Le refus d'une pièce jointe d'invité : 413 pour un fichier trop lourd, 403
+ * sinon, et le code stable de la garde (#10001) quand elle en rend un.
+ */
+function sendGuestAttachmentRefusal(reply: FastifyReply, verdict: Extract<AnonymousAttachmentVerdict, { allowed: false }>): void {
+  if (verdict.code === GUEST_ATTACHMENT_REFUSAL_CODES.TOO_LARGE) {
+    return sendPayloadTooLarge(reply, verdict.reason, { code: verdict.code });
+  }
+  return sendForbidden(reply, verdict.reason, verdict.code ? { code: verdict.code } : undefined);
+}
+
+/** #11266 — le quota journalier ; absent : celui de la passerelle, sur `fastify.redis`. */
+export type UploadRoutesOptions = {
+  readonly uploadQuota?: UploadQuota;
+};
+
 export async function registerUploadRoutes(
   fastify: FastifyInstance,
   authOptional: any,
-  prisma: PrismaClient
+  prisma: PrismaClient,
+  options: UploadRoutesOptions = {}
 ) {
   const attachmentService = new AttachmentService(prisma);
+  const uploadQuota = options.uploadQuota ?? createUploadQuota({
+    redis: ((fastify as { redis?: UploadQuotaRedis | null }).redis ?? null),
+    quotas: uploadLimitPolicyFromEnv().quotas,
+  });
 
   /**
    * POST /attachments/upload
@@ -60,7 +102,7 @@ export async function registerUploadRoutes(
     {
       onRequest: [authOptional],
       schema: {
-        description: 'Upload one or multiple files. Supports both authenticated and anonymous users. Files are processed with metadata extraction (dimensions for images, duration for audio/video). Anonymous users must have file/image upload permissions on their share link.',
+        description: 'Upload one or multiple files. Supports both authenticated and anonymous users. Files are processed with metadata extraction (dimensions for images, duration for audio/video). Anonymous users must have file/image upload permissions on their share link. An optional `conversationId` field, sent before the files, names the conversation the pieces are destined for: the pieces of an end-to-end encrypted conversation are received to the end of the body, then discarded, never stored (400 E2EE_PLAINTEXT_REFUSED), a conversation the caller is not a member of is not found (404 CONVERSATION_NOT_FOUND, the same as an absent one).',
         tags: ['attachments'],
         summary: 'Upload file attachments',
         consumes: ['multipart/form-data'],
@@ -93,6 +135,31 @@ export async function registerUploadRoutes(
             description: 'Forbidden - anonymous users without upload permissions',
             ...errorResponseSchema
           },
+          // #4856 — le lien de partage RECHERCHÉ est celui par lequel
+          // l'appelant s'est lui-même authentifié (son propre
+          // `shareLinkId` de session) : sa disparition entretemps est un
+          // « je ne trouve pas », pas un refus d'accès à un tiers.
+          404: {
+            description: 'The share link this anonymous session was authenticated with no longer exists',
+            ...errorResponseSchema
+          },
+          // #6604 — un fichier dont le type déclaré ne correspond pas à son
+          // contenu réel, ou dont la taille dépasse la limite de sa
+          // catégorie, est un refus de DEMANDE : jamais un 500.
+          413: {
+            description: 'A file exceeds the size limit for its category',
+            ...errorResponseSchema
+          },
+          415: {
+            description: 'A file\'s declared media type does not match its content, or is not admitted',
+            ...errorResponseSchema
+          },
+          // #11266 — le quota journalier d'envoi de l'appelant est atteint
+          // (`UPLOAD_DAILY_QUOTA_EXCEEDED`) ; `Retry-After` dit quand il repart.
+          429: {
+            description: 'The caller\'s daily upload quota is exhausted',
+            ...errorResponseSchema
+          },
           500: {
             description: 'Internal server error',
             ...errorResponseSchema
@@ -119,27 +186,65 @@ export async function registerUploadRoutes(
         const metadataMap: Map<number, any> = new Map();
 
         let fileIndex = 0;
-        for await (const part of parts) {
-          if (part.type === 'file') {
-            const buffer = await part.toBuffer();
-            files.push({
-              buffer,
-              filename: part.filename,
-              mimeType: part.mimetype,
-              size: buffer.length,
-            });
-            fileIndex++;
-          } else if (part.type === 'field' && part.fieldname.startsWith('metadata_')) {
-            const index = parseInt(part.fieldname.replace('metadata_', ''), 10);
-            const metadataValue = await part.value;
-            try {
-              const metadata = JSON.parse(metadataValue as string);
-              logger.debug('Metadata received for file', { index, hasDuration: !!metadata.duration, duration: metadata.duration, fullMetadata: metadata });
-              metadataMap.set(index, metadata);
-            } catch (error) {
-              logger.warn('Impossible de parser les métadonnées', error as Error);
+        // #13820 — une destination refusée ne coupe pas la lecture du corps : un
+        // client HTTP/1.1 écrit TOUT le corps avant de lire la réponse, et un
+        // `return` ici le laissait bloqué au premier Mo. Les fichiers suivants
+        // sont lus jusqu'au bout et jetés, jamais gardés ; la réponse part après.
+        let refusedDestination: Exclude<UploadDestinationVerdict, 'admitted'> | null = null;
+        try {
+          for await (const part of parts) {
+            if (part.type === 'file' && refusedDestination !== null) {
+              await discardFilePart(part.file);
+            } else if (part.type === 'file') {
+              const buffer = await part.toBuffer();
+              files.push({
+                buffer,
+                filename: part.filename,
+                // #9693 — le type ADMIS est celui du média : `audio/x-wav`
+                // devient `audio/wav`, un MP3 sans type devient `audio/mpeg`
+                // quand ses octets le confirment.
+                mimeType: admittedUploadMimeType({
+                  declared: normalizeContactCardMimeType(part.mimetype, part.filename),
+                  fileName: part.filename,
+                  head: buffer,
+                }),
+                size: buffer.length,
+              });
+              fileIndex++;
+            } else if (part.type === 'field' && part.fieldname === UPLOAD_DESTINATION_FIELD && refusedDestination === null) {
+              // #13820 — la destination se juge dès qu'elle arrive : une pièce vers une
+              // conversation chiffrée de bout en bout n'est jamais STOCKÉE — ses octets
+              // sont reçus, puis jetés.
+              const destination = await judgeUploadDestination(prisma, authContext, String(part.value ?? ''));
+              if (destination !== 'admitted') {
+                refusedDestination = destination;
+                files.length = 0;
+              }
+            } else if (refusedDestination !== null) {
+              continue;
+            } else if (part.type === 'field' && part.fieldname.startsWith('metadata_')) {
+              const index = parseInt(part.fieldname.replace('metadata_', ''), 10);
+              const metadataValue = await part.value;
+              try {
+                const metadata = JSON.parse(metadataValue as string);
+                logger.debug('Metadata received for file', { index, hasDuration: !!metadata.duration, duration: metadata.duration, fullMetadata: metadata });
+                metadataMap.set(index, metadata);
+              } catch (error) {
+                logger.warn('Impossible de parser les métadonnées', error as Error);
+              }
             }
           }
+        } catch (error) {
+          // #13820 — le fichier jeté d'une destination refusée a pu dépasser `fileSize` :
+          // le corps est lu jusqu'au bout, et c'est le refus qui répond, jamais un 500.
+          if (refusedDestination === null || !isFileSizeOverflow(error)) throw error;
+        }
+
+        if (refusedDestination === 'end-to-end') {
+          return sendBadRequest(reply, E2EE_PLAINTEXT_ATTACHMENT_REFUSAL_MESSAGE, { code: E2EE_PLAINTEXT_REFUSED });
+        }
+        if (refusedDestination === 'not-found') {
+          return refuserCommeIntrouvable(reply);
         }
 
         logger.debug('Files received', { count: files.length });
@@ -154,11 +259,15 @@ export async function registerUploadRoutes(
             select: {
               allowAnonymousFiles: true,
               allowAnonymousImages: true,
+              allowedAttachmentKinds: true,
+              conversation: { select: { identifier: true } },
             },
           });
 
           if (!shareLink) {
-            return sendForbidden(reply, 'Share link not found');
+            // #4856 — le lien recherché ici est celui de la SESSION anonyme
+            // de l'appelant, jamais celui d'un tiers : rien à cacher.
+            return sendNotFound(reply, 'Share link not found');
           }
 
           // Round 1 sécurité (task-1-fix-round-1) : la classification ne se
@@ -171,12 +280,46 @@ export async function registerUploadRoutes(
           // `classifyAnonymousAttachment` est la décision UNIQUE, partagée
           // avec `routes/uploads/tus-handler.ts`, pour que les deux chemins
           // d'upload ne puissent pas diverger (round 2, Critical 1).
+          //
+          // #10001 — quand le lien liste ses familles (ou que sa conversation
+          // les plafonne, World Wide), la décision lit le fichier ENTIER et son
+          // NOM, et rend un code stable que les clients localisent.
           for (const file of files) {
-            const verdict = classifyAnonymousAttachment(file.mimeType, file.buffer, shareLink);
+            const verdict = classifyAnonymousAttachment(file.mimeType, file.buffer, shareLink, { fileName: file.filename });
             if (verdict.allowed === false) {
-              return sendForbidden(reply, verdict.reason);
+              return sendGuestAttachmentRefusal(reply, verdict);
             }
           }
+        }
+
+        // #6604 — même famille que #6557 : un refus de DEMANDE (type non
+        // admis, taille excessive) ne doit ni disparaître en silence
+        // (`uploadMultiple` avale les erreurs PAR FICHIER pour rester
+        // résilient à un échec de traitement isolé — ce n'est pas le même
+        // contrat qu'un refus D'ADMISSION, qui doit être vu par l'appelant)
+        // ni dégénérer en 500 générique si une exception nue s'échappait
+        // ailleurs. Validé AVANT tout octet écrit, pour tous les fichiers du
+        // lot : un seul fichier refusé refuse l'ENSEMBLE de la requête,
+        // plutôt que de publier une réponse 200 partielle qui ne dit pas ce
+        // qui manque (#6603).
+        // #11266 — la limite de taille est celle du RÔLE de l'appelant.
+        const role = uploaderRole(isAnonymous);
+        for (const file of files) {
+          const validation = attachmentService.validateFile(file, role);
+          if (!validation.valid) {
+            if (validation.code === 'FILE_TOO_LARGE') {
+              return sendPayloadTooLarge(reply, validation.error);
+            }
+            return sendUnsupportedMediaType(reply, validation.error);
+          }
+        }
+
+        // #11266 — le quota du jour, avant tout octet écrit ; compté après succès.
+        const incomingBytes = files.reduce((total, file) => total + file.size, 0);
+        const quotaRefusal = dailyQuotaRefusal(await uploadQuota.check({ userId, role, incomingBytes }));
+        if (quotaRefusal) {
+          reply.header('Retry-After', String(quotaRefusal.retryAfterSeconds));
+          return sendError(reply, quotaRefusal.status, quotaRefusal.message, { code: quotaRefusal.code });
         }
 
         const results = await attachmentService.uploadMultiple(
@@ -186,6 +329,7 @@ export async function registerUploadRoutes(
           undefined,
           metadataMap.size > 0 ? metadataMap : undefined
         );
+        await uploadQuota.record({ userId, bytes: incomingBytes });
 
         return sendSuccess(reply, { attachments: results });
       } catch (error: any) {
@@ -252,6 +396,12 @@ export async function registerUploadRoutes(
             description: 'Forbidden - anonymous users without file upload permission',
             ...errorResponseSchema
           },
+          // #4856 — même verdict que sur `/attachments/upload` : le lien de
+          // partage recherché est celui de la session anonyme appelante.
+          404: {
+            description: 'The share link this anonymous session was authenticated with no longer exists',
+            ...errorResponseSchema
+          },
           500: {
             description: 'Internal server error',
             ...errorResponseSchema
@@ -301,15 +451,44 @@ export async function registerUploadRoutes(
         if (isAnonymous && authContext.participantId) {
           const shareLink = await prisma.conversationShareLink.findUnique({
             where: { id: authContext.anonymousUser?.shareLinkId },
-            select: { allowAnonymousFiles: true },
+            select: { allowAnonymousFiles: true, allowAnonymousImages: true, allowedAttachmentKinds: true, conversation: { select: { identifier: true } } },
           });
 
           if (!shareLink) {
-            return sendForbidden(reply, 'Share link not found');
+            // #4856 — comme sur `/attachments/upload` : c'est le lien de la
+            // session anonyme appelante, jamais celui d'un tiers.
+            return sendNotFound(reply, 'Share link not found');
           }
 
-          if (!shareLink.allowAnonymousFiles) {
+          // #10001 — un lien qui liste ses familles décide seul : le texte
+          // déposé ici est un `.txt`, et passe la même garde que s'il avait
+          // été téléversé (UTF-8, aucun caractère de contrôle).
+          if (guestAttachmentKindsOf(shareLink) !== null) {
+            const verdict = classifyAnonymousAttachment('text/plain', Buffer.from(content, 'utf-8'), shareLink, { fileName: 'text.txt' });
+            if (verdict.allowed === false) {
+              return sendGuestAttachmentRefusal(reply, verdict);
+            }
+          } else if (!shareLink.allowAnonymousFiles) {
             return sendForbidden(reply, 'File uploads are not allowed for anonymous users on this conversation');
+          }
+        }
+
+        // #9927 — un fichier rattaché à un message EXISTANT paraît dans sa
+        // conversation : dans Meeshy Global, un mineur déclaré ne l'y ajoute
+        // pas. Sans `messageId`, le fichier n'entre dans aucune conversation
+        // tant qu'un envoi ne l'y porte, et l'envoi a sa propre garde.
+        if (messageId && !isAnonymous) {
+          const target = await prisma.message.findFirst({
+            where: { id: messageId },
+            select: { conversation: { select: { type: true } } },
+          });
+          const minorInGlobal = await refusesMinorInConversationOfType(prisma, {
+            conversationType: target?.conversation?.type,
+            userId,
+            now: new Date(),
+          });
+          if (minorInGlobal) {
+            return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
           }
         }
 

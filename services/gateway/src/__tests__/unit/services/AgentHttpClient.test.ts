@@ -41,6 +41,8 @@ function makeSut() {
 beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
+  // #10242 — sans secret interne, aucun appel ne part (AgentHttpClient.internal-token.test.ts).
+  process.env.AGENT_INTERNAL_TOKEN = 'unit-test-internal-token-0123456789abcdef';
 });
 
 // ─── AgentUnavailableError ────────────────────────────────────────────────────

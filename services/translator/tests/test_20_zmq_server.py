@@ -396,7 +396,9 @@ class TestTranslationPoolManager:
         assert error_result['targetLanguage'] == "fr"
         assert error_result['error'] == "Test error"
         assert error_result['confidenceScore'] == 0.0
-        assert "[ERROR: Test error]" in error_result['translatedText']
+        # Un échec sert l'ORIGINAL au client, jamais un texte-témoin "[ERROR: …]"
+        # qui ressemblerait à une traduction valide (#3663).
+        assert error_result['translatedText'] == task.text
 
     def test_get_stats(self, mock_translation_service):
         """Test getting pool manager statistics"""
@@ -468,8 +470,10 @@ class TestTranslationPoolManager:
 
         assert result['messageId'] == "msg_456"
         assert result['modelType'] == "fallback"
-        assert result['confidenceScore'] == 0.1
-        assert "[FR]" in result['translatedText']
+        assert result['confidenceScore'] == 0.0
+        # Un échec sert l'ORIGINAL au client, jamais un texte-témoin "[FR] …"
+        # qui ressemblerait à une traduction valide (#3663).
+        assert result['translatedText'] == task.text
 
     @pytest.mark.asyncio
     async def test_translate_single_language_service_returns_none(self):

@@ -12,6 +12,8 @@ import org.junit.Test
  */
 class NotificationTypeCatalogTest {
 
+    private val shownTypes = NotificationType.entries - NotificationTypeCatalog.hiddenTypes
+
     // ---- toggle / isEnabled lenses ---------------------------------------
 
     @Test
@@ -52,7 +54,7 @@ class NotificationTypeCatalogTest {
             NotificationCategory.GROUPS,
             NotificationCategory.SYSTEM,
         ).inOrder()
-        assertThat(sections.flatMap { it.items }).hasSize(NotificationType.entries.size)
+        assertThat(sections.flatMap { it.items }).hasSize(shownTypes.size)
     }
 
     @Test
@@ -67,6 +69,97 @@ class NotificationTypeCatalogTest {
             NotificationType.REACTION,
             NotificationType.CONVERSATION,
         ).inOrder()
+    }
+
+    @Test
+    fun sections_callsCategoryPutsIncomingBeforeMissedAndHidesVoicemail() {
+        val calls = NotificationTypeCatalog.sections(UserNotificationPreferences())
+            .first { it.category == NotificationCategory.CALLS }
+            .items.map { it.type }
+
+        // iOS orders callsEnabled ahead of missedCallEnabled, et a retiré « Messages vocaux ».
+        assertThat(calls).containsExactly(
+            NotificationType.INCOMING_CALL,
+            NotificationType.MISSED_CALL,
+        ).inOrder()
+        assertThat(NotificationTypeCatalog.hiddenTypes).containsExactly(NotificationType.VOICEMAIL)
+    }
+
+    @Test
+    fun sections_socialCategoryEndsWithFriendContentThenGame() {
+        val social = NotificationTypeCatalog.sections(UserNotificationPreferences())
+            .first { it.category == NotificationCategory.SOCIAL }
+            .items.map { it.type }
+
+        // iOS : friendContentEnabled puis gameEnabled ferment la section « Fil social ».
+        assertThat(social.takeLast(2)).containsExactly(NotificationType.FRIEND_CONTENT, NotificationType.GAME).inOrder()
+    }
+
+    @Test
+    fun sections_contactActivityFollowsContactRequestInGroups() {
+        val groups = NotificationTypeCatalog.sections(UserNotificationPreferences())
+            .first { it.category == NotificationCategory.GROUPS }
+            .items.map { it.type }
+
+        assertThat(groups.take(2)).containsExactly(
+            NotificationType.CONTACT_REQUEST,
+            NotificationType.CONTACT_ACTIVITY,
+        ).inOrder()
+    }
+
+    @Test
+    fun sections_deviceBatteryFollowsContactActivityInGroups() {
+        val groups = NotificationTypeCatalog.sections(UserNotificationPreferences())
+            .first { it.category == NotificationCategory.GROUPS }
+            .items.map { it.type }
+
+        assertThat(groups.take(3)).containsExactly(
+            NotificationType.CONTACT_REQUEST,
+            NotificationType.CONTACT_ACTIVITY,
+            NotificationType.DEVICE_BATTERY,
+        ).inOrder()
+    }
+
+    @Test
+    fun toggle_deviceBatteryLensReadsAndWritesItsOwnField() {
+        val off = NotificationTypeCatalog.toggle(UserNotificationPreferences(), NotificationType.DEVICE_BATTERY, enabled = false)
+        assertThat(off.deviceBatteryEnabled).isFalse()
+        assertThat(off.contactActivityEnabled).isTrue()
+    }
+
+    @Test
+    fun toggle_gameAndContactActivityLensesReadAndWriteTheirOwnField() {
+        val off = NotificationTypeCatalog.toggle(UserNotificationPreferences(), NotificationType.GAME, enabled = false)
+        assertThat(off.gameEnabled).isFalse()
+        assertThat(off.contactActivityEnabled).isTrue()
+        val off2 = NotificationTypeCatalog.toggle(off, NotificationType.CONTACT_ACTIVITY, enabled = false)
+        assertThat(off2.contactActivityEnabled).isFalse()
+        assertThat(off2.gameEnabled).isFalse()
+    }
+
+    @Test
+    fun toggle_incomingCallLensReadsAndWritesCallsEnabled() {
+        val off = NotificationTypeCatalog.toggle(
+            UserNotificationPreferences(callsEnabled = true),
+            NotificationType.INCOMING_CALL,
+            enabled = false,
+        )
+        assertThat(off.callsEnabled).isFalse()
+        assertThat(NotificationTypeCatalog.isEnabled(off, NotificationType.INCOMING_CALL)).isFalse()
+        // The neighbouring missed-call toggle is untouched.
+        assertThat(off.missedCallEnabled).isTrue()
+    }
+
+    @Test
+    fun toggle_friendContentLensReadsAndWritesFriendContentEnabled() {
+        val off = NotificationTypeCatalog.toggle(
+            UserNotificationPreferences(friendContentEnabled = true),
+            NotificationType.FRIEND_CONTENT,
+            enabled = false,
+        )
+        assertThat(off.friendContentEnabled).isFalse()
+        assertThat(NotificationTypeCatalog.isEnabled(off, NotificationType.FRIEND_CONTENT)).isFalse()
+        assertThat(off.commentLikeEnabled).isEqualTo(UserNotificationPreferences().commentLikeEnabled)
     }
 
     // ---- sections: enabled-state derivation ------------------------------
@@ -86,13 +179,13 @@ class NotificationTypeCatalogTest {
     @Test
     fun sections_blankQueryKeepsEveryType() {
         val sections = NotificationTypeCatalog.sections(UserNotificationPreferences(), query = "")
-        assertThat(sections.flatMap { it.items }).hasSize(NotificationType.entries.size)
+        assertThat(sections.flatMap { it.items }).hasSize(shownTypes.size)
     }
 
     @Test
     fun sections_whitespaceOnlyQueryIsTreatedAsNoFilter() {
         val sections = NotificationTypeCatalog.sections(UserNotificationPreferences(), query = "   ")
-        assertThat(sections.flatMap { it.items }).hasSize(NotificationType.entries.size)
+        assertThat(sections.flatMap { it.items }).hasSize(shownTypes.size)
     }
 
     @Test

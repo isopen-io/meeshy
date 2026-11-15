@@ -1,9 +1,10 @@
+import Combine
 import UIKit
 import MeeshySDK
 import MeeshyUI
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.app", category: "background-transition")
+private let logger = MeeshyLog.logger(.backgroundTransition)
 
 /// Orchestrates the `.background` scene transition under a real
 /// `beginBackgroundTask` umbrella so every step gets a bounded OS budget
@@ -20,21 +21,42 @@ protocol BackgroundTransitioning: AnyObject {
 /// coordinator can cancel or degrade gracefully on OS expiration.
 @MainActor
 final class BackgroundTransitionCoordinator: BackgroundTransitioning {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = BackgroundTransitionCoordinator()
 
     private var activeTaskId: UIBackgroundTaskIdentifier = .invalid
-    private var isTransitioning = false
+    /// `enterBackground` court sur plusieurs attentes (cache, accusés de push par le réseau). Revenue au
+    /// premier plan avant sa fin, l'app ne doit perdre ni ses sockets ni sa base ; REPARTIE en arrière-plan
+    /// avant sa fin, elle doit les suspendre quand même — c'est le registre qui le dit, pas une génération.
+    private var ledger = BackgroundTransitionLedger()
 
     private init() {}
 
     // MARK: - Background entry
 
     func enterBackground() async {
-        guard !isTransitioning else { return }
-        isTransitioning = true
-        defer { isTransitioning = false }
+        // Une transition déjà en cours reprend à son compte ce nouveau départ : le registre la marque
+        // « en arrière-plan », et elle suspendra sockets et base à sa fin — tout sauf l'étape média.
+        guard ledger.enterBackground() == .start else {
+            await joinRunningTransition()
+            return
+        }
+        defer { ledger.finishTransition() }
+        var socketsSuspended = false
 
         let taskId = UIApplication.shared.beginBackgroundTask(withName: "meeshy.background.transition") { [weak self] in
+            // #7059 — L'OS ANNONCE LA SUSPENSION : c'est exactement l'instant du
+            // 0xDEAD10CC. La base se ferme aux verrous ICI, de façon SYNCHRONE
+            // et depuis le fil qui nous appelle — un `Task { }` ne garantit pas
+            // de s'exécuter avant que le processus ne soit gelé, et ce qui roule
+            // encore sur `DatabasePool.writer` tiendrait son verrou pendant le
+            // gel. `suspend()` ne fait que poster une notification : aucun
+            // besoin du main actor, aucune attente.
+            DatabaseSuspension.suspend()
             // OS is telling us time is up. End the task from the main actor so
             // we don't leave it dangling and trigger the 0x8BADF00D watchdog.
             Task { @MainActor [weak self] in
@@ -65,7 +87,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             await PushDeliveryReceiptService.shared.flushPending()
         }
         await withBudget("sockets.prepareForBackground") {
-            // CALL-FIX 2026-06-05 — NEVER tear down the realtime sockets while a
+            // CALL-FIX — NEVER tear down the realtime sockets while a
             // call is active. CallKit + UIBackgroundModes(voip/audio) keep the app
             // running in background during a call; suspending the socket here kills
             // the WebRTC signaling channel mid-call (gateway sees "client namespace
@@ -73,19 +95,21 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             // never completes and the call gets stuck on "connecting" + leaves a
             // phantom. Keep the socket alive; Socket.IO auto-reconnect still covers
             // a genuine transport drop.
-            if CallManager.shared.isCallActiveForAudioGuard {
+            if CallManagerHost.shared.isCallActiveForAudioGuard {
                 logger.info("Skipping socket suspend — call active (keep signaling channel)")
+            } else if !ledger.shouldSuspend {
+                logger.info("Skipping socket suspend — app resumed during the transition")
             } else {
                 MessageSocketManager.shared.prepareForBackground()
                 SocialSocketManager.shared.prepareForBackground()
+                socketsSuspended = true
             }
         }
         // BG tasks are only useful for authenticated users — scheduling them
         // for guests would burn quota and fail at execution time.
         if AuthManager.shared.authToken != nil {
             await withBudget("bgtasks.schedule") {
-                BackgroundTaskManager.shared.scheduleConversationSync()
-                BackgroundTaskManager.shared.scheduleMessagePrefetch()
+                BackgroundTaskManager.shared.scheduleBackgroundWork()
             }
         }
         await withBudget("notifications.syncNow") {
@@ -97,7 +121,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         // App Group partagé avec la NSE — un verrou encore tenu à la
         // suspension est le motif documenté du kill 0xdead10cc.
         await withBudget("db.maintenance") {
-            let pool = DependencyContainer.shared.dbPool
+            let pool = DependencyContainer.shared.database.pool
             do {
                 try DatabaseMaintenance.runIncrementalVacuum(on: pool)
                 try DatabaseMaintenance.runOptimize(on: pool)
@@ -106,49 +130,112 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             }
         }
 
+        // #7059 — DERNIER GESTE AVANT DE RENDRE LA GARDE, et l'ordre n'est pas
+        // négociable : suspendre plus tôt ferait échouer les steps ci-dessus en
+        // SQLITE_INTERRUPT, à commencer par `db.maintenance`. À partir d'ici,
+        // plus personne ne prend de verrou sur le fichier — c'est ce qui manquait
+        // aux cinq suppressions 0xDEAD10CC mesurées sur l'appareil du porteur,
+        // toutes venues d'écrivains que la garde de maintenance ne couvrait pas.
+        if ledger.shouldSuspend {
+            // Repartie en arrière-plan après une reprise survenue pendant la transition : les sockets
+            // n'avaient pas été coupés à leur step — ils le sont ici.
+            if !socketsSuspended && !CallManagerHost.shared.isCallActiveForAudioGuard {
+                MessageSocketManager.shared.prepareForBackground()
+                SocialSocketManager.shared.prepareForBackground()
+            }
+            DatabaseSuspension.suspend()
+        } else {
+            logger.info("Skipping database suspend — app resumed during the transition")
+        }
+
         endBackgroundTask()
+    }
+
+    /// Le second départ rejoint la transition en cours, sauf son étape MÉDIA : elle a tranché pour ce
+    /// qui jouait AVANT la reprise, et une vidéo relancée depuis continuerait de jouer en arrière-plan,
+    /// sans PiP ni pause (#11041). Elle se rejoue sous la garde `beginBackgroundTask` que la transition
+    /// en cours tient encore.
+    private func joinRunningTransition() async {
+        logger.info("Background re-entry joined the running transition — media step replayed")
+        await withBudget("audio.prepareForBackground.joined") {
+            await MediaLifecycleBridge.shared.prepareForBackground()
+        }
     }
 
     // MARK: - Foreground entry
 
+    /// La reprise de qui n'a PAS de compte ouvert : un invité entré par lien, ou l'écran de connexion.
+    ///
+    /// `enterBackground` suspend la base et coupe les sockets pour tout le monde ; la reprise complète, elle,
+    /// n'est appelée que sous un compte. Sans ce pendant, la base restait suspendue au retour — toute écriture
+    /// refusée jusqu'au cycle suivant — pour l'invité revenu à sa conversation comme pour la personne partie
+    /// lire son code de connexion dans une autre app. Le socket de l'invité, détruit lui aussi, n'était
+    /// jamais reconstruit : aucun chemin de reconnexion n'existe sans jeton de compte.
+    func resumeWithoutSession() {
+        logger.info("Foreground resume (no account session)")
+        ledger.resume()
+        DatabaseSuspension.resume()
+        guard !CallManagerHost.shared.isCallActiveForAudioGuard,
+              let guestSession = APIClient.shared.anonymousSessionToken, !guestSession.isEmpty else { return }
+        MessageSocketManager.shared.connectAnonymous(sessionToken: guestSession)
+    }
+
     func resumeFromBackground() async {
         logger.info("Foreground resume starting")
-        await withBudget("nse.consumePending") {
+        // Deux retours rapprochés lançaient deux reprises concurrentes (deux `forceReconnect`, deux
+        // vidages de l'outbox) ; un départ pendant la reprise la laissait reconstruire les sockets et
+        // écrire dans une base déjà suspendue. Chaque step vérifie désormais que SA reprise est la courante.
+        let epoch = ledger.resume()
+        // #7059 — PREMIER GESTE, avant tout ce qui écrit. Les consommateurs
+        // ci-dessous gravent en base dès la première ligne ; les laisser tourner
+        // sur une base encore suspendue échangerait le plantage contre une
+        // application muette au réveil, ce qui se diagnostique bien plus mal.
+        DatabaseSuspension.resume()
+        await resumeStep(epoch, "nse.consumePending") {
             await NSEPendingMessageConsumer.shared.consumeAll()
         }
-        await withBudget("nse.consumePendingPosts") {
+        await resumeStep(epoch, "nse.consumePendingPosts") {
             await NSEPendingPostConsumer.shared.consumeAll()
         }
         // Partages que l'extension n'a pas pu envoyer (hors-ligne, jeton
         // périmé) : ils rejoignent l'outbox, qui les rejouera. Republier
         // l'environnement au passage garde l'extension alignée si l'utilisateur
         // a changé de gateway pendant la session.
-        await withBudget("share.consumePendingSends") {
+        await resumeStep(epoch, "share.consumePendingSends") {
             WidgetDataManager.shared.publishAPIBaseURL()
             await SharePendingSendConsumer.shared.consumeAll()
+            // #5056 — même réveil, même raison : la fiche de composition
+            // déposée par l'extension arrive par le disque, pas par
+            // l'ouverture, qui n'est qu'un raccourci faillible.
+            await ShareComposeHandoffConsumer.shared.consumeNext()
+            ShareRelayConsumer.shared.consumeNext()
         }
-        await withBudget("sockets.resume") {
-            // CALL-FIX 2026-06-05 — if a call kept the sockets alive (see the
+        await resumeStep(epoch, "sockets.resume") {
+            // CALL-FIX — if a call kept the sockets alive (see the
             // enterBackground guard), do NOT force-reconnect on resume: that would
             // tear down and rebuild the very socket carrying the live call's
             // signaling. Only reconnect when no call is active.
-            if CallManager.shared.isCallActiveForAudioGuard {
+            if CallManagerHost.shared.isCallActiveForAudioGuard {
                 logger.info("Skipping socket resume reconnect — call active (socket kept alive)")
             } else {
                 MessageSocketManager.shared.resumeFromBackground()
                 SocialSocketManager.shared.resumeFromBackground()
             }
         }
-        await withBudget("audio.resume") {
+        await resumeStep(epoch, "audio.resume") {
             await MediaLifecycleBridge.shared.resumeFromBackground()
         }
-        await withBudget("sync.conversations") {
+        await resumeStep(epoch, "sync.conversations") {
             await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
         }
-        await withBudget("conversationStore.flushOutbox") {
+        await resumeStep(epoch, "media.autosavePushed") {
+            // #8358 — ce que les pushs ont synchronisé app suspendue rejoint l'album.
+            await PushedMediaAutoSaveQueue.shared.drain()
+        }
+        await resumeStep(epoch, "conversationStore.flushOutbox") {
             await ConversationStore.shared.flushOutbox()
         }
-        await withBudget("push.retryPending") {
+        await resumeStep(epoch, "push.retryPending") {
             await PushDeliveryReceiptService.shared.flushPending()
             // PendingStatusQueue is also flushed on socket reconnect via
             // ConversationSocketHandler.triggerSyncIfNeeded(), but that observer
@@ -156,7 +243,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             // case where the user returns to the foreground on the list screen.
             await PendingStatusQueue.shared.flush()
         }
-        await withBudget("outbox.recovery") {
+        await resumeStep(epoch, "outbox.recovery") {
             // Récupère les records orphelins laissés en `.inflight` si le
             // process a été tué pendant un dispatch. `bootRecovery()` ne
             // tournait qu'au cold start : un retour de background « warm »
@@ -172,11 +259,11 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
                 Logger.backgroundTransition.error("Boot recovery failed on background transition: \(error.localizedDescription, privacy: .public)")
             }
         }
-        await withBudget("outbox.flush") {
-            let pool = DependencyContainer.shared.dbPool
+        await resumeStep(epoch, "outbox.flush") {
+            let pool = DependencyContainer.shared.database.pool
             let flusher = OutboxFlusher(
                 pool: pool,
-                dispatcher: OutboxDispatcher(),
+                dispatcher: EndToEndOutboxGate(),
                 onOutcome: { @Sendable outcome in
                     Task { await OfflineQueue.shared.publishOutcome(outcome) }
                 },
@@ -188,7 +275,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             let nextRetry = await flusher.flush()
             OutboxRetryScheduler.shared.schedule(at: nextRetry)
         }
-        await withBudget("engagement.flush") {
+        await resumeStep(epoch, "engagement.flush") {
             // Engagement rows are durable (SQLite) and retried by
             // EngagementRetryScheduler + the network-reconnect observer, so this
             // flush is NON-critical. Bound it: a slow network (serial dispatch +
@@ -217,7 +304,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         await withTaskGroup(of: Bool.self) { group in
             group.addTask { await operation(); return true }
             group.addTask {
-                try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                _ = await cancellableSleep(for: .seconds(seconds))
                 return false
             }
             let finishedFirst = await group.next() ?? false
@@ -236,6 +323,15 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         logger.info("Background transition ended (task=\(taskId.rawValue, privacy: .public))")
     }
 
+    /// Un step de reprise ne s'exécute que si sa reprise est encore la courante.
+    private func resumeStep(_ epoch: UInt64, _ step: String, _ work: () async -> Void) async {
+        guard ledger.isCurrentResume(epoch) else {
+            logger.info("Step \(step, privacy: .public) skipped — resume superseded or app backgrounded")
+            return
+        }
+        await withBudget(step, work)
+    }
+
     private func withBudget(_ step: String, _ work: () async -> Void) async {
         let start = Date()
         await work()
@@ -246,40 +342,129 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
     }
 }
 
+/// Registre pur de la transition d'arrière-plan : une seule transition court à la fois, et c'est l'état
+/// VOULU de l'app à sa fin — en arrière-plan ou revenue — qui décide de suspendre sockets et base.
+///
+/// Arrière-plan → premier plan → arrière-plan pendant que la première transition attend encore le
+/// réseau : le second départ rejoint la transition en cours (`.joined`), qui suspend à sa fin. Avant ce
+/// registre, il était avalé par une garde de ré-entrée, et la transition en cours, ayant vu la reprise,
+/// sautait la suspension : l'app était gelée la base ouverte (0xDEAD10CC, #7059).
+nonisolated struct BackgroundTransitionLedger: Equatable {
+    enum Entry: Equatable { case start, joined }
+
+    private(set) var isTransitioning = false
+    private(set) var isBackgrounded = false
+    /// Avance à chaque reprise ET à chaque départ : une reprise dont l'époque n'est plus la courante
+    /// (une reprise plus récente l'a doublée, ou l'app est repartie en arrière-plan) s'arrête.
+    private(set) var resumeEpoch: UInt64 = 0
+
+    mutating func enterBackground() -> Entry {
+        isBackgrounded = true
+        resumeEpoch &+= 1
+        guard !isTransitioning else { return .joined }
+        isTransitioning = true
+        return .start
+    }
+
+    mutating func finishTransition() { isTransitioning = false }
+
+    @discardableResult
+    mutating func resume() -> UInt64 {
+        isBackgrounded = false
+        resumeEpoch &+= 1
+        return resumeEpoch
+    }
+
+    /// La reprise d'époque `epoch` peut-elle encore agir ?
+    func isCurrentResume(_ epoch: UInt64) -> Bool { !isBackgrounded && epoch == resumeEpoch }
+
+    var shouldSuspend: Bool { isBackgrounded }
+}
+
 /// Thin bridge that lets the coordinator (app layer) reach into the SDK
 /// without leaking the coordinator type into MeeshySDK. The bridge just
 /// delegates to the managers owned by the app; the SDK hosts the pure
 /// orchestration primitives, the app wires them together.
 @MainActor
 final class MediaLifecycleBridge {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = MediaLifecycleBridge()
     private init() {}
 
+    /// Filet de l'attente du PiP automatique (#11041). AVKit annonce la
+    /// fenêtre par `willStart` d'ordinaire AVANT que la scène ne passe en
+    /// `.background` : l'attente rend la main au premier signal (démarrage,
+    /// ouverture ou échec) et ne dure que si aucun ne vient. Elle remplace
+    /// les 0,4 s qui guettaient `isPictureInPictureActive`, levé seulement
+    /// à la FIN de l'animation — la pause tombait au milieu et avortait la
+    /// fenêtre. Une seconde de son au plus quand aucune fenêtre ne s'ouvre.
+    static let pipHandOffWindow: TimeInterval = 1.0
+
+    private var isPreparingForBackground = false
+    private var pipFailureSubscription: AnyCancellable?
+
     func prepareForBackground() async {
+        observePipStartFailures()
+        isPreparingForBackground = true
+        defer { isPreparingForBackground = false }
         let video = SharedAVPlayerManager.shared
-        // L'auto-PiP système démarre PENDANT la transition — ce garde court
-        // contre son animation. Quand une surface a opté pour le PiP
-        // (`isPipConfigured`, jamais vrai sur simulateur), on lui laisse une
-        // fenêtre bornée pour s'engager avant de trancher, sinon un `pause()`
-        // prématuré avorterait la fenêtre que le système ouvrait.
-        var pipEngaged = video.isPipEngaged
-        if video.isPlaying, !pipEngaged, video.isPipConfigured {
-            pipEngaged = await video.waitForPipEngagement(timeout: 0.4)
+        // L'auto-PiP système démarre PENDANT la transition. Quand une surface
+        // a opté pour le PiP (`isPipConfigured`, jamais vrai sur simulateur)
+        // et que la fenêtre ne s'est pas encore déclarée, on lui laisse une
+        // fenêtre bornée avant de trancher.
+        if video.isPlaying, video.isPipConfigured, !video.isPipStartingOrEngaged {
+            _ = await video.waitForPipHandOff(timeout: Self.pipHandOffWindow)
         }
+        await applyBackgroundDecision(pipFailed: video.hasPipFailedToStart)
+    }
+
+    func resumeFromBackground() async {
+        // No-op for now — players re-activate their session on next play().
+        // Kept as an extension point if we later want to resume downloads.
+    }
+
+    /// Repli : la fenêtre PiP échoue à s'ouvrir alors que l'app est déjà en
+    /// arrière-plan — la vidéo n'a plus de lieu, elle s'arrête et la session
+    /// se rend (la musique coupée par Meeshy reprend).
+    private func observePipStartFailures() {
+        guard pipFailureSubscription == nil else { return }
+        pipFailureSubscription = SharedAVPlayerManager.shared.pipStartFailures
+            .receive(on: DispatchQueue.main)
+            .sink { _ in
+                Task { @MainActor in await MediaLifecycleBridge.shared.handlePipStartFailure() }
+            }
+    }
+
+    private func handlePipStartFailure() async {
+        guard !isPreparingForBackground,
+              UIApplication.shared.applicationState == .background else { return }
+        await applyBackgroundDecision(pipFailed: true)
+    }
+
+    private func applyBackgroundDecision(pipFailed: Bool) async {
+        let video = SharedAVPlayerManager.shared
+        let videoVerdict = MediaBackgroundPolicy.backgroundVideo(
+            videoPlaying: video.isPlaying,
+            pipConfigured: video.isPipConfigured,
+            pipStartingOrEngaged: video.isPipStartingOrEngaged,
+            pipFailed: pipFailed
+        )
         let decision = MediaBackgroundPolicy.decide(
             audioQueuePlaying: ConversationAudioCoordinator.sharedForTesting.isPlaying,
             audioQueueActive: ConversationAudioCoordinator.sharedForTesting.activeContext != nil,
             anyAudioEnginePlaying: PlaybackCoordinator.shared.isAnyAudioPlaying,
-            videoPlaying: video.isPlaying,
-            pipEngaged: pipEngaged
+            video: videoVerdict
         )
-        // Une vidéo (réel) hors PiP ne survit jamais à l'arrière-plan : le
-        // mode background "audio" couvre les messages vocaux et posts audio,
-        // pas la bande-son d'un réel. `pause()` (pas `stop()`) : ne touche pas
-        // à la session AVAudioSession qu'une file audio en pause peut encore
-        // tenir, et le retour en avant-plan retrouve la frame figée. Si
-        // l'auto-PiP a engagé la fenêtre pendant la transition, la vidéo lui
-        // appartient et continue.
+        Logger.pip.info("background decision — playing=\(video.isPlaying, privacy: .public) configured=\(video.isPipConfigured, privacy: .public) possible=\(video.isPipPossible, privacy: .public) startingOrEngaged=\(video.isPipStartingOrEngaged, privacy: .public) failed=\(pipFailed, privacy: .public) → video=\(String(describing: videoVerdict), privacy: .public) keepsSession=\(decision.keepsSessionAlive, privacy: .public)")
+        // `.handOffToPip` : la vidéo appartient à la fenêtre — ni pause, ni
+        // `stopAll()` (qui démonterait le PiP), et la session reste active.
+        // `.pause` : `pause()` (pas `stop()`) ne touche pas à la session
+        // qu'une file audio en pause peut encore tenir, et le retour au
+        // premier plan retrouve la frame figée.
         if decision.pausesVideo {
             video.pause()
         }
@@ -302,15 +487,10 @@ final class MediaLifecycleBridge {
         // which is why its probe increment above stays external.
         await MediaSessionCoordinator.shared.deactivateForBackground()
     }
-
-    func resumeFromBackground() async {
-        // No-op for now — players re-activate their session on next play().
-        // Kept as an extension point if we later want to resume downloads.
-    }
 }
 
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let backgroundTransition = Logger(subsystem: "me.meeshy.app", category: "background-transition")
+    nonisolated static let backgroundTransition = MeeshyLog.logger(.backgroundTransition)
 }

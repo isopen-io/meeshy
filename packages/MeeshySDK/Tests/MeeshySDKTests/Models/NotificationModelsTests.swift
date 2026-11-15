@@ -195,6 +195,29 @@ final class NotificationModelsTests: XCTestCase {
         XCTAssertEqual(notification.notificationType, .system)
     }
 
+    /// #6508 P3 — la passerelle émet `report_resolved` (art. 16 DSA : le
+    /// déclarant apprend l'issue de son signalement). Absent du catalogue, il
+    /// décodait en `.system` : titre « Notification systeme », destination
+    /// par repli. Il porte désormais son type, donc sa destination explicite.
+    func test_reportResolved_decodeEnSonPropreType_avecLeTitreServi() throws {
+        let json = """
+        {
+            "id": "notif-report",
+            "userId": "user1",
+            "type": "report_resolved",
+            "title": "Votre signalement a été traité",
+            "content": "Merci : nous avons pris des mesures.",
+            "state": {"isRead":false,"createdAt":"2026-09-14T10:30:00.000Z"}
+        }
+        """.data(using: .utf8)!
+
+        let notification = try JSONDecoder().decode(APINotification.self, from: json)
+
+        XCTAssertEqual(notification.notificationType, .reportResolved)
+        XCTAssertEqual(notification.formattedTitle, "Votre signalement a été traité")
+        XCTAssertEqual(notification.formattedBody, "Merci : nous avons pris des mesures.")
+    }
+
     // MARK: - RegisterDeviceTokenRequest
 
     func testRegisterDeviceTokenRequestEncoding() throws {
@@ -353,6 +376,28 @@ final class NotificationModelsTests: XCTestCase {
         XCTAssertNotNil(notification.formattedBody)
         XCTAssertTrue(notification.formattedBody?.contains("Paris, France") ?? false)
         XCTAssertTrue(notification.formattedBody?.contains("82.123.45.67") ?? false)
+    }
+
+    /// #9049 — une réaction de message se lit « meeshy sama » / « a réagi ❤️ à
+    /// votre message : « J'attends! » » : l'acteur en titre, la phrase servie
+    /// en corps, l'émoji UNE fois.
+    func test_messageReaction_titleIsTheActor_bodyIsTheServedSentence() throws {
+        let json = """
+        {
+            "id": "notif-reaction",
+            "userId": "user1",
+            "type": "message_reaction",
+            "content": "a réagi ❤️ à votre message : « J'attends! »",
+            "actor": { "id": "a1", "username": "meeshysama", "displayName": "meeshy sama" },
+            "metadata": { "reactionEmoji": "❤️" },
+            "state": {"isRead":false,"createdAt":"2026-10-01T14:18:00.000Z"}
+        }
+        """.data(using: .utf8)!
+
+        let notification = try JSONDecoder().decode(APINotification.self, from: json)
+
+        XCTAssertEqual(notification.formattedTitle, "meeshy sama")
+        XCTAssertEqual(notification.formattedBody, "a réagi ❤️ à votre message : « J'attends! »")
     }
 
     func testLoginNewDeviceNotificationFallbackTitle() throws {

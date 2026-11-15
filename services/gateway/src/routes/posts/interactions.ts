@@ -7,40 +7,44 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { MediaService } from '../../services/MediaService';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
-import { LikeSchema, UnlikeSchema, RepostSchema, PostParams, EngagementBatchSchema, RecordDownloadsSchema } from './types';
+import { LikeSchema, UnlikeSchema, RepostSchema, PostParams, EngagementBatchSchema, RecordDownloadsSchema, postIdParamsSchema } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { safeBroadcast } from '../../socketio/serverEmit';
 import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest, sendConflict, sendGone } from '../../utils/response';
 import { ConflictError } from '../../errors/custom-errors';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
+import {
+  createSocialWriteRateLimitConfig,
+  createSharedWriteRateLimitPreHandler,
+  hardenedRateLimitConfig,
+} from './socialRateLimit';
 import { resolveInteractionTarget } from '../../services/posts/postVisibility';
+import { mayRepostSource } from '../../services/posts/moderationHold';
+import { DailyGestureLimitReached } from '../../services/engagement/DailyGestureGate';
+import { refuseDailyGesture } from '../../utils/daily-gesture-refusal';
 import { withMutationLog, withMutationOutcome } from '../../utils/withMutationLog';
 import { MutationInFlight } from '../../services/MutationLogService';
-import { resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
 import { validatePagination } from '../../utils/pagination';
-import { NOT_DELETED } from '../../services/posts/postIncludes';
 import { withMentions } from '../../services/posts/postReferences';
+import { withAudienceListFor } from '../../services/posts/audienceList';
+import { servePublishedPost, hoistLocation } from './publication';
 import { WIRE_BROADCAST, wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
-
-/**
- * Surfaces qui peuvent produire une impression. Déclaré UNE fois et partagé par
- * la route unitaire et la route batch : les deux enums avaient divergé du client
- * — iOS envoie `story` à chaque slide de story révélé
- * (`StoryViewModel.recordStoryImpression`), valeur absente des deux listes, donc
- * 400 systématique et `impressionCount` figé à 0 sur toutes les stories malgré
- * des vues réelles. Toute nouvelle surface cliente s'ajoute ICI, pas dans un
- * seul des deux schémas.
- */
-const IMPRESSION_SOURCES = [
-  'feed',
-  'profile',
-  'search',
-  'shared_link',
-  'notification',
-  'detail',
-  'story',
-  'status',
-] as const;
+import { registerBookmarkRoutes } from './bookmarks';
+import { registerImpressionRoutes } from './impressions';
+import { depreciee } from '../../utils/deprecation';
+import { socialEventsDeprecation } from '../social/deprecation';
+import { admitAnonymousReader, resolveAnonymousReader } from '../social/anonymousReader';
+import {
+  ingestSocialEvents,
+  refuseAnonymousBudget,
+  socialEventsRateLimit,
+  VIEW_ALIAS_SCHEMA,
+  type SocialEventsActor,
+  type SocialEventsDeps,
+} from '../social/events';
+import { registerShareRoutes } from './share';
+import { viewerListRequest, viewerListRefused } from './viewerListRequest';
+import { viewerListCounts } from '../../services/posts/viewerEngagement';
+import { noteRepostInteraction, notifyRepostedAuthor, readRepostedSource } from './repostedAuthorNotification';
 
 export function registerInteractionRoutes(
   fastify: FastifyInstance,
@@ -54,10 +58,43 @@ export function registerInteractionRoutes(
   // is readable.
   const postService = new PostService(prisma, new MediaService(), orphanCleanup);
 
+  // Trois familles ont quitté ce fichier (issue #4146), par RESPONSABILITÉ et
+  // non par tranche : le favori, l'impression et le partage. Elles partagent
+  // désormais la même porte d'audience (`postConsumptionGate`) et n'avaient
+  // plus rien à faire au milieu des réactions, des vues et du repost. Le
+  // fichier pesait 1165 lignes, au-dessus du budget 800-1100 : on n'ajoute pas
+  // à un fichier hors budget, on extrait d'abord.
+  //
+  // Elles restent montées ICI, sur la même instance et le même `postService`,
+  // pour qu'aucun chemin, aucun ordre d'enregistrement et aucun appelant ne
+  // bouge : `registerInteractionRoutes` demeure le point d'entrée unique du
+  // module, celui qu'`index.ts` et les suites de tests connaissent.
+  registerBookmarkRoutes(fastify, prisma, requiredAuth, postService);
+  registerImpressionRoutes(fastify, prisma, requiredAuth, postService);
+  registerShareRoutes(fastify, prisma, requiredAuth, postService);
+
+  // #4147 critère 2 — seau PARTAGÉ avec POST /posts et
+  // POST /posts/from-attachment (core.ts, sa PROPRE instance de ce même
+  // preHandler ; le partage vient de la clé Redis, pas de l'identité de la
+  // fermeture — cf. socialRateLimit.ts, en-tête). Posé sur repost ci-dessous.
+  const sharedWriteRateLimit = createSharedWriteRateLimitPreHandler();
+
   // POST /posts/:postId/like
+  //
+  // `hardenedRateLimitConfig` recale ce seau (hook `preHandler` + `skipOnError:
+  // false`, cf. socialRateLimit.ts) — sans quoi la clé se calculait à
+  // `onRequest`, avant `authContext`, donc par IP plutôt que par compte
+  // (#4147 critère 6). #4147 critère 4 demande « le même seau que POST » pour
+  // DELETE ci-dessous ; `config.rateLimit` ne peut PAS faire converger deux
+  // ROUTES vers un compteur unique (cf. socialRateLimit.ts, en-tête : chaque
+  // route reçoit son propre "child store", namespacé par sa méthode+URL) —
+  // DELETE reçoit donc le MÊME plafond (30/min, même fabrique, même clé par
+  // COMPTE), posé INDÉPENDAMMENT, ce que le critère autorise explicitement
+  // (« au minimum le 30/min actuel du POST tant que la route cible
+  // n'existe pas »).
   fastify.post('/posts/:postId/like', {
     preValidation: [requiredAuth],
-    config: { rateLimit: createPostRouteRateLimitConfig('like') },
+    config: { rateLimit: hardenedRateLimitConfig(createPostRouteRateLimitConfig('like')) },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -87,16 +124,30 @@ export function registerInteractionRoutes(
       // idempotent at the storage layer (the reaction set keeps a
       // single entry per (userId, postId)), d'où `replayCost: 'converges'`.
       //
-      // ATTENTION — ce commentaire promettait « so replays don't double-fire
-      // notifications ». C'est FAUX et ça l'a toujours été : la diffusion et
-      // `createPostLikeNotification` vivent APRÈS le journal, sans condition,
-      // donc un rejeu les refait. Le verrou ne garde que ce qu'il ENVELOPPE.
-      // Le remède existe depuis 2026-08-25 — `withMutationOutcome`, dont le
-      // verdict `replayed` retient les effets de bord, appliqué juste en
-      // dessous sur le repost — mais il n'a PAS été porté ici : la route like
-      // est hors du fil rouge du repost et sa suite de tests mocke le helper.
-      // Dette nommée, pas invariant tenu.
-      const post = await withMutationLog({
+      // `withMutationOutcome` (et non `withMutationLog`) parce que le like ne
+      // voyage pas SEUL : une diffusion et une notification partent juste en
+      // dessous. Un verrou qui ne garde que l'ÉCRITURE laisse partir l'annonce
+      // en double à chaque rejeu — deux bannières pour un like unique
+      // (`createNotification` fait un `prisma.notification.create` sec, sans
+      // clé d'idempotence) et un second `post:liked` à toute l'audience. Le
+      // verdict les garde.
+      //
+      // Cette dette a été NOMMÉE ici pendant un temps et tenue par personne :
+      // le commentaire d'origine promettait « so replays don't double-fire
+      // notifications », ce qui était faux. #6293 la solde en portant le patron
+      // que le repost applique deux cents lignes plus bas, et la forme que la
+      // route DELETE jumelle appliquait DÉJÀ (`&& removedEmoji`, « rien retiré
+      // ⇒ rien annoncé ») : le défaut était confiné au POST.
+      //
+      // Le témoin est `__tests__/unit/routes/posts/likeIdempotency.test.ts`, et
+      // il ne mocke PAS `withMutationLog` — un `jest.mock` du helper (ce que
+      // fait `interactions.harness.ts`) rend la suite verte que la route garde
+      // ses effets ou non. C'est ce mock qui a laissé la dette vivre.
+      // Pas d'annotation de type : `T` s'INFÈRE depuis `op`, qui rend le
+      // résultat de `withMentions` (`Omit<…, 'mentions'|'postMentions'> & …`) et
+      // non celui de `likePost`. L'écrire à la main ici invitait à nommer le
+      // mauvais des deux — c'est ce que la première version de ce lot a fait.
+      const outcome = await withMutationOutcome({
         request,
         fastify,
         userId: authContext.registeredUser.id,
@@ -104,7 +155,9 @@ export function registerInteractionRoutes(
         // `converges` — voir `ReplayCost` : rejouer cette op rend le même état.
         replayCost: 'converges',
         op: async () => {
-          const res = await postService.likePost(targetPostId, authContext.registeredUser.id, emoji);
+          // #9584 — venu d'une republication simple, le like la crédite AUSSI,
+          // pour de vrai : la résolution ci-dessus l'a traversée et la rend.
+          const res = await postService.likePost(targetPostId, authContext.registeredUser.id, emoji, { through: target.redirectedFrom });
           if (!res) throw new Error('POST_NOT_FOUND');
           // Les deux branches rendent la MÊME forme de post : `likePost` porte
           // la relation brute `postMentions`, `getPostById` sa forme aplatie et
@@ -120,9 +173,16 @@ export function registerInteractionRoutes(
         if (err instanceof Error && err.message === 'POST_NOT_FOUND') return null;
         throw err;
       });
-      if (!post) {
+      if (!outcome) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
+      if (outcome.status === 'gone') {
+        return sendGone(reply, 'Like already applied, its result is gone', { code: 'MUTATION_RESULT_GONE' });
+      }
+      const post = outcome.result;
+      // Un rejeu resert le post ; il ne REFAIT rien. Ce booléen gouverne les
+      // deux effets qui voyagent AVEC le like, et eux seuls.
+      const isFreshLike = outcome.status === 'applied';
 
       // Broadcast like via Socket.IO — porte l'id de la CIBLE réelle
       // (`targetPostId`, l'original pour un repost simple) : les clients
@@ -132,7 +192,7 @@ export function registerInteractionRoutes(
       // - STATUS → status:reacted to author + post room (same privacy model as STORY)
       // - POST/MOOD → post:liked fan-out to all friends
       const socialEvents = fastify.socialEvents;
-      if (socialEvents && post.authorId) {
+      if (socialEvents && post.authorId && isFreshLike) {
         // `likeCount` + `reactionSummary` : l'état ABSOLU après le geste, la
         // même paire que `post:liked` porte depuis toujours. Les jumeaux
         // story/status ne portaient qu'un emoji et un acteur, ce qui n'autorise
@@ -173,14 +233,13 @@ export function registerInteractionRoutes(
 
       // Create notification for post author
       const notifService = fastify.notificationService;
-      if (notifService && post.authorId) {
+      if (notifService && post.authorId && isFreshLike) {
         notifService.createPostLikeNotification({
           actorId: authContext.registeredUser.id,
           postId: targetPostId,
           postAuthorId: post.authorId,
           emoji,
           postType: post.type,
-          postPreview: (post as { content?: string | null }).content?.slice(0, 80) ?? undefined,
           postCreatedAt: (post as { createdAt?: Date | string | null }).createdAt ?? undefined,
           postExpiresAt: (post as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
         }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/like]: notify post like failed', { err }));
@@ -194,14 +253,31 @@ export function registerInteractionRoutes(
       if (error instanceof ConflictError) {
         return sendConflict(reply, error.message, { code: error.code });
       }
+      if (error instanceof DailyGestureLimitReached) {
+        return refuseDailyGesture(reply, error);
+      }
       enhancedLogger.error('[POST /posts/:postId/like]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
   // DELETE /posts/:postId/like
+  //
+  // #4147 critère 4 — avant ce lot, aucun plafond : le retrait était libre
+  // pendant que la pose (POST ci-dessus) était bornée à 30/min, une
+  // asymétrie qu'un compte peut exploiter pour marteler la ligne
+  // `PostReaction`/les compteurs sans jamais être freiné. Même plafond que
+  // POST, posé de façon identique
+  // (`hardenedRateLimitConfig(createPostRouteRateLimitConfig('like'))` —
+  // même fabrique, même clé PAR COMPTE, même échec fail-closed) : les deux
+  // sens du geste sont désormais bornés au même rythme, chacun sur son
+  // propre budget de 30/min (`config.rateLimit` ne peut pas les fusionner en
+  // un seul compteur inter-routes — cf. socialRateLimit.ts, en-tête ; le
+  // critère l'autorise explicitement : « au minimum le 30/min actuel du
+  // POST »).
   fastify.delete('/posts/:postId/like', {
     preValidation: [requiredAuth],
+    config: { rateLimit: hardenedRateLimitConfig(createPostRouteRateLimitConfig('like')) },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -319,116 +395,61 @@ export function registerInteractionRoutes(
     }
   });
 
-  // POST /posts/:postId/bookmark
-  fastify.post('/posts/:postId/bookmark', {
-    preValidation: [requiredAuth],
-  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (!authContext?.registeredUser) {
-        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
-      }
+  // ─── Quatre adresses en sursis vers `POST /social/events` (#4150) ─────────
+  //
+  // Quatre des six portes qui disaient « ce contenu a été vu » vivent ici ; les
+  // deux autres — l'impression, unitaire et en lot — sont montées par
+  // `registerImpressionRoutes` ci-dessus. Toutes DÉLÈGUENT désormais à
+  // `ingestSocialEvents` : elles traduisent leur corps historique en événements
+  // typés, servent leur forme de réponse historique, et n'implémentent AUCUNE
+  // règle en propre. L'audience filtrée dans la requête, la fermeture de
+  // l'oracle d'existence, la borne de `durationMs` et les deux effets de bord
+  // de la vue vivent en UN exemplaire, dans `routes/social/events.ts`.
+  //
+  // Elles restent MONTÉES — le critère 10 interdit de retirer une seule des six
+  // tant que le client Kotlin n'a pas été inventorié — et annoncent leur sursis
+  // par les trois en-têtes du site unique (`utils/deprecation.ts`).
+  const socialEventDeps: SocialEventsDeps = { fastify, prisma, postService };
 
-      const { postId } = request.params;
-      const result = await postService.bookmarkPost(postId, authContext.registeredUser.id);
-      // Sync temps réel (perso) : le feed et le reel viewer réhydratent
-      // `isBookmarkedByMe` + le `bookmarkCount` absolu → le favori et son
-      // compteur survivent à la fermeture/réouverture, sans reload.
-      // Le favori est ÉCRIT : plus rien de ce qui suit n'a le droit de faire
-      // échouer la requête. Sans cette porte, une panne d'émission rendait 500
-      // sur une opération réussie, et le client effaçait de l'écran un favori
-      // bien présent en base.
-      safeBroadcast('post:bookmarked', () => {
-        fastify.socialEvents?.broadcastPostBookmarked(
-          { postId, bookmarked: true, bookmarkCount: result?.bookmarkCount ?? 0 },
-          authContext.registeredUser.id,
-        );
-      });
-      return sendSuccess(reply, { bookmarked: true, bookmarkCount: result?.bookmarkCount ?? 0 });
-    } catch (error) {
-      enhancedLogger.error('[POST /posts/:postId/bookmark]', error);
-      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
-    }
-  });
+  const acteurInscrit = (request: FastifyRequest): SocialEventsActor | null => {
+    const registeredUser = (request as UnifiedAuthRequest).authContext?.registeredUser;
+    return registeredUser
+      ? { kind: 'user', userId: registeredUser.id, username: registeredUser.username ?? '' }
+      : null;
+  };
 
-  // DELETE /posts/:postId/bookmark
-  fastify.delete('/posts/:postId/bookmark', {
-    preValidation: [requiredAuth],
-  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (!authContext?.registeredUser) {
-        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
-      }
-
-      const { postId } = request.params;
-      const result = await postService.unbookmarkPost(postId, authContext.registeredUser.id);
-      safeBroadcast('post:unbookmarked', () => {
-        fastify.socialEvents?.broadcastPostBookmarked(
-          { postId, bookmarked: false, bookmarkCount: result?.bookmarkCount ?? 0 },
-          authContext.registeredUser.id,
-        );
-      });
-      return sendSuccess(reply, { bookmarked: false, bookmarkCount: result?.bookmarkCount ?? 0 });
-    } catch (error) {
-      enhancedLogger.error('[DELETE /posts/:postId/bookmark]', error);
-      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
-    }
-  });
-
-  // POST /posts/:postId/view
+  // ALIAS de `POST /social/events` — POST /posts/:postId/view
+  //
+  // Le corps est DÉCLARÉ et `duration` borné à la FRONTIÈRE. Il était lu en
+  // `(request.body as any) ?? {}` : aucun schéma, aucune borne, et le seul `any`
+  // de ce module. La valeur était bien assainie en aval (`recordView` la ramène
+  // dans [0, 300 000] ms), mais une borne posée chez l'appelé n'est pas une
+  // borne — elle vaut pour CET appelé, et le jour où un second consommateur lit
+  // le champ, il hérite d'un entier libre.
+  //
+  // `duration` (millisecondes, nom historique) se traduit ici en `durationMs`,
+  // le nom que porte le point d'ingestion : un nom qui dit son unité.
   fastify.post('/posts/:postId/view', {
+    schema: VIEW_ALIAS_SCHEMA,
+    onRequest: depreciee(socialEventsDeprecation()),
     preValidation: [requiredAuth],
     config: { rateLimit: createPostRouteRateLimitConfig('view') },
-  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Params: PostParams; Body?: { duration?: number } }>, reply: FastifyReply) => {
     try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (!authContext?.registeredUser) {
+      const acteur = acteurInscrit(request);
+      if (!acteur) {
         return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
-      const { postId } = request.params;
-      const { duration } = (request.body as any) ?? {};
-      const viewerId = authContext.registeredUser.id;
-      const isNewView = await postService.recordView(postId, viewerId, duration);
+      await ingestSocialEvents(
+        socialEventDeps,
+        [{ type: 'view', postId: request.params.postId, durationMs: request.body?.duration }],
+        acteur,
+      );
 
-      // Contenu consommé (première vue réelle) → les notifications liées à ce
-      // post (X a publié une story / un statut / un post, réactions, commentaires)
-      // ne doivent plus apparaître comme non lues. Borné à la première vue pour
-      // éviter de rejouer la requête à chaque impression répétée du feed.
-      // Fire-and-forget : ne bloque pas la réponse, émet `notification:counts`.
-      if (isNewView) {
-        fastify.notificationService.markPostNotificationsAsRead(viewerId, postId).catch((err) => enhancedLogger.warn('[POST /posts/:postId/view]: mark post notifications as read failed', { err }));
-      }
-
-      // If this is a story, broadcast the view to the story author
-      const socialEvents = fastify.socialEvents;
-      if (socialEvents) {
-        // Fetch post to check type and get author + viewCount. Passe le viewer :
-        // sans lui, `getPostById` applique le filtre PUBLIC-seul et retourne
-        // `null` pour une story FRIENDS (le cas courant) → `broadcastStoryViewed`
-        // ne partait jamais alors que `recordView` (même filtre viewer) avait
-        // bien enregistré la vue. Le viewer d'audience vient de passer ce même
-        // filtre dans `recordView`, donc la story est retrouvée ici aussi.
-        //
-        // Un lecteur admis par sa seule RÉFÉRENCE (2026-08-19) l'est aussi :
-        // `getPostById` relit sans filtre quand l'audience ne rend rien, et la
-        // référence tranche — l'auteur reçoit donc son événement temps réel pour
-        // une vue que `recordView` vient d'enregistrer. Ces deux-là ne peuvent
-        // plus diverger.
-        const post = await postService.getPostById(postId, viewerId);
-        if (post && post.type === 'STORY' && post.authorId !== authContext.registeredUser.id) {
-          safeBroadcast('story:viewed', () => {
-            socialEvents.broadcastStoryViewed({
-              storyId: postId,
-              viewerId: authContext.registeredUser.id,
-              viewerUsername: authContext.registeredUser.username ?? '',
-              viewCount: post.viewCount,
-            }, post.authorId);
-          });
-        }
-      }
-
+      // `viewed: true` quel que soit le verdict — c'est la forme historique, et
+      // c'est aussi la seule qui ne fasse pas de cette route un oracle : un post
+      // hors audience et un post inexistant y répondaient déjà pareil.
       return sendSuccess(reply, { viewed: true });
     } catch (error) {
       enhancedLogger.error('[POST /posts/:postId/view]', error);
@@ -436,216 +457,60 @@ export function registerInteractionRoutes(
     }
   });
 
-  // POST /posts/:postId/anonymous-view — compte une ouverture ANONYME (sans compte).
-  // v1 "comptage bête" : public, dédup faible par X-Session-Token (chaîne opaque).
-  // Les clients INSCRITS (JWT présent) sont comptés via le parcours engagement →
-  // no-op ici pour éviter le double-comptage. Voir spec 2026-06-17 (§ Sécurité).
-  // Pas de preValidation auth : on lit le header directement, sans tenter de
-  // résoudre un Participant (un token navigateur n'en est pas un → éviterait un 401).
+  // ALIAS de `POST /social/events` — POST /posts/:postId/anonymous-view
+  //
+  // La vue d'un lecteur SANS compte (#10483) : clé de lecteur HMAC, garde de
+  // lecture anonyme, débit par lecteur et par adresse — le cœur de la porte
+  // canonique. Un client INSCRIT (JWT) y reçoit `counted: false` : il compte
+  // par `/view`. Pas de `preValidation` : l'invité se retrouve par l'empreinte
+  // de son jeton, un jeton de navigateur n'étant pas un Participant.
   fastify.post('/posts/:postId/anonymous-view', {
-    config: { rateLimit: createPostRouteRateLimitConfig('view') },
+    onRequest: depreciee(socialEventsDeprecation()),
+    config: { rateLimit: socialEventsRateLimit },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       if (request.headers.authorization) {
         return sendSuccess(reply, { counted: false }); // client inscrit → parcours engagement
       }
-      const sessionKey = request.headers['x-session-token'] as string | undefined;
-      if (!sessionKey || sessionKey.length === 0 || sessionKey.length > 128) {
+      const lecteur = await resolveAnonymousReader(prisma as never, request);
+      if (!lecteur) {
         return sendBadRequest(reply, 'Missing or invalid session key', { code: 'VALIDATION_ERROR' });
       }
-      const { postId } = request.params;
-      const counted = await postService.recordAnonymousOpen(postId, sessionKey);
-      return sendSuccess(reply, { counted });
+      if (!(await admitAnonymousReader(fastify, request, lecteur))) return refuseAnonymousBudget(reply);
+
+      const { legacy } = await ingestSocialEvents(
+        socialEventDeps,
+        [{ type: 'view', postId: request.params.postId }],
+        lecteur,
+      );
+      return sendSuccess(reply, { counted: legacy.anonymousCounted });
     } catch (error) {
       enhancedLogger.error('[POST /posts/:postId/anonymous-view]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
-  // POST /posts/:postId/impression — Track a feed impression
-  fastify.post('/posts/:postId/impression', {
-    schema: {
-      params: { type: 'object', required: ['postId'], properties: { postId: { type: 'string' } } },
-      body: {
-        type: 'object',
-        properties: {
-          source: { type: 'string', enum: [...IMPRESSION_SOURCES] }
-        }
-      }
-    },
-    preValidation: [requiredAuth],
-  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (!authContext?.registeredUser) {
-        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
-      }
-
-      const { postId } = request.params;
-      const source = (request.body as any)?.source ?? 'feed';
-
-      await prisma.postImpression.create({
-        data: { postId, userId: authContext.registeredUser.id, source }
-      });
-
-      // Ouvrir le Détail d'un post (`source: 'detail'`) est à la fois une
-      // impression ET une vue (totale, jamais dédupliquée) comptée IMMÉDIATEMENT
-      // — chaque ouverture compte, sans seuil ni gating engagement. Les autres
-      // sources (apparition feed, etc.) ne comptent qu'une impression.
-      // Note : `postOpenCount` n'est PLUS alimenté par l'engagement sur la surface
-      // `detail` (cf. engagementAggregateIncrements) pour éviter le double comptage.
-      const counters: Record<string, { increment: number }> = { impressionCount: { increment: 1 } };
-      if (source === 'detail') {
-        counters.postOpenCount = { increment: 1 };
-      }
-
-      // Résout repostOfId/originalRepostOfId depuis le RETOUR de `update` —
-      // pas une lecture séparée : un repost doit créditer son original du
-      // même impressionCount en plus de son propre compteur (chantier
-      // reposts cohérents & watermark, tâche 1), sans ajouter de requête sur
-      // ce chemin chaud (chaque impression, majoritairement des non-reposts).
-      const target = await prisma.post.update({
-        where: { id: postId },
-        data: counters,
-        select: { repostOfId: true, originalRepostOfId: true },
-      });
-
-      const rootId = target?.originalRepostOfId ?? target?.repostOfId;
-      if (rootId && rootId !== postId) {
-        await prisma.post.updateMany({
-          where: { id: rootId, deletedAt: NOT_DELETED },
-          data: { impressionCount: { increment: 1 } },
-        });
-      }
-
-      return sendSuccess(reply, { recorded: true });
-    } catch (error) {
-      enhancedLogger.error('[POST /posts/:postId/impression]', error);
-      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
-    }
-  });
-
-  // POST /posts/impressions/batch — Track multiple feed impressions at once
-  fastify.post('/posts/impressions/batch', {
-    schema: {
-      body: {
-        type: 'object',
-        required: ['postIds'],
-        properties: {
-          postIds: { type: 'array', items: { type: 'string' } },
-          source: { type: 'string', enum: [...IMPRESSION_SOURCES] }
-        }
-      }
-    },
-    preValidation: [requiredAuth],
-    config: { rateLimit: createPostRouteRateLimitConfig('impression') },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (!authContext?.registeredUser) {
-        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
-      }
-
-      const { postIds, source = 'feed' } = request.body as any;
-
-      if (!Array.isArray(postIds) || postIds.length === 0) {
-        return sendSuccess(reply, { recorded: 0 });
-      }
-
-      const capped = postIds.slice(0, 50);
-
-      await prisma.postImpression.createMany({
-        data: capped.map((postId: string) => ({
-          postId,
-          userId: authContext.registeredUser!.id,
-          source
-        }))
-      });
-
-      // Une impression par APPARITION : le même post peut légitimement revenir
-      // plusieurs fois dans un lot (aller-retour de scroll). `createMany` insère
-      // bien une ligne par occurrence, mais `updateMany({ id: { in: [...] } })`
-      // n'incrémente chaque post qu'UNE fois — le `in` est dédupliqué côté base.
-      // On regroupe donc par nombre d'occurrences : un `updateMany` par valeur
-      // d'incrément distincte (en pratique 1 à 3), et non un par post.
-      const occurrences = capped.reduce<Map<string, number>>((acc, postId: string) => {
-        acc.set(postId, (acc.get(postId) ?? 0) + 1);
-        return acc;
-      }, new Map());
-
-      const idsByIncrement = [...occurrences].reduce<Map<number, string[]>>((acc, [postId, count]) => {
-        acc.set(count, [...(acc.get(count) ?? []), postId]);
-        return acc;
-      }, new Map());
-
-      // Reposts du batch : résout repostOfId/originalRepostOfId de tous les
-      // posts DISTINCTS en UNE requête — jamais une par post — pour créditer
-      // la racine de chaque repost du même impressionCount (chantier reposts
-      // cohérents & watermark, tâche 1).
-      const repostSources = await prisma.post.findMany({
-        where: { id: { in: [...occurrences.keys()] }, repostOfId: { not: null } },
-        select: { id: true, repostOfId: true, originalRepostOfId: true },
-      });
-      const rootByPostId = new Map<string, string>(
-        repostSources
-          .map((p: { id: string; repostOfId: string | null; originalRepostOfId: string | null }) =>
-            [p.id, p.originalRepostOfId ?? p.repostOfId] as [string, string | null])
-          .filter((entry: [string, string | null]): entry is [string, string] =>
-            Boolean(entry[1]) && entry[1] !== entry[0]),
-      );
-
-      // Chaque OCCURRENCE d'un repost dans le batch crédite sa racine — deux
-      // reposts distincts (ou 2 occurrences du même repost) du même original
-      // doivent créditer l'original de +2, jamais +1. Même piège `in`
-      // dédupliqué que ci-dessus, appliqué ici au crédit de la racine.
-      const rootOccurrences = capped.reduce<Map<string, number>>((acc, postId: string) => {
-        const rootId = rootByPostId.get(postId);
-        if (!rootId) return acc;
-        acc.set(rootId, (acc.get(rootId) ?? 0) + 1);
-        return acc;
-      }, new Map());
-
-      const rootIdsByIncrement = [...rootOccurrences].reduce<Map<number, string[]>>((acc, [rootId, count]) => {
-        acc.set(count, [...(acc.get(count) ?? []), rootId]);
-        return acc;
-      }, new Map());
-
-      await Promise.all([
-        ...[...idsByIncrement].map(([increment, ids]) =>
-          prisma.post.updateMany({
-            where: { id: { in: ids } },
-            data: { impressionCount: { increment } }
-          })
-        ),
-        ...[...rootIdsByIncrement].map(([increment, ids]) =>
-          prisma.post.updateMany({
-            where: { id: { in: ids }, deletedAt: NOT_DELETED },
-            data: { impressionCount: { increment } }
-          })
-        ),
-      ]);
-
-      return sendSuccess(reply, { recorded: capped.length });
-    } catch (error) {
-      enhancedLogger.error('[POST /posts/impressions/batch]', error);
-      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
-    }
-  });
-
-  // POST /posts/engagement/batch — Ingest durable engagement sessions (dwell + actions)
+  // ALIAS de `POST /social/events` — POST /posts/engagement/batch
   //
-  // Append-only ingestion of finalized consumption sessions captured client-side
-  // (EngagementOutbox). Idempotent on sessionId (upsert) so a lost-ACK retry is a
-  // no-op. The userId is taken from the auth context — the client-supplied
-  // session.userId is never trusted. Skips (without 400) any session whose post
-  // was deleted between begin and flush.
+  // Ingestion append-only des sessions de consommation finalisées côté client
+  // (EngagementOutbox). Idempotente sur `sessionId` (upsert), donc rejouer un
+  // ACK perdu est un no-op. L'identité vient du contexte d'authentification — le
+  // `session.userId` fourni par le client n'est jamais cru.
+  //
+  // C'était la plus mûre des six portes : débit par COMPTE, corps typé riche.
+  // Son schéma Zod est celui que le point d'ingestion REPREND pour sa branche
+  // `dwell` (`EngagementSessionSchema` + le discriminant) — il n'est pas
+  // dégradé, il est devenu la forme commune. Le lot gagne au passage la porte
+  // d'audience qu'il n'avait pas : `recordEngagementBatch` ne consultait que
+  // `deletedAt`.
   fastify.post('/posts/engagement/batch', {
+    onRequest: depreciee(socialEventsDeprecation()),
     preValidation: [requiredAuth],
     config: { rateLimit: createPostRouteRateLimitConfig('engagement') },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (!authContext?.registeredUser) {
+      const acteur = acteurInscrit(request);
+      if (!acteur) {
         return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
@@ -654,13 +519,10 @@ export function registerInteractionRoutes(
         return sendBadRequest(reply, 'Invalid engagement batch', { code: 'VALIDATION_ERROR' });
       }
 
-      // Zod has validated + applied defaults at runtime; `.data.sessions` is the
-      // parsed output. The service re-normalizes defensively, so the structural
-      // assertion to its input shape is safe.
-      const sessions = parsed.data.sessions as Parameters<typeof postService.recordEngagementBatch>[0];
-      const recorded = await postService.recordEngagementBatch(
-        sessions,
-        authContext.registeredUser.id,
+      const { recorded } = await ingestSocialEvents(
+        socialEventDeps,
+        parsed.data.sessions.map((session) => ({ ...session, type: 'dwell' as const })),
+        acteur,
       );
       return sendSuccess(reply, { recorded });
     } catch (error) {
@@ -669,112 +531,24 @@ export function registerInteractionRoutes(
     }
   });
 
-  // POST /posts/:postId/share — Track a share, optionally mint a tracking link
+  // ALIAS de `POST /social/events` — POST /posts/:postId/downloads
   //
-  // Body (all optional):
-  //   - platform: marketing tag forwarded to PostService.sharePost
-  //   - generateLink: when truthy, mint a TrackingLink owned by the caller so
-  //     they can paste an attributable `meeshy.me/l/<token>` URL into any
-  //     external share sheet. The link points at the post detail route on the
-  //     web frontend (`FRONTEND_URL`/feeds/post/<postId>`); subsequent
-  //     redirects are counted into the existing `trackingLinkClick` analytics.
-  //     The same `/feeds/post/<postId>` path is also claimed by the iOS app via
-  //     Universal Links, so the recipient lands directly inside the native
-  //     PostDetailView when the app is installed.
+  // Trace le téléchargement des médias d'un poste. Batch et non unitaire :
+  // « Enregistrer » sur un poste à quatre images télécharge les quatre d'un
+  // coup, un seul aller-retour. La validation des médias et la déduplication
+  // vivent dans `PostService.recordMediaDownloads`.
   //
-  // Response always carries `{ shared, shareCount }`; if `generateLink` was
-  // requested the same payload also exposes `shortUrl` (absolute, ready for
-  // sharing) and `token` (6-char id) so the client can deep-link / display
-  // analytics later.
-  fastify.post('/posts/:postId/share', {
-    preValidation: [requiredAuth],
-  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (!authContext?.registeredUser) {
-        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
-      }
-
-      const { postId } = request.params;
-      const body = (request.body as any) ?? {};
-      const platform: string | undefined = body.platform;
-      const generateLink: boolean = Boolean(body.generateLink);
-      const baseUrl = resolveFrontendBaseUrl();
-
-      const payload: {
-        shared: boolean;
-        shareCount: number;
-        shortUrl?: string;
-        token?: string;
-      } = { shared: true, shareCount: 0 };
-
-      if (generateLink) {
-        // Tracked share: upsert one link per (post, sharer). Reusing an existing
-        // link does NOT re-increment shareCount — the counter tracks unique
-        // sharers, not repeated taps of the share button.
-        const result = await postService.shareWithTrackingLink(
-          postId,
-          authContext.registeredUser.id,
-          { baseUrl, platform },
-        );
-        if (!result) {
-          return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
-        }
-        payload.shareCount = result.shareCount;
-        payload.token = result.token;
-        payload.shortUrl = result.shortUrl;
-      } else {
-        // Plain share (no tracked link) — increment the counter as before.
-        const post = await postService.sharePost(postId, authContext.registeredUser.id, platform);
-        if (!post) {
-          return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
-        }
-        payload.shareCount = post.shareCount;
-      }
-
-      return sendSuccess(reply, payload);
-    } catch (error) {
-      enhancedLogger.error('[POST /posts/:postId/share]', error);
-      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
-    }
-  });
-
-  // GET /posts/:postId/share — Analytics of the caller's own tracked share link.
-  //
-  // Returns null data when the caller has not (yet) generated a tracked share
-  // for this post. Otherwise exposes the live click analytics so the UI can
-  // surface "your link got N clicks" without a second tracking-links call.
-  fastify.get('/posts/:postId/share', {
-    preValidation: [requiredAuth],
-  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (!authContext?.registeredUser) {
-        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
-      }
-
-      const { postId } = request.params;
-      const baseUrl = resolveFrontendBaseUrl();
-      const link = await postService.getPostShareLink(postId, authContext.registeredUser.id, baseUrl);
-
-      return sendSuccess(reply, link);
-    } catch (error) {
-      enhancedLogger.error('[GET /posts/:postId/share]', error);
-      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
-    }
-  });
-
-  // POST /posts/:postId/downloads — Trace le téléchargement des médias d'un poste.
-  //
-  // Batch et non unitaire : « Enregistrer » sur un poste à quatre images
-  // télécharge les quatre d'un coup, un seul aller-retour. La validation, l'ACL
-  // et la déduplication vivent dans PostService.recordMediaDownloads.
+  // `recorded` compte ici des MÉDIAS, pas des événements — c'est la forme que
+  // ses clients lisent, et le point d'ingestion la sert par `legacy`. Les
+  // confondre changerait la réponse sous les clients que le critère 9 confie à
+  // leur propre lot.
   fastify.post('/posts/:postId/downloads', {
+    onRequest: depreciee(socialEventsDeprecation()),
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (!authContext?.registeredUser) {
+      const acteur = acteurInscrit(request);
+      if (!acteur) {
         return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
@@ -783,28 +557,35 @@ export function registerInteractionRoutes(
         return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
       }
 
-      const { postId } = request.params;
-      const result = await postService.recordMediaDownloads(
-        postId,
-        authContext.registeredUser.id,
-        { mediaIds: parsed.data.mediaIds, surface: parsed.data.surface },
+      const { recorded, legacy } = await ingestSocialEvents(
+        socialEventDeps,
+        [{
+          type: 'download',
+          postId: request.params.postId,
+          mediaIds: parsed.data.mediaIds,
+          surface: parsed.data.surface,
+        }],
+        acteur,
       );
 
-      // null couvre indistinctement « absent », « supprimé » et « invisible » —
-      // les distinguer révélerait l'existence du poste.
-      if (!result) {
+      // Le 404 couvre indistinctement « absent », « supprimé », « hors
+      // audience » et « malformé » — les distinguer révélerait l'existence du
+      // poste.
+      if (recorded === 0) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
-      return sendSuccess(reply, result);
+      return sendSuccess(reply, { recorded: legacy.mediaRecorded });
     } catch (error) {
       enhancedLogger.error('[POST /posts/:postId/downloads]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
+
   // POST /posts/:postId/pin — Pin a post (author only)
   fastify.post('/posts/:postId/pin', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
@@ -831,6 +612,7 @@ export function registerInteractionRoutes(
 
   // DELETE /posts/:postId/pin — Unpin a post (author only)
   fastify.delete('/posts/:postId/pin', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
@@ -855,8 +637,10 @@ export function registerInteractionRoutes(
     }
   });
 
-  // GET /posts/:postId/views — Story/post seen-by list (author only)
+  // GET /posts/:postId/views — l'ancienne liste « Vu par », sous la porte de la liste enrichie
+  // (`viewerListAccess` : auteur d'une story ; ADMIN/BIGBOSS pour tout contenu, lecture tracée)
   fastify.get('/posts/:postId/views', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
@@ -871,25 +655,29 @@ export function registerInteractionRoutes(
       // unbounded client `limit` into Prisma `take`), and treats `limit=0` as 1.
       const { limit, offset } = validatePagination(query.offset, query.limit, { defaultLimit: 50, maxLimit: 100 });
 
-      const result = await postService.getPostViews(postId, authContext.registeredUser.id, limit, offset);
+      const asked = viewerListRequest(request, authContext.registeredUser.role);
+      const result = await postService.getPostViews(postId, authContext.registeredUser.id, limit, offset, asked);
       if (!result) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
       return sendSuccess(reply, result.items, {
         pagination: { total: result.total, offset, limit, hasMore: result.hasMore },
+        meta: viewerListCounts(result),
       });
     } catch (error) {
-      if (error instanceof Error && error.message === 'FORBIDDEN') {
-        return sendForbidden(reply, 'Only the author can view this list', { code: 'FORBIDDEN' });
-      }
+      if (viewerListRefused(reply, error)) return;
       enhancedLogger.error('[GET /posts/:postId/views]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
-  // GET /posts/:postId/interactions — Story viewers enriched with reactions & replies (author only)
+  // GET /posts/:postId/interactions — la liste des vues d'un contenu, chaque personne avec ce qu'elle
+  // y a fait (#9727) — l'auteur d'une story ; pour un post ou un réel, ADMIN/BIGBOSS seuls (l'auteur
+  // n'en voit que les nombres), chaque lecture administrateur tracée (#9733) ;
+  // `engagement: 'unavailable'` dit que le détail n'a pas pu être établi
   fastify.get('/posts/:postId/interactions', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
@@ -904,18 +692,20 @@ export function registerInteractionRoutes(
       // unbounded client `limit` into Prisma `take`), and treats `limit=0` as 1.
       const { limit, offset } = validatePagination(query.offset, query.limit, { defaultLimit: 50, maxLimit: 100 });
 
-      const result = await postService.getPostInteractions(postId, authContext.registeredUser.id, limit, offset);
+      const asked = viewerListRequest(request, authContext.registeredUser.role);
+      const result = await postService.getPostInteractions(postId, authContext.registeredUser.id, limit, offset, asked);
       if (!result) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
-      return sendSuccess(reply, { viewers: result.viewers }, {
-        pagination: { total: result.total, offset, limit, hasMore: result.hasMore },
-      });
+      return sendSuccess(
+        reply,
+        { viewers: result.viewers, ...(result.engagement !== undefined ? { engagement: result.engagement } : {}),
+          ...viewerListCounts(result) },
+        { pagination: { total: result.total, offset, limit, hasMore: result.hasMore } },
+      );
     } catch (error) {
-      if (error instanceof Error && error.message === 'FORBIDDEN') {
-        return sendForbidden(reply, 'Only the author can view interactions', { code: 'FORBIDDEN' });
-      }
+      if (viewerListRefused(reply, error)) return;
       enhancedLogger.error('[GET /posts/:postId/interactions]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
@@ -926,8 +716,19 @@ export function registerInteractionRoutes(
   // publication fraîche (createdAt/expiresAt = now/now+TTL) et un engagement
   // remis à zéro. Auteur uniquement, type STORY uniquement. Le broadcast
   // `story:created` la re-fanne dans les trays des destinataires.
+  // #4147 critère 1 — la seule route DESTRUCTIVE du module (supprime
+  // postView/postReaction/postImpression, remet sept compteurs à zéro,
+  // refanne story:created dans tous les trays) n'avait AUCUN plafond avant ce
+  // lot : dix appels valaient dix remises à zéro de l'engagement acquis.
+  // Seau dédié `social:write` — cf. socialRateLimit.ts pour le choix de ne
+  // PAS le coupler à la création (`posts:create`, réutilisé par repost
+  // juste en dessous) : republier une story existante n'est pas un geste de
+  // création, et le coupler bloquerait un usage nominal (prolonger une
+  // story qui expire) sur le budget d'un autre.
   fastify.post('/posts/:postId/republish', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
+    config: { rateLimit: createSocialWriteRateLimitConfig() },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -980,7 +781,10 @@ export function registerInteractionRoutes(
       // aplatissement des mentions sur les deux charges ; seul `storyEffects`
       // diverge — négocié pour la réponse (O17), tel quel sur le broadcast
       // (F3 : une seule charge pour une audience hétérogène).
-      const payload = withMentions(republished, wireReaderFromRequest(request as UnifiedAuthRequest));
+      const payload = withMentions(
+        withAudienceListFor(republished, authContext.registeredUser.id),
+        wireReaderFromRequest(request as UnifiedAuthRequest),
+      );
       const broadcastPayload = withMentions(republished, WIRE_BROADCAST);
 
       // Un rejeu resert la story ; il ne la republie pas. Refanner
@@ -1013,8 +817,21 @@ export function registerInteractionRoutes(
     }
   });
 
+  // #4147 critère 2 — un repost crée pourtant un `Post`
+  // (`postService.repostPost` → `prisma.post.create`) mais n'avait, avant ce
+  // lot, aucun plafond : le plafond de création (`POST /posts`, 10/min) se
+  // contournait entièrement en repostant. `sharedWriteRateLimit` (construit
+  // plus haut) fait consommer à cette route le MÊME budget que POST /posts
+  // et POST /posts/from-attachment — PAS via `config.rateLimit` (qui ne
+  // PEUT PAS faire partager un compteur entre routes, cf.
+  // socialRateLimit.ts, en-tête) mais via un `preHandler` qui incrémente
+  // directement la même clé Redis. C'est ce partage — prouvé par témoin
+  // (deux comptes, deux seaux distincts ; un seul compte, un budget commun
+  // aux trois routes) — qui ferme le contournement.
   fastify.post('/posts/:postId/repost', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
+    preHandler: [sharedWriteRateLimit],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -1038,6 +855,8 @@ export function registerInteractionRoutes(
         return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
       }
       const data = parsed.data;
+      // #10315 — on ne republie que ce qu'on peut lire, et jamais ce qui est hors ligne.
+      if (!(await mayRepostSource(prisma, postId, authContext.registeredUser.id))) return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
 
       // Idempotent via clientMutationId (lot 7, tâche 7.1) : `repostPost`
       // n'est PAS naturellement idempotent — chaque appel `prisma.post.create`
@@ -1111,11 +930,16 @@ export function registerInteractionRoutes(
       // deux effets qui voyagent AVEC la republication, et eux seuls.
       const isFreshRepost = outcome.status === 'applied';
 
-      // Même aplatissement que partout ailleurs : la clé exposée est `mentions`,
-      // y compris sur un repost qui n'en porte aucune — une clé absente et une
-      // liste vide ne se décodent pas pareil.
-      const payload = withMentions(repost, wireReaderFromRequest(request as UnifiedAuthRequest));
-      const broadcastPayload = withMentions(repost, WIRE_BROADCAST);
+      // Composition UNIQUE des portes de publication (#4151) : même
+      // aplatissement des mentions (la clé exposée est `mentions`, même vide)
+      // ET même hoist du lieu, que ce chemin ne posait pas — un repost servait
+      // `metadata.location` sans `location`, ni `repostOf.location`.
+      const payload = servePublishedPost({
+        post: repost as unknown as Record<string, unknown>,
+        references: undefined,
+        request,
+      });
+      const broadcastPayload = withMentions(hoistLocation(repost as unknown as Record<string, unknown>), WIRE_BROADCAST);
 
       // Broadcast repost via Socket.IO — F3 : blob tel quel pour l'audience
       // hétérogène, chaque client négocie sa forme au premier fetch REST.
@@ -1127,26 +951,22 @@ export function registerInteractionRoutes(
         }, authContext.registeredUser.id).catch((err) => enhancedLogger.warn('[POST /posts/:postId/repost]: broadcast post reposted failed', { err }));
       }
 
-      // Notify original post author
+      // Notifier l'auteur de l'original est un EFFET SECONDAIRE, comme le
+      // broadcast juste au-dessus : il part HORS du chemin de la réponse. La
+      // relecture de l'original était awaitée dans ce `try` ; quand elle jetait
+      // (#6503, `getPostById` refusé par Prisma), le `catch` rendait 500 pour
+      // un repost DÉJÀ créé, et l'app annonçait un échec au-dessus d'une
+      // écriture actée (#6524).
+      // Site UNIQUE partagé avec `POST /posts { repostOfId }` (#10525).
       const notifService = fastify.notificationService;
-      if (notifService && repost.repostOfId && isFreshRepost) {
-        // Même garde que la route de traduction : sans le viewer, le lookup
-        // applique le filtre anonyme et ne retrouve pas une story réservée aux
-        // contacts — l'auteur d'une story repartagée n'était alors jamais
-        // notifié.
-        const original = await postService.getPostById(postId, authContext.registeredUser.id);
-        if (original?.authorId) {
-          notifService.createPostRepostNotification({
-            actorId: authContext.registeredUser.id,
-            originalPostId: postId,
-            postAuthorId: original.authorId,
-            repostId: repost.id,
-            postType: (original as { type?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' }).type,
-            postPreview: (original as { content?: string | null }).content?.slice(0, 80) ?? undefined,
-            postCreatedAt: (original as { createdAt?: Date | string | null }).createdAt ?? undefined,
-            postExpiresAt: (original as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
-          }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/repost]: notify post repost failed', { err }));
-        }
+      const sourcePostId = repost.repostOfId;
+      if (sourcePostId && isFreshRepost) {
+        const actorId = authContext.registeredUser.id;
+        void (async () => {
+          const source = await readRepostedSource((id, viewer) => postService.getPostById(id, viewer), sourcePostId, actorId);
+          noteRepostInteraction(fastify.prisma, { actorId, source });
+          await notifyRepostedAuthor(notifService, { actorId, source, sourcePostId, repostId: repost.id });
+        })().catch((err) => enhancedLogger.warn('[POST /posts/:postId/repost]: notify post repost failed', { err }));
       }
 
       return sendSuccess(reply, payload, { statusCode: 201 });

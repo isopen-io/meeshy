@@ -1,6 +1,25 @@
 import XCTest
 @testable import MeeshySDK
 
+// #4588 — cinq de ces adresses ont été CORRIGÉES le 2026-08-31, dans les
+// témoins comme dans le service.
+//
+// Elles étaient fausses des deux côtés : `AuthService` appelait
+// `/auth/password-reset/reset`, `/auth/phone/send-code`, `/auth/phone/verify`,
+// `/auth/email/verify` et `/auth/email/resend-verification` — mesuré **404**
+// sur `gate.staging.meeshy.me` — et ces témoins ASSERTAIENT exactement ces
+// chemins.
+//
+// C'est ce qui rendait le défaut permanent. Un témoin qui épingle un chemin ne
+// peut vérifier qu'une chose : que le client est cohérent avec LUI-MÊME. Il
+// était vert, il l'est resté, et quatre parcours utilisateur — dont la
+// réinitialisation de mot de passe — ne pouvaient pas aboutir. Ce n'est pas la
+// relecture qui l'a trouvé, c'est l'appariement mécanique des chemins au
+// manifeste du serveur (#4282).
+//
+// Depuis, le service passe par le catalogue GÉNÉRÉ : un chemin qui n'existe pas
+// côté serveur ne compile plus, et ces témoins ne peuvent plus en épingler un.
+
 final class AuthServiceTests: XCTestCase {
     private var mock: MockAPIClient!
     private var service: AuthService!
@@ -115,11 +134,9 @@ final class AuthServiceTests: XCTestCase {
         mock.stub("/auth/register", result: response)
 
         let request = RegisterRequest(
-            username: "newuser",
-            password: "securePass",
-            firstName: "John",
-            lastName: "Doe",
-            email: "john@test.com"
+            displayName: "John Doe",
+            email: "john@test.com",
+            password: "securePass"
         )
         let result = try await service.register(request: request)
 
@@ -134,8 +151,7 @@ final class AuthServiceTests: XCTestCase {
         mock.errorToThrow = MeeshyError.server(statusCode: 409, message: "Username taken")
 
         let request = RegisterRequest(
-            username: "taken", password: "pass",
-            firstName: "A", lastName: "B", email: "a@b.com"
+            displayName: "A B", email: "a@b.com", password: "pass"
         )
 
         do {
@@ -291,6 +307,32 @@ final class AuthServiceTests: XCTestCase {
         }
     }
 
+    // MARK: - resendVerificationEmail (#16009)
+
+    /// La route `POST /auth/resend-verification` exige `{ email }`
+    /// (`AuthSchemas.resendVerification`) : sans corps, c'est un 400 à coup sûr.
+    func test_resendVerificationEmail_sendsTheEmailTheRouteRequires() async throws {
+        mock.stub("/auth/resend-verification", result: SimpleAPIResponse(success: true, message: "sent", error: nil))
+
+        try await service.resendVerificationEmail(email: "user@test.com")
+
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/resend-verification")
+        XCTAssertEqual(mock.lastRequest?.method, "POST")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["email"] as? String, "user@test.com")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?.count, 1)
+    }
+
+    /// La jumelle SANS corps (`resendEmailVerification()`) ne pouvait recevoir
+    /// qu'un 400 et n'avait aucun appelant : elle a quitté le SDK.
+    func test_theBodylessResendTwin_hasLeftTheService() throws {
+        let source = try String(contentsOf: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshySDK/Auth/AuthService.swift"), encoding: .utf8)
+        XCTAssertFalse(source.contains("func resendEmailVerification("))
+    }
+
     // MARK: - requestPasswordReset
 
     func testRequestPasswordResetSuccess() async throws {
@@ -344,18 +386,18 @@ final class AuthServiceTests: XCTestCase {
 
     func testResetPasswordSuccess() async throws {
         let response = SimpleAPIResponse(success: true, message: "Password reset", error: nil)
-        mock.stub("/auth/password-reset/reset", result: response)
+        mock.stub("/auth/reset-password", result: response)
 
         try await service.resetPassword(token: "reset-tok", newPassword: "newPass123")
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/password-reset/reset")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/reset-password")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
     func testResetPasswordThrowsOnFailure() async {
         let response = SimpleAPIResponse(success: false, message: nil, error: "Token expired")
-        mock.stub("/auth/password-reset/reset", result: response)
+        mock.stub("/auth/reset-password", result: response)
 
         do {
             try await service.resetPassword(token: "expired", newPassword: "new")
@@ -373,7 +415,7 @@ final class AuthServiceTests: XCTestCase {
 
     func testResetPasswordThrowsWithDefaultMessage() async {
         let response = SimpleAPIResponse(success: false, message: nil, error: nil)
-        mock.stub("/auth/password-reset/reset", result: response)
+        mock.stub("/auth/reset-password", result: response)
 
         do {
             try await service.resetPassword(token: "bad", newPassword: "new")
@@ -393,18 +435,18 @@ final class AuthServiceTests: XCTestCase {
 
     func testSendPhoneCodeSuccess() async throws {
         let response = SimpleAPIResponse(success: true, message: "Code sent", error: nil)
-        mock.stub("/auth/phone/send-code", result: response)
+        mock.stub("/auth/send-phone-code", result: response)
 
         try await service.sendPhoneCode(phoneNumber: "+33612345678")
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/phone/send-code")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/send-phone-code")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
     func testSendPhoneCodeThrowsOnFailure() async {
         let response = SimpleAPIResponse(success: false, message: nil, error: "Invalid phone")
-        mock.stub("/auth/phone/send-code", result: response)
+        mock.stub("/auth/send-phone-code", result: response)
 
         do {
             try await service.sendPhoneCode(phoneNumber: "bad")
@@ -425,14 +467,14 @@ final class AuthServiceTests: XCTestCase {
     func testVerifyPhoneSuccess() async throws {
         let verifyData = VerifyPhoneResponse(verified: true, phoneTransferToken: "transfer-abc")
         let response = APIResponse(success: true, data: verifyData, error: nil)
-        mock.stub("/auth/phone/verify", result: response)
+        mock.stub("/auth/verify-phone", result: response)
 
         let result = try await service.verifyPhone(phoneNumber: "+33612345678", code: "123456")
 
         XCTAssertEqual(result.verified, true)
         XCTAssertEqual(result.phoneTransferToken, "transfer-abc")
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/phone/verify")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/verify-phone")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
@@ -457,9 +499,8 @@ final class AuthServiceTests: XCTestCase {
 
     func testCheckAvailabilityUsernameAvailable() async throws {
         let availData = AvailabilityResponse(
-            usernameAvailable: true, emailAvailable: nil,
-            phoneNumberAvailable: nil, phoneNumberValid: nil,
-            suggestions: nil
+            usernameAvailable: true, suggestions: nil,
+            emailValid: nil, phoneNumberValid: nil, phoneNumberE164: nil
         )
         let response = APIResponse(success: true, data: availData, error: nil)
         mock.stub("/auth/check-availability", result: response)
@@ -475,9 +516,8 @@ final class AuthServiceTests: XCTestCase {
 
     func testCheckAvailabilityUsernameTaken() async throws {
         let availData = AvailabilityResponse(
-            usernameAvailable: false, emailAvailable: nil,
-            phoneNumberAvailable: nil, phoneNumberValid: nil,
-            suggestions: ["newuser1", "newuser2"]
+            usernameAvailable: false, suggestions: ["newuser1", "newuser2"],
+            emailValid: nil, phoneNumberValid: nil, phoneNumberE164: nil
         )
         let response = APIResponse(success: true, data: availData, error: nil)
         mock.stub("/auth/check-availability", result: response)
@@ -491,32 +531,36 @@ final class AuthServiceTests: XCTestCase {
 
     func testCheckAvailabilityEmail() async throws {
         let availData = AvailabilityResponse(
-            usernameAvailable: nil, emailAvailable: true,
-            phoneNumberAvailable: nil, phoneNumberValid: nil,
-            suggestions: nil
+            usernameAvailable: nil, suggestions: nil,
+            emailValid: true, phoneNumberValid: nil, phoneNumberE164: nil
         )
         let response = APIResponse(success: true, data: availData, error: nil)
         mock.stub("/auth/check-availability", result: response)
 
         let result = try await service.checkAvailability(email: "new@test.com")
 
-        XCTAssertEqual(result.emailAvailable, true)
-        XCTAssertTrue(result.available)
+        // L'adresse ne répond plus que sur sa FORME (#4158) : dire si elle
+        // appartient à un compte, sans authentification, faisait de cette route
+        // un oracle. `available` ne parle donc plus QUE du pseudo — la laisser
+        // retomber sur l'adresse ferait rendre `false` à toutes.
+        XCTAssertEqual(result.emailValid, true)
+        XCTAssertTrue(result.wellFormed)
+        XCTAssertFalse(result.available)
     }
 
     func testCheckAvailabilityPhone() async throws {
         let availData = AvailabilityResponse(
-            usernameAvailable: nil, emailAvailable: nil,
-            phoneNumberAvailable: true, phoneNumberValid: true,
-            suggestions: nil
+            usernameAvailable: nil, suggestions: nil,
+            emailValid: nil, phoneNumberValid: true, phoneNumberE164: "+33612345678"
         )
         let response = APIResponse(success: true, data: availData, error: nil)
         mock.stub("/auth/check-availability", result: response)
 
         let result = try await service.checkAvailability(phone: "+33612345678")
 
-        XCTAssertEqual(result.phoneNumberAvailable, true)
         XCTAssertEqual(result.phoneNumberValid, true)
+        XCTAssertEqual(result.phoneNumberE164, "+33612345678")
+        XCTAssertTrue(result.wellFormed)
     }
 
     func testCheckAvailabilityThrowsOnError() async {
@@ -653,6 +697,44 @@ final class AuthServiceTests: XCTestCase {
         }
     }
 
+    // MARK: - Premier mot de passe (#9186)
+
+    func test_changePassword_withoutCurrentPassword_omitsTheKey() async throws {
+        mock.stub("/users/me/password", result: SimpleAPIResponse(success: true, message: nil, error: nil))
+
+        try await service.changePassword(currentPassword: nil, newPassword: "Meeshy-2026!")
+
+        let body = try XCTUnwrap(mock.lastRequest?.bodyJSON)
+        XCTAssertNil(body["currentPassword"])
+        XCTAssertEqual(body["newPassword"] as? String, "Meeshy-2026!")
+    }
+
+    func test_hasPassword_readsTheSecuritySummaryOfMe() async throws {
+        mock.stub("/auth/me", result: APIResponse(
+            success: true,
+            data: MeSecurityResponseData(user: .init(security: .init(hasPassword: false))),
+            error: nil
+        ))
+
+        let hasPassword = try await service.hasPassword()
+
+        XCTAssertEqual(hasPassword, false)
+        let query = mock.lastRequest?.queryItems ?? []
+        XCTAssertTrue(query.contains(URLQueryItem(name: "expand", value: "security")))
+    }
+
+    func test_hasPassword_gatewayWithoutSecuritySummary_isUnknown() async throws {
+        mock.stub("/auth/me", result: APIResponse(
+            success: true,
+            data: MeSecurityResponseData(user: .init(security: nil)),
+            error: nil
+        ))
+
+        let hasPassword = try await service.hasPassword()
+
+        XCTAssertNil(hasPassword)
+    }
+
     // MARK: - logout
 
     func testLogoutCallsCorrectEndpoint() async {
@@ -674,29 +756,33 @@ final class AuthServiceTests: XCTestCase {
         XCTAssertEqual(mock.requestCount, 1)
     }
 
-    // MARK: - logoutThrowing(token:) — D5.hygiene
+    // MARK: - logoutThrowing(token:) — D5.hygiene, #10463
 
-    /// The explicitly-passed token must be sent as the Authorization header,
-    /// decoupled from `mock.authToken` (which stays `nil` here, standing in
-    /// for `AuthManager.logout()` having already wiped `APIClient.shared.authToken`
-    /// by the time the retry loop actually sends its request).
-    func testLogoutThrowingWithToken_sendsExplicitAuthorizationHeader_notAmbientAPIClientToken() async throws {
-        let response = APIResponse(success: true, data: ["loggedOut": true], error: nil)
-        mock.stub("/auth/logout", result: response)
+    /// The explicitly-passed token signs the request, decoupled from
+    /// `mock.authToken` (which stays `nil` here, standing in for
+    /// `AuthManager.logout()` having already wiped `APIClient.shared.authToken`).
+    /// #10463 — and it goes through the PINNED transport, never through `api`,
+    /// whose 401 path refreshes and replays under the active account's token.
+    func testLogoutThrowingWithToken_signsWithTheExplicitToken_throughThePinnedTransport() async throws {
+        let pinned = PinnedLogoutRecorder()
+        let pinnedService = AuthService(api: mock, pinned: pinned)
         mock.authToken = nil
 
-        try await service.logoutThrowing(token: "captured-token-abc")
+        try await pinnedService.logoutThrowing(token: "captured-token-abc")
 
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/logout")
-        XCTAssertEqual(mock.lastRequest?.method, "POST")
-        XCTAssertEqual(mock.lastRequest?.headers?["Authorization"], "Bearer captured-token-abc")
+        XCTAssertEqual(pinned.calls.map(\.path), [AuthEndpoint.logout.path])
+        XCTAssertEqual(pinned.calls.map(\.method), ["POST"])
+        XCTAssertEqual(pinned.calls.map(\.bearerToken), ["captured-token-abc"])
+        XCTAssertEqual(mock.requestCount, 0, "rien ne part par le transport qui rafraîchit et rejoue")
     }
 
     func testLogoutThrowingWithToken_propagatesServerError() async {
-        mock.errorToThrow = MeeshyError.network(.noConnection)
+        let pinned = PinnedLogoutRecorder()
+        pinned.error = MeeshyError.network(.noConnection)
+        let pinnedService = AuthService(api: mock, pinned: pinned)
 
         do {
-            try await service.logoutThrowing(token: "tok")
+            try await pinnedService.logoutThrowing(token: "tok")
             XCTFail("Expected error to be thrown")
         } catch let error as MeeshyError {
             if case .network(.noConnection) = error {
@@ -739,5 +825,47 @@ final class AuthServiceTests: XCTestCase {
         } catch {
             XCTFail("Expected error to be MeeshyError, got \(error)")
         }
+    }
+}
+
+/// Le transport ÉPINGLÉ, enregistré : ce que la déconnexion par jeton lui confie.
+private final class PinnedLogoutRecorder: PinnedRequesting, @unchecked Sendable {
+    struct Call: Sendable {
+        let path: String
+        let method: String
+        let bearerToken: String
+    }
+
+    private let lock = NSLock()
+    private var _calls: [Call] = []
+    private var _error: Error?
+
+    private func locked<T>(_ body: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body()
+    }
+
+    var calls: [Call] { locked { _calls } }
+
+    var error: Error? {
+        get { locked { _error } }
+        set { locked { _error = newValue } }
+    }
+
+    func requestPinned<T: Decodable>(
+        _ endpoint: any MeeshyEndpoint,
+        method: String,
+        body: Data?,
+        headers: [String: String],
+        bearerToken: String
+    ) async throws -> T {
+        let failure: Error? = locked {
+            _calls.append(Call(path: endpoint.path, method: method, bearerToken: bearerToken))
+            return _error
+        }
+        if let failure { throw failure }
+        let data = Data(#"{"success":true,"data":{"loggedOut":true}}"#.utf8)
+        return try JSONDecoder().decode(T.self, from: data)
     }
 }

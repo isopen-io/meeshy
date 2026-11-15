@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_block_confirm_title">حظر هذا المستخدم</string>
+    <string name="profile_block_confirm_message">لن تتلقى رسائل من %1$s بعد الآن. يمكنك إلغاء الحظر من الإعدادات.</string>
+    <string name="profile_block_confirm_action">حظر</string>
+    <string name="profile_block_cancel">إلغاء</string>
+    <string name="profile_block_fallback_name">هذا الشخص</string>
+</resources>

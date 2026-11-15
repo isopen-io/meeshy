@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_composer_plus_menu">إضافة إلى منشورك</string>
+    <string name="feed_composer_plus_photo_video">صورة أو فيديو</string>
+    <string name="feed_composer_plus_camera">الكاميرا</string>
+    <string name="feed_composer_plus_audio">تسجيل صوتي</string>
+    <string name="feed_composer_plus_file">ملف</string>
+    <string name="feed_composer_plus_location">الموقع</string>
+</resources>

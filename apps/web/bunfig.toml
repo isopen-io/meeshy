@@ -1,0 +1,44 @@
+# Les littéraux de CONSTRUCTION (`vite.config.ts` § `define`) sous `bun test`.
+#
+# `resolveApiConfig`/`apiConfig` (`src/lib/api/config.ts`, #5605) et la
+# fixture de banc (`src/lib/api/fixtures.ts`) lisent `__SHELL__`/`__BENCH__`
+# au niveau MODULE — pas seulement dans une branche gardée. Importer N'IMPORTE
+# QUEL export d'un tel fichier évalue tout le module, `__SHELL__`/`__BENCH__`
+# compris : sans ce define, `bun test` les rend `ReferenceError`, alors que
+# ni `vite build` ni `vite dev` (qui les REMPLACENT par un littéral avant
+# transpilation) ne rencontrent jamais le problème.
+#
+# Ces valeurs sont celles du build NORMAL (variante A, hors banc) — un témoin
+# qui a besoin de la variante coque/banc bouchonne son propre appel plutôt que
+# de dépendre d'un define global.
+[define]
+"__SHELL__" = "false"
+"__BENCH__" = "0"
+# `__FIXTURES__` — vrai sous `bun test` : c'est la valeur du build NORMAL
+# (`VITE_DATA_SOURCE` absente ⇒ `fixtures`), et tous les témoins lisent la
+# source `fixtures`. Un témoin qui a besoin de la construction `gateway`
+# bouchonne son propre appel (`source: 'gateway'` en paramètre), ce que la
+# garde `__FIXTURES__ && source === 'fixtures'` laisse passer à l'identique.
+"__FIXTURES__" = "true"
+# `__APP_VERSION__` porte ici une valeur SENTINELLE, jamais la vraie version :
+# recopier `package.json` dans ce fichier rejouerait exactement le defaut que
+# le litteral de construction corrige. Les temoins comparent au SYMBOLE, pas a
+# une chaine ecrite.
+"__APP_VERSION__" = "\"0.0.0-test\""
+"__API_PROXY_TARGET__" = "\"https://proxy.test\""
+# `__BUILD_COMMIT__` — `null` sous `bun test`, comme un build local sans `VCS_REF` (#12654).
+"__BUILD_COMMIT__" = "null"
+
+# LE CATALOGUE D'INTERFACE DE LA LANGUE DU DOCUMENT, chargé avant tout témoin
+# (#6206). En production, aucun écran ne se rend avant que la route ait chargé
+# le catalogue de la langue résolue (`route-table.tsx` § `screenPrerequisite`) ;
+# sous `bun test`, un composant rendu hors routeur lirait un catalogue absent.
+# Ce préchargement rejoue le CONTRAT du démarrage pour la langue du HTML
+# statique (`fr`) — ce n'est pas un repli : un témoin qui pose une autre
+# langue charge son catalogue lui-même, et une clé absente reste rouge.
+#
+# LA GARDE DES `act()` ABANDONNÉS passe EN PREMIER (#9509) : elle remplace
+# `act` sur l'objet de module de React, ce qui doit précéder tout import de
+# `react` par un autre préchargement ou un témoin.
+[test]
+preload = ["./src/test-support/act-leak-guard.ts", "./src/test-support/interface-catalog-preload.ts", "./src/test-support/end-to-end-regime-isolation.ts", "./src/test-support/presence-isolation.ts", "./src/test-support/caption-reveals-isolation.ts"]

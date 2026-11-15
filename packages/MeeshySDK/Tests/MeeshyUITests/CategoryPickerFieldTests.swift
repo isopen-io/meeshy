@@ -12,7 +12,7 @@ final class CategoryPickerFieldTests: XCTestCase {
     private struct Host: View {
         let categories: [ConversationCategory]
         @State var selected: String? = nil
-        var onCreate: (String) async -> ConversationCategory? = { _ in nil }
+        var onCreate: @MainActor (String) async -> ConversationCategory? = { _ in nil }
 
         var body: some View {
             CategoryPickerField(

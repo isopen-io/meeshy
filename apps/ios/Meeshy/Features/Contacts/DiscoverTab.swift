@@ -8,24 +8,23 @@ struct DiscoverTab: View {
     @ObservedObject var viewModel: DiscoverViewModel
     var isActive: Bool = true
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
 
     @State private var showSMSComposer = false
+    @State private var isOfferingPhone = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             ContactsScrollSentinel()
-            VStack(spacing: 16) {
+            VStack(spacing: MeeshySpacing.lg) {
                 inviteSection
                 contactMatchesSection
                 searchSection
             }
-            .padding(.top, 8)
-            .padding(.bottom, 20)
+            .padding(.top, MeeshySpacing.sm)
+            .padding(.bottom, MeeshySpacing.xl)
         }
         .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
         .refreshable {
@@ -36,45 +35,60 @@ struct DiscoverTab: View {
             guard viewModel.searchQuery.isEmpty, viewModel.searchResults.isEmpty else { return }
             await viewModel.loadSuggestions()
         }
+        .phonePromptBeforeContactSearch(isPresented: $isOfferingPhone, onContinue: importContacts)
+    }
+
+    /// Retrouver ses contacts : un compte sans numéro se voit d'abord proposer
+    /// d'en ajouter un (#8843), puis l'import part.
+    private func offerPhoneThenSearch() {
+        guard PhonePromptPolicy.shouldOffer(user: AuthManager.shared.currentUser) else {
+            importContacts()
+            return
+        }
+        isOfferingPhone = true
+    }
+
+    private func importContacts() {
+        Task { await viewModel.importContacts() }
     }
 
     // MARK: - Invite Section
 
     private var inviteSection: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             emailInviteCard
             smsInviteCard
             importContactsButton
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     private var emailInviteCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             Label(String(localized: "contacts.discover.email.title", defaultValue: "Inviter par email", bundle: .main), systemImage: "envelope.fill")
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 TextField(String(localized: "contacts.discover.email.placeholder", defaultValue: "Adresse email", bundle: .main), text: $viewModel.emailText)
                     .font(.subheadline)
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .keyboardType(.emailAddress)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.smPlus)
                     .background(theme.inputBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
 
                 Button {
                     Task { await viewModel.sendEmailInvitation() }
                 } label: {
                     Text(String(localized: "common.send", defaultValue: "Envoyer", bundle: .main))
                         .font(.footnote.weight(.semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
+                        .padding(.vertical, MeeshySpacing.smPlus)
                         .background(
                             Capsule().fill(
                                 viewModel.emailText.isEmpty || viewModel.isSendingInvite
@@ -87,25 +101,25 @@ struct DiscoverTab: View {
                 .accessibilityLabel(String(localized: "contacts.discover.email.send-a11y", defaultValue: "Envoyer l'invitation par email", bundle: .main))
             }
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .glassCard()
     }
 
     private var smsInviteCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             Label(String(localized: "contacts.discover.sms.title", defaultValue: "Inviter par SMS", bundle: .main), systemImage: "message.fill")
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
-            HStack(spacing: 10) {
-                TextField(String(localized: "contacts.discover.sms.placeholder", defaultValue: "Numero de telephone", bundle: .main), text: $viewModel.phoneText)
+            HStack(spacing: MeeshySpacing.smPlus) {
+                TextField(String(localized: "contacts.discover.sms.placeholder", defaultValue: "Numéro de téléphone", bundle: .main), text: $viewModel.phoneText)
                     .font(.subheadline)
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .keyboardType(.phonePad)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.smPlus)
                     .background(theme.inputBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
 
                 Button {
                     if MFMessageComposeViewController.canSendText() {
@@ -116,9 +130,9 @@ struct DiscoverTab: View {
                 } label: {
                     Text(String(localized: "common.send", defaultValue: "Envoyer", bundle: .main))
                         .font(.footnote.weight(.semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
+                        .padding(.vertical, MeeshySpacing.smPlus)
                         .background(
                             Capsule().fill(
                                 viewModel.phoneText.isEmpty
@@ -131,7 +145,7 @@ struct DiscoverTab: View {
                 .accessibilityLabel(String(localized: "contacts.discover.sms.send-a11y", defaultValue: "Envoyer l'invitation par SMS", bundle: .main))
             }
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .glassCard()
         .sheet(isPresented: $showSMSComposer) {
             SMSComposerView(
@@ -144,9 +158,9 @@ struct DiscoverTab: View {
     private var importContactsButton: some View {
         Button {
             HapticFeedback.light()
-            Task { await viewModel.importContacts() }
+            offerPhoneThenSearch()
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 if viewModel.isImportingContacts {
                     ProgressView()
                         .scaleEffect(0.8)
@@ -160,10 +174,10 @@ struct DiscoverTab: View {
             }
             .foregroundColor(MeeshyColors.indigo500)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, MeeshySpacing.md)
             .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(MeeshyColors.indigo500.opacity(0.3), lineWidth: 1)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                    .stroke(MeeshyColors.indigo500.opacity(MeeshyOpacity.medium), lineWidth: 1)
             )
         }
         .disabled(viewModel.isImportingContacts)
@@ -175,10 +189,10 @@ struct DiscoverTab: View {
     @ViewBuilder
     private var contactMatchesSection: some View {
         if !viewModel.contactMatches.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                Label(String(localized: "contacts.discover.matches.title", defaultValue: "Deja sur Meeshy", bundle: .main), systemImage: "person.2.wave.2.fill")
+            VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                Label(String(localized: "contacts.discover.matches.title", defaultValue: "Déjà sur Meeshy", bundle: .main), systemImage: "person.2.wave.2.fill")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
 
                 LazyVStack(spacing: 0) {
                     ForEach(Array(viewModel.contactMatches.enumerated()), id: \.element.id) { index, match in
@@ -186,9 +200,9 @@ struct DiscoverTab: View {
                     }
                 }
             }
-            .padding(14)
+            .padding(MeeshySpacing.mdPlus)
             .glassCard()
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
         }
     }
 
@@ -204,39 +218,45 @@ struct DiscoverTab: View {
             avatarURL: match.user.avatar
         )
 
-        return HStack(spacing: 14) {
+        return HStack(spacing: MeeshySpacing.mdPlus) {
             MeeshyAvatar(
                 name: displayName,
                 context: .userListItem,
                 accentColor: color,
                 avatarURL: match.user.avatar,
                 moodEmoji: statusViewModel.statusForUser(userId: match.user.id)?.moodEmoji,
-                presenceState: PresenceManager.shared.resolvedState(userId: match.user.id, isOnline: match.user.isOnline ?? false),
+                presenceState: PresenceManager.shared.resolvedState(userId: match.user.id, isOnline: match.user.isOnline),
+                ring: match.user.avatarRing,
                 onMoodTap: statusViewModel.moodTapHandler(for: match.user.id)
             )
-            .onTapGesture { router.deepLinkProfileUser = profileUser }
+            .onTapGesture { router.openProfileSheet(profileUser) }
+            .accessibilityAction(named: Text(String(localized: "bubble.avatar.viewProfile", defaultValue: "Voir le profil", bundle: .main))) { router.openProfileSheet(profileUser) }
+            .countsImpression(of: statusViewModel.statusForUser(userId: match.user.id)?.id) {
+                statusViewModel.trackImpression($0)
+            }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(displayName)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
                 if let contactName = match.contactDisplayName, contactName != displayName {
                     Text(String(format: String(localized: "contacts.discover.matches.in-contacts", defaultValue: "Dans tes contacts : %@", bundle: .main), contactName))
                         .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .lineLimit(1)
                 } else {
                     Text("@\(match.user.username)")
                         .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .contentShape(Rectangle())
-            .onTapGesture { router.deepLinkProfileUser = profileUser }
+            .onTapGesture { router.openProfileSheet(profileUser) }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(String(localized: "bubble.avatar.viewProfile", defaultValue: "Voir le profil", bundle: .main))
+            .accessibilityAction { router.openProfileSheet(profileUser) }
 
             Spacer()
 
@@ -248,15 +268,15 @@ struct DiscoverTab: View {
                 onSuccess: { FeedbackToastManager.shared.showSuccess($0) }
             )
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.xs)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.04), value: viewModel.contactMatches.count)
     }
 
     // MARK: - Search Section
 
     private var searchSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             searchBar
             if viewModel.isSearching {
                 HStack {
@@ -264,65 +284,42 @@ struct DiscoverTab: View {
                     ProgressView().tint(MeeshyColors.indigo500)
                     Spacer()
                 }
-                .padding(.top, 20)
+                .padding(.top, MeeshySpacing.xl)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(String(localized: "accessibility.searching", defaultValue: "Recherche en cours", bundle: .main))
             } else if !viewModel.searchResults.isEmpty {
                 searchResults
             } else if !viewModel.searchQuery.isEmpty && viewModel.searchQuery.count >= 2 {
-                VStack(spacing: 12) {
+                VStack(spacing: MeeshySpacing.md) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(.title).weight(.light))
-                        .foregroundColor(theme.textMuted.opacity(0.4))
+                        .foregroundStyle(theme.textMuted.opacity(0.4))
                         .accessibilityHidden(true)
-                    Text(String(localized: "contacts.discover.no-results", defaultValue: "Aucun utilisateur trouve", bundle: .main))
+                    Text(String(localized: "contacts.discover.no-results", defaultValue: "Aucun utilisateur trouvé", bundle: .main))
                         .font(.subheadline.weight(.medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.top, 30)
+                .padding(.top, MeeshySpacing.xxxl)
                 .accessibilityElement(children: .combine)
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     private var searchBar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.subheadline.weight(.medium))
-                .foregroundColor(theme.textMuted)
-
-            TextField(String(localized: "contacts.discover.search-placeholder", defaultValue: "Rechercher un utilisateur Meeshy", bundle: .main), text: $viewModel.searchQuery)
-                .font(.subheadline)
-                .foregroundColor(theme.textPrimary)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .onSubmit { Task { await viewModel.performSearch() } }
-                .adaptiveOnChange(of: viewModel.searchQuery) { _, newValue in
-                    if newValue.count >= 2 {
-                        Task { await viewModel.performSearch() }
-                    } else {
-                        viewModel.searchResults = []
-                    }
-                }
-
-            if !viewModel.searchQuery.isEmpty {
-                Button {
-                    viewModel.searchQuery = ""
-                    viewModel.searchResults = []
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.subheadline)
-                        .foregroundColor(theme.textMuted)
-                }
-                .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
+        ContactsSearchField(
+            placeholder: String(localized: "contacts.discover.search-placeholder", defaultValue: "Rechercher un utilisateur Meeshy", bundle: .main),
+            query: $viewModel.searchQuery
+        )
+        .onSubmit { Task { await viewModel.performSearch() } }
+        .adaptiveOnChange(of: viewModel.searchQuery) { _, newValue in
+            if newValue.count >= 2 {
+                Task { await viewModel.performSearch() }
+            } else {
+                viewModel.searchResults = []
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(theme.inputBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var searchResults: some View {
@@ -336,8 +333,9 @@ struct DiscoverTab: View {
     private func searchResultRow(_ user: UserSearchResult, index: Int) -> some View {
         let name = user.displayName ?? user.username
         let color = DynamicColorGenerator.colorForName(name)
+        let profileUser = ProfileSheetUser(userId: user.id, username: user.username, displayName: user.displayName, avatarURL: user.avatar)
 
-        return HStack(spacing: 14) {
+        return HStack(spacing: MeeshySpacing.mdPlus) {
             MeeshyAvatar(
                 name: name,
                 context: .userListItem,
@@ -345,38 +343,30 @@ struct DiscoverTab: View {
                 avatarURL: user.avatar,
                 moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
                 presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline),
+                ring: user.avatarRing,
                 onMoodTap: statusViewModel.moodTapHandler(for: user.id)
             )
-            .onTapGesture {
-                router.deepLinkProfileUser = ProfileSheetUser(
-                    userId: user.id,
-                    username: user.username,
-                    displayName: user.displayName,
-                    avatarURL: user.avatar
-                )
+            .onTapGesture { router.openProfileSheet(profileUser) }
+            .accessibilityAction(named: Text(String(localized: "bubble.avatar.viewProfile", defaultValue: "Voir le profil", bundle: .main))) { router.openProfileSheet(profileUser) }
+            .countsImpression(of: statusViewModel.statusForUser(userId: user.id)?.id) {
+                statusViewModel.trackImpression($0)
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
                 Text("@\(user.username)")
                     .font(.caption.weight(.medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             .contentShape(Rectangle())
-            .onTapGesture {
-                router.deepLinkProfileUser = ProfileSheetUser(
-                    userId: user.id,
-                    username: user.username,
-                    displayName: user.displayName,
-                    avatarURL: user.avatar
-                )
-            }
+            .onTapGesture { router.openProfileSheet(profileUser) }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(String(localized: "bubble.avatar.viewProfile", defaultValue: "Voir le profil", bundle: .main))
+            .accessibilityAction { router.openProfileSheet(profileUser) }
 
             Spacer()
 
@@ -388,8 +378,8 @@ struct DiscoverTab: View {
                 onSuccess: { FeedbackToastManager.shared.showSuccess($0) }
             )
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.xs)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.04), value: viewModel.searchResults.count)
     }
 }
@@ -414,6 +404,11 @@ struct SMSComposerView: UIViewControllerRepresentable {
 
     @MainActor
     class Coordinator: NSObject, MFMessageComposeViewControllerDelegate {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
         nonisolated func messageComposeViewController(_ controller: MFMessageComposeViewController, didFinishWith result: MessageComposeResult) {
             Task { @MainActor in
                 controller.dismiss(animated: true)

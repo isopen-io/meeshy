@@ -13,8 +13,11 @@ import XCTest
 final class StoryBackgroundLayerVolumeSourceGuardTests: XCTestCase {
 
     func test_backgroundLayer_neverAssignsLiteralVolume() throws {
-        let source = try String(contentsOf: Self.layerSourceURL, encoding: .utf8)
-        let code = Self.strippingLineComments(source)
+        let code = try Self.layerSourceURLs
+            .map { Self.strippingLineComments(try String(contentsOf: $0, encoding: .utf8)) }
+            .joined(separator: "\n")
+        XCTAssertTrue(code.contains("avPlayer?.volume"),
+                      "La garde doit lire le fichier qui attache le player de fond, sinon elle est vide.")
 
         let offenders = code
             .split(separator: "\n", omittingEmptySubsequences: false)
@@ -63,17 +66,22 @@ final class StoryBackgroundLayerVolumeSourceGuardTests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Racine du package : le fichier vit dans `Tests/MeeshyUITests/Story/`,
-    /// il faut donc remonter QUATRE niveaux (fichier → Story → MeeshyUITests
-    /// → Tests → racine) avant de redescendre dans `Sources`.
-    private static var layerSourceURL: URL {
-        URL(fileURLWithPath: #filePath)
+    /// La couche et ses extensions (`StoryBackgroundLayer+*.swift`) : le player
+    /// de fond s'attache dans `+Playback` depuis le découpage du fichier (#9496),
+    /// et la garde suit le TYPE. Le fichier vit dans `Tests/MeeshyUITests/Story/` :
+    /// quatre remontées avant de redescendre dans `Sources`.
+    private static var layerSourceURLs: [URL] {
+        let dossier = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // Story
             .deletingLastPathComponent()   // MeeshyUITests
             .deletingLastPathComponent()   // Tests
             .deletingLastPathComponent()   // MeeshySDK (racine du package)
-            .appendingPathComponent(
-                "Sources/MeeshyUI/Story/Canvas/Layers/StoryBackgroundLayer.swift")
+            .appendingPathComponent("Sources/MeeshyUI/Story/Canvas/Layers")
+        let fichiers = (try? FileManager.default.contentsOfDirectory(at: dossier, includingPropertiesForKeys: nil)) ?? []
+        return fichiers.filter {
+            $0.lastPathComponent == "StoryBackgroundLayer.swift"
+                || $0.lastPathComponent.hasPrefix("StoryBackgroundLayer+")
+        }
     }
 
     private static func strippingLineComments(_ source: String) -> String {

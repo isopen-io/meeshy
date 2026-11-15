@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.loadingImage",
+          "androidName": "story_composer_loadingImage",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.loadingVideo",
+          "androidName": "story_composer_loadingVideo",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

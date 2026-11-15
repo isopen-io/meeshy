@@ -11,9 +11,14 @@ import MeeshyUI
 private final class StubMediaResolver: MediaSaveSourceResolving, @unchecked Sendable {
     var result: Result<URL, Error> = .failure(MediaSaveError.sourceUnavailable)
     private(set) var lastRequest: MediaSaveRequest?
+    /// Le COMPTE, pas seulement la dernière requête : une graine de texte ne
+    /// doit solliciter ce résolveur ZÉRO fois, et `lastRequest == nil` ne
+    /// distinguerait pas « jamais appelé » de « appelé puis remis à nil ».
+    private(set) var callCount = 0
 
     func resolveLocalFile(for request: MediaSaveRequest) async throws -> URL {
         lastRequest = request
+        callCount += 1
         return try result.get()
     }
 }
@@ -77,8 +82,19 @@ final class ConversationMediaDoorTests: XCTestCase {
         )
     }
 
-    private func message(_ attachments: [MessageAttachment], isBlurred: Bool = false) -> Message {
-        var m = MeeshyMessage(conversationId: "conv-1", content: "", attachments: attachments)
+    /// Adaptateur de fixture : `seed(for:)` prend désormais un PLAN (#4025), et
+    /// les témoins de média n'en désignent qu'une moitié. Écrire l'adaptateur
+    /// plutôt que d'élargir chaque appel garde ces témoins concentrés sur ce
+    /// qu'ils mesurent — la matérialisation du fichier, pas la forme du plan.
+    private func plan(_ media: MessageAttachment?,
+                      description: String? = nil) -> ComposableAttachment.SeedPlan {
+        ComposableAttachment.SeedPlan(media: media, description: description)
+    }
+
+    private func message(_ attachments: [MessageAttachment] = [],
+                         content: String = "",
+                         isBlurred: Bool = false) -> Message {
+        var m = MeeshyMessage(conversationId: "conv-1", content: content, attachments: attachments)
         m.isBlurred = isBlurred
         return m
     }
@@ -92,8 +108,8 @@ final class ConversationMediaDoorTests: XCTestCase {
         let resolver = StubMediaResolver()
         resolver.result = .failure(MediaSaveError.sourceUnavailable)
 
-        let seed = await ConversationMediaSeeding.seed(
-            for: attachment(mimeType: "image/jpeg"), resolver: resolver)
+        let seed = await ComposerMediaSeeding.seed(
+            for: plan(attachment(mimeType: "image/jpeg")), resolver: resolver)
 
         XCTAssertNil(seed, "Sans fichier, il n'y a rien à semer — et la porte doit le DIRE, pas l'ouvrir.")
     }
@@ -105,8 +121,8 @@ final class ConversationMediaDoorTests: XCTestCase {
         let resolver = StubMediaResolver()
         resolver.result = .success(try makeJPEG())
 
-        _ = await ConversationMediaSeeding.seed(
-            for: attachment(mimeType: "image/jpeg", id: "piece-7"), resolver: resolver)
+        _ = await ComposerMediaSeeding.seed(
+            for: plan(attachment(mimeType: "image/jpeg", id: "piece-7")), resolver: resolver)
 
         XCTAssertEqual(resolver.lastRequest?.attachmentId, "piece-7")
         XCTAssertEqual(resolver.lastRequest?.kind, .image)
@@ -118,22 +134,33 @@ final class ConversationMediaDoorTests: XCTestCase {
     func test_uneImage_devientUnBitmap_uneVideoResteUnFichier() async throws {
         let imageResolver = StubMediaResolver()
         imageResolver.result = .success(try makeJPEG())
-        let imageSeed = await ConversationMediaSeeding.seed(
-            for: attachment(mimeType: "image/jpeg"), resolver: imageResolver)
+        let imageSeed = await ComposerMediaSeeding.seed(
+            for: plan(attachment(mimeType: "image/jpeg")), resolver: imageResolver)
 
+        // `payload` est OPTIONNEL depuis #4025 — une graine de TEXTE seul n'a
+        // rien à poser. Le `case .none` n'est donc pas une formalité de
+        // compilation : il DIT ce que ce témoin attend, à savoir qu'une image
+        // reçue produit TOUJOURS une charge. Un double `XCTUnwrap` aurait fait
+        // taire la même exigence.
         switch try XCTUnwrap(imageSeed).payload {
         case .image: break
         case .video: XCTFail("Une image reçue doit devenir un BITMAP : le fond de slide n'accepte rien d'autre.")
+        case .audio: XCTFail("Une image reçue n'est pas un son — la forme est élue par le mime, une seule fois.")
+        case .scene: XCTFail("Une pièce reçue n'est pas une story : la scène entière n'est semée que depuis une story publiée.")
+        case .none: XCTFail("Une image reçue doit produire une charge — une graine SANS payload ne pose rien sur le canvas.")
         }
 
         let videoResolver = StubMediaResolver()
         videoResolver.result = .success(try makeFile(named: "recu.mp4"))
-        let videoSeed = await ConversationMediaSeeding.seed(
-            for: attachment(mimeType: "video/mp4"), resolver: videoResolver)
+        let videoSeed = await ComposerMediaSeeding.seed(
+            for: plan(attachment(mimeType: "video/mp4")), resolver: videoResolver)
 
         switch try XCTUnwrap(videoSeed).payload {
         case .video: break
         case .image: XCTFail("Une vidéo reçue doit rester un FICHIER : décoder une piste vidéo en bitmap perdrait le son et le mouvement.")
+        case .audio: XCTFail("Une vidéo n'est pas une piste sonore : elle se pose sur le canvas, le son ne s'y pose pas.")
+        case .scene: XCTFail("Une pièce reçue n'est pas une story : la scène entière n'est semée que depuis une story publiée.")
+        case .none: XCTFail("Une vidéo reçue doit produire une charge — une graine SANS payload ne pose rien sur le canvas.")
         }
     }
 
@@ -144,14 +171,26 @@ final class ConversationMediaDoorTests: XCTestCase {
     /// « Composer » sur une note vocale que la graine ne sait pas poser, et
     /// l'atelier ouvrirait sur une couche sans actif chargé — « invisible aux
     /// lecteurs », dit le log de l'upload.
-    func test_unAudio_neSeSemeDANS_aucuneGraine() async throws {
+    /// **RETOURNÉ au #4461.** Ce témoin exigeait qu'un son ne sème RIEN, et sa
+    /// raison — « l'atelier ouvrirait sur une couche sans actif chargé » — était
+    /// juste tant que la graine ne savait poser que des bitmaps et des pistes
+    /// vidéo. `StoryComposerSeed.audio` emprunte désormais le chemin du collage
+    /// (`attachPastedAudio`), qui charge l'actif : la couche n'est plus vide,
+    /// donc le refus n'a plus d'objet.
+    ///
+    /// Il est retourné et non supprimé : ce qu'il garde maintenant est que le
+    /// son sème bien une charge SONORE — pas une image, pas une vidéo, pas
+    /// `nil`.
+    func test_unAudio_semeUneCharge_SONORE() async throws {
         let resolver = StubMediaResolver()
         resolver.result = .success(try makeFile(named: "note.m4a"))
 
-        let seed = await ConversationMediaSeeding.seed(
-            for: attachment(mimeType: "audio/m4a"), resolver: resolver)
+        let seed = await ComposerMediaSeeding.seed(
+            for: plan(attachment(mimeType: "audio/m4a")), resolver: resolver)
 
-        XCTAssertNil(seed)
+        guard case .audio? = seed?.payload else {
+            return XCTFail("un son doit semer une charge sonore, pas \(String(describing: seed?.payload))")
+        }
     }
 
     /// Un LIEU (`application/x-location`), un PDF, un document : `AttachmentKind`
@@ -163,8 +202,8 @@ final class ConversationMediaDoorTests: XCTestCase {
                      "application/msword", "text/plain", "application/zip"] {
             let resolver = StubMediaResolver()
             resolver.result = .success(try makeFile(named: "piece.bin"))
-            let seed = await ConversationMediaSeeding.seed(
-                for: attachment(mimeType: mime), resolver: resolver)
+            let seed = await ComposerMediaSeeding.seed(
+                for: plan(attachment(mimeType: mime)), resolver: resolver)
             XCTAssertNil(seed, "\(mime) ne se pose sur aucun canvas.")
         }
     }
@@ -182,9 +221,9 @@ final class ConversationMediaDoorTests: XCTestCase {
             let resolver = StubMediaResolver()
             resolver.result = .success(try makeJPEG())
 
-            let seed = await ConversationMediaSeeding.seed(
-                for: attachment(mimeType: mime, fileUrl: "",
-                                thumbnailUrl: "https://cdn.example/vignette.jpg"),
+            let seed = await ComposerMediaSeeding.seed(
+                for: plan(attachment(mimeType: mime, fileUrl: "",
+                                thumbnailUrl: "https://cdn.example/vignette.jpg")),
                 resolver: resolver)
 
             XCTAssertNil(seed, "\(mime) : la vignette n'est pas le média.")
@@ -202,18 +241,18 @@ final class ConversationMediaDoorTests: XCTestCase {
     /// quatrième site qui oublierait le gate ne pourrait toujours pas construire
     /// de cible sur un média protégé.
     func test_uneCible_refuseUnMediaProtege_auxDeuxNiveaux() {
-        XCTAssertNotNil(ComposableMediaTarget(message: message([attachment(mimeType: "image/jpeg")])))
+        XCTAssertNotNil(ComposerSeedTarget(message: message([attachment(mimeType: "image/jpeg")])))
 
         XCTAssertNil(
-            ComposableMediaTarget(message: message([attachment(mimeType: "image/jpeg", isBlurred: true)])),
+            ComposerSeedTarget(message: message([attachment(mimeType: "image/jpeg", isBlurred: true)])),
             "Une pièce FLOUTÉE : le flou est un masque de rendu, et la porte matérialise le fichier d'origine."
         )
         XCTAssertNil(
-            ComposableMediaTarget(message: message([attachment(mimeType: "image/jpeg", isViewOnce: true)])),
+            ComposerSeedTarget(message: message([attachment(mimeType: "image/jpeg", isViewOnce: true)])),
             "Une pièce à VUE UNIQUE — la protection se déclare aussi au niveau de la pièce jointe."
         )
         XCTAssertNil(
-            ComposableMediaTarget(message: message([attachment(mimeType: "image/jpeg")], isBlurred: true)),
+            ComposerSeedTarget(message: message([attachment(mimeType: "image/jpeg")], isBlurred: true)),
             "Un MESSAGE flouté : masqué dans la conversation, il ne s'ouvre pas sur un fil public."
         )
     }
@@ -253,13 +292,18 @@ final class ConversationMediaDoorTests: XCTestCase {
 
         let porteurs = try sources.filter {
             AppSourceGuard.stripComments(try String(contentsOf: $0, encoding: .utf8))
-                .contains("ComposerIntent(origin: .conversationMedia(")
+                .contains("origin: .conversationMedia(")
         }
         XCTAssertEqual(
-            porteurs.map { $0.lastPathComponent }, ["ConversationMediaComposerDoor.swift"],
+            porteurs.map { $0.lastPathComponent }, ["MediaComposerDoor.swift"],
             "Un seul site construit cette intention, et c'est une PORTE. Zéro : le profil est redevenu "
                 + "de l'UI morte. Deux : le montage a été recopié, avec son envoi et sa sortie."
         )
+        // #6085 — l'intention naît désormais de la CIBLE (`ComposerIntent(origin:
+        // target.origin)`), et l'origine littérale vit dans la fabrique de
+        // `ComposerSeedTarget`. Le fragment cherché a donc perdu son préfixe
+        // `ComposerIntent(` : ce qui se mesure est « qui NOMME cette porte », et
+        // c'est toujours un site unique, toujours le même fichier.
     }
 
     /// La porte n'envoie RIEN elle-même : elle passe par `StoryViewModel`, qui
@@ -270,7 +314,7 @@ final class ConversationMediaDoorTests: XCTestCase {
         let code = try porteCode()
 
         XCTAssertTrue(
-            code.contains("struct ConversationMediaComposerDoor"),
+            code.contains("struct MediaComposerDoor"),
             "Garde-fou : la source lue n'est pas celle de la porte."
         )
         XCTAssertTrue(
@@ -338,7 +382,7 @@ final class ConversationMediaDoorTests: XCTestCase {
         let code = try porteCode()
 
         XCTAssertTrue(
-            code.contains("struct ConversationMediaComposerDoor"),
+            code.contains("struct MediaComposerDoor"),
             "Garde-fou : la source lue n'est pas celle de la porte."
         )
         let attente = try XCTUnwrap(
@@ -364,7 +408,54 @@ final class ConversationMediaDoorTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ConversationMediaComposerDoor.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/MediaComposerDoor.swift")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    // MARK: - #4025 — la porte s'ouvre aussi sur un message TEXTE
+
+    /// **Le troisième verrou s'ouvre au texte, sans se desserrer.**
+    ///
+    /// `ComposerSeedTarget` existe pour qu'aucun déclencheur — fût-il un
+    /// quatrième, écrit demain, qui oublierait le gate d'offre — ne puisse
+    /// construire de cible sur un contenu protégé. Il refusait aussi, par
+    /// construction, tout message sans pièce jointe : son `init?` exigeait un
+    /// `MessageAttachment`. Un message texte ne pouvait donc pas ouvrir la
+    /// porte, quoi qu'en dise le menu.
+    func test_target_seDeployeSurUnMessageTexte() throws {
+        let cible = try XCTUnwrap(ComposerSeedTarget(message: message(content: "On se voit à 18h")))
+        XCTAssertNil(cible.attachment, "un message texte ne pose rien sur le canvas")
+        XCTAssertEqual(cible.plan.description, "On se voit à 18h")
+    }
+
+    /// Et il reste FERMÉ sur ce qui ne sème rien — sans quoi « la porte s'ouvre
+    /// aussi sur le texte » deviendrait « la porte s'ouvre toujours », sur une
+    /// scène vide.
+    func test_target_refuseUnMessageQuiNeSemeRien() {
+        XCTAssertNil(ComposerSeedTarget(message: message()))
+        XCTAssertNil(ComposerSeedTarget(message: message(content: "   ")))
+    }
+
+    /// **Le verrou vaut pour le texte comme pour le média.** Un message flouté
+    /// ne construit pas de cible, que la chose masquée soit une photo ou une
+    /// phrase — le flou n'est qu'un masque de rendu, jamais une transformation
+    /// du contenu.
+    func test_target_refuseUnTexteProtege() {
+        XCTAssertNil(ComposerSeedTarget(message: message(content: "secret", isBlurred: true)))
+    }
+
+    /// La graine d'un message texte ne demande RIEN au résolveur de média : il
+    /// n'y a aucun fichier à matérialiser. Le témoin le prouve par le compte
+    /// d'appels — un résolveur sollicité pour rien serait un aller-retour
+    /// réseau posé sur un geste qui n'en a pas besoin.
+    func test_graineTexte_neSollicitePasLeResolveurDeMedia() async throws {
+        let resolver = StubMediaResolver()
+        let cible = try XCTUnwrap(ComposerSeedTarget(message: message(content: "salut")))
+
+        let graine = await ComposerMediaSeeding.seed(for: cible.plan, resolver: resolver)
+
+        XCTAssertEqual(graine?.description, "salut")
+        XCTAssertNil(graine?.payload, "aucun actif à poser sur le canvas")
+        XCTAssertEqual(resolver.callCount, 0, "aucun fichier à matérialiser")
     }
 }

@@ -1,0 +1,74 @@
+import UIKit
+import SwiftUI
+
+// **Les LIMITES et les lignes MAGNÉTIQUES, pendant une manipulation** (#8370).
+//
+// La scène se pose sur un sol peint de son propre thumbhash : son bord ne se
+// voit plus, et un objet poussé au-delà se coupe sans que rien ne l'annonce.
+// Pendant un déplacement, un pincement ou une rotation, le canvas trace donc le
+// contour de la scène — là où le contenu se coupe — et les lignes sur lesquelles
+// il s'accroche. La ligne ENGAGÉE garde son trait rose (`updateSnapGuides`) ;
+// celles-ci disent où sont les autres. Au repos, rien ne se peint sur la scène.
+//
+// Les mesures (trait, opacité, pointillé, retrait) sont celles de la recette du
+// kit (`MeeshySelectionFeedbackRecipe.guides()`, K23) : une seule source, que le
+// calque `MeeshySnapGuides` lit aussi. Rien ne change à l'écran.
+//
+// Extension à part, sans propriété stockée : le calque se retrouve par son NOM
+// dans `editOverlayLayer`, ce qui évite d'ajouter à `StoryCanvasUIView.swift`,
+// déjà au-delà du seuil de découpage.
+extension StoryCanvasUIView {
+
+    static let limitsLayerName = "story.canvas.manipulation.limits"
+
+    /// Les lignes tracées sont les cibles du snap, et rien d'autre.
+    nonisolated static var magneticLineTargets: [Double] { snapTargets }
+
+    func showManipulationLimits() {
+        guard bounds.size != .zero else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        hideManipulationLimits()
+        let style = MeeshySelectionFeedbackRecipe.guides()
+        let conteneur = CALayer()
+        conteneur.name = Self.limitsLayerName
+        conteneur.frame = bounds
+
+        let lignes = UIBezierPath()
+        for cible in Self.magneticLineTargets {
+            let x = CGFloat(cible) * bounds.width
+            lignes.move(to: CGPoint(x: x, y: 0))
+            lignes.addLine(to: CGPoint(x: x, y: bounds.height))
+            let y = CGFloat(cible) * bounds.height
+            lignes.move(to: CGPoint(x: 0, y: y))
+            lignes.addLine(to: CGPoint(x: bounds.width, y: y))
+        }
+        let magnetiques = CAShapeLayer()
+        magnetiques.path = lignes.cgPath
+        magnetiques.strokeColor = UIColor(MeeshyColors.onMedia).withAlphaComponent(CGFloat(style.candidateOpacity)).cgColor
+        magnetiques.lineWidth = style.candidateWidth
+        magnetiques.lineDashPattern = style.candidateDash.map { NSNumber(value: Double($0)) }
+        magnetiques.fillColor = UIColor.clear.cgColor
+
+        let contour = CAShapeLayer()
+        contour.path = UIBezierPath(roundedRect: bounds.insetBy(dx: style.boundsInset, dy: style.boundsInset),
+                                    cornerRadius: max(0, canvasCornerRadius - style.boundsInset)).cgPath
+        contour.strokeColor = UIColor(MeeshyColors.onMedia).withAlphaComponent(CGFloat(style.boundsOpacity)).cgColor
+        contour.lineWidth = style.boundsWidth
+        contour.fillColor = UIColor.clear.cgColor
+
+        conteneur.addSublayer(magnetiques)
+        conteneur.addSublayer(contour)
+        editOverlayLayer.insertSublayer(conteneur, at: 0)
+    }
+
+    func hideManipulationLimits() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        editOverlayLayer.sublayers?
+            .filter { $0.name == Self.limitsLayerName }
+            .forEach { $0.removeFromSuperlayer() }
+        CATransaction.commit()
+    }
+}

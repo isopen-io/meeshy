@@ -85,11 +85,31 @@ jest.mock('../../../services/MentionService', () => ({
 }));
 
 jest.mock('../../../utils/withMutationLog', () => ({
+  ...(jest.requireActual('../../../utils/withMutationLog') as object),
   withMutationLog: jest.fn(({ op }: { op: () => Promise<unknown> }) => op()),
 }));
 
 jest.mock('../../../middleware/rate-limiter', () => ({
   createPostRouteRateLimitConfig: jest.fn(() => ({})),
+}));
+
+// #4147 — POST /posts tire son plafond de création d'un compteur PARTAGÉ qui
+// lit Redis directement, fail-closed (createSharedWriteRateLimitPreHandler,
+// routes/posts/socialRateLimit.ts) : sans ce double,
+// `getCacheStore().getNativeClient()` rend `null` en test (aucun REDIS_URL)
+// et la création serait refusée 429 avant d'atteindre ce que ce fichier
+// vérifie — détail complet dans __tests__/unit/routes/posts/core.test.ts,
+// premier fichier de la série à le poser. `incr` répond toujours « premier
+// appel » : ce fichier ne teste PAS le plafond (son témoin dédié vit dans
+// social-write-rate-limit.test.ts) — juste un Redis DISPONIBLE.
+jest.mock('../../../services/CacheStore', () => ({
+  getCacheStore: () => ({
+    getNativeClient: () => ({
+      incr: async () => 1,
+      pexpire: async () => 1,
+      pttl: async () => -1,
+    }),
+  }),
 }));
 
 jest.mock('../../../utils/logger-enhanced', () => ({
@@ -123,7 +143,7 @@ async function buildApp(postServiceImpl: ReturnType<typeof buildMockPostService>
   const requiredAuth = async (request: import('fastify').FastifyRequest, _reply: import('fastify').FastifyReply) => {
     (request as unknown as Record<string, unknown>).authContext = {
       isAuthenticated: true,
-      registeredUser: { id: 'user-id-abc' },
+      registeredUser: { emailVerifiedAt: new Date(), id: 'user-id-abc' },
     };
   };
 
@@ -222,11 +242,19 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
 
     expect(res.statusCode).toBe(201);
     expect(translatePostMock).toHaveBeenCalledTimes(1);
+    // `undefined`, jamais `null` (#4151) : la signature de `translatePost`
+    // déclare `originalLanguage?: string`, et le noyau de publication rend le
+    // champ dans cette forme plutôt que de recopier la colonne à travers un
+    // `any`. Comportement INCHANGÉ — `null ?? detectLanguage(c)` et
+    // `undefined ?? detectLanguage(c)` sont le même repli ; c'est le type
+    // qu'on cesse de mentir.
     expect(translatePostMock).toHaveBeenCalledWith(
       'post-id-123',
       'A regular post caption',
-      null,
-      'user-id-abc',
+      undefined,
+      // #5349 — 4e argument : `detectedLanguage`, absent tant que le composer
+      // ne l'a pas mesuré.
+      undefined,
     );
 
     await app.close();
@@ -255,8 +283,10 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
       expect(translatePostMock).toHaveBeenCalledWith(
         'post-id-123',
         'Une phrase à traduire',
-        null,
-        'user-id-abc',
+        undefined,
+        // #5349 — `detectedLanguage`, absent tant que le composer ne l'a pas
+        // mesuré.
+        undefined,
       );
 
       await app.close();

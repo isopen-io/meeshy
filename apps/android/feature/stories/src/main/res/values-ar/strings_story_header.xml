@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_header_remove">إزالة</string>
+    <string name="stories_header_remove_title">إزالة هذه القصة؟</string>
+    <string name="stories_header_remove_hint">السبب (إلزامي، 3 أحرف على الأقل)</string>
+    <string name="stories_header_report_details">التفاصيل (اختياري)</string>
+    <string name="stories_header_report_send">إرسال</string>
+    <string name="stories_header_remove_failed">تعذّرت إزالة القصة.</string>
+</resources>

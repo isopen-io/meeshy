@@ -1,5 +1,8 @@
 package me.meeshy.sdk.model
 
+import me.meeshy.sdk.model.search.SearchTextFolder
+import me.meeshy.sdk.model.text.WrittenLink
+
 /**
  * The four inline emphasis treatments a text run can carry. Immutable; markdown
  * nesting unions them (e.g. `**a *b* c**` → the `b` run is bold + italic).
@@ -16,6 +19,14 @@ data class TextStyles(
 }
 
 /**
+ * A run of a content string flagged as a search-term match ([highlighted]) or
+ * not. In order, the runs' [text] concatenate back to the original input with no
+ * gaps and no overlaps — so a plain-text row can wash the matches by mapping each
+ * run onto a styled span, with no decision of its own.
+ */
+data class HighlightSegment(val text: String, val highlighted: Boolean)
+
+/**
  * A single rendered run of a message body. Text runs carry emphasis; the three
  * link kinds carry both what to display and where to navigate.
  */
@@ -24,6 +35,18 @@ sealed interface MessageSegment {
     data class MentionLink(val display: String, val username: String, val url: String) : MessageSegment
     data class MeeshyTokenLink(val display: String, val token: String, val url: String) : MessageSegment
     data class UrlLink(val display: String, val url: String) : MessageSegment
+
+    /** Inline `code` — literal: no emphasis, mention or link inside. */
+    data class Code(val text: String, val styles: TextStyles = TextStyles.None) : MessageSegment
+
+    /** `#tag` → `https://meeshy.me/hashtag/<tag lowercased>`; [display] is as written. */
+    data class HashtagLink(val display: String, val tag: String, val url: String) : MessageSegment
+
+    /**
+     * A link AS WRITTEN (`[label](url)`, `[[url]]`, `www.…`, an e-mail): what it
+     * shows and where it leads is decided at render time by `LinkDisplayLaw`.
+     */
+    data class Link(val written: WrittenLink) : MessageSegment
 }
 
 /**
@@ -49,28 +72,80 @@ object MessageTextParser {
      * Segment [text] into styled runs and links. [mentionDisplayNames] maps a
      * `username → display name`; a display name with whitespace lets `@Display
      * Name` resolve to the user (bare `@username` still resolves without it).
+     * [validUsernames] (lowercase) is the set the caller KNOWS to exist: only those
+     * pseudos become links, the rest stay plain text. `null` links every handle
+     * (messages); an empty set means nobody matched, so nothing links.
      */
-    fun parse(text: String, mentionDisplayNames: Map<String, String>? = null): List<MessageSegment> =
-        parseInternal(text, TextStyles.None, mentionDisplayNames)
+    fun parse(
+        text: String,
+        mentionDisplayNames: Map<String, String>? = null,
+        validUsernames: Set<String>? = null,
+    ): List<MessageSegment> =
+        parseInternal(text, TextStyles.None, mentionDisplayNames, validUsernames)
 
     /**
-     * All case-insensitive, non-overlapping occurrences of [term] in [text], as
-     * char-index ranges suitable for highlight spans. Empty [term] → no ranges.
+     * All accent- and case-insensitive, non-overlapping occurrences of [term] in
+     * [text], as char-index ranges into the ORIGINAL [text] suitable for highlight
+     * spans — iOS `.diacriticInsensitive`/`.caseInsensitive` parity, so a query
+     * typed without accents ("cafe") still highlights accented text ("café"), and
+     * vice versa. Empty [term], or a [term] that folds away to nothing (only
+     * combining marks), → no ranges. When the match lands on a decomposed grapheme,
+     * the range extends over its trailing combining marks so no half-grapheme is
+     * highlighted.
      */
     fun highlightRanges(text: String, term: String): List<IntRange> {
         if (term.isEmpty()) return emptyList()
-        val lowered = text.lowercase()
-        val needle = term.lowercase()
+        val needle = SearchTextFolder.fold(term)
+        if (needle.isEmpty()) return emptyList()
+        val haystack = SearchTextFolder.foldWithMap(text)
         val ranges = mutableListOf<IntRange>()
         var start = 0
         while (true) {
-            val idx = lowered.indexOf(needle, start)
+            val idx = haystack.folded.indexOf(needle, start)
             if (idx < 0) break
-            val end = idx + needle.length
-            if (end <= text.length) ranges.add(idx until end)
-            start = end
+            val endFolded = idx + needle.length
+            val originStart = haystack.sourceIndexOf[idx]
+            val originEndExclusive =
+                if (endFolded < haystack.folded.length) haystack.sourceIndexOf[endFolded] else text.length
+            ranges.add(originStart until originEndExclusive)
+            start = endFolded
         }
         return ranges
+    }
+
+    /**
+     * Split [text] into alternating highlighted / plain [HighlightSegment] runs
+     * for the accent- and case-insensitive occurrences of [term] (see
+     * [highlightRanges]). The runs cover [text] with no gaps and no overlaps and
+     * concatenate back to it exactly, so a plain-text surface — a global-search
+     * result row (iOS `highlightedText`) — washes the matches by mapping each run
+     * onto a styled span (glue, no decisions), without re-running the search.
+     *
+     * Boundaries: an empty [text] yields no runs; an empty [term], or one that
+     * matches nothing, yields a single plain run carrying the whole [text]; two
+     * adjacent matches yield back-to-back highlighted runs with no empty filler
+     * between them. Because matching is accent-folded, a highlighted run may keep
+     * more characters than [term] has (an accented grapheme highlighted whole).
+     */
+    fun highlightedSegments(text: String, term: String): List<HighlightSegment> {
+        if (text.isEmpty()) return emptyList()
+        val ranges = highlightRanges(text, term)
+        if (ranges.isEmpty()) return listOf(HighlightSegment(text, highlighted = false))
+        val segments = mutableListOf<HighlightSegment>()
+        var cursor = 0
+        for (range in ranges) {
+            val start = range.first
+            val endExclusive = range.last + 1
+            if (start > cursor) {
+                segments.add(HighlightSegment(text.substring(cursor, start), highlighted = false))
+            }
+            segments.add(HighlightSegment(text.substring(start, endExclusive), highlighted = true))
+            cursor = endExclusive
+        }
+        if (cursor < text.length) {
+            segments.add(HighlightSegment(text.substring(cursor), highlighted = false))
+        }
+        return segments
     }
 
     /**
@@ -112,6 +187,13 @@ object MessageTextParser {
         data object Strikethrough : RuleKind
         data object Underline : RuleKind
         data object MeeshyLink : RuleKind
+        data object Code : RuleKind
+        data object BoldItalic : RuleKind
+        data object VerbatimLink : RuleKind
+        data object MarkdownLink : RuleKind
+        data object Hashtag : RuleKind
+        data object Www : RuleKind
+        data object Email : RuleKind
         data object Mention : RuleKind
         data object Url : RuleKind
         data class DisplayNameMention(val username: String) : RuleKind
@@ -122,7 +204,18 @@ object MessageTextParser {
     private val underlineRegex = Regex("""__(.+?)__""")
     private val italicRegex = Regex("""(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)""")
     private val meeshyLinkRegex = Regex("""(?<![a-zA-Z0-9])m\+([a-zA-Z0-9]+)""")
-    private val mentionRegex = Regex("""(?<![a-zA-Z0-9])@([a-zA-Z0-9_]{1,30})""")
+    private val mentionRegex = Regex("""(?<![a-zA-Z0-9])@([a-zA-Z0-9_-]{1,30})""")
+    private val codeRegex = Regex("""`([^`\n]+)`""")
+    private val boldItalicRegex = Regex("""\*\*\*(?![\s*])([^*]+?)(?<![\s*])\*\*\*""")
+    private val verbatimLinkRegex = Regex("""\[\[(https?://[^\s\[\]]+)\]\]""")
+    private val markdownLinkRegex =
+        Regex("""\[([^\[\]\n]+)\]\(((?:https?://|mailto:)[^\s()]+(?:\([^\s()]*\)[^\s()]*)*)\)""")
+    private val hashtagRegex = Regex("""(?<![\p{L}\p{N}_/])#([\p{L}\p{N}_]{1,50})""")
+    private val wwwRegex = Regex(
+        """(?<![\p{L}\p{N}_./@-])www\.[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+(?:[/?#][\w\-._~:/?#\[\]@!${'$'}&'()*+,;=%]*)?""",
+    )
+    private val emailRegex =
+        Regex("""(?<![\p{L}\p{N}_.+-])[\p{L}\p{N}_.+-]+@[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+""")
     private val urlRegex = Regex("""(?<![@\w])https?://[\w\-._~:/?#\[\]@!${'$'}&'()*+,;=%]+""")
 
     /**
@@ -131,12 +224,19 @@ object MessageTextParser {
      * URL last — both handled explicitly in [parseInternal]).
      */
     private val rules: List<Pair<Regex, RuleKind>> = listOf(
+        codeRegex to RuleKind.Code,
+        verbatimLinkRegex to RuleKind.VerbatimLink,
+        markdownLinkRegex to RuleKind.MarkdownLink,
+        boldItalicRegex to RuleKind.BoldItalic,
         boldRegex to RuleKind.Bold,
         strikethroughRegex to RuleKind.Strikethrough,
         underlineRegex to RuleKind.Underline,
         italicRegex to RuleKind.Italic,
         meeshyLinkRegex to RuleKind.MeeshyLink,
         mentionRegex to RuleKind.Mention,
+        hashtagRegex to RuleKind.Hashtag,
+        wwwRegex to RuleKind.Www,
+        emailRegex to RuleKind.Email,
     )
 
     private val trailingLinkPunctuation: Set<Char> = setOf('.', ',', ';', ':', '!', '?', ')', ']')
@@ -152,9 +252,9 @@ object MessageTextParser {
      */
     private fun hasInlineSyntax(text: String): Boolean {
         for (c in text) {
-            if (c == '*' || c == '~' || c == '_' || c == '@') return true
+            if (c == '*' || c == '~' || c == '_' || c == '@' || c == '#' || c == '`' || c == '[') return true
         }
-        return text.contains("http") || text.contains("m+")
+        return text.contains("http") || text.contains("m+") || text.contains("www.")
     }
 
     private fun displayNameRules(mentionDisplayNames: Map<String, String>): List<Pair<Regex, RuleKind>> =
@@ -172,6 +272,7 @@ object MessageTextParser {
         text: String,
         inherited: TextStyles,
         mentionDisplayNames: Map<String, String>?,
+        validUsernames: Set<String>?,
     ): List<MessageSegment> {
         if (text.isEmpty()) return emptyList()
         if (!hasInlineSyntax(text)) return listOf(MessageSegment.Text(text, inherited))
@@ -209,18 +310,44 @@ object MessageTextParser {
                 segments.add(MessageSegment.Text(text.substring(cursor, match.range.first), inherited))
             }
 
+            var consumed = match.value.length
+
             when (kind) {
-                RuleKind.Bold -> segments.addAll(parseInternal(match.groupValues[1], inherited.copy(bold = true), null))
-                RuleKind.Italic -> segments.addAll(parseInternal(match.groupValues[1], inherited.copy(italic = true), null))
-                RuleKind.Strikethrough -> segments.addAll(parseInternal(match.groupValues[1], inherited.copy(strikethrough = true), null))
-                RuleKind.Underline -> segments.addAll(parseInternal(match.groupValues[1], inherited.copy(underline = true), null))
+                RuleKind.Bold -> segments.addAll(parseInternal(match.groupValues[1], inherited.copy(bold = true), null, validUsernames))
+                RuleKind.Italic -> segments.addAll(parseInternal(match.groupValues[1], inherited.copy(italic = true), null, validUsernames))
+                RuleKind.Strikethrough -> segments.addAll(parseInternal(match.groupValues[1], inherited.copy(strikethrough = true), null, validUsernames))
+                RuleKind.Underline -> segments.addAll(parseInternal(match.groupValues[1], inherited.copy(underline = true), null, validUsernames))
+                RuleKind.BoldItalic ->
+                    segments.addAll(parseInternal(match.groupValues[1], inherited.copy(bold = true, italic = true), null, validUsernames))
+                RuleKind.Code -> segments.add(MessageSegment.Code(match.groupValues[1], inherited))
+                RuleKind.VerbatimLink -> {
+                    val target = match.groupValues[1]
+                    segments.add(MessageSegment.Link(WrittenLink.Verbatim(target, target)))
+                }
+                RuleKind.MarkdownLink ->
+                    segments.add(MessageSegment.Link(WrittenLink.Labelled(match.groupValues[1], match.groupValues[2])))
+                RuleKind.Www -> {
+                    val shown = match.value.trimEnd { it in trailingLinkPunctuation }
+                    segments.add(MessageSegment.Link(WrittenLink.Bare(shown, "https://$shown")))
+                    consumed = shown.length
+                }
+                RuleKind.Email ->
+                    segments.add(MessageSegment.Link(WrittenLink.Verbatim(match.value, "mailto:${match.value}")))
+                RuleKind.Hashtag -> {
+                    val tag = match.groupValues[1].lowercase()
+                    segments.add(MessageSegment.HashtagLink(match.value, tag, "https://meeshy.me/hashtag/$tag"))
+                }
                 RuleKind.MeeshyLink -> {
                     val token = match.groupValues[1]
                     segments.add(MessageSegment.MeeshyTokenLink(match.value, token, meeshyUrl(token)))
                 }
                 RuleKind.Mention -> {
                     val username = match.groupValues[1]
-                    segments.add(MessageSegment.MentionLink(match.value, username, mentionUrl(username)))
+                    if (validUsernames == null || username.lowercase() in validUsernames) {
+                        segments.add(MessageSegment.MentionLink(match.value, username, mentionUrl(username)))
+                    } else {
+                        segments.add(MessageSegment.Text(match.value, inherited))
+                    }
                 }
                 is RuleKind.DisplayNameMention -> {
                     segments.add(MessageSegment.MentionLink(match.value, kind.username, mentionUrl(kind.username)))
@@ -228,7 +355,7 @@ object MessageTextParser {
                 RuleKind.Url -> segments.add(MessageSegment.UrlLink(match.value, match.value))
             }
 
-            cursor = match.range.last + 1
+            cursor = match.range.first + consumed
         }
 
         return segments

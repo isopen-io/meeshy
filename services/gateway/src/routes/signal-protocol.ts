@@ -17,10 +17,10 @@ import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/a
 import { createSignalProtocolRateLimitConfig } from '../middleware/rate-limiter';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendForbidden, sendBadRequest } from '../utils/response.js';
+import { mayReadKeysOf } from '../services/e2ee/key-access';
 import {
   errorResponseSchema,
   validationErrorResponseSchema,
-  signalPreKeyBundleSchema,
   generatePreKeyBundleRequestSchema,
   generatePreKeyBundleResponseSchema,
   getPreKeyBundleResponseSchema,
@@ -208,37 +208,9 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
         }
         const { userId: targetUserId } = paramsResult.data;
 
-        // SECURITY: Authorization check - user must share a conversation with target
-        // This prevents unauthorized key scraping
-        // Find conversations where the requesting user is a member
-        const userConversations = await prisma.participant.findMany({
-          where: { userId: requestingUserId, isActive: true },
-          select: { conversationId: true }
-        });
-        const conversationIds = userConversations.map(c => c.conversationId);
-
-        // Check if target user is a member of any of those conversations
-        const sharedConversation = conversationIds.length > 0
-          ? await prisma.participant.findFirst({
-              where: {
-                userId: targetUserId,
-                conversationId: { in: conversationIds },
-                isActive: true
-              }
-            })
-          : null;
-
-        // Also allow if they are friends
-        const areFriends = await prisma.friendRequest.findFirst({
-          where: {
-            OR: [
-              { senderId: requestingUserId, receiverId: targetUserId, status: 'accepted' },
-              { senderId: targetUserId, receiverId: requestingUserId, status: 'accepted' }
-            ]
-          }
-        });
-
-        if (!sharedConversation && !areFriends) {
+        // SECURITY: même garde que `/e2ee/keys/:userId` — site unique (#3706).
+        const authorized = await mayReadKeysOf(prisma, requestingUserId ?? '', targetUserId);
+        if (!authorized) {
           logger.warn('SECURITY: Unauthorized key bundle request', {
             requestingUserId,
             targetUserId,

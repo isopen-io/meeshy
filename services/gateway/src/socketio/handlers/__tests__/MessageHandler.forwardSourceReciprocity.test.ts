@@ -68,8 +68,15 @@ jest.mock('../../../services/messaging/postReplySnapshot', () => ({
   postReplyToFromMetadata: jest.fn(() => null),
   POST_REPLY_SNAPSHOT_SELECT: { id: true },
 }));
+// #7070 — la LISTE autant que la pièce : le handler appelle le site unique
+// `serializeMessageAttachmentsForSocket`. Double transparent, comme son voisin :
+// ce fichier mesure la réciprocité des SOURCES de transfert, pas la forme servie
+// des pièces jointes.
 jest.mock('../../serializeAttachmentForSocket', () => ({
   serializeAttachmentForSocket: jest.fn((a: unknown) => a),
+  serializeMessageAttachmentsForSocket: jest.fn((attachments: unknown) =>
+    Array.isArray(attachments) ? attachments : []
+  ),
 }));
 jest.mock('../../../services/ConversationStatsService', () => ({
   conversationStatsService: { updateOnNewMessage: jest.fn<any>().mockResolvedValue(undefined) },
@@ -118,22 +125,24 @@ function makeRecordingIO() {
   return { io, emissions };
 }
 
-type Options = { readonly optedOut?: readonly string[] };
+type Options = { readonly optedOut?: readonly string[]; readonly participantsFail?: boolean };
 
 type QueuedEntry = { readonly queueKey: string; readonly payload: any };
 
-function makeDeps({ optedOut = [] }: Options) {
+function makeDeps({ optedOut = [], participantsFail = false }: Options) {
   const { io, emissions } = makeRecordingIO();
   const queued: QueuedEntry[] = [];
 
   const prisma = {
     conversation: { findUnique: jest.fn<any>().mockResolvedValue(null) },
     participant: {
-      findMany: jest.fn<any>().mockResolvedValue([
-        { id: FORWARDER_PARTICIPANT_ID, userId: FORWARDER_USER_ID, joinedAt: new Date() },
-        { id: 'p-open', userId: OPEN_READER_ID, joinedAt: new Date() },
-        { id: 'p-silent', userId: SILENT_READER_ID, joinedAt: new Date() },
-      ]),
+      findMany: participantsFail
+        ? jest.fn<any>().mockRejectedValue(new Error('participant query down'))
+        : jest.fn<any>().mockResolvedValue([
+            { id: FORWARDER_PARTICIPANT_ID, userId: FORWARDER_USER_ID, joinedAt: new Date() },
+            { id: 'p-open', userId: OPEN_READER_ID, joinedAt: new Date() },
+            { id: 'p-silent', userId: SILENT_READER_ID, joinedAt: new Date() },
+          ]),
       findFirst: jest.fn<any>().mockResolvedValue(null),
     },
     message: {
@@ -335,5 +344,22 @@ describe('message:new — réciprocité de la source des transferts', () => {
     );
 
     expect(roomEmission?.except).toEqual([`user:${FORWARDER_USER_ID}`]);
+  });
+
+  it("retire la provenance pour TOUS les lecteurs quand la requête participants échoue — fail-closed, jamais fail-open", async () => {
+    const emissions = await emissionsOf({ participantsFail: true });
+
+    const roomEmission = messageNewEmissions(emissions).find((e) =>
+      e.rooms.includes(`conversation:${CONV_ID}`)
+    );
+    expect(roomEmission).toBeDefined();
+    expect(roomEmission?.payload.forwardedFrom).toBeUndefined();
+    expect(roomEmission?.payload.forwardedFromConversation).toBeUndefined();
+    expect(JSON.stringify(roomEmission?.payload)).not.toContain('Groupe Public Source');
+    expect(JSON.stringify(roomEmission?.payload)).not.toContain('Auteur Origine');
+
+    // L'auteur reste servi par son propre payload cid-aware.
+    const own = messageNewEmissions(emissions).find((e) => e.rooms.includes(`user:${FORWARDER_USER_ID}`));
+    expect(own?.payload.forwardedFrom).toBeDefined();
   });
 });

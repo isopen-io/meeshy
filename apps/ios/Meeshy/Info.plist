@@ -6,6 +6,7 @@
 	<array>
 		<string>me.meeshy.app.conversation-sync</string>
 		<string>me.meeshy.app.message-prefetch</string>
+		<string>me.meeshy.app.battery-refresh</string>
 		<string>me.meeshy.cache.background-flush</string>
 	</array>
 	<key>CFBundleDevelopmentRegion</key>
@@ -48,7 +49,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1756</string>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>FirebaseAppDelegateProxyEnabled</key>
 	<false/>
 	<key>ITSAppUsesNonExemptEncryption</key>
@@ -57,6 +58,10 @@
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<false/>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>MeeshySourceCommit</key>
+	<string>$(MEESHY_SOURCE_COMMIT)</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
@@ -65,11 +70,15 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Meeshy needs access to your camera to take photos and videos for messages, video calls, and AR experiences.</string>
 	<key>NSContactsUsageDescription</key>
-	<string>Meeshy needs access to your contacts to help you connect with friends on the platform.</string>
+	<string>Meeshy uses your contacts to find friends who are already on Meeshy and let you know when one of them joins. No one is contacted on your behalf.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Meeshy uses Face ID to provide secure and convenient authentication.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Meeshy uses your location to share your current location with contacts and find nearby friends.</string>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>Meeshy rings an alarm on your iPhone when a friend sends you a Bring, an extreme emergency, even in silent mode.</string>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>Meeshy reads the song playing in Apple Music to share it with the Close friends you granted it to, and only with them.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Meeshy needs access to your microphone for voice messages, video calls, and audio recording.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
@@ -78,10 +87,13 @@
 	<string>Meeshy needs access to your photo library to share photos and videos with your contacts.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Meeshy uses on-device speech recognition for real-time voice translation and voice message transcription. Your voice data stays on your device for maximum privacy.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>NSUserActivityTypes</key>
 	<array>
 		<string>INSendMessageIntent</string>
 		<string>INStartCallIntent</string>
+		<string>me.meeshy.app.detached-conversation</string>
 	</array>
 	<key>NSVoIPUsageDescription</key>
 	<string>Meeshy uses VoIP to enable real-time voice and video calls with your contacts.</string>
@@ -109,6 +121,7 @@
 		<string>fetch</string>
 		<string>remote-notification</string>
 		<string>processing</string>
+		<string>push-to-talk</string>
 	</array>
 	<key>UIFileSharingEnabled</key>
 	<false/>

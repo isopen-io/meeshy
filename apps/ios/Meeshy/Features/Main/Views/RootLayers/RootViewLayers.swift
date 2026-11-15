@@ -1,0 +1,426 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+// Les couches PROPRES à `RootView` (fenêtre iPhone), dans l'ordre où elles se
+// posent sur le `ZStack` racine. Chacune est un `ViewModifier` nominal : voir
+// l'en-tête de `RootSharedLayers.swift` pour la raison (#5837). Ce qu'une
+// couche ne possède pas, elle le reçoit — jamais de singleton nommé Meeshy
+// lu « parce que c'est plus court », les fermetures de la racine restent le
+// seul lieu qui écrit son état.
+
+/// Environnement de la fenêtre : les cinq objets partagés, le chrome social,
+/// le namespace de la transition zoom, l'aperçu de conversation ouvert depuis
+/// un toast, et le drapeau « un viewer de story est présenté ».
+struct RootEnvironmentLayer: ViewModifier {
+    let router: Router
+    let storyViewModel: StoryViewModel
+    let statusViewModel: StatusViewModel
+    let conversationViewModel: ConversationListViewModel
+    @ObservedObject var storyViewerCoordinator: StoryViewerCoordinator
+    let storyZoomNamespace: Namespace.ID
+    @Binding var notificationPreviewConversation: Conversation?
+    let onOpenFullConversation: (Conversation) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(MeeshyRouterInjection(router: router))
+            .modifier(PublishesSceneNavigation(router: router, role: .main))
+            .environmentObject(storyViewModel)
+            .environmentObject(statusViewModel)
+            .meeshyConversationList(conversationViewModel)
+            .environmentObject(storyViewerCoordinator)
+            // Humeur / anneau de story par EnvironmentValues : les feuilles (dont la
+            // feuille de commentaires) en héritent, contrairement aux
+            // EnvironmentObject ci-dessus. Cf. SocialChromeEnvironment.swift.
+            .meeshySocialChrome(status: statusViewModel, story: storyViewModel, storyViewer: storyViewerCoordinator)
+            .environment(\.zoomTransitionNamespace, storyZoomNamespace)
+            // In-app notification preview: long-press / pull-down on a toast opens
+            // the conversation (last messages + simple composer) over the current
+            // page. A sheet creates a fresh environment, so the objects the reused
+            // `ConversationView` reads must be re-injected here.
+            .sheet(item: $notificationPreviewConversation) { conv in
+                ConversationView(conversation: conv, previewMode: true, onOpenFullConversation: {
+                    // Leave the preview and open the real conversation with a
+                    // navigation push so going back returns to the originating
+                    // screen. Dismiss first, then push to avoid a present/dismiss
+                    // race.
+                    notificationPreviewConversation = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        onOpenFullConversation(conv)
+                    }
+                })
+                    .modifier(MeeshyRouterInjection(router: router))
+                    .environmentObject(storyViewModel)
+                    .environmentObject(statusViewModel)
+                    .meeshyConversationList(conversationViewModel)
+                    .environmentObject(storyViewerCoordinator)
+                    .presentationDetents([.large, .medium])
+                    .presentationDragIndicator(.visible)
+                    .closesForConversationOpening(.sheet)
+            }
+            .modifier(PostDetailSheetHost(
+                router: router,
+                storyViewModel: storyViewModel,
+                statusViewModel: statusViewModel,
+                conversationViewModel: conversationViewModel,
+                storyViewerCoordinator: storyViewerCoordinator
+            ))
+            // Propagate story viewer presentation state down to chrome (sync
+            // pill, etc.) so they can skip rendering while a `fullScreenCover`
+            // story is on top. Read by `ConnectionBanner` via
+            // `@Environment(\.isStoryViewerPresenting)`. Cf. bug 2026-05-27.
+            .environment(\.isStoryViewerPresenting, storyViewerCoordinator.pendingRequest != nil)
+    }
+}
+
+/// Les portes de story et le cycle de vie de la racine : « Mes stories »,
+/// l'édition, le viewer, les composers de création et de partage, le titre de
+/// scène, et la tâche de démarrage.
+struct RootStoryDoorsLayer: ViewModifier {
+    @Binding var showMyStoriesFromProfile: Bool
+    @Binding var myStoriesProfileFollowUp: DeferredSheetFollowUp<MyStoriesFollowUp>
+    @Binding var editingStorySessionFromProfile: StoryEditSession?
+    let storyViewModel: StoryViewModel
+    let statusViewModel: StatusViewModel
+    let conversationViewModel: ConversationListViewModel
+    @ObservedObject var router: Router
+    @ObservedObject var storyViewerCoordinator: StoryViewerCoordinator
+    let storyZoomNamespace: Namespace.ID
+    /// Le corps de `.task` de la racine — connexion socket, abonnements,
+    /// chargements parallèles. Il reste ÉCRIT dans `RootView`, qui possède
+    /// tout ce qu'il touche.
+    let onStart: @MainActor () async -> Void
+    @Environment(\.rootNavigationHandoff) private var navigationHandoff
+
+    func body(content: Content) -> some View {
+        content
+            // Tuile « Stories » du profil → page « Mes stories » (en cours et
+            // passées). Hôte UNIQUE de ce listener : la racine est montée quelle
+            // que soit la provenance de la feuille de profil.
+            .myStoriesSheet(
+                isPresented: $showMyStoriesFromProfile,
+                followUp: $myStoriesProfileFollowUp,
+                viewModel: storyViewModel,
+                userId: AuthManager.shared.currentUser?.id ?? "",
+                statusViewModel: statusViewModel,
+                router: router,
+                conversationListViewModel: conversationViewModel,
+                perform: { action in
+                    switch action {
+                    case .openViewer(let postId):
+                        storyViewerCoordinator.present(StoryViewerRequest(
+                            id: AuthManager.shared.currentUser?.id ?? "",
+                            singleGroup: true, postId: postId))
+                    case .createStory:
+                        storyViewModel.showStoryComposer = true
+                    case .editStory(let story):
+                        editingStorySessionFromProfile = StoryEditSession(
+                            story: story,
+                            composer: StoryComposerViewModel(editing: story))
+                    case .resumeDraft(let draftId):
+                        storyViewModel.openComposer(resumingDraftId: draftId)
+                    }
+                }
+            )
+            .storyEditComposerCover(session: $editingStorySessionFromProfile, viewModel: storyViewModel)
+            .onReceive(NotificationCenter.default.publisher(for: .openMyStories)) { _ in
+                showMyStoriesFromProfile = true
+            }
+            // Le titre de scène est ce qu'iPadOS affiche sous la fenêtre en App
+            // Exposé / Stage Manager. `connectedScenes.first` le posait sur une
+            // scène arbitraire : avec deux fenêtres Meeshy, la fenêtre au premier
+            // plan gardait le titre de l'autre. `activeWindowScene` cible celle
+            // que l'utilisateur regarde.
+            .adaptiveOnChange(of: router.sceneTitle) { _, title in
+                DeviceLayout.activeWindowScene?.title = String(format: String(localized: "root.scene_title_format", defaultValue: "Meeshy — %@", bundle: .main), title)
+            }
+            .onAppear {
+                DeviceLayout.activeWindowScene?.title = String(localized: "root.scene_title_default", defaultValue: "Meeshy — Conversations", bundle: .main)
+                // La fenêtre d'iPad vient de passer en largeur compacte : la pile reprend là où la racine iPad
+                // s'est arrêtée (`RootNavigationHandoff`).
+                if router.path.isEmpty, let routes = navigationHandoff?.routes, !routes.isEmpty {
+                    router.path = routes
+                }
+            }
+            .adaptiveOnChange(of: router.path) { _, path in
+                navigationHandoff?.record(path)
+            }
+            .task {
+                await onStart()
+                ConversationListVMOwner.endLaunch()
+            }
+            .modifier(StoryReaderCover(
+                request: $storyViewerCoordinator.pendingRequest,
+                storyViewModel: storyViewModel,
+                statusViewModel: statusViewModel,
+                router: router,
+                conversationList: conversationViewModel,
+                presentationSource: "RootView.fromConv",
+                zoomNamespace: storyZoomNamespace,
+                onReply: { replyContext in
+                    router.navigateToStoryReply(replyContext, conversationList: conversationViewModel)
+                }
+            ))
+            // La célébration d'un palier (#5809), posée en UNE ligne : l'hôte est
+            // écrit une seule fois et vit chez sa jumelle iPad à l'identique.
+            .engagementReveal(router: router)
+            // Composer de CRÉATION — monté ici, au niveau racine, comme le viewer
+            // juste au-dessus. Il vivait dans `StoryTrayView`, instanciée par la
+            // liste de conversations ET par la feuille de feed qui la recouvre sans
+            // la démonter : deux trays vivantes observaient le même
+            // `showStoryComposer` et présentaient le même cover en double. Détail
+            // dans `StoryComposerCover`.
+            .storyComposerCover(
+                viewModel: storyViewModel,
+                router: router,
+                conversationListViewModel: conversationViewModel,
+                statusViewModel: statusViewModel
+            )
+            // **Vue `2a` — l'entrée externe** (#5056). Montée à la racine, comme le
+            // composer de création juste au-dessus, et pour la MÊME raison : deux
+            // hôtes vivants présenteraient le cover en double sur la même fiche.
+            // La fiche vient du conteneur App Group, déposée par l'extension de
+            // partage ; `ShareComposeHandoffConsumer` la balaie à chaque réveil.
+            .shareComposeCover(
+                consumer: ShareComposeHandoffConsumer.shared,
+                storyViewModel: storyViewModel
+            )
+    }
+}
+
+/// Le chrome global : la pastille de synchronisation, la présentation d'appel
+/// et les deux animations de la racine.
+struct RootChromeLayer: ViewModifier {
+    @ObservedObject var reelsPresenter: ReelsPresenter
+    let conversationViewModel: ConversationListViewModel
+    let storyViewModel: StoryViewModel
+    @ObservedObject var storyViewerCoordinator: StoryViewerCoordinator
+    @ObservedObject var router: Router
+    let activeConversationId: () -> String?
+    let onSyncPillTap: (OutboxUIItem.Source) -> Bool
+    let onMiniPlayerTap: () -> Void
+    let showFeed: Bool
+    let showMenu: Bool
+    /// L'aperçu d'appui long ouvert : la bannière du joueur et la pastille de
+    /// synchronisation lui cèdent la place (#17260).
+    @ObservedObject var peekPresence: LongPressPeekPresence
+
+    func body(content: Content) -> some View {
+        content
+            // Point de montage unique du SyncPill (indicateur de frappe global +
+            // statut connexion + file d'attente hors-ligne), voir
+            // docs/superpowers/specs/2026-08-11-global-chrome-banner-stacking-design.md.
+            // Chaîné ICI, AVANT .modifier(CallPresentationLayer()), pour que le
+            // composite (contenu + SyncPill) soit comprimé comme un bloc sous la
+            // bannière d'appel (VStack de compression de frame, §B2 de la spec —
+            // l'ordre inverse ferait chevaucher les deux bannières).
+            // conversationListViewModel/isStoryViewerPresenting passés
+            // explicitement, jamais via @EnvironmentObject/@Environment dans ce
+            // .overlay (§B1 de la spec — crash documenté 4× dans ce repo).
+            // Masqué pendant le lecteur de réels immersif (frère de ZStack, pas
+            // un fullScreenCover — contrairement au story viewer déjà gated via
+            // isStoryViewerPresenting, il n'avait aucune garde équivalente).
+            .overlay(alignment: .bottom) {
+                if reelsPresenter.launch == nil {
+                    ConnectionBanner(
+                        conversationListViewModel: conversationViewModel,
+                        isStoryViewerPresenting: storyViewerCoordinator.pendingRequest != nil,
+                        onItemTap: onSyncPillTap,
+                        activeConversationId: activeConversationId
+                    )
+                    // Au-dessus du chrome bas, et sur le clavier avec lui —
+                    // la barre de composition d'une conversation la porte
+                    // (#10840, qui supplante #10371). La position vit dans
+                    // `SyncPillPlacement`, plus chez chaque hôte (#5941,
+                    // #5944, #5835).
+                    .inSyncPillBand()
+                    .modifier(ConcealedUnderLongPressPeek(presence: peekPresence))
+                }
+            }
+            // Présentation d'appel (cover plein écran + PiP + pastille + bulle +
+            // bannière call-waiting) : le tick `callDuration` 1 Hz et les stats
+            // qualité WebRTC n'invalident que `CallPresentationLayer`, jamais la
+            // racine (cause du watchdog 0x8BADF00D en arrière-plan pendant un
+            // appel). Le mini-lecteur audio y est hoisté (même point
+            // de montage que la bannière d'appel) ; son tap route par
+            // `navigateToConversationById`, le chemin des deep links et des push.
+            .modifier(CallPresentationLayer(
+                miniPlayerOnTapBody: onMiniPlayerTap,
+                // Hide the bar whenever the user is already inside the
+                // conversation playing the audio — the in-place audio bubble
+                // owns the controls there.
+                miniPlayerCurrentConversationId: { router.currentConversationId },
+                // La BANNIÈRE DU JOUEUR (#9494) : sur les écrans principaux seulement, comme les menus
+                // flottants — ni un fil, ni Progression elle-même, ni le lecteur de réels. Une primitive
+                // calculée ICI, où le routeur et le lecteur de réels sont observés.
+                playerBannerHosted: PlayerBannerPlacement.hosts(
+                    routeIsDeep: router.isDeepRoute, reelsAreOpen: reelsPresenter.launch != nil,
+                    peekIsOpen: peekPresence.isOpen),
+                onPlayerBannerTap: { router.openGame(at: .progressionConcept($0.concept)) }
+            ))
+            .meeshyAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, value: showFeed)
+            .meeshyAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, value: showMenu)
+            // L'onboarding post-inscription (#7729), DERNIER calque du chrome :
+            // un `.overlay` ne recouvre que ce qui est chaîné avant lui. Posé
+            // plus tôt, la pastille de synchronisation — « Synchronisation »,
+            // l'état le plus probable au démarrage à froid qui suit
+            // l'inscription — flottait sur la carte, et la toucher naviguait
+            // sous le calque ; le mini-lecteur et la bannière d'appel aussi.
+            // Les présentations (célébration, composeur, appel plein écran)
+            // restent modales, donc PAR-DESSUS. Garde :
+            // `OnboardingAboveGlobalChromeGuardTests`.
+            .onboardingHost(storyViewModel: storyViewModel, router: router)
+            // « Validez votre compte » (#8239) : une FEUILLE, qui passe après
+            // l'onboarding (`OnboardingPresenceSignal`).
+            .activationInviteHost()
+    }
+}
+
+/// Les feuilles de profil et de partage, la nouvelle conversation, les
+/// réactions au chemin de navigation, le deep link et la porte de rupture.
+struct RootSheetsLayer: ViewModifier {
+    @ObservedObject var router: Router
+    let statusViewModel: StatusViewModel
+    let conversationViewModel: ConversationListViewModel
+    @Binding var showSharePicker: Bool
+    @Binding var showNewConversation: Bool
+    @Binding var showFeed: Bool
+    @Binding var feedWasVisibleBeforeNav: Bool
+    @ObservedObject var deepLinkRouter: DeepLinkRouter
+    @ObservedObject var upgradeGate: UpgradeGateController
+    let onDeepLink: (DeepLink?) -> Void
+    /// La porte de citation, posée par la couche la plus EXTERNE (#15911) :
+    /// les feuilles de profil ci-dessous et toutes les pages en héritent.
+    let quoteHost: QuoteComposerHost
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+
+    /// Montre ou cache le fil : ressort rapide, fondu court sous réduction.
+    private func setFeed(_ isShown: Bool) {
+        let reduce = MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
+        meeshyWithAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, reduceMotion: reduce) {
+            showFeed = isShown
+        }
+    }
+
+    func body(content: Content) -> some View {
+        content
+            #if DEBUG
+            // La vitrine (#9820) : le réel se publie sous les yeux du fil, révélé comme par l'accès rapide.
+            .onAppear {
+                VitrineRendu.shared.racineAffichee {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showFeed = true }
+                }
+            }
+            #endif
+            // La fiche d'un visiteur SANS COMPTE — son identité vit dans une
+            // conversation, pas sur un profil.
+            .sheet(item: $router.participantProfileTarget) { target in
+                ParticipantProfileSheet(
+                    conversationId: target.conversationId,
+                    participantId: target.participantId
+                )
+            }
+            .sheet(item: $router.deepLinkProfileUser) { user in
+                UserProfileSheet(
+                    user: user,
+                    moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
+                    onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
+                    presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
+                    postsContent: { uid in
+                        AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
+                            router.push(.postDetail(post.id, post)) // la fiche part d'abord (#16676)
+                        }, onOpenReel: { reel, reels in
+                            ProfilePostsOpener.openReel(reel, in: reels) { router.deepLinkProfileUser = nil }
+                        }))
+                    },
+                    onCall: dialFromProfile, dependencies: .live
+                )
+                .presentationDetents([.large, .medium])
+                .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showSharePicker) {
+                if let shared = router.pendingShareContent {
+                    // L'écran de partage unique (#10947) ne lit aucun objet
+                    // d'environnement : tout lui est injecté.
+                    ShareSheetView(
+                        subject: shared,
+                        actions: ShareSheetHostActions(onOpenConversation: { router.navigateToConversation($0) }),
+                        onDismiss: {
+                            router.pendingShareContent = nil
+                        }
+                    )
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    .closesForConversationOpening(.sheet, close: {
+                        router.pendingShareContent = nil
+                        showSharePicker = false
+                    })
+                }
+            }
+            .adaptiveOnChange(of: router.pendingShareContent != nil) { _, hasContent in
+                if hasContent {
+                    showSharePicker = true
+                }
+            }
+            // #10947 — un partage relayé par l'extension (sans session, ou vers
+            // une conversation chiffrée) rouvre ICI l'écran de partage unique.
+            .shareRelayPresenter(consumer: ShareRelayConsumer.shared, router: router)
+            .modifier(NewConversationSheetHost(isPresented: $showNewConversation, statusViewModel: statusViewModel))
+            .adaptiveOnChange(of: router.path) { _, newPath in
+                if !newPath.isEmpty && showFeed {
+                    feedWasVisibleBeforeNav = true
+                    setFeed(false)
+                } else if newPath.isEmpty && feedWasVisibleBeforeNav {
+                    feedWasVisibleBeforeNav = false
+                    setFeed(true)
+                }
+            }
+            // Accès rapide « Publier un post » (liste de conversations): le flux se montre, et `ThemedFeedOverlay`
+            // consomme le drapeau en ouvrant son composeur.
+            .adaptiveOnChange(of: router.pendingOpenFeedComposer) { _, pending in
+                guard pending, !showFeed else { return }
+                setFeed(true)
+            }
+            // `initial: true` covers the cold-launch race where a Universal
+            // Link sets `pendingDeepLink` from AppDelegate.continue:userActivity:
+            // BEFORE this view mounts. Without it, a plain `.onChange` only fires
+            // on subsequent transitions and the user lands on the home screen
+            // with the deep link silently discarded. `consumePendingDeepLink`
+            // returns nil for the typical cold-launch (no pending link), so
+            // firing on the initial value is a free no-op when there's nothing
+            // to process.
+            .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink, initial: true) { _, newValue in
+                onDeepLink(newValue)
+            }
+            // C4b — la rupture. Posée EN DERNIER dans la chaîne, donc la plus
+            // extérieure : elle doit recouvrir les feuilles et les covers déjà
+            // montés, pas passer derrière eux.
+            //
+            // Le binding est CONSTANT, et c'est le point : `UpgradeGateController`
+            // n'expose aucun moyen de repasser à `nil`, et un `fullScreenCover`
+            // piloté par une constante n'a aucun geste de fermeture. La porte est
+            // une rupture, pas un avertissement.
+            .fullScreenCover(isPresented: .constant(upgradeGate.isBlocked)) {
+                if let requirement = upgradeGate.requirement {
+                    UpgradeGateView(requirement: requirement)
+                }
+            }
+            // La fenêtre de ce routeur, posée par la couche la plus EXTERNE :
+            // feuilles et pleins écrans s'y déclarent, et une ouverture ne
+            // referme que ceux de cette fenêtre (#10543).
+            // La demande d'un lien d'appel : confirmée ici, dans la fenêtre principale.
+            .callLinkConfirmationSheet()
+            .environment(\.meeshyQuoteComposerHost, quoteHost)
+            .environment(\.presentedSurfaceScope, router.surfaceScope)
+    }
+
+    /// L'appel lancé depuis la feuille de profil part une fois la feuille fermée.
+    private func dialFromProfile(_ request: ProfileCallRequest) {
+        router.deepLinkProfileUser = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            CallBackDialer.shared.dialFromProfile(request)
+        }
+    }
+}

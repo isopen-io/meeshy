@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        { "androidName": "participant_profile_allowed_can_view_history", "status": "android-only" },
+        { "androidName": "participant_profile_allowed_can_send_messages", "status": "android-only" },
+        { "androidName": "participant_profile_allowed_can_send_images", "status": "android-only" },
+        { "androidName": "participant_profile_allowed_can_send_files", "status": "android-only" },
+        { "androidName": "participant_profile_allowed_can_send_videos", "status": "android-only" },
+        { "androidName": "participant_profile_allowed_can_send_audios", "status": "android-only" },
+        { "androidName": "participant_profile_allowed_can_send_links", "status": "android-only" },
+        { "androidName": "participant_profile_allowed_can_send_locations", "status": "android-only" },
+        {
+          "catalog": "app",
+          "iosKey": "participantProfile.birthday",
+          "androidName": "participant_profile_info_birthday",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "participantProfile.country",
+          "androidName": "participant_profile_info_country",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "participantProfile.language",
+          "androidName": "participant_profile_info_language",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "participantProfile.joined",
+          "androidName": "participant_profile_info_joined",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "participantProfile.viaLink",
+          "androidName": "participant_profile_info_via_link",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "participantProfile.entryLink",
+          "androidName": "participant_profile_entry_link_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "participantProfile.linkInactive",
+          "androidName": "participant_profile_entry_link_inactive",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "participantProfile.linkUses",
+          "androidName": "participant_profile_entry_link_uses",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "participantProfile.requireNickname",
+          "androidName": "participant_profile_require_nickname",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "participantProfile.requireBirthday",
+          "androidName": "participant_profile_require_birthday",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "participantProfile.hasLeft",
+          "androidName": "participant_profile_has_left",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "participantProfile.unavailable",
+          "androidName": "participant_profile_unavailable",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "participantProfile.noAccount",
+          "androidName": "participant_profile_no_account",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "participantProfile.withheld",
+          "androidName": "participant_profile_withheld",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "participantProfile.historyGrant.error",
+          "androidName": "participant_profile_history_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "participantProfile.linkExpires",
+          "androidName": "participant_profile_entry_link_expires",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,230 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+// MARK: - StoryExportShareSheet
+//
+// Sheet that bakes the current slide into an MP4 — in the language the
+// reader picks — and presents the system share sheet (`ShareSheet`) so the
+// user can drop the file into Photos / Messages / WhatsApp / AirDrop. Offered
+// to EVERY reader since #9953 (« Partager ▸ Exporter en vidéo »). NEVER
+// touches the Meeshy backend.
+
+struct StoryExportShareSheet: View {
+    let story: StoryItem
+    @ObservedObject var viewModel: StoryExportShareViewModel
+    /// L'AUTEUR de la story : le filigrane le nomme et l'interlude le présente
+    /// — jamais le lecteur devant la story d'un autre (#9953, #10536).
+    /// `nil` (« Mes stories ») : l'utilisateur connecté est l'auteur.
+    var author: StoryExportAuthor? = nil
+    @State private var openNoteID: String?
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var isDark: Bool { colorScheme == .dark }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: MeeshySpacing.xxl) {
+                header
+                if !viewModel.availableLanguages.isEmpty {
+                    languagePicker
+                }
+                Spacer(minLength: 0)
+                progressOrAction
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.vertical, MeeshySpacing.xxl)
+            .background(StoryExportSheetPalette.wash(isDark: isDark).ignoresSafeArea())
+            .navigationTitle(String(localized: "story.export.share.title", defaultValue: "Exporter en vidéo"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "common.cancel", defaultValue: "Annuler")) {
+                        viewModel.cancel()
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                viewModel.prepare(story: story)
+            }
+            .sheet(item: Binding<ShareWrapper?>(
+                get: { viewModel.sharedURL.map(ShareWrapper.init) },
+                set: { _ in }
+            )) { wrapper in
+                ShareSheet(activityItems: [wrapper.url], onCompletion: { completed in
+                    viewModel.finishSharing(success: completed)
+                    dismiss()
+                })
+                .onAppear { viewModel.markSharingPresented() }
+            }
+            .alert(
+                String(localized: "story.export.share.errorTitle",
+                       defaultValue: "Export impossible"),
+                isPresented: Binding(
+                    get: { viewModel.errorMessage != nil },
+                    set: { if !$0 { viewModel.errorMessage = nil } }
+                ),
+                actions: {
+                    Button(String(localized: "common.ok", defaultValue: "OK"),
+                           role: .cancel) { viewModel.errorMessage = nil }
+                },
+                message: {
+                    if let msg = viewModel.errorMessage {
+                        Text(msg)
+                    }
+                }
+            )
+        }
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        VStack(spacing: MeeshySpacing.sm) {
+            // Le (i) se pose À CÔTÉ du glyphe, jamais seul sous lui (#18109).
+            MeeshyInfoNoted(note: StoryExportShareCopy.infoNote, openNoteID: $openNoteID, tint: .secondary) {
+                Image(systemName: "square.and.arrow.up.fill")
+                    // Doctrine 84i : hero décoratif de la sheet (~36pt) → taille figée
+                    // (un glyphe hero qui grossit en XXXL déséquilibrerait l'en-tête) ;
+                    // masqué du rotor car le titre de la feuille et le (i) portent le sens.
+                    .font(MeeshyFont.fixedGlyph(36, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.brandGradient)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.top, MeeshySpacing.sm)
+    }
+
+    // MARK: - Language Picker
+
+    private var languagePicker: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            Text(String(localized: "story.export.share.languageLabel",
+                        defaultValue: "Langue à graver"))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                .foregroundColor(.secondary)
+
+            Menu {
+                Button(String(localized: "story.export.share.languageOriginal",
+                              defaultValue: "Texte original")) {
+                    viewModel.selectedLanguage = nil
+                }
+                ForEach(viewModel.availableLanguages, id: \.self) { lang in
+                    Button(displayName(for: lang)) {
+                        viewModel.selectedLanguage = lang
+                    }
+                }
+            } label: {
+                HStack {
+                    Text(viewModel.selectedLanguage.map(displayName(for:))
+                         ?? String(localized: "story.export.share.languageOriginal",
+                                   defaultValue: "Texte original"))
+                        .foregroundColor(.primary)
+                    Spacer()
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                        .foregroundStyle(Color.secondary)
+                        .accessibilityHidden(true)
+                }
+                .padding(MeeshySpacing.md)
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                        .fill(StoryExportSheetPalette.pickerFill(isDark: isDark))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                        .stroke(StoryExportSheetPalette.pickerStroke(isDark: isDark), lineWidth: 1)
+                )
+            }
+            .disabled(viewModel.phase == .exporting || viewModel.phase == .sharing)
+        }
+    }
+
+    private func displayName(for code: String) -> String {
+        Locale.current.localizedString(forLanguageCode: code)?.capitalized
+            ?? code.uppercased()
+    }
+
+    // MARK: - Progress / CTA
+
+    @ViewBuilder
+    private var progressOrAction: some View {
+        switch viewModel.phase {
+        case .exporting:
+            VStack(spacing: MeeshySpacing.md) {
+                ProgressView(value: viewModel.progress)
+                    .progressViewStyle(.linear)
+                    .tint(MeeshyColors.indigo500)
+                Text(String(
+                    format: String(localized: "story.export.share.exporting",
+                                   defaultValue: "Export en cours… %lld%%"),
+                    Int(viewModel.progress * 100)
+                ))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                .foregroundColor(.secondary)
+            }
+        case .idle, .failed:
+            Button {
+                HapticFeedback.medium()
+                Task { await viewModel.startExport(story: story, author: author) }
+            } label: {
+                Text(String(localized: "story.export.share.cta", defaultValue: "Exporter en vidéo"))
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, MeeshySpacing.mdPlus)
+                    .background(MeeshyColors.brandGradient)
+                    .foregroundStyle(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
+            }
+        case .ready, .sharing:
+            ProgressView()
+                .tint(MeeshyColors.indigo500)
+        }
+    }
+}
+
+// MARK: - Share Sheet wrapper
+
+private struct ShareWrapper: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
+}
+
+// MARK: - Palette de surface
+
+/// Jetons de surface de la feuille d'export, dérivés du **`colorScheme` réel
+/// de rendu** — jamais de `ThemeManager.mode`.
+///
+/// La distinction n'est pas théorique : cette feuille a deux points d'entrée,
+/// et l'un des deux force le sombre. `StoryViewerView` applique
+/// `.preferredColorScheme(.dark)` à son contenu, et une `.sheet` présentée
+/// depuis cette hiérarchie en hérite. Le sélecteur de langue s'y rendait donc
+/// **toujours** avec ses valeurs de mode clair, quel que soit le thème choisi
+/// dans l'app : texte `.primary` (blanc en sombre) sur un fond lavande très
+/// clair, soit un contraste de **2,7:1** — sous le seuil WCAG AA de 4,5:1.
+/// Le chevron `.secondary` tombait à ~1,9:1.
+///
+/// Les valeurs de mode clair sont reprises **à l'identique** : l'itération
+/// répare le mode sombre, elle ne re-règle pas le mode clair.
+enum StoryExportSheetPalette {
+
+    /// Voile de fond de la feuille. En clair, la lavande sombre de la marque à
+    /// 4 % ; en sombre, son inverse — l'ancienne valeur y peignait du presque
+    /// noir sur du noir, c'est-à-dire rien.
+    static func wash(isDark: Bool) -> Color {
+        isDark ? MeeshyColors.indigo50.opacity(0.04) : MeeshyColors.indigo950.opacity(0.04)
+    }
+
+    /// Fond du sélecteur de langue.
+    static func pickerFill(isDark: Bool) -> Color {
+        isDark ? MeeshyColors.indigo900.opacity(MeeshyOpacity.medium) : MeeshyColors.indigo50.opacity(0.6)
+    }
+
+    /// Bordure du sélecteur de langue.
+    static func pickerStroke(isDark: Bool) -> Color {
+        isDark ? MeeshyColors.indigo700.opacity(MeeshyOpacity.strong) : MeeshyColors.indigo200
+    }
+}

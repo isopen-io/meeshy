@@ -5,6 +5,11 @@ import os
 
 @MainActor
 final class ConversationOptionsViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published var prefs: APIConversationPreferences = .empty
     @Published var categories: [ConversationCategory] = []
     @Published var allTags: [String] = []
@@ -17,7 +22,7 @@ final class ConversationOptionsViewModel: ObservableObject {
     private var conversationId: String { conversation.id }
     private let store: ConversationStore
     private let preferenceService: PreferenceServiceProviding
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "conv-options")
+    private static let logger = MeeshyLog.logger(.convOptions)
 
     private let customNameSubject = PassthroughSubject<String, Never>()
     private var cancellables = Set<AnyCancellable>()

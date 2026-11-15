@@ -1,29 +1,18 @@
 import Foundation
 
-// MARK: - In-app toast presentation
+// MARK: - In-app banner: identity slots
 
-/// Presentation helpers that turn a raw `SocketNotificationEvent` (backend
-/// real-time alert) into the three text slots + avatar rendered by the in-app
-/// toast (`NotificationToastView`).
+/// Ce qui IDENTIFIE l'auteur d'une bannière in-app — nom affiché, avatar,
+/// couleur de repli — et le nom canonique du groupe où l'événement a eu lieu.
 ///
-/// Design goals (cf. produit — "notifications in-app aussi précises que iOS,
-/// avec moins de détails") :
-///   * **Conversation messages** render exactly like the iOS push
-///     communication-notification: the *sender* is the title and the *group*
-///     is the subtitle. Direct messages have no subtitle.
-///   * **Social / interaction events** (réactions, commentaires, réponses de
-///     commentaire, reposts, stories, statuts…) render a *precise* action
-///     phrase as the title, so the user knows exactly what happened without
-///     opening the app — mirroring the precision of the system push body.
-///   * The avatar is the *sender* avatar, falling back to the *group* avatar
-///     when the sender has none (group messages), then to deterministic
-///     initials.
+/// Ce que la bannière DIT (headline, corps, vignette, réaction) vit dans
+/// `NotificationBannerPresentation.swift` : deux questions, deux fichiers.
 ///
-/// All properties are pure and `O(1)` — they are read from a transient leaf
-/// view (`NotificationToastView`) on every render.
+/// Toutes les propriétés sont pures et `O(1)` — elles sont lues depuis une vue
+/// feuille transitoire (`NotificationToastView`) à chaque rendu.
 public extension SocketNotificationEvent {
 
-    /// Display name of the actor (sender / triggerer), with safe fallbacks.
+    /// Nom affiché de l'acteur (expéditeur / déclencheur), avec replis sûrs.
     var actorDisplayName: String {
         if let name = senderDisplayName, !name.isEmpty { return name }
         if let handle = senderUsername, !handle.isEmpty { return handle }
@@ -31,91 +20,32 @@ public extension SocketNotificationEvent {
         return "Quelqu'un"
     }
 
-    /// `true` when the notification is a plain conversation message whose toast
-    /// should read *sender = title, group = subtitle* (the precise action is
-    /// "a envoyé un message", so it is left implicit).
-    private var isConversationMessage: Bool {
-        switch notificationType {
-        case .newMessage, .legacyNewMessage,
-             .messageReply, .reply, .legacyStoryReply,
-             .userMentioned, .mention, .legacyMention:
-            return true
-        default:
-            return false
-        }
-    }
-
-    // MARK: Title
-
-    /// Primary (bold) line of the toast.
+    /// Le nom CANONIQUE du groupe où le message a été envoyé — `nil` pour un
+    /// message direct, pour une conversation sans titre, et pour tout ce qui
+    /// n'est pas un message de conversation.
     ///
-    /// Prisme Linguistique (i18n serveur) : comme le push iOS, le *titre* est
-    /// l'expéditeur (acteur) et la phrase d'action localisée vit dans le *corps*
-    /// (`content` déjà localisé par le gateway dans la langue du destinataire).
-    /// On ne reconstruit donc plus de phrase FR ici. Les événements sans acteur
-    /// retombent sur le `title` backend.
-    /// Voir docs/superpowers/specs/2026-06-16-notification-system-i18n-design.md
-    var toastTitle: String {
-        let actor = actorDisplayName
-        if actor != "Quelqu'un" { return actor }
-        if let title, !title.isEmpty { return title }
-        return actor
-    }
-
-    // MARK: Subtitle
-
-    /// Secondary muted line. For group conversation messages this is the group
-    /// (conversation) name — the iOS push subtitle. Direct messages and social
-    /// events have no subtitle (their meaning is already in title + body).
-    var toastSubtitle: String? {
-        guard isConversationMessage, !isDirect else { return nil }
+    /// Ce n'est PAS une ligne d'affichage : c'est la matière première du
+    /// cadrage « X dans <groupe> ». Le nom que la bannière montre est celui que
+    /// l'APPAREIL connaît (renommage local + emoji favori), résolu par
+    /// `NotificationToastManager.resolvedConversationGroupName(for:)`.
+    var conversationGroupName: String? {
+        guard bannerFraming == .conversation, !isDirect else { return nil }
         guard let title = conversationTitle, !title.isEmpty else { return nil }
         return title
     }
 
-    // MARK: Body
-
-    /// Tertiary (preview) line.
-    ///
-    /// Conversation messages → attachment label + message preview / content.
-    /// Tous les autres événements → le `content` localisé par le gateway
-    /// (« a réagi ❤️ à votre message », « a commenté votre story » …), affiché
-    /// sous l'expéditeur exactement comme le corps du push iOS. Plus aucune
-    /// reconstruction FR côté client (Prisme-first, i18n serveur).
-    var toastBody: String? {
-        switch notificationType {
-        // Conversation messages: attachment label + message preview / content.
-        case .newMessage, .legacyNewMessage,
-             .messageReply, .reply, .legacyStoryReply,
-             .userMentioned, .mention, .legacyMention:
-            if let label = attachmentLabel {
-                if let preview = nonEmptyContentPreview {
-                    return "\(label) \u{2022} \(preview)"
-                }
-                return label
-            }
-            return nonEmptyContentPreview
-
-        // Everything else: the gateway already localized the action phrase into
-        // `content`. Display it verbatim.
-        default:
-            return nonEmpty(content)
-        }
-    }
-
     // MARK: Avatar
 
-    /// Avatar URL for the toast: the sender's photo, falling back to the group
-    /// (conversation) avatar when the sender has none. Social events keep the
-    /// sender avatar (they carry no group avatar).
+    /// Avatar de la bannière : la photo de l'expéditeur, à défaut celle du
+    /// groupe (messages de groupe), à défaut les initiales déterministes.
     var toastAvatarURL: String? {
         if let sender = senderAvatar, !sender.isEmpty { return sender }
         if !isDirect, let group = conversationAvatar, !group.isEmpty { return group }
         return nil
     }
 
-    /// Name used for the deterministic initials fallback. When the toast falls
-    /// back to the group avatar slot, the initials represent the group.
+    /// Nom qui alimente les initiales de repli. Quand la bannière retombe sur
+    /// l'avatar du groupe, les initiales représentent le groupe.
     var toastAvatarName: String {
         let senderHasAvatar = (senderAvatar?.isEmpty == false)
         if !senderHasAvatar, !isDirect, conversationAvatar?.isEmpty == false,
@@ -125,22 +55,10 @@ public extension SocketNotificationEvent {
         return actorDisplayName
     }
 
-    /// Deterministic color seed for the avatar fallback gradient (stable across
-    /// re-renders + matches the bubble's sender chip color).
+    /// Graine de couleur déterministe pour le dégradé de repli de l'avatar
+    /// (stable entre deux rendus + identique à la pastille d'expéditeur de la
+    /// bulle).
     var toastAvatarColorSeed: String {
         senderId ?? toastAvatarName
-    }
-
-    // MARK: - Private helpers
-
-    /// Message preview/content, ignoring empty strings.
-    private var nonEmptyContentPreview: String? {
-        if let preview = nonEmpty(messagePreview) { return preview }
-        return nonEmpty(content)
-    }
-
-    private func nonEmpty(_ value: String?) -> String? {
-        guard let value, !value.isEmpty else { return nil }
-        return value
     }
 }

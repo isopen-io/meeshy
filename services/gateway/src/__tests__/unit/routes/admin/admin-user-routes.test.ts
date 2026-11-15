@@ -51,6 +51,7 @@ jest.mock('../../../../services/admin/permissions.service', () => ({
     canManageUser: jest.fn().mockReturnValue(true),
     canModifyUser: jest.fn().mockReturnValue(true),
     canChangeRole: jest.fn().mockReturnValue(true),
+    canViewPresence: jest.fn().mockReturnValue(true),
   },
 }));
 
@@ -83,6 +84,8 @@ import { permissionsService } from '../../../../services/admin/permissions.servi
 import { sanitizationService } from '../../../../services/admin/user-sanitization.service';
 import * as adminUserValidation from '@meeshy/shared/types/validation/admin-user';
 import { z } from 'zod';
+import { UserManagementService } from '../../../../services/admin/user-management.service';
+import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 // ── Shared fixtures ──────────────────────────────────────────────────────────
 const mockUser = {
@@ -94,17 +97,17 @@ const mockUser = {
   isActive: true,
   emailVerified: new Date(),
   phoneVerified: null,
-  twoFactorEnabled: null,
+  twoFactorSecret: 'JBSWY3DPEHPK3PXP', // appairé : armer le second facteur est admis (#8289)
   avatar: null,
   createdAt: new Date('2024-01-01'),
   lastActiveAt: null,
 };
 
 const mockPrisma: Record<string, Record<string, jest.Mock>> = {
-  conversationShareLink: { findMany: jest.fn() },
-  trackingLink: { findMany: jest.fn() },
-  affiliateToken: { findMany: jest.fn() },
-  friendRequest: { findMany: jest.fn() },
+  conversationShareLink: { findMany: jest.fn(), count: jest.fn().mockResolvedValue(0) },
+  trackingLink: { findMany: jest.fn(), count: jest.fn().mockResolvedValue(0) },
+  affiliateToken: { findMany: jest.fn(), count: jest.fn().mockResolvedValue(0) },
+  friendRequest: { findMany: jest.fn(), count: jest.fn().mockResolvedValue(0) },
   user: { findUnique: jest.fn() },
   conversation: { findMany: jest.fn(), findUnique: jest.fn(), count: jest.fn() },
   postMedia: { findMany: jest.fn(), count: jest.fn() },
@@ -144,6 +147,7 @@ function resetMocks() {
   (permissionsService.canManageUser as jest.Mock).mockReturnValue(true);
   (permissionsService.canModifyUser as jest.Mock).mockReturnValue(true);
   (permissionsService.canChangeRole as jest.Mock).mockReturnValue(true);
+  (permissionsService.canViewPresence as jest.Mock).mockReturnValue(true);
   (sanitizationService.sanitizeUser as jest.Mock).mockImplementation((u: unknown) => u);
   (sanitizationService.sanitizeUsers as jest.Mock).mockImplementation((u: unknown) => u);
 
@@ -155,6 +159,11 @@ function resetMocks() {
   mockAudit.logUpdateStatus.mockResolvedValue(undefined);
   mockAudit.logResetPassword.mockResolvedValue(undefined);
   mockAudit.logDeleteUser.mockResolvedValue(undefined);
+
+  // `requireHierarchy` (#4154) lit le RANG de la cible en base : sans ce
+  // défaut, le double rend `undefined`, la garde échoue FERMÉ et tous les
+  // témoins d'écriture liraient 403 pour une raison qui n'est pas la leur.
+  mockPrisma.user.findUnique.mockResolvedValue({ role: mockUser.role } as never);
 
   mockUMS.getUsers.mockResolvedValue({ users: [], total: 0 });
   mockUMS.getUserById.mockResolvedValue(mockUser);
@@ -237,9 +246,66 @@ describe('GET /admin/users', () => {
       url: '/admin/users?search=foo&role=USER&sortBy=username&sortOrder=asc'
     });
     expect(mockUMS.getUsers).toHaveBeenCalledWith(
-      expect.objectContaining({ search: 'foo', role: 'USER', sortBy: 'username', sortOrder: 'asc' }),
+      expect.objectContaining({ search: 'foo', role: ['USER'], sortBy: 'username', sortOrder: 'asc' }),
       expect.any(Object)
     );
+  });
+
+  // Directive produit 2026-08-25 (revue adversariale F4) : une SÉLECTION ou un
+  // ORDRE qui dépend de lastActiveAt révèle la présence autant que le champ.
+  // Sans canViewPresence, les bornes sont IGNORÉES en silence (jamais 403,
+  // qui confirmerait l'existence du filtre) et le tri retombe sur createdAt.
+  describe('presence-gated filters and sort (canViewPresence)', () => {
+    const presenceQuery = '/admin/users?lastActiveAfter=2026-08-01T00:00:00.000Z&lastActiveBefore=2026-08-25T00:00:00.000Z&sortBy=lastActiveAt&sortOrder=asc';
+    const forwardedFilters = () => mockUMS.getUsers.mock.calls[0][0] as Record<string, unknown>;
+
+    it('forwards lastActiveAfter/lastActiveBefore and sortBy=lastActiveAt when the viewer can view presence', async () => {
+      const res = await app.inject({ method: 'GET', url: presenceQuery });
+      expect(res.statusCode).toBe(200);
+      expect(forwardedFilters()).toEqual(expect.objectContaining({
+        lastActiveAfter: new Date('2026-08-01T00:00:00.000Z'),
+        lastActiveBefore: new Date('2026-08-25T00:00:00.000Z'),
+        sortBy: 'lastActiveAt',
+        sortOrder: 'asc',
+      }));
+    });
+
+    it('silently drops lastActiveAfter/lastActiveBefore when the viewer cannot view presence', async () => {
+      (permissionsService.canViewPresence as jest.Mock).mockReturnValue(false);
+      const res = await app.inject({ method: 'GET', url: presenceQuery });
+      expect(res.statusCode).toBe(200);
+      expect(mockUMS.getUsers).toHaveBeenCalledTimes(1);
+      expect(forwardedFilters().lastActiveAfter).toBeUndefined();
+      expect(forwardedFilters().lastActiveBefore).toBeUndefined();
+    });
+
+    it('falls sortBy=lastActiveAt back to createdAt when the viewer cannot view presence', async () => {
+      (permissionsService.canViewPresence as jest.Mock).mockReturnValue(false);
+      const res = await app.inject({ method: 'GET', url: presenceQuery });
+      expect(res.statusCode).toBe(200);
+      expect(forwardedFilters()).toEqual(expect.objectContaining({ sortBy: 'createdAt', sortOrder: 'asc' }));
+    });
+
+    it('falls sortBy=isOnline back to createdAt when the viewer cannot view presence', async () => {
+      (permissionsService.canViewPresence as jest.Mock).mockReturnValue(false);
+      const res = await app.inject({ method: 'GET', url: '/admin/users?sortBy=isOnline' });
+      expect(res.statusCode).toBe(200);
+      expect(forwardedFilters()).toEqual(expect.objectContaining({ sortBy: 'createdAt' }));
+    });
+
+    it('keeps a non-presence sortBy untouched when the viewer cannot view presence', async () => {
+      (permissionsService.canViewPresence as jest.Mock).mockReturnValue(false);
+      await app.inject({ method: 'GET', url: '/admin/users?sortBy=username' });
+      expect(forwardedFilters()).toEqual(expect.objectContaining({ sortBy: 'username' }));
+    });
+
+    it('asks canViewPresence with the viewer role', async () => {
+      const moderatorApp = buildApp('MODERATOR');
+      await moderatorApp.ready();
+      await moderatorApp.inject({ method: 'GET', url: presenceQuery });
+      await moderatorApp.close();
+      expect(permissionsService.canViewPresence).toHaveBeenCalledWith('MODERATOR');
+    });
   });
 
   it('returns 500 when getUsers throws', async () => {
@@ -297,7 +363,7 @@ describe('GET /admin/users/:userId', () => {
 // ── POST /admin/users ────────────────────────────────────────────────────────
 describe('POST /admin/users', () => {
   let app: FastifyInstance;
-  const validBody = { username: 'newuser', email: 'new@example.com', password: 'Pass1234!' };
+  const validBody = { username: 'newuser', email: 'new@example.com', password: 'Xk9$mQ2vLp8#nR4wZ' };
 
   beforeAll(async () => {
     resetMocks();
@@ -386,17 +452,34 @@ describe('PATCH /admin/users/:userId', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('returns 403 when canModifyUser is false', async () => {
-    (permissionsService.canModifyUser as jest.Mock).mockReturnValueOnce(false);
+  // La loi de ROUTE (`canModifyUser`) a cédé la place à DEUX questions posées
+  // séparément (#4154) : la permission du CHAMP, et le RANG de la cible.
+  // Un témoin qui n'exercerait que la première ne verrait pas l'escalade.
+  it('returns 403 when the caller does not outrank the target', async () => {
+    (permissionsService.canManageUser as jest.Mock).mockReturnValue(false);
     const res = await app.inject({ method: 'PATCH', url: '/admin/users/user123', payload: validBody });
     expect(res.statusCode).toBe(403);
+    expect(mockUMS.updateUser).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for a field that carries no law', async () => {
+    // Fail-closed sur l'inconnu : un champ absent de `LOI_PAR_CHAMP` n'est pas
+    // écrit sous une loi par défaut, il est REFUSÉ. C'est cette branche-là qui
+    // ferme la classe, pas la correction des champs connus.
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/admin/users/user123',
+      payload: { password: 'contournement' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(mockUMS.updateUser).not.toHaveBeenCalled();
   });
 
   it('returns 400 when validation throws ZodError', async () => {
     (adminUserValidation.updateUserProfileValidationSchema.parse as jest.Mock).mockImplementationOnce(() => {
       throw new z.ZodError([{ code: 'custom', message: 'Invalid', path: ['displayName'] }]);
     });
-    const res = await app.inject({ method: 'PATCH', url: '/admin/users/user123', payload: {} });
+    const res = await app.inject({ method: 'PATCH', url: '/admin/users/user123', payload: validBody });
     expect(res.statusCode).toBe(400);
   });
 
@@ -485,17 +568,15 @@ describe('PATCH /admin/users/:userId/status', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('returns 403 when canModifyUser is false', async () => {
-    (permissionsService.canModifyUser as jest.Mock).mockReturnValueOnce(false);
+  it('returns 403 when the caller does not outrank the target', async () => {
+    (permissionsService.canManageUser as jest.Mock).mockReturnValue(false);
     const res = await app.inject({ method: 'PATCH', url: '/admin/users/user123/status', payload: { isActive: true } });
     expect(res.statusCode).toBe(403);
+    expect(mockUMS.updateStatus).not.toHaveBeenCalled();
   });
 
-  it('returns 400 when validation throws ZodError', async () => {
-    (adminUserValidation.updateStatusValidationSchema.parse as jest.Mock).mockImplementationOnce(() => {
-      throw new z.ZodError([{ code: 'custom', message: 'Invalid', path: ['isActive'] }]);
-    });
-    const res = await app.inject({ method: 'PATCH', url: '/admin/users/user123/status', payload: {} });
+  it('returns 400 when isActive is not a boolean', async () => {
+    const res = await app.inject({ method: 'PATCH', url: '/admin/users/user123/status', payload: { isActive: 'peut-etre' } });
     expect(res.statusCode).toBe(400);
   });
 
@@ -509,7 +590,7 @@ describe('PATCH /admin/users/:userId/status', () => {
 // ── POST /admin/users/:userId/reset-password ─────────────────────────────────
 describe('POST /admin/users/:userId/reset-password', () => {
   let app: FastifyInstance;
-  const validBody = { newPassword: 'NewPass123!' };
+  const validBody = { newPassword: 'Xk9$mQ2vLp8#nR4wZ' };
 
   beforeAll(async () => {
     resetMocks();
@@ -567,37 +648,37 @@ describe('DELETE /admin/users/:userId', () => {
   it('returns 401 when no authContext', async () => {
     const noAuth = buildNoAuthApp();
     await noAuth.ready();
-    const res = await noAuth.inject({ method: 'DELETE', url: '/admin/users/user123' });
+    const res = await noAuth.inject({ method: 'DELETE', url: '/admin/users/user123', payload: { reason: 'Motif de test' } });
     await noAuth.close();
     expect(res.statusCode).toBe(401);
   });
 
   it('returns 403 when hasPermission (delete) is false', async () => {
     (permissionsService.hasPermission as jest.Mock).mockReturnValueOnce(false);
-    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123' });
+    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123', payload: { reason: 'Motif de test' } });
     expect(res.statusCode).toBe(403);
   });
 
   it('returns 200 on happy path', async () => {
-    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123' });
+    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123', payload: { reason: 'Motif de test' } });
     expect(res.statusCode).toBe(200);
   });
 
   it('returns 404 when user not found', async () => {
     mockUMS.getUserById.mockResolvedValue(null);
-    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123' });
+    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123', payload: { reason: 'Motif de test' } });
     expect(res.statusCode).toBe(404);
   });
 
   it('returns 403 when canModifyUser is false', async () => {
     (permissionsService.canModifyUser as jest.Mock).mockReturnValueOnce(false);
-    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123' });
+    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123', payload: { reason: 'Motif de test' } });
     expect(res.statusCode).toBe(403);
   });
 
   it('returns 500 when deleteUser throws', async () => {
     mockUMS.deleteUser.mockRejectedValue(new Error('DB error'));
-    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123' });
+    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123', payload: { reason: 'Motif de test' } });
     expect(res.statusCode).toBe(500);
   });
 });
@@ -725,10 +806,11 @@ describe('POST /admin/users/:userId/verify-email', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('returns 403 when canModifyUser is false', async () => {
-    (permissionsService.canModifyUser as jest.Mock).mockReturnValueOnce(false);
+  it('returns 403 when the caller does not outrank the target', async () => {
+    (permissionsService.canManageUser as jest.Mock).mockReturnValue(false);
     const res = await app.inject({ method: 'POST', url: '/admin/users/user123/verify-email', payload: { verified: true } });
     expect(res.statusCode).toBe(403);
+    expect(mockUMS.verifyEmail).not.toHaveBeenCalled();
   });
 
   it('returns 400 on invalid body (local Zod schema)', async () => {
@@ -777,10 +859,11 @@ describe('POST /admin/users/:userId/verify-phone', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('returns 403 when canModifyUser is false', async () => {
-    (permissionsService.canModifyUser as jest.Mock).mockReturnValueOnce(false);
+  it('returns 403 when the caller does not outrank the target', async () => {
+    (permissionsService.canManageUser as jest.Mock).mockReturnValue(false);
     const res = await app.inject({ method: 'POST', url: '/admin/users/user123/verify-phone', payload: { verified: true } });
     expect(res.statusCode).toBe(403);
+    expect(mockUMS.verifyPhone).not.toHaveBeenCalled();
   });
 
   it('returns 400 on invalid body (local Zod schema)', async () => {
@@ -800,32 +883,42 @@ describe('POST /admin/users/:userId/verify-phone', () => {
 });
 
 // ── POST /admin/users/:userId/voice-consent ──────────────────────────────────
+//
+// L'adresse historique du consentement PASSE désormais par la loi SOUVERAINE
+// (#4154) : poser au nom d'autrui la preuve qu'il a consenti à l'usage de sa
+// voix fabrique une pièce légale. Elle coûte le rang le plus haut ET un motif
+// écrit. C'est le seul alias dont le CONTRAT change — il existe pour ne pas
+// rendre 404, pas pour conserver une porte que l'issue ferme.
 describe('POST /admin/users/:userId/voice-consent', () => {
-  let app: FastifyInstance;
+  let appSouverain: FastifyInstance;
+  let appAdmin: FastifyInstance;
+  const MOTIF = 'demande RGPD ecrite du 2026-08-29';
 
   beforeAll(async () => {
     resetMocks();
-    app = buildApp();
-    await app.ready();
+    appSouverain = buildApp('BIGBOSS');
+    appAdmin = buildApp('ADMIN');
+    await appSouverain.ready();
+    await appAdmin.ready();
   });
-  afterAll(() => app.close());
+  afterAll(async () => { await appSouverain.close(); await appAdmin.close(); });
   beforeEach(resetMocks);
 
   it('returns 200 with enabled=true (enabled branch)', async () => {
-    const res = await app.inject({
+    const res = await appSouverain.inject({
       method: 'POST',
       url: '/admin/users/user123/voice-consent',
-      payload: { consentType: 'voiceProfile', enabled: true }
+      payload: { consentType: 'voiceProfile', enabled: true, reason: MOTIF }
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().message).toContain('enabled');
   });
 
   it('returns 200 with enabled=false (disabled branch)', async () => {
-    const res = await app.inject({
+    const res = await appSouverain.inject({
       method: 'POST',
       url: '/admin/users/user123/voice-consent',
-      payload: { consentType: 'voiceData', enabled: false }
+      payload: { consentType: 'voiceData', enabled: false, reason: MOTIF }
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().message).toContain('disabled');
@@ -833,39 +926,52 @@ describe('POST /admin/users/:userId/voice-consent', () => {
 
   it('returns 404 when user not found', async () => {
     mockUMS.getUserById.mockResolvedValue(null);
-    const res = await app.inject({
+    const res = await appSouverain.inject({
       method: 'POST',
       url: '/admin/users/user123/voice-consent',
-      payload: { consentType: 'voiceProfile', enabled: true }
+      payload: { consentType: 'voiceProfile', enabled: true, reason: MOTIF }
     });
     expect(res.statusCode).toBe(404);
   });
 
-  it('returns 403 when canModifyUser is false', async () => {
-    (permissionsService.canModifyUser as jest.Mock).mockReturnValueOnce(false);
-    const res = await app.inject({
+  it('refuse un ADMIN — le rang souverain ne se délègue pas par une permission', async () => {
+    // `hasPermission` rend `true` dans ce double : si la garde passait par la
+    // matrice, ce témoin ne tomberait pas. Elle interroge le RANG, que rien
+    // dans le double ne peut accorder.
+    const res = await appAdmin.inject({
+      method: 'POST',
+      url: '/admin/users/user123/voice-consent',
+      payload: { consentType: 'voiceProfile', enabled: true, reason: MOTIF }
+    });
+    expect(res.statusCode).toBe(403);
+    expect(mockUMS.toggleVoiceConsent).not.toHaveBeenCalled();
+  });
+
+  it('admet un souverain SANS motif écrit — spec 2026-10-04 § 4', async () => {
+    const res = await appSouverain.inject({
       method: 'POST',
       url: '/admin/users/user123/voice-consent',
       payload: { consentType: 'voiceProfile', enabled: true }
     });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(200);
+    expect(mockUMS.toggleVoiceConsent).toHaveBeenCalledWith('user123', 'voiceProfile', true);
   });
 
-  it('returns 400 on invalid consentType (local Zod enum)', async () => {
-    const res = await app.inject({
+  it('returns 400 on invalid consentType (aucune loi ne porte ce champ)', async () => {
+    const res = await appSouverain.inject({
       method: 'POST',
       url: '/admin/users/user123/voice-consent',
-      payload: { consentType: 'invalid_type', enabled: true }
+      payload: { consentType: 'invalid_type', enabled: true, reason: MOTIF }
     });
     expect(res.statusCode).toBe(400);
   });
 
   it('returns 500 when toggleVoiceConsent throws', async () => {
     mockUMS.toggleVoiceConsent.mockRejectedValue(new Error('DB error'));
-    const res = await app.inject({
+    const res = await appSouverain.inject({
       method: 'POST',
       url: '/admin/users/user123/voice-consent',
-      payload: { consentType: 'voiceProfile', enabled: true }
+      payload: { consentType: 'voiceProfile', enabled: true, reason: MOTIF }
     });
     expect(res.statusCode).toBe(500);
   });
@@ -895,9 +1001,13 @@ describe('POST /admin/users/:userId/verify-age', () => {
     expect(res.json().message).toBe('Age unverified');
   });
 
-  it('returns 200 with no body (all fields optional)', async () => {
+  it('refuse un corps VIDE — un PATCH qui n’écrit rien n’est pas un succès', async () => {
+    // L'ancien schéma local déclarait tous ses champs optionnels : la route
+    // rendait donc 200 en n'écrivant RIEN, et le client ne pouvait pas
+    // distinguer « c'est fait » de « je n'ai rien compris à ta demande ».
     const res = await app.inject({ method: 'POST', url: '/admin/users/user123/verify-age', payload: {} });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(400);
+    expect(mockUMS.verifyAge).not.toHaveBeenCalled();
   });
 
   it('returns 404 when user not found', async () => {
@@ -906,19 +1016,25 @@ describe('POST /admin/users/:userId/verify-age', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('returns 403 when canModifyUser is false', async () => {
-    (permissionsService.canModifyUser as jest.Mock).mockReturnValueOnce(false);
+  it('returns 403 when the caller does not outrank the target', async () => {
+    (permissionsService.canManageUser as jest.Mock).mockReturnValue(false);
     const res = await app.inject({ method: 'POST', url: '/admin/users/user123/verify-age', payload: { verified: true } });
     expect(res.statusCode).toBe(403);
+    expect(mockUMS.verifyAge).not.toHaveBeenCalled();
   });
 
-  it('returns 400 when isAdult is not a boolean (local Zod schema)', async () => {
+  it('returns 400 when the body names no verification at all', async () => {
+    // `isAdult` n'a JAMAIS été un champ de vérification : le schéma local
+    // l'acceptait, la route ne l'écrivait nulle part. Traduit vers la loi des
+    // champs, un tel corps ne présente aucun champ — et un PATCH qui n'écrit
+    // rien est une requête malformée, pas un succès silencieux.
     const res = await app.inject({
       method: 'POST',
       url: '/admin/users/user123/verify-age',
       payload: { isAdult: 'not-a-boolean' }
     });
     expect(res.statusCode).toBe(400);
+    expect(mockUMS.verifyAge).not.toHaveBeenCalled();
   });
 
   it('returns 500 when verifyAge throws', async () => {
@@ -1237,5 +1353,116 @@ describe('GET /admin/conversations/:conversationId/participants', () => {
     mockPrisma.conversation.findUnique.mockRejectedValue(new Error('DB error'));
     const res = await app.inject({ method: 'GET', url: '/admin/conversations/conv123/participants' });
     expect(res.statusCode).toBe(500);
+  });
+
+  // Directive produit 2026-08-25 : présence masquée sans canViewPresence.
+  it('masks isOnline when the viewer lacks canViewPresence', async () => {
+    (permissionsService.canViewPresence as jest.Mock).mockReturnValue(false);
+    const participant = { id: 'p1', userId: 'user123', type: 'user', role: 'MEMBER', isActive: true, isOnline: true };
+    mockPrisma.participant.findMany.mockResolvedValue([participant]);
+    mockPrisma.participant.count.mockResolvedValue(1);
+    const res = await app.inject({ method: 'GET', url: '/admin/conversations/conv123/participants' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data[0].isOnline).toBe(false);
+  });
+});
+
+// ── F9 — la désactivation révoque les sockets du compte ─────────────────────
+//
+// Le service est mocké ici : ce que cette suite vérifie est le CÂBLAGE —
+// `userAdminRoutes` injecte dans `UserManagementService` un révocateur qui
+// atteint Socket.IO par le même chemin que `revoke-all-sessions.ts`
+// (`fastify.socketIOHandler.getManager().getIO()`), résolu À L'APPEL parce
+// que le manager naît après l'enregistrement des routes.
+
+function makeSocketIOHandler(
+  sockets: Array<{ emit: jest.Mock; disconnect: jest.Mock }>,
+  fetchError?: Error,
+) {
+  const rooms: string[] = [];
+  const io = {
+    in: (room: string) => {
+      rooms.push(room);
+      return {
+        fetchSockets: async () => {
+          if (fetchError) throw fetchError;
+          return sockets;
+        },
+      };
+    },
+  };
+  return { rooms, io, handler: { getManager: () => ({ getIO: () => io }) } };
+}
+
+type SessionRevoker = (userId: string) => Promise<unknown>;
+
+function revokerWiredIntoService(): SessionRevoker {
+  const ctor = UserManagementService as unknown as jest.Mock;
+  const deps = ctor.mock.calls.at(-1)?.[1] as { revokeSessions?: SessionRevoker } | undefined;
+  if (!deps?.revokeSessions) {
+    throw new Error("userAdminRoutes n'injecte aucun révocateur de sessions dans UserManagementService");
+  }
+  return deps.revokeSessions;
+}
+
+describe('userAdminRoutes — révocation des sockets du compte désactivé (F9)', () => {
+  beforeEach(resetMocks);
+
+  it('injecte un révocateur qui émet auth:session-revoked (reason admin_revoke) puis ferme chaque socket de la room du compte', async () => {
+    const socket = { emit: jest.fn(), disconnect: jest.fn() };
+    const { rooms, handler } = makeSocketIOHandler([socket]);
+    const app = buildApp();
+    app.decorate('socketIOHandler', handler);
+    await app.ready();
+    try {
+      const revoke = revokerWiredIntoService();
+      await expect(revoke('user123')).resolves.toBe(1);
+      expect(rooms).toEqual([ROOMS.user('user123')]);
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.AUTH_SESSION_REVOKED,
+        expect.objectContaining({ code: 'session_revoked', reason: 'admin_revoke' }),
+      );
+      expect(socket.disconnect).toHaveBeenCalledWith(true);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("résout le manager Socket.IO À L'APPEL : un manager né après l'enregistrement des routes est atteint", async () => {
+    const socket = { emit: jest.fn(), disconnect: jest.fn() };
+    const { io } = makeSocketIOHandler([socket]);
+    let manager: { getIO: () => typeof io } | null = null;
+    const app = buildApp();
+    app.decorate('socketIOHandler', { getManager: () => manager });
+    await app.ready();
+    try {
+      const revoke = revokerWiredIntoService();
+      await expect(revoke('user123')).resolves.toBe(0);
+      manager = { getIO: () => io };
+      await expect(revoke('user123')).resolves.toBe(1);
+      expect(socket.disconnect).toHaveBeenCalledWith(true);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('ne lève jamais : manager absent ⇒ 0 socket coupé ; fetchSockets qui échoue ⇒ 0, sans rejet', async () => {
+    const { handler } = makeSocketIOHandler([{ emit: jest.fn(), disconnect: jest.fn() }], new Error('adapter down'));
+    const bare = buildApp();
+    await bare.ready();
+    try {
+      await expect(revokerWiredIntoService()('user123')).resolves.toBe(0);
+    } finally {
+      await bare.close();
+    }
+
+    const failing = buildApp();
+    failing.decorate('socketIOHandler', handler);
+    await failing.ready();
+    try {
+      await expect(revokerWiredIntoService()('user123')).resolves.toBe(0);
+    } finally {
+      await failing.close();
+    }
   });
 });

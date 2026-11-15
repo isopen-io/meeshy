@@ -1,0 +1,116 @@
+[
+  {
+    "_label": "rotation par defaut : 360 degres, lineaire, origine = centre du cadre",
+    "center": [50, 50],
+    "elements": [{"group": "a", "bounds": [10, 20, 30, 40]}],
+    "motions": [{"kind": "rotate", "targets": ["a"], "duration": 8}],
+    "layers": [{"elements": [0], "chain": [{"kind": "ROTATE", "duration": 8, "delay": 0, "direction": "NORMAL", "from": 0, "to": 360, "linear": true, "origin": [50, 50]}]}],
+    "sweeps": [],
+    "animated": [0]
+  },
+  {
+    "_label": "rotation inverse partielle : ease, sens inverse",
+    "center": [50, 50],
+    "elements": [{"group": "a", "bounds": null}],
+    "motions": [{"kind": "rotate", "targets": ["a"], "duration": 4, "direction": "reverse", "amplitude": 90}],
+    "layers": [{"elements": [0], "chain": [{"kind": "ROTATE", "duration": 4, "delay": 0, "direction": "REVERSE", "from": 0, "to": 90, "linear": false, "origin": [50, 50]}]}],
+    "sweeps": [],
+    "animated": [0]
+  },
+  {
+    "_label": "rotation alternee : -amplitude vers +amplitude",
+    "center": [50, 50],
+    "elements": [{"group": "a", "bounds": [0, 0, 10, 10]}],
+    "motions": [{"kind": "rotate", "targets": ["a"], "duration": 3, "direction": "alternate", "amplitude": 20, "origin": "bottom"}],
+    "layers": [{"elements": [0], "chain": [{"kind": "ROTATE", "duration": 3, "delay": 0, "direction": "ALTERNATE", "from": -20, "to": 20, "linear": false, "origin": [5, 10]}]}],
+    "sweeps": [],
+    "animated": [0]
+  },
+  {
+    "_label": "pulsation : origine propre (centre de la cible) par defaut",
+    "center": [50, 50],
+    "elements": [{"group": "a", "bounds": [10, 20, 30, 40]}],
+    "motions": [{"kind": "pulse", "targets": ["a"], "duration": 2}],
+    "layers": [{"elements": [0], "chain": [{"kind": "PULSE", "duration": 2, "delay": 0, "direction": "NORMAL", "from": 1, "to": 1.1, "linear": false, "origin": [20, 30]}]}],
+    "sweeps": [],
+    "animated": [0]
+  },
+  {
+    "_label": "inclinaison : ancree en haut, alternee",
+    "center": [50, 50],
+    "elements": [{"group": "a", "bounds": [10, 20, 30, 40]}],
+    "motions": [{"kind": "skew", "targets": ["a"], "duration": 5}],
+    "layers": [{"elements": [0], "chain": [{"kind": "SKEW", "duration": 5, "delay": 0, "direction": "ALTERNATE", "from": -7, "to": 7, "linear": false, "origin": [20, 20]}]}],
+    "sweeps": [],
+    "animated": [0]
+  },
+  {
+    "_label": "inclinaison inversee",
+    "center": [50, 50],
+    "elements": [{"group": "a", "bounds": [10, 20, 30, 40]}],
+    "motions": [{"kind": "skew", "targets": ["a"], "duration": 5, "direction": "reverse", "amplitude": 3}],
+    "layers": [{"elements": [0], "chain": [{"kind": "SKEW", "duration": 5, "delay": 0, "direction": "ALTERNATE_REVERSE", "from": -3, "to": 3, "linear": false, "origin": [20, 20]}]}],
+    "sweeps": [],
+    "animated": [0]
+  },
+  {
+    "_label": "scintillement : centre du cadre, opacite 1 vers 0.25",
+    "center": [50, 50],
+    "elements": [{"group": "a", "bounds": [10, 20, 30, 40]}],
+    "motions": [{"kind": "twinkle", "targets": ["a"], "duration": 2}],
+    "layers": [{"elements": [0], "chain": [{"kind": "TWINKLE", "duration": 2, "delay": 0, "direction": "NORMAL", "from": 1, "to": 0.25, "linear": false, "origin": [50, 50]}]}],
+    "sweeps": [],
+    "animated": [0]
+  },
+  {
+    "_label": "elements identiques regroupes dans une couche",
+    "center": [50, 50],
+    "elements": [{"group": "a", "bounds": [0, 0, 10, 10]}, {"group": "b", "bounds": [20, 20, 30, 30]}, {"group": "a", "bounds": [40, 40, 50, 50]}],
+    "motions": [{"kind": "rotate", "targets": ["a"], "duration": 8}],
+    "layers": [{"elements": [0, 2], "chain": [{"kind": "ROTATE", "duration": 8, "delay": 0, "direction": "NORMAL", "from": 0, "to": 360, "linear": true, "origin": [50, 50]}]}],
+    "sweeps": [],
+    "animated": [0, 2]
+  },
+  {
+    "_label": "stagger : un delai croissant separe les couches",
+    "center": [50, 50],
+    "elements": [{"group": "a", "bounds": null}, {"group": "a", "bounds": null}],
+    "motions": [{"kind": "twinkle", "targets": ["a"], "duration": 2, "delay": 1, "stagger": 0.5, "amplitude": 0.5}],
+    "layers": [
+      {"elements": [0], "chain": [{"kind": "TWINKLE", "duration": 2, "delay": 1, "direction": "NORMAL", "from": 1, "to": 0.5, "linear": false, "origin": [50, 50]}]},
+      {"elements": [1], "chain": [{"kind": "TWINKLE", "duration": 2, "delay": 1.5, "direction": "NORMAL", "from": 1, "to": 0.5, "linear": false, "origin": [50, 50]}]}
+    ],
+    "sweeps": [],
+    "animated": [0, 1]
+  },
+  {
+    "_label": "chaine : deux mouvements sur un meme element s'emboitent dans l'ordre",
+    "center": [50, 50],
+    "elements": [{"group": "a", "bounds": [10, 20, 30, 40]}],
+    "motions": [{"kind": "rotate", "targets": ["a"], "duration": 8}, {"kind": "pulse", "targets": ["a"], "duration": 2}],
+    "layers": [{"elements": [0], "chain": [
+      {"kind": "ROTATE", "duration": 8, "delay": 0, "direction": "NORMAL", "from": 0, "to": 360, "linear": true, "origin": [50, 50]},
+      {"kind": "PULSE", "duration": 2, "delay": 0, "direction": "NORMAL", "from": 1, "to": 1.1, "linear": false, "origin": [20, 30]}
+    ]}],
+    "sweeps": [],
+    "animated": [0]
+  },
+  {
+    "_label": "reflet : la cible reste dans le dessin fixe",
+    "center": [50, 50],
+    "elements": [{"group": "a", "bounds": [10, 20, 30, 40]}, {"group": "b", "bounds": null}],
+    "motions": [{"kind": "sweep", "targets": ["a", "b"], "duration": 3, "delay": 1, "direction": "reverse"}],
+    "layers": [],
+    "sweeps": [{"elements": [0, 1], "duration": 3, "delay": 1, "reverse": true}],
+    "animated": []
+  },
+  {
+    "_label": "cible absente : le mouvement est ignore, le cadre reste fixe",
+    "center": [50, 50],
+    "elements": [{"group": "a", "bounds": null}],
+    "motions": [{"kind": "rotate", "targets": ["zz"], "duration": 8}],
+    "layers": [],
+    "sweeps": [],
+    "animated": []
+  }
+]

@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// Garde de source sur le CÂBLAGE de la republication de story.
@@ -14,9 +15,10 @@ import XCTest
 /// pourrait défaire en silence, et dont l'absence est précisément l'état d'AVANT
 /// ce lot — donc des témoins qui discriminent :
 ///
-/// 1. Le rail OUVRE le composeur ; il ne republie plus d'un tap côté serveur.
-///    L'ancien chemin appelait `PostService.shared.repost` directement : la
-///    story repartait à l'identique, sans texte ajouté ni choix d'audience.
+/// 1. Le rail republie EN STORY d'un tap (#9953) par l'écrivain unique
+///    `RepostPublisher` — jamais par l'appel réseau nu `PostService.shared.repost`.
+///    Le composeur de republication (`StoryRepublishComposer`) reste la porte qui
+///    porte le plafond d'audience et `repostOfId` (points 2 et 3).
 /// 2. Le sélecteur d'audience du composeur est PLAFONNÉ par la loi
 ///    (`StoryRepostAudience`) — même audience ou plus restreinte, jamais plus
 ///    large.
@@ -27,7 +29,17 @@ import XCTest
 @MainActor
 final class StoryRepublishWiringGuardTests: XCTestCase {
 
+    /// `StoryViewModel` s'est scindé en plusieurs fichiers (#4425) : ce chemin
+    /// précis passe par l'UNITÉ (`AppSourceGuard.storyViewModelSource`), sinon
+    /// l'invariant 3 ci-dessous (`repostOfId` jamais figé à `nil`) cesserait de
+    /// mesurer quoi que ce soit le jour où `createStory` migre vers un fichier
+    /// frère. Les deux autres chemins lus par ce helper
+    /// (`StoryViewerView+Sidebar.swift`, `StoryViewerView.swift`) continuent
+    /// de lire leur fichier tel quel.
     private func source(_ relativePath: String) throws -> String {
+        if relativePath == AppSourceGuard.storyViewModelPath {
+            return try AppSourceGuard.storyViewModelSource()
+        }
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // .../Features/Stories
             .deletingLastPathComponent()   // .../Features
@@ -37,134 +49,137 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    // MARK: - 1. Le rail ouvre le composeur
+    // MARK: - 1. Le rail republie en STORY, d'un tap (#9953)
 
-    func test_railRepostButton_opensTheComposer_andNoLongerRepostsInOneTap() throws {
+    /// Décision du porteur (2026-10-10) : « Republier » du rail republie EN
+    /// STORY d'un tap — la mécanique existante (`RepostIntent.simple` remis à
+    /// `RepostPublisher` : jeton d'idempotence, file hors ligne, verrou par
+    /// cible), cible `.story`. Il n'ouvre plus le composeur, et ne repasse pas
+    /// par l'appel réseau nu `PostService.shared.repost`.
+    func test_railRepostButton_republishesAsAStory_inOneTap() throws {
         let sidebar = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"))
+            try source("Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift"))
 
-        XCTAssertTrue(
-            sidebar.contains("republishStorySource = RepostPostSourceWrapper("),
-            "Le bouton de republication du rail doit OUVRIR le composeur en posant " +
-            "`republishStorySource` — c'est la demande produit du 2026-08-19."
-        )
-        XCTAssertFalse(
-            sidebar.contains("PostService.shared.repost("),
-            "Le rail ne doit plus republier d'un tap côté serveur : ce chemin ne " +
-            "laissait ni ajouter de texte ni choisir l'audience."
-        )
+        XCTAssertTrue(sidebar.contains("StoryDirectRepost.publish(story, as: .story)"),
+                      "Le bouton du rail republie en STORY d'un tap.")
+        XCTAssertFalse(sidebar.contains("republishStorySource"),
+                       "Le rail n'ouvre plus le composeur de republication.")
+        XCTAssertTrue(sidebar.contains("try await RepostPublisher.shared.publish("),
+                      "La republication directe passe par l'écrivain unique, jamais par un appel réseau nu.")
+        XCTAssertFalse(sidebar.contains("PostService.shared.repost("))
+        XCTAssertEqual(StoryRepostDestination.story.targetType, .story)
     }
 
     /// Le libellé annonçait « Partager » pour une action de republication —
     /// source directe de la confusion signalée par l'utilisateur.
     func test_railRepostButton_isLabelledRepublish_notShare() throws {
         let sidebar = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"))
+            try source("Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift"))
         guard let range = sidebar.range(of: "story.viewer.action.repost") else {
             return XCTFail("clé de libellé du bouton de republication introuvable")
         }
         let tail = String(sidebar[range.lowerBound...].prefix(120))
         XCTAssertTrue(
-            tail.contains("defaultValue: \"Republier\""),
-            "Le repli du libellé doit dire « Republier », pas « Partager » — l'action " +
+            tail.contains("defaultValue: \"Repartager\""),
+            "Le repli du libellé doit dire « Repartager », pas « Partager » — l'action " +
             "republie, elle ne transmet pas. Trouvé : \(tail)"
         )
     }
 
-    // MARK: - 1bis. Les TROIS formes de partage vivent dans le menu (...)
+    // MARK: - 1bis. Envoyer reste au rail ; post et réel passent par la feuille Meeshy
 
-    /// Les trois formes n'étaient offertes que sur les stories PUBLIQUES, un
-    /// gate qui reflétait une barrière serveur ABOLIE (`repostPost` refusait
-    /// tout original non-`PUBLIC`). Le laisser rendait le menu VIDE de toute
-    /// forme de partage sur les stories que la nouvelle loi d'audience vise
-    /// précisément.
-    ///
-    /// Une assertion textuelle ne distinguerait pas « présent » de « présent
-    /// SOUS le gate » — c'est justement le défaut qu'a eu la première écriture
-    /// de ce lot. On prouve donc la CONTENANCE : les trois formes sont hors du
-    /// bloc `if story.isPublic`, le partage EXTERNE est dedans (son lien
-    /// `meeshy.me/l/…` est ouvrable par n'importe qui, donc lui seul garde le
-    /// gate).
-    func test_theThreeShareForms_liveOutsideTheIsPublicGate_onlyExternalShareStaysInside() throws {
+    /// #9953, revu le 2026-10-24 (#12644) : le rail garde « Envoyer » et
+    /// « Republier » (en story). « Envoyer » ouvre la feuille de partage
+    /// MEESHY, qui republie aussi en post et en réel par la MÊME mécanique —
+    /// le menu (…) ne les double plus. « Citer en post » a disparu :
+    /// « Composer » le fait.
+    func test_sendStaysOnTheRail_postAndReelAreInTheMeeshySheet_quoteIsGone() throws {
         let sidebar = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"))
+            try source("Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift"))
+        XCTAssertTrue(sidebar.contains("story.viewer.action.send"), "« Envoyer » reste au rail.")
+        XCTAssertTrue(sidebar.contains("sharedContentWrapper = SharedContentWrapper(subject: .story("))
 
-        // Le gate de la branche NON-auteur est le dernier `if story.isPublic`
-        // du fichier (celui de la branche auteur le précède).
-        guard let gateStart = sidebar.range(of: "if story.isPublic {", options: .backwards) else {
-            return XCTFail("bloc `if story.isPublic` introuvable")
+        let dispatcher = AppSourceGuard.stripComments(
+            try source("Meeshy/Features/Share/ShareDispatcher.swift"))
+        XCTAssertTrue(dispatcher.contains("StoryDirectRepost.republish(storyId: card.contentId, as: StoryRepostDestination(target))"),
+                      "La feuille Meeshy republie par l'écrivain du rail, jamais un second.")
+
+        let header = AppSourceGuard.stripComments(
+            try source("Meeshy/Features/Stories/Views/StoryViewerView+Header.swift"))
+        for key in ["StoryDirectRepost.publish(", "story.viewer.editAndRepostAsPost", "story.viewer.share.internal", "editAndRepostAsPostSource"] {
+            XCTAssertFalse(header.contains(key), "\(key) a quitté le menu (…) — #9953")
         }
-        let gateBody = Self.bracedBody(of: sidebar, openingBraceAfter: gateStart.lowerBound)
-
-        for form in ["story.viewer.repostAsPost",
-                     "story.viewer.editAndRepostAsPost",
-                     "story.viewer.share.internal"] {
-            XCTAssertTrue(
-                sidebar.contains(form),
-                "\(form) doit figurer dans le menu (...)"
-            )
-            XCTAssertFalse(
-                gateBody.contains(form),
-                "\(form) ne doit PAS être enfermé dans `if story.isPublic` : le menu " +
-                "resterait vide de toute forme de partage sur une story FRIENDS ou " +
-                "PRIVATE, alors que la loi d'audience borne déjà le résultat."
-            )
-        }
-
-        XCTAssertTrue(
-            gateBody.contains("story.viewer.share.external"),
-            "Le partage HORS Meeshy doit rester gardé : son lien est ouvrable par " +
-            "n'importe qui, ce qui élargirait l'audience hors de tout contrôle."
-        )
-    }
-
-    /// Corps délimité par accolades équilibrées à partir de la première `{`
-    /// rencontrée après `index`.
-    private static func bracedBody(of source: String, openingBraceAfter index: String.Index) -> String {
-        guard let open = source[index...].firstIndex(of: "{") else { return "" }
-        var depth = 0
-        var cursor = open
-        while cursor < source.endIndex {
-            if source[cursor] == "{" { depth += 1 }
-            if source[cursor] == "}" {
-                depth -= 1
-                if depth == 0 { return String(source[source.index(after: open)..<cursor]) }
-            }
-            cursor = source.index(after: cursor)
-        }
-        return String(source[source.index(after: open)...])
+        let viewer = AppSourceGuard.stripComments(
+            try source("Meeshy/Features/Stories/Views/StoryViewerView.swift"))
+        XCTAssertFalse(viewer.contains("editAndRepostAsPostSource"), "Le cover de « Citer en post » est parti avec son entrée.")
     }
 
     // MARK: - 2. L'audience est plafonnée
 
+    /// **Le plafond a rejoint l'HYDRATATION** (#5053, 2026-09-06).
+    ///
+    /// La présentation posait `allowedVisibilities:` et construisait le
+    /// ViewModel de repost côté `StoryViewerView`. Les deux vivent désormais
+    /// dans `ComposerHydration` — « un seul paramètre pour deux choses (quel
+    /// contenu reprendre, quelle audience il autorise) parce que les séparer
+    /// aurait permis d'en passer une sans l'autre, c'est-à-dire de republier
+    /// SANS PLAFOND, silencieusement ».
+    ///
+    /// > Le déménagement RENFORCE la loi que ce témoin garde : elle n'est plus
+    /// > à reposer sur chaque présentation, elle est portée par le type que
+    /// > toute republication doit passer. La garde suit donc le site qui la
+    /// > DÉCIDE, et non plus celui qui la recopiait.
     func test_composerPresentation_capsTheAudienceWithTheSharedLaw() throws {
-        let viewer = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView.swift"))
+        let hydration = AppSourceGuard.stripComments(
+            try source("Meeshy/Features/Composer/ComposerHydration.swift"))
 
         XCTAssertTrue(
-            viewer.contains("allowedVisibilities: StoryRepostAudience.allowed(fromRawValue:"),
-            "La présentation du composeur de republication doit plafonner le " +
-            "sélecteur d'audience par la loi — même audience ou plus restreinte."
+            hydration.contains("StoryRepostAudience.allowed(fromRawValue: story.visibility)"),
+            "La republication doit plafonner le sélecteur d'audience par la loi — même audience ou " +
+            "plus restreinte. Le plafond est une affordance, mais une affordance dont l'absence " +
+            "transforme un refus serveur en échec inexpliqué au moment de publier."
         )
         XCTAssertTrue(
-            viewer.contains("StoryComposerViewModel(") && viewer.contains("reposting:"),
+            hydration.contains("case .editingStory(let hydrate):")
+                && hydration.contains("return hydrate.editingInitialVisibility"),
+            "… et l'ÉDITION part de l'audience actuelle de la story, que porte le ViewModel hydraté " +
+            "(`editingInitialVisibility`) : l'atelier qui la réassignait a quitté le dépôt (#15629), " +
+            "et la scène du meuble la lit ici — une seule source, jamais un dernier choix mémorisé."
+        )
+
+        let host = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+        XCTAssertTrue(
+            host.contains("StoryComposerViewModel(reposting: story)"),
             "Le composeur doit être construit par l'initialiseur de repost, qui " +
-            "préremplit la slide source et verrouille le badge d'attribution."
+            "préremplit la slide source et retire toute puce de crédit héritée (#10524)."
         )
     }
 
     // MARK: - 3. repostOfId descend jusqu'à la publication
 
     func test_repostOfId_travelsAllTheWayToPublication_neverHardcodedNil() throws {
-        let viewer = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView.swift"))
+        // **La republication est passée au COMPOSER** (2026-09-06). Le geste
+        // partait de `StoryViewerView`, qui posait `repostOfId: wrapper.story.id`
+        // au moment de publier ; il passe désormais par `StoryRepublishComposer`,
+        // qui porte le même id sous le nom de sa propre source
+        // (`repostOfId: source.story.id`). L'invariant n'a pas bougé d'un pouce —
+        // la publication d'une republication porte l'id de l'original — mais le
+        // site qui l'honore a changé, et la garde lisait l'ancien.
+        //
+        // > Une garde qui nomme un FICHIER mesure une géographie, pas une règle.
+        // > Celle-ci nomme désormais le site qui DÉCIDE, et son message dit quoi
+        // > chercher si le geste déménage encore.
+        let composer = AppSourceGuard.stripComments(
+            try source("Meeshy/Features/Composer/StoryRepublishComposer.swift"))
         XCTAssertTrue(
-            viewer.contains("repostOfId: wrapper.story.id"),
-            "La publication de la republication doit porter l'id de l'original."
+            composer.contains("repostOfId: source.story.id"),
+            "La publication de la republication doit porter l'id de l'original. Si ce site n'est plus "
+                + "celui qui republie, chercher qui pose `repostOfId` sur le chemin de la scène — jamais "
+                + "retirer cette garde : c'est elle qui a attrapé les republications orphelines."
         )
 
         let viewModel = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/ViewModels/StoryViewModel.swift"))
+            try source("Meeshy/Features/Stories/ViewModels/StoryViewModel.swift"))
         XCTAssertTrue(
             viewModel.contains("repostOfId: upload.repostOfId"),
             "`createStory` doit lire `repostOfId` sur l'état d'upload — il valait " +

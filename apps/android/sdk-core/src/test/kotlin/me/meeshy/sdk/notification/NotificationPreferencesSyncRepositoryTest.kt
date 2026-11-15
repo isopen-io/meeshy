@@ -7,6 +7,8 @@ import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import me.meeshy.sdk.model.DndDay
 import me.meeshy.sdk.model.NotificationPreferenceSyncBody
 import me.meeshy.sdk.model.UserNotificationPreferences
@@ -93,5 +95,28 @@ class NotificationPreferencesSyncRepositoryTest {
         val cmid = repo(session, outbox).enqueueSync(UserNotificationPreferences(soundEnabled = false))
 
         assertThat(cmid).isNull()
+    }
+
+    /**
+     * The three fields #11616 added must reach the gateway whatever their value. The wire `Json`
+     * does not encode defaults, so a field modelled with a `true` / `0` default would be dropped
+     * from the PATCH — leaving the server on an offset another device stamped while this screen
+     * shows UTC.
+     */
+    @Test
+    fun `enqueueSync sends the contact-activity, game and utc-offset fields even at their defaults`() = runTest {
+        val session = mockk<SessionRepository>(relaxed = true)
+        coEvery { session.currentUserId } returns "me-42"
+        val outbox = mockk<OutboxRepository>()
+        val captured = slot<OutboxMutation>()
+        coEvery { outbox.enqueue(capture(captured)) } returns "cmid_1"
+
+        repo(session, outbox).enqueueSync(UserNotificationPreferences())
+        val payload = MeeshyApi.json.parseToJsonElement(captured.captured.payload).jsonObject
+
+        assertThat(payload["contactActivityEnabled"]!!.jsonPrimitive.content).isEqualTo("true")
+        assertThat(payload["gameEnabled"]!!.jsonPrimitive.content).isEqualTo("true")
+        assertThat(payload["dndUtcOffsetMinutes"]!!.jsonPrimitive.content).isEqualTo("0")
+        assertThat(payload.keys).doesNotContain("extras")
     }
 }

@@ -1,0 +1,420 @@
+import Foundation
+
+// Extrait de `CoreModels.swift` (hors budget de taille — un fichier hors
+// budget est interdit d'ajout). La citation porte les FAITS du média cité :
+// on extrait d'abord, on ajoute ensuite.
+
+// MARK: - Reply Reference
+
+/// `Equatable` SYNTHÉTISÉ, et c'est structurel : chaque hôte qui monte une
+/// citation sous `.equatable()` doit décider si elle a changé, et trois d'entre
+/// eux en recopiaient une PROJECTION champ par champ. La projection d'un hôte
+/// se périme au premier champ ajouté — les sept faits du média et la
+/// protection pourraient arriver sans que l'hôte audio les reçoive, et sa
+/// citation resterait figée sur sa première résolution, vignette d'un média
+/// protégé comprise. Comparer la citation ENTIÈRE ferme la classe : un champ neuf ne
+/// peut plus être oublié par un hôte.
+public struct ReplyReference: Codable, Equatable, Sendable {
+    public let messageId: String
+    /// Nom, couleur et portrait de l'auteur cité : GRAVÉS, et repeints par la
+    /// seule loi `UserUpdatedEvent.repainted(_:)` quand `authorUserId` désigne
+    /// le pair renommé.
+    public internal(set) var authorName: String
+    public internal(set) var authorColor: String
+    /// Avatar de l'auteur cite, GRAVE dans la citation — jamais re-resolu au
+    /// rendu.
+    ///
+    /// La citation est une feuille `Equatable` a `==` MANUEL : une lecture de
+    /// store faite pendant le rendu serait invisible de cette comparaison, et
+    /// l'avatar qui arrive apres coup ne redessinerait jamais la cellule. La
+    /// donnee est deja sur le fil (`APIMessageReplyTo.sender`) : les
+    /// constructeurs la lisent a la composition.
+    ///
+    /// **Optionnel, et il doit le rester** : `MeeshyMessage.init(from:)` decode
+    /// `replyTo` par `decodeIfPresent`, qui PROPAGE l'echec d'un sous-decodage.
+    /// Un champ requis ferait donc disparaitre du cache L2 le message ENTIER
+    /// des que son blob `replyToJson` a ete grave avant ce champ — pas
+    /// seulement sa citation. Meme discipline que
+    /// `ForwardReference.conversationType`.
+    ///
+    /// `nil` ne ferme AUCUNE porte : `authorName` et `authorColor` sont
+    /// presents a tous les sites de construction, donc l'avatar se dessine
+    /// quand meme en initiales colorees. La porte vers le profil ne depend
+    /// jamais de la presence d'une photo.
+    public internal(set) var authorAvatarUrl: String?
+    public let previewText: String
+    public let isMe: Bool
+    public let attachmentType: String?
+
+    /// L'ANCRE de la citation : la PIÈCE NOMMÉE que cette réponse vise.
+    ///
+    /// Répondre à la troisième photo d'un carrousel de cinq est licite ; la
+    /// passerelle grave l'identifiant et la NATURE dans
+    /// `metadata.attachmentReplyTo` et les ressert sous `replyTo`. C'est, avec
+    /// la nature, le SEUL fait qui ne se relit pas — tout ce qui DÉCRIT la
+    /// pièce (vignette, nom, taille, DURÉE) se relit à chaque service et
+    /// disparaît si la pièce devient secrète ou est supprimée.
+    ///
+    /// **Optionnel, et il doit le rester** : `MeeshyMessage.init(from:)` décode
+    /// `replyTo` par `decodeIfPresent`, qui PROPAGE l'échec d'un sous-décodage.
+    /// Un champ requis ferait disparaître du cache L2 le message ENTIER dès que
+    /// son blob `replyToJson` a été gravé avant ce champ — pas seulement sa
+    /// citation. Même discipline que `authorAvatarUrl`,
+    /// `attachmentIsProtected` et `ForwardReference.conversationType`.
+    ///
+    /// `nil` = « on ne sait pas laquelle » ⇒ repli sur le média REPRÉSENTATIF,
+    /// exactement comme une citation sans ancre : aucune citation existante ne
+    /// change de rendu.
+    public let attachmentId: String?
+    public let attachmentThumbnailUrl: String?
+    /// L'adresse du FICHIER cité — ce qui donne un poster à une vidéo
+    /// dont la vignette serveur a raté (extraction de la première frame) et
+    /// ce qui ouvre en plein écran une pièce absente de la fenêtre chargée.
+    ///
+    /// JAMAIS posée pour un média protégé : chaque constructeur la retient dès
+    /// que `attachmentIsProtected` vaudrait vrai. Une vignette retenue ne
+    /// suffirait pas — le fichier EST le secret.
+    ///
+    /// **Optionnel, et il doit le rester** : un blob `replyToJson` gravé avant
+    /// ce champ doit se relire sans emporter le message entier. Même
+    /// discipline que `authorAvatarUrl`.
+    public let attachmentFileUrl: String?
+    /// La piece jointe citee est PROTEGEE — vue unique ou floutee — donc son
+    /// contenu ne doit ni s'afficher ni s'annoncer dans la citation.
+    ///
+    /// GRAVE au moment ou la citation est composee, exactement comme
+    /// `authorAvatarUrl`, et pour la meme raison : la citation est une feuille
+    /// `Equatable` a `==` MANUEL, une lecture de store faite au rendu serait
+    /// invisible de ce comparateur. Chaque constructeur le derive de la source
+    /// qu'il tient — `APIMessageAttachment` sur les chemins reseau et cache,
+    /// `MeeshyMessageAttachment` sur la bulle optimiste.
+    ///
+    /// **Optionnel, et il doit le rester** : `MeeshyMessage.init(from:)` decode
+    /// `replyTo` par `decodeIfPresent`, qui PROPAGE l'echec d'un sous-decodage.
+    /// Un champ requis ferait disparaitre du cache L2 le message ENTIER des que
+    /// son blob `replyToJson` a ete grave avant ce champ. Meme discipline que
+    /// `authorAvatarUrl` et `ForwardReference.conversationType`.
+    ///
+    /// `nil` = inconnu, traite comme NON protege : la vignette d'une citation
+    /// ordinaire ne doit pas disparaitre parce qu'un blob ancien se tait. La
+    /// porte reste FERMEE la ou elle compte, `MessageListViewController
+    /// .openQuotedMedia` refusant d'ouvrir un attachement protege apres
+    /// relecture du message REEL dans le store.
+    public let attachmentIsProtected: Bool?
+
+    /// Les sept FAITS du média cité — ce qui permet à la citation de
+    /// rendre un flou ThumbHash à l'ouverture et une ligne « 1024×768 · 0:42 ·
+    /// 1,2 Mo » sans attendre le réseau. La passerelle les sert
+    /// (`attachmentFullSelect`) et iOS les décode (`APIMessageAttachment`) ;
+    /// le type porteur les déclare pour que les trois constructeurs les
+    /// recopient à l'identique jusqu'à l'écran.
+    ///
+    /// **Tous optionnels, et ils doivent le rester** — même règle que
+    /// `authorAvatarUrl` : un blob `replyToJson` gravé avant eux doit se relire
+    /// sans emporter le message entier. Se recopient en UNE ligne depuis
+    /// chaque source par `QuotedAttachmentFacts`.
+    public let attachmentThumbHash: String?
+    public let attachmentWidth: Int?
+    public let attachmentHeight: Int?
+    public let attachmentDurationMs: Int?
+    public let attachmentFileSize: Int?
+    public let attachmentPageCount: Int?
+    public let attachmentMimeType: String?
+
+    public let isStoryReply: Bool
+    public var storyPublishedAt: Date?
+    public var storyReactionCount: Int?
+    public var storyCommentCount: Int?
+    /// Nombre de partages de la story, figé au moment de la réponse.
+    public var storyShareCount: Int?
+    public var storyThumbnailUrl: String?
+    /// Emoji de l'humeur citée. Non-nil ⇒ cette réponse cite un mood/statut
+    /// (rendu dédié : emoji + contenu + date) plutôt qu'une story générique.
+    /// `storyPublishedAt` porte alors la date de publication du mood.
+    public var moodEmoji: String?
+    /// Auteur de la story ou de l'humeur citée — la clé de `StoryReplyAdmission`.
+    /// `nil` sur toute citation de message et sur les blobs anciens.
+    public var storyAuthorId: String?
+    /// L'identifiant d'UTILISATEUR de l'auteur cité, gravé à la
+    /// RÉCEPTION depuis `replyTo.sender` — jamais `replyTo.senderId`, qui est
+    /// l'appartenance à la conversation. C'est la SEULE clé par laquelle
+    /// `user:updated` apparie une citation : sans lui, la citation garde le
+    /// nom gravé (apparier sur le nom repeindrait un homonyme).
+    ///
+    /// **Optionnel, et il doit le rester** : un blob `replyToJson` gravé avant
+    /// ce champ se relit sans lui. Même discipline que `authorAvatarUrl`.
+    public var authorUserId: String?
+    /// La story citée a DISPARU sans laisser d'instantané : la
+    /// passerelle n'a servi que `storyReplyToId`, sans `postReplyTo` — le
+    /// message n'en gravait pas et le post n'existe plus. Posé par un seul
+    /// producteur, `unavailableStory(storyId:)`.
+    ///
+    /// **Optionnel, et il doit le rester** : un blob `replyToJson` gravé avant
+    /// ce champ doit se relire sans emporter le message entier. `nil` =
+    /// disponible — aucune citation existante ne change de rendu.
+    public let storyUnavailable: Bool?
+    /// Le message CITÉ a été supprimé : la citation ne porte plus
+    /// rien de lui (`tombstoned(at:)`), et l'app rend « Message supprimé ».
+    /// Optionnel pour la même raison que `authorAvatarUrl` : un blob gravé
+    /// avant lui doit se relire.
+    public var quotedMessageDeletedAt: Date?
+    /// L'échéance du message cité ÉPHÉMÈRE : passée, la zone lecture
+    /// d'un audio cité se ferme (`offersQuotedAudioPlayback(now:)`). Posée
+    /// après l'init, comme `quotedMessageDeletedAt` : optionnelle, un blob
+    /// gravé avant elle se relit sans emporter le message.
+    public var quotedExpiresAt: Date?
+    /// **La nature de disparition du message CITÉ**, telle que la loi de
+    /// sortie la lit sur ce que le fil a servi de lui. `nil` = le fil ne l'a pas
+    /// déclarée (citation reconstruite pour le temps réel, ligne de cache écrite
+    /// avant ce champ) : la citation est alors ILLISIBLE, et son contenu ne sort
+    /// pas avec le message qui la porte (`quotedContentMayLeave`).
+    public var quotedExitNature: ContentExitLaw.Nature?
+    /// Les pistes TRADUITES d'un audio cité et la langue d'origine
+    /// qui les départage, pour que la citation joue, hors de la fenêtre
+    /// chargée, la MÊME piste que le vocal d'origine (Prisme audio). Jamais
+    /// posée pour un média protégé : le fichier EST le secret.
+    public var quotedAudioTracks: QuotedAudioTracks?
+    /// **Combien de TUILES (photos, vidéos) porte le message cité**,
+    /// quand la citation vise le message ENTIER — la face montre la première,
+    /// « +N » dit qu'il y en a d'autres. `nil` quand la citation NOMME une
+    /// pièce (elle n'en montre qu'une, et c'est la bonne) et pour un contenu
+    /// protégé : un compte est déjà un fait sur ce que la protection retient.
+    ///
+    /// **Optionnel, et il doit le rester** : un blob `replyToJson` gravé avant
+    /// ce champ doit toujours se décoder.
+    public var quotedPieceCount: Int?
+
+    /// L'auteur cité n'a pas de compte : ses adresses se citent en
+    /// texte brut, jamais cliquables. Optionnel pour les blobs `replyToJson`
+    /// gravés avant ce champ.
+    public var authorIsAnonymous: Bool?
+    /// Le contour équipé de l'auteur cité, GRAVÉ à la réception depuis
+    /// `replyTo.sender.profileDecor` — comme son portrait. Optionnel pour les blobs
+    /// `replyToJson` gravés avant ce champ.
+    public var authorRing: ServedProfileDecorItem?
+
+    /// Le nombre de tuiles que « +N » annonce au-delà de la face, ou `nil`.
+    public var quotedExtraPieceCount: Int? {
+        guard let quotedPieceCount, quotedPieceCount > 1, !quotedMediaIsProtected else { return nil }
+        return quotedPieceCount - 1
+    }
+
+    /// Le PREDICAT unique des deux peaux (`BubbleQuotedReply`,
+    /// `FocalQuotedReplyView`) : un media cite protege ne montre ni vignette ni
+    /// icone de lecture, et n'arme AUCUNE zone 2 — le tap retombe alors en zone
+    /// 3 (retour au message cite), ou le media garde son propre geste de
+    /// revelation. Miroir de `BubbleGridCell.attachmentIsProtected`
+    /// (`isViewOnce || isBlurred`), cote citation.
+    ///
+    /// Sans lui, une citation affichait la vignette NON FLOUTEE d'un media a
+    /// vue unique et posait par-dessus un bouton play que le verrou de l'hote
+    /// refusait d'honorer : une exposition, doublee d'un controle qui ment.
+    public var quotedMediaIsProtected: Bool { attachmentIsProtected == true }
+
+    /// Le PRÉDICAT unique « la story citée a-t-elle disparu ? », lu
+    /// par la carte de scène et par les citations plates des trois modes.
+    /// Vrai ⇒ carte compacte « Story indisponible », sans scène ni porte.
+    /// Une humeur n'est jamais concernée : elle n'a pas de scène.
+    public var isUnavailableStory: Bool {
+        isStoryReply && moodEmoji == nil && storyUnavailable == true
+    }
+
+    /// ZONE 3 côté DONNÉE : un tap sur cette citation a-t-il une cible ? Sans
+    /// identifiant, ou vers une story disparue, il n'ouvrirait rien — et un
+    /// contrôle sans effet est un contrôle qui ment (loi 4).
+    public var opensQuotedTarget: Bool {
+        !messageId.isEmpty && !isUnavailableStory
+    }
+
+    /// La citation d'une story dont il ne reste que l'identifiant. Aucun
+    /// aperçu : c'est la vue qui DIT « Story indisponible », depuis son
+    /// catalogue, et non un texte figé dans la donnée.
+    public static func unavailableStory(storyId: String) -> ReplyReference {
+        ReplyReference(messageId: storyId, authorName: "Story", previewText: "", isStoryReply: true, storyUnavailable: true)
+    }
+
+    /// ZONE 1 de la LOI DES ZONES, cote DONNEE : cette citation designe-t-elle
+    /// une PERSONNE dont la fiche peut s'ouvrir ?
+    ///
+    /// Une story ou une humeur citee porte `authorName == "Story"` (ou vide) et
+    /// aucun avatar : il n'y a pas de personne a ouvrir, l'hote fabriquerait
+    /// une fiche a ce nom.
+    ///
+    /// Ce que la donnee OFFRE, jamais ce qu'une peau CABLE : l'armement reste
+    /// la conjonction de ce fait et de la presence d'un gestionnaire.
+    public var offersAuthorGate: Bool { !isStoryReply }
+
+    /// ZONE 2 cote DONNEE : cette citation porte-t-elle un media que l'on peut
+    /// ouvrir ou jouer EN PLEIN ECRAN ?
+    ///
+    /// La story en est exclue : son chemin (zone 3 -> viewer) EST deja le plein
+    /// ecran demande, et le dedoubler serait un second point actionnable pour
+    /// une seule capacite. Un media PROTEGE en est exclu aussi — voir
+    /// `quotedMediaIsProtected`.
+    ///
+    /// Lu par la couche d'ACCESSIBILITE des deux hotes de rangee
+    /// (`BubbleStandardLayout`, `FocalRow`), qui doivent offrir cette zone en
+    /// action nommee : leur `.accessibilityElement(children: .combine)` fusionne
+    /// la rangee en UN element et leur `.accessibilityLabel` REMPLACE le
+    /// libelle, si bien qu'aucun geste pose dans la citation n'est atteignable
+    /// autrement. Les deux peaux ecrivent la meme loi dans leur propre
+    /// armement, sous des gardes de source qui epinglent leurs expressions.
+    public var offersMediaGate: Bool {
+        !isStoryReply
+            && !quotedMediaIsProtected
+            && (attachmentType != nil || attachmentThumbnailUrl?.isEmpty == false)
+    }
+
+    public init(messageId: String = "", authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil, authorAvatarUrl: String? = nil, attachmentType: String? = nil, attachmentId: String? = nil, attachmentThumbnailUrl: String? = nil, attachmentFileUrl: String? = nil, attachmentIsProtected: Bool? = nil, isStoryReply: Bool = false,
+                storyPublishedAt: Date? = nil, storyReactionCount: Int? = nil, storyCommentCount: Int? = nil, storyShareCount: Int? = nil, storyThumbnailUrl: String? = nil, moodEmoji: String? = nil, storyAuthorId: String? = nil,
+                attachmentFacts: QuotedAttachmentFacts? = nil, storyUnavailable: Bool? = nil, authorUserId: String? = nil) {
+        self.messageId = messageId
+        self.authorName = authorName
+        self.previewText = previewText
+        self.isMe = isMe
+        self.authorColor = authorColor ?? DynamicColorGenerator.colorForName(authorName)
+        self.authorAvatarUrl = authorAvatarUrl
+        self.attachmentType = attachmentType
+        self.attachmentId = attachmentId
+        self.attachmentThumbnailUrl = attachmentThumbnailUrl
+        self.attachmentFileUrl = attachmentIsProtected == true ? nil : attachmentFileUrl
+        self.attachmentIsProtected = attachmentIsProtected
+        self.attachmentThumbHash = attachmentFacts?.thumbHash
+        self.attachmentWidth = attachmentFacts?.width
+        self.attachmentHeight = attachmentFacts?.height
+        self.attachmentDurationMs = attachmentFacts?.durationMs
+        self.attachmentFileSize = attachmentFacts?.fileSize
+        self.attachmentPageCount = attachmentFacts?.pageCount
+        self.attachmentMimeType = attachmentFacts?.mimeType
+        self.isStoryReply = isStoryReply
+        self.storyPublishedAt = storyPublishedAt
+        self.storyReactionCount = storyReactionCount
+        self.storyCommentCount = storyCommentCount
+        self.storyShareCount = storyShareCount
+        self.storyThumbnailUrl = storyThumbnailUrl
+        self.moodEmoji = moodEmoji
+        self.storyAuthorId = storyAuthorId
+        self.storyUnavailable = storyUnavailable
+        self.authorUserId = authorUserId
+    }
+}
+
+// MARK: - La pièce que la citation DÉSIGNE
+
+public extension ReplyReference {
+    /// La pièce jointe que CETTE citation vise, parmi celles du message cité.
+    ///
+    /// UN site pour l'ICÔNE et pour l'OUVERTURE : `MessageListViewController
+    /// .openQuotedMedia` et la composition de la citation doivent résoudre la
+    /// MÊME pièce, sans quoi la vignette décrit une photo et le plein écran en
+    /// ouvre une autre — le défaut exact que `quotedRepresentative` avait déjà
+    /// fermé pour la règle « premier hors localisation ».
+    ///
+    /// Trois cas, et le troisième est celui qui compte :
+    /// - identifiant ABSENT ⇒ le représentatif, inchangé ;
+    /// - identifiant PRÉSENT et pièce trouvée ⇒ elle, quel que soit son rang ;
+    /// - identifiant PRÉSENT et pièce INTROUVABLE (supprimée, hors fenêtre) ⇒
+    ///   `nil`, **jamais** le représentatif. Emprunter la première serait
+    ///   montrer une photo que cette réponse ne cite pas.
+    func citedAttachment(among attachments: [MeeshyMessageAttachment]) -> MeeshyMessageAttachment? {
+        guard let attachmentId else { return attachments.quotedRepresentative }
+        return attachments.first { $0.id == attachmentId }
+    }
+}
+
+// MARK: - Quoted attachment facts
+
+public extension ReplyReference {
+    /// Les sept faits du média cité, recopiés en UNE ligne depuis la source
+    /// que chaque constructeur tient — `APIMessageAttachment` sur les chemins
+    /// réseau et cache, `MeeshyMessageAttachment` sur la bulle optimiste et la
+    /// bannière du composeur. Un constructeur qui recopie champ par champ est
+    /// un inventaire à tenir à jour ; celui-ci n'en tient qu'un.
+    struct QuotedAttachmentFacts: Equatable, Sendable {
+        public let thumbHash: String?
+        public let width: Int?
+        public let height: Int?
+        public let durationMs: Int?
+        public let fileSize: Int?
+        public let pageCount: Int?
+        public let mimeType: String?
+
+        public init(thumbHash: String?, width: Int?, height: Int?, durationMs: Int?,
+                    fileSize: Int?, pageCount: Int?, mimeType: String?) {
+            self.thumbHash = thumbHash
+            self.width = width
+            self.height = height
+            self.durationMs = durationMs
+            self.fileSize = fileSize
+            self.pageCount = pageCount
+            self.mimeType = mimeType
+        }
+
+        public init(_ attachment: APIMessageAttachment) {
+            self.init(
+                thumbHash: attachment.thumbHash,
+                width: attachment.width,
+                height: attachment.height,
+                durationMs: attachment.duration,
+                fileSize: attachment.fileSize,
+                pageCount: attachment.pageCount,
+                mimeType: attachment.mimeType
+            )
+        }
+
+        /// Le modèle domaine porte `fileSize: Int` avec `0` pour « inconnu »
+        /// (`apiAtt.fileSize ?? 0` aux deux sites de conversion) : un zéro n'est
+        /// pas une taille, il redevient `nil` pour que la ligne de détails ne
+        /// rende jamais « 0 o ».
+        public init(_ attachment: MeeshyMessageAttachment) {
+            self.init(
+                thumbHash: attachment.thumbHash,
+                width: attachment.width,
+                height: attachment.height,
+                durationMs: attachment.duration,
+                fileSize: attachment.fileSize > 0 ? attachment.fileSize : nil,
+                pageCount: attachment.pageCount,
+                mimeType: attachment.mimeType
+            )
+        }
+    }
+}
+
+// MARK: - Forward Reference
+
+public struct ForwardReference: Codable, Sendable {
+    public let originalMessageId: String
+    public let senderName: String
+    public let senderAvatar: String?
+    public let previewText: String
+    public let conversationId: String?
+    public let conversationName: String?
+    public let attachmentType: String?
+    public let attachmentThumbnailUrl: String?
+    /// Type de la conversation SOURCE (`direct`, `group`, `public`, `global`,
+    /// `community`, `channel`, `bot`, `broadcast`) — mêmes valeurs que
+    /// `MeeshyConversation.ConversationType`. Optionnel : les caches GRDB
+    /// antérieurs au champ décodent en `nil` sans migration.
+    public let conversationType: String?
+    /// L'identifiant d'UTILISATEUR de l'expéditeur d'origine, gravé à
+    /// la réception depuis `forwardedFrom.sender` : la clé par laquelle
+    /// `user:updated` repeint la référence. Optionnel : un blob gravé avant
+    /// lui se relit sans lui, et la référence garde alors le nom gravé.
+    public let senderUserId: String?
+
+    public init(originalMessageId: String = "", senderName: String, senderAvatar: String? = nil,
+                previewText: String, conversationId: String? = nil, conversationName: String? = nil,
+                attachmentType: String? = nil, attachmentThumbnailUrl: String? = nil,
+                conversationType: String? = nil, senderUserId: String? = nil) {
+        self.originalMessageId = originalMessageId
+        self.senderName = senderName
+        self.senderAvatar = senderAvatar
+        self.previewText = previewText
+        self.conversationId = conversationId
+        self.conversationName = conversationName
+        self.attachmentType = attachmentType
+        self.attachmentThumbnailUrl = attachmentThumbnailUrl
+        self.conversationType = conversationType
+        self.senderUserId = senderUserId
+    }
+}

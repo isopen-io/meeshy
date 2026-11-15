@@ -102,6 +102,11 @@ public struct MediaConsumptions: Codable, Equatable, Sendable {
 /// this store's.
 @MainActor
 public final class MediaConsumptionStore {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public static let shared = MediaConsumptionStore()
 
     /// Upper bound on remembered entries. Beyond this, the least-recently

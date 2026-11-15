@@ -18,13 +18,16 @@
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 
-// Mock bcryptjs - using any for mock function types to avoid TypeScript issues
+// Site UNIQUE du hachage depuis #5216 (`utils/password-hash`) : doubler
+// `bcryptjs` ne suffit plus, le module charge d'abord le binaire NATIF. Le coût
+// ayant quitté le site d'appel, il s'assert sur la constante partagée.
 const mockBcryptHash = jest.fn() as jest.Mock<any>;
 const mockBcryptCompare = jest.fn() as jest.Mock<any>;
 
-jest.mock('bcryptjs', () => ({
-  hash: (password: string, rounds: number) => mockBcryptHash(password, rounds),
-  compare: (password: string, hash: string) => mockBcryptCompare(password, hash)
+jest.mock('../../../utils/password-hash', () => ({
+  ...(jest.requireActual('../../../utils/password-hash') as Record<string, unknown>),
+  hashPassword: (password: string) => mockBcryptHash(password),
+  verifyPassword: (password: string, hash: string) => mockBcryptCompare(password, hash)
 }));
 
 // Mock speakeasy for 2FA
@@ -55,6 +58,8 @@ import {
 } from '../../../services/PasswordResetService';
 import { matchesMongoWhere } from '../../helpers/mongo-where';
 import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
+import { BCRYPT_COST } from '../../../utils/password-hash';
+import { validatePasswordStrength } from '../../../utils/password-strength';
 
 // Mock Prisma Client
 const mockPrisma = {
@@ -191,7 +196,7 @@ describe('PasswordResetService', () => {
 
     mockPrisma.securityEvent.create.mockResolvedValue({ id: 'event-1' });
     mockPrisma.passwordResetToken.count.mockResolvedValue(0);
-    mockPrisma.passwordResetToken.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.passwordResetToken.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.passwordResetToken.create.mockResolvedValue({ id: 'token-1' });
     mockPrisma.passwordHistory.findMany.mockResolvedValue([]);
 
@@ -376,7 +381,7 @@ describe('PasswordResetService', () => {
         }
       });
 
-      it('should return generic response for unverified email', async () => {
+      it('sends the normal reset to an unverified email — its use proves the address (#8238)', async () => {
         mockPrisma.user.findFirst.mockResolvedValue({
           ...mockUser,
           emailVerifiedAt: null
@@ -385,7 +390,7 @@ describe('PasswordResetService', () => {
         const result = await service.requestPasswordReset(validResetRequest);
 
         expect(result.success).toBe(true);
-        expect(mockPrisma.securityEvent.create).toHaveBeenCalledWith(
+        expect(mockPrisma.securityEvent.create).not.toHaveBeenCalledWith(
           expect.objectContaining({
             data: expect.objectContaining({
               eventType: 'PASSWORD_RESET_UNVERIFIED_EMAIL'
@@ -588,7 +593,7 @@ describe('PasswordResetService', () => {
           name: `${mockUser.firstName} ${mockUser.lastName}`,
           resetLink: expect.stringContaining('token='),
           expiryMinutes: 15,
-          language: 'en'
+          language: 'en', intent: 'reset'
         });
       });
 
@@ -611,10 +616,11 @@ describe('PasswordResetService', () => {
 
         expect(mockPrisma.passwordResetToken.create).toHaveBeenCalledWith({
           data: expect.objectContaining({
-            geoLocation: 'New York, United States',
-            geoCoordinates: '40.7128,-74.006'
+            geoLocation: 'New York, United States'
           })
         });
+        // #9609 — plus aucune coordonnée n'est écrite.
+        expect(mockPrisma.passwordResetToken.create.mock.calls[0][0].data).not.toHaveProperty('geoCoordinates');
       });
     });
 
@@ -660,45 +666,11 @@ describe('PasswordResetService', () => {
         expect(result.error).toContain(`minimum ${PASSWORD_MIN_LENGTH} characters`);
       });
 
-      it('should reject password without lowercase letter', async () => {
-        mockZxcvbn.mockReturnValue({ score: 4, feedback: {} });
-
-        const result = await service.completePasswordReset({
-          ...validResetCompletion,
-          newPassword: 'ALLUPPERCASE123!',
-          confirmPassword: 'ALLUPPERCASE123!'
-        });
-
-        expect(result.success).toBe(false);
-        expect(result.error).toContain('one lowercase letter');
-      });
-
-      it('should reject password without uppercase letter', async () => {
-        mockZxcvbn.mockReturnValue({ score: 4, feedback: {} });
-
-        const result = await service.completePasswordReset({
-          ...validResetCompletion,
-          newPassword: 'alllowercase123!',
-          confirmPassword: 'alllowercase123!'
-        });
-
-        expect(result.success).toBe(false);
-        expect(result.error).toContain('one uppercase letter');
-      });
-
-      it('should reject password without digit', async () => {
-        mockZxcvbn.mockReturnValue({ score: 4, feedback: {} });
-
-        const result = await service.completePasswordReset({
-          ...validResetCompletion,
-          newPassword: 'NoDigitsHere!!',
-          confirmPassword: 'NoDigitsHere!!'
-        });
-
-        expect(result.success).toBe(false);
-        expect(result.error).toContain('one digit');
-      });
-
+      // Les anciens témoins "should reject password without {lowercase,uppercase,digit}"
+      // sont retirés (#6436, pas de règle de composition) — le même comportement
+      // ("validation passe, la reprise échoue sur le token") est déjà couvert
+      // ci-dessous, et l'absence de garde de composition l'est par
+      // `password-strength.test.ts`.
       it('should accept password without special character (special chars are optional)', async () => {
         // Special characters are now optional in password validation
         // The password should still pass basic requirements if it has:
@@ -1091,17 +1063,14 @@ describe('PasswordResetService', () => {
         const result = await service.completePasswordReset(validResetCompletion);
 
         expect(result.success).toBe(true);
-        expect(mockBcryptHash).toHaveBeenCalledWith(
-          validResetCompletion.newPassword,
-          12
-        );
+        expect(mockBcryptHash).toHaveBeenCalledWith(validResetCompletion.newPassword);
       });
 
       it('should mark token as used', async () => {
         await service.completePasswordReset(validResetCompletion);
 
-        expect(mockPrisma.passwordResetToken.update).toHaveBeenCalledWith({
-          where: { id: 'token-1' },
+        expect(mockPrisma.passwordResetToken.updateMany).toHaveBeenCalledWith({
+          where: expect.objectContaining({ id: 'token-1', isRevoked: false }),
           data: { usedAt: expect.any(Date) }
         });
       });
@@ -1236,13 +1205,13 @@ describe('PasswordResetService', () => {
   // =========================================
 
   describe('Password Strength Validation (validatePasswordStrength)', () => {
+    // Extrait vers `utils/password-strength.ts` par #3629 — cinq portes
+    // partagent désormais la même fonction, exportée, plutôt qu'une méthode
+    // privée réservée à ce service.
     it('should accept password meeting all requirements', () => {
       mockZxcvbn.mockReturnValue({ score: 4, feedback: {} });
 
-      // Access private method through completion flow
-      const validation = (service as any).validatePasswordStrength(
-        'VeryStr0ng@Password!'
-      );
+      const validation = validatePasswordStrength('VeryStr0ng@Password!');
 
       expect(validation.isValid).toBe(true);
       expect(validation.errors).toHaveLength(0);
@@ -1251,21 +1220,20 @@ describe('PasswordResetService', () => {
     it('should collect multiple validation errors', () => {
       mockZxcvbn.mockReturnValue({ score: 0, feedback: { warning: 'Too common' } });
 
-      const validation = (service as any).validatePasswordStrength('weak');
+      const validation = validatePasswordStrength('weak');
 
       expect(validation.isValid).toBe(false);
       expect(validation.errors.length).toBeGreaterThan(1);
     });
 
     it('should include zxcvbn warning in errors', () => {
+      // score 1 stays below any length-proportional tier (#6436) for this password.
       mockZxcvbn.mockReturnValue({
-        score: 2,
+        score: 1,
         feedback: { warning: 'This is a commonly used password' }
       });
 
-      const validation = (service as any).validatePasswordStrength(
-        'Password123!'
-      );
+      const validation = validatePasswordStrength('Password123!');
 
       expect(validation.errors).toContain('This is a commonly used password');
     });
@@ -1342,7 +1310,7 @@ describe('PasswordResetService - Edge Cases', () => {
 
     mockPrisma.securityEvent.create.mockResolvedValue({ id: 'event-1' });
     mockPrisma.passwordResetToken.count.mockResolvedValue(0);
-    mockPrisma.passwordResetToken.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.passwordResetToken.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.passwordResetToken.create.mockResolvedValue({ id: 'token-1' });
     mockPrisma.passwordHistory.findMany.mockResolvedValue([]);
 
@@ -1365,8 +1333,7 @@ describe('PasswordResetService - Edge Cases', () => {
     expect(result.success).toBe(true);
     expect(mockPrisma.passwordResetToken.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        geoLocation: null,
-        geoCoordinates: null
+        geoLocation: null
       })
     });
   });
@@ -1538,10 +1505,9 @@ describe('PasswordResetService - Security Tests', () => {
 
     await service.completePasswordReset(validResetCompletion);
 
-    expect(mockBcryptHash).toHaveBeenCalledWith(
-      validResetCompletion.newPassword,
-      12
-    );
+    // Les DEUX moitiés : que le site hache, et que la constante vaut 12.
+    expect(mockBcryptHash).toHaveBeenCalledWith(validResetCompletion.newPassword);
+    expect(BCRYPT_COST).toBe(12);
   });
 
   it('should log all security-relevant events', async () => {
@@ -1670,7 +1636,7 @@ describe('PasswordResetService - Security Tests', () => {
     mockBcryptHash.mockResolvedValue('$2b$12$newhash');
     mockPrisma.user.update.mockResolvedValue({});
     mockPrisma.passwordHistory.create.mockResolvedValue({});
-    mockPrisma.passwordResetToken.update.mockResolvedValue({});
+    mockPrisma.passwordResetToken.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.userSession.updateMany.mockResolvedValue({ count: 0 });
 
     const completionWith2FA = {
@@ -1716,7 +1682,7 @@ describe('PasswordResetService - Security Tests', () => {
     mockBcryptHash.mockResolvedValue('$2b$12$newhash');
     mockPrisma.user.update.mockResolvedValue({});
     mockPrisma.passwordHistory.create.mockResolvedValue({});
-    mockPrisma.passwordResetToken.update.mockResolvedValue({});
+    mockPrisma.passwordResetToken.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.userSession.updateMany.mockResolvedValue({ count: 0 });
 
     const result = await service.completePasswordReset({
@@ -1730,8 +1696,8 @@ describe('PasswordResetService - Security Tests', () => {
 
   it('should reject low-score password with no zxcvbn warning message', async () => {
     // Covers the FALSE branch of `if (result.feedback.warning)` at line 652:
-    // score < MIN_PASSWORD_SCORE but feedback.warning is empty → only score error pushed
-    mockZxcvbn.mockReturnValue({ score: 2, feedback: { warning: '' } });
+    // score below the length-proportional minimum (#6436) but feedback.warning empty.
+    mockZxcvbn.mockReturnValue({ score: 1, feedback: { warning: '' } });
 
     const result = await service.completePasswordReset({
       ...validResetCompletion,
@@ -1772,7 +1738,7 @@ describe('PasswordResetService - Security Tests', () => {
     mockBcryptHash.mockResolvedValue('$2b$12$newhash');
     mockPrisma.user.update.mockResolvedValue({});
     mockPrisma.passwordHistory.create.mockResolvedValue({});
-    mockPrisma.passwordResetToken.update.mockResolvedValue({});
+    mockPrisma.passwordResetToken.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.userSession.updateMany.mockResolvedValue({ count: 0 });
 
     await service.completePasswordReset(validResetCompletion);
@@ -1808,7 +1774,7 @@ describe('PasswordResetService - Security Tests', () => {
     mockBcryptHash.mockResolvedValue('$2b$12$newhash');
     mockPrisma.user.update.mockResolvedValue({});
     mockPrisma.passwordHistory.create.mockResolvedValue({});
-    mockPrisma.passwordResetToken.update.mockResolvedValue({});
+    mockPrisma.passwordResetToken.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.userSession.updateMany.mockResolvedValue({ count: 0 });
 
     const result = await service.completePasswordReset(validResetCompletion);

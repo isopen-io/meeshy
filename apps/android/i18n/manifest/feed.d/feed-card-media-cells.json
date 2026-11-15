@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "feed.caption.expand", "androidName": "feed_caption_expand", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.caption.collapse", "androidName": "feed_caption_collapse", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.carousel.previous", "androidName": "feed_carousel_previous", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.carousel.next", "androidName": "feed_carousel_next", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.carousel.a11y.position", "androidName": "feed_carousel_a11y_position", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.media.viewFullscreen", "androidName": "feed_media_view_fullscreen", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.post.detail.document", "androidName": "feed_post_detail_document", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.post.detail.pages", "androidName": "feed_post_detail_pages", "status": "adopted" },
+        { "catalog": "app", "iosKey": "media.downloadVideo", "androidName": "media_download_video", "status": "adopted" }
+      ]
+    }
+  }
+}

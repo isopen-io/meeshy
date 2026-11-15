@@ -154,7 +154,6 @@ export interface X3DHResponderResult {
  */
 export class X3DHKeyAgreement {
   private keyManager: SignalKeyManager;
-  private prisma: PrismaClient;
   private stats = {
     initiatorSessions: 0,
     responderSessions: 0,
@@ -166,9 +165,8 @@ export class X3DHKeyAgreement {
     signedPreKeysRejected: 0
   };
 
-  constructor(keyManager: SignalKeyManager, prisma: PrismaClient) {
+  constructor(keyManager: SignalKeyManager, _prisma: PrismaClient) {
     this.keyManager = keyManager;
-    this.prisma = prisma;
   }
 
   /**

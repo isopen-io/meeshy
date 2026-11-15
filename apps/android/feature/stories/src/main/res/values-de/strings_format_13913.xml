@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #13913 : le compositeur nomme le format qu'il compose — les variantes post et réel (ou story) des libellés qui le nomment. -->
+<resources>
+    <string name="stories_composer_canvas_post">Beitragsfläche – zum Zoomen zusammenziehen, zum Verschieben ziehen</string>
+    <string name="stories_composer_canvas_reel">Reel-Fläche – zum Zoomen zusammenziehen, zum Verschieben ziehen</string>
+    <string name="story_sound_sheet_title_post">Beitragston</string>
+    <string name="story_sound_sheet_title_reel">Reel-Ton</string>
+    <string name="story_sound_library_emptyMine_post">Deine Sounds erscheinen hier, sobald du einen Beitrag mit eigenem Audio veröffentlichst.</string>
+    <string name="story_sound_library_emptyMine_reel">Deine Sounds erscheinen hier, sobald du ein Reel mit eigenem Audio veröffentlichst.</string>
+    <string name="story_media_soundExtraction_caption_story">Andere Personen können den Ton der Videos dieser Story wiederverwenden.</string>
+    <string name="story_media_soundExtraction_caption_reel">Andere Personen können den Ton der Videos dieses Reels wiederverwenden.</string>
+    <string name="story_media_soundExtraction_a11yHint_story">Andere Personen können den Ton der Videos dieser Story in ihren eigenen Inhalten wiederverwenden.</string>
+    <string name="story_media_soundExtraction_a11yHint_reel">Andere Personen können den Ton der Videos dieses Reels in ihren eigenen Inhalten wiederverwenden.</string>
+    <string name="composer_post_text_reel">Reel-Text</string>
+</resources>

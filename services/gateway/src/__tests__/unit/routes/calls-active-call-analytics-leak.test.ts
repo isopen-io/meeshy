@@ -33,6 +33,7 @@ const OTHER_PARTICIPANT_ID = '507f1f77bcf86cd799439055';
 const mockGetActiveCallForConversation = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn<any>().mockImplementation(() => ({
     getActiveCallForConversation: (...args: any[]) =>
       mockGetActiveCallForConversation(...args),

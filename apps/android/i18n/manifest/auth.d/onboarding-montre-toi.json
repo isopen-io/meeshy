@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {
+          "androidName": "onboarding_profile_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_profile_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_profile_banner_add",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_profile_banner_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_profile_avatar_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_profile_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_profile_retry",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_profile_uploading_a11y",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

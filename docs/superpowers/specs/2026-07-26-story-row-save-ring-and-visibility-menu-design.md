@@ -18,7 +18,7 @@ Deux demandes utilisateur sur la liste « Mes stories » :
 
 | Élément | Emplacement | Constat |
 | --- | --- | --- |
-| Ligne + menu `⋯` | `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift:484` | `Menu` avec `Image(systemName: "ellipsis")`, `.accessibilityHidden(true)` |
+| Ligne + menu `⋯` | `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift:484` | `Menu` avec `Image(systemName: "ellipsis")`, `.accessibilityHidden(true)` |
 | Ligne (a11y) | même fichier, `MyStoryRow.body` | `.accessibilityElement(children: .ignore)` + libellé composé |
 | Sauvegarde Photos | `StoryExportShareSheet` mode `.saveToPhotos` + `StoryExportShareViewModel` | progression exposée en `@Published progress`, mais le VM est un `@StateObject` de `MyStoriesView` |
 | Bake MP4 | `StoryVideoExportService.shared` (`@MainActor` singleton) | `beginBackgroundTask` déjà géré en interne par `StoryExporter` |
@@ -50,7 +50,7 @@ l'utilisateur navigue ailleurs ne peut pas s'appuyer sur un état à durée de v
 
 ### `StoryPhotoSaveService`
 
-Nouveau fichier : `apps/ios/Meeshy/Features/Main/Services/StoryPhotoSaveService.swift`.
+Nouveau fichier : `apps/ios/Meeshy/Features/Stories/Services/StoryPhotoSaveService.swift`.
 Singleton `@MainActor`, `ObservableObject` — même patron que `StoryPublishService.shared`.
 
 ```swift
@@ -243,7 +243,7 @@ payload). Ce qui manque est côté iOS :
 | `packages/MeeshySDK/Sources/MeeshySDK/Services/PostService.swift` | `PostServiceProtocol.update(...)` et son implémentation gagnent `visibilityUserIds: [String]? = nil` et le transmettent à `UpdatePostRequest`. Le champ **existe déjà** dans `UpdatePostRequest` (`ServiceModels.swift:133`) mais `update` ne le renseigne jamais — il part toujours à `nil`, ce qui fait rejeter EXCEPT/ONLY par le `refine` Zod du gateway |
 | `packages/MeeshySDK/Sources/MeeshySDK/Models/PostModels.swift` | `APIPost.visibilityUserIds: [String]?` décodé (`decodeIfPresent`, ajouté aux `CodingKeys`) |
 | `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift` | `StoryItem.visibility` passe de `let` à `var` ; ajout de `visibilityUserIds: [String]?` (optionnel → migration GRDB douce, les rows antérieurs décodent en `nil`) ; propagation dans `toStoryGroups` et dans le `copy`/rebuild existant |
-| `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift` | `applyVisibility(storyId:visibility:userIds:) async -> Bool` — écrit en mémoire, appelle le SDK, restaure l'ancienne valeur si l'appel échoue |
+| `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift` | `applyVisibility(storyId:visibility:userIds:) async -> Bool` — écrit en mémoire, appelle le SDK, restaure l'ancienne valeur si l'appel échoue |
 
 Ajouter `visibilityUserIds` en optionnel partout garantit que les payloads et les rows
 GRDB antérieurs continuent de décoder sans migration.

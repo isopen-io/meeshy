@@ -10,6 +10,11 @@ import MeeshyUI
 /// Internal visibility: app-side orchestrator (per `[[sdk-purity]]`).
 @MainActor
 final class ConversationMediaHandler {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     private let state: ConversationStateStore
     private var inFlightTask: Task<Void, Never>?
 
@@ -22,9 +27,18 @@ final class ConversationMediaHandler {
     /// prefetch so a rapid burst of socket updates only triggers the last
     /// snapshot. Caller is expected to debounce upstream (the legacy
     /// `ConversationViewModel` adds a 300 ms debounce).
+    /// Les messages dont le préchargement a le DROIT de récupérer les médias.
+    ///
+    /// #7618 — une vue unique ne se télécharge qu'à son OUVERTURE : le
+    /// préchargement ne la sautait pas, et l'ouverture du fil récupérait le
+    /// fichier d'un sticker à vue unique avant tout geste (recette staging).
+    static func prefetchCandidates(_ messages: [Message]) -> [Message] {
+        Array(messages.suffix(30).filter { !$0.attachments.isEmpty && !$0.holdsViewOnce })
+    }
+
     func prefetchRecentMedia() {
         inFlightTask?.cancel()
-        let snapshot = Array(state.messages.suffix(30).filter { !$0.attachments.isEmpty })
+        let snapshot = Self.prefetchCandidates(state.messages)
         guard !snapshot.isEmpty else { return }
         // Respect the user's auto-download policy. The bubble views already gate
         // their network fetch on it; prefetching the full media regardless was
@@ -36,7 +50,12 @@ final class ConversationMediaHandler {
         let allowImage = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .image, condition: condition, prefs: prefs)
         let allowVideo = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .video, condition: condition, prefs: prefs)
         let allowAudio = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .audio, condition: condition, prefs: prefs)
-        guard allowImage || allowVideo || allowAudio else { return }
+        // #14639 — sous 100 Ko, un média part quel que soit le réseau ; seul le hors-ligne le retient.
+        let online = condition != .offline
+        let isSmall: @Sendable (MessageAttachment) -> Bool = { attachment in
+            online && MediaDownloadPolicyEngine.isSmallMedia(attachment.fileSize)
+        }
+        guard allowImage || allowVideo || allowAudio || snapshot.contains(where: { $0.attachments.contains(where: isSmall) }) else { return }
         inFlightTask = Task(priority: .utility) {
             let imageStore = await CacheCoordinator.shared.images
 
@@ -47,7 +66,7 @@ final class ConversationMediaHandler {
                         guard !Task.isCancelled else { return }
                         switch attachment.type {
                         case .image:
-                            guard allowImage else { continue }
+                            guard allowImage || isSmall(attachment) else { continue }
                             if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
                                let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
                                 group.addTask { _ = await imageStore.image(for: resolved) }
@@ -57,7 +76,7 @@ final class ConversationMediaHandler {
                                 group.addTask { _ = await imageStore.image(for: resolved) }
                             }
                         case .video:
-                            guard allowVideo else { continue }
+                            guard allowVideo || isSmall(attachment) else { continue }
                             if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
                                let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
                                 group.addTask { _ = await imageStore.image(for: resolved) }
@@ -81,6 +100,8 @@ final class ConversationMediaHandler {
             // Video preroll: fire-and-forget so the first video in the
             // current window starts as soon as the user taps play. Doesn't
             // delay this prefetch — runs in its own utility-priority Task.
+            // `preloadAndCachePlayer` ne prépare que depuis le disque, hors
+            // stade thermique critique, et cède aux voisins des réels (#9882).
             if allowVideo,
                let firstVideoAtt = snapshot.flatMap(\.attachments).first(where: { $0.type == .video }),
                !firstVideoAtt.fileUrl.isEmpty,

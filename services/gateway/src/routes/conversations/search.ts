@@ -1,5 +1,6 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import {
   generateDefaultConversationTitle,
   resolveUserLanguagesOrdered
@@ -14,14 +15,22 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import type { SearchQuery } from './types';
+import { PARTICIPATION_VIVANTE } from './utils/access-control';
 import { sendSuccess, sendInternalError } from '../../utils/response';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
+import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsOrFail } from '../../services/historyFloor';
 import {
   buildLastMessagePreviewTranslations,
   truncateMessagePreview
 } from './utils/last-message-preview';
+import { isPreviewWithheld, resolvePreviewProtection } from './utils/last-message-nature';
+import { servedListPreviewAttachment } from './utils/list-last-message-body';
+import { withoutCaptureNotices } from '../../services/messaging/captureNoticeVisibility';
+import { externalVisibilityClauses } from './utils/list-viewer-scope';
+import { announcesCapability, appendVary, CLIENT_CAPABILITIES, CLIENT_CAPABILITIES_HEADER } from '../../utils/client-capabilities';
 
 const logger = enhancedLogger.child({ module: 'ConversationSearchRoutes' });
 
@@ -52,7 +61,7 @@ const conversationSearchPreviewInclude = {
       },
     },
   },
-  attachments: { take: 1 },
+  attachments: { orderBy: MESSAGE_ATTACHMENT_ORDER, take: 1 },
   _count: { select: { attachments: true } },
 } as const;
 
@@ -96,6 +105,9 @@ export function registerSearchRoutes(
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
+      const servesExternal = announcesCapability(request.headers, CLIENT_CAPABILITIES.externalConversations);
+      appendVary(reply, CLIENT_CAPABILITIES_HEADER);
+
       if (!q || q.trim().length === 0) {
         return sendSuccess(reply, []);
       }
@@ -136,6 +148,8 @@ export function registerSearchRoutes(
                 { participants: { some: { userId, isActive: true } } },
               ],
             },
+            // #17117 — un ancien client ne trouve pas de conversation externe (`utils/list-viewer-scope.ts`).
+            ...externalVisibilityClauses(servesExternal),
           ],
         },
         include: {
@@ -151,15 +165,24 @@ export function registerSearchRoutes(
                   id: true,
                   username: true,
                   displayName: true,
+                  // #8970 — `generateDefaultConversationTitle` nomme un membre
+                  // `displayName` → `firstName lastName` → `username`. Ne pas
+                  // charger le nom réel ici ne dégradait pas le titre : il le
+                  // rendait IMPOSSIBLE — la fonction ne recevait que deux des
+                  // quatre champs, et cette route était la seule des quatre
+                  // appelantes dans ce cas. Ses trois soeurs
+                  // (`conversationCard.ts`, `core-detail.ts`, `core-list.ts`)
+                  // les chargent depuis toujours.
+                  firstName: true,
+                  lastName: true,
                 },
               },
             },
             take: 5,
           },
           messages: {
-            where: {
-              deletedAt: null
-            },
+            // #9630 — un avis de capture n'est jamais l'aperçu d'une ligne.
+            where: withoutCaptureNotices({ deletedAt: null }),
             orderBy: { createdAt: 'desc' },
             take: 1,
             include: conversationSearchPreviewInclude,
@@ -169,30 +192,6 @@ export function registerSearchRoutes(
         take: 50,
       });
 
-      // Même masquage personnel que la liste (`core.ts`) : la recherche de
-      // conversations rend la MÊME ligne, donc le même aperçu. Ici la route ne
-      // sélectionne pas les préférences, d'où l'absence de `clearHistoryBefore`
-      // dans les candidats — le résolveur charge alors les curseurs lui-même.
-      const searchVisibleLastMessages = await resolveVisibleLastMessages(prisma, {
-        // Cf. `core.ts` : `userId` vaut le jeton de session pour un anonyme.
-        userId: authRequest.authContext.type === 'anonymous' ? null : userId,
-        candidates: conversations.map(c => {
-          const preview = (c as any).messages?.[0];
-          return {
-            conversationId: c.id,
-            message: preview ? { id: preview.id, createdAt: preview.createdAt } : null
-          };
-        }),
-        query: { include: conversationSearchPreviewInclude as unknown as Record<string, unknown> }
-      });
-      for (const conversation of conversations) {
-        if (!searchVisibleLastMessages.has(conversation.id)) continue;
-        const replacement = searchVisibleLastMessages.get(conversation.id);
-        (conversation as any).messages = replacement ? [replacement] : [];
-      }
-
-      // Compute unread counts — iter-4: appel direct par userId (2+N queries vs 4×N)
-      const readStatusService = new MessageReadStatusService(prisma);
       const conversationIds = conversations.map(c => c.id);
 
       // Appartenance de l'appelant, résolue UNE fois pour la page entière.
@@ -213,18 +212,57 @@ export function registerSearchRoutes(
         ? await prisma.participant.findMany({
             where: {
               conversationId: { in: conversationIds },
-              isActive: true,
+              // #14183 — une participation VIVANTE : un banni encore actif n'est
+              // pas membre, ne reçoit pas son rang, et aucun client ne l'infère.
+              ...PARTICIPATION_VIVANTE,
               ...(isAnonymousViewer ? { id: userId } : { userId })
             },
-            // `role` en plus, pour rien de plus : c'est le titre qui ouvre
-            // l'effectif ENTIER (creator/admin de la conversation) sur la
-            // ligne servie plus bas, et cette lecture est la seule du chemin
-            // qui connaisse le lecteur conversation par conversation.
-            select: { conversationId: true, role: true }
+            // `role` en plus : c'est le titre qui ouvre l'effectif ENTIER
+            // (creator/admin de la conversation) sur la ligne servie plus bas.
+            // Et tout ce qui décide du PLANCHER d'historique du lecteur : cette
+            // lecture est la seule du chemin qui connaisse le lecteur
+            // conversation par conversation, donc la seule à pouvoir le borner.
+            select: { conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
           })
         : [];
       const memberConversationIds = new Set(memberships.map(p => p.conversationId));
       const memberRoleByConversation = new Map(memberships.map(p => [p.conversationId, p.role]));
+
+      // Le plancher d'historique du lecteur par conversation — fail-closed : une
+      // conversation dont le plancher est ILLISIBLE perd son aperçu.
+      const { floors: searchHistoryFloors, unreadableConversationIds } = await loadHistoryFloorsOrFail(prisma, memberships);
+      const unreadableFloors = new Set(unreadableConversationIds);
+
+      // Même masquage personnel que la liste (`core.ts`) : la recherche de
+      // conversations rend la MÊME ligne, donc le même aperçu. Ici la route ne
+      // sélectionne pas les préférences, d'où l'absence de `clearHistoryBefore`
+      // dans les candidats — le résolveur charge alors les curseurs lui-même.
+      const searchVisibleLastMessages = await resolveVisibleLastMessages(prisma, {
+        // Cf. `core.ts` : `userId` vaut le jeton de session pour un anonyme.
+        userId: authRequest.authContext.type === 'anonymous' ? null : userId,
+        candidates: conversations.map(c => {
+          const preview = (c as any).messages?.[0];
+          return {
+            conversationId: c.id,
+            message: preview ? { id: preview.id, createdAt: preview.createdAt } : null
+          };
+        }),
+        query: { include: conversationSearchPreviewInclude as unknown as Record<string, unknown> },
+        historyFloors: searchHistoryFloors
+      });
+      for (const conversation of conversations) {
+        if (unreadableFloors.has(conversation.id)) {
+          (conversation as any).messages = [];
+          continue;
+        }
+        if (!searchVisibleLastMessages.has(conversation.id)) continue;
+        const replacement = searchVisibleLastMessages.get(conversation.id);
+        (conversation as any).messages = replacement ? [replacement] : [];
+      }
+
+      // Compute unread counts — iter-4: appel direct par userId (2+N queries vs 4×N)
+      const readStatusService = new MessageReadStatusService(prisma);
+
 
       const unreadCountMap = conversationIds.length > 0
         ? await readStatusService.getUnreadCountsForUser(userId, conversationIds)
@@ -251,9 +289,14 @@ export function registerSearchRoutes(
           })
         : [];
 
-      // Présence des expéditeurs de lastMessage : gate showOnlineStatus —
-      // même règle que GET /conversations (cf. core.ts).
-      const senderPresenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+      // Présence des expéditeurs de lastMessage : régime STRICT (2026-08-25),
+      // même règle que GET /conversations (cf. core.ts) — soi/ADMIN+/ami seuls,
+      // jamais la seule co-participation. La carte ne porte une entrée que
+      // pour un `User.id` ; le sort d'une entrée ABSENTE est celui de
+      // `presenceFor` (presence-gate) — masqué, sauf ADMIN+.
+      const searchPresenceViewer = viewerFromRequest(request);
+      const senderPresenceVis = await getPresenceVisibilityService(prisma).resolveForTargets(
+        searchPresenceViewer,
         conversations
           .map((conversation) => (conversation.messages[0]?.sender as any)?.userId)
           .filter((uid: string | null | undefined): uid is string => !!uid)
@@ -271,6 +314,8 @@ export function registerSearchRoutes(
                     id: m.userId,
                     displayName: m.user?.displayName,
                     username: m.user?.username,
+                    firstName: m.user?.firstName,
+                    lastName: m.user?.lastName,
                   })),
                   userId
                 ));
@@ -290,7 +335,27 @@ export function registerSearchRoutes(
         // le `include` Prisma ci-dessus (aucun `select` restrictif sur
         // `messages`), mais était jusqu'ici jeté par cette reconstruction
         // manuelle — la donnée était payée puis perdue. Hisser explicitement.
-        const place = sharedPlaceFromMetadata((msg as { metadata?: unknown } | undefined)?.metadata);
+        // #6111 — jumeau exact du masquage de `GET /conversations` : un
+        // dernier message à vue unique, flouté ou éphémère périmé ne
+        // transporte plus rien de son contenu (lieu, pièces jointes, leur
+        // compte compris). Identité, horloge, type et drapeaux continuent de
+        // partir — ce sont eux qui qualifient le placeholder client.
+        // #7545 — même prédicat que la liste et le socket : `ephemeralDuration`
+        // et le chiffrement compris.
+        const msgProtection = msg
+          ? resolvePreviewProtection(msg as {
+              isBlurred?: boolean | null;
+              isViewOnce?: boolean | null;
+              isEncrypted?: boolean | null;
+              expiresAt?: Date | null;
+              ephemeralDuration?: number | null;
+              effectFlags?: number | null;
+            })
+          : null;
+        const isMsgProtected = isPreviewWithheld(msgProtection);
+        const place = isMsgProtected
+          ? null
+          : sharedPlaceFromMetadata((msg as { metadata?: unknown } | undefined)?.metadata);
         const lastMessage = msg ? {
           id: msg.id,
           // Même borne que `GET /conversations` : la carte d'aperçu traduite
@@ -298,22 +363,33 @@ export function registerSearchRoutes(
           // et servir l'original en entier ferait dépendre le poids de la ligne
           // de la langue du lecteur. Le contenu complet passe toujours par
           // `GET /conversations/:id/messages`.
-          content: truncateMessagePreview(msg.content),
+          content: isMsgProtected ? '' : truncateMessagePreview(msg.content),
           senderId: msg.senderId,
           messageType: msg.messageType,
           createdAt: msg.createdAt,
+          isBlurred: (msg as { isBlurred?: boolean | null }).isBlurred ?? false,
+          isViewOnce: (msg as { isViewOnce?: boolean | null }).isViewOnce ?? false,
+          expiresAt: (msg as { expiresAt?: Date | null }).expiresAt ?? null,
+          effectFlags: (msg as { effectFlags?: number | null }).effectFlags ?? 0,
           sender: sender ? {
             id: sender.id,
             userId: sender.userId,
             username: sender.user?.username ?? null,
             displayName: resolveParticipantDisplayName(sender),
             avatar: resolveParticipantAvatar(sender),
-            isOnline: senderPresenceVis.get(sender.userId ?? '')?.showOnline === false
-              ? false
-              : (sender.user?.isOnline ?? false),
+            // Un expéditeur sans compte n'a pas de `user.isOnline` : cette
+            // projection ne charge aucune présence pour lui, donc même révélé
+            // (ADMIN), rien à servir.
+            isOnline: presenceFor(searchPresenceViewer, senderPresenceVis, sender.userId).showOnline
+              ? (sender.user?.isOnline ?? false)
+              : false,
           } : null,
-          attachments: msg.attachments || [],
-          _count: (msg as any)._count,
+          // #16021 — la MÊME pièce que la liste : une pièce masquée, ou celle
+          // d'un éphémère actif, ne part qu'avec sa nature et ses drapeaux.
+          attachments: isMsgProtected
+            ? []
+            : (msg.attachments || []).map((attachment) => servedListPreviewAttachment(attachment, msgProtection)),
+          _count: isMsgProtected ? { attachments: 0 } : (msg as any)._count,
           ...(place ? { location: place } : {}),
         } : null;
 
@@ -341,6 +417,10 @@ export function registerSearchRoutes(
           // public de cinquante membres, où elle écartait à tort le salon d'un
           // membre légitime.
           isMember,
+          // #14183 — le rang, comme la liste et le détail : un client qui ouvre
+          // la conversation depuis cette charge lit son appartenance par lui.
+          // `null` = pas membre (sémantique de `conversationMinimalSchema`).
+          currentUserRole: memberRoleByConversation.get(conversation.id) ?? null,
           // Déjà chargés par le `include` ci-dessus (au plus 5) : sans cette
           // recopie, une conversation DIRECTE trouvée par la recherche arrive
           // sans titre (forcé à `null` pour les directs) ET sans personne —
@@ -370,8 +450,8 @@ export function registerSearchRoutes(
           // (`MeeshyConversation.resolvedLastMessagePreview`,
           // `formatLastMessage` côté web) et que la carte compacte
           // `{ langue: aperçu }` n'a pas la forme de `Message.translations`.
-          lastMessageOriginalLanguage: msg?.originalLanguage ?? null,
-          lastMessageTranslations: buildLastMessagePreviewTranslations({
+          lastMessageOriginalLanguage: isMsgProtected ? null : (msg?.originalLanguage ?? null),
+          lastMessageTranslations: isMsgProtected ? null : buildLastMessagePreviewTranslations({
             translations: (msg as { translations?: unknown } | undefined)?.translations,
             originalLanguage: msg?.originalLanguage,
             viewerLanguages

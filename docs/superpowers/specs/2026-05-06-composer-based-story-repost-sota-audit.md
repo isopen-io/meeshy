@@ -11,7 +11,7 @@
 - plan original : `docs/superpowers/plans/2026-05-04-composer-based-story-repost.md`
 - plan révisé Phase B/C/D : `docs/superpowers/plans/2026-05-05-composer-based-story-repost-phase-bcd-revised.md`
 - code livré : 45 commits sur `feat/stories-composer-repost` (`ea6fe226..0731175d`), Phases A→D toutes mergées
-- modules : `services/gateway/src/services/PostService.ts`, `services/gateway/src/services/MediaService.ts`, `services/gateway/src/routes/posts/interactions.ts`, `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerViewModel.swift`, `UnifiedPostComposer.swift`, `StoryCanvasReaderView.swift`, `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift`, `StoryRepostEmbedCell.swift`
+- modules : `services/gateway/src/services/PostService.ts`, `services/gateway/src/services/MediaService.ts`, `services/gateway/src/routes/posts/interactions.ts`, `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerViewModel.swift`, `UnifiedPostComposer.swift`, `StoryCanvasReaderView.swift`, `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift`, `StoryRepostEmbedCell.swift`
 
 ---
 
@@ -638,7 +638,7 @@ Apple HIG : "composer = modal plein écran, pas de swipe-to-dismiss accidentel".
 
 **Choix actuel** :
 - Type `ReplyContext` avec flag `isStoryReply: Bool` exposé côté SDK (`packages/MeeshySDK/Sources/MeeshySDK/Models/CoreModels.swift`)
-- Callback `onReplyToStory: ((ReplyContext) -> Void)?` déclaré dans `apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift:17`
+- Callback `onReplyToStory: ((ReplyContext) -> Void)?` déclaré dans `apps/ios/Meeshy/Features/Stories/Views/StoryViewerContainer.swift:17`
 - Bouton "Répondre" dans la pile actions droite du viewer story (`StoryViewerView.swift:~720-745`), conditionnel `if !isOwnStory && onReplyToStory != nil`
 - Au tap : crée un `Message` standard via `MessageService.send()` avec `storyReplyToId` rempli → message dans la conversation 1:1 avec l'auteur
 - **Bug P0 connu (cf. spec section "Hors scope")** : le callback n'est propagé que sur **1 des 4 call sites** de `StoryViewerContainer` — sur `ConversationView`, `StoryTrayView`, `RootView`, `iPadRootView+Sheets` le bouton n'apparaît jamais
@@ -664,7 +664,7 @@ Apple HIG : "composer = modal plein écran, pas de swipe-to-dismiss accidentel".
 **Recommandation** :
 1. **Action P0** — câbler `onReplyToStory` sur les 3 call sites manquants :
    - `apps/ios/Meeshy/Features/Main/Views/ConversationView.swift` (ouverture story tray depuis conversation)
-   - `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift` (story tray principal)
+   - `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift` (story tray principal)
    - `apps/ios/Meeshy/Features/Main/Navigation/RootView.swift` + `iPadRootView+Sheets.swift`
    ```swift
    StoryViewerContainer(
@@ -727,7 +727,7 @@ Apple ne fournit pas de pattern "internal conversation picker" — c'est explici
 
 **Choix actuel** :
 - Backend complet : `PostService.addComment(postId, content, parentId, effectFlags)` dans `packages/MeeshySDK/Sources/MeeshySDK/Services/PostService.swift:68-72`. Schema Prisma `PostComment` avec `parentId: String?` pour threading.
-- iOS load only : `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:~920-960` — `loadStoryComments()` appelle `PostService.shared.getComments(postId: story.id)` et stocke dans `@State storyComments: [FeedComment]`
+- iOS load only : `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift:~920-960` — `loadStoryComments()` appelle `PostService.shared.getComments(postId: story.id)` et stocke dans `@State storyComments: [FeedComment]`
 - Overlay : `showCommentsOverlay` toggle qui affiche `CommentListView` en mode read-only — **pas de UI de création** dans le viewer
 - Commentaires flat de premier niveau implémentés ; nested replies (`parentId`) supportés côté backend mais **non exposés** côté UI
 

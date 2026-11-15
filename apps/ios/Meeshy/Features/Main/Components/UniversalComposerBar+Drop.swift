@@ -29,19 +29,34 @@ struct ComposerDropTargetModifier: ViewModifier {
     /// Couleur d'accent (hex) de la barre — teinte le contour d'affordance.
     let accentColor: String
 
+    let isEnabled: Bool
+
     /// Rappel `onIngest` de la barre, transmis tel quel.
     let onIngest: (([ComposerIngest]) -> Void)?
 
     @State private var isDropTargeted = false
 
-    /// Types acceptés, `.item` en dernier (voir doc du modificateur).
-    private static let acceptedTypes: [UTType] = [
+    init(accentColor: String, isEnabled: Bool = true, onIngest: (([ComposerIngest]) -> Void)?) {
+        self.accentColor = accentColor
+        self.isEnabled = isEnabled
+        self.onIngest = onIngest
+    }
+
+    private static let allTypes: [UTType] = [
         .image, .movie, .audio, .pdf, .text, .url, .fileURL, .item
     ]
 
+    static func acceptedTypes(isEnabled: Bool) -> [UTType] {
+        isEnabled ? allTypes : []
+    }
+
+    static func acceptsDrops(isSelecting: Bool, isBlockedDirect: Bool, isClosed: Bool, isWriteRestricted: Bool, isPreview: Bool) -> Bool {
+        !(isSelecting || isBlockedDirect || isClosed || isWriteRestricted || isPreview)
+    }
+
     func body(content: Content) -> some View {
         content
-            .onDrop(of: Self.acceptedTypes, isTargeted: $isDropTargeted) { providers in
+            .onDrop(of: Self.acceptedTypes(isEnabled: isEnabled), isTargeted: $isDropTargeted) { providers in
                 handleDrop(providers)
             }
             .overlay {
@@ -60,23 +75,23 @@ struct ComposerDropTargetModifier: ViewModifier {
     /// remplacé, et l'overlay ne capte aucun événement.
     private var dropAffordance: some View {
         let accent = Color(hex: accentColor)
-        return RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .strokeBorder(accent, style: StrokeStyle(lineWidth: 2, dash: [7, 5]))
+        return RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
+            .strokeBorder(accent, style: StrokeStyle(lineWidth: MeeshyBorder.strong, dash: [7, 5]))
             .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
                     .fill(accent.opacity(0.08))
             )
             .overlay(
                 Label {
-                    Text(String(localized: "composer.drop.hint", defaultValue: "D\u{00E9}poser ici", bundle: .main))
+                    Text(String(localized: "composer.drop.hint", defaultValue: "Déposer ici", bundle: .main))
                         .font(.footnote.weight(.semibold))
                 } icon: {
                     Image(systemName: "arrow.down.doc.fill")
                         .font(.footnote.weight(.semibold))
                 }
-                .foregroundColor(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+                .foregroundStyle(Color.white)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.xsPlus)
                 .background(Capsule().fill(accent))
             )
             .allowsHitTesting(false)
@@ -97,9 +112,15 @@ struct ComposerDropTargetModifier: ViewModifier {
     /// rappelle hors du main ; ici `await` ne fait que suspendre.
     ///
     /// Renvoie `true` si au moins un provider est réclamable.
+    /// Un glisser de rangée de conversation n'est jamais un contenu à poser dans le message (iPad : la liste est à côté).
+    static func carriesAConversationRow(_ providers: [NSItemProvider]) -> Bool {
+        providers.contains { $0.hasItemConformingToTypeIdentifier(ConversationDragItemProvider.markerType) }
+    }
+
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        guard !Self.carriesAConversationRow(providers) else { return false }
         let claimable = providers.contains { provider in
-            Self.acceptedTypes.contains { provider.hasItemConformingToTypeIdentifier($0.identifier) }
+            Self.allTypes.contains { provider.hasItemConformingToTypeIdentifier($0.identifier) }
         }
         guard claimable else { return false }
 
@@ -116,7 +137,7 @@ struct ComposerDropTargetModifier: ViewModifier {
                 .filter { resolved[$0.offset] == nil }
                 .map { entry in
                     entry.element.suggestedName
-                        ?? String(localized: "composer.drop.unnamedItem", defaultValue: "\u{00E9}l\u{00E9}ment sans nom", bundle: .main)
+                        ?? String(localized: "composer.drop.unnamedItem", defaultValue: "élément sans nom", bundle: .main)
                 }
             if !failedNames.isEmpty {
                 ComposerIngestFeedback.showFailure(names: failedNames)
@@ -213,7 +234,7 @@ enum ComposerIngestFeedback {
 /// implicite (SE-0466) qui double-libérerait sur iOS < 26.
 nonisolated enum PastedFileCopier {
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "composer-drop")
+    private static let logger = MeeshyLog.logger(.ui)
 
     /// Copie l'URL vers `temporaryDirectory/paste_<uuid>_<nom>` si elle est
     /// lisible telle quelle. Refuse un dossier et un fichier de 0 octet.
@@ -234,7 +255,7 @@ nonisolated enum PastedFileCopier {
             }
             let name = url.lastPathComponent
             let destination = fm.temporaryDirectory
-                .appendingPathComponent("paste_\(UUID().uuidString)_\(name)")
+                .appendingPathComponent(ImportedCopyName.copyName(of: name, through: .paste))
             try fm.copyItem(at: url, to: destination)
             return .file(
                 url: destination,

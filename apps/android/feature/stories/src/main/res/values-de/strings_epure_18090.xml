@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="my_stories_queue_empty_title">Keine laufenden oder fehlgeschlagenen Veröffentlichungen</string>
+    <string name="stories_comments_empty_title">Keine Kommentare</string>
+    <string name="stories_viewers_empty_title">Keine Aufrufe</string>
+    <string name="story_sentinel_body">Aktualisiere die App, um sie zu sehen.</string>
+</resources>

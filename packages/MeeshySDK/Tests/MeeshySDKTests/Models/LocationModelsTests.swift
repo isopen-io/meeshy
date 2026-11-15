@@ -66,7 +66,7 @@ final class LocationModelsTests: XCTestCase {
 
     // MARK: - APIMessage.location (lieu partage hisse par le gateway)
 
-    /// Le décodeur est celui de la PRODUCTION (`APIClient.makeAPIPayloadDecoder`).
+    /// Le décodeur est celui de la PRODUCTION (`MeeshyCoders.decoder(.api)`).
     /// Un `JSONDecoder` local en `.iso8601` refuse les fractions de seconde que
     /// le gateway émet (`…T10:00:00.000Z`) : le test échouait alors sur sa propre
     /// fixture, pas sur le code produit.
@@ -76,7 +76,7 @@ final class LocationModelsTests: XCTestCase {
          "createdAt":"2026-07-29T10:00:00.000Z",
          "location":{"latitude":48.8566,"longitude":2.3522,"name":"Tour Eiffel"}}
         """.utf8)
-        let message = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: json)
+        let message = try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: json)
         XCTAssertEqual(message.location?.name, "Tour Eiffel")
     }
 
@@ -85,7 +85,7 @@ final class LocationModelsTests: XCTestCase {
         {"id":"m1","conversationId":"c1","senderId":"u1","content":"ici",
          "createdAt":"2026-07-29T10:00:00.000Z"}
         """.utf8)
-        let message = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: json)
+        let message = try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: json)
         XCTAssertNil(message.location)
     }
 
@@ -94,7 +94,7 @@ final class LocationModelsTests: XCTestCase {
     func test_apiPayloadDecoder_acceptsFractionalSecondsFromTheGateway() throws {
         let json = Data(#"{"createdAt":"2026-07-29T10:00:00.000Z"}"#.utf8)
         struct Probe: Decodable { let createdAt: Date }
-        let probe = try APIClient.makeAPIPayloadDecoder().decode(Probe.self, from: json)
+        let probe = try MeeshyCoders.decoder(.api).decode(Probe.self, from: json)
         XCTAssertEqual(probe.createdAt.timeIntervalSince1970, 1785319200, accuracy: 1)
     }
 
@@ -176,45 +176,28 @@ final class LocationModelsTests: XCTestCase {
         XCTAssertEqual(location.id, "user3")
     }
 
-    // MARK: - ClientInfoProvider.enrichWithLocation (garde de source)
+    // MARK: - ClientInfoProvider ne lit plus la position (garde de source, #9612)
 
-    /// Avant correctif, `enrichWithLocation` instanciait un `CLLocationManager()`
-    /// JETABLE à CHAQUE appel — c'est-à-dire à CHAQUE requête API construisant
-    /// ses en-têtes. Le garde `status == .authorizedWhenInUse` sortait toujours
-    /// avant l'octroi de l'autorisation (le chemin dormait) ; dès l'octroi, ce
-    /// code s'exécute pour la première fois ET sur toutes les requêtes API en
-    /// vol simultanément — c'est le seul chemin réveillé globalement par
-    /// l'octroi, hors du picker lui-même, donc le suspect n°1 du crash « juste
-    /// après avoir accordé la permission ».
-    ///
-    /// Deux défauts corrigés ici : (1) un manager instancié par requête plutôt
-    /// qu'une instance durable rattachée à une runloop — CoreLocation n'aime
-    /// pas les managers éphémères créés/détruits en rafale ; (2) l'absence de
-    /// cache négatif — un échec de géocodage relançait le cycle CoreLocation +
-    /// réseau complet à la requête suivante, donc potentiellement des dizaines
-    /// de fois par seconde sur un flux de requêtes API.
-    func testClientInfoProviderReusesASingleLocationManagerWithNegativeCache() throws {
-        // Depuis ce fichier de test : Models -> MeeshySDKTests -> Tests -> MeeshySDK -> packages
-        // Donc 4 `deletingLastPathComponent()` (en comptant celle qui retire le
-        // nom de fichier) pour atteindre `packages/MeeshySDK`, pas 5.
+    /// `enrichWithLocation` géocodait la position GPS à chaque requête API et
+    /// envoyait ville et région — hors de l'usage pour lequel la localisation
+    /// avait été accordée, et inutile au serveur, qui situe une session par son
+    /// adresse dans une base locale (#9609). Le chemin a été retiré, et
+    /// CoreLocation avec lui : un retour réintroduirait un relevé de position
+    /// sur chaque requête, réveillé d'un coup à l'octroi de l'autorisation.
+    func testClientInfoProviderNeLitPlusLaPosition() throws {
+        // Depuis ce fichier de test : Models -> MeeshySDKTests -> Tests -> MeeshySDK
         let packageRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()  // Models/ -> retire le fichier
             .deletingLastPathComponent()  // MeeshySDKTests/
             .deletingLastPathComponent()  // Tests/
             .deletingLastPathComponent()  // packages/MeeshySDK
         let sourceURL = packageRoot
-            .appendingPathComponent("Sources/MeeshySDK/Networking/ClientInfoProvider.swift")
+            .appendingPathComponent("Sources/MeeshyCore/Networking/ClientInfoProvider.swift")
         let src = try String(contentsOf: sourceURL, encoding: .utf8)
 
-        guard let bodyStart = src.range(of: "func enrichWithLocation") else {
-            XCTFail("enrichWithLocation introuvable dans ClientInfoProvider.swift")
-            return
-        }
-        let body = src[bodyStart.upperBound...]
-
-        XCTAssertFalse(body.contains("CLLocationManager()"),
-                       "Un manager par requête API : CoreLocation attend une instance durable, pas une instance jetable créée à chaque appel.")
-        XCTAssertTrue(src.contains("geoCacheExpiry = Date().addingTimeInterval("),
-                      "Un échec (pas de localisation disponible) doit poser un TTL négatif, sinon le cycle CoreLocation + réseau repart à chaque requête API.")
+        XCTAssertFalse(src.contains("import CoreLocation"), "ClientInfoProvider ne doit plus toucher CoreLocation.")
+        XCTAssertFalse(src.contains("CLGeocoder"), "Aucun géocodage inverse ne part avec les requêtes.")
+        XCTAssertFalse(src.contains("\"X-Meeshy-City\""), "La ville GPS ne part plus dans les en-têtes.")
+        XCTAssertFalse(src.contains("\"X-Meeshy-Region\""), "La région GPS ne part plus dans les en-têtes.")
     }
 }

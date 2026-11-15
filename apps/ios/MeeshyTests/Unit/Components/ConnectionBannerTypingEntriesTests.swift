@@ -29,8 +29,12 @@ final class ConnectionBannerTypingEntriesTests: XCTestCase {
         XCTAssertEqual(entry.dotStyle, SyncPillDotStyle.brand)
         XCTAssertTrue(entry.showsActivityDots,
                       "quelqu'un est en train d'écrire : l'entrée doit se lire comme en cours")
-        XCTAssertEqual(entry.source, OutboxUIItem.Source.conversation(id: "conv1"),
-                       "le tap doit ouvrir la conversation où l'on écrit")
+        XCTAssertEqual(entry.source, OutboxUIItem.Source.conversation(id: "conv1", messageId: nil),
+                       """
+                       le tap doit ouvrir la conversation où l'on écrit — et SANS ancre \
+                       de message (#4027) : « X écrit » ne désigne aucun message, il n'y \
+                       en a pas encore. Viser ici ferait sauter le fil sur un id arbitraire.
+                       """)
     }
 
     func test_typingEntries_excludesTheOpenConversation() {
@@ -52,27 +56,4 @@ final class ConnectionBannerTypingEntriesTests: XCTestCase {
         XCTAssertTrue(entries([:]).isEmpty)
         XCTAssertTrue(entries([:], excluding: "conv1").isEmpty)
     }
-
-    // MARK: - Remontée de la pastille
-
-    /// La pastille naissait trop bas sous le chrome de ses hôtes. Elle remonte
-    /// de trois fois sa hauteur — en RENDANT de la marge, jamais en débordant :
-    /// un hôte déjà collé en haut reste où il est.
-    func test_liftedTopPadding_liftsByThreeTimesThePillHeight() {
-        XCTAssertEqual(
-            ConnectionBanner.liftedTopPadding(base: 72),
-            72 - SyncPillMetrics.topLift,
-            "72 pt sous le header de conversation : la marge disponible est rendue"
-        )
-        XCTAssertEqual(SyncPillMetrics.topLift, 3 * SyncPillMetrics.height,
-                       "la remontée est exprimée en hauteurs de pastille, pas en points en dur")
-    }
-
-    func test_liftedTopPadding_neverPushesAboveTheTopOfItsHost() {
-        XCTAssertEqual(ConnectionBanner.liftedTopPadding(base: 0), 0,
-                       "un hôte sans marge (iPad) ne doit pas voir la pastille passer sous la barre d'état")
-        XCTAssertEqual(ConnectionBanner.liftedTopPadding(base: 8), 0,
-                       "le viewer de story n'a que 8 pt : il les rend, et s'arrête là")
-    }
-
 }

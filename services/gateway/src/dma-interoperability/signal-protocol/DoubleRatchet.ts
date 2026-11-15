@@ -16,11 +16,10 @@
  */
 
 import * as crypto from 'crypto';
-import { createHmac, createHash } from 'crypto';
+import { createHmac } from 'crypto';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import {
   SignalValidation,
-  SignalProtocolLimits,
   zeroizeBuffer,
 } from '@meeshy/shared/utils/validation';
 

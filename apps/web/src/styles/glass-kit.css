@@ -1,0 +1,221 @@
+/* LE VERRE DU KIT (K01, #17400) — la matière des composants de `components/kit/`,
+   posée par `MeeshyGlass` (`meeshy-glass-tone.tsx`) qui n'écrit jamais un fond.
+   Le ton élit le remplissage et le liseré, la densité l'opacité ; `theme` redonne
+   à l'identique `.glass` / `.glass-prominent`. Chaque valeur chiffrée vit ICI et
+   dans `meeshy-glass-recipe.ts` ; `meeshy-glass-tone.test.tsx` les compare aux
+   vecteurs de parité (`docs/product/kit/K01-MeeshyGlassTone.vectors.json`). */
+.glass-scope {
+  display: contents;
+}
+
+.glass-tone {
+  --glass-fill: var(--ios-media-backdrop);
+  --glass-alpha: 46%;
+  --glass-rim: 20%;
+  --glass-top-light: 38%;
+  --glass-glow-peak: var(--glass-top-light);
+  --glass-blur: 24px;
+  --glass-saturate: 180%;
+  --glass-shadow-alpha: 28%;
+  --glass-shadow-y: 10px;
+  --glass-press-scale: 1.04;
+  --glass-tone-fade: 200ms;
+  --glass-glow-hover: 0.5;
+  --glass-glow-press: 1;
+  --glass-wash: 22%;
+  --glass-focus-ring: var(--ios-media-backdrop);
+  transition: background-color var(--glass-tone-fade) ease;
+}
+
+/* Ce qui PLACE la surface et dispose le groupe vit sous la couche des
+   utilitaires : un `absolute`, un `grid` ou un `gap-*` de l'appelant l'emporte. */
+@layer components {
+  .glass-tone {
+    position: relative;
+  }
+
+  .glass-group {
+    display: flex;
+    align-items: center;
+    gap: var(--ios-space-sm);
+  }
+}
+
+/* Le ton `theme` n'a pas de matière ICI : il porte les classes `.glass` /
+   `.glass-prominent` (et `.glass-card` / `.glass-accent`) de `glass.css`, que
+   K01 enveloppe au lieu de les recopier. Seuls les trois tons de la planche
+   reçoivent la matière du kit. */
+.glass-tone:not([data-glass-tone='theme']) {
+  background-color: color-mix(in srgb, var(--glass-fill) var(--glass-alpha), transparent);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--ios-on-media) var(--glass-rim), transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--ios-on-media) var(--glass-top-light), transparent),
+    0 var(--glass-shadow-y) 28px color-mix(in srgb, var(--ios-media-backdrop) var(--glass-shadow-alpha), transparent);
+}
+
+:root.light .glass-tone {
+  --glass-wash: 16%;
+}
+
+.glass-tone[data-glass-tone='plain'] {
+  --glass-fill: var(--ios-on-media);
+  --glass-alpha: 14%;
+  --glass-rim: 24%;
+  --glass-focus-ring: var(--ios-on-media);
+}
+
+.glass-tone[data-glass-tone='onLight'] {
+  --glass-alpha: 62%;
+}
+
+.glass-tone[data-glass-tone='theme'] {
+  --glass-fill: var(--glass-tone, var(--color-ios-surface));
+  --glass-rim: 0%;
+  --glass-top-light: 0%;
+  --glass-glow-peak: 10%;
+  --glass-tone-fade: 0ms;
+  --glass-focus-ring: currentColor;
+}
+
+:root.light .glass-tone[data-glass-tone='theme'] {
+  --glass-glow-peak: 32%;
+}
+
+.glass-tone[data-glass-tone='deep'][data-glass-density='dense'] {
+  --glass-alpha: 66%;
+}
+
+.glass-tone[data-glass-tint='accent'] {
+  --glass-tint-color: var(--accent);
+}
+
+.glass-tone[data-glass-tint='card'] {
+  --glass-tint-color: var(--color-ios-card);
+}
+
+.glass-tone[data-glass-tint]:not([data-glass-tone='theme']) {
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--glass-tint-color) var(--glass-wash), transparent),
+    color-mix(in srgb, var(--glass-tint-color) var(--glass-wash), transparent)
+  );
+}
+
+/* LA MATIÈRE PLEINE — « réduire la transparence » (le réglage du système) ou la
+   matière posée par `MeeshyGlassScope opaque` (le catalogue) : le fond du ton à
+   100 %, ni flou, ni reflet, ni ombre. Le fond se pose ici et non par la densité,
+   que `[data-glass-density='dense']` emporterait en spécificité. */
+.glass-tone[data-glass-material='opaque'][data-glass-tone] {
+  background-color: color-mix(in srgb, var(--glass-fill) 100%, transparent);
+  backdrop-filter: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ios-on-media) var(--glass-rim), transparent);
+}
+
+.glass-tone[data-glass-material='opaque'][data-glass-tone]:not([data-glass-tone='theme']) {
+  --glass-fill: var(--ios-media-backdrop);
+  --glass-rim: 18%;
+}
+
+.glass-tone[data-glass-material='opaque']::after {
+  display: none;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass-tone[data-glass-tone] {
+    background-color: color-mix(in srgb, var(--glass-fill) 100%, transparent);
+    backdrop-filter: none;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ios-on-media) var(--glass-rim), transparent);
+  }
+
+  .glass-tone[data-glass-tone]:not([data-glass-tone='theme']) {
+    --glass-fill: var(--ios-media-backdrop);
+    --glass-rim: 18%;
+  }
+
+  .glass-tone::after {
+    display: none;
+  }
+}
+
+.glass-tone[data-glass-nested][data-glass-tone] {
+  --glass-focus-ring: var(--ios-on-media);
+  background-color: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.glass-tone[data-glass-nested]::after {
+  display: none;
+}
+
+.glass-touch {
+  cursor: pointer;
+  transition:
+    transform 280ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color var(--glass-tone-fade) ease;
+}
+
+.glass-touch::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ios-on-media) var(--glass-glow-peak), transparent);
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+@media (hover: hover) {
+  .glass-touch:hover::after {
+    opacity: var(--glass-glow-hover);
+  }
+}
+
+.glass-touch:active,
+:where(button,[role='button'],a[href],label,summary):active:not(.glass-touch) > .glass-touch,
+.glass-touch[data-pressed] {
+  transform: scale(var(--glass-press-scale));
+}
+
+.glass-touch:active::after,
+:where(button,[role='button'],a[href],label,summary):active:not(.glass-touch) > .glass-touch::after,
+.glass-touch[data-pressed]::after {
+  opacity: var(--glass-glow-press);
+}
+
+/* Un contrôle désactivé ne répond pas : ni échelle, ni reflet, ni main au
+   survol (sur iOS, un bouton désactivé ne passe jamais à l'état pressé). */
+.glass-touch:disabled,
+.glass-touch[aria-disabled='true'] {
+  cursor: default;
+  transform: none;
+}
+
+.glass-touch:disabled::after,
+.glass-touch[aria-disabled='true']::after {
+  opacity: 0;
+}
+
+.glass-touch:focus-visible {
+  outline: 2px solid var(--glass-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-tone {
+    transition: none;
+  }
+
+  .glass-touch,
+  .glass-touch:active,
+  :where(button,[role='button'],a[href],label,summary):active:not(.glass-touch) > .glass-touch,
+  .glass-touch[data-pressed] {
+    transform: none;
+    transition: none;
+  }
+
+  .glass-touch::after {
+    transition: none;
+  }
+}

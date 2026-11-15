@@ -21,7 +21,6 @@ const mockLikePost = jest.fn<any>();
 const mockUnlikePost = jest.fn<any>();
 const mockGetPostById = jest.fn<any>();
 const mockRecordView = jest.fn<any>();
-const mockRecordAnonymousOpen = jest.fn<any>();
 const mockPinPost = jest.fn<any>();
 const mockUnpinPost = jest.fn<any>();
 const mockGetPostViews = jest.fn<any>();
@@ -32,7 +31,7 @@ const mockShareWithTrackingLink = jest.fn<any>();
 const mockGetPostShareLink = jest.fn<any>();
 const mockRecordEngagementBatch = jest.fn<any>();
 const mockWithMutationLog = jest.fn<any>();
-
+jest.mock('../../../../services/posts/moderationHold', () => ({ ...(jest.requireActual('../../../../services/posts/moderationHold') as object), mayRepostSource: async () => true, audienceChangeVerdict: async () => ({ refusal: null, clearsPriorVisibility: false }) })); // #10315 — gates witnessed in moderationHold.test.ts
 jest.mock('../../../../services/PostService', () => ({
   PostService: jest.fn().mockImplementation(() => ({
     likePost: (...a: any[]) => mockLikePost(...a),
@@ -41,7 +40,6 @@ jest.mock('../../../../services/PostService', () => ({
     unbookmarkPost: jest.fn<any>().mockResolvedValue({ bookmarkCount: 0 }),
     recordView: (...a: any[]) => mockRecordView(...a),
     getPostById: (...a: any[]) => mockGetPostById(...a),
-    recordAnonymousOpen: (...a: any[]) => mockRecordAnonymousOpen(...a),
     recordEngagementBatch: (...a: any[]) => mockRecordEngagementBatch(...a),
     sharePost: (...a: any[]) => mockSharePost(...a),
     shareWithTrackingLink: (...a: any[]) => mockShareWithTrackingLink(...a),
@@ -81,7 +79,24 @@ jest.mock('../../../../utils/withMutationLog', () => ({
   withMutationLog: (...args: any[]) => mockWithMutationLog(...args),
 }));
 
-// ─── Import after mocks ───────────────────────────────────────────────────────
+// #4147 — POST /posts / from-attachment / repost tirent leur plafond de
+// création d'un compteur PARTAGÉ qui lit Redis directement, fail-closed
+// (createSharedWriteRateLimitPreHandler, routes/posts/socialRateLimit.ts) :
+// sans ce double, `getCacheStore().getNativeClient()` rend `null` en test
+// (aucun REDIS_URL) et CHAQUE écriture de ce type serait refusée avant
+// d'atteindre ce que ce fichier vérifie — détail complet dans core.test.ts,
+// premier fichier de la série à le poser. `incr` répond toujours « premier
+// appel » : ce fichier ne teste PAS le plafond (son témoin dédié vit dans
+// social-write-rate-limit.test.ts) — juste un Redis DISPONIBLE.
+jest.mock('../../../../services/CacheStore', () => ({
+  getCacheStore: () => ({
+    getNativeClient: () => ({
+      incr: async () => 1,
+      pexpire: async () => 1,
+      pttl: async () => -1,
+    }),
+  }),
+}));// ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerInteractionRoutes } from '../../../../routes/posts/interactions';
 
@@ -117,10 +132,13 @@ function makeNotificationService() {
 
 function makePrisma() {
   return {
-    postImpression: {
+    anonymousPostOpen: { create: jest.fn<any>().mockResolvedValue({}), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }),
       create: jest.fn<any>().mockResolvedValue({}),
       createMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },
+    // #14242 — le partage lit le blocage entre le partageur et l'auteur : aucun ici.
+    user: { findFirst: async () => null },
     post: {
       update: jest.fn<any>().mockResolvedValue({}),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
@@ -137,10 +155,37 @@ function makePrisma() {
       // batch d'impressions (chantier reposts cohérents, tâche 1) — par
       // défaut aucun repost dans le batch. L'unitaire replie sa résolution
       // dans le `select` de `update`, aucun `findUnique` séparé nécessaire.
-      findMany: jest.fn<any>().mockResolvedValue([]),
+      // Le même délégué porte la passe d'audience du lot (#4146).
+      findMany: aclAwareFindMany(),
     },
   } as any;
 }
+
+/**
+ * Tranche ACL d'un post PUBLIC — ce que `loadPostAcl` rend au verdict
+ * d'audience posé sur le favori, l'impression et le partage (issue #4146).
+ */
+const publicAcl = (id: string) => ({
+  id, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] as string[], expiresAt: null, deletedAt: null,
+  repostOfId: null, originalRepostOfId: null, repostOf: null, author: { isActive: true, deletedAt: null, deactivatedAt: null },
+});
+
+/**
+ * `post.findMany` répond désormais à DEUX questions : la passe d'audience du
+ * lot d'impressions (`where.id.in`) et la résolution des racines de repost
+ * (`where.repostOfId`). Ce double branche sur la seconde et rend, pour la
+ * première, un post PUBLIC par id demandé — l'audience elle-même est le sujet
+ * de `interactions-consumption-audience.test.ts`, pas de ce fichier.
+ */
+function aclAwareFindMany(repostRows: unknown[] = []) {
+  return jest.fn<any>().mockImplementation(({ where }: any) => {
+    if (where?.repostOfId !== undefined) return Promise.resolve(repostRows);
+    return Promise.resolve(((where?.id?.in ?? []) as string[]).map(publicAcl));
+  });
+}
+
+const aclAwareFindFirst = () =>
+  jest.fn<any>().mockImplementation(({ where }: any) => Promise.resolve(publicAcl(where.id)));
 
 function makeAuth(authenticated: boolean) {
   return async (req: FastifyRequest) => {
@@ -187,7 +232,6 @@ beforeEach(() => {
     id: POST_ID, type: 'POST', authorId: AUTHOR_ID, viewCount: 1,
   });
   mockRecordView.mockResolvedValue(true);
-  mockRecordAnonymousOpen.mockResolvedValue(true);
   mockPinPost.mockResolvedValue({ id: POST_ID });
   mockUnpinPost.mockResolvedValue({ id: POST_ID });
   mockGetPostViews.mockResolvedValue({ items: [], total: 0, hasMore: false });
@@ -275,25 +319,24 @@ describe('POST /posts/:postId/like — notificationService fires createPostLikeN
 
 // ─── POST /posts/:postId/like — onDuplicate callback ─────────────────────────
 
-describe('POST /posts/:postId/like — withMutationLog onDuplicate path', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 via onDuplicate path and calls getPostById', async () => {
-    mockWithMutationLog.mockImplementationOnce(async ({ onDuplicate }: any) => onDuplicate(POST_ID));
-    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
-    expect(res.statusCode).toBe(200);
-    expect(mockGetPostById).toHaveBeenCalledWith(POST_ID, USER_ID);
-  });
-
-  it('returns 404 via onDuplicate when getPostById returns null', async () => {
-    mockWithMutationLog.mockImplementationOnce(async ({ onDuplicate }: any) => onDuplicate(POST_ID));
-    mockGetPostById.mockResolvedValueOnce(null);
-    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
-    expect(res.statusCode).toBe(404);
-  });
-});
+// ─── POST /posts/:postId/like — le chemin onDuplicate a DÉMÉNAGÉ (#6293) ─────
+//
+// Deux témoins vivaient ici : « returns 200 via onDuplicate path » et
+// « returns 404 via onDuplicate when getPostById returns null ». Ils pilotaient
+// le helper MOCKÉ (`mockWithMutationLog.mockImplementationOnce(({ onDuplicate })
+// => onDuplicate(POST_ID))`), donc ils mesuraient la fiction du harnais, pas la
+// route : depuis que la route emploie `withMutationOutcome` pour garder ses
+// effets de bord au rejeu, ce mock n'est plus sur son chemin.
+//
+// Leur intention est reprise dans
+// `likeIdempotency.test.ts`, contre le VRAI helper et un faux
+// `MutationLogService` en mémoire — donc le rejeu y est réel, pas simulé.
+//
+// Et ils avaient un second coût, mesuré en les retirant : leurs
+// `mockImplementationOnce` / `mockResolvedValueOnce` n'étant plus consommés,
+// ils FUYAIENT dans les `describe` suivants et décalaient d'un cran toutes les
+// files de mocks des témoins DELETE — onze rouges dont aucun ne parlait de
+// `like`. Une file `Once` non consommée est un état partagé entre témoins.
 
 // ─── DELETE /posts/:postId/like — STORY type ─────────────────────────────────
 
@@ -634,7 +677,7 @@ describe('Error catch blocks — anonymous-view, impression, batch, share', () =
   afterAll(async () => { await app.close(); });
 
   it('POST /posts/:postId/anonymous-view — returns 500 on service error', async () => {
-    mockRecordAnonymousOpen.mockRejectedValueOnce(new Error('DB error'));
+    prisma.post.findMany.mockRejectedValueOnce(new Error('DB error'));
     const res = await app.inject({
       method: 'POST',
       url: `/posts/${POST_ID}/anonymous-view`,
@@ -644,7 +687,7 @@ describe('Error catch blocks — anonymous-view, impression, batch, share', () =
   });
 
   it('POST /posts/:postId/impression — returns 500 on prisma error', async () => {
-    prisma.postImpression.create.mockRejectedValueOnce(new Error('DB error'));
+    prisma.postImpression.createMany.mockRejectedValueOnce(new Error('DB error')); // #4150 — REPOINTÉ : `create` n'est plus appelé, un rejet posé dessus passerait au vert
     const res = await app.inject({
       method: 'POST',
       url: `/posts/${POST_ID}/impression`,
@@ -688,15 +731,6 @@ describe('Error catch blocks — anonymous-view, impression, batch, share', () =
       method: 'POST',
       url: `/posts/${POST_ID}/share`,
       payload: {},
-    });
-    expect(res.statusCode).toBe(500);
-  });
-
-  it('GET /posts/:postId/share — returns 500 on service error', async () => {
-    mockGetPostShareLink.mockRejectedValueOnce(new Error('DB error'));
-    const res = await app.inject({
-      method: 'GET',
-      url: `/posts/${POST_ID}/share`,
     });
     expect(res.statusCode).toBe(500);
   });

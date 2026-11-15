@@ -45,32 +45,44 @@ Lorsque vous soumettez votre application sur App Store Connect, vous devrez remp
   - Utilisé pour le suivi : NON
 
 - **ID de l'appareil** : OUI
-  - Utilisé pour : Fonctionnalité de l'app (notifications push)
+  - Utilisé pour : Fonctionnalité de l'app (jeton de notification push, appareil d'une session ouverte), Analytiques
+  - Lié à l'identité de l'utilisateur : OUI (le jeton et la session sont rattachés au compte)
+  - Utilisé pour le suivi : NON
+
+#### D. Localisation
+- **Localisation précise** : OUI (uniquement quand l'utilisateur partage sa position)
+  - Utilisé pour : Fonctionnalité de l'app
   - Lié à l'identité de l'utilisateur : OUI
   - Utilisé pour le suivi : NON
 
-#### D. Données d'utilisation
+- **Localisation approximative** : OUI — pays et ville APPROXIMATIVE d'une session, déduits de l'adresse IP par une base locale (DB-IP Lite, aucune adresse envoyée à un tiers, #9609). L'app n'envoie plus aucune ville tirée du GPS (#9612).
+  - Utilisé pour : Fonctionnalité de l'app (Sécurité > Sessions, alerte de nouvelle connexion)
+  - Lié à l'identité de l'utilisateur : OUI
+  - Utilisé pour le suivi : NON
+
+#### E. Données d'utilisation
 - **Données d'interaction avec le produit** : OUI
-  - Utilisé pour : Analytiques, Amélioration du produit
-  - Lié à l'identité de l'utilisateur : NON
+  - Utilisé pour : Fonctionnalité de l'app (avis de capture d'écran envoyé à l'auteur d'un contenu protégé), Analytiques (écrans vus)
+  - Lié à l'identité de l'utilisateur : OUI (l'avis de capture nomme le compte qui a capturé)
   - Utilisé pour le suivi : NON
 
+#### F. Diagnostics
 - **Données de crash** : OUI
-  - Utilisé pour : Amélioration du produit
+  - Utilisé pour : Analytiques (amélioration du produit)
+  - Lié à l'identité de l'utilisateur : OUI (Crashlytics reçoit l'identifiant du compte connecté)
+  - Utilisé pour le suivi : NON
+
+- **Données de performance** : OUI
+  - Utilisé pour : Analytiques (amélioration du produit)
   - Lié à l'identité de l'utilisateur : NON
   - Utilisé pour le suivi : NON
 
-#### E. Diagnostics
-- **Données de performance** : OUI
-  - Utilisé pour : Amélioration du produit
-  - Lié à l'identité de l'utilisateur : NON
-  - Utilisé pour le suivi : NON
+> Ce guide suit `apps/ios/Meeshy/PrivacyInfo.xcprivacy` ligne pour ligne (#9645) ; le manifeste fait foi en cas d'écart, et le témoin `SessionPrivacyManifestTests` en garde les déclarations de session. Les contacts du carnet d'adresses (non liés, Fonctionnalité) et les autres contenus utilisateur y figurent aussi.
 
 ### 2. DONNÉES NON COLLECTÉES
 
 - Historique de recherche : NON
 - Historique de navigation : NON
-- Localisation : NON (sauf si vous ajoutez cette fonctionnalité)
 - Informations financières : NON
 - Informations de santé : NON
 - Informations sensibles : NON

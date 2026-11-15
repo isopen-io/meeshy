@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="connection_toast_accept_failed">تعذّر القبول</string>
+    <string name="connection_toast_decline_failed">تعذّر الرفض</string>
+    <string name="connection_toast_cancel_failed">تعذّر الإلغاء</string>
+</resources>

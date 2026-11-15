@@ -38,7 +38,21 @@ object DynamicColorGenerator {
         val secondary: String,
         val accent: String,
         val saturationBoost: Double = 0.0,
-    )
+    ) {
+        companion object {
+            /** Palette dérivée d'une couleur primaire : secondaire +30°, accent −30° (iOS `ConversationColorPalette`). */
+            fun derived(primary: String, saturationBoost: Double = 0.0): ColorPalette =
+                DynamicColorGenerator.derivedPalette(primary, saturationBoost)
+        }
+    }
+
+    internal fun derivedPalette(primary: String, saturationBoost: Double = 0.0): ColorPalette =
+        ColorPalette(
+            primary = primary,
+            secondary = shiftHue(primary, 30.0),
+            accent = shiftHue(primary, -30.0),
+            saturationBoost = saturationBoost,
+        )
 
     private val languageColors = mapOf(
         ConversationLanguage.FRENCH to "3498DB",
@@ -89,7 +103,8 @@ object DynamicColorGenerator {
         "sv" to "0EA5E9", "vi" to "EC4899", "th" to "CA8A04",
     )
 
-    private val vibrantPalette = listOf(
+    /** The 39 palette colours (iOS `vibrantPalette`). */
+    val vibrantPalette = listOf(
         "E74C3C", "C0392B", "DC4A5A", "D94452", "F43F5E",
         "FF7F50", "E67E22", "F97316", "EA580C", "D4763B",
         "D97706", "B8860B", "CA8A04",
@@ -101,20 +116,102 @@ object DynamicColorGenerator {
         "EC4899", "E91E63", "DB2777",
     )
 
-    fun colorFor(context: ConversationContext): ColorPalette {
-        val langColor = languageColors[context.language] ?: "4ECDC4"
-        val typeColor = typeColors[context.type] ?: "FF6B6B"
-        val themeColor = themeColors[context.theme] ?: "4ECDC4"
+    // Wire-facing resolution tables — mirror of packages/shared/utils/conversation-colors.ts.
+    // A conversation's `type` arrives as one of the eight wire values (Prisma/API); the
+    // five-key color context collapses public/global/community/broadcast onto community.
+    private val WIRE_TYPE_TO_CONTEXT_TYPE = mapOf(
+        "direct" to ConversationType.DIRECT,
+        "group" to ConversationType.GROUP,
+        "public" to ConversationType.COMMUNITY,
+        "global" to ConversationType.COMMUNITY,
+        "community" to ConversationType.COMMUNITY,
+        "broadcast" to ConversationType.COMMUNITY,
+        "channel" to ConversationType.CHANNEL,
+        "bot" to ConversationType.BOT,
+    )
 
-        val saturationBoost = min(1.0, context.memberCount / 100.0) * 0.2
+    // ISO 639-1 → ConversationLanguage key (the nine real languages carried by
+    // languageColors; `other` is a categorical fallback, not an ISO code).
+    private val ISO_TO_CONVERSATION_LANGUAGE = mapOf(
+        "fr" to "french", "en" to "english", "es" to "spanish", "de" to "german",
+        "ja" to "japanese", "ar" to "arabic", "zh" to "chinese", "pt" to "portuguese",
+        "it" to "italian",
+    )
+
+    // Provided-but-unknown language/theme key → 4ECDC4 (reproduces the `?? "4ECDC4"`
+    // of the Swift/TS dictionaries); unknown-but-mapped type → FF6B6B (direct).
+    private const val UNKNOWN_KEY_FALLBACK_HEX = "4ECDC4"
+    private const val UNKNOWN_TYPE_FALLBACK_HEX = "FF6B6B"
+
+    fun colorFor(context: ConversationContext): ColorPalette =
+        paletteFromColors(
+            langColor = languageColors[context.language] ?: UNKNOWN_KEY_FALLBACK_HEX,
+            typeColor = typeColors[context.type] ?: UNKNOWN_TYPE_FALLBACK_HEX,
+            themeColor = themeColors[context.theme] ?: UNKNOWN_KEY_FALLBACK_HEX,
+            memberCount = context.memberCount,
+        )
+
+    /**
+     * Deterministic accent palette from the conversation's WIRE strings — the exact
+     * Kotlin mirror of `conversationAccentPalette` (`packages/shared/utils/
+     * conversation-colors.ts`), itself the verified mirror of the Swift
+     * `MeeshyConversation.computeColorPalette` adapter over `colorFor(context:)`.
+     *
+     * Unlike [colorFor], which takes the closed enums, this resolves the eight wire
+     * [type] values through [WIRE_TYPE_TO_CONTEXT_TYPE] — so `public`, `global`,
+     * `community` and `broadcast` all collapse onto the COMMUNITY base color, matching
+     * web and iOS. [language] accepts an ISO 639-1 code (`"fr"`) or a full key
+     * (`"french"`); a value outside both tables falls back to [UNKNOWN_KEY_FALLBACK_HEX]
+     * (`4ECDC4`), reproducing the `?? "4ECDC4"` of the TS/Swift dictionaries. An unknown
+     * wire [type] falls back to DIRECT; an unknown [theme] to [UNKNOWN_KEY_FALLBACK_HEX].
+     *
+     * `name` does not influence the palette (only `memberCount` feeds `saturationBoost`,
+     * and type/language/theme feed the hue) — it is intentionally not a parameter here.
+     */
+    fun paletteForWire(
+        type: String?,
+        language: String? = null,
+        theme: String? = null,
+        memberCount: Int = 2,
+    ): ColorPalette =
+        paletteFromColors(
+            langColor = wireLanguageColor(language),
+            typeColor = wireTypeColor(type),
+            themeColor = wireThemeColor(theme),
+            memberCount = memberCount,
+        )
+
+    private fun paletteFromColors(
+        langColor: String,
+        typeColor: String,
+        themeColor: String,
+        memberCount: Int,
+    ): ColorPalette {
+        val saturationBoost = min(1.0, memberCount / 100.0) * 0.2
         val primary = blendColors(langColor, 0.3, typeColor, 0.3, themeColor, 0.4)
 
-        return ColorPalette(
-            primary = primary,
-            secondary = shiftHue(primary, 30.0),
-            accent = shiftHue(primary, -30.0),
-            saturationBoost = saturationBoost,
-        )
+        return derivedPalette(primary, saturationBoost)
+    }
+
+    /** `null` → default FRENCH; ISO or full key → enum color; unknown key → 4ECDC4. */
+    private fun wireLanguageColor(language: String?): String {
+        if (language == null) return languageColors[ConversationLanguage.FRENCH]!!
+        val fullKey = ISO_TO_CONVERSATION_LANGUAGE[language.lowercase()] ?: language.lowercase()
+        val matched = ConversationLanguage.entries.firstOrNull { it.name.equals(fullKey, ignoreCase = true) }
+        return matched?.let { languageColors[it] } ?: UNKNOWN_KEY_FALLBACK_HEX
+    }
+
+    /** Wire type → context type ([WIRE_TYPE_TO_CONTEXT_TYPE]); unknown → DIRECT. */
+    private fun wireTypeColor(type: String?): String {
+        val contextType = WIRE_TYPE_TO_CONTEXT_TYPE[type?.lowercase()] ?: ConversationType.DIRECT
+        return typeColors[contextType] ?: UNKNOWN_TYPE_FALLBACK_HEX
+    }
+
+    /** `null` → default GENERAL; known key → enum color; unknown key → 4ECDC4. */
+    private fun wireThemeColor(theme: String?): String {
+        if (theme == null) return themeColors[ConversationTheme.GENERAL]!!
+        val matched = ConversationTheme.entries.firstOrNull { it.name.equals(theme, ignoreCase = true) }
+        return matched?.let { themeColors[it] } ?: UNKNOWN_KEY_FALLBACK_HEX
     }
 
     fun colorForPost(authorId: String, type: String?, originalLanguage: String?): String {
@@ -129,6 +226,13 @@ object DynamicColorGenerator {
         val index = (stableHash(name) % vibrantPalette.size.toULong()).toInt()
         return vibrantPalette[index]
     }
+
+    /**
+     * La couleur du PROFIL : l'id de compte quand il existe, le nom à défaut — miroir de
+     * `profileAccentHex` iOS et d'`authorAccentColor` (packages/shared/utils/conversation-colors.ts).
+     */
+    fun profileAccentHex(userId: String?, name: String): String =
+        colorForName(me.meeshy.sdk.model.profile.ProfileAccentRules.seed(userId, name))
 
     /** DJB2 hash — deterministic across launches (overflow wraps via ULong). */
     private fun stableHash(input: String): ULong {

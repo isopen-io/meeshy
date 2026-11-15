@@ -18,7 +18,7 @@ struct CrashReportSheet: View {
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         } label: {
-                            VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                                 HStack {
                                     kindBadge(report.kind)
                                     Spacer()
@@ -35,7 +35,7 @@ struct CrashReportSheet: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .navigationTitle(String(localized: "crash.reports.title", defaultValue: "Crash Reports", bundle: .main))
+            .navigationTitle(String(localized: "crash.reports.title", defaultValue: "Rapports de crash", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -71,9 +71,9 @@ struct CrashReportSheet: View {
         }
         Text(kind.localizedLabel)
             .font(.caption2.weight(.bold))
-            .foregroundColor(.white)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, MeeshySpacing.xsPlus)
+            .padding(.vertical, MeeshySpacing.xxs)
             .background(Capsule().fill(color))
     }
 

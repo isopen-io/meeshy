@@ -11,7 +11,50 @@ APP_NAME="Meeshy"
 BUNDLE_ID="me.meeshy.app"
 SCHEME="Meeshy"
 PROJECT="Meeshy.xcodeproj"
-DERIVED_DATA="Build"
+# Chemin de DerivedData, surchargeable par l'environnement.
+#
+# Deux sessions qui bâtissent dans le MÊME `-derivedDataPath` se disputent
+# `Intermediates.noindex/XCBuildData/build.db`, et xcodebuild rend alors
+# « database is locked » avec un code 65. Le danger n'est pas la minute perdue :
+# `test-without-building` rejoue ensuite le bundle PRÉCÉDENT, avec des chiffres
+# plausibles et EXIT=0 — donc une certification de l'arbre d'AVANT le diff.
+# Sérialiser à coups de `pgrep` ne suffit pas : entre la lecture et le
+# lancement, l'autre peut démarrer. La séparation, elle, n'a pas de fenêtre.
+#
+#   MEESHY_DERIVED_DATA=/chemin/hors/depot ./apps/ios/meeshy.sh build
+#
+# ATTENTION — `-derivedDataPath` NE SUFFIT PAS sur ce projet, et le croire est
+# pire que ne rien faire. `Meeshy.xcodeproj/project.xcworkspace/xcshareddata/
+# WorkspaceSettings.xcsettings` déclare :
+#
+#     DerivedDataLocationStyle   = WorkspaceRelativePath
+#     DerivedDataCustomLocation  = Build
+#
+# ce qui FORCE `SYMROOT`/`OBJROOT`/`BUILD_DIR` vers `apps/ios/Build` quel que
+# soit le `-derivedDataPath` passé. Mesuré par `-showBuildSettings` : deux
+# sessions qui croyaient bâtir séparément se disputaient toujours le même
+# `build.db`, avec la précaution en place. Les trois surcharges ci-dessous sont
+# ce qui rend la séparation RÉELLE.
+DERIVED_DATA="${MEESHY_DERIVED_DATA:-Build}"
+# Résolu en chemin ABSOLU (#3949) : un `DERIVED_DATA` relatif ("Build") rend le
+# motif `pgrep -f "xcodebuild.*-derivedDataPath.*$DERIVED_DATA"` de
+# `is_build_running`/`kill_all_builds` indiscriminant entre worktrees — chacun
+# passe `-derivedDataPath Build`, donc chacun attend et peut tuer les builds
+# des AUTRES worktrees, qui ne partagent pourtant aucun fichier avec lui. Le
+# `cd` de la ligne 3 place déjà le script dans `apps/ios/` : `$(pwd)` y désigne
+# ce worktree, jamais un autre.
+case "$DERIVED_DATA" in
+    /*) : ;;
+    *) DERIVED_DATA="$(pwd)/$DERIVED_DATA" ;;
+esac
+if [ -n "${MEESHY_DERIVED_DATA:-}" ]; then
+    BUILD_LOCATION_OVERRIDES=(
+        "SYMROOT=${MEESHY_DERIVED_DATA}/Products"
+        "OBJROOT=${MEESHY_DERIVED_DATA}/Intermediates.noindex"
+    )
+else
+    BUILD_LOCATION_OVERRIDES=()
+fi
 
 # Apple Developer Team — required for device code-signing under automatic
 # provisioning (CODE_SIGN_STYLE=Automatic in project.yml). Without it,
@@ -73,6 +116,11 @@ COVERAGE=false
 # Phase 0 du gate `test` : suite du package MeeshySDK. Exécutée par défaut —
 # `--skip-sdk` ne la saute que pour une itération rapide sur du code app.
 SKIP_SDK_TESTS=false
+# Phase 3 (état connecté) sans DEMO_USER/DEMO_PASSWORD tourne en XCTSkip et
+# reste verte : par défaut le gate reste vert malgré tout (postes locaux sans
+# creds). `--require-connected` fait échouer le gate si la phase 3 a été
+# sautée — pour CI, qui a les creds et doit vérifier l'état connecté.
+REQUIRE_CONNECTED=false
 LOG_STREAM_PID=""
 CRASH_MONITOR_PID=""
 LOGFILE=""
@@ -83,13 +131,33 @@ PHYSICAL_DEVICE_NAME=""
 PLATFORM="iphone"  # iphone | ipad | mac
 
 # ─── Physical Device Detection ──────────────────────────────────────────────
+# ─── iPhones appairés, lus dans le JSON de devicectl ─────────────────────────
+# Une ligne « identifiant CoreDevice<TAB>nom » par iPhone joignable. Le tableau
+# texte de devicectl ne se lit plus : depuis Xcode 27, sa colonne d'identifiant
+# porte l'UDID matériel (00008160-…), plus l'UUID CoreDevice que `devicectl
+# device install` attend — le motif UUID n'y trouvait rien, et le choix
+# retombait en silence sur des simulateurs.
+list_physical_iphones() {
+    xcrun devicectl list devices --json-output /dev/stdout 2>/dev/null \
+        | python3 -c 'import json,sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for x in d.get("result", {}).get("devices", []):
+    hw, conn = x.get("hardwareProperties", {}), x.get("connectionProperties", {})
+    if hw.get("deviceType") != "iPhone" or conn.get("pairingState") != "paired":
+        continue
+    if conn.get("tunnelState") == "unavailable":
+        continue
+    print(x.get("identifier", "") + "\t" + x.get("deviceProperties", {}).get("name", ""))' 2>/dev/null || true
+}
+
 detect_physical_device() {
-    # devicectl output columns: FriendlyName  NetworkName  UUID  Status  Model
-    # Exclure les devices "unavailable" (déjà appairés mais non connectés) : on ne
-    # peut pas y déployer, et les lister fausse la sélection.
     local devices
-    devices=$(xcrun devicectl list devices 2>/dev/null | grep -E "iPhone" | grep -v "Simulator" | grep -v "unavailable" || true)
+    devices=$(list_physical_iphones)
     if [ -z "$devices" ]; then
+        warn_unpaired_usb_iphones
         err "No physical iPhone found. Connect via USB or WiFi."
         exit 1
     fi
@@ -99,9 +167,8 @@ detect_physical_device() {
     chosen=$(echo "$devices" | grep -i "Services CEO" | head -n 1)
     [ -z "$chosen" ] && chosen=$(echo "$devices" | head -n 1)
 
-    # First column is the friendly name (before the .coredevice.local hostname)
-    PHYSICAL_DEVICE_NAME=$(echo "$chosen" | awk -F'  +' '{print $1}' | xargs)
-    PHYSICAL_DEVICE_ID=$(echo "$chosen" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}' | head -1)
+    PHYSICAL_DEVICE_ID=$(printf '%s' "$chosen" | cut -f1)
+    PHYSICAL_DEVICE_NAME=$(printf '%s' "$chosen" | cut -f2-)
 
     if [ -z "$PHYSICAL_DEVICE_ID" ] || [ -z "$PHYSICAL_DEVICE_NAME" ]; then
         err "Could not parse physical device from: $chosen"
@@ -109,6 +176,48 @@ detect_physical_device() {
     fi
 
     ok "Physical device: ${BOLD}$PHYSICAL_DEVICE_NAME${NC} ($PHYSICAL_DEVICE_ID)"
+}
+
+# ─── iPhones branchés en USB mais inconnus de devicectl ─────────────────────
+# Un iPhone jamais appairé (ou verrouillé avant d'avoir fait confiance au Mac)
+# est visible sur le bus USB mais absent de `devicectl list devices` : sans ce
+# signalement, le picker retombe en silence sur les simulateurs.
+warn_unpaired_usb_iphones() {
+    local known
+    known=$(xcrun devicectl list devices --json-output /dev/stdout 2>/dev/null \
+        | python3 -c 'import json,sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for x in d.get("result", {}).get("devices", []):
+    if x.get("connectionProperties", {}).get("tunnelState") != "unavailable":
+        print((x.get("hardwareProperties", {}).get("udid") or "").replace("-", ""))' 2>/dev/null || true)
+
+    local usb_serials
+    usb_serials=$(system_profiler SPUSBHostDataType -json 2>/dev/null \
+        | python3 -c 'import json,sys
+def walk(nodes):
+    for n in nodes:
+        if isinstance(n, dict):
+            if n.get("_name") in ("iPhone", "iPad") and n.get("USBDeviceKeyVendorID") == "0x05ac":
+                print(n.get("_name") + " " + (n.get("USBDeviceKeySerialNumber") or ""))
+            walk(n.get("_items", []))
+try:
+    walk(json.load(sys.stdin).get("SPUSBHostDataType", []))
+except Exception:
+    pass' 2>/dev/null || true)
+
+    local line kind serial
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        kind=${line%% *}
+        serial=${line#* }
+        echo "$known" | grep -qx "$serial" && continue
+        warn "Un $kind est branché en USB (série $serial) mais n'est pas appairé avec ce Mac."
+        warn "  → Déverrouille-le, touche « Se fier » puis saisis le code ; active le Mode développeur"
+        warn "    (Réglages › Confidentialité et sécurité) s'il est demandé, puis relance la commande."
+    done <<< "$usb_serials"
 }
 
 # ─── Device Picker (physical first, simulators as fallback) ─────────────────
@@ -120,23 +229,21 @@ pick_device() {
     local -a dev_labels=()
 
     # 1. Physical devices FIRST — priority
-    while IFS= read -r line; do
-        [ -z "$line" ] && continue
-        local did dname
-        dname=$(echo "$line" | awk -F'  +' '{print $1}' | xargs)
-        did=$(echo "$line" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}' | head -1)
+    local did dname
+    while IFS=$'\t' read -r did dname; do
         [ -z "$did" ] && continue
         dev_types+=("physical")
         dev_ids+=("$did")
         dev_names+=("$dname")
         dev_labels+=("📲 $dname ${DIM}(Physical)${NC}")
-    done < <(xcrun devicectl list devices 2>/dev/null | grep -E "iPhone" | grep -v "Simulator" | grep -v "unavailable" || true)
+    done < <(list_physical_iphones)
 
     local physical_count=${#dev_ids[@]}
 
     # If physical devices found, only show those (skip simulators)
     if [ "$physical_count" -eq 0 ]; then
         # No physical devices — fallback to simulators
+        warn_unpaired_usb_iphones
         warn "No physical iPhone found. Falling back to simulators..."
         echo ""
 
@@ -151,7 +258,7 @@ pick_device() {
             dev_ids+=("$did")
             dev_names+=("$dname")
             dev_labels+=("📱 $dname ${DIM}(Simulator — Booted)${NC}")
-        done < <(xcrun simctl list devices | grep -E "iPhone.*\(Booted\)" 2>/dev/null || true)
+        done < <(./scripts/list_simulators.py iPhone | awk -F'\t' '$3 == "Booted" { print $2 " (" $1 ")" }')
 
         # Available (not booted) simulators
         while IFS= read -r line; do
@@ -169,13 +276,30 @@ pick_device() {
             dev_ids+=("$did")
             dev_names+=("$dname")
             dev_labels+=("📱 $dname ${DIM}(Simulator)${NC}")
-        done < <(xcrun simctl list devices available | grep -E "iPhone" | grep -v "unavailable" 2>/dev/null || true)
+        done < <(./scripts/list_simulators.py iPhone | awk -F'\t' '{ print $2 " (" $1 ")" }')
     fi
 
     local count=${#dev_ids[@]}
 
     if [ "$count" -eq 0 ]; then
         err "No devices found (no physical iPhones, no simulators)."
+        exit 1
+    fi
+
+    # Un appareil désigné (identifiant CoreDevice ou nom) se choisit sans
+    # question : sans terminal, `read` rend EOF et le choix sortait en silence.
+    if [ -n "${MEESHY_DEVICE_ID:-}" ]; then
+        local i
+        for i in $(seq 0 $((count - 1))); do
+            if [ "${dev_ids[$i]}" = "$MEESHY_DEVICE_ID" ] || [ "${dev_names[$i]}" = "$MEESHY_DEVICE_ID" ]; then
+                PICKED_DEVICE_TYPE="${dev_types[$i]}"
+                PICKED_DEVICE_ID="${dev_ids[$i]}"
+                PICKED_DEVICE_NAME="${dev_names[$i]}"
+                ok "Target (MEESHY_DEVICE_ID): ${BOLD}$PICKED_DEVICE_NAME${NC}"
+                return 0
+            fi
+        done
+        err "MEESHY_DEVICE_ID=$MEESHY_DEVICE_ID ne désigne aucun appareil listé."
         exit 1
     fi
 
@@ -338,6 +462,67 @@ sync_build_number() {
     log "project.yml et $PROJECT/project.pbxproj mis à jour — pensez à committer ce bump"
 }
 
+# ─── Build number des builds LOCAUX ──────────────────────────────────────────
+#
+# Un build local (`build`, `run`, `device`) porte le numéro de la DERNIÈRE
+# livraison App Store Connect — TestFlight comme Xcode Cloud, qui y publient
+# tous deux. Il le porte en BUILD SETTING passé à xcodebuild, jamais en
+# réécrivant project.yml et le pbxproj : écrire les fichiers suivis laissait
+# chaque worktree sale après un build, bloquait les fast-forward et faisait
+# voyager le bump dans des commits de feature. `build-number --write` reste le
+# geste explicite qui grave la valeur dans le dépôt.
+#
+# App Store Connect n'est interrogé qu'une fois par quart d'heure (cache), et
+# hors ligne on retombe sur le dernier numéro connu, puis sur la valeur
+# committée — un build local n'échoue jamais pour ça.
+BUILD_NUMBER_CACHE="${MEESHY_BUILD_NUMBER_CACHE:-${XDG_CACHE_HOME:-$HOME/Library/Caches}/meeshy/asc-latest-build-$BUNDLE_ID}"
+BUILD_NUMBER_CACHE_TTL=900
+LOCAL_BUILD_NUMBER=""
+BUILD_NUMBER_FLAGS=()
+
+cached_build_number() {
+    [ -f "$BUILD_NUMBER_CACHE" ] || return 1
+    local value
+    value=$(grep -o '^[0-9][0-9]*$' "$BUILD_NUMBER_CACHE" | head -n 1)
+    [ -n "$value" ] || return 1
+    printf '%s' "$value"
+}
+
+# `stat -f %m` est la syntaxe BSD (macOS) ; GNU (le runner Linux qui joue le
+# témoin) lit `-f` comme « système de fichiers » et échoue.
+file_mtime() {
+    if [ "$(uname -s)" = "Darwin" ]; then stat -f %m "$1"; else stat -c %Y "$1"; fi
+}
+
+build_number_cache_is_fresh() {
+    [ -f "$BUILD_NUMBER_CACHE" ] || return 1
+    local age=$(( $(date +%s) - $(file_mtime "$BUILD_NUMBER_CACHE") ))
+    [ "$age" -lt "$BUILD_NUMBER_CACHE_TTL" ]
+}
+
+# Pose LOCAL_BUILD_NUMBER et BUILD_NUMBER_FLAGS. Les messages vont sur stderr
+# pour que `build-number --print` ne rende que le numéro.
+resolve_build_number() {
+    local value source
+    if build_number_cache_is_fresh && value=$(cached_build_number); then
+        source="dernier build App Store Connect (cache)"
+    elif value=$(fetch_latest_asc_build); then
+        mkdir -p "$(dirname "$BUILD_NUMBER_CACHE")"
+        printf '%s\n' "$value" > "$BUILD_NUMBER_CACHE"
+        source="dernier build App Store Connect"
+    elif value=$(cached_build_number); then
+        source="dernier numéro connu — App Store Connect injoignable"
+    else
+        value=$(current_build_number)
+        source="valeur committée — App Store Connect injoignable et aucun cache"
+    fi
+
+    LOCAL_BUILD_NUMBER="$value"
+    BUILD_NUMBER_FLAGS=()
+    [ -n "$value" ] && BUILD_NUMBER_FLAGS=("CURRENT_PROJECT_VERSION=$value")
+    ok "Build number ${BOLD}${value:-?}${NC} ($source)" >&2
+}
+
 # ─── Fraîcheur du projet Xcode ───────────────────────────────────────────────
 #
 # `project.yml` est la source de vérité (XcodeGen) ; `project.pbxproj` en est
@@ -360,14 +545,14 @@ sync_build_number() {
 #
 # L'incident du 2026-07-25 (pbxproj réécrit depuis le placeholder « 1 » de
 # project.yml, cf. la section « Build number » ci-dessus) ne peut plus se
-# reproduire : `write_build_number` écrit le numéro dans les DEUX fichiers, et
-# `sync_build_number` s'exécute avant la compilation — donc avant comme après
-# une régénération, project.yml porte la vérité. C'est ce qui rend l'appel à
-# xcodegen sûr ici, et c'est la seule raison pour laquelle il l'est.
+# reproduire : un build local passe `CURRENT_PROJECT_VERSION` à xcodebuild en
+# build setting (`resolve_build_number`), qui prime sur ce que le pbxproj porte
+# — avant comme après une régénération. Et `--write` écrit dans les DEUX
+# fichiers. C'est ce qui rend l'appel à xcodegen sûr ici.
 PROJECT_FRESHNESS_CHECKED=false
 
 # Racines globbées récursivement par project.yml (une par target).
-PROJECT_SOURCE_ROOTS=(Meeshy MeeshyTests MeeshyWidgets MeeshyNotificationExtension MeeshyShareExtension)
+PROJECT_SOURCE_ROOTS=(Meeshy MeeshyTests MeeshyWidgets MeeshyNotificationExtension MeeshyNotificationContentExtension MeeshyShareExtension)
 
 # Fichiers `.swift` présents sur disque mais absents du pbxproj compilé.
 #
@@ -404,7 +589,30 @@ ensure_project_is_current() {
 
     local drifted
     drifted=$(unreferenced_sources)
-    [ -z "$drifted" ] && return 0
+    # **Le pbxproj local concorde — mais le COMMITTÉ ?** (#6839)
+    #
+    # Cette fonction compare le disque au pbxproj de l'ARBRE DE TRAVAIL, et
+    # régénère. Elle dit ensuite « committer les références ajoutées » — une
+    # phrase en prose, que rien ne fait respecter. Mesuré le 2026-09-16 :
+    # `GallerySceneBackdropUnicityTests.swift` (148 lignes, 6 cas, témoin de
+    # #6791) n'était inscrit sur AUCUNE ref, dev compris. Chaque build local le
+    # compilait, chaque `git checkout` l'oubliait, et `verify_test_classes_are_
+    # compiled` — qui lit le bundle PRODUIT — ne pouvait rien en dire.
+    #
+    # On avertit ici, à chaque build, pour que l'oubli ait un coût visible sans
+    # bloquer l'itération ; `scripts/check_test_registration.sh` est la même
+    # mesure en version ROUGE, pour la CI et l'avant-push.
+    if [ -z "$drifted" ]; then
+        local non_committes
+        non_committes=$(./scripts/check_test_registration.sh 2>&1 >/dev/null | grep '^  • ' || true)
+        if [ -n "$non_committes" ]; then
+            warn "Fichiers de test compilés ICI mais absents du $PROJECT COMMITTÉ —"
+            warn "ailleurs (CI, autre worktree, collègue) leurs cas ne s'exécutent pas :"
+            printf '%s\n' "$non_committes"
+            warn "Committer $PROJECT."
+        fi
+        return 0
+    fi
 
     warn "Fichiers absents de $PROJECT — le pbxproj committé est périmé :"
     printf '  • %s\n' $drifted
@@ -466,6 +674,7 @@ do_device_deploy_only() {
         -configuration "$CONFIGURATION" \
         -destination "platform=iOS,name=$PHYSICAL_DEVICE_NAME" \
         -derivedDataPath "$DERIVED_DATA" \
+        ${BUILD_LOCATION_OVERRIDES[@]+"${BUILD_LOCATION_OVERRIDES[@]}"} \
         "${XCODE_PKG_FLAGS[@]}" \
         -allowProvisioningUpdates \
         -allowProvisioningDeviceRegistration \
@@ -474,6 +683,7 @@ do_device_deploy_only() {
         -jobs "$ncpu" \
         ONLY_ACTIVE_ARCH=YES \
         DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
+        ${BUILD_NUMBER_FLAGS[@]+"${BUILD_NUMBER_FLAGS[@]}"} \
         CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION=YES \
         build >"$build_log" 2>&1
     local build_rc=$?
@@ -543,33 +753,58 @@ detect_simulator() {
         return 0
     fi
 
-    local device_family="iPhone"
-    [ "$PLATFORM" = "ipad" ] && device_family="iPad"
-
-    # Priority 1: Already booted device of the right family
-    local booted
-    booted=$(xcrun simctl list devices | grep -E "$device_family.*\(Booted\)" | head -n 1 || true)
-    if [ -n "$booted" ]; then
-        DEVICE_ID=$(echo "$booted" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}')
-        DEVICE_NAME=$(echo "$booted" | sed 's/ (.*//' | xargs)
-        ok "Booted: ${BOLD}$DEVICE_NAME${NC}"
+    # Priority 0: explicit device — MEESHY_DEVICE_ID
+    #
+    # Les simulateurs du PROJET (Meeshy-iOS26, Meeshy-iOS18, ...) ne portent pas
+    # "iPhone" dans leur nom : aucune des priorites suivantes ne peut les elire,
+    # meme demarres. Sans cette porte, une mesure demandee sur iOS 26 partait sur
+    # le premier "iPhone ..." venu et ne valait pas pour son runtime.
+    if [ -n "${MEESHY_DEVICE_ID:-}" ]; then
+        local explicit
+        explicit=$(xcrun simctl list devices | grep "$MEESHY_DEVICE_ID" | head -n 1 || true)
+        if [ -z "$explicit" ]; then
+            err "MEESHY_DEVICE_ID=$MEESHY_DEVICE_ID introuvable dans les simulateurs"
+            exit 1
+        fi
+        DEVICE_ID="$MEESHY_DEVICE_ID"
+        DEVICE_NAME=$(echo "$explicit" | sed 's/ (.*//' | xargs)
+        ok "Target (MEESHY_DEVICE_ID): ${BOLD}$DEVICE_NAME${NC}"
         return 0
     fi
 
-    # Priority 2: Any available device of the right family (prefer Pro models)
-    local available
-    available=$(xcrun simctl list devices available | grep -E "$device_family" | grep -v "unavailable" || true)
-    if [ -z "$available" ]; then
+    local device_family="iPhone"
+    [ "$PLATFORM" = "ipad" ] && device_family="iPad"
+
+    # **La FAMILLE décide, jamais le NOM** (#6838).
+    #
+    # Le nom d'un simulateur est libre ; son type ne l'est pas. Élire par
+    # `grep -E "iPhone"` marchait tant qu'il restait au moins une machine du
+    # catalogue Apple : le jour où le nettoyage demandé par le porteur n'a laissé
+    # que `Meeshy-iOS26`, tout build local est mort sur « No iPhone simulators
+    # found » — alors que la machine existait ET tournait. Le commentaire
+    # ci-dessus AVOUAIT déjà le défaut (« aucune des priorités suivantes ne peut
+    # les élire, même démarrés ») ; `MEESHY_DEVICE_ID` en était l'échappatoire,
+    # pas la correction.
+    #
+    # `list_simulators.py` rend « UDID<TAB>NOM<TAB>ÉTAT » dans l'ordre d'essai :
+    # démarrés d'abord (on ne redémarre pas ce qui tourne), puis les modèles
+    # « Pro », puis le reste. Les deux priorités se lisent donc dans UNE liste,
+    # et l'ordre est gardé par `scripts/check_simulator_election.sh`.
+    local candidats chosen
+    candidats=$(./scripts/list_simulators.py "$device_family" || true)
+    if [ -z "$candidats" ]; then
         err "No $device_family simulators found. Install via Xcode > Settings > Platforms."
         exit 1
     fi
 
-    local chosen
-    chosen=$(echo "$available" | grep -E "Pro" | head -n 1)
-    [ -z "$chosen" ] && chosen=$(echo "$available" | head -n 1)
+    chosen=$(echo "$candidats" | head -n 1)
+    DEVICE_ID=$(echo "$chosen" | cut -f1)
+    DEVICE_NAME=$(echo "$chosen" | cut -f2)
 
-    DEVICE_ID=$(echo "$chosen" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}')
-    DEVICE_NAME=$(echo "$chosen" | sed 's/ (.*//' | xargs)
+    if [ "$(echo "$chosen" | cut -f3)" = "Booted" ]; then
+        ok "Booted: ${BOLD}$DEVICE_NAME${NC}"
+        return 0
+    fi
 
     if [ -z "$DEVICE_ID" ]; then
         err "Could not parse simulator device ID."
@@ -627,20 +862,23 @@ is_build_running() {
 }
 
 kill_all_builds() {
-    log "Killing all xcodebuild processes..."
-    pkill -f "xcodebuild" 2>/dev/null || true
+    # Restreint au même motif que is_build_running (#3949) : un `pkill -f
+    # "xcodebuild"` sans filtre de chemin tue les builds de TOUS les
+    # worktrees, y compris ceux d'autres sessions en cours.
+    log "Killing xcodebuild processes for this worktree ($DERIVED_DATA)..."
+    pkill -f "xcodebuild.*-derivedDataPath.*$DERIVED_DATA" 2>/dev/null || true
     sleep 2
     # Verify killed
-    if pgrep -f "xcodebuild" >/dev/null 2>&1; then
+    if is_build_running; then
         warn "Processes still alive, sending SIGKILL..."
-        pkill -9 -f "xcodebuild" 2>/dev/null || true
+        pkill -9 -f "xcodebuild.*-derivedDataPath.*$DERIVED_DATA" 2>/dev/null || true
         sleep 1
     fi
-    if pgrep -f "xcodebuild" >/dev/null 2>&1; then
-        err "Failed to kill all xcodebuild processes"
+    if is_build_running; then
+        err "Failed to kill xcodebuild processes for this worktree"
         exit 1
     fi
-    ok "All xcodebuild processes killed"
+    ok "xcodebuild processes for this worktree killed"
 }
 
 wait_for_existing_build() {
@@ -751,6 +989,8 @@ do_build() {
         do_clean
     fi
 
+    resolve_build_number
+
     log "Building ${BOLD}$SCHEME${NC} ($CONFIGURATION) for ${BOLD}$DEVICE_NAME${NC}..."
     local build_start
     build_start=$(date +%s)
@@ -782,8 +1022,10 @@ do_build() {
         -configuration "$CONFIGURATION" \
         -destination "$(build_destination)" \
         -derivedDataPath "$DERIVED_DATA" \
+        ${BUILD_LOCATION_OVERRIDES[@]+"${BUILD_LOCATION_OVERRIDES[@]}"} \
         "${XCODE_PKG_FLAGS[@]}" \
         "${mac_flags[@]}" \
+        ${BUILD_NUMBER_FLAGS[@]+"${BUILD_NUMBER_FLAGS[@]}"} \
         CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION=YES \
         build >"$build_log" 2>&1
     local status=$?
@@ -1211,11 +1453,15 @@ do_release_andp() {
     } > .andp/secrets.yml
     chmod 600 .andp/secrets.yml
 
-    # Write compliance policy
-    {
-        echo "compliance:"
-        echo "  uses_non_exempt_encryption: false"
-    } > andp.yml
+    # Compliance policy: andp.yml is tracked and declares it (#9752). Only an
+    # andp.yml that is MISSING is written — overwriting would wipe the build
+    # targets and the App Store listing it carries.
+    if [ ! -f andp.yml ]; then
+        {
+            echo "compliance:"
+            echo "  uses_non_exempt_encryption: false"
+        } > andp.yml
+    fi
 
     log "Uploading to $target_label via ANDP…"
 
@@ -1658,6 +1904,7 @@ do_test() {
         -destination "$destination"
         -configuration Debug
         -derivedDataPath "$DERIVED_DATA"
+        ${BUILD_LOCATION_OVERRIDES[@]+"${BUILD_LOCATION_OVERRIDES[@]}"}
         "${XCODE_PKG_FLAGS[@]}"
         -enableCodeCoverage "$coverage_flag"
     )
@@ -1739,12 +1986,17 @@ do_test() {
         demo_user=$(grep -m1 '^DEMO_USER=' fastlane/.env | cut -d= -f2-)
         demo_password=$(grep -m1 '^DEMO_PASSWORD=' fastlane/.env | cut -d= -f2-)
     fi
+    local phase3_skipped=false
     if [ -z "$demo_user" ] || [ -z "$demo_password" ]; then
+        phase3_skipped=true
         warn "DEMO_USER/DEMO_PASSWORD introuvables (fastlane/.env) — phase 3 sautée côté test (XCTSkip), l'app restera déconnectée"
     fi
 
     log "Phase 3/3 — connexion finale au compte de test (laisse l'app connectée)..."
+    # Seule phase où le réseau réel est VOULU : sans ce drapeau, l'hôte de
+    # test refuse toute requête (TestHarnessNetworkSeal, #10854).
     TEST_RUNNER_DEMO_USER="$demo_user" TEST_RUNNER_DEMO_PASSWORD="$demo_password" \
+    TEST_RUNNER_MEESHY_TEST_LIVE_NETWORK=1 \
     xcodebuild test-without-building "${common_flags[@]}" \
         -resultBundlePath "$TEST_OUTPUT_DIR/phase3-connected.xcresult" \
         -only-testing:MeeshyTests/$END_STATE_SUITE \
@@ -1754,7 +2006,18 @@ do_test() {
     [ "$p0" -eq 0 ] && ok "Phase 0 (package MeeshySDK) : verte" || err "Phase 0 (package MeeshySDK) : échec (exit $p0) — voir $TEST_OUTPUT_DIR/phase0-sdk.xcresult"
     [ "$p1" -eq 0 ] && ok "Phase 1 (isolées) : verte" || err "Phase 1 (isolées) : échec (exit $p1) — voir $TEST_OUTPUT_DIR/phase1-isolated.xcresult"
     [ "$p2" -eq 0 ] && ok "Phase 2 (connexion & contenu) : verte" || err "Phase 2 (connexion & contenu) : échec (exit $p2) — voir $TEST_OUTPUT_DIR/phase2-content.xcresult"
-    [ "$p3" -eq 0 ] && ok "Phase 3 (état connecté) : verte — l'app est connectée au compte de test" || err "Phase 3 (état connecté) : échec (exit $p3) — voir $TEST_OUTPUT_DIR/phase3-connected.xcresult"
+    local p3_require_fail=0
+    if [ "$phase3_skipped" = true ]; then
+        warn "Phase 3 (état connecté) : SAUTÉE — DEMO_USER absent, XCTSkip, état connecté NON vérifié"
+        if [ "$REQUIRE_CONNECTED" = true ]; then
+            p3_require_fail=1
+            err "--require-connected : phase 3 sautée, état connecté non vérifié — échec du gate"
+        fi
+    elif [ "$p3" -eq 0 ]; then
+        ok "Phase 3 (état connecté) : verte — l'app est connectée au compte de test"
+    else
+        err "Phase 3 (état connecté) : échec (exit $p3) — voir $TEST_OUTPUT_DIR/phase3-connected.xcresult"
+    fi
 
     if [ "$UI_TESTS" = true ]; then
         log "Running UI tests..."
@@ -1764,6 +2027,7 @@ do_test() {
             -destination "$destination" \
             -configuration Debug \
             -derivedDataPath "$DERIVED_DATA" \
+            ${BUILD_LOCATION_OVERRIDES[@]+"${BUILD_LOCATION_OVERRIDES[@]}"} \
             "${XCODE_PKG_FLAGS[@]}" \
             -resultBundlePath "$TEST_OUTPUT_DIR/ui-tests.xcresult" \
             -only-testing:MeeshyUITests \
@@ -1785,7 +2049,7 @@ do_test() {
         head -20 "$TEST_OUTPUT_DIR/coverage.txt"
     fi
 
-    return $(( porphan != 0 || p0 != 0 || p1 != 0 || p2 != 0 || p3 != 0 ? 1 : 0 ))
+    return $(( porphan != 0 || p0 != 0 || p1 != 0 || p2 != 0 || p3 != 0 || p3_require_fail != 0 ? 1 : 0 ))
 }
 
 # ─── Setup ───────────────────────────────────────────────────────────────────
@@ -1895,7 +2159,7 @@ usage() {
     echo -e "    ${GREEN}test${NC}         Run unit tests ${DIM}(SDK package suite + 3 app phases; --skip-sdk, --ui)${NC}"
     echo -e "    ${GREEN}setup${NC}        Check/install dev dependencies"
     echo -e "    ${GREEN}device${NC}       Pick a device (simulator or physical) and deploy ${DIM}(interactive)${NC}"
-    echo -e "    ${GREEN}build-number${NC} Align CURRENT_PROJECT_VERSION on the latest App Store Connect build ${DIM}(via andp)${NC}"
+    echo -e "    ${GREEN}build-number${NC} Show the build number local builds inject (latest App Store Connect build) ${DIM}(--print: number only, --write: commit it to project.yml + pbxproj)${NC}"
     echo -e "    ${GREEN}screenshot${NC}   Take simulator screenshot"
     echo ""
     echo -e "  ${BOLD}Platform:${NC}"
@@ -1915,6 +2179,7 @@ usage() {
     echo -e "    ${YELLOW}--skip-tests${NC}             Skip unit tests before release"
     echo -e "    ${YELLOW}--ui${NC}                     Include UI tests"
     echo -e "    ${YELLOW}--skip-sdk${NC}               Skip phase 0 (MeeshySDK package suite)"
+    echo -e "    ${YELLOW}--require-connected${NC}      Fail the gate if phase 3 (connected state) was skipped (no DEMO_USER)"
     echo -e "    ${YELLOW}--coverage${NC}               Generate coverage report"
     echo -e "    ${YELLOW}--deep${NC}                   Deep clean (global Xcode caches)"
     echo ""
@@ -1975,8 +2240,11 @@ while [[ $# -gt 0 ]]; do
         -m|--method)      EXPORT_METHOD="$2"; shift 2 ;;
         --ui)             UI_TESTS=true; shift ;;
         --skip-sdk)       SKIP_SDK_TESTS=true; shift ;;
+        --require-connected) REQUIRE_CONNECTED=true; shift ;;
         --coverage)       COVERAGE=true; shift ;;
         --deep)           DEEP_CLEAN=true; shift ;;
+        --print)          BUILD_NUMBER_MODE="print"; shift ;;
+        --write)          BUILD_NUMBER_MODE="write"; shift ;;
         --iphone)         PLATFORM="iphone"; shift ;;
         --ipad)           PLATFORM="ipad"; shift ;;
         --mac|--macos)    PLATFORM="mac"; shift ;;
@@ -2121,20 +2389,37 @@ case "$COMMAND" in
         ;;
 
     build-number)
-        echo ""
-        echo -e "${BOLD}${CYAN}  Meeshy iOS Build Number${NC}"
-        echo ""
-        sync_build_number
-        echo ""
+        case "${BUILD_NUMBER_MODE:-}" in
+            print)
+                resolve_build_number
+                echo "$LOCAL_BUILD_NUMBER"
+                ;;
+            write)
+                echo ""
+                echo -e "${BOLD}${CYAN}  Meeshy iOS Build Number${NC}"
+                echo ""
+                sync_build_number
+                echo ""
+                ;;
+            *)
+                echo ""
+                echo -e "${BOLD}${CYAN}  Meeshy iOS Build Number${NC}"
+                echo ""
+                resolve_build_number 2>&1
+                log "Les builds locaux l'injectent en build setting ; ${BOLD}--write${NC} le grave dans project.yml et le pbxproj"
+                echo ""
+                ;;
+        esac
         ;;
 
     device)
         echo ""
         echo -e "${BOLD}${CYAN}  Meeshy iOS Device Deploy${NC}"
         echo ""
-        # Avant de compiler : l'app posée sur un appareil réel doit porter le
-        # numéro de build du dernier TestFlight, pas le placeholder XcodeGen.
-        sync_build_number
+        # Avant de compiler : l'app posée sur un appareil réel porte le numéro
+        # de la dernière livraison App Store Connect, injecté sans réécrire le
+        # dépôt (cf. « Build number des builds LOCAUX »).
+        resolve_build_number
         pick_device
 
         if [ "$PICKED_DEVICE_TYPE" = "physical" ]; then

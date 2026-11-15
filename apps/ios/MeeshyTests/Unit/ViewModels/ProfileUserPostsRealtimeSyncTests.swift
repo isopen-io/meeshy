@@ -31,7 +31,8 @@ final class ProfileUserPostsRealtimeSyncTests: XCTestCase {
     // MARK: - SUT
 
     private func makeSUT(
-        currentUserId: String? = ProfileUserPostsRealtimeSyncTests.meId
+        currentUserId: String? = ProfileUserPostsRealtimeSyncTests.meId,
+        preferredLanguages: [String] = []
     ) -> (sut: ProfileUserPostsViewModel, post: MockPostService, socket: MockSocialSocket) {
         let post = MockPostService()
         let socket = MockSocialSocket()
@@ -39,7 +40,7 @@ final class ProfileUserPostsRealtimeSyncTests: XCTestCase {
             userId: Self.userId,
             postService: post,
             userService: MockUserService(),
-            languageProvider: MockLanguageProvider(preferredLanguages: []),
+            languageProvider: MockLanguageProvider(preferredLanguages: preferredLanguages),
             socialSocket: socket,
             currentUserIdProvider: { currentUserId }
         )
@@ -240,5 +241,33 @@ final class ProfileUserPostsRealtimeSyncTests: XCTestCase {
         try await waitForCondition { sut.isBookmarked(sut.posts[0]) }
 
         XCTAssertEqual(sut.bookmarkCount(sut.posts[0]), 7)
+    }
+
+    // MARK: - Traduction (#6531)
+
+    /// Troisième site du même défaut que `FeedViewModel`/`PostDetailViewModel` :
+    /// la première traduction reçue dont la langue figurait n'importe où dans
+    /// le Prisme devenait le texte affiché. Prisme `[fr, pt]`, original `fr`,
+    /// une traduction `pt` arrive → le français (rang 1, l'original) reste
+    /// affiché.
+    func test_postTranslationUpdated_originalLanguageAtItsRank_winsOverLowerRankTranslation() async throws {
+        let (sut, mock, socket) = makeSUT(preferredLanguages: ["fr", "pt"])
+        let page: PaginatedAPIResponse<[APIPost]> = JSONStub.decode("""
+        {"success":true,"data":[{"id":"p1","type":"POST","content":"Bonjour","originalLanguage":"fr",
+        "createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"\(Self.userId)","username":"alice"}}],
+        "pagination":{"hasMore":false,"limit":20}}
+        """)
+        mock.getUserPostsResultsQueue = [.success(page)]
+        await sut.loadInitial()
+        XCTAssertEqual(sut.posts.count, 1, "précondition : la page est servie")
+
+        let translationData: SocketPostTranslationUpdatedData = JSONStub.decode("""
+        {"postId":"p1","language":"pt","translation":{"text":"Olá","translationModel":"nllb-200","confidenceScore":0.9,"createdAt":"2026-01-15T12:00:00.000Z"}}
+        """)
+        socket.postTranslationUpdated.send(translationData)
+        try await waitForCondition { sut.posts.first?.translations?["pt"] != nil }
+
+        XCTAssertNil(sut.posts.first?.translatedContent,
+                      "le français (rang 1, langue d'origine) doit primer sur le portugais reçu")
     }
 }

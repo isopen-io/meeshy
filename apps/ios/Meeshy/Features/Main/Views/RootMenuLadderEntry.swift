@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// Compteur vivant affiché en pastille sur un barreau de l'échelle. Le
 /// descripteur reste pur — `RootView` résout la valeur au rendu.
@@ -14,10 +15,16 @@ enum RootMenuBadge: Hashable {
 /// sur le bouton avatar. Le DERNIER barreau est la roue dentée (→ préférences
 /// générales). L'ordre de `allCases` EST l'ordre de l'échelle.
 ///
-/// Le 3e barreau ouvre le **journal d'appels** (`ContactsHubView` sur l'onglet
+/// Le PREMIER barreau, au plus près du bouton, ouvre le **jeu** (la Progression, #17769), nommé « Ma Légende » —
+/// l'objectif visé, pas l'outil (décision du porteur, #17769), sous le trophée du Profil et des Réglages. Il disparaît quand le joueur a masqué le jeu
+/// (`ladder(gameHidden:)`). La Progression reste un écran profond, pas un hub : le bandeau du jeu ne
+/// se pose pas au-dessus du jeu lui-même.
+///
+/// Le barreau qui suit les notifications ouvre le **journal d'appels** (`ContactsHubView` sur l'onglet
 /// Appels). L'annuaire de contacts n'a plus de barreau dédié : il reste à un
 /// swipe de là, sur l'onglet Contacts du même hub.
 enum RootMenuLadderEntry: CaseIterable, Hashable {
+    case game
     case links
     case notifications
     case calls
@@ -27,6 +34,7 @@ enum RootMenuLadderEntry: CaseIterable, Hashable {
 
     var icon: String {
         switch self {
+        case .game: return "trophy.fill"
         case .links: return "link.badge.plus"
         case .notifications: return "bell.fill"
         case .calls: return "phone.fill"
@@ -38,6 +46,7 @@ enum RootMenuLadderEntry: CaseIterable, Hashable {
 
     var colorHex: String {
         switch self {
+        case .game: return "F97316"
         case .links: return "F8B500"
         case .notifications: return "FF6B6B"
         case .calls: return "6366F1"
@@ -49,6 +58,8 @@ enum RootMenuLadderEntry: CaseIterable, Hashable {
 
     var label: String {
         switch self {
+        case .game:
+            return String(localized: "root.menu.game", defaultValue: "Ma Légende")
         case .links:
             return String(localized: "root.menu.links", defaultValue: "Mes liens")
         case .notifications:
@@ -66,6 +77,7 @@ enum RootMenuLadderEntry: CaseIterable, Hashable {
 
     var route: Route {
         switch self {
+        case .game: return .progression
         case .links: return .links
         case .notifications: return .notifications
         case .calls: return .contacts(.calls)
@@ -79,7 +91,34 @@ enum RootMenuLadderEntry: CaseIterable, Hashable {
         switch self {
         case .notifications: return .unreadNotifications
         case .discover: return .pendingFriendRequests
-        case .links, .calls, .communities, .settings: return nil
+        case .game, .links, .calls, .communities, .settings: return nil
         }
+    }
+
+    /// Le point de « Ma Légende » (#18165) : l'Offrande prête ou la Flamme en danger. Seul le barreau du jeu le porte —
+    /// un SIGNAL sans chiffre, jamais une pastille de compte.
+    func showsAttentionDot(_ attention: GameAttention) -> Bool {
+        self == .game && attention.isRaised
+    }
+
+    /// Le nom que VoiceOver lit : celui du barreau, et pour « Ma Légende » ce que le jeu signale. Une phrase entière par
+    /// cas, jamais une concaténation — l'arabe et l'allemand ne joignent pas comme le français.
+    func accessibilityLabel(attention: GameAttention) -> String {
+        guard self == .game else { return label }
+        switch (attention.chestReady, attention.flameAtRisk) {
+        case (true, true):
+            return String(localized: "a11y.floating.rung.game.both", defaultValue: "Ma Légende, Offrande prête, Flamme en danger")
+        case (true, false):
+            return String(localized: "a11y.floating.rung.game.chest-ready", defaultValue: "Ma Légende, Offrande prête")
+        case (false, true):
+            return String(localized: "a11y.floating.rung.game.flame-at-risk", defaultValue: "Ma Légende, Flamme en danger")
+        case (false, false):
+            return label
+        }
+    }
+
+    /// L'échelle dessinée : toute l'échelle, moins le jeu quand le joueur l'a masqué.
+    static func ladder(gameHidden: Bool) -> [RootMenuLadderEntry] {
+        gameHidden ? allCases.filter { $0 != .game } : allCases
     }
 }

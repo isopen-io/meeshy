@@ -17,7 +17,8 @@ final class LocationPickerSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
             .appendingPathComponent("Meeshy/Features/Main/Components/LocationPickerView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        let card = url.deletingLastPathComponent().appendingPathComponent("LocationPickerBottomCard.swift")
+        return try String(contentsOf: url, encoding: .utf8) + "\n" + String(contentsOf: card, encoding: .utf8)
     }
 
     /// Commentaires retirés : une mention de `MapUserLocationButton` dans une

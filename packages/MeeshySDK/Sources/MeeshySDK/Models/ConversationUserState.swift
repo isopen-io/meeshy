@@ -20,6 +20,17 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
     public var unreadCount: Int
     public var lastReadAt: Date?
     public var lastDeliveredAt: Date?
+    /// Dernier message lu par le lecteur (#7198/#7222) — le curseur SERVEUR,
+    /// distinct de `lastReadAt` (l'horloge de l'ACTION de lecture) : c'est lui
+    /// que `FirstUnreadBoundary.resolve` EXCLUT explicitement des candidats
+    /// (défense contre un décalage d'horloge entre le curseur et la fenêtre
+    /// chargée). `nil` sans curseur connu — jamais fabriqué.
+    public var lastReadMessageId: String?
+    /// `createdAt` de `lastReadMessageId` — la clé CHRONOLOGIQUE du curseur,
+    /// rang 1 de `FirstUnreadBoundary.resolve` (avant `lastReadAt`, avant
+    /// `joinedAt`). Servie par G1 (`packages/shared/utils/first-unread.ts`
+    /// doc-comment, § rangs) — voir son doc-comment pour la loi complète.
+    public var lastReadMessageCreatedAt: Date?
 
     // MARK: - Notification preferences
 
@@ -39,6 +50,9 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
 
     public var customName: String?
     public var reaction: String?
+    /// Le fond et l'accent PERSONNELS de la conversation (#10631). `nil` =
+    /// Signature + accent calculé ; jamais partagé avec les autres membres.
+    public var appearance: ConversationAppearance?
     /// User-defined free-form tags (matches the Prisma `String[]` shape).
     /// `MeeshyConversation.tags` (the existing `[MeeshyConversationTag]`
     /// field) remains a separate display-layer concern until Phase 6/7
@@ -76,6 +90,8 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
         unreadCount: Int = 0,
         lastReadAt: Date? = nil,
         lastDeliveredAt: Date? = nil,
+        lastReadMessageId: String? = nil,
+        lastReadMessageCreatedAt: Date? = nil,
         isPinned: Bool = false,
         isMuted: Bool = false,
         mentionsOnly: Bool = false,
@@ -84,6 +100,7 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
         clearHistoryBefore: Date? = nil,
         customName: String? = nil,
         reaction: String? = nil,
+        appearance: ConversationAppearance? = nil,
         tags: [String] = [],
         sectionId: String? = nil,
         orderInCategory: Int? = nil,
@@ -97,6 +114,8 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
         self.unreadCount = unreadCount
         self.lastReadAt = lastReadAt
         self.lastDeliveredAt = lastDeliveredAt
+        self.lastReadMessageId = lastReadMessageId
+        self.lastReadMessageCreatedAt = lastReadMessageCreatedAt
         self.isPinned = isPinned
         self.isMuted = isMuted
         self.mentionsOnly = mentionsOnly
@@ -105,6 +124,7 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
         self.clearHistoryBefore = clearHistoryBefore
         self.customName = customName
         self.reaction = reaction
+        self.appearance = appearance
         self.tags = tags
         self.sectionId = sectionId
         self.orderInCategory = orderInCategory
@@ -124,6 +144,48 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
     public var hasPendingSync: Bool { pendingMutationCount > 0 }
     public var isVisible: Bool { deletedForUserAt == nil && !isArchived }
 
+    // MARK: - Version gating
+
+    /// Greffe la moitié PRÉFÉRENCES de `self` sur `incoming`, dont la moitié
+    /// LECTURE (`unreadCount`, `lastReadAt`, `lastDeliveredAt`) est conservée.
+    ///
+    /// `version` ne versionne QUE les préférences : ni `applyReadReceipt`, ni le
+    /// zéro d'ouverture, ni le compteur servi par `conversation:unread-updated`
+    /// ne le bumpent jamais (§9 du design). Préserver le `userState` local EN
+    /// BLOC parce qu'une préférence est en vol figeait donc aussi le compteur —
+    /// pastille gelée sur toute conversation épinglée, muette ou archivée, et
+    /// définitivement, puisque rien ne rebaisse une version.
+    ///
+    /// La frontière de lecture locale n'a pas besoin d'être greffée ici : elle
+    /// est monotone et `ConversationSyncEngine.reconcileUnread`, qui s'applique
+    /// juste après chez les deux appelants, en reprend le MAX. La lui recopier
+    /// ici ferait deux règles pour un seul fait.
+    public func preferencesGrafted(onto incoming: ConversationUserState) -> ConversationUserState {
+        var merged = incoming
+        merged.isPinned = isPinned
+        merged.isMuted = isMuted
+        merged.mentionsOnly = mentionsOnly
+        merged.isArchived = isArchived
+        merged.deletedForUserAt = deletedForUserAt
+        merged.clearHistoryBefore = clearHistoryBefore
+        merged.customName = customName
+        merged.reaction = reaction
+        merged.appearance = appearance
+        merged.tags = tags
+        merged.sectionId = sectionId
+        merged.orderInCategory = orderInCategory
+        // Local-only, par appareil : un instantané serveur ne les porte jamais,
+        // les prendre de `incoming` les effacerait à chaque rafraîchissement.
+        merged.isLocked = isLocked
+        merged.hasDraft = hasDraft
+        merged.draftPreview = draftPreview
+        // Les métadonnées de sync suivent la moitié qu'elles décrivent.
+        merged.version = version
+        merged.lastSyncedAt = lastSyncedAt
+        merged.pendingMutationCount = pendingMutationCount
+        return merged
+    }
+
     // MARK: - Codable (lenient decoder)
 
     /// Custom decoder that falls back to the init defaults for any
@@ -139,6 +201,8 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
             unreadCount: try c.decodeIfPresent(Int.self, forKey: .unreadCount) ?? 0,
             lastReadAt: try c.decodeIfPresent(Date.self, forKey: .lastReadAt),
             lastDeliveredAt: try c.decodeIfPresent(Date.self, forKey: .lastDeliveredAt),
+            lastReadMessageId: try c.decodeIfPresent(String.self, forKey: .lastReadMessageId),
+            lastReadMessageCreatedAt: try c.decodeIfPresent(Date.self, forKey: .lastReadMessageCreatedAt),
             isPinned: try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false,
             isMuted: try c.decodeIfPresent(Bool.self, forKey: .isMuted) ?? false,
             mentionsOnly: try c.decodeIfPresent(Bool.self, forKey: .mentionsOnly) ?? false,
@@ -147,6 +211,7 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
             clearHistoryBefore: try c.decodeIfPresent(Date.self, forKey: .clearHistoryBefore),
             customName: try c.decodeIfPresent(String.self, forKey: .customName),
             reaction: try c.decodeIfPresent(String.self, forKey: .reaction),
+            appearance: try c.decodeIfPresent(ConversationAppearance.self, forKey: .appearance),
             tags: try c.decodeIfPresent([String].self, forKey: .tags) ?? [],
             sectionId: try c.decodeIfPresent(String.self, forKey: .sectionId),
             orderInCategory: try c.decodeIfPresent(Int.self, forKey: .orderInCategory),

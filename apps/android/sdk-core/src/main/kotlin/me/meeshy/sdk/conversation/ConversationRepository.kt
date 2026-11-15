@@ -1,7 +1,9 @@
 package me.meeshy.sdk.conversation
 
+import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
@@ -12,27 +14,55 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.appearance.ConversationAppearance
+import me.meeshy.sdk.model.DIRECT_CONVERSATION_TYPE
+import me.meeshy.sdk.model.directConversationRequest
+import me.meeshy.sdk.model.isDirect
+import me.meeshy.sdk.model.ApiParticipantProfile
 import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CreateConversationRequest
+import me.meeshy.sdk.model.HistoryGrantUpdate
+import me.meeshy.sdk.model.ParticipantCapability
+import me.meeshy.sdk.model.ParticipantRightsUpdate
+import me.meeshy.sdk.model.MemberCountResolution
 import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.MemberRosterPage
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
+import me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData
+import me.meeshy.sdk.model.applyRemote
+import me.meeshy.sdk.model.withMemberCount
+import me.meeshy.sdk.model.conversationlist.RecentlyCreatedMerge
+import me.meeshy.sdk.model.conversationlist.UnreadReconciliation
+import me.meeshy.sdk.model.conversationlist.UnreadRow
+import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddParticipantRequest
 import me.meeshy.sdk.net.api.ConversationApi
+import me.meeshy.sdk.net.api.ParticipantRightsUpdateResult
 import me.meeshy.sdk.net.api.ParticipantRoleUpdate
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.net.apiCallUnit
 import me.meeshy.sdk.outbox.ConversationPrefsPayload
+import me.meeshy.sdk.outbox.CreateConversationPayload
+import me.meeshy.sdk.outbox.ConversationPrefsPrevious
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.outbox.ReadReceiptPayload
+import me.meeshy.core.database.dao.SearchIndexDao
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.commitOrWrite
+import me.meeshy.sdk.socket.ServedPresenceSink
+import me.meeshy.sdk.search.LocalSearchIndex
+import me.meeshy.sdk.sync.SyncAccountProvider
+import me.meeshy.sdk.sync.SyncDeltaFetching
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 
 @Singleton
 class ConversationRepository @Inject constructor(
@@ -41,13 +71,31 @@ class ConversationRepository @Inject constructor(
     private val conversationDao: ConversationDao,
     syncMetaDao: SyncMetaDao,
     private val outboxRepository: OutboxRepository,
+    syncAccountProvider: SyncAccountProvider = SyncAccountProvider.None,
+    endToEndRegimeLedger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
+    private val fence: AccountFence? = null,
+    presenceSink: ServedPresenceSink = ServedPresenceSink.None,
+    syncDelta: SyncDeltaFetching = SyncDeltaFetching.None,
 ) {
+    /** conversationId → instant this client created it ([RecentlyCreatedMerge]); guarded by itself. */
+    private val recentlyCreated = mutableMapOf<String, Long>()
+
+    /** Annonces `conversation:new` en cours de lecture : une même conversation n'est jamais lue deux fois à la fois. */
+    private val learning: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
     private val cacheSource = ConversationCacheSource(
         database = database,
         conversationDao = conversationDao,
         syncMetaDao = syncMetaDao,
         conversationApi = conversationApi,
         clock = SystemCacheClock,
+        searchIndex = LocalSearchIndex(SearchIndexDao(database)),
+        accountProvider = syncAccountProvider,
+        protectedIds = ::recentlyCreatedIds,
+        endToEnd = endToEndRegimeLedger,
+        fence = fence,
+        presenceSink = presenceSink,
+        syncDelta = syncDelta,
     )
 
     /**
@@ -81,20 +129,348 @@ class ConversationRepository @Inject constructor(
     fun cachedConversations(): Flow<List<ApiConversation>> =
         cacheSource.observe().map { it ?: emptyList() }
 
+    /**
+     * The unread total across every cached conversation (#5190) — a SQL `SUM`
+     * over [ConversationDao.totalUnreadCount]'s denormalized `unreadCount`
+     * column, never a decode. The single source both the home-screen
+     * `UnreadCountWidget` and the in-app chrome badge read, so the two can
+     * never drift from each other OR from re-deriving the same sum by
+     * decoding every cached row (what [me.meeshy.sdk.model.totalUnreadCount]
+     * — the pure `List<ApiConversation>` reducer — still backs for screens
+     * that already hold the full decoded list for other reasons, e.g. the
+     * conversation list itself).
+     */
+    fun totalUnreadCount(): Flow<Int> = conversationDao.totalUnreadCount()
+
+    /** Le nombre de conversations non lues (SQL `COUNT`, aucun decodage) : le chiffre du badge de la liste. */
+    fun unreadConversationCount(): Flow<Int> = conversationDao.unreadConversationCount()
+
+    /**
+     * Une empreinte de la fenêtre que lisent les widgets ([recentCachedConversations]) : elle change
+     * quand une conversation de la fenêtre change (message reçu, lecture, épingle), jamais sinon.
+     * Aucun décodage ni réseau — le déclencheur de repeinte des widgets.
+     */
+    fun recentCachedFingerprint(limit: Int = RECENT_WINDOW): Flow<Int> =
+        conversationDao.observeRecentByUpdatedAt(limit)
+            .map { rows -> rows.fold(1) { hash, row ->
+                31 * (31 * (31 * hash + row.id.hashCode()) + row.payload.hashCode()) + row.unreadCount
+            } }
+            .distinctUntilChanged()
+
+    /**
+     * The [limit] most-recently-updated cached conversations, decoded — a
+     * BOUNDED read for callers that only ever render a handful of rows
+     * (home-screen widgets, dynamic launcher shortcuts) instead of
+     * [cachedConversations], which decodes the ENTIRE cached table (#5190: up
+     * to the 10 000-conversation full-sync ceiling [ConversationCacheSource]
+     * allows, to render 5-8 rows). Local-only, like [cachedConversations] —
+     * no network revalidation.
+     */
+    suspend fun recentCachedConversations(limit: Int = RECENT_WINDOW): List<ApiConversation> =
+        conversationDao.recentByUpdatedAt(limit)
+            .map { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }
+
     /** Explicit refresh (pull-to-refresh / retry). Throws on failure. */
     suspend fun refresh() {
         cacheSource.revalidate()
     }
 
+    /**
+     * Silent sync (launch prewarm, cached-fresh first frame, return to the foreground): the same
+     * revalidation as [refresh], but a failure is reported as `false` — the cache stays on screen.
+     */
+    suspend fun syncSilently(): Boolean =
+        try {
+            cacheSource.revalidate()
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            false
+        }
+
+    /**
+     * After a COMPLETE sync, reconciles the unread counters the server just served with what this
+     * device knows better ([UnreadReconciliation]): the conversation open on screen reads 0, an
+     * explicit « mark unread » keeps its badge. Only the rows that change are rewritten. Returns
+     * how many were.
+     */
+    suspend fun reconcileUnreads(openConversationId: String?, explicitlyUnread: Set<String>): Int {
+        val ids = (explicitlyUnread + listOfNotNull(openConversationId)).filterTo(HashSet()) { it.isNotBlank() }
+        if (ids.isEmpty()) return 0
+        return database.withTransaction {
+            val rows = ids.mapNotNull { conversationDao.find(it) }
+            val fixes = UnreadReconciliation.corrections(
+                rows.map { UnreadRow(it.id, it.unreadCount) },
+                openConversationId,
+                explicitlyUnread,
+            )
+            val byId = rows.associateBy { it.id }
+            val updated = fixes.mapNotNull { fix ->
+                val row = byId[fix.conversationId] ?: return@mapNotNull null
+                val conversation = runCatching {
+                    MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+                }.getOrNull() ?: return@mapNotNull null
+                row.copy(
+                    payload = MeeshyApi.json.encodeToString(conversation.copy(unreadCount = fix.unreadCount)),
+                    unreadCount = fix.unreadCount,
+                )
+            }
+            if (updated.isNotEmpty()) conversationDao.upsertAll(updated)
+            updated.size
+        }
+    }
+
+    private fun noteCreated(id: String) {
+        synchronized(recentlyCreated) {
+            val now = SystemCacheClock.nowMillis()
+            val live = RecentlyCreatedMerge.evictExpired(recentlyCreated, now)
+            recentlyCreated.clear()
+            recentlyCreated.putAll(live)
+            recentlyCreated[id] = now
+        }
+    }
+
+    private fun recentlyCreatedIds(): Set<String> = synchronized(recentlyCreated) {
+        RecentlyCreatedMerge.protectedIds(recentlyCreated, SystemCacheClock.nowMillis())
+    }
+
     suspend fun getById(id: String): NetworkResult<ApiConversation> =
         apiCall { conversationApi.getById(id) }
+
+    /** One cached conversation by id (Room read, no network), or null when never cached or undecodable. */
+    suspend fun cachedById(id: String): ApiConversation? =
+        conversationDao.find(id)?.let {
+            runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }.getOrNull()
+        }
+
+    /** Merges one conversation fetched by id into the cached list (upsert by id: no duplicate). */
+    suspend fun remember(conversation: ApiConversation) {
+        cacheSource.remember(conversation)
+    }
+
+    /** #13628 — [remember] for a body the gateway has just served: its null mode is confirmed clear. Never for a cached or built copy. */
+    suspend fun rememberServed(conversation: ApiConversation) {
+        cacheSource.rememberServed(conversation)
+    }
+
+    /**
+     * `conversation:new` (#13795) : lit et mémorise la conversation que la passerelle vient d'annoncer, pour qu'elle
+     * entre dans la liste (Room) sans rafraîchissement, à sa place d'ordre et avec son mode de chiffrement SERVI
+     * ([rememberServed]). `true` quand elle est connue à l'issue (déjà en cache, en cours de lecture par un autre
+     * appel, ou mémorisée) ; `false` quand la lecture a échoué ou que le compte a changé — l'appelant peut alors
+     * demander une relecture de la liste. Une conversation déjà connue n'est jamais relue ni dupliquée, et la ligne
+     * ajoutée est protégée de l'élagage d'un balayage dont l'agrégat n'a pas encore rattrapé la création.
+     *
+     * Le compte est celui sous lequel l'événement est ARRIVÉ ([me.meeshy.sdk.socket.collectArrived]) : un compte clos
+     * ne lit rien (aucune requête sous le jeton du suivant) et n'écrit rien.
+     */
+    suspend fun learnCreated(conversationId: String): Boolean {
+        val ticket = fence?.currentTicket()
+        if (ticket != null && fence?.isCurrent(ticket) == false) return false
+        if (conversationDao.find(conversationId) != null) return true
+        if (!learning.add(conversationId)) return true
+        try {
+            val fence = fence
+            val read: suspend () -> NetworkResult<ApiConversation> = { getById(conversationId) }
+            val outcome = if (fence == null || ticket == null) read() else fence.guard(ticket, read)
+            return when (val served = outcome) {
+                null -> false
+                is NetworkResult.Success -> {
+                    noteCreated(conversationId)
+                    cacheSource.rememberServed(served.data)
+                    true
+                }
+                is NetworkResult.Failure -> false
+            }
+        } finally {
+            learning.remove(conversationId)
+        }
+    }
+
+    /**
+     * #13795 — l'effectif d'une ligne du cache après une adhésion ou un débannissement ([MemberCountResolution] :
+     * l'absolu servi tranche, le delta n'est qu'un repli). `false` quand la conversation est inconnue (rien n'est
+     * fabriqué) ou que le compte de l'événement n'est plus le courant.
+     */
+    suspend fun applyMembership(
+        conversationId: String,
+        absolute: Int?,
+        absoluteCapped: Boolean?,
+        delta: Int,
+    ): Boolean {
+        val ticket = fence?.currentTicket()
+        return fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                val row = conversationDao.find(conversationId) ?: return@withTransaction false
+                val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+                val resolved = MemberCountResolution.after(
+                    current = conversation.memberCount,
+                    currentCapped = conversation.memberCountCapped == true,
+                    absolute = absolute,
+                    absoluteCapped = absoluteCapped,
+                    delta = delta,
+                )
+                conversationDao.upsertAll(
+                    listOf(row.copy(payload = MeeshyApi.json.encodeToString(conversation.withMemberCount(resolved)))),
+                )
+                true
+            }
+        } ?: false
+    }
 
     suspend fun create(
         type: String,
         title: String?,
         participantIds: List<String>,
+        encryptionMode: String? = null,
     ): NetworkResult<ApiConversation> =
-        apiCall { conversationApi.create(CreateConversationRequest(type, title, participantIds)) }
+        apiCall { conversationApi.create(CreateConversationRequest(type, title, participantIds, encryptionMode)) }
+            .also { if (it is NetworkResult.Success) noteCreated(it.data.id) }
+
+    /**
+     * Crée une conversation sans attendre le réseau (#15179, iOS `createConversation` hors ligne) : la ligne optimiste
+     * `pending_<uuid>` entre dans la liste à l'instant, la création part par l'outbox au retour du réseau, et
+     * [reconcileCreated] la remplace par l'identifiant serveur. Rend l'id optimiste, ou `null` quand la file est pleine
+     * (rien n'est alors laissé dans la liste).
+     */
+    suspend fun createOptimistic(
+        type: String,
+        title: String?,
+        participantIds: List<String>,
+        encryptionMode: String? = null,
+    ): String? {
+        val pendingId = PENDING_PREFIX + java.util.UUID.randomUUID().toString()
+        val stamp = java.time.Instant.now().toString()
+        cacheSource.remember(ApiConversation(id = pendingId, type = type, title = title, createdAt = stamp, updatedAt = stamp))
+        noteCreated(pendingId)
+        val payload = CreateConversationPayload(type, title, participantIds, encryptionMode)
+        val queued = outboxRepository.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.CREATE_CONVERSATION,
+                lane = OutboxLanes.CONVERSATION,
+                targetId = pendingId,
+                payload = MeeshyApi.json.encodeToString(payload),
+            ),
+        )
+        if (queued == null) discardPending(pendingId)
+        return queued?.let { pendingId }
+    }
+
+    /** La création a abouti : la ligne serveur prend la place de la ligne optimiste, en une transaction (aucun doublon). */
+    suspend fun reconcileCreated(pendingId: String, created: ApiConversation) {
+        database.withTransaction {
+            cacheSource.rememberServed(created)
+            conversationDao.deleteByIds(listOf(pendingId))
+        }
+        outboxRepository.resolveLocalId(pendingId, created.id)
+    }
+
+    /** La création a échoué pour de bon : la ligne optimiste part, et les lignes qui l'attendaient avec elle. */
+    suspend fun discardPending(pendingId: String) {
+        conversationDao.deleteByIds(listOf(pendingId))
+        outboxRepository.cancelHeldFor(pendingId)
+    }
+
+    /**
+     * La conversation directe la plus récente avec [userId] qui existe DÉJÀ dans le cache local —
+     * une lecture Room, sans réseau, donc ouverte aussi hors ligne. Un direct du cache qui nomme
+     * [userId] est forcément entre le lecteur et lui : le cache ne contient que les conversations
+     * du lecteur. Le pré-filtre SQL sur-sélectionne (toute mention du texte) ; la ligne décodée
+     * est revérifiée ici.
+     */
+    suspend fun cachedDirectWith(userId: String): ApiConversation? {
+        if (userId.isBlank()) return null
+        return conversationDao.payloadsContaining(escapeLikeLiteral(userId))
+            .asSequence()
+            .mapNotNull { row ->
+                runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(row.payload) }.getOrNull()
+            }
+            .firstOrNull { conversation ->
+                conversation.isDirect && conversation.participants.any { it.userId == userId }
+            }
+    }
+
+    /**
+     * Cache puis API (miroir de `ConversationService.findDirectWith`, #11615) : le direct déjà
+     * connu localement s'ouvre sans réseau ; sinon `GET /conversations?type=direct&withUserId=…`
+     * rend le plus récent, ou `null` quand il n'en existe aucun. Un direct trouvé par l'API est
+     * rangé dans le cache pour que l'écran de discussion — qui lit la ligne Room — l'ait sous la
+     * main.
+     */
+    suspend fun findDirectWith(userId: String): NetworkResult<ApiConversation?> {
+        cachedDirectWith(userId)?.let { return NetworkResult.Success(it) }
+        return fetchDirectWith(userId)
+    }
+
+    /**
+     * Les conversations que je partage avec [userId] (miroir de `ConversationService.listSharedWith`
+     * iOS) : `GET /conversations?withUserId=…&limit=…`. Chaque ligne servie est rangée dans le cache
+     * pour que l'écran de discussion l'ait sous la main — et que son rang LRU soit rafraîchi.
+     */
+    suspend fun listSharedWith(userId: String, limit: Int = SHARED_CONVERSATIONS_LIMIT): NetworkResult<List<ApiConversation>> {
+        if (userId.isBlank()) return NetworkResult.Success(emptyList())
+        return when (val result = apiCall { conversationApi.sharedWith(withUserId = userId, limit = limit) }) {
+            is NetworkResult.Success -> {
+                result.data.forEach { cacheSource.rememberServed(it) }
+                result
+            }
+            is NetworkResult.Failure -> result
+        }
+    }
+
+    private suspend fun fetchDirectWith(userId: String): NetworkResult<ApiConversation?> =
+        when (
+            val result = apiCall {
+                conversationApi.directWith(type = DIRECT_CONVERSATION_TYPE, withUserId = userId, limit = 1)
+            }
+        ) {
+            is NetworkResult.Success -> {
+                val found = result.data.firstOrNull { it.isDirect }
+                found?.let { cacheSource.rememberServed(it) }
+                NetworkResult.Success(found)
+            }
+            is NetworkResult.Failure -> result
+        }
+
+    /**
+     * Le résolveur UNIQUE de « la conversation directe avec [userId] » : le dernier direct qui
+     * existe, sinon un neuf (miroir de `DirectConversationResolver.resolve`, #11615). La réponse à
+     * une story, à une humeur et le bouton Message d'un profil passent tous par ici, si bien que
+     * deux gestes différents ne choisissent jamais deux conversations pour un même auteur.
+     *
+     * Hors ligne : un direct en cache s'ouvre quand même ; sans cache, la création est mise en
+     * file par [creationQueue] quand elle est fournie (sinon l'échec dit qu'il manque le réseau).
+     */
+    suspend fun directConversationWith(
+        userId: String,
+        creationQueue: DirectCreationQueue? = null,
+    ): DirectConversationResolution {
+        cachedDirectWith(userId)?.let { return DirectConversationResolution.Found(it, fromCache = true) }
+        when (val lookup = fetchDirectWith(userId)) {
+            is NetworkResult.Failure -> return failedOrQueued(userId, lookup.error, creationQueue)
+            is NetworkResult.Success ->
+                lookup.data?.let { return DirectConversationResolution.Found(it, fromCache = false) }
+        }
+        val request = directConversationRequest(userId)
+        return when (val created = create(request.type, request.title, request.participantIds)) {
+            is NetworkResult.Success -> {
+                cacheSource.rememberServed(created.data)
+                DirectConversationResolution.Created(created.data)
+            }
+            is NetworkResult.Failure -> failedOrQueued(userId, created.error, creationQueue)
+        }
+    }
+
+    private suspend fun failedOrQueued(
+        userId: String,
+        error: ApiError,
+        creationQueue: DirectCreationQueue?,
+    ): DirectConversationResolution {
+        val offline = error.code == OFFLINE_ERROR_CODE
+        if (offline && creationQueue?.enqueue(userId) == true) return DirectConversationResolution.Queued(userId)
+        return DirectConversationResolution.Failed(error, offline)
+    }
 
     suspend fun markRead(id: String): NetworkResult<Unit> =
         apiCall { conversationApi.markRead(id) }
@@ -213,34 +589,135 @@ class ConversationRepository @Inject constructor(
         apiCallUnit { conversationApi.banParticipant(id, userId) }
 
     /**
+     * La fiche d'UN participant (#3943) — identité, capacités d'entrée, réglages
+     * du lien emprunté et octroi d'historique.
+     *
+     * **[participantId] est un `Participant.id`, jamais un `User.id`** : le
+     * sujet est souvent un visiteur venu par un lien, qui n'a aucune ligne
+     * `User`. Les méthodes voisines de cette classe prennent l'autre colonne —
+     * la ressemblance des deux chemins est un piège, pas une symétrie.
+     *
+     * Ce dépôt ne garde RIEN : la copie vit dans `ParticipantProfileCache`, clé par lecteur (ADR-032), parce que la
+     * fiche porte des faits que le gateway gate PAR LECTEUR (`email`, `entryLink`, `historyVisibleFrom`,
+     * `canGrantHistory`).
+     */
+    suspend fun participantProfile(
+        id: String,
+        participantId: String,
+    ): NetworkResult<ApiParticipantProfile> =
+        apiCall { conversationApi.participantProfile(id, participantId) }
+
+    /**
+     * Pose ou retire « voit l'historique depuis le \<date\> » (#3877, #3943).
+     *
+     * [historyVisibleFrom] `null` RETIRE l'octroi — et c'est une valeur, pas une
+     * absence : [HistoryGrantUpdate] force l'encodage de la clé pour que le
+     * gateway puisse distinguer « retirer » de « ne rien dire ».
+     *
+     * Réservé aux admin/creator, arbitré par le SERVEUR ; le client ne fait que
+     * gater l'affordance sur `canGrantHistory`, qu'il ne recalcule jamais.
+     */
+    suspend fun updateHistoryGrant(
+        id: String,
+        participantId: String,
+        historyVisibleFrom: String?,
+    ): NetworkResult<ParticipantRightsUpdateResult> =
+        apiCall {
+            conversationApi.updateHistoryGrant(
+                id,
+                participantId,
+                HistoryGrantUpdate(historyVisibleFrom),
+            )
+        }
+
+    /**
+     * Pose UN droit d'un participant (`PATCH …/rights`, une clé par écriture). La réponse est l'état résolu par le
+     * serveur ; l'appelant la pose telle quelle et défait son geste optimiste sur un échec.
+     */
+    suspend fun updateParticipantRight(
+        id: String,
+        participantId: String,
+        capability: ParticipantCapability,
+        value: Boolean,
+    ): NetworkResult<ParticipantRightsUpdateResult> =
+        apiCall {
+            conversationApi.updateParticipantRight(id, participantId, ParticipantRightsUpdate.single(capability, value))
+        }
+
+    /**
+     * Local-only mark-as-read: the cached badge drops to zero, and NOTHING joins the outbox. The
+     * list's « mark read » takes this path for the conversation already on screen (parity iOS
+     * `shouldDispatchListMarkAsRead`): the open conversation owns the precise mark-read that names
+     * the messages actually shown, and a body-less list mark-read would declare unseen messages
+     * read. No-op (returns false) when the conversation is unknown or already read.
+     */
+    suspend fun markReadLocally(id: String): Boolean {
+        val ticket = fence?.currentTicket()
+        return fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                val row = conversationDao.find(id) ?: return@withTransaction false
+                val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+                if (conversation.unreadCount == 0) return@withTransaction false
+                conversationDao.upsertAll(
+                    listOf(
+                        row.copy(
+                            payload = MeeshyApi.json.encodeToString(conversation.copy(unreadCount = 0)),
+                            unreadCount = 0,
+                        ),
+                    ),
+                )
+                true
+            }
+        }?.also { if (it) readLocallySignal.tryEmit(id) } ?: false
+    }
+
+    /** Une lecture locale appliquee : le coordinateur de non-lus la rejoue de facon optimiste. */
+    private val readLocallySignal = kotlinx.coroutines.flow.MutableSharedFlow<String>(
+        extraBufferCapacity = 32,
+        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST,
+    )
+
+    val readLocally: Flow<String> get() = readLocallySignal
+
+    /** L'instantane id -> non-lus du cache : il seme le registre, il ne l'ecrase jamais. */
+    fun unreadSnapshot(): Flow<Map<String, Int>> =
+        cachedConversations().map { rows -> rows.associate { it.id to it.unreadCount } }
+
+    /**
      * Optimistic mark-as-read (ARCHITECTURE.md §5): the cached badge drops to
      * zero instantly and a `READ_RECEIPT` mutation joins its outbox lane (the
      * coalescer merges repeats). No-op when the conversation is unknown or
      * already read. Returns whether anything was queued.
      */
-    suspend fun markReadOptimistic(id: String): Boolean {
-        val updated = database.withTransaction {
-            val row = conversationDao.find(id) ?: return@withTransaction false
-            val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
-            if (conversation.unreadCount == 0) return@withTransaction false
-            conversationDao.upsertAll(
-                listOf(
-                    row.copy(
-                        payload = MeeshyApi.json.encodeToString(conversation.copy(unreadCount = 0)),
-                    ),
-                ),
-            )
-            true
-        }
-        if (!updated) return false
+    suspend fun markReadOptimistic(id: String, declaration: ReadReceiptPayload? = null): Boolean {
+        if (!markReadLocally(id)) return false
+        queueReadReceipt(id, declaration)
+        return true
+    }
+
+    /** [declaration] : ce qui a été lu et dans quelle langue, résolu à la composition (jamais à l'envoi de la file). */
+    private suspend fun queueReadReceipt(id: String, declaration: ReadReceiptPayload? = null) {
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.READ_RECEIPT,
                 lane = OutboxLanes.READ_RECEIPT,
                 targetId = id,
-                payload = "{}",
+                payload = declaration?.let { MeeshyApi.json.encodeToString(ReadReceiptPayload.serializer(), it) } ?: "{}",
             ),
         )
+    }
+
+    /**
+     * The open conversation's read receipt (#13793): the decision to acknowledge was taken by the
+     * screen on what it captured at opening, so the receipt joins the outbox WHATEVER the cached
+     * badge says now. A list sync can zero the badge of the open conversation between the capture
+     * and this call ([markReadOptimistic] would then queue nothing and the server would keep
+     * counting unread). The coalescer keeps a single pending `READ_RECEIPT` per conversation, and
+     * the route is idempotent, so a repeated acknowledgement costs nothing.
+     */
+    suspend fun acknowledgeRead(id: String, declaration: ReadReceiptPayload? = null): Boolean {
+        markReadLocally(id)
+        queueReadReceipt(id, declaration)
         return true
     }
 
@@ -269,6 +746,7 @@ class ConversationRepository @Inject constructor(
                 listOf(
                     row.copy(
                         payload = MeeshyApi.json.encodeToString(conversation.copy(unreadCount = 1)),
+                        unreadCount = 1,
                     ),
                 ),
             )
@@ -311,10 +789,12 @@ class ConversationRepository @Inject constructor(
      * Optimistic drag-to-category (re)assignment (parity iOS
      * `ConversationOptionsViewModel.setCategory`): the cached `categoryId` mutates
      * instantly — the section splitter re-buckets the row into [categoryId]'s
-     * section — and the full-snapshot mutation joins the shared prefs lane. A no-op
-     * (returns false) when the conversation is already in [categoryId].
+     * section — and the full-snapshot mutation joins the shared prefs lane. A `null`
+     * [categoryId] uncategorizes the row (iOS `category.remove`, #13784): its snapshot
+     * carries [ConversationPrefsPayload.clearCategory]. A no-op (returns false) when
+     * the conversation is already in [categoryId].
      */
-    suspend fun setCategoryOptimistic(id: String, categoryId: String): Boolean =
+    suspend fun setCategoryOptimistic(id: String, categoryId: String?): Boolean =
         updatePreferencesOptimistic(id) { it.copy(categoryId = categoryId) }
 
     /**
@@ -355,6 +835,57 @@ class ConversationRepository @Inject constructor(
         return updatePreferencesOptimistic(id) { it.copy(tags = normalized) }
     }
 
+    /** Tag edit relative to the CACHED set (add / remove one tag): [edit] runs against the stored tags, inside the write. */
+    suspend fun editTagsOptimistic(id: String, edit: (List<String>) -> List<String>): Boolean =
+        updatePreferencesOptimistic(id) { it.copy(tags = edit(it.tags).map { tag -> tag.trim() }.filter { tag -> tag.isNotEmpty() }.distinct()) }
+
+    /**
+     * Optimistic personal background + accent (parité iOS `ConversationAppearanceViewModel.commit`) : le fond change aussitôt
+     * (la ligne Room émet, le fil ouvert se repeint), le snapshot part par la voie des préférences, sans doublon si rien ne change.
+     */
+    suspend fun setAppearanceOptimistic(id: String, appearance: ConversationAppearance): Boolean {
+        val wire = appearance.toWire()
+        return updatePreferencesOptimistic(id) { it.copy(appearance = wire) }
+    }
+
+    /**
+     * Apply a conversation-scope `user:preferences-updated` broadcast to the cached
+     * row — the read side of the per-USER preferences the user changed on ANOTHER
+     * device (issue #4127).
+     *
+     * The arbitration lives in the pure [applyRemote]; this method is only the I/O
+     * around it, so every drop rule is JVM-covered without a database. `false` means
+     * nothing was written: the conversation is not cached (the next list refresh
+     * catches up — the same silent drop iOS makes), or the event lost the version
+     * arbitration.
+     *
+     * The snapshot lands on [ApiConversation.preferences] rather than on
+     * `userPreferences[0]` for the same reason the optimistic path writes there: it
+     * is the override `resolvedPreferences` reads FIRST, so the list re-buckets on
+     * the Room emission without waiting for a refetch, and the next REST sync — the
+     * server's own truth — replaces the whole row payload and clears the override.
+     */
+    suspend fun applyRemoteConversationPreferences(
+        event: UserPreferencesConversationUpdatedSocketData,
+    ): Boolean {
+        val ticket = fence?.currentTicket()
+        return fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                val row = conversationDao.find(event.conversationId) ?: return@withTransaction false
+                val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+                val next = conversation.resolvedPreferences.applyRemote(event) ?: return@withTransaction false
+                conversationDao.upsertAll(
+                    listOf(
+                        row.copy(
+                            payload = MeeshyApi.json.encodeToString(conversation.copy(preferences = next)),
+                        ),
+                    ),
+                )
+                true
+            }
+        } ?: false
+    }
+
     /**
      * Optimistic per-conversation preference update (ARCHITECTURE.md §5): the
      * cached preferences mutate instantly (the filter re-derives the visible
@@ -367,12 +898,18 @@ class ConversationRepository @Inject constructor(
         id: String,
         transform: (ApiConversationPreferences) -> ApiConversationPreferences,
     ): Boolean {
+        var appearanceChanged = false
+        var categoryCleared = false
+        var before: ConversationPrefsPrevious? = null
         val snapshot = database.withTransaction {
             val row = conversationDao.find(id) ?: return@withTransaction null
             val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
             val current = conversation.resolvedPreferences ?: ApiConversationPreferences()
             val next = transform(current)
             if (next == current) return@withTransaction null
+            appearanceChanged = next.appearance != current.appearance
+            categoryCleared = current.categoryId != null && next.categoryId == null
+            before = current.toPrevious()
             conversationDao.upsertAll(
                 listOf(
                     row.copy(
@@ -397,6 +934,9 @@ class ConversationRepository @Inject constructor(
                         customName = snapshot.customName,
                         reaction = snapshot.reaction,
                         tags = snapshot.tags,
+                        appearance = if (appearanceChanged) snapshot.appearance else null,
+                        clearCategory = categoryCleared,
+                        previous = before,
                     ),
                 ),
             ),
@@ -404,12 +944,59 @@ class ConversationRepository @Inject constructor(
         return true
     }
 
+    /**
+     * Retour arrière d'un instantané de préférences que la file a abandonné : remet [previous] dans la ligne SANS rien
+     * remettre en file. Rien n'est défait quand une diffusion plus récente a déjà avancé la version des préférences
+     * (elle l'emporte sur l'optimiste obsolète). `true` = la ligne a été restaurée.
+     */
+    suspend fun restorePreferences(id: String, previous: ConversationPrefsPrevious): Boolean {
+        val ticket = fence?.currentTicket()
+        return fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                val row = conversationDao.find(id) ?: return@withTransaction false
+                val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+                val current = conversation.resolvedPreferences ?: ApiConversationPreferences()
+                if (current.version != previous.baseVersion) return@withTransaction false
+                val restored = current.restoring(previous)
+                if (restored == current) return@withTransaction false
+                conversationDao.upsertAll(
+                    listOf(row.copy(payload = MeeshyApi.json.encodeToString(conversation.copy(preferences = restored)))),
+                )
+                true
+            }
+        } ?: false
+    }
+
     companion object {
+        /** Le préfixe d'une conversation créée sur cet appareil et pas encore connue du serveur. */
+        private const val PENDING_PREFIX: String = "pending_"
+
+        /** [ApiError.code] of a call that never reached the server (airplane mode, DNS, timeout). */
+        private const val OFFLINE_ERROR_CODE: String = "NETWORK"
+
+        /** Escapes `\\`, `%` and `_` so [text] matches literally in a `LIKE … ESCAPE '\\'` clause. */
+        private fun escapeLikeLiteral(text: String): String =
+            text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
         /**
          * Members fetched per roster page. The gateway defaults to 20 and caps at
          * 100; 30 fills a phone screen with headroom so the first "load more" only
          * fires on a genuinely long roster.
          */
         const val PARTICIPANTS_PAGE_SIZE: Int = 30
+
+        /**
+         * Default candidate window for [recentCachedConversations]. Every current
+         * caller renders at most 8 rows (`FavoriteContactsWidget`'s `.prefix(8)`)
+         * after re-sorting pinned-first-then-recency and/or filtering — a re-sort
+         * this bounded query cannot itself express, since `isPinned` lives in the
+         * JSON payload, not a column. 100 is generous headroom past any realistic
+         * pinned set while remaining orders of magnitude below decoding the whole
+         * cached table (#5190).
+         */
+        const val RECENT_WINDOW: Int = 100
+
+        /** Conversations en commun demandées à la passerelle pour l'onglet d'une fiche (iOS `limit: 50`). */
+        const val SHARED_CONVERSATIONS_LIMIT: Int = 50
     }
 }

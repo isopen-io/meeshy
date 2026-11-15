@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.CategoryOption
+import me.meeshy.sdk.model.ConversationReorderItem
 import org.junit.Test
 
 /**
@@ -239,5 +240,42 @@ class ConversationSectionsTest {
 
         assertThat(ids(sections.first { it.categoryId == "work" }))
             .containsExactly("w1", "w2", "w3").inOrder()
+    }
+
+    @Test
+    fun `dragging inside a category section yields the renumbered orderInCategory`() {
+        val sections = ConversationSections.of(
+            listOf(conv("w1", categoryId = "work"), conv("w2", categoryId = "work"), conv("w3", categoryId = "work")),
+            listOf(cat("work")),
+        )
+
+        val updates = ConversationSections.reorderUpdates(sections.single(), from = 2, to = 0)
+
+        assertThat(updates).containsExactly(
+            ConversationReorderItem("w3", 0),
+            ConversationReorderItem("w1", 1),
+            ConversationReorderItem("w2", 2),
+        ).inOrder()
+    }
+
+    @Test
+    fun `the pinned and catch-all sections never reorder`() {
+        val sections = ConversationSections.of(listOf(conv("p1", pinned = true), conv("p2", pinned = true), conv("a"), conv("b")))
+
+        sections.forEach { section ->
+            assertThat(ConversationSections.reorderUpdates(section, from = 0, to = 1)).isEmpty()
+        }
+    }
+
+    @Test
+    fun `a category section carries its own colour and icon`() {
+        val sections = ConversationSections.of(
+            listOf(conv("a", categoryId = "work")),
+            listOf(CategoryOption(id = "work", name = "Work", color = "#3B82F6", icon = "briefcase")),
+        )
+
+        assertThat(sections.single().color).isEqualTo("#3B82F6")
+        assertThat(sections.single().icon).isEqualTo("briefcase")
+        assertThat(sections.single().sectionId).isEqualTo("work")
     }
 }

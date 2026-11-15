@@ -1,0 +1,5 @@
+## 2026-08-01 — Application des lots de la revue local-first
+- **`xcodebuild | grep && commit` avale l'exit 65** : le pipeline retourne le code de grep. Un commit est parti avec un test rouge (b426b11b8, rattrapé par 4690f85a9). Règle : toujours `set -o pipefail` en tête des chaînes de vérification, et vérifier `exit=$?` explicitement.
+- **Fixture JSON minimale + decode `try?` = faux GREEN impossible, mais faux RED possible** : le décodage synthétisé de `MeeshyMessageAttachment` exige fileName/filePath/uploadedBy/createdAt — un JSON partiel échoue EN SILENCE dans les guards `try?` d'hydratation. Construire les fixtures par le VRAI type (init public + JSONEncoder), jamais à la main.
+- **Les défauts d'arguments publics ne peuvent référencer un symbole privé** : `seedSource: ... = Self.privateClosure` ne compile pas ; utiliser un défaut `nil` + résolution `?? Self.privé` dans le corps.
+- **`logout()`/hôte SPM** : la cascade complète avec session atteint UNUserNotificationCenter (bundleProxy nil). Les purges testables se posent AVANT le guard `activeUserId` (patron T15b), le test emprunte l'early-return.

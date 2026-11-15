@@ -1,5 +1,4 @@
 import XCTest
-import CryptoKit
 @testable import MeeshyUI
 @testable import MeeshySDK
 
@@ -52,7 +51,7 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
     // MARK: - Guard 2b — l'inspecteur gagne « Suivre la slide » (libellé + nil)
 
     func test_clipInspector_carriesTheFollowSlideLabel() throws {
-        let source = try Self.strippedSource(of: Self.clipInspectorURL)
+        let source = try Self.clipInspectorFamilySource()
         XCTAssertTrue(source.contains("story.timeline.inspector.followSlide"),
                      "L'action « Suivre la slide » doit exister comme libellé/clé dans ClipInspector")
         XCTAssertTrue(source.contains("onFollowSlide"),
@@ -63,7 +62,7 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
     /// du retour fantôme U9 à `arrow.uturn.backward.circle` — `ClipInspector`
     /// dessinait `arrow.uturn.backward` (sans `.circle`), une glyphe DIFFÉRENTE.
     func test_clipInspector_followSlideIcon_matchesTheSymbolTable() throws {
-        let source = try Self.strippedSource(of: Self.clipInspectorURL)
+        let source = try Self.clipInspectorFamilySource()
         XCTAssertTrue(source.contains(#"systemImage: "arrow.uturn.backward.circle""#),
                      "L'icône de « Suivre la slide » doit être arrow.uturn.backward.circle "
                      + "(table des symboles, views.html:1687) — pas arrow.uturn.backward seul")
@@ -180,7 +179,7 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
     // réinvention.
 
     func test_clipInspector_carriesTheMuteAction() throws {
-        let source = try Self.strippedSource(of: Self.clipInspectorURL)
+        let source = try Self.clipInspectorFamilySource()
         XCTAssertTrue(source.contains("onToggleMute"),
                      "Le mute par clip doit exister comme action sur ClipInspector")
         XCTAssertTrue(source.contains("story.timeline.inspector.mute"),
@@ -350,14 +349,18 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
     // `Story/Timeline/**` mais est le catalogue UNIQUE du module — toute
     // chaîne neuve du plan doit y entrer pour tenir la règle des 7 langues.
     // Le contourner (littéraux non localisés) coûterait plus cher que
-    // l'écart. Second écart : la matrice `docs/superpowers/specs/
-    // 2026-08-19-meeshy-composer-views.html`, dont ce lot ne touche QUE sa
+    // l'écart. Second écart : la matrice `docs/product/
+    // planche-meeshy-composer.html` (ex-`docs/superpowers/specs/
+    // 2026-08-19-meeshy-composer-views.html`, renommée quand la planche a
+    // pris son nom de produit — commit f266d7ad, 2026-08-26 ; le manifeste
+    // suit, sans quoi `test_everyFileOfTheD3Diff_exists` rougit sur toute
+    // branche qui déclenche sdk-tests), dont ce lot ne touche QUE sa
     // propre ligne (règle P0 du lot D).
 
     /// Les DEUX seuls chemins hors périmètre que D3 s'autorise.
     static let declaredOutOfScopePaths: Set<String> = [
         "packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings",
-        "docs/superpowers/specs/2026-08-19-meeshy-composer-views.html"
+        "docs/product/planche-meeshy-composer.html"
     ]
 
     static let ownedPathPrefixes: [String] = [
@@ -370,7 +373,7 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
     /// l'aimant : les bancs de glissement qui passent désormais la géométrie
     /// rendue en paramètre en font partie).
     static let d3DiffPaths: [String] = [
-        "docs/superpowers/specs/2026-08-19-meeshy-composer-views.html",
+        "docs/product/planche-meeshy-composer.html",
         "packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Logic/Plan2DLayout.swift",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel+Plan4Helpers.swift",
@@ -449,14 +452,6 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
         let strays = Self.d3DiffPaths.filter { !Self.isWithinOwnership($0) }
         XCTAssertEqual(strays, [],
                       "Le lot D ne possède que Timeline/** — tout autre fichier doit être un écart NOMMÉ (catalogue, matrice)")
-    }
-
-    /// Contrôle positif : la garde doit réellement rejeter un chemin hors
-    /// périmètre non déclaré.
-    func test_guardRejectsAFileOutsideThePerimeter() {
-        XCTAssertFalse(Self.isWithinOwnership("packages/MeeshySDK/Sources/MeeshyUI/Story/Controls/ComposerControlsLayer.swift"))
-        XCTAssertFalse(Self.isWithinOwnership("apps/ios/Meeshy.xcodeproj/project.pbxproj"))
-        XCTAssertTrue(Self.isWithinOwnership("packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Plan2D/Plan2DView.swift"))
     }
 
     /// Balayage de l'ARBRE, pas du manifeste : le plan ne doit avoir fuité
@@ -542,42 +537,23 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
 
     // MARK: - Guard 3c — les deux voisins immédiats hors périmètre
 
-    func test_timelineExportFlow_contentIsUnchanged() throws {
-        let data = try Data(contentsOf: Self.timelineExportFlowURL)
-        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-        XCTAssertEqual(
-            digest,
-            "de4d954b0876b86e2e0569ceec31029967e4fb8e7f4f68ec682ad5af9363f54c",
-            "TimelineExportFlow.swift PRÉSENTE le conteneur racine mais n'appartient pas à ce lot — aucune ligne ne doit bouger"
-        )
-    }
-
-    /// **Le hash a été remplacé par l'invariant qu'il servait — 2026-08-24.**
-    ///
-    /// Cette garde figeait `ComposerControlsLayer.swift` par empreinte SHA-256,
-    /// au titre que le fichier « n'appartient pas à ce lot ». C'était vrai, et
-    /// c'était utile TANT QUE le lot D était en vol : l'empreinte prouvait que
-    /// le Plan 2D ne débordait pas sur un voisin.
-    ///
-    /// Le lot D est mergé (`24d1bf752`). Ce qui reste du hash n'est plus un
-    /// invariant mais un instantané : il interdit à QUICONQUE, désormais et pour
-    /// toujours, de toucher un fichier de contrôles de composer — alors que ces
-    /// contrôles appartiennent au lot C, qui les fait légitimement évoluer (C7 y
-    /// relaie le texte alternatif et l'extraction de son jusqu'au point de
-    /// publication).
-    ///
-    /// L'invariant RÉEL — « le Plan 2D ne fuit pas hors de `Story/Timeline/` » —
-    /// n'est pas perdu : il est porté par
-    /// `test_noPlan2DReferenceLeaksOutsideTheTimeline` (l. 470), dont le balayage
-    /// couvre `Story/Controls/`, et dont le contrôle positif prouve qu'il sait
-    /// rougir. Cette garde-ci le REDIT sur le seul fichier nommé, ce qui la rend
-    /// falsifiable sans figer une ligne : elle rougit si `Plan2D` réapparaît ici,
-    /// jamais parce qu'un autre lot a fait son travail.
-    func test_composerControlsLayer_carriesNoPlan2DReference() throws {
-        let source = try String(contentsOf: Self.composerControlsLayerURL, encoding: .utf8)
+    /// **Hash remplacé par l'invariant qu'il servait — 2026-08-26.** Même
+    /// raison que pour `ComposerControlsLayer` ci-dessous (2026-08-24) : le
+    /// figement par empreinte SHA-256 n'était un invariant que TANT QUE le lot
+    /// Plan 2D était en vol. Le lot D mergé, l'empreinte n'interdit plus une
+    /// FUITE du plan mais TOUTE évolution du fichier par un autre chantier —
+    /// ici le balayage `nonisolated deinit {}` de la famille deinit iOS 26.1
+    /// (SE-0466), qui touche légitimement `ProgressSinkBox` et
+    /// `TimelineExportController`. L'invariant RÉEL — « le Plan 2D ne fuit pas
+    /// hors de `Story/Timeline/` » — est porté par
+    /// `test_noPlan2DReferenceLeaksOutsideTheTimeline`, et redit ici sur le
+    /// fichier nommé : falsifiable (il rougit si `Plan2D` réapparaît), sans
+    /// figer une ligne.
+    func test_timelineExportFlow_carriesNoPlan2DReference() throws {
+        let source = try String(contentsOf: Self.timelineExportFlowURL, encoding: .utf8)
         XCTAssertFalse(
             source.contains("Plan2D"),
-            "Le Plan 2D ne déborde pas sur la couche de contrôles du composer — voisin hors périmètre du lot D"
+            "Le Plan 2D ne déborde pas sur TimelineExportFlow — voisin hors périmètre du lot D"
         )
     }
 
@@ -615,6 +591,19 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
         sourcesRoot.appendingPathComponent("Story/Timeline/Views/Inspector/ClipInspector.swift")
     }
 
+    /// ClipInspector.swift et les sous-vues extraites qui vivent à côté
+    /// (`ClipInspector+*.swift`, `ClipInspector*.swift`, `ClipVolumeAutomation`, `ClipFadeChipRow`).
+    private static func clipInspectorFamilySource() throws -> String {
+        let dir = clipInspectorURL.deletingLastPathComponent()
+        let names = ["ClipInspector.swift", "ClipInspector+ClipSnapshot.swift",
+                     "ClipInspectorActionsRow.swift", "ClipInspectorNumericField.swift",
+                     "ClipInspectorTransformSection.swift", "ClipVolumeAutomation.swift",
+                     "ClipFadeChipRow.swift"]
+        return try names
+            .map { try strippedSource(of: dir.appendingPathComponent($0)) }
+            .joined(separator: "\n")
+    }
+
     private static var timelineViewModelPlan4HelpersURL: URL {
         sourcesRoot.appendingPathComponent("Story/Timeline/ViewModel/TimelineViewModel+Plan4Helpers.swift")
     }
@@ -639,10 +628,6 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
 
     private static var timelineExportFlowURL: URL {
         sourcesRoot.appendingPathComponent("Story/TimelineExportFlow.swift")
-    }
-
-    private static var composerControlsLayerURL: URL {
-        sourcesRoot.appendingPathComponent("Story/Controls/ComposerControlsLayer.swift")
     }
 
     private static func strippedSource(of url: URL) throws -> String {

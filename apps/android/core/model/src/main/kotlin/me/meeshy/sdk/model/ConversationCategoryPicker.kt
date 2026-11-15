@@ -12,12 +12,19 @@ import kotlinx.serialization.Serializable
  * so caching it directly avoids re-mapping the render-only DTO on every cold read.
  *
  * @property order the display rank; `null` sorts as `0` (iOS `order ?? 0`).
+ * @property color the category's own colour as a hex string (`null` = none chosen yet).
+ * @property icon the category's own icon name (`null` = none chosen yet).
+ * @property isExpanded the fold state the gateway holds (`null` = never stated); an old
+ *   snapshot written before these fields existed decodes with all three `null`.
  */
 @Serializable
 data class CategoryOption(
     val id: String,
     val name: String,
     val order: Int? = null,
+    val color: String? = null,
+    val icon: String? = null,
+    val isExpanded: Boolean? = null,
 )
 
 /**

@@ -40,7 +40,18 @@ final class SheetEnvironmentObjectGuardTests: XCTestCase {
     /// hôte qui ne réinjecte pas le chrome social.
     private static let sheetOnlyViews: [(file: String, types: [String])] = [
         ("Meeshy/Features/Main/Views/FeedCommentsSheet.swift",
-         ["CommentsSheetView", "CommentRowView", "ThreadedCommentSection"]),
+         ["CommentsSheetView"]),
+        // #8582 — `ThreadedCommentSection` a quitté la feuille à son tour (hors
+        // budget) : la garde suit le TYPE, comme pour `CommentRowView` ci-dessous.
+        ("Meeshy/Features/Main/Views/ThreadedCommentSection.swift",
+         ["ThreadedCommentSection"]),
+        // #6578 — `CommentRowView` a QUITTÉ `FeedCommentsSheet.swift` pour son
+        // propre fichier (la feuille frôlait 2 519 lignes). La garde suit le
+        // TYPE, pas le fichier où il est né : le risque qu'elle mesure — une vue
+        // toujours présentée en feuille qui lirait un `@EnvironmentObject`
+        // absent — voyage avec la vue, jamais avec son hôte d'origine.
+        ("Meeshy/Features/Main/Views/CommentRowView.swift",
+         ["CommentRowView"]),
         ("Meeshy/Features/Main/Components/ConversationInfoSheet.swift",
          ["ConversationInfoSheet"]),
         ("Meeshy/Features/Main/Views/GlobalSearchView.swift",
@@ -86,9 +97,20 @@ final class SheetEnvironmentObjectGuardTests: XCTestCase {
     }
 
     func test_bothRoots_poseSocialChromeResolvers() throws {
-        for root in ["Meeshy/Features/Main/Views/RootView.swift",
-                     "Meeshy/Features/Main/Views/iPadRootView.swift"] {
-            let stripped = AppSourceGuard.stripComments(try source(root))
+        // Depuis #5837 chaque racine pose son environnement par une couche
+        // nominale (`RootEnvironmentLayer` / `iPadEnvironmentLayer`) : c'est
+        // dans la couche que `.meeshySocialChrome(...)` est appelé, et la
+        // racine doit monter cette couche.
+        for (root, layer) in [("Meeshy/Features/Main/Views/RootView.swift",
+                               "Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift"),
+                              ("Meeshy/Features/Main/Views/iPadRootView.swift",
+                               "Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift")] {
+            let rootCode = AppSourceGuard.stripComments(try source(root))
+            XCTAssertTrue(
+                rootCode.contains("EnvironmentLayer("),
+                "\(root) doit monter sa couche d'environnement — c'est elle qui pose le chrome social."
+            )
+            let stripped = AppSourceGuard.stripComments(try source(layer))
             XCTAssertTrue(
                 stripped.contains(".meeshySocialChrome("),
                 """

@@ -1,0 +1,51 @@
+package me.meeshy.sdk.net.api
+
+import kotlinx.serialization.json.JsonElement
+import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.sticker.StickerPackList
+import me.meeshy.sdk.model.sticker.StickerPackSummary
+import me.meeshy.sdk.net.routes.ApiRoutesStickerPacks
+import retrofit2.http.DELETE
+import retrofit2.http.GET
+import retrofit2.http.PUT
+import retrofit2.http.Path
+
+/**
+ * Les packs de stickers installés et leur (dés)installation — miroir de `StickerPacksEndpoint` d'iOS
+ * (`/sticker-packs/installed`, `PUT|DELETE /sticker-packs/{slug}/install`).
+ */
+interface StickerPackApi {
+    /** La Boutique : les packs intégrés puis les packs publiés, avec leur état d'installation. */
+    @GET(ApiRoutesStickerPacks.ROOT)
+    suspend fun catalogue(): ApiResponse<StickerPackList>
+
+    @GET(ApiRoutesStickerPacks.INSTALLED)
+    suspend fun installed(): ApiResponse<StickerPackList>
+
+    @PUT(ApiRoutesStickerPacks.BY_SLUG_INSTALL)
+    suspend fun install(@Path("slug") slug: String): ApiResponse<StickerPackSummary>
+
+    @DELETE(ApiRoutesStickerPacks.BY_SLUG_INSTALL)
+    suspend fun uninstall(@Path("slug") slug: String): ApiResponse<StickerPackSummary>
+}
+
+/**
+ * `/sticker-packs`, contrat INCHANGÉ à l'octet, lu sans modèle pour le moteur générique des packs : les stickers
+ * gardent leurs adresses, les autres domaines passent par `/packs/<domaine>` ([PackRawApi]).
+ */
+interface StickerPackRawApi {
+    @GET(ApiRoutesStickerPacks.ROOT)
+    suspend fun catalogue(): ApiResponse<JsonElement>
+
+    @GET(ApiRoutesStickerPacks.INSTALLED)
+    suspend fun installed(): ApiResponse<JsonElement>
+
+    @GET(ApiRoutesStickerPacks.BY_SLUG)
+    suspend fun detail(@Path("slug") slug: String): ApiResponse<JsonElement>
+
+    @PUT(ApiRoutesStickerPacks.BY_SLUG_INSTALL)
+    suspend fun install(@Path("slug") slug: String): ApiResponse<JsonElement>
+
+    @DELETE(ApiRoutesStickerPacks.BY_SLUG_INSTALL)
+    suspend fun uninstall(@Path("slug") slug: String): ApiResponse<JsonElement>
+}

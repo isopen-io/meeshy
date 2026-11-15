@@ -15,7 +15,9 @@ from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
 
-from utils.text_segmentation import TextSegmenter
+from services.task_privacy import shown
+from utils.text_segmentation import TextSegmenter, protect_entities
+from .translation_cache import segments_without_cache
 
 logger = logging.getLogger(__name__)
 
@@ -240,13 +242,13 @@ class TranslationService:
             }
 
             logger.info(
-                f"✅ [ML-{source_channel.upper()}] '{text[:20]}...' → "
-                f"'{translated_text[:20]}...' ({processing_time:.3f}s)"
+                f"✅ [ML-{source_channel.upper()}] {len(text)}→{len(translated_text)} chars "
+                f"({processing_time:.3f}s)"
             )
             return result
 
         except Exception as e:
-            logger.error(f"❌ Erreur traduction ML [{source_channel}]: {e}")
+            logger.error(f"❌ Erreur traduction ML [{source_channel}]: {shown(str(e))}")
             return await self._fallback_translate(
                 text, source_language, target_language, model_type, source_channel
             )
@@ -257,13 +259,18 @@ class TranslationService:
         source_language: str = "auto",
         target_language: str = "en",
         model_type: str = "basic",
-        source_channel: str = "unknown"
+        source_channel: str = "unknown",
+        use_cache: bool = True,
+        message_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Traduction avec préservation de structure (paragraphes, emojis)
 
         AMÉLIORATION: Sélection automatique du modèle selon longueur
         OPTIMISATION: Batch ML + cache parallèle
+
+        `use_cache=False` (#12822, texte chiffré au repos) : aucun segment n'est
+        lu ni écrit dans le cache Redis.
         """
         start_time = time.time()
 
@@ -289,7 +296,7 @@ class TranslationService:
                 logger.info(f"[STRUCTURED] Model switched: {original_model_type} → {model_type}")
 
             # Texte simple: utiliser traduction standard
-            if len(text) <= 100 and '\n\n' not in text and not self.text_segmenter.extract_emojis(text)[1]:
+            if len(text) <= 100 and '\n\n' not in text and not protect_entities(text)[1]:
                 return await self.translate(text, source_language, target_language, model_type, source_channel)
 
             logger.info(f"[STRUCTURED] Starting structured translation: {len(text)} chars")
@@ -312,8 +319,10 @@ class TranslationService:
 
             # OPTIMISATION: Vérifier le cache en parallèle
             cache_hits = 0
-            translated_segments, segments_to_translate = await self.translation_cache.check_cache_batch(
-                segments, detected_lang, target_language, model_type
+            translated_segments, segments_to_translate = (
+                await self.translation_cache.check_cache_batch(segments, detected_lang, target_language, model_type)
+                if use_cache
+                else segments_without_cache(segments)
             )
 
             cache_hits = sum(1 for s in translated_segments if s is not None)
@@ -344,13 +353,13 @@ class TranslationService:
                         cache_items.append((original_text, translated_text))
 
                     # Cacher les résultats en arrière-plan
-                    if cache_items:
+                    if cache_items and use_cache:
                         await self.translation_cache.cache_batch_results(
-                            cache_items, detected_lang, target_language, model_type
+                            cache_items, detected_lang, target_language, model_type, message_id=message_id
                         )
 
                 except Exception as e:
-                    logger.error(f"[BATCH-STRUCT] Erreur batch ML: {e}")
+                    logger.error(f"[BATCH-STRUCT] Erreur batch ML: {shown(str(e))}")
                     # Fallback individuel
                     for idx, text_to_trans in segments_to_translate:
                         try:
@@ -391,7 +400,7 @@ class TranslationService:
             return result
 
         except Exception as e:
-            logger.error(f"❌ Erreur traduction structurée [{source_channel}]: {e}")
+            logger.error(f"❌ Erreur traduction structurée [{source_channel}]: {shown(str(e))}")
             return await self.translate(text, source_language, target_language, model_type, source_channel)
 
     async def _fallback_translate(
@@ -402,7 +411,12 @@ class TranslationService:
         model_type: str,
         source_channel: str
     ) -> Dict[str, Any]:
-        """Traduction de fallback si ML non disponible"""
+        """Traduction de repli si le ML n'est pas disponible (modèle non chargé,
+        service non initialisé). Ni un mot-à-mot ni un texte-témoin ne sont des
+        traductions : `error` marque le résultat comme un ÉCHEC EXPLICITE, pour
+        que l'appelant (a) ne le mette JAMAIS en cache comme une vraie traduction
+        et (b) serve l'original plutôt que ce texte de repli au client (#3663).
+        """
         logger.warning(f"Utilisation du fallback pour {model_type} [{source_channel}]")
 
         # Dictionnaire simple
@@ -433,7 +447,8 @@ class TranslationService:
             'model_used': f"{model_type}_fallback",
             'from_cache': False,
             'processing_time': 0.001,
-            'source_channel': source_channel
+            'source_channel': source_channel,
+            'error': 'ML translation unavailable — served fallback'
         }
 
     def _update_stats(self, processing_time: float, source_channel: str):

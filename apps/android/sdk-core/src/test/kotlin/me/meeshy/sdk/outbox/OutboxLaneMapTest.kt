@@ -22,6 +22,13 @@ class OutboxLaneMapTest {
     }
 
     @Test
+    fun `a content capture declaration has its own drained capture lane`() {
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.REPORT_CONTENT_CAPTURE))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.CAPTURE))
+        assertThat(OutboxLaneMap.sharedDrainLanes).contains(OutboxLanes.CAPTURE)
+    }
+
+    @Test
     fun `add and remove reaction share the reaction lane`() {
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.ADD_REACTION))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.REACTION))
@@ -46,6 +53,22 @@ class OutboxLaneMapTest {
     }
 
     @Test
+    fun `like and unlike share the social lane`() {
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.LIKE_POST))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SOCIAL))
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UNLIKE_POST))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SOCIAL))
+    }
+
+    @Test
+    fun `bookmark and unbookmark share the social lane`() {
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.BOOKMARK_POST))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SOCIAL))
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UNBOOKMARK_POST))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SOCIAL))
+    }
+
+    @Test
     fun `read receipt and mark-unread share the read-receipt lane`() {
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.READ_RECEIPT))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.READ_RECEIPT))
@@ -64,11 +87,21 @@ class OutboxLaneMapTest {
         // Privacy sync shares the settings lane but is a distinct kind (independent coalescing).
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPDATE_PRIVACY_SETTINGS))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS))
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPDATE_AUDIO_SETTINGS))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS))
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPDATE_APPLICATION_SETTINGS))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS))
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.PUBLISH_STORY))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.STORY))
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPLOAD_MEDIA))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.MEDIA))
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.SEND_FRIEND_REQUEST))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.FRIEND))
+    }
+
+    @Test
+    fun `answering a friend request drains on the friend lane`() {
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.RESPOND_FRIEND_REQUEST))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.FRIEND))
     }
 
@@ -116,6 +149,41 @@ class OutboxLaneMapTest {
         OutboxLaneMap.sharedDrainLanes.forEach { lane ->
             assertThat(lane).doesNotContain("message:")
             assertThat(lane).isNotEmpty()
+        }
+    }
+
+    @Test
+    fun `a post publication drains on its own lane, never behind a story or a like`() {
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.CREATE_POST))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.POST))
+        assertThat(OutboxLaneMap.sharedDrainLanes).contains(OutboxLanes.POST)
+        assertThat(OutboxLocalTargets.isRouteAddressed(OutboxKind.CREATE_POST)).isFalse()
+    }
+}
+
+class OutboxConversationKindsLaneTest {
+
+    @Test
+    fun `create and update conversation share the conversation lane`() {
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.CREATE_CONVERSATION))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.CONVERSATION))
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPDATE_CONVERSATION))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.CONVERSATION))
+    }
+
+    @Test
+    fun `a generic settings action drains on the settings lane`() {
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.SETTINGS_ACTION))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS))
+    }
+
+    @Test
+    fun `every kind has a lane and every shared lane is drained`() {
+        OutboxKind.entries.forEach { kind ->
+            val assignment = OutboxLaneMap.assignmentFor(kind)
+            if (assignment is OutboxLaneAssignment.Shared) {
+                assertThat(OutboxLaneMap.sharedDrainLanes).contains(assignment.lane)
+            }
         }
     }
 }

@@ -192,4 +192,51 @@ final class ShareLinkEntryResolverTests: XCTestCase {
 
         XCTAssertEqual(resolution?.intent, .chooseIdentity(conversationId: "conv-1"))
     }
+
+    // MARK: - La page d'invitation (#7795)
+
+    /// Un compte présent voit la MÊME page que sans compte, avec le lien déjà
+    /// résolu : aucun second appel, aucun indicateur de chargement.
+    func test_landing_nonMember_carriesTheResolvedLinkAndTheDormantSession() async throws {
+        let provider = MockShareLinkInfoProvider()
+        provider.result = .success(makeLinkInfo(title: "Nova Club"))
+
+        let resolution = await resolve(provider: provider, storedGuestSession: true)
+        let landing = try XCTUnwrap(resolution?.landing(identifier: "mshy_abc"))
+
+        XCTAssertEqual(landing.identifier, "mshy_abc")
+        XCTAssertEqual(landing.conversationId, "conv-1")
+        XCTAssertEqual(landing.info.conversation.title, "Nova Club")
+        XCTAssertTrue(landing.resumesGuestSession)
+        XCTAssertEqual(provider.getLinkInfoCallCount, 1)
+    }
+
+    /// Un lien qui exige un compte engageait le compte EN SILENCE : la page
+    /// s'affiche désormais aussi, avec le seul choix du compte.
+    func test_landing_linkRequiringAccount_isShownRatherThanJoiningSilently() async throws {
+        let provider = MockShareLinkInfoProvider()
+        provider.result = .success(makeLinkInfo(requireAccount: true))
+
+        let resolution = await resolve(provider: provider)
+        let landing = try XCTUnwrap(resolution?.landing(identifier: "mshy_abc"))
+
+        XCTAssertEqual(landing.info.landingChoices(isSignedIn: true), [.joinWithAccount])
+    }
+
+    /// Le choix vit en `@State` dans `RootView` et `iPadRootView`, deux vues
+    /// dont la TAILLE est un budget (`ConversationViewValueSizeGuardTests`).
+    /// Le lien résolu qu'il transporte pèse plusieurs centaines d'octets : en
+    /// ligne, il a poussé `iPadRootView` à 8 449 o, au-delà des 8 192 permis.
+    func test_landing_choice_keepsTheResolvedLinkOffTheHostViewValue() {
+        XCTAssertLessThanOrEqual(MemoryLayout<ShareLinkIdentityChoice?>.size, 96)
+    }
+
+    func test_landing_alreadyMember_showsNothing() async {
+        let provider = MockShareLinkInfoProvider()
+        provider.result = .success(makeLinkInfo(conversationId: "conv-7"))
+
+        let resolution = await resolve(provider: provider, knownConversationIds: ["conv-7"])
+
+        XCTAssertNil(resolution?.landing(identifier: "mshy_abc"))
+    }
 }

@@ -1,0 +1,362 @@
+package me.meeshy.sdk.net
+
+import okhttp3.Interceptor
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.logging.HttpLoggingInterceptor
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.ConcurrentLinkedQueue
+
+/**
+ * Constate a l'usage (#4811) : `HttpLoggingInterceptor.Level.BODY` journalise le
+ * corps de `/me/account/deletion` en build debug, mot de passe compris — un
+ * niveau global n'a pas de granularite par route.
+ *
+ * **Ces temoins mesurent CE QUI EST JOURNALISE, jamais un champ `level`.** La
+ * premiere forme du garde posait `logger.level` juste avant que le logger ne
+ * s'execute, et se mesurait en relisant ce champ APRES l'appel. Ce temoin-la
+ * etait vert sur une garde qui avait une COURSE : `level` est un champ
+ * d'INSTANCE, partage par tous les appels, et OkHttp en depeche jusqu'a 64 en
+ * parallele — le fil voisin pouvait reposer BODY entre l'ecriture du garde et
+ * la lecture du logger. Un temoin mono-fil ne peut pas voir ca : il lit quand
+ * plus rien ne bouge.
+ *
+ * On mesure donc la SORTIE (les lignes ecrites), et on la mesure aussi SOUS
+ * CONCURRENCE.
+ */
+class SensitiveBodyLoggingGuardTest {
+
+    /** Le corps qu'aucune ligne de journal ne doit contenir. */
+    private val motDePasse = "hunter2-ne-doit-jamais-paraitre"
+
+    private fun chain(
+        path: String,
+        jeton: String? = null,
+        corps: okhttp3.RequestBody = """{"password":"$motDePasse"}""".toRequestBody("application/json".toMediaType()),
+    ): Interceptor.Chain {
+        val builder = Request.Builder()
+            .url("https://gate.meeshy.me/api/v1$path")
+            .post(corps)
+        if (jeton != null) builder.header("Authorization", "Bearer $jeton")
+        val request = builder.build()
+        val response = Response.Builder()
+            .request(request)
+            .protocol(Protocol.HTTP_1_1)
+            .code(200)
+            .message("OK")
+            .body("{}".toResponseBody(null))
+            .build()
+        return object : Interceptor.Chain {
+            override fun request(): Request = request
+            override fun proceed(request: Request): Response = response
+            override fun connection() = null
+            override fun call(): okhttp3.Call = throw UnsupportedOperationException()
+            override fun connectTimeoutMillis() = 0
+            override fun withConnectTimeout(timeout: Int, unit: TimeUnit) = this
+            override fun readTimeoutMillis() = 0
+            override fun withReadTimeout(timeout: Int, unit: TimeUnit) = this
+            override fun writeTimeoutMillis() = 0
+            override fun withWriteTimeout(timeout: Int, unit: TimeUnit) = this
+        }
+    }
+
+    /**
+     * Un garde dont les deux loggers ecrivent dans [lignes] — le MEME montage
+     * qu'`atLevel()` (niveaux fixes, en-tetes rediges sans condition de route,
+     * #4843), reconstruit ici avec un [HttpLoggingInterceptor.Logger] observable
+     * plutot qu'appele via `atLevel()`, qui n'expose pas d'injection de logger.
+     */
+    private fun gardeQuiEcritDans(lignes: MutableCollection<String>): SensitiveBodyLoggingGuard {
+        val recueil = HttpLoggingInterceptor.Logger { lignes.add(it) }
+        return SensitiveBodyLoggingGuard(
+            full = HttpLoggingInterceptor(recueil).apply {
+                level = HttpLoggingInterceptor.Level.BODY
+                redactHeader("Authorization")
+                redactHeader("Cookie")
+            },
+            sensitive = HttpLoggingInterceptor(recueil).apply {
+                level = HttpLoggingInterceptor.Level.BASIC
+                redactHeader("Authorization")
+                redactHeader("Cookie")
+            },
+            bulk = HttpLoggingInterceptor(recueil).apply {
+                level = HttpLoggingInterceptor.Level.HEADERS
+                redactHeader("Authorization")
+                redactHeader("Cookie")
+            },
+        )
+    }
+
+    @Test
+    fun `aucune route a mot de passe ne journalise son corps`() {
+        for (route in SensitiveBodyLoggingGuard.SENSITIVE_PATHS) {
+            val lignes = mutableListOf<String>()
+            gardeQuiEcritDans(lignes).intercept(chain(route))
+
+            assertTrue(
+                "$route a journalise des lignes — le garde ne s'est pas execute",
+                lignes.isNotEmpty(),
+            )
+            assertTrue(
+                "$route a journalise le mot de passe : ${lignes.joinToString(" | ")}",
+                lignes.none { it.contains(motDePasse) },
+            )
+        }
+    }
+
+    @Test
+    fun `une route ordinaire garde son corps au journal`() {
+        val lignes = mutableListOf<String>()
+        gardeQuiEcritDans(lignes).intercept(chain("/conversations"))
+
+        assertTrue(
+            "le niveau complet n'a pas ete applique hors des routes sensibles",
+            lignes.any { it.contains(motDePasse) },
+        )
+    }
+
+    /**
+     * (#4843) L'en-tete `Authorization` porte le jeton de la session — sur
+     * TOUTE requete authentifiee, jamais seulement sur une route choisie a
+     * l'avance. Contrairement au corps, redige par ROUTE (`SENSITIVE_PATHS`),
+     * cette redaction ne depend d'AUCUNE liste : une route ordinaire, au
+     * niveau BODY complet (en-tetes ET corps), ne doit jamais laisser
+     * paraitre le jeton porteur.
+     */
+    @Test
+    fun `l'en-tete Authorization ne fuit jamais, meme sur une route ordinaire`() {
+        val jeton = "jwt-jamais-vu-en-clair"
+        val lignes = mutableListOf<String>()
+        gardeQuiEcritDans(lignes).intercept(chain("/conversations", jeton = jeton))
+
+        assertTrue(
+            "le jeton Authorization a fuite : ${lignes.joinToString(" | ")}",
+            lignes.none { it.contains(jeton) },
+        )
+    }
+
+    /**
+     * (#4843) `/auth/login/2fa` porte le code de second facteur au corps —
+     * absent de `SENSITIVE_PATHS` avant ce correctif. Ce temoin cible LA
+     * ROUTE directement, sans passer par l'iteration du set : un set qui
+     * omettrait cette route encore demain ne ferait tomber aucun des temoins
+     * existants, puisqu'ils ne testent que ce que le set contient deja.
+     */
+    @Test
+    fun `le code de second facteur ne fuit pas via slash-auth-login-2fa`() {
+        val lignes = mutableListOf<String>()
+        gardeQuiEcritDans(lignes).intercept(chain("/auth/login/2fa"))
+
+        assertTrue(
+            "/auth/login/2fa a journalise son corps : ${lignes.joinToString(" | ")}",
+            lignes.none { it.contains(motDePasse) },
+        )
+    }
+
+    /**
+     * Les routes d'authentification qui portent un secret au corps ou dans la
+     * reponse — NOMMEES ici une a une, hors de l'iteration du set : un set auquel on
+     * oublierait d'ajouter la route de demain ne ferait tomber aucun temoin qui
+     * n'itere que sur ce qu'il contient deja.
+     */
+    @Test
+    fun `les secrets de la preuve d'adresse, de la reinitialisation et du telephone ne fuient pas`() {
+        listOf(
+            "/auth/verify-email",
+            "/auth/magic-link/validate",
+            "/auth/verification/status",
+            "/auth/reset-password",
+            "/auth/reset-password/verify-token",
+            "/auth/forgot-password/phone/verify-identity",
+            "/auth/forgot-password/phone/verify-code",
+            "/auth/2fa/verify",
+            "/auth/verify-phone",
+            "/auth/phone-transfer/verify",
+            "/auth/phone-transfer/verify-registration",
+            "/anonymous/refresh",
+        ).forEach { route ->
+            val lignes = mutableListOf<String>()
+            gardeQuiEcritDans(lignes).intercept(chain(route))
+
+            assertTrue("$route n'a rien journalise", lignes.isNotEmpty())
+            assertTrue(
+                "$route a journalise son corps : ${lignes.joinToString(" | ")}",
+                lignes.none { it.contains(motDePasse) },
+            )
+        }
+    }
+
+    /**
+     * LA COURSE, mesuree. Cinquante appels sensibles et cinquante ordinaires,
+     * melanges sur huit fils. Avec un `level` partage et mute par requete, il
+     * suffit qu'un seul appel ordinaire repose BODY entre l'ecriture d'un appel
+     * sensible et sa lecture pour qu'un mot de passe parte — et avec cent
+     * appels entrelaces, cela arrive.
+     *
+     * Avec deux instances a niveau FIXE, il n'y a rien a entrelacer : le choix
+     * se fait sur la pile du fil appelant.
+     */
+    @Test
+    fun `aucun mot de passe ne fuit sous concurrence`() {
+        val lignes = ConcurrentLinkedQueue<String>()
+        val garde = gardeQuiEcritDans(lignes)
+        val pool = Executors.newFixedThreadPool(8)
+        val depart = CountDownLatch(1)
+        val fini = CountDownLatch(100)
+
+        repeat(100) { i ->
+            val route = if (i % 2 == 0) "/auth/login" else "/conversations"
+            pool.execute {
+                depart.await()
+                runCatching { garde.intercept(chain(route)) }
+                fini.countDown()
+            }
+        }
+        depart.countDown()
+        assertTrue("les appels n'ont pas termine", fini.await(30, TimeUnit.SECONDS))
+        pool.shutdown()
+
+        val fuites = lignes.filter { it.contains(motDePasse) }
+        // Seules les routes ORDINAIRES ont le droit de journaliser leur corps ;
+        // il y en a cinquante. Toute ligne au-dela vient d'une route sensible.
+        assertEquals(
+            "des appels sensibles ont journalise leur corps : ${fuites.size} lignes pour 50 appels ordinaires",
+            50,
+            fuites.size,
+        )
+    }
+
+    /**
+     * Le jeton FCM, une transcription d'appel et le protocole Signal portent un
+     * secret ou une donnee sensible dans leur corps ou leur reponse. Ce temoin
+     * cible les ROUTES telles qu'elles partent, avec leurs identifiants, sans
+     * iterer le set : une route omise du set ne ferait tomber aucun temoin qui
+     * ne lit que ce que le set contient deja.
+     */
+    @Test
+    fun `le jeton push, la transcription et Signal ne journalisent pas leur corps`() {
+        val routes = listOf(
+            "/users/register-device-token",
+            "/calls/68b0000000000000000000aa/transcript",
+            "/signal/keys",
+            "/signal/keys/68b0000000000000000000bb",
+            "/signal/session/establish",
+        )
+
+        for (route in routes) {
+            val lignes = mutableListOf<String>()
+            gardeQuiEcritDans(lignes).intercept(chain(route))
+
+            assertTrue("$route n'a rien journalise — le garde ne s'est pas execute", lignes.isNotEmpty())
+            assertTrue(
+                "$route a journalise son corps : ${lignes.joinToString(" | ")}",
+                lignes.none { it.contains(motDePasse) },
+            )
+        }
+    }
+
+    /**
+     * Un carnet d'adresses entier (noms, numeros, e-mails) part dans ces corps et revient dans
+     * leurs reponses. Les chemins sont NOMMES ici, hors de l'iteration du set, et passent par le
+     * niveau BASIC : meme en logging BODY, aucun corps n'atteint logcat.
+     */
+    @Test
+    fun `aucun carnet d'adresses n'atteint le journal, meme en logging BODY`() {
+        listOf(
+            "/directory/contacts",
+            "/users/me/contacts/match",
+            "/users/me/contacts/sync",
+            "/contacts/resolve",
+        ).forEach { route ->
+            val lignes = mutableListOf<String>()
+            gardeQuiEcritDans(lignes).intercept(chain(route))
+
+            assertTrue("$route n'a rien journalise", lignes.isNotEmpty())
+            assertTrue(
+                "$route a journalise son corps : ${lignes.joinToString(" | ")}",
+                lignes.none { it.contains(motDePasse) },
+            )
+        }
+    }
+
+    /**
+     * (#15315) Un corps de televersement que l'on n'a PAS le droit de lire : il annonce sa taille
+     * (44 Mo, comme la video de la recette du S8) et leve s'il est ecrit. Le logger BODY
+     * l'ecrivait entier dans un tampon puis en faisait une chaine — 89 Mo alloues d'un coup, et
+     * l'app debug tombait en `OutOfMemoryError` a chaque reprise de la file d'envoi.
+     */
+    private class CorpsInterditDeLecture(
+        private val taille: Long,
+        private val type: okhttp3.MediaType?,
+    ) : okhttp3.RequestBody() {
+        val ecritures = java.util.concurrent.atomic.AtomicInteger()
+        override fun contentType(): okhttp3.MediaType? = type
+        override fun contentLength(): Long = taille
+        override fun writeTo(sink: okio.BufferedSink) {
+            ecritures.incrementAndGet()
+            throw AssertionError("le journal a lu le corps d'un televersement")
+        }
+    }
+
+    @Test
+    fun `un televersement multipart n'est jamais lu par le journal`() {
+        val video = CorpsInterditDeLecture(44L * 1024 * 1024, "video/mp4".toMediaType())
+        val multipart = okhttp3.MultipartBody.Builder()
+            .setType(okhttp3.MultipartBody.FORM)
+            .addFormDataPart("files", "r14697b.mp4", video)
+            .build()
+        val lignes = mutableListOf<String>()
+
+        gardeQuiEcritDans(lignes).intercept(chain("/attachments/upload", corps = multipart))
+
+        assertEquals("le journal a ecrit le corps du televersement", 0, video.ecritures.get())
+        assertTrue("la requete n'a pas ete journalisee : $lignes", lignes.any { it.startsWith("--> POST") })
+        assertTrue(
+            "les en-tetes du televersement doivent rester au journal : $lignes",
+            lignes.any { it.startsWith("Content-Type: multipart/form-data") },
+        )
+    }
+
+    @Test
+    fun `un corps binaire nu n'est jamais lu par le journal`() {
+        val audio = CorpsInterditDeLecture(3L * 1024 * 1024, "audio/mp4".toMediaType())
+        val lignes = mutableListOf<String>()
+
+        gardeQuiEcritDans(lignes).intercept(chain("/voice/profile", corps = audio))
+
+        assertEquals(0, audio.ecritures.get())
+        assertTrue(lignes.any { it.startsWith("--> POST") })
+    }
+
+    @Test
+    fun `un corps texte au-dela du seuil n'est pas lu par le journal`() {
+        val enorme = CorpsInterditDeLecture(
+            SensitiveBodyLoggingGuard.MAX_LOGGED_BODY_BYTES + 1,
+            "application/json".toMediaType(),
+        )
+        val lignes = mutableListOf<String>()
+
+        gardeQuiEcritDans(lignes).intercept(chain("/conversations", corps = enorme))
+
+        assertEquals(0, enorme.ecritures.get())
+    }
+
+    @Test
+    fun `un corps de taille inconnue n'est pas lu par le journal`() {
+        val flux = CorpsInterditDeLecture(-1, "application/json".toMediaType())
+        val lignes = mutableListOf<String>()
+
+        gardeQuiEcritDans(lignes).intercept(chain("/conversations", corps = flux))
+
+        assertEquals(0, flux.ecritures.get())
+    }
+}

@@ -1,0 +1,467 @@
+{
+  "$comment": "La loi d'enregistrement d'une prise (#10284), rejouée par vitest (packages/shared/utils/capture/capture-save.test.ts) et par Swift (CaptureSaveLawVectorTests). Sur divergence, le TypeScript a raison : le miroir bouge, jamais le vecteur. `visible` donne l'état du bouton Enregistrer de la retouche juste après la prise, puis après chaque étape. `savesOriginal` est le réglage Réglages › Médias « enregistrer l'original » (#9684) : la directive #10284 fixe les DÉFAUTS (hors cadre ⇒ gardée dans l'app), le réglage de l'utilisateur prime (correction porteur 2026-10-12). Une version enregistrée est une PAIRE (cadre, format) : changer de format (story, carré) fait réapparaître Enregistrer comme changer de cadre (#10296, porteur 2026-10-12).",
+  "destinations": [
+    {
+      "zone": "frame",
+      "savesOriginal": false,
+      "expected": {
+        "gallery": true,
+        "then": "edit",
+        "keptInApp": false
+      }
+    },
+    {
+      "zone": "frame",
+      "savesOriginal": true,
+      "expected": {
+        "gallery": true,
+        "then": "edit",
+        "keptInApp": false
+      }
+    },
+    {
+      "zone": "outside",
+      "savesOriginal": false,
+      "expected": {
+        "gallery": false,
+        "then": "edit",
+        "keptInApp": true
+      }
+    },
+    {
+      "zone": "outside",
+      "savesOriginal": true,
+      "expected": {
+        "gallery": true,
+        "then": "edit",
+        "keptInApp": false
+      }
+    }
+  ],
+  "sequences": [
+    {
+      "name": "une prise par la case de cadre part en galerie : Enregistrer est masqué en retouche",
+      "origin": {
+        "zone": "frame",
+        "frameId": "or-royal",
+        "format": "story"
+      },
+      "steps": [],
+      "visible": [
+        false
+      ]
+    },
+    {
+      "name": "une prise par la scène reste dans l'app : Enregistrer est visible en retouche",
+      "origin": {
+        "zone": "outside",
+        "frameId": "or-royal",
+        "format": "story"
+      },
+      "steps": [],
+      "visible": [
+        true
+      ]
+    },
+    {
+      "name": "le déclencheur rond, sans aucun cadre choisi, est hors zone cadre : Enregistrer visible",
+      "origin": {
+        "zone": "outside",
+        "frameId": null,
+        "format": "story"
+      },
+      "steps": [],
+      "visible": [
+        true
+      ]
+    },
+    {
+      "name": "changer de cadre fait réapparaître Enregistrer, réenregistrer le masque",
+      "origin": {
+        "zone": "frame",
+        "frameId": "or-royal",
+        "format": "story"
+      },
+      "steps": [
+        {
+          "op": "frame",
+          "frameId": "argent"
+        },
+        {
+          "op": "save"
+        }
+      ],
+      "visible": [
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "name": "revenir au cadre déjà enregistré masque de nouveau Enregistrer",
+      "origin": {
+        "zone": "frame",
+        "frameId": "or-royal",
+        "format": "story"
+      },
+      "steps": [
+        {
+          "op": "frame",
+          "frameId": "argent"
+        },
+        {
+          "op": "frame",
+          "frameId": "or-royal"
+        }
+      ],
+      "visible": [
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "name": "retirer le cadre rend Enregistrer ; revenir à un cadre déjà enregistré le masque",
+      "origin": {
+        "zone": "frame",
+        "frameId": "or-royal",
+        "format": "story"
+      },
+      "steps": [
+        {
+          "op": "frame",
+          "frameId": null
+        },
+        {
+          "op": "save"
+        },
+        {
+          "op": "frame",
+          "frameId": "or-royal"
+        }
+      ],
+      "visible": [
+        false,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "name": "une prise hors cadre enregistrée sans cadre : poser un cadre rend Enregistrer",
+      "origin": {
+        "zone": "outside",
+        "frameId": null,
+        "format": "story"
+      },
+      "steps": [
+        {
+          "op": "save"
+        },
+        {
+          "op": "frame",
+          "frameId": "argent"
+        },
+        {
+          "op": "frame",
+          "frameId": null
+        }
+      ],
+      "visible": [
+        true,
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "name": "une écriture en galerie refusée (permission, disque) rend Enregistrer",
+      "origin": {
+        "zone": "frame",
+        "frameId": "or-royal",
+        "format": "story"
+      },
+      "steps": [
+        {
+          "op": "saveFailed",
+          "frameId": "or-royal",
+          "format": "story"
+        },
+        {
+          "op": "save"
+        }
+      ],
+      "visible": [
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "name": "un échec d'écriture garde la trace d'aucun enregistrement : changer puis revenir laisse Enregistrer visible",
+      "origin": {
+        "zone": "outside",
+        "frameId": "argent",
+        "format": "story"
+      },
+      "steps": [
+        {
+          "op": "save"
+        },
+        {
+          "op": "saveFailed",
+          "frameId": "argent",
+          "format": "story"
+        },
+        {
+          "op": "frame",
+          "frameId": "or-royal"
+        },
+        {
+          "op": "frame",
+          "frameId": "argent"
+        }
+      ],
+      "visible": [
+        true,
+        false,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "re-choisir le cadre courant ne change rien",
+      "origin": {
+        "zone": "frame",
+        "frameId": "or-royal",
+        "format": "story"
+      },
+      "steps": [
+        {
+          "op": "frame",
+          "frameId": "or-royal"
+        }
+      ],
+      "visible": [
+        false,
+        false
+      ]
+    },
+    {
+      "name": "un échec sur un second cadre n'efface pas l'enregistrement du premier",
+      "origin": {
+        "zone": "frame",
+        "frameId": "or-royal",
+        "format": "story"
+      },
+      "steps": [
+        {
+          "op": "frame",
+          "frameId": "argent"
+        },
+        {
+          "op": "save"
+        },
+        {
+          "op": "saveFailed",
+          "frameId": "argent",
+          "format": "story"
+        },
+        {
+          "op": "frame",
+          "frameId": "or-royal"
+        }
+      ],
+      "visible": [
+        false,
+        true,
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "name": "l'échec d'une écriture lancée avant un changement de cadre vise le cadre de l'écriture, pas le cadre courant",
+      "origin": {
+        "zone": "frame",
+        "frameId": "or-royal",
+        "format": "story"
+      },
+      "steps": [
+        {
+          "op": "frame",
+          "frameId": "argent"
+        },
+        {
+          "op": "saveFailed",
+          "frameId": "or-royal",
+          "format": "story"
+        },
+        {
+          "op": "frame",
+          "frameId": "or-royal"
+        }
+      ],
+      "visible": [
+        false,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "#10296 : une prise story enregistrée par le cadre, puis le carré, fait réapparaître Enregistrer",
+      "origin": {
+        "zone": "frame",
+        "frameId": "or-royal",
+        "format": "story"
+      },
+      "steps": [
+        {
+          "op": "format",
+          "format": "square"
+        }
+      ],
+      "visible": [
+        false,
+        true
+      ]
+    },
+    {
+      "name": "#10296 : le carré enregistré puis le retour à la story déjà enregistrée masque Enregistrer, sans doublon",
+      "origin": {
+        "zone": "frame",
+        "frameId": "or-royal",
+        "format": "story"
+      },
+      "steps": [
+        {
+          "op": "format",
+          "format": "square"
+        },
+        {
+          "op": "save"
+        },
+        {
+          "op": "format",
+          "format": "story"
+        },
+        {
+          "op": "format",
+          "format": "square"
+        }
+      ],
+      "visible": [
+        false,
+        true,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "name": "#10296 : chaque paire (cadre, format) compte — un autre cadre au même format rend Enregistrer",
+      "origin": {
+        "zone": "frame",
+        "frameId": "or-royal",
+        "format": "story"
+      },
+      "steps": [
+        {
+          "op": "format",
+          "format": "square"
+        },
+        {
+          "op": "save"
+        },
+        {
+          "op": "frame",
+          "frameId": "argent"
+        },
+        {
+          "op": "format",
+          "format": "story"
+        },
+        {
+          "op": "frame",
+          "frameId": "or-royal"
+        }
+      ],
+      "visible": [
+        false,
+        true,
+        false,
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "name": "#10296 : l'échec de l'écriture du carré n'efface pas la story déjà enregistrée",
+      "origin": {
+        "zone": "frame",
+        "frameId": "or-royal",
+        "format": "story"
+      },
+      "steps": [
+        {
+          "op": "format",
+          "format": "square"
+        },
+        {
+          "op": "save"
+        },
+        {
+          "op": "saveFailed",
+          "frameId": "or-royal",
+          "format": "square"
+        },
+        {
+          "op": "format",
+          "format": "story"
+        }
+      ],
+      "visible": [
+        false,
+        true,
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "name": "#10296 : une écriture lancée en story puis un passage au carré — l'échec vise la story, le carré reste à enregistrer",
+      "origin": {
+        "zone": "outside",
+        "frameId": "or-royal",
+        "format": "story"
+      },
+      "steps": [
+        {
+          "op": "save"
+        },
+        {
+          "op": "format",
+          "format": "square"
+        },
+        {
+          "op": "saveFailed",
+          "frameId": "or-royal",
+          "format": "story"
+        },
+        {
+          "op": "format",
+          "format": "story"
+        }
+      ],
+      "visible": [
+        true,
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  ]
+}

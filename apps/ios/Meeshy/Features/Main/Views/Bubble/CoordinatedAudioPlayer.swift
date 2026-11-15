@@ -10,8 +10,7 @@ import MeeshyUI
 /// local possédé par la vue, et le tap play démarre une file d'UN élément
 /// sur le coordinator. Décision produit Meeshy → app-side (SDK purity).
 ///
-/// Les réels n'utilisent PAS ce routeur (profil `.transient`, parité avec
-/// les réels vidéo — décision de spec 2026-08-10).
+/// Les réels n'utilisent PAS ce routeur (profil `.transient`).
 struct CoordinatedAudioPlayer<Player: View>: View {
     let attachmentId: String
     let nowPlayingName: String

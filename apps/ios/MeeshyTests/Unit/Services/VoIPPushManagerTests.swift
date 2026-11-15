@@ -340,18 +340,12 @@ final class VoIPPushManagerTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/VoIPPushManager.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/VoIPPushManager.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_duplicatePushPhantomPath_passesCallIdToReportPhantomVoIPCall() throws {
@@ -376,7 +370,7 @@ final class VoIPPushManagerTests: XCTestCase {
         }
         let precedingBody = String(source[..<malformedRange.lowerBound].suffix(400))
         XCTAssertTrue(
-            precedingBody.contains("reportPhantomVoIPCall(uuid: phantomUUID, update: update)") &&
+            precedingBody.contains("reportPhantomVoIPCall(uuid: phantomUUID, update: update, callId: nil)") &&
             !precedingBody.contains("callId: callId"),
             "The malformed-payload path never inserted into the dedup ring, so it must not pass a callId " +
             "(there's nothing to evict)."
@@ -495,13 +489,17 @@ final class VoIPPushManagerTests: XCTestCase {
 
     private func makeRetrySUT(
         registrar: MockVoIPTokenRegistrar,
-        authTokenAvailable: Bool = true
+        authTokenAvailable: Bool = true,
+        device: PushDeviceIdentity = PushDeviceIdentity(
+            deviceId: "install-test", deviceName: "iPhone16,2", appVersion: "1.0 (1)", bundleId: "me.meeshy.app"
+        )
     ) -> (sut: VoIPPushManager, store: MockVoIPTokenStore) {
         let store = MockVoIPTokenStore()
         let sut = VoIPPushManager(
             tokenStore: store,
             registrar: registrar,
-            authTokenAvailable: { authTokenAvailable }
+            authTokenAvailable: { authTokenAvailable },
+            deviceIdentity: { device }
         )
         return (sut, store)
     }
@@ -557,6 +555,23 @@ final class VoIPPushManagerTests: XCTestCase {
         XCTAssertEqual(registrar.registerCallCount, 1,
                        "Same token inside the cooldown window must not re-POST")
         XCTAssertNil(sut.debug_pendingTokenToRegister)
+    }
+
+    func test_registerTokenWithBackend_postsTheDeviceIdentity() async {
+        let registrar = MockVoIPTokenRegistrar()
+        let device = PushDeviceIdentity(
+            deviceId: "install-10858", deviceName: "iPhone17,1", appVersion: "2.0 (900)", bundleId: "me.meeshy.app"
+        )
+        let (sut, _) = makeRetrySUT(registrar: registrar, device: device)
+
+        await sut.debug_registerTokenWithBackend("tokDevice")
+
+        XCTAssertEqual(registrar.lastBody?.type, "voip")
+        XCTAssertEqual(registrar.lastBody?.deviceId, "install-10858",
+                       "Without deviceId the gateway cannot retire this device's previous VoIP token")
+        XCTAssertEqual(registrar.lastBody?.deviceName, "iPhone17,1")
+        XCTAssertEqual(registrar.lastBody?.appVersion, "2.0 (900)")
+        XCTAssertEqual(registrar.lastBody?.bundleId, "me.meeshy.app")
     }
 
     func test_registerTokenWithBackend_noAuthToken_queuesWithoutPosting() async {

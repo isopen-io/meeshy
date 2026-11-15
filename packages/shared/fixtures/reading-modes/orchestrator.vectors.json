@@ -134,7 +134,7 @@
       }
     },
     "expected": {
-      "mode": "focal",
+      "mode": "script",
       "reason": "clamped-unavailable"
     },
     "expectedBridgeSuggestedMode": "focal"
@@ -162,7 +162,7 @@
       }
     },
     "expected": {
-      "mode": "focal",
+      "mode": "script",
       "reason": "clamped-unavailable"
     },
     "expectedBridgeSuggestedMode": "focal"
@@ -218,7 +218,7 @@
       }
     },
     "expected": {
-      "mode": "focal",
+      "mode": "script",
       "reason": "default"
     },
     "expectedBridgeSuggestedMode": "focal"
@@ -246,7 +246,7 @@
       }
     },
     "expected": {
-      "mode": "focal",
+      "mode": "script",
       "reason": "default"
     },
     "expectedBridgeSuggestedMode": "focal"
@@ -330,7 +330,7 @@
       }
     },
     "expected": {
-      "mode": "focal",
+      "mode": "script",
       "reason": "default"
     },
     "expectedBridgeSuggestedMode": "focal"
@@ -358,7 +358,7 @@
       }
     },
     "expected": {
-      "mode": "focal",
+      "mode": "script",
       "reason": "default"
     },
     "expectedBridgeSuggestedMode": "focal"
@@ -414,7 +414,7 @@
       }
     },
     "expected": {
-      "mode": "focal",
+      "mode": "script",
       "reason": "default"
     },
     "expectedBridgeSuggestedMode": "focal"
@@ -469,7 +469,7 @@
       }
     },
     "expected": {
-      "mode": "focal",
+      "mode": "script",
       "reason": "clamped-unavailable"
     },
     "expectedBridgeSuggestedMode": "focal"
@@ -496,7 +496,7 @@
       }
     },
     "expected": {
-      "mode": "focal",
+      "mode": "script",
       "reason": "clamped-unavailable"
     },
     "expectedBridgeSuggestedMode": "focal"
@@ -523,7 +523,7 @@
       }
     },
     "expected": {
-      "mode": "focal",
+      "mode": "script",
       "reason": "clamped-unavailable"
     },
     "expectedBridgeSuggestedMode": "focal"

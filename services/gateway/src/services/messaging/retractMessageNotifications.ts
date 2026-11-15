@@ -1,5 +1,8 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import type { RetractedNotificationAnnouncer } from '../notifications/retractedNotifications';
+import {
+  retractedNotificationOf,
+  type RetractedNotificationAnnouncer,
+} from '../notifications/retractedNotifications';
 
 /**
  * Retirer les notifications qu'un message a produites — le geste, isolé de ses
@@ -59,20 +62,39 @@ export type NotificationRetractionPrisma = Pick<PrismaClient, 'notification'>;
 export async function retractMessageNotifications(
   prisma: NotificationRetractionPrisma,
   messageId: string,
-  announcer: RetractedNotificationAnnouncer | undefined
+  announcer: RetractedNotificationAnnouncer | undefined,
+  /**
+   * Restreint le retrait à UN destinataire (#7451).
+   *
+   * L'échéance d'un éphémère est PAR DESTINATAIRE : quand `D(u)` tombe, seule la
+   * bannière de `u` doit partir — celle d'un destinataire qui n'a pas encore
+   * reçu, ou dont le décompte court encore, nomme un message toujours vivant
+   * pour lui. Retirer tout le monde à la première échéance aurait fait de la
+   * réception du plus rapide la fin du message pour les autres.
+   *
+   * Absent (le cas historique : rappel, destruction) ⇒ tout le monde.
+   */
+  options?: { readonly userId?: string },
 ): Promise<void> {
-  const retracted = await prisma.notification.findMany({
-    where: { messageId },
-    select: { id: true, userId: true },
+  // `context` relu pour sa seule `conversationId` : la révocation push en a
+  // besoin, le web et Android indexant leurs bannières par conversation. Et
+  // `type` avec lui : seul un ARRIVAGE de message indexe sa bannière par
+  // conversation, et sans le type le client ne peut pas le savoir. `delivery`
+  // dit si un push est PARTI — sans lui il n'y a aucune bannière à retirer.
+  const scope = options?.userId ? { messageId, userId: options.userId } : { messageId };
+  const rows = await prisma.notification.findMany({
+    where: scope,
+    select: { id: true, userId: true, type: true, context: true, delivery: true },
   });
-  if (retracted.length === 0) return;
+  if (rows.length === 0) return;
+  const retracted = rows.map(retractedNotificationOf);
 
   // Filtré sur `messageId` et non sur les ids relus : une notification créée
   // entre la lecture et l'écriture part avec les autres. Elle n'est alors pas
   // annoncée — un écran en retard — là où la garder aurait laissé la copie du
   // contenu en base. Celles qui naissent APRÈS cette écriture sont fermées par
   // l'autre bout : la relecture d'après-éventail de `notifyMessageRecipients`.
-  await prisma.notification.deleteMany({ where: { messageId } });
+  await prisma.notification.deleteMany({ where: scope });
 
   // L'annonce APRÈS l'écriture durable, et jamais l'inverse : les compteurs
   // qu'elle recalcule doivent voir la base d'après le retrait.

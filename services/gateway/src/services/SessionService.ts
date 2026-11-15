@@ -8,9 +8,14 @@
  * - Trusted devices: Extended duration (configurable via SESSION_EXPIRY_TRUSTED_DAYS)
  */
 
+import { assertAccountMeetsMinimumAge } from './auth/minimum-age-gate';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { SessionLoginMethod } from '@meeshy/shared/utils/client-session';
 import { RequestContext } from './GeoIPService';
+import { adoptionDeadlineOf, openingExpiry } from './auth/session-adoption';
+import { retireDevicesAfterSessionEnd, type SessionEndScope } from './e2ee/device-retirement';
+import { retirePushToTalkTokensAfterSessionEnd } from './talkie/pushToTalkTokens';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'SessionService' });
@@ -36,6 +41,17 @@ const ACTIVE_SESSION_FILTER = {
     { invalidatedAt: { isSet: false } }
   ]
 };
+
+/**
+ * #12543 — l'appareil chiffré qu'une session avait enrôlé ne lui survit pas ; #17142 — son jeton
+ * PushToTalk non plus (il réveillerait l'appareil pour un compte qui n'y est plus connecté).
+ */
+async function retireEncryptedDevices(db: PrismaClient, scope: SessionEndScope): Promise<void> {
+  await Promise.all([
+    retireDevicesAfterSessionEnd(db, scope, (error) => logger.warn('e2ee devices not retired at session end; the sweep will', { error })),
+    retirePushToTalkTokensAfterSessionEnd(db, scope, (error) => logger.warn('PushToTalk tokens not retired at session end; the wake gate will', { error })),
+  ]);
+}
 
 /**
  * Initialize the session service with a prisma client
@@ -66,20 +82,36 @@ export interface SessionData {
   browserName: string | null;
   browserVersion: string | null;
   isMobile: boolean;
+  /** Ce que le client a déclaré (#9610) — `null` pour un client qui n'en dit rien. */
+  appVersion: string | null;
+  appBuild: string | null;
+  platform: string | null;
+  deviceName: string | null;
+  /** Posé par le serveur à l'ouverture (#9610). */
+  loginMethod: string | null;
   ipAddress: string | null;
   country: string | null;
+  /** Approximative : tirée de l'adresse IP par la base locale (#9609). */
   city: string | null;
   location: string | null;
+  timezone: string | null;
   createdAt: Date;
   lastActivityAt: Date;
   isCurrentSession: boolean;
   isTrusted: boolean;
+  /**
+   * L'échéance d'adoption d'une session prouvée par un lien (#10518) — posée
+   * par `createSession` seul, absente quand rien n'attend.
+   */
+  adoptBy?: Date;
 }
 
 export interface CreateSessionInput {
   userId: string;
   token: string;
   requestContext: RequestContext;
+  /** Le moyen par lequel la session s'ouvre (#9610) ; absent, il reste inconnu. */
+  loginMethod?: SessionLoginMethod;
 }
 
 /**
@@ -131,15 +163,23 @@ function getSessionExpiryDays(deviceInfo: RequestContext['deviceInfo']): number 
 export async function createSession(input: CreateSessionInput): Promise<SessionData> {
   const db = getPrisma();
   const { userId, token, requestContext } = input;
-  const { ip, geoData, deviceInfo } = requestContext;
+
+  // #9927 — toute connexion passe ici : un compte de moins de 13 ans déclarés
+  // n'ouvre aucune session, quelle que soit la porte (mot de passe, lien
+  // magique, second facteur, vérification d'adresse).
+  await assertAccountMeetsMinimumAge(db, userId, new Date());
+  const { ip, geoData, deviceInfo, client } = requestContext;
 
   // Hash the token for storage
   const sessionToken = hashToken(token);
 
   // Calculate expiry date based on device type
+  const now = new Date();
   const expiryDays = getSessionExpiryDays(deviceInfo);
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + expiryDays);
+  const normalExpiresAt = new Date(now);
+  normalExpiresAt.setDate(normalExpiresAt.getDate() + expiryDays);
+  // #10477 — ouverte par un lien, la session est courte jusqu'à son adoption.
+  const { expiresAt, adoptedExpiresAt } = openingExpiry({ loginMethod: input.loginMethod, expiresAt: normalExpiresAt, now });
 
   // Create the session
   const session = await db.userSession.create({
@@ -147,6 +187,7 @@ export async function createSession(input: CreateSessionInput): Promise<SessionD
       userId,
       sessionToken,
       expiresAt,
+      adoptedExpiresAt,
       // Device info
       deviceType: deviceInfo?.type || null,
       deviceVendor: deviceInfo?.vendor || null,
@@ -157,13 +198,17 @@ export async function createSession(input: CreateSessionInput): Promise<SessionD
       browserVersion: deviceInfo?.browserVersion || null,
       isMobile: deviceInfo?.isMobile || false,
       userAgent: deviceInfo?.rawUserAgent || null,
+      // Ce que le client déclare, et le moyen de connexion (#9610)
+      appVersion: client?.appVersion ?? null,
+      appBuild: client?.appBuild ?? null,
+      platform: client?.platform ?? null,
+      deviceName: client?.deviceName ?? null,
+      loginMethod: input.loginMethod ?? null,
       // Geo info
       ipAddress: ip,
       country: geoData?.country || null,
       city: geoData?.city || null,
       location: geoData?.location || null,
-      latitude: geoData?.latitude || null,
-      longitude: geoData?.longitude || null,
       timezone: geoData?.timezone || null,
       // Flags
       isValid: true,
@@ -176,7 +221,7 @@ export async function createSession(input: CreateSessionInput): Promise<SessionD
   // Enforce session limit - remove oldest sessions if over limit
   await enforceSessionLimit(userId);
 
-  return mapSessionToData(session, true);
+  return { ...mapSessionToData(session, true), ...adoptionDeadlineOf(session) };
 }
 
 /**
@@ -209,14 +254,51 @@ export async function validateSession(token: string): Promise<SessionData | null
 }
 
 /**
- * Get all active sessions for a user
+ * **La session courante — « cet appareil-ci » — se nomme de DEUX façons**
+ * (#9606), et l'une suffit :
+ *
+ *  - `sessionId` : le claim `sid` du JWT VÉRIFIÉ (`UnifiedAuthContext.sessionId`).
+ *    C'est la voie nominale : tout jeton d'un inscrit le porte depuis #4264, et
+ *    la porte REST refuse ceux qui ne le portent pas.
+ *  - `sessionToken` : l'en-tête `x-session-token`, en clair, haché ici. Gardé
+ *    pour la rétrocompatibilité — aucun client inscrit ne l'envoie en REST,
+ *    mais un client qui le ferait continue d'être compris.
+ *
+ * Quand les deux sont fournis et nomment deux sessions, les DEUX sont
+ * « courantes » : le porteur détient les deux justificatifs, donc les deux
+ * appareils. Une chaîne seule reste acceptée et vaut `{ sessionToken }` — la
+ * forme d'avant, que des appelants passent encore.
+ */
+export type CurrentSessionRef = {
+  readonly sessionId?: string | null;
+  readonly sessionToken?: string | null;
+};
+
+type CurrentSessionClause = { readonly id: string } | { readonly sessionToken: string };
+
+function currentSessionClauses(current: string | CurrentSessionRef | undefined): CurrentSessionClause[] {
+  const ref: CurrentSessionRef = typeof current === 'string' ? { sessionToken: current } : current ?? {};
+  const byId: CurrentSessionClause[] = ref.sessionId ? [{ id: ref.sessionId }] : [];
+  const byToken: CurrentSessionClause[] = ref.sessionToken ? [{ sessionToken: hashToken(ref.sessionToken) }] : [];
+  return [...byId, ...byToken];
+}
+
+function isNamedBy(session: { id: string; sessionToken: string }, clauses: readonly CurrentSessionClause[]): boolean {
+  return clauses.some((clause) =>
+    'id' in clause ? session.id === clause.id : session.sessionToken === clause.sessionToken
+  );
+}
+
+/**
+ * Get all active sessions for a user — `isCurrentSession` marks the session(s)
+ * named by `current` (see {@link CurrentSessionRef}).
  */
 export async function getUserSessions(
   userId: string,
-  currentToken?: string
+  current?: string | CurrentSessionRef
 ): Promise<SessionData[]> {
   const db = getPrisma();
-  const currentTokenHash = currentToken ? hashToken(currentToken) : null;
+  const clauses = currentSessionClauses(current);
 
   const sessions = await db.userSession.findMany({
     where: {
@@ -228,9 +310,7 @@ export async function getUserSessions(
     orderBy: { lastActivityAt: 'desc' },
   });
 
-  return sessions.map((session) =>
-    mapSessionToData(session, session.sessionToken === currentTokenHash)
-  );
+  return sessions.map((session) => mapSessionToData(session, isNamedBy(session, clauses)));
 }
 
 /**
@@ -242,36 +322,44 @@ export async function invalidateSession(
 ): Promise<boolean> {
   const db = getPrisma();
   try {
-    await db.userSession.update({
-      where: { id: sessionId },
+    // Une session DÉJÀ close ne se réécrit pas (audit A2-5) : son motif
+    // d'origine resterait écrasé, et un `invalidatedAt` relancé prolongerait sa
+    // conservation. `false` : rien n'a été fermé.
+    const { count } = await db.userSession.updateMany({
+      where: { id: sessionId, isValid: true },
       data: {
         isValid: false,
         invalidatedAt: new Date(),
         invalidatedReason: reason,
       },
     });
-    return true;
+    if (count > 0) await retireEncryptedDevices(db, { sessionId });
+    return count > 0;
   } catch {
     return false;
   }
 }
 
 /**
- * Invalidate all sessions for a user except the current one
+ * Invalidate all sessions for a user except the current one(s) — see
+ * {@link CurrentSessionRef}. With NOTHING naming the current session, every
+ * session is invalidated: that is the deliberate « sign out everywhere » of
+ * `POST /auth/revoke-all-sessions` (the e-mail link), and the only safe
+ * reading of an anonymous caller — keeping nothing alive that should not be.
  */
 export async function invalidateAllSessions(
   userId: string,
-  exceptToken?: string,
+  except?: string | CurrentSessionRef,
   reason: string = 'user_revoked_all'
 ): Promise<number> {
   const db = getPrisma();
-  const exceptTokenHash = exceptToken ? hashToken(exceptToken) : null;
+  const clauses = currentSessionClauses(except);
 
   const result = await db.userSession.updateMany({
     where: {
       userId,
       isValid: true,
-      ...(exceptTokenHash ? { sessionToken: { not: exceptTokenHash } } : {}),
+      ...(clauses.length > 0 ? { NOT: clauses } : {}),
     },
     data: {
       isValid: false,
@@ -279,6 +367,7 @@ export async function invalidateAllSessions(
       invalidatedReason: reason,
     },
   });
+  if (result.count > 0) await retireEncryptedDevices(db, { userId });
 
   return result.count;
 }
@@ -325,8 +414,37 @@ export async function logout(token: string): Promise<boolean> {
       invalidatedReason: 'logout',
     },
   });
+  if (result.count > 0) await retireEncryptedDevices(db, { sessionToken });
 
   return result.count > 0;
+}
+
+/**
+ * Close the CURRENT session(s) of a user — the ones named by `current` (#9606).
+ * `POST /auth/logout` used to close only the session named by the
+ * `x-session-token` header, which no signed-in client sends in REST: logging
+ * out left the session valid. Scoped by `userId`, so a reference can never
+ * close another account's session. Returns how many sessions were closed.
+ */
+export async function endCurrentSession(
+  userId: string,
+  current: CurrentSessionRef,
+  reason: string = 'logout'
+): Promise<number> {
+  const clauses = currentSessionClauses(current);
+  if (clauses.length === 0) return 0;
+
+  const db = getPrisma();
+  const result = await db.userSession.updateMany({
+    where: { userId, isValid: true, OR: clauses },
+    data: {
+      isValid: false,
+      invalidatedAt: new Date(),
+      invalidatedReason: reason,
+    },
+  });
+  if (result.count > 0) await retireEncryptedDevices(db, { userId });
+  return result.count;
 }
 
 /**
@@ -420,7 +538,7 @@ export async function markSessionTrusted(
     // Verify session exists first
     const existingSession = await db.userSession.findUnique({
       where: { id: sessionId },
-      select: { id: true, userId: true, isTrusted: true, isValid: true }
+      select: { id: true, userId: true, isTrusted: true, isValid: true, adoptedExpiresAt: true }
     });
 
     if (!existingSession) {
@@ -442,12 +560,13 @@ export async function markSessionTrusted(
     const newExpiresAt = new Date();
     newExpiresAt.setDate(newExpiresAt.getDate() + SESSION_EXPIRY_TRUSTED_DAYS);
 
+    // #10477 — une session prouvée pas encore adoptée garde sa fenêtre courte :
+    // la confiance porte sur l'échéance qu'elle prendra une fois adoptée.
     await db.userSession.update({
       where: { id: sessionId },
-      data: {
-        isTrusted: true,
-        expiresAt: newExpiresAt
-      },
+      data: existingSession.adoptedExpiresAt
+        ? { isTrusted: true, adoptedExpiresAt: newExpiresAt }
+        : { isTrusted: true, expiresAt: newExpiresAt },
     });
 
     // Log security event to database
@@ -486,8 +605,12 @@ export async function extendSessionExpiry(token: string, days?: number): Promise
   const sessionToken = hashToken(token);
 
   try {
+    // #5712 — sans `expiresAt`, une session morte depuis des mois (mesuré :
+    // jusqu'à six mois en production, 140 lignes) se voyait PROLONGÉE et
+    // redevenait active : `isValid` seul ne suffit pas, une session peut être
+    // expirée sans jamais avoir été invalidée.
     const session = await db.userSession.findFirst({
-      where: { sessionToken, isValid: true },
+      where: { sessionToken, isValid: true, expiresAt: { gt: new Date() } },
     });
 
     if (!session) return false;
@@ -512,52 +635,13 @@ export async function extendSessionExpiry(token: string, days?: number): Promise
   }
 }
 
-/**
- * Refresh token rotation - Generate new refresh token while keeping session valid
- * Used by mobile apps to maintain long-term sessions securely
- */
-export async function rotateRefreshToken(currentRefreshToken: string): Promise<{
-  newRefreshToken: string;
-  expiresAt: Date;
-} | null> {
-  const db = getPrisma();
-  const refreshTokenHash = hashToken(currentRefreshToken);
-
-  try {
-    const session = await db.userSession.findFirst({
-      where: { refreshToken: refreshTokenHash, isValid: true },
-    });
-
-    if (!session) return null;
-
-    // Generate new refresh token
-    const newRefreshToken = randomBytes(32).toString('hex');
-    const newRefreshTokenHash = hashToken(newRefreshToken);
-
-    // Extend expiry based on device type
-    const extensionDays = session.isMobile ? SESSION_EXPIRY_MOBILE_DAYS : SESSION_EXPIRY_DESKTOP_DAYS;
-    const newExpiresAt = new Date();
-    newExpiresAt.setDate(newExpiresAt.getDate() + extensionDays);
-
-    await db.userSession.update({
-      where: { id: session.id },
-      data: {
-        refreshToken: newRefreshTokenHash,
-        expiresAt: newExpiresAt,
-        lastActivityAt: new Date()
-      },
-    });
-
-    logger.debug(`Refresh token rotated (${extensionDays} days)`);
-    return {
-      newRefreshToken,
-      expiresAt: newExpiresAt
-    };
-  } catch (error) {
-    logger.error('Failed to rotate refresh token', error as Error);
-    return null;
-  }
-}
+// `rotateRefreshToken` (#3621) a été retiré : aucune route ne l'appelait, et
+// `userSession.create` ci-dessus ne pose jamais `UserSession.refreshToken` —
+// son `where: { refreshToken: refreshTokenHash }` ne pouvait donc JAMAIS
+// matcher une ligne réelle. Le mécanisme de renouvellement effectivement
+// utilisé est `POST /auth/refresh` (`routes/auth/magic-link.ts`), qui lie le
+// JWT à sa session par le claim `sid` (`services/auth/session-jwt.ts`,
+// #4213/#4264) plutôt que par un `refreshToken` séparé.
 
 /**
  * Enforce maximum sessions per user
@@ -597,10 +681,16 @@ function mapSessionToData(session: any, isCurrentSession: boolean): SessionData 
     browserName: session.browserName,
     browserVersion: session.browserVersion,
     isMobile: session.isMobile,
+    appVersion: session.appVersion ?? null,
+    appBuild: session.appBuild ?? null,
+    platform: session.platform ?? null,
+    deviceName: session.deviceName ?? null,
+    loginMethod: session.loginMethod ?? null,
     ipAddress: session.ipAddress,
     country: session.country,
     city: session.city,
     location: session.location,
+    timezone: session.timezone ?? null,
     createdAt: session.createdAt,
     lastActivityAt: session.lastActivityAt,
     isCurrentSession,

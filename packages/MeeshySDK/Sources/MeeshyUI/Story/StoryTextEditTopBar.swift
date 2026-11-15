@@ -5,7 +5,7 @@ import MeeshySDK
 /// plus que la sortie.
 ///
 /// Les attributs qui l'occupaient sont redescendus sur la rangée unique
-/// (`TextEditFloatingBubbles`), avec le même geste pour tous — tap pour la
+/// (retirées par #18640 : la barre collée au clavier de l'app les remplace), avec le même geste pour tous — tap pour la
 /// valeur suivante, appui long pour le panneau. La séparation en deux rangées
 /// répondait à un débordement de largeur ; retirer taille et graisse, devenues
 /// des curseurs, l'a rendue inutile.
@@ -18,11 +18,11 @@ struct StoryTextEditTopBar: View {
             finishButton
         }
         .padding(.horizontal, TextEditToolbarMetrics.horizontalMargin)
-        .padding(.top, 6)
+        .padding(.top, MeeshySpacing.xsPlus)
     }
 
     /// Rang de contour (0…4) traduit en poids de trait — la bulle montre
-    /// ainsi l'épaisseur qu'elle pose. Consommé par `TextEditFloatingBubbles`.
+    /// ainsi l'épaisseur qu'elle pose. Consommé par les rangées d'options.
     static func strokeWeight(_ emphasis: Int) -> Font.Weight {
         switch emphasis {
         case ...0: return .regular
@@ -38,26 +38,27 @@ struct StoryTextEditTopBar: View {
     /// Remplace le X rouge de l'ancienne rangée basse. « Terminé » dit ce que
     /// l'action fait : elle referme l'éditeur, elle ne supprime rien.
     private var finishButton: some View {
-        Text(String(localized: "story.textEdit.finish.short",
-                    defaultValue: "Terminé", bundle: .module))
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(Color.white)
-            .lineLimit(1)
-            .padding(.horizontal, 18)
-            .frame(height: TextEditToolbarMetrics.bubbleSize)
-            .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
-            .contentShape(Capsule())
-            .onTapGesture {
-                HapticFeedback.medium()
-                onFinish()
-            }
-            .accessibilityLabel(String(
-                localized: "story.textEdit.finish",
-                defaultValue: "Terminer l'édition du texte", bundle: .module))
-            .accessibilityHint(String(
-                localized: "story.textEdit.finish.hint",
-                defaultValue: "Ferme l'éditeur et masque le clavier", bundle: .module))
-            .accessibilityAddTraits(.isButton)
+        Button {
+            HapticFeedback.medium()
+            onFinish()
+        } label: {
+            Text(String(localized: "story.textEdit.finish.short",
+                        defaultValue: "Terminé", bundle: .module))
+                .meeshyScaledFont(14, weight: .semibold)
+                .foregroundStyle(Color.white)
+                .lineLimit(1)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .frame(height: TextEditToolbarMetrics.bubbleSize)
+                .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .capsule))
+        .accessibilityLabel(String(
+            localized: "story.textEdit.finish",
+            defaultValue: "Terminer l'édition du texte", bundle: .module))
+        .accessibilityHint(String(
+            localized: "story.textEdit.finish.hint",
+            defaultValue: "Ferme l'éditeur et masque le clavier", bundle: .module))
     }
 
     // MARK: - Accessibilité
@@ -78,6 +79,8 @@ struct StoryTextEditTopBar: View {
             return "\(Int(width)) pt"
         case .style:
             return text.parsedTextStyle.displayName
+        case .effect:
+            return TextEditLabels.title(for: text.parsedTextEffect)
         case .language:
             return (TextEditToolOptions.normalisedCode(text.sourceLanguage) ?? "fr").uppercased()
         case .color, .background:
@@ -93,6 +96,7 @@ struct StoryTextEditTopBar: View {
 struct CycleButtonAccessibility: ViewModifier {
     let label: String
     let value: String
+    let onActivate: () -> Void
     let onOpenPanel: () -> Void
 
     func body(content: Content) -> some View {
@@ -105,6 +109,7 @@ struct CycleButtonAccessibility: ViewModifier {
                 defaultValue: "Touchez pour la valeur suivante, appui long pour toutes les options",
                 bundle: .module))
             .accessibilityAddTraits(.isButton)
+            .accessibilityAction { onActivate() }
             .accessibilityAction(named: String(
                 localized: "story.textEdit.cycle.allOptions",
                 defaultValue: "Toutes les options", bundle: .module), onOpenPanel)

@@ -6,6 +6,11 @@
  * pour la feature d'appels vidéo avec traduction automatique
  */
 
+import type { CallErrorCode } from './call-error-codes.js';
+import type { CallScreenCaptureKind } from './call-capture.js';
+
+export * from './call-analytics.js';
+
 // ===== CALL MODES & STATUS =====
 
 /**
@@ -148,96 +153,10 @@ export interface CallControls {
   readonly screenShareEnabled: boolean;
 }
 
-// ===== AUDIO EFFECTS =====
+// ===== AUDIO EFFECTS — ./call-audio-effects.ts =====
 
-/**
- * Types d'effets audio disponibles
- */
-export type AudioEffectType = 'voice-coder' | 'baby-voice' | 'demon-voice' | 'back-sound';
-
-/**
- * Mode de loop pour le back sound
- */
-export type LoopMode = 'N_TIMES' | 'N_MINUTES';
-
-/**
- * Paramètres pour l'effet Voice Coder (auto-tune)
- */
-export interface VoiceCoderParams {
-  readonly pitch: number;           // -12 à +12 semitones (transpose)
-  readonly harmonization: boolean;  // Ajouter harmonies
-  readonly strength: number;        // 0-100%, intensité correction (mix)
-  readonly retuneSpeed: number;     // 0-100%, vitesse de correction (0=lent/naturel, 100=rapide/robotique)
-  readonly scale: 'chromatic' | 'major' | 'minor' | 'pentatonic'; // Gamme musicale
-  readonly key: 'C' | 'C#' | 'D' | 'D#' | 'E' | 'F' | 'F#' | 'G' | 'G#' | 'A' | 'A#' | 'B'; // Tonalité
-  readonly naturalVibrato: number;  // 0-100%, préservation du vibrato naturel
-}
-
-/**
- * Presets pour Perfect Voice
- */
-export type VoiceCoderPreset =
-  | 'voix-naturelle'
-  | 'pop-star'
-  | 'effet-robot'
-  | 'correction-subtile'
-  | 'custom';
-
-/**
- * Paramètres pour l'effet Baby Voice
- */
-export interface BabyVoiceParams {
-  readonly pitch: number;           // +6 à +12 semitones
-  readonly formant: number;         // 1.2-1.5x shift formantique
-  readonly breathiness: number;     // 0-100%, ajout de souffle
-}
-
-/**
- * Paramètres pour l'effet Demon Voice
- */
-export interface DemonVoiceParams {
-  readonly pitch: number;           // -8 à -12 semitones
-  readonly distortion: number;      // 0-100%, saturation
-  readonly reverb: number;          // 0-100%, echo cathedral
-}
-
-/**
- * Paramètres pour l'effet Back Sound Code
- */
-export interface BackSoundParams {
-  readonly soundFile: string;       // Nom du fichier son
-  readonly volume: number;          // 0-100%
-  readonly loopMode: LoopMode;      // Mode de loop
-  readonly loopValue: number;       // Nombre de fois ou minutes
-}
-
-/**
- * Union des paramètres d'effets audio
- */
-export type AudioEffectParams =
-  | VoiceCoderParams
-  | BabyVoiceParams
-  | DemonVoiceParams
-  | BackSoundParams;
-
-/**
- * Configuration d'un effet audio
- */
-export interface AudioEffect {
-  readonly type: AudioEffectType;
-  readonly enabled: boolean;
-  readonly params: AudioEffectParams;
-}
-
-/**
- * État des effets audio
- */
-export interface AudioEffectsState {
-  readonly voiceCoder: AudioEffect & { params: VoiceCoderParams };
-  readonly babyVoice: AudioEffect & { params: BabyVoiceParams };
-  readonly demonVoice: AudioEffect & { params: DemonVoiceParams };
-  readonly backSound: AudioEffect & { params: BackSoundParams };
-}
+export * from './call-audio-effects.js';
+export * from './call-error-codes.js';
 
 // ===== CONNECTION QUALITY =====
 
@@ -444,6 +363,19 @@ export interface CallInitiatedEvent {
    */
   readonly conversationTitle?: string | null;
   /**
+   * #8433 — présent sur la copie remise à une personne INVITÉE dans un appel
+   * déjà en cours : qui l'invite. Elle n'est pas forcément membre de la
+   * conversation, et c'est cet appel seul qu'elle peut rejoindre.
+   */
+  readonly invitedBy?: {
+    readonly userId: string;
+    readonly username: string;
+    readonly displayName?: string;
+    readonly avatar?: string;
+  };
+  /** #8433 — vrai dès que l'appel compte ou attend plus de deux personnes. Absent : lire `conversationType`. */
+  readonly isGroup?: boolean;
+  /**
    * Les identifiants TURN/STUN du DESTINATAIRE de cette copie de l'événement.
    *
    * **Déclaré au cycle 107 ; il voyageait sans contrat depuis toujours.** Les
@@ -569,6 +501,12 @@ export interface CallScreenCaptureEvent {
    */
   readonly userId?: string
   readonly isCapturing: boolean
+  /**
+   * #16665 — `recording` (enregistrement d'écran, vrai puis faux) ou
+   * `screenshot` (capture ponctuelle, vrai seul). Absent chez un client
+   * d'avant : se lit `recording` (`screenCaptureKindOf`).
+   */
+  readonly kind?: CallScreenCaptureKind
 }
 
 export interface CallTranslationRequestedEvent {
@@ -598,31 +536,6 @@ export interface CallQualityFeedback {
   readonly comment?: string
 }
 
-export interface CallAnalytics {
-  readonly setupTimeMs: number
-  /**
-   * answer/join → connected : la négociation WebRTC seule, SANS le temps de
-   * sonnerie humain inclus dans `setupTimeMs`. Optionnel (absent des builds
-   * iOS < 2026-07-03) ; -1 = jamais connecté / ancrage manquant.
-   */
-  readonly negotiationTimeMs?: number
-  readonly iceMethod: 'direct' | 'stun' | 'turn'
-  readonly codec: { readonly audio: string; readonly video: string }
-  readonly averageRtt: number
-  readonly averagePacketLoss: number
-  readonly maxPacketLoss: number
-  readonly averageBitrate: { readonly audio: number; readonly video: number }
-  readonly reconnectionCount: number
-  readonly networkTransitions: number
-  readonly effectsUsed: readonly AudioEffectType[]
-  readonly filtersUsed: boolean
-  readonly transcriptionEnabled: boolean
-  readonly translationEnabled: boolean
-  readonly qualityDistribution: { readonly excellent: number; readonly good: number; readonly fair: number; readonly poor: number }
-  readonly platform: 'ios' | 'web'
-  readonly deviceModel?: string
-}
-
 /**
  * Event: call:mode-changed (Server → Client)
  */
@@ -637,7 +550,7 @@ export interface CallModeChangedEvent {
  * Event: call:media-toggled (Server → Client)
  */
 /**
- * Client → Server: `call:toggle-audio` / `call:toggle-video`.
+ * Client → Server: `call:toggle-audio` / `call:toggle-video` / `call:toggle-screen`.
  *
  * À ne pas confondre avec `CallMediaToggleEvent`, qui est la DIFFUSION
  * serveur→client du même geste. Le listener de la passerelle a déclaré le type
@@ -666,11 +579,21 @@ export interface CallModeChangedEvent {
  * l'aurait attendu indéfiniment — déclarer un ack qui n'existe pas est une
  * promesse, pas une tolérance.
  */
+/**
+ * Les médias qu'un participant bascule. `screen` (#8063) est le partage
+ * d'écran : il voyage sur la MÊME diffusion `call:media-toggled`, et il est
+ * INERTE pour les clients publiés avant lui — le décodeur web
+ * (`decodeMediaToggled`) rend `null` hors `audio`/`video`, iOS tombe dans
+ * `default: break`. Ce n'est PAS la caméra : la passerelle n'écrit jamais
+ * `isVideoEnabled` pour lui.
+ */
+export type CallMediaType = 'audio' | 'video' | 'screen';
+
 export interface CallMediaToggleClientEvent {
   readonly callId: string;
   readonly enabled: boolean;
   /** Toléré par le schéma, jamais lu : le NOM de l'événement porte le média. */
-  readonly mediaType?: 'audio' | 'video';
+  readonly mediaType?: CallMediaType;
   /** Toléré par le schéma, jamais lu : la passerelle résout le participant. */
   readonly participantId?: string;
 }
@@ -684,7 +607,7 @@ export interface CallMediaToggleEvent {
   // this value — only `.userId`/`.participantId` roster lookups do.
   /** See `CallScreenCaptureEvent.userId` — same rationale, added Vague 140. */
   readonly userId?: string;
-  readonly mediaType: 'audio' | 'video';
+  readonly mediaType: CallMediaType;
   readonly enabled: boolean;
 }
 
@@ -772,6 +695,34 @@ export interface CallQualityAlertEvent {
 export interface CallInitiateAck {
   readonly success: boolean;
   readonly data?: { callId: string; mode: CallMode; iceServers: RTCIceServer[]; ttl?: number };
+  /**
+   * `activeCallId` accompagne un refus `CALL_ALREADY_ACTIVE` (#9111) : l'appel
+   * en cours dans la conversation, que le client REJOINT au lieu d'échouer.
+   */
+  readonly error?: { code: string; message: string; activeCallId?: string };
+}
+
+/**
+ * ACK pour call:signal
+ *
+ * **La forme de refus n'est pas décorative : c'est ce qui distingue un refus
+ * d'une panne de réseau.** `SocketAck.parse` (SDK iOS) rend `.timedOut` quand
+ * rien n'arrive et `.refused(…)` quand un `{ success: false }` arrive — et
+ * `CallSdpSignaler` REJOUE en backoff exponentiel sur le premier. Tant que les
+ * refus de `call:signal` ne rendaient rien, un refus DÉFINITIF
+ * (`NOT_A_PARTICIPANT`, `SIGNAL_SENDER_MISMATCH`, `INVALID_SIGNAL`) était rejoué
+ * à l'identique, 3 s par tentative, en consommant le budget de débit (#18632).
+ *
+ * `error` suit la forme de `CallInitiateAck` / `CallJoinAck` — `SocketAckRefusal`
+ * (SDK) décode déjà `code` et `error.code`/`error.message`, tous optionnels :
+ * l'élargissement est ADDITIF sur le fil et ne demande rien aux clients. Relevé
+ * des trois consommateurs avant de l'écrire (règle du cycle 105) : iOS
+ * (`emitCallSignalWithAck`) le décode, le web fabrique un rappel VIDE
+ * (`use-webrtc-p2p.ts`), Android n'envoie pas d'acquittement
+ * (`CallSignalManager.emitSignal`).
+ */
+export interface CallSignalAck {
+  readonly success: boolean;
   readonly error?: { code: string; message: string };
 }
 
@@ -1030,64 +981,6 @@ export interface CallRequestIceServersEvent {
   readonly callId: string;
 }
 
-/**
- * Répartition du temps d'appel entre les quatre paliers de qualité, en
- * FRACTIONS sommant à 1 — jamais en secondes (`socketCallAnalyticsSchema` borne
- * chaque membre à `[0, 1]`).
- */
-export interface CallQualityDistribution {
-  readonly excellent: number;
-  readonly good: number;
-  readonly fair: number;
-  readonly poor: number;
-}
-
-/**
- * Client → Server: le rapport de télémétrie terminal d'un appel, émis UNE fois
- * au raccrochage (« fire-and-forget », sans ack).
- *
- * Déclaré au cycle 107. Il ne l'était nulle part jusque-là : ni dans
- * `CLIENT_EVENTS`, ni dans `ClientToServerEvents`. Il ne vivait que dans
- * `CALL_EVENTS.ANALYTICS` et dans la signature en ligne de son listener — dix-neuf
- * champs transcrits à la main — pendant que les TROIS clients l'émettaient,
- * chacun contre sa propre transcription de la forme.
- *
- * C'est `conversation:join-error` (cycle 99) dans l'autre sens : là, huit
- * émetteurs serveur sans déclaration ; ici, un listener sans déclaration. La
- * réception est le sens le plus cher des deux — la forme y vient du réseau, donc
- * d'un émetteur que le dépôt ne contrôle pas.
- *
- * **L'autorité d'exécution reste `socketCallAnalyticsSchema`** (Zod, côté
- * passerelle) : cette interface en est la transcription au type, pas une seconde
- * source. Les deux se modifient ensemble — c'est le schéma qui REFUSE, ce type ne
- * fait que dire ce qui est attendu.
- */
-export interface CallAnalyticsEvent {
-  readonly callId: string;
-  /** Sonnerie humaine INCLUSE. `-1` = jamais connecté (manqué, rejeté, échec). */
-  readonly setupTimeMs: number;
-  /**
-   * Négociation WebRTC SEULE (answer/join → connected), sans le temps de
-   * sonnerie. Optionnel : absent des builds iOS antérieurs au 2026-07-03.
-   */
-  readonly negotiationTimeMs?: number;
-  readonly durationSeconds: number;
-  readonly reconnectionCount: number;
-  readonly networkTransitions: number;
-  readonly averageRtt: number;
-  readonly averagePacketLoss: number;
-  readonly maxPacketLoss: number;
-  readonly codec: string;
-  readonly effectsUsed: readonly string[];
-  readonly filtersUsed: boolean;
-  readonly transcriptionUsed: boolean;
-  readonly qualityDistribution: CallQualityDistribution;
-  readonly platform: string;
-  readonly deviceModel: string;
-  readonly isVideo: boolean;
-  readonly endReason: string;
-}
-
 // ===== SOCKET.IO EVENT NAMES =====
 
 /**
@@ -1101,6 +994,8 @@ export const CALL_EVENTS = {
   SIGNAL: 'call:signal',
   TOGGLE_AUDIO: 'call:toggle-audio',
   TOGGLE_VIDEO: 'call:toggle-video',
+  /** Partage d'écran (#8063) — même charge que `call:toggle-video`, même diffusion. */
+  TOGGLE_SCREEN: 'call:toggle-screen',
   END: 'call:end',
 
   // Client → Server (fire-and-forget)
@@ -1179,60 +1074,3 @@ export interface CallError {
    */
   readonly callId?: string;
 }
-
-/**
- * Codes d'erreur pour les appels vidéo
- */
-export const CALL_ERROR_CODES = {
-  // Authentication errors
-  NOT_AUTHENTICATED: 'NOT_AUTHENTICATED',
-
-  // Connection errors
-  CONNECTION_FAILED: 'CONNECTION_FAILED',
-  PEER_CONNECTION_FAILED: 'PEER_CONNECTION_FAILED',
-  ICE_CONNECTION_FAILED: 'ICE_CONNECTION_FAILED',
-  SIGNAL_FAILED: 'SIGNAL_FAILED',
-
-  // Permission errors
-  MEDIA_PERMISSION_DENIED: 'MEDIA_PERMISSION_DENIED',
-  CONVERSATION_NOT_FOUND: 'CONVERSATION_NOT_FOUND',
-  NOT_A_PARTICIPANT: 'NOT_A_PARTICIPANT',
-  /**
-   * Le fil est TERMINÉ (`Conversation.isActive === false` ou `closedAt` posé) —
-   * « no one can write », et un appel écrit : bulle d'appel en cours puis résumé
-   * terminal, plus l'éventail de sonnerie. Refusé à l'OUVERTURE seulement ; un
-   * appel déjà en cours va à son terme. Cf. `CallService.initiateCall`.
-   */
-  CONVERSATION_CLOSED: 'CONVERSATION_CLOSED',
-
-  // Call state errors
-  CALL_NOT_FOUND: 'CALL_NOT_FOUND',
-  CALL_ALREADY_ACTIVE: 'CALL_ALREADY_ACTIVE',
-  CALL_ENDED: 'CALL_ENDED',
-  MAX_PARTICIPANTS_REACHED: 'MAX_PARTICIPANTS_REACHED',
-  FORCE_LEAVE_ERROR: 'FORCE_LEAVE_ERROR',
-  INVALID_CALL_MODE: 'INVALID_CALL_MODE',
-  UNSUPPORTED_CALL_TYPE: 'UNSUPPORTED_CALL_TYPE',
-  ALREADY_IN_CALL: 'ALREADY_IN_CALL',
-  NOT_IN_CALL: 'NOT_IN_CALL',
-  /** Optimistic-locking conflict on CallSession.version persisted after retry (see CallService.joinCall). */
-  CALL_STATE_CONFLICT: 'CALL_STATE_CONFLICT',
-
-  // Media control errors
-  MEDIA_TOGGLE_FAILED: 'MEDIA_TOGGLE_FAILED',
-
-  // Feature errors
-  VIDEO_CALLS_NOT_SUPPORTED: 'VIDEO_CALLS_NOT_SUPPORTED',  // PUBLIC/GLOBAL conversations
-  BROWSER_NOT_SUPPORTED: 'BROWSER_NOT_SUPPORTED',
-
-  // Security errors (CVE fixes)
-  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
-  VALIDATION_ERROR: 'VALIDATION_ERROR',
-  INVALID_SIGNAL: 'INVALID_SIGNAL',
-  SIGNAL_SENDER_MISMATCH: 'SIGNAL_SENDER_MISMATCH',
-  SIGNAL_TOO_LARGE: 'SIGNAL_TOO_LARGE',
-  TARGET_NOT_FOUND: 'TARGET_NOT_FOUND',
-  PERMISSION_DENIED: 'PERMISSION_DENIED',
-} as const;
-
-export type CallErrorCode = typeof CALL_ERROR_CODES[keyof typeof CALL_ERROR_CODES];

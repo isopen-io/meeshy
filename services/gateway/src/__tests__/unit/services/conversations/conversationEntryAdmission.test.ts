@@ -289,7 +289,36 @@ describe("resolveConversationEntry — l'état du conteneur", () => {
 });
 
 describe('REJOIN_PARTICIPANT_STATE', () => {
-  it('rouvre l\'appartenance et efface la date de départ, et RIEN d\'autre — `joinedAt` reste celui de la première venue', () => {
-    expect(REJOIN_PARTICIPANT_STATE).toEqual({ isActive: true, leftAt: null });
+  /**
+   * `historyVisibleFrom` a rejoint la remise à zéro : c'est un octroi (ou une
+   * restriction) accordé à UNE arrivée, et il PRIME sur tout sauf le rang admin
+   * (rang 2 du plancher, avant le droit figé et avant le lien). Le laisser
+   * survivre à un départ faisait qu'un membre exclu puis ré-ajouté rentrait avec
+   * la borne d'une venue périmée, que ni son nouveau rôle ni son nouveau lien ne
+   * pouvaient corriger — le rang 2 les court-circuite tous les deux.
+   */
+  /**
+   * `deletedForMe` a rejoint la remise à zéro au cycle 148 (#17072), et ce
+   * `toEqual` est exactement ce qui l'a rendue visible : **une égalité sur
+   * l'objet ENTIER affirme autant sur ce qu'elle GARDE que sur ce qu'elle
+   * ADMET**, et sa seconde moitié se relisait comme le reste de la phrase. La
+   * constante effaçait DEUX des trois colonnes de départ que le flux de
+   * tombstones lit ensemble, et ce témoin gelait la troisième absence.
+   *
+   * `bannedAt` n'y est PAS, et ne doit pas y être : une rentrée ne débannit
+   * personne. Le verdict des trois colonnes — effacée, effacée, jamais — vit
+   * dans `__tests__/unit/rejoin-clears-departure-columns.test.ts`, qui les
+   * relève dans le source du flux plutôt que de les recopier ici.
+   */
+  it('rouvre l\'appartenance, efface les DEUX colonnes de départ qu\'une rentrée peut effacer ET l\'octroi d\'historique — `joinedAt` reste celui de la première venue', () => {
+    expect(REJOIN_PARTICIPANT_STATE).toEqual({
+      isActive: true,
+      leftAt: null,
+      deletedForMe: null,
+      historyVisibleFrom: null,
+      messageRequestAt: null,
+      messageRequestRisk: null,
+      messageRequestFromId: null,
+    });
   });
 });

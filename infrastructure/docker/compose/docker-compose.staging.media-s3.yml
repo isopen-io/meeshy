@@ -1,0 +1,93 @@
+# =============================================================================
+# MEESHY STAGING — SEAU DES MÉDIAS (S3 privé, #11267)
+# =============================================================================
+# SURCOUCHE : elle ne s'active qu'incluse explicitement, avec le compose de
+# staging :
+#
+#   docker compose -f docker-compose.staging.yml \
+#                  -f docker-compose.staging.media-s3.yml up -d
+#
+# Pourquoi un fichier à part, et pas un profil : Compose évalue `${VAR:?}` sur
+# TOUT le fichier, profils inactifs compris (mesuré, Compose v5.6). Des
+# identifiants obligatoires dans le compose principal casseraient le
+# déploiement de tout le staging tant qu'ils ne sont pas posés. Ici, `:?`
+# refuse le démarrage sans eux : MinIO, à identifiants vides, retomberait sur
+# « minioadmin » (audit D3).
+#
+# Le seau n'est joignable que depuis le réseau du staging : ni `ports`, ni
+# Traefik, jamais `meeshy-network` (partagé avec la production). Ce réseau est
+# un bridge ORDINAIRE, sans `internal: true` (contre-audit C6) : les autres
+# conteneurs du staging le joignent, et ce qui protège le seau, ce sont ses
+# identifiants obligatoires et l'absence de politique anonyme, pas la
+# topologie. La passerelle n'y a qu'un COMPTE DE SERVICE limité à ce seau ;
+# l'administrateur ne sert qu'à l'initialisation. Garde :
+# services/gateway/src/__tests__/unit/config/media-bucket-never-public.test.ts.
+#
+# Images : MinIO ne publie plus d'image communautaire depuis le 2025-10-23
+# (CVE-2025-62506 non corrigée en amont) ; la construction Chainguard est tenue
+# à jour. Elles s'épinglent par EMPREINTE, lue sur l'hôte au moment d'armer :
+#   docker buildx imagetools inspect cgr.dev/chainguard/minio:latest
+#   docker buildx imagetools inspect cgr.dev/chainguard/minio-client:latest-dev
+# (champ « Digest », sous la forme sha256:…).
+# =============================================================================
+
+# Les ancres YAML ne traversent pas les fichiers : celle du compose de staging
+# (#10855) est recopiée ici, à l'identique.
+x-journald-logging: &journald-logging
+  driver: journald
+  options:
+    tag: "{{.Name}}"
+
+services:
+  media-s3-staging:
+    image: cgr.dev/chainguard/minio@${MEDIA_S3_IMAGE_DIGEST:?empreinte sha256 de cgr.dev/chainguard/minio requise}
+    container_name: meeshy-media-s3-staging
+    restart: unless-stopped
+    logging: *journald-logging
+    command: ["server", "/data"]
+    environment:
+      - MINIO_ROOT_USER=${MEDIA_S3_ROOT_USER:?administrateur du seau requis, aucun identifiant par défaut}
+      - MINIO_ROOT_PASSWORD=${MEDIA_S3_ROOT_PASSWORD:?mot de passe administrateur du seau requis}
+      - MINIO_BROWSER=off
+    volumes:
+      - media_staging_bucket:/data
+    networks:
+      - meeshy-staging-network
+
+  # Crée le seau (sans politique anonyme : un seau MinIO neuf n'en a aucune),
+  # la politique limitée à CE seau, et le compte de service de la passerelle.
+  # Idempotent, rejoué jusqu'au succès ; refuse un compte de service qui serait
+  # l'administrateur.
+  media-s3-init-staging:
+    image: cgr.dev/chainguard/minio-client@${MEDIA_S3_CLIENT_IMAGE_DIGEST:?empreinte sha256 de cgr.dev/chainguard/minio-client (variante -dev, avec shell) requise}
+    container_name: meeshy-media-s3-init-staging
+    restart: on-failure
+    logging: *journald-logging
+    depends_on:
+      - media-s3-staging
+    environment:
+      - MEDIA_S3_ROOT_USER=${MEDIA_S3_ROOT_USER:?administrateur du seau requis}
+      - MEDIA_S3_ROOT_PASSWORD=${MEDIA_S3_ROOT_PASSWORD:?mot de passe administrateur du seau requis}
+      - MEDIA_S3_ACCESS_KEY_ID=${MEDIA_S3_ACCESS_KEY_ID:?identifiant du compte de service de la passerelle requis}
+      - MEDIA_S3_SECRET_ACCESS_KEY=${MEDIA_S3_SECRET_ACCESS_KEY:?secret du compte de service de la passerelle requis}
+      - MEDIA_S3_BUCKET=${MEDIA_S3_BUCKET:-meeshy-media-staging}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        [ "$${MEDIA_S3_ACCESS_KEY_ID}" != "$${MEDIA_S3_ROOT_USER}" ] || { echo "le compte de service ne peut pas être l'administrateur"; exit 1; }
+        until mc alias set staging http://media-s3-staging:9000 "$${MEDIA_S3_ROOT_USER}" "$${MEDIA_S3_ROOT_PASSWORD}" >/dev/null; do sleep 2; done
+        mc mb --ignore-existing "staging/$${MEDIA_S3_BUCKET}"
+        cat > /tmp/meeshy-gateway-media.json <<POLICY
+        {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetObject","s3:PutObject","s3:DeleteObject"],"Resource":["arn:aws:s3:::$${MEDIA_S3_BUCKET}/*"]},{"Effect":"Allow","Action":["s3:ListBucket","s3:GetBucketLocation"],"Resource":["arn:aws:s3:::$${MEDIA_S3_BUCKET}"]}]}
+        POLICY
+        mc admin policy create staging meeshy-gateway-media /tmp/meeshy-gateway-media.json
+        mc admin user add staging "$${MEDIA_S3_ACCESS_KEY_ID}" "$${MEDIA_S3_SECRET_ACCESS_KEY}"
+        mc admin policy attach staging meeshy-gateway-media --user "$${MEDIA_S3_ACCESS_KEY_ID}" || mc admin user info staging "$${MEDIA_S3_ACCESS_KEY_ID}" | grep -q meeshy-gateway-media
+        echo "seau $${MEDIA_S3_BUCKET} prêt, compte de service limité au seau"
+    networks:
+      - meeshy-staging-network
+
+volumes:
+  media_staging_bucket:
+    name: meeshy-staging-media-bucket

@@ -1,0 +1,174 @@
+import Foundation
+
+// MARK: - Les politiques que le chemin ne devrait pas porter (#4282)
+//
+// Écrit À LA MAIN. Le générateur ne supprime que les fichiers portant son
+// en-tête, donc ce fichier ne peut pas être emporté par une régénération.
+
+/// Déduit d'un CHEMIN ce qu'une adresse typée DÉCLARE.
+///
+/// Elle n'existe que pour les sites d'appel non encore migrés : `APIClient`
+/// reçoit aujourd'hui une `String`, et les deux politiques ci-dessous vivaient
+/// en ligne dans son corps, sous forme de comparaisons de préfixe. Une
+/// comparaison de préfixe ne rougit jamais quand une route bouge — elle cesse
+/// de matcher, et la politique qu'elle gouvernait disparaît en silence.
+///
+/// Ce type ne CHANGE rien : il donne un NOM à deux décisions de produit qui
+/// n'en avaient pas, donc pas de témoin non plus. Une fois les 348 sites
+/// migrés, il devient inutile et se retire — c'est la fin de la migration, pas
+/// une couche de plus.
+public enum MeeshyEndpointPolicy {
+
+    /// Ce qu'une requête attache, et ce qu'un 401 y signifie.
+    ///
+    /// Les quatre familles non porteuses SERVENT à obtenir un jeton : en
+    /// demander un pour les appeler bouclerait. Seule la connexion fait d'un
+    /// 401 une erreur d'IDENTIFIANTS — inscription et lien magique rendent
+    /// tout en 400 (`sendBadRequest`, vérifié côté gateway), donc les y ranger
+    /// affirmerait ce que le serveur ne soutient pas.
+    public static func authKind(forLegacyPath path: String) -> MeeshyEndpointAuthKind {
+        if path.hasPrefix("/auth/login") || path == "/auth/verification/status" { return .credentials }
+        if path == "/auth/refresh"
+            || path.hasPrefix("/auth/register")
+            || path.hasPrefix("/auth/magic-link") { return .none }
+        return .bearer
+    }
+
+    /// Ce qui se réessaie sur erreur transitoire.
+    public static func retryPolicy(forLegacyPath path: String) -> MeeshyEndpointRetryPolicy {
+        path.hasPrefix("/signal/") ? .never : .standard
+    }
+
+    /// Ce qu'un refus 4xx rend. Voir `MeeshyEndpointRejectionPolicy` —
+    /// l'inscription et la preuve d'adresse sont les routes dont le contrat
+    /// DOCUMENTE ses codes.
+    public static func rejectionPolicy(forLegacyPath path: String) -> MeeshyEndpointRejectionPolicy {
+        path.hasPrefix("/auth/register") || path == "/auth/verify-email" || path == "/auth/reset-password" ? .structured : .opaque
+    }
+}
+
+// MARK: - Ce que les adresses typées DÉCLARENT
+//
+// En extension, dans un fichier écrit à la main : les énumérations sont
+// générées et une redéfinition posée chez elles serait perdue à la prochaine
+// régénération. Le compilateur porte la garde — renommer un cas casse ici.
+
+public extension AuthEndpoint {
+    var authKind: MeeshyEndpointAuthKind {
+        switch self {
+        // #8083 — l'état d'une attente de preuve : aucune session n'y est en
+        // jeu, un 401 y dit « jeton d'attente invalide », jamais « session
+        // expirée » (qui rafraîchirait celle d'un AUTRE compte).
+        case .login, .loginN2Fa, .verificationStatus: return .credentials
+        case .refresh, .register, .magicLinkRequest, .magicLinkValidate: return .none
+        default: return .bearer
+        }
+    }
+
+    /// **Les routes dont les refus sont typés** — l'inscription d'abord (#5218).
+    ///
+    /// Son contrat documente quatre codes et le champ que chacun vise —
+    /// `VALIDATION_ERROR` (+ `violations`), `PHONE_INVALID`, `USERNAME_TAKEN`
+    /// (+ `suggestions`), `EMAIL_TAKEN` — précisément parce que l'écran doit
+    /// poser chaque phrase SOUS sa saisie. Aucune autre route d'auth ne
+    /// promet cela : les y basculer ferait de `MeeshyError.rejected` la forme
+    /// courante d'un 400, et les sites qui filtrent `.server(400, _)`
+    /// cesseraient de matcher sans qu'aucun d'eux ne rougisse.
+    ///
+    /// **La preuve d'adresse les rejoint (#8081)** : `POST /auth/verify-email`
+    /// pose `INVALID_VERIFICATION`, `VERIFICATION_EXPIRED` et `WEAK_PASSWORD`,
+    /// et sa phrase est écrite en français — l'écran de saisie du code doit
+    /// lire le CODE pour parler la langue de l'interface.
+    ///
+    /// **La réinitialisation du mot de passe aussi (#10867)** : `RESET_TOKEN_INVALID`,
+    /// `RESET_PASSWORD_WEAK`, `TWO_FACTOR_REQUIRED`… (#10866) — un compte 2FA doit
+    /// voir la saisie du code, pas « lien invalide ».
+    var rejectionPolicy: MeeshyEndpointRejectionPolicy {
+        switch self {
+        case .register, .verifyEmail, .resetPassword: return .structured
+        default: return .opaque
+        }
+    }
+}
+
+public extension SignalEndpoint {
+    /// Le 503 du Signal Protocol annonce un état PERMANENT (« Signal Protocol
+    /// not available »), jamais une surcharge passagère : réessayer brûle
+    /// 2 s + 4 s de temporisation et ne peut pas aboutir, pendant que
+    /// l'appelant attend son repli en clair.
+    var retryPolicy: MeeshyEndpointRetryPolicy { .never }
+}
+
+public extension ConversationsEndpoint {
+    /// **Le partage d'une traduction rend un refus que l'appareil LIT (#9899).**
+    ///
+    /// `POST …/shared-translations` répond 409 `SHARED_TRANSLATION_STALE_SOURCE`
+    /// quand le message a été modifié depuis que l'appareil l'a traduit : la
+    /// traduction ne dit plus ce que les autres lisent, elle reste locale. Sans
+    /// cette déclaration le transport ne rend qu'une phrase
+    /// (`MeeshyError.server(409, _)`), et ce refus se confondrait avec une panne —
+    /// `SharedTranslationService` en lit le CODE.
+    ///
+    /// Une seule adresse : toutes les autres routes de conversation gardent la
+    /// forme d'erreur qu'elles ont, et les sites qui filtrent leurs
+    /// `.server(400, _)` ne bougent pas.
+    var rejectionPolicy: MeeshyEndpointRejectionPolicy {
+        switch self {
+        case .byIdSharedTranslations: return .structured
+        default: return .opaque
+        }
+    }
+}
+
+
+public extension RelationsEndpoint {
+    /// **Le rituel du Sang et la baisse d'un lien rendent des refus que l'écran LIT (#13938).**
+    ///
+    /// `POST …/ritual` pose `RELATION_RITUAL_LAPSED`, `…_NOT_SYNCHRONISED`, `…_NO_REQUEST`,
+    /// `…_INVALID`, `…_BUSY`, `RELATION_CONSENT_REQUIRED`… : chacun change ce que l'écran dit
+    /// (« l'autre a lâché », « il manque un consentement », « plus de demande »). Sans cette
+    /// déclaration le transport ne rend qu'une phrase (`MeeshyError.server(409, _)`) et un
+    /// lâcher se confondrait avec une panne. Les deux lectures (`GET /relations`,
+    /// `GET /relations/config`) gardent la forme d'erreur qu'elles ont.
+    ///
+    /// Le relevé à la demande de la batterie (#14147) lit son code : `BATTERY_PULL_TOO_SOON` dit « déjà demandé il y a
+    /// moins de 5 minutes », `BATTERY_PULL_FORBIDDEN` retire le bouton.
+    var rejectionPolicy: MeeshyEndpointRejectionPolicy {
+        switch self {
+        case .byUserIdRitual, .byUserIdLevel, .byUserIdBatteryPull: return .structured
+        default: return .opaque
+        }
+    }
+}
+
+
+// MARK: - Une catégorie de préférences DÉSIGNE son adresse (#4282)
+
+public extension PreferenceCategory {
+    /// L'adresse servant CETTE catégorie.
+    ///
+    /// Le serveur sert sept routes LITTÉRALES (`/me/preferences/audio`,
+    /// `…/video`) et non une route à paramètre. Les sites d'appel, eux,
+    /// interpolaient `rawValue` : `"/me/preferences/\(category.rawValue)"`.
+    ///
+    /// Les deux formes se valent tant que `rawValue` et le dernier segment
+    /// coïncident — et rien ne le garantissait. Renommer un cas de
+    /// l'énumération (ou en ajouter un que le serveur ne sert pas) produisait
+    /// un 404 que ni le compilateur ni l'audit d'appariement ne pouvaient voir :
+    /// un segment interpolé est un JOKER, il apparie n'importe quelle route de
+    /// même forme.
+    ///
+    /// Ce `switch` est exhaustif SANS repli : un huitième cas ne compilera pas
+    /// tant que quelqu'un n'aura pas décidé quelle adresse il désigne.
+    var endpoint: MeEndpoint {
+        switch self {
+        case .privacy: return .preferencesPrivacy
+        case .audio: return .preferencesAudio
+        case .message: return .preferencesMessage
+        case .notification: return .preferencesNotification
+        case .video: return .preferencesVideo
+        case .document: return .preferencesDocument
+        case .application: return .preferencesApplication
+        }
+    }
+}

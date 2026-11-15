@@ -16,6 +16,18 @@ import {
 } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { shareLinkSchema } from './types';
+import { closeShareLinkRevokingGuests } from '../../socketio/closeShareLinkRevokingGuests';
+import { depreciee } from '../../utils/deprecation';
+// #4170 — le bloc « charger par linkId public + décider créateur/modérateur »
+// vivait quatre fois (ici trois, plus le PATCH générique de `management.ts`) ;
+// `loadShareLinkForManagement` en est désormais la source UNIQUE, partagée
+// entre les deux fichiers. Voir son doc-comment pour ce que la duplication
+// coûtait — c'est là qu'a vécu le premier écart de comportement (#4170,
+// `PATCH` ne révoquait pas les invités là où `/toggle` le faisait déjà).
+import { loadShareLinkForManagement, applyShareLinkUpdate } from './management';
+import { ShareLinkGraceRefusedError } from '../../services/auth/share-link-grace';
+import { sendShareLinkGraceRefusal } from '../../middleware/verification-gates';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 export async function registerAdminRoutes(fastify: FastifyInstance) {
   const authRequired = createUnifiedAuthMiddleware(fastify.prisma, {
@@ -24,8 +36,17 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour obtenir tous les liens créés par l'utilisateur
+  //
+  // #4170 — ALIAS DÉPRÉCIÉ. `GET /links` (`links/user.ts`) absorbe désormais
+  // cette liste (mêmes lignes, mêmes bornes de pagination via `?offset=`) et
+  // gagne `?expand=conversation,creator` pour la forme enrichie que cette
+  // route rendait seule. Gardée VIVANTE, comportement INCHANGÉ : le web
+  // l'appelait encore au moment de l'audit (`app/links/page.tsx:151`) — migré
+  // dans le même lot — et rien ne prouve l'absence d'un déploiement web plus
+  // ancien encore en circulation. Le retrait suit le compteur d'accès de
+  // #4275, jamais une lecture de code client.
   fastify.get<{ Querystring: { limit?: string; offset?: string } }>('/links/my-links', {
-    onRequest: [authRequired],
+    onRequest: [authRequired, depreciee({ depuis: '2026-08-29', successeur: apiPath('/links') })],
     schema: {
       description: 'Get all share links created by the authenticated user with pagination. Returns links with conversation details, participant statistics, and language information. Maximum 50 links per request.',
       tags: ['links'],
@@ -198,8 +219,20 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
   });
 
   // Route pour basculer l'état actif/inactif d'un lien
+  //
+  // #4170 — ALIAS DÉPRÉCIÉ. `PATCH /links/:linkId` accepte `isActive` depuis
+  // l'origine et absorbe ce geste — Android (`LinkApi.kt: @PATCH
+  // "links/{linkId}/toggle"`) reste le seul appelant mesuré (iOS et le web,
+  // migré dans ce même lot, appellent déjà la porte générique) : gardée
+  // VIVANTE tant que le compteur d'accès de #4275 ne prouve pas l'inverse.
   fastify.patch('/links/:linkId/toggle', {
-    onRequest: [authRequired],
+    onRequest: [
+      authRequired,
+      depreciee({
+        depuis: '2026-08-29',
+        successeur: (request) => apiPath(`/links/${(request.params as { linkId: string }).linkId}`),
+      }),
+    ],
     schema: {
       description: 'Toggle a share link\'s active status (activate or deactivate). Only the link creator or conversation administrators/moderators can toggle. When deactivated, the link becomes inaccessible to new and existing anonymous users.',
       tags: ['links'],
@@ -264,74 +297,51 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       const { linkId } = request.params as { linkId: string };
       const { isActive } = request.body as { isActive: boolean };
 
-      const link = await fastify.prisma.conversationShareLink.findFirst({
-        where: {
-          linkId,
-          createdBy: userId
-        },
-        include: {
-          conversation: {
-            include: {
-              participants: {
-                where: { userId, isActive: true }
-              }
-            }
-          }
-        }
-      });
-
-      if (!link) {
+      const loaded = await loadShareLinkForManagement(
+        fastify, userId, request.authContext.registeredUser?.role, linkId
+      );
+      if (loaded.outcome === 'not-found') {
         return sendNotFound(reply, 'Lien non trouvé');
       }
-
-      const isCreator = link.createdBy === userId;
-      const isConversationAdmin = link.conversation.participants.some(member =>
-        member.role === 'ADMIN' || member.role === 'MODERATOR'
-      );
-
-      if (!isCreator && !isConversationAdmin) {
+      if (loaded.outcome === 'forbidden') {
         return sendForbidden(reply, 'Permissions insuffisantes pour modifier ce lien');
       }
 
-      const updatedLink = await fastify.prisma.conversationShareLink.update({
-        where: { id: link.id },
-        data: { isActive },
-        include: {
-          conversation: {
-            select: {
-              id: true,
-              title: true,
-              description: true,
-              type: true,
-              isActive: true,
-              createdAt: true,
-              updatedAt: true
-            }
-          },
-          creator: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true
-            }
-          }
-        }
-      });
+      // #4351 — cet alias ne réécrit plus l'écriture : il délègue à
+      // `applyShareLinkUpdate`, qui porte la projection ET la révocation des
+      // invités déjà entrés. C'est là que vivait la seconde moitié de la
+      // promesse de cette route — « the link becomes inaccessible to new AND
+      // EXISTING anonymous users » : fermer la porte ne vide pas la salle, les
+      // invités déjà entrés gardaient leur socket dans la room du fil, donc
+      // chaque message, indéfiniment. Réactiver, en revanche, ne rend rien à
+      // personne : une ligne `Participant` close ne se rouvre que par la porte
+      // d'entrée.
+      const updatedLink = await applyShareLinkUpdate(fastify, loaded.id, { isActive });
 
       return sendSuccess(reply, updatedLink, { message: isActive ? 'Lien activé avec succès' : 'Lien désactivé avec succès' });
 
     } catch (error) {
+      if (error instanceof ShareLinkGraceRefusedError) {
+        return sendShareLinkGraceRefusal(reply, error.verdict, 'reopen');
+      }
       logError(fastify.log, 'Toggle link status error:', error);
       return sendInternalError(reply, 'Erreur lors de la modification du statut du lien');
     }
   });
 
   // Route pour prolonger la durée d'un lien
+  //
+  // #4170 — ALIAS DÉPRÉCIÉ, même raison que `/toggle` ci-dessus : Android
+  // (`LinkApi.kt: @PATCH "links/{linkId}/extend"`) en reste le seul appelant
+  // mesuré une fois le web migré vers `PATCH /links/:linkId` dans ce lot.
   fastify.patch('/links/:linkId/extend', {
-    onRequest: [authRequired],
+    onRequest: [
+      authRequired,
+      depreciee({
+        depuis: '2026-08-29',
+        successeur: (request) => apiPath(`/links/${(request.params as { linkId: string }).linkId}`),
+      }),
+    ],
     schema: {
       description: 'Extend a share link\'s expiration date. Only the link creator or conversation administrators/moderators can extend. Provide a new expiresAt timestamp in ISO 8601 format.',
       tags: ['links'],
@@ -397,78 +407,53 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       const { linkId } = request.params as { linkId: string };
       const { expiresAt } = request.body as { expiresAt: string };
 
-      const link = await fastify.prisma.conversationShareLink.findFirst({
-        where: {
-          linkId,
-          createdBy: userId
-        },
-        include: {
-          conversation: {
-            include: {
-              participants: {
-                where: { userId, isActive: true }
-              }
-            }
-          }
-        }
-      });
-
-      if (!link) {
+      const loaded = await loadShareLinkForManagement(
+        fastify, userId, request.authContext.registeredUser?.role, linkId
+      );
+      if (loaded.outcome === 'not-found') {
         return sendNotFound(reply, 'Lien non trouvé');
       }
-
-      const isCreator = link.createdBy === userId;
-      const isConversationAdmin = link.conversation.participants.some(member =>
-        member.role === 'ADMIN' || member.role === 'MODERATOR'
-      );
-
-      if (!isCreator && !isConversationAdmin) {
+      if (loaded.outcome === 'forbidden') {
         return sendForbidden(reply, 'Permissions insuffisantes pour modifier ce lien');
       }
 
-      const updatedLink = await fastify.prisma.conversationShareLink.update({
-        where: { id: link.id },
-        data: { expiresAt: new Date(expiresAt) },
-        include: {
-          conversation: {
-            select: {
-              id: true,
-              title: true,
-              description: true,
-              type: true,
-              isActive: true,
-              createdAt: true,
-              updatedAt: true
-            }
-          },
-          creator: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true
-            }
-          }
-        }
+      // #4351 — même délégation que `/toggle` : une seule écriture, une seule
+      // projection. Prolonger ne révoque personne (`isActive` n'est pas dans
+      // le `data`), et c'est `applyShareLinkUpdate` qui en décide, pas cet
+      // appelant.
+      const updatedLink = await applyShareLinkUpdate(fastify, loaded.id, {
+        expiresAt: new Date(expiresAt),
       });
 
       return sendSuccess(reply, updatedLink, { message: 'Lien prolongé avec succès' });
 
     } catch (error) {
+      if (error instanceof ShareLinkGraceRefusedError) {
+        return sendShareLinkGraceRefusal(reply, error.verdict, 'reopen');
+      }
       logError(fastify.log, 'Extend link duration error:', error);
       return sendInternalError(reply, 'Erreur lors de la prolongation du lien');
     }
   });
 
   // Route pour supprimer un lien
+  // #4170 critère 5 — FERMETURE DOUCE : la ligne survit, seul `isActive`
+  // bascule à `false`. Avant ce lot, `.delete()` détruisait la ligne du lien
+  // — un modérateur qui rouvrait sa liste la voyait disparaître sans laisser
+  // de trace, `currentUses`/les mesures agrégées de `GET /links?include=summary`
+  // perdaient l'historique, et rien ne distinguait plus « ce lien n'a jamais
+  // existé » de « ce lien a existé et a été retiré ». `isActive:false` est le
+  // même état qu'une désactivation via `/toggle` : ce lot ne fait QUE cesser
+  // de détruire la ligne, il ne fait naître aucun état nouveau. Un champ dédié
+  // (`closedAt`) distinguerait proprement « fermé » de « simplement désactivé »
+  // — colonne absente du schéma Prisma aujourd'hui, migration hors du
+  // territoire de cette route, déclarée à l'intégrateur (voir le commit).
   fastify.delete('/links/:linkId', {
     onRequest: [authRequired],
     schema: {
-      description: 'Permanently delete a share link. Only the link creator or conversation administrators/moderators can delete. This action is irreversible and will immediately invalidate all anonymous participants using this link.',
+      description: 'Close a share link (soft-close: the link becomes inactive but the row is preserved for audit and usage stats). Only the link creator or conversation administrators/moderators can close it. Immediately invalidates all anonymous participants using this link — a new join attempt via this linkId is refused, not silently accepted.',
       tags: ['links'],
-      summary: 'Delete share link',
+      summary: 'Close share link (soft-close)',
       params: {
         type: 'object',
         required: ['linkId'],
@@ -482,14 +467,14 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       },
       response: {
         200: {
-          description: 'Link deleted successfully',
+          description: 'Link closed successfully',
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
             data: {
               type: 'object',
               properties: {
-                message: { type: 'string', example: 'Lien supprimé avec succès' }
+                message: { type: 'string', example: 'Lien fermé avec succès' }
               }
             }
           }
@@ -499,7 +484,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
           ...errorResponseSchema
         },
         403: {
-          description: 'Forbidden - insufficient permissions to delete link',
+          description: 'Forbidden - insufficient permissions to close link',
           ...errorResponseSchema
         },
         404: {
@@ -521,44 +506,42 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       const userId = request.authContext.registeredUser!.id;
       const { linkId } = request.params as { linkId: string };
 
-      const link = await fastify.prisma.conversationShareLink.findFirst({
-        where: {
-          linkId,
-          createdBy: userId
-        },
-        include: {
-          conversation: {
-            include: {
-              participants: {
-                where: { userId, isActive: true }
-              }
-            }
-          }
-        }
-      });
-
-      if (!link) {
+      const loaded = await loadShareLinkForManagement(
+        fastify, userId, request.authContext.registeredUser?.role, linkId
+      );
+      if (loaded.outcome === 'not-found') {
         return sendNotFound(reply, 'Lien non trouvé');
       }
-
-      const isCreator = link.createdBy === userId;
-      const isConversationAdmin = link.conversation.participants.some(member =>
-        member.role === 'ADMIN' || member.role === 'MODERATOR'
-      );
-
-      if (!isCreator && !isConversationAdmin) {
+      if (loaded.outcome === 'forbidden') {
         return sendForbidden(reply, 'Permissions insuffisantes pour supprimer ce lien');
       }
 
-      await fastify.prisma.conversationShareLink.delete({
-        where: { id: link.id }
+      // AVANT la fermeture, et pas après — l'argument est désormais porté par
+      // `applyShareLinkUpdate` (#4351), qui l'applique aux TROIS écritures :
+      // `Participant.shareLinkId` est une colonne NUE, aucune cascade, et une
+      // ligne de lien devenue inactive ne relie plus rien à un invité qui
+      // resterait connecté par erreur. Cette route garde son propre couple
+      // révocation + `update` NU parce que sa réponse ne porte que son
+      // message : lui faire traverser `applyShareLinkUpdate` la ferait payer
+      // la projection `include` que personne ne lit ici.
+      // #10470 — un gros lien est fermé sans attendre l'éviction de ses
+      // invités (`closeShareLinkRevokingGuests`).
+      await closeShareLinkRevokingGuests({
+        prisma: fastify.prisma,
+        io: fastify.socketIOHandler?.getManager()?.getIO(),
+        manager: fastify.socketIOHandler?.getManager(),
+        shareLinkId: loaded.id,
+        close: (mark) => fastify.prisma.conversationShareLink.update({
+          where: { id: loaded.id },
+          data: { isActive: false, ...mark },
+        }),
       });
 
-      return sendSuccess(reply, { message: 'Lien supprimé avec succès' });
+      return sendSuccess(reply, { message: 'Lien fermé avec succès' });
 
     } catch (error) {
-      logError(fastify.log, 'Delete link error:', error);
-      return sendInternalError(reply, 'Erreur lors de la suppression du lien');
+      logError(fastify.log, 'Close link error:', error);
+      return sendInternalError(reply, 'Erreur lors de la fermeture du lien');
     }
   });
 }

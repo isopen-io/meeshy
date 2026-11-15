@@ -4,21 +4,38 @@ import { type RankingQuery } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery } from '../../validation/helpers.js';
 import { RankingsQuerySchema } from '../../validation/admin-schemas.js';
-import { sendSuccess, sendUnauthorized, sendForbidden, sendBadRequest, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendBadRequest, sendInternalError } from '../../utils/response.js';
+import { permissionsService } from '../../services/admin/permissions.service';
+import type { UserRoleEnum } from '@meeshy/shared/types';
+import { requirePermission } from '../../middleware/authorize';
+import { trackingUrlHost } from './tracking-link-url';
+import { adminViewer } from './oversight-viewer';
+import { buildUserRankings, fetchUserDetails, foldParticipantCountsToUsers } from './ranking-people';
+import {
+  loadConversationNamePreviews,
+  servedNamePreview,
+  type ConversationNamePreview,
+} from './conversation-name-preview';
+import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
-const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return sendUnauthorized(reply, 'Authentification requise');
-  }
-
-  const userRole = authContext.registeredUser.role;
-  const canView = ['BIGBOSS', 'ADMIN', 'AUDIT', 'ANALYST'].includes(userRole);
-
-  if (!canView) {
-    return sendForbidden(reply, 'Permission insuffisante');
-  }
-};
+// `requireAdmin` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+//
+// #4157 — LE PLUS GRAVE des écarts de la matrice : `/admin/ranking` sert un
+// palmarès NOMINATIF (username, displayName, avatar, jusqu'à 100 comptes) de
+// qui écrit le plus, qui a le plus de contacts, qui appelle le plus — ce
+// n'est pas une statistique agrégée comme le reste de `/admin/analytics/*`,
+// c'est une liste d'UTILISATEURS. `canViewAnalytics` admettait ANALYST, qui
+// n'a le droit de lister PERSONNE (`canViewUsers = false` dans la matrice
+// centrale) : un rôle sans accès administrateur consultait un classement
+// nominatif de la plateforme entière. La garde juste est celle qui gouverne
+// déjà `GET /admin/anonymous-users` pour la même raison — `canViewUsers` —
+// et non `canViewAnalytics`, qui parle d'agrégats, pas d'identités. Sous la
+// matrice actuelle les deux permissions coïncident exactement sur
+// BIGBOSS/ADMIN/MODERATOR/AUDIT (les quatre rôles qui ont `canAccessAdmin`) ;
+// seul ANALYST diverge, et c'est précisément lui qu'il faut exclure.
+const requireAdmin = requirePermission('canViewUsers');
 
 function getPeriodStartDate(period: string): Date | null {
   const now = new Date();
@@ -47,42 +64,28 @@ function getPeriodStartDate(period: string): Date | null {
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════
 
-type UserInfo = { id: string; username: string; displayName: string | null; avatar: string | null; lastActiveAt: Date | null };
 type ConvoInfo = { id: string; identifier: string; title: string | null; type: string; avatar: string | null };
 
-async function fetchUserDetails(fastify: FastifyInstance, userIds: string[]): Promise<Map<string, UserInfo>> {
-  if (userIds.length === 0) return new Map();
-  const users = await fastify.prisma.user.findMany({
-    where: { id: { in: userIds } },
-    select: { id: true, username: true, displayName: true, avatar: true, lastActiveAt: true }
-  });
-  return new Map(users.map(u => [u.id, u]));
-}
+// #8876 (R1) — une conversation SANS titre se nomme par ses membres. `canSeeMembers` (le rang
+// d'administration) gouverne l'aperçu : qui parle à qui est l'inventaire des conversations. Sans
+// ce rang la carte est vide et les lignes ne portent ni `participants` ni `total`.
+type ConvoDetails = ConvoInfo & { preview?: ConversationNamePreview };
 
-function buildUserRankings(sorted: Array<[string, number]>, userMap: Map<string, UserInfo>) {
-  return sorted.map(([userId, count]) => {
-    const user = userMap.get(userId);
-    return {
-      id: userId,
-      username: user?.username || 'Unknown',
-      displayName: user?.displayName,
-      avatar: user?.avatar,
-      count,
-      lastActivity: user?.lastActiveAt?.toISOString()
-    };
-  });
-}
-
-async function fetchConvoDetails(fastify: FastifyInstance, convoIds: string[]): Promise<Map<string, ConvoInfo>> {
+async function fetchConvoDetails(
+  fastify: FastifyInstance,
+  convoIds: string[],
+  canSeeMembers: boolean
+): Promise<Map<string, ConvoDetails>> {
   if (convoIds.length === 0) return new Map();
   const convos = await fastify.prisma.conversation.findMany({
     where: { id: { in: convoIds } },
     select: { id: true, identifier: true, title: true, type: true, avatar: true }
   });
-  return new Map(convos.map(c => [c.id, c]));
+  const previews = await loadConversationNamePreviews(fastify.prisma, convos, { allowed: canSeeMembers });
+  return new Map(convos.map(c => [c.id, { ...c, preview: previews.get(c.id) }]));
 }
 
-function buildConvoRankings(sorted: Array<[string, number]>, convoMap: Map<string, ConvoInfo>) {
+function buildConvoRankings(sorted: Array<[string, number]>, convoMap: Map<string, ConvoDetails>) {
   return sorted.map(([convoId, count]) => {
     const convo = convoMap.get(convoId);
     return {
@@ -91,6 +94,7 @@ function buildConvoRankings(sorted: Array<[string, number]>, convoMap: Map<strin
       title: convo?.title || convo?.identifier || 'Sans titre',
       type: convo?.type,
       image: convo?.avatar,
+      ...servedNamePreview(convo?.preview),
       count
     };
   });
@@ -106,48 +110,21 @@ function dateWhere(startDate: Date | null, field = 'createdAt') {
   return startDate ? { [field]: { gte: startDate } } : {};
 }
 
-// Message.senderId, Reaction.participantId and
-// CallParticipant.participantId all reference Participant.id, and a user holds one
-// Participant per conversation. Counts keyed by those columns must be folded back
-// to the owning userId — summing a user's per-conversation counts — before ranking.
-// Otherwise the same user surfaces once per conversation (duplicated and
-// undercounted), and counts keyed by a raw participant id never resolve to a user
-// (rendered "Unknown"). An orphan participant id with no user keeps its own key so
-// its activity stays visible rather than silently vanishing.
-async function foldParticipantCountsToUsers(
-  fastify: FastifyInstance,
-  participantCounts: Map<string, number>
-): Promise<Map<string, number>> {
-  if (participantCounts.size === 0) return new Map();
-  const participants = await fastify.prisma.participant.findMany({
-    where: { id: { in: [...participantCounts.keys()] } },
-    select: { id: true, userId: true }
-  });
-  const partToUser = new Map(participants.map(p => [p.id, p.userId]));
-  const userCounts = new Map<string, number>();
-  for (const [participantId, count] of participantCounts) {
-    const key = partToUser.get(participantId) || participantId;
-    userCounts.set(key, (userCounts.get(key) || 0) + count);
-  }
-  return userCounts;
-}
-
 // ═══════════════════════════════════════════════════════════════════
 // RANK USERS
 // ═══════════════════════════════════════════════════════════════════
 
-async function rankUsers(fastify: FastifyInstance, criterion: string, startDate: Date | null, limit: number) {
+async function rankUsers(fastify: FastifyInstance, criterion: string, startDate: Date | null, limit: number, canSeePresence: boolean) {
   const msgDateFilter = dateWhere(startDate);
 
   switch (criterion) {
     case 'messages_sent':
     case 'messages': {
+      // SANS `take` : la borne s'applique APRÈS le repli par compte.
       const topSenders = await fastify.prisma.message.groupBy({
         by: ['senderId'],
         where: { ...msgDateFilter, deletedAt: null, senderId: { not: null } },
-        _count: { id: true },
-        orderBy: { _count: { id: 'desc' } },
-        take: limit
+        _count: { id: true }
       });
       const participantCounts = new Map<string, number>();
       for (const s of topSenders) {
@@ -156,7 +133,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userCounts = await foldParticipantCountsToUsers(fastify, participantCounts);
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     case 'reactions_given':
@@ -164,9 +141,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const topReactors = await fastify.prisma.reaction.groupBy({
         by: ['participantId'],
         where: { ...msgDateFilter },
-        _count: { id: true },
-        orderBy: { _count: { id: 'desc' } },
-        take: limit
+        _count: { id: true }
       });
       const participantCounts = new Map<string, number>();
       for (const r of topReactors) {
@@ -175,7 +150,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userCounts = await foldParticipantCountsToUsers(fastify, participantCounts);
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     case 'reactions_received': {
@@ -200,7 +175,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userCounts = await foldParticipantCountsToUsers(fastify, senderCounts);
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     case 'replies_received': {
@@ -227,7 +202,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userCounts = await foldParticipantCountsToUsers(fastify, senderCounts);
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     // Seul compteur de cette famille qui n'a PAS à être replié : `Mention` est
@@ -248,7 +223,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       }
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     case 'mentions_sent': {
@@ -266,14 +241,15 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userCounts = await foldParticipantCountsToUsers(fastify, senderCounts);
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     case 'conversations_joined':
     case 'conversations': {
+      // Le groupe `userId: null` (les invités) n'est pas une personne.
       const topConversors = await fastify.prisma.participant.groupBy({
         by: ['userId'],
-        where: dateWhere(startDate, 'joinedAt'),
+        where: { ...dateWhere(startDate, 'joinedAt'), userId: { not: null } },
         _count: { id: true },
         orderBy: { _count: { id: 'desc' } },
         take: limit
@@ -282,7 +258,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userMap = await fetchUserDetails(fastify, userIds);
       return buildUserRankings(
         topConversors.map(c => [c.userId, c._count.id] as [string, number]),
-        userMap
+        userMap,
+        canSeePresence
       );
     }
 
@@ -307,7 +284,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       }
       const sorted = sortAndLimit(creatorCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     case 'share_links_created': {
@@ -322,7 +299,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userMap = await fetchUserDetails(fastify, userIds);
       return buildUserRankings(
         topCreators.map(c => [c.createdBy, c._count.id] as [string, number]),
-        userMap
+        userMap,
+        canSeePresence
       );
     }
 
@@ -335,9 +313,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
           senderId: { not: null },
           messageType: { in: ['image', 'file', 'video', 'audio'] }
         },
-        _count: { id: true },
-        orderBy: { _count: { id: 'desc' } },
-        take: limit
+        _count: { id: true }
       });
       const participantCounts = new Map<string, number>();
       for (const s of topSenders) {
@@ -346,7 +322,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userCounts = await foldParticipantCountsToUsers(fastify, participantCounts);
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     case 'reports_sent': {
@@ -361,7 +337,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userMap = await fetchUserDetails(fastify, userIds);
       return buildUserRankings(
         topReporters.map(r => [r.reporterId!, r._count.id] as [string, number]),
-        userMap
+        userMap,
+        canSeePresence
       );
     }
 
@@ -377,7 +354,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userMap = await fetchUserDetails(fastify, userIds);
       return buildUserRankings(
         topReported.map(r => [r.reportedEntityId, r._count.id] as [string, number]),
-        userMap
+        userMap,
+        canSeePresence
       );
     }
 
@@ -393,7 +371,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userMap = await fetchUserDetails(fastify, userIds);
       return buildUserRankings(
         topSenders.map(s => [s.senderId, s._count.id] as [string, number]),
-        userMap
+        userMap,
+        canSeePresence
       );
     }
 
@@ -409,7 +388,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userMap = await fetchUserDetails(fastify, userIds);
       return buildUserRankings(
         topReceivers.map(r => [r.receiverId, r._count.id] as [string, number]),
-        userMap
+        userMap,
+        canSeePresence
       );
     }
 
@@ -425,7 +405,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userMap = await fetchUserDetails(fastify, userIds);
       return buildUserRankings(
         topInitiators.map(c => [c.initiatorId, c._count.id] as [string, number]),
-        userMap
+        userMap,
+        canSeePresence
       );
     }
 
@@ -444,7 +425,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userCounts = await foldParticipantCountsToUsers(fastify, participantCounts);
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     case 'most_referrals_via_affiliate': {
@@ -459,7 +440,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userMap = await fetchUserDetails(fastify, userIds);
       return buildUserRankings(
         relations.map(r => [r.affiliateUserId, r._count.id] as [string, number]),
-        userMap
+        userMap,
+        canSeePresence
       );
     }
 
@@ -476,7 +458,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       }
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     case 'most_contacts': {
@@ -491,7 +473,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       }
       const sorted = sortAndLimit(contactCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     case 'most_tracking_links_created': {
@@ -506,7 +488,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userMap = await fetchUserDetails(fastify, userIds);
       return buildUserRankings(
         topCreators.map(c => [c.createdBy!, c._count.id] as [string, number]),
-        userMap
+        userMap,
+        canSeePresence
       );
     }
 
@@ -523,7 +506,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       }
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     default:
@@ -535,7 +518,13 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
 // RANK CONVERSATIONS
 // ═══════════════════════════════════════════════════════════════════
 
-async function rankConversations(fastify: FastifyInstance, criterion: string, startDate: Date | null, limit: number) {
+async function rankConversations(
+  fastify: FastifyInstance,
+  criterion: string,
+  startDate: Date | null,
+  limit: number,
+  canSeeMembers: boolean
+) {
   switch (criterion) {
     case 'message_count':
     case 'messages': {
@@ -547,7 +536,7 @@ async function rankConversations(fastify: FastifyInstance, criterion: string, st
         take: limit
       });
       const convoIds = topConvos.map(c => c.conversationId);
-      const convoMap = await fetchConvoDetails(fastify, convoIds);
+      const convoMap = await fetchConvoDetails(fastify, convoIds, canSeeMembers);
       return buildConvoRankings(
         topConvos.map(c => [c.conversationId, c._count.id] as [string, number]),
         convoMap
@@ -564,7 +553,7 @@ async function rankConversations(fastify: FastifyInstance, criterion: string, st
         take: limit
       });
       const convoIds = topConvos.map(c => c.conversationId);
-      const convoMap = await fetchConvoDetails(fastify, convoIds);
+      const convoMap = await fetchConvoDetails(fastify, convoIds, canSeeMembers);
       return buildConvoRankings(
         topConvos.map(c => [c.conversationId, c._count.id] as [string, number]),
         convoMap
@@ -584,7 +573,7 @@ async function rankConversations(fastify: FastifyInstance, criterion: string, st
         }
       }
       const sorted = sortAndLimit(convoCounts, limit);
-      const convoMap = await fetchConvoDetails(fastify, sorted.map(([id]) => id));
+      const convoMap = await fetchConvoDetails(fastify, sorted.map(([id]) => id), canSeeMembers);
       return buildConvoRankings(sorted, convoMap);
     }
 
@@ -601,7 +590,7 @@ async function rankConversations(fastify: FastifyInstance, criterion: string, st
         take: limit
       });
       const convoIds = topConvos.map(c => c.conversationId);
-      const convoMap = await fetchConvoDetails(fastify, convoIds);
+      const convoMap = await fetchConvoDetails(fastify, convoIds, canSeeMembers);
       return buildConvoRankings(
         topConvos.map(c => [c.conversationId, c._count.id] as [string, number]),
         convoMap
@@ -617,7 +606,7 @@ async function rankConversations(fastify: FastifyInstance, criterion: string, st
         take: limit
       });
       const convoIds = topConvos.map(c => c.conversationId);
-      const convoMap = await fetchConvoDetails(fastify, convoIds);
+      const convoMap = await fetchConvoDetails(fastify, convoIds, canSeeMembers);
       return buildConvoRankings(
         topConvos.map(c => [c.conversationId, c._count.id] as [string, number]),
         convoMap
@@ -631,12 +620,14 @@ async function rankConversations(fastify: FastifyInstance, criterion: string, st
         orderBy: { lastMessageAt: 'desc' },
         take: limit
       });
+      const previews = await loadConversationNamePreviews(fastify.prisma, convos, { allowed: canSeeMembers });
       return convos.map(c => ({
         id: c.id,
         identifier: c.identifier,
         title: c.title || c.identifier || 'Sans titre',
         type: c.type,
         image: c.avatar,
+        ...servedNamePreview(previews.get(c.id)),
         count: 0,
         lastActivity: c.lastMessageAt?.toISOString()
       }));
@@ -651,39 +642,60 @@ async function rankConversations(fastify: FastifyInstance, criterion: string, st
 // RANK MESSAGES
 // ═══════════════════════════════════════════════════════════════════
 
-async function rankMessages(fastify: FastifyInstance, criterion: string, startDate: Date | null, limit: number) {
+async function rankMessages(
+  fastify: FastifyInstance,
+  criterion: string,
+  startDate: Date | null,
+  limit: number,
+  canSeeMembers: boolean
+) {
   const dateFilter = dateWhere(startDate);
 
   async function fetchAndBuildMessageRankings(
     entries: Array<{ messageId: string; count: number }>
   ) {
     const messageIds = entries.map(e => e.messageId);
-    const messages = await fastify.prisma.message.findMany({
-      where: { id: { in: messageIds } },
-      select: {
-        id: true,
-        content: true,
-        messageType: true,
-        createdAt: true,
-        sender: {
-          select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
-        },
-        conversation: {
-          select: { id: true, identifier: true, title: true, type: true }
-        }
-      }
-    });
+    // Un classement platefome-entière ne connaît aucune conversation d'avance
+    // (#6516) : la portée se DÉCOUVRE depuis les mêmes ids, jamais `sender`.
+    const messages = await withOrphanedSenderRepair(
+      { prisma: fastify.prisma, conversationIds: discoverConversationIdsByMessageIds(fastify.prisma, messageIds) },
+      () =>
+        fastify.prisma.message.findMany({
+          where: { id: { in: messageIds } },
+          // #8876 — JAMAIS `content` : un classement de messages nomme un message par
+          // son auteur, sa conversation, sa date et son type ; il ne le LIT pas.
+          // Même classe que #6919 (`GET /admin/messages`) : le texte d'un message ne se
+          // lit que par la lecture souveraine d'une conversation, avec un motif écrit.
+          // Ce n'est pas un masquage : la colonne n'est même pas demandée à la base.
+          select: {
+            id: true,
+            messageType: true,
+            createdAt: true,
+            sender: {
+              select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
+            },
+            conversation: {
+              select: { id: true, identifier: true, title: true, type: true }
+            }
+          }
+        })
+    );
     const msgMap = new Map(messages.map(m => [m.id, m]));
+    const previews = await loadConversationNamePreviews(
+      fastify.prisma,
+      messages.flatMap(m => (m.conversation ? [m.conversation] : [])),
+      { allowed: canSeeMembers }
+    );
     return entries.map(e => {
       const msg = msgMap.get(e.messageId);
       return {
         id: e.messageId,
-        content: msg?.content,
-        contentPreview: msg?.content ? msg.content.substring(0, 100) : '',
         messageType: msg?.messageType,
         createdAt: msg?.createdAt?.toISOString(),
         sender: msg?.sender ? { ...msg.sender, username: msg.sender.user?.username } : undefined,
-        conversation: msg?.conversation,
+        conversation: msg?.conversation
+          ? { ...msg.conversation, ...servedNamePreview(previews.get(msg.conversation.id)) }
+          : msg?.conversation,
         count: e.count
       };
     });
@@ -740,6 +752,8 @@ async function rankMessages(fastify: FastifyInstance, criterion: string, startDa
 // RANK LINKS
 // ═══════════════════════════════════════════════════════════════════
 
+// #8876 — `originalUrl` est lue pour en tirer l'ORIGINE et rien d'autre : une invitation collée
+// dans un message devient `…/chat/<linkId>`, une clé de jointure. Le web ne lit que l'hôte.
 async function rankLinks(fastify: FastifyInstance, criterion: string, startDate: Date | null, limit: number) {
   switch (criterion) {
     case 'tracking_links_most_visited':
@@ -763,7 +777,7 @@ async function rankLinks(fastify: FastifyInstance, criterion: string, startDate:
       return links.map(l => ({
         id: l.id,
         token: l.token,
-        originalUrl: l.originalUrl,
+        originalUrl: trackingUrlHost(l.originalUrl),
         totalClicks: l.totalClicks,
         uniqueClicks: l.uniqueClicks,
         createdAt: l.createdAt?.toISOString(),
@@ -792,7 +806,7 @@ async function rankLinks(fastify: FastifyInstance, criterion: string, startDate:
       return links.map(l => ({
         id: l.id,
         token: l.token,
-        originalUrl: l.originalUrl,
+        originalUrl: trackingUrlHost(l.originalUrl),
         totalClicks: l.totalClicks,
         uniqueClicks: l.uniqueClicks,
         createdAt: l.createdAt?.toISOString(),
@@ -803,12 +817,13 @@ async function rankLinks(fastify: FastifyInstance, criterion: string, startDate:
 
     case 'share_links_most_used':
     case 'uses': {
+      // #8876 — ni `linkId` ni `identifier` ne sont lus : ils OUVRENT la conversation
+      // (`SHARE_LINK_JOIN_KEY_COLUMNS`), et un classement d'administration n'a pas à
+      // les distribuer. Un lien sans nom est servi `name: null`, jamais sous son secret.
       const topShareLinks = await fastify.prisma.conversationShareLink.findMany({
         where: { isActive: true },
         select: {
           id: true,
-          linkId: true,
-          identifier: true,
           name: true,
           currentUses: true,
           maxUses: true,
@@ -825,8 +840,7 @@ async function rankLinks(fastify: FastifyInstance, criterion: string, startDate:
       });
       return topShareLinks.map(l => ({
         id: l.id,
-        name: l.name || l.identifier || l.linkId,
-        identifier: l.identifier,
+        name: l.name?.trim() || null,
         currentUses: l.currentUses,
         maxUses: l.maxUses,
         createdAt: l.createdAt?.toISOString(),
@@ -841,8 +855,6 @@ async function rankLinks(fastify: FastifyInstance, criterion: string, startDate:
         where: { isActive: true, currentUniqueSessions: { gt: 0 } },
         select: {
           id: true,
-          linkId: true,
-          identifier: true,
           name: true,
           currentUses: true,
           currentUniqueSessions: true,
@@ -860,8 +872,7 @@ async function rankLinks(fastify: FastifyInstance, criterion: string, startDate:
       });
       return topShareLinks.map(l => ({
         id: l.id,
-        name: l.name || l.identifier || l.linkId,
-        identifier: l.identifier,
+        name: l.name?.trim() || null,
         currentUses: l.currentUses,
         currentUniqueSessions: l.currentUniqueSessions,
         maxUses: l.maxUses,
@@ -887,6 +898,12 @@ export async function systemRankingsRoutes(fastify: FastifyInstance) {
     preHandler: [validateQuery(RankingsQuerySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
+      // Directive produit 2026-08-25 : `requireAdmin` laisse passer AUDIT/ANALYST,
+      // qui n'ont plus le droit de voir `lastActivity` sur un classement.
+      const viewerRole = (request as UnifiedAuthRequest).authContext!.registeredUser!.role as UserRoleEnum;
+      const canSeePresence = permissionsService.canViewPresence(viewerRole);
+      const canSeeMembers = adminViewer(request).hasAdminRank;
+
       const { entityType = 'users', criterion = 'messages_sent', period = '30d', limit = '50' } = request.query as RankingQuery;
       const limitNum = Math.min(Math.max(1, parseInt(limit || '50', 10) || 50), 100);
       const startDate = getPeriodStartDate(period || '30d');
@@ -895,13 +912,13 @@ export async function systemRankingsRoutes(fastify: FastifyInstance) {
 
       switch (entityType) {
         case 'users':
-          rankings = await rankUsers(fastify, criterion || 'messages_sent', startDate, limitNum);
+          rankings = await rankUsers(fastify, criterion || 'messages_sent', startDate, limitNum, canSeePresence);
           break;
         case 'conversations':
-          rankings = await rankConversations(fastify, criterion || 'message_count', startDate, limitNum);
+          rankings = await rankConversations(fastify, criterion || 'message_count', startDate, limitNum, canSeeMembers);
           break;
         case 'messages':
-          rankings = await rankMessages(fastify, criterion || 'most_reactions', startDate, limitNum);
+          rankings = await rankMessages(fastify, criterion || 'most_reactions', startDate, limitNum, canSeeMembers);
           break;
         case 'links':
           rankings = await rankLinks(fastify, criterion || 'tracking_links_most_visited', startDate, limitNum);

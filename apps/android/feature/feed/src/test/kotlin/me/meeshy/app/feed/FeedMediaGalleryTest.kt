@@ -5,8 +5,8 @@ import org.junit.Test
 
 class FeedMediaGalleryTest {
 
-    private fun image(id: String, url: String, thumb: String? = null) =
-        FeedPostImage(id = id, url = url, thumbnailUrl = thumb, width = null, height = null, thumbHash = null)
+    private fun image(id: String, url: String, thumb: String? = null, alt: String? = null, caption: String? = null) =
+        FeedPostImage(id = id, url = url, thumbnailUrl = thumb, width = null, height = null, thumbHash = null, caption = caption, alt = alt)
 
     private fun presentation(
         images: List<FeedPostImage>,
@@ -113,16 +113,36 @@ class FeedMediaGalleryTest {
     }
 
     @Test
-    fun `post text becomes the shared caption for every page`() {
+    fun `each page of a multi image post shows its own media caption never the post text`() {
         val gallery = FeedMediaGallery.of(
             presentation(
-                images = listOf(image("a", "a"), image("b", "b")),
+                images = listOf(image("a", "a", caption = "The start"), image("b", "b")),
                 content = "Sunset run",
             ),
             imageIndex = 0,
         )
 
-        assertThat(gallery.captions).containsExactly("Sunset run", "Sunset run")
+        assertThat(gallery.captions).containsExactly("The start", null).inOrder()
+    }
+
+    @Test
+    fun `a single image post without its own caption falls back to the post text`() {
+        val gallery = FeedMediaGallery.of(
+            presentation(images = listOf(image("a", "a")), content = "  Sunset run "),
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.captions).containsExactly("Sunset run")
+    }
+
+    @Test
+    fun `a single image post prefers its own caption over the post text`() {
+        val gallery = FeedMediaGallery.of(
+            presentation(images = listOf(image("a", "a", caption = "Mine")), content = "Sunset run"),
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.captions).containsExactly("Mine")
     }
 
     @Test
@@ -202,5 +222,74 @@ class FeedMediaGalleryTest {
         assertThat(gallery.captions).hasSize(3)
         assertThat(gallery.authorNames).hasSize(3)
         assertThat(gallery.createdAtIsos).hasSize(3)
+    }
+
+    // #3878 — the thumbnail travels alongside the full-resolution url, never
+    // replacing it: the viewer uses it only as a blurred backdrop while the
+    // sharp image loads.
+
+    @Test
+    fun `an images thumbnail travels alongside its full-resolution url`() {
+        val gallery = FeedMediaGallery.of(
+            presentation(
+                listOf(
+                    image("a", url = "https://cdn/a-full.jpg", thumb = "https://cdn/a-thumb.jpg"),
+                    image("b", url = "https://cdn/b-full.jpg"),
+                ),
+            ),
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.imageUrls)
+            .containsExactly("https://cdn/a-full.jpg", "https://cdn/b-full.jpg")
+            .inOrder()
+        assertThat(gallery.thumbnailUrls)
+            .containsExactly("https://cdn/a-thumb.jpg", null)
+            .inOrder()
+    }
+
+    // #6739 — each page carries its OWN alt text (unlike caption, which is
+    // shared across all pages of a post), positionally aligned with imageUrls.
+
+    @Test
+    fun `an images alt text travels alongside its full-resolution url`() {
+        val gallery = FeedMediaGallery.of(
+            presentation(
+                listOf(
+                    image("a", url = "https://cdn/a-full.jpg", alt = "A red bicycle"),
+                    image("b", url = "https://cdn/b-full.jpg"),
+                ),
+            ),
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.altTexts).containsExactly("A red bicycle", null).inOrder()
+    }
+
+    @Test
+    fun `alt texts list is always the same size as image urls`() {
+        val gallery = FeedMediaGallery.of(
+            presentation(listOf(image("a", "a", alt = "alt a"), image("b", "b"))),
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.altTexts).hasSize(gallery.imageUrls.size)
+    }
+
+    @Test
+    fun `thumbnail urls list is always the same size as image urls`() {
+        val gallery = FeedMediaGallery.of(
+            presentation(listOf(image("a", "a", thumb = "ta"), image("b", "b"))),
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.thumbnailUrls).hasSize(gallery.imageUrls.size)
+    }
+
+    @Test
+    fun `no images yields no thumbnail urls`() {
+        val gallery = FeedMediaGallery.of(presentation(emptyList()), imageIndex = 0)
+
+        assertThat(gallery.thumbnailUrls).isEmpty()
     }
 }

@@ -24,6 +24,7 @@ import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridg
  * | `MeeshySocketIOManager._emitUnreadCountsSnapshot` | AU-DELÀ de la borne, ou passe échouée | `bridgeNotComputed()` |
  * | `ConversationHandler` (sur `conversation:join`) | on ouvre pour LIRE : le pont est consommé | `bridgeComputed(undefined)` |
  * | `broadcastReadStatus` | le lecteur vient de lire : l'ancien pont est VOID | `bridgeComputed(undefined)` |
+ * | `registerMarkUnreadRoute` (mark-unread, #7346) | rewind réussi ; aucun `ConversationBridgeService` câblé sur cette route | `bridgeNotComputed()` |
  *
  * Le seul état qui EFFACE est celui qu'on écrit en connaissance de cause. Un
  * émetteur futur qui ne sait rien du pont ne peut plus détruire par omission.

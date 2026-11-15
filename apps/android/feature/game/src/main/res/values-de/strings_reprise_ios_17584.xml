@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="game2_duo_no_friends">Für ein Bündnis brauchst du einen bestätigten Freund.</string>
+    <string name="game2_league_locked">Das Turnier öffnet bei Level %1$s · du bist auf Level %2$s</string>
+    <string name="game2_settings_hidden_card">Das Spiel ist auf diesem Gerät ausgeblendet.</string>
+    <string name="game_atlas_tiers_prestige">Die Wiedergeburt öffnet sich ab Level %1$s: Sie ist freiwillig, dein Licht kann auch weiter wachsen.</string>
+    <string name="game_concept_atlas_tip_2">Warte auf die Antwort: Es braucht eine Nachricht in jede Richtung.</string>
+    <string name="game_frappe_refused_shadow">Ein Schatten verhüllt dein Licht. Deine nächsten Funken vertreiben ihn, dann prägen wir.</string>
+    <string name="game_rules_concept_showcase_body">Das Regal deiner Trophäen: Pokale aus Turnier und Reise, Trophäen der Wiedergeburt und der Flamme.</string>
+    <string name="game_rules_intro">Acht Regeln, und das ganze Spiel passt hinein. Meo erklärt sie, Mee zeigt dir die Aktion.</string>
+    <string name="game_state_points_missing">Dein Licht zählt %1$s, also %2$s. Meesh Nr. %3$s wird %4$s davon bannen: Es fehlen %5$s.</string>
+    <string name="game_state_points_ready">Dein Licht zählt %1$s, also %2$s: genug, um Meesh Nr. %3$s zu prägen, die %4$s davon bannen wird.</string>
+    <string name="game_state_points_missing_plain">Dein Licht zählt %1$s. Meesh Nr. %2$s wird %3$s davon bannen: Es fehlen %4$s.</string>
+    <string name="game_state_season_progress">Reise %1$s, Woche %2$s von %3$s: Rast %4$s von %5$s, und %6$s bis zur nächsten.</string>
+</resources>

@@ -27,10 +27,16 @@ public struct KeyframeInspector: View {
         public let y: CGFloat
         public let scale: CGFloat
         public let opacity: CGFloat
+        /// La plus petite échelle que le curseur propose : celle où le plus
+        /// petit côté rendu de l'objet vaut 5 px de la scène de référence
+        /// (`TimelineScaleSetting.keyframeFloor`) ; 0 quand elle ne se prouve pas.
+        public let scaleFloor: CGFloat
         public init(id: String, absoluteTime: Float,
-                    x: CGFloat, y: CGFloat, scale: CGFloat, opacity: CGFloat) {
+                    x: CGFloat, y: CGFloat, scale: CGFloat, opacity: CGFloat,
+                    scaleFloor: CGFloat = 0) {
             self.id = id; self.absoluteTime = absoluteTime
             self.x = x; self.y = y; self.scale = scale; self.opacity = opacity
+            self.scaleFloor = scaleFloor
         }
     }
 
@@ -41,6 +47,20 @@ public struct KeyframeInspector: View {
     public static let timeStep: Float = 0.1
 
     public static let exposedEasingsAtLaunch: [Easing] = [.linear]
+
+    /// Le haut de la plage VISIBLE du curseur d'échelle. L'échelle n'a pas de
+    /// plafond (#14304) : une valeur ouverte au-delà étend la plage.
+    public static let scaleSliderCeiling: CGFloat = 4
+
+    /// La plage du curseur d'échelle : du plancher de l'objet à
+    /// `scaleSliderCeiling`, élargie pour contenir la valeur OUVERTE — une
+    /// image clé hors de la plage nominale s'affiche telle quelle, et le
+    /// curseur ne la ramène ni ne l'écrase tant qu'on ne le déplace pas.
+    public static func scaleSliderRange(current: CGFloat, floor: CGFloat) -> ClosedRange<CGFloat> {
+        let ouverte = current.isFinite ? current : 1
+        let bas = floor > 0 ? min(floor, ouverte) : ouverte
+        return bas...max(scaleSliderCeiling, ouverte, bas + 1)
+    }
 
     public static func exposedEasings(advanced: Bool) -> [Easing] {
         advanced ? Easing.allCases : exposedEasingsAtLaunch
@@ -96,7 +116,7 @@ public struct KeyframeInspector: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             header
             timeStepper
             positionSliders
@@ -105,12 +125,12 @@ public struct KeyframeInspector: View {
             easingPicker
             deleteButton
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         // Même composition que ClipInspector/TransitionInspector : matériau
         // sous le contenu (jamais glassEffect, le verre ne peut pas
         // échantillonner du verre — artefacts iOS 26).
         .background(
-            RoundedRectangle(cornerRadius: 14).fill(.ultraThinMaterial)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(.ultraThinMaterial)
         )
         .frame(maxWidth: 360, alignment: .leading)
         .accessibilityElement(children: .contain)
@@ -119,7 +139,7 @@ public struct KeyframeInspector: View {
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "diamond.fill")
                 .foregroundStyle(MeeshyColors.warning)
                 .accessibilityHidden(true)
@@ -143,17 +163,17 @@ public struct KeyframeInspector: View {
     /// Même pas et même présentation que les steppers de `ClipInspector` —
     /// une seule grammaire de réglage fin dans toute la timeline.
     private var timeStepper: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(String(localized: "story.timeline.keyframe.time",
                         defaultValue: "Instant", bundle: .module).uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .meeshyScaledFont(9, weight: .semibold)
                 .foregroundStyle(.secondary)
-            HStack(spacing: 6) {
-                timeStepButton(systemName: "minus.circle.fill") { onTimeAdjusted(-Self.timeStep) }
+            HStack(spacing: MeeshySpacing.xsPlus) {
+                timeStepButton(systemName: "minus.circle.fill", label: String(localized: "story.timeline.step.decrease.a11y", bundle: .module)) { onTimeAdjusted(-Self.timeStep) }
                 Text(String(format: "%.2fs", keyframe.absoluteTime))
                     .font(.system(.callout, design: .monospaced))
                     .monospacedDigit()
-                timeStepButton(systemName: "plus.circle.fill") { onTimeAdjusted(Self.timeStep) }
+                timeStepButton(systemName: "plus.circle.fill", label: String(localized: "story.timeline.step.increase.a11y", bundle: .module)) { onTimeAdjusted(Self.timeStep) }
             }
         }
         .accessibilityElement(children: .combine)
@@ -162,22 +182,23 @@ public struct KeyframeInspector: View {
         .accessibilityValue(String(format: "%.2fs", keyframe.absoluteTime))
     }
 
-    private func timeStepButton(systemName: String, action: @escaping () -> Void) -> some View {
+    private func timeStepButton(systemName: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.title3)
                 .foregroundStyle(MeeshyColors.indigo400)
                 .contentShape(Rectangle().inset(by: -8))
         }
+        .accessibilityLabel(label)
         .buttonStyle(.plain)
     }
 
     private var positionSliders: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             Text(String(localized: "story.timeline.keyframe.position", bundle: .module).uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold)
                 .foregroundStyle(.secondary)
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 axisSlider(label: "X", value: $posX, range: 0...1) {
                     onPositionChanged(posX, posY)
                 }
@@ -189,7 +210,7 @@ public struct KeyframeInspector: View {
     }
 
     private func axisSlider(label: String, value: Binding<CGFloat>, range: ClosedRange<CGFloat>, onCommit: @escaping () -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(label).font(.caption.weight(.semibold))
             Slider(value: value, in: range) { editing in
                 if !editing { onCommit() }
@@ -200,11 +221,11 @@ public struct KeyframeInspector: View {
     }
 
     private var scaleSlider: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(String(localized: "story.timeline.keyframe.scale", bundle: .module).uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold)
                 .foregroundStyle(.secondary)
-            Slider(value: $scale, in: 0.1...4.0, step: 0.05) { editing in
+            Slider(value: $scale, in: Self.scaleSliderRange(current: keyframe.scale, floor: keyframe.scaleFloor)) { editing in
                 if !editing { onScaleChanged(scale) }
             }
             .tint(MeeshyColors.indigo500)
@@ -213,9 +234,9 @@ public struct KeyframeInspector: View {
     }
 
     private var opacitySlider: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(String(localized: "story.timeline.keyframe.opacity", bundle: .module).uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold)
                 .foregroundStyle(.secondary)
             Slider(value: $opacity, in: 0...1, step: 0.01) { editing in
                 if !editing { onOpacityChanged(opacity) }

@@ -2,7 +2,7 @@
 
 **Date** : 2026-07-19
 **Piste** : iOS (suffixe `i`).
-**Surface** : `apps/ios/Meeshy/Features/Main/Views/VoiceProfileWizardView.swift`
+**Surface** : `apps/ios/Meeshy/Features/Settings/Views/VoiceProfileWizardView.swift`
 **Base** : `main` HEAD (`efedb69e4`)
 **Branche** : `claude/laughing-thompson-42yxa2`
 **Gate** : CI `iOS Tests`

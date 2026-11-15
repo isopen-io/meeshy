@@ -1,0 +1,141 @@
+import Foundation
+
+// MARK: - Ce qui MÉRITE un post
+
+/// **La seule règle qui décide qu'une slide mérite d'être publiée** (#4741).
+///
+/// ## Pourquoi elle existe
+///
+/// Publier une story crée un post PAR slide. Deux sites décidaient de la même
+/// chose, séparément, et divergeaient dans les DEUX sens :
+///
+/// | champ | `ComposerStoryCanvas.slideHasMatter` (armait la flèche) | `slideIsWorthPublishing` (filtrait ce qui part) |
+/// |---|---|---|
+/// | coquille de texte VIDE | comptait | ne comptait pas |
+/// | pastille de LIEU | **ne comptait pas** | comptait |
+/// | fond choisi | comptait | **ne comptait pas** |
+/// | image de fond | ne la voyait pas | comptait |
+/// | `mediaURL` / `mediaData` legacy | comptait | ne comptait pas |
+///
+/// Un auteur dont la seule matière était une pastille de lieu voyait donc la
+/// flèche RESTER GRISE ; à l'inverse, une slide au fond choisi armait la flèche
+/// puis se faisait jeter par le filtre. Deux écritures d'une règle sont deux
+/// occasions de la corriger à moitié — celle-ci l'était des deux côtés.
+///
+/// ## Ce qu'elle n'est PAS
+///
+/// **Distincte de `slideHasContent`**, et volontairement. Cette dernière répond
+/// « la page que je REGARDE est-elle vierge » — la page blanche de l'auteur —
+/// et le fond auto-appliqué n'y compte légitimement pas : un fond ne remplit
+/// pas une page aux yeux de qui la regarde. Ici la question est autre :
+/// « cette slide mérite-t-elle un post ? », et un fond CHOISI y répond oui —
+/// c'est le geste le plus court qui produise une story qu'on peut regarder
+/// (décision testée, `ComposerStoryCanvasTests.test_unFOND_estDeLaMatière`).
+///
+/// Les fusionner ferait de deux questions justes une seule fausse.
+public enum StorySlidePublishMatter {
+
+    /// - Parameter hasBackgroundImage: la slide porte-t-elle un bitmap de fond ?
+    ///   Il ne vit pas dans `effects` mais dans `slideImages`, sous l'id de la
+    ///   slide. Requis, sans défaut : un défaut jetterait en silence une
+    ///   story-photo, et le site d'appel ne rougirait pas.
+    public static func deservesAPost(_ slide: StorySlide,
+                                     hasBackgroundImage: Bool) -> Bool {
+        if hasBackgroundImage { return true }
+        if slide.mediaURL?.isEmpty == false { return true }
+        if slide.mediaData != nil { return true }
+        if slide.content?.isEmpty == false { return true }
+        return carriesMatter(slide.effects)
+    }
+
+    /// **La même règle, au grain des EFFETS seuls**.
+    ///
+    /// Un brouillon de document ne porte pas une `StorySlide` mais son
+    /// `StoryEffects` — et la question « y a-t-il de quoi publier ? » s'y pose
+    /// à l'identique. Elle était réécrite nulle part : elle n'était simplement
+    /// pas posée, et un canvas de texte, de dessin ou à fond de couleur se
+    /// faisait refuser comme « brouillon vide » par `ComposerDocumentSendPlan`.
+    ///
+    /// > Exposer le grain manquant vaut mieux que recopier la liste des
+    /// > champs : une seconde écriture serait une seconde occasion de la
+    /// > corriger à moitié — c'est exactement ce que ce type a été créé pour
+    /// > empêcher (#4741).
+    public static func carriesMatter(_ effets: StoryEffects) -> Bool {
+        if effets.background?.isEmpty == false { return true }
+        // Un texte VIDE n'est pas de la matière : c'est la coquille que le tap
+        // sur la page blanche pose AVANT la première frappe. La compter
+        // armerait la flèche sur une intention qui n'existe pas encore.
+        if effets.textObjects.contains(where: carriesRealText) { return true }
+        if effets.mediaObjects?.isEmpty == false { return true }
+        if effets.stickerObjects?.isEmpty == false { return true }
+        if !effets.locationObjects.isEmpty { return true }
+        if effets.drawingStrokes?.isEmpty == false { return true }
+        if effets.drawingData != nil { return true }
+        // Le SON est de la matière : une story « fond + musique » n'a aucun
+        // contenu visuel et se publie parfaitement.
+        if effets.audioPlayerObjects?.isEmpty == false { return true }
+        if effets.backgroundAudioId != nil { return true }
+        return false
+    }
+
+    /// **Un canvas doit porter un OBJET, pas seulement un fond**.
+    ///
+    /// > « Il faut juste rendre impossible la publication de canvas vide sans
+    /// > texte, ni autre type d'object ! »
+    ///
+    /// C'est une règle DISTINCTE de `carriesMatter`, et les deux coexistent
+    /// parce qu'elles répondent à deux questions :
+    ///
+    /// | question | règle | le fond de COULEUR y compte-t-il ? |
+    /// |---|---|---|
+    /// | « cette slide mérite-t-elle un post ? » (story : N slides = N posts) | `carriesMatter` | oui — décision #4741, testée |
+    /// | « ce canvas a-t-il un CONTENU à publier ? » (post) | `carriesObject` | **non** |
+    ///
+    /// Une image de fond COMPTE : c'est du contenu, elle occupe la scène et
+    /// se regarde. Seule la couleur nue est écartée — elle décore une page qui
+    /// reste vide, et publier une page vide ne dit rien à personne.
+    ///
+    /// > **Fusionner les deux ferait de deux questions justes une seule
+    /// > fausse** — c'est ce que le doc-comment de ce type dit déjà de
+    /// > `slideHasContent`, et la raison vaut une troisième fois ici.
+    public static func carriesObject(_ effets: StoryEffects) -> Bool {
+        if effets.textObjects.contains(where: carriesRealText) { return true }
+        if effets.mediaObjects?.isEmpty == false { return true }
+        if effets.stickerObjects?.isEmpty == false { return true }
+        if !effets.locationObjects.isEmpty { return true }
+        if effets.drawingStrokes?.isEmpty == false { return true }
+        if effets.drawingData != nil { return true }
+        if effets.audioPlayerObjects?.isEmpty == false { return true }
+        if effets.backgroundAudioId != nil { return true }
+        return false
+    }
+
+    /// La même question, posée à TOUT le composer — l'image de fond vivant
+    /// hors des `effects`, elle arrive par `slideImageIds` comme partout.
+    public static func anySlideCarriesObject(_ slides: [StorySlide],
+                                             slideImageIds: Set<String>) -> Bool {
+        slides.contains { slide in
+            if slideImageIds.contains(slide.id) { return true }
+            if slide.mediaURL?.isEmpty == false { return true }
+            if slide.mediaData != nil { return true }
+            if slide.content?.isEmpty == false { return true }
+            return carriesObject(slide.effects)
+        }
+    }
+
+    /// Y a-t-il, dans TOUT le composer, de quoi publier ?
+    ///
+    /// - Parameter slideImageIds: les slides qui portent un bitmap de fond.
+    public static func anySlideDeservesAPost(_ slides: [StorySlide],
+                                             slideImageIds: Set<String>) -> Bool {
+        slides.contains { deservesAPost($0, hasBackgroundImage: slideImageIds.contains($0.id)) }
+    }
+
+    /// Un `StoryTextObject` au texte vide — ou fait d'espaces — ne porte aucune
+    /// intention. Même trim que `exitTextEditingMode`, qui fait le ménage à la
+    /// sortie de l'éditeur : les deux règles doivent voir la même chose, sinon
+    /// la fenêtre se rouvre entre la saisie d'un espace et la fermeture.
+    public static func carriesRealText(_ text: StoryTextObject) -> Bool {
+        !text.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}

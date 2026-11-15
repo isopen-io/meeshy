@@ -17,18 +17,18 @@ struct SecurityVerificationView: View {
                     // Hero glyph ≥40pt : décoratif, le titre adjacent porte le sens — masqué VoiceOver (doctrine 74i/86i)
                     Image(systemName: "lock.shield.fill")
                         .font(MeeshyFont.relative(64))
-                        .foregroundColor(MeeshyColors.indigo400)
+                        .foregroundStyle(MeeshyColors.indigo400)
                         .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.sm)
                         .accessibilityHidden(true)
 
-                    Text(String(localized: "security.verify.title", defaultValue: "End-to-End Encryption", bundle: .main))
+                    Text(String(localized: "security.verify.title", defaultValue: "Chiffrement de bout en bout", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .accessibilityAddTraits(.isHeader)
 
-                    Text(String(localized: "security.verify.description", defaultValue: "Messages with \(conversationName) are end-to-end encrypted.", bundle: .main))
+                    Text(String(localized: "security.verify.description", defaultValue: "Les messages avec \(conversationName) sont chiffrés de bout en bout.", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, MeeshySpacing.xxxl)
 
@@ -45,8 +45,8 @@ struct SecurityVerificationView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { dismiss() }) {
-                        Text(String(localized: "common.done", defaultValue: "Done", bundle: .main)).bold()
-                            .foregroundColor(MeeshyColors.indigo400)
+                        Text(String(localized: "common.done", defaultValue: "Terminé", bundle: .main)).bold()
+                            .foregroundStyle(MeeshyColors.indigo400)
                     }
                 }
             }
@@ -74,33 +74,33 @@ struct SecurityVerificationView: View {
                 .background(Color.white)
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                 .shadow(color: theme.textPrimary.opacity(0.1), radius: 10)
-                .accessibilityLabel(String(localized: "security.verify.qr.a11y", defaultValue: "QR code of the safety number, to scan on the other device", bundle: .main))
+                .accessibilityLabel(String(localized: "security.verify.qr.a11y", defaultValue: "QR code du numéro de sécurité, à scanner sur l'autre appareil", bundle: .main))
         }
 
         // Libellé + numéro fusionnés en un seul élément VoiceOver, avec les
         // chiffres espacés pour une lecture digit-par-digit (comparaison à voix
         // haute lors de la vérification), plutôt que lus comme de grands nombres.
         VStack(spacing: MeeshySpacing.sm) {
-            Text(String(localized: "security.verify.safetyNumber.label", defaultValue: "Safety Number", bundle: .main))
+            Text(String(localized: "security.verify.safetyNumber.label", defaultValue: "Numéro de sécurité", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .textCase(.uppercase)
 
             Text(formatSafetyNumber(safetyNumber))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .monospaced))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, MeeshySpacing.xxl)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            String(localized: "security.verify.safetyNumber.label", defaultValue: "Safety Number", bundle: .main)
+            String(localized: "security.verify.safetyNumber.label", defaultValue: "Numéro de sécurité", bundle: .main)
                 + ", " + spelledSafetyNumber(safetyNumber)
         )
 
-        Text(String(localized: "security.verify.howto", defaultValue: "To verify, compare this number with the one shown on \(conversationName)'s device, or scan their QR code.", bundle: .main))
+        Text(String(localized: "security.verify.howto", defaultValue: "Pour vérifier, comparez ce nombre avec celui affiché sur l'appareil de \(conversationName), ou scannez son code QR.", bundle: .main))
             .font(MeeshyFont.relative(MeeshyFont.captionSize))
-            .foregroundColor(theme.textMuted)
+            .foregroundStyle(theme.textMuted)
             .multilineTextAlignment(.center)
             .padding(.horizontal, MeeshySpacing.xxl)
             .padding(.top, MeeshySpacing.lg)
@@ -113,17 +113,17 @@ struct SecurityVerificationView: View {
             // Glyphe d'état ≥40pt : décoratif, le titre adjacent porte le sens — masqué VoiceOver (doctrine 74i/86i)
             Image(systemName: "hourglass.circle")
                 .font(MeeshyFont.relative(40))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .accessibilityHidden(true)
 
-            Text(String(localized: "security.verify.unavailable.title", defaultValue: "Verification Unavailable", bundle: .main))
+            Text(String(localized: "security.verify.unavailable.title", defaultValue: "Vérification indisponible", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .accessibilityAddTraits(.isHeader)
 
-            Text(String(localized: "security.verify.unavailable.description", defaultValue: "Safety number verification will be available once both participants have exchanged their encryption keys.", bundle: .main))
+            Text(String(localized: "security.verify.unavailable.description", defaultValue: "La vérification du numéro de sécurité sera disponible une fois que les deux participants auront échangé leurs clés de chiffrement.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, MeeshySpacing.xxl)
         }

@@ -1,0 +1,436 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "a11y.floating.menu.profile-action",
+          "androidName": "a11y_edit_profile",
+          "status": "adopted"
+        },
+        {
+          "androidName": "a11y_floating_menu",
+          "status": "android-only"
+        },
+        {
+          "androidName": "a11y_floating_menu_unread",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversationCard.open",
+          "androidName": "a11y_state_open",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.app_name",
+          "androidName": "app_name",
+          "status": "adopted"
+        },
+        {
+          "androidName": "brand_signature_credit",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bring_channel_description",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bring_channel_name",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bring.incoming.body",
+          "androidName": "bring_incoming_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bring.incoming.someone",
+          "androidName": "bring_incoming_someone",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bring.incoming.stop",
+          "androidName": "bring_incoming_stop",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bring.incoming.title",
+          "androidName": "bring_incoming_title",
+          "status": "adopted"
+        },
+        {
+          "androidName": "call_channel_description",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.section.appels",
+          "androidName": "call_channel_name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.incoming.audio",
+          "androidName": "call_incoming_audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.incoming.video",
+          "androidName": "call_incoming_video",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.back",
+          "androidName": "chat_back",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "commands.menu.message",
+          "androidName": "chat_message_placeholder",
+          "status": "adopted"
+        },
+        {
+          "androidName": "chat_no_messages",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversations.error.retry",
+          "androidName": "chat_retry",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.feedback.send",
+          "androidName": "chat_send",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "dashboard.stat.messages",
+          "androidName": "chat_title",
+          "status": "adopted"
+        },
+        {
+          "androidName": "conversations_empty",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.logout.a11y",
+          "androidName": "conversations_logout",
+          "status": "adopted"
+        },
+        {
+          "androidName": "conversations_no_messages",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversations.error.retry",
+          "androidName": "conversations_retry",
+          "status": "adopted"
+        },
+        {
+          "androidName": "conversations_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.empty.title",
+          "androidName": "feed_empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.feed.post.like",
+          "androidName": "feed_like",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.floating.feed",
+          "androidName": "feed_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.login.submit",
+          "androidName": "login_button",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.password.label",
+          "androidName": "login_password_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.identity.username",
+          "androidName": "login_username_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "commands.contacts",
+          "androidName": "menu_contacts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "root.menu.discover",
+          "androidName": "menu_discover",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "root.menu.game",
+          "androidName": "menu_game",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "root.menu.links",
+          "androidName": "menu_my_links",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "root.menu.notifications",
+          "androidName": "menu_notifications",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "root.menu.settings",
+          "androidName": "menu_settings",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.empty.all",
+          "androidName": "notifications_empty",
+          "status": "adopted"
+        },
+        {
+          "androidName": "notifications_mark_all_read",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.notifications",
+          "androidName": "notifications_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.back",
+          "androidName": "profile_back",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.bio",
+          "androidName": "profile_bio_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.display_name",
+          "androidName": "profile_display_name_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.edit",
+          "androidName": "profile_edit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.floating.menu.profile-action",
+          "androidName": "profile_edit_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.save",
+          "androidName": "profile_save",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.title",
+          "androidName": "profile_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.message.unknown_sender",
+          "androidName": "profile_unknown",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "splash.tagline",
+          "androidName": "splash_tagline",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "Meeshy %@ · %@",
+          "androidName": "splash_version_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.tab.calls",
+          "androidName": "tab_calls",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.tab.feed",
+          "androidName": "tab_feed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.title",
+          "androidName": "tab_profile",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.incoming.mute",
+          "androidName": "talkie_incoming_mute",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.incoming.muteNamed",
+          "androidName": "talkie_incoming_mute_named",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.incoming.someone",
+          "androidName": "talkie_incoming_someone",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.incoming.title",
+          "androidName": "talkie_incoming_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.allRead",
+          "androidName": "widget_all_read_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.favoriteContacts.description",
+          "androidName": "widget_favorite_contacts_description",
+          "status": "adopted"
+        },
+        {
+          "androidName": "widget_favorite_contacts_empty",
+          "status": "android-only"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.favoriteContacts.title",
+          "androidName": "widget_favorite_contacts_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.quickReply.callMe",
+          "androidName": "widget_quick_reply_call_me",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.quickReply.description",
+          "androidName": "widget_quick_reply_description",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.empty.openApp",
+          "androidName": "widget_quick_reply_empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.quickReply.ok",
+          "androidName": "widget_quick_reply_ok",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.quickReply.thanks",
+          "androidName": "widget_quick_reply_thanks",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.quickReply.title",
+          "androidName": "widget_quick_reply_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.recentConversations.description",
+          "androidName": "widget_recent_conversations_description",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.empty.openApp",
+          "androidName": "widget_recent_conversations_empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.recentConversations.title",
+          "androidName": "widget_recent_conversations_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.unreadMessages.description",
+          "androidName": "widget_unread_count_description",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.unreadMessages.title",
+          "androidName": "widget_unread_count_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.unread",
+          "androidName": "widget_unread_label",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

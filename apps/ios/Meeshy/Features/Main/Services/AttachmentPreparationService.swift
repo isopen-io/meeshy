@@ -48,6 +48,11 @@ struct PreparedAttachment: Sendable {
 /// drops the handle.
 @MainActor
 final class PreparingAttachment: ObservableObject, Identifiable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     let id: String
     let kind: MessageAttachment.AttachmentType
     @Published var stage: AttachmentPreparationStage = .loading
@@ -122,8 +127,13 @@ enum AttachmentPreparationError: Error, Sendable {
 /// background.
 @MainActor
 final class AttachmentPreparationService {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = AttachmentPreparationService()
-    private let log = Logger(subsystem: "me.meeshy.app", category: "attachment-prep")
+    private let log = MeeshyLog.logger(.attachmentPrep)
 
     init() {}
 
@@ -140,18 +150,29 @@ final class AttachmentPreparationService {
         return prep
     }
 
-    // MARK: Image data (PhotosPicker / share extension)
+    // MARK: Image bytes (original file data — recent-media grid, #9683)
 
+    /// Une photo de la photothèque remise en OCTETS d'origine : même chemin
+    /// que le sélecteur système, sans `UIImage` 2048 décodée en amont.
     func prepareImageData(_ data: Data,
-                                 image: UIImage,
-                                 context: MediaContext = .message,
-                                 accentColor: String = MeeshyColors.brandPrimaryHex) -> PreparingAttachment {
-        let prep = PreparingAttachment(kind: .image, initialThumbnail: image, accentColor: accentColor)
-        prep.stage = .compressing
+                          context: MediaContext = .message,
+                          accentColor: String = MeeshyColors.brandPrimaryHex) -> PreparingAttachment {
+        let prep = PreparingAttachment(kind: .image, accentColor: accentColor)
+        prep.stage = .loading
         Task { [weak self] in
-            await self?.runImageDataPreparation(prep: prep, data: data, image: image, context: context)
+            await self?.runPickedImageData(data, prep: prep, context: context)
         }
         return prep
+    }
+
+    /// **Une prise du viseur part par ses OCTETS** (#9885, #11847) : ceux que
+    /// `PhotoCaptureProcessor` a écrits une fois, carte de gain HDR comprise.
+    /// L'image ne sert que si la prise n'en a pas (rendu peint par le composer).
+    func prepareCapture(_ image: UIImage, data: Data?,
+                        context: MediaContext,
+                        accentColor: String) -> PreparingAttachment {
+        guard let data else { return prepareImage(image, context: context, accentColor: accentColor) }
+        return prepareImageData(data, context: context, accentColor: accentColor)
     }
 
     // MARK: Video (URL on disk — camera or already-extracted picker payload)
@@ -220,36 +241,44 @@ final class AttachmentPreparationService {
 
     // MARK: - Private: Image pipeline
 
+    /// Une image RENDUE (retouche, scène) n'a pas d'octets d'origine : elle
+    /// s'encode une fois, au budget que la préférence de compression autorise.
     private func runImagePreparation(prep: PreparingAttachment,
                                      image: UIImage,
                                      context: MediaContext) async {
-        let result = await MediaCompressor.shared.compressImage(image, maxDimension: context.maxImageDimension)
-        await populateImage(prep: prep, result: result, sourceImage: image)
-    }
-
-    private func runImageDataPreparation(prep: PreparingAttachment,
-                                         data: Data,
-                                         image: UIImage,
-                                         context: MediaContext) async {
-        let result = await MediaCompressor.shared.compressImageData(data, maxDimension: context.maxImageDimension)
-        await populateImage(prep: prep, result: result, sourceImage: image)
+        let policy = context.storedOutgoingImagePolicy()
+        let result = await MediaCompressor.shared.compressImage(image, maxDimension: policy.pixelBudget,
+                                                                quality: policy.quality)
+        await populateImage(prep: prep, result: result, preview: image)
     }
 
     private func populateImage(prep: PreparingAttachment,
                                result: CompressedImageResult,
-                               sourceImage: UIImage) async {
+                               preview: UIImage) async {
         let fileName = "image_\(prep.id).\(result.fileExtension)"
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+
+        prep.stage = .hashing
+        // Écriture + ThumbHash hors MainActor : une sélection multi-photos
+        // empile plusieurs `populateImage` en vol, et ces deux étapes n'ont
+        // besoin d'aucune isolation — seul le retour à `prep.finish`/`prep.fail`
+        // doit se faire sur MainActor. Le ThumbHash se calcule sur l'APERÇU
+        // (1 024 px), jamais sur la pleine définition (#9885). `imageBox` suit
+        // la discipline de `StickerSendPipeline.SendableStickerImage` : l'image
+        // n'est que LUE (encodage du hash), jamais mutée.
+        let data = result.data
+        let imageBox = SendableAttachmentImage(image: preview)
+        let thumbHash: String?
         do {
-            try result.data.write(to: tempURL)
+            thumbHash = try await Task.detached(priority: .userInitiated) {
+                try data.write(to: tempURL)
+                return imageBox.image.toThumbHash()
+            }.value
         } catch {
             log.error("image write failed: \(error.localizedDescription)")
             prep.fail("Échec d'écriture de l'image")
             return
         }
-
-        prep.stage = .hashing
-        let thumbHash = sourceImage.toThumbHash()
 
         let attachment = MessageAttachment(
             id: prep.id,
@@ -258,8 +287,8 @@ final class AttachmentPreparationService {
             mimeType: result.mimeType,
             fileSize: result.data.count,
             fileUrl: tempURL.absoluteString,
-            width: Int(sourceImage.size.width),
-            height: Int(sourceImage.size.height),
+            width: result.pixelSize.map { Int($0.width) },
+            height: result.pixelSize.map { Int($0.height) },
             thumbHash: thumbHash,
             thumbnailColor: prep.accentColor
         )
@@ -280,7 +309,8 @@ final class AttachmentPreparationService {
                                      context: MediaContext) async {
         let compressedURL: URL
         do {
-            compressedURL = try await MediaCompressor.shared.compressVideo(sourceURL, context: context)
+            compressedURL = try await MediaCompressor.shared.compressVideo(sourceURL, context: context,
+                                                                           budget: context.storedVideoSendBudget())
             if deleteSource, compressedURL != sourceURL {
                 FileManager.default.removeItemLogging(at: sourceURL, context: "post-compression source cleanup", logger: log)
             }
@@ -325,36 +355,52 @@ final class AttachmentPreparationService {
                                  prep: PreparingAttachment,
                                  context: MediaContext) async {
         do {
-            guard let data = try await item.loadTransferable(type: Data.self),
-                  let fullImage = UIImage(data: data) else {
+            guard let data = try await PickedMedia.loadImageData(item) else {
                 prep.fail("Image illisible")
                 return
             }
-            // Pose immédiatement un aperçu léger (downsampling ImageIO, faible
-            // empreinte mémoire) pour que l'image sélectionnée apparaisse
-            // « directement » dans la zone d'attachement. La décompression
-            // pleine résolution + le ThumbHash restent réservés au pipeline de
-            // traitement en arrière-plan ci-dessous.
-            prep.thumbnail = Self.downsampledPreview(from: data) ?? fullImage
-            prep.stage = .compressing
-            await runImageDataPreparation(prep: prep, data: data, image: fullImage, context: context)
+            await runPickedImageData(data, prep: prep, context: context)
         } catch {
             log.error("picker image load failed: \(error.localizedDescription)")
             prep.fail("Échec du chargement de l'image")
         }
     }
 
+    /// Les OCTETS d'une photo — sélecteur, grille des récents, prise de
+    /// l'objectif, fichier déposé : jamais décodés sur le fil principal (#9885).
+    /// L'aperçu 1 024 px s'affiche dès qu'il est prêt et sert au ThumbHash ; le
+    /// fichier qui part est celui de `compressImageData` — les octets d'origine
+    /// tant qu'ils tiennent dans le budget.
+    private func runPickedImageData(_ data: Data,
+                                    prep: PreparingAttachment,
+                                    context: MediaContext) async {
+        let policy = context.storedOutgoingImagePolicy()
+        let preview = await Task.detached(priority: .userInitiated) {
+            Self.downsampledPreview(from: data).map(SendableAttachmentImage.init(image:))
+        }.value
+        guard let preview else {
+            prep.fail("Image illisible")
+            return
+        }
+        prep.thumbnail = preview.image
+        prep.stage = .compressing
+        guard let result = await MediaCompressor.shared.compressImageData(data, policy: policy) else {
+            log.error("image preparation refused: location could not be removed")
+            prep.fail("Image illisible")
+            return
+        }
+        await populateImage(prep: prep, result: result, preview: preview.image)
+    }
+
     private func loadPickerVideo(item: PhotosPickerItem,
                                  prep: PreparingAttachment,
                                  context: MediaContext) async {
         do {
-            guard let data = try await item.loadTransferable(type: Data.self) else {
+            // Un FICHIER, jamais `Data` : le film ne traverse pas la mémoire (#9870).
+            guard let rawURL = try await PickedMedia.loadVideoFile(item) else {
                 prep.fail("Vidéo illisible")
                 return
             }
-            let rawURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("video_raw_\(prep.id).mp4")
-            try data.write(to: rawURL)
             prep.stage = .compressing
             await runVideoPreparation(prep: prep,
                                       sourceURL: rawURL,
@@ -372,20 +418,7 @@ final class AttachmentPreparationService {
     /// budget used by the message and feed composers so the tray thumbnail
     /// keeps the same on-disk footprint after the unification.
     static func generateVideoThumbnail(url: URL) async -> UIImage? {
-        // Modern async AVFoundation API (iOS 16+): `image(at:)` decodes the frame
-        // on AVFoundation's own queue, so it neither blocks the caller nor needs a
-        // manually-detached thread, and replaces the deprecated synchronous
-        // `copyCGImage` and `AVAsset(url:)`.
-        let asset = AVURLAsset(url: url)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 200, height: 200)
-        do {
-            let cgImage = try await generator.image(at: .zero).image
-            return UIImage(cgImage: cgImage)
-        } catch {
-            return nil
-        }
+        await VideoThumbnailGenerator.shared.image(for: .firstFrame(of: url, maxDimension: 200))
     }
 
     /// Feeds `ReelComposition`'s 3-second qualification floor (règle produit
@@ -414,18 +447,20 @@ final class AttachmentPreparationService {
     /// `UIImage` just to fill a ~56pt tray tile (cf. SOTA image audit). Used to
     /// surface the picked photo in the attachment zone the instant its bytes
     /// land, before the heavier compression pipeline runs. Returns `nil` when
-    /// the bytes can't be decoded, so the caller falls back to the full image.
-    static func downsampledPreview(from data: Data, maxPixelSize: CGFloat = 1024) -> UIImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceShouldCacheImmediately: false
-        ]
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-            return nil
-        }
-        return UIImage(cgImage: cgImage)
+    /// the bytes can't be decoded: the caller then refuses the image.
+    nonisolated static func downsampledPreview(from data: Data, maxPixelSize: CGFloat = 1024) -> UIImage? {
+        ImageDownsampler.thumbnail(data: data, maxPixelSize: maxPixelSize, decodeImmediately: false)
+            .map { UIImage(cgImage: $0) }
     }
+}
+
+// MARK: - Sendable image box (Task.detached crossing)
+
+/// Traversée d'une `UIImage` vers une tâche détachée — même discipline que
+/// `StickerSendPipeline.SendableStickerImage` : l'image n'est que LUE
+/// (encodage ThumbHash des pixels), jamais mutée, donc la faire voyager est
+/// sûr. Redite plutôt qu'exportée : une boîte partagée inviterait à faire
+/// voyager n'importe quelle image, y compris une image qu'on mute.
+private nonisolated struct SendableAttachmentImage: @unchecked Sendable {
+    let image: UIImage
 }

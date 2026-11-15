@@ -93,6 +93,14 @@ function makeFakePrisma(opts: { storyIds: string[]; repostIds: string[]; comment
         return { count: 0 };
       }),
     },
+    // Ce que les posts détruits ont rapporté à leurs lecteurs (#9569) : même
+    // régime — sans ce double la passe rejette et rien n'est détruit.
+    engagementPostPoints: {
+      deleteMany: jest.fn(async () => {
+        calls.push('engagementPostPoints.deleteMany');
+        return { count: 0 };
+      }),
+    },
     // Le hard-delete purge aussi les usages de sons (le Sound, lui, survit).
     // Sans ces doubles, l'accès à `prisma.soundUsage` lève et le try/catch de
     // la passe avale l'erreur : postMedia.deleteMany n'est jamais atteint.
@@ -166,6 +174,9 @@ function makeSimplePrisma() {
     },
     trackingLink: {
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    engagementPostPoints: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     soundUsage: {
       findMany: jest.fn<any>().mockResolvedValue([]),
@@ -398,7 +409,14 @@ describe('ExpiredStoriesCleanupService — notifications des posts détruits', (
     expect(fake.prisma.$runCommandRaw).toHaveBeenCalledWith(
       expect.objectContaining({
         find: 'Notification',
-        filter: { 'context.postId': { $in: ['story1', 'repost1'] } },
+        filter: {
+          type: { $ne: 'content_removed' },
+          $or: [
+            { 'context.postId': { $in: ['story1', 'repost1'] } },
+            { 'metadata.repostId': { $in: ['story1', 'repost1'] } },
+            { 'metadata.originalPostId': { $in: ['story1', 'repost1'] } },
+          ],
+        },
       })
     );
   });
@@ -432,8 +450,8 @@ describe('ExpiredStoriesCleanupService — notifications des posts détruits', (
     (fake.prisma.$runCommandRaw as jest.Mock<any>).mockResolvedValueOnce({
       cursor: {
         firstBatch: [
-          { _id: { $oid: 'n1' }, userId: { $oid: '64a000000000000000000001' } },
-          { _id: { $oid: 'n2' }, userId: { $oid: '64a000000000000000000002' } },
+          { _id: { $oid: 'n1' }, userId: { $oid: '64a000000000000000000001' }, delivery: { pushSent: true } },
+          { _id: { $oid: 'n2' }, userId: { $oid: '64a000000000000000000002' }, delivery: { pushSent: true } },
         ],
       },
     });
@@ -445,8 +463,8 @@ describe('ExpiredStoriesCleanupService — notifications des posts détruits', (
       where: { id: { in: ['n1', 'n2'] } },
     });
     expect(ANNOUNCER.announceNotificationsRetracted).toHaveBeenCalledWith([
-      { id: 'n1', userId: '64a000000000000000000001' },
-      { id: 'n2', userId: '64a000000000000000000002' },
+      { id: 'n1', userId: '64a000000000000000000001', pushSent: true },
+      { id: 'n2', userId: '64a000000000000000000002', pushSent: true },
     ]);
   });
 

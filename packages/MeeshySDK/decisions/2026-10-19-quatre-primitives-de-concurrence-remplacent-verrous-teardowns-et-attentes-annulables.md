@@ -1,0 +1,9 @@
+## Quatre primitives de concurrence remplacent verrous, teardowns et attentes annulables
+
+**Contexte**: treize fichiers appariaient `NSLock` et `nonisolated(unsafe)`, trois classes `CleanupHandle` recopiaient le même filet de `deinit`, cinq attentes (porte d'e-mail, vignettes, sondage de transcription, drapeau de scroll, `BoundedAsyncResolution`) ne rendaient pas la main à l'annulation, et `ConversationSyncEngine` sérialisait par `stateQueue.sync`.
+
+**Décision**: `MeeshySDK/Concurrency/` — `Locked<State>` (état DANS `OSAllocatedUnfairLock`, copies partageant le même verrou), `TeardownBox<Resources>` (ressources prises UNE fois puis libérées hors verrou, sur la queue voulue), `CancellableWaiters<Value>` posée sur `WaiterTable` pure (continuations toujours reprises hors verrou, annulation avant l'inscription couverte par le ticket), `cancellableSleep(for:)`. Au-dessus : `LatestFirstGate` et `CoalescingDeadline`. `Locked` est le point unique à basculer vers `Synchronization.Mutex` quand le plancher sera iOS 18.
+
+**Pourquoi pas un task group pour `BoundedAsyncResolution`**: un groupe attend TOUS ses enfants ; après le délai il attendrait encore une opération sourde à l'annulation, et la borne de temps ne tiendrait plus. Une continuation unique tenue dans `Locked`, un minuteur annulé quand l'opération gagne et `nil` à l'annulation de l'appelant tiennent la borne.
+
+**Conséquences assumées**: `awaitSyncRelease` reste NON annulable (`rejoinsLaSynchroEnVol` relance `fullSync()` au retour, une tâche annulée bouclerait). L'e-mail : un appelant annulé reçoit `false` tout de suite, la présentation reste ; un verdict tardif la retire même si tous sont partis. Le moteur de synchro migre en deux passes : l'état propre à `ConversationSyncEngine.swift` d'abord, l'état partagé avec `+Ecritures` et `+Socket` (ouvertes, miroir de non-lus, accusés de réception) après LOT-01, qui possède `+Socket`.

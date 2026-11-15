@@ -16,47 +16,48 @@ public enum EngagementDispatchOutcome: Sendable, Equatable {
 public actor EngagementOutbox {
     public static let shared = EngagementOutbox()
 
-    private let db: DatabaseQueue
-    private let now: @Sendable () -> Date
-    private static let logger = Logger(subsystem: "com.meeshy.sdk", category: "engagement-outbox")
-
-    /// Backoff identique au pattern existant : min(60s, 2^attempts × 5s).
-    private static func backoff(attempts: Int) -> TimeInterval {
-        min(60, pow(2.0, Double(max(0, attempts))) * 5)
+    private let storage: DatabaseQueue?
+    private var db: DatabaseQueue {
+        get throws {
+            guard let storage else { throw DatabaseStorageUnavailable() }
+            return storage
+        }
     }
+    private let now: @Sendable () -> Date
+    private static let logger = MeeshyLog.logger(.engagementOutbox, subsystem: .legacySDK)
+
+    private let retryPolicy: RetryPolicy
 
     public init() {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let path = dir.appendingPathComponent("meeshy_engagement_outbox.db").path
-        self.db = Self.makeQueue(path: path)
-        self.now = { Date() }
+        self.init(dbPath: dir.appendingPathComponent("meeshy_engagement_outbox.db").path)
     }
 
     /// Test-only / injectable init.
-    public init(dbPath: String, clock: @escaping @Sendable () -> Date = { Date() }) {
-        self.db = Self.makeQueue(path: dbPath)
-        self.now = clock
+    public init(dbPath: String, clock: @escaping @Sendable () -> Date = { Date() }, retryPolicy: RetryPolicy = .stateSync) {
+        self.init(storage: ResilientDatabaseQueue.open(path: dbPath), clock: clock, retryPolicy: retryPolicy)
     }
 
-    private static func makeQueue(path: String) -> DatabaseQueue {
-        let queue: DatabaseQueue
-        do {
-            queue = try DatabaseQueue(path: path)
-        } catch {
-            // Bascule mémoire : l'outbox fonctionne mais NE SURVIT PLUS aux
-            // relancements — toute session non dépilée est perdue au kill.
-            Self.logger.error("On-disk engagement outbox unavailable, falling back to memory (sessions will not survive relaunch): \(error.localizedDescription, privacy: .public)")
-            do {
-                queue = try DatabaseQueue()
-            } catch {
-                fatalError("[EngagementOutbox] Cannot create in-memory GRDB queue — out of memory: \(error)")
-            }
+    init(storage opened: OpenedDatabaseQueue, clock: @escaping @Sendable () -> Date = { Date() }, retryPolicy: RetryPolicy = .stateSync) {
+        self.storage = Self.prepare(opened)
+        self.now = clock
+        self.retryPolicy = retryPolicy
+    }
+
+    private static func prepare(_ opened: OpenedDatabaseQueue) -> DatabaseQueue? {
+        switch opened {
+        case .persistent:
+            break
+        case .memoryFallback(_, let diskError):
+            logger.error("On-disk engagement outbox unavailable, falling back to memory (sessions will not survive relaunch): \(diskError, privacy: .public)")
+        case .unavailable(let diskError, let memoryError):
+            logger.fault("Engagement outbox has no storage at all, sessions are dropped: disk=\(diskError, privacy: .public) memory=\(memoryError, privacy: .public)")
         }
+        guard let queue = opened.queue else { return nil }
         do {
             try createSchema(in: queue)
         } catch {
-            // Sans schéma, toutes les requêtes suivantes échoueront en cascade.
-            Self.logger.fault("Engagement outbox schema creation failed — every subsequent query will fail: \(error.localizedDescription, privacy: .public)")
+            logger.fault("Engagement outbox schema creation failed — every subsequent query will fail: \(error.localizedDescription, privacy: .public)")
         }
         return queue
     }
@@ -76,12 +77,8 @@ public actor EngagementOutbox {
         }
     }
 
-    private static let encoder: JSONEncoder = {
-        let e = JSONEncoder(); e.outputFormatting = [.sortedKeys]; e.dateEncodingStrategy = .iso8601; return e
-    }()
-    private static let decoder: JSONDecoder = {
-        let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d
-    }()
+    private static let encoder = MeeshyCoders.encoder(.outbox)
+    private static let decoder = MeeshyCoders.decoder(.outbox)
 
     /// Encodes a session to its stored JSON text, logging instead of
     /// returning a bare `nil` — a dropped encode means the session never
@@ -234,10 +231,10 @@ public actor EngagementOutbox {
             ready = []
         }
 
-        // Dispatch ALL ready rows as ONE batch. The endpoint accepts an array and
-        // is rate-limited at 20/min per user — one POST for ≤50 sessions instead
-        // of one-POST-per-session, which used to hammer /posts/engagement/batch
-        // into 429s. A bounded caller (background transition) cancels this task
+        // Dispatch ALL ready rows as ONE batch (≤50, under the 200-event cap of
+        // POST /social/events, where they travel as `dwell` events since #10483).
+        // One POST for ≤50 sessions instead of one-POST-per-session, which used
+        // to hammer the old /posts/engagement/batch into 429s. A bounded caller (background transition) cancels this task
         // when its budget is spent: skip the dispatch, the rows stay `finalized`.
         guard !ready.isEmpty, !Task.isCancelled else { return }
         let sessions = ready.map { $0.1 }
@@ -259,7 +256,7 @@ public actor EngagementOutbox {
             }
         case .failedTransient:
             let bumps: [(String, Double)] = ready.map { (id, _, attempts) in
-                (id, now().addingTimeInterval(Self.backoff(attempts: attempts + 1)).timeIntervalSince1970)
+                (id, now().addingTimeInterval(retryPolicy.delay(afterFailure: attempts + 1)).timeIntervalSince1970)
             }
             do {
                 try await db.write { db in

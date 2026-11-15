@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import UIKit
+import MeeshyUI
 
 /// Full-screen long-press preview for a STAGED (not-yet-sent) image or video
 /// attachment. The composer already holds the media locally
@@ -21,6 +22,7 @@ struct AttachmentQuickLookPreview: View {
     @State private var fullImage: UIImage?
     @State private var player: AVQueuePlayer?
     @State private var looper: AVPlayerLooper?
+    @State private var audioTracks = AudioTrackActivator()
 
     var body: some View {
         ZStack {
@@ -40,16 +42,21 @@ struct AttachmentQuickLookPreview: View {
         .task {
             switch kind {
             case .image:
-                guard fullImage == nil, let fileURL, let data = try? Data(contentsOf: fileURL) else { return }
-                fullImage = UIImage(data: data)
+                guard fullImage == nil, let fileURL else { return }
+                fullImage = await Task.detached(priority: .userInitiated) { () -> UIImage? in
+                    guard let data = try? Data(contentsOf: fileURL) else { return nil }
+                    return UIImage(data: data)?.preparingThumbnail(of: CGSize(width: 840, height: 840))
+                }.value
             case .video:
                 guard let fileURL else { return }
                 let queue = AVQueuePlayer()
                 queue.isMuted = true
+                audioTracks.bind(to: queue, effectiveMuted: { true })
                 queue.allowsExternalPlayback = false
                 queue.preventsDisplaySleepDuringVideoPlayback = false
                 let item = AVPlayerItem(url: fileURL)
                 looper = AVPlayerLooper(player: queue, templateItem: item)
+                MediaPolicyMonitor.shared.adopt(queue, role: .watched)
                 player = queue
                 queue.play()
             }
@@ -60,6 +67,7 @@ struct AttachmentQuickLookPreview: View {
         .onDisappear {
             player?.pause()
             looper = nil
+            audioTracks.release()
             player = nil
         }
     }
@@ -86,6 +94,11 @@ private struct AttachmentQuickLookVideoSurface: UIViewRepresentable {
     }
 
     final class PlayerLayerView: UIView {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
         override class var layerClass: AnyClass { AVPlayerLayer.self }
         var playerLayer: AVPlayerLayer {
             guard let layer = layer as? AVPlayerLayer else {

@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:notifications": {
+      "resDir": "feature/notifications/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "notification.banner.inConversation",
+          "androidName": "notification_banner_in_conversation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media.summary.audio",
+          "androidName": "notification_banner_media_audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media.summary.photo",
+          "androidName": "notification_banner_media_photo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media.summary.video",
+          "androidName": "notification_banner_media_video",
+          "status": "adopted"
+        },
+        {
+          "androidName": "notification_banner_preview_hidden",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "comment.action.delete",
+          "androidName": "notifications_action_delete",
+          "status": "adopted"
+        },
+        {
+          "androidName": "notifications_action_mark_read",
+          "status": "android-only"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.all",
+          "androidName": "notifications_category_all",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.calls",
+          "androidName": "notifications_category_calls",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.contacts",
+          "androidName": "notifications_category_contacts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.groups",
+          "androidName": "notifications_category_groups",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.mentions",
+          "androidName": "notifications_category_mentions",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.messages",
+          "androidName": "notifications_category_messages",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.reactions",
+          "androidName": "notifications_category_reactions",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.social",
+          "androidName": "notifications_category_social",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.system",
+          "androidName": "notifications_category_system",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.translations",
+          "androidName": "notifications_category_translations",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.unread",
+          "androidName": "notifications_category_unread",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.empty.all",
+          "androidName": "notifications_empty",
+          "status": "adopted"
+        },
+        {
+          "androidName": "notifications_mark_all_read",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.system",
+          "androidName": "notifications_system_sender",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.notifications",
+          "androidName": "notifications_title",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

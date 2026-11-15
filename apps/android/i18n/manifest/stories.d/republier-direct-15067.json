@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "story.repost.success",
+          "androidName": "story_repost_success",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.repost.success.reel",
+          "androidName": "story_repost_success_reel",
+          "status": "adopted"
+        },
+        {
+          "androidName": "story_repost_menu_feed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_repost_menu_reel",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

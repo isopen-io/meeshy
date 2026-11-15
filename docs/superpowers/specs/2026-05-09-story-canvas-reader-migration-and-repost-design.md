@@ -638,9 +638,9 @@ Renames mécaniques :
 
 | Fichier | Avant | Après |
 |---------|-------|-------|
-| `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:450` | `StoryCanvasReaderView(story: outgoing, preferredLanguage: ...)` | `StoryReaderRepresentable(story: outgoing, preferredLanguage: ...)` |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift:450` | `StoryCanvasReaderView(story: outgoing, preferredLanguage: ...)` | `StoryReaderRepresentable(story: outgoing, preferredLanguage: ...)` |
 | idem `:464` | `StoryCanvasReaderView(story: story, preferredLanguage: ...)` | `StoryReaderRepresentable(story: story, preferredLanguage: ...)` |
-| `apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift:32` | `StoryCanvasReaderView(repost:, preferredContentLanguages:, mute: true)` | `StoryReaderRepresentable(repost:, preferredContentLanguages:, mute: true)` |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryRepostEmbedCell.swift:32` | `StoryCanvasReaderView(repost:, preferredContentLanguages:, mute: true)` | `StoryReaderRepresentable(repost:, preferredContentLanguages:, mute: true)` |
 | `apps/ios/Meeshy/Features/Main/Views/FeedPostCard.swift:215` | (aucune) — utilise `StoryRepostEmbedCell` | (aucune) |
 | `packages/MeeshySDK/Sources/MeeshyUI/Story/UnifiedPostComposer.swift:225` | `StoryCanvasReaderView(story:, mute: false)` | `StoryReaderRepresentable(story:, mute: false)` |
 
@@ -893,8 +893,8 @@ Chaque sous-phase build sur la précédente (A1.x toutes consommées par A2 ; A2
   - `clipTransitionOpacity(...)`
   - `applyOpening(_:rootLayer:elapsed:)`
   - `renderBackground(slide:into:at:mode:languages:)`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` (2 renames)
-- `apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift` (1 rename)
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` (2 renames)
+- `apps/ios/Meeshy/Features/Stories/Views/StoryRepostEmbedCell.swift` (1 rename)
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/UnifiedPostComposer.swift` (1 rename + `importFromStory(_)`)
 
 ### 12.3 Supprimés

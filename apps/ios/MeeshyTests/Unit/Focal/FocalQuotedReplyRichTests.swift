@@ -2,11 +2,11 @@ import XCTest
 import MeeshySDK
 @testable import Meeshy
 
-/// **LOI DES ZONES** (directive produit 2026-08-24) — une citation de la
-/// rangée plate n'offre que TROIS classes de zone tactile, et pas une de
-/// plus :
-/// 1. l'AVATAR de l'auteur cité → profil (`onQuotedAuthorTap`, résolution
-///    hôte) ;
+/// **LOI DES ZONES** (directive produit 2026-08-24, relue au #7491) — une
+/// citation de la rangée plate n'offre que DEUX classes de zone tactile. La
+/// ZONE 1 (l'AVATAR de l'auteur cité → profil) n'existe que dans la bulle :
+/// focal et script ne montrent que le NOM de l'auteur cité (#7491), et le
+/// profil reste offert par l'action VoiceOver nommée de la rangée.
 /// 2. la MINIATURE ou l'ICÔNE DE LECTURE → plein écran / lecture
 ///    (`onQuotedMediaTap`, résolution hôte) ;
 /// 3. TOUT LE RESTE, LE NOM COMPRIS → saut à l'original (comportement
@@ -66,11 +66,11 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
             .appendingPathComponent(path)
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        return AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
     }
 
     private func quotedReplySource() throws -> String {
-        try source("Meeshy/Features/Main/Focal/Row/FocalQuotedReplyView.swift")
+        try source("Meeshy/Features/Focal/Row/FocalQuotedReplyView.swift")
     }
 
     /// ANCRE POSITIVE — à passer AVANT tout comptage ou toute assertion
@@ -118,6 +118,12 @@ final class FocalQuotedReplyRichTests: XCTestCase {
         try source("Meeshy/Features/Main/Views/MessageListViewController.swift")
     }
 
+    /// Les deux résolutions de la citation ont quitté le contrôleur (hors
+    /// budget) pour leur extension (#8230) ; le MONTAGE des rappels y reste.
+    private func quotedMediaHostSource() throws -> String {
+        try source("Meeshy/Features/Main/Views/MessageListViewController+QuotedMedia.swift")
+    }
+
     // MARK: - La loi : le NOM n'est plus une zone
 
     /// LA nouveauté du 2026-08-24, et la seule assertion qui la dise. Le NOM
@@ -125,7 +131,23 @@ final class FocalQuotedReplyRichTests: XCTestCase {
     /// un tap dessus traverse jusqu'à la zone 3 et retourne au message cité.
     func test_loiDesZones_leNomNEstPlusUneZoneTactile() throws {
         let code = try anchoredQuotedReplySource()
-        let nameSlice = try slice(of: code, from: "Text(title)", to: "private var previewGlyph")
+        // **L'ancre a bougé sous la garde** (#5103). Elle partait de
+        // `Text(title)` ; le NOM se rend désormais à DEUX endroits — dans
+        // `quotedFlow()`, qui le fait couler avec le texte, et dans `titleLine`,
+        // que seuls mood et story montent. `quotedFlow` étant déclaré AVANT,
+        // la tranche partait de lui et avalait `quotedThumbnail` et
+        // `authorGate` — deux zones tactiles LÉGITIMES à l'époque (2 et 1).
+        //
+        // La garde rougissait donc sur un déplacement, pas sur une infraction.
+        // Elle interroge maintenant les DEUX rendus du nom, chacun borné par sa
+        // propre déclaration : c'est la loi qu'elle voulait dire.
+        // La borne de fin est la DÉCLARATION suivante, jamais un lexème qui
+        // réapparaît plus loin : `@ViewBuilder` ne revient qu'à 150 lignes
+        // d'ici, et la tranche avalait tout le `body` — dont le tap de la
+        // ZONE 3, parfaitement légitime.
+        let flowSlice = try slice(of: code, from: "private func quotedFlow()", to: "var body: some View")
+        let titleSlice = try slice(of: code, from: "private var titleLine", to: "private var previewGlyph")
+        let nameSlice = flowSlice + titleSlice
 
         var offenders: [String] = []
         for lexeme in Self.tapLexemes where nameSlice.contains(lexeme) {
@@ -137,68 +159,34 @@ final class FocalQuotedReplyRichTests: XCTestCase {
         XCTAssertTrue(
             offenders.isEmpty,
             "le NOM de l'auteur cité a REPRIS une zone tactile propre [\(offenders.joined(separator: ", "))] — " +
-            "LOI DES ZONES 2026-08-24 : le nom retombe sous la zone 3 (retour au message cité), seul l'AVATAR " +
-            "ouvre le profil. « Le moins de point actionnable pour permettre de manipuler le message simplement. »"
+            "LOI DES ZONES 2026-08-24 : le nom retombe sous la zone 3 (retour au message cité). " +
+            "« Le moins de point actionnable pour permettre de manipuler le message simplement. »"
         )
     }
 
-    // MARK: - Zone 1 : l'avatar → profil
+    // MARK: - Zone 1 : absente de la rangée plate (#7491)
 
-    func test_loiDesZones_lAvatarEstLaSeulePorteVersLeProfil() throws {
+    /// **Focal et script : le NOM de l'auteur cité, jamais son avatar**
+    /// (directive porteur 2026-09-22). La rangée pose déjà l'avatar de SON
+    /// auteur ; celui de la citation empilait un second visage pour un seul
+    /// message. La règle vit dans `QuotedReplyPresentation.showsAuthorAvatar`,
+    /// et cette peau ne monte aucun avatar du tout.
+    func test_rangeePlate_laCitationNePorteQueLeNom_jamaisLAvatarDeLAuteurCite() throws {
         let code = try anchoredQuotedReplySource()
-        XCTAssertTrue(
-            code.contains("MeeshyAvatar("),
-            "la citation doit monter l'avatar PARTAGÉ du dépôt (MeeshyAvatar) — jamais un cercle redessiné sur place."
-        )
-        XCTAssertTrue(
-            code.contains("context: .custom(FocalMetrics.Avatar.size)"),
-            "l'avatar de la citation prend sa cote de FocalMetrics.Avatar.size — jamais un littéral (garde R15)."
-        )
-        XCTAssertTrue(
-            code.contains("onTap: { onQuotedAuthorTap?(reference) }"),
-            "l'avatar doit porter la ZONE 1 via son propre `onTap` — le composant fournit alors sa forme de frappe " +
-            "CIRCULAIRE et son haptique, au lieu d'un rectangle rapporté."
-        )
-        // Compté sur les DEUX formes d'appel — `f?(…)` et `f(…)`. Ne compter
-        // que l'optionnelle laissait un second site passer sous la garde dès
-        // qu'il déballait la fermeture avant de l'appeler (mutation d'épreuve
-        // du 2026-08-24).
-        let zone1Sites = code.components(separatedBy: "onQuotedAuthorTap?(").count - 1
-            + code.components(separatedBy: "onQuotedAuthorTap(").count - 1
-        XCTAssertEqual(
-            zone1Sites, 1,
-            "`onQuotedAuthorTap` doit être déclenché depuis UN SEUL site (l'avatar) — \(zone1Sites) trouvé(s). " +
-            "Deux sites = deux points actionnables pour une seule capacité, ce que la directive 2026-08-24 proscrit."
-        )
-        XCTAssertTrue(
-            code.contains("bubble.reply.author_hint"),
-            "la clé d'accessibilité du geste « ouvrir le profil » doit SUIVRE l'avatar. Elle n'a qu'un site " +
-            "d'usage dans tout le dépôt : la retirer d'ici en ferait une clé MORTE dans les sept catalogues."
-        )
-    }
-
-    /// L'anti-perte. `authorAvatarUrl` est `nil` à huit des douze sites de
-    /// construction (story, humeur, brouillon restauré) : si le rendu de
-    /// l'avatar était gardé par la présence de l'URL, la porte vers le profil
-    /// disparaîtrait précisément là où elle existait avant ce lot. Elle ne
-    /// dépend que du genre de citation, jamais d'une photo.
-    func test_loiDesZones_lAvatarSeDessineMemeSansURL_laPorteNeDependJamaisDUnePhoto() throws {
-        let code = try anchoredQuotedReplySource()
-        XCTAssertTrue(
-            code.contains("avatarURL: reference.authorAvatarUrl"),
-            "l'URL d'avatar est un PARAMÈTRE de l'avatar, jamais sa condition d'existence."
-        )
-        let gateSlice = try slice(of: code, from: "if showsAuthorGate", to: "MeeshyAvatar(")
         XCTAssertFalse(
-            gateSlice.contains("authorAvatarUrl"),
-            "l'avatar est gardé par l'URL de la photo — sans photo, plus aucune porte vers le profil. " +
-            "MeeshyAvatar retombe sur les initiales colorées : le rendu est INCONDITIONNEL."
+            code.contains("MeeshyAvatar("),
+            "la citation de la rangée plate (focal ET script) ne doit plus monter d'avatar : la rangée porte déjà " +
+            "celui de son auteur, deux visages pour un message (#7491). Le NOM seul identifie l'auteur cité."
+        )
+        XCTAssertFalse(
+            code.contains("onQuotedAuthorTap"),
+            "sans avatar, la citation n'a plus de ZONE 1 — un rappel déclaré sans site d'appel serait un fil mort."
         )
         XCTAssertTrue(
-            code.contains("!reference.isStoryReply"),
-            "la ZONE 1 n'existe que pour la citation d'un MESSAGE : une story ou une humeur citée porte " +
-            "`authorName == \"Story\"` (ou vide) et aucun avatar — l'hôte fabriquerait une fiche à ce nom."
+            code.contains("QuotedReplyPresentation.title(author: authorName)"),
+            "le NOM de l'auteur cité reste affiché, composé par la règle partagée (« Alice : »)."
         )
+        XCTAssertFalse(QuotedReplyPresentation.showsAuthorAvatar(for: .focal))
     }
 
     // MARK: - Zone 2 : le média → plein écran / lecture
@@ -210,8 +198,14 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             "La miniature doit lire les URL DÉJÀ portées par ReplyReference — jamais une seconde résolution d'attachment."
         )
         XCTAssertTrue(
-            code.contains("CachedAsyncImage(url: thumbnailURL.absoluteString)"),
+            code.contains("CachedAsyncImage(") && code.contains("url: thumbnailURL.absoluteString"),
             "La vignette passe par CachedAsyncImage (3-tier) — jamais un AsyncImage nu qui re-télécharge à chaque réutilisation de cellule."
+        )
+        XCTAssertTrue(
+            code.contains("thumbHash: QuotedReplyPresentation.thumbHash(for: reference)"),
+            "L'appel a gagné un SECOND argument (#4946) : le flou ThumbHash instantané, refusé par la règle " +
+            "pour un média protégé. La forme mono-ligne d'origine n'est donc plus celle du fichier — c'est " +
+            "l'ajout qui a fait bouger cette assertion, pas un déplacement du composant."
         )
         XCTAssertTrue(
             code.contains("attachmentKind?.hasTimebasedTrack == true"),
@@ -282,7 +276,11 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             "la MINIATURE elle-même doit être filtrée : sans cela, la vignette en clair d'une vidéo à vue " +
             "unique reste visible par tout le fil, à chaque relecture — le tap verrouillé n'y change rien."
         )
-        let gateSlice = try slice(of: code, from: "private var hasTappableMedia", to: "private var showsAuthorGate")
+        // L'ancre de fin est la déclaration SUIVANTE — `showsAuthorGate` la
+        // tenait jusqu'à ce que #7491 la retire, et la garde est alors devenue
+        // inopérante sans qu'aucune de ses assertions ne change. Une tranche
+        // bornée par le NOM d'un voisin dépend d'un lot qui ne la lira jamais.
+        let gateSlice = try slice(of: code, from: "private var hasTappableMedia", to: "private var attachmentKind")
         XCTAssertTrue(
             gateSlice.contains("quotedMediaIsProtected"),
             "la ZONE 2 ne doit pas être armée sur un média protégé : une icône de lecture au-dessus d'un verrou " +
@@ -383,19 +381,19 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             partial + code.components(separatedBy: lexeme).count - 1
         }
         XCTAssertEqual(
-            total, 4,
-            "inventaire des zones tactiles de FocalQuotedReplyView : \(total) au lieu de 4. Les quatre SITES " +
-            "attendus sont (1) l'avatar → profil, (2) la miniature → plein écran, (3) le glyphe de la ligne " +
-            "d'aperçu → plein écran / lecture, (4) le bloc entier → retour au message cité. Les sites 2 et 3 " +
-            "s'excluent par construction (`glyphOpensTheMedia` exige `thumbnailURL == nil`) : à l'exécution une " +
-            "citation n'offre jamais plus de TROIS cibles, une par classe de la LOI DES ZONES."
+            total, 3,
+            "inventaire des zones tactiles de FocalQuotedReplyView : \(total) au lieu de 3. Les trois SITES " +
+            "attendus sont (1) la miniature → plein écran, (2) le glyphe de la ligne d'aperçu → plein écran / " +
+            "lecture, (3) le bloc entier → retour au message cité. Les sites 1 et 2 s'excluent par construction " +
+            "(`glyphOpensTheMedia` exige `thumbnailURL == nil`). Plus d'avatar → profil depuis #7491 : focal et " +
+            "script ne montrent que le NOM de l'auteur cité."
         )
     }
 
     // MARK: - Zone 3 : la résolution hôte, inchangée
 
-    func test_host_resolvesQuotedAuthor_fromLocalStore_withNameOnlyFallback() throws {
-        let code = try hostSource()
+    func test_host_resolvesQuotedAuthor_fromLocalStore_withReferenceIdFallback() throws {
+        let code = try quotedMediaHostSource()
         XCTAssertTrue(
             code.contains("func openQuotedAuthorProfile(_ reference: ReplyReference)"),
             "L'hôte doit résoudre l'auteur cité — la vue ne porte que la référence, jamais l'identité complète."
@@ -405,13 +403,22 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             "La résolution passe par le store local (message cité → sender réel), jamais par une seconde source de vérité."
         )
         XCTAssertTrue(
-            code.contains("username: reference.authorName"),
-            "Repli nom-seul obligatoire : un message cité hors fenêtre locale doit quand même ouvrir une fiche profil."
+            code.contains("referenceAuthorUserId: reference.authorUserId"),
+            "Repli sur l'identifiant gravé dans la citation : un message cité hors fenêtre locale ouvre quand même la fiche ; sans identifiant, rien ne s'ouvre."
         )
     }
 
-    func test_host_routesQuotedMedia_byAttachmentType_withJumpFallback() throws {
-        let code = try hostSource()
+    /// **#8230 a envoyé l'audio cité en plein écran ; #8320 (directive porteur
+    /// du 2026-09-27, plus tardive) le fait JOUER SUR PLACE** : « jouer les
+    /// miniatures audio dans les reply lorsqu'on touche la zone play
+    /// uniquement ». Image et vidéo gardent le plein écran (`onMediaTap`) ; un
+    /// vocal passe par le lecteur PARTAGÉ (`toggleQuotedAudio`), jamais par
+    /// `playAudio`, qui mettrait en file les vocaux suivant l'original.
+    ///
+    /// Et le cité HORS fenêtre ne retombe plus sur le saut quand la citation
+    /// porte de quoi reconstruire la pièce.
+    func test_host_routesQuotedMedia_imageVideoToFullscreen_audioInPlace() throws {
+        let code = try quotedMediaHostSource()
         guard let start = code.range(of: "func openQuotedMedia(_ reference: ReplyReference)"),
               let end = code.range(of: "\n    }", range: start.upperBound..<code.endIndex)
         else {
@@ -419,28 +426,40 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             return
         }
         let body = code[start.lowerBound..<end.upperBound]
+        // #8283 — l'élection de la pièce a quitté l'hôte pour le site partagé
+        // avec la Rivière (`QuotedMediaOpening`) : l'hôte l'APPELLE, la règle
+        // se lit chez elle et s'exécute dans `QuotedMediaOpeningTests`.
         XCTAssertTrue(
-            body.contains("onMediaTap?(attachment)"),
-            "Image/vidéo citée → la MÊME galerie plein écran que la rangée (onMediaTap), jamais une surface parallèle."
+            body.contains("QuotedMediaOpening.gesture(for: reference") && body.contains("onMediaTap?(attachment)"),
+            "Image et vidéo citées → le plein écran de la conversation (onMediaTap), jamais une surface parallèle."
         )
         XCTAssertTrue(
-            body.contains("playAudio(attachmentId: attachment.id)"),
-            "Audio cité → la MÊME file de lecture que la rangée (playAudio)."
+            body.contains("toggleQuotedAudio(reference)"),
+            "un vocal cité se joue SUR PLACE par le lecteur partagé (#8320)."
+        )
+        XCTAssertFalse(
+            body.contains("playAudio("),
+            "une citation ne met pas en file les vocaux qui suivent l'original — `playAudio` n'a rien à faire ici."
+        )
+        let rule = try source("Meeshy/Features/Main/Views/Bubble/QuotedMediaOpening.swift")
+        XCTAssertTrue(
+            rule.contains("case .image, .video, .audio:"),
+            "les trois genres qui ont un plein écran sont élus par la règle partagée."
+        )
+        XCTAssertTrue(
+            rule.contains("reference.quotedAttachment"),
+            "un message cité hors fenêtre s'ouvre depuis la pièce RECONSTRUITE par la citation, pas par un saut."
         )
         XCTAssertTrue(
             body.contains("scrollToMessage(localId: localId)"),
-            "Document ou cité hors fenêtre → repli sur le saut à l'original — jamais un no-op silencieux."
+            "Document ou pièce introuvable → repli sur le saut à l'original — jamais un no-op silencieux."
         )
     }
 
     // MARK: - Câblage jusqu'à la rangée
 
-    func test_focalRow_passesBothCallbacksToTheQuotedReplyView() throws {
-        let code = try source("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
-        XCTAssertTrue(
-            code.contains("onQuotedAuthorTap: actions.onQuotedAuthorTap"),
-            "FocalRow doit transmettre onQuotedAuthorTap — sans ce fil, le tap de l'avatar est mort."
-        )
+    func test_focalRow_passesTheMediaCallbackToTheQuotedReplyView() throws {
+        let code = try source("Meeshy/Features/Focal/Row/FocalRow.swift")
         XCTAssertTrue(
             code.contains("onQuotedMediaTap: actions.onQuotedMediaTap"),
             "FocalRow doit transmettre onQuotedMediaTap — sans ce fil, la vignette est décorative."
@@ -463,14 +482,14 @@ final class FocalQuotedReplyRichTests: XCTestCase {
     /// « Un écart NON DIT est un défaut » : celui-ci était non dit parce que
     /// la peau concernée porte le nom de l'AUTRE mode.
     func test_loiDesZones_laCitationHebergeeParLAudio_recoitAussiSesDeuxZones() throws {
-        let row = try source("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        let row = try source("Meeshy/Features/Focal/Row/FocalRow.swift")
         XCTAssertTrue(
             row.contains("onQuotedAuthorTap: actions.onQuotedAuthorTap")
                 && row.contains("onQuotedMediaTap: actions.onQuotedMediaTap"),
             "FocalRow doit transmettre les deux zones à FocalAudioBlock AUSSI — sans quoi la citation d'un " +
             "message vocal reste la seule du mode à n'offrir ni avatar ni zone média."
         )
-        let block = try source("Meeshy/Features/Main/Focal/Row/FocalAudioBlock.swift")
+        let block = try source("Meeshy/Features/Focal/Row/FocalAudioBlock.swift")
         XCTAssertTrue(
             block.contains("var onQuotedAuthorTap: ((ReplyReference) -> Void)? = nil")
                 && block.contains("var onQuotedMediaTap: ((ReplyReference) -> Void)? = nil"),
@@ -481,11 +500,20 @@ final class FocalQuotedReplyRichTests: XCTestCase {
                 && block.contains("onQuotedMediaTap: onQuotedMediaTap"),
             "FocalAudioBlock doit les TRANSMETTRE à AudioMediaView, seul hôte de cette citation-là."
         )
-        // Et l'exclusion qui rend ce chemin nécessaire est toujours là : si
-        // elle disparaissait, la citation serait rendue DEUX fois.
+        // #7491 — la citation d'un vocal suit la règle de la rangée plate :
+        // nom seul, sans avatar. Sans cette peau, la bulle y remettait le sien.
         XCTAssertTrue(
-            row.contains("content.reply != nil && !content.audioHostsReply && !content.visualHostsReply"),
-            "la rangée ne dessine la citation que si aucun widget ne l'héberge — c'est CETTE exclusion qui " +
+            block.contains("replySkin: .focal"),
+            "FocalAudioBlock doit déclarer la peau `.focal` à la citation qu'il héberge — sinon BubbleQuotedReply " +
+            "y dessine l'avatar de l'auteur cité, que focal et script ne montrent plus (#7491)."
+        )
+        // Et l'exclusion qui rend ce chemin nécessaire est toujours là : si
+        // elle disparaissait, la citation serait rendue DEUX fois. Elle ne
+        // porte QUE sur l'audio : le bloc média nu n'héberge aucune citation,
+        // et l'exclure aussi la faisait disparaître (#7928).
+        XCTAssertTrue(
+            row.contains("content.flatRowDrawsQuote"),
+            "la rangée ne dessine pas la citation qu'héberge le lecteur audio — c'est CETTE exclusion qui " +
             "envoie la citation d'un vocal chez BubbleQuotedReply."
         )
     }
@@ -506,7 +534,7 @@ final class FocalQuotedReplyRichTests: XCTestCase {
     /// explicitement, sinon la fiche lui reste inaccessible »). Le lot du
     /// 2026-08-24 avait copié l'idiome du TRAIT et laissé l'ACTION derrière lui.
     func test_loiDesZones_lesDeuxZonesSontOffertesAVoiceOver_surLaRangee() throws {
-        let row = try source("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        let row = try source("Meeshy/Features/Focal/Row/FocalRow.swift")
         XCTAssertTrue(
             row.contains(".accessibilityActions {"),
             "la rangée doit offrir les zones de la citation en actions NOMMÉES : son `children: .combine` + " +
@@ -518,17 +546,26 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             to: "\n    private "
         )
         XCTAssertTrue(
-            block.contains("bubble.reply.author_hint") && block.contains("bubble.reply.open_media"),
-            "les deux actions réemploient les clés que la citation porte déjà — zéro clé neuve, zéro clé morte, " +
-            "cliquet français inchangé."
+            block.contains("QuotedZoneAccessibility.actions("),
+            "les actions nommées de la citation vivent en UN site partagé par les deux rangées (#8320) — " +
+            "une jumelle qu'on modifie deux fois finit par diverger."
+        )
+        let shared = try source("Meeshy/Features/Main/Views/Bubble/QuotedZoneAccessibility.swift")
+        XCTAssertTrue(
+            shared.contains("bubble.reply.author_hint") && shared.contains("bubble.reply.open_media")
+                && shared.contains("bubble.reply.listen_quoted") && shared.contains("bubble.reply.go_to_quoted"),
+            "les actions nomment les trois zones : l'auteur, le média (« Écouter le message cité » pour un " +
+            "audio, #8320), et le saut « Aller au message cité »."
         )
         XCTAssertTrue(
-            block.contains("onQuotedAuthorTap(reference)") && block.contains("onQuotedMediaTap(reference)"),
+            shared.contains("onQuotedAuthorTap(reference)") && shared.contains("onQuotedMediaTap(reference)")
+                && shared.contains("onReplyTap(reference.messageId)"),
             "chaque action doit DÉCLENCHER sa zone : une action nommée sans effet est un contrôle qui ment, et " +
             "le rotor la récite."
         )
         XCTAssertTrue(
-            block.contains("reference.offersAuthorGate") && block.contains("reference.offersMediaGate"),
+            shared.contains("reference.offersAuthorGate") && shared.contains("reference.offersMediaGate")
+                && shared.contains("reference.opensQuotedTarget"),
             "les actions suivent l'ARMEMENT (gestionnaire câblé ET zone offerte par la donnée), jamais la seule " +
             "présence d'une citation — sinon VoiceOver se voit proposer d'ouvrir la fiche d'une story."
         )

@@ -9,8 +9,6 @@ import os
 /// `MessageDetailSheet.languageTabContent`. Aucun changement de comportement.
 struct MessageLanguageDetailView: View {
     let message: Message
-    let contactColor: String
-    let conversationId: String
     var textTranslations: [MessageTranslation] = []
     var transcription: MessageTranscription? = nil
     var translatedAudios: [MessageTranslatedAudio] = []
@@ -25,6 +23,11 @@ struct MessageLanguageDetailView: View {
     var translationRequestFailedPublisher: AnyPublisher<ConversationViewModel.TranslationRequestFailure, Never>? = nil
     var onRequestTextTranslation: ((_ targetLanguage: String, _ sourceLanguage: String) -> Void)? = nil
     var onRequestAudioTranslation: ((_ targetLanguage: String, _ attachmentId: String) -> Void)? = nil
+    /// `false` quand le contenu n'est pas un message : la feuille sert aussi le
+    /// texte d'un post (#6504), dont les traductions arrivent par
+    /// `textTranslations` — lire `/messages/<id du post>/translations` ne
+    /// rendrait qu'un 404.
+    var fetchesMessageTranslations: Bool = true
 
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
@@ -34,7 +37,9 @@ struct MessageLanguageDetailView: View {
     @State private var translations: [String: String] = [:]
     @State private var selectedLanguageCode: String? = nil
     @State private var isLoadingTranslations = false
-    @State private var translationError: String? = nil
+    @State private var translationError: LanguageDetailError? = nil
+    /// #16418 — la configuration de la voix, ouverte depuis un refus de consentement.
+    @State private var voiceSetup: VoiceSetupDestination? = nil
     @State private var mergedTranslatedAudios: [MessageTranslatedAudio] = []
 
     /// Fallback in-flight tracking for callers that don't supply
@@ -57,8 +62,38 @@ struct MessageLanguageDetailView: View {
                     .filter { $0.messageId == message.id }
                     .receive(on: DispatchQueue.main)
             ) { failure in
-                translationError = failure.message
+                translationError = LanguageDetailError(text: failure.message, consentGap: failure.consentGap)
             }
+            .sheet(item: $voiceSetup) { VoiceSetupSheet(destination: $0) }
+    }
+
+    /// Un refus de CONSENTEMENT se touche (#16418) : il ouvre la configuration
+    /// de la voix ; tout autre échec reste un texte.
+    @ViewBuilder
+    private func errorView(_ error: LanguageDetailError) -> some View {
+        if let gap = error.consentGap {
+            Button {
+                HapticFeedback.light()
+                voiceSetup = VoiceSetupDestination.resolve(gap, state: .current())
+            } label: {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    Text(error.text).font(.caption2).foregroundStyle(MeeshyColors.error)
+                    HStack(spacing: MeeshySpacing.xs) {
+                        Text(String(localized: "voice.setup.configure", defaultValue: "Configurer ma voix", bundle: .main))
+                        Image(systemName: "chevron.forward").accessibilityHidden(true)
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(MeeshyColors.brandPrimary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityHint(String(localized: "voice.setup.hint", defaultValue: "Ouvre la configuration de votre voix", bundle: .main))
+        } else {
+            Text(error.text).font(.caption2).foregroundStyle(MeeshyColors.error)
+        }
     }
 
     // MARK: - Language Tab Content
@@ -67,33 +102,33 @@ struct MessageLanguageDetailView: View {
         let originalLang = message.originalLanguage
         let originalColor = Color(hex: LanguageDisplay.colorHex(for:originalLang))
 
-        return VStack(alignment: .leading, spacing: 14) {
+        return VStack(alignment: .leading, spacing: MeeshySpacing.mdPlus) {
             // Original language banner
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Circle()
                     .fill(originalColor)
                     .frame(width: 8, height: 8)
                 Image(systemName: "text.bubble.fill")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(originalColor)
-                Text(String(format: String(localized: "message-detail.original", defaultValue: "Original \u{2022} %@", bundle: .main), Self.languageName(for: originalLang)))
+                    .foregroundStyle(originalColor)
+                Text(String(format: String(localized: "message-detail.original", defaultValue: "Original • %@", bundle: .main), Self.languageName(for: originalLang)))
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Spacer()
                 Text(originalLang.uppercased())
                     .font(.system(.caption2, design: .monospaced).weight(.bold))
-                    .foregroundColor(originalColor)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(originalColor.opacity(0.12)))
+                    .foregroundStyle(originalColor)
+                    .padding(.horizontal, MeeshySpacing.xsPlus)
+                    .padding(.vertical, MeeshySpacing.xxs)
+                    .background(Capsule().fill(originalColor.opacity(MeeshyOpacity.light)))
             }
-            .padding(10)
+            .padding(MeeshySpacing.smPlus)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(originalColor.opacity(isDark ? 0.08 : 0.05))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(originalColor.opacity(0.15), lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                            .stroke(originalColor.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
                     )
             )
 
@@ -101,34 +136,34 @@ struct MessageLanguageDetailView: View {
             if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(message.content)
                     .font(.footnote)
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                     .lineLimit(3)
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, MeeshySpacing.xs)
             } else if let transcription {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "waveform")
                         .font(.caption2.weight(.medium))
-                        .foregroundColor(originalColor.opacity(0.7))
+                        .foregroundStyle(originalColor.opacity(MeeshyOpacity.heavy))
                     Text(transcription.text)
                         .font(.footnote)
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .lineLimit(3)
                 }
-                .padding(.horizontal, 4)
+                .padding(.horizontal, MeeshySpacing.xs)
             }
 
             // Selected translation display
             if let selectedCode = selectedLanguageCode, let translated = translations[selectedCode] {
                 let langColor = Color(hex: LanguageDisplay.colorHex(for:selectedCode))
 
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Circle()
                             .fill(langColor)
                             .frame(width: 6, height: 6)
                         Text(Self.languageName(for: selectedCode))
                             .font(.caption.weight(.semibold))
-                            .foregroundColor(langColor)
+                            .foregroundStyle(langColor)
                         Spacer()
                         Button {
                             withAnimation(.easeInOut(duration: 0.2)) { selectedLanguageCode = nil }
@@ -137,10 +172,12 @@ struct MessageLanguageDetailView: View {
                             // verre) — parité avec les autres boutons de fermeture.
                             Image(systemName: "xmark")
                                 .font(.caption.weight(.bold))
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                                 .frame(width: 28, height: 28)
                                 .adaptiveGlass(in: Circle())
                                 .contentShape(Circle())
+                                .meeshyTapTarget()
+                                .padding(-MeeshyTapTarget.inset(forVisualSide: 28))
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(String(localized: "message-detail.a11y.close-translation", defaultValue: "Fermer la traduction", bundle: .main))
@@ -148,16 +185,16 @@ struct MessageLanguageDetailView: View {
 
                     Text(translated)
                         .font(.subheadline)
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(12)
+                .padding(MeeshySpacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .fill(langColor.opacity(isDark ? 0.08 : 0.05))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(langColor.opacity(0.2), lineWidth: 0.5)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                                .stroke(langColor.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
                         )
                 )
                 .transition(.opacity.combined(with: .move(edge: .top)))
@@ -165,20 +202,16 @@ struct MessageLanguageDetailView: View {
 
             // Divider
             Rectangle()
-                .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                .fill(MeeshyColors.surfaceFill(isDark: isDark))
                 .frame(height: 0.5)
-
             // Language list
             ForEach(LanguageDisplay.translationPickerLanguages.filter { $0.code != originalLang }, id: \.code) { lang in
                 languageRow(lang, originalLang: originalLang)
             }
-
             if let translationError {
-                Text(translationError)
-                    .font(.caption2)
-                    .foregroundColor(MeeshyColors.error)
-                    .padding(.horizontal, 8)
-                    .padding(.top, 4)
+                errorView(translationError)
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.top, MeeshySpacing.xs)
                     .transition(.opacity)
             }
         }
@@ -250,7 +283,7 @@ struct MessageLanguageDetailView: View {
                 }
             }
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 // Color dot
                 Circle()
                     .fill(langColor)
@@ -261,7 +294,7 @@ struct MessageLanguageDetailView: View {
                     .font(.callout)
                 Text(lang.name)
                     .font(.footnote.weight(.medium))
-                    .foregroundColor(isSelected ? langColor : theme.textPrimary)
+                    .foregroundStyle(isSelected ? langColor : theme.textPrimary)
 
                 Spacer()
 
@@ -273,7 +306,7 @@ struct MessageLanguageDetailView: View {
                 } else if hasTranslation {
                     Text(String((translations[lang.code] ?? "").prefix(60)) + (translations[lang.code]?.count ?? 0 > 60 ? "..." : ""))
                         .font(.caption2)
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .lineLimit(1)
                         .frame(maxWidth: 180, alignment: .trailing)
 
@@ -287,42 +320,42 @@ struct MessageLanguageDetailView: View {
                     } label: {
                         Image(systemName: "arrow.clockwise")
                             .font(.caption2.weight(.medium))
-                            .foregroundColor(langColor.opacity(0.6))
+                            .foregroundStyle(langColor.opacity(0.6))
                     }
                     .accessibilityLabel(String(localized: "message-detail.a11y.retranslate", defaultValue: "Retraduire", bundle: .main))
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.forward")
                         .font(.caption.weight(.medium))
-                        .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
+                        .foregroundStyle(isSelected ? langColor : theme.textMuted.opacity(MeeshyOpacity.strong))
                 } else if let audioForLang = mergedTranslatedAudios.first(where: { $0.targetLanguage.lowercased() == lang.code.lowercased() }) {
-                    HStack(spacing: 3) {
+                    HStack(spacing: MeeshySpacing.xxs) {
                         Image(systemName: "waveform")
                             .font(.caption2.weight(.medium))
                             .minimumScaleFactor(0.8)
-                            .foregroundColor(langColor.opacity(0.6))
+                            .foregroundStyle(langColor.opacity(0.6))
                         Text(String(audioForLang.transcription.prefix(50)) + (audioForLang.transcription.count > 50 ? "..." : ""))
                             .font(.caption2)
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                             .lineLimit(1)
                     }
                     .frame(maxWidth: 180, alignment: .trailing)
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.forward")
                         .font(.caption.weight(.medium))
-                        .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
+                        .foregroundStyle(isSelected ? langColor : theme.textMuted.opacity(MeeshyOpacity.strong))
                 } else {
                     Text(String(localized: "message-detail.translate", defaultValue: "Traduire", bundle: .main))
                         .font(.caption2.weight(.medium))
-                        .foregroundColor(langColor)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(langColor.opacity(0.12)))
+                        .foregroundStyle(langColor)
+                        .padding(.horizontal, MeeshySpacing.sm)
+                        .padding(.vertical, MeeshySpacing.xxs)
+                        .background(Capsule().fill(langColor.opacity(MeeshyOpacity.light)))
                 }
             }
-            .padding(.vertical, 9)
-            .padding(.horizontal, 8)
+            .padding(.vertical, MeeshySpacing.sm)
+            .padding(.horizontal, MeeshySpacing.sm)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                     .fill(isSelected
                         ? langColor.opacity(isDark ? 0.08 : 0.05)
                         : Color.clear)
@@ -363,8 +396,16 @@ struct MessageLanguageDetailView: View {
 
     // MARK: - Local fallback (no ConversationViewModel available)
 
+    /// Le refus se DIT : un toucher sans effet ni message serait un contrôle inerte.
+    private func refuseServerTranslation() {
+        translationError = LanguageDetailError(text: ServerTranslationAdmission.refusalMessage)
+        HapticFeedback.error()
+    }
+
     private func translateToLocal(_ targetLang: String, from sourceLang: String) async {
         guard !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        // #11214 — un message chiffré de bout en bout ne part jamais vers la traduction serveur.
+        guard ServerTranslationAdmission.admitsOutsideConversation(message) else { return refuseServerTranslation() }
         localTranslatingLanguages.insert(targetLang)
         translationError = nil
         defer { localTranslatingLanguages.remove(targetLang) }
@@ -392,15 +433,16 @@ struct MessageLanguageDetailView: View {
             onSelectTranslation?(mt)
             HapticFeedback.success()
         } catch {
-            translationError = String(
+            translationError = LanguageDetailError(text: String(
                 localized: "translation.error",
                 defaultValue: "La traduction a échoué. Réessayez."
-            )
+            ))
             HapticFeedback.error()
         }
     }
 
     private func translateAudioToLocal(_ targetLang: String, attachmentId: String) async {
+        guard ServerTranslationAdmission.admitsOutsideConversation(message) else { return refuseServerTranslation() }
         localTranslatingAudioLanguages.insert(targetLang)
         translationError = nil
         defer { localTranslatingAudioLanguages.remove(targetLang) }
@@ -420,11 +462,11 @@ struct MessageLanguageDetailView: View {
             onSelectAudioLanguage?(targetLang)
             HapticFeedback.success()
         } catch let consent as AttachmentConsentError {
-            translationError = consent.message
+            translationError = LanguageDetailError(text: consent.message, consentGap: VoiceSetupGap(consentCode: consent.code))
             HapticFeedback.error()
         } catch {
-            translationError = String(localized: "translation.audio.error",
-                defaultValue: "La traduction audio a échoué. Réessayez.")
+            translationError = LanguageDetailError(text: String(localized: "translation.audio.error",
+                defaultValue: "La traduction audio a échoué. Réessayez."))
             HapticFeedback.error()
         }
     }
@@ -435,7 +477,8 @@ struct MessageLanguageDetailView: View {
         attachmentId: String
     ) -> [MessageTranslatedAudio] {
         var byLang: [String: MessageTranslatedAudio] = Dictionary(
-            uniqueKeysWithValues: existing.map { ($0.targetLanguage.lowercased(), $0) }
+            existing.map { ($0.targetLanguage.lowercased(), $0) },
+            uniquingKeysWith: { first, _ in first }
         )
         for result in incoming {
             let key = result.targetLanguage.lowercased()
@@ -469,6 +512,8 @@ struct MessageLanguageDetailView: View {
             }
         }
 
+        guard fetchesMessageTranslations else { return }
+
         // `GET /messages/:id/translations` returns `data` as an OBJECT that
         // nests the list under `translations` (next to the original-message
         // metadata) — NOT a bare array. Decoding `APIResponse<[TranslationData]>`
@@ -487,7 +532,7 @@ struct MessageLanguageDetailView: View {
 
         do {
             let response: APIResponse<TranslationsPayload> = try await APIClient.shared.request(
-                endpoint: "/messages/\(message.id)/translations"
+                MessagesEndpoint.byMessageIdTranslations(messageId: message.id)
             )
             if response.success {
                 for t in response.data.translations {
@@ -515,4 +560,10 @@ struct MessageLanguageDetailView: View {
         cachedTranscriptionAttachmentId
             ?? attachments.first { AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack }?.id
     }
+}
+
+/// L'échec affiché sous la liste des langues ; `consentGap` le rend touchable.
+struct LanguageDetailError: Equatable {
+    let text: String
+    var consentGap: VoiceSetupGap? = nil
 }

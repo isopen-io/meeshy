@@ -41,7 +41,11 @@ public extension SocketNotificationEvent {
             type: type,
             priority: priority,
             title: title,
-            subtitle: nil,
+            // Le fil porte enfin le sous-titre (la phrase d'action localisée
+            // par la passerelle) : le jeter ici laissait la ligne insérée par
+            // le socket muette sur CE QUI venait d'arriver jusqu'au prochain
+            // rafraîchissement REST.
+            subtitle: subtitle,
             content: content,
             actor: mappedActor,
             context: mappedContext,

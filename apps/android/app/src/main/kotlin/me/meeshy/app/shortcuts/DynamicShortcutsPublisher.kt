@@ -8,6 +8,7 @@ import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import me.meeshy.app.MainActivity
 import me.meeshy.app.R
+import me.meeshy.app.navigation.LaunchShortcut
 import me.meeshy.sdk.model.ApiConversation
 
 /**
@@ -29,9 +30,28 @@ internal object DynamicShortcutsPublisher {
 
     fun publish(context: Context, conversations: List<ApiConversation>, currentUserId: String?) {
         val maxCount = ShortcutManagerCompat.getMaxShortcutCountPerActivity(context)
-        val presentation = DynamicShortcutsPresentation.from(conversations, currentUserId, maxCount)
+        val presentation = DynamicShortcutsPresentation.from(conversations, currentUserId, (EntryShortcut.conversationSlots(maxCount) - 1).coerceAtLeast(0))
         val icon = IconCompat.createWithResource(context, R.mipmap.ic_launcher)
-        val shortcuts = presentation.rows.map { row ->
+        val entries = EntryShortcut.all.map { entry ->
+            val label = context.getString(entry.labelRes)
+            ShortcutInfoCompat.Builder(context, entry.shortcutId)
+                .setShortLabel(label)
+                .setLongLabel(label)
+                .setIcon(icon)
+                .setIntent(Intent(Intent.ACTION_VIEW, Uri.parse(entry.address), context, MainActivity::class.java))
+                .build()
+        }
+        val publishLabel = context.getString(R.string.shortcut_publish_post)
+        val publish = ShortcutInfoCompat.Builder(context, PUBLISH_POST_SHORTCUT_ID)
+            .setShortLabel(publishLabel)
+            .setLongLabel(publishLabel)
+            .setIcon(icon)
+            .setIntent(
+                Intent(Intent.ACTION_MAIN, null, context, MainActivity::class.java)
+                    .putExtra(LaunchShortcut.EXTRA, LaunchShortcut.COMPOSE_POST),
+            )
+            .build()
+        val shortcuts = listOf(publish) + entries + presentation.rows.map { row ->
             ShortcutInfoCompat.Builder(context, row.id)
                 .setShortLabel(row.shortLabel)
                 .setLongLabel(row.shortLabel)
@@ -42,6 +62,8 @@ internal object DynamicShortcutsPublisher {
         ShortcutManagerCompat.setDynamicShortcuts(context, shortcuts)
     }
 }
+
+private const val PUBLISH_POST_SHORTCUT_ID = "entry-publish-post"
 
 private fun openConversationIntent(context: Context, conversationId: String): Intent =
     Intent(

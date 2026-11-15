@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_composer_fold">Hide the comment area</string>
+    <string name="story_composer_fold_hint">Closes the keyboard and folds the comment area into a bubble</string>
+    <string name="story_composer_unfold">Show the comment area</string>
+    <string name="story_composer_unfold_hint">Reopens the comment area without opening the keyboard</string>
+    <string name="story_composer_unfold_recording">Voice recording in progress</string>
+    <string name="story_composer_unfold_replying">Reply in progress</string>
+</resources>

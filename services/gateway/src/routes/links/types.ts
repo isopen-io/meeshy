@@ -1,6 +1,37 @@
 import { z } from 'zod';
+import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { messageAttachmentSchema, sharedPlaceResponseSchema } from '@meeshy/shared/types/api-schemas';
+
+/**
+ * `allowedCountries` — ACCEPTÉ VIDE, REFUSÉ NON VIDE (#4354, suite de #4167).
+ *
+ * #4167 a retiré ce champ de la loi d'admission : le filtrer exigerait une base
+ * GeoIP que la passerelle n'embarque pas, et **un contrôle décoratif est pire
+ * qu'une absence, parce qu'on compte dessus**. La décision était prise côté
+ * admission et n'avait pas atteint la porte de création : l'API l'acceptait
+ * encore et l'interface l'affichait comme appliqué. Quelqu'un pouvait cocher
+ * « limiter aux pays suivants », le voir confirmé, et partager le lien en
+ * croyant qu'il était géo-restreint.
+ *
+ * ## Pourquoi refuser le NON VIDE plutôt que le champ
+ *
+ * Mesuré sur l'intégration le 2026-08-31 : **dix liens sur dix portent le
+ * champ, aucun ne porte de valeur.** Les clients publiés l'envoient donc, à
+ * vide, à chaque création. Un 400 sur la simple PRÉSENCE casserait toute
+ * création de lien jusqu'à leur mise à jour.
+ *
+ * Le refus se déclenche exactement là où l'utilisateur serait trompé — quand il
+ * DEMANDE une restriction. Un tableau vide ne demande rien : il est accepté, et
+ * ignoré comme il l'a toujours été.
+ *
+ * Le retrait muet a été écarté : il laisserait croire que l'écriture a réussi,
+ * ce qui est précisément le défaut qu'on ferme.
+ */
+const CHAMP_PAYS_INERTE = z
+  .array(z.string())
+  .max(0, "allowedCountries n'est plus appliqué (#4167) : un filtre par pays exigerait une base GeoIP que la passerelle n'embarque pas. Retirez le champ, ou laissez-le vide.")
+  .optional();
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ZOD VALIDATION SCHEMAS
@@ -22,13 +53,13 @@ export const createLinkSchema = z.object({
   requireNickname: z.boolean().optional(),
   requireEmail: z.boolean().optional(),
   requireBirthday: z.boolean().optional(),
-  allowedCountries: z.array(z.string()).optional(),
+  allowedCountries: CHAMP_PAYS_INERTE,
   allowedLanguages: z.array(z.string()).optional(),
   allowedIpRanges: z.array(z.string()).optional(),
   newConversation: z.object({
     title: z.string().min(1, 'Le titre de la conversation est requis'),
     description: z.string().optional(),
-    memberIds: z.array(z.string()).optional()
+    memberIds: z.array(z.string().regex(OBJECT_ID_REGEX)).optional()
   }).optional()
 });
 
@@ -48,12 +79,17 @@ export const updateLinkSchema = z.object({
   requireNickname: z.boolean().optional(),
   requireEmail: z.boolean().optional(),
   requireBirthday: z.boolean().optional(),
-  allowedCountries: z.array(z.string()).optional(),
+  allowedCountries: CHAMP_PAYS_INERTE,
   allowedLanguages: z.array(z.string()).optional(),
   allowedIpRanges: z.array(z.string()).optional()
 });
 
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
+import { clientMessageTypeSchema } from '../../validation/client-message-type';
+
+
+
+
 
 export const sendMessageSchema = z.object({
   content: z.string().max(1000, 'Message is too long').optional(),
@@ -75,7 +111,7 @@ export const sendMessageSchema = z.object({
     .string()
     .default('fr')
     .transform((v) => normalizeLanguageCode(v) ?? v),
-  messageType: z.string().default('text'),
+  messageType: clientMessageTypeSchema.default('text'),
   // Accepté puis IGNORÉ, et c'est délibéré : aucune des deux routes d'envoi par
   // lien ne lit ce champ — ni `message.create`, ni la diffusion, ni la
   // notification. Il reste déclaré pour qu'un client qui l'envoie à côté d'un
@@ -258,6 +294,17 @@ export const linkMessageSchema = {
       items: { type: 'string' },
       description: 'Usernames whose mention passed validation'
     },
+    // La carte des liens suivis (#9093, #9105) : non nommée ici, elle serait
+    // tronquée du 201 et l'auteur verrait l'adresse brute au lieu de m+token.
+    trackingLinks: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { url: { type: 'string' }, token: { type: 'string' } },
+        required: ['url', 'token']
+      },
+      description: 'Raw and markdown URLs of the content, with their /l/ tracking token'
+    },
     location: { ...sharedPlaceResponseSchema }
   }
 } as const;
@@ -295,20 +342,49 @@ const messageTranslationsSchema = {
 } as const;
 
 /**
- * Message cité, tel que `formatReplyToMessage` le produit : son texte et son
- * auteur, rien de plus.
+ * Message cité, tel que `formatReplyToMessage` le produit : son texte
+ * (masqué par `servedQuotedMessage` quand le message cité est protégé), son
+ * auteur, et les quatre drapeaux qui déclarent cette protection (#4952).
+ *
+ * Ne PAS déclarer `translations` ni `attachments` ici : `formatReplyToMessage`
+ * ne les sert jamais pour la citation (voir son propre commentaire) — les
+ * ajouter au schéma sans producteur reproduirait le piège du `default` sur un
+ * champ absent (§ CLAUDE.md « Un `default` … est une ÉCRITURE »).
  */
 const replyToMessageSchema = {
   type: 'object',
   nullable: true,
-  description: 'Quoted message (reply target) — text and author only',
+  description: 'Quoted message (reply target) — text, author, and protection flags',
   properties: {
     id: { type: 'string', description: 'Quoted message identifier' },
-    content: { type: 'string', description: 'Quoted message content' },
+    content: { type: 'string', description: 'Quoted message content (masked placeholder when protected)' },
     originalLanguage: { type: 'string', description: 'Quoted message original language' },
     messageType: { type: 'string', description: 'Quoted message type' },
     createdAt: { type: 'string', format: 'date-time', description: 'Quoted message creation timestamp' },
-    sender: { ...messageSenderSchema, nullable: true, description: 'Author of the quoted message (registered or anonymous)' }
+    sender: { ...messageSenderSchema, nullable: true, description: 'Author of the quoted message (registered or anonymous)' },
+    isViewOnce: { type: 'boolean', description: 'Quoted message is view-once' },
+    isBlurred: { type: 'boolean', description: 'Quoted message content is blurred until tap to reveal' },
+    isEncrypted: { type: 'boolean', description: 'Quoted message is end-to-end encrypted' },
+    effectFlags: { type: 'number', description: 'Bitfield for the quoted message effects (blurred / ephemeral / view-once)' },
+    // #7927 / #8562 — la citation SCELLÉE (message cité supprimé, ou éphémère
+    // échu pour ce lecteur) le DIT : sans la déclaration, le sérialiseur retire
+    // le marqueur et le client rend une citation vide au lieu du scellé.
+    deletedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Quoted message is sealed for this reader (deleted, or ephemeral lapsed for them)' },
+    // #6164 — la PIÈCE NOMMÉE que la réponse vise. DEUX champs, et deux
+    // seulement : l'ancre du saut et la NATURE du média. Tout ce qui DÉCRIT la
+    // pièce se relit à chaque service et n'a donc pas le droit d'être figé
+    // (liste dans `services/messaging/attachmentReplySnapshot.ts`). Sans cette
+    // déclaration, fast-json-stringify strippe le champ EN SILENCE — la forme
+    // exacte du défaut que `replyTo.translations` a portée (#4945).
+    attachmentReplyTo: {
+      type: 'object',
+      nullable: true,
+      description: 'Attachment NAMED by the reply (frozen snapshot) — jump anchor and media nature. Absent ⇒ the reply targets the whole message.',
+      properties: {
+        attachmentId: { type: 'string' },
+        kind: { type: 'string', enum: ['image', 'video', 'audio', 'location', 'file'] }
+      }
+    }
   }
 } as const;
 
@@ -353,6 +429,17 @@ export const messageSchema = {
     isEdited: { type: 'boolean', description: 'Whether the message was edited' },
     editedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Edition timestamp' },
     replyToId: { type: 'string', nullable: true, description: 'Quoted message identifier' },
+    // #4885 — non déclarés, ces quatre champs (+ le compteur/plafond de vue
+    // unique) étaient chargés par `getConversationMessagesWithDetails` et
+    // retirés ici par `fast-json-stringify` : un visiteur SANS COMPTE lisant
+    // un lien de partage recevait un message à vue unique / flouté /
+    // éphémère sans aucun moyen de le savoir.
+    isViewOnce: { type: 'boolean', description: 'View-once message (disappears after view)' },
+    maxViewOnceCount: { type: 'number', nullable: true, description: 'Maximum unique viewers allowed for view-once messages' },
+    viewOnceCount: { type: 'number', description: 'Number of unique viewers' },
+    isBlurred: { type: 'boolean', description: 'Content blurred until tap to reveal' },
+    effectFlags: { type: 'number', description: 'Bitfield for message effects (blurred / ephemeral / view-once)' },
+    expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Self-destruct timestamp' },
     // Le SENS des messages système (avis d'arrivée, résumé d'appel) vit dans
     // `metadata` + `messageSource` — sans eux, le visiteur anonyme ne peut pas
     // les rendre dans SA langue et retombe sur le repli français stocké.
@@ -478,7 +565,16 @@ export const createLinkBodySchema = {
     allowAnonymousMessages: { type: 'boolean', default: true },
     allowAnonymousFiles: { type: 'boolean', default: false },
     allowAnonymousImages: { type: 'boolean', default: true },
-    allowViewHistory: { type: 'boolean', default: true },
+    // #4169 — PAS de default ici. Fastify active useDefaults d'AJV et server.ts
+    // ne le desactive pas : un default dans un schema de REQUETE est une
+    // ECRITURE, materialisee sur request.body AVANT que le gestionnaire ne
+    // s'execute. Le repli input.allowViewHistory ?? false de
+    // mintConversationShareLink devenait donc structurellement inatteignable,
+    // et tout lien cree sans ce champ naissait avec l'historique OUVERT --
+    // plus permissif que ce que recoit un membre INSCRIT invite par un admin.
+    // Le repli appartient au gestionnaire, jamais au schema : l'y remettre,
+    // meme a false, redefairait en silence le prochain changement du repli.
+    allowViewHistory: { type: 'boolean' },
     requireAccount: { type: 'boolean', default: false },
     requireNickname: { type: 'boolean', default: true },
     requireEmail: { type: 'boolean', default: false },

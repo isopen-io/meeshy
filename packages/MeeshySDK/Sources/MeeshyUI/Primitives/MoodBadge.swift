@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 // MARK: - Pastille de mood (atome de présentation partagé)
 
@@ -35,6 +36,13 @@ public struct MeeshyMoodBadge: View {
     /// Position GLOBALE du centre de la pastille, pour ancrer un popover de
     /// statut. `nil` ⇒ pastille décorative.
     public var onTap: ((CGPoint) -> Void)?
+    /// Le contour de la SILHOUETTE de l'emoji (#9065) — la présence qu'un point
+    /// aurait dite : indigo « ici », vert « en ligne ». `nil` ⇒ aucun contour.
+    public var outline: Color?
+    /// Le pair regarde un élément en plein écran depuis la conversation : la
+    /// pastille quitte sa respiration pour un pulse à peine perceptible,
+    /// jusqu'à son retour au fil.
+    public var hushed: Bool
 
     // MARK: - Trame et loi du ressort
     //
@@ -44,11 +52,23 @@ public struct MeeshyMoodBadge: View {
 
     public static let restingScale: CGFloat = 1.0
     public static let pulsedScale: CGFloat = 1.18
+    /// Le pulse à peine perceptible du plein écran, et sa période.
+    public nonisolated static let hushedScale: CGFloat = 1.05
+    public static let hushedDuration: Double = 1.6
     public static let springResponse: Double = 0.5
     public static let springDamping: Double = 0.4
     /// Départ décalé au hasard : sans lui, N pastilles montées ensemble
     /// respirent à l'unisson — un battement de troupe, pas une foule.
     public static let maximumStartDelay: Double = 1.5
+    /// Fenêtre de respiration après l'apparition (~4 cycles de ressort), puis
+    /// la pastille SE POSE. Le ressort tournait sans fin : dans la bande de
+    /// stories — premier enfant NON lazy du scroll de la liste de
+    /// conversations — chaque mood continuait de respirer hors écran, pendant
+    /// toute la lecture de la liste (audit chauffe 2026-08-26 ; précédent
+    /// « hog device 2026-07-03 » cité plus bas). L'annonce respire, le repos
+    /// se tait — même arbitrage que `SyncPillRotator.maxCycles` et le halo
+    /// d'annonce de `NotificationBadge`.
+    public static let breathingDuration: Double = 8
     /// Le glyphe est rendu à cette fraction du cadre ; le cadre porte la
     /// place visuelle complète et la zone de tap.
     public static let glyphRatio: CGFloat = 0.65
@@ -61,10 +81,42 @@ public struct MeeshyMoodBadge: View {
         animates && !reduceMotion
     }
 
-    public init(emoji: String, diameter: CGFloat, animates: Bool, onTap: ((CGPoint) -> Void)? = nil) {
+    public enum Motion: Equatable, Sendable { case breathe, hush, still }
+
+    public nonisolated static func motion(animates: Bool, reduceMotion: Bool, hushed: Bool) -> Motion {
+        guard shouldAnimate(animates: animates, reduceMotion: reduceMotion) else { return .still }
+        return hushed ? .hush : .breathe
+    }
+
+    /// La cible tactile minimale (HIG, WCAG 2.5.5).
+    public nonisolated static let minimumHitTarget: CGFloat = MeeshyControlSize.tapTarget
+
+    /// Le diamètre de la zone de toucher (#10528) : la pastille mesure
+    /// 0,42 × l'avatar — 22 pt dans la liste, 9 pt sur une rangée de message —
+    /// et sa cible ne descend jamais sous `minimumHitTarget`. Elle déborde la
+    /// pastille sans rien déplacer : le dessin garde sa place.
+    public nonisolated static func hitDiameter(diameter: CGFloat) -> CGFloat {
+        max(minimumHitTarget, diameter)
+    }
+
+    /// L'épaisseur du contour : proportionnelle à la pastille, jamais un filet.
+    public nonisolated static func outlineWidth(diameter: CGFloat) -> CGFloat {
+        max(1.5, diameter * 0.07)
+    }
+
+    public init(
+        emoji: String,
+        diameter: CGFloat,
+        animates: Bool,
+        outline: Color? = nil,
+        hushed: Bool = false,
+        onTap: ((CGPoint) -> Void)? = nil
+    ) {
         self.emoji = emoji
         self.diameter = diameter
         self.animates = animates
+        self.outline = outline
+        self.hushed = hushed
         self.onTap = onTap
     }
 
@@ -76,17 +128,55 @@ public struct MeeshyMoodBadge: View {
         // Frame explicite sur le `GeometryReader` : sans elle il s'effondre à
         // 0×0 en contexte d'overlay et l'emoji disparaît.
         GeometryReader { geo in
-            Text(emoji)
-                .font(.system(size: diameter * Self.glyphRatio))
+            glyph
                 .frame(width: diameter, height: diameter)
                 .scaleEffect(scale)
-                .contentShape(Circle())
-                .onTapGesture {
-                    HapticFeedback.light()
-                    let frame = geo.frame(in: .global)
-                    onTap?(CGPoint(x: frame.midX, y: frame.midY))
+                // Le toucher ne se monte que s'il a un effet (#10528) : sans
+                // gestionnaire, la pastille laisse passer le geste de l'avatar
+                // qu'elle recouvre. Avec, sa cible fait au moins 44 pt.
+                .overlay {
+                    if let onTap {
+                        Button {
+                            HapticFeedback.light()
+                            let frame = geo.frame(in: .global)
+                            onTap(CGPoint(x: frame.midX, y: frame.midY))
+                        } label: {
+                            Color.clear
+                                .frame(
+                                    width: Self.hitDiameter(diameter: diameter),
+                                    height: Self.hitDiameter(diameter: diameter)
+                                )
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .circle))
+                        .accessibilityLabel(String(localized: "avatar.a11y.mood", defaultValue: "humeur \(emoji)", bundle: .module))
+                    }
                 }
-                .onAppear { startPulse() }
+                // `.task` et non `.onAppear` : une seule séquence par identité
+                // de vue — respirer la fenêtre d'annonce, puis se poser. Un
+                // `.onAppear` re-tiré par re-parenting relancerait un ressort
+                // qu'aucun apaisement ne viendrait plus clore.
+                // Relancée quand le plein écran du pair commence ou finit :
+                // elle passe au pulse à peine perceptible, puis refait
+                // respirer la pastille à son retour.
+                .task(id: hushed) {
+                    withTransaction(Transaction(animation: nil)) { scale = Self.restingScale }
+                    switch currentMotion {
+                    case .still: return
+                    case .hush:
+                        // Un ressort lancé dans la passe même où la vue paraît
+                        // est absorbé par sa transition (mesuré au simulateur) :
+                        // la respiration y échappe par son départ décalé, le
+                        // pulse discret par ce battement.
+                        guard await cancellableSleep(for: .milliseconds(80)) else { return }
+                        hushPulse()
+                        return
+                    case .breathe: break
+                    }
+                    startPulse()
+                    guard await cancellableSleep(for: .seconds(Self.maximumStartDelay + Self.breathingDuration)) else { return }
+                    settlePulse()
+                }
                 .onDisappear {
                     withTransaction(Transaction(animation: nil)) { scale = Self.restingScale }
                 }
@@ -94,19 +184,53 @@ public struct MeeshyMoodBadge: View {
         .frame(width: diameter, height: diameter)
     }
 
+    /// Le contour suit la forme du glyphe : sa silhouette, teinte et décalée
+    /// dans huit directions, sous l'emoji.
+    @ViewBuilder
+    private var glyph: some View {
+        let text = Text(emoji).font(.system(size: diameter * Self.glyphRatio))
+        if let outline {
+            let width = Self.outlineWidth(diameter: diameter)
+            ZStack {
+                ForEach(0..<8, id: \.self) { step in
+                    let angle = Double(step) * .pi / 4
+                    outline
+                        .mask(text)
+                        .offset(x: cos(angle) * width, y: sin(angle) * width)
+                }
+                text
+            }
+            .padding(width)
+            .drawingGroup()
+            .padding(-width)
+        } else {
+            text
+        }
+    }
+
     /// `scale == restingScale` = aucun ressort en vol pour cette identité de
     /// vue. Un `.onAppear` peut re-tirer sans `.onDisappear` intermédiaire
     /// (ScrollView, re-parenting) ; relancer un `repeatForever` par-dessus un
     /// autre les fait COMBINER par le moteur — aucun des deux ne se termine
     /// jamais et chaque frame les évalue tous, pour toujours (hog device
-    /// 2026-07-03 : `DefaultCombiningAnimation` à ~90 % du thread
+    /// `DefaultCombiningAnimation` à ~90 % du thread
     /// `ViewGraphDisplayLink`).
-    private func startPulse() {
-        let reduceMotion = MeeshyMotion.shouldReduce(
-            system: systemReduceMotion,
-            userForced: userForcedReduceMotion
+    private var currentMotion: Motion {
+        Self.motion(
+            animates: animates,
+            reduceMotion: MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion),
+            hushed: hushed
         )
-        guard Self.shouldAnimate(animates: animates, reduceMotion: reduceMotion) else { return }
+    }
+
+    private func hushPulse() {
+        withAnimation(.easeInOut(duration: Self.hushedDuration).repeatForever(autoreverses: true)) {
+            scale = Self.hushedScale
+        }
+    }
+
+    private func startPulse() {
+        guard currentMotion == .breathe else { return }
         guard scale == Self.restingScale else { return }
         withAnimation(
             .spring(response: Self.springResponse, dampingFraction: Self.springDamping)
@@ -114,6 +238,16 @@ public struct MeeshyMoodBadge: View {
                 .delay(Double.random(in: 0...Self.maximumStartDelay))
         ) {
             scale = Self.pulsedScale
+        }
+    }
+
+    /// Fin de la fenêtre d'annonce : le ressort répété est REMPLACÉ par une
+    /// détente unique vers le repos — jamais un arrêt sec au milieu d'un
+    /// cycle, jamais un `repeatForever` qui survivrait posé à 1.18.
+    private func settlePulse() {
+        guard scale != Self.restingScale else { return }
+        withAnimation(.spring(response: Self.springResponse, dampingFraction: Self.springDamping)) {
+            scale = Self.restingScale
         }
     }
 }

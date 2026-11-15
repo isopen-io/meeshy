@@ -80,7 +80,25 @@ jest.mock('../../../utils/sanitize.js', () => ({
   SecuritySanitizer: { sanitizeText: jest.fn((t: string) => t) },
 }));
 
-// ─── Import after mocks ───────────────────────────────────────────────────────
+// #4147 — POST /posts / from-attachment / repost tirent leur plafond de
+// création d'un compteur PARTAGÉ qui lit Redis directement, fail-closed
+// (createSharedWriteRateLimitPreHandler, routes/posts/socialRateLimit.ts) :
+// sans ce double, `getCacheStore().getNativeClient()` rend `null` en test
+// (aucun REDIS_URL) et CHAQUE écriture de ce type serait refusée avant
+// d'atteindre ce que ce fichier vérifie — détail complet dans
+// unit/routes/posts/core.test.ts, premier fichier de la série à le poser.
+// `incr` répond toujours « premier appel » : ce fichier ne teste PAS le
+// plafond (son témoin dédié vit dans social-write-rate-limit.test.ts) —
+// juste un Redis DISPONIBLE.
+jest.mock('../../../services/CacheStore', () => ({
+  getCacheStore: () => ({
+    getNativeClient: () => ({
+      incr: async () => 1,
+      pexpire: async () => 1,
+      pttl: async () => -1,
+    }),
+  }),
+}));// ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerCoreRoutes } from '../../../routes/posts/core';
 import { appRoutes } from '../../../routes/app';
@@ -119,7 +137,7 @@ async function buildApp(): Promise<FastifyInstance> {
   const requiredAuth = async (req: FastifyRequest) => {
     (req as any).authContext = {
       isAuthenticated: true,
-      registeredUser: { id: USER_ID, role: 'USER', username: 'alice' },
+      registeredUser: { emailVerifiedAt: new Date(), id: USER_ID, role: 'USER', username: 'alice' },
     };
   };
 
@@ -259,5 +277,49 @@ describe('plancher X-App-Version — présence sous plancher = 426, ABSENCE = pa
     expect(res.statusCode).toBe(200);
     expect(res.json().data).toEqual({ minVersion: '1.2.0' });
     await app.close();
+  });
+  it('GET /app/min-version?platform= sert le plancher de la plateforme, le global reste servi sans paramètre', async () => {
+    process.env.MIN_APP_VERSION = '1.2.0';
+    process.env.MIN_APP_VERSION_ANDROID = '3.1.0';
+    const app = await buildApp();
+    const android = await app.inject({ method: 'GET', url: '/app/min-version?platform=android' });
+    const ios = await app.inject({ method: 'GET', url: '/app/min-version?platform=ios' });
+    const web = await app.inject({ method: 'GET', url: '/app/min-version?platform=pwa' });
+    const bare = await app.inject({ method: 'GET', url: '/app/min-version' });
+    delete process.env.MIN_APP_VERSION_ANDROID;
+    await app.close();
+    expect(android.json().data).toEqual({ minVersion: '3.1.0' });
+    expect(ios.json().data).toEqual({ minVersion: '1.2.0' });
+    expect(web.json().data).toEqual({ minVersion: '' });
+    expect(bare.json().data).toEqual({ minVersion: '1.2.0' });
+  });
+
+  it('GET /app/min-version sans paramètre lit X-App-Platform : le binaire natif reçoit le plancher qui le juge', async () => {
+    process.env.MIN_APP_VERSION_IOS = '1.2.0';
+    process.env.MIN_APP_VERSION_ANDROID = '3.1.0';
+    const app = await buildApp();
+    const ios = await app.inject({ method: 'GET', url: '/app/min-version', headers: { 'x-app-platform': 'ios' } });
+    const android = await app.inject({ method: 'GET', url: '/app/min-version', headers: { 'x-app-platform': 'android' } });
+    const query = await app.inject({ method: 'GET', url: '/app/min-version?platform=android', headers: { 'x-app-platform': 'ios' } });
+    delete process.env.MIN_APP_VERSION_IOS;
+    delete process.env.MIN_APP_VERSION_ANDROID;
+    await app.close();
+    expect(ios.json().data).toEqual({ minVersion: '1.2.0' });
+    expect(android.json().data).toEqual({ minVersion: '3.1.0' });
+    expect(query.json().data).toEqual({ minVersion: '3.1.0' });
+  });
+
+  it('plancher par plateforme : la porte des stories juge iOS sur MIN_APP_VERSION_IOS, pas sur celui d’Android', async () => {
+    process.env.MIN_APP_VERSION_IOS = '1.2.0';
+    process.env.MIN_APP_VERSION_ANDROID = '3.1.0';
+    const app = await buildApp();
+    const ios = await createStory(app, { 'x-app-version': '1.1.9', 'x-app-platform': 'ios' });
+    const iosAt = await createStory(app, { 'x-app-version': '1.2.0', 'x-app-platform': 'ios' });
+    delete process.env.MIN_APP_VERSION_IOS;
+    delete process.env.MIN_APP_VERSION_ANDROID;
+    await app.close();
+    expect(ios.statusCode).toBe(426);
+    expect(ios.json().minVersion).toBe('1.2.0');
+    expect(iosAt.statusCode).toBe(201);
   });
 });

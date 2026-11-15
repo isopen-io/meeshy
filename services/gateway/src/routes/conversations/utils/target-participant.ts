@@ -35,6 +35,8 @@ export interface TargetParticipantRow {
   readonly bannedAt: Date | null;
   readonly displayName: string | null;
   readonly shareLinkId: string | null;
+  readonly anonymousSession?: { readonly shareLinkId?: string | null } | null;
+  readonly language: string;
 }
 
 const TARGET_SELECT = {
@@ -48,6 +50,12 @@ const TARGET_SELECT = {
   // Le lien d'ENTRÉE. Bannir le ferme — sortir la personne sans fermer la porte
   // par laquelle elle est passée ne protège de rien.
   shareLinkId: true,
+  // La session embarquée d'un invité porte AUSSI son lien d'entrée : un invité
+  // entré avec ce seul champ se lit par `guestShareLinkId` (#10465).
+  anonymousSession: { select: { shareLinkId: true } },
+  // Une levée de bannissement qui RÉTABLIT l'appartenance est une arrivée :
+  // la composition linguistique de la conversation l'apprend avec sa langue.
+  language: true,
 } as const;
 
 export async function resolveTargetParticipant(

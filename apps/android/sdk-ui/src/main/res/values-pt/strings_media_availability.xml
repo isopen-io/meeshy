@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="media_availability_retry">Tentar novamente</string>
+    <string name="media_availability_offline">Sem conexão</string>
+    <string name="media_availability_gone">Já não está disponível</string>
+</resources>

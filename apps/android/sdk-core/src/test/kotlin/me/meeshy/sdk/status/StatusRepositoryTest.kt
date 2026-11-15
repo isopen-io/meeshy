@@ -118,7 +118,7 @@ class StatusRepositoryTest {
     @Test
     fun create_postsStatusTypeAndMapsEntry() = runTest {
         val body = slot<CreatePostRequest>()
-        coEvery { api.create(capture(body)) } returns ApiResponse(success = true, data = status("s1", emoji = "🔥"))
+        coEvery { api.create(capture(body), any()) } returns ApiResponse(success = true, data = status("s1", emoji = "🔥"))
 
         val entry = repo.create(moodEmoji = "🔥", content = "hello", visibility = "FRIENDS").success()
 
@@ -133,7 +133,7 @@ class StatusRepositoryTest {
     @Test
     fun create_republish_carriesRepostAttributionInTheBody() = runTest {
         val body = slot<CreatePostRequest>()
-        coEvery { api.create(capture(body)) } returns ApiResponse(success = true, data = status("s2", emoji = "🎉"))
+        coEvery { api.create(capture(body), any()) } returns ApiResponse(success = true, data = status("s2", emoji = "🎉"))
 
         repo.create(
             moodEmoji = "🎉",
@@ -150,7 +150,7 @@ class StatusRepositoryTest {
 
     @Test
     fun create_nonStatusResponse_becomesParseFailure() = runTest {
-        coEvery { api.create(any()) } returns ApiResponse(success = true, data = plainPost("p1"))
+        coEvery { api.create(any(), any()) } returns ApiResponse(success = true, data = plainPost("p1"))
 
         val error = repo.create(moodEmoji = "🔥", content = null).failure()
 
@@ -159,11 +159,75 @@ class StatusRepositoryTest {
 
     @Test
     fun create_transportFailure_propagates() = runTest {
-        coEvery { api.create(any()) } throws IOException("offline")
+        coEvery { api.create(any(), any()) } throws IOException("offline")
 
         val error = repo.create(moodEmoji = "🔥", content = null).failure()
 
         assertThat(error.code).isEqualTo("NETWORK")
+    }
+
+    @Test
+    fun create_withoutNetwork_queuesTheSameCreatePostRowWithTheCmidItSent() = runTest {
+        val cmid = slot<String>()
+        val row = slot<me.meeshy.sdk.outbox.OutboxMutation>()
+        val outbox: me.meeshy.sdk.outbox.OutboxRepository = mockk(relaxed = true)
+        coEvery { api.create(any(), capture(cmid)) } throws IOException("offline")
+        coEvery { outbox.enqueue(capture(row), any()) } returns "queued"
+
+        val error = StatusRepository(api, outbox)
+            .create(moodEmoji = "🔥", content = "hello", visibility = "FRIENDS", visibilityUserIds = listOf("u1"))
+            .failure()
+
+        assertThat(error.code).isEqualTo(StatusRepository.QUEUED_OFFLINE)
+        assertThat(row.captured.kind).isEqualTo(me.meeshy.sdk.outbox.OutboxKind.CREATE_POST)
+        assertThat(row.captured.cmid).isEqualTo(cmid.captured)
+        assertThat(row.captured.payload).contains("\"type\":\"STATUS\"")
+        assertThat(row.captured.payload).contains("\"visibilityUserIds\":[\"u1\"]")
+    }
+
+    @Test
+    fun create_refusedByTheGateway_isNeverQueued() = runTest {
+        val outbox: me.meeshy.sdk.outbox.OutboxRepository = mockk(relaxed = true)
+        coEvery { api.create(any(), any()) } throws retrofit2.HttpException(
+            retrofit2.Response.error<Any>(403, okhttp3.ResponseBody.create(null, "{}")),
+        )
+
+        StatusRepository(api, outbox).create(moodEmoji = "🔥").failure()
+
+        coVerify(exactly = 0) { outbox.enqueue(any(), any()) }
+    }
+
+    private fun row(cmid: String, request: CreatePostRequest, createdAt: Long) = me.meeshy.core.database.entity.OutboxEntity(
+        cmid = cmid, lane = "post", kind = "CREATE_POST", targetId = cmid,
+        payload = me.meeshy.sdk.net.MeeshyApi.json.encodeToString(CreatePostRequest.serializer(), request),
+        dependsOn = null, attempts = 0, state = "PENDING", createdAt = createdAt, updatedAt = createdAt,
+    )
+
+    @Test
+    fun recoverStuckMood_takesBackAMoodQueuedForMoreThanAMinuteAsADraft() = runTest {
+        val outbox: me.meeshy.sdk.outbox.OutboxRepository = mockk(relaxed = true)
+        val mood = CreatePostRequest(content = "hello", type = "STATUS", visibility = "FRIENDS", moodEmoji = "🔥")
+        val plain = CreatePostRequest(content = "post", type = "POST")
+        coEvery { outbox.pendingRows(me.meeshy.sdk.outbox.OutboxKind.CREATE_POST) } returns
+            listOf(row("p", plain, 0L), row("m", mood, 1_000L))
+
+        val draft = StatusRepository(api, outbox).recoverStuckMood(nowMillis = 100_000L)
+
+        assertThat(draft?.emoji).isEqualTo("🔥")
+        assertThat(draft?.text).isEqualTo("hello")
+        assertThat(draft?.visibility).isEqualTo("FRIENDS")
+        coVerify { outbox.discard("m") }
+        coVerify(exactly = 0) { outbox.discard("p") }
+    }
+
+    @Test
+    fun recoverStuckMood_leavesAFreshQueuedMoodAlone() = runTest {
+        val outbox: me.meeshy.sdk.outbox.OutboxRepository = mockk(relaxed = true)
+        val mood = CreatePostRequest(type = "STATUS", moodEmoji = "🔥")
+        coEvery { outbox.pendingRows(me.meeshy.sdk.outbox.OutboxKind.CREATE_POST) } returns listOf(row("m", mood, 90_000L))
+
+        assertThat(StatusRepository(api, outbox).recoverStuckMood(nowMillis = 100_000L)).isNull()
+        coVerify(exactly = 0) { outbox.discard(any()) }
     }
 
     // ─── delete ──────────────────────────────────────────────────────────────

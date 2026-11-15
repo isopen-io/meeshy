@@ -1,0 +1,189 @@
+import AVFoundation
+import CoreMedia
+import MeeshySDK
+
+/// Une définition en pixels — `CMVideoDimensions` n'est pas `Equatable`.
+nonisolated struct CameraPhotoDimensions: Equatable, Sendable {
+    let width: Int32
+    let height: Int32
+
+    init(width: Int32, height: Int32) {
+        self.width = width
+        self.height = height
+    }
+
+    init(_ dimensions: CMVideoDimensions) {
+        self.init(width: dimensions.width, height: dimensions.height)
+    }
+
+    var video: CMVideoDimensions { CMVideoDimensions(width: width, height: height) }
+    var longestSide: CGFloat { CGFloat(max(width, height)) }
+    var area: Int64 { Int64(width) * Int64(height) }
+}
+
+/// Ce que la sortie photo de l'objectif en place sait faire — lu sur la file de
+/// la session, une fois l'entrée installée : avant, rien n'est « pris en charge ».
+nonisolated struct CameraPhotoCapabilities: Equatable, Sendable {
+    var supportsZeroShutterLag = false
+    var supportsResponsiveCapture = false
+    var supportsFastCapturePrioritization = false
+    /// Les dimensions de la trame vidéo du format actif : la photo garde ses proportions.
+    var formatDimensions = CameraPhotoDimensions(width: 0, height: 0)
+    var supportedMaxPhotoDimensions: [CameraPhotoDimensions] = []
+}
+
+/// Ce que la sortie photo reçoit, une fois par objectif installé (#16482).
+nonisolated struct CameraPhotoTuningPlan: Equatable, Sendable {
+    let zeroShutterLag: Bool
+    let responsiveCapture: Bool
+    let fastCapturePrioritization: Bool
+    let qualityPrioritization: AVCapturePhotoOutput.QualityPrioritization
+    /// `nil` ⇒ l'objectif n'annonce aucune dimension : on ne touche à rien.
+    let maxPhotoDimensions: CameraPhotoDimensions?
+}
+
+/// **La prise part vite, et la photo garde ce que l'aperçu montrait** (#16482).
+///
+/// L'état de l'art d'AVFoundation (WWDC23 « Create a more responsive camera
+/// experience ») : l'obturateur sans latence (`isZeroShutterLagEnabled`), la
+/// prise qui chevauche le traitement de la précédente (`isResponsiveCaptureEnabled`)
+/// et la priorité à la vitesse sur les rafales (`isFastCapturePrioritizationEnabled`),
+/// chacun seulement si l'objectif le sert ; une qualité ÉQUILIBRÉE, jamais
+/// `.quality`, dont la fusion multi-images retient l'image des centaines de ms.
+///
+/// La définition : la plus petite que le format sert aux MÊMES proportions que
+/// son aperçu, et qui couvre ce que le traitement unique garde
+/// (`PhotoCaptureSettings.capture`) — jamais une photo 4:3 sous un aperçu 16:9,
+/// ni douze mégapixels qu'on réduira aussitôt.
+nonisolated enum CameraPhotoTuning {
+
+    static let qualityPrioritization: AVCapturePhotoOutput.QualityPrioritization = .balanced
+
+    static func plan(for capabilities: CameraPhotoCapabilities,
+                     coveringLongestSide target: CGFloat = PhotoCaptureSettings.capture.maxPixelDimension)
+        -> CameraPhotoTuningPlan {
+        let zsl = capabilities.supportsZeroShutterLag
+        let responsive = zsl && capabilities.supportsResponsiveCapture
+        return CameraPhotoTuningPlan(
+            zeroShutterLag: zsl,
+            responsiveCapture: responsive,
+            fastCapturePrioritization: responsive && capabilities.supportsFastCapturePrioritization,
+            qualityPrioritization: qualityPrioritization,
+            maxPhotoDimensions: dimensions(capabilities, coveringLongestSide: target))
+    }
+
+    /// Les réglages d'UNE prise : le flash seulement s'il est servi, la qualité
+    /// équilibrée et la définition que la sortie ET le format actif admettent.
+    /// `capturePhoto` lève une exception Objective-C sur tout autre couple, et la
+    /// sortie ne suit pas un format changé hors de la session (un appel sur le même
+    /// objectif) : elle garde sa valeur, qui n'est plus servie.
+    static func settings(flash: AVCaptureDevice.FlashMode,
+                         supportedFlashModes: [AVCaptureDevice.FlashMode],
+                         outputMaxPhotoDimensions: CameraPhotoDimensions,
+                         formatMaxPhotoDimensions: [CameraPhotoDimensions]) -> AVCapturePhotoSettings {
+        let reglages = AVCapturePhotoSettings()
+        reglages.flashMode = supportedFlashModes.contains(flash) ? flash : .off
+        reglages.photoQualityPrioritization = qualityPrioritization
+        if let definition = requestable(output: outputMaxPhotoDimensions, format: formatMaxPhotoDimensions) {
+            reglages.maxPhotoDimensions = definition.video
+        }
+        return reglages
+    }
+
+    /// La plus grande que le format sert sous le plafond de la sortie ; `nil` ⇒ on
+    /// ne demande rien, et AVFoundation sert son défaut sans rien valider.
+    static func requestable(output: CameraPhotoDimensions, format: [CameraPhotoDimensions]) -> CameraPhotoDimensions? {
+        format.filter { $0.width <= output.width && $0.height <= output.height }.max { $0.area < $1.area }
+    }
+
+    /// **Dans la transaction qui installe `device`** (#16504) : le plan naît avec
+    /// la configuration, sans seconde transaction à l'ouverture.
+    static func adopt(for device: AVCaptureDevice, on output: AVCapturePhotoOutput) {
+        output.adopt(plan(for: output.photoCapabilities(of: device)))
+    }
+
+    /// **Après le commit** : une sortie qui n'a su répondre qu'une fois la
+    /// configuration validée reçoit son plan en UNE transaction ; sinon rien ne
+    /// s'ouvre. Les réglages préparés font naître les ressources de la première
+    /// prise avant le premier toucher.
+    static func confirm(_ output: AVCapturePhotoOutput, in session: AVCaptureSession, for device: AVCaptureDevice) {
+        let cible = plan(for: output.photoCapabilities(of: device))
+        confirm(adopted: output.hasAdopted(cible)) {
+            session.beginConfiguration()
+            output.adopt(cible)
+            session.commitConfiguration()
+        }
+        let prepares = settings(flash: .off, supportedFlashModes: output.supportedFlashModes,
+                                outputMaxPhotoDimensions: CameraPhotoDimensions(output.maxPhotoDimensions),
+                                formatMaxPhotoDimensions: output.sourceMaxPhotoDimensions)
+        output.setPreparedPhotoSettingsArray([prepares], completionHandler: nil)
+    }
+
+    static func confirm(adopted: Bool, adopt: () -> Void) {
+        guard !adopted else { return }
+        adopt()
+    }
+
+    private static func dimensions(_ capabilities: CameraPhotoCapabilities,
+                                   coveringLongestSide target: CGFloat) -> CameraPhotoDimensions? {
+        let format = capabilities.formatDimensions
+        let memes = capabilities.supportedMaxPhotoDimensions.filter { sameAspect($0, format) }
+        let candidats = (memes.isEmpty ? capabilities.supportedMaxPhotoDimensions : memes)
+            .sorted { $0.area < $1.area }
+        return candidats.first { $0.longestSide >= target } ?? candidats.last
+    }
+
+    private static func sameAspect(_ a: CameraPhotoDimensions, _ b: CameraPhotoDimensions) -> Bool {
+        guard a.height > 0, b.height > 0 else { return false }
+        return abs(Double(a.width) / Double(a.height) - Double(b.width) / Double(b.height)) < 0.02
+    }
+}
+
+// MARK: - La sortie réelle
+
+nonisolated extension AVCapturePhotoOutput {
+
+    /// Les définitions du format ACTIF de l'objectif que tient la connexion photo :
+    /// la liste même que `maxPhotoDimensions` et `capturePhoto` consultent avant de
+    /// lever. Vide sans connexion.
+    var sourceMaxPhotoDimensions: [CameraPhotoDimensions] {
+        let entree = connection(with: .video)?.inputPorts.first?.input as? AVCaptureDeviceInput
+        return entree?.device.activeFormat.supportedMaxPhotoDimensions.map(CameraPhotoDimensions.init) ?? []
+    }
+
+    /// Ce que la sortie sert avec l'objectif `device` — sur la file de la session.
+    func photoCapabilities(of device: AVCaptureDevice) -> CameraPhotoCapabilities {
+        var capacites = CameraPhotoCapabilities(
+            formatDimensions: CameraPhotoDimensions(
+                CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)),
+            supportedMaxPhotoDimensions: device.activeFormat.supportedMaxPhotoDimensions.map(CameraPhotoDimensions.init))
+        if #available(iOS 17.0, *) {
+            capacites.supportsZeroShutterLag = isZeroShutterLagSupported
+            capacites.supportsResponsiveCapture = isResponsiveCaptureSupported
+            capacites.supportsFastCapturePrioritization = isFastCapturePrioritizationSupported
+        }
+        return capacites
+    }
+
+    func hasAdopted(_ plan: CameraPhotoTuningPlan) -> Bool {
+        guard plan.maxPhotoDimensions.map({ $0 == CameraPhotoDimensions(maxPhotoDimensions) }) ?? true,
+              maxPhotoQualityPrioritization == plan.qualityPrioritization else { return false }
+        guard #available(iOS 17.0, *) else { return true }
+        return (!isZeroShutterLagSupported || isZeroShutterLagEnabled == plan.zeroShutterLag)
+            && (!isResponsiveCaptureSupported || isResponsiveCaptureEnabled == plan.responsiveCapture)
+            && (!isFastCapturePrioritizationSupported || isFastCapturePrioritizationEnabled == plan.fastCapturePrioritization)
+    }
+
+    /// Le plan, posé dans la configuration ouverte par l'appelant. Une définition
+    /// hors du format actif, ou sans connexion, lèverait : elle ne se pose pas.
+    func adopt(_ plan: CameraPhotoTuningPlan) {
+        if let dimensions = plan.maxPhotoDimensions, sourceMaxPhotoDimensions.contains(dimensions) {
+            maxPhotoDimensions = dimensions.video
+        }
+        maxPhotoQualityPrioritization = plan.qualityPrioritization
+        guard #available(iOS 17.0, *) else { return }
+        if isZeroShutterLagSupported { isZeroShutterLagEnabled = plan.zeroShutterLag }
+        if isResponsiveCaptureSupported { isResponsiveCaptureEnabled = plan.responsiveCapture }
+        if isFastCapturePrioritizationSupported { isFastCapturePrioritizationEnabled = plan.fastCapturePrioritization }
+    }
+}

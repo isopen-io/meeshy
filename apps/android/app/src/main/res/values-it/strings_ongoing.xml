@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lot: notifications en cours (#13420) ; miroir des Live Activities iOS d'envoi et d'enregistrement. -->
+<resources>
+    <string name="ongoing_channel_name">Attività in corso</string>
+    <string name="ongoing_channel_description">Avanzamento degli invii e dei vocali in registrazione</string>
+    <string name="ongoing_activity_public">Attività in corso</string>
+    <string name="outbox_activity_story">Pubblicazione di una storia</string>
+    <string name="outbox_activity_media">Invio di un contenuto multimediale</string>
+    <string name="outbox_activity_message_with_media">Invio di un messaggio con contenuto multimediale</string>
+    <string name="outbox_activity_sent">Inviato</string>
+    <string name="outbox_activity_failed">Invio non riuscito</string>
+    <string name="outbox_activity_waiting_network">In attesa della rete</string>
+    <string name="outbox_activity_remaining">%1$d rimanenti</string>
+    <string name="voice_recording_activity_title">Registrazione vocale</string>
+    <string name="voice_recording_activity_stop">Interrompi</string>
+    <string name="voice_recording_activity_cancel">Annulla</string>
+    <string name="voice_recording_activity_kept_in_tray">La registrazione si è interrotta: il tuo vocale ti aspetta nel compositore</string>
+</resources>

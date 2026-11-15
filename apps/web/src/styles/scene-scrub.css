@@ -1,0 +1,129 @@
+/**
+ * LA BARRE QU'ON PARCOURT AU DOIGT (#7879) — la feuille voyage avec son
+ * composant (`scene-scrub-bar.tsx`), jamais dans `app.css`. Cotes partagées
+ * avec iOS (`ReelScrubBar`) : zone de frappe de 44, piste de 3 au repos, de 10
+ * sous le doigt, poignée ronde de 16. Le rempli et la poignée sont ÉCRITS par
+ * ref (`transform`, `left`) : aucune règle ici ne les anime, seule l'épaisseur
+ * a une transition — la position suit le doigt sans retard.
+ */
+
+.scene-scrub {
+  position: absolute;
+  height: 44px;
+  touch-action: none;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  outline-offset: -2px;
+  --scene-scrub-thickness: 3px;
+}
+
+.scene-scrub[data-scrubbing],
+.scene-scrub:focus-visible {
+  --scene-scrub-thickness: 10px;
+}
+
+@media (hover: hover) {
+  .scene-scrub:hover {
+    --scene-scrub-thickness: 10px;
+  }
+}
+
+.scene-scrub-rail,
+.scene-scrub-fill {
+  position: absolute;
+  inset-inline: 0;
+  height: var(--scene-scrub-thickness);
+  pointer-events: none;
+  transition:
+    height 150ms ease,
+    bottom 150ms ease,
+    margin-top 150ms ease;
+}
+
+.scene-scrub-rail {
+  background-color: rgb(255 255 255 / 30%);
+}
+
+.scene-scrub-fill {
+  transform-origin: left center;
+  will-change: transform;
+}
+
+/* Le réel : la piste au RAS de la page, comme le réel vidéo. Au-dessus du
+   voile bas (`z-index`), que les commandes peintes après la zone recouvrent
+   pourtant au toucher : la zone, elle, reste à `z-index: auto`. */
+.scene-scrub[data-align='bottom'] .scene-scrub-rail,
+.scene-scrub[data-align='bottom'] .scene-scrub-fill {
+  bottom: 0;
+  z-index: 10;
+}
+
+.scene-scrub[data-align='bottom'][data-scrubbing] .scene-scrub-rail,
+.scene-scrub[data-align='bottom'][data-scrubbing] .scene-scrub-fill,
+.scene-scrub[data-align='bottom']:focus-visible .scene-scrub-rail,
+.scene-scrub[data-align='bottom']:focus-visible .scene-scrub-fill {
+  bottom: 3px;
+  border-radius: 9999px;
+}
+
+/* Le segment de story : la piste au CENTRE de sa zone, capsule arrondie. */
+.scene-scrub[data-align='center'] .scene-scrub-rail,
+.scene-scrub[data-align='center'] .scene-scrub-fill {
+  top: 50%;
+  margin-top: calc(var(--scene-scrub-thickness) / -2);
+  border-radius: 9999px;
+}
+
+.scene-scrub-thumb {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  border-radius: 9999px;
+  background-color: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 40%);
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0.5);
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+  z-index: 10;
+}
+
+.scene-scrub[data-align='bottom'] .scene-scrub-thumb {
+  bottom: 0;
+}
+
+.scene-scrub[data-align='center'] .scene-scrub-thumb {
+  top: 50%;
+  margin-top: -8px;
+}
+
+.scene-scrub[data-scrubbing] .scene-scrub-thumb,
+.scene-scrub:focus-visible .scene-scrub-thumb {
+  opacity: 1;
+  transform: scale(1);
+}
+
+@media (hover: hover) {
+  .scene-scrub:hover .scene-scrub-thumb {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .scene-scrub[data-align='bottom']:hover .scene-scrub-rail,
+  .scene-scrub[data-align='bottom']:hover .scene-scrub-fill {
+    bottom: 3px;
+    border-radius: 9999px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-scrub-rail,
+  .scene-scrub-fill,
+  .scene-scrub-thumb {
+    transition: none;
+  }
+}

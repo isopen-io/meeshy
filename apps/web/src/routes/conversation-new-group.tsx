@@ -1,0 +1,195 @@
+import { PeerAvatar } from '@/components/peer-avatar';
+import { Field } from '@/components/field';
+import { Glyph } from '@/components/glyph';
+import type { PersonSummary } from '@/lib/api/friend-requests';
+import { GROUP_TITLE_MAX, type GroupDraft, type GroupField } from '@/lib/conversation-new/group';
+import { colorForName } from '@meeshy/shared/utils/conversation-colors';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+
+/**
+ * **LE COMPOSEUR D'UN GROUPE** (#6706) — le nom, qui en est, et le geste qui
+ * le crée. Aucune description à la création (#14646, comme iOS) : elle se
+ * règle ensuite dans la fiche du groupe.
+ *
+ * Extrait de `conversation-new.tsx` pour la raison habituelle (budget de
+ * taille) et pour une seconde : la liste des personnes sert les DEUX modes,
+ * alors que ceci ne sert qu'au groupe. Un lecteur qui cherche « comment on
+ * choisit quelqu'un » n'a pas à traverser « comment on nomme un groupe ».
+ *
+ * **`onInput` sur les champs texte, jamais `onChange`** — leçon 617 : sous
+ * happy-dom un `input` dispatché ne déclenche pas `onChange`, et un champ ainsi
+ * câblé se remplit à l'œil sans jamais rapporter à son hôte.
+ *
+ * **Les personnes choisies sont RETIRABLES d'ici.** Sans cela, se tromper
+ * obligerait à remonter la liste pour retrouver la ligne et la dé-sélectionner —
+ * le choix se défait là où il se voit.
+ */
+
+const FIELD_TINT = 'var(--color-ios-brand)';
+const INPUT_CLASS = 'min-w-0 flex-1 bg-transparent text-body outline-none';
+
+export type GroupComposerProps = {
+  readonly draft: GroupDraft;
+  /** Les personnes choisies, RÉSOLUES — l'écran les tient, ce composant les montre. */
+  readonly chosen: readonly PersonSummary[];
+  readonly busy: boolean;
+  readonly online: boolean;
+  readonly refusedField: GroupField | null;
+  readonly refusalMessage: string | null;
+  readonly focused: 'title' | null;
+  readonly onEditTitle: (value: string) => void;
+  readonly onFocus: (field: 'title' | null) => void;
+  readonly onRemove: (participantId: string) => void;
+  readonly onSubmit: () => void;
+};
+
+export function GroupComposer({
+  draft,
+  chosen,
+  busy,
+  online,
+  refusedField,
+  refusalMessage,
+  focused,
+  onEditTitle,
+  onFocus,
+  onRemove,
+  onSubmit,
+}: GroupComposerProps) {
+  const errorFor = (field: GroupField): string | undefined =>
+    refusedField === field && refusalMessage !== null ? refusalMessage : undefined;
+
+  const disabled = busy || !online;
+
+  return (
+    <form
+      noValidate
+      data-group-composer
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit();
+      }}
+      className="grid gap-3 px-4 pt-3"
+    >
+      <Field
+        id="group-title"
+        label={translate(currentInterfaceLanguage(), 'newConversation.group.name')}
+        icon="users"
+        tint={FIELD_TINT}
+        focused={focused === 'title'}
+        error={errorFor('title')}
+      >
+        {({ id, describedBy }) => (
+          <input
+            id={id}
+            name="title"
+            data-group-title
+            aria-describedby={describedBy}
+            aria-required="true"
+            aria-invalid={refusedField === 'title'}
+            autoComplete="off"
+            maxLength={GROUP_TITLE_MAX}
+            value={draft.title}
+            placeholder={translate(currentInterfaceLanguage(), 'newConversation.group.name.placeholder')}
+            onInput={(event) => onEditTitle(event.currentTarget.value)}
+            onFocus={() => onFocus('title')}
+            onBlur={() => onFocus(null)}
+            className={INPUT_CLASS}
+            style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}
+          />
+        )}
+      </Field>
+
+      <ChosenPeople chosen={chosen} error={errorFor('participants')} onRemove={onRemove} />
+
+      <button
+        type="submit"
+        data-group-submit
+        disabled={disabled}
+        aria-busy={busy}
+        className="grid w-full place-items-center rounded-[14px] font-bold text-ios-on-brand transition-opacity"
+        style={{
+          minHeight: 52,
+          backgroundColor: 'var(--color-ios-brand)',
+          opacity: disabled ? 0.6 : 1,
+        }}
+      >
+        {translate(currentInterfaceLanguage(), busy ? 'newConversation.group.creating' : 'newConversation.group.create')}
+      </button>
+
+      {online ? null : (
+        <p className="text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {translate(currentInterfaceLanguage(), 'newConversation.group.offline')}
+        </p>
+      )}
+    </form>
+  );
+}
+
+/**
+ * QUI EN EST — rien tant que personne n'est choisi (l'interrupteur dit déjà
+ * qu'un groupe se crée seul) ; le refus de la LISTE se pose ICI, sous les
+ * pastilles, parce que c'est là que le geste qui le corrige se trouve.
+ */
+function ChosenPeople({
+  chosen,
+  error,
+  onRemove,
+}: {
+  readonly chosen: readonly PersonSummary[];
+  readonly error: string | undefined;
+  readonly onRemove: (participantId: string) => void;
+}) {
+  if (chosen.length === 0) return error === undefined ? null : <RefusalNote error={error} />;
+  return (
+    <div className="grid gap-1.5">
+      <span className="text-caption font-medium" style={{ color: 'var(--color-ios-ink-3)' }}>
+        {translate(currentInterfaceLanguage(), chosen.length > 1 ? 'newConversation.group.chosen.other' : 'newConversation.group.chosen.one', { count: String(chosen.length) })}
+      </span>
+      <ul data-group-chosen className="flex flex-wrap gap-2">
+          {chosen.map((person) => {
+            const name = person.displayName ?? person.username;
+            /* LA PHOTO (#6975) — même donnée, même loi que la liste d'où
+               cette chip vient d'être choisie. */
+            const photo = participantAvatarOf(person);
+            return (
+              <li key={person.id}>
+                <button
+                  type="button"
+                  data-group-remove={person.id}
+                  onClick={() => onRemove(person.id)}
+                  aria-label={translate(currentInterfaceLanguage(), 'newConversation.group.remove', { name })}
+                  className="flex items-center gap-2 rounded-chip py-1 ps-1 pe-2.5"
+                  style={{ minHeight: 44, backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)' }}
+                >
+                  <PeerAvatar
+                    presenceKey={person.id}
+                    ringRef={person.ring}
+                    initials={initialsOf(name)}
+                    color={colorForName(name)}
+                    size={28}
+                    {...(photo === undefined ? {} : { src: photo })}
+                  />
+                  <span className="max-w-[9rem] truncate text-caption font-medium">{name}</span>
+                  <span aria-hidden="true" style={{ color: 'var(--color-ios-ink-3)' }}>
+                    <Glyph name="x" size={12} />
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+      </ul>
+      {error === undefined ? null : <RefusalNote error={error} />}
+    </div>
+  );
+}
+
+function RefusalNote({ error }: { readonly error: string }) {
+  return (
+    <p role="alert" className="text-caption" style={{ color: 'var(--ios-error)' }}>
+      {error}
+    </p>
+  );
+}

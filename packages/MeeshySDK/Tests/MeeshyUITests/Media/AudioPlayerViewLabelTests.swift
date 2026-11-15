@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import MeeshyUI
+import MeeshySDK
 
 /// Pure helpers tests for AudioPlayerView's size labels rendered under the
 /// play-button circle. The visual rendering itself is covered by the iOS
@@ -8,7 +9,7 @@ import Foundation
 struct AudioPlayerViewLabelTests {
 
     @Test func needsDownload_showsFormattedSize_whenFileSizeKnown() {
-        let expected = AudioPlayerView.formatBytes(870_400)
+        let expected = MediaFormat.bytes(870_400)
         let label = AudioPlayerView.formattedNeedsDownloadLabel(fileSize: 870_400)
         #expect(label == expected)
         #expect(!label.isEmpty)
@@ -20,8 +21,8 @@ struct AudioPlayerViewLabelTests {
     }
 
     @Test func downloading_showsDownloadedOverTotal_whenBothKnown() {
-        let total = AudioPlayerView.formatBytes(870_400)
-        let downloaded = AudioPlayerView.formatBytes(408_000)
+        let total = MediaFormat.bytes(870_400)
+        let downloaded = MediaFormat.bytes(408_000)
         let label = AudioPlayerView.formattedDownloadingLabel(
             downloadedBytes: 408_000, totalBytes: 870_400, fallbackFileSize: 0
         )
@@ -32,8 +33,8 @@ struct AudioPlayerViewLabelTests {
         let label = AudioPlayerView.formattedDownloadingLabel(
             downloadedBytes: 100_000, totalBytes: 0, fallbackFileSize: 870_400
         )
-        let downloaded = AudioPlayerView.formatBytes(100_000)
-        let total = AudioPlayerView.formatBytes(870_400)
+        let downloaded = MediaFormat.bytes(100_000)
+        let total = MediaFormat.bytes(870_400)
         #expect(label == "\(downloaded) / \(total)")
     }
 
@@ -45,7 +46,7 @@ struct AudioPlayerViewLabelTests {
     }
 
     @Test func formatBytes_returnsNonEmpty_forPositive() {
-        let s = AudioPlayerView.formatBytes(1_048_576)
+        let s = MediaFormat.bytes(1_048_576)
         #expect(!s.isEmpty)
     }
 }

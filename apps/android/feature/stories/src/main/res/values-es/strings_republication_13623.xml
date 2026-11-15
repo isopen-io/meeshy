@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="my_stories_repost_audience_kept">La historia no se republicó; su audiencia ahora es: %1$s</string>
+</resources>

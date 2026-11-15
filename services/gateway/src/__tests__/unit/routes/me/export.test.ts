@@ -54,6 +54,7 @@ function makeMocks() {
   return {
     userFindUnique: jest.fn<any>().mockResolvedValue(mockUser),
     participantFindMany: jest.fn<any>()
+      .mockResolvedValue([])  // tout autre lecteur (appels, #11277) : aucun participant
       .mockResolvedValueOnce([{ id: 'part-1' }])  // for messages: participant ids
       .mockResolvedValueOnce(mockParticipations),  // for contacts
     messageFindMany: jest.fn<any>().mockResolvedValue(mockMessages),
@@ -71,6 +72,45 @@ async function buildApp(opts: {
     user: { findUnique: mocks.userFindUnique },
     participant: { findMany: mocks.participantFindMany },
     message: { findMany: mocks.messageFindMany },
+    // #3633 — le défaut "toutes les types" en couvre désormais dix, pas trois ;
+    // ce fichier ne teste que profile/messages/contacts, ces doubles évitent
+    // seulement qu'un modèle non simulé fasse lever le chemin par défaut.
+    post: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    postComment: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    reaction: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    postReaction: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    commentReaction: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    messageAttachment: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    postMedia: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    userVoiceModel: { findFirst: jest.fn().mockResolvedValue(null) },
+    userSession: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    securityEvent: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    // Le jeu (#9384) : des collections vides, comme un compte qui n'a jamais joué.
+    ...Object.fromEntries(
+      ['gameProfile', 'leaguePseudonym', 'leagueMembership', 'gameWeekPoints', 'gameDuo', 'gameSeason', 'gameTrophy', 'atlasStamp', 'dailyMission', 'gloryLedger', 'meeshLedger', 'mythicSeat', 'gamePhotoMoment'].map(
+        (model) => [model, { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null) }],
+      ),
+    ),
+    // Les packs (#10151) : aucun choix, aucune bibliothèque, aucune proposition.
+    ...Object.fromEntries(
+      ['userStickerPack', 'userSticker', 'stickerPack', 'userPackOwnership', 'communityAppearancePack', 'lensPack', 'partnerProfile'].map(
+        (model) => [model, { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) }],
+      ),
+    ),
+    // La télémétrie de lecture (#10499, O6) : un compte qui n'a rien lu.
+    ...Object.fromEntries(
+      ['postImpression', 'postEngagement', 'postView', 'contentEvent'].map(
+        (model) => [model, { findMany: jest.fn().mockResolvedValue([]) }],
+      ),
+    ),
+    // La télémétrie d'appel (#11277) : un compte qui n'a jamais appelé.
+    callParticipant: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    // Les cercles (#14400) : aucun lien, aucun échange, aucun consentement, aucune position du Sang (#13937).
+    ...Object.fromEntries(
+      ['userRelation', 'pairInteractionDay', 'relationFeatureSetting', 'bloodLocationPoint', 'bloodLocationConsultation'].map(
+        (model) => [model, { findMany: jest.fn().mockResolvedValue([]) }],
+      ),
+    ),
   } as any);
 
   app.decorate('authenticate', async (req: FastifyRequest) => {
@@ -117,7 +157,14 @@ describe('GET /export — default JSON (all types)', () => {
     expect(body.data).toBeDefined();
     expect(body.data.exportDate).toBeDefined();
     expect(body.data.format).toBe('json');
-    expect(body.data.requestedTypes).toEqual(['profile', 'messages', 'contacts']);
+    // #3633 — le défaut couvre désormais les treize types (le jeu, #9384, les événements de sécurité, #9614, et les packs, #10151, en plus), pas seulement les trois
+    // premiers (l'export RGPD ne doit pas exiger de connaître chaque catégorie).
+    expect(body.data.requestedTypes).toEqual([
+      'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions', 'securityEvents', 'game', 'packs',
+      'readingActivity',
+      'calls',
+      'relations',
+    ]);
     expect(body.data.profile).toBeDefined();
     expect(body.data.profile.id).toBe(USER_ID);
     expect(body.data.messages).toBeDefined();

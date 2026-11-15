@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tests d'intégration Firebase pour le système de notifications
  *
@@ -8,20 +7,23 @@
  * - Fallback gracieux en cas d'erreur Firebase
  * - WebSocket continue de fonctionner même si Firebase fail
  *
- * NOTE: `@ts-nocheck` is applied to keep ts-jest happy despite pre-existing
- * type drift in the legacy tests (private method access, removed/renamed
- * fields, jest.fn() generic-narrowing). These tests are excluded from the
- * default `jest.config.json` runner — file lives under
- * `testPathIgnorePatterns: ["/__tests__/notifications-"]` — so the only
- * caller is the explicit `pnpm test -- notifications-firebase.test.ts`
- * invocation used by maintainers. The new "APNs environment routing"
- * describe block at the bottom is what the routing fix relies on.
+ * Cette suite a porté un `@ts-nocheck` et une exclusion de
+ * `testPathIgnorePatterns` — « le seul appelant est l'invocation explicite des
+ * mainteneurs ». Les deux sont levés (#7153) : la dérive de types que le
+ * `@ts-nocheck` couvrait ÉTAIT la dérive d'API qui empêchait la suite de dire
+ * vrai. Une suite qu'on exclut pour la faire taire cesse de garder ce qu'elle
+ * prétend garder, et personne ne l'apprend.
  *
  * @jest-environment node
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
-import { NotificationService, CreateNotificationData } from '../services/notifications/NotificationService';
+import { NotificationService } from '../services/notifications/NotificationService';
+
+// `CreateNotificationParams` n'a jamais été exporté par `NotificationService.ts`,
+// et il décrit une forme PLATE que `createNotification` n'accepte plus. Les
+// témoins se lient à la SIGNATURE : c'est elle qui fait rougir une dérive.
+type CreateNotificationParams = Parameters<NotificationService['createNotification']>[0];
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 
 // Mock Firebase Admin (simule que Firebase est configuré)
@@ -56,20 +58,9 @@ jest.mock('isomorphic-dompurify', () => ({
 // Mock Prisma — hoisted via the `mock` prefix so the new APNs routing tests
 // at the bottom of the file can reach the same instance the existing tests use.
 const mockPrisma = {
-  notification: {
-    create: jest.fn(),
-    findMany: jest.fn(),
-    updateMany: jest.fn(),
-    deleteMany: jest.fn(),
-    count: jest.fn(),
-    createMany: jest.fn()
-  },
-  notificationPreference: {
-    findUnique: jest.fn()
-  },
-  userPreferences: {
-    findUnique: jest.fn()
-  },
+  ...require('./helpers/notification-service-doubles').makeNotificationPrisma(),
+  // `pushToken` est le seul modèle dont CETTE suite a besoin au-delà de la
+  // surface commune : elle vérifie l'enregistrement et la purge des jetons.
   pushToken: {
     findMany: jest.fn(),
     findFirst: jest.fn(),
@@ -82,32 +73,21 @@ const mockPrisma = {
 };
 
 jest.mock('@meeshy/shared/prisma/client', () => {
-  return {
-    PrismaClient: jest.fn(() => mockPrisma)
-  };
+  const actual = jest.requireActual<Record<string, unknown>>('@meeshy/shared/prisma/client');
+  return { ...actual, PrismaClient: jest.fn(() => mockPrisma) };
 });
 
-// Mock loggers
-jest.mock('../utils/logger', () => ({
-  logger: {
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-  }
-}));
+// `PushNotificationService.ts:24` appelle `enhancedLogger.child(...)` au
+// CHARGEMENT du module : un double sans lui ne fait pas échouer un test mais
+// l'IMPORT — la suite entière tombe sur « Cannot read properties of undefined
+// (reading 'child') », loin du test qui l'a déclenché.
+jest.mock('../utils/logger', () =>
+  require('./helpers/notification-service-doubles').makeLoggerModule()
+);
 
-jest.mock('../utils/logger-enhanced', () => ({
-  notificationLogger: {
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-  },
-  securityLogger: {
-    logViolation: jest.fn()
-  }
-}));
+jest.mock('../utils/logger-enhanced', () =>
+  require('./helpers/notification-service-doubles').makeLoggerEnhancedModule()
+);
 
 describe('Notifications Integration - Avec Firebase', () => {
   let service: NotificationService;
@@ -172,7 +152,9 @@ describe('Notifications Integration - Avec Firebase', () => {
 
   describe('Push notifications avec Firebase', () => {
     it('Envoie une push notification via Firebase', async () => {
-      const notifData: CreateNotificationData = {
+      const notifData: CreateNotificationParams = {
+        context: {},
+        metadata: {},
         userId: 'user123',
         type: 'new_message',
         title: 'Nouveau message',
@@ -224,17 +206,21 @@ describe('Notifications Integration - Avec Firebase', () => {
 
     it('Envoie une push notification avec données enrichies', async () => {
       const messageData = {
-        recipientId: 'user456',
+        recipientUserId: 'user456',
         senderId: 'user123',
-        senderUsername: 'testuser',
-        senderAvatar: 'https://example.com/avatar.png',
-        messageContent: 'Hello! How are you?',
+        messagePreview: 'Hello! How are you?',
         conversationId: 'conv123',
-        messageId: 'msg123',
-        conversationIdentifier: 'direct',
-        conversationType: 'direct',
-        conversationTitle: 'testuser'
+        messageId: 'msg123'
       };
+
+      // Relecture de vivacité : sans ce double, le message est jugé disparu et
+      // la méthode rend `null` — et `expect(null).toBeDefined()` PASSE.
+      prisma.message.findUnique.mockResolvedValue({
+        deletedAt: null, expiresAt: null, createdAt: new Date(),
+        messageType: 'text', translations: [], originalLanguage: 'en'
+      });
+      prisma.user.findUnique.mockResolvedValue({ username: 'testuser', displayName: 'Test User', avatar: null });
+      prisma.conversation.findUnique.mockResolvedValue({ id: 'conv123', title: 'testuser', type: 'direct', avatar: null, participants: [] });
 
       prisma.pushToken.findMany.mockResolvedValue([
         {
@@ -268,13 +254,19 @@ describe('Notifications Integration - Avec Firebase', () => {
 
       const result = await service.createMessageNotification(messageData);
 
-      expect(result).toBeDefined();
-      expect(result?.senderId).toBe('user123');
-      expect(result?.conversationId).toBe('conv123');
+      expect(result).not.toBeNull();
+      // L'expéditeur est dans `actor`, la navigation dans `context` — et on le
+      // vérifie sur ce qui est ÉCRIT, pas sur ce que le double rend.
+      const createArg = prisma.notification.create.mock.calls[0][0];
+      expect(createArg.data.actor.id).toBe('user123');
+      expect(createArg.data.context.conversationId).toBe('conv123');
     });
 
     it('Gère plusieurs tokens FCM pour un utilisateur', async () => {
-      const notifData: CreateNotificationData = {
+      const notifData: CreateNotificationParams = {
+        priority: 'normal',
+        context: {},
+        metadata: {},
         userId: 'user123',
         type: 'new_message',
         title: 'Test',
@@ -305,7 +297,10 @@ describe('Notifications Integration - Avec Firebase', () => {
 
   describe('WebSocket fonctionne toujours avec Firebase', () => {
     it('Émet via WebSocket ET Firebase quand disponible', async () => {
-      const notifData: CreateNotificationData = {
+      const notifData: CreateNotificationParams = {
+        priority: 'normal',
+        context: {},
+        metadata: {},
         userId: 'user123',
         type: 'new_message',
         title: 'Test dual',
@@ -342,7 +337,8 @@ describe('Notifications Integration - Avec Firebase', () => {
       await service.createNotification(notifData);
 
       // WebSocket doit avoir émis
-      expect(mockIO.to).toHaveBeenCalledWith('socket1');
+      // V2 : une émission user-scoped vise la ROOM `user:<id>`.
+      expect(mockIO.to).toHaveBeenCalledWith('user:user123');
       expect(mockIO.emit).toHaveBeenCalled();
 
       // Firebase devrait aussi avoir été appelé (dans un vrai système)
@@ -350,7 +346,10 @@ describe('Notifications Integration - Avec Firebase', () => {
     });
 
     it('WebSocket fonctionne même si l\'utilisateur n\'a pas de token FCM', async () => {
-      const notifData: CreateNotificationData = {
+      const notifData: CreateNotificationParams = {
+        priority: 'normal',
+        context: {},
+        metadata: {},
         userId: 'user123',
         type: 'new_message',
         title: 'Test WebSocket only',
@@ -373,14 +372,18 @@ describe('Notifications Integration - Avec Firebase', () => {
       await service.createNotification(notifData);
 
       // WebSocket doit quand même fonctionner
-      expect(mockIO.to).toHaveBeenCalledWith('socket1');
+      // V2 : une émission user-scoped vise la ROOM `user:<id>`.
+      expect(mockIO.to).toHaveBeenCalledWith('user:user123');
       expect(mockIO.emit).toHaveBeenCalled();
     });
   });
 
   describe('Gestion erreurs Firebase', () => {
     it('Continue si Firebase push échoue', async () => {
-      const notifData: CreateNotificationData = {
+      const notifData: CreateNotificationParams = {
+        priority: 'normal',
+        context: {},
+        metadata: {},
         userId: 'user123',
         type: 'new_message',
         title: 'Test erreur Firebase',
@@ -415,7 +418,10 @@ describe('Notifications Integration - Avec Firebase', () => {
     });
 
     it('Logue un warning si Firebase échoue', async () => {
-      const notifData: CreateNotificationData = {
+      const notifData: CreateNotificationParams = {
+        priority: 'normal',
+        context: {},
+        metadata: {},
         userId: 'user123',
         type: 'new_message',
         title: 'Test warning',
@@ -444,7 +450,10 @@ describe('Notifications Integration - Avec Firebase', () => {
     });
 
     it('Fallback WebSocket si Firebase down', async () => {
-      const notifData: CreateNotificationData = {
+      const notifData: CreateNotificationParams = {
+        priority: 'normal',
+        context: {},
+        metadata: {},
         userId: 'user123',
         type: 'new_message',
         title: 'Test fallback',
@@ -485,15 +494,20 @@ describe('Notifications Integration - Avec Firebase', () => {
       await service.createNotification(notifData);
 
       // WebSocket doit avoir reçu la notification
-      expect(mockIO.to).toHaveBeenCalledWith('socket1');
-      expect(mockIO.emit).toHaveBeenCalledWith('notification', expect.objectContaining({
+      // V2 : une émission user-scoped vise la ROOM `user:<id>`.
+      expect(mockIO.to).toHaveBeenCalledWith('user:user123');
+      // L'événement s'appelle `notification:new` (convention `entité:action`).
+      expect(mockIO.emit).toHaveBeenCalledWith('notification:new', expect.objectContaining({
         id: 'notif123',
         title: 'Test fallback'
       }));
     });
 
     it('Gère les tokens FCM invalides', async () => {
-      const notifData: CreateNotificationData = {
+      const notifData: CreateNotificationParams = {
+        priority: 'normal',
+        context: {},
+        metadata: {},
         userId: 'user123',
         type: 'new_message',
         title: 'Test token invalide',
@@ -530,7 +544,10 @@ describe('Notifications Integration - Avec Firebase', () => {
     });
 
     it('Gère les timeouts Firebase', async () => {
-      const notifData: CreateNotificationData = {
+      const notifData: CreateNotificationParams = {
+        priority: 'normal',
+        context: {},
+        metadata: {},
         userId: 'user123',
         type: 'new_message',
         title: 'Test timeout',
@@ -567,7 +584,9 @@ describe('Notifications Integration - Avec Firebase', () => {
 
   describe('Priorités et types de notifications avec Firebase', () => {
     it('Envoie une notification urgente avec priorité élevée', async () => {
-      const notifData: CreateNotificationData = {
+      const notifData: CreateNotificationParams = {
+        context: {},
+        metadata: {},
         userId: 'user123',
         type: 'missed_call',
         title: 'Appel manqué',

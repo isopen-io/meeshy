@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_audio_chip_playing">قيد التشغيل</string>
+    <string name="story_audio_chip_muted">مكتوم</string>
+    <string name="story_audio_chip_a11y">%1$s، المدة %2$s</string>
+</resources>

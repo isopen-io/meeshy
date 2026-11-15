@@ -1,6 +1,7 @@
 package me.meeshy.sdk.friend
 
 import me.meeshy.sdk.model.FriendRequest
+import me.meeshy.sdk.model.relation.RelationRefusal
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 
@@ -57,7 +58,12 @@ public object FriendRequestSend {
             is NetworkResult.Failure -> classifyFailure(result.error)
         }
 
+    /**
+     * A `409` is "already exists" — EXCEPT when it carries a circles refusal (`RELATION_PHASE_SKIP`, `…_COOLDOWN`,
+     * `…_NOT_ELIGIBLE`, #13933): the request was refused for good, and its optimistic pending must roll back (#13938).
+     */
     private fun classifyFailure(error: ApiError): FriendRequestDelivery = when {
+        error.httpStatus == CONFLICT && RelationRefusal.of(error.code) != null -> FriendRequestDelivery.Rejected(error.message)
         error.httpStatus == CONFLICT -> FriendRequestDelivery.AlreadyExists
         error.httpStatus in PERMANENT_STATUSES -> FriendRequestDelivery.Rejected(error.message)
         else -> FriendRequestDelivery.Retry

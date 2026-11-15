@@ -28,7 +28,7 @@ import XCTest
 /// verte sur un fil coupé ; une garde par valeur fait l'inverse.
 final class StoryViewerScenePlayerGuardTests: XCTestCase {
 
-    private static let canvasFile = "Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"
+    private static let canvasFile = "Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift"
 
     /// Ce qui manque à `MeeshyScenePlayer` (B4, contrat gelé) pour que le swap
     /// E4 soit seulement POSSIBLE. Message du `XCTSkip` de la famille A — il
@@ -302,8 +302,10 @@ final class StoryViewerScenePlayerGuardTests: XCTestCase {
     // MARK: - Le chrome est INCHANGÉ autour de la couche contenu
 
     func test_chromeLayersStayMountedAroundTheContentHost() throws {
-        let text = try source()
-        for layer in ["StoryProgressBarsView(", "StoryHeaderView(", "ReferenceNoteRow(",
+        // Le chrome (en-tête, rail, commentaires) est monté par les couches de la carte,
+        // dans `StoryViewerView+Canvas+Layers.swift` : l'UNITÉ du canvas, pas son seul hôte.
+        let text = MyStoriesSourceCorpus.strippingComments(try AppSourceGuard.unit(Self.canvasFile))
+        for layer in ["StoryLiveProgressBars(", "StoryHeaderView(", "ReferenceNoteRow(",
                       "StoryActionSidebarView(", "makeCommentsOverlay()"] {
             XCTAssertTrue(
                 text.contains(layer),
@@ -311,6 +313,55 @@ final class StoryViewerScenePlayerGuardTests: XCTestCase {
                 "autour, à l'identique."
             )
         }
+    }
+
+    // MARK: - B2 (#3925) — la description s'affiche par-dessus le canvas composé
+
+    /// La face LECTURE de la section description repliable du composer : le
+    /// contenu partagé (`slide.content`) s'affiche par-dessus le canvas, résolu
+    /// par le Prisme, et ne chevauche jamais la transcription vocale.
+    func test_laDescription_saffichePardessusLeCanvas_resolueParLePrisme() throws {
+        // **La couche a DÉMÉNAGÉ, la règle n'a pas bougé** (#4831). Tout ce qui
+        // concerne la légende — sa condition de montage, sa colonne, ses
+        // retraits — vit désormais dans `StoryViewerView+CanvasCaption.swift` :
+        // `StoryViewerView+Canvas.swift` était largement hors budget, et la loi 4
+        // interdit d'ajouter à un fichier qui l'est. Ce témoin suit le CODE, pas
+        // le chemin ; seule la dernière assertion regarde encore le canvas, parce
+        // que c'est lui qui doit continuer d'APPELER la couche.
+        let canvas = try MyStoriesSourceCorpus.text(
+            of: "Meeshy/Features/Stories/Views/StoryViewerView+CanvasCaption.swift")
+        XCTAssertTrue(
+            canvas.contains("currentVoiceCaption == nil, let description = currentStoryDescription"),
+            "L'overlay de description se peint sous le canvas gaté sur l'absence de transcription " +
+            "vocale — les deux ne se chevauchent jamais."
+        )
+        // **Repointée au #4474, jamais supprimée.** Ce que ce témoin mesure —
+        // « la description résolue est bien PEINTE par-dessus le canvas » —
+        // reste vrai ; c'est la FORME qui a changé. Le `Text(description)` nu
+        // était le défaut : dans un cartouche opaque, `lineLimit(4)`, et sous
+        // un `allowsHitTesting(false)` qui le rendait indépliable. La couche
+        // partagée reçoit la MÊME valeur résolue, ce que l'étiquette de son
+        // argument prouve.
+        XCTAssertTrue(
+            canvas.contains("MediaCaptionOverlay(") && canvas.contains("caption: description"),
+            "Le texte de la description est bien PEINT par-dessus le canvas composé — " +
+            "désormais par `MediaCaptionOverlay`, qui reçoit la description RÉSOLUE (#4474)."
+        )
+        XCTAssertTrue(
+            try source().contains("var currentStoryDescription"),
+            "La description résolue vit dans une propriété de `StoryCardView` (l'hôte du canvas), " +
+            "testable et unique."
+        )
+        XCTAssertTrue(
+            try source().contains("captionLayer(geometry: geometry)"),
+            "Et le canvas doit continuer de MONTER la couche extraite — sans cet appel, le " +
+            "fichier de la légende reste parfait et l'écran n'a plus de légende (#4831)."
+        )
+        XCTAssertTrue(
+            try source().contains("resolvedContent(preferredLanguages: resolvedViewerLanguageChain)"),
+            "La description descend le Prisme (chaîne complète, repli original) — jamais " +
+            "`translations.first`."
+        )
     }
 
     // MARK: - Le swap lui-même (s'active tout seul le jour où B4 le permet)

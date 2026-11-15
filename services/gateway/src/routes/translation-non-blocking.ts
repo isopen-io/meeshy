@@ -1,10 +1,15 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError, logger } from '../utils/logger';
-import { sendSuccess, sendError, sendBadRequest, sendNotFound, sendInternalError, sendForbidden } from '../utils/response.js';
+import { sendSuccess, sendError, sendBadRequest, sendNotFound, sendInternalError } from '../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { resolveConversationId } from '../utils/conversation-id-cache';
 import type { UnifiedAuthRequest } from '../middleware/auth';
+import { creditTranslationRequest, lazyTranslationRequestEngagement } from '../services/messaging/translationRequestCredit';
+import { gatewayKeyring, SERVER_AT_REST_UNREADABLE_TRANSLATION_MESSAGE, translationSourceOf } from '../services/messaging/atRestTranslationSource';
+import { SERVER_AT_REST_UNREADABLE } from '../services/messaging/serverAtRest';
+import { historyReaderFromAuthContext } from '../services/historyFloor';
+import { readerMayTranslateMessage } from '../services/messaging/translationReadGate';
 
 // ===== SCHEMAS DE VALIDATION =====
 const TranslateRequestSchema = z.object({
@@ -124,169 +129,7 @@ const translationNonBlockingResponseSchema = {
   }
 } as const;
 
-/**
- * OpenAPI schema for translation status response
- */
-const translationStatusResponseSchema = {
-  type: 'object',
-  properties: {
-    success: { type: 'boolean', example: true },
-    data: {
-      type: 'object',
-      properties: {
-        status: {
-          type: 'string',
-          description: 'Translation status',
-          example: 'completed',
-          enum: ['processing', 'completed']
-        },
-        translation: {
-          type: 'object',
-          description: 'Translation result if completed',
-          properties: {
-            translatedText: { type: 'string', example: 'Bonjour, comment allez-vous?' },
-            sourceLanguage: { type: 'string', example: 'en' },
-            targetLanguage: { type: 'string', example: 'fr' },
-            confidenceScore: { type: 'number', example: 0.95 },
-            modelType: { type: 'string', example: 'medium' },
-            processingTime: { type: 'number', example: 0.234 }
-          }
-        }
-      }
-    }
-  }
-} as const;
-
-/**
- * OpenAPI schema for conversation response
- */
-const conversationResponseSchema = {
-  type: 'object',
-  properties: {
-    success: { type: 'boolean', example: true },
-    data: {
-      type: 'object',
-      properties: {
-        id: {
-          type: 'string',
-          description: 'MongoDB ObjectId of the conversation',
-          example: '507f1f77bcf86cd799439011'
-        },
-        identifier: {
-          type: 'string',
-          description: 'Human-readable conversation identifier',
-          example: 'conv_456def'
-        },
-        title: {
-          type: 'string',
-          description: 'Conversation title',
-          example: 'Support Chat'
-        },
-        type: {
-          type: 'string',
-          description: 'Conversation type',
-          example: 'direct',
-          enum: ['direct', 'group', 'channel']
-        },
-        createdAt: {
-          type: 'string',
-          format: 'date-time',
-          description: 'Conversation creation timestamp',
-          example: '2024-01-15T10:30:00.000Z'
-        },
-        lastMessageAt: {
-          type: 'string',
-          format: 'date-time',
-          description: 'Last message timestamp',
-          example: '2024-01-15T14:30:00.000Z'
-        },
-        messageCount: {
-          type: 'number',
-          description: 'Number of messages in the conversation',
-          example: 42
-        },
-        memberCount: {
-          type: 'number',
-          description: 'Number of members in the conversation',
-          example: 3
-        }
-      }
-    }
-  }
-} as const;
-
-/**
- * OpenAPI schema for status route params
- */
-const statusParamsSchema = {
-  type: 'object',
-  properties: {
-    messageId: {
-      type: 'string',
-      description: 'ID of the message',
-      example: 'msg_123abc'
-    },
-    language: {
-      type: 'string',
-      description: 'Target language code',
-      example: 'fr'
-    }
-  },
-  required: ['messageId', 'language']
-} as const;
-
-/**
- * OpenAPI schema for conversation params
- */
-const conversationParamsSchema = {
-  type: 'object',
-  properties: {
-    identifier: {
-      type: 'string',
-      description: 'Conversation identifier (human-readable or ObjectId)',
-      example: 'conv_456def'
-    }
-  },
-  required: ['identifier']
-} as const;
-
 // ===== ROUTE NON-BLOQUANTE =====
-/**
- * L'appelant participe-t-il à cette conversation ?
- *
- * La traduction porte le CONTENU des messages : sans cette garde, connaître un
- * identifiant suffisait à lire le texte traduit — donc déchiffré — de n'importe
- * quelle conversation privée. Le contrôle vit ici, partagé par toutes les
- * routes du module, plutôt que recopié dans chacune : c'est la recopie qui a
- * produit les trous (une route l'avait, sa voisine non).
- *
- * Couvre les deux formes d'identité : utilisateur enregistré et participant
- * anonyme arrivé par un lien de partage.
- */
-async function callerParticipatesIn(
-  fastify: FastifyInstance,
-  authContext: UnifiedAuthRequest['authContext'] | undefined,
-  conversationId: string
-): Promise<boolean> {
-  if (!authContext?.isAuthenticated && !authContext?.participantId) return false;
-
-  if (authContext?.participantId) {
-    const anonymous = await fastify.prisma.participant.findFirst({
-      where: { id: authContext.participantId, conversationId, isActive: true },
-      select: { id: true }
-    });
-    return anonymous !== null;
-  }
-
-  if (!authContext?.userId) return false;
-
-  const member = await fastify.prisma.participant.findFirst({
-    where: { userId: authContext.userId, conversationId, isActive: true },
-    select: { id: true }
-  });
-  return member !== null;
-}
-
 export async function translationRoutes(fastify: FastifyInstance, _options: Record<string, unknown>) {
   // Recuperer les services depuis l'instance fastify (comme dans translation.ts)
   const translationService = fastify.translationService;
@@ -300,12 +143,14 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
     throw new Error('MessagingService not provided to translation routes');
   }
 
+  const engagement = lazyTranslationRequestEngagement(() => fastify.prisma);
+
 
   // ===== ROUTE PRINCIPALE NON-BLOQUANTE =====
   fastify.post<{ Body: TranslateRequest }>('/translate', {
     preHandler: [(req: FastifyRequest, rep: FastifyReply) => fastify.authenticate(req, rep)],
     schema: {
-      description: 'Translate text asynchronously with non-blocking behavior. This endpoint submits a translation request and returns immediately with a "processing" status. The actual translation happens asynchronously in the background. Use the GET /status/:messageId/:language endpoint to check translation status and retrieve the result. Supports both new message translation and retranslation of existing messages.',
+      description: 'Translate text asynchronously with non-blocking behavior. This endpoint submits a translation request and returns immediately with a "processing" status. The actual translation happens asynchronously in the background — the result is delivered via the real-time Socket.IO pipeline (translation:completed), not by polling. Supports both new message translation and retranslation of existing messages.',
       tags: ['translation'],
       summary: 'Translate text (non-blocking)',
       body: translateRequestSchema,
@@ -334,36 +179,41 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
       // ===== CAS 1: RETRADUCTION D'UN MESSAGE EXISTANT =====
       if (validatedData.message_id) {
 
-        // Recuperer le message depuis la base de donnees
-        const existingMessage = await fastify.prisma.message.findUnique({
-          where: { id: validatedData.message_id },
-          include: {
-            conversation: { include: { participants: true } }
-          }
+        // SECURITY (#16557) : la loi de lecture, avant toute lecture de la ligne.
+        // Tout compte valide pouvait retraduire un message arbitraire ; un membre
+        // pouvait relancer celle d'un message rappelé, ou d'avant son arrivée. Le
+        // refus ne dit ni que le message existe, ni qu'il est rappelé.
+        const mayTranslate = await readerMayTranslateMessage(fastify.prisma, {
+          reader: historyReaderFromAuthContext(authContext),
+          messageId: validatedData.message_id,
+          now: new Date()
         });
-
-        if (!existingMessage) {
-          logger.warn(`[Translation] Message ${validatedData.message_id} not found`);
+        if (!mayTranslate) {
+          logger.warn('[Translation] Retraduction refusée par la loi de lecture', {
+            messageId: validatedData.message_id
+          });
           return sendNotFound(reply, 'Message not found');
         }
 
-        // Les participants étaient chargés ci-dessus mais jamais consultés :
-        // tout compte valide pouvait déclencher la retraduction d'un message
-        // arbitraire, puis en lire le texte via /status. La garde ferme la
-        // chaîne des deux côtés.
-        if (!(await callerParticipatesIn(fastify, authContext, existingMessage.conversationId))) {
-          logger.warn('[Translation] Retraduction refusée : appelant hors de la conversation', {
-            messageId: validatedData.message_id
-          });
-          return sendForbidden(reply, 'Access denied to this message');
+        const existingMessage = await fastify.prisma.message.findUnique({
+          where: { id: validatedData.message_id }
+        });
+
+        if (!existingMessage) {
+          return sendNotFound(reply, 'Message not found');
         }
 
+        // #11381 — un message `server`/`hybrid` se retraduit depuis son CLAIR, jamais depuis `content: ''`.
+        const source = await translationSourceOf(existingMessage, gatewayKeyring(fastify.prisma));
+        if (!source.readable) {
+          return sendError(reply, 409, SERVER_AT_REST_UNREADABLE_TRANSLATION_MESSAGE, { code: SERVER_AT_REST_UNREADABLE });
+        }
 
         // Preparer les donnees de traduction
         const messageData = {
           id: validatedData.message_id,
           conversationId: existingMessage.conversationId,
-          content: validatedData.text || existingMessage.content,
+          content: source.row.content, // la ligne fait foi, jamais le texte du corps
           originalLanguage: validatedData.source_language || existingMessage.originalLanguage,
           targetLanguage: validatedData.target_language,
           modelType: validatedData.model_type || 'basic'
@@ -373,6 +223,15 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
         // DECLENCHEMENT NON-BLOQUANT - pas d'await !
         translationService.handleNewMessage(messageData).catch((error: any) => {
           logger.error(`[Translation] Async retranslation error: ${error.message}`);
+        });
+
+        // La RETRADUCTION est la seule demande de traduction de cette route :
+        // le cas 2 est un ENVOI, déjà crédité comme message (#8959).
+        creditTranslationRequest({
+          engagement,
+          requester: authContext,
+          conversationId: existingMessage.conversationId,
+          onError: (error) => logger.warn('[Translation] tool.translation_request engagement credit failed', { error })
         });
 
         // REPONSE IMMEDIATE - pas d'attente
@@ -448,130 +307,6 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
       }
 
       return sendInternalError(reply, errorMessage);
-    }
-  });
-
-  // ===== ROUTE UTILITAIRE POUR RECUPERER LE STATUT =====
-  fastify.get('/status/:messageId/:language', {
-    // Cette route rendait le texte TRADUIT — donc déchiffré — de n'importe quel
-    // message à qui devinait un identifiant, sans aucune identité.
-    preHandler: [(req: FastifyRequest, rep: FastifyReply) => fastify.authenticate(req, rep)],
-    schema: {
-      description: 'Get the translation status and result for a specific message and target language. Returns "processing" status if the translation is still being processed, or "completed" status with the translation result if available. This endpoint is used to poll for translation completion after submitting a non-blocking translation request.',
-      tags: ['translation'],
-      summary: 'Get translation status',
-      params: statusParamsSchema,
-      response: {
-        200: translationStatusResponseSchema,
-        500: {
-          description: 'Internal server error - failed to retrieve translation status',
-          ...errorResponseSchema
-        }
-      }
-    }
-  }, async (request: FastifyRequest<{ Params: { messageId: string; language: string } }>, reply: FastifyReply) => {
-    try {
-      const { messageId, language } = request.params;
-
-      // Être authentifié ne suffit pas : il faut participer à la conversation
-      // du message. Sans ce contrôle, tout compte valide lisait le contenu
-      // traduit de toutes les conversations du produit.
-      const message = await fastify.prisma.message.findUnique({
-        where: { id: messageId },
-        select: { conversationId: true }
-      });
-
-      if (!message) {
-        return sendNotFound(reply, 'Message not found');
-      }
-
-      const authContext = (request as unknown as UnifiedAuthRequest).authContext;
-      if (!(await callerParticipatesIn(fastify, authContext, message.conversationId))) {
-        return sendForbidden(reply, 'Access denied to this message');
-      }
-
-      const result = await translationService.getTranslation(messageId, language);
-
-      if (result) {
-        return sendSuccess(reply, {
-          status: 'completed',
-          translation: result
-        });
-      } else {
-        return sendSuccess(reply, {
-          status: 'processing'
-        });
-      }
-    } catch (error) {
-      logError(logger, '[Translation] Status retrieval error:', error);
-      return sendInternalError(reply, 'Failed to get translation status');
-    }
-  });
-
-  // ===== ROUTE POUR RECUPERER UNE CONVERSATION PAR IDENTIFIANT =====
-  fastify.get<{ Params: { identifier: string } }>('/conversation/:identifier', {
-    // Exposait titre, type, dates et nombre de membres de n'importe quelle
-    // conversation à un appelant anonyme.
-    preHandler: [(req: FastifyRequest, rep: FastifyReply) => fastify.authenticate(req, rep)],
-    schema: {
-      description: 'Retrieve conversation details by identifier. Accepts either a human-readable identifier or a MongoDB ObjectId. Returns conversation metadata including ID, title, type, timestamps, and counts of messages and members. This endpoint is useful for validating conversation identifiers before submitting translation requests.',
-      tags: ['translation'],
-      summary: 'Get conversation by identifier',
-      params: conversationParamsSchema,
-      response: {
-        200: conversationResponseSchema,
-        404: {
-          description: 'Not found - conversation does not exist',
-          ...errorResponseSchema
-        },
-        500: {
-          description: 'Internal server error - failed to retrieve conversation',
-          ...errorResponseSchema
-        }
-      }
-    }
-  }, async (request: FastifyRequest<{ Params: { identifier: string } }>, reply: FastifyReply) => {
-    try {
-      const { identifier } = request.params;
-
-
-      // Chercher la conversation par identifiant
-      const conversation = await fastify.prisma.conversation.findFirst({
-        where: { identifier: identifier },
-        select: {
-          id: true,
-          identifier: true,
-          title: true,
-          type: true,
-          createdAt: true,
-          lastMessageAt: true,
-          _count: {
-            select: {
-              messages: true,
-              participants: true
-            }
-          }
-        }
-      });
-
-      if (!conversation) {
-        return sendNotFound(reply, `Conversation with identifier '${identifier}' not found`);
-      }
-
-      return sendSuccess(reply, {
-        id: conversation.id, // ObjectId MongoDB
-        identifier: conversation.identifier,
-        title: conversation.title,
-        type: conversation.type,
-        createdAt: conversation.createdAt,
-        lastMessageAt: conversation.lastMessageAt,
-        messageCount: conversation._count.messages,
-        memberCount: conversation._count.participants
-      });
-
-    } catch (error) {
-      logError(logger, '[Translation] Conversation retrieval error:', error);
-      return sendInternalError(reply, 'Internal server error');
     }
   });
 

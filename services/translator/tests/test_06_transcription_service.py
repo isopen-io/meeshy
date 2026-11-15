@@ -70,6 +70,39 @@ async def test_transcription_service_singleton():
 
 
 @pytest.mark.asyncio
+async def test_transcription_service_reads_model_config_from_settings():
+    """#3666 — TranscriptionService must have no configuration of its own:
+    model/device/compute_type come from config.settings.Settings, the single
+    source of truth. Before the fix, the service redefined its own defaults
+    and read os.getenv() directly, so editing Settings had no effect on what
+    actually ran."""
+    logger.info("Test 06.14: model config sourced from Settings, not hardcoded")
+
+    if not SERVICE_AVAILABLE:
+        pytest.skip("TranscriptionService not available")
+
+    from unittest.mock import MagicMock
+    import services.transcription_service as ts_module
+
+    fake_settings = MagicMock()
+    fake_settings.whisper_model = "tiny"
+    fake_settings.whisper_device = "cuda"
+    fake_settings.whisper_compute_type = "float32"
+
+    TranscriptionService._instance = None
+    try:
+        with patch.object(ts_module, "get_settings", return_value=fake_settings):
+            service = TranscriptionService()
+    finally:
+        TranscriptionService._instance = None
+
+    assert service.model_size == "tiny"
+    assert service.device == "cuda"
+    assert service.compute_type == "float32"
+    logger.info("TranscriptionService correctly sources its config from Settings")
+
+
+@pytest.mark.asyncio
 @pytest.mark.skipif(IS_CI, reason="Requires Whisper model loading (slow, downloads required)")
 async def test_transcription_service_initialization():
     """Test service initialization"""

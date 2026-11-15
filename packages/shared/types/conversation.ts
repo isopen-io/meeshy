@@ -5,10 +5,13 @@
 
 import type { SocketIOUser as User, MessageType } from './socketio-events.js';
 import type { Participant } from './participant.js';
+import type { MentionedUser } from './mention.js';
 import type { Attachment } from './attachment.js';
 import type { TranslationModel, MessageTranslation, MessageStatusEntry, UITranslationState, UITranslationStatus } from './message-types.js';
 import type { CallSummaryMetadata } from '../utils/call-summary.js';
+import type { MessageSticker } from './message-sticker.js';
 import type { ConversationBridge } from './conversation-bridge.js';
+import type { ContentTrackingLink } from './post.js';
 
 // Re-export canonical types from message-types.ts
 export type { TranslationModel, MessageTranslation, MessageStatusEntry, UITranslationState, UITranslationStatus };
@@ -18,6 +21,7 @@ export type { TranslationModel, MessageTranslation, MessageStatusEntry, UITransl
  * @see user.ts UserRole type
  */
 import type { UserRole } from './user.js';
+import type { GuestAttachmentKind } from './guest-attachment-kinds.js';
 
 /**
  * Import du type MemberRoleType depuis role-types.ts (type unifie pour conversations et communautes)
@@ -25,6 +29,9 @@ import type { UserRole } from './user.js';
  */
 import type { MemberRoleType } from './role-types.js';
 import { isMemberAdmin as isMemberAdminRole, isMemberModerator as isMemberModeratorRole } from './role-types.js';
+import type { ConversationViewerCapabilities } from './conversation-viewer-capabilities.js';
+
+export type { ConversationViewerCapabilities } from './conversation-viewer-capabilities.js';
 
 /**
  * Langue parlee avec statistiques
@@ -122,11 +129,35 @@ export interface Message {
   // ===== ETAT DU MESSAGE =====
   readonly isEdited: boolean;
   readonly editedAt?: Date;
+  /**
+   * #11375 — le tiers (modérateur de plateforme) qui a fait la dernière
+   * modification, tel que servi à CE lecteur : son `User.id` pour ADMIN /
+   * BIGBOSS et lui-même, la marque `MASKED_MODERATOR_EDITOR` sinon ; absent
+   * quand c'est l'auteur.
+   * @see packages/shared/utils/message-edit-attribution.ts
+   */
+  readonly editedById?: string;
+  /** #11375 — son rôle global, servi avec son identité seulement. */
+  readonly editedByRole?: string;
   readonly deletedAt?: Date;
 
   // ===== REPONSE & FORWARDING =====
   readonly replyToId?: string;
   readonly replyTo?: Message;
+  /**
+   * #9915 — sur un message CITÉ (`replyTo`) seulement : le nombre total de
+   * photos et vidéos qu'il porte, quand la passerelle n'en sert que quatre.
+   * Absent pour un message protégé, et chez une passerelle antérieure.
+   */
+  readonly visualAttachmentCount?: number;
+  /**
+   * #17441 — sur un message CITÉ (`replyTo`) seulement : la métadonnée de
+   * l'avis cité (appel, arrivée, arrivées regroupées, départ annoncé), que la
+   * réponse REST ne sert pas sous `metadata`. Le client en tire le texte de
+   * l'avis dans la langue du lecteur ; absente (ancienne passerelle), la
+   * citation retombe sur `content`, repli français.
+   */
+  readonly notice?: Record<string, unknown>;
   /** ID du post cité (status/story/reel/post) quand le message répond à un post. Snapshot figé dans `metadata.postReplyTo`. @see schema.prisma */
   readonly storyReplyToId?: string;
   readonly forwardedFromId?: string;
@@ -143,13 +174,41 @@ export interface Message {
   readonly effectFlags?: number;
 
   // ===== EXPIRATION =====
+  /**
+   * L'échéance SERVIE pour CE lecteur (contrat du fil #7451, point 3) :
+   * `réception(lecteur) + ephemeralDuration` pour un destinataire, la plus
+   * tardive des échéances connues pour l'expéditeur, `undefined` tant que
+   * personne n'a reçu. Sur `message:new`, elle est ABSENTE pour un éphémère
+   * (point 4) : une diffusion en room ne peut pas être différente par lecteur.
+   */
   readonly expiresAt?: Date;
+  /**
+   * LA DURÉE, en secondes entières — ce que le client ENVOIE, là où il posait
+   * jusqu'ici une échéance calculée au moment de l'envoi (directive porteur
+   * 2026-09-22 : un éphémère ne décompte qu'une fois REÇU). Servie partout :
+   * REST, `message:new` et push.
+   *
+   * Le client compose son échéance avec `ephemeralDeadline()`
+   * (`utils/ephemeral-deadline.ts`) — jamais en rejouant la règle sur place.
+   */
+  readonly ephemeralDuration?: number;
 
   // ===== VIEW-ONCE & BLUR =====
   readonly isViewOnce: boolean;
   readonly maxViewOnceCount?: number;
   readonly viewOnceCount: number;
+  /** Vue unique (#7578) : CE lecteur l'a déjà ouverte — le contenu n'est plus servi. */
+  readonly consumedByMe?: boolean;
+  /** Vue unique (#7578) : tous les destinataires actifs l'ont ouverte. Ne retire jamais la bulle. */
+  readonly isFullyConsumed?: boolean;
   readonly isBlurred: boolean;
+  /**
+   * Le LECTEUR a déjà ouvert ce message à vue unique (#7594). Servi par
+   * `GET /conversations` sur `lastMessage` seulement — valeur par lecteur, lue
+   * dans `MessageStatusEntry.viewedOnceAt`. `false` pour l'expéditeur et pour
+   * un message qui n'est pas à vue unique.
+   */
+  readonly viewOnceConsumed?: boolean;
 
   // ===== PINNING =====
   readonly pinnedAt?: Date;
@@ -184,6 +243,26 @@ export interface Message {
   /** Structured per-type payload. For call-summary system messages this is a
    * {@link CallSummaryMetadata} the client renders into a rich call bubble. */
   readonly metadata?: CallSummaryMetadata | Record<string, unknown>;
+  /**
+   * Sticker hissé de `metadata.sticker` (#4823), revalidé serveur. `null` sans
+   * sticker — et, sur `lastMessage` de `GET /conversations`, pour un message
+   * ou une pièce jointe protégé (#7591).
+   */
+  readonly sticker?: MessageSticker | null;
+  /**
+   * Lieu partagé hissé de `metadata.location` par la passerelle (REST et
+   * `message:new`). Même contrat que les charges socket : la forme n'est pas
+   * contrainte ici, la validation stricte vit côté passerelle
+   * (`services/location/sharedPlace.ts`) et le client la revalide
+   * (`placeOf`, apps/web). `null` ou absent : aucun lieu.
+   */
+  readonly location?: unknown;
+  /**
+   * Les URL BRUTES du contenu que la passerelle a rendues traçables
+   * (`metadata.trackingLinks`, hissé tel quel sur `message:new`) — le client
+   * garde le texte et fait passer le lien par `/l/<token>` (#7827).
+   */
+  readonly trackingLinks?: readonly ContentTrackingLink[];
 
   // ===== METADONNEES =====
   readonly createdAt: Date;
@@ -191,6 +270,20 @@ export interface Message {
 
   // ===== MENTIONS =====
   readonly validatedMentions?: readonly string[];
+  /**
+   * Résolution serveur des `@pseudo` du contenu — le nom affiché de chaque
+   * personne mentionnée, pour que le client le rende SANS requête de plus.
+   *
+   * Le serveur la produit déjà sur les deux chemins d'arrivée d'un message : en
+   * REST dans `meta.mentionedUsers` de `GET /conversations/:id/messages`, et sur
+   * le message lui-même dans l'événement socket `message:new`. Les deux la
+   * posent ici, pour que la bulle n'ait qu'UNE forme à lire quelle que soit la
+   * provenance du message.
+   *
+   * @see MentionedUser
+   * @see mentionsToLinks — la carte change le LIBELLÉ du lien, jamais sa cible
+   */
+  readonly mentionedUsers?: readonly MentionedUser[];
 
   // ===== EXPEDITEUR =====
   readonly sender?: Participant;
@@ -238,6 +331,13 @@ export interface MessageWithTranslations extends Message {
  * Type de conversation
  */
 export type ConversationType = 'direct' | 'group' | 'public' | 'global' | 'broadcast';
+
+/**
+ * Les restrictions d'écriture qu'un lecteur peut porter sur une conversation
+ * (#9927). Une seule aujourd'hui : un mineur déclaré dans Meeshy Global.
+ */
+export const VIEWER_WRITE_RESTRICTIONS = ['minor-global'] as const;
+export type ViewerWriteRestriction = (typeof VIEWER_WRITE_RESTRICTIONS)[number];
 
 /**
  * Statut de conversation
@@ -370,6 +470,27 @@ export interface Conversation {
    */
   readonly currentUserRole?: string | null;
 
+  /**
+   * Ce que le LECTEUR n'a pas le droit d'écrire ici (#9927), calculé serveur
+   * depuis sa date de naissance déclarée : `'minor-global'` = mineur (13-17
+   * ans) dans Meeshy Global, en lecture seule et rangée dans ses archives
+   * jusqu'à ses 18 ans. `null` = aucune restriction. ABSENT = serveur antérieur.
+   * Source : `viewerWriteRestrictionOf` (`utils/global-minor-restriction.ts`).
+   */
+  readonly viewerWriteRestriction?: ViewerWriteRestriction | null;
+
+  /**
+   * Ce que le LECTEUR peut faire de cette conversation (#14690), calculé serveur
+   * par la décision même qui garde la route. ABSENT = serveur antérieur, ou
+   * lecture impossible : le client garde son comportement d'avant. C'est un
+   * INSTANTANÉ : `participant:role-updated` le concernant porte sa nouvelle
+   * valeur (#15987), que le client applique ; s'il ne la porte pas (serveur
+   * antérieur, lecture impossible), le client la relit
+   * (`GET /conversations/:id?fields=viewerCapabilities`). La route reste seule
+   * juge.
+   */
+  readonly viewerCapabilities?: ConversationViewerCapabilities;
+
   /** Date d'adhésion du lecteur — borne son historique visible. */
   readonly currentUserJoinedAt?: Date | string;
 
@@ -379,6 +500,13 @@ export interface Conversation {
   // ===== MESSAGES =====
   readonly lastMessage?: Message;
   readonly lastMessageAt?: Date;
+  /**
+   * Rang de la ligne (#9026), chaîne ISO : max(`lastMessageAt`,
+   * `lastActivityAt` — réaction, appel, épingle), le même pour tous les
+   * participants. `GET /conversations` trie dessus ; les clients trient sur
+   * cette valeur servie (`conversationListRank`, `utils/conversation-list-rank.ts`).
+   */
+  readonly listRankAt?: string | null;
   readonly messageCount?: number;
   readonly unreadCount?: number;
 
@@ -419,6 +547,23 @@ export interface Conversation {
    * `MeeshyConversation.userState.lastReadAt` côté iOS.
    */
   readonly lastReadAt?: Date;
+  /**
+   * La frontière de lecture ENTIÈRE (#7198, G1) — `lastReadMessageId` et
+   * `lastReadMessageCreatedAt` complètent `lastReadAt` ci-dessus, servis
+   * INCONDITIONNELLEMENT par la liste ET le détail de conversation
+   * (`services/gateway/src/routes/conversations/read-cursor-projection.ts`,
+   * `core-list.ts:884-892`, `core-detail.ts:537-544`) et déjà déclarés côté
+   * schéma de réponse (`api-schemas/conversation.ts:261-265`) — ABSENTS ici
+   * jusqu'à #7202 (W3), premier consommateur côté client de ce triplet.
+   * `lastReadMessageCreatedAt` est la clé CHRONOLOGIQUE (voir le
+   * doc-comment de `ConversationReadCursor.lastReadMessageCreatedAt`
+   * ci-dessous pour la raison de la préférer à `lastReadAt`, qui n'est que
+   * l'horloge de l'ACTION de lecture). Les deux : ABSENTS sans curseur,
+   * jamais fabriqués. Base de `firstUnreadBoundary()`
+   * (`packages/shared/utils/first-unread.ts`, S1).
+   */
+  readonly lastReadMessageId?: string;
+  readonly lastReadMessageCreatedAt?: Date;
 
   // ===== E2EE / ENCRYPTION =====
   readonly encryptionMode?: EncryptionMode;
@@ -517,6 +662,8 @@ export interface ConversationShareLink {
   readonly allowAnonymousMessages?: boolean;
   readonly allowAnonymousFiles?: boolean;
   readonly allowAnonymousImages?: boolean;
+  /** Familles ouvertes aux invités (#10001) — `null`/absent : aucune restriction par famille. @see guest-attachment-kinds.ts */
+  readonly allowedAttachmentKinds?: readonly GuestAttachmentKind[] | null;
   readonly allowViewHistory?: boolean;
   readonly requireAccount?: boolean;
   readonly requireNickname?: boolean;
@@ -605,6 +752,8 @@ export interface ConversationReadCursor {
 
   readonly lastReadMessageId?: string;
   readonly lastReadAt?: Date;
+  /** createdAt of `lastReadMessageId` — see schema.prisma for why this, not `lastReadAt`, is the chronological key. */
+  readonly lastReadMessageCreatedAt?: Date;
   readonly unreadCount: number;
 
   readonly createdAt: Date;

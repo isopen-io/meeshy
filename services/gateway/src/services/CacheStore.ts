@@ -1,6 +1,8 @@
 import Redis from 'ioredis';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { CircuitBreakerFactory, circuitBreakerManager, CircuitState } from '../utils/circuitBreaker';
+import { readEventLoopLag, startEventLoopLagMonitor } from '../utils/eventLoopLag';
+import { guardedInterval } from '../utils/guarded-timer';
 
 const logger = enhancedLogger.child({ module: 'CacheStore' });
 
@@ -27,10 +29,10 @@ export class RedisCacheStore implements CacheStore {
   private redis: Redis | null = null;
   private memoryCache: Map<string, MemoryCacheEntry> = new Map();
   private cleanupInterval: NodeJS.Timeout | null = null;
-  private redisConnected = false;
-  private circuitBreaker = CircuitBreakerFactory.createRedisBreaker();
+  private circuitBreaker = CircuitBreakerFactory.createRedisBreaker(() => this.redisDiagnostics());
 
   constructor(redisUrl?: string) {
+    startEventLoopLagMonitor();
     const url = redisUrl ?? process.env.REDIS_URL;
 
     if (url) {
@@ -56,13 +58,8 @@ export class RedisCacheStore implements CacheStore {
         enableOfflineQueue: false,
       });
 
-      this.redis.on('connect', () => {
-        this.redisConnected = true;
-      });
-
       this.redis.on('ready', () => {
         logger.info('Redis ready');
-        this.redisConnected = true;
       });
 
       this.redis.on('error', (error) => {
@@ -70,37 +67,39 @@ export class RedisCacheStore implements CacheStore {
         if (!suppressedErrors.some(code => error.message.includes(code))) {
           logger.warn('Redis error', { error: error.message });
         }
-        this.redisConnected = false;
-      });
-
-      this.redis.on('close', () => {
-        this.redisConnected = false;
-      });
-
-      this.redis.on('end', () => {
-        this.redisConnected = false;
       });
 
       this.redis.connect().catch(() => {
         logger.warn('Redis connection failed, using memory cache');
-        this.redisConnected = false;
       });
     } catch {
       logger.warn('Redis initialization failed, using memory cache');
       this.redis = null;
-      this.redisConnected = false;
     }
   }
 
+  /**
+   * Ce que porte une ligne d'échec Redis (#8272) : un délai dépassé avec une
+   * file de commandes pleine et une boucle fluide accuse la connexion ; une
+   * boucle en retard accuse le processus, pas Redis.
+   */
+  private redisDiagnostics(): Record<string, unknown> {
+    return {
+      redisStatus: this.redis?.status ?? 'absent',
+      commandQueueLength: this.redis?.commandQueue.length ?? 0,
+      eventLoopLag: readEventLoopLag(),
+    };
+  }
+
   private startMemoryCacheCleanup(): void {
-    this.cleanupInterval = setInterval(() => {
+    this.cleanupInterval = guardedInterval({ name: 'cache-store-memory-purge', everyMs: 60000, logger, run: () => {
       const now = Date.now();
       for (const [key, entry] of this.memoryCache.entries()) {
         if (entry.expiresAt < now) {
           this.memoryCache.delete(key);
         }
       }
-    }, 60000);
+    } });
     this.cleanupInterval.unref?.();
   }
 

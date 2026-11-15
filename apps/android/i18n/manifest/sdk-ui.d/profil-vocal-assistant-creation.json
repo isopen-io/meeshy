@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        { "androidName": "voiceProfile_wizard_title", "status": "android-only" },
+        { "androidName": "voiceProfile_wizard_close", "status": "android-only" },
+        { "androidName": "voiceProfile_wizard_errorTitle", "status": "android-only" },
+        { "androidName": "voiceProfile_wizard_ok", "status": "android-only" },
+        { "androidName": "voiceProfile_consent_title", "status": "android-only" },
+        { "androidName": "voiceProfile_consent_description", "status": "android-only" },
+        { "androidName": "voiceProfile_consent_point1", "status": "android-only" },
+        { "androidName": "voiceProfile_consent_point2", "status": "android-only" },
+        { "androidName": "voiceProfile_consent_point3", "status": "android-only" },
+        { "androidName": "voiceProfile_consent_point4", "status": "android-only" },
+        { "androidName": "voiceProfile_consent_point5", "status": "android-only" },
+        { "androidName": "voiceProfile_consent_toggle", "status": "android-only" },
+        { "androidName": "voiceProfile_consent_continue", "status": "android-only" },
+        { "androidName": "voiceProfile_age_title", "status": "android-only" },
+        { "androidName": "voiceProfile_age_description", "status": "android-only" },
+        { "androidName": "voiceProfile_age_birthDate", "status": "android-only" },
+        { "androidName": "voiceProfile_age_tooYoungError", "status": "android-only" },
+        { "androidName": "voiceProfile_age_verify", "status": "android-only" },
+        { "androidName": "voiceProfile_recording_title", "status": "android-only" },
+        { "androidName": "voiceProfile_recording_description", "status": "android-only" },
+        { "androidName": "voiceProfile_processing_title", "status": "android-only" },
+        { "androidName": "voiceProfile_processing_description", "status": "android-only" },
+        { "androidName": "voiceProfile_complete_title", "status": "android-only" },
+        { "androidName": "voiceProfile_complete_description", "status": "android-only" },
+        { "androidName": "voiceProfile_complete_finish", "status": "android-only" },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.wizard.error.consent",
+          "androidName": "voiceProfile_wizard_error_consent",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.wizard.error.uploadSamples",
+          "androidName": "voiceProfile_wizard_error_upload",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.wizard.uploadProgress",
+          "androidName": "voiceProfile_wizard_upload_progress",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.samples",
+          "androidName": "voiceProfile_wizard_recap_samples",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.totalDuration",
+          "androidName": "voiceProfile_wizard_recap_duration",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.quality",
+          "androidName": "voiceProfile_wizard_recap_quality",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.status",
+          "androidName": "voiceProfile_wizard_recap_status",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.status.pending.label",
+          "androidName": "voiceProfile_wizard_status_pending",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.status.processing.label",
+          "androidName": "voiceProfile_wizard_status_processing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.status.ready.label",
+          "androidName": "voiceProfile_wizard_status_ready",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.status.failed.label",
+          "androidName": "voiceProfile_wizard_status_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.status.expired.label",
+          "androidName": "voiceProfile_wizard_status_expired",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

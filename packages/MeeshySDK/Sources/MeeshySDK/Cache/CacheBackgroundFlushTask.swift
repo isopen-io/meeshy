@@ -33,18 +33,32 @@ public final class CacheBackgroundFlushTask: Sendable {
     private static let budget: TimeInterval = 25
 
     private let coordinator: CacheCoordinator
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "cache-bg-flush")
+    private let logger = MeeshyLog.logger(.cacheBgFlush)
 
     public init(coordinator: CacheCoordinator = .shared) {
         self.coordinator = coordinator
     }
 
-    /// Registers the task identifier with `BGTaskScheduler`. Idempotent —
-    /// `BGTaskScheduler.register` returns `false` if the identifier was
-    /// already registered, which we treat as a no-op so it's safe to
-    /// call on every cold start.
+    private static let registration = Locked(false)
+
+    /// Un seul enregistrement par processus. `BGTaskScheduler` ne rend PAS `false` sur un doublon : il lève
+    /// `NSInternalInconsistencyException` (« launch handler … already registered ») et l'app meurt au lancement —
+    /// vu sur simulateur, build 1936, depuis `MeeshyApp.init`. Rend `true` à la première demande seulement.
+    static func claimRegistration() -> Bool {
+        registration.mutate { claimed in
+            guard !claimed else { return false }
+            claimed = true
+            return true
+        }
+    }
+
+    /// Registers the task identifier with `BGTaskScheduler`, once per process — a second call is a no-op.
     public func register() {
         #if canImport(BackgroundTasks)
+        guard Self.claimRegistration() else {
+            logger.notice("background flush task already registered — skipped")
+            return
+        }
         let coordinator = self.coordinator
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: Self.identifier,
@@ -74,12 +88,12 @@ public final class CacheBackgroundFlushTask: Sendable {
         coordinator: CacheCoordinator
     ) {
         let deadline = Date().addingTimeInterval(Self.budget)
-        let logger = Logger(subsystem: "me.meeshy.app", category: "cache-bg-flush")
+        let logger = MeeshyLog.logger(.cacheBgFlush)
         processingTask.expirationHandler = {
             logger.warning("Background flush task expired before completion")
         }
         Task {
-            await coordinator.flushAll(deadline: deadline)
+            await CacheBackgroundFlushTask.flush(coordinator, deadline: deadline)
             processingTask.setTaskCompleted(success: true)
         }
     }
@@ -89,6 +103,26 @@ public final class CacheBackgroundFlushTask: Sendable {
     /// the test harness. Drives the coordinator's deadline-aware flush
     /// across every GRDB-backed store.
     public func run(deadline: Date) async {
-        await coordinator.flushAll(deadline: deadline)
+        await Self.flush(coordinator, deadline: deadline)
+    }
+
+    /// **Le filet de flush est un RÉVEIL, pas un sursis** (#7160).
+    ///
+    /// Cette tâche ne s'exécute que lorsque le processus a déjà basculé en
+    /// arrière-plan — donc après `DatabaseSuspension.suspend()`. Sans la
+    /// parenthèse, `flushAll` levait `SQLITE_INTERRUPT` sur chaque store et le
+    /// filet censé sauver les écritures que le flush de premier plan n'a pas eu
+    /// le temps de faire ne sauvait rien du tout, en silence.
+    ///
+    /// Site UNIQUE des deux chemins — `handle` (BGProcessingTask) et `run`
+    /// (harnais de test) — pour que la parenthèse ne puisse pas manquer à l'un
+    /// des deux.
+    nonisolated private static func flush(
+        _ coordinator: CacheCoordinator,
+        deadline: Date
+    ) async {
+        await DatabaseSuspension.duringBackgroundWake {
+            await coordinator.flushAll(deadline: deadline)
+        }
     }
 }

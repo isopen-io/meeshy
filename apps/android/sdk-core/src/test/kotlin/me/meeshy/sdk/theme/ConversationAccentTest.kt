@@ -4,6 +4,13 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.ApiParticipant
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import me.meeshy.sdk.model.appearance.AppearanceGamut
+import me.meeshy.sdk.model.appearance.AppearanceGamutEntry
+import me.meeshy.sdk.model.appearance.AppearanceGamutShade
+import me.meeshy.sdk.model.appearance.AppearanceScheme
 import org.junit.Test
 
 class ConversationAccentTest {
@@ -40,18 +47,44 @@ class ConversationAccentTest {
     }
 
     @Test
-    fun `displayTitle prefers the title then the custom name`() {
-        val titled = ApiConversation(id = "c1", title = "Team")
+    fun `displayTitle prefers the title then the custom name for a group`() {
+        val titled = ApiConversation(id = "c1", type = "group", title = "Team")
         val custom = ApiConversation(
             id = "c2",
+            type = "group",
             title = " ",
             preferences = ApiConversationPreferences(customName = "Mon groupe"),
         )
-        val bare = ApiConversation(id = "c3")
+        val bare = ApiConversation(id = "c3", type = "group")
 
         assertThat(titled.displayTitle()).isEqualTo("Team")
         assertThat(custom.displayTitle()).isEqualTo("Mon groupe")
         assertThat(bare.displayTitle()).isEqualTo("Conversation")
+    }
+
+    @Test
+    fun `displayTitle never falls back to a stored title for a direct conversation`() {
+        // #6790 — a legacy client composed a "X et Y" title at creation time
+        // for a DM. It must never surface, even when no participant is known
+        // (the shape GET /sync serves: no `participants` on the row).
+        val direct = ApiConversation(id = "c11", type = "direct", title = "Alice et Bob")
+
+        assertThat(direct.displayTitle(currentUserId = "me")).isEqualTo("Conversation")
+    }
+
+    @Test
+    fun `displayTitle prefers the other participant over a stored title for a direct conversation`() {
+        val direct = ApiConversation(
+            id = "c12",
+            type = "direct",
+            title = "Alice et Bob",
+            participants = listOf(
+                ApiParticipant(id = "p1", userId = "me", displayName = "Me"),
+                ApiParticipant(id = "p2", userId = "other", displayName = "Bob"),
+            ),
+        )
+
+        assertThat(direct.displayTitle(currentUserId = "me")).isEqualTo("Bob")
     }
 
     @Test
@@ -168,5 +201,136 @@ class ConversationAccentTest {
         )
 
         assertThat(direct.otherParticipantUserId(currentUserId = "me")).isNull()
+    }
+
+    // #11615 — l'élection se fait CONTRE le lecteur ; un lecteur inconnu n'élit personne.
+
+    private fun directWithReaderServedFirst() = ApiConversation(
+        id = "c14",
+        type = "direct",
+        participants = listOf(
+            ApiParticipant(id = "p1", userId = "me", displayName = "Moi"),
+            ApiParticipant(id = "p2", userId = "other", displayName = "Andre Tabeth"),
+        ),
+    )
+
+    @Test
+    fun `otherParticipantUserId elects nobody for an unknown reader`() {
+        val direct = directWithReaderServedFirst()
+
+        assertThat(direct.otherParticipantUserId(currentUserId = null)).isNull()
+        assertThat(direct.otherParticipantUserId(currentUserId = "")).isNull()
+    }
+
+    @Test
+    fun `displayTitle never shows the reader's own name when the reader is unknown`() {
+        val direct = directWithReaderServedFirst()
+
+        assertThat(direct.displayTitle(currentUserId = null)).isEqualTo("Conversation")
+        assertThat(direct.displayTitle(currentUserId = "")).isEqualTo("Conversation")
+    }
+
+    @Test
+    fun `otherParticipantUserId skips the reader whichever way the roster is ordered`() {
+        val readerLast = directWithReaderServedFirst().let { it.copy(participants = it.participants.reversed()) }
+
+        assertThat(directWithReaderServedFirst().otherParticipantUserId(currentUserId = "me")).isEqualTo("other")
+        assertThat(readerLast.otherParticipantUserId(currentUserId = "me")).isEqualTo("other")
+    }
+
+    @Test
+    fun `otherParticipantUserId picks the first non-reader among several participants`() {
+        val three = directWithReaderServedFirst().let {
+            it.copy(participants = it.participants + ApiParticipant(id = "p3", userId = "third", displayName = "Zoe"))
+        }
+
+        assertThat(three.otherParticipantUserId(currentUserId = "me")).isEqualTo("other")
+    }
+
+    @Test
+    fun `name and peer id come from the same election`() {
+        val direct = directWithReaderServedFirst()
+
+        assertThat(direct.displayTitle(currentUserId = "me")).isEqualTo("Andre Tabeth")
+        assertThat(direct.otherParticipantUserId(currentUserId = "me")).isEqualTo("other")
+    }
+
+    @Test
+    fun `a local rename still wins over the elected peer name`() {
+        val renamed = directWithReaderServedFirst()
+            .copy(preferences = ApiConversationPreferences(customName = "Mon ami"))
+
+        assertThat(renamed.displayTitle(currentUserId = "me")).isEqualTo("Mon ami")
+    }
+
+    private val gamut = AppearanceGamut(
+        listOf(
+            AppearanceGamutEntry(
+                key = "coral",
+                name = "Coral",
+                light = AppearanceGamutShade(surface = "#FFE4E1", accent = "#E4572E"),
+                dark = AppearanceGamutShade(surface = "#3A1C14", accent = "#FF8A65"),
+            ),
+        ),
+    )
+
+    private fun conversationWithAccent(key: String?) = ApiConversation(
+        id = "c1",
+        title = "Team",
+        type = "group",
+        preferences = ApiConversationPreferences(
+            appearance = JsonObject(mapOf("v" to JsonPrimitive(1), "accent" to (key?.let(::JsonPrimitive) ?: JsonNull))),
+        ),
+    )
+
+    @Test
+    fun `without a personal accent displayPalette serves the computed palette unchanged`() {
+        val conversation = ApiConversation(id = "c1", title = "Team", type = "group")
+
+        assertThat(conversation.displayPalette(gamut, AppearanceScheme.LIGHT)).isEqualTo(conversation.accentColorPalette())
+    }
+
+    @Test
+    fun `an automatic accent keeps the computed palette`() {
+        val conversation = conversationWithAccent(null)
+
+        assertThat(conversation.displayPalette(gamut, AppearanceScheme.DARK)).isEqualTo(conversation.accentColorPalette())
+    }
+
+    @Test
+    fun `a chosen accent is derived at plus and minus 30 degrees in the light range`() {
+        val conversation = conversationWithAccent("coral")
+
+        val palette = conversation.displayPalette(gamut, AppearanceScheme.LIGHT)
+
+        assertThat(palette).isEqualTo(
+            DynamicColorGenerator.ColorPalette.derived("E4572E", conversation.accentColorPalette().saturationBoost),
+        )
+        assertThat(palette.secondary).isNotEqualTo(palette.accent)
+    }
+
+    @Test
+    fun `the dark scheme selects the dark range`() {
+        val conversation = conversationWithAccent("coral")
+
+        assertThat(conversation.displayPalette(gamut, AppearanceScheme.DARK).primary).isEqualTo("FF8A65")
+    }
+
+    @Test
+    fun `an accent outside the gamut falls back to the computed palette`() {
+        val conversation = conversationWithAccent("unknown")
+
+        assertThat(conversation.displayPalette(gamut, AppearanceScheme.LIGHT)).isEqualTo(conversation.accentColorPalette())
+    }
+
+    @Test
+    fun `the personal accent is never written into the computed palette`() {
+        val conversation = conversationWithAccent("coral")
+
+        conversation.displayPalette(gamut, AppearanceScheme.LIGHT)
+
+        assertThat(conversation.accentColorPalette()).isEqualTo(
+            ApiConversation(id = "c1", title = "Team", type = "group").accentColorPalette(),
+        )
     }
 }

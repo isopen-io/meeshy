@@ -3,7 +3,10 @@
  * Covers branches and paths not reached by auth.test.ts:
  * - createUnifiedAuthMiddleware factory (all branches)
  * - Helper: authUserCacheKey, isRegisteredUser, isAnonymousUser, getUserPermissions
- * - Legacy: requireRole, requireEmailVerification, authenticate
+ * - Legacy : `requireRole` / `requireEmailVerification` vivent chez elles depuis
+ *   #4760 — `auth-legacy-guards-status-codes.test.ts`, qui les monte derrière une
+ *   VRAIE route pour lire le statut ET le code sur le corps SÉRIALISÉ. Les y
+ *   laisser en double aurait fait deux vérités sur le même refus.
  * - JWT cache hit (JWT verify result cached)
  * - Auth user cache hit (user row cached; inactive cached user)
  * - JWT expired + sessionToken trusted-session paths
@@ -15,18 +18,9 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import jwt from 'jsonwebtoken';
 import { hashSessionToken } from '../../../utils/session-token';
+import { SessionActivitySampler } from '../../../services/auth/session-activity';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
-
-const mockAuthServiceVerify = jest.fn() as jest.Mock<any>;
-const mockAuthServiceGetUser = jest.fn() as jest.Mock<any>;
-
-jest.mock('../../../services/AuthTestService', () => ({
-  AuthService: {
-    verifyToken: (...args: unknown[]) => mockAuthServiceVerify(...args),
-    getUserById: (...args: unknown[]) => mockAuthServiceGetUser(...args),
-  },
-}));
 
 jest.mock('../../../services/CacheStore', () => {
   const store = new Map<string, { value: string; expiresAt: number }>();
@@ -76,9 +70,6 @@ import {
   isRegisteredUser,
   isAnonymousUser,
   getUserPermissions,
-  requireEmailVerification,
-  requireRole as requireRoleLegacy,
-  authenticate,
   findTrustedSession,
 } from '../../../middleware/auth';
 
@@ -105,13 +96,17 @@ function createMockPrisma(overrides: Record<string, unknown> = {}) {
       findUnique: overrides.userFindUnique ?? (jest.fn() as jest.Mock<any>).mockResolvedValue(null),
     },
     userSession: {
-      findFirst: overrides.sessionFindFirst ?? (jest.fn() as jest.Mock<any>).mockResolvedValue(null),
+      findFirst: overrides.sessionFindFirst ?? (jest.fn() as jest.Mock<any>).mockResolvedValue({ isValid: true, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) }),
       update: overrides.sessionUpdate ?? (jest.fn() as jest.Mock<any>).mockReturnValue({
         catch: jest.fn(),
       }),
     },
     participant: {
       findFirst: overrides.participantFindFirst ?? (jest.fn() as jest.Mock<any>).mockResolvedValue(null),
+    },
+    // #10437 — la résolution d'un invité relit son lien (échéance) : un lien vivant, sans échéance.
+    conversationShareLink: {
+      findUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue({ expiresAt: null }),
     },
   } as unknown as ConstructorParameters<typeof AuthMiddleware>[0];
 }
@@ -141,7 +136,7 @@ function createTestUser(overrides: Record<string, unknown> = {}) {
 }
 
 function signJwt(userId: string): string {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '1h' });
+  return jwt.sign({ userId, sid: '507f1f77bcf86cd799439031' }, JWT_SECRET, { expiresIn: '1h' });
 }
 
 function signExpiredJwt(userId: string): string {
@@ -434,204 +429,6 @@ describe('createUnifiedAuthMiddleware', () => {
   });
 });
 
-// ─── requireRole (legacy auth.ts export) ─────────────────────────────────────
-
-describe('requireRole (legacy from auth.ts)', () => {
-  it('returns 403 when authContext is missing', async () => {
-    const middleware = requireRoleLegacy('ADMIN');
-    const req = { authContext: null } as any;
-    const reply = createReply();
-
-    await middleware(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(403);
-  });
-
-  it('returns 403 when user is not authenticated', async () => {
-    const middleware = requireRoleLegacy('ADMIN');
-    const req = {
-      authContext: { isAuthenticated: false, registeredUser: null },
-    } as any;
-    const reply = createReply();
-
-    await middleware(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(403);
-  });
-
-  it('returns 403 when user role is not allowed', async () => {
-    const middleware = requireRoleLegacy('BIGBOSS');
-    const req = {
-      authContext: {
-        isAuthenticated: true,
-        registeredUser: { role: 'USER' },
-      },
-    } as any;
-    const reply = createReply();
-
-    await middleware(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(403);
-    expect(reply.send).toHaveBeenCalledWith(
-      expect.objectContaining({ success: false })
-    );
-  });
-
-  it('allows request when user role matches', async () => {
-    const middleware = requireRoleLegacy('ADMIN');
-    const req = {
-      authContext: {
-        isAuthenticated: true,
-        registeredUser: { role: 'ADMIN' },
-      },
-    } as any;
-    const reply = createReply();
-
-    await middleware(req, reply);
-
-    expect(reply.code).not.toHaveBeenCalled();
-  });
-
-  it('allows when role is in array of allowed roles', async () => {
-    const middleware = requireRoleLegacy(['BIGBOSS', 'ADMIN']);
-    const req = {
-      authContext: {
-        isAuthenticated: true,
-        registeredUser: { role: 'ADMIN' },
-      },
-    } as any;
-    const reply = createReply();
-
-    await middleware(req, reply);
-
-    expect(reply.code).not.toHaveBeenCalled();
-  });
-});
-
-// ─── requireEmailVerification ─────────────────────────────────────────────────
-
-describe('requireEmailVerification', () => {
-  it('returns 403 when authContext is missing', async () => {
-    const req = { authContext: null } as any;
-    const reply = createReply();
-
-    await requireEmailVerification(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(403);
-    expect(reply.send).toHaveBeenCalledWith(
-      expect.objectContaining({ error: expect.objectContaining({ code: 'PERMISSION_DENIED' }) })
-    );
-  });
-
-  it('returns 403 when not authenticated', async () => {
-    const req = {
-      authContext: { isAuthenticated: false, registeredUser: null },
-    } as any;
-    const reply = createReply();
-
-    await requireEmailVerification(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(403);
-  });
-
-  it('returns 403 EMAIL_NOT_VERIFIED when email not verified', async () => {
-    const req = {
-      authContext: {
-        isAuthenticated: true,
-        registeredUser: { emailVerifiedAt: null },
-      },
-    } as any;
-    const reply = createReply();
-
-    await requireEmailVerification(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(403);
-    expect(reply.send).toHaveBeenCalledWith(
-      expect.objectContaining({ error: expect.objectContaining({ code: 'EMAIL_NOT_VERIFIED' }) })
-    );
-  });
-
-  it('does not reply when email is verified', async () => {
-    const req = {
-      authContext: {
-        isAuthenticated: true,
-        registeredUser: { emailVerifiedAt: new Date() },
-      },
-    } as any;
-    const reply = createReply();
-
-    await requireEmailVerification(req, reply);
-
-    expect(reply.code).not.toHaveBeenCalled();
-    expect(reply.send).not.toHaveBeenCalled();
-  });
-});
-
-// ─── authenticate (legacy) ────────────────────────────────────────────────────
-
-describe('authenticate (legacy)', () => {
-  it('sends 401 when authorization header is missing', async () => {
-    const req = { headers: {} } as any;
-    const reply = createReply();
-
-    await authenticate(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(401);
-    expect(reply.send).toHaveBeenCalledWith(
-      expect.objectContaining({ success: false })
-    );
-  });
-
-  it('sends 401 when authorization header does not start with Bearer', async () => {
-    const req = { headers: { authorization: 'Basic dXNlcjpwYXNz' } } as any;
-    const reply = createReply();
-
-    await authenticate(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(401);
-  });
-
-  it('passes when jwtVerify succeeds and userId is present', async () => {
-    const req = {
-      headers: { authorization: 'Bearer sometoken' },
-      jwtVerify: (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined),
-      user: { userId: 'user-123' },
-    } as any;
-    const reply = createReply();
-
-    await authenticate(req, reply);
-
-    expect(reply.code).not.toHaveBeenCalled();
-    expect((req as any).user.id).toBe('user-123');
-  });
-
-  it('sends 401 when jwtVerify succeeds but userId is missing', async () => {
-    const req = {
-      headers: { authorization: 'Bearer sometoken' },
-      jwtVerify: (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined),
-      user: {},
-    } as any;
-    const reply = createReply();
-
-    await authenticate(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(401);
-  });
-
-  it('sends 401 when jwtVerify throws', async () => {
-    const req = {
-      headers: { authorization: 'Bearer badtoken' },
-      jwtVerify: (jest.fn() as jest.Mock<any>).mockRejectedValue(new Error('invalid signature')),
-      user: null,
-    } as any;
-    const reply = createReply();
-
-    await authenticate(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(401);
-  });
-});
-
 // ─── JWT expired + sessionToken paths ────────────────────────────────────────
 
 describe('AuthMiddleware — JWT expired with sessionToken', () => {
@@ -866,7 +663,11 @@ describe('AuthMiddleware — StatusService integration', () => {
     jest.clearAllMocks();
   });
 
-  it('calls updateUserLastSeen and ensureUserOnline when user is offline', async () => {
+  // #10575 — une requête REST ne prouve pas qu'une personne est LÀ : l'extension
+  // de notification iOS (`NSEDataSync`) et celle de partage appellent l'API en
+  // arrière-plan, et la marquer en ligne allumait sa pastille chez ses amis. La
+  // présence appartient à la socket au premier plan ; REST ne date que l'activité.
+  it('calls updateUserLastSeen but NEVER declares an offline user online from REST', async () => {
     const user = createTestUser({ isOnline: false });
     const prisma = createMockPrisma({
       userFindUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue(user),
@@ -882,7 +683,7 @@ describe('AuthMiddleware — StatusService integration', () => {
     await middleware.createAuthContext(`Bearer ${token}`);
 
     expect(statusService.updateUserLastSeen).toHaveBeenCalledWith(user.id);
-    expect(statusService.ensureUserOnline).toHaveBeenCalledWith(user.id, false);
+    expect(statusService.ensureUserOnline).not.toHaveBeenCalled();
   });
 
   it('calls updateUserLastSeen but NOT ensureUserOnline when user is already online', async () => {
@@ -945,21 +746,27 @@ describe('AuthMiddleware — StatusService integration', () => {
     expect(statusService.updateAnonymousLastSeen).toHaveBeenCalledWith(participant.id);
   });
 
-  it('calls userSession.update when sessionToken provided and JWT is not expired', async () => {
+  it("ne réécrit plus la session de l'en-tête à chaque requête : la dernière activité suit le `sid`, échantillonnée (#9607)", async () => {
     const user = createTestUser();
     const prisma = createMockPrisma({
       userFindUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue(user),
     });
-    const sessionUpdateMock = (jest.fn() as jest.Mock<any>).mockReturnValue({ catch: jest.fn() });
+    const sessionUpdateMock = jest.fn() as jest.Mock<any>;
+    const sessionUpdateManyMock = (jest.fn() as jest.Mock<any>).mockResolvedValue({ count: 1 });
     (prisma as any).userSession.update = sessionUpdateMock;
+    (prisma as any).userSession.updateMany = sessionUpdateManyMock;
 
-    const middleware = new AuthMiddleware(prisma as never);
+    const middleware = new AuthMiddleware(prisma as never, undefined, { sessionActivity: new SessionActivitySampler() });
     const token = signJwt(user.id);
 
     await middleware.createAuthContext(`Bearer ${token}`, 'some-raw-session-token');
+    await middleware.createAuthContext(`Bearer ${token}`, 'some-raw-session-token');
 
-    expect(sessionUpdateMock).toHaveBeenCalledWith(
+    expect(sessionUpdateMock).not.toHaveBeenCalled();
+    expect(sessionUpdateManyMock).toHaveBeenCalledTimes(1);
+    expect(sessionUpdateManyMock).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ id: '507f1f77bcf86cd799439031', userId: user.id, isValid: true }),
         data: expect.objectContaining({ lastActivityAt: expect.any(Date) }),
       })
     );
@@ -1011,24 +818,24 @@ describe('AuthMiddleware — fire-and-forget catch callbacks', () => {
   // describe('AuthMiddleware — JWT expired with sessionToken') ci-dessus) —
   // il n'y a donc plus rien à observer ici pour ce cas.
 
-  it('triggers non-expired sessionToken update .catch callback when update fails', async () => {
+  it("une écriture d'activité REJETÉE est rattrapée, et la requête est admise (#9607)", async () => {
     const user = createTestUser();
-    const sessionUpdateMock = (jest.fn() as jest.Mock<any>).mockReturnValue(
-      Promise.reject(new Error('update failed'))
+    const sessionUpdateManyMock = (jest.fn() as jest.Mock<any>).mockImplementation(
+      () => Promise.reject(new Error('update failed'))
     );
     const prisma = createMockPrisma({
       userFindUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue(user),
     });
-    (prisma as any).userSession.update = sessionUpdateMock;
+    (prisma as any).userSession.updateMany = sessionUpdateManyMock;
 
-    const middleware = new AuthMiddleware(prisma as never);
+    const middleware = new AuthMiddleware(prisma as never, undefined, { sessionActivity: new SessionActivitySampler() });
     const token = signJwt(user.id);
 
     const ctx = await middleware.createAuthContext(`Bearer ${token}`, 'raw-session-xyz');
 
     await new Promise(r => setImmediate(r));
     expect(ctx.isAuthenticated).toBe(true);
-    expect(sessionUpdateMock).toHaveBeenCalled();
+    expect(sessionUpdateManyMock).toHaveBeenCalled();
   });
 });
 
@@ -1055,34 +862,6 @@ describe('AuthMiddleware — anonymous context error path', () => {
     await expect(
       middleware.createAuthContext(undefined, 'anon_null_participant')
     ).rejects.toThrow('Invalid session token');
-  });
-});
-
-// ─── requireRole — generic non-PermissionDeniedError path ────────────────────
-
-describe('requireRole — generic error path (line 663)', () => {
-  it('returns 403 with PERMISSION_DENIED when unexpected error is thrown', async () => {
-    const middleware = requireRoleLegacy('ADMIN');
-
-    // Craft a request where accessing authContext.registeredUser throws a non-PermissionDeniedError
-    const authContext = {
-      isAuthenticated: true,
-      get registeredUser() {
-        throw new TypeError('Unexpected internal failure');
-      },
-    };
-    const req = { authContext } as any;
-    const reply = createReply();
-
-    await middleware(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(403);
-    expect(reply.send).toHaveBeenCalledWith(
-      expect.objectContaining({
-        success: false,
-        error: expect.objectContaining({ code: 'PERMISSION_DENIED' }),
-      })
-    );
   });
 });
 
@@ -1139,33 +918,6 @@ describe('createUnifiedAuthMiddleware — user not active error', () => {
 
     // Should fall back to unauthenticated context (non-requireAuth mode)
     expect(req.authContext.isAuthenticated).toBe(false);
-  });
-});
-
-// ─── authenticate legacy — development mode path ──────────────────────────────
-// Lines 607-620: only reached when NODE_ENV === 'development'
-
-describe('authenticate legacy — development mode', () => {
-  afterEach(() => {
-    process.env.NODE_ENV = 'test';
-    mockAuthServiceVerify.mockReset();
-    mockAuthServiceGetUser.mockReset();
-  });
-
-  it('falls through to jwtVerify when NODE_ENV=development and verifyToken returns null', async () => {
-    process.env.NODE_ENV = 'development';
-    mockAuthServiceVerify.mockReturnValue(null);
-
-    const req = {
-      headers: { authorization: 'Bearer dev-token' },
-      jwtVerify: (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined),
-      user: { userId: 'dev-user-id' },
-    } as any;
-    const reply = createReply();
-
-    await authenticate(req, reply);
-
-    expect(req.jwtVerify).toHaveBeenCalled();
   });
 });
 
@@ -1297,83 +1049,6 @@ describe('createUnifiedAuthMiddleware — catch blocks for req.user and req.auth
     } catch {
       // acceptable
     }
-  });
-});
-
-// ─── authenticate legacy — development mode with valid user ───────────────────
-
-describe('authenticate legacy — development mode with valid user returned', () => {
-  afterEach(() => {
-    process.env.NODE_ENV = 'test';
-    mockAuthServiceVerify.mockReset();
-    mockAuthServiceGetUser.mockReset();
-  });
-
-  it('sets req.user and returns early when AuthTestService verifies token with known user', async () => {
-    process.env.NODE_ENV = 'development';
-
-    // Configure the top-level mocks (set up at jest.mock level above)
-    // Use mockReturnValue (not Once) so it persists through entire test
-    mockAuthServiceVerify.mockReturnValue({ userId: 'dev-user-id' });
-    mockAuthServiceGetUser.mockReturnValue({
-      id: 'dev-user-id',
-      username: 'devuser',
-      email: 'dev@example.com',
-      role: 'USER',
-    });
-
-    const req = {
-      headers: { authorization: 'Bearer dev-test-token' },
-      jwtVerify: jest.fn().mockReturnValue(Promise.resolve()),
-      user: {},
-    } as any;
-    const reply = createReply();
-
-    await authenticate(req, reply);
-
-    // In dev mode with valid user from AuthTestService: req.user should be populated
-    // and jwtVerify should NOT be called (early return at line 620)
-    expect(req.user.userId).toBe('dev-user-id');
-    expect(req.user.username).toBe('devuser');
-    expect(req.jwtVerify).not.toHaveBeenCalled();
-  });
-
-  it('falls through to jwtVerify when AuthTestService returns null decoded token', async () => {
-    process.env.NODE_ENV = 'development';
-
-    mockAuthServiceVerify.mockReturnValue(null);
-    mockAuthServiceGetUser.mockReturnValue(null);
-
-    const req = {
-      headers: { authorization: 'Bearer dev-unknown-token' },
-      jwtVerify: jest.fn().mockReturnValue(Promise.resolve()),
-      user: { userId: 'from-jwt' },
-    } as any;
-    const reply = createReply();
-
-    await authenticate(req, reply);
-
-    // Since AuthTestService returned null, should fall through to jwtVerify
-    expect(req.jwtVerify).toHaveBeenCalled();
-  });
-
-  it('falls through to jwtVerify when AuthTestService decoded token but getUserById returns null', async () => {
-    process.env.NODE_ENV = 'development';
-
-    mockAuthServiceVerify.mockReturnValue({ userId: 'known-dev-user' });
-    mockAuthServiceGetUser.mockReturnValue(null); // User not in dev service
-
-    const req = {
-      headers: { authorization: 'Bearer dev-token-user-null' },
-      jwtVerify: jest.fn().mockReturnValue(Promise.resolve()),
-      user: { userId: 'from-jwt-fallback' },
-    } as any;
-    const reply = createReply();
-
-    await authenticate(req, reply);
-
-    // Falls through to jwtVerify when user lookup returns null
-    expect(req.jwtVerify).toHaveBeenCalled();
   });
 });
 

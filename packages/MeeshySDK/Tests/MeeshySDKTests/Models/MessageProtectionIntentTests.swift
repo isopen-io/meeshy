@@ -1,0 +1,105 @@
+import Testing
+import Foundation
+@testable import MeeshySDK
+
+/// Ce que l'auteur ARME au composeur voyage avec TOUT ce qu'il envoie (#7498).
+///
+/// Le défaut relevé à la recette 1.1.0 : « cela fonctionne uniquement sur les
+/// textes ». Un envoi produit souvent PLUSIEURS messages — un par groupe de
+/// pièces jointes, plus le texte en dernier — et les trois champs du composeur
+/// étaient relus à chaque envoi puis désarmés au premier acquittement. Le
+/// deuxième groupe partait sans protection, la rangée allumée.
+///
+/// Une intention est une VALEUR : elle se saisit une fois au tap et se
+/// transporte. Il n'y a plus de « moment » où la relire, donc plus de fenêtre
+/// où la perdre.
+@Suite("MessageProtectionIntent — une protection armée une fois, transportée partout")
+struct MessageProtectionIntentTests {
+
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    @Test("Rien d'armé ne porte ni bit ni durée")
+    func test_none_neProtègeRien() {
+        let intent = MessageProtectionIntent.none
+        #expect(intent.isEmpty)
+        #expect(intent.lifecycleFlags.isEmpty)
+        #expect(intent.ephemeralDurationSeconds == nil)
+    }
+
+    /// L'envoi n'est pas une réception (#8905) : l'intention transporte une
+    /// DURÉE, jamais une échéance — celle de l'expéditeur est `max D(u)`,
+    /// servie par la passerelle.
+    @Test("Une durée éphémère pose le bit et la DURÉE, jamais une échéance")
+    func test_éphémère_poseBitEtDurée() {
+        let intent = MessageProtectionIntent(ephemeralDurationSeconds: 300)
+        #expect(intent.lifecycleFlags.contains(.ephemeral))
+        #expect(intent.ephemeralDurationSeconds == 300)
+    }
+
+    @Test("Une durée nulle ou négative n'arme rien")
+    func test_duréeNonPositive_nArmeRien() {
+        #expect(MessageProtectionIntent(ephemeralDurationSeconds: 0).isEmpty)
+        #expect(MessageProtectionIntent(ephemeralDurationSeconds: -1).ephemeralDurationSeconds == nil)
+    }
+
+    @Test("Le flou et la vue unique posent LEUR bit, et seulement le leur")
+    func test_flouEtVueUnique_posentLeurBit() {
+        let flou = MessageProtectionIntent(isBlurred: true)
+        #expect(flou.lifecycleFlags == .blurred)
+        let vueUnique = MessageProtectionIntent(isViewOnce: true)
+        #expect(vueUnique.lifecycleFlags == .viewOnce)
+    }
+
+    @Test("L'éphémère cohabite avec la vue unique dans un seul champ de bits")
+    func test_éphémèreEtVueUnique_cohabitent() {
+        let intent = MessageProtectionIntent(
+            ephemeralDurationSeconds: 60, isViewOnce: true
+        )
+        #expect(intent.lifecycleFlags == [.ephemeral, .viewOnce])
+        #expect(!intent.isEmpty)
+    }
+
+    /// « Le message ne peut pas être flou et vue unique ! » (directive porteur
+    /// 2026-09-24, #7667). Le composeur éteint l'un quand on allume l'autre ;
+    /// l'intention en est le SECOND verrou, celui que tout chemin d'envoi
+    /// traverse — texte, pièces jointes, groupe suivant (#7498). La vue
+    /// unique gagne : elle est la plus forte des deux.
+    @Test("Flou et vue unique armés ensemble : seule la vue unique part")
+    func test_flouEtVueUnique_seuleLaVueUniquePart() {
+        let intent = MessageProtectionIntent(
+            ephemeralDurationSeconds: 60, isBlurred: true, isViewOnce: true
+        )
+        #expect(intent.isViewOnce)
+        #expect(!intent.isBlurred)
+        #expect(intent.lifecycleFlags == [.ephemeral, .viewOnce])
+        #expect(intent.wireIsBlurred == nil)
+        #expect(intent.wireIsViewOnce == true)
+    }
+
+    /// Un `false` explicite sur le fil écraserait un défaut de conversation
+    /// côté serveur : ce qui n'est pas armé est ABSENT, pas faux.
+    @Test("Ce qui n'est pas armé voyage comme ABSENT, jamais comme faux")
+    func test_fil_absenceEtJamaisFaux() {
+        let rien = MessageProtectionIntent.none
+        #expect(rien.wireIsViewOnce == nil)
+        #expect(rien.wireIsBlurred == nil)
+        let vueUnique = MessageProtectionIntent(isViewOnce: true)
+        #expect(vueUnique.wireIsViewOnce == true)
+        #expect(vueUnique.wireIsBlurred == nil)
+        let flou = MessageProtectionIntent(isBlurred: true)
+        #expect(flou.wireIsBlurred == true)
+        #expect(flou.wireIsViewOnce == nil)
+    }
+
+    /// Une protection ne touche QUE l'axe du cycle de vie. Les effets
+    /// d'apparition et les effets persistants se composent ailleurs, et les
+    /// mélanger ferait qu'armer une vue unique allumerait un confetti.
+    @Test("Une intention ne pose aucun bit hors de l'axe cycle de vie")
+    func test_lifecycleFlags_neDébordePasSurLesAutresAxes() {
+        let intent = MessageProtectionIntent(
+            ephemeralDurationSeconds: 60, isBlurred: true, isViewOnce: true
+        )
+        #expect(intent.lifecycleFlags.intersection(.appearanceMask).isEmpty)
+        #expect(intent.lifecycleFlags.intersection(.persistentMask).isEmpty)
+    }
+}

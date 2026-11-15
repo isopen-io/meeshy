@@ -1,5 +1,6 @@
 import type { CaptureTrack } from './SoundCaptureService';
 import { cleanWaveformSamples } from './waveformSamples';
+import { isCanvasV3OrNewer } from './storyEffectsV3';
 
 /**
  * Lit les pistes audio d'un blob `storyEffects` produit par le client.
@@ -22,11 +23,56 @@ function finiteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+function records(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.filter((o): o is Record<string, unknown> => typeof o === 'object' && o !== null)
+    : [];
+}
+
+/**
+ * Pistes d'un canvas v3 (#8012) : chaque objet `audio` de chaque scène — sa
+ * charge porte les mêmes clés que la piste v1 (`convertV1ToV3` la répand),
+ * l'identifiant vit sur l'objet — plus le son de scène EMPRUNTÉ à la
+ * bibliothèque, dont la fenêtre `bounds` est en secondes.
+ */
+function canvasTrackSources(canvas: Record<string, unknown>): Record<string, unknown>[] {
+  const objects = records(canvas['scenes'])
+    .flatMap((scene) => records(scene['objects']))
+    .filter((o) => o['kind'] === 'audio')
+    .map((o) => {
+      const payload = typeof o['payload'] === 'object' && o['payload'] !== null
+        ? (o['payload'] as Record<string, unknown>)
+        : {};
+      return { ...payload, id: o['id'] };
+    });
+  const sound = typeof canvas['sound'] === 'object' && canvas['sound'] !== null
+    ? (canvas['sound'] as Record<string, unknown>)
+    : {};
+  const source = typeof sound['source'] === 'object' && sound['source'] !== null
+    ? (sound['source'] as Record<string, unknown>)
+    : {};
+  if (source['t'] !== 'library') return objects;
+  const bounds = typeof sound['bounds'] === 'object' && sound['bounds'] !== null
+    ? (sound['bounds'] as Record<string, unknown>)
+    : {};
+  const start = finiteNumber(bounds['start']);
+  const end = finiteNumber(bounds['end']);
+  return [...objects, {
+    id: SCENE_SOUND_TRACK_ID,
+    soundId: source['soundId'],
+    ...(start !== undefined ? { sourceStart: start } : {}),
+    ...(start !== undefined && end !== undefined && end >= start ? { duration: end - start } : {}),
+  }];
+}
+
+/** `trackId` du son de scène — un seul par canvas, donc stable d'une édition à l'autre. */
+export const SCENE_SOUND_TRACK_ID = 'scene-sound';
+
 export function extractCaptureTracks(storyEffects?: Record<string, unknown>): CaptureTrack[] {
-  const raw = storyEffects?.['audioPlayerObjects'];
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .filter((o): o is Record<string, unknown> => typeof o === 'object' && o !== null)
+  const sources = isCanvasV3OrNewer(storyEffects)
+    ? canvasTrackSources(storyEffects as unknown as Record<string, unknown>)
+    : records(storyEffects?.['audioPlayerObjects']);
+  return sources
     .map((o) => {
       // Fenêtre de SOURCE, pas fenêtre de timeline. `SoundUsage.startMs/endMs`
       // disent QUELLE PART DU SON a été utilisée ; y ranger `startTime` — la

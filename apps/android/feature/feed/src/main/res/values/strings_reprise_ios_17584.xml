@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_bookmark_success">Added to bookmarks</string>
+    <string name="feed_notice_bookmark_failed">Error saving bookmark</string>
+    <plurals name="feed_post_stat_reposts">
+        <item quantity="one">%1$d repost</item>
+        <item quantity="other">%1$d reposts</item>
+    </plurals>
+    <string name="profile_posts_empty_filter_subtitle">Tap the tile again to see everything</string>
+</resources>

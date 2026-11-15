@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_control_effects">المؤثرات</string>
+    <string name="call_effects_title">مؤثرات كاميرتي</string>
+    <string name="call_effects_category_face">الوجه</string>
+    <string name="call_effects_category_color">اللون</string>
+    <string name="call_effects_face_none">بلا</string>
+    <string name="call_effects_face_smoothing">تنعيم البشرة</string>
+    <string name="call_effects_face_toad">ضفدع</string>
+    <string name="call_effects_face_angel">ملاك</string>
+    <string name="call_effects_face_demon">شيطان</string>
+    <string name="call_effects_face_volcano">ثوران</string>
+    <string name="call_effects_settings">الإعدادات</string>
+    <string name="call_effects_settings_hint">يعرض السطوع وتمويه الخلفية بدلاً من المؤثرات</string>
+    <string name="call_effects_back">العودة إلى المكالمة</string>
+    <string name="call_effects_back_hint">يحتفظ بمظهرك ويعود إلى المكالمة</string>
+    <string name="call_effects_add_look">إضافة مظهر آخر</string>
+    <string name="call_effects_add_look_hint">ينتقل إلى نوع آخر من المظاهر لدمجه مع مظهرك</string>
+    <string name="call_effects_blur">تمويه الخلفية</string>
+    <string name="call_effects_smoothing_strength">قوة التنعيم</string>
+    <string name="call_effects_brightness">السطوع</string>
+    <string name="call_effects_percent">%1$d%%</string>
+    <string name="call_effects_next">المؤثر التالي</string>
+    <string name="call_effects_previous">المؤثر السابق</string>
+    <string name="call_effects_category_landscape">منظر</string>
+    <string name="call_effects_category_voice">صوت</string>
+    <string name="call_effects_layer_entry">%1$s · %2$s</string>
+</resources>

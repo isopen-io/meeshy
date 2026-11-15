@@ -1,14 +1,28 @@
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import { sharedPlaceFromMetadata } from '../services/location/sharedPlace';
+import { MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
+import { emitConversationUpdatedPerReader } from './conversationUpdatedPerReader';
 import { participantUserRoomTargets } from './emitToConversationParticipants';
 import {
+  PREVIEW_MEDIA_ATTACHMENT_SELECT,
+  PREVIEW_MEDIA_SENDER_SELECT,
   PREVIEW_PRISM_PARTICIPANT_SELECT,
-  resolveLastMessagePreviewPrism,
   toIsoOrNull,
+  type PreviewMediaAttachmentInput,
 } from './utils/lastMessagePreviewPrism';
+import {
+  PREVIEW_ATTACHMENT_SUMMARY_LIMIT,
+  resolveLastMessagePreviewGroup,
+} from './utils/lastMessagePreviewGroup';
 import { resolvePersonalPreviewOverrides } from './utils/personalPreviewOverride';
+import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsForOrFail } from '../services/historyFloor';
 import type { ServerEmitIO } from './serverEmit';
+import { withOrphanedSenderRepair } from '../services/messaging/withOrphanedSenderRepair';
+import { loadViewOnceConsumptions, viewOnceConsumptionKey } from '../services/messaging/readViewOnceConsumption';
+import { withoutCaptureNotices } from '../services/messaging/captureNoticeVisibility';
+import { loadSealedQuoteAudience, quotedDeathFor } from './quotedEphemeralAudience';
+import { AT_REST_MESSAGE_SELECT, revealAtRest } from '../services/messaging/serverAtRest';
+import { gatewayKeyring } from '../services/messaging/atRestTranslationSource';
 
 /**
  * Minimal Socket.IO surface used by this helper. Kept structural so the
@@ -29,7 +43,7 @@ export type PreviewEmitIO = ServerEmitIO;
  */
 export type PreviewPrisma = Pick<
   PrismaClient,
-  'participant' | 'message' | 'userMessageDeletion' | 'userConversationPreferences'
+  'participant' | 'message' | 'userMessageDeletion' | 'userConversationPreferences' | 'conversationShareLink' | 'messageStatusEntry'
 >;
 
 /**
@@ -41,6 +55,9 @@ export type PreviewPrisma = Pick<
  * Lot 3 : sans `metadata`, un dernier message géolocalisé n'affiche jamais sa
  * position dans ce fanout temps réel de l'aperçu.
  * `translations` / `originalLanguage` : le Prisme de la ligne de liste.
+ * `isBlurred` / `isViewOnce` / `expiresAt` / `sender` / `attachments` /
+ * `_count` (#3737) : le sous-groupe MÉDIA du même aperçu — voir
+ * `resolvePreviewMediaFields`.
  */
 const PREVIEW_MESSAGE_SELECT = {
   id: true,
@@ -50,6 +67,70 @@ const PREVIEW_MESSAGE_SELECT = {
   metadata: true,
   translations: true,
   originalLanguage: true,
+  isBlurred: true,
+  isViewOnce: true,
+  expiresAt: true,
+  // #7451 — cf. `resolveLastMessageSummaryKind` : sans elle, un éphémère de
+  // trente secondes s'affiche « actif » sept jours dans la liste.
+  ephemeralDuration: true,
+  // #7545 — la NATURE du message et la protection que le groupe d'aperçu lit
+  // (`resolveLastMessagePreviewGroup`) : sans `isEncrypted`, un message
+  // chiffré partait en clair ; sans les autres, la ligne ignorait qu'il
+  // s'agissait d'un appel, d'un avis système ou d'un transfert.
+  isEncrypted: true,
+  messageType: true,
+  messageSource: true,
+  effectFlags: true,
+  forwardedFromId: true,
+  // #8686 — la chaîne citée : une réponse morte pour un lecteur lui part « expirée ».
+  replyToId: true,
+  sender: { select: PREVIEW_MEDIA_SENDER_SELECT },
+  // Bornée, plus plafonnée à 1 : le résumé (« 3 photos · 1,4 Mo ») lit
+  // TOUTES les pièces jointes ; le groupe n'en sert que la première en détail.
+  attachments: { take: PREVIEW_ATTACHMENT_SUMMARY_LIMIT, select: PREVIEW_MEDIA_ATTACHMENT_SELECT, orderBy: MESSAGE_ATTACHMENT_ORDER },
+  _count: { select: { attachments: true } },
+  // #12822 — de quoi ouvrir le repos d'un message `server`/`hybrid` : sans
+  // elles, la ligne recalculée passait à « Message chiffré » (`content: ''`).
+  ...AT_REST_MESSAGE_SELECT,
+} as const;
+
+/**
+ * La projection du participant, seul site du dépôt qui compose DEUX SSOT dont
+ * chacune déclare son propre `user`.
+ *
+ * `id` n'est pas de la décoration : il NOMME la room personnelle d'un
+ * participant sans ligne `User`. Ne sélectionner que `userId` n'ignorait pas
+ * l'identité de repli, il ne la lisait jamais. `user` porte les préférences de
+ * langue du lecteur — sans elles il n'y a pas de Prisme à résoudre — et son
+ * rôle PLATEFORME, qui décide du PLANCHER d'historique (#3892) : le dernier
+ * message global peut précéder l'arrivée de l'un d'eux.
+ *
+ * **`user` est réécrit à la MAIN, et c'est un piège armé.** Un spread naïf
+ * (`{...A, ...B}`) ferait gagner le `user` de `HISTORY_FLOOR_PARTICIPANT_SELECT`
+ * (`{ role }` seul) au prix des préférences de langue du Prisme. La fusion
+ * explicite corrige cela — mais elle FIGE la liste : un champ ajouté demain à
+ * l'un ou l'autre `select.user` n'arrivera pas ici, silencieusement, et
+ * `tsc` ne verra que la moitié Prisme (`PreviewPrismParticipant` l'exige ;
+ * `HistoryFloorJoin.user` est OPTIONNEL, donc sa perte ne compile pas moins
+ * bien). C'est exactement le défaut que #3892 a trouvé sur ce site.
+ *
+ * D'où l'extraction : la constante est EXPORTÉE pour qu'un témoin puisse la
+ * comparer champ par champ aux deux SSOT — même cliquet que
+ * `shareLinkIncludeStructure` (`routes/links/utils/prisma-queries.ts`), l'autre
+ * site qui redéclare son `user`, et le seul des deux que #3892 ait gardé.
+ */
+export const PREVIEW_PARTICIPANT_SELECT = {
+  ...PREVIEW_PRISM_PARTICIPANT_SELECT,
+  ...HISTORY_FLOOR_PARTICIPANT_SELECT,
+  user: {
+    select: {
+      systemLanguage: true,
+      regionalLanguage: true,
+      customDestinationLanguage: true,
+      deviceLocale: true,
+      role: true,
+    },
+  },
 } as const;
 
 /** Ce qu'un dernier message — global ou propre à un lecteur — met sur le fil. */
@@ -61,6 +142,19 @@ type PreviewMessage = {
   metadata?: unknown;
   translations?: unknown;
   originalLanguage?: string | null;
+  isBlurred?: boolean | null;
+  isViewOnce?: boolean | null;
+  expiresAt?: Date | string | null;
+  ephemeralDuration?: number | null;
+  isEncrypted?: boolean | null;
+  messageType?: string | null;
+  messageSource?: string | null;
+  effectFlags?: number | null;
+  forwardedFromId?: string | null;
+  replyToId?: string | null;
+  sender?: { displayName?: string | null; userId?: string | null; user?: { displayName?: string | null } | null } | null;
+  attachments?: readonly PreviewMediaAttachmentInput[];
+  _count?: { attachments?: number } | null;
 };
 
 /**
@@ -109,6 +203,12 @@ export interface PreviewUpdateScope {
    * sans compte ne peut ni écrire dans l'une ni figurer ici.
    */
   readonly onlyForReaderUserId?: string;
+  /**
+   * Même borne d'AUDIENCE, par `Participant.id` : c'est l'identité que porte
+   * une consommation de vue unique (`MessageStatusEntry.participantId`), et la
+   * seule qu'ait un invité de lien partagé. Voir `emitViewOnceConsumedPreview`.
+   */
+  readonly onlyForReaderParticipantId?: string;
 }
 
 /**
@@ -180,23 +280,40 @@ export async function emitConversationPreviewUpdate(
 ): Promise<void> {
   if (!io) return;
   try {
-    const [participants, latest] = await Promise.all([
+    // `prisma` n'est ici qu'un `Pick<PrismaClient, …>` (testabilité) ; le
+    // vrai client, dont la réparation a besoin, est ce que chaque appelant de
+    // production lui passe réellement — d'où le cast, local à ce module
+    // (même motif que `copyAttachments.ts`, #6516).
+    const realPrisma = prisma as unknown as PrismaClient;
+    const [participants, storedLatest] = await Promise.all([
       prisma.participant.findMany({
-        where: { conversationId, isActive: true },
+        where: { conversationId, ...PARTICIPATION_VIVANTE },
         // `id` is not decoration: it NAMES the personal room of a participant
         // with no `User` row. Selecting `userId` alone did not ignore the
         // fallback identity, it never read it. `user` carries the reader's
         // language preferences — without them there is no Prisme to resolve.
-        select: PREVIEW_PRISM_PARTICIPANT_SELECT,
+        // Et ce qui décide du PLANCHER d'historique de chaque lecteur : le
+        // dernier message global peut précéder l'arrivée de l'un d'eux.
+        //
+        select: PREVIEW_PARTICIPANT_SELECT,
       }),
-      prisma.message.findFirst({
-        where: { conversationId, deletedAt: null },
-        orderBy: { createdAt: 'desc' },
-        select: PREVIEW_MESSAGE_SELECT,
-      }) as Promise<PreviewMessage | null>,
+      withOrphanedSenderRepair({ prisma: realPrisma, conversationIds: [conversationId] }, () =>
+        prisma.message.findFirst({
+          // #9630 — un avis de capture n'est jamais l'aperçu poussé.
+          where: withoutCaptureNotices({ conversationId, deletedAt: null }),
+          orderBy: { createdAt: 'desc' },
+          select: PREVIEW_MESSAGE_SELECT,
+        })
+      ) as Promise<PreviewMessage | null>,
     ]);
 
-    if (scope?.onlyIfLatestIs != null && latest?.id !== scope.onlyIfLatestIs) return;
+    if (scope?.onlyIfLatestIs != null && storedLatest?.id !== scope.onlyIfLatestIs) return;
+
+    // #12822 — le clair AVANT le Prisme, comme `GET /conversations` : le
+    // dernier message et chaque remplaçant personnel ci-dessous. Le chiffré et
+    // ses métadonnées ne partent pas : le groupe d'aperçu ne les lit pas.
+    const keyring = gatewayKeyring(realPrisma);
+    const latest = storedLatest ? await revealAtRest(storedLatest, keyring) : null;
 
     // La borne du LECTEUR se pose ICI, avant la sonde et avant la boucle, parce
     // qu'elle vaut pour les deux : demander à la base si CHAQUE participant a
@@ -204,10 +321,11 @@ export async function emitConversationPreviewUpdate(
     // lequel, coûterait la question la plus large pour la réponse la plus
     // étroite. Vide ⇒ le lecteur nommé n'est plus participant actif : rien à
     // sonder, rien à émettre.
-    const targets =
-      scope?.onlyForReaderUserId != null
-        ? participants.filter((p) => p.userId === scope.onlyForReaderUserId)
-        : participants;
+    const targets = participants.filter(
+      (p) =>
+        (scope?.onlyForReaderUserId == null || p.userId === scope.onlyForReaderUserId) &&
+        (scope?.onlyForReaderParticipantId == null || p.id === scope.onlyForReaderParticipantId),
+    );
     if (targets.length === 0) return;
 
     // Le dernier message GLOBAL n'est pas le dernier message de tout le monde :
@@ -217,22 +335,46 @@ export async function emitConversationPreviewUpdate(
     // ligne de liste — voir `resolvePersonalPreviewOverrides`. Résolue APRÈS le
     // portillon `onlyIfLatestIs` : le chemin des traductions, le plus fréquenté
     // des trois, abandonne avant d'avoir rien sondé.
-    const overrides = await resolvePersonalPreviewOverrides<PreviewMessage>(prisma, {
+    //
+    // Le plancher d'historique de chaque lecteur s'y ajoute : un participant
+    // ajouté après coup, ou entré par un lien sans historique, ne doit pas voir
+    // dans sa ligne de liste un message d'AVANT son arrivée. Lu ici, pas dans la
+    // sonde : sa lecture est un contrôle d'accès, et son échec ne dégrade pas en
+    // « on sert » comme le masquage personnel.
+    //
+    // Fail-closed PAR DESTINATAIRE, jamais en bloc : la lecture des liens
+    // n'apprend rien sur un lecteur dont le plancher se rend sans elle (admin,
+    // octroi par date, droit figé, aucune participation par lien). Abandonner
+    // l'émission entière le privait d'un aperçu que la panne ne rendait pas
+    // incertain — et lui SERVIR l'aperçu global sans son plancher aurait été
+    // pire. Seul celui dont le LIEN décidait sort de l'émission.
+    const { floors, unreadable } = await loadHistoryFloorsForOrFail(prisma, targets);
+    const floorByParticipant = new Map(targets.map((p, index) => [p.id, floors[index]]));
+    const served = targets.filter((_, index) => !unreadable.has(index));
+    if (served.length === 0) return;
+
+    const storedOverrides = await resolvePersonalPreviewOverrides<PreviewMessage>(prisma, {
       conversationId,
       latest,
-      userIds: targets.map((p) => p.userId).filter((id): id is string => typeof id === 'string'),
+      readers: served.map((p) => ({
+        participantId: p.id,
+        userId: p.userId,
+        historyFloor: floorByParticipant.get(p.id) ?? null,
+      })),
       select: PREVIEW_MESSAGE_SELECT,
     });
+    const overrides = new Map(
+      await Promise.all(
+        [...storedOverrides].map(async ([participantId, own]) => [participantId, own ? await revealAtRest(own, keyring) : null] as const),
+      ),
+    );
 
     // La moitié du payload qui dépend du message, donc du LECTEUR dès qu'il en
-    // a masqué un. `location` comprise : servir la position du message global à
-    // qui ne le voit pas placerait une épingle sous un aperçu qui parle d'autre
-    // chose. Un message géolocalisé sans légende a un `lastMessagePreview`
-    // vide — hisser `location` ne fabrique aucun texte de repli côté serveur ;
-    // le client décide comment rendre "" + location (ex. via messageType ou la
-    // seule présence de `location`), pas ce helper.
+    // a masqué un. `location` y appartient aussi, mais elle sort du groupe
+    // d'aperçu (`resolveLastMessagePreviewGroup`), sous la même protection que
+    // le texte : servir la position du message global à qui ne le voit pas
+    // placerait une épingle sous un aperçu qui parle d'autre chose.
     const messagePayloadFor = (message: PreviewMessage | null) => {
-      const place = sharedPlaceFromMetadata(message?.metadata);
       return {
         // Chaîne ISO — voir `toIsoOrNull`. `null` reste une VALEUR ici : c'est
         // ainsi que ce chemin dit « ce lecteur n'a plus aucun message visible ».
@@ -242,7 +384,6 @@ export async function emitConversationPreviewUpdate(
         // `resolveLastMessagePreviewPrism` avec le reste de la paire, plafonné
         // comme elle.
         senderId: message?.senderId ?? null,
-        ...(place ? { location: place } : {}),
       };
     };
 
@@ -278,25 +419,102 @@ export async function emitConversationPreviewUpdate(
     // tout le monde.
     const wantedLanguage = scope?.onlyIfPreviewCarriesLanguage?.toLowerCase();
 
-    for (const { room, participant } of participantUserRoomTargets(targets)) {
-      // `has`, jamais `get() ?? latest` : une entrée qui vaut `null` dit « cette
-      // personne n'a plus AUCUN message visible ici », ce qu'un repli sur
-      // l'aperçu global rendrait exactement à l'envers.
-      const own =
-        participant.userId != null && overrides.has(participant.userId)
-          ? overrides.get(participant.userId) ?? null
-          : latest;
-      const prism = resolveLastMessagePreviewPrism(participant, own);
-      if (wantedLanguage != null && !carriesLanguage(prism.lastMessageTranslations, wantedLanguage)) continue;
-      io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
-        ...basePayload,
-        ...messagePayloadFor(own),
-        ...prism,
-      });
-    }
+    // #7594 — la vue unique déjà OUVERTE, par lecteur : chaque destinataire
+    // reçoit sa propre room, donc sa propre valeur. Une lecture pour tous.
+    const ownMessageOf = (participantId: string) =>
+      overrides.has(participantId) ? overrides.get(participantId) ?? null : latest;
+    const consumed = await loadViewOnceConsumptions(
+      prisma,
+      served.flatMap((p) => {
+        const own = ownMessageOf(p.id);
+        return own?.isViewOnce ? [{ messageId: own.id, participantId: p.id }] : [];
+      }),
+      onError,
+    );
+
+    // #8686 — une réponse meurt, pour son lecteur, avec ce qu'elle cite (#8630) :
+    // sa ligne part « expirée », comme `GET /conversations` la sert. Une lecture
+    // par message cité distinct ; aucune pour une page sans réponse.
+    const quoting = new Map(
+      served.flatMap((p) => {
+        const own = ownMessageOf(p.id);
+        return own?.replyToId ? [[own.id, own.replyToId] as const] : [];
+      }),
+    );
+    const quotedDeaths = new Map(
+      await Promise.all(
+        [...quoting].map(async ([messageId, replyToId]) => [messageId, await loadSealedQuoteAudience(prisma, { id: replyToId })] as const),
+      ),
+    );
+
+    // #18380 — un lecteur qui LÈVE ne coûte que ce lecteur. Les deux `continue`
+    // deviennent un `null` rendu : le site unique les traite comme « rien à
+    // envoyer à celui-ci », ce qu'ils ont toujours voulu dire.
+    emitConversationUpdatedPerReader(
+      io,
+      participantUserRoomTargets(served),
+      (participant) => {
+        // La sonde a pu échouer (carte vide, aperçu global pour tous) : sous un
+        // plancher, l'aperçu global est précisément ce que ce lecteur n'a pas le
+        // droit de lire. Rien plutôt que l'interdit — sa ligne garde l'état que
+        // le REST lui a servi sous la même borne.
+        const floor = floorByParticipant.get(participant.id) ?? null;
+        const latestBelowFloor = floor !== null && latest !== null && latest.createdAt < floor;
+        if (latestBelowFloor && !overrides.has(participant.id)) return null;
+
+        // `has`, jamais `get() ?? latest` : une entrée qui vaut `null` dit « cette
+        // personne n'a plus AUCUN message visible ici », ce qu'un repli sur
+        // l'aperçu global rendrait exactement à l'envers.
+        const own = ownMessageOf(participant.id);
+        const group = resolveLastMessagePreviewGroup(participant, own, new Date(), {
+          viewOnceConsumed: own !== null && consumed.has(viewOnceConsumptionKey({ messageId: own.id, participantId: participant.id })),
+          quotedDeathAt: own ? quotedDeathFor(quotedDeaths.get(own.id), participant) : null,
+        });
+        if (wantedLanguage != null && !carriesLanguage(group.lastMessageTranslations, wantedLanguage)) return null;
+        return {
+          ...basePayload,
+          ...messagePayloadFor(own),
+          ...group,
+        };
+      },
+      (error) => onError?.(error),
+    );
   } catch (error) {
     onError?.(error);
   }
+}
+
+export interface ViewOnceConsumedPreviewParams {
+  readonly conversationId: string;
+  /** Le message à vue unique que ce lecteur vient d'ouvrir. */
+  readonly messageId: string;
+  /** Le `Participant.id` du lecteur — celui de `recordViewOnceConsumption`. */
+  readonly readerParticipantId: string;
+  /** `updatedBy.id` : le `User.id` du lecteur, ou son `Participant.id` s'il n'a pas de compte. */
+  readonly actorUserId: string;
+}
+
+/**
+ * L'émission CIBLÉE qui suit une consommation de vue unique (#7594) : la ligne
+ * de liste du SEUL lecteur qui vient d'ouvrir passe à « 👁 Ouvert »
+ * (`lastMessageViewOnceConsumed: true`, relu dans la base).
+ *
+ * À appeler par `POST …/messages/:messageId/consume` APRÈS
+ * `recordViewOnceConsumption`, quand elle rend `firstConsumption: true`. Rien
+ * ne part si le message n'est plus le dernier de la conversation (la ligne ne
+ * le décrit plus), ni vers les autres participants : pour eux rien n'a changé.
+ * Best-effort comme `emitConversationPreviewUpdate` — ne lève jamais.
+ */
+export async function emitViewOnceConsumedPreview(
+  prisma: PreviewPrisma,
+  io: PreviewEmitIO | null | undefined,
+  params: ViewOnceConsumedPreviewParams,
+  onError?: (error: unknown) => void,
+): Promise<void> {
+  await emitConversationPreviewUpdate(prisma, io, params.conversationId, params.actorUserId, onError, {
+    onlyIfLatestIs: params.messageId,
+    onlyForReaderParticipantId: params.readerParticipantId,
+  });
 }
 
 function carriesLanguage(map: Record<string, string> | null, wantedLowercase: string): boolean {

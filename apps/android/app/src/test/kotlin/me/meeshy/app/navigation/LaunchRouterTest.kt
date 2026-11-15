@@ -118,6 +118,16 @@ class LaunchRouterTest {
     }
 
     @Test
+    fun `a socket incoming offer carries its conversation into the call screen`() {
+        val route = LaunchRouter.routeIncomingSocketOffer(
+            offer = WaitingCall(callId = "call-c", callerId = "u1", callerName = "Bob", isVideo = false, conversationId = "conv-7"),
+            currentRoute = Routes.CONVERSATIONS,
+        )!!
+
+        assertThat(configOf(route).conversationId).isEqualTo("conv-7")
+    }
+
+    @Test
     fun `a socket incoming offer while already on the call screen yields no route`() {
         val route = LaunchRouter.routeIncomingSocketOffer(
             offer = WaitingCall(callId = "call-2", callerId = "u2", callerName = "Carol", isVideo = false),
@@ -164,5 +174,317 @@ class LaunchRouterTest {
         )!!
 
         assertThat(Uri.parse(route).getQueryParameter(CallRoute.ANSWER_ARG)).isEqualTo("false")
+    }
+
+    // ---- Un lien a jeton d'e-mail n'entre que par la forme exacte de l'e-mail, sur l'origine https (#10873, #10875)
+
+    private fun routeOf(uri: String): String? = LaunchRouter.routeForDeepLink(uri)
+
+    @Test
+    fun `the secret written in the fragment routes to validation`() {
+        assertThat(routeOf("https://meeshy.me/auth/magic-link?via=email#token=abc123"))
+            .isEqualTo("auth/magic-link?token=abc123")
+    }
+
+    @Test
+    fun `the fragment prevails over the query`() {
+        assertThat(routeOf("https://meeshy.me/auth/magic-link?token=old#token=new"))
+            .isEqualTo("auth/magic-link?token=new")
+    }
+
+    @Test
+    fun `a blank fragment secret falls back to the query`() {
+        assertThat(routeOf("https://meeshy.me/auth/magic-link?token=old#token="))
+            .isEqualTo("auth/magic-link?token=old")
+    }
+
+    @Test
+    fun `the email-link alias written in the mails routes to validation`() {
+        assertThat(routeOf("https://meeshy.me/auth/email-link/magic-link#token=abc123"))
+            .isEqualTo("auth/magic-link?token=abc123")
+    }
+
+    @Test
+    fun `the historical path token routes to validation`() {
+        assertThat(routeOf("https://meeshy.me/auth/magic-link/tok-3_A"))
+            .isEqualTo("auth/magic-link?token=tok-3_A")
+    }
+
+    @Test
+    fun `the default https port and an upper-case origin are the same origin`() {
+        assertThat(routeOf("https://meeshy.me:443/auth/magic-link#token=abc"))
+            .isEqualTo("auth/magic-link?token=abc")
+        assertThat(routeOf("HTTPS://MEESHY.ME/auth/magic-link#token=abc"))
+            .isEqualTo("auth/magic-link?token=abc")
+    }
+
+    @Test
+    fun `a token link received through the custom scheme is never routed`() {
+        listOf(
+            "meeshy://auth/magic-link?token=abc",
+            "meeshy://auth/magic-link#token=abc",
+            "meeshy://auth/magic-link/abc",
+            "meeshy://auth/email-link/magic-link#token=abc",
+            "meeshy://auth/verify-email#token=t&email=a%40b.co",
+            "meeshy://auth/reset-password#token=r",
+            "meeshy://reset-password#token=r",
+            "MEESHY://auth/magic-link?token=abc",
+            "Meeshy://Auth/Magic-Link?token=abc",
+        ).forEach { assertThat(routeOf(it)).isNull() }
+    }
+
+    @Test
+    fun `every variant of the exact form is refused`() {
+        listOf(
+            "https://meeshy.me/auth/magic-link/validate?token=abc",
+            "https://meeshy.me/auth/magic-link/abc/extra",
+            "https://meeshy.me/auth/magic-link/ab%20c",
+            "https://meeshy.me/auth/magic-link/?token=abc",
+            "https://meeshy.me//auth/magic-link?token=abc",
+            "https://meeshy.me/x/../auth/magic-link?token=abc",
+            "https://meeshy.me/AUTH/Magic-Link?token=abc",
+            "https://meeshy.me/auth%2Fmagic-link?token=abc",
+            "https://meeshy.me/%61uth/magic-link?token=abc",
+            "https://meeshy.me/auth/magic-link%20?token=abc",
+            "https://meeshy.me/auth/magic%E2%80%8B-link?token=abc",
+            "https://meeshy.me/auth/magic-link;x=1?token=abc",
+            "https://meeshy.me/auth/magic-linker?token=abc",
+            "https://user:pass@meeshy.me/auth/magic-link?token=abc",
+            "https://evil.example%5C@meeshy.me/auth/magic-link?token=abc",
+            "https://meeshy.me:8443/auth/magic-link?token=abc",
+            "http://meeshy.me/auth/magic-link?token=abc",
+        ).forEach { assertThat(routeOf(it)).isNull() }
+    }
+
+    @Test
+    fun `an origin that only looks like Meeshy is refused`() {
+        listOf(
+            "https://evil.example/auth/magic-link?token=abc",
+            "https://meeshy.me.evil.example/auth/magic-link?token=abc",
+            "https://meeshy.me@evil.example/auth/magic-link?token=abc",
+            "https://meeshy.me\\@evil.example/auth/magic-link?token=abc",
+            "https://notmeeshy.me/auth/magic-link?token=abc",
+            "https://www.evil.example/?u=https://meeshy.me/auth/magic-link?token=abc",
+        ).forEach { assertThat(routeOf(it)).isNull() }
+    }
+
+    @Test
+    fun `the reset link written in the mails routes to the new password screen with its fragment token`() {
+        assertThat(routeOf("https://meeshy.me/reset-password#token=r1")).isEqualTo("auth/reset-password?token=r1")
+        assertThat(routeOf("https://meeshy.me/auth/reset-password#token=r1")).isEqualTo("auth/reset-password?token=r1")
+        assertThat(routeOf("https://meeshy.me/auth/email-link/reset-password#token=r%2B1"))
+            .isEqualTo("auth/reset-password?token=r%2B1")
+    }
+
+    @Test
+    fun `a reset link still carrying its token in the query is read for mails sent before`() {
+        assertThat(routeOf("https://meeshy.me/reset-password?token=old")).isEqualTo("auth/reset-password?token=old")
+        assertThat(routeOf("https://meeshy.me/reset-password?token=old#token=new")).isEqualTo("auth/reset-password?token=new")
+    }
+
+    @Test
+    fun `the verification link routes with its token and its address`() {
+        assertThat(routeOf("https://meeshy.me/auth/verify-email#token=t&email=a%40b.co"))
+            .isEqualTo("auth/verify-email?token=t&email=a%40b.co")
+        assertThat(routeOf("https://meeshy.me/auth/email-link/verify-email#token=t&email=a%40b.co"))
+            .isEqualTo("auth/verify-email?token=t&email=a%40b.co")
+    }
+
+    @Test
+    fun `a reset or verification link without its secret opens nothing`() {
+        assertThat(routeOf("https://meeshy.me/reset-password")).isNull()
+        assertThat(routeOf("https://meeshy.me/reset-password#token=")).isNull()
+        assertThat(routeOf("https://meeshy.me/auth/verify-email#token=t")).isNull()
+        assertThat(routeOf("https://meeshy.me/auth/verify-email#email=a%40b.co")).isNull()
+        assertThat(routeOf("https://meeshy.me/auth/verify-email#token=t&email=")).isNull()
+    }
+
+    @Test
+    fun `every variant of a reset or verification link is refused`() {
+        listOf(
+            "http://meeshy.me/reset-password#token=r",
+            "https://meeshy.me:8443/reset-password#token=r",
+            "https://evil.example/reset-password#token=r",
+            "https://meeshy.me/reset-password/extra#token=r",
+            "https://meeshy.me/Reset-Password#token=r",
+            "https://meeshy.me//reset-password#token=r",
+            "https://meeshy.me/auth/reset-password/#token=r",
+            "https://meeshy.me/auth/verify-email/x#token=t&email=a%40b.co",
+            "https://meeshy.me/settings/verify-email-change#token=t",
+        ).forEach { assertThat(routeOf(it)).isNull() }
+    }
+
+    @Test
+    fun `only the sign-in and password links open before any session`() {
+        assertThat(LaunchRouter.opensWithoutSession("auth/magic-link?token=a")).isTrue()
+        assertThat(LaunchRouter.opensWithoutSession("auth/reset-password?token=a")).isTrue()
+        assertThat(LaunchRouter.opensWithoutSession("auth/verify-email?token=a&email=b")).isTrue()
+        assertThat(LaunchRouter.opensWithoutSession("conversations")).isFalse()
+        assertThat(LaunchRouter.opensWithoutSession(null)).isFalse()
+    }
+
+    // #13465 — après la mort du processus, le système rend à l'activité restaurée l'intent ORIGINAL (son adresse
+    // intacte : `intent.data = null` n'a vidé que la copie locale). Une route à jeton relue là rejouerait le lien.
+    @Test
+    fun `a restored activity never replays an email link token, a fresh launch does`() {
+        val reset = "auth/reset-password?token=a"
+
+        assertThat(LaunchRouter.onCreateRoute(reset, restored = true)).isNull()
+        assertThat(LaunchRouter.onCreateRoute("auth/magic-link?token=a", restored = true)).isNull()
+        assertThat(LaunchRouter.onCreateRoute("auth/verify-email?token=a&email=b", restored = true)).isNull()
+        assertThat(LaunchRouter.onCreateRoute(reset, restored = false)).isEqualTo(reset)
+        assertThat(LaunchRouter.onCreateRoute("conversations", restored = true)).isEqualTo("conversations")
+    }
+
+    // #13504 — une activité RECRÉÉE (changement de thème, de langue, de densité, mort du processus) relit l'intent
+    // ORIGINAL, preuve d'appel intacte. Le bouton « Répondre » relu là faisait redécrocher, micro ouvert, un appel de
+    // groupe que l'utilisateur avait quitté et qui durait encore : la demande d'appel a déjà été présentée.
+    @Test
+    fun `a recreated activity never replays a call launch, answered or ringing`() {
+        val answer = CallRoute.incoming("call-1", "conv-1", "Ana", isVideo = false, autoAnswer = true)
+        val ringing = CallRoute.incoming("call-1", "conv-1", "Ana", isVideo = false, autoAnswer = false)
+
+        assertThat(LaunchRouter.onCreateRoute(answer, restored = true)).isNull()
+        assertThat(LaunchRouter.onCreateRoute(ringing, restored = true)).isNull()
+        assertThat(LaunchRouter.onCreateRoute(answer, restored = false)).isEqualTo(answer)
+        assertThat(LaunchRouter.onCreateRoute(Routes.chat("conv-1"), restored = true)).isEqualTo(Routes.chat("conv-1"))
+    }
+
+    @Test
+    fun `every email link the manifest claims is a link the router reads - none is swallowed`() {
+        val manifest = java.io.File("src/main/AndroidManifest.xml").readText()
+            .replace(Regex("<!--.*?-->", RegexOption.DOT_MATCHES_ALL), "")
+        val claimed = Regex("android:host=\"([^\"]+)\" android:(?:path|pathPrefix)=\"([^\"]+)\"").findAll(manifest)
+            .map { it.groupValues[1] to it.groupValues[2] }
+            .filter { (_, path) -> me.meeshy.sdk.model.link.EmailLinkSecret.pathCarriesSecret(path) }
+            .toList()
+
+        assertThat(claimed).isNotEmpty()
+        assertThat(routeOf("https://www.meeshy.me.evil.example/reset-password#token=t")).isNull()
+        assertThat(routeOf("https://wwwmeeshy.me/reset-password#token=t")).isNull()
+        claimed.forEach { (host, path) ->
+            com.google.common.truth.Truth.assertWithMessage("https://$host$path").that(routeOf("https://$host$path#token=t&email=a%40b.co")).isNotNull()
+        }
+    }
+
+    @Test
+    fun `a magic link without any secret never routes`() {
+        assertThat(routeOf("https://meeshy.me/auth/magic-link")).isNull()
+        assertThat(routeOf("https://meeshy.me/auth/magic-link?via=email")).isNull()
+        assertThat(routeOf("https://meeshy.me/auth/magic-link#token=")).isNull()
+        assertThat(routeOf("https://meeshy.me/auth/magic-link#other=abc")).isNull()
+    }
+
+    private fun tapRoute(vararg data: Pair<String, String>, routeHint: String? = null): String? =
+        LaunchRouter.route(LaunchExtras(tap = me.meeshy.sdk.model.push.PushPayload.decode(mapOf(*data)), routeHint = routeHint))
+
+    @Test
+    fun `an added-to-community tap opens the community detail`() {
+        assertThat(tapRoute("type" to "community_invite", "communityId" to "k1"))
+            .isEqualTo(me.meeshy.app.navigation.graph.CommunityRoutes.detail("k1"))
+    }
+
+    @Test
+    fun `an added-to-community tap without the key keeps its former behaviour`() {
+        assertThat(tapRoute("type" to "community_invite", "communityId" to "")).isNull()
+    }
+
+    @Test
+    fun `a message tap opens the conversation and highlights the message`() {
+        assertThat(tapRoute("type" to "new_message", "conversationId" to "c1", "messageId" to "m1"))
+            .isEqualTo(Routes.chat("c1", "m1"))
+    }
+
+    @Test
+    fun `a post comment tap opens the post, a reel comment opens the reel`() {
+        assertThat(tapRoute("type" to "post_comment", "postId" to "p1")).isEqualTo(Routes.postDetail("p1"))
+        assertThat(tapRoute("type" to "story_thread_reply", "postId" to "p2", "postType" to "REEL"))
+            .isEqualTo(Routes.reels("p2"))
+    }
+
+    @Test
+    fun `a friend request tap opens the sender profile and an account alert the notifications`() {
+        assertThat(tapRoute("type" to "friend_request", "senderId" to "u2")).isEqualTo(Routes.profile("u2"))
+        assertThat(tapRoute("type" to "login_new_device")).isEqualTo(Routes.NOTIFICATIONS)
+    }
+
+    @Test
+    fun `a progression route hint opens the progression screen`() {
+        assertThat(tapRoute("type" to "post_like", routeHint = "progression"))
+            .isEqualTo(me.meeshy.app.navigation.graph.GameRoutes.PROGRESSION)
+    }
+
+    @Test
+    fun `a game notification tap opens the screen the game map names`() {
+        val routes = me.meeshy.app.navigation.graph.GameRoutes
+        assertThat(tapRoute("type" to "level_up")).isEqualTo("progression/level")
+        assertThat(tapRoute("type" to "game_league_result")).isEqualTo("progression/page/league")
+        assertThat(tapRoute("type" to "game_season_step")).isEqualTo("progression/page/season")
+        assertThat(tapRoute("type" to "badge_earned")).isEqualTo("progression/badges")
+        assertThat(routes.route(me.meeshy.sdk.model.game.GameTarget.Home)).isEqualTo(routes.PROGRESSION)
+    }
+
+    @Test
+    fun `a tap with nothing actionable yields no route`() {
+        assertThat(tapRoute("type" to "post_like")).isNull()
+        assertThat(LaunchRouter.route(LaunchExtras())).isNull()
+    }
+
+    // #13527 — un média partagé par une autre app s'ouvre dans l'hôte du composeur, une seule fois.
+    @Test
+    fun `a shared media seed opens the composer host on the share door`() {
+        val seed = "AbCdEfGhIjKlMnOpQrStUv"
+        assertThat(LaunchRouter.route(LaunchExtras(composerSeed = seed))).isEqualTo("composer?origin=share&seed=$seed")
+    }
+
+    @Test
+    fun `a seed without the shape of the store's tokens opens nothing, and a call or a tap wins over it`() {
+        assertThat(LaunchRouter.route(LaunchExtras(composerSeed = "../../etc"))).isNull()
+        assertThat(LaunchRouter.route(LaunchExtras(composerSeed = ""))).isNull()
+        assertThat(LaunchRouter.route(LaunchExtras(callId = "c1", composerSeed = "AbCdEfGhIjKlMnOpQrStUv"))).startsWith("call")
+        assertThat(LaunchRouter.route(LaunchExtras(conversationId = "conv-1", composerSeed = "AbCdEfGhIjKlMnOpQrStUv")))
+            .isEqualTo(Routes.chat("conv-1"))
+    }
+
+    @Test
+    fun `a recreated activity never reopens the composer on a seed already taken`() {
+        val route = "composer?origin=share&seed=AbCdEfGhIjKlMnOpQrStUv"
+        assertThat(LaunchRouter.onCreateRoute(route, restored = true)).isNull()
+        assertThat(LaunchRouter.onCreateRoute(route, restored = false)).isEqualTo(route)
+    }
+
+    @Test
+    fun `un push de commentaire sur une story reel ouvre le reel`() {
+        assertThat(tapRoute("type" to "post_comment", "postId" to "p9", "postType" to "REEL", "commentId" to "c1"))
+            .isEqualTo(Routes.reels("p9"))
+    }
+
+    @Test
+    fun `un push sans type ni destination n ouvre rien`() {
+        assertThat(LaunchRouter.route(LaunchExtras())).isNull()
+    }
+
+    @Test
+    fun `l appel entrant garde la priorite sur un push de message`() {
+        val extras = LaunchExtras(
+            callId = "call1",
+            conversationId = "c1",
+            tap = me.meeshy.sdk.model.push.PushPayload.decode(mapOf("type" to "new_message", "conversationId" to "c1")),
+        )
+        assertThat(LaunchRouter.route(extras)).isEqualTo(
+            CallRoute.incoming(callId = "call1", conversationId = "c1", callerName = "", isVideo = false, autoAnswer = false, callerId = ""),
+        )
+    }
+
+    @Test
+    fun `un push destine a un autre compte que celui connecte n ouvre rien`() {
+        val extras = LaunchExtras(
+            tap = me.meeshy.sdk.model.push.PushPayload.decode(
+                mapOf("type" to "new_message", "conversationId" to "c1", "recipientUserId" to "u-other"),
+            ),
+        )
+        assertThat(LaunchRouter.route(extras, signedInUserId = "u-me")).isNull()
+        assertThat(LaunchRouter.route(extras, signedInUserId = "u-other")).isEqualTo(Routes.chat("c1", null))
+        assertThat(LaunchRouter.route(extras, signedInUserId = null)).isEqualTo(Routes.chat("c1", null))
     }
 }

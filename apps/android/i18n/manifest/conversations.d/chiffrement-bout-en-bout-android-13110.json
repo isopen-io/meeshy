@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "androidName": "conversations_preview_end_to_end",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

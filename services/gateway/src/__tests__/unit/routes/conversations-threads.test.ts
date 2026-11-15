@@ -31,9 +31,10 @@ jest.mock('../../../utils/conversation-id-cache', () => ({
 }));
 
 const mockCanAccessConversation = jest.fn<any>().mockResolvedValue(true);
-jest.mock('../../../routes/conversations/utils/access-control', () => ({
-  canAccessConversation: (...a: any[]) => mockCanAccessConversation(...a),
-}));
+jest.mock('../../../routes/conversations/utils/access-control', () =>
+  (jest.requireActual('../../helpers/acces-conversation-double') as any).doubleAccesConversation(
+    jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>,
+    (...a: any[]) => mockCanAccessConversation(...a)));
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
@@ -77,6 +78,16 @@ function makePrisma(overrides: any = {}) {
       findFirst: jest.fn<any>().mockResolvedValue(MOCK_PARENT_MESSAGE),
       findMany: jest.fn<any>().mockResolvedValue([]),
       ...overrides.message,
+    },
+    // La ligne du LECTEUR, lue pour son plancher d'historique. `null` = pas de
+    // ligne, donc rien ne borne — le défaut de tout ce fichier.
+    participant: {
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+      ...overrides.participant,
+    },
+    conversationShareLink: {
+      findUnique: jest.fn<any>().mockResolvedValue(null),
+      ...overrides.conversationShareLink,
     },
     ...overrides,
   };
@@ -145,9 +156,9 @@ describe('GET /conversations/:id/threads/:messageId — access denied', () => {
     await app.close();
   });
 
-  it('returns 403 when user has no access to the conversation', async () => {
+  it('returns the 404 of an unknown conversation when user has no access to it (#8116)', async () => {
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MESSAGE_ID}` });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
   });
 });
 
@@ -239,5 +250,168 @@ describe('GET /conversations/:id/threads/:messageId — service error', () => {
   it('returns 500 on service error', async () => {
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MESSAGE_ID}` });
     expect(res.statusCode).toBe(500);
+  });
+});
+
+// ─── Plancher d'historique ────────────────────────────────────────────────────
+//
+// Un fil est une porte sur l'historique comme une autre : sa racine et ses
+// réponses obéissent au plancher du lecteur (`services/historyFloor`), le même
+// que `GET messages`. Une racine d'AVANT l'arrivée n'existe pas pour lui — 404,
+// comme pour un message masqué.
+
+describe('GET /conversations/:id/threads/:messageId — plancher d’historique du lecteur', () => {
+  const JOINED_AT = new Date('2026-06-15T00:00:00Z');
+  const memberRow = (over: Record<string, unknown> = {}) => ({
+    role: 'member',
+    joinedAt: JOINED_AT,
+    shareLinkId: null,
+    historyVisibleFrom: null,
+    permissions: { canViewHistory: false },
+    anonymousSession: null,
+    ...over,
+  });
+
+  it('borne la racine ET les réponses à `joinedAt` pour un membre au droit figé fermé', async () => {
+    const findFirst = jest.fn<any>().mockResolvedValue(MOCK_PARENT_MESSAGE);
+    const findMany = jest.fn<any>().mockResolvedValue([]);
+    const app = await buildApp({
+      prismaOverrides: {
+        message: { findFirst, findMany },
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(memberRow()) },
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MESSAGE_ID}` });
+    expect(res.statusCode).toBe(200);
+    expect(findFirst.mock.calls[0][0].where).toMatchObject({ id: MESSAGE_ID, createdAt: { gte: JOINED_AT } });
+    expect(findMany.mock.calls[0][0].where).toMatchObject({ replyToId: { in: [MESSAGE_ID] }, createdAt: { gte: JOINED_AT } });
+    await app.close();
+  });
+
+  it('cherche la ligne du lecteur INSCRIT par `userId`', async () => {
+    const participantFindFirst = jest.fn<any>().mockResolvedValue(memberRow());
+    const app = await buildApp({ prismaOverrides: { participant: { findFirst: participantFindFirst } } });
+
+    await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MESSAGE_ID}` });
+    expect(participantFindFirst.mock.calls[0][0].where).toEqual({ userId: USER_ID, conversationId: CONV_RESOLVED_ID, isActive: true });
+    await app.close();
+  });
+
+  it('ouvre tout à un administrateur de la conversation', async () => {
+    const findFirst = jest.fn<any>().mockResolvedValue(MOCK_PARENT_MESSAGE);
+    const app = await buildApp({
+      prismaOverrides: {
+        message: { findFirst, findMany: jest.fn<any>().mockResolvedValue([]) },
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(memberRow({ role: 'admin' })) },
+      },
+    });
+
+    await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MESSAGE_ID}` });
+    expect(findFirst.mock.calls[0][0].where.createdAt).toBeUndefined();
+    await app.close();
+  });
+
+  it('ouvre depuis la DATE octroyée par un administrateur', async () => {
+    const GRANTED_FROM = new Date('2026-01-01T00:00:00Z');
+    const findFirst = jest.fn<any>().mockResolvedValue(MOCK_PARENT_MESSAGE);
+    const app = await buildApp({
+      prismaOverrides: {
+        message: { findFirst, findMany: jest.fn<any>().mockResolvedValue([]) },
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(memberRow({ historyVisibleFrom: GRANTED_FROM })) },
+      },
+    });
+
+    await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MESSAGE_ID}` });
+    expect(findFirst.mock.calls[0][0].where.createdAt).toEqual({ gte: GRANTED_FROM });
+    await app.close();
+  });
+
+  it('rend 500, jamais le fil, quand le plancher est ILLISIBLE — contrôle d’accès fail-closed', async () => {
+    const findFirst = jest.fn<any>().mockResolvedValue(MOCK_PARENT_MESSAGE);
+    const app = await buildApp({
+      prismaOverrides: {
+        message: { findFirst, findMany: jest.fn<any>().mockResolvedValue([]) },
+        participant: { findFirst: jest.fn<any>().mockRejectedValue(new Error('mongo down')) },
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MESSAGE_ID}` });
+    expect(res.statusCode).toBe(500);
+    expect(findFirst).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe('GET /conversations/:id/threads/:messageId — #9646 pièce protégée', () => {
+  const READER = 'cccccccccccccccccccccc01';
+  const PIECE = 'aaaaaaaaaaaaaaaaaaaaaaa1';
+  const KEY = '2026/10/68f2a81417a557e8ce4ddfc1/photo.jpg';
+
+  async function servedParentFileUrl(pieceIsViewOnce: boolean): Promise<string> {
+    process.env.ATTACHMENT_URL_SIGNING_KEY = Buffer.alloc(32, 5).toString('base64');
+    mockResolveConversationId.mockResolvedValue(CONV_RESOLVED_ID);
+    mockCanAccessConversation.mockResolvedValue(true);
+    const parent = { ...MOCK_PARENT_MESSAGE, attachments: [{ id: PIECE, messageId: MESSAGE_ID, fileName: 'photo.jpg', mimeType: 'image/jpeg', fileUrl: KEY }] };
+    const app = await buildApp({
+      prismaOverrides: {
+        message: { findFirst: jest.fn<any>().mockResolvedValue(parent), findMany: jest.fn<any>().mockResolvedValue([]) },
+        participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: READER, joinedAt: new Date(0), shareLinkId: null }) },
+        messageAttachment: { findMany: jest.fn<any>().mockResolvedValue([{ id: PIECE, isViewOnce: pieceIsViewOnce, isBlurred: false, effectFlags: 0 }]) },
+      },
+    });
+    try {
+      const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MESSAGE_ID}` });
+      return res.json().data.parent.attachments[0].fileUrl;
+    } finally {
+      await app.close();
+      delete process.env.ATTACHMENT_URL_SIGNING_KEY;
+    }
+  }
+
+  it('signe pour son lecteur la pièce à vue unique du message parent', async () => {
+    expect(await servedParentFileUrl(true)).toMatch(new RegExp(`^/api/v1/attachments/signed/${PIECE}\\.${READER}\\.`));
+  });
+});
+
+/**
+ * #7388 — le fil de réponses d'un message est une lecture de messages comme les
+ * autres : un lien de partage ÉCHU en ferme la porte, comme sur
+ * `GET .../messages`.
+ */
+describe('GET /conversations/:id/threads/:messageId — lien de partage échu (#7388)', () => {
+  const LINK_ID = '507f1f77bcf86cd7994390aa';
+
+  async function threadWithLink(expiresAt: Date) {
+    mockResolveConversationId.mockResolvedValue(CONV_RESOLVED_ID);
+    mockCanAccessConversation.mockResolvedValue(true);
+    const app = await buildApp({
+      prismaOverrides: {
+        participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: 'reader-part', joinedAt: new Date(0), shareLinkId: LINK_ID }) },
+        conversationShareLink: {
+          findUnique: jest.fn<any>().mockResolvedValue({ id: LINK_ID, allowViewHistory: true, expiresAt }),
+          findFirst: jest.fn<any>().mockResolvedValue({ id: LINK_ID, allowViewHistory: true, expiresAt }),
+        },
+      },
+    });
+    try {
+      return await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MESSAGE_ID}` });
+    } finally {
+      await app.close();
+    }
+  }
+
+  it('refuse 403 SHARE_LINK_EXPIRED et ne sert pas le message parent', async () => {
+    const res = await threadWithLink(new Date('2020-01-01T00:00:00.000Z'));
+    expect(res.statusCode).toBe(403);
+    expect(res.json().success).toBe(false);
+    expect(res.json().data).toBeUndefined();
+    expect(res.payload).not.toContain('Parent message');
+  });
+
+  it('sert le fil quand le lien est vivant', async () => {
+    const res = await threadWithLink(new Date('2999-01-01T00:00:00.000Z'));
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toContain('Parent message');
   });
 });

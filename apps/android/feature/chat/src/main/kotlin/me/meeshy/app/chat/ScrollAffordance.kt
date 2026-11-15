@@ -3,7 +3,7 @@ package me.meeshy.app.chat
 import me.meeshy.ui.component.bubble.BubbleContent
 
 /** How the newest unread message renders on the scroll-to-bottom control's preview. */
-enum class UnreadPreviewKind { Text, Image, File }
+enum class UnreadPreviewKind { Text, Image, File, Audio }
 
 /** A compact preview of the newest unread message, shown beside the scroll-to-bottom control. */
 data class UnreadPreview(
@@ -11,6 +11,8 @@ data class UnreadPreview(
     val senderName: String?,
     val text: String,
     val kind: UnreadPreviewKind,
+    /** Le vocal du message, quand c'est lui que la pastille propose de jouer (▶) ; jamais celui d'un message protégé. */
+    val audioAttachmentId: String? = null,
 )
 
 /**
@@ -27,6 +29,7 @@ data class AffordanceMessage(
     val senderName: String?,
     val text: String,
     val kind: UnreadPreviewKind,
+    val audioAttachmentId: String? = null,
 )
 
 /**
@@ -150,17 +153,35 @@ private fun AffordanceMessage.toPreview() = UnreadPreview(
     senderName = senderName,
     text = text,
     kind = kind,
+    audioAttachmentId = audioAttachmentId,
 )
 
-fun BubbleContent.toAffordanceMessage(): AffordanceMessage = AffordanceMessage(
-    id = messageId,
-    isOutgoing = isOutgoing,
-    isDeleted = isDeleted,
-    senderName = senderName,
-    text = text,
-    kind = when {
-        images.isNotEmpty() -> UnreadPreviewKind.Image
-        files.isNotEmpty() -> UnreadPreviewKind.File
-        else -> UnreadPreviewKind.Text
-    },
-)
+fun BubbleContent.toAffordanceMessage(): AffordanceMessage {
+    val playable = playableUnreadVoice()
+    return AffordanceMessage(
+        id = messageId,
+        isOutgoing = isOutgoing,
+        isDeleted = isDeleted,
+        senderName = senderName,
+        text = text,
+        kind = when {
+            images.isNotEmpty() -> UnreadPreviewKind.Image
+            files.isNotEmpty() -> UnreadPreviewKind.File
+            playable != null -> UnreadPreviewKind.Audio
+            else -> UnreadPreviewKind.Text
+        },
+        audioAttachmentId = playable,
+    )
+}
+
+/**
+ * Le vocal que la pastille propose de jouer (iOS `UnreadPillAttachment`, pièce = `attachments.first`) : la première pièce
+ * vocale d'un message qui n'est que vocal, adressable, et NON protégée — la pièce d'un message à vue unique, flouté,
+ * éphémère ou chiffré ne se joue pas depuis une pastille (message OU pièce : [ChatVoiceQueue.isProtected]).
+ */
+private fun BubbleContent.playableUnreadVoice(): String? {
+    if (images.isNotEmpty() || files.isNotEmpty()) return null
+    val first = audios.firstOrNull() ?: return null
+    if (first.url.isNullOrBlank() || ChatVoiceQueue.isProtected(this, first)) return null
+    return first.attachmentId
+}

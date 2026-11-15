@@ -11,7 +11,7 @@ import SwiftUI
 /// iOS 16 it tracks the previous value itself so callers still receive
 /// `(oldValue, newValue)`.
 ///
-/// # Pourquoi un `ViewModifier` et JAMAIS un `@ViewBuilder` (2026-08-19)
+/// # Pourquoi un `ViewModifier` et JAMAIS un `@ViewBuilder`
 ///
 /// La version précédente branchait l'`if #available` **dans un `@ViewBuilder`
 /// renvoyant `some View`**. Le type produit était alors

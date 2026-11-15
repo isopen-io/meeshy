@@ -230,6 +230,22 @@ final class StatusViewModelTests: XCTestCase {
         XCTAssertEqual(mockStatusService.createCallCount, 1)
     }
 
+    /// L'écho socket de SA propre humeur arrive avant la réponse REST : elle
+    /// était insérée deux fois, deux lignes au même id.
+    func test_setStatus_ownEchoArrivingFirst_keepsASingleRow() async {
+        let createdPost = Self.makeStatusAPIPost(id: "new-status", content: "New mood", moodEmoji: "\u{1F525}", authorId: "me")
+        mockStatusService.createResult = .success(createdPost)
+        sut.subscribeToSocketEvents()
+        mockStatusService.onCreate = { [mockSocket] in
+            mockSocket?.statusCreated.send(createdPost)
+            await withCheckedContinuation { continuation in DispatchQueue.main.async { continuation.resume() } }
+        }
+
+        await sut.setStatus(emoji: "\u{1F525}", content: "New mood")
+
+        XCTAssertEqual(sut.statuses.filter { $0.id == "new-status" }.count, 1)
+    }
+
     func test_setStatus_failure_doesNotCreateLocalEntry() async {
         mockStatusService.createResult = .failure(APIError.networkError(URLError(.timedOut)))
 
@@ -667,6 +683,16 @@ final class StatusViewModelTests: XCTestCase {
         XCTAssertEqual(result?.id, "lookup-entry")
     }
 
+    /// Une humeur éteinte ne se lit plus, même si la liste (servie par le cache) la porte encore.
+    func test_statusForUser_ignoresAnExpiredMood() {
+        let entry = makeStatusEntry(id: "mood", userId: "friend")
+        sut.statuses = [entry]
+
+        XCTAssertNotNil(sut.statusForUser(userId: "friend"), "Vivante, l'humeur se lit.")
+        XCTAssertNil(sut.statusForUser(userId: "friend", now: Date().addingTimeInterval(7200)),
+                     "Expirée (une heure de vie, lue deux heures plus tard), elle ne se lit plus.")
+    }
+
     func test_statusForUser_returnsNilForUnknownUser() {
         let entry = makeStatusEntry(userId: "known-user")
         sut.statuses = [entry]
@@ -695,7 +721,7 @@ final class StatusViewModelTests: XCTestCase {
     func test_currentUserDisplayName_fallsBackToMoi() {
         mockAuthManager.currentUser = nil
 
-        XCTAssertEqual(sut.currentUserDisplayName, "Moi")
+        XCTAssertEqual(sut.currentUserDisplayName, String(localized: "common.me", defaultValue: "Moi", bundle: .main))
     }
 
     func test_currentUserInitial_usesFirstName() {
@@ -757,6 +783,23 @@ final class StatusViewModelTests: XCTestCase {
         let handler = sut.moodTapHandler(for: "no-status-user")
 
         XCTAssertNil(handler, "Should return nil when no status exists for the user")
+    }
+
+    func test_moodSpotlightHandler_returnsNilWhenNoStatus() {
+        XCTAssertNil(sut.moodSpotlightHandler(for: "no-status-user"))
+    }
+
+    func test_moodSpotlightHandler_opensTheMoodPageOfTheLiveStatus() {
+        let entry = makeStatusEntry(userId: "tap-user")
+        sut.statuses = [entry]
+        let controller = StatusBubbleController()
+        var opened: StatusEntry?
+        controller.onOpenSpotlight = { opened = $0 }
+
+        sut.moodSpotlightHandler(for: "tap-user", controller: controller)?(.zero)
+
+        XCTAssertEqual(opened?.id, entry.id)
+        XCTAssertNil(controller.currentEntry, "en conversation, aucune bulle ne s'ouvre")
     }
 
     // MARK: - Status Lifecycle Tests (Point 85)
@@ -983,7 +1026,69 @@ final class StatusViewModelTests: XCTestCase {
 
         await offlineSUT.supersedeRecoveredStatus(clientMutationId: "cmid_mood")
 
-        XCTAssertEqual(queue.cancelCreatePostCalls, ["cmid_mood"])
+        XCTAssertEqual(queue.cancelPendingPublicationCalls, ["cmid_mood"],
+                       "la même annulation gardée que la pastille et le détail (#10331)")
+        XCTAssertTrue(queue.cancelCreatePostCalls.isEmpty)
+    }
+
+    // MARK: - #10331 — une humeur encore dans la file s'annule, elle ne se supprime pas
+
+    private func makePendingMoodSUT(queue: MockOfflineQueue) -> (StatusViewModel, StatusEntry) {
+        let pending = makeStatusEntry(id: ClientMutationId.generate(), userId: "me")
+        let sut = StatusViewModel(
+            mode: .friends,
+            statusService: mockStatusService,
+            socialSocket: mockSocket,
+            authManager: mockAuthManager,
+            offlineQueue: queue
+        )
+        sut.myStatus = pending
+        sut.statuses = [pending]
+        return (sut, pending)
+    }
+
+    func test_clearStatus_onPendingMood_cancelsItsRow_andNeverCallsDelete() async {
+        let queue = MockOfflineQueue()
+        queue.cancelPendingPublicationResult = .removed
+        let (sut, pending) = makePendingMoodSUT(queue: queue)
+
+        await sut.clearStatus()
+
+        XCTAssertEqual(queue.cancelPendingPublicationCalls, [pending.id])
+        XCTAssertEqual(mockStatusService.deleteCallCount, 0, "un cmid n'existe pas côté serveur : aucun DELETE ne part")
+        XCTAssertNil(sut.myStatus)
+        XCTAssertTrue(sut.statuses.isEmpty)
+    }
+
+    func test_clearStatus_onPendingMoodThatCouldNotBeStopped_restoresIt_withoutCallingDelete() async {
+        let queue = MockOfflineQueue()
+        queue.cancelPendingPublicationResult = .failed
+        let (sut, pending) = makePendingMoodSUT(queue: queue)
+
+        await sut.clearStatus()
+
+        XCTAssertEqual(mockStatusService.deleteCallCount, 0)
+        XCTAssertEqual(sut.myStatus?.id, pending.id, "rien n'a été arrêté : l'humeur reste à sa place")
+        XCTAssertEqual(sut.statuses.map(\.id), [pending.id])
+    }
+
+    func test_clearStatus_onServerMood_neverTouchesTheOutbox() async {
+        let queue = MockOfflineQueue()
+        let sut = StatusViewModel(
+            mode: .friends,
+            statusService: mockStatusService,
+            socialSocket: mockSocket,
+            authManager: mockAuthManager,
+            offlineQueue: queue
+        )
+        let entry = makeStatusEntry(id: "665f1c2e9b1d4a0012345678", userId: "me")
+        sut.myStatus = entry
+        sut.statuses = [entry]
+
+        await sut.clearStatus()
+
+        XCTAssertTrue(queue.cancelPendingPublicationCalls.isEmpty)
+        XCTAssertEqual(mockStatusService.deleteCallCount, 1)
     }
 
     // MARK: - Portée du mood (impressions & vues)
@@ -991,35 +1096,50 @@ final class StatusViewModelTests: XCTestCase {
     /// Un mood EST un post (`PostType.STATUS`) et porte `impressionCount` /
     /// `viewCount`, mais AUCUNE surface ne les alimentait : la barre de moods
     /// était le seul contenu du produit dont la portée restait à zéro.
-    func test_trackImpression_flushesTheBatchWithTheStatusSource() async {
+    private func makeMoodReachSUT() -> (sut: StatusViewModel, service: MockPostService, cleanup: () -> Void) {
+        let service = MockPostService()
+        let suite = "mood-reach-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        let batcher = ImpressionBatcher(
+            source: "status", surface: .moodAvatar, postService: service, flushDelay: 60,
+            defaults: defaults, accountId: { "userA" }
+        )
+        let sut = StatusViewModel(
+            mode: .friends,
+            statusService: mockStatusService,
+            socialSocket: mockSocket,
+            authManager: mockAuthManager,
+            postService: service,
+            moodImpressions: batcher
+        )
+        return (sut, service, { defaults.removePersistentDomain(forName: suite) })
+    }
+
+    func test_trackImpression_flushesTheBatchOnTheMoodAvatarSurface() async {
+        let (sut, service, cleanup) = makeMoodReachSUT()
+        defer { cleanup() }
+
         sut.trackImpression("s1")
         sut.trackImpression("s2")
+        await sut.flushImpressions()
 
-        try? await Task.sleep(nanoseconds: 3_400_000_000)
-
-        XCTAssertEqual(mockPostService.recordImpressionsCallCount, 1)
-        XCTAssertEqual(mockPostService.lastRecordImpressionPostIds, ["s1", "s2"])
-        XCTAssertEqual(mockPostService.lastRecordImpressionsSource, "status")
+        XCTAssertEqual(service.recordedSocialEvents, [
+            .impression(postId: "s1", source: "status", surface: .moodAvatar),
+            .impression(postId: "s2", source: "status", surface: .moodAvatar),
+        ])
     }
 
     /// Une impression par APPARITION : revoir le même mood recompte, sinon le
     /// compteur plafonnerait à 1 par lancement d'app.
     func test_trackImpression_countsEveryAppearance_notOncePerStatus() async {
+        let (sut, service, cleanup) = makeMoodReachSUT()
+        defer { cleanup() }
+
         sut.trackImpression("s1")
         sut.trackImpression("s1")
         sut.trackImpression("s1")
+        await sut.flushImpressions()
 
-        try? await Task.sleep(nanoseconds: 3_400_000_000)
-
-        XCTAssertEqual(mockPostService.lastRecordImpressionPostIds, ["s1", "s1", "s1"])
-    }
-
-    func test_markStatusViewed_recordsAUniqueView() async {
-        sut.markStatusViewed("s1")
-
-        try? await Task.sleep(nanoseconds: 200_000_000)
-
-        XCTAssertEqual(mockPostService.viewPostCallCount, 1)
-        XCTAssertEqual(mockPostService.lastViewPostId, "s1")
+        XCTAssertEqual(service.recordedSocialEvents.map(\.postId), ["s1", "s1", "s1"])
     }
 }

@@ -1,0 +1,149 @@
+import Foundation
+
+// MARK: - Le contrat d'une adresse d'API (#4282)
+//
+// Écrit À LA MAIN — tout le reste du dossier est GÉNÉRÉ depuis
+// `services/gateway/route-manifest.json`, via la même dérivation que le
+// catalogue TypeScript (`packages/shared/api/build-catalog.ts`). Un chemin
+// d'API s'écrit à un seul endroit, sur les quatre surfaces.
+
+/// Une adresse servie par la passerelle.
+///
+/// ## Ce que le protocole porte en plus du chemin
+///
+/// Une route porte plus que son chemin, et ce « plus » était jusqu'ici DÉDUIT
+/// du chemin par comparaison de chaîne, dans trois `hasPrefix` d'`APIClient` :
+///
+/// ```swift
+/// let isRefreshOrAuth = endpoint == "/auth/refresh"
+///     || endpoint.hasPrefix("/auth/login") || endpoint.hasPrefix("/auth/register") …
+/// let endpointAllowsRetry = !endpoint.hasPrefix("/signal/")
+/// ```
+///
+/// Une comparaison de préfixe ne rougit jamais quand la route bouge : elle
+/// cesse simplement de matcher, et la politique qu'elle gouvernait disparaît en
+/// silence. Portées par le type, ces décisions deviennent vérifiées par le
+/// compilateur — renommer un cas casse sa redéfinition.
+///
+/// Elles ne sont PAS générées, et c'est délibéré : le manifeste porte
+/// `securityLevel: 'inconnu'` par refus de deviner (#4276), et ce sont de toute
+/// façon des décisions CLIENT (quel jeton attacher, quoi réessayer), pas des
+/// propriétés du serveur. Chaque domaine redéfinit les siennes dans son propre
+/// fichier ; le défaut sert l'écrasante majorité.
+public protocol MeeshyEndpoint: Sendable {
+    /// Le chemin COMPLET tel que la passerelle le sert, préfixe compris.
+    ///
+    /// Complet, et non un suffixe, parce que le manifeste n'est pas
+    /// uniformément préfixé : 7 routes vivent hors de `/api` (`/health`,
+    /// `/info`, `/voice/analysis`…) et 7 sous `/api/…` sans version. Un
+    /// catalogue qui ne stockerait que le suffixe et laisserait la couche de
+    /// transport préfixer `/api/v1` serait FAUX sur ces quatorze routes — c'est
+    /// la raison que `build-catalog.ts` écrit déjà pour la surface web.
+    var path: String { get }
+
+    /// Ce que la requête attache, et ce qu'un 401 doit vouloir dire.
+    var authKind: MeeshyEndpointAuthKind { get }
+
+    /// Ce qui se réessaie, et ce qui échoue vite.
+    var retryPolicy: MeeshyEndpointRetryPolicy { get }
+
+    /// Ce qu'un refus 4xx TRANSPORTE, et donc ce que l'appelant peut en lire.
+    var rejectionPolicy: MeeshyEndpointRejectionPolicy { get }
+}
+
+public extension MeeshyEndpoint {
+    var authKind: MeeshyEndpointAuthKind { .bearer }
+    var retryPolicy: MeeshyEndpointRetryPolicy { .standard }
+    var rejectionPolicy: MeeshyEndpointRejectionPolicy { .opaque }
+
+    /// L'URL absolue, composée depuis l'ORIGINE et non depuis `apiBaseURL`.
+    ///
+    /// `apiBaseURL` porte déjà `/api/v1` ; concaténer un chemin complet avec
+    /// lui doublerait le préfixe. C'est le seul site où cette composition
+    /// s'écrit — les sites d'appel n'ont jamais à savoir laquelle des deux
+    /// bases s'applique à leur route.
+    var absoluteURLString: String {
+        absoluteURLString(apiBaseURL: MeeshyConfig.shared.apiBaseURL)
+    }
+
+    /// La même composition pour un client dont la base d'API est INJECTÉE.
+    ///
+    /// `SyncDeltaClient` écrivait `baseURL + SyncEndpoint.root.path` : l'app
+    /// appelait `/api/v1/api/v1/sync` et la passerelle répondait 404 à chaque
+    /// synchronisation delta (#6539). La garde
+    /// `EndpointBaseURLConcatenationGuardTests` interdit le retour de cette forme.
+    func absoluteURLString(apiBaseURL: String) -> String {
+        MeeshyConfig.origin(ofAPIBaseURL: apiBaseURL) + path
+    }
+}
+
+/// Ce qu'une requête attache comme identité — et donc ce qu'un 401 signifie.
+public enum MeeshyEndpointAuthKind: Sendable, Equatable {
+    /// Le cas nominal : jeton porteur attaché, 401 ⇒ session expirée, un
+    /// rafraîchissement est tenté.
+    case bearer
+
+    /// Aucune identité attachée, et **aucun rafraîchissement** : ces routes
+    /// SERVENT à obtenir un jeton, en demander un pour les appeler bouclerait.
+    case none
+
+    /// Route d'identification : un 401 y signifie « identifiants invalides »,
+    /// jamais « session expirée ». La distinction est celle que
+    /// `APIClient.mapUnauthorized` fait aujourd'hui par `hasPrefix`.
+    case credentials
+}
+
+/// Ce qui se réessaie sur erreur transitoire.
+public enum MeeshyEndpointRetryPolicy: Sendable, Equatable {
+    /// Réessais avec temporisation croissante sur 5xx et erreurs réseau.
+    case standard
+
+    /// Aucun réessai. Le cas connu est le Signal Protocol : son 503 annonce un
+    /// état PERMANENT (« Signal Protocol not available »), jamais une surcharge
+    /// passagère — réessayer brûle 2 s + 4 s de temporisation et ne peut pas
+    /// aboutir, pendant que l'appelant attend son repli.
+    case never
+}
+
+/// Ce qu'un refus 4xx rend à l'appelant.
+///
+/// La distinction n'est pas cosmétique : `.opaque` ne rend qu'une PHRASE, donc
+/// un écran ne peut que la mettre en bandeau ; `.structured` rend le `code`
+/// machine et le `field` visé, donc la phrase peut se poser SOUS la saisie
+/// fautive. C'est la seule différence, et elle décide de ce qu'un formulaire
+/// peut faire d'un refus.
+///
+/// Le défaut est `.opaque` — l'état d'avant #5218 — pour que basculer une route
+/// soit une DÉCLARATION, jamais un effet de bord : les sites qui filtrent
+/// `.server(400, _)` (vérification de téléphone, changement de mot de passe)
+/// continuent de voir la forme qu'ils attendent.
+public enum MeeshyEndpointRejectionPolicy: Sendable, Equatable {
+    /// `MeeshyError.server(statusCode:message:)`. Le cas nominal.
+    case opaque
+
+    /// `MeeshyError.rejected(APIRejection)` sur 400/409 : `code`, `field`,
+    /// `suggestions`, `violations`. Réservé aux routes dont le contrat les
+    /// DOCUMENTE — un code inventé côté client ne serait jamais servi.
+    case structured
+}
+
+/// La MÊME adresse, dont les refus 4xx gardent leur `code` machine
+/// (`MeeshyError.rejected`, `.structured`) au lieu de la seule phrase.
+///
+/// Un appelant qui doit distinguer le refus SERVI par la passerelle (son
+/// enveloppe et son code) d'un 404 d'intermédiaire (Traefik pendant un
+/// déploiement) la demande ainsi, sans changer la forme d'erreur que les autres
+/// appelants de l'adresse filtrent (#14693). Chemin, identité et réessais sont
+/// ceux de l'adresse enveloppée.
+public struct TypedRefusals: MeeshyEndpoint {
+    public let endpoint: any MeeshyEndpoint
+
+    public init(_ endpoint: any MeeshyEndpoint) {
+        self.endpoint = endpoint
+    }
+
+    public var path: String { endpoint.path }
+    public var authKind: MeeshyEndpointAuthKind { endpoint.authKind }
+    public var retryPolicy: MeeshyEndpointRetryPolicy { endpoint.retryPolicy }
+    public var rejectionPolicy: MeeshyEndpointRejectionPolicy { .structured }
+}

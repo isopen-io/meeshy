@@ -1,6 +1,11 @@
 package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.scene.StoryElementTiming
+import me.meeshy.sdk.model.scene.StoryTextBackground
+import me.meeshy.sdk.model.scene.StoryTextDirection
+import me.meeshy.sdk.model.scene.StoryTextFade
+import me.meeshy.sdk.model.scene.StoryTextOutline
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -275,7 +280,11 @@ class StoryTextElementTest {
     @Test
     fun `every style and align exposes a distinct lowercase wire token`() {
         assertThat(StoryTextStyle.entries.map { it.wire })
-            .containsExactly("bold", "neon", "typewriter", "handwriting", "classic")
+            .containsExactly(
+                "bold", "neon", "typewriter", "handwriting", "classic",
+                "calligraphy", "cartoon", "futuristic", "fantasy", "curve", "tag",
+                "italic", "retro", "elegant", "poster", "bubble", "note", "brush",
+            )
         assertThat(StoryTextAlign.entries.map { it.wire })
             .containsExactly("left", "center", "right")
     }
@@ -298,27 +307,35 @@ class StoryTextElementTest {
     }
 
     @Test
-    fun `transformed clamps the scale at the pinch ceiling`() {
+    fun `transformed grows the scale without a ceiling`() {
         val element = StoryTextElement(id = "e1", scale = 3f).transformed(scaleBy = 10f, rotateByDeg = 0f)
-        assertThat(element.scale).isEqualTo(StoryTextElement.MAX_SCALE)
+        assertThat(element.scale).isWithin(1e-4f).of(30f)
     }
 
     @Test
-    fun `transformed clamps the scale at the pinch floor`() {
-        val element = StoryTextElement(id = "e1", scale = 0.5f).transformed(scaleBy = 0.1f, rotateByDeg = 0f)
-        assertThat(element.scale).isEqualTo(StoryTextElement.MIN_SCALE)
+    fun `transformed shrinks a text until its glyphs are 5 design pixels high`() {
+        val element = StoryTextElement(id = "e1", scale = 0.5f).transformed(scaleBy = 0.0001f, rotateByDeg = 0f)
+        val glyph = element.size.designSize.toFloat()
+        assertThat(element.scale).isWithin(1e-6f).of(5f / glyph)
+        assertThat(element.scale * glyph).isWithin(1e-4f).of(5f)
     }
 
     @Test
-    fun `transformed with a non-positive factor collapses to the floor`() {
+    fun `transformed passes below the old 0,3 floor`() {
+        val element = StoryTextElement(id = "e1", scale = 0.5f).transformed(scaleBy = 0.4f, rotateByDeg = 0f)
+        assertThat(element.scale).isWithin(1e-6f).of(0.2f)
+    }
+
+    @Test
+    fun `transformed with a non-positive factor leaves the scale where it is`() {
         val element = StoryTextElement(id = "e1", scale = 2f).transformed(scaleBy = 0f, rotateByDeg = 0f)
-        assertThat(element.scale).isEqualTo(StoryTextElement.MIN_SCALE)
+        assertThat(element.scale).isEqualTo(2f)
     }
 
     @Test
-    fun `transformed with a non-finite factor falls back to the default scale`() {
+    fun `transformed with a non-finite factor leaves the scale where it is`() {
         val element = StoryTextElement(id = "e1", scale = 2f).transformed(scaleBy = Float.NaN, rotateByDeg = 0f)
-        assertThat(element.scale).isEqualTo(StoryTextElement.DEFAULT_SCALE)
+        assertThat(element.scale).isEqualTo(2f)
     }
 
     // --- transformed: rotation ---
@@ -358,11 +375,12 @@ class StoryTextElementTest {
     // --- clampScale / normaliseRotation (the pure rules) ---
 
     @Test
-    fun `clampScale pins out-of-range factors to the bounds and passes through valid ones`() {
-        assertThat(StoryTextElement.clampScale(0.1f)).isEqualTo(StoryTextElement.MIN_SCALE)
-        assertThat(StoryTextElement.clampScale(9f)).isEqualTo(StoryTextElement.MAX_SCALE)
-        assertThat(StoryTextElement.clampScale(2f)).isEqualTo(2f)
-        assertThat(StoryTextElement.clampScale(Float.POSITIVE_INFINITY))
+    fun `servedScale keeps any finite positive factor and collapses the rest to the default`() {
+        assertThat(StoryTextElement.servedScale(0.01f)).isEqualTo(0.01f)
+        assertThat(StoryTextElement.servedScale(90f)).isEqualTo(90f)
+        assertThat(StoryTextElement.servedScale(2f)).isEqualTo(2f)
+        assertThat(StoryTextElement.servedScale(0f)).isEqualTo(StoryTextElement.DEFAULT_SCALE)
+        assertThat(StoryTextElement.servedScale(Float.POSITIVE_INFINITY))
             .isEqualTo(StoryTextElement.DEFAULT_SCALE)
     }
 
@@ -381,9 +399,9 @@ class StoryTextElementTest {
     // --- normalised covers scale + rotation too ---
 
     @Test
-    fun `normalised clamps an out-of-range scale and wraps rotation`() {
+    fun `normalised keeps a large scale and wraps rotation`() {
         val element = StoryTextElement(id = "e1", scale = 99f, rotationDeg = 450f).normalised()
-        assertThat(element.scale).isEqualTo(StoryTextElement.MAX_SCALE)
+        assertThat(element.scale).isEqualTo(99f)
         assertThat(element.rotationDeg).isWithin(1e-4f).of(90f)
     }
 
@@ -418,5 +436,26 @@ class StoryTextElementTest {
     fun `an arabic caption lays out right-to-left`() {
         assertThat(StoryTextElement(id = "e1", text = "مرحبا").baseDirection)
             .isEqualTo(StoryTextDirection.RTL)
+    }
+
+    // --- effect preset (#4870) ---
+
+    /**
+     * A style is a FONT; the glow this composer shows under "neon" is published on the
+     * EFFECT axis so the reader — here, on the web, on iOS — sees what the author saw.
+     */
+    @Test
+    fun `toTextObject publishes the glow of the NEON preset on the effect axis`() {
+        val wire = StoryTextElement(id = "e1", text = "Salut", style = StoryTextStyle.NEON)
+            .toTextObject(sourceLanguage = "fr")
+        assertThat(wire.textEffect).isEqualTo("glow")
+    }
+
+    @Test
+    fun `toTextObject publishes no effect for a style that does not glow`() {
+        StoryTextStyle.entries.filter { it != StoryTextStyle.NEON }.forEach { style ->
+            val wire = StoryTextElement(id = "e1", text = "Salut", style = style).toTextObject(sourceLanguage = "fr")
+            assertThat(wire.textEffect).isNull()
+        }
     }
 }

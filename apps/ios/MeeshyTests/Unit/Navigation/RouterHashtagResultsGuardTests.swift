@@ -14,12 +14,13 @@ final class RouterHashtagResultsGuardTests: XCTestCase {
     }
 
     func test_route_hasHashtagResultsCase() throws {
-        let source = try sourceWithoutComments("Meeshy/Features/Main/Navigation/Router.swift")
+        let source = try sourceWithoutComments("Meeshy/Features/Navigation/Router.swift")
         XCTAssertTrue(source.contains("case hashtagResults(tag: String)"))
     }
 
     func test_rootView_rendersHashtagResultsView_forHashtagResultsRoute() throws {
-        let source = try sourceWithoutComments("Meeshy/Features/Main/Views/RootView.swift")
+        // Le `switch` de routes vit dans `RootRouteDestination` (#5837).
+        let source = try sourceWithoutComments("Meeshy/Features/Main/Views/RootLayers/RootRouteDestination.swift")
         XCTAssertTrue(source.contains("case .hashtagResults(let tag):"))
         XCTAssertTrue(source.contains("HashtagResultsView(tag: tag)"))
     }

@@ -5,12 +5,14 @@
  * verifies comment existence instead of conversation-participant membership.
  */
 
+import { notePairInteraction } from './relations/pairInteractionRecorder.js';
 import { PrismaClient, CommentReaction } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
 import type { CommentReactionAggregation } from '@meeshy/shared/types/post';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
-import { ConflictError } from '../errors/custom-errors';
 import { assertValidObjectId } from '../utils/object-id.js';
+import { EngagementService } from './engagement/EngagementService';
+import { creditPostEngagement, creditSource, reclaimContentCredits, type PostEngagementRecorder } from './posts/postEngagementCredits';
 
 export interface CommentReactionData {
   readonly id: string;
@@ -79,7 +81,16 @@ export class CommentReactionService {
     assertValidObjectId(commentId, 'comment');
   }
 
-  constructor(private readonly prisma: PrismaClient) {}
+  /**
+   * `engagement` : le crédit `tool.comment_like` (#8959). Ce chemin (socket)
+   * et `PostCommentService.likeComment` (REST, son repli) écrivent la même
+   * ligne `CommentReaction` ; chacun ne crédite que si la ligne n'existait pas
+   * avant lui — le repli qui passe derrière un socket réussi ne recrédite pas.
+   */
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly engagement: PostEngagementRecorder = new EngagementService(prisma),
+  ) {}
 
   async addReaction(options: AddCommentReactionOptions): Promise<AddCommentReactionResult | null> {
     const { commentId, userId, emoji } = options;
@@ -149,6 +160,15 @@ export class CommentReactionService {
       });
 
       await this.updateCommentReactionSummary(commentId);
+      // Les cercles (#13932) : réagir au commentaire de l'autre compte pour la paire.
+      notePairInteraction(this.prisma, { actorId: userId, otherId: comment.authorId, nature: 'reaction', at: reaction.createdAt });
+      creditPostEngagement(
+        this.prisma,
+        userId,
+        'tool.comment_like',
+        { postId: comment.postId, targetId: commentId, targetOwnerId: comment.authorId, receipt: creditSource.commentReaction(reaction.id) },
+        this.engagement,
+      );
 
       return { ...this.mapReactionToData(reaction), unchanged: false };
     } catch (err: unknown) {
@@ -173,6 +193,10 @@ export class CommentReactionService {
       throw new Error('Invalid emoji format');
     }
 
+    const removed = await this.prisma.commentReaction.findMany({
+      where: { commentId, userId, emoji: sanitized },
+      select: { id: true },
+    });
     const result = await this.prisma.commentReaction.deleteMany({
       where: {
         commentId,
@@ -183,6 +207,8 @@ export class CommentReactionService {
 
     if (result.count > 0) {
       await this.updateCommentReactionSummary(commentId);
+      // Retirer le like reprend ce qu'il a rapporté (#9584).
+      removed.forEach(({ id }) => reclaimContentCredits(this.prisma, userId, creditSource.commentReaction(id), this.engagement));
     }
 
     return result.count > 0;

@@ -3,8 +3,13 @@
  *
  * Covers pure functions: validateMentionCount, messageValidationHook,
  * createPostRouteRateLimitConfig, createSignalProtocolRateLimitConfig.
- * Also covers registerMessageRateLimiter and registerGlobalRateLimiter
- * with a mocked Fastify to exercise all plugin option callbacks.
+ * Also covers registerGlobalRateLimiter with a mocked Fastify to exercise all
+ * plugin option callbacks.
+ *
+ * `registerMessageRateLimiter` a été SUPPRIMÉ par #4687 : enregistreur global
+ * (20 msg/min) qu'aucun appelant de production n'invoquait, dont le
+ * `keyGenerator` annonçait `msg:${userId}` et rendait l'adresse — un patron à
+ * copier, pas un limiteur. Ses témoins partent avec lui.
  *
  * @jest-environment node
  */
@@ -28,8 +33,8 @@ import {
   validateMentionCount,
   messageValidationHook,
   createPostRouteRateLimitConfig,
+  createContactChangeRateLimitConfig,
   createSignalProtocolRateLimitConfig,
-  registerMessageRateLimiter,
   registerGlobalRateLimiter,
 } from '../../../middleware/rate-limiter';
 
@@ -136,11 +141,19 @@ describe('createPostRouteRateLimitConfig', () => {
   const cases: Array<[Parameters<typeof createPostRouteRateLimitConfig>[0], number]> = [
     ['create', 10],
     ['like', 30],
-    ['view', 60],
+    // #10403 — une vue par réel défilé : un défilement de réels en enchaîne
+    // bien plus de 60 par minute, et la passerelle dédoublonne déjà la vue par
+    // (post, compte). Un plafond bas ne protégeait rien et jetait les PREMIÈRES
+    // vues réelles des réels suivants (prod, 2026-10-12 : 1430 × 429 sur /view).
+    ['view', 240],
     ['comment', 20],
     // Une impression par APPARITION à l'écran (et non plus une par post et par
     // session) : un aller-retour de scroll produit légitimement plusieurs lots.
     ['impression', 30],
+    // #10403 — la route UNITAIRE émet une impression par apparition : son seau
+    // est celui du COMPTE, à la mesure d'un défilement de réels, et non plus le
+    // seau global de 300/min par ADRESSE partagé avec tout le trafic.
+    ['impressionUnit', 240],
     ['engagement', 20],
   ];
 
@@ -156,10 +169,32 @@ describe('createPostRouteRateLimitConfig', () => {
     expect(cfg.keyGenerator(req)).toBe('posts:create:u-42');
   });
 
-  it('keyGenerator falls back to IP when authContext is absent', () => {
+  it('keyGenerator sans compte compte par EMPREINTE d’adresse, jamais l’adresse en clair (#10483)', () => {
     const cfg = createPostRouteRateLimitConfig('like') as any;
-    const req = { ip: '9.9.9.9' };
-    expect(cfg.keyGenerator(req)).toBe('posts:like:ip:9.9.9.9');
+    const key = cfg.keyGenerator({ ip: '9.9.9.9', headers: {} });
+    expect(key).toMatch(/^posts:like:addr:[0-9a-f]{64}$/);
+    expect(key).not.toContain('9.9.9.9');
+    expect(cfg.keyGenerator({ ip: '9.9.9.9', headers: {} })).toBe(key);
+  });
+
+  it('keyGenerator ne verse pas tous les visiteurs dans UN seau — le contexte non authentifié (userId « anonymous ») compte par adresse (#10483)', () => {
+    const cfg = createPostRouteRateLimitConfig('impression') as any;
+    const visiteur = (ip: string) => ({ authContext: { isAuthenticated: false, isAnonymous: true, userId: 'anonymous' }, ip, headers: {} });
+    expect(cfg.keyGenerator(visiteur('9.9.9.9'))).not.toContain('9.9.9.9');
+    expect(cfg.keyGenerator(visiteur('8.8.8.8'))).not.toBe(cfg.keyGenerator(visiteur('9.9.9.9')));
+  });
+
+  it('keyGenerator d’un lecteur à X-Session-Token : un seau par lecteur, même derrière une IP partagée (#10483)', () => {
+    const cfg = createPostRouteRateLimitConfig('impression') as any;
+    const lecteur = (token: string) => ({
+      authContext: { isAuthenticated: false, isAnonymous: true, userId: 'anonymous' },
+      ip: '203.0.113.5',
+      headers: { 'x-session-token': token },
+    });
+    const a = cfg.keyGenerator(lecteur('visitor_a'));
+    expect(a).toMatch(/^posts:impression:reader:[0-9a-f]{64}$/);
+    expect(a).not.toContain('visitor_a');
+    expect(cfg.keyGenerator(lecteur('visitor_b'))).not.toBe(a);
   });
 
   it('errorResponseBuilder returns 429 shape', () => {
@@ -231,57 +266,6 @@ describe('createSignalProtocolRateLimitConfig', () => {
   });
 });
 
-// ─── registerMessageRateLimiter ───────────────────────────────────────────────
-
-describe('registerMessageRateLimiter', () => {
-  it('registers the @fastify/rate-limit plugin', async () => {
-    const fastify = makeFastify();
-    await registerMessageRateLimiter(fastify as any);
-    expect(fastify.register).toHaveBeenCalledTimes(1);
-  });
-
-  describe('registered options callbacks', () => {
-    async function getOpts() {
-      const fastify = makeFastify();
-      await registerMessageRateLimiter(fastify as any);
-      return (fastify.register as jest.Mock).mock.calls[0][1] as Record<string, any>;
-    }
-
-    it('max is 20 and timeWindow is 1 minute', async () => {
-      const opts = await getOpts();
-      expect(opts.max).toBe(20);
-      expect(opts.timeWindow).toBe('1 minute');
-    });
-
-    it('keyGenerator uses userId from authContext', async () => {
-      const opts = await getOpts();
-      const req = { authContext: { userId: 'u-99' }, ip: '5.5.5.5' };
-      expect(opts.keyGenerator(req)).toBe('msg:u-99');
-    });
-
-    it('keyGenerator falls back to IP when no authContext', async () => {
-      const opts = await getOpts();
-      const req = { ip: '6.6.6.6' };
-      expect(opts.keyGenerator(req)).toBe('msg:ip:6.6.6.6');
-    });
-
-    it('errorResponseBuilder returns 429 shape with retryAfter', async () => {
-      const opts = await getOpts();
-      const body = opts.errorResponseBuilder({}, { ttl: 30 });
-      expect(body.success).toBe(false);
-      expect(body.statusCode).toBe(429);
-      expect(body.retryAfter).toBe(30);
-    });
-
-    it('addHeaders hides x-ratelimit headers', async () => {
-      const opts = await getOpts();
-      expect(opts.addHeaders?.['x-ratelimit-limit']).toBe(false);
-      expect(opts.addHeaders?.['x-ratelimit-remaining']).toBe(false);
-      expect(opts.addHeaders?.['x-ratelimit-reset']).toBe(false);
-    });
-  });
-});
-
 // ─── registerGlobalRateLimiter ────────────────────────────────────────────────
 
 describe('registerGlobalRateLimiter', () => {
@@ -332,6 +316,9 @@ describe('registerGlobalRateLimiter', () => {
       expect(opts.allowList({ url: '/health', ip: '8.8.8.8' })).toBe(true);
       expect(opts.allowList({ url: '/healthz', ip: '8.8.8.8' })).toBe(true);
       expect(opts.allowList({ url: '/ready', ip: '8.8.8.8' })).toBe(true);
+      // La sonde de disponibilité de #4219 : un 429 la ferait conclure
+      // « instance morte » et redémarrer le conteneur.
+      expect(opts.allowList({ url: '/api/v1/health/ready', ip: '8.8.8.8' })).toBe(true);
     });
 
     /**
@@ -365,5 +352,47 @@ describe('registerGlobalRateLimiter', () => {
       expect(body.statusCode).toBe(429);
       expect(body.retryAfter).toBe(15);
     });
+  });
+});
+
+// ─── createContactChangeRateLimitConfig (#4184) ───────────────────────────────
+
+describe('createContactChangeRateLimitConfig', () => {
+  const cas: Array<[Parameters<typeof createContactChangeRateLimitConfig>[0], number]> = [
+    ['initiate', 3],
+    ['verify', 10],
+    ['resend', 5],
+  ];
+
+  it.each(cas)('%s plafonne a %i par heure', (type, max) => {
+    const cfg = createContactChangeRateLimitConfig(type) as any;
+    expect(cfg.max).toBe(max);
+    expect(cfg.timeWindow).toBe('1 hour');
+  });
+
+  /**
+   * Le temoin qui compte vraiment. Sans `keyGenerator`, `mergeParams` du
+   * plugin (un `Object.assign`) fait heriter la cle GLOBALE
+   * `global:${request.ip}` — l'ADRESSE de l'appelant, `trustProxy` etant pose
+   * depuis #4137. Un plafond « 3/h par compte » compterait alors par adresse,
+   * ce qui se trompe dans les DEUX sens : plusieurs comptes derriere une meme
+   * sortie (operateur mobile, bureau, NAT) se partagent un credit prevu pour
+   * un seul, et un meme compte disposant de plusieurs adresses en obtient
+   * autant de credits.
+   */
+  it('la cle est celle du COMPTE, jamais l\'adresse de l\'appelant', () => {
+    const cfg = createContactChangeRateLimitConfig('initiate') as any;
+    const req = { authContext: { userId: 'u-42' }, ip: '10.0.0.7' };
+    expect(cfg.keyGenerator(req)).toBe('contact-change:initiate:u-42');
+  });
+
+  it('retombe sur l\'IP seulement en l\'absence de compte', () => {
+    const cfg = createContactChangeRateLimitConfig('verify') as any;
+    expect(cfg.keyGenerator({ ip: '10.0.0.7' })).toBe('contact-change:verify:ip:10.0.0.7');
+  });
+
+  it('rend un 429 structure', () => {
+    const cfg = createContactChangeRateLimitConfig('resend') as any;
+    expect(cfg.errorResponseBuilder()).toMatchObject({ success: false, statusCode: 429 });
   });
 });

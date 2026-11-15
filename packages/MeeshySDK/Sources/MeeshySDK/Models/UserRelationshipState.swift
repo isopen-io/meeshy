@@ -37,6 +37,11 @@ public enum UserRelationshipState: Equatable, Sendable {
 /// callers from other isolation domains must hop to the main actor first.
 @MainActor
 public final class UserRelationshipResolver {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     private let friendshipCache: FriendshipCache
     private let blockService: BlockServiceProviding
     private let currentUserIdProvider: () -> String?

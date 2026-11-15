@@ -40,12 +40,20 @@ public protocol TimelineEngineProviding: AnyObject {
 
 @MainActor
 public final class TimelineViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     // MARK: - State observable by Views
 
-    @Published public internal(set) var project: TimelineProject
-    @Published public private(set) var currentTime: Float = 0 {
-        didSet { onPlayheadChanged?(currentTime) }
+    @Published public internal(set) var project: TimelineProject { didSet { projectRevision = TimelineProjectRevision.next() } }
+    public private(set) var projectRevision: UInt = TimelineProjectRevision.next() // clé KeyedMemo, unique au processus
+    public let playhead = PlayheadClock() // #9874 : un tick ne publie que sur lui, pas sur ce view model
+    public private(set) var currentTime: Float { // NON publié ici : lire `playhead` pour être réveillé
+        get { playhead.time }
+        set { playhead.move(to: newValue); onPlayheadChanged?(newValue) }
     }
     @Published public private(set) var isPlaying: Bool = false {
         didSet {
@@ -108,7 +116,7 @@ public final class TimelineViewModel: ObservableObject {
     /// écrivait directement `project.slideDuration`, que le premier
     /// `recomputeSlideDuration()` venu écrasait — rien ne distinguait une
     /// valeur posée par l'auteur d'un reste de calcul. C'est ce défaut, et non
-    /// le bouton, qui avait motivé son retrait le 2026-07-27.
+    /// le bouton, qui avait motivé son retrait.
     ///
     /// Traité comme un PLANCHER, pas comme une autorité : un contenu plus long
     /// que la demande l'emporte toujours. « +10 s » n'a jamais servi à rogner.
@@ -249,22 +257,18 @@ public final class TimelineViewModel: ObservableObject {
     // MARK: - Wiring
 
     private func wireEngineCallbacks() {
-        engine.onTimeUpdate = { [weak self] time in
-            self?.currentTime = time
-        }
+        engine.onTimeUpdate = { [weak self] in self?.currentTime = $0 }
         engine.onPlaybackEnd = { [weak self] in
             guard let self else { return }
             self.isPlaying = false
             // Fin de lecture = retour au début (convention transport). La
             // tête laissée à `slideDuration` figeait le canvas du composer
             // sur le dernier instant — éléments hors fenêtre masqués — au
-            // lieu de l'état statique du design (capture user 2026-07-20).
+            // lieu de l'état statique du design.
             self.scrub(to: 0, precise: true)
             self.onPlaybackEnded?()
         }
-        engine.onError = { [weak self] error in
-            self?.errorMessage = error.localizedDescription
-        }
+        engine.onError = { [weak self] in self?.errorMessage = $0.localizedDescription }
         engine.onElementBecameActive = { [weak self] elementId in
             // Surface to selection so the inspector reflects the active clip
             // when playback crosses a clip boundary. Read-only signal — does
@@ -337,7 +341,7 @@ public final class TimelineViewModel: ObservableObject {
         // Retour haptique léger au MOMENT où l'aimant accroche (transition
         // non-accroché → accroché), pas à chaque frame.
         if drag.snappedTo != nil, !previouslySnapped {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            HapticFeedback.light()
         }
         selection.updateDrag(currentStartTime: drag.currentStartTime,
                              snappedTo: drag.snappedTo)
@@ -371,6 +375,12 @@ public final class TimelineViewModel: ObservableObject {
         }
         for s in project.stickerObjects {
             addEdges(id: s.id, start: Float(s.startTime ?? 0), duration: Float(s.duration ?? 0))
+        }
+        // Le doc-comment promet « les bords de chaque AUTRE objet du canvas » —
+        // il en manquait un (#4840). Même mécanique que le résolveur de clip
+        // actif : sans fenêtre atteignable, l'absence ne se voyait pas.
+        for l in project.locationObjects {
+            addEdges(id: l.id, start: Float(l.startTime ?? 0), duration: Float(l.duration ?? 0))
         }
         return candidates
     }
@@ -423,6 +433,7 @@ public final class TimelineViewModel: ObservableObject {
         if project.audioPlayerObjects.contains(where: { $0.id == id }) { return .audio }
         if project.textObjects.contains(where: { $0.id == id }) { return .text }
         if project.stickerObjects.contains(where: { $0.id == id }) { return .sticker }
+        if project.locationObjects.contains(where: { $0.id == id }) { return .place }
         return nil
     }
 
@@ -439,6 +450,7 @@ public final class TimelineViewModel: ObservableObject {
         if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.startTime ?? 0 }
         if let t = project.textObjects.first(where: { $0.id == id }) { return Float(t.startTime ?? 0) }
         if let s = project.stickerObjects.first(where: { $0.id == id }) { return Float(s.startTime ?? 0) }
+        if let l = project.locationObjects.first(where: { $0.id == id }) { return Float(l.startTime ?? 0) }
         return nil
     }
 
@@ -461,6 +473,11 @@ public final class TimelineViewModel: ObservableObject {
         if let i = project.stickerObjects.firstIndex(where: { $0.id == clipId }) {
             project.stickerObjects[i].startTime = Double(newStartTime)
             recomputeSlideDuration()
+            return
+        }
+        if let i = project.locationObjects.firstIndex(where: { $0.id == clipId }) {
+            project.locationObjects[i].startTime = Double(newStartTime)
+            recomputeSlideDuration()
         }
     }
 
@@ -468,7 +485,7 @@ public final class TimelineViewModel: ObservableObject {
     /// same "longest data wins" rule as `StorySlide.computedTotalDuration()`
     /// (via `StoryEffects.contentDerivedDuration`), so the ruler/track length
     /// always matches what will actually play — never left stale after a
-    /// trim/split/delete/add/move (design doc 2026-07-18). Fires
+    /// trim/split/delete/add/move. Fires
     /// `durationDidAutoAdjust` only when the value actually changes, so a
     /// no-op edit doesn't spam a toast.
     ///
@@ -656,6 +673,7 @@ public final class TimelineViewModel: ObservableObject {
         if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.duration }
         if let t = project.textObjects.first(where: { $0.id == id }) { return t.duration.map { Float($0) } }
         if let s = project.stickerObjects.first(where: { $0.id == id }) { return s.duration.map { Float($0) } }
+        if let l = project.locationObjects.first(where: { $0.id == id }) { return l.duration.map { Float($0) } }
         return nil
     }
 

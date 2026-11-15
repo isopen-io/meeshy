@@ -1,0 +1,691 @@
+import type { ContentTrackingLink } from '@meeshy/shared/types/post';
+import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
+import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
+import { isRepostable } from '@meeshy/shared/utils/repost-audience';
+import { trackingLinksOf } from '@meeshy/shared/utils/text-segments';
+
+import { attachmentPictureSrcSets, attachmentSrc } from '@/lib/api/media-url';
+import { compatibilityRendition } from '@/lib/media/video-rendition';
+import { servedRingOf } from '@/lib/profile-decor/served-ring';
+import type { FeedMedia, FeedPost } from '@/lib/api/feed-pages';
+import { shortRelativeTime } from '@/lib/relative-time';
+import { initialsOf } from '@/lib/view/conversation';
+
+import { resolveMediaAlt, resolveMediaCaption } from '@/lib/api/prism';
+import { parseCanvasDocument, type CanvasDocument } from '@/lib/canvas/document';
+import type { SceneCarrier } from '@/lib/canvas/carrier';
+
+import { feedMediaKindOf, postMediaRatio, reelCardRatio, type FeedMediaKind } from './layout';
+import { resolveMosaicLayout, type MosaicLayoutMode } from './mosaic-layout';
+import { resolveFeedText } from './text';
+import { servedViewerPoints } from './viewer-points';
+import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
+
+/**
+ * LE MODÈLE D'UNE CARTE DU FIL (#5893) — PURE : `resolveFeedCardModel`
+ * transforme un `FeedPost` (la forme du wire, § `feed-pages.ts`) en ce que
+ * `FeedPostCard` PEINT, rien de plus. Séparer les deux, c'est ce qui rend le
+ * calcul testable SANS DOM (motif `ProgressionBody`/`resolveEngagementProgress`,
+ * `routes/progression.tsx`).
+ */
+export type FeedCardMedia = {
+  readonly id: string;
+  readonly kind: FeedMediaKind;
+  /** LE MIME SERVI (#6903) — le porteur d'une scène (`FeedCardScene.carrier`,
+   * ci-dessous) en a besoin pour ÉLIRE son son de fond
+   * (`electBackgroundTrack`, `lib/canvas/background-sound.ts:80` :
+   * `document.sound: { source: 'original' }` élit « le premier média AUDIO
+   * du porteur », PAR le MIME). Sans lui, aucun réel ni post composé du fil
+   * n'a jamais de son de fond — le porteur de STORY le reporte déjà
+   * (`lib/stories/carrier.ts:37`), celui du fil ne le faisait pas. */
+  readonly mimeType?: string;
+  readonly src: string;
+  readonly thumbnailSrc?: string;
+  readonly placeholder?: string;
+  readonly ratio: number;
+  /** MILLISECONDES, comme la passerelle et iOS les servent — voir
+   * `FeedMedia.duration` (`api/feed-pages.ts`). */
+  readonly durationMs?: number;
+  /** #12316 — les `srcset` WebP et AVIF d'une image (`attachmentPictureSrcSets`) ; `src` reste l'original HD. */
+  readonly srcSet?: string;
+  readonly avifSrcSet?: string;
+  /** #12316 — le rendu H.264 de compatibilité d'une vidéo HEVC, résolu ; la surface l'élit (`useElectedVideoSrc`). */
+  readonly compatSrc?: string;
+  readonly compatSize?: number;
+  readonly fileSize?: number;
+  /** LE TEXTE SERVI PAR LE PRISME (#6280, `resolveMediaCaption` — jamais
+   * `PostMedia.caption` brut) : la langue résolue peut différer de la
+   * langue source dès qu'une traduction du lecteur existe.
+   *
+   * **Repli sur le contenu du post (#6864)** — UNIQUEMENT quand ce média est
+   * seul (`post.media.length === 1`) ET ne porte aucune légende propre : le
+   * contenu du post, déjà résolu par le Prisme, en tient lieu. Un post à
+   * PLUSIEURS médias ne pose JAMAIS son texte sur un média qui n'a pas sa
+   * propre légende — le texte décrit le LOT, pas une pièce, et le poser
+   * dessous ferait mentir la légende sur les autres pièces du même post. */
+  readonly caption?: string;
+  /** La langue DANS LAQUELLE `caption` ci-dessus est servie — porte
+   * l'attribut `lang` de la légende affichée (§ Prisme cycle 122 : un
+   * résolveur qui élit la bonne traduction n'a corrigé personne tant qu'on
+   * ne sait pas QUI l'affiche, dans quelle langue). Absente seulement quand
+   * ni `captionLanguage` ni le Prisme n'ont pu la dire. */
+  readonly captionLanguage?: string;
+  /** Vrai quand `caption` est une TRADUCTION de sa source, jamais la source
+   * elle-même. QUELLE source, c'est `captionOrigin` qui le dit — depuis
+   * #6864 une légende peut venir du média OU du post, et ce drapeau seul ne
+   * permettait plus de savoir ce qu'il qualifiait. */
+  readonly captionTranslated?: boolean;
+  /**
+   * **D'OÙ VIENT LA LÉGENDE** (#6864) — `'media'` : la légende PROPRE du
+   * média (`PostMedia.caption`) ; `'post'` : le contenu du post, servi en
+   * l'absence de légende propre ET seulement sur un média UNIQUE.
+   *
+   * Ce marqueur n'est pas décoratif : les deux provenances portent des
+   * traductions DIFFÉRENTES — `PostMedia.captionTranslations` d'un côté,
+   * `Post.translations` de l'autre. Servir les unes sur l'autre est
+   * exactement ce que #4904 a coûté, et une chaîne nue ne dit pas laquelle
+   * des deux on affiche. Miroir de `SceneCaption.Origin` côté iOS
+   * (`SceneCaption.swift`, `mediaCaption` / `carrierText`).
+   *
+   * Absent quand `caption` l'est.
+   */
+  readonly captionOrigin?: 'media' | 'post';
+  /** LA CARTE DES ADRESSES SUIVIES DU POST (#9074) — elle couvre le corps ET
+   * chaque légende de média (#9073), donc elle voyage avec `caption` quelle
+   * que soit sa provenance. Absente sans légende ou sans carte servie. */
+  readonly trackingLinks?: readonly ContentTrackingLink[];
+  /** LE TEXTE D'ACCESSIBILITÉ SERVI PAR LA PASSERELLE — `PostMedia.alt`
+   * (`schema.prisma:3618`, « Accessibilité »). Il était DÉCLARÉ sur le wire
+   * (`FeedMedia.alt`) et jeté par le modèle : chaque image du fil partait en
+   * `alt=""`, décorative, invisible au lecteur d'écran (revue-correction
+   * #5893). La LÉGENDE ne le remplace pas — elle est déjà rendue en texte
+   * VISIBLE sous le média, et la répéter en `alt` la ferait lire deux fois. */
+  readonly altText?: string;
+  /** LA LANGUE DANS LAQUELLE `altText` est servi (#7392) — elle porte
+   * l'attribut `lang` de l'image, donc la VOIX du lecteur d'écran. Le
+   * doc-comment de `lib/api/prism.ts` nomme ce défaut comme sa raison
+   * d'exister : « un lecteur d'écran qui prononce un texte français avec une
+   * voix anglaise ». Absente quand `altText` l'est, ou quand ni `altLanguage`
+   * ni le Prisme n'ont pu dire la langue. */
+  readonly altTextLanguage?: string;
+  /** Vrai quand `altText` est une TRADUCTION de `PostMedia.alt`, jamais la
+   * source elle-même. Il n'a pas l'ambiguïté de `captionTranslated` : le texte
+   * alternatif n'a qu'UNE provenance, sa propre carte — aucun repli sur le
+   * corps du post (#6864 ne vaut que pour la légende, qui est VISIBLE). */
+  readonly altTextTranslated?: boolean;
+};
+
+export type FeedCardAuthor = {
+  readonly name: string;
+  readonly initials: string;
+  readonly accentColor: string;
+  readonly avatarSrc?: string;
+  /** LE CONTOUR ÉQUIPÉ (#10946) — la référence servie avec l'auteur (#10945), que `PeerAvatar` résout ; absent sans contour. */
+  readonly ring?: ServedProfileDecorItem;
+  /**
+   * LE PSEUDO, PARCE QUE L'AVATAR OUVRE LE PROFIL (#6396) — l'adresse d'un
+   * profil est `/u/$username`, jamais l'identifiant (`route-table.tsx:191`).
+   *
+   * Il est ABSENT quand la passerelle n'en sert pas : un auteur anonyme n'a pas
+   * de pseudo, et `Avatar` ne fabrique alors aucun lien plutôt que d'en poser
+   * un vers `/u/` — une adresse qui n'existe pas.
+   */
+  readonly username?: string;
+  /**
+   * L'IDENTIFIANT, parce que l'anneau de story se cherche par lui (#7185) —
+   * le corpus du rail indexe ses groupes par `authorId`, jamais par pseudo.
+   * Absent quand la passerelle ne sert pas d'auteur : aucun anneau alors, ce
+   * qui est la dégradation juste.
+   */
+  readonly id?: string;
+};
+
+export type FeedCardText = {
+  readonly full: string;
+  readonly language: string;
+  readonly translated: boolean;
+  /**
+   * CE QUE LE GESTE OUVRE (#7141) — le texte tel que son autrice l'a écrit, et
+   * sa langue. Le Prisme sert la traduction par DÉFAUT (§ Automatisme) ; sans
+   * ces deux champs la carte pourrait ANNONCER une traduction sans offrir de
+   * chemin vers l'original, c'est-à-dire un contrôle sans effet (loi 4) — le
+   * défaut qui a déjà coûté `PostCard` au dépôt.
+   *
+   * Portés même quand rien n'est traduit : c'est `translated` qui décide de
+   * l'annonce, et un champ conditionnel obligerait chaque lecteur à refaire ce
+   * test.
+   */
+  readonly original: string;
+  readonly originalLanguage: string;
+  /**
+   * LES URL BRUTES DU TEXTE QUI PASSENT PAR `/l/<token>` (#7827) — absentes
+   * quand le post n'en porte aucune. Elles voyagent AVEC le texte parce que
+   * c'est lui, et lui seul, que `RichText` découpe.
+   */
+  readonly trackingLinks?: readonly ContentTrackingLink[];
+};
+
+export type FeedCardStats = {
+  readonly likeCount: number;
+  readonly commentCount: number;
+  readonly repostCount: number;
+  readonly bookmarkCount: number;
+  readonly shareCount: number;
+};
+
+/** CE QUE LE LECTEUR A DÉJÀ FAIT de ce post (#6278) — `isLikedByMe` (le nom SERVI — `PostFeedService.ts:1197` ; le wire n'a jamais porté `isLiked`) /
+ * `isBookmarkedByMe` servis par la passerelle ; non servi ⇒ `false`, le
+ * contrôle se peint vide plutôt que d'affirmer un geste jamais posé. */
+export type FeedCardViewer = { readonly liked: boolean; readonly bookmarked: boolean; readonly reposted: boolean };
+
+/** LA SCÈNE D'UNE PUBLICATION (D-78, #6898) — le document canvas v3 déjà
+ * PARSÉ (`parseCanvasDocument`, `lib/canvas/document.ts`) et son PORTEUR : les
+ * médias déjà résolus par le Prisme (`FeedCardMedia[]` ci-dessus), jamais une
+ * seconde descente (cycle 128 du CLAUDE.md). `undefined` ⇒ repli média
+ * (D-78) : `v !== 3`, `scenes` absent/vide, ou pas de `storyEffects`. */
+export type FeedCardScene = { readonly document: CanvasDocument; readonly carrier: SceneCarrier };
+
+/**
+ * LA PUBLICATION CITÉE (#6278 c) — la carte IMBRIQUÉE qu'un repost SIMPLE
+ * rend sous son propre en-tête, miroir `FeedPostCard.swift:822-910`
+ * (`repostView`) : auteur, corps déjà résolu par le Prisme (`text`, jamais
+ * une seconde descente — D-14), une vignette de son premier média et son
+ * compte de « j'aime » — les QUATRE autres compteurs de l'original
+ * n'apparaissent PAS sur la carte imbriquée iOS. `isStory`/`isReel`
+ * distinguent le médium cité (`FeedPostCard.swift:155-169`) : ils gouvernent
+ * le libellé de la puce, jamais un second aiguillage de rendu (§ 4 loi 6).
+ * `undefined` sur toute la structure quand `post.repostOf` n'est pas chargé
+ * (relation absente, jamais une carte vide affichée à sa place).
+ */
+export type FeedCardRepostEmbed = {
+  readonly id?: string;
+  readonly isStory: boolean;
+  readonly isReel: boolean;
+  readonly author: FeedCardAuthor;
+  readonly relativeTime: string;
+  readonly text?: FeedCardText;
+  readonly moodEmoji?: string;
+  readonly thumbnailSrc?: string;
+  /** LE COMPTE DES MÉDIAS QUI NE TIENNENT PAS DANS LA VIGNETTE (#6278 c, G10)
+   * — miroir `FeedPostCard.swift:131-134` (`repostMediaPreviewModel`) : « +N »
+   * quand l'original en porte plusieurs, jamais posé pour un seul. */
+  readonly moreCount?: number;
+  readonly likeCount: number;
+};
+
+/**
+ * LA PROTECTION DÉCLARÉE D'UNE PUBLICATION (#16166) — ce que la loi de sortie
+ * lit pour décider si « Imager » s'offre. Aucun champ du fil ne la porte
+ * aujourd'hui (un post n'a ni flamme, ni vue unique, ni flou) : absente, rien
+ * n'est déclaré ; présente, elle ferme l'export comme pour un message.
+ */
+export type FeedCardProtection = {
+  readonly isViewOnce?: boolean | null;
+  readonly isBlurred?: boolean | null;
+  readonly isEncrypted?: boolean | null;
+  readonly effectFlags?: number | null;
+  readonly ephemeralDuration?: number | null;
+  readonly expiresAt?: Date | string | null;
+};
+
+export type FeedCardModel = {
+  readonly id: string;
+  readonly viewer: FeedCardViewer;
+  readonly isReel: boolean;
+  readonly author: FeedCardAuthor;
+  readonly relativeTime: string;
+  /** L'HORLOGE ISO du post, TELLE QUE SERVIE (#6902) — `relativeTime` ci-dessus
+   * est déjà la projection HUMAINE (« il y a 3 min »), qui se PÉRIME (`useMinute`)
+   * et ne porte pas de date absolue : le pied de la galerie plein écran
+   * (`CarrierFooter`, miroir `bottomMetadataOverlay`) a besoin de la date BRUTE
+   * pour son propre format (`toLocaleString`), comme `MediaCarrier.sentAt`. */
+  readonly createdAt: string;
+  /** LA CARTE CITÉE, voir `FeedCardRepostEmbed` — absente quand ce post n'est
+   * pas un repost, OU quand `repostOf` n'a pas été chargé par la source. */
+  readonly repostOf?: FeedCardRepostEmbed;
+  readonly text?: FeedCardText;
+  /**
+   * LES PSEUDOS QUE LE SERVEUR A VALIDÉS (#7032) — le jeu qui décide quels
+   * `@handle` du texte deviennent des liens. ABSENT (relation non chargée) ⇒
+   * tout handle est cliquable ; `[]` ⇒ aucun. Voir `FeedPost.mentions`.
+   */
+  readonly validatedMentions?: readonly string[];
+  /** La carte des adresses suivies du post (#9074) — celle que la visionneuse
+   * plein écran remet à ses légendes. Absente quand le post n'en porte aucune. */
+  readonly trackingLinks?: readonly ContentTrackingLink[];
+  readonly media: readonly FeedCardMedia[];
+  readonly scene?: FeedCardScene;
+  /** L'agencement CHOISI par l'auteur (#6514, `resolveMosaicLayout`) —
+   * `carousel` quand le document n'en dit rien. */
+  readonly layout: MosaicLayoutMode;
+  readonly stats: FeedCardStats;
+  /**
+   * CE QUE CE POST A RAPPORTÉ AU LECTEUR (#9570) — `FeedPost.viewerPoints`,
+   * présent seulement quand il vaut plus que zéro : absent (ancien serveur,
+   * lecteur sans compte) ou nul, la carte ne porte aucune marque. Toujours
+   * celui de CE post : une republication porte le sien, jamais celui de son
+   * original.
+   */
+  readonly viewerPoints?: number;
+  /** LES COMMENTAIRES FERMÉS PAR CETTE PUBLICATION (#16541) — son PROPRE réglage,
+   * celui que le menu « ⋯ » bascule ; présent seulement quand il est posé. */
+  readonly commentsDisabled?: true;
+  /** LA REPUBLICATION FERMÉE PAR L'AUDIENCE (#14501, RG-18) — un contenu de Sang
+   * ne se repartage jamais (`isRepostable`, loi partagée) : la carte et le rail
+   * n'offrent pas un geste que la passerelle refuserait. Présent seulement
+   * quand il est fermé ; audience non servie ⇒ ouvert, la passerelle tranche. */
+  readonly repostClosed?: true;
+  /** Voir `FeedCardProtection` — absente : rien n'est déclaré. */
+  readonly protection?: FeedCardProtection;
+};
+
+const FALLBACK_AUTHOR_NAME = 'Quelqu’un';
+
+/**
+ * LE FILTRE DE NULLITÉ DU FIL (défaut BLOQUANT, revue-correction #5893) —
+ * un champ optionnel de la passerelle arrive en `null`, jamais absent (voir
+ * le doc-comment de `FeedAuthor`, `api/feed-pages.ts`). Ces deux gardes
+ * testent le TYPE plutôt que l'absence : c'est la seule forme qui traverse
+ * `null`, `undefined` ET la chaîne vide sans lever.
+ */
+const textOrUndefined = (value: string | null | undefined): string | undefined =>
+  typeof value === 'string' && value.trim() !== '' ? value : undefined;
+
+const numberOrUndefined = (value: number | null | undefined): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+function authorRingOf(author: unknown): { readonly ring?: ServedProfileDecorItem } {
+  const ring = servedRingOf(author);
+  return ring === null ? {} : { ring };
+}
+
+function resolveAuthorSrc(avatar: string | null | undefined): string | undefined {
+  const url = textOrUndefined(avatar);
+  return url === undefined ? undefined : attachmentSrc(url);
+}
+
+/**
+ * **LE CONTENU DU POST N'EST PAS LA LÉGENDE DE SES MÉDIAS** (#6864, directive
+ * porteur 2026-09-16) — l'ordre de priorité, en trois temps :
+ *
+ * 1. la légende PROPRE du média gagne TOUJOURS, quel que soit leur nombre ;
+ * 2. à défaut, le contenu du post, **et seulement si le post ne porte qu'UN
+ *    média** ;
+ * 3. sinon, aucune légende.
+ *
+ * Le texte d'un post décrit le LOT ; le coller sous chaque pièce ferait mentir
+ * la légende — et sur un post à média unique, une implémentation fautive et une
+ * juste rendent le MÊME résultat. C'est le vecteur à deux médias dont l'un
+ * seulement porte sa légende qui les sépare.
+ *
+ * PORTAGE de la loi iOS, qui l'applique déjà aux deux conditions :
+ * `SocialMediaCaption.map` / `.serving` (`CommentMediaGallery.swift:36,141`) —
+ * `let fallback = visuals.count == 1 ? carrierText : nil`, puis
+ * `resolve(own:carrierText:)` qui essaie la légende propre d'abord.
+ *
+ * **ÉCART ASSUMÉ avec iOS sur ce qui COMPTE** : iOS ne compte que les visuels
+ * paginables (`isPageable`), ce module compte TOUS les médias. La directive dit
+ * « plusieurs contenu (image, vidéo **et autre**) » — un post portant une image
+ * et un document porte bien deux contenus, et son texte les décrit tous deux.
+ *
+ * `carrier` est le texte DÉJÀ SERVI par le Prisme (`resolveFeedText`, calculé
+ * une fois par `resolveFeedCardModel`), jamais `post.content` brut : le
+ * redescendre ici ferait une SECONDE descente, exactement le défaut que le
+ * cycle 128 a fermé sur trois clients.
+ */
+function resolveMedia(
+  post: FeedPost,
+  isReel: boolean,
+  preferredLanguages: readonly string[],
+  /** Le texte du post, DÉJÀ résolu par le Prisme (`resolveFeedCardModel`,
+   * même valeur que `model.text`) — jamais recalculé ici (D-14). Repli
+   * possible pour la légende d'un média SEUL (#6864), voir plus bas. */
+  soleMediaCaptionFallback: FeedCardText | undefined,
+  trackingLinks: readonly ContentTrackingLink[],
+): readonly FeedCardMedia[] {
+  const media = post.media ?? [];
+  const ordered = [...media].sort((a, b) => (numberOrUndefined(a.order) ?? 0) - (numberOrUndefined(b.order) ?? 0));
+  // Le repli sur le contenu du post (#6864) ne s'applique QUE si ce média
+  // est SEUL : à plusieurs médias, le texte du post décrit le lot, jamais
+  // une pièce précise, et le coller sous l'une d'elles ferait mentir la
+  // légende sur ses voisines.
+  const fallback = ordered.length === 1 ? soleMediaCaptionFallback : undefined;
+  return ordered.map((m) => {
+    // Capturé UNE fois : `exactOptionalPropertyTypes` narrove `string |
+    // undefined` en `string` seulement quand le test et l'usage portent sur
+    // la MÊME référence — deux appels séparés à `thumbHashPlaceholder`
+    // resteraient chacun `string | undefined` aux yeux du compilateur.
+    const placeholder = thumbHashPlaceholder(textOrUndefined(m.thumbHash));
+    const thumbnail = textOrUndefined(m.thumbnailUrl);
+    const rawCaption = textOrUndefined(m.caption);
+    // Le Prisme (#6280) : `PostMedia.caption` n'est traduit QUE quand il
+    // existe — une pièce sans légende n'a rien à résoudre, et
+    // `resolveMediaCaption` sur une chaîne vide rendrait un `language`
+    // trompeur (l'original vide « servi » dans la langue du lecteur).
+    const resolvedCaption =
+      rawCaption === undefined
+        ? undefined
+        : resolveMediaCaption({
+            preferredLanguages,
+            captionLanguage: m.captionLanguage,
+            captionTranslations: m.captionTranslations,
+            caption: rawCaption,
+          });
+    // Une légende PROPRE gagne toujours ; à défaut, et seulement pour un
+    // média seul, le contenu du post en tient lieu (#6864) — jamais l'inverse.
+    //
+    // `origin` voyage AVEC le texte, dans la même valeur : `caption`,
+    // `captionLanguage`, `captionTranslated` et `captionOrigin` sont alors
+    // composés d'une seule branche et ne peuvent pas se contredire. Sans lui,
+    // `captionTranslated` — documenté « une traduction de sa source » — ne
+    // dirait plus DE QUELLE source, et les deux provenances n'ont pas les
+    // mêmes traductions (`PostMedia.captionTranslations` contre
+    // `Post.translations`) : les mélanger est ce que #4904 a coûté.
+    const caption =
+      resolvedCaption !== undefined
+        ? {
+            text: resolvedCaption.text,
+            language: resolvedCaption.language,
+            translated: resolvedCaption.translated,
+            origin: 'media' as const,
+          }
+        : fallback !== undefined
+          ? { text: fallback.full, language: fallback.language, translated: fallback.translated, origin: 'post' as const }
+          : undefined;
+    const captionLanguage = caption === undefined ? undefined : textOrUndefined(caption.language);
+    // LE TEXTE ALTERNATIF DESCEND SON PROPRE PRISME (#7392) — même dispositif
+    // que la légende juste au-dessus, sur le TROISIÈME couple
+    // (`altLanguage` / `altTranslations`). Il sortait brut jusqu'au 2026-11-07,
+    // c'est-à-dire dans la langue de l'auteur, pour la seule chaîne du média
+    // qu'un lecteur d'écran PRONONCE.
+    //
+    // Même garde que la légende, pour la même raison : une pièce SANS texte
+    // alternatif n'a rien à résoudre, et `resolveMediaAlt` sur une chaîne vide
+    // rendrait un `language` trompeur — l'original vide « servi » dans la
+    // langue du lecteur.
+    const rawAlt = textOrUndefined(m.alt);
+    const resolvedAlt =
+      rawAlt === undefined
+        ? undefined
+        : resolveMediaAlt({
+            preferredLanguages,
+            altLanguage: m.altLanguage,
+            altTranslations: m.altTranslations,
+            alt: rawAlt,
+          });
+    const altText = resolvedAlt?.text;
+    // La langue voyage AVEC le texte, dans la même valeur : c'est elle qui
+    // porte l'attribut `lang` de l'image, donc la voix du lecteur d'écran
+    // (§ Prisme cycle 122 — qui AFFICHE ce que le résolveur élit). Absente
+    // seulement quand ni `altLanguage` ni le Prisme n'ont pu la dire.
+    const altTextLanguage = resolvedAlt === undefined ? undefined : textOrUndefined(resolvedAlt.language);
+    const durationMs = numberOrUndefined(m.duration);
+    const width = numberOrUndefined(m.width);
+    const height = numberOrUndefined(m.height);
+    const mimeType = textOrUndefined(m.mimeType);
+    const pictures = attachmentPictureSrcSets({ ...(m.imageVariants ? { imageVariants: m.imageVariants } : {}), ...(m.avifVariants ? { avifVariants: m.avifVariants } : {}) });
+    const compat = compatibilityRendition(m.renditions);
+    const fileSize = numberOrUndefined(m.fileSize);
+    return {
+      id: m.id,
+      kind: feedMediaKindOf(m.mimeType),
+      ...(mimeType !== undefined ? { mimeType } : {}),
+      src: attachmentSrc(m.fileUrl),
+      ...(thumbnail !== undefined ? { thumbnailSrc: attachmentSrc(thumbnail) } : {}),
+      ...(placeholder !== undefined ? { placeholder } : {}),
+      ratio: isReel ? reelCardRatio(width, height) : postMediaRatio(width, height),
+      ...(durationMs !== undefined ? { durationMs } : {}),
+      ...(pictures.webp !== undefined ? { srcSet: pictures.webp } : {}),
+      ...(pictures.avif !== undefined ? { avifSrcSet: pictures.avif } : {}),
+      ...(compat !== undefined ? { compatSrc: attachmentSrc(compat.url), compatSize: compat.size } : {}),
+      ...(fileSize !== undefined ? { fileSize } : {}),
+      ...(caption !== undefined
+        ? { caption: caption.text, captionTranslated: caption.translated, captionOrigin: caption.origin }
+        : {}),
+      ...(caption !== undefined && trackingLinks.length > 0 ? { trackingLinks } : {}),
+      ...(captionLanguage !== undefined ? { captionLanguage } : {}),
+      ...(altText !== undefined ? { altText } : {}),
+      ...(altTextLanguage !== undefined ? { altTextLanguage } : {}),
+      ...(resolvedAlt !== undefined ? { altTextTranslated: resolvedAlt.translated } : {}),
+    };
+  });
+}
+
+/**
+ * LA VIGNETTE DE LA CARTE CITÉE (#6278 c, G10) — miroir
+ * `FeedPostCard.swift:131-134` (`repostMediaPreviewModel`) : le PREMIER média
+ * de l'original, jamais celui qui porte une miniature par hasard. Une
+ * vignette DÉDIÉE (`thumbnailUrl`) gagne toujours ; à défaut, une IMAGE peut
+ * servir SA PROPRE source — jamais une vidéo, dont `fileUrl` n'est pas une
+ * image (T7). `moreCount` compte ce que la vignette ne montre pas.
+ */
+function resolveRepostThumbnail(
+  media: readonly FeedMedia[] | null | undefined,
+): { readonly thumbnailSrc?: string; readonly moreCount?: number } {
+  const list = media ?? [];
+  const first = list[0];
+  if (first === undefined) return {};
+  const dedicated = textOrUndefined(first.thumbnailUrl);
+  const mimeType = textOrUndefined(first.mimeType);
+  const ownSource = mimeType?.startsWith('image/') === true ? textOrUndefined(first.fileUrl) : undefined;
+  const url = dedicated ?? ownSource;
+  return {
+    ...(url !== undefined ? { thumbnailSrc: attachmentSrc(url) } : {}),
+    ...(list.length > 1 ? { moreCount: list.length - 1 } : {}),
+  };
+}
+
+/**
+ * `resolveFeedRepostEmbed` — LA CARTE CITÉE, résolue UNE fois avec le RESTE
+ * du modèle (jamais relue par le composant, D-14). `undefined` sans relation
+ * chargée ; un `repostOf` sans auteur ni contenu ni média reste malgré tout
+ * rendu (un compte supprimé garde sa place dans la chaîne, iOS ne la masque
+ * pas non plus — `repostView` ne garde qu'`author`/`content` optionnels).
+ */
+function resolveFeedRepostEmbed(
+  repostOf: FeedPost['repostOf'],
+  preferredLanguages: readonly string[],
+  now: Date,
+): FeedCardRepostEmbed | undefined {
+  if (repostOf == null) return undefined;
+
+  const authorName =
+    textOrUndefined(repostOf.author?.displayName) ?? textOrUndefined(repostOf.author?.username) ?? FALLBACK_AUTHOR_NAME;
+  const avatarSrc = resolveAuthorSrc(repostOf.author?.avatar);
+  const content = repostOf.content ?? '';
+  const text =
+    content.trim() === ''
+      ? undefined
+      : (() => {
+          const resolved = resolveFeedText({
+            preferredLanguages,
+            originalLanguage: repostOf.originalLanguage,
+            translations: repostOf.translations,
+            content,
+          });
+          return { full: resolved.text, language: resolved.language, translated: resolved.translated, original: content, originalLanguage: repostOf.originalLanguage ?? '' };
+        })();
+  const { thumbnailSrc, moreCount } = resolveRepostThumbnail(repostOf.media);
+  const moodEmoji = textOrUndefined(repostOf.moodEmoji);
+
+  return {
+    ...(textOrUndefined(repostOf.id) !== undefined ? { id: repostOf.id } : {}),
+    isStory: repostOf.type === 'STORY',
+    isReel: repostOf.type === 'REEL',
+    author: {
+      name: authorName,
+      initials: initialsOf(authorName),
+      accentColor: authorAccentColor(repostOf.author?.id, authorName),
+      ...(avatarSrc !== undefined ? { avatarSrc } : {}),
+      ...authorRingOf(repostOf.author),
+      ...(textOrUndefined(repostOf.author?.username) !== undefined ? { username: textOrUndefined(repostOf.author?.username) as string } : {}),
+      ...(textOrUndefined(repostOf.author?.id) !== undefined ? { id: textOrUndefined(repostOf.author?.id) as string } : {}),
+    },
+    relativeTime: repostOf.createdAt === undefined ? '' : shortRelativeTime(new Date(repostOf.createdAt), now),
+    ...(text !== undefined ? { text } : {}),
+    ...(moodEmoji !== undefined ? { moodEmoji } : {}),
+    ...(thumbnailSrc !== undefined ? { thumbnailSrc } : {}),
+    ...(moreCount !== undefined ? { moreCount } : {}),
+    likeCount: numberOrUndefined(repostOf.likeCount) ?? 0,
+  };
+}
+
+/**
+ * `resolveFeedCardModel` — LE SITE UNIQUE qui compose : la géographie du
+ * type (`REEL` ⇒ affiche plein cadre), le Prisme du corps
+ * (`resolveFeedText`, `lib/feed/text.ts` — JAMAIS réécrit ici, D-14),
+ * l'accent de l'auteur (`authorAccentColor`, miroir `FeedModels.swift:255`),
+ * et l'heure relative (`shortRelativeTime`, déjà consommée par la Lentille).
+ */
+export function resolveFeedCardModel(
+  post: FeedPost,
+  params: { readonly preferredLanguages: readonly string[]; readonly now: Date },
+): FeedCardModel {
+  const isReel = post.type === 'REEL';
+  const authorName =
+    textOrUndefined(post.author?.displayName) ?? textOrUndefined(post.author?.username) ?? FALLBACK_AUTHOR_NAME;
+  const content = post.content ?? '';
+  const trackingLinks = trackingLinksOf(post);
+  const text =
+    content.trim() === ''
+      ? undefined
+      : (() => {
+          const resolved = resolveFeedText({
+            preferredLanguages: params.preferredLanguages,
+            originalLanguage: post.originalLanguage,
+            translations: post.translations,
+            content,
+          });
+          return {
+            full: resolved.text,
+            language: resolved.language,
+            translated: resolved.translated,
+            original: content,
+            originalLanguage: post.originalLanguage ?? '',
+            ...(trackingLinks.length > 0 ? { trackingLinks } : {}),
+          };
+        })();
+
+  const avatarSrc = resolveAuthorSrc(post.author?.avatar);
+  const repostEmbed = resolveFeedRepostEmbed(post.repostOf, params.preferredLanguages, params.now);
+  const media = resolveMedia(post, isReel, params.preferredLanguages, text, trackingLinks);
+  const document = parseCanvasDocument(post.storyEffects);
+  // Le PORTEUR d'une scène est fait des médias DÉJÀ résolus par le Prisme
+  // (`media` ci-dessus) — jamais une seconde descente (cycle 128 du
+  // CLAUDE.md racine).
+  const scene: FeedCardScene | undefined =
+    document === null
+      ? undefined
+      : {
+          document,
+          carrier: {
+            postId: post.id,
+            // `width`/`height` ne sont PAS reportés ici : le player rend un
+            // objet `media` d'après SA PROPRE charge canvas
+            // (`payload.mediaType`, `payload.aspectRatio`), jamais d'après le
+            // porteur. `mimeType` Y ENTRE (#6903) parce que l'ÉLECTION du son
+            // de fond (`electBackgroundTrack`, `background-sound.ts:80`) lit
+            // LE PORTEUR, jamais le canvas — et le porteur de STORY le
+            // reporte déjà (`lib/stories/carrier.ts:37`). Le porteur sert
+            // donc l'IDENTITÉ, la LÉGENDE, le MIME (pour l'élection du son)
+            // et, pour une vidéo de fond, la VIGNETTE (revue-correction
+            // #6898) : `thumbnailSrc ?? placeholder`, le MÊME repli que
+            // `FeedMediaSurface` pose en `poster` sur une vidéo de post.
+            media: media.map((m) => {
+              const poster = m.thumbnailSrc ?? m.placeholder;
+              return {
+                id: m.id,
+                src: m.src,
+                ...(m.mimeType !== undefined ? { mimeType: m.mimeType } : {}),
+                ...(m.caption !== undefined ? { caption: m.caption } : {}),
+                ...(m.captionLanguage !== undefined ? { captionLanguage: m.captionLanguage } : {}),
+                ...(m.captionOrigin !== undefined ? { captionOrigin: m.captionOrigin } : {}),
+                ...(poster !== undefined ? { poster } : {}),
+              };
+            }),
+          },
+        };
+
+  const viewerPoints = servedViewerPoints(post.viewerPoints);
+
+  return {
+    id: post.id,
+    viewer: { liked: post.isLikedByMe === true, bookmarked: post.isBookmarkedByMe === true, reposted: post.isRepostedByMe === true },
+    isReel,
+    ...(post.commentsDisabled === true ? { commentsDisabled: true as const } : {}),
+    ...(post.visibility != null && !isRepostable(post.visibility) ? { repostClosed: true as const } : {}),
+    author: {
+      name: authorName,
+      initials: initialsOf(authorName),
+      accentColor: authorAccentColor(post.author?.id, authorName),
+      ...(avatarSrc !== undefined ? { avatarSrc } : {}),
+      ...authorRingOf(post.author),
+      ...(textOrUndefined(post.author?.username) !== undefined
+        ? { username: textOrUndefined(post.author?.username) as string }
+        : {}),
+      ...(textOrUndefined(post.author?.id) !== undefined ? { id: textOrUndefined(post.author?.id) as string } : {}),
+    },
+    relativeTime: shortRelativeTime(new Date(post.createdAt), params.now),
+    createdAt: new Date(post.createdAt).toISOString(),
+    ...(repostEmbed !== undefined ? { repostOf: repostEmbed } : {}),
+    ...(text !== undefined ? { text } : {}),
+    ...(trackingLinks.length > 0 ? { trackingLinks } : {}),
+    // `null` et `undefined` RETOMBENT tous deux sur « le serveur ne s'est pas
+    // prononcé » : la passerelle sert `null` pour un champ optionnel absent
+    // (doc-comment de `FeedAuthor`), et un `[]` fabriqué ici tuerait tous les
+    // liens de mention d'une republication.
+    ...(post.mentions === undefined || post.mentions === null
+      ? {}
+      : { validatedMentions: post.mentions.map((reference) => reference.username) }),
+    media,
+    ...(scene !== undefined ? { scene } : {}),
+    layout: resolveMosaicLayout(post.storyEffects),
+    stats: {
+      likeCount: numberOrUndefined(post.likeCount) ?? 0,
+      commentCount: numberOrUndefined(post.commentCount) ?? 0,
+      repostCount: numberOrUndefined(post.repostCount) ?? 0,
+      bookmarkCount: numberOrUndefined(post.bookmarkCount) ?? 0,
+      shareCount: numberOrUndefined(post.shareCount) ?? 0,
+    },
+    ...(viewerPoints !== undefined && viewerPoints > 0 ? { viewerPoints } : {}),
+  };
+}
+
+/**
+ * LA PRÉSÉANCE DU CORPS D'UNE CARTE (#6278 c, revue-correction) — miroir de
+ * l'échelle `if … else if …` de `FeedPostCard.swift:560-678`, qui ne rend
+ * JAMAIS la carte citée À CÔTÉ d'un visuel qui la répète :
+ *
+ * 1. la carte porte sa PROPRE scène ⇒ la scène SEULE (`:560`, « priorité sur
+ *    les branches repost ») — cas nominal d'une STORY repartagée, dont la
+ *    passerelle RECOPIE le document dans le repost (`PostService.repostPost`,
+ *    `isEphemeralSourceRepost`) : la carte citée peindrait la même story une
+ *    seconde fois, en vignette, juste au-dessus ;
+ * 2. elle cite une STORY ou un RÉEL ⇒ la carte citée SEULE (`:636-667`) — le
+ *    média de la carte n'est alors que la COPIE de celui de l'original ;
+ * 3. sinon ⇒ le visuel PUIS la carte citée (`:668-678`, `mediaPreview` avant
+ *    `repostView`).
+ *
+ * Une DONNÉE résolue une fois, jamais trois branches recopiées dans la vue :
+ * `media` et `scene` restent intacts au modèle (la galerie plein écran et le
+ * lecteur de réels les lisent), seule leur PEINTURE sur la carte en dépend.
+ */
+export type FeedCardBody = { readonly visual: boolean; readonly repostOf?: FeedCardRepostEmbed };
+
+export function feedCardBody(model: Pick<FeedCardModel, 'scene' | 'media' | 'repostOf'>): FeedCardBody {
+  const hasVisual = model.scene !== undefined || model.media.length > 0;
+  if (model.scene !== undefined || model.repostOf === undefined) return { visual: hasVisual };
+  if (model.repostOf.isStory || model.repostOf.isReel) return { visual: false, repostOf: model.repostOf };
+  return { visual: hasVisual, repostOf: model.repostOf };
+}
+
+/**
+ * L'AFFICHE D'UN RÉEL DANS LE FIL (#9737) — sans scène, le premier média : un
+ * réel PUREMENT audio garde son visuel d'onde, c'est son contenu. Avec une
+ * scène, un média audio du porteur est un SON de la scène (son fond, ou un son
+ * posé) : il ne se dessine jamais en affiche — le fond se dit par le crédit,
+ * hors scène. L'affiche est alors le premier média VISUEL, ou rien.
+ */
+export function reelPosterOf(model: Pick<FeedCardModel, 'scene' | 'media'>): FeedCardMedia | undefined {
+  return model.scene === undefined ? model.media[0] : model.media.find((media) => media.kind !== 'audio');
+}

@@ -1,5 +1,8 @@
 # Meeshy Agent Service - Best Practices
 
+> ## ⛔ Aucune feature sans issue — règle de démarrage (directive 2026-08-26)
+> **Avant d'écrire la première ligne d'une feature, d'une amélioration ou d'un correctif non trivial**, ouvrir (ou retrouver) son **issue** dans `isopen-io/meeshy`, la placer dans un **milestone précis** (nommé par le résultat attendu, avec échéance) et l'inscrire au projet « Meeshy — pilotage » (https://github.com/orgs/isopen-io/projects/1) avec `Status = In Progress`. Le commit qui livre la ferme (`Closes #n`) avec sa preuve (gate, mesure, PR). **Une tâche sans issue n'existe pas ; un travail sans milestone n'est pas planifié.** Ce qu'on découvre en chemin (dette, dimension non mûre, suivi) devient une issue à son tour — jamais une ligne dans un fichier ou une page. Détail : § « Pilotage du développement » du `CLAUDE.md` racine.
+
 Ce document définit les standards de développement et de configuration pour le service d'agents IA de Meeshy.
 
 ## 🛠 Commandes de Développement
@@ -52,8 +55,20 @@ Le service utilise `LangGraph` pour gérer le flux de décision:
 3.  **Impersonate/Animate**: Génère la réponse brute.
 4.  **QualityGate**: Valide la réponse avant envoi.
 
+## 🗞 Archétypes de kongossa, sujets de faits divers et image du sujet lancé (#6192, 2026-09-12)
+
+- **Archétypes** : `packages/shared/agent/archetypes.ts` en porte treize — les sept historiques et six taillés pour les faits divers et les ragots (`gossip` la commère, `chronicler` le chroniqueur, `joker` le blagueur, `diaspora`, `elder` le sage, `hustler` le débrouillard). Ces six ont des `topicsOfExpertise` REMPLIS (faits divers, kongossa, people, Cameroun, Côte d'Ivoire, Gabon, Congo, France, USA, Canada) : c'est par eux que le stratège élit qui lance un tel sujet. Leurs tons (`complice`, `journalistique`, `moqueur`, `nostalgique`, `posé`) ont chacun leur guide dans `generator.ts` (`TONE_GUIDES`) — un ton sans guide tombe sur « naturel et équilibré », donc **ajouter un ton, c'est ajouter son guide**.
+- **Sujets** : `topics/seeds/initial-topics.ts` seed un sujet de faits divers par pays cible, le people d'Afrique et le buzz des réseaux, chacun avec ses motifs (villes, gentilés, indicatifs, quartiers), sa consigne (nommer le site lu) et sa requête de recherche RÉGIONALE. `TopicSeedService` insère les slugs ABSENTS à chaque boot et ne réécrit jamais un sujet existant : un sujet ajouté au seed atteint la prod, une édition admin y survit.
+- **Sélection** : `rankProvocationTopics` (strategist) = occurrences regex + `AgentTopicCatalog.priority` (0-10, admin), ex æquo MÉLANGÉS avant le tri. Les faits divers sont seedés à 2, le tech à 0 : dans une conversation sans signal, ce sont eux qui partent ; une conversation qui parle clairement de Kubernetes garde le tech.
+- **Image** : le fournisseur OpenAI remonte les `url_citation` de la recherche web (`LlmChatResponse.citations`) ; `generator.pickIllustration` attache la PREMIÈRE page http(s) citée au message qui OUVRE un sujet (jamais une réponse, jamais sans recherche) — `PendingMessage.illustration.sourceUrl`, transporté tel quel par `AgentResponse`. La passerelle (`services/gateway/src/services/zmq-agent/agent-illustration.ts`) résout l'image Open Graph de l'article sous garde SSRF et la joint au message ; tout refus rend un message texte. **Seule l'URL voyage** : ne jamais faire télécharger ni encoder un fichier par ce service.
+
 ---
-*Dernière mise à jour: Mars 2026*
+*Dernière mise à jour: Septembre 2026*
+
+## Pilotage & maturité (règle transverse — détail dans le `CLAUDE.md` racine)
+- **Le pilotage se fait EXCLUSIVEMENT sur GitHub** (projet « Meeshy — pilotage », milestones, issues) : toute tâche de ce répertoire est une issue au titre sémantique, passée `In Progress` au démarrage et fermée par le commit qui la livre (`Closes #n`). Pas de `todo.md`, pas de page « progress » ; les artifacts servent aux brouillons, au design et aux comptes rendus — jamais à l'état.
+- **Chaque feature est portée à maturité sur les treize dimensions** (sécurité, performance, mémoire, fluidité, accessibilité, cohérence de positionnement, facilité d'usage, UX, compatibilité, utilité, maintenabilité, simplicité d'usage, complétude). Ici, les témoins qui comptent d'abord : latence de réponse perçue, fenêtre de contexte bornée (mémoire), garde des prompts et des données utilisateur (sécurité), utilité MESURÉE par les analytics d'activation — le maintien de ce service est un arbitrage ouvert de la roadmap (issue `décision-produit`).
+- **La complexité se paie dans le code, jamais chez l'utilisateur.** Une lenteur, une saccade, une action sans feedback immédiat sont des bugs, pas de la dette : ils ont au moins la priorité de la feature qu'ils dégradent. Le commentaire de clôture d'une issue dit quelles dimensions sont mûres et ouvre une issue par dimension restante.
 
 ## Quality Gate
 Codex will review your output once you are done. Self-evaluate and ensure consistent, coherent code before marking any task as complete.

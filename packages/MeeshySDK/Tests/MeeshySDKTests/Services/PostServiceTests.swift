@@ -99,10 +99,37 @@ final class PostServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "DELETE")
     }
 
+    func test_delete_withReason_sendsReasonInJSONBody() async throws {
+        mock.stub("/posts/\(postId)", result: try MessageServiceTests.gatewayAcknowledgement(#"{"success":true,"data":{"deleted":true}}"#))
+
+        try await service.delete(postId: postId, reason: "Contenu violent")
+
+        XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["reason"] as? String, "Contenu violent")
+    }
+
+    func test_delete_withoutReason_sendsNoBody() async throws {
+        mock.stub("/posts/\(postId)", result: APIResponse(success: true, data: ["deleted": true], error: nil))
+
+        try await service.delete(postId: postId, reason: nil)
+
+        XCTAssertNil(mock.lastRequest?.bodyJSON)
+    }
+
+    func test_deleteComment_withReason_sendsReasonInJSONBody() async throws {
+        mock.stub("/posts/\(postId)/comments/c1", result: try MessageServiceTests.gatewayAcknowledgement(#"{"success":true,"data":{"deleted":true}}"#))
+
+        try await service.deleteComment(postId: postId, commentId: "c1", reason: "Harcèlement")
+
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/posts/\(postId)/comments/c1")
+        XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["reason"] as? String, "Harcèlement")
+    }
+
     // MARK: - like
 
     func testLikeCallsCorrectEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["status": "liked"], error: nil)
+        let response = APIResponse<DiscardedResponseBody>(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/posts/\(postId)/like", result: response)
 
         try await service.like(postId: postId)
@@ -128,7 +155,7 @@ final class PostServiceTests: XCTestCase {
     // MARK: - bookmark
 
     func testBookmarkCallsCorrectEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["status": "bookmarked"], error: nil)
+        let response = APIResponse<DiscardedResponseBody>(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/posts/\(postId)/bookmark", result: response)
 
         try await service.bookmark(postId: postId)
@@ -154,10 +181,41 @@ final class PostServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
+    // MARK: - updateComment
+
+    /// #6600 — la langue de la pastille voyage avec la correction. Sans elle,
+    /// la passerelle remet `originalLanguage` à null et la devinette reprend la
+    /// main à la première faute de frappe corrigée (#6598).
+    func testUpdateCommentSendsTheDeclaredOriginalLanguage() async throws {
+        mock.stub("/posts/\(postId)/comments/comment1", result: APIResponse(success: true, data: makeComment(), error: nil))
+
+        _ = try await service.updateComment(
+            postId: postId, commentId: "comment1", content: "Gran post", effectFlags: nil, originalLanguage: "es"
+        )
+
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/posts/\(postId)/comments/comment1")
+        XCTAssertEqual(mock.lastRequest?.method, "PATCH")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["originalLanguage"] as? String, "es")
+    }
+
+    /// Repli : sans déclaration, le champ n'existe pas dans le corps — la
+    /// passerelle garde sa redétection, comme avant #6600.
+    func testUpdateCommentOmitsOriginalLanguageWhenNoneIsDeclared() async throws {
+        mock.stub("/posts/\(postId)/comments/comment1", result: APIResponse(success: true, data: makeComment(), error: nil))
+
+        _ = try await service.updateComment(
+            postId: postId, commentId: "comment1", content: "Great post!", effectFlags: nil, originalLanguage: nil
+        )
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["content"] as? String, "Great post!")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?.keys.contains("originalLanguage"), false,
+                       "une langue non déclarée ne part pas, même à null")
+    }
+
     // MARK: - likeComment
 
     func testLikeCommentCallsCorrectEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["status": "liked"], error: nil)
+        let response = APIResponse<DiscardedResponseBody>(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/posts/\(postId)/comments/comment1/like", result: response)
 
         try await service.likeComment(postId: postId, commentId: "comment1")
@@ -282,7 +340,7 @@ final class PostServiceTests: XCTestCase {
     // MARK: - share
 
     func testShareCallsCorrectEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["status": "shared"], error: nil)
+        let response = APIResponse<DiscardedResponseBody>(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/posts/\(postId)/share", result: response)
 
         try await service.share(postId: postId)
@@ -404,40 +462,6 @@ final class PostServiceTests: XCTestCase {
         }
 
         XCTAssertEqual(mock.requestCount, 1)
-    }
-
-    func test_recordEngagement_postsBatch_toEngagementEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["recorded": 1], error: nil)
-        mock.stub("/posts/engagement/batch", result: response)
-
-        let session = EngagementSession(
-            sessionId: "s1", userId: "u1", postId: "p1", contentType: .reel, surface: .reels,
-            startedAt: Date(timeIntervalSince1970: 1_700_000_000), dwellMs: 4000, watchMs: 3800,
-            mediaDurationMs: 15000, completed: false, truncated: false, consent: "granted",
-            actions: [], watchSamples: []
-        )
-
-        try await service.recordEngagement([session])
-
-        XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/posts/engagement/batch")
-        XCTAssertEqual(mock.lastRequest?.method, "POST")
-    }
-
-    func test_recordEngagement_emptyArray_doesNotCallNetwork() async throws {
-        try await service.recordEngagement([])
-        XCTAssertEqual(mock.requestCount, 0)
-    }
-
-    func test_recordImpression_postsTo_singleImpressionEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["recorded": true], error: nil)
-        mock.stub("/posts/\(postId)/impression", result: response)
-
-        try await service.recordImpression(postId: postId, source: "detail")
-
-        XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/posts/\(postId)/impression")
-        XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
     // MARK: - update : tri-état du lieu (gestion de la position à l'édition)

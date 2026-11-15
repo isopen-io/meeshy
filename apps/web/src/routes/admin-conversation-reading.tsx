@@ -1,0 +1,573 @@
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+
+import { BRAND, INK, INK2 } from '@/components/admin/tone';
+import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminSkeleton } from '@/components/admin/states';
+import { OlderLoadIndicator } from '@/components/thread-chrome';
+import {
+  adminConversationThreadQueryKey,
+  loadAdminSovereignThread,
+  mergeAdminThreadPages,
+  MOTIF_LONGUEUR_MAXIMALE,
+  MOTIF_LONGUEUR_MINIMALE,
+  nextAdminThreadOffset,
+} from '@/lib/api/admin-conversations';
+import { useAdminMotive } from '@/lib/admin/use-admin-motive';
+import { formatDuration } from '@/lib/admin/interpret/time';
+import type { AdminDeps } from '@/lib/api/admin';
+import { ApiError, unwrap } from '@/lib/api/client';
+import { apiDeps } from '@/lib/api/deps';
+import type { Viewer } from '@/lib/api/viewer';
+import { place } from '@/lib/grouping';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
+import { paginationStateOf } from '@/lib/lens/pagination';
+import { useThreadScene } from '@/lib/reading-mode/scene';
+import { THREAD_ROW_ESTIMATE, useHeadAnchor, useOlderMessages } from '@/lib/view/use-older-messages';
+import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
+import { ThreadModes } from '@/routes/thread-modes';
+
+import { AdminConversationReadingMedia } from './admin-conversation-reading-media';
+
+/**
+ * **LA VRAIE VUE CONVERSATION, SOUS ADMINISTRATION** (#6862, lot C) — le SEUL
+ * site du chantier qui rende le fil d'un membre à un administrateur, et le
+ * seul qui construise un prisme de lecture pour quelqu'un d'autre.
+ *
+ * ## POURQUOI PAS UN RENDU MAISON
+ *
+ * `admin-conversation.tsx` en portait un : des `<li>` plats, sans bulle, sans
+ * regroupement, sans citation, sans Prisme. Il n'était pas « simplifié » — il
+ * était FAUX sur ce qu'il prétendait montrer. Un administrateur qui lit une
+ * conversation doit voir CE QUE LE MEMBRE A VU : la même disposition, les
+ * mêmes suites, la même protection, et surtout la même LANGUE. Un second
+ * rendu, si fidèle soit-il le jour où on l'écrit, diverge au premier lot qui
+ * touche le fil — le dépôt a déjà payé trois fois cette leçon sur le Prisme.
+ *
+ * On monte donc `ThreadModes`, le composant que le fil monte, avec les
+ * capacités d'écriture ABSENTES (jamais bouchonnées : § doc-comment de
+ * `ThreadModes`). Ce qui manque ici manque pour une raison : on ne répond pas
+ * à la place de quelqu'un, on ne réagit pas en son nom, et on ne consomme
+ * SURTOUT pas la vue unique d'un tiers — la consommation est irréversible et
+ * détruirait la pièce que l'administration vient constater.
+ *
+ * ## LE PRISME EST CELUI DU MEMBRE, PAS CELUI DE L'ADMINISTRATEUR
+ *
+ * `readerLanguages` arrive EN PROP. C'est déjà comme ça que `ThreadModes`
+ * fonctionne — aucun composant de rendu du fil ne lit la session — et c'est ce
+ * qui rend ce lot possible sans toucher une seule peau. Le Prisme du membre ne
+ * gouverne que le CONTENU : les dates du chrome parlent la langue d'interface
+ * de l'administrateur (`language`, #10817).
+ * Leur construction vit dans `lib/admin/prisme-membre.ts`, qui porte la raison
+ * pour laquelle le rang 4 (la locale de l'appareil) y est DÉLIBÉRÉMENT omis.
+ *
+ * ## LE MOTIF EST DEMANDÉ AVANT LA REQUÊTE, ET IL EST FIGÉ
+ *
+ * Le schéma AJV de la route refuse `reason` sous dix caractères, par un 400,
+ * avant son handler. Demander le motif d'abord évite à l'administrateur de
+ * découvrir la règle par un échec — et surtout, cela rend le geste DÉLIBÉRÉ :
+ * on n'ouvre pas une conversation privée en tapant sur une ligne, on l'ouvre
+ * en écrivant pourquoi. `AdminAuditLog` consigne ce texte.
+ *
+ * La requête n'est donc PAS armée tant que le motif n'est pas validé
+ * (`enabled`), et le motif validé est FIGÉ : le rendre modifiable relancerait
+ * une lecture sous un autre motif que celui déjà consigné.
+ *
+ * **LE RANG SOUVERAIN LIT SANS MOTIF** (spec 2026-10-04 § 4, « BIGBOSS n'a
+ * besoin de rien justifier ») : pour lui, aucun formulaire — la lecture est
+ * armée d'emblée et part SANS `reason`, ce que la passerelle n'admet que de ce
+ * rang ; la lecture reste consignée au journal. Le rang se lit sur la matrice
+ * SERVIE (`useAdminReach().isSovereign`) ; tant qu'elle n'est pas lue, le
+ * lecteur n'est pas souverain (fermé par défaut).
+ *
+ * ## LE FIL SE REMONTE D'UN GESTE (#11457)
+ *
+ * Comme le fil du produit : la lecture s'ouvre EN BAS, sur les messages les plus
+ * récents, et remonter charge les plus anciens AU-DESSUS — la prise de tête
+ * (`useOlderMessages`), l'ancre du virtualiseur (`useHeadAnchor`,
+ * `keepReadingInPlace`, que pose `ThreadModes`) et l'atterrissage en bas
+ * (`useThreadOpenScroll`) sont ceux de `routes/thread.tsx`, jamais une copie. Les pages, servies par offset en
+ * `createdAt DESC`, vivent dans UNE requête infinie et se recousent par
+ * `mergeAdminThreadPages`. L'onglet « Médias » lit sa PROPRE route au curseur
+ * (`GET /admin/conversations/:id/attachments`, #11510), sous le même motif —
+ * `admin-conversation-reading-media.tsx` — et « Voir dans le fil » remonte le fil
+ * jusqu'au message qui porte la pièce.
+ *
+ * ## RIEN DE CE QUI EST LU ICI NE TOUCHE LE DISQUE
+ *
+ * La clé descend d'`ADMIN_SOUVERAIN_PREFIXE`, qu'exclut le filtre de
+ * déshydratation (`query-client.ts`), et `gcTime: 0` ne la garde pas en
+ * mémoire au-delà de l'écran. Emprunter `messagesQueryKey` — la clé du fil
+ * ordinaire — écrirait le contenu d'une conversation privée dans
+ * `localStorage`, où il survivrait à la session sans qu'`AdminAuditLog` en
+ * sache rien.
+ */
+
+const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
+
+/**
+ * LA HAUTEUR DU FIL SUR UNE FICHE — bornée, sinon le virtualiseur monterait
+ * toutes les rangées en silence. Le fil est un panneau qui défile DANS la fiche :
+ * le reste de la page (chiffres, membres, métadonnées) défile autour.
+ */
+const BOUNDED_HEIGHT = 'min(75vh, 52rem)';
+
+type ReadingTab = 'thread' | 'media';
+const READING_TABS: readonly ReadingTab[] = ['thread', 'media'];
+const TAB_LABEL = { thread: 'admin.conversation.reading.tab.thread', media: 'admin.conversation.reading.tab.media' } as const;
+
+/**
+ * LE MODE DE LECTURE DE L'ADMINISTRATION — `focal`, le mode PAR DÉFAUT du
+ * produit (D-7). Ce n'est pas un choix esthétique : la consigne est de montrer
+ * la vue du produit, et le produit ouvre un fil en Focal. Le mode n'est pas
+ * réglable ici — un sélecteur de mode dans une fenêtre de lecture souveraine
+ * ajouterait un geste sans rapport avec ce qu'on est venu constater.
+ */
+const MODE_DE_LECTURE = 'focal' as const;
+
+/* Références STABLES (#5650, F1) : un `[]` écrit en ligne change d'identité à
+   chaque rendu, ce qui défait `useMemo`, `place()` et la mémoïsation du fil
+   virtualisé — la leçon du CLAUDE.md racine sur `preferredLanguages`. */
+const EMPTY_MESSAGES = [] as const;
+const EMPTY_TYPISTS = [] as const;
+const EMPTY_IDS: ReadonlySet<string> = new Set();
+
+export function AdminConversationReading({
+  conversationId,
+  language,
+  prisme,
+  readerLanguages,
+  viewer,
+  deps = apiDeps,
+  layout = 'fill',
+}: {
+  readonly conversationId: string;
+  /** La langue de l'INTERFACE d'administration (motif, boutons) — jamais celle du contenu. */
+  readonly language: AdminLanguage;
+  /**
+   * **LE PRISME DE QUI** — et donc s'il y a quelque chose à ANNONCER.
+   *
+   * Le bandeau existe parce que le prisme n'est PAS celui du lecteur : sur la
+   * fiche d'un membre, l'administrateur lit dans les langues de QUELQU'UN
+   * D'AUTRE, et rien d'autre à l'écran ne le lui dirait. Sur
+   * `/adm/conversations/:id`, il n'y a aucun membre administré — le prisme y
+   * est le sien, comme partout ailleurs dans l'application.
+   *
+   * Le bandeau y annonçait pourtant « Lu dans le prisme du membre : fr › en »
+   * (recette au navigateur, #6862) : une phrase FAUSSE sur la langue servie,
+   * qui fait prendre sa propre traduction pour celle d'un tiers. Là où le
+   * prisme est celui du lecteur, il n'y a rien à annoncer — la mention par
+   * rangée (`data-prism-indicator`) dit déjà qu'un texte est traduit, et c'est
+   * exactement ce que le produit dit partout ailleurs.
+   *
+   * REQUIS, sans défaut : un hôte qui oublierait de le poser hériterait
+   * silencieusement de l'affirmation la plus forte des deux.
+   */
+  readonly prisme: 'membre' | 'lecteur';
+  /** LE PRISME DU MEMBRE (ou de l'administrateur hors fiche membre) — face CONTENU. */
+  readonly readerLanguages: readonly string[];
+  /** La face CADRAGE du même prisme : libellés de jour, dates relatives. */
+  /**
+   * QUI EST « MOI » DANS CE FIL. Sur la fiche d'un membre, c'est LE MEMBRE :
+   * la conversation s'affiche de son point de vue, ses prises de parole du
+   * côté qu'il connaît. Hors fiche membre (`/adm/conversations/:id`), c'est
+   * l'administrateur lui-même — s'il participe à la conversation, ses propres
+   * messages restent les siens ; sinon rien n'est « à lui », ce qui est la
+   * vérité.
+   */
+  readonly viewer: Viewer;
+  /**
+   * LE PORT, INJECTABLE — `apiDeps` par défaut, comme partout ailleurs dans
+   * l'administration. Un témoin qui doit prouver QUELLE LANGUE est peinte a
+   * besoin de poser lui-même les traductions servies : sans cette porte, il ne
+   * pourrait mesurer le Prisme qu'à travers un cache seedé, c'est-à-dire pas à
+   * travers le chemin qu'un administrateur emprunte.
+   */
+  readonly deps?: AdminDeps;
+  /**
+   * OÙ LE FIL S'ASSOIT. `fill` (défaut) : l'hôte borne la hauteur (la fenêtre de
+   * lecture de la fiche d'un membre). `bounded` : l'hôte est une PAGE qui défile
+   * — la fiche d'une conversation —, et le fil se borne lui-même. Additif : aucun
+   * appelant existant n'a à changer.
+   */
+  readonly layout?: 'fill' | 'bounded';
+}) {
+  /* L'ADMIN trouve le motif PROPOSÉ déjà écrit (#11410) : « Lire » d'un seul geste, la
+     passerelle le recevant écrit (elle n'exempte que le rang souverain). */
+  const { sovereign: souverain, fallback: motifPropose } = useAdminMotive(language);
+  const [saisie, setSaisie] = useState(motifPropose ?? '');
+  /** Le motif VALIDÉ — figé une fois la lecture demandée. */
+  const [motif, setMotif] = useState<string | null>(null);
+  /** La lecture est armée : un motif validé, ou le rang souverain qui n'en écrit pas. */
+  const armee = motif !== null || souverain;
+  const [tab, setTab] = useState<ReadingTab>('thread');
+  /** L'onglet Médias a été OUVERT une fois : il reste monté derrière le fil, sa pellicule ne se relit pas à chaque retour. */
+  const [mediaOpened, setMediaOpened] = useState(false);
+  useEffect(() => {
+    if (tab === 'media') setMediaOpened(true);
+  }, [tab]);
+  /** Le message qu'un geste de l'onglet Médias a désigné — rejoint une fois le fil revenu à l'écran et le message chargé. */
+  const [pendingJump, setPendingJump] = useState<string | null>(null);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [expiredIds, setExpiredIds] = useState<ReadonlySet<string>>(() => new Set());
+
+  const thread = useInfiniteQuery({
+    queryKey: adminConversationThreadQueryKey(conversationId),
+    queryFn: async ({ pageParam, signal }) =>
+      /* `unwrap` lève une `ApiError` qui GARDE son statut : un refus (403) et une
+         conversation disparue (404) ne se disent pas comme une panne. */
+      unwrap(
+        await loadAdminSovereignThread({
+          ...deps,
+          conversationId,
+          offset: pageParam,
+          reason: motif,
+          signal,
+        }),
+      ),
+    initialPageParam: 0,
+    getNextPageParam: nextAdminThreadOffset,
+    enabled: armee,
+    retry: false,
+    gcTime: 0,
+  });
+
+  const woven = useMemo(() => (thread.data === undefined ? null : mergeAdminThreadPages(thread.data.pages)), [thread.data]);
+  const messages = woven?.messages ?? EMPTY_MESSAGES;
+  const protectedIds = woven?.protectedIds ?? EMPTY_IDS;
+  const olderState = paginationStateOf({
+    hasNextPage: thread.hasNextPage,
+    isFetchingNextPage: thread.isFetchingNextPage,
+    isFetchNextPageError: thread.isFetchNextPageError,
+  });
+  /* Deux prises (le haut du fil, le pied de la pellicule) peuvent appeler dans le même
+     instant : la seconde rejoint la page en vol au lieu de l'annuler. */
+  const fetchNextPage = thread.fetchNextPage;
+  const fetchOlder = useCallback(() => void fetchNextPage({ cancelRefetch: false }), [fetchNextPage]);
+  /* `useMemo` et non un appel nu : `placed` alimente le virtualiseur, le saut
+     de citation et la scène. Le reconstruire à chaque rendu leur donnerait une
+     identité neuve à chaque fois — la mémoïsation du fil ne tiendrait plus
+     rien (« Zero Unnecessary Re-render », CLAUDE.md), même discipline que
+     `routes/thread.tsx`. */
+  const placed = useMemo(() => place(messages, { locale: language }), [messages, language]);
+
+  const scroller = useRef<HTMLElement | null>(null);
+  /**
+   * LE MÊME VIRTUALISEUR QUE LE FIL, et il n'est pas optionnel : `ThreadModes`
+   * n'itère QUE sur `virtualizer.getVirtualItems()` et pose la hauteur totale
+   * depuis `getTotalSize()`. Sans lui, la liste ne rend pas une rangée — ce
+   * n'est pas une optimisation qu'on pourrait sauter, c'est la structure.
+   *
+   * `measureElement` plutôt qu'une hauteur fixe, pour la raison qu'écrit
+   * `thread.tsx` : les bulles n'ont pas de hauteur commune, et une estimation
+   * fixe ferait sauter la barre de défilement à chaque mesure réelle.
+   */
+  const anchorTo = useHeadAnchor(placed[0]?.message.id);
+  const virtualizer = useVirtualizer({
+    count: placed.length,
+    getScrollElement: () => scroller.current,
+    estimateSize: () => THREAD_ROW_ESTIMATE,
+    overscan: 6,
+    getItemKey: (index) => placed[index]?.message.id ?? index,
+    anchorTo,
+  });
+
+  const scene = useThreadScene(scroller, { mode: MODE_DE_LECTURE, ready: placed.length > 0 });
+  const noteProgrammaticScroll = scene.noteProgrammaticScroll;
+
+  /* La prise de tête n'est armée que fil À L'ÉCRAN : caché derrière l'onglet Médias, il
+     ne demanderait pas de pages pour un défilement que personne ne fait. */
+  const older = useOlderMessages({
+    scroller,
+    state: olderState,
+    rowCount: tab === 'thread' ? placed.length : 0,
+    firstMessageId: placed[0]?.message.id,
+    fetchOlder,
+    noteProgrammaticScroll,
+  });
+
+  useThreadOpenScroll({
+    scroller,
+    conversationId,
+    placed,
+    unreadBoundary: null,
+    ready: placed.length > 0,
+    virtualizer,
+    onProgrammaticScroll: noteProgrammaticScroll,
+    followTail: false,
+  });
+
+  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (highlightTimer.current !== null) clearTimeout(highlightTimer.current);
+    },
+    [],
+  );
+
+  /**
+   * LE SAUT VERS UNE CITATION — CÂBLÉ, jamais bouchonné. La carte de citation
+   * porte un bouton ; un bouton qui ne saute nulle part est le contrôle sans
+   * effet que la loi 4 interdit. Le saut est BORNÉ à la page chargée : un
+   * message cité qui n'y est pas ne bouge rien plutôt que de sauter au hasard.
+   */
+  const jumpToMessage = useCallback(
+    (messageId: string) => {
+      const index = placed.findIndex((p) => p.message.id === messageId);
+      if (index === -1) return;
+      noteProgrammaticScroll();
+      virtualizer.scrollToIndex(index, { align: 'center' });
+      setHighlightedId(messageId);
+      if (highlightTimer.current !== null) clearTimeout(highlightTimer.current);
+      highlightTimer.current = setTimeout(() => setHighlightedId(null), 1600);
+    },
+    [placed, virtualizer, noteProgrammaticScroll],
+  );
+
+  /* « Voir dans le fil » depuis l'onglet Médias : le saut attend que le fil soit revenu
+     à l'écran, sans quoi le virtualiseur d'un panneau caché ne mesure rien. Et depuis
+     #11510 la pellicule ne vient plus des pages du fil : une pièce peut être bien plus
+     ancienne que ce qui est chargé. Le fil REMONTE alors page par page jusqu'au message
+     — un « Voir dans le fil » qui ne mènerait nulle part serait le contrôle sans effet
+     que la loi 4 interdit — et renonce quand le fil est épuisé ou en échec. */
+  const threadHasNextPage = thread.hasNextPage;
+  const threadIsFetchingNextPage = thread.isFetchingNextPage;
+  const threadIsFetchNextPageError = thread.isFetchNextPageError;
+  useEffect(() => {
+    if (tab !== 'thread' || pendingJump === null) return;
+    if (placed.some((p) => p.message.id === pendingJump)) {
+      setPendingJump(null);
+      jumpToMessage(pendingJump);
+      return;
+    }
+    if (!threadHasNextPage || threadIsFetchNextPageError) {
+      setPendingJump(null);
+      return;
+    }
+    if (!threadIsFetchingNextPage) fetchOlder();
+  }, [tab, pendingJump, placed, jumpToMessage, threadHasNextPage, threadIsFetchingNextPage, threadIsFetchNextPageError, fetchOlder]);
+
+  const showInThread = useCallback((messageId: string) => {
+    setTab('thread');
+    setPendingJump(messageId);
+  }, []);
+
+  /**
+   * UN ÉPHÉMÈRE QUI S'ÉTEINT SOUS LES YEUX S'ÉTEINT ICI AUSSI. La passerelle
+   * retient déjà le contenu d'un message expiré ; ce relais couvre le cas où
+   * l'échéance tombe PENDANT la lecture. Ne rien câbler laisserait la rangée
+   * afficher son minuteur à zéro sans jamais basculer.
+   */
+  const onEphemeralExpired = useCallback((messageId: string) => {
+    setExpiredIds((courant) => (courant.has(messageId) ? courant : new Set([...courant, messageId])));
+  }, []);
+
+  const contentWithheld = useCallback((messageId: string) => protectedIds.has(messageId), [protectedIds]);
+
+  const ephemeralDurations = woven?.ephemeralDurations;
+  /**
+   * LA MARQUE D'UN ÉPHÉMÈRE — « éphémère · 30 s » sous la rangée. La durée n'est
+   * jamais confiée au fil (voir `AdminSovereignThreadPage.ephemeralDurations`) :
+   * l'administration constate qu'un message était écrit pour disparaître, elle
+   * ne le reçoit pas, et il ne disparaît pas sous ses yeux.
+   */
+  const ephemeralNote = useCallback(
+    (messageId: string) => {
+      const seconds = ephemeralDurations?.get(messageId);
+      if (seconds === undefined) return null;
+      return (
+        <p data-admin-ephemeral={messageId} className="px-4 pb-1 text-caption" style={{ color: INK2 }}>
+          {translateAdmin(language, 'admin.conversation.reading.ephemeral', { duration: formatDuration(seconds, 's', language) })}
+        </p>
+      );
+    },
+    [ephemeralDurations, language],
+  );
+
+  const longueurDuMotif = saisie.trim().length;
+  const motifSuffisant = longueurDuMotif >= MOTIF_LONGUEUR_MINIMALE && longueurDuMotif <= MOTIF_LONGUEUR_MAXIMALE;
+
+  if (!armee) {
+    return (
+      <div className="grid gap-3" data-admin-reading-gate>
+        <label className="grid gap-1">
+          <span className="text-caption font-medium" style={{ color: INK2 }}>
+            {translateAdmin(language, 'admin.convDetail.reasonLabel')}
+          </span>
+          <textarea
+            value={saisie}
+            data-admin-reason
+            rows={3}
+            maxLength={MOTIF_LONGUEUR_MAXIMALE}
+            /* `onInput`, JAMAIS `onChange` — convention du dépôt, et mesurée :
+               React fait normalement de `onChange` un synonyme de l'événement
+               `input` sur un champ texte, mais l'équivalence repose sur son
+               suivi de valeur, que happy-dom ne satisfait pas. Un champ câblé
+               `onChange` se monte, s'affiche, se remplit à l'œil — et ne
+               rapporte JAMAIS rien à son hôte sous témoin. */
+            onInput={(event) => setSaisie(event.currentTarget.value)}
+            onChange={() => undefined}
+            className={`rounded-card px-4 py-3 text-body ${FOCUS}`}
+            style={{ backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)', color: INK, outlineColor: BRAND }}
+          />
+          <span className="text-caption" style={{ color: INK2 }}>
+            {translateAdmin(language, 'admin.convDetail.reasonHint')}
+          </span>
+        </label>
+        <button
+          type="button"
+          data-admin-reason-submit
+          disabled={!motifSuffisant}
+          onClick={() => setMotif(saisie.trim())}
+          className={`w-fit rounded-chip px-5 text-body font-semibold text-ios-on-brand disabled:opacity-40 ${FOCUS}`}
+          style={{ minHeight: 44, backgroundColor: BRAND, outlineColor: BRAND }}
+        >
+          {translateAdmin(language, 'admin.convDetail.read')}
+        </button>
+      </div>
+    );
+  }
+
+  if (thread.isPending) return <AdminSkeleton rows={6} />;
+
+  if (thread.data === undefined) {
+    /* Trois échecs, trois phrases (audit 2026-10-04) : un refus n'est pas une panne,
+       une conversation disparue non plus — et ni l'un ni l'autre ne se « réessaie ». */
+    const status = thread.error instanceof ApiError ? thread.error.status : 0;
+    if (status === 403) {
+      return (
+        <div data-admin-reading-failure="denied">
+          <AdminDeniedInline language={language} />
+        </div>
+      );
+    }
+    if (status === 404) {
+      return (
+        <div data-admin-reading-failure="missing">
+          <AdminEmptyState glyph="chats" title={translateAdmin(language, 'admin.conversation.reading.missing')} />
+        </div>
+      );
+    }
+    return (
+      <div data-admin-reading-failure="error">
+        <AdminErrorState language={language} onRetry={() => void thread.refetch()} />
+      </div>
+    );
+  }
+
+  if (placed.length === 0) {
+    return (
+      <div data-admin-reading-empty>
+        <AdminEmptyState glyph="chats" title={translateAdmin(language, 'admin.convDetail.empty')} />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="flex min-h-0 flex-1 flex-col"
+      data-admin-reading={conversationId}
+      {...(layout === 'bounded' ? { style: { height: BOUNDED_HEIGHT } } : {})}
+    >
+      {/* LE PRISME D'UN AUTRE, DIT À VOIX HAUTE — un administrateur qui lit
+          dans les langues de quelqu'un d'autre doit le savoir, sinon il prend
+          la traduction d'un tiers pour ce qu'il lirait lui-même. Le bandeau ne
+          se peint QUE dans ce cas : voir le doc-comment de `prisme`.
+          `lang` sur le conteneur reste posé dans les deux cas — le fil est
+          rendu dans une langue, et un lecteur d'écran doit le prononcer avec
+          la bonne voix, que cette langue soit celle du membre ou la sienne. */}
+      {prisme === 'membre' ? (
+        <p className="shrink-0 px-4 pb-1 text-caption" style={{ color: INK2 }} data-admin-reading-prism>
+          {translateAdmin(language, 'admin.convDetail.memberPrism', { languages: readerLanguages.join(' › ') })}
+        </p>
+      ) : null}
+
+      <div
+        role="tablist"
+        aria-label={translateAdmin(language, 'admin.conversation.reading.tabs')}
+        className="flex shrink-0 gap-2 pb-2"
+        onKeyDown={(event) => {
+          if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+          event.preventDefault();
+          setTab((current) => (current === 'thread' ? 'media' : 'thread'));
+        }}
+      >
+        {READING_TABS.map((candidate) => {
+          const selected = candidate === tab;
+          return (
+            <button
+              key={candidate}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              tabIndex={selected ? 0 : -1}
+              data-admin-reading-tab={candidate}
+              onClick={() => setTab(candidate)}
+              className={`rounded-chip px-4 text-body font-semibold ${FOCUS}`}
+              style={{
+                minHeight: 44,
+                outlineColor: BRAND,
+                color: selected ? 'var(--color-ios-on-brand)' : INK,
+                backgroundColor: selected ? BRAND : 'var(--color-ios-surface)',
+                border: selected ? '1px solid transparent' : '1px solid var(--color-edge)',
+              }}
+            >
+              {translateAdmin(language, TAB_LABEL[candidate])}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* LE FIL RESTE MONTÉ derrière l'onglet Médias : sa position de lecture et ses
+          mesures survivent à l'aller-retour, et « Voir dans le fil » y saute. */}
+      <div className="relative flex min-h-0 flex-1 flex-col" hidden={tab !== 'thread'}>
+        {/* `<section>` et non `<div>` : React type le `ref` d'une balise
+            sectionnante en `HTMLElement`, le type même qu'attendent
+            `useThreadScene` et `Virtualizer<HTMLElement, Element>` — la MÊME
+            raison qui fait du fil un `<main ref={scroller}>`. */}
+        <section ref={scroller} className="flex min-h-0 flex-1 flex-col overflow-y-auto" lang={language}>
+          {/* LE DÉBUT DU FIL SE DIT — et sa place est tenue avant qu'il ne s'écrive :
+              la phrase qui apparaît en haut ne pousse pas ce qu'on est en train de lire. */}
+          <p className="shrink-0 px-4 py-2 text-center text-caption" style={{ color: INK2, minHeight: 32 }} data-admin-reading-start>
+            {olderState === 'exhausted' ? translateAdmin(language, 'admin.conversation.reading.start') : ''}
+          </p>
+          <ThreadModes
+            mode={MODE_DE_LECTURE}
+            viewer={viewer}
+            placed={placed}
+            virtualizer={virtualizer}
+            scene={scene}
+            readerLanguages={readerLanguages}
+            group
+            highlightedId={highlightedId}
+            expiredIds={expiredIds}
+            jumpToMessage={jumpToMessage}
+            onEphemeralExpired={onEphemeralExpired}
+            contentWithheld={contentWithheld}
+            rowNoteOf={ephemeralNote}
+            typists={EMPTY_TYPISTS}
+            older={{ state: older.state, sentinelRef: older.sentinelRef }}
+          />
+        </section>
+        <OlderLoadIndicator state={older.state} onRetry={older.retry} />
+      </div>
+
+      {/* LA PELLICULE RESTE MONTÉE une fois ouverte, comme le fil : sa requête (une ligne
+          d'audit par page) ne se rejoue pas à chaque aller-retour entre les onglets. */}
+      {mediaOpened ? (
+        <div className="flex min-h-0 flex-1 flex-col" hidden={tab !== 'media'} data-admin-reading-media-panel>
+          <AdminConversationReadingMedia
+            conversationId={conversationId}
+            reason={motif}
+            deps={deps}
+            enabled={armee}
+            language={language}
+            readerLanguages={readerLanguages}
+            viewerId={viewer.id ?? ''}
+            onShowInThread={showInThread}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}

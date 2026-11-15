@@ -82,7 +82,7 @@ final class MessageListLayoutOffsetTests: XCTestCase {
         XCTAssertEqual(
             MessageListOffsetCompensationLaw.batchUpdateAdjustment(
                 headDelta: 150,
-                contentOffsetY: 600,
+                distanceFromVisualBottom: 600,
                 nearBottomThreshold: 200
             ),
             150,
@@ -94,7 +94,7 @@ final class MessageListLayoutOffsetTests: XCTestCase {
         XCTAssertEqual(
             MessageListOffsetCompensationLaw.batchUpdateAdjustment(
                 headDelta: 150,
-                contentOffsetY: 40,
+                distanceFromVisualBottom: 40,
                 nearBottomThreshold: 200
             ),
             0,
@@ -106,11 +106,49 @@ final class MessageListLayoutOffsetTests: XCTestCase {
         XCTAssertEqual(
             MessageListOffsetCompensationLaw.batchUpdateAdjustment(
                 headDelta: -52,
-                contentOffsetY: 600,
+                distanceFromVisualBottom: 600,
                 nearBottomThreshold: 200
             ),
             -52,
             "le typing indicator qui disparaît (delta négatif) tire les cellules visibles vers le bas — l'offset doit suivre pour que la scène reste immobile."
+        )
+    }
+
+    // MARK: - #16458 — « près du bas » se mesure depuis le bas VISUEL
+
+    func test_distanceFromVisualBottom_addsTheComposerInset() {
+        XCTAssertEqual(
+            MessageListOffsetCompensationLaw.distanceFromVisualBottom(contentOffsetY: 150, bottomInset: 140),
+            290,
+            "liste retournée : tout en bas, l'offset vaut -contentInset.top ; la distance au bas visuel est offset + marge."
+        )
+        XCTAssertEqual(
+            MessageListOffsetCompensationLaw.distanceFromVisualBottom(contentOffsetY: -140, bottomInset: 140),
+            0
+        )
+    }
+
+    func test_isNearVisualBottom_aReaderAFewBubblesUp_isNotNearTheBottom() {
+        let distance = MessageListOffsetCompensationLaw.distanceFromVisualBottom(contentOffsetY: 150, bottomInset: 140)
+
+        XCTAssertFalse(
+            MessageListOffsetCompensationLaw.isNearVisualBottom(distanceFromVisualBottom: distance, threshold: 200),
+            "290 pt au-dessus du bas : le lecteur relit, un message entrant ne doit pas le ramener en bas."
+        )
+        XCTAssertTrue(
+            MessageListOffsetCompensationLaw.isNearVisualBottom(distanceFromVisualBottom: 0, threshold: 200)
+        )
+    }
+
+    func test_batchUpdate_withAComposerInset_compensatesAReaderAFewBubblesUp() {
+        XCTAssertEqual(
+            MessageListOffsetCompensationLaw.batchUpdateAdjustment(
+                headDelta: 80,
+                distanceFromVisualBottom: MessageListOffsetCompensationLaw.distanceFromVisualBottom(contentOffsetY: 150, bottomInset: 140),
+                nearBottomThreshold: 200
+            ),
+            80,
+            "l'offset brut (150) passait pour « près du bas » : l'insertion n'était pas compensée et la lecture sautait."
         )
     }
 
@@ -299,6 +337,260 @@ final class MessageListLayoutOffsetTests: XCTestCase {
             collectionView.contentOffset.y, 600, accuracy: 1,
             "seuil non posé ⇒ compensation désactivée — l'offset reste, le champ visuel saute (comportement UIKit nu)."
         )
+    }
+
+    // MARK: - Invalidation de RÉCUPÉRATION (budget dépassé) — l'ancre de lecture
+
+    private final class HeightBox {
+        var heights: [Int: CGFloat] = [:]
+        func height(for item: Int) -> CGFloat { heights[item] ?? 100 }
+    }
+
+    /// Groupe `.custom` : positions DÉTERMINISTES lues dans `heights` à
+    /// chaque `prepare()` — contourne toute incertitude sur le cache de
+    /// mesure self-sizing d'UIKit (hors-écran, invalidation complète…) pour
+    /// isoler exactement ce que le test veut prouver : la préservation de
+    /// l'ancre de lecture, quelle que soit la cause du changement de hauteur.
+    private func makeDeterministicHeightHarness(
+        itemCount: Int,
+        heights: HeightBox
+    ) -> (collectionView: UICollectionView, dataSource: UICollectionViewDiffableDataSource<Int, String>, window: UIWindow) {
+        let layout = MessageListLayout { _, _ in
+            let totalHeight = (0..<itemCount).reduce(CGFloat(0)) { $0 + heights.height(for: $1) }
+            let groupSize = NSCollectionLayoutSize(
+                widthDimension: .fractionalWidth(1),
+                heightDimension: .absolute(totalHeight)
+            )
+            let group = NSCollectionLayoutGroup.custom(layoutSize: groupSize) { environment in
+                var y: CGFloat = 0
+                var items: [NSCollectionLayoutGroupCustomItem] = []
+                for i in 0..<itemCount {
+                    let h = heights.height(for: i)
+                    items.append(NSCollectionLayoutGroupCustomItem(
+                        frame: CGRect(x: 0, y: y, width: environment.container.contentSize.width, height: h)
+                    ))
+                    y += h
+                }
+                return items
+            }
+            return NSCollectionLayoutSection(group: group)
+        }
+        let collectionView = UICollectionView(
+            frame: CGRect(x: 0, y: 0, width: 390, height: 300),
+            collectionViewLayout: layout
+        )
+        let registration = UICollectionView.CellRegistration<UICollectionViewCell, String> { _, _, _ in }
+        let dataSource = UICollectionViewDiffableDataSource<Int, String>(
+            collectionView: collectionView
+        ) { collectionView, indexPath, item in
+            collectionView.dequeueConfiguredReusableCell(using: registration, for: indexPath, item: item)
+        }
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 300))
+        window.addSubview(collectionView)
+        window.makeKeyAndVisible()
+
+        var snapshot = NSDiffableDataSourceSnapshot<Int, String>()
+        snapshot.appendSections([0])
+        snapshot.appendItems((0..<itemCount).map { "m\($0)" })
+        dataSource.apply(snapshot, animatingDifferences: false)
+        collectionView.layoutIfNeeded()
+        return (collectionView, dataSource, window)
+    }
+
+    /// Reproduit le mécanisme mesuré en repro live (2026-08-26) : une
+    /// cellule AU-DESSUS de la fenêtre visible (`m0`) change de hauteur
+    /// (-150 pt — le cas « séparateur de jour estimé 150 réalisé à ~36 » de
+    /// la doc de la loi) pendant que le budget de compensations partielles
+    /// est dépassé dans la MÊME transaction : le chemin de rattrapage
+    /// (invalidation COMPLÈTE, anti-SIGTRAP) prend le relais et — sans
+    /// ancre — ne porte AUCUNE des deux compensations. `contentOffset` doit
+    /// pourtant rester posé sur la rangée que le lecteur regardait :
+    /// mesuré en repro live, `contentOffset` a sauté de 968 à 842 en moins
+    /// de 20 ms sans doigt ni décélération.
+    func test_recoveryInvalidation_budgetExceeded_preservesReadingAnchor() {
+        let heights = HeightBox()
+        // `dataSource` doit rester VIVANT : `UICollectionView.dataSource`
+        // est faible, et sans référence forte ici ARC le libère avant que
+        // le rattrapage ne re-questionne le nombre d'items.
+        let (collectionView, dataSource, _) = makeDeterministicHeightHarness(itemCount: 10, heights: heights)
+        _ = dataSource
+        let layout = collectionView.collectionViewLayout as! MessageListLayout
+
+        // Géométrie initiale (tout à 100 pt) : la fenêtre [400, 700) couvre
+        // m4 (400-500) en tête — l'ancre de lecture, l'utilisateur ayant
+        // défilé loin dans l'historique, `m0` hors champ au-dessus.
+        collectionView.contentOffset = CGPoint(x: 0, y: 400)
+        collectionView.layoutIfNeeded()
+        let anchorIndexPath = IndexPath(item: 4, section: 0)
+        guard let anchorMinYBefore = layout.layoutAttributesForItem(at: anchorIndexPath)?.frame.minY else {
+            return XCTFail("ancre absente du layout")
+        }
+        let distanceFromOffsetBefore = anchorMinYBefore - collectionView.contentOffset.y
+
+        // `m0` (hors champ, minY=0 < offset=400) rétrécit de 100 pt — tout
+        // ce qui suit, ancre comprise, glisse de 100 pt vers le haut au
+        // prochain `prepare()`.
+        heights.heights[0] = 0
+
+        // Appel DIRECT du chemin de rattrapage (invalidation COMPLÈTE, celui
+        // que `scheduleRecoveryInvalidation()` planifie en asynchrone quand
+        // le budget de compensations partielles est dépassé DANS LA MÊME
+        // transaction) — le mécanisme d'ancrage ne dépend d'aucun timing,
+        // seul son déclenchement réel l'est ; l'appeler directement isole le
+        // test de cette asynchronie sans en changer la sémantique.
+        layout.fireOrDeferRecoveryInvalidation()
+
+        guard let anchorMinYAfter = layout.layoutAttributesForItem(at: anchorIndexPath)?.frame.minY else {
+            return XCTFail("ancre disparue après le rattrapage")
+        }
+        let distanceFromOffsetAfter = anchorMinYAfter - collectionView.contentOffset.y
+
+        XCTAssertEqual(
+            distanceFromOffsetAfter, distanceFromOffsetBefore, accuracy: 1,
+            "l'invalidation de récupération (budget dépassé) doit préserver la position visuelle de la rangée lue par l'utilisateur — jamais la faire sauter au repos."
+        )
+    }
+
+    // MARK: - Budget dépassé (#7624) — le layout n'OUBLIE jamais ce qu'il a mesuré
+
+    /// Harnais self-sizing RÉEL : estimation 100 pt, rangées de 50 pt. Les
+    /// hauteurs de `heights` sont lues par la contrainte de chaque cellule à
+    /// sa configuration — une cellule visible re-mesurée après
+    /// `invalidateIntrinsicContentSize()` rend donc la nouvelle cote.
+    private func makeSelfSizingHarness(
+        itemCount: Int,
+        heights: HeightBox
+    ) -> (collectionView: UICollectionView, dataSource: UICollectionViewDiffableDataSource<Int, String>, window: UIWindow) {
+        let layout = MessageListLayout { _, _ in
+            let size = NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .estimated(100))
+            let item = NSCollectionLayoutItem(layoutSize: size)
+            let group = NSCollectionLayoutGroup.vertical(layoutSize: size, subitems: [item])
+            return NSCollectionLayoutSection(group: group)
+        }
+        let collectionView = UICollectionView(
+            frame: CGRect(x: 0, y: 0, width: 390, height: 300),
+            collectionViewLayout: layout
+        )
+        let registration = UICollectionView.CellRegistration<SelfSizingProbeCell, String> { cell, indexPath, _ in
+            cell.heights = heights
+            cell.item = indexPath.item
+        }
+        let dataSource = UICollectionViewDiffableDataSource<Int, String>(
+            collectionView: collectionView
+        ) { collectionView, indexPath, item in
+            collectionView.dequeueConfiguredReusableCell(using: registration, for: indexPath, item: item)
+        }
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 300))
+        window.addSubview(collectionView)
+        window.makeKeyAndVisible()
+        var snapshot = NSDiffableDataSourceSnapshot<Int, String>()
+        snapshot.appendSections([0])
+        snapshot.appendItems((0..<itemCount).map { "m\($0)" })
+        dataSource.apply(snapshot, animatingDifferences: false)
+        collectionView.layoutIfNeeded()
+        return (collectionView, dataSource, window)
+    }
+
+    /// Cellule dont la hauteur préférée est lue à CHAQUE mesure dans
+    /// `heights` — le contenu SwiftUI d'une rangée qui change de cote.
+    private final class SelfSizingProbeCell: UICollectionViewCell {
+        var heights: HeightBox?
+        var item = 0
+        override func preferredLayoutAttributesFitting(
+            _ layoutAttributes: UICollectionViewLayoutAttributes
+        ) -> UICollectionViewLayoutAttributes {
+            let attributes = layoutAttributes.copy() as! UICollectionViewLayoutAttributes
+            attributes.frame.size.height = heights?.height(for: item) ?? 50
+            return attributes
+        }
+    }
+
+    /// Les rangées VISIBLES changent de cote dans la même transaction : un
+    /// contexte self-sizing RÉEL par rangée — celui qu'UIKit fabrique quand le
+    /// contenu SwiftUI d'une cellule `UIHostingConfiguration` change de cote —
+    /// livré par l'entonnoir `invalidateLayout(with:)`, comme en production.
+    private func resizeVisibleRows(of collectionView: UICollectionView, heights: HeightBox, to height: CGFloat) -> [Int] {
+        let layout = collectionView.collectionViewLayout as! MessageListLayout
+        let visible = collectionView.indexPathsForVisibleItems.sorted()
+        for indexPath in visible {
+            heights.heights[indexPath.item] = height
+            guard let original = layout.layoutAttributesForItem(at: indexPath) else { continue }
+            let preferred = original.copy() as! UICollectionViewLayoutAttributes
+            preferred.frame.size.height = height
+            let context = layout.invalidationContext(
+                forPreferredLayoutAttributes: preferred,
+                withOriginalAttributes: original
+            )
+            layout.invalidateLayout(with: context)
+        }
+        return visible.map(\.item)
+    }
+
+    private func spinMainLoop(_ seconds: TimeInterval = 0.4) {
+        RunLoop.current.run(until: Date().addingTimeInterval(seconds))
+    }
+
+    /// Mesuré au simulateur (#7624, fil « Meeshy Global ») : chaque
+    /// dépassement du plafond de 4 invalidations partielles planifiait une
+    /// invalidation COMPLÈTE — et le layout compositionnel y jette TOUTES les
+    /// hauteurs mesurées (chaque cellule re-mesurée depuis l'estimation,
+    /// `in=62.7` pour toutes). La re-mesure de la fenêtre dépassait à son tour
+    /// le plafond : 22 invalidations complètes en cascade sur 25 s de flings,
+    /// 2,4 s de fil principal, et le contenu non visible retombé à
+    /// l'estimation (`contentSize` 7155 → 6445 au repos).
+    func test_invalidateLayout_partialBudgetExceeded_keepsMeasuredHeights() {
+        let heights = HeightBox()
+        for index in 0..<30 { heights.heights[index] = 50 }
+        let (collectionView, dataSource, _) = makeSelfSizingHarness(itemCount: 30, heights: heights)
+        _ = dataSource
+        let layout = collectionView.collectionViewLayout as! MessageListLayout
+        // Les rangées de l'ouverture sont MESURÉES (50 pt) puis sortent de la
+        // fenêtre.
+        spinMainLoop()
+        collectionView.contentOffset = CGPoint(x: 0, y: 700)
+        collectionView.layoutIfNeeded()
+        spinMainLoop()
+        XCTAssertFalse(collectionView.indexPathsForVisibleItems.contains(IndexPath(item: 0, section: 0)),
+                       "précondition : la rangée 0 est sortie de la fenêtre")
+        let measuredBefore = layout.layoutAttributesForItem(at: IndexPath(item: 0, section: 0))?.frame.height ?? 0
+        XCTAssertEqual(measuredBefore, 50, accuracy: 0.5, "précondition : la rangée 0 a été mesurée à l'ouverture")
+
+        let resized = resizeVisibleRows(of: collectionView, heights: heights, to: 80)
+        XCTAssertGreaterThan(resized.count, MessageListLayout.maxPartialInvalidationsPerTransaction,
+                             "précondition : plus de rangées retaillées que le plafond")
+        collectionView.layoutIfNeeded()
+        spinMainLoop()
+        collectionView.layoutIfNeeded()
+
+        XCTAssertEqual(
+            layout.layoutAttributesForItem(at: IndexPath(item: 0, section: 0))?.frame.height ?? 0, measuredBefore, accuracy: 0.5,
+            "un dépassement du plafond d'invalidations partielles ne doit jamais faire oublier au layout les hauteurs déjà mesurées — une invalidation complète les ramène toutes à l'estimation et relance la tempête qu'elle devait éteindre."
+        )
+    }
+
+    /// Le plafond DIFFÈRE une correction, il ne la perd pas : des rangées
+    /// VISIBLES qui changent toutes de cote dans la même transaction (plus
+    /// que le plafond) atteignent leur hauteur réelle au tour suivant.
+    func test_invalidateLayout_partialBudgetExceeded_visibleRowsConvergeToTheirHeight() {
+        let heights = HeightBox()
+        for index in 0..<20 { heights.heights[index] = 50 }
+        let (collectionView, dataSource, _) = makeSelfSizingHarness(itemCount: 20, heights: heights)
+        _ = dataSource
+        let layout = collectionView.collectionViewLayout as! MessageListLayout
+        spinMainLoop()
+
+        let resized = resizeVisibleRows(of: collectionView, heights: heights, to: 80)
+        XCTAssertGreaterThan(resized.count, MessageListLayout.maxPartialInvalidationsPerTransaction,
+                             "précondition : plus de rangées retaillées que le plafond")
+        collectionView.layoutIfNeeded()
+        spinMainLoop()
+        collectionView.layoutIfNeeded()
+        spinMainLoop()
+
+        for item in resized where collectionView.indexPathsForVisibleItems.contains(IndexPath(item: item, section: 0)) {
+            XCTAssertEqual(layout.layoutAttributesForItem(at: IndexPath(item: item, section: 0))?.frame.height ?? 0, 80, accuracy: 0.5,
+                           "rangée \(item) : la correction avalée par le plafond doit être rejouée au tour suivant")
+        }
     }
 
     // MARK: - Hôte — le contrôleur monte bien la sous-classe

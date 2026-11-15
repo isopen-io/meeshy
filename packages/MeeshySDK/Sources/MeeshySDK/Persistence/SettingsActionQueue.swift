@@ -56,7 +56,7 @@ public actor SettingsActionQueue {
     private var items: [SettingsAction] = []
     private var isFlushing = false
     private var cancellables = Set<AnyCancellable>()
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "settingsactionqueue")
+    private let logger = MeeshyLog.logger(.settingsactionqueue, subsystem: .legacySDK)
 
     /// In-memory failure counter per `SettingsAction.id`. Deliberately not
     /// persisted alongside `items` (unlike `OutboxRecord.attempts`): a fresh
@@ -67,14 +67,13 @@ public actor SettingsActionQueue {
     private var failureCounts: [String: Int] = [:]
 
     private let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .iso8601
+        let e = MeeshyCoders.encoder(.persistence)
         return e
     }()
 
     /// Closure that runs each pending action. Return `true` if it succeeded
     /// (item is removed); `false` keeps it queued for the next attempt.
-    public var onFlush: (@Sendable (SettingsAction) async -> Bool)?
+    public var onFlush: (@Sendable @concurrent (SettingsAction) async -> Bool)?
 
     public func setFlushHandler(_ handler: @escaping @Sendable (SettingsAction) async -> Bool) {
         onFlush = handler
@@ -138,7 +137,7 @@ public actor SettingsActionQueue {
         } catch {
             // Le merge est perdu : la mutation précédente est écrasée par la
             // nouvelle au lieu d'être fusionnée.
-            Logger(subsystem: "com.meeshy.sdk", category: "settingsactionqueue")
+            MeeshyLog.logger(.settingsactionqueue, subsystem: .legacySDK)
                 .error("Merged settings payload could not be serialized, previous mutation dropped: \(error.localizedDescription, privacy: .public)")
             return incoming
         }
@@ -221,7 +220,7 @@ public actor SettingsActionQueue {
             .sink { [weak self] _ in
                 guard let self else { return }
                 Task {
-                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    guard await cancellableSleep(for: QueueTiming.reconnectSettle) else { return }
                     await self.flushIfPossible()
                 }
             }
@@ -231,15 +230,9 @@ public actor SettingsActionQueue {
     // MARK: - Disk Persistence
 
     private var queueFileURL: URL {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
-        if !FileManager.default.fileExists(atPath: cacheDir.path) {
-            do {
-                try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
-            } catch {
-                Logger(subsystem: "com.meeshy.sdk", category: "settingsactionqueue")
-                    .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
-            }
+        let cacheDir = MeeshyCacheDirectory.ensured { error in
+            MeeshyLog.logger(.settingsactionqueue, subsystem: .legacySDK)
+                .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
         }
         return cacheDir.appendingPathComponent(Self.queueFileName)
     }
@@ -254,15 +247,13 @@ public actor SettingsActionQueue {
     }
 
     private static func loadFromDisk() -> [SettingsAction] {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
+        let cacheDir = MeeshyCacheDirectory.url
         let url = cacheDir.appendingPathComponent(queueFileName)
         guard FileManager.default.fileExists(atPath: url.path) else { return [] }
 
         do {
             let data = try Data(contentsOf: url)
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
+            let decoder = MeeshyCoders.decoder(.persistence)
             return try decoder.decode([SettingsAction].self, from: data)
         } catch {
             return []

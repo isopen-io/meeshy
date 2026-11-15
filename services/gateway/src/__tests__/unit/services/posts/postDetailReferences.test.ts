@@ -20,6 +20,7 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 
 jest.mock('../../../../services/posts/communityVisibility', () => ({
   getCommunityCoMemberIds: jest.fn<any>().mockResolvedValue([]),
+  getReadableCommunityIds: jest.fn<any>().mockResolvedValue([]),
 }));
 
 jest.mock('../../../../services/ZmqSingleton', () => ({
@@ -44,6 +45,14 @@ const POST_MENTIONS = [
 
 function makePrisma(post: unknown) {
   return {
+    /* #7184 — les deux lectures de `getBlockRelatedUserIds` : « qui m'a bloqué »
+       et « qui j'ai bloqué ». La garde de blocage traverse désormais
+       `buildVisibilityFilter`, donc tout double qui compose un `where` de post
+       doit les servir — un double muet ferait rougir la garde, pas le code. */
+    user: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue({ blockedUserIds: [] }),
+    } as any,
     post: {
       findFirst: jest.fn<any>().mockResolvedValue(post),
       count: jest.fn<any>().mockResolvedValue(0),
@@ -80,8 +89,8 @@ describe('PostService.getPostById — références', () => {
     const prisma = makePrisma(makePost());
     await new PostService(prisma).getPostById('p-1', AUTHOR);
 
-    const include = prisma.post.findFirst.mock.calls[0][0].include;
-    expect(include.postMentions.where).toBeUndefined();
+    const select = prisma.post.findFirst.mock.calls[0][0].select;
+    expect(select.postMentions.where).toBeUndefined();
   });
 
   it('rend TOUTES les références à l\'auteur, silencieuse comprise', async () => {
@@ -159,6 +168,17 @@ describe('PostService.getPostById — le référencé hors audience', () => {
 
     expect(post).not.toBeNull();
     expect((post as any).referenceAccess).toBe('granted');
+  });
+
+  // #10315 — PRIVATE l'emporte sur la référence (`postVisibility.ts`) : une publication
+  // mise en privé ou hors ligne par la modération ne s'ouvre plus par une mention.
+  // La relecture de secours le demande à la BASE — un double qui la rendrait quand
+  // même ne prouverait rien, d'où un témoin sur la requête.
+  it('ne relit jamais une publication PRIVÉE pour un référencé — la modération ne se contourne pas par une mention', async () => {
+    const prisma = makeReferencedPrisma({ visible: null, unfiltered: null, reference: { expiredViewAt: null } });
+
+    expect(await new PostService(prisma).getPostById('p-1', BOB)).toBeNull();
+    expect(prisma.post.findFirst.mock.calls[1][0].where).toMatchObject({ id: 'p-1', visibility: { not: 'PRIVATE' } });
   });
 
   it('refuse quand le droit de référence est éteint', async () => {

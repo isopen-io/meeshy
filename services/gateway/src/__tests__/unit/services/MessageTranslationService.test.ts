@@ -38,7 +38,7 @@ jest.mock('../../../services/ZmqSingleton', () => ({
   }
 }));
 
-// Mock fs promises for audio file operations
+jest.mock('../../../services/EncryptionService', () => jest.requireActual<typeof import('../../helpers/server-key-stub')>('../../helpers/server-key-stub').serverKeyStub());
 jest.mock('fs', () => ({
   promises: {
     mkdir: jest.fn().mockResolvedValue(undefined),

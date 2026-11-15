@@ -5,7 +5,11 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
@@ -14,12 +18,17 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.conversation.ParticipantCacheRepository
 import me.meeshy.sdk.model.MemberModeration
 import me.meeshy.sdk.model.MemberRole
+import me.meeshy.sdk.model.MemberRowFormat
 import me.meeshy.sdk.model.MemberRoleAction
 import me.meeshy.sdk.model.MemberRoster
+import me.meeshy.sdk.model.MemberRosterPage
 import me.meeshy.sdk.model.PaginatedParticipant
+import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
 import me.meeshy.sdk.model.currentUserRole
+import me.meeshy.sdk.model.knownUserRole
 import me.meeshy.sdk.model.matches
 import me.meeshy.sdk.model.role
 import me.meeshy.sdk.net.NetworkResult
@@ -37,9 +46,21 @@ data class ConversationMembersUiState(
     val isLoadingMore: Boolean = false,
     val searchQuery: String = "",
     val viewerRole: MemberRole = MemberRole.MEMBER,
+    /** Le rôle du lecteur quand il est CONNU (`knownUserRole`), `null` sinon : la garde de rôle du cache de la fiche (ADR-032). */
+    val readerRole: String? = null,
     val currentUserId: String? = null,
     val actionFailed: Boolean = false,
+    /** #15269 — la loi des actions accorde « Inviter » à ce lecteur (Global : administrateurs de la plateforme seuls). */
+    val mayInvite: Boolean = false,
+    /** Le changement de rôle choisi au menu, tant que « Changer le rôle ? » n'est pas confirmé. */
+    val pendingRoleChange: PendingRoleChange? = null,
 ) {
+    /** Squelette de lignes au démarrage à froid SEULEMENT : jamais sur un roster déjà à l'écran. */
+    val showSkeleton: Boolean get() = isLoading && roster.members.isEmpty()
+
+    /** Le serveur ne sert plus l'effectif exact : on rend « 199+ ». */
+    val isCapped: Boolean get() = MemberRowFormat.isCapped(memberCount)
+
     val members: List<PaginatedParticipant> get() = roster.members
     val memberCount: Int get() = roster.displayCount
     val canLoadMore: Boolean get() = roster.hasMore && !isLoadingMore
@@ -56,7 +77,7 @@ data class ConversationMembersUiState(
         MemberModeration.canRemove(actor = viewerRole, target = member.role, isSelf = isSelf(member))
 
     fun roleActions(member: PaginatedParticipant): List<MemberRoleAction> =
-        MemberModeration.roleActions(actor = viewerRole, target = member.role, isSelf = isSelf(member))
+        MemberModeration.roleActions(actor = viewerRole, target = member.role, isSelf = isSelf(member), hasAccount = member.userId != null)
 
     fun canBan(member: PaginatedParticipant): Boolean =
         MemberModeration.canBan(actor = viewerRole, target = member.role, isSelf = isSelf(member))
@@ -74,12 +95,14 @@ data class ConversationMembersUiState(
  * `conversation:participant-left` and `conversation:participant-banned` to the whole
  * roster, so a moderation action taken on another device — or by another moderator —
  * lands here without a refetch. Those three socket flows existed in
- * [MessageSocketManager] but had no consumer before this screen.
+ * [MessageSocketManager] but had no consumer before this screen. An arrival
+ * (`conversation:participant-joined`, `-unbanned`) silently re-reads the first page (#13795).
  */
 @OptIn(FlowPreview::class)
 @HiltViewModel
 class ConversationMembersViewModel @Inject constructor(
     private val conversationRepository: ConversationRepository,
+    private val participantCache: ParticipantCacheRepository,
     private val sessionRepository: SessionRepository,
     private val messageSocketManager: MessageSocketManager,
 ) : ViewModel() {
@@ -89,8 +112,17 @@ class ConversationMembersViewModel @Inject constructor(
 
     private val searchQuery = MutableStateFlow("")
 
+    private val effectChannel = Channel<MembersEffect>(Channel.BUFFERED)
+    val effects: Flow<MembersEffect> = effectChannel.receiveAsFlow()
+
     /** Everything bound to the currently-loaded conversation, cancelled when it changes. */
     private var bindings: List<Job> = emptyList()
+
+    /** La relecture silencieuse en cours : une arrivée plus récente la remplace, la plus lente ne l'écrase jamais. */
+    private var revalidation: Job? = null
+
+    /** La fenêtre de regroupement ouverte par la première arrivée : celles qui la suivent y sont absorbées. */
+    private var revalidationWindow: Job? = null
 
     /**
      * Bind to a conversation and load its first page. Idempotent for the same id —
@@ -101,6 +133,8 @@ class ConversationMembersViewModel @Inject constructor(
     fun load(conversationId: String) {
         if (_state.value.conversationId == conversationId) return
         bindings.forEach(Job::cancel)
+        revalidation?.cancel()
+        revalidationWindow?.cancel()
         searchQuery.value = ""
         _state.value = ConversationMembersUiState(
             conversationId = conversationId,
@@ -108,7 +142,8 @@ class ConversationMembersViewModel @Inject constructor(
         )
         bindings = observeViewerRole(conversationId) +
             observeSearch(conversationId) +
-            observeRosterEvents(conversationId)
+            observeRosterEvents(conversationId) +
+            observeCachedRoster(conversationId)
         refresh()
     }
 
@@ -137,6 +172,17 @@ class ConversationMembersViewModel @Inject constructor(
 
         _state.update { it.copy(isLoadingMore = true) }
         viewModelScope.launch {
+            if (current.searchQuery.isBlank()) {
+                val result = participantCache.nextPage(id)
+                _state.update { state ->
+                    when {
+                        result is NetworkResult.Success && state.searchQuery.isBlank() ->
+                            state.copy(roster = result.data, isLoadingMore = false)
+                        else -> state.copy(isLoadingMore = false)
+                    }
+                }
+                return@launch
+            }
             val result = conversationRepository.participants(
                 id = id,
                 search = current.searchQuery,
@@ -166,7 +212,7 @@ class ConversationMembersViewModel @Inject constructor(
      */
     fun changeRole(member: PaginatedParticipant, action: MemberRoleAction) {
         val id = _state.value.conversationId ?: return
-        val userId = member.userId ?: member.id
+        val userId = MemberModeration.addressKey(member)
         val previous = _state.value.roster
 
         _state.update { it.copy(roster = it.roster.withRole(userId, action.target), actionFailed = false) }
@@ -174,6 +220,10 @@ class ConversationMembersViewModel @Inject constructor(
             val result = conversationRepository.updateParticipantRole(id, userId, action.target)
             if (result is NetworkResult.Failure) {
                 _state.update { it.copy(roster = previous, actionFailed = true) }
+                effectChannel.trySend(MembersEffect.Haptic(FeedbackHaptic.ERROR))
+            } else {
+                participantCache.updateRole(id, userId, action.target.wireValue)
+                effectChannel.trySend(MembersEffect.Haptic(FeedbackHaptic.SUCCESS))
             }
         }
     }
@@ -184,7 +234,7 @@ class ConversationMembersViewModel @Inject constructor(
      */
     fun removeMember(member: PaginatedParticipant) {
         val id = _state.value.conversationId ?: return
-        val userId = member.userId ?: member.id
+        val userId = MemberModeration.addressKey(member)
         val previous = _state.value.roster
 
         _state.update { it.copy(roster = it.roster.withoutUser(userId), actionFailed = false) }
@@ -192,6 +242,10 @@ class ConversationMembersViewModel @Inject constructor(
             val result = conversationRepository.removeParticipant(id, userId)
             if (result is NetworkResult.Failure) {
                 _state.update { it.copy(roster = previous, actionFailed = true) }
+                effectChannel.trySend(MembersEffect.Haptic(FeedbackHaptic.ERROR))
+            } else {
+                participantCache.removeParticipant(id, userId)
+                effectChannel.trySend(MembersEffect.Haptic(FeedbackHaptic.SUCCESS))
             }
         }
     }
@@ -204,7 +258,7 @@ class ConversationMembersViewModel @Inject constructor(
      */
     fun banMember(member: PaginatedParticipant) {
         val id = _state.value.conversationId ?: return
-        val userId = member.userId ?: member.id
+        val userId = MemberModeration.addressKey(member)
         val previous = _state.value.roster
 
         _state.update { it.copy(roster = it.roster.withoutUser(userId), actionFailed = false) }
@@ -212,14 +266,64 @@ class ConversationMembersViewModel @Inject constructor(
             val result = conversationRepository.banParticipant(id, userId)
             if (result is NetworkResult.Failure) {
                 _state.update { it.copy(roster = previous, actionFailed = true) }
+                effectChannel.trySend(MembersEffect.Haptic(FeedbackHaptic.ERROR))
+            } else {
+                participantCache.removeParticipant(id, userId)
+                effectChannel.trySend(MembersEffect.Haptic(FeedbackHaptic.SUCCESS))
+            }
+        }
+    }
+
+    /** Le menu contextuel a choisi un rôle : rien ne part avant la confirmation « Changer le rôle ? ». */
+    fun requestRoleChange(member: PaginatedParticipant, action: MemberRoleAction) =
+        _state.update { it.copy(pendingRoleChange = PendingRoleChange(member, action)) }
+
+    fun cancelRoleChange() = _state.update { it.copy(pendingRoleChange = null) }
+
+    fun confirmRoleChange() {
+        val pending = _state.value.pendingRoleChange ?: return
+        _state.update { it.copy(pendingRoleChange = null) }
+        changeRole(pending.member, pending.action)
+    }
+
+    /**
+     * Quitter le groupe (destructif, le dialogue a confirmé). Pas d'optimisme : la sortie n'est montrée qu'une fois le
+     * serveur d'accord ; le cache du roster est effacé, puis l'écran revient à la liste ([MembersEffect.Left]).
+     */
+    fun leaveGroup() {
+        val id = _state.value.conversationId ?: return
+        viewModelScope.launch {
+            when (conversationRepository.leave(id)) {
+                is NetworkResult.Success -> {
+                    participantCache.invalidate(id)
+                    effectChannel.trySend(MembersEffect.Haptic(FeedbackHaptic.SUCCESS))
+                    effectChannel.trySend(MembersEffect.Left)
+                }
+                is NetworkResult.Failure -> {
+                    _state.update { it.copy(actionFailed = true) }
+                    effectChannel.trySend(MembersEffect.Haptic(FeedbackHaptic.ERROR))
+                }
             }
         }
     }
 
     fun dismissActionError() = _state.update { it.copy(actionFailed = false) }
 
-    private suspend fun fetchFirstPage(conversationId: String, query: String) {
-        val result = conversationRepository.participants(id = conversationId, search = query)
+    /**
+     * [revalidate] : relecture réseau FORCÉE d'une liste déjà à l'écran (arrivée d'un membre) — silencieuse, donc un
+     * échec laisse la liste affichée telle quelle (jamais d'écran d'erreur sur un roster qui se lisait).
+     */
+    private suspend fun fetchFirstPage(conversationId: String, query: String, revalidate: Boolean = false) {
+        val result = if (query.isBlank()) {
+            participantCache.firstPage(conversationId, forceRefresh = revalidate).let { cached ->
+                when (cached) {
+                    is NetworkResult.Success -> NetworkResult.Success(cached.data.asPage())
+                    is NetworkResult.Failure -> cached
+                }
+            }
+        } else {
+            conversationRepository.participants(id = conversationId, search = query)
+        }
         _state.update { state ->
             // A slower first page for an abandoned query must never overwrite the
             // roster the viewer is now looking at.
@@ -232,7 +336,8 @@ class ConversationMembersViewModel @Inject constructor(
                             roster = state.roster.withFirstPage(result.data),
                             status = MembersLoadStatus.Loaded,
                         )
-                    is NetworkResult.Failure -> state.copy(status = MembersLoadStatus.Error)
+                    is NetworkResult.Failure ->
+                        if (revalidate) state else state.copy(status = MembersLoadStatus.Error)
                 }
             }
         }
@@ -247,7 +352,25 @@ class ConversationMembersViewModel @Inject constructor(
                     it.copy(
                         currentUserId = userId ?: it.currentUserId,
                         viewerRole = conversation.currentUserRole(userId),
+                        readerRole = conversation.knownUserRole(userId)?.name,
+                        mayInvite = ConversationRowMenuCapabilities.forViewer(conversation, sessionRepository.currentUser.value).invite,
                     )
+                }
+            }
+        },
+    )
+
+    /**
+     * Follows the cached unfiltered roster so a silent revalidation lands on screen. Ignored while
+     * a search is active (the roster then is a filtered one) and while nothing is cached yet.
+     */
+    private fun observeCachedRoster(conversationId: String): List<Job> = listOf(
+        viewModelScope.launch {
+            participantCache.observe(conversationId).collect { cached ->
+                if (cached == null) return@collect
+                _state.update { state ->
+                    if (state.searchQuery.isNotBlank() || state.status != MembersLoadStatus.Loaded) state
+                    else state.copy(roster = cached)
                 }
             }
         },
@@ -270,6 +393,7 @@ class ConversationMembersViewModel @Inject constructor(
         viewModelScope.launch {
             messageSocketManager.participantRoleUpdated.collect { event ->
                 if (event.conversationId != conversationId) return@collect
+                participantCache.updateRole(conversationId, event.userId, event.role)
                 _state.update { it.copy(roster = it.roster.withRole(event.userId, MemberRole.from(event.role))) }
             }
         },
@@ -277,19 +401,55 @@ class ConversationMembersViewModel @Inject constructor(
             messageSocketManager.participantLeft.collect { event ->
                 if (event.conversationId != conversationId) return@collect
                 val removedId = event.userId ?: event.participantId ?: return@collect
+                participantCache.removeParticipant(conversationId, removedId)
                 _state.update { it.copy(roster = it.roster.withoutUser(removedId)) }
+            }
+        },
+        viewModelScope.launch {
+            messageSocketManager.participantJoined.collect { event ->
+                if (event.conversationId == conversationId) revalidateRoster(conversationId)
+            }
+        },
+        viewModelScope.launch {
+            messageSocketManager.participantUnbanned.collect { event ->
+                if (event.conversationId == conversationId && event.membershipRestored != false) {
+                    revalidateRoster(conversationId)
+                }
             }
         },
         viewModelScope.launch {
             messageSocketManager.participantBanned.collect { event ->
                 if (event.conversationId != conversationId) return@collect
                 val removedId = event.userId ?: event.participantId ?: return@collect
+                participantCache.removeParticipant(conversationId, removedId)
                 _state.update { it.copy(roster = it.roster.withoutUser(removedId)) }
             }
         },
     )
 
+    /**
+     * Un membre vient d'arriver (adhésion, débannissement) : la fiche d'un nouveau membre (avatar, rang, nom servi) ne se
+     * devine pas de l'événement, donc la première page se relit — sans écran de chargement, pour la requête affichée
+     * (la recherche en cours se relit elle-même, jamais remplacée par la liste complète). L'effectif suit le total servi.
+     * Les arrivées rapprochées (≤ 300 ms de la première) sont regroupées : une rafale ne coûte qu'UNE requête.
+     */
+    private fun revalidateRoster(conversationId: String) {
+        if (revalidationWindow?.isActive == true) return
+        revalidationWindow = viewModelScope.launch {
+            delay(ROSTER_COALESCE_MS)
+            revalidation?.cancel()
+            revalidation = viewModelScope.launch {
+                fetchFirstPage(conversationId, _state.value.searchQuery, revalidate = true)
+            }
+        }
+    }
+
+    private fun MemberRoster.asPage() = MemberRosterPage(members, nextCursor, hasMore, totalCount)
+
     private companion object {
         const val SEARCH_DEBOUNCE_MS = 300L
+
+        /** Une rafale d'arrivées (import de groupe) se regroupe en UNE relecture. */
+        const val ROSTER_COALESCE_MS = 300L
     }
 }

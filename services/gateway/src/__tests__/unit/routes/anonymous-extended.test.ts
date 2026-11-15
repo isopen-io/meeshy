@@ -25,14 +25,9 @@ jest.mock('../../../utils/sanitize', () => ({
 
 jest.mock('../../../utils/session-token', () => ({
   hashSessionToken: jest.fn((token: string) => 'hashed-' + token),
-}));
-
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: { type: 'object', properties: {} },
-  anonymousParticipantSchema: { type: 'object', additionalProperties: true },
-  conversationLinkSchema: { type: 'object', additionalProperties: true },
-  conversationMinimalSchema: { type: 'object', additionalProperties: true },
-  userMinimalSchema: { type: 'object', additionalProperties: true },
+  // #4167 — voir `anonymous.test.ts` : `generateSessionToken` est désormais
+  // partagé (`utils/session-token.ts`), plus un double local de la route.
+  generateSessionToken: jest.fn(() => 'anon_test_session_token'),
 }));
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
@@ -83,12 +78,14 @@ async function buildApp(prismaOverrides: Record<string, any> = {}): Promise<Fast
       findFirst: jest.fn().mockResolvedValue(mockShareLink),
       findUnique: jest.fn().mockResolvedValue({ ...mockShareLink }),
       update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     user: { findFirst: jest.fn().mockResolvedValue(null) },
     participant: {
       findFirst: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockResolvedValue(mockParticipant),
       update: jest.fn().mockResolvedValue(mockParticipant),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       count: jest.fn().mockResolvedValue(0),
       findMany: jest.fn().mockResolvedValue([]),
     },
@@ -156,12 +153,15 @@ describe('POST /anonymous/join/:linkId — requireNickname', () => {
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 400 when nickname required but missing', async () => {
+  it('admet l\'invité sans pseudo saisi et lui en attribue un, au lieu de le refuser', async () => {
     const res = await app.inject({
       method: 'POST', url: `/anonymous/join/${LINK_ID}`,
       payload: VALID_BODY,
     });
-    expect(res.statusCode).toBe(400);
+
+    expect(res.statusCode).toBe(201);
+    const written = (app as any).prisma.participant.create.mock.calls.at(-1)[0].data;
+    expect(written.displayName).toMatch(/^ano_.+[^\d][1-9]\d{1,4}$/);
   });
 });
 
@@ -177,12 +177,12 @@ describe('POST /anonymous/join/:linkId — pseudo déjà porté dans la conversa
   beforeAll(async () => {
     app = await buildApp();
     (app as any).prisma.participant.findFirst
-      .mockResolvedValueOnce({ id: 'other-part', displayName: 'ano_bob_sm123' })
+      .mockResolvedValueOnce({ id: 'other-part' })
       .mockResolvedValue(null);
   });
   afterAll(async () => { await app.close(); });
 
-  it('admet le joignant sous le rang suivant plutôt que de le refuser', async () => {
+  it('admet le joignant sous un autre nombre plutôt que de le refuser', async () => {
     const res = await app.inject({
       method: 'POST', url: `/anonymous/join/${LINK_ID}`,
       payload: { ...VALID_BODY, username: 'bob_sm123' },
@@ -193,7 +193,10 @@ describe('POST /anonymous/join/:linkId — pseudo déjà porté dans la conversa
     // réponse ne peut rien prouver du pseudo résolu.
     expect(res.statusCode).toBe(201);
     const written = (app as any).prisma.participant.create.mock.calls.at(-1)[0].data;
-    expect(written.displayName).toBe('ano_bob_sm1232');
+    const firstCandidate = ((app as any).prisma.participant.findFirst.mock.calls[0][0] as any).where.displayName;
+    expect(written.displayName).toMatch(/^ano_bob_sm123[1-9]\d{1,4}$/);
+    expect(firstCandidate).toMatch(/^ano_bob_sm123[1-9]\d{1,4}$/);
+    expect(written.displayName).not.toBe(firstCandidate);
   });
 });
 
@@ -258,7 +261,7 @@ describe('POST /anonymous/leave — with shareLinkId', () => {
       payload: { sessionToken: SESSION_TOKEN },
     });
     expect(res.statusCode).toBe(200);
-    expect((app as any).prisma.conversationShareLink.update).toHaveBeenCalledWith(
+    expect((app as any).prisma.conversationShareLink.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { currentConcurrentUsers: { decrement: 1 } } })
     );
   });
@@ -305,3 +308,136 @@ describe('GET /anonymous/link/:identifier — expired link', () => {
     expect(res.statusCode).toBe(410);
   });
 });
+
+// ─── LINK: les trois refus 410 servent le linkId canonique (#4829) ───────────
+//
+// Un client qui range la session invitée PAR LIEN (cookie
+// `meeshy_guest_<linkId>`, conception v3 § 6.3.E) a besoin du `linkId`
+// CANONIQUE pour retrouver sa place quand l'aperçu refuse en 410 — exactement
+// le cas où le lien est clos, échu ou plein. `sendError` étale `details` À LA
+// RACINE (`utils/response.ts`) ; le champ ne survit à la sérialisation QUE si
+// le schéma LOCAL du 410 de cette route le déclare — sinon
+// `fast-json-stringify` le retire en silence (`additionalProperties: false`
+// par défaut). Ce fichier NE MOCKE PAS `@meeshy/shared/types/api-schemas`
+// (contrairement à `anonymous.test.ts`) : les témoins ci-dessous traversent
+// donc la VRAIE sérialisation, sur la vraie route, avec les vrais schémas.
+
+describe('GET /anonymous/link/:identifier — les trois refus 410 servent linkId (#4829)', () => {
+  const buildLinkPreviewApp = async (overrides: Record<string, unknown>) => {
+    const app = await buildApp();
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValue({
+      ...mockShareLink,
+      ...overrides,
+      // Un aperçu de lien clos ne doit RIEN dire de la conversation qu'il
+      // referme : un titre/description distinctifs font tomber l'assertion
+      // « rien d'autre ne part à côté » si la charge se met à fuiter.
+      conversation: { id: CONV_ID, title: 'Titre de conversation secret', description: 'Description secrète', type: 'group', createdAt: new Date() },
+    });
+    return app;
+  };
+
+  it('LINK_INACTIVE sert le linkId canonique, et rien d’autre que success/error/message', async () => {
+    const app = await buildLinkPreviewApp({ isActive: false });
+    const res = await app.inject({ method: 'GET', url: `/anonymous/link/${LINK_ID}` });
+
+    expect(res.statusCode).toBe(410);
+    const body = res.json();
+    expect(body.error).toBe('LINK_INACTIVE');
+    expect(body.linkId).toBe(LINK_ID);
+    // Contrat exact de la charge servie : aucune clé de la conversation
+    // (title, description, members, dernier message…) ne doit s'y glisser.
+    expect(Object.keys(body).sort()).toEqual(['error', 'linkId', 'message', 'success']);
+
+    await app.close();
+  });
+
+  it('LINK_EXPIRED sert le linkId canonique', async () => {
+    const app = await buildLinkPreviewApp({ isActive: true, expiresAt: new Date('2020-01-01') });
+    const res = await app.inject({ method: 'GET', url: `/anonymous/link/${LINK_ID}` });
+
+    expect(res.statusCode).toBe(410);
+    const body = res.json();
+    expect(body.error).toBe('LINK_EXPIRED');
+    expect(body.linkId).toBe(LINK_ID);
+    expect(Object.keys(body).sort()).toEqual(['error', 'linkId', 'message', 'success']);
+
+    await app.close();
+  });
+
+  it('LINK_MAX_USES sert le linkId canonique', async () => {
+    const app = await buildLinkPreviewApp({ isActive: true, expiresAt: null, maxUses: 5, currentUses: 5 });
+    const res = await app.inject({ method: 'GET', url: `/anonymous/link/${LINK_ID}` });
+
+    expect(res.statusCode).toBe(410);
+    const body = res.json();
+    expect(body.error).toBe('LINK_MAX_USES');
+    expect(body.linkId).toBe(LINK_ID);
+    expect(Object.keys(body).sort()).toEqual(['error', 'linkId', 'message', 'success']);
+
+    await app.close();
+  });
+});
+
+// ─── REFRESH: participation morte (#10457) ───────────────────────────────────
+
+/**
+ * #10457 — l'alias `POST /anonymous/refresh` juge la participation par la règle
+ * de `PARTICIPATION_VIVANTE` : désactivée OU bannie ⇒ 410
+ * `GUEST_ACCESS_REVOKED`, le code du REST et du socket, sans rien servir de la
+ * conversation ni relancer la présence. Avant, un banni encore actif recevait
+ * id, titre, type et droits, et repassait `isOnline` ; un désactivé recevait
+ * un 401 `SESSION_INVALID` qui l'envoyait retenter.
+ */
+describe('POST /anonymous/refresh — participation morte (#10457)', () => {
+  const refresh = (app: FastifyInstance) =>
+    app.inject({ method: 'POST', url: '/anonymous/refresh', payload: { sessionToken: SESSION_TOKEN } });
+
+  it('banni encore actif ⇒ 410 GUEST_ACCESS_REVOKED, rien servi, présence non relancée', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValue({ ...mockParticipant, bannedAt: new Date('2026-10-13T09:00:00Z') });
+
+    const res = await refresh(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(410);
+    expect(res.json()).toMatchObject({ success: false, error: 'GUEST_ACCESS_REVOKED' });
+    expect(res.json().data).toBeUndefined();
+    expect(res.body).not.toContain('Test Conv');
+    expect((app as any).prisma.participant.update).not.toHaveBeenCalled();
+  });
+
+  it('désactivé ⇒ 410 GUEST_ACCESS_REVOKED, plus 401 SESSION_INVALID', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValue({ ...mockParticipant, isActive: false });
+
+    const res = await refresh(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(410);
+    expect(res.json()).toMatchObject({ success: false, error: 'GUEST_ACCESS_REVOKED' });
+    expect((app as any).prisma.participant.update).not.toHaveBeenCalled();
+  });
+
+  it('désactivé ET lien échu ⇒ 410 LINK_EXPIRED, la cause première', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValue({ ...mockParticipant, isActive: false });
+    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValue({ ...mockShareLink, expiresAt: new Date('2020-01-01') });
+
+    const res = await refresh(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(410);
+    expect(res.json()).toMatchObject({ error: 'LINK_EXPIRED' });
+  });
+
+  it('un jeton sans ligne garde le 401 : rien n’est confirmé à qui ne détient rien', async () => {
+    const app = await buildApp();
+
+    const res = await refresh(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(401);
+    expect(res.body).not.toContain('GUEST_ACCESS_REVOKED');
+  });
+});
+

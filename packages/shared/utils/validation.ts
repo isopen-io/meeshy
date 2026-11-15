@@ -5,49 +5,33 @@
 
 import { z } from 'zod';
 import { ErrorCode } from '../types/errors.js';
-import { personNamePatternSource, usernamePatternSource } from '../types/api-schemas.js';
+import { EMOJI_MAX_LENGTH } from '../types/reaction.js';
 import { createError } from './errors.js';
-import { isSupportedLanguage } from './languages.js';
-import { normalizeLanguageCode } from './language-normalize.js';
 import { OBJECT_ID_REGEX } from './object-id.js';
+import { AuthSchemas } from './auth-schemas.js';
+import { notificationTypeEnum } from './notification-type-enum.js';
+import { isProfileImageReference } from './profile-image-reference.js';
+import { usernameMaxLength, usernameMinLength } from '../types/api-schemas/identity-bounds.js';
+import {
+  PASSWORD_MIN_LENGTH,
+  USERNAME_PATTERN,
+  customDestinationLanguageCode,
+  passwordTooShort,
+  supportedLanguageCode,
+  usernameTooLong,
+  usernameTooShort,
+  utf16Bounded,
+} from './validation-primitives.js';
 
 /**
- * Nom de personne (prénom / nom). Compilé depuis la source unique
- * `personNamePatternSource` (types/api-schemas.ts) pour que la couche Ajv
- * (body JSON schema Fastify) et la couche Zod rendent le même verdict —
- * notamment l'acceptation des apostrophes typographiques `’`/`ʼ` insérées par
- * le clavier iOS.
+ * Les bornes et motifs partagés vivent dans `./validation-primitives.js`
+ * depuis #5216 — ce fichier est hors budget (2700 lignes pour un plafond de
+ * 1000) et le dépôt y interdit tout ajout tant qu'on n'en a pas extrait. Le
+ * ré-export garde les importeurs historiques, qui nommaient déjà
+ * `PASSWORD_MIN_LENGTH` à cette adresse.
  */
-const PERSON_NAME_PATTERN = new RegExp(personNamePatternSource, 'u');
+export { PASSWORD_MIN_LENGTH } from './validation-primitives.js';
 
-/**
- * Nom d'utilisateur. Compilé depuis la source unique `usernamePatternSource`
- * (types/api-schemas.ts) pour que la couche Ajv (body JSON schema Fastify) et la
- * couche Zod rendent le même verdict — notamment le refus de l'espace et des
- * lettres accentuées, que le charset ASCII exclut.
- */
-const USERNAME_PATTERN = new RegExp(usernamePatternSource);
-
-/**
- * Longueur minimale d'un mot de passe — UNE règle, pour toutes les portes.
- *
- * Elle a valu onze déclarations indépendantes, et trois valeurs différentes :
- * le wizard web ouvrait le pas suivant dès 6, la checklist affichée à
- * l'utilisateur en promettait 8, et les schémas serveur en exigeaient 8. Une
- * saisie de 6 caractères franchissait donc tout le formulaire pour se faire
- * rejeter à la DERNIÈRE étape par un message Ajv brut, trois écrans après le
- * champ fautif.
- *
- * La borne s'applique aux mots de passe qu'on DÉFINIT. Un mot de passe qu'on
- * PROUVE (`currentPassword`) n'a qu'à être non vide : c'est le hash qui
- * l'arbitre, et lui imposer une longueur enfermerait tout compte créé sous une
- * borne plus basse.
- *
- * Garde : `__tests__/password-min-length-parity.test.ts`.
- */
-export const PASSWORD_MIN_LENGTH = 6;
-
-const passwordTooShort = `Mot de passe trop court (min ${PASSWORD_MIN_LENGTH} caractères)`;
 
 const DEFAULT_PAGE_LIMIT = 20;
 const MAX_PAGE_LIMIT = 100;
@@ -68,47 +52,6 @@ function clampOffset(val: string | undefined): number {
   const parsed = parseInt(val ?? '', 10);
   return Math.max(0, Number.isNaN(parsed) ? 0 : parsed);
 }
-
-/**
- * Code de langue in-app supporté, **validé ET normalisé** (lowercase).
- *
- * Source de vérité unique de la normalisation à l'écriture : `isSupportedLanguage`
- * accepte les codes de manière insensible à la casse (`'EN'`, `'Fr'`) mais ne les
- * transforme pas — sans le `.transform` ci-dessous, un `systemLanguage: 'EN'` serait
- * persisté verbatim et casserait la résolution du Prisme Linguistique côté lecture
- * (les traductions sont stockées sous clé minuscule). On lowercase donc au point
- * d'écriture pour garantir l'invariant « la base ne contient que des codes
- * minuscules », rendant les compensations de lecture (`resolveUserLanguage`) purement
- * défensives.
- *
- * @see packages/shared/utils/conversation-helpers.ts — résolveurs de lecture
- */
-const supportedLanguageCode = z
-  .string()
-  .min(2)
-  .max(5)
-  .refine((code) => isSupportedLanguage(code), { message: 'Unsupported language code' })
-  .transform((code) => code.toLowerCase());
-
-/**
- * Code de langue de destination personnalisée (priorité 3 du Prisme). Contrairement
- * à {@link supportedLanguageCode}, ce champ n'exige pas que le code figure dans la
- * liste des langues supportées, mais il DOIT être canonique en base : un locale
- * région/script-taggé de plateforme (`'fr-FR'`, `'en_US'`) persisté verbatim comme
- * `'fr-fr'` / `'en-us'` ne matcherait aucune `MessageTranslation.targetLanguage`
- * (clé lowercase) et forcerait la résolution du Prisme sur le message original.
- *
- * Canonicalisation au write boundary via le SSOT {@link normalizeLanguageCode}
- * (`'fr-FR'`/`'fr_FR'` → `'fr'`, `'en-US'` → `'en'`), avec repli `.toLowerCase()`
- * pour les codes que le normaliseur ne sait pas réduire (ISO 639-3 supporté comme
- * `'bas'`, ou code plausible inconnu) : comportement d'acceptation strictement
- * inchangé, seul le stockage des codes région-taggés est corrigé.
- */
-const customDestinationLanguageCode = z
-  .string()
-  .min(2)
-  .max(5)
-  .transform((code) => normalizeLanguageCode(code) ?? code.toLowerCase());
 
 /**
  * Valider un schéma Zod et retourner une erreur standardisée
@@ -196,7 +139,7 @@ export const CommonSchemas = {
   email: z.email('Email invalide'),
   
   // Username
-  username: z.string().min(3, 'Username trop court').max(30, 'Username trop long')
+  username: z.string().min(usernameMinLength, usernameTooShort).max(30, 'Username trop long')
     .regex(USERNAME_PATTERN, 'Username invalide'),
   
   // Conversation identifier (custom identifier for conversations)
@@ -354,8 +297,33 @@ export const httpUrlSchema = z.string().refine(isHttpUrl, 'URL invalide : http(s
 /**
  * Schéma de validation pour la mise à jour du profil utilisateur
  * Avec validation stricte (rejette les champs inconnus)
+ *
+ * #4184 — `email` et `phoneNumber` sont ABSENTS d'ICI par construction, et
+ * `.strict()` (dernière ligne) transforme cette absence en REFUS EXPLICITE
+ * (Zod lève, le handler répond 400) plutôt qu'en simple silence. Cette route
+ * écrivait ces deux champs DIRECTEMENT en base sur simple appel authentifié —
+ * sans jeton ni code envoyé à la NOUVELLE adresse, et sans jamais remettre
+ * `emailVerifiedAt` / `phoneVerifiedAt` à `null` — alors qu'une preuve de
+ * possession n'était qu'à un fichier de là (`contact-change.ts`). Le coût :
+ * une session courte (volée, fixée) suffisait à un attaquant pour poser SA
+ * propre adresse, déclencher une réinitialisation de mot de passe dessus, et
+ * prendre le compte en entier — le tout en un seul appel HTTP, sans jamais
+ * prouver la possession de quoi que ce soit. Le changement de contact passe
+ * désormais EXCLUSIVEMENT par `POST /users/me/change-email` / `/change-phone`
+ * (`services/gateway/src/routes/users/contact-change.ts`), qui exigent cette
+ * preuve avant d'écrire. Ne JAMAIS réintroduire ces deux clés ici — les
+ * gardes ci-dessous (`__tests__/validation.test.ts`, même paquet) et
+ * `unit/routes/users/profile.test.ts` (gateway, describe « email/phoneNumber
+ * are not writable via this route ») rougissent sous cette mutation précise,
+ * schéma AJV frère `updateUserRequestSchema`
+ * (`packages/shared/types/api-schemas.ts`) compris.
  */
 export const updateUserProfileSchema = z.object({
+  // Les noms gardent le minimum d'AVANT (#13825, rétrocompatibilité) : l'iOS
+  // publié renvoie prénom, nom et nom affiché INCHANGÉS à chaque
+  // enregistrement, et un compte hérité « A » doit pouvoir changer sa bio. La
+  // borne de 2 s'applique aux seuls noms CHANGÉS, dans le handler
+  // (`services/gateway/src/utils/identity-name-floor.ts`).
   firstName: z.string().min(1).optional().refine(noEmoji, {
     message: 'Le prénom ne peut pas contenir d\'emojis'
   }),
@@ -363,8 +331,6 @@ export const updateUserProfileSchema = z.object({
     message: 'Le nom ne peut pas contenir d\'emojis'
   }),
   displayName: z.string().optional(), // Autorise les emojis dans displayName
-  email: z.email().optional(),
-  phoneNumber: z.union([z.string(), z.null()]).optional(),
   bio: z.string().max(500).optional(),
   systemLanguage: supportedLanguageCode.optional(),
   // Chaîne vide autorisée = effacement de la langue secondaire (mirror de
@@ -377,6 +343,8 @@ export const updateUserProfileSchema = z.object({
   voicePublic: z.boolean().optional(),
 }).strict();
 
+export { isProfileImageReference };
+
 /**
  * Schéma de validation pour l'upload d'avatar
  */
@@ -387,8 +355,8 @@ export const updateAvatarSchema = z.object({
       'Avatar must be a file URL, not a base64 data URI'
     )
     .refine(
-      (val) => val.startsWith('http://') || val.startsWith('https://') || val.startsWith('/api/'),
-      'Avatar must be an HTTP(S) URL or API path'
+      isProfileImageReference,
+      'Avatar must be an HTTP(S) URL, an API path or an uploaded file path'
     )
 }).strict();
 
@@ -397,23 +365,39 @@ export const updateAvatarSchema = z.object({
  */
 export const updateBannerSchema = z.object({
   banner: z.string().refine(
-    (data) => {
-      return data.startsWith('http://') ||
-             data.startsWith('https://') ||
-             data.startsWith('/api/');
-    },
-    'Format bannière invalide. Doit être une URL HTTP(S) ou un chemin API'
+    isProfileImageReference,
+    'Format bannière invalide. Doit être une URL HTTP(S), un chemin API ou un fichier téléversé'
   )
 }).strict();
 
 /**
  * Schéma de validation pour le changement de mot de passe
  */
+/**
+ * `currentPassword` est OPTIONNEL — et ne l'est que pour un compte qui n'en a
+ * pas (#6424).
+ *
+ * Un compte né d'une inscription par e-mail seul n'a pas de mot de passe :
+ * exiger l'ancien pour poser le premier ferait de la preuve une CONDITION
+ * d'existence de ce qu'elle doit prouver, et le compte n'aurait jamais aucun
+ * moyen d'en obtenir un.
+ *
+ * L'optionalité vit ici, dans la FORME ; l'exigence vit dans la ROUTE, qui
+ * seule connaît l'état du compte (`PATCH /users/me/password` :
+ * `user.password === null` ⇒ la session, obtenue par lien magique, EST la
+ * preuve ; sinon l'ancien mot de passe est exigé et vérifié). Poser la règle
+ * dans le schéma la rendrait aveugle à cet état, donc fausse dans un sens ou
+ * dans l'autre.
+ *
+ * `confirmPassword` est OPTIONNEL : la confirmation est un contrôle d'INTERFACE
+ * que chaque client vérifie avant d'envoyer (les apps natives iOS et Android ne
+ * l'envoient jamais). Fourni (le web), il doit encore égaler `newPassword`.
+ */
 export const updatePasswordSchema = z.object({
-  currentPassword: z.string().min(1, 'Mot de passe actuel requis'),
+  currentPassword: z.string().min(1, 'Mot de passe actuel requis').optional(),
   newPassword: z.string().min(PASSWORD_MIN_LENGTH, passwordTooShort),
-  confirmPassword: z.string().min(1, 'Confirmation du mot de passe requise')
-}).refine((data) => data.newPassword === data.confirmPassword, {
+  confirmPassword: z.string().optional()
+}).refine((data) => data.confirmPassword === undefined || data.newPassword === data.confirmPassword, {
   message: 'Les mots de passe ne correspondent pas',
   path: ['confirmPassword']
 });
@@ -423,8 +407,8 @@ export const updatePasswordSchema = z.object({
  */
 export const updateUsernameSchema = z.object({
   newUsername: z.string()
-    .min(2, 'Username trop court (min 2 caractères)')
-    .max(16, 'Username trop long (max 16 caractères)')
+    .min(usernameMinLength, usernameTooShort)
+    .max(usernameMaxLength, usernameTooLong)
     .regex(USERNAME_PATTERN, 'Username invalide (lettres, chiffres, - et _ uniquement)'),
   currentPassword: z.string().min(1, 'Mot de passe requis pour confirmer le changement')
 }).strict();
@@ -434,83 +418,12 @@ export const updateUsernameSchema = z.object({
 // =============================================================================
 
 /**
- * Schémas pour l'authentification
+ * Les schémas d'authentification vivent dans `./auth-schemas.js` depuis #5216 —
+ * ce fichier est hors budget, et le dépôt y interdit tout ajout tant qu'on n'en
+ * a pas extrait. Le ré-export garde les importeurs historiques, qui nommaient
+ * déjà `AuthSchemas` à cette adresse.
  */
-export const AuthSchemas = {
-  // Login request
-  login: z.object({
-    username: z.string().min(2).max(50),
-    password: z.string().min(1),
-    rememberDevice: z.boolean().optional().default(false), // Trust this device for longer sessions (365 days)
-  }),
-
-  // Register request
-  register: z.object({
-    username: z.string()
-      .min(2, 'Username trop court (min 2)')
-      .max(16, 'Username trop long (max 16)')
-      .regex(USERNAME_PATTERN, 'Username invalide (lettres, chiffres, - et _ uniquement)'),
-    password: z.string()
-      .min(PASSWORD_MIN_LENGTH, passwordTooShort),
-    firstName: z.string().min(1).max(50)
-      .regex(PERSON_NAME_PATTERN, 'Le prénom doit contenir au moins une lettre'),
-    lastName: z.string().min(1).max(50)
-      .regex(PERSON_NAME_PATTERN, 'Le nom doit contenir au moins une lettre'),
-    email: z.email('Email invalide'),
-    phoneNumber: z.string().optional(),
-    phoneCountryCode: z.string().length(2).optional(),
-    systemLanguage: supportedLanguageCode.default('fr'),
-    regionalLanguage: supportedLanguageCode.default('fr'),
-    phoneTransferToken: z.string().optional(), // Token proving SMS verification for phone transfer
-  }),
-
-  // Refresh token
-  refreshToken: z.object({
-    token: z.string().min(1),
-    sessionToken: z.string().optional(),
-  }),
-
-  // Verify email (token from link OR 6-digit code from mobile)
-  verifyEmail: z.object({
-    token: z.string().min(1).optional(),
-    code: z.string().length(6).regex(/^[0-9]{6}$/).optional(),
-    email: z.email(),
-  }).refine(
-    (data) => !!data.token || !!data.code,
-    { message: 'Either token or code must be provided' }
-  ),
-
-  // Resend verification
-  resendVerification: z.object({
-    email: z.email(),
-  }),
-
-  // Phone verification
-  sendPhoneCode: z.object({
-    phoneNumber: z.string().min(8),
-  }),
-
-  verifyPhone: z.object({
-    phoneNumber: z.string().min(8),
-    code: z.string().length(6),
-  }),
-
-  // Password reset
-  requestPasswordReset: z.object({
-    email: z.email(),
-  }),
-
-  resetPassword: z.object({
-    token: z.string().min(1),
-    newPassword: z.string().min(PASSWORD_MIN_LENGTH, passwordTooShort),
-  }),
-
-  // Change password (authenticated)
-  changePassword: z.object({
-    currentPassword: z.string().min(1),
-    newPassword: z.string().min(PASSWORD_MIN_LENGTH, passwordTooShort),
-  }),
-};
+export { AuthSchemas } from './auth-schemas.js';
 
 // =============================================================================
 // SESSION SCHEMAS
@@ -728,6 +641,13 @@ export const ConversationSchemas = {
     participantIds: z.array(z.string()).max(250, { message: 'Au maximum 250 participants à la création — utiliser l\'ajout incrémental au-delà' }).optional().default([]),
     communityId: z.string().optional(),
     identifier: CommonSchemas.conversationIdentifier,
+    // #12966 — un tête-à-tête que le serveur lit, à côté d'un tête-à-tête
+    // chiffré de bout en bout avec la même personne. Absent : la demande d'un
+    // ancien client, inchangée.
+    plaintext: z.boolean().optional(),
+    // Directive porteur du 2026-11-01 — le mode se choisit à la création ;
+    // absent : `server`, le serveur chiffre toujours au repos.
+    encryptionMode: z.enum(['server', 'hybrid', 'e2ee']).optional(),
   }),
   
   // Mettre à jour une conversation
@@ -1303,7 +1223,7 @@ export const ReactionSchemas = {
 
   // Ajouter une réaction
   add: z.object({
-    emoji: z.string().min(1).max(10),
+    emoji: utf16Bounded(z.string(), { min: 1, max: EMOJI_MAX_LENGTH }),
   }),
 };
 
@@ -1368,136 +1288,7 @@ export const FriendRequestSchemas = {
 // NOTIFICATION SCHEMAS
 // =============================================================================
 
-/**
- * Types de notification
- * Valeurs complètes pour toutes les fonctionnalités du site
- *
- * Catégories:
- * - Messages: notifications liées aux messages
- * - Conversations: création, invitation, modifications
- * - Membres: rejoindre, quitter, promotions
- * - Contacts: demandes d'amis, acceptations
- * - Interactions: mentions, réactions
- * - Appels: manqués, entrants, terminés
- * - Traduction: transcriptions, traductions audio
- * - Sécurité: connexions, changements de mot de passe
- * - Modération: signalements, contenus supprimés
- * - Système: maintenance, annonces
- */
-export const notificationTypeEnum = z.enum([
-  // ===== MESSAGE EVENTS =====
-  'new_message',           // Nouveau message reçu
-  'message_reply',         // Réponse à votre message
-  'message_edited',        // Message modifié
-  'message_deleted',       // Message supprimé
-  'message_pinned',        // Message épinglé
-  'message_unpinned',      // Message désépinglé
-  'message_forwarded',     // Message transféré
-
-  // ===== CONVERSATION EVENTS =====
-  'new_conversation',          // Nouvelle conversation (générique)
-  'new_conversation_direct',   // Nouvelle conversation directe
-  'new_conversation_group',    // Invitation à un groupe
-  'conversation_archived',     // Conversation archivée
-  'conversation_unarchived',   // Conversation désarchivée
-  'conversation_deleted',      // Conversation supprimée
-  'conversation_settings_changed', // Paramètres de conversation modifiés
-  'added_to_conversation',     // Ajouté à une conversation
-  'removed_from_conversation', // Retiré d'une conversation
-  'conversation_encryption_enabled', // Chiffrement E2EE activé
-
-  // ===== MEMBER/GROUP EVENTS =====
-  'member_joined',        // Nouveau membre dans le groupe
-  'member_left',          // Membre a quitté le groupe
-  'member_removed',       // Membre retiré du groupe
-  'member_promoted',      // Membre promu (admin/modérateur)
-  'member_demoted',       // Membre rétrogradé
-  'member_role_changed',  // Rôle de membre modifié
-
-  // ===== CONTACT/FRIEND EVENTS =====
-  'contact_request',      // Demande de contact reçue
-  'contact_accepted',     // Demande de contact acceptée
-  'contact_rejected',     // Demande de contact refusée
-  'contact_blocked',      // Contact bloqué
-  'contact_unblocked',    // Contact débloqué
-  'friend_request',       // Alias pour contact_request
-  'friend_accepted',      // Alias pour contact_accepted
-
-  // ===== INTERACTION EVENTS =====
-  'user_mentioned',       // Mentionné dans un message (@username)
-  'mention',              // Alias pour user_mentioned
-  'message_reaction',     // Réaction emoji à votre message
-  'reaction',             // Alias pour message_reaction
-
-  // ===== CALL EVENTS =====
-  'missed_call',          // Appel manqué
-  'incoming_call',        // Appel entrant
-  'call_ended',           // Appel terminé
-  'call_declined',        // Appel refusé
-  'call_recording_ready', // Enregistrement d'appel disponible
-
-  // ===== TRANSLATION/AUDIO EVENTS =====
-  'translation_completed',    // Traduction terminée
-  'translation_failed',       // Échec de traduction
-  'transcription_completed',  // Transcription audio terminée
-  'transcription_failed',     // Échec de transcription
-  'voice_clone_ready',        // Modèle vocal prêt
-  'voice_clone_failed',       // Échec du clonage vocal
-  'audio_message_translated', // Message audio traduit
-
-  // ===== SECURITY/ACCOUNT EVENTS =====
-  'login_new_device',         // Connexion depuis un nouvel appareil
-  'login_suspicious',         // Activité de connexion suspecte
-  'password_changed',         // Mot de passe modifié
-  'password_reset_requested', // Demande de réinitialisation
-  'email_verified',           // Email vérifié
-  'phone_verified',           // Téléphone vérifié
-  'two_factor_enabled',       // 2FA activé
-  'two_factor_disabled',      // 2FA désactivé
-  'session_expired',          // Session expirée
-  'account_locked',           // Compte verrouillé
-  'account_unlocked',         // Compte déverrouillé
-
-  // ===== MODERATION EVENTS =====
-  'content_flagged',          // Contenu signalé
-  'content_removed',          // Contenu supprimé par modération
-  'report_submitted',         // Signalement envoyé
-  'report_resolved',          // Signalement traité
-  'warning_received',         // Avertissement reçu
-
-  // ===== FILE/ATTACHMENT EVENTS =====
-  'file_shared',              // Fichier partagé avec vous
-  'file_upload_completed',    // Upload de fichier terminé
-  'file_upload_failed',       // Échec d'upload
-  'file_scan_completed',      // Scan antivirus terminé
-
-  // ===== COMMUNITY EVENTS =====
-  'community_invite',         // Invitation à une communauté
-  'community_joined',         // Rejoint une communauté
-  'community_left',           // Quitté une communauté
-  'community_announcement',   // Annonce de communauté
-  'community_role_changed',   // Rôle changé dans la communauté
-
-  // ===== SYSTEM EVENTS =====
-  'system',                   // Notification système générique
-  'maintenance',              // Maintenance planifiée
-  'update_available',         // Mise à jour disponible
-  'feature_announcement',     // Nouvelle fonctionnalité
-  'terms_updated',            // Conditions d'utilisation mises à jour
-  'privacy_updated',          // Politique de confidentialité mise à jour
-
-  // ===== ENGAGEMENT/GAMIFICATION =====
-  'achievement_unlocked',     // Succès débloqué
-  'streak_milestone',         // Jalon de streak atteint
-  'level_up',                 // Niveau augmenté
-  'badge_earned',             // Badge gagné
-
-  // ===== PAYMENT/SUBSCRIPTION (future) =====
-  'subscription_expiring',    // Abonnement expire bientôt
-  'subscription_renewed',     // Abonnement renouvelé
-  'payment_received',         // Paiement reçu
-  'payment_failed',           // Échec de paiement
-]);
+export { notificationTypeEnum } from './notification-type-enum.js';
 
 /**
  * Priorité de notification

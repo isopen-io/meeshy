@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_failed_initiate_timed_out">Impossibile avviare la chiamata: il server non risponde</string>
+    <string name="call_failed_initiate_malformed">Impossibile avviare la chiamata: risposta inattesa del server</string>
+    <string name="call_failed_connect_timed_out">Impossibile stabilire la connessione</string>
+    <string name="call_failed_join_refused">Impossibile unirsi alla chiamata</string>
+    <string name="call_failed_media_setup">Microfono o fotocamera non disponibile</string>
+</resources>

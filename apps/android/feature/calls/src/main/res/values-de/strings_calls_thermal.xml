@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_video_notice_reduced">Video reduziert, damit das Telefon abkühlt</string>
+    <string name="call_video_notice_low_light">Wenig Licht: Dein Bild kann dunkel wirken</string>
+    <string name="call_video_thermal_audio_only">Telefon zu heiß: Der Anruf läuft nur mit Ton weiter</string>
+</resources>

@@ -1,0 +1,389 @@
+import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
+import * as socialEndpoints from '@meeshy/shared/api/endpoints/social';
+
+import { unwrap } from './client';
+import type { DataSource } from './config';
+import { CANVAS_CAPS_HEADERS } from './feed-pages';
+import type { ApiResult, HttpTransport } from './http';
+
+/**
+ * **LE PORT DU RAIL DE STORIES** (#6080) — motif EXISTANT `loadConversations`
+ * (`conversations.ts:33-41`) : `source` résolue ICI, jamais dans le hook ni
+ * dans l'écran, et les fixtures passent par le MÊME chemin.
+ *
+ * `GET social.posts?scope=stories&projection=tray` (#6249 — successeur
+ * de l'alias déprécié `GET /posts/feed/stories?projection=tray`,
+ * `services/gateway/src/routes/posts/feed.ts:801-813`, authentification
+ * REQUISE — 401 `UNAUTHORIZED` sans session). La lecture — `chargerStories`,
+ * donc `trayStorySelect` — est INCHANGÉE : l'alias et la route cible
+ * délèguent à la MÊME fonction (`feed.ts:450-457` vs `:801-813`), seule
+ * l'adresse a bougé. La projection `tray` reste une whitelist stricte côté
+ * serveur : toute autre valeur est ignorée et sert la charge complète, d'où
+ * l'envoi de la chaîne exacte.
+ *
+ * Ce que le serveur renvoie est un POST par story (`trayStorySelect`,
+ * `postIncludes.ts:275-296`), pas un auteur : `{ id, type, createdAt,
+ * expiresAt, viewCount, author, media, repostOf }`. **Le groupement par auteur
+ * est un travail de VUE** — un rail montre un cercle par auteur, jamais un par
+ * story —, et il vit dans `lib/view/story-tray.ts` avec sa règle de tri.
+ *
+ * `limit` est plafonné à 50 côté serveur (`LimiteSchema`) : le demander plus
+ * haut ne sert à rien, et le demander plus bas priverait le rail d'auteurs
+ * sans que rien ne le dise.
+ */
+/**
+ * `STORIES_QUERY_PREFIX` (#6195) — le préfixe COMMUN aux deux corpus de ce
+ * fichier : le tirer-pour-rafraîchir de la Lentille (`refreshListAction`,
+ * `query.ts`) invalide CE préfixe, une fois, plutôt que d'énumérer les clés —
+ * un troisième corpus qui rejoindrait ce module n'aurait qu'à en DÉRIVER sa
+ * clé pour être rafraîchi avec les deux premiers, jamais une ligne de plus à
+ * ajouter au tirer.
+ */
+export const STORIES_QUERY_PREFIX = ['stories'] as const;
+export const STORY_TRAY_QUERY_KEY = [...STORIES_QUERY_PREFIX, 'tray'] as const;
+
+/** Un média de story — la forme de `mediaSelect`
+ * (`services/gateway/src/services/posts/postIncludes.ts:98-120`), réduite à ce
+ * que le rail et le lecteur consomment. Un champ OPTIONNEL de la passerelle se
+ * déclare `?: T | null` (règle de `feed-pages.ts`).
+ *
+ * `fileUrl` est la clé que la passerelle SERT (mesuré sur
+ * `gate.staging.meeshy.me` le 2026-09-17, les deux projections) ; `url` est
+ * l'ancienne clé des fixtures, qu'aucune réponse réelle ne porte — lue seule,
+ * elle laissait sans image toute story à média hors fixtures
+ * (`storyMediaUrl`, `lib/stories/playback.ts`, lit les deux). `width`,
+ * `height` et `thumbHash` nourrissent le lecteur de scène (#6899) : rapport du
+ * fond, bandes, fond flou. */
+export type StoryTrayMedia = {
+  readonly id: string;
+  readonly fileUrl?: string | null;
+  readonly url?: string;
+  readonly thumbnailUrl?: string | null;
+  readonly mimeType?: string | null;
+  readonly width?: number | null;
+  readonly height?: number | null;
+  readonly thumbHash?: string | null;
+  /** LA LÉGENDE PROPRE DU MÉDIA et son Prisme (#6944) — `PostMedia.caption`,
+   * `captionLanguage`, `captionTranslations`, servis par `mediaSelect`
+   * (`postIncludes.ts:111-118`) sur les deux projections de story. Distincts
+   * de `Post.content`/`Post.translations`, qui décrivent la PUBLICATION :
+   * mélanger les deux couples est ce que #4904 a coûté. */
+  readonly caption?: string | null;
+  readonly captionLanguage?: string | null;
+  readonly captionTranslations?: unknown;
+};
+
+/** L'auteur, tel que `storyAuthorSelect` le sert. */
+export type StoryTrayAuthor = {
+  readonly id: string;
+  readonly username?: string;
+  readonly displayName?: string;
+  readonly firstName?: string;
+  readonly lastName?: string;
+  readonly avatar?: string;
+  readonly banner?: string | null;
+  readonly isOnline?: boolean | null;
+  readonly lastActiveAt?: string | Date | null;
+};
+
+/** Une story du plateau — la forme EXACTE de `trayStorySelect`, rien de plus.
+ *
+ * `isViewedByMe` (#5817, correctif du défaut relevé § 2 de la spécification)
+ * — SERVI par la passerelle sur les DEUX projections (`PostFeedService.ts`,
+ * commentaire « isViewedByMe (anneau vu/non-vu) reste servi dans les deux »),
+ * jamais absent du plateau contrairement à ce qu'affirmait le doc-comment de
+ * `groupStoriesByAuthor` avant ce lot. */
+export type StoryTrayPost = {
+  readonly id: string;
+  readonly type: string;
+  readonly createdAt: string | Date;
+  readonly expiresAt?: string | Date;
+  readonly viewCount?: number;
+  readonly isViewedByMe?: boolean;
+  readonly author?: StoryTrayAuthor;
+  readonly media?: readonly StoryTrayMedia[];
+};
+
+export type StoriesDeps = {
+  readonly source: DataSource;
+  readonly transport: HttpTransport;
+};
+
+export async function loadStoryTray(
+  params: StoriesDeps & { readonly signal?: AbortSignal },
+): Promise<ApiResult<readonly StoryTrayPost[]>> {
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    const { STORY_TRAY } = await import('./fixtures-stories');
+    /* CE QUI EST PARTI DANS CET ONGLET PASSE DEVANT (#7707, même motif que
+       `loadStatusMoods` § « CE QUE J'AI POSÉ… ») — une story de plusieurs
+       pages publiée sous fixtures ENTRE dans le rail, une entrée par page. */
+    const { fixtureStories } = await import('./stories-publish');
+    const posted: readonly StoryTrayPost[] = fixtureStories().map((s) => ({
+      id: s.id,
+      type: 'STORY',
+      createdAt: s.createdAt,
+      isViewedByMe: true,
+      author: { id: s.authorId, username: 'vous', displayName: 'Moi' },
+    }));
+    return { ok: true, data: [...posted, ...STORY_TRAY] };
+  }
+  return params.transport.request<readonly StoryTrayPost[]>({
+    method: 'GET',
+    path: `${socialEndpoints.posts}?scope=stories&projection=tray&limit=50`,
+    headers: CANVAS_CAPS_HEADERS,
+    ...(params.signal !== undefined ? { signal: params.signal } : {}),
+  });
+}
+
+export function storyTrayQueryOptions(deps: StoriesDeps) {
+  return {
+    queryKey: STORY_TRAY_QUERY_KEY,
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      loadStoryTray({ ...deps, signal }).then(unwrap),
+  };
+}
+
+/**
+ * **LE CORPUS DES HUMEURS** (#5652) — `GET /social/posts?scope=statuses`
+ * (`services/gateway/src/routes/posts/feed.ts:823-831`, requiredAuth ; le
+ * même endroit qui sert `/posts/feed/stories` sous `?scope=stories`). Chaque
+ * ligne est un `Post` complet dont seuls `moodEmoji` et `author` intéressent
+ * le rail — les autres champs (contenu, réactions…) ne sont pas de son
+ * ressort, `withMoods()` (`lib/view/story-tray.ts`) ne lit que ces deux-là.
+ */
+export const STATUS_MOODS_QUERY_KEY = [...STORIES_QUERY_PREFIX, 'moods'] as const;
+
+/** Une humeur, réduite à ce que le rail LIT — `Post.moodEmoji`
+ * (`schema.prisma`, « Emoji mood (ex: "😴", "🎉", "💪", "☕") »). */
+export type StatusMoodPost = {
+  readonly id: string;
+  readonly authorId?: string;
+  readonly moodEmoji?: string | null;
+  readonly author?: StoryTrayAuthor;
+  /** Le texte qui accompagne l'humeur (`Post.content`) et ce qui le traduit —
+   * lus par la feuille qu'ouvre un toucher sur la pastille (#10528). */
+  readonly content?: string | null;
+  readonly originalLanguage?: string | null;
+  readonly translations?: unknown;
+};
+
+export async function loadStatusMoods(
+  params: StoriesDeps & { readonly signal?: AbortSignal },
+): Promise<ApiResult<readonly StatusMoodPost[]>> {
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    const { STATUS_MOODS } = await import('./fixtures-stories');
+    /* CE QUE J'AI POSÉ DANS CET ONGLET PASSE DEVANT (#6150) — le corpus servi
+       est trié `createdAt desc`, et l'humeur qu'on vient de poser est la plus
+       récente. Sans ce préfixe, poser une humeur hors réseau l'affichait puis
+       la faisait DISPARAÎTRE à la première invalidation : l'écriture optimiste
+       était correcte, le corpus qui la remplaçait ne la connaissait pas. */
+    const { fixtureMoods } = await import('./status');
+    const posted: readonly StatusMoodPost[] = fixtureMoods().map((m, i) => ({
+      id: `st-local-${i}`,
+      authorId: m.authorId,
+      moodEmoji: m.moodEmoji,
+    }));
+    return { ok: true, data: [...posted, ...STATUS_MOODS] };
+  }
+  return params.transport.request<readonly StatusMoodPost[]>({
+    method: 'GET',
+    path: `${socialEndpoints.posts}?scope=statuses&limit=50`,
+    ...(params.signal !== undefined ? { signal: params.signal } : {}),
+  });
+}
+
+export function statusMoodsQueryOptions(deps: StoriesDeps) {
+  return {
+    queryKey: STATUS_MOODS_QUERY_KEY,
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      loadStatusMoods({ ...deps, signal }).then(unwrap),
+  };
+}
+
+/**
+ * **LE CORPUS COMPLET DU LECTEUR** (#5817) — LE MÊME ENDPOINT que
+ * `loadStoryTray` (#6249, `GET social.posts?scope=stories`), SANS
+ * `?projection=tray` : `chargerStories`
+ * (`services/gateway/src/routes/posts/feed.ts:801-813`) sert alors
+ * `storyPostInclude` (`postIncludes.ts:382-385`) — contenu, langue
+ * d'origine, traductions, effets de fond, media, auteur — tout ce que
+ * `lib/stories/playback.ts` a besoin de LIRE pour jouer une story, quand le
+ * plateau (`trayStorySelect`) ne sert que l'anneau et la miniature.
+ *
+ * `STORY_FEED_QUERY_KEY` est un troisième corpus SOUS le même préfixe
+ * (`STORIES_QUERY_PREFIX`) : `refreshListAction`/le socket (`api/socket.ts`)
+ * invalident le préfixe entier et couvrent donc ce corpus SANS ligne de plus
+ * (doc-comment `STORIES_QUERY_PREFIX` ci-dessus).
+ */
+export const STORY_FEED_QUERY_KEY = [...STORIES_QUERY_PREFIX, 'feed'] as const;
+
+/** Une story du corpus COMPLET — la forme que `storyPostInclude` sert,
+ * réduite à ce que le lecteur (#5817, périmètre TEXTE + IMAGE) consomme. */
+export type StoryFeedPost = {
+  readonly id: string;
+  readonly type: string;
+  readonly createdAt: string | Date;
+  readonly expiresAt?: string | Date | null;
+  /** L'AUDIENCE (`postScalarSelect.visibility`) — lue par « Imager » un commentaire (#13922). */
+  readonly visibility?: string | null;
+  readonly viewCount?: number;
+  readonly isViewedByMe?: boolean;
+  readonly author?: StoryTrayAuthor;
+  readonly media?: readonly StoryTrayMedia[];
+  readonly content?: string | null;
+  readonly originalLanguage?: string | null;
+  /** La carte `langue → { text, … }` que `postScalarSelect.translations`
+   * sert (`schema.prisma:911`) — dépouillée par `lib/api/prism.ts`, JAMAIS
+   * relue ici telle quelle (D-14, cycle 122 du CLAUDE.md racine). */
+  readonly translations?: unknown;
+  /**
+   * **LES EMOJIS QUE CE LECTEUR A POSÉS** (`PostFeedService.ts:511`,
+   * `userReactionsMap`) — et NON un booléen `isLikedByMe` : le corpus des
+   * stories ne sert pas la forme du Flux. Le champ arrivait bien sur le fil
+   * et ce type le JETAIT, donc le rail du lecteur ne pouvait pas savoir si
+   * la story était déjà aimée — chaque tap aurait posé une réaction sans
+   * jamais pouvoir la retirer (loi 4 : un bouton de retrait inerte).
+   */
+  readonly currentUserReactions?: readonly string[] | null;
+  /** `postInclude.reactionCount` (`postIncludes.ts:351`) — le compte GLOBAL
+   * que le rail affiche sous le cœur. */
+  readonly reactionCount?: number | null;
+  /** `postInclude.commentCount` (`postIncludes.ts:354`) — ce que le rail lit
+   * pour savoir si le bouton « Commentaires » existe (`showsComments`,
+   * `lib/stories/action-rail.ts`), SANS aucune requête. */
+  readonly commentCount?: number | null;
+  /** LES COMMENTAIRES FERMÉS (#16541) — lus par `commentsClosed`. */
+  readonly commentsDisabled?: boolean | null;
+  /** `unknown` (#6899, T8/T9) — un fond v1 (`{ background }`) OU un document
+   * canvas v3 (`{ v: 3, scenes: […] }`) selon la négociation O17
+   * (`storyEffectsV3.ts`, § 3 de la spécification `stories-lecteur`) : lu par
+   * `storyEffectsBackgroundOf`/`parseCanvasDocument`, jamais un champ direct. */
+  readonly storyEffects?: unknown;
+  /** La carte `{ url, token }` des adresses suivies (#9074) — `metadata.trackingLinks`
+   * en REST, hissée en `trackingLinks` par le socket ; décodée par `trackingLinksOf`. */
+  readonly metadata?: unknown;
+  readonly trackingLinks?: unknown;
+  /** La SOURCE d'une story repartagée (`repostOfInclude`) : le lecteur joue sa
+   * scène quand l'enveloppe n'a pas d'effets propres (`playedStoryScene`). */
+  readonly repostOf?: {
+    readonly id: string;
+    readonly storyEffects?: unknown;
+    readonly media?: readonly StoryTrayMedia[] | null;
+    /** L'auteur de la source : le crédit de l'en-tête (`storyRepostCredit`, #10524). */
+    readonly author?: { readonly username?: string | null; readonly displayName?: string | null } | null;
+    readonly commentsDisabled?: boolean | null;
+  } | null;
+};
+
+export async function loadStoryFeed(
+  params: StoriesDeps & { readonly signal?: AbortSignal },
+): Promise<ApiResult<readonly StoryFeedPost[]>> {
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    const { STORY_FEED } = await import('./fixtures-stories');
+    return { ok: true, data: STORY_FEED };
+  }
+  return params.transport.request<readonly StoryFeedPost[]>({
+    method: 'GET',
+    path: `${socialEndpoints.posts}?scope=stories&limit=50`,
+    headers: CANVAS_CAPS_HEADERS,
+    ...(params.signal !== undefined ? { signal: params.signal } : {}),
+  });
+}
+
+export function storyFeedQueryOptions(deps: StoriesDeps) {
+  return {
+    queryKey: STORY_FEED_QUERY_KEY,
+    queryFn: ({ signal }: { signal: AbortSignal }) => loadStoryFeed({ ...deps, signal }).then(unwrap),
+  };
+}
+
+/**
+ * **LA TROISIÈME MARCHE DE LA CASCADE** (#5817, revue-correction, défaut 4)
+ * — miroir de `StoryViewerContainer.swift:297-352` : cache → groupe déjà là
+ * → `GET /posts/:id` UNITAIRE → `loadStories(forceNetwork:)` → `timedOut`.
+ * `loadStoryFeed` ne sert que les 50 stories les plus récentes (`limit=50`,
+ * plafond serveur) ; une story partagée par LIEN mais plus
+ * ancienne que ces 50-là (ou publiée par un auteur dont aucune autre story
+ * ne figure dans la fenêtre) reste pourtant une adresse « partageable
+ * publiquement » (`parity.md:310`). Cette marche la retrouve À LA DEMANDE,
+ * sans jamais élargir la fenêtre du corpus principal.
+ *
+ * `GET /posts/:postId` (`services/gateway/src/routes/posts/core.ts:475-500`,
+ * requiredAuth) applique déjà l'ACL de `getPostById` — un lecteur qui n'a
+ * pas le droit de voir cette story reçoit le MÊME 404 `POST_NOT_FOUND`
+ * qu'une story qui n'existe pas (D-6 : aucun oracle d'existence). Le corps
+ * servi n'est PAS `trayStorySelect` (le plateau) : c'est le post complet,
+ * une projection plus large que `StoryFeedPost` mais qui la CONTIENT — le
+ * même contrat de champs (`content`, `translations`, `storyEffects`,
+ * `media`, `author`…) que `storyPostInclude` sert déjà à `loadStoryFeed`.
+ *
+ * **AUCUN DÉLAI PROPRE À CETTE MARCHE** (#9172). Elle a porté 2,5 s, lus dans
+ * `StoryViewerContainer.swift:346` — mais là-bas, les 2,5 s s'écoulent APRÈS
+ * le retour de toutes les requêtes, pour laisser les publications se poser :
+ * aucune requête iOS n'est coupée. Ici, elles coupaient la requête elle-même,
+ * et sur un réseau lent un visiteur sans compte (dont c'est la SEULE lecture,
+ * #9149) voyait « Réessayer » à la place de la story. La requête vit donc sous
+ * le délai du transport (`DEFAULT_TIMEOUT_MS`, 15 s mesurés, `http.ts`) :
+ * « Réessayer » ne dit qu'un échec réel.
+ */
+export async function loadStoryPost(
+  params: StoriesDeps & { readonly postId: string; readonly signal?: AbortSignal },
+): Promise<ApiResult<StoryFeedPost>> {
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    const { STORY_FEED } = await import('./fixtures-stories');
+    const found = STORY_FEED.find((story) => story.id === params.postId);
+    if (found === undefined) {
+      return { ok: false, status: 404, error: 'Post not found', code: 'POST_NOT_FOUND' };
+    }
+    return { ok: true, data: found };
+  }
+  return params.transport.request<StoryFeedPost>({
+    method: 'GET',
+    path: postsEndpoints.byPostId(params.postId),
+    headers: CANVAS_CAPS_HEADERS,
+    ...(params.signal !== undefined ? { signal: params.signal } : {}),
+  });
+}
+
+/** **LA CLÉ DE LA TROISIÈME MARCHE**, exportée plutôt que composée en ligne :
+ * le cache qu'elle nomme n'est pas lu que par sa requête — le port des
+ * réactions y bascule l'optimiste d'une story atteinte par LIEN, absente du
+ * corpus du plateau (`story-reactions.ts`). Une clé recomposée à deux
+ * endroits est un cache que l'un des deux manque en silence. */
+export const storyPostQueryKey = (postId: string) => [...STORIES_QUERY_PREFIX, 'post', postId] as const;
+
+export function storyPostQueryOptions(deps: StoriesDeps & { readonly postId: string }) {
+  return {
+    queryKey: storyPostQueryKey(deps.postId),
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      loadStoryPost({ ...deps, signal }).then(unwrap),
+  };
+}
+
+/**
+ * **MARQUER UNE STORY VUE** (#5817, migré #6249) — `POST social.events`
+ * (`services/gateway/src/routes/social/events.ts:670-696`, successeur de
+ * l'alias déprécié `POST /posts/:postId/view`), corps
+ * `{ events: [{ type: 'view', postId, durationMs? }] }` (`SocialEventSchema`,
+ * `events.ts:163-171` — `durationMs`, pas `duration` : le nom dit son unité).
+ *
+ * Le serveur y répond `{ recorded, rejected }`, jamais `{ viewed }` — cette
+ * fonction retombe donc sur `{ viewed: true }` en cas de succès, quel que soit
+ * le verdict serveur (« ni oracle d'existence ni témoin d'audience », même
+ * comportement que l'alias historique) : l'appelant n'attend de cette réponse
+ * qu'un accusé, jamais une donnée à afficher.
+ */
+export async function markStoryViewed(
+  params: StoriesDeps & { readonly postId: string; readonly durationMs?: number },
+): Promise<ApiResult<{ readonly viewed: boolean }>> {
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    return { ok: true, data: { viewed: true } };
+  }
+  const result = await params.transport.request<{ readonly recorded: number; readonly rejected: number }>({
+    method: 'POST',
+    path: socialEndpoints.events,
+    body: { events: [{ type: 'view', postId: params.postId, ...(params.durationMs === undefined ? {} : { durationMs: params.durationMs }) }] },
+  });
+  if (!result.ok) return result;
+  return { ok: true, data: { viewed: true } };
+}

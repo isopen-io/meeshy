@@ -124,6 +124,7 @@ jest.mock('../../../services/CacheStore', () => ({
 import { NotificationService } from '../../../services/notifications/NotificationService';
 import * as notificationsIndex from '../../../services/notifications/index';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 
 describe('notifications/index — exports', () => {
   it('should re-export NotificationService', () => {
@@ -376,7 +377,7 @@ describe('NotificationService — Uncovered Paths', () => {
       prisma.notification.findUnique.mockResolvedValue({ userId: 'user-1' });
       prisma.notification.delete.mockRejectedValue(new Error('Delete failed'));
 
-      const result = await service.deleteNotification('notif-id');
+      const result = await service.deleteNotification('notif-id', 'user-id');
       expect(result).toBe(false);
     });
   });
@@ -536,14 +537,14 @@ describe('NotificationService — Uncovered Paths', () => {
 
   describe('isDNDActive', () => {
     it('should return false when dndEnabled is false', () => {
-      const result = (service as any).isDNDActive({ dndEnabled: false, dndStartTime: '22:00', dndEndTime: '08:00' });
+      const result = isWithinDnd({ dndEnabled: false, dndStartTime: '22:00', dndEndTime: '08:00' });
       expect(result).toBe(false);
     });
 
     it('should handle nocturne DND (start > end) — during night', () => {
       const prefs = { dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00', dndDays: null };
       jest.useFakeTimers().setSystemTime(new Date('2024-01-15T23:00:00Z'));
-      const result = (service as any).isDNDActive(prefs);
+      const result = isWithinDnd(prefs);
       jest.useRealTimers();
       expect(result).toBe(true);
     });
@@ -551,7 +552,7 @@ describe('NotificationService — Uncovered Paths', () => {
     it('should handle nocturne DND — outside window', () => {
       const prefs = { dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00', dndDays: null };
       jest.useFakeTimers().setSystemTime(new Date('2024-01-15T12:00:00Z'));
-      const result = (service as any).isDNDActive(prefs);
+      const result = isWithinDnd(prefs);
       jest.useRealTimers();
       expect(result).toBe(false);
     });
@@ -559,7 +560,7 @@ describe('NotificationService — Uncovered Paths', () => {
     it('should handle diurne DND (start < end) — during window', () => {
       const prefs = { dndEnabled: true, dndStartTime: '14:00', dndEndTime: '16:00', dndDays: null };
       jest.useFakeTimers().setSystemTime(new Date('2024-01-15T15:00:00Z'));
-      const result = (service as any).isDNDActive(prefs);
+      const result = isWithinDnd(prefs);
       jest.useRealTimers();
       expect(result).toBe(true);
     });
@@ -567,7 +568,7 @@ describe('NotificationService — Uncovered Paths', () => {
     it('should handle diurne DND — outside window', () => {
       const prefs = { dndEnabled: true, dndStartTime: '14:00', dndEndTime: '16:00', dndDays: null };
       jest.useFakeTimers().setSystemTime(new Date('2024-01-15T17:00:00Z'));
-      const result = (service as any).isDNDActive(prefs);
+      const result = isWithinDnd(prefs);
       jest.useRealTimers();
       expect(result).toBe(false);
     });
@@ -580,7 +581,7 @@ describe('NotificationService — Uncovered Paths', () => {
       // 2024-01-16 is a Tuesday; 02:00 is still inside the Monday-night window.
       const prefs = { dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00', dndDays: ['mon'] };
       jest.useFakeTimers().setSystemTime(new Date('2024-01-16T02:00:00Z'));
-      const result = (service as any).isDNDActive(prefs);
+      const result = isWithinDnd(prefs);
       jest.useRealTimers();
       expect(result).toBe(true);
     });
@@ -590,7 +591,7 @@ describe('NotificationService — Uncovered Paths', () => {
       // Sunday-night window — which the user did not select — so DND is inactive.
       const prefs = { dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00', dndDays: ['mon'] };
       jest.useFakeTimers().setSystemTime(new Date('2024-01-15T02:00:00Z'));
-      const result = (service as any).isDNDActive(prefs);
+      const result = isWithinDnd(prefs);
       jest.useRealTimers();
       expect(result).toBe(false);
     });
@@ -599,7 +600,7 @@ describe('NotificationService — Uncovered Paths', () => {
       // 2024-01-15 is a Monday, 23:00 opens the Monday-night window.
       const prefs = { dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00', dndDays: ['mon'] };
       jest.useFakeTimers().setSystemTime(new Date('2024-01-15T23:00:00Z'));
-      const result = (service as any).isDNDActive(prefs);
+      const result = isWithinDnd(prefs);
       jest.useRealTimers();
       expect(result).toBe(true);
     });
@@ -738,10 +739,10 @@ describe('NotificationService — Uncovered Paths', () => {
   });
 
   // ==============================================
-  // shouldCreateMentionNotification — map overflow
+  // consumeMentionBudget — map overflow
   // ==============================================
 
-  describe('shouldCreateMentionNotification — map overflow eviction', () => {
+  describe('consumeMentionBudget — map overflow eviction', () => {
     it('should evict oldest entry when MAX_MENTION_MAP_ENTRIES exceeded', () => {
       const recentMentions = (service as any).recentMentions as Map<string, number[]>;
       const MAX_ENTRIES = (service as any).MAX_MENTION_MAP_ENTRIES as number;
@@ -752,7 +753,7 @@ describe('NotificationService — Uncovered Paths', () => {
       expect(recentMentions.size).toBe(MAX_ENTRIES);
 
       const firstKey = recentMentions.keys().next().value;
-      (service as any).shouldCreateMentionNotification('new-sender', 'new-recipient');
+      (service as any).consumeMentionBudget('new-sender', 'new-recipient');
 
       expect(recentMentions.size).toBe(MAX_ENTRIES);
       expect(recentMentions.has(firstKey)).toBe(false);
@@ -766,7 +767,7 @@ describe('NotificationService — Uncovered Paths', () => {
   describe('markAsRead — error path', () => {
     it('should return null when update throws', async () => {
       prisma.notification.update.mockRejectedValue(new Error('Update failed'));
-      const result = await service.markAsRead('notif-id');
+      const result = await service.markAsRead('notif-id', 'user-id');
       expect(result).toBeNull();
     });
   });

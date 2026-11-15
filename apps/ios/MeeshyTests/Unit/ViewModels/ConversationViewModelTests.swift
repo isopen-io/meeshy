@@ -35,9 +35,17 @@ final class ConversationViewModelTests: XCTestCase {
         // send semantics need the singleton to report connected. Tests that
         // exercise the offline path explicitly flip this to false.
         MessageSocketManager.shared.isConnected = true
+        // `APIClient.shared` est un singleton de processus : un SUT construit
+        // avec une session anonyme y pose son jeton, et seul un VM DÉMARRÉ le
+        // retire dans son `deinit` (`guard hasStarted`). Un SUT jamais démarré
+        // — le cas de ces tests — le laisse donc au test SUIVANT :
+        // `test_init_withNilAnonymousSession…` héritait « test-anon-token » de
+        // son jumeau. Remis à zéro ici ET au tearDown, comme tout état partagé.
+        APIClient.shared.anonymousSessionToken = nil
     }
 
     override func tearDown() async throws {
+        APIClient.shared.anonymousSessionToken = nil
         // Reset singleton so other test classes don't inherit a forced
         // connected state. The default for a fresh app session is false.
         MessageSocketManager.shared.isConnected = false
@@ -77,6 +85,7 @@ final class ConversationViewModelTests: XCTestCase {
             conversationService: mockConversationService,
             reactionService: mockReactionService,
             reportService: mockReportService,
+            mentionContacts: MockMentionContacts(),
             messageSocket: mockMessageSocket,
             dependencies: deps,
             activeCallService: activeCallService ?? ActiveCallService.shared,
@@ -92,7 +101,6 @@ final class ConversationViewModelTests: XCTestCase {
     private func makeTestDependencies() -> ConversationDependencies {
         let pool = try! makeInMemoryPool()
         return ConversationDependencies(
-            dbPool: pool,
             persistence: MessagePersistenceActor(dbWriter: pool)
         )
     }
@@ -295,11 +303,12 @@ final class ConversationViewModelTests: XCTestCase {
         // en faire un déclencheur de lecture viderait la pastille de
         // conversations que personne n'a ouvertes.
         //
-        // La lecture LOCALE a un seul déclencheur, `start()` (l'ouverture de
-        // l'écran), qui poste `.conversationMarkedRead` via
-        // `ConversationReadSignal` — voir
-        // `test_start_marksTheConversationReadLocally`. L'accusé de lecture
-        // SERVEUR, lui, garde son exigence d'exactitude
+        // La lecture LOCALE n'a plus AUCUN déclencheur à la simple ouverture
+        // depuis #7350 (I-2) — voir
+        // `test_start_doesNotMarkTheConversationReadLocally`. Seul un accusé
+        // de lecture EXACT ou un geste explicite postent
+        // `.conversationMarkedRead` via `ConversationReadSignal`. L'accusé de
+        // lecture SERVEUR, lui, garde son exigence d'exactitude
         // (`docs/superpowers/specs/2026-07-24-read-exactness-design.md`) : il
         // ne nomme que les messages réellement affichés, et ne part que par
         // `markAsRead(messageIds:)`.
@@ -348,7 +357,12 @@ final class ConversationViewModelTests: XCTestCase {
             }
         }
 
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
+        // #4943 : `start()` n'effectue plus la première lecture — `loadMessages()`
+        // est l'unique chemin qui peint la fenêtre depuis GRDB. Les lignes semées
+        // par `pool.write` ne notifient personne : sans cet appel, la précondition
+        // attendait une fenêtre que rien ne lisait.
+        await sut.loadMessages()
         let windowed = await MessageStoreObservationHelper.awaitMessagesCount(equals: 200, in: sut)
         XCTAssertTrue(windowed, "precondition: the initial window caps at the newest 200 cached messages")
 
@@ -367,11 +381,169 @@ final class ConversationViewModelTests: XCTestCase {
 
         let grew = await MessageStoreObservationHelper.awaitMessagesCount(equals: 201, in: sut)
         XCTAssertTrue(grew, "the offline path must surface the GRDB-cached older message")
-        XCTAssertEqual(mockMessageService.listBeforeCallCount, 1, "the REST call must still be attempted (to extend the window)")
+        let attempted = await MessageStoreObservationHelper.awaitCondition(timeout: 2.0) {
+            self.mockMessageService.listBeforeCallCount == 1
+        }
+        XCTAssertTrue(attempted, "the REST call must still be attempted (to extend the window)")
         XCTAssertEqual(
             messageCountWhenRESTFired, 201,
             "cache-FIRST : la page GRDB doit être servie AVANT l'appel réseau — un gateway mort ne doit jamais retarder des rangées déjà sur disque"
         )
+    }
+
+    // MARK: - Rattrapage à l'OUVERTURE d'une conversation
+
+    /// Le geste rapporté par l'utilisateur le 2026-08-25 : « j'ouvre la
+    /// conversation, même après 1h, et il manque des messages récents — alors
+    /// que dans la liste on a bien le dernier ».
+    ///
+    /// `refreshMessagesFromAPI()` lit `offset: 0, limit: 30`. Au-delà de trente
+    /// messages manqués il colle les trente derniers sur le bloc GRDB ancien et
+    /// laisse un TROU au milieu : `loadOlderMessages` part du plus ancien vers
+    /// l'arrière, `syncMissedMessages` du plus récent vers l'avant, et personne
+    /// ne regarde entre les deux. Le trou n'était comblé que par redondance —
+    /// le puits `message:new` global et le rejeu serveur de 48 h —, jamais
+    /// détecté, et rien ne le couvrait après une absence plus longue.
+    func test_loadMessages_surUnCacheCHAUD_declencheLeRattrapageParWatermark() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let base = Date().addingTimeInterval(-3600)
+        let records: [MessageRecord] = (0..<5).map { i in
+            var record = MessageStoreObservationHelper.makeRecord(
+                localId: "chaud-\(i)", conversationId: testConversationId,
+                senderId: testUserId, content: "msg \(i)",
+                state: .sent, createdAt: base.addingTimeInterval(Double(i))
+            )
+            record.cachedTimeString = MessageRecord.computeTimeString(for: record.createdAt)
+            return record
+        }
+        try await pool.write { db in
+            for record in records { try record.insert(db) }
+        }
+
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
+        mockMessageService.listAfterResult = .success(makeMessagesResponse())
+
+        await sut.loadMessages()
+        // #4943 : la fenêtre n'est peinte que par `loadMessages()` — l'attente se
+        // pose APRÈS, sinon elle épuise son délai pour rien.
+        _ = await MessageStoreObservationHelper.awaitMessagesCount(equals: 5, in: sut)
+
+        // Le rattrapage part dans une tâche de fond détachée du chargement :
+        // on attend qu'il se manifeste plutôt que de supposer son instant.
+        // `awaitCondition` prend une closure NON échappante : pas de capture
+        // faible, `self` y est capturé implicitement et sans cycle.
+        let rattrape = await MessageStoreObservationHelper.awaitCondition(timeout: 2.0) {
+            self.mockMessageService.listAfterCallCount >= 1
+        }
+        XCTAssertTrue(
+            rattrape,
+            "ouvrir une conversation dont GRDB est CHAUD doit rejouer le rattrapage par watermark — sans lui, un trou de plus de trente messages reste invisible et définitif"
+        )
+    }
+
+    /// La moitié NÉGATIVE, et elle n'est pas décorative : sur un GRDB FROID le
+    /// refresh vient d'apporter les trente plus récents, il n'y a rien devant
+    /// eux à rattraper. Un rattrapage y serait une seconde lecture pour rien.
+    func test_loadMessages_surUnCacheFROID_neDeclenchePasLeRattrapage() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
+        mockMessageService.listAfterResult = .success(makeMessagesResponse())
+
+        await sut.loadMessages()
+
+        XCTAssertEqual(
+            mockMessageService.listAfterCallCount, 0,
+            "GRDB froid : le refresh a déjà apporté les plus récents, aucun watermark à remonter"
+        )
+    }
+
+    /// #10572 — cinq messages détenus, puis une absence de plus de trente :
+    /// le refresh pose les trente plus récents, TOUS postérieurs au bloc
+    /// détenu. Le rattrapage doit repartir du plus récent message détenu AVANT
+    /// ce refresh. Relu après, le curseur tombait sur le plus récent des
+    /// trente, et le trou entre les deux blocs ne se comblait jamais.
+    func test_loadMessages_surUnTrouPlusLongQueLaPage_rattrapeDepuisLeCurseurDAvantLeRefresh() async throws {
+        let (sut, newestHeld) = try await makeWarmSUT(heldAt: Date(timeIntervalSince1970: 1_748_736_000))
+        mockMessageService.listResult = .success(
+            makeBackfillResponse(idPrefix: "recent", count: 30, createdAtISO: "2026-06-01T10:00:00.000Z")
+        )
+        mockMessageService.listAfterResult = .success(makeMessagesResponse())
+
+        await sut.loadMessages()
+        let rattrape = await MessageStoreObservationHelper.awaitCondition(timeout: 2.0) {
+            self.mockMessageService.listAfterCallCount >= 1
+        }
+
+        XCTAssertTrue(rattrape, "un refresh qui ne rejoint pas le bloc détenu laisse un trou à combler")
+        let after = try XCTUnwrap(mockMessageService.lastListAfterAfter)
+        XCTAssertLessThanOrEqual(after, newestHeld)
+        XCTAssertGreaterThan(
+            after, newestHeld.addingTimeInterval(-0.01),
+            "le curseur est le plus récent message détenu AVANT le refresh, pas le plus récent servi par lui"
+        )
+    }
+
+    /// La moitié négative : une page de refresh qui REMONTE jusqu'au bloc
+    /// détenu le recouvre sans trou — un rattrapage n'y serait qu'une seconde
+    /// lecture des mêmes messages, à chaque ouverture.
+    func test_loadMessages_quandLeRefreshRejointLeBlocDetenu_neRattrapePas() async throws {
+        let (sut, _) = try await makeWarmSUT(heldAt: Date(timeIntervalSince1970: 1_748_736_000))
+        mockMessageService.listResult = .success(
+            makeBackfillResponse(idPrefix: "overlap", count: 30, createdAtISO: "2025-01-01T00:00:00.000Z")
+        )
+
+        await sut.loadMessages()
+        let revalide = await MessageStoreObservationHelper.awaitCondition(timeout: 2.0) {
+            self.mockMessageService.listCallCount >= 1 && !sut.isRevalidating
+        }
+
+        XCTAssertTrue(revalide)
+        XCTAssertEqual(mockMessageService.listAfterCallCount, 0)
+    }
+
+    func test_openingGapCursor_withNothingHeld_returnsNil() {
+        XCTAssertNil(ConversationViewModel.openingGapCursor(heldUpTo: nil, refreshReachedBackTo: Date()))
+    }
+
+    func test_openingGapCursor_whenTheRefreshServedNothing_returnsTheHeldWatermark() {
+        let held = Date(timeIntervalSince1970: 1_000)
+        XCTAssertEqual(ConversationViewModel.openingGapCursor(heldUpTo: held, refreshReachedBackTo: nil), held)
+    }
+
+    func test_openingGapCursor_whenThePageStartsAfterTheHeldBlock_returnsTheHeldWatermark() {
+        let held = Date(timeIntervalSince1970: 1_000)
+        XCTAssertEqual(
+            ConversationViewModel.openingGapCursor(heldUpTo: held, refreshReachedBackTo: held.addingTimeInterval(60)),
+            held
+        )
+    }
+
+    func test_openingGapCursor_whenThePageReachesTheHeldBlock_returnsNil() {
+        let held = Date(timeIntervalSince1970: 1_000)
+        XCTAssertNil(ConversationViewModel.openingGapCursor(heldUpTo: held, refreshReachedBackTo: held))
+    }
+
+    /// Cinq messages SERVEUR détenus en GRDB, le plus récent à `heldAt + 4 s`.
+    private func makeWarmSUT(heldAt base: Date) async throws -> (ConversationViewModel, Date) {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let records: [MessageRecord] = (0..<5).map { i in
+            var record = MessageStoreObservationHelper.makeRecord(
+                localId: "held-\(i)", conversationId: testConversationId,
+                senderId: testUserId, content: "msg \(i)",
+                state: .sent, createdAt: base.addingTimeInterval(Double(i))
+            )
+            record.cachedTimeString = MessageRecord.computeTimeString(for: record.createdAt)
+            return record
+        }
+        try await pool.write { db in
+            for record in records { try record.insert(db) }
+        }
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
+        return (sut, base.addingTimeInterval(4))
     }
 
     // MARK: - syncMissedMessages (T9 — reconnect gap recovery via watermark)
@@ -439,7 +611,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_sendMessage_emptyContent_returnsFalse() async {
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "")
+        let result = await sut.send(outgoingMessage(content: "", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertFalse(result)
         XCTAssertTrue(sut.messages.isEmpty)
@@ -448,7 +620,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_sendMessage_whitespaceOnly_returnsFalse() async {
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "   \n  ")
+        let result = await sut.send(outgoingMessage(content: "   \n  ", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertFalse(result)
     }
@@ -461,7 +633,7 @@ final class ConversationViewModelTests: XCTestCase {
         // which crosses several runloop hops — poll for the condition instead
         // of a fixed sleep (a 50 ms delay races the pipeline under load).
         let sendTask = Task {
-            await sut.sendMessage(content: "Hello world")
+            await sut.send(outgoingMessage(content: "Hello world", conversationId: sut.conversationId)).isAccepted
         }
 
         let surfaced = await MessageStoreObservationHelper.awaitMessage(in: sut) {
@@ -475,9 +647,9 @@ final class ConversationViewModelTests: XCTestCase {
     func test_sendMessage_success_replacesOptimisticWithServerMessage() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
-        let result = await sut.sendMessage(content: "Hello")
+        let result = await sut.send(outgoingMessage(content: "Hello", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertTrue(result)
         // Post Phase 1.5: insertOptimistic + applyEvent(.serverAck) write
@@ -502,7 +674,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockMessageService.sendResult = .failure(NSError(domain: "test", code: 500, userInfo: [NSLocalizedDescriptionKey: "Send failed"]))
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "Fail me")
+        let result = await sut.send(outgoingMessage(content: "Fail me", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertFalse(result)
         XCTAssertEqual(sut.messages.count, 1)
@@ -517,7 +689,7 @@ final class ConversationViewModelTests: XCTestCase {
         let sut = makeSUT()
         XCTAssertEqual(sut.messages.count, 0)
 
-        _ = await sut.sendMessage(content: "Test")
+        _ = await sut.send(outgoingMessage(content: "Test", conversationId: sut.conversationId)).isAccepted
 
         // The optimistic GRDB insert surfaces through the store observation
         // (notification → store refresh → @Published messages), which hops the
@@ -535,7 +707,7 @@ final class ConversationViewModelTests: XCTestCase {
         let sut = makeSUT()
         sut.messages = [makeMessage(id: "parent-msg", content: "Original", isMe: false)]
 
-        _ = await sut.sendMessage(content: "Reply", replyToId: "parent-msg")
+        _ = await sut.send(outgoingMessage(content: "Reply", conversationId: sut.conversationId, relation: .reply(to: MessageID("parent-msg"), citing: nil))).isAccepted
 
         XCTAssertEqual(mockMessageService.lastSendRequest?.replyToId, "parent-msg")
     }
@@ -549,7 +721,7 @@ final class ConversationViewModelTests: XCTestCase {
         )
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "Fallback me")
+        let result = await sut.send(outgoingMessage(content: "Fallback me", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertTrue(result)
         XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 1)
@@ -558,7 +730,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_sendMessage_restSucceeds_skipsSocketFallback() async {
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "Plain send")
+        let result = await sut.send(outgoingMessage(content: "Plain send", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertTrue(result)
         XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 0)
@@ -575,7 +747,7 @@ final class ConversationViewModelTests: XCTestCase {
         )
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "Fast via socket")
+        let result = await sut.send(outgoingMessage(content: "Fast via socket", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertTrue(result)
         XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 1, "socket-first sends via the socket")
@@ -589,82 +761,11 @@ final class ConversationViewModelTests: XCTestCase {
         mockMessageSocket.sendViaSocketFallbackResult = nil
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "Socket miss then REST")
+        let result = await sut.send(outgoingMessage(content: "Socket miss then REST", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertTrue(result)
         XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 1, "socket-first was attempted")
         XCTAssertEqual(mockMessageService.sendCallCount, 1, "REST is the fallback on a socket miss")
-    }
-
-    // MARK: - Conversation-list optimistic preview
-
-    func test_optimisticListPreview_text_returnsTheText() {
-        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "Salut", messageType: .text), "Salut")
-    }
-
-    func test_optimisticListPreview_captionedMedia_prefersTheCaption() {
-        // A media message WITH a caption shows the caption, not the media label.
-        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "Regarde", messageType: .image), "Regarde")
-    }
-
-    func test_optimisticListPreview_captionlessMedia_returnsMediaLabel() throws {
-        // `optimisticListPreview` résout ses libellés via `String(localized:)`,
-        // donc depuis la langue du simulateur : on fixe la table française pour
-        // juger le code, pas la machine (sinon vert en local fr, rouge en CI en).
-        let path = try XCTUnwrap(Bundle.main.path(forResource: "fr", ofType: "lproj"),
-                                 "localisation « fr » absente du bundle — régression de packaging")
-        let fr = try XCTUnwrap(Bundle(path: path))
-        let loc = Locale(identifier: "fr")
-        func preview(_ type: Message.MessageType) -> String {
-            ConversationViewModel.optimisticListPreview(text: "", messageType: type, bundle: fr, locale: loc)
-        }
-        XCTAssertEqual(preview(.image), "📷 Photo")
-        XCTAssertEqual(preview(.video), "🎥 Vidéo")
-        XCTAssertEqual(preview(.audio), "🎙️ Message vocal")
-        XCTAssertEqual(preview(.file), "📎 Fichier")
-        XCTAssertEqual(preview(.location), "📍 Position")
-    }
-
-    func test_optimisticListPreview_lieuSeul_composeNomPuisAdressePuisPosition() throws {
-        // Lot 2 (spec 2026-07-30) : un message « lieu seul » a un `content`
-        // vide et un messageType .text — sans la branche `location`, son
-        // aperçu de conversation serait vide. « 📍 <nom, à défaut adresse,
-        // à défaut Position> ». Table française fixée : on juge le code, pas
-        // la langue du simulateur.
-        let path = try XCTUnwrap(Bundle.main.path(forResource: "fr", ofType: "lproj"))
-        let fr = try XCTUnwrap(Bundle(path: path))
-        let loc = Locale(identifier: "fr")
-        func preview(_ place: SharedPlace?) -> String {
-            ConversationViewModel.optimisticListPreview(
-                text: "", messageType: .text, location: place, bundle: fr, locale: loc)
-        }
-
-        let nomEtAdresse = SharedPlace(latitude: 48.85, longitude: 2.35,
-                                       name: "Café de Flore",
-                                       address: "172 boulevard Saint-Germain, Paris")
-        XCTAssertEqual(preview(nomEtAdresse), "📍 Café de Flore", "le nom prime sur l'adresse")
-
-        let adresseSeule = SharedPlace(latitude: 48.85, longitude: 2.35,
-                                       name: nil,
-                                       address: "172 boulevard Saint-Germain, Paris")
-        XCTAssertEqual(preview(adresseSeule), "📍 172 boulevard Saint-Germain, Paris")
-
-        let nomVide = SharedPlace(latitude: 48.85, longitude: 2.35, name: "", address: "")
-        XCTAssertEqual(preview(nomVide), "📍 Position",
-                       "nom et adresse vides → libellé localisé de repli")
-
-        let pointBrut = SharedPlace(latitude: 48.85, longitude: 2.35)
-        XCTAssertEqual(preview(pointBrut), "📍 Position")
-    }
-
-    func test_optimisticListPreview_texteAvecLieu_prefereLeTexte() {
-        // Un message qui porte texte ET lieu montre le texte en aperçu — le
-        // lieu n'écrase jamais une légende.
-        let place = SharedPlace(latitude: 48.85, longitude: 2.35, name: "Café de Flore")
-        XCTAssertEqual(
-            ConversationViewModel.optimisticListPreview(text: "On se voit ici ?", messageType: .text, location: place),
-            "On se voit ici ?"
-        )
     }
 
     func test_sendMessage_restAndSocketBothFail_returnsFalse() async {
@@ -672,7 +773,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockMessageSocket.sendViaSocketFallbackResult = nil
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "Both down")
+        let result = await sut.send(outgoingMessage(content: "Both down", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertFalse(result)
         XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 1)
@@ -685,7 +786,7 @@ final class ConversationViewModelTests: XCTestCase {
         )
         let sut = makeSUT()
 
-        _ = await sut.sendMessage(content: "Dedup key check")
+        _ = await sut.send(outgoingMessage(content: "Dedup key check", conversationId: sut.conversationId)).isAccepted
 
         // The fallback MUST reuse the cid_<uuid> optimistic id so the gateway
         // dedup (conversationId, clientMessageId) prevents a duplicate when the
@@ -708,7 +809,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_insertOptimisticMediaMessage_persistsRecordToGRDB() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let imageAttachment = MeeshyMessageAttachment(
             id: "att_image_001",
@@ -724,7 +825,8 @@ final class ConversationViewModelTests: XCTestCase {
             attachments: [imageAttachment],
             messageType: .image,
             replyToId: nil,
-            originalLanguage: "es"
+            originalLanguage: "es",
+            protection: .none
         )
 
         // The helper writes via Task.detached — wait for the row to land.
@@ -755,7 +857,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_insertOptimisticMediaMessage_replyReference_carriesTheQuotedAuthorAvatar() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let quoted = Message(
             id: "msg-quoted-001",
@@ -777,7 +879,8 @@ final class ConversationViewModelTests: XCTestCase {
             content: "ma reponse",
             attachments: [],
             messageType: .text,
-            replyToId: "msg-quoted-001"
+            replyToId: "msg-quoted-001",
+            protection: .none
         )
 
         let record = await MessageStoreObservationHelper.awaitRecord(
@@ -804,7 +907,7 @@ final class ConversationViewModelTests: XCTestCase {
 
     func test_toggleAttachmentReaction_addsOptimistically_andEmits() throws {
         let pool = try makeInMemoryPool()
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: MessagePersistenceActor(dbWriter: pool)))
         sut.messages = [makeImageMessage()]
 
         sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "❤️")
@@ -817,7 +920,7 @@ final class ConversationViewModelTests: XCTestCase {
 
     func test_toggleAttachmentReaction_secondTapSameEmoji_removes() throws {
         let pool = try makeInMemoryPool()
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: MessagePersistenceActor(dbWriter: pool)))
         sut.messages = [makeImageMessage()]
 
         sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "❤️")
@@ -831,7 +934,7 @@ final class ConversationViewModelTests: XCTestCase {
 
     func test_toggleAttachmentReaction_differentEmoji_stacksWithPrevious() throws {
         let pool = try makeInMemoryPool()
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: MessagePersistenceActor(dbWriter: pool)))
         sut.messages = [makeImageMessage()]
 
         sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "❤️")
@@ -845,12 +948,53 @@ final class ConversationViewModelTests: XCTestCase {
 
     func test_applyAttachmentReactionDelta_replacesSummary() throws {
         let pool = try makeInMemoryPool()
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: MessagePersistenceActor(dbWriter: pool)))
         sut.messages = [makeImageMessage()]
 
         sut.applyAttachmentReactionDelta(attachmentId: "a1", reactionSummary: ["👍": 3])
 
         XCTAssertEqual(sut.messages.first?.attachments.first?.reactionSummary?["👍"], 3)
+    }
+
+    /// **La pièce SERVIE AU PLEIN ÉCRAN porte la réaction** (#6789, directive
+    /// porteur 2026-09-16).
+    ///
+    /// `allVisualAttachments` est la seule source du visualiseur, et elle est
+    /// mémoïsée : son invalidation dépend de `structureChanged` — nombre de
+    /// messages, identité du premier, du dernier. **Une réaction ne change aucun
+    /// des trois.** La projection reservait donc un tableau d'AVANT la réaction :
+    /// la bulle se mettait à jour (elle lit `message.attachments` en direct), le
+    /// plein écran non.
+    ///
+    /// Le témoin LIT la projection une première fois — c'est ce qui arme le
+    /// cache, et sans cette lecture il serait vert sur le code fautif.
+    func test_toggleAttachmentReaction_refreshesTheFullscreenProjection() throws {
+        let pool = try makeInMemoryPool()
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: MessagePersistenceActor(dbWriter: pool)))
+        sut.messages = [makeImageMessage()]
+
+        XCTAssertNil(sut.allVisualAttachments.first?.reactionSummary,
+                     "lecture d'amorçage : c'est elle qui met le cache en place")
+
+        sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "❤️")
+
+        XCTAssertEqual(sut.allVisualAttachments.first?.reactionSummary?["❤️"], 1,
+                       "le plein écran sert la pièce d'après la réaction, pas celle d'avant")
+        XCTAssertEqual(sut.allVisualAttachments.first?.currentUserReactions, ["❤️"])
+    }
+
+    /// Et le delta SERVEUR rafraîchit la même projection : sans lui, la réaction
+    /// d'un tiers n'atteindrait jamais le visualiseur ouvert.
+    func test_applyAttachmentReactionDelta_refreshesTheFullscreenProjection() throws {
+        let pool = try makeInMemoryPool()
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: MessagePersistenceActor(dbWriter: pool)))
+        sut.messages = [makeImageMessage()]
+
+        XCTAssertNil(sut.allVisualAttachments.first?.reactionSummary)
+
+        sut.applyAttachmentReactionDelta(attachmentId: "a1", reactionSummary: ["👍": 3])
+
+        XCTAssertEqual(sut.allVisualAttachments.first?.reactionSummary?["👍"], 3)
     }
 
     // Regression guard (GAP #1): an attachment reaction must be written through
@@ -859,7 +1003,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_toggleAttachmentReaction_persistsReactionSummaryToGRDB() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         // Seed a delivered message row carrying the image attachment so the row
         // exists for `updateAttachmentsJson` to update and surfaces in the VM.
@@ -897,7 +1041,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_insertOptimisticMediaMessage_surfacesBubbleInViewModel() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let audioAttachment = MeeshyMessageAttachment(
             id: "att_audio_001",
@@ -914,7 +1058,8 @@ final class ConversationViewModelTests: XCTestCase {
             attachments: [audioAttachment],
             messageType: .audio,
             replyToId: nil,
-            originalLanguage: "fr"
+            originalLanguage: "fr",
+            protection: .none
         )
 
         let surfaced = await MessageStoreObservationHelper.awaitMessage(in: sut) { $0.id == tempId }
@@ -932,7 +1077,7 @@ final class ConversationViewModelTests: XCTestCase {
         // (so we don't store an empty `[]` blob taking disk space).
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let tempId = "temp_\(UUID().uuidString)"
 
@@ -942,7 +1087,8 @@ final class ConversationViewModelTests: XCTestCase {
             attachments: [],
             messageType: .text,
             replyToId: nil,
-            originalLanguage: "en"
+            originalLanguage: "en",
+            protection: .none
         )
 
         let record = await MessageStoreObservationHelper.awaitRecord(
@@ -962,7 +1108,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_editMessage_optimisticallyUpdatesContent() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-edit", conversationId: testConversationId,
@@ -984,7 +1130,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_editMessage_emptyContent_doesNothing() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-edit", conversationId: testConversationId,
@@ -1006,7 +1152,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockMessageService.editResult = .failure(NSError(domain: "test", code: 500, userInfo: [NSLocalizedDescriptionKey: "Edit failed"]))
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-edit", conversationId: testConversationId,
@@ -1033,7 +1179,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_deleteMessage_optimisticallyMarksDeleted() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-del", conversationId: testConversationId,
@@ -1056,7 +1202,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockMessageService.deleteResult = .failure(NSError(domain: "test", code: 500, userInfo: [NSLocalizedDescriptionKey: "Delete failed"]))
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-del", conversationId: testConversationId,
@@ -1083,7 +1229,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_deleteMessage_failedMessageNeverReachedServer_purgesLocallyWithoutRestCall() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-failed-del", conversationId: testConversationId,
@@ -1125,7 +1271,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_markOptimisticMediaFailed_flipsRowToFailed() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "media-s7", conversationId: testConversationId,
             senderId: testUserId, content: ""
@@ -1150,7 +1296,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_toggleReaction_addsReactionOptimistically() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-react", conversationId: testConversationId,
@@ -1190,7 +1336,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_toggleReaction_ownReaction_isHighlightedAsMine() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-mine", conversationId: testConversationId,
@@ -1220,7 +1366,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_toggleReaction_removesExistingReaction() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let existingReaction = MeeshyReaction(
             messageId: "msg-react", participantId: testUserId, emoji: "thumbsup"
@@ -1255,7 +1401,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_toggleReaction_differentEmoji_stacksWithMyPreviousReaction() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let myPrevious = MeeshyReaction(
             messageId: "msg-swap", participantId: testUserId, emoji: "heart"
@@ -1299,7 +1445,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_toggleReaction_systemMessage_isIgnored() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-system", conversationId: testConversationId,
@@ -1321,7 +1467,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_toggleReaction_doesNothingForUnknownMessageId() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-1", conversationId: testConversationId,
@@ -1348,7 +1494,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_togglePin_pinsUnpinnedMessage() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-pin", conversationId: testConversationId,
@@ -1371,7 +1517,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_togglePin_unpinsPinnedMessage() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-pin", conversationId: testConversationId,
@@ -1397,7 +1543,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockMessageService.pinResult = .failure(NSError(domain: "test", code: 500, userInfo: [NSLocalizedDescriptionKey: "Pin failed"]))
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-pin", conversationId: testConversationId,
@@ -1421,7 +1567,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockMessageService.unpinResult = .failure(NSError(domain: "test", code: 500, userInfo: [NSLocalizedDescriptionKey: "Unpin failed"]))
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-pin", conversationId: testConversationId,
@@ -1568,26 +1714,183 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(result?.translatedContent, "Hallo")
     }
 
-    // MARK: - Ouvrir, c'est lire (localement)
+    /// Tous les cas ci-dessus posent les traductions AVANT le premier appel :
+    /// aucun n'exerce la séquence fautive. Ici la bulle est d'abord résolue
+    /// « pas de traduction ⇒ original », puis la traduction ARRIVE (chemin
+    /// socket `translation:completed`). Le cache de résolution gardait alors le
+    /// `nil` pour toujours et la bulle ne basculait jamais — l'invalidation est
+    /// désormais une propriété du CHAMP, qu'aucun écrivain ne peut oublier.
+    func test_preferredTranslation_lateArrival_afterResolvedAsOriginal_returnsTranslation() {
+        let currentUser = MeeshyUser(
+            id: testUserId, username: "testuser",
+            systemLanguage: "es"
+        )
+        mockAuthManager.simulateLoggedIn(user: currentUser)
+        let sut = ConversationViewModel(
+            conversationId: testConversationId,
+            authManager: mockAuthManager,
+            messageService: mockMessageService,
+            conversationService: mockConversationService,
+            reactionService: mockReactionService,
+            reportService: mockReportService,
+            dependencies: makeTestDependencies()
+        )
+        sut.messages = [makeMessage(id: "msg-t", content: "Bonjour")]
 
-    /// Le moteur de sync ramenait déjà le compteur de la conversation ouverte à
-    /// zéro — mais dans son cache SEUL, et de façon différée. Les lignes
-    /// @Published de la liste et le `ConversationStore` ne l'apprenaient que par
-    /// le rechargement de cache débouncé, quand ils l'apprenaient : le seul
-    /// autre chemin qui les touchait est gaté par l'exactitude de lecture, que
-    /// l'ouverture d'une conversation à 99 non-lus sans en atteindre le bas ne
-    /// franchit jamais. Le store gardait donc 99, le cache disait 0, et la ligne
-    /// affichait celui des deux qui avait publié en dernier.
-    func test_start_marksTheConversationReadLocally() {
+        XCTAssertNil(sut.preferredTranslation(for: "msg-t"),
+                     "aucune traduction reçue ⇒ l'original (règle 1 du Prisme)")
+
+        sut.messageTranslations["msg-t"] = [
+            MessageTranslation(
+                id: "t-es", messageId: "msg-t",
+                sourceLanguage: "fr", targetLanguage: "es",
+                translatedContent: "Hola", translationModel: "nllb",
+                confidenceScore: nil
+            ),
+        ]
+
+        let result = sut.preferredTranslation(for: "msg-t")
+
+        XCTAssertEqual(result?.targetLanguage, "es")
+        XCTAssertEqual(result?.translatedContent, "Hola",
+                       "la bulle doit basculer dès que la traduction arrive")
+    }
+
+    // MARK: - Édition et traductions périmées
+
+    /// Le gateway invalide les traductions à l'ÉCRITURE du nouveau contenu
+    /// (`translations: null` dans le même `updateMany` que `content`). Le
+    /// chemin d'édition OPTIMISTE du client doit poser le même verdict avant
+    /// d'écrire le nouveau texte, sinon la bulle rend le texte neuf sous
+    /// l'ancienne traduction.
+    func test_editMessage_clearsStaleTranslations() async {
+        let sut = makeSUT()
+        sut.messages = [makeMessage(id: "msg-edit-local", content: "Bonjour")]
+        sut.messageTranslations["msg-edit-local"] = [
+            MessageTranslation(
+                id: "t-es", messageId: "msg-edit-local",
+                sourceLanguage: "fr", targetLanguage: "es",
+                translatedContent: "Hola", translationModel: "nllb",
+                confidenceScore: nil
+            ),
+        ]
+
+        await sut.editMessage(messageId: "msg-edit-local", newContent: "Bonsoir")
+
+        XCTAssertNil(sut.messageTranslations["msg-edit-local"],
+                     "une traduction d'un contenu périmé n'est pas une traduction")
+        XCTAssertNil(sut.preferredTranslation(for: "msg-edit-local"),
+                     "pendant la fenêtre d'édition, l'ORIGINAL est servi")
+    }
+
+    /// La bulle qu'on édite est la SIENNE, donc celle qui porte encore un id
+    /// optimiste — alors que les deux caches PERSISTANTS sont keyés par l'id
+    /// SERVEUR (`pendingServerIds`). Évincer sous le seul id de la ligne ne
+    /// touchait alors AUCUNE ligne GRDB : le texte périmé revenait au
+    /// redémarrage, exactement le symptôme que l'éviction dit fermer.
+    func test_editMessage_onOptimisticRow_alsoEvictsTheServerKeyedCaches() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        try await persistence.saveTranslation(TranslationRecord(
+            id: "tr-edit-optimistic", messageLocalId: "srv_1", messageServerId: "srv_1",
+            targetLanguage: "es", translatedContent: "Hola",
+            translationModel: "nllb-200", confidenceScore: 0.9,
+            sourceLanguage: "fr", receivedAt: Date()
+        ))
+
+        let sut = makeSUT(
+            dependencies: ConversationDependencies(persistence: persistence)
+        )
+        sut.messages = [makeMessage(id: "temp_1", content: "Bonjour", isMe: true)]
+        sut.pendingServerIds["temp_1"] = "srv_1"
+        sut.messageTranslations["srv_1"] = [
+            MessageTranslation(
+                id: "t-es", messageId: "srv_1",
+                sourceLanguage: "fr", targetLanguage: "es",
+                translatedContent: "Hola", translationModel: "nllb",
+                confidenceScore: nil
+            ),
+        ]
+
+        await sut.editMessage(messageId: "temp_1", newContent: "Bonsoir")
+
+        XCTAssertNil(sut.messageTranslations["srv_1"],
+                     "l'espace d'ids SERVEUR doit tomber avec l'espace local")
+
+        // L'éviction disque part dans une `Task` détachée du geste : on la
+        // laisse aboutir avant de lire la table, sans quoi le témoin
+        // mesurerait l'ordonnancement plutôt que l'éviction.
+        var attempts = 0
+        var remaining = try persistence.translations(for: "srv_1")
+        while !remaining.isEmpty && attempts < 50 {
+            try await Task.sleep(nanoseconds: 20_000_000)
+            remaining = try persistence.translations(for: "srv_1")
+            attempts += 1
+        }
+        XCTAssertTrue(remaining.isEmpty,
+                      "la ligne persistée sous l'id serveur doit être supprimée")
+    }
+
+    /// La bascule MANUELLE court-circuite les quatre caches dans
+    /// `preferredTranslation(for:)` : sans son éviction, un lecteur qui a
+    /// exploré une langue garde le texte d'AVANT l'édition à l'écran
+    /// indéfiniment, alors même que tout le reste est vide.
+    func test_editMessage_dropsTheManualLanguageOverride() async {
+        let sut = makeSUT()
+        sut.messages = [makeMessage(id: "msg-edit-local", content: "Bonjour")]
+        // Le geste RÉEL de la vue Langue de l'appui long (ConversationView),
+        // pas une écriture directe du dictionnaire.
+        sut.setActiveTranslation(
+            for: "msg-edit-local",
+            translation: MessageTranslation(
+                id: "t-es", messageId: "msg-edit-local",
+                sourceLanguage: "fr", targetLanguage: "es",
+                translatedContent: "Hola", translationModel: "nllb",
+                confidenceScore: nil
+            )
+        )
+        XCTAssertTrue(sut.activeTranslationOverrides.keys.contains("msg-edit-local"))
+
+        await sut.editMessage(messageId: "msg-edit-local", newContent: "Bonsoir")
+
+        XCTAssertFalse(sut.activeTranslationOverrides.keys.contains("msg-edit-local"),
+                       "la clé est RETIRÉE : présente et nulle, elle graverait un « montre l'original » que le lecteur n'a pas demandé")
+        XCTAssertNil(sut.preferredTranslation(for: "msg-edit-local"),
+                     "le Prisme automatique reprend la main et sert l'ORIGINAL")
+    }
+
+    // MARK: - Ouvrir N'EST PLUS lire (localement) — #7350, I-2
+
+    /// `start()` empilait `ConversationReadSignal.markReadLocally` à CHAQUE
+    /// ouverture — corrigeant un défaut de COHÉRENCE (le store gardait 99 le
+    /// temps d'un rechargement débouncé pendant que le cache disait déjà 0)
+    /// en fabriquant un défaut plus grave : la frontière posée, `lastReadAt =
+    /// Date()`, arrive TOUJOURS après le dernier message connu (on ouvre
+    /// forcément APRÈS qu'il a été envoyé), donc `reconcileUnread` clampait à
+    /// 0 tout instantané serveur ultérieur — y compris un « 94 encore non
+    /// lus » légitime après que 5 des 99 messages aient réellement été vus.
+    /// Recette 2026-09-21 : l'API dit 1 conversation non lue pendant que le
+    /// badge affiche 0.
+    ///
+    /// Ouvrir un écran n'est donc plus, à lui seul, une preuve de lecture.
+    /// Seul un accusé de lecture EXACT (`sendReadReceipt`, quand le lot vu
+    /// contient le message le plus récent — voir
+    /// `test_markAsRead_seenBatchContainsNewestMessage_clearsBadgeImmediately`
+    /// juste plus bas) ou un geste explicite « marquer comme lu » posent
+    /// encore cette frontière. `setCurrentlyOpenConversation` (appelé par
+    /// `start()`, INCHANGÉ) continue de montrer 0 le temps que l'écran reste
+    /// affiché — c'est la vue TRANSITOIRE, jamais une frontière persistée.
+    func test_start_doesNotMarkTheConversationReadLocally() {
         let expectedId = testConversationId
         let marked = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
             (notification.object as? String) == expectedId
         }
+        marked.isInverted = true
 
         // `makeSUT` appelle `start()`, comme le `.task` de la vue.
         let sut = makeSUT(unreadCount: 99)
 
-        wait(for: [marked], timeout: 1.0)
+        wait(for: [marked], timeout: 0.5)
         XCTAssertEqual(sut.conversationId, expectedId)
     }
 
@@ -1651,6 +1954,34 @@ final class ConversationViewModelTests: XCTestCase {
         wait(for: [cleared], timeout: 0.5)
     }
 
+    /// **#3902 — le message le plus récent est À L'ÉCRAN, il n'a simplement pas
+    /// fini son délai de présence.**
+    ///
+    /// Même lot que le test ci-dessus, à UNE différence près : la surface dit
+    /// ce qu'elle montre. Sur une conversation à fort débit c'est le cas
+    /// nominal — le lot est drainé toutes les ~300 ms, un message plus récent
+    /// est arrivé entre-temps, et la coïncidence `seen.contains(newest)`
+    /// n'arrive quasiment jamais. Le badge doit tomber quand même.
+    ///
+    /// Le contraste avec `…seenBatchWithoutNewestMessage_leavesBadgeAlone` est
+    /// le cœur du lot : vues du seul `seen`, les deux situations sont
+    /// INDISCERNABLES. C'est `visibleIds` qui les sépare.
+    func test_markAsRead_newestIsOnScreenButNotYetDwelt_clearsBadge() {
+        let sut = makeSUT()
+        sut.messages = [
+            makeMessage(id: Self.idOldest, content: "A"),
+            makeMessage(id: Self.idNewest, content: "B")
+        ]
+        let expectedId = testConversationId
+        let cleared = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == expectedId
+        }
+
+        sut.markAsRead(messageIds: [Self.idOldest], visibleIds: [Self.idOldest, Self.idNewest])
+
+        wait(for: [cleared], timeout: 1.0)
+    }
+
     /// Après un saut vers un message cité, le bas de l'écran n'est PAS le bas de
     /// la conversation. Traiter le dernier message chargé comme le plus récent
     /// viderait un badge encore dû.
@@ -1677,6 +2008,73 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertFalse(ConversationViewModel.isServerMessageId("cid_9f1c2d3e-4a5b-4c6d-8e9f-0a1b2c3d4e5f"))
         XCTAssertFalse(ConversationViewModel.isServerMessageId(""))
         XCTAssertFalse(ConversationViewModel.isServerMessageId("zzzzzzzzzzzzzzzzzzzzzzzz"))
+    }
+
+    // MARK: - Rattrapage depuis Résumé / Rivière (#3901)
+    //
+    // Au-delà de 25 non-lus, `ReadingModeOrchestrator` bascule l'ouverture en
+    // Résumé ou Rivière — deux modes qui ne rendent JAMAIS bulle par bulle
+    // (`MessageListViewController.rendersThread` est faux pour `.summary` et
+    // `.river`, voir `MessageListSeenTrackingModeGateTests`), donc n'alimentent
+    // jamais `seenIds`. `markAsRead(messageIds:)` seul ne peut donc jamais y
+    // faire avancer le curseur serveur : un piège permanent, vérifié en base de
+    // production (compteur figé à 125 sur une conversation lue aujourd'hui).
+    // `markCaughtUpFromSummaryOrRiver()` répond à la preuve de consultation
+    // PROPRE à ces modes (Résumé affiché jusqu'au bout, Rivière au présent) —
+    // sans jamais passer par `seen.contains(newest)`, qui n'a pas de sens ici.
+
+    /// La fenêtre chargée est au sommet : le rattrapage envoie directement le
+    /// curseur au dernier message CONNU DU SERVEUR et vide le badge en local
+    /// sans attendre l'aller-retour réseau — même effet immédiat que
+    /// `markAsRead` quand le lot vu contient le plus récent.
+    func test_markCaughtUpFromSummaryOrRiver_atTheTipOfTheWindow_clearsBadgeImmediately() {
+        let sut = makeSUT()
+        sut.messages = [
+            makeMessage(id: Self.idOldest, content: "A"),
+            makeMessage(id: Self.idNewest, content: "B")
+        ]
+        let expectedId = testConversationId
+        let cleared = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == expectedId
+        }
+
+        sut.markCaughtUpFromSummaryOrRiver()
+
+        wait(for: [cleared], timeout: 1.0)
+    }
+
+    /// Même garde qu'en mode Bulles (`caughtUpMessageId`) : après un saut vers
+    /// un message cité, le bas de l'écran chargé n'est pas le bas de la
+    /// conversation — déclarer un rattrapage ici viderait un badge encore dû.
+    func test_markCaughtUpFromSummaryOrRiver_windowNotAtTip_doesNotClearBadge() {
+        let sut = makeSUT()
+        sut.messages = [makeMessage(id: Self.idNewest, content: "B")]
+        sut.hasNewerMessages = true
+        let expectedId = testConversationId
+        let cleared = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == expectedId
+        }
+        cleared.isInverted = true
+
+        sut.markCaughtUpFromSummaryOrRiver()
+
+        wait(for: [cleared], timeout: 0.5)
+    }
+
+    /// Aucun message CONNU DU SERVEUR dans la fenêtre (fil vide, ou uniquement
+    /// des bulles optimistes sans ObjectId) : rien à rattraper, aucun effet.
+    func test_markCaughtUpFromSummaryOrRiver_noServerMessageInWindow_doesNothing() {
+        let sut = makeSUT()
+        sut.messages = []
+        let expectedId = testConversationId
+        let cleared = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == expectedId
+        }
+        cleared.isInverted = true
+
+        sut.markCaughtUpFromSummaryOrRiver()
+
+        wait(for: [cleared], timeout: 0.5)
     }
 
     // MARK: - messageIndex Tests
@@ -1725,7 +2123,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_removeExpiredMessages_removesExpiredOnly() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let pastDate = Date().addingTimeInterval(-3600)
         let futureDate = Date().addingTimeInterval(3600)
@@ -1784,7 +2182,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_removeFailedMessage_removesOnlyFailedWithMatchingId() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         try await persistence.insertOptimistic(MessageStoreObservationHelper.makeRecord(
             localId: "good-msg", conversationId: testConversationId,
@@ -1822,7 +2220,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_removeFailedMessage_doesNotRemoveSentMessage() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         try await persistence.insertOptimistic(MessageStoreObservationHelper.makeRecord(
             localId: "sent-msg", conversationId: testConversationId,
@@ -1835,11 +2233,11 @@ final class ConversationViewModelTests: XCTestCase {
         // change. We assert the row remains in GRDB (count == 1).
         sut.removeFailedMessage(messageId: "sent-msg")
 
-        try? await Task.sleep(nanoseconds: 200_000_000)
-        let row = try await MessageStoreObservationHelper.fetchRecord(
+        let row = await MessageStoreObservationHelper.awaitRecord(
             localId: "sent-msg", from: pool
-        )
+        ) { $0.deletedAt != nil }
         XCTAssertNotNil(row, "Row must still exist (markDeleted is a soft delete)")
+        XCTAssertNotNil(row?.deletedAt, "the soft delete must land")
     }
 
     // MARK: - reportMessage Tests
@@ -2004,10 +2402,10 @@ final class ConversationViewModelTests: XCTestCase {
         """)
         mockMessageService.searchWithCursorResult = .success(secondPageResponse)
 
-        await sut.loadMoreSearchResults(query: "Hello")
+        await sut.searchHandler.loadMoreSearchResults(query: "Hello")
 
-        XCTAssertEqual(sut.searchResults.count, 2, "loadMore must append second page results to existing ones")
-        XCTAssertFalse(sut.searchHasMore, "searchHasMore must be false when server returns hasMore=false on last page")
+        XCTAssertEqual(sut.stateStore.searchResults.count, 2, "loadMore must append second page results to existing ones")
+        XCTAssertFalse(sut.stateStore.searchHasMore, "searchHasMore must be false when server returns hasMore=false on last page")
         XCTAssertEqual(mockMessageService.searchWithCursorCallCount, 1, "searchWithCursor must be called exactly once for the second page")
     }
 
@@ -2023,9 +2421,9 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertFalse(sut.searchHasMore)
         let countAfterFirstPage = sut.searchResults.count
 
-        await sut.loadMoreSearchResults(query: "Hello")
+        await sut.searchHandler.loadMoreSearchResults(query: "Hello")
 
-        XCTAssertEqual(sut.searchResults.count, countAfterFirstPage, "loadMore when no more pages must not modify results")
+        XCTAssertEqual(sut.stateStore.searchResults.count, countAfterFirstPage, "loadMore when no more pages must not modify results")
         XCTAssertEqual(mockMessageService.searchWithCursorCallCount, 0, "searchWithCursor must not be called when there is no cursor")
     }
 
@@ -2044,9 +2442,9 @@ final class ConversationViewModelTests: XCTestCase {
         """)
         mockMessageService.searchWithCursorResult = .success(emptyNextPage)
 
-        await sut.loadMoreSearchResults(query: "Hello")
+        await sut.searchHandler.loadMoreSearchResults(query: "Hello")
 
-        XCTAssertFalse(sut.isSearching, "isSearching must be false once loadMoreSearchResults completes")
+        XCTAssertFalse(sut.stateStore.isSearching, "isSearching must be false once loadMoreSearchResults completes")
     }
 
     func test_loadMoreSearchResults_onNetworkFailure_preservesExistingResultsAndHasMore() async {
@@ -2061,13 +2459,13 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(sut.searchResults.count, 1)
 
         mockMessageService.searchWithCursorResult = .failure(NSError(domain: "test", code: -1009))
-        await sut.loadMoreSearchResults(query: "Hello")
+        await sut.searchHandler.loadMoreSearchResults(query: "Hello")
 
-        XCTAssertEqual(sut.searchResults.count, 1,
+        XCTAssertEqual(sut.stateStore.searchResults.count, 1,
             "loadMore network failure must not remove existing search results")
-        XCTAssertTrue(sut.searchHasMore,
+        XCTAssertTrue(sut.stateStore.searchHasMore,
             "searchHasMore must remain true after a transient loadMore failure so the user can retry by scrolling")
-        XCTAssertFalse(sut.isSearching,
+        XCTAssertFalse(sut.stateStore.isSearching,
             "isSearching must be false even after a loadMore failure")
     }
 
@@ -2292,8 +2690,8 @@ final class ConversationViewModelTests: XCTestCase {
         sut.handleMentionQuery(in: "Hey @al")
 
         XCTAssertEqual(sut.activeMentionQuery, "al")
-        XCTAssertEqual(sut.mentionSuggestions.count, 1)
-        XCTAssertEqual(sut.mentionSuggestions.first?.username, "alice")
+        XCTAssertEqual(sut.mentionController.suggestions.count, 1)
+        XCTAssertEqual(sut.mentionController.suggestions.first?.username, "alice")
     }
 
     func test_activeMentionQuery_triggersSearch() {
@@ -2309,12 +2707,12 @@ final class ConversationViewModelTests: XCTestCase {
         sut.handleMentionQuery(in: "Hey @")
 
         XCTAssertEqual(sut.activeMentionQuery, "")
-        XCTAssertEqual(sut.mentionSuggestions.count, 2)
+        XCTAssertEqual(sut.mentionController.suggestions.count, 2)
 
         // Clear suggestions
         sut.clearMentionSuggestions()
 
-        XCTAssertTrue(sut.mentionSuggestions.isEmpty)
+        XCTAssertTrue(sut.mentionController.suggestions.isEmpty)
         XCTAssertNil(sut.activeMentionQuery)
     }
 
@@ -2332,18 +2730,6 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(sut.pendingEffects, .none)
     }
 
-    func test_showEffectsPicker_toggles() {
-        let sut = makeSUT()
-
-        XCTAssertFalse(sut.showEffectsPicker)
-
-        sut.showEffectsPicker = true
-        XCTAssertTrue(sut.showEffectsPicker)
-
-        sut.showEffectsPicker = false
-        XCTAssertFalse(sut.showEffectsPicker)
-    }
-
     // MARK: - Persistence Orchestrator Tests
 
     func test_init_createsMessageStoreEagerly() async throws {
@@ -2356,7 +2742,7 @@ final class ConversationViewModelTests: XCTestCase {
             conversationService: mockConversationService,
             reactionService: mockReactionService,
             reportService: mockReportService,
-            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+            dependencies: ConversationDependencies(persistence: persistence)
         )
         XCTAssertNotNil(viewModel.messageStore,
             "messageStore must be available immediately after init")
@@ -2372,7 +2758,7 @@ final class ConversationViewModelTests: XCTestCase {
             conversationService: mockConversationService,
             reactionService: mockReactionService,
             reportService: mockReportService,
-            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+            dependencies: ConversationDependencies(persistence: persistence)
         )
         XCTAssertEqual(viewModel.messageStore.conversationId, testConversationId)
     }
@@ -2389,7 +2775,7 @@ final class ConversationViewModelTests: XCTestCase {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let viewModel = makeSUT(
-            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+            dependencies: ConversationDependencies(persistence: persistence)
         )
 
         let record = MessageRecord(
@@ -2482,7 +2868,7 @@ final class ConversationViewModelTests: XCTestCase {
         ))
 
         let viewModel = makeSUT(
-            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+            dependencies: ConversationDependencies(persistence: persistence)
         )
         mockAuthManager.simulateLoggedIn(user: MeeshyUser(
             id: testUserId, username: "testuser", systemLanguage: "fr"
@@ -2538,7 +2924,7 @@ final class ConversationViewModelTests: XCTestCase {
         ))
 
         let viewModel = makeSUT(
-            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+            dependencies: ConversationDependencies(persistence: persistence)
         )
         mockAuthManager.simulateLoggedIn(user: MeeshyUser(
             id: testUserId, username: "testuser", systemLanguage: "fr"
@@ -2584,7 +2970,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_mergeIntoMessages_afterServerAck_noDuplicateBubble() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let tempId = "cid_merge_dedup_test"
         let serverId = "srv_merge_dedup_test"
@@ -2654,6 +3040,7 @@ final class ConversationViewModelTests: XCTestCase {
         var rejoinResult = true
         private(set) var broughtUIForwardCount = 0
         private(set) var rejoinCalls: [(callId: String, conversationId: String, remoteUserId: String, remoteUsername: String, isVideo: Bool)] = []
+        private(set) var markedGroups: [String] = []
 
         var context: LiveCallJoinContext {
             LiveCallJoinContext(
@@ -2664,7 +3051,8 @@ final class ConversationViewModelTests: XCTestCase {
                 rejoinActiveCall: { [weak self] callId, conversationId, remoteUserId, remoteUsername, isVideo in
                     self?.rejoinCalls.append((callId, conversationId, remoteUserId, remoteUsername, isVideo))
                     return self?.rejoinResult ?? true
-                }
+                },
+                markGroupConversation: { [weak self] conversationId, _ in self?.markedGroups.append(conversationId) }
             )
         }
     }
@@ -2733,6 +3121,25 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(spy.rejoinCalls.first?.remoteUserId, "peer-user-1")
         XCTAssertEqual(spy.rejoinCalls.first?.remoteUsername, "Peer")
         XCTAssertEqual(spy.rejoinCalls.first?.isVideo, true)
+    }
+
+    /// #9111 — la bulle vivante d'un GROUPE n'était pas touchable : `isDirect`
+    /// était testé avant `isLive`, et le geste s'arrêtait là.
+    func test_callBack_liveBubbleInGroup_joinsTheCallThroughTheMesh() async throws {
+        let spy = LiveCallJoinSpy()
+        let service = MockActiveCallService()
+        service.result = .success(ActiveCallSession(
+            id: "call-live-1", conversationId: testConversationId, mode: "p2p", status: "active",
+            participants: [ActiveCallParticipant(userId: testUserId), ActiveCallParticipant(userId: "peer-user-1"), ActiveCallParticipant(userId: "peer-user-2")]
+        ))
+        let sut = makeSUT(isDirect: false, participantUserId: nil, activeCallService: service, liveCallJoin: spy.context)
+
+        sut.callBack(for: makeLiveCallSummary())
+        for _ in 0..<50 where spy.rejoinCalls.isEmpty { try await Task.sleep(nanoseconds: 20_000_000) }
+
+        XCTAssertEqual(spy.rejoinCalls.count, 1)
+        XCTAssertEqual(spy.rejoinCalls.first?.remoteUserId, testConversationId, "un groupe se rejoint par sa conversation : le premier qui offre devient le principal")
+        XCTAssertEqual(spy.markedGroups, [testConversationId])
     }
 
     func test_joinOngoingCall_callEndedServerSide_toastsAndNeverRejoins() async {
@@ -2818,6 +3225,21 @@ final class ConversationViewModelTests: XCTestCase {
         await fulfillment(of: [neverCalled], timeout: 0.5)
         XCTAssertTrue(spy.rejoinCalls.isEmpty)
         XCTAssertEqual(spy.broughtUIForwardCount, 0)
+    }
+
+    // MARK: - Drapeau de scroll programmatique
+
+    func test_markProgrammaticScroll_twoCloseScrolls_keepTheFlagUntilTheSecondDeadline() async {
+        let sut = makeSUT()
+
+        sut.markProgrammaticScroll()
+        _ = await cancellableSleep(for: .milliseconds(300))
+        sut.markProgrammaticScroll()
+        _ = await cancellableSleep(for: .milliseconds(300))
+        XCTAssertTrue(sut.isProgrammaticScroll, "le premier délai ne lève pas le drapeau du second scroll")
+
+        _ = await cancellableSleep(for: .milliseconds(400))
+        XCTAssertFalse(sut.isProgrammaticScroll, "le drapeau retombe 500 ms après le DERNIER scroll")
     }
 
     // MARK: - Helpers

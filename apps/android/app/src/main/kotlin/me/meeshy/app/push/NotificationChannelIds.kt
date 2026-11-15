@@ -1,5 +1,10 @@
 package me.meeshy.app.push
 
+import me.meeshy.sdk.model.MeeshyNotificationCategory
+import me.meeshy.sdk.model.NotificationChannelPlan
+import me.meeshy.sdk.model.push.PushChannelCategory
+import me.meeshy.sdk.model.push.PushPayload
+
 /**
  * Canonical Android notification-channel identifiers (ARCHITECTURE.md §18 — "~80
  * notification types map onto a curated notification-channel taxonomy"). Single
@@ -31,4 +36,68 @@ object NotificationChannelIds {
     /** v2 : les canaux sont immuables — le v1 (muet, sans sonnerie) est supprimé au passage. */
     const val CHANNEL_CALLS: String = "meeshy_calls_v2"
     const val LEGACY_CHANNEL_CALLS: String = "meeshy_calls"
+
+    /** Social family : likes, comments, stories, contacts, communities, game. */
+    const val CHANNEL_SOCIAL: String = "meeshy_social"
+
+    /** Account family : security alerts, reports, service messages. */
+    const val CHANNEL_SYSTEM: String = "meeshy_system"
+
+    /**
+     * Les canaux sur lesquels l'app RENDT elle-même (le pipeline) : vibration, nom localisé. Un
+     * canal est immuable une fois créé et recréer un id supprimé restaure ses anciens réglages —
+     * les installs qui l'ont créé sans vibration (S8 du porteur, #13394) ne la retrouvent que sous
+     * un id neuf. Les trois v1 sont supprimés à l'installation : `MeeshyFcmService.handleIntent`
+     * remet chaque push au pipeline, donc le système ne rend plus jamais sur [CHANNEL_MESSAGES]
+     * (que la passerelle nomme encore) ; si cela arrivait, FCM retombe sur le canal par défaut du
+     * manifeste, [CHANNEL_MESSAGES_V2].
+     */
+    const val CHANNEL_MESSAGES_V2: String = "meeshy_messages_v2"
+    const val CHANNEL_SOCIAL_V2: String = "meeshy_social_v2"
+    const val CHANNEL_SYSTEM_V2: String = "meeshy_system_v2"
+
+    /**
+     * Le Bring (#13936) : une sonnerie FORCÉE pour l'urgence extrême, catégorie alarme. Le canal est muet — le service
+     * au premier plan joue le son sur le flux alarme — et passe Ne pas déranger quand le système l'accorde.
+     */
+    const val CHANNEL_BRING: String = "meeshy_bring"
+
+    /** Le réveil du talkie d'urgence (#17144) : « X vous parle », visible, muet (la voix est le son). */
+    const val CHANNEL_TALKIE: String = "meeshy_talkie"
+
+    /** Les notifications en cours (envoi long, vocal en cours d'enregistrement) : discrètes, sans son. */
+    const val CHANNEL_ONGOING: String = "meeshy_ongoing"
+
+    /**
+     * Quiet delivery (no banner, no sound) — where a push lands when the preferences refuse an
+     * alert in the background (quiet hours, muted type, system Do-Not-Disturb), the
+     * counterpart of the iOS `.passive` interruption level.
+     */
+    const val CHANNEL_SILENT: String = "meeshy_notifications_silent"
+
+    /**
+     * The channel of a category the pipeline renders on. Messages and every unknown type land
+     * on [CHANNEL_MESSAGES_V2].
+     */
+    fun forCategory(category: PushChannelCategory): String = when (category) {
+        PushChannelCategory.MESSAGES -> CHANNEL_MESSAGES_V2
+        PushChannelCategory.SOCIAL -> CHANNEL_SOCIAL_V2
+        PushChannelCategory.SYSTEM -> CHANNEL_SYSTEM_V2
+    }
+
+    /** Les canaux ajoutés par la taxonomie iOS (catégories `MEESHY_*`) ; leurs identifiants vivent dans le plan pur. */
+    const val CHANNEL_MENTIONS: String = NotificationChannelPlan.MENTIONS
+    const val CHANNEL_EPHEMERAL: String = NotificationChannelPlan.EPHEMERAL
+    const val CHANNEL_FRIENDS: String = NotificationChannelPlan.FRIENDS
+    const val CHANNEL_CALLS_MISSED: String = NotificationChannelPlan.CALLS_MISSED
+    const val CHANNEL_INVITATIONS: String = NotificationChannelPlan.INVITATIONS
+
+    /**
+     * Le canal d'un push : sa catégorie `MEESHY_*` (dérivée du type de la passerelle ; un message à
+     * durée de vie est éphémère) mène à UN canal du plan. Un type inconnu — ancien binaire, type
+     * neuf — tombe sur le canal générique des messages, jamais perdu.
+     */
+    fun forPayload(payload: PushPayload): String = NotificationChannelPlan.channelIdFor(
+        MeeshyNotificationCategory.of(type = payload.type, ephemeral = (payload.ephemeralDuration ?: 0) > 0),
+    )
 }

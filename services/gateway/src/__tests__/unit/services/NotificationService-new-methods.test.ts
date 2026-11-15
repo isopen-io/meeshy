@@ -34,6 +34,18 @@ jest.mock('../../../utils/sanitize', () => ({
         return null;
       }
     }),
+    // #7157 — même règle que la production : un chemin relatif survit, un
+    // protocole refusé tombe. Un double PARTIEL de `SecuritySanitizer` rend
+    // `undefined` et fait échouer l'appel, pas l'assertion.
+    sanitizeURLOrPath: jest.fn((input: string) => {
+      if (!input) return null;
+      try {
+        const url = new URL(input);
+        return ['http:', 'https:'].includes(url.protocol) ? input : null;
+      } catch {
+        return input.startsWith('/') && !input.startsWith('//') ? input : null;
+      }
+    }),
     sanitizeJSON: jest.fn((input: any) => {
       const sanitize = (obj: any): any => {
         if (typeof obj === 'string') return obj.replace(/<[^>]*>/g, '');

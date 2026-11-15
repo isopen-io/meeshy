@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_comment_attach">إرفاق صورة أو فيديو أو ملف</string>
+    <string name="stories_comment_attach_remove">إزالة المرفق</string>
+    <string name="stories_comment_attach_uploading">جارٍ الرفع…</string>
+    <string name="stories_comment_attach_failed">تعذّر رفع المرفق</string>
+</resources>

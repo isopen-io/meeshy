@@ -1,0 +1,308 @@
+import { lazy, Suspense, useState } from 'react';
+
+import type { EditPostOutcome } from '@/lib/api/publication-actions';
+import type { PublicationImageRequest } from '@/lib/export/publication-image-store';
+import type { FeedCardModel } from '@/lib/feed/card-model';
+import type { ReportReason } from '@/lib/api/reports';
+import type { DraftStore } from '@/lib/send/draft-store';
+import type { PostToggleKind } from '@/lib/feed/interactions';
+import type { PostImagingInput } from '@/lib/feed/publication-imaging';
+import { postMenuEntries } from '@/lib/feed/publication-menu';
+import { translate } from '@/lib/i18n-catalog';
+import { isSceneExportCatalogLoaded, loadSceneExportCatalog } from '@/lib/i18n-scene-export-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { placePopover, placePopoverVertical } from '@/lib/view/popover';
+import { LAYER_MOTION_MS } from '@/lib/view/dialog-exit';
+import { useRovingMenu } from '@/lib/view/roving-menu';
+
+import { GlyphSvg } from './glyph';
+import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
+
+/**
+ * LE PANNEAU, À LA DEMANDE — le fil ne paie que ce bouton (voir le
+ * doc-comment de `publication-menu-panel.tsx`).
+ */
+const PostMenuPanel = lazy(() => import('./publication-menu-panel').then((m) => ({ default: m.PostMenuPanel })));
+
+/** Ce que « Sauvegarder » rend (#13873) — la scène de la carte et son auteur, sans rien charger tant que le menu n'est pas ouvert. */
+export type PostMenuSceneExport = Pick<FeedCardModel, 'id' | 'isReel' | 'scene' | 'author'>;
+
+/** Ce qu'« Imager » remet à l'atelier de carte (#16166, #16393) — la loi ne se charge qu'à l'ouverture du menu. */
+export type PostMenuImaging = PostImagingInput & Pick<FeedCardModel, 'isReel'>;
+
+/**
+ * **LE MENU « ⋯ » D'UNE CARTE DU FIL** (#7533, directive porteur du
+ * 2026-09-23) — en HAUT À DROITE de la carte post comme de la carte réel,
+ * miroir `FeedPostCard+Header.swift:235` et `ReelFeedCard.swift:308`.
+ *
+ * Les ENTRÉES sont une loi pure (`postMenuEntries`, `lib/feed/publication-menu.ts`) ;
+ * le panneau (`publication-menu-panel.tsx`) les peint. La MÉCANIQUE est celle
+ * des menus de rangée du dépôt (`notification-row-menu.tsx`, `row-actions.tsx`)
+ * : portail, clavier par `useRovingMenu`, placement par `popover.ts`, 44 px
+ * par entrée. Seul écart : le bouton est TOUJOURS visible — sur iOS il l'est,
+ * et une carte du fil n'a pas de survol au doigt.
+ *
+ * Les GESTES viennent de l'hôte (`usePostGesture().menu`), comme le cœur et le
+ * signet : c'est lui qui tient la région d'annonce et les caisses. Sans hôte
+ * de menu, le bouton ne se monte pas — loi 4.
+ */
+export type PostMenuHost = {
+  readonly viewerId: string | null;
+  /** ADMIN/BIGBOSS (#9727) — absent ⇒ non : « Vues » ne s'offre pas. */
+  readonly viewerIsAdministrator?: boolean;
+  /** MODERATOR/ADMIN/BIGBOSS (#11150) — absent ⇒ non : « Retirer » ne s'offre pas. */
+  readonly viewerModerates?: boolean;
+  readonly onCopyText: (text: string) => void;
+  readonly onPin: (postId: string) => void;
+  /** MODIFIER LE TEXTE (#7534) — la SEULE entrée du menu qui rend son issue :
+   * la feuille l'attend pour se fermer (`'done'`) ou rester ouverte
+   * (`'offline'`/`'failed'`/`'busy'`, revue-correction — un second appel
+   * pendant le vol du premier), là où les autres gestes n'ont pas de surface
+   * qui attend. */
+  readonly onEdit: (postId: string, content: string) => Promise<EditPostOutcome>;
+  readonly onDelete: (postId: string) => void;
+  /** RETIRER LA PUBLICATION D'UN AUTRE (#11150) — le motif nettoyé, saisi dans `ContentRemovalSheet`. Absent ⇒ aucune entrée. */
+  readonly onRemove?: (postId: string, reason: string) => void;
+  readonly onReport: (postId: string, reason: ReportReason) => void;
+  /** FERMER (`true`) OU ROUVRIR (`false`) LES COMMENTAIRES (#16541) — l'auteur ou la modération. Absent ⇒ aucune entrée. */
+  readonly onToggleComments?: (postId: string, disable: boolean) => void;
+  /** LA FEUILLE DE SIGNALEMENT S'OUVRE (#10503) — un signal négatif, même sans motif choisi. */
+  readonly onReportOpen?: (postId: string) => void;
+  /** LE BROUILLON DE L'ÉDITION EN COURS (#8849, jumelle de #8848) — absent,
+   * la feuille ne sauvegarde rien. */
+  readonly editDrafts?: DraftStore;
+};
+
+const MENU_WIDTH = 240;
+const MENU_MARGIN = 8;
+const MENU_GAP = 4;
+const MENU_ITEM_HEIGHT = 44;
+const MENU_PADDING = 8;
+/** Le disque DESSINÉ ; la cible, elle, fait 44 (`size-11`). */
+const DISC_SIZE = 34;
+
+export function FeedPostMenu({
+  postId,
+  authorId,
+  authorName,
+  text,
+  originalText,
+  originalLanguage,
+  bookmarked,
+  commentsDisabled = false,
+  studioEditable = false,
+  sceneExport,
+  imaging,
+  isDetail,
+  tone,
+  menu,
+  onShare,
+  onGesture,
+}: {
+  readonly postId: string;
+  readonly authorId: string | undefined;
+  readonly authorName: string;
+  readonly text: string | undefined;
+  /** LE TEXTE TEL QUE L'AUTEUR L'A ÉCRIT (#7534, `card-model.ts#FeedCardText.original`)
+   * — ce que la feuille d'édition ouvre, JAMAIS `text` (la traduction servie
+   * par le Prisme) : `EditPostSheet.swift` hydrate depuis `post.content`,
+   * l'original, pas l'affiché. */
+  readonly originalText: string | undefined;
+  /** La langue de `originalText` — le `lang` du champ d'édition. */
+  readonly originalLanguage: string | undefined;
+  readonly bookmarked: boolean;
+  /** LE RÉGLAGE PROPRE de la publication (#16541) — « Désactiver » ou « Réactiver les commentaires ». */
+  readonly commentsDisabled?: boolean;
+  /** « MODIFIER » ROUVRE LE STUDIO (#9317) — la carte porte une scène ou un
+   * média, et n'est pas une republication : sa modification se fait dans le
+   * studio (`/posts/:id/edit`). Sinon, la feuille de texte (#7534). */
+  readonly studioEditable?: boolean;
+  /** LA SCÈNE À EXPORTER (#13873) — absente, pas de « Sauvegarder ». */
+  readonly sceneExport?: PostMenuSceneExport | undefined;
+  /** CE QU'« IMAGER » COMPOSE (#16166) — absent, ou rien qui s'image : pas d'« Imager ». */
+  readonly imaging?: PostMenuImaging | undefined;
+  readonly isDetail: boolean;
+  /** `card` sur le fond de la carte, `overlay` sur un média (le réel). */
+  readonly tone: 'card' | 'overlay';
+  readonly menu: PostMenuHost;
+  readonly onShare?: ((postId: string) => void) | undefined;
+  readonly onGesture?: ((postId: string, kind: PostToggleKind) => void) | undefined;
+}) {
+  const [reporting, setReporting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [viewing, setViewing] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  /* Les libellés de l'export vivent dans un catalogue chargé à l'ouverture du
+     menu, avec le panneau et la loi d'« Imager » : les entrées s'offrent dès
+     qu'ils sont là. */
+  const [, setExportLabelsReady] = useState(false);
+  const [imageRequest, setImageRequest] = useState<PublicationImageRequest | null>(null);
+  const labelsLoaded = isSceneExportCatalogLoaded(currentInterfaceLanguage());
+  const entries = postMenuEntries({
+    viewerId: menu.viewerId,
+    authorId,
+    isDetail,
+    hasText: text !== undefined && text.trim() !== '',
+    canShare: onShare !== undefined,
+    canSave: onGesture !== undefined,
+    viewerIsAdministrator: menu.viewerIsAdministrator === true,
+    viewerModerates: menu.viewerModerates === true && menu.onRemove !== undefined,
+    canSaveScene: sceneExport?.scene !== undefined && labelsLoaded,
+    canImage: imageRequest !== null && labelsLoaded,
+    canToggleComments: menu.onToggleComments !== undefined,
+  });
+
+  const [box, setBox] = useState<{ top: number; right: number; width: number }>({ top: 0, right: 0, width: MENU_WIDTH });
+  const { open, mounted, leaving, setOpen, closeAndFocusButton, activeIndex, buttonRef, menuRef, itemRefs, onMenuKeyDown } = useRovingMenu({
+    itemCount: entries.length,
+    exitMs: LAYER_MOTION_MS,
+    onScroll: () => setOpen(false),
+    onResize: () => setOpen(false),
+  });
+
+  if (entries.length === 0) return null;
+
+  const measure = () => {
+    const anchor = buttonRef.current?.getBoundingClientRect();
+    if (anchor === undefined) return;
+    const placement = placePopover({ anchorRight: anchor.right, viewportWidth: window.innerWidth, preferredWidth: MENU_WIDTH, margin: MENU_MARGIN });
+    const vertical = placePopoverVertical({
+      anchorTop: anchor.top,
+      anchorBottom: anchor.bottom,
+      viewportHeight: window.innerHeight,
+      estimatedHeight: entries.length * MENU_ITEM_HEIGHT + MENU_PADDING,
+      gap: MENU_GAP,
+      margin: MENU_MARGIN,
+    });
+    setBox({ top: vertical.top, right: window.innerWidth - anchor.right + placement.right, width: placement.width });
+  };
+
+  const label = translate(currentInterfaceLanguage(), 'feed.post.more_options');
+  const overlay = tone === 'overlay';
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-label={label}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        data-feed-post-menu
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!open) measure();
+          if (!open && (sceneExport?.scene !== undefined || imaging !== undefined)) {
+            void Promise.all([loadSceneExportCatalog(currentInterfaceLanguage()), imaging === undefined ? null : import('@/lib/export/publication-image')]).then(
+              ([, module]) => {
+                setImageRequest(module === null || imaging === undefined ? null : module.postImageRequestOf(imaging));
+                setExportLabelsReady(true);
+              },
+              () => undefined,
+            );
+          }
+          setOpen((value) => !value);
+        }}
+        /* UNE VRAIE BOÎTE DE 44 (`check-profile.mjs` mesure la boîte, pas un
+           débord `::after`) ; le DISQUE visible garde 34, la cote iOS. */
+        className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:-outline-offset-2"
+        style={{ outlineColor: overlay ? 'var(--color-on-media)' : 'var(--color-ios-brand)' }}
+      >
+        <span
+          aria-hidden
+          className="grid place-items-center rounded-chip"
+          style={{
+            width: DISC_SIZE,
+            height: DISC_SIZE,
+            color: overlay ? 'var(--color-on-media)' : 'var(--color-ios-ink-3)',
+            backgroundColor: overlay ? 'var(--color-scrim-soft)' : 'transparent',
+          }}
+        >
+          <GlyphSvg glyph={THREAD_MENU_GLYPHS.dotsThree} size={20} />
+        </span>
+      </button>
+
+      {mounted || reporting || editing || viewing || removing ? (
+        <Suspense fallback={null}>
+          <PostMenuPanel
+            open={mounted}
+            leaving={leaving}
+            entries={entries}
+            postId={postId}
+            authorName={authorName}
+            text={text}
+            originalText={originalText}
+            originalLanguage={originalLanguage}
+            bookmarked={bookmarked}
+            commentsDisabled={commentsDisabled}
+            studioEditable={studioEditable}
+            sceneExport={sceneExport}
+            imageRequest={imageRequest}
+            menu={menu}
+            onShare={onShare}
+            onGesture={onGesture}
+            box={box}
+            label={label}
+            activeIndex={activeIndex}
+            menuRef={menuRef}
+            itemRefs={itemRefs}
+            onMenuKeyDown={onMenuKeyDown}
+            closeAndFocusButton={closeAndFocusButton}
+            reporting={reporting}
+            setReporting={setReporting}
+            editing={editing}
+            setEditing={setEditing}
+            viewing={viewing}
+            setViewing={setViewing}
+            removing={removing}
+            setRemoving={setRemoving}
+          />
+        </Suspense>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * **LE « ⋯ » D'UNE PUBLICATION, DEPUIS SON MODÈLE** — le SEUL passage du
+ * modèle de carte aux props du menu : la carte du fil (post et réel) et la
+ * barre haute du plein écran des Réels (#11156) le montent toutes deux, aucune
+ * ne recopie l'aiguillage (texte original, studio, signet).
+ */
+export function ModelPostMenu({
+  model,
+  isDetail,
+  tone,
+  menu,
+  onShare,
+  onGesture,
+}: {
+  readonly model: FeedCardModel;
+  readonly isDetail: boolean;
+  readonly tone: 'card' | 'overlay';
+  readonly menu: PostMenuHost;
+  readonly onShare?: ((postId: string) => void) | undefined;
+  readonly onGesture?: ((postId: string, kind: PostToggleKind) => void) | undefined;
+}) {
+  return (
+    <FeedPostMenu
+      postId={model.id}
+      authorId={model.author.id}
+      authorName={model.author.name}
+      text={model.text?.full}
+      originalText={model.text?.original}
+      originalLanguage={model.text?.originalLanguage}
+      bookmarked={model.viewer.bookmarked}
+      commentsDisabled={model.commentsDisabled === true}
+      studioEditable={model.repostOf === undefined && (model.scene !== undefined || model.media.length > 0)}
+      sceneExport={model.scene === undefined ? undefined : model}
+      imaging={model}
+      isDetail={isDetail}
+      tone={tone}
+      menu={menu}
+      onShare={onShare}
+      onGesture={onGesture}
+    />
+  );
+}

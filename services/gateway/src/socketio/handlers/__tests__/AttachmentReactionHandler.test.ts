@@ -157,34 +157,49 @@ describe('AttachmentReactionHandler', () => {
       expect(cb).toHaveBeenCalledWith({ success: true });
     });
 
-    it('calls callback with error for missing attachmentId', async () => {
+    // Frontière Zod : mêmes refus que les trois jumelles de réaction. Le vrai
+    // schéma est exercé (aucun mock de `validateSocketEvent`), donc ces témoins
+    // tombent si le schéma est débranché ou affaibli.
+    it('rejects missing attachmentId at the Zod boundary', async () => {
       const cb = jest.fn();
-      const { handler } = makeHandler();
+      const { handler, service } = makeHandler();
       const socket = makeSocket();
 
       await handler.handleAdd(socket, { attachmentId: '', messageId: MSG_ID, emoji: EMOJI }, cb);
 
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid payload' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
+      expect(service.addAttachmentReaction).not.toHaveBeenCalled();
     });
 
-    it('calls callback with error for missing messageId', async () => {
+    it('rejects missing messageId at the Zod boundary', async () => {
       const cb = jest.fn();
       const { handler } = makeHandler();
       const socket = makeSocket();
 
       await handler.handleAdd(socket, { attachmentId: ATTACH_ID, messageId: '', emoji: EMOJI }, cb);
 
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid payload' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
     });
 
-    it('calls callback with error for missing emoji', async () => {
+    it('rejects missing emoji at the Zod boundary', async () => {
       const cb = jest.fn();
       const { handler } = makeHandler();
       const socket = makeSocket();
 
       await handler.handleAdd(socket, { attachmentId: ATTACH_ID, messageId: MSG_ID, emoji: '' }, cb);
 
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid payload' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
+    });
+
+    it('rejects an over-long emoji (> EMOJI_MAX_LENGTH) at the boundary — parity with the reaction twins', async () => {
+      const cb = jest.fn();
+      const { handler, service } = makeHandler();
+      const socket = makeSocket();
+
+      await handler.handleAdd(socket, { attachmentId: ATTACH_ID, messageId: MSG_ID, emoji: 'a'.repeat(40) }, cb);
+
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
+      expect(service.addAttachmentReaction).not.toHaveBeenCalled();
     });
 
     it('rejects optimistic messageId (cid_* format) — not a valid ObjectId', async () => {
@@ -194,7 +209,7 @@ describe('AttachmentReactionHandler', () => {
 
       await handler.handleAdd(socket, { attachmentId: ATTACH_ID, messageId: 'cid_abc123', emoji: EMOJI }, cb);
 
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Could not resolve participant' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
     });
 
     it('rejects non-ObjectId attachmentId', async () => {
@@ -204,7 +219,7 @@ describe('AttachmentReactionHandler', () => {
 
       await handler.handleAdd(socket, { attachmentId: 'not-an-objectid', messageId: MSG_ID, emoji: EMOJI }, cb);
 
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Could not resolve participant' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
     });
 
     it('returns error when socket is not in socketToUser map', async () => {
@@ -367,14 +382,15 @@ describe('AttachmentReactionHandler', () => {
       expect(cb).toHaveBeenCalledWith({ success: true });
     });
 
-    it('runs same validation guards as handleAdd — missing fields', async () => {
+    it('runs same Zod boundary as handleAdd — missing fields', async () => {
       const cb = jest.fn();
-      const { handler } = makeHandler();
+      const { handler, service } = makeHandler();
       const socket = makeSocket();
 
       await handler.handleRemove(socket, { attachmentId: '', messageId: MSG_ID, emoji: EMOJI }, cb);
 
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid payload' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
+      expect(service.removeAttachmentReaction).not.toHaveBeenCalled();
     });
 
     it('runs IDOR guard — attachment belongs to different message', async () => {
@@ -462,6 +478,46 @@ describe('AttachmentReactionHandler', () => {
         emoji: EMOJI,
         action: 'add',
       }));
+    });
+
+    /**
+     * #17026 — HUITIÈME site de la famille, trouvé par l'audit adversarial.
+     *
+     * `emitServerEvent(io.to(room), …)` précédait
+     * `_enqueueOfflineAttachmentReactionEvent` dans le MÊME `try`, dont le
+     * `catch` journalise « post-success side-effects failed ». Une diffusion
+     * tombée — `emitServerEvent` fait un `.emit()` NU, et `serverEmit.ts`
+     * documente lui-même l'incident de production du 2026-08-25 où il levait
+     * sur quatorze sites — annulait donc l'enfilage, et le `reactionSummary`
+     * par pièce jointe d'un participant hors ligne était perdu
+     * DÉFINITIVEMENT : le doc-comment de l'enfilage dit que seul « an
+     * unrelated full refetch » le répare.
+     *
+     * La règle était écrite VINGT LIGNES PLUS BAS, dans ce même `try`, pour
+     * l'autre canal latéral (« ni emporter l'entrée de file hors ligne qui la
+     * précède ») — et la jumelle REST `broadcastReactionMutation` appliquait
+     * déjà la bonne forme. Ni l'issue, ni ma relecture, ni mon cliquet ne l'ont
+     * vu : le cliquet était AVEUGLE à l'émission par helper, qui est l'idiome
+     * dominant du dépôt.
+     */
+    it('#17026 — une diffusion vivante qui LÈVE n’emporte pas l’enfilage de la réaction', async () => {
+      const prisma = prismaWithParticipants();
+      const deliveryQueue = makeDeliveryQueue();
+      const io = makeIo();
+      // `emit` lève : adaptateur ou encodeur en défaut, ce que `serverEmit.ts`
+      // affirme sur mesure de production.
+      (io as unknown as { _toRoom: { emit: jest.Mock } })._toRoom.emit.mockImplementation(() => {
+        throw new Error('adapter down');
+      });
+      const { handler } = makeHandler({ io, prisma, deliveryQueue });
+      const socket = makeSocket();
+
+      await handler.handleAdd(socket, validData, jest.fn());
+
+      // Le pair EN LIGNE a perdu sa diffusion — il n'y a rien à y faire. Le
+      // pair ABSENT a sa file, et c'est sa seule voie.
+      expect(deliveryQueue.enqueue).toHaveBeenCalledTimes(1);
+      expect(deliveryQueue.enqueue.mock.calls[0][0]).toBe(OFFLINE_USER);
     });
 
     it('enqueues attachment-reaction-removed on remove', async () => {

@@ -106,10 +106,9 @@ async def test_one_failing_language_does_not_block_the_others():
 
     assert [lang for lang, _ in published] == ["en", "pt", "de"]
     assert published[1][1] is True
-    # Comportement actuel : _translate_single_language avale l'exception et
-    # publie un fallback "[XX] préfixe" porteur d'un champ error (simulacre
-    # rejeté ensuite par la validation gateway — sa suppression est un
-    # chantier séparé). L'important ici : en et de aboutissent quand même.
+    # _translate_single_language avale l'exception et publie l'ORIGINAL avec un
+    # champ `error` explicite (#3663) — plus de texte-témoin "[XX] préfixe".
+    # L'important ici : en et de aboutissent quand même.
     assert len(results) == 3
     assert not published[0][1] and not published[2][1]
 

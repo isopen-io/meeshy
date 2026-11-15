@@ -4,6 +4,11 @@ import MeeshySDK
 
 /// Bridges the SDK outbox to the app-side EngagementTracker sink protocol.
 public final class EngagementOutboxSink: EngagementSinking {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public static let shared = EngagementOutboxSink()
     private let outbox: EngagementOutbox
     init(outbox: EngagementOutbox = .shared) { self.outbox = outbox }
@@ -11,6 +16,13 @@ public final class EngagementOutboxSink: EngagementSinking {
     public func checkpoint(_ s: EngagementSession) async { await outbox.checkpoint(s) }
     public func finalizeSession(_ s: EngagementSession) async { await outbox.finalizeSession(s) }
     public func requestFlush() async { await EngagementFlushTrigger.flushNow() }
+    /// #10764 — le premier contact, dans une requête À LUI : un serveur qui ne
+    /// sait pas fusionner une session refuse `dwell-start`, et ce refus ne doit
+    /// emporter rien d'autre. Sans réessai : la mesure finale, durable, porte
+    /// la même clé et compte l'ouverture si ce premier envoi s'est perdu.
+    public func announceSession(_ s: EngagementSession) async {
+        _ = try? await PostService.shared.recordSocialEvents([.dwellStart(s)], credential: .account)
+    }
 }
 
 /// Dispatches a finalized session to the network, dropping cross-user rows.
@@ -18,7 +30,7 @@ public final class EngagementOutboxSink: EngagementSinking {
 /// `PostServiceProviding` is not Sendable (app mock is a mutable class), so it
 /// cannot be stored in a Sendable struct captured by the @Sendable flush closure.
 public struct EngagementDispatcher: Sendable {
-    private let record: @Sendable ([EngagementSession]) async throws -> Void
+    private let record: @Sendable @concurrent ([EngagementSession]) async throws -> Void
     private let currentUserId: @Sendable () -> String?
     public init(record: @escaping @Sendable ([EngagementSession]) async throws -> Void,
                 currentUserId: @escaping @Sendable () -> String?) {
@@ -43,7 +55,9 @@ enum EngagementFlushTrigger {
         guard online else { EngagementRetryScheduler.shared.scheduleSoon(); return }
         let uid = AuthManager.shared.currentUser?.id   // captured String? is Sendable
         let dispatcher = EngagementDispatcher(
-            record: { sessions in try await PostService.shared.recordEngagement(sessions) },
+            record: { sessions in
+                _ = try await PostService.shared.recordSocialEvents(sessions.map(SocialEvent.dwell), credential: .account)
+            },
             currentUserId: { uid })
         await EngagementOutbox.shared.flush { sessions in await dispatcher.dispatch(sessions) }
     }
@@ -51,6 +65,11 @@ enum EngagementFlushTrigger {
 
 @MainActor
 final class EngagementRetryScheduler {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = EngagementRetryScheduler()
     private var timer: Task<Void, Never>?
     private var networkCancellable: AnyCancellable?
@@ -62,13 +81,12 @@ final class EngagementRetryScheduler {
             .removeDuplicates()
             .dropFirst()
             .filter { $0 }
-            .sink { _ in Task { @MainActor in await EngagementFlushTrigger.flushNow() } }
+            .relay(through: OrderedEventLane()) { _ in await EngagementFlushTrigger.flushNow() }
     }
     func scheduleSoon() {
         timer?.cancel()
         timer = Task {
-            try? await Task.sleep(nanoseconds: 30 * 1_000_000_000)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(30)), !Task.isCancelled else { return }
             await EngagementFlushTrigger.flushNow()
         }
     }

@@ -16,6 +16,7 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
     private(set) var enqueuedDeletes: [OfflineDeletePayload] = []
     private(set) var retriedClientMessageIds: [String] = []
     private(set) var cancelledPendingSendClientMessageIds: [String] = []
+    private(set) var clearedSendMessageRowClientMessageIds: [String] = []
     private(set) var enqueuedMediaCalls: [EnqueuedMedia] = []
 
     struct EnqueuedMedia: Equatable {
@@ -25,8 +26,12 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
         let content: String?
         let clientMessageId: String
         let copyAttachmentsFromClientMessageId: String?
+        /// Sticker enfilé avec le PNG (#4823) ; nil pour un média ordinaire.
+        let sticker: MessageSticker?
         let deletesSourceFiles: Bool
         let createdAt: Date?
+        /// Noms d'origine alignés sur les fichiers (#11531).
+        var originalNames: [String?]? = nil
     }
 
     // MARK: - Stubbing
@@ -90,6 +95,11 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
         cancelledPendingSendClientMessageIds.append(cmid)
     }
 
+    func clearSendMessageRow(clientMessageId cmid: String) async {
+        if let delay { try? await Task.sleep(for: delay) }
+        clearedSendMessageRowClientMessageIds.append(cmid)
+    }
+
     @discardableResult
     func enqueueMedia(
         sourceMediaURLs: [URL],
@@ -102,8 +112,11 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
         forwardedFromId: String?,
         forwardedFromConversationId: String?,
         copyAttachmentsFromClientMessageId: String?,
+        sticker: MessageSticker?,
         deletesSourceFiles: Bool,
-        createdAt: Date?
+        createdAt: Date?,
+        protection: MessageProtectionIntent,
+        originalNames: [String?]?
     ) async throws -> OfflineQueue.EnqueueMediaResult {
         if let delay { try? await Task.sleep(for: delay) }
         if shouldFailNow() { throw errorToThrow }
@@ -112,7 +125,9 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
             conversationId: conversationId, content: content,
             clientMessageId: clientMessageId,
             copyAttachmentsFromClientMessageId: copyAttachmentsFromClientMessageId,
-            deletesSourceFiles: deletesSourceFiles, createdAt: createdAt))
+            sticker: sticker,
+            deletesSourceFiles: deletesSourceFiles, createdAt: createdAt,
+            originalNames: originalNames))
         return OfflineQueue.EnqueueMediaResult(
             outboxId: "ofq_fake_\(clientMessageId)",
             localMediaPaths: sourceMediaURLs.indices.map {

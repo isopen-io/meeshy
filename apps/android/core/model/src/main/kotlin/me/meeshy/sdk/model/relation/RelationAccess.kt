@@ -1,0 +1,238 @@
+package me.meeshy.sdk.model.relation
+
+import me.meeshy.sdk.model.AgeClass
+import me.meeshy.sdk.model.PlatformRole
+
+/**
+ * **LE LIEN ENTRE DEUX PERSONNES** — l'échelle des niveaux, miroir de `RELATION_LEVELS`
+ * (`packages/shared/types/relation.ts`, #13926).
+ *
+ * Chaque personne ACCORDE un niveau à l'autre ; le niveau effectif est le minimum des deux accords (aucun accès à sens
+ * unique). `ATOM` (lien parent/tuteur) est RÉSERVÉ et n'appartient pas à l'échelle : une valeur qu'on ne reconnaît pas se
+ * lit [PUBLIC], jamais un niveau plus haut (fermé par défaut). L'ordre de déclaration EST l'ordre de l'échelle.
+ */
+public enum class RelationLevel(public val wire: String) {
+    PUBLIC("PUBLIC"),
+    COMMUNITY("COMMUNITY"),
+    ACQUAINTANCE("ACQUAINTANCE"),
+    FRIEND("FRIEND"),
+    CLOSE("CLOSE"),
+    BLOOD("BLOOD"),
+    ;
+
+    public companion object {
+        /** `parseRelationLevel` : lecture EXACTE, tout le reste vaut [PUBLIC]. */
+        public fun of(wire: String?): RelationLevel = entries.firstOrNull { it.wire == wire } ?: PUBLIC
+    }
+}
+
+/**
+ * Les actions que la loi d'accès gouverne — miroir de `RELATION_FEATURES` et des tables de
+ * `packages/shared/utils/relation-levels.ts`, que `RelationAccessCasesTest` relit ligne à ligne.
+ */
+public enum class RelationFeature(
+    public val wire: String,
+    /** Niveau EFFECTIF minimal (`RELATION_FEATURE_MIN_LEVEL`) ; la Connaissance automatique CRÉE le premier lien. */
+    public val minimumLevel: RelationLevel,
+    /** Consentement explicite et refusable, à tout âge (`RELATION_CONSENT_FEATURES`) — jamais un refus d'âge. */
+    public val requiresConsent: Boolean = false,
+    /** Adressée à UNE AUTRE personne : sans sens envers soi-même (`RELATION_DIRECTED_FEATURES`). */
+    public val isDirected: Boolean = false,
+    /** Les seules features qu'ADMIN/BIGBOSS lit sans lien (`RELATION_PRESENCE_FEATURES`). */
+    public val isPresence: Boolean = false,
+    /**
+     * Le bouclier des mineurs (`RELATION_MINOR_TARGET_MIN_LEVEL`, RG-21) : le niveau qu'un viewer non mineur doit atteindre
+     * face à un mineur DÉCLARÉ ; `null` = la feature n'est pas bouclée.
+     */
+    public val minorTargetMinimum: RelationLevel? = null,
+    /** Ce que le privilège d'équipe n'ouvre pas (`RELATION_TEAM_CLOSED_FEATURES`, #16623) : seule la Connaissance automatique. */
+    public val isClosedToTeam: Boolean = false,
+    /**
+     * Le privilège d'équipe s'éteint entre un mineur et un majeur déclarés, dans les deux sens
+     * (`RELATION_TEAM_MINOR_APART_FEATURES`, #16623) : le viewer y est le lecteur ou le destinataire.
+     */
+    public val isMinorApartForTeam: Boolean = false,
+    /**
+     * Le niveau à partir duquel le consentement de l'ÉMETTEUR est accordé PAR DÉFAUT
+     * (`RELATION_EMITTER_CONSENT_DEFAULT_LEVEL`, #14147) : la batterie part entre Sangs sans confirmation, retirable ;
+     * entre Proches elle attend un accord. `null` = seul un accord stocké ouvre.
+     */
+    public val emitterConsentDefaultLevel: RelationLevel? = null,
+) {
+    PRESENCE_ONLINE("presence.online", RelationLevel.FRIEND, isPresence = true),
+    PRESENCE_DETAILED("presence.detailed", RelationLevel.CLOSE, isPresence = true),
+    GAME_BASIC("game.basic", RelationLevel.FRIEND),
+    GAME_SPARKS_GLORY("game.sparksGlory", RelationLevel.CLOSE),
+    NOTIFY_NEW_CONTENT("notify.newContent", RelationLevel.CLOSE, isMinorApartForTeam = true),
+    RELAY_COMMENTERS_ON_MY_POSTS("relay.commentersOnMyPosts", RelationLevel.CLOSE, isMinorApartForTeam = true),
+    RELAY_MY_COMMENTS_ELSEWHERE("relay.myCommentsElsewhere", RelationLevel.BLOOD, isMinorApartForTeam = true),
+    DM_DIRECT("dm.direct", RelationLevel.ACQUAINTANCE),
+    DM_REQUEST("dm.request", RelationLevel.PUBLIC, isDirected = true, minorTargetMinimum = RelationLevel.ACQUAINTANCE),
+    DM_READ_RECEIPTS("dm.readReceipts", RelationLevel.ACQUAINTANCE),
+    DM_TYPING("dm.typing", RelationLevel.ACQUAINTANCE),
+    PRESENCE_DND("presence.dnd", RelationLevel.ACQUAINTANCE),
+    CALL_RING("call.ring", RelationLevel.PUBLIC, isDirected = true, minorTargetMinimum = RelationLevel.FRIEND),
+    VIEWS_IDENTITY("views.identity", RelationLevel.COMMUNITY),
+    AUDIENCE_ACQUAINTANCES("audience.acquaintances", RelationLevel.ACQUAINTANCE, isMinorApartForTeam = true),
+    AUDIENCE_CLOSE("audience.close", RelationLevel.CLOSE, isMinorApartForTeam = true),
+    AUDIENCE_BLOOD("audience.blood", RelationLevel.BLOOD, isMinorApartForTeam = true),
+    LISTENING_CATEGORY("listening.category", RelationLevel.CLOSE, requiresConsent = true),
+    LISTENING_TITLE("listening.title", RelationLevel.BLOOD, requiresConsent = true),
+    TALKIE("talkie", RelationLevel.CLOSE, requiresConsent = true, isDirected = true),
+    TOGETHER("together", RelationLevel.CLOSE, isDirected = true),
+    BRING("bring", RelationLevel.FRIEND, requiresConsent = true, isDirected = true),
+    LOCATION_LIVE("location.live", RelationLevel.BLOOD, requiresConsent = true),
+    LOCATION_TEMPORARY("location.temporary", RelationLevel.FRIEND, requiresConsent = true),
+    LOCATION_HISTORY("location.history", RelationLevel.BLOOD, requiresConsent = true),
+    LOCATION_PROXIMITY("location.proximity", RelationLevel.BLOOD, requiresConsent = true),
+    DEVICE_BATTERY("device.battery", RelationLevel.CLOSE, requiresConsent = true, emitterConsentDefaultLevel = RelationLevel.BLOOD),
+    DEVICE_BATTERY_PULL(
+        "device.battery.pull",
+        RelationLevel.BLOOD,
+        requiresConsent = true,
+        isDirected = true,
+        emitterConsentDefaultLevel = RelationLevel.BLOOD,
+    ),
+    ACQUAINTANCE_AUTO("acquaintance.auto", RelationLevel.PUBLIC, isDirected = true, isClosedToTeam = true),
+    ;
+
+    /** Le minimum de la matrice, relevé par le bouclier quand un viewer non mineur s'adresse à un mineur déclaré — jamais abaissé. */
+    public fun minimumLevel(viewerMinor: AgeClass, targetMinor: AgeClass): RelationLevel {
+        val shield = minorTargetMinimum ?: return minimumLevel
+        if (targetMinor != AgeClass.MINOR || viewerMinor == AgeClass.MINOR) return minimumLevel
+        return maxOf(minimumLevel, shield)
+    }
+
+    public companion object {
+        /**
+         * `isRelationFeature` : une feature qu'un serveur plus récent ajoute n'est AUCUN cas (`null`) — elle ne se propose
+         * pas, et rien ne casse le décodage de la charge qui la porte.
+         */
+        public fun of(wire: String?): RelationFeature? = entries.firstOrNull { it.wire == wire }
+    }
+}
+
+/** Consentement résolu par le serveur ; seul [GRANTED] ouvre, une valeur absente ou illisible se lit [UNKNOWN]. */
+public enum class RelationConsent(public val wire: String) {
+    GRANTED("granted"),
+    REFUSED("refused"),
+    UNKNOWN("unknown"),
+    ;
+
+    public companion object {
+        public fun of(wire: String?): RelationConsent = entries.firstOrNull { it.wire == wire } ?: UNKNOWN
+    }
+}
+
+public enum class RelationAccessReason(public val wire: String) {
+    LEVEL("level"),
+    BLOCKED("blocked"),
+    MINOR("minor"),
+    SELF("self"),
+    ROLE("role"),
+    CONSENT("consent"),
+}
+
+public data class RelationAccessInput(
+    val viewerId: String,
+    val targetId: String,
+    val grantedByViewer: RelationLevel,
+    val grantedByTarget: RelationLevel,
+    val sharesCommunity: Boolean,
+    val blockedEitherWay: Boolean,
+    /** Âge DÉCLARÉ (`RelationAgeClass = DeclaredAgeClass`) : la classe que `PUT /me/birth-date` sert déjà, jamais une jumelle. */
+    val viewerMinor: AgeClass,
+    val targetMinor: AgeClass,
+    val viewerRole: PlatformRole?,
+    val feature: RelationFeature,
+    /** `null` = inconnu : une feature à consentement reste fermée. */
+    val consent: RelationConsent?,
+    /** Le rôle de la cible : `null` (absent ou inconnu), le privilège d'équipe reste fermé (#16623). */
+    val targetRole: PlatformRole? = null,
+)
+
+/**
+ * **LA LOI D'ACCÈS DES CERCLES** — miroir de `resolveRelationAccess` (`packages/shared/utils/relation-access.ts`, #13927),
+ * rejoué sur les cas COMMUNS `packages/shared/fixtures/relation-access-cases.json`.
+ *
+ * Le miroir ne décide d'AUCUN accès : le serveur reste l'autorité. Il sert à ne pas PROPOSER une action qu'il refusera.
+ * Pur, sans état, sans I/O. Ordre des verdicts : blocage, identité absente, soi, rôle (présence seule), âge (Connaissance
+ * automatique seule), niveau (relevé par le bouclier des mineurs, refus dit `level`), consentement. Entre deux comptes de
+ * l'équipe, le niveau d'un outil vaut Sang (#16623), sauf face à un mineur déclaré.
+ */
+public data class RelationAccess(
+    val allowed: Boolean,
+    val effectiveLevel: RelationLevel,
+    val reason: RelationAccessReason,
+    val requiresConsent: Boolean,
+) {
+    public companion object {
+
+        /** Minimum des deux accords, relevé à [RelationLevel.COMMUNITY] quand une communauté est partagée et que le lien serait [RelationLevel.PUBLIC]. */
+        public fun combinedLevel(
+            grantedByViewer: RelationLevel,
+            grantedByTarget: RelationLevel,
+            sharesCommunity: Boolean,
+        ): RelationLevel {
+            val granted = minOf(grantedByViewer, grantedByTarget)
+            return if (granted == RelationLevel.PUBLIC && sharesCommunity) RelationLevel.COMMUNITY else granted
+        }
+
+        /** Le privilège d'équipe s'applique-t-il à cette paire, pour cette feature (`teamOpens`) ? */
+        internal fun teamOpens(input: RelationAccessInput): Boolean =
+            input.viewerRole?.isTeam == true &&
+                input.targetRole?.isTeam == true &&
+                !input.feature.isClosedToTeam &&
+                !minorShieldsTeam(input)
+
+        /** Le bouclier des mineurs face au privilège d'équipe : la cible d'un outil, les deux côtés d'une audience. */
+        internal fun minorShieldsTeam(input: RelationAccessInput): Boolean =
+            if (input.feature.isMinorApartForTeam) {
+                (input.viewerMinor == AgeClass.MINOR) != (input.targetMinor == AgeClass.MINOR)
+            } else {
+                input.targetMinor == AgeClass.MINOR && input.viewerMinor != AgeClass.MINOR
+            }
+
+        public fun resolve(input: RelationAccessInput): RelationAccess {
+            val level = if (teamOpens(input)) {
+                RelationLevel.BLOOD
+            } else {
+                combinedLevel(input.grantedByViewer, input.grantedByTarget, input.sharesCommunity)
+            }
+            val feature = input.feature
+
+            if (input.blockedEitherWay) return denied(RelationAccessReason.BLOCKED)
+            if (input.viewerId.isEmpty() || input.targetId.isEmpty()) return denied(RelationAccessReason.LEVEL)
+            if (input.viewerId == input.targetId) {
+                return if (feature.isDirected) {
+                    denied(RelationAccessReason.SELF)
+                } else {
+                    RelationAccess(true, RelationLevel.BLOOD, RelationAccessReason.SELF, false)
+                }
+            }
+            if (input.viewerRole?.administers == true && feature.isPresence) {
+                return RelationAccess(true, level, RelationAccessReason.ROLE, false)
+            }
+            if (feature == RelationFeature.ACQUAINTANCE_AUTO &&
+                (input.viewerMinor == AgeClass.MINOR) != (input.targetMinor == AgeClass.MINOR)
+            ) {
+                return RelationAccess(false, level, RelationAccessReason.MINOR, false)
+            }
+
+            val reached = level >= feature.minimumLevel(input.viewerMinor, input.targetMinor)
+            if (!reached || !feature.requiresConsent) {
+                return RelationAccess(reached, level, RelationAccessReason.LEVEL, false)
+            }
+            val consented = input.consent == RelationConsent.GRANTED
+            return RelationAccess(
+                allowed = consented,
+                effectiveLevel = level,
+                reason = if (consented) RelationAccessReason.LEVEL else RelationAccessReason.CONSENT,
+                requiresConsent = true,
+            )
+        }
+
+        private fun denied(reason: RelationAccessReason): RelationAccess =
+            RelationAccess(false, RelationLevel.PUBLIC, reason, false)
+    }
+}

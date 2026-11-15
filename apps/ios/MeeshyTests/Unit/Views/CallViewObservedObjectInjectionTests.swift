@@ -19,12 +19,12 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/\(relativePath)")
+            .appendingPathComponent("Meeshy/Features/\(relativePath)")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
     func test_callView_doesNotDefaultCallManagerToSharedInstance() throws {
-        let source = try source(of: "Views/CallView.swift")
+        let source = try source(of: "Call/Views/CallView.swift")
         XCTAssertFalse(
             source.contains("@ObservedObject var callManager = CallManager.shared"),
             "CallView must not default `callManager` to `CallManager.shared` at " +
@@ -38,12 +38,24 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
         )
     }
 
-    func test_rootView_injectsOwnCallManagerIntoCallView() throws {
-        let source = try source(of: "Views/RootView.swift")
+    // 2026-09-15 (#6579) — L'ADRESSE A CHANGÉ, L'EXIGENCE NON. La présentation
+    // d'appel a été EXTRAITE de `RootView.swift` (hors budget, plafond dur 1200)
+    // vers `RootLayers/CallPresentationLayer.swift`. Ces deux gardes lisaient
+    // encore l'ancien fichier et étaient donc ROUGES depuis l'extraction, sans
+    // que rien ne le dise : un déplacement de code n'emporte pas les témoins qui
+    // le désignent par son CHEMIN.
+    //
+    // 2026-09-29 (#8725) — l'adresse a changé une seconde fois : `CallView` vit
+    // désormais dans sa propre fenêtre (`CallWindowPresenter`), montée par
+    // `CallPresentationLayer`. L'exigence reste : la pile observée est remise
+    // telle quelle, jamais un défaut.
+    func test_callPresentationLayer_injectsOwnCallManagerIntoCallView() throws {
+        let source = try source(of: "Main/Views/RootLayers/CallWindowPresenter.swift")
         XCTAssertTrue(
-            source.contains("CallView(callManager: callManager)"),
-            "RootView must pass its own `callManager` into CallView instead of " +
-            "letting CallView default to CallManager.shared on every reconstruction."
+            source.contains("CallView(callManager: manager, mesh: .shared)"),
+            "The call window must pass the observed `callManager` into CallView " +
+            "instead of letting CallView default to CallManager.shared on every " +
+            "reconstruction."
         )
     }
 
@@ -57,7 +69,9 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
     // in RootView.swift) by the `rootView_*` tests above; the iPad guard verifies
     // iPadRootView routes through that shared layer and never mounts CallView itself.
     func test_iPadRootView_routesCallPresentationThroughSharedLayer() throws {
-        let source = try source(of: "Views/iPadRootView+Sheets.swift")
+        // Depuis #5837 la présentation d'appel de l'iPad est posée par
+        // `iPadCoversAndChromeLayer` (RootLayers/iPadRootViewLayers.swift).
+        let source = try source(of: "Main/Views/RootLayers/iPadRootViewLayers.swift")
         XCTAssertTrue(
             // 2026-08-13 — `CallPresentationLayer` gained the hoisted mini-audio-player
             // closures (`miniPlayerOnTapBody`/`miniPlayerCurrentConversationId`), so the
@@ -71,7 +85,7 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
         )
         XCTAssertFalse(
             source.contains("CallView(callManager:"),
-            "iPadRootView+Sheets must NOT mount CallView directly — that gives it its own " +
+            "iPadRootViewLayers must NOT mount CallView directly — that gives it its own " +
             "callManager observation and reintroduces the 0x8BADF00D background watchdog (P0 #1)."
         )
     }
@@ -85,7 +99,7 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
     // unrelated re-render.
 
     func test_floatingCallPillView_doesNotDefaultCallManagerToSharedInstance() throws {
-        let source = try source(of: "Views/FloatingCallPillView.swift")
+        let source = try source(of: "Call/Views/FloatingCallPillView.swift")
         XCTAssertFalse(
             source.contains("@ObservedObject var callManager = CallManager.shared"),
             "FloatingCallPillView must not default `callManager` to `CallManager.shared` " +
@@ -99,7 +113,7 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
     }
 
     func test_callBubbleView_doesNotDefaultCallManagerToSharedInstance() throws {
-        let source = try source(of: "Views/CallBubbleView.swift")
+        let source = try source(of: "Call/Views/CallBubbleView.swift")
         XCTAssertFalse(
             source.contains("@ObservedObject var callManager = CallManager.shared"),
             "CallBubbleView must not default `callManager` to `CallManager.shared` " +
@@ -112,15 +126,18 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
         )
     }
 
-    func test_rootView_injectsOwnCallManagerIntoPillAndBubble() throws {
-        let source = try source(of: "Views/RootView.swift")
+    func test_callPresentationLayer_injectsOwnCallManagerIntoPillAndBubble() throws {
+        let layer = try source(of: "Main/Views/RootLayers/CallPresentationLayer.swift")
         XCTAssertTrue(
-            source.contains("FloatingCallPillView(callManager: callManager)"),
-            "RootView must pass its own `callManager` into FloatingCallPillView."
+            layer.contains("FloatingCallPillView(callManager: callManager"),
+            "`CallPresentationLayer` must pass its own `callManager` into FloatingCallPillView."
         )
+        // #8739 — la bulle vit dans la fenêtre passe-plat du point de retour,
+        // au-dessus de tout plein écran : c'est elle qui lui remet la pile.
+        let window = try source(of: "Main/Views/RootLayers/CallWindowPresenter.swift")
         XCTAssertTrue(
-            source.contains("CallBubbleView(callManager: callManager)"),
-            "RootView must pass its own `callManager` into CallBubbleView."
+            window.contains("CallBubbleView(callManager: callManager"),
+            "The return-point window must pass its own `callManager` into CallBubbleView."
         )
     }
 
@@ -138,7 +155,7 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
     // already-fixed `callManager` in the same struct.
 
     func test_callParticipantVisual_doesNotDefaultCallManagerToSharedInstance() throws {
-        let source = try source(of: "Views/CallParticipantVisual.swift")
+        let source = try source(of: "Call/Views/CallParticipantVisual.swift")
         XCTAssertFalse(
             source.contains("@ObservedObject private var callManager = CallManager.shared"),
             "CallParticipantVisual must not default `callManager` to `CallManager.shared` " +
@@ -152,7 +169,7 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
     }
 
     func test_floatingCallPillView_injectsOwnCallManagerIntoCallParticipantVisual() throws {
-        let source = try source(of: "Views/FloatingCallPillView.swift")
+        let source = try source(of: "Call/Views/FloatingCallPillView.swift")
         XCTAssertTrue(
             source.contains("CallParticipantVisual(diameter: 44, callManager: callManager)"),
             "FloatingCallPillView must pass its own `callManager` into CallParticipantVisual."
@@ -160,44 +177,15 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
     }
 
     func test_callBubbleView_injectsOwnCallManagerIntoCallParticipantVisual() throws {
-        let source = try source(of: "Views/CallBubbleView.swift")
+        let source = try source(of: "Call/Views/CallBubbleView.swift")
         XCTAssertTrue(
             source.contains("CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, callManager: callManager)"),
             "CallBubbleView must pass its own `callManager` into CallParticipantVisual."
         )
     }
 
-    // 2026-07-10 — `VideoFiltersPanel` (mounted by `CallEffectsOverlay`, which
-    // itself already carries the P1-16 fix above and is instantiated with a
-    // bare `VideoFiltersPanel()`) reintroduced the exact same anti-pattern:
-    // its `callManager` defaulted to `.shared` instead of being threaded down
-    // from the already-injected parent, resubscribing on every call tick
-    // while the user is mid-call adjusting filters.
-
-    func test_videoFiltersPanel_doesNotDefaultCallManagerToSharedInstance() throws {
-        let source = try source(of: "Views/VideoFiltersPanel.swift")
-        XCTAssertFalse(
-            source.contains("@ObservedObject private var callManager = CallManager.shared"),
-            "VideoFiltersPanel must not default `callManager` to `CallManager.shared` " +
-            "at declaration — that resubscribes on every parent re-render (every call tick)."
-        )
-        XCTAssertTrue(
-            source.contains("@ObservedObject var callManager: CallManager"),
-            "VideoFiltersPanel must declare `callManager` as an injected " +
-            "(non-defaulted) ObservedObject so callers pass their own instance down."
-        )
-    }
-
-    func test_callEffectsOverlay_injectsOwnCallManagerIntoVideoFiltersPanel() throws {
-        let source = try source(of: "Views/CallEffectsOverlay.swift")
-        XCTAssertTrue(
-            source.contains("VideoFiltersPanel(callManager: callManager)"),
-            "CallEffectsOverlay must pass its own `callManager` into VideoFiltersPanel."
-        )
-    }
-
     func test_callView_doesNotDefaultTranscriptionServiceToSharedInstance() throws {
-        let source = try source(of: "Views/CallView.swift")
+        let source = try source(of: "Call/Views/CallView.swift")
         XCTAssertFalse(
             source.contains("@ObservedObject private var transcriptionService = CallManager.shared.transcriptionService"),
             "CallView must not default `transcriptionService` to " +

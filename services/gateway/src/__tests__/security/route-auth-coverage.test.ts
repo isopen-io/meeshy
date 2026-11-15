@@ -55,9 +55,10 @@
  *    seul et retombe en erreur si la même route régresse un jour.
  */
 
-import { describe, it, expect, afterAll } from '@jest/globals';
-import Fastify, { FastifyInstance } from 'fastify';
-import { EventEmitter } from 'events';
+import { describe, it, expect, afterAll, beforeAll } from '@jest/globals';
+import type { FastifyInstance } from 'fastify';
+import fs from 'fs';
+import path from 'path';
 
 // `@tus/server`/`@tus/file-store` sont publiés en ESM pur — Jest ne peut pas
 // les transformer (le reste de node_modules est exclu de la transformation,
@@ -78,9 +79,25 @@ jest.mock('@tus/server', () => ({
     async handle(req: any, res: any) {
       const headers = req?.headers || {};
       const headersApi = { get: (k: string) => headers[k.toLowerCase()] };
+      // #4190 — AVANT : ce double n'appelait QUE `onUploadCreate` et rendait
+      // donc 201/401 POUR TOUTE MÉTHODE. Or `onUploadCreate` n'est invoqué en
+      // production que par le gestionnaire POST : GET/HEAD/PATCH/DELETE passent
+      // par `onIncomingRequest`. Le double fabriquait un 401 sur des méthodes
+      // que ce chemin ne garde pas — n'importe quel témoin écrit contre ce
+      // montage mesurait le double, jamais la route. Il aiguille désormais sur
+      // la MÉTHODE, exactement comme `@tus/server`.
+      const method = String(req?.method || 'POST').toUpperCase();
+      // L'identifiant de session est le dernier segment du chemin ; la
+      // collection n'en a pas — seule la CRÉATION y a un sens.
+      const uploadId = String(req?.url || '').split('?')[0].split('/').filter(Boolean).pop() ?? '';
       try {
-        await this.opts?.onUploadCreate?.({ headers: headersApi }, { metadata: {}, size: 0 });
-        res.statusCode = 201;
+        if (method === 'POST') {
+          await this.opts?.onUploadCreate?.({ headers: headersApi }, { metadata: {}, size: 0 });
+          res.statusCode = 201;
+        } else {
+          await this.opts?.onIncomingRequest?.({ headers: headersApi }, uploadId);
+          res.statusCode = 204;
+        }
         res.end();
       } catch (err: any) {
         res.statusCode = (err && err.status_code) || 500;
@@ -92,6 +109,13 @@ jest.mock('@tus/server', () => ({
 jest.mock('@tus/file-store', () => ({
   FileStore: class MockFileStore {
     constructor(_opts: any) {}
+    // #4190 — un upload EXISTANT, appartenant à un tiers : le seul état dans
+    // lequel `onIncomingRequest` exerce réellement sa comparaison d'identité
+    // (401 sans justificatif, 403 pour un autre utilisateur). Sans lui, la
+    // garde revient sur `if (!ownerUserId) return` et ne mesure rien.
+    async getUpload(id: string) {
+      return { id, offset: 0, size: 0, metadata: { userId: 'tus-upload-owner-user-id' } };
+    }
   },
 }));
 
@@ -111,157 +135,18 @@ jest.mock('../../services/ZmqSingleton', () => {
   return { ZMQSingleton: { getInstance: jest.fn().mockResolvedValue(new EE()) } };
 });
 
-import { registerAllRoutes, type RouteRegistrationDeps } from '../../route-registration';
-import { createUnifiedAuthMiddleware } from '../../middleware/auth';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
+import { buildAssembledApp, type CollectedRoute } from '../../route-manifest';
 
-// ---------------------------------------------------------------------------
-// Stub Prisma "profond" : tout accès de propriété renvoie un nouveau proxy
-// chainable, tout appel renvoie une Promise résolue à `[]`. Suffisant pour
-// que le code de CONSTRUCTION de chaque module de routes (ex. `new
-// XxxService(prisma)`, ou du chargement de clés au démarrage) ne plante pas
-// au chargement — aucune des requêtes anonymes de ce test ne doit jamais
-// réellement lire un résultat Prisma signifiant (elles sont rejetées par le
-// hook d'auth avant), donc le contenu renvoyé par le stub n'a pas d'importance,
-// seule sa forme (itérable, chainable) compte.
-// ---------------------------------------------------------------------------
-// Propriétés à ne JAMAIS relayer vers un proxy imbriqué : `then/catch/finally`
-// évitent qu'un `await` traite le proxy comme un thenable ; `getter/setter`
-// évitent un piège Fastify — `fastify.decorate(name, value)` sonde
-// `value.getter`/`value.setter` (typeof === 'function' ?) pour détecter le
-// pattern d'accesseur `{getter, setter}`. Un proxy racine dont TARGET est une
-// fonction (nécessaire pour que `prisma.model.findMany(...)` reste appelable)
-// a `typeof proxy === 'function'` pour CHAQUE propriété relayée, y compris
-// `.getter` — Fastify croit alors définir un accesseur et n'expose plus la
-// valeur telle quelle (perte de référence, `.serverEncryptionKey` redevient
-// `undefined` une fois traversé `fastify.decorate`). Vérifié empiriquement :
-// sans cette exclusion, `fastify.prisma !== prismaStub` à l'intérieur d'un
-// plugin enregistré.
-const STUB_EXCLUDED_PROPS = new Set(['then', 'catch', 'finally', 'getter', 'setter']);
-
-function makeCallableStub(): any {
-  // `[]` plutôt que `undefined` : plusieurs chemins d'enregistrement (ex.
-  // `EncryptionService.ServerKeyVault.initialize()`) font `for (const x of
-  // await prisma.model.findMany(...))` — un stub générique doit rester
-  // itérable pour ne pas faire planter la CONSTRUCTION des routes (aucune
-  // requête anonyme de ce test ne dépend du contenu réel de ce résultat).
-  const fn: any = (..._args: unknown[]) => Promise.resolve([]);
-  return new Proxy(fn, {
-    get(_target, prop) {
-      if (typeof prop === 'symbol') return undefined;
-      if (STUB_EXCLUDED_PROPS.has(prop)) return undefined;
-      return makeCallableStub();
-    },
-    apply() {
-      return Promise.resolve([]);
-    },
-  });
-}
-
-/**
- * Racine du stub Prisma. Doit envelopper un OBJET, pas une fonction : la même
- * sonde Fastify décrite ci-dessus traite `typeof decoratedValue === 'function'`
- * comme un signal de rebind spécial pour les décorateurs-méthodes — un stub
- * racine appelable perdrait sa référence dès `app.decorate('prisma', ...)`.
- * Seuls les niveaux enfants (`prisma.model.method(...)`) doivent être
- * appelables ; eux ne passent jamais par `fastify.decorate`.
- */
-function makeDeepStub(): any {
-  return new Proxy({}, {
-    get(_target, prop) {
-      if (typeof prop === 'symbol') return undefined;
-      if (STUB_EXCLUDED_PROPS.has(prop)) return undefined;
-      return makeCallableStub();
-    },
-  });
-}
-
-interface CollectedRoute {
-  method: string;
-  url: string;
-  bodySchema?: any;
-  querystringSchema?: any;
-}
-
-async function buildAssembledApp(): Promise<{ app: FastifyInstance; routes: CollectedRoute[] }> {
-  const app = Fastify({
-    logger: false,
-    ajv: {
-      customOptions: {
-        strict: 'log' as const,
-        keywords: ['example'],
-      },
-    },
-  });
-
-  const prismaStub = makeDeepStub();
-
-  // `fastify.authenticate` = EXACT même middleware que la production
-  // (`createUnifiedAuthMiddleware(prisma, {requireAuth:true,
-  // allowAnonymous:false})`, voir `server.ts` `createAuthMiddleware()`).
-  // On utilise la VRAIE fonction, pas un mock — pour un appelant sans
-  // `Authorization` ni `X-Session-Token`, `createAuthContext()` retourne
-  // `createUnauthenticatedContext()` sans jamais toucher Prisma, donc le
-  // stub ci-dessus n'est pas sollicité sur ce chemin.
-  app.decorate('authenticate', createUnifiedAuthMiddleware(prismaStub, {
-    requireAuth: true,
-    allowAnonymous: false,
-  }));
-
-  app.decorate('prisma', prismaStub);
-  app.decorate('redis', undefined);
-  app.decorate('mentionService', {} as any);
-  app.decorate('socketIOHandler', {} as any);
-  app.decorate('jobMappingCache', {} as any);
-  app.decorate('emailService', {} as any);
-  app.decorate('mutationLogService', {} as any);
-  app.decorate('callService', {} as any);
-  app.decorate('notificationService', {} as any);
-  app.decorate('socialEvents', {} as any);
-  app.decorate('presenceChecker', {
-    isOnline: () => false,
-    bulk: () => new Map(),
-    listOnlineAmong: () => [],
-  } as any);
-
-  const routes: CollectedRoute[] = [];
-  app.addHook('onRoute', (routeOptions) => {
-    const methods = Array.isArray(routeOptions.method) ? routeOptions.method : [routeOptions.method];
-    const schema = (routeOptions as any).schema;
-    for (const method of methods) {
-      if (method === 'HEAD' || method === 'OPTIONS') continue; // miroir mécanique de GET, pas une route distincte à garder
-      routes.push({
-        method,
-        url: routeOptions.url,
-        bodySchema: schema?.body,
-        querystringSchema: schema?.querystring,
-      });
-    }
-  });
-
-  const deps: RouteRegistrationDeps = {
-    prisma: prismaStub,
-    translationService: {
-      healthCheck: async () => true,
-      // Valeur non-null pour forcer l'enregistrement de
-      // `registerVoiceRoutes` (voir `route-registration.ts` : "if
-      // (zmqClient) { ... }") — sans ça, tout `routes/voice/*` ne serait
-      // jamais enregistré et échapperait totalement à ce test.
-      // `AudioTranslateService`/`AttachmentTranslateService` appellent
-      // `zmqClient.on(...)` à la construction (écoute d'évènements) : un vrai
-      // EventEmitter, pas un objet nu, pour que ces constructions ne plantent
-      // pas au chargement des routes.
-      getZmqClient: () => new EventEmitter() as any,
-    } as any,
-    messagingService: {} as any,
-    mentionService: {} as any,
-    orphanMediaCleanup: {} as any,
-  };
-
-  await registerAllRoutes(app, deps);
-  await app.ready();
-
-  return { app, routes };
-}
+// Le montage jetable (stub Prisma profond + assemblage du VRAI serveur Fastify
+// via `registerAllRoutes`) vivait ici même, lignes ~141-266. Il est parti dans
+// `route-manifest/collect.ts` (#4276), qui en fait un ARTEFACT régénérable
+// (`route-manifest.json` + `scripts/generate-route-manifest.ts`) plutôt qu'une
+// pièce jetable de CE seul test — deux montages divergeraient tôt ou tard,
+// exactement la classe de défaut que ce dépôt referme sans relâche. Ce test
+// consomme désormais `buildAssembledApp()` depuis ce module partagé ; son
+// comportement observable (mêmes routes, mêmes décorations, mêmes stubs) est
+// inchangé au caractère près — seul l'endroit où le montage est ÉCRIT a bougé.
 
 /**
  * Remplace les segments `:param`/`*` d'un patron de route Fastify par une
@@ -350,12 +235,47 @@ function synthesizeQueryString(schema: any): string {
 // lisibilité ; la justification vaut pour tout le groupe qu'elle chapeaute.
 // ---------------------------------------------------------------------------
 const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
+  // --- Annuaire ---
+  {
+    method: 'GET',
+    url: '/api/v1/directory/availability',
+    why:
+      "porte PUBLIQUE de l'annuaire (S1) : elle dit si un PSEUDO est libre — une clé " +
+      'publique, déjà énumérable par GET /u/:username — et si une adresse ou un numéro ' +
+      'est BIEN FORMÉ. Elle ne dit JAMAIS si un identifiant de contact appartient à un ' +
+      'compte : ce serait un oracle, à rebours de la doctrine de /forgot-password et de ' +
+      '/magic-link/request (#4158). Bornée à 20/min par IP, plus un coupe-circuit global.',
+  },
+  // --- Récupération de compte ---
+  {
+    method: 'POST',
+    url: '/api/v1/account/deletion/resolve',
+    why:
+      "résolution d'un lien de suppression reçu par courriel — publique PAR NATURE : " +
+      "la personne qui ANNULE sa suppression peut avoir perdu l'accès à son compte, " +
+      "c'est même le cas nominal. Le secret est le jeton, qui périme en 72 h, dont les " +
+      "essais sont comptés (5 avant invalidation de la demande) et dont la cadence est " +
+      "bornée par un limiteur (10/h par IP). Elle remplace trois GET MUTANTS qu'un " +
+      'pré-chargeur de lien pouvait déclencher (#4183).',
+  },
   // --- Santé / méta ---
   { method: 'GET', url: '/health', why: 'sonde de santé infra' },
-  { method: 'GET', url: '/info', why: "métadonnées statiques du service, aucune donnée d'utilisateur" },
+  {
+    method: 'GET',
+    url: '/api/v1/health/ready',
+    why:
+      "sonde de DISPONIBILITÉ (S0, #4219) : un orchestrateur l'appelle sans jeton, " +
+      "c'est son unique raison d'être. Elle ne divulgue RIEN de l'infrastructure — son " +
+      "corps ENTIER est `{ success, data: { status: 'ready' } }` en 200 et " +
+      "`{ success: false, error: 'not-ready', code: 'NOT_READY' }` en 503 : ni version, " +
+      "ni build, ni environnement, ni hôte, ni compteur, ni le message du pilote de base " +
+      "(qui porte l'hôte et le port dans son texte). Contrairement à `GET /health`, elle " +
+      'ne lit aucune collection : `$runCommandRaw({ ping: 1 })`, verdict mémoïsé 2 s, ce ' +
+      "qui borne le coût de l'exemption de débit qu'une sonde exige.",
+  },
   { method: 'GET', url: '/api/v1/languages', why: 'liste statique de langues supportées' },
   { method: 'GET', url: '/api/v1/app/min-version', why: 'plancher de version applicative pour le bootstrap de la porte cliente (spec R6) — config statique lue avant toute session, aucune donnée utilisateur' },
-  { method: 'POST', url: '/api/v1/detect-language', why: 'détection regex stateless, aucun accès DB/pipeline ML' },
+  { method: 'GET', url: '/api/v1/app/shell-version', why: 'version publiée de la coque de apps/web et fiche du magasin (#6937) — config statique lue avant toute session, aucune donnée utilisateur, jumelle de min-version' },
 
   // --- Entrée du flux d'authentification (translation.ts a réparé /test,
   //     ce qui reste ici est volontairement sans session : on n'a pas
@@ -365,9 +285,9 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'POST', url: '/api/v1/auth/login/2fa', why: 'étape 2FA du flux de connexion, protégée par le twoFactorToken transmis dans le corps — aucune session au moment de cet appel' },
   { method: 'POST', url: '/api/v1/auth/verify-email', why: "vérification d'email par token à usage limité, pré-session" },
   { method: 'POST', url: '/api/v1/auth/resend-verification', why: "renvoi d'email de vérification, pré-session" },
+  { method: 'POST', url: '/api/v1/auth/verification/status', why: "état pending/proven d'une attente de preuve d'adresse, pré-session, par jeton opaque (#8083)" },
   { method: 'POST', url: '/api/v1/auth/send-phone-code', why: 'envoi de code SMS, pré-session (flux de vérification tél.)' },
   { method: 'POST', url: '/api/v1/auth/verify-phone', why: 'vérification de code SMS, pré-session' },
-  { method: 'POST', url: '/api/v1/auth/validate-session', why: 'valide un sessionToken transmis dans le corps — son rôle est justement de fonctionner sans Authorization' },
   { method: 'POST', url: '/api/v1/auth/phone-transfer/check', why: 'flux de transfert de numéro, pré-session (rate-limité)' },
   { method: 'POST', url: '/api/v1/auth/phone-transfer/initiate', why: 'idem' },
   { method: 'POST', url: '/api/v1/auth/phone-transfer/verify', why: 'idem' },
@@ -379,29 +299,44 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'POST', url: '/api/v1/auth/forgot-password', why: "point d'entrée de récupération de mot de passe (3 rate-limiters dédiés)" },
   { method: 'POST', url: '/api/v1/auth/reset-password', why: 'consomme un token de reset à usage unique, pré-session' },
   { method: 'GET', url: '/api/v1/auth/reset-password/verify-token', why: 'oracle de validité de token de reset, pré-session' },
+  { method: 'POST', url: '/api/v1/auth/reset-password/verify-token', why: 'le même oracle, jeton dans le CORPS — le lien d’e-mail le porte dans son fragment, jamais dans une adresse journalisée (#10859)' },
   { method: 'POST', url: '/api/v1/auth/forgot-password/phone/lookup', why: 'flux de reset par téléphone, pré-session (rate-limité)' },
   { method: 'POST', url: '/api/v1/auth/forgot-password/phone/verify-identity', why: 'idem' },
   { method: 'POST', url: '/api/v1/auth/forgot-password/phone/verify-code', why: 'idem' },
   { method: 'POST', url: '/api/v1/auth/forgot-password/phone/resend', why: 'idem' },
   { method: 'POST', url: '/api/v1/auth/magic-link/request', why: "demande de lien magique par email, pré-session" },
-  { method: 'GET', url: '/api/v1/auth/magic-link/validate', why: 'consomme un lien magique à usage unique, pré-session' },
   { method: 'POST', url: '/api/v1/auth/magic-link/validate', why: 'idem' },
-  { method: 'GET', url: '/api/v1/auth/auth/revoke-all-sessions', why: 'lien signé JWT envoyé par email (chemin réel dupliqué "/auth/auth" — bug fonctionnel documenté dans l\'audit, pas un trou de garde), vérifié par signature dans le handler' },
+  { method: 'GET', url: '/api/v1/auth/revoke-all-sessions', why: 'lien signé JWT envoyé par e-mail sur connexion suspecte, vérifié par signature dans le handler. Le segment "auth" était DOUBLÉ jusqu\'à #4141 — la route existait à une adresse que rien n\'appelait, et l\'entrée d\'inventaire le disait en la traitant comme un fait acquis plutôt que comme un défaut à corriger' },
+  { method: 'POST', url: '/api/v1/auth/revoke-all-sessions', why: 'le même lien signé, remis par la page web dans le CORPS au clic : le jeton voyage dans le fragment du lien, jamais dans une adresse journalisée (#10859)' },
 
   // --- me/delete-account : flux de suppression de compte par email, tokens à usage limité ---
-  { method: 'GET', url: '/api/v1/me/delete-account/confirm', why: "confirmation de suppression par lien email (token sha256 vérifié en base), pré-session par nature" },
+  // Ces trois entrées ont été RETIRÉES puis REMISES le 2026-08-30, et ce
+  // qui s'est passé entre les deux vaut d'être écrit : elles rendaient 401
+  // dans le serveur assemblé, et le 401 venait de l'instrumentation du
+  // COLLECTEUR, pas du produit. En enveloppant `addHook` sur chaque contexte,
+  // elle reprenait son point d'appui DANS la chaîne de prototypes Fastify et
+  // faisait atterrir la garde de `me/preferences` sur un ancêtre — donc sur
+  // ses modules frères. Corrigé (voir `instrumentEncapsulatedAuthHooks`), les
+  // trois rendent 302, ce qu'elles ont toujours fait en production.
+  // La leçon n'est pas sur ces routes : un harnais peut fabriquer le défaut
+  // qu'il mesure, et une mesure faite À TRAVERS un observateur ne vaut que ce
+  // que vaut l'observateur.
+  { method: 'GET', url: '/api/v1/me/delete-account/confirm', why: "confirmation de suppression par lien email (token sha256 vérifié en base), pré-session par nature — mesuré 302 sans jeton le 2026-08-30" },
   { method: 'GET', url: '/api/v1/me/delete-account/cancel', why: 'idem (cancelTokenHash)' },
-  { method: 'GET', url: '/api/v1/me/delete-account/delete-now', why: "idem, exige en plus le statut GRACE_PERIOD_EXPIRED" },
+  { method: 'GET', url: '/api/v1/me/delete-account/delete-now', why: 'idem (purgeTokenHash) — les trois ne font plus aucune mutation depuis #4183, elles redirigent' },
 
   // --- Profils publics (design produit assumé) ---
-  { method: 'GET', url: '/api/v1/u/:username', why: 'profil public consultable sans compte (optionalAuth, email/téléphone jamais renvoyés)' },
-  { method: 'GET', url: '/api/v1/users/:id', why: 'idem, par id' },
-  { method: 'GET', url: '/api/v1/users/id/:id', why: 'idem, lookup par ObjectId opaque' },
-  { method: 'GET', url: '/api/v1/users/email/:email', why: "lookup public par email (primitive d'énumération notée séparément dans l'audit, pas un défaut de garde)" },
-  { method: 'GET', url: '/api/v1/users/phone/:phone', why: "lookup public par téléphone (idem)" },
-  { method: 'GET', url: '/api/v1/users', why: "stub no-op aujourd'hui (message statique, aucune donnée) — À RETIRER de cette liste si un jour implémenté avec de vraies données" },
-  { method: 'PUT', url: '/api/v1/users/:id', why: "stub no-op aujourd'hui malgré une doc \"admin-only\" — À RETIRER de cette liste et gardé avant toute implémentation réelle" },
-  { method: 'DELETE', url: '/api/v1/users/:id', why: 'idem' },
+  // `/users/email/:email` et `/users/phone/:phone` ont QUITTÉ cette liste : elles
+  // sont désormais AUTHENTIFIÉES (#4160). Elles confirmaient sans compte qu'une
+  // adresse ou un numéro appartient à un utilisateur Meeshy — et rendaient son
+  // profil : un annuaire INVERSÉ. Cette liste les tolérait au motif que
+  // l'énumération était « notée séparément dans l'audit, pas un défaut de
+  // garde » — mais une primitive d'énumération EST un défaut de garde, et la
+  // note ne la refermait pas.
+  //
+  // `GET /users`, `PUT` et `DELETE /users/:id` en ont été retirées avec les
+  // routes elles-mêmes (#4185). Leur commentaire disait « à retirer de cette
+  // liste si un jour implémenté » : c'est le retrait qui est arrivé d'abord.
 
   // --- Liens de partage anonymes / participation anonyme (mécanisme de
   //     token de session dédié, vérifié dans le handler — catégorie
@@ -410,12 +345,37 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'POST', url: '/api/v1/anonymous/refresh', why: 'sessionToken du corps haché puis vérifié en base (fail-closed)' },
   { method: 'POST', url: '/api/v1/anonymous/leave', why: 'idem' },
   { method: 'GET', url: '/api/v1/anonymous/link/:identifier', why: "aperçu pré-jointure d'un lien de partage, sans contenu de messages" },
+  // #10000 — l'entrée de World Wide que lit la landing de meeshy.me, servie à
+  // des visiteurs SANS compte ni session : identique pour tous, sans identité
+  // lue, ni id ni participant ni présence (schéma de réponse fermé).
+  { method: 'GET', url: '/api/v1/world', why: "entrée publique de World Wide pour la landing : clé du lien de partage, aucun id ni identité ; l'effectif ne part que vers un compte Meeshy (#10205)" },
+  // Les profils (GET /directory/people/:handle et ses trois alias /u/:username,
+  // /users/:id, /users/id/:id) ne sont PLUS publics depuis #10205 (directive
+  // porteur du 2026-10-11) : un lecteur sans compte reçoit 403 ACCOUNT_REQUIRED,
+  // et le témoin ci-dessous le PROUVE en les traitant comme toute route gardée.
+  // #10157 (L5) — le magasin adressé par contenu des packs officiels : le web
+  // le lit en `fetch(url, { mode: 'cors' })` SANS aucun en-tête. Liste blanche
+  // calculée au démarrage par `PackIndex`, aucune lecture de base, aucune identité.
+  { method: 'GET', url: '/api/v1/pack-assets/:file', why: "fichier d'un pack OFFICIEL adressé par son empreinte (<sha16>.<ext>), liste blanche des registres, aucune identité lue ni servie" },
+  // #4167 — porte CANONIQUE de jointure par lien (S1 invité, S2 inscrit) et ses
+  // deux jumelles de session invitée : mêmes raisons que les quatre `anonymous/*`
+  // ci-dessus, sous les nouveaux noms cibles (`docs/product/api-simplification/conversations.md`).
+  // `admitLinkEntry` (`services/conversations/linkAdmission.ts`) est la garde —
+  // un JWT valide y bascule simplement l'identité de invité à inscrit, jamais un
+  // 401/403 générique, exactement comme `anonymous/join` ne l'a jamais rendu.
+  { method: 'POST', url: '/api/v1/links/:key/members', why: "point d'entrée UNIFIÉ de jointure par lien — S1 invité (aucune créance) · S2 inscrit (JWT optionnel), gardé par admitLinkEntry" },
+  { method: 'PATCH', url: '/api/v1/guest-sessions/me', why: 'X-Session-Token haché puis vérifié en base (fail-closed) — remplace POST /anonymous/refresh' },
+  { method: 'DELETE', url: '/api/v1/guest-sessions/me', why: 'X-Session-Token haché puis vérifié en base (fail-closed) — remplace POST /anonymous/leave' },
   { method: 'GET', url: '/api/v1/links/:identifier', why: "aperçu public d'un lien d'invitation (design volontaire \"allowViewHistory\")" },
+  { method: 'GET', url: '/api/v1/links/:identifier/card', why: "carte d'un lien de partage (#8099) : ce que le lien autorise déjà, sans participant ni message" },
+  { method: 'GET', url: '/api/v1/links/:identifier/og', why: "page d'aperçu des robots (#9712) : l'hôte et le titre que l'aperçu public sert déjà, sans participant ni message ; lien mort ou inconnu ⇒ aperçu générique" },
   { method: 'POST', url: '/api/v1/links/:identifier/messages', why: "x-session-token haché puis vérifié en base dans le handler (fail-closed), conversation dérivée du token pas de l'URL" },
   { method: 'GET', url: '/api/v1/links/:identifier/messages', why: 'accès conditionné à un match membre/participant anonyme vérifié dans le handler' },
-  { method: 'POST', url: '/api/v1/tracking-links', why: "création d'un lien de suivi NON rattaché : ouverte par conception. Le rattachement à une conversation (`conversationId` dans le corps) exige désormais d'y participer, vérifié dans le handler — c'était le trou." },
+  { method: 'POST', url: '/api/v1/tracking-links', why: "garde optionnelle au montage, mais le HANDLER refuse tout appelant sans compte inscrit (#10291 : 401 sans session, 403 `REGISTERED_USER_REQUIRED` pour un invité) — la garde optionnelle garde les deux refus discernables (#4792). Le rattachement à une conversation (`conversationId`) exige en plus d'y participer." },
   { method: 'GET', url: '/api/v1/tracking-links/:token', why: 'résolution publique de lien court (design assumé, commentaire explicite dans le code)' },
-  { method: 'GET', url: '/api/v1/tracking-links/:token/resolve', why: 'idem, aucune donnée sensible exposée' },
+  { method: 'GET', url: '/api/v1/tracking-links/:token/og', why: "page d'aperçu des robots (#10192) : 302 vers la cible web publique d'un lien actif (ce que l'ouverture du lien donne à quiconque le tient, sans clic compté), aperçu d'une invitation ouverte et publique, sinon générique sans rien de la cible" },
+  { method: 'GET', url: '/api/v1/affiliate/:token/og', why: "page d'aperçu des robots (#10559) : nom affiché, pseudo, bannière ou avatar de l'invitant d'un jeton ouvert — ce que la validation publique du jeton sert déjà ; jeton fermé ou compte désactivé ⇒ aperçu générique, aucun clic compté" },
+  { method: 'GET', url: '/api/v1/tracking-links/:token/resolve', why: "idem ; `sharer` (#9149) n'expose que nom affiché, pseudo et avatar du partageur d'un CONTENU (link-sharer.ts, resolve-sharer.test.ts)" },
   { method: 'GET', url: '/api/v1/l/:token', why: 'redirection publique de lien court' },
   { method: 'POST', url: '/api/v1/tracking-links/:token/click', why: "comptage de clic public par design" },
   { method: 'POST', url: '/api/v1/tracking-links/:token/redirect-status', why: "signal sendBeacon, explicitement documenté \"No authentication required\"" },
@@ -425,20 +385,61 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'POST', url: '/api/v1/affiliate/track-visit', why: "tracking de visite public par design (pollution mineure notée séparément dans l'audit)" },
   { method: 'POST', url: '/api/v1/affiliate/click/:token', why: 'comptage de clic public par design' },
 
-  // --- Voice : sondes publiques, aucune donnée utilisateur ---
-  { method: 'GET', url: '/api/v1/voice/health', why: 'statut agrégé des sous-services, aucune donnée utilisateur' },
+  // --- Voice : sonde publique, aucune donnée utilisateur ---
+  // `GET /api/v1/voice/health` a QUITTÉ cette liste AVEC la route elle-même
+  // (#4190) : aucun appelant côté clients ni côté sondes d'infrastructure, et
+  // une seconde réponse à « le service répond-il ? » vaut moins qu'une seule
+  // qui fait autorité — `GET /health` (racine). Ne la remets pas ici.
   { method: 'GET', url: '/api/v1/voice/languages', why: 'liste statique de langues supportées' },
 
   // --- Posts/Feed : visibilité PUBLIC appliquée côté service pour les
   //     appelants anonymes (vérifié par lecture de PostFeedService/PostService) ---
   { method: 'GET', url: '/api/v1/posts/user/:userId', why: 'optionalAuth ; PostFeedService.getUserPosts applique buildVisibilityFilter — un anonyme ne voit que le PUBLIC' },
   { method: 'GET', url: '/api/v1/posts/community/:communityId', why: 'idem' },
-  { method: 'POST', url: '/api/v1/posts/:postId/anonymous-view', why: "comptage de vue anonyme, PostService.recordAnonymousOpen filtre explicitement au PUBLIC" },
+  { method: 'GET', url: '/api/v1/posts/:postId', why: "optionalAuth (#9149) — le lien partagé d'un visiteur ; anonymousPostGate ne sert que le PUBLIC vivant d'un auteur actif (original compris), le reste rend le 404 d'une publication inexistante (prouvé par unit/routes/posts/anonymous-post-read.test.ts)" },
+  // #4149 — `GET /api/v1/social/posts` remplace neuf routes de fil social.
+  // Elle est ici pour la MEME raison que les deux lignes ci-dessus : optionalAuth,
+  // et PostFeedService applique `buildVisibilityFilter`, donc un anonyme ne voit
+  // que le PUBLIC. Mais elle mérite un mot de plus, parce que la sonde n'observe
+  // pas d'elle-même ce qui la protège : cette route ne déclare AUCUN
+  // `schema.querystring` Fastify (elle valide son `scope` par une union
+  // discriminée Zod DANS le gestionnaire), donc la synthèse de querystring de ce
+  // test ne s'y applique pas — la sonde l'appelle SANS aucun `?scope=` et reçoit
+  // un 400 avant même que la route sache QUELLE ressource est demandée, donc
+  // avant qu'une autorisation ait un sens.
+  //
+  // Ce que cette ligne fait perdre à ce test, un autre le garde : les six scopes
+  // qui exigent une identité (home, stories, stories.mine, reels, statuses,
+  // bookmarks) rendent 401 à un anonyme, et c'est
+  // `unit/routes/posts/social-posts-scope.test.ts` qui le prouve, scope par
+  // scope. Si cette garantie tombe un jour, c'est LUI qui rougira — pas ce
+  // balayage. Ne retire pas ce témoin en croyant qu'il fait doublon.
+  { method: 'GET', url: '/api/v1/social/posts', why: 'optionalAuth ; scope=author/community publics par conception, les six autres rendent 401 (prouvé par unit/routes/posts/social-posts-scope.test.ts)' },
+  { method: 'POST', url: '/api/v1/posts/:postId/anonymous-view', why: "comptage de vue anonyme sous la garde de LECTURE anonyme (readServableToAnonymous, #10483), lecteur désigné par sa clé HMAC" },
+  {
+    method: 'POST',
+    url: '/api/v1/social/events',
+    why:
+      "point d'ingestion UNIQUE de la télémétrie de lecture (#4150). S1 par CONCEPTION : le " +
+      "critère 4 exige que la variante ANONYME soit la MÊME route — un visiteur sans compte " +
+      "compte l'ouverture d'un contenu public, comme le faisait déjà " +
+      "POST /posts/:postId/anonymous-view juste au-dessus, dont elle est le successeur. " +
+      "Ce qu'un anonyme peut faire y est doublement borné, et pas par le seul fait d'être " +
+      "accepté : son audience est la garde de LECTURE anonyme (readServableToAnonymous, " +
+      "#10483 : public, vivant, auteur actif, original public), et les seuls TYPES d'événement " +
+      "qu'il peut produire sont énumérés par TYPES_ANONYMES — une vue et une impression, qui " +
+      "ne laissent que sa clé de lecteur HMAC et des compteurs ; téléchargement et session " +
+      "d'engagement écrivent une ligne PORTANT une identité, et sortent en 403. Le 400 que " +
+      "voit ce balayage est le refus d'un appelant sans jeton de session : sans lui, il n'a " +
+      "aucune identité de seau. Débit, en événements : 60/min par clé de lecteur et 600/min par " +
+      "empreinte d'adresse HMAC tournante pour un visiteur, 30 lots/min par compte sinon.",
+  },
 
   // --- Attachments : fichiers statiques servis par nom de fichier UUIDv4
   //     réel (pas l'ObjectId de l'attachment), anti-path-traversal vérifié ---
   { method: 'GET', url: '/api/v1/attachments/file/*', why: 'noms de fichiers UUIDv4 non énumérables + garde anti path-traversal, CDN de fichiers publics par design' },
   { method: 'GET', url: '/api/attachments/file/*', why: 'même route, montage legacy sans /v1' },
+  { method: 'GET', url: '/api/v1/attachments/signed/:token/*', why: "adresse SIGNÉE par lecteur (#9600) : l'autorisation EST le jeton — HMAC-SHA-256 sur la clé de stockage, la pièce, le participant lecteur et l'échéance, comparé en temps constant ; puis la pièce vivante et l'état du lecteur (membre actif, message vivant, échéance, vue unique non ouverte). Tout refus rend 404, jamais 401/403, pour ne rien révéler de l'existence du fichier." },
 ];
 
 // ---------------------------------------------------------------------------
@@ -472,13 +473,309 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
   let app: FastifyInstance;
   let routes: CollectedRoute[];
 
+  // L'assemblage vit dans un `beforeAll`, jamais dans un `it` : monté depuis
+  // un témoin, il n'existe pas quand un `-t` filtre ce témoin-là, et tous les
+  // suivants tombent sur `routes` undefined — une panne de HARNAIS qui se lit
+  // comme un défaut de code.
+  beforeAll(async () => {
+    ({ app, routes } = await buildAssembledApp());
+  }, 120_000);
+
   afterAll(async () => {
     if (app) await app.close();
   });
 
-  it('assemble le serveur réel et énumère au moins une centaine de routes (garde-fou anti-régression du harnais lui-même)', async () => {
-    ({ app, routes } = await buildAssembledApp());
+  it('assemble le serveur réel et énumère au moins une centaine de routes (garde-fou anti-régression du harnais lui-même)', () => {
     expect(routes.length).toBeGreaterThan(100);
+  });
+
+  // -------------------------------------------------------------------------
+  // Les chemins que le WEB appelle existent (#4189)
+  // -------------------------------------------------------------------------
+  // Trois adresses appelées par le web ne correspondaient à AUCUNE route :
+  // `/auth/check-username`, `/users/profile/:id` et `/friend-requests` sans
+  // suffixe. Deux d'entre elles étaient avalées par un `if (response.ok)` — la
+  // page de profil publique retombait sur des métadonnées génériques, et les
+  // listes de demandes d'ami restaient DÉFINITIVEMENT vides, sans erreur.
+  //
+  // Pourquoi la garde vit ICI et pas côté web : un test web ne peut vérifier
+  // ses URL que contre un `apiService` MOQUÉ, et un mock verrouille l'URL
+  // FAUSSE aussi bien que la juste — il ne peut donc pas tomber. La seule
+  // source qui tranche est la table de routes du serveur ASSEMBLÉ, qui vit
+  // ici. Elle rougit dans les DEUX sens : chemin client erroné, et route
+  // serveur retirée sous un appelant qui existe encore.
+  //
+  // PÉRIMÈTRE, dit à voix haute : seuls les appels dont le chemin est une
+  // chaîne LITTÉRALE sont vus. Ceux composés par gabarit
+  // (`path: `/users/${id}``) ne le sont pas — les couvrir demanderait
+  // d'évaluer du TypeScript, et une garde qui prétendrait les couvrir sans le
+  // faire serait pire que celle-ci.
+  //
+  // LA FORME D'APPEL A CHANGÉ AVEC L'APPLICATION (#7668, 2026-09-24). Le
+  // legacy Next.js appelait `buildApiUrl('/x')` / `apiService.get('/x', …)` ;
+  // il a quitté le dépôt, et l'application qui a pris le chemin `apps/web`
+  // décrit chaque requête par un objet `{ path: '/api/v1/x', … }`
+  // (`src/lib/api/*.ts`). Repointer le seul chemin aurait laissé l'ancien
+  // extracteur balayer 1 300 fichiers pour n'y trouver AUCUN appel — vert, et
+  // muet. L'extracteur lit donc la forme `path:` ; l'échantillon fixe plus bas
+  // prouve qu'il la reconnaît.
+  it('ne laisse aucun appel du web — LITTÉRAL ou entrée du CATALOGUE — viser une route absente', () => {
+    const racineWeb = path.resolve(__dirname, '../../../../../apps/web/src');
+    if (!fs.existsSync(racineWeb)) {
+      throw new Error(`apps/web/src introuvable (${racineWeb}) — cette garde ne peut pas se prononcer, et se taire serait pire que rougir.`);
+    }
+
+    const IGNORÉS = ['node_modules', 'dist', '.turbo', '__tests__', 'coverage', 'test-support'];
+    const fichiers: string[] = [];
+    const parcourir = (dossier: string) => {
+      for (const entrée of fs.readdirSync(dossier, { withFileTypes: true })) {
+        if (IGNORÉS.includes(entrée.name)) continue;
+        const complet = path.join(dossier, entrée.name);
+        if (entrée.isDirectory()) parcourir(complet);
+        else if (/\.(ts|tsx)$/.test(entrée.name) && !/\.test\.tsx?$/.test(entrée.name)) fichiers.push(complet);
+      }
+    };
+    parcourir(racineWeb);
+
+    // Un chemin sans préfixe `/api/v1` est rapporté à `<backend>/api/v1/x`, comme
+    // le faisait l'ancienne forme `buildApiUrl('/x')`.
+    const versUrlServeur = (litteral: string) => {
+      const sansApi = litteral.startsWith('/api/v')
+        ? litteral
+        : litteral.startsWith('/api/')
+          ? `/api/v1${litteral.slice(4)}`
+          : `/api/v1${litteral.startsWith('/') ? litteral : `/${litteral}`}`;
+      return sansApi.split('?')[0];
+    };
+
+    const déclarées = new Set(routes.map((r) => r.url));
+    /** Une route paramétrée matche un chemin concret segment à segment. */
+    const estServie = (url: string) =>
+      déclarées.has(url) ||
+      routes.some((r) => {
+        const attendus = r.url.split('/');
+        const reçus = url.split('/');
+        if (attendus.length !== reçus.length) return false;
+        return attendus.every((seg, i) => seg.startsWith(':') || seg === '*' || seg === reçus[i]);
+      });
+
+    // Le littéral n'est un chemin COMPLET que s'il se FERME sur sa propre
+    // quote : un gabarit `path: `/api/v1/x/${id}`` s'arrête au `$` et n'est pas
+    // vu (cf. PÉRIMÈTRE). La requête se termine après, par une virgule, une
+    // accolade ou une fin de ligne.
+    const motif = /\bpath:\s*(['"`])(\/api\/[^'"`$\s]+)\1\s*[,}\n]/g;
+    // Clé (url, site) et non url seule : deux fichiers visant la MÊME adresse
+    // absente s'écrasaient, et le rapport n'en nommait qu'un — c'est ainsi que
+    // `hooks/use-group-modal.ts` est resté caché derrière `lib/server-cache.ts`
+    // pendant deux tours.
+    const fantômes = new Map<string, { url: string; site: string }>();
+
+    // Un appel COMMENTÉ n'est pas un appel : un doc-comment qui cite une
+    // requête documente une intention — le compter ferait rougir la garde
+    // sur du texte.
+    const estCommenté = (source: string, index: number) => {
+      const avant = source.slice(source.lastIndexOf('\n', index) + 1, index).trimStart();
+      return avant.startsWith('//') || avant.startsWith('*');
+    };
+
+    // LA FORME D'APPEL A CHANGÉ UNE SECONDE FOIS (#7716, 2026-09-27). Le web
+    // n'écrit plus ses adresses : il importe le module de GROUPE du catalogue
+    // généré (`import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin'`)
+    // et appelle `adminEndpoints.clé(…)`. Chaque référence est RÉSOLUE par le
+    // VRAI catalogue (jeton `x` pour chaque paramètre), puis confrontée au
+    // serveur assemblé comme un littéral : une entrée absente du catalogue, ou
+    // un catalogue périmé sur une route retirée, rougit ici.
+    const importDeGroupe =
+      /import\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s+['"]@meeshy\/shared\/api\/endpoints\/([a-z0-9-]+)['"]/g;
+    const versNamespace = (fichier: string) => fichier.replace(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+    const référencesDuCatalogue = (source: string) =>
+      [...source.matchAll(importDeGroupe)].flatMap(([, alias, fichier]) =>
+        [...source.matchAll(new RegExp(`(?<![\\w$.])${alias.replace(/\$/g, '\\$')}\\.([A-Za-z_$][\\w$]*)`, 'g'))]
+          .filter((m) => !estCommenté(source, m.index!))
+          .map((m) => ({ namespace: versNamespace(fichier), clé: m[1] }))
+      );
+    const résoudre = ({ namespace, clé }: { namespace: string; clé: string }): string | null => {
+      const entrée = (API_ENDPOINTS as unknown as Record<string, Record<string, unknown> | undefined>)[namespace]?.[clé];
+      if (typeof entrée === 'string') return entrée;
+      if (typeof entrée !== 'function') return null;
+      const appel = entrée as (...paramètres: string[]) => string;
+      return appel(...Array.from({ length: appel.length }, () => 'x'));
+    };
+    let importsDeGroupe = 0;
+    let fichiersQuiCitentLeCatalogue = 0;
+
+    for (const fichier of fichiers) {
+      const source = fs.readFileSync(fichier, 'utf8');
+      const site = path.relative(racineWeb, fichier);
+      if (source.includes('@meeshy/shared/api/endpoints')) fichiersQuiCitentLeCatalogue += 1;
+      if ([...source.matchAll(importDeGroupe)].length > 0) importsDeGroupe += 1;
+      for (const référence of référencesDuCatalogue(source)) {
+        const résolue = résoudre(référence);
+        const url = résolue === null ? `${référence.namespace}.${référence.clé} (absente du catalogue)` : versUrlServeur(résolue);
+        if (résolue === null || !estServie(url)) fantômes.set(`${url}\u0000${site}`, { url, site });
+      }
+      for (const m of source.matchAll(motif)) {
+        if (estCommenté(source, m.index!)) continue;
+
+        const url = versUrlServeur(m[2]);
+        if (!estServie(url)) fantômes.set(`${url}\u0000${site}`, { url, site });
+      }
+    }
+
+    // Garde-fou du harnais lui-même : si l'extraction cesse de trouver des
+    // appels, la garde passerait au vert en ne mesurant plus rien.
+    //
+    // Ce garde-fou a porté un PLANCHER DE VOLUME (`littéraux > 40`), calibré
+    // sur un web qui écrivait ses adresses à la main. #4281 en a migré 217 vers
+    // le catalogue partagé : il en reste trois, et le plancher est devenu
+    // inatteignable — non parce que l'extraction a CASSÉ, mais parce qu'elle a
+    // RÉUSSI. Un plancher de volume posé sur une quantité qu'un chantier a pour
+    // BUT de réduire à zéro finit forcément par rougir sur un progrès, puis par
+    // être abaissé à zéro : c'est-à-dire exactement l'état muet qu'il prétendait
+    // interdire. Il ne mesurait pas la santé de l'extracteur, il mesurait
+    // l'ampleur de la dette.
+    //
+    // Les deux façons dont cette garde peut devenir muette se gardent donc
+    // séparément, et aucune des deux ne décroît avec la migration.
+
+    // 1. Le BALAYAGE atteint-il l'arbre ? Un `racineWeb` cassé rendrait une
+    //    liste vide, et tout le reste passerait au vert sans rien lire.
+    expect(fichiers.length).toBeGreaterThan(500);
+
+    // 2. L'EXTRACTEUR reconnaît-il encore la forme d'appel ? Question qui
+    //    se répond sur un échantillon FIXE, insensible à ce que le web contient.
+    //    Si `motif` cesse de matcher, ceci rougit — même le jour où il ne reste
+    //    plus un seul littéral en production.
+    const ÉCHANTILLON = [
+      "request({ path: '/api/v1/echantillon/simple', method: 'GET' });",
+      'request({ method: "POST", path: "/api/v1/echantillon/double" });',
+      'request({ path: `/api/v1/echantillon/gabarit/${id}` });',
+      'const route = {',
+      '  path: `/api/v1/echantillon/accent-grave`',
+      '};',
+    ].join('\n');
+    const extraits = [...ÉCHANTILLON.matchAll(motif)].map((m) => m[2]);
+    expect(extraits).toEqual([
+      '/api/v1/echantillon/simple',
+      '/api/v1/echantillon/double',
+      '/api/v1/echantillon/accent-grave',
+    ]);
+
+    // 3. La lecture du CATALOGUE reconnaît-elle la forme d'appel du web, et
+    //    RÉSOUT-elle vers une route que le serveur juge ? Même principe : un
+    //    échantillon fixe, qui porte une entrée INEXISTANTE — elle doit sortir
+    //    fantôme, sinon la garde ne sait plus rougir sur le catalogue.
+    const ÉCHANTILLON_CATALOGUE = [
+      "import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';",
+      'const a = adminEndpoints.dashboard;',
+      'const b = adminEndpoints.usersByUserIdResetPassword(userId);',
+      'const c = adminEndpoints.routeQuiNExistePas;',
+      ' * adminEndpoints.commentee — documentaire, jamais un appel',
+    ].join('\n');
+    const lues = référencesDuCatalogue(ÉCHANTILLON_CATALOGUE);
+    expect(lues.map(({ clé }) => clé)).toEqual(['dashboard', 'usersByUserIdResetPassword', 'routeQuiNExistePas']);
+    expect(lues.map((référence) => {
+      const résolue = résoudre(référence);
+      return résolue === null ? null : estServie(versUrlServeur(résolue));
+    })).toEqual([true, true, null]);
+
+    // 4. Aucun fichier ne cite le catalogue sous une AUTRE forme que l'import
+    //    de groupe : un `import { x } from …/endpoints/admin` échapperait à
+    //    l'extraction, et la garde deviendrait muette sans rien perdre en volume.
+    expect(importsDeGroupe).toBe(fichiersQuiCitentLeCatalogue);
+
+    // Exception UNIQUE, datée et suivie. L'onglet santé de l'administration
+    // lit trois sondes qui n'existent pas — un défaut RÉEL, trouvé par cette
+    // garde, mais dont le correctif exige d'abord une décision : faut-il
+    // SERVIR ces sondes (une disponibilité distincte de `/health` a une valeur
+    // propre) ou replier l'écran sur `/health` et `/admin/analytics/*` ?
+    // Suivi en #4219. Cette liste doit rester vide ou décroître : elle n'est
+    // pas un endroit où ranger ce qu'on n'a pas eu le temps de faire.
+    // VIDE depuis le lot 1 du 2026-08-29 : #4219 a SERVI les trois sondes de
+    // santé, #4222 a décidé qu'un « groupe » est une COMMUNAUTÉ et a repointé la
+    // modale. Une liste de suivi qui ne survit pas à sa propre résolution est ce
+    // qui a rendu ces deux corrections visibles — laisser les entrées après le
+    // correctif ferait rougir la garde, et c'est voulu.
+    const SUIVIS = new Set<string>([]);
+
+    const restants = [...fantômes.values()].filter(({ url }) => !SUIVIS.has(url));
+    expect(restants.map(({ url, site }) => `${url}  ← ${site}`)).toEqual([]);
+
+    // La liste de suivi ne survit pas à sa propre résolution : dès qu'une de
+    // ces issues est livrée, l'entrée cesse d'être trouvée et CE témoin rougit,
+    // forçant son retrait. Sans lui, une exception résolue resterait en place
+    // et couvrirait silencieusement la prochaine régression sur la même URL.
+    const suivisEncoreFantômes = new Set(
+      [...fantômes.values()].filter(({ url }) => SUIVIS.has(url)).map(({ url }) => url)
+    );
+    expect(suivisEncoreFantômes).toEqual(SUIVIS);
+  });
+
+  // -------------------------------------------------------------------------
+  // Les routes « to be implemented » (#4185)
+  // -------------------------------------------------------------------------
+  // Quatre routes étaient montées, documentées dans Swagger, et ne faisaient
+  // RIEN. `GET /users`, `PUT /users/:id` et `DELETE /users/:id` rendaient
+  // `{ message: '… to be implemented' }` en 200 et **sans aucune garde** —
+  // alors que la description Swagger des deux dernières annonçait
+  // « Admin-only endpoint ». Le contrat publié déclarait une restriction que le
+  // code n'appliquait pas : aucune fuite tant que ce sont des stubs, une vraie
+  // fuite le jour où quelqu'un les implémente sur le contrat existant.
+  // `GET /users/me/test` n'avait, elle, aucun appelant sur les trois clients.
+  //
+  // GARDE NÉGATIVE — et une garde négative meurt en silence : elle passe au
+  // vert le jour où elle ne teste plus rien. Celle-ci a été PROUVÉE en
+  // remontant temporairement `getAllUsers` et en vérifiant qu'elle rougit.
+  // Le garde-fou du harnais (« au moins une centaine de routes ») la protège
+  // du cas où l'assemblage cesserait d'énumérer quoi que ce soit.
+  it('ne monte plus aucune route « to be implemented »', () => {
+    const RETIREES = [
+      { method: 'GET', url: '/api/v1/users' },
+      { method: 'PUT', url: '/api/v1/users/:id' },
+      { method: 'DELETE', url: '/api/v1/users/:id' },
+      { method: 'GET', url: '/api/v1/users/me/test' },
+      // #4186 — jumelles appauvries de l'identité et de « moi ».
+      { method: 'GET', url: '/api/v1/auth/magic-link/validate' },
+      { method: 'POST', url: '/api/v1/auth/validate-session' },
+      // `DELETE /api/v1/me/preferences` a quitté cette liste : #4181 a ROUVERT
+      // l'adresse sous un AUTRE contrat (`?categories=`, absent = tout), qui
+      // absorbe les sept DELETE par catégorie. Le retrait de #4186 n'était pas
+      // un aller-retour — c'est lui qui a libéré l'adresse.
+      { method: 'GET', url: '/api/v1/me/me' },
+    ];
+
+    const encoreMontees = RETIREES.filter((retiree) =>
+      routes.some((r) => r.method === retiree.method && r.url === retiree.url)
+    );
+
+    expect(encoreMontees.map((r) => `${r.method} ${r.url}`)).toEqual([]);
+  });
+
+  // -------------------------------------------------------------------------
+  // Le segment doublé (#4141)
+  // -------------------------------------------------------------------------
+  // `registerRevokeAllSessionsRoute` déclarait '/auth/revoke-all-sessions' sur
+  // une instance que `route-registration.ts` monte DÉJÀ sous
+  // `${API_PREFIX}/auth`. Le chemin réel était donc
+  // `/api/v1/auth/AUTH/revoke-all-sessions`, quand l'e-mail « nouvelle
+  // connexion détectée » envoie `/api/v1/auth/revoke-all-sessions` : le lien
+  // « ce n'était pas moi » — SEUL site du dépôt qui coupe réellement les
+  // sockets d'un intrus — répondait 404.
+  //
+  // Le défaut ne se voit dans aucun fichier pris isolément : la déclaration est
+  // correcte, le montage est correct, c'est leur COMPOSITION qui est fausse.
+  // Il ne peut donc s'attraper que sur le serveur ASSEMBLÉ, et c'est pourquoi
+  // cette garde vit ici plutôt que dans un test du module de routes.
+  it('ne monte aucune route dont un segment est immédiatement répété', () => {
+    const doublons = routes
+      .map((route) => {
+        const segments = route.url.split('/').filter(Boolean);
+        const doublon = segments.find((segment, i) => i > 0 && segment === segments[i - 1]);
+        return doublon ? `${route.method} ${route.url}  (segment « ${doublon} » répété)` : null;
+      })
+      .filter((ligne): ligne is string => ligne !== null);
+
+    expect(doublons).toEqual([]);
   });
 
   it('rejette tout appelant totalement anonyme (401/403) sur toute route qui ne figure ni dans PUBLIC_ROUTES ni dans KNOWN_GAPS', async () => {
@@ -530,17 +827,85 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
 
     // Signale les entrées d'exception devenues obsolètes (route renommée/supprimée)
     // — pas un échec dur, mais un indice que la liste doit être mise à jour.
-    if (unusedPublic.size > 0) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[route-auth-coverage] Entrées PUBLIC_ROUTES obsolètes (route introuvable) : ${[...unusedPublic].join(', ')}`
-      );
-    }
-    if (unusedGaps.size > 0) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[route-auth-coverage] Entrées KNOWN_GAPS obsolètes (route introuvable, corrigée ou renommée ?) : ${[...unusedGaps].join(', ')}`
-      );
-    }
+    // Une exception PÉRIMÉE ne se contente pas d'être inutile : elle attend.
+    // Le jour où une route réapparaît à la même adresse — un renommage, une
+    // refonte, un copier-coller — elle est accueillie comme « publique par
+    // conception » sans que personne n'ait tranché. C'est une garde qui meurt
+    // en silence, et un `console.warn` dans un flot de milliers de lignes de
+    // sortie de test n'est lu par personne.
+    //
+    // Ces deux listes ne survivent donc pas à leur propre résolution.
+    expect([...unusedPublic]).toEqual([]);
+    expect([...unusedGaps]).toEqual([]);
   });
+
+  /**
+   * Le témoin qui manquait à #4318 : il compare ce que le manifeste ANNONCE à
+   * ce que le serveur SERT.
+   *
+   * Le témoin ci-dessus interroge le serveur et n'ouvre jamais
+   * `route-manifest.json` ; le cliquet du manifeste compare l'artefact à sa
+   * régénération et n'interroge jamais le serveur. Chacun était vert pendant
+   * que la table annonçait « public par construction » sur 304 routes dont dix
+   * tirées au hasard rendaient 401 (mesuré sur staging le 2026-08-29). Aucun
+   * des deux ne pouvait le voir : il n'existait aucun témoin qui les
+   * CONFRONTE.
+   *
+   * On lit l'artefact COMMITÉ, pas une régénération : c'est le fichier que les
+   * gardes de contrat client consomment (#4189), donc c'est lui qui doit dire
+   * vrai. Une table qui annonce public sur une route gardée est pire qu'une
+   * table absente — elle est crédible, et produite mécaniquement.
+   *
+   * Le verdict est `401` et lui seul. `403` ne contredit pas l'annonce (une
+   * route ouverte peut refuser un appelant sur autre chose que l'absence de
+   * jeton), `400` non plus (validation atteinte, donc garde franchie).
+   */
+  it("n'annonce PUBLIQUE aucune route qui exige un jeton — l'artefact commité confronté au serveur", async () => {
+    const manifestPath = path.resolve(__dirname, '../../../route-manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as {
+      routes: Array<{ method: string; path: string; securityBasisKey: string }>;
+    };
+
+    const annoncesPubliques = manifest.routes.filter((r) => r.securityBasisKey === 'no-standard-auth-hook');
+
+    // Le balayage doit prouver qu'il BALAIE : une table vide, ou une clé
+    // renommée, rendrait ce témoin vert sans avoir rien confronté.
+    expect(annoncesPubliques.length).toBeGreaterThan(10);
+
+    const declareesPubliques = new Set([
+      ...PUBLIC_ROUTES.map((e) => `${e.method} ${e.url}`),
+      ...KNOWN_GAPS.map((e) => `${e.method} ${e.url}`),
+    ]);
+
+    // Confrontation DÉTERMINISTE : le témoin frère ci-dessus prouve que TOUTE
+    // route hors de ces deux listes rend 401/403 à un appelant anonyme. Une
+    // route annoncée « publique par construction » et absente des deux listes
+    // est donc, par construction, une route gardée que le manifeste annonce
+    // ouverte — sans qu'il faille la réinterroger.
+    const mensonges = annoncesPubliques
+      .map((r) => `${r.method} ${r.path}`)
+      .filter((cle) => !declareesPubliques.has(cle));
+
+    if (mensonges.length > 0) {
+      throw new Error(
+        `${mensonges.length} route(s) sont ANNONCÉES publiques par le manifeste alors que le serveur ` +
+        `exige un jeton (le témoin frère prouve le 401/403 de toute route hors PUBLIC_ROUTES/KNOWN_GAPS) :\n\n` +
+        mensonges.map((c) => `  ${c}`).join('\n') +
+        `\n\nLa détection de \`deriveSecurityLevel\` a un angle mort — voir ` +
+        `\`route-manifest/collect.ts\`, § « La QUATRIÈME forme d'authentification » et ` +
+        `\`GARDES_HORS_HOOK\`. Ne PAS corriger en ajoutant la route à PUBLIC_ROUTES : ` +
+        `c'est la DÉTECTION qui doit voir la garde, pas la liste des exceptions qui doit grossir.`
+      );
+    }
+
+    // Et la vérification SERVIE sur ce qui reste, pour les routes qui ne sont
+    // pas couvertes par le raisonnement ci-dessus : une route déclarée
+    // publique répond 401 sur un verdict MÉTIER (mauvais mot de passe, jeton
+    // du corps refusé), ce qui CONFIRME l'annonce au lieu de la contredire —
+    // les confondre rendrait ce témoin faux sur `/auth/login`, et un témoin
+    // faux se fait désarmer. Il ne reste donc rien à injecter tant que la
+    // confrontation ci-dessus est verte ; ce bloc existe pour le jour où une
+    // exception sera ajoutée sans que la garde le soit.
+    expect(mensonges).toEqual([]);
+  }, 120_000);
 });

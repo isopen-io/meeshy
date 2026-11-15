@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "composer_scene_cap_text",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_scene_cap_sticker",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_scene_cap_media",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_scene_cap_sound",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -16,6 +16,12 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+
+const cutTogetherWhere = jest.fn(async (_scope: unknown) => undefined);
+jest.mock('../../services/together/togetherDeps', () => ({
+  cutTogetherWhere: (scope: unknown) => cutTogetherWhere(scope),
+}));
+
 import { announceConversationClosed } from '../announceConversationClosed';
 
 const CONV_ID = '507f1f77bcf86cd799439011';
@@ -149,5 +155,36 @@ describe('announceConversationClosed', () => {
       })
     ).not.toThrow();
     expect(order).toEqual([`emit:${SERVER_EVENTS.CONVERSATION_CLOSED}`]);
+  });
+
+  it('coupe les séances « ensemble » de la conversation close (#17147), même sans personne à prévenir', () => {
+    cutTogetherWhere.mockClear();
+    announceConversationClosed({
+      io: null,
+      manager: null,
+      conversationId: CONV_ID,
+      participants: [],
+      closedBy: CLOSED_BY,
+      closedAt: CLOSED_AT,
+    });
+    expect(cutTogetherWhere).toHaveBeenCalledWith({ conversationId: CONV_ID });
+  });
+
+  it('une coupure qui REJETTE ne fait ni lever l\'annonce ni tomber le processus', async () => {
+    cutTogetherWhere.mockImplementationOnce(() => Promise.reject(new Error('relais en panne')));
+    const unhandled: unknown[] = [];
+    const listener = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', listener);
+    try {
+      const { io } = makeIo();
+      expect(() =>
+        announceConversationClosed({ io, manager: null, conversationId: CONV_ID, participants: [MEMBER], closedBy: CLOSED_BY, closedAt: CLOSED_AT }),
+      ).not.toThrow();
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+    } finally {
+      process.off('unhandledRejection', listener);
+    }
+    expect(unhandled).toEqual([]);
   });
 });

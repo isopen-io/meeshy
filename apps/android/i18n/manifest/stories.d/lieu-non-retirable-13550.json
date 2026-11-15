@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "stories_composer_media_location_refused",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

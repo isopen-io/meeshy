@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "stories_visibility_acquaintances",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_visibility_close",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_visibility_blood",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_audience_sub_acquaintances",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_audience_sub_close",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_audience_sub_blood",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

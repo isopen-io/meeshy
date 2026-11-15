@@ -38,7 +38,13 @@ import { join } from 'path';
 
 const ROUTES_DIR = join(__dirname, '../../../routes');
 
-const MESSAGE_READ = /\bprisma\.message\.(findMany|count)\s*\(/g;
+// `aggregateRaw` fait partie du balayage depuis #4391 : une agrégation MongoDB
+// sur `Message` EST une lecture de messages, et l'omettre créait un angle mort
+// — `admin/languages.ts` lisait déjà quatre fois la collection sans jamais
+// apparaître ici, et #4391 a converti une lecture de `admin/messages.ts` vers
+// cette forme. Un balayage qui rétrécit quand la lecture change de FORME
+// n'atteste plus rien.
+const MESSAGE_READ = /\bprisma\.message\.(findMany|count|aggregateRaw)\s*\(/g;
 const APPLY_HIDING = /\bapplyPersonalHistoryHiding\s*\(/g;
 
 type Classification =
@@ -53,11 +59,77 @@ type Classification =
  */
 const SURFACES: Record<string, Classification> = {
   // ── Applique le masquage personnel ────────────────────────────────────────
-  'conversations/messages.ts': { kind: 'applies', reads: 11, applications: 10 },
+  // conversations/messages.ts (11 lectures, 10 applications) a été découpé
+  // en fichiers frères par #4284 ; les quatre entrées ci-dessous se
+  // partagent EXACTEMENT ces deux totaux (6+1+2+2=11 lectures,
+  // 6+0+2+2=10 applications) — aucune lecture ni application n'a été
+  // ajoutée ni retirée, seul le fichier a changé. L'écart d'une unité entre
+  // lectures et applications, jusqu'ici anonyme dans le compte global du
+  // fichier unique, se trouvait sur `messages-list-query.ts` :
+  // `enrichForwardedMessagesForList` y relit le message SOURCE d'un
+  // transfert par id direct (`where: { id: { in: … } }`), gardée par sa
+  // propre réciprocité (`resolveForwardSourceGateForReader`) mais pas par
+  // `applyPersonalHistoryHiding` — le même écart qu'avant le découpage,
+  // seulement plus précisément localisé.
+  //
+  // #3616 a fermé l'écart, EN MÉMOIRE plutôt qu'en `where` : les messages
+  // sources d'une même page peuvent appartenir à plusieurs conversations, et
+  // `applyPersonalHistoryHiding` ne merge qu'un SEUL `where`. Le
+  // `applications: 0` ci-dessous reste donc exact au sens du balayage
+  // TEXTUEL (`applyPersonalHistoryHiding(` littéral) — la couverture réelle
+  // est portée par `loadPersonalHistoryHidingByConversation` et gardée par
+  // `ROUTE_IN_MEMORY_HIDING_SURFACES` plus bas, même patron que
+  // `ConversationBridgeService.ts` côté service.
+  'conversations/messages-list.ts': { kind: 'applies', reads: 4, applications: 4 },
+  // #16684 — la résolution de la fenêtre `around` a quitté `messages-list.ts`
+  // pour le module de la loi de curseur ; les deux comptes ci-dessus BAISSENT
+  // d'autant : la surface s'est DÉPLACÉE, elle ne s'est pas ajoutée.
+  //
+  // `reads: 1` alors que le module ouvre DEUX requêtes de page (la moitié
+  // ancienne et la moitié récente) : elles partagent UN helper littéral, donc le
+  // balayage TEXTUEL n'en voit qu'une — et c'est précisément ce que la garde
+  // veut, le masquage personnel étant appliqué dans ce helper unique, donc aux
+  // deux moitiés par construction. Chaque moitié le porte dans son propre
+  // `where` et non à la fin : sans cela, `take: halfLimit` remplirait sa moitié
+  // de messages masqués puis les perdrait, et la fenêtre rendrait moins que
+  // demandé sans le dire. La lecture de la CIBLE (`findFirst`) ne porte que le
+  // plancher d'historique, comme avant ce lot : une cible masquée entre dans la
+  // liste d'ids et la page finale la retire par `personalWhereClause`.
+  'conversations/messages-cursor-window.ts': { kind: 'applies', reads: 1, applications: 1 },
+  'conversations/messages-list-query.ts': { kind: 'applies', reads: 1, applications: 0 },
+  'conversations/messages-pin.ts': { kind: 'applies', reads: 2, applications: 2 },
+  'conversations/messages-search.ts': { kind: 'applies', reads: 2, applications: 2 },
+  // #9899 — les traductions partagées d'une page de messages DEMANDÉS par id
+  // (`GET /conversations/:id/shared-translations`). Une lecture, `applications:
+  // 0` : le masquage n'entre pas dans un `where`, il est JUGÉ en mémoire, message
+  // par message, par la loi de lecture (`readerMayReadMessages` — plancher
+  // d'historique ET masquage personnel, `whenHidingUnreadable: 'refuse'`), et
+  // seules les traductions des messages que le lecteur lit sont servies. Les
+  // marqueurs de `ROUTE_IN_MEMORY_HIDING_SURFACES` en sont la preuve.
+  'conversations/shared-translations.ts': { kind: 'applies', reads: 1, applications: 0 },
   'conversations/threads.ts': { kind: 'applies', reads: 1, applications: 2 },
 
+  // `messages-list-views.ts` — le résolveur d'ids des VUES de la collection
+  // unique (#4340). Ses DEUX lectures sont les deux moitiés de la recherche
+  // (terme dans le contenu, terme dans les traductions) et chacune porte son
+  // `applyPersonalHistoryHiding` : 2 lectures, 2 applications, aucun écart.
+  //
+  // Le masquage y est appliqué UNE SECONDE FOIS — le site partagé de
+  // `messages-list.ts` le pose déjà sur la page finale. La redondance est
+  // MESURÉE, pas supposée : retirer le masquage du seul résolveur ci-dessous
+  // ne fait tomber AUCUN témoin (le site partagé couvre), le retirer du seul
+  // site partagé en fait tomber trois (la recherche survit), et le retirer des
+  // DEUX en fait tomber quatre. Deux gardes indépendantes sur le même chemin,
+  // et c'est le régime voulu pour une porte qui sert quatre vues.
+  'conversations/messages-list-views.ts': { kind: 'applies', reads: 2, applications: 2 },
+
   // ── Exemptes, avec leur raison ────────────────────────────────────────────
-  'sync.ts': {
+  // `sync.ts` → `sync/messages.ts` (#4171, intégré pendant ce lot : le
+  // fichier unique est devenu un répertoire). Même lecture, même raison,
+  // seul le CHEMIN a changé — vérifié : `sync/messages.ts` porte encore
+  // exactement les deux `prisma.message.findMany` et le même appel à
+  // `loadPersonalHistoryHidingByConversation` que l'ancien `sync.ts`.
+  'sync/messages.ts': {
     kind: 'exempt',
     reads: 2,
     why:
@@ -66,7 +138,21 @@ const SURFACES: Record<string, Classification> = {
       'dans `syncMessages`. Le flux `deleted` (tombstones) reste non filtré à ' +
       "dessein : retirer un message déjà masqué est un no-op côté client.",
   },
-  'conversations/messages-advanced.ts': {
+  'conversations/receipts.ts': {
+    kind: 'exempt',
+    reads: 2,
+    why:
+      "La collection d'accusés (#4349) ne rend AUCUN contenu de message : ses " +
+      'deux lectures servent `{id, senderId, createdAt}` (anti-spoof) et `{id}` ' +
+      "(portée `recent`). Elle n'est pas pour autant aveugle au masquage — le " +
+      'PLANCHER est appliqué sur les deux chemins (`reader.historyFloor()`, ' +
+      'écriture et lecture), et un id situé sous le plancher est refusé en 404. ' +
+      "L'exemption porte donc sur le CONTENU, jamais sur l'admission.",
+  },
+  // conversations/messages-advanced.ts → messages-advanced-reads.ts (#4284,
+  // découpage par responsabilité). Même lecture, même raison ; seul le
+  // chemin a changé.
+  'conversations/messages-advanced-reads.ts': {
     kind: 'exempt',
     reads: 1,
     why:
@@ -102,14 +188,101 @@ const SURFACES: Record<string, Classification> = {
     reads: 3,
     why: 'Analytics de liens de tracking — agrège des URLs, pas des messages lisibles.',
   },
-  'admin/agent.ts': { kind: 'exempt', reads: 2, why: 'Surface admin/modération.' },
-  'admin/content.ts': { kind: 'exempt', reads: 3, why: 'Surface admin/modération.' },
+  // admin/agent.ts → admin/agent-configs.ts (#4284, découpage par
+  // responsabilité — GET /configs/:conversationId/messages) : même deux
+  // lectures, même raison, seul le chemin a changé.
+  'admin/agent-configs.ts': { kind: 'exempt', reads: 2, why: 'Surface admin/modération.' },
+  // 3 → 4 (`07d57a92ad`) : la quatrième lecture est VOULUE, et elle est une
+  // CORRECTION DE SÉCURITÉ, pas une surface nouvelle. #4384 avait fermé la
+  // lecture du texte d'un message protégé sur `GET /admin/messages` ; le filtre
+  // `?search=` de la MÊME route interrogeait toujours la colonne brute, si bien
+  // qu'un modérateur ne pouvait plus LIRE un message à vue unique mais pouvait
+  // le DEVINER terme à terme, en observant si la ligne apparaît. Le correctif
+  // pré-balaye les candidats (`take: SEARCH_SCAN_CAP`), écarte les lignes
+  // protégées par le prédicat PARTAGÉ `messageContentIsProtected`, puis pagine
+  // sur les seuls identifiants servables. D'où un `findMany` de plus — sur le
+  // chemin AVEC recherche uniquement, le chemin sans recherche gardant sa
+  // pagination en base.
+  //
+  // Ce compte monte donc parce qu'un trou s'est fermé. L'incrémenter en le
+  // disant est ce que ce cliquet demande ; le laisser rouge aurait appris à
+  // ses lecteurs à le regeler sans lire.
+  // 4 → 6 (#6516) : les deux lectures de plus sont les résolveurs de portée
+  // de `withOrphanedSenderRepair` (un expéditeur disparu faisait rejeter
+  // TOUTE la page admin en 500) — `select: { conversationId: true }`
+  // uniquement, rejoué APRÈS l'échec, jamais de contenu à masquer.
+  'admin/content.ts': { kind: 'exempt', reads: 6, why: 'Surface admin/modération.' },
+  // Onze, INCHANGÉ après #4391 : la lecture de fenêtre de `GET /stats` n'a pas
+  // disparu, elle a changé de FORME (`findMany` → `aggregateRaw`). C'est ce
+  // que le balayage élargi rend visible.
   'admin/messages.ts': { kind: 'exempt', reads: 11, why: 'Surface admin/modération.' },
+  // Déclarée par #4391 en même temps que l'élargissement du balayage : ses
+  // quatre lectures sont des `aggregateRaw` (paires de traduction, utilisateurs
+  // distincts par langue, volumes quotidiens), invisibles jusque-là.
+  'admin/languages.ts': { kind: 'exempt', reads: 4, why: 'Surface admin/modération.' },
   'admin/system-rankings.ts': { kind: 'exempt', reads: 3, why: 'Surface admin/modération.' },
-  'admin/users.ts': { kind: 'exempt', reads: 4, why: 'Surface admin/modération.' },
-  'admin/analytics.ts': { kind: 'exempt', reads: 4, why: 'Surface admin/modération.' },
+  // `admin/users.ts` a tenu 4 lectures, puis 2, puis AUCUNE — et il sort donc
+  // de ce registre. Le trajet, dans l'ordre :
+  //   4 → 2 (#4333 c.3) : `GET /admin/conversations/:id/messages` (2 des 4
+  //   lectures) est passée en régime SOUVERAIN et a été extraite dans son
+  //   propre fichier — voir l'entrée `admin/conversation-messages-sovereign.ts`
+  //   ci-dessous, déjà EXEMPTE elle aussi.
+  //   2 → 0 (#4284) : les deux portes qui lisent `Report` sont parties dans
+  //   `admin/user-reports.ts`, le fichier ayant franchi le budget de taille
+  //   (< 1000 lignes, `route-file-size-budget.test.ts`). Même découpage par
+  //   RESPONSABILITÉ que `admin/agent.ts` → `admin/agent-configs.ts` juste
+  //   au-dessus, et même conséquence ici : aucune lecture n'a disparu, elle
+  //   a changé de fichier, comme `users/preferences.ts` plus bas (#4161).
+  // La lecture de messages de `admin/user-reports.ts` est la jointure de
+  // `GET /admin/users/:userId/reported-messages` : `Report.reportedEntityId`
+  // est polymorphe, donc la porte énumère les participations puis les messages
+  // de l'utilisateur pour construire son filtre. Deux lectures, exemptées au
+  // même titre que leur fichier d'origine.
+  'admin/user-reports.ts': { kind: 'exempt', reads: 2, why: 'Surface admin/modération.' },
+  // #8876 — `enrichReports` nomme ce qu'un signalement DÉSIGNE : UNE lecture de
+  // `Message` par page (auteur, conversation, extrait). Exempte au titre de la
+  // surface de modération — le modérateur lit ce que le signalant a vu, et le
+  // masquage personnel d'un PARTICIPANT n'a pas à décider de ce qu'un signalement
+  // lui montre. Ce qui PART est gardé ailleurs : l'extrait n'est servi qu'avec
+  // `canModerateContent`, jamais pour un contenu protégé ou retiré
+  // (`messageContentIsProtected`, `deletedAt`).
+  'admin/reports-enrichment.ts': { kind: 'exempt', reads: 1, why: 'Surface admin/modération.' },
+  // #7845 — deux lectures de COMPTE (`count` des messages envoyés, `findMany`
+  // des seuls identifiants pour compter les signalements reçus) : aucune ne
+  // sert un message, la fiche d'un membre ne rend que des nombres.
+  'admin/user-member-stats.ts': { kind: 'exempt', reads: 2, why: 'Surface admin/modération.' },
+  // #11510 — la pellicule de la même lecture SOUVERAINE : UNE lecture des
+  // porteurs (`message.findMany` au curseur) pour servir leurs pièces, sous la
+  // même projection de protection que la route des messages. Même raison
+  // d'exemption que l'entrée ci-dessous.
+  'admin/conversation-attachments-sovereign.ts': { kind: 'exempt', reads: 1, why: 'Lecture SOUVERAINE (#11510), même régime que admin/conversation-messages-sovereign.ts.' },
+  'admin/conversation-messages-sovereign.ts': {
+    kind: 'exempt',
+    reads: 2,
+    why:
+      'Lecture SOUVERAINE (#4333 c.3 : BIGBOSS, motif écrit, tracée dans ' +
+      'AdminAuditLog) de l\'INTÉGRALITÉ d\'une conversation à des fins de ' +
+      "modération/investigation. Masquer les messages qu'un PARTICIPANT a " +
+      "supprimés de SA PROPRE vue irait à l'encontre de l'objet du geste : un " +
+      "administrateur enquêtant sur un signalement doit voir le message que " +
+      "son auteur a tenté d'effacer de son côté, pas une vue déjà nettoyée par " +
+      "l'un des participants. Le masquage PERSONNEL et la protection " +
+      "SOUVERAINE (isViewOnce/isBlurred/effectFlags/expiresAt/encryptionMode, " +
+      'appliquée par ce fichier) répondent à deux questions différentes.',
+  },
+  // 4 → 5 (audit 2026-10-04) : `engagementRate` compte les comptes EXPÉDITEURS
+  // de la période (`aggregateRaw` sur `Message`) — un dénombrement, aucun contenu.
+  'admin/analytics.ts': { kind: 'exempt', reads: 5, why: 'Surface admin/modération.' },
   'admin/dashboard.ts': { kind: 'exempt', reads: 3, why: 'Surface admin/modération.' },
-  'users/preferences.ts': { kind: 'exempt', reads: 4, why: 'Compteurs de préférences.' },
+  // 4 → 3 (#4161) : `GET /users/:userId/stats` recopiait `computeUserStats`
+  // agrégation par agrégation, l'une d'elles lisant `Message`. Il DÉLÈGUE
+  // désormais, et la lecture a suivi le calcul dans `user-stats.ts`, surface
+  // déjà déclarée. Aucune lecture n'a disparu : elle a changé de fichier.
+  // 3 → 2 (#4859) : `totalMessages` était calculé par une requête dédiée
+  // (`message.count` sans filtre de date) dont le résultat n'était jamais
+  // servi — l'API rend la valeur de `messagesThisWeek` sous cette clé. La
+  // lecture retirée était une requête gaspillée, pas une garde de masquage.
+  'users/preferences.ts': { kind: 'exempt', reads: 2, why: 'Compteurs de préférences.' },
 };
 
 /**
@@ -118,7 +291,9 @@ const SURFACES: Record<string, Classification> = {
  * `conversation`, donc invisibles au balayage ci-dessus. C'est exactement la
  * forme qui échappe à un dénombrement naïf, d'où leur déclaration séparée.
  */
-const NESTED_PREVIEW_SURFACES = ['conversations/core.ts', 'conversations/search.ts'];
+// conversations/core.ts → conversations/core-list.ts (#4284 : GET
+// /conversations, seule route de ce fichier à porter l'aperçu imbriqué).
+const NESTED_PREVIEW_SURFACES = ['conversations/core-list.ts', 'conversations/search.ts'];
 
 const SOCKETIO_DIR = join(__dirname, '../../../socketio');
 
@@ -156,7 +331,104 @@ const SERVICES_DIR = join(__dirname, '../../../services');
  * que les routes : applique, ou exempt avec sa raison.
  */
 const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
-  'MessageReadStatusService.ts': { kind: 'applies', reads: 7, applications: 2 },
+  // 7 → 5 lectures, 2 → 1 application (#7199) : les DEUX compteurs batchés
+  // (liste et push temps réel) ne lisent plus `prisma.message` eux-mêmes — ils
+  // délèguent au calcul partagé `unreadCountsCore.ts`, déclaré ci-dessous.
+  // Aucune lecture n'a disparu, elle a changé de fichier ; et l'application
+  // TEXTUELLE qui s'en va (`applyPersonalHistoryHiding` sur le chemin de la
+  // liste) est remplacée par la fusion EN MÉMOIRE du cutoff dans le plancher,
+  // exigée par `IN_MEMORY_HIDING_SURFACES` sur le fichier qui la porte.
+  // 5 → 4 (#7451) : le GEL par message est parti dans
+  // `messaging/freezeMessageStatus.ts` (déclaré plus bas). La lecture a changé
+  // de fichier, pas de nature — elle ne servait déjà aucun contenu.
+  // 4 → 3 lectures, 1 → 0 application (#9630) : le compteur UNITAIRE
+  // (`getUnreadCount`) est parti, entier, dans `unreadCountOfParticipant.ts`
+  // (déclaré ci-dessous) — ce fichier hors budget ne pouvait plus grandir pour
+  // y écarter les avis de capture. Aucune lecture n'a disparu.
+  'MessageReadStatusService.ts': { kind: 'applies', reads: 3, applications: 0 },
+  // #9630 — le compteur unitaire : le `count` sous `applyPersonalHistoryHiding`
+  // (masquage personnel ET avis de capture non adressés à ce lecteur), plus la
+  // lecture des CANDIDATS avis de la fenêtre (identité et marque, aucun contenu)
+  // dont il tire ce qu'il écarte — d'où une application pour deux lectures.
+  'unreadCountOfParticipant.ts': { kind: 'applies', reads: 2, applications: 1 },
+  // #9709 — le rattrapage traduit l'historique pour le lecteur qui ARRIVE : ce
+  // qu'il a masqué de sa vue (historique effacé, messages supprimés pour lui)
+  // ne lui est pas retraduit. Un invité sans compte n'a rien à masquer.
+  'message-translation/ArrivalHistoryBackfill.ts': { kind: 'applies', reads: 1, applications: 1 },
+
+  /**
+   * #5759 — les succès de « parole » et « retouche ». Trois lectures, toutes
+   * des COMPTES (`message.count`) filtrés sur `sender: { userId }` : ce que le
+   * titulaire du succès a lui-même PRODUIT.
+   *
+   * Exempt pour deux raisons distinctes, et il faut les deux :
+   *
+   *  1. **rien n'est SERVI.** Ces lectures ne rendent aucun contenu, aucun
+   *     auteur, aucun aperçu — seulement un entier comparé à un palier. Il n'y
+   *     a donc rien à masquer : le masquage protège ce qu'un lecteur VOIT.
+   *  2. **le masquage est personnel, la production ne l'est pas.** Effacer son
+   *     historique cache ce qu'on a REÇU ; ça ne défait pas d'avoir envoyé.
+   *     Appliquer le masquage ici ferait redescendre un succès parce que
+   *     l'utilisateur a nettoyé sa vue — or un succès atteint reste à vie
+   *     (règle porteur).
+   */
+  /**
+   * #9315 — le verdict de la route par CHEMIN (`GET /attachments/file/*`). Une
+   * lecture, qui ne projette que l'ÉTAT des messages porteurs d'un fichier
+   * (`deletedAt`, `expiresAt`, `viewOnceBurnAt`, et le bloc de protection —
+   * `isViewOnce`, `isBlurred`, `effectFlags`, `ephemeralDuration` — dont #9600
+   * lit la nature pour dire si le fichier se lit par lecteur) pour décider si
+   * ses octets peuvent encore partir. L'adresse SIGNÉE (#9600) connaît son
+   * lecteur, mais elle sert le fichier d'un message que la liste lui a déjà
+   * servi : son lecteur est jugé comme celui des routes par identifiant
+   * (`attachmentReadVerdict.ts`, une `findUnique` hors du périmètre de ce garde). Aucun contenu, aucun aperçu, aucun
+   * auteur n'est servi par elle : le masquage personnel protège ce qu'un
+   * lecteur VOIT dans son historique, et une adresse de fichier n'en est pas
+   * une surface (la route ne connaît pas le lecteur, #9315 « aucune
+   * authentification exigée »).
+   */
+  'attachments/fileRouteVerdict.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Projette seulement l'état des messages porteurs d'un fichier (supprimé, " +
+      'expiré, vue unique consommée) pour décider si ses octets partent encore ; ' +
+      "aucun contenu servi, et la route ne connaît pas le lecteur dont l'historique serait masqué.",
+  },
+  /**
+   * #13100 — le rattrapage du scellement au repos lit les IDENTIFIANTS des
+   * messages d'une conversation `server`/`hybrid` pour en sceller les pièces.
+   * Il ne sert rien à aucun lecteur : c'est une migration, pas une surface.
+   */
+  'attachments/atRest/atRestBackfill.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Lit seulement les identifiants des messages d'une conversation chiffrée au repos pour en sceller " +
+      'les pièces sur le disque ; aucun lecteur, aucun contenu servi.',
+  },
+  /**
+   * #9646 — relit la protection (cinq colonnes) des messages porteurs de pièces
+   * DÉJÀ choisies et filtrées par l'appelant (galerie, détail — plancher et
+   * masquage appliqués là), pour signer les adresses de celles qui
+   * disparaissent. Elle ne choisit aucun message et n'en sert aucun contenu.
+   */
+  'attachments/signServedAttachments.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Relit seulement la protection des porteurs de pièces que l'appelant a déjà choisies sous son " +
+      'plancher et son masquage, pour en signer les adresses ; aucun message choisi, aucun contenu servi.',
+  },
+  'achievements/GlobalAchievements.ts': {
+    kind: 'exempt',
+    reads: 3,
+    why:
+      'Comptes de la production PROPRE du titulaire (`sender: { userId }`), ' +
+      'comparés à un palier de succès. Aucun contenu servi, donc rien à ' +
+      "masquer ; et effacer son historique cache ce qu'on a reçu, sans défaire " +
+      "d'avoir envoyé — masquer ici ferait redescendre un succès acquis.",
+  },
 
   /**
    * G-122 — le pont ✦ de la ligne de liste. Il NOMME les auteurs des messages
@@ -180,22 +452,264 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   // masqué : deux lectures, une seule application TEXTUELLE.
   'ConversationBridgeService.ts': { kind: 'applies', reads: 2, applications: 1 },
 
-  'ConversationMessageStatsService.ts': {
+  // #17076 — la raison d'exemption d'avant (« une valeur stockée une fois et lue
+  // par tout le monde ») est devenue à moitié fausse : ce fichier a désormais
+  // DEUX lectures de régimes opposés. `recompute()` reconstruit la ligne
+  // PARTAGÉE — rien n'y est par lecteur, donc rien à masquer.
+  // `foldFlooredWindow` plie la fenêtre d'UN lecteur, et c'est le régime où
+  // `clear-history` et `delete-for-me` veulent dire quelque chose : il applique.
+  'ConversationMessageStatsService.ts': { kind: 'applies', reads: 2, applications: 1 },
+  'conversationCard.ts': {
     kind: 'exempt',
     reads: 1,
     why:
-      "Statistiques agrégées d'une conversation (volumes, langues, types) " +
-      'partagées par TOUS ses participants. Un masquage est personnel : ' +
-      "l'appliquer rendrait une statistique différente par lecteur, pour une " +
-      'valeur qui est stockée une fois et lue par tout le monde.',
+      "Décompte des messages d'une carte de conversation (#8099) — un AGRÉGAT " +
+      "affiché à côté du nombre de membres, identique pour tout lecteur, jamais " +
+      'une liste : aucun message ne sort, seul le nombre. Même raison que ' +
+      '`ConversationMessageStatsService.ts`.',
   },
   'ExpiredMessagesCleanupService.ts': {
     kind: 'exempt',
-    reads: 1,
+    reads: 2,
     why:
       "Balayage de rétention côté serveur : il détruit les messages arrivés à " +
-      "expiration, sans lecteur. Masquer une ligne à la destruction la ferait " +
+      "expiration, sans lecteur, et les réponses qui les citent (#8630). Masquer une ligne à la destruction la ferait " +
       'survivre indéfiniment à la préférence d\'affichage d\'un seul utilisateur.',
+  },
+
+  // #7451 — les deux moitiés du décompte éphémère. Aucune des deux ne SERT de
+  // contenu : le masquage protège ce qu'un lecteur VOIT, et ces lectures ne
+  // rendent rien à personne.
+  // #7578 — la purge du contenu d'une vue unique : balayage serveur, sans
+  // lecteur et de portée GLOBALE (filtré par `viewOnceBurnAt`), qui ne sélectionne
+  // ni expéditeur ni contenu servi. Même famille qu'ExpiredMessagesCleanupService.
+  'messaging/purgeViewOnceContent.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Purge serveur du contenu d'une vue unique arrivée à échéance, sans lecteur " +
+      "et de portée globale (`viewOnceBurnAt`) : elle ne sert rien à personne. " +
+      "Masquer ou réparer ici laisserait survivre un contenu que tous ont ouvert.",
+  },
+  // #11269 — le rattrapage des médias à vue unique lus par tous : même famille
+  // que la purge, dont il ne fait que réarmer l'échéance.
+  'messaging/viewOnceMediaCatchUp.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Rattrapage serveur, sans lecteur et de portée globale (`isViewOnce`), qui " +
+      "réarme l'échéance de purge des vues uniques lues par tous : il ne sert rien " +
+      "à personne. Masquer ici laisserait survivre des octets que tous ont ouverts.",
+  },
+  'messaging/freezeMessageStatus.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Fenêtre du gel d'accusés (`select: { id: true }`) : elle décide quelles " +
+      'lignes de statut écrire, pas ce qui est servi. Masquer ici ferait ' +
+      "qu'un message effacé de l'historique personnel d'un lecteur ne serait " +
+      'jamais marqué livré pour lui — donc compté non lu à vie.',
+  },
+  'conversations/globalArrivalsNotice.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Ligne d'arrivées de Meeshy Global (#7740) : relit les messages SYSTÈME " +
+      "de la fenêtre (`select: { id, metadata, deletedAt }`) pour retrouver la " +
+      "ligne ouverte et y ajouter un arrivant. Écriture serveur, sans lecteur : " +
+      "masquer ici ouvrirait une seconde ligne dès qu'un seul membre a effacé la sienne.",
+  },
+  'game/MissionHabits.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Heures habituelles d'écriture du titulaire pour sa mission personnelle (#9539) : " +
+      'ses 150 derniers messages ENVOYÉS, `select: { createdAt: true }`, réduits à un ' +
+      "histogramme qui n'entre que dans le tirage de sa plage. Aucun contenu servi, " +
+      "à personne ; et effacer son historique cache ce qu'on a reçu, sans défaire " +
+      "d'avoir écrit à ces heures-là.",
+  },
+  'messaging/messagePostSaveEffects.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Anti-répétition de Meeshy Global (#7740) : compare le texte qu'on VIENT " +
+      "d'envoyer aux derniers de Global (`select: { content: true }`) pour " +
+      'décider du crédit d\'engagement, et ne rend rien. Masquer ici laisserait ' +
+      'un lecteur regagner des points en répétant ce qu\'il a effacé chez lui.',
+  },
+  'onboarding/OnboardingService.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Suggestions d'onboarding (#7729) : ne lit que des `senderId` récents de " +
+      'Global pour proposer des personnes à suivre, jamais un contenu servi. ' +
+      "Le masquage personnel porte sur l'historique affiché, pas sur qui parle.",
+  },
+  'posts/directContactVisibility.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Lien d'un choisi d'un post ONLY (#14105) : ne lit que les `senderId` des messages qu'il a " +
+      "lui-même écrits dans une conversation directe avec l'auteur, pour décider s'il est prévenu, " +
+      "jamais un contenu servi. Effacer son historique cache ce qu'on a reçu, sans défaire " +
+      "qu'on se soit parlé.",
+  },
+  'messaging/consumeAfterReadMessages.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Consommation flamme-œil (#8302) : elle lit le bitfield et l'expéditeur " +
+      "des messages que le lecteur VIENT de voir, et ne rend aucun contenu. " +
+      'Un masquage personnel empêcherait ce lecteur de faire disparaître ' +
+      'chez lui ce qu\'il a vu — le contraire de la directive.',
+  },
+  'messaging/quoteCascade.ts': {
+    kind: 'exempt',
+    reads: 2,
+    why:
+      "Chaîne citée (#8630) : elle lit identifiants, expéditeur et échéance des " +
+      "messages CITÉS (vers le haut) et les identifiants des RÉPONSES (vers le bas) " +
+      "pour décider ce qui est mort pour un lecteur, et ne rend aucun contenu. " +
+      "Masquer ici laisserait vivre, chez qui a effacé l'original de son historique, " +
+      "une réponse à un éphémère déjà détruit pour lui.",
+  },
+  'messaging/attachmentSendAdmission.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Admission des pièces d'un envoi (#9587) : elle lit l'identifiant, la " +
+      "conversation et le `clientMessageId` des messages qui PORTENT déjà les " +
+      "pièces déclarées, pour reconnaître le réessai idempotent du MÊME envoi. " +
+      "Elle ne rend aucun contenu ; masquer ici refuserait le réessai d'un " +
+      "envoi de l'auteur sous prétexte qu'il a effacé son propre historique.",
+  },
+  'messaging/captureNoticeRetention.ts': {
+    kind: 'exempt',
+    reads: 3,
+    why:
+      "Durée des avis de capture (#9629) : la cascade relit les avis vivants d'une " +
+      "conversation pour avancer leur échéance, le rattrapage relit ceux qui n'en " +
+      "ont pas et l'échéance des messages qu'ils nomment. Aucun contenu n'est " +
+      "servi : ce sont des écritures d'échéance, pour TOUS les lecteurs à la fois.",
+  },
+  'messaging/captureNoticeVisibility.ts': {
+    kind: 'exempt',
+    reads: 2,
+    why:
+      "Audience des avis de capture (#9629, #9630) : ses deux lectures rendent " +
+      "l'identité, l'auteur et la métadonnée des avis vivants, puis l'horloge et " +
+      "l'auteur des messages qu'ils nomment — aucun contenu. Le masquage du " +
+      "lecteur n'y est pas APPLIQUÉ en `where`, il y est JUGÉ : un avis se sert " +
+      "si le lecteur lit le message capturé (`readableByReader` sur SON plancher " +
+      "et SON masquage), et les ids refusés rejoignent le masquage de la surface.",
+  },
+  'messaging/contentCaptureNotices.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Avis de capture (#9617) : il lit la protection et l'expéditeur des " +
+      "messages déclarés capturés, et ne rend aucun contenu. Le droit du " +
+      "lecteur, masquage personnel COMPRIS, est jugé message par message par " +
+      "`readerMayReadMessage` avec `whenHidingUnreadable: 'refuse'` : un " +
+      "message masqué pour l'acteur n'est jamais annoncé.",
+  },
+  'messaging/ephemeralCountdown.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Écriture d'échéance à la réception : elle lit la durée et l'expéditeur " +
+      "d'un message que le destinataire VIENT de recevoir, et ne rend aucun " +
+      'contenu. Un masquage personnel arrêterait le décompte de ce lecteur — ' +
+      'soit exactement le contraire de ce que la directive demande.',
+  },
+
+  // #5689 — même famille qu'ExpiredMessagesCleanupService juste au-dessus,
+  // pour la même raison : un balayage de purge de compte supprimé, sans
+  // lecteur, qui détruit les messages du compte plutôt que de les masquer
+  // pour un utilisateur en particulier.
+  'messaging/anonymizeDeletedAccountMessages.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Balayage de purge de compte supprimé, à la fin de sa période de grâce : " +
+      'il détruit le contenu des messages du compte (destination fixée par ' +
+      "privacy.json), sans lecteur. Masquer une ligne à la destruction la " +
+      'ferait survivre indéfiniment à la préférence d\'affichage d\'un seul ' +
+      'utilisateur — même raisonnement, même exemption.',
+  },
+
+  // #6501 — même famille encore : une passe d'INTÉGRITÉ, sans lecteur, qui
+  // cherche les messages dont l'expéditeur a disparu pour les réparer.
+  'messaging/repairOrphanedMessageSenders.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Réparation d'intégrité, jamais une surface servie : elle cherche, dans " +
+      "une conversation entière, les messages dont le Participant expéditeur a " +
+      "disparu — un seul fait rejeter la lecture de TOUS les membres. Masquer " +
+      "une ligne pour un lecteur la laisserait casser la conversation des autres.",
+  },
+
+  // #6516 — le résolveur de PORTÉE partagé par tous les lecteurs qui
+  // branchent `withOrphanedSenderRepair` sans connaître leur conversation
+  // d'avance. Sa seule lecture ne sert jamais de contenu : `select: {
+  // conversationId: true }`, rien de plus — la même raison que
+  // `repairOrphanedMessageSenders.ts` juste au-dessus, un cran plus haut.
+  'messaging/withOrphanedSenderRepair.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Résolveur de portée : lit uniquement `conversationId` pour les messages " +
+      "dont l'id est déjà connu, jamais leur contenu ni leur expéditeur. Rien à " +
+      'masquer pour un lecteur qui ne reçoit aucun texte.',
+  },
+
+  /**
+   * #7199 — le calcul de non-lu, extrait de `MessageReadStatusService.ts` pour
+   * que la LISTE et le PUSH temps réel comptent par la même implémentation.
+   * Sa lecture unique sert les deux badges, donc elle doit masquer : mais elle
+   * ne peut pas le faire par un `where`, pour la même raison que
+   * `ConversationBridgeService.ts` — UNE requête sert N lecteurs, et le
+   * masquage est personnel. D'où `applications: 0` et deux marqueurs EN
+   * MÉMOIRE ci-dessous, seule forme que le balayage puisse prouver ici.
+   */
+  'unreadCountsCore.ts': { kind: 'applies', reads: 1, applications: 0 },
+
+  /**
+   * #7377 — la liste des favoris de message. Sa lecture unique charge les
+   * messages étoilés d'une page qui traverse PLUSIEURS conversations :
+   * `applyPersonalHistoryHiding` ne merge qu'un SEUL `where`, d'où
+   * `applications: 0` et le masquage appliqué EN MÉMOIRE, conversation par
+   * conversation, après le keyset — même forme que `sync/messages.ts`. Les
+   * marqueurs de `IN_MEMORY_HIDING_SURFACES` ci-dessous en sont la preuve.
+   */
+  'messaging/messageStars/StarredMessagesReader.ts': { kind: 'applies', reads: 1, applications: 0 },
+  // #14619 — la recherche de la liste des conversations : ses lectures
+  // partagent la MÊME disjonction par conversation, où chaque conversation
+  // bornée reçoit `applyPersonalHistoryHiding` — une seule application pour
+  // toutes, comme `conversations/messages-search.ts`.
+  //
+  // TROIS depuis #16574 (`cb3e6d2ab`), qui a ajouté les TRANSCRIPTIONS —
+  // cliquet resté ROUGE sur `dev` faute de redéclaration. Bien masquée : les
+  // trois `findMany` répandent le même `base`, la disjonction qu'a déjà bornée
+  // `applyPersonalHistoryHiding`.
+  'search/globalMessageSearch.ts': { kind: 'applies', reads: 3, applications: 1 },
+
+  /**
+   * #10006 — le retrait du seed World Wide (`removeWorldSeed`,
+   * `scripts/world-seed-remove.ts`). Sa lecture unique est un `count` scopé à
+   * UNE conversation (le seed), qui ne sert à rien d'autre qu'à REFUSER la
+   * purge dès qu'un message existe — jamais à rendre un contenu, un auteur ou
+   * un aperçu. Même raison que `attachments/fileRouteVerdict.ts` ci-dessus :
+   * rien n'est SERVI, donc rien à masquer.
+   */
+  'world/worldSeedOperations.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Compte les messages d'UNE conversation (le seed World Wide) pour décider " +
+      "si sa purge doit être refusée — aucun contenu, auteur ni aperçu servi.",
   },
 };
 
@@ -209,7 +723,47 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
  * imbriqués plus bas).
  */
 const IN_MEMORY_HIDING_SURFACES: Record<string, readonly string[]> = {
-  'MessageReadStatusService.ts': ['loadPersonalHistoryHidingByUser(', 'exclusiveFloorMsFor('],
+  /**
+   * #7199 — `exclusiveFloorMsFor(` a suivi le calcul dans `unreadCountsCore.ts`
+   * (déclaré juste en dessous). Ce qui reste ici est ce que ce fichier fait
+   * encore lui-même : CHARGER le masquage de chaque lecteur, et le REMETTRE au
+   * calcul partagé. `unreadFloorFor(` tombe avec cette remise — le retirer, ou
+   * l'appeler sans son troisième argument, c'est compter un badge qui ignore
+   * l'historique effacé.
+   */
+  'MessageReadStatusService.ts': [
+    'loadPersonalHistoryHidingByUser(',
+    'loadPersonalHistoryHidingByConversation(',
+    'unreadFloorFor(',
+  ],
+
+  /**
+   * Le calcul partagé lui-même. Ses DEUX coupes personnelles sont exigées
+   * séparément parce qu'elles se perdent séparément, exactement comme pour
+   * `ConversationBridgeService.ts` : `exclusiveFloorMsFor(` fond la coupure
+   * d'historique dans le plancher de lecture, `!hidden.has(` écarte un par un
+   * les messages effacés pour soi. `!hidden.has(` et non `hiddenMessageIds` :
+   * le nom seul survivrait à la suppression du filtre (il reste porté par le
+   * type et par la CONSTRUCTION de l'ensemble) — un marqueur doit tomber avec
+   * ce qu'il garde.
+   */
+  'unreadCountsCore.ts': ['exclusiveFloorMsFor(', '!hidden.has('],
+
+  /**
+   * #7377 — la liste des favoris CHARGE le masquage de chaque conversation de
+   * la page et le remet au verdict de lecture ; le verdict porte les deux
+   * coupes, exigées séparément parce qu'elles se perdent séparément : les
+   * messages retirés un par un (`hiddenMessageIds.includes(`) et l'historique
+   * effacé (`clearHistoryBefore`, comparé en `gte` comme le `where` partagé).
+   */
+  'messaging/messageStars/StarredMessagesReader.ts': [
+    'loadPersonalHistoryHidingByConversation(',
+    'readableByReader(',
+  ],
+  'messaging/messageStars/starredMessageVerdict.ts': [
+    'reader.hiding.hiddenMessageIds.includes(',
+    'const cutoff = reader.hiding.clearHistoryBefore;',
+  ],
 
   /**
    * La passe par LECTEURS de `buildBridgeDataForViewers` (REV-5/B2) a la MÊME
@@ -231,6 +785,38 @@ const IN_MEMORY_HIDING_SURFACES: Record<string, readonly string[]> = {
     'loadPersonalHistoryHidingByUser(',
     'exclusiveFloorMsFor(',
     'hiddenMessageIds?.has(',
+  ],
+};
+
+/**
+ * Le même besoin, sous `src/routes/` cette fois (#3616) : l'aperçu de
+ * transfert de `messages-list-query.ts` relit son message SOURCE par id, hors
+ * du `where` de la liste principale, et ces sources peuvent appartenir à
+ * PLUSIEURS conversations dans une même page — `applyPersonalHistoryHiding`
+ * ne peut merger qu'un seul `where`. Le masquage du lecteur y est donc
+ * appliqué EN MÉMOIRE, par conversation source, exactement comme
+ * `ConversationBridgeService.ts` ci-dessus. Sans ces marqueurs, le
+ * `applications: 0` déclaré pour ce fichier se relirait comme un trou.
+ */
+const ROUTE_IN_MEMORY_HIDING_SURFACES: Record<string, readonly string[]> = {
+  'conversations/messages-list-query.ts': [
+    'loadPersonalHistoryHidingByConversation(',
+    'hiddenMessageIds.includes(',
+    'clearHistoryBefore',
+  ],
+  // #9899 — le verdict de lecture vient de `messageReadAccess.ts` (son énoncé
+  // unique : plancher et masquage personnel), la route en tient trois choses :
+  // l'APPEL, la posture fail-closed, et le FILTRE de ce qu'elle sert. Le nom de
+  // l'appel seul survivrait à la suppression de son usage — `readable.has(` est
+  // ce qui tombe avec le filtre. La posture figure aux DEUX appels (écriture et
+  // lecture) : un marqueur de texte ne dit pas lequel a changé, et ce sont les
+  // témoins de comportement de `conversation-shared-translations*.test.ts` (« le
+  // masquage personnel de l'appelant ne répond pas ») qui tiennent chacun d'eux.
+  'conversations/shared-translations.ts': [
+    'readerMayReadMessage(',
+    'readerMayReadMessages(',
+    "whenHidingUnreadable: 'refuse'",
+    'readable.has(',
   ],
 };
 
@@ -334,7 +920,16 @@ describe('personal history hiding — dénombrement des surfaces de lecture', ()
     const scanned = scanServices();
 
     expect(scanned.length).toBeGreaterThan(0);
-    expect(scanned.map((f) => f.relative)).toEqual(Object.keys(SERVICE_LAYER_SURFACES).sort());
+    // Les DEUX côtés trient par `localeCompare`, comme `scanServices`.
+    // `Array.prototype.sort()` nu compare par point de code : il range toute
+    // minuscule APRÈS toute majuscule, et les deux ordres ne coïncidaient ici
+    // que par accident — tant qu'aucune surface ne vivait dans un
+    // sous-répertoire à initiale minuscule autre que `messaging/`. La première
+    // qui l'a fait (`achievements/`, #5759) a révélé la divergence : le témoin
+    // rougissait sur un ORDRE, en accusant un contenu qui, lui, était juste.
+    expect(scanned.map((f) => f.relative)).toEqual(
+      Object.keys(SERVICE_LAYER_SURFACES).sort((a, b) => a.localeCompare(b)),
+    );
   });
 
   it('compte exactement les lectures et les applications que la couche service déclare', () => {
@@ -355,6 +950,15 @@ describe('personal history hiding — dénombrement des surfaces de lecture', ()
   it('tient les applications EN MÉMOIRE, que le balayage ne peut pas voir', () => {
     const missing = Object.entries(IN_MEMORY_HIDING_SURFACES).flatMap(([relative, markers]) => {
       const source = readFileSync(join(SERVICES_DIR, relative), 'utf8');
+      return markers.filter((marker) => !source.includes(marker)).map((marker) => `${relative}: ${marker}`);
+    });
+
+    expect(missing).toEqual([]);
+  });
+
+  it('tient les applications EN MÉMOIRE côté routes (#3616), que le balayage ne peut pas voir', () => {
+    const missing = Object.entries(ROUTE_IN_MEMORY_HIDING_SURFACES).flatMap(([relative, markers]) => {
+      const source = readFileSync(join(ROUTES_DIR, relative), 'utf8');
       return markers.filter((marker) => !source.includes(marker)).map((marker) => `${relative}: ${marker}`);
     });
 

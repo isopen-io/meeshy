@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "emoji.category.recent", "status": "adopted"},
+        {"catalog": "app", "iosKey": "emoji.category.smileys", "status": "adopted"},
+        {"catalog": "app", "iosKey": "emoji.category.people", "status": "adopted"},
+        {"catalog": "app", "iosKey": "emoji.category.animals", "status": "adopted"},
+        {"catalog": "app", "iosKey": "emoji.category.food", "status": "adopted"},
+        {"catalog": "app", "iosKey": "emoji.category.activities", "status": "adopted"},
+        {"catalog": "app", "iosKey": "emoji.category.travel", "status": "adopted"},
+        {"catalog": "app", "iosKey": "emoji.category.objects", "status": "adopted"},
+        {"catalog": "app", "iosKey": "emoji.category.symbols", "status": "adopted"},
+        {"catalog": "app", "iosKey": "emoji.category.flags", "status": "adopted"},
+        {"catalog": "app", "iosKey": "common.clearSearch", "status": "adopted"},
+        {"androidName": "emoji_search", "status": "android-only"},
+        {"androidName": "emoji_quick_reactions", "status": "android-only"},
+        {"androidName": "emoji_recent", "status": "android-only"},
+        {"androidName": "emoji_search_no_results", "status": "android-only"}
+      ]
+    }
+  }
+}

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lot: canaux-et-categories-de-notification — groupes et canaux par catégorie MEESHY_*. -->
+<resources>
+    <string name="push_group_messages">الرسائل</string>
+    <string name="push_group_social">اجتماعي</string>
+    <string name="push_group_friends">الأصدقاء</string>
+    <string name="push_group_calls">المكالمات</string>
+    <string name="push_group_others">أخرى</string>
+    <string name="push_channel_mentions_name">الإشارات</string>
+    <string name="push_channel_mentions_description">أشار إليك أحدهم</string>
+    <string name="push_channel_ephemeral_name">الرسائل المؤقتة</string>
+    <string name="push_channel_ephemeral_description">رسائل تختفي</string>
+    <string name="push_channel_friends_name">طلبات الصداقة</string>
+    <string name="push_channel_friends_description">طلبات الصداقة وجهات الاتصال المنضمّة إلى Meeshy</string>
+    <string name="push_channel_calls_missed_name">المكالمات الفائتة</string>
+    <string name="push_channel_calls_missed_description">مكالمات لم تردّ عليها</string>
+    <string name="push_channel_invitations_name">الدعوات</string>
+    <string name="push_channel_invitations_description">دعوات للانضمام إلى المحادثات والمجتمعات</string>
+</resources>

@@ -538,11 +538,16 @@ final class RepostIntentTests: XCTestCase {
         )
     }
 
+    /// Depuis #9953, le repost du viewer vit dans `StoryViewerView+Sidebar.swift`
+    /// (Republier au rail, `StoryDirectRepost`) : l'ancre positive y est lue, et
+    /// la branche morte reste interdite dans les DEUX fichiers du viewer.
     func test_leViewerDeStory_neMappePlusSesRefus_surUnTypeQuePersonneNeLance() throws {
-        let source = AppSourceGuard.stripComments(try sourceDeProduction("StoryViewerView.swift"))
+        // Le lecteur, ses extensions ET les types que la découpe par cohésion a rangés sous leur nom.
+        let viewer = AppSourceGuard.stripComments(try StoryViewerSources.unit())
+        let source = AppSourceGuard.stripComments(try sourceDeProduction("StoryViewerView+Sidebar.swift"))
 
         XCTAssertFalse(
-            source.contains("catch APIError.serverError("),
+            (viewer + source).contains("catch APIError.serverError("),
             "`APIClient` ne lance que `MeeshyError` : un `catch APIError.serverError(…)` est une branche "
                 + "MORTE, et les deux refus nommés du repost y tombaient dans le fourre-tout générique."
         )
@@ -599,17 +604,19 @@ final class RepostIntentTests: XCTestCase {
     /// Sans elle, supprimer purement et simplement un site rendrait la garde
     /// négative verte — en supprimant la fonctionnalité.
     ///
-    /// **Neuf SITES, huit FICHIERS** — `StoryViewerView` en porte deux (la
-    /// republication sèche du kebab et celle du composeur de citation). Le plan
+    /// **Neuf SITES, huit FICHIERS** — `StoryViewerView` en portait deux (la
+    /// republication sèche du kebab et celle du composeur de citation) ; depuis
+    /// #9953, « Citer en post » est retiré et le repost vit dans
+    /// `StoryViewerView+Sidebar.swift`. Le plan
     /// du lot 7 en recensait huit ; le neuvième — l'ancrage d'un mood,
     /// `StatusViewModel.anchorStatusAsPost` — est arrivé avec le lot 4.7, après
     /// la rédaction du plan. Le compter en moins aurait laissé un appel direct
     /// derrière la garde négative.
     func test_lesNeufSitesDuRepost_publientParLEcrivainUnique() throws {
         let sites = [
-            "FeedViewModel.swift", "ReelsViewModel.swift", "StatusViewModel.swift",
-            "PostDetailView.swift", "ProfileUserPostsList.swift", "RootViewComponents.swift",
-            "FeedView.swift", "StoryViewerView.swift"
+            "FeedViewModel+PostActions.swift", "ReelsViewModel.swift", "StatusViewModel.swift",
+            "PostDetailView.swift", "ProfileUserPostsViewModel.swift", "RootViewComponents.swift",
+            "FeedView.swift", "StoryViewerView+Sidebar.swift"
         ]
 
         for site in sites {
@@ -622,7 +629,7 @@ final class RepostIntentTests: XCTestCase {
         }
     }
 
-    // MARK: - 5. Les trois gestes nommés
+    // MARK: - 5. Les deux gestes nommés
 
     func test_unRepartageSec_nEstPasUneCitation() {
         let geste = RepostIntent.simple(postId: "p", targetType: .post, visibility: nil)
@@ -646,20 +653,6 @@ final class RepostIntentTests: XCTestCase {
         let geste = RepostIntent.quoted(postId: "p", targetType: .post, comment: "  mon avis  ", visibility: nil)
         XCTAssertEqual(geste.content, "mon avis")
         XCTAssertTrue(geste.isQuote)
-    }
-
-    /// **Le troisième geste existe parce qu'une surface DÉCLARE une citation
-    /// sans recueillir de commentaire** — la feuille de détail, dont l'alerte
-    /// « Citer » n'a aucun champ de saisie. Le normaliser en repartage sec
-    /// serait un changement de PRODUIT et non de forme : côté serveur,
-    /// `isQuote` décide où s'enracinent les réactions (`PostService.ts`,
-    /// `reactionRootId`) — une citation les garde, un repartage sec les renvoie
-    /// sur l'original. Ce geste est donc porté FIDÈLEMENT, et sa dette est
-    /// nommée plutôt que corrigée à l'aveugle.
-    func test_uneCitationDECLAREE_resteUneCitation_memeSansCommentaire() {
-        let geste = RepostIntent.declaredQuote(postId: "p", targetType: .post, visibility: nil)
-        XCTAssertTrue(geste.isQuote)
-        XCTAssertNil(geste.content)
     }
 
     // MARK: - Helper d'attente

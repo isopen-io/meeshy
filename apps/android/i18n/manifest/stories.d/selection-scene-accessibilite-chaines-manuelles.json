@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "composer_scene_a11y_labeled",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_scene_a11y_place_named",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_scene_a11y_plane_background",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_scene_a11y_plane_foreground",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_scene_a11y_selected",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_scene_a11y_sticker_named",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

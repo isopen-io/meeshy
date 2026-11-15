@@ -3,68 +3,146 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-nonisolated(unsafe) private var searchDebounceKey: UInt8 = 0
+/// Le debounce de la recherche dans la conversation, tenu par une RÉFÉRENCE que la vue garde en `@State`.
+///
+/// Il était rangé en objet associé sur `self` — or `ConversationView` est une struct : chaque accès
+/// emballait une copie neuve, le getter rendait toujours nil, et ni la frappe suivante ni la fermeture
+/// de la recherche n'annulaient rien. Chaque frappe lançait sa recherche, dans le désordre, et une
+/// recherche fermée dans les 400 ms filtrait quand même la conversation, interface de recherche partie.
+final class SearchDebounceBox {
+    private(set) var task: Task<Void, Never>?
+
+    /// Remplace la recherche en attente, en annulant la précédente.
+    func replace(with task: Task<Void, Never>?) {
+        self.task?.cancel()
+        self.task = task
+    }
+
+    func cancel() { replace(with: nil) }
+
+    nonisolated deinit { task?.cancel() }
+}
 
 // MARK: - Message Row, Reactions & Search
 extension ConversationView {
 
+    /// **Point d'entrée UNIQUE pour demander la suppression d'un message**
+    /// (#4043) — les 4 sites qui posaient `overlayState.deleteConfirmMessageId`
+    /// directement (bulle, barre de réaction rapide, menu long-press, menu
+    /// natif) appellent désormais celui-ci. Un message JAMAIS envoyé
+    /// (`.failed`) n'a rien à confirmer — « pour tous » n'a aucun sens
+    /// (rien n'a atteint le serveur) et « pour moi » ne présente aucun
+    /// risque puisqu'aucune donnée n'est en jeu côté destinataires : la
+    /// suppression locale part IMMÉDIATEMENT, sans `confirmationDialog`.
+    /// Tout autre message garde la confirmation habituelle.
+    func requestDeleteMessage(_ messageId: String) {
+        if viewModel.outgoingState(of: messageId)?.isFailed == true {
+            Task { await viewModel.deleteMessage(messageId: messageId, mode: .everyone) }
+            return
+        }
+        overlayState.deleteConfirmMessageId = messageId
+    }
 
     func triggerReply(for msg: Message) {
-        let firstAttachment = msg.attachments.first
-        let preview = msg.content.isEmpty
-            ? (firstAttachment.map { "[\($0.type.rawValue.capitalized)]" } ?? "")
-            : msg.content
-        let attType = firstAttachment?.type.rawValue
-        let attThumb = firstAttachment?.thumbnailUrl ?? (firstAttachment?.type == .image ? firstAttachment?.fileUrl : nil)
-        composerState.pendingReplyReference = ReplyReference(
-            messageId: msg.id,
-            authorName: msg.senderName ?? "?",
-            previewText: preview,
-            isMe: msg.isMe,
-            authorColor: msg.senderColor,
-            // Le message cite est sous le doigt de l'utilisateur : son avatar
-            // est deja resolu. On le grave pour que la citation nee de ce geste
-            // le porte de bout en bout, banniere du composeur comprise.
-            authorAvatarUrl: msg.senderAvatarURL,
-            attachmentType: attType,
-            attachmentThumbnailUrl: attThumb,
-            // Le message cite est sous le doigt : sa protection est CONNUE.
-            // La banniere du composeur repond de la meme loi que la citation
-            // rendue dans le fil — un media a vue unique n'y montre pas plus sa
-            // vignette qu'ailleurs.
-            attachmentIsProtected: firstAttachment.map { $0.isViewOnce || $0.isBlurred }
-        )
-        isTyping = true
+        guard MessageRowOffer.of(msg, authority: menuAuthority).canReply else { return } // #12626 — la loi du menu, sur tous les chemins
+        // La citation naît de la fabrique UNIQUE du ViewModel — la même que la
+        // bulle optimiste (#4945). Ce geste composait la sienne à la main,
+        // pauvre de trois champs : sans miniature ThumbHash, sans durée, en
+        // langue d'ORIGINE et sans placeholder pour un message protégé — puis
+        // la bulle qui en naissait affichait autre chose. Le message cité est
+        // sous le doigt de l'utilisateur : tout ce que la fabrique grave (avatar,
+        // faits du média, texte élu par le Prisme, protection) est déjà connu.
+        composerState.pendingReplyReference = viewModel.optimisticReplyReference(quoting: msg)
+        composerState.pendingReplyPieceId = nil
+        requestReplyFocus(openingConversation: false)
         HapticFeedback.medium()
     }
 
-    // `scrollToAndHighlight(_:proxy:)` a vécu ici sans qu'aucun commit du dépôt
-    // ne l'appelle. C'était le saut-vers-le-message de l'époque où le fil était
-    // une `ScrollView` SwiftUI (`ScrollViewProxy`) ; la liste est passée à
-    // `MessageListViewController`, et le saut vivant y est
-    // `scrollToMessage(localId:)` / `scrollToMessageFast(localId:)`, dont le
-    // `flashCell(at:)` fait le surlignage. Les six sites vivants passent tous
-    // par `scrollState.scrollToMessageId`.
-    //
-    // Sa dépouille emportait `conversation.message.unavailable` — une chaîne
-    // traduite en sept locales pour un toast qu'aucun geste ne pouvait
-    // déclencher — et `scrollState.highlightedMessageId`, dont elle était le
-    // seul écrivain non nul et que RIEN ne lisait.
+    /// **Répondre à UNE pièce** (#9908) — le même geste, mais la citation NOMME
+    /// la pièce visée (`citing:`) et l'envoi l'ancre (`attachmentReplyTo`),
+    /// comme la réponse du plein écran. Une pièce protégée ne se cite pas :
+    /// le menu ne l'offre pas, et ce site ne la nomme pas non plus.
+    func triggerReply(for msg: Message, citing piece: MessageAttachment) {
+        guard MessageRowOffer.of(msg, authority: menuAuthority).canReply else { return }
+        triggerReply(for: msg)
+        guard !MessagePieceTarget.isProtected(piece, in: msg) else { return }
+        composerState.pendingReplyReference = viewModel.optimisticReplyReference(quoting: msg, citing: piece)
+        composerState.pendingReplyPieceId = piece.id
+    }
+
+    /// Pose la citation d'une réponse reçue par `ReplyContext` — story, mood,
+    /// statut — et lève le clavier comme un geste de réponse (#6003).
+    /// `openingConversation` : la conversation vient d'être poussée pour
+    /// répondre, et non déjà à l'écran.
+    ///
+    /// Seule porte d'entrée d'un `ReplyContext` dans le composeur : le contexte
+    /// n'y entre que dans le DM de son auteur (`StoryReplyAdmission`, #7883).
+    /// Rend `false` sans rien toucher sinon — ni citation, ni clavier, ni
+    /// brouillon.
+    @discardableResult
+    func applyReplyContext(_ context: ReplyContext, openingConversation: Bool) -> Bool {
+        guard context.isAdmissible(conversationIsDirect: isDirect, participantUserId: conversation?.participantUserId) else { return false }
+        composerState.pendingReplyReference = context.toReplyReference
+        requestReplyFocus(openingConversation: openingConversation)
+        return true
+    }
+
+    /// Ce que l'envoi transmet de la citation en attente, bornée à CETTE
+    /// conversation (#7883) — le site unique des chemins texte, média et sticker.
+    var outgoingReplyRoute: OutgoingReplyRoute {
+        OutgoingReplyRoute(pending: composerState.pendingReplyReference, conversationIsDirect: isDirect, participantUserId: conversation?.participantUserId)
+    }
+
+    /// L'ancre de la pièce citée (#9908), ou `nil` quand la réponse vise le
+    /// message entier — l'envoi la transmet sous `attachmentReplyTo`.
+    var outgoingAttachmentAnchor: QuotedAttachmentSend? {
+        MessagePieceTarget.replyAnchor(pending: composerState.pendingReplyReference, pieceId: composerState.pendingReplyPieceId)
+    }
+
+    /// Demande le focus du composer par un FRONT bas → haut (#6003).
+    ///
+    /// `isTyping` ne convient pas : c'est un `@FocusState` lié à aucun champ,
+    /// qui ne fait que recevoir le focus de la barre. La barre expose
+    /// `focusTrigger`, consommé par un `onChange` puis remis à `false` — d'où
+    /// le front : une porte restée levée (composer non monté) ne changerait
+    /// plus de valeur, et une affectation faite pendant la passe qui monte le
+    /// composer n'est pas vue.
+    /// « dis-lui salut » (#16338) : les @mentions des arrivants, puis le focus.
+    func greetArrivals(messageId: String) {
+        guard let next = ArrivalGreeting.draft(greeting: messageId, in: viewModel.messages,
+                                               ownHandle: AuthManager.shared.currentUser?.username,
+                                               draft: composerText.text) else { return }
+        HapticFeedback.light()
+        composerText.text = next
+        requestReplyFocus(openingConversation: false)
+    }
+
+    func requestReplyFocus(openingConversation: Bool) {
+        composerState.focusRequested = false
+        let delay = ConversationComposerState.replyFocusDelay(openingConversation: openingConversation)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            composerState.focusRequested = true
+        }
+    }
+
+    // Le saut vers un message vit dans `MessageListViewController`
+    // (`scrollToMessage(localId:)`, surlignage par `flashCell(at:)`) : les
+    // sites vivants passent tous par `scrollState.scrollToMessageId`.
 
     // MARK: - Search Overlay
 
     // MARK: - Search Bar (below header)
 
     var searchBar: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "magnifyingglass")
-                    .font(MeeshyFont.relative(14, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
+                    .foregroundStyle(theme.textMuted)
 
                 TextField(String(localized: "conversation.view.search.placeholder", defaultValue: "Rechercher dans la conversation...", bundle: .main), text: $headerState.searchQuery)
-                    .font(MeeshyFont.relative(15))
-                    .foregroundColor(theme.textPrimary)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize))
+                    .foregroundStyle(theme.textPrimary)
                     .focused($isSearchFocused)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
@@ -78,17 +156,17 @@ extension ConversationView {
                         Task { await viewModel.endSearch() }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(MeeshyFont.relative(16))
-                            .foregroundColor(theme.textMuted)
+                            .font(MeeshyFont.relative(MeeshyIconSize.md))
+                            .foregroundStyle(theme.textMuted)
                     }
                     .accessibilityLabel(String(localized: "conversation.view.search.clear", defaultValue: "Effacer la recherche", bundle: .main))
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.sm)
             .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                    .fill(MeeshyColors.surfaceFill(isDark: isDark))
             )
 
             if viewModel.isSearching {
@@ -101,17 +179,17 @@ extension ConversationView {
                 dismissSearch()
             } label: {
                 Text(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
-                    .font(MeeshyFont.relative(14, weight: .medium))
-                    .foregroundColor(Color(hex: accentColor))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                    .foregroundStyle(Color(hex: accentColor))
             }
             .accessibilityLabel(String(localized: "conversation.view.search.close", defaultValue: "Fermer la recherche", bundle: .main))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 16), tint: Color(hex: accentColor).opacity(0.12))
-        .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-        .padding(.horizontal, 8)
-        .padding(.top, 4)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tint: Color(hex: accentColor).opacity(MeeshyOpacity.light))
+        .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: 4, y: 2)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.top, MeeshySpacing.xs)
     }
 
     // MARK: - Search Results Banner (filtered-conversation mode)
@@ -124,19 +202,19 @@ extension ConversationView {
     @ViewBuilder
     var searchResultsBanner: some View {
         let count = viewModel.searchResults.count
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: (count == 0 && !viewModel.isSearching) ? "magnifyingglass" : "text.magnifyingglass")
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
             Text(searchBannerLabel(count: count, searching: viewModel.isSearching))
-                .font(MeeshyFont.relative(12, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .lineLimit(1)
         }
         .foregroundColor(theme.textSecondary)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(Capsule().fill(.ultraThinMaterial))
-        .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
-        .padding(.top, 6)
+        .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: 3, y: 1)
+        .padding(.top, MeeshySpacing.xsPlus)
     }
 
     private func searchBannerLabel(count: Int, searching: Bool) -> String {
@@ -152,20 +230,29 @@ extension ConversationView {
 
     // MARK: - Search Actions
 
+    /// Ouverture depuis le bouton Recherche de l'aperçu long-press : active la barre de recherche.
+    ///
+    /// Consommée à l'ouverture ET à chaud : sur iPad, la liste reste à côté de la conversation ouverte,
+    /// et choisir « Rechercher » sur CELLE-CI ne recrée pas la vue (même `.id`) — le drapeau, lu par le
+    /// seul `.task` initial, restait levé et ouvrait la recherche dans la conversation suivante.
+    func consumePendingOpenSearch() async {
+        guard router.pendingOpenSearch else { return }
+        router.pendingOpenSearch = false
+        guard await cancellableSleep(for: .milliseconds(250)) else { return }
+        guard !Task.isCancelled else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            headerState.showSearch = true
+        }
+    }
+
     func triggerBackendSearch() {
         Task { await viewModel.searchMessages(query: headerState.searchQuery) }
     }
 
-    private var searchDebounceTask: Task<Void, Never>? {
-        get { objc_getAssociatedObject(self, &searchDebounceKey) as? Task<Void, Never> }
-        nonmutating set { objc_setAssociatedObject(self, &searchDebounceKey, newValue, .OBJC_ASSOCIATION_RETAIN) }
-    }
-
     func debounceSearch() {
-        searchDebounceTask?.cancel()
         let query = headerState.searchQuery
-        searchDebounceTask = Task {
-            try? await Task.sleep(nanoseconds: 400_000_000)
+        searchDebounce.replace(with: Task {
+            guard await cancellableSleep(for: .milliseconds(400)) else { return }
             guard !Task.isCancelled else { return }
             if query.count >= 2 {
                 await viewModel.searchMessages(query: query)
@@ -174,18 +261,17 @@ extension ConversationView {
                 // full conversation comes back.
                 await viewModel.endSearch()
             }
-        }
+        })
     }
 
     func dismissSearch() {
         // Cancel any pending debounce so a stale `endSearch` / `searchMessages`
         // can't fire after the search UI has been dismissed.
-        searchDebounceTask?.cancel()
+        searchDebounce.cancel()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             headerState.showSearch = false
             headerState.searchQuery = ""
         }
-        viewModel.searchNextCursor = nil as String?
         isSearchFocused = false
         // Restore the full conversation window + clear search state.
         Task { await viewModel.endSearch() }
@@ -211,51 +297,12 @@ extension ConversationView {
         }
     }
 
-    // MARK: - Return to Latest Button (extracted for type-checker)
-
-    @ViewBuilder
-    var returnToLatestButton: some View {
-        if viewModel.isInJumpedState && !headerState.showSearch {
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Button {
-                        HapticFeedback.medium()
-                        Task { await viewModel.returnToLatest() }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.down.to.line")
-                                .font(MeeshyFont.relative(12, weight: .bold))
-                            Text(String(localized: "conversation.view.recent_messages", defaultValue: "Messages récents", bundle: .main))
-                                .font(MeeshyFont.relative(12, weight: .semibold))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(
-                            Capsule()
-                                .fill(Color(hex: accentColor).opacity(0.9))
-                                .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 8, y: 2)
-                        )
-                    }
-                    .accessibilityLabel(String(localized: "conversation.view.return_to_recent", defaultValue: "Retourner aux messages récents", bundle: .main))
-                    Spacer()
-                }
-                .padding(.bottom, composerHeight + 8)
-            }
-            .zIndex(65)
-            .transition(.scale(scale: 0.8).combined(with: .opacity))
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isInJumpedState)
-        }
-    }
-
     // MARK: - Quick Reaction Bar + Actions
 
     func quickReactionBar(for messageId: String) -> some View {
         let topReactions = EmojiUsageTracker.topEmojis(count: 15, defaults: defaultReactionEmojis)
 
-        return VStack(spacing: 6) {
+        return VStack(spacing: MeeshySpacing.xsPlus) {
             quickReactionEmojiStrip(messageId: messageId, emojis: topReactions)
 
             if !overlayState.emojiOnlyMode {
@@ -302,62 +349,30 @@ extension ConversationView {
     }
 
     private func quickReactionActionsRow(messageId: String) -> some View {
-        HStack(spacing: 8) {
-            messageActionButton(icon: "arrowshape.turn.up.left.fill", label: String(localized: "action.reply", defaultValue: "Repondre"), color: MeeshyColors.indigo300Hex) {
-                if let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) {
-                    triggerReply(for: msg)
-                }
+        let offer = viewModel.messageIndex(for: messageId).map { MessageRowOffer.of(viewModel.messages[$0], authority: menuAuthority) } ?? .closed
+        let resolve = { viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] } }
+        return QuickReactionActionsRow(
+            offer: offer,
+            canCopy: resolve()?.exitOffer.offers(.copy) ?? false,
+            accentColor: accentColor,
+            reply: {
+                if let msg = resolve() { triggerReply(for: msg) }
+                closeReactionBar()
+            },
+            copy: {
+                // Prisme : copie ce que la bulle AFFICHE, drapeau basculé compris (#11233).
+                if let msg = resolve() { MessageExitTransport.copyDisplayed(msg, in: viewModel) }
+                closeReactionBar()
+            },
+            forward: {
+                composerState.forwardMessage = resolve()
+                closeReactionBar()
+            },
+            delete: {
+                requestDeleteMessage(messageId)
                 closeReactionBar()
             }
-            messageActionButton(icon: "doc.on.doc.fill", label: String(localized: "action.copy", defaultValue: "Copier"), color: MeeshyColors.trackingAccentHex) {
-                if let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) {
-                    // Prisme: copy what's actually DISPLAYED (the preferred
-                    // translation when one is showing), never blindly the
-                    // original — matches the long-press menu's Copier below.
-                    UIPasteboard.general.string = viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
-                }
-                closeReactionBar()
-            }
-            // Le bouton disparaît plutôt que d'offrir une action condamnée
-            // (`Message.isForwardable`).
-            if viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0].isForwardable }) ?? true {
-                messageActionButton(icon: "arrowshape.turn.up.forward.fill", label: String(localized: "action.forward", defaultValue: "Transferer"), color: MeeshyColors.warningHex) {
-                    composerState.forwardMessage = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] })
-                    closeReactionBar()
-                }
-            }
-            messageActionButton(icon: "trash.fill", label: String(localized: "action.delete", defaultValue: "Supprimer"), color: MeeshyColors.errorHex) {
-                overlayState.deleteConfirmMessageId = messageId
-                closeReactionBar()
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(Capsule().stroke(Color(hex: accentColor).opacity(0.15), lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
         )
-        .transition(.scale(scale: 0.8).combined(with: .opacity))
-    }
-
-    func messageActionButton(icon: String, label: String, color: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 3) {
-                // Doctrine 82i : icône + micro-label figés — bouton d'action compact
-                // dans un cadre tap fixe 60×44 aligné en rangée horizontale ; les faire
-                // scaler ferait déborder/casser la barre. Le bouton porte `accessibilityLabel`.
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(Color(hex: color))
-                Text(label)
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(.secondary)
-            }
-            .frame(width: 60, height: 44)
-        }
-        .accessibilityLabel(label)
     }
 
     func closeReactionBar() {
@@ -371,7 +386,7 @@ extension ConversationView {
     /// message hugs the composer — see `QuickReactionBarPlacement`. The
     /// full-screen `Color.clear` backdrop dismisses the bar on tap and also
     /// blocks the list from scrolling, so the captured anchor never drifts.
-    /// `AnyView` à la DÉCLARATION (2026-08-19) : c'était le chemin le PLUS
+    /// `AnyView` à la DÉCLARATION: c'était le chemin le PLUS
     /// PROFOND du type concret de `bodyContent` (GeometryReader → ZStack →
     /// VStack → EmojiReactionPicker + HStack de `Button<VStack<Image,Text>>`,
     /// ~30 niveaux). Ce type entrait dans le mangled name de `bodyContent`
@@ -393,9 +408,12 @@ extension ConversationView {
                 Color.clear
                     .contentShape(Rectangle())
                     .onTapGesture { closeReactionBar() }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(String(localized: "common.close", bundle: .main))
+                    .accessibilityAction { closeReactionBar() }
 
                 quickReactionBar(for: messageId)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, MeeshySpacing.lg)
                     .padding(.top, placement.inset)
                     .frame(maxWidth: .infinity, alignment: .center)
             }
@@ -481,5 +499,62 @@ enum QuickReactionBarPlacement {
         let maxTop = container.maxY - barHeight
         let clamped = min(max(belowTop, container.minY + topLimit), maxTop)
         return Result(inset: clamped - container.minY)
+    }
+}
+
+/// **La rangée d'actions de la barre de réaction rapide** — une porte de plus
+/// du message (#12626). « Répondre » et « Transférer » n'y sont rendus que si le
+/// verdict de la loi les offre (`MessageRowOffer`, le même que le glissé,
+/// VoiceOver et le menu ; D8 : un flouté se transfère), « Copier » que si la loi
+/// de sortie l'admet (#9573). Un bouton sans effet n'existe pas.
+struct QuickReactionActionsRow: View {
+    let offer: MessageRowOffer
+    let canCopy: Bool
+    let accentColor: String
+    let reply: () -> Void
+    let copy: () -> Void
+    let forward: () -> Void
+    let delete: () -> Void
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            if offer.canReply {
+                Self.actionButton(icon: MessageActionVerb.reply.filledSymbol, label: MessageActionVerb.reply.label, color: MeeshyColors.indigo300Hex, action: reply)
+            }
+            if canCopy {
+                Self.actionButton(icon: MessageActionVerb.copy.filledSymbol, label: MessageActionVerb.copy.label, color: MeeshyColors.trackingAccentHex, action: copy)
+            }
+            if offer.canForward {
+                Self.actionButton(icon: MessageActionVerb.forward.filledSymbol, label: MessageActionVerb.forward.label, color: MeeshyColors.warningHex, action: forward)
+            }
+            Self.actionButton(icon: MessageActionVerb.delete.filledSymbol, label: MessageActionVerb.delete.label, color: MeeshyColors.errorHex, action: delete)
+        }
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xsPlus)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(Capsule().stroke(Color(hex: accentColor).opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
+                .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: 8, y: 4)
+        )
+        .transition(.scale(scale: 0.8).combined(with: .opacity))
+    }
+
+    static func actionButton(icon: String, label: String, color: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: MeeshySpacing.xxs) {
+                // Doctrine 82i : icône + micro-label figés — bouton d'action compact
+                // dans un cadre tap fixe 60×44 aligné en rangée horizontale ; les faire
+                // scaler ferait déborder/casser la barre. Le bouton porte `accessibilityLabel`.
+                Image(systemName: icon)
+                    .font(.system(size: MeeshyIconSize.md, weight: .medium))
+                    .foregroundStyle(Color(hex: color))
+                Text(label)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(Color.secondary)
+            }
+            .frame(width: 60, height: 44)
+        }
+        .accessibilityLabel(label)
     }
 }

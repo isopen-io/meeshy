@@ -1,0 +1,413 @@
+import SwiftUI
+import MeeshyUI
+
+/// Cotes normatives de la rangée plate du Fil (Focal) — miroir Swift de
+/// `packages/shared/design/lentille-tokens.json` → `thread` (LECTURE SEULE,
+/// source de vérité). Même patron que `Lens/Core/LentilleMetrics.swift`
+/// (GELÉ, imité ici — jamais édité) : structures nichées par zone d'écran,
+/// `FocalMetricsTests` fait la parité valeur par valeur contre le JSON.
+/// « On répare le token, jamais le test » (règle sacrée, recopiée du patron
+/// `LentilleMetricsTests`).
+///
+/// **Cotes `thread.*` ABSENTES du token — signalées, jamais inventées** (une
+/// esquisse PRÉ-TOKEN de `focal-implementation-contract.md` §3.11 les
+/// proposait ; le token ne les a jamais reprises) :
+/// - `groupTopPadding` (esquisse pré-token : `10`) — `thread.row` ne porte
+///   QUE `padding.vertical`/`padding.horizontal`, aucun espacement dédié
+///   « au-dessus d'un nouveau groupe d'expéditeur ». Repli : `8`
+///   (= `MeeshySpacing.sm`, le palier le plus proche de l'échelle générique
+///   déjà existante — écrit en dur ici, comme tout le reste de ce fichier,
+///   pour rester `nonisolated`, cf. note d'isolation plus bas).
+///   TODO CONTRACTUEL : ajouter `thread.row.groupTopPadding` à
+///   `lentille-tokens.json` (extension de contrat — propriété Fable, le
+///   token est gelé).
+/// - `pill.gap` (esquisse pré-token : `8`) — `thread.pill` ne porte que
+///   `top`/`fadeDurationMs`/`dismissAfterMs`, aucun espacement interne à la
+///   capsule. Repli : `8` (= `MeeshySpacing.sm`, coïncidence avec l'esquisse
+///   pré-token documentée ici, pas une preuve qu'elle est correcte).
+///   TODO CONTRACTUEL : ajouter `thread.pill.gap` si un futur consommateur
+///   en a réellement besoin (aucun aujourd'hui — la capsule réutilise
+///   `MeeshySpacing.md`/`.xs` génériques pour son padding, faute de ce
+///   miroir).
+///
+/// **Hors périmètre de ce miroir** (constantes d'ALGORITHME, pas des cotes de
+/// maquette `thread.*`) : `optimisticAlphaCeiling` (0.7, plafond du pass de
+/// perspective WS-5 — WS-4 §7 : « la rangée NE pose PAS l'opacité ») et
+/// `estimatedFlatRowHeight` (64, estimation du layout compositionnel WS-6).
+/// Aucun des deux n'existe dans `thread.*` ; ni consommé ni testé par
+/// WS-3/WS-4 (F-082/F-083) — à mirrorer par WS-5/WS-6 s'ils en ont besoin.
+///
+/// **Écarts de cote assumés vs l'esquisse PRÉ-TOKEN de §3.11** (le token gelé
+/// fait foi — ne jamais réintroduire les valeurs pré-token ci-dessous) :
+/// - `row.padding` : token `vertical 5 / horizontal 16` — l'esquisse pré-token
+///   ne donnait qu'un `rowVerticalPadding = 4` (pas de valeur horizontale).
+/// - `focusCard.padding` : token `horizontal 8 / vertical 12` — l'esquisse
+///   pré-token inversait (`paddingV = 8, paddingH = 12`).
+/// - `focusCard.margin` : token `horizontal 3 / vertical 8` — l'esquisse
+///   pré-token ne donnait qu'un scalaire unique (`margin = 8`).
+///
+/// **Note d'isolation** : `nonisolated` sur le type, comme `LentilleMetrics`
+/// — la cible `MeeshyTests` compile en `SWIFT_DEFAULT_ACTOR_ISOLATION:
+/// nonisolated`, la cible `Meeshy` en `MainActor` (SE-0466). Toutes les
+/// constantes ci-dessous sont des littéraux `CGFloat`/`Double` bruts (jamais
+/// une référence directe à `MeeshySpacing`/`MeeshyRadius`, dont les membres
+/// sont eux-mêmes potentiellement isolés dans la cible `MeeshyUI`) — même
+/// choix que `LentilleMetrics`, qui n'y référence jamais ces types non plus.
+/// Seules `Name.size`/`Text.size` (qui lisent `MeeshyFont.subheadSize`/
+/// `.bodySize`) sont `@MainActor`, exactement comme `LentilleMetrics.Name`/
+/// `.Line2`.
+nonisolated public enum FocalMetrics {
+
+    // MARK: - Rang
+
+    /// `thread.row.padding` — `5/16` (contrat Lentille §4.3, colonne Fil).
+    nonisolated public enum Row {
+        /// Cote resserrée pour limiter le blanc entre les messages d'un groupe.
+        /// Elle joue DEUX fois entre deux rangées de suite — le bas de l'une et le
+        /// haut de l'autre : 3 pt + 3 pt = 6.
+        public static let paddingVertical: CGFloat = 3
+        public static let paddingHorizontal: CGFloat = 16
+        /// Cote ABSENTE de `thread.*` — voir doc de tête (TODO CONTRACTUEL).
+        /// Resserrer l'INTÉRIEUR d'un groupe rapproche aussi les groupes entre eux,
+        /// or ce sont eux qui doivent rester distincts : la respiration quitte
+        /// l'intérieur pour la frontière.
+        public static let groupTopPadding: CGFloat = 8
+
+        /// **L'ORIGINE du contenu : la COLONNE DU NOM.** Le texte s'aligne au
+        /// niveau des citations, ce qui distingue avatar et auteur puis son
+        /// contenu ; la citation reste identifiable par sa barre et son fond
+        /// teinté. L'avatar occupe SEUL sa marge ; « auteur · heure », le contenu
+        /// propre (texte, drapeaux, médias, vocal, lieu, sticker, réactions) ET
+        /// toutes les citations (message, story, humeur, pièce) partent de cette
+        /// cote — la pastille plus la gouttière de l'en-tête.
+        ///
+        /// UNE cote, pas deux : aucune citation n'a de retrait propre.
+        public static let contentIndent: CGFloat = Text.indent
+    }
+
+    // MARK: - Avatar (pastille)
+
+    /// `thread.avatar` — `22` (« pastille », description du token).
+    nonisolated public enum Avatar {
+        public static let size: CGFloat = 22
+    }
+
+    // MARK: - Nom · Heure
+
+    /// `thread.name` — `13` poids `800` CSS → `.heavy`
+    /// (`Font.Weight.extrabold` n'existe pas en SwiftUI,
+    /// `focal-implementation-contract.md` §0).
+    nonisolated public enum Name {
+        @MainActor public static var size: CGFloat { MeeshyFont.subheadSize }
+        public static let weight: Font.Weight = .heavy
+        @MainActor public static var font: Font { MeeshyFont.relative(size, weight: weight) }
+    }
+
+    /// `thread.time` — `12` poids `600` CSS → `.semibold`.
+    nonisolated public enum Time {
+        public static let size: CGFloat = 12
+        public static let weight: Font.Weight = .semibold
+        public static var font: Font { MeeshyFont.relative(size, weight: weight) }
+    }
+
+    // MARK: - Texte du message
+
+    /// `thread.line2` — texte `15`, interligne `1.42`, retrait `29`.
+    nonisolated public enum Text {
+        @MainActor public static var size: CGFloat { MeeshyFont.bodySize }
+        public static let lineHeightRatio: CGFloat = 1.42
+        /// `22` (pastille) + `7` (gouttière). Hors échelle `MeeshySpacing` —
+        /// assumé, centralisé ici (contrat Focal §3.11).
+        public static let indent: CGFloat = 29
+
+        /// Interligne ADDITIF (SwiftUI `.lineSpacing` est en points, pas un
+        /// ratio, contrat Focal §3.11) : ratio `1.42` sur une taille résolue
+        /// `s` ⇒ `s * 0.42`, arrondi au demi-point.
+        public static func lineSpacing(forResolvedFontSize s: CGFloat) -> CGFloat {
+            (s * (lineHeightRatio - 1) * 2).rounded() / 2
+        }
+    }
+
+    // MARK: - Carte de focus
+
+    /// `thread.focusCard` — ring interne `1.5`, radius `16`, marge `3/8`
+    /// (horizontal/vertical), padding `8/12` (horizontal/vertical — le
+    /// token fait foi, voir doc de tête pour l'écart avec l'esquisse
+    /// pré-token). Rendue par WS-5 (F-084), pas WS-3/WS-4 — mirrorée ici
+    /// pour la parité EXHAUSTIVE `thread.*` exigée par la tâche 0.
+    nonisolated public enum FocusCard {
+        public static let ringSize: CGFloat = 1.5
+        public static let radius: CGFloat = 16
+        public static let marginHorizontal: CGFloat = 3
+        public static let marginVertical: CGFloat = 8
+        public static let paddingHorizontal: CGFloat = 8
+        public static let paddingVertical: CGFloat = 12
+
+        /// Opacité de la TEINTE D'ACCENT qui remplit la carte de focus.
+        ///
+        /// Cotes ABSENTES de `thread.focusCard` (qui ne décrit que la
+        /// géométrie de l'anneau, jamais son remplissage) — nommées ici selon
+        /// le précédent `SurfaceTint`, sans revendiquer de miroir `thread.*`.
+        ///
+        /// La carte se remplissait jusqu'ici de `backgroundSecondary`, un
+        /// aplat OPAQUE et neutre : la couleur de la conversation ne survivait
+        /// que sur l'anneau de 1,5 pt, et la rangée élue lisait comme une
+        /// boîte posée sur le fil. Ces deux alphas rendent la teinte à la
+        /// carte entière. Volontairement bas — le texte du message garde son
+        /// contraste, aucune des mesures de `FocalPaletteContrastTests` ne
+        /// s'exerce sur un fond teinté à ce point.
+        public static let surfaceLightAlpha: CGFloat = 0.055
+        public static let surfaceDarkAlpha: CGFloat = 0.10
+
+        // Aucun filet d'accent du verre : le bloc de verre est la matière du composer, sans filet.
+    }
+
+    // MARK: - Gabarit large de la rangée
+
+    /// Les DEUX cotes de gabarit (`Focus.avatarSize`, `Focus.textIndent`) sont
+    /// la règle CONSTANTE de toutes les rangées : la hauteur d'en-tête et le
+    /// retrait de texte ne varient jamais, la liste ne saute donc jamais.
+    /// Tempo de la SCÈNE Focal : la perspective
+    /// n'existe que pendant le défilement ; au repos, tout redevient Script.
+    nonisolated public enum Scene {
+        /// Repos sans geste avant que la scène s'aplatisse (« au bout de
+        /// quelques secondes sans scroller ») : avec `flattenDuration`, la
+        /// magnificence disparaît en 4,95 s, sous les 5 s. Liste et fil lisent ce token.
+        public static let restDelay: TimeInterval = 4.5
+        /// Durée de l'aplatissement (transform + opacité + carte).
+        public static let flattenDuration: TimeInterval = 0.45
+        /// Durée de l'entrée en perspective au premier tick d'un geste —
+        /// les ticks de cette fenêtre animent depuis la valeur présentée,
+        /// jamais un saut.
+        public static let enterDuration: TimeInterval = 0.25
+    }
+
+    nonisolated public enum Focus {
+        /// Plafond de caractères du texte du message EN FOCUS :
+        /// au-delà, « Lire plus » — une magnificence qui tient à l'écran.
+        ///
+        /// **Sans consommateur** : `truncateLimit` de la rangée vaut
+        /// `BubbleExpandableText.truncateLimit` (512) qu'elle soit élue ou
+        /// non. Conservée comme POINT DE REBRANCHEMENT si le plafond de
+        /// focus revient — ne pas supprimer.
+        public static let maxCharacters: Int = 360
+
+        /// Gabarit de pastille réservé en permanence par l'en-tête
+        /// (`FocalIdentityHeader`, `minHeight`) — la pastille rendue reste
+        /// `Avatar.size` (22) dans ce cadre de 34.
+        public static let avatarSize: CGFloat = 34
+
+        /// Le retrait CONSTANT de `FocalRow` — `avatarSize` + la même
+        /// gouttière de `7` que `Text.indent` (`22 + 7 = 29`).
+        public static let textIndent: CGFloat = avatarSize + 7
+
+        /// LOUPE du message élu : l'élu seul grandit de ce gain pendant
+        /// la scène, ses voisins restent à plat.
+        ///
+        /// Gain 0,26 : échelle 1,05 × 1,2 = 1,26. Même valeur que
+        /// `loupeGain` de `packages/shared/utils/focal-metrics.ts`, que le web
+        /// lit. `FocalScrollPerspective.electedScale` ne l'écrête qu'à la
+        /// LARGEUR de l'écran, jamais à la hauteur du message.
+        public static let loupeGain: CGFloat = 0.26
+
+        /// Loupe du message long DÉPLIÉ, dans tous les modes — l'agrandissement
+        /// de l'élu Focal ne le vise pas.
+        /// `FocalScrollPerspective.loupeScale` l'écrête toujours à la marge de
+        /// la carte : un déplié est haut par définition.
+        public static let expandedLoupeGain: CGFloat = 0.05
+
+        /// Durée du dépliage / repliage en place (animation de hauteur) —
+        /// `expandDurationMs` de `packages/shared/utils/focal-metrics.ts`.
+        public static let expandDuration: TimeInterval = 0.3
+
+        /// Courbe du dépliage / repliage — les points de contrôle
+        /// `[x1, y1, x2, y2]` de `expandCurve` (`focal-metrics.ts`), que le
+        /// web joue en `cubic-bezier(…)` : départ vif, arrivée douce.
+        public static let expandCurve: [Double] = [0.2, 0, 0, 1]
+    }
+
+    // MARK: - Citation
+
+    /// `thread.quote` — filet `2.5`, couleur de l'auteur cité.
+    nonisolated public enum Quote {
+        public static let railWidth: CGFloat = 2.5
+    }
+
+    // MARK: - Médias
+
+    /// `thread.media` — radius `16`.
+    /// **Le sticker d'une rangée FOCAL / SCRIPT / RIVIÈRE.**
+    ///
+    /// Plus petit que dans la bulle (210) : ces trois modes tiennent une
+    /// COLONNE de texte, où une carte de 210 pt écraserait la lecture. Le
+    /// dessin, lui, est le même atome — seule la stature change. Le rapport
+    /// de la bulle est conservé (112/160 = 147/210 = 0,7).
+    nonisolated public enum Sticker {
+        public static let side: CGFloat = 140
+    }
+
+    nonisolated public enum Media {
+        public static let radius: CGFloat = 16
+    }
+
+    // MARK: - Chrome masqué au défilement
+
+    /// `thread.hiddenChrome` — identique à `list.hiddenChrome` (même loi de
+    /// chrome sur les deux écrans, `translateY(94)` + opacité 0,
+    /// `easeOut .25`). Propriété WS-6 (hôte de défilement) : `easeOut` cadence
+    /// la disparition du header entier
+    /// dans `ConversationView.swift`. `translateY` et `opacityEnd` restent
+    /// mirrorées pour la parité EXHAUSTIVE `thread.*` de la tâche 0, sans
+    /// consommateur à ce jour.
+    /// Chips de la bordure basse du message en focus : les icônes sont SUR la
+    /// bordure, comme CATÉGORIE dans la liste.
+    nonisolated public enum FocusStrip {
+        /// TOUTES les chips du focus (identité, date+coche, traduction,
+        /// drapeaux, (+), réactions) = la MÊME capsule : les icônes en bas
+        /// sont exactement comme ces chips.
+        public static let chipHeight: CGFloat = 24
+        public static let chipMinWidth: CGFloat = 32
+        /// Retrait des réactions dans la bande basse.
+        public static let chipInset: CGFloat = 4
+        /// L'identité du message magnifié est la SEULE chip à dépasser le
+        /// gabarit commun — elle est simplement plus agrandie. Elle porte tout ce
+        /// que porte l'en-tête de rangée (présence, mood, anneau de story,
+        /// fantôme d'un visiteur sans compte) : au gabarit `chipHeight` de 24,
+        /// rien de tout cela ne serait lisible.
+        public static let identityAvatarSize: CGFloat = 26
+        public static let identityChipHeight: CGFloat = 34
+        public static let identityNameSize: CGFloat = 13.5
+
+        /// Drapeaux de langue proposés par une rangée. Une rangée ordinaire en
+        /// montre TROIS, la magnifiée CINQ : la place
+        /// disponible n'est pas la même, et un message très traduit ne doit pas
+        /// noyer sa propre ligne.
+        public static let flagLimitPlain = 3
+        public static let flagLimitMagnified = 5
+        /// **Ce dont le contenu d'une SUITE de groupe magnifiée descend sous sa
+        /// pastille d'identité** — en RENDU seulement (`offset`), jamais
+        /// en hauteur : la rangée garde sa taille au basculement d'élection.
+        ///
+        /// Contrôleurs et détails se posent À L'INTÉRIEUR du cadre : la pastille
+        /// ne chevauche pas la ligne haute du cadre, elle se pose ENTIÈRE en haut du bloc. Une
+        /// tête de groupe l'y loge sur son en-tête — effacé en focus, toujours
+        /// réservé, de la même hauteur (`Focus.avatarSize`) ; une suite n'a
+        /// rien sous elle, son contenu descend donc de la pastille entière,
+        /// plus l'espacement d'une rangée — celui qui sépare l'en-tête du texte.
+        public static func contentLift(isFirstInGroup: Bool) -> CGFloat {
+            guard !isFirstInGroup else { return 0 }
+            return identityChipHeight + FocalMetrics.Row.paddingVertical
+        }
+
+        /// **L'écart entre la dernière ligne du message et la bande basse**
+        /// La bande ne chevauche pas la ligne basse du cadre : elle
+        /// se pose ENTIÈRE sous le contenu, à l'intérieur du cadre, et ne
+        /// réserve aucune hauteur de rangée — elle est une superposition.
+        public static let stripGap: CGFloat = FocalMetrics.Row.paddingVertical
+    }
+
+    nonisolated public enum HiddenChrome {
+        public static let translateY: CGFloat = 94
+        public static let opacityEnd: Double = 0
+        public static let easeOut: Double = 0.25
+        /// Course d'un composant de chrome vers SON bord quand il s'escamote
+        /// (fondu vers les bords à la disparition, retour depuis le bord vers la
+        /// position à la réapparition).
+        public static let edgeTravel: CGFloat = 28
+    }
+
+    // MARK: - Pilule de défilement
+
+    /// `thread.pill` — ancrée `top 72`, fondu `280 ms`. `top` est propriété
+    /// WS-6 (positionnement de l'overlay par l'hôte) ; `fadeDuration` répare
+    /// l'écart signalé par F-081 (`ScrollTimePillOverlay`, qui utilisait un
+    /// fondu système faute de ce miroir).
+    nonisolated public enum Pill {
+        public static let top: CGFloat = 72
+        public static let fadeDurationMs: Double = 280
+        /// Secondes, pour `.easeInOut(duration:)`.
+        public static var fadeDuration: Double { fadeDurationMs / 1000 }
+        /// Cote ABSENTE de `thread.pill` — voir doc de tête (TODO CONTRACTUEL).
+        public static let gap: CGFloat = 8
+
+        // `dismissAfterMs` (900 ms dans le JSON) n'est délibérément PAS
+        // mirroré ici — garde R15, même raison que `LentilleMetrics.Pill` :
+        // c'est une constante de LOI (`ScrollTimePillLaw.lingerMs`,
+        // `Focal/Core/`, GELÉ), pas un token de design. Dupliquer `900` ici
+        // referait dériver deux sources de vérité.
+    }
+
+    // MARK: - Agent ✦ / rangée pont
+
+    /// `thread.agent.row` — bord pointillé `1.5`, radius `14`.
+    nonisolated public enum Agent {
+        public static let borderWidth: CGFloat = 1.5
+        public static let radius: CGFloat = 14
+    }
+
+    // MARK: - Méta discrète (opacité de texte translucide)
+
+    /// Opacité du texte méta discret (heure de suite de groupe, libellé
+    /// « modifié »). `0.4`/`0.45` donnaient une régression de contraste AA sur
+    /// les DEUX thèmes (2,85:1 clair, 4,49:1 sombre, mesuré par
+    /// `FocalPaletteContrastTests`).
+    ///
+    /// **`0.5` ne suffit pas** : `WCAGContrast.ratioOfTranslucentForeground(
+    /// .black.opacity(0.5), on: #FFFFFF)` mesure **3,977:1** — SOUS le seuil AA
+    /// `4.5:1` (la relation opacité→contraste n'est pas linéaire, la formule
+    /// WCAG applique une courbe gamma sRGB). `0.55` clair mesure **4,759:1**
+    /// (AA satisfait) ; `0.55` sombre mesure **6,261:1** (déjà largement
+    /// conforme). Retenu : `0.55` pour LES DEUX thèmes — un seul palier au lieu
+    /// de deux, et `FocalIdentityHeader` lit CETTE MÊME constante, jamais un
+    /// littéral concurrent.
+    nonisolated public enum MetaText {
+        public static let lightOpacity: Double = 0.55
+        public static let darkOpacity: Double = 0.55
+    }
+
+    /// **La seconde colonne de la rangée — date et accusé, au bas de la bulle**
+    ///
+    /// La méta ne vit pas sur une LIGNE à elle : `FocalRevealedDetail` masque
+    /// l'heure et les coches par OPACITÉ, jamais par démontage, donc une ligne
+    /// dédiée réserverait une hauteur pleine et un espacement vertical à de
+    /// l'invisible, sous chaque message.
+    ///
+    /// **`minWidth` et non `width`, et c'est la seule nuance de l'arbitrage.**
+    /// Le porteur a tranché « largeur réservée pour toutes » — pour que les
+    /// dates s'alignent verticalement d'une rangée à l'autre. Une largeur DURE
+    /// tiendrait cette promesse aux tailles courantes et la trahirait aux
+    /// grandes : `MeeshyFont.relative(10.5)` suit le Dynamic Type, et « 14:32 »
+    /// en accessibilité XXL déborderait ou s'éliderait. Un plancher donne
+    /// l'alignement voulu — toutes les rangées subissent la MÊME échelle, donc
+    /// toutes atteignent la même largeur — sans jamais tronquer l'heure.
+    ///
+    /// La cote tient « 88:88 » suivi de deux coches à la taille nominale.
+    nonisolated public enum MetaColumn {
+        public static let reservedWidth: CGFloat = 62
+        /// L'écart entre la bulle et sa colonne. Aligné sur l'espacement
+        /// horizontal de la ligne basse (`flagAndReactionsRow`), pour que la
+        /// méta ne paraisse pas plus détachée du texte qu'un drapeau ne l'est.
+        public static let spacing: CGFloat = 6
+    }
+
+    // MARK: - Teinte de surface neutre (cartes plates hors focus)
+
+    /// Fond de carte neutre translucide — utilisé par les surfaces plates
+    /// SANS bulle qui ont besoin d'une légère élévation visuelle (ex. rangée
+    /// d'épisode du Résumé Vivant, `Focal/Summary/EpisodeListView.swift`).
+    /// Nommée (F-083ter, garde R15 `check-law-literals.sh`) plutôt que
+    /// laissée en littéral `0.04`/`0.06` orphelin dans un fichier de peau —
+    /// AUCUNE cote de maquette `thread.*` ne porte cette valeur (ni dans le
+    /// contrat Focal ni dans `lentille-tokens.json`) : c'est une teinte
+    /// décorative interne au Résumé Vivant, pas une cote normative du fil,
+    /// donc centralisée ici sans revendiquer de miroir `thread.*`.
+    nonisolated public enum SurfaceTint {
+        public static let lightFill: Double = 0.04
+        public static let darkFill: Double = 0.06
+    }
+
+    // Les opacités des chips de la carte de focus (teinte de fond, marque de
+    // l'état actif : `focusChipFillOpacity`) vivent dans
+    // `FocalScrollPerspective` : deux domiciles pour une même cote, c'est
+    // exactement ce que la garde R15 interdit.
+}

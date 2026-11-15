@@ -66,14 +66,19 @@ const USER_ID = '507f1f77bcf86cd799439011';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makePrisma(overrides: Record<string, any> = {}) {
-  return {
+  const prisma: any = {
     user: {
       findUnique: jest.fn<any>().mockResolvedValue(null),
       findFirst:  jest.fn<any>().mockResolvedValue(null),
       update:     jest.fn<any>().mockResolvedValue({}),
     },
+    passwordResetToken: {
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    $transaction: jest.fn<any>((cb: any) => cb(prisma)),
     ...overrides,
-  } as any;
+  };
+  return prisma;
 }
 
 async function buildApp(opts: {

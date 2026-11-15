@@ -147,8 +147,8 @@ public struct TimelineInspectorHost: View {
     /// OUVRIRAIT avant de rien poser (`inspectIfResolvable`) : sans ce
     /// découplage, la seule façon de le savoir serait de poser la sélection
     /// puis de la reprendre — un état transitoire que la vue verrait passer.
-    private static func clipSnapshot(id: String,
-                                     viewModel: TimelineViewModel) -> ClipInspector.ClipSnapshot? {
+    static func clipSnapshot(id: String,
+                             viewModel: TimelineViewModel) -> ClipInspector.ClipSnapshot? {
         let slideDuration = viewModel.project.slideDuration
         if let media = viewModel.project.mediaObjects.first(where: { $0.id == id }) {
             // Media objects only carry image/video — audio lives in
@@ -236,6 +236,34 @@ public struct TimelineInspectorHost: View {
                 isBackground: false,
                 name: nil,
                 isFollowingSlide: sticker.startTime == nil && sticker.duration == nil
+            )
+        }
+        // **La pastille de lieu, dernière famille sans fiche** (#4840). Le
+        // commentaire du sticker juste au-dessus raconte exactement ce qui lui
+        // arrivait — et il n'a pas suffi à empêcher que ça recommence sur la
+        // famille suivante : la sélection résolvait `nil`, donc le tap ne
+        // posait rien, donc aucune poignée n'était rendue, donc la fenêtre que
+        // le ViewModel savait écrire n'était atteignable par aucun geste.
+        //
+        // Pas de nom persisté sur `StoryLocationObject` — le nom du LIEU est
+        // son identité, comme l'emoji l'est pour un sticker.
+        if let lieu = viewModel.project.locationObjects.first(where: { $0.id == id }) {
+            let win = window(startTime: Float(lieu.startTime ?? 0),
+                             duration: lieu.duration.map { Float($0) },
+                             slideDuration: slideDuration)
+            return ClipInspector.ClipSnapshot(
+                id: lieu.id,
+                displayName: lieu.place.name ?? "",
+                kind: .place,
+                startTime: win.start,
+                duration: win.duration,
+                volume: 1.0,
+                fadeInDuration: Float(lieu.fadeIn ?? 0),
+                fadeOutDuration: Float(lieu.fadeOut ?? 0),
+                isLooping: false,
+                isBackground: false,
+                name: nil,
+                isFollowingSlide: lieu.startTime == nil && lieu.duration == nil
             )
         }
         return nil
@@ -335,7 +363,8 @@ public struct TimelineInspectorHost: View {
                 x: kf.x ?? 0.5,
                 y: kf.y ?? 0.5,
                 scale: kf.scale ?? 1.0,
-                opacity: kf.opacity ?? 1.0
+                opacity: kf.opacity ?? 1.0,
+                scaleFloor: TimelineScaleSetting.keyframeFloor(of: .media(media))
             )
             return (snapshot, media.id)
         }
@@ -349,7 +378,8 @@ public struct TimelineInspectorHost: View {
                 x: kf.x ?? 0.5,
                 y: kf.y ?? 0.5,
                 scale: kf.scale ?? 1.0,
-                opacity: kf.opacity ?? 1.0
+                opacity: kf.opacity ?? 1.0,
+                scaleFloor: TimelineScaleSetting.keyframeFloor(of: .text(text))
             )
             return (snapshot, text.id)
         }
@@ -569,7 +599,7 @@ public struct TimelineInspectorHost: View {
             onTransformChanged: { [viewModel] field in
                 viewModel.setClipTransform(id: clipId, field: field)
             },
-            playheadTime: viewModel.currentTime,
+            playhead: viewModel.playhead,
             onAddVolumePoint: { [viewModel] volume in
                 viewModel.addKeyframeAtPlayhead(volume: volume)
             },
@@ -672,7 +702,7 @@ public struct TimelineInspectorHost: View {
 // MARK: - Présentation en sheet
 
 /// Présente l'inspecteur de timeline dans une **sheet** plutôt qu'en survol
-/// flottant au-dessus des pistes (item 8, directive user 2026-07-25).
+/// flottant au-dessus des pistes.
 ///
 /// Le survol posait un panneau translucide par-dessus la zone qu'on était en
 /// train d'éditer : il masquait les pistes, n'offrait aucune poignée de

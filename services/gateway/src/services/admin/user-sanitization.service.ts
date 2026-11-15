@@ -2,12 +2,55 @@ import {
   FullUser,
   PublicUser,
   AdminUser,
+  AdminUserMetadata,
   MaskedUser,
   UserResponse,
   UserAuditLog,
   UserRoleEnum
 } from '@meeshy/shared/types';
 import { permissionsService } from './permissions.service';
+import { withoutExpiredConnectionTraces } from '../retention/retention-bounds';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+
+export type SanitizeUserOptions = {
+  /** La FICHE demande le bloc `adminMetadata` ; une ligne de liste ne le porte pas. */
+  readonly withAdminMetadata?: boolean;
+  /**
+   * L'identifiant du LECTEUR (audit A2-4) : l'adresse, le lieu et l'agent de
+   * connexion d'un membre ne se servent qu'à qui le SURCLASSE, ou à lui-même.
+   * Absent, seule la hiérarchie décide.
+   */
+  readonly viewerId?: string;
+};
+
+/**
+ * Le bloc de métadonnées, énuméré CHAMP PAR CHAMP — jamais un spread de la ligne
+ * (#8876). Ce que la ligne porte de plus (`pendingEmail`, `pendingPhoneNumber`,
+ * `blockedUserIds`…) ne sort donc jamais : on en tire un booléen ou un compte.
+ */
+export function adminMetadataOf(user: FullUser): AdminUserMetadata {
+  return {
+    deviceLocale: user.deviceLocale ?? null,
+    deviceCountry: user.deviceCountry ?? null,
+    birthDate: user.birthDate ?? null,
+    ageVerifiedAt: user.ageVerifiedAt ?? null,
+    voiceProfileConsentAt: user.voiceProfileConsentAt ?? null,
+    voiceDataConsentAt: user.voiceDataConsentAt ?? null,
+    dataProcessingConsentAt: user.dataProcessingConsentAt ?? null,
+    analyticsConsentAt: user.analyticsConsentAt ?? null,
+    voiceCloningEnabledAt: user.voiceCloningEnabledAt ?? null,
+    termsAcceptedAt: user.termsAcceptedAt ?? null,
+    termsVersion: user.termsVersion ?? null,
+    onboardingCompletedAt: user.onboardingCompletedAt ?? null,
+    currentStreakDays: user.currentStreakDays ?? 0,
+    longestStreakDays: user.longestStreakDays ?? 0,
+    engagementScore: user.engagementScore ?? 0,
+    meeshBalance: user.meeshBalance ?? 0,
+    blockedCount: user.blockedUserIds?.length ?? 0,
+    hasPendingEmail: Boolean(user.pendingEmail),
+    hasPendingPhone: Boolean(user.pendingPhoneNumber)
+  };
+}
 
 export class UserSanitizationService {
   /**
@@ -40,13 +83,41 @@ export class UserSanitizationService {
   }
 
   /**
+   * Les traces de connexion d'un membre telles qu'un lecteur peut les voir :
+   * bornées à 12 mois, et masquées à qui ne le surclasse pas (lui-même excepté).
+   */
+  private connectionTracesFor<T extends Parameters<typeof withoutExpiredConnectionTraces>[0]>(
+    user: FullUser,
+    viewerRole: UserRoleEnum,
+    viewerId: string | undefined,
+    traces: T,
+  ): T {
+    const mayRead = viewerId === user.id || permissionsService.canManageUser(viewerRole, user.role as UserRoleEnum);
+    if (mayRead) return withoutExpiredConnectionTraces(traces, new Date());
+    return {
+      ...traces,
+      lastLoginIp: null,
+      lastLoginLocation: null,
+      lastLoginDevice: null,
+      registrationIp: null,
+      registrationLocation: null,
+      registrationDevice: null,
+    };
+  }
+
+  /**
    * Sanitize un utilisateur selon le rôle du viewer
    */
-  sanitizeUser(user: FullUser, viewerRole: UserRoleEnum): UserResponse {
+  sanitizeUser(user: FullUser, viewerRole: UserRoleEnum, options: SanitizeUserOptions = {}): UserResponse {
     const canViewSensitive = permissionsService.canViewSensitiveData(viewerRole);
+    // Directive produit 2026-08-25 : « les utilisateurs avec le rôle ADMIN et
+    // supérieur peuvent constamment avoir l'état de présence » — un seuil
+    // DISTINCT de canViewSensitiveData (MODERATOR modère du contenu mais ne
+    // voit ni l'un ni l'autre).
+    const canViewPresence = permissionsService.canViewPresence(viewerRole);
 
     // Données publiques (toujours incluses)
-    const publicData: PublicUser = {
+    const publicDataRaw: PublicUser = {
       id: user.id,
       username: user.username,
       firstName: user.firstName,
@@ -54,6 +125,7 @@ export class UserSanitizationService {
       displayName: user.displayName,
       bio: user.bio,
       avatar: user.avatar,
+      banner: user.banner ?? null,
       role: user.role,
       isActive: user.isActive,
       isOnline: user.isOnline,
@@ -66,6 +138,21 @@ export class UserSanitizationService {
       profileCompletionRate: user.profileCompletionRate,
       _count: user._count
     };
+
+    // `applyPresenceVisibilityAsOffline` est le site UNIQUE déjà bâti (loi de
+    // présence partagée) pour la forme que `PublicUser` déclare : `isOnline:
+    // boolean` (jamais `null`) et `lastActiveAt: Date | null`. Masqué s'y
+    // présente comme HORS LIGNE — `isOnline=false`, `lastActiveAt=null` — et
+    // c'est ce que le type du helper (`PresenceAsOffline`) et celui de
+    // `PublicUser` DISENT tous deux : la colonne (`FullUser.lastActiveAt:
+    // Date`) n'est jamais nulle, la valeur SERVIE peut l'être. Les clés
+    // restent présentes (jamais retirées), seule leur valeur change — un rôle
+    // non autorisé ne doit jamais pouvoir distinguer « présence masquée » de
+    // « réellement hors ligne depuis toujours ».
+    const publicData: PublicUser = applyPresenceVisibilityAsOffline(publicDataRaw, {
+      showOnline: canViewPresence,
+      showLastSeenTimestamp: canViewPresence,
+    });
 
     // Si peut voir les données sensibles → AdminUser
     if (canViewSensitive) {
@@ -83,18 +170,28 @@ export class UserSanitizationService {
         lockedUntil: user.lockedUntil,
         lockedReason: user.lockedReason,
         twoFactorEnabledAt: user.twoFactorEnabledAt,
-        twoFactorBackupCodes: user.twoFactorBackupCodes ?? [],
-        lastLoginIp: user.lastLoginIp,
-        lastLoginLocation: user.lastLoginLocation,
-        lastLoginDevice: user.lastLoginDevice,
-        registrationIp: user.registrationIp,
-        registrationLocation: user.registrationLocation,
-        registrationDevice: user.registrationDevice,
+        // Le NOMBRE de codes restants, jamais leurs empreintes (#8876) : une
+        // empreinte de code à usage unique n'a aucune raison d'atteindre un navigateur.
+        twoFactorBackupCodesRemaining: user.twoFactorBackupCodes?.length ?? 0,
+        // La borne de la purge, armée ou non (revue « privacy-retention-bypass ») :
+        // une adresse de plus de 12 mois ne se sert plus ; et la HIÉRARCHIE
+        // (audit A2-4) : à qui ne surclasse pas le membre, aucune.
+        ...this.connectionTracesFor(user, viewerRole, options.viewerId, {
+          createdAt: user.createdAt,
+          lastLoginAt: user.lastLoginAt ?? null,
+          lastLoginIp: user.lastLoginIp,
+          lastLoginLocation: user.lastLoginLocation,
+          lastLoginDevice: user.lastLoginDevice,
+          registrationIp: user.registrationIp,
+          registrationLocation: user.registrationLocation,
+          registrationDevice: user.registrationDevice,
+        }),
         registrationCountry: user.registrationCountry,
         deletedAt: user.deletedAt,
         deletedBy: user.deletedBy,
         userFeature: user.userFeature,
-        _count: user._count
+        _count: user._count,
+        ...(options.withAdminMetadata ? { adminMetadata: adminMetadataOf(user) } : {})
       };
       return adminData;
     }
@@ -111,8 +208,8 @@ export class UserSanitizationService {
   /**
    * Sanitize une liste d'utilisateurs
    */
-  sanitizeUsers(users: FullUser[], viewerRole: UserRoleEnum): UserResponse[] {
-    return users.map(user => this.sanitizeUser(user, viewerRole));
+  sanitizeUsers(users: FullUser[], viewerRole: UserRoleEnum, viewerId?: string): UserResponse[] {
+    return users.map(user => this.sanitizeUser(user, viewerRole, { viewerId }));
   }
 
   /**

@@ -18,7 +18,7 @@ struct DrawingStrokeList: View {
                 Text(String(localized: "story.drawEdit.strokeList.count",
                             defaultValue: "\(viewModel.drawingStrokes.count) trait(s)",
                             bundle: .module))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundStyle(.secondary)
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 6) {

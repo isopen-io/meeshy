@@ -1,0 +1,6 @@
+# Arêtes feature -> feature admises par l'ADR-033 (decisions.md). Toute autre arête fait échouer
+# scripts/check-feature-edges.sh. Format : ":feature:a -> :feature:b".
+:feature:profile -> :feature:contacts
+:feature:reels -> :feature:stories
+:feature:reels -> :feature:feed
+:feature:stories -> :feature:feed

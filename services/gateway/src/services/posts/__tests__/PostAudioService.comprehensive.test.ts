@@ -60,7 +60,25 @@ const makeMockZmqClient = () => ({
   sendAudioProcessRequest: jest.fn().mockResolvedValue('task-id'),
 });
 
-const makeMockPrisma = (postResult: object | null = { id: 'post-1', authorId: 'author-1' }) => ({
+const CONSENTED = new Date('2026-01-01T00:00:00.000Z');
+const ADULT_BIRTH_DATE = new Date('1990-06-15T00:00:00.000Z');
+const MINOR_BIRTH_DATE = new Date(Date.UTC(new Date().getUTCFullYear() - 12, 0, 1));
+
+const makeMockPrisma = (
+  postResult: object | null = { id: 'post-1', authorId: 'author-1' },
+  authorBirthDate: Date | null = null,
+) => ({
+  user: {
+    findUnique: jest.fn().mockResolvedValue({
+      dataProcessingConsentAt: CONSENTED,
+      analyticsConsentAt: null,
+      voiceDataConsentAt: CONSENTED,
+      voiceProfileConsentAt: CONSENTED,
+      voiceCloningEnabledAt: CONSENTED,
+      birthDate: authorBirthDate,
+    }),
+  },
+  userPreferences: { findUnique: jest.fn().mockResolvedValue(null) },
   postMedia: {
     update: jest.fn().mockResolvedValue({}),
   },
@@ -192,7 +210,7 @@ describe('PostAudioService — comprehensive', () => {
 
     it('sends platform languages when translateToAllLanguages is true (default)', async () => {
       const zmq = makeMockZmqClient();
-      const { service } = makeService(zmq);
+      const { service } = makeService(zmq, makeMockPrisma(undefined, ADULT_BIRTH_DATE));
 
       await service.processPostAudio({
         postId: 'post-1',
@@ -204,6 +222,31 @@ describe('PostAudioService — comprehensive', () => {
       const payload = (zmq.sendAudioProcessRequest as jest.Mock).mock.calls[0] as [AudioProcessPayload];
       expect(payload[0].targetLanguages.length).toBeGreaterThan(0);
       expect(payload[0].generateVoiceClone).toBe(true);
+    });
+  });
+
+  describe('processPostAudio — clonage vocal à 18 ans révolus (#17309)', () => {
+    const cloneFor = async (birthDate: Date | null) => {
+      const zmq = makeMockZmqClient();
+      const { service } = makeService(zmq, makeMockPrisma(undefined, birthDate));
+      await service.processPostAudio({
+        postId: 'post-1',
+        postMediaId: 'media-1',
+        fileUrl: '/uploads/audio/a.m4a',
+        authorId: 'user-1',
+      });
+      const payload = (zmq.sendAudioProcessRequest as jest.Mock).mock.calls[0] as [AudioProcessPayload];
+      return payload[0];
+    };
+
+    it('traduit la voix d’un auteur mineur sans jamais la cloner', async () => {
+      const payload = await cloneFor(MINOR_BIRTH_DATE);
+      expect(payload.targetLanguages.length).toBeGreaterThan(0);
+      expect(payload.generateVoiceClone).toBe(false);
+    });
+
+    it('ne clone pas la voix d’un auteur sans date de naissance (fail-closed)', async () => {
+      expect((await cloneFor(null)).generateVoiceClone).toBe(false);
     });
   });
 

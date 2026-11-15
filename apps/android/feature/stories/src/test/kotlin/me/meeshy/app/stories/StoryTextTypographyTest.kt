@@ -71,4 +71,22 @@ class StoryTextTypographyTest {
         val all = StoryTextStyle.entries.map { it.typography() }
         assertThat(all.toSet()).hasSize(StoryTextStyle.entries.size)
     }
+
+    @Test
+    fun `the eighteen styles are covered and each carries an embedded or system face`() {
+        assertThat(StoryTextStyle.entries).hasSize(18)
+        StoryTextStyle.entries.forEach { assertThat(it.typography().face).isEqualTo(it.kind.face) }
+    }
+
+    @Test
+    fun `the composer picker still offers the original five`() {
+        assertThat(StoryTextStyle.composerOffered.map { it.wire })
+            .containsExactly("bold", "neon", "typewriter", "handwriting", "classic").inOrder()
+    }
+
+    @Test
+    fun `a style unknown to this client reads as bold and the wire survives for the eighteen`() {
+        assertThat(StoryTextStyle.fromWire("hologram")).isEqualTo(StoryTextStyle.BOLD)
+        StoryTextStyle.entries.forEach { assertThat(StoryTextStyle.fromWire(it.wire)).isEqualTo(it) }
+    }
 }

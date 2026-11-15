@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Les commentaires top-level sont paginés du plus récent au plus ancien
 /// (curseur `lt`) : un commentaire notifié au-delà de la première page
-/// n'était jamais atteint (audit routage 2026-07-24, F6). Plutôt qu'une API
+/// n'était jamais atteint (F6). Plutôt qu'une API
 /// « around » (qui créerait un trou dans la liste et une double sémantique
 /// de curseur côté client), on suit le curseur existant page par page
 /// jusqu'à ce que la cible soit chargée — liste contiguë, « Charger plus »

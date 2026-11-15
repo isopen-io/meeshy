@@ -46,6 +46,9 @@ function makeManager(order: string[]) {
     invalidateParticipantCache: jest.fn<any>((userId: string, conversationId: string) => {
       order.push(`invalidate:${userId}:${conversationId}`);
     }),
+    retractViewingForDepartedMember: jest.fn<any>(async (conversationId: string, userId: string) => {
+      order.push(`retract-viewing:${conversationId}:${userId}`);
+    }),
   };
 }
 
@@ -57,6 +60,69 @@ describe('endConversationMembership', () => {
 
     await endConversationMembership({ io, manager, conversationId: CONV_ID, userId: USER_ID });
 
+    expect(order).toEqual([
+      `end-live-location:${CONV_ID}:${USER_ID}`,
+      `end-call:${CONV_ID}:${USER_ID}`,
+      `retract-viewing:${CONV_ID}:${USER_ID}`,
+      `leave:socket-a:${ROOMS.conversation(CONV_ID)}`,
+      `invalidate:${USER_ID}:${CONV_ID}`,
+    ]);
+  });
+
+  /**
+   * LE TROISIÈME ÉTAT VIVANT (#16654). L'inventaire en tenait deux — la position
+   * partagée et la participation d'appel. Le registre « ici » (#8892, #9061)
+   * est arrivé APRÈS cette convergence et n'y a jamais été inscrit : un membre
+   * retiré restait nommé à tout pair qui ouvrait le fil ensuite, et ce
+   * `viewing:snapshot` est de l'état SERVEUR pur — il n'attend la coopération
+   * d'aucun client.
+   *
+   * Même contrainte d'ordre et même raison que la position vive : le
+   * `viewing:stop` voyage par la room de la conversation, donc il part AVANT
+   * que les sockets du partant en soient sortis.
+   */
+  it("éteint « ici » AVANT de sortir le partant de la room", async () => {
+    const order: string[] = [];
+    const { io } = makeIo(order, ['socket-a']);
+    const manager = makeManager(order);
+
+    await endConversationMembership({ io, manager, conversationId: CONV_ID, userId: USER_ID });
+
+    expect(order.indexOf(`retract-viewing:${CONV_ID}:${USER_ID}`)).toBeLessThan(
+      order.indexOf(`leave:socket-a:${ROOMS.conversation(CONV_ID)}`)
+    );
+  });
+
+  it("ATTEND la rétractation d'« ici » avant d'évincer", async () => {
+    const order: string[] = [];
+    const { io } = makeIo(order, ['socket-a']);
+    const manager = makeManager(order);
+    manager.retractViewingForDepartedMember = jest.fn<any>(async () => {
+      await new Promise(resolve => setTimeout(resolve, 5));
+      order.push(`retract-viewing:${CONV_ID}:${USER_ID}`);
+    });
+
+    await endConversationMembership({ io, manager, conversationId: CONV_ID, userId: USER_ID });
+
+    expect(order).toEqual([
+      `end-live-location:${CONV_ID}:${USER_ID}`,
+      `end-call:${CONV_ID}:${USER_ID}`,
+      `retract-viewing:${CONV_ID}:${USER_ID}`,
+      `leave:socket-a:${ROOMS.conversation(CONV_ID)}`,
+      `invalidate:${USER_ID}:${CONV_ID}`,
+    ]);
+  });
+
+  /** Une passerelle sans gestionnaire n'a par construction aucun registre à vider. */
+  it("ne rejette pas quand le gestionnaire n'offre pas la rétractation d'« ici »", async () => {
+    const order: string[] = [];
+    const { io } = makeIo(order, ['socket-a']);
+    const manager = makeManager(order);
+    delete (manager as { retractViewingForDepartedMember?: unknown }).retractViewingForDepartedMember;
+
+    await expect(
+      endConversationMembership({ io, manager, conversationId: CONV_ID, userId: USER_ID })
+    ).resolves.toBeUndefined();
     expect(order).toEqual([
       `end-live-location:${CONV_ID}:${USER_ID}`,
       `end-call:${CONV_ID}:${USER_ID}`,

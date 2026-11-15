@@ -1,6 +1,8 @@
 import Foundation
 import MetricKit
 import os
+import MeeshySDK
+import MeeshyUI
 
 /// Captures, persists and surfaces crash & hang reports through two layers:
 ///
@@ -37,6 +39,10 @@ protocol CrashReporting: Sendable {
 
     /// Free-form breadcrumb attached to the next crash report.
     nonisolated func log(_ message: String)
+
+    /// A COUNTED non-fatal: a degradation the app survived but must not hide
+    /// (e.g. a story exported without its brand wrapping, #14488).
+    nonisolated func recordNonFatal(_ error: NSError)
 }
 
 /// Default reporter when no remote backend is configured. Every call is a
@@ -50,6 +56,7 @@ nonisolated struct NoOpCrashReporter: CrashReporting {
     func record(_ diagnostic: CrashDiagnostic) {}
     func setUserID(_ userID: String?) {}
     func log(_ message: String) {}
+    func recordNonFatal(_ error: NSError) {}
 }
 
 // MARK: - Diagnostic model (top-level so Codable is nonisolated)
@@ -95,6 +102,11 @@ extension CrashDiagnostic.Kind {
 /// a single toast and log them via `Logger.crash` (visible in Console.app).
 @MainActor
 final class CrashDiagnosticsManager: NSObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = CrashDiagnosticsManager()
 
     /// Reports captured in previous sessions, ordered most-recent first.
@@ -104,6 +116,10 @@ final class CrashDiagnosticsManager: NSObject {
 
     private nonisolated static let directoryName = "crash_diagnostics"
     private nonisolated static let maxStoredReports = 50
+    /// #18494 — un rapport surfacé n'est plus effacé : il part dans `archive/`,
+    /// où le porteur et les sessions le relisent (`devicectl device copy from`).
+    private nonisolated static let archiveDirectoryName = "archive"
+    nonisolated static let maxArchivedReports = 200
     private nonisolated static let fileExtension = "json"
 
     private var installed = false
@@ -132,6 +148,7 @@ final class CrashDiagnosticsManager: NSObject {
         Self.setReporter(crashReporter)
         loadPersisted()
         installNSExceptionHandler()
+        StoryExportBrandingFallback.reporter = { CrashDiagnosticsManager.recordBrandingFallback($0) }
         MXMetricManager.shared.add(self)
         Logger.crash.info("CrashDiagnostics installed (\(self.pending.count, privacy: .public) pending report(s))")
     }
@@ -164,14 +181,31 @@ final class CrashDiagnosticsManager: NSObject {
         Self.reporter.log(message)
     }
 
+    /// Un export de story parti sans sa marque (#14488) : compté en non-fatal,
+    /// un code par chemin d'export, la cause d'encodage dans le contexte.
+    nonisolated static func recordBrandingFallback(_ failure: StoryExportBrandingFailure) {
+        reporter.recordNonFatal(NSError(
+            domain: brandingFallbackDomain,
+            code: failure.path == .shareOrSave ? 1 : 2,
+            userInfo: [
+                NSLocalizedDescriptionKey: "story exportée sans son emballage de marque (\(failure.path.rawValue))",
+                "slide_id": failure.slideId,
+                "cause_domain": failure.errorDomain,
+                "cause_code": failure.errorCode,
+                "cause": String(failure.reason.prefix(300))
+            ]
+        ))
+    }
+
+    nonisolated static let brandingFallbackDomain = "Meeshy.StoryExportBranding"
+
 
     // MARK: - NSException
 
     /// Captured at install time so we can chain to whatever handler was
-    /// installed before us (Crashlytics, Sentry, the OS default, etc.). Marked
-    /// `nonisolated(unsafe)` because it's set exactly once, on the main thread,
-    /// before the handler can ever fire — at which point we only read it.
-    private nonisolated(unsafe) static var previousExceptionHandler: (@convention(c) (NSException) -> Void)?
+    /// installed before us (Crashlytics, Sentry, the OS default, etc.). Set
+    /// exactly once, on the main thread, before the handler can ever fire.
+    private nonisolated static let previousExceptionHandler = Locked<(@convention(c) (NSException) -> Void)?>(uncheckedState: nil)
 
     /// Remote forwarder used by `capture(...)` for MetricKit diagnostics.
     /// Protected by `OSAllocatedUnfairLock` so reads from the MetricKit
@@ -208,7 +242,7 @@ final class CrashDiagnosticsManager: NSObject {
         CrashDiagnosticsManager.writeSync(kind: .nsException, summary: summary, details: details)
         // Hand off to whatever was registered before us so we don't clobber
         // a sibling reporter (e.g. a future Crashlytics integration).
-        CrashDiagnosticsManager.previousExceptionHandler?(exception)
+        CrashDiagnosticsManager.previousExceptionHandler.mutateUnchecked { $0 }?(exception)
     }
 
     private func installNSExceptionHandler() {
@@ -216,7 +250,7 @@ final class CrashDiagnosticsManager: NSObject {
         // about to be terminated, so we intentionally avoid spawning Tasks or
         // hopping actors — just fsync a JSON blob and return so the OS can
         // continue its termination sequence.
-        Self.previousExceptionHandler = NSGetUncaughtExceptionHandler()
+        Self.previousExceptionHandler.mutateUnchecked { $0 = NSGetUncaughtExceptionHandler() }
         NSSetUncaughtExceptionHandler(Self.uncaughtExceptionHandler)
     }
 
@@ -227,7 +261,7 @@ final class CrashDiagnosticsManager: NSObject {
         for (url, diag) in decodeAllReports() {
             loaded.append(diag)
             loadedFileURLs.insert(url)
-            let when = diag.timestamp.formatted(.iso8601)
+            let when = WireDate.string(from: diag.timestamp)
             Logger.crash.error("Restored \(diag.kind.rawValue, privacy: .public) @ \(when, privacy: .public): \(diag.summary, privacy: .public)")
         }
         pending = loaded
@@ -289,14 +323,50 @@ final class CrashDiagnosticsManager: NSObject {
         return result
     }
 
-    /// Deletes only the files we've actually loaded into memory, leaving any
+    /// Archive only the files we've actually loaded into memory, leaving any
     /// unrelated content in the directory untouched and any reports that
-    /// arrive *after* this call intact for the next launch.
+    /// arrive *after* this call intact for the next launch. Un rapport surfacé
+    /// reste lisible (#18494) : des dizaines de hangs ont été montrés puis
+    /// perdus avec leurs piles avant qu'on puisse les analyser.
     private func clearLoadedFiles() {
         for url in loadedFileURLs {
-            FileManager.default.removeItemLogging(at: url, context: "surfaced crash report cleanup", logger: Logger.crash)
+            Self.archive(url)
         }
         loadedFileURLs.removeAll()
+        Self.trimArchive()
+    }
+
+    private nonisolated static func archiveDirectoryURL() -> URL? {
+        guard let dir = directoryURL() else { return nil }
+        let archive = dir.appendingPathComponent(archiveDirectoryName, isDirectory: true)
+        if !FileManager.default.fileExists(atPath: archive.path) {
+            FileManager.default.createDirectoryLogging(at: archive, context: "crash reports archive directory", logger: Logger.crash)
+        }
+        return archive
+    }
+
+    private nonisolated static func archive(_ url: URL) {
+        guard let archive = archiveDirectoryURL() else { return }
+        let destination = archive.appendingPathComponent(url.lastPathComponent)
+        do {
+            try FileManager.default.moveItem(at: url, to: destination)
+        } catch {
+            Logger.crash.error("Surfaced crash report not archived, kept in place: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Les plus anciens partent au-delà du plafond ; la loi dit combien.
+    private nonisolated static func trimArchive() {
+        guard let archive = archiveDirectoryURL(),
+              let files = try? FileManager.default.contentsOfDirectory(at: archive, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+        let reports = files.filter { $0.pathExtension == fileExtension }.sorted { lhs, rhs in
+            let l = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            let r = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            return l > r
+        }
+        for url in reports.dropFirst(CrashReportArchiveLaw.kept(count: reports.count, cap: maxArchivedReports)) {
+            FileManager.default.removeItemLogging(at: url, context: "crash report archive cap eviction", logger: Logger.crash)
+        }
     }
 
     private nonisolated static func directoryURL() -> URL? {
@@ -308,15 +378,8 @@ final class CrashDiagnosticsManager: NSObject {
         return dir
     }
 
-    private nonisolated static func makeEncoder() -> JSONEncoder {
-        let enc = JSONEncoder()
-        enc.dateEncodingStrategy = .iso8601
-        return enc
-    }
-
     private nonisolated static func makeDecoder() -> JSONDecoder {
-        let dec = JSONDecoder()
-        dec.dateDecodingStrategy = .iso8601
+        let dec = MeeshyCoders.decoder(.persistence)
         return dec
     }
 
@@ -343,8 +406,7 @@ final class CrashDiagnosticsManager: NSObject {
 
     private nonisolated static func persist(_ diag: CrashDiagnostic) {
         guard let dir = directoryURL() else { return }
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         encoder.outputFormatting = .prettyPrinted
         // Ce fichier EST le rapport de crash : s'il n'est pas écrit, le
         // diagnostic est définitivement perdu au prochain lancement.
@@ -440,5 +502,13 @@ extension CrashDiagnosticsManager: MXMetricManagerSubscriber {
         } catch {
             Logger.crash.error("MetricKit payload not persisted: \(error.localizedDescription, privacy: .public)")
         }
+    }
+}
+
+/// **Combien de rapports l'archive garde** (#18494) : les plus récents,
+/// jusqu'au plafond ; jamais un plafond nul, qui viderait l'archive.
+nonisolated enum CrashReportArchiveLaw {
+    static func kept(count: Int, cap: Int) -> Int {
+        max(0, min(count, max(cap, 1)))
     }
 }

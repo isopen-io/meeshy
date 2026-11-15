@@ -1,14 +1,21 @@
 package me.meeshy.sdk.net.api
 
 import me.meeshy.sdk.model.ApiCategory
+import me.meeshy.sdk.model.ApplicationPreferenceSyncBody
+import me.meeshy.sdk.model.AudioPreferenceSyncBody
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.CategoryPatchBody
 import me.meeshy.sdk.model.CreateCategoryBody
 import me.meeshy.sdk.model.NotificationPreferenceSyncBody
 import me.meeshy.sdk.model.PrivacyPreferenceSyncBody
+import me.meeshy.sdk.model.UserPreferences
+import kotlinx.serialization.json.JsonObject
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 /**
@@ -44,4 +51,69 @@ interface PreferencesApi {
 
     @PATCH("me/preferences/privacy")
     suspend fun updatePrivacy(@Body body: PrivacyPreferenceSyncBody): ApiResponse<Unit>
+
+    /** Fusionne la transcription automatique dans le bloc audio (`PATCH /me/preferences/audio`). */
+    @PATCH("me/preferences/audio")
+    suspend fun updateAudio(@Body body: AudioPreferenceSyncBody): ApiResponse<Unit>
+
+    /** Fusionne le thème dans le bloc application (`PATCH /me/preferences/application`) : le thème seul, jamais un consentement. */
+    @PATCH("me/preferences/application")
+    suspend fun updateApplication(@Body body: ApplicationPreferenceSyncBody): ApiResponse<Unit>
+
+    /** Relit le bloc audio ; seule la transcription automatique est lue (le décodeur indulgent ignore le reste). */
+    @GET("me/preferences/audio")
+    suspend fun getAudio(): ApiResponse<AudioPreferenceSyncBody>
+
+    /**
+     * Re-reads the stored notification block — the READ half of [updateNotification],
+     * added for issue #4133. The device store stays the UI source of truth, so this is
+     * not a hydration path: it is what `user:preferences-updated` (category scope) asks
+     * for when another device changed the block, the broadcast carrying only the category
+     * NAME and never its content.
+     *
+     * The response decodes into the same [NotificationPreferenceSyncBody] the PATCH sends
+     * — the gateway's block is that contract exactly — and
+     * [NotificationPreferenceSyncBody.toPreferences] folds it back onto the local block.
+     */
+    @GET("me/preferences/notification")
+    suspend fun getNotification(): ApiResponse<NotificationPreferenceSyncBody>
+
+    /**
+     * Re-reads the stored privacy block (issue #4133), the READ half of [updatePrivacy].
+     *
+     * The response carries the gateway's whole privacy block, of which this body decodes
+     * the twelve editable toggles; the lenient decoder drops the encryption keys, which
+     * Android renders read-only and must never overwrite from the wire. See
+     * [PrivacyPreferenceSyncBody.toPreferences].
+     */
+    @GET("me/preferences/privacy")
+    suspend fun getPrivacy(): ApiResponse<PrivacyPreferenceSyncBody>
+
+    /** The whole preference aggregate (`GET /me/preferences`) — the cache-first read of every block at once. */
+    @GET("me/preferences")
+    suspend fun getAll(): ApiResponse<UserPreferences>
+
+    /**
+     * Folds or unfolds a category section (`PATCH /me/preferences/categories/{id}`,
+     * iOS `patchCategory(id:isExpanded:)`); the response row is ignored.
+     */
+    @PATCH("me/preferences/categories/{categoryId}")
+    suspend fun patchCategory(
+        @Path("categoryId") categoryId: String,
+        @Body body: CategoryPatchBody,
+    ): ApiResponse<Unit>
+
+    /**
+     * Partial update of one preference block by its wire name (`privacy`, `audio`, `message`,
+     * `notification`, `video`, `document`, `application`) — iOS `patchPreferences(category:body:)`.
+     */
+    @PATCH("me/preferences/{category}")
+    suspend fun patchBlock(
+        @Path("category") category: String,
+        @Body body: JsonObject,
+    ): ApiResponse<Unit>
+
+    /** Resets one preference block to the gateway defaults (iOS `resetPreferences(category:)`). */
+    @DELETE("me/preferences/{category}")
+    suspend fun resetBlock(@Path("category") category: String): ApiResponse<Unit>
 }

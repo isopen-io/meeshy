@@ -1,4 +1,5 @@
 import Foundation
+import MetricKit
 import os
 import os.signpost
 
@@ -9,6 +10,9 @@ import os.signpost
 /// when no profiler is attached).
 ///
 /// ## Aggregation wire-up
+///
+/// The intervals go through `mxSignpost` on a `MXMetricManager.makeLogHandle`
+/// handle: an `OSSignposter` on a plain `OSLog` never reaches a payload.
 ///
 /// MetricKit only delivers `MXSignpostMetric` payloads to a registered
 /// `MXMetricManagerSubscriber`. The aggregation is provided by
@@ -24,22 +28,23 @@ import os.signpost
 /// no production payload ever arrives — see `MeeshyMetricsSubscriber` for
 /// details.
 public struct TimelineSignposter {
-    private nonisolated static let log = OSLog(subsystem: "me.meeshy.app", category: "TimelineEngine")
-    private nonisolated static let signposter = OSSignposter(logHandle: log)
+    private nonisolated static let log = MXMetricManager.makeLogHandle(category: "TimelineEngine")
 
     /// Wraps a synchronous block in a signpost interval. Re-throws any error.
     @discardableResult
     public nonisolated static func interval<T>(_ name: StaticString, _ work: () throws -> T) rethrows -> T {
-        let state = signposter.beginInterval(name)
-        defer { signposter.endInterval(name, state) }
+        let id = OSSignpostID(log: log)
+        mxSignpost(.begin, log: log, name: name, signpostID: id)
+        defer { mxSignpost(.end, log: log, name: name, signpostID: id) }
         return try work()
     }
 
     /// Wraps an async block in a signpost interval. Re-throws any error.
     @discardableResult
     public nonisolated static func intervalAsync<T>(_ name: StaticString, _ work: () async throws -> T) async rethrows -> T {
-        let state = signposter.beginInterval(name)
-        defer { signposter.endInterval(name, state) }
+        let id = OSSignpostID(log: log)
+        mxSignpost(.begin, log: log, name: name, signpostID: id)
+        defer { mxSignpost(.end, log: log, name: name, signpostID: id) }
         return try await work()
     }
 }

@@ -13,8 +13,10 @@ import kotlinx.serialization.json.Json
  *
  * `encodeDefaults` persists every field (a toggle left at its default still survives), and the
  * decode is corruption-proof: a blank, absent, or malformed token degrades to the safe defaults;
- * a partial token fills the missing fields with their defaults and ignores unknown keys — so a
- * corrupt or legacy value can never leave the app without a coherent configuration.
+ * a partial token fills the missing fields with their defaults, and a field of an unexpected type
+ * falls back to ITS default without emptying the block (see [privacyPreferencesFromJson]) — so a
+ * corrupt or legacy value can never leave the app without a coherent configuration. A key this
+ * client does not know is kept in `extras` and written back with the block.
  */
 private val privacyPrefsJson = Json {
     ignoreUnknownKeys = true
@@ -31,12 +33,8 @@ public val PrivacyPreferences.storageValue: String
 /**
  * Decodes a persisted token back into the preference block. A blank, absent, or malformed token
  * degrades to [PrivacyPreferences] defaults; a partial token fills the missing fields with their
- * defaults and ignores unknown keys.
+ * defaults, a field of an unexpected type falls back to its own default, and an unknown key is
+ * kept in `extras`.
  */
-public fun privacyPreferencesFromStorage(raw: String?): PrivacyPreferences {
-    val trimmed = raw?.trim()
-    if (trimmed.isNullOrEmpty()) return PrivacyPreferences()
-    return runCatching {
-        privacyPrefsJson.decodeFromString<PrivacyPreferences>(trimmed)
-    }.getOrDefault(PrivacyPreferences())
-}
+public fun privacyPreferencesFromStorage(raw: String?): PrivacyPreferences =
+    privacyPreferencesFromJson(parseStoredBlock(privacyPrefsJson, raw))

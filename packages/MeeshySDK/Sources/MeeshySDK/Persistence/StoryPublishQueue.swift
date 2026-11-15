@@ -62,6 +62,27 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
     /// affichait la pastille et ne prévenait personne. Optionnel pour rester
     /// rétro-compatible avec les rows persistés avant lui (→ `nil`).
     public let mentionsPayload: [PostMentionInput]?
+    /// **Les mentions PAR SLIDE** (#4068).
+    ///
+    /// > Une mention est attachée à la publication. En Story, une publication
+    /// > est une slide ; en Post et en Réel, il n'y en a qu'une.
+    ///
+    /// `mentionsPayload` ci-dessus est composer-wide, et c'est exactement le
+    /// défaut : la boucle d'envoi le semait sur CHAQUE slide, si bien qu'une
+    /// NOTE posée en pensant à la première notifiait la personne trois fois et
+    /// la faisait apparaître sous trois stories.
+    ///
+    /// Le champ s'AJOUTE plutôt que de remplacer, et c'est délibéré : des rows
+    /// écrites avant ce lot dorment déjà dans la file d'un appareil hors-ligne.
+    /// Quand la carte est présente elle PRIME ; sinon on retombe sur
+    /// `mentionsPayload`, c'est-à-dire sur l'ancien comportement pour ces
+    /// rows-là seulement.
+    ///
+    /// > Un contrat neuf s'AJOUTE à l'ancien tant que des porteurs de l'ancien
+    /// > existent. Remplacer la clé aurait fait échouer le décodage d'une
+    /// > publication en attente — et une publication perdue est pire qu'une
+    /// > mention répétée.
+    public let mentionsBySlidePayload: [String: [PostMentionInput]]?
     /// Le texte alternatif par média saisi par l'auteur, keyé par ID D'ÉLÉMENT
     /// DU COMPOSER — les ids serveur n'existent qu'après l'upload, que le rejeu
     /// refera lui-même. Persisté ici pour la même raison que
@@ -70,6 +91,12 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
     /// muette pour les lecteurs d'écran. Optionnel — rétro-compatible avec les
     /// rows persistés avant lui (→ `nil`).
     public let mediaAltPayload: [String: String]?
+    /// La LÉGENDE par média (#4055), persistée pour EXACTEMENT la raison
+    /// écrite ci-dessus — et plus fortement encore : un texte alternatif perdu
+    /// publie une story muette pour les lecteurs d'écran, une légende perdue
+    /// publie un média que l'auteur croyait avoir légendé, VISIBLEMENT.
+    /// Optionnel — les rows écrites avant ce champ se relisent en `nil`.
+    public let mediaCaptionPayload: [String: String]?
     /// L'opt-in d'extraction de bande-son, tel que l'auteur l'a tranché. `nil`
     /// = il n'a rien tranché (ou row antérieure au champ) : le défaut serveur
     /// s'applique alors par silence.
@@ -83,12 +110,18 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
     /// en échec de décodage de toute la ligne. `nil` = row antérieure au champ
     /// → story, ce qu'elle était.
     public let targetTypePayload: String?
+    /// « Publier AUSSI en réel » (#9476) : la story part avec son réel, en UN
+    /// geste. Persisté pour la même raison que `targetTypePayload` — un rejeu
+    /// au retour du réseau publierait la story seule. `nil` = row antérieure au
+    /// champ, ou story seule : rien d'autre ne part.
+    public let alsoAsReelPayload: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id, tempStoryId, visibility, slidesPayload, repostOfId
         case mediaReferences, createdAt, retryCount, lastError, visibilityUserIds
-        case originalLanguage, draftId, mentionsPayload
-        case mediaAltPayload, allowSoundExtractionPayload, targetTypePayload
+        case originalLanguage, draftId, mentionsPayload, mentionsBySlidePayload
+        case mediaAltPayload, mediaCaptionPayload, allowSoundExtractionPayload, targetTypePayload
+        case alsoAsReelPayload
     }
 
     public init(
@@ -101,9 +134,12 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         originalLanguage: String? = nil,
         draftId: String? = nil,
         mentionsPayload: [PostMentionInput]? = nil,
+        mentionsBySlidePayload: [String: [PostMentionInput]]? = nil,
         mediaAltPayload: [String: String]? = nil,
+        mediaCaptionPayload: [String: String]? = nil,
         allowSoundExtractionPayload: Bool? = nil,
-        targetTypePayload: String? = nil
+        targetTypePayload: String? = nil,
+        alsoAsReelPayload: Bool? = nil
     ) {
         let queueId = UUID().uuidString
         self.id = queueId
@@ -119,9 +155,12 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.originalLanguage = originalLanguage
         self.draftId = draftId
         self.mentionsPayload = mentionsPayload
+        self.mentionsBySlidePayload = mentionsBySlidePayload
         self.mediaAltPayload = mediaAltPayload
+        self.mediaCaptionPayload = mediaCaptionPayload
         self.allowSoundExtractionPayload = allowSoundExtractionPayload
         self.targetTypePayload = targetTypePayload
+        self.alsoAsReelPayload = alsoAsReelPayload
     }
 
     public init(from decoder: Decoder) throws {
@@ -139,9 +178,17 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.originalLanguage = try container.decodeIfPresent(String.self, forKey: .originalLanguage)
         self.draftId = try container.decodeIfPresent(String.self, forKey: .draftId)
         self.mentionsPayload = try container.decodeIfPresent([PostMentionInput].self, forKey: .mentionsPayload)
+        // Row écrite avant #4068 : pas de clé, donc `nil` — l'envoi retombe
+        // alors sur `mentionsPayload`, l'ancien comportement, plutôt que de
+        // perdre la publication au décodage.
+        self.mentionsBySlidePayload = try container.decodeIfPresent([String: [PostMentionInput]].self, forKey: .mentionsBySlidePayload)
         self.mediaAltPayload = try container.decodeIfPresent([String: String].self, forKey: .mediaAltPayload)
+        // Row écrite avant #4055 : pas de clé, donc `nil` — jamais un échec de
+        // décodage, qui perdrait la publication en attente TOUT ENTIÈRE.
+        self.mediaCaptionPayload = try container.decodeIfPresent([String: String].self, forKey: .mediaCaptionPayload)
         self.allowSoundExtractionPayload = try container.decodeIfPresent(Bool.self, forKey: .allowSoundExtractionPayload)
         self.targetTypePayload = try container.decodeIfPresent(String.self, forKey: .targetTypePayload)
+        self.alsoAsReelPayload = try container.decodeIfPresent(Bool.self, forKey: .alsoAsReelPayload)
     }
 }
 
@@ -149,6 +196,16 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
 /// `localFilePath` exists before each retry; if missing, the item is failed
 /// permanently and surfaced via `publishFailed` so the UI can ask the user
 /// to retake the lost media.
+/// Ce qu'a fait l'annulation d'une story en attente (#10331).
+public enum StoryPendingCancellation: Equatable, Sendable {
+    /// Retirée de la file, médias locaux compris : rien ne partira.
+    case removed
+    /// En train de partir : la file la garde.
+    case inFlight
+    /// Plus dans la file — partie, ou déjà classée en échec.
+    case notFound
+}
+
 public struct StoryMediaReference: Codable, Sendable {
     public let elementId: String
     /// "image", "video" or "audio" — kept as a free string for forward
@@ -161,6 +218,39 @@ public struct StoryMediaReference: Codable, Sendable {
         self.elementId = elementId
         self.mediaType = mediaType
         self.localFilePath = localFilePath
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case elementId, mediaType, localFilePath
+    }
+
+    /// **Le chemin relu suit le conteneur de l'app** (#14879). Le dossier
+    /// `…/Data/Application/<UUID>/` change d'un lancement à l'autre (mise à
+    /// jour, réinstallation, simulateur) : un chemin absolu persisté visait
+    /// l'ANCIEN conteneur, et le fichier, bien présent, était déclaré
+    /// introuvable — la story partait en échec « média local introuvable ».
+    /// Le format écrit ne change pas : seul le décodage rebase.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        elementId = try container.decode(String.self, forKey: .elementId)
+        mediaType = try container.decode(String.self, forKey: .mediaType)
+        localFilePath = Self.rebasing(
+            try container.decode(String.self, forKey: .localFilePath),
+            ontoHome: NSHomeDirectory()
+        )
+    }
+
+    /// Réécrit `path` sous `home` quand il vise un AUTRE conteneur d'app ; tout
+    /// autre chemin (déjà sous `home`, hors conteneur, `home` hors conteneur)
+    /// reste tel quel.
+    public static func rebasing(_ path: String, ontoHome home: String) -> String {
+        let marker = "/Data/Application/"
+        guard !path.hasPrefix(home + "/"),
+              home.contains(marker),
+              let markerRange = path.range(of: marker) else { return path }
+        let afterMarker = path[markerRange.upperBound...]
+        guard let containerEnd = afterMarker.firstIndex(of: "/") else { return path }
+        return home + afterMarker[containerEnd...]
     }
 
     /// File extensions (case-insensitive) treated as video containers.
@@ -252,6 +342,11 @@ public struct StoryPublishFailure: Sendable {
 public actor StoryPublishQueue {
     public static let shared = StoryPublishQueue()
 
+    /// La trace qu'un échec `.missingLocalMedia` laisse dans `lastError`.
+    /// Persistée telle quelle depuis toujours : l'app la reconnaît pour la
+    /// dire dans la langue de l'interface, jamais en l'affichant brute.
+    public static let missingLocalMediaError = "Un média local est introuvable"
+
     /// Emitted when a pending publication reaches the server and is assigned
     /// a real post id. ViewModels listen to swap their optimistic
     /// `pending_<uuid>` row with the authoritative server row.
@@ -263,19 +358,13 @@ public actor StoryPublishQueue {
     public nonisolated let publishFailed = SendablePassthrough<StoryPublishFailure>()
 
     private static let maxQueueSize = 50
-    private static let maxRetries = 5
-    /// Exponential backoff schedule (seconds). Index = retryCount before
-    /// next attempt. Beyond `maxRetries` the item is failed permanently.
-    /// TODO(lot ultérieur) : DÉCLARÉ MAIS JAMAIS LU — il n'existe aucune porte
-    /// temporelle entre deux passes, les passes sont déclenchées par
-    /// `observeConnection`, `setPublishHandler` et `retryFailedItem`. Le
-    /// brancher transformerait le comportement de reprise (fenêtres de
-    /// plusieurs heures) : hors périmètre, mais ne pas croire qu'il s'applique.
-    private static let retryDelays: [TimeInterval] = [30, 120, 600, 3600, 7200]
+    /// Budget seul : aucune porte temporelle entre deux passes, déclenchées par
+    /// `observeConnection`, `setPublishHandler` et `retryFailedItem`.
+    private static let retryPolicy = RetryPolicy.storyPublish
     /// Un item fautif ne doit pas geler les suivants ; une panne réseau ne doit
     /// pas brûler le budget de toute la file. La frontière entre les deux est
     /// le nombre d'échecs retryables CONSÉCUTIFS. Sans porte temporelle entre
-    /// deux passes (cf. `retryDelays`), un `continue` inconditionnel brûlerait
+    /// deux passes (cf. `retryPolicy`), un `continue` inconditionnel brûlerait
     /// 1 tentative sur CHAQUE item à chaque passe : 5 flaps réseau suffiraient
     /// à envoyer toute la file en échec permanent.
     private static let maxConsecutiveRetryableFailures = 2
@@ -288,11 +377,6 @@ public actor StoryPublishQueue {
     /// compter ferait boucler la passe à vide sur une file de claims.
     private static let maxItemsPerSweep = 10
     private static let queueFileName = "story_publish_queue.json"
-    /// Cap on the retry-able failure history (`failedItems`). Local media is
-    /// preserved for these items (unlike `items`, which drops media on any
-    /// terminal disposition) so the user can retry from `MyStoriesView` —
-    /// the cap bounds how much abandoned media can accumulate on disk.
-    private static let maxFailedItems = 20
     private static let failedQueueFileName = "story_publish_failed_queue.json"
 
     private var items: [StoryPublishQueueItem] = []
@@ -303,17 +387,15 @@ public actor StoryPublishQueue {
     private var failedItems: [StoryPublishQueueItem] = []
     private var isProcessing = false
     private var cancellables = Set<AnyCancellable>()
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "story-publish-queue")
+    private let logger = MeeshyLog.logger(.storyPublishQueue, subsystem: .legacySDK)
 
     private let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .iso8601
+        let e = MeeshyCoders.encoder(.persistence)
         return e
     }()
 
     private let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
+        let d = MeeshyCoders.decoder(.persistence)
         return d
     }()
 
@@ -323,7 +405,7 @@ public actor StoryPublishQueue {
     ///   - throws an `Error` to signal a retryable failure (network, 5xx)
     ///   - throws `StoryPublishUnrecoverableError` to signal a permanent
     ///     failure (4xx, validation) that should NOT be retried
-    public var onPublish: ((StoryPublishQueueItem) async throws -> String)?
+    public var onPublish: (@concurrent (StoryPublishQueueItem) async throws -> String)?
 
     /// Registers the publish handler and immediately drains any items that
     /// were restored from disk at init time. Without this trigger there is
@@ -358,10 +440,12 @@ public actor StoryPublishQueue {
     @discardableResult
     public func enqueue(_ item: StoryPublishQueueItem) -> String {
         if items.count >= Self.maxQueueSize {
-            // Drop the oldest pending item to make room. The dropped item is
-            // surfaced as a permanent failure so the user is aware that their
-            // long-stale draft was abandoned.
-            let dropped = items.removeFirst()
+            // #13415 — la plus ancienne cède sa place dans la FILE, jamais sur
+            // l'appareil : elle passe dans l'historique des échecs, avec ses
+            // médias, où l'auteur la reprend ou la supprime.
+            var dropped = items.removeFirst()
+            dropped.lastError = "File d'envoi pleine"
+            addToFailedItems(dropped)
             publishFailed.send(StoryPublishFailure(
                 queueId: dropped.id,
                 tempStoryId: dropped.tempStoryId,
@@ -426,6 +510,12 @@ public actor StoryPublishQueue {
         items
     }
 
+    /// Les items EN ATTENTE que personne ne publie en ce moment (#10331) —
+    /// ceux qu'une annulation retirerait.
+    public var waitingItems: [StoryPublishQueueItem] {
+        items.filter { !inFlightIds.contains($0.id) }
+    }
+
     /// Items that failed permanently and are waiting for a manual retry or
     /// discard from the UI (`MyStoriesView`). Their local media is preserved
     /// (unlike `pendingItems`' terminal successes) so a retry can reuse it.
@@ -446,6 +536,26 @@ public actor StoryPublishQueue {
         Task { await self.processNext() }
     }
 
+    /// Classe un item EN ATTENTE comme échec définitif, sans le rejouer : le
+    /// chemin en ligne a reçu un refus que la passerelle rendra à chaque
+    /// tentative (#7907). L'item rejoint l'historique d'échecs, médias gardés
+    /// pour une reprise manuelle, et `publishFailed` l'annonce comme tout échec
+    /// définitif du drain. No-op si l'id n'est plus en attente.
+    public func failPermanently(_ itemId: String, message: String) {
+        inFlightIds.remove(itemId)
+        guard let idx = items.firstIndex(where: { $0.id == itemId }) else { return }
+        var item = items.remove(at: idx)
+        item.lastError = message
+        addToFailedItems(item)
+        saveToDisk()
+        publishFailed.send(StoryPublishFailure(
+            queueId: item.id,
+            tempStoryId: item.tempStoryId,
+            reason: .unrecoverable(message: message),
+            draftId: item.draftId
+        ))
+    }
+
     /// Permanently abandons a failed item : removes it from history and
     /// deletes its local media. The caller is responsible for clearing any
     /// optimistic UI row still referencing the item's `tempStoryId`.
@@ -454,6 +564,19 @@ public actor StoryPublishQueue {
         let item = failedItems.remove(at: idx)
         removeLocalMedia(of: item)
         saveFailedItemsToDisk()
+    }
+
+    /// **Annuler une story EN ATTENTE d'envoi** (#10331) — le geste de
+    /// l'auteur, avant que la file ne la publie. Un item revendiqué
+    /// (`inFlightIds`) est en train de partir : il n'est pas retiré sous les
+    /// pieds de son téléversement, et l'appelant le dit.
+    public func cancelPendingItem(_ itemId: String) -> StoryPendingCancellation {
+        guard let idx = items.firstIndex(where: { $0.id == itemId }) else { return .notFound }
+        guard !inFlightIds.contains(itemId) else { return .inFlight }
+        let item = items.remove(at: idx)
+        removeLocalMedia(of: item)
+        saveToDisk()
+        return .removed
     }
 
     /// Draft recovery — the most recent queued story that has been stuck
@@ -541,8 +664,7 @@ public actor StoryPublishQueue {
             // Backoff between consecutive retries within the same processing
             // pass — small jitter to avoid thundering-herd on reconnect.
             if attemptedInSweep > 0 {
-                let jitter = UInt64(Double.random(in: 200...700) * 1_000_000)
-                try? await Task.sleep(nanoseconds: jitter)
+                guard await cancellableSleep(for: .milliseconds(Int.random(in: 200...700))) else { break }
             }
             attemptedInSweep += 1
 
@@ -581,6 +703,11 @@ public actor StoryPublishQueue {
                     draftId: item.draftId
                 ))
                 consecutiveRetryableFailures = 0
+            } catch is StoryPublishDeferredError {
+                // Pas un ESSAI : personne pour publier (exécuteur démonté). Aucun budget consommé, et la passe
+                // s'arrête — les items suivants n'ont pas plus d'exécuteur que celui-ci.
+                logger.info("Story publication deferred — no executor; kept without charging its retry budget")
+                break
             } catch {
                 // Échec retryable : on charge le budget de CET item puis on
                 // poursuit sur les suivants — ils sont indépendants et
@@ -591,7 +718,7 @@ public actor StoryPublishQueue {
                     items[idx].retryCount += 1
                     items[idx].lastError = error.localizedDescription
 
-                    if items[idx].retryCount >= Self.maxRetries {
+                    if Self.retryPolicy.isExhausted(afterFailures: items[idx].retryCount) {
                         permanentFailureIds.append(item.id)
                         failurePayloads.append(StoryPublishFailure(
                             queueId: item.id,
@@ -625,7 +752,7 @@ public actor StoryPublishQueue {
             var item = items.remove(at: idx)
             switch failurePayloads.first(where: { $0.queueId == id })?.reason {
             case .missingLocalMedia:
-                item.lastError = "Un média local est introuvable"
+                item.lastError = Self.missingLocalMediaError
             case .unrecoverable(let message):
                 item.lastError = message
             case .maxRetriesReached, .none:
@@ -658,15 +785,11 @@ public actor StoryPublishQueue {
         }
     }
 
-    /// Appends a permanently-failed item to the retry-able history, dropping
-    /// the oldest entry (and its media) once `maxFailedItems` is exceeded —
-    /// same drop-oldest pattern as `enqueue`'s `maxQueueSize` guard.
+    /// Appends a permanently-failed item to the retry-able history. #13415 —
+    /// no cap: a story the author did not publish leaves the device only by
+    /// their gesture (`discardFailedItem`) or a successful retry.
     private func addToFailedItems(_ item: StoryPublishQueueItem) {
         failedItems.append(item)
-        if failedItems.count > Self.maxFailedItems {
-            let dropped = failedItems.removeFirst()
-            removeLocalMedia(of: dropped)
-        }
         saveFailedItemsToDisk()
     }
 
@@ -702,7 +825,7 @@ public actor StoryPublishQueue {
                 guard let self else { return }
                 Task {
                     // Stabilization delay matches OfflineQueue's pattern.
-                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    guard await cancellableSleep(for: QueueTiming.reconnectSettle) else { return }
                     await self.processNext()
                 }
             }
@@ -712,29 +835,17 @@ public actor StoryPublishQueue {
     // MARK: - Disk Persistence
 
     private var queueFileURL: URL {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
-        if !FileManager.default.fileExists(atPath: cacheDir.path) {
-            do {
-                try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
-            } catch {
-                Logger(subsystem: "com.meeshy.sdk", category: "story-publish-queue")
-                    .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
-            }
+        let cacheDir = MeeshyCacheDirectory.ensured { error in
+            MeeshyLog.logger(.storyPublishQueue, subsystem: .legacySDK)
+                .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
         }
         return cacheDir.appendingPathComponent(Self.queueFileName)
     }
 
     private var failedQueueFileURL: URL {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
-        if !FileManager.default.fileExists(atPath: cacheDir.path) {
-            do {
-                try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
-            } catch {
-                Logger(subsystem: "com.meeshy.sdk", category: "story-publish-queue")
-                    .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
-            }
+        let cacheDir = MeeshyCacheDirectory.ensured { error in
+            MeeshyLog.logger(.storyPublishQueue, subsystem: .legacySDK)
+                .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
         }
         return cacheDir.appendingPathComponent(Self.failedQueueFileName)
     }
@@ -757,14 +868,12 @@ public actor StoryPublishQueue {
     }
 
     private static func loadItemsFromDisk() -> [StoryPublishQueueItem] {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
+        let cacheDir = MeeshyCacheDirectory.url
         return loadItems(from: cacheDir.appendingPathComponent(queueFileName))
     }
 
     private static func loadFailedItemsFromDisk() -> [StoryPublishQueueItem] {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
+        let cacheDir = MeeshyCacheDirectory.url
         return loadItems(from: cacheDir.appendingPathComponent(failedQueueFileName))
     }
 
@@ -773,8 +882,7 @@ public actor StoryPublishQueue {
 
         do {
             let data = try Data(contentsOf: url)
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
+            let decoder = MeeshyCoders.decoder(.persistence)
             return try decoder.decode([StoryPublishQueueItem].self, from: data)
         } catch {
             return []
@@ -787,6 +895,13 @@ public actor StoryPublishQueue {
 /// Throw this from the `onPublish` handler to mark a publish failure as
 /// permanent (4xx HTTP, validation rejected, story expired) so the queue
 /// stops retrying and surfaces the failure to the user via `publishFailed`.
+/// La publication n'a PAS été tentée : rien ne peut publier pour l'instant (l'exécuteur de l'app — le
+/// `StoryViewModel` racine — est démonté). La file garde l'item SANS consommer son budget de retry et arrête la
+/// passe ; la prochaine reprise (reconnexion, retour au premier plan, exécuteur remonté) la relance.
+public struct StoryPublishDeferredError: Error, Sendable {
+    public init() {}
+}
+
 public struct StoryPublishUnrecoverableError: Error, Sendable {
     public let message: String
 

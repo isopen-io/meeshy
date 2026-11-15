@@ -12,7 +12,29 @@ import MeeshySDK
 /// scaled through `CanvasGeometry.render(_:)` so two devices of different
 /// physical size show typography at identical visual proportions.
 public final class StoryTextLayer: CATextLayer {
-    public private(set) nonisolated(unsafe) var textObject: StoryTextObject?
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
+    private nonisolated let textObjectSlot = Locked<StoryTextObject?>(nil)
+    public private(set) nonisolated var textObject: StoryTextObject? {
+        get { textObjectSlot.read { $0 } }
+        set { textObjectSlot.mutate { $0 = newValue } }
+    }
+
+    /// **La taille de police PEINTE sur le canvas monté** — celle du calque ET
+    /// celle du champ de saisie en ligne (#8680). Une seule écriture : le texte
+    /// qu'on tape a la taille du texte qu'on publiera, et l'échelle de la carte
+    /// (`SceneCardProjection`) s'applique aux deux à la fois.
+    ///
+    /// C'est la taille de l'ÉDITION : `scale` n'y entre pas. Le pincement
+    /// agrandit le cadre entier par la transformation du calque (#9139,
+    /// `sceneTransform`), il ne recoupe jamais les lignes.
+    public nonisolated static func renderedFontSize(of text: StoryTextObject,
+                                                    in geometry: CanvasGeometry) -> CGFloat {
+        geometry.render(CGFloat(text.fontSize))
+    }
 
     /// Backing layer placed behind the text glyphs when `backgroundStyle` is
     /// non-`.none`. For `.solid` this is a tinted CALayer; for `.glass` this is
@@ -82,7 +104,7 @@ public final class StoryTextLayer: CATextLayer {
     public func configure(with text: StoryTextObject,
                           geometry: CanvasGeometry,
                           mode: RenderMode,
-                          renderScale: CGFloat = UIScreen.main.scale) {
+                          renderScale: CGFloat = StoryCanvasDisplayScale.ambient) {
         self.textObject = text
         self.renderScale = renderScale
 
@@ -93,7 +115,9 @@ public final class StoryTextLayer: CATextLayer {
         // render space (e.g. `attributed.size()` at the rendered font), font
         // hinting + sub-pixel rounding would break the iPhone↔iPad linearity
         // contract enforced by `CrossDeviceEquivalenceTests`.
-        let designFontSize = CGFloat(text.fontSize * text.scale)
+        // Mise en ligne à la taille de l'ÉDITION : `scale` agrandit ensuite le
+        // cadre entier par `transform` (#9139), il ne recoupe pas les lignes.
+        let designFontSize = CGFloat(text.fontSize)
         // `resolveFont(forTextObject:...)` respecte le `textStyle` (bold / neon
         // / typewriter / handwriting / classic) en plus de la `fontFamily`.
         // Auparavant `resolveFont(family:size:)` ignorait textStyle, donc le
@@ -111,8 +135,8 @@ public final class StoryTextLayer: CATextLayer {
         // police ; une valeur NÉGATIVE remplit ET contoure (positif = texte
         // creux). `borderWidth` est en design-px absolus → le diviser par la
         // taille de police design donne un pourcentage indépendant de la
-        // résolution ET de l'échelle (le contour garde la même épaisseur design
-        // quel que soit `text.scale`).
+        // résolution. Comme le reste du cadre, le contour grandit avec
+        // `text.scale` (#9139) : le pincement met à l'échelle la forme entière.
         let strokeAttrs = Self.strokeAttributes(for: text, designFontSize: designFontSize)
 
         // Measure in design space.
@@ -237,6 +261,11 @@ public final class StoryTextLayer: CATextLayer {
         // Render-space bounds is the linear projection of the design bounds.
         let renderedBounds = geometry.render(metrics.bounds)
         bounds = CGRect(origin: .zero, size: renderedBounds)
+        // Le cadre est agrandi par `transform` : on rasterise à la densité
+        // qu'il occupera à l'écran, pour des glyphes nets (#9139).
+        self.renderScale = Self.rasterScale(renderScale: renderScale,
+                                            objectScale: text.scale,
+                                            longestSide: max(renderedBounds.width, renderedBounds.height))
 
         // Formes path-based : tracé + zone de glyphes projetés en render-space
         // (projection uniforme — `CanvasGeometry.scaleFactor` est le même en x
@@ -255,7 +284,7 @@ public final class StoryTextLayer: CATextLayer {
         }
 
         // Render-space font for actual painting — applique aussi le textStyle.
-        let renderedFontSize = geometry.render(designFontSize)
+        let renderedFontSize = Self.renderedFontSize(of: text, in: geometry)
         let renderedFont = StoryTextFontResolver.resolveFont(forTextObject: text, size: renderedFontSize)
         let renderedAttr = NSAttributedString(string: text.text, attributes: [
             .font: renderedFont,
@@ -274,7 +303,7 @@ public final class StoryTextLayer: CATextLayer {
         // (and tests) can read it directly without unwrapping the attributed string.
         fontSize = renderedFontSize
         alignmentMode = caTextAlignment(from: alignment)
-        contentsScale = renderScale
+        contentsScale = self.renderScale
         isWrapped = true
         // Jamais de troncature « … » : la mesure ci-dessus dimensionne `bounds`
         // pour contenir tout le texte wrappé. `.none` garantit l'absence
@@ -285,13 +314,13 @@ public final class StoryTextLayer: CATextLayer {
         let designCenterY = geometry.designHeightLength(forNormalized: CGFloat(text.y))
         position = geometry.render(CGPoint(x: designCenterX, y: designCenterY))
         anchorPoint = text.anchor
-        transform = CATransform3DMakeRotation(CGFloat(text.rotation) * .pi / 180, 0, 0, 1)
+        transform = Self.sceneTransform(rotationDegrees: text.rotation, scale: text.scale)
         zPosition = CGFloat(text.zIndex)
         name = text.id
 
         // Static text is a rasterization candidate during playback.
         shouldRasterize = mode == .play && text.isStatic
-        if shouldRasterize { rasterizationScale = renderScale }
+        if shouldRasterize { rasterizationScale = self.renderScale }
 
         // Install background fill / glass backdrop behind the text glyphs.
         // The CATextLayer renders its `string` into its OWN contents. Un
@@ -302,6 +331,115 @@ public final class StoryTextLayer: CATextLayer {
         // tandis que le GLASS reste un sous-calque (il fait du blur GPU).
         applyBackgroundStyle(text.resolvedBackgroundStyle, geometry: geometry)
         applyFrameBorder(text, geometry: geometry)
+        applyTextEffect(text, renderedFontSize: renderedFontSize, textColor: color)
+    }
+
+    // MARK: - Effet (#4870)
+
+    /// **L'ombre de l'EFFET vit sur la calque qui PEINT les glyphes** — la
+    /// sous-calque quand il y en a une, `self` sinon.
+    ///
+    /// Une ombre `CALayer` se calcule sur TOUT ce que la calque compose,
+    /// sous-calques compris. Posée sur `self` au-dessus d'un fond solide ou
+    /// d'un liseré, elle ombrerait la BOÎTE et non les lettres — c'est
+    /// pourquoi `applyBackgroundStyle` force la sous-calque de glyphes dès
+    /// qu'un effet rencontre une boîte (`effectNeedsGlyphSublayer`). Un texte
+    /// nu garde le chemin historique : ses glyphes sont le seul contenu de
+    /// `self`, l'ombre est donc la leur.
+    ///
+    /// Les deux hôtes possibles sont REMIS À ZÉRO avant de poser : `configure`
+    /// est idempotent, et une calque réutilisée ne doit pas garder l'ombre
+    /// d'un objet précédent ni celle d'un fond qu'elle n'a plus.
+    @MainActor
+    private func applyTextEffect(_ text: StoryTextObject,
+                                 renderedFontSize: CGFloat,
+                                 textColor: UIColor) {
+        StoryTextEffectRendering.clear(self)
+        if let glyphLayer { StoryTextEffectRendering.clear(glyphLayer) }
+        applyFlame(text, renderedFontSize: renderedFontSize)
+        guard text.hasTextEffect else { return }
+        StoryTextEffectRendering.apply(text.parsedTextEffect,
+                                       to: glyphLayer ?? self,
+                                       fontSize: renderedFontSize,
+                                       textColor: textColor,
+                                       rasterizationScale: renderScale)
+    }
+
+    // MARK: - Flamme (#17112)
+
+    /// Le feu du texte, posé AU-DESSUS de la sous-calque de glyphes et masqué
+    /// par leur silhouette — `nil` pour tout autre effet.
+    public private(set) var flameLayer: StoryFlameLayer?
+
+    /// **Les flammes brûlent sur les lettres** : la calque de feu se cale sur
+    /// le cadre des glyphes (la sous-calque, que `effectNeedsGlyphSublayer`
+    /// impose à un texte en feu) et prend leur silhouette depuis un clone du
+    /// `CATextLayer` — même moteur, même mise en ligne, donc des flammes
+    /// exactement sur les lettres posées.
+    ///
+    /// La calque elle-même n'est plus rasterisée : un cache de rasterisation
+    /// figerait le feu sur sa première image. Les glyphes, eux, le restent
+    /// (`StoryTextEffectRendering.apply` rasterise la sous-calque).
+    @MainActor
+    private func applyFlame(_ text: StoryTextObject, renderedFontSize: CGFloat) {
+        guard text.parsedTextEffect.burns, let glyphs = visibleString else {
+            flameLayer?.removeFromSuperlayer()
+            flameLayer = nil
+            return
+        }
+        let glyphFrame = glyphLayer?.frame ?? bounds
+        let alignment = alignmentMode
+        let flame = flameLayer ?? StoryFlameLayer()
+        flame.configure(glyphFrame: glyphFrame,
+                        fontSize: renderedFontSize,
+                        key: StoryFlameGlyphKey(glyphs: glyphs, size: glyphFrame.size, scale: renderScale),
+                        animates: StoryFlameTextRenderer.motionAllowed) { ctx in
+            Self.renderGlyphCoverage(glyphs, size: glyphFrame.size, alignment: alignment, in: ctx)
+        }
+        flame.zPosition = 1
+        flame.contentsScale = renderScale
+        flame.isHidden = glyphsHidden
+        if flame.superlayer !== self { addSublayer(flame) }
+        flameLayer = flame
+        shouldRasterize = false
+    }
+
+    @MainActor
+    private static func renderGlyphCoverage(_ glyphs: NSAttributedString, size: CGSize,
+                                            alignment: CATextLayerAlignmentMode, in ctx: CGContext) {
+        let clone = CATextLayer()
+        clone.bounds = CGRect(origin: .zero, size: size)
+        clone.string = glyphs
+        clone.alignmentMode = alignment
+        clone.isWrapped = true
+        clone.truncationMode = .none
+        clone.render(in: ctx)
+    }
+
+    /// Pose le feu de l'instant `elapsed` sur la calque MODÈLE — pour un rendu
+    /// par `layer.render(in:)`, qui ne fait tourner aucune animation.
+    @MainActor
+    public func showFlameFrame(atElapsed elapsed: TimeInterval) {
+        flameLayer?.show(atElapsed: elapsed - (textObject?.startTime ?? 0))
+    }
+
+    /// Un effet rencontre-t-il quelque chose que `self` PEINT en plus des
+    /// glyphes — un fond solide sur `backgroundColor`, un liseré sur `border` ?
+    /// Alors les glyphes doivent migrer en sous-calque pour que l'ombre soit la
+    /// leur — voir `applyTextEffect`.
+    ///
+    /// La question est « qu'est-ce que `self` peint ? », PAS « y a-t-il une
+    /// boîte ? » : `hasFrameBox` est faux dès que la forme est « Aucun », mais
+    /// `applyBackgroundStyle(.solid)` pose le fond sur `backgroundColor` sans
+    /// regarder la forme — fond solide + forme « Aucun » + effet ombrait la
+    /// boîte. Le verre et les formes
+    /// path-based installent toujours leur sous-calque : ce prédicat ne
+    /// tranche que les cas où `self` peint lui-même.
+    private var effectNeedsGlyphSublayer: Bool {
+        guard let textObject, textObject.hasTextEffect else { return false }
+        return textObject.parsedTextEffect.burns
+            || textObject.hasFrameBox
+            || textObject.resolvedBackgroundStyle != StoryTextBackgroundStyle.none
     }
 
     /// Rend les glyphes invisibles (couleur de premier plan transparente) tout
@@ -311,6 +449,7 @@ public final class StoryTextLayer: CATextLayer {
     @MainActor
     public func setGlyphsHidden(_ hidden: Bool) {
         glyphsHidden = hidden
+        flameLayer?.isHidden = hidden
         if let glyphLayer {
             // Cas `.glass` : les glyphes visibles vivent dans la sous-calque
             // au-dessus du backdrop. Le parent reste transparent en permanence.
@@ -373,8 +512,10 @@ public final class StoryTextLayer: CATextLayer {
             // Texte nu, sans boîte : les glyphes peignent directement `self`
             // (chemin historique, inchangé) SAUF si une réserve d'encre
             // existe — auquel cas elle doit rester vide de VRAIS glyphes
-            // (Panne 2), d'où la même sous-calque insetée que les autres fonds.
-            if inkOverhangRenderPad > 0 {
+            // (Panne 2), d'où la même sous-calque insetée que les autres fonds
+            // — ou si un EFFET rencontre un liseré porté par `self`
+            // (`effectNeedsGlyphSublayer`, #4870).
+            if inkOverhangRenderPad > 0 || effectNeedsGlyphSublayer {
                 installGlyphSublayer(frame: glyphPaintFrame(bounds))
             }
             return
@@ -411,8 +552,10 @@ public final class StoryTextLayer: CATextLayer {
             cornerRadius = frameCornerRadius(height: bounds.height)
             // Même réserve d'encre que le cas `.none` nu ci-dessus : le fond
             // vit sur `backgroundColor` (inchangé), seuls les glyphes migrent
-            // en sous-calque insetée quand `inkOverhangRenderPad > 0`.
-            if inkOverhangRenderPad > 0 {
+            // en sous-calque insetée quand `inkOverhangRenderPad > 0` — ou
+            // quand un EFFET doit ombrer les lettres et non la boîte
+            // (`effectNeedsGlyphSublayer`, #4870).
+            if inkOverhangRenderPad > 0 || effectNeedsGlyphSublayer {
                 installGlyphSublayer(frame: glyphPaintFrame(bounds))
             }
 
@@ -519,6 +662,35 @@ public final class StoryTextLayer: CATextLayer {
         glassBackdropLayer?.setBackdropTexture(texture)
     }
 
+    /// `true` pour un texte en verre : seul porteur d'une couche à nourrir.
+    var hasGlassBackdrop: Bool { glassBackdropLayer != nil }
+
+    /// **La vitre seule** (#12602) : le fond Verre peint en blanc opaque, sans glyphe, liseré,
+    /// ombre ni teinte — la découpe où un peintre de média floute ce qu'il y a dessous.
+    /// `false` (et rien ne change) pour un texte sans verre.
+    @MainActor
+    @discardableResult
+    func isolateGlassPane() -> Bool {
+        guard let vitre = glassBackdropLayer else { return false }
+        sublayers?.filter { $0 !== vitre }.forEach { $0.isHidden = true }
+        string = nil
+        backgroundColor = nil
+        borderWidth = 0
+        shadowOpacity = 0
+        vitre.contents = nil
+        vitre.borderWidth = 0
+        vitre.backgroundColor = UIColor.white.cgColor
+        return true
+    }
+
+    /// Ce que la lecture a déjà donné au verre de ce texte (#9864).
+    var glassBackdropFeedStamp: StoryGlassFeedStamp? { glassBackdropLayer?.feedStamp }
+
+    @MainActor
+    func setBackdropTexture(_ texture: MTLTexture?, stamp: StoryGlassFeedStamp) {
+        glassBackdropLayer?.setBackdropTexture(texture, stamp: stamp)
+    }
+
     // MARK: - Helpers
 
     /// Corner radius of the framing box, derived from the text object's
@@ -532,241 +704,6 @@ public final class StoryTextLayer: CATextLayer {
         case .pill:      return height / 2
         case .rectangle: return max(2, height * 0.04)
         }
-    }
-
-    // MARK: - Frame geometry (path-based shapes)
-
-    /// Hauteur (design px) de la bande réservée à la queue de la bulle BD.
-    nonisolated static let speechTailHeight: CGFloat = 40
-    /// Rayon (design px) des bosses du nuage.
-    nonisolated static let cloudPuffRadius: CGFloat = 26
-    /// Hauteur (design px) de la bande réservée aux bulles de pensée du nuage.
-    nonisolated static let cloudThoughtHeight: CGFloat = 48
-
-    /// Encombrement design-space du cadre + zone de glyphes pour une forme.
-    nonisolated struct FrameMetrics: Equatable {
-        let bounds: CGSize
-        let glyphRect: CGRect
-    }
-
-    /// Calcule l'encombrement du cadre et la zone où les glyphes sont peints,
-    /// en design px. Formes à coins : pad horizontal ≥ 1 'o' (framé) ou 8 px,
-    /// +16 vertical — comportement historique inchangé. Formes path-based :
-    /// - losange : rect w×h inscrit dans un rhombe de diagonales (2w, 2h) —
-    ///   les coins du texte touchent exactement les bords, glyphes centrés ;
-    /// - bulle BD : corps arrondi + bande basse pour la queue ;
-    /// - nuage : bosses tout autour + bande basse pour les bulles de pensée.
-    ///
-    /// `nonisolated static` pour être testable sans instancier de calque.
-    /// Débord d'encre maximal (design px) d'un côté ou de l'autre des lignes
-    /// wrappées : différence entre les bounds de TRACÉ des glyphes
-    /// (`.useGlyphPathBounds` — l'encre réellement peinte) et la largeur
-    /// typographique (somme des avances) que mesure `boundingRect`. Les
-    /// empattements/terminaisons serif dépassent l'avance ; sans cette marge,
-    /// CATextLayer rogne le premier/dernier glyphe.
-    nonisolated static func maxInkOverhangPerSide(of attributed: NSAttributedString,
-                                                  wrappedTo maxWidth: CGFloat) -> CGFloat {
-        guard attributed.length > 0 else { return 0 }
-        let framesetter = CTFramesetterCreateWithAttributedString(attributed)
-        let path = CGPath(rect: CGRect(x: 0, y: 0, width: maxWidth, height: 1_000_000),
-                          transform: nil)
-        let frame = CTFramesetterCreateFrame(framesetter,
-                                             CFRange(location: 0, length: 0), path, nil)
-        guard let lines = CTFrameGetLines(frame) as? [CTLine], !lines.isEmpty else { return 0 }
-        var overhang: CGFloat = 0
-        for line in lines {
-            let typographic = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
-            let ink = CTLineGetBoundsWithOptions(line, [.useGlyphPathBounds])
-            overhang = max(overhang, ink.maxX - typographic, -ink.minX)
-        }
-        return max(0, ceil(overhang))
-    }
-
-    /// Hauteur EXIGÉE par CoreText — le moteur qui peint réellement le
-    /// contenu d'un `CATextLayer` — pour poser TOUT `attributed` wrappé à
-    /// `maxWidth` sans qu'aucune ligne ne soit agglomérée. `boundingRect`
-    /// (TextKit, utilisé pour `designSize`/`renderedNeed` dans `configure`)
-    /// sous-estime cette hauteur quand une ligne contient des glyphes à
-    /// ascent/descent supérieur à la police du texte — Apple Color Emoji en
-    /// fin de ligne, typiquement — car `.usesFontLeading` ne le compte pas
-    /// comme CoreText le fait à la pose réelle.
-    ///
-    /// `CTFramesetterSuggestFrameSizeWithConstraints` (l'ancienne
-    /// implémentation) SOUS-ESTIME lui-même encore ce calcul dans un cas
-    /// précis : une ligne composée UNIQUEMENT d'emoji (descent Apple Color
-    /// Emoji ≈ 0,3125 em), posée avec une police de base dont le descent est
-    /// PLUS GRAND (ex. SavoyeLetPlain ≈ 0,5 em). `CATextLayer` réserve alors
-    /// AU MOINS le descent de sa police de base MÊME pour cette ligne — ce
-    /// que `CTLineGetTypographicBounds` (et donc `SuggestFrameSize`, qui s'y
-    /// ramène) ignore puisqu'il ne rapporte que le max des runs RÉELLEMENT
-    /// PRÉSENTS sur la ligne (ici, uniquement le run emoji substitué). Sur
-    /// une ligne MIXTE texte+emoji ce n'est pas un problème : `CTLine` a déjà
-    /// pris le max des runs, qui inclut le run texte à fort descent.
-    ///
-    /// On reconstruit donc un vrai `CTFrame` (`CTFramesetterCreateFrame`) à
-    /// `maxWidth`, on récupère ses `CTLine`s, et pour CHAQUE ligne on calcule
-    /// `ascent + max(descent de la ligne, descent de `baseFont`) + leading`,
-    /// puis on somme sur toutes les lignes — exactement le calcul de hauteur
-    /// réel de `CATextLayer` (vérifié à ±0,01pt sur 4 configurations par
-    /// réplication du rendu réel, repro 2026-08). `baseFont` doit être la
-    /// police du texte PRINCIPAL (`designFont`/`renderedFont` selon l'espace
-    /// de mesure appelant) — PAS forcément celle du run de la ligne courante,
-    /// qui peut avoir été substituée (cas emoji).
-    ///
-    /// `nonisolated static` pour être testable sans instancier de calque
-    /// (même pattern que `maxInkOverhangPerSide`).
-    nonisolated static func coreTextRequiredHeight(of attributed: NSAttributedString,
-                                                   wrappedTo maxWidth: CGFloat,
-                                                   baseFont: CTFont) -> CGFloat {
-        guard attributed.length > 0, maxWidth > 0 else { return 0 }
-        let framesetter = CTFramesetterCreateWithAttributedString(attributed)
-        let path = CGPath(rect: CGRect(x: 0, y: 0, width: maxWidth, height: 1_000_000),
-                          transform: nil)
-        let frame = CTFramesetterCreateFrame(framesetter,
-                                             CFRange(location: 0, length: 0), path, nil)
-        guard let lines = CTFrameGetLines(frame) as? [CTLine], !lines.isEmpty else { return 0 }
-        let baseDescent = CTFontGetDescent(baseFont)
-        var total: CGFloat = 0
-        for line in lines {
-            var ascent: CGFloat = 0
-            var descent: CGFloat = 0
-            var leading: CGFloat = 0
-            _ = CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
-            total += ascent + max(descent, baseDescent) + leading
-        }
-        return ceil(total)
-    }
-
-    nonisolated static func frameMetrics(shape: StoryTextFrameShape,
-                                         isFramed: Bool,
-                                         textSize: CGSize,
-                                         oGlyphWidth: CGFloat,
-                                         paddingScale: CGFloat = 1) -> FrameMetrics {
-        let w = ceil(textSize.width)
-        let h = ceil(textSize.height)
-        // Un texte NU n'a pas de boîte : le curseur de marge ne le concerne
-        // pas, et lui appliquer changerait la mise en page de toutes les
-        // stories sans cadre.
-        let scale = isFramed ? max(0, paddingScale) : 1
-        let hPad = max(8, oGlyphWidth) * scale
-        let vPad = 8 * scale
-        guard isFramed, shape.usesCustomPath else {
-            return FrameMetrics(bounds: CGSize(width: w + hPad * 2, height: h + vPad * 2),
-                                glyphRect: CGRect(x: hPad, y: vPad, width: w, height: h))
-        }
-        switch shape {
-        case .none, .rounded, .pill, .rectangle:
-            // Couvert par le guard (usesCustomPath == false) — jamais atteint.
-            return FrameMetrics(bounds: CGSize(width: w + hPad * 2, height: h + vPad * 2),
-                                glyphRect: CGRect(x: hPad, y: vPad, width: w, height: h))
-        case .diamond:
-            let width = max(w * 2, w + hPad * 2)
-            let height = max(h * 2, h + vPad * 2)
-            return FrameMetrics(bounds: CGSize(width: width, height: height),
-                                glyphRect: CGRect(x: (width - w) / 2,
-                                                  y: (height - h) / 2,
-                                                  width: w, height: h))
-        case .speech:
-            // `speechTailHeight` est une caractéristique de la forme et non une
-            // marge : la faire suivre le curseur détacherait la queue du corps.
-            return FrameMetrics(bounds: CGSize(width: w + hPad * 2,
-                                               height: h + vPad * 2 + speechTailHeight),
-                                glyphRect: CGRect(x: hPad, y: vPad, width: w, height: h))
-        case .cloud:
-            let puff = cloudPuffRadius
-            return FrameMetrics(bounds: CGSize(width: w + hPad * 2 + puff * 2,
-                                               height: h + vPad * 2 + puff * 2 + cloudThoughtHeight),
-                                glyphRect: CGRect(x: hPad + puff, y: vPad + puff,
-                                                  width: w, height: h))
-        }
-    }
-
-    /// Tracé design-space du cadre pour les formes path-based ; `nil` pour les
-    /// formes à coins (rendues par `cornerRadius`). Les sous-tracés se
-    /// chevauchent volontairement : un fill nonzero peint chaque pixel UNE
-    /// seule fois, donc pas de couture ni de sur-opacité même avec un fond
-    /// translucide (hex "…A6").
-    nonisolated static func framePath(shape: StoryTextFrameShape, in rect: CGRect) -> CGPath? {
-        switch shape {
-        case .none, .rounded, .pill, .rectangle:
-            return nil
-
-        case .diamond:
-            let path = CGMutablePath()
-            path.move(to: CGPoint(x: rect.midX, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
-            path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
-            path.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
-            path.closeSubpath()
-            return path
-
-        case .speech:
-            let body = CGRect(x: rect.minX, y: rect.minY,
-                              width: rect.width,
-                              height: max(1, rect.height - speechTailHeight))
-            let radius = max(0, min(body.height * 0.3, body.width * 0.2))
-            let path = CGMutablePath()
-            path.addRoundedRect(in: body, cornerWidth: radius, cornerHeight: radius)
-            // Queue pointée bas-gauche, chevauchant le corps de 2 px.
-            let baseX = body.minX + body.width * 0.20
-            let baseWidth = min(body.width * 0.30, speechTailHeight * 1.6)
-            path.move(to: CGPoint(x: baseX, y: body.maxY - 2))
-            path.addLine(to: CGPoint(x: baseX + baseWidth, y: body.maxY - 2))
-            path.addLine(to: CGPoint(x: max(rect.minX, baseX - speechTailHeight * 0.25),
-                                     y: rect.maxY))
-            path.closeSubpath()
-            return path
-
-        case .cloud:
-            let puff = cloudPuffRadius
-            let body = CGRect(x: rect.minX, y: rect.minY,
-                              width: rect.width,
-                              height: max(1, rect.height - cloudThoughtHeight))
-            let inner = body.insetBy(dx: puff, dy: puff)
-            guard inner.width > 0, inner.height > 0 else {
-                return CGPath(ellipseIn: body, transform: nil)
-            }
-            let path = CGMutablePath()
-            let radius = max(0, min(inner.height, inner.width) * 0.25)
-            path.addRoundedRect(in: inner, cornerWidth: radius, cornerHeight: radius)
-            addCloudPuffs(to: path, around: inner, radius: puff)
-            // Bulles de pensée en cascade vers le bas-gauche, contenues dans
-            // la bande `cloudThoughtHeight`.
-            let large = puff * 0.6
-            let small = puff * 0.35
-            let cx = max(inner.minX + puff, inner.minX + inner.width * 0.15)
-            path.addEllipse(in: CGRect(x: cx - large, y: body.maxY - large * 0.4,
-                                       width: large * 2, height: large * 2))
-            path.addEllipse(in: CGRect(x: cx - puff * 0.8 - small,
-                                       y: body.maxY + large * 1.4,
-                                       width: small * 2, height: small * 2))
-            return path
-        }
-    }
-
-    /// Ajoute une rangée de cercles (rayon `radius`) centrés sur le périmètre
-    /// de `rect` — les bosses du nuage. Espacement ~1.5 rayon pour un
-    /// chevauchement moelleux sans trous.
-    private nonisolated static func addCloudPuffs(to path: CGMutablePath,
-                                                  around rect: CGRect,
-                                                  radius: CGFloat) {
-        func addAlong(from a: CGPoint, to b: CGPoint) {
-            let distance = hypot(b.x - a.x, b.y - a.y)
-            let steps = max(1, Int(ceil(distance / (radius * 1.5))))
-            for i in 0...steps {
-                let t = CGFloat(i) / CGFloat(steps)
-                let center = CGPoint(x: a.x + (b.x - a.x) * t,
-                                     y: a.y + (b.y - a.y) * t)
-                path.addEllipse(in: CGRect(x: center.x - radius,
-                                           y: center.y - radius,
-                                           width: radius * 2,
-                                           height: radius * 2))
-            }
-        }
-        addAlong(from: CGPoint(x: rect.minX, y: rect.minY), to: CGPoint(x: rect.maxX, y: rect.minY))
-        addAlong(from: CGPoint(x: rect.maxX, y: rect.minY), to: CGPoint(x: rect.maxX, y: rect.maxY))
-        addAlong(from: CGPoint(x: rect.maxX, y: rect.maxY), to: CGPoint(x: rect.minX, y: rect.maxY))
-        addAlong(from: CGPoint(x: rect.minX, y: rect.maxY), to: CGPoint(x: rect.minX, y: rect.minY))
     }
 
     /// Calcule les attributs de stroke (`strokeColor`, `strokeWidth`) pour un
@@ -840,23 +777,6 @@ public final class StoryTextLayer: CATextLayer {
     /// Logique identique à l'ancien `parseHexColor` MainActor.
     nonisolated static func parseHexColorNonisolated(_ hex: String?) -> UIColor? {
         guard let hex else { return nil }
-        var trimmed = hex.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix("#") { trimmed.removeFirst() }
-        guard trimmed.count == 6 || trimmed.count == 8 else { return nil }
-        var rgb: UInt64 = 0
-        guard Scanner(string: trimmed).scanHexInt64(&rgb) else { return nil }
-        let r, g, b, a: CGFloat
-        if trimmed.count == 8 {
-            r = CGFloat((rgb & 0xFF000000) >> 24) / 255
-            g = CGFloat((rgb & 0x00FF0000) >> 16) / 255
-            b = CGFloat((rgb & 0x0000FF00) >> 8) / 255
-            a = CGFloat(rgb & 0x000000FF) / 255
-        } else {
-            r = CGFloat((rgb & 0xFF0000) >> 16) / 255
-            g = CGFloat((rgb & 0x00FF00) >> 8) / 255
-            b = CGFloat(rgb & 0x0000FF) / 255
-            a = 1.0
-        }
-        return UIColor(red: r, green: g, blue: b, alpha: a)
+        return HexColor(hex: hex)?.uiColor
     }
 }

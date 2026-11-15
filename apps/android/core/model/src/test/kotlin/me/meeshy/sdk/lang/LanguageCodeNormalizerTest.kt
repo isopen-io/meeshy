@@ -84,11 +84,20 @@ class LanguageCodeNormalizerTest {
     }
 
     @Test
-    fun normalize_rejectsReductionWhoseTargetIsNotSupported() {
-        // "orm"/"nya" ARE in the reduction table (-> "om"/"ny") but those targets
-        // are absent from the Android catalogue, so the re-validation drops them.
-        assertThat(LanguageCodeNormalizer.normalize("orm")).isNull()
-        assertThat(LanguageCodeNormalizer.normalize("nya")).isNull()
+    fun normalize_reducesToTheLanguagesTheCatalogueGainedFromIos() {
+        // "orm"/"nya"/"tir" are in the reduction table (-> "om"/"ny"/"ti"); those targets
+        // joined the Android catalogue with the 83-language alignment on iOS, so the
+        // re-validation now keeps them instead of dropping the reader on the original.
+        assertThat(LanguageCodeNormalizer.normalize("orm")).isEqualTo("om")
+        assertThat(LanguageCodeNormalizer.normalize("nya")).isEqualTo("ny")
+        assertThat(LanguageCodeNormalizer.normalize("tir")).isEqualTo("ti")
+    }
+
+    @Test
+    fun normalize_preservesTheCameroonCodesWithoutAnIso6391Equivalent() {
+        assertThat(LanguageCodeNormalizer.normalize("ksf")).isEqualTo("ksf")
+        assertThat(LanguageCodeNormalizer.normalize("nnh")).isEqualTo("nnh")
+        assertThat(LanguageCodeNormalizer.normalize("ksf-CM")).isEqualTo("ksf")
     }
 
     @Test
@@ -96,6 +105,30 @@ class LanguageCodeNormalizerTest {
         // Historical behaviour: an unknown 2-letter code is kept as-is (it simply
         // won't match any translation, and the caller applies its own fallback).
         assertThat(LanguageCodeNormalizer.normalize("xx")).isEqualTo("xx")
+    }
+
+    @Test
+    fun normalize_reducesDeprecatedIso6391Aliases() {
+        // The JVM keeps the retired ISO 639-1 codes for backward compat:
+        // `java.util.Locale.getLanguage()` normalises he->iw, id->in, yi->ji.
+        // An Android device on a Hebrew locale therefore emits "iw", which — left
+        // verbatim — matches no `MessageTranslation` (keyed "he") and drops the
+        // reader onto the untranslated original: a direct Prisme Linguistique
+        // violation. Mirror of `LEGACY_ISO_639_1` (language-normalize.ts) and
+        // `legacyISO6391Map` (AuthModels.swift).
+        assertThat(LanguageCodeNormalizer.normalize("iw")).isEqualTo("he")
+        assertThat(LanguageCodeNormalizer.normalize("in")).isEqualTo("id")
+        // Region/script tags on a deprecated alias reduce too (Locale "iw_IL").
+        assertThat(LanguageCodeNormalizer.normalize("iw-IL")).isEqualTo("he")
+        assertThat(LanguageCodeNormalizer.normalize("IW")).isEqualTo("he")
+    }
+
+    @Test
+    fun normalize_rejectsDeprecatedAliasWhoseTargetIsNotSupported() {
+        // "ji" -> "yi" (Yiddish) is in the legacy table, but "yi" is absent from
+        // the Android catalogue, so re-validation drops it — exactly as the TS/iOS
+        // mirrors do (`SUPPORTED_CODES.has("yi")` is false).
+        assertThat(LanguageCodeNormalizer.normalize("ji")).isNull()
     }
 
     @Test

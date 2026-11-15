@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:notifications": {
+      "resDir": "feature/notifications/src/main/res",
+      "entries": [
+        {"androidName": "notifications_category_engagement", "status": "android-only"}
+      ]
+    }
+  }
+}

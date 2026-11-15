@@ -1,0 +1,335 @@
+/**
+ * LE JOURNAL DES APPELS (#8066) — sa lecture, extraite de `CallService`
+ * (budget de taille) pour y ajouter l'effacement : `hideCallFromHistory` /
+ * `clearCallHistory` masquent POUR SOI (`CallSession.hiddenForUserIds`),
+ * jamais pour les autres membres de la conversation.
+ */
+import { CallStatus, type Prisma, type PrismaClient } from '@meeshy/shared/prisma/client';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import { getPresenceVisibilityService, type PresenceViewer } from '../PresenceVisibilityService';
+import {
+  buildCallHistoryItem,
+  type CallHistoryItem,
+  type CallHistoryPeer,
+  type CallHistoryRow
+} from '../callHistory';
+import { resolveGroupCallParticipants } from './callHistoryParticipants';
+import { answeredCallRoster, callsTrackingAnswers, isDuoCall, type CallRosterLine, type RosterCall } from './answeredCallRoster';
+import { journalConversationsMatching, normalizedJournalQuery } from './callHistorySearch';
+
+export type CallHistoryType = 'all' | 'audio' | 'video';
+
+type ReaderCallLine = CallRosterLine & { readonly callSessionId: string };
+
+/** Call journal sliding window: 3 months. */
+export const CALL_HISTORY_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
+
+// Mirror of `CALL_TERMINAL_STATUSES` (@meeshy/shared/types/video-call),
+// typed on the Prisma enum — keep both lists in sync.
+const HISTORY_STATUSES: CallStatus[] = [
+  CallStatus.ended,
+  CallStatus.missed,
+  CallStatus.rejected,
+  CallStatus.failed
+];
+
+/**
+ * QUI LIT UN APPEL DANS SON JOURNAL (#8468) : un membre ACTIF de sa
+ * conversation, ou une personne qui l'a rejoint ou y a été invitée sans en
+ * être membre (#8433 — sa participation est inactive, `role: 'call-guest'`).
+ * `has` POSITIF lit une liste absente comme « ne contient pas ».
+ */
+const journalAccess = (userId: string): Prisma.CallSessionWhereInput => ({
+  OR: [
+    { conversation: { participants: { some: { userId, isActive: true } } } },
+    { participants: { some: { participant: { userId } } } },
+    { invitedUserIds: { has: userId } }
+  ]
+});
+
+/**
+ * L'ONGLET « MANQUÉS » D'UN LECTEUR (#18242), traduction en requête de la
+ * direction (`answeredCallRoster`) : un appel qu'il n'a pas lancé, et (a) le
+ * statut `missed` que pose la sonnerie quand personne n'a répondu, ou (b) un
+ * appel décroché où il n'a aucune ligne (refusé, ignoré, hors ligne — il finit
+ * `ended`, jamais `missed`, Vague 136), ou (c) un appel de GROUPE SUIVI (une
+ * ligne au moins porte la clé `answeredAt`) où aucune de ses lignes n'est
+ * décrochée — une ligne de sonnerie n'y vaut pas participation. Un duo et un
+ * appel non suivi gardent la règle d'avant : sa ligne l'exclut. Aucune horloge.
+ */
+const missedByReader = (userId: string): Prisma.CallSessionWhereInput => ({
+  initiatorId: { not: userId },
+  OR: [
+    { status: CallStatus.missed },
+    { answeredAt: { not: null }, participants: { none: { participant: { userId } } } },
+    {
+      answeredAt: { not: null },
+      participants: { some: { answeredAt: { isSet: true } }, none: { participant: { userId }, answeredAt: { not: null } } },
+      OR: [{ conversation: { type: { not: 'direct' } } }, { invitedUserIds: { isEmpty: false } }]
+    }
+  ]
+});
+
+const AUDIO_ONLY: Prisma.CallSessionWhereInput = {
+  OR: [{ isVideo: { isSet: false } }, { isVideo: null }, { isVideo: false }]
+};
+
+type JournalScope = Prisma.CallSessionWhereInput & { AND: Prisma.CallSessionWhereInput[] };
+
+/**
+ * CE QUE LE JOURNAL D'UN LECTEUR CONTIENT : les appels terminés qu'il peut lire
+ * (`journalAccess`) sur la fenêtre glissante, moins ceux qu'il a effacés
+ * (#8066). La lecture et le « tout effacer » partagent cette portée : vider
+ * efface exactement ce que le journal montrait.
+ *
+ * L'effacement se retire PAR IDENTIFIANT, jamais par `NOT: { hiddenForUserIds:
+ * { has } }` (#8294) : sur MongoDB, Prisma écarte de toute négation le document
+ * où la clé est absente (#8309), et une session créée avant `@default([])`
+ * n'en porte pas la clé — le journal rendait 0 appel.
+ */
+const journalScope = async (
+  prisma: PrismaClient,
+  userId: string,
+  windowStart: Date
+): Promise<JournalScope> => {
+  const base: JournalScope = {
+    startedAt: { gte: windowStart },
+    status: { in: HISTORY_STATUSES },
+    AND: [journalAccess(userId)]
+  };
+  const hidden = await prisma.callSession.findMany({
+    where: { ...base, hiddenForUserIds: { has: userId } },
+    select: { id: true }
+  });
+  return hidden.length === 0 ? base : { ...base, id: { notIn: hidden.map((h) => h.id) } };
+};
+
+/**
+ * Ce qu'un appel montre à qui n'est PAS membre de sa conversation (#8468) :
+ * l'appel, ses horaires et les personnes qui l'ont rejoint — jamais le titre,
+ * l'avatar ni les membres de la conversation. Un duo où l'on a été invité se
+ * lit comme l'appel à plusieurs qu'il est devenu.
+ */
+const asSeenByGuest = <Row extends { conversation: { type: string; title: string | null; avatar: string | null } }>(
+  row: Row
+): Row => ({ ...row, conversation: { ...row.conversation, type: 'group', title: null, avatar: null } });
+
+/**
+ * Paginated call journal for a user: the terminal (ended/missed/rejected/
+ * failed) calls they can read (`journalAccess` — member, or joined/invited
+ * guest, #8468), newest first, over a 3-month sliding window. Cursor-paginated
+ * by call id. A guest's row is shaped by `asSeenByGuest`.
+ *
+ * Peer resolution: for a direct (P2P) conversation the "other party" is the
+ * conversation's other member — resolved from the conversation roster, not the
+ * call participants — so a missed outgoing call (callee never joined) still
+ * shows who was dialed. Group calls carry no peer (the conversation
+ * name/avatar identifies them) and name who joined in `participants`
+ * (`resolveGroupCallParticipants`, #8066) — never with any presence field.
+ *
+ * Peer presence (`CallHistoryPeer.isOnline`) is gated STRICT (directive
+ * produit 2026-08-25) — `options.viewer` (the caller themselves, from
+ * `viewerFromRequest`) must be the peer, an ADMIN/BIGBOSS, or their accepted
+ * friend, else `isOnline` reads `false`. Being the conversation's other
+ * member is what makes them a *peer* in this journal, never what makes them
+ * *visible* — the two used to be conflated by loading `isOnline` raw off the
+ * `Participant.user` roster query.
+ */
+export async function listCallHistory(
+  prisma: PrismaClient,
+  userId: string,
+  options: {
+    limit: number;
+    cursor?: string;
+    filter: 'all' | 'missed';
+    type?: CallHistoryType;
+    q?: string;
+    viewer: PresenceViewer;
+  }
+): Promise<{ items: CallHistoryItem[]; hasMore: boolean; nextCursor?: string }> {
+  const { limit, cursor, filter, viewer } = options;
+  const windowStart = new Date(Date.now() - CALL_HISTORY_WINDOW_MS);
+
+  const query = normalizedJournalQuery(options.q);
+  const conversationIds = query === null ? null : await journalConversationsMatching(prisma, userId, query);
+  if (conversationIds !== null && conversationIds.length === 0) return { items: [], hasMore: false, nextCursor: undefined };
+
+  const scope = await journalScope(prisma, userId, windowStart);
+  // Type d'appel (#8203) : `isVideo` est posé à la création ; un appel plus
+  // ancien que ce champ (non encore rattrapé par la migration 020) n'en porte
+  // pas et se lit « audio », comme `callIsVideo` le lit sur `metadata`.
+  // « Manqués », pour CE lecteur : `missedByReader`.
+  const where: Prisma.CallSessionWhereInput = {
+    ...scope,
+    ...(conversationIds !== null ? { conversationId: { in: conversationIds } } : {}),
+    ...(options.type === 'video' ? { isVideo: true } : {}),
+    ...(filter === 'missed' ? missedByReader(userId) : {}),
+    AND: [...scope.AND, ...(options.type === 'audio' ? [AUDIO_ONLY] : [])]
+  };
+
+  const rows = await prisma.callSession.findMany({
+    where,
+    orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    select: {
+      id: true,
+      conversationId: true,
+      mode: true,
+      status: true,
+      endReason: true,
+      initiatorId: true,
+      startedAt: true,
+      answeredAt: true,
+      endedAt: true,
+      duration: true,
+      bytesSent: true,
+      bytesReceived: true,
+      metadata: true,
+      reactionCounts: true,
+      invitedUserIds: true,
+      conversation: {
+        select: {
+          type: true,
+          title: true,
+          avatar: true,
+          participants: { where: { userId, isActive: true }, select: { id: true }, take: 1 }
+        }
+      }
+    }
+  });
+
+  const hasMore = rows.length > limit;
+  // La forme du duo se lit AVANT `asSeenByGuest`, qui réécrit le type de la conversation.
+  const duoCallIds = new Set(rows.filter(isDuoCall).map((row) => row.id));
+  const page = (hasMore ? rows.slice(0, limit) : rows).map((row) =>
+    row.conversation.participants.length > 0 ? row : asSeenByGuest(row)
+  );
+  const nextCursor = hasMore ? page[page.length - 1]?.id : undefined;
+
+  // Resolve all direct-call peers in a single batched roster query.
+  const directConvIds = Array.from(
+    new Set(page.filter((r) => r.conversation.type === 'direct').map((r) => r.conversationId))
+  );
+  const peerByConv = new Map<string, CallHistoryPeer>();
+  if (directConvIds.length > 0) {
+    const members = await prisma.participant.findMany({
+      where: { conversationId: { in: directConvIds }, userId: { not: userId } },
+      select: {
+        conversationId: true,
+        user: {
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            avatar: true,
+            phoneNumber: true,
+            isOnline: true
+          }
+        }
+      }
+    });
+    for (const m of members) {
+      if (m.user && !peerByConv.has(m.conversationId)) {
+        peerByConv.set(m.conversationId, {
+          userId: m.user.id,
+          username: m.user.username,
+          displayName: m.user.displayName ?? null,
+          avatar: m.user.avatar ?? null,
+          phoneNumber: m.user.phoneNumber ?? null,
+          isOnline: m.user.isOnline
+        });
+      }
+    }
+  }
+
+  // Gate peer presence STRICT — one batched resolution for the whole page,
+  // keyed the same way `resolveForTargets` is everywhere else. `isOnline` is
+  // NON-nullable on the wire (`CallHistoryPeer`, mirrored by the SDK's
+  // `APICallRecord.peer.isOnline: Bool`), so `applyPresenceVisibilityAsOffline`
+  // — not `applyPresenceVisibility` — keeps the key and folds "hidden" to
+  // `false` rather than `null`.
+  if (peerByConv.size > 0) {
+    const peerUserIds = Array.from(new Set(Array.from(peerByConv.values(), (p) => p.userId)));
+    const visibility = await getPresenceVisibilityService(prisma).resolveForTargets(viewer, peerUserIds);
+    for (const [conversationId, peer] of peerByConv) {
+      peerByConv.set(conversationId, applyPresenceVisibilityAsOffline(peer, visibility.get(peer.userId)));
+    }
+  }
+
+  // Resolve, for each call the current user did NOT initiate, whether they
+  // TOOK PART in it — `answeredCallRoster` (#18242), the same law as the
+  // card and the roster: a `CallParticipant` row exists from the RING on
+  // (clients early-join to receive the offer), so a member who rang and
+  // declined has a row and must still read "missed", never "incoming" — in a
+  // GROUP call that tracks answers. A duo and an untracked call keep the
+  // former rule (B-1), and the LAW says so (`duo`): a duo is tracked like any
+  // other call (#18453). The law filters line by line, so only the reader's
+  // own lines are loaded (#18453, as before #18242). See `deriveCallDirection`.
+  const nonOutgoingCalls = page.filter((r) => r.initiatorId !== userId);
+  const groupCalls = page.filter((r) => r.conversation.type !== 'direct');
+  const needsTracking = [...nonOutgoingCalls, ...groupCalls].filter((r) => r.answeredAt !== null);
+  const tracked = await callsTrackingAnswers(prisma, needsTracking.map((r) => r.id));
+  const rosterCall = (row: { id: string; answeredAt: Date | null }): RosterCall => ({
+    id: row.id,
+    answeredAt: row.answeredAt,
+    duo: duoCallIds.has(row.id),
+    tracksAnswers: tracked.has(row.id)
+  });
+
+  const participatedCallIds = new Set<string>();
+  if (nonOutgoingCalls.length > 0) {
+    const readerLines: ReadonlyArray<ReaderCallLine> = await prisma.callParticipant.findMany({
+      where: { callSessionId: { in: nonOutgoingCalls.map((r) => r.id) }, participant: { userId } },
+      select: { callSessionId: true, role: true, answeredAt: true }
+    });
+    for (const call of nonOutgoingCalls) {
+      const tookPart = answeredCallRoster(readerLines.filter((line) => line.callSessionId === call.id), rosterCall(call));
+      if (tookPart.length > 0) participatedCallIds.add(call.id);
+    }
+  }
+
+  const participantsByCall = await resolveGroupCallParticipants(prisma, groupCalls.map(rosterCall), userId);
+
+  const items = page.map((row) =>
+    buildCallHistoryItem(
+      row as CallHistoryRow,
+      userId,
+      row.conversation.type === 'direct' ? peerByConv.get(row.conversationId) ?? null : null,
+      participatedCallIds.has(row.id),
+      participantsByCall.get(row.id) ?? []
+    )
+  );
+
+  return { items, hasMore, nextCursor };
+}
+
+/**
+ * Efface UN appel du journal de `userId` — pour lui seul. `not-found` quand
+ * il ne peut pas le lire (`journalAccess` ; même réponse qu'un id inexistant :
+ * on ne confirme pas l'existence d'un appel étranger).
+ */
+export async function hideCallFromHistory(
+  prisma: PrismaClient,
+  userId: string,
+  callId: string
+): Promise<'hidden' | 'not-found'> {
+  const call = await prisma.callSession.findFirst({
+    where: { id: callId, ...journalAccess(userId) },
+    select: { id: true, hiddenForUserIds: true }
+  });
+  if (call === null) return 'not-found';
+  if (call.hiddenForUserIds.includes(userId)) return 'hidden';
+  await prisma.callSession.update({ where: { id: callId }, data: { hiddenForUserIds: { push: userId } } });
+  return 'hidden';
+}
+
+/** Vide le journal de `userId` — pour lui seul — et rend le nombre d'appels effacés. */
+export async function clearCallHistory(prisma: PrismaClient, userId: string): Promise<number> {
+  const windowStart = new Date(Date.now() - CALL_HISTORY_WINDOW_MS);
+  const result = await prisma.callSession.updateMany({
+    where: await journalScope(prisma, userId, windowStart),
+    data: { hiddenForUserIds: { push: userId } }
+  });
+  return result.count;
+}

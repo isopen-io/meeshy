@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:contacts": {
+      "resDir": "feature/contacts/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "circles.locations.title", "androidName": "circles_locations_title", "status": "adopted" },
+        { "catalog": "app", "iosKey": "circles.locations.map", "androidName": "circles_locations_map", "status": "adopted" },
+        { "catalog": "app", "iosKey": "circles.locations.footnote", "androidName": "circles_locations_footnote", "status": "adopted" },
+        { "catalog": "app", "iosKey": "circles.locations.someone", "androidName": "circles_locations_someone", "status": "adopted" },
+        { "catalog": "app", "iosKey": "circles.locations.precision.exact", "androidName": "circles_locations_precision_exact", "status": "adopted" },
+        { "catalog": "app", "iosKey": "circles.locations.precision.neighborhood", "androidName": "circles_locations_precision_neighborhood", "status": "adopted" },
+        { "catalog": "app", "iosKey": "circles.locations.precision.city", "androidName": "circles_locations_precision_city", "status": "adopted" },
+        { "catalog": "app", "iosKey": "circles.locations.pin.until", "androidName": "circles_locations_pin_until", "status": "adopted" }
+      ]
+    }
+  }
+}

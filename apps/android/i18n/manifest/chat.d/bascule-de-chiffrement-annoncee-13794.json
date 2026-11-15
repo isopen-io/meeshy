@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.switched.enabled",
+          "androidName": "conversation_encryption_switched_enabled",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

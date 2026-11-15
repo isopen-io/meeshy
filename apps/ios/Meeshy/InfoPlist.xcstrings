@@ -69,8 +69,7 @@
             "state" : "new",
             "value" : "Meeshy"
           }
-        }
-      ,
+        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
@@ -88,12 +87,107 @@
             "state" : "translated",
             "value" : "Meeshy"
           }
-        }
-      ,
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy"
+          }
+        }
+      }
+    },
+    "NSAlarmKitUsageDescription" : {
+      "comment" : "AlarmKit: the alarm that rings when a Bring arrives",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يقرع Meeshy منبّهًا على آيفون عندما يرسل لك صديق «Bring»، أي حالة طارئة قصوى، حتى في الوضع الصامت."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy lässt auf deinem iPhone einen Wecker klingeln, wenn dir ein Freund einen Bring sendet, einen extremen Notfall, auch im Lautlos-Modus."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy rings an alarm on your iPhone when a friend sends you a Bring, an extreme emergency, even in silent mode."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy hace sonar una alarma en tu iPhone cuando un amigo te envía un Bring, una urgencia extrema, incluso en modo silencio."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy fait sonner une alarme sur ton iPhone quand un ami t’envoie un Bring, une urgence extrême, même en mode silencieux."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy fa suonare una sveglia sul tuo iPhone quando un amico ti invia un Bring, un’emergenza estrema, anche in modalità silenziosa."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Meeshy faz tocar um alarme no seu iPhone quando um amigo envia um Bring, uma emergência extrema, mesmo no modo silencioso."
+          }
+        }
+      }
+    },
+    "NSAppleMusicUsageDescription" : {
+      "comment" : "Privacy - Media Library Usage Description",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يقرأ Meeshy المقطع الذي يعمل في Apple Music لمشاركته مع المقرّبين الذين منحتهم ذلك، ومعهم فقط."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy liest den Titel, der in Apple Music läuft, um ihn mit den Nahestehenden zu teilen, denen du es gewährt hast – und nur mit ihnen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy reads the song playing in Apple Music to share it with the Close friends you granted it to, and only with them."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy lee la canción que suena en Apple Music para compartirla con los Cercanos a quienes se lo concediste, y solo con ellos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy lit le morceau qui joue dans Apple Music pour le partager avec les Proches à qui vous l’avez accordé, et seulement avec eux."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy legge il brano in riproduzione su Apple Music per condividerlo con i Vicini a cui l’hai concesso, e solo con loro."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Meeshy lê a música que está tocando no Apple Music para compartilhá-la com os Próximos a quem você concedeu, e só com eles."
           }
         }
       }
@@ -151,43 +245,43 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "يحتاج Meeshy إلى الوصول إلى جهات اتصالك لمساعدتك في العثور على أصدقائك على المنصّة."
+            "value" : "يستخدم Meeshy جهات اتصالك للعثور على أصدقائك الموجودين على Meeshy وإخطارك عند انضمام أحدهم. لن يتواصل أحد مع أي شخص نيابةً عنك."
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Meeshy benötigt Zugriff auf Ihre Kontakte, um Ihnen zu helfen, Freunde auf der Plattform zu finden."
+            "value" : "Meeshy nutzt Ihre Kontakte, um Freunde zu finden, die schon auf Meeshy sind, und Sie zu benachrichtigen, wenn einer von ihnen dazukommt. Niemand wird in Ihrem Namen kontaktiert."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Meeshy needs access to your contacts to help you connect with friends on the platform."
+            "value" : "Meeshy uses your contacts to find friends who are already on Meeshy and let you know when one of them joins. No one is contacted on your behalf."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Meeshy necesita acceso a tus contactos para ayudarte a conectar con amigos en la plataforma."
+            "value" : "Meeshy usa tus contactos para encontrar a los amigos que ya están en Meeshy y avisarte cuando uno de ellos llegue. Nadie recibe mensajes en tu nombre."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Meeshy a besoin d'accéder à vos contacts pour vous aider à retrouver vos amis sur la plateforme."
+            "value" : "Meeshy utilise vos contacts pour retrouver vos amis déjà sur Meeshy et vous prévenir quand l'un d'eux arrive. Personne n'est contacté à votre place."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Meeshy ha bisogno di accedere ai tuoi contatti per aiutarti a ritrovare i tuoi amici sulla piattaforma."
+            "value" : "Meeshy usa i tuoi contatti per ritrovare gli amici già su Meeshy e avvisarti quando uno di loro arriva. Nessuno viene contattato al posto tuo."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O Meeshy precisa de acesso aos seus contatos para ajudá-lo a se conectar com amigos na plataforma."
+            "value" : "O Meeshy usa seus contatos para encontrar amigos que já estão no Meeshy e avisar você quando um deles chegar. Ninguém é contatado em seu nome."
           }
         }
       }

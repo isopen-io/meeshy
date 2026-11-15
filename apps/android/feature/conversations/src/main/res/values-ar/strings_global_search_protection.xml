@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="global_search_message_blurred">رسالة مموّهة</string>
+    <string name="global_search_transcript_audio">نص رسالة صوتية</string>
+    <string name="global_search_transcript_video">نص مقطع فيديو</string>
+    <string name="global_search_transcript_image">نص صورة</string>
+    <string name="global_search_transcript_document">نص مستند</string>
+</resources>

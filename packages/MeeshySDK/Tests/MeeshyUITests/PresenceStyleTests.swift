@@ -10,6 +10,7 @@ import SwiftUI
 /// gray (#9CA3AF) = idle — DISPLAYED on avatar dots. `offline` renders NO
 /// indicator anywhere (showsIndicator == false); its gray + label survive only
 /// for explicitly labeled contexts. Only .online pulses.
+@MainActor
 final class PresenceStyleTests: XCTestCase {
 
     func test_dotColor_online_isGreen() {

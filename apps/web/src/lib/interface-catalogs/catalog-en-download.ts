@@ -1,0 +1,39 @@
+/**
+ * LA PAGE `/download` (#7297, #8801) — tranche du catalogue `catalog-en.ts`,
+ * extraite pour tenir le budget de taille (CLAUDE.md) : le catalogue la
+ * RÉPAND. Les deux boutiques, les captures des deux plateformes et les liens
+ * vers les pages institutionnelles.
+ */
+const enDownload = {
+  'download.title': 'Get Meeshy',
+  'download.body': 'Write in your language, read in yours: Meeshy translates every message on the way.',
+  'download.free': 'Free',
+  'download.appStore': 'Download on the App Store',
+  'download.web': 'Open Meeshy in your browser',
+  'download.badge.appStore.caption': 'Download on the',
+  'download.badge.googlePlay.caption': 'Get it on',
+  'download.ios.heading': 'iPhone and iPad',
+  'download.android.heading': 'Android',
+  'download.googlePlay': 'Get it on Google Play',
+  'download.shots.ios': 'Screenshots of Meeshy on iPhone',
+  'download.shots.android': 'Screenshots of Meeshy on Android',
+  'download.shot.ios.1': 'A conversation translated live, voice messages included',
+  'download.shot.ios.2': 'A group where everyone writes in their own language',
+  'download.shot.ios.3': 'Meeshy Global, the lounge where the whole world says hello',
+  'download.shot.ios.4': 'The feed of posts, translated into your language',
+  'download.shot.ios.5': 'Discover friends in every country',
+  'download.shot.android.1': 'Choose your main language',
+  'download.shot.android.2': 'Say hello to the world in Meeshy Global',
+  'download.shot.android.3': 'Show yourself: a story, visible for 24 hours',
+  'download.shot.android.4': 'Find your crew: friends who speak your languages',
+  'download.links': 'Learn more',
+  'download.more': 'More',
+  'download.link.about': 'About',
+  'download.link.help': 'Help',
+  'download.link.faq': 'FAQ',
+  'download.link.contact': 'Contact',
+  'download.link.privacy': 'Privacy',
+  'download.link.terms': 'Terms',
+};
+
+export default enDownload;

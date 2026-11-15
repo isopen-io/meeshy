@@ -51,13 +51,34 @@ struct Plan2DProjectAdapterTests {
         #expect(effects.stickerObjects?.isEmpty ?? true)
     }
 
-    @Test("Ce que TimelineProject ne porte pas (fond, lieu, dessin) reste à son défaut — jamais fabriqué")
+    @Test("Ce que TimelineProject ne porte pas (fond, dessin, son de fond) reste à son défaut — jamais fabriqué")
     func effects_omitsFamiliesTimelineProjectDoesNotCarry() {
         let effects = Plan2DProjectAdapter.effects(from: TimelineProjectFactory.emptyProject())
         #expect(effects.background == nil)
-        #expect(effects.locationObjects.isEmpty)
         #expect(effects.drawingStrokes == nil)
         #expect(effects.backgroundAudioId == nil)
+    }
+
+    /// **Le lieu a quitté cette liste le 2026-08-31** (directive porteur, #4591).
+    ///
+    /// > Le témoin ci-dessus l'y rangeait, et il serait resté VERT après la
+    /// > correction : sur un projet VIDE, « le lieu ne traverse pas » et « le
+    /// > lieu traverse, il n'y en a aucun » rendent le même verdict. Un témoin
+    /// > écrit sur le cas vide ne peut pas distinguer une omission d'une
+    /// > absence — il faut un lieu POSÉ pour que la question se pose.
+    @Test("Une pastille de lieu TRAVERSE l'adaptateur — sa fenêtre atteint le plan")
+    func effects_carriesLocationObjects_withTheirWindow() {
+        var lieu = StoryLocationObject(id: "l1",
+                                       place: SharedPlace(latitude: 48.85, longitude: 2.35,
+                                                          name: "Paris"))
+        lieu.startTime = 2
+        lieu.duration = 3
+        let project = TimelineProject(slideId: "s1", slideDuration: 10, locationObjects: [lieu])
+
+        let effects = Plan2DProjectAdapter.effects(from: project)
+        #expect(effects.locationObjects.map(\.id) == ["l1"])
+        #expect(effects.locationObjects.first?.startTime == Double(2))
+        #expect(effects.locationObjects.first?.duration == Double(3))
     }
 
     @Test("Le pont vers Plan2DLayout.tracks produit le MÊME plan qu'un StoryEffects construit à la main")

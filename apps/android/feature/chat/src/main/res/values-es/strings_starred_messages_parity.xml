@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="starred_clear_confirm_title">¿Quitar todos los mensajes favoritos?</string>
+    <string name="starred_clear_confirm_message">Tus mensajes favoritos dejarán de aparecer aquí. Los mensajes siguen en sus conversaciones.</string>
+</resources>

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.zoom.cycle.hint",
+          "androidName": "call_zoom_cycle_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.camera",
+          "androidName": "call_control_camera",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.cameraRail",
+          "androidName": "call_control_camera_rail",
+          "status": "adopted"
+        },
+        {
+          "androidName": "call_camera_front",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_camera_back",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_camera_external",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_camera_external_numbered",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

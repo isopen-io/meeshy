@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="live_location_channel_name">Live location sharing</string>
+    <string name="live_location_notification_title">Sharing your live location</string>
+    <string name="live_location_notification_stop">Stop</string>
+</resources>

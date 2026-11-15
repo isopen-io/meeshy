@@ -1,0 +1,421 @@
+import Foundation
+import MeeshySDK
+
+/// CE QUE L'ÉCRAN « PROGRESSION » DIT (#5698) — les libellés, les symboles et
+/// les phrases de palier, à côté de la loi de progression (`EngagementProgressResolver`)
+/// qui, elle, ne connaît aucun mot : elle rend des clés et des nombres, ce
+/// fichier les fait parler. Les mots sont ceux de la v3.1 web
+/// (`apps/web/src/lib/view/progression.ts`, #5547) — « même mot, même
+/// icône » (dimension 6) — et vivent dans `Localizable.xcstrings` en sept langues.
+///
+/// Les `switch` sont EXHAUSTIFS sur les énumérations du catalogue : un axe ou
+/// un succès ajouté à `EngagementCatalog.swift` sans libellé ici ne compile
+/// plus — c'est le témoin d'exhaustivité que le compilateur tient gratuitement.
+enum ProgressionCopy {
+    // MARK: - Axes
+
+    static func title(for axis: EngagementAxisKey) -> String {
+        switch axis {
+        case .audioMessage:
+            return String(localized: "progression.axis.content.audio_message", defaultValue: "Messages vocaux", bundle: .main)
+        case .textMessage:
+            return String(localized: "progression.axis.content.text_message", defaultValue: "Messages texte", bundle: .main)
+        case .post:
+            return String(localized: "progression.axis.content.post", defaultValue: "Publications", bundle: .main)
+        case .story:
+            return String(localized: "progression.axis.content.story", defaultValue: "Stories", bundle: .main)
+        case .reel:
+            return String(localized: "progression.axis.content.reel", defaultValue: "Réels", bundle: .main)
+        case .audioComment:
+            return String(localized: "progression.axis.comment.audio", defaultValue: "Commentaires vocaux", bundle: .main)
+        case .textComment:
+            return String(localized: "progression.axis.comment.text", defaultValue: "Commentaires écrits", bundle: .main)
+        case .privateConversation:
+            return String(localized: "progression.axis.conversation.private", defaultValue: "Conversations privées", bundle: .main)
+        case .publicConversation:
+            return String(localized: "progression.axis.conversation.public", defaultValue: "Conversations publiques", bundle: .main)
+        case .communityConversation:
+            return String(localized: "progression.axis.conversation.community", defaultValue: "Conversations de communauté", bundle: .main)
+        case .groupCreated:
+            return String(localized: "progression.axis.conversation.group_created", defaultValue: "Groupes créés", bundle: .main)
+        case .sticker:
+            return String(localized: "progression.axis.tool.sticker", defaultValue: "Stickers posés", bundle: .main)
+        case .inAppEdit:
+            return String(localized: "progression.axis.tool.in_app_edit", defaultValue: "Montages dans l’app", bundle: .main)
+        case .trackedLink:
+            return String(localized: "progression.axis.social.tracked_link", defaultValue: "Liens créés", bundle: .main)
+        case .share:
+            return String(localized: "progression.axis.social.share", defaultValue: "Contenus partagés", bundle: .main)
+        case .inviteJoined:
+            return String(localized: "progression.axis.social.invite_joined", defaultValue: "Invités venus", bundle: .main)
+        case .friendship:
+            return String(localized: "progression.axis.social.friendship", defaultValue: "Amitiés nouées", bundle: .main)
+        case .directPublish:
+            return String(localized: "progression.axis.tool.direct_publish", defaultValue: "Publications directes", bundle: .main)
+        case .reaction:
+            return String(localized: "progression.axis.tool.reaction", defaultValue: "Réactions", bundle: .main)
+        case .attachment:
+            return String(localized: "progression.axis.tool.attachment", defaultValue: "Pièces jointes", bundle: .main)
+        }
+    }
+
+    /// LE TITRE D'UN PALIER D'AXE (#7778) — le seuil, puis le nom de l'axe pris dans la phrase : « 10 amitiés nouées ».
+    /// En allemand, un nom commun garde sa majuscule ; seul l'adjectif qui ouvre le groupe la perd après le numéral
+    /// (« 10 geknüpfte Freundschaften », « 100 Sprachnachrichten »). L'adjectif se reconnaît à ce qu'il précède un mot
+    /// capitalisé. Les autres langues passent le nom entier en minuscule, comme avant.
+    static func badgeTierTitle(threshold: Int, axis: EngagementAxisKey) -> String {
+        badgeTierTitle(threshold: threshold,
+                       axisName: title(for: axis),
+                       language: Bundle.main.preferredLocalizations.first ?? "fr")
+    }
+
+    nonisolated static func badgeTierTitle(threshold: Int, axisName: String, language: String) -> String {
+        "\(threshold) \(axisNameInSentence(axisName, language: language))"
+    }
+
+    nonisolated private static func axisNameInSentence(_ name: String, language: String) -> String {
+        guard language.lowercased().hasPrefix("de") else { return name.lowercased() }
+        let words = name.split(separator: " ", omittingEmptySubsequences: false)
+        guard words.count >= 2,
+              let first = words[0].first, first.isUppercase,
+              let next = words[1].first, next.isUppercase else { return name }
+        return first.lowercased() + name.dropFirst()
+    }
+
+    /// CE QUI COMPTE pour le badge d'un axe (#9640) — le geste précis que son compteur mesure, jamais la phrase de
+    /// la famille. Miroir d'`ENGAGEMENT_AXIS_COUNTS` (`packages/shared/utils/engagement-labels.ts`, #9639) : les
+    /// mêmes phrases, dans les sept langues.
+    static func whatCounts(for axis: EngagementAxisKey) -> String {
+        switch axis {
+        case .audioMessage:
+            return String(localized: "progression.axis.content.audio_message.counts", defaultValue: "Chaque message vocal envoyé dans une conversation.", bundle: .main)
+        case .textMessage:
+            return String(localized: "progression.axis.content.text_message.counts", defaultValue: "Chaque message écrit envoyé dans une conversation.", bundle: .main)
+        case .post:
+            return String(localized: "progression.axis.content.post.counts", defaultValue: "Chaque publication mise en ligne dans le fil, jamais un brouillon.", bundle: .main)
+        case .story:
+            return String(localized: "progression.axis.content.story.counts", defaultValue: "Chaque story publiée.", bundle: .main)
+        case .reel:
+            return String(localized: "progression.axis.content.reel.counts", defaultValue: "Chaque réel publié.", bundle: .main)
+        case .audioComment:
+            return String(localized: "progression.axis.comment.audio.counts", defaultValue: "Chaque commentaire vocal laissé sous une publication.", bundle: .main)
+        case .textComment:
+            return String(localized: "progression.axis.comment.text.counts", defaultValue: "Chaque commentaire écrit laissé sous une publication.", bundle: .main)
+        case .privateConversation:
+            return String(localized: "progression.axis.conversation.private.counts", defaultValue: "Chaque conversation privée distincte où tu écris pour la première fois.", bundle: .main)
+        case .publicConversation:
+            return String(localized: "progression.axis.conversation.public.counts", defaultValue: "Chaque conversation publique distincte où tu prends la parole.", bundle: .main)
+        case .communityConversation:
+            return String(localized: "progression.axis.conversation.community.counts", defaultValue: "Chaque conversation de communauté distincte où tu prends la parole.", bundle: .main)
+        case .groupCreated:
+            return String(localized: "progression.axis.conversation.group_created.counts", defaultValue: "Chaque groupe que tu crées, une seule fois par ensemble de membres.", bundle: .main)
+        case .sticker:
+            return String(localized: "progression.axis.tool.sticker.counts", defaultValue: "Chaque sticker glissé dans un message envoyé.", bundle: .main)
+        case .inAppEdit:
+            return String(localized: "progression.axis.tool.in_app_edit.counts", defaultValue: "Chaque média monté dans l’app avant d’être publié.", bundle: .main)
+        case .directPublish:
+            return String(localized: "progression.axis.tool.direct_publish.counts", defaultValue: "Chaque publication, story ou réel mis en ligne directement, sans montage.", bundle: .main)
+        case .reaction:
+            return String(localized: "progression.axis.tool.reaction.counts", defaultValue: "Chaque réaction posée sur un message.", bundle: .main)
+        case .attachment:
+            return String(localized: "progression.axis.tool.attachment.counts", defaultValue: "Chaque pièce jointe envoyée dans une conversation.", bundle: .main)
+        case .trackedLink:
+            return String(localized: "progression.axis.social.tracked_link.counts", defaultValue: "Chaque lien suivi que tu crées pour ouvrir une porte vers Meeshy.", bundle: .main)
+        case .share:
+            return String(localized: "progression.axis.social.share.counts", defaultValue: "Chaque publication que tu partages.", bundle: .main)
+        case .inviteJoined:
+            return String(localized: "progression.axis.social.invite_joined.counts", defaultValue: "Chaque personne qui rejoint Meeshy grâce à ton invitation.", bundle: .main)
+        case .friendship:
+            return String(localized: "progression.axis.social.friendship.counts", defaultValue: "Chaque amitié acceptée, de ton côté ou du sien.", bundle: .main)
+        }
+    }
+
+    /// SF Symbol — le même vocabulaire iconographique que le reste de l'app
+    /// (`NotificationModels.systemIcon`, `UserStatsView`).
+    static func symbol(for axis: EngagementAxisKey) -> String {
+        axis.symbolName
+    }
+
+    static func title(for family: EngagementAxisFamily) -> String {
+        switch family {
+        case .content:
+            return String(localized: "progression.family.content", defaultValue: "Contenu produit", bundle: .main)
+        case .comment:
+            return String(localized: "progression.family.comment", defaultValue: "Commentaires", bundle: .main)
+        case .conversation:
+            return String(localized: "progression.family.conversation", defaultValue: "Conversations", bundle: .main)
+        case .tool:
+            return String(localized: "progression.family.tool", defaultValue: "Outils", bundle: .main)
+        case .social:
+            return String(localized: "progression.family.social", defaultValue: "Liens tissés", bundle: .main)
+        }
+    }
+
+    // MARK: - Succès
+
+    static func title(for achievement: EngagementAchievementKey) -> String {
+        switch achievement {
+        case .firstContent:
+            return String(localized: "progression.achievement.first_content.title", defaultValue: "Premier pas", bundle: .main)
+        case .allContentTypes:
+            return String(localized: "progression.achievement.all_content_types.title", defaultValue: "Touche-à-tout", bundle: .main)
+        case .firstVoice:
+            return String(localized: "progression.achievement.first_voice.title", defaultValue: "Première voix", bundle: .main)
+        case .editor:
+            return String(localized: "progression.achievement.editor.title", defaultValue: "Monteur", bundle: .main)
+        case .threeConversationKinds:
+            return String(localized: "progression.achievement.three_conversation_kinds.title", defaultValue: "Trois cercles", bundle: .main)
+        }
+    }
+
+    /// La CONDITION, lisible verrouillée — ce qu'il reste à faire, jamais un mystère.
+    static func condition(for achievement: EngagementAchievementKey) -> String {
+        switch achievement {
+        case .firstContent:
+            return String(localized: "progression.achievement.first_content.condition", defaultValue: "Publier un premier contenu, quel qu’il soit", bundle: .main)
+        case .allContentTypes:
+            return String(localized: "progression.achievement.all_content_types.condition", defaultValue: "Un message vocal, un message texte, une publication, une story et un réel", bundle: .main)
+        case .firstVoice:
+            return String(localized: "progression.achievement.first_voice.condition", defaultValue: "Un premier message ou commentaire vocal", bundle: .main)
+        case .editor:
+            return String(localized: "progression.achievement.editor.condition", defaultValue: "Un premier montage dans l’app avant de publier", bundle: .main)
+        case .threeConversationKinds:
+            return String(localized: "progression.achievement.three_conversation_kinds.condition", defaultValue: "Écrire dans une conversation privée, une publique et une de communauté", bundle: .main)
+        }
+    }
+
+    // MARK: - Échelles
+
+    enum ScaleKind {
+        case badge, level, streak
+    }
+
+    /// « Niveau 3 » — le niveau courant, 0 avant le premier palier.
+    static func levelTitle(_ level: Int) -> String {
+        String(localized: "progression.level", defaultValue: "Niveau \(level)", bundle: .main)
+    }
+
+    /// « 350 points » — le score qui porte le niveau.
+    static func score(_ score: Int) -> String {
+        String(localized: "progression.points", defaultValue: "\(score) étincelles", bundle: .main)
+    }
+
+    /// « Élan ×3 » — le titre de la carte des élans quand le multiplicateur est actif (#7757), dans la langue du
+    /// lecteur comme la phrase juste dessous (« Momentum ×3 », « Schwung ×3 »). Le facteur est entier par construction.
+    nonisolated static func elanTitle(factor: Double) -> String {
+        let f = Int(factor.rounded())
+        return String(localized: "progression.elan.factor", defaultValue: "Élan ×\(f)", bundle: .main)
+    }
+
+    /// L'élan courant, et CE QUI LE PORTE (#5749) — un multiplicateur dont on
+    /// ignore la cause ne se pilote pas, il se subit.
+    static func elan(factor: Double, families: Int, windowDays: Int, hasStanding: Bool) -> String {
+        // Le facteur est entier par construction (1 + crans) ; on l'affiche tel
+        // quel plutôt qu'en « ×2,0 », qui suggérerait une précision inexistante.
+        let f = Int(factor.rounded())
+        let familles = families == 1
+            ? String(localized: "progression.elan.family.one", defaultValue: "1 famille active", bundle: .main)
+            : String(localized: "progression.elan.family.many", defaultValue: "\(families) familles actives", bundle: .main)
+        let base = String(
+            localized: "progression.elan.base",
+            defaultValue: "Élan ×\(f) — \(familles) sur \(windowDays) jours",
+            bundle: .main
+        )
+        let assise = hasStanding
+            ? String(localized: "progression.elan.standing", defaultValue: ", plus ton assise", bundle: .main)
+            : ""
+        let effet = String(
+            localized: "progression.elan.effect",
+            defaultValue: "Tes prochains gestes rapportent \(f) fois plus.",
+            bundle: .main
+        )
+        return "\(base)\(assise). \(effet)"
+    }
+
+    /// « 2 Meeshes » / « 1 Meesh » / « Aucune Meesh » — le solde (#5743).
+    /// Le singulier est traité à part : « 1 Meeshes » se lirait comme un bogue.
+    static func meeshBalance(_ balance: Int) -> String {
+        if balance <= 0 {
+            return String(localized: "progression.meesh.none", defaultValue: "Aucune Meesh", bundle: .main)
+        }
+        if balance == 1 {
+            return String(localized: "progression.meesh.one", defaultValue: "1 Meesh", bundle: .main)
+        }
+        return String(localized: "progression.meesh.many", defaultValue: "\(balance) Meeshes", bundle: .main)
+    }
+
+    /// « 5 frappées depuis toujours » — le compteur À VIE, jamais le solde.
+    static func meeshMintedLifetime(_ minted: Int) -> String {
+        minted == 1
+            ? String(localized: "progression.meesh.minted.one", defaultValue: "1 frappée depuis toujours", bundle: .main)
+            : String(localized: "progression.meesh.minted.many", defaultValue: "\(minted) frappées depuis toujours", bundle: .main)
+    }
+
+    /// Ce que l'entrée de l'en-tête ANNONCE au lecteur d'écran (#5839).
+    ///
+    /// Le solde y est REDIT alors qu'il est déjà à l'écran : la capsule montre
+    /// un chiffre nu à côté d'une médaille, ce qui ne dit pas de quoi il est le
+    /// nombre. Un libellé qui se contente de « Meesh » perdrait la valeur.
+    static func meeshEntryA11y(_ balance: Int) -> String {
+        String(
+            localized: "progression.meesh.entry.a11y",
+            defaultValue: "\(balance) Meesh — voir le détail",
+            bundle: .main
+        )
+    }
+
+    /// L'action de conversion — le prix vient du SERVEUR, jamais d'une constante locale.
+    static func meeshMintAction(_ cost: Int) -> String {
+        String(
+            localized: "progression.meesh.mint",
+            defaultValue: "Convertir \(cost) étincelles en une Meesh",
+            bundle: .main
+        )
+    }
+
+    /// Ce qui manque, et pourquoi le plancher n'y répond pas.
+    static func meeshMissing(missing: Int, floor: Int) -> String {
+        let manque = String(
+            localized: "progression.meesh.missing",
+            defaultValue: "\(missing) étincelles jusqu’à ta prochaine Meesh.",
+            bundle: .main
+        )
+        guard floor > 0 else { return manque }
+        let plancher = String(
+            localized: "progression.meesh.floor",
+            defaultValue: "Toutes tes étincelles, dont \(floor) de conversation, se convertissent en Meesh.",
+            bundle: .main
+        )
+        return "\(manque) \(plancher)"
+    }
+
+    /// « 5 jours d’affilée » / « 1 jour d’affilée » / « Aucune série en cours ».
+    ///
+    /// Le singulier a sa propre clé, comme le solde de Meeshes : une forme
+    /// unique écrivait « 1 jours d’affilée » sur le hero de la flamme, et aucun
+    /// témoin ne le disait — toutes les fixtures valaient 5, 6 ou 11.
+    static func streak(_ currentDays: Int) -> String {
+        guard currentDays > 0 else {
+            return String(localized: "progression.streak.none", defaultValue: "Aucune Flamme allumée", bundle: .main)
+        }
+        if currentDays == 1 {
+            return String(localized: "progression.streak.days.one", defaultValue: "1 jour d’affilée", bundle: .main)
+        }
+        return String(localized: "progression.streak.days", defaultValue: "\(currentDays) jours d’affilée", bundle: .main)
+    }
+
+    /// « Record : 12 jours » — la série la plus longue, qui tient les jalons pour atteints.
+    static func streakRecord(_ longestDays: Int) -> String {
+        if longestDays == 1 {
+            return String(localized: "progression.streak.record.one", defaultValue: "Ta plus longue Flamme : 1 jour", bundle: .main)
+        }
+        return String(localized: "progression.streak.record", defaultValue: "Ta plus longue Flamme : \(longestDays) jours", bundle: .main)
+    }
+
+    /// La phrase de la barre — ce qu'il reste AVANT le prochain palier, depuis
+    /// le dernier franchi, ou l'échelle complète. Une barre sans phrase dit une
+    /// fraction ; la phrase dit le pas.
+    /// Le niveau NOMME son RANG (« niveau 4 »), jamais son seuil de points
+    /// (« niveau 400 ») — le défaut de la notification `level_up` relevé en
+    /// production, que la carte de niveau aurait rejoué.
+    static func nextStep(for scale: EngagementScaleProgress, kind: ScaleKind, level: Int? = nil) -> String {
+        guard let next = scale.nextThreshold, let remaining = scale.remainingToNext else {
+            return String(localized: "progression.scale.complete", defaultValue: "Échelle complète", bundle: .main)
+        }
+        switch kind {
+        case .badge:
+            return String(localized: "progression.next.badge", defaultValue: "\(remaining) jusqu’au palier \(next)", bundle: .main)
+        case .level:
+            let nextLevel = (level ?? scale.reachedCount) + 1
+            return String(localized: "progression.next.level", defaultValue: "\(remaining) étincelles jusqu’au niveau \(nextLevel)", bundle: .main)
+        case .streak:
+            if remaining == 1 {
+                return String(localized: "progression.next.streak.one", defaultValue: "1 jour jusqu’au jalon de \(next)", bundle: .main)
+            }
+            return String(localized: "progression.next.streak", defaultValue: "\(remaining) jours jusqu’au jalon de \(next)", bundle: .main)
+        }
+    }
+
+    /// « Obtenu le 3 septembre 2026 », ou `nil` quand aucune trace gravée ne date le palier.
+    static func obtained(_ reachedAt: String?) -> String? {
+        guard let date = EngagementProgressResolver.reachedDate(reachedAt) else { return nil }
+        return obtained(date: date)
+    }
+
+    /// La même phrase à partir d'une `Date` déjà décodée — pour les appelants
+    /// qui en tiennent une. Sans cette porte, ils ré-encodaient en ISO pour
+    /// faire re-décoder ici, un aller-retour qui reperdait la fraction de
+    /// seconde en chemin.
+    static func obtained(date: Date) -> String {
+        let formatted = date.formatted(date: .long, time: .omitted)
+        return String(localized: "progression.obtained", defaultValue: "Obtenu le \(formatted)", bundle: .main)
+    }
+
+    static func tierAccessibilityLabel(_ tier: EngagementTier) -> String {
+        if tier.reached {
+            let base = String(localized: "progression.a11y.tier.reached", defaultValue: "Palier \(tier.threshold) atteint", bundle: .main)
+            if let dated = obtained(tier.reachedAt) { return "\(base) — \(dated)" }
+            return base
+        }
+        return String(localized: "progression.a11y.tier.pending", defaultValue: "Palier \(tier.threshold) à atteindre", bundle: .main)
+    }
+
+    // MARK: - Le hub (#5838, #5839, #5841, #5842)
+
+    /// L'en-tête du hero quand un succès a DÉJÀ été décroché.
+    static let heroLastTitle = String(localized: "progression.hero.last", defaultValue: "Dernier haut fait", bundle: .main)
+
+    /// L'en-tête du menu Meesh — le MOT, à côté du logo. Le panneau s'ouvrait
+    /// sur un solde nu : hors du bouton qui l'a ouvert, rien ne nommait la
+    /// monnaie dont il parlait.
+    static let meeshEntryTitle = String(localized: "progression.meesh.title", defaultValue: "Meesh", bundle: .main)
+
+    /// L'en-tête du hero de la FLAMME. Il en
+    /// manquait un : le hero s'ouvrait sur « 9 jours d'affilée », un chiffre
+    /// sans nom. Ses deux voisins — DERNIER SUCCÈS, VOS ÉLANS — se présentent ;
+    /// celui-ci laissait le lecteur deviner de quoi on lui parle.
+    static let heroStreakTitle = String(localized: "progression.hero.streak", defaultValue: "Flamme", bundle: .main)
+
+    /// Et quand il n'y en a AUCUN — le hero ne disparaît pas, il change de propos.
+    static let heroFirstTitle = String(localized: "progression.hero.first", defaultValue: "Premier haut fait", bundle: .main)
+
+    /// Le bandeau quand le hero montre un palier PAS ENCORE obtenu (#5831).
+    /// Même clé que la carte qu'il remplace : le mot ne change pas parce que
+    /// la vue qui le rend a changé.
+    static let heroNextTitle = String(localized: "progression.hero.next", defaultValue: "Prochain haut fait", bundle: .main)
+
+    static let heroFirstHint = String(
+        localized: "progression.hero.first.hint",
+        defaultValue: "Envoie un message : le premier s’accomplit tout de suite.",
+        bundle: .main
+    )
+
+    /// L'indice VoiceOver du hero touchable — il annonce l'EFFET, pas le geste.
+    static let heroRevealHint = String(
+        localized: "progression.hero.reveal.hint",
+        defaultValue: "Revoir le signe des aïeux de ce haut fait",
+        bundle: .main
+    )
+
+    static let elansTitle = String(localized: "progression.elans.title", defaultValue: "Tes élans", bundle: .main)
+
+    static let elansEmpty = String(
+        localized: "progression.elans.empty",
+        defaultValue: "Publie, commente et écris en même temps pour multiplier tes étincelles.",
+        bundle: .main
+    )
+
+    static let elansHint = String(
+        localized: "progression.elans.hint",
+        defaultValue: "Tiens une famille de plus en même temps pour déclencher le multiplicateur.",
+        bundle: .main
+    )
+
+    static let badgesTitle = String(localized: "progression.section.badges", defaultValue: "Médailles", bundle: .main)
+
+    static let achievementsTitle = String(
+        localized: "progression.section.achievements",
+        defaultValue: "Hauts faits",
+        bundle: .main
+    )
+}

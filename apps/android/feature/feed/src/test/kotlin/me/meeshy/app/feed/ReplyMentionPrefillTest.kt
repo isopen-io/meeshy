@@ -108,4 +108,17 @@ class ReplyMentionPrefillTest {
         assertThat(result.text).isEqualTo("@bob hey @alice")
         assertThat(result.prefilledMention).isEqualTo("@bob ")
     }
+
+    @Test
+    fun `cancelling the reply strips the injected mention and keeps the rest of the draft`() {
+        val result = ReplyMentionPrefill.apply(
+            currentText = "@bob merci",
+            previousMention = "@bob ",
+            replyToParentId = null,
+            authorUsername = null,
+        )
+
+        assertThat(result.text).isEqualTo("merci")
+        assertThat(result.prefilledMention).isNull()
+    }
 }

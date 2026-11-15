@@ -4,16 +4,16 @@
  * Tests the SharedEncryptionService using mock adapters to verify business logic.
  */
 
-import { SharedEncryptionService } from '../../../../shared/encryption/encryption-service';
+import { SharedEncryptionService } from '@meeshy/shared/encryption/encryption-service';
 import type {
   CryptoAdapter,
   CryptoKey,
   EncryptionResult,
   DecryptionParams,
   KeyPair,
-} from '../../../../shared/encryption/crypto-adapter';
-import type { KeyStorageAdapter } from '../../../../shared/encryption/encryption-service';
-import type { EncryptionMode } from '../../../../shared/types/encryption';
+} from '@meeshy/shared/encryption/crypto-adapter';
+import type { KeyStorageAdapter } from '@meeshy/shared/encryption/encryption-service';
+import type { EncryptionMode } from '@meeshy/shared/types/encryption';
 
 // Mock CryptoKey implementation
 class MockCryptoKey implements CryptoKey {

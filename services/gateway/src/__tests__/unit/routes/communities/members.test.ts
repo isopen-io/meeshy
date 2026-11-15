@@ -18,16 +18,19 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
   },
 }));
 
-const mockResolvePrefsOnly = jest.fn<any>();
+const mockResolveForTargets = jest.fn<any>();
+const mockResolveForTarget = jest.fn<any>();
 
 jest.mock('../../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({
-    resolvePrefsOnly: (...args: any[]) => mockResolvePrefsOnly(...args),
+    resolveForTargets: (...args: any[]) => mockResolveForTargets(...args),
+    resolveForTarget: (...args: any[]) => mockResolveForTarget(...args),
   }),
 }));
 
 beforeEach(() => {
-  mockResolvePrefsOnly.mockReset().mockResolvedValue(new Map());
+  mockResolveForTargets.mockReset().mockResolvedValue(new Map());
+  mockResolveForTarget.mockReset().mockResolvedValue({ showOnline: false, showLastSeenTimestamp: false });
 });
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
@@ -68,7 +71,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
     },
     user: {
       findUnique: jest.fn<any>().mockResolvedValue({ id: OTHER_USER_ID }),
-      findFirst: jest.fn<any>().mockResolvedValue({ id: OTHER_USER_ID }),
+      findFirst: jest.fn<any>(async ({ where }: any) => (where?.OR ? null : { id: OTHER_USER_ID })),
     },
     ...overrides,
   } as any;
@@ -186,7 +189,10 @@ describe('GET /communities/:id/members — presence visibility gating', () => {
     await app.close();
   });
 
-  it('returns a member unchanged when no presence entry exists for its user', async () => {
+  // Défaut `'hide'` (critère strict) : contrairement à l'ancien régime
+  // préférences-seules (co-appartenance ⇒ accès garanti), une entrée absente
+  // n'est plus la situation normale — elle masque.
+  it('hides isOnline when the strict resolver returns no entry for its user', async () => {
     const prisma = makePrisma();
     prisma.community.findFirst = jest.fn<any>().mockResolvedValue(publicCommunityWithUserAsMember());
     prisma.communityMember.findMany = jest.fn<any>().mockResolvedValue([
@@ -197,18 +203,18 @@ describe('GET /communities/:id/members — presence visibility gating', () => {
     const { app } = await buildApp({ prisma });
     const res = await app.inject({ method: 'GET', url: `/communities/${COMMUNITY_ID}/members` });
     expect(res.statusCode).toBe(200);
-    expect(res.json().data[0].user.isOnline).toBe(true);
+    expect(res.json().data[0].user.isOnline).toBe(false);
     await app.close();
   });
 
-  it('hides isOnline when the member has disabled showOnlineStatus', async () => {
+  it('hides isOnline when the strict resolver denies visibility', async () => {
     const prisma = makePrisma();
     prisma.community.findFirst = jest.fn<any>().mockResolvedValue(publicCommunityWithUserAsMember());
     prisma.communityMember.findMany = jest.fn<any>().mockResolvedValue([
       { id: 'mem-hidden', userId: 'user-hidden', role: 'member', user: { id: 'user-hidden', username: 'hidden', isOnline: true } }
     ]);
     prisma.communityMember.count = jest.fn<any>().mockResolvedValue(1);
-    mockResolvePrefsOnly.mockResolvedValue(new Map([['user-hidden', { showOnline: false, showLastSeenTimestamp: true }]]));
+    mockResolveForTargets.mockResolvedValue(new Map([['user-hidden', { showOnline: false, showLastSeenTimestamp: true }]]));
     const { app } = await buildApp({ prisma });
     const res = await app.inject({ method: 'GET', url: `/communities/${COMMUNITY_ID}/members` });
     expect(res.statusCode).toBe(200);
@@ -216,14 +222,14 @@ describe('GET /communities/:id/members — presence visibility gating', () => {
     await app.close();
   });
 
-  it('keeps isOnline visible when the member allows showOnlineStatus', async () => {
+  it('keeps isOnline visible when the strict resolver allows it (e.g. an accepted friend)', async () => {
     const prisma = makePrisma();
     prisma.community.findFirst = jest.fn<any>().mockResolvedValue(publicCommunityWithUserAsMember());
     prisma.communityMember.findMany = jest.fn<any>().mockResolvedValue([
       { id: 'mem-visible', userId: 'user-visible', role: 'member', user: { id: 'user-visible', username: 'visible', isOnline: true } }
     ]);
     prisma.communityMember.count = jest.fn<any>().mockResolvedValue(1);
-    mockResolvePrefsOnly.mockResolvedValue(new Map([['user-visible', { showOnline: true, showLastSeenTimestamp: true }]]));
+    mockResolveForTargets.mockResolvedValue(new Map([['user-visible', { showOnline: true, showLastSeenTimestamp: true }]]));
     const { app } = await buildApp({ prisma });
     const res = await app.inject({ method: 'GET', url: `/communities/${COMMUNITY_ID}/members` });
     expect(res.statusCode).toBe(200);
@@ -413,15 +419,40 @@ describe('DELETE /communities/:id/members/:memberId — not admin', () => {
 });
 
 describe('DELETE /communities/:id/members/:memberId — success (admin removes member)', () => {
-  it('returns 200', async () => {
+  it('returns 200, sets isActive:false + leftAt instead of deleting the row (#5800)', async () => {
     const prisma = makePrisma();
     prisma.community.findFirst = jest.fn<any>().mockResolvedValue(communityWithUserAsAdmin());
+    prisma.communityMember.findFirst = jest.fn<any>().mockResolvedValue({
+      id: 'mem-removed', communityId: COMMUNITY_ID, userId: OTHER_USER_ID, isActive: true,
+    });
     const { app } = await buildApp({ prisma });
     const res = await app.inject({
       method: 'DELETE',
       url: `/communities/${COMMUNITY_ID}/members/${OTHER_USER_ID}`,
     });
     expect(res.statusCode).toBe(200);
+    expect(prisma.communityMember.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.communityMember.update).toHaveBeenCalledWith({
+      where: { id: 'mem-removed' },
+      data: { isActive: false, leftAt: expect.any(Date) },
+    });
+    await app.close();
+  });
+});
+
+describe('DELETE /communities/:id/members/:memberId — target is not an active member', () => {
+  it('returns 404 without touching the row', async () => {
+    const prisma = makePrisma();
+    prisma.community.findFirst = jest.fn<any>().mockResolvedValue(communityWithUserAsAdmin());
+    prisma.communityMember.findFirst = jest.fn<any>().mockResolvedValue(null);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/communities/${COMMUNITY_ID}/members/${OTHER_USER_ID}`,
+    });
+    expect(res.statusCode).toBe(404);
+    expect(prisma.communityMember.update).not.toHaveBeenCalled();
+    expect(prisma.communityMember.deleteMany).not.toHaveBeenCalled();
     await app.close();
   });
 });

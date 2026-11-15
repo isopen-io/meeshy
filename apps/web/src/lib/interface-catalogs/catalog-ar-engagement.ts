@@ -1,0 +1,25 @@
+/**
+ * LA PASTILLE D'ENGAGEMENT D'UNE CONVERSATION (#8906) — « 🔥 4 · 120 (12) » :
+ * son nom accessible, qui dit en mots la série et les points. Tranche du
+ * catalogue `catalog-ar.ts`, qu'il RÉPAND.
+ */
+const arEngagement = {
+  'engagement.pill.streak.one': '{count} يوم',
+  'engagement.pill.streak.other': '{count} أيام',
+  'engagement.pill.points.one': '{total} شرارة، منها {today} اليوم',
+  'engagement.pill.points.other': '{total} شرارات، منها {today} اليوم',
+  'engagement.pill.total.one': '{total} شرارة مكتسبة في هذه المحادثة',
+  'engagement.pill.total.other': '{total} شرارات مكتسبة في هذه المحادثة',
+  'engagement.pill.join': '{streak}، {points}',
+  'engagement.post.points.one': 'أطلق هذا المنشور {count} شرارة لك',
+  'engagement.post.points.other': 'أطلق هذا المنشور {count} شرارات لك',
+  'engagement.card.streak.one': 'يوم متتالٍ هنا',
+  'engagement.card.streak.other': 'أيام متتالية هنا',
+  'engagement.card.today': 'اليوم',
+  'engagement.card.total': 'هنا منذ البداية',
+  'engagement.card.open': 'افتح اللعبة',
+  'engagement.card.hide': 'إخفاء اللهب',
+  'engagement.card.title': 'في هذه المحادثة',
+} as const;
+
+export default arEngagement;

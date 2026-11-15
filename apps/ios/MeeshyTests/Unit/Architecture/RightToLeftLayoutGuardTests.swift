@@ -25,13 +25,24 @@ import XCTest
 /// - les opérations géométriques (miroir horizontal) ;
 /// - les symboles bidirectionnels (`arrow.left.and.right` pour une durée) et
 ///   l'icône « code » `chevron.left.forwardslash.chevron.right`.
+///
+/// **L'exemption vaut pour les CHEVRONS autant que pour les flèches**
+/// (2026-09-02). Elle ne s'appliquait qu'au test des flèches, parce que seules
+/// des flèches habitaient alors les timelines. `MeeshyAudioTrimmer` (SDK, retiré
+/// au profit de `MediaTrimStrip`, #17110) posait un `chevron.left` / `chevron.right` sur une poignée sortie du champ :
+/// la flèche dit DE QUEL CÔTÉ de la bande visible la borne est partie, et une
+/// bande de temps coule de gauche à droite quelle que soit la langue — un
+/// `chevron.backward` s'y retournerait en arabe et désignerait le mauvais bord.
+/// C'est exactement la géométrie que `directionalByDesign` reconnaît aux
+/// `arrow.*` ; le symbole change, pas la raison. La liste est partagée, pas
+/// dédoublée : deux listes pour une même exemption divergeraient au premier
+/// fichier ajouté.
 final class RightToLeftLayoutGuardTests: XCTestCase {
 
-    /// Fichiers dont les flèches décrivent une timeline ou une géométrie.
+    /// Fichiers dont les flèches ET les chevrons décrivent une timeline ou une
+    /// géométrie — jamais une direction de lecture.
     private static let directionalByDesign: Set<String> = [
-        "VideoEditorToolPanels.swift",
         "ClipTimingBar.swift",
-        "MeeshyImageEditorView.swift",
     ]
 
     private func repoRoot() -> URL {
@@ -74,7 +85,7 @@ final class RightToLeftLayoutGuardTests: XCTestCase {
 
     func test_aucunChevronNomméParUnCôtéPhysique() {
         var offenders: [String] = []
-        for url in swiftSources() {
+        for url in swiftSources() where !Self.directionalByDesign.contains(url.lastPathComponent) {
             guard let raw = try? String(contentsOf: url, encoding: .utf8) else { continue }
             let code = strippingComments(raw)
             // La chaîne complète entre guillemets : l'icône « code »
@@ -88,7 +99,9 @@ final class RightToLeftLayoutGuardTests: XCTestCase {
             offenders.isEmpty,
             """
             Ces symboles pointent vers un côté physique et ne se retournent pas \
-            en arabe. Utiliser "chevron.forward" / "chevron.backward" :
+            en arabe. Utiliser "chevron.forward" / "chevron.backward", ou inscrire \
+            le fichier dans `directionalByDesign` si le chevron décrit une \
+            timeline ou une géométrie :
             \(offenders.joined(separator: "\n"))
             """
         )

@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "sticker_custom_text",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_custom_time",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_library_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_library_item_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_library_lift",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_library_lift_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_library_paste",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_library_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_pack_by",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_shop_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_shop_install",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_shop_remove",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_template_text_badge",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_template_text_neon",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_template_text_ribbon",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_template_text_signboard",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_template_text_speech_bubble",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_template_text_stamp",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_template_text_sticky_note",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_template_text_tag",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_template_text_tape",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_template_text_thought_bubble",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_template_time_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_template_time_analog",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_template_time_calendar_day",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_template_time_digital",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_template_time_ribbon",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_text_example",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_text_field_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sticker_text_placeholder",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

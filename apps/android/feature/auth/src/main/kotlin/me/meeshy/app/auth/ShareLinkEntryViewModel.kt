@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.ShareLinkEntryIntent
+import me.meeshy.sdk.model.ShareLinkInfo
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.AnonymousSessionStore
 import javax.inject.Inject
@@ -108,8 +109,22 @@ public class ShareLinkEntryViewModel @Inject constructor(
         "ShareLinkEntryViewModel requires an '${GuestJoinViewModel.IDENTIFIER_ARG}' navigation argument"
     }
 
+    /**
+     * L'identité est déjà choisie là où le lien a été touché : « Anonyme » d'une carte de conversation
+     * (#13683, iOS `DeepLinkRouter.requestedGuestJoin`). On ne repose pas la question.
+     */
+    private val anonymityChosen: Boolean = savedStateHandle.get<Any?>(ANONYMOUS_ARG)?.toString() == "true"
+
     private val _state = MutableStateFlow<ShareLinkEntryUiState>(ShareLinkEntryUiState.Resolving)
     public val state: StateFlow<ShareLinkEntryUiState> = _state.asStateFlow()
+
+    private val _landingInfo = MutableStateFlow<ShareLinkInfo?>(null)
+
+    /**
+     * L'aperçu du lien tel que la résolution l'a lu : la page d'invitation le peint (identique avec ou
+     * sans compte). Hors de [ShareLinkEntryUiState] pour que ses branches de navigation restent des valeurs.
+     */
+    public val landingInfo: StateFlow<ShareLinkInfo?> = _landingInfo.asStateFlow()
 
     init {
         resolve()
@@ -119,7 +134,7 @@ public class ShareLinkEntryViewModel @Inject constructor(
     public fun resolve() {
         _state.value = ShareLinkEntryUiState.Resolving
         viewModelScope.launch {
-            _state.value = decide()
+            _state.value = if (anonymityChosen) resumeStoredGuestSession() else decide()
         }
     }
 
@@ -156,6 +171,7 @@ public class ShareLinkEntryViewModel @Inject constructor(
             knownConversationIds = known,
         ) ?: return if (isAuthenticated) attemptAuthenticatedJoin() else ShareLinkEntryUiState.GuestForm
 
+        _landingInfo.value = resolution.info
         return when (val intent = resolution.intent) {
             is ShareLinkEntryIntent.OpenConversation ->
                 ShareLinkEntryUiState.OpenConversation(intent.conversationId)
@@ -197,4 +213,9 @@ public class ShareLinkEntryViewModel @Inject constructor(
 
     private suspend fun hasStoredGuestSessionForThisLink(): Boolean =
         sessionStore.load()?.linkId?.trim() == identifier.trim()
+
+    public companion object {
+        /** `meeshy://join/<id>?anonymous=true` : la personne a déjà choisi d'entrer sans compte. */
+        public const val ANONYMOUS_ARG: String = "anonymous"
+    }
 }

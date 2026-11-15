@@ -2,7 +2,7 @@
 
 **Date** : 2026-07-01
 **Piste** : iOS (suffixe `i`).
-**Surface** : `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift`
+**Surface** : `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift`
 **Base** : `main` HEAD (`100e4725`)
 **Branche** : `claude/upbeat-euler-s5qysh`
 **Gate** : CI `iOS Tests`

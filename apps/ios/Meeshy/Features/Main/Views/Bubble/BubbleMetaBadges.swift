@@ -13,14 +13,22 @@ struct BubbleEditedIndicator: View, Equatable {
     let isSaving: Bool
     let hasEditHistory: Bool
     let isDark: Bool
+    /// #11375 — la modification d'un modérateur de plateforme se dit en MOTS.
+    var byModerator: Bool = false
+    @Environment(\.bubbleSkin) private var skin
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.isMe == rhs.isMe && lhs.isSaving == rhs.isSaving && lhs.hasEditHistory == rhs.hasEditHistory
+            && lhs.isDark == rhs.isDark && lhs.byModerator == rhs.byModerator
+    }
 
     var body: some View {
         let theme = ThemeManager.shared
         let metaColor: Color = isMe
-            ? Color.white.opacity(0.6)
-            : theme.textSecondary.opacity(0.5)
+            ? skin.ink(0.6)
+            : theme.textSecondary.opacity(MeeshyOpacity.strong)
 
-        return HStack(spacing: 3) {
+        return HStack(spacing: MeeshySpacing.xxs) {
             if isSaving {
                 // Saving feedback: arrow-spin glyph instead of pencil so the
                 // user sees their edit is still propagating to the server.
@@ -28,26 +36,44 @@ struct BubbleEditedIndicator: View, Equatable {
                     .font(.system(.caption2, design: .default).weight(.semibold))
                     .minimumScaleFactor(0.8)
                     .rotationEffect(.degrees(isSaving ? 360 : 0))
-                    .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: isSaving)
-                Text(String(localized: "bubble.meta.saving", defaultValue: "Saving…", bundle: .main))
+                    // `meeshyAnimation` plutôt que les deux `@Environment` que
+                    // déclarent les autres sites : cette vue est `Equatable`
+                    // par SYNTHÈSE, et une propriété stockée `@Environment`
+                    // (non `Equatable`) la casserait. Le modificateur du SDK
+                    // lit l'environnement lui-même et laisse la vue sans état.
+                    //
+                    // Rien à choisir comme valeur de repos ici : 360° ≡ 0°, le
+                    // glyphe arrêté est exactement celui que la rotation
+                    // traverse — et le « Saving… » juste à droite continue de
+                    // dire ce que la rotation disait.
+                    .meeshyAnimation(
+                        .linear(duration: 1).repeatForever(autoreverses: false),
+                        value: isSaving
+                    )
+                Text(String(localized: "bubble.meta.saving", defaultValue: "Enregistrement…", bundle: .main))
                     .font(.caption2.weight(.medium))
                     .italic()
             } else {
+                // #7599 — le crayon SEUL : « modifié » ne s'écrit plus, le
+                // lecteur d'écran le dit. Le point « historique » était un
+                // pictogramme décoratif — l'historique s'ouvre depuis le menu.
                 Image(systemName: "pencil")
                     .font(.system(.caption2, design: .default).weight(.semibold))
                     .minimumScaleFactor(0.8)
-                Text(String(localized: "bubble.meta.edited", defaultValue: "Edited", bundle: .main))
-                    .font(.caption2.weight(.medium))
-                    .italic()
-                if hasEditHistory {
-                    // Dot affordance hinting the detail sheet shows history.
-                    Circle()
-                        .fill(metaColor)
-                        .frame(width: 3, height: 3)
-                        .opacity(0.7)
+                // #11375 — le crayon seul laisserait lire ce texte comme celui
+                // de son auteur : la modification d'un tiers se dit en mots.
+                if byModerator {
+                    Text(BubbleEditMark.spokenLabel(byModerator: true))
+                        .font(.caption2.weight(.medium))
+                        .italic()
+                        .lineLimit(1)
                 }
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isSaving
+            ? String(localized: "bubble.meta.saving", defaultValue: "Enregistrement…", bundle: .main)
+            : BubbleEditMark.spokenLabel(byModerator: byModerator))
         .foregroundColor(metaColor)
     }
 }
@@ -61,20 +87,17 @@ struct BubbleEditedIndicator: View, Equatable {
 /// preserver le fast-path `.equatable()`.
 struct BubblePinnedIndicator: View, Equatable {
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
+            // #7599 — l'épingle SEULE, droite ; le libellé reste au lecteur
+            // d'écran (ci-dessous).
             Image(systemName: "pin.fill")
                 .font(.caption2.weight(.bold))
-                .foregroundColor(MeeshyColors.pinnedBlue)
-                .rotationEffect(.degrees(45))
-
-            Text(String(localized: "bubble.meta.pinned", defaultValue: "Pinned", bundle: .main))
-                .font(.caption2.weight(.medium))
-                .foregroundColor(MeeshyColors.pinnedBlue)
+                .foregroundStyle(MeeshyColors.pinnedBlue)
         }
-        .padding(.horizontal, 4)
-        .padding(.bottom, 2)
+        .padding(.horizontal, MeeshySpacing.xs)
+        .padding(.bottom, MeeshySpacing.xxs)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "bubble.meta.pinned.a11y", defaultValue: "Pinned message", bundle: .main))
+        .accessibilityLabel(String(localized: "bubble.meta.pinned.a11y", defaultValue: "Message épinglé", bundle: .main))
     }
 }
 
@@ -94,19 +117,19 @@ struct BubbleForwardedIndicator: View, Equatable {
 
     var body: some View {
         let theme = ThemeManager.shared
-        return HStack(spacing: 4) {
+        return HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: "arrowshape.turn.up.right.fill")
                 .font(.caption2.weight(.medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
 
             Text(Self.label(for: attribution))
                 .font(.caption2)
                 .italic()
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 4)
-        .padding(.bottom, 2)
+        .padding(.horizontal, MeeshySpacing.xs)
+        .padding(.bottom, MeeshySpacing.xxs)
         .accessibilityElement(children: .combine)
     }
 
@@ -117,7 +140,7 @@ struct BubbleForwardedIndicator: View, Equatable {
         case .person(let name):
             return String(localized: "bubble.meta.forwarded.from", defaultValue: "Fwd. from \(name)", bundle: .main)
         case .anonymous:
-            return String(localized: "bubble.meta.forwarded", defaultValue: "Forwarded", bundle: .main)
+            return String(localized: "bubble.meta.forwarded", defaultValue: "Transféré", bundle: .main)
         }
     }
 }
@@ -126,34 +149,10 @@ struct BubbleForwardedIndicator: View, Equatable {
 // inline by `BubbleFooter` / `BubbleDeliveryCheck`. The former standalone
 // `BubbleDeliveryBadge` has been removed.
 
-// MARK: - Ephemeral Badge (was: ThemedMessageBubble.ephemeralTimerOverlay)
-
-/// Capsule "flame + timer" affichee sous les messages ephemeres pour
-/// rappeler le compte a rebours avant expiration.
-struct BubbleEphemeralBadge: View, Equatable {
-    let timerText: String
-    let isDark: Bool
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "flame.fill")
-                .font(.caption2.weight(.semibold))
-                .foregroundColor(MeeshyColors.error)
-
-            Text(timerText)
-                .font(.system(.caption2, design: .monospaced).weight(.bold))
-                .foregroundColor(MeeshyColors.error)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            Capsule()
-                .fill(MeeshyColors.error.opacity(isDark ? 0.15 : 0.1))
-                .overlay(
-                    Capsule()
-                        .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 0.5)
-                )
-        )
-        .accessibilityLabel(String(localized: "bubble.meta.ephemeral.a11y", defaultValue: "Ephemeral message, expires in \(timerText)", bundle: .main))
-    }
-}
+// MARK: - Le badge éphémère a quitté ce fichier (#7452)
+//
+// `BubbleEphemeralBadge` vivait ici, et `FocalEphemeralBadge` en était une
+// seconde implémentation pour la rangée plate — deux badges pour une même
+// chose, et RIEN en Rivière ni en Résumé. Les cinq modes consomment désormais
+// `MessageProtectionChrome` (`MeeshyUI/Conversation/`), qui porte le décompte,
+// la vue unique et le flou, et n'a plus de minuteur par cellule.

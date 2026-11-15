@@ -11,6 +11,9 @@ data class ApiCommunityUser(
     val displayName: String? = null,
     val avatar: String? = null,
     val isOnline: Boolean? = null,
+    /** Contour d'avatar équipé (#10945) ; absent ou illisible => aucun contour. */
+    @Serializable(with = TolerantServedProfileDecorSerializer::class)
+    val profileDecor: ServedProfileDecor? = null,
 )
 
 /** A community member — port of APICommunityMember (CommunityModels.swift). */
@@ -22,7 +25,10 @@ data class ApiCommunityMember(
     val role: String = "member",
     val joinedAt: String? = null,
     val user: ApiCommunityUser? = null,
-)
+) {
+    /** Le rôle lu sans tenir compte de la casse ; une valeur inconnue vaut membre (iOS `communityRole`). */
+    val communityRole: MemberRole get() = MemberRole.from(role)
+}
 
 @Serializable
 data class ApiCommunityCount(
@@ -48,6 +54,8 @@ data class ApiCommunity(
     @SerialName("_count") val count: ApiCommunityCount? = null,
     val memberCount: Int? = null,
     val conversationCount: Int? = null,
+    /** Agrégat anonyme servi par `GET /communities/:id` (#18014) ; `null` = communauté trop petite ou ancien serveur. */
+    val onlineMemberCount: Int? = null,
 )
 
 /** A community search result — port of APICommunitySearchResult (CommunityModels.swift). */

@@ -21,7 +21,7 @@ const mockAudioTranslateService: any = {
 };
 
 jest.mock('../../../services/AudioTranslateService', () => ({
-  AudioTranslateService: jest.fn().mockImplementation(() => mockAudioTranslateService)
+  ...(jest.requireActual('../../../services/AudioTranslateService') as object), AudioTranslateService: jest.fn().mockImplementation(() => mockAudioTranslateService)
 }));
 
 // Mock Prisma
@@ -40,7 +40,17 @@ jest.mock('@meeshy/shared/prisma/client', () => {
   };
 
   return {
-    PrismaClient: jest.fn(() => mockPrisma)
+    PrismaClient: jest.fn(() => mockPrisma),
+    // #4166 — `AttachmentTranslateService` importe désormais
+    // `attachmentTranslateSelect` (`services/attachments/attachmentIncludes`),
+    // qui appelle `Prisma.validator<...>()({...})` au CHARGEMENT du module.
+    // `Prisma.validator` est, dans le client généré, une identité pure
+    // (`(...args) => (row) => row` — sert uniquement à l'inférence de type,
+    // ignore ses arguments à l'exécution) : ce double reproduit exactement
+    // ce comportement, il ne l'approxime pas.
+    Prisma: {
+      validator: () => (arg: unknown) => arg,
+    },
   };
 });
 

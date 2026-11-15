@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_text_format_bar">التنسيق</string>
+    <string name="composer_text_format_bold">غامق</string>
+    <string name="composer_text_format_italic">مائل</string>
+    <string name="composer_text_format_underline">تحته خط</string>
+    <string name="composer_text_format_strikethrough">يتوسطه خط</string>
+</resources>

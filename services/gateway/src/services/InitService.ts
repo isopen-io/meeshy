@@ -1,23 +1,51 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { ensureSocialEventIndexesByCommand } from './social/socialEventIndexes';
+import { ensureMessageDedupIndexes as ensureMessageDedupIndexesByCommand } from './messaging/messageDedupIndex';
 import { AuthService } from './AuthService';
 import { UserRoleEnum } from '@meeshy/shared/types';
+import type { MemberRoleType } from '@meeshy/shared/types/role-types';
 import { generateCompactConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { ensureGlobalConversationMembership } from './conversations/ensureGlobalConversationMembership';
+import { getJwtSecret, requireStrongSecret } from '../utils/secrets';
+import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation-primitives';
+import { UserAuditAction } from '@meeshy/shared/types';
+import { maySeedEmailVerification, seedAccountEmail, seedAccounts, type SeedAccount } from './seed-accounts';
+import { ensureWorldConversation } from './world/worldConversation';
+import { isWorldSeedEnabled, worldReservedIdentitiesFromEnv } from './world/worldReservedMembers';
+
+/**
+ * Les trois comptes de bootstrap (#3623) — `bigboss123`/`admin123` étaient un
+ * défaut public COMMITTÉ, utilisable par quiconque lit le dépôt. Même garde
+ * que `getJwtSecret()` : refus au boot en production/staging sans l'env var
+ * dédiée, tolérance avec avertissement en dev/test.
+ */
+const requireSeedPassword = (envVar: string, insecureDefault: string): string =>
+  requireStrongSecret({ envVar, insecureDefault, minLength: PASSWORD_MIN_LENGTH });
 
 // Logger dédié pour InitService
 const logger = enhancedLogger.child({ module: 'InitService' });
 
+/**
+ * Le rôle DANS LE SALON GLOBAL réservé aux trois comptes de bootstrap —
+ * `meeshy` (créateur), `admin` (administrateur), tout le reste (membre
+ * ordinaire, y compris `atabeth`). Distinct du rôle PLATEFORME
+ * (`User.role`, BIGBOSS/ADMIN/…) : un compte peut être BIGBOSS globalement
+ * sans être `creator` de CE salon précis si un jour le seed change de nom.
+ */
+export function reservedGlobalMemberRole(username: string): MemberRoleType {
+  if (username === 'meeshy') return 'creator';
+  if (username === 'admin') return 'admin';
+  return 'member';
+}
 
 export class InitService {
   private prisma: PrismaClient;
   private authService: AuthService;
-  private globalConversationId: string;
-  private directConversationId: string;
-  private groupConversationId: string;
-  
+
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
-    this.authService = new AuthService(prisma, process.env.JWT_SECRET || 'default-jwt-secret');
+    this.authService = new AuthService(prisma, getJwtSecret());
   }
 
   /**
@@ -26,7 +54,7 @@ export class InitService {
   async initializeDatabase(): Promise<void> {
     const forceReset = process.env.FORCE_DB_RESET === 'true';
     const isProduction = process.env.NODE_ENV === 'production';
-    
+
     // GARDE-FOU CRITIQUE: Empêcher FORCE_DB_RESET=true en production
     if (forceReset && isProduction) {
       const errorMessage = '🚨 ERREUR CRITIQUE: FORCE_DB_RESET=true détecté en PRODUCTION! Ceci supprimerait TOUTES les données!';
@@ -35,13 +63,11 @@ export class InitService {
       logger.error('[INIT] 💡 Si vous devez vraiment réinitialiser en production, contactez un administrateur');
       throw new Error('FORCE_DB_RESET=true est interdit en production pour protéger les données');
     }
-    
+
     if (forceReset) {
       await this.resetDatabase();
     } else {
     }
-
-    await this.ensurePostGeoIndex();
 
     try {
       // 1. Créer la conversation globale "meeshy"
@@ -62,12 +88,12 @@ export class InitService {
     } catch (error) {
       logger.error('[INIT] ❌ Erreur lors de l\'initialisation:', error);
       logger.error('[INIT] 💡 Détails de l\'erreur:', error.message);
-      
+
       // En mode développement, on ne fait pas échouer le serveur
       if (process.env.NODE_ENV === 'development') {
         return;
       }
-      
+
       throw error;
     }
   }
@@ -87,7 +113,7 @@ export class InitService {
       }
 
 
-      const newConversation = await this.prisma.conversation.create({
+      await this.prisma.conversation.create({
         data: {
           identifier: 'meeshy',
           title: 'Meeshy Global',
@@ -98,8 +124,6 @@ export class InitService {
           updatedAt: new Date()
         }
       });
-
-      this.globalConversationId = newConversation.id;
 
     } catch (error) {
       logger.error('[INIT] ❌ Erreur lors de la création de la conversation globale', error);
@@ -131,11 +155,10 @@ export class InitService {
   private async createBigbossUser(): Promise<void> {
     // Utilisateur fixe avec certains champs configurables
     const username = 'meeshy'; // FIXE
-    const password = process.env.MEESHY_PASSWORD || 'bigboss123'; // CONFIGURABLE
+    const password = requireSeedPassword('MEESHY_PASSWORD', 'bigboss123'); // CONFIGURABLE
     const firstName = 'Meeshy'; // FIXE
     const lastName = 'Sama'; // FIXE
-    const email = process.env.MEESHY_EMAIL || 'meeshy@meeshy.me'; // CONFIGURABLE
-    const role = 'BIGBOSS'; // FIXE
+    const email = seedAccountEmail('meeshy'); // CONFIGURABLE (`seed-accounts.ts`)
     const systemLanguage = process.env.MEESHY_SYSTEM_LANGUAGE || 'en'; // CONFIGURABLE
     const regionalLanguage = process.env.MEESHY_REGIONAL_LANGUAGE || 'fr'; // CONFIGURABLE
     const customDestinationLanguage = process.env.MEESHY_CUSTOM_DESTINATION_LANGUAGE || 'pt'; // CONFIGURABLE
@@ -171,25 +194,27 @@ export class InitService {
 
       const user = result.user;
 
-      // Mettre à jour le rôle vers BIGBOSS (fixe)
+      // Mettre à jour le rôle vers BIGBOSS (fixe). La vérification d'e-mail du
+      // seed n'est PAS posée ici : `ensureSeedAccountsVerified()` la pose à
+      // CHAQUE boot, hors de la porte `shouldInitialize()` (#6581).
       await this.prisma.user.update({
         where: { id: user.id },
         data: { role: UserRoleEnum.BIGBOSS }
       });
 
-      // Ajouter l'utilisateur comme CREATOR de la conversation meeshy
-      await this.prisma.participant.create({
-        data: {
-          conversationId: this.globalConversationId,
-          userId: user.id,
-          type: 'user',
-          displayName: user.displayName || user.username,
-          role: 'CREATOR',
-          joinedAt: new Date(),
-          isActive: true,
-          permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true }
-        }
-      });
+      // Ajouter l'utilisateur comme CREATOR de la conversation meeshy —
+      // `ensureGlobalConversationMembership` (#3876) est la SOURCE UNIQUE de
+      // cet ajout. Trouvé pendant ce lot : `register()` ci-dessus a DÉJÀ
+      // rejoint le salon global en `member` (rôle par défaut) puisque
+      // `createGlobalConversation()` s'exécute avant ce point — un second
+      // `participant.create` direct pour la MÊME paire
+      // `(conversationId, userId)` violait l'index unique et laissait BIGBOSS
+      // coincé à `member`. La fonction partagée MET À NIVEAU une
+      // participation déjà existante quand un rôle explicite est demandé.
+      await ensureGlobalConversationMembership(
+        { prisma: this.prisma },
+        { userId: user.id, displayName: user.displayName || user.username, role: 'creator' }
+      );
 
     } catch (error) {
       logger.error(`[INIT] ❌ Erreur lors de la création de l'utilisateur Bigboss "${username}":`, error);
@@ -203,11 +228,10 @@ export class InitService {
   private async createAdminUser(): Promise<void> {
     // Utilisateur fixe avec certains champs configurables
     const username = 'admin'; // FIXE
-    const password = process.env.ADMIN_PASSWORD || 'admin123'; // CONFIGURABLE
+    const password = requireSeedPassword('ADMIN_PASSWORD', 'admin123'); // CONFIGURABLE
     const firstName = 'Admin'; // FIXE
     const lastName = 'Manager'; // FIXE
-    const email = process.env.ADMIN_EMAIL || 'admin@meeshy.me'; // CONFIGURABLE
-    const role = 'ADMIN'; // FIXE
+    const email = seedAccountEmail('admin'); // CONFIGURABLE (`seed-accounts.ts`)
     const systemLanguage = process.env.ADMIN_SYSTEM_LANGUAGE || 'en'; // CONFIGURABLE - Default: English
     const regionalLanguage = process.env.ADMIN_REGIONAL_LANGUAGE || 'fr'; // CONFIGURABLE - Default: French
     const customDestinationLanguage = process.env.ADMIN_CUSTOM_DESTINATION_LANGUAGE || 'es'; // CONFIGURABLE - Default: Spanish
@@ -219,18 +243,18 @@ export class InitService {
       });
 
       if (existingUser) {
-        
+
         // Mettre à jour le rôle vers ADMIN et les langues configurables
         await this.prisma.user.update({
           where: { id: existingUser.id },
-          data: { 
+          data: {
             role: UserRoleEnum.ADMIN,
             systemLanguage,
             regionalLanguage,
             customDestinationLanguage
           }
         });
-        
+
       } else {
 
         // Créer l'utilisateur via l'API de création de compte
@@ -251,7 +275,8 @@ export class InitService {
           throw new Error('Échec de la création de l\'utilisateur Admin');
         }
 
-        // Mettre à jour le rôle vers ADMIN (fixe)
+        // Mettre à jour le rôle vers ADMIN (fixe) — cf. `ensureSeedAccountsVerified()`
+        // pour la vérification d'e-mail du seed (#6581).
         await this.prisma.user.update({
           where: { id: result.user.id },
           data: { role: UserRoleEnum.ADMIN }
@@ -260,7 +285,10 @@ export class InitService {
 
       // Ajouter l'utilisateur à la conversation globale meeshy
       const userId = existingUser ? existingUser.id : (await this.prisma.user.findFirst({ where: { username } }))!.id;
-      await this.addUserToMeeshyConversation(userId, username);
+      await ensureGlobalConversationMembership(
+        { prisma: this.prisma },
+        { userId, displayName: username, role: reservedGlobalMemberRole(username) }
+      );
 
     } catch (error) {
       logger.error(`[INIT] ❌ Erreur lors de la configuration de l'utilisateur Admin "${username}":`, error);
@@ -278,10 +306,16 @@ export class InitService {
    * spec sur un index déjà existant réussit sans erreur (pas de code à
    * ignorer ici) — toute erreur qui remonte est donc réelle et doit stopper
    * le démarrage, jamais avalée en silence.
-   * Inconditionnel : appelé à chaque boot, que `FORCE_DB_RESET` soit actif ou
-   * non — pas dans `resetDatabase()`, qui ne s'exécute que sur reset explicite.
+   *
+   * Invariant de CHAQUE boot, pas du premier : `server.ts` l'appelle AVANT la
+   * porte `shouldInitialize()`, base vide ou non. Il vivait dans
+   * `initializeDatabase()`, que cette porte ne laisse passer que sur une base
+   * VIDE — une base déjà peuplée ne recevait donc jamais l'index, et
+   * `/posts/nearby` rendait 500 en production (`$geoNear requires a 2d or
+   * 2dsphere index`, 2026-08-25) alors que le commentaire ci-dessus disait
+   * « à chaque boot ».
    */
-  private async ensurePostGeoIndex(): Promise<void> {
+  async ensurePostGeoIndex(): Promise<void> {
     try {
       await this.prisma.$runCommandRaw({
         createIndexes: 'Post',
@@ -299,10 +333,221 @@ export class InitService {
   }
 
   /**
+   * Garantit les deux index composés de `FriendRequest` (#4162).
+   *
+   * La collection n'en portait AUCUN — ni `senderId`, ni `receiverId`, ni
+   * `status`. Les trois listings de demandes d'amitié, appelés à chaque
+   * ouverture de l'écran contacts sur iOS comme sur le web, étaient des
+   * balayages complets.
+   *
+   * Le `schema.prisma` les déclare, et cela ne suffit PAS : sur le connecteur
+   * MongoDB, une déclaration d'index ne devient réelle qu'au `prisma db push`,
+   * que le déploiement n'exécute pas. Un index déclaré et jamais créé se lit
+   * pourtant comme un index posé — c'est exactement la forme du piège que
+   * `ensurePostGeoIndex` a payé, et pour lequel `/posts/nearby` rendait 500
+   * en production.
+   *
+   * Invariant de CHAQUE boot, jamais derrière `shouldInitialize()` : cette
+   * porte ne s'ouvre que sur une base VIDE, et un rattrapage d'index s'applique
+   * par définition à une base qui contient déjà des données.
+   *
+   * `createIndexes` est nativement idempotent : rejouer la même spec sur un
+   * index existant réussit sans erreur.
+   */
+  async ensureFriendRequestIndexes(): Promise<void> {
+    try {
+      await this.prisma.$runCommandRaw({
+        createIndexes: 'FriendRequest',
+        indexes: [
+          { key: { receiverId: 1, status: 1, createdAt: -1 }, name: 'FriendRequest_receiver_status_createdAt' },
+          { key: { senderId: 1, status: 1, createdAt: -1 }, name: 'FriendRequest_sender_status_createdAt' },
+        ],
+      });
+    } catch (error) {
+      logger.error('[INIT] ❌ Erreur lors de la création des index FriendRequest', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Garantit l'index de DELTA de `UserContact` (#4163).
+   *
+   * Même raison que ses voisins : sur le connecteur MongoDB, une déclaration
+   * `@@index` du `schema.prisma` ne devient réelle qu'au `prisma db push`, que
+   * le déploiement n'exécute pas. Sans cet index, `?updatedSince=` balaie tout
+   * le carnet du propriétaire — exactement ce que le delta évite de
+   * retélécharger.
+   */
+  async ensureContactDeltaIndex(): Promise<void> {
+    try {
+      await this.prisma.$runCommandRaw({
+        createIndexes: 'UserContact',
+        indexes: [{ key: { ownerId: 1, updatedAt: 1 }, name: 'UserContact_owner_updatedAt' }],
+      });
+    } catch (error) {
+      logger.error('[INIT] ❌ Erreur lors de la création de l\'index delta UserContact', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Les index de la télémétrie v2 (#10510) : unique PARTIEL de la clé
+   * d'événement et TTL de `expiresAt` sur `ContentEvent` et `PostImpression`.
+   * Idempotent (`ensureSocialEventIndexes`). Un échec est JOURNALISÉ sans
+   * arrêter le démarrage : la télémétrie ne doit jamais empêcher la
+   * messagerie de servir — mais sans ces index un rejeu compterait deux fois
+   * et rien n'expirerait, d'où le niveau `error`.
+   */
+  async ensureSocialEventIndexes(): Promise<void> {
+    try {
+      const outcomes = Object.entries(await ensureSocialEventIndexesByCommand(this.prisma));
+      const created = outcomes.filter(([, probe]) => probe.outcome === 'created').map(([name]) => name);
+      const conflicts = outcomes.flatMap(([name, probe]) => probe.outcome === 'conflict' ? [`${name} (${probe.reason})`] : []);
+      logger.info(`[INIT] index de télémétrie v2 posés : ${outcomes.length - conflicts.length}/${outcomes.length}${created.length > 0 ? ` — créés : ${created.join(', ')}` : ''}`);
+      if (conflicts.length > 0) logger.error(`[INIT] ❌ Index de télémétrie v2 en conflit, laissés en place : ${conflicts.join(', ')}`);
+    } catch (error) {
+      logger.error('[INIT] ❌ Index de télémétrie v2 non posés', error);
+    }
+  }
+
+  /**
+   * L'index unique PARTIEL `(conversationId, clientMessageId)` (#18621) — la
+   * SEULE chose qui ferme la fenêtre de concurrence du dedup d'envoi.
+   *
+   * Même raison que ses voisins, et un antécédent plus lourd : le
+   * `schema.prisma` décline `@@unique` à dessein (le connecteur MongoDB poserait
+   * un index NON partiel, cassant l'envoi pour les lignes historiques), l'index
+   * vit donc dans une migration `.mongodb.js` qu'AUCUN déploiement ne joue. Il
+   * a manqué deux mois en production sans que rien ne le détecte.
+   *
+   * Invariant de CHAQUE boot, jamais derrière `shouldInitialize()` : cette
+   * porte ne s'ouvre que sur une base VIDE, et la base qui porte les messages à
+   * ne pas dupliquer est par définition peuplée.
+   *
+   * Un conflit 85/86 est JOURNALISÉ et laissé en place — droper un index unique
+   * sous une base vivante est l'affaire d'une migration nommée. Toute autre
+   * erreur STOPPE le démarrage, comme chez les trois voisins : un `E11000` dit
+   * que des doublons existent déjà, c'est-à-dire exactement ce que l'index
+   * devait empêcher, et le taire ferait du démarrage le complice du défaut.
+   */
+  async ensureMessageDedupIndexes(): Promise<void> {
+    try {
+      const outcomes = Object.entries(await ensureMessageDedupIndexesByCommand(this.prisma));
+      const conflicts = outcomes.flatMap(([name, probe]) => probe.outcome === 'conflict' ? [`${name} (${probe.reason})`] : []);
+      const created = outcomes.filter(([, probe]) => probe.outcome === 'created').map(([name]) => name);
+      if (created.length > 0) logger.info(`[INIT] index de dedup d'envoi créé : ${created.join(', ')}`);
+      if (conflicts.length > 0) {
+        logger.error(`[INIT] ❌ Index de dedup d'envoi en CONFLIT, laissé en place — le dedup concurrent ne protège rien : ${conflicts.join(', ')}`);
+      }
+    } catch (error) {
+      logger.error('[INIT] ❌ Index de dedup d\'envoi non posé', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Les trois comptes SEMÉS peuvent publier — à CHAQUE boot (#6581).
+   *
+   * Leurs adresses ne reçoivent aucun courrier (`seed-accounts.ts`), donc
+   * personne ne peut cliquer le lien de vérification. Depuis #6437,
+   * `requireEmailVerification` garde `POST /posts` : sans `emailVerifiedAt`,
+   * le compte de démonstration que ce service vient de créer prend
+   * `403 EMAIL_NOT_VERIFIED` à sa première publication — il lit, il écrit en
+   * conversation, et il n'alimente jamais la bibliothèque de sons, qui ne naît
+   * QUE d'une publication publique.
+   *
+   * INCONDITIONNELLE, comme ses trois voisines et pour la MÊME raison : la
+   * porte `shouldInitialize()` ne s'ouvre que sur une base VIDE (ses six
+   * lectures rendent toutes une ligne sur une base saine). Un rattrapage
+   * derrière elle est du code MORT — c'est exactement ce que
+   * `ensurePostGeoIndex` a payé d'un 500 en production le 2026-08-25, et le
+   * premier jet de ce lot l'avait rejoué. `server.ts` l'appelle APRÈS
+   * `initializeDatabase()` pour que la base fraîchement semée passe par le
+   * MÊME site que la base héritée : une seule écriture de `emailVerifiedAt`
+   * dans tout le service.
+   *
+   * Idempotente : `maySeedEmailVerification` refuse un compte déjà vérifié,
+   * un compte dont l'adresse a été REPURPOSÉE (production, 2026-09-15 :
+   * `atabeth` porte `zuymanto@gmail.com`) et un compte sur lequel un
+   * administrateur a tranché.
+   */
+  async ensureSeedAccountsVerified(): Promise<void> {
+    try {
+      await Promise.all(seedAccounts().map((account) => this.ensureSeedAccountVerified(account)));
+    } catch (error) {
+      logger.error('[INIT] ❌ Erreur lors de la vérification d\'e-mail des comptes semés', error);
+      throw error;
+    }
+  }
+
+  /**
+   * World Wide (#10000) — la conversation publique et son lien `mshy_world`
+   * (`world/worldConversation.ts` en porte la loi).
+   *
+   * Derrière un interrupteur EXPLICITE, `WORLD_SEED_ENABLED=true` : promouvoir
+   * le code ne doit pas écrire en production. Le porteur l'active après le
+   * pré-vol en lecture seule (`scripts/world-seed-preflight.ts`) et une
+   * sauvegarde vérifiée ; toute autre valeur laisse la base intacte.
+   *
+   * NON FATALE, à l'inverse des index ci-dessus : un index manquant casse des
+   * routes existantes, alors qu'un World Wide absent ne retire que la porte
+   * publique — `GET /world` répond 404 et la landing n'offre pas d'entrée.
+   * L'échec est journalisé avec sa conséquence, et le démarrage suivant
+   * réessaie (le seed est idempotent).
+   */
+  async ensureWorldConversation(): Promise<void> {
+    if (!isWorldSeedEnabled()) {
+      logger.info('[INIT] World Wide non semée — WORLD_SEED_ENABLED≠true, aucune écriture');
+      return;
+    }
+    try {
+      await ensureWorldConversation({ prisma: this.prisma, logger, identities: worldReservedIdentitiesFromEnv() });
+    } catch (error) {
+      logger.error(
+        '[INIT] ❌ World Wide non semée — la landing n\'offrira aucune entrée invité tant qu\'un démarrage ne l\'aura pas posée',
+        error,
+      );
+    }
+  }
+
+  private async ensureSeedAccountVerified(account: SeedAccount): Promise<void> {
+    const existing = await this.prisma.user.findFirst({
+      where: { username: account.username },
+      select: { id: true, email: true, emailVerifiedAt: true },
+    });
+    if (!existing) return;
+
+    const eligible = maySeedEmailVerification({
+      emailVerifiedAt: existing.emailVerifiedAt,
+      email: existing.email,
+      seedEmail: account.email,
+    });
+    if (!eligible) return;
+
+    // TROISIÈME refus, et le seul qui ne se lise pas sur la ligne : la décision
+    // d'un administrateur PRIME, dans les deux sens. `verifyEmail(userId, false)`
+    // exige un motif et laisse une trace ; la réécrire au boot suivant
+    // l'annulerait EN SILENCE. Lue seulement maintenant — les deux refus bon
+    // marché ci-dessus épargnent cette requête sur le cas nominal (compte déjà
+    // vérifié), qui est celui de chaque boot d'une base saine.
+    const decided = await this.prisma.adminAuditLog.findFirst({
+      where: { userId: existing.id, action: UserAuditAction.VERIFY_EMAIL },
+      select: { id: true },
+    });
+    if (decided) return;
+
+    await this.prisma.user.update({
+      where: { id: existing.id },
+      data: { emailVerifiedAt: new Date() },
+    });
+    logger.info(`[INIT] ✅ Compte semé "${account.username}" vérifié d'office (adresse sans boîte réelle)`);
+  }
+
+  /**
    * Réinitialise complètement la base de données
    */
   private async resetDatabase(): Promise<void> {
-    
+
     try {
       // Utiliser $runCommandRaw pour drop les collections directement
       // Ceci évite les problèmes de contraintes de clés étrangères avec les auto-relations
@@ -314,7 +559,7 @@ export class InitService {
         'Conversation',
         'User'
       ];
-      
+
       for (const collection of collections) {
         try {
           await this.prisma.$runCommandRaw({
@@ -326,7 +571,7 @@ export class InitService {
           }
         }
       }
-      
+
     } catch (error) {
       logger.error('[INIT] ❌ Erreur lors de la réinitialisation de la base de données', error);
       throw error;
@@ -340,10 +585,10 @@ export class InitService {
   private async createAndreTabethUser(): Promise<void> {
     // Utilisateur entièrement configurable - Default: ADMIN with English
     const username = process.env.ATABETH_USERNAME || 'atabeth';
-    const password = process.env.ATABETH_PASSWORD || 'admin123';
+    const password = requireSeedPassword('ATABETH_PASSWORD', 'admin123');
     const firstName = process.env.ATABETH_FIRST_NAME || 'André';
     const lastName = process.env.ATABETH_LAST_NAME || 'Tabeth';
-    const email = process.env.ATABETH_EMAIL || 'atabeth@meeshy.me';
+    const email = seedAccountEmail('atabeth');
     const role = process.env.ATABETH_ROLE || 'ADMIN';  // Default: ADMIN (can manage translations)
     const systemLanguage = process.env.ATABETH_SYSTEM_LANGUAGE || 'en';  // Default: English
     const regionalLanguage = process.env.ATABETH_REGIONAL_LANGUAGE || 'fr';  // Default: French
@@ -380,66 +625,22 @@ export class InitService {
 
       const user = result.user;
 
-      // Mettre à jour le rôle vers la valeur configurée
+      // Mettre à jour le rôle vers la valeur configurée — cf.
+      // `ensureSeedAccountsVerified()` pour la vérification d'e-mail (#6581).
       await this.prisma.user.update({
         where: { id: user.id },
         data: { role: role as any }
       });
 
-      // Ajouter l'utilisateur à la conversation globale meeshy
-      await this.addUserToMeeshyConversation(user.id, username);
+      // Ajouter l'utilisateur à la conversation globale meeshy —
+      // `ensureGlobalConversationMembership` (#3876) est la SOURCE UNIQUE.
+      await ensureGlobalConversationMembership(
+        { prisma: this.prisma },
+        { userId: user.id, displayName: username, role: reservedGlobalMemberRole(username) }
+      );
 
     } catch (error) {
       logger.error(`[INIT] ❌ Erreur lors de la création de l'utilisateur André Tabeth "${username}":`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Ajoute un utilisateur à la conversation globale meeshy
-   */
-  private async addUserToMeeshyConversation(userId: string, username: string): Promise<void> {
-    try {
-      // Récupérer l'ID de la conversation globale
-      const globalConversation = await this.prisma.conversation.findFirst({
-        where: { identifier: 'meeshy' }
-      });
-
-      if (!globalConversation) {
-        return;
-      }
-
-      // Vérifier si l'utilisateur est déjà membre de la conversation
-      const existingMember = await this.prisma.participant.findFirst({
-        where: {
-          conversationId: globalConversation.id,
-          userId: userId
-        }
-      });
-
-      if (!existingMember) {
-        // Déterminer le rôle selon l'utilisateur
-        const role = username === 'meeshy' ? 'CREATOR' : 
-                    username === 'admin' ? 'ADMIN' : 'MEMBER';
-        
-        // Ajouter l'utilisateur comme membre de la conversation meeshy
-        await this.prisma.participant.create({
-          data: {
-            conversationId: globalConversation.id,
-            userId: userId,
-            type: 'user',
-            displayName: username,
-            role: role,
-            joinedAt: new Date(),
-            isActive: true,
-            permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true }
-          }
-        });
-        
-      } else {
-      }
-    } catch (error) {
-      logger.error(`[INIT] ❌ Erreur lors de l'ajout de l'utilisateur "${username}" à la conversation meeshy:`, error);
       throw error;
     }
   }
@@ -456,7 +657,10 @@ export class InitService {
       });
 
       for (const user of users) {
-        await this.addUserToMeeshyConversation(user.id, user.username);
+        await ensureGlobalConversationMembership(
+          { prisma: this.prisma },
+          { userId: user.id, displayName: user.displayName || user.username, role: reservedGlobalMemberRole(user.username) }
+        );
       }
 
     } catch (error) {
@@ -521,7 +725,6 @@ export class InitService {
       const identifier = generateCompactConversationIdentifier();
 
       if (existingConversation) {
-        this.directConversationId = existingConversation.id;
         return;
       }
 
@@ -537,8 +740,6 @@ export class InitService {
         }
       });
 
-      this.directConversationId = conversation.id;
-
       // Ajouter les deux utilisateurs comme membres
       await this.prisma.participant.createMany({
         data: [
@@ -547,7 +748,7 @@ export class InitService {
             userId: userId1,
             type: 'user',
             displayName: 'User 1',
-            role: 'ADMIN',
+            role: 'admin',
             joinedAt: new Date(),
             isActive: true,
             permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true }
@@ -557,7 +758,7 @@ export class InitService {
             userId: userId2,
             type: 'user',
             displayName: 'User 2',
-            role: 'ADMIN',
+            role: 'admin',
             joinedAt: new Date(),
             isActive: true,
             permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true }
@@ -579,14 +780,13 @@ export class InitService {
     try {
       // Générer un identifiant unique pour la conversation de groupe
       const identifier = `mshy_meeshy-infrastructure-team-one`;
-      
+
       // Vérifier si la conversation existe déjà
       const existingConversation = await this.prisma.conversation.findFirst({
         where: { identifier }
       });
 
       if (existingConversation) {
-        this.groupConversationId = existingConversation.id;
         return;
       }
 
@@ -602,15 +802,13 @@ export class InitService {
         }
       });
 
-      this.groupConversationId = conversation.id;
-
       // Ajouter tous les utilisateurs comme membres
       const membersData = userIds.map((userId, index) => ({
         conversationId: conversation.id,
         userId,
         type: 'user' as const,
         displayName: `User ${index + 1}`,
-        role: index === 0 ? 'CREATOR' : 'ADMIN',
+        role: index === 0 ? 'creator' : 'admin',
         joinedAt: new Date(),
         isActive: true,
         permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true }
@@ -632,13 +830,13 @@ export class InitService {
   async shouldInitialize(): Promise<boolean> {
     const forceReset = process.env.FORCE_DB_RESET === 'true';
     const isProduction = process.env.NODE_ENV === 'production';
-    
+
     // GARDE-FOU CRITIQUE: Bloquer FORCE_DB_RESET=true en production
     if (forceReset && isProduction) {
       logger.error('[INIT] 🚨 FORCE_DB_RESET=true détecté en PRODUCTION - BLOQUÉ pour protection des données');
       return false;
     }
-    
+
     if (forceReset) {
       return true;
     }
@@ -686,11 +884,11 @@ export class InitService {
 
       // Si la conversation globale, les utilisateurs ou leurs appartenances n'existent pas, initialisation nécessaire
       const needsInit = !globalConversation || !bigbossUser || !adminUser || !atabethUser || !bigbossMember || !adminMember;
-      
+
       if (needsInit) {
       } else {
       }
-      
+
       return needsInit;
     } catch (error) {
       logger.error('[INIT] ❌ Erreur lors de la vérification de l\'initialisation:', error);

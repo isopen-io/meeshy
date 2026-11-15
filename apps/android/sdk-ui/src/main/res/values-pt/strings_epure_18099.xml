@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure des composants partagés (#18099, #17584) : écrit à la main — les clés quittent le catalogue iOS (manifeste android-only), l'épure de iOS suit son propre lot. -->
+<resources>
+    <string name="post_daily_limit_comment">Limite diário de comentários atingido: retoma às %1$s</string>
+    <string name="post_daily_limit_comment_untimed">Limite diário de comentários atingido</string>
+    <string name="post_daily_limit_reaction">Limite diário de reações atingido: retoma às %1$s</string>
+    <string name="post_daily_limit_reaction_untimed">Limite diário de reações atingido</string>
+    <string name="post_daily_limit_note_question">Esse limite afeta minhas faíscas?</string>
+    <string name="post_daily_limit_note">Conta seus gestos, nunca suas faíscas.</string>
+    <string name="bubble_failed_attachment_right">Este tipo de anexo ainda não é permitido aqui.</string>
+    <string name="bring_explain">Para uma emergência extrema: o telefone dela toca, mesmo bloqueado.</string>
+    <string name="bring_silent_question">E se o telefone dela estiver no silencioso?</string>
+    <string name="bring_silent_note">Conforme os ajustes, um iPhone no silencioso pode mostrar só um alerta prioritário.</string>
+    <string name="talkie_info_note">Só para as pessoas mais próximas, em caso de extrema urgência: sua voz toca do lado dela mesmo com o Meeshy em segundo plano. Não é criptografado de ponta a ponta: fica fechado em uma conversa criptografada. Se não passar, uma mensagem de voz vai para a sua conversa mais recente com ela.</string>
+    <string name="talkie_send_voice_copy">Enviado como mensagem de voz.</string>
+    <string name="voiceProfile_processing_description">Processando, alguns minutos.</string>
+    <string name="voiceProfile_recording_description">Leia o texto em voz alta: pelo menos 3 amostras de 10 segundos.</string>
+    <string name="audio_consent_notice_message">Ative o consentimento de voz para transcrever e traduzir seus áudios.</string>
+    <string name="sticker_sheet_intent_humour_noir_hint">Para rir de tudo, até do pior</string>
+    <string name="sticker_sheet_intent_quotidien_hint">Para contar o que você está fazendo: café, refeição, trabalho, caminho</string>
+    <string name="sticker_sheet_intent_bonjour_hint">Para cumprimentar, agradecer, pedir desculpas</string>
+</resources>

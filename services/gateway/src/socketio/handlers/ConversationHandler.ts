@@ -9,13 +9,15 @@ import type { MeeshySocket as Socket } from '../typed-socket';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
 import { SERVER_EVENTS, ROOMS, type ReadStatusUpdatedEventData } from '@meeshy/shared/types/socketio-events';
-import { conversationStatsService } from '../../services/ConversationStatsService';
+import { conversationStatsService, type OnlineUserInfo } from '../../services/ConversationStatsService';
+import type { PresenceViewer, PresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketConversationJoinSchema, SocketConversationLeaveSchema } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import type { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { bridgeComputed } from '../unreadBridgeField.js';
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 
 const logger = enhancedLogger.child({ module: 'ConversationHandler' });
 
@@ -51,8 +53,33 @@ export interface ConversationHandlerDependencies {
    *
    * Optionnelle : un `ConversationHandler` construit sans elle joint
    * normalement, il ne rattrape simplement rien.
+   *
+   * ASYNCHRONE depuis #16745 : le rattrapage lit le blocage bidirectionnel de
+   * l'arrivant avant de lui servir la position d'un partageur. Le site d'appel
+   * l'ATTEND — un rejeu détaché partirait après la suite de la jonction, et un
+   * rejet détaché n'aurait aucun écouteur (§ « `void p` exige toujours
+   * `p.catch` »).
    */
-  replayLiveLocations?: (socket: Socket, conversationId: string) => void;
+  replayLiveLocations?: (socket: Socket, conversationId: string) => void | Promise<void>;
+  /**
+   * Le LECTEUR des statistiques, avec son VRAI rôle —
+   * `MeeshySocketIOManager._presenceViewer` en pratique. Ni `SocketUser` ni le
+   * handshake ne portent `User.role` : il est relu en base, une fois par
+   * émission de stats. `null` ⇒ aucun lecteur ⇒ la loi ne nomme personne.
+   *
+   * Obligatoire, à la différence des deux rappels ci-dessus : un handler sans
+   * lecteur ne peut pas projeter `onlineUsers`, et la liste nominative de qui
+   * est en ligne est exactement ce que la directive du 2026-08-25 retire à un
+   * co-participant qui n'est pas ami.
+   */
+  presenceViewer: (userId: string) => Promise<PresenceViewer>;
+  /**
+   * La loi UNIQUE de visibilité de la présence — amitié acceptée, ADMIN+,
+   * blocage, préférences — dans sa forme d'ÉVÉNEMENT POUSSÉ,
+   * `PresenceVisibilityService.resolveForPresenceEvent`, la même porte que
+   * `presence:snapshot` : un blocage l'emporte sur le privilège ADMIN (#13298).
+   */
+  presenceVisibility: Pick<PresenceVisibilityService, 'resolveForPresenceEvent'>;
 }
 
 export class ConversationHandler {
@@ -61,7 +88,9 @@ export class ConversationHandler {
   private socketToUser: Map<string, string>;
   private readStatusService: Pick<MessageReadStatusService, 'getUnreadCount' | 'getLatestMessageSummary'>;
   private retractTyping?: (socket: Socket, conversationId: string) => Promise<void>;
-  private replayLiveLocations?: (socket: Socket, conversationId: string) => void;
+  private replayLiveLocations?: (socket: Socket, conversationId: string) => void | Promise<void>;
+  private presenceViewer: (userId: string) => Promise<PresenceViewer>;
+  private presenceVisibility: Pick<PresenceVisibilityService, 'resolveForPresenceEvent'>;
   private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: ConversationHandlerDependencies) {
@@ -71,6 +100,8 @@ export class ConversationHandler {
     this.readStatusService = deps.readStatusService;
     this.retractTyping = deps.retractTyping;
     this.replayLiveLocations = deps.replayLiveLocations;
+    this.presenceViewer = deps.presenceViewer;
+    this.presenceVisibility = deps.presenceVisibility;
   }
 
   /**
@@ -133,7 +164,7 @@ export class ConversationHandler {
         // Anonymous: verify participant owns this exact conversation
         const participantId = connectedUser.participantId;
         const participant = await this.prisma.participant.findFirst({
-          where: { id: participantId, conversationId: normalizedId, isActive: true },
+          where: { id: participantId, conversationId: normalizedId, ...PARTICIPATION_VIVANTE },
           select: { id: true },
         });
         participantRowId = participant?.id ?? null;
@@ -188,11 +219,17 @@ export class ConversationHandler {
       // Rattrapage AVANT les accusés ci-dessous, et hors du gate
       // `participationId` : l'appartenance vient d'être contrôlée, et un invité
       // de lien partagé a autant besoin de voir l'épingle d'un pair que le
-      // membre inscrit. Ne peut pas jeter — l'implémentation est synchrone et
-      // sans I/O — mais un rejeu perdu ne doit de toute façon jamais faire
-      // échouer une jonction.
+      // membre inscrit.
+      //
+      // L'implémentation LIT LA BASE depuis #16745 (le blocage bidirectionnel
+      // de l'arrivant) : elle peut donc jeter, et c'est pour cela qu'elle est
+      // ATTENDUE sous ce `try`. La phrase précédente — « ne peut pas jeter,
+      // l'implémentation est synchrone et sans I/O » — était vraie quand elle a
+      // été écrite et ne l'est plus : un commentaire d'impossibilité ne rougit
+      // jamais, il se relit comme une raison de ne pas s'en occuper. Un rejeu
+      // perdu, lui, ne doit toujours jamais faire échouer une jonction.
       try {
-        this.replayLiveLocations?.(socket, normalizedId);
+        await this.replayLiveLocations?.(socket, normalizedId);
       } catch (err) {
         logger.warn('live location replay failed on join (non-blocking)', { conversationId: normalizedId, error: err });
       }
@@ -393,7 +430,16 @@ export class ConversationHandler {
   }
 
   /**
-   * Envoie les statistiques de conversation à un socket
+   * Envoie les statistiques de conversation à un socket.
+   *
+   * Les stats sont calculées et mises en cache SANS lecteur — l'entrée est
+   * partagée par tous les sockets d'une conversation. Seule `onlineUsers`, une
+   * liste d'IDENTITÉS, est projetée ici, par socket, à travers la loi de
+   * visibilité de la présence (directive produit du 2026-08-25 : hors amitié
+   * acceptée ou ADMIN+, personne ne voit qui est en ligne). Les agrégats sans
+   * identité (`participantCount`, les compteurs par langue) voyagent tels
+   * quels. La charge émise est un NOUVEL objet : l'entrée de cache n'est
+   * jamais touchée, deux sockets en reçoivent deux projections.
    */
   async sendConversationStatsToSocket(socket: Socket, conversationId: string): Promise<void> {
     try {
@@ -407,15 +453,51 @@ export class ConversationHandler {
         conversationId,
         () => Array.from(this.connectedUsers.values()).map((u) => u.id)
       );
+      if (!stats) return;
 
-      if (stats) {
-        socket.emit(SERVER_EVENTS.CONVERSATION_STATS, {
-          conversationId,
-          stats
-        });
-      }
+      socket.emit(SERVER_EVENTS.CONVERSATION_STATS, {
+        conversationId,
+        stats: { ...stats, onlineUsers: await this._onlineUsersVisibleTo(socket, stats.onlineUsers) },
+      });
     } catch (error) {
       logger.error('conversation stats emit failed', { error });
     }
+  }
+
+  /**
+   * La projection de `onlineUsers` pour CE socket : ne reste que ce que la loi
+   * marque `showOnline` — soi et ses amis acceptés pour un lecteur ordinaire,
+   * tout le monde pour un ADMIN+. Fermée par construction : un id que la carte
+   * ne mentionne pas est retiré.
+   *
+   * Un socket anonyme n'a pas d'identité à relire — le lecteur est `null` et
+   * c'est la loi qui répond HIDDEN pour tous, pas ce handler. Une liste vide
+   * ne consulte ni le lecteur ni la loi : rien à projeter, aucune lecture.
+   */
+  private async _onlineUsersVisibleTo(
+    socket: Socket,
+    onlineUsers: readonly OnlineUserInfo[],
+  ): Promise<readonly OnlineUserInfo[]> {
+    if (onlineUsers.length === 0) return onlineUsers;
+
+    const viewerUserId = this._registeredUserIdOf(socket);
+    const viewer = viewerUserId ? await this.presenceViewer(viewerUserId) : null;
+    const visibility = await this.presenceVisibility.resolveForPresenceEvent(
+      viewer,
+      onlineUsers.map((u) => u.id),
+    );
+    return onlineUsers.filter((u) => visibility.get(u.id)?.showOnline === true);
+  }
+
+  /**
+   * Le `User.id` derrière un socket, ou `null` pour un invité de lien partagé
+   * — dont la clé dans `connectedUsers` est un jeton de session, jamais une
+   * identité qu'on présente à la loi.
+   */
+  private _registeredUserIdOf(socket: Socket): string | null {
+    const key = this.socketToUser.get(socket.id);
+    const connectedUser = key ? this.connectedUsers.get(key) : undefined;
+    if (!connectedUser || connectedUser.isAnonymous) return null;
+    return connectedUser.userId ?? null;
   }
 }

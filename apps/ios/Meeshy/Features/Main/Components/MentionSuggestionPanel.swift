@@ -6,60 +6,74 @@ import MeeshyUI
 
 /// Reusable autocomplete panel rendered above any composer when
 /// `MentionComposerController.activeQuery` is non-nil.
-/// Callers pass the controller and an `onSelect` closure that receives
-/// the updated text after insertion.
+/// Callers pass the controller and either the current text + an `onSelect`
+/// closure that receives the updated text, or a `pick` closure that inserts
+/// the candidate itself (hosts that must not read their text in `body`).
 struct MentionSuggestionPanel: View {
     @ObservedObject var controller: MentionComposerController
     let accentColor: String
-    let currentText: String
-    let onSelect: (String) -> Void
+    let pick: (MentionCandidate) -> Void
+
+    init(controller: MentionComposerController,
+         accentColor: String,
+         currentText: String,
+         onSelect: @escaping (String) -> Void) {
+        self.controller = controller
+        self.accentColor = accentColor
+        self.pick = { candidate in onSelect(controller.insertMention(candidate, into: currentText)) }
+    }
+
+    init(controller: MentionComposerController,
+         accentColor: String,
+         pick: @escaping (MentionCandidate) -> Void) {
+        self.controller = controller
+        self.accentColor = accentColor
+        self.pick = pick
+    }
 
     private var theme: ThemeManager { ThemeManager.shared }
-
-    /// Top-rounded surface: the panel is pinned to the top edge of the composer,
-    /// so only the leading/trailing top corners are rounded — it reads as a card
-    /// rising above the input rather than a detached pill.
-    private var panelShape: UnevenRoundedRectangle {
-        UnevenRoundedRectangle(
-            topLeadingRadius: 16,
-            bottomLeadingRadius: 0,
-            bottomTrailingRadius: 0,
-            topTrailingRadius: 16,
-            style: .continuous
-        )
-    }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 0) {
-                if controller.suggestions.isEmpty {
+                // Le squelette ne dit « on cherche » que pendant qu'une
+                // recherche est EN VOL ; sinon une liste vide est la réponse
+                // « personne », écrite en toutes lettres (#7847 : à `@` et à
+                // une lettre aucune recherche ne part, un squelette y mentirait).
+                if controller.suggestions.isEmpty && controller.isResolving {
                     mentionSkeletonRows
+                } else if controller.suggestions.isEmpty {
+                    Text(ComposerDocumentCopy.mentionEmpty)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                        .foregroundStyle(theme.textSecondary)
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 } else {
                     ForEach(controller.suggestions) { candidate in
                         Button {
-                            let updated = controller.insertMention(candidate, into: currentText)
-                            onSelect(updated)
+                            pick(candidate)
                         } label: {
-                            HStack(spacing: 10) {
-                                MeeshyAvatar(
+                            HStack(spacing: MeeshySpacing.smPlus) {
+                                LivePresence { MeeshyAvatar(
                                     name: candidate.displayName,
                                     context: .userListItem,
                                     accentColor: accentColor,
-                                    avatarURL: candidate.avatarURL
-                                )
+                                    avatarURL: candidate.avatarURL,
+                                    presenceState: PresenceManager.shared.presenceState(for: candidate.id),
+                                    ring: candidate.ring
+                                ) }
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(candidate.displayName)
-                                        .font(MeeshyFont.relative(14, weight: .semibold))
-                                        .foregroundColor(theme.textPrimary)
+                                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                                        .foregroundStyle(theme.textPrimary)
                                     Text("@\(candidate.username)")
-                                        .font(MeeshyFont.relative(12))
-                                        .foregroundColor(theme.textSecondary)
+                                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                                        .foregroundStyle(theme.textSecondary)
                                 }
                                 Spacer()
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                            .frame(minHeight: 44)
+                            .padding(.horizontal, MeeshySpacing.lg)
+                            .padding(.vertical, MeeshySpacing.md)
+                            .frame(minHeight: MeeshyControlSize.tapTarget)
                         }
                         .accessibilityLabel("\(String(localized: "composer.mention.label", defaultValue: "Mention", bundle: .main)) \(candidate.displayName)")
 
@@ -86,29 +100,54 @@ struct MentionSuggestionPanel: View {
     private var mentionSkeletonRows: some View {
         VStack(spacing: 0) {
             ForEach(0..<3, id: \.self) { _ in
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     Circle()
                         .fill(theme.inputBackground)
                         .frame(width: 36, height: 36)
                         .shimmer()
-                    VStack(alignment: .leading, spacing: 4) {
-                        RoundedRectangle(cornerRadius: 4)
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                        RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                             .fill(theme.inputBackground)
                             .frame(width: 100, height: 12)
                             .shimmer()
-                        RoundedRectangle(cornerRadius: 4)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                             .fill(theme.inputBackground)
                             .frame(width: 70, height: 10)
                             .shimmer()
                     }
                     Spacer()
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .frame(minHeight: 44)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.md)
+                .frame(minHeight: MeeshyControlSize.tapTarget)
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(String(localized: "composer.mention.loading", defaultValue: "Loading mentions", bundle: .main))
+        .accessibilityLabel(String(localized: "composer.mention.loading", defaultValue: "Chargement des mentions", bundle: .main))
+    }
+}
+
+// MARK: - MentionSuggestionOverlay
+
+/// **Le panneau, monté par la seule requête `@` active** (#7847).
+///
+/// L'hôte n'a pas à observer le contrôleur : cette vue le fait, donc la liste
+/// se recompose quand les contacts arrivent du cache ou du réseau APRÈS la
+/// frappe — un hôte qui lit `controller.suggestions` dans son propre `body`
+/// ne se ré-évalue pas sur un changement d'un `ObservableObject` imbriqué.
+struct MentionSuggestionOverlay: View {
+    @ObservedObject var controller: MentionComposerController
+    let accentColor: String
+    let pick: (MentionCandidate) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if controller.activeQuery != nil {
+                MentionSuggestionPanel(controller: controller, accentColor: accentColor, pick: pick)
+                    .meeshyTransition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .meeshyAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade,
+                         value: controller.activeQuery != nil)
     }
 }

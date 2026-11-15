@@ -6,8 +6,13 @@ import MeeshyUI
 
 @MainActor
 final class FeedbackToastManager: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = FeedbackToastManager()
-    static let showToastNotification = Notification.Name("meeshy.showToast")
+    static let showToastNotification = FeedbackToastCenter.notificationName
 
     @Published var currentToast: FeedbackToast?
     var onTapAction: (() -> Void)?
@@ -63,6 +68,13 @@ final class FeedbackToastManager: ObservableObject {
         present(FeedbackToast(message: message, type: .error, isTappable: true), tapAction: tapAction)
     }
 
+    /// Un AVERTISSEMENT bref — une limite atteinte n'est pas une erreur : la
+    /// vibration d'avertissement, un toast d'information, l'annonce VoiceOver.
+    func showNotice(_ message: String) {
+        HapticFeedback.warning()
+        present(FeedbackToast(message: message, type: .info))
+    }
+
     func showSuccess(_ message: String) {
         HapticFeedback.success()
         present(FeedbackToast(message: message, type: .success))
@@ -99,8 +111,7 @@ final class FeedbackToastManager: ObservableObject {
 
     private func scheduleDismiss(duration: UInt64 = 3_000_000_000) {
         dismissTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: duration)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .nanoseconds(duration)), !Task.isCancelled else { return }
             currentToast = nil
             onTapAction = nil
         }
@@ -108,14 +119,15 @@ final class FeedbackToastManager: ObservableObject {
 
     nonisolated private func observeSDKToasts() {
         NotificationCenter.default.addObserver(
-            forName: Notification.Name("meeshy.showToast"),
+            forName: FeedbackToastCenter.notificationName,
             object: nil,
             queue: .main
         ) { [weak self] notification in
             guard let self else { return }
 
-            let message = notification.userInfo?["message"] as? String ?? "Unknown"
-            let isSuccess = notification.userInfo?["isSuccess"] as? Bool ?? false
+            guard let toast = FeedbackToastCenter.decode(notification) else { return }
+            let message = toast.message
+            let isSuccess = toast.isSuccess
 
             Task { @MainActor in
                 if isSuccess {
@@ -125,5 +137,83 @@ final class FeedbackToastManager: ObservableObject {
                 }
             }
         }
+    }
+}
+
+// MARK: - La limite quotidienne de gestes (#9571)
+
+/// Le message d'un refus `DAILY_COMMENT_LIMIT` / `DAILY_REACTION_LIMIT` : clair,
+/// dans la langue de l'app, avec l'heure de remise à zéro dans le fuseau de
+/// l'appareil (`resetAt`). Le texte servi par la passerelle n'est qu'un repli
+/// français : il n'est jamais montré.
+enum DailyGestureLimitNotice {
+
+    static func text(for limit: DailyGestureLimit, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
+        guard let resetAt = limit.resetAt else {
+            switch limit.gesture {
+            case .comment:
+                return String(localized: "post.daily_limit.comment.untimed",
+                              defaultValue: "Limite de commentaires du jour atteinte — vos étincelles ne bougent pas.", bundle: .main)
+            case .reaction:
+                return String(localized: "post.daily_limit.reaction.untimed",
+                              defaultValue: "Limite de réactions du jour atteinte — vos étincelles ne bougent pas.", bundle: .main)
+            case .unlinkedRecipients:
+                return onlyUnlinkedRecipientsText
+            }
+        }
+        let time = resetTime(resetAt, locale: locale, timeZone: timeZone)
+        switch limit.gesture {
+        case .comment:
+            return String(localized: "post.daily_limit.comment",
+                          defaultValue: "Limite de commentaires atteinte — vos étincelles ne bougent pas. Reprise à \(time).",
+                          bundle: .main)
+        case .unlinkedRecipients:
+            return onlyUnlinkedRecipientsText
+        case .reaction:
+            return String(localized: "post.daily_limit.reaction",
+                          defaultValue: "Limite de réactions atteinte — vos étincelles ne bougent pas. Reprise à \(time).",
+                          bundle: .main)
+        }
+    }
+
+    /// **Trop de personnes choisies sans lien aujourd'hui** (#14169) : ni une
+    /// cadence ni une heure — l'auteur retire ces personnes, ou revient demain.
+    static var onlyUnlinkedRecipientsText: String {
+        String(localized: "post.audience.only_unlinked_limit",
+               defaultValue: "Trop de personnes sans lien avec vous aujourd’hui. Retirez-en, ou réessayez demain.",
+               bundle: .main)
+    }
+
+    /// Le message d'un refus du jour, quand `error` en est un ; `nil` sinon.
+    static func refusalText(_ error: Error) -> String? {
+        DailyGestureLimit.from(error).map { text(for: $0) }
+    }
+
+    /// L'heure de remise à zéro, courte, dans le fuseau et la langue de l'appareil.
+    static func resetTime(_ date: Date, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.timeZone = timeZone
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    /// Le message d'une mutation que la file a abandonnée sur une limite du jour.
+    static func exhaustedText(clientMutationId: String) -> String? {
+        DailyGestureLimitLedger.shared.take(clientMutationId: clientMutationId).map { text(for: $0) }
+    }
+
+    /// Montre la limite du jour quand `error` en est une, `fallback` sinon : un seul toast.
+    static func showError(_ error: Error, otherwise fallback: String, toasts: FeedbackToastManager = .shared) {
+        toasts.showError(refusalText(error) ?? fallback)
+    }
+
+    /// Montre le message quand `error` est une limite du jour ; `true` si c'en était une.
+    @discardableResult
+    static func surface(_ error: Error, toasts: FeedbackToastManager = .shared) -> Bool {
+        guard let limit = DailyGestureLimit.from(error) else { return false }
+        toasts.showError(text(for: limit))
+        return true
     }
 }

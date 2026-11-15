@@ -3,7 +3,7 @@ import XCTest
 
 /// A `Button` whose label is `if isBusy { ProgressView() } else { Text(…) }` has
 /// **no accessible name at all** while it is busy: the only `Text` is in the
-/// branch that is not rendered. `StatusComposerView:258` states the doctrine —
+/// branch that is not rendered. `MeeshyComposerHost.publishButton` states the doctrine —
 /// *pin the name to the action and carry transient state as value* — and 12 of
 /// the app's 19 such buttons already follow it.
 ///

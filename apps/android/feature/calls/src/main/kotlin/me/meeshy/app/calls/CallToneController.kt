@@ -1,18 +1,15 @@
 package me.meeshy.app.calls
 
 import android.content.Context
-import android.media.AudioManager
-import android.media.Ringtone
-import android.media.RingtoneManager
-import android.media.ToneGenerator
-import android.os.Build
 import dagger.Binds
+import dagger.Provides
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import me.meeshy.sdk.model.call.CallCue
 import me.meeshy.sdk.model.call.CallSound
+import me.meeshy.feature.calls.R
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -39,73 +36,64 @@ interface CallToneController {
 }
 
 /**
- * Production controller: standard call tones via [ToneGenerator] for the caller
- * ringback + cues, and the device ringtone via [RingtoneManager] for the callee
- * alert. Pure Android-framework glue (no branching decisions) — every entry point
- * is wrapped so a device that refuses a [ToneGenerator] (a known OEM quirk) or a
- * null default ringtone degrades to silence rather than crashing the call.
+ * Production controller : sons de marque en `res/raw` (ringback 0,6 pour l'appelant, signaux
+ * connecté / terminé), sonnerie APPAREIL + vibration pour le destinataire, filtrées par
+ * [CallRingEnvironment]. Aucune décision ici (elles vivent dans `CallSoundPolicy`) : un appareil qui
+ * refuse la lecture dégrade en silence, sans jamais faire échouer l'appel. Chaque transition arrête
+ * la boucle précédente et libère son lecteur.
  */
 @Singleton
 class AndroidCallToneController @Inject constructor(
-    @ApplicationContext private val context: Context,
+    private val players: CallTonePlayerFactory,
+    private val ringtone: CallRingtoneOutput,
+    private val environment: CallRingEnvironment,
 ) : CallToneController {
 
-    private var loopTone: ToneGenerator? = null
-    private var ringtone: Ringtone? = null
-    private var cueTone: ToneGenerator? = null
+    private var loop: CallTonePlayer? = null
+    private var cue: CallTonePlayer? = null
 
     override fun setLoop(sound: CallSound) {
         stopLoop()
         when (sound) {
             CallSound.None -> Unit
             CallSound.Ringback -> runCatching {
-                loopTone = ToneGenerator(AudioManager.STREAM_VOICE_CALL, RINGBACK_VOLUME).apply {
-                    startTone(ToneGenerator.TONE_SUP_RINGTONE)
-                }
+                loop = players.create(R.raw.call_ringback, looping = true, volume = RINGBACK_VOLUME)?.also { it.start() }
             }
-            CallSound.Ringtone -> runCatching {
-                val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-                ringtone = RingtoneManager.getRingtone(context, uri)?.apply {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) isLooping = true
-                    play()
-                }
-            }
+            CallSound.Ringtone -> runCatching { ringtone.start(environment.plan()) }
         }
     }
 
     override fun playCue(cue: CallCue) {
         runCatching {
-            val tone = cueTone ?: ToneGenerator(AudioManager.STREAM_VOICE_CALL, CUE_VOLUME)
-                .also { cueTone = it }
-            val (type, durationMs) = when (cue) {
-                CallCue.Connected -> ToneGenerator.TONE_PROP_ACK to CONNECTED_CUE_MS
-                CallCue.Ended -> ToneGenerator.TONE_PROP_PROMPT to ENDED_CUE_MS
+            this.cue?.release()
+            val resId = when (cue) {
+                CallCue.Connected -> R.raw.call_cue_connected
+                CallCue.Ended -> R.raw.call_cue_ended
             }
-            tone.startTone(type, durationMs)
+            this.cue = players.create(resId, looping = false, volume = CUE_VOLUME, onCompleted = ::releaseCue)
+                ?.also { it.start() }
         }
     }
 
     override fun release() {
         stopLoop()
-        cueTone?.release()
-        cueTone = null
+        releaseCue()
+    }
+
+    private fun releaseCue() {
+        cue?.release()
+        cue = null
     }
 
     private fun stopLoop() {
-        loopTone?.let {
-            it.stopTone()
-            it.release()
-        }
-        loopTone = null
-        ringtone?.stop()
-        ringtone = null
+        loop?.release()
+        loop = null
+        ringtone.stop()
     }
 
     private companion object {
-        const val RINGBACK_VOLUME = 70
-        const val CUE_VOLUME = 80
-        const val CONNECTED_CUE_MS = 180
-        const val ENDED_CUE_MS = 250
+        const val RINGBACK_VOLUME = 0.6f
+        const val CUE_VOLUME = 0.9f
     }
 }
 
@@ -114,4 +102,18 @@ class AndroidCallToneController @Inject constructor(
 interface CallToneModule {
     @Binds
     fun bindCallToneController(impl: AndroidCallToneController): CallToneController
+
+    companion object {
+        @Provides
+        @Singleton
+        fun providePlayers(@ApplicationContext context: Context): CallTonePlayerFactory = MediaPlayerToneFactory(context)
+
+        @Provides
+        @Singleton
+        fun provideRingtone(@ApplicationContext context: Context): CallRingtoneOutput = AndroidCallRingtoneOutput(context)
+
+        @Provides
+        @Singleton
+        fun provideEnvironment(@ApplicationContext context: Context): CallRingEnvironment = AndroidCallRingEnvironment(context)
+    }
 }

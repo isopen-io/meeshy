@@ -23,19 +23,33 @@ where Item.ID == String {
     private let items: [Item]
     @Binding private var currentPageID: String?
     private let page: (Int, Item) -> Page
+    private let onMajorityPage: ((String) -> Void)?
+    private let onScrollingChange: ((Bool) -> Void)?
 
     /// - Parameters:
     ///   - items: pages to display, in order.
     ///   - currentPageID: two-way binding to the visible page's `id`.
+    ///   - onMajorityPage: appelé PENDANT le défilement, dès qu'une page
+    ///     passe plus de la moitié de la zone visible (`VerticalPagerMajority`,
+    ///     #9837) — sans attendre que le paging se pose, contrairement à
+    ///     `currentPageID`. iOS 17+ ; sous iOS 16, seul `currentPageID` parle.
+    ///   - onScrollingChange: le pager commence (`true`) ou cesse (`false`)
+    ///     de défiler (#10354) — doigt, inertie ou animation de paging. Le
+    ///     travail lourd du réel entrant attend `false`. iOS 18+ ; avant, rien
+    ///     n'est signalé et `currentPageID` fait foi.
     ///   - page: builds a page from its index and item. Each page fills the
     ///     container in both axes.
     public init(
         items: [Item],
         currentPageID: Binding<String?>,
+        onMajorityPage: ((String) -> Void)? = nil,
+        onScrollingChange: ((Bool) -> Void)? = nil,
         @ViewBuilder page: @escaping (Int, Item) -> Page
     ) {
         self.items = items
         self._currentPageID = currentPageID
+        self.onMajorityPage = onMajorityPage
+        self.onScrollingChange = onScrollingChange
         self.page = page
     }
 
@@ -44,15 +58,19 @@ where Item.ID == String {
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                        page(index, item)
-                            .containerRelativeFrame(.horizontal)
-                            .containerRelativeFrame(.vertical)
+                        majorityReporting(
+                            page(index, item)
+                                .containerRelativeFrame(.horizontal)
+                                .containerRelativeFrame(.vertical),
+                            id: item.id
+                        )
                     }
                 }
                 .scrollTargetLayout()
             }
             .scrollTargetBehavior(.paging)
             .scrollPosition(id: $currentPageID)
+            .modifier(ScrollingReporter(onScrollingChange: onScrollingChange))
             .ignoresSafeArea()
         } else {
             GeometryReader { proxy in
@@ -70,6 +88,46 @@ where Item.ID == String {
                 .tabViewStyle(.page(indexDisplayMode: .never))
             }
             .ignoresSafeArea()
+        }
+    }
+
+    /// Signale la page qui devient majoritairement visible. Sans consommateur,
+    /// la page est rendue nue : aucune mesure n'est payée par les autres pagers.
+    @available(iOS 17.0, *)
+    @ViewBuilder
+    private func majorityReporting<Content: View>(_ content: Content, id: String) -> some View {
+        if let onMajorityPage {
+            content.onGeometryChange(for: Bool.self) { proxy in
+                VerticalPagerMajority.isMajorityVisible(
+                    pageHeight: proxy.size.height,
+                    viewport: proxy.bounds(of: .scrollView(axis: .vertical))
+                )
+            } action: { isMajority in
+                if isMajority { onMajorityPage(id) }
+            }
+        } else {
+            content
+        }
+    }
+}
+
+/// Signale le début et la fin du défilement (#10354), une fois par bord.
+/// Sans consommateur, rien n'est observé.
+private struct ScrollingReporter: ViewModifier {
+    let onScrollingChange: ((Bool) -> Void)?
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            if let onScrollingChange {
+                content.onScrollPhaseChange { old, new in
+                    guard old.isScrolling != new.isScrolling else { return }
+                    onScrollingChange(new.isScrolling)
+                }
+            } else {
+                content
+            }
+        } else {
+            content
         }
     }
 }

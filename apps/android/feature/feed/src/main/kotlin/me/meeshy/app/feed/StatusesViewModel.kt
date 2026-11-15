@@ -4,18 +4,34 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.model.EngagementSessions
+import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.QualifiedView
+import me.meeshy.sdk.model.PostMentionInput
+import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.StatusEntry
+import me.meeshy.sdk.model.mood.StatusAnchor
+import me.meeshy.sdk.model.mood.StatusReactionDelta
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.model.analytics.ContentSurface
+import me.meeshy.sdk.model.analytics.ImpressionSource
+import me.meeshy.sdk.outbox.OutboxIds
+import me.meeshy.sdk.post.FeedEngagementRepository
 import me.meeshy.sdk.post.ImpressionBatcher
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.status.StatusBarCache
@@ -62,6 +78,9 @@ class StatusesViewModel @Inject constructor(
     private val statusBarCache: StatusBarCache,
     private val statusBarCacheRepository: StatusBarCacheRepository,
     private val socialSocket: SocialSocketManager,
+    private val clock: CacheClock,
+    private val privacyPreferencesStore: PrivacyPreferencesStore,
+    engagement: FeedEngagementRepository,
 ) : ViewModel() {
 
     private val mode = MutableStateFlow(StatusFeedMode.FRIENDS)
@@ -69,11 +88,61 @@ class StatusesViewModel @Inject constructor(
     private val status = MutableStateFlow(StatusesStatus())
 
     /**
-     * Groups mood impressions before sending them (feature-parity §F) — the status-bar
-     * counterpart of the feed's own batcher. Port of iOS `StatusViewModel.impressions`
-     * (`source: "status"`).
+     * Groups the impressions of the moods painted on the story rail's rings before sending them —
+     * iOS `SharedImpressionBatchers.moodRail` (`source: "status"`, `surface: "story_rail"`, #13662),
+     * the rail being the only host of [trackImpression] since the status bar left (#13653).
      */
-    private val impressionBatcher = ImpressionBatcher(source = "status", postRepository = postRepository)
+    private val impressionBatcher = ImpressionBatcher(
+        source = ImpressionSource.STATUS,
+        surface = ContentSurface.STORY_RAIL,
+        deliver = engagement::deliver,
+    )
+
+    /** Les humeurs peintes sur l'avatar d'une ligne de conversation — iOS `SharedImpressionBatchers.moodAvatar` (#15989). */
+    private val avatarImpressionBatcher = ImpressionBatcher(
+        source = ImpressionSource.STATUS,
+        surface = ContentSurface.MOOD_AVATAR,
+        deliver = engagement::deliver,
+    )
+
+    /**
+     * Dwell bookkeeping for the status-bubble surface. Held outside [_state] because it is an
+     * analytics cursor, not something the bar renders (the same placement as
+     * [me.meeshy.app.feed.PostDetailViewModel.sessions]). The pure [EngagementSessions] machine
+     * owns the *how* (monotonic dwell, qualification); this ViewModel owns the *when* — begin the
+     * moment the popover opens ([markStatusViewed], right beside the impression), end when it
+     * dismisses ([endStatusDwell], driven by the popover's `onDispose`).
+     *
+     * Port of iOS `StatusBubbleController`, whose `present(_:)` fires the `viewPost` impression and
+     * `EngagementTracker.begin(surface: .statusBubble)` together, and whose every dismiss path calls
+     * `end(surface: .statusBubble)`. Both records land on the same `posts/{id}/view` endpoint, which
+     * the gateway keeps from double-counting — `creditPostView` is a `(postId, userId)` singleton
+     * that increments `viewCount` once (the impression) and only ever raises the stored dwell
+     * `duration` to its max (the enrichment).
+     */
+    private var sessions = EngagementSessions()
+
+    /**
+     * The reactions this account already placed in this session, as `(account, status, emoji)`. The gateway
+     * keeps one reaction per (reader, emoji) — a second tap on the same emoji is a server no-op — so a
+     * second optimistic bump would inflate the count until the next reload (#13662).
+     */
+    private var placedReactions: Set<Triple<String?, String, String>> = emptySet()
+
+    private val _reactFailed = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** One event per refused reaction, after its rollback — iOS `status.reactError` toast (#13662). */
+    val reactFailed: SharedFlow<Unit> = _reactFailed.asSharedFlow()
+
+    private val _repostAudienceRefused = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** One event per republication the gateway refused as wider than its source (403 `REPOST_AUDIENCE_WIDENING`, #13667). */
+    val repostAudienceRefused: SharedFlow<Unit> = _repostAudienceRefused.asSharedFlow()
+
+    private val _moodQueued = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** Une humeur tapée sans réseau est en file : « Humeur en attente d'envoi » (iOS `status.queuedOffline`). */
+    val moodQueued: SharedFlow<Unit> = _moodQueued.asSharedFlow()
 
     private val _state = MutableStateFlow(StatusesUiState())
     val state: StateFlow<StatusesUiState> = _state.asStateFlow()
@@ -111,6 +180,7 @@ class StatusesViewModel @Inject constructor(
                 val entry = payload.status.toStatusEntry() ?: return@collect
                 if (listState.value.statuses.none { it.id == entry.id }) {
                     listState.update { it.created(entry) }
+                    persistLiveBar()
                 }
             }
         }
@@ -118,25 +188,52 @@ class StatusesViewModel @Inject constructor(
             socialSocket.statusUpdated.collect { payload ->
                 val entry = payload.status.toStatusEntry() ?: return@collect
                 listState.update { it.updated(entry) }
+                persistLiveBar()
             }
         }
         viewModelScope.launch {
             socialSocket.statusDeleted.collect { payload ->
                 listState.update { it.removed(payload.statusId) }
+                placedReactions = placedReactions.filterNotTo(mutableSetOf()) { it.second == payload.statusId }
+                persistLiveBar()
             }
         }
         viewModelScope.launch {
             socialSocket.statusReacted.collect { payload ->
-                if (payload.userId != currentUserId()) {
+                if (!StatusReactionDelta.isOwn(payload.userId, currentUserId())) {
                     listState.update { it.reacted(payload.statusId, payload.emoji) }
+                    persistLiveBar()
                 }
             }
         }
         viewModelScope.launch {
             socialSocket.statusUnreacted.collect { payload ->
-                if (payload.userId != currentUserId()) {
+                if (!StatusReactionDelta.isOwn(payload.userId, currentUserId())) {
                     listState.update { it.unreacted(payload.statusId, payload.emoji) }
+                    persistLiveBar()
+                } else {
+                    placedReactions = placedReactions - Triple(payload.userId, payload.statusId, payload.emoji)
                 }
+            }
+        }
+    }
+
+    /**
+     * Chaque mutation temps réel (créée, supprimée, réagie, modifiée) rejoint les DEUX étages du cache de la barre : un
+     * lancement à froid repeint la barre telle que le temps réel l'a laissée, pas telle que le dernier fetch l'a servie.
+     */
+    private fun persistLiveBar() {
+        val ticket = statusBarCacheRepository.ticket()
+        val activeMode = mode.value
+        val statuses = listState.value.statuses
+        statusBarCache.save(activeMode, statuses)
+        viewModelScope.launch {
+            try {
+                statusBarCacheRepository.persistBar(activeMode, statuses, ticket)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // le cache disque est un confort : l'écran a déjà la barre à jour
             }
         }
     }
@@ -148,18 +245,34 @@ class StatusesViewModel @Inject constructor(
      */
     private fun currentUserId(): String? = sessionRepository.currentUser.value?.id
 
-    /** [statusId]'s pill just appeared on screen — call once per appearance. */
+    /**
+     * [statusId]'s mood just appeared on a rail ring — call once per APPEARANCE, never deduplicated: the
+     * porteur's counting rule (2026-10-13, iOS `countsImpression`) counts every display.
+     */
     fun trackImpression(statusId: String) {
         impressionBatcher.record(statusId)
+    }
+
+    fun trackAvatarImpression(statusId: String) {
+        avatarImpressionBatcher.record(statusId)
     }
 
     /**
      * A mood status IS a post — opening its popover is a single, per-viewer-deduplicated
      * VIEW, the status-bar counterpart of the post-detail `viewPost` record. Fire-and-forget,
-     * failure silently ignored (best-effort analytics). Port of iOS `markStatusViewed`.
+     * failure silently ignored (best-effort analytics). Records the impression AND opens the
+     * dwell session, together — the faithful port of iOS `StatusBubbleController.present(_:)`,
+     * which fires the `viewPost` impression and `EngagementTracker.begin(.statusBubble)` in the
+     * same method. A blank [statusId] records nothing and opens nothing (iOS's early `guard`).
      */
     fun markStatusViewed(statusId: String) {
         if (statusId.isBlank()) return
+        sessions = sessions.begin(
+            EngagementSurface.STATUS_BUBBLE,
+            statusId,
+            clock.nowMillis(),
+            consentGranted = privacyPreferencesStore.preferences.value.allowAnalytics,
+        )
         viewModelScope.launch {
             try {
                 postRepository.viewPost(statusId)
@@ -171,9 +284,45 @@ class StatusesViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Closes the status-bubble dwell session and, when it qualified (on-surface time ≥
+     * [EngagementSessions.MIN_DWELL_MS]), records the measured dwell against the viewed status.
+     * Driven by the popover's `onDispose` so it fires on every dismiss path (tap-outside, react,
+     * republish) — the port of iOS `StatusBubbleController.dismiss()`/`isPresented` both calling
+     * `end(surface: .statusBubble)`. Idempotent: a second call (or a dismiss of a status that was
+     * never opened for a view — the viewer's OWN status, which fires no impression and so opens no
+     * session) finds nothing open and records nothing. A sub-threshold glance is dropped.
+     */
+    fun endStatusDwell() {
+        val (next, view) = sessions.end(EngagementSurface.STATUS_BUBBLE, clock.nowMillis())
+        sessions = next
+        view?.let { recordDwellView(it) }
+    }
+
+    /**
+     * Best-effort dwell enrichment for a status's existing view: `posts/{id}/view` with the
+     * measured [QualifiedView.dwellMs]. The gateway's `creditPostView` is a `(postId, userId)`
+     * singleton, so this never re-increments the view count already booked by [markStatusViewed]'s
+     * impression — it only raises the stored dwell `duration` (the reco/monetisation watch-time
+     * signal) to its max. Fire-and-forget, matching the impression: a failure is analytics the
+     * viewer should never see fail.
+     */
+    private fun recordDwellView(view: QualifiedView) {
+        viewModelScope.launch {
+            try {
+                postRepository.viewPost(view.postId, view.dwellMs.toInt())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // best-effort — matches the impression view record
+            }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         impressionBatcher.flushNowAsync()
+        avatarImpressionBatcher.flushNowAsync()
     }
 
     /**
@@ -260,6 +409,7 @@ class StatusesViewModel @Inject constructor(
      */
     private fun fetchFirstPage(disk: DiskCachePlan = DiskCachePlan.NONE) {
         val activeMode = mode.value
+        val ticket = statusBarCacheRepository.ticket()
         viewModelScope.launch {
             try {
                 when (disk) {
@@ -277,7 +427,7 @@ class StatusesViewModel @Inject constructor(
                     is NetworkResult.Success -> {
                         listState.value = StatusBarListState().appended(result.data)
                         statusBarCache.save(activeMode, result.data.statuses)
-                        statusBarCacheRepository.persistBar(activeMode, result.data.statuses)
+                        statusBarCacheRepository.persistBar(activeMode, result.data.statuses, ticket)
                         status.update { it.copy(isLoading = false, isRefreshing = false) }
                     }
                     is NetworkResult.Failure ->
@@ -325,6 +475,13 @@ class StatusesViewModel @Inject constructor(
     }
 
     /**
+     * Les humeurs en cours d'envoi. Un second Publier de la MÊME humeur pendant qu'elle part est ignoré ; une AUTRE
+     * humeur part, même si la première n'est pas arrivée (#18271) : le ViewModel est partagé par toutes les ouvertures du
+     * composeur, et l'humeur suivante serait perdue sans un mot.
+     */
+    private val publishing = mutableSetOf<StatusPublishRequest>()
+
+    /**
      * Publish a mood status: create it, then hoist the mapped entry to the front of
      * the bar. Port of iOS `setStatus` (online path). On failure the list is left
      * untouched and the error surfaces — the create is confirmed by the network
@@ -337,8 +494,13 @@ class StatusesViewModel @Inject constructor(
         audioUrl: String? = null,
         repostOfId: String? = null,
         viaUsername: String? = null,
+        visibilityUserIds: List<String>? = null,
+        mentions: List<PostMentionInput>? = null,
     ) {
+        val mood = StatusPublishRequest(emoji, content, visibility, audioUrl, repostOfId, viaUsername, visibilityUserIds, mentions)
+        if (!publishing.add(mood)) return
         status.update { it.copy(error = null) }
+        val ticket = statusBarCacheRepository.ticket()
         viewModelScope.launch {
             try {
                 val result = statusRepository.create(
@@ -348,22 +510,70 @@ class StatusesViewModel @Inject constructor(
                     audioUrl = audioUrl,
                     repostOfId = repostOfId,
                     viaUsername = viaUsername,
+                    visibilityUserIds = visibilityUserIds,
+                    mentions = mentions,
                 )
                 when (result) {
                     is NetworkResult.Success -> {
+                        if (statusBarCacheRepository.accountChanged(ticket)) return@launch
                         listState.update { it.created(result.data) }
                         statusBarCache.save(mode.value, listState.value.statuses)
-                        statusBarCacheRepository.persistBar(mode.value, listState.value.statuses)
+                        statusBarCacheRepository.persistBar(mode.value, listState.value.statuses, ticket)
                     }
-                    is NetworkResult.Failure -> status.update { it.copy(error = result.error.message) }
+                    is NetworkResult.Failure -> if (result.error.code == StatusRepository.QUEUED_OFFLINE) {
+                        _moodQueued.tryEmit(Unit)
+                    } else {
+                        status.update { it.copy(error = result.error.message) }
+                        if (result.error.code == REPOST_AUDIENCE_WIDENING) _repostAudienceRefused.tryEmit(Unit)
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 status.update { it.copy(error = e.message) }
+            } finally {
+                publishing.remove(mood)
             }
         }
     }
+
+    /**
+     * L'ANCRAGE (iOS `anchorStatusAsPost`) : republie l'humeur [sourceStatusId] en POST permanent. Un commentaire ajouté
+     * fait une citation, sinon c'est un repost simple. Rend `true` quand la passerelle l'a pris ; hors ligne ou refusé,
+     * rend `false` et laisse la saisie en place. N'écrit ni la barre ni le cache : un post n'est pas une humeur.
+     */
+    suspend fun anchorAsPost(sourceStatusId: String, comment: String?, prefill: String? = null): Boolean {
+        val plan = StatusAnchor.plan(comment, prefill)
+        return try {
+            val result = when (plan) {
+                StatusAnchor.Plan.SimpleRepost ->
+                    postRepository.repost(sourceStatusId, targetType = PostType.POST, clientMutationId = OutboxIds.cmid())
+                is StatusAnchor.Plan.Quote ->
+                    postRepository.repost(
+                        sourceStatusId,
+                        targetType = PostType.POST,
+                        content = plan.comment,
+                        isQuote = true,
+                        clientMutationId = OutboxIds.cmid(),
+                    )
+            }
+            result is NetworkResult.Success
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /** Une humeur bloquée plus d'une minute en file revient comme brouillon du composeur (remplacement sans doublon). */
+    suspend fun recoverStuckMood(): StatusComposerDraft? =
+        try {
+            statusRepository.recoverStuckMood(clock.nowMillis())?.toComposerDraft()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
 
     /**
      * Optimistically clear the signed-in user's own status: drop it instantly, persist
@@ -372,6 +582,7 @@ class StatusesViewModel @Inject constructor(
      */
     fun clearStatus() {
         val ownId = _state.value.myStatus?.id ?: return
+        val ticket = statusBarCacheRepository.ticket()
         val snapshot = listState.value
         listState.update { it.removed(ownId) }
         viewModelScope.launch {
@@ -382,7 +593,7 @@ class StatusesViewModel @Inject constructor(
                     status.update { it.copy(error = result.error.message) }
                 } else {
                     statusBarCache.save(mode.value, listState.value.statuses)
-                    statusBarCacheRepository.persistBar(mode.value, listState.value.statuses)
+                    statusBarCacheRepository.persistBar(mode.value, listState.value.statuses, ticket)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -394,28 +605,49 @@ class StatusesViewModel @Inject constructor(
     }
 
     /**
-     * Optimistically bump a reaction on [statusId], persist it, and roll the bump back
-     * on failure. Port of iOS `reactToStatus`. Inert when the status is not in the bar.
+     * Optimistically bump a reaction on [statusId], persist it, and withdraw THAT bump on failure — never the
+     * whole list, so the socket deltas, the other reactions and the new moods that arrived meanwhile survive.
+     * Port of iOS `reactToStatus` (rollback + `status.reactError`). Inert when the status is not in the bar, and
+     * when this account already placed [emoji] on it in this session (the gateway would not count it twice).
      */
     fun react(statusId: String, emoji: String) {
-        val snapshot = listState.value
-        if (snapshot.statuses.none { it.id == statusId }) return
+        if (listState.value.statuses.none { it.id == statusId }) return
+        forgetReactionsTheServedBarNoLongerCarries()
+        val placed = Triple(currentUserId(), statusId, emoji)
+        if (placed in placedReactions) return
+        placedReactions = placedReactions + placed
+        val ticket = statusBarCacheRepository.ticket()
         listState.update { it.reacted(statusId, emoji) }
         viewModelScope.launch {
-            try {
-                val result = statusRepository.react(statusId, emoji)
-                if (result is NetworkResult.Failure) {
-                    listState.value = snapshot
-                    status.update { it.copy(error = result.error.message) }
-                }
+            val failure = try {
+                (statusRepository.react(statusId, emoji) as? NetworkResult.Failure)?.let { ReactFailure(it.error.message) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                listState.value = snapshot
-                status.update { it.copy(error = e.message) }
+                ReactFailure(e.message)
             }
+            if (failure == null) return@launch
+            placedReactions = placedReactions - placed
+            if (statusBarCacheRepository.accountChanged(ticket)) return@launch
+            listState.update { it.unreacted(statusId, emoji) }
+            status.update { it.copy(error = failure.message) }
+            _reactFailed.tryEmit(Unit)
         }
     }
+
+    /**
+     * A placed reaction is remembered to stop a second tap inflating the count; it must not outlive what it
+     * describes. Once the served bar no longer carries that emoji on that status (withdrawn elsewhere, status
+     * deleted and back, a refresh), the reaction is placeable again (#13667).
+     */
+    private fun forgetReactionsTheServedBarNoLongerCarries() {
+        val statuses = listState.value.statuses.associateBy { it.id }
+        placedReactions = placedReactions.filterTo(mutableSetOf()) { (_, statusId, emoji) ->
+            (statuses[statusId]?.reactionSummary?.get(emoji) ?: 0) > 0
+        }
+    }
+
+    private class ReactFailure(val message: String?)
 
     private fun project(
         list: StatusBarListState,
@@ -448,6 +680,7 @@ class StatusesViewModel @Inject constructor(
 
     private companion object {
         const val LOAD_MORE_THRESHOLD = 3
+        const val REPOST_AUDIENCE_WIDENING = "REPOST_AUDIENCE_WIDENING"
     }
 }
 

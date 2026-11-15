@@ -1,17 +1,22 @@
 /**
- * Le CONTRAT DE CORPS des deux routes d'envoi par lien de partage.
+ * Le CONTRAT DE CORPS de la route d'envoi par lien de partage.
+ *
+ * Elle était deux jusqu'au #4188 ; `POST /links/:identifier/messages/auth` a
+ * été retirée (porte morte sur les quatre clients, participant SYNTHÉTIQUE sur
+ * le fil global `meeshy`). Le contrat ci-dessous vaut désormais pour la seule
+ * survivante, qui portait le défaut à l'identique.
  *
  * `sendMessageSchema` promet « contenu OU pièces jointes » — son `.refine`
  * admet explicitement un corps SANS `content` dès qu'`attachments` est non
- * vide, et la description OpenAPI des deux routes répète la promesse
+ * vide, et la description OpenAPI de la route répète la promesse
  * (« Message content or attachments are required »).
  *
- * Aucune des deux routes n'a jamais lu `body.attachments`. Le champ est validé,
+ * Cette route n'a jamais lu `body.attachments`. Le champ est validé,
  * puis abandonné : ni `prisma.message.create`, ni la diffusion, ni la
  * notification ne le mentionnent. La branche que le `refine` ouvre ne mène donc
- * à aucune fonctionnalité — elle mène à `trackingLinkService.processMessageLinks`,
- * dont le paramètre est typé `content: string` et qui appelle `content.match()`
- * sans garde (`TrackingLinkService.ts`). Le gateway compilant en
+ * à aucune fonctionnalité — elle mène à la collecte des liens suivis
+ * (`collectContentTrackingLinks`, puis `processMessageLinks`), dont le
+ * paramètre est typé `content: string` et qui appelle `content.match()`. Le gateway compilant en
  * `strict: false`, rien n'a signalé qu'un `string | undefined` y entrait.
  *
  * Ces suites tiennent la seule invariante qui vaille ici : **un corps que le
@@ -37,22 +42,28 @@ jest.mock('../../../../utils/session-token', () => ({
 }));
 
 /**
- * Double FIDÈLE de `TrackingLinkService.processMessageLinks`.
+ * Doubles FIDÈLES de `TrackingLinkService`.
  *
- * Il reproduit la seule chose qui compte ici : la méthode réelle déclare
- * `content: string` et fait `content.match(urlRegex)` dès sa quatrième ligne,
- * sans garde de nullité. Un double permissif (`mockResolvedValue(...)`)
- * accepterait `undefined` sans broncher et cacherait exactement le défaut que
- * cette suite existe pour voir.
+ * `processExplicitLinksInContent` fait `content.match(...)` sans garde ;
+ * `collectContentTrackingLinks` rend `[]` sur un contenu vide, comme la
+ * méthode réelle. Un double permissif (`mockResolvedValue(...)`) accepterait
+ * `undefined` sans broncher et cacherait exactement le défaut que cette suite
+ * existe pour voir.
  */
-const mockProcessMessageLinks = jest.fn(async ({ content }: any) => {
-  const matches = content.match(/(https?:\/\/[^\s]+)/gi);
-  return { processedContent: content, trackingLinks: matches ? [] : [] };
+const mockProcessExplicitLinksInContent = jest.fn(async ({ content }: any) => {
+  content.match(/<(https?:\/\/[^>\s]+)>/gi);
+  return { processedContent: content, trackingLinks: [] };
+});
+const mockCollectContentTrackingLinks = jest.fn(async ({ content }: any) => {
+  if (!content) return [];
+  content.match(/(https?:\/\/[^\s]+)/gi);
+  return [];
 });
 const mockUpdateTrackingLinks = jest.fn<any>().mockResolvedValue(undefined);
 jest.mock('../../../../services/TrackingLinkService', () => ({
   TrackingLinkService: jest.fn().mockImplementation(() => ({
-    processMessageLinks: (...args: any[]) => (mockProcessMessageLinks as any)(...args),
+    processExplicitLinksInContent: (...args: any[]) => (mockProcessExplicitLinksInContent as any)(...args),
+    collectContentTrackingLinks: (...args: any[]) => (mockCollectContentTrackingLinks as any)(...args),
     updateTrackingLinksMessageId: (...args: any[]) => mockUpdateTrackingLinks(...args),
   })),
 }));
@@ -239,38 +250,3 @@ describe('POST /links/:identifier/messages — le corps que le schéma accepte',
   });
 });
 
-describe('POST /links/:identifier/messages/auth — le jumeau authentifié', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp();
-    (app as any).prisma.participant.findFirst.mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('ne rend JAMAIS 500 sur un corps pièces-jointes-sans-contenu', async () => {
-    // Le jumeau partage le schéma ET l'absence de support des pièces jointes.
-    // Une règle de corps qui ne tiendrait que sur un des deux chemins serait
-    // la moitié de règle que le cycle 31 a passé son temps à corriger.
-    const res = await app.inject({
-      method: 'POST', url: `/links/${IDENTIFIER}/messages/auth`,
-      payload: { clientMessageId: CID, attachments: ['attachment-id-1'] },
-    });
-    expect(res.statusCode).not.toBe(500);
-  });
-
-  it('refuse explicitement le corps pièces-jointes-sans-contenu (400)', async () => {
-    const res = await app.inject({
-      method: 'POST', url: `/links/${IDENTIFIER}/messages/auth`,
-      payload: { clientMessageId: CID, attachments: ['attachment-id-1'] },
-    });
-    expect(res.statusCode).toBe(400);
-  });
-
-  it('accepte toujours un corps avec contenu (non-régression)', async () => {
-    const res = await app.inject({
-      method: 'POST', url: `/links/${IDENTIFIER}/messages/auth`,
-      payload: { content: 'Hello!', clientMessageId: CID },
-    });
-    expect(res.statusCode).toBe(201);
-  });
-});

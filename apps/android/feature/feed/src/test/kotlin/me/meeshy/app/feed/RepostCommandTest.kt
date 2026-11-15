@@ -2,6 +2,7 @@ package me.meeshy.app.feed
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiRepostOf
+import me.meeshy.sdk.model.PostType
 import org.junit.Test
 
 class RepostCommandTest {
@@ -88,5 +89,32 @@ class RepostCommandTest {
         assertThat(cmd.targetId).isEqualTo("root99")
         assertThat(cmd.content).isEqualTo("worth it")
         assertThat(cmd.isQuote).isTrue()
+    }
+
+    // --- format: the card's own type (iOS RepostTargeting.target(cardType:)) ---
+
+    @Test
+    fun `a reel card reposts as a reel`() {
+        val cmd = RepostCommand.of("r1", repostOf = null, quote = false, commentary = null, cardType = "REEL")
+        assertThat(cmd.targetType).isEqualTo(PostType.REEL)
+    }
+
+    @Test
+    fun `the format is the card's, never the root's`() {
+        val repostOf = ApiRepostOf(id = "story1", type = "STORY")
+        val cmd = RepostCommand.of("p1", repostOf = repostOf, quote = false, commentary = null, cardType = "POST")
+        assertThat(cmd.targetType).isEqualTo(PostType.POST)
+    }
+
+    @Test
+    fun `a served type is read whatever its case and padding`() {
+        val cmd = RepostCommand.of("r1", repostOf = null, quote = false, commentary = null, cardType = " reel ")
+        assertThat(cmd.targetType).isEqualTo(PostType.REEL)
+    }
+
+    @Test
+    fun `an unknown or missing card type leaves the gateway's fallback`() {
+        assertThat(RepostCommand.of("p1", null, quote = false, commentary = null, cardType = "LIVE").targetType).isNull()
+        assertThat(RepostCommand.of("p1", null, quote = false, commentary = null).targetType).isNull()
     }
 }

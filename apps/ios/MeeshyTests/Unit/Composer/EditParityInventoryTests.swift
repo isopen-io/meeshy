@@ -42,7 +42,7 @@ import MeeshyUI
 /// `ComposerSurfaceRouting` fait atterrir sur la SCENE, ou le socle ne peint
 /// rien du tout. Une capacite tenue par le meuble et inatteignable depuis la
 /// porte qui en aurait besoin n'est pas une capacite acquise pour le retrait :
-/// c'est le decalage que `test_lesDeuxCapacitesTenues_leSontCoteCreation_...`
+/// c'est le decalage que `test_lesCapacitesDeChromeSocle_leSontCoteCreation_...`
 /// grave, pour qu'un lecteur pressé ne compte pas 2 sur 7 comme un progres vers
 /// le retrait de la feuille d'EDITION.
 @MainActor
@@ -58,7 +58,14 @@ final class EditParityInventoryTests: XCTestCase {
         .deletingLastPathComponent()   // apps/ios
 
     private static let feuille = "Meeshy/Features/Main/Components/EditPostSheet.swift"
-    private static let surfaceDocument = "Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift"
+    /// La PORTE du document, sortie de la surface au découpage `70b04d2aeb`.
+    /// C'est elle qui poste le brouillon — donc elle qui porte `originalLanguage`.
+    private static let porteDuDocument = "Meeshy/Features/Composer/DocumentComposerDoor.swift"
+    /// La porte d'ÉDITION du meuble (#9333) et la traduction de son brouillon
+    /// en requête de modification : c'est là que vivent le retrait de médias et
+    /// le lieu tri-état.
+    private static let porteDEdition = "Meeshy/Features/Composer/PostEditComposerDoor.swift"
+    private static let reglesDEdition = "Meeshy/Features/Composer/PostEditComposerRules.swift"
     private static let gardeQuiLitLaFeuille = "MeeshyTests/Unit/Views/SheetToolbarSemanticsTests.swift"
 
     private func lire(_ relativePath: String) throws -> String {
@@ -94,17 +101,34 @@ final class EditParityInventoryTests: XCTestCase {
     }
 
     private func inventaire() throws -> [Capacite] {
-        let sourceDuDocument = try code(Self.surfaceDocument)
+        // **La mesure lit l'UNITÉ, pas le seul fichier de surface (#4072).**
+        //
+        // Elle rendait NON TENUE une capacité pourtant LIVRÉE (T2.2, `973db35ab8`) :
+        // le découpage de `ComposerDocumentSurface` (`70b04d2aeb`, « six cliquets
+        // suivent le découpage ») a sorti la porte du document dans son propre
+        // fichier, et ce cliquet-ci était le SEPTIÈME — celui que le lot n'a pas
+        // vu. Le code était juste, la mesure lisait le fichier qu'il venait de
+        // quitter.
+        //
+        // C'est le mode d'échec le plus cher d'une extraction : la garde ne dit
+        // pas « j'ai perdu mon sujet », elle dit « la capacité a disparu » — et
+        // envoie chercher une régression qui n'existe pas.
+        // #13864 : la surface document est partie, un post se compose sur la
+        // scène du meuble — la mesure lit donc l'unité du MEUBLE.
+        let sourceDuDocument = try AppSourceGuard.stripComments(AppSourceGuard.composerHostSource())
+            + code(Self.porteDuDocument)
+            + code(Self.porteDEdition)
+            + code(Self.reglesDEdition)
 
         // 1 — CHAMP CONTENU + VALIDITE.
         // Le meuble a les deux : `ComposerDocumentDraft` porte un texte, le plan
         // d'envoi refuse un brouillon blanc, et le socle peint la fleche sous le
         // document. C'est une capacite REPRISE, la premiere des sept.
         let brouillonBlanc = ComposerDocumentDraft.document(
-            format: .post, text: "   ", visibility: .public, visibilityUserIds: [], repostOfId: nil
+            format: .post, forcePlainPost: false, text: "   ", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil
         )
         let brouillonPlein = ComposerDocumentDraft.document(
-            format: .post, text: "un texte", visibility: .public, visibilityUserIds: [], repostOfId: nil
+            format: .post, forcePlainPost: false, text: "un texte", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil
         )
         let refuseLeBlanc = ComposerDocumentSendPlan.plan(for: brouillonBlanc, isOffline: false)
             == .refuse(.emptyDraft)
@@ -120,7 +144,7 @@ final class EditParityInventoryTests: XCTestCase {
         // « Hello everyone » repart etiquete francais, et le Prisme le traduit
         // FR vers EN sur un texte deja anglais.
         let langueEnDur = sourceDuDocument.contains("originalLanguage: DefaultComposerLanguage.resolve()")
-        let langueDeclarable = !langueEnDur
+        let langueDeclarable = !langueEnDur && sourceDuDocument.contains("originalLanguage: draft.originalLanguage")
 
         // 3 — EVENTAIL POST/REEL GATE.
         // L'eventail EXISTE et se peint (lot 4). Ce qui manque est la MOITIE
@@ -129,10 +153,17 @@ final class EditParityInventoryTests: XCTestCase {
         // porte rien qui permette de le savoir. La table offre donc les deux
         // formats a TOUT reel, repost compris — le serveur miroite le type d'un
         // repost et l'auteur n'a pas a en choisir un.
-        let offreDuReel = ComposerProfile.profile(
-            for: .edit(postId: "document-quelconque", documentFormat: .reel)
+        // #15631 : la porte porte `isRepost`, et l'éventail d'un repost rouvert
+        // se referme sur son seul format — un réel ordinaire garde les deux.
+        let offreDuRepost = ComposerProfile.profile(
+            for: .edit(postId: "document-quelconque", documentFormat: .reel, isRepost: true),
+            compositionQualifiesAsReel: true
         ).offeredFormats
-        let gateDuRepost = offreDuReel != [.reel, .post]
+        let offreDuReel = ComposerProfile.profile(
+            for: .edit(postId: "document-quelconque", documentFormat: .reel),
+            compositionQualifiesAsReel: true
+        ).offeredFormats
+        let gateDuRepost = offreDuRepost == [.reel] && offreDuReel == [.reel, .post]
 
         // 4 — REPLI AUTOMATIQUE DU REEL.
         // La feuille rebascule sur POST des qu'un retrait de media de-qualifie la
@@ -147,26 +178,40 @@ final class EditParityInventoryTests: XCTestCase {
             && sansQualification.initialFormat != .reel
 
         // 5 — RETRAIT DE MEDIAS.
-        // Mesure de PRECONDITION, et c'est la bonne : on ne retire pas ce qu'on
-        // ne sait pas porter. Aucun outil d'attache du document n'a d'effet —
-        // `ComposerDocumentTool.effect` rend `nil` pour les trois — donc aucun
-        // media n'entre, donc aucun ne se retire.
-        let outilsDeMedia: [ComposerDocumentTool] = [.photo, .camera, .document]
-        let retraitDeMedias = outilsDeMedia.contains { $0.effect != nil }
+        // La PRECONDITION (l'ingestion) est tombee au lot T2.3 : les trois
+        // outils d'attache portent desormais un effet (`.attachesLocalMedia`).
+        // Continuer a mesurer `effect != nil` ferait dire au vert que le
+        // RETRAIT est tenu — le mode d'echec PROXY : la precondition et la
+        // capacite ont cesse d'etre equivalentes le jour ou l'une des deux a
+        // bouge sans l'autre. Ce que la feuille tient et que le meuble ne
+        // tient toujours pas, c'est un CANAL de retrait sur une composition
+        // REPRISE (l'equivalent de `removeMediaIds`) —
+        // `ComposerDocumentDraft.document(...)` n'en porte aucun, et la porte
+        // d'edition n'atteint de toute facon jamais cette surface
+        // (`test_lesCapacitesDeChromeSocle_leSontCoteCreation_...` : `.edit`
+        // route vers `.scene`).
+        let retraitDeMedias = sourceDuDocument.contains("removeMediaIds")
 
         // 6 — POSITION TRI-ETAT.
         // La feuille distingue TROIS etats (`PostLocationUpdate` : remplacer,
         // retirer, ne pas toucher) — c'est ce qui empeche une reouverture de
-        // vider une position que l'auteur n'a pas regardee. Le meuble n'a meme
-        // pas le premier : son outil de lieu ne declenche rien.
-        let positionTriEtat = ComposerDocumentTool.place.effect != nil
+        // vider une position que l'auteur n'a pas regardee. T2.5 pose desormais
+        // UN etat cote CREATION (`ComposerDocumentTool.place.effect`,
+        // `ComposerDocumentDraft.location: SharedPlace?` — un OPTIONNEL a DEUX
+        // etats, pas trois). Mesurer `effect != nil` serait redevenu un mode
+        // d'echec PROXY, exactement le piege nomme par "retrait de medias"
+        // juste au-dessus au T2.3 : l'outil declenche desormais un effet REEL,
+        // mais ni un canal de RETRAIT ni le troisieme etat ("ne pas toucher")
+        // qu'une REPRISE exige n'existent. Mesuree sur le texte source, comme
+        // "retrait de medias".
+        let positionTriEtat = sourceDuDocument.contains("LocationUpdate")
 
         // 7 — AUDIENCE + LISTE NOMMEE.
         // Reprise au lot 4.9 : le socle peint un vrai selecteur sous le
         // document, et le brouillon porte la liste nominative que ONLY et EXCEPT
         // exigent. Seconde des deux capacites tenues.
         let brouillonNomme = ComposerDocumentDraft.document(
-            format: .post, text: "x", visibility: .only, visibilityUserIds: ["u1"], repostOfId: nil
+            format: .post, forcePlainPost: false, text: "x", visibility: .only, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil
         )
         let audienceEtListe = ComposerChromeOwnership.socleZones(for: .document).contains(.audience)
             && brouillonNomme.visibilityUserIds == ["u1"]
@@ -184,46 +229,48 @@ final class EditParityInventoryTests: XCTestCase {
                 nom: "langue source",
                 chezLaFeuille: ["showLanguagePicker = true", "language: languageChanged ? selectedLanguage : nil"],
                 mesuree: langueDeclarable,
-                attendue: false,
-                mesureDit: "la porte-document pose `DefaultComposerLanguage.resolve()`, une constante — "
-                    + "aucun canal de langue sur `ComposerDocumentDraft`"
+                attendue: true,
+                mesureDit: "T2.2 : la porte-document poste `draft.originalLanguage`, ecrit par la capsule "
+                    + "et le selecteur que le meuble monte desormais — le litteral "
+                    + "`DefaultComposerLanguage.resolve()` a quitte le corps de `publish`"
             ),
             Capacite(
                 nom: "eventail POST/REEL gate",
                 chezLaFeuille: [
                     "private var showTypePicker: Bool",
-                    "!isRepost && (remainingQualifiesAsReel || normalizedOriginalType == \"REEL\")"
+                    "PostEditTypeChoice.reelIsChoosable("
                 ],
                 mesuree: gateDuRepost,
-                attendue: false,
-                mesureDit: "la table offre `[.reel, .post]` a TOUT reel edite : `ComposerOrigin.edit` ne "
-                    + "porte pas de quoi savoir qu'un document est un repost"
+                attendue: true,
+                mesureDit: "#15631 : `ComposerOrigin.edit` porte `isRepost`, et l'eventail d'un repost rouvert "
+                    + "n'offre que son format ; un reel ordinaire garde `[.reel, .post]`"
             ),
             Capacite(
                 nom: "repli automatique du reel",
                 chezLaFeuille: [
-                    "if selectedType == \"REEL\" && !remainingQualifiesAsReel {",
-                    "selectedType = (normalizedOriginalType == \"REEL\" && !remainingQualifiesAsReel)"
+                    "selectedType = PostEditTypeChoice.selection(selectedType, reelIsChoosable: reelIsChoosable)",
+                    "selectedType = PostEditTypeChoice.initialType(originalType: originalType)"
                 ],
                 mesuree: repliAutomatique,
-                attendue: false,
-                mesureDit: "le gate de qualification AJOUTE le reel et ne le RETIRE jamais : sans "
-                    + "qualification, l'edition ouvre encore sur `.reel`"
+                attendue: true,
+                mesureDit: "#15631 : sans qualification, l'edition d'un reel n'offre plus que le post — le gate "
+                    + "de cette porte est `PostEditBaseline.reelIsChoosable`, la regle de la feuille"
             ),
             Capacite(
                 nom: "retrait de medias",
                 chezLaFeuille: ["private func toggleRemove(_ id: String) {", "removeMediaIds: Array(removedMediaIds)"],
                 mesuree: retraitDeMedias,
-                attendue: false,
-                mesureDit: "aucun outil d'attache du document n'a d'effet — rien n'entre, donc rien ne "
-                    + "se retire"
+                attendue: true,
+                mesureDit: "#9333 : la porte d'edition du meuble rend `removeMediaIds` — les medias d'origine "
+                    + "que la scene rouverte ne montre plus (`PostEditComposerSave.removedMediaIds`)"
             ),
             Capacite(
                 nom: "position tri-etat",
                 chezLaFeuille: ["private var locationSection: some View {", "locationEdit = originalLocation == nil ? nil : .remove"],
                 mesuree: positionTriEtat,
-                attendue: false,
-                mesureDit: "l'outil de lieu du document ne declenche rien"
+                attendue: true,
+                mesureDit: "#9333 : la porte d'edition rend un `PostLocationUpdate` tri-etat — inchange, "
+                    + "remplace ou retire (`PostEditComposerSave.locationUpdate`)"
             ),
             Capacite(
                 nom: "audience + liste nommee",
@@ -244,23 +291,24 @@ final class EditParityInventoryTests: XCTestCase {
     /// compte serait reste vert le jour ou un format en remplacerait un autre,
     /// et c'est exactement la substitution qui a produit le defaut d'origine.
     func test_lEdition_routeParFORMAT_etCesseDeFairePasserUnPostPourUneStory() {
-        XCTAssertEqual(
+        // **#5053** — `storyEditComposerCover` existe toujours, aux mêmes quatre
+        // montages ; ce qu'il MONTE a changé. Il présente `StoryEditComposer`,
+        // donc `MeeshyComposerHost`, hydraté par
+        // `ComposerHydration.editingStory`. La table n'a plus d'historique à
+        // nommer pour ce format.
+        XCTAssertNil(
             ComposerIntent(origin: .edit(postId: "d", documentFormat: .story)).routesToLegacy,
-            .storyEdit,
-            "Editer une STORY monte `storyEditComposerCover` — quatre montages de production. C'est le "
-            + "seul format dont `.storyEdit` dise la verite."
+            "Editer une STORY monte le MEUBLE depuis #5053. `.storyEdit` reste DÉCLARÉ dans "
+            + "`LegacyComposer` — l'inventaire de ce fichier compte par ce vocabulaire, et retirer le "
+            + "mot ferait rougir un inventaire pour une raison sans rapport avec ce qu'il mesure."
         )
-        XCTAssertEqual(
+        XCTAssertNil(
             ComposerIntent(origin: .edit(postId: "d", documentFormat: .post)).routesToLegacy,
-            .editPostSheet,
-            "Editer un POST monte `EditPostSheet` — cinq montages de production. Router ce format vers "
-            + "`.storyEdit` faisait dire a la table qu'un post s'edite dans l'atelier d'une story."
+            "#9333 : editer un POST monte le meuble sur le document — la vue qui l'a cree."
         )
-        XCTAssertEqual(
+        XCTAssertNil(
             ComposerIntent(origin: .edit(postId: "d", documentFormat: .reel)).routesToLegacy,
-            .editPostSheet,
-            "Editer un REEL monte la meme feuille (`ReelsPlayerView`), et c'est la seule surface du depot "
-            + "qui sache basculer POST vers REEL."
+            "#9333 : editer un REEL monte le meme meuble, et son eventail bascule POST <-> REEL."
         )
         XCTAssertEqual(
             ComposerIntent(origin: .edit(postId: "d", documentFormat: .status)).routesToLegacy,
@@ -281,35 +329,25 @@ final class EditParityInventoryTests: XCTestCase {
     /// Elle exige que les DEUX cas restent declares dans `LegacyComposer` : une
     /// garde negative privee du symbole qu'elle cherche passe au vert en perdant
     /// sa protection, et le retour du routage passerait alors sans un mot.
-    func test_aucunFormatSaufLaStory_neRetombeSurLEditionDeStory() {
+    func test_seulLeMood_retombeSurLaFeuilleDEdition() {
         let formats: [ComposerFormat] = [.story, .post, .reel, .status]
 
         for format in formats {
             let route = ComposerIntent(origin: .edit(postId: "d", documentFormat: format)).routesToLegacy
-            let estUneStory = format == .story
-
             XCTAssertEqual(
-                route == LegacyComposer.storyEdit, estUneStory,
-                "L'edition en \(format) route vers `.storyEdit` : `storyEditComposerCover` monte "
-                + "`StoryComposerView` sur une `StoryEditSession`, qu'un post n'a pas."
+                route == LegacyComposer.editPostSheet, format == .status,
+                "L'edition en \(format) : story, post et reel s'editent dans le MEUBLE (#5053, #9333) ; seul "
+                + "le mood, qu'aucun site n'offre d'editer, nomme encore la feuille."
             )
-            XCTAssertEqual(
-                route == LegacyComposer.editPostSheet, !estUneStory,
-                "L'edition en \(format) route vers `.editPostSheet` : la feuille prend un contenu, une "
-                + "langue, des medias, un lieu et une audience — pas un canvas."
-            )
+            XCTAssertNotEqual(route, LegacyComposer.storyEdit,
+                              "L'edition en \(format) ne route jamais vers l'atelier nu d'une story.")
         }
     }
 
-    /// Les huit AUTRES portes ne touchent ni l'une ni l'autre feuille
-    /// d'edition. Un cas neuf dans `LegacyComposer` est une valeur que n'importe
-    /// quelle ligne de la table peut se mettre a rendre ; l'interdire ici est ce
-    /// qui empeche une porte de creation d'atterrir sur une surface d'edition.
     func test_aucunePorteDeCreation_neRetombeSurUneFeuilleDEdition() {
         let portesQuiNEditentRien: [ComposerOrigin] = [
             .storyTray,
             .feedComposer,
-            .reelTab,
             .moodChip,
             .repost(ofPostId: "post-source", sourceFormat: .story),
             .draft(id: "brouillon-42"),
@@ -366,32 +404,30 @@ final class EditParityInventoryTests: XCTestCase {
         }
     }
 
-    /// **Le STOP, opposable.** Deux capacites sur sept. Le retrait
-    /// d'`EditPostSheet.swift` retirerait les cinq autres a l'utilisateur.
+    /// **Les sept capacites sont tenues par le meuble** (#15631). Ce qui garde
+    /// encore la feuille n'est plus une capacite manquante mais deux routes de
+    /// `PostEditRoute` : la degradation sans compositeur dans l'environnement,
+    /// et la publication qui porte un media qu'aucune scene ne montre (un
+    /// document).
     ///
     /// Le compte ET les noms : un compte seul serait reste vert le jour ou une
-    /// capacite en remplacerait une autre, et c'est precisement ce qui vient
-    /// d'arriver du cote creation.
-    func test_leRetraitDeLaFeuille_resteINTERDIT_tantQueCinqCapacitesManquent() throws {
+    /// capacite en remplacerait une autre.
+    func test_lesSeptCapacites_sontTenuesParLeMeuble() throws {
         let capacites = try inventaire()
         let tenues = Set(capacites.filter(\.mesuree).map(\.nom))
-        let manquantes = capacites.filter { !$0.mesuree }.map(\.nom)
 
         XCTAssertEqual(
-            tenues, ["champ contenu + validite", "audience + liste nommee"],
-            "Les capacites tenues par le meuble ont change. Le retrait de la feuille reste interdit tant "
-            + "que les sept n'y sont pas ; ce test dit LESQUELLES manquent, pour qu'un lot suivant sache "
-            + "quoi lever plutot que de recompter."
+            tenues, ["champ contenu + validite", "audience + liste nommee", "langue source",
+                     "retrait de medias", "position tri-etat", "eventail POST/REEL gate",
+                     "repli automatique du reel"],
+            "Les capacites tenues par le meuble ont change : ce test dit LESQUELLES, pour qu'un lot "
+            + "suivant sache quoi lever plutot que de recompter."
         )
-        XCTAssertEqual(
-            manquantes.count, 5,
-            "Cinq capacites manquent : \(manquantes.joined(separator: ", ")). Retirer la feuille les "
-            + "retirerait a l'utilisateur, sans qu'aucun test d'ecran ne le dise."
-        )
+        XCTAssertTrue(capacites.allSatisfy(\.mesuree))
     }
 
-    /// **Les deux capacites tenues le sont cote CREATION — la porte d'edition ne
-    /// les atteint pas.**
+    /// **Les capacites de CHROME tenues le sont cote CREATION — la porte
+    /// d'edition ne les atteint pas.**
     ///
     /// C'est la remesure que le plan exigeait, et elle ne dit pas ce qu'on
     /// attendait. Le lot 4 a fait deriver le proprietaire du chrome de la
@@ -400,38 +436,24 @@ final class EditParityInventoryTests: XCTestCase {
     /// `ComposerSurfaceRouting` fait atterrir toute reprise sur la SCENE — ou le
     /// socle ne peint RIEN et l'atelier assemble tout.
     ///
-    /// Compter « 2 sur 7 » comme un progres vers le retrait de la feuille
-    /// d'EDITION serait donc faux. Les deux capacites ont muri sur le chemin de
-    /// CREATION ; le chemin d'edition n'en a exerce aucune.
-    func test_lesDeuxCapacitesTenues_leSontCoteCreation_etLaPorteDEditionNeLesAtteintPas() {
+    /// Compter « 3 sur 7 » comme un progres vers le retrait de la feuille
+    /// d'EDITION serait donc faux. Les trois capacites tenues (T2.2 ajoute
+    /// « langue source ») ont muri sur le chemin de CREATION ; le chemin
+    /// d'edition n'en a exerce aucune. Ce test-ci n'en remesure que DEUX :
+    /// « langue source » ne depend pas du CHROME (`ComposerChromeOwnership`)
+    /// mais d'un canal distinct (`documentLanguage` + capsule superposee), donc
+    /// hors de ce que `socleZones` peut dire.
+    func test_laPorteDEdition_ouvreLeDocument_ouLeSoclePeintAudienceEtFleche() {
         let profil = ComposerProfile.profile(for: .edit(postId: "d", documentFormat: .post))
 
-        XCTAssertEqual(
-            profil.opensWith, .resume,
-            "Editer, c'est reprendre un document deja constitue."
-        )
-
+        XCTAssertEqual(profil.opensWith, .keyboardOnContent,
+                       "#9333 : editer un post rouvre son DOCUMENT, clavier sur le texte.")
         let surface = ComposerSurfaceRouting.surface(opening: profil.opensWith, format: profil.initialFormat)
-
+        XCTAssertEqual(surface, .document)
         XCTAssertEqual(
-            surface, .scene,
-            "Une REPRISE monte la surface ou la composition reprise vit reellement, et le seul mecanisme "
-            + "de reprise du meuble repeuple l'ATELIER."
-        )
-        XCTAssertEqual(
-            ComposerChromeOwnership.owner(for: surface), .atelier,
-            "Sous la scene, le chrome appartient a l'atelier : le meuble n'y peint ni audience ni fleche."
-        )
-        XCTAssertTrue(
-            ComposerChromeOwnership.socleZones(for: surface).isEmpty,
-            "Le socle ne peint AUCUNE zone sous la scene — en peindre une seconde serie donnerait deux "
-            + "audiences et deux fleches, dont une inerte."
-        )
-
-        XCTAssertEqual(
-            ComposerChromeOwnership.socleZones(for: .document), [.audience, .publish],
-            "La contre-epreuve : sous le DOCUMENT, les deux capacites tenues sont bien peintes. C'est ce "
-            + "contraste qui dit qu'elles ont muri cote creation, jamais cote edition."
+            ComposerChromeOwnership.socleZones(for: surface), [.audience, .publish],
+            "Sous le document rouvert, le socle peint l'audience et la fleche : les capacites murissent "
+            + "desormais cote EDITION aussi."
         )
     }
 

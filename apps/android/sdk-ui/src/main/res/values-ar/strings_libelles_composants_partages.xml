@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="brand_logo_description">Meeshy</string>
+    <plurals name="bubble_story_reactions">
+        <item quantity="zero">لا تفاعلات</item>
+        <item quantity="one">تفاعل واحد</item>
+        <item quantity="two">تفاعلان</item>
+        <item quantity="few">%1$d تفاعلات</item>
+        <item quantity="many">%1$d تفاعلًا</item>
+        <item quantity="other">%1$d تفاعل</item>
+    </plurals>
+    <plurals name="bubble_story_comments">
+        <item quantity="zero">لا تعليقات</item>
+        <item quantity="one">تعليق واحد</item>
+        <item quantity="two">تعليقان</item>
+        <item quantity="few">%1$d تعليقات</item>
+        <item quantity="many">%1$d تعليقًا</item>
+        <item quantity="other">%1$d تعليق</item>
+    </plurals>
+    <plurals name="bubble_story_shares">
+        <item quantity="zero">لا مشاركات</item>
+        <item quantity="one">مشاركة واحدة</item>
+        <item quantity="two">مشاركتان</item>
+        <item quantity="few">%1$d مشاركات</item>
+        <item quantity="many">%1$d مشاركة</item>
+        <item quantity="other">%1$d مشاركة</item>
+    </plurals>
+    <plurals name="bubble_hidden_images">
+        <item quantity="zero">لا صور إضافية</item>
+        <item quantity="one">صورة إضافية واحدة</item>
+        <item quantity="two">صورتان إضافيتان</item>
+        <item quantity="few">%1$d صور إضافية</item>
+        <item quantity="many">%1$d صورة إضافية</item>
+        <item quantity="other">%1$d صورة إضافية</item>
+    </plurals>
+</resources>

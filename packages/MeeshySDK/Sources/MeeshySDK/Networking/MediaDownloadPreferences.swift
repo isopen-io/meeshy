@@ -10,13 +10,13 @@ public enum AutoDownloadPolicy: String, Codable, CaseIterable, Equatable, Sendab
     public var shortLabel: String {
         switch self {
         case .always:
-            return String(localized: "media.policy.always.short", defaultValue: "Toujours")
+            return String(localized: "media.policy.always.short", defaultValue: "Toujours", bundle: .main)
         case .wifiAndGoodCellular:
-            return String(localized: "media.policy.wifiGood.short", defaultValue: "Wi-Fi + bon cellulaire")
+            return String(localized: "media.policy.wifiGood.short", defaultValue: "Wi-Fi + bon cellulaire", bundle: .main)
         case .wifiOnly:
-            return String(localized: "media.policy.wifi.short", defaultValue: "Wi-Fi uniquement")
+            return String(localized: "media.policy.wifi.short", defaultValue: "Wi-Fi uniquement", bundle: .main)
         case .never:
-            return String(localized: "media.policy.never.short", defaultValue: "Jamais")
+            return String(localized: "media.policy.never.short", defaultValue: "Jamais", bundle: .main)
         }
     }
 }

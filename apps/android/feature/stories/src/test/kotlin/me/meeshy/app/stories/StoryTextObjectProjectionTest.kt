@@ -2,7 +2,10 @@ package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.StoryKeyframe
+import me.meeshy.sdk.model.StoryTextEffect
 import me.meeshy.sdk.model.StoryTextObject
+import me.meeshy.sdk.model.StoryTextBackgroundStyle
+import me.meeshy.sdk.model.scene.StoryTextBackground
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -54,10 +57,11 @@ class StoryTextObjectProjectionTest {
     }
 
     @Test
-    fun `resolveText prefers an exact key over a normalized sibling`() {
+    fun `resolveText settles two keys of one language by content, the canonical key winning`() {
         val obj = textObject(translations = mapOf("pt-BR" to "Ola BR", "pt" to "Ola"))
-        // The exact "pt-BR" key wins outright over the normalized "pt" sibling that would also match.
-        assertThat(StoryTextObjectProjection.resolveText(obj, preferredLanguages = listOf("pt-BR"))).isEqualTo("Ola BR")
+        // Same rule as iOS PrismTranslationResolver: keys that canonicalise alike are settled by
+        // CONTENT (the canonical key wins), never by map order — one payload, one text.
+        assertThat(StoryTextObjectProjection.resolveText(obj, preferredLanguages = listOf("pt-BR"))).isEqualTo("Ola")
     }
 
     @Test
@@ -190,5 +194,59 @@ class StoryTextObjectProjectionTest {
         assertThat(view.fadeIn).isEqualTo(0.0)
         assertThat(view.fadeOut).isEqualTo(0.0)
         assertThat(view.keyframes).isEmpty()
+    }
+
+    @Test
+    fun `project carries no text backing when the wire object declares none`() {
+        val wire = StoryTextObject(id = "t", text = "Hello")
+        val view = StoryTextObjectProjection.project(wire, preferredLanguages = emptyList())
+        assertThat(view.background).isEqualTo(StoryTextBackground.None)
+    }
+
+    @Test
+    fun `project resolves a modern glass background style into the view backing`() {
+        val wire = StoryTextObject(
+            id = "t",
+            text = "Hello",
+            backgroundStyle = StoryTextBackgroundStyle(type = "glass", radius = 24.0),
+        )
+        val view = StoryTextObjectProjection.project(wire, preferredLanguages = emptyList())
+        assertThat(view.background).isEqualTo(StoryTextBackground.Glass(radius = 24.0))
+    }
+
+    @Test
+    fun `project resolves a modern solid background style into the view backing`() {
+        val wire = StoryTextObject(
+            id = "t",
+            text = "Hello",
+            backgroundStyle = StoryTextBackgroundStyle(type = "solid", hex = "6366F1"),
+        )
+        val view = StoryTextObjectProjection.project(wire, preferredLanguages = emptyList())
+        assertThat(view.background).isEqualTo(StoryTextBackground.Solid(hex = "6366F1"))
+    }
+
+    @Test
+    fun `project falls back to a legacy textBg hex as a solid backing`() {
+        val wire = StoryTextObject(id = "t", text = "Hello", textBg = "112233")
+        val view = StoryTextObjectProjection.project(wire, preferredLanguages = emptyList())
+        assertThat(view.background).isEqualTo(StoryTextBackground.Solid(hex = "112233"))
+    }
+
+    // --- effect (#4870) ---
+
+    @Test
+    fun `project carries the text effect, and an absent one is NONE`() {
+        val glowing = StoryTextObject(id = "t", text = "Hi", textEffect = "glow")
+        assertThat(StoryTextObjectProjection.project(glowing, preferredLanguages = emptyList()).effect)
+            .isEqualTo(StoryTextEffect.GLOW)
+        assertThat(StoryTextObjectProjection.project(textObject(), preferredLanguages = emptyList()).effect)
+            .isEqualTo(StoryTextEffect.NONE)
+    }
+
+    @Test
+    fun `project decays an unknown effect to NONE rather than failing the slide`() {
+        val future = StoryTextObject(id = "t", text = "Hi", textEffect = "effect-from-the-future")
+        assertThat(StoryTextObjectProjection.project(future, preferredLanguages = emptyList()).effect)
+            .isEqualTo(StoryTextEffect.NONE)
     }
 }

@@ -1,21 +1,161 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { scheduleContactJoinedAnnouncement } from '../../services/notifications/contact-joined';
 import {
   userSchema,
   registerRequestSchema,
+  verificationRequiredProperties,
+  emailOwnerSchema,
   validationErrorResponseSchema,
   errorResponseSchema
 } from '@meeshy/shared/types';
 import { AuthSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import { MeeshyError } from '@meeshy/shared/utils/errors';
 import { ErrorCode } from '@meeshy/shared/types/errors';
-import { RegisterData } from '../../services/AuthService';
-import { getRequestContext } from '../../services/GeoIPService';
-import { createRegisterRateLimiter, createAuthGlobalRateLimiter } from '../../utils/rate-limiter.js';
+import type { RegisterData } from '../../services/AuthService';
+import { getRequestContext, lookupGeoIp, isPrivateIp } from '../../services/GeoIPService';
+import { AffiliateTrackingService } from '../../services/AffiliateTrackingService';
+import { openSession } from './open-session';
+import { isRegistrationRefusal } from '../../services/auth/registration-refusal';
+import { createRegisterRateLimiter, createAuthGlobalRateLimiter, type RateLimiter } from '../../utils/rate-limiter.js';
+import { deferAfterResponse, type AfterResponse } from '../../utils/after-response';
+import { localeDeLaRequete } from './request-locale';
+import { depreciee } from '../../utils/deprecation';
 import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendError, sendBadRequest, sendInternalError } from '../../utils/response.js';
+import { candidatsDePseudo, pseudoSousLePlancher } from '../../utils/username-candidates';
+import { validatePasswordStrength } from '../../utils/password-strength';
+import { apiPath } from '@meeshy/shared/api/prefix';
+import { pendingSessionTokenForAccount } from '../../services/auth/email-verification-watch';
 
 const logger = enhancedLogger.child({ module: 'AuthRegisterRoute' });
+
+/**
+ * Combien de temps l'inscription attend le tiers de géolocalisation AVANT de
+ * répondre (#5216).
+ *
+ * `lookupGeoIp` accorde trois secondes par défaut — trois secondes ajoutées
+ * telles quelles au temps qu'une personne passe devant un écran de chargement,
+ * pour une donnée dont AUCUN champ de la réponse ne dépend. La borne courte
+ * garde le cas nominal (le tiers répond en quelques dizaines de millisecondes,
+ * et le cache sert les suivantes) et abandonne le cas lent — que la reprise
+ * post-réponse rattrape, sans que personne n'attende.
+ */
+const GEO_AVANT_REPONSE_MS = 400;
+
+
+/**
+ * REND la tentative comptée par le limiteur — sur un 400, et sur un 409
+ * USERNAME_TAKEN (#5912).
+ *
+ * Un 400 dit « ta saisie est mal formée » : rien n'a été touché, rien n'a été
+ * appris sur autrui — remboursé de tout temps.
+ *
+ * Un 409 apprend qu'un identifiant EXISTE, et un oracle remboursable est en
+ * général un oracle gratuit — MAIS ce raisonnement ne vaut que pour un refus
+ * dont ce limiteur est la SEULE porte. `EMAIL_TAKEN` l'est encore (#4158 a
+ * fermé toute autre surface publique qui répond `taken` sur un e-mail) : il
+ * reste payant, sans exception.
+ *
+ * `USERNAME_TAKEN` ne l'est plus depuis `GET /directory/availability`, qui
+ * répond `taken`/`available` sur un pseudo avec son PROPRE limiteur (20/min
+ * par IP, `directory/availability.ts`) — l'oracle de pseudo est déjà borné
+ * là, à un tarif plus généreux que celui-ci. Faire payer CE limiteur en plus
+ * ne protège donc plus rien : la collision de pseudo est l'issue la plus
+ * COURANTE d'une inscription humaine (les trois suggestions rendues par le
+ * refus invitent explicitement à réessayer), et le compter comme un abus
+ * fermait la porte cinq minutes à quelqu'un qui n'avait rien créé — la
+ * confusion nommée par le commentaire original de ce module, tenue depuis
+ * pour une conséquence acceptée plutôt que pour un défaut.
+ *
+ * Best-effort et DÉTACHÉ : le remboursement ne doit pas retarder la réponse
+ * d'un aller-retour Redis. La garde `.catch` est obligatoire — un rejet sans
+ * écouteur termine le process sous Node 22 (leçon 230).
+ */
+function rembourserLaTentative(limiteurs: readonly RateLimiter[], request: FastifyRequest): void {
+  for (const limiteur of limiteurs) {
+    void limiteur.refund(limiteur.keyFor(request)).catch((error: unknown) => {
+      logger.warn('remboursement de tentative impossible', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }
+}
+
+/**
+ * REPREND la géolocalisation APRÈS la réponse, et complète la ligne du compte.
+ *
+ * Trois colonnes d'inscription en dépendent — `registrationLocation`,
+ * `registrationCountry`, `timezone` — plus `lastLoginLocation`. Aucune n'est
+ * servie dans la réponse : les faire attendre revenait à ajouter un
+ * aller-retour vers un tiers au chemin d'entrée du produit pour des données que
+ * personne ne lit avant longtemps.
+ *
+ * On ne reprend que ce qui a MANQUÉ, et seulement quand il y avait quelque
+ * chose à trouver : une adresse PRIVÉE a déjà rendu tout ce qu'elle rendra
+ * (`location: 'Local'`, sans appel réseau), et une géolocalisation déjà obtenue
+ * a été écrite à la création.
+ */
+function completerLaGeolocalisation(
+  context: AuthRouteContext,
+  afterResponse: AfterResponse,
+  userId: string,
+  requestContext: { ip: string; geoData: unknown },
+): void {
+  if (requestContext.geoData) return;
+  if (!requestContext.ip || isPrivateIp(requestContext.ip)) return;
+
+  afterResponse(async () => {
+    const geoData = await lookupGeoIp(requestContext.ip);
+    if (!geoData) return;
+
+    await context.prisma.user.update({
+      where: { id: userId },
+      data: {
+        registrationLocation: geoData.location,
+        registrationCountry: geoData.country,
+        timezone: geoData.timezone,
+        lastLoginLocation: geoData.location,
+      },
+    });
+  }, 'registration-geoip-backfill');
+}
+
+/**
+ * RATTACHE le nouveau compte à son parrain, À LA CRÉATION (#8058).
+ *
+ * Arbitrage porteur 2026-09-26 : le parrainage est « sauvegardé lors de la
+ * création de compte » — actif ou non. Un compte créé sans session (une
+ * revendication d'adresse, #8214) ne pourrait pas appeler
+ * `POST /affiliate/register` ensuite : le code voyage donc avec
+ * l'inscription, et c'est le MÊME service qui le valide et crée la relation.
+ *
+ * Un code invalide (inconnu, expiré, épuisé) ou une panne n'empêchent JAMAIS
+ * l'inscription : le compte existe déjà, on journalise et on continue.
+ */
+async function rattacherAuParrain(
+  context: AuthRouteContext,
+  userId: string,
+  affiliateToken: string | undefined,
+  affiliateSessionKey: string | undefined,
+): Promise<void> {
+  if (!affiliateToken) return;
+  try {
+    const resultat = await AffiliateTrackingService.convertAffiliateVisit(
+      context.fastify.prisma,
+      affiliateToken,
+      userId,
+      affiliateSessionKey,
+    );
+    if (!resultat.success) {
+      logger.info('code de parrainage ignoré à l\'inscription', { reason: resultat.error });
+    }
+  } catch (error) {
+    logger.warn('rattachement au parrain impossible à l\'inscription', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
 
 /**
  * Register registration and availability check routes
@@ -29,13 +169,13 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
   // POST /register - Main registration endpoint
   fastify.post('/register', {
     schema: {
-      description: 'Register a new user account. An email verification will be sent to the provided email address. The user is automatically added to the global "meeshy" conversation.',
+      description: 'Register a new user account. An email verification will be sent to the provided email address. The user is automatically added to the global "meeshy" conversation. When the address already belongs to another account, the 409 EMAIL_TAKEN carries its masked identity (`emailOwner`); resubmitting with `claimEmail: true` creates the account inactive, without the address, until the code or the link is presented to POST /auth/verify-email (#8214). A claim cannot carry a transferred phone number: `claimEmail` with `phoneTransferToken` is refused with 400 CLAIM_WITH_PHONE_TRANSFER (#8227).',
       tags: ['auth'],
       summary: 'User registration',
       body: registerRequestSchema,
       response: {
         200: {
-          description: 'Account created successfully - verification email sent. When the phone number already belongs to another account, NO account is created and the response carries `phoneOwnershipConflict` instead, so the client can offer a transfer.',
+          description: 'Account created - verification email (code + link) sent, and the account is usable at once: the response carries the session (`token`, `sessionToken`), the watch token `pendingSessionToken` (#8288: POST /auth/verification/status tells the signup card when the link was opened elsewhere) and `user.activation`, the email grace period (#8238: quiet for 7 days, invite until day 28, then blocked until the email is proven — never blocked with a phone number). An email CLAIM (`claimEmail`, #8214) is the exception: the response carries `status: "verification-required"`, `accountCreated: true` and `email`, with no token, and POST /auth/verify-email opens the session. When the phone number already belongs to another account, NO account is created and the response carries `phoneOwnershipConflict` instead, so the client can offer a transfer.',
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
@@ -52,7 +192,18 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
                 // Branche « compte créé »
                 user: userSchema,
                 token: { type: 'string', description: 'JWT access token for API authentication (absent on a phone-ownership conflict)' },
+                // Déclaré parce qu'un champ non déclaré est RETIRÉ à la
+                // sérialisation — le piège que la branche du conflit de numéro
+                // a déjà payé juste en dessous.
+                sessionToken: { type: 'string', description: 'Session token of the device that created the account — presentable to POST /auth/refresh (absent on a phone-ownership conflict)' },
                 expiresIn: { type: 'number', description: 'Token expiration time in seconds', example: 86400 },
+
+                // Branche « vérification requise » — depuis le délai de grâce
+                // (#8238), la seule REVENDICATION d'adresse (#8214) la sert : le
+                // compte existe, inactif ; aucun jeton, aucune session, le code
+                // est parti. Une inscription SANS numéro reçoit la session comme
+                // les autres — le numéro n'est requis que par les écrans (#9343).
+                ...verificationRequiredProperties,
 
                 // Branche « numéro déjà détenu » — aucun compte n'a été créé
                 phoneOwnershipConflict: { type: 'boolean', description: 'True when the phone number belongs to another account; no account was created', example: true },
@@ -78,6 +229,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
                   properties: {
                     username: { type: 'string' },
                     email: { type: 'string' },
+                    displayName: { type: 'string' },
                     firstName: { type: 'string' },
                     lastName: { type: 'string' },
                     systemLanguage: { type: 'string' },
@@ -88,7 +240,35 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
             }
           }
         },
-        400: validationErrorResponseSchema,
+        // `field` est DÉCLARÉ ici, et c'est la moitié qui compte : `sendError`
+        // étale son `details` à la RACINE de l'enveloppe, et
+        // `fast-json-stringify` retire tout ce que le schéma ne déclare pas —
+        // en silence. Un `PHONE_INVALID` dont le client ne saurait pas quel
+        // champ surligner ne vaut pas mieux qu'un 400 muet (piège du #4487,
+        // rejoué cinq fois dans ce dépôt).
+        400: {
+          description: 'Malformed payload — the response names the field to fix',
+          ...validationErrorResponseSchema,
+          properties: {
+            ...validationErrorResponseSchema.properties,
+            field: { type: 'string', description: 'Form field to highlight (e.g. "phoneNumber")' }
+          }
+        },
+        409: {
+          description: 'The username or the email address is already taken. No account was created.',
+          ...errorResponseSchema,
+          properties: {
+            ...errorResponseSchema.properties,
+            field: { type: 'string', description: 'Form field to highlight — "username" or "email"' },
+            suggestions: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Free usernames to offer instead (USERNAME_TAKEN only)'
+            },
+            // #8214 — déclaré, sinon fast-json-stringify le retire en silence.
+            emailOwner: emailOwnerSchema
+          }
+        },
         429: {
           description: 'Too many registration attempts',
           ...errorResponseSchema,
@@ -103,30 +283,83 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
     },
     preHandler: [registerRateLimiter.middleware(), authGlobalRateLimiter.middleware()]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const limiteurs = [registerRateLimiter, authGlobalRateLimiter];
+    // Le différé est une décision de la surface HTTP — c'est elle qui a une
+    // réponse à rendre. Le service, appelé sans requête (seed, création admin),
+    // exécute ses travaux EN LIGNE.
+    const afterResponse = context.afterResponse ?? deferAfterResponse;
+
     try {
-      const validatedData = validateSchema(AuthSchemas.register, request.body, 'register') as RegisterData & {
-        phoneTransferToken?: string;
+      const { affiliateToken, affiliateSessionKey, ...validatedData } = validateSchema(AuthSchemas.register, request.body, 'register') as RegisterData & {
         skipPhoneConflictCheck?: boolean;
+        affiliateToken?: string;
+        affiliateSessionKey?: string;
       };
 
-      const requestContext = await getRequestContext(request);
+      // #3629 — `AuthSchemas.register` (Zod) ne borne que la LONGUEUR
+      // (`PASSWORD_MIN_LENGTH`) ; `zxcvbn` et les classes de caractères
+      // n'étaient consultés qu'au reset de mot de passe, jamais à la création
+      // du compte. Même discipline que le reste de cette route : une même
+      // budget de tentative que n'importe quelle autre entrée invalide, pas de
+      // remboursement.
+      // #6424 — un mot de passe ABSENT n'est pas un mot de passe faible. Le
+      // compte naît sans, sa seule porte est le lien magique, et la robustesse
+      // se juge au moment où il en pose un (`PATCH /users/me/password`, qui
+      // appelle la MÊME fonction). Passer `undefined` ici rendrait quatre
+      // erreurs — dont « minimum 6 characters » sur une saisie qui n'existe
+      // pas — et refuserait l'inscription que ce lot vient d'ouvrir.
+      if (validatedData.password !== undefined) {
+        const strength = validatePasswordStrength(validatedData.password);
+        if (!strength.isValid) {
+          return sendBadRequest(reply, `Password requirements: ${strength.errors.join(', ')}`);
+        }
+      }
+
+      // Le rang 4 du Prisme entre ICI, avec la requête — c'est la seule couche
+      // qui voit les en-têtes. Le service, lui, ne le consulte que si
+      // l'inscription n'exprime aucune préférence.
+      const inscription: RegisterData = {
+        ...validatedData,
+        deviceLocale: localeDeLaRequete(request),
+      };
+
+      const requestContext = await getRequestContext(request, { geoTimeoutMs: GEO_AVANT_REPONSE_MS });
+
+      // #8227 — une REVENDICATION d'adresse n'emporte pas de numéro TRANSFÉRÉ.
+      // Le compte revendiquant naît inactif et peut ne jamais être prouvé :
+      // transférer maintenant retirerait le numéro à un compte vivant pour un
+      // compte qui n'existera peut-être jamais, et différer le transfert à la
+      // preuve exigerait de garder un jeton de transfert (vie courte) au-delà
+      // de sa fenêtre. Refus explicite, avant de toucher au jeton : l'un, puis
+      // l'autre, une fois le compte actif.
+      if (inscription.claimEmail && inscription.phoneTransferToken) {
+        rembourserLaTentative(limiteurs, request);
+        return sendBadRequest(reply, "Une revendication d'adresse ne peut pas emporter un numéro transféré : revendiquez l'adresse, puis transférez le numéro depuis le compte activé.", { code: 'CLAIM_WITH_PHONE_TRANSFER' });
+      }
 
       // Check if phoneTransferToken is provided
       let phoneTransferValidated = false;
-      if (validatedData.phoneTransferToken) {
+      let inscriptionFinale = inscription;
+      if (inscription.phoneTransferToken) {
         logger.info('Phone transfer token provided — validating');
-        const transferData = await phoneTransferService.getTransferDataByToken(validatedData.phoneTransferToken);
+        const transferData = await phoneTransferService.getTransferDataByToken(inscription.phoneTransferToken);
 
         if (!transferData.valid) {
+          rembourserLaTentative(limiteurs, request);
           return sendBadRequest(reply, 'Token de transfert invalide ou expiré', { code: 'INVALID_TRANSFER_TOKEN' });
         }
 
         logger.info('Phone transfer token valid');
         phoneTransferValidated = true;
-        validatedData.skipPhoneConflictCheck = true;
+        inscriptionFinale = { ...inscription, skipPhoneConflictCheck: true };
       }
 
-      const result = await authService.register(validatedData as RegisterData, requestContext);
+      // Le même exécuteur post-réponse traverse jusqu'au service : l'e-mail de
+      // vérification et l'annonce d'arrivée dans le salon global n'ont, eux non
+      // plus, aucun champ de la réponse à alimenter.
+      const result = await authService.register(inscriptionFinale, requestContext, {
+        afterResponse,
+      });
 
       if (!result) {
         return sendBadRequest(reply, 'Erreur lors de la création du compte');
@@ -154,12 +387,13 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
           // SOURCE plutôt que laissé au sérialiseur : compter sur une omission
           // de schéma pour retenir un secret, c'est le piège armé du cycle 84.
           pendingRegistration: {
-            username: validatedData.username,
-            email: validatedData.email,
-            firstName: validatedData.firstName,
-            lastName: validatedData.lastName,
-            systemLanguage: validatedData.systemLanguage,
-            regionalLanguage: validatedData.regionalLanguage
+            username: inscriptionFinale.username,
+            email: inscriptionFinale.email,
+            displayName: inscriptionFinale.displayName,
+            firstName: inscriptionFinale.firstName,
+            lastName: inscriptionFinale.lastName,
+            systemLanguage: inscriptionFinale.systemLanguage,
+            regionalLanguage: inscriptionFinale.regionalLanguage
           }
         });
       }
@@ -170,11 +404,24 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
         return sendBadRequest(reply, 'Erreur lors de la création du compte');
       }
 
+      // #8214 — « CE N'EST PAS MOI » : le compte existe, INACTIF, sans
+      // l'adresse, qui reste à son détenteur jusqu'à la preuve. Jamais de
+      // session — numéro ou non —, aucune annonce d'arrivée ; la réponse nomme
+      // l'adresse REVENDIQUÉE (jamais l'adresse d'attente du compte), et
+      // l'attente de cet appareil se lie au compte revendiquant, que la
+      // recherche par adresse ne retrouverait pas.
+      if (result.claimedEmail) {
+        completerLaGeolocalisation(context, afterResponse, user.id, requestContext);
+        await rattacherAuParrain(context, user.id, affiliateToken, affiliateSessionKey);
+        const attente = await pendingSessionTokenForAccount(context.prisma, user.id);
+        return sendSuccess(reply, { status: 'verification-required', accountCreated: true, email: result.claimedEmail, ...attente });
+      }
+
       // Execute phone transfer if validated
-      if (phoneTransferValidated && validatedData.phoneTransferToken) {
+      if (phoneTransferValidated && inscriptionFinale.phoneTransferToken) {
         logger.info('Executing phone transfer for new user');
         const transferResult = await phoneTransferService.executeRegistrationTransfer(
-          validatedData.phoneTransferToken,
+          inscriptionFinale.phoneTransferToken,
           user.id,
           requestContext.ip || 'unknown'
         );
@@ -186,13 +433,49 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
         }
       }
 
-      const token = authService.generateToken(user);
+      completerLaGeolocalisation(context, afterResponse, user.id, requestContext);
+
+      await rattacherAuParrain(context, user.id, affiliateToken, affiliateSessionKey);
+
+      // « X a rejoint Meeshy » (#8105) : le service n'apparie que des
+      // identifiants VÉRIFIÉS — un compte sans numéro n'annonce rien ici,
+      // son e-mail l'annoncera une fois prouvé.
+      scheduleContactJoinedAnnouncement(context.prisma, user.id, { afterResponse });
+
+      // #8238 — AVEC OU SANS NUMÉRO, LE COMPTE S'UTILISE TOUT DE SUITE : le
+      // délai de grâce de l'adresse (`services/auth/account-activation.ts`)
+      // remplace le blocage immédiat de #8055. Le code et le lien sont partis
+      // avec l'e-mail de vérification, pour plus tard ; `user.activation`
+      // dit aux clients où en est le délai.
+
+      // #4264 — CHANGEMENT DE COMPORTEMENT ASSUMÉ : l'inscription crée
+      // désormais une session, comme la connexion.
+      //
+      // `AuthService.register` n'appelait JAMAIS `createSession` : un compte
+      // frais repartait avec un JWT rattaché à RIEN. Depuis #4213 cela n'était
+      // plus seulement incohérent, c'était cassé — sa garde refuse
+      // `POST /refresh` quand `count({ userId, isValid: true })` vaut zéro,
+      // ce qui est exactement l'état d'un compte qui vient d'être créé et ne
+      // s'est pas encore connecté. Le premier renouvellement, 24 h plus tard,
+      // rendait 401 « Session révoquée » à quelqu'un qui n'avait rien révoqué.
+      //
+      // Nommer la session dans le jeton IMPOSAIT donc d'en créer une ; on y
+      // gagne au passage que le premier appareil d'un compte devient
+      // révocable et visible dans `GET /auth/sessions`, comme tous les autres.
+      // Le `sessionToken` est renvoyé pour que le client puisse le présenter
+      // (fenêtre glissante), sur la même clé que `POST /login`.
+      const { token, sessionToken } = await openSession(authService, user, requestContext, 'registration');
       const permissions = authService.getUserPermissions(user);
+      // #8288 — la carte de l'inscription attend son code SUR PLACE : le jeton
+      // d'attente (#8083) lui apprend que le lien a été ouvert ailleurs.
+      const attente = await pendingSessionTokenForAccount(context.prisma, user.id);
 
       return sendSuccess(reply, {
         user: formatUserResponse(user, permissions),
         token,
-        expiresIn: 24 * 60 * 60
+        sessionToken,
+        expiresIn: 24 * 60 * 60,
+        ...attente
       });
 
     } catch (error) {
@@ -204,43 +487,85 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
 
         logger.warn('Registration payload rejected by validation', { violations });
 
+        rembourserLaTentative(limiteurs, request);
+
         return sendError(reply, 400, fieldSummary ? `Données invalides — ${fieldSummary}` : 'Données invalides', {
           code: 'VALIDATION_ERROR',
-          violations
+          violations,
+          // Le PREMIER champ fautif, servi à part : un client qui surligne un
+          // champ n'a pas à parser une phrase française pour savoir lequel.
+          details: { field: (violations[0] as { path?: string } | undefined)?.path }
         });
       }
 
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorStack = error instanceof Error ? error.stack : undefined;
+      // Un REFUS de formulaire — pseudo pris, adresse prise, numéro illisible.
+      //
+      // Ces trois cas rendaient auparavant un 400 « Erreur lors de la création
+      // du compte », sans code ni champ : le service rattrapait tout et
+      // renvoyait `null`, si bien que les branches de ce `catch` qui
+      // prétendaient les distinguer par le TEXTE de l'erreur
+      // (`errorMessage.includes('déjà utilisé')`) étaient INATTEIGNABLES. Elles
+      // ont été retirées avec le `null` qui les rendait mortes ; les témoins
+      // qui les exerçaient simulaient un rejet que la production n'a jamais
+      // produit.
+      if (isRegistrationRefusal(error)) {
+        logger.info('Registration refused', { code: error.code, field: error.field });
+
+        // Un 400 rend la tentative (la saisie est à corriger, rien n'a été
+        // touché). USERNAME_TAKEN la rend aussi (#5912) : l'oracle de pseudo
+        // est déjà borné par le limiteur DÉDIÉ de `GET /directory/availability`
+        // — voir le doc-comment de `rembourserLaTentative`. EMAIL_TAKEN reste
+        // payant : lui seul apprend qu'un e-mail existe (#4158).
+        if (error.status === 400 || error.code === 'USERNAME_TAKEN') rembourserLaTentative(limiteurs, request);
+
+        return sendError(reply, error.status, error.message, {
+          code: error.code,
+          details: {
+            field: error.field,
+            ...(error.suggestions ? { suggestions: [...error.suggestions] } : {}),
+            ...(error.emailOwner ? { emailOwner: { ...error.emailOwner } } : {})
+          }
+        });
+      }
 
       logger.error('Registration error', error as Error);
 
-      // Erreurs de validation connues
-      if (errorMessage.includes('déjà utilisé') || errorMessage.includes('already exists')) {
-        return sendBadRequest(reply, errorMessage, { code: 'DUPLICATE_FIELD' });
-      }
-
-      if (errorMessage.includes('Email invalide') || errorMessage.includes('Format d\'email')) {
-        return sendBadRequest(reply, errorMessage, { code: 'INVALID_EMAIL' });
-      }
-
-      if (errorMessage.includes('mot de passe') || errorMessage.includes('password')) {
-        return sendBadRequest(reply, errorMessage, { code: 'INVALID_PASSWORD' });
-      }
-
-      if (errorMessage.includes('username') || errorMessage.includes('utilisateur')) {
-        return sendBadRequest(reply, errorMessage, { code: 'INVALID_USERNAME' });
-      }
-
       // Erreur générique avec détails en dev
+      const errorMessage = error instanceof Error ? error.message : String(error);
       const isDev = process.env.NODE_ENV !== 'production';
       sendError(reply, 500, isDev ? errorMessage : 'Erreur lors de la création du compte', { code: 'REGISTRATION_ERROR' });
     }
   });
 
   // GET /check-availability - Check username/email/phone availability
+  // ALIAS rétro-compatible vers `GET /directory/availability` (#4158).
+  //
+  // Ce que l'ancienne route faisait, et qui ne peut pas être conservé : elle
+  // confirmait **sans compte** qu'un pseudo, une adresse OU un numéro
+  // appartient à un utilisateur Meeshy — pendant que `/forgot-password` et
+  // `/magic-link/request` répondent délibérément « succès » dans tous les cas
+  // pour ne rien révéler. La même plateforme appliquait deux doctrines opposées
+  // à la même question.
+  //
+  // C'est la SEULE bascule de ce lot qui change une réponse et pas seulement
+  // une adresse, et le coût est nommé : le formulaire d'inscription ne peut
+  // plus dire « vous avez déjà un compte » avant la soumission. C'est la
+  // soumission qui le dit. Coût réel côté web : NUL — la branche qui affichait
+  // cet avertissement (`use-registration-validation.ts:94`) lit
+  // `data.data.accountInfo`, un champ que le gateway n'émet nulle part.
+  //
+  // `usernameAvailable` et `suggestions` restent servis à l'identique : un
+  // pseudo est une clé publique, déjà énumérable par `GET /u/:username`.
+  // `emailAvailable` et `phoneNumberAvailable` deviennent des verdicts de
+  // FORME, ce que porte `phoneNumberValid` — déjà présent dans l'ancienne
+  // réponse.
   fastify.get('/check-availability', {
+    onRequest: depreciee({ depuis: '2026-08-29', successeur: apiPath('/directory/availability') }),
     schema: {
+      deprecated: true,
+      description:
+        'DEPRECATED — use GET /directory/availability. Email and phone no longer reveal whether an account exists (#4158).',
+      tags: ['auth'],
       querystring: {
         type: 'object',
         properties: {
@@ -248,107 +573,77 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
           email: { type: 'string' },
           phoneNumber: { type: 'string' }
         }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                usernameAvailable: { type: 'boolean' },
+                suggestions: { type: 'array', items: { type: 'string' } },
+                // Verdicts de FORME. Ils ne disent plus l'existence.
+                emailValid: { type: 'boolean' },
+                phoneNumberValid: { type: 'boolean' },
+                phoneNumberE164: { type: 'string', nullable: true }
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        500: errorResponseSchema
       }
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { username, email, phoneNumber } = request.query as {
+      username?: string;
+      email?: string;
+      phoneNumber?: string;
+    };
+
+    if (!username && !email && !phoneNumber) {
+      return sendBadRequest(reply, 'Username, email ou numéro de téléphone requis');
+    }
+
     try {
-      const { username, email, phoneNumber } = request.query as {
-        username?: string;
-        email?: string;
-        phoneNumber?: string;
-      };
+      const result: Record<string, unknown> = {};
 
-      if (!username && !email && !phoneNumber) {
-        return sendBadRequest(reply, 'Username, email ou numéro de téléphone requis');
-      }
-
-      const prisma = fastify.prisma;
-      const { normalizePhoneNumber } = await import('../../utils/normalize');
-      const result: {
-        usernameAvailable?: boolean;
-        suggestions?: string[];
-        emailAvailable?: boolean;
-        phoneNumberAvailable?: boolean;
-        phoneNumberValid?: boolean;
-      } = {};
-
-      // Check username (case-insensitive)
       if (username) {
-        const normalizedUsername = username.trim();
-        const existingUser = await prisma.user.findFirst({
-          where: {
-            username: {
-              equals: normalizedUsername,
-              mode: 'insensitive'
-            }
-          }
+        const demande = username.trim();
+        // Un pseudo sous le plancher (#13825) n'est pas « disponible » : la
+        // soumission le refuserait. La base n'est pas même interrogée.
+        const pris = pseudoSousLePlancher(demande) || await fastify.prisma.user.findFirst({
+          where: { username: { equals: demande, mode: 'insensitive' } },
+          select: { id: true }
         });
-        result.usernameAvailable = !existingUser;
+        result.usernameAvailable = !pris;
 
-        if (existingUser) {
-          const suggestions: string[] = [];
-          let attempts = 0;
-          while (suggestions.length < 3 && attempts < 10) {
-            const suffix = Math.floor(Math.random() * 9999) + 1;
-            const candidate = `${normalizedUsername}${suffix}`;
-
-            const check = await prisma.user.findFirst({
-              where: {
-                username: {
-                  equals: candidate,
-                  mode: 'insensitive'
-                }
-              }
-            });
-
-            if (!check && !suggestions.includes(candidate)) {
-              suggestions.push(candidate);
-            }
-            attempts++;
-          }
-
-          if (suggestions.length > 0) {
-            result.suggestions = suggestions;
-          }
+        if (pris) {
+          const candidats = candidatsDePseudo(demande);
+          const dejaPris = await fastify.prisma.user.findMany({
+            where: { username: { in: candidats, mode: 'insensitive' } },
+            select: { username: true }
+          });
+          const occupes = new Set(
+            (dejaPris as Array<{ username: string }>).map((u) => u.username.toLowerCase())
+          );
+          result.suggestions = candidats.filter((c) => !occupes.has(c.toLowerCase())).slice(0, 3);
         }
       }
 
-      // Check email (case-insensitive)
       if (email) {
-        const normalizedEmail = email.trim().toLowerCase();
-        const existingUser = await prisma.user.findFirst({
-          where: {
-            email: {
-              equals: normalizedEmail,
-              mode: 'insensitive'
-            }
-          }
-        });
-        result.emailAvailable = !existingUser;
+        result.emailValid = /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(email.trim());
       }
 
-      // Check phone number (E.164 format)
       if (phoneNumber) {
         const requestContext = await getRequestContext(request);
-
-        // Priorité: 1) Pays de la géoloc, 2) Défaut FR
         const defaultCountry = requestContext?.geoData?.country || 'FR';
-
         const { normalizePhoneWithCountry } = await import('../../utils/normalize');
-        const phoneResult = normalizePhoneWithCountry(phoneNumber, defaultCountry);
-
-        if (phoneResult && phoneResult.isValid) {
-          const existingUser = await prisma.user.findFirst({
-            where: {
-              phoneNumber: phoneResult.phoneNumber
-            }
-          });
-          result.phoneNumberAvailable = !existingUser;
-          result.phoneNumberValid = true;
-        } else {
-          result.phoneNumberAvailable = false;
-          result.phoneNumberValid = false;
-        }
+        const normalise = normalizePhoneWithCountry(phoneNumber, defaultCountry);
+        result.phoneNumberValid = Boolean(normalise && normalise.isValid);
+        result.phoneNumberE164 = normalise && normalise.isValid ? normalise.phoneNumber : null;
       }
 
       return sendSuccess(reply, result);

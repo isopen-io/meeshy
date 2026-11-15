@@ -1,0 +1,123 @@
+import { useEffect, useState } from 'react';
+
+import { GLYPHS } from '@/components/glyphs';
+import { DISCOVER_GLYPHS } from '@/components/glyphs-discover';
+import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
+import { translateOnboarding } from '@/lib/i18n-onboarding-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { JourneyRecap } from '@/lib/onboarding/journey';
+
+import { CardFrame, type CardHost } from './onboarding-cards';
+import { PrimaryButton, RecapPlaceholder, RecapTiles, SecondaryButton, TrophyIllustration, type RecapTile } from './onboarding-visuals';
+
+/**
+ * **LE RÉCAPITULATIF** (#7729) — « +N pts · niveau · série · badges », puis
+ * deux sorties : « Continuer à explorer » (Meeshy Global) et « C'est bon pour
+ * aujourd'hui ». Toujours la possibilité de s'arrêter (§ 5 du parcours).
+ *
+ * **Les chiffres sont RELUS du serveur** (`GET /me/engagement`), comme
+ * `OnboardingViewModel.loadRecap` sur iOS : la pastille de session ne
+ * contredit jamais la progression. Tant que la relecture n'a pas répondu, un
+ * emplacement STABLE tient la place des tuiles — aucun chiffre qui sauterait
+ * ensuite (#7909). Si elle échoue, le récapitulatif ne montre que les points
+ * de la session (eux-mêmes relus, `journey.ts § pointsOf`) : jamais une série,
+ * un niveau ou des badges déduits ici. Les demandes « en route » sont celles
+ * que le serveur dit EN ATTENTE (#7910).
+ */
+
+export type RecapNumbers = {
+  readonly points: number;
+  readonly level: number;
+  readonly streakDays: number;
+  readonly badges: number;
+};
+
+function streakText(lang: InterfaceLanguage, days: number): string {
+  const key = new Intl.PluralRules(lang).select(days) === 'one' ? 'onboarding.recap.streak.one' : 'onboarding.recap.streak.other';
+  return translateOnboarding(lang, key, { days: String(days) });
+}
+
+export function recapTiles(host: CardHost, numbers: RecapNumbers, pendingFriends: number): readonly RecapTile[] {
+  const lang = host.lang;
+  const tiles: readonly (RecapTile | null)[] = [
+    { id: 'points', glyph: PROGRESSION_GLYPHS.star, text: translateOnboarding(lang, 'onboarding.recap.points', { points: String(numbers.points) }) },
+    numbers.level > 0 ? { id: 'level', glyph: PROGRESSION_GLYPHS.medal, text: translateOnboarding(lang, 'onboarding.recap.level', { level: String(numbers.level) }) } : null,
+    numbers.streakDays > 0
+      ? { id: 'streak', glyph: PROGRESSION_GLYPHS.fire, text: streakText(lang, numbers.streakDays), tone: 'warm' }
+      : null,
+    numbers.badges > 0 ? { id: 'badges', glyph: GLYPHS.trophy, text: translateOnboarding(lang, 'onboarding.recap.badges', { count: String(numbers.badges) }) } : null,
+    pendingFriends > 0 ? { id: 'friends', glyph: DISCOVER_GLYPHS.userPlus, text: translateOnboarding(lang, 'onboarding.recap.friends', { count: String(pendingFriends) }) } : null,
+  ];
+  return tiles.filter((tile): tile is RecapTile => tile !== null);
+}
+
+export function RecapCard({
+  host,
+  session,
+  load,
+  onExplore,
+  onDone,
+  onGame,
+}: {
+  readonly host: CardHost;
+  readonly session: JourneyRecap;
+  readonly load: () => Promise<RecapNumbers | null>;
+  readonly onExplore: () => void;
+  readonly onDone: () => void;
+  /**
+   * LA PORTE VERS LE JEU (#9379) — mène à Progression, où Mee ouvre la première
+   * des sept cartes de l'intégration. Facultative : un hôte qui ne la fournit
+   * pas garde le récapitulatif d'avant, avec ses deux sorties.
+   */
+  readonly onGame?: () => void;
+}) {
+  const lang = host.lang;
+  const [served, setServed] = useState<RecapNumbers | null | 'loading'>('loading');
+
+  useEffect(() => {
+    let alive = true;
+    void load().then((numbers) => {
+      if (alive) setServed(numbers);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [load]);
+
+  const numbers: RecapNumbers | null =
+    served === 'loading' ? null : (served ?? { points: session.points, level: 0, streakDays: 0, badges: 0 });
+  const body =
+    numbers !== null && numbers.points > 0 && numbers.streakDays > 0
+      ? translateOnboarding(lang, 'onboarding.recap.tomorrow', { next: String(numbers.streakDays + 1) })
+      : translateOnboarding(lang, 'onboarding.recap.calm');
+
+  return (
+    <CardFrame
+      step="recap"
+      title={translateOnboarding(lang, 'onboarding.recap.title')}
+      body={body}
+      illustration={<TrophyIllustration />}
+      actions={
+        <>
+          <PrimaryButton id="recap.explore" onClick={onExplore}>
+            {translateOnboarding(lang, 'onboarding.recap.explore')}
+          </PrimaryButton>
+          {onGame === undefined ? null : (
+            <SecondaryButton id="recap.game" onClick={onGame}>
+              {translateOnboarding(lang, 'onboarding.recap.game')}
+            </SecondaryButton>
+          )}
+          <SecondaryButton id="recap.done" onClick={onDone}>
+            {translateOnboarding(lang, 'onboarding.recap.done')}
+          </SecondaryButton>
+        </>
+      }
+    >
+      {numbers === null ? (
+        <RecapPlaceholder label={translateOnboarding(lang, 'onboarding.recap.loading')} />
+      ) : (
+        <RecapTiles tiles={recapTiles(host, numbers, session.pendingFriends)} />
+      )}
+    </CardFrame>
+  );
+}

@@ -92,4 +92,38 @@ class ProfileEditApplyTest {
 
         assertThat(result.bio).isEqualTo("first bio")
     }
+
+    @Test
+    fun `an empty string clears the bio and both secondary languages`() {
+        val result = ProfileEditApply.apply(
+            user(),
+            UpdateProfileRequest(bio = "", regionalLanguage = "", customDestinationLanguage = ""),
+        )
+
+        assertThat(result.bio).isNull()
+        assertThat(result.regionalLanguage).isNull()
+        assertThat(result.customDestinationLanguage).isNull()
+    }
+
+    @Test
+    fun `null keeps the bio and both secondary languages`() {
+        val result = ProfileEditApply.apply(user(), UpdateProfileRequest(displayName = "Alicia"))
+
+        assertThat(result.bio).isEqualTo("old bio")
+        assertThat(result.regionalLanguage).isEqualTo("en")
+        assertThat(result.customDestinationLanguage).isEqualTo("es")
+    }
+
+    @Test
+    fun `an empty string never clears a name or the primary language`() {
+        val result = ProfileEditApply.apply(
+            user(),
+            UpdateProfileRequest(firstName = "", lastName = "", displayName = "", systemLanguage = ""),
+        )
+
+        assertThat(result.firstName).isEqualTo("Al")
+        assertThat(result.lastName).isEqualTo("Ice")
+        assertThat(result.displayName).isEqualTo("Alice")
+        assertThat(result.systemLanguage).isEqualTo("fr")
+    }
 }

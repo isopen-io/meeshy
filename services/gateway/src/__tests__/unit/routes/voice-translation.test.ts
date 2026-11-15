@@ -36,18 +36,6 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-      message: { type: 'string' },
-      code: { type: 'string' },
-    },
-  },
-}));
-
 // `routes/voice/types` n'est plus REMPLACÉ, il est PROLONGÉ.
 //
 // Ce double listait trois schémas à la main « pour éviter les dépendances
@@ -129,9 +117,29 @@ function makeTranslationService(overrides: Record<string, any> = {}) {
   };
 }
 
+// #3624 — le chemin `attachmentId` vérifie désormais l'appartenance de
+// l'appelant à sa conversation (`ensureVoiceAttachmentAccessible`). Le défaut
+// simule un membre légitime, pour ne pas dévier les témoins de ce fichier
+// (qui portent sur d'autres branches) vers la garde d'appartenance.
+function makePrismaMock(overrides: Record<string, any> = {}) {
+  return {
+    messageAttachment: {
+      findUnique: jest.fn<any>().mockResolvedValue({ id: 'att-1', messageId: 'msg-1', uploadedBy: 'user-1' }),
+    },
+    message: {
+      findUnique: jest.fn<any>().mockResolvedValue({ conversationId: 'conv-1', deletedAt: null, expiresAt: null }),
+    },
+    participant: {
+      findFirst: jest.fn<any>().mockResolvedValue({ id: 'participant-1' }),
+    },
+    ...overrides,
+  };
+}
+
 type AppOptions = {
   audioService?: ReturnType<typeof makeAudioService>;
   translationService?: ReturnType<typeof makeTranslationService> | null;
+  prisma?: ReturnType<typeof makePrismaMock>;
 };
 
 // Chaque route voice exige désormais `fastify.authenticate` en `preHandler`
@@ -156,13 +164,14 @@ async function buildApp(opts: AppOptions = {}) {
   const translationService = Object.prototype.hasOwnProperty.call(opts, 'translationService')
     ? opts.translationService
     : makeTranslationService();
+  const prisma = opts.prisma ?? makePrismaMock();
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   // Inject a user so getUserId() returns a value
   app.addHook('preHandler', async (req) => {
     (req as any).user = { userId: 'user-1', role: 'user' };
   });
   decorateAuthenticate(app);
-  registerTranslationRoutes(app, audioService as any, translationService as any, PREFIX);
+  registerTranslationRoutes(app, audioService as any, translationService as any, PREFIX, prisma as any);
   await app.ready();
   return app;
 }
@@ -172,10 +181,11 @@ async function buildAppNoAuth(opts: AppOptions = {}) {
   const translationService = Object.prototype.hasOwnProperty.call(opts, 'translationService')
     ? opts.translationService
     : makeTranslationService();
+  const prisma = opts.prisma ?? makePrismaMock();
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   // No user injected → getUserId() returns null
   decorateAuthenticate(app);
-  registerTranslationRoutes(app, audioService as any, translationService as any, PREFIX);
+  registerTranslationRoutes(app, audioService as any, translationService as any, PREFIX, prisma as any);
   await app.ready();
   return app;
 }
@@ -861,5 +871,58 @@ describe('POST /api/v1/voice/transcribe — attachmentId', () => {
     expect(res.statusCode).toBe(500);
     const body = res.json();
     expect(body.success).toBe(false);
+  });
+});
+
+// ─── #17309 — l'audio envoyé en base64 ne se clone qu'à un adulte consentant ──
+
+describe('POST /voice/translate[/async] — clonage vocal à 18 ans révolus (#17309)', () => {
+  const CONSENTED = new Date('2026-01-01T00:00:00.000Z');
+  const MINOR = new Date(Date.UTC(new Date().getUTCFullYear() - 12, 0, 1));
+
+  function prismaFor(birthDate: Date | null) {
+    return makePrismaMock({
+      user: {
+        findUnique: jest.fn<any>().mockResolvedValue({
+          dataProcessingConsentAt: CONSENTED,
+          analyticsConsentAt: null,
+          voiceDataConsentAt: CONSENTED,
+          voiceProfileConsentAt: CONSENTED,
+          voiceCloningEnabledAt: CONSENTED,
+          birthDate,
+        }),
+      },
+      userPreferences: { findUnique: jest.fn<any>().mockResolvedValue(null) },
+    });
+  }
+
+  async function sentClone(path: '/translate' | '/translate/async', birthDate: Date | null, generateVoiceClone?: boolean) {
+    const audioService = makeAudioService();
+    const app = await buildApp({ audioService, prisma: prismaFor(birthDate) });
+    await app.inject({
+      method: 'POST',
+      url: `${PREFIX}${path}`,
+      payload: { audioBase64: 'dGVzdA==', targetLanguages: ['fr'], ...(generateVoiceClone === undefined ? {} : { generateVoiceClone }) },
+    });
+    await app.close();
+    const call = path === '/translate' ? audioService.translateSync : audioService.translateAsync;
+    return (call.mock.calls[0]?.[1] as { generateVoiceClone?: boolean } | undefined)?.generateVoiceClone;
+  }
+
+  it('clone par défaut la voix d’un adulte consentant', async () => {
+    expect(await sentClone('/translate', new Date('1990-06-15T00:00:00.000Z'))).toBe(true);
+  });
+
+  it('ne clone pas la voix d’un mineur, même demandé explicitement', async () => {
+    expect(await sentClone('/translate', MINOR, true)).toBe(false);
+    expect(await sentClone('/translate/async', MINOR, true)).toBe(false);
+  });
+
+  it('ne clone pas sans date de naissance (fail-closed)', async () => {
+    expect(await sentClone('/translate/async', null)).toBe(false);
+  });
+
+  it('un clone refusé par l’appelant reste refusé', async () => {
+    expect(await sentClone('/translate', new Date('1990-06-15T00:00:00.000Z'), false)).toBe(false);
   });
 });

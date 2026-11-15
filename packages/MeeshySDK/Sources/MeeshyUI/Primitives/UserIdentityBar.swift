@@ -64,6 +64,8 @@ public struct AvatarConfig {
     public let moodEmoji: String?
     public let presenceState: PresenceState?
     public let storyRingState: StoryRingState
+    /// Le contour équipé de la personne, la référence servie (#10946).
+    public let ring: ServedProfileDecorItem?
     public let onTap: (() -> Void)?
     public let onViewProfile: (() -> Void)?
     public let onViewStory: (() -> Void)?
@@ -76,6 +78,7 @@ public struct AvatarConfig {
         moodEmoji: String? = nil,
         presenceState: PresenceState? = nil,
         storyRingState: StoryRingState = .none,
+        ring: ServedProfileDecorItem? = nil,
         onTap: (() -> Void)? = nil,
         onViewProfile: (() -> Void)? = nil,
         onViewStory: (() -> Void)? = nil,
@@ -87,6 +90,7 @@ public struct AvatarConfig {
         self.moodEmoji = moodEmoji
         self.presenceState = presenceState
         self.storyRingState = storyRingState
+        self.ring = ring
         self.onTap = onTap
         self.onViewProfile = onViewProfile
         self.onViewStory = onViewStory
@@ -131,7 +135,7 @@ public struct UserIdentityBar: View {
     }
 
     public var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             if let avatar {
                 MeeshyAvatar(
                     name: name ?? "",
@@ -141,6 +145,7 @@ public struct UserIdentityBar: View {
                     storyState: avatar.storyRingState,
                     moodEmoji: avatar.moodEmoji,
                     presenceState: avatar.presenceState,
+                    ring: avatar.ring,
                     enablePulse: false,
                     onTap: avatar.onTap,
                     onViewProfile: avatar.onViewProfile,
@@ -149,8 +154,8 @@ public struct UserIdentityBar: View {
                 )
             }
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                HStack(spacing: MeeshySpacing.xs) {
                     ForEach(leadingPrimary) { element in
                         renderElement(element)
                     }
@@ -161,7 +166,7 @@ public struct UserIdentityBar: View {
                 }
 
                 if !leadingSecondary.isEmpty || !trailingSecondary.isEmpty {
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         ForEach(leadingSecondary) { element in
                             renderElement(element)
                         }
@@ -183,32 +188,32 @@ public struct UserIdentityBar: View {
         case .name:
             if let name {
                 Text(name)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
             }
 
         case .username(let value):
             Text(value)
-                .font(.system(size: 11))
-                .foregroundColor(theme.textSecondary)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
 
         case .roleBadge(let role):
             if role != .member {
                 Label {
                     Text(role.displayName)
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                 } icon: {
                     Image(systemName: role.icon)
-                        .font(.system(size: 11))
+                        .meeshyScaledFont(MeeshyIconSize.xxs)
                 }
-                .foregroundColor(roleBadgeColor(for: role))
+                .foregroundStyle(roleBadgeColor(for: role))
             }
 
         case .time(let value):
             Text(value)
-                .font(.system(size: 11, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(tintColor ?? theme.textSecondary)
 
         case .delivery(let status):
@@ -218,43 +223,39 @@ public struct UserIdentityBar: View {
             flagsView(codes: codes, active: active, onTap: onTap)
 
         case .translateButton(let action):
-            Image(systemName: "translate")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(MeeshyColors.brandPrimary)
-                .onTapGesture { action() }
-                .accessibilityLabel(String(localized: "userIdentity.translation.available", defaultValue: "Traduction disponible", bundle: .module))
+            translateButton(action)
 
         case .presence(let state):
             // Couleurs + libellé via le mapping central (PresenceStyle) :
             // vert online, orange away, gris idle. Règle 1/3/5 : `offline`
             // n'émet RIEN (gating central `showsIndicator`).
             if state.showsIndicator {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Circle()
                         .fill(state.dotColor)
                         .frame(width: 6, height: 6)
                     Text(state.localizedLabel)
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundColor(state.dotColor)
                 }
             }
 
         case .memberSince(let value):
             Text(value)
-                .font(.system(size: 11))
-                .foregroundColor(theme.textSecondary)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
 
         case .actionButton(let label, let action):
             Button(action: action) {
                 Text(label)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(MeeshyColors.indigo500)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
+                    .foregroundStyle(MeeshyColors.indigo500)
+                    .padding(.horizontal, MeeshySpacing.smPlus)
+                    .padding(.vertical, MeeshySpacing.xs)
                     .background(
                         Capsule()
-                            .fill(MeeshyColors.indigo500.opacity(0.15))
+                            .fill(MeeshyColors.indigo500.opacity(MeeshyOpacity.light))
                     )
             }
             .buttonStyle(.plain)
@@ -273,25 +274,25 @@ public struct UserIdentityBar: View {
                     }
                 }
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Text(label)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .medium))
+                        .meeshyScaledFont(8, weight: .medium)
                 }
-                .foregroundColor(MeeshyColors.indigo500)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
+                .foregroundStyle(MeeshyColors.indigo500)
+                .padding(.horizontal, MeeshySpacing.smPlus)
+                .padding(.vertical, MeeshySpacing.xs)
                 .background(
                     Capsule()
-                        .fill(MeeshyColors.indigo500.opacity(0.15))
+                        .fill(MeeshyColors.indigo500.opacity(MeeshyOpacity.light))
                 )
             }
 
         case .text(let value, _):
             Text(value)
-                .font(.system(size: 11))
-                .foregroundColor(theme.textSecondary)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
         }
     }
@@ -320,7 +321,7 @@ public struct UserIdentityBar: View {
         switch status {
         case .sending:
             Image(systemName: "clock")
-                .font(.system(size: 10))
+                .font(.system(size: MeeshyIconSize.xxs))
                 .foregroundColor(secondaryColor)
         case .invisible:
             // Spec §6.2 — optimistic applied locally, debounced for 200ms before
@@ -330,26 +331,26 @@ public struct UserIdentityBar: View {
         case .clock:
             // 200ms-5s without ACK: subtle clock glyph hinting "still sending".
             Image(systemName: "clock")
-                .font(.system(size: 10))
-                .foregroundColor(secondaryColor.opacity(0.7))
+                .font(.system(size: MeeshyIconSize.xxs))
+                .foregroundColor(secondaryColor.opacity(MeeshyOpacity.heavy))
         case .slow:
             // 5s-30s without ACK or auto-retry in flight: warmer "slow send"
             // indicator. Plain clock — spec 2026-07-08
             // (message-send-failure-retry-flow, règle 2) : aucun glyphe
             // évoquant un échec tant que l'état n'est pas `.failed`.
             Image(systemName: "clock")
-                .font(.system(size: 10))
-                .foregroundColor(MeeshyColors.warning)
+                .font(.system(size: MeeshyIconSize.xxs))
+                .foregroundStyle(MeeshyColors.warning)
         case .sent:
             Image(systemName: "checkmark")
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 .foregroundColor(secondaryColor)
         case .delivered:
             ZStack(alignment: .leading) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .regular))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .regular))
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .regular))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .regular))
                     .offset(x: 4)
             }
             .foregroundColor(secondaryColor)
@@ -357,26 +358,36 @@ public struct UserIdentityBar: View {
         case .read:
             ZStack(alignment: .leading) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .black))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .black))
                 Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .black))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .black))
                     .offset(x: 4)
             }
-            .foregroundColor(readColor)
+            .foregroundStyle(readColor)
             .frame(width: 17)
             .accessibilityLabel(String(localized: "userIdentity.read", defaultValue: "Lu", bundle: .module))
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 10))
-                .foregroundColor(MeeshyColors.error)
+                .font(.system(size: MeeshyIconSize.xxs))
+                .foregroundStyle(MeeshyColors.error)
         }
+    }
+
+    private func translateButton(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "translate")
+                .meeshyScaledFont(MeeshyIconSize.xxs, weight: .medium)
+                .foregroundStyle(MeeshyColors.brandPrimary)
+        }
+        .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .circle))
+        .accessibilityLabel(String(localized: "userIdentity.translation.available", defaultValue: "Traduction disponible", bundle: .module))
     }
 
     // MARK: - Flags View
 
     @ViewBuilder
     private func flagsView(codes: [String], active: String?, onTap: ((String) -> Void)?) -> some View {
-        HStack(spacing: 2) {
+        HStack(spacing: MeeshySpacing.xxs) {
             ForEach(codes, id: \.self) { code in
                 let display = LanguageDisplay.from(code: code)
                 let isActive = code == active
@@ -395,6 +406,11 @@ public struct UserIdentityBar: View {
                 .onTapGesture {
                     onTap?(code)
                 }
+                .accessibilityLabel(String(
+                    format: String(localized: "userIdentity.language.show.a11y", bundle: .module),
+                    display?.name ?? code))
+                .accessibilityAddTraits(onTap == nil ? [] : .isButton)
+                .accessibilityAction { onTap?(code) }
             }
         }
     }
@@ -470,10 +486,18 @@ extension UserIdentityBar {
 
         var contextMenuItems: [AvatarContextMenuItem] = []
         if let onViewStory, storyRingState != .none {
-            contextMenuItems.append(AvatarContextMenuItem(label: "Voir la story", icon: "play.circle.fill", action: onViewStory))
+            contextMenuItems.append(AvatarContextMenuItem(
+                label: String(localized: "avatar.menu.view_story", defaultValue: "Voir la story", bundle: .module),
+                icon: "play.circle.fill",
+                action: onViewStory
+            ))
         }
         if let onAvatarTap {
-            contextMenuItems.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.circle", action: onAvatarTap))
+            contextMenuItems.append(AvatarContextMenuItem(
+                label: String(localized: "avatar.menu.view_profile", defaultValue: "Voir le profil", bundle: .module),
+                icon: "person.circle",
+                action: onAvatarTap
+            ))
         }
 
         let avatarConfig = AvatarConfig(
@@ -534,7 +558,11 @@ extension UserIdentityBar {
         var contextMenuItems: [AvatarContextMenuItem]?
         if let onAvatarTap {
             contextMenuItems = [
-                AvatarContextMenuItem(label: "Voir le profil", icon: "person.circle", action: onAvatarTap)
+                AvatarContextMenuItem(
+                    label: String(localized: "avatar.menu.view_profile", defaultValue: "Voir le profil", bundle: .module),
+                    icon: "person.circle",
+                    action: onAvatarTap
+                )
             ]
         }
 
@@ -589,7 +617,11 @@ extension UserIdentityBar {
         var contextMenuItems: [AvatarContextMenuItem]?
         if let onAvatarTap {
             contextMenuItems = [
-                AvatarContextMenuItem(label: "Voir le profil", icon: "person.circle", action: onAvatarTap)
+                AvatarContextMenuItem(
+                    label: String(localized: "avatar.menu.view_profile", defaultValue: "Voir le profil", bundle: .module),
+                    icon: "person.circle",
+                    action: onAvatarTap
+                )
             ]
         }
 
@@ -642,7 +674,7 @@ extension UserIdentityBar {
         return UserIdentityBar(
             leadingPrimary: leading1,
             trailingPrimary: trailing1,
-            tintColor: isMe ? .white.opacity(0.7) : nil
+            tintColor: isMe ? .white.opacity(MeeshyOpacity.heavy) : nil
         )
     }
 }

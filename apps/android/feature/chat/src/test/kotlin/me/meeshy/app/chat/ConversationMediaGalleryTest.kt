@@ -1,13 +1,16 @@
 package me.meeshy.app.chat
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.ui.component.bubble.BubbleBlurRevealSpec
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.BubbleImage
+import me.meeshy.ui.component.viewer.ImageViewerAuthor
 import org.junit.Test
 
 class ConversationMediaGalleryTest {
 
-    private fun img(id: String, url: String) = BubbleImage(attachmentId = id, url = url)
+    private fun img(id: String, url: String, thumbnailUrl: String? = null, alt: String? = null) =
+        BubbleImage(attachmentId = id, url = url, thumbnailUrl = thumbnailUrl, alt = alt)
 
     private fun bubble(
         id: String,
@@ -16,18 +19,32 @@ class ConversationMediaGalleryTest {
         text: String = "",
         senderName: String? = null,
         createdAtIso: String? = null,
+        isOutgoing: Boolean = false,
+        authorId: String? = null,
+        avatarUrl: String? = null,
+        isViewOnce: Boolean = false,
+        isViewOnceOpenedByMe: Boolean = false,
+        isBlurred: Boolean = false,
+        exitOffer: me.meeshy.sdk.model.MessageExitOffer = me.meeshy.sdk.model.MessageExitOffer.Unrestricted,
     ) = BubbleContent(
         messageId = id,
         text = text,
-        isOutgoing = false,
+        isOutgoing = isOutgoing,
         isTranslated = false,
         originalText = null,
         senderName = senderName,
+        senderAvatarUrl = avatarUrl,
+        senderProfile = authorId?.let { me.meeshy.sdk.model.profile.ProfileSheetUser(userId = it, username = "u") },
         showSenderName = false,
         isEdited = false,
         isDeleted = isDeleted,
         createdAtIso = createdAtIso,
         images = images,
+        isViewOnce = isViewOnce,
+        isViewOnceOpenedByMe = isViewOnceOpenedByMe,
+        isBlurred = isBlurred,
+        exitOffer = exitOffer,
+        blurReveal = if (isViewOnce || isBlurred) BubbleBlurRevealSpec(isViewOnce = isViewOnce) else null,
     )
 
     @Test
@@ -491,5 +508,350 @@ class ConversationMediaGalleryTest {
 
         assertThat(gallery.senderNames).isEmpty()
         assertThat(gallery.createdAtIsos).isEmpty()
+    }
+
+    // #3878 — the thumbnail travels alongside the full-resolution URL, never
+    // replacing it: the viewer uses it only as a blurred backdrop while the
+    // sharp image loads.
+
+    @Test
+    fun an_images_thumbnail_travels_alongside_its_full_resolution_url() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1", thumbnailUrl = "t1")))),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.imageUrls).containsExactly("u1")
+        assertThat(gallery.thumbnailUrls).containsExactly("t1")
+    }
+
+    @Test
+    fun an_image_without_a_thumbnail_yields_null_never_a_fabricated_fallback() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1")))),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.thumbnailUrls).containsExactly(null as String?)
+    }
+
+    @Test
+    fun thumbnail_urls_align_positionally_with_image_urls_across_messages() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble("m1", listOf(img("a1", "u1", thumbnailUrl = "t1"), img("a2", "u2"))),
+                bubble("m2", listOf(img("a3", "u3", thumbnailUrl = "t3"))),
+            ),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.imageUrls).containsExactly("u1", "u2", "u3").inOrder()
+        assertThat(gallery.thumbnailUrls).containsExactly("t1", null, "t3").inOrder()
+    }
+
+    @Test
+    fun the_thumbnail_urls_list_is_always_the_same_length_as_the_image_urls() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1", thumbnailUrl = "t1"), img("a2", "u2")))),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.thumbnailUrls).hasSize(gallery.imageUrls.size)
+    }
+
+    @Test
+    fun an_empty_gallery_has_no_thumbnail_urls() {
+        val gallery = ConversationMediaGallery.of(emptyList(), messageId = "m1", imageIndex = 0)
+
+        assertThat(gallery.thumbnailUrls).isEmpty()
+    }
+
+    // #6813 — an attachment's own `alt` (author-authored accessibility
+    // description) travels alongside its URL, positionally aligned, distinct
+    // from the message's `caption` (its text body).
+
+    @Test
+    fun an_images_alt_text_travels_alongside_its_url() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1", alt = "A sunset over the bay")))),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.imageUrls).containsExactly("u1")
+        assertThat(gallery.altTexts).containsExactly("A sunset over the bay")
+    }
+
+    @Test
+    fun an_image_without_alt_text_yields_null_never_a_fabricated_fallback() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1")))),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.altTexts).containsExactly(null as String?)
+    }
+
+    @Test
+    fun alt_texts_align_positionally_with_image_urls_across_messages() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble("m1", listOf(img("a1", "u1", alt = "first"), img("a2", "u2"))),
+                bubble("m2", listOf(img("a3", "u3", alt = "third"))),
+            ),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.imageUrls).containsExactly("u1", "u2", "u3").inOrder()
+        assertThat(gallery.altTexts).containsExactly("first", null, "third").inOrder()
+    }
+
+    @Test
+    fun the_alt_texts_list_is_always_the_same_length_as_the_image_urls() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1", alt = "first"), img("a2", "u2")))),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.altTexts).hasSize(gallery.imageUrls.size)
+    }
+
+    @Test
+    fun an_empty_gallery_has_no_alt_texts() {
+        val gallery = ConversationMediaGallery.of(emptyList(), messageId = "m1", imageIndex = 0)
+
+        assertThat(gallery.altTexts).isEmpty()
+    }
+
+    @Test
+    fun a_view_once_neighbour_never_joins_the_series_opened_from_another_photo() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble("m1", listOf(img("a1", "u1"))),
+                bubble("m2", listOf(img("a2", "secret")), isViewOnce = true),
+                bubble("m3", listOf(img("a3", "u3"))),
+            ),
+            messageId = "m3",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.imageUrls).containsExactly("u1", "u3").inOrder()
+        assertThat(gallery.startIndex).isEqualTo(1)
+    }
+
+    @Test
+    fun a_blurred_neighbour_never_joins_the_series_opened_from_another_photo() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble("m1", listOf(img("a1", "blurred")), isBlurred = true),
+                bubble("m2", listOf(img("a2", "u2"))),
+            ),
+            messageId = "m2",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.imageUrls).containsExactly("u2")
+        assertThat(gallery.startIndex).isEqualTo(0)
+    }
+
+    @Test
+    fun the_protected_photo_opened_from_its_own_bubble_is_in_the_series_and_not_exportable() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble("m1", listOf(img("a1", "u1"))),
+                bubble("m2", listOf(img("a2", "secret")), isViewOnce = true),
+            ),
+            messageId = "m2",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.imageUrls).containsExactly("u1", "secret").inOrder()
+        assertThat(gallery.startIndex).isEqualTo(1)
+        assertThat(gallery.exportable).containsExactly(true, false).inOrder()
+        assertThat(gallery.shieldsCapture).isTrue()
+    }
+
+    @Test
+    fun a_view_once_already_opened_by_me_never_opens_again() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble("m1", listOf(img("a1", "u1"))),
+                bubble("m2", listOf(img("a2", "burnt")), isViewOnce = true, isViewOnceOpenedByMe = true),
+            ),
+            messageId = "m2",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.imageUrls).containsExactly("u1")
+    }
+
+    @Test
+    fun a_flame_photo_is_in_the_series_but_the_exit_offer_makes_it_not_exportable() {
+        val flame = me.meeshy.sdk.model.MessageExitOffer(
+            me.meeshy.sdk.model.ContentExitLaw.timedFlame(60), holdsBlur = false, isEncrypted = false,
+        )
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble("m1", images = listOf(img("a1", "https://x/1.jpg"))),
+                bubble("m2", images = listOf(img("a2", "https://x/2.jpg")), exitOffer = flame),
+            ),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.exportable).containsExactly(true, false).inOrder()
+        assertThat(gallery.shieldsCapture).isTrue()
+    }
+
+    @Test
+    fun ordinary_photos_are_all_exportable() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1"), img("a2", "u2")))),
+            messageId = "m1",
+            imageIndex = 1,
+        )
+
+        assertThat(gallery.exportable).containsExactly(true, true)
+        assertThat(gallery.shieldsCapture).isFalse()
+    }
+
+    @Test
+    fun each_page_carries_the_account_and_photo_of_its_author_for_the_presence_dot() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1")), senderName = "Ana", authorId = "u1", avatarUrl = "https://f/a.png")),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.authorIdentities).containsExactly(ImageViewerAuthor(userId = "u1", avatarUrl = "https://f/a.png"))
+    }
+
+    @Test
+    fun my_own_photo_carries_no_account_so_it_never_shows_a_dot() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1")), senderName = "Moi", authorId = "me", isOutgoing = true)),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.authorIdentities.single()?.userId).isNull()
+    }
+
+    @Test
+    fun a_photo_without_a_named_author_carries_no_face() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1")))),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.authorIdentities).containsExactly(null as ImageViewerAuthor?)
+    }
+
+    private object French : me.meeshy.sdk.lang.LanguageResolver.ContentLanguagePreferences {
+        override val systemLanguage: String? = "fr"
+        override val regionalLanguage: String? = null
+        override val customDestinationLanguage: String? = null
+    }
+
+    private fun pendingPhoto(preview: String?, effectFlags: Long) = me.meeshy.ui.component.bubble.BubbleContentBuilder.build(
+        message = me.meeshy.sdk.model.ApiMessage(
+            id = "cid-1",
+            conversationId = "c1",
+            senderId = "me",
+            attachments = listOf(
+                me.meeshy.sdk.model.ApiMessageAttachment(
+                    id = "upload-0",
+                    mimeType = "image/jpeg",
+                    thumbnailUrl = preview,
+                    effectFlags = effectFlags,
+                ),
+            ),
+        ),
+        currentUserId = "me",
+        preferences = French,
+        mediaBaseUrl = "https://gate.staging.meeshy.me/api/v1",
+        displayDensity = me.meeshy.ui.component.bubble.BubbleContentBuilder.DEFAULT_DISPLAY_DENSITY,
+    )
+
+    @Test
+    fun a_pending_photo_opens_the_viewer_on_its_local_preview() {
+        val preview = "file:///data/user/0/me.meeshy.app.debug/cache/pending-previews/upload-0.preview.jpg"
+
+        val gallery = ConversationMediaGallery.of(listOf(pendingPhoto(preview, effectFlags = 0L)), messageId = "cid-1", imageIndex = 0)
+
+        assertThat(gallery.imageUrls).containsExactly(preview)
+        assertThat(gallery.startIndex).isEqualTo(0)
+    }
+
+    @Test
+    fun a_pending_view_once_photo_keeps_the_viewer_closed() {
+        val viewOnce = me.meeshy.sdk.model.MessageEffectFlags.VIEW_ONCE
+
+        val gallery = ConversationMediaGallery.of(listOf(pendingPhoto(preview = null, effectFlags = viewOnce)), messageId = "cid-1", imageIndex = 0)
+
+        assertThat(gallery.isEmpty).isTrue()
+    }
+
+    private val pendingPreview = "file:///data/cache/pending-previews/cmid_p.preview.jpg"
+    private val sharpCopy = "file:///data/cache/pending-previews/cmid_p.sharp.jpg"
+
+    @Test
+    fun a_pending_photo_opens_on_its_sanitized_sharp_copy_over_its_preview() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", images = listOf(img("cmid_p", pendingPreview, thumbnailUrl = pendingPreview)), isOutgoing = true)),
+            messageId = "m1",
+            imageIndex = 0,
+            sharpOf = { if (it == "cmid_p") sharpCopy else null },
+        )
+
+        assertThat(gallery.imageUrls).containsExactly(sharpCopy)
+        assertThat(gallery.thumbnailUrls).containsExactly(pendingPreview)
+    }
+
+    @Test
+    fun a_pending_photo_whose_copy_is_not_ready_opens_on_its_preview() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", images = listOf(img("cmid_p", pendingPreview, thumbnailUrl = pendingPreview)))),
+            messageId = "m1",
+            imageIndex = 0,
+            sharpOf = { null },
+        )
+
+        assertThat(gallery.imageUrls).containsExactly(pendingPreview)
+    }
+
+    @Test
+    fun a_protected_pending_photo_never_asks_for_a_sharp_copy() {
+        val asked = mutableListOf<String>()
+        ConversationMediaGallery.of(
+            listOf(bubble("m1", images = listOf(img("cmid_p", pendingPreview)), isViewOnce = true)),
+            messageId = "m1",
+            imageIndex = 0,
+            sharpOf = { asked += it; sharpCopy },
+        )
+
+        assertThat(asked).isEmpty()
+    }
+
+    @Test
+    fun a_served_photo_never_asks_for_a_sharp_copy() {
+        val asked = mutableListOf<String>()
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", images = listOf(img("att_1", "https://gate.meeshy.me/a.jpg")))),
+            messageId = "m1",
+            imageIndex = 0,
+            sharpOf = { asked += it; sharpCopy },
+        )
+
+        assertThat(asked).isEmpty()
+        assertThat(gallery.imageUrls).containsExactly("https://gate.meeshy.me/a.jpg")
     }
 }

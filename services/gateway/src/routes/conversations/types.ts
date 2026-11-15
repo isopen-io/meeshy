@@ -18,6 +18,8 @@ export interface CreateConversationBody {
   participantIds?: string[];
   communityId?: string;
   identifier?: string;
+  plaintext?: boolean;
+  encryptionMode?: 'server' | 'hybrid' | 'e2ee';
 }
 
 export interface SendMessageBody {
@@ -33,9 +35,17 @@ export interface SendMessageBody {
   originalLanguage?: string;
   messageType?: 'text' | 'image' | 'file' | 'system';
   replyToId?: string;
+  /**
+   * #6164 — la PIÈCE NOMMÉE du message cité. Seul l'identifiant voyage : la
+   * NATURE est dérivée serveur du MIME relu, et l'appartenance au message cité
+   * est vérifiée avant toute écriture (`admitAttachmentReply`).
+   */
+  attachmentReplyTo?: { attachmentId: string };
   storyReplyToId?: string;
   // Forwarding fields
   forwardedFromId?: string;
+  /** #9914 — les pièces de `forwardedFromId` à recopier ; absent : tout le lot. */
+  forwardedAttachmentIds?: string[];
   forwardedFromConversationId?: string;
   // Diffusion à plusieurs destinataires (PAS un transfert) : copie serveur
   // des pièces jointes du message désigné, mêmes fichiers, sans marque de
@@ -51,6 +61,8 @@ export interface SendMessageBody {
   // Ephemeral/blurred/view-once message fields
   isBlurred?: boolean;
   expiresAt?: string;
+  /** Durée d'un éphémère, en secondes (#7451) — le décompte part de la RÉCEPTION. */
+  ephemeralDuration?: number;
   effectFlags?: number;
   isViewOnce?: boolean;
   maxViewOnceCount?: number;
@@ -58,6 +70,9 @@ export interface SendMessageBody {
   // Lieu partagé — champ dédié, jamais un `metadata` brut. Validé et écrit
   // dans `metadata.location` par `MessageProcessor.saveMessage`.
   location?: unknown;
+  // Sticker — même doctrine que `location` (#4823). Validé par
+  // `parseMessageSticker` et écrit dans `metadata.sticker`.
+  sticker?: unknown;
 }
 
 export interface MessagesQuery {
@@ -66,6 +81,25 @@ export interface MessagesQuery {
   before?: string; // messageId pour pagination
   after?: string; // ISO8601 watermark: messages créés strictement après cet instant (backfill incrémental local-first)
   around?: string; // messageId pour charger les messages autour d'un message spécifique
+  // #4177 — fil de réponses : filtre CÔTÉ SERVEUR aux réponses de CE message.
+  // Absent du schéma de route jusqu'ici, AJV (`removeAdditional`, réglage par
+  // défaut de Fastify) le retirait de `request.query` avant que le handler ne
+  // s'exécute — `ThreadRepliesLoader.swift` l'envoie depuis toujours en
+  // croyant, comme le dit son doc-comment, que le filtrage est déjà
+  // server-side. Il ne l'était pas : ouvrir un fil chargeait les 50 derniers
+  // messages de la conversation ENTIÈRE.
+  replyToId?: string;
+  // #4340 — la SOUS-COLLECTION lue : 'timeline' (défaut) | 'thread' | 'pinned' |
+  // 'search'. Comme `replyToId` avant elle, une clé absente de ce type ET du
+  // schéma de route est retirée en silence par AJV (`removeAdditional`) avant
+  // que le handler ne s'exécute : les trois vont ensemble, ou aucune n'arrive.
+  view?: string;
+  /** Requis par `view=thread` — synonyme de `replyToId`, qui reste accepté. */
+  parentId?: string;
+  /** Requis par `view=search` — cherché dans le contenu ET les traductions ; facultatif sur `view=media` (#8098). */
+  q?: string;
+  /** `view=media` seulement (#8098) : genres de l'index, séparés par des virgules. */
+  kinds?: string;
   include_reactions?: string;
   include_translations?: string;
   include_status?: string;

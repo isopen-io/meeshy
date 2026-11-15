@@ -22,10 +22,14 @@ public struct SoundLibraryPicker: View {
 
     @StateObject private var model: SoundLibraryPickerModel
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.composerFormatWording) private var formatWording
     @FocusState private var searchFocused: Bool
     @State private var renameDraft: String = ""
     /// Son dont on regarde la page. `nil` = aucune page ouverte.
     @State private var detailSound: APISound?
+    /// Retrait demandé depuis la page du son : la confirmation attend que la
+    /// feuille soit FERMÉE — présentée pendant sa fermeture, SwiftUI l'avalerait.
+    @State private var pendingRemoval: APISound?
 
     public init(service: SoundLibraryServiceProviding = SoundLibraryService.shared,
                 onPick: @escaping (APISound) -> Void,
@@ -37,12 +41,12 @@ public struct SoundLibraryPicker: View {
 
     public var body: some View {
         NavigationStack {
-            VStack(spacing: 12) {
+            VStack(spacing: MeeshySpacing.md) {
                 picker
                 searchField
                 content
             }
-            .padding(.top, 8)
+            .padding(.top, MeeshySpacing.sm)
             .navigationTitle(String(localized: "story.sound.library.title",
                                     defaultValue: "Choisir un son", bundle: .module))
             .navigationBarTitleDisplayMode(.inline)
@@ -57,7 +61,12 @@ public struct SoundLibraryPicker: View {
         // Sans ça, fermer la feuille pendant un aperçu laissait le son tourner
         // par-dessus le composer.
         .onDisappear { model.stopPreview() }
-        .sheet(item: $detailSound) { sound in
+        .sheet(item: $detailSound, onDismiss: {
+            if let sound = pendingRemoval {
+                pendingRemoval = nil
+                model.beginRemove(sound)
+            }
+        }) { sound in
             SoundDetailView(
                 sound: sound,
                 onUse: {
@@ -67,7 +76,13 @@ public struct SoundLibraryPicker: View {
                     detailSound = nil
                     onPick($0)
                 },
-                onClose: { detailSound = nil }
+                onClose: { detailSound = nil },
+                // Seulement sur « Mes sons » : la page d'un son d'autrui
+                // n'offre pas ce geste.
+                onRemove: model.canRemove ? { sound in
+                    pendingRemoval = sound
+                    detailSound = nil
+                } : nil
             )
         }
         .alert(String(localized: "story.sound.library.renameTitle",
@@ -94,6 +109,27 @@ public struct SoundLibraryPicker: View {
                         defaultValue: "Ce titre sera visible par tous ceux qui découvrent ce son. Laissez vide pour revenir au libellé par défaut.",
                         bundle: .module))
         }
+        // #9848 — confirmation du retrait. Le message dit combien de
+        // publications le jouent encore : elles continueront de le jouer.
+        .confirmationDialog(
+            String(localized: "story.sound.library.removeTitle",
+                   defaultValue: "Retirer ce son de votre bibliothèque ?", bundle: .module),
+            isPresented: Binding(get: { model.removing != nil },
+                                 set: { if !$0 { model.removing = nil } }),
+            titleVisibility: .visible,
+            presenting: model.removing
+        ) { sound in
+            Button(String(localized: "story.sound.library.removeConfirm",
+                          defaultValue: "Retirer", bundle: .module), role: .destructive) {
+                Task { await model.confirmRemove(sound) }
+            }
+            Button(String(localized: "story.composer.cancel",
+                          defaultValue: "Annuler", bundle: .module), role: .cancel) {
+                model.removing = nil
+            }
+        } message: { sound in
+            Text(SoundLibraryPickerModel.removalMessage(for: sound))
+        }
         .onReceive(model.$renaming.compactMap { $0 }) { sound in
             // Pré-remplir avec le titre courant : renommer, c'est corriger, pas
             // repartir de zéro.
@@ -109,11 +145,11 @@ public struct SoundLibraryPicker: View {
                         defaultValue: "Tendances", bundle: .module)).tag(Tab.trending)
         }
         .pickerStyle(.segmented)
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     private var searchField: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
             TextField(String(localized: "story.sound.library.search",
                              defaultValue: "Rechercher un son ou un auteur", bundle: .module),
@@ -129,17 +165,25 @@ public struct SoundLibraryPicker: View {
                                            defaultValue: "Effacer la recherche", bundle: .module))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
+                .fill(colorScheme == .dark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.black.opacity(MeeshyOpacity.faint))
         )
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     @ViewBuilder
     private var content: some View {
+        if model.removalFailed {
+            Label(String(localized: "story.sound.library.removeFailed",
+                         defaultValue: "Le son n'a pas pu être retiré. Réessayez.", bundle: .module),
+                  systemImage: "exclamationmark.triangle.fill")
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                .foregroundStyle(MeeshyColors.error)
+                .padding(.horizontal, MeeshySpacing.lg)
+        }
         if model.isLoading && model.sounds.isEmpty {
             Spacer(); ProgressView(); Spacer()
         } else if model.sounds.isEmpty {
@@ -166,6 +210,26 @@ public struct SoundLibraryPicker: View {
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
+                    // #9848 — retirer un de SES sons : balayage ou appui long (que
+                    // VoiceOver expose en actions). Les deux mènent à la même confirmation.
+                    // Sans `role: .destructive` : ce rôle fait animer la sortie
+                    // de la ligne AVANT la confirmation, puis la ramène si
+                    // l'utilisateur annule.
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        if model.canRemove {
+                            Button { model.beginRemove(sound) } label: {
+                                Label(removeLabel, systemImage: "trash")
+                            }
+                            .tint(MeeshyColors.error)
+                        }
+                    }
+                    .contextMenu {
+                        if model.canRemove {
+                            Button(role: .destructive) { model.beginRemove(sound) } label: {
+                                Label(removeLabel, systemImage: "trash")
+                            }
+                        }
+                    }
                 }
                 if model.canLoadMore {
                     ProgressView()
@@ -179,16 +243,21 @@ public struct SoundLibraryPicker: View {
         }
     }
 
+    private var removeLabel: String {
+        String(localized: "story.sound.library.remove",
+               defaultValue: "Retirer de ma bibliothèque", bundle: .module)
+    }
+
     private var emptyState: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "waveform")
-                .font(.system(size: 34, weight: .light))
+                .meeshyScaledFont(34, weight: .light)
                 .foregroundStyle(.secondary)
-            Text(model.emptyMessage)
+            Text(model.emptyMessage(for: formatWording))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, MeeshySpacing.xxxl)
         }
     }
 }
@@ -211,22 +280,22 @@ struct SoundLibraryRow: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             cover
             // Le bloc texte ouvre la page du son. Bouton `.plain` et non un
             // `onTapGesture` : sans lui la zone n'est ni focalisable ni
             // annoncée comme actionnable par VoiceOver.
             Button(action: onOpenDetail) {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(SoundLibraryPickerModel.displayTitle(for: sound))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                         .lineLimit(1)
                     metadataLine
                     // Gris discret, et seulement dans « Mes sons » sur un son
                     // NOMMÉ : ailleurs la date est déjà le libellé principal.
                     if let date = SoundLibraryPickerModel.secondaryDate(for: sound, isMine: canRename) {
                         Text(date)
-                            .font(.system(size: 11))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)
                     }
@@ -241,7 +310,7 @@ struct SoundLibraryRow: View {
             Spacer(minLength: 8)
             if canRename {
                 Button(action: onRename) {
-                    Image(systemName: "pencil").font(.system(size: 13, weight: .semibold))
+                    Image(systemName: "pencil").meeshyScaledFont(MeeshyIconSize.xs, weight: .semibold)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
@@ -251,7 +320,7 @@ struct SoundLibraryRow: View {
             Button(action: onPick) {
                 Text(String(localized: "story.sound.library.use",
                             defaultValue: "Utiliser", bundle: .module))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
@@ -280,7 +349,7 @@ struct SoundLibraryRow: View {
     /// ne déborde dans aucune des sept langues, et le libellé complet part en
     /// accessibilité — où il a sa place, contrairement à une ligne de liste.
     private var metadataLine: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             if let author = sound.authorLabel {
                 Text(author).lineLimit(1).layoutPriority(1)
             }
@@ -336,7 +405,7 @@ struct SoundLibraryRow: View {
                     .frame(width: 48, height: 48)
             } else {
                 Circle()
-                    .fill(colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.08))
+                    .fill(colorScheme == .dark ? Color.white.opacity(MeeshyOpacity.light) : Color.black.opacity(MeeshyOpacity.subtle))
                     .frame(width: 48, height: 48)
             }
 
@@ -352,7 +421,7 @@ struct SoundLibraryRow: View {
                             .tint(.white)
                     } else {
                         Image(systemName: isPlaying ? "stop.fill" : "play.fill")
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.system(size: MeeshyIconSize.sm, weight: .bold))
                             .foregroundStyle(.white)
                     }
                 }

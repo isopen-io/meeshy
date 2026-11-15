@@ -11,6 +11,11 @@ import MeeshySDK
 /// single `ThreadService` in one focused PR.
 @MainActor
 final class ThreadRepliesLoader {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     private let api: APIClientProviding
 
@@ -31,7 +36,7 @@ final class ThreadRepliesLoader {
         limit: Int = 50
     ) async throws -> [MeeshyMessage] {
         let response: OffsetPaginatedAPIResponse<[APIMessage]> = try await api.request(
-            endpoint: "/conversations/\(conversationId)/messages",
+            ConversationsEndpoint.byIdMessages(id: conversationId),
             method: "GET",
             body: nil,
             queryItems: [
@@ -39,8 +44,13 @@ final class ThreadRepliesLoader {
                 URLQueryItem(name: "limit", value: String(limit)),
             ]
         )
+        // Le prisme se HISSE hors du `.map` : `ReaderPrism.resolve(for:)` est
+        // une descente CALCULÉE qui construit un tableau neuf à chaque lecture
+        // (quatre insertions distinctes + une normalisation de locale). Écrite
+        // dans la fermeture, elle se payait cinquante fois par ouverture de fil.
+        let prism = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         return response.data.map {
-            $0.toMessage(currentUserId: currentUserId, currentUsername: currentUsername)
+            $0.toMessage(currentUserId: currentUserId, currentUsername: currentUsername, preferredLanguages: prism)
         }
     }
 }

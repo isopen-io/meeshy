@@ -7,9 +7,24 @@ import {
   UnifiedAuthRequest
 } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { createLegacyHybridRequest } from './utils/link-helpers';
-import { findShareLinkByIdentifier, getConversationMessages, countConversationMessages } from './utils/prisma-queries';
+import { historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
+import { isConversationClosed } from '../../services/messaging/conversationWriteAdmission';
+import {
+  findShareLinkByIdentifier,
+  getConversationMessages,
+  countConversationMessages,
+  findActiveUserParticipant,
+  findLinkMembers,
+  findLinkAnonymousParticipants,
+  countLinkParticipantsByType,
+  countOnlineAnonymousParticipants
+} from './utils/prisma-queries';
 import { formatMessageWithUnifiedSender } from './utils/message-formatters';
+import { allowedAttachmentKindsJsonSchema } from '@meeshy/shared/types/guest-attachment-kinds';
+import { guestAttachmentKindsOf } from '../../services/attachments/ContentSignature';
 import {
   conversationSummarySchema,
   messageSchema,
@@ -17,6 +32,7 @@ import {
   linkMemberSchema,
   linkAnonymousParticipantSchema
 } from './types';
+import { isGuestViewer, membersServedToViewer } from '../../services/guests/guestMemberVisibility';
 
 export async function registerRetrievalRoutes(fastify: FastifyInstance) {
   const authOptional = createUnifiedAuthMiddleware(fastify.prisma, {
@@ -80,6 +96,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
                     allowAnonymousMessages: { type: 'boolean' },
                     allowAnonymousFiles: { type: 'boolean' },
                     allowAnonymousImages: { type: 'boolean' },
+                    allowedAttachmentKinds: allowedAttachmentKindsJsonSchema,
                     requireAccount: { type: 'boolean' },
                     requireEmail: { type: 'boolean' },
                     requireNickname: { type: 'boolean' },
@@ -98,7 +115,14 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
                     totalMembers: { type: 'number' },
                     totalAnonymousParticipants: { type: 'number' },
                     onlineAnonymousParticipants: { type: 'number' },
-                    hasMore: { type: 'boolean' }
+                    hasMore: { type: 'boolean' },
+                    // #4165 — `members`/`anonymousParticipants` sont désormais
+                    // plafonnés (`LINK_PARTICIPANT_DISPLAY_CAP`) : ces deux
+                    // champs disent au client qu'il y a plus à charger, comme
+                    // `hasMore` le dit déjà pour `messages`. Additif : un client
+                    // qui les ignore voit exactement la même réponse qu'avant.
+                    membersHasMore: { type: 'boolean' },
+                    anonymousParticipantsHasMore: { type: 'boolean' }
                   }
                 },
                 members: { type: 'array', items: linkMemberSchema },
@@ -134,24 +158,47 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
       }
 
       // Aperçu public : la règle de repli, valable pour tout appelant qui n'est
-      // ni membre ni participant anonyme de CE lien.
-      const canPreview = shareLink.isActive && shareLink.allowViewHistory;
+      // ni membre ni participant anonyme de CE lien. #6740 — `isActive` et
+      // `allowViewHistory` gouvernaient déjà cet aperçu, mais laissaient
+      // passer un lien EXPIRÉ ou une conversation FERMÉE : l'un et l'autre
+      // sont désormais des conditions à part entière, jamais déduites de
+      // `isActive` (un lien peut rester actif après l'échéance de son propre
+      // `expiresAt`, et `isConversationClosed` porte une raison distincte de
+      // fermeture). `isConversationClosed` est la SSOT déjà posée pour
+      // l'écriture — même lecture, même décision, ici pour la LECTURE.
+      const linkNotExpired = !shareLink.expiresAt || shareLink.expiresAt > new Date();
+      const canPreview = shareLink.isActive
+        && shareLink.allowViewHistory
+        && linkNotExpired
+        && !isConversationClosed(shareLink.conversation);
 
-      // Vérifier les permissions d'accès
+      // Vérifier les permissions d'accès. `memberRow` est une lecture CIBLÉE
+      // (#4165), indexée sur (conversationId, userId) — indépendante de
+      // l'effectif de la conversation — qui remplace l'ancien scan de la
+      // relation `participants` chargée en bloc SANS `take`. Le cas nommé par
+      // l'audit est justement "meeshy" : le salon public, potentiellement la
+      // conversation la plus peuplée du produit, rechargée ENTIÈRE (avec
+      // chaque ligne `User`) à CHAQUE appel de cette route non authentifiée.
+      // `memberRow` sert la garde d'accès ET `userType` plus bas : un lecteur
+      // admis par le cas spécial "meeshy" sans être réellement participant
+      // reste `userType: 'anonymous'`, comme avant — `memberRow` ne porte PAS
+      // ce cas spécial, volontairement (même comportement que l'ancien double
+      // scan, qui ne l'appliquait qu'à `hasAccess`).
+      const memberRow = hybridRequest.isAuthenticated && hybridRequest.user
+        ? await findActiveUserParticipant(fastify.prisma, shareLink.conversationId, hybridRequest.user.id)
+        : null;
+
       let hasAccess = false;
 
       if (hybridRequest.isAuthenticated && hybridRequest.user) {
         if (shareLink.conversation.identifier === "meeshy") {
           hasAccess = true;
         } else {
-          const isMember = shareLink.conversation.participants.filter(p => p.type === "user").some(
-            member => member.userId === hybridRequest.user.id && member.isActive
-          );
           // Un compte connecté qui n'est pas encore membre voit le MÊME aperçu
           // qu'un visiteur déconnecté : être identifié ne doit jamais donner
           // moins d'accès que la navigation privée. Le client enchaîne sur la
           // modale « Rejoindre ».
-          hasAccess = isMember || canPreview;
+          hasAccess = memberRow !== null || canPreview;
         }
       } else if (hybridRequest.isAnonymous && hybridRequest.anonymousParticipant) {
         hasAccess = hybridRequest.anonymousParticipant.shareLinkId === shareLink.id;
@@ -168,14 +215,28 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
       // yielded `NaN`/negative skip/take on malformed input, with no upper cap.
       const { limit, offset } = validatePagination(offsetStr, limitStr, { defaultLimit: 50, maxLimit: 100 });
 
+      // Le plancher du LECTEUR — requête ciblée par la SSOT partagée
+      // (`loadReaderHistoryFloor`, déjà celle de `/conversations/:id/reactions`
+      // et `/conversations/:id/status`) plutôt qu'un scan de la relation
+      // chargée en bloc (#4165). Un visiteur en simple aperçu n'a pas de
+      // ligne : rien ne le borne, et c'est juste, `canPreview` exige déjà
+      // `allowViewHistory`.
+      const reader = historyReaderFromAuthContext(request.authContext);
+      const historyFloor = await loadReaderHistoryFloor(fastify.prisma, {
+        conversationId: shareLink.conversationId,
+        reader,
+        link: shareLink
+      });
+
       const messages = await getConversationMessages(
         fastify.prisma,
         shareLink.conversationId,
         limit,
-        offset
+        offset,
+        { historyFloor }
       );
 
-      const totalMessages = await countConversationMessages(fastify.prisma, shareLink.conversationId);
+      const totalMessages = await countConversationMessages(fastify.prisma, shareLink.conversationId, { historyFloor });
 
       const formattedMessages = messages.map(formatMessageWithUnifiedSender);
 
@@ -184,10 +245,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
       let currentUser: any = null;
 
       if (hybridRequest.isAuthenticated && hybridRequest.user) {
-        const isMember = shareLink.conversation.participants.filter(p => p.type === "user").some(
-          member => member.userId === hybridRequest.user.id && member.isActive
-        );
-        userType = isMember ? 'member' : 'anonymous';
+        userType = memberRow !== null ? 'member' : 'anonymous';
         currentUser = {
           id: hybridRequest.user.id,
           username: hybridRequest.user.username,
@@ -221,12 +279,83 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
         };
       }
 
-      const stats = {
+      // Cette route est CONSULTABLE SANS AUTHENTIFICATION (`onRequest:
+      // [authOptional]`) : `viewer` est `null` pour l'immense majorité des
+      // appels. Un participant anonyme n'a pas de `userId` — pas de ligne
+      // `User`, donc pas d'amitié ni de préférences à résoudre — seul le
+      // bypass ADMIN/BIGBOSS de la directive produit du 2026-08-25
+      // s'applique : « personne ne doit savoir ma dernière connexion si on
+      // n'est pas ami », et un visiteur d'un lien public n'est jamais un ami.
+      const viewer = viewerFromRequest(request);
+      // Le verdict d'une cible que le résolveur ne sait pas résoudre est CELUI
+      // DE LA LOI (`presenceMissingEntryPolicy` : `'reveal'` pour ADMIN/BIGBOSS,
+      // `'hide'` sinon), jamais un prédicat de rôle réécrit ici — « aucun site
+      // de service ne réécrit la boucle amitié/rôle ». Le site en tire les deux
+      // formes dont il a besoin : la POLITIQUE, qui gouverne la projection de
+      // chaque ligne, et le BOOLÉEN, qui décide si l'agrégat vaut une requête.
+      const anonymousPresence = presenceMissingEntryPolicy(viewer);
+      const anonymousPresenceVisible = anonymousPresence === 'reveal';
+
+      // BORNÉ (#4165). `shareLinkIncludeStructure` chargeait `participants`
+      // SANS `take` : sur "meeshy" (voir plus haut), cette route servait
+      // TOUTE la conversation à chaque appel — membres, participants anonymes,
+      // leur ligne `User`/session. `members`/`anonymousParticipantRows` sont
+      // désormais deux pages (`LINK_PARTICIPANT_DISPLAY_CAP`) ; les effectifs
+      // de `stats` sont des `.count()`, vrais quel que soit le plafond
+      // d'affichage — une longueur de tableau tronqué aurait menti. La requête
+      // de présence en ligne n'est posée QUE si `anonymousPresenceVisible` :
+      // c'est le même repli `0` qu'avant pour tout lecteur non-ADMIN.
+      const [members, anonymousParticipantRows, participantCounts, onlineAnonymousParticipants] = await Promise.all([
+        findLinkMembers(fastify.prisma, shareLink.conversationId),
+        findLinkAnonymousParticipants(fastify.prisma, shareLink.conversationId),
+        countLinkParticipantsByType(fastify.prisma, shareLink.conversationId),
+        anonymousPresenceVisible
+          ? countOnlineAnonymousParticipants(fastify.prisma, shareLink.conversationId)
+          : Promise.resolve(0)
+      ]);
+
+      // `isOnline` ET `lastActiveAt` tombent sous le MÊME prédicat : la
+      // directive retient les deux hors amitié / soi / ADMIN+, et le web
+      // (`participant-mapper.ts` → `StreamSidebar`) dérive une pastille de
+      // `lastActiveAt` via `getUserPresenceStatus` — masquer l'un en laissant
+      // l'autre ne masque rien. La valeur servie à l'ADMIN est la dernière
+      // activité RÉELLE (`Participant.lastActiveAt`, écrite par `StatusService`),
+      // jamais `joinedAt` : une date d'arrivée n'est pas une dernière activité.
+      const gatedAnonymousParticipants = anonymousParticipantRows.map(participant =>
+        applyPresenceVisibilityAsOffline(
+          {
+            id: participant.id,
+            username: participant.anonymousSession?.profile?.username ?? null,
+            firstName: participant.anonymousSession?.profile?.firstName ?? null,
+            lastName: participant.anonymousSession?.profile?.lastName ?? null,
+            displayName: participant.displayName,
+            avatar: participant.avatar,
+            language: participant.language,
+            isOnline: participant.isOnline,
+            lastActiveAt: participant.lastActiveAt,
+            joinedAt: participant.joinedAt,
+            canSendMessages: participant.permissions?.canSendMessages ?? false,
+            canSendFiles: participant.permissions?.canSendFiles ?? false,
+            canSendImages: participant.permissions?.canSendImages ?? false
+          },
+          undefined,
+          { onMissingEntry: anonymousPresence }
+        ));
+
+      // #10205 — un lecteur sans compte Meeshy ne lit ni les membres, ni les
+      // autres invités, ni aucun effectif : seuls les messages et leurs auteurs.
+      const viewerIsGuest = isGuestViewer(request.authContext);
+      const stats = viewerIsGuest ? { totalMessages, hasMore: totalMessages > offset + messages.length } : {
         totalMessages,
-        totalMembers: shareLink.conversation.participants.filter(p => p.type === "user").length,
-        totalAnonymousParticipants: shareLink.conversation.participants.filter(p => p.type === "anonymous").length,
-        onlineAnonymousParticipants: shareLink.conversation.participants.filter(p => p.type === "anonymous").filter(p => p.isOnline).length,
-        hasMore: totalMessages > offset + messages.length
+        totalMembers: participantCounts.totalMembers,
+        totalAnonymousParticipants: participantCounts.totalAnonymousParticipants,
+        onlineAnonymousParticipants,
+        hasMore: totalMessages > offset + messages.length,
+        // #4165 — critère 2 : de quoi demander la suite sur les deux listes
+        // qui viennent d'être plafonnées. Additif ; un client qui les ignore
+        // voit exactement la même réponse qu'avant.
+        membersHasMore: participantCounts.totalMembers > members.length,
+        anonymousParticipantsHasMore: participantCounts.totalAnonymousParticipants > gatedAnonymousParticipants.length
       };
 
       return sendSuccess(reply, {
@@ -247,6 +376,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
             allowAnonymousMessages: shareLink.allowAnonymousMessages,
             allowAnonymousFiles: shareLink.allowAnonymousFiles,
             allowAnonymousImages: shareLink.allowAnonymousImages,
+            allowedAttachmentKinds: guestAttachmentKindsOf(shareLink),
             requireAccount: shareLink.requireAccount,
             requireEmail: shareLink.requireEmail,
             requireNickname: shareLink.requireNickname,
@@ -260,7 +390,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
           }),
           messages: formattedMessages.reverse(),
           stats,
-          members: shareLink.conversation.participants.filter(p => p.type === "user").map(member => ({
+          members: (viewerIsGuest ? [] : members).map(member => ({
             id: member.id,
             role: member.role,
             joinedAt: member.joinedAt,
@@ -272,9 +402,12 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
               displayName: member.user.displayName,
               avatar: member.user.avatar,
               // Lien de partage consultable sans authentification : ne jamais
-              // divulguer la présence réelle des membres (joinedAt non sensible).
+              // divulguer la présence réelle des membres — ni `isOnline`, ni
+              // `lastActiveAt`, dont le web dérive une pastille. Le `joinedAt`
+              // (non sensible) reste servi sous son propre nom, un niveau plus
+              // haut ; il ne se déguise plus en dernière activité.
               isOnline: false,
-              lastActiveAt: member.joinedAt
+              lastActiveAt: null
             }
           })),
           // L'identité d'un participant anonyme vit dans
@@ -283,21 +416,10 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
           // et surtout pas de `canSend*` à plat. Le reste de l'enveloppe
           // `anonymousSession` (hash de jeton, IP, empreinte appareil) ne sort
           // JAMAIS de la gateway — d'où le `select` restreint à `profile`.
-          anonymousParticipants: shareLink.conversation.participants.filter(p => p.type === "anonymous").map(participant => ({
-            id: participant.id,
-            username: participant.anonymousSession?.profile?.username ?? null,
-            firstName: participant.anonymousSession?.profile?.firstName ?? null,
-            lastName: participant.anonymousSession?.profile?.lastName ?? null,
-            displayName: participant.displayName,
-            avatar: participant.avatar,
-            language: participant.language,
-            isOnline: participant.isOnline,
-            lastActiveAt: participant.joinedAt,
-            joinedAt: participant.joinedAt,
-            canSendMessages: participant.permissions?.canSendMessages ?? false,
-            canSendFiles: participant.permissions?.canSendFiles ?? false,
-            canSendImages: participant.permissions?.canSendImages ?? false
-          })),
+          // `isOnline` ET `lastActiveAt` sont gatés ci-dessus
+          // (`gatedAnonymousParticipants`) — `false` / `null` sauf pour un
+          // viewer ADMIN/BIGBOSS.
+          anonymousParticipants: membersServedToViewer(gatedAnonymousParticipants, request.authContext),
           currentUser
         });
 

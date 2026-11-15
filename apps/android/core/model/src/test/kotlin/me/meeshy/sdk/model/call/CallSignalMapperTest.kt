@@ -405,6 +405,19 @@ class CallSignalMapperTest {
     }
 
     @Test
+    fun `screenCaptureAlert reads the capture kind and the capturer (#16665)`() {
+        val alert = CallSignalMapper.screenCaptureAlert("""{"callId":"c1","participantId":"p2","userId":"u2","isCapturing":true,"kind":"screenshot"}""")
+        assertThat(alert?.userId).isEqualTo("u2")
+        assertThat(alert?.captureKind).isEqualTo(CallCaptureKind.SCREENSHOT)
+    }
+
+    @Test
+    fun `screenCaptureAlert without a kind speaks of a screen recording`() {
+        val alert = CallSignalMapper.screenCaptureAlert("""{"callId":"c1","isCapturing":true}""")
+        assertThat(alert?.captureKind).isEqualTo(CallCaptureKind.RECORDING)
+    }
+
+    @Test
     fun `screenCaptureAlert returns null for a frame missing the capture flag`() {
         assertThat(CallSignalMapper.screenCaptureAlert("""{"callId":"c1","participantId":"p2"}""")).isNull()
     }
@@ -493,5 +506,18 @@ class CallSignalMapperTest {
     @Test
     fun `mediaToggle is inert on malformed JSON rather than crashing`() {
         assertThat(CallSignalMapper.mediaToggle("not-json-at-all")).isNull()
+    }
+
+    // --- call:ice-servers-refreshed ----------------------------------------
+
+    @Test
+    fun `a TURN refresh keeps its call and its lifetime, a malformed frame is dropped`() {
+        val refresh = CallSignalMapper.iceServersRefreshed(
+            """{"callId":"c1","iceServers":[{"urls":"turn:relay","username":"u","credential":"p"}],"ttl":3600}""",
+        )
+        assertThat(refresh?.callId).isEqualTo("c1")
+        assertThat(refresh?.ttl).isEqualTo(3600)
+        assertThat(refresh?.iceServers?.single()?.username).isEqualTo("u")
+        assertThat(CallSignalMapper.iceServersRefreshed("not json")).isNull()
     }
 }

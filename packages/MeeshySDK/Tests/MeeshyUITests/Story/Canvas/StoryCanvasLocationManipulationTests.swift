@@ -28,7 +28,7 @@ final class StoryCanvasLocationManipulationTests: XCTestCase {
 
     func test_itemKind_ofALocationBadge_isLocation() {
         let canvas = makeCanvas([badge()])
-        XCTAssertEqual(canvas.itemKind(forId: "loc-1"), .location,
+        XCTAssertEqual(canvas.itemKind(forId: "loc-1"), .place,
                        "Sans cas dédié, la pastille n'est ni sélectionnable ni déplaçable.")
     }
 

@@ -1,0 +1,224 @@
+import SwiftUI
+import Combine
+import MeeshySDK
+import MeeshyUI
+
+struct TrackingLinksView: View {
+    private var theme: ThemeManager { ThemeManager.shared }
+    @StateObject private var viewModel = TrackingLinksViewModel()
+    @State private var showCreate = false
+
+    private let accent = MeeshyColors.trackingAccent
+    private let accentHex = MeeshyColors.trackingAccentHex
+
+    var body: some View {
+        LinksPage(
+            title: String(localized: "tracking.links.title", defaultValue: "Liens de suivi", bundle: .main),
+            accent: accent,
+            action: LinksPageAction(
+                label: String(localized: "tracking.links.create.a11y", defaultValue: "Créer un lien de suivi", bundle: .main),
+                perform: { showCreate = true }
+            )
+        ) {
+            VStack(spacing: MeeshySpacing.xl) {
+                SettingsSentence(text: String(localized: "tracking.links.orientation", defaultValue: "Un lien de suivi compte les clics et dit d'où ils viennent.", bundle: .main))
+                    .padding(.horizontal, MeeshySpacing.lg)
+                if let stats = viewModel.stats {
+                    trackingStatsOverview(stats).padding(.horizontal, MeeshySpacing.lg)
+                }
+                linksSection.padding(.horizontal, MeeshySpacing.lg)
+            }
+            .padding(.top, MeeshySpacing.sm).padding(.bottom, 40)
+        }
+        .refreshable { await viewModel.load() }
+        .task { await viewModel.load() }
+        .sheet(isPresented: $showCreate) {
+            CreateTrackingLinkView { link in
+                viewModel.links.insert(link, at: 0)
+                Task { await viewModel.loadStats() }
+            }
+        }
+    }
+
+    private func trackingStatsOverview(_ stats: TrackingLinkStats) -> some View {
+        HStack(spacing: MeeshySpacing.smPlus) {
+            trackingStatCard("\(stats.totalLinks)", label: String(localized: "tracking.links.stats.links", defaultValue: "Liens", bundle: .main), icon: "link")
+            trackingStatCard("\(stats.totalClicks)", label: String(localized: "tracking.links.stats.clicks", defaultValue: "Clics", bundle: .main), icon: "cursorarrow.click")
+            trackingStatCard("\(stats.uniqueClicks)", label: String(localized: "tracking.links.stats.uniques", defaultValue: "Uniques", bundle: .main), icon: "person.fill")
+            trackingStatCard("\(stats.activeLinks)", label: String(localized: "tracking.links.stats.active", defaultValue: "Actifs", bundle: .main), icon: "checkmark.circle")
+        }
+    }
+
+    private func trackingStatCard(_ value: String, label: String, icon: String) -> some View {
+        VStack(spacing: MeeshySpacing.xs) {
+            Image(systemName: icon)
+                .font(MeeshyFont.relative(MeeshyIconSize.md))
+                .foregroundColor(accent)
+                .accessibilityHidden(true)
+            Text(value)
+                .font(.title3.weight(.bold))
+                .foregroundStyle(theme.textPrimary)
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(theme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(MeeshySpacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                .fill(theme.surfaceGradient(tint: accentHex))
+                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: 1))
+        )
+        .accessibilityElement(children: .combine)
+    }
+
+    private var linksSection: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            Text(String(localized: "tracking.links.section.myLinks", defaultValue: "MES LIENS", bundle: .main)).font(.caption.weight(.semibold))
+                .foregroundColor(theme.textSecondary).kerning(0.8)
+                .accessibilityAddTraits(.isHeader)
+
+            if viewModel.isLoading {
+                ProgressView().frame(maxWidth: .infinity).padding(40)
+            } else if viewModel.links.isEmpty {
+                trackingEmptyState
+            } else {
+                VStack(spacing: MeeshySpacing.sm) {
+                    ForEach(viewModel.links) { link in
+                        NavigationLink(destination: TrackingLinkDetailView(link: link)) {
+                            trackingLinkRow(link)
+                        }.buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    // Empty state deferred to the shared design-system `EmptyStateView`
+    // (canonical icon+title+subtitle, combined VoiceOver label + spring appear)
+    // instead of a hand-rolled VStack — same dedup applied to the sibling
+    // `ShareLinksView` (178i). `compact` keeps it sized for this in-scroll
+    // section; the brand accent (trackingAccentHex) is preserved. The native
+    // icon scales with Dynamic Type (removes the frozen `.system(size: 40)`).
+    private var trackingEmptyState: some View {
+        EmptyStateView(
+            icon: "chart.bar.fill",
+            title: String(localized: "tracking.links.empty.title", defaultValue: "Aucun lien de suivi", bundle: .main),
+            actionLabel: String(localized: "tracking.links.create.a11y", defaultValue: "Créer un lien de suivi", bundle: .main),
+            accentColor: MeeshyColors.trackingAccentHex,
+            compact: true,
+            onAction: { showCreate = true }
+        )
+        .padding(.vertical, MeeshySpacing.xxl)
+    }
+
+    private func trackingLinkRow(_ link: TrackingLink) -> some View {
+        HStack(spacing: MeeshySpacing.md) {
+            ZStack {
+                Circle().fill((link.isActive ? accent : MeeshyColors.neutral500).opacity(MeeshyOpacity.light))
+                    .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
+                // Glyphe dans un cercle de dimension fixe 40×40 : figé (déborderait s'il scalait) + masqué VoiceOver (doctrine 86i)
+                Image(systemName: "chart.bar.fill")
+                    .font(MeeshyFont.fixedGlyph(MeeshyIconSize.md))
+                    .foregroundColor(link.isActive ? accent : MeeshyColors.neutral500)
+                    .accessibilityHidden(true)
+            }
+
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                Text(link.displayName).font(.subheadline.weight(.semibold))
+                    .foregroundStyle(theme.textPrimary).lineLimit(1)
+                HStack(spacing: MeeshySpacing.xsPlus) {
+                    Text(String(localized: "tracking.links.row.clicks", defaultValue: "\(link.totalClicks) clics", bundle: .main))
+                        .font(.caption).foregroundColor(accent)
+                    Text(String(localized: "tracking.links.row.uniques", defaultValue: "· \(link.uniqueClicks) uniques", bundle: .main))
+                        .font(.caption).foregroundColor(theme.textMuted)
+                    if let c = link.campaign {
+                        Text("· \(c)").font(.caption).foregroundStyle(theme.textMuted).lineLimit(1)
+                    }
+                }
+                Text(TrackingLinkRowDates.line(for: link))
+                    .font(.caption2).foregroundStyle(theme.textMuted).lineLimit(1)
+            }
+
+            Spacer()
+
+            MeeshyGlassButton(
+                systemImage: "doc.on.doc",
+                label: String(localized: "common.copyLink", defaultValue: "Copier le lien", bundle: .main),
+                size: .s36,
+                glyphTint: accent,
+                haptic: .none,
+                action: { LinksClipboard.copy(link.shortUrl) }
+            )
+
+            Image(systemName: "chevron.forward").font(MeeshyFont.relative(MeeshyIconSize.xs)).foregroundStyle(theme.textMuted)
+                .accessibilityHidden(true)
+        }
+        .padding(MeeshySpacing.mdPlus)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                .fill(theme.surfaceGradient(tint: accentHex))
+                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: 1))
+        )
+    }
+}
+
+/// Ce qui permet de reconnaître un lien de suivi dans la liste : la date de création et, s'il a servi, celle de son
+/// dernier clic (règle 7 de l'épure). Aucune date inventée : un lien jamais cliqué ne dit que sa création.
+enum TrackingLinkRowDates {
+    static func line(for link: TrackingLink, now: Date = Date(), locale: Locale = .current) -> String {
+        let created = String(
+            format: String(localized: "links.row.created", defaultValue: "Créé le %@", bundle: .main),
+            link.createdAt.formatted(.dateTime.day().month(.abbreviated).year().locale(locale))
+        )
+        let lastClick = link.lastClickedAt.map { last in
+            String(
+                format: String(localized: "tracking.links.row.lastClick", defaultValue: "Dernier clic %@", bundle: .main),
+                RelativeTimeFormatter.fullString(for: min(last, now), now: now, locale: locale)
+            )
+        }
+        return [created, lastClick].compactMap { $0 }.joined(separator: " · ")
+    }
+}
+
+@MainActor
+class TrackingLinksViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
+    @Published var links: [TrackingLink] = []
+    @Published var stats: TrackingLinkStats? = nil
+    @Published var isLoading = false
+
+    func load() async {
+        let cached = await CacheCoordinator.shared.trackingLinks.load(for: "list")
+        switch cached {
+        case .fresh(let data, _):
+            links = data
+            return
+        case .stale(let data, _):
+            links = data
+            await refreshFromAPI()
+        case .expired, .empty:
+            isLoading = links.isEmpty
+            await refreshFromAPI()
+        }
+    }
+
+    private func refreshFromAPI() async {
+        async let l = TrackingLinkService.shared.listLinks()
+        async let s = TrackingLinkService.shared.fetchStats()
+        links = (try? await l) ?? []
+        stats = try? await s
+        await bestEffort("trackingLinksView.trackingLinks.save", category: .cache) { try await CacheCoordinator.shared.trackingLinks.save(links, for: "list") }
+        isLoading = false
+    }
+
+    func loadStats() async {
+        stats = try? await TrackingLinkService.shared.fetchStats()
+    }
+}

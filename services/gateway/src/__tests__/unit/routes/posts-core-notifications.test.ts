@@ -65,6 +65,31 @@ jest.mock('../../../utils/sanitize.js', () => ({
   SecuritySanitizer: { sanitizeText: jest.fn((t: string) => t) },
 }));
 
+// #4147 — POST /posts / from-attachment / repost tirent leur plafond de
+// création d'un compteur PARTAGÉ qui lit Redis directement, fail-closed
+// (createSharedWriteRateLimitPreHandler, routes/posts/socialRateLimit.ts) :
+// sans ce double, `getCacheStore().getNativeClient()` rend `null` en test
+// (aucun REDIS_URL) et CHAQUE écriture de ce type serait refusée avant
+// d'atteindre ce que ce fichier vérifie — détail complet dans
+// unit/routes/posts/core.test.ts, premier fichier de la série à le poser.
+// `incr` répond toujours « premier appel » : ce fichier ne teste PAS le
+// plafond (son témoin dédié vit dans social-write-rate-limit.test.ts) —
+// juste un Redis DISPONIBLE.
+jest.mock('../../../services/CacheStore', () => ({
+  getCacheStore: () => ({
+    getNativeClient: () => ({
+      incr: async () => 1,
+      pexpire: async () => 1,
+      pttl: async () => -1,
+    }),
+  }),
+}));// #10497 — la republication par `POST /posts` passe la porte d'accès à la
+// source ; ce fichier ne teste que ce qui part APRÈS l'écriture.
+jest.mock('../../../services/posts/moderationHold', () => ({
+  ...(jest.requireActual('../../../services/posts/moderationHold') as object),
+  mayRepostSource: async (_prisma: unknown, _sourceId: string, _userId: string) => true,
+}));
+
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerCoreRoutes } from '../../../routes/posts/core';
@@ -81,7 +106,7 @@ function makeAuth() {
   return async (req: FastifyRequest) => {
     (req as any).authContext = {
       isAuthenticated: true,
-      registeredUser: { id: USER_ID, role: 'USER' },
+      registeredUser: { emailVerifiedAt: new Date(), id: USER_ID, role: 'USER' },
     };
   };
 }
@@ -101,6 +126,7 @@ const mockPostMentionDeleteMany = jest.fn<any>().mockResolvedValue({ count: 0 })
 
 function makePrisma() {
   return {
+    post: { findFirst: async () => null },
     postMention: {
       findMany: (...args: any[]) => mockPostMentionFindMany(...args),
       deleteMany: (...args: any[]) => mockPostMentionDeleteMany(...args),
@@ -200,7 +226,8 @@ describe('POST /posts — friend content fan-out uses fastify.notificationServic
       })
     );
     expect(notificationService.createFriendContentNotificationsBatch).toHaveBeenCalledWith(
-      expect.objectContaining({ excludeUserIds: [FRIEND_ID] })
+      // #14168 : un nommé n'est retiré de l'éventail que si la mention le prévient — le lot en juge.
+      expect.objectContaining({ excludeUserIds: [], mentionedUserIds: [FRIEND_ID] })
     );
 
     await app.close();
@@ -321,6 +348,44 @@ describe('PUT /posts/:postId — edit mentions use fastify.notificationService',
     expect(notificationService.createPostMentionNotificationsBatch).toHaveBeenCalledWith(
       expect.objectContaining({ mentionedUserIds: [FRIEND_ID] })
     );
+
+    await app.close();
+  });
+});
+
+describe('POST /posts avec repostOfId — les mentions se lisent sur le canvas ENREGISTRÉ (#10497)', () => {
+  it('une puce « Reposté de @auteur » retirée par le service ne nomme plus personne', async () => {
+    const { app, notificationService } = await buildApp();
+    mockExtractMentions.mockImplementation((text: unknown) => (String(text).includes('@ada') ? ['ada'] : []));
+    mockResolveUsernames.mockResolvedValue(new Map([['ada', { id: FRIEND_ID }]]));
+    mockCreatePost.mockResolvedValue({
+      id: POST_ID,
+      type: 'STORY',
+      visibility: 'FRIENDS',
+      visibilityUserIds: [],
+      storyEffects: { textObjects: [{ id: 'mine', text: 'Bonjour' }] },
+      createdAt: new Date('2026-07-20T10:00:00.000Z'),
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/posts',
+      payload: {
+        type: 'STORY',
+        visibility: 'FRIENDS',
+        repostOfId: '507f1f77bcf86cd799439044',
+        storyEffects: {
+          textObjects: [
+            { id: 'mine', text: 'Bonjour' },
+            { id: 'credit', text: 'Reposté de @ada', isLocked: true },
+          ],
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(mockExtractMentions.mock.calls.flat()).not.toContain('Reposté de @ada');
+    expect(notificationService.createPostMentionNotificationsBatch).not.toHaveBeenCalled();
 
     await app.close();
   });

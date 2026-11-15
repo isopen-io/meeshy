@@ -62,6 +62,18 @@ export interface CircuitBreakerConfig {
    * Fallback function when circuit is open
    */
   fallback?: () => any;
+
+  /**
+   * What the failure and OPEN lines carry besides the error — the state of
+   * the protected client, the event-loop lag (#8272).
+   */
+  diagnostics?: () => Record<string, unknown>;
+
+  /**
+   * At most one failure (or fail-fast) line per window; the next line counts
+   * the ones it swallowed. 0 logs every failure.
+   */
+  failureLogSampleMs?: number;
 }
 
 export interface CircuitBreakerStats {
@@ -82,6 +94,8 @@ export class CircuitBreaker {
   private lastFailureTime?: number;
   private lastSuccessTime?: number;
   private nextAttemptTime?: number;
+  private lastFailureLogAt?: number;
+  private suppressedFailureLogs = 0;
   private readonly config: Required<CircuitBreakerConfig>;
 
   constructor(config: CircuitBreakerConfig) {
@@ -90,7 +104,9 @@ export class CircuitBreaker {
       fallback: () => {
         throw new Error(`Circuit breaker "${config.name}" is OPEN`);
       },
-      ...config
+      ...config,
+      diagnostics: config.diagnostics ?? (() => ({})),
+      failureLogSampleMs: config.failureLogSampleMs ?? 0
     };
 
     enhancedLogger.info(`Circuit breaker initialized: ${this.config.name}`, {
@@ -109,18 +125,21 @@ export class CircuitBreaker {
       if (this.shouldAttemptReset()) {
         this.transitionToHalfOpen();
       } else {
-        enhancedLogger.warn(`Circuit breaker OPEN, failing fast: ${this.config.name}`);
+        if (this.shouldLogFailure()) {
+          enhancedLogger.warn(`Circuit breaker OPEN, failing fast: ${this.config.name}`, this.sampledContext());
+        }
         return this.config.fallback();
       }
     }
 
+    const startedAt = Date.now();
     try {
       // Execute with timeout
       const result = await this.executeWithTimeout(fn);
       this.onSuccess();
       return result;
     } catch (error) {
-      this.onFailure(error);
+      this.onFailure(error, Date.now() - startedAt);
       throw error;
     }
   }
@@ -156,7 +175,7 @@ export class CircuitBreaker {
   /**
    * Handle failed execution
    */
-  private onFailure(error: unknown) {
+  private onFailure(error: unknown, elapsedMs: number) {
     const now = Date.now();
     this.lastFailureTime = now;
 
@@ -177,14 +196,18 @@ export class CircuitBreaker {
       this.failureCount++;
     }
 
-    enhancedLogger.error(
-      `Circuit breaker failure: ${this.config.name}`,
-      error instanceof Error ? error : new Error(String(error)),
-      {
-        failureCount: this.failureCount,
-        state: this.state
-      }
-    );
+    if (this.shouldLogFailure()) {
+      enhancedLogger.error(
+        `Circuit breaker failure: ${this.config.name}`,
+        error instanceof Error ? error : new Error(String(error)),
+        {
+          failureCount: this.failureCount,
+          state: this.state,
+          elapsedMs,
+          ...this.sampledContext()
+        }
+      );
+    }
 
     if (this.state === CircuitState.HALF_OPEN) {
       this.transitionToOpen();
@@ -217,8 +240,33 @@ export class CircuitBreaker {
     enhancedLogger.warn(`Circuit breaker OPEN: ${this.config.name}`, {
       state: this.state,
       nextAttemptTime: new Date(this.nextAttemptTime).toISOString(),
-      failureCount: this.failureCount
+      failureCount: this.failureCount,
+      ...this.config.diagnostics()
     });
+  }
+
+  /**
+   * One line per `failureLogSampleMs` window; the others are counted, and the
+   * next line reports them (`suppressedSinceLastLog`).
+   */
+  private shouldLogFailure(): boolean {
+    const now = Date.now();
+    const sampled =
+      this.config.failureLogSampleMs > 0 &&
+      this.lastFailureLogAt !== undefined &&
+      now - this.lastFailureLogAt < this.config.failureLogSampleMs;
+    if (sampled) {
+      this.suppressedFailureLogs++;
+      return false;
+    }
+    this.lastFailureLogAt = now;
+    return true;
+  }
+
+  private sampledContext(): Record<string, unknown> {
+    const suppressedSinceLastLog = this.suppressedFailureLogs;
+    this.suppressedFailureLogs = 0;
+    return { ...this.config.diagnostics(), ...(suppressedSinceLastLog > 0 ? { suppressedSinceLastLog } : {}) };
   }
 
   /**
@@ -298,7 +346,7 @@ export class CircuitBreakerFactory {
   /**
    * Circuit breaker for Redis operations
    */
-  static createRedisBreaker(): CircuitBreaker {
+  static createRedisBreaker(diagnostics?: () => Record<string, unknown>): CircuitBreaker {
     return new CircuitBreaker({
       name: 'Redis',
       failureThreshold: 3,
@@ -306,10 +354,10 @@ export class CircuitBreakerFactory {
       resetTimeoutMs: 20000, // 20 seconds
       successThreshold: 3,
       timeout: 2000,
-      fallback: () => {
-        enhancedLogger.warn('Redis circuit breaker OPEN, falling back to in-memory');
-        return null;
-      }
+      // The breaker's sampled fail-fast line already says the circuit is OPEN.
+      fallback: () => null,
+      failureLogSampleMs: 10000,
+      ...(diagnostics ? { diagnostics } : {})
     });
   }
 

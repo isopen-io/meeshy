@@ -10,7 +10,7 @@ import Combine
 /// reconstruction des actions par ligne, diff Equatable) à ~120 Hz. Sur la
 /// liste de conversations d'un compte à ~100 conversations, ce churn
 /// nourrissait la famine du main thread derrière les kills
-/// `0x8BADF00D` scene-update (device 2026-06-10 → 2026-07-05).
+/// `0x8BADF00D` scene-update.
 ///
 /// Usage : la vue racine détient l'instance dans un `@State` (référence
 /// stable, PAS `@StateObject` — le but est justement que la racine ne

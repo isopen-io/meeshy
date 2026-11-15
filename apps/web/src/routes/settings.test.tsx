@@ -1,0 +1,664 @@
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { renderToStaticMarkup } from 'react-dom/server';
+import type { ReactElement } from 'react';
+
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+
+import type { AppPreferences } from '@/lib/api/app-preferences';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadDeviceTranslationCatalog } from '@/lib/i18n-device-translation-catalog';
+
+import {
+  AboutSection,
+  AccountSection,
+  AppearanceSection,
+  DataSection,
+  LogoutButton,
+  NotificationsSection,
+  PacksSection,
+  PrivacySection,
+  ProfileCard,
+  SettingsContent,
+  SettingsHeaderBar,
+  ToolsSection,
+  type PreferencesView,
+} from './settings-sections';
+
+/**
+ * LES RÉGLAGES DESSINÉS (#5563) — miroir `SettingsView.swift`, section pour
+ * section. Chaque section est un composant PUR (primitives en props) : ces
+ * témoins la rendent sans TanStack Query ni routeur, puis l'interrogent comme
+ * un lecteur d'écran le ferait — par rôle et par nom. Ils prouvent ce qu'aucune
+ * capture ne dit : où une rangée MÈNE, dans quel ÉTAT une bascule s'ANNONCE, et
+ * qu'aucun contrôle n'est offert quand il ne peut rien faire.
+ */
+
+beforeAll(async () => {
+  ensureHappyDomRegistered();
+  await loadDeviceTranslationCatalog('fr');
+});
+
+afterAll(async () => {
+  await releaseHappyDomIfRegistered();
+});
+
+const noop = () => undefined;
+
+const preferencesOf = (overrides: Partial<AppPreferences> = {}): AppPreferences => ({
+  theme: 'auto',
+  pushEnabled: true,
+  soundEnabled: true,
+  showOnlineStatus: true,
+  showLastSeen: true,
+  showReadReceipts: true,
+  showTypingIndicator: true,
+  hideProfileFromSearch: false,
+  acceptCallsFromNonContacts: true,
+  notifyContactsOnReturn: true,
+  contactActivityEnabled: true,
+  bringEnabled: true,
+  gameEnabled: true,
+  gamePhotoEnabled: true,
+  saveMediaToGallery: false,
+  ...overrides,
+});
+
+const ready = (overrides: Partial<AppPreferences> = {}): PreferencesView => ({ kind: 'ready', preferences: preferencesOf(overrides) });
+
+const dom = (element: ReactElement): HTMLElement => {
+  const host = document.createElement('div');
+  host.innerHTML = renderToStaticMarkup(element);
+  return host;
+};
+
+const switchNamed = (host: HTMLElement, name: string) => host.querySelector(`[role="switch"][aria-label="${name}"]`);
+
+const linkTo = (host: HTMLElement, href: string) => host.querySelector(`a[href="${href}"]`);
+
+describe('le haut de l’écran', () => {
+  /* #10634 — l'écran réservait sous son en-tête la hauteur du couloir des
+     disques flottants (122 px vides). `SettingsView` d'iOS commence sous son
+     en-tête (`.padding(.top, MeeshySpacing.sm)`) et les disques flottent
+     par-dessus, comme sur le profil : la carte de profil y commence aussi. */
+  test('le contenu commence sous l’en-tête, à la même cote que le profil, sans réserver le couloir', () => {
+    const root = dom(
+      <SettingsContent>
+        <p>contenu</p>
+      </SettingsContent>,
+    ).firstElementChild;
+    expect(root?.getAttribute('style') ?? '').not.toContain('padding-top');
+    expect(root?.className.split(' ')).toContain('pt-2');
+  });
+});
+
+describe('l’en-tête', () => {
+  test('un retour NOMMÉ vers les conversations, et le titre', () => {
+    const host = dom(<SettingsHeaderBar language="fr" />);
+    expect(host.querySelector('a[aria-label="Revenir aux conversations"]')?.getAttribute('href')).toBe('/chats');
+    expect(host.querySelector('h1')?.textContent).toBe('Réglages');
+  });
+
+  test('se dit dans la langue d’interface', async () => {
+    await loadInterfaceCatalog('en');
+    expect(dom(<SettingsHeaderBar language="en" />).querySelector('h1')?.textContent).toBe('Settings');
+  });
+});
+
+describe('la carte de profil', () => {
+  test('mène au profil, et montre le nom et l’identifiant', () => {
+    const host = dom(<ProfileCard language="fr" user={{ username: 'awa', displayName: 'Awa Diallo', avatar: null }} />);
+    const link = linkTo(host, '/me');
+    expect(link?.getAttribute('aria-label')).toBe('Mon profil');
+    expect(link?.textContent).toContain('Awa Diallo');
+    expect(link?.textContent).toContain('@awa');
+  });
+
+  test('sans session lue, elle mène quand même au profil', () => {
+    expect(linkTo(dom(<ProfileCard language="fr" user={null} />), '/me')?.textContent).toContain('Mon profil');
+  });
+});
+
+describe('le compte — seule la suppression reste offerte', () => {
+  /* #6715 : la page de suppression est portée dans la v2, à l'adresse que les
+     e-mails visent. La rangée y mène dans le MÊME onglet, sans légende « version
+     classique » — et, son adresse étant relative, chaque environnement ouvre SA
+     page : un testeur de staging n'atterrit plus sur la production (#6354). */
+  test('la suppression du compte ouvre sa page de la v2, dans le même onglet', () => {
+    const host = dom(<AccountSection language="fr" />);
+    const link = linkTo(host, '/account/deletion');
+    expect(link).not.toBeNull();
+    expect(link?.hasAttribute('target')).toBe(false);
+    expect(link?.textContent).toContain('Supprimer le compte');
+    expect(host.textContent).not.toContain('Version classique');
+    expect(host.textContent).not.toContain('Indisponible sur cet environnement');
+  });
+
+  /* Le legacy est décommissionné (#6702) : la sécurité a été MASQUÉE jusqu'à
+     son portage (loi 4) ; elle revient au volet des sessions (#6720). */
+  test('la sécurité revient (#6720) : elle ouvre le volet des sessions des réglages, jamais une adresse legacy', () => {
+    const host = dom(<AccountSection language="fr" />);
+    const row = host.querySelector<HTMLAnchorElement>('[data-settings-security]');
+    expect(row?.textContent).toContain('Sécurité');
+    expect(row?.getAttribute('href')).toBe('/settings?volet=securite');
+    expect(host.querySelectorAll('a')).toHaveLength(2);
+  });
+});
+
+describe('la confidentialité — les bascules que la passerelle obéit', () => {
+  const NAMES = ['Statut en ligne', 'Dernière connexion', 'Accusés de lecture', 'Indicateur de frappe'];
+
+  test('chaque bascule annonce son état réel', () => {
+    const host = dom(
+      <PrivacySection
+        language="fr"
+        view={ready({ showOnlineStatus: false, showTypingIndicator: false })}
+        disabled={false}
+        onToggle={noop}
+        onRetry={noop}
+      />,
+    );
+    expect(NAMES.map((name) => switchNamed(host, name)?.getAttribute('aria-checked'))).toEqual(['false', 'true', 'true', 'false']);
+  });
+
+  /* #8284 — le carnet synchronisé s'efface à la suppression du compte, jamais
+     par un geste à part : la confidentialité n'offre aucune rangée pour cela. */
+  test('aucune rangée n’efface le carnet d’adresses à la main', () => {
+    const host = dom(<PrivacySection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+    expect(host.textContent).not.toMatch(/carnet d’adresses/i);
+    expect(host.querySelector('[data-settings-address-book]')).toBeNull();
+  });
+
+  test('ce qu’une bascule COÛTE se lit sous elle — la réciprocité des accusés de lecture', () => {
+    const host = dom(<PrivacySection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+    expect(host.textContent).toContain('vous ne verrez pas non plus si vos messages ont été lus');
+  });
+
+  /* #8105 — la passerelle applique `hideProfileFromSearch` à toutes les
+     recherches par identifiant et à l'annonce « X a rejoint Meeshy » (#8104,
+     #8112) : la bascule a un effet, elle se montre. */
+  const DISCRETION = 'Masquer mon numéro et mon e-mail';
+
+  test('la discrétion de la recherche par identifiant se bascule, et écrit SA clé', () => {
+    const edits: Array<readonly [string, boolean]> = [];
+    const host = dom(
+      <PrivacySection
+        language="fr"
+        view={ready({ hideProfileFromSearch: true })}
+        disabled={false}
+        onToggle={(key, value) => edits.push([key, value])}
+        onRetry={noop}
+      />,
+    );
+    const toggle = switchNamed(host, DISCRETION);
+    expect(toggle?.getAttribute('aria-checked')).toBe('true');
+    expect(toggle?.getAttribute('data-setting')).toBe('hideProfileFromSearch');
+    expect(host.textContent).toContain('ne seront pas prévenus de votre arrivée');
+  });
+
+  test('la discrétion se dit dans chaque langue du catalogue, jamais par sa clé', async () => {
+    for (const language of ['en', 'es', 'de', 'it', 'pt', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      const host = dom(<PrivacySection language={language} view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+      const label = host.querySelector('[data-setting="hideProfileFromSearch"]')?.getAttribute('aria-label') ?? '';
+      expect(label).not.toContain('settings.');
+      expect(label).not.toBe(DISCRETION);
+    }
+  });
+
+  /* #8073 — la passerelle refuse de faire sonner un non-contact quand le
+     réglage est coupé : la bascule a un effet, elle se montre. */
+  test('les appels hors contacts se basculent, écrivent LEUR clé et disent ce qu’ils coûtent', () => {
+    const edits: Array<readonly [string, boolean]> = [];
+    const host = dom(
+      <PrivacySection
+        language="fr"
+        view={ready({ acceptCallsFromNonContacts: false })}
+        disabled={false}
+        onToggle={(key, value) => edits.push([key, value])}
+        onRetry={noop}
+      />,
+    );
+    const toggle = switchNamed(host, 'Appels hors contacts');
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    expect(toggle?.getAttribute('data-setting')).toBe('acceptCallsFromNonContacts');
+    expect(host.textContent).toContain('seuls vos amis peuvent vous faire sonner');
+  });
+
+  /* #8285 — la passerelle ne prévient les contacts du retour de X que si ce
+     réglage est ouvert (défaut : ouvert), et jamais si sa présence est masquée. */
+  const RETURN = 'Annoncer mon retour';
+
+  test('« prévenir mes contacts quand je reviens » se bascule, écrit SA clé et dit ce qu’elle montre', () => {
+    const host = dom(
+      <PrivacySection language="fr" view={ready({ notifyContactsOnReturn: false })} disabled={false} onToggle={noop} onRetry={noop} />,
+    );
+    const toggle = switchNamed(host, RETURN);
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    expect(toggle?.getAttribute('data-setting')).toBe('notifyContactsOnReturn');
+    expect(host.textContent).toContain('au plus une fois toutes les 3 heures');
+    expect(host.textContent).toContain('Jamais si votre statut en ligne est masqué.');
+  });
+
+  test('« prévenir mes contacts » se dit dans chaque langue du catalogue, jamais par sa clé', async () => {
+    for (const language of ['en', 'es', 'de', 'it', 'pt', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      const host = dom(<PrivacySection language={language} view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+      const toggle = host.querySelector('[data-setting="notifyContactsOnReturn"]');
+      const label = toggle?.getAttribute('aria-label') ?? '';
+      expect(label).not.toContain('settings.');
+      expect(label).not.toBe(RETURN);
+      expect(label).not.toBe('');
+      expect(host.textContent).not.toContain('settings.privacy.notify_contacts_on_return');
+    }
+  });
+
+  /* #14641 — « Sauvegarder média », au même endroit et sous le même nom
+     qu'iOS (`PrivacySettingsView.mediaSection`), synchronisé par
+     `/me/preferences` : il gouverne l'enregistrement des médias reçus. */
+  const SAVE_MEDIA = 'Sauvegarder média';
+
+  test('« Sauvegarder média » annonce son état et porte SA clé, synchronisée', () => {
+    const host = dom(<PrivacySection language="fr" view={ready({ saveMediaToGallery: false })} disabled={false} onToggle={noop} onRetry={noop} />);
+    const toggle = switchNamed(host, SAVE_MEDIA);
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    expect(toggle?.getAttribute('data-setting')).toBe('saveMediaToGallery');
+    const on = dom(<PrivacySection language="fr" view={ready({ saveMediaToGallery: true })} disabled={false} onToggle={noop} onRetry={noop} />);
+    expect(switchNamed(on, SAVE_MEDIA)?.getAttribute('aria-checked')).toBe('true');
+  });
+
+  test('« Sauvegarder média » se dit dans chaque langue du catalogue, avec le libellé d’iOS', async () => {
+    const IOS = { en: 'Save media', es: 'Guardar multimedia', de: 'Medien sichern', it: 'Salva contenuto', pt: 'Salvar mídia', ar: 'حفظ الوسائط' } as const;
+    for (const language of ['en', 'es', 'de', 'it', 'pt', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      const host = dom(<PrivacySection language={language} view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+      expect(host.querySelector('[data-setting="saveMediaToGallery"]')?.getAttribute('aria-label')).toBe(IOS[language]);
+    }
+  });
+
+  test('hors ligne, aucune bascule n’est actionnable', () => {
+    const host = dom(<PrivacySection language="fr" view={ready()} disabled onToggle={noop} onRetry={noop} />);
+    expect(NAMES.every((name) => switchNamed(host, name)?.hasAttribute('disabled'))).toBe(true);
+  });
+
+  test('sans cache : un squelette nommé, jamais une bascule inventée', () => {
+    const host = dom(<PrivacySection language="fr" view={{ kind: 'loading' }} disabled={false} onToggle={noop} onRetry={noop} />);
+    expect(host.querySelectorAll('[role="switch"]')).toHaveLength(0);
+    expect(host.querySelector('[aria-busy="true"]')?.textContent).toContain('Chargement des réglages');
+  });
+
+  test('en échec : une reprise, jamais une bascule inventée', () => {
+    const host = dom(<PrivacySection language="fr" view={{ kind: 'error' }} disabled={false} onToggle={noop} onRetry={noop} />);
+    expect(host.querySelectorAll('[role="switch"]')).toHaveLength(0);
+    expect([...host.querySelectorAll('button')].map((button) => button.textContent)).toContain('Réessayer');
+  });
+
+  /* Le legacy est décommissionné (#6702) : les options fines de
+     confidentialité n'ont plus d'adresse où mener. MASQUÉES — ni lien, ni
+     rangée inerte (loi 4). */
+  test('les options fines, non portées, ne sont pas offertes', () => {
+    const host = dom(<PrivacySection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+    expect(host.querySelectorAll('a')).toHaveLength(0);
+    expect(host.textContent).not.toContain("Plus d'options");
+  });
+});
+
+describe('les données — seul l’export reste offert', () => {
+  /* #6725 : l'export de données est porté dans la v2, à l'adresse dédiée
+     `/settings/data-export`. La rangée y mène dans le MÊME onglet. */
+  test('exporter mes données ouvre sa page de la v2, dans le même onglet', () => {
+    const host = dom(<DataSection language="fr" />);
+    const link = linkTo(host, '/settings/data-export');
+    expect(link).not.toBeNull();
+    expect(link?.hasAttribute('target')).toBe(false);
+    expect(link?.textContent).toContain('Exporter mes données');
+  });
+
+  /* Le legacy est décommissionné (#6702) : médias et messages, que la v2 ne
+     porte pas encore, n'ont plus aucune adresse où mener. MASQUÉS — ni lien,
+     ni rangée inerte (loi 4). #6723, #6724. */
+  test('médias et messages, non portés, ne sont pas offerts', () => {
+    const host = dom(<DataSection language="fr" />);
+    expect(host.textContent).not.toContain('Médias');
+    expect(host.textContent).not.toContain('Messages');
+    expect(host.querySelectorAll('a')).toHaveLength(1);
+  });
+});
+
+describe('les packs et téléchargements (#10149)', () => {
+  /* Demande porteur 2026-10-11 : la Boutique des stickers ET celle des cadres
+     du jeu. Un volet des réglages, sans route neuve (première peinture). */
+  test('la rangée ouvre le volet des packs des réglages', () => {
+    const host = dom(<PacksSection language="fr" />);
+    const row = host.querySelector<HTMLAnchorElement>('[data-settings-packs]');
+    expect(row?.getAttribute('href')).toBe('/settings?volet=packs');
+    expect(row?.textContent).toBe('Boutique');
+    expect(host.textContent).toContain('PACKS ET TÉLÉCHARGEMENTS');
+  });
+});
+
+describe('la galerie (#8308, #14641)', () => {
+  test('la section Données n’a plus de bascule LOCALE de galerie — le réglage est synchronisé, sous la confidentialité', () => {
+    const host = dom(<DataSection language="fr" />);
+    expect(host.querySelector('[data-setting="galleryAutoSave"]')).toBeNull();
+    expect(host.querySelector('[data-setting="saveMediaToGallery"]')).toBeNull();
+  });
+});
+
+describe('le téléchargement automatique des médias (#6333)', () => {
+  test('la section Données porte une politique par type, images puis vidéos, aux défauts d’iOS', () => {
+    const host = dom(<DataSection language="fr" />);
+    const row = host.querySelector('[data-settings-media-download]');
+    expect(row?.textContent).toContain('Téléchargement auto');
+    expect(row?.textContent).toContain('Sous 100 Ko');
+    const images = host.querySelector<HTMLSelectElement>('[data-media-download="image"]');
+    const videos = host.querySelector<HTMLSelectElement>('[data-media-download="video"]');
+    expect([...(images?.options ?? [])].map((o) => o.textContent)).toEqual(['Toujours', 'Wi-Fi + bon cellulaire', 'Wi-Fi uniquement', 'Jamais']);
+    expect(images?.querySelector('option[selected]')?.getAttribute('value')).toBe('wifiAndGoodCellular');
+    expect(videos?.querySelector('option[selected]')?.getAttribute('value')).toBe('wifiOnly');
+  });
+});
+
+describe('la traduction sur l’appareil (#9898)', () => {
+  test('sans réglage fourni, aucune bascule n’est offerte', () => {
+    expect(dom(<DataSection language="fr" />).querySelector('[data-setting="deviceTranslation"]')).toBeNull();
+  });
+
+  test('la bascule s’annonce avec son état ; la légende nomme les sept langues, la taille d’une paire et ce que le serveur garde', () => {
+    const on = dom(<DataSection language="fr" deviceTranslation={{ ready: true, enabled: true, onToggle: noop }} />);
+    const toggle = switchNamed(on, 'Traduire sur cet appareil');
+    expect(toggle?.getAttribute('aria-checked')).toBe('true');
+    expect(toggle?.getAttribute('data-setting')).toBe('deviceTranslation');
+    expect(toggle?.hasAttribute('disabled')).toBe(false);
+    for (const language of ['français', 'anglais', 'espagnol', 'portugais', 'allemand', 'italien', 'arabe']) expect(on.textContent).toContain(language);
+    expect(on.textContent).toContain('110 Mo');
+    expect(on.textContent).toContain('une seule fois');
+    expect(on.textContent).toContain('par le serveur');
+    expect(on.textContent).toContain('non chiffrées de bout en bout');
+
+    const off = dom(<DataSection language="fr" deviceTranslation={{ ready: true, enabled: false, onToggle: noop }} />);
+    expect(switchNamed(off, 'Traduire sur cet appareil')?.getAttribute('aria-checked')).toBe('false');
+  });
+
+  test('tant que l’accord n’est pas lu sur l’appareil, la bascule existe mais n’est pas actionnable', () => {
+    const host = dom(<DataSection language="fr" deviceTranslation={{ ready: false, enabled: false, onToggle: noop }} />);
+    expect(switchNamed(host, 'Traduire sur cet appareil')?.hasAttribute('disabled')).toBe(true);
+  });
+
+  test('la rangée est légendée : la légende est lue avec la bascule', () => {
+    const host = dom(<DataSection language="fr" deviceTranslation={{ ready: true, enabled: false, onToggle: noop }} />);
+    const toggle = switchNamed(host, 'Traduire sur cet appareil');
+    const described = (toggle?.getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .map((id) => host.querySelector(`[id="${id}"]`)?.textContent ?? '')
+      .join(' ');
+    expect(described).toContain('Les messages sont traduits ici');
+    expect(described).toContain('110 Mo');
+  });
+
+  test('chaque langue d’interface la dit, depuis son catalogue chargé à la demande', async () => {
+    for (const language of ['en', 'es', 'pt', 'de', 'it', 'ar'] as const) {
+      await Promise.all([loadInterfaceCatalog(language), loadDeviceTranslationCatalog(language)]);
+      const host = dom(<DataSection language={language} deviceTranslation={{ ready: true, enabled: true, onToggle: noop }} />);
+      const toggle = host.querySelector('[data-setting="deviceTranslation"]');
+      expect(toggle?.getAttribute('aria-label') ?? '').not.toBe('');
+      expect(host.textContent).toContain('110');
+    }
+  });
+});
+
+describe('l’apparence', () => {
+  const appearance = (props: Partial<Parameters<typeof AppearanceSection>[0]> = {}) =>
+    dom(
+      <AppearanceSection
+        language="fr"
+        theme="system"
+        onTheme={noop}
+        interfaceChoice={null}
+        onInterfaceLanguage={noop}
+        primaryLanguage="fr"
+        {...props}
+      />,
+    );
+
+  test('le thème : trois choix, un seul pressé', () => {
+    const host = appearance({ theme: 'dark' });
+    const pressed = [...host.querySelectorAll('button[aria-pressed]')].map((button) => [button.textContent, button.getAttribute('aria-pressed')]);
+    expect(pressed).toEqual([
+      ['Auto', 'false'],
+      ['Clair', 'false'],
+      ['Sombre', 'true'],
+    ]);
+  });
+
+  test('« Auto » est pressé quand l’appareil suit le système', () => {
+    const host = appearance({ theme: 'system' });
+    expect(host.querySelector('button[aria-pressed="true"]')?.textContent).toBe('Auto');
+  });
+
+  test('la langue de l’interface : « Automatique » puis les sept langues, chacune dans SA langue', () => {
+    const select = appearance().querySelector('select');
+    expect(select?.getAttribute('aria-label')).toBe("Langue de l'interface");
+    expect([...(select?.querySelectorAll('option') ?? [])].map((option) => [option.value, option.textContent])).toEqual([
+      ['', 'Automatique'],
+      ['fr', 'Français'],
+      ['en', 'English'],
+      ['es', 'Español'],
+      ['pt', 'Português'],
+      ['de', 'Deutsch'],
+      ['it', 'Italiano'],
+      ['ar', 'العربية'],
+    ]);
+  });
+
+  /* Lu sur l'attribut `selected` que le navigateur reçoit : happy-dom ne relit
+     pas `select.value` depuis un balisage injecté. La sélection VIVANTE est
+     mesurée dans un vrai navigateur (`scripts/check-settings.mjs`). */
+  test('le choix explicite est celui qui est sélectionné', () => {
+    const selectedOf = (host: HTMLElement) => [...host.querySelectorAll('option[selected]')].map((option) => option.getAttribute('value'));
+    expect(selectedOf(appearance({ interfaceChoice: 'de' }))).toEqual(['de']);
+    expect(selectedOf(appearance({ interfaceChoice: null }))).toEqual(['']);
+  });
+
+  test('les langues de traduction vivent dans le profil — une seule source, un seul écran', () => {
+    const link = linkTo(appearance({ primaryLanguage: 'es' }), '/me');
+    expect(link?.textContent).toContain('Langues de traduction');
+    expect(link?.textContent).toContain('Español');
+  });
+});
+
+describe('les notifications', () => {
+  test('les notifications poussées et leur son, dans leur état réel', () => {
+    const host = dom(<NotificationsSection language="fr" view={ready({ soundEnabled: false })} disabled={false} onToggle={noop} onRetry={noop} />);
+    expect(switchNamed(host, 'Notifications')?.getAttribute('aria-checked')).toBe('true');
+    expect(switchNamed(host, 'Sons')?.getAttribute('aria-checked')).toBe('false');
+  });
+
+  /* #8285 — la passerelle ne pousse « X était sur Meeshy récemment » qu'à
+     qui garde cette préférence ouverte (défaut : ouverte). */
+  const CONTACT_BACK = 'Retour d’un contact';
+
+  test('« quand un contact revient » se bascule et écrit SA clé', () => {
+    const host = dom(
+      <NotificationsSection language="fr" view={ready({ contactActivityEnabled: false })} disabled={false} onToggle={noop} onRetry={noop} />,
+    );
+    const toggle = switchNamed(host, CONTACT_BACK);
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    expect(toggle?.getAttribute('data-setting')).toBe('contactActivityEnabled');
+  });
+
+  test('« quand un contact revient » se dit dans chaque langue du catalogue, jamais par sa clé', async () => {
+    for (const language of ['en', 'es', 'de', 'it', 'pt', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      const host = dom(<NotificationsSection language={language} view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+      const label = host.querySelector('[data-setting="contactActivityEnabled"]')?.getAttribute('aria-label') ?? '';
+      expect(label).not.toContain('settings.');
+      expect(label).not.toBe(CONTACT_BACK);
+      expect(label).not.toBe('');
+    }
+  });
+
+  /* #16588 — l'interrupteur GLOBAL du Bring : coupé, personne ne peut plus
+     faire sonner ce compte (« Bring indisponible » chez l'émetteur). */
+  const BRING = 'Recevoir des Bring';
+
+  test('« Recevoir des Bring » se bascule, écrit SA clé et dit ce qu’il coupe', () => {
+    const host = dom(<NotificationsSection language="fr" view={ready({ bringEnabled: false })} disabled={false} onToggle={noop} onRetry={noop} />);
+    const toggle = switchNamed(host, BRING);
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    expect(toggle?.getAttribute('data-setting')).toBe('bringEnabled');
+    expect(host.textContent).toContain('même en silencieux');
+  });
+
+  test('« Recevoir des Bring » est activé par défaut', () => {
+    const host = dom(<NotificationsSection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+    expect(switchNamed(host, BRING)?.getAttribute('aria-checked')).toBe('true');
+  });
+
+  test('« Recevoir des Bring » se dit dans chaque langue du catalogue, jamais par sa clé', async () => {
+    for (const language of ['en', 'es', 'de', 'it', 'pt', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      const host = dom(<NotificationsSection language={language} view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+      const label = host.querySelector('[data-setting="bringEnabled"]')?.getAttribute('aria-label') ?? '';
+      expect(label).not.toContain('settings.');
+      expect(label).not.toBe(BRING);
+      expect(label).not.toBe('');
+    }
+  });
+
+  /* Le legacy est décommissionné (#6702) : les options fines de notification
+     n'ont plus d'adresse où mener. MASQUÉES — ni lien, ni rangée inerte. */
+  test('les options fines, non portées, ne sont pas offertes', () => {
+    const host = dom(<NotificationsSection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+    expect(host.querySelectorAll('a')).toHaveLength(0);
+    expect(host.textContent).not.toContain("Plus d'options");
+  });
+});
+
+/**
+ * AUCUN CONTRÔLE DES RÉGLAGES NE VISE UNE AUTRE ORIGINE (#6702, #6715, #6725)
+ * — le legacy est décommissionné, la v2 sert tout le domaine. Médias et
+ * messages n'ont plus d'adresse et restent masqués (#6723, #6724). La
+ * suppression de compte et l'export de données, eux, mènent désormais à leur
+ * page de la v2.
+ */
+describe('les réglages ne mènent plus au legacy', () => {
+  const everySection = () =>
+    dom(
+      <>
+        <ProfileCard language="fr" user={{ username: 'awa', displayName: 'Awa Diallo', avatar: null }} />
+        <AccountSection language="fr" />
+        <PrivacySection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />
+        <AppearanceSection language="fr" theme="system" onTheme={noop} interfaceChoice={null} onInterfaceLanguage={noop} primaryLanguage="fr" />
+        <NotificationsSection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />
+        <DataSection language="fr" />
+        <ToolsSection language="fr" showAdmin />
+        <AboutSection language="fr" version="2.0.2" />
+      </>,
+    );
+
+  test('aucun lien ne vise une autre origine, ni n’ouvre un nouvel onglet — la suppression de compte et l’export compris', () => {
+    const host = everySection();
+    const hrefs = [...host.querySelectorAll('a[href]')].map((link) => link.getAttribute('href') ?? '');
+
+    expect(hrefs.filter((href) => /^(?:[a-z]+:)?\/\//i.test(href))).toEqual([]);
+    expect(host.querySelectorAll('a[target]')).toHaveLength(0);
+    expect(hrefs).toContain('/account/deletion');
+    expect(hrefs).toContain('/settings/data-export');
+  });
+
+  /**
+   * Le témoin mesure les LIBELLÉS DE RANGÉE, pas une sous-chaîne du texte
+   * entier (#7286) : « Messages favoris », la première rangée « Outils »,
+   * CONTIENT « Messages » — chercher la sous-chaîne faisait rougir ce témoin
+   * pour une rangée légitime, sans rien dire de la rangée masquée qu'il garde
+   * (`settings.messages`, #6724).
+   */
+  test('aucune rangée masquée n’est rendue, même inerte', () => {
+    const rowLabels = [...everySection().querySelectorAll('a .text-body, button .text-body')].map((el) => (el.textContent ?? '').trim());
+    for (const label of ["Plus d'options", 'Médias', 'Messages']) {
+      expect({ label, present: rowLabels.includes(label) }).toEqual({ label, present: false });
+    }
+    expect(rowLabels).toContain('Exporter mes données');
+    expect(rowLabels).toContain('Messages favoris');
+  });
+});
+
+describe('les outils', () => {
+  test('la progression mène à son écran', () => {
+    expect(linkTo(dom(<ToolsSection language="fr" />), '/me/progression')?.textContent).toContain('Ma Légende');
+  });
+
+  test('les réglages du jeu (#9481) ont leur rangée, juste sous Progression', () => {
+    const rows = [...dom(<ToolsSection language="fr" />).querySelectorAll('a[href]')].map((a) => a.getAttribute('href'));
+    expect(linkTo(dom(<ToolsSection language="fr" />), '/me/progression/reglages')?.textContent).toContain('Jeu');
+    expect(rows.indexOf('/me/progression/reglages')).toBe(rows.indexOf('/me/progression') + 1);
+  });
+
+  /**
+   * **LA PORTE DES PUBLICATIONS ENREGISTRÉES** (#7286) — iOS la pose dans
+   * « Outils » (`SettingsView.swift`, `meeshyToolsSection`, `bookmark.fill`),
+   * juste après les messages favoris et avant les statistiques. Le web n'en
+   * avait AUCUNE : on enregistrait, et l'effet du geste restait invisible
+   * pour toujours à celui qui le faisait.
+   *
+   * Ce témoin ne mesure pas le libellé seul — il mesure que la rangée MÈNE
+   * quelque part. Une rangée sans adresse serait le contrôle qui ment (loi 4),
+   * exactement le défaut que l'issue nomme un cran plus bas.
+   */
+  test('les publications enregistrées ont leur rangée, et elle MÈNE à l’écran', () => {
+    const rangee = linkTo(dom(<ToolsSection language="fr" />), '/me/bookmarks');
+    expect(rangee?.textContent).toContain('Publications enregistrées');
+  });
+
+  test('elle arrive AVANT la progression — l’ordre d’iOS, pas l’ordre d’arrivée', () => {
+    const html = renderToStaticMarkup(<ToolsSection language="fr" />);
+    expect(html.indexOf('/me/bookmarks')).toBeGreaterThan(-1);
+    expect(html.indexOf('/me/bookmarks')).toBeLessThan(html.indexOf('/me/progression'));
+  });
+
+  /**
+   * **LA PORTE DES MESSAGES FAVORIS** (#7286) — la PREMIÈRE rangée « Outils »
+   * d'iOS (`SettingsView.swift`, `meeshyToolsSection` : `star.fill`, teinte
+   * `warning`, `settings.tools.starred`), avant les publications enregistrées.
+   * Elle MÈNE à l'écran : une rangée sans adresse serait le contrôle qui ment.
+   */
+  test('les messages favoris ont leur rangée, et elle MÈNE à l’écran', () => {
+    const rangee = linkTo(dom(<ToolsSection language="fr" />), '/me/starred-messages');
+    expect(rangee?.textContent).toContain('Messages favoris');
+    expect(rangee?.hasAttribute('data-settings-starred-messages')).toBe(true);
+  });
+
+  test('elle est la PREMIÈRE rangée des outils, avant les publications enregistrées — l’ordre d’iOS', () => {
+    const rows = [...dom(<ToolsSection language="fr" showAdmin />).querySelectorAll('a[href]')].map((a) => a.getAttribute('href'));
+    expect(rows[0]).toBe('/me/starred-messages');
+    expect(rows.indexOf('/me/starred-messages')).toBeLessThan(rows.indexOf('/me/bookmarks'));
+  });
+
+  test('son étoile porte la teinte `warning`, comme sur iOS', () => {
+    const icone = linkTo(dom(<ToolsSection language="fr" />), '/me/starred-messages')?.querySelector('svg')?.parentElement;
+    expect(icone?.getAttribute('style') ?? '').toContain('var(--color-warning)');
+  });
+});
+
+describe('à propos', () => {
+  test('conditions, politique de confidentialité et version', () => {
+    const host = dom(<AboutSection language="fr" version="2.0.2" />);
+    expect(linkTo(host, '/terms')?.textContent).toContain("Conditions d'utilisation");
+    expect(linkTo(host, '/privacy')?.textContent).toContain('Politique de confidentialité');
+    expect(host.textContent).toContain('2.0.2');
+  });
+});
+
+describe('la déconnexion', () => {
+  test('un bouton nommé, actionnable au repos', () => {
+    const button = dom(<LogoutButton language="fr" busy={false} onPress={noop} />).querySelector('button');
+    expect(button?.textContent).toContain('Déconnexion');
+    expect(button?.hasAttribute('disabled')).toBe(false);
+  });
+
+  test('pendant la déconnexion : désactivé, et il dit ce qui se passe', () => {
+    const button = dom(<LogoutButton language="fr" busy onPress={noop} />).querySelector('button');
+    expect(button?.hasAttribute('disabled')).toBe(true);
+    expect(button?.textContent).toContain('Déconnexion en cours...');
+  });
+});

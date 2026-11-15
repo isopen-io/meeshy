@@ -1,0 +1,233 @@
+import CoreGraphics
+import Foundation
+
+/// Les familles de la bande : un détail de TRI, plus une entrée du rail (#18639).
+/// L'ordre de déclaration EST l'ordre de la liste mêlée : Filtres · Effets · Cadres
+/// (#10311, porteur 2026-10-12).
+nonisolated enum ComposerLookFamily: String, CaseIterable, Hashable, Sendable {
+    case filters
+    case effects
+    case frames
+}
+
+/// Une case de la bande : un filtre, un effet ou un cadre — jamais un look
+/// entier ; la case MONTRE ce qu'elle produirait avec le reste du look en cours.
+nonisolated enum ComposerLookStripItem: Hashable, Sendable {
+    /// « Aucun » en tête de la liste mêlée (#17267) : la prise telle quelle.
+    case untouched
+    case filter(VideoFilterPreset)
+    case effect(CallFaceEffect)
+    case frame(ComposerPhotoFrame)
+}
+
+/// Ce que la bande REPLIÉE montre à la place du déclencheur (#9557).
+nonisolated enum ComposerLookStripTrigger: Equatable, Sendable {
+    /// Rien n'est choisi : un déclencheur simple, aucune trame peinte.
+    case shutter
+    /// Un look est choisi : sa miniature vivante, qui déclenche.
+    case thumbnail
+    /// On retouche : rien à déclencher — la miniature seule n'existe que
+    /// pendant la capture (#9567).
+    case hidden
+}
+
+/// **Ce que le défilement choisit** (#9566, porteur 2026-10-07 : « lorsqu'on
+/// scroll les effets ou frames celui qui est au milieu est automatiquement
+/// sélectionné »).
+///
+/// La case arrivée au centre est choisie — sauf pendant un défilement que la
+/// bande fait D'ELLE-MÊME (à l'ouverture, ou vers une case touchée) : les cases
+/// qu'elle traverse alors ne sont pas des choix, et y répondre la ferait courir
+/// après elle-même. Un tel défilement que le doigt interrompt se solde au repos.
+nonisolated struct ComposerLookStripFollow: Equatable, Sendable {
+
+    /// Ce que la bande fait en s'arrêtant.
+    enum Rest: Equatable, Sendable {
+        case nothing
+        /// Elle repose ailleurs que sur le choix : cette case est choisie.
+        case choose(Int)
+        /// Elle n'a pas bougé vers sa cible : elle la rejoint.
+        case rejoin(Int)
+    }
+
+    /// La case que la bande rejoint d'elle-même ; `nil` ⇒ elle suit le doigt.
+    private(set) var target: Int?
+    private(set) var centered: Int?
+    private(set) var hasBegun = false
+    /// Le centre a changé depuis que la cible est posée.
+    private var movedSinceTarget = false
+
+    /// La bande s'ouvre en tête, puis rejoint la case choisie.
+    mutating func begin(chosen: Int?) {
+        hasBegun = true
+        target = chosen
+        movedSinceTarget = false
+    }
+
+    /// `index` est arrivée au centre : la case à choisir, `nil` si rien ne change.
+    mutating func centered(on index: Int, chosen: Int?, selects: Bool) -> Int? {
+        let avant = centered
+        centered = index
+        guard let target else { return selects && index != chosen ? index : nil }
+        if let avant, avant != index { movedSinceTarget = true }
+        if target == index { self.target = nil }
+        return nil
+    }
+
+    /// Le choix vient de changer : la case où défiler, `nil` si elle est déjà
+    /// au centre — un choix né du défilement ne fait rien défiler.
+    mutating func chose(_ index: Int) -> Int? {
+        movedSinceTarget = false
+        guard index != centered else {
+            target = nil
+            return nil
+        }
+        target = index
+        return index
+    }
+
+    /// La bande s'est arrêtée. Une cible qu'elle n'a pas commencé à rejoindre
+    /// se rejoint — jamais « Aucun » choisi parce que la bande s'est ouverte en
+    /// tête ; un trajet que le doigt a coupé choisit la case où il s'arrête.
+    mutating func settled(chosen: Int?, selects: Bool) -> Rest {
+        if let target, !movedSinceTarget { return .rejoin(target) }
+        target = nil
+        movedSinceTarget = false
+        guard selects, let centered, centered != chosen else { return .nothing }
+        return .choose(centered)
+    }
+}
+
+/// **Les lois de la bande** (#9351, spec § 3.1 et § 5) — décision du porteur :
+/// les miniatures sont VIVANTES (le direct avant la prise, le média après),
+/// filtre et cadre se COMBINENT, et la case choisie est encadrée.
+nonisolated enum ComposerLookStripRule {
+
+    static let cellSize = CGSize(width: 56, height: 100)
+
+    /// **Sans filtre ni cadre, rien ne recopie la caméra en bas de l'écran**
+    /// (porteur 2026-10-07, #9557) : une miniature du viseur nu n'apprend rien.
+    /// La bande repliée devient un déclencheur simple ; en retouche, où rien ne
+    /// se déclenche, elle s'efface.
+    static func collapsedTrigger(look: ComposerPhotoLook, editing: Bool) -> ComposerLookStripTrigger {
+        guard !editing else { return .hidden }
+        return look.isUntouched ? .shutter : .thumbnail
+    }
+
+    /// La bande peint-elle des trames ? Ouverte, toujours ; repliée, seulement
+    /// la miniature d'un look choisi.
+    static func paintsLive(look: ComposerPhotoLook, familyOpen: Bool) -> Bool {
+        familyOpen || !look.isUntouched
+    }
+    static let spacing: CGFloat = 8
+    static var pitch: CGFloat { cellSize.width + spacing }
+    /// **Chaque case se nomme sous elle, AVANT d'être choisie** (#18639) : la choisie ne gagne que le gras et deux points.
+    static func nameSize(chosen: Bool) -> CGFloat { chosen ? 11 : 9 }
+    static let nameHeight: CGFloat = 18
+    /// La rangée des puces qui trient la bande (#17267) : une cible de 44 pt.
+    static let chipsHeight: CGFloat = 44
+    /// La colonne posée au niveau de la bande : son bas sur le bas des cases
+    /// (porteur 2026-10-12).
+    static var railBottomInset: CGFloat { nameHeight + ComposerTriggerOutline.outset }
+
+    /// **UNE entrée de looks au rail, « Effets »** (#18639) :
+    /// elle ouvre la liste mêlée, que les puces trient (Tout · Filtres · Cadres ·
+    /// Effets image · Effets visage · ambiances) ; la retoucher la replie.
+    static let railFamily: ComposerLookFamily = .effects
+
+    /// Chaque entrée de la colonne est une cible de 44 pt.
+    static let railEntryHeight: CGFloat = 44
+
+    /// La case sous le milieu de la bande, pour un défilement de `scrolled`
+    /// points depuis la première ; les rebonds restent sur les bords.
+    static func centeredIndex(scrolled: CGFloat, count: Int) -> Int? {
+        guard count > 0 else { return nil }
+        return min(count - 1, max(0, Int((scrolled / pitch).rounded())))
+    }
+
+    /// « Aucun » en tête, puis la famille dans son ordre — chaque cadre une fois.
+    /// Calculée UNE fois : le défilement relit la bande à chaque image.
+    static func items(_ family: ComposerLookFamily) -> [ComposerLookStripItem] {
+        switch family {
+        case .filters: return filterItems
+        case .effects: return effectItems
+        case .frames: return frameItems
+        }
+    }
+
+    private static let filterItems = ComposerPhotoLookRule.filters.map { ComposerLookStripItem.filter($0) }
+
+    /// Les effets de l'appel, « Aucun » en tête (#10311).
+    private static let effectItems = CallFaceEffect.allCases.map { ComposerLookStripItem.effect($0) }
+
+    private static let frameItems: [ComposerLookStripItem] = {
+        let cadres = ComposerLiveLookRule.chips()
+            .flatMap { ComposerLiveLookRule.frames(for: $0) }
+            .filter { $0 != ComposerPhotoFrame.none }
+        let uniques = cadres.reduce(into: (vus: Set<ComposerPhotoFrame>(), ordre: [ComposerPhotoFrame]())) { acc, cadre in
+            if acc.vus.insert(cadre).inserted { acc.ordre.append(cadre) }
+        }.ordre
+        return [.frame(.none)] + uniques.map { ComposerLookStripItem.frame($0) }
+    }()
+
+    /// **Filtre, effet et cadre se COMBINENT** : choisir l'un garde les autres. Une
+    /// AUTRE ambiance repart pleine ; le pavé chaleur × contraste reste.
+    static func look(of item: ComposerLookStripItem, combinedWith current: ComposerPhotoLook) -> ComposerPhotoLook {
+        switch item {
+        case .untouched: return ComposerPhotoLook()
+        case .filter(let preset):
+            return ComposerPhotoLook(filter: preset, frame: current.frame, effect: current.effect,
+                                     tuning: preset == current.filter ? current.tuning : current.tuning.with(intensity: 1))
+        case .effect(let effet):
+            return ComposerPhotoLook(filter: current.filter, frame: current.frame, effect: effet, tuning: current.tuning)
+        case .frame(let cadre):
+            return ComposerPhotoLook(filter: current.filter, frame: cadre, effect: current.effect, tuning: current.tuning)
+        }
+    }
+
+    /// La case est-elle la moitié choisie du look ? C'est elle qu'on encadre.
+    static func isChosen(_ item: ComposerLookStripItem, in look: ComposerPhotoLook) -> Bool {
+        switch item {
+        case .untouched: return look.isUntouched
+        case .filter(let preset): return look.filter == preset
+        case .effect(let effet): return look.effect == effet
+        case .frame(let cadre): return look.frame == cadre
+        }
+    }
+
+    static func chosenIndex(in items: [ComposerLookStripItem], look: ComposerPhotoLook) -> Int? {
+        items.firstIndex { isChosen($0, in: look) }
+    }
+
+    /// Les cases dont un pixel se voit, pour un défilement `offset` sur `width` points.
+    static func visibleRange(offset: CGFloat, width: CGFloat, count: Int) -> ClosedRange<Int>? {
+        guard width > 0, count > 0 else { return nil }
+        let premiere = max(0, Int((offset / pitch).rounded(.down)))
+        let derniere = min(count - 1, Int(((offset + width) / pitch).rounded(.down)))
+        return premiere <= derniere ? premiere...derniere : nil
+    }
+
+    /// **Les cases peintes** : visibles ±1, au plus `cells` (palier thermique), les
+    /// plus proches du centre d'abord, la choisie dès qu'elle est à portée. En
+    /// enregistrement, la choisie seule — c'est elle qui déclenche, la bande
+    /// la garde à l'écran. `visibleRange` compte l'espacement qui suit une case
+    /// comme sien ; le retrait de bord de la bande est à l'appelant.
+    static func paintedIndices(visible: ClosedRange<Int>?, count: Int, cells: Int, chosen: Int?,
+                               recording: Bool) -> [Int] {
+        guard cells > 0, count > 0 else { return [] }
+        if recording { return chosen.map { [$0] } ?? [] }
+        guard let visible else { return [] }
+        let bas = max(0, visible.lowerBound - 1)
+        let haut = min(count - 1, visible.upperBound + 1)
+        guard bas <= haut else { return [] }
+        let centre = Double(visible.lowerBound + visible.upperBound) / 2
+        let parProximite = (bas...haut).sorted { gauche, droite in
+            let ecartGauche = abs(Double(gauche) - centre)
+            let ecartDroite = abs(Double(droite) - centre)
+            return ecartGauche == ecartDroite ? gauche < droite : ecartGauche < ecartDroite
+        }
+        let proches = Array(parProximite.prefix(cells))
+        guard let chosen, (bas...haut).contains(chosen), !proches.contains(chosen) else { return proches.sorted() }
+        return (Array(proches.dropLast()) + [chosen]).sorted()
+    }
+}

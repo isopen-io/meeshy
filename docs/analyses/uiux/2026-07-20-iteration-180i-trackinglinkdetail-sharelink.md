@@ -1,7 +1,7 @@
 # Iteration 180i — `TrackingLinkDetailView` : partage natif `ShareLink`
 
 **Date** : 2026-07-20
-**Écran** : `apps/ios/Meeshy/Features/Main/Views/TrackingLinkDetailView.swift`
+**Écran** : `apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView.swift`
 **Type** : HIG / composant natif / dette technique
 **Piste** : iOS (suffixe `i`)
 

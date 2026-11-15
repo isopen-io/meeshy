@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lot: lecture-moteur-partage-carte-systeme-et-caches (#15486) — « précédent » de la carte de lecture du système ; iOS n'a pas de clé pour ce bouton (MPRemoteCommand système). -->
+<resources>
+    <string name="voice_playback_previous">السابق</string>
+</resources>

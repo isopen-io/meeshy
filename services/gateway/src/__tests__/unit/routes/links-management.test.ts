@@ -1,3 +1,17 @@
+/**
+ * Unit tests for links management routes (management.ts).
+ * Tests PATCH /links/:linkId — la seule porte de mise à jour d'un lien.
+ *
+ * `PUT /links/:conversationShareLinkId` a été RETIRÉE (#4188) : jumelle du
+ * `PATCH` exigeant ADMIN là où celui-ci exige MODERATOR. Le seuil EFFECTIF
+ * d'une règle est celui de sa porte la plus permissive : cette ADMIN était
+ * DÉCORATIVE. Aucun client n'émettait de `PUT` vers `/links` (web
+ * `link-edit-modal.tsx` → `PATCH`, iOS `ShareLinkService.toggleLink` →
+ * `api.patch`, Android `LinkApi.kt` → `@PATCH`).
+ *
+ * @jest-environment node
+ */
+
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import Fastify from 'fastify';
 import { z } from 'zod';
@@ -19,18 +33,6 @@ jest.mock('../../../middleware/auth', () => ({
   }),
   isRegisteredUser: jest.fn<any>((ctx: any) => ctx?.registeredUser != null),
   UnifiedAuthRequest: {},
-}));
-
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-      message: { type: 'string' },
-      code: { type: 'string' },
-    },
-  },
 }));
 
 jest.mock('../../../routes/links/types', () => ({
@@ -59,6 +61,19 @@ function makePrisma(overrides: Record<string, any> = {}) {
       findUnique: jest.fn<any>(),
       findFirst: jest.fn<any>(),
       update: jest.fn<any>().mockResolvedValue({ id: LINK_DB_ID, linkId: LINK_PUBLIC_ID }),
+    },
+    // #4170 — PATCH pose désormais `isActive:false` au même effet que
+    // `/toggle` (admin.ts) : révoquer les invités déjà entrés
+    // (`revokeShareLinkGuests`, socketio/revokeShareLinkGuests.ts). Le double
+    // porte la surface Prisma que la production appelle réellement, sinon
+    // toute mutation vers `isActive:false` tombe en 500 pour une raison qui
+    // n'a rien à voir avec le témoin (`participant.findMany` indéfini). Zéro
+    // invité trouvé par défaut : les témoins existants qui désactivent un
+    // lien sans se soucier de la révocation restent inchangés.
+    participant: {
+      count: jest.fn<any>().mockResolvedValue(0),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     ...overrides,
   } as any;
@@ -104,237 +119,6 @@ async function buildApp({ auth = 'registered', prisma = makePrisma() }: { auth?:
   await app.ready();
   return app;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PUT /links/:conversationShareLinkId
-// ─────────────────────────────────────────────────────────────────────────────
-
-describe('PUT /links/:conversationShareLinkId', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockUpdateLinkParse.mockImplementation((body: any) => body);
-  });
-
-  it('returns 403 when user is not a registered user', async () => {
-    const app = await buildApp({ auth: 'anonymous' });
-    const res = await app.inject({
-      method: 'PUT',
-      url: `/links/${LINK_DB_ID}`,
-      payload: { isActive: false },
-    });
-    expect(res.statusCode).toBe(403);
-    await app.close();
-  });
-
-  it('returns 404 when share link not found', async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique.mockResolvedValue(null);
-    const app = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'PUT',
-      url: `/links/${LINK_DB_ID}`,
-      payload: {},
-    });
-    expect(res.statusCode).toBe(404);
-    await app.close();
-  });
-
-  it('returns 403 when user is not creator and not conversation admin', async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique.mockResolvedValue(
-      makeShareLink({
-        createdBy: OTHER_USER_ID,
-        conversation: { id: CONV_ID, participants: [] },
-      })
-    );
-    const app = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'PUT',
-      url: `/links/${LINK_DB_ID}`,
-      payload: { isActive: false },
-    });
-    expect(res.statusCode).toBe(403);
-    await app.close();
-  });
-
-  it('returns 403 when participant is a regular member (not admin/creator)', async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique.mockResolvedValue(
-      makeShareLink({
-        createdBy: OTHER_USER_ID,
-        conversation: {
-          id: CONV_ID,
-          participants: [makeParticipant('member')],
-        },
-      })
-    );
-    const app = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'PUT',
-      url: `/links/${LINK_DB_ID}`,
-      payload: { isActive: false },
-    });
-    expect(res.statusCode).toBe(403);
-    await app.close();
-  });
-
-  it('returns 200 when user is the link creator', async () => {
-    const prisma = makePrisma();
-    const updatedLink = { id: LINK_DB_ID, isActive: false, linkId: LINK_PUBLIC_ID };
-    prisma.conversationShareLink.findUnique.mockResolvedValue(
-      makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })
-    );
-    prisma.conversationShareLink.update.mockResolvedValue(updatedLink);
-    const app = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'PUT',
-      url: `/links/${LINK_DB_ID}`,
-      payload: { isActive: false },
-    });
-    expect(res.statusCode).toBe(200);
-    const body = JSON.parse(res.body);
-    expect(body.success).toBe(true);
-    expect(body.data.shareLink).toMatchObject({ id: LINK_DB_ID });
-    await app.close();
-  });
-
-  it('returns 200 when user is conversation admin', async () => {
-    const prisma = makePrisma();
-    const updatedLink = { id: LINK_DB_ID, isActive: true, linkId: LINK_PUBLIC_ID };
-    prisma.conversationShareLink.findUnique.mockResolvedValue(
-      makeShareLink({
-        createdBy: OTHER_USER_ID,
-        conversation: {
-          id: CONV_ID,
-          participants: [makeParticipant('admin')],
-        },
-      })
-    );
-    prisma.conversationShareLink.update.mockResolvedValue(updatedLink);
-    const app = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'PUT',
-      url: `/links/${LINK_DB_ID}`,
-      payload: { name: 'Updated Name' },
-    });
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-
-  it('returns 200 when user is conversation creator', async () => {
-    const prisma = makePrisma();
-    const updatedLink = { id: LINK_DB_ID, name: 'Creator Update', linkId: LINK_PUBLIC_ID };
-    prisma.conversationShareLink.findUnique.mockResolvedValue(
-      makeShareLink({
-        createdBy: OTHER_USER_ID,
-        conversation: {
-          id: CONV_ID,
-          participants: [makeParticipant('creator')],
-        },
-      })
-    );
-    prisma.conversationShareLink.update.mockResolvedValue(updatedLink);
-    const app = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'PUT',
-      url: `/links/${LINK_DB_ID}`,
-      payload: { name: 'Creator Update' },
-    });
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-
-  it('returns 400 on ZodError', async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique.mockResolvedValue(
-      makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })
-    );
-    mockUpdateLinkParse.mockImplementationOnce(() => {
-      throw new z.ZodError([
-        { code: 'custom', message: 'maxUses must be an integer', path: ['maxUses'] },
-      ]);
-    });
-    const app = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'PUT',
-      url: `/links/${LINK_DB_ID}`,
-      payload: { maxUses: 1.5 },
-    });
-    expect(res.statusCode).toBe(400);
-    const body = JSON.parse(res.body);
-    expect(body.success).toBe(false);
-    expect(body.message).toBe('Données invalides');
-    await app.close();
-  });
-
-  it('returns 500 on unexpected DB error', async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique.mockRejectedValue(new Error('DB connection lost'));
-    const app = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'PUT',
-      url: `/links/${LINK_DB_ID}`,
-      payload: {},
-    });
-    expect(res.statusCode).toBe(500);
-    await app.close();
-  });
-
-  it('returns 500 when update throws', async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique.mockResolvedValue(
-      makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })
-    );
-    prisma.conversationShareLink.update.mockRejectedValue(new Error('Write failed'));
-    const app = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'PUT',
-      url: `/links/${LINK_DB_ID}`,
-      payload: { name: 'Test' },
-    });
-    expect(res.statusCode).toBe(500);
-    await app.close();
-  });
-
-  it('calls update with sanitized name and description', async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique.mockResolvedValue(
-      makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })
-    );
-    prisma.conversationShareLink.update.mockResolvedValue({ id: LINK_DB_ID });
-    const app = await buildApp({ prisma });
-    await app.inject({
-      method: 'PUT',
-      url: `/links/${LINK_DB_ID}`,
-      payload: { name: 'My Link', description: 'A description' },
-    });
-    expect(prisma.conversationShareLink.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: LINK_DB_ID },
-        data: expect.objectContaining({ name: 'My Link', description: 'A description' }),
-      })
-    );
-    await app.close();
-  });
-
-  it('converts expiresAt string to Date on update', async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique.mockResolvedValue(
-      makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })
-    );
-    prisma.conversationShareLink.update.mockResolvedValue({ id: LINK_DB_ID });
-    const expiresAt = '2030-12-31T00:00:00.000Z';
-    const app = await buildApp({ prisma });
-    await app.inject({
-      method: 'PUT',
-      url: `/links/${LINK_DB_ID}`,
-      payload: { expiresAt },
-    });
-    const updateCall = prisma.conversationShareLink.update.mock.calls[0][0];
-    expect(updateCall.data.expiresAt).toBeInstanceOf(Date);
-    await app.close();
-  });
-});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PATCH /links/:linkId
@@ -388,15 +172,42 @@ describe('PATCH /links/:linkId', () => {
     await app.close();
   });
 
-  it('returns 403 when participant has role "admin" (lowercase, PATCH uses uppercase ADMIN/MODERATOR)', async () => {
+  it('returns 200 when participant has role "admin" (lowercase — la seule casse écrite en base, #3875)', async () => {
     const prisma = makePrisma();
-    // PATCH route checks for 'ADMIN' and 'MODERATOR' (uppercase), not 'admin'/'creator'
+    const updatedLink = {
+      id: LINK_DB_ID,
+      linkId: LINK_PUBLIC_ID,
+      conversation: { id: CONV_ID, title: 'T', description: null, type: 'group', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+      creator: { id: OTHER_USER_ID, username: 'other', firstName: null, lastName: null, displayName: null, avatar: null },
+    };
     prisma.conversationShareLink.findFirst.mockResolvedValue(
       makeShareLink({
         createdBy: OTHER_USER_ID,
         conversation: {
           id: CONV_ID,
           participants: [{ userId: USER_ID, role: 'admin', isActive: true }],
+        },
+      })
+    );
+    prisma.conversationShareLink.update.mockResolvedValue(updatedLink);
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/links/${LINK_PUBLIC_ID}`,
+      payload: { isActive: false },
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('returns 403 when participant has role "member" (ni admin ni modérateur)', async () => {
+    const prisma = makePrisma();
+    prisma.conversationShareLink.findFirst.mockResolvedValue(
+      makeShareLink({
+        createdBy: OTHER_USER_ID,
+        conversation: {
+          id: CONV_ID,
+          participants: [{ userId: USER_ID, role: 'member', isActive: true }],
         },
       })
     );
@@ -597,7 +408,12 @@ describe('PATCH /links/:linkId', () => {
     await app.close();
   });
 
-  it('uses findUnique for PUT and findFirst for PATCH (by linkId)', async () => {
+  // La porte résout le lien par son identifiant PUBLIC (`mshy_…`), jamais par
+  // son id de base : c'est ce que les trois clients lui envoient. L'assertion
+  // sur `findUnique` survit au retrait de `PUT /links/:conversationShareLinkId`
+  // (#4188) — elle interdit qu'on rebranche la résolution par id de base sur
+  // cette porte-ci.
+  it('résout par `linkId` via findFirst, jamais par id de base via findUnique', async () => {
     const prisma = makePrisma();
     prisma.conversationShareLink.findFirst.mockResolvedValue(
       makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })

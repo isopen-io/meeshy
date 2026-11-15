@@ -1,0 +1,974 @@
+/**
+ * Surface CYCLE DE VIE de `conversations/core.ts` — `POST /conversations`,
+ * `PUT`/`PATCH /conversations/:id` et `DELETE /conversations/:id`. Extrait de
+ * `core.ts` lors du découpage #4284 ; voir `core.ts` pour le point d'entrée
+ * `registerCoreRoutes` qui appelle ces registrars.
+ */
+import { FastifyInstance, FastifyReply } from 'fastify';
+import { isMemberCreator, MemberRole } from '@meeshy/shared/types/role-types';
+import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+import { ErrorCode } from '@meeshy/shared/types';
+import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
+import { ConversationSchemas, validateSchema } from '@meeshy/shared/utils/validation';
+import { generateDefaultConversationTitle } from '@meeshy/shared/utils/conversation-helpers';
+import { resolveConversationId } from '../../utils/conversation-id-cache';
+import { UnifiedAuthRequest } from '../../middleware/auth';
+import {
+  conversationResponseSchema,
+  errorResponseSchema,
+  createConversationRequestSchema,
+  updateConversationRequestSchema
+} from '@meeshy/shared/types/api-schemas';
+import { isBlockedBetween } from '../../utils/blocking';
+import {
+  decideOpenings,
+  withoutRequestColumns,
+  requestRecipientFields,
+  requesterPermissionsFor,
+  type DirectOpening
+} from '../../services/messaging/messageRequests';
+import { sendSuccess, sendError, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { refuserCommeIntrouvable } from './utils/access-control';
+import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { presenceFor, viewerFromRequest } from '../users/presence-gate';
+import {
+  generateConversationIdentifier,
+  generateCompactConversationIdentifier,
+  ensureUniqueConversationIdentifier
+} from './utils/identifier-generator';
+import type {
+  ConversationParams,
+  CreateConversationBody
+} from './types';
+import { announceConversationClosed } from '../../socketio/announceConversationClosed';
+import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure';
+import { eraseExternalPeerOnClose } from '../../services/external-conversation/erase-external-peers';
+import { SecuritySanitizer } from '../../utils/sanitize.js';
+import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
+import { EngagementService } from '../../services/engagement/EngagementService';
+import { cutTalkiesOnEndToEnd, talkieCutDepsOf } from '../../services/talkie/talkieCut';
+import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
+import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice';
+import { directLookupWheres, firstFound } from '../../services/conversations/directPair';
+import {
+  decideCreationRegime,
+  directReopeningFor,
+  nascentRegime,
+  nascentRegimeDeps,
+  sealReopenedDirect,
+  type CreationRegimeRefusal,
+} from '../../services/conversations/creationRegime';
+import { isServerAtRestUnavailable } from '../../services/messaging/serverAtRest';
+import { announceConversationNew } from '../../services/conversations/obsoleteCapability';
+import { ENCRYPTION_ACTIVATION_RESTRICTED_CODE } from '../../utils/encryption-activation-policy';
+import { ENCRYPTION_MODE_UNSUPPORTED_CODE } from '@meeshy/shared/utils/conversation-creation-encryption';
+import { activeMembershipOf } from '../communities/serialization';
+import {
+  composeConversationUpdate,
+  broadcastConversationUpdated,
+  type ConversationMetadataBody,
+} from '../../services/conversations/conversation-metadata-update';
+
+const logger = enhancedLogger.child({ module: 'conversations/core' });
+
+/**
+ * Enregistre `POST /conversations` (création d'une conversation).
+ */
+export function registerCreateConversationRoute(
+  fastify: FastifyInstance,
+  prisma: PrismaClient,
+  optionalAuth: any
+) {
+  // Route pour créer une nouvelle conversation
+  fastify.post<{ Body: CreateConversationBody }>('/conversations', {
+    schema: {
+      description: 'Create a new conversation (direct, group, or public) with specified participants',
+      tags: ['conversations'],
+      summary: 'Create conversation',
+      body: createConversationRequestSchema,
+      response: {
+        200: conversationResponseSchema,
+        // #14107 (audit B1) — déclarée : `fast-json-stringify` retire du fil toute
+        // colonne de ligne `Participant` que le schéma ne nomme pas.
+        201: conversationResponseSchema,
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema,
+        503: errorResponseSchema
+      }
+    },
+    preValidation: [optionalAuth]
+  }, async (request, reply) => {
+    try {
+      // Valider les données avec Zod
+      const validatedData = validateSchema(
+        ConversationSchemas.create,
+        request.body,
+        'create-conversation'
+      );
+
+      const { type, title: rawTitle, description: rawDescription, participantIds = [], communityId, identifier, plaintext, encryptionMode: requestedMode } = validatedData as { type: string; title?: string; description?: string; participantIds?: string[]; communityId?: string; identifier?: string; plaintext?: boolean; encryptionMode?: 'server' | 'hybrid' | 'e2ee' };
+      const title = rawTitle !== undefined ? SecuritySanitizer.sanitizeText(rawTitle) : undefined;
+      const description = rawDescription !== undefined ? SecuritySanitizer.sanitizeText(rawDescription) : undefined;
+
+      // Utiliser le nouveau système d'authentification unifié
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
+        throw createError(ErrorCode.UNAUTHORIZED, 'Authentication required to create conversation');
+      }
+
+      const userId = authContext.userId;
+
+      // Directive porteur du 2026-11-01 — le mode se choisit à la création, et
+      // une conversation ne naît jamais sans mode (`creationRegime.ts`).
+      const regimeRequest = { requestedMode, plaintext: plaintext === true, platformRole: authContext.registeredUser.role, conversationType: type };
+      const regime = decideCreationRegime(regimeRequest);
+      if (regime.kind === 'refused') {
+        return refuseCreationRegime(reply, regime.refusal);
+      }
+
+      // Prevent creating conversation with oneself
+      if (type === 'direct' && participantIds.length === 1 && participantIds[0] === userId) {
+        throw createError(ErrorCode.INVALID_OPERATION, 'Vous ne pouvez pas créer une conversation avec vous-même');
+      }
+
+      // Also check if userId is in participantIds (in case of manipulation)
+      if (participantIds.includes(userId)) {
+        throw createError(ErrorCode.INVALID_OPERATION, 'Vous ne devez pas vous inclure dans la liste des participants');
+      }
+
+      // Note: La validation de l'identifier est maintenant gérée par CommonSchemas.conversationIdentifier dans Zod
+
+      // Validate community access if communityId is provided.
+      // #8876 — une communauté désactivée n'accueille plus aucun geste (404).
+      const hostCommunity = communityId
+        ? await prisma.community.findFirst({
+            where: { id: communityId, isActive: true },
+            select: { createdBy: true, isPrivate: true, members: { where: activeMembershipOf(userId), select: { userId: true, role: true }, take: 1 } }
+          })
+        : null;
+      if (communityId) {
+        if (!hostCommunity) {
+          return sendNotFound(reply, 'Community not found');
+        }
+
+        // Check if user is member of the community
+        const isMember = hostCommunity.createdBy === userId || hostCommunity.members.length > 0;
+
+        if (!isMember) {
+          return sendForbidden(reply, 'You must be a member of this community to create a conversation');
+        }
+      }
+
+      // Generate identifier
+      let finalIdentifier: string;
+      if (identifier) {
+        // Use custom identifier with mshy_ prefix
+        finalIdentifier = `mshy_${identifier}`;
+        // Ensure uniqueness
+        finalIdentifier = await ensureUniqueConversationIdentifier(prisma, finalIdentifier);
+      } else {
+        // Une DM n'a pas de titre a rendre lisible : son ancien identifiant
+        // derivait des deux userId (`mshy_direct-<id1>-<id2>-<horodate>`,
+        // ~72 car.) et publiait donc ses deux membres. On emet un identifiant
+        // COMPACT et opaque. Les conversations TITREES gardent leur forme
+        // lisible — c'est ce que promet le schema Prisma, et un groupe nomme
+        // n'expose l'identite de personne.
+        const baseIdentifier = type === 'direct'
+          ? generateCompactConversationIdentifier()
+          : generateConversationIdentifier(title);
+        finalIdentifier = await ensureUniqueConversationIdentifier(prisma, baseIdentifier);
+      }
+
+      // S'assurer que participantIds ne contient pas de doublons, n'inclut pas le créateur,
+      // et ne contient pas de valeurs null/undefined/empty
+      const uniqueParticipantIds = [...new Set(participantIds)]
+        .filter((id: any) => id && id !== userId && typeof id === 'string' && id.trim().length > 0);
+
+      // #14644 (C) — un groupe peut n'avoir que son créateur (audits, recueils
+      // d'avis extérieurs) : il n'a alors aucun membre dont tirer un titre, il
+      // doit donc en porter un.
+      if (type === 'group' && uniqueParticipantIds.length === 0 && (!title || title.trim() === '')) {
+        throw createError(ErrorCode.MISSING_REQUIRED_FIELD, 'Un groupe sans invité doit avoir un titre');
+      }
+
+      // #16639 — faire entrer les participants dans la communauté hôte est une
+      // INVITATION : elle se décide AVANT la création, sous la loi de
+      // `POST /communities/:id/invite`, pour refuser sans rien écrire.
+      const communityAdmission = communityId && hostCommunity
+        ? await planCommunityAdmission(prisma, {
+            communityId,
+            actorId: userId,
+            createdBy: hostCommunity.createdBy,
+            isPrivate: hostCommunity.isPrivate,
+            actorRole: hostCommunity.members[0]?.role ?? null,
+            participantIds: uniqueParticipantIds,
+          })
+        : null;
+      if (communityAdmission?.kind === 'refused') {
+        return communityAdmission.reason === 'invite-forbidden'
+          ? sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' })
+          : sendNotFound(reply, 'User to invite not found');
+      }
+
+      // Block enforcement applies to DIRECT conversations only (group / community /
+      // public / global / broadcast are never block-enforced). Bidirectional: reject
+      // if the creator blocked the other party OR the other party blocked the creator.
+      if (type === 'direct' && uniqueParticipantIds.length === 1) {
+        const blocked = await isBlockedBetween(prisma, userId, uniqueParticipantIds[0]);
+        if (blocked) {
+          throw createError(ErrorCode.USER_BLOCKED);
+        }
+
+        // Idempotence DM — une conversation directe entre deux users est
+        // UNIQUE. Sans ce check, chaque « Nouvelle conversation → Créer »
+        // fabriquait une DM de plus (2 DM identiques observées en prod le
+        // 2026-07-03 pendant les tests d'appel) : on rouvre l'existante
+        // (200) au lieu d'en créer une deuxième. Les archivées comptent —
+        // recréer la DM d'un contact archivé doit la ROUVRIR, pas la
+        // dupliquer. Groupes : jamais dédupliqués (même-membres légitime).
+        //
+        // #12966 — une paire a au plus UN tête-à-tête `e2ee` et au plus UN
+        // que le serveur lit. Sans précision, le chiffré d'abord, puis le plus
+        // récemment actif (inchangé tant qu'une paire n'a qu'un régime) ;
+        // `plaintext: true` ne rouvre que le lisible, et en crée un à côté du
+        // chiffré s'il n'y en a pas.
+        const reopening = directReopeningFor(regimeRequest);
+        const lookups = directLookupWheres(
+          { userId, peerId: uniqueParticipantIds[0] },
+          { plaintext: reopening === 'readable', endToEnd: reopening === 'end-to-end' },
+        );
+        const existingDirect = await firstFound(lookups, (where) => prisma.conversation.findFirst({
+          where,
+          // Des doublons historiques existent (5 DM atabeth↔jcnm datant
+          // d'avant ce fix) : rouvrir la plus RÉCEMMENT ACTIVE, pas une
+          // arbitraire — sinon l'utilisateur retombe sur une DM morte.
+          orderBy: { lastMessageAt: 'desc' },
+          include: {
+            participants: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    displayName: true,
+                    avatar: true,
+                    banner: true
+                  }
+                }
+              }
+            }
+          }
+        }));
+        if (existingDirect) {
+          const callerParticipant = existingDirect.participants.find((p: any) => p.userId === userId);
+          const creatorParticipant = existingDirect.participants.find((p: any) => isMemberCreator(p.role ?? 'member'));
+          // `!firstMessageSentAt` est ambigu (absent ET null donnent `null`
+          // côté client JS) mais sans risque ici : le flip ci-dessous est
+          // gardé par un `updateMany({ where: { firstMessageSentAt: null } })`
+          // qui ne matche jamais un champ absent (legacy) — 0 ligne, no-op.
+          // Ne jamais retirer ce garde sans revoir cette ambiguïté.
+          const isEmptyDirect = existingDirect.type === 'direct' && !existingDirect.firstMessageSentAt;
+
+          if (isEmptyDirect && creatorParticipant && !isMemberCreator(callerParticipant?.role ?? 'member')) {
+            // Le destinataire silencieux réinitie lui-même la conversation —
+            // intention mutuelle aussi explicite qu'un message. On la rend
+            // visible désormais des deux côtés (Prisme design doc 2026-08-04).
+            const flip = await prisma.conversation.updateMany({
+              where: { id: existingDirect.id, firstMessageSentAt: null },
+              data: { firstMessageSentAt: new Date() }
+            });
+            if (flip.count > 0) {
+              existingDirect.firstMessageSentAt = new Date();
+              try {
+                const socketIOHandler = fastify.socketIOHandler;
+                const io = socketIOHandler?.getManager()?.getIO();
+                if (io && creatorParticipant.userId) {
+                  announceConversationNew(prisma, {
+                    io,
+                    recipientIds: [creatorParticipant.userId],
+                    payload: {
+                      conversationId: existingDirect.id,
+                      conversationType: existingDirect.type,
+                      title: existingDirect.title,
+                      creatorId: creatorParticipant.userId,
+                      participantIds: existingDirect.participants.map((p: any) => p.userId).filter(Boolean),
+                      createdAt: existingDirect.createdAt instanceof Date
+                        ? existingDirect.createdAt.toISOString()
+                        : String(existingDirect.createdAt)
+                    },
+                    onError: (error) => logger.warn('error broadcasting CONVERSATION_NEW on DM reinitiation', { conversationId: existingDirect.id, error })
+                  }).catch((error: unknown) => logger.warn('conversation:new emission failed', { error }));
+                }
+              } catch (broadcastError) {
+                logger.error('error broadcasting CONVERSATION_NEW on DM reinitiation', { error: broadcastError });
+              }
+            }
+          }
+
+          const sealed = await sealReopenedDirect(prisma, nascentRegimeDeps(prisma), { conversation: existingDirect, enabledBy: userId });
+
+          return sendSuccess(reply, {
+            ...existingDirect,
+            participants: withoutRequestColumns(existingDirect.participants),
+            ...(sealed ?? {}),
+            title: existingDirect.title || null
+          }, { statusCode: 200 });
+        }
+      }
+
+      // #14107 — chaque membre nommé : direct dès Connaissance, sinon une DEMANDE
+      // dans sa boîte, dans un tête-à-tête comme dans un groupe (RG-22). Aucune
+      // issue de refus : la porte répond pareil vers un mineur (audit B2).
+      const openedAt = new Date();
+      const openings = await decideOpenings(prisma, { senderId: userId, recipientIds: uniqueParticipantIds, now: openedAt });
+      const openingOf = (participantId: string): DirectOpening => openings.get(participantId) ?? { kind: 'direct' };
+      const creatorOpening: DirectOpening = type === 'direct' && uniqueParticipantIds.length === 1
+        ? openingOf(uniqueParticipantIds[0])
+        : { kind: 'direct' };
+
+      const allUserIds = [userId, ...uniqueParticipantIds];
+      const allUsers = await prisma.user.findMany({
+        where: { id: { in: allUserIds } },
+        select: { id: true, displayName: true, username: true, avatar: true, ...RECIPIENT_LANG_SELECT }
+      });
+      const userMap = new Map(allUsers.map(u => [u.id, u]));
+      // #9711 — la langue de chaque fondateur, descendue de SON prisme ; une
+      // ligne sans `language` prenait le défaut `"en"` du schéma.
+      const languageByUserId = new Map(allUsers.map((u) => [u.id, recipientLanguage(u, 'fr')]));
+      // #6080 — la table vient du site UNIQUE (`services/participantRights.ts`),
+      // pour le créateur comme pour chaque membre initial. Le littéral écrit ici
+      // fermait `canSendVideos`/`canSendAudios`, ce que la garde de pièce jointe
+      // (#5151) lit comme un REFUS : dans tout groupe créé depuis l'app, une
+      // vidéo, un vocal et un document étaient rejetés.
+      const defaultPermissions = { ...FOUNDING_MEMBER_PERMISSIONS };
+
+      const creatorUser = userMap.get(userId);
+      // Broadcast = announcement channel with admin-only write
+      const isBroadcast = type === 'broadcast';
+
+      const silentUntilFirstMessage = type === 'direct' || type === 'group';
+
+      const nascent = await nascentRegime(nascentRegimeDeps(prisma), { mode: regime.mode, enabledBy: userId });
+
+      const conversation = await prisma.conversation.create({
+        data: {
+          id: nascent.conversationId,
+          ...nascent.data,
+          identifier: finalIdentifier,
+          type,
+          title,
+          description,
+          communityId: communityId || null,
+          ...(isBroadcast ? { isAnnouncementChannel: true, defaultWriteRole: 'admin' } : {}),
+          // Explicite (pas juste omis) : Prisma/MongoDB omettrait le champ si
+          // on ne le posait pas, ce qui le laisserait ABSENT plutôt que
+          // `null` — voir Prisme design doc 2026-08-04 (DM vide et silencieux
+          // jusqu'au premier message).
+          // #14644 (B) — un groupe neuf est silencieux comme un tête-à-tête :
+          // il ne s'annonce à ses invités qu'au premier message.
+          ...(silentUntilFirstMessage ? { firstMessageSentAt: null } : {}),
+          participants: {
+            create: [
+              {
+                userId,
+                type: 'user',
+                displayName: creatorUser?.displayName || creatorUser?.username || 'User',
+                role: 'creator',
+                language: languageByUserId.get(userId) ?? 'fr',
+                permissions: requesterPermissionsFor(creatorOpening, defaultPermissions)
+              },
+              ...uniqueParticipantIds.map((participantId: string) => {
+                const pUser = userMap.get(participantId);
+                return {
+                  userId: participantId,
+                  type: 'user',
+                  displayName: pUser?.displayName || pUser?.username || 'User',
+                  role: 'member',
+                  language: languageByUserId.get(participantId) ?? 'fr',
+                  permissions: defaultPermissions,
+                  ...requestRecipientFields(openingOf(participantId), openedAt, userId)
+                };
+              })
+            ]
+          }
+        },
+        include: {
+          participants: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  displayName: true,
+                  avatar: true,
+                  banner: true
+                }
+              }
+            }
+          }
+        }
+      });
+
+      // #14490 — un tête-à-tête né `e2ee` fait passer la PAIRE en bout en bout pour la
+      // porte du talkie : sa voix en clair déjà ouverte s'arrête à l'instant.
+      if (type === 'direct' && regime.mode === 'e2ee') {
+        await Promise.resolve().then(() => cutTalkiesOnEndToEnd(talkieCutDepsOf(), { userIds: [userId, ...uniqueParticipantIds] }))
+          .catch((error: unknown) => logger.warn('end-to-end direct created but the talkie cut was not written', { conversationId: conversation.id, error: String(error) }));
+      }
+
+      // Succès « cercles » (#5759) — APRÈS l'ACK métier. Créer un cercle, c'est
+      // aussi le rejoindre : les deux familles (`create.count`, `join.*`) sont
+      // évaluées par les deux événements, chacun ne mesurant que la sienne.
+      void new CerclesAchievements(prisma).recordEvent({ kind: 'conversation.create', userId }).catch(() => undefined);
+      // Créer un groupe rapporte, une fois par ENSEMBLE de membres (#8906).
+      if (type === 'group') {
+        void new EngagementService(prisma).recordGroupCreation(userId, conversation.id, uniqueParticipantIds).catch(() => undefined);
+      }
+      void new CerclesAchievements(prisma).recordEvent({
+        kind: 'conversation.join',
+        userId,
+        conversationId: conversation.id,
+      }).catch(() => undefined);
+
+      // Si la conversation est créée dans une communauté, ses participants y
+      // entrent selon le plan admis plus haut (#16639, `planCommunityAdmission`).
+      if (communityId && communityAdmission?.kind === 'admitted') {
+        await applyCommunityAdmission(prisma, communityId, communityAdmission);
+      }
+
+      // Pour les DMs, pas de titre — le frontend résout le nom de l'interlocuteur
+      const displayTitle = type === 'direct'
+        ? (conversation.title || null)
+        : (conversation.title && conversation.title.trim() !== ''
+            ? conversation.title
+            : generateDefaultConversationTitle(
+                conversation.participants.map((m: any) => ({
+                  id: m.userId,
+                  displayName: m.user?.displayName,
+                  username: m.user?.username,
+                  firstName: m.user?.firstName,
+                  lastName: m.user?.lastName
+                })),
+                userId
+              ));
+
+      // Diffuser le nouvel event typé CONVERSATION_NEW à TOUS les participants
+      // — y compris le créateur — dans leurs user-rooms respectives. Avant ce
+      // change, le créateur n'avait AUCUN signal socket (la boucle de
+      // notifications ci-dessous itère uniquement sur `uniqueParticipantIds`
+      // qui exclut `userId`), ce qui forçait les clients iOS et web à
+      // implémenter un workaround local (ConversationCreatedBroadcaster sur
+      // iOS) pour faire apparaître la nouvelle conversation immédiatement.
+      // Avec CONVERSATION_NEW, la source de vérité reste sur le gateway et
+      // tous les clients (web, iOS, future plateformes) reçoivent le même
+      // payload typé. La notification:new legacy reste émise en parallèle
+      // pour compat avec les anciens clients pendant ~3 mois.
+      try {
+        const socketIOHandler = fastify.socketIOHandler;
+        const socketManager = socketIOHandler?.getManager();
+        const io = socketManager?.getIO();
+        if (io) {
+          const allParticipantIds = [userId, ...uniqueParticipantIds];
+          // Auto-join every already-connected participant's sockets to the
+          // conversation room BEFORE announcing it. Without this, connected
+          // participants are in `connectedUsers` (so never offline-queued)
+          // but not in ROOMS.conversation(id) — every message:new for the
+          // new conversation is silently missed until their next reconnect.
+          for (const participantId of allParticipantIds) {
+            socketManager.joinUserToConversationRoom(participantId, conversation.id).catch(
+              (err: unknown) => logger.error('Failed to auto-join participant to new conversation room', { participantId, error: err })
+            );
+          }
+          const conversationNewPayload = {
+            conversationId: conversation.id,
+            conversationType: type,
+            title: displayTitle,
+            creatorId: userId,
+            participantIds: allParticipantIds,
+            createdAt: conversation.createdAt instanceof Date
+              ? conversation.createdAt.toISOString()
+              : String(conversation.createdAt)
+          };
+          // Un direct fraîchement créé (0 message) reste silencieux pour les
+          // autres participants — seul le créateur voit sa conversation
+          // vide apparaître immédiatement (Prisme design doc 2026-08-04).
+          // #14644 — un groupe neuf aussi : ses invités l'apprennent au premier
+          // message (`services/conversations/announceStartedGroup.ts`).
+          const emitParticipantIds = silentUntilFirstMessage ? [userId] : allParticipantIds;
+          // #14690 — chacun reçoit SES capacités, sans retarder la réponse.
+          announceConversationNew(prisma, {
+            io,
+            recipientIds: emitParticipantIds,
+            payload: conversationNewPayload,
+            onError: (error) => logger.error('error broadcasting CONVERSATION_NEW', { conversationId: conversation.id, error })
+          }).catch((error: unknown) => logger.warn('conversation:new emission failed', { error }));
+        }
+      } catch (broadcastError) {
+        logger.error('error broadcasting CONVERSATION_NEW', { error: broadcastError });
+        // Non bloquant : la conversation est créée, les clients la verront
+        // au prochain delta sync ou via la notification legacy ci-dessous.
+      }
+
+      // Envoyer des notifications aux participants invités — sauf pour un
+      // direct fraîchement créé (0 message) : silencieux à la création, voir
+      // Prisme design doc 2026-08-04.
+      const notificationService = fastify.notificationService;
+      if (notificationService && uniqueParticipantIds.length > 0 && !silentUntilFirstMessage) {
+        try {
+          // Le créateur est déjà chargé dans userMap (userId ∈ allUserIds) :
+          // pas de second aller-retour DB.
+          const creator = userMap.get(userId);
+
+          if (creator) {
+            // Notifications d'invitation indépendantes : fan-out parallèle (O(1) latence).
+            // #14107 (M1) — une demande ne s'annonce pas : elle attend dans la boîte.
+            await Promise.all(
+              uniqueParticipantIds.filter((participantId) => openingOf(participantId).kind === 'direct').map(async (participantId) => {
+                await notificationService.createConversationInviteNotification({
+                  invitedUserId: participantId,
+                  inviterId: userId,
+                  inviterUsername: creator.displayName || creator.username,
+                  inviterAvatar: creator.avatar || undefined,
+                  conversationId: conversation.id,
+                  conversationTitle: displayTitle,
+                  conversationType: type
+                });
+                logger.debug('invitation notification sent', { participantId, conversationId: conversation.id });
+              })
+            );
+          }
+        } catch (notifError) {
+          logger.error('error sending invitation notifications', { error: notifError });
+          // Ne pas bloquer la création de la conversation
+        }
+      }
+
+      return sendSuccess(reply, {
+        ...conversation,
+        participants: withoutRequestColumns(conversation.participants),
+        title: displayTitle
+      }, { statusCode: 201 });
+
+    } catch (error) {
+      if (isServerAtRestUnavailable(error)) {
+        logger.error('conversation not created: server encryption unavailable', { reason: error.reason });
+        return sendError(reply, 503, error.message, { code: error.code });
+      }
+      sendErrorResponse(reply, error as Error, 'create-conversation');
+    }
+  });
+}
+
+function refuseCreationRegime(reply: FastifyReply, refusal: CreationRegimeRefusal) {
+  if (refusal === 'end-to-end-direct-only') {
+    return sendError(reply, 400, 'End-to-end encryption can only be chosen at creation for a direct conversation for now', {
+      code: ENCRYPTION_MODE_UNSUPPORTED_CODE,
+    });
+  }
+  if (refusal === 'plaintext-with-end-to-end') {
+    return sendError(reply, 400, 'A conversation cannot be both readable by the server and end-to-end encrypted', {
+      code: 'ENCRYPTION_MODE_CONFLICT',
+    });
+  }
+  return sendForbidden(reply, 'End-to-end encryption can only be chosen by a platform staff role (ANALYST or above) for now', {
+    code: ENCRYPTION_ACTIVATION_RESTRICTED_CODE,
+  });
+}
+
+/**
+ * Enregistre `PUT`/`PATCH /conversations/:id` (mise à jour des métadonnées).
+ */
+export function registerUpdateConversationRoute(
+  fastify: FastifyInstance,
+  prisma: PrismaClient,
+  requiredAuth: any
+) {
+  // Route pour mettre à jour une conversation
+  // `PUT` ET `PATCH` sur un SEUL handler. Ce sont deux verbes pour un seul
+  // geste — « modifie ces champs-là » — et les avoir écrits deux fois, dans
+  // deux fichiers, a produit exactement ce qu'une duplication produit : deux
+  // contrats qui divergent. Le jumeau vivait dans `sharing.ts` et n'acceptait
+  // que `title`/`description`/`type` ; le web lui postait `avatar` et `banner`,
+  // qu'il ignorait en silence tout en répondant 200 — bannière et avatar
+  // restaient vides pendant que l'interface annonçait le succès (mesuré en
+  // production le 2026-08-24). Il ne diffusait par ailleurs AUCUN
+  // `conversation:updated`, et laissait n'importe quel membre renommer le
+  // groupe. Il a été supprimé : ici est le seul point d'écriture des
+  // métadonnées d'une conversation.
+  //
+  // Garde : `conversation-update-route.test.ts` rejoue chaque cas SUR LES DEUX
+  // VERBES — un handler qui se remettrait à diverger y rougirait.
+  fastify.route<{
+    Params: ConversationParams;
+    Body: Partial<CreateConversationBody>;
+  }>({
+    method: ['PUT', 'PATCH'],
+    url: '/conversations/:id',
+    schema: {
+      description: 'Update conversation metadata (title, description, avatar, banner) and container settings - requires creator/admin/moderator role. PUT and PATCH are equivalent: both apply only the fields present in the body.',
+      tags: ['conversations'],
+      summary: 'Update conversation',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      body: updateConversationRequestSchema,
+      response: {
+        200: conversationResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [requiredAuth],
+    handler: async (request, reply) => {
+    try {
+      const { id } = request.params;
+      const body = request.body as ConversationMetadataBody;
+      const { avatar, defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled } = body;
+      // La composition (et l'assainissement de `title`/`description`) est
+      // partagée avec la route souveraine (#7845) — voir
+      // `services/conversations/conversation-metadata-update.ts`.
+      const { updateData, changedFields } = composeConversationUpdate(body);
+      const { title } = changedFields;
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+
+      // « ID or identifier », dit le schéma — et seul le jumeau supprimé le
+      // tenait. Ici, `where: { conversationId: id }` recevait le `mshy_…` tel
+      // quel, ne trouvait aucune appartenance, et répondait 403 à un créateur
+      // parfaitement légitime qui avait ouvert sa conversation par son
+      // identifiant lisible. Toutes les routes voisines résolvent d'abord.
+      const conversationId = id === 'meeshy' ? id : await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return refuserCommeIntrouvable(reply);
+      }
+
+      // Vérifier les permissions d'administration
+      // Le `select` ramène le TYPE du conteneur par la relation que cette
+      // requête d'appartenance charge déjà — la garde du tête-à-tête ci-dessous
+      // en dépend, et aucune requête de plus n'est émise pour l'obtenir.
+      const membership = await prisma.participant.findFirst({
+        where: {
+          conversationId: conversationId,
+          userId: userId,
+          isActive: true
+        },
+        // `id`/`displayName` : l'appelant est l'ACTEUR des avis de renommage et
+        // d'image (#7593) ; `title`/`avatar` : l'état AVANT, qui décide si le
+        // geste change quelque chose à annoncer.
+        select: {
+          id: true,
+          role: true,
+          displayName: true,
+          conversation: { select: { type: true, title: true, avatar: true } }
+        }
+      });
+
+      // Le rang ne se filtre PLUS dans la requête : un administrateur de la
+      // plateforme simple membre n'y était pas refusé — sa ligne n'était même
+      // pas chargée, et le point de contrôle n'existait pas là où on le
+      // cherchait (#3941). La requête ramène l'appartenance, la loi décide.
+      const actor = {
+        conversationRole: membership?.role,
+        platformRole: authRequest.authContext.registeredUser?.role,
+      };
+
+      if (!actorHasMinimumRole(actor, MemberRole.MODERATOR) && id !== "meeshy") {
+        return sendForbidden(reply, 'Vous n\'êtes pas autorisé à modifier cette conversation');
+      }
+
+      // Interdire la modification de la conversation globale
+      if (id === "meeshy") {
+        return sendForbidden(reply, 'The global conversation cannot be modified');
+      }
+
+      // Le rang d'écriture, le canal d'annonces et le mode lent sont des
+      // PERMISSIONS : un modérateur de conversation ne les touche pas. La
+      // restriction lit la même colonne que la garde ci-dessus, en sens
+      // INVERSE — l'une accorde, l'autre retient — et les deux doivent donc
+      // se déplacer ensemble (#4008, #3941).
+      if (!actorHasMinimumRole(actor, MemberRole.ADMIN)) {
+        if (defaultWriteRole !== undefined || isAnnouncementChannel !== undefined ||
+            slowModeSeconds !== undefined || autoTranslateEnabled !== undefined) {
+          return sendForbidden(reply, 'Les modérateurs ne peuvent pas modifier les permissions');
+        }
+      }
+
+      // Le rang d'écriture, le canal d'annonces et le mode lent décrivent la
+      // POLICE d'un conteneur À HIÉRARCHIE. Un tête-à-tête n'en a pas : ses
+      // rôles `creator`/`member` nomment qui a ouvert le fil, pas une autorité
+      // sur l'autre partie (cf. WRITE_HIERARCHY_FREE_TYPES dans
+      // `conversationWriteAdmission`). Les laisser passer permettait à
+      // l'initiateur de faire TAIRE son pair, refusé ensuite à chaque envoi,
+      // et sans recours : ce même PUT lui répond 403 puisqu'il est `member`.
+      //
+      // Le filtre ne porte QUE sur ces trois champs. `autoTranslateEnabled`,
+      // `title`, `description`, `avatar` et `banner` ne décrivent aucune
+      // hiérarchie et restent modifiables sur un tête-à-tête.
+      //
+      // Un type inconnu reste permissif — idiome documenté du module
+      // d'admission. Ce n'est pas un trou : la garde qui protège réellement le
+      // pair est la règle d'admission, qui lit le type sur la ligne AUTORITAIRE
+      // de conversation. Ici on empêche l'écriture d'un réglage sans effet, et
+      // l'événement `conversation:updated` qui l'annoncerait aux clients.
+      if (membership?.conversation?.type === 'direct' &&
+          (defaultWriteRole !== undefined || isAnnouncementChannel !== undefined ||
+           slowModeSeconds !== undefined)) {
+        return sendForbidden(reply, 'Un tête-à-tête n\'a pas de hiérarchie d\'écriture : ces réglages ne s\'y appliquent pas');
+      }
+
+      const conversationInclude = {
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                avatar: true,
+                banner: true
+              }
+            }
+          }
+        }
+      } as const;
+
+      // Un corps qui ne nomme aucun champ connu n'est pas une erreur du client :
+      // c'est une écriture vide. Prisma, lui, refuse un `data` vide et levait —
+      // la route répondait 500 à un `{}`. On rend l'état courant, sans écrire et
+      // sans annoncer un changement qui n'a pas eu lieu.
+      // Gate de présence des co-participants. `conversationParticipantSchema`
+      // DÉCLARE `isOnline`/`lastActiveAt`, et l'`include` ci-dessus ramène tous
+      // les scalaires de `Participant` : ces deux champs atteignaient le fil
+      // BRUTS. Régime STRICT (2026-08-25) : self/ADMIN+/ami seuls voient la
+      // présence d'un co-participant ; un id ABSENT de la carte (participant
+      // sans compte) est masqué, sauf pour un viewer ADMIN+.
+      //
+      // Défini ici, appliqué aux DEUX sorties : la branche « rien à écrire »
+      // rend les mêmes lignes que la branche nominale, donc la même donnée à
+      // garder. Une porte posée sur une seule des deux n'est pas une porte.
+      const updatePresenceViewer = viewerFromRequest(request);
+      const gatePresence = async <P extends { userId: string | null; isOnline: boolean | null; lastActiveAt: Date | null }>(
+        participants: P[]
+      ) => {
+        const vis = await getPresenceVisibilityService(prisma).resolveForTargets(
+          updatePresenceViewer,
+          participants
+            .map((p) => p.userId)
+            .filter((uid): uid is string => !!uid)
+        );
+        return participants.map((p) => {
+          const prefs = presenceFor(updatePresenceViewer, vis, p.userId);
+          return {
+            ...p,
+            isOnline: prefs.showOnline ? p.isOnline : false,
+            lastActiveAt: prefs.showLastSeenTimestamp ? p.lastActiveAt : null,
+          };
+        });
+      };
+
+      if (Object.keys(updateData).length === 0) {
+        const unchanged = await prisma.conversation.findUnique({
+          where: { id: conversationId },
+          include: conversationInclude
+        });
+        if (!unchanged) {
+          return refuserCommeIntrouvable(reply);
+        }
+        return sendSuccess(reply, {
+          ...unchanged,
+          participants: await gatePresence(unchanged.participants),
+        });
+      }
+
+      const updatedConversation = await prisma.conversation.update({
+        where: { id: conversationId },
+        data: updateData,
+        include: conversationInclude
+      });
+
+      // La room de conversation ne suffit pas : un participant posé sur l'écran
+      // de LISTE n'est joignable que par sa room personnelle — sans elle, un
+      // renommage n'atteignait que ceux qui avaient le fil ouvert. Le helper
+      // partagé (#7845) écarte les inactifs et chaîne les rooms.
+      broadcastConversationUpdated({
+        io: fastify.socketIOHandler?.getManager()?.getIO(),
+        conversationId,
+        participants: updatedConversation.participants,
+        changedFields,
+        updatedBy: userId,
+      })
+
+      // #7593 — la ligne de liste dit « Nom du groupe modifié » / « Photo du
+      // groupe modifiée ». APRÈS `conversation:updated` : l'avis porte son
+      // propre `conversation:updated` (dernier message), qui ne doit pas être
+      // devancé par le titre. Un champ réécrit à l'identique n'annonce rien.
+      if (membership) {
+        const notices = [
+          ...(title !== undefined && title !== membership.conversation?.title ? ['conversation-renamed' as const] : []),
+          ...(avatar !== undefined && avatar !== membership.conversation?.avatar ? ['conversation-image' as const] : []),
+        ];
+        for (const kind of notices) {
+          await postConversationNotice(
+            { prisma, broadcast: noticeBroadcast(fastify.socketIOHandler) },
+            { conversationId, notice: { kind, actor: noticeActor(membership) } },
+          );
+        }
+      }
+
+      // La route jumelle supprimée gardait la présence ; le `PUT`, jamais.
+      // Porter ce qu'un exemplaire avait de PLUS fait partie de la
+      // consolidation — sans quoi unifier revient à choisir la moins bonne des
+      // deux moitiés.
+      return sendSuccess(reply, {
+        ...updatedConversation,
+        participants: await gatePresence(updatedConversation.participants),
+      });
+
+    } catch (error) {
+      logger.error('error updating conversation', { error });
+      return sendInternalError(reply, 'Error updating conversation');
+    }
+    }
+  });
+}
+
+/**
+ * Enregistre `DELETE /conversations/:id` (suppression douce d'une conversation).
+ */
+export function registerDeleteConversationRoute(
+  fastify: FastifyInstance,
+  prisma: PrismaClient,
+  requiredAuth: any
+) {
+  // Route pour supprimer une conversation
+  fastify.delete<{ Params: ConversationParams }>('/conversations/:id', {
+    schema: {
+      description: 'Delete a conversation (soft delete - marks as inactive) - requires creator role',
+      tags: ['conversations'],
+      summary: 'Delete conversation',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Conversation supprimée avec succès' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [requiredAuth]
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params;
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+
+      // Interdire la suppression de la conversation globale
+      if (id === "meeshy") {
+        return sendForbidden(reply, 'The global conversation cannot be deleted');
+      }
+
+      // Résoudre l'ID de conversation réel
+      const conversationId = await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
+      }
+
+      // Vérifier les permissions d'administration
+      const membership = await prisma.participant.findFirst({
+        where: {
+          conversationId: conversationId,
+          userId: userId,
+          isActive: true
+        },
+        select: { role: true }
+      });
+
+      if (!actorHasMinimumRole(
+        {
+          conversationRole: membership?.role,
+          platformRole: authRequest.authContext.registeredUser?.role,
+        },
+        MemberRole.ADMIN,
+      )) {
+        return sendForbidden(reply, 'Vous n\'êtes pas autorisé à supprimer cette conversation');
+      }
+
+      // Marquer la conversation comme inactive plutôt que de la supprimer
+      const now = new Date()
+      // Les participants sont ramenés PAR l'écriture : le fan-out ci-dessous a
+      // besoin de nommer leurs rooms personnelles, et une seconde requête pour
+      // les lire pourrait tomber sur un état déjà modifié.
+      //
+      // #3740 — la clôture éteint aussi les liens de partage encore actifs de
+      // ce fil, dans la MÊME transaction : un lien qui reste actif après un
+      // 410 est un contrôle qui ment (voir `shareLinkClosure.ts`).
+      const [closedConversation] = await prisma.$transaction([
+        prisma.conversation.update({
+          where: { id: conversationId },
+          data: { isActive: false, closedAt: now, closedBy: userId },
+          include: { participants: { select: { id: true, userId: true, isActive: true } } }
+        }),
+        deactivateShareLinksOnClose(prisma, conversationId),
+      ]);
+      // #17117 — le numéro de l'ami d'une conversation externe ne survit pas au fil.
+      await eraseExternalPeerOnClose(prisma, closedConversation);
+
+      // Broadcast closure to all members — ce que le commentaire annonçait sans
+      // que le code le fasse. Adressée à la seule room de conversation, la
+      // clôture n'atteignait que les membres ayant le fil OUVERT ; tous les
+      // autres gardaient la ligne dans leur liste et n'apprenaient la fermeture
+      // qu'en tapant dessus. Même raison que le renommage ci-dessus : la room
+      // personnelle est le seul endroit où joindre un client posé sur la liste.
+      //
+      // `announceConversationClosed` et non l'émission directe : fermer un fil
+      // éteint aussi ce qu'il portait de vivant (les partages de position en
+      // cours), et cette décision ne se répète pas sur les trois chemins de
+      // clôture — elle vit dans l'unité qui les sert tous.
+      const closureManager = fastify.socketIOHandler?.getManager()
+      announceConversationClosed({
+        io: closureManager?.getIO(),
+        manager: closureManager,
+        conversationId,
+        participants: closedConversation.participants.filter(p => p.isActive),
+        closedBy: userId,
+        closedAt: now
+      })
+
+      return sendSuccess(reply, { message: 'Conversation supprimée avec succès' });
+
+    } catch (error) {
+      logger.error('error deleting conversation', { error });
+      return sendInternalError(reply, 'Erreur lors de la suppression de la conversation');
+    }
+  });
+}

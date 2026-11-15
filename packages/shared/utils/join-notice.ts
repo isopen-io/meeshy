@@ -13,6 +13,8 @@
  * figé en base ne peut pas suivre le Prisme Linguistique ; une métadonnée, si.
  */
 
+import { parseNoticeActor, type NoticeActor } from './conversation-notice.js';
+
 export const JOIN_NOTICE_KIND = 'member-joined' as const;
 
 /**
@@ -40,6 +42,13 @@ export type JoinNoticeMetadata = {
   /** Nom humain donné au formulaire d'entrée (prénom/nom), s'il existe. */
   readonly givenName?: string;
   readonly linkRules?: JoinNoticeLinkRules;
+  /**
+   * Le membre qui a fait entrer l'arrivant (#7593) — ajout ou invitation par
+   * un tiers. Absent quand l'arrivant est venu de lui-même (lien, conversation
+   * globale) : la ligne de liste dit alors « X a rejoint », sinon « Demo a
+   * ajouté X ».
+   */
+  readonly addedBy?: NoticeActor;
 };
 
 /**
@@ -60,6 +69,7 @@ export function parseJoinNotice(metadata: unknown): JoinNoticeMetadata | null {
 
   const username = typeof raw.username === 'string' && raw.username ? raw.username : undefined;
   const givenName = typeof raw.givenName === 'string' && raw.givenName ? raw.givenName : undefined;
+  const addedBy = parseNoticeActor(raw.addedBy);
   const rules = raw.linkRules;
   const linkRules: JoinNoticeLinkRules | undefined =
     rules && typeof rules === 'object'
@@ -79,5 +89,6 @@ export function parseJoinNotice(metadata: unknown): JoinNoticeMetadata | null {
     ...(username ? { username } : {}),
     ...(givenName ? { givenName } : {}),
     ...(linkRules ? { linkRules } : {}),
+    ...(addedBy ? { addedBy } : {}),
   };
 }

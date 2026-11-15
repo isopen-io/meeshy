@@ -1,7 +1,7 @@
 # iOS UI/UX — Iteration 226i
 
 **Date** : 2026-07-27
-**Surface** : `apps/ios/Meeshy/Features/Main/Views/AffiliateCreateView.swift`
+**Surface** : `apps/ios/Meeshy/Features/Links/Views/AffiliateCreateView.swift`
 **Axe** : Accessibilité VoiceOver — état transitoire d'un bouton d'action
 **Base** : `main` HEAD `68a1a33f`
 

@@ -99,8 +99,16 @@ async function buildApp(prismaOverrides: Record<string, any> = {}): Promise<Fast
       count: jest.fn().mockResolvedValue(1),
       findMany: jest.fn().mockResolvedValue([{ ...mockLink }]),
       findFirst: jest.fn().mockResolvedValue({ ...mockLink }),
+      findUnique: jest.fn().mockResolvedValue({ ...mockLink }),
       update: jest.fn().mockResolvedValue({ ...mockLink }),
       delete: jest.fn().mockResolvedValue({}),
+    },
+    // Retirer un lien révoque ses invités (`revokeShareLinkGuests`) : le double
+    // porte la surface que la production appelle.
+    participant: {
+      count: jest.fn().mockResolvedValue(0),
+      findMany: jest.fn().mockResolvedValue([]),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     ...prismaOverrides,
   });

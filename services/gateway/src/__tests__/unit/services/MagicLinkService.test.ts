@@ -9,7 +9,7 @@
  * - Security event logging
  * - Factory function
  *
- * Run with: pnpm test -- --testPathPattern="MagicLinkService"
+ * Run with: bun run test -- --testPathPatterns="MagicLinkService"
  *
  * @jest-environment node
  */
@@ -105,11 +105,13 @@ const mockUser = {
   phoneVerifiedAt: null,
   createdAt: new Date(),
   updatedAt: new Date(),
-  userFeature: {
-    twoFactorEnabledAt: null,
-    autoTranslateEnabled: true,
-    encryptionPreference: null
-  }
+  // `twoFactorEnabledAt` est PROJETÉ par `validateMagicLink` : Prisma le rend
+  // donc toujours — `null` quand le compte n'a pas de second facteur, jamais
+  // absent. Il vivait ici sous une clé `userFeature` qui ne correspond à AUCUN
+  // modèle du schéma (vérifié) ni à aucune clé du `select` : le champ lu par la
+  // production valait `undefined`, c'est-à-dire l'état INDÉTERMINÉ que la garde
+  // #4534 refuse. Un double ment aussi par ce qu'il ACCEPTE.
+  twoFactorEnabledAt: null
 };
 
 const mockGeoData = {
@@ -201,7 +203,7 @@ describe('MagicLinkService', () => {
     mockEmailService.sendMagicLinkEmail.mockResolvedValue(undefined);
 
     mockPrisma.securityEvent.create.mockResolvedValue({ id: 'event-1' });
-    mockPrisma.magicLinkToken.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.magicLinkToken.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.magicLinkToken.create.mockResolvedValue({ id: 'token-1' });
     mockPrisma.magicLinkToken.update.mockResolvedValue({ id: 'token-1' });
     mockPrisma.user.update.mockResolvedValue(mockUser);
@@ -372,16 +374,14 @@ describe('MagicLinkService', () => {
         });
       });
 
+      // La CHARGE de l'e-mail — son adresse, son nom, son lien, et l'identité
+      // que #6424 y joint — est mesurée par `magic-link-identity.test.ts` :
+      // ce fichier est hors budget de taille (dette héritée #4531), et le
+      // dépôt interdit de l'agrandir. Ici on ne garde que le FAIT de l'envoi.
       it('should send magic link email', async () => {
         await service.requestMagicLink(validMagicLinkRequest);
 
-        expect(mockEmailService.sendMagicLinkEmail).toHaveBeenCalledWith({
-          to: mockUser.email,
-          name: mockUser.firstName,
-          magicLink: expect.stringContaining('token='),
-          location: 'New York, United States',
-          language: mockUser.systemLanguage
-        });
+        expect(mockEmailService.sendMagicLinkEmail).toHaveBeenCalledTimes(1);
       });
 
       it('should log security event for magic link request', async () => {
@@ -411,20 +411,16 @@ describe('MagicLinkService', () => {
 
         expect(mockPrisma.magicLinkToken.create).toHaveBeenCalledWith({
           data: expect.objectContaining({
-            geoLocation: 'Unknown',
-            geoCoordinates: null
+            geoLocation: 'Unknown'
           })
         });
       });
 
-      it('should include geo coordinates when available', async () => {
+      it('n’écrit jamais de coordonnées, même quand le lieu est connu (#9609)', async () => {
         await service.requestMagicLink(validMagicLinkRequest);
 
-        expect(mockPrisma.magicLinkToken.create).toHaveBeenCalledWith({
-          data: expect.objectContaining({
-            geoCoordinates: '40.7128,-74.006'
-          })
-        });
+        const { data } = mockPrisma.magicLinkToken.create.mock.calls[0][0];
+        expect(data).not.toHaveProperty('geoCoordinates');
       });
 
       it('should store rememberDevice flag server-side', async () => {
@@ -472,7 +468,7 @@ describe('MagicLinkService', () => {
   describe('validateMagicLink', () => {
     const validValidation: MagicLinkValidation = {
       token: 'valid-raw-token',
-      requestContext: mockRequestContext
+      requestContext: mockRequestContext, confirmed: true
     };
 
     describe('Token Not Found', () => {
@@ -543,6 +539,9 @@ describe('MagicLinkService', () => {
         expect(result.success).toBe(false);
         expect(result.token).toBeUndefined();
         expect(mockPrisma.magicLinkToken.update).not.toHaveBeenCalled();
+        expect(mockPrisma.magicLinkToken.updateMany).not.toHaveBeenCalledWith(
+          expect.objectContaining({ data: { usedAt: expect.any(Date) } })
+        );
       });
     });
 
@@ -586,20 +585,48 @@ describe('MagicLinkService', () => {
       it('should mark token as used', async () => {
         await service.validateMagicLink(validValidation);
 
-        expect(mockPrisma.magicLinkToken.update).toHaveBeenCalledWith({
-          where: { id: mockMagicLinkToken.id },
+        // #10475 — par une écriture CONDITIONNELLE, jamais un `update` nu.
+        expect(mockPrisma.magicLinkToken.updateMany).toHaveBeenCalledWith({
+          where: {
+            id: mockMagicLinkToken.id,
+            isRevoked: false,
+            OR: [{ usedAt: null }, { usedAt: { isSet: false } }]
+          },
           data: { usedAt: expect.any(Date) }
         });
       });
 
-      it('should generate JWT token', async () => {
+      it('signe un JWT de la MÊME forme que les quatre autres sites — avec `role` et `sid` (#4264)', async () => {
+        // Ce site signait sa propre charge à DEUX champs, depuis son propre
+        // `require('jsonwebtoken')` : pas de `role`, là où connexion, 2FA,
+        // inscription et renouvellement en posent un. Une divergence de forme
+        // entre deux jetons du même service, invisible tant qu'aucun appelant
+        // ne lisait `role` — et impossible à rattraper sans un site unique.
         await service.validateMagicLink(validValidation);
 
         expect(mockJwtSign).toHaveBeenCalledWith(
-          { userId: mockUser.id, username: mockUser.username },
+          {
+            userId: mockUser.id,
+            username: mockUser.username,
+            role: mockUser.role,
+            sid: mockSession.id
+          },
           expect.any(String),
           { expiresIn: '24h' }
         );
+      });
+
+      it('crée la session AVANT de signer — sinon il n\'y a aucune session à nommer', async () => {
+        // L'ORDRE est le correctif. Signer d'abord rendait le `sid`
+        // structurellement impossible : la ligne `UserSession` n'existait pas
+        // encore au moment de la signature. Le mode de panne change et c'est
+        // voulu — `createSession` en échec ne fabrique plus de JWT du tout.
+        mockCreateSession.mockRejectedValueOnce(new Error('session en panne'));
+
+        const result = await service.validateMagicLink(validValidation);
+
+        expect(result.success).toBe(false);
+        expect(mockJwtSign).not.toHaveBeenCalled();
       });
 
       it('should create session with request context', async () => {
@@ -608,7 +635,8 @@ describe('MagicLinkService', () => {
         expect(mockCreateSession).toHaveBeenCalledWith({
           userId: mockUser.id,
           token: 'mock-session-token',
-          requestContext: mockRequestContext
+          requestContext: mockRequestContext,
+          loginMethod: 'magic_link'
         });
       });
 
@@ -619,6 +647,7 @@ describe('MagicLinkService', () => {
           where: { id: mockUser.id },
           data: {
             lastActiveAt: expect.any(Date),
+            lastLoginAt: expect.any(Date),
             lastLoginIp: mockRequestContext.ip,
             lastLoginLocation: mockRequestContext.geoData?.location,
             lastLoginDevice: mockRequestContext.deviceInfo?.type
@@ -690,6 +719,50 @@ describe('MagicLinkService', () => {
           autoTranslateEnabled: true,
           twoFactorEnabledAt: null
         });
+      });
+
+      // `autoTranslateEnabled` n'a qu'un store : `UserPreferences.application`.
+      // Le témoin s'écrit sur `false` — sur `true`, la valeur en dur que ce site
+      // servait et la lecture rendent le même verdict, et il ne peut pas tomber.
+      it('serves autoTranslateEnabled=false when the user preference says so', async () => {
+        mockPrisma.magicLinkToken.findUnique.mockResolvedValue({
+          ...mockMagicLinkToken,
+          user: { ...mockUser, userPreferences: { application: { autoTranslateEnabled: false } } }
+        });
+
+        const result = await service.validateMagicLink(validValidation);
+
+        expect(result.success).toBe(true);
+        expect(result.user.autoTranslateEnabled).toBe(false);
+      });
+
+      it('falls back to the shared default when the user has no preferences row', async () => {
+        mockPrisma.magicLinkToken.findUnique.mockResolvedValue({
+          ...mockMagicLinkToken,
+          user: { ...mockUser, userPreferences: null }
+        });
+
+        const result = await service.validateMagicLink(validValidation);
+
+        expect(result.user.autoTranslateEnabled).toBe(true);
+      });
+
+      // Un mock Prisma rend ce qu'on lui dit quel que soit le `select` : seule
+      // une assertion sur la REQUÊTE prouve que la lecture est possible en aval.
+      it('projects UserPreferences.application in the token lookup so the preference can be read', async () => {
+        await service.validateMagicLink(validValidation);
+
+        expect(mockPrisma.magicLinkToken.findUnique).toHaveBeenCalledWith(
+          expect.objectContaining({
+            include: {
+              user: {
+                select: expect.objectContaining({
+                  userPreferences: { select: { application: true } }
+                })
+              }
+            }
+          })
+        );
       });
     });
 
@@ -847,7 +920,7 @@ describe('MagicLinkService - Edge Cases', () => {
     mockCreateSession.mockResolvedValue(mockSession);
     mockEmailService.sendMagicLinkEmail.mockResolvedValue(undefined);
     mockPrisma.securityEvent.create.mockResolvedValue({ id: 'event-1' });
-    mockPrisma.magicLinkToken.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.magicLinkToken.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.magicLinkToken.create.mockResolvedValue({ id: 'token-1' });
     mockPrisma.user.update.mockResolvedValue(mockUser);
 
@@ -908,18 +981,14 @@ describe('MagicLinkService - Edge Cases', () => {
 
     await service.requestMagicLink(validMagicLinkRequest);
 
-    expect(mockPrisma.magicLinkToken.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        geoCoordinates: null
-      })
-    });
+    expect(mockPrisma.magicLinkToken.create.mock.calls[0][0].data).not.toHaveProperty('geoCoordinates');
   });
 
   it('should handle validation with null geo data in request context', async () => {
     mockPrisma.magicLinkToken.findUnique.mockResolvedValue(mockMagicLinkToken);
 
     const validationWithNullGeo: MagicLinkValidation = {
-      token: 'valid-raw-token',
+      token: 'valid-raw-token', confirmed: true,
       requestContext: {
         ip: '192.168.1.1',
         geoData: null,
@@ -954,7 +1023,7 @@ describe('MagicLinkService - Security Tests', () => {
     mockCreateSession.mockResolvedValue(mockSession);
     mockEmailService.sendMagicLinkEmail.mockResolvedValue(undefined);
     mockPrisma.securityEvent.create.mockResolvedValue({ id: 'event-1' });
-    mockPrisma.magicLinkToken.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.magicLinkToken.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.magicLinkToken.create.mockResolvedValue({ id: 'token-1' });
     mockPrisma.user.update.mockResolvedValue(mockUser);
 
@@ -1039,7 +1108,7 @@ describe('MagicLinkService - Security Tests', () => {
 
     const result = await service.validateMagicLink({
       token: 'reused-token',
-      requestContext: mockRequestContext
+      requestContext: mockRequestContext, confirmed: true
     });
 
     expect(result.success).toBe(false);

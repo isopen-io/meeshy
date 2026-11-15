@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_video_notice_reduced">تم تقليل الفيديو ليبرد الهاتف</string>
+    <string name="call_video_notice_low_light">إضاءة ضعيفة: قد تبدو صورتك داكنة</string>
+    <string name="call_video_thermal_audio_only">الهاتف ساخن جدًا: تستمر المكالمة بالصوت فقط</string>
+</resources>

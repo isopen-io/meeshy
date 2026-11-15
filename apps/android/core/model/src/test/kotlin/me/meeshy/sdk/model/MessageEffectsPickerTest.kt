@@ -82,8 +82,10 @@ class MessageEffectsPickerTest {
         // defines (no orphan bit the user cannot pick), and each option's flag is a
         // single distinct bit (no chip toggling two effects at once).
         val union = MessageEffectOption.entries.fold(0L) { acc, option -> acc or option.flag }
+        // EPHEMERAL_AFTER_READ is not a chip: it rides on EPHEMERAL (the "after reading"
+        // duration choice), so it is the one wire bit the catalog does not own.
         assertThat(union).isEqualTo(
-            MessageEffectFlags.LIFECYCLE_MASK or
+            (MessageEffectFlags.LIFECYCLE_MASK and MessageEffectFlags.EPHEMERAL_AFTER_READ.inv()) or
                 MessageEffectFlags.APPEARANCE_MASK or
                 MessageEffectFlags.PERSISTENT_MASK,
         )
@@ -229,5 +231,30 @@ class MessageEffectsPickerTest {
         assertThat(presentation.activeCount).isEqualTo(1)
         assertThat(presentation.showSummary).isTrue()
         assertThat(presentation.sections.flatMap { it.options }.none { it.isActive }).isTrue()
+    }
+
+    // MARK: - Panneau compact : deux rangées, comme iOS EffectsPickerView
+
+    @Test
+    fun panel_hasEntryThenPermanentRowsInIosOrder() {
+        val rows = MessageEffectsPickerPresenter.panel(MessageEffects())
+
+        assertThat(rows.map { it.section })
+            .containsExactly(MessageEffectSection.ENTRY, MessageEffectSection.PERMANENT)
+            .inOrder()
+        assertThat(rows[0].options.map { it.option.labelKey })
+            .containsExactly("shake", "zoom", "explode", "confetti", "fireworks", "waoo")
+            .inOrder()
+        assertThat(rows[1].options.map { it.option.labelKey })
+            .containsExactly("glow", "pulse", "rainbow", "sparkle")
+            .inOrder()
+    }
+
+    @Test
+    fun panel_marksOnlyArmedChipsActive() {
+        val rows = MessageEffectsPickerPresenter.panel(MessageEffects(flags = MessageEffectFlags.ZOOM or MessageEffectFlags.GLOW))
+
+        assertThat(rows.flatMap { it.options }.filter { it.isActive }.map { it.option })
+            .containsExactly(MessageEffectOption.ZOOM, MessageEffectOption.GLOW)
     }
 }

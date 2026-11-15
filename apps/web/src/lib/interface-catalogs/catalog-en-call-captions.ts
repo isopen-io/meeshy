@@ -1,0 +1,44 @@
+/**
+ * LES SOUS-TITRES D'UN APPEL ET SA TRANSCRIPTION (#8048) — tranche du catalogue,
+ * RÉPANDUE par `catalog-en.ts` comme `catalog-en-call-quality.ts` : le bouton
+ * Sous-titres de l'écran d'appel, le panneau et son journal
+ * (`call-captions-panel.tsx`), la transcription d'après l'appel dans la bulle
+ * du fil (`call-transcript-panel.tsx`).
+ */
+const enCallCaptions = {
+  'call.captions.original': 'Show original captions',
+  'call.captions.invited': 'Show captions — the other person is already reading them',
+  'callCaptions.footer.touchForOriginal': '{pair} · tap = original',
+  'callCaptions.footer.translating': '{language} · translating',
+  'callCaptions.footer.translatedLanguages.one': 'Translated · {count} language',
+  'callCaptions.footer.translatedLanguages.two': 'Translated · two languages',
+  'callCaptions.footer.translatedLanguages.few': 'Translated · {count} languages',
+  'callCaptions.footer.translatedLanguages.many': 'Translated · {count} languages',
+  'callCaptions.footer.translatedLanguages.other': 'Translated · {count} languages',
+  'callCaptions.self': 'Me',
+  'callCaptions.regionLabel': 'Call captions',
+  'callCaptions.translating': 'Translating',
+  'callCaptions.region': 'Captions',
+  'callCaptions.waiting': 'Captions appear here as soon as someone speaks',
+  'callCaptions.listening': 'Your voice is being transcribed',
+  'callCaptions.unsupported': 'Your voice can’t be transcribed on this device: you can read the others',
+  'callCaptions.denied': 'Speech recognition denied: you can read the others',
+  'callCaptions.sealed': 'Captions are unavailable: this conversation is end-to-end encrypted, or its encryption could not be verified',
+  'callCaptions.journal.title': 'Call log',
+  'callCaptions.participant': 'Participant',
+  'callTranscript.show': 'Show transcript',
+  'callTranscript.hide': 'Hide transcript',
+  'callTranscript.title': 'Call transcript',
+  'callTranscript.loading': 'Loading transcript…',
+  'callTranscript.empty': 'No transcript',
+  'callTranscript.error': 'Transcript unavailable',
+  'callTranscript.retry': 'Try again',
+  'callTranscript.showOriginal': 'Show original',
+  'callTranscript.showTranslated': 'Show translation',
+  'callJournal.capture.screenshot': 'took a screenshot',
+  'callJournal.capture.recording': 'is recording the screen',
+  'callJournal.recording.started': 'Call recording started',
+  'callJournal.recording.stopped': 'Call recording stopped',
+} as const;
+
+export default enCallCaptions;

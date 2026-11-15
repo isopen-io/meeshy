@@ -30,12 +30,15 @@ final class MockUserService: UserServiceProviding, @unchecked Sendable {
 
     var searchResult: Result<OffsetPaginatedAPIResponse<[UserSearchResult]>, Error> = .success(emptySearchResponse)
     var searchUsersResult: Result<[UserSearchResult], Error> = .success([])
+    /// L'identifiant que la passerelle sert avec la page (`meta.searchId`) —
+    /// `nil` : serveur ou route qui ne le sert pas.
+    var servedSearchId: String?
     var updateProfileResult: Result<MeeshyUser, Error> = .success(stubUser)
     var updateAvatarResult: Result<MeeshyUser, Error> = .success(stubUser)
     var updateBannerResult: Result<MeeshyUser, Error> = .success(stubUser)
     var uploadImageResult: Result<String, Error> = .success("https://example.com/stub-image.jpg")
     var getProfileResult: Result<MeeshyUser, Error> = .success(stubUser)
-    var getPublicProfileResult: Result<MeeshyUser, Error> = .success(stubUser)
+    var getProfileHandleResult: Result<PublicProfile, Error> = .success(PublicProfile(user: stubUser))
     var getProfileByEmailResult: Result<MeeshyUser, Error> = .success(stubUser)
     var getProfileByIdResult: Result<MeeshyUser, Error> = .success(stubUser)
     var getProfileByPhoneResult: Result<MeeshyUser, Error> = .success(stubUser)
@@ -68,8 +71,9 @@ final class MockUserService: UserServiceProviding, @unchecked Sendable {
     var getProfileCallCount = 0
     var lastGetProfileIdOrUsername: String?
 
-    var getPublicProfileCallCount = 0
-    var lastGetPublicProfileUsername: String?
+    var getProfileHandleCallCount = 0
+    var lastGetProfileHandle: String?
+    var lastGetProfileExpand: Set<ProfileExpansion> = []
 
     var getProfileByEmailCallCount = 0
 
@@ -94,10 +98,24 @@ final class MockUserService: UserServiceProviding, @unchecked Sendable {
         return try searchResult.get()
     }
 
+    /// Suspend une recherche APRÈS qu'elle a lu sa réponse : une réponse lente
+    /// peut alors revenir après celle d'une frappe plus récente.
+    var searchUsersGate: (@Sendable (_ query: String) async -> Void)?
+
     func searchUsers(query: String, limit: Int, offset: Int) async throws -> [UserSearchResult] {
         searchUsersCallCount += 1
         lastSearchUsersQuery = query
-        return try searchUsersResult.get()
+        let result = searchUsersResult
+        if let searchUsersGate { await searchUsersGate(query) }
+        return try result.get()
+    }
+
+    func searchPeople(query: String, limit: Int, offset: Int) async throws -> UserSearchPage {
+        searchUsersCallCount += 1
+        lastSearchUsersQuery = query
+        let result = searchUsersResult
+        if let searchUsersGate { await searchUsersGate(query) }
+        return UserSearchPage(users: try result.get(), searchId: servedSearchId)
     }
 
     func updateProfile(_ request: UpdateProfileRequest) async throws -> MeeshyUser {
@@ -129,10 +147,11 @@ final class MockUserService: UserServiceProviding, @unchecked Sendable {
         return try getProfileResult.get()
     }
 
-    func getPublicProfile(username: String) async throws -> MeeshyUser {
-        getPublicProfileCallCount += 1
-        lastGetPublicProfileUsername = username
-        return try getPublicProfileResult.get()
+    func getProfile(handle: String, expand: Set<ProfileExpansion>) async throws -> PublicProfile {
+        getProfileHandleCallCount += 1
+        lastGetProfileHandle = handle
+        lastGetProfileExpand = expand
+        return try getProfileHandleResult.get()
     }
 
     func getProfileByEmail(_ email: String) async throws -> MeeshyUser {
@@ -189,6 +208,7 @@ final class MockUserService: UserServiceProviding, @unchecked Sendable {
         lastSearchQuery = nil
 
         searchUsersResult = .success([])
+        servedSearchId = nil
         searchUsersCallCount = 0
         lastSearchUsersQuery = nil
 
@@ -211,9 +231,10 @@ final class MockUserService: UserServiceProviding, @unchecked Sendable {
         getProfileCallCount = 0
         lastGetProfileIdOrUsername = nil
 
-        getPublicProfileResult = .success(stubUser)
-        getPublicProfileCallCount = 0
-        lastGetPublicProfileUsername = nil
+        getProfileHandleResult = .success(PublicProfile(user: stubUser))
+        getProfileHandleCallCount = 0
+        lastGetProfileHandle = nil
+        lastGetProfileExpand = []
 
         getProfileByEmailResult = .success(stubUser)
         getProfileByEmailCallCount = 0

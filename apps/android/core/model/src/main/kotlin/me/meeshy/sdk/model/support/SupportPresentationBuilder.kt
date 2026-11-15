@@ -35,10 +35,20 @@ public object SupportPresentationBuilder {
         ),
     )
 
+    public const val DEFAULT_APPLICATION_ID: String = "me.meeshy.app"
+
+    /** La fiche Google Play : repli de « Noter l'app » quand l'avis intégré est indisponible (sans services Play). */
+    public fun playListingUrl(applicationId: String): String =
+        "https://play.google.com/store/apps/details?id=" + applicationId.trim().ifBlank { DEFAULT_APPLICATION_ID }
+
     public fun build(params: SupportParams): SupportPresentation =
         SupportPresentation(
             linkSections = listOf(
-                SupportLinkSection(SupportSectionKey.HELP, SupportLinkResolver.resolvable(HELP_LINKS)),
+                SupportLinkSection(
+                    key = SupportSectionKey.HELP,
+                    links = SupportLinkResolver.resolvable(HELP_LINKS),
+                    actions = listOf(SupportActionKind.RATE_APP),
+                ),
                 SupportLinkSection(SupportSectionKey.CONTACT, SupportLinkResolver.resolvable(CONTACT_LINKS)),
                 SupportLinkSection(SupportSectionKey.REPORT, SupportLinkResolver.resolvable(REPORT_LINKS)),
             ),

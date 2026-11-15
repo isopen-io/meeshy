@@ -12,8 +12,8 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessagingService } from '../../services/MessagingService';
 import { encryptionService } from '../../services/EncryptionService';
-import type { MessageRequest } from '../../../shared/types/messaging';
-import type { EncryptedPayload } from '../../../shared/types/encryption';
+import type { MessageRequest } from '@meeshy/shared/types/messaging';
+import type { EncryptedPayload } from '@meeshy/shared/types/encryption';
 
 const prisma = new PrismaClient();
 const messagingService = new MessagingService(prisma);

@@ -132,8 +132,8 @@ double zoom.
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+Core.swift` — la garde `!wasPlay`
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView.swift` — l'`init` qui court-circuite le `didSet`
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderer.swift` — `applyOpening` / `applyClosing` / `resetClosing`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift` — la ré-implémentation (ancre : `let incomingEffect`)
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift` — `.offset` / `.scaleEffect` / `RevealCircleShape`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift` — la ré-implémentation (ancre : `let incomingEffect`)
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift` — `.offset` / `.scaleEffect` / `RevealCircleShape`
 
 **Piste :** faire jouer l'ouverture depuis `layoutSubviews` ou un `didMoveToWindow`
 quand le canvas naît en `.play`, plutôt que d'élargir la garde `!wasPlay` — un

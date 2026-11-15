@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "bubble.media.masked",
+          "androidName": "bubble_media_masked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.media.tapToView",
+          "androidName": "bubble_media_tap_to_view",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.media.a11y.masked",
+          "androidName": "bubble_media_a11y_masked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.media.a11y.viewOnce",
+          "androidName": "bubble_media_a11y_view_once",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

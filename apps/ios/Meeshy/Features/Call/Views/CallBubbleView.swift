@@ -1,0 +1,489 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+/// Bulle avatar circulaire — forme repliée de l'appel en cours, atteinte par
+/// swipe depuis `FloatingCallPillView`. Au palier cercle, c'est le disque rogné
+/// aimanté au bord (`CallEdgeDisk`, #18458). Déplaçable (drag libre, clipse au
+/// bord le plus proche), pinçable (4 paliers de taille cercle → small →
+/// medium → large, morphing continu — spec
+/// 2026-08-03-call-bubble-pip-resize-morph-design.md), tap → plein écran
+/// déployé depuis l'endroit où elle flotte (P18.4), appui long (palier cercle
+/// uniquement) → mini-menu rapide (mute/haut-parleur/raccrocher). Aux paliers rectangle, ces 3 actions sont
+/// à la place une barre persistante en haut du cadre. Montée dans la fenêtre
+/// passe-plat du point de retour (`CallReturnPointWindowHost`, #8739), au-dessus
+/// de tout plein écran ; elle se montre selon `CallReturnPoint.showsBubble` —
+/// en mode bulle, et en mode pastille quand un plein écran recouvre la pastille.
+struct CallBubbleView: View {
+    // Audit P1-16 parity (see CallView.swift / FloatingCallPillView.swift) —
+    // injected by the caller instead of a `= CallManager.shared` default, so
+    // the parent's body re-evaluating for unrelated churn (unread counts,
+    // presence, navigation) doesn't tear down and rebuild this view's
+    // objectWillChange subscription. Both mount sites (RootView,
+    // iPadRootView+Sheets) already hold their own @ObservedObject callManager.
+    @ObservedObject var callManager: CallManager
+    let isMainScreenCovered: Bool
+    /// L'écran principal montre la conversation de l'appel (#18457) : en audio
+    /// la bulle se tait (la puce d'en-tête suffit), en vidéo elle est la
+    /// vignette, jamais le cercle.
+    var isInCallConversation: Bool = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    @State private var isMenuRevealed = false
+    @State private var dragTranslation: CGSize = .zero
+    @State private var menuDismissTask: Task<Void, Never>?
+    @State private var pinchScale: CGFloat = 1.0
+    @State private var pinchLastSample: (time: Date, progress: CGFloat)?
+
+    private let circleDiameter = CallBubbleGestureResolver.bubbleDiameter
+    private let menuButtonDiameter: CGFloat = 44
+    private let menuButtonGap: CGFloat = 8
+
+    private var isVideo: Bool {
+        callManager.isVideoEnabled || callManager.isRemoteVideoEnabled
+    }
+
+    private var presence: CallReducedPresence {
+        CallReducedPresence.resolve(
+            displayMode: callManager.displayMode,
+            isActive: callManager.callState.isActive,
+            isSystemPiPActive: callManager.isSystemPiPActive,
+            isInCallConversation: isInCallConversation,
+            isVideo: isVideo
+        )
+    }
+
+    var body: some View {
+        if CallReturnPoint.showsBubble(
+            displayMode: callManager.displayMode,
+            callState: callManager.callState,
+            isSystemPiPActive: callManager.isSystemPiPActive,
+            isMainScreenCovered: isMainScreenCovered,
+            isInCallConversation: isInCallConversation,
+            isVideo: isVideo
+        ) {
+            GeometryReader { geometry in
+                bubbleCluster(in: geometry)
+                    .position(bubbleCenter(in: geometry, size: CallBubbleGestureResolver.interpolatedSize(progress: currentProgress)))
+            }
+            .ignoresSafeArea()
+            .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
+            .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.75), value: callManager.displayMode)
+        }
+    }
+
+    // MARK: - Pinch progress
+
+    /// Progression continue (0...3, `.circle...large`) — ancrée sur le
+    /// palier snappé au repos (`pinchScale == 1`), suit l'échelle du doigt en
+    /// direct pendant un pinch actif.
+    private var currentProgress: CGFloat {
+        CallBubbleGestureResolver.progress(
+            startingTier: CallReducedPresence.effectiveTier(stored: callManager.bubbleSizeTier, presence: presence),
+            scale: pinchScale
+        )
+    }
+
+    /// Vrai tant que la forme est encore proche du cercle — c'est cette
+    /// région, et elle seule, qui garde le mini-menu déclenché par long-press
+    /// (au-delà, la barre de contrôle persistante prend le relais).
+    private var isCircleRegion: Bool {
+        currentProgress < 0.5
+    }
+
+    // MARK: - Cluster (bubble + revealed menu / persistent control bar)
+
+    @ViewBuilder
+    private func bubbleCluster(in geometry: GeometryProxy) -> some View {
+        let progress = currentProgress
+        let size = CallBubbleGestureResolver.interpolatedSize(progress: progress)
+        let cornerRadius = CallBubbleGestureResolver.interpolatedCornerRadius(progress: progress)
+        let controlOpacity = CallBubbleGestureResolver.controlBarOpacity(progress: progress)
+        let menuOffset = isMenuRevealed
+            ? CallBubbleGestureResolver.menuOffset(edge: callManager.bubbleEdge, screenWidth: geometry.size.width, buttonDiameter: menuButtonDiameter)
+            : 0
+        let sideButtonOffset = circleDiameter / 2 + menuButtonGap + menuButtonDiameter / 2
+
+        ZStack {
+            if isCircleRegion && isMenuRevealed {
+                muteButton.offset(x: -sideButtonOffset)
+                speakerButton.offset(x: sideButtonOffset)
+                hangupButton.offset(y: sideButtonOffset)
+            }
+
+            shareStopSlot(size: size)
+
+            participantVisual(size: size, cornerRadius: cornerRadius, controlOpacity: controlOpacity)
+        }
+        // Le cadre touchable de la fenêtre passe-plat, mesuré AVANT les
+        // décalages pour les suivre : élargi au glyphe de signal, et aux
+        // boutons du mini-menu quand il est ouvert.
+        .background {
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: CallReturnPointFrameKey.self,
+                    value: proxy.frame(in: .global).insetBy(dx: -(touchReach + shareStopReachX), dy: -touchReach)
+                )
+            }
+        }
+        .offset(x: menuOffset)
+        .offset(dragTranslation)
+        .simultaneousGesture(dragGesture(in: geometry))
+        .simultaneousGesture(pinchGesture)
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.5, maximumDistance: 6)
+                .onEnded { _ in revealMenu() }
+        )
+        .onTapGesture {
+            if isMenuRevealed {
+                closeMenu()
+            } else {
+                expandToFullScreen(in: geometry)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(
+            String(localized: "call.bubble.ongoing", defaultValue: "Appel en cours")
+            + (callManager.remoteUsername.map { " — \($0)" } ?? "")
+        )
+        .accessibilityValue(accessibilityTierLabel(for: callManager.bubbleSizeTier))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction(named: String(localized: "a11y.call.bubble.expand", defaultValue: "Revenir au plein écran", bundle: .main)) {
+            expandToFullScreen(in: geometry)
+        }
+        .accessibilityAction(named: String(localized: "a11y.call.bubble.quickMenu", defaultValue: "Ouvrir le mini-menu d'appel", bundle: .main)) {
+            revealMenu()
+        }
+        // Retaper la bulle referme le menu (voir .onTapGesture ci-dessus),
+        // mais VoiceOver navigue par swipe, pas par tap direct sur la bulle —
+        // sans cette action explicite, fermer le menu exigerait d'attendre
+        // les 3s d'auto-dismiss ou de déclencher raccrocher (destructif).
+        .accessibilityAction(named: String(localized: "a11y.call.bubble.closeMenu", defaultValue: "Fermer le mini-menu d'appel", bundle: .main)) {
+            closeMenu()
+        }
+        .accessibilityAdjustableAction { direction in
+            adjustTier(direction)
+        }
+    }
+
+    /// #18458 — au palier cercle, l'appel réduit est le disque rogné aimanté au
+    /// bord : ses cercles disent la ligne, la durée continue dessus, le réseau
+    /// ne s'y montre que dégradé, et aucune étiquette ne vit sous lui. Aux
+    /// paliers rectangle, la vignette garde son badge, son étiquette et sa barre.
+    @ViewBuilder
+    private func participantVisual(size: CGSize, cornerRadius: CGFloat, controlOpacity: Double) -> some View {
+        if isCircleRegion {
+            CallEdgeDisk(callManager: callManager, edge: callManager.bubbleEdge, strength: signalStrength)
+        } else {
+            CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, callManager: callManager)
+                .shadow(color: Color.black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
+                .overlay(alignment: .topTrailing) { signalBadge }
+                .overlay(alignment: .bottom) { nameplate(frameWidth: size.width) }
+                .overlay(alignment: .top) {
+                    tierControlBar
+                        .opacity(controlOpacity)
+                        .allowsHitTesting(controlOpacity > 0.5)
+                }
+        }
+    }
+
+    private func adjustTier(_ direction: AccessibilityAdjustmentDirection) {
+        let newRawValue: Int
+        switch direction {
+        case .increment: newRawValue = callManager.bubbleSizeTier.rawValue + 1
+        case .decrement: newRawValue = callManager.bubbleSizeTier.rawValue - 1
+        @unknown default: return
+        }
+        guard let newTier = CallBubbleSizeTier(rawValue: newRawValue) else { return }
+        withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.8)) {
+            callManager.bubbleSizeTier = newTier
+        }
+        HapticFeedback.light()
+    }
+
+    private var signalBadge: some View {
+        TransientCallSignalGlyph(strength: signalStrength)
+            .padding(MeeshySpacing.xsPlus)
+            .background(Circle().fill(Color.black.opacity(MeeshyOpacity.strong)))
+            .offset(x: 16, y: -16)
+    }
+
+    /// P18.5 — l'étiquette de verre « nom · durée » : en bas à gauche du cadre aux paliers
+    /// rectangle (resserrée à sa largeur), sous le cercle au palier cercle (trop petit pour la
+    /// porter), où elle s'efface quand le mini-menu y pose Raccrocher. Elle passe d'une place
+    /// à l'autre en mouvement et ne prend aucun toucher.
+    private func nameplate(frameWidth: CGFloat) -> some View {
+        CallReducedCaption(callManager: callManager, style: .glass)
+            .minimumScaleFactor(0.75)
+            .fixedSize(horizontal: isCircleRegion, vertical: true)
+            .frame(width: isCircleRegion ? nil : max(frameWidth - 2 * MeeshySpacing.sm, 0), alignment: .leading)
+            .padding(.bottom, isCircleRegion ? 0 : MeeshySpacing.sm)
+            .offset(y: isCircleRegion ? nameplateBelowOffset : 0)
+            .opacity(isCircleRegion && isMenuRevealed ? 0 : 1)
+            .animation(reduceMotion ? Animation.easeInOut(duration: 0.15) : Animation.spring(response: 0.3, dampingFraction: 0.85), value: isCircleRegion)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
+    private let nameplateBelowOffset: CGFloat = 32
+
+    private var touchReach: CGFloat {
+        guard isCircleRegion && isMenuRevealed else { return max(16, shareStopReach) }
+        return menuButtonGap + menuButtonDiameter + MeeshySpacing.sm
+    }
+
+    // MARK: - « Arrêter » au-dessus d'un plein écran (#17763)
+
+    private let shareStopHeight: CGFloat = 44
+
+    /// Le cadre touchable de la fenêtre passe-plat s'étend jusqu'à la capsule.
+    private var shareStopReach: CGFloat {
+        guard CallReturnPoint.showsShareStop(isSharing: callManager.screenShare.isSharing, isMenuRevealed: isMenuRevealed) else { return 0 }
+        return menuButtonGap + shareStopHeight + MeeshySpacing.sm
+    }
+
+    /// La capsule déborde la bulle du côté de l'écran : le cadre touchable s'y étend aussi.
+    private var shareStopReachX: CGFloat {
+        shareStopReach > 0 ? 100 : 0
+    }
+
+    @ViewBuilder
+    private func shareStopSlot(size: CGSize) -> some View {
+        Group {
+            if CallReturnPoint.showsShareStop(isSharing: callManager.screenShare.isSharing, isMenuRevealed: isMenuRevealed) {
+                shareStopCapsule
+                    .frame(width: size.width, alignment: callManager.bubbleEdge == .trailing ? .trailing : .leading)
+                    .offset(y: size.height / 2 + menuButtonGap + shareStopHeight / 2)
+                    .transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
+            }
+        }
+        .animation(CallShareCapsuleMotion.swapAnimation(reduceMotion: reduceMotion), value: callManager.screenShare.isSharing)
+    }
+
+    private var shareStopCapsule: some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            Image(systemName: "rectangle.on.rectangle")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.white)
+                .accessibilityHidden(true)
+            CallShareStopButton { callManager.screenShare.stopSharing() }
+        }
+        .padding(.leading, MeeshySpacing.sm)
+        .meeshyGlass(in: Capsule(), tint: MeeshyColors.error)
+        .fixedSize()
+        .environment(\.colorScheme, .dark)
+    }
+
+    private var tierControlBar: some View {
+        HStack(spacing: MeeshySpacing.md) {
+            muteButton
+            speakerButton
+            hangupButton
+        }
+        .padding(.top, MeeshySpacing.smPlus)
+    }
+
+    private func accessibilityTierLabel(for tier: CallBubbleSizeTier) -> String {
+        switch tier {
+        case .circle: return String(localized: "call.bubble.size.circle", defaultValue: "Cercle", bundle: .main)
+        case .small: return String(localized: "call.bubble.size.small", defaultValue: "Petit", bundle: .main)
+        case .medium: return String(localized: "call.bubble.size.medium", defaultValue: "Moyen", bundle: .main)
+        case .large: return String(localized: "call.bubble.size.large", defaultValue: "Grand", bundle: .main)
+        }
+    }
+
+    private var signalStrength: CallSignalStrength {
+        CallSignalStrength.from(level: callManager.liveVideoQualityLevel, connection: callManager.connectionQuality)
+    }
+
+    // MARK: - P18.4 — l'appel se redéploie depuis l'endroit où la bulle flotte
+
+    private func expandToFullScreen(in geometry: GeometryProxy) {
+        HapticFeedback.medium()
+        let center = bubbleCenter(in: geometry, size: CallBubbleGestureResolver.interpolatedSize(progress: currentProgress))
+        let origin = CallShareCapsuleMotion.window(reduceMotion: reduceMotion, bubbleCenter: center, in: geometry.size)
+        CallPipMorph.expand(callManager, from: origin, reduceMotion: reduceMotion)
+    }
+
+    // MARK: - Positioning
+
+    private func bubbleCenter(in geometry: GeometryProxy, size: CGSize) -> CGPoint {
+        let margin = CallBubbleGestureResolver.bubbleEdgeMargin
+        let halfWidth = size.width / 2
+        let safeArea = geometry.safeAreaInsets
+        // #18458 — le disque du palier cercle est rogné par le bord ; il rentre dans
+        // l'écran, à la marge des autres paliers, quand son mini-menu s'ouvre.
+        let x: CGFloat
+        if isCircleRegion && !isMenuRevealed {
+            x = CallEdgeDiskLaw.centerX(edge: callManager.bubbleEdge, screenWidth: geometry.size.width, diameter: size.width)
+        } else {
+            x = callManager.bubbleEdge == .trailing
+                ? geometry.size.width - safeArea.trailing - margin - halfWidth
+                : safeArea.leading + margin + halfWidth
+        }
+        let availableHeight = geometry.size.height - safeArea.top - safeArea.bottom
+        let rawY = callManager.bubbleVerticalFraction * availableHeight
+        let clampedY = CallBubbleGestureResolver.clampedVerticalPosition(
+            rawY, availableHeight: availableHeight, bubbleRadius: size.height / 2
+        )
+        return CGPoint(x: x, y: safeArea.top + clampedY)
+    }
+
+    // MARK: - Reposition drag
+
+    private func dragGesture(in geometry: GeometryProxy) -> some Gesture {
+        // `minimumDistance: 10` — matches the pill's own collapse gesture
+        // (`FloatingCallPillView.collapseDragGesture`). A near-zero threshold
+        // co-fires with `.onTapGesture` on ordinary finger jitter during a
+        // tap, causing a redundant edge-snap + haptic alongside the tap's
+        // own full-screen expansion.
+        DragGesture(minimumDistance: 10)
+            .onChanged { value in
+                guard !isMenuRevealed else { return }
+                dragTranslation = value.translation
+            }
+            .onEnded { value in
+                guard !isMenuRevealed else { return }
+                let size = CallBubbleGestureResolver.interpolatedSize(progress: currentProgress)
+                let center = bubbleCenter(in: geometry, size: size)
+                let releasedX = center.x + value.translation.width
+                let releasedY = center.y + value.translation.height
+                let edge = CallBubbleGestureResolver.snappedEdge(centerX: releasedX, screenWidth: geometry.size.width)
+
+                let safeArea = geometry.safeAreaInsets
+                let availableHeight = geometry.size.height - safeArea.top - safeArea.bottom
+                let clampedY = CallBubbleGestureResolver.clampedVerticalPosition(
+                    releasedY - safeArea.top, availableHeight: availableHeight, bubbleRadius: size.height / 2
+                )
+
+                withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.75)) {
+                    dragTranslation = .zero
+                    callManager.bubbleEdge = edge
+                    callManager.bubbleVerticalFraction = availableHeight > 0 ? clampedY / availableHeight : 0
+                }
+                HapticFeedback.light()
+            }
+    }
+
+    // MARK: - Pinch resize
+
+    private var pinchGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                guard !isMenuRevealed else { return }
+                // Sample BEFORE updating pinchScale, so onEnded can diff
+                // against the second-to-last progress — an instantaneous
+                // velocity estimate, matching dragGesture's own pre-update
+                // sampling convention in FloatingCallPillView.
+                pinchLastSample = (Date(), currentProgress)
+                pinchScale = value
+            }
+            .onEnded { value in
+                guard !isMenuRevealed else { return }
+                let finalProgress = CallBubbleGestureResolver.progress(startingTier: callManager.bubbleSizeTier, scale: value)
+                let velocity: CGFloat
+                if let sample = pinchLastSample {
+                    let elapsed = Date().timeIntervalSince(sample.time)
+                    velocity = elapsed > 0 ? (finalProgress - sample.progress) / CGFloat(elapsed) : 0
+                } else {
+                    velocity = 0
+                }
+                pinchLastSample = nil
+                let resolvedTier = CallBubbleGestureResolver.nextTier(progress: finalProgress, velocity: velocity)
+                withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.75)) {
+                    callManager.bubbleSizeTier = resolvedTier
+                    pinchScale = 1.0
+                }
+                HapticFeedback.light()
+            }
+    }
+
+    // MARK: - Mini-menu (long-press reveal, circle region only)
+
+    private func revealMenu() {
+        guard currentProgress < 0.5 else { return }
+        HapticFeedback.medium()
+        withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.75)) {
+            isMenuRevealed = true
+        }
+        armAutoDismiss()
+    }
+
+    private func closeMenu() {
+        menuDismissTask?.cancel()
+        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
+            isMenuRevealed = false
+        }
+    }
+
+    private func armAutoDismiss() {
+        menuDismissTask?.cancel()
+        menuDismissTask = Task { @MainActor in
+            guard await cancellableSleep(for: .seconds(3)), !Task.isCancelled else { return }
+            closeMenu()
+        }
+    }
+
+    private var muteButton: some View {
+        Button {
+            callManager.toggleMute()
+            HapticFeedback.light()
+            armAutoDismiss()
+        } label: {
+            Image(systemName: callManager.isMuted ? "mic.slash.fill" : "mic.fill")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(callManager.isMuted ? MeeshyColors.error : Color.white)
+                .frame(width: menuButtonDiameter, height: menuButtonDiameter)
+                .background(Circle().fill(callManager.isMuted ? MeeshyColors.error.opacity(MeeshyOpacity.light) : Color.black.opacity(MeeshyOpacity.strong)))
+        }
+        .pressable()
+        .accessibilityLabel(callManager.isMuted
+            ? String(localized: "call.pill.unmute", defaultValue: "Réactiver le micro")
+            : String(localized: "call.pill.mute", defaultValue: "Couper le micro"))
+        .toggleStateAccessibility(isToggle: true, isActive: callManager.isMuted)
+    }
+
+    private var speakerButton: some View {
+        Button {
+            callManager.toggleSpeaker()
+            HapticFeedback.light()
+            armAutoDismiss()
+        } label: {
+            Image(systemName: callManager.isSpeaker ? "speaker.wave.3.fill" : "speaker.fill")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(callManager.isSpeaker ? MeeshyColors.indigo400 : Color.white)
+                .frame(width: menuButtonDiameter, height: menuButtonDiameter)
+                .background(Circle().fill(callManager.isSpeaker ? MeeshyColors.indigo400.opacity(MeeshyOpacity.light) : Color.black.opacity(MeeshyOpacity.strong)))
+        }
+        .pressable()
+        .accessibilityLabel(callManager.isSpeaker
+            ? String(localized: "call.pill.speaker.off", defaultValue: "Désactiver le haut-parleur")
+            : String(localized: "call.pill.speaker.on", defaultValue: "Activer le haut-parleur"))
+        .toggleStateAccessibility(isToggle: true, isActive: callManager.isSpeaker)
+    }
+
+    private var hangupButton: some View {
+        Button {
+            closeMenu()
+            callManager.endCall()
+            HapticFeedback.error()
+        } label: {
+            Image(systemName: "phone.down.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.white)
+                .frame(width: menuButtonDiameter, height: menuButtonDiameter)
+                .background(
+                    Circle().fill(
+                        LinearGradient(
+                            colors: [MeeshyColors.error, MeeshyColors.error.opacity(MeeshyOpacity.intense)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                )
+        }
+        .pressable()
+        .accessibilityLabel(String(localized: "call.bubble.hangup", defaultValue: "Raccrocher l'appel"))
+        .accessibilityHint(String(localized: "call.end.hint", defaultValue: "Termine l'appel en cours", bundle: .main))
+    }
+}

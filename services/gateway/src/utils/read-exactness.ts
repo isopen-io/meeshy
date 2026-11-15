@@ -105,13 +105,80 @@ export function computeRecipientCount(
   );
 }
 
+/**
+ * Marque du SEUL producteur légitime d'un repli de livraison.
+ *
+ * `resolveCursorDeliveredAt` est la seule fonction qui la pose, et
+ * `ResolveReceivedAtInput.cursorDeliveredAt` est la seule à l'exiger : passer
+ * `cursor.lastDeliveredAt` brut ne compile pas. C'est un cliquet de TYPE, pas
+ * un style — la dérivation vivait recopiée sur quatre sites, et le cinquième
+ * aurait été écrit sans elle (#18701).
+ */
+declare const CURSOR_DELIVERED_BRAND: unique symbol;
+
+/** Un repli de livraison DÉJÀ borné au message ET à la bascule. */
+export type CursorDeliveredAt =
+  | (Date & { readonly [CURSOR_DELIVERED_BRAND]: 'resolveCursorDeliveredAt' })
+  | null;
+
+export type ResolveCursorDeliveredAtInput = {
+  /** `ConversationReadCursor.lastDeliveredAt`, BRUT — une horloge murale. */
+  readonly cursorLastDeliveredAt: Date | null;
+  readonly messageCreatedAt: Date;
+  /** La MÊME bascule que `resolveReadAt` — cf. `getExactReadTrackingCutover`. */
+  readonly cutover: Date | null;
+};
+
+/**
+ * Repli curseur de la LIVRAISON — la moitié que `resolveReadAt` avait et que
+ * la livraison n'avait pas.
+ *
+ * `ConversationReadCursor.lastDeliveredAt` est posé à `now` par
+ * `_advanceCursor` : c'est l'heure à laquelle un accusé a été TRAITÉ, jamais la
+ * position du dernier message réellement livré. Le comparer à
+ * `message.createdAt` confronte une horloge MURALE à une POSITION, et répond
+ * « remis » pour tout message antérieur au traitement — y compris celui que le
+ * drain vient de REFUSER d'émettre (#18614) et celui que le plafond de 500 de
+ * `RedisDeliveryQueue` a évincé sans que rien ne le signale. L'auteur voyait
+ * ✓✓ sur un message que personne n'a reçu.
+ *
+ * La discipline est celle de `resolveReadAt`, et pour la même raison : passé la
+ * bascule, **l'absence de gel VEUT DIRE l'absence de livraison** — les deux
+ * sites qui avancent ce curseur figent dans le même mouvement
+ * (`markMessagesAsReceived`, et la cascade « lu ⇒ remis » de
+ * `markConversationAsRead`), si bien qu'un message livré après la bascule porte
+ * toujours son entrée. Avant la bascule, le repli reste consenti : ces
+ * messages-là n'ont jamais eu l'occasion d'être gelés, et les en priver les
+ * ferait tous basculer en « jamais remis ».
+ *
+ * `cutover: null` — variable d'environnement absente — conserve le comportement
+ * historique à l'identique, borne au message comprise : la bascule s'arme
+ * délibérément, jamais par le seul fait de livrer ce code.
+ */
+export function resolveCursorDeliveredAt({
+  cursorLastDeliveredAt,
+  messageCreatedAt,
+  cutover,
+}: ResolveCursorDeliveredAtInput): CursorDeliveredAt {
+  if (cutover && messageCreatedAt.getTime() >= cutover.getTime()) return null;
+
+  if (!cursorLastDeliveredAt) return null;
+
+  return cursorLastDeliveredAt.getTime() >= messageCreatedAt.getTime()
+    ? (cursorLastDeliveredAt as NonNullable<CursorDeliveredAt>)
+    : null;
+}
+
 export type ResolveReceivedAtInput = {
   /** `MessageStatusEntry.receivedAt`, figé write-once. */
   readonly frozenReceivedAt: Date | null;
   /** `MessageStatusEntry.deliveredAt`, figé write-once. */
   readonly frozenDeliveredAt: Date | null;
-  /** `ConversationReadCursor.lastDeliveredAt`, déjà borné au message. */
-  readonly cursorDeliveredAt: Date | null;
+  /**
+   * Le repli curseur, déjà borné au message ET à la bascule. Le type l'exige :
+   * seul `resolveCursorDeliveredAt` peut le produire.
+   */
+  readonly cursorDeliveredAt: CursorDeliveredAt;
   /** La date de LECTURE déjà résolue pour ce même participant. */
   readonly readAt: Date | null;
 };
@@ -136,7 +203,11 @@ export type ResolveReceivedAtInput = {
  * le monde.
  *
  * La lecture est la preuve la plus forte de la réception ; elle sert donc de
- * dernier repli. En son absence, rien n'est affirmé : `null`.
+ * dernier repli — et elle survit à la bascule, `resolveReadAt` ne rendant plus
+ * alors qu'une date FIGÉE. En son absence, rien n'est affirmé : `null`.
+ *
+ * Le repli curseur, lui, est borné par `resolveCursorDeliveredAt` (#18701) : il
+ * ne peut plus entrer ici sans l'être, son type en est la preuve.
  */
 export function resolveReceivedAt({
   frozenReceivedAt,

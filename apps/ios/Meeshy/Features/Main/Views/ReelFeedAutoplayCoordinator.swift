@@ -14,23 +14,46 @@ import MeeshyUI
 /// ne serait jamais rappelé et le réel continuerait de jouer pendant l'appel.
 @MainActor
 final class ReelFeedAutoplayCoordinator: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published private(set) var activeReelId: String?
 
+    /// **Le réel à PRÉCHAUFFER — celui qui suit l'actif** (#7009).
+    ///
+    /// Le coordinateur n'élisait que l'actif : le voisin n'était touché qu'au
+    /// moment où il le devenait à son tour, et le swipe montrait un trou noir
+    /// le temps du premier frame. Il est élu ici parce que c'est ici que vit
+    /// l'ORDRE du fil (`frames`) ; il est CONSOMMÉ par `ReelFeedCardContainer`,
+    /// qui est le seul à tenir le `FeedPost` — donc son URL.
+    ///
+    /// Comme `activeReelId`, il n'est lu QUE par des conteneurs, jamais par le
+    /// `body` de `FeedView` : sans cela, chaque changement d'élection
+    /// ré-évaluerait le `ForEach` entier (invariant I1).
+    @Published private(set) var prewarmReelId: String?
+
     private let isCallActive: () -> Bool
+    /// La politique média autorise-t-elle à préparer le réel SUIVANT ? Non en
+    /// économie d'énergie ni sous une chaleur sérieuse (#9880).
+    private let prewarmsNeighbours: () -> Bool
     /// Debounce des recalculs d'élection : annulé+reprogrammé à chaque `update()`
     /// pour coalescer le churn de frames au scroll (I2).
     private var debounceTask: Task<Void, Never>?
     private var callStateCancellable: AnyCancellable?
 
     /// `callStatePublisher` injecte le flux d'état d'appel (true = appel actif).
-    /// Défaut : `CallManager.shared.$callState` mappé sur `isActive`, qui émet
+    /// Défaut : `CallManagerHost.shared.callStatePublisher` mappé sur `isActive`, qui émet
     /// la transition inactif→actif même sans scroll. Les tests passent un
     /// publisher déterministe (ou `nil`) pour ne pas toucher le singleton.
     init(
         isCallActive: @escaping () -> Bool = { MediaSessionCoordinator.shared.isCallActive },
-        callStatePublisher: AnyPublisher<Bool, Never>? = ReelFeedAutoplayCoordinator.defaultCallStatePublisher
+        callStatePublisher: AnyPublisher<Bool, Never>? = ReelFeedAutoplayCoordinator.defaultCallStatePublisher,
+        prewarmsNeighbours: @escaping () -> Bool = { MediaPolicyMonitor.shared.policy.autoplaysNeighbors }
     ) {
         self.isCallActive = isCallActive
+        self.prewarmsNeighbours = prewarmsNeighbours
         if let callStatePublisher {
             callStateCancellable = callStatePublisher
                 .receive(on: DispatchQueue.main)
@@ -46,7 +69,7 @@ final class ReelFeedAutoplayCoordinator: ObservableObject {
     /// vers un `Bool` "appel actif". Construite hors-init pour rester `nil` si la
     /// couche appel n'est pas disponible (preview/test sans singleton).
     static var defaultCallStatePublisher: AnyPublisher<Bool, Never> {
-        CallManager.shared.$callState
+        CallManagerHost.shared.callStatePublisher
             .map(\.isActive)
             .removeDuplicates()
             .eraseToAnyPublisher()
@@ -61,11 +84,17 @@ final class ReelFeedAutoplayCoordinator: ObservableObject {
         }
         debounceTask?.cancel()
         debounceTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 100_000_000) // 100 ms
+            _ = await cancellableSleep(for: .milliseconds(100)) // 100 ms
             guard !Task.isCancelled, let self else { return }
             guard !self.isCallActive() else { self.clear(); return }
             let next = mostCenteredReel(frames: frames, viewportMinY: viewportMinY, viewportMaxY: viewportMaxY)
             if next != self.activeReelId { self.activeReelId = next }
+            // Réassignation CONDITIONNELLE, comme au-dessus : `@Published`
+            // publie sur `willSet`, valeur changée ou non, et ce bloc court
+            // pendant le défilement. Republier à l'identique fait « Publishing
+            // changes from within view updates » et vide le fil (#6977).
+            let neighbour = self.prewarmsNeighbours() ? ReelPrewarmWindow.next(after: next, in: frames) : nil
+            if neighbour != self.prewarmReelId { self.prewarmReelId = neighbour }
         }
     }
 
@@ -73,6 +102,7 @@ final class ReelFeedAutoplayCoordinator: ObservableObject {
         debounceTask?.cancel()
         debounceTask = nil
         if activeReelId != nil { activeReelId = nil }
+        if prewarmReelId != nil { prewarmReelId = nil }
     }
 
     /// Suspension immédiate déclenchée par un passage en appel hors scroll (C1) :

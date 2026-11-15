@@ -3,6 +3,31 @@ import XCTest
 @MainActor
 final class SingleSourceOfTruthTests: XCTestCase {
 
+    /// Depuis #4942, `ConversationViewModel` est une FAMILLE de fichiers — l'hôte
+    /// `ConversationViewModel.swift` et ses extensions `ConversationViewModel+*.swift`.
+    /// Une garde qui ne lisait que l'hôte passait À VIDE dès l'extraction : le code
+    /// qu'elle interdit avait simplement changé de fichier, et rien ne rougissait.
+    /// Les deux témoins balaient donc la famille entière, et attribuent chaque
+    /// violation à son fichier.
+    private func conversationViewModelFamily() throws -> [(name: String, lines: [String])] {
+        let filePath = #filePath
+        let projectRoot = filePath
+            .components(separatedBy: "/MeeshyTests/")
+            .first ?? ""
+        let directory = "\(projectRoot)/Meeshy/Features/Main/ViewModels"
+        let names = try FileManager.default.contentsOfDirectory(atPath: directory)
+            .filter { $0 == "ConversationViewModel.swift" || ($0.hasPrefix("ConversationViewModel+") && $0.hasSuffix(".swift")) }
+            .sorted()
+        XCTAssertGreaterThan(
+            names.count, 1,
+            "La famille ConversationViewModel*.swift doit compter l'hôte ET ses extensions (#4942)"
+        )
+        return try names.map { name in
+            let content = try String(contentsOfFile: "\(directory)/\(name)", encoding: .utf8)
+            return (name: name, lines: content.components(separatedBy: "\n"))
+        }
+    }
+
     /// Phase 1 invariant: optimistic UI updates must NOT mutate
     /// `ConversationViewModel.messages` directly. They must write to
     /// `MessagePersistenceActor` and let the store observation surface
@@ -12,15 +37,6 @@ final class SingleSourceOfTruthTests: XCTestCase {
     /// - The single `subscribeToMessageStore` write (the observation OUTPUT)
     /// - Test files (test fixtures legitimately seed state directly)
     func test_noDirectOptimisticMutation_of_conversationViewModel_messages() throws {
-        let filePath = #filePath
-        let projectRoot = filePath
-            .components(separatedBy: "/MeeshyTests/")
-            .first ?? ""
-        let viewModelPath = "\(projectRoot)/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift"
-
-        let content = try String(contentsOfFile: viewModelPath, encoding: .utf8)
-        let lines = content.components(separatedBy: "\n")
-
         // Patterns that indicate direct mutation in optimistic-update flows.
         // These should be replaced by writes to MessagePersistenceActor;
         // the store observation surfaces changes to the view automatically.
@@ -50,11 +66,13 @@ final class SingleSourceOfTruthTests: XCTestCase {
             #"messages\[msgIdx\]\.attachments\s*="#,
         ]
 
-        var violations: [(Int, String)] = []
-        for (i, line) in lines.enumerated() {
-            for pattern in forbiddenPatterns {
-                if line.range(of: pattern, options: .regularExpression) != nil {
-                    violations.append((i + 1, line.trimmingCharacters(in: .whitespaces)))
+        var violations: [(String, Int, String)] = []
+        for file in try conversationViewModelFamily() {
+            for (i, line) in file.lines.enumerated() {
+                for pattern in forbiddenPatterns {
+                    if line.range(of: pattern, options: .regularExpression) != nil {
+                        violations.append((file.name, i + 1, line.trimmingCharacters(in: .whitespaces)))
+                    }
                 }
             }
         }
@@ -62,7 +80,7 @@ final class SingleSourceOfTruthTests: XCTestCase {
         XCTAssertTrue(
             violations.isEmpty,
             "Direct optimistic mutations of vm.messages found — write through MessagePersistenceActor instead:\n" +
-            violations.map { "Line \($0.0): \($0.1)" }.joined(separator: "\n")
+            violations.map { "\($0.0):\($0.1): \($0.2)" }.joined(separator: "\n")
         )
     }
 
@@ -84,21 +102,12 @@ final class SingleSourceOfTruthTests: XCTestCase {
     /// rather than a count, so legitimate additions/removals inside the
     /// sanctioned method never trip it while writes elsewhere always do.
     func test_wholeArrayMessagesWrite_onlyInSubscribeToMessageStore() throws {
-        let filePath = #filePath
-        let projectRoot = filePath
-            .components(separatedBy: "/MeeshyTests/")
-            .first ?? ""
-        let viewModelPath = "\(projectRoot)/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift"
-
-        let content = try String(contentsOfFile: viewModelPath, encoding: .utf8)
-        let lines = content.components(separatedBy: "\n")
-
         // Attribute any line to its enclosing method by scanning upward for the
         // nearest `func` declaration. Closures carry no `func` keyword, so a
         // write inside `subscribeToMessageStore`'s `.sink`/`Task` closures still
         // resolves to `subscribeToMessageStore`.
         let funcDeclPattern = #"(^|\s)func\s+(\w+)\s*\("#
-        func enclosingFunction(ofLineAt index: Int) -> String? {
+        func enclosingFunction(in lines: [String], ofLineAt index: Int) -> String? {
             for i in stride(from: index, through: 0, by: -1) {
                 guard let match = lines[i].range(of: funcDeclPattern, options: .regularExpression)
                 else { continue }
@@ -114,28 +123,40 @@ final class SingleSourceOfTruthTests: XCTestCase {
         // Excludes: comments, variable declarations containing "messages", subscript writes (messages[i]).
         let wholeArrayWritePattern = #"^\s+(self\.)?messages\s*="#
 
-        var violations: [(Int, String, String)] = []
-        for (i, line) in lines.enumerated() {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard !trimmed.hasPrefix("//"),
-                  !trimmed.hasPrefix("*"),
-                  !trimmed.contains("messages[")
-            else { continue }
-            guard line.range(of: wholeArrayWritePattern, options: .regularExpression) != nil
-            else { continue }
-            let owner = enclosingFunction(ofLineAt: i) ?? "<unknown>"
-            if owner != "subscribeToMessageStore" {
-                violations.append((i + 1, trimmed, owner))
+        var violations: [(String, Int, String, String)] = []
+        var sanctionedWrites = 0
+        for file in try conversationViewModelFamily() {
+            for (i, line) in file.lines.enumerated() {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                guard !trimmed.hasPrefix("//"),
+                      !trimmed.hasPrefix("*"),
+                      !trimmed.contains("messages[")
+                else { continue }
+                guard line.range(of: wholeArrayWritePattern, options: .regularExpression) != nil
+                else { continue }
+                let owner = enclosingFunction(in: file.lines, ofLineAt: i) ?? "<unknown>"
+                if owner == "subscribeToMessageStore" {
+                    sanctionedWrites += 1
+                } else {
+                    violations.append((file.name, i + 1, trimmed, owner))
+                }
             }
         }
 
+        // Le site sanctionné DOIT exister quelque part dans la famille : un
+        // balayage qui ne trouve plus aucune écriture ne prouve pas l'invariant,
+        // il prouve qu'il lit les mauvais fichiers.
+        XCTAssertGreaterThan(
+            sanctionedWrites, 0,
+            "Aucune écriture pleine-array trouvée dans `subscribeToMessageStore` : la garde ne lit plus le bon fichier"
+        )
         XCTAssertTrue(
             violations.isEmpty,
             "Whole-array `messages = ...` writes must only exist inside " +
             "`subscribeToMessageStore` (the GRDB observation output). " +
             "Single-source-of-truth requires every other site to write through " +
             "MessageStore instead. Found writes in other methods:\n" +
-            violations.map { "Line \($0.0) [in \($0.2)]: \($0.1)" }.joined(separator: "\n")
+            violations.map { "\($0.0):\($0.1) [in \($0.3)]: \($0.2)" }.joined(separator: "\n")
         )
     }
 }

@@ -34,6 +34,7 @@ from utils.audio_format_converter import convert_to_wav_if_needed
 
 # Import stages
 from .transcription_guards import is_blank_transcription
+from .voice_cloning_guards import takes_multi_speaker_path
 from .transcription_stage import (
     TranscriptionStage,
     AudioMessageMetadata,
@@ -48,6 +49,7 @@ from .translation_stage import (
 
 # Import services for dependency injection
 from ..redis_service import get_redis_service
+from services.task_privacy import shown
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -407,7 +409,7 @@ class AudioMessagePipeline:
         )
 
         logger.info(
-            f"[PIPELINE] Transcribed: '{transcription.text[:50]}...' "
+            f"[PIPELINE] Transcribed: '{shown(transcription.text, 50)}...' "
             f"(lang={transcription.language}, source={transcription.source})"
         )
 
@@ -596,11 +598,11 @@ class AudioMessagePipeline:
         # ═══════════════════════════════════════════════════════════════
         # CHOIX DE LA MÉTHODE: Multi-speaker ou simple
         # ═══════════════════════════════════════════════════════════════
-        is_multi_speaker = (
-            transcription.speaker_count is not None and
-            transcription.speaker_count > 1 and
-            source_segments and
-            len(source_segments) > 0
+        # #17309 — un modèle de voix par locuteur : seulement si la passerelle autorise le clonage.
+        is_multi_speaker = takes_multi_speaker_path(
+            speaker_count=transcription.speaker_count,
+            segments=source_segments,
+            generate_voice_clone=final_generate_voice_clone,
         )
 
         if is_multi_speaker:
@@ -633,7 +635,8 @@ class AudioMessagePipeline:
                 sender_speaker_id=transcription.sender_speaker_id,
                 model_type=model_type,
                 on_translation_ready=on_translation_ready,
-                diarization_speakers=transcription.diarization_speakers
+                diarization_speakers=transcription.diarization_speakers,
+                generate_voice_clone=final_generate_voice_clone
             )
 
             if not translations:

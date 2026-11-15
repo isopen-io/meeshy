@@ -200,36 +200,47 @@ describe('GET /api/v1/voice/history — service error', () => {
   });
 });
 
-// ─── GET /api/v1/voice/stats ──────────────────────────────────────────────────
+// ─── #4190 — ce module ne monte plus /stats ni /health ────────────────────────
 
-describe('GET /api/v1/voice/stats — unauthenticated', () => {
-  it('returns 401 when userId is not available', async () => {
-    const { app } = await buildApp({ authenticated: false });
-    const res = await app.inject({ method: 'GET', url: `${PREFIX}/stats` });
-    expect(res.statusCode).toBe(401);
+/**
+ * GARDE NÉGATIVE. Les describes qui exerçaient `GET /api/v1/voice/stats` et
+ * `GET /api/v1/voice/health` ont été retirés avec les routes (#4190) — mais un
+ * test SUPPRIMÉ ne protège de rien : rien n'empêcherait de remonter les deux
+ * handlers demain. Celui-ci lit la table de routes RÉELLEMENT montée par
+ * `registerAnalysisRoutes` (le seul endroit où la méthode et le chemin se
+ * lisent ensemble) et exige à la fois l'ABSENCE des deux retirées et la
+ * PRÉSENCE de leurs voisines vivantes — cette seconde moitié est ce qui
+ * empêche un futur nettoyage d'emporter une route qui sert.
+ */
+describe('registerAnalysisRoutes — table de routes (#4190)', () => {
+  async function mountedRoutes(): Promise<string[]> {
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('authenticate', async () => {});
+    const collected: string[] = [];
+    app.addHook('onRoute', (route) => {
+      const methods = Array.isArray(route.method) ? route.method : [route.method];
+      for (const method of methods) collected.push(`${method} ${route.url}`);
+    });
+    registerAnalysisRoutes(app, makeAudioTranslateService(), PREFIX);
+    await app.ready();
     await app.close();
+    return collected;
+  }
+
+  it('ne monte plus GET /api/v1/voice/stats ni GET /api/v1/voice/health', async () => {
+    const routes = await mountedRoutes();
+    expect(routes).not.toContain(`GET ${PREFIX}/stats`);
+    expect(routes).not.toContain(`GET ${PREFIX}/health`);
   });
-});
 
-describe('GET /api/v1/voice/stats — success', () => {
-  it('returns 200 with stats data', async () => {
-    const stats = { totalTranslations: 10, totalMinutes: 5, languagesUsed: ['en', 'fr'], avgProcessingTime: 1.2, feedbackRating: 4.5 };
-    const service = makeAudioTranslateService({ getUserStats: jest.fn<any>().mockResolvedValue(stats) });
-    const { app } = await buildApp({ service });
-    const res = await app.inject({ method: 'GET', url: `${PREFIX}/stats?period=week` });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
-    await app.close();
-  });
-});
-
-describe('GET /api/v1/voice/stats — service error', () => {
-  it('returns 500 when service throws', async () => {
-    const service = makeAudioTranslateService({ getUserStats: jest.fn<any>().mockRejectedValue(new Error('DB error')) });
-    const { app } = await buildApp({ service });
-    const res = await app.inject({ method: 'GET', url: `${PREFIX}/stats` });
-    expect(res.statusCode).toBe(500);
-    await app.close();
+  it('monte toujours les routes voisines vivantes', async () => {
+    const routes = await mountedRoutes();
+    expect(routes).toContain(`POST ${PREFIX}/analyze`);
+    expect(routes).toContain(`POST ${PREFIX}/compare`);
+    expect(routes).toContain(`POST ${PREFIX}/feedback`);
+    expect(routes).toContain(`GET ${PREFIX}/history`);
+    expect(routes).toContain(`GET ${PREFIX}/admin/metrics`);
+    expect(routes).toContain(`GET ${PREFIX}/languages`);
   });
 });
 
@@ -291,49 +302,6 @@ describe('GET /api/v1/voice/admin/metrics — service error', () => {
     await app.ready();
     const res = await app.inject({ method: 'GET', url: `${PREFIX}/admin/metrics` });
     expect(res.statusCode).toBe(500);
-    await app.close();
-  });
-});
-
-// ─── GET /api/v1/voice/health ─────────────────────────────────────────────────
-
-describe('GET /api/v1/voice/health — healthy', () => {
-  it('returns 200 when service is healthy', async () => {
-    const service = makeAudioTranslateService({ getHealthStatus: jest.fn<any>().mockResolvedValue({ status: 'healthy', services: {} }) });
-    const { app } = await buildApp({ service });
-    const res = await app.inject({ method: 'GET', url: `${PREFIX}/health` });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.status).toBe('healthy');
-    await app.close();
-  });
-});
-
-describe('GET /api/v1/voice/health — degraded', () => {
-  it('returns 200 when service is degraded', async () => {
-    const service = makeAudioTranslateService({ getHealthStatus: jest.fn<any>().mockResolvedValue({ status: 'degraded', services: {} }) });
-    const { app } = await buildApp({ service });
-    const res = await app.inject({ method: 'GET', url: `${PREFIX}/health` });
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-});
-
-describe('GET /api/v1/voice/health — unhealthy', () => {
-  it('returns 503 when service is unhealthy', async () => {
-    const service = makeAudioTranslateService({ getHealthStatus: jest.fn<any>().mockResolvedValue({ status: 'unhealthy', services: {} }) });
-    const { app } = await buildApp({ service });
-    const res = await app.inject({ method: 'GET', url: `${PREFIX}/health` });
-    expect(res.statusCode).toBe(503);
-    await app.close();
-  });
-});
-
-describe('GET /api/v1/voice/health — service error', () => {
-  it('returns 503 when getHealthStatus throws', async () => {
-    const service = makeAudioTranslateService({ getHealthStatus: jest.fn<any>().mockRejectedValue(new Error('health check failed')) });
-    const { app } = await buildApp({ service });
-    const res = await app.inject({ method: 'GET', url: `${PREFIX}/health` });
-    expect(res.statusCode).toBe(503);
     await app.close();
   });
 });

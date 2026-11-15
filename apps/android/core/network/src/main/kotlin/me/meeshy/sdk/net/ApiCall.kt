@@ -1,14 +1,83 @@
 package me.meeshy.sdk.net
 
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.decodeFromString
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.ApiResponseMeta
+import me.meeshy.sdk.model.DeletionAcknowledgement
 import me.meeshy.sdk.model.Pagination
+import me.meeshy.sdk.model.feedback.DailyGestureLimit
+import me.meeshy.sdk.model.net.MaskedEmailOwner
+import me.meeshy.sdk.model.net.NewcomerSlowMode
+import okhttp3.ResponseBody
 import retrofit2.HttpException
 import retrofit2.Response
 import java.io.IOException
 
 /** [apiCall]'s payload plus the envelope's `pagination` block, which [apiCall] discards. */
-data class PagedResult<T>(val data: T, val pagination: Pagination?)
+data class PagedResult<T>(val data: T, val pagination: Pagination?, val meta: ApiResponseMeta? = null) {
+    /** Ancre de la suite (curseur) de cette page, `null` quand il n'y en a plus. */
+    val nextCursor: String? get() = pagination?.nextCursor
+}
+
+/**
+ * Projette une enveloppe de refus en [ApiError] — le SITE UNIQUE qui décide ce
+ * qu'un refus TRANSPORTE. Les trois clés qui QUALIFIENT le refus (`field`,
+ * `suggestions`, `violations`) vivent à la RACINE de l'enveloppe, à côté de
+ * `code` et jamais sous `error` ; les lire ici, et non chez chaque appelant,
+ * est ce qui permet à un écran de poser chaque refus sous SON champ.
+ */
+private fun ApiResponse<*>.toApiError(
+    fallbackMessage: String,
+    fallbackCode: String?,
+    httpStatus: Int?,
+    retryAfterHeader: String? = null,
+): ApiError {
+    val refusalCode = code ?: fallbackCode
+    return ApiError(
+        message = error ?: message ?: fallbackMessage,
+        code = refusalCode,
+        httpStatus = httpStatus,
+        fieldName = fieldName,
+        suggestions = suggestions.orEmpty(),
+        violations = violations.orEmpty(),
+        limit = limit,
+        unlinked = unlinked,
+        emailOwner = MaskedEmailOwner.from(emailOwner),
+        resetAtEpochMillis = DailyGestureLimit.parseInstant(resetAt),
+        retryAfterSeconds = retryAfterSecondsOf(httpStatus, refusalCode, retryAfterHeader),
+        requiredConsents = requiredConsents,
+    )
+}
+
+/**
+ * Le délai d'un refus TEMPORAIRE : le mode lent des nouveaux comptes lit `Retry-After` puis `retryAfter` de l'enveloppe
+ * (plancher d'une seconde) ; une limite du jour garde le `retryAfter` de l'enveloppe quand il est servi.
+ */
+private fun ApiResponse<*>.retryAfterSecondsOf(httpStatus: Int?, refusalCode: String?, header: String?): Int? =
+    NewcomerSlowMode.from(httpStatus ?: 0, refusalCode, header, retryAfter)?.retryAfterSeconds
+        ?: retryAfter?.takeIf { DailyGestureLimit.isDailyLimitCode(refusalCode) }?.let { NewcomerSlowMode.seconds(it) }
+
+/**
+ * Turns a Retrofit [HttpException] into an [ApiError] carrying the GATEWAY'S OWN
+ * `code`/`error` when its body decodes as an [ApiResponse] envelope, instead of only
+ * the synthetic `"HTTP_$status"` — otherwise two endpoints answering the same status
+ * for different reasons (e.g. `/me/account/deletion`'s `409 ALREADY_PENDING` vs.
+ * `409 NO_EMAIL`) are indistinguishable to every caller that discriminates on
+ * [ApiError.code]. Best-effort: an absent/malformed body falls back to the prior
+ * synthetic shape unchanged, so a caller that only ever checked [ApiError.httpStatus]
+ * sees no behavioural change.
+ */
+private fun apiErrorFromHttpException(e: HttpException): ApiError {
+    val body = runCatching { e.response()?.errorBody()?.string() }.getOrNull()
+    val envelope = body?.let { runCatching { MeeshyApi.json.decodeFromString<ApiResponse<Unit>>(it) }.getOrNull() }
+    return envelope?.toApiError(
+        fallbackMessage = e.message(),
+        fallbackCode = "HTTP_${e.code()}",
+        httpStatus = e.code(),
+        retryAfterHeader = e.response()?.headers()?.get("Retry-After"),
+    ) ?: ApiError(message = e.message(), code = "HTTP_${e.code()}", httpStatus = e.code())
+}
 
 /**
  * Run an API call returning the standard [ApiResponse] envelope and fold it into a
@@ -22,23 +91,18 @@ suspend fun <T> apiCall(block: suspend () -> ApiResponse<T>): NetworkResult<T> =
             NetworkResult.Success(data)
         } else {
             NetworkResult.Failure(
-                ApiError(
-                    message = response.error ?: response.message ?: "Unknown error",
-                    code = response.code,
-                ),
+                response.toApiError(fallbackMessage = "Unknown error", fallbackCode = null, httpStatus = null),
             )
         }
     } catch (e: HttpException) {
-        NetworkResult.Failure(
-            ApiError(message = e.message(), code = "HTTP_${e.code()}", httpStatus = e.code()),
-        )
+        NetworkResult.Failure(apiErrorFromHttpException(e))
     } catch (e: IOException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
+            ioApiError(e),
         )
     } catch (e: SerializationException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Malformed response", code = "PARSE"),
+            parseApiError(e),
         )
     }
 
@@ -52,26 +116,21 @@ suspend fun <T> pagedApiCall(block: suspend () -> ApiResponse<T>): NetworkResult
         val response = block()
         val data = response.data
         if (response.success && data != null) {
-            NetworkResult.Success(PagedResult(data, response.pagination))
+            NetworkResult.Success(PagedResult(data, response.pagination, response.meta))
         } else {
             NetworkResult.Failure(
-                ApiError(
-                    message = response.error ?: response.message ?: "Unknown error",
-                    code = response.code,
-                ),
+                response.toApiError(fallbackMessage = "Unknown error", fallbackCode = null, httpStatus = null),
             )
         }
     } catch (e: HttpException) {
-        NetworkResult.Failure(
-            ApiError(message = e.message(), code = "HTTP_${e.code()}", httpStatus = e.code()),
-        )
+        NetworkResult.Failure(apiErrorFromHttpException(e))
     } catch (e: IOException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
+            ioApiError(e),
         )
     } catch (e: SerializationException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Malformed response", code = "PARSE"),
+            parseApiError(e),
         )
     }
 
@@ -116,7 +175,7 @@ suspend fun <T> headerCall(headerName: String, block: suspend () -> Response<T>)
         )
     } catch (e: IOException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
+            ioApiError(e),
         )
     }
 
@@ -142,7 +201,7 @@ suspend fun chunkCall(block: suspend () -> Response<Unit>): NetworkResult<Unit> 
         )
     } catch (e: IOException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
+            ioApiError(e),
         )
     }
 
@@ -155,15 +214,111 @@ suspend fun <T> rawApiCall(block: suspend () -> T): NetworkResult<T> =
     try {
         NetworkResult.Success(block())
     } catch (e: HttpException) {
-        NetworkResult.Failure(
-            ApiError(message = e.message(), code = "HTTP_${e.code()}", httpStatus = e.code()),
-        )
+        NetworkResult.Failure(apiErrorFromHttpException(e))
     } catch (e: IOException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
+            ioApiError(e),
         )
     } catch (e: SerializationException) {
         NetworkResult.Failure(
-            ApiError(message = e.message ?: "Malformed response", code = "PARSE"),
+            parseApiError(e),
         )
+    }
+
+/**
+ * Outcome of [conditionalApiCall] — a THIRD state beyond [NetworkResult]'s
+ * Success/Failure, because "304 Not Modified" is neither: RFC 7232 says a 304
+ * carries no body (there is nothing to decode), and it is not a failure — it is
+ * the server CONFIRMING the validator the caller sent (`If-None-Match`) is still
+ * current. #5188.
+ */
+sealed interface ConditionalResult<out T> {
+    /** A decoded 2xx body, plus the response's own `ETag` header (if any) to remember for next time. */
+    data class Fresh<T>(val data: T, val pagination: Pagination?, val etag: String?, val meta: ApiResponseMeta? = null) : ConditionalResult<T>
+
+    /** 304 — the caller's held validator still matches; there is no body to read. */
+    data object NotModified : ConditionalResult<Nothing>
+
+    data class Failure(val error: ApiError) : ConditionalResult<Nothing>
+}
+
+/**
+ * Same decode as [apiErrorFromHttpException], for a Retrofit [Response] that was
+ * never thrown as an [HttpException] in the first place — [conditionalApiCall]'s
+ * Retrofit method returns the raw `Response` (like [headerCall]/[chunkCall]), which
+ * does not throw on a non-2xx status.
+ */
+private fun apiErrorFromResponse(response: Response<*>): ApiError {
+    val body = runCatching { response.errorBody()?.string() }.getOrNull()
+    val envelope = body?.let { runCatching { MeeshyApi.json.decodeFromString<ApiResponse<Unit>>(it) }.getOrNull() }
+    return envelope?.toApiError(
+        fallbackMessage = "HTTP ${response.code()}",
+        fallbackCode = "HTTP_${response.code()}",
+        httpStatus = response.code(),
+        retryAfterHeader = response.headers()["Retry-After"],
+    ) ?: ApiError(
+        message = "HTTP ${response.code()}",
+        code = "HTTP_${response.code()}",
+        httpStatus = response.code(),
+    )
+}
+
+/**
+ * Runs a conditional GET (`If-None-Match`) whose Retrofit method returns the raw
+ * [Response] rather than an unwrapped [ApiResponse] — required to reach the `ETag`
+ * response HEADER (unreachable from the direct-return convention [apiCall]/
+ * [pagedApiCall] use) and to tell a genuine 304 (no body) apart from a decoded 200,
+ * since Retrofit's direct-return convention would otherwise fold BOTH into the same
+ * generic [HttpException]. #5188 — the caller decides what to send as
+ * `If-None-Match`; this only interprets what came back.
+ */
+suspend fun <T> conditionalApiCall(block: suspend () -> Response<ApiResponse<T>>): ConditionalResult<T> =
+    try {
+        val response = block()
+        when {
+            response.code() == 304 -> ConditionalResult.NotModified
+            response.isSuccessful -> {
+                val envelope = response.body()
+                val data = envelope?.data
+                if (envelope?.success == true && data != null) {
+                    ConditionalResult.Fresh(data, envelope.pagination, response.headers()["ETag"], envelope.meta)
+                } else {
+                    ConditionalResult.Failure(
+                        envelope?.toApiError(
+                            fallbackMessage = "Unknown error",
+                            fallbackCode = null,
+                            httpStatus = null,
+                        ) ?: ApiError(message = "Unknown error"),
+                    )
+                }
+            }
+            else -> ConditionalResult.Failure(apiErrorFromResponse(response))
+        }
+    } catch (e: HttpException) {
+        ConditionalResult.Failure(apiErrorFromHttpException(e))
+    } catch (e: IOException) {
+        ConditionalResult.Failure(ioApiError(e))
+    } catch (e: SerializationException) {
+        ConditionalResult.Failure(parseApiError(e))
+    }
+
+/**
+ * Suppression tolérante : TOUT 2xx confirme, quelle que soit la charge (`{message}`,
+ * `{messageId, deleted, meta}`, `{deleted:true}`, corps vide). Un 4xx/5xx reste un
+ * [NetworkResult.Failure] portant le `code`/`error` de la passerelle. La méthode
+ * Retrofit rend la [Response] brute pour atteindre le statut sans décoder la charge.
+ */
+suspend fun deletionCall(block: suspend () -> Response<ResponseBody>): NetworkResult<DeletionAcknowledgement> =
+    try {
+        val response = block()
+        if (response.isSuccessful) {
+            val body = runCatching { response.body()?.string() }.getOrNull()
+            NetworkResult.Success(DeletionAcknowledgement.parse(body))
+        } else {
+            NetworkResult.Failure(apiErrorFromResponse(response))
+        }
+    } catch (e: HttpException) {
+        NetworkResult.Failure(apiErrorFromHttpException(e))
+    } catch (e: IOException) {
+        NetworkResult.Failure(ioApiError(e))
     }

@@ -27,7 +27,7 @@
 | `packages/MeeshySDK/Sources/MeeshyUI/Media/VideoFullscreenPlayerView.swift` | **Modify** | Gating + bouton DL. |
 | `packages/MeeshySDK/Sources/MeeshyUI/Primitives/CachedAsyncImage.swift` | **Modify** | Skip async fetch si engine `false` pour `.image`. |
 | `apps/ios/Meeshy/Features/Main/Views/VideoMediaView.swift` | **Create** | Wrapper miroir `AudioMediaView` pour vidéo. |
-| `apps/ios/Meeshy/Features/Main/Views/MediaDownloadSettingsView.swift` | **Modify** | Refactor 6-toggles vers 4-pickers + 4ème section AudioTranslation + migration UserDefaults. Struct `MediaDownloadPreferences` DÉPLACÉE vers SDK MeeshyUI/Networking. |
+| `apps/ios/Meeshy/Features/Settings/Views/MediaDownloadSettingsView.swift` | **Modify** | Refactor 6-toggles vers 4-pickers + 4ème section AudioTranslation + migration UserDefaults. Struct `MediaDownloadPreferences` DÉPLACÉE vers SDK MeeshyUI/Networking. |
 | `apps/ios/Meeshy/Features/Main/Views/ConversationMediaViews.swift` | **Modify** | `AudioMediaView` : `currentAudioUrl`/`currentMediaKind`/`currentFileSize` + auto-DL. `AttachmentDownloader.startTranslatedAudio`. |
 | `apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift` | **Modify** | Gating per-item via `VideoMediaView` ou pré-resolve. |
 | `packages/MeeshySDK/Tests/MeeshySDKTests/Networking/NetworkConditionMonitorTests.swift` | **Create** | Tests purs `resolve(path:)` 5 cas. |
@@ -372,7 +372,7 @@ UserDefaults. Défauts : images+audios wifiAndGoodCellular, traductions+
 vidéos wifiOnly (volumineux, non critiques en cellulaire).
 
 Note : remplace la struct 6-booleans existante dans
-apps/ios/Meeshy/Features/Main/Views/MediaDownloadSettingsView.swift
+apps/ios/Meeshy/Features/Settings/Views/MediaDownloadSettingsView.swift
 (refactoring Task 5).
 
 Spec : docs/superpowers/specs/2026-05-20-ios-media-download-policy-design.md §4.2"
@@ -758,7 +758,7 @@ Spec : docs/superpowers/specs/2026-05-20-ios-media-download-policy-design.md §4
 ## Task 5 : Refactor `MediaDownloadSettingsView` UI
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/MediaDownloadSettingsView.swift`
+- Modify: `apps/ios/Meeshy/Features/Settings/Views/MediaDownloadSettingsView.swift`
 
 - [ ] **Step 5.1 : Supprimer la struct locale + utiliser le Store**
 
@@ -895,7 +895,7 @@ Expected: build OK.
 - [ ] **Step 5.5 : Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/MediaDownloadSettingsView.swift
+git add apps/ios/Meeshy/Features/Settings/Views/MediaDownloadSettingsView.swift
 git commit -m "refactor(ios): MediaDownloadSettingsView — passer aux pickers 4-options
 
 Supprime la struct locale MediaDownloadPreferences (déplacée vers SDK).

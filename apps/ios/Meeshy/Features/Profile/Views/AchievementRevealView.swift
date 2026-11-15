@@ -1,0 +1,482 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+/// **Le palier obtenu se REGARDE avant de se ranger dans une grille.**
+///
+/// Toucher une notification de succès ouvrait directement le tableau de bord
+/// (#5809) : il fallait retrouver soi-même, parmi les badges, celui qu'on
+/// venait de débloquer. La récompense arrivait sous forme de devoir.
+///
+/// Cette vue s'intercale entre le tap et le tableau de bord — elle ne le
+/// remplace pas : elle le COUVRE, et le referme sur lui. L'utilisateur n'a donc
+/// jamais un geste de plus à faire pour arriver là où il allait.
+///
+/// **Une CARTE posée, pas un plein écran (#10816).** Constat porteur : « le
+/// cadre du premier achievement est moche, prend tout l'écran et ne dit rien
+/// sur l'auteur ». La célébration est une carte bornée (300 pt), inclinée d'un
+/// degré et demi, posée sur un voile qui laisse voir l'écran qu'elle couvre ;
+/// un succès obtenu y porte la plaque d'auteur — le pseudo gravé au métal de
+/// sa rareté (`GamePhotoAuthorPlate`). Toucher le voile referme.
+///
+/// **Réduire les animations est respecté, et pas seulement ralenti.** Sous ce
+/// réglage, le badge est POSÉ à son état final — aucune échelle, aucun halo qui
+/// pulse, aucun rayon qui tourne. Une animation « plus lente » reste une
+/// animation : la demande est de ne pas en jouer.
+struct AchievementRevealView: View {
+
+    /// **POURQUOI cette vue est à l'écran** — ce n'est pas la même nouvelle,
+    /// et une vue qui l'ignore ment sur l'une des deux (#5831).
+    ///
+    /// Célébrer, c'est annoncer un fait qui vient de tomber : haptique de
+    /// succès, « Succès débloqué », et une sortie qui MÈNE au tableau de bord.
+    /// Consulter, c'est y revenir depuis ce même tableau de bord : on n'y
+    /// refête rien, on n'y « va » nulle part — on referme. Et un succès qu'on
+    /// n'a PAS encore obtenu s'y regarde aussi : c'est là qu'on lit ce qu'il
+    /// faut faire pour l'avoir.
+    enum Occasion: Equatable {
+        case celebration
+        case consultation(unlocked: Bool, reachedAt: String?)
+
+        var estCelebration: Bool { self == .celebration }
+
+        var estObtenu: Bool {
+            switch self {
+            case .celebration: return true
+            case .consultation(let unlocked, _): return unlocked
+            }
+        }
+    }
+
+    let reveal: EngagementReveal
+    var occasion: Occasion = .celebration
+    /// Ferme la célébration — et ne fait QUE ça.
+    let onContinue: () -> Void
+    /// **Mène au tableau de bord.** Séparée de `onContinue` depuis #5903 : le
+    /// bouton « Voir ma progression » les confondait, et ne faisait donc que
+    /// refermer. Ça marchait par UNE porte — l'hôte de notification pousse
+    /// `.progression` AVANT d'ouvrir la vue, si bien que la refermer y arrive —
+    /// et par elle seule. Depuis toute autre, le bouton promettait une
+    /// navigation et rendait l'écran qu'on regardait déjà.
+    ///
+    /// `nil` ⇒ la vue n'offre pas cette sortie : c'est le cas de la
+    /// consultation, où l'on VIENT du tableau de bord et où y « aller » n'aurait
+    /// aucun sens.
+    var onVoirProgression: (() -> Void)?
+    /// **La même carte se propose à la révélation d'un SUCCÈS** (#7742) : la carte 9:16 du moment photo,
+    /// avec le lien de parrainage. `nil` ⇒ pas d'offre (consultation, badge, série, niveau : seuls les
+    /// succès se photographient). Reçoit le moment, dont le titre est celui que la vue affiche.
+    var onPhoto: ((PhotoMoment) -> Void)?
+    /// **La rareté MESURÉE du succès** (#9390) : la célébration porte son liseré, comme la ligne du succès sur
+    /// Progression. `nil` — un badge, une série, un niveau, un ancien serveur, une rareté non mesurée ou « Jeu
+    /// masqué » — et la célébration reste celle d'avant.
+    var rarity: GameRarityEntry?
+    /// L'auteur dont la plaque grave le pseudo (#10816) : le compte connecté ; `nil` pour un invité.
+    var author: PhotoAuthor? = PhotoAuthor.current()
+
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private var isDark: Bool { colorScheme == .dark }
+
+    @State private var apparu = false
+    @State private var halo = false
+
+    // MARK: - Ce que le palier DIT
+
+    private var titre: String {
+        switch reveal {
+        case .achievement(let clé): return ProgressionCopy.title(for: clé)
+        case .composedAchievement(let famille, let palier):
+            // Le MOT, jamais la clé. `label` ne rend `nil` que pour une famille
+            // sans gabarit — le titre de section reste alors juste, là où
+            // « achievement.cercles.conversation.join.size:1000 » ne dirait rien.
+            return AchievementCopy.label(famille, tier: palier)
+                ?? AchievementCopy.sectionTitle(famille.section)
+        // Le MOT de l'axe et son seuil — « 100 messages texte ». Un axe que ce
+        // client ne connaît pas encore (ajouté au serveur avant la mise à jour)
+        // rend son seuil seul plutôt qu'une clé technique : « palier 100 » dit
+        // moins, mais ne ment pas et ne fait rien échouer.
+        case .badge(let axe, let seuil):
+            guard let clé = EngagementAxisKey(rawValue: axe) else {
+                return String(localized: "reveal.badge.tier",
+                              defaultValue: "Palier \(seuil)", bundle: .main)
+            }
+            return ProgressionCopy.badgeTierTitle(threshold: seuil, axis: clé)
+        case .streak(let jours): return ProgressionCopy.streak(jours)
+        case .level(let rang): return ProgressionCopy.levelTitle(rang)
+        }
+    }
+
+    private var explication: String {
+        switch reveal {
+        case .achievement(let clé):
+            return ProgressionCopy.condition(for: clé)
+        case .composedAchievement(let famille, _):
+            // Le titre PORTE déjà la condition (« 1 000 messages envoyés ») :
+            // la répéter ici ne dirait rien de neuf. Ce qui manque au lecteur,
+            // c'est OÙ ce palier se range — la section, qu'il retrouvera en
+            // rangée sur le tableau de bord.
+            return String(localized: "reveal.composed.subtitle",
+                          defaultValue: "Un palier de plus dans « \(AchievementCopy.sectionTitle(famille.section)) ».",
+                          bundle: .main)
+        case .badge:
+            return String(localized: "reveal.badgeAxis.subtitle",
+                          defaultValue: "Un palier de plus sur cet axe. Le suivant se débloque en continuant.",
+                          bundle: .main)
+        case .streak(let jours):
+            return String(localized: "reveal.streak.subtitle",
+                          defaultValue: "\(jours) jours d'affilée. La série continue tant que vous écrivez.",
+                          bundle: .main)
+        case .level:
+            return String(localized: "reveal.level.subtitle",
+                          defaultValue: "Votre activité vous a fait franchir un rang.",
+                          bundle: .main)
+        }
+    }
+
+    private var bandeau: String {
+        if case .consultation(let unlocked, let reachedAt) = occasion {
+            guard unlocked else {
+                return String(localized: "reveal.badge.locked", defaultValue: "Succès à débloquer", bundle: .main)
+            }
+            return ProgressionCopy.obtained(reachedAt)
+                ?? String(localized: "reveal.badge.unlocked", defaultValue: "Succès obtenu", bundle: .main)
+        }
+        switch reveal {
+        case .achievement, .composedAchievement:
+            return String(localized: "reveal.badge.achievement", defaultValue: "Succès débloqué", bundle: .main)
+        case .badge: return String(localized: "reveal.badge.badge", defaultValue: "Badge gagné", bundle: .main)
+        case .streak: return String(localized: "reveal.badge.streak", defaultValue: "Série tenue", bundle: .main)
+        case .level: return String(localized: "reveal.badge.level", defaultValue: "Nouveau niveau", bundle: .main)
+        }
+    }
+
+    private var teinte: Color {
+        // Un palier verrouillé se peint en GRIS, pas dans la couleur de la
+        // récompense : la couleur EST le signal « c'est à vous ». La servir à
+        // ce qui n'est pas obtenu la vide de son sens sur tout l'écran.
+        //
+        // `neutral500` et non `textMuted` : mesuré au simulateur, ce dernier
+        // rend `indigo300` à 70 % — sur un disque de 128 pt, un lavande PLEIN
+        // qui se lit comme une SECONDE récompense plutôt que comme une absence.
+        // Le gris neutre est déjà le vocabulaire du verrouillé dans cette app
+        // (`AchievementBadgeView`, teinte « 808080 »).
+        guard occasion.estObtenu else { return MeeshyColors.neutral500 }
+        switch reveal {
+        case .achievement, .composedAchievement: return MeeshyColors.purple500
+        // La teinte de la grille des badges (#5698) : la célébration et la
+        // grille doivent se reconnaître, sinon on ne retrouve pas ce qu'on
+        // vient de gagner.
+        case .badge: return MeeshyColors.brandPrimary
+        case .streak: return MeeshyColors.warning
+        case .level: return MeeshyColors.indigo500
+        }
+    }
+
+    private var symbole: String {
+        occasion.estObtenu ? reveal.symbolName : "lock.fill"
+    }
+
+    /// La médaille d'un BADGE obtenu : la même que sur l'étagère de Progression (#9466). Un palier qu'on n'a pas
+    /// encore reste un disque gris et son cadenas — la médaille, c'est ce qui est GAGNÉ.
+    private var medaille: RevealMedal? {
+        occasion.estObtenu ? RevealMedal(reveal: reveal) : nil
+    }
+
+    /// Le liseré de la rareté, quand elle a le droit de se montrer.
+    private var liseré: RarityBorder? { RevealRim.border(for: rarity) }
+
+    /// Ce que la sortie FAIT — elle ferme, et son mot le dit.
+    ///
+    /// Il disait « Voir ma progression » en célébration, pour une action qui ne
+    /// faisait que refermer. Ce mot appartient désormais au bouton qui mène
+    /// VRAIMENT (ci-dessous) ; celui-ci reprend le sien.
+    private var libelleSortie: String {
+        occasion.estCelebration
+            ? String(localized: "reveal.ok", defaultValue: "OK", bundle: .main)
+            : String(localized: "reveal.close", defaultValue: "Fermer", bundle: .main)
+    }
+
+    private var libellePhoto: String {
+        String(localized: "reveal.achievement.photo", defaultValue: "En faire une carte", bundle: .main)
+    }
+
+    /// Seul un succès OBTENU, célébré, se photographie.
+    private var momentPhoto: PhotoMoment? {
+        guard occasion.estCelebration, onPhoto != nil else { return nil }
+        switch reveal {
+        case .achievement, .composedAchievement:
+            return GamePhotoMoments.achievement(id: reveal.id, title: titre, rarity: rarity?.visibleRarity)
+        case .badge, .streak, .level: return nil
+        }
+    }
+
+    /// La plaque d'auteur d'un SUCCÈS obtenu (#10816), au métal de sa rareté visible ; rien pour un badge, une
+    /// série, un niveau, un palier à débloquer ou un invité.
+    private var plaqueAuteur: AuthorPlate? {
+        guard occasion.estObtenu else { return nil }
+        switch reveal {
+        case .achievement, .composedAchievement:
+            return GamePhotoAuthorPlate.plate(for: .achievement(rarity: rarity?.visibleRarity), author: author)
+        case .badge, .streak, .level:
+            return nil
+        }
+    }
+
+    static let cardWidth: CGFloat = 300
+
+    private var libelleProgression: String {
+        String(localized: "reveal.continue", defaultValue: "Voir ma progression", bundle: .main)
+    }
+
+    var body: some View {
+        ZStack {
+            // Le voile : l'écran couvert reste visible, la carte s'y pose. Le toucher referme — c'est la
+            // fermeture, pas une seconde action.
+            Color.black.opacity(isDark ? 0.62 : 0.45)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { onContinue() }
+                .accessibilityHidden(true)
+
+            // Centrée quand elle tient ; elle défile sous un grand corps de texte plutôt que de déborder.
+            GeometryReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: MeeshySpacing.xl) {
+                        carte
+                        sortie
+                            .frame(maxWidth: Self.cardWidth)
+                    }
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.vertical, MeeshySpacing.xxl)
+                    .frame(maxWidth: .infinity, minHeight: proxy.size.height)
+                }
+            }
+        }
+        .clearCoverBackground()
+        .onAppear(perform: entrer)
+        // La célébration RETIENT : la conversation s'ouvre quand on la quitte (#10543).
+        .retainsAgainstConversationOpening(.game)
+    }
+
+    /// La carte posée : la médaille, ce que le palier dit, et la plaque de son auteur.
+    private var carte: some View {
+        VStack(spacing: MeeshySpacing.lg) {
+            médaille
+            texte
+            if let plaqueAuteur {
+                GameAuthorPlateLive(plate: plaqueAuteur, width: Self.cardWidth - 2 * MeeshySpacing.lg)
+                    .accessibilityIdentifier("reveal.author.plate")
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.xl)
+        .padding(.bottom, MeeshySpacing.lg)
+        .frame(maxWidth: Self.cardWidth)
+        .background(
+            ZStack {
+                GameAuthorCardBackdrop()
+                lueurDeFond.clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
+            }
+        )
+        .rotationEffect(.degrees(-1.5))
+        .scaleEffect(apparu ? 1 : 0.85)
+        .opacity(apparu ? 1 : 0)
+        // La carte se lit sur son fond sombre, quel que soit le thème de l'appareil.
+        .environment(\.colorScheme, .dark)
+        // UN seul élément pour le lecteur d'écran : « Succès débloqué, <titre>,
+        // <explication> », puis l'auteur, se lit d'un trait. Trois éléments
+        // séparés feraient balayer trois fois ce qui est une seule nouvelle.
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(phraseAccessible)
+        .accessibilityIdentifier("reveal.card")
+    }
+
+    /// « Succès débloqué. <titre>. <explication> », puis la rareté en toutes lettres : la couleur du liseré n'est
+    /// jamais la seule information.
+    private var phraseAccessible: String {
+        let base = "\(bandeau). \(titre). \(explication)"
+        let rare = rarity?.visibleRarity.map { "\(base). \(GameText.rarityName($0))" } ?? base
+        guard let plaqueAuteur else { return rare }
+        return "\(rare). \(plaqueAuteur.label)"
+    }
+
+    // MARK: - Pièces
+
+    private var lueurDeFond: some View {
+        RadialGradient(
+            colors: [teinte.opacity(0.32), .clear],
+            center: .top, startRadius: 0, endRadius: 260
+        )
+        .scaleEffect(halo ? 1.0 : 0.7)
+        .opacity(apparu ? 1 : 0)
+    }
+
+    private var médaille: some View {
+        ZStack {
+            // Les rayons ne tournent QUE si l'animation est permise — sinon ils
+            // ne sont pas peints du tout : un décor immobile n'explique rien et
+            // encombre la lecture.
+            //
+            // Et ils ne se peignent QUE pour un palier OBTENU : un rayonnement
+            // dit « ta-daa ». Le servir à ce qui n'est pas encore acquis
+            // félicite pour rien — même erreur que la couleur, une couche
+            // au-dessus. Avec un liseré de rareté, ils tournent plus loin : la plaque les précède.
+            if !reduceMotion && occasion.estObtenu {
+                ForEach(0..<12, id: \.self) { i in
+                    Capsule()
+                        .fill(teinte.opacity(0.35))
+                        .frame(width: 3, height: 18)
+                        .offset(y: liseré == nil ? -64 : -86)
+                        .rotationEffect(.degrees(Double(i) / 12 * 360))
+                        .scaleEffect(halo ? 1.15 : 0.6)
+                        .opacity(apparu ? 1 : 0)
+                }
+            }
+
+            plaque
+        }
+        .scaleEffect(apparu ? 1 : 0.4)
+        .opacity(apparu ? 1 : 0)
+    }
+
+    /// Le disque du palier — ou la médaille du badge —, dans la plaque que le liseré de rareté cerne.
+    @ViewBuilder
+    private var plaque: some View {
+        if liseré != nil {
+            emblème
+                .padding(MeeshySpacing.xl)
+                .background(
+                    RoundedRectangle(cornerRadius: 36, style: .continuous).fill(teinte.opacity(isDark ? 0.14 : 0.08))
+                )
+                .gameRarityRim(liseré, cornerRadius: 36)
+        } else {
+            emblème
+        }
+    }
+
+    @ViewBuilder
+    private var emblème: some View {
+        if let medaille {
+            GameMedalView(
+                family: medaille.family, glyph: medaille.glyph, material: medaille.material,
+                state: .lit, progress: 0, label: GameCopy.formatCount(medaille.threshold)
+            )
+            .frame(width: 104)
+            .shadow(color: teinte.opacity(0.45), radius: 24, y: 10)
+            .gamePrismTilt(active: medaille.material == .prism)
+        } else {
+            ZStack {
+                Circle()
+                    .fill(LinearGradient(colors: [teinte, teinte.opacity(0.55)],
+                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 104, height: 104)
+                    .shadow(color: teinte.opacity(0.45), radius: 24, y: 10)
+
+                Image(systemName: symbole)
+                    .font(MeeshyFont.relative(46, weight: .semibold))
+                    .foregroundStyle(Color.white)
+            }
+        }
+    }
+
+    private var texte: some View {
+        VStack(spacing: MeeshySpacing.sm) {
+            Text(bandeau.uppercased())
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold))
+                .tracking(1.2)
+                .foregroundStyle(occasion.estObtenu ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
+
+            Text(titre)
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
+                .foregroundStyle(Color.white)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(explication)
+                .font(MeeshyFont.relative(MeeshyFont.bodySize))
+                .foregroundStyle(MeeshyColors.indigo200)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // « Épique · 4 % des comptes » : le nom de la rareté, lu en toutes lettres sous le liseré.
+            GameRarityLine(entry: rarity, ink: MeeshyColors.indigo200)
+        }
+        .opacity(apparu ? 1 : 0)
+        .offset(y: apparu ? 0 : MeeshySpacing.lg)
+    }
+
+    private var sortie: some View {
+        VStack(spacing: MeeshySpacing.sm) {
+            // L'action OFFERTE en premier, remplie : c'est elle qu'on propose.
+            if let onVoirProgression {
+                Button {
+                    HapticFeedback.light()
+                    onVoirProgression()
+                } label: {
+                    Text(libelleProgression)
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .background(Capsule().fill(teinte))
+                }
+                .buttonStyle(.plain)
+            }
+
+            if let moment = momentPhoto {
+                Button {
+                    HapticFeedback.light()
+                    onPhoto?(moment)
+                } label: {
+                    Label(libellePhoto, systemImage: "camera.fill")
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("reveal.achievement.photo")
+            }
+
+            // La fermeture. Pleine quand elle est SEULE (consultation), en
+            // retrait quand elle accompagne l'action offerte : deux capsules
+            // pleines côte à côte ne diraient pas laquelle est proposée.
+            Button {
+                HapticFeedback.light()
+                onContinue()
+            } label: {
+                Text(libelleSortie)
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
+                    .foregroundStyle(Color.white)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(
+                        Capsule().fill(onVoirProgression == nil ? teinte : Color.clear)
+                    )
+                    .overlay(
+                        Capsule().stroke(
+                            onVoirProgression == nil ? Color.clear : Color.white.opacity(0.6),
+                            lineWidth: 1
+                        )
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+        .opacity(apparu ? 1 : 0)
+    }
+
+    // MARK: - L'entrée
+
+    private func entrer() {
+        // L'haptique de SUCCÈS annonce un fait nouveau. La rejouer à chaque
+        // consultation ferait fêter, plusieurs fois par jour, quelque chose qui
+        // n'arrive plus — et userait le signal qui compte.
+        if occasion.estCelebration { HapticFeedback.success() } else { HapticFeedback.light() }
+        guard !reduceMotion else {
+            // POSÉ, pas animé — et le halo reste à son échelle de repos.
+            apparu = true
+            halo = true
+            return
+        }
+        withAnimation(.spring(response: 0.55, dampingFraction: 0.62)) { apparu = true }
+        withAnimation(.easeOut(duration: 0.9).delay(0.1)) { halo = true }
+    }
+}

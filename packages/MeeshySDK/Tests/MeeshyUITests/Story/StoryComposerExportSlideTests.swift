@@ -59,6 +59,60 @@ final class StoryComposerExportSlideTests: XCTestCase {
                        "Un background réel existe déjà — pas d'injection concurrente")
     }
 
+    // MARK: - Entrées du moteur (#8599)
+
+    /// La scène du composer tient en mémoire ce que la slide ne porte pas : le
+    /// bitmap d'un sticker collé, la retouche d'une image, le fichier d'un son
+    /// pas encore téléversé. Sans eux le moteur peignait 🖼️, l'original, et
+    /// bakait un MP4 muet.
+    func test_exportInputs_carriesInMemoryBitmapsOfTheSlideObjectsOnly() {
+        let vm = StoryComposerViewModel()
+        var effects = vm.currentEffects
+        effects.mediaObjects = [StoryMediaObject(id: "img-1", postMediaId: "",
+                                                 mediaType: "image", aspectRatio: 1.0)]
+        effects.stickerObjects = [StorySticker(id: "stk-1", emoji: "🖼️")]
+        vm.currentEffects = effects
+        let retouchee = Self.makeImage()
+        let collee = Self.makeImage()
+        vm.registerLoadedImage(retouchee, for: "img-1")
+        vm.registerLoadedImage(collee, for: "stk-1")
+        vm.registerLoadedImage(Self.makeImage(), for: "autre-slide")
+
+        let inputs = vm.exportInputs(for: vm.exportableCurrentSlide())
+
+        XCTAssertTrue(inputs.images["img-1"] === retouchee, "La retouche du média doit partir au moteur")
+        XCTAssertTrue(inputs.images["stk-1"] === collee, "Le bitmap du sticker collé doit partir au moteur")
+        XCTAssertNil(inputs.images["autre-slide"], "Un bitmap étranger à la slide ne voyage pas")
+    }
+
+    func test_exportInputs_resolvesSessionAudioFiles() throws {
+        let vm = StoryComposerViewModel()
+        var effects = vm.currentEffects
+        let son = StoryAudioPlayerObject(id: "aud-1", postMediaId: "")
+        effects.audioPlayerObjects = [son]
+        vm.currentEffects = effects
+        let fichier = URL(fileURLWithPath: "/tmp/session-voice.m4a")
+        vm.loadedAudioURLs["aud-1"] = fichier
+
+        let inputs = vm.exportInputs(for: vm.exportableCurrentSlide())
+
+        let resolver = try XCTUnwrap(inputs.audioResolver, "Un son de session doit armer le résolveur")
+        XCTAssertEqual(resolver(son), fichier)
+    }
+
+    func test_exportInputs_pairsAdoptedStickerFilesByPostMediaId() {
+        let vm = StoryComposerViewModel()
+        var effects = vm.currentEffects
+        effects.stickerObjects = [StorySticker(id: "stk-2", emoji: "🖼️", postMediaId: "pm-stk")]
+        vm.currentEffects = effects
+        let local = URL(fileURLWithPath: "/tmp/sticker-adopte.png")
+        vm.adoptedLocalMedia["pm-stk"] = local
+
+        let inputs = vm.exportInputs(for: vm.exportableCurrentSlide())
+
+        XCTAssertEqual(inputs.stickerImageSources, ["pm-stk": local.absoluteString])
+    }
+
     private static func makeImage() -> UIImage {
         UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { context in
             UIColor.systemIndigo.setFill()

@@ -1,0 +1,735 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+// MARK: - Les mots de la bande (#9351)
+
+extension ComposerCaptureCopy {
+    static func familyName(_ family: ComposerLookFamily) -> String {
+        switch family {
+        case .filters:
+            return String(localized: "call.filters", defaultValue: "Filtres", bundle: .main)
+        case .effects:
+            return CallControlsCopy.effectsCaption
+        case .frames:
+            return String(localized: "composer.capture.rail.frames", defaultValue: "Cadres", bundle: .main)
+        }
+    }
+
+    /// L'unique entrée de looks du rail (#18639) : le mot et le pictogramme des effets de l'appel.
+    static var looksName: String { familyName(ComposerLookStripRule.railFamily) }
+    static var looksSymbol: String { familySymbol(ComposerLookStripRule.railFamily) }
+
+    /// « Effets » porte le pictogramme des effets de l'appel (#10311).
+    static func familySymbol(_ family: ComposerLookFamily) -> String {
+        switch family {
+        case .filters: return "camera.filters"
+        case .effects: return "wand.and.stars"
+        case .frames: return "photo.artframe"
+        }
+    }
+
+    static func itemName(_ item: ComposerLookStripItem) -> String {
+        switch item {
+        case .untouched:
+            return ComposerLookFilterCopy.none
+        case .filter(.natural):
+            return String(localized: "composer.capture.band.noFilter", defaultValue: "Aucun filtre", bundle: .main)
+        case .filter(let preset):
+            return CallEffectsCopy.presetName(preset)
+        case .effect(let effet):
+            return CallEffectsCopy.name(effet)
+        case .frame(.none):
+            return CallLiveFrameCopy.none
+        case .frame(.montage(let choice)):
+            return CallFrameCopy.choiceName(choice)
+        }
+    }
+
+    static func itemSymbol(_ item: ComposerLookStripItem) -> String {
+        switch item {
+        case .untouched: return "circle.slash"
+        case .filter(let preset): return CallEffectsCopy.presetSymbol(preset)
+        case .effect(.none): return "circle.slash"
+        case .effect: return "wand.and.stars"
+        case .frame(.none): return "circle.slash"
+        case .frame(.montage(let choice)): return CallFrameCopy.choiceSymbol(choice)
+        }
+    }
+
+    /// Ce que la miniature choisie montre : filtre et cadre, et l'effet s'il y en a un.
+    static func chosenLookName(_ look: ComposerPhotoLook) -> String {
+        let effet = look.effect == .none ? [] : [itemName(.effect(look.effect))]
+        return ListFormatter.localizedString(byJoining: [itemName(.filter(look.filter))] + effet
+                                                 + [itemName(.frame(look.frame))])
+    }
+}
+
+// MARK: - Les équivalents VoiceOver, projetés de la table
+
+extension View {
+    /// **Les prises d'une zone, offertes à VoiceOver** (#9351, contraintes globales
+    /// § Accessibilité) : la liste est celle de la table des gestes, nommée par
+    /// elle — jamais réécrite par la vue.
+    func composerCaptureAccessibilityActions(zone: ComposerCaptureZone, context: ComposerCaptureGestureContext,
+                                             perform: @escaping (ComposerCaptureAction) -> Void) -> some View {
+        accessibilityActions {
+            ForEach(Array(ComposerCaptureGesture.accessibilityActions(zone: zone, context: context).enumerated()),
+                    id: \.offset) { _, action in
+                if let nom = ComposerCaptureGesture.accessibilityName(of: action) {
+                    Button(nom) { perform(action) }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Le rail
+
+/// **Le rail vertical, en bas à gauche** (#9351) : UNE entrée, « Effets »
+/// (#18639) — la toucher ouvre la bande mêlée que les puces trient, la
+/// retoucher la replie. En retouche il garde sa colonne et gagne les outils de la
+/// prise (#18638). Ni verre ni cadre : le pictogramme et le nom, ombrés pour rester
+/// lisibles (porteur 2026-10-07, #9566).
+struct ComposerLookRail: View {
+    let open: Bool
+    /// Ce que la colonne porte, de haut en bas — « Effets » seul pendant la capture ; en
+    /// retouche, les entrées du viseur puis les outils (`ComposerRetouchRail`, #18654).
+    var items: [ComposerRetouchRailItem] = [.looks]
+    /// Les outils dont la surface est à l'écran : ils s'allument, ensemble.
+    var shownTools: Set<ComposerEditTool> = []
+    var onTool: (ComposerEditTool) -> Void = { _ in }
+    var onScene: (ComposerViewfinderEntry) -> Void = { _ in }
+    let onToggle: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: ComposerLookStripRule.spacing) {
+            ForEach(items, id: \.self) { entree in
+                switch entree {
+                case .looks:
+                    tool(symbol: ComposerCaptureCopy.looksSymbol, name: ComposerCaptureCopy.looksName, selected: open,
+                         action: onToggle)
+                case .tool(let outil):
+                    tool(symbol: ComposerCaptureCopy.editToolSymbol(outil), name: ComposerCaptureCopy.editToolName(outil),
+                         selected: shownTools.contains(outil)) { onTool(outil) }
+                case .scene(let scene):
+                    tool(symbol: scene.symbol, name: ComposerViewfinderColumn.label(scene), selected: false) { onScene(scene) }
+                        .accessibilityIdentifier(scene.accessibilityIdentifier)
+                case .separator:
+                    ComposerViewfinderRailSeparator()
+                }
+            }
+        }
+    }
+
+    private func tool(symbol: String, name: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            label(symbol: symbol, name: name)
+                .foregroundStyle(selected ? Color.yellow : .white)
+                .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(ComposerBounceButtonStyle())
+        .accessibilityLabel(name)
+        .accessibilityValue(selected ? ComposerCaptureCopy.toolShown : ComposerCaptureCopy.toolHidden)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    /// Chaque entrée en ligne, pictogramme puis nom, sur une cible de 44 pt.
+    private func label(symbol: String, name: String) -> some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            Image(systemName: symbol)
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+            Text(name)
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(minWidth: MeeshyControlSize.tapTarget, alignment: .leading)
+        .frame(height: ComposerLookStripRule.railEntryHeight)
+    }
+}
+
+// MARK: - La bande
+
+/// **La bande — et, repliée, la miniature-déclencheur** (#9351, spec § 3.1 / § 3.2).
+///
+/// Ouverte, toutes les cases de la liste mêlée : celle du CENTRE est la choisie
+/// (#9566) — le défilement s'accroche case par case et choisit en passant —,
+/// encadrée. Chaque case porte son nom sous elle, la choisie en gras et un peu
+/// plus grand (#18639). Repliée, la
+/// seule miniature choisie (la paire complète), qui continue d'afficher le
+/// direct. Les cases peintes sont les visibles ±1, au plus le budget thermique ;
+/// leurs images vivent dans UN atlas Metal (`ComposerLookStripSurface`). Chaque
+/// geste est lu dans la table (`ComposerCaptureGesture`), le toucher par son seul
+/// décideur.
+struct ComposerLookStrip: View {
+    @ObservedObject var session: ComposerCaptureSession
+    let source: any ComposerFrameSourcing
+    let context: ComposerCaptureGestureContext
+    let recordingTime: TimeInterval
+    /// Le tri des puces posées sous la bande (#17267).
+    var filter = ComposerLookStripFilter()
+
+    /// La case choisie en dernier : dans la liste mêlée, c'est elle qui porte
+    /// le choix — un filtre ET un cadre peuvent appartenir au look (#17267).
+    @State private var focus: ComposerLookStripItem?
+    /// Les cases dont un pixel se voit — mises à jour au franchissement d'une case,
+    /// jamais à chaque image du défilement.
+    @State private var visible: ClosedRange<Int>?
+    @State private var scrolling = false
+    /// Le minuteur de fin de défilement et le suivi du centre : une référence,
+    /// que mettre à jour à chaque image n'invalide pas la vue.
+    @State private var settle = ComposerLookStripScrollSettle()
+    @State private var blink: Double = 1
+    /// Le réglage de l'ambiance est ouvert au-dessus de la bande (OPUS-2).
+    @State private var tuningOpen = false
+    /// Retombe d'elle-même quand le système annule l'appui long sans `onEnded`.
+    @GestureState private var pressing = false
+    /// La fin de la dernière tenue — sa levée ne compte pas pour un toucher.
+    @State private var holdEndedAt: Date?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let scrollSpace = "composer.capture.band"
+
+    /// La bande ouverte GARDE ses cases pendant l'enregistrement : basculer de la
+    /// bande à la miniature seule annulerait l'appui long qui vient de lancer la
+    /// prise (sa levée ne parviendrait plus à `endHold`). Les autres cases
+    /// s'effacent ; seule la choisie reste visible et vivante. Ouverte depuis
+    /// n'importe quelle famille, elle montre la liste mêlée que ses puces trient
+    /// (#17267).
+    private var items: [ComposerLookStripItem] {
+        guard session.openFamily != nil else { return [] }
+        return ComposerLookStripFilterRule.items(filter)
+    }
+
+    /// La case encadrée : la dernière choisie, si la liste la montre.
+    private func chosenIndex(in cases: [ComposerLookStripItem]) -> Int? {
+        ComposerLookStripFilterRule.chosenIndex(in: cases, look: session.look, focus: focus)
+    }
+
+    /// La case que le défilement suit : la choisie, ou « Aucun » quand le tri
+    /// l'a écartée — trier ne choisit rien.
+    private func followedIndex(in cases: [ComposerLookStripItem]) -> Int? {
+        ComposerLookStripFilterRule.followedIndex(in: cases, look: session.look, focus: focus)
+    }
+
+    private var recording: Bool { context.stage == .recording }
+
+    /// Le défilement peut-il changer le look ? La table le dit, comme pour un
+    /// toucher : jamais pendant une prise, ni avec des segments en attente.
+    private var selects: Bool {
+        ComposerCaptureGesture.action(zone: .otherThumbnail, gesture: .tap, context: context) == .select
+    }
+
+    /// Le déclencheur porte UN nom, seul ou dans la bande ouverte.
+    private var chosenLabel: String {
+        recording
+            ? ComposerSceneCameraCopy.shutterLabel(mode: .video, stage: .recording)
+            : ComposerCaptureCopy.chosenLookName(session.look)
+    }
+
+    /// Les vignettes vivantes se voilent avec la scène pendant une bascule (#10337).
+    private var switchingCamera: Bool {
+        !context.editing && session.camera.isSwitchingCamera
+    }
+
+    private var budget: ComposerThermalBudget {
+        recording ? session.thermalBudget.whileRecording() : session.thermalBudget
+    }
+
+    var body: some View {
+        Group {
+            if items.isEmpty {
+                switch ComposerLookStripRule.collapsedTrigger(look: session.look, editing: context.editing) {
+                case .shutter: shutter
+                case .thumbnail: chosenAlone
+                case .hidden: Color.clear.accessibilityHidden(true)
+                }
+            } else {
+                // Le cadre de la choisie déborde de la case (#10309) : la bande lui
+                // garde sa place, sans quoi le défilement le rognerait ; les noms dessous.
+                band.overlay(alignment: .top) { if !recording { tuning } }
+            }
+        }
+        .frame(height: ComposerLookStripRule.cellSize.height + 2 * ComposerTriggerOutline.outset + ComposerLookStripRule.nameHeight)
+        .adaptiveOnChange(of: pressing) { _, tenu in
+            guard !tenu else { return }
+            session.releaseStaleHold()
+        }
+        .environment(\.composerCaptureProgress, captureProgress)
+        .modifier(ComposerCameraAmbianceFollow(session: session))
+        .adaptiveOnChange(of: session.openFamily) { _, _ in
+            focus = nil
+        }
+    }
+
+    // MARK: - Le réglage de l'ambiance (OPUS-2)
+
+    /// Au-dessus de la bande, jamais sur la miniature : elle déclenche, et son
+    /// appui long filme. Le bouton ouvre la dose et le pavé chaleur × contraste,
+    /// à droite de la colonne du rail, qu'il ne couvre jamais (#18639).
+    private var tuning: some View {
+        VStack(alignment: .trailing, spacing: MeeshySpacing.xs) {
+            if tuningOpen {
+                ComposerLookTuningPanel(look: session.look) { reglage in
+                    var look = session.look
+                    look.tuning = reglage
+                    session.look = look
+                }
+                .transition(.opacity)
+            }
+            ComposerLookTuningToggle(open: tuningOpen, tuned: session.look.tuning != .neutral) {
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { tuningOpen.toggle() }
+            }
+        }
+        .padding(.leading, ComposerEditScene.railColumnWidth)
+        .padding(.trailing, MeeshySpacing.md)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .alignmentGuide(.top) { dimensions in dimensions[.bottom] }
+    }
+
+    // MARK: - Repliée, sans look : le déclencheur simple (#9557)
+
+    /// **Le déclencheur à anneau blanc** (A8, #17109, qui revient sur #9351 et
+    /// #10336) : rien de peint dedans, la caméra est déjà tout l'écran. En
+    /// filmant (A9), l'anneau devient la jauge rouge du maximum du format et
+    /// porte le carré d'arrêt. Il garde les gestes de la miniature choisie.
+    private var shutter: some View {
+        let cellule = ComposerLookStripRule.cellSize
+        return ComposerShutterRing(recording: captureProgress.capturing, progress: captureProgress.fraction)
+        .frame(width: ComposerShutterRing.diameter + 2 * ComposerTriggerOutline.outset, height: cellule.height)
+        .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
+        .modifier(ComposerShutterPulse(tick: session.camera.shutterPresses))
+        .contentShape(Rectangle())
+        .gesture(triggerGestures(zone: .shutter))
+        .accessibilityElement()
+        .accessibilityLabel(recording
+            ? ComposerSceneCameraCopy.shutterLabel(mode: .video, stage: .recording)
+            : ComposerSceneCameraCopy.shutterLabel(mode: .photo, stage: .armed))
+        .accessibilityAddTraits(.isButton)
+        .composerCaptureAccessibilityActions(zone: .shutter, context: context) { performAccessible($0) }
+    }
+
+    /// **La prise est à l'écran dès la tenue** (#17268) : l'anneau, et le cadre
+    /// de la miniature choisie — seule ou dans la bande ouverte —, tournent dès
+    /// que le doigt tient, segments déjà pris compris.
+    private var captureProgress: ComposerCaptureProgress {
+        let capturing = ComposerCaptureProgressDisplay.isCapturing(stage: context.stage,
+                                                                   holding: session.holdStartedAt != nil)
+        return ComposerCaptureProgress(
+            capturing: capturing,
+            fraction: ComposerCaptureProgressDisplay.ringProgress(segments: session.segments, rawLive: recordingTime,
+                                                                  stage: context.stage,
+                                                                  budget: session.recordingBudget))
+    }
+
+    // MARK: - Repliée : la miniature choisie, seule
+
+    private var chosenAlone: some View {
+        let cellule = ComposerLookStripRule.cellSize
+        let tuile = ComposerLookStripTile(index: 0, look: session.look, rect: CGRect(origin: .zero, size: cellule))
+        return ZStack {
+            glyph(symbol: "camera.aperture")
+            ComposerLookStripSurface(tiles: budget.thumbnailCells > 0 ? [tuile] : [], source: source,
+                                     person: session.lookPerson, date: session.lookDate, framing: session.framing,
+                                     fps: budget.thumbnailFPS, frozen: false)
+                .modifier(ComposerCameraSwitchVeilStyle(switching: switchingCamera))
+            chosenOverlay
+        }
+        .frame(width: cellule.width, height: cellule.height)
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous))
+        // Le cadre AUTOUR du flux (#10309) : rouge et battant pendant la prise.
+        .modifier(ComposerTriggerOutlineStyle(recording: recording))
+        .modifier(ComposerShutterPulse(tick: session.camera.shutterPresses))
+        .contentShape(Rectangle())
+        .gesture(chosenGestures)
+        .accessibilityElement()
+        .accessibilityLabel(chosenLabel)
+        .accessibilityAddTraits(.isButton)
+        .composerCaptureAccessibilityActions(zone: .chosenThumbnail, context: context) { performAccessible($0) }
+    }
+
+    /// Le point rouge clignotant et le chronomètre, DÈS le premier segment —
+    /// posés sur la miniature choisie, seule ou dans la bande ouverte.
+    @ViewBuilder
+    private var chosenOverlay: some View {
+        if recording || !session.segments.isEmpty {
+            VStack {
+                HStack(spacing: MeeshySpacing.xxs) {
+                    Circle().fill(MeeshyColors.error).frame(width: 7, height: 7)
+                        .opacity(reduceMotion || !recording ? 1 : blink)
+                    Text(ComposerCaptureSegments.elapsed(segments: session.segments, live: recordingTime,
+                                                         recording: recording)
+                        .formatted(.number.precision(.fractionLength(0))) + "″")
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, MeeshySpacing.xs)
+                .background(Capsule().fill(.black.opacity(0.45)))
+                .padding(.top, MeeshySpacing.xxs)
+                Spacer()
+            }
+            .accessibilityHidden(true)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) { blink = 0.25 }
+            }
+            .onDisappear { blink = 1 }
+        }
+    }
+
+    // MARK: - Ouverte : toute la famille
+
+    private var band: some View {
+        GeometryReader { conteneur in
+            let retrait = max(0, (conteneur.size.width - ComposerLookStripRule.cellSize.width) / 2)
+            ScrollViewReader { lecteur in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    bandContent
+                        .background(GeometryReader { contenu in
+                            Color.clear.adaptiveOnChange(of: contenu.frame(in: .named(Self.scrollSpace)).minX,
+                                                         initial: true) { _, x in
+                                followScroll(scrolled: retrait - x, width: conteneur.size.width, reader: lecteur)
+                            }
+                        })
+                        .modifier(ComposerLookStripLegacyInset(inset: retrait))
+                }
+                .modifier(ComposerLookStripSnapping(inset: retrait))
+                .scrollDisabled(!selects)
+                .coordinateSpace(name: Self.scrollSpace)
+                .environment(\.layoutDirection, .leftToRight)
+                .onAppear {
+                    guard let choisie = followedIndex(in: items) else { return }
+                    beginFollowing(chosen: choisie)
+                    lecteur.scrollTo(choisie, anchor: .center)
+                }
+                .adaptiveOnChange(of: followedIndex(in: items)) { _, choisie in
+                    guard let choisie, let cible = settle.follow.chose(choisie) else { return }
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+                        lecteur.scrollTo(cible, anchor: .center)
+                    }
+                }
+                .adaptiveOnChange(of: filter) { _, _ in
+                    refollow(reader: lecteur)
+                }
+            }
+        }
+    }
+
+    private var bandContent: some View {
+        let cellule = ComposerLookStripRule.cellSize
+        let pas = ComposerLookStripRule.pitch
+        let cases = items
+        let choisie = chosenIndex(in: cases)
+        let peintes = ComposerLookStripRule.paintedIndices(visible: visible, count: cases.count,
+                                                           cells: budget.thumbnailCells,
+                                                           chosen: choisie, recording: recording)
+        let fenetre = ComposerLookStripGeometry.paintedWindow(peintes)
+        let tuiles = peintes.map { index in
+            ComposerLookStripTile(index: index,
+                                  look: ComposerLookStripRule.look(of: cases[index], combinedWith: session.look),
+                                  rect: CGRect(x: CGFloat(index - (fenetre?.lowerBound ?? 0)) * pas, y: 0,
+                                               width: cellule.width, height: cellule.height))
+        }
+        return ZStack(alignment: .topLeading) {
+            HStack(spacing: ComposerLookStripRule.spacing) {
+                ForEach(Array(cases.enumerated()), id: \.offset) { index, item in
+                    glyph(symbol: ComposerCaptureCopy.itemSymbol(item))
+                        .frame(width: cellule.width, height: cellule.height)
+                        .opacity(recording && index != choisie ? 0 : 1)
+                }
+            }
+            if let fenetre {
+                ComposerLookStripSurface(tiles: tuiles, source: source, person: session.lookPerson,
+                                         date: session.lookDate, framing: session.framing,
+                                         fps: budget.thumbnailFPS, frozen: scrolling)
+                    .modifier(ComposerCameraSwitchVeilStyle(switching: switchingCamera))
+                    .frame(width: CGFloat(fenetre.count) * pas - ComposerLookStripRule.spacing,
+                           height: cellule.height)
+                    // Chaque vignette a les coins de sa case (#10338) : la marque
+                    // les épouse, choisie ou non.
+                    .mask {
+                        HStack(spacing: ComposerLookStripRule.spacing) {
+                            ForEach(0..<fenetre.count, id: \.self) { _ in
+                                RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
+                                    .frame(width: cellule.width, height: cellule.height)
+                            }
+                        }
+                    }
+                    .offset(x: CGFloat(fenetre.lowerBound) * pas)
+                    .allowsHitTesting(false)
+            }
+            HStack(spacing: ComposerLookStripRule.spacing) {
+                ForEach(Array(cases.enumerated()), id: \.offset) { index, item in
+                    cell(item: item, chosen: index == choisie)
+                        .opacity(recording && index != choisie ? 0 : 1)
+                        .allowsHitTesting(!recording || index == choisie)
+                        .accessibilityHidden(recording && index != choisie)
+                        .id(index)
+                }
+            }
+            .modifier(ComposerLookStripTargets())
+            names(of: cases, chosen: choisie)
+        }
+        .padding(.top, ComposerTriggerOutline.outset)
+    }
+
+    /// **Le nom de chaque case, sous elle, avant tout choix** (#18639) : la choisie en gras et deux points plus grand, rien d'autre.
+    /// Un nom peut mordre sur l'espacement voisin sans décaler les cases.
+    private func names(of cases: [ComposerLookStripItem], chosen: Int?) -> some View {
+        HStack(spacing: ComposerLookStripRule.spacing) {
+            ForEach(Array(cases.enumerated()), id: \.offset) { index, item in
+                Text(ComposerCaptureCopy.itemName(item))
+                    .font(MeeshyFont.relative(ComposerLookStripRule.nameSize(chosen: index == chosen),
+                                              weight: index == chosen ? .bold : .medium))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .frame(width: ComposerLookStripRule.pitch - 2)
+                    .frame(width: ComposerLookStripRule.cellSize.width, height: ComposerLookStripRule.nameHeight)
+            }
+        }
+        .padding(.top, ComposerLookStripRule.cellSize.height + ComposerTriggerOutline.outset)
+        .opacity(recording ? 0 : 1)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    /// Une case : son contour ; son nom s'écrit dessous (`names`).
+    /// La choisie porte son cadre HORS du flux (#10309) ; les autres, un filet.
+    @ViewBuilder
+    private func cell(item: ComposerLookStripItem, chosen: Bool) -> some View {
+        let cellule = ComposerLookStripRule.cellSize
+        let corps = RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
+            .strokeBorder(Color.white.opacity(chosen ? 0 : 0.25), lineWidth: 1)
+            .frame(width: cellule.width, height: cellule.height)
+            .modifier(ComposerTriggerOutlineStyle(recording: recording, shown: chosen))
+            .modifier(ComposerShutterPulse(tick: chosen ? session.camera.shutterPresses : 0))
+            .contentShape(Rectangle())
+            .gesture(chosen ? AnyGesture(chosenGestures.map { _ in () }) : AnyGesture(TapGesture().onEnded {
+                perform(.otherThumbnail, .tap, item: item)
+            }))
+            .overlay { if chosen { chosenOverlay } }
+            .accessibilityElement(children: .ignore)
+        if chosen {
+            corps
+                .accessibilityLabel(chosenLabel)
+                .accessibilityAddTraits([.isButton, .isSelected])
+                .composerCaptureAccessibilityActions(zone: .chosenThumbnail, context: context) { performAccessible($0) }
+        } else {
+            corps
+                .accessibilityLabel(ComposerCaptureCopy.itemName(item))
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { perform(.otherThumbnail, .tap, item: item) }
+        }
+    }
+
+    private func glyph(symbol: String) -> some View {
+        RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
+            .fill(Color.white.opacity(0.12))
+            .overlay(Image(systemName: symbol).foregroundStyle(.white.opacity(0.7)))
+            .accessibilityHidden(true)
+    }
+
+    // MARK: - Les gestes de la miniature choisie
+
+    /// Appui long (puis glissé : cadenas à droite, zoom à la verticale) ET
+    /// toucher, reconnus côte à côte (#9557) : derrière un `exclusively(before:)`,
+    /// le toucher ne partait jamais — relevé au simulateur.
+    private var chosenGestures: some Gesture { triggerGestures(zone: .chosenThumbnail) }
+
+    private func triggerGestures(zone: ComposerCaptureZone) -> some Gesture {
+        LongPressGesture(minimumDuration: ComposerSceneQuickCapture.armedHoldDuration)
+            .sequenced(before: DragGesture(minimumDistance: 0))
+            .updating($pressing) { valeur, tenu, _ in
+                guard case .second(true, _) = valeur else { return }
+                tenu = true
+            }
+            .onChanged { valeur in
+                guard case .second(true, let glisse) = valeur else { return }
+                guard session.holdStartedAt != nil else {
+                    perform(zone, .longPress)
+                    return
+                }
+                guard let glisse, steers(zone) else { return }
+                session.holdChanged(CGPoint(x: glisse.translation.width, y: glisse.translation.height))
+            }
+            .onEnded { _ in
+                holdEndedAt = Date()
+                session.endHold()
+            }
+            .simultaneously(with: TapGesture().onEnded {
+                guard session.holdStartedAt == nil,
+                      !ComposerCaptureTapRule.followsAHold(holdEndedAt, now: Date()) else { return }
+                tapTrigger(zone)
+            })
+    }
+
+    /// Le doigt qui tient la prise la pilote-t-il ? La table le dit.
+    private func steers(_ zone: ComposerCaptureZone) -> Bool {
+        var tenue = context
+        tenue.holding = session.holdStartedAt != nil
+        return ComposerCaptureGesture.action(zone: zone, gesture: .drag, context: tenue) == .steerTake
+    }
+
+    /// **Le toucher de la miniature, lu par le seul décideur** (#9464, #10284) :
+    /// la case choisie EST le déclencheur — un toucher photographie (galerie puis
+    /// retouche), le second d'un double est absorbé ; pendant une prise
+    /// verrouillée, il l'arrête.
+    private func tapTrigger(_ zone: ComposerCaptureZone) {
+        let issue = ComposerCaptureGesture.tap(zone: zone, context: context, now: Date(),
+                                               lastTap: session.lastViewfinderTap, armedAt: session.armedAt)
+        session.lastViewfinderTap = issue.memory
+        session.perform(issue.action, item: nil)
+    }
+
+    private func perform(_ zone: ComposerCaptureZone, _ geste: ComposerCaptureGestureKind,
+                         item: ComposerLookStripItem? = nil) {
+        if geste == .longPress { session.selfTimer.cancel() }
+        let action = ComposerCaptureGesture.action(zone: zone, gesture: geste, context: context)
+        if action == .select, let item { focus = item }
+        session.perform(action, item: item)
+    }
+
+    /// VoiceOver ne TIENT pas un doigt : une prise qu'il lance part verrouillée,
+    /// et c'est « Arrêter » qui la termine.
+    private func performAccessible(_ action: ComposerCaptureAction) {
+        session.perform(action, item: nil)
+        guard action == .filmToGallery || action == .filmSegment else { return }
+        session.lockPendingTake()
+    }
+
+    // MARK: - Le défilement
+
+    /// La bande s'ouvre en tête puis rejoint la case choisie : ce trajet-là
+    /// n'est pas un choix.
+    private func beginFollowing(chosen: Int?) {
+        guard !settle.follow.hasBegun else { return }
+        settle.follow.begin(chosen: chosen)
+    }
+
+    /// Les cases visibles suivent le défilement, case par case, et **celle du
+    /// centre est choisie** (#9566) ; pendant qu'il dure, les cases peintes se
+    /// figent et seules les neuves se peignent. Au repos, la bande se solde —
+    /// et, sans accroche système (iOS 16), se recentre sur sa case.
+    private func followScroll(scrolled: CGFloat, width: CGFloat, reader: ScrollViewProxy) {
+        let cases = items
+        let choisie = followedIndex(in: cases)
+        beginFollowing(chosen: choisie)
+        let vues = ComposerLookStripRule.visibleRange(offset: scrolled - (width - ComposerLookStripRule.cellSize.width) / 2,
+                                                      width: width, count: cases.count)
+        if vues != visible { visible = vues }
+        if let centre = ComposerLookStripRule.centeredIndex(scrolled: scrolled, count: cases.count),
+           centre != settle.follow.centered,
+           let aChoisir = settle.follow.centered(on: centre, chosen: choisie, selects: selects) {
+            choose(cases[aChoisir])
+        }
+        if !scrolling { scrolling = true }
+        settle.task?.cancel()
+        settle.task = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            scrolling = false
+            rest(reader: reader)
+        }
+    }
+
+    private func rest(reader: ScrollViewProxy) {
+        defer { settle.base = nil }
+        let cases = items
+        let choisie = followedIndex(in: cases)
+        switch settle.follow.settled(chosen: choisie, selects: selects) {
+        case .rejoin(let cible):
+            return reader.scrollTo(cible, anchor: .center)
+        case .choose(let aChoisir):
+            if cases.indices.contains(aChoisir) { choose(cases[aChoisir]) }
+        case .nothing:
+            break
+        }
+        guard !ComposerLookStripSnapping.isNative, let centre = settle.follow.centered else { return }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { reader.scrollTo(centre, anchor: .center) }
+    }
+
+    /// **La case du centre s'ajoute au look d'AVANT le défilement** (#17267) :
+    /// la liste mêlée traverse d'autres familles pour rejoindre une case, et ce
+    /// qu'elle traverse ne reste pas dans la prise.
+    private func choose(_ item: ComposerLookStripItem) {
+        guard selects else { return }
+        let base = settle.base ?? session.look
+        settle.base = base
+        focus = item
+        session.look = ComposerLookStripRule.look(of: item, combinedWith: base)
+        HapticFeedback.light()
+    }
+
+    /// **Les puces ont trié la bande** : elle rejoint d'elle-même la case qu'elle
+    /// suit — les cases qu'elle traverse alors ne sont pas des choix.
+    private func refollow(reader: ScrollViewProxy) {
+        settle.base = nil
+        guard let suivie = followedIndex(in: items) else { return }
+        settle.follow.begin(chosen: suivie)
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+            reader.scrollTo(suivie, anchor: .center)
+        }
+    }
+}
+
+/// Le minuteur de fin de défilement et le suivi du centre de la bande, hors de
+/// l'état observé.
+final class ComposerLookStripScrollSettle {
+    var task: Task<Void, Never>?
+    var follow = ComposerLookStripFollow()
+    /// Le look d'avant le défilement en cours ; `nil` au repos.
+    var base: ComposerPhotoLook?
+
+    nonisolated deinit {}
+}
+
+// MARK: - L'accroche case par case (#9566)
+
+/// iOS 17+ : l'accroche système, aussi loin que le lancer porte, sur des marges
+/// qui amènent la première et la dernière case au centre.
+struct ComposerLookStripSnapping: ViewModifier {
+    let inset: CGFloat
+
+    static var isNative: Bool {
+        if #available(iOS 17.0, *) { return true }
+        return false
+    }
+
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content
+                .contentMargins(.horizontal, inset, for: .scrollContent)
+                .scrollTargetBehavior(.viewAligned(limitBehavior: .never))
+        } else {
+            content
+        }
+    }
+}
+
+/// iOS 16 : pas de marges de contenu — un retrait posé sur le contenu.
+struct ComposerLookStripLegacyInset: ViewModifier {
+    let inset: CGFloat
+
+    func body(content: Content) -> some View {
+        if ComposerLookStripSnapping.isNative {
+            content
+        } else {
+            content.padding(.horizontal, inset)
+        }
+    }
+}
+
+/// Les cases sont les cibles de l'accroche.
+struct ComposerLookStripTargets: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content.scrollTargetLayout()
+        } else {
+            content
+        }
+    }
+}

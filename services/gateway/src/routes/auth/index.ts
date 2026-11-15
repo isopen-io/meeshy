@@ -9,16 +9,22 @@ import { registerRegistrationRoutes } from './register';
 import { registerMagicLinkRoutes } from './magic-link';
 import { registerPhoneTransferRoutes } from './phone-transfer';
 import { registerRevokeAllSessionsRoute } from './revoke-all-sessions';
+import { registerVerificationStatusRoute } from './verification-status';
+import { getJwtSecret } from '../../utils/secrets';
 
 /**
  * Main entry point for all authentication routes
  * Initializes services and registers route modules
  */
 export async function authRoutes(fastify: FastifyInstance) {
-  // Initialize core authentication service
+  // Initialize core authentication service.
+  // Le manager Socket.IO est résolu à l'APPEL : il n'existe pas encore ici
+  // (créé par `socketIOHandler.initialize()`), et l'inscription doit annoncer
+  // l'arrivée dans le salon global comme toute autre porte d'entrée.
   const authService = new AuthService(
     fastify.prisma,
-    process.env.JWT_SECRET || 'meeshy-secret-key-dev'
+    getJwtSecret(),
+    { resolveSocketManager: () => fastify.socketIOHandler?.getManager() }
   );
 
   // Use shared singleton instance to avoid multiple Redis connections
@@ -49,4 +55,5 @@ export async function authRoutes(fastify: FastifyInstance) {
   registerMagicLinkRoutes(context);
   registerPhoneTransferRoutes(context);
   registerRevokeAllSessionsRoute(context);
+  registerVerificationStatusRoute(context);
 }

@@ -11,11 +11,10 @@ struct KeypadTab: View {
     var isActive: Bool = true
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
 
-    @Environment(\.colorScheme) private var colorScheme
     private var theme: ThemeManager { ThemeManager.shared }
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
 
-    private let keys: [[KeypadKey]] = [
+    private static let keys: [[KeypadKey]] = [
         [.init("1", ""), .init("2", "ABC"), .init("3", "DEF")],
         [.init("4", "GHI"), .init("5", "JKL"), .init("6", "MNO")],
         [.init("7", "PQRS"), .init("8", "TUV"), .init("9", "WXYZ")],
@@ -36,9 +35,9 @@ struct KeypadTab: View {
     // MARK: - Input Bar
 
     private var inputBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             TextField(
-                String(localized: "keypad.input.placeholder", defaultValue: "Numero ou nom", bundle: .main),
+                String(localized: "keypad.input.placeholder", defaultValue: "Numéro ou nom", bundle: .main),
                 text: $viewModel.input
             )
             .font(MeeshyFont.relative(26, weight: .medium, design: .rounded))
@@ -46,7 +45,7 @@ struct KeypadTab: View {
             .multilineTextAlignment(.center)
             .autocorrectionDisabled()
             .textInputAutocapitalization(.never)
-            .accessibilityLabel(String(localized: "keypad.input.a11y", defaultValue: "Champ numero ou nom", bundle: .main))
+            .accessibilityLabel(String(localized: "keypad.input.a11y", defaultValue: "Champ numéro ou nom", bundle: .main))
 
             if !viewModel.input.isEmpty {
                 Button {
@@ -55,7 +54,7 @@ struct KeypadTab: View {
                 } label: {
                     Image(systemName: "delete.left.fill")
                         .font(.title3)
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "keypad.delete.a11y", defaultValue: "Effacer", bundle: .main))
                 .accessibilityHint(String(localized: "keypad.delete.a11y.hint", defaultValue: "Efface le dernier caractère", bundle: .main))
@@ -71,9 +70,9 @@ struct KeypadTab: View {
                 )
             }
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, MeeshySpacing.xxl)
         .frame(height: 64)
-        .overlay(alignment: .bottom) { Divider().opacity(0.2) }
+        .overlay(alignment: .bottom) { Divider().opacity(MeeshyOpacity.light) }
     }
 
     // MARK: - Results
@@ -87,10 +86,10 @@ struct KeypadTab: View {
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(viewModel.matches) { user in
-                        resultRow(user)
+                        liveResultRow(user)
                     }
                 }
-                .padding(.top, 6)
+                .padding(.top, MeeshySpacing.xsPlus)
             }
         }
         .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
@@ -106,31 +105,26 @@ struct KeypadTab: View {
         case .loaded:
             // A search actually ran and returned nothing.
             hintMessage(
-                title: String(localized: "keypad.no-match.title", defaultValue: "Aucun contact trouve", bundle: .main),
-                subtitle: String(localized: "keypad.no-match.subtitle", defaultValue: "Verifiez le numero ou le nom saisi.", bundle: .main)
+                title: String(localized: "keypad.no-match.title", defaultValue: "Aucun contact trouvé", bundle: .main)
             )
         default:
-            // Idle / too-short / error: prompt without falsely claiming a
-            // completed search found nothing.
-            hintMessage(
-                title: String(localized: "keypad.prompt.title", defaultValue: "Composez un numero ou un nom", bundle: .main),
-                subtitle: String(localized: "keypad.prompt.subtitle", defaultValue: "Trouvez une personne par numéro de téléphone ou par nom.", bundle: .main)
-            )
+            // Idle / too-short / error: nothing under the field — its placeholder
+            // is the prompt, and no search is claimed to have come back empty.
+            EmptyView()
         }
     }
 
-    private func hintMessage(title: String, subtitle: String) -> some View {
-        VStack(spacing: 6) {
+    private func hintMessage(title: String) -> some View {
+        VStack(spacing: MeeshySpacing.xsPlus) {
             Text(title)
                 .font(.callout.weight(.semibold))
-                .foregroundColor(theme.textPrimary)
-            Text(subtitle)
-                .font(.footnote)
-                .foregroundColor(theme.textMuted)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
+                .foregroundStyle(theme.textPrimary)
         }
-        .padding(.top, 24)
+        .padding(.top, MeeshySpacing.xxl)
+    }
+
+    private func liveResultRow(_ user: UserSearchResult) -> some View {
+        LivePresence { resultRow(user) }
     }
 
     private func resultRow(_ user: UserSearchResult) -> some View {
@@ -138,26 +132,27 @@ struct KeypadTab: View {
         let color = DynamicColorGenerator.colorForName(name)
         let presence = PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline)
 
-        return HStack(spacing: 14) {
+        return HStack(spacing: MeeshySpacing.mdPlus) {
             Button {
                 openProfile(user)
             } label: {
-                HStack(spacing: 14) {
+                HStack(spacing: MeeshySpacing.mdPlus) {
                     MeeshyAvatar(
                         name: name,
                         context: .userListItem,
                         accentColor: color,
                         avatarURL: user.avatar,
-                        presenceState: presence
+                        presenceState: presence,
+                        ring: user.avatarRing
                     )
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(name)
                             .font(.subheadline.weight(.semibold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                             .lineLimit(1)
                         Text("@\(user.username)")
                             .font(.caption.weight(.medium))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
                     Spacer()
                 }
@@ -165,12 +160,12 @@ struct KeypadTab: View {
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(resultRowAccessibilityLabel(for: user, name: name, presence: presence))
-            .accessibilityHint(String(localized: "keypad.result.open-profile.a11y", defaultValue: "Ouvre le profil", bundle: .main))
+            .accessibilityHint(String(localized: "keypad.result.open-profile.a11y", defaultValue: "Ouvrir le profil", bundle: .main))
 
-            dialMenu(for: user, displayName: name)
+            CallRowDialButton(userId: user.id, displayName: name, onUnavailable: { openProfile(user) }, accessibilityLabel: String(localized: "calls.call", defaultValue: "Appeler", bundle: .main))
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.md)
     }
 
     // `.accessibilityElement(children: .combine)` above would let VoiceOver read
@@ -189,57 +184,25 @@ struct KeypadTab: View {
         return parts.joined(separator: ", ")
     }
 
-    private func dialMenu(for user: UserSearchResult, displayName: String) -> some View {
-        Menu {
-            Button {
-                startCall(user, displayName: displayName, isVideo: false)
-            } label: {
-                Label(String(localized: "call.start.audio", defaultValue: "Appel vocal", bundle: .main), systemImage: "phone.fill")
-            }
-            Button {
-                startCall(user, displayName: displayName, isVideo: true)
-            } label: {
-                Label(String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main), systemImage: "video.fill")
-            }
-        } label: {
-            Image(systemName: "phone.fill")
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(MeeshyColors.indigo500)
-                .frame(width: 40, height: 40)
-                .background(Circle().fill(MeeshyColors.indigo500.opacity(0.12)))
-        }
-        .accessibilityLabel(String(localized: "calls.call", defaultValue: "Appeler", bundle: .main))
-    }
-
-    private func startCall(_ user: UserSearchResult, displayName: String, isVideo: Bool) {
-        HapticFeedback.medium()
-        CallStarter.start(
-            userId: user.id,
-            displayName: displayName,
-            isVideo: isVideo,
-            onUnavailable: { openProfile(user) }
-        )
-    }
-
     private func openProfile(_ user: UserSearchResult) {
-        router.deepLinkProfileUser = ProfileSheetUser(username: user.username)
+        router.openProfileSheet(ProfileSheetUser(username: user.username))
         HapticFeedback.light()
     }
 
     // MARK: - Keypad
 
     private var keypad: some View {
-        VStack(spacing: 14) {
-            ForEach(keys.indices, id: \.self) { row in
+        VStack(spacing: MeeshySpacing.mdPlus) {
+            ForEach(Self.keys.indices, id: \.self) { row in
                 HStack(spacing: 28) {
-                    ForEach(keys[row]) { key in
+                    ForEach(Self.keys[row]) { key in
                         keyButton(key)
                     }
                 }
             }
         }
-        .padding(.vertical, 18)
-        .overlay(alignment: .top) { Divider().opacity(0.2) }
+        .padding(.vertical, MeeshySpacing.lg)
+        .overlay(alignment: .top) { Divider().opacity(MeeshyOpacity.light) }
     }
 
     private func keyButton(_ key: KeypadKey) -> some View {
@@ -251,12 +214,12 @@ struct KeypadTab: View {
                 Text(key.digit)
                     // doctrine 82i — chiffre borné par la touche fixe 72×56 du pavé
                     .font(.system(size: 30, weight: .regular, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Text(key.letters)
                     // doctrine 82i — lettres bornées par la touche fixe 72×56 du pavé
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(1)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .frame(height: 10)
             }
             .frame(width: 72, height: 56)

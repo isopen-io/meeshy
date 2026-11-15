@@ -31,11 +31,42 @@ final class StoryCanvasFramingTests: XCTestCase {
         XCTAssertEqual(r.cornerRadius, 0, accuracy: 0.0001)
     }
 
-    func test_resolve_immersive_isIdentityNoCorners() {
+    /// **`.immersive` COUVRE le viewport depuis le 2026-09-16** (#6806, directive
+    /// porteur : « il faut pas afficher une troisieme couche en plein plein
+    /// écran, mais juste agrandir le canvas à sa taille total du viewport »).
+    ///
+    /// Ce témoin exigeait l'identité — et sur un état qui ne décidait alors
+    /// rien, c'était le verdict juste. Il est remplacé plutôt que retiré, avec
+    /// la date qui l'a renversé : sans elle, le prochain qui lit « `.free` et
+    /// `.immersive` court-circuitent tous deux vers l'identité » remettra
+    /// l'ancienne règle en croyant réparer.
+    ///
+    /// Le facteur est une COUVERTURE : le rapport du canvas est préservé, ce qui
+    /// dépasse sort de l'écran. Il ne rétrécit jamais (`max(1, …)`) — un canvas
+    /// PLUS LARGE que le viewport n'a rien à agrandir.
+    func test_resolve_immersive_coversTheViewport() {
         let r = StoryCanvasFraming.resolve(makeInput(state: .immersive))
-        XCTAssertEqual(r.scale, 1, accuracy: 0.0001)
+        XCTAssertGreaterThan(r.scale, 1, "le canvas doit grandir jusqu'à couvrir")
         XCTAssertEqual(r.offset, .zero)
         XCTAssertEqual(r.cornerRadius, 0, accuracy: 0.0001)
+
+        // La couverture, mesurée : le canvas 9:16 ajusté dans le viewport, puis
+        // agrandi jusqu'à ce que sa HAUTEUR atteigne celle du viewport.
+        let intrinsic = CanvasGeometry.aspectFitSize(in: viewport(),
+                                                     ratio: CanvasGeometry.portraitRatio)
+        XCTAssertEqual(intrinsic.height * r.scale, viewport().height, accuracy: 0.5,
+                       "plus un point de sol au-dessus ni au-dessous")
+        XCTAssertGreaterThanOrEqual(intrinsic.width * r.scale, viewport().width,
+                                    "et la largeur couvre, quitte à déborder")
+    }
+
+    /// **Le COMPOSER n'est pas touché**, et c'est la moitié qui protège
+    /// l'auteur : `.free` est aussi ce qu'il passe pendant le dessin et
+    /// l'édition de texte. Y couvrir le viewport rognerait la scène qu'il est en
+    /// train de composer — le contraire de « dessinable jusqu'aux angles ».
+    func test_resolve_free_staysIdentity_soTheComposerIsNeverCropped() {
+        let r = StoryCanvasFraming.resolve(makeInput(state: .free))
+        XCTAssertEqual(r.scale, 1, accuracy: 0.0001)
     }
 
     func test_resolve_carded_shrinksAndRoundsCorners() {
@@ -125,32 +156,33 @@ final class StoryCanvasFramingTests: XCTestCase {
     }
 
     func test_isCarded_truthTable() {
-        XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: false, textActive: false, timelineActive: false))
-        XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: false, textActive: false, timelineActive: false))
-        // Mode dessin IMMERSIF (user 2026-07-11) : le dessin seul ne carde
-        // PLUS — canvas plein écran, dessinable jusqu'aux angles, bulles
-        // flottantes sans sheet. (Remplace la spec 2026-06-02 « identique
-        // pour tous les outils, dessin inclus ».)
+        // **#8370 — la scène prend TOUT le viewport** (directive porteur
+        // 2026-09-27, maquette `docs/product/composer-plein-ecran/`). Elle
+        // supplante #4124 (2026-08-28), qui cardait le repos : « la scène est en
+        // plein écran et le reste des contrôleurs sont par-dessus ». Au repos,
+        // l'atelier n'est donc plus une carte ; les contrôles flottent dessus.
+        XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: false, textActive: false, timelineActive: false),
+                       "Au repos, la scène occupe le viewport — #8370 supplante #4124.")
+        // Un PANNEAU qui réduit la zone visible carde toujours : la scène se
+        // rétracte au-dessus de lui plutôt que de se faire recouvrir. C'est la
+        // règle d'avant #4124, et `bandPresent` en redevient la raison.
+        XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: false, textActive: false, timelineActive: false),
+                      "Une band déployée carde la scène au-dessus d'elle.")
+        // Mode dessin IMMERSIF (user 2026-07-11) : plein écran, dessinable
+        // jusqu'aux angles — et il l'emporte même band déployée.
         XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: true, textActive: false, timelineActive: false))
-        // Édition texte (user 2026-07-28) : le canvas reste PLEIN ÉCRAN, les
-        // bulles et « Terminé » flottent par-dessus, le clavier recouvre le bas
-        // — assumé, l'attention est sur le texte.
-        //
-        // C'est une sortie anticipée et non un terme de la disjonction : quand
-        // l'éditeur s'ouvre depuis la tuile Texte, `StoryComposerView+Canvas`
-        // appelle `bandStateMachine.tapFAB` puis `tapTile` juste après
-        // `enterTextEditingMode`. La band n'est donc pas `.hidden`, et
-        // `bandPresent` seul relancerait le carding — alors même que la band est
-        // masquée et non-interactive.
+        XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: true, textActive: false, timelineActive: false),
+                       "Le dessin est immersif même band déployée : il l'emporte sur le cardage.")
+        // Édition texte (user 2026-07-28) : sortie anticipée, jamais un terme de
+        // la disjonction — la band n'est pas `.hidden` quand l'éditeur s'ouvre
+        // depuis la tuile Texte.
         XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: false, textActive: true, timelineActive: false))
         XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: true, textActive: true, timelineActive: false))
         XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: true, textActive: true, timelineActive: true),
                        "l'édition texte l'emporte sur toutes les autres raisons")
-        // Timeline (2026-07-14) : la timeline force le cadrage exactement
-        // comme l'édition de texte — le panneau timeline est présenté via
-        // l'override de ComposerControlsLayer pendant que
-        // `bandStateMachine.state` reste `.hidden`, donc `bandPresent` seul
-        // ne peut pas le voir.
+        // Timeline (2026-07-14) : présentée par l'override de
+        // ComposerControlsLayer pendant que la band reste `.hidden` — elle
+        // carde par son propre terme.
         XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: false, textActive: false, timelineActive: true))
     }
 
@@ -247,14 +279,30 @@ final class StoryCanvasFramingTests: XCTestCase {
         XCTAssertEqual(input.canvasRatio, CanvasGeometry.portraitRatio, accuracy: 0.0001)
     }
 
-    func test_readerPresentation_fullscreenSession_alwaysFree() {
-        // En session plein écran, le canvas reste plein bord même quand le chrome
-        // ré-apparaît temporairement (touch-and-hold peek) — pas de re-cardage.
+    /// **La session plein écran rend `.immersive` depuis le 2026-09-16** (#6806).
+    ///
+    /// Ce que le témoin gardait reste vrai et reste gardé : le canvas ne se
+    /// RE-CARDE pas quand le chrome réapparaît au touch-and-hold. Seul le nom de
+    /// l'état change — et il change parce que `.free` ne pouvait plus porter les
+    /// deux sens à la fois, le composer le passant lui aussi.
+    func test_readerPresentation_fullscreenSession_alwaysImmersive() {
         XCTAssertEqual(
             StoryCanvasFraming.readerPresentation(isFullscreenSession: true, chromeVisible: true),
-            .free)
+            .immersive)
         XCTAssertEqual(
             StoryCanvasFraming.readerPresentation(isFullscreenSession: true, chromeVisible: false),
+            .immersive)
+    }
+
+    /// **Hors session plein écran, rien ne bouge** : cardé au repos, plein bord
+    /// au peek. Le peek garde `.free` — un aperçu transitoire qui zoomerait
+    /// ferait respirer l'écran à chaque doigt posé.
+    func test_readerPresentation_outsideFullscreen_isUnchanged() {
+        XCTAssertEqual(
+            StoryCanvasFraming.readerPresentation(isFullscreenSession: false, chromeVisible: true),
+            .carded)
+        XCTAssertEqual(
+            StoryCanvasFraming.readerPresentation(isFullscreenSession: false, chromeVisible: false),
             .free)
     }
 

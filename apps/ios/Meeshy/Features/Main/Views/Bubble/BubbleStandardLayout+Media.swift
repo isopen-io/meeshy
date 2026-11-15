@@ -7,12 +7,11 @@
 //      - `visualMediaGrid` : 1/2/3/4+ grid layout dispatcher
 //      - `makeGridCell(_:overflowCount:solo:)` : cell factory
 //      - `carouselView` : façade instantiating `BubbleCarouselView`
-//      - `downloadBadge(_:)` : per-attachment download chip
 //      - `mediaWithReplyContainer(reply:)` : visual + quoted reply combo
 //
 //   2. Satellite structs (fileprivate / standalone) :
 //      - `BubbleGridCell` : 1 grid slot (image or video)
-//      - `BubbleGridImageView` / `BubbleGridVideoThumbnailView`
+//      - `BubbleGridImageView` (une vidéo : `ConversationVideoPoster`, #8231)
 //      - `AttachmentBlurOverlayView`
 //      - `BubbleCarouselView` : standalone pager, swipe between slides
 //
@@ -29,10 +28,25 @@ import MeeshyUI
 // MARK: - Visual Media Grid (extension on BubbleStandardLayout)
 extension BubbleStandardLayout {
 
-    /// `AnyView` à la DÉCLARATION (2026-08-19). Le `switch items.count` à 4
+    /// **Une pièce à vue unique s'ouvre en plein écran depuis sa case**
+    /// (#8009, #8310), en appelant l'hôte DIRECTEMENT.
+    ///
+    /// Le détour par la liaison `fullscreenAttachment` (posée, puis relayée par
+    /// `adaptiveOnChange`) ne présentait rien quand l'écriture partait du voile :
+    /// mesuré au simulateur, le rappel de l'hôte n'était jamais atteint. La
+    /// liaison ne reste que pour l'hôte sans galerie (`onMediaTap == nil`).
+    func openProtectedMedia(_ media: MessageAttachment) {
+        guard let onMediaTap else {
+            fullscreenAttachment = media
+            return
+        }
+        onMediaTap(media)
+    }
+
+    /// `AnyView` à la DÉCLARATION. Le `switch items.count` à 4
     /// branches × `makeGridCell` produit un `_ConditionalContent` profond qui
     /// entrait dans le type de `BubbleStandardLayout.body` (47 niveaux). Trois
-    /// `.ips` device du 2026-08-10 meurent ICI, sur
+    /// `.ips` device meurent ICI, sur
     /// `com.apple.uikit.datasource.diffing` — pile de 512 Ko, pas 1 Mo.
     /// L'extraction de `BubbleGridCell` (voir `makeGridCell`) avait borné les
     /// CELLULES ; il restait à borner la GRILLE elle-même.
@@ -61,17 +75,15 @@ extension BubbleStandardLayout {
                 makeGridCell(item, cellPointWidth: gridMaxWidth, solo: true)
                     .frame(width: gridMaxWidth)
             } else {
-                makeGridCell(item, cellPointWidth: gridMaxWidth, solo: true)
-                    .frame(width: gridMaxWidth, height: 240)
+                let frame = BubbleSoloImageFrame.size(width: item.width, height: item.height, maxWidth: gridMaxWidth)
+                makeGridCell(item, cellPointWidth: frame.width, solo: true).frame(width: frame.width, height: frame.height)
             }
-
         case 2:
             HStack(spacing: gridSpacing) {
                 makeGridCell(items[0], cellPointWidth: halfW)
                 makeGridCell(items[1], cellPointWidth: halfW)
             }
             .frame(width: gridMaxWidth, height: 180)
-
         case 3:
             let leftW = (gridMaxWidth - gridSpacing) * 0.6
             let rightW = (gridMaxWidth - gridSpacing) * 0.4
@@ -85,7 +97,6 @@ extension BubbleStandardLayout {
                 .frame(width: rightW)
             }
             .frame(width: gridMaxWidth, height: 240)
-
         default:
             let overflow = items.count - 4
             VStack(spacing: gridSpacing) {
@@ -122,11 +133,11 @@ extension BubbleStandardLayout {
     /// site is not. This also lets SwiftUI cache the cell's structural
     /// identity across body re-evaluations.
     ///
-    /// **Nécessaire mais PAS suffisant (constat du 2026-08-19).** Cette
+    /// **Nécessaire mais PAS suffisant.** Cette
     /// extraction a borné les CELLULES ; la GRILLE, elle, restait un
     /// `@ViewBuilder` dont le `switch items.count` à 4 branches entrait en
     /// entier dans le type de `BubbleStandardLayout.body`. Trois `.ips` device
-    /// du 2026-08-10 sont morts ICI malgré ce correctif, sur
+    /// sont morts ICI malgré ce correctif, sur
     /// `com.apple.uikit.datasource.diffing` — un thread à 512 Ko, la moitié du
     /// main thread. C'est l'érasure de `visualMediaGrid` à sa DÉCLARATION qui a
     /// fermé la classe (voir sa doc).
@@ -147,7 +158,8 @@ extension BubbleStandardLayout {
             shareURL: $shareURL,
             showShareSheet: $showShareSheet,
             onConsumeViewOnce: onConsumeViewOnce,
-            onReactToAttachment: onReactToAttachment
+            onReactToAttachment: onReactToAttachment,
+            onOpenProtected: openProtectedMedia
         )
     }
 
@@ -164,22 +176,7 @@ extension BubbleStandardLayout {
             messageDeliveryStatus: message.deliveryStatus,
             footer: resolvedFooter().0,
             isDark: isDark,
-            containerWidth: gridMaxWidth,
-            hasPlayingInlineVideo: hasPlayingInlineVideo
-        )
-    }
-
-    // MARK: - Download Badge (still used by extension callers — kept for backward compat)
-
-    func downloadBadge(_ attachment: MessageAttachment) -> some View {
-        DownloadBadgeView(
-            attachment: attachment,
-            accentColor: contactColor,
-            messageDeliveryStatus: message.deliveryStatus,
-            onShareFile: { url in
-                shareURL = url
-                showShareSheet = true
-            }
+            containerWidth: gridMaxWidth
         )
     }
 
@@ -196,9 +193,9 @@ extension BubbleStandardLayout {
 
     @ViewBuilder
     private func mediaWithReplyContainerBody(reply: BubbleContent.Reply) -> some View {
-        let neutralBg = isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)
-        let strokeColor = isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05)
-        let dividerColor = isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)
+        let neutralBg = MeeshyColors.surfaceFill(isDark: isDark)
+        let strokeColor = MeeshyColors.hairline(isDark: isDark)
+        let dividerColor = MeeshyColors.hairline(isDark: isDark)
 
         VStack(spacing: 0) {
             BubbleQuotedReply(
@@ -208,6 +205,7 @@ extension BubbleStandardLayout {
                 accentHex: contactColor,
                 isDark: isDark,
                 mentionDisplayNames: mentionDisplayNames,
+                authorPresence: quotedAuthorPresence(reply.reference),
                 onQuotedAuthorTap: onQuotedAuthorTap,
                 onQuotedMediaTap: onQuotedMediaTap
             )
@@ -215,7 +213,7 @@ extension BubbleStandardLayout {
             .background(neutralBg)
             .contentShape(Rectangle())
             .onTapGesture {
-                guard !reply.reference.messageId.isEmpty else { return }
+                guard reply.reference.opensQuotedTarget else { return }
                 HapticFeedback.light()
                 if reply.isStory {
                     onStoryReplyTap?(reply.reference.messageId)
@@ -223,33 +221,28 @@ extension BubbleStandardLayout {
                     onReplyTap?(reply.reference.messageId)
                 }
             }
+            .accessibilityAction(named: Text(String(localized: "a11y.main.quotedReply.open", bundle: .main))) { openQuotedTarget(reply) }
 
             Divider().background(dividerColor)
 
             visualMediaGrid
                 .background(Color.black)
                 .overlay(alignment: .bottomTrailing) {
-                    // Footer caché pendant la lecture d'une vidéo inline —
-                    // évite la collision avec les contrôles overlay au
-                    // bottom de la vidéo.
-                    if !hasPlayingInlineVideo {
-                        BubbleFooter(
-                            model: resolvedFooter().0,
-                            actions: .none,
-                            style: .overlay,
-                            isDark: isDark
-                        )
-                        .equatable()
-                        .padding(MeeshySpacing.sm)
-                        .transition(.opacity)
-                    }
+                    BubbleFooter(
+                        model: resolvedFooter().0,
+                        actions: .none,
+                        style: .overlay,
+                        isDark: isDark
+                    )
+                    .equatable()
+                    .padding(MeeshySpacing.sm)
                 }
         }
         .compositingGroup()
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                .stroke(strokeColor, lineWidth: 0.5)
+                .stroke(strokeColor, lineWidth: MeeshyBorder.hairline)
         )
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
     }
@@ -270,23 +263,6 @@ extension BubbleStandardLayout {
 /// the runtime can resolve in O(1) recursion depth. This also lets SwiftUI
 /// preserve the cell's structural identity across `ThemedMessageBubble.body`
 /// re-evaluations and skip rebuild when the bindings haven't actually changed.
-/// BUG2 A' — attache un long-press HAUTE PRIORITÉ (gagne sur le long-press parent
-/// = context menu) uniquement quand `enabled`. Pour image solo/protégée, aucun
-/// geste n'est attaché → le parent gère son propre long-press normalement.
-private struct AttachmentReactionLongPress: ViewModifier {
-    let enabled: Bool
-    let action: () -> Void
-    func body(content: Content) -> some View {
-        if enabled {
-            content.highPriorityGesture(
-                LongPressGesture(minimumDuration: 0.4).onEnded { _ in action() }
-            )
-        } else {
-            content
-        }
-    }
-}
-
 fileprivate struct BubbleGridCell: View {
     let attachment: MessageAttachment
     let overflowCount: Int
@@ -315,34 +291,67 @@ fileprivate struct BubbleGridCell: View {
     /// (`attachmentId`, `emoji`). nil = pas de réaction par-image (ex : image solo).
     let onReactToAttachment: ((String, String) -> Void)?
 
+    /// #8310 — le plein écran d'une pièce cachée, ouvert par l'HÔTE en direct
+    /// (`openProtectedMedia`), comme depuis le voile de la bulle. La cellule
+    /// écrivait la liaison `fullscreenAttachment`, le détour que #8009 a mesuré
+    /// mort : le toucher sur une case protégée n'ouvrait rien.
+    let onOpenProtected: (MessageAttachment) -> Void
+
     @State private var showReactionPicker = false
+    /// L'image affichée par la case est ARRIVÉE (`onFullImageLoaded`) : le
+    /// badge « télécharger » se tait, elle est sur l'appareil (#10370).
+    @State private var displayedImageLanded = false
+    @Environment(\.displayScale) private var displayScale: CGFloat
 
     private var attachmentIsProtected: Bool {
-        attachment.isViewOnce || attachment.isBlurred
+        attachment.declaresViewOnce || attachment.declaresBlur
     }
 
     /// Réaction par-image active seulement en grille multi-images (`!solo`), sur
     /// image non protégée, avec callback câblé. L'image solo garde la réaction
     /// message-level ; les protégées gardent le long-press de révélation.
+    ///
+    /// **La conjonction a quitté ce `body` pour `AttachmentReactionOffer`**
+    /// (#6084) : le plein écran pose désormais la MÊME question sur la MÊME
+    /// pièce, et une condition enfouie dans une vue n'est interrogeable par
+    /// aucun témoin — c'est ce qui a laissé le plein écran sans barre sans que
+    /// rien ne rougisse. Le verdict de la grille est inchangé à une chose près,
+    /// qui est un resserrement : la loi lit `ComposableAttachment.isProtected`,
+    /// donc une pièce CHIFFRÉE n'offre plus de réaction par-image — le prédicat
+    /// local ci-dessus, qui gouverne encore le RENDU (révélation d'une vidéo
+    /// protégée), ne connaît que la vue unique et le flou.
     private var canReactPerImage: Bool {
-        !solo && !attachmentIsProtected && onReactToAttachment != nil
+        AttachmentReactionOffer.offersReaction(surface: .bubbleGrid(isSolo: solo),
+                                               attachment: attachment,
+                                               hasHandler: onReactToAttachment != nil)
     }
 
     private var isRevealed: Bool {
         revealedAttachmentIds.contains(attachment.id)
     }
 
+    /// Une vidéo lisible a son corps à elle : un lecteur inline à trois
+    /// contrôles (#8231). La tuile de débordement (« +N », dont le toucher
+    /// ouvre le carrousel) et la pièce protégée gardent le corps commun, où la
+    /// vidéo n'est qu'un poster — sans bouton lecture sur le « +N » (#11586).
     var body: some View {
-        if attachment.type == .video, !attachmentIsProtected || isRevealed {
-            videoBody
-        } else {
-            standardBody
+        Group {
+            if attachment.type == .video, videoPresentation.hostsPlayer {
+                videoBody
+            } else {
+                standardBody
+            }
         }
     }
 
-    /// Standard layout — image cells, protected/blurred video, or any future
-    /// media kind. Tap = fullscreen, DownloadBadge centred (no competing
-    /// play affordance underneath).
+    /// #11586 — la MÊME loi que la case du Fil.
+    private var videoPresentation: MediaTileVideoPresentation {
+        MediaTileVideoPresentation.resolve(overflowCount: overflowCount,
+                                           isHiddenByProtection: attachmentIsProtected && !isRevealed)
+    }
+
+    /// Image, poster vidéo (débordement, pièce protégée) : toucher = plein
+    /// écran, DownloadBadge centré pour l'image seule.
     private var standardBody: some View {
         ZStack {
             Color.black
@@ -353,88 +362,73 @@ fileprivate struct BubbleGridCell: View {
         }
         .clipped()
         .contentShape(Rectangle())
-        .onTapGesture(perform: handleTap)
-        .overlay { downloadBadgeOverlay }
-        .overlay(alignment: .bottomLeading) { reactionsBadge }
-        .modifier(AttachmentReactionLongPress(enabled: canReactPerImage) {
+        // #4020 — le double tap ouvre le sélecteur de réaction de CETTE pièce.
+        // Depuis #9907, c'est le SEUL geste de la tuile qui y mène directement :
+        // l'appui long ouvre l'aperçu de la pièce, dont le menu réagit aussi.
+        //
+        // **Déclaré AVANT le simple tap**, ce qui est la seule façon pour
+        // SwiftUI d'arbitrer les deux. Le coût est mesuré et assumé : le
+        // simple tap (plein écran) attend désormais la fenêtre de
+        // désambiguïsation d'iOS — ~250 ms — avant de partir. C'est le prix de
+        // la coexistence que l'issue demande explicitement, et le même que
+        // paie Messages sur ses propres photos. Si le porteur juge ce délai
+        // trop cher devant l'ouverture d'un média, c'est CE modificateur qu'on
+        // retire — le geste de la bulle, lui, ne coûte rien.
+        .modifier(QuickReactionDoubleTap(isEnabled: canReactPerImage) {
             HapticFeedback.medium()
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { showReactionPicker = true }
         })
-        .overlay { reactionPickerOverlay }
+        .onTapGesture(perform: handleTap)
+        .accessibilityAction(named: Text(String(localized: "a11y.post.media.open.hint", bundle: .main))) { handleTap() }
+        .overlay(alignment: downloadPlacement.alignment) { downloadBadgeOverlay }
+        .overlay(alignment: .bottomLeading) { reactionsBadge }
+        // #9907 — l'appui long n'ouvre plus le sélecteur : il ouvre l'aperçu
+        // de CETTE pièce, dont le menu porte la réaction. Le double tap
+        // ci-dessus reste le chemin court vers le sélecteur.
+        .modifier(MessagePieceLongPress(attachmentId: attachment.id, enabled: offersPiecePreview))
+        .modifier(PieceSpotlightRing(attachmentId: attachment.id, accentHex: contactColor))
+        .overlay {
+            AttachmentReactionPickerOverlay(isPresented: $showReactionPicker) { emoji in
+                onReactToAttachment?(attachment.id, emoji)
+            }
+        }
+    }
+
+    /// **L'appui long ouvre l'aperçu de la pièce** (#9907) — dans un LOT
+    /// seulement, et jamais sur une pièce protégée : la pression d'une pièce
+    /// seule ou cachée reste à la bulle, qui montre le message entier.
+    private var offersPiecePreview: Bool {
+        !solo && !ComposableAttachment.isProtected(attachment)
     }
 
     /// BUG2 A' — pastille des réactions par-image (emojis + total) en coin bas-gauche
     /// (le download badge occupe le bas-droite, le viewCount le haut-droite).
+    ///
+    /// **Le dessin a quitté ce site pour `AttachmentReactionBadge`** (#6789) :
+    /// le plein écran devait montrer la MÊME pastille, et la recopier aurait
+    /// donné deux règles qui se ressemblent jusqu'au jour où l'une bouge. La
+    /// première divergence aurait été le renfort « j'ai réagi », que ce site a
+    /// mis un lot entier à gagner.
     @ViewBuilder private var reactionsBadge: some View {
-        if let summary = attachment.reactionSummary, !summary.isEmpty {
-            let total = summary.values.reduce(0, +)
-            // « J'ai réagi à CE média » — la donnée existait sur le modèle
-            // (`MessageAttachment.currentUserReactions`, décodée et mappée) mais
-            // ce site ne lisait que `reactionSummary` : sur une photo où j'avais
-            // posé un ❤️ parmi trois 👍 d'autres personnes, la pastille affichait
-            // « ❤️👍 4 » sans rien qui distingue le mien.
-            //
-            // Le renfort emprunte le langage DÉJÀ en place pour les réactions de
-            // bulle (`BubbleReactionsOverlay`) : contour épais à l'accent, et non
-            // le contour-sur-glyphe des actions à symbole — un emoji n'a pas de
-            // tracé qu'on puisse retracer.
-            let iReacted = !(attachment.currentUserReactions ?? []).isEmpty
-            let accent = Color(hex: contactColor)
-            HStack(spacing: 1) {
-                ForEach(summary.keys.sorted().prefix(3), id: \.self) { emoji in
-                    Text(emoji).font(MeeshyFont.relative(11))
-                }
-                if total > 1 {
-                    Text("\(total)").font(MeeshyFont.relative(9, weight: .semibold)).foregroundColor(.white)
-                }
-            }
-            .padding(.horizontal, 5).padding(.vertical, 2)
-            .background(
-                Capsule().fill(iReacted ? accent.opacity(0.55) : Color.black.opacity(0.55))
-            )
-            .overlay(
-                Capsule().strokeBorder(iReacted ? accent : .clear, lineWidth: iReacted ? 2 : 0)
-            )
-            .shadow(color: iReacted ? accent.opacity(0.4) : .clear, radius: iReacted ? 4 : 0)
-            .padding(5)
+        if let modèle = AttachmentReactionBadgeModel.make(
+            summary: attachment.reactionSummary,
+            currentUserReactions: attachment.currentUserReactions) {
+            AttachmentReactionBadge(model: modèle, accent: Color(hex: contactColor))
+                .padding(MeeshySpacing.xs)
         }
     }
 
-    /// BUG2 A' — picker emoji présenté centré DANS les bounds de la cellule (évite
-    /// le clip de `.clipped()`), fond assombri tap-to-dismiss.
-    @ViewBuilder private var reactionPickerOverlay: some View {
-        if showReactionPicker {
-            ZStack {
-                Color.black.opacity(0.4)
-                    .contentShape(Rectangle())
-                    .onTapGesture { withAnimation { showReactionPicker = false } }
-                EmojiReactionPicker(
-                    scale: 0.78,
-                    scrollable: true,
-                    onReact: { emoji in
-                        onReactToAttachment?(attachment.id, emoji)
-                        withAnimation { showReactionPicker = false }
-                    },
-                    onDismiss: { withAnimation { showReactionPicker = false } }
-                )
-                .padding(MeeshySpacing.sm)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.lg))
-                .padding(.horizontal, MeeshySpacing.xs + 2)
-            }
-            .transition(.opacity)
-        }
-    }
-
-    /// Inline video player path. `VideoAvailabilityResolver` resolves download
-    /// policy and passes `VideoAvailability` to `MeeshyVideoPlayer`, which owns
-    /// the play affordance, download badge, and fullscreen expand button.
+    /// **Lecture inline à trois contrôles : son, lecture/pause, plein écran**
+    /// (#8231). Le bouton lecture joue DANS la bulle;
+    /// toucher la vidéo ailleurs — le poster avant, la surface pendant — ouvre
+    /// le plein écran, où la galerie reprend le moteur partagé à la même
+    /// position. Les gestes vivent tous DANS le lecteur : un tap simultané
+    /// posé sur la tuile faisait jouer ET ouvrir sur un seul toucher.
     ///
     /// PAS de `.frame(maxWidth: .infinity, maxHeight: .infinity)` sur le
     /// `VideoAvailabilityResolver` : ça écraserait la contrainte d'`.aspectRatio`
     /// posée par le `_InlineRenderer` interne, et la bulle s'aplatirait en
-    /// paysage au moment du tap-play. Le ratio est piloté EXCLUSIVEMENT par
-    /// le renderer du SDK qui reporte sa frame naturelle (`width × W/ratio`)
-    /// à ce ZStack, lequel se sizes dessus.
+    /// paysage au moment du tap-play.
     private var videoBody: some View {
         ZStack {
             Color.black
@@ -442,37 +436,70 @@ fileprivate struct BubbleGridCell: View {
                 MeeshyVideoPlayer(
                     attachment: attachment,
                     style: .inline,
-                    controls: .inlineDefault,
+                    controls: .inlineMinimal,
                     accentColor: contactColor,
                     frame: .bubble,
                     availability: availability,
-                    performance: .inline,
-                    // Grille multi-média : cellules ~150pt de large — le bouton
-                    // play 64pt écrasait la vignette. 44pt (minimum HIG) en
-                    // multi, 64pt conservé pour la vidéo solo pleine largeur.
                     playButtonDiameter: solo ? 64 : 44,
+                    surfaceTapExpands: true,
                     onDownload: onDownload,
-                    onExpand: { fullscreenAttachment = attachment }
+                    onExpand: { openFullscreen() }
                 )
             }
             .overlay(alignment: .bottom) {
-                MediaConsumptionProgressBar(attachmentId: attachment.id, accentHex: contactColor)
+                MediaConsumptionProgressBar(
+                    attachmentId: attachment.id,
+                    accentHex: contactColor,
+                    servedConsumption: attachment.currentUserConsumption,
+                    totalDuration: Double(attachment.duration ?? 0) / 1000.0)
             }
-            overflowOverlay
             viewCountBadge
         }
         .clipped()
+        // #9910 — la vidéo de grille montre ce qu'elle a récolté, comme la
+        // photo voisine ; en HAUT à gauche, le bas portant la barre de lecture
+        // et les contrôles du lecteur.
+        .overlay(alignment: .topLeading) { reactionsBadge }
+        // Recette du 2026-10-10 : sans geste à elle, le double tap d'une vidéo
+        // tombait sur celui de la cellule et ouvrait le menu d'édition du
+        // message. Il ouvre le sélecteur de CETTE pièce, comme la photo.
+        .modifier(QuickReactionDoubleTap(isEnabled: canReactPerImage) {
+            HapticFeedback.medium()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { showReactionPicker = true }
+        })
+        .modifier(MessagePieceLongPress(attachmentId: attachment.id, enabled: offersPiecePreview))
+        .modifier(PieceSpotlightRing(attachmentId: attachment.id, accentHex: contactColor))
+        .overlay {
+            AttachmentReactionPickerOverlay(isPresented: $showReactionPicker) { emoji in
+                onReactToAttachment?(attachment.id, emoji)
+            }
+        }
     }
 
     // MARK: - Sub-Views (each returns `some View` but at one bounded depth)
+
+    /// #12333 — ce que VoiceOver dit de la pièce : la description de l'auteur
+    /// ou, à défaut, la transcription, dans la langue du lecteur (Prisme, rang
+    /// par rang). `nil` sous protection : la loi du SDK ne décrit pas une pièce
+    /// à vue unique, floutée ou chiffrée, et la passerelle ne la sert pas.
+    private var spokenDescription: String? {
+        attachment.servedDescription(preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))?.text
+    }
 
     @ViewBuilder
     private var mediaLayer: some View {
         switch attachment.type {
         case .image:
-            BubbleGridImageView(attachment: attachment, cellPointWidth: cellPointWidth)
+            BubbleGridImageView(attachment: attachment, cellPointWidth: cellPointWidth,
+                                contentMode: solo ? .fit : .fill,
+                                onFullImageLoaded: { displayedImageLanded = true })
+                .modifier(MediaDescriptionLabel(text: spokenDescription))
         case .video:
-            BubbleGridVideoThumbnailView(attachment: attachment, contactColor: contactColor, solo: solo)
+            ConversationVideoPoster(attachment: attachment,
+                                    accentHex: contactColor,
+                                    playButtonDiameter: solo ? 64 : 44,
+                                    showsPlaybackCue: videoPresentation.showsPlaybackCue)
+                .modifier(MediaDescriptionLabel(text: spokenDescription))
         default:
             EmptyView()
         }
@@ -481,18 +508,22 @@ fileprivate struct BubbleGridCell: View {
     @ViewBuilder
     private var overflowOverlay: some View {
         if overflowCount > 0 {
-            Color.black.opacity(0.5)
-            Text("+\(overflowCount)")
-                .font(MeeshyFont.relative(24, weight: .bold))
-                .foregroundColor(.white)
+            MediaTileOverflowLabel(count: overflowCount)
         }
+    }
+
+    /// #11569 — la case « +N » pose son badge au coin, en forme compacte,
+    /// comme la case du Fil ; les autres cases le gardent au centre.
+    private var downloadPlacement: MediaTileDownloadPlacement {
+        MediaTileDownloadPlacement.resolve(surface: .bubbleGrid, overflowCount: overflowCount)
     }
 
     @ViewBuilder
     private var blurOverlay: some View {
         if attachmentIsProtected && !isRevealed {
             AttachmentBlurOverlayView(
-                isViewOnce: attachment.isViewOnce,
+                isViewOnce: attachment.declaresViewOnce,
+                hint: ProtectedContentTap.resolve(cell: attachment).accessibilityHint,
                 onReveal: handleReveal
             )
         }
@@ -500,24 +531,24 @@ fileprivate struct BubbleGridCell: View {
 
     @ViewBuilder
     private var viewCountBadge: some View {
-        if attachment.isViewOnce && attachment.viewOnceCount > 0 {
+        if attachment.declaresViewOnce && attachment.viewOnceCount > 0 {
             VStack {
                 HStack {
                     Spacer()
                     Text("\(attachment.viewOnceCount)")
                         // Doctrine 86i : compteur dans une pastille circulaire fixe 18×18 → figé.
-                        .font(MeeshyFont.relative(9, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
+                        .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold, design: .monospaced))
+                        .foregroundStyle(Color.white)
                         .frame(width: 18, height: 18)
                         .background(
                             Circle()
-                                .fill(MeeshyColors.error.opacity(0.85))
+                                .fill(MeeshyColors.error.opacity(MeeshyOpacity.intense))
                         )
                 }
-                .padding(6)
+                .padding(MeeshySpacing.xsPlus)
                 Spacer()
             }
-            .accessibilityLabel(Text(String(localized: "bubble.media.a11y.viewCount", defaultValue: "\(attachment.viewOnceCount) vue\(attachment.viewOnceCount > 1 ? "s" : "")", bundle: .main)))
+            .accessibilityLabel(Text(String(localized: "bubble.media.a11y.viewCount", defaultValue: "\(attachment.viewOnceCount) vues", bundle: .main)))
         }
     }
 
@@ -528,11 +559,16 @@ fileprivate struct BubbleGridCell: View {
                 attachment: attachment,
                 accentColor: contactColor,
                 messageDeliveryStatus: messageDeliveryStatus,
-                compact: attachment.type == .video,
                 onShareFile: { url in
                     shareURL = url
                     showShareSheet = true
-                }
+                },
+                displayedURL: BubbleGridImageView.displayedURL(for: attachment,
+                                                               cellPointWidth: cellPointWidth,
+                                                               displayScale: displayScale),
+                displayedImageLanded: displayedImageLanded,
+                form: downloadPlacement.form,
+                tileHostsVideoPlayer: videoPresentation.hostsPlayer
             )
         }
     }
@@ -540,7 +576,18 @@ fileprivate struct BubbleGridCell: View {
     // MARK: - Actions
 
     private func handleTap() {
-        guard !attachmentIsProtected || isRevealed else { return }
+        guard !attachmentIsProtected || isRevealed else { return handleReveal() }
+        openFullscreen()
+        HapticFeedback.light()
+    }
+
+    /// L'ouverture elle-même, sans la garde de révélation.
+    ///
+    /// Extraite parce que `handleReveal` doit ouvrir DANS LE MÊME geste que la
+    /// révélation (#7499) : repasser par `handleTap` relirait `isRevealed` à
+    /// travers la liaison qu'on vient d'écrire, ce qui fait dépendre
+    /// l'ouverture d'un ordre de propagation SwiftUI au lieu du code.
+    private func openFullscreen() {
         if overflowCount > 0 {
             carouselIndex = allVisualAttachments.firstIndex(where: { $0.id == attachment.id }) ?? 0
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
@@ -549,29 +596,55 @@ fileprivate struct BubbleGridCell: View {
         } else {
             fullscreenAttachment = attachment
         }
-        HapticFeedback.light()
     }
 
+    /// **Un toucher sur une pièce cachée** suit `ProtectedContentTap` :
+    ///
+    /// - floutée : révélée SUR PLACE dans sa case (#8389) ; le toucher suivant
+    ///   passe par `handleTap` et ouvre son plein écran, comme tout média ;
+    /// - à vue unique : son plein écran s'ouvre DIRECTEMENT (#8009). On OUVRE,
+    ///   on ne consomme pas (#7499) : la consommation part à la FERMETURE du
+    ///   plein écran, depuis l'hôte qui possède la galerie (`onMediaTap`
+    ///   l'arme), sur CETTE pièce, jamais par le carrousel en ligne.
     private func handleReveal() {
-        HapticFeedback.medium()
-        if attachment.isViewOnce {
-            onConsumeViewOnce?(messageId) { success in
-                guard success else { return }
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    _ = revealedAttachmentIds.insert(attachment.id)
-                }
-                let attachmentId = attachment.id
-                DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                    withAnimation(.easeOut(duration: 0.5)) {
-                        _ = revealedAttachmentIds.remove(attachmentId)
-                    }
-                }
-            }
-        } else {
+        switch ProtectedContentTap.resolve(cell: attachment) {
+        case .openFullscreen(let media):
+            HapticFeedback.medium()
+            onOpenProtected(media)
+        case .revealInPlace:
+            HapticFeedback.medium()
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 _ = revealedAttachmentIds.insert(attachment.id)
             }
+        default:
+            break
         }
+    }
+}
+
+// MARK: - BubbleSoloImageFrame — la case d'une image seule suit son ratio (#18678)
+
+/// **Une image seule s'affiche entière, à ses proportions** (retour porteur,
+/// #18678) : portrait, paysage ou carré, bornée en largeur (`maxWidth`) et en
+/// hauteur (`maxHeightRatio` × largeur, le plafond de la vidéo seule), jamais
+/// recadrée. Un ratio extrême garde un plancher `minSide` sur l'autre côté ;
+/// l'image y est posée en `.fit`. Sans dimensions connues, la case historique.
+/// La grille à 2, 3 et 4+ pièces reste en remplissage : seule l'image seule
+/// change. Partagée par la bulle et le Fil (`FocalMediaGridLayout`).
+nonisolated enum BubbleSoloImageFrame {
+    static let maxHeightRatio: CGFloat = 1.6
+    static let minSide: CGFloat = 80
+    static let fallbackHeight: CGFloat = 240
+
+    static func size(width: Int?, height: Int?, maxWidth: CGFloat,
+                     maxHeight: CGFloat? = nil, minSide: CGFloat = minSide) -> CGSize {
+        guard let width, let height, width > 0, height > 0 else {
+            return CGSize(width: maxWidth, height: fallbackHeight)
+        }
+        let ratio = CGFloat(width) / CGFloat(height)
+        let fitted = min(maxWidth / ratio, maxHeight ?? maxWidth * maxHeightRatio)
+        let boxWidth = max(min(maxWidth, fitted * ratio), min(minSide, maxWidth))
+        return CGSize(width: boxWidth.rounded(), height: max(fitted, minSide).rounded())
     }
 }
 
@@ -582,24 +655,45 @@ fileprivate struct BubbleGridImageView: View {
     /// Largeur en points de la cellule (décidée par `visualMediaGrid`). Sert à
     /// choisir la variante d'image la plus légère suffisante (bande passante 5.2).
     let cellPointWidth: CGFloat
+    /// `.fit` pour l'image seule, dont la case suit déjà son ratio
+    /// (`BubbleSoloImageFrame`) : elle n'est jamais coupée (#18678).
+    var contentMode: ContentMode = .fill
+    /// Le plein format affiché est résident — relayé au badge (#10370).
+    var onFullImageLoaded: (@MainActor () -> Void)? = nil
 
     @Environment(\.displayScale) private var displayScale: CGFloat
 
+    /// 5.2 — l'URL que la case AFFICHE (`BubbleImageSourceLaw`) : une forme
+    /// déjà sur l'appareil d'abord, sinon la plus petite variante
+    /// `>= largeur d'affichage en px`, ou l'original sans variante (image
+    /// chiffrée). Site unique : le badge y lit la MÊME URL que celle que la
+    /// case charge (#10370).
+    static func displayedURL(for attachment: MessageAttachment, cellPointWidth: CGFloat,
+                             displayScale: CGFloat,
+                             isOnDevice: (String) -> Bool = BubbleImageSourceLaw.isOnDevice) -> String? {
+        BubbleImageSourceLaw.displayedURL(
+            variants: attachment.imageVariants ?? [],
+            originalURL: attachment.fileUrl,
+            originalWidth: attachment.width,
+            targetWidthPx: Int((cellPointWidth * displayScale).rounded()),
+            isOnDevice: isOnDevice
+        )
+    }
+
+    /// L'original posé sur l'appareil par le bouton de la bulle relit la
+    /// source affichée et relance le chargement retenu par la politique.
     var body: some View {
+        OriginalLandingReload(fileUrl: attachment.fileUrl) { originalLanded in
+            image(originalLanded: originalLanded)
+        }
+    }
+
+    @ViewBuilder
+    private func image(originalLanded: Bool) -> some View {
         let originalFull = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
         let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-
-        // 5.2 — choisir la plus petite variante `>= largeur d'affichage en px`
-        // (atome pur SDK). Sans variante (image chiffrée) → `originalFull`.
-        let targetWidthPx = Int((cellPointWidth * displayScale).rounded())
-        let selectedFull: String? = originalFull.map { orig in
-            ImageVariantSelector.bestImageURL(
-                variants: attachment.imageVariants ?? [],
-                originalURL: orig,
-                originalWidth: attachment.width,
-                targetWidthPx: targetWidthPx
-            )
-        }
+        let selectedFull = Self.displayedURL(for: attachment, cellPointWidth: cellPointWidth,
+                                             displayScale: displayScale)
         // N6 — quand une variante allégée est choisie (≠ original), le thumbHash
         // couvre déjà le remplissage instantané : on saute le tier thumbnail pour
         // ne pas télécharger thumbnail + variante.
@@ -612,89 +706,19 @@ fileprivate struct BubbleGridImageView: View {
                 thumbHash: attachment.thumbHash,
                 thumbnailUrl: effectiveThumb,
                 fullUrl: selectedFull,
-                targetSize: CGSize(width: cellPointWidth, height: cellPointWidth)
+                targetSize: CGSize(width: cellPointWidth, height: cellPointWidth),
+                onFullImageLoaded: onFullImageLoaded,
+                reloadToken: originalLanded,
+                byteSize: attachment.fileSize
             ) {
                 Color(hex: attachment.thumbnailColor).shimmer()
             }
-            .aspectRatio(contentMode: .fill)
+            .aspectRatio(contentMode: contentMode)
             .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
             .clipped()
         } else {
             Color(hex: attachment.thumbnailColor)
-                .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(0.5)))
-        }
-    }
-}
-
-// MARK: - BubbleGridVideoThumbnailView (extracted so its `some View` is bounded)
-
-fileprivate struct BubbleGridVideoThumbnailView: View {
-    let attachment: MessageAttachment
-    let contactColor: String
-    let solo: Bool
-
-    var body: some View {
-        ZStack {
-            thumbnailLayer
-            playIconOverlay
-            durationBadge
-        }
-    }
-
-    @ViewBuilder
-    private var thumbnailLayer: some View {
-        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-        if thumbUrl != nil || attachment.thumbHash != nil {
-            ProgressiveCachedImage(
-                thumbHash: attachment.thumbHash,
-                thumbnailUrl: thumbUrl,
-                fullUrl: thumbUrl
-            ) {
-                Color(hex: attachment.thumbnailColor).shimmer()
-            }
-            .aspectRatio(contentMode: .fill)
-            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-            .clipped()
-        } else {
-            Color(hex: attachment.thumbnailColor)
-        }
-    }
-
-    private var playIconOverlay: some View {
-        ZStack {
-            Circle()
-                .fill(.ultraThinMaterial)
-                .frame(width: solo ? 48 : 36, height: solo ? 48 : 36)
-            Circle()
-                .fill(Color(hex: contactColor).opacity(0.85))
-                .frame(width: solo ? 42 : 30, height: solo ? 42 : 30)
-            Image(systemName: "play.fill")
-                // Doctrine 86i : glyphe play dans un cercle de lecture de dimension fixe
-                // (48/36) → taille figée, proportionnée au cercle (ne doit pas déborder).
-                .font(.system(size: solo ? 18 : 12, weight: .bold))
-                .foregroundColor(.white)
-                .offset(x: solo ? 2 : 1)
-        }
-        .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
-    }
-
-    @ViewBuilder
-    private var durationBadge: some View {
-        if let formatted = attachment.durationFormatted {
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Text(formatted)
-                        .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.black.opacity(0.6)))
-                }
-                .padding(.trailing, 4)
-                .padding(.bottom, 4)
-            }
+                .overlay(Image(systemName: "photo").foregroundStyle(Color.white.opacity(MeeshyOpacity.strong)))
         }
     }
 }
@@ -703,328 +727,52 @@ fileprivate struct BubbleGridVideoThumbnailView: View {
 
 private struct AttachmentBlurOverlayView: View {
     let isViewOnce: Bool
+    let hint: String?
     let onReveal: () -> Void
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.5)
+            MeeshyColors.mediaScrim
                 .background(.ultraThinMaterial)
 
-            VStack(spacing: 5) {
+            VStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "eye.slash.fill")
-                    .font(MeeshyFont.relative(16, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
                     .foregroundStyle(.white)
 
-                Text(isViewOnce ? String(localized: "bubble.media.viewOnce", defaultValue: "Voir une fois", bundle: .main) : String(localized: "bubble.media.masked", defaultValue: "Contenu masque", bundle: .main))
-                    .font(MeeshyFont.relative(10, weight: .semibold))
+                Text(isViewOnce ? String(localized: "bubble.media.viewOnce", defaultValue: "Voir une fois", bundle: .main) : String(localized: "bubble.media.masked", defaultValue: "Contenu masqué", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                     .foregroundStyle(.white)
 
-                Text(String(localized: "bubble.media.holdToView", defaultValue: "Maintenir pour voir", bundle: .main))
-                    .font(MeeshyFont.relative(9))
-                    .foregroundStyle(.white.opacity(0.7))
+                Text(String(localized: "bubble.media.tapToView", defaultValue: "Toucher pour voir", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.microSize))
+                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
             }
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(isViewOnce ? String(localized: "bubble.media.a11y.viewOnce", defaultValue: "Média à voir une fois", bundle: .main) : String(localized: "bubble.media.a11y.masked", defaultValue: "Media masque", bundle: .main))
-        .accessibilityHint(String(localized: "bubble.media.a11y.holdToReveal", defaultValue: "Maintenir pour révéler le contenu", bundle: .main))
-        .onLongPressGesture(minimumDuration: 0.3) {
-            onReveal()
-        }
+        .accessibilityLabel(isViewOnce ? String(localized: "bubble.media.a11y.viewOnce", defaultValue: "Média à voir une fois", bundle: .main) : String(localized: "bubble.media.a11y.masked", defaultValue: "Média masqué", bundle: .main))
+        .accessibilityHint(hint ?? "")
+        .onTapGesture { onReveal() }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { onReveal() }
     }
 }
 
-// MARK: - Bubble Carousel View (Native Paging + Elegant Transitions)
-
-struct BubbleCarouselView: View {
-    let items: [MessageAttachment]
-    @Binding var carouselIndex: Int
-    @Binding var showCarousel: Bool
-    @Binding var fullscreenAttachment: MessageAttachment?
-    let contactColor: String
-    let messageDeliveryStatus: Message.DeliveryStatus
-    var footer: BubbleFooterModel = .empty
-    var isDark: Bool = false
-    var containerWidth: CGFloat = 260
-    /// Mirror of `BubbleStandardLayout.hasPlayingInlineVideo` — passed in
-    /// by `carouselView` so the carousel hides its `BubbleFooter` overlay
-    /// (timestamp + delivery state) while one of its video slides is the
-    /// active inline player. Avoids collision with the overlay controls
-    /// drawn over the video. Defaults to `false` for non-bubble callers.
-    var hasPlayingInlineVideo: Bool = false
-
-    @State private var currentPageID: String?
-
-    private func carouselHeight(width: CGFloat) -> CGFloat {
-        // Pager height = max(width / ratio) — pure aspect ratio respect, no
-        // cap. A portrait 9:16 slide in the mix dictates the pager height
-        // (≈ width × 1.78); landscape slides are letterboxed inside that
-        // height with their natural aspect. Voulu pour respecter le format
-        // de chaque vidéo.
-        let heights = items.map { att -> CGFloat in
-            let r = att.videoAspectRatio ?? (16.0 / 9.0)
-            return width / r
-        }
-        return heights.max() ?? width * 9 / 16
-    }
-
-    var body: some View {
-        ZStack(alignment: .top) {
-            AdaptiveHorizontalPager(
-                items: items,
-                currentPageID: $currentPageID,
-                fillVertical: false,
-                carouselTransition: true
-            ) { _, attachment in
-                carouselPage(attachment)
-            }
-            .frame(height: carouselHeight(width: containerWidth))
-
-            carouselTopBar
-        }
-        // Timestamp + delivery state — overlay footer, masqué pendant la
-        // lecture d'une vidéo inline pour libérer le bottom-trailing.
-        .overlay(alignment: .bottomTrailing) {
-            if !hasPlayingInlineVideo {
-                BubbleFooter(model: footer, actions: .none, style: .overlay, isDark: isDark)
-                    .equatable()
-                    .padding(MeeshySpacing.sm)
-            }
-        }
-        .onAppear {
-            let startIndex = max(0, min(carouselIndex, items.count - 1))
-            currentPageID = items[startIndex].id
-        }
-        .adaptiveOnChange(of: currentPageID) { _, newID in
-            guard let newID,
-                  let newIndex = items.firstIndex(where: { $0.id == newID })
-            else { return }
-
-            let oldIndex = carouselIndex
-            carouselIndex = newIndex
-
-            if oldIndex != newIndex {
-                let oldAttachment = items[oldIndex]
-                if oldAttachment.type == .video {
-                    // BUG E fix : release (URL-gated) plutôt que pause sur
-                    // swipe-away — vide `activeURL` pour que la bulle réaffiche
-                    // son footer et que le player ne traîne pas en mémoire.
-                    SharedAVPlayerManager.shared.release(urlString: oldAttachment.fileUrl)
-                }
-                HapticFeedback.light()
-            }
-
-            prefetchAdjacentPages(around: newIndex)
-        }
-    }
-
-    // MARK: - Top Bar
-
-    private var carouselTopBar: some View {
-        HStack(spacing: 0) {
-            Button {
-                // BUG E fix : libère le player de la slide active (URL-gated)
-                // pour vider `activeURL`, sinon `hasPlayingInlineVideo` reste
-                // vrai et le footer de la bulle reste masqué après fermeture.
-                let current = items[max(0, min(carouselIndex, items.count - 1))]
-                if current.type == .video {
-                    SharedAVPlayerManager.shared.release(urlString: current.fileUrl)
-                }
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showCarousel = false
-                }
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: "xmark")
-                    // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 26×26 → figé.
-                    .font(MeeshyFont.relative(10, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(.ultraThinMaterial.opacity(0.8)))
-                    .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
-            }
-            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
-
-            Spacer()
-
-            if items.count > 1 {
-                pageIndicator
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.top, 10)
-    }
-
-    // MARK: - Page Indicator
+/// #12333 — le libellé VoiceOver d'une pièce visuelle, quand elle a une
+/// description servie ; sinon la pièce garde le libellé qu'elle avait.
+private struct MediaDescriptionLabel: ViewModifier {
+    let text: String?
 
     @ViewBuilder
-    private var pageIndicator: some View {
-        let accent = Color(hex: contactColor)
-
-        if items.count <= 7 {
-            HStack(spacing: 5) {
-                ForEach(0..<items.count, id: \.self) { i in
-                    Circle()
-                        .fill(i == carouselIndex ? accent : Color.white.opacity(0.45))
-                        .frame(
-                            width: i == carouselIndex ? 7 : 5,
-                            height: i == carouselIndex ? 7 : 5
-                        )
-                        .shadow(
-                            color: i == carouselIndex ? accent.opacity(0.6) : .clear,
-                            radius: 4
-                        )
-                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: carouselIndex)
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(
-                Capsule()
-                    .fill(.ultraThinMaterial.opacity(0.7))
-                    .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
-            )
+    func body(content: Content) -> some View {
+        if let text, !text.isEmpty {
+            content
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(text))
+                .accessibilityAddTraits(.isImage)
         } else {
-            Text("\(carouselIndex + 1) / \(items.count)")
-                .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
-                .foregroundColor(.white)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(
-                    Capsule()
-                        .fill(.ultraThinMaterial.opacity(0.7))
-                        .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
-                )
-                .contentTransition(.numericText())
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: carouselIndex)
-        }
-    }
-
-    // MARK: - Carousel Page
-
-    @ViewBuilder
-    private func carouselPage(_ attachment: MessageAttachment) -> some View {
-        ZStack {
-            Color.black
-
-            switch attachment.type {
-            case .image:
-                carouselImageCell(attachment)
-            case .video:
-                carouselVideoCell(attachment)
-            default:
-                EmptyView()
-            }
-        }
-        .frame(height: carouselHeight(width: containerWidth))
-        .clipped()
-        .contentShape(Rectangle())
-        .onTapGesture {
-            fullscreenAttachment = attachment
-            HapticFeedback.light()
-        }
-        .overlay(alignment: .bottom) {
-            DownloadBadgeView(
-                attachment: attachment,
-                accentColor: contactColor,
-                messageDeliveryStatus: messageDeliveryStatus,
-                onShareFile: { _ in }
-            )
-            .padding(.bottom, 8)
-        }
-    }
-
-    // MARK: - Image Cell
-
-    @ViewBuilder
-    private func carouselImageCell(_ attachment: MessageAttachment) -> some View {
-        let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
-        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-        if fullUrl != nil || thumbUrl != nil || attachment.thumbHash != nil {
-            ProgressiveCachedImage(
-                thumbHash: attachment.thumbHash,
-                thumbnailUrl: thumbUrl,
-                fullUrl: fullUrl ?? thumbUrl
-            ) {
-                Color(hex: attachment.thumbnailColor).shimmer()
-            }
-            .aspectRatio(contentMode: .fit)
-            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-        } else {
-            Color(hex: attachment.thumbnailColor)
-                .overlay(
-                    Image(systemName: "photo")
-                        .font(MeeshyFont.relative(28))
-                        .foregroundColor(.white.opacity(0.4))
-                        .accessibilityHidden(true)
-                )
-        }
-    }
-
-    // MARK: - Video Cell
-
-    @ViewBuilder
-    private func carouselVideoCell(_ attachment: MessageAttachment) -> some View {
-        VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
-            MeeshyVideoPlayer(
-                attachment: attachment,
-                style: .inline,
-                controls: .inlineDefault,
-                accentColor: contactColor,
-                frame: .bubble,
-                availability: availability,
-                performance: .carousel,
-                onDownload: onDownload,
-                onExpand: { fullscreenAttachment = attachment }
-            )
-        }
-        .overlay(alignment: .bottom) {
-            MediaConsumptionProgressBar(attachmentId: attachment.id, accentHex: contactColor)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    // MARK: - Prefetch
-
-    /// Pure gate: should this attachment kind be prefetched given the
-    /// resolved auto-download policy? Extracted so the wiring in
-    /// `prefetchAdjacentPages` (2026-07-21 fix — the ±1 carousel neighbor
-    /// prefetch previously ignored `MediaDownloadPolicyEngine` entirely,
-    /// burning cellular data against 'Never'/'Wi-Fi only') is testable
-    /// without spinning up the full carousel view.
-    nonisolated static func shouldPrefetchAttachment(
-        kind: MessageAttachment.AttachmentType,
-        allowImage: Bool,
-        allowVideo: Bool
-    ) -> Bool {
-        kind == .video ? allowVideo : allowImage
-    }
-
-    private func prefetchAdjacentPages(around index: Int) {
-        let prefetchRange = max(0, index - 1)...min(items.count - 1, index + 1)
-        // Respect the user's auto-download policy — mirrors
-        // ConversationMediaHandler.prefetchRecentMedia. Without this gate the
-        // ±1 neighbor prefetch pulled full-size media over cellular
-        // regardless of the 'Never'/'Wi-Fi only' preference.
-        let condition = NetworkConditionMonitor.shared.condition
-        let prefs = MediaDownloadPreferencesStore.shared.preferences
-        let allowImage = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .image, condition: condition, prefs: prefs)
-        let allowVideo = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .video, condition: condition, prefs: prefs)
-        for i in prefetchRange {
-            let attachment = items[i]
-            guard Self.shouldPrefetchAttachment(kind: attachment.type, allowImage: allowImage, allowVideo: allowVideo) else { continue }
-            // BUG C fix : pour une vidéo, NE JAMAIS prefetch le body MP4 dans
-            // le cache image (téléchargement complet + échec de décodage
-            // UIImage). On prefetch le thumbnail uniquement ; si absent, skip.
-            let urlStr: String = attachment.type == .video
-                ? (attachment.thumbnailUrl ?? "")
-                : (attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl)
-            guard !urlStr.isEmpty else { continue }
-            Task {
-                _ = await CacheCoordinator.shared.images.image(
-                    for: MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString ?? urlStr
-                )
-            }
+            content
         }
     }
 }

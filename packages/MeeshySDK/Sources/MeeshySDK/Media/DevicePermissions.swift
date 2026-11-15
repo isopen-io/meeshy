@@ -107,7 +107,7 @@ extension MediaPermissionState {
 /// inherits `@MainActor`, and its prologue (`swift_task_isCurrentExecutorImpl`)
 /// checks the executor ON ENTRY, off the main actor, and traps
 /// (`EXC_BREAKPOINT`) before any inner `Task { @MainActor in }` can run. That
-/// was a real crash on the first microphone prompt (2026-06-15).
+/// was a real crash on the first microphone prompt.
 ///
 /// Keeping the callback free of any actor-isolated access means no check is
 /// inserted; the `async` result is then consumed on the MainActor via `await`.

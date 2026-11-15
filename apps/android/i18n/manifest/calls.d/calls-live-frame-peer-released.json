@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.liveFrame.peerReleased",
+          "androidName": "call_live_frame_peer_released",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.liveFrame.peerReleased.anonymous",
+          "androidName": "call_live_frame_peer_released_anonymous",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

@@ -9,8 +9,7 @@ import { z } from 'zod';
 import { isMsRangeOrdered, MS_RANGE_REFINEMENT } from '@meeshy/shared/utils/time-range';
 import {
   callTypeEnum,
-  CommonSchemas,
-  type VCallType,
+  CommonSchemas
 } from '@meeshy/shared/utils/validation';
 
 /**
@@ -118,7 +117,9 @@ export const getActiveCallForUserSchema = z.object({});
 export const callHistoryQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(30),
   cursor: objectIdSchema.optional(),
-  filter: z.enum(['all', 'missed']).default('all')
+  filter: z.enum(['all', 'missed']).default('all'),
+  type: z.enum(['all', 'audio', 'video']).default('all'),
+  q: z.string().max(100).optional()
 });
 export type CallHistoryQueryInput = z.infer<typeof callHistoryQuerySchema>;
 
@@ -250,12 +251,12 @@ export const socketSignalSchema = z.object({
 });
 
 /**
- * Socket.IO Event: call:toggle-audio / call:toggle-video
+ * Socket.IO Event: call:toggle-audio / call:toggle-video / call:toggle-screen
  */
 export const socketMediaToggleSchema = z.object({
   callId: objectIdSchema,
   enabled: z.boolean(),
-  mediaType: z.enum(['audio', 'video']).optional(),
+  mediaType: z.enum(['audio', 'video', 'screen']).optional(),
   participantId: z.string().optional()
 });
 
@@ -431,6 +432,12 @@ export const socketCallScreenCaptureDetectedSchema = z.object({
   callId: objectIdSchema,
   participantId: z.string().min(1),
   isCapturing: z.boolean(),
+  /**
+   * #16665 — absent chez un client d'avant, ou inconnu chez un client d'après :
+   * la passerelle le lit `recording` (`screenCaptureKindOf`). Refuser une sorte
+   * inconnue ferait taire l'alerte de confidentialité d'un client plus récent.
+   */
+  kind: z.string().max(32).optional(),
 });
 export type SocketCallScreenCaptureDetectedInput = z.infer<typeof socketCallScreenCaptureDetectedSchema>;
 
@@ -467,5 +474,27 @@ export const socketCallAnalyticsSchema = z.object({
   deviceModel: z.string().max(100),
   isVideo: z.boolean(),
   endReason: z.string().max(50),
+  // #11277 — la QUALITÉ, tous optionnels (absents des clients d'avant) ; la
+  // forme est celle de `CallAnalyticsEvent` (`@meeshy/shared/types/call-analytics`).
+  freezeCount: z.number().int().nonnegative().optional(),
+  totalFreezesDuration: z.number().nonnegative().optional(),
+  qualityLimitationReason: z.string().max(20).optional(),
+  jitterBufferDelay: z.number().nonnegative().optional(),
+  concealedSamples: z.number().int().nonnegative().optional(),
+  nackCount: z.number().int().nonnegative().optional(),
+  pliCount: z.number().int().nonnegative().optional(),
+  mos: z.number().min(1).max(5).optional(),
+  candidateType: z.string().max(20).optional(),
+  relayProtocol: z.string().max(20).optional(),
 });
 export type SocketCallAnalyticsInput = z.infer<typeof socketCallAnalyticsSchema>;
+
+/** La note d'après-appel (#8072) — la forme de `CallQualityFeedbackEvent`. */
+export const CALL_FEEDBACK_ISSUES = ['audio_quality', 'video_quality', 'dropped', 'echo', 'sync', 'other'] as const;
+export const socketCallQualityFeedbackSchema = z.object({
+  callId: objectIdSchema,
+  rating: z.number().int().min(1).max(5),
+  issues: z.array(z.enum(CALL_FEEDBACK_ISSUES)).max(CALL_FEEDBACK_ISSUES.length).optional(),
+  comment: z.string().trim().max(500).optional(),
+});
+export type SocketCallQualityFeedbackInput = z.infer<typeof socketCallQualityFeedbackSchema>;

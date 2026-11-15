@@ -1,5 +1,10 @@
 import { transformTranslationsToArray } from '../../../utils/translation-transformer';
 import { resolveAnonymousSenderIdentity } from '@meeshy/shared/utils/participant-helpers';
+import { mapMessageProtectionFields } from '../../conversations/messages-list-query';
+import { servedQuotedMessage } from '../../../services/messaging/servedQuotedMessage';
+import { servedLinkMetadata } from '../../../services/messaging/linkTrackingAuthor';
+import { attachmentReplyToFromMetadata } from '../../../services/messaging/attachmentReplySnapshot';
+import type { EphemeralReaderResolution } from '../../conversations/ephemeralReaderDeadlines';
 
 /**
  * Extracts sender info from unified Participant model
@@ -85,8 +90,24 @@ export function formatMessageWithUnifiedSender(message: any) {
  *
  * `deletedAt` n'est pas recopié : `getConversationMessagesWithDetails` filtre
  * `deletedAt: null`, la valeur est donc constante par construction.
+ *
+ * #4885 — `getConversationMessagesWithDetails` charge la ligne `Message`
+ * ENTIÈRE (`include` sans `select` racine), donc `isViewOnce`/`isBlurred`/
+ * `effectFlags`/`expiresAt` sont déjà dans `message` : ce formateur ne les
+ * recopiait pas, et `messageSchema` (`routes/links/types.ts`) ne les
+ * déclarait pas. Un message à vue unique / flouté / éphémère lu via un lien
+ * de partage arrivait donc SANS AUCUN de ses drapeaux — la population la
+ * plus exposée (visiteurs sans compte) était aussi la seule à n'avoir aucun
+ * moyen de savoir qu'un message est protégé.
  */
-export function formatLinkMessageWithDetails(message: any) {
+export type LinkQuotedReaders = {
+  readonly deadlines: ReadonlyMap<string, EphemeralReaderResolution>;
+  readonly now: Date;
+};
+
+export function formatLinkMessageWithDetails(message: any, readers?: LinkQuotedReaders) {
+  // #10286 — la carte de liens suivis d'un invité anonyme n'en sort pas.
+  const servedMetadata = servedLinkMetadata(message.metadata, message.sender);
   return {
     id: message.id,
     content: message.content,
@@ -97,14 +118,15 @@ export function formatLinkMessageWithDetails(message: any) {
     replyToId: message.replyToId,
     createdAt: message.createdAt,
     updatedAt: message.updatedAt,
+    ...mapMessageProtectionFields(message),
     // Messages système : leur sens vit dans `metadata` (rendu localisé côté
     // client), jamais dans le texte. Clés ABSENTES sur un message ordinaire.
     ...(message.messageSource ? { messageSource: message.messageSource } : {}),
     ...(message.senderId ? { senderId: message.senderId } : {}),
-    ...(message.metadata ? { metadata: message.metadata } : {}),
+    ...(servedMetadata ? { metadata: servedMetadata } : {}),
     sender: extractSenderInfo(message.sender),
     attachments: message.attachments || [],
-    replyTo: message.replyTo ? formatReplyToMessage(message.replyTo) : null,
+    replyTo: message.replyTo ? formatReplyToMessage(message.replyTo, message.metadata, readers) : null,
     reactions: message.reactions || [],
     translations: transformTranslationsToArray(
       message.id,
@@ -122,14 +144,44 @@ export function formatLinkMessageWithDetails(message: any) {
  *
  * Ne recopie ni les pièces jointes ni les réactions du message cité — une
  * citation ne rend que son texte et son auteur.
+ *
+ * #4952 — `getConversationMessagesWithDetails` charge la ligne CITÉE en
+ * entier (`include`, pas `select`) : `replyTo.content` d'un message à vue
+ * unique / flouté / chiffré partait donc EN CLAIR vers la population la plus
+ * exposée d'un lien de partage — les visiteurs sans compte. `servedQuotedMessage`
+ * (site UNIQUE partagé avec la liste REST et `message:new` socket, cf.
+ * `services/messaging/servedQuotedMessage.ts`) remplace le texte par le
+ * placeholder et sert les quatre drapeaux dont la protection se DÉCLARE — les
+ * autres routes du dépôt les affichent déjà pour le message RACINE
+ * (`mapMessageProtectionFields`, `#4885`), la citation n'a aucune raison d'en
+ * savoir moins.
+ *
+ * #6164 — `citingMetadata` est le `metadata` du message QUI CITE, jamais celui
+ * du message cité : l'instantané de la PIÈCE NOMMÉE y est gravé, et c'est le
+ * seul fait de la citation que ce formateur peut servir sans recopier les
+ * pièces jointes. La NATURE figée suffit à dire « une photo » ; l'ancre suffit
+ * à sauter. Clé ABSENTE quand la réponse vise le message entier — c'est le cas
+ * de toutes les citations d'avant ce lot, et rien n'y change.
  */
-function formatReplyToMessage(replyTo: any) {
+function formatReplyToMessage(replyTo: any, citingMetadata?: unknown, readers?: LinkQuotedReaders) {
+  const guarded = servedQuotedMessage(replyTo, {
+    includeTranslations: false,
+    attachmentReplyTo: attachmentReplyToFromMetadata(citingMetadata),
+    // #8562 — l'échéance de CE lecteur ; sans elle, l'heure brute ne sort pas.
+    ephemeralReader: readers ? { resolution: readers.deadlines.get(replyTo.id), now: readers.now } : undefined,
+  });
   return {
     id: replyTo.id,
-    content: replyTo.content,
+    content: guarded['content'] !== undefined ? guarded['content'] : replyTo.content,
     originalLanguage: replyTo.originalLanguage || 'fr',
     messageType: replyTo.messageType,
     createdAt: replyTo.createdAt,
-    sender: extractSenderInfo(replyTo.sender)
+    sender: extractSenderInfo(replyTo.sender),
+    isViewOnce: Boolean(replyTo.isViewOnce),
+    isBlurred: Boolean(replyTo.isBlurred),
+    isEncrypted: Boolean(replyTo.isEncrypted),
+    effectFlags: replyTo.effectFlags ?? 0,
+    ...(guarded['deletedAt'] ? { deletedAt: guarded['deletedAt'] } : {}),
+    ...(guarded['attachmentReplyTo'] ? { attachmentReplyTo: guarded['attachmentReplyTo'] } : {})
   };
 }

@@ -1,0 +1,87 @@
+import Foundation
+import Combine
+import UIKit
+import MeeshySDK
+import MeeshyUI
+import os
+
+// Extrait de `ConversationViewModel.swift` (#4942, D-MAINT-01), qui portait
+// 4 832 lignes — quatre fois le plafond DUR de 1 200 de la directive
+// 2026-09-02, que `FileSizeBudgetGuardTests` mesure et qui interdit d'AJOUTER
+// à un fichier hors budget. Un chantier de fluidité qui doit toucher le
+// chargement, l'envoi et l'observation du magasin ne pouvait pas commencer
+// avant : on extrait d'abord, on ajoute ensuite. Le découpage suit une
+// RESPONSABILITÉ, jamais une tranche de lignes, et ne change AUCUN
+// comportement — les corps sont déplacés à l'identique.
+//
+// `private` est de portée FICHIER en Swift : les membres de l'hôte que cette
+// extension consomme se sont élargis en interne par la découpe, pas par un
+// choix de visibilité. Les propriétés STOCKÉES restent chez l'hôte — une
+// extension ne peut pas en déclarer.
+//
+// Responsabilité tenue ici : la conformité `ConversationSocketDelegate` — ce que
+// le socket POUSSE dans le modèle : rôle d'un participant, accès révoqué, et
+// l'enrichissement d'une pièce jointe (transcription / pistes traduites) injecté
+// en une seule tranche d'acteur principal puis écrit dans GRDB, pour qu'une
+// réouverture le serve depuis le cache au lieu de le faire « pop » après coup.
+
+// MARK: - ConversationSocketDelegate Conformance
+
+extension ConversationViewModel: ConversationSocketDelegate {
+    func handleParticipantRoleUpdated(participantId: String, newRole: String) {
+        Logger.socket.info("Participant \(participantId) role changed to \(newRole)")
+        derived.topActiveMembers = nil
+        let convId = conversationId
+        Task {
+            await CacheCoordinator.shared.participants.invalidate(for: convId)
+        }
+        objectWillChange.send()
+    }
+
+    /// Bridge for `ConversationSocketHandler` — reuses the same purge +
+    /// dismiss path as the REST 403 case so socket-rejected joins look
+    /// identical to API-rejected loads from the user's perspective.
+    func handleSocketAccessRevoked(reason: String?) {
+        Task { [weak self] in
+            await self?.handleAccessRevoked(reason: reason)
+        }
+    }
+
+    /// Applies a server-pushed attachment delta (transcription / audio
+    /// translation finalized) by:
+    /// 1. Injecting the enriched metadata directly into
+    ///    `messageTranscriptions` / `messageTranslatedAudios` in a
+    ///    single MainActor slice (no await between assignments — same
+    ///    atomic-publish rule as `hydrateMetadataFromGRDB`).
+    /// 2. Fire-and-forget GRDB write-through via
+    ///    `MessagePersistenceActor.applyAttachmentEnrichment`, so a
+    ///    subsequent open of this conversation surfaces the enrichment
+    ///    from cache instead of pop-in-then-replace when
+    ///    `refreshMessagesFromAPI` later runs.
+    func applyAttachmentUpdate(_ event: AttachmentUpdatedEvent) {
+        injectAttachmentMetadata(from: event.attachment, intoMessageId: event.messageId)
+
+        let messageId = event.messageId
+        let attachmentId = event.attachment.id
+        let transcription = event.attachment.transcription
+        let translations = event.attachment.translations
+        Task { [persistence = messagePersistence] in
+            try? await persistence.applyAttachmentEnrichment(
+                messageId: messageId,
+                attachmentId: attachmentId,
+                transcription: transcription,
+                translations: translations
+            )
+        }
+    }
+
+    private func injectAttachmentMetadata(
+        from attachment: APIMessageAttachment,
+        intoMessageId msgId: String
+    ) {
+        applyAudioMetadata(
+            [AttachmentAudioMetadata.entry(fromSocket: attachment, messageId: msgId)],
+            forceOverwrite: true
+        )
+    }
+}

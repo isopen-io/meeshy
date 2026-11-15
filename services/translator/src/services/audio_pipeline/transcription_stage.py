@@ -16,23 +16,33 @@ Architecture:
 - Cache-first strategy
 """
 
+from __future__ import annotations
+
 import os
 import logging
 import asyncio
-from typing import Optional, Dict, Any, List
+from typing import TYPE_CHECKING, Optional, Dict, Any, List
 from dataclasses import dataclass
 
-# Import services
-from ..transcription_service import (
-    TranscriptionService,
-    TranscriptionResult,
-    get_transcription_service
-)
+# `transcription_service` importe des modules de ce paquet (`speaker_probe`,
+# `transcription_guards`) : l'importer ici en tête referme une boucle au
+# chargement. Les types ne servent qu'aux annotations, le service se résout à
+# l'appel.
+if TYPE_CHECKING:
+    from ..transcription_service import TranscriptionService, TranscriptionResult
+
+
+def get_transcription_service():
+    from ..transcription_service import get_transcription_service as _get
+
+    return _get()
+
 from ..redis_service import (
     AudioCacheService,
     get_audio_cache_service
 )
 from ..segment_serialization import _segment_to_dict
+from services.task_privacy import shown
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -188,7 +198,7 @@ class TranscriptionStage:
             if cached_result:
                 logger.info(
                     f"[TRANSCRIPTION_STAGE] ⚡ Cache hit: "
-                    f"'{cached_result.text[:50]}...' "
+                    f"'{shown(cached_result.text, 50)}...' "
                     f"(lang={cached_result.language})"
                 )
 
@@ -273,7 +283,7 @@ class TranscriptionStage:
         )
 
         if use_cache:
-            await self._cache_transcription(audio_hash, result)
+            await self._cache_transcription(audio_hash, result, attachment_id)
 
             # Log confirmation sauvegarde avec speakers
             if result.speaker_count:
@@ -286,7 +296,7 @@ class TranscriptionStage:
 
         logger.info(
             f"[TRANSCRIPTION_STAGE] ✅ Transcribed: "
-            f"'{result.text[:50]}...' "
+            f"'{shown(result.text, 50)}...' "
             f"(lang={result.language}, source={result.source})"
         )
 
@@ -381,7 +391,8 @@ class TranscriptionStage:
     async def _cache_transcription(
         self,
         audio_hash: str,
-        result: TranscriptionStageResult
+        result: TranscriptionStageResult,
+        attachment_id: Optional[str] = None
     ) -> bool:
         """Store transcription result in cache"""
         try:
@@ -406,7 +417,7 @@ class TranscriptionStage:
                 "speaker_analysis": result.speaker_analysis
             }
 
-            await self.audio_cache.set_transcription_by_hash(audio_hash, cache_data)
+            await self.audio_cache.set_transcription_by_hash(audio_hash, cache_data, attachment_id=attachment_id)
             logger.debug(f"[TRANSCRIPTION_STAGE] Cached transcription: {audio_hash[:8]}...")
             return True
 

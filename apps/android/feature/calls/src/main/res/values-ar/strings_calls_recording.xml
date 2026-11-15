@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_recording_end_to_end_refused">التسجيل غير متاح في محادثة مشفّرة من طرف إلى طرف</string>
+</resources>

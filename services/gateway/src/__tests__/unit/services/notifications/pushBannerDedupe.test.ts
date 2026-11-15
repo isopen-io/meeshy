@@ -21,7 +21,7 @@
  * @jest-environment node
  */
 
-import { dedupePushSubtitle } from '../../../../services/notifications/NotificationService';
+import { dedupePushSubtitle } from '../../../../services/notifications/push-header';
 
 describe('dedupePushSubtitle — la bannière ne se répète pas', () => {
   it('test_dedupePushSubtitle_subtitleEqualsBody_dropsTheSubtitle', () => {

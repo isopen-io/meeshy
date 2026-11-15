@@ -1,13 +1,41 @@
 package me.meeshy.sdk.auth
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.model.AuthSession
 import me.meeshy.sdk.model.AvailabilityResult
 import me.meeshy.sdk.model.LoginRequest
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.RegisterRequest
+import me.meeshy.sdk.model.auth.EmailCodeDispatch
+import me.meeshy.sdk.model.auth.EmailVerificationRequest
+import me.meeshy.sdk.model.auth.EmailVerificationWatchStatus
+import me.meeshy.sdk.model.auth.LoginOutcome
+import me.meeshy.sdk.model.auth.LoginResponse
+import me.meeshy.sdk.model.auth.ResendVerificationRequest
+import me.meeshy.sdk.model.auth.SessionOrigin
+import me.meeshy.sdk.model.auth.ResetPasswordRequest
+import me.meeshy.sdk.model.auth.ResetTokenVerification
+import me.meeshy.sdk.model.auth.ResetTokenVerificationRequest
+import me.meeshy.sdk.model.auth.SendPhoneCodeRequest
+import me.meeshy.sdk.model.auth.TwoFactorLoginRequest
+import me.meeshy.sdk.model.auth.TwoFactorVerifyResult
+import me.meeshy.sdk.model.guest.GuestSessionEnd
+import me.meeshy.sdk.model.auth.VerificationStatusRequest
+import me.meeshy.sdk.model.auth.VerifyPhoneData
+import me.meeshy.sdk.model.auth.VerifyPhoneRequest
+import me.meeshy.sdk.net.AccountShelf
+import me.meeshy.sdk.net.ApiError
+import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.NoAccountShelf
+import me.meeshy.sdk.net.NoSessionBackup
+import me.meeshy.sdk.net.SessionBackup
+import me.meeshy.sdk.net.SessionRefresher
 import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.session.SessionTeardown
 import me.meeshy.sdk.sync.SyncSeqTracker
@@ -22,16 +50,208 @@ class AuthRepository @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val sessionTeardown: SessionTeardown,
     private val syncSeqTracker: SyncSeqTracker,
+    private val fence: AccountFence? = null,
+    private val sessionBackup: SessionBackup = NoSessionBackup,
+    private val keepSignedIn: KeepSignedInConsent? = null,
+    private val accountShelf: AccountShelf = NoAccountShelf,
+    private val sessionClosing: me.meeshy.sdk.session.SessionClosing? = null,
+    private val serverLogout: ServerLogout? = null,
+    private val linkDevice: LinkDeviceBindingProviding = NoLinkDeviceBinding,
 ) {
     val isAuthenticated: Boolean get() = tokenStore.isAuthenticated
 
-    suspend fun login(username: String, password: String): NetworkResult<AuthSession> =
-        apiCall { authApi.login(LoginRequest(username, password)) }
-            .also { if (it is NetworkResult.Success) storeSession(it.data) }
+    /** Un COMPTE est connecté (JWT) : une session d'invité de lien est [isAuthenticated] sans l'être (#13530). */
+    val hasAccountSession: Boolean get() = tokenStore.jwt != null
 
-    suspend fun register(request: RegisterRequest): NetworkResult<AuthSession> =
-        apiCall { authApi.register(request) }
-            .also { if (it is NetworkResult.Success) storeSession(it.data) }
+    /** Of [accountIds], those whose session sleeps on the device: only then is "stay signed in" offered. */
+    fun accountsKeepingASession(accountIds: Collection<String>): Set<String> = tokenStore.accountsWithTokens(accountIds)
+
+    /**
+     * La connexion par mot de passe, dans TOUTES ses issues : la session, le défi
+     * de second facteur, l'adresse à prouver, la confirmation d'un compte
+     * ([LoginOutcome]). La session n'est stockée que sur [LoginOutcome.Authenticated] —
+     * les trois autres ne donnent aucun accès, donc rien n'est écrit dans le
+     * porte-jetons. Une charge illisible (statut inconnu, charge vide) est un échec
+     * typé [AuthFailureCode.UNSUPPORTED_RESPONSE], jamais une session supposée.
+     *
+     * [rememberDevice] part toujours au corps : c'est lui qui fait durer la
+     * confiance de l'appareil (365 jours) plutôt qu'un jour.
+     */
+    suspend fun loginOutcome(
+        username: String,
+        password: String,
+        rememberDevice: Boolean,
+    ): NetworkResult<LoginOutcome> {
+        keepSignedIn?.open(rememberDevice)
+        return when (val result = apiCall { authApi.login(LoginRequest(username, password, rememberDevice)) }) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> result.data.openIfAuthenticated(typedIdentifier = username)
+        }
+    }
+
+    /**
+     * La porte de l'écran de connexion actuel : une session ou un échec. Toute autre
+     * issue de [loginOutcome] devient un échec typé ([AuthFailureCode]) — l'écran
+     * qui sait les lire appelle [loginOutcome]. Le comportement reste celui d'avant :
+     * session stockée sur succès, rien sinon, `rememberDevice = false` (la passerelle
+     * n'accordait déjà que la durée de base quand la clé était omise).
+     */
+    suspend fun login(username: String, password: String): NetworkResult<AuthSession> =
+        when (val result = loginOutcome(username, password, rememberDevice = false)) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> result.data.asSession()
+        }
+
+    /**
+     * Seconde étape de la connexion d'un compte protégé : le défi rendu par
+     * [loginOutcome] ([LoginOutcome.TwoFactorRequired.twoFactorToken]) et le code
+     * (TOTP, ou de secours `XXXX-XXXX`). La session n'est stockée qu'au succès ; un
+     * refus (code invalide, trop de tentatives) remonte tel quel, avec le `code` de
+     * la passerelle — un 401 de cette route est « code refusé », jamais une
+     * session expirée.
+     */
+    suspend fun completeLoginWith2FA(twoFactorToken: String, code: String): NetworkResult<AuthSession> =
+        when (val result = apiCall { authApi.completeLoginWith2FA(TwoFactorLoginRequest(twoFactorToken, code)) }) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> when (val opened = result.data.openIfAuthenticated()) {
+                is NetworkResult.Failure -> opened
+                is NetworkResult.Success -> opened.data.asSession()
+            }
+        }
+
+    /**
+     * Prouve l'adresse par le code ou le lien ([EmailVerificationRequest]) et rend ce
+     * que la preuve a produit — la session, le défi de second facteur, ou la
+     * confirmation d'un compte. Elle N'ADOPTE RIEN : l'écran qui attend le code tient
+     * la session et la pose lui-même ([adoptSession]), sinon la racine de l'app
+     * basculerait et démonterait l'écran en cours (#8288).
+     */
+    suspend fun confirmEmail(request: EmailVerificationRequest): NetworkResult<LoginOutcome> =
+        when (val result = apiCall { authApi.verifyEmail(request.presenting(linkDevice.presentedSecret())) }) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> result.data.asOutcome(typedIdentifier = request.email).also { if (request.token != null) forgetLinkSecretIfSettled(it) }
+        }
+
+    /**
+     * Ouvre une session que l'appelant a TENUE (preuve d'adresse, lien magique
+     * confirmé) : jetons écrits, profil adopté. Publique pour les écrans d'ouverture
+     * sur preuve ; elle ne vérifie rien — l'appelant ne la passe qu'à une session que
+     * la passerelle vient de rendre.
+     */
+    fun adoptSession(session: AuthSession, origin: SessionOrigin = SessionOrigin.LOGIN) {
+        writeSession(session, origin)
+    }
+
+    /**
+     * Valide le lien magique SANS poser la session : l'ouverture passe par le
+     * `ProvenSessionOpener` (fenêtre d'adoption, garde de changement de compte), jamais
+     * par un stockage direct. Mêmes arguments et mêmes issues que [magicLinkOutcome].
+     */
+    suspend fun verifyMagicLink(
+        token: String,
+        linkDeviceSecret: String? = null,
+        confirmed: Boolean = false,
+    ): NetworkResult<LoginOutcome> =
+        when (
+            val result = apiCall {
+                authApi.validateMagicLink(
+                    me.meeshy.sdk.net.api.MagicLinkValidateRequest(
+                        token = token,
+                        linkDeviceSecret = (linkDeviceSecret ?: linkDevice.presentedSecret())?.takeIf { it.isNotBlank() },
+                        confirm = if (confirmed) true else null,
+                    ),
+                )
+            }
+        ) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> result.data.asOutcome().also { forgetLinkSecretIfSettled(it) }
+        }
+
+    /**
+     * Le secret ne sert qu'une fois : il s'oublie dès que la preuve a rendu une session ou un défi de second
+     * facteur. Une demande de confirmation le garde (le jeton n'est pas consommé) ; un refus aussi, car un lien plus
+     * ancien qui échoue ne doit pas délier le lien en cours (iOS `forgetLinkSecretIfSettled`).
+     */
+    private fun forgetLinkSecretIfSettled(result: NetworkResult<LoginOutcome>) {
+        val outcome = (result as? NetworkResult.Success)?.data ?: return
+        forgetLinkSecretIfSettled(outcome)
+    }
+
+    private fun forgetLinkSecretIfSettled(outcome: LoginOutcome) {
+        if (outcome is LoginOutcome.Authenticated || outcome is LoginOutcome.TwoFactorRequired) linkDevice.forget()
+    }
+
+    /**
+     * Ferme côté passerelle une session prouvée qu'on n'a pas posée (refusée, hors fenêtre,
+     * écartée) : la preuve a consommé le jeton et ouvert une session serveur qui ne doit pas
+     * lui survivre. Rien ne change sur l'appareil. `true` quand la passerelle a répondu.
+     */
+    suspend fun closeProvenServerSession(jwt: String, sessionToken: String?): Boolean =
+        try {
+            authApi.logout(authorization = "Bearer $jwt", sessionToken = sessionToken)
+            true
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (ignored: Exception) {
+            false
+        }
+
+    /**
+     * Crée le compte. Le `200` de la passerelle porte DEUX issues distinctes —
+     * le compte créé, ou le refus « ce numéro appartient déjà à quelqu'un »,
+     * qui n'a créé aucun compte — donc le succès de transport ne suffit pas à
+     * dire qu'on est inscrit : c'est [RegisterOutcome] qui le dit.
+     *
+     * La session n'est adoptée que sur [RegisterOutcome.Created] : un conflit
+     * de numéro laisse le porte-jetons intact, faute de quoi l'app se croirait
+     * connectée sans compte.
+     */
+    suspend fun register(request: RegisterRequest): NetworkResult<RegisterOutcome> =
+        when (val result = registerHoldingSession(request)) {
+            is NetworkResult.Success -> {
+                (result.data as? RegisterOutcome.Created)?.let { storeSession(it.session) }
+                result
+            }
+            is NetworkResult.Failure -> result
+        }
+
+    /**
+     * Crée le compte SANS poser la session (iOS `registerHoldingSession`) : l'écran d'inscription la TIENT le temps
+     * que sa carte reçoive le code, puis la pose par [ProvenSessionOpener] (`hold` / `installHeld`). Rien n'est écrit
+     * dans le porte-jetons, donc la racine de l'app ne bascule pas et ne démonte pas l'écran qui attend le code.
+     * Mêmes issues et mêmes refus que [register].
+     */
+    suspend fun registerHoldingSession(request: RegisterRequest): NetworkResult<RegisterOutcome> =
+        when (val result = apiCall { authApi.register(request) }) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> {
+                val session = result.data.asSession()
+                val pending = result.data.pendingVerification(request.email)
+                when {
+                    result.data.phoneOwnershipConflict ->
+                        NetworkResult.Success(RegisterOutcome.PhoneOwnershipConflict)
+                    // « Ce n'est pas moi » (#8214) : le compte existe SANS session, un code est parti à l'adresse.
+                    // L'attente du code PRIME sur une identité servie à côté (iOS `AuthManager+EmailAccess`) :
+                    // une réponse qui demande la preuve n'ouvre jamais de session, quoi qu'elle porte d'autre.
+                    pending != null -> NetworkResult.Success(
+                        RegisterOutcome.VerificationRequired(pending.email, pending.pendingSessionToken),
+                    )
+                    session != null -> NetworkResult.Success(
+                        RegisterOutcome.Created(
+                            session = session,
+                            pendingSessionToken = result.data.pendingSessionToken?.takeIf { it.isNotEmpty() },
+                        ),
+                    )
+                    // Ni identité, ni conflit déclaré : la charge ne dit rien
+                    // d'exploitable. Un échec explicite vaut mieux qu'un conflit
+                    // supposé, qui enverrait l'utilisateur corriger un numéro
+                    // que personne n'a mis en cause.
+                    else -> NetworkResult.Failure(
+                        ApiError(message = "Registration response carried no session", code = "PARSE"),
+                    )
+                }
+            }
+        }
 
     /**
      * Probe the availability of a single signup field (username / email / phone).
@@ -64,6 +284,23 @@ class AuthRepository @Inject constructor(
             .map { it.expiresInSeconds ?: DEFAULT_MAGIC_LINK_VALIDITY_SECONDS }
 
     /**
+     * Demande l'e-mail « code + lien » de la connexion sans mot de passe (iOS `requestEmailCode`) : le lien est LIÉ À
+     * CET APPAREIL — la demande ne porte que l'EMPREINTE d'un secret tiré ici et gardé au coffre
+     * ([LinkDeviceBindingProviding]). Rend la durée de validité et le jeton d'attente de cet appareil.
+     */
+    suspend fun requestEmailCode(email: String): NetworkResult<EmailCodeDispatch> =
+        apiCall {
+            authApi.requestMagicLink(
+                me.meeshy.sdk.net.api.MagicLinkRequestBody(email, linkDeviceHash = linkDevice.issueHash()),
+            )
+        }.map {
+            EmailCodeDispatch(
+                expiresInSeconds = it.expiresInSeconds ?: EmailCodeDispatch.DEFAULT_EXPIRES_IN_SECONDS,
+                pendingSessionToken = it.pendingSessionToken,
+            )
+        }
+
+    /**
      * Echange le token du magic link contre une session complete — le pendant
      * passwordless de [login] : memes effets (tokens persistes, session hydratee).
      * L'appelant est responsable du logout PREALABLE si un compte est deja ouvert
@@ -71,11 +308,108 @@ class AuthRepository @Inject constructor(
      * passer par un teardown complet, jamais par un simple remplacement).
      */
     suspend fun loginWithMagicLink(token: String): NetworkResult<AuthSession> =
-        apiCall { authApi.validateMagicLink(me.meeshy.sdk.net.api.MagicLinkValidateRequest(token)) }
-            .also { if (it is NetworkResult.Success) storeSession(it.data) }
+        when (val result = magicLinkOutcome(token)) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> result.data.asSession()
+        }
+
+    /**
+     * Le lien magique dans toutes ses issues. [linkDeviceSecret] est le secret que
+     * l'appareil a gardé en demandant le lien et [confirmed] le « oui » de l'utilisateur
+     * au compte qu'il ouvre (#10872) : un lien ouvert ailleurs que sur l'appareil
+     * demandeur rend [LoginOutcome.LinkConfirmationRequired], sans session. La session
+     * n'est stockée que sur [LoginOutcome.Authenticated].
+     */
+    suspend fun magicLinkOutcome(
+        token: String,
+        linkDeviceSecret: String? = null,
+        confirmed: Boolean = false,
+    ): NetworkResult<LoginOutcome> =
+        when (
+            val result = apiCall {
+                authApi.validateMagicLink(
+                    me.meeshy.sdk.net.api.MagicLinkValidateRequest(
+                        token = token,
+                        linkDeviceSecret = (linkDeviceSecret ?: linkDevice.presentedSecret())?.takeIf { it.isNotBlank() },
+                        confirm = if (confirmed) true else null,
+                    ),
+                )
+            }
+        ) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> result.data.openIfAuthenticated().also { forgetLinkSecretIfSettled(it) }
+        }
+
+    /** Renvoie le code / lien de vérification ; la passerelle répond succès même sans compte (anti-énumération). */
+    suspend fun resendEmailVerification(email: String): NetworkResult<Unit> =
+        me.meeshy.sdk.net.apiCallUnit { authApi.resendVerification(ResendVerificationRequest(email)) }
+
+    /**
+     * L'adresse a-t-elle été prouvée ailleurs depuis que CET appareil a reçu son jeton
+     * d'attente ? Jamais une session. Un jeton inconnu (401) ou expiré (410) FINIT
+     * l'attente ([EmailVerificationWatchStatus.ENDED]) ; toute autre panne reste un
+     * échec passager, à rejouer.
+     */
+    suspend fun emailVerificationStatus(pendingSessionToken: String): NetworkResult<EmailVerificationWatchStatus> =
+        when (val result = apiCall { authApi.verificationStatus(VerificationStatusRequest(pendingSessionToken)) }) {
+            is NetworkResult.Success -> NetworkResult.Success(EmailVerificationWatchStatus.served(result.data.status))
+            is NetworkResult.Failure ->
+                EmailVerificationWatchStatus.ending(result.error.httpStatus)
+                    ?.let { NetworkResult.Success(it) }
+                    ?: result
+        }
+
+    /** Le verdict d'un jeton de réinitialisation, sans le consommer. */
+    suspend fun verifyResetToken(token: String): NetworkResult<ResetTokenVerification> =
+        apiCall { authApi.verifyResetToken(ResetTokenVerificationRequest(token)) }
+
+    /**
+     * Pose le nouveau mot de passe. [twoFactorCode] est celui d'un compte protégé (omis
+     * sinon) ; les refus (`RESET_TOKEN_INVALID`, `TWO_FACTOR_REQUIRED`…) remontent avec
+     * leur `code`.
+     */
+    suspend fun submitPasswordReset(
+        token: String,
+        newPassword: String,
+        twoFactorCode: String? = null,
+    ): NetworkResult<Unit> =
+        me.meeshy.sdk.net.apiCallUnit {
+            authApi.resetPassword(
+                ResetPasswordRequest(
+                    token = token,
+                    newPassword = newPassword,
+                    confirmPassword = newPassword,
+                    twoFactorCode = twoFactorCode,
+                ),
+            )
+        }
+
+    /** Envoie le code SMS qui prouve un numéro. */
+    suspend fun sendPhoneCode(phoneNumber: String): NetworkResult<Unit> =
+        me.meeshy.sdk.net.apiCallUnit { authApi.sendPhoneCode(SendPhoneCodeRequest(phoneNumber)) }
+
+    suspend fun verifyPhone(phoneNumber: String, code: String): NetworkResult<VerifyPhoneData> =
+        apiCall { authApi.verifyPhone(VerifyPhoneRequest(phoneNumber, code)) }
+
+    /**
+     * Le compte a-t-il déjà un mot de passe ? Un compte né d'une inscription par e-mail
+     * seul n'en a pas, et Réglages › Sécurité doit alors en POSER un sans réclamer
+     * d'« actuel » (#9186). `Success(null)` quand la passerelle ne sert pas le résumé :
+     * l'écran garde le formulaire d'un CHANGEMENT.
+     */
+    suspend fun hasPassword(): NetworkResult<Boolean?> =
+        apiCall { authApi.meSecurity() }.map { it.user.security?.hasPassword }
+
+    /** Vérifie un code de second facteur (TOTP ou de secours) ; un 401 est un code refusé. */
+    suspend fun verifyTwoFactor(code: String): NetworkResult<TwoFactorVerifyResult> =
+        apiCall { authApi.verifyTwoFactor(me.meeshy.sdk.net.api.TwoFactorCodeRequest(code)) }
+
+    /** Annule un enrôlement 2FA en cours, avant `enable`. */
+    suspend fun cancelTwoFactorSetup(): NetworkResult<Unit> =
+        me.meeshy.sdk.net.apiCallUnit { authApi.cancelTwoFactorSetup() }
 
     /** Les sessions actives du compte (la courante marquee par le serveur). */
-    suspend fun listSessions(): NetworkResult<me.meeshy.sdk.net.api.SessionsListData> =
+    suspend fun listSessions(): NetworkResult<me.meeshy.sdk.model.session.UserSessionsPayload> =
         apiCall { authApi.listSessions() }
 
     /** Revoque UNE session (jamais la courante cote UI). */
@@ -106,6 +440,37 @@ class AuthRepository @Inject constructor(
     suspend fun regenerateTwoFactorBackupCodes(code: String): NetworkResult<me.meeshy.sdk.net.api.TwoFactorBackupCodesInfo> =
         apiCall { authApi.regenerateTwoFactorBackupCodes(me.meeshy.sdk.net.api.TwoFactorCodeRequest(code)) }
 
+    /**
+     * Réinstaller l'app garde la connexion (#14058) : au démarrage SANS session locale, la session sauvegardée
+     * hors de l'app ([SessionBackup], Block Store) est renouvelée auprès de la passerelle puis adoptée — l'identité
+     * ouverte, `null` quand l'app reste sur la connexion. Un refus de la passerelle (session révoquée, échue, compte fermé,
+     * âge : [SessionRefresher.refuses]) efface la sauvegarde et l'entrée du compte au coffre des comptes gardés
+     * ([AccountShelf], #14079) : l'écran de connexion s'affiche, sans message. Hors ligne, en panne serveur ou derrière un
+     * proxy qui répond à sa place, elle est gardée pour le lancement suivant. Une connexion faite pendant l'appel n'est jamais écrasée.
+     */
+    suspend fun restoreBackedUpSession(): MeeshyUser? {
+        if (tokenStore.isAuthenticated) return null
+        val saved = sessionBackup.read() ?: return null
+        val result = apiCall { authApi.refresh(RefreshTokenRequest(token = saved.jwt, sessionToken = saved.sessionToken)) }
+        if (tokenStore.isAuthenticated) return null
+        return when (result) {
+            is NetworkResult.Success -> {
+                val renewed = result.data
+                storeSession(renewed.copy(sessionToken = renewed.sessionToken ?: saved.sessionToken), SessionOrigin.RESTORED)
+                renewed.user
+            }
+            is NetworkResult.Failure -> {
+                if (result.error.refusesTheSession()) {
+                    sessionBackup.erase()
+                    accountShelf.erase(saved.userId)
+                }
+                null
+            }
+        }
+    }
+
+    private fun ApiError.refusesTheSession(): Boolean = SessionRefresher.refuses(httpStatus, code)
+
     /** Re-hydrates the session on app start when a token is already present. */
     suspend fun restoreSession() {
         sessionRepository.refresh()
@@ -116,11 +481,54 @@ class AuthRepository @Inject constructor(
      * different account signing in on this device never inherits the previous
      * account's data. The wipe is awaited before returning — the caller may treat
      * the device as clean the moment this suspend call completes.
+     *
+     * La passerelle est ensuite prévenue, au mieux : `POST /auth/logout` part avec les
+     * jetons FIGÉS de la session quittée, relevés AVANT la purge. Lus plus tard, ils
+     * seraient vides — ou ceux du compte qui vient de se connecter, dont on fermerait
+     * alors la session à la place de l'autre. La purge locale passe d'abord et ne
+     * dépend de rien : hors ligne, en erreur ou après [SERVER_LOGOUT_TIMEOUT_MILLIS],
+     * l'appareil est propre de toute façon, et la session passerelle expirera d'elle-même.
      */
     suspend fun logout() {
+        val frozenJwt = tokenStore.jwt
+        val frozenSessionToken = tokenStore.sessionToken
+        purgeLocalSession()
+        // Trois essais en arrière-plan puis reprise WorkManager : la déconnexion ne les attend jamais.
+        serverLogout?.closeInBackground(frozenJwt, frozenSessionToken)
+            ?: closeServerSession(frozenJwt, frozenSessionToken)
+    }
+
+    /**
+     * La passerelle a TERMINE la session d'un invite de lien (lien echu, acces retire) : l'appareil est purge comme apres
+     * une deconnexion — jetons, caches, brouillons, file d'envoi, session invitee persistee — et rien ne part vers une
+     * session que la passerelle a deja fermee. Ne vise que la session refusee ([refusedToken], `null` ne vise rien) :
+     * le refus tardif d'une session quittee ne purge pas celle ouverte depuis, et un compte inscrit n'est jamais touche.
+     * Rend `true` quand la purge a eu lieu.
+     */
+    suspend fun endGuestSession(refusedToken: String?): Boolean {
+        if (tokenStore.jwt != null || !GuestSessionEnd.targets(tokenStore.sessionToken, refusedToken)) return false
+        purgeLocalSession(serverInvalidated = true)
+        return true
+    }
+
+    /**
+     * La passerelle a dit que le compte de CETTE session n'existe plus : l'appareil est purgé comme après une déconnexion,
+     * mais rien ne part vers la passerelle — le compte n'y est plus, `POST /auth/logout` n'aurait personne à fermer.
+     */
+    suspend fun closeDeletedAccountSession() {
+        purgeLocalSession(serverInvalidated = true)
+    }
+
+    private suspend fun purgeLocalSession(serverInvalidated: Boolean = false) {
+        val leaving = tokenStore.userId?.takeIf { it.isNotBlank() } ?: sessionRepository.currentUserId
         tokenStore.clear()
         sessionRepository.clear()
-        sessionTeardown.wipe()
+        // Le profil gardé dans le coffre survit à la purge des caches : seul le compte qui part l'efface (#14840).
+        leaving?.let { sessionRepository.forgetIdentity(it) }
+        // Un seul plan de fermeture (surfaces d'extension d'abord), comme iOS : jetons deja vides, donc widgets et
+        // raccourcis se repeignent deconnectes.
+        sessionClosing?.closeSession()
+        if (serverInvalidated) sessionTeardown.wipeAfterServerInvalidation() else sessionTeardown.wipe()
         // Le curseur `_seq` est en MÉMOIRE, donc hors du périmètre de
         // [SessionTeardown] (stores persistés) — il se purge ici, comme iOS le
         // purge dans `AuthManager` et le web dans `disconnect()`. Il est alloué
@@ -129,14 +537,97 @@ class AuthRepository @Inject constructor(
         syncSeqTracker.reset()
     }
 
-    private fun storeSession(session: AuthSession) {
+    private suspend fun closeServerSession(jwt: String?, sessionToken: String?) {
+        if (jwt == null && sessionToken == null) return
+        withTimeoutOrNull(SERVER_LOGOUT_TIMEOUT_MILLIS) {
+            try {
+                authApi.logout(authorization = jwt?.let { "Bearer $it" }, sessionToken = sessionToken)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (ignored: Exception) {
+                // Meilleur effort assumé : la purge locale a déjà eu lieu, et la
+                // session passerelle expirera d'elle-même.
+            }
+        }
+    }
+
+    private fun LoginResponse.asOutcome(typedIdentifier: String = ""): NetworkResult<LoginOutcome> =
+        outcome(typedIdentifier)
+            ?.let { NetworkResult.Success(it) }
+            ?: NetworkResult.Failure(AuthFailureCode.forNonSession(null))
+
+    /** L'issue lue, et la session stockée si — et seulement si — c'est une session. */
+    private suspend fun LoginResponse.openIfAuthenticated(typedIdentifier: String = ""): NetworkResult<LoginOutcome> =
+        asOutcome(typedIdentifier).also { result ->
+            val outcome = (result as? NetworkResult.Success)?.data
+            if (outcome is LoginOutcome.Authenticated) storeSession(outcome.session)
+        }
+
+    private fun LoginOutcome.asSession(): NetworkResult<AuthSession> = when (this) {
+        is LoginOutcome.Authenticated -> NetworkResult.Success(session)
+        else -> NetworkResult.Failure(AuthFailureCode.forNonSession(this))
+    }
+
+    /**
+     * Pose la session sous la barrière de compte ([AccountFence.opening]) : jamais au milieu d'une purge, qui la viderait
+     * juste après son écriture (#15241). [adoptSession], qui ne suspend pas, écrit directement.
+     */
+    private suspend fun storeSession(session: AuthSession, origin: SessionOrigin = SessionOrigin.LOGIN) {
+        if (fence == null) writeSession(session, origin) else fence.opening { writeSession(session, origin) }
+    }
+
+    private fun writeSession(session: AuthSession, origin: SessionOrigin) {
+        // #13558 : un compte posé par-dessus un autre, sans purge, retire d'abord les envois en vol du compte remplacé —
+        // leur prochaine requête partirait sinon sous les jetons du compte adopté.
+        // #13567 : les jetons de B ne s'écrivent jamais sous l'identité de A — ni dans l'emplacement de coffre de A, ni
+        // pendant une fenêtre où un push de A serait jugé destiné au compte connecté. Sans identité, le temps de
+        // l'écriture, un push nommé est écarté (fail-closed) ; `adopt` pose ensuite B, puis les jetons s'écrivent sous B.
+        keepSignedIn?.bind(session.user.id)
+        val replaced = sessionRepository.currentUserId ?: tokenStore.userId
+        if (replaced != null && replaced != session.user.id) {
+            fence?.revoke()
+            tokenStore.userId = null
+        }
         tokenStore.jwt = session.token
         tokenStore.sessionToken = session.sessionToken
-        sessionRepository.adopt(session.user)
+        sessionRepository.adopt(session.user, origin)
+        // L'adoption ne recopie pas un jeton sur l'emplacement d'un compte qui en garde déjà un (compte enregistré) :
+        // les jetons de CETTE session s'y réécrivent, sans quoi l'ancien serait lu.
+        tokenStore.jwt = session.token
+        tokenStore.sessionToken = session.sessionToken
     }
 
     private companion object {
         /** Validite par defaut si le gateway omet expiresInSeconds (60 s cote serveur). */
         const val DEFAULT_MAGIC_LINK_VALIDITY_SECONDS: Int = 60
+
+        /** Ce que la deconnexion attend la passerelle : au-dela, l'appareil est deja propre et rend la main. */
+        const val SERVER_LOGOUT_TIMEOUT_MILLIS: Long = 3_000L
     }
+}
+
+/**
+ * Ce que `POST /auth/register` a réellement produit.
+ *
+ * Deux issues sous le même `200` : le compte est créé, ou le numéro fourni
+ * appartient déjà à un compte vérifié et **rien n'a été créé**. Les distinguer
+ * par un type, et non par un booléen dans la charge, force chaque appelant à
+ * traiter le refus — un `AuthSession` nullable se serait lu « échec réseau ».
+ */
+sealed interface RegisterOutcome {
+
+    /**
+     * Le compte existe. La session est adoptée par [AuthRepository.register], TENUE par
+     * [AuthRepository.registerHoldingSession] ; [pendingSessionToken] sert à la veille d'une preuve ailleurs.
+     */
+    data class Created(val session: AuthSession, val pendingSessionToken: String? = null) : RegisterOutcome
+
+    /** Le numéro est rattaché à un autre compte vérifié ; aucun compte créé. */
+    data object PhoneOwnershipConflict : RegisterOutcome
+
+    /**
+     * L'adresse a été REVENDIQUÉE (`claimEmail`, #8214) : le compte existe sans session et n'entre que par le code
+     * envoyé à [email] ; [pendingSessionToken] apprend à l'écran du code que le lien a été ouvert ailleurs.
+     */
+    data class VerificationRequired(val email: String, val pendingSessionToken: String? = null) : RegisterOutcome
 }

@@ -147,6 +147,8 @@ enum SyncPillLabels {
             return String(localized: "sync.pill.other.createStatus", defaultValue: "Publication de mood", bundle: bundle, locale: locale)
         case "deleteComment":
             return String(localized: "sync.pill.other.deleteComment", defaultValue: "Suppression commentaire", bundle: bundle, locale: locale)
+        case "toggleBookmarkPost":
+            return String(localized: "sync.pill.other.bookmark", defaultValue: "Synchronisation des favoris", bundle: bundle, locale: locale)
         default:
             return String(localized: "sync.pill.other.generic", defaultValue: "Synchronisation", bundle: bundle, locale: locale)
         }
@@ -187,6 +189,8 @@ enum SyncPillLabels {
             return String(localized: "sync.pill.failed.createStatus", defaultValue: "Mood non publié", bundle: bundle, locale: locale)
         case "deleteComment":
             return String(localized: "sync.pill.failed.deleteComment", defaultValue: "Commentaire non supprimé", bundle: bundle, locale: locale)
+        case "toggleBookmarkPost":
+            return String(localized: "sync.pill.failed.bookmark", defaultValue: "Favoris non synchronisés", bundle: bundle, locale: locale)
         default:
             return String(localized: "sync.pill.failed.generic", defaultValue: "Échec de synchronisation", bundle: bundle, locale: locale)
         }

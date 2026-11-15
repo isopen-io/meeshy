@@ -32,6 +32,13 @@ final class FocalChromeReturnTests: XCTestCase {
         XCTAssertEqual(EdgeHiddenChrome.offset(isHidden: false, edge: .bottom), 0)
     }
 
+    func test_edgeHiddenChrome_underReduceMotion_staysInPlace_andOnlyFades() {
+        XCTAssertEqual(EdgeHiddenChrome.offset(isHidden: true, edge: .top, reduceMotion: true), 0)
+        XCTAssertEqual(EdgeHiddenChrome.offset(isHidden: true, edge: .bottom, reduceMotion: true), 0)
+        XCTAssertEqual(EdgeHiddenChrome.offset(isHidden: true, edge: .top, reduceMotion: false), -FocalMetrics.HiddenChrome.edgeTravel)
+        XCTAssertEqual(EdgeHiddenChrome.offset(isHidden: true, edge: .bottom, reduceMotion: false), FocalMetrics.HiddenChrome.edgeTravel)
+    }
+
     // MARK: - Structure
 
     private static var iosRoot: URL {
@@ -40,13 +47,13 @@ final class FocalChromeReturnTests: XCTestCase {
     }
 
     private func normalized(_ relativePath: String) throws -> String {
-        AppSourceGuard.stripComments(try String(contentsOf: Self.iosRoot.appendingPathComponent(relativePath), encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.text(at: Self.iosRoot.appendingPathComponent(relativePath)))
             .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
     }
 
     func test_host_decidesTheChromeWithTheRule_fromTheDecelerationTarget() throws {
         let code = try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
-        XCTAssertTrue(code.contains("setChromeHiddenForScroll(FocalChromeReturn.isHidden( isTracking: scrollView.isTracking, isDecelerating: scrollView.isDecelerating, remainingDistance: decelerationTargetOffsetY.map { $0 - scrollView.contentOffset.y } ))"),
+        XCTAssertTrue(code.contains("setChromeHiddenForScroll(FocalChromeReturn.isHidden( isTracking: scrollView.isTracking, isDecelerating: scrollView.isDecelerating, remainingDistance: decelerationTargetOffsetY.map { $0 - scrollView.contentOffset.y } ) && keyboardFirst.chromeMayCollapse)"),
                       "Le chrome suit la règle, alimentée par l'offset d'arrivée de la décélération.")
         XCTAssertTrue(code.contains("func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) { decelerationTargetOffsetY = targetContentOffset.pointee.y }"),
                       "L'offset d'arrivée est capturé à la fin du geste.")
@@ -56,11 +63,15 @@ final class FocalChromeReturnTests: XCTestCase {
 
     func test_conversationView_slidesEachChromePiece_towardsItsOwnEdge() throws {
         let code = try normalized("Meeshy/Features/Main/Views/ConversationView.swift")
-        XCTAssertTrue(code.contains("AnyView(expandedHeaderBand.hiddenTowardsEdge(hidesEntireHeaderForScroll, .top))"), "l'en-tête glisse vers le HAUT")
-        XCTAssertTrue(code.contains(".hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)"), "le composeur et la bulle « retour en bas » glissent vers le BAS")
-        XCTAssertEqual(code.components(separatedBy: ".hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)").count - 1, 2,
-                       "composeur + bulle : deux composants vers le bas")
+        let band = try normalized("Meeshy/Features/Main/Views/ConversationExpandedHeaderBand.swift")
+        let stage = try normalized("Meeshy/Features/Main/Views/ConversationLayers/ConversationBodyStage.swift")
+        XCTAssertTrue(code.contains("hidesBandForScroll: hidesEntireHeaderForScroll"), "l'hôte remet à la section la loi de l'en-tête")
+        XCTAssertTrue(band.contains("expandedBand() .hiddenTowardsEdge(hidesBandForScroll, .top)"), "l'en-tête glisse vers le HAUT, DANS le corps de la section")
+        XCTAssertTrue(code.contains("hidesComposerChrome: hidesComposerChromeForScroll"), "l'hôte remet à la scène la loi du composeur")
+        XCTAssertTrue(stage.contains(".hiddenTowardsEdge(hidesComposerChrome, .bottom)"), "le composeur glisse vers le BAS")
+        XCTAssertEqual(stage.components(separatedBy: ".hiddenTowardsEdge(hidesComposerChrome, .bottom)").count - 1, 1,
+                       "le composeur seul glisse vers le bas — la bulle « retour en bas » reste (#8002)")
         XCTAssertFalse(code.contains(".opacity(hidesComposerChromeForScroll ? 0 : 1)"), "plus de simple fondu sans glissement")
-        XCTAssertFalse(code.contains("else if hidesEntireHeaderForScroll { AnyView(EmptyView()) }"), "plus de démontage de l'en-tête")
+        XCTAssertFalse(code.contains("else if hidesEntireHeaderForScroll {"), "plus de démontage de l'en-tête")
     }
 }

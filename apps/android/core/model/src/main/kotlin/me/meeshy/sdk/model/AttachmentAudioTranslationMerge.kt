@@ -24,7 +24,9 @@ object AttachmentAudioTranslationMerge {
      *  - no attachment to attach it to — an explicit [attachmentId] that matches no
      *    attachment, or (when [attachmentId] is blank) a message with no audio attachment;
      *  - an identical translation already present under that language (same url, same
-     *    transcription) — idempotent, a re-emitted event costs nothing.
+     *    transcription) that [segments] do not enrich — idempotent, a re-emitted event costs
+     *    nothing. The same track arriving with segments the target lacks is NOT a no-op, and
+     *    a call without segments never strips the ones already held.
      *
      * Target selection mirrors [AttachmentTranscriptionMerge]: a non-blank [attachmentId]
      * matches the attachment with that id; a blank/absent one falls back to the message's
@@ -45,6 +47,7 @@ object AttachmentAudioTranslationMerge {
         quality: Double? = null,
         voiceModelId: String? = null,
         ttsModel: String? = null,
+        segments: List<TranscriptionSegment>? = null,
     ): ApiMessage? {
         if (message.deletedAt != null) return null
         val targetLanguage = language.trim()
@@ -63,9 +66,9 @@ object AttachmentAudioTranslationMerge {
         val existing = message.attachments[index].translations.orEmpty()
         val existingKey = existing.keys.firstOrNull { it.equals(targetLanguage, ignoreCase = true) }
         val current = existingKey?.let { existing[it] }
-        if (current != null && current.url == playableUrl && (current.transcription ?: "") == transcription) {
-            return null
-        }
+        val sameTrack = current != null && current.url == playableUrl && (current.transcription ?: "") == transcription
+        val richer = !segments.isNullOrEmpty() && current?.segments != segments
+        if (sameTrack && !richer) return null
 
         val entry = ApiAttachmentTranslation(
             type = "audio",
@@ -77,6 +80,7 @@ object AttachmentAudioTranslationMerge {
             quality = quality,
             voiceModelId = voiceModelId,
             ttsModel = ttsModel,
+            segments = segments?.takeIf { it.isNotEmpty() } ?: current?.segments?.takeIf { sameTrack },
         )
         val merged = existing + ((existingKey ?: targetLanguage) to entry)
         val attachments = message.attachments.mapIndexed { i, attachment ->

@@ -24,6 +24,29 @@ public nonisolated extension Color {
         var rgb: UInt64 = 0
         Scanner(string: hexSanitized).scanHexInt64(&rgb)
 
+        // **La forme à HUIT chiffres est « RRGGBBAA »** (#5045). C'est la
+        // convention du dépôt, écrite sur le modèle (`StoryTextObject`, « Hex
+        // "RRGGBB" ou "RRGGBBAA" ») et honorée par les deux autres lecteurs
+        // d'un même fond : `StoryTextLayer.parseHexColorNonisolated` côté
+        // rendu iOS, `parseBackingColor` côté Android.
+        //
+        // Sans cette branche, un hex à huit chiffres tombait dans le décalage
+        // à SIX et rendait une couleur SANS RAPPORT — pas une approximation :
+        // « 000000A6 » (noir à 65 %) donnait du bleu franc, « 6366F1A6 »
+        // (indigo à 65 %) du vert. Le sélecteur de fonds du composer PEIGNAIT
+        // donc trois pastilles fausses au-dessus d'un rendu juste, ce qui est
+        // la faute que la loi 6 nomme : l'aperçu ment sur ce qui sera rendu.
+        if hexSanitized.count == 8 {
+            self.init(
+                .sRGB,
+                red: Double((rgb & 0xFF00_0000) >> 24) / 255.0,
+                green: Double((rgb & 0x00FF_0000) >> 16) / 255.0,
+                blue: Double((rgb & 0x0000_FF00) >> 8) / 255.0,
+                opacity: Double(rgb & 0x0000_00FF) / 255.0
+            )
+            return
+        }
+
         let r = Double((rgb & 0xFF0000) >> 16) / 255.0
         let g = Double((rgb & 0x00FF00) >> 8) / 255.0
         let b = Double(rgb & 0x0000FF) / 255.0
@@ -45,6 +68,25 @@ public nonisolated extension Color {
         }
         return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
     }
+
+    /// L'encre lisible (noire ou blanche) sur une surface peinte de cette
+    /// couleur — celle des deux qui rend le PLUS de contraste WCAG. Bascule
+    /// au point d'ÉGALITÉ de contraste entre noir et blanc :
+    /// `(L+0,05)/0,05 = 1,05/(L+0,05)` ⇒ `L = √(0,05 × 1,05) − 0,05 ≈ 0,179`.
+    /// Écrit comme la FORMULE, jamais comme le nombre arrondi — c'est une
+    /// conséquence de la définition WCAG du contraste, pas une constante de
+    /// design à dériver. Pendant Swift exact de `inkOnAccent`
+    /// (`apps/web/src/lib/accent.ts`).
+    ///
+    /// Toute surface teintée (bouton « revenir en bas », badges, capsules)
+    /// DOIT consommer ce point unique plutôt que comparer sa `luminance` à un
+    /// seuil arrondi en dur (`0.6`, `0.5`…) — ce seuil élit la mauvaise encre
+    /// sur toute la plage `0,179 → seuil` (#5950).
+    var readableInk: Color {
+        luminance > Color.inkSwitchLuminance ? .black : .white
+    }
+
+    private static let inkSwitchLuminance: CGFloat = (0.05 * 1.05).squareRoot() - 0.05
 
     /// Parse zéro-allocation de la forme canonique "RRGGBB" / "#RRGGBB"
     /// (insensible à la casse). Retourne la valeur RGB 24-bit, ou `nil` pour

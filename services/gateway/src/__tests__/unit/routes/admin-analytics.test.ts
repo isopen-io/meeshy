@@ -50,7 +50,7 @@ function makePrisma(overrides: any = {}) {
       ...overrides.user,
     },
     message: {
-      count: jest.fn<any>().mockResolvedValue(500),
+      count: jest.fn<any>().mockResolvedValue(500), aggregateRaw: jest.fn<any>().mockResolvedValue([]),
       groupBy: jest.fn<any>().mockResolvedValue([{ conversationId: 'conv-1', _count: { _all: 10, id: 10 }, messageType: 'TEXT', originalLanguage: 'fr' }]),
       ...overrides.message,
     },
@@ -138,14 +138,23 @@ describe('GET /realtime — USER role forbidden', () => {
   });
 });
 
-describe('GET /realtime — MODERATOR role forbidden', () => {
+// #4157 — ANTI-TÉMOIN corrigé. La garde était `canViewAnalytics`
+// (`MODERATOR.canViewAnalytics = false`) ; la matrice donne `canAccessAdmin =
+// true` à MODERATOR, et ces huit routes vivent sous `/admin/analytics/*` — un
+// périmètre d'administration, pas une permission de domaine. Ce témoin gelait
+// la moitié « MODERATOR exclu à tort » du défaut.
+describe('GET /realtime — MODERATOR role success', () => {
   let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp('MODERATOR'); });
+  beforeAll(async () => {
+    mockCacheGet.mockResolvedValue(null);
+    app = await buildApp('MODERATOR');
+  });
   afterAll(async () => { await app.close(); });
 
-  it('returns 403 when user has MODERATOR role', async () => {
+  it('returns 200 when user has MODERATOR role (canAccessAdmin, #4157)', async () => {
     const res = await app.inject({ method: 'GET', url: '/realtime' });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
   });
 });
 
@@ -167,7 +176,13 @@ describe('GET /realtime — ADMIN success', () => {
   });
 });
 
-describe('GET /realtime — ANALYST success', () => {
+// #4157 — ANTI-TÉMOIN corrigé. ANALYST a `canViewAnalytics = true` dans la
+// matrice mais `canAccessAdmin = false` : il a le droit de voir des
+// statistiques ailleurs que sous `/admin`, jamais d'entrer dans le périmètre
+// d'administration. Ce témoin attestait l'inverse sur les HUIT routes de ce
+// fichier — exactement « accès accordé à un rôle qui n'a pas d'accès
+// administrateur ».
+describe('GET /realtime — ANALYST forbidden', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
     mockCacheGet.mockResolvedValue(null);
@@ -178,10 +193,9 @@ describe('GET /realtime — ANALYST success', () => {
     await app.close();
   });
 
-  it('returns 200 for ANALYST role', async () => {
+  it('returns 403 for ANALYST role — pas de canAccessAdmin (#4157)', async () => {
     const res = await app.inject({ method: 'GET', url: '/realtime' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
+    expect(res.statusCode).toBe(403);
   });
 });
 
@@ -427,7 +441,10 @@ describe('GET /language-distribution — with limit query param', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
     mockCacheGet.mockResolvedValue(null);
-    app = await buildApp('ANALYST', {
+    // #4157 — ANALYST n'a plus `canAccessAdmin` : ce test vise le paramètre
+    // `limit`, pas un rôle en particulier, donc AUDIT (qui reste admis) le
+    // remplace sans changer ce que le test observe.
+    app = await buildApp('AUDIT', {
       message: {
         count: jest.fn<any>().mockResolvedValue(500),
         groupBy: jest.fn<any>().mockResolvedValue([{ originalLanguage: 'es', _count: { id: 10 } }]),
@@ -499,7 +516,10 @@ describe('GET /kpis — with period=90d', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
     mockCacheGet.mockResolvedValue(null);
-    app = await buildApp('ANALYST');
+    // #4157 — ANALYST n'a plus `canAccessAdmin` : ce test vise `period=90d`,
+    // pas un rôle en particulier, donc AUDIT (qui reste admis) le remplace
+    // sans changer ce que le test observe.
+    app = await buildApp('AUDIT');
   });
   afterAll(async () => { await app.close(); });
 
@@ -526,7 +546,7 @@ describe('GET /kpis — DB error', () => {
   beforeAll(async () => {
     mockCacheGet.mockResolvedValue(null);
     app = await buildApp('ADMIN', {
-      message: { count: jest.fn<any>().mockRejectedValue(new Error('DB crash')) },
+      message: { count: jest.fn<any>().mockRejectedValue(new Error('DB crash')), aggregateRaw: jest.fn<any>().mockResolvedValue([]) },
     });
   });
   afterAll(async () => { await app.close(); });
@@ -637,9 +657,34 @@ describe('GET /calls — call reliability aggregate', () => {
     await app.close();
   });
 
+  it('adds the post-call ratings to the aggregate (#8072)', async () => {
+    mockCacheGet.mockResolvedValue(null);
+    const findMany = jest.fn<any>().mockResolvedValue([
+      { ...analyticsRow(), feedback: { rating: 4, issues: [] } },
+      { ...analyticsRow(), feedback: { rating: 2, issues: ['echo'] } },
+      { ...analyticsRow(), feedback: null },
+    ]);
+    const app = await buildApp('ADMIN', { callParticipant: { findMany } });
+
+    const res = await app.inject({ method: 'GET', url: '/calls' });
+
+    expect(res.statusCode).toBe(200);
+    expect(findMany.mock.calls[0][0].select).toEqual({ analytics: true, feedback: true });
+    expect(res.json().data.feedback).toEqual({
+      ratedCalls: 2,
+      avgRating: 3,
+      ratingDistribution: { 1: 0, 2: 1, 3: 0, 4: 1, 5: 0 },
+      byIssue: { echo: 1 },
+    });
+    await app.close();
+  });
+
   it('returns a zeroed summary when no call reported telemetry', async () => {
     mockCacheGet.mockResolvedValue(null);
-    const app = await buildApp('ANALYST');
+    // #4157 — ANALYST n'a plus `canAccessAdmin` : ce test vise l'agrégat vide,
+    // pas un rôle en particulier, donc AUDIT (qui reste admis) le remplace
+    // sans changer ce que le test observe.
+    const app = await buildApp('AUDIT');
 
     const res = await app.inject({ method: 'GET', url: '/calls' });
 

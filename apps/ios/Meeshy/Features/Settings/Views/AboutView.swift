@@ -1,0 +1,308 @@
+import SwiftUI
+import Combine
+import MeeshySDK
+import MeeshyUI
+
+struct AboutView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    private let accentColor = "45B7D1"
+
+    /// Plateforme, Bundle ID, SDK et profil média : rangés derrière « Plus » ; la version et le build restent visibles sous le nom.
+    @State private var showsMoreInformation = false
+
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+    }
+
+    private var buildNumber: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+    }
+
+    private var versionString: String {
+        String(localized: "about.version", defaultValue: "Version \(appVersion) (\(buildNumber))", bundle: .main)
+    }
+
+    private var copyLabel: String {
+        String(localized: "common.copy", defaultValue: "Copier", bundle: .main)
+    }
+
+    /// Le tier média de l'appareil (#11281) — ce que les lois de lecture (fenêtre
+    /// des réels, cadence des stories, cache décodé) lisent pour se régler.
+    private var mediaTierLabel: String {
+        switch DeviceMediaTier.current {
+        case .low: return String(localized: "about.info.mediaTier.low", defaultValue: "Basique", bundle: .main)
+        case .mid: return String(localized: "about.info.mediaTier.mid", defaultValue: "Intermédiaire", bundle: .main)
+        case .high: return String(localized: "about.info.mediaTier.high", defaultValue: "Élevé", bundle: .main)
+        case .pro: return String(localized: "about.info.mediaTier.pro", defaultValue: "Pro", bundle: .main)
+        }
+    }
+
+    private func copyValue(_ value: String) {
+        UIPasteboard.general.string = value
+        HapticFeedback.success()
+    }
+
+    var body: some View {
+        ZStack {
+            theme.backgroundGradient.ignoresSafeArea()
+
+            CollapsibleHeaderPage(
+                title: String(localized: "about.title", defaultValue: "À propos", bundle: .main),
+                onBack: { dismiss() },
+                titleColor: theme.textPrimary,
+                backArrowColor: Color(hex: accentColor),
+                backgroundColor: theme.backgroundPrimary,
+                content: { pageContent }
+            )
+        }
+    }
+
+    // MARK: - Content
+
+    private var pageContent: some View {
+        VStack(spacing: MeeshySpacing.xl) {
+            appHeaderSection
+            informationsSection
+            fonctionnalitesSection
+            liensSection
+            copyrightSection
+            Spacer().frame(height: MeeshySpacing.xxxl + MeeshySpacing.sm)
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.lg)
+    }
+
+    // MARK: - App Header
+
+    private var appHeaderSection: some View {
+        VStack(spacing: MeeshySpacing.md) {
+            AnimatedLogoView(
+                color: isDark ? .white : Color(hex: "1C1917"),
+                lineWidth: 10,
+                continuous: true
+            )
+            .frame(width: 80, height: 80)
+            .accessibilityHidden(true)
+
+            Text(String(localized: "about.app_name", defaultValue: "Meeshy", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.displaySize, weight: .bold, design: .rounded))
+                .foregroundStyle(theme.textPrimary)
+
+            Text(versionString)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                .foregroundStyle(theme.textMuted)
+                .contextMenu {
+                    Button {
+                        copyValue(versionString)
+                    } label: {
+                        Label(copyLabel, systemImage: "doc.on.doc")
+                    }
+                }
+                .accessibilityAction(named: Text(copyLabel)) { copyValue(versionString) }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, MeeshySpacing.xl)
+        .background(SettingsSectionBackground(tint: accentColor))
+    }
+
+    // MARK: - Informations
+
+    private var informationsSection: some View {
+        VStack(spacing: 0) {
+            Button {
+                HapticFeedback.light()
+                withAnimation(.easeInOut(duration: 0.2)) { showsMoreInformation.toggle() }
+            } label: {
+                HStack(spacing: MeeshySpacing.md) {
+                    fieldIcon("info.circle.fill", color: accentColor)
+
+                    Text(String(localized: "common.more", defaultValue: "Plus", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                        .foregroundStyle(theme.textPrimary)
+
+                    Spacer()
+
+                    Image(systemName: showsMoreInformation ? "chevron.up" : "chevron.down")
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                        .foregroundStyle(Color(hex: accentColor))
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, MeeshySpacing.md + 2)
+                .padding(.vertical, MeeshySpacing.sm + 2)
+                .frame(minHeight: MeeshyControlSize.tapTarget)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(showsMoreInformation ? .isSelected : [])
+
+            if showsMoreInformation {
+                infoRow(icon: "apple.logo", title: String(localized: "about.info.platform", defaultValue: "Plateforme", bundle: .main), value: "iOS \(UIDevice.current.systemVersion)", color: accentColor)
+                infoRow(icon: "shippingbox.fill", title: String(localized: "about.info.bundleId", defaultValue: "Bundle ID", bundle: .main), value: Bundle.main.bundleIdentifier ?? "me.meeshy.app", color: accentColor)
+                infoRow(icon: "wrench.and.screwdriver.fill", title: String(localized: "about.info.sdkVersion", defaultValue: "Version du SDK", bundle: .main), value: "1.0.0", color: accentColor)
+                infoRow(icon: "gauge.with.dots.needle.67percent", title: String(localized: "about.info.mediaTier", defaultValue: "Profil média", bundle: .main), value: mediaTierLabel, color: accentColor)
+            }
+        }
+        .background(SettingsSectionBackground(tint: accentColor))
+    }
+
+    // MARK: - Fonctionnalites
+
+    private var fonctionnalitesSection: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            sectionHeader(title: String(localized: "about.section.features", defaultValue: "Fonctionnalités", bundle: .main), icon: "star.fill", color: MeeshyColors.tileSaffronHex)
+
+            VStack(spacing: 0) {
+                featureRow(title: String(localized: "about.feature.encryption", defaultValue: "Chiffrement de bout en bout", bundle: .main), summary: SettingsOrientation.encryption, icon: "lock.shield.fill")
+                featureRow(title: String(localized: "about.feature.translation", defaultValue: "Traduction en temps réel", bundle: .main), summary: String(localized: "about.feature.translation.summary", defaultValue: "Chaque message se lit dans votre langue.", bundle: .main), icon: "globe")
+                featureRow(title: String(localized: "about.feature.voiceCloning", defaultValue: "Clonage vocal", bundle: .main), summary: SettingsOrientation.voice, icon: "waveform")
+            }
+            .background(SettingsSectionBackground(tint: MeeshyColors.tileSaffronHex))
+        }
+    }
+
+    // MARK: - Liens
+
+    private var liensSection: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            sectionHeader(title: String(localized: "about.section.links", defaultValue: "Liens", bundle: .main), icon: "link", color: MeeshyColors.infoHex)
+
+            VStack(spacing: 0) {
+                linkRow(icon: "globe", title: String(localized: "about.link.website", defaultValue: "Site web", bundle: .main), url: "https://meeshy.me", color: MeeshyColors.infoHex)
+                // Les pages du site font FOI : l'application y renvoie au lieu
+                // d'embarquer une seconde copie du texte, qui divergerait.
+                // `settings.terms` et `settings.privacy_policy` sont RÉUTILISÉES
+                // — elles nomment déjà ces documents ailleurs dans l'app.
+                //
+                // « /contact », pas « /contacts » : seule la première a une page
+                // (`apps/web/app/contact/page.tsx`) ; `/contacts` n'a aucun
+                // `page.tsx` et donnerait un lien mort.
+                linkRow(icon: "doc.text", title: String(localized: "settings.terms", defaultValue: "Conditions d'utilisation", bundle: .main), url: "https://meeshy.me/terms", color: MeeshyColors.infoHex)
+                linkRow(icon: "hand.raised", title: String(localized: "settings.privacy_policy", defaultValue: "Politique de confidentialité", bundle: .main), url: "https://meeshy.me/privacy", color: MeeshyColors.infoHex)
+                linkRow(icon: "envelope", title: String(localized: "about.link.contact", defaultValue: "Nous contacter", bundle: .main), url: "https://meeshy.me/contact", color: MeeshyColors.infoHex)
+                linkRow(icon: "person.2", title: String(localized: "about.link.partners", defaultValue: "Partenaires", bundle: .main), url: "https://meeshy.me/partners", color: MeeshyColors.infoHex)
+                linkRow(icon: "at", title: String(localized: "about.link.twitter", defaultValue: "Twitter / X", bundle: .main), url: "https://twitter.com/meeshy", color: MeeshyColors.infoHex)
+                linkRow(icon: "chevron.left.forwardslash.chevron.right", title: String(localized: "about.link.github", defaultValue: "GitHub", bundle: .main), url: "https://github.com/meeshy", color: MeeshyColors.infoHex)
+            }
+            .background(SettingsSectionBackground(tint: MeeshyColors.infoHex))
+        }
+    }
+
+    // MARK: - Copyright
+
+    private var copyrightSection: some View {
+        Text(String(localized: "about.copyright", defaultValue: "2024-2026 Meeshy. Tous droits réservés.", bundle: .main))
+            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
+            .foregroundStyle(theme.textMuted)
+            .frame(maxWidth: .infinity)
+            .padding(.top, MeeshySpacing.sm)
+    }
+
+    // MARK: - Helpers
+
+    private func sectionHeader(title: String, icon: String, color: String) -> some View {
+        HStack(spacing: MeeshySpacing.xs + 2) {
+            Image(systemName: icon)
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                .foregroundStyle(Color(hex: color))
+            Text(title.uppercased())
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
+                .foregroundColor(Color(hex: color))
+                .tracking(1.2)
+        }
+        .padding(.leading, MeeshySpacing.xs)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private func fieldIcon(_ name: String, color: String) -> some View {
+        Image(systemName: name)
+            .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
+            .foregroundStyle(Color(hex: color))
+            .frame(width: 28, height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm - 2)
+                    .fill(Color(hex: color).opacity(0.12))
+            )
+    }
+
+    private func infoRow(icon: String, title: String, value: String, color: String) -> some View {
+        HStack(spacing: MeeshySpacing.md) {
+            fieldIcon(icon, color: color)
+
+            Text(title)
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                .foregroundStyle(theme.textPrimary)
+
+            Spacer()
+
+            Text(value)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                .foregroundStyle(theme.textMuted)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, MeeshySpacing.md + 2)
+        .padding(.vertical, MeeshySpacing.sm + 2)
+        .accessibilityElement(children: .combine)
+        .contextMenu {
+            Button {
+                copyValue(value)
+            } label: {
+                Label(copyLabel, systemImage: "doc.on.doc")
+            }
+        }
+        .accessibilityAction(named: Text(copyLabel)) { copyValue(value) }
+    }
+
+    private func featureRow(title: String, summary: String, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: MeeshySpacing.md) {
+                fieldIcon(icon, color: MeeshyColors.tileSaffronHex)
+
+                Text(title)
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                    .foregroundStyle(theme.textPrimary)
+
+                Spacer()
+
+                Image(systemName: "checkmark.circle.fill")
+                    .font(MeeshyFont.relative(MeeshyIconSize.md))
+                    .foregroundStyle(MeeshyColors.success)
+            }
+            .padding(.horizontal, MeeshySpacing.md + 2)
+            .padding(.vertical, MeeshySpacing.sm + 2)
+
+            SettingsRowSentence(text: summary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private func linkRow(icon: String, title: String, url: String, color: String) -> some View {
+        if let destination = URL(string: url) {
+            Link(destination: destination) {
+                HStack(spacing: MeeshySpacing.md) {
+                    fieldIcon(icon, color: color)
+
+                    Text(title)
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                        .foregroundStyle(theme.textPrimary)
+
+                    Spacer()
+
+                    Image(systemName: "arrow.up.right")
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                        .foregroundStyle(Color(hex: color))
+                }
+                .padding(.horizontal, MeeshySpacing.md + 2)
+                .padding(.vertical, MeeshySpacing.sm + 2)
+            }
+            .accessibilityLabel(title)
+            .accessibilityHint(String(localized: "about.link.hint", defaultValue: "Ouvre \(title) dans Safari", bundle: .main))
+        }
+    }
+}

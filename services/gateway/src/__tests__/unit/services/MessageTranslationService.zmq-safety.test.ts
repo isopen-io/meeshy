@@ -293,7 +293,8 @@ describe('MessageTranslationService — translateTextDirectly listener hygiene',
 
   const listenerCounts = () => ({
     completed: mockZmqClient.listenerCount('translationCompleted'),
-    error: mockZmqClient.listenerCount('translationError')
+    error: mockZmqClient.listenerCount('translationError'),
+    unsupported: mockZmqClient.listenerCount('translationUnsupported')
   });
 
   it('detaches both listeners on the 10s timeout (no leak on the shared zmqClient)', async () => {
@@ -308,7 +309,8 @@ describe('MessageTranslationService — translateTextDirectly listener hygiene',
     await jest.advanceTimersByTimeAsync(0);
     expect(listenerCounts()).toEqual({
       completed: before.completed + 1,
-      error: before.error + 1
+      error: before.error + 1,
+      unsupported: before.unsupported + 1
     });
 
     // Cross the 10s timeout — the promise resolves to the fallback result
@@ -364,5 +366,36 @@ describe('MessageTranslationService — translateTextDirectly listener hygiene',
     const result = await pending;
     expect(result.modelType).toBe('fallback');
     expect(listenerCounts()).toEqual(before);
+  });
+  // `POST /translate-blocking` sans `message_id` passe désormais par ce chemin
+  // au lieu d'écrire un message (#7740). Le traducteur RENVOIE l'identifiant
+  // reçu, et le bus `translationCompleted` est multiplexé : un identifiant nu
+  // (`rest_…`) y était pris pour un `Message` — lookup Prisma sur un ObjectId
+  // malformé, sauvegarde, stats, diffusion fantôme.
+  it('namespace la requête directe : son résultat ne descend jamais dans le pipeline des messages', async () => {
+    mockZmqClient.sendTranslationRequest.mockResolvedValue('direct-task');
+
+    const pending = translationService.translateTextDirectly('hi', 'en', 'es');
+    await flushAsync();
+    const [[request]] = mockZmqClient.sendTranslationRequest.mock.calls as [[{ messageId: string }]];
+    mockZmqClient.emit('translationCompleted', {
+      taskId: 'direct-task',
+      result: {
+        messageId: request.messageId,
+        translatedText: 'hola',
+        sourceLanguage: 'en',
+        targetLanguage: 'es',
+        confidenceScore: 0.9,
+        processingTime: 5,
+        modelType: 'basic'
+      },
+      targetLanguage: 'es'
+    });
+    await pending;
+    await flushAsync();
+
+    expect(request.messageId).toMatch(/^[a-z][a-z0-9-]*:/);
+    expect(mockPrisma.message.findUnique).not.toHaveBeenCalled();
+    expect(mockPrisma.messageTranslation.upsert).not.toHaveBeenCalled();
   });
 });

@@ -8,7 +8,8 @@ class StoryPublishFailuresTest {
 
     private fun failed(
         cmid: String,
-        content: String = "oops",
+        content: String? = "oops",
+        mediaIds: List<String> = emptyList(),
         failedAtMillis: Long = 0L,
     ) = FailedStoryPublish(
         cmid = cmid,
@@ -18,6 +19,7 @@ class StoryPublishFailuresTest {
         originalLanguage = "fr",
         createdAtMillis = 0L,
         failedAtMillis = failedAtMillis,
+        mediaIds = mediaIds,
     )
 
     @Test
@@ -94,5 +96,33 @@ class StoryPublishFailuresTest {
 
         assertThat(item.preview).hasLength(StoryPublishFailures.PREVIEW_MAX + 1)
         assertThat(item.preview).endsWith("…")
+    }
+
+    @Test
+    fun `a text-only failure reports no media`() {
+        val item = StoryPublishFailures.from(listOf(failed("c1", content = "hi"))).single()
+
+        assertThat(item.preview).isEqualTo("hi")
+        assertThat(item.mediaCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `a media-only failure has a blank text preview and its media count`() {
+        val item = StoryPublishFailures.from(
+            listOf(failed("c1", content = null, mediaIds = listOf("m1", "m2"))),
+        ).single()
+
+        assertThat(item.preview).isEmpty()
+        assertThat(item.mediaCount).isEqualTo(2)
+    }
+
+    @Test
+    fun `a captioned media failure keeps the text preview and the media count`() {
+        val item = StoryPublishFailures.from(
+            listOf(failed("c1", content = "look", mediaIds = listOf("m1"))),
+        ).single()
+
+        assertThat(item.preview).isEqualTo("look")
+        assertThat(item.mediaCount).isEqualTo(1)
     }
 }

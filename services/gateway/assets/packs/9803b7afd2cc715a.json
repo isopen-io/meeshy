@@ -1,0 +1,70 @@
+{
+ "domain": "banner",
+ "designs": [
+  {
+   "key": "aurore-vive",
+   "style": "gradient",
+   "palettes": {
+    "light": {
+     "base": "#0B1430",
+     "ink": "#34D399",
+     "soft": "#C026D3"
+    },
+    "dark": {
+     "base": "#030712",
+     "ink": "#10B981",
+     "soft": "#A21CAF"
+    }
+   },
+   "gradient": {
+    "angle": 180,
+    "stops": [
+     {
+      "role": "base",
+      "at": 0
+     },
+     {
+      "role": "soft",
+      "at": 1
+     }
+    ],
+    "blobs": [
+     {
+      "x": 0.28,
+      "y": 0.32,
+      "r": 0.42,
+      "role": "ink",
+      "opacity": 0.55
+     },
+     {
+      "x": 0.62,
+      "y": 0.18,
+      "r": 0.36,
+      "role": "ink",
+      "opacity": 0.4
+     },
+     {
+      "x": 0.85,
+      "y": 0.4,
+      "r": 0.38,
+      "role": "soft",
+      "opacity": 0.45
+     },
+     {
+      "x": 0.5,
+      "y": 1,
+      "r": 0.7,
+      "role": "base",
+      "opacity": 0.85
+     }
+    ]
+   },
+   "fit": "fill",
+   "lottie": {
+    "src": "5aff839c02a1cfcb.json",
+    "bytes": 9598,
+    "sha256": "5aff839c02a1cfcb6906f41b3f1bf74f312afaa24b94fd98d204c964c2fb1df6"
+   }
+  }
+ ]
+}

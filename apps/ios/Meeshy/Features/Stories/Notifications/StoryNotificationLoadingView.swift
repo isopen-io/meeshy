@@ -14,20 +14,20 @@ public struct StoryNotificationLoadingView: View {
     public init() {}
 
     private var loadingMessage: String {
-        String(localized: "loading.message", defaultValue: "Loading…", bundle: .main)
+        String(localized: "loading.message", defaultValue: "Chargement…", bundle: .main)
     }
 
     public var body: some View {
         ZStack {
             Color.black.opacity(0.6)
                 .ignoresSafeArea()
-            VStack(spacing: 16) {
+            VStack(spacing: MeeshySpacing.lg) {
                 ProgressView()
                     .progressViewStyle(.circular)
                     .tint(.white)
                 Text(loadingMessage)
                     .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(.white.opacity(MeeshyOpacity.intense))
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(loadingMessage)

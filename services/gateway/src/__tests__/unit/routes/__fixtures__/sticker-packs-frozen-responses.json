@@ -1,0 +1,80 @@
+{
+  "GET / — la boutique, un intégré retiré, un tiers installé": {
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "cacheControl": "private, no-cache",
+    "body": "{\"success\":true,\"data\":[{\"slug\":\"mee\",\"name\":\"Mee\",\"description\":\"Le colibri de Meeshy : ses humeurs, ses gestes et ses Instants qui écrivent ton message.\",\"author\":\"Meeshy\",\"builtin\":true,\"status\":\"approved\",\"itemCount\":0,\"kinds\":[\"static\",\"cinematic\",\"instant\"],\"coverUrl\":null,\"installed\":true,\"installCount\":0},{\"slug\":\"meo\",\"name\":\"Meo\",\"description\":\"Le complice de Mee, crête au vent : les mêmes envies de dire, avec son caractère.\",\"author\":\"Meeshy\",\"builtin\":true,\"status\":\"approved\",\"itemCount\":0,\"kinds\":[\"static\",\"cinematic\",\"instant\"],\"coverUrl\":null,\"installed\":false,\"installCount\":0},{\"slug\":\"mee-et-meo\",\"name\":\"Mee & Meo\",\"description\":\"Les deux ensemble : câlins, chamailleries et fêtes à deux.\",\"author\":\"Meeshy\",\"builtin\":true,\"status\":\"approved\",\"itemCount\":0,\"kinds\":[\"static\",\"cinematic\"],\"coverUrl\":null,\"installed\":true,\"installCount\":0},{\"slug\":\"chats-de-paris\",\"name\":\"Chats de Paris\",\"description\":\"Des chats qui flânent sur les quais.\",\"author\":\"Studio Minou\",\"builtin\":false,\"status\":\"approved\",\"itemCount\":2,\"kinds\":[\"static\",\"instant\"],\"coverUrl\":\"sticker-packs/f1/bonjour.png\",\"installed\":true,\"installCount\":4}]}"
+  },
+  "GET /installed — jamais une clé glory-frame.*": {
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "cacheControl": "private, no-cache",
+    "body": "{\"success\":true,\"data\":[{\"slug\":\"mee\",\"name\":\"Mee\",\"description\":\"Le colibri de Meeshy : ses humeurs, ses gestes et ses Instants qui écrivent ton message.\",\"author\":\"Meeshy\",\"builtin\":true,\"status\":\"approved\",\"itemCount\":0,\"kinds\":[\"static\",\"cinematic\",\"instant\"],\"coverUrl\":null,\"installed\":true,\"installCount\":0,\"items\":[]},{\"slug\":\"mee-et-meo\",\"name\":\"Mee & Meo\",\"description\":\"Les deux ensemble : câlins, chamailleries et fêtes à deux.\",\"author\":\"Meeshy\",\"builtin\":true,\"status\":\"approved\",\"itemCount\":0,\"kinds\":[\"static\",\"cinematic\"],\"coverUrl\":null,\"installed\":true,\"installCount\":0,\"items\":[]},{\"slug\":\"chats-de-paris\",\"name\":\"Chats de Paris\",\"description\":\"Des chats qui flânent sur les quais.\",\"author\":\"Studio Minou\",\"builtin\":false,\"status\":\"approved\",\"itemCount\":2,\"kinds\":[\"static\",\"instant\"],\"coverUrl\":\"sticker-packs/f1/bonjour.png\",\"installed\":true,\"installCount\":4,\"items\":[{\"key\":\"bonjour\",\"title\":\"Bonjour\",\"emoji\":\"👋\",\"kind\":\"static\",\"mimeType\":\"image/png\",\"fileUrl\":\"sticker-packs/f1/bonjour.png\",\"width\":512,\"height\":512,\"zones\":[]},{\"key\":\"bravo\",\"title\":\"Bravo\",\"emoji\":\"🎉\",\"kind\":\"instant\",\"mimeType\":\"image/webp\",\"fileUrl\":\"sticker-packs/f1/bravo.webp\",\"width\":512,\"height\":480,\"zones\":[{\"slot\":\"prenom\",\"label\":\"Prénom\",\"box\":{\"x\":40,\"y\":400,\"width\":432,\"height\":90},\"defaultText\":\"Léa\",\"maxLength\":14,\"maxLines\":1,\"minFontSize\":14,\"maxFontSize\":64,\"color\":\"#ffffff\",\"weight\":\"black\",\"align\":\"center\"}]}]}]}"
+  },
+  "GET /:slug — tiers publié, vu par un autre": {
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "cacheControl": null,
+    "body": "{\"success\":true,\"data\":{\"slug\":\"chats-de-paris\",\"name\":\"Chats de Paris\",\"description\":\"Des chats qui flânent sur les quais.\",\"author\":\"Studio Minou\",\"builtin\":false,\"status\":\"approved\",\"itemCount\":2,\"kinds\":[\"static\",\"instant\"],\"coverUrl\":\"sticker-packs/f1/bonjour.png\",\"installed\":false,\"installCount\":4,\"items\":[{\"key\":\"bonjour\",\"title\":\"Bonjour\",\"emoji\":\"👋\",\"kind\":\"static\",\"mimeType\":\"image/png\",\"fileUrl\":\"sticker-packs/f1/bonjour.png\",\"width\":512,\"height\":512,\"zones\":[]},{\"key\":\"bravo\",\"title\":\"Bravo\",\"emoji\":\"🎉\",\"kind\":\"instant\",\"mimeType\":\"image/webp\",\"fileUrl\":\"sticker-packs/f1/bravo.webp\",\"width\":512,\"height\":480,\"zones\":[{\"slot\":\"prenom\",\"label\":\"Prénom\",\"box\":{\"x\":40,\"y\":400,\"width\":432,\"height\":90},\"defaultText\":\"Léa\",\"maxLength\":14,\"maxLines\":1,\"minFontSize\":14,\"maxFontSize\":64,\"color\":\"#ffffff\",\"weight\":\"black\",\"align\":\"center\"}]}]}}"
+  },
+  "GET /:slug — tiers publié, vu par son auteur": {
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "cacheControl": null,
+    "body": "{\"success\":true,\"data\":{\"slug\":\"chats-de-paris\",\"name\":\"Chats de Paris\",\"description\":\"Des chats qui flânent sur les quais.\",\"author\":\"Studio Minou\",\"builtin\":false,\"status\":\"approved\",\"itemCount\":2,\"kinds\":[\"static\",\"instant\"],\"coverUrl\":\"sticker-packs/f1/bonjour.png\",\"installed\":true,\"installCount\":4,\"items\":[{\"key\":\"bonjour\",\"title\":\"Bonjour\",\"emoji\":\"👋\",\"kind\":\"static\",\"mimeType\":\"image/png\",\"fileUrl\":\"sticker-packs/f1/bonjour.png\",\"width\":512,\"height\":512,\"zones\":[]},{\"key\":\"bravo\",\"title\":\"Bravo\",\"emoji\":\"🎉\",\"kind\":\"instant\",\"mimeType\":\"image/webp\",\"fileUrl\":\"sticker-packs/f1/bravo.webp\",\"width\":512,\"height\":480,\"zones\":[{\"slot\":\"prenom\",\"label\":\"Prénom\",\"box\":{\"x\":40,\"y\":400,\"width\":432,\"height\":90},\"defaultText\":\"Léa\",\"maxLength\":14,\"maxLines\":1,\"minFontSize\":14,\"maxFontSize\":64,\"color\":\"#ffffff\",\"weight\":\"black\",\"align\":\"center\"}]}],\"reviewNote\":\"Superbe\"}}"
+  },
+  "GET /:slug — intégré": {
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "cacheControl": null,
+    "body": "{\"success\":true,\"data\":{\"slug\":\"mee\",\"name\":\"Mee\",\"description\":\"Le colibri de Meeshy : ses humeurs, ses gestes et ses Instants qui écrivent ton message.\",\"author\":\"Meeshy\",\"builtin\":true,\"status\":\"approved\",\"itemCount\":0,\"kinds\":[\"static\",\"cinematic\",\"instant\"],\"coverUrl\":null,\"installed\":true,\"installCount\":0,\"items\":[]}}"
+  },
+  "GET /:slug — inconnu": {
+    "status": 404,
+    "contentType": "application/json; charset=utf-8",
+    "cacheControl": null,
+    "body": "{\"success\":false,\"error\":\"Sticker pack not found\",\"message\":\"Sticker pack not found\",\"code\":\"STICKER_PACK_NOT_FOUND\"}"
+  },
+  "GET /:slug — clé de cadre, refus du schéma": {
+    "status": 400,
+    "contentType": "application/json; charset=utf-8",
+    "cacheControl": null,
+    "body": "{\"success\":false,\"error\":\"Validation Error\",\"message\":\"params/slug must match pattern \\\"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$\\\"\",\"code\":\"VALIDATION_ERROR\",\"violations\":[{\"path\":\"slug\",\"message\":\"must match pattern \\\"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$\\\"\"}]}"
+  },
+  "PUT /:slug/install — clé de cadre, refus du schéma": {
+    "status": 400,
+    "contentType": "application/json; charset=utf-8",
+    "cacheControl": null,
+    "body": "{\"success\":false,\"error\":\"Validation Error\",\"message\":\"params/slug must match pattern \\\"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$\\\"\",\"code\":\"VALIDATION_ERROR\",\"violations\":[{\"path\":\"slug\",\"message\":\"must match pattern \\\"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$\\\"\"}]}"
+  },
+  "DELETE /:slug/install — clé de cadre, refus du schéma": {
+    "status": 400,
+    "contentType": "application/json; charset=utf-8",
+    "cacheControl": null,
+    "body": "{\"success\":false,\"error\":\"Validation Error\",\"message\":\"params/slug must match pattern \\\"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$\\\"\",\"code\":\"VALIDATION_ERROR\",\"violations\":[{\"path\":\"slug\",\"message\":\"must match pattern \\\"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$\\\"\"}]}"
+  },
+  "GET / — invité d’un lien": {
+    "status": 403,
+    "contentType": "application/json; charset=utf-8",
+    "cacheControl": null,
+    "body": "{\"success\":false,\"error\":\"Registered user required\",\"message\":\"Registered user required\",\"code\":\"REGISTERED_USER_REQUIRED\"}"
+  },
+  "PUT /:slug/install — tiers": {
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "cacheControl": null,
+    "body": "{\"success\":true,\"data\":{\"slug\":\"chats-de-paris\",\"name\":\"Chats de Paris\",\"description\":\"Des chats qui flânent sur les quais.\",\"author\":\"Studio Minou\",\"builtin\":false,\"status\":\"approved\",\"itemCount\":2,\"kinds\":[\"static\",\"instant\"],\"coverUrl\":\"sticker-packs/f1/bonjour.png\",\"installed\":true,\"installCount\":5}}"
+  },
+  "PUT /:slug/install — inconnu": {
+    "status": 404,
+    "contentType": "application/json; charset=utf-8",
+    "cacheControl": null,
+    "body": "{\"success\":false,\"error\":\"Sticker pack not found\",\"message\":\"Sticker pack not found\",\"code\":\"STICKER_PACK_NOT_FOUND\"}"
+  },
+  "DELETE /:slug/install — intégré": {
+    "status": 409,
+    "contentType": "application/json; charset=utf-8",
+    "cacheControl": null,
+    "body": "{\"success\":false,\"error\":\"This pack is included and cannot be removed\",\"message\":\"This pack is included and cannot be removed\",\"code\":\"PACK_NOT_REMOVABLE\"}"
+  }
+}

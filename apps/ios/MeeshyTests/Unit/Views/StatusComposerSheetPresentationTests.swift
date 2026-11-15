@@ -53,10 +53,11 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
     /// que plus aucune feuille ne présente — le mode d'extinction silencieuse
     /// que cette suite existe pour fuir.
     ///
-    /// `StatusComposerView.swift` existe encore (son retrait est la tâche 4.8,
-    /// conditionnelle) et garde ses propres suites — `SheetToolbarSemanticsTests`,
-    /// `StatusComposerAccessibilityTests`, `NavigationContainerMigrationTests`.
-    private let composerPath = "Meeshy/Features/Main/Composer/ComposerMoodSurface.swift"
+    /// La tâche 4.8 a retiré `StatusComposerView.swift` (vérifié 2026-08-25 :
+    /// le fichier n'existe plus). `SheetToolbarSemanticsTests`,
+    /// `StatusComposerAccessibilityTests` et `NavigationContainerMigrationTests`
+    /// ont été re-visées sur la même surface, `ComposerMoodSurface.swift`.
+    private let composerPath = "Meeshy/Features/Composer/ComposerMoodSurface.swift"
 
     // MARK: - The composer's own side of the contract
 
@@ -64,7 +65,7 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
         let swift = try code(composerPath)
         XCTAssertTrue(
             swift.contains("ScrollView {"),
-            "StatusComposerView must host its stack in a ScrollView: the emoji grid uses fixed " +
+            "ComposerMoodSurface must host its stack in a ScrollView: the emoji grid uses fixed " +
             "56pt cells while every surrounding label scales with Dynamic Type, so at " +
             "accessibility sizes the content exceeds the .medium detent and would be clipped " +
             "with no gesture left to reach the text field."
@@ -114,11 +115,13 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
     /// generous enough to clear the widest call site (six labelled arguments).
     /// Les quatre feuilles, nommées. La liste est ADDITIVE : en retirer une
     /// entrée sans la remplacer perd une présentation de la mesure, en silence.
+    // Depuis #5837 la republication depuis la bulle est UN site pour les deux
+    // racines : `RootStatusBubbleLayer` (RootLayers/RootSharedLayers.swift),
+    // que RootView et iPadRootView montent toutes deux.
     private static let presentationFiles = [
-        "Meeshy/Features/Main/Views/RootView.swift",
-        "Meeshy/Features/Main/Views/iPadRootView.swift",
+        "Meeshy/Features/Main/Views/RootLayers/RootSharedLayers.swift",
         "Meeshy/Features/Main/Views/RootViewComponents.swift",
-        "Meeshy/Features/Main/Views/ConversationListView.swift",
+        "Meeshy/Features/Main/Views/ConversationListView+Presentations.swift",
     ]
 
     private func presentationSites() throws -> [PresentationSite] {
@@ -152,11 +155,18 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
         // covering it. C'est un `XCTAssertEqual(…, 4)` : zéro site le fait ROUGIR,
         // pas verdir — il n'a besoin d'aucun renfort.
         XCTAssertEqual(
-            try presentationSites().count, 4,
-            "Expected exactly four MoodComposerDoor presentations (one in RootView, one in " +
-            "iPadRootView, one in RootViewComponents, one in ConversationListView). Update this " +
-            "suite when an entry point is added."
+            try presentationSites().count, 3,
+            "Expected exactly three MoodComposerDoor presentations (one in RootStatusBubbleLayer, " +
+            "shared by RootView and iPadRootView; one in RootViewComponents; one in " +
+            "ConversationListView). Update this suite when an entry point is added."
         )
+        for root in ["Meeshy/Features/Main/Views/RootView.swift",
+                     "Meeshy/Features/Main/Views/iPadRootView.swift"] {
+            XCTAssertTrue(
+                try code(root).contains(".modifier(RootStatusBubbleLayer("),
+                "\(root) doit monter RootStatusBubbleLayer — sinon la republication depuis la bulle n'a plus de porte."
+            )
+        }
     }
 
     /// **Le recâblage du lot 4.6, gardé du bon côté.** Les quatre feuilles ne
@@ -176,6 +186,15 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
                 "du mood par le meuble, et y revenir perdrait le socle, la règle de surface et le gate de matière."
             )
         }
+        // Le balayage négatif couvre l'UNITÉ de la liste, pas seulement le fichier qui monte la porte :
+        // un type extrait (rail, queue, feuilles) ne doit pas réintroduire le composer historique.
+        let listUnit = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView.swift")
+        )
+        XCTAssertFalse(
+            listUnit.contains("StatusComposerView("),
+            "L'unité ConversationListView monte encore `StatusComposerView` : la porte du mood passe par le meuble."
+        )
     }
 
     /// **Chaque présentation donne à la porte ce qu'elle sait, et rien de plus.**
@@ -188,8 +207,7 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
     /// silencieux, et aucun compilateur ne les voit.
     func test_everyPresentationSeedsWhatItKnows_andNothingElse() throws {
         let republication = [
-            "Meeshy/Features/Main/Views/RootView.swift",
-            "Meeshy/Features/Main/Views/iPadRootView.swift",
+            "Meeshy/Features/Main/Views/RootLayers/RootSharedLayers.swift",
         ]
         for file in republication {
             let swift = try code(file)
@@ -207,7 +225,7 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
 
         let creation = [
             "Meeshy/Features/Main/Views/RootViewComponents.swift",
-            "Meeshy/Features/Main/Views/ConversationListView.swift",
+            "Meeshy/Features/Main/Views/ConversationListView+Presentations.swift",
         ]
         for file in creation {
             let swift = try code(file)

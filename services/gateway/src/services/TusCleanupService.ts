@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { guardedInterval } from '../utils/guarded-timer.js';
 
 const TUS_TEMP_PATH = path.join(process.env.UPLOAD_PATH || '/app/uploads', '.tus-resumable');
 const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -11,7 +12,7 @@ export class TusCleanupService {
   private interval: ReturnType<typeof setInterval> | null = null;
 
   start(intervalMs: number = 60 * 60 * 1000) {
-    this.interval = setInterval(() => this.cleanup(), intervalMs);
+    this.interval = guardedInterval({ name: 'tus-cleanup', everyMs: intervalMs, logger, run: () => this.cleanup() });
     this.interval.unref?.();
     logger.info('TusCleanup started', { intervalHours: intervalMs / (60 * 60 * 1000), maxAgeHours: 24 });
   }

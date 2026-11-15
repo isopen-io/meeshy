@@ -29,7 +29,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
-	<string>1756</string>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionAttributes</key>
@@ -37,11 +37,11 @@
 			<key>NSExtensionActivationRule</key>
 			<dict>
 				<key>NSExtensionActivationSupportsFileWithMaxCount</key>
-				<integer>20</integer>
+				<integer>100</integer>
 				<key>NSExtensionActivationSupportsImageWithMaxCount</key>
-				<integer>20</integer>
+				<integer>100</integer>
 				<key>NSExtensionActivationSupportsMovieWithMaxCount</key>
-				<integer>20</integer>
+				<integer>100</integer>
 				<key>NSExtensionActivationSupportsText</key>
 				<true/>
 				<key>NSExtensionActivationSupportsWebURLWithMaxCount</key>

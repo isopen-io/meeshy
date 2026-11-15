@@ -1,0 +1,11 @@
+[Unit]
+Description=Usage Docker publie chaque minute pour l'administration Meeshy (%i)
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=10s
+Unit=meeshy-ops-docker-df@%i.service
+
+[Install]
+WantedBy=timers.target

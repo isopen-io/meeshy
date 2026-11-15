@@ -11,7 +11,11 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../services/StatusService';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
-import { resolveParticipant } from '../utils/participant-resolver';
+import {
+  resolveParticipant,
+  resolveMembershipDenialReason,
+  type MembershipDenialReason,
+} from '../utils/participant-resolver';
 import type { TypingEvent } from '@meeshy/shared/types/socketio-events';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
@@ -20,6 +24,9 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 import { getBlockedUserIdsAmong } from '../../utils/blocking';
+import { pairAccessAmong } from '../../services/relations/pairAccess';
+import { guardedInterval } from '../../utils/guarded-timer.js';
+import { createEndToEndRegimeReader } from '../../services/e2ee/e2ee-signal-channel';
 
 const logger = enhancedLogger.child({ module: 'StatusHandler' });
 
@@ -40,6 +47,15 @@ type CachedIdentity = { username: string; displayName: string };
 
 type ActiveTyper = { conversationId: string; userId: string; username: string; displayName: string };
 
+// Mêmes trois libellés que `ConversationHandler.handleConversationJoin` pour
+// ces trois motifs — le client affiche `message` tel quel (voir
+// `ConversationSocketHandler.handleSocketAccessRevoked` côté iOS).
+const MEMBERSHIP_DENIAL_MESSAGE: Record<MembershipDenialReason, string> = {
+  not_a_member: 'Vous n\'êtes pas membre de cette conversation',
+  banned: 'Vous êtes banni de cette conversation',
+  no_longer_member: 'Vous n\'êtes plus membre de cette conversation',
+};
+
 export class StatusHandler {
   private prisma: PrismaClient;
   private statusService: StatusService;
@@ -58,6 +74,8 @@ export class StatusHandler {
   private static readonly TYPING_THROTTLE_CLEANUP_SIZE = 1_000;
   private typingThrottleCleanupTimer: ReturnType<typeof setInterval> | null = null;
   private rateLimiter = getSocketRateLimiter();
+  /** #13142 — le régime lu une fois par conversation : la frappe ne paie pas une lecture par événement. */
+  private readonly isEndToEnd: (conversationId: string) => Promise<boolean>;
 
   constructor(deps: StatusHandlerDependencies) {
     this.prisma = deps.prisma;
@@ -66,7 +84,8 @@ export class StatusHandler {
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
     this.userSockets = deps.userSockets ?? new Map();
-    this.typingThrottleCleanupTimer = setInterval(() => this._evictStale(), 30_000);
+    this.isEndToEnd = createEndToEndRegimeReader(this.prisma);
+    this.typingThrottleCleanupTimer = guardedInterval({ name: 'typing-throttle-eviction', everyMs: 30_000, logger, run: () => this._evictStale() });
     if (this.typingThrottleCleanupTimer.unref) this.typingThrottleCleanupTimer.unref();
   }
 
@@ -113,7 +132,12 @@ export class StatusHandler {
    */
   async handleSocketDisconnecting(
     socketId: string,
-    broadcastFn: (room: string, event: string, data: unknown, exceptSocketIds?: string[]) => void,
+    broadcastFn: (
+      room: string,
+      event: typeof SERVER_EVENTS.TYPING_STOP,
+      data: TypingEvent,
+      exceptSocketIds?: string[]
+    ) => void,
     otherSocketIds?: ReadonlySet<string>
   ): Promise<void> {
     const typers = this.activeTypers.get(socketId);
@@ -164,12 +188,18 @@ export class StatusHandler {
   }
 
   /**
-   * PRIVACY: socket ids to exclude from a typing broadcast — same bidirectional
-   * blocking rule already enforced on the presence channel (`_broadcastUserStatus`
-   * in MeeshySocketIOManager). Typing is a more sensitive, moment-to-moment signal
-   * than presence, so it must not leak to a blocked co-participant either.
-   * Anonymous participants (no `userId`) can't block/be blocked — only registered
-   * users are considered.
+   * PRIVACY: socket ids to exclude from a typing broadcast.
+   *
+   * - The bidirectional BLOCKING rule already enforced on the presence channel
+   *   (`_broadcastUserStatus` in MeeshySocketIOManager): typing is a more
+   *   sensitive, moment-to-moment signal than presence.
+   * - The CIRCLE law (#14107, MSG-05): a registered typer's typing reaches only
+   *   the registered members who are at least ACQUAINTANCE (`dm.typing`), in a
+   *   direct conversation as in a group — a group unlocks nothing (RG-22).
+   *
+   * Anonymous participants (no `userId`) have no circle and can't block/be
+   * blocked: an anonymous typer keeps the blocking rule alone, an anonymous
+   * viewer is never in this list.
    */
   private async _getBlockedSocketIdsInRoom(userId: string, conversationId: string): Promise<string[]> {
     const participants = await this.prisma.participant.findMany({
@@ -181,10 +211,24 @@ export class StatusHandler {
       .filter((id): id is string => !!id && id !== userId && this.connectedUsers.has(id));
     if (onlineParticipantUserIds.length === 0) return [];
 
-    const blockedUserIds = await getBlockedUserIdsAmong(this.prisma, userId, onlineParticipantUserIds);
-    if (blockedUserIds.size === 0) return [];
+    const typerIsRegistered = participants.some((p) => p.userId === userId);
+    const hiddenUserIds = typerIsRegistered
+      ? await this._typingDeniedAmong(userId, onlineParticipantUserIds)
+      : await getBlockedUserIdsAmong(this.prisma, userId, onlineParticipantUserIds);
+    if (hiddenUserIds.size === 0) return [];
 
-    return [...blockedUserIds].flatMap(id => [...(this.userSockets.get(id) ?? [])]);
+    return [...hiddenUserIds].flatMap(id => [...(this.userSockets.get(id) ?? [])]);
+  }
+
+  /** The members the law refuses `dm.typing` from `typerId` — blocking included. */
+  private async _typingDeniedAmong(typerId: string, viewerIds: readonly string[]): Promise<Set<string>> {
+    const verdicts = await pairAccessAmong(this.prisma, {
+      feature: 'dm.typing',
+      subjectId: typerId,
+      otherIds: viewerIds,
+      subjectIs: 'target',
+    });
+    return new Set(viewerIds.filter((id) => verdicts.get(id)?.allowed !== true));
   }
 
   private _untrackTyping(socketId: string, conversationId: string): void {
@@ -237,9 +281,64 @@ export class StatusHandler {
         connectedUsers: this.connectedUsers,
       });
       if (!participant) {
-        logger.warn('typing:start — not a participant in conversation', { userId, conversationId: normalizedId });
+        // `resolveParticipant` filters `isActive: true` in its query: a `null`
+        // here does not distinguish "never a member" from "removed/banned/left".
+        // `typing:start` was the ONE membership-gated handler with no callback
+        // to report that back — message/reaction/location handlers all answer
+        // an ack. The room the socket joined at auth time (`_joinUserConversations`)
+        // is never re-verified either, so a removed member keeps receiving
+        // `message:new` in a conversation it can no longer type into: the ONLY
+        // client-visible tell was the missing typing indicator, silently.
+        //
+        // Reusing `conversation:join-error` — not inventing a new channel — is
+        // deliberate: web (`use-socket-cache-sync.ts`) and iOS
+        // (`ConversationSocketHandler`/`MessageSocketManager`) already purge
+        // their cache / close the open thread on a membership-denying reason,
+        // via the shared `isMembershipDeniedJoinError()` policy. No new client
+        // code is needed for the refusal to become visible.
+        // La room est une autorisation mise en cache (#5947) : une non-appartenance
+        // PROUVÉE ici l'expire, sinon l'ancien membre reçoit encore le fil.
+        //
+        // **Dans son PROPRE try** (#6051). Cette expiration a été insérée en
+        // AMONT du signal qu'elle accompagne, sous un `catch` englobant qui se
+        // contente de journaliser : un adapter qui refuse, un socket déjà
+        // parti, et le refus n'était plus signalé DU TOUT — le silence exact
+        // que #5947 existait pour finir.
+        //
+        // Les deux gestes n'ont pas la même raison et ne doivent donc pas
+        // partager un sort : le `leave` est une mesure de SÉCURITÉ (cesser de
+        // livrer le fil à un ancien membre), l'`emit` est ce qui rend le refus
+        // VISIBLE et déclenche la purge de cache côté web et iOS
+        // (`isMembershipDeniedJoinError`). L'échec du premier ne peut pas
+        // emporter le second.
+        try {
+          await socket.leave(ROOMS.conversation(normalizedId));
+        } catch (error) {
+          logger.error('typing:start — expiration de la room échouée, le refus est signalé quand même', {
+            error, userId: userIdOrToken, conversationId: normalizedId
+          });
+        }
+        const reason = await resolveMembershipDenialReason({
+          prisma: this.prisma,
+          conversationId: normalizedId,
+          isAnonymous: connectedUser.isAnonymous,
+          // Même repli que `resolveParticipant` ci-dessus, pour la même raison.
+          anonymousParticipantId: connectedUser.participantId || connectedUser.id,
+          userId,
+        });
+        logger.warn('typing:start — not a participant in conversation', { userId, conversationId: normalizedId, reason });
+        socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
+          conversationId: normalizedId,
+          reason,
+          message: MEMBERSHIP_DENIAL_MESSAGE[reason],
+        });
         return;
       }
+
+      // #13142 — dans une conversation chiffrée de bout en bout, la frappe voyage en
+      // signal chiffré d'appareil à appareil : la passerelle n'en relaie ni n'en
+      // retient aucune en clair. Rien n'est suivi, donc aucun `typing:stop` à rendre.
+      if (await this.isEndToEnd(normalizedId)) return;
 
       // Mettre à jour l'activité
       this.statusService.updateLastSeen(userId, connectedUser.isAnonymous);

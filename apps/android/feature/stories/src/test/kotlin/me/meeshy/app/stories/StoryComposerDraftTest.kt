@@ -3,6 +3,7 @@ package me.meeshy.app.stories
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.scene.StoryBackgroundFraming
 import org.junit.Test
 
 /**
@@ -403,5 +404,333 @@ class StoryComposerDraftTest {
 
         assertThat(request.storyEffects).isNotNull()
         assertThat(request.storyEffects?.background).isNull()
+    }
+
+    // --- background media (isBackground StoryMediaObject) ---
+
+    @Test
+    fun `a designated background media serialises to a single isBackground media object`() {
+        val request = StoryComposerDraft(
+            text = "hi",
+            mediaIds = listOf("m1"),
+            backgroundMedia = StoryBackgroundMedia(
+                mediaId = "m1",
+                url = "https://cdn/m1.jpg",
+                mimeType = "image/jpeg",
+                durationSeconds = null,
+            ),
+        ).toCreateStoryRequest("en")
+
+        val objects = request.storyEffects?.mediaObjects
+        assertThat(objects).hasSize(1)
+        assertThat(objects?.single()?.isBackground).isTrue()
+        assertThat(objects?.single()?.postMediaId).isEqualTo("m1")
+        assertThat(objects?.single()?.mediaURL).isEqualTo("https://cdn/m1.jpg")
+        assertThat(objects?.single()?.mediaType).isEqualTo("image")
+        assertThat(objects?.single()?.loop).isTrue()
+    }
+
+    @Test
+    fun `a video background carries its duration so the reader can loop the slide`() {
+        val request = StoryComposerDraft(
+            text = "hi",
+            mediaIds = listOf("v1"),
+            backgroundMedia = StoryBackgroundMedia(
+                mediaId = "v1",
+                url = "https://cdn/v1.mp4",
+                mimeType = "video/mp4",
+                durationSeconds = 4.0,
+            ),
+        ).toCreateStoryRequest("en")
+
+        val obj = request.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.mediaType).isEqualTo("video")
+        assertThat(obj?.duration).isEqualTo(4.0)
+        assertThat(obj?.intrinsicDuration).isEqualTo(4.0)
+    }
+
+    @Test
+    fun `an image background carries no duration even when one is present`() {
+        val request = StoryComposerDraft(
+            text = "hi",
+            mediaIds = listOf("m1"),
+            backgroundMedia = StoryBackgroundMedia(
+                mediaId = "m1",
+                url = "https://cdn/m1.jpg",
+                mimeType = "image/jpeg",
+                durationSeconds = 9.0,
+            ),
+        ).toCreateStoryRequest("en")
+
+        val obj = request.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.duration).isNull()
+        assertThat(obj?.intrinsicDuration).isNull()
+    }
+
+    @Test
+    fun `a non-looping video background serialises loop false`() {
+        val request = StoryComposerDraft(
+            text = "hi",
+            mediaIds = listOf("v1"),
+            backgroundMedia = StoryBackgroundMedia(
+                mediaId = "v1",
+                url = "https://cdn/v1.mp4",
+                mimeType = "video/mp4",
+                durationSeconds = 4.0,
+                loop = false,
+            ),
+        ).toCreateStoryRequest("en")
+
+        val obj = request.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.mediaType).isEqualTo("video")
+        assertThat(obj?.loop).isFalse()
+    }
+
+    @Test
+    fun `an image background carries the author's framing as normalised x, y and scale`() {
+        val request = StoryComposerDraft(
+            text = "hi",
+            mediaIds = listOf("m1"),
+            backgroundMedia = StoryBackgroundMedia(
+                mediaId = "m1",
+                url = "https://cdn/m1.jpg",
+                mimeType = "image/jpeg",
+                durationSeconds = null,
+                framing = StoryBackgroundFraming(x = 0.75, y = 0.25, scale = 2.5),
+            ),
+        ).toCreateStoryRequest("en")
+
+        val obj = request.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.x).isEqualTo(0.75)
+        assertThat(obj?.y).isEqualTo(0.25)
+        assertThat(obj?.scale).isEqualTo(2.5)
+    }
+
+    @Test
+    fun `an unframed image background serialises the bare centred defaults`() {
+        val request = StoryComposerDraft(
+            text = "hi",
+            mediaIds = listOf("m1"),
+            backgroundMedia = StoryBackgroundMedia(
+                mediaId = "m1",
+                url = "https://cdn/m1.jpg",
+                mimeType = "image/jpeg",
+                durationSeconds = null,
+            ),
+        ).toCreateStoryRequest("en")
+
+        val obj = request.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.x).isEqualTo(0.5)
+        assertThat(obj?.y).isEqualTo(0.5)
+        assertThat(obj?.scale).isEqualTo(1.0)
+    }
+
+    @Test
+    fun `a video background carries the author's framing as normalised x, y and scale`() {
+        // The reader now honours a background video's x/y/scale (prior slice), so the composer
+        // authors the same framing onto a video it authors onto an image.
+        val request = StoryComposerDraft(
+            text = "hi",
+            mediaIds = listOf("v1"),
+            backgroundMedia = StoryBackgroundMedia(
+                mediaId = "v1",
+                url = "https://cdn/v1.mp4",
+                mimeType = "video/mp4",
+                durationSeconds = 4.0,
+                framing = StoryBackgroundFraming(x = 0.75, y = 0.25, scale = 2.5),
+            ),
+        ).toCreateStoryRequest("en")
+
+        val obj = request.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.mediaType).isEqualTo("video")
+        assertThat(obj?.x).isEqualTo(0.75)
+        assertThat(obj?.y).isEqualTo(0.25)
+        assertThat(obj?.scale).isEqualTo(2.5)
+        // Framing rides alongside the video-only fields without clobbering them.
+        assertThat(obj?.loop).isTrue()
+        assertThat(obj?.intrinsicDuration).isEqualTo(4.0)
+    }
+
+    @Test
+    fun `an unframed video background serialises the bare centred defaults`() {
+        val request = StoryComposerDraft(
+            text = "hi",
+            mediaIds = listOf("v1"),
+            backgroundMedia = StoryBackgroundMedia(
+                mediaId = "v1",
+                url = "https://cdn/v1.mp4",
+                mimeType = "video/mp4",
+                durationSeconds = 4.0,
+            ),
+        ).toCreateStoryRequest("en")
+
+        val obj = request.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.mediaType).isEqualTo("video")
+        assertThat(obj?.x).isEqualTo(0.5)
+        assertThat(obj?.y).isEqualTo(0.5)
+        assertThat(obj?.scale).isEqualTo(1.0)
+    }
+
+    @Test
+    fun `an image background always loops even when loop is off`() {
+        val request = StoryComposerDraft(
+            text = "hi",
+            mediaIds = listOf("m1"),
+            backgroundMedia = StoryBackgroundMedia(
+                mediaId = "m1",
+                url = "https://cdn/m1.jpg",
+                mimeType = "image/jpeg",
+                durationSeconds = null,
+                loop = false,
+            ),
+        ).toCreateStoryRequest("en")
+
+        assertThat(request.storyEffects?.mediaObjects?.single()?.loop).isTrue()
+    }
+
+    @Test
+    fun `a background media alone materialises effects`() {
+        val request = StoryComposerDraft(
+            mediaIds = listOf("m1"),
+            backgroundMedia = StoryBackgroundMedia(
+                mediaId = "m1",
+                url = "https://cdn/m1.jpg",
+                mimeType = "image/jpeg",
+                durationSeconds = null,
+            ),
+        ).toCreateStoryRequest("en")
+
+        assertThat(request.storyEffects).isNotNull()
+        assertThat(request.storyEffects?.mediaObjects).hasSize(1)
+    }
+
+    @Test
+    fun `no designated background media leaves storyEffects mediaObjects null`() {
+        val request = StoryComposerDraft(text = "hi", background = StoryBackgroundValue.Hex("2ECC71"))
+            .toCreateStoryRequest("en")
+
+        assertThat(request.storyEffects).isNotNull()
+        assertThat(request.storyEffects?.mediaObjects).isNull()
+    }
+
+    @Test
+    fun `a non-repost draft sends no repost link on the wire`() {
+        val request = StoryComposerDraft(text = "hi").toCreateStoryRequest("en")
+
+        assertThat(request.repostOfId).isNull()
+    }
+
+    @Test
+    fun `a repost draft carries the source id on the wire`() {
+        val request = StoryComposerDraft(text = "hi", repostOfId = "src-1").toCreateStoryRequest("en")
+
+        assertThat(request.repostOfId).isEqualTo("src-1")
+    }
+
+    @Test
+    fun `a blank repost source id is dropped from the wire`() {
+        val request = StoryComposerDraft(text = "hi", repostOfId = "   ").toCreateStoryRequest("en")
+
+        assertThat(request.repostOfId).isNull()
+    }
+
+    @Test
+    fun `withRepostOf normalises a blank source id to null`() {
+        assertThat(StoryComposerDraft().withRepostOf("  \t ").repostOfId).isNull()
+        assertThat(StoryComposerDraft().withRepostOf(null).repostOfId).isNull()
+    }
+
+    @Test
+    fun `withRepostOf keeps a non-blank source id and leaves the rest of the draft intact`() {
+        val draft = StoryComposerDraft(text = "keep me", visibility = StoryVisibility.FRIENDS)
+            .withRepostOf("src-9")
+
+        assertThat(draft.repostOfId).isEqualTo("src-9")
+        assertThat(draft.text).isEqualTo("keep me")
+        assertThat(draft.visibility).isEqualTo(StoryVisibility.FRIENDS)
+    }
+
+    // --- drawing strokes ---
+
+    private fun drawnStroke(id: String = "s1") =
+        me.meeshy.sdk.model.StoryDrawingStroke(id = id, colorHex = "FFFFFF", width = 6.0)
+
+    @Test
+    fun `a drawing-only draft can publish`() {
+        assertThat(StoryComposerDraft(text = "", strokes = listOf(drawnStroke())).canPublish).isTrue()
+    }
+
+    @Test
+    fun `toCreateStoryRequest serialises strokes onto storyEffects drawingStrokes`() {
+        val stroke = drawnStroke()
+        val request = StoryComposerDraft(text = "", strokes = listOf(stroke))
+            .toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.storyEffects).isNotNull()
+        assertThat(request.storyEffects?.drawingStrokes).containsExactly(stroke)
+    }
+
+    @Test
+    fun `a drawing-only draft still produces a storyEffects payload`() {
+        val request = StoryComposerDraft(text = "", strokes = listOf(drawnStroke()))
+            .toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.content).isNull()
+        assertThat(request.storyEffects).isNotNull()
+    }
+
+    @Test
+    fun `no stroke leaves the storyEffects drawingStrokes null`() {
+        val request = StoryComposerDraft(textElements = listOf(StoryTextElement(id = "e1", text = "hi")))
+            .toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.storyEffects).isNotNull()
+        assertThat(request.storyEffects?.drawingStrokes).isNull()
+    }
+
+    @Test
+    fun `a caption-only draft leaves storyEffects null even though drawingStrokes is checked`() {
+        val request = StoryComposerDraft(text = "hello").toCreateStoryRequest(originalLanguage = "en")
+        assertThat(request.storyEffects).isNull()
+    }
+
+    // --- the post owns every media its canvas designates (#5280) ---
+
+    private fun backgroundImage(mediaId: String) = StoryBackgroundMedia(
+        mediaId = mediaId,
+        url = "https://cdn/$mediaId.jpg",
+        mimeType = "image/jpeg",
+        durationSeconds = null,
+    )
+
+    @Test
+    fun `the post lists the media its canvas designates even when the draft did not`() {
+        val request = StoryComposerDraft(
+            text = "hi",
+            mediaIds = listOf("m1"),
+            backgroundMedia = backgroundImage("bg-9"),
+        ).toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.mediaIds).containsExactly("m1", "bg-9").inOrder()
+        assertThat(request.storyEffects?.mediaObjects?.single()?.postMediaId).isEqualTo("bg-9")
+    }
+
+    @Test
+    fun `a background media that the draft already lists is not listed twice`() {
+        val request = StoryComposerDraft(mediaIds = listOf("m1"), backgroundMedia = backgroundImage("m1"))
+            .toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.mediaIds).containsExactly("m1")
+    }
+
+    @Test
+    fun `a canvas designating no media leaves the post media ids as the draft lists them`() {
+        val request = StoryComposerDraft(
+            text = "hi",
+            mediaIds = listOf("m1", "m2"),
+            stickers = listOf(StoryStickerElement(id = "k", emoji = "🎉")),
+        ).toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.mediaIds).containsExactly("m1", "m2").inOrder()
     }
 }

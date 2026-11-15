@@ -76,6 +76,7 @@ jest.mock('../../../utils/withMutationLog', () => ({
   // qui se déguise en 500 sur des chemins d'erreur sans rapport.
   ...(jest.requireActual('../../../utils/withMutationLog') as object),
   withMutationLog: jest.fn<any>().mockImplementation(({ op }) => op()),
+  withMutationVerdict: jest.fn<any>().mockImplementation(async ({ op }: any) => ({ result: await op(), replayed: false })),
 }));
 
 jest.mock('../../../utils/sanitize.js', () => ({
@@ -83,11 +84,20 @@ jest.mock('../../../utils/sanitize.js', () => ({
 }));
 
 jest.mock('../../../routes/posts/types', () => ({
-  // Ce double ÉNUMÈRE les schémas : tout export neuf consommé par la route est
-  // `undefined` ici, et `.safeParse` lève AVANT la moindre garde — la route
-  // rend alors 500 sur des chemins qui n'ont rien à voir. C'est un inventaire
-  // à tenir à jour, pas une simple façade.
-  //
+  // AVANT #4147 : ce double ÉNUMÉRAIT les schémas à la main, sans
+  // `requireActual` — exactement le piège que son propre commentaire
+  // décrivait (« un inventaire à tenir à jour ») et qui s'est refermé au
+  // premier export neuf consommé par ce fichier : `comments.ts` importe
+  // désormais `TranslatePostSchema` (routes/posts/translate à la demande,
+  // désormais validée par le MÊME schéma que le post), et ce double ne le
+  // déclarait pas — `TranslatePostSchema.safeParse` aurait levé sur
+  // `undefined`, faisant 500 les trois tests `.../translate` ci-dessous SANS
+  // toucher à la moindre garde de la route. `requireActual` en base, avec
+  // surcharge CIBLÉE des seuls schémas dont CE fichier a besoin d'un
+  // comportement plus permissif que le vrai Zod (patron prescrit par
+  // CLAUDE.md § « TROISIÈME exemplaire ») : tout export réel, y compris ceux
+  // qu'aucune des lignes ci-dessous ne nomme, reste vivant.
+  ...(jest.requireActual('../../../routes/posts/types') as object),
   // `UnlikeSchema` est le jumeau SANS défaut de `LikeSchema` : sur un retrait,
   // l'absence d'emoji vaut « retire la plus récente », alors qu'un défaut '❤️'
   // rendrait ce repli inatteignable.
@@ -165,7 +175,7 @@ async function buildApp({ authenticated = true, withCmidDecoration = false } = {
   // droit de voir (cf. `posts/comments-audience.test.ts`).
   const publicAcl = { authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] };
   const prisma = {
-    post: {
+    user: { findFirst: jest.fn<any>().mockResolvedValue(null) }, post: {
       findUnique: jest.fn<any>().mockResolvedValue(null),
       findFirst: jest.fn<any>().mockResolvedValue(publicAcl),
     },
@@ -306,6 +316,88 @@ describe('POST /posts/:postId/comments — success', () => {
   });
 });
 
+/**
+ * #6587 — la langue DÉCLARÉE par l'auteur doit atteindre le service, à la place
+ * que le service lit.
+ *
+ * La suite de service (`PostCommentService.authoredLanguage.test.ts`) prouve que
+ * `addComment` PRÉFÈRE une langue déclarée à son heuristique de mots. Elle
+ * n'atteste rien de la ROUTE, qui passe NEUF arguments POSITIONNELS : une
+ * insertion de paramètre en amont décalerait `originalLanguage` d'un cran sans
+ * qu'un seul témoin rougisse, et le service recevrait un `attachmentId` comme
+ * langue source — donc un `originalLanguage` absurde persisté sur le commentaire,
+ * depuis lequel TOUS les lecteurs descendent leur prisme.
+ *
+ * On épingle donc le TUPLE ENTIER, pas seulement la position 5 : c'est la seule
+ * forme qui rougisse quel que soit le rang de l'insertion. Et on passe par
+ * `app.inject`, donc par le vrai schéma de route et le vrai handler — un témoin
+ * qui appellerait le service directement mesurerait le service, pas le relais.
+ *
+ * Trancher entre ce témoin et un OBJET D'OPTIONS à la place des neuf
+ * positionnels : les deux, mais pas dans ce lot. L'objet d'options supprime la
+ * DÉRIVE de position ; il ne dit rien du cas où la route OMET simplement la clé,
+ * le champ étant optionnel des deux côtés — seul un témoin de route voit les
+ * deux. Et `PostCommentService.ts` est hors du périmètre de ce lot : refactorer
+ * sa signature toucherait cinq suites qu'aucun de ses défauts ne concerne.
+ */
+describe('POST /posts/:postId/comments — la langue déclarée atteint le service', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildApp();
+    // `resolveInteractionTarget` rend la ligne du double : sans `id`, le
+    // `targetPostId` transmis au service serait `undefined` et le tuple
+    // n'épinglerait pas la cible réelle.
+    ((app as any).prisma.post.findFirst as jest.Mock<any>).mockResolvedValue({
+      id: POST_ID, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  // Français reconnaissable, langue déclarée ALLEMANDE : si la route perdait la
+  // déclaration, `detectLanguage` rendrait « fr » et le témoin ne pourrait pas
+  // verdir pour un motif étranger à ce qu'il mesure.
+  const FRENCH_LOOKING = 'Bonjour, je suis très heureux de vous lire aujourd’hui';
+
+  it('hands the authored language to addComment, at the position the service reads it', async () => {
+    mockAddComment.mockClear();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments`,
+      payload: { content: FRENCH_LOOKING, originalLanguage: 'de' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(mockAddComment).toHaveBeenCalledTimes(1);
+    expect(mockAddComment).toHaveBeenCalledWith(
+      POST_ID,          // targetPostId
+      USER_ID,          // authorId
+      FRENCH_LOOKING,   // content (sanitisé — le double est l'identité)
+      // La queue est un OBJET D'OPTIONS depuis #6578 : la position ne porte plus
+      // le sens, le NOM le porte — et c'est précisément ce que ce témoin garde.
+      expect.objectContaining({ originalLanguage: 'de' }),
+    );
+  });
+
+  it('hands undefined when the author declared nothing, so the server fallback applies', async () => {
+    mockAddComment.mockClear();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments`,
+      payload: { content: FRENCH_LOOKING },
+    });
+
+    expect(res.statusCode).toBe(201);
+    // L'index positionnel `[5]` valait `originalLanguage` avant #6578 ; depuis
+    // que la queue est un objet d'options, il vaut `undefined` TOUJOURS — un
+    // témoin qui ne peut plus tomber. On interroge le NOM.
+    const options = mockAddComment.mock.calls[0][3];
+    expect(options).toBeDefined();
+    expect(options.originalLanguage).toBeUndefined();
+  });
+});
+
 describe('POST /posts/:postId/comments — broadcast carries clientMutationId', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
@@ -436,7 +528,15 @@ describe('POST /posts/:postId/comments/:commentId/translate — on-demand', () =
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.requested).toBe(true);
-    expect(mockTranslateCommentOnDemand).toHaveBeenCalledWith(COMMENT_ID, 'de', { force: false });
+    // #4147 — `force` vient désormais de `TranslatePostSchema.safeParse`
+    // (`z.boolean().optional()`), le MÊME schéma que POST /posts/:postId/translate
+    // (core.ts) : un `force` omis y a TOUJOURS résolu `undefined`, jamais
+    // `false` — c'était la validation à la main de cette route, disparue
+    // avec ce lot, qui produisait `false` par un `body.force === true` local.
+    // Attendre encore `false` ici aurait fait la preuve inverse de ce que le
+    // critère 3 demande : les deux routes ne partagent le même contrat que
+    // si elles produisent la MÊME valeur pour la même absence.
+    expect(mockTranslateCommentOnDemand).toHaveBeenCalledWith(COMMENT_ID, 'de', { force: undefined });
   });
 
   it('forwards force=true for the « Retraduire » path', async () => {
@@ -495,6 +595,17 @@ describe('PATCH /posts/:postId/comments/:commentId — edit own comment', () => 
       payload: {},
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 403 COMMENTS_DISABLED when the publication closed its comments (#16930)', async () => {
+    mockUpdateComment.mockRejectedValueOnce(new Error('COMMENTS_DISABLED'));
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}`,
+      payload: { content: 'Edited' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('COMMENTS_DISABLED');
   });
 
   it('returns 400 EMPTY_CONTENT when a text comment is edited to blank', async () => {

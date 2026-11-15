@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "story_audio_chip_playing",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_audio_chip_muted",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_audio_chip_a11y",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

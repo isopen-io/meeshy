@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.on-meeshy",
+          "androidName": "contact_card_on_meeshy",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.action.connect",
+          "androidName": "contact_card_action_connect",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.action.write",
+          "androidName": "contact_card_action_write",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.state.request-sent",
+          "androidName": "contact_card_state_request_sent",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.state.request-received",
+          "androidName": "contact_card_state_request_received",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.toast.request-failed",
+          "androidName": "contact_card_toast_request_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.a11y-on-meeshy",
+          "androidName": "contact_card_a11y_on_meeshy",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "link.error.open-conversation",
+          "androidName": "contact_card_open_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.lookup-unavailable-encrypted",
+          "androidName": "contact_card_lookup_unavailable_encrypted",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

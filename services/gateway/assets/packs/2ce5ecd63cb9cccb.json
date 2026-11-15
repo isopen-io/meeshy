@@ -1,0 +1,69 @@
+{
+ "schema": 1,
+ "frames": [
+  {
+   "id": "exemple-savane.ambassadeur-4",
+   "usage": {
+    "kind": "rank",
+    "rank": "ambassadeur",
+    "division": 4
+   },
+   "thumb": {
+    "src": "dc2f5613626b4310.webp",
+    "bytes": 18832,
+    "sha256": "dc2f5613626b4310707e54e0354e37174ddbb563f1c59b7e7d635659d1ea04ee"
+   },
+   "i18n": {
+    "name": "frame.exemple-savane.ambassadeur-4.name"
+   }
+  },
+  {
+   "id": "exemple-savane.ambassadeur-3",
+   "usage": {
+    "kind": "rank",
+    "rank": "ambassadeur",
+    "division": 3
+   },
+   "thumb": {
+    "src": "41d4451bdbb80dd4.webp",
+    "bytes": 21388,
+    "sha256": "41d4451bdbb80dd4192c04690aba151f2194911248fe68e7bf83cc25f4022a69"
+   },
+   "i18n": {
+    "name": "frame.exemple-savane.ambassadeur-3.name"
+   }
+  },
+  {
+   "id": "exemple-savane.ambassadeur-2",
+   "usage": {
+    "kind": "rank",
+    "rank": "ambassadeur",
+    "division": 2
+   },
+   "thumb": {
+    "src": "8cb78673b40189d2.webp",
+    "bytes": 23718,
+    "sha256": "8cb78673b40189d268248fc0a519d5a6f0fea9fb68031478481585f25bfdd5d5"
+   },
+   "i18n": {
+    "name": "frame.exemple-savane.ambassadeur-2.name"
+   }
+  },
+  {
+   "id": "exemple-savane.ambassadeur-1",
+   "usage": {
+    "kind": "rank",
+    "rank": "ambassadeur",
+    "division": 1
+   },
+   "thumb": {
+    "src": "98c061337887927e.webp",
+    "bytes": 26530,
+    "sha256": "98c061337887927ea3a7499cdd283a54027ddfaa75cfcd2990023eefe63c471d"
+   },
+   "i18n": {
+    "name": "frame.exemple-savane.ambassadeur-1.name"
+   }
+  }
+ ]
+}

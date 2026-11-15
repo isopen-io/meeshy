@@ -53,6 +53,39 @@ echo "[ci_post_clone] No signing patch — the Xcode Cloud archive signs ad hoc 
 # type 'MediaSaveBranding' in scope" because the file was never a member of
 # any PBXSourcesBuildPhase in the committed project.
 cd "$CI_PRIMARY_REPOSITORY_PATH/apps/ios"
+
+# ─── Le numéro de build VIENT d'Xcode Cloud (directive porteur 2026-09-09) ───
+#
+# Xcode Cloud EXPOSE `CI_BUILD_NUMBER` à ses scripts ; il ne l'injecte dans
+# AUCUN réglage de build. Sans ces lignes, l'archive porte le
+# `CURRENT_PROJECT_VERSION` committé — la MÊME valeur pour tous les runs, quel
+# que soit leur numéro. Deux binaires différents sortaient donc avec le même
+# numéro de build, et App Store Connect refusait le second (« The bundle
+# version must be higher ») sans que rien dans le dépôt n'explique pourquoi :
+# `project.yml` jurait au contraire que le compteur venait d'ici.
+#
+# Écrit AVANT `xcodegen generate` : c'est lui qui rend le pbxproj depuis
+# `project.yml`. Après, le numéro atterrirait dans un fichier que plus personne
+# ne lit.
+if [ -n "${CI_BUILD_NUMBER:-}" ]; then
+    sed -i '' "s/^  CURRENT_PROJECT_VERSION: .*/  CURRENT_PROJECT_VERSION: \"$CI_BUILD_NUMBER\"/" project.yml
+
+    # RELIRE ce qu'on vient d'écrire. `sed` qui ne trouve pas sa ligne REND 0 :
+    # il ne modifie rien, le build sort avec l'ancien numéro, et le défaut est
+    # revenu sans que rien ne rougisse. Une injection qui ne peut pas échouer
+    # n'est pas une injection, c'est un espoir.
+    if ! grep -q "^  CURRENT_PROJECT_VERSION: \"$CI_BUILD_NUMBER\"$" project.yml; then
+        echo "[ci_post_clone] FATAL: CI_BUILD_NUMBER=$CI_BUILD_NUMBER non écrit dans project.yml." >&2
+        grep -n "CURRENT_PROJECT_VERSION" project.yml >&2 || true
+        exit 1
+    fi
+    echo "[ci_post_clone] Build number = $CI_BUILD_NUMBER (Xcode Cloud)."
+else
+    # Hors Xcode Cloud (exécution manuelle du hook, test local) : on ne touche
+    # à rien plutôt que d'écrire un numéro faux.
+    echo "[ci_post_clone] CI_BUILD_NUMBER absent — le numéro committé est conservé."
+fi
+
 command -v xcodegen >/dev/null 2>&1 || brew install xcodegen
 xcodegen generate
 echo "[ci_post_clone] XcodeGen regenerated project.pbxproj from project.yml."

@@ -3,7 +3,7 @@ import Foundation
 import MeeshySDK
 import os
 
-nonisolated private let logger = Logger(subsystem: "me.meeshy.app", category: "focus-filter")
+nonisolated private let logger = MeeshyLog.logger(.focusFilter)
 
 /// User-facing knobs exposed when configuring a Focus mode to include Meeshy.
 ///
@@ -126,6 +126,11 @@ public struct MeeshyFocusSnapshot: Codable, Sendable, Equatable {
 /// widget / notification extension can read without depending on the app.
 @MainActor
 public final class MeeshyFocusStore {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public static let shared = MeeshyFocusStore()
 
     private let suiteName = "group.me.meeshy.apps"
@@ -160,5 +165,5 @@ public final class MeeshyFocusStore {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let focusFilter = Logger(subsystem: "me.meeshy.app", category: "focus-filter")
+    nonisolated static let focusFilter = MeeshyLog.logger(.focusFilter)
 }

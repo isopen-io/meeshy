@@ -10,6 +10,7 @@ import { findEligibleConversations, type EligibleConversation } from './eligible
 import { detectActivity } from './activity-detector';
 import { toneProfileToGlobalFields } from '../memory/profile-merger';
 import { ScanTracer } from '../tracing/scan-tracer';
+import { resolveDailyBudgetUsd } from '../llm/budgeted-llm';
 import type { TracerRef } from '../graph/graph';
 
 type CompiledGraph = {
@@ -115,6 +116,13 @@ export class ConversationScanner {
     if (evicted > 0) {
       console.log(`[Scanner] Manual rescan evicted ${evicted} recently active user(s)`);
     }
+    // La SECONDE cause de libération : le rôle qui n'a pas servi depuis le
+    // délai de sa conversation. Sans elle, une place prise par quelqu'un qui
+    // ne revient jamais reste prise pour toujours (#5663).
+    const stale = await this.persistence.evictStaleRoles();
+    if (stale > 0) {
+      console.log(`[Scanner] Manual rescan released ${stale} idle role(s) back to the pool`);
+    }
 
     const conversation = await this.persistence.getConversationWithType(conversationId);
     const conv: EligibleConversation = {
@@ -203,6 +211,10 @@ export class ConversationScanner {
       if (evicted > 0) {
         console.log(`[Scanner] Evicted ${evicted} recently active users from agent control`);
       }
+      const stale = await this.persistence.evictStaleRoles();
+      if (stale > 0) {
+        console.log(`[Scanner] Released ${stale} idle role(s) back to the pool`);
+      }
 
       const globalConfig = await this.configCache.getGlobalConfig();
       const scanOptions = {
@@ -256,6 +268,10 @@ export class ConversationScanner {
       if (evicted > 0) {
         console.log(`[Scanner] Evicted ${evicted} recently active users`);
       }
+      const stale = await this.persistence.evictStaleRoles();
+      if (stale > 0) {
+        console.log(`[Scanner] Released ${stale} idle role(s) back to the pool`);
+      }
 
       const globalConfig = await this.configCache.getGlobalConfig();
       const scanOptions = {
@@ -304,6 +320,15 @@ export class ConversationScanner {
 
   private async processConversation(conv: EligibleConversation, trigger: 'auto' | 'manual' = 'auto'): Promise<boolean> {
     const { conversationId } = conv;
+
+    // #10287 — budget LLM du jour atteint : l'agent s'ARRÊTE (aucun graphe, aucun statut).
+    // L'enveloppe BudgetedLlmProvider refuse de toute façon l'appel ; ce contrôle évite
+    // de lancer un cycle qui ne peut qu'échouer.
+    const llmBudget = await this.budgetManager.canSpendLlm(resolveDailyBudgetUsd(await this.configCache.getGlobalConfig()));
+    if (!llmBudget.allowed) {
+      console.warn(`[Scanner] conv=${conversationId} skipped: daily LLM budget reached ($${llmBudget.spentUsd.toFixed(4)} / $${llmBudget.budgetUsd.toFixed(2)})`);
+      return false;
+    }
 
     // Lock PAR-CONVERSATION : scanConversation (manuel, déclenché par le bouton
     // admin) ne prend aucun lock global, donc sans ce verrou il pourrait traiter
@@ -790,12 +815,21 @@ export class ConversationScanner {
 
     const msgActions = pendingActions.filter((a) => a.type === 'message');
     const rxnActions = pendingActions.filter((a) => a.type !== 'message');
+    const userIdsUsed = [...new Set(msgActions.map((a) => (a as any).asUserId).filter(Boolean))] as string[];
+
+    // Horodater les rôles qui viennent de servir : c'est la SEULE chose qui
+    // les protège de `evictStaleRoles`. L'éviction et son horodatage se posent
+    // ensemble — sans cet appel, même les rôles les plus actifs vieilliraient
+    // sur leur `createdAt` et seraient libérés au bout du délai.
+    await this.persistence.touchUserRoles(conversationId, userIdsUsed).catch((err) =>
+      console.error(`[Scanner] Error touching roles for conv=${conversationId}:`, err));
+
     tracer.setOutcome({
       outcome: msgActions.length > 0 ? 'messages_sent' : rxnActions.length > 0 ? 'reactions_only' : 'skipped',
       messagesSent: msgActions.length,
       reactionsSent: rxnActions.length,
       messagesRejected: 0,
-      userIdsUsed: [...new Set(msgActions.map((a) => (a as any).asUserId).filter(Boolean))],
+      userIdsUsed,
     });
     await this.persistence.createScanLog(tracer.finalize()).catch(err =>
       console.error(`[Scanner] Error persisting scan log:`, err));

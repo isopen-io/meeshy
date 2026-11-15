@@ -10,7 +10,7 @@ import MeeshySDK
 /// Pur et `nonisolated` : le package pose `.defaultIsolation(MainActor.self)`
 /// (SE-0466), et une annotation posée méthode par méthode ne suffit pas — elle
 /// doit l'être sur le type pour que les extensions et les conformances suivent.
-nonisolated enum StoryTextAttributeCycle {
+public nonisolated enum StoryTextAttributeCycle {
 
     /// Ce qu'affiche une bulle pour son attribut. Chaque bulle rend l'état
     /// COURANT et non un pictogramme figé : c'est ce qui rend le tap-pour-
@@ -25,6 +25,10 @@ nonisolated enum StoryTextAttributeCycle {
         case symbol(name: String, emphasis: Int, tint: String? = nil)
         /// Lettre témoin rendue dans la POLICE courante (bouton Police).
         case styledGlyph(String, style: StoryTextStyle)
+        /// Lettre témoin rendue AVEC l'effet courant (bouton Effet, #4870) —
+        /// la bulle montre la lueur ou l'ombre qu'elle pose, pas un
+        /// pictogramme.
+        case effectGlyph(String, effect: StoryTextEffect)
         /// Pastille pleine de la couleur courante (bouton Couleur).
         case colorDot(hex: String)
         /// Fond courant : `hex == nil && !isGlass` ⇒ aucun fond.
@@ -54,15 +58,36 @@ nonisolated enum StoryTextAttributeCycle {
     // MARK: - Avance
 
     static func advance(_ tool: TextEditTool, on text: inout StoryTextObject) {
+        advance(tool, on: &text, backgrounds: StoryTextBackgroundPresets.all)
+    }
+
+    public static func advance(_ tool: TextEditTool, on text: inout StoryTextObject,
+                               backgrounds: [StoryTextBackgroundStyle]) {
         switch tool {
         case .align:      advanceAlign(on: &text)
         case .border:     advanceBorder(on: &text)
         case .frame:      advanceFrame(on: &text)
         case .style:      advanceStyle(on: &text)
         case .color:      advanceColor(on: &text)
-        case .background: advanceBackground(on: &text)
+        case .background: advanceBackground(on: &text, steps: backgrounds)
         case .language:   advanceLanguage(on: &text)
+        case .effect:     advanceEffect(on: &text)
         }
+    }
+
+    /// « Aucun » fait partie de la rotation, comme pour le cadre : un effet
+    /// doit pouvoir se RETIRER d'un tap, pas seulement se changer. Et « aucun »
+    /// s'écrit `nil`, jamais `"none"` : un texte sans effet garde le JSON
+    /// qu'il avait.
+    ///
+    /// La rotation parcourt les quatre effets OFFERTS (#17112) : un effet
+    /// historique que le texte porte encore n'en fait pas partie, son index
+    /// manque, et le tap suivant mène au premier effet offert.
+    private static func advanceEffect(on text: inout StoryTextObject) {
+        let steps = StoryTextEffect.pickerChoices
+        let index = steps.firstIndex(of: text.parsedTextEffect) ?? 0
+        let next = steps[(index + 1) % steps.count]
+        text.textEffect = next == StoryTextEffect.none ? nil : next.rawValue
     }
 
     private static func advanceStyle(on text: inout StoryTextObject) {
@@ -81,8 +106,8 @@ nonisolated enum StoryTextAttributeCycle {
     /// Purge `textBg` en même temps : le renderer préfère `backgroundStyle`
     /// mais retombe encore sur ce champ legacy, qui laisserait sinon un fond
     /// fantôme derrière un `.none` fraîchement choisi.
-    private static func advanceBackground(on text: inout StoryTextObject) {
-        let steps = StoryTextBackgroundPresets.all
+    private static func advanceBackground(on text: inout StoryTextObject, steps: [StoryTextBackgroundStyle]) {
+        guard !steps.isEmpty else { return }
         let index = steps.firstIndex(of: text.resolvedBackgroundStyle) ?? 0
         text.backgroundStyle = steps[(index + 1) % steps.count]
         text.textBg = nil
@@ -133,6 +158,8 @@ nonisolated enum StoryTextAttributeCycle {
         switch tool {
         case .style:
             return .styledGlyph("Aa", style: text.parsedTextStyle)
+        case .effect:
+            return .effectGlyph("Aa", effect: text.parsedTextEffect)
         case .color:
             return .colorDot(hex: text.textColor ?? "FFFFFF")
         case .background:
@@ -196,7 +223,11 @@ nonisolated enum StoryTextAttributeCycle {
 /// extrémités étaient coupées, sans scroll ni indice.
 nonisolated enum TextEditToolbarMetrics {
     static let bubbleSize: CGFloat = 36
-    static let spacing: CGFloat = 8
+    /// 7 pt depuis #4870 : la huitième bulle (EFFET) demandait 344 pt là où
+    /// l'iPhone SE en offre 343 — UN point de trop, que le `ScrollView` aurait
+    /// coupé sans qu'on le voie. À 7 pt, huit bulles tiennent en 337 ; une
+    /// neuvième ne tiendrait plus, et `TextEditToolbarLayoutTests` le garde.
+    static let spacing: CGFloat = 7
     static let horizontalMargin: CGFloat = 16
     /// Largeur du bouton « Terminé » de la rangée haute (capsule libellée).
     static let finishControlWidth: CGFloat = 100

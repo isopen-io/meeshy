@@ -44,7 +44,36 @@
  * fully-typed Prisma result — no `as any` cast.
  */
 
+import { MESSAGE_SIDE_PROTECTION_SELECT } from './mediaSideContent';
 import { Prisma } from '@meeshy/shared/prisma/client';
+import {
+  ATTACHMENT_PROTECTION_FIELDS,
+  type AttachmentProtectionField,
+} from '@meeshy/shared/utils/attachment-protection';
+
+/**
+ * Les trois colonnes de protection PROPRES à `MessageAttachment`
+ * (`isViewOnce` / `isBlurred` / `effectFlags`), INDÉPENDANTES de leurs
+ * homonymes sur le `Message` porteur — DÉRIVÉES de l'inventaire partagé
+ * (`ATTACHMENT_PROTECTION_FIELDS`), jamais réécrites (#7014).
+ *
+ * Elle vivait dans `routes/admin/media-protection.ts`, qui la ré-exporte
+ * désormais depuis ici : un fragment de `select` Prisma a son domicile dans ce
+ * fichier — « Every gateway endpoint that returns or broadcasts a Message with
+ * its attachments MUST select from one of these named shapes » — et son ancien
+ * domicile, un module de ROUTE, rendait sa réutilisation par le canal SOCKET
+ * impossible sans traîner `NotificationService` dans la couche temps réel.
+ *
+ * `Prisma.validator` n'est pas décoratif ici : il refuse à la compilation un
+ * nom d'inventaire qui ne serait pas une colonne de `MessageAttachment`.
+ */
+const protectionFieldsSelect = Object.fromEntries(
+  ATTACHMENT_PROTECTION_FIELDS.map((champ) => [champ, true])
+) as { readonly [K in AttachmentProtectionField]: true };
+
+export const attachmentProtectionSelect = Prisma.validator<Prisma.MessageAttachmentSelect>()(
+  protectionFieldsSelect
+);
 
 /**
  * Render-ready attachment shape.
@@ -77,6 +106,9 @@ export const attachmentMediaSelect = Prisma.validator<Prisma.MessageAttachmentSe
   thumbnailUrl: true,
   thumbHash: true,
   imageVariants: true,
+  avifVariants: true,
+  renditions: true,
+  processingState: true,
   width: true,
   height: true,
   duration: true,
@@ -84,6 +116,7 @@ export const attachmentMediaSelect = Prisma.validator<Prisma.MessageAttachmentSe
   sampleRate: true,
   codec: true,
   channels: true,
+  loudnessLufs: true,
   fps: true,
   videoCodec: true,
   pageCount: true,
@@ -98,8 +131,88 @@ export const attachmentMediaSelect = Prisma.validator<Prisma.MessageAttachmentSe
   // sur l'attachement livré par la LISTE de messages pour décider si publier
   // demande confirmation. Absent d'ici, la garde ne se déclenche jamais.
   capturedInApp: true,
+  // #11327 — la lens qui a produit le média : le média reçu affiche « Lens par X »
+  // (`GET /lens/credits`). En clair, E2EE compris (décision #11251).
+  lensSlug: true,
   // BUG2 A' — réactions par-image (agrégées au mapping en reactionSummary + currentUserReactions)
   reactions: { select: { emoji: true, participantId: true } },
+});
+
+/**
+ * LA FORME DU CANAL SOCKET (#7014, étendue #7070) — `attachmentMediaSelect`
+ * PLUS la protection propre à la pièce jointe PLUS les familles que les
+ * clients réels (iOS, web-v2, web legacy) lisent sur `message:new` /
+ * `message:edited` et que #7070 a trouvées ABSENTES : forwarding, effets de
+ * vue-unique, compteurs de consommation, fait ET mode du chiffrement.
+ *
+ * Toute requête dont le résultat part chez `serializeAttachmentForSocket`
+ * sélectionne CELLE-CI, jamais `attachmentMediaSelect` nu. La raison est
+ * mesurée : `attachmentMediaSelect` est délibérément SANS drapeau de
+ * protection (son doc-comment : « No consumption-tracking, no security
+ * flags »), si bien que `message:edited` et `message:attachment-updated`
+ * remettaient au fil une pièce MUETTE sur sa propre protection — et
+ * `maskedAttachment`, qui échoue OUVERTE quand on ne la nourrit pas, laissait
+ * son `<img>` atteindre le DOM en clair.
+ *
+ * Elle porte le `select` et la projection ENSEMBLE, comme
+ * `utils/recipient-language.ts` porte le sien avec sa descente : c'est la
+ * projection trop étroite, jamais l'appel manquant, qui rend une garde
+ * impossible en aval sans qu'aucun témoin ne rougisse (leçon 276). La liste de
+ * protection n'est pas retapée — elle est SPREAD depuis
+ * `attachmentProtectionSelect`, donc un quatrième canal la rejoint sans
+ * qu'aucun site socket n'ait à s'en souvenir.
+ *
+ * ## Ce que #7070 AJOUTE, et ce qu'il refuse délibérément
+ *
+ * `MessageProcessor.saveMessage` relisait ses pièces par un `findMany` SANS
+ * `select` : la ligne Prisma BRUTE (65 colonnes) atteignait `message:new` /
+ * `message:edited` sur le chemin REST/ZMQ — le transport DOMINANT (toute pièce
+ * jointe, tout DM chiffré, toute vue-unique partent par lui côté iOS). Cinq
+ * familles manquaient ici pour que le chemin socket (déjà curaté) et le chemin
+ * REST (désormais curaté par la MÊME forme) ne divergent plus :
+ *
+ *   - forwarding            : forwardedFromAttachmentId, isForwarded
+ *   - effets vue-unique     : maxViewOnceCount, viewOnceCount (isViewOnce /
+ *                             isBlurred / effectFlags viennent déjà de
+ *                             attachmentProtectionSelect)
+ *   - consommation          : deliveredToAllAt, viewedByAllAt,
+ *                             downloadedByAllAt, listenedByAllAt,
+ *                             watchedByAllAt, viewedCount, downloadedCount,
+ *                             consumedCount
+ *   - fait du chiffrement   : isEncrypted, encryptionMode
+ *
+ * `filePath` (chemin serveur), `encryptionIv` et `encryptionAuthTag` restent
+ * HORS de cette forme, à dessein : ce sont des secrets de SERVEUR (le gateway
+ * déchiffre lui-même la pièce, `AttachmentService.decryptAttachment`), et
+ * aucun des quatre décodeurs clients ne les lit pour déchiffrer quoi que ce
+ * soit côté device (mesuré, #7070 § 1.2/1.4). Les pousser à toute une room est
+ * exactement la sur-divulgation que #7070 ferme, jamais une famille à
+ * rattraper.
+ */
+export const attachmentSocketSelect = Prisma.validator<Prisma.MessageAttachmentSelect>()({
+  ...attachmentMediaSelect,
+  ...attachmentProtectionSelect,
+  // #12333 — la description, servie masquée sous protection de la pièce OU de
+  // son message (`servedDescription`, `mediaSideContent.ts`) : la protection du
+  // porteur voyage donc avec la pièce. Le message n'est jamais servi tel quel.
+  alt: true,
+  altLanguage: true,
+  altTranslations: true,
+  message: { select: MESSAGE_SIDE_PROTECTION_SELECT },
+  forwardedFromAttachmentId: true,
+  isForwarded: true,
+  maxViewOnceCount: true,
+  viewOnceCount: true,
+  deliveredToAllAt: true,
+  viewedByAllAt: true,
+  downloadedByAllAt: true,
+  listenedByAllAt: true,
+  watchedByAllAt: true,
+  viewedCount: true,
+  downloadedCount: true,
+  consumedCount: true,
+  isEncrypted: true,
+  encryptionMode: true,
 });
 
 /**
@@ -160,6 +273,108 @@ export const attachmentForwardPreviewSelect = Prisma.validator<Prisma.MessageAtt
   fileUrl: true,
 });
 
+/**
+ * The exact field set `AttachmentService.toAttachment()` reads to build its
+ * public `Attachment` shape (`getAttachment`, `getAttachmentsByIds`).
+ *
+ * #4166 — `getAttachment` used to `findUnique`/`findMany` with NO `select`
+ * at all: the ENTIRE `MessageAttachment` row (transcription, translations,
+ * encryptionIv, every consumption counter…) was loaded and immediately
+ * discarded by `toAttachment`, which only ever reads the 26 fields below.
+ * This shape mirrors `toAttachment`'s parameter type exactly — it is not a
+ * narrower contract than what the method already served, it is the same
+ * contract made explicit at the query.
+ */
+export const attachmentServiceRowSelect = Prisma.validator<Prisma.MessageAttachmentSelect>()({
+  id: true,
+  messageId: true,
+  fileName: true,
+  originalName: true,
+  mimeType: true,
+  fileSize: true,
+  fileUrl: true,
+  thumbnailUrl: true,
+  width: true,
+  height: true,
+  duration: true,
+  bitrate: true,
+  sampleRate: true,
+  codec: true,
+  channels: true,
+  uploadedBy: true,
+  isAnonymous: true,
+  createdAt: true,
+  isForwarded: true,
+  capturedInApp: true,
+  lensSlug: true,
+  isViewOnce: true,
+  viewOnceCount: true,
+  isBlurred: true,
+  viewedCount: true,
+  downloadedCount: true,
+  consumedCount: true,
+  isEncrypted: true,
+});
+
+/**
+ * Root-row shape needed by `AttachmentTranslateService.translate()` — the
+ * dispatcher that decides how to translate an attachment and, for audio,
+ * drives cache lookup, forwarding-chain resolution, and job-mapping
+ * bookkeeping (`verifyUserAccess`, `translateAudio`).
+ *
+ * #4166, critère 4 — `POST /attachments/:attachmentId/translate` reads this
+ * row for its own consent gate (`mimeType`), then handed off to
+ * `translate()`, which read the SAME row again via a bare `include` (every
+ * scalar column: transcription, translations, encryptionIv…) for a handful
+ * of fields — two round-trips for one row. This shape lets the route read
+ * ONCE and pass the row through (`translate`'s `preloadedAttachment` param).
+ *
+ * `message` is reduced to `{ id, conversationId }` — the only two fields
+ * `translate()` reads off it (`verifyUserAccess`, job-mapping bookkeeping).
+ * `senderId`, present on the old bare `include`, was never read from THIS
+ * particular join (the forwarding-chain walk in `_findOriginalAttachmentAndSender`
+ * resolves its own sender from a DIFFERENT attachment id, via its own query).
+ */
+export const attachmentTranslateSelect = Prisma.validator<Prisma.MessageAttachmentSelect>()({
+  id: true,
+  messageId: true,
+  mimeType: true,
+  uploadedBy: true,
+  isViewOnce: true,
+  isForwarded: true,
+  forwardedFromAttachmentId: true,
+  duration: true,
+  filePath: true,
+  message: {
+    select: {
+      id: true,
+      conversationId: true,
+    },
+  },
+});
+
+export { MESSAGE_ATTACHMENT_ORDER } from './attachmentOrder';
+
+/**
+ * #9915 — le nombre de TUILES (photos et vidéos) du message CITÉ, compté en
+ * base à côté des quatre pièces que la citation sert (`take: 4`). À étaler
+ * dans le `select`/`include` du `replyTo` (ou son `_count.select` quand il en
+ * a déjà un) : `servedQuotedMessage` le sert en `visualAttachmentCount`, que
+ * les clients lisent pour le « +N » de la citation du message entier.
+ */
+export const QUOTED_VISUAL_ATTACHMENT_COUNT = {
+  _count: {
+    select: {
+      attachments: {
+        where: { OR: [{ mimeType: { startsWith: 'image/' } }, { mimeType: { startsWith: 'video/' } }] },
+      },
+    },
+  },
+} satisfies { _count: { select: Prisma.MessageCountOutputTypeSelect } };
+
+/** Le même compte, pour un `replyTo` qui a déjà son propre `_count.select`. */
+export const QUOTED_VISUAL_ATTACHMENT_COUNT_SELECT = QUOTED_VISUAL_ATTACHMENT_COUNT._count.select;
+
 // ============================================================================
 // Derived payload types — consumers get fully-typed Prisma results, no casts.
 // ============================================================================
@@ -177,4 +392,14 @@ export type AttachmentFullPayload = Prisma.MessageAttachmentGetPayload<{
 /** Forward chip preview payload — just enough to render the chip. */
 export type AttachmentForwardPreviewPayload = Prisma.MessageAttachmentGetPayload<{
   select: typeof attachmentForwardPreviewSelect;
+}>;
+
+/** `AttachmentService.toAttachment()`'s input row — see `attachmentServiceRowSelect`. */
+export type AttachmentServiceRowPayload = Prisma.MessageAttachmentGetPayload<{
+  select: typeof attachmentServiceRowSelect;
+}>;
+
+/** `AttachmentTranslateService.translate()`'s input row — see `attachmentTranslateSelect`. */
+export type AttachmentTranslateRowPayload = Prisma.MessageAttachmentGetPayload<{
+  select: typeof attachmentTranslateSelect;
 }>;

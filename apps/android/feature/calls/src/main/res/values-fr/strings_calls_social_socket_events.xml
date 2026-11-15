@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_feedback_star">%1$d étoiles sur 5</string>
+    <string name="call_feedback_issue_audio_quality">Qualité audio</string>
+    <string name="call_feedback_issue_video_quality">Qualité vidéo</string>
+    <string name="call_feedback_issue_dropped">Appel coupé</string>
+    <string name="call_feedback_issue_sync">Décalage son/image</string>
+</resources>

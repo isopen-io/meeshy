@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_removal_refused_delete">Não foi possível apagar a conversa. Ela voltou para a sua lista.</string>
+</resources>

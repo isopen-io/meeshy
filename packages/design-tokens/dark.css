@@ -1,0 +1,119 @@
+/* Schéma SOMBRE — le rendu de référence de la v3 (la planche est « nocturne »).
+   Porté par :root SANS classe : un navigateur qui n'exécute aucun JavaScript
+   n'a pas de classe posée et doit tout de même être servi. La coquille
+   (`apps/web/index.html`) porte `<html class="dark">` et le script de schéma
+   (`apps/web/src/lib/inline-scheme-bootstrap.js`) ne fait que CORRIGER cette
+   classe ; aucune requête de média n'apparaît ici — un jeton ne bascule jamais
+   tout seul.
+
+   `color-scheme` est déclaré ICI, avec les jetons qu'il accompagne, et pas
+   dans le script : sans JavaScript, une page peinte en jetons sombres sous un
+   agent utilisateur en `color-scheme: normal` rend des ascenseurs, des
+   contrôles de formulaire et un canevas de surdéfilement BLANCS. Le rôle
+   PREMIER — un lecteur sans compte et sans JS lourd — est exactement ce cas.
+   La conception § 2 dit « color-scheme suit la classe » : il la suit ici, en
+   CSS, et nulle part ailleurs. */
+:root,
+:root.dark {
+  color-scheme: dark;
+
+  /* LES RÔLES DU SDK GAGNENT (#8879, D-157). Plans et encres pointent vers
+     `ios.css`, dérivé de MeeshyColors.swift : backgroundPrimary, Secondary,
+     Tertiary (indigo950) et textPrimary. Le plan ENFONCÉ n'a pas de rôle
+     SDK plus profond que le fond : il prend le fond des visionneuses
+     (`mediaBackdrop`), le seul noir que le SDK nomme. */
+  --color-bg: var(--ios-surface);
+  --color-bg-sunken: var(--ios-media-backdrop);
+  --color-surface: var(--ios-surface-card);
+  --color-surface-raised: var(--ios-indigo-950);
+  --color-text: var(--ios-ink);
+
+  --color-neutral-400: #b9bcd0;
+  --color-neutral-500: #9397ab;
+  --color-neutral-600: #75798c;
+  --color-neutral-700: #4b4f63;
+  --color-neutral-800: #33364a;
+  --color-neutral-900: #22243a;
+
+  --color-text-muted: var(--ios-ink-2);
+  /* `textMuted` du SDK (indigo300 à 70 %), composé sur chaque plan : 4,65:1
+     au pire (sur indigo950), mesuré par check-jetons (#8879). */
+  --color-text-subtle: var(--ios-ink-3);
+  --color-border: var(--ios-edge);
+  --color-border-strong: var(--ios-neutral-600);
+  /* Le contour VISIBLE d'un champ ou d'une case porte à lui seul l'information
+     « il y a un contrôle ici » : WCAG 1.4.11 lui demande 3:1 contre la surface.
+     Ni `--color-border` (1,28:1 sur raised) ni `--color-border-strong`
+     (1,88:1) ne l'atteignent — ce sont des séparateurs, pas des contours. */
+  --color-border-interactive: var(--ios-neutral-500);
+
+  --color-accent-200: var(--ios-indigo-200);
+  --color-accent-300: var(--ios-indigo-300);
+  --color-accent-400: var(--ios-indigo-400);
+  --color-primary: var(--color-accent-400);
+  /* STRONG S'ÉLOIGNE DU PLAN, SOFT S'EN RAPPROCHE — et en sombre le plan est
+     sombre, donc `strong` est le cran le plus CLAIR. Les trois rôles étaient
+     ici l'exact contraire de leurs jumeaux de `light.css`, où `strong` prend
+     `--color-accent-300` (le cran le plus éloigné du blanc) et `soft` le cran
+     qui s'en rapproche. Ce qui l'a rendu visible est une MESURE : la charte
+     (règle 4) peint le survol de l'action principale avec `strong`, sous encre
+     `--color-on-primary` — #6366f1 y rendait 4,37:1, sous les 4,5:1 dus à du
+     texte de 17 px, sur la plus grosse cible de l'écran. Le cran juste : 9,38:1.
+     Mesuré par la paire `--color-on-primary` / `--color-primary-strong` du
+     contrôle de l'ancienne refonte v3, parti avec elle (#5994, #6000). */
+  --color-primary-strong: var(--color-accent-300);
+  --color-primary-soft: var(--ios-indigo-500);
+  --color-primary-softer: var(--ios-indigo-600);
+  --color-on-primary: #0b0c14;
+
+  /* L'ANNEAU DE FOCUS ET SON CONTRE-ANNEAU (règle 15).
+     POURQUOI DEUX JETONS, ET POURQUOI CES DEUX-LÀ. Un anneau d'UNE couleur
+     disparaît dès qu'il touche une surface de sa luminance — et il en touche
+     une, la plus importante : `--color-text` sur `--color-primary` rend 2,58:1
+     en sombre et 2,94:1 en clair, sous les 3:1 de WCAG 1.4.11, c'est-à-dire
+     qu'un anneau SEUL serait invisible sur le BOUTON PRINCIPAL, la cible que la
+     charte rend la plus grosse (peint à l'accent, il tomberait à 1,43:1). Le
+     COUPLE, lui, tient partout : sur le bouton c'est le contre-anneau qui porte
+     (6,66 en sombre, 6,29 en clair), sur les plans de page c'est l'anneau
+     (16,63 / 16,65). Ce qui se mesure n'est donc pas « chacun tient 3:1 » —
+     aucun couple ne le tiendrait — mais « pour chaque fond, AU MOINS UN des
+     deux » : c'était la DISJONCTION du contrôle de l'ancienne refonte v3
+     (`focusInvisiblesDans`, parti avec elle — #5994, #6000), en plus des 3:1
+     que les deux anneaux se doivent l'un à l'autre. */
+  --color-focus: var(--color-text);
+  --color-focus-contra: var(--color-bg-sunken);
+
+  --color-success: var(--ios-success);
+  --color-success-soft: var(--ios-success);
+  --color-warning: var(--ios-warning);
+  /* `MeeshyColors.error` (#f87171), le rouge d'iOS : il tient 5,8:1 sur le
+     plan le plus clair (indigo950), où l'ancien #f45b5b avait été éclairci
+     pour la même loi (#8879). */
+  --color-danger: var(--ios-error);
+  --color-danger-soft: var(--ios-error);
+  --color-on-status: var(--color-bg);
+
+  --color-presence-online: #34d399;
+  --color-presence-away: #fbbf24;
+  --color-presence-idle: #9ca3af;
+  --color-presence-offline: #9ca3af;
+
+
+  /* LES QUATRE VOILES (charte § 12.5 règles 11 et 17) — un fond d'état, jamais
+     une couleur d'état à pleine force sous du texte. Ils vivent dans les DEUX
+     schémas et non dans tokens.css parce qu'ils se calculent SUR
+     `--color-surface`, dont la luminance change avec le schéma : un voile posé
+     hors schéma serait clair sur fond sombre. La teinte primaire pèse 12 % (elle
+     habille le héros de la vitrine et les tuiles de la charte), les trois états
+     10 % (ils portent un bandeau, pas une surface). */
+  --color-tint-primary: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  --color-tint-success: color-mix(in srgb, var(--color-success) 10%, var(--color-surface));
+  --color-tint-warning: color-mix(in srgb, var(--color-warning) 10%, var(--color-surface));
+  --color-tint-danger: color-mix(in srgb, var(--color-danger) 10%, var(--color-surface));
+
+  --color-overlay: var(--ios-scrim-strong);
+
+  --shadow-sm: 0 6px 20px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 20px 60px rgb(0 0 0 / 0.6);
+  --shadow-primary: 0 10px 26px rgb(129 140 248 / 0.35);
+}

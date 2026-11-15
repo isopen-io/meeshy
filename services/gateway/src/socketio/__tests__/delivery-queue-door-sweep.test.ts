@@ -36,13 +36,38 @@
 import { describe, it, expect } from '@jest/globals';
 import { join } from 'path';
 
-import { sweepDirectEnqueueCalls } from './delivery-queue-door-sweep';
+import {
+  sweepDirectEnqueueCalls,
+  sweepDeliveryQueueConstructions,
+  SHARED_UNITS,
+  QUEUE_CONSTRUCTION_SITES,
+} from './delivery-queue-door-sweep';
 
 const SRC_DIR = join(__dirname, '..', '..');
 
 describe("file de remise hors ligne — un seul enfilage, celui de l'unité partagée", () => {
   it('aucun transport de production n’appelle `enqueue` en direct', () => {
     expect(sweepDirectEnqueueCalls(SRC_DIR)).toEqual([]);
+  });
+
+  /**
+   * L'ensemble des portes PARTAGÉES est figé, et c'est la moitié qui donne son
+   * sens à l'inventaire vide ci-dessus : sans lui, exclure un fichier du
+   * balayage suffirait à le rendre vert.
+   *
+   * Quand CE témoin tombe, la question n'est pas « faut-il geler ? » mais
+   * **quelle AUDIENCE cette porte sert-elle, qu'aucune des autres ne sait
+   * servir ?** La première décide des participants d'une CONVERSATION absents ;
+   * la seconde (#16688) des autres APPAREILS d'un compte, que la première ne
+   * pouvait pas servir — son prédicat de joignabilité répond toujours OUI quand
+   * c'est l'appareil acteur qui le renseigne. Ce qui n'est pas une audience
+   * neuve est un transport, et un transport délègue.
+   */
+  it('les portes partagées sont exactement les DEUX unités déclarées', () => {
+    expect([...SHARED_UNITS].sort()).toEqual([
+      'socketio/enqueuePersonalMessageMark.ts',
+      'socketio/offlineParticipantQueue.ts',
+    ]);
   });
 
   /**
@@ -61,5 +86,80 @@ describe("file de remise hors ligne — un seul enfilage, celui de l'unité part
   /** Et il ne prend pas la DÉLÉGATION pour un appel direct. */
   it('le balayage ne signale pas un transport qui délègue', () => {
     expect(sweepDirectEnqueueCalls(join(__dirname, 'fixtures', 'delegated-enqueue-door'))).toEqual([]);
+  });
+});
+
+/**
+ * Le SECOND cliquet du même sujet — l'UNICITÉ d'INSTANCE (#18616).
+ *
+ * `server.ts` DÉCLARE sur place que l'instance qu'il construit est « la seule
+ * dont la tranche MÉMOIRE porte des entrées de message », et
+ * `delivery-queue-registry.ts` le redit (« la seule où les entrées de message
+ * sont effectivement enfilées »). L'affirmation était FAUSSE :
+ * `MeeshySocketIOHandler.startMediaPipelines` en construisait une seconde pour
+ * les quatre déclencheurs de `message:attachment-updated`, vivante en
+ * production dès que le client ZMQ du translator l'est.
+ *
+ * Les deux doc-comments étaient à l'endroit exact où l'on irait vérifier — « un
+ * commentaire qui ÉNONCE une contrainte est une AFFIRMATION, et se vérifie
+ * comme telle » (cycle 94). Ce cliquet est cette vérification.
+ */
+describe("file de remise hors ligne — une seule INSTANCE, celle du processus", () => {
+  it('aucune unité de production ne construit une seconde file', () => {
+    expect(sweepDeliveryQueueConstructions(SRC_DIR)).toEqual([]);
+  });
+
+  /**
+   * L'inventaire des sites de construction est figé, et c'est la moitié qui
+   * donne son sens au vide ci-dessus : sans lui, exclure un fichier suffirait
+   * à rendre le balayage vert.
+   *
+   * Quand CE témoin tombe, la question n'est pas « faut-il geler ? » mais
+   * **ce site ENREGISTRE-t-il ce qu'il construit ?** Un site qui construit
+   * sans enregistrer fabrique une tranche mémoire que ni le drain, ni la
+   * purge, ni le balayage de TTL n'atteignent.
+   */
+  it('le site de construction est exactement `server.ts`', () => {
+    expect([...QUEUE_CONSTRUCTION_SITES]).toEqual(['server.ts']);
+  });
+
+  /**
+   * Un balayage qui ne trouve jamais rien rend un inventaire vide pour la
+   * mauvaise raison — et il faut lui montrer TOUTE la famille, pas la forme
+   * qu'on avait en tête.
+   *
+   * La première rédaction ne cherchait que `new RedisDeliveryQueue(`. L'audit
+   * adversarial a fait tourner la VRAIE fonction sur six contre-exemples et
+   * elle n'en a vu **aucun** : le vert du cliquet était alors plus faible que
+   * ce que son doc-comment affirmait. Chaque forme a désormais sa fixture, et
+   * la plus réaliste des six — la SOUS-CLASSE, qui porte sa propre tranche
+   * mémoire — vit dans un `.mts`, que le balayage ne lisait pas non plus.
+   */
+  it('le balayage VOIT les quatre formes qu’il prétend interdire', () => {
+    const found = sweepDeliveryQueueConstructions(join(__dirname, 'fixtures', 'second-delivery-queue'));
+
+    expect([...found.map((c) => c.file)].sort()).toEqual([
+      'aliased.ts',
+      'holder.ts',
+      'rebound.ts',
+      'rebound.ts',
+      'subclass.mts',
+      'subclass.mts',
+    ]);
+  });
+
+  /**
+   * Les scripts de la passerelle vivent HORS de `src/`, et plusieurs PURGENT
+   * des données. Un balayage borné au répertoire qui a l'air concerné déclare
+   * l'inventaire vide en en laissant une vivante — c'est la leçon de la
+   * huitième porte d'émission (cycle 105), et elle vaut ici d'un répertoire.
+   */
+  it('les scripts de la passerelle ne construisent pas de file non plus', () => {
+    expect(sweepDeliveryQueueConstructions(join(SRC_DIR, '..', 'scripts'))).toEqual([]);
+  });
+
+  /** Et il ne prend pas une RÉSOLUTION par le registre pour une construction. */
+  it('le balayage ne signale pas une file résolue par le registre', () => {
+    expect(sweepDeliveryQueueConstructions(join(__dirname, 'fixtures', 'registry-resolved-queue'))).toEqual([]);
   });
 });

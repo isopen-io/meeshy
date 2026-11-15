@@ -24,7 +24,7 @@ public extension View {
     /// rest position reads `0` whatever the container adds above the content —
     /// a `.safeAreaInset(edge: .top)` (Lentille sticky sticker band) shifted the
     /// raw offset by its height and left the pull indicator stuck at 27 % and
-    /// the collapsing header 44 pt late (2026-08-21). Containers using the
+    /// the collapsing header 44 pt late. Containers using the
     /// ZStack-overlay + `Color.clear` spacer pattern have no inset: unchanged.
     ///
     /// **N'Y METTEZ JAMAIS DE DEBOUNCE** (réserve R-g,

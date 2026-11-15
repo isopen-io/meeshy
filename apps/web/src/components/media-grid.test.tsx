@@ -1,0 +1,549 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { renderToStaticMarkup } from 'react-dom/server';
+
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { messagesOf } from '@/lib/api/fixtures';
+import { MEDIA_CONVERSATION_ID } from '@/lib/api/fixtures-media';
+import {
+  MEDIA_GRID_MINE_WITNESS_ID,
+  MEDIA_GRID_OVERFLOW_WITNESS_ID,
+  MEDIA_GRID_PAIR_WITNESS_ID,
+  MEDIA_GRID_QUAD_WITNESS_ID,
+  MEDIA_GRID_TRIPLE_WITNESS_ID,
+  MEDIA_SOLO_VIDEO_WITNESS_ID,
+} from '@/lib/api/fixtures-media-grid';
+import type { Attachment } from '@/lib/api/types';
+import { sizesFor } from '@/lib/api/media-url';
+import { mediaGridCellSizes, mediaGridSlots, soloVideoSlot } from '@/lib/view/media-grid-layout';
+
+import { HighlightedPieceContext } from '@/lib/view/highlighted-piece';
+
+import { mediaDownloadStore } from '@/lib/media/media-download-preferences';
+
+import { MediaGrid } from './media-grid';
+
+/**
+ * P0 — LA GRILLE 2/3/4+ (#6169, #6221) : le POC livrait l'implémentation
+ * (commit 018573b22e) sans les témoins de COMPORTEMENT que la spécification
+ * exige — ce fichier les écrit contre l'API PUBLIQUE de `MediaGrid`
+ * (`items`, `onOpen`), jamais son détail interne.
+ */
+
+const attachmentsOf = (messageId: string): readonly Attachment[] => {
+  const message = messagesOf(MEDIA_CONVERSATION_ID).find((m) => m.id === messageId);
+  if (!message) throw new Error(`témoin introuvable : ${messageId}`);
+  return message.attachments ?? [];
+};
+
+const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+beforeAll(() => {
+  ensureHappyDomRegistered();
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+});
+
+afterAll(async () => {
+  await act(async () => {});
+  delete globals.IS_REACT_ACT_ENVIRONMENT;
+  await releaseHappyDomIfRegistered();
+});
+
+let container: HTMLDivElement;
+let root: Root;
+
+afterEach(() => {
+  act(() => {
+    root.unmount();
+  });
+  container.remove();
+});
+
+function mount(items: readonly Attachment[], onOpen: (index: number) => void): HTMLDivElement {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+  act(() => {
+    root.render(<MediaGrid items={items} frame="box" languages={['fr']} fallbackLanguage="fr" onOpen={onOpen} />);
+  });
+  return container;
+}
+
+describe('MediaGrid — le compte de tuiles (#6169, critère 1)', () => {
+  test('2 pièces (media-11) ⇒ 2 [data-media-tile], data-media-grid présent', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_PAIR_WITNESS_ID), () => {});
+    expect(el.querySelectorAll('[data-media-tile]').length).toBe(2);
+    expect(el.querySelector('[data-media-grid]') !== null).toBe(true);
+  });
+
+  test('3 pièces (media-12 : 2 images + 1 vidéo) ⇒ 3 [data-media-tile]', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_TRIPLE_WITNESS_ID), () => {});
+    expect(el.querySelectorAll('[data-media-tile]').length).toBe(3);
+  });
+
+  test('4 pièces (media-13) ⇒ 4 [data-media-tile], aucun badge +N', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID), () => {});
+    expect(el.querySelectorAll('[data-media-tile]').length).toBe(4);
+    expect(el.querySelector('[data-overflow]') === null).toBe(true);
+  });
+
+  test('6 pièces (media-14) ⇒ 4 tuiles rendues, badge "+2" (6 − 4) sur la dernière', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_OVERFLOW_WITNESS_ID), () => {});
+    expect(el.querySelectorAll('[data-media-tile]').length).toBe(4);
+    const badge = el.querySelector('[data-overflow]')!;
+    expect(badge !== null).toBe(true);
+    expect(badge.getAttribute('data-overflow')).toBe('2');
+    expect(badge.textContent).toBe('+2');
+  });
+});
+
+describe('MediaGrid — tap sur la tuile k ⇒ onOpen(k) (critère 1)', () => {
+  test('media-13 (4 pièces) : chaque tuile ouvre SON index, pas un autre', () => {
+    const opened: number[] = [];
+    const el = mount(attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID), (index) => opened.push(index));
+    const tiles = Array.from(el.querySelectorAll('[data-media-tile]'));
+    expect(tiles.length).toBe(4);
+
+    act(() => {
+      tiles[2]!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(opened).toEqual([2]);
+
+    act(() => {
+      tiles[0]!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(opened).toEqual([2, 0]);
+  });
+
+  test('media-14 (6 pièces, overflow) : la 4ᵉ tuile (voile +2) ouvre l’index 3', () => {
+    const opened: number[] = [];
+    const el = mount(attachmentsOf(MEDIA_GRID_OVERFLOW_WITNESS_ID), (index) => opened.push(index));
+    const badge = el.querySelector('[data-overflow]')!;
+    act(() => {
+      badge.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(opened).toEqual([3]);
+  });
+});
+
+describe('MediaGrid — la pièce MASQUÉE (isBlurred) occupe sa case sans rien exposer (#6189, critère 1)', () => {
+  /* #8008 (demande porteur du 2026-09-26) : « un contenu média caché s'ouvre
+     directement en plein écran ». La case masquée n'est plus une image inerte
+     (#6189) : c'est un BOUTON qui ouvre SON index — et elle n'expose toujours
+     rien, ni `<img>` ni URL. */
+  test('media-14, index 2 (3ᵉ pièce) : aucune <img>, la marque protégée est posée, et le toucher ouvre SON index', () => {
+    const opened: number[] = [];
+    const el = mount(attachmentsOf(MEDIA_GRID_OVERFLOW_WITNESS_ID), (index) => opened.push(index));
+    const tiles = Array.from(el.querySelectorAll('[data-media-tile]'));
+    const maskedTile = tiles[2]!;
+    expect(maskedTile.tagName).toBe('BUTTON');
+    expect(maskedTile.getAttribute('data-protected-attachment')).toBe('hidden');
+    expect(maskedTile.querySelector('img') === null).toBe(true);
+    act(() => {
+      maskedTile.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(opened).toEqual([2]);
+  });
+
+  test('une pièce masquée SANS fichier servi reste une image inerte — rien à ouvrir', () => {
+    const items = attachmentsOf(MEDIA_GRID_OVERFLOW_WITNESS_ID).map((a, i) => (i === 2 ? { ...a, fileUrl: '' } : a));
+    const el = mount(items, () => {});
+    const maskedTile = el.querySelector('[data-protected-attachment="hidden"]')!;
+    expect(maskedTile.tagName).not.toBe('BUTTON');
+    expect(maskedTile.getAttribute('role')).toBe('img');
+  });
+
+  test('CONTRE-ÉPREUVE : les trois autres tuiles de media-14 restent des <button> avec <img>', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_OVERFLOW_WITNESS_ID), () => {});
+    const tiles = Array.from(el.querySelectorAll('[data-media-tile]'));
+    [0, 1, 3].forEach((i) => {
+      expect(tiles[i]!.tagName).toBe('BUTTON');
+      expect(tiles[i]!.querySelector('img') !== null).toBe(true);
+    });
+  });
+});
+
+describe('MediaGrid — la vidéo en grille rend un <video> réel, jamais null (#6193 puis #6221)', () => {
+  test('media-12 (2 images + 1 vidéo) : le <video> est présent avec son poster', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_TRIPLE_WITNESS_ID), () => {});
+    const video = el.querySelector('video');
+    expect(video !== null).toBe(true);
+    expect(video!.getAttribute('poster') !== null).toBe(true);
+  });
+});
+
+describe('MediaGrid — témoin de RANG, PAS le rang 1 (leçon 261) : media-13, prisme [\'de\',\'fr\']', () => {
+  test('les QUATRE cases servent l’allemand, aucune ne retombe sur l’anglais d’origine', () => {
+    const html = renderToStaticMarkup(
+      <MediaGrid items={attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID)} frame="box" languages={['de', 'fr']} fallbackLanguage="en" onOpen={() => {}} />,
+    );
+    for (let n = 1; n <= 4; n += 1) {
+      expect(html).toContain(`Aufnahme ${n} vom Yachthafen`);
+      expect(html).not.toContain(`Marina shot ${n}`);
+    }
+    expect(html).toMatch(/lang="de"/);
+  });
+});
+
+describe('MediaGrid — `sizes` porté par chaque case, dérivé de `mediaGridSlots` (D4 §1.4.4)', () => {
+  test('media-11 (2 pièces) : chaque <img> porte sizes="<largeur-de-case>px"', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_PAIR_WITNESS_ID), () => {});
+    const slots = mediaGridSlots(2);
+    const imgs = Array.from(el.querySelectorAll('img'));
+    expect(imgs.length).toBe(2);
+    imgs.forEach((img, i) => {
+      expect(img.getAttribute('sizes')).toBe(sizesFor(slots[i]!.width));
+    });
+  });
+});
+
+/**
+ * `GridCellImage` — l'ÉCHEC de décodage d'une case de grille (#6882).
+ *
+ * Avant ce lot, seule `ImageTile` (la case SOLO) masquait l'`<img>` en échec
+ * pour révéler un glyphe de repli (#5805, `attachment-blocks.test.tsx`) ;
+ * `GridCellImage`, montée pour TOUTE grille 2/3/4+, n'avait aucune prise sur
+ * `onError` — un message à plusieurs pièces dont une manque au stockage
+ * (staging, #6882 : trois pièces jointes référencées en base mais absentes
+ * du stockage) rendait l'icône « image brisée » native du navigateur au
+ * lieu du glyphe de repli. Ce témoin verrouille la parité.
+ */
+describe('MediaGrid — l’image en ÉCHEC de décodage dans une case de grille (#6882)', () => {
+  test('onError masque l’<img> de la case en échec et découvre son glyphe de repli, sans toucher aux cases saines', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_PAIR_WITNESS_ID), () => {});
+    const tiles = Array.from(el.querySelectorAll('[data-media-tile]'));
+    expect(tiles.length).toBe(2);
+    const [failingTile, healthyTile] = tiles as [HTMLElement, HTMLElement];
+    const failingImg = failingTile.querySelector('img')!;
+    const healthyImg = healthyTile.querySelector('img')!;
+
+    expect(failingImg.hidden).toBe(false);
+    expect(failingTile.querySelector('svg') !== null).toBe(true);
+
+    act(() => {
+      failingImg.dispatchEvent(new Event('error'));
+    });
+
+    expect(failingImg.hidden).toBe(true);
+    expect(failingTile.querySelector('svg') !== null).toBe(true);
+    // La tuile reste ouvrable — perdre le fichier n'éteint pas l'accès à la visionneuse.
+    expect(failingTile.tagName).toBe('BUTTON');
+    expect(failingTile.getAttribute('aria-label')).not.toBeNull();
+
+    // Contre-épreuve : la case saine, à côté, n'a pas bougé.
+    expect(healthyImg.hidden).toBe(false);
+  });
+});
+
+/**
+ * U4 (#6169) — LA BOÎTE PORTE SES COTES DÉRIVÉES, AU STYLE (ce que G1 mesure
+ * au pixel dans un vrai navigateur, ici au `style` posé par `mediaGridSlots`
+ * — un témoin unitaire qui rougirait AVANT tout gate DOM si l'arithmétique
+ * dérivait).
+ */
+describe('MediaGrid — la boîte porte ses cotes dérivées (U4, #6169)', () => {
+  /**
+   * #7030 (relecture adversariale, PAS jouée avant fusion) — `height` FIXE
+   * était le défaut : la boîte est plafonnée à `100 %` de son porteur
+   * (#7018), donc sa largeur RENDUE rétrécit dès que le porteur est plus
+   * étroit que 300 px (223,4 px en Bulles, mesuré) — une `height` littérale
+   * ne suit pas, chaque case shrinkée par flex-shrink se retrouve sous une
+   * hauteur inchangée : `110,7 × 180` au lieu de `110,7 × 134,0`. Même motif
+   * que la vidéo SEULE (#7016, ci-dessus) : `width` + `aspectRatio`, JAMAIS
+   * `height`, pour que la hauteur DESCENDE avec la largeur plafonnée.
+   */
+  test('media-11 (2 pièces) : largeur 300, forme 300 / 180 — jamais une hauteur figée', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_PAIR_WITNESS_ID), () => {});
+    const grid = el.querySelector('[data-media-grid]') as HTMLElement;
+    expect(grid.style.width).toBe('300px');
+    expect(grid.style.height).toBe('');
+    expect(grid.style.aspectRatio).toBe('300 / 180');
+  });
+
+  test('media-12 (3 pièces) : largeur 300, forme 300 / 240 — jamais une hauteur figée', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_TRIPLE_WITNESS_ID), () => {});
+    const grid = el.querySelector('[data-media-grid]') as HTMLElement;
+    expect(grid.style.width).toBe('300px');
+    expect(grid.style.height).toBe('');
+    expect(grid.style.aspectRatio).toBe('300 / 240');
+  });
+
+  test('media-13 (4 pièces) : largeur 300, forme 300 / 240 — jamais une hauteur figée', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID), () => {});
+    const grid = el.querySelector('[data-media-grid]') as HTMLElement;
+    expect(grid.style.width).toBe('300px');
+    expect(grid.style.height).toBe('');
+    expect(grid.style.aspectRatio).toBe('300 / 240');
+  });
+
+  test('media-14 (6 pièces, 4 rendues) : largeur 300, forme 300 / 240 — jamais une hauteur figée', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_OVERFLOW_WITNESS_ID), () => {});
+    const grid = el.querySelector('[data-media-grid]') as HTMLElement;
+    expect(grid.style.width).toBe('300px');
+    expect(grid.style.height).toBe('');
+    expect(grid.style.aspectRatio).toBe('300 / 240');
+  });
+
+  /**
+   * LA CASE, PAS SEULEMENT LA BOÎTE — SUR LES TROIS AGENCEMENTS (#7030,
+   * seconde relecture).
+   *
+   * La boîte peut suivre sa forme sans que les cases suivent la LEUR. La
+   * première écriture de ce témoin n'instrumentait que la paire et la case
+   * GAUCHE du triplet, faute d'une hauteur de case dans `mediaGridSlots` (qui
+   * porte, par contrat, la hauteur de la BOÎTE sur chaque case). Elle laissait
+   * donc SANS témoin de forme le QUADRUPLE — deux rangées `1fr 1fr`, un
+   * mécanisme qu'aucune des deux cases couvertes n'exerce, et le seul dont la
+   * hauteur de rangée dépend désormais de la largeur servie — alors que
+   * `expectNoTileClipped`, dans le gate navigateur, énonce trois lignes plus
+   * haut la règle inverse : « sur les QUATRE, jamais sur le seul quadruple ».
+   *
+   * `mediaGridCellSizes` (la dérivation manquante) rend cette hauteur ; chaque
+   * case la porte, et le gate navigateur compare le ratio RENDU à celui-là.
+   */
+  const expectEveryCellCarriesItsDesignSize = (witnessId: string, count: number) => {
+    const el = mount(attachmentsOf(witnessId), () => {});
+    const cells = mediaGridCellSizes(count);
+    const carriers = Array.from(el.querySelectorAll('[data-slot-width]')) as HTMLElement[];
+    expect(carriers.length).toBe(cells.length);
+    carriers.forEach((carrier, i) => {
+      expect(carrier.getAttribute('data-slot-width')).toBe(String(cells[i]!.width));
+      expect(carrier.getAttribute('data-slot-height')).toBe(String(cells[i]!.height));
+    });
+  };
+
+  test('media-11 (paire) : les DEUX cases portent leur forme rendue', () => {
+    expectEveryCellCarriesItsDesignSize(MEDIA_GRID_PAIR_WITNESS_ID, 2);
+  });
+
+  test('media-12 (triplet) : les TROIS cases portent leur forme rendue, les empilées comprises', () => {
+    expectEveryCellCarriesItsDesignSize(MEDIA_GRID_TRIPLE_WITNESS_ID, 3);
+  });
+
+  test('media-13 (quadruple, `1fr 1fr`) : les QUATRE cases portent leur forme rendue', () => {
+    expectEveryCellCarriesItsDesignSize(MEDIA_GRID_QUAD_WITNESS_ID, 4);
+  });
+
+  /**
+   * `media-14` — SIX pièces dont une MASQUÉE. La case masquée rend son
+   * substitut (`MaskedAttachment`), jamais la case de grille : elle ne porte
+   * donc aucune cote, et ce témoin le DIT plutôt que de le subir — c'est ce
+   * qui interdit au gate navigateur d'indexer les cases par position.
+   */
+  test('media-14 (6 pièces, 4 rendues, 1 masquée) : seules les cases NON masquées portent leur forme', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_OVERFLOW_WITNESS_ID), () => {});
+    const cells = mediaGridCellSizes(6);
+    const carriers = Array.from(el.querySelectorAll('[data-slot-width]')) as HTMLElement[];
+    expect(el.querySelectorAll('[data-protected-attachment]').length).toBe(1);
+    expect(carriers.length).toBe(cells.length - 1);
+    for (const carrier of carriers) {
+      expect(carrier.getAttribute('data-slot-width')).toBe(String(cells[0]!.width));
+      expect(carrier.getAttribute('data-slot-height')).toBe(String(cells[0]!.height));
+    }
+  });
+});
+
+/**
+ * #7016 — LA VIDÉO SEULE PORTE ENFIN SES COTES.
+ *
+ * La branche SOLO rendait `VideoTile` SANS conteneur dimensionné, alors que sa
+ * racine est `size-full` avec tous ses enfants `absolute inset-0` : un
+ * `height: 100 %` contre un parent en hauteur `auto` se résout en `auto` →
+ * contenu → **ZÉRO**. Mesuré au navigateur avant ce lot, dans les deux peaux :
+ * `{focal: 246 × 0, bulles: 119 × 0}`.
+ *
+ * La loi qui dimensionne cette tuile — `soloVideoSlot` — existait, était
+ * testée (`media-grid-layout.test.ts`) et gardée par le gate de cotes
+ * (`curve-media-grid.mjs`), et n'avait AUCUN site d'appel : le motif « une loi
+ * qui calcule une valeur que personne ne lit ». Ce témoin est sa PROJECTION —
+ * il compare le style posé à ce que la loi rend, jamais à un littéral recopié
+ * (qui divergerait en silence le jour où la loi change).
+ *
+ * `aspectRatio` plutôt que `height` : la boîte est plafonnée à `100 %` de son
+ * porteur (#7018), donc sa largeur RENDUE dépend de la peau. Le couple
+ * `width` + `aspectRatio` fait descendre la hauteur AVEC la largeur ; un
+ * `height` figé, lui, déformerait la vidéo dès que le porteur est plus étroit
+ * que 300 px — ce qui est le cas NOMINAL de la bulle (253,4 px à 390 px).
+ */
+describe('MediaGrid — la vidéo SEULE porte les cotes de soloVideoSlot (#7016)', () => {
+  test('media-15 : la tuile est dimensionnée — jamais une hauteur nulle', () => {
+    const el = mount(attachmentsOf(MEDIA_SOLO_VIDEO_WITNESS_ID), () => {});
+    const tile = el.querySelector('[data-media-tile]') as HTMLElement;
+    const slot = soloVideoSlot(160 / 90);
+    expect(slot.width).toBe(300);
+    expect(slot.height).toBe(168.75);
+    expect(tile.style.width).toBe(`${slot.width}px`);
+    expect(tile.style.aspectRatio).toBe(`${slot.width} / ${slot.height}`);
+    expect(tile.style.maxWidth).toBe('100%');
+  });
+
+  test('media-15 : le <video> est monté sous cette boîte, avec son poster', () => {
+    const el = mount(attachmentsOf(MEDIA_SOLO_VIDEO_WITNESS_ID), () => {});
+    const tile = el.querySelector('[data-media-tile]') as HTMLElement;
+    const video = tile.querySelector('video');
+    expect(video !== null).toBe(true);
+    expect(video!.getAttribute('poster') !== null).toBe(true);
+  });
+
+  test('CONTRE-ÉPREUVE : en GRILLE la vidéo ne se dimensionne PAS elle-même — la case la dimensionne (media-12)', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_TRIPLE_WITNESS_ID), () => {});
+    const videoTile = el.querySelector('video')!.closest('[data-media-tile]') as HTMLElement;
+    expect(videoTile.style.width).toBe('');
+    expect(videoTile.style.aspectRatio).toBe('');
+  });
+});
+
+/**
+ * #7018 — LA BOÎTE DE GRILLE NE SORT PLUS DE SON PORTEUR.
+ *
+ * `ImageTile` porte `max-w-full` depuis toujours ; la boîte de `MediaGrid`, à
+ * largeur FIXE de 300 px, ne le portait pas. Dans une bulle dont la largeur
+ * utile est 253,4 px (390 px de viewport, `max-w-[70%]` + gouttière de 50 px),
+ * elle débordait de 46,6 px — vers la gouttière sur un message REÇU (invisible),
+ * HORS DE L'ÉCRAN sur un message DE MOI (`justify-end`), rendant tout le fil
+ * défilable horizontalement (`scrollWidth` 437 pour `clientWidth` 390, mesuré).
+ */
+describe('MediaGrid — la boîte ne déborde jamais de son porteur (#7018)', () => {
+  const grilles: readonly (readonly [string, string])[] = [
+    ['media-11 (2 pièces)', MEDIA_GRID_PAIR_WITNESS_ID],
+    ['media-12 (3 pièces)', MEDIA_GRID_TRIPLE_WITNESS_ID],
+    ['media-13 (4 pièces)', MEDIA_GRID_QUAD_WITNESS_ID],
+    ['media-14 (6 pièces)', MEDIA_GRID_OVERFLOW_WITNESS_ID],
+    ['media-16 (2 pièces, DE MOI)', MEDIA_GRID_MINE_WITNESS_ID],
+  ];
+
+  grilles.forEach(([label, id]) => {
+    test(`${label} : la boîte est plafonnée à 100 % de son porteur`, () => {
+      const el = mount(attachmentsOf(id), () => {});
+      const grid = el.querySelector('[data-media-grid]') as HTMLElement;
+      expect(grid.style.width).toBe('300px');
+      expect(grid.style.maxWidth).toBe('100%');
+    });
+  });
+});
+
+/**
+ * LA TUILE PROTÉGÉE SE LIT SUR LA BOÎTE NOIRE (#7881) — la bulle pose UNE
+ * boîte noire sous sa grille (`BubbleStandardLayout.swift:784-787`,
+ * `.background(Color.black)`, gardé par `check-media-grid.mjs` G5). Le
+ * substitut d'une pièce protégée y était peint à 10 % d'accent sur
+ * TRANSPARENT : sombre sur sombre, libellé illisible en Bulles alors qu'il
+ * était clair en Focal. En grille, la tuile est OPAQUE et porte son encre.
+ */
+describe('MediaGrid — la tuile protégée reste lisible sur la boîte noire (#7881)', () => {
+  test('en grille, le substitut est opaque (mêlé à la surface) et porte l’encre du thème', () => {
+    const html = renderToStaticMarkup(
+      <MediaGrid items={attachmentsOf(MEDIA_GRID_OVERFLOW_WITNESS_ID)} frame="box" languages={['fr']} fallbackLanguage="fr" onOpen={() => {}} />,
+    );
+    const masked = /data-protected-attachment="hidden"[^>]*style="([^"]*)"/.exec(html);
+    expect(masked).not.toBeNull();
+    expect(masked![1]).toContain('var(--accent) 10%, var(--ios-surface))');
+    expect(masked![1]).not.toContain('transparent');
+    expect(masked![1]).toContain('color:var(--color-ios-ink)');
+  });
+});
+
+/**
+ * #9907, #9911 — CHAQUE CASE SE NOMME (`data-piece`) : l'appui long sur une
+ * tuile vise SA pièce, et le saut d'une citation qui nomme une pièce met en
+ * évidence SA tuile. Une pièce au-delà de la quatrième, que la grille ne
+ * montre pas, s'éclaire sur la case « +N » qui la contient.
+ */
+describe('MediaGrid — chaque case se nomme, la tuile citée s’éclaire (#9907, #9911)', () => {
+  const render = (items: readonly Attachment[], highlighted: string | null) =>
+    renderToStaticMarkup(
+      <HighlightedPieceContext.Provider value={highlighted}>
+        <MediaGrid items={items} frame="box" languages={['fr']} fallbackLanguage="fr" onOpen={() => {}} />
+      </HighlightedPieceContext.Provider>,
+    );
+
+  test('chaque case visible porte l’identifiant de sa pièce', () => {
+    const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
+    const html = render(items, null);
+    for (const piece of items) expect(html).toContain(`data-piece="${piece.id}"`);
+    expect(html).not.toContain('data-piece-highlighted');
+  });
+
+  test('la case de la pièce citée est mise en évidence, et elle seule', () => {
+    const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
+    const html = render(items, items[2]!.id);
+    expect(html.match(/data-piece-highlighted/g)?.length).toBe(1);
+    expect(html).toMatch(new RegExp(`data-piece="${items[2]!.id}"[^>]*data-piece-highlighted|data-piece-highlighted[^>]*data-piece="${items[2]!.id}"`));
+  });
+
+  test('la mise en évidence d’une pièce MASQUÉE ne révèle rien : la case garde son substitut, sans fichier', () => {
+    const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID).map((a) => ({ ...a, isBlurred: true }));
+    const html = render(items, items[2]!.id);
+    expect(html).toContain('data-piece-highlighted');
+    expect(html).not.toContain('<img');
+    expect(html).not.toContain('<video');
+  });
+
+  test('une pièce cachée derrière « +N » éclaire la case « +N »', () => {
+    const items = attachmentsOf(MEDIA_GRID_OVERFLOW_WITNESS_ID);
+    const html = render(items, items[5]!.id);
+    expect(html.match(/data-piece-highlighted/g)?.length).toBe(1);
+    expect(html).toMatch(new RegExp(`data-piece="${items[3]!.id}"[^>]*data-piece-highlighted|data-piece-highlighted[^>]*data-piece="${items[3]!.id}"`));
+  });
+});
+
+/**
+ * **AU-DELÀ DE LA POLITIQUE, LA BULLE DEMANDE** (#6333) — une image que la
+ * politique de l'appareil ne laisse pas partir seule n'est pas demandée au
+ * serveur : sa case dit sa taille, un toucher la télécharge. Sous 100 Ko elle
+ * part toujours seule ; une taille absente n'est pas « petite ».
+ */
+describe('MediaGrid — le téléchargement automatique des images (#6333)', () => {
+  const images = () => attachmentsOf(MEDIA_GRID_PAIR_WITNESS_ID).filter((a) => a.mimeType.startsWith('image/'));
+  const solo = (fileSize: number): Attachment => ({ ...images()[0]!, fileSize });
+  const ask = (el: HTMLElement) => el.querySelector<HTMLButtonElement>('[data-media-download-ask]');
+
+  afterEach(() => {
+    mediaDownloadStore().setPolicy('image', 'wifiAndGoodCellular');
+  });
+
+  test('par défaut (Wi-Fi + bon cellulaire, réseau sans indice) : l’image se télécharge comme avant', () => {
+    const el = mount([solo(2_400_000)], () => {});
+    expect(el.querySelector('img[data-attachment-image]')).not.toBeNull();
+    expect(ask(el)).toBeNull();
+  });
+
+  test('politique « jamais » : aucune <img>, la case dit sa taille, un toucher la télécharge sans ouvrir la visionneuse', () => {
+    mediaDownloadStore().setPolicy('image', 'never');
+    const opened: number[] = [];
+    const el = mount([solo(2_400_000)], (index) => opened.push(index));
+    expect(el.querySelector('img[data-attachment-image]')).toBeNull();
+    expect(ask(el)?.getAttribute('aria-label')).toMatch(/^Télécharger .+, 2[.,]\d+ Mo$/u);
+    expect(el.querySelector('[data-media-download-pill]')?.textContent).toMatch(/Mo/u);
+
+    act(() => ask(el)?.click());
+
+    expect(el.querySelector('img[data-attachment-image]')).not.toBeNull();
+    expect(ask(el)).toBeNull();
+    expect(opened).toEqual([]);
+  });
+
+  test('sous 100 Ko, l’image part seule malgré « jamais » ; une taille absente (0) demande', () => {
+    mediaDownloadStore().setPolicy('image', 'never');
+    expect(mount([solo(99_999)], () => {}).querySelector('img[data-attachment-image]')).not.toBeNull();
+    act(() => root.unmount());
+    container.remove();
+    const unsized = mount([solo(0)], () => {});
+    expect(unsized.querySelector('img[data-attachment-image]')).toBeNull();
+    expect(ask(unsized)?.getAttribute('aria-label')).toMatch(/^Télécharger /u);
+  });
+
+  test('dans une grille, la case demande aussi, et un toucher la télécharge au lieu de l’ouvrir', () => {
+    mediaDownloadStore().setPolicy('image', 'never');
+    const opened: number[] = [];
+    const pair = images().map((a) => ({ ...a, fileSize: 1_500_000 }));
+    expect(pair.length).toBe(2);
+    const el = mount(pair, (index) => opened.push(index));
+    const asks = el.querySelectorAll<HTMLButtonElement>('[data-media-download-ask]');
+    expect(asks.length).toBe(2);
+    act(() => asks[0]!.click());
+    expect(opened).toEqual([]);
+    expect(el.querySelectorAll('img[data-attachment-image]').length).toBe(1);
+  });
+});

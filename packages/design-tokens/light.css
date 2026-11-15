@@ -1,0 +1,101 @@
+/* Schéma CLAIR — DÉRIVÉ, jamais mesuré : la planche de la v3 n'a pas de vue
+   claire (voir README § « D'où viennent les valeurs »). Les rôles sont ceux du
+   schéma sombre, la rampe neutre est retournée (400 = le plus contrasté,
+   900 = le plus proche du fond) et les couleurs d'état sont assombries pour
+   tenir 4,5:1 sur le fond clair le plus SOMBRE (`--color-bg-sunken`), qui est
+   le cas contraignant pour une encre foncée.
+
+   Porté par .light UNIQUEMENT : la classe est posée par la coquille racine puis
+   corrigée par le moteur de thème, jamais par une requête de média. La
+   spécificité de :root.light l'emporte sur :root quel que soit l'ordre des
+   imports.
+
+   RETOURNER LA RAMPE NE RETOURNE PAS LES RÔLES. `--color-surface-raised` veut
+   dire « au-dessus » : le prendre dans la rampe retournée le peignait #edeef6,
+   donc PLUS SOMBRE que `--color-surface` (#ffffff) et indiscernable de
+   `--color-bg-sunken` (1,00:1). Les quatre plans sont désormais une échelle
+   strictement croissante en luminance — mesurée par le contrôle d'ORDRE de
+   l'ancienne refonte v3, parti avec elle (#5994, #6000) ; une parité de CLÉS
+   ne dit rien d'une palette. */
+:root.light {
+  color-scheme: light;
+
+  --color-bg: #f1f3f9;
+  --color-bg-sunken: var(--ios-indigo-50);
+  --color-surface: #f9fafd;
+  --color-surface-raised: var(--ios-surface);
+  --color-text: var(--ios-ink);
+
+  --color-neutral-400: #3a3d52;
+  --color-neutral-500: #575b73;
+  --color-neutral-600: #666a80;
+  --color-neutral-700: #a9adbf;
+  --color-neutral-800: #d7d9e4;
+  --color-neutral-900: #edeef6;
+
+  /* GARDÉ HORS SDK (#8879) : `textSecondary`/`textMuted` clairs
+     (indigo700 à 80 %) tombent à 4,26–4,42:1 sur les quatre voiles d'état,
+     sous les 4,5:1 dus au texte d'un bandeau. Le rôle garde la valeur qui
+     tient sa loi — suivi : #8879 (followup de la charte). */
+  --color-text-muted: var(--color-neutral-500);
+  /* HORS de la rampe, symétriquement au sombre : `--color-neutral-600`
+     (#666a80) rend 4,39:1 sur `--color-bg-sunken`, sous les 4,5:1 du texte. */
+  --color-text-subtle: #5f6379;
+  --color-border: var(--ios-edge);
+  --color-border-strong: var(--ios-neutral-400);
+  /* 3:1 sur les quatre plans clairs — voir le doc-comment de dark.css. */
+  --color-border-interactive: var(--ios-neutral-500);
+
+  --color-accent-200: var(--ios-indigo-800);
+  --color-accent-300: var(--ios-indigo-700);
+  --color-accent-400: var(--ios-indigo-600);
+  --color-primary: var(--color-accent-400);
+  --color-primary-strong: var(--color-accent-300);
+  --color-primary-soft: var(--ios-indigo-500);
+  --color-primary-softer: var(--ios-indigo-400);
+  --color-on-primary: #ffffff;
+
+  /* Voir dark.css : l'anneau prend l'encre du schéma, le contre-anneau le plan
+     le plus éloigné d'elle — ici le plus clair, en sombre le plus enfoncé. */
+  --color-focus: var(--color-text);
+  --color-focus-contra: var(--color-surface-raised);
+
+  --color-success: #047857;
+  --color-success-soft: var(--ios-success-deep);
+  /* #b45309 rendait 4,14:1 sur `--color-bg-sunken` : assombri d'un cran. */
+  --color-warning: #a84e08;
+  /* #dc2626 rendait 3,98:1 sur `--color-bg-sunken` : assombri d'un cran. */
+  --color-danger: #c81e1e;
+  --color-danger-soft: var(--ios-error-strong);
+  --color-on-status: #ffffff;
+
+  /* La présence est une famille DE SCHÉMA, pas une famille hors schéma. Les
+     valeurs citées de CLAUDE.md (#34D399 / #FBBF24 / #9CA3AF) sont fixées pour
+     des surfaces NOCTURNES : servies telles quelles sur un fond clair elles
+     rendent 1,80 / 1,56 / 2,37 contre `--color-bg`. Or une pastille de
+     présence porte SEULE son information (aucun libellé sur un avatar), donc
+     WCAG 1.4.11 lui demande 3:1. Mêmes rôles, mêmes teintes, assombries. */
+  --color-presence-online: #059669;
+  --color-presence-away: #b45309;
+  --color-presence-idle: #6b7280;
+  --color-presence-offline: #6b7280;
+
+
+  /* LES QUATRE VOILES (charte § 12.5 règles 11 et 17) — un fond d'état, jamais
+     une couleur d'état à pleine force sous du texte. Ils vivent dans les DEUX
+     schémas et non dans tokens.css parce qu'ils se calculent SUR
+     `--color-surface`, dont la luminance change avec le schéma : un voile posé
+     hors schéma serait clair sur fond sombre. La teinte primaire pèse 12 % (elle
+     habille le héros de la vitrine et les tuiles de la charte), les trois états
+     10 % (ils portent un bandeau, pas une surface). */
+  --color-tint-primary: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  --color-tint-success: color-mix(in srgb, var(--color-success) 10%, var(--color-surface));
+  --color-tint-warning: color-mix(in srgb, var(--color-warning) 10%, var(--color-surface));
+  --color-tint-danger: color-mix(in srgb, var(--color-danger) 10%, var(--color-surface));
+
+  --color-overlay: var(--ios-scrim);
+
+  --shadow-sm: 0 6px 20px rgb(19 21 34 / 0.1);
+  --shadow-lg: 0 20px 60px rgb(19 21 34 / 0.16);
+  --shadow-primary: 0 10px 26px rgb(79 70 229 / 0.25);
+}

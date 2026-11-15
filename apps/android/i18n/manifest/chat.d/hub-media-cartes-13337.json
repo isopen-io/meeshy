@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.shared",
+          "androidName": "contact_card_shared",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.a11y-label",
+          "androidName": "contact_card_a11y_label",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

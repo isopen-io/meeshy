@@ -20,6 +20,12 @@ final class StoryCanvasUIView_ReaderAccessibilityTests: XCTestCase {
     private func makeView(slide: StorySlide, mode: RenderMode) -> StoryCanvasUIView {
         let view = StoryCanvasUIView(slide: slide, mode: mode)
         view.frame = CGRect(x: 0, y: 0, width: 412, height: 732)
+        // **La fixture CÂBLE l'éditeur (#4046)**, comme l'atelier de production
+        // (`StoryComposerView+Canvas.swift:1131`). Sans lui, « Modifier » n'a
+        // personne derrière elle et la règle la retire — à juste titre : ces
+        // témoins vérifient que VoiceOver annonce l'action, pas qu'elle est
+        // annoncée dans le vide.
+        view.onItemDoubleTapped = { _, _ in }
         return view
     }
 
@@ -244,6 +250,25 @@ final class StoryCanvasUIView_ReaderAccessibilityTests: XCTestCase {
         let expectedVideo = String(localized: "story.canvas.a11y.backgroundVideo", defaultValue: "Vidéo de fond", bundle: .module)
         XCTAssertEqual(elements(imgView).first?.accessibilityLabel, expectedPhoto)
         XCTAssertEqual(elements(vidView).first?.accessibilityLabel, expectedVideo)
+    }
+
+    /// **En composition aussi, le fond se NOMME fond** (#9521). Il s'annonçait
+    /// « Image », comme une image posée : l'auteur qui cherche à régler son
+    /// fond ne pouvait pas le distinguer à l'oreille. Son « Modifier » ouvre
+    /// les outils du fond — Réglages compris.
+    func test_accessibilityElements_inEditMode_namesBackgroundMediaAsBackground() {
+        let bg = StoryMediaObject(id: "bg", mediaType: "image", aspectRatio: 0.5625, isBackground: true)
+        let videoBg = StoryMediaObject(id: "vbg", mediaType: "video", aspectRatio: 0.5625, isBackground: true)
+        let posee = StoryMediaObject(id: "fg", mediaType: "image", aspectRatio: 1.0)
+
+        let imgLabels = elements(makeView(slide: makeSlide(media: [bg, posee]), mode: .edit)).map(\.accessibilityLabel)
+        let vidLabels = elements(makeView(slide: makeSlide(media: [videoBg]), mode: .edit)).map(\.accessibilityLabel)
+
+        let expectedPhoto = String(localized: "story.canvas.a11y.backgroundPhoto", defaultValue: "Photo de fond", bundle: .module)
+        let expectedVideo = String(localized: "story.canvas.a11y.backgroundVideo", defaultValue: "Vidéo de fond", bundle: .module)
+        XCTAssertTrue(imgLabels.contains(expectedPhoto), "Le fond image doit s'annoncer « \(expectedPhoto) », reçu \(imgLabels).")
+        XCTAssertTrue(imgLabels.contains(imageLabel), "L'image POSÉE reste « \(imageLabel) ».")
+        XCTAssertTrue(vidLabels.contains(expectedVideo), "Le fond vidéo doit s'annoncer « \(expectedVideo) », reçu \(vidLabels).")
     }
 
     func test_accessibilityElements_textInPreferredLanguage() {

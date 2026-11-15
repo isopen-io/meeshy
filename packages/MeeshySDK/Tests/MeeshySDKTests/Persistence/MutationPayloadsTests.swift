@@ -452,6 +452,55 @@ final class MutationPayloadsTests: XCTestCase {
         XCTAssertEqual(object["postId"] as? String, "post-1")
     }
 
+    /// Une réaction à une story emprunte le MÊME endpoint que le like d'un post
+    /// (`POST /posts/:id/like`) et le même `kind` de `MutationLog` côté gateway
+    /// (`toggleLikePost`) : pas d'`OutboxKind` à elle, mais l'emoji doit
+    /// voyager jusqu'au dispatcher.
+    func test_toggleLikePostPayload_withReactionEmoji_roundTripsTheEmoji() throws {
+        let payload = ToggleLikePostPayload(
+            clientMutationId: "cmid_00000000-0000-4000-8000-000000000013",
+            postId: "story-1",
+            liked: true,
+            emoji: "🔥"
+        )
+
+        let decoded = try decoder.decode(ToggleLikePostPayload.self, from: try encoder.encode(payload))
+
+        XCTAssertEqual(decoded.emoji, "🔥")
+        XCTAssertEqual(decoded, payload)
+    }
+
+    /// Un like simple garde la forme qu'il avait avant ce champ : la clé ne
+    /// part pas, plutôt qu'un `null` que le dispatcher aurait à interpréter.
+    func test_toggleLikePostPayload_withoutEmoji_omitsTheEmojiKey() throws {
+        let payload = ToggleLikePostPayload(
+            clientMutationId: "cmid_00000000-0000-4000-8000-000000000014",
+            postId: "post-1",
+            liked: false
+        )
+
+        let data = try encoder.encode(payload)
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertNil(object["emoji"])
+        XCTAssertEqual(Set(object.keys), ["clientMutationId", "postId", "liked"])
+    }
+
+    /// Rétro-compatibilité : les lignes DÉJÀ en file au moment de la migration
+    /// ont été encodées sans `emoji`. Elles doivent continuer à se décoder —
+    /// sinon la mise à jour ferait perdre des mutations en attente.
+    func test_toggleLikePostPayload_decodesRowsWrittenBeforeTheEmojiField_asPlainLike() throws {
+        let legacy = Data("""
+        {"clientMutationId":"cmid_00000000-0000-4000-8000-000000000012","postId":"post-1","liked":true}
+        """.utf8)
+
+        let decoded = try decoder.decode(ToggleLikePostPayload.self, from: legacy)
+
+        XCTAssertNil(decoded.emoji, "Un like simple n'a pas d'emoji.")
+        XCTAssertTrue(decoded.liked)
+        XCTAssertEqual(decoded.postId, "post-1")
+    }
+
     // MARK: - CreateCommentPayload (Phase C)
 
     func test_createCommentPayload_roundtrip_topLevel() throws {
@@ -459,7 +508,8 @@ final class MutationPayloadsTests: XCTestCase {
             clientMutationId: ClientMutationId.generate(),
             postId: "post-1",
             parentCommentId: nil,
-            content: "Great post!"
+            content: "Great post!",
+            originalLanguage: "en", authorId: "user-1"
         )
         let data = try encoder.encode(original)
         let decoded = try decoder.decode(CreateCommentPayload.self, from: data)
@@ -471,7 +521,8 @@ final class MutationPayloadsTests: XCTestCase {
             clientMutationId: ClientMutationId.generate(),
             postId: "post-1",
             parentCommentId: "comment-parent",
-            content: "Agreed"
+            content: "Agreed",
+            originalLanguage: "en", authorId: "user-1"
         )
         let data = try encoder.encode(original)
         let decoded = try decoder.decode(CreateCommentPayload.self, from: data)
@@ -484,6 +535,7 @@ final class MutationPayloadsTests: XCTestCase {
             postId: "post-1",
             parentCommentId: "comment-parent",
             content: "Sparkles",
+            originalLanguage: "en", authorId: "user-1",
             effectFlags: 5
         )
         let data = try encoder.encode(original)
@@ -502,6 +554,61 @@ final class MutationPayloadsTests: XCTestCase {
         let decoded = try decoder.decode(CreateCommentPayload.self, from: Data(legacyJSON.utf8))
         XCTAssertNil(decoded.effectFlags)
         XCTAssertNil(decoded.parentCommentId)
+    }
+
+
+    /// #6587 — la langue d'ÉCRITURE déclarée par l'auteur doit atteindre le
+    /// serveur, y compris par le chemin durable (outbox).
+    ///
+    /// Le témoin n'interroge pas une propriété (elle n'existait pas avant ce
+    /// lot, et un rouge de COMPILATION ne prouve rien) : il interroge le
+    /// VOYAGE. Une ligne d'outbox qui porte `originalLanguage` doit la
+    /// restituer à l'encodage — c'est exactement ce que le dispatcher
+    /// réencode vers `POST /posts/:id/comments`.
+    ///
+    /// Le contenu est volontairement une phrase que l'heuristique serveur
+    /// (`detectLanguage`, `services/gateway/src/services/PostService.ts`)
+    /// classerait « fr » alors que l'auteur a déclaré « de » : si l'assertion
+    /// verdit, c'est parce que la DÉCLARATION a voyagé, jamais parce que la
+    /// devinette est tombée juste.
+    func test_createCommentPayload_carriesAuthoredLanguageThroughTheWire() throws {
+        let wire = """
+        {"clientMutationId":"cmid_lang_6587","postId":"post-1","content":"Je suis dans les nuages avec vous","originalLanguage":"de"}
+        """
+        let decoded = try decoder.decode(CreateCommentPayload.self, from: Data(wire.utf8))
+        let reencoded = try JSONSerialization.jsonObject(
+            with: try encoder.encode(decoded)
+        ) as? [String: Any]
+
+        XCTAssertEqual(
+            reencoded?["originalLanguage"] as? String, "de",
+            "La langue d'écriture déclarée doit survivre à l'aller-retour outbox."
+        )
+    }
+
+    /// #6587, revers du témoin ci-dessus — une ligne gravée AVANT le champ se
+    /// relit sans perte. `FeedPersistenceActor` décode ces blobs en `try?` :
+    /// un champ requis au DÉCODAGE ferait disparaître SANS ERREUR toute la
+    /// file d'attente hors-ligne d'une app mise à jour.
+    func test_createCommentPayload_decodesLegacyRowWithoutLanguage() throws {
+        let legacyJSON = """
+        {"clientMutationId":"cmid_legacy6587","postId":"post-1","parentCommentId":"c-parent","content":"Coucou","effectFlags":5}
+        """
+        let decoded = try decoder.decode(CreateCommentPayload.self, from: Data(legacyJSON.utf8))
+
+        XCTAssertEqual(decoded.clientMutationId, "cmid_legacy6587")
+        XCTAssertEqual(decoded.postId, "post-1")
+        XCTAssertEqual(decoded.parentCommentId, "c-parent")
+        XCTAssertEqual(decoded.content, "Coucou")
+        XCTAssertEqual(decoded.effectFlags, 5)
+
+        let reencoded = try JSONSerialization.jsonObject(
+            with: try encoder.encode(decoded)
+        ) as? [String: Any]
+        XCTAssertNil(
+            reencoded?["originalLanguage"],
+            "Une ligne gravée avant le champ ne doit pas se voir attribuer une langue."
+        )
     }
 
     // MARK: - DeleteCommentPayload (Phase C)

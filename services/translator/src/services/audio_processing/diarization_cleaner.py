@@ -7,6 +7,7 @@ import logging
 import numpy as np
 from typing import List, Dict, Any, Tuple
 from sklearn.metrics.pairwise import cosine_similarity
+from services.task_privacy import shown
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +203,7 @@ class DiarizationCleaner:
                 msg = f"Fusion phrase coupée: {seg['speaker_id']} → {prev_seg['speaker_id']}"
                 merge_info.append(msg)
                 logger.info(f"📝 {msg}")
-                logger.debug(f"   '{prev_text}' → '{current_text}'")
+                logger.debug(f"   '{shown(prev_text)}' → '{shown(current_text)}'")
 
                 seg['speaker_id'] = prev_seg['speaker_id']
 

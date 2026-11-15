@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.toast.sent-to",
+          "androidName": "share_toast_sent_to",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.section.people",
+          "androidName": "share_section_people",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.detail.friend",
+          "androidName": "share_detail_friend",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversationCard.open",
+          "androidName": "share_toast_open",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.action.copy-link",
+          "androidName": "share_action_copy_link",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.action.share-out",
+          "androidName": "share_action_share_out",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.copied",
+          "androidName": "share_copied",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

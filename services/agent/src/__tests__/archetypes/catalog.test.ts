@@ -1,13 +1,48 @@
 import { getArchetype, listArchetypes } from '../../archetypes/catalog';
 import { enrichArchetypeWithProfile } from '../../archetypes/enrichment';
 
+const ORIGINAL_IDS = ['curious', 'enthusiast', 'skeptic', 'pragmatic', 'social', 'expert', 'moderator'];
+const GOSSIP_IDS = ['gossip', 'chronicler', 'joker', 'diaspora', 'elder', 'hustler'];
+
 describe('Archetypes Catalog', () => {
-  it('returns all 7 archetypes', () => {
+  it('returns the 7 original archetypes and the 6 gossip-oriented ones', () => {
     const archetypes = listArchetypes();
-    expect(archetypes).toHaveLength(7);
-    expect(archetypes.map((a) => a.id)).toEqual(
-      expect.arrayContaining(['curious', 'enthusiast', 'skeptic', 'pragmatic', 'social', 'expert', 'moderator']),
-    );
+    expect(archetypes).toHaveLength(ORIGINAL_IDS.length + GOSSIP_IDS.length);
+    expect(archetypes.map((a) => a.id)).toEqual(expect.arrayContaining([...ORIGINAL_IDS, ...GOSSIP_IDS]));
+  });
+
+  it('never declares the same id twice', () => {
+    const ids = listArchetypes().map((a) => a.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('gives every gossip-oriented archetype topics of expertise the strategist can match', () => {
+    for (const id of GOSSIP_IDS) {
+      const archetype = getArchetype(id);
+      expect(archetype).toBeDefined();
+      expect(archetype!.topicsOfExpertise.length).toBeGreaterThan(0);
+      expect(archetype!.catchphrases.length).toBeGreaterThan(0);
+      expect(archetype!.minWords).toBeGreaterThanOrEqual(1);
+      expect(archetype!.maxWords).toBeGreaterThan(archetype!.minWords);
+    }
+  });
+
+  it('anchors the gossip archetype on faits divers and the target countries', () => {
+    const gossip = getArchetype('gossip')!;
+    expect(gossip.topicsOfExpertise).toEqual(expect.arrayContaining(['faits divers', 'kongossa', 'Cameroun']));
+    expect(gossip.emojiUsage).toBe('abondant');
+    expect(gossip.vocabularyLevel).toBe('familier');
+  });
+
+  it('anchors the diaspora archetype on France, USA and Canada', () => {
+    const diaspora = getArchetype('diaspora')!;
+    expect(diaspora.topicsOfExpertise).toEqual(expect.arrayContaining(['France', 'USA', 'Canada']));
+  });
+
+  it('keeps the chronicler on sourced, medium-length messages', () => {
+    const chronicler = getArchetype('chronicler')!;
+    expect(chronicler.typicalLength).toBe('moyen');
+    expect(chronicler.maxWords).toBeGreaterThanOrEqual(80);
   });
 
   it('returns a specific archetype by id', () => {
@@ -57,6 +92,12 @@ describe('Archetype Enrichment', () => {
     });
     const techCount = enriched.topicsOfExpertise.filter((t) => t === 'tech').length;
     expect(techCount).toBe(1);
+  });
+
+  it('keeps the archetype own topics when enriching a gossip persona', () => {
+    const archetype = getArchetype('gossip')!;
+    const enriched = enrichArchetypeWithProfile(archetype, { communities: ['douala-life'] });
+    expect(enriched.topicsOfExpertise).toEqual(expect.arrayContaining([...archetype.topicsOfExpertise, 'douala-life']));
   });
 
   it('caps confidence at 0.6', () => {

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_clear_all_message">Alle Folien beginnen leer auf dem neutralen Hintergrund. Rückgängig stellt die Folien wieder her.</string>
+    <string name="composer_media_sources">Quelle wählen</string>
+    <string name="composer_preview_close">Vorschau schließen</string>
+    <string name="composer_preview_previous">Vorherige Folie</string>
+    <string name="composer_preview_next">Nächste Folie</string>
+</resources>

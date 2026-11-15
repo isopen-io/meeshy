@@ -48,7 +48,7 @@ public struct AudioClipBar: View, Equatable {
     public let onTrimEndDelta: (CGFloat) -> Void
     /// URL locale du fichier — quand `waveformSamples` est vide (draft
     /// restauré, repost), la barre extrait elle-même sa forme d'onde
-    /// (AudioWaveform, RMS + cache). Sans ça la lane audio était un aplat.
+    /// (WaveformCache, RMS + cache). Sans ça la lane audio était un aplat.
     public let audioURL: URL?
     /// Points d'automation du clip — seule leur composante `volume` est
     /// tracée, en lecture seule. L'édition passe par la fiche.
@@ -75,6 +75,12 @@ public struct AudioClipBar: View, Equatable {
     /// des brouillons restaurés, pour qui aucun fichier local n'existe.
     nonisolated static func resolveSamples(local: [Float], published: [Float]) -> [Float] {
         local.isEmpty ? published : local
+    }
+
+    /// L'échelle de la source retenue : la mesure locale en décibels, le repli
+    /// publié (normalisé au pic) en linéaire (#9886).
+    nonisolated static func resolveReading(local: [Float]) -> WaveformReading {
+        local.isEmpty ? .published : .measured
     }
 
     public init(
@@ -112,6 +118,32 @@ public struct AudioClipBar: View, Equatable {
         String(format: String(localized: "story.timeline.a11y.clip.audio", bundle: .module), title)
     }
 
+    var accessibilityValueComposed: String {
+        let range = String(
+            format: String(localized: "story.timeline.a11y.clip.displayedRange", bundle: .module),
+            startTime, startTime + duration
+        )
+        return "\(range). \(accessibilityValueDescription)"
+    }
+
+    var accessibilityModel: ClipBarAccessibility {
+        ClipBarAccessibility(
+            geometry: geometry,
+            isLocked: isLocked,
+            muteLabels: onToggleMute == nil ? nil : (
+                mute: String(localized: "story.audio.track.mute", defaultValue: "Couper le son de cette piste", bundle: .module),
+                unmute: String(localized: "story.audio.track.unmute", defaultValue: "Activer le son de cette piste", bundle: .module)
+            ),
+            isMuted: isMuted
+        )
+    }
+
+    var accessibilityCallbacks: ClipBarCallbacks {
+        ClipBarCallbacks(onTap: onTap, onDoubleTap: onDoubleTap, onMoveDelta: onMoveDelta,
+                         onMoveEnded: onMoveEnded, onTrimStartDelta: onTrimStartDelta,
+                         onTrimEndDelta: onTrimEndDelta, onToggleMute: onToggleMute)
+    }
+
     public var accessibilityValueDescription: String {
         let pct = Int((volume * 100).rounded())
         let muted = isMuted
@@ -124,7 +156,8 @@ public struct AudioClipBar: View, Equatable {
         ZStack(alignment: .leading) {
             Rectangle()
                 .fill(MeeshyColors.warning.opacity(isDark ? 0.32 : 0.22))
-            WaveformStrip(samples: effectiveSamples, tint: Color.white.opacity(0.85))
+            WaveformStrip(samples: effectiveSamples, tint: Color.white.opacity(0.85),
+                          reading: Self.resolveReading(local: loadedSamples))
             volumeCurve
             titleOverlay
             if onToggleMute != nil {
@@ -133,13 +166,14 @@ public struct AudioClipBar: View, Equatable {
                 muteBadge
             }
             if isSelected {
-                RoundedRectangle(cornerRadius: 6).stroke(MeeshyColors.indigo400, lineWidth: 2)
+                RoundedRectangle(cornerRadius: 6).stroke(MeeshyColors.indigo400, lineWidth: MeeshyBorder.strong)
                     .allowsHitTesting(false)
             }
             if ClipTrimHandles.shouldShow(isSelected: isSelected, isLocked: isLocked) {
                 ClipTrimHandles(laneHeight: laneHeight,
                                 onTrimStartDelta: onTrimStartDelta,
-                                onTrimEndDelta: onTrimEndDelta)
+                                onTrimEndDelta: onTrimEndDelta,
+                                adjustStepPoints: accessibilityModel.stepPoints)
             }
         }
         .frame(width: geometry.width(for: duration), height: laneHeight - 4)
@@ -158,10 +192,11 @@ public struct AudioClipBar: View, Equatable {
         .onTapGesture { onTap() }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityComposed)
-        .accessibilityValue(accessibilityValueDescription)
+        .accessibilityValue(accessibilityValueComposed)
+        .clipBarAccessibility(accessibilityModel, callbacks: accessibilityCallbacks)
         .task(id: audioURL) {
             guard waveformSamples.isEmpty, let audioURL else { return }
-            loadedSamples = await AudioWaveform.samples(url: audioURL, count: 80)
+            loadedSamples = (try? await WaveformCache.shared.samples(from: audioURL, count: 80)) ?? []
         }
     }
 
@@ -176,19 +211,19 @@ public struct AudioClipBar: View, Equatable {
         let width = geometry.width(for: duration)
         if width >= 44 && !title.isEmpty {
             VStack(spacing: 0) {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "waveform")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(.white)
                         .accessibilityHidden(true)
                     Text(title)
-                        .font(.system(size: 10, weight: .semibold))
+                        .meeshyScaledFont(MeeshyFont.captionSize, weight: .semibold)
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .shadow(color: .black.opacity(0.45), radius: 1, y: 0.5)
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, MeeshySpacing.sm)
                 .frame(height: VideoClipBar.titleBandHeight)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Spacer(minLength: 0)
@@ -232,6 +267,7 @@ public struct AudioClipBar: View, Equatable {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .accessibilityElement()
             .accessibilityAddTraits(.isButton)
+            .accessibilityAction { onToggleMute?() }
             .accessibilityLabel(isMuted
                 ? String(localized: "story.audio.track.unmute", defaultValue: "Activer le son de cette piste", bundle: .module)
                 : String(localized: "story.audio.track.mute", defaultValue: "Couper le son de cette piste", bundle: .module))
@@ -243,10 +279,10 @@ public struct AudioClipBar: View, Equatable {
         // `titleOverlay` (icône waveform + titre) sur les clips ≥ 44 pt.
         Image(systemName: "speaker.slash.fill")
             .font(.caption2)
-            .padding(4)
+            .padding(MeeshySpacing.xs)
             .background(Circle().fill(Color.black.opacity(0.6)))
             .foregroundStyle(Color.white)
-            .padding(4)
+            .padding(MeeshySpacing.xs)
             .frame(maxWidth: .infinity, alignment: .trailing)
             .accessibilityHidden(true)
     }

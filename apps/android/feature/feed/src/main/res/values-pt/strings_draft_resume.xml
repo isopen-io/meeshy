@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_draft_resume_title">Retome o seu rascunho</string>
+    <string name="feed_draft_resume_action">Retomar</string>
+    <string name="feed_draft_resume_discard_title">Excluir este rascunho?</string>
+    <string name="feed_draft_resume_discard_body">Ele será apagado deste dispositivo.</string>
+</resources>

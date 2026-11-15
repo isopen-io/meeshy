@@ -30,6 +30,19 @@ final class StoryComposerChromeSchemeTests: XCTestCase {
         XCTAssertEqual(vm.canvasChromeScheme, .dark)
     }
 
+    /// **Une scène sans fond est peinte NOIRE** (repli du canvas) : le chrome
+    /// posé dessus suit ce noir, jamais le pastel que la scène précédente a
+    /// laissé dans `backgroundColor` (#5008 — légende indigo sur matière claire
+    /// mesurée à 1,13:1 sur une scène neuve, recette du 2026-10-05).
+    func test_canvasChromeScheme_newSlideWithoutBackground_followsTheBlackCanvas() {
+        let vm = StoryComposerViewModel()
+        vm.backgroundColor = "#EEF2FF"
+        vm.addSlide()
+
+        XCTAssertNil(vm.currentEffects.background)
+        XCTAssertEqual(vm.canvasChromeScheme, .dark)
+    }
+
     func test_canvasChromeScheme_backgroundMediaObject_forcesDark() {
         let vm = StoryComposerViewModel()
         vm.backgroundColor = "#EEF2FF"

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_search_translation_badge">ترجمة</string>
+    <string name="chat_search_failed">فشل البحث</string>
+    <string name="chat_search_retry">إعادة المحاولة</string>
+    <string name="chat_search_offline">غير متصل: النتائج المحلية فقط</string>
+    <string name="chat_search_open_result">انتقل إلى رسالة %1$s</string>
+</resources>

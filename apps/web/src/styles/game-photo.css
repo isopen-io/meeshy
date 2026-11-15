@@ -1,0 +1,28 @@
+/* LE CADRE DES MOMENTS PHOTO (#9382) — les dessins du jeu portent une taille
+   en pixels (leurs attributs `width`/`height`) ; dans le cadre ils suivent la
+   largeur de l'image, qu'elle s'affiche sur un téléphone ou en plein écran. */
+.game-photo-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.game-photo-art > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.game-photo-frame {
+  container-type: inline-size;
+}
+
+.game-photo-text {
+  position: absolute;
+  inset-inline: 0;
+  margin: 0;
+  text-align: center;
+  white-space: nowrap;
+  line-height: 1;
+  text-shadow: 0 0 0.35em color-mix(in srgb, var(--ios-indigo-950) 60%, transparent);
+}

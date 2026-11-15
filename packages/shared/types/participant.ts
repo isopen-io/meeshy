@@ -27,7 +27,6 @@ export type ParticipantPermissions = z.infer<typeof ParticipantPermissionsSchema
 
 export const AnonymousSessionDetailsSchema = z.object({
   sessionTokenHash: z.string(),
-  ipAddress: z.string().optional(),
   country: z.string().optional(),
   deviceFingerprint: z.string().optional(),
   connectedAt: z.coerce.date(),
@@ -137,6 +136,12 @@ const BaseParticipantSchema = z.object({
   joinedAt: z.coerce.date(),
   leftAt: z.coerce.date().optional(),
   bannedAt: z.coerce.date().optional(),
+  /**
+   * Octroi d'historique par DATE posé par un administrateur de la conversation.
+   * Facultatif : ajouté après coup, absent sur toute participation antérieure.
+   * @see schema.prisma → Participant.historyVisibleFrom
+   */
+  historyVisibleFrom: z.coerce.date().nullable().optional(),
   nickname: z.string().optional(),
   lastActiveAt: z.coerce.date().optional(),
   sessionTokenHash: z.string().optional(),

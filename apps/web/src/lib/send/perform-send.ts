@@ -1,0 +1,435 @@
+import type { QueryClient } from '@tanstack/react-query';
+import type { StoreApi } from 'zustand/vanilla';
+
+import type { PostMediaUploadDeps } from '@/lib/api/post-media-upload';
+import type { ApiResult } from '@/lib/api/http';
+import type { TusCheckpointStore } from '@/lib/api/tus-checkpoint';
+import { E2EE_PLAINTEXT_WITHHELD } from '@/lib/end-to-end-regime-ledger';
+import { browserImagePreparer, type ImagePreparer } from '@/lib/media/prepare-image-upload';
+import { newClientMessageId } from '@/lib/api/client-message-id';
+import type { ConversationsDeps } from '@/lib/api/conversations';
+import { offerLastMessage } from '@/lib/api/list-preview';
+import { findCachedThreadMessage, messagesQueryKey, sendMessage, upsertThreadMessage, type SendMessageBody } from '@/lib/api/messages';
+import { attachmentReplyOf } from './attachment-reply';
+import { plaintextWithheld } from './served-regime';
+import type { Message, Participant } from '@/lib/api/types';
+
+import { messageTypeOfPending, type PendingAttachment } from './attachments';
+import type { ComposeProtection } from './compose-protection';
+import { confirmedMessageOf, localMessageOf, type LocalMessage } from './local-message';
+import type { SharedPlace } from './shared-place';
+import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
+import { entriesOf, type OutboxState } from './outbox-store';
+import type { SendProgressState } from './send-progress';
+import { uploadPending } from './upload-pending';
+import type { UploadBatchLimits } from './upload-batches';
+
+/**
+ * LE SITE UNIQUE DE LA RÈGLE (#5813, étape 5) — comment une écriture PART,
+ * se CONFIRME et se RELANCE. `queryClient`/`outbox`/`online` sont REÇUS,
+ * jamais lus depuis un singleton : ce module ne sait rien de `apiConfig`
+ * ni de `useOnline()`, `use-send.ts` (le hook, sans règle) les lui fournit.
+ */
+export type SendDeps = ConversationsDeps & {
+  readonly queryClient: QueryClient;
+  readonly outbox: StoreApi<OutboxState>;
+  readonly online: boolean;
+  /** Horloge injectable — jamais `Date.now()` lu directement (témoins). */
+  readonly now?: () => number;
+  /** La préparation des photos avant téléversement (#11310) — le worker d'image par défaut. */
+  readonly prepare?: ImagePreparer;
+  /** Le téléversement par reprise (TUS) des gros fichiers et la progression
+   * de chaque envoi (#16134) — absent ⇒ tout part en multipart, sans progression. */
+  readonly transfer?: SendTransfer;
+};
+
+export type ResumableUploader = (params: {
+  readonly file: File;
+  readonly onProgress?: (fraction: number) => void;
+}) => Promise<ApiResult<{ readonly attachmentId: string }>>;
+
+export type SendTransfer = {
+  readonly progress: StoreApi<SendProgressState>;
+  readonly media: PostMediaUploadDeps;
+  readonly limits?: UploadBatchLimits;
+  readonly checkpoints?: TusCheckpointStore | null;
+  /** Injectable par les témoins ; `uploadMessageAttachment` en production. */
+  readonly resumable?: ResumableUploader;
+};
+
+export type Draft = {
+  readonly content: string;
+  readonly originalLanguage: string;
+  readonly replyToId?: string;
+  /** Le message cité, ENTIER — voir `localMessageOf` (`local-message.ts`,
+   * défaut majeur 6, revue-correction #5813) : porté à côté de `replyToId`
+   * pour que la bulle optimiste affiche sa citation avant tout accusé. */
+  readonly replyTo?: Message;
+  /**
+   * L'HUMEUR (ou la story) À LAQUELLE ON RÉPOND (#10813) — sa citation se gèle
+   * côté passerelle (`metadata.postReplyTo`) ; elle n'est admise que dans la
+   * conversation DIRECTE avec son auteur (`storyReplyAdmission.ts`).
+   */
+  readonly storyReplyToId?: string;
+  /**
+   * LA SÉLECTION DU COMPOSEUR (#5668) — `undefined`/liste vide pour un envoi
+   * texte pur (comportement INCHANGÉ, tous les témoins historiques de ce
+   * module continuent de passer sans cette clé). Non vide ⇒ `performSend`
+   * pose `entry.upload` et `attempt()` téléverse AVANT d'appeler
+   * `POST …/messages`.
+   */
+  readonly attachments?: readonly PendingAttachment[];
+  /**
+   * LA PROTECTION CHOISIE (#6175) — éphémère / flou / vue unique / effets
+   * décoratifs, composée en champs `Message` par `localMessageOf`
+   * (`protectionFieldsOf`, `compose-protection.ts`) UNE seule fois, à la
+   * création : `retrySend` relit le MÊME `LocalMessage`, jamais recalculée
+   * (la durée ne change JAMAIS d’un renvoi à l’autre). `undefined`
+   * ⇒ aucune protection (comportement INCHANGÉ, tous les témoins historiques
+   * de ce module continuent de passer sans cette clé).
+   */
+  readonly protection?: ComposeProtection;
+  /**
+   * LE LIEU PARTAGÉ (#7280) — ce que la tuile « Position » du tiroir a
+   * obtenu du navigateur. `undefined` ⇒ clé `location` ABSENTE du corps,
+   * jamais `null` posé (même discipline que `content`/`replyToId`/la
+   * protection).
+   *
+   * IL VOYAGE SUR LE `LocalMessage` (#7328), plus sur l'entrée d'outbox à
+   * côté de lui : c'est ce que la bulle rend (`placeOf`), ce que la reprise
+   * relit (`entry.message` est repris tel quel) et ce que `bodyOf` envoie —
+   * une source, trois lecteurs. Rangé à côté du message, il était invisible à
+   * son expéditeur (voir le doc-comment de `LocalMessage.location`).
+   */
+  readonly place?: SharedPlace;
+  /**
+   * LE STICKER (#7938) — le descripteur d'un sticker de bibliothèque
+   * (`{ stickerId }`), porté comme le lieu : sur le `LocalMessage`, relu par
+   * `bodyOf`. L'image elle-même voyage en pièce jointe ordinaire.
+   */
+  readonly sticker?: MessageSticker;
+};
+
+/**
+ * `attachmentIds` REÇUS séparément du `message` (#5668) : ils viennent de la
+ * PHASE D'UPLOAD de `attempt()` (ou d'une reprise qui les a déjà obtenus),
+ * jamais de `message.attachments` — qui porte des `Attachment` LOCAUX
+ * (`fileUrl` en `blob:`, pour la bulle optimiste), pas des ids serveur.
+ * `content` est OMIS quand le texte est vide (§ 0 de la spécification #5668,
+ * un vocal PUR part sans la clé) ; `messageType` OMIS à `'text'` (le défaut
+ * serveur, `messages-send.ts:59`).
+ */
+/**
+ * LA PROTECTION, RELUE depuis le message local plutôt que RECOMPOSÉE
+ * (#6175) — `localMessageOf` a déjà posé `isBlurred`/`isViewOnce`/
+ * `effectFlags`/`ephemeralDuration` par `protectionFieldsOf` : ce corps relit ces
+ * MÊMES champs, jamais une seconde composition depuis `ComposeProtection` (un
+ * seul site de vérité entre ce qui s'affiche et ce qui part). Chaque clé est
+ * OMISE à sa valeur par défaut (`false`/`0`/absente) — même discipline que
+ * `content`/`replyToId` ci-dessous, miroir `ConversationViewModel+Send.swift:428-437`
+ * (« aucune clé à sa valeur par défaut »).
+ */
+function protectionBodyOf(message: LocalMessage): Pick<SendMessageBody, 'isBlurred' | 'ephemeralDuration' | 'effectFlags' | 'isViewOnce'> {
+  return {
+    ...(message.isBlurred ? { isBlurred: true } : {}),
+    ...(message.ephemeralDuration === undefined ? {} : { ephemeralDuration: message.ephemeralDuration }),
+    ...(message.effectFlags ? { effectFlags: message.effectFlags } : {}),
+    ...(message.isViewOnce ? { isViewOnce: true } : {}),
+  };
+}
+
+function bodyOf(message: LocalMessage, attachmentIds: readonly string[]): SendMessageBody {
+  const declared = declaredAttachmentType(message.messageType);
+  const namedPiece = attachmentReplyOf(message.replyTo);
+  return {
+    ...(message.content.trim().length > 0 ? { content: message.content } : {}),
+    originalLanguage: message.originalLanguage,
+    clientMessageId: message.clientMessageId,
+    ...(declared === undefined ? {} : { messageType: declared }),
+    ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
+    ...(message.replyToId === undefined ? {} : { replyToId: message.replyToId }),
+    ...(message.storyReplyToId === undefined ? {} : { storyReplyToId: message.storyReplyToId }),
+    /* LA PIÈCE NOMMÉE (#6303) — relue sur le message CITÉ, comme la bande et la
+       bulle optimiste : la passerelle la range dans `metadata.attachmentReplyTo`
+       et la ressert sur `replyTo.attachmentReplyTo`. */
+    ...(namedPiece === undefined ? {} : { attachmentReplyTo: namedPiece }),
+    /* LE LIEU SE RELIT SUR LE MESSAGE (#7328), comme la protection deux lignes
+       plus bas — un seul site de vérité entre ce qui s'affiche et ce qui part.
+       `retrySend` reprend `entry.message` tel quel : le lieu survit au renvoi
+       sans qu'aucune relecture d'entrée ne le rattrape. */
+    ...(message.location === undefined ? {} : { location: message.location }),
+    ...(message.sticker === undefined ? {} : { sticker: message.sticker }),
+    ...protectionBodyOf(message),
+  };
+}
+
+/**
+ * LE TYPE QU'ON A LE DROIT DE DÉCLARER, sans assertion (revue-correction
+ * #5668) — `LocalMessage['messageType']` porte AUSSI `'system'` et
+ * `'location'`, que ce lot ne produit jamais : un `as` les aurait laissés
+ * passer en silence si un futur appelant en posait un. Rendre `undefined`
+ * laisse alors le défaut serveur (`'text'`, `messages-send.ts:220`)
+ * s'appliquer, plutôt que d'écrire une déclaration que le serveur, lui, ne
+ * corrigera PAS (`attachment-message-type.ts:112-113`).
+ */
+function declaredAttachmentType(
+  messageType: LocalMessage['messageType'],
+): 'image' | 'file' | 'audio' | 'video' | undefined {
+  return messageType === 'image' || messageType === 'file' || messageType === 'audio' || messageType === 'video'
+    ? messageType
+    : undefined;
+}
+
+/**
+ * L'ENVOL, ET SA GARDE — `dispatch` ne rend JAMAIS un rejet, quoi qu'il
+ * arrive à `attempt` (revue-correction).
+ */
+async function dispatch(params: {
+  readonly conversationId: string;
+  readonly message: LocalMessage;
+  readonly deps: SendDeps;
+}): Promise<void> {
+  const { conversationId, message, deps } = params;
+  try {
+    await attempt(params);
+  } catch {
+    /* AUCUNE EXCEPTION NE LAISSE UN MESSAGE SUR L'HORLOGE. `performSend` est
+       appelé en `void` par le hook : un rejet y resterait non traité et
+       l'entrée d'outbox garderait `pending` POUR TOUJOURS — une horloge qui
+       tourne sans reprise possible. `ApiResult` ne rejette jamais (doctrine
+       `http.ts`), mais ce module REÇOIT son transport : la garde tient sur ce
+       qu'on lui donne. Direction de l'erreur choisie par le COÛT DE
+       RÉPARATION — un « Réessayer » de trop se rejoue (l'appel est idempotent
+       par `clientMessageId`), une horloge figée ne se répare pas. */
+    deps.outbox.getState().markFailed(conversationId, message.clientMessageId);
+  }
+}
+
+/**
+ * LA TENTATIVE — appelle le port, puis arbitre l'issue. **Un seul geste pour
+ * les deux issues d'échec** (permanent/transient) : la différence vit dans
+ * `lastError.status` de l'entrée d'outbox, pour l'affichage et pour la
+ * future file de reprise (issue compagnon Q2). `ApiResult` ne rejette jamais
+ * (doctrine `http.ts`), `unwrap` n'est PAS appelé — ce n'est pas un
+ * `queryFn` ; ce qui pourrait tout de même lever est rattrapé par `dispatch`.
+ */
+/**
+ * LA PHASE D'UPLOAD (#5668) — appelée par `attempt()` AVANT `POST …/messages`
+ * quand l'entrée porte `upload`. Rend les `attachmentIds` à poser sur le
+ * corps, ou `null` si l'upload a échoué (`markFailed` déjà posé par cette
+ * fonction — l'appelant s'arrête alors sans rien tenter d'autre).
+ *
+ * REPRISE SANS RE-UPLOAD (§ 0 « Reprise » de la spécification) :
+ * `upload.attachmentIds` déjà posé (un `POST …/messages` précédent a échoué
+ * APRÈS un upload réussi) ⇒ cette phase ne rappelle PAS
+ * `POST /attachments/upload`, elle rend directement les ids mémorisés.
+ *
+ * RÉCONCILIATION PAR COMPTE (§ 0 « UPLOAD_PARTIAL ») : `uploadMultiple` avale
+ * les échecs PAR FICHIER sous `success: true` — moins d'attachements que de
+ * fichiers envoyés est un ÉCHEC d'envoi, jamais un envoi partiel silencieux.
+ */
+async function uploadPhase(params: {
+  readonly conversationId: string;
+  readonly message: LocalMessage;
+  readonly deps: SendDeps;
+}): Promise<readonly string[] | null> {
+  const { conversationId, message, deps } = params;
+  const entry = entriesOf(deps.outbox.getState(), conversationId).find(
+    (e) => e.message.clientMessageId === message.clientMessageId,
+  );
+  const upload = entry?.upload;
+  if (upload === undefined) {
+    /**
+     * L'ENTRÉE NE PORTE PLUS SA PHASE D'UPLOAD, MAIS LE MESSAGE DÉCLARE DES
+     * PIÈCES (revue-correction #5668) — rendre `[]` enverrait le message
+     * AMPUTÉ : la bulle montrerait la photo en local, le serveur
+     * enregistrerait un message vide, et personne ne verrait jamais l'écart.
+     * La direction de l'erreur se choisit par le COÛT DE RÉPARATION
+     * (`tasks/lessons.md`) : un « Réessayer » de trop se rejoue, une pièce
+     * perdue en silence ne se répare pas.
+     */
+    if ((message.attachments?.length ?? 0) > 0) {
+      deps.outbox
+        .getState()
+        .markFailed(conversationId, message.clientMessageId, {
+          ok: false,
+          status: 0,
+          error: 'Pièces jointes introuvables pour cet envoi',
+          code: 'UPLOAD_PARTIAL',
+        });
+      return null;
+    }
+    return [];
+  }
+  if (upload.attachmentIds !== undefined) return upload.attachmentIds;
+  if (upload.files.length === 0) return [];
+
+  const pending = await (deps.prepare ?? browserImagePreparer).prepareUploads(upload.files);
+  const uploaded = await uploadPending({ deps, pending, clientMessageId: message.clientMessageId });
+  deps.transfer?.progress.getState().clear(message.clientMessageId);
+  if (!uploaded.ok) {
+    deps.outbox.getState().markFailed(conversationId, message.clientMessageId, uploaded.failure);
+    return null;
+  }
+
+  const attachmentIds = uploaded.ids;
+  deps.outbox.getState().markUploaded(conversationId, message.clientMessageId, attachmentIds);
+  return attachmentIds;
+}
+
+async function attempt(params: {
+  readonly conversationId: string;
+  readonly message: LocalMessage;
+  readonly deps: SendDeps;
+}): Promise<void> {
+  const { conversationId, message, deps } = params;
+
+  /* #12949 — la garde AVANT le téléversement : retenir le seul message
+     laisserait le fichier déjà parti en clair au serveur. */
+  if (plaintextWithheld(conversationId, deps.queryClient)) {
+    deps.outbox.getState().markFailed(conversationId, message.clientMessageId, {
+      ok: false,
+      status: 0,
+      error: 'Cette conversation est chiffrée de bout en bout : rien n’y part en clair',
+      code: E2EE_PLAINTEXT_WITHHELD,
+    });
+    return;
+  }
+
+  const attachmentIds = await uploadPhase(params);
+  if (attachmentIds === null) return; // markFailed déjà posé par uploadPhase.
+
+  const result = await sendMessage({
+    source: deps.source,
+    transport: deps.transport,
+    conversationId,
+    body: bodyOf(message, attachmentIds),
+  });
+
+  if (!result.ok) {
+    deps.outbox.getState().markFailed(conversationId, message.clientMessageId, result);
+    return;
+  }
+
+  const confirmed = confirmedMessageOf(message, result.data);
+
+  // ANNULE le refetch en vol AVANT d'écrire — sinon la résolution d'une
+  // page déjà en cours écraserait le confirmé qu'on vient de poser
+  // (témoin 4.5, point 11).
+  await deps.queryClient.cancelQueries({ queryKey: messagesQueryKey(conversationId) });
+  /* `upsertThreadMessage` (#6972, étape 1) — le SITE UNIQUE qui porte
+     « FUSIONNE par id OU clientMessageId, sinon append » (`api/messages.ts`).
+     C'était `upsertConfirmed`, ici, jumelle de celle de `applyMessageNew`
+     (`api/realtime-apply.ts`) que leurs doc-comments déclaraient déjà être
+     « la MÊME règle » (D-11/D-28) — sans l'être tout à fait.
+     Elle REMPLAÇAIT jusqu'à #9262 : `confirmed` ne porte ni `recipientCount`
+     ni traductions, et ses compteurs retombent à 0 — ce chemin-ci est celui
+     qui faisait redescendre la coche de ✓✓ à ✓ quand l'accusé arrivait après
+     un `read-status:updated`. La loi de fusion est chez elle, pas ici. */
+  /* L'ÉCHO A PU PRÉCÉDER L'ACCUSÉ (#10690) : `message:new` a déjà posé la
+     rangée avec les pièces SERVIES. L'accusé, qui repart du local, ne les
+     remplace pas par les aperçus `blob:` — la loi de fusion garde une clé
+     absente telle quelle. */
+  const served = findCachedThreadMessage(deps.queryClient, conversationId, confirmed.id);
+  const { attachments: _localPreviews, ...withoutLocalPieces } = confirmed;
+  upsertThreadMessage(
+    deps.queryClient,
+    conversationId,
+    served?.attachments === undefined ? confirmed : withoutLocalPieces,
+  );
+  /* L'ACCUSÉ PASSE PAR LA GARDE D'ORDRE (#7547) : s'il revient après une
+     réponse plus récente, il ne ramène pas mon ancien message dans la ligne.
+     Même message que l'optimiste (même `clientMessageId`) ⇒ il le promeut.
+     `createdAt` de l'accusé reste une CHAÎNE (D-26), `offerLastMessage` la
+     pose telle quelle. */
+  offerLastMessage(deps.queryClient, conversationId, confirmed);
+  deps.outbox.getState().remove(conversationId, message.clientMessageId);
+}
+
+/**
+ * AUCUN DÉDOUBLONNAGE PAR CONTENU (#7985, directive porteur 2026-09-25) — le
+ * débounce de 600 ms sur `(conversation, texte, réponse, pièces)` bloquait
+ * 😂 😂 😂 tapés en série ; il est retiré, comme son miroir iOS
+ * (`duplicateSendDebounce`). Chaque envoi est un MESSAGE, avec son propre
+ * `clientMessageId` : c'est la SEULE déduplication qui reste — un même
+ * message rejoué (`retrySend`, écho socket) garde son identifiant et ne fait
+ * qu'une ligne, ici comme à la passerelle (`messages-send.ts`). Le double
+ * clic sur « Envoyer » est tenu par le composeur, qui vide son brouillon à
+ * l'instant de l'envoi (`composer.tsx`, `draftNow`).
+ */
+export async function performSend(params: {
+  readonly conversationId: string;
+  readonly draft: Draft;
+  readonly viewerId: string;
+  readonly sender?: Participant;
+  readonly deps: SendDeps;
+}): Promise<void> {
+  const { conversationId, draft, viewerId, sender, deps } = params;
+  /* #13171 — dans une conversation vue chiffrée de bout en bout, le clair ne
+     naît nulle part : ni entrée d'outbox, ni ligne de liste optimiste (que le
+     cache RANGE sur le disque), ni requête. L'appelant dit le refus
+     (`plaintextWithheld`) ; un envoi déjà en file avant l'apprentissage reste
+     retenu par `attempt`. */
+  if (plaintextWithheld(conversationId, deps.queryClient)) return;
+  const now = deps.now ?? Date.now;
+  const nowMs = now();
+
+  const clientMessageId = newClientMessageId();
+  const messageType = messageTypeOfPending(draft.attachments ?? []);
+  const message = localMessageOf({
+    clientMessageId,
+    conversationId,
+    viewerId,
+    ...(sender === undefined ? {} : { sender }),
+    content: draft.content,
+    originalLanguage: draft.originalLanguage,
+    messageType,
+    ...(draft.replyToId === undefined ? {} : { replyToId: draft.replyToId }),
+    ...(draft.replyTo === undefined ? {} : { replyTo: draft.replyTo }),
+    ...(draft.storyReplyToId === undefined ? {} : { storyReplyToId: draft.storyReplyToId }),
+    ...(draft.attachments === undefined || draft.attachments.length === 0 ? {} : { attachments: draft.attachments }),
+    ...(draft.protection === undefined ? {} : { protection: draft.protection }),
+    ...(draft.place === undefined ? {} : { place: draft.place }),
+    ...(draft.sticker === undefined ? {} : { sticker: draft.sticker }),
+    now: new Date(nowMs),
+  });
+
+  deps.outbox.getState().enqueue(conversationId, {
+    message,
+    delivery: deps.online ? 'pending' : 'failed',
+    attempts: deps.online ? 1 : 0,
+    startedAt: nowMs,
+    ...(draft.attachments === undefined || draft.attachments.length === 0
+      ? {}
+      : { upload: { files: draft.attachments } }),
+  });
+
+  /* L'OPTIMISTE DANS LA LIGNE (#7547) — la liste montre mon envoi à
+     l'instant du geste, avant tout accusé et même hors ligne ; l'accusé ou
+     l'écho socket le promeuvent ensuite par son `clientMessageId`. */
+  offerLastMessage(deps.queryClient, conversationId, message);
+
+  if (!deps.online) return; // hors ligne (D-16) : aucun appel.
+
+  await dispatch({ conversationId, message, deps });
+}
+
+export async function retrySend(params: {
+  readonly conversationId: string;
+  readonly clientMessageId: string;
+  readonly deps: SendDeps;
+}): Promise<void> {
+  const { conversationId, clientMessageId, deps } = params;
+  const entry = entriesOf(deps.outbox.getState(), conversationId).find(
+    (e) => e.message.clientMessageId === clientMessageId,
+  );
+  if (entry === undefined || entry.delivery !== 'failed') return;
+  if (!deps.online) return; // D-16 : reste en échec, aucun appel.
+
+  const now = deps.now ?? Date.now;
+  deps.outbox.getState().markPending(conversationId, clientMessageId, now());
+  // Le MÊME `clientMessageId` et la MÊME `originalLanguage` — `entry.message`
+  // est repris tel quel, jamais reconstruit (« aucune régénération au
+  // renvoi », § 10 de la spécification #5813).
+  await dispatch({ conversationId, message: entry.message, deps });
+}

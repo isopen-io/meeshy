@@ -36,7 +36,7 @@ final class StoryTraySheetChainingTests: XCTestCase {
     }
 
     private func traySource() throws -> String {
-        try source("Features/Main/Views/StoryTrayView.swift")
+        try source("Features/Stories/Views/StoryTrayView.swift")
     }
 
     private func occurrences(of needle: String, in haystack: String) -> Int {
@@ -75,7 +75,7 @@ final class StoryTraySheetChainingTests: XCTestCase {
     }
 
     private func trayActionsSource() throws -> String {
-        try source("Features/Main/Views/StoryTrayActions.swift")
+        try source("Features/Stories/Views/StoryTrayActions.swift")
     }
 
     func test_theStoryTrayNeverSleepsBeforePresenting() throws {
@@ -206,5 +206,14 @@ final class StoryTraySheetChainingTests: XCTestCase {
             occurrences(of: "storyViewerCoordinator.present(", in: tap), 0,
             "…et jamais la lecture directe : elle vit au menu contextuel (« Voir ma story »)."
         )
+    }
+
+    /// Une story expire 24 h après sa publication : le tray la balaie tant qu'il est visible, pas seulement aux
+    /// chargements — sans quoi une app restée un jour au premier plan gardait des avatars sans rien à jouer.
+    func test_trayBalaieLesStoriesExpireesTantQuIlEstVisible() throws {
+        let tray = try traySource()
+        XCTAssertTrue(tray.contains(".task { await viewModel.sweepExpiredStoriesWhileVisible() }"),
+                      "Le tray balaie les stories mortes tant qu'il est monté (la `.task` s'annule à sa disparition).")
+        XCTAssertEqual(StoryViewModel.expirySweepInterval, .seconds(60))
     }
 }

@@ -1,0 +1,226 @@
+import SwiftUI
+import Combine
+import MeeshySDK
+import MeeshyUI
+
+// =============================================================================
+//  Un réel COMPOSÉ se rejoue comme sa scène (#6745)
+// =============================================================================
+//
+//  Le lecteur de réels demandait « quels médias ce post porte-t-il ? » et jouait
+//  la vidéo brute. Un réel composé porte une SCÈNE : sa vidéo n'en est que le
+//  fond — coupée si l'auteur l'a coupée — et son son de fond vit sur la timeline
+//  de la scène. Mesuré en production (réel `6aa868a7…8222`) : aucun son de fond,
+//  et la vidéo parlait à sa place.
+//
+//  C'est le défaut que `SocialSceneFullscreenView` a fermé pour les posts :
+//
+//  > « Une galerie feuillette de la matière ; un canvas se rejoue. »
+//
+//  Le moteur n'est pas réécrit : `MeeshyScenePlayer` en mode `.reel` rejoue la
+//  scène en boucle, avec le son, et publie sa position pour la progression.
+
+extension ReelPageView {
+    /// Le document que ce réel rejoue, ou `nil` pour un réel de médias.
+    var sceneDocument: CanvasV3? { ReelSceneRouting.sceneDocument(for: reel) }
+
+    var isSceneReel: Bool { sceneDocument != nil }
+}
+
+/// La position de lecture de la scène, publiée à la cadence du player et lue par
+/// la SEULE barre de progression : la page ne se ré-évalue pas à chaque image.
+///
+/// Elle porte aussi le pont du parcours au doigt (#7878) : la page le passe au
+/// player, la barre le pilote, et le canvas se redessine sous le doigt sans
+/// qu'aucun body de page ne soit ré-évalué.
+@MainActor
+final class ReelSceneClock: ObservableObject {
+    nonisolated deinit {}
+
+    @Published var progress: Double = 0
+
+    let scrubber = ScenePlaybackScrubber()
+}
+
+/// Possède le moteur audio d'une page de réel SANS le republier : la page le
+/// garde en vie et l'appelle, seuls ses lecteurs (`ReelAudioView`,
+/// `ReelAudioControl`, `ReelBorrowedSoundCredit`) l'observent.
+@MainActor
+final class ReelAudioEngineBox: ObservableObject {
+    nonisolated deinit {}
+
+    let player = AudioPlaybackManager()
+}
+
+/// La scène d'un réel composé, jouée plein écran.
+///
+/// La lecture suit la MÊME porte que la vidéo d'un réel simple
+/// (`ReelMediaAutostart.shouldStart`) : page active, révélation terminée, aucun
+/// appel. Le tap de la page la met en pause ; quitter la page la relâche.
+struct ReelSceneView: View {
+    /// Les marges sûres de la fenêtre qui porte la vue, mesurées par sa racine (hors de `body`).
+    @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets
+    let reel: FeedPost
+    let document: CanvasV3
+    let isActive: Bool
+    let revealCompleted: Bool
+    let isMuted: Bool
+    @Binding var isPaused: Bool
+    let clock: ReelSceneClock
+
+    @State private var isCallActive = MediaSessionCoordinator.shared.isCallActive
+
+    /// Même porteur que la carte du fil et le plein écran d'un post : sans lui,
+    /// une scène de MÉDIA se peindrait vide (#4926). `internal` depuis #6904 :
+    /// c'est LUI qui porte l'empreinte du fond de la carte, et le témoin la
+    /// mesure.
+    var carrier: StoryItem {
+        StoryItem(id: reel.id,
+                  content: reel.content,
+                  media: reel.media,
+                  storyEffects: reel.storyEffects,
+                  createdAt: reel.timestamp)
+    }
+
+    private var isPlaying: Bool {
+        ReelMediaAutostart.shouldStart(isActive: isActive,
+                                       revealCompleted: revealCompleted,
+                                       isCallActive: isCallActive) && !isPaused
+    }
+
+    var body: some View {
+        // Le Prisme du lecteur, UNE fois : la slide jouée et sa durée en
+        // dépendent toutes deux (un texte long allonge le tour).
+        let languages = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
+        // La durée du tour que le player JOUE (#10555), pas une seconde
+        // dérivation depuis d'autres effets et sans les langues du lecteur.
+        let duration = MeeshyScenePlayer.playedDuration(document: document,
+                                                        carrier: carrier,
+                                                        preferredContentLanguages: languages)
+        // **Un réel qui porte une scène montre LA carte de la story** —
+        // le même composant, la même forme, le même fond (directive porteur du
+        // 2026-09-17 : « Partir du fait que le composant est déjà fait et le
+        // réutiliser pour les scènes de posts et les Réels ! »).
+        //
+        // Il posait `.aspectRatio(SceneShape.aspect, contentMode: .fill)` +
+        // `.clipped()` : un remplissage qui RETIRAIT 44,8 pt de chaque côté de
+        // la scène sur un iPhone 402×874 — 18,2 % de sa largeur, des pixels que
+        // l'auteur avait posés. Le 3e message de la directive (« On préserve le
+        // même fond que pour la story ! ») tranche l'inverse : la scène est
+        // AJUSTÉE, et le fond dominant habille ce qui reste.
+        //
+        // Le viewport vient d'un `GeometryReader` parce qu'un réel ne connaît
+        // pas sa page : le pager lui donne sa place, et le chrome du réel vit
+        // dans ses couloirs, PAR-DESSUS la carte (il ne la rétrécit pas).
+        GeometryReader { geo in
+            ZStack {
+                // **Le SOL — le même que la story et la galerie de post** (#6904,
+                // directive porteur du 2026-09-17 : « On préserve le même fond que
+                // pour la story ! »). Le réel posait `.background(Color.black)` sous
+                // son média (`ReelPageView.mediaLayer`) : la MÊME carte se retrouvait
+                // sur du noir pur là où le lecteur de stories l'entoure d'une teinte
+                // dérivée de son empreinte. Le voile est NUL — un réel est immersif
+                // par nature, il n'a pas de plateau à faire reculer —, et l'empreinte
+                // vient du même site que le fond DANS la carte, juste dessous.
+                SceneFloorView(thumbHash: carrier.sceneBackdropHash,
+                               veil: SceneFloorView.fullVeil)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+
+                // **Un réel est IMMERSIF par nature** (directive B du
+                // 2026-09-18) : il occupe le viewport entier, sans plateau à
+                // faire reculer — c'est déjà pourquoi son sol porte le voile
+                // PLEIN au tour 4. Sa carte n'a donc aucun rayon : « garder les
+                // bords angle exacte ».
+                SceneCard(layout: SceneShape.layout(in: geo.size, immersive: true),
+                          thumbHash: carrier.sceneBackdropHash) {
+                    MeeshyScenePlayer(document: document,
+                                      mode: .reel,
+                                      sceneIndex: .constant(0),
+                                      isPlaying: .constant(isPlaying),
+                                      accentColorHex: reel.authorColor,
+                                      carrier: carrier,
+                                      preferredContentLanguages: languages,
+                                      isMuted: isMuted,
+                                      // Le canvas ne peint jamais son hors-champ :
+                                      // la carte le peint, comme aux quatre
+                                      // montages du lecteur de stories (#6791).
+                                      servesLetterboxFill: false,
+                                      scrubber: clock.scrubber)
+                        .onPlaybackTime { seconds in
+                            clock.progress = ReelSceneProgress.fraction(elapsed: seconds, duration: duration)
+                            // L'horloge de la scène avance : le réel joue (#9837).
+                            if isPlaying, seconds > 0 {
+                                ReelSwitchSignpost.mediaStarted(reel.id, kind: "scene")
+                            }
+                        }
+                }
+
+                // **LE VOILE de lisibilité — celui de la STORY** (#6904 tour 5,
+                // directive porteur du 2026-09-18 : « il faut bien faire
+                // attention à l'ombre dégradé pour rendre le texte lisible qui
+                // doit être mis sur tous l'écran à partir du bas de l'écran »).
+                //
+                // Un réel posait sa légende et sa ligne d'auteur à même le média,
+                // avec `mediaChromeLegible()` pour seule défense — une ombre
+                // portée sur le glyphe, qui tient sur un fond chargé et se perd
+                // sur un aplat clair. Le voile de l'écran est la réponse que la
+                // story donne depuis #6701, et c'est elle qu'on reproduit.
+                //
+                // `chromeVisible: true` — **un réel a TOUJOURS son chrome** :
+                // légende, auteur et rail d'actions ne s'effacent pas, il n'y a
+                // pas de porte immersive dans un réel. C'est la même raison qui
+                // donne à son sol le voile PLEIN au tour 4.
+                //
+                // Monté DERNIER de cette pile, donc au-dessus de la carte ; le
+                // chrome du réel (`ReelPageView+Info`, `ReelsPlayerView+ActionRail`)
+                // vit une couche PLUS HAUTE encore, chez l'hôte de la page — il
+                // reste donc au-dessus du voile, qu'il détache.
+                //
+                // **Les réels VIDÉO et IMAGE ne sont pas visés par ce lot** : ce
+                // fichier ne porte que le réel à SCÈNE, et le lot #6904 est la
+                // convergence des surfaces de SCÈNE (carte, sol, forme, voile).
+                StoryReaderScrims(topInset: WindowInsets(published: sceneSafeAreaInsets).top,
+                                  chromeVisible: true)
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
+            .onReceive(
+                CallManagerHost.shared.callStatePublisher
+                    .map(\.isActive)
+                    .removeDuplicates()
+                    .receive(on: DispatchQueue.main)
+            ) { isCallActive = $0 }
+            .adaptiveOnChange(of: isActive) { _, active in
+                guard !active else { return }
+                isPaused = false
+                clock.progress = 0
+            }
+    }
+}
+
+/// La progression d'un réel composé — et depuis #7878, un CURSEUR.
+///
+/// Elle disait « une barre, sans poignée — la scène se rejoue, elle ne se
+/// parcourt pas ». La demande renverse la décision: au
+/// toucher, la barre s'épaissit, une poignée suit le doigt, la scène se
+/// redessine à l'instant pointé et reprend de là au relâcher — le geste du
+/// réel VIDÉO (`ReelScrubBar`), sur le moteur de la scène.
+struct ReelSceneProgressBar: View {
+    @ObservedObject var clock: ReelSceneClock
+    let accentColor: String
+
+    var body: some View {
+        SceneScrubTrack(playback: clock.progress,
+                        fill: AnyShapeStyle(Color(hex: accentColor)),
+                        scrubber: clock.scrubber,
+                        onCommit: { clock.progress = $0 })
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "reels.scrub", defaultValue: "Avancer ou reculer", bundle: .main))
+            .accessibilityValue(LocalizedNumber.percent(Int((clock.progress * 100).rounded())))
+            .sceneScrubAccessibility(progress: clock.progress,
+                                     scrubber: clock.scrubber,
+                                     onCommit: { clock.progress = $0 })
+    }
+}

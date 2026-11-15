@@ -52,6 +52,46 @@ final class PublishIntentTests: XCTestCase {
         )
     }
 
+    private func intentionDocument(
+        localMedia: [ComposerDocumentMedia] = [],
+        forcePlainPost: Bool = false,
+        originalLanguage: String? = nil,
+        transcription: MobileTranscriptionPayload? = nil,
+        storyEffects: StoryEffects? = nil,
+        mediaCaptions: ComposerMediaCaptions = [:],
+        mediaAlts: ComposerMediaCaptions = [:],
+        mediaObjectIds: ComposerMediaCaptions = [:],
+        allowSoundExtraction: Bool? = nil
+    ) -> PublishIntent {
+        PublishIntent.document(
+            localMedia: localMedia,
+            declaredType: nil,
+            forcePlainPost: forcePlainPost,
+            content: "bonjour",
+            visibility: "PUBLIC",
+            visibilityUserIds: nil,
+            originalLanguage: originalLanguage,
+            mentions: nil,
+            location: nil,
+            discoverabilityPrecision: nil,
+            transcription: transcription,
+            storyEffects: storyEffects,
+            // **Le paramètre était MORT jusqu'au 2026-09-05.** Cette fabrique
+            // acceptait `mediaCaptions` et passait `[:]` en dur : tout témoin
+            // qui lui donnait une carte mesurait donc une intention VIDE, et
+            // concluait ce qu'il voulait. Découvert en ajoutant `mediaAlts` —
+            // le second paramètre a rendu le premier lisible.
+            //
+            // > Un paramètre qu'une fabrique de test ignore ne fait rougir
+            // > personne : le témoin passe, et il passe pour la mauvaise
+            // > raison.
+            mediaCaptions: mediaCaptions,
+            mediaAlts: mediaAlts,
+            mediaObjectIds: mediaObjectIds,
+            allowSoundExtraction: allowSoundExtraction, commentsDisabled: false
+        )
+    }
+
     // MARK: - 1. Le type suit la règle de composition, au MÊME endroit qu'avant
 
     /// Non-régression exacte de `ReelComposition.defaultType` : la convergence
@@ -153,6 +193,86 @@ final class PublishIntentTests: XCTestCase {
         XCTAssertEqual(intention.mentions?.count, 1)
     }
 
+    // MARK: - T2.1 — le geste « je publie un document composé dans le meuble »
+
+    /// Même règle de composition que le vocal — `ReelComposition`, et nulle
+    /// part ailleurs.
+    func test_leTypeDUnDocument_suitLaRegleDeCompositionDuReel() {
+        let video = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/clip.mp4"), mimeType: "video/mp4", durationMs: 4000
+        )
+        XCTAssertEqual(
+            intentionDocument(localMedia: [video]).type, "REEL",
+            "Une vidéo d'au moins 3 s qualifie un RÉEL — même moteur que les autres chemins de publication."
+        )
+        XCTAssertEqual(
+            intentionDocument(localMedia: [video], forcePlainPost: true).type, "POST",
+            "`forcePlainPost` reste honoré : l'auteur qui refuse le format réel garde son post."
+        )
+        let photo = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/photo.jpg"), mimeType: "image/jpeg", durationMs: nil
+        )
+        XCTAssertEqual(
+            intentionDocument(localMedia: [photo]).type, "POST",
+            "Une seule image ne qualifie pas — il en faut deux ou plus."
+        )
+    }
+
+    /// La langue d'un document est celle que l'auteur a DÉCLARÉE — à la
+    /// différence du vocal, dont la langue vient de la transcription.
+    func test_laLangueDUnDocument_estCelleQueLAuteurADeclaree() {
+        XCTAssertEqual(intentionDocument(originalLanguage: "es").originalLanguage, "es")
+    }
+
+    /// **E2 (#3887) — le MÉDIA de fond porte SA propre langue, distincte du
+    /// TEXTE.** Un audio joint à un document ne SUPPLANTE plus la langue
+    /// déclarée du texte : le texte garde la sienne (déclarée), le média garde
+    /// la sienne (transcription), et le Prisme les résout séparément.
+    func test_uneLangueDeMedia_distincteDeLaLangueDuTexte() {
+        let intent = intentionDocument(
+            originalLanguage: "fr",
+            transcription: MobileTranscriptionPayload(text: "Salaam", language: "wo"),
+            storyEffects: nil
+        )
+        XCTAssertEqual(
+            intent.originalLanguage, "fr",
+            "Le TEXTE du document garde la langue DÉCLARÉE — un audio joint ne la supplante plus."
+        )
+        XCTAssertEqual(
+            intent.mobileTranscription?.language, "wo",
+            "Le MÉDIA garde SA propre langue (la transcription), distincte du texte, résolue à part."
+        )
+    }
+
+    // MARK: - #3996 — l'autorisation d'extraction du son voyage avec l'intention
+
+    /// **Round-trip pur** : ce que la fabrique reçoit, l'intention le rend tel
+    /// quel — les trois valeurs possibles (`true`, `false`, `nil` = « l'auteur
+    /// n'a rien décidé »), aucune ne se confondant avec les deux autres.
+    func test_lAutorisationDExtractionDuSon_voyageTelleQuelleJusquALIntention() {
+        XCTAssertEqual(intentionDocument(allowSoundExtraction: true).allowSoundExtraction, true)
+        XCTAssertEqual(intentionDocument(allowSoundExtraction: false).allowSoundExtraction, false)
+        XCTAssertNil(
+            intentionDocument(allowSoundExtraction: nil).allowSoundExtraction,
+            "`nil` doit rester `nil` — c'est « l'auteur n'a rien décidé », distinct d'un refus explicite."
+        )
+    }
+
+    /// #16541 — un brouillon ouvert ne dit rien : `false` ne part jamais.
+    func test_laFermetureDesCommentaires_nExisteDansLIntentionQueSiElleEstChoisie() {
+        func intention(_ fermee: Bool) -> PublishIntent {
+            PublishIntent.document(
+                localMedia: [], declaredType: .post, forcePlainPost: false, content: "x", visibility: "PUBLIC",
+                visibilityUserIds: nil, originalLanguage: nil, mentions: nil, location: nil,
+                discoverabilityPrecision: nil, transcription: nil, storyEffects: nil,
+                mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil,
+                commentsDisabled: fermee)
+        }
+
+        XCTAssertEqual(intention(true).commentsDisabled, true)
+        XCTAssertNil(intention(false).commentsDisabled)
+    }
+
     // MARK: - Lecture de la source de production
 
     private var racineApp: URL {
@@ -216,23 +336,29 @@ final class PublishIntentTests: XCTestCase {
     /// faire passer pour un contrôle qu'elle n'exerce plus.
     func test_laFabriqueDeLIntention_nePoseAucunDefaut() throws {
         let code = try sourceDuVerbe()
-        guard let parametres = listeDeParametres(
-            de: "static func audioRecording(", dans: code
-        ) else {
-            throw AncreIntrouvable(ancre: "static func audioRecording(")
-        }
+        let ancresEtMotsAttendus = [
+            "static func audioRecording(": "fileURL:",
+            "static func document(": "localMedia:",
+        ]
 
-        XCTAssertTrue(
-            parametres.contains("fileURL:"),
-            "La liste de paramètres lue est vide ou fausse — la garde ne mesurerait RIEN."
-        )
-        XCTAssertFalse(
-            parametres.contains("="),
-            "La fabrique pose une valeur par défaut. Un défaut fait disparaître un champ d'un site d'appel "
-                + "SANS casser la compilation : c'est le mécanisme exact qui a fait partir un mood vocal "
-                + "muet et sans sa source. Chaque geste DÉCLARE tout ce qu'il publie, `nil` compris. "
-                + "Paramètres lus — \(parametres)"
-        )
+        for (ancre, motAttendu) in ancresEtMotsAttendus {
+            guard let parametres = listeDeParametres(de: ancre, dans: code) else {
+                throw AncreIntrouvable(ancre: ancre)
+            }
+
+            XCTAssertTrue(
+                parametres.contains(motAttendu),
+                "La liste de paramètres lue est vide ou fausse pour « \(ancre) » — la garde ne mesurerait "
+                    + "RIEN."
+            )
+            XCTAssertFalse(
+                parametres.contains("="),
+                "« \(ancre) » pose une valeur par défaut. Un défaut fait disparaître un champ d'un site "
+                    + "d'appel SANS casser la compilation : c'est le mécanisme exact qui a fait partir un "
+                    + "mood vocal muet et sans sa source. Chaque geste DÉCLARE tout ce qu'il publie, `nil` "
+                    + "compris. Paramètres lus — \(parametres)"
+            )
+        }
     }
 
     // MARK: - 5. Le verbe naît DÉCLARÉ sans appelant
@@ -254,7 +380,7 @@ final class PublishIntentTests: XCTestCase {
     /// La question « qui l'appelle » est une quantification UNIVERSELLE : elle
     /// se prouve sur toute l'arborescence de production, jamais sur le fichier
     /// qu'on a sous les yeux.
-    func test_lIntentionDePublication_nEstComposeeQueParLesDeuxJumeauxAudio() throws {
+    func test_lIntentionDePublication_nEstComposeeQueParLePublieurAudioDuFil() throws {
         guard let enumerateur = FileManager.default.enumerator(
             at: racineApp, includingPropertiesForKeys: nil
         ) else {
@@ -277,17 +403,78 @@ final class PublishIntentTests: XCTestCase {
             "L'intention doit exister, et une seule fois — sinon cette garde ne mesurerait rien."
         )
         XCTAssertEqual(
-            appels, 2,
-            "La fabrique doit avoir DEUX appelants — les deux points d'entrée d'un enregistrement vocal. "
-                + "Zéro : les jumeaux ont cessé de composer, et la fabrique est redevenue du code mort ; "
-                + "retourner cette garde dans l'autre sens. Trois : un geste de plus s'écrit tout seul, et "
-                + "il divergera. Appelants trouvés — \(fichiersAppelants)."
-        )
-        XCTAssertEqual(
             fichiersAppelants, ["FeedView+Attachments.swift"],
-            "Les deux appelants doivent vivre dans le fichier des deux jumeaux. Un modèle, une porte ou "
-                + "une autre vue qui composerait sa propre intention de vocal serait le troisième site que "
-                + "ce lot existe pour empêcher."
+            "La fabrique n'a plus qu'UN appelant depuis que la feuille du fil a quitté le dépôt (#15628) : "
+                + "`publishAudioPost`, dans l'extension `FeedView+Attachments`. Zéro : le vocal a cessé de "
+                + "composer son intention ; un autre fichier : un geste de plus s'écrit tout seul, et il "
+                + "divergera. Appels trouvés — \(appels)."
         )
+    }
+
+    // MARK: - Le RÉALIGNEMENT des textes par média (2026-09-05)
+
+    private func fichier(_ nom: String) -> ComposerDocumentMedia {
+        ComposerDocumentMediaFactory.media(
+            url: URL(fileURLWithPath: "/tmp/\(nom).jpg"), declaredMimeType: "image/jpeg")
+    }
+
+    /// **La carte devient un TABLEAU, dans l'ordre des fichiers.**
+    ///
+    /// C'est le seul étage qui tienne à la fois les textes (par URL) et l'ORDRE
+    /// des fichiers ; plus bas, l'URL n'existe plus — la file relocalise et ne
+    /// garde que des chemins relatifs, et le dispatcher ne connaît que des
+    /// index. Un décalage ici pose la description d'une photo sous une autre,
+    /// et rien en aval ne peut le rattraper.
+    func test_lesAlternatives_seRéalignentSurLOrdreDesFichiers() {
+        let a = fichier("a"), b = fichier("b"), c = fichier("c")
+        let intent = intentionDocument(
+            localMedia: [a, b, c],
+            mediaAlts: [c.url: "le chien", a.url: "la mer"]
+        )
+
+        XCTAssertEqual(intent.mediaAlts, ["la mer", nil, "le chien"],
+                       "l'ordre est celui de `localMedia`, pas celui de la carte — "
+                       + "un dictionnaire n'a pas d'ordre")
+    }
+
+    /// **Légende et alternative voyagent SÉPARÉMENT.** Ce sont deux textes pour
+    /// deux lecteurs — celui qui voit le média, et celui qui ne le voit pas — et
+    /// le schéma les reçoit dans deux champs. Un repli de l'un sur l'autre
+    /// annoncerait à un lecteur d'écran « voici ce que l'image montre » à partir
+    /// d'un texte écrit pour accompagner ce qu'on voit déjà.
+    func test_uneLégende_neSertJamaisDAlternative() {
+        let a = fichier("a")
+        let intent = intentionDocument(localMedia: [a], mediaCaptions: [a.url: "au bord de l'eau"])
+
+        XCTAssertEqual(intent.mediaCaptions, ["au bord de l'eau"])
+        XCTAssertEqual(intent.mediaAlts, [nil],
+                       "aucune alternative saisie ⇒ aucune alternative servie")
+    }
+
+    /// Le pendant : une alternative sans légende ne fabrique pas de légende.
+    func test_uneAlternative_neFabriquePasDeLégende() {
+        let a = fichier("a")
+        let intent = intentionDocument(localMedia: [a], mediaAlts: [a.url: "un chien sur la plage"])
+
+        XCTAssertEqual(intent.mediaAlts, ["un chien sur la plage"])
+        XCTAssertEqual(intent.mediaCaptions, [nil])
+    }
+    /// #9179 — un RÉEL sans texte part avec sa légende de scène dans
+    /// `Post.content`, et la légende RESTE aussi sur son média.
+    func test_unReelSansTexte_portesaLegendeDansLeContenu_etSurLeMedia() {
+        let a = fichier("a")
+        let b = fichier("b")
+        let intent = PublishIntent.document(
+            localMedia: [a, b], declaredType: .reel, forcePlainPost: false,
+            content: "#voyage", visibility: "PUBLIC", visibilityUserIds: nil,
+            originalLanguage: "fr", mentions: nil, location: nil,
+            discoverabilityPrecision: nil, transcription: nil, storyEffects: nil,
+            mediaCaptions: [b.url: "Au bord de l'eau"], mediaAlts: [:], mediaObjectIds: [:],
+            allowSoundExtraction: nil, commentsDisabled: false)
+
+        XCTAssertEqual(intent.type, "REEL")
+        XCTAssertEqual(intent.content, "Au bord de l'eau\n#voyage")
+        XCTAssertEqual(intent.mediaCaptions, [nil, "Au bord de l'eau"])
+        XCTAssertEqual(intent.originalLanguage, "fr")
     }
 }

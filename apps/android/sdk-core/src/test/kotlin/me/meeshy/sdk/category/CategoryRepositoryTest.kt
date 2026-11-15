@@ -35,12 +35,20 @@ class CategoryRepositoryTest {
         var response: ApiResponse<List<ApiCategory>>,
         var createResponse: ApiResponse<ApiCategory> = ApiResponse(success = false, error = "not stubbed"),
     ) : PreferencesApi {
+        override suspend fun updateAudio(body: me.meeshy.sdk.model.AudioPreferenceSyncBody) = ApiResponse<Unit>(success = false)
+
+        override suspend fun getAudio() = ApiResponse<me.meeshy.sdk.model.AudioPreferenceSyncBody>(success = false)
+
+        override suspend fun updateApplication(body: me.meeshy.sdk.model.ApplicationPreferenceSyncBody) = ApiResponse<Unit>(success = false)
+
         var calls: Int = 0
         var createCalls: Int = 0
         var lastCreateBody: CreateCategoryBody? = null
+        var lastLimit: Int? = null
 
         override suspend fun getCategories(limit: Int?): ApiResponse<List<ApiCategory>> {
             calls++
+            lastLimit = limit
             return response
         }
 
@@ -55,6 +63,27 @@ class CategoryRepositoryTest {
 
         override suspend fun updatePrivacy(body: PrivacyPreferenceSyncBody) =
             ApiResponse(success = true, data = Unit)
+
+        // Les deux lectures ajoutees au cycle 131 (#4133). Ce double n'a rien a voir avec
+        // elles : il refuse, ce qui ferait tomber tout test de categories qui les
+        // atteindrait par erreur. Comme les quatre doubles de `ConversationApi`, celui-ci
+        // implemente l'interface A LA MAIN — chaque route ajoutee est donc un inventaire a
+        // tenir, et le compilateur est le seul a s'en souvenir.
+        override suspend fun getNotification() =
+            ApiResponse<NotificationPreferenceSyncBody>(success = false, error = "not stubbed")
+
+        override suspend fun getPrivacy() =
+            ApiResponse<PrivacyPreferenceSyncBody>(success = false, error = "not stubbed")
+
+        override suspend fun getAll() = ApiResponse<me.meeshy.sdk.model.UserPreferences>(success = false, error = "not stubbed")
+
+        override suspend fun patchCategory(categoryId: String, body: me.meeshy.sdk.model.CategoryPatchBody) =
+            ApiResponse<Unit>(success = false, error = "not stubbed")
+
+        override suspend fun patchBlock(category: String, body: kotlinx.serialization.json.JsonObject) =
+            ApiResponse<Unit>(success = false, error = "not stubbed")
+
+        override suspend fun resetBlock(category: String) = ApiResponse<Unit>(success = false, error = "not stubbed")
     }
 
     private fun ok(vararg categories: ApiCategory) =
@@ -63,10 +92,14 @@ class CategoryRepositoryTest {
     private fun wire(id: String, name: String, order: Int? = null) =
         ApiCategory(id = id, name = name, color = "#123456", icon = "star", order = order, isExpanded = true)
 
+    /** What [wire] narrows to: the render attributes travel with the option since 986a39c2bb (#15834). */
+    private fun served(id: String, name: String, order: Int? = null) =
+        CategoryOption(id = id, name = name, order = order, color = "#123456", icon = "star", isExpanded = true)
+
     // ── CategoryCacheSource ──────────────────────────────────────────────────
 
     @Test
-    fun `revalidate fetches, narrows render-only fields and records the sync time`() = runTest {
+    fun `revalidate fetches, keeps the render attributes and records the sync time`() = runTest {
         val api = FakePreferencesApi(ok(wire("work", "Work", order = 1), wire("fam", "Family", order = 0)))
         val store = InMemoryCategorySnapshotStore()
         val source = CategoryCacheSource(store, api, FixedClock(4_242L))
@@ -74,10 +107,21 @@ class CategoryRepositoryTest {
         source.revalidate()
 
         assertThat(source.observe().first()).containsExactly(
-            CategoryOption(id = "work", name = "Work", order = 1),
-            CategoryOption(id = "fam", name = "Family", order = 0),
+            served("work", "Work", order = 1),
+            served("fam", "Family", order = 0),
         ).inOrder()
         assertThat(source.lastSyncedAt().first()).isEqualTo(4_242L)
+    }
+
+    @Test
+    fun `revalidate asks for a page the gateway accepts, never above its maximum of 100`() = runTest {
+        val api = FakePreferencesApi(ok(wire("work", "Work", order = 0)))
+        val source = CategoryCacheSource(InMemoryCategorySnapshotStore(), api, FixedClock(1L))
+
+        source.revalidate()
+
+        assertThat(api.lastLimit).isNotNull()
+        assertThat(api.lastLimit!!).isAtMost(100)
     }
 
     @Test
@@ -171,7 +215,7 @@ class CategoryRepositoryTest {
         repository(api, store).refresh()
 
         assertThat(store.observe().first()).containsExactly(
-            CategoryOption(id = "a", name = "Alpha", order = 2),
+            served("a", "Alpha", order = 2),
         )
         assertThat(api.calls).isEqualTo(1)
     }
@@ -191,11 +235,11 @@ class CategoryRepositoryTest {
 
         val result = repository(api, store, clock = FixedClock(5_000L)).create("Errands")
 
-        assertThat(result).isEqualTo(NetworkResult.Success(CategoryOption(id = "new", name = "Errands", order = 3)))
+        assertThat(result).isEqualTo(NetworkResult.Success(served("new", "Errands", order = 3)))
         assertThat(api.lastCreateBody).isEqualTo(CreateCategoryBody(name = "Errands"))
         assertThat(store.observe().first()).containsExactly(
             CategoryOption(id = "work", name = "Work", order = 0),
-            CategoryOption(id = "new", name = "Errands", order = 3),
+            served("new", "Errands", order = 3),
         ).inOrder()
         assertThat(store.lastSyncedAt().first()).isEqualTo(5_000L)
     }
@@ -210,8 +254,8 @@ class CategoryRepositoryTest {
 
         val result = repository(api, store, clock = FixedClock(9L)).create("Trips")
 
-        assertThat(result.getOrNull()).isEqualTo(CategoryOption(id = "first", name = "Trips", order = null))
-        assertThat(store.observe().first()).containsExactly(CategoryOption(id = "first", name = "Trips"))
+        assertThat(result.getOrNull()).isEqualTo(served("first", "Trips"))
+        assertThat(store.observe().first()).containsExactly(served("first", "Trips"))
     }
 
     @Test

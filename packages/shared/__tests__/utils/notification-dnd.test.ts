@@ -121,5 +121,20 @@ describe('isWithinDnd', () => {
       // 09:45 local = 08:45 UTC → outside.
       expect(isWithinDnd(prefs, new Date('2026-01-01T08:45:00.000Z'))).toBe(false);
     });
+
+    // A whole family of witnesses used '00:00'-'23:59' as an "all day" proxy,
+    // then read the real clock. The window is NOT all day: the end bound is
+    // exclusive, so its last minute is outside — and those witnesses flaked,
+    // or silently stopped exercising DND, for sixty seconds every day.
+    // Graving the bound here is what makes the omission visible: no window
+    // covers 24h, so a witness that needs an active window fixes its INSTANT.
+    it('an end bound is EXCLUSIVE — 00:00-23:59 is not "all day"', () => {
+      const prefs = makePrefs({ dndStartTime: '00:00', dndEndTime: '23:59' });
+      // 23:58 is the last minute actually covered.
+      expect(isWithinDnd(prefs, new Date('2026-01-01T23:58:30.000Z'))).toBe(true);
+      // 23:59 is the exclusive end — outside, for the whole minute.
+      expect(isWithinDnd(prefs, new Date('2026-01-01T23:59:00.000Z'))).toBe(false);
+      expect(isWithinDnd(prefs, new Date('2026-01-01T23:59:59.000Z'))).toBe(false);
+    });
   });
 });

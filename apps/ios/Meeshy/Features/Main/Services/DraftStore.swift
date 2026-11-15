@@ -30,10 +30,15 @@ public struct DraftAttachmentRef: Codable, Equatable, Sendable {
     public var width: Int?
     public var height: Int?
     public var thumbnailColor: String
+    /// `PHAsset.localIdentifier` dont la pièce vient (#9697) — `nil` pour une
+    /// pièce qui ne vient pas de la photothèque, et pour un brouillon écrit
+    /// avant ce champ.
+    public var libraryAssetId: String?
 
     public init(attachmentId: String, storedFileName: String, originalName: String,
                 mimeType: String, fileSize: Int = 0, duration: Int? = nil,
-                width: Int? = nil, height: Int? = nil, thumbnailColor: String = "4ECDC4") {
+                width: Int? = nil, height: Int? = nil, thumbnailColor: String = "4ECDC4",
+                libraryAssetId: String? = nil) {
         self.attachmentId = attachmentId
         self.storedFileName = storedFileName
         self.originalName = originalName
@@ -43,6 +48,7 @@ public struct DraftAttachmentRef: Codable, Equatable, Sendable {
         self.width = width
         self.height = height
         self.thumbnailColor = thumbnailColor
+        self.libraryAssetId = libraryAssetId
     }
 }
 
@@ -54,6 +60,12 @@ public struct MessageDraft: Codable, Equatable, Sendable {
     public var replyAuthorName: String?
     public var replyPreviewText: String?
     public var replyIsMe: Bool
+    /// Non-nil ⇒ la citation est une réponse à une story ou à une humeur de cet
+    /// auteur (#7883) : sans elle, `replyToId` — l'id d'un POST — revenait en
+    /// réponse à un message, et la restauration ne pouvait pas borner la
+    /// citation au DM de l'auteur.
+    public var replyStoryAuthorId: String?
+    public var replyMoodEmoji: String?
     public var selectedLanguage: String?
     /// Raw rawValue of `MessageEffects.flags` so we don't have to import the
     /// app-only type here (the SDK-free DraftStore lives in the app target).
@@ -72,6 +84,8 @@ public struct MessageDraft: Codable, Equatable, Sendable {
         replyAuthorName: String? = nil,
         replyPreviewText: String? = nil,
         replyIsMe: Bool = false,
+        replyStoryAuthorId: String? = nil,
+        replyMoodEmoji: String? = nil,
         selectedLanguage: String? = nil,
         effectFlags: UInt32 = 0,
         isBlurEnabled: Bool = false,
@@ -84,6 +98,8 @@ public struct MessageDraft: Codable, Equatable, Sendable {
         self.replyAuthorName = replyAuthorName
         self.replyPreviewText = replyPreviewText
         self.replyIsMe = replyIsMe
+        self.replyStoryAuthorId = replyStoryAuthorId
+        self.replyMoodEmoji = replyMoodEmoji
         self.selectedLanguage = selectedLanguage
         self.effectFlags = effectFlags
         self.isBlurEnabled = isBlurEnabled
@@ -113,6 +129,55 @@ public struct MessageDraft: Codable, Equatable, Sendable {
     public var hasDraftText: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
+
+    /// Le brouillon du composeur, citation en attente APLATIE — y compris la
+    /// marque de story, pour qu'elle revienne story et non message.
+    static func composing(
+        text: String,
+        reply: ReplyReference?,
+        selectedLanguage: String? = nil,
+        effectFlags: UInt32 = 0,
+        isBlurEnabled: Bool = false,
+        ephemeralDurationRawValue: Int? = nil,
+        attachments: [DraftAttachmentRef]? = nil
+    ) -> MessageDraft {
+        MessageDraft(
+            text: text,
+            replyToId: reply?.messageId,
+            replyAuthorName: reply?.authorName,
+            replyPreviewText: reply?.previewText,
+            replyIsMe: reply?.isMe ?? false,
+            replyStoryAuthorId: reply?.isStoryReply == true ? reply?.storyAuthorId : nil,
+            replyMoodEmoji: reply?.isStoryReply == true ? reply?.moodEmoji : nil,
+            selectedLanguage: selectedLanguage,
+            effectFlags: effectFlags,
+            isBlurEnabled: isBlurEnabled,
+            ephemeralDurationRawValue: ephemeralDurationRawValue,
+            attachments: attachments
+        )
+    }
+
+    /// La citation à restituer au composeur de CETTE conversation, ou `nil`.
+    /// Une citation de story ou d'humeur n'est rendue que dans le DM de son
+    /// auteur (`StoryReplyAdmission`, #7883).
+    ///
+    /// `authorAvatarUrl` reste nil, et c'est sans conséquence : cette
+    /// référence n'alimente que la BANNIÈRE du composeur, qui ne dessine aucun
+    /// avatar ; à l'envoi, la citation rendue est reconstruite depuis le
+    /// message cité en mémoire.
+    func restoredReply(conversationIsDirect: Bool, participantUserId: String?) -> ReplyReference? {
+        guard let replyToId, let replyAuthorName else { return nil }
+        let reference = ReplyReference(
+            messageId: replyToId,
+            authorName: replyAuthorName,
+            previewText: replyPreviewText ?? "",
+            isMe: replyIsMe,
+            isStoryReply: replyStoryAuthorId != nil,
+            moodEmoji: replyMoodEmoji,
+            storyAuthorId: replyStoryAuthorId
+        )
+        return reference.isAdmissible(conversationIsDirect: conversationIsDirect, participantUserId: participantUserId) ? reference : nil
+    }
 }
 
 /// Projection légère et prête au rendu d'un brouillon persisté, pour la liste
@@ -124,6 +189,11 @@ struct DraftSummary: Equatable, Sendable {
 }
 
 final class DraftStore: @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = DraftStore()
 
     /// Émis à chaque mutation de brouillon (save, remove, clearAll,
@@ -139,13 +209,11 @@ final class DraftStore: @unchecked Sendable {
     /// (la migration n'a pas de user-cible).
     private let userIdProvider: () -> String?
     private let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .iso8601
+        let e = MeeshyCoders.encoder(.persistence)
         return e
     }()
     private let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
+        let d = MeeshyCoders.decoder(.persistence)
         return d
     }()
 
@@ -267,6 +335,8 @@ final class DraftStore: @unchecked Sendable {
         draft.replyAuthorName = nil
         draft.replyPreviewText = nil
         draft.replyIsMe = false
+        draft.replyStoryAuthorId = nil
+        draft.replyMoodEmoji = nil
         save(draft, for: conversationId)
     }
 
@@ -355,5 +425,5 @@ final class DraftStore: @unchecked Sendable {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let drafts = Logger(subsystem: "me.meeshy.app", category: "draft-store")
+    nonisolated static let drafts = MeeshyLog.logger(.draftStore)
 }

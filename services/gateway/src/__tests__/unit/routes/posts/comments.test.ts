@@ -29,7 +29,7 @@ jest.mock('../../../../services/PostCommentService', () => ({
   PostCommentService: jest.fn().mockImplementation(() => ({
     getComments: (...args: any[]) => mockGetComments(...args),
     getReplies: (...args: any[]) => mockGetReplies(...args),
-    addComment: (...args: any[]) => mockAddComment(...args),
+    addComment: (...args: any[]) => mockAddComment(...args), getCommentAsCreated: async (id: string) => ({ id, content: 'Hello', postId: '507f1f77bcf86cd799439022' }),
     likeComment: (...args: any[]) => mockLikeComment(...args),
     unlikeComment: (...args: any[]) => mockUnlikeComment(...args),
     deleteComment: (...args: any[]) => mockDeleteComment(...args),
@@ -72,6 +72,7 @@ jest.mock('../../../../middleware/rate-limiter', () => ({
 }));
 
 const mockWithMutationLog = jest.fn<any>().mockImplementation(({ op }: any) => op());
+const mockWithMutationVerdict = jest.fn<any>().mockImplementation(async ({ op }: any) => ({ result: await op(), replayed: false }));
 jest.mock('../../../../utils/withMutationLog', () => ({
   // Le module réel est ÉTALÉ d'abord : `MutationResultGone` est une CLASSE
   // dont les routes font `instanceof`, et `withMutationOutcome` est le
@@ -79,7 +80,7 @@ jest.mock('../../../../utils/withMutationLog', () => ({
   // les laissait à `undefined` — `instanceof undefined` lève un TypeError
   // qui se déguise en 500 sur des chemins d'erreur sans rapport.
   ...(jest.requireActual('../../../../utils/withMutationLog') as object),
-  withMutationLog: (...args: any[]) => mockWithMutationLog(...args),
+  withMutationLog: (...args: any[]) => mockWithMutationLog(...args), withMutationVerdict: (...args: any[]) => mockWithMutationVerdict(...args),
 }));
 
 jest.mock('../../../../utils/sanitize.js', () => ({
@@ -89,6 +90,7 @@ jest.mock('../../../../utils/sanitize.js', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerCommentRoutes } from '../../../../routes/posts/comments';
+import { MutationResultGone } from '../../../../utils/withMutationLog';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -132,7 +134,7 @@ const PUBLIC_ACL = { authorId: 'author-1', visibility: 'PUBLIC', visibilityUserI
  */
 function withPublicAcl<T extends Record<string, any>>(prisma: T): T {
   return {
-    ...prisma,
+    user: { findFirst: jest.fn<any>().mockResolvedValue(null), findUnique: jest.fn<any>().mockResolvedValue({ timezone: 'UTC' }) }, ...prisma,
     post: { ...prisma['post'], findFirst: jest.fn<any>().mockResolvedValue(PUBLIC_ACL) },
     postComment: {
       ...prisma['postComment'],
@@ -364,7 +366,7 @@ describe('POST /posts/:postId/comments — MEDIA_NOT_AVAILABLE error', () => {
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
-      payload: { attachmentIds: ['media-001'] },
+      payload: { attachmentIds: ['f0796f644a4ca7c7b0d3bce5'] },
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe('MEDIA_NOT_AVAILABLE');
@@ -410,15 +412,9 @@ describe('POST /posts/:postId/comments — with notification service (reply)', (
 
 describe('POST /posts/:postId/comments — onDuplicate path (idempotent replay)', () => {
   it('returns 201 with replayed existing comment from prisma', async () => {
-    const existingComment = { id: COMMENT_ID, content: 'Hello', authorId: USER_ID };
-    mockWithMutationLog.mockImplementationOnce(async ({ onDuplicate }: any) => {
-      return onDuplicate(COMMENT_ID);
-    });
-    const prisma = withPublicAcl({
-      post: { findUnique: jest.fn<any>().mockResolvedValue(null) },
-      postComment: { findUnique: jest.fn<any>().mockResolvedValue(existingComment) },
-    });
-    const app = await buildApp({ prisma });
+    // #9603 — le rejeu relit le commentaire au format de sa création, et ne refait rien d'autre.
+    mockWithMutationVerdict.mockImplementationOnce(async ({ onDuplicate }: any) => ({ result: await onDuplicate(COMMENT_ID), replayed: true }));
+    const app = await buildApp({ prisma: withPublicAcl({}) });
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
       payload: { content: 'Hello' },
@@ -461,12 +457,12 @@ describe('POST /posts/:postId/comments — attachment only (no text)', () => {
       id: 'comment-002',
       content: '',
       authorId: USER_ID,
-      media: [{ id: 'media-001', mimeType: 'image/jpeg', fileUrl: '/uploads/img.jpg' }],
+      media: [{ id: 'f0796f644a4ca7c7b0d3bce5', mimeType: 'image/jpeg', fileUrl: '/uploads/img.jpg' }],
     });
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
-      payload: { attachmentIds: ['media-001'] },
+      payload: { attachmentIds: ['f0796f644a4ca7c7b0d3bce5'] },
     });
     expect(res.statusCode).toBe(201);
     await app.close();
@@ -479,12 +475,12 @@ describe('POST /posts/:postId/comments — audio attachment triggers PostAudioSe
       id: 'comment-003',
       content: '',
       authorId: USER_ID,
-      media: [{ id: 'media-audio-001', mimeType: 'audio/mpeg', fileUrl: '/uploads/audio.mp3' }],
+      media: [{ id: '517d71c794bd1f0428f8bca6', mimeType: 'audio/mpeg', fileUrl: '/uploads/audio.mp3' }],
     });
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
-      payload: { attachmentIds: ['media-audio-001'] },
+      payload: { attachmentIds: ['517d71c794bd1f0428f8bca6'] },
     });
     expect(res.statusCode).toBe(201);
     await app.close();
@@ -1014,12 +1010,12 @@ describe('POST /posts/:postId/comments — processPostAudio rejects (line 291)',
       id: 'comment-audio-rej',
       content: '',
       authorId: USER_ID,
-      media: [{ id: 'media-rej', mimeType: 'audio/mpeg', fileUrl: '/uploads/rej.mp3' }],
+      media: [{ id: '8c1865d638dcfbda67e4d7c7', mimeType: 'audio/mpeg', fileUrl: '/uploads/rej.mp3' }],
     });
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
-      payload: { attachmentIds: ['media-rej'] },
+      payload: { attachmentIds: ['8c1865d638dcfbda67e4d7c7'] },
     });
     expect(res.statusCode).toBe(201);
     await new Promise((resolve) => setImmediate(resolve));
@@ -1346,26 +1342,40 @@ describe('DELETE /posts/:postId/comments/:commentId — adresse et audience de l
   });
 });
 
-// ─── Branch coverage: FeedQuerySchema false branches (lines 44, 76-79) ────────
+// ─── Une requête malformée est REFUSÉE, jamais complétée en silence ──────────
+//
+// Ces deux témoins affirmaient l'inverse jusqu'au 2026-08-30 : « returns 200
+// with default limit when limit is not a number ». Ils avaient été écrits
+// pour la COUVERTURE de la branche `query.success ? query.data : { … }`, et
+// c'est tout leur intérêt comme leçon — écrits pour atteindre une ligne, ils
+// ont épinglé le comportement de cette ligne. Le motif était par ailleurs
+// nommé comme dette dans `no-silent-query-fallback-guard.test.ts` : le dépôt
+// portait donc, sur le même code, une garde qui l'interdisait et deux témoins
+// qui l'exigeaient.
+//
+// Un test écrit pour la couverture décrit ce que le code FAIT ; il ne dit
+// jamais que le code a raison de le faire. Quand une garde de source et un
+// témoin de comportement se contredisent, c'est la garde qui porte une
+// INTENTION — le témoin ne porte qu'un constat.
+//
+// Dette soldée par #4339 : les deux adresses rendent 400.
 
-describe('GET /posts/:postId/comments — invalid limit query uses default (line 44)', () => {
-  it('returns 200 with default limit when limit is not a number', async () => {
+describe('GET /posts/:postId/comments — une requête malformée est refusée', () => {
+  it('rend 400 VALIDATION_ERROR quand `limit` n\'est pas un nombre, jamais la première page', async () => {
     const app = await buildApp();
     const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/comments?limit=notanumber` });
-    expect(res.statusCode).toBe(200);
-    const json = res.json();
-    expect(json.pagination.limit).toBe(20);
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ success: false, error: 'Invalid query parameters' });
     await app.close();
   });
 });
 
-describe('GET /posts/:postId/comments/:commentId/replies — invalid limit query uses default (lines 76-79)', () => {
-  it('returns 200 with default limit when limit is not a number', async () => {
+describe('GET /posts/:postId/comments/:commentId/replies — une requête malformée est refusée', () => {
+  it('rend 400 VALIDATION_ERROR quand `limit` n\'est pas un nombre, jamais la première page', async () => {
     const app = await buildApp();
     const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/comments/${COMMENT_ID}/replies?limit=notanumber` });
-    expect(res.statusCode).toBe(200);
-    const json = res.json();
-    expect(json.pagination.limit).toBe(20);
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ success: false, error: 'Invalid query parameters' });
     await app.close();
   });
 });
@@ -1373,21 +1383,14 @@ describe('GET /posts/:postId/comments/:commentId/replies — invalid limit query
 // ─── Branch coverage: onDuplicate returns null for comment (line 142) ─────────
 
 describe('POST /posts/:postId/comments — onDuplicate with null findUnique result (line 142)', () => {
-  it('returns 404 when replay finds no existing comment', async () => {
-    mockWithMutationLog.mockImplementationOnce(async ({ onDuplicate }: any) => {
-      return onDuplicate(COMMENT_ID);
-    });
-    const prisma = withPublicAcl({
-      post: { findUnique: jest.fn<any>().mockResolvedValue(null) },
-      postComment: { findUnique: jest.fn<any>().mockResolvedValue(null) },
-    });
-    const app = await buildApp({ prisma });
+  it('returns 410 when the replayed comment is gone — a create replay never resurrects it (#9603)', async () => {
+    mockWithMutationVerdict.mockImplementationOnce(async ({ kind }: any) => { throw new MutationResultGone(COMMENT_ID, kind); });
+    const app = await buildApp({ prisma: withPublicAcl({}) });
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
       payload: { content: 'Hello' },
     });
-    // Returns null from onDuplicate → sendNotFound
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).toBe(410);
     await app.close();
   });
 });
@@ -1526,12 +1529,12 @@ describe('POST /posts/:postId/comments — audio media without fileUrl falls bac
       id: 'comment-audio-nourl',
       content: '',
       authorId: USER_ID,
-      media: [{ id: 'media-audio-no-url', mimeType: 'audio/mpeg' }], // no fileUrl
+      media: [{ id: 'f23ba38a26eafa69c614e917', mimeType: 'audio/mpeg' }], // no fileUrl
     });
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
-      payload: { attachmentIds: ['media-audio-no-url'] },
+      payload: { attachmentIds: ['f23ba38a26eafa69c614e917'] },
     });
     expect(res.statusCode).toBe(201);
     await app.close();
@@ -1545,7 +1548,7 @@ describe('POST /posts/:postId/comments/:commentId/like — invalid emoji trigger
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments/${COMMENT_ID}/like`,
-      payload: { emoji: 'x'.repeat(11) }, // exceeds max(10) → LikeSchema fails → fallback '❤️'
+      payload: { emoji: 'x'.repeat(40) }, // exceeds EMOJI_MAX_LENGTH → LikeSchema fails → fallback '❤️'
     });
     expect(res.statusCode).toBe(200);
     await app.close();
@@ -1560,7 +1563,7 @@ describe('DELETE /posts/:postId/comments/:commentId/like — invalid emoji trigg
     const res = await app.inject({
       method: 'DELETE', url: `/posts/${POST_ID}/comments/${COMMENT_ID}/like`,
       headers: { 'content-type': 'application/json' },
-      payload: JSON.stringify({ emoji: 'x'.repeat(11) }), // exceeds max(10) → LikeSchema fails → fallback '❤️'
+      payload: JSON.stringify({ emoji: 'x'.repeat(40) }), // exceeds EMOJI_MAX_LENGTH → LikeSchema fails → fallback '❤️'
     });
     expect(res.statusCode).toBe(200);
     await app.close();

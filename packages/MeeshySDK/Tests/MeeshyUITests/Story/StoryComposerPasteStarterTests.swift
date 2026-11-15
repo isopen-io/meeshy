@@ -32,40 +32,69 @@ final class StoryComposerPasteStarterTests: XCTestCase {
     // MARK: - Règle pure
 
     func test_pasteStarter_isOffered_whenTheAppInjectedAResolverAndMediaFits() {
-        XCTAssertTrue(StoryComposerView.offersPasteStarter(hasResolver: true, canAddMedia: true))
+        XCTAssertTrue(StoryPasteStarter.offers(hasResolver: true, canAddMedia: true))
     }
 
     /// Sans injection, personne ne sait lire le presse-papier : la capsule
     /// ouvrirait le vide. Même doctrine que le chip « Lieu » et que l'amorce
     /// « Caméra ».
     func test_pasteStarter_isWithheld_withoutAnInjectedResolver() {
-        XCTAssertFalse(StoryComposerView.offersPasteStarter(hasResolver: false, canAddMedia: true))
+        XCTAssertFalse(StoryPasteStarter.offers(hasResolver: false, canAddMedia: true))
     }
 
     /// Le plafond média est le droit de poser un objet de plus. L'offrir malgré
     /// lui donnerait un collage qui n'insère rien, sans le dire.
     func test_pasteStarter_isWithheld_onceTheMediaCeilingIsReached() {
-        XCTAssertFalse(StoryComposerView.offersPasteStarter(hasResolver: true, canAddMedia: false))
+        XCTAssertFalse(StoryPasteStarter.offers(hasResolver: true, canAddMedia: false))
     }
 
     // MARK: - Les types acceptés SONT la directive produit
 
-    /// *« On doit pouvoir coller des images, des documents dont les stickers,
-    /// et ça doit être pris en compte et propagé. »* Réduire cette liste aux
-    /// images ne rendrait pas le collage d'un document impossible : elle
-    /// rendrait la capsule INERTE devant lui — `PasteButton` se désactive quand
-    /// le presse-papier ne porte rien d'acceptable — et le presse-papier ne dit
-    /// jamais pourquoi rien ne s'est passé.
+    /// **RETOURNÉ au #4378** (directive porteur 2026-08-30) :
+    ///
+    /// > « que coller n'apparaisse que si on a une image, un texte ou vidéo dans
+    /// > le presse-papier »
+    ///
+    /// La garde exigeait `.pdf` et `.item` au nom de la directive du 2026-08-23
+    /// — « on doit pouvoir coller des documents, et ça doit être pris en compte
+    /// et propagé ». Elle avait raison sur son époque : réduire la liste aux
+    /// images aurait rendu la capsule INERTE devant un document, sans un mot.
+    ///
+    /// Ce que la nouvelle directive change n'est pas l'exigence, c'est le
+    /// PÉRIMÈTRE. `.item` accepte TOUT : la capsule ne se désactivait donc
+    /// jamais, et s'affichait devant un presse-papier vide de matière — une
+    /// affordance sans effet, ce que la loi 4 interdit. La restriction rend le
+    /// bouton honnête : il n'apparaît que quand il a de quoi coller.
+    ///
+    /// La succession se CONSIGNE : ce qui n'est ni image, ni vidéo, ni son, ni
+    /// texte n'est plus proposé, donc il n'y a plus rien à annoncer sur ce
+    /// chemin — l'exigence de 2026-08-23 n'est pas violée, elle est sans objet.
+    ///
     func test_pasteStarterContentTypes_goFarBeyondImages() {
-        let types = StoryComposerView.pasteStarterContentTypes
+        let types = StoryPasteStarter.contentTypes
 
-        for expected in [UTType.image, .movie, .audio, .pdf, .item] {
+        for expected in [UTType.image, .movie, .audio, .plainText] {
             XCTAssertTrue(
                 types.contains(expected),
                 "« \(expected.identifier) » a quitté la liste : la capsule « Coller » "
                     + "deviendrait inerte devant ce presse-papier, sans un mot."
             )
         }
+
+        // Garde NÉGATIVE, et c'est elle qui porte la nouvelle directive : un
+        // type FOURRE-TOUT rend le bouton toujours actif, donc toujours menteur.
+        XCTAssertFalse(
+            types.contains(.item),
+            "`.item` accepte TOUT : la capsule ne se désactiverait plus jamais et s'afficherait "
+                + "devant un presse-papier sans matière — l'affordance sans effet de la loi 4."
+        )
+        // Le TEXTE doit être là ET savoir se poser : l'accepter sans destination
+        // rendrait la capsule active devant ce qu'elle ne sait pas servir, ce qui
+        // est pire que de ne pas l'accepter.
+        XCTAssertTrue(
+            types.contains(.plainText),
+            "Le texte est accepté depuis #4378, et `StoryPastedItem.text` sait où le poser."
+        )
         XCTAssertGreaterThan(
             types.count, 1,
             "Une liste réduite aux images est exactement le défaut que la directive du "
@@ -98,6 +127,22 @@ final class StoryComposerPasteStarterTests: XCTestCase {
         )
     }
 
+    /// Porteur (#17434) : le compositeur ne montre que le GLYPHE de « Coller ».
+    /// Le style de libellé le plus PROCHE du bouton gagne : un `.labelStyle`
+    /// posé dans la capsule écrase le `.iconOnly` de l'hôte. La mesure ne le
+    /// voit pas (le `PasteButton` système ne se dimensionne pas hors fenêtre),
+    /// d'où la lecture de la source.
+    func test_theStarter_imposesNoLabelStyle_soTheHostIconOnlyWins() throws {
+        let source = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshyUI/Story/StoryPasteStarter.swift")
+        let code = try String(contentsOf: source, encoding: .utf8)
+        let capsule = try XCTUnwrap(code.range(of: "public struct BlankCanvasPasteStarter"))
+        XCTAssertFalse(code[capsule.upperBound...].contains(".labelStyle("),
+                       "la capsule laisse l'hôte choisir : « Coller » ne s'écrit pas à côté du glyphe")
+    }
+
     /// Le plafond média passe par une entrée PRIMITIVE : la feuille ne s'abonne
     /// à aucun graphe global (« Zero Unnecessary Re-render »). Si elle cessait
     /// de l'honorer, elle offrirait un collage qui n'insère rien.
@@ -113,21 +158,6 @@ final class StoryComposerPasteStarterTests: XCTestCase {
     }
 
     // MARK: - Gardes de source
-
-    /// **La garde qui compte.** Ce dépôt répète un motif : du code juste,
-    /// compilé, testé — et que rien ne monte. Une capsule écrite mais absente de
-    /// la rangée passerait toutes les assertions ci-dessus.
-    func test_thePasteStarter_isActuallyMountedInTheStarterRow() throws {
-        let code = try ComposerSourceGuard.source("StoryComposerView+Canvas.swift")
-        let row = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "private var blankCanvasStarterRow:", in: code),
-            "La rangée d'amorces a disparu."
-        )
-        XCTAssertEqual(
-            ComposerSourceGuard.occurrences(of: "BlankCanvasPasteStarter(", in: row), 1,
-            "La capsule « Coller » n'est pas dans la rangée : elle serait écrite et jamais rendue."
-        )
-    }
 
     /// Garde NÉGATIVE. Le composer ne doit JAMAIS relire le presse-papier
     /// lui-même : `ComposerDropResolver` / `ComposerIngestRouter` le font déjà
@@ -165,16 +195,30 @@ final class StoryComposerPasteStarterTests: XCTestCase {
     /// (comme `posePastedItems` et `sceneItems` app-side), et le compte de cas
     /// ci-dessous rougit. C'est alors, et seulement alors, que l'annonce doit
     /// devenir une propagation.
+    /// **La condition de levée S'EST RÉALISÉE au #4378, et c'est ce que ce test
+    /// enregistre.** Les deux signaux qu'elle annonçait ont fonctionné : le
+    /// `switch` a cessé de compiler, et le compte de cas a rougi.
+    ///
+    /// La famille gagnée est le TEXTE, et elle **se pose** — description ou objet
+    /// de scène selon `StoryPastePolicy`. L'annonce « le texte appartient à
+    /// l'outil texte » est retirée : elle refusait poliment une matière que la
+    /// scène sait héberger, ce qui est pire qu'un rejet muet — c'est un rejet
+    /// qui se croit poli.
+    ///
+    /// Ce qui RESTE annoncé n'a pas bougé : le document. Les quatre familles
+    /// d'entrée se peignent toutes, aucune surface de story ne sait peindre un
+    /// PDF. La condition de levée se reconduit donc à l'identique.
     func test_noStorySurfaceCanHostAnAttachment_soTheExclusionStaysAnnounced() throws {
         let painted: [StoryPastedItem] = [
             .image(UIImage()),
             .video(URL(fileURLWithPath: "/tmp/a.mov")),
-            .audio(URL(fileURLWithPath: "/tmp/a.m4a"))
+            .audio(URL(fileURLWithPath: "/tmp/a.m4a")),
+            .text("collé")
         ]
 
         for item in painted {
             switch item {
-            case .image, .video, .audio:
+            case .image, .video, .audio, .text:
                 continue
             }
         }
@@ -192,20 +236,4 @@ final class StoryComposerPasteStarterTests: XCTestCase {
         )
     }
 
-    /// Le collage ne fabrique aucun chemin d'insertion : il emprunte ceux de la
-    /// caméra et de l'enregistrement, qui existent et sont éprouvés. Un
-    /// `addMediaObject(` posé ici serait un troisième jumeau du même code.
-    func test_pastedItems_reuseTheExistingInsertionPaths() throws {
-        let code = try ComposerSourceGuard.source("StoryComposerView+Canvas.swift")
-        let body = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "func posePastedItems(", in: code),
-            "`posePastedItems` a disparu : le collage ne poserait plus rien."
-        )
-        XCTAssertEqual(ComposerSourceGuard.occurrences(of: "addCapturedMedia(", in: body), 2,
-                       "L'image et la vidéo empruntent le chemin caméra, tel quel.")
-        XCTAssertEqual(ComposerSourceGuard.occurrences(of: "addRecordingToBackground(", in: body), 1,
-                       "Le son emprunte le chemin de l'enregistrement.")
-        XCTAssertEqual(ComposerSourceGuard.occurrences(of: "addMediaObject(", in: body), 0,
-                       "Un quatrième chemin d'insertion recommencerait ce que deux extractions ont réuni.")
-    }
 }

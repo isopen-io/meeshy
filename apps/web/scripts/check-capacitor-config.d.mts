@@ -1,0 +1,66 @@
+/**
+ * Les types du module voisin — voir `scripts/lib/institutional-routes.d.mts`
+ * pour la raison d'être de ce motif : trois runtimes distincts (Vite, bun,
+ * node) consomment ce fichier, seul le premier lit du TypeScript.
+ */
+export type CapConfigReplayTarget = 'android' | 'ios';
+
+export type CapConfigReplayResult = Readonly<{
+  readonly status: number | null;
+  readonly stdout: string;
+  readonly stderr: string;
+}>;
+
+export declare function replayStartPath(target: CapConfigReplayTarget): CapConfigReplayResult;
+
+export declare function judgeStartPathReplay(
+  target: CapConfigReplayTarget,
+  result: CapConfigReplayResult,
+): readonly string[];
+
+export declare function auditHookDeclaration(
+  packageJson: Readonly<{ readonly scripts?: Readonly<Record<string, string>> }>,
+  capConfig: Readonly<{ readonly ios?: Readonly<{ readonly webDir?: string }> }> | undefined,
+): readonly string[];
+
+export declare function replayHookRoundtrip(): readonly string[];
+
+export declare function capacitorPluginsImportedBy(sources: readonly string[]): readonly string[];
+
+export declare function auditSyncedPlugins(
+  packageJson: Readonly<{
+    readonly dependencies?: Readonly<Record<string, string>>;
+    readonly devDependencies?: Readonly<Record<string, string>>;
+    readonly optionalDependencies?: Readonly<Record<string, string>>;
+  }>,
+  importedPlugins: readonly string[],
+): readonly string[];
+
+export declare function auditWebViewFloor(input: Readonly<{
+  readonly capConfig: Readonly<{ readonly android?: Readonly<{ readonly minWebViewVersion?: number }>; readonly server?: Readonly<{ readonly errorPath?: string }> }> | undefined;
+  readonly floorSource: string;
+  readonly publicFiles: readonly string[];
+  readonly mainSource: string;
+}>): readonly string[];
+
+export declare function androidShellPlugins(
+  packageJson: Readonly<{
+    readonly dependencies?: Readonly<Record<string, string>>;
+    readonly devDependencies?: Readonly<Record<string, string>>;
+  }>,
+  manifestOf: (name: string) => unknown,
+): readonly string[];
+
+export declare function auditReadableManifests(
+  packageJson: Readonly<{
+    readonly dependencies?: Readonly<Record<string, string>>;
+    readonly devDependencies?: Readonly<Record<string, string>>;
+  }>,
+  manifestOf: (name: string) => unknown,
+): readonly string[];
+
+export declare function auditAndroidShellLinks(input: Readonly<{
+  readonly plugins: readonly string[];
+  readonly settingsGradle: string;
+  readonly buildGradle: string;
+}>): readonly string[];

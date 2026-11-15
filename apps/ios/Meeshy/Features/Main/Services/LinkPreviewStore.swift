@@ -12,6 +12,11 @@ import os
 /// serves metadata that predates a site redesign by more than a week.
 @MainActor
 final class LinkPreviewStore: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = LinkPreviewStore()
 
     private let fetcher: LinkPreviewFetcher = .shared
@@ -27,13 +32,11 @@ final class LinkPreviewStore: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
 
     private let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .iso8601
+        let e = MeeshyCoders.encoder(.persistence)
         return e
     }()
     private let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
+        let d = MeeshyCoders.decoder(.persistence)
         return d
     }()
 
@@ -63,34 +66,6 @@ final class LinkPreviewStore: ObservableObject {
         cache[urlString]
     }
 
-    /// Kick off a fetch for this URL if we don't already have fresh data and
-    /// we haven't recently failed. No-op on repeat calls — `LinkPreviewFetcher`
-    /// dedupes in-flight requests, and our `pendingKeys` set prevents
-    /// duplicate VM-level refreshes during the same scroll frame.
-    func requestMetadata(for urlString: String) {
-        if cache[urlString] != nil { return }
-        if let failedAt = negativeCache[urlString],
-           Date().timeIntervalSince(failedAt) < negativeCacheDuration {
-            return
-        }
-        if pendingKeys.contains(urlString) { return }
-        pendingKeys.insert(urlString)
-
-        Task { [weak self] in
-            let metadata = await LinkPreviewFetcher.shared.metadata(for: urlString)
-            await MainActor.run { [weak self] in
-                guard let self else { return }
-                self.pendingKeys.remove(urlString)
-                if let metadata {
-                    self.cache[urlString] = metadata
-                    self.persist()
-                } else {
-                    self.negativeCache[urlString] = Date()
-                }
-            }
-        }
-    }
-
     /// Awaitable resolution driving `LinkPreviewCard`'s LOCAL `@State` so the
     /// card does NOT observe the global `@Published cache` — otherwise EVERY
     /// link card in the conversation re-evaluates its body each time ANY URL's
@@ -108,12 +83,25 @@ final class LinkPreviewStore: ObservableObject {
         }
         let metadata = await fetcher.metadata(for: urlString)
         if let metadata {
-            cache[urlString] = metadata
+            cache = Self.bounded(cache.merging([urlString: metadata]) { _, new in new }, limit: Self.maxEntries)
             persist()
         } else {
-            negativeCache[urlString] = Date()
+            let now = Date()
+            // Les échecs expirés partent à chaque nouvel échec : sans ce ménage, l'ensemble ne faisait que grossir.
+            negativeCache = negativeCache.filter { now.timeIntervalSince($0.value) < negativeCacheDuration }
+            negativeCache[urlString] = now
         }
         return metadata
+    }
+
+    /// Plafond des aperçus gardés : chaque lien distinct s'ajoutait, et chaque ajout ré-encodait tout le fichier.
+    static let maxEntries = 500
+
+    /// Les `limit` aperçus les plus récents (`fetchedAt`).
+    nonisolated static func bounded(_ entries: [String: LinkMetadata], limit: Int) -> [String: LinkMetadata] {
+        guard entries.count > limit else { return entries }
+        let kept = entries.sorted { $0.value.fetchedAt > $1.value.fetchedAt }.prefix(limit)
+        return Dictionary(uniqueKeysWithValues: kept.map { ($0.key, $0.value) })
     }
 
     func clearAll() {
@@ -164,12 +152,12 @@ final class LinkPreviewStore: ObservableObject {
             return [:]
         }
         let cutoff = Date().addingTimeInterval(-maxAge)
-        return decoded.filter { _, metadata in metadata.fetchedAt >= cutoff }
+        return bounded(decoded.filter { _, metadata in metadata.fetchedAt >= cutoff }, limit: maxEntries)
     }
 }
 
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let linkPreview = Logger(subsystem: "me.meeshy.app", category: "link-preview")
+    nonisolated static let linkPreview = MeeshyLog.logger(.linkPreview)
 }

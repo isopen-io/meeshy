@@ -1,0 +1,35 @@
+package me.meeshy.app.settings
+
+import com.google.common.truth.Truth.assertThat
+import org.junit.Test
+
+class AppVersionTest {
+
+    @Test
+    fun `the version of the installed build is shown as is`() {
+        assertThat(AppVersion.display("0.1.0")).isEqualTo("0.1.0")
+    }
+
+    @Test
+    fun `a padded version is trimmed`() {
+        assertThat(AppVersion.display("  0.1.0-beta \n")).isEqualTo("0.1.0-beta")
+    }
+
+    @Test
+    fun `a missing or blank version shows a dash and never an invented number`() {
+        assertThat(AppVersion.display(null)).isEqualTo(AppVersion.UNKNOWN)
+        assertThat(AppVersion.display("   ")).isEqualTo(AppVersion.UNKNOWN)
+    }
+
+    @Test
+    fun `the build number follows the version in parentheses`() {
+        assertThat(AppVersion.display("3.0.0", 12L)).isEqualTo("3.0.0 (12)")
+    }
+
+    @Test
+    fun `an unknown or non positive build number is left out and a missing version stays a dash`() {
+        assertThat(AppVersion.display("3.0.0", null)).isEqualTo("3.0.0")
+        assertThat(AppVersion.display("3.0.0", 0L)).isEqualTo("3.0.0")
+        assertThat(AppVersion.display(null, 12L)).isEqualTo(AppVersion.UNKNOWN)
+    }
+}

@@ -1244,7 +1244,7 @@ moins que l'absence de l'option."
 ### Task 7: Publication — envoyer les modes, cesser de deviner
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift` (`runStoryUpload`, ~ligne 2192)
+- Modify: `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift` (`runStoryUpload`, ~ligne 2192)
 - Modify: `packages/MeeshySDK/Sources/MeeshySDK/Services/PostService.swift` (`createStory`, `createPost`)
 - Test: `apps/ios/MeeshyTests/Unit/ViewModels/StoryUploadReferencesTests.swift`
 
@@ -1325,7 +1325,7 @@ conformeurs existants — c'est le patron déjà utilisé ligne 104 pour `create
 - [ ] **Step 6: Committer**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift \
+git add apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift \
         packages/MeeshySDK/Sources/MeeshySDK/Services/PostService.swift \
         apps/ios/MeeshyTests/Unit/ViewModels/StoryUploadReferencesTests.swift
 git commit -m "feat(ios): la publication déclare les modes au lieu de deviner les pseudos
@@ -1489,7 +1489,7 @@ les pseudos validés. Et sa regex excluait le tiret là où le backend l'accepte
 
 **Files:**
 - Modify: `apps/ios/Meeshy/Features/Stories/Notifications/StoryNotificationTargetViewModel.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift` (filtres `!$0.isExpired()`, ~2750 / ~2782)
+- Modify: `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift` (filtres `!$0.isExpired()`, ~2750 / ~2782)
 - Test: `apps/ios/MeeshyTests/Unit/ViewModels/ReferenceAccessViewerTests.swift`
 
 **Interfaces:**
@@ -1593,7 +1593,7 @@ disparaît pas à son échéance pour la personne qui y est nommée.
 
 ```bash
 git add apps/ios/Meeshy/Features/Stories/Notifications/StoryNotificationTargetViewModel.swift \
-        apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift \
+        apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift \
         apps/ios/MeeshyTests/Unit/ViewModels/ReferenceAccessViewerTests.swift
 git commit -m "feat(ios): une story expirée s'ouvre quand le serveur l'autorise
 

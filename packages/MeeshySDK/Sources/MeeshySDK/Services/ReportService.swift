@@ -7,15 +7,36 @@ public protocol ReportServiceProviding: Sendable {
     func reportUser(userId: String, reportType: String, reason: String?) async throws
     func reportPost(postId: String, reportType: String, reason: String?) async throws
     func reportStory(storyId: String, reportType: String, reason: String?) async throws
+    func reportComment(commentId: String, reportType: String, reason: String?) async throws
     func reportConversation(conversationId: String, reportType: String, reason: String?) async throws
 }
 
-public final class ReportService: ReportServiceProviding, @unchecked Sendable {
+/// Signaler un contenu est un geste ORDINAIRE (S2), pas un geste
+/// d'administration (#4155).
+///
+/// Ces cinq appels visaient `/admin/reports` — la seule route d'administration
+/// que l'app appelait. Toute règle d'infrastructure posée un jour sur le
+/// préfixe `/admin` (liste blanche d'IP, WAF, journalisation renforcée) aurait
+/// cassé le signalement sur les trois plateformes, sans que personne ne fasse
+/// le lien. L'adresse dit désormais ce que le geste est.
+///
+/// `/admin/reports` reste servie en adaptateur mince le temps que les versions
+/// déjà installées disparaissent.
+public final class ReportService: ReportServiceProviding, Sendable {
     public static let shared = ReportService()
     private let api: APIClientProviding
+    /// #10503 — un signalement ABOUTI d'un contenu social devient un signal
+    /// négatif (`report_submit`, code du motif seul, jamais le texte libre).
+    /// Un message ou une conversation : rien ne part.
+    private let socialEvents: SocialEventsV2Hub
 
-    init(api: APIClientProviding = APIClient.shared) {
+    init(api: APIClientProviding = APIClient.shared, socialEvents: SocialEventsV2Hub = .shared) {
         self.api = api
+        self.socialEvents = socialEvents
+    }
+
+    private func emitReported(_ kind: SocialTargetKind, id: String, reportType: String) {
+        socialEvents.emit(SocialInteractionEvents.negative(.reportSubmit, on: SocialTarget(kind: kind, id: id), reasonCode: reportType))
     }
 
     public func reportMessage(messageId: String, reportType: String, reason: String? = nil) async throws {
@@ -25,7 +46,7 @@ public final class ReportService: ReportServiceProviding, @unchecked Sendable {
             reportType: reportType,
             reason: reason
         )
-        let _: APIResponse<ReportResponseData> = try await api.post(endpoint: "/admin/reports", body: body)
+        let _: APIResponse<ReportResponseData> = try await api.post(ReportsEndpoint.root, body: body)
     }
 
     public func reportUser(userId: String, reportType: String, reason: String? = nil) async throws {
@@ -35,7 +56,8 @@ public final class ReportService: ReportServiceProviding, @unchecked Sendable {
             reportType: reportType,
             reason: reason
         )
-        let _: APIResponse<ReportResponseData> = try await api.post(endpoint: "/admin/reports", body: body)
+        let _: APIResponse<ReportResponseData> = try await api.post(ReportsEndpoint.root, body: body)
+        emitReported(.profile, id: userId, reportType: reportType)
     }
 
     public func reportPost(postId: String, reportType: String, reason: String? = nil) async throws {
@@ -45,7 +67,8 @@ public final class ReportService: ReportServiceProviding, @unchecked Sendable {
             reportType: reportType,
             reason: reason
         )
-        let _: APIResponse<ReportResponseData> = try await api.post(endpoint: "/admin/reports", body: body)
+        let _: APIResponse<ReportResponseData> = try await api.post(ReportsEndpoint.root, body: body)
+        emitReported(.post, id: postId, reportType: reportType)
     }
 
     public func reportStory(storyId: String, reportType: String, reason: String? = nil) async throws {
@@ -55,7 +78,21 @@ public final class ReportService: ReportServiceProviding, @unchecked Sendable {
             reportType: reportType,
             reason: reason
         )
-        let _: APIResponse<ReportResponseData> = try await api.post(endpoint: "/admin/reports", body: body)
+        let _: APIResponse<ReportResponseData> = try await api.post(ReportsEndpoint.root, body: body)
+        emitReported(.story, id: storyId, reportType: reportType)
+    }
+
+    /// Un commentaire de post, de réel ou de story (#8709) — la passerelle le
+    /// tient atteignable quand sa publication l'est.
+    public func reportComment(commentId: String, reportType: String, reason: String? = nil) async throws {
+        let body = CreateReportBody(
+            reportedType: "comment",
+            reportedEntityId: commentId,
+            reportType: reportType,
+            reason: reason
+        )
+        let _: APIResponse<ReportResponseData> = try await api.post(ReportsEndpoint.root, body: body)
+        emitReported(.comment, id: commentId, reportType: reportType)
     }
 
     public func reportConversation(conversationId: String, reportType: String, reason: String? = nil) async throws {
@@ -65,7 +102,7 @@ public final class ReportService: ReportServiceProviding, @unchecked Sendable {
             reportType: reportType,
             reason: reason
         )
-        let _: APIResponse<ReportResponseData> = try await api.post(endpoint: "/admin/reports", body: body)
+        let _: APIResponse<ReportResponseData> = try await api.post(ReportsEndpoint.root, body: body)
     }
 }
 

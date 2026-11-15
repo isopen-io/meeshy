@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "composer.drop.unnamedItem",
+          "status": "adopted"
+        },
+        {
+          "androidName": "chat_tray_cap_reached",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_tray_import_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_tray_preparing",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_tray_remove",
+          "status": "android-only"
+        },
+        {
+          "androidName": "chat_tray_too_large",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

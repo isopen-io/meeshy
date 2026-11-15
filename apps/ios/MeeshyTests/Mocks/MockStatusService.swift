@@ -69,8 +69,13 @@ final class MockStatusService: StatusServiceProviding, @unchecked Sendable {
         lastCreateVisibilityUserIds = visibilityUserIds
         lastCreateAudioUrl = audioUrl
         lastCreateRepostOfId = repostOfId
-        return try createResult.get()
+        let result = createResult
+        if let onCreate { await onCreate() }
+        return try result.get()
     }
+
+    /// Joué PENDANT l'appel de création : l'écho socket qui la précède.
+    var onCreate: (@MainActor () async -> Void)?
 
     func delete(statusId: String) async throws {
         deleteCallCount += 1

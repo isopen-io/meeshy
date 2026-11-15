@@ -1,0 +1,12 @@
+[Unit]
+Description=Execute les demandes d'operations de l'administration Meeshy (%i)
+Documentation=https://github.com/isopen-io/meeshy/issues/10385
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I /opt/meeshy/%i/ops/bin/meeshy-ops-runner.py process %i
+TimeoutStartSec=5h
+NoNewPrivileges=true
+PrivateTmp=true

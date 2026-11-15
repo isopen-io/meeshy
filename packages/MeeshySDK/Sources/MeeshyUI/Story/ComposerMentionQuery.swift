@@ -17,6 +17,54 @@ import MeeshySDK
 /// `nonisolated` : `MeeshyUI` compile sous `defaultIsolation(MainActor)`, et une
 /// règle de chaîne de caractères n'a rien à faire sur l'acteur principal — ses
 /// tests non plus.
+/// **QUAND une frappe `@` interroge le RÉSEAU — la loi, écrite une fois**
+/// (directive porteur, #14053, qui remplace celle de #7847).
+///
+/// > « "@" déclenche TOUJOURS d'abord la liste du cache local de contacts,
+/// > filtrée par la saisie. Le réseau n'est appelé qu'à partir du 3ᵉ
+/// > caractère, pour faire remonter les autres personnes du contexte. Sauf si
+/// > les 2 premières lettres n'ont aucune correspondance locale : alors réseau
+/// > dès la 2ᵉ lettre. »
+///
+/// Miroir de `mentionLookupStage` (`packages/shared/utils/mention-lookup.ts`),
+/// que le web consomme et qu'Android (`MentionLookupLaw`) reflète aussi.
+///
+/// ## Les régimes, et ce que chacun coûte
+///
+/// | frappe | ce qui répond | coût réseau |
+/// |---|---|---|
+/// | `@` | les contacts, en entier | **zéro** — cache |
+/// | `@a` | les mêmes, filtrés | **zéro** — filtre local |
+/// | `@al`, au moins une correspondance locale | les mêmes, filtrés | **zéro** |
+/// | `@al`, aucune correspondance locale | l'annuaire / le contexte | un appel, débattu |
+/// | `@ali` et au-delà | les locaux, puis le serveur | un appel, débattu |
+///
+/// Deux lettres discriminent mal, mais pas toujours : quand le cache local a
+/// déjà quelqu'un à proposer, attendre la troisième lettre ne coûte rien à
+/// l'auteur ; quand il n'a personne, attendre le laisserait devant une liste
+/// vide.
+///
+/// ## Pourquoi une règle et pas une constante par site
+///
+/// Le dépôt a DEUX familles de résolveurs de mention — `MentionComposerController`
+/// (conversation, commentaires de post, brouillon du composer) et
+/// `MentionSuggestionsModel` (mood, éditeur de texte de story, sélecteur de
+/// mention). Chacune portait autrefois son propre seuil, donc trois régimes
+/// différents pour un même geste selon l'écran où le doigt se trouvait.
+///
+/// > Une constante recopiée dans deux familles n'est pas une règle partagée :
+/// > c'est deux règles qui se ressemblent aujourd'hui.
+public nonisolated enum MentionLookupRule {
+
+    /// À partir de ce nombre de caractères APRÈS le `@`, le réseau part
+    /// toujours (`MENTION_REMOTE_MIN_CHARS`).
+    public static let remoteMinimumLength = 3
+
+    /// À ce nombre de caractères, le réseau part SI le cache local n'a aucune
+    /// correspondance (`MENTION_REMOTE_EARLY_CHARS`).
+    public static let remoteEarlyLength = 2
+}
+
 public nonisolated enum ComposerMentionQuery {
 
     /// Caractères qu'un pseudo Meeshy peut porter. Le point et le tiret y sont
@@ -71,10 +119,30 @@ public nonisolated struct ComposerReference: Sendable, Equatable {
     public let userId: String?
     public var display: PostReferenceDisplay
 
-    public init(username: String, userId: String? = nil, display: PostReferenceDisplay) {
+    /// **À quelle PUBLICATION cette mention appartient** (#4068).
+    ///
+    /// > Une mention est attachée à la publication. En Story, une publication
+    /// > est une slide ; en Post et en Réel, il n'y en a qu'une.
+    ///
+    /// D'où un `String?` et non un booléen ou un mode : en profil Story, la
+    /// clé est l'id de la SLIDE, parce que publier N slides crée N
+    /// publications. Sans ce champ, `references` vivait au COMPOSER et la
+    /// boucle d'envoi semait la même liste sur chacune — une NOTE posée en
+    /// pensant à la slide 1 notifiait trois fois et apparaissait sous trois
+    /// stories.
+    ///
+    /// `nil` signifie « toutes les publications de ce composer ». C'est le cas
+    /// NOMINAL en Post et en Réel (il n'y en a qu'une), et le repli des
+    /// brouillons repris d'avant ce lot, dont rien ne permet de deviner la
+    /// slide visée.
+    public var publicationKey: String?
+
+    public init(username: String, userId: String? = nil,
+                display: PostReferenceDisplay, publicationKey: String? = nil) {
         self.username = username
         self.userId = userId
         self.display = display
+        self.publicationKey = publicationKey
     }
 }
 
@@ -90,12 +158,26 @@ public nonisolated enum ComposerReferences {
     /// EN PLACE, pas en fin de liste : choisir un mode et en changer sont le
     /// même geste côté UI, et voir la pastille sauter au bout de la rangée à
     /// chaque changement donnerait l'impression d'avoir ajouté quelqu'un.
+    /// **L'identité d'une référence est (pseudo, publication)** — pas le pseudo
+    /// seul (#4068).
+    ///
+    /// Nommer la même personne sur deux slides d'une Story est un geste
+    /// légitime : ce sont deux publications distinctes. Avec le pseudo pour
+    /// seule clé, la seconde pose ÉCRASAIT la première au lieu de s'y ajouter,
+    /// et l'auteur voyait sa mention disparaître de la slide précédente sans
+    /// rien avoir retiré.
+    ///
+    /// > Ajouter un axe de portée à une donnée déplace sa clé d'unicité. Ne pas
+    /// > suivre ce déplacement produit un écrasement SILENCIEUX, exactement là
+    /// > où la nouvelle portée devait apporter de la précision.
     public static func upsert(
         _ reference: ComposerReference,
         into references: [ComposerReference]
     ) -> [ComposerReference] {
         let key = reference.username.lowercased()
-        guard let index = references.firstIndex(where: { $0.username.lowercased() == key }) else {
+        guard let index = references.firstIndex(where: {
+            $0.username.lowercased() == key && $0.publicationKey == reference.publicationKey
+        }) else {
             return references + [reference]
         }
         var updated = references
@@ -105,12 +187,24 @@ public nonisolated enum ComposerReferences {
 
     /// Retire une personne. Insensible à la casse — le serveur résout les
     /// pseudos de la même façon.
+    /// Retire une personne. Insensible à la casse — le serveur résout les
+    /// pseudos de la même façon.
+    ///
+    /// `publicationKey: nil` retire la personne de TOUTES les publications ;
+    /// une clé ne retire que de celle-là. Le défaut est le retrait total, qui
+    /// est le geste attendu depuis une feuille qui liste les personnes nommées
+    /// sans dire sur quelle slide.
     public static func remove(
         username: String,
-        from references: [ComposerReference]
+        from references: [ComposerReference],
+        publicationKey: String? = nil
     ) -> [ComposerReference] {
         let key = username.lowercased()
-        return references.filter { $0.username.lowercased() != key }
+        return references.filter { reference in
+            guard reference.username.lowercased() == key else { return true }
+            guard let publicationKey else { return false }
+            return reference.publicationKey != publicationKey
+        }
     }
 
     /// Ce que la publication DÉCLARE au serveur : les non-INLINE, et elles
@@ -119,6 +213,28 @@ public nonisolated enum ComposerReferences {
     /// INLINE est absent par construction — le serveur le dérive en relisant
     /// les `@handle` du texte, et le déclarer ouvrirait un second chemin vers le
     /// même fait, que le premier désaccord ferait diverger.
+    /// **Ce qu'UNE publication emporte** (#4068).
+    ///
+    /// - `publicationKey: nil` ⇒ la publication est unique (Post, Réel) : tout
+    ///   part, puisque toute mention lui appartient ;
+    /// - une clé ⇒ une slide de Story : seules SES mentions partent, plus
+    ///   celles qui n'ont pas de clé (brouillons d'avant le lot).
+    ///
+    /// > Perdre est pire que répéter, ici. Une référence sans clé est servie
+    /// > partout plutôt que nulle part : l'auteur l'a bel et bien posée, et une
+    /// > donnée qu'on n'a jamais écrite ne se devine pas.
+    public static func payload(
+        _ references: [ComposerReference],
+        for publicationKey: String?
+    ) -> [PostMentionInput] {
+        let retenues = references.filter { reference in
+            guard let publicationKey else { return true }
+            guard let clé = reference.publicationKey else { return true }
+            return clé == publicationKey
+        }
+        return payload(retenues)
+    }
+
     public static func payload(_ references: [ComposerReference]) -> [PostMentionInput] {
         references.compactMap { reference in
             guard reference.display != .inline else { return nil }

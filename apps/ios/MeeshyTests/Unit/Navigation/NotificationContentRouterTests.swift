@@ -246,4 +246,37 @@ final class NotificationContentRouterTests: XCTestCase {
             .story
         )
     }
+
+    // MARK: - #10814 — une nouvelle humeur ouvre SA page plein écran
+
+    private var moodContext: StoryNotificationContext {
+        StoryNotificationContext(actorAvatar: nil, actorDisplayName: "Alice",
+                                 trigger: .reaction(emoji: "😄"), occurredAt: Date(timeIntervalSince1970: 0))
+    }
+
+    func test_ephemeralRoute_friendNewMood_opensTheMoodSpotlight() {
+        let route = NotificationContentRouter.ephemeralRoute(
+            postId: "mood-1", notificationType: .friendNewMood, context: moodContext,
+            commentId: nil, parentCommentId: nil
+        )
+        XCTAssertEqual(route, .moodSpotlight(statusId: "mood-1"))
+    }
+
+    func test_ephemeralRoute_reactionOnAMood_keepsTheStoryTarget() {
+        let route = NotificationContentRouter.ephemeralRoute(
+            postId: "mood-1", notificationType: .statusReaction, context: moodContext,
+            commentId: nil, parentCommentId: nil
+        )
+        XCTAssertEqual(route, .storyNotificationTarget(storyId: "mood-1", intent: .reactions, context: moodContext,
+                                                       commentId: nil, parentCommentId: nil))
+    }
+
+    func test_ephemeralRoute_friendNewStory_keepsTheStoryTarget() {
+        let route = NotificationContentRouter.ephemeralRoute(
+            postId: "story-1", notificationType: .friendNewStory, context: moodContext,
+            commentId: nil, parentCommentId: nil
+        )
+        XCTAssertEqual(route, .storyNotificationTarget(storyId: "story-1", intent: .view, context: moodContext,
+                                                       commentId: nil, parentCommentId: nil))
+    }
 }

@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.fair",
+          "androidName": "call_signal_fair",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.poor",
+          "androidName": "call_signal_poor",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.lost",
+          "androidName": "call_signal_lost",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.inProgress",
+          "androidName": "call_signal_connecting",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.detail",
+          "androidName": "call_quality_detail",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.waiting",
+          "androidName": "call_quality_waiting",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.close",
+          "androidName": "call_quality_close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.open.hint",
+          "androidName": "call_quality_open_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.grade.good",
+          "androidName": "call_quality_grade_good",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.grade.medium",
+          "androidName": "call_quality_grade_medium",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.grade.poor",
+          "androidName": "call_quality_grade_poor",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.loss",
+          "androidName": "call_quality_loss",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.latency",
+          "androidName": "call_quality_latency",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.jitter",
+          "androidName": "call_quality_jitter",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.audioRate",
+          "androidName": "call_quality_audio_rate",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.videoRate",
+          "androidName": "call_quality_video_rate",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.route",
+          "androidName": "call_quality_route",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.route.relayed",
+          "androidName": "call_quality_route_relayed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.route.direct",
+          "androidName": "call_quality_route_direct",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.rate.kbps",
+          "androidName": "call_quality_rate_kbps",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.reconnecting",
+          "androidName": "call_reconnecting",
+          "status": "adopted"
+        },
+        {
+          "androidName": "call_quality_unit_ms",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

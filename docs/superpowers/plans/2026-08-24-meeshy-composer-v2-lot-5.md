@@ -556,7 +556,7 @@ montage disparaissait.
 - [ ] Scheme `MeeshySDK-Package` COMPLET (DerivedData `/tmp/meeshy-dd-lot-5-sdk`)
 - [ ] `./apps/ios/meeshy.sh test` — chiffres RÉELS consignés au commit (nombre de suites,
       nombre de tests), pas « ça passe »
-- [ ] **Planches P0** (`docs/superpowers/specs/2026-08-19-meeshy-composer-views.html`) :
+- [ ] **Planches P0** (`docs/product/planche-meeshy-composer.html`) :
       camembert ET matrice mis à jour **dans le MÊME commit que ce gate** — la règle de
       maintenance héritée (design v2 §A bis) fait d'un P0 périmé un défaut bloquant.
       *État REMESURÉ par l'audit du 2026-08-24, et il invalide la ligne précédente de ce plan :

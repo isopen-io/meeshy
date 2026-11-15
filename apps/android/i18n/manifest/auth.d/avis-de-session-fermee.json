@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "sessionClosed.userRevoke.title",
+          "androidName": "session_closed_user_revoke_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessionClosed.password.title",
+          "androidName": "session_closed_password_title",
+          "status": "adopted"
+        },
+        {
+          "androidName": "session_closed_password_message",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessionClosed.expired.title",
+          "androidName": "session_closed_expired_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessionClosed.activation.title",
+          "androidName": "session_closed_activation_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessionClosed.contact",
+          "androidName": "session_closed_contact",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

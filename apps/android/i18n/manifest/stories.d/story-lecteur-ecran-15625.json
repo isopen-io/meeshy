@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "story_a11y_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_a11y_pause",
+          "status": "android-only"
+        },
+        {
+          "androidName": "story_a11y_resume",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        { "androidName": "comment_composer_editing", "status": "android-only" },
+        { "androidName": "comment_composer_fold", "status": "android-only" },
+        { "androidName": "comment_composer_unfold", "status": "android-only" }
+      ]
+    }
+  }
+}

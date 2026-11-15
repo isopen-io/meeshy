@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_audio_sheet_title">Sortie audio</string>
+    <string name="call_audio_button">Sortie</string>
+    <string name="call_audio_earpiece">Écouteur</string>
+    <string name="call_audio_speaker">Haut-parleur</string>
+    <string name="call_audio_bluetooth">Bluetooth</string>
+    <string name="call_audio_wired">Casque filaire</string>
+    <string name="call_audio_usb">Audio USB</string>
+    <string name="call_audio_hearing_aid">Aide auditive</string>
+    <string name="call_audio_car">Voiture</string>
+    <string name="call_audio_other">Autre sortie</string>
+    <string name="call_audio_selected">Sélectionné</string>
+    <string name="call_audio_bluetooth_permission">Autorisez l\'accès Bluetooth pour voir les appareils Bluetooth</string>
+    <string name="call_audio_bluetooth_allow">Autoriser</string>
+    <string name="call_audio_select_failed">Impossible de changer la sortie audio</string>
+</resources>

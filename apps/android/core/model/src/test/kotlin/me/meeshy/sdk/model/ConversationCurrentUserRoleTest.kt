@@ -40,4 +40,35 @@ class ConversationCurrentUserRoleTest {
 
         assertThat(conv.currentUserRole("me")).isEqualTo(MemberRole.MEMBER)
     }
+
+    // ── Le rôle CONNU : inconnu n'est pas MEMBER (garde de rôle du cache de la fiche, ADR-032) ──
+
+    @Test
+    fun the_known_role_prefers_the_server_computed_role() {
+        val conv = conversation(listOf(ApiParticipant(id = "p1", userId = "me", role = "member")))
+            .copy(currentUserRole = "ADMIN")
+
+        assertThat(conv.knownUserRole("me")).isEqualTo(MemberRole.ADMIN)
+    }
+
+    @Test
+    fun the_known_role_falls_back_on_the_roster() {
+        val conv = conversation(listOf(ApiParticipant(id = "p1", userId = "me", role = "moderator")))
+
+        assertThat(conv.knownUserRole("me")).isEqualTo(MemberRole.MODERATOR)
+    }
+
+    @Test
+    fun a_reader_absent_from_the_roster_has_no_known_role() {
+        val conv = conversation(listOf(ApiParticipant(id = "p1", userId = "someone-else", role = "creator")))
+
+        assertThat(conv.knownUserRole("me")).isNull()
+    }
+
+    @Test
+    fun without_a_reader_id_no_role_is_known() {
+        val conv = conversation(listOf(ApiParticipant(id = "p1", userId = "me", role = "creator")))
+
+        assertThat(conv.knownUserRole(null)).isNull()
+    }
 }

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="voice_prompts_delete_sample">Probe %1$d löschen</string>
+</resources>

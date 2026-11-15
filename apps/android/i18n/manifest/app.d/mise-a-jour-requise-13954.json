@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "upgradeGate.title",
+          "androidName": "upgrade_required_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "upgradeGate.message",
+          "androidName": "upgrade_required_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "upgradeGate.min_version",
+          "androidName": "upgrade_required_min_version",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "upgradeGate.action",
+          "androidName": "upgrade_required_action",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

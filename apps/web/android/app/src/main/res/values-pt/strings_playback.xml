@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #9257 — le message vocal écouté tient la lecture au premier plan.
+     Sept langues, les memes cles partout. -->
+<resources>
+    <string name="playback_channel_name">Reprodução de áudio</string>
+    <string name="playback_ongoing">Reproduzindo áudio</string>
+    <string name="playback_return">Toque para voltar ao Meeshy</string>
+    <string name="playback_pause">Pausar</string>
+    <string name="playback_play">Reproduzir</string>
+    <string name="playback_paused">Áudio em pausa</string>
+    <!-- #10624 — la carte de lecture dit le vocal et se pilote, comme iOS. -->
+    <string name="playback_voice_message">Mensagem de voz</string>
+    <string name="playback_protected">Mensagem protegida</string>
+    <string name="playback_back">Voltar 15 segundos</string>
+    <string name="playback_forward">Avançar 15 segundos</string>
+</resources>

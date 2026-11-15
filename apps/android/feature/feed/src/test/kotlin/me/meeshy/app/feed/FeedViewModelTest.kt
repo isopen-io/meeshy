@@ -19,15 +19,15 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
-import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
+import me.meeshy.sdk.model.ApiMediaCaptionTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
-import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
 import me.meeshy.sdk.model.SocketPostBookmarkedData
@@ -35,14 +35,16 @@ import me.meeshy.sdk.model.SocketPostCreatedData
 import me.meeshy.sdk.model.SocketPostDeletedData
 import me.meeshy.sdk.model.SocketPostLikedData
 import me.meeshy.sdk.model.SocketPostRepostedData
+import me.meeshy.sdk.model.SocketMediaCaptionTranslationUpdatedData
 import me.meeshy.sdk.model.SocketPostTranslationUpdatedData
 import me.meeshy.sdk.model.SocketPostUnlikedData
 import me.meeshy.sdk.model.SocketPostUpdatedData
-import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.publication.PublicationNotice
+import me.meeshy.sdk.publication.PublicationOutbox
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import org.junit.After
@@ -65,10 +67,13 @@ class FeedViewModelTest {
     }
 
     private val repository: PostRepository = mockk(relaxed = true)
+    private val engagement: me.meeshy.sdk.post.FeedEngagementRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
-    private val feedMediaUploader: FeedMediaUploader = mockk(relaxed = true)
     private val reportRepository: me.meeshy.sdk.report.ReportRepository = mockk(relaxed = true)
+    private val workManager: androidx.work.WorkManager = mockk(relaxed = true)
+    private val publicationNotices = MutableSharedFlow<PublicationNotice>(extraBufferCapacity = 4)
+    private val publications: PublicationOutbox = mockk(relaxed = true) { every { notices } returns publicationNotices }
     private val postCreated = MutableSharedFlow<SocketPostCreatedData>(extraBufferCapacity = 64)
     private val postDeleted = MutableSharedFlow<SocketPostDeletedData>(extraBufferCapacity = 64)
     private val postLiked = MutableSharedFlow<SocketPostLikedData>(extraBufferCapacity = 64)
@@ -78,6 +83,8 @@ class FeedViewModelTest {
     private val commentDeleted = MutableSharedFlow<SocketCommentDeletedData>(extraBufferCapacity = 64)
     private val postTranslationUpdated =
         MutableSharedFlow<SocketPostTranslationUpdatedData>(extraBufferCapacity = 64)
+    private val mediaCaptionTranslationUpdated =
+        MutableSharedFlow<SocketMediaCaptionTranslationUpdatedData>(extraBufferCapacity = 64)
     private val postUpdated = MutableSharedFlow<SocketPostUpdatedData>(extraBufferCapacity = 64)
     private val postReposted = MutableSharedFlow<SocketPostRepostedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
@@ -87,6 +94,7 @@ class FeedViewModelTest {
     private fun viewModel(hasMore: Boolean = true): FeedViewModel {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         every { repository.feedHasMore } returns MutableStateFlow(hasMore)
+        every { repository.gestureRefusals } returns MutableSharedFlow()
         every { socialSocket.postCreated } returns postCreated
         every { socialSocket.postDeleted } returns postDeleted
         every { socialSocket.postLiked } returns postLiked
@@ -95,9 +103,33 @@ class FeedViewModelTest {
         every { socialSocket.commentAdded } returns commentAdded
         every { socialSocket.commentDeleted } returns commentDeleted
         every { socialSocket.postTranslationUpdated } returns postTranslationUpdated
+        every { socialSocket.mediaCaptionTranslationUpdated } returns mediaCaptionTranslationUpdated
+        every { socialSocket.postReactionAdded } returns MutableSharedFlow()
+        every { socialSocket.postReactionRemoved } returns MutableSharedFlow()
+        every { socialSocket.reconnected } returns kotlinx.coroutines.flow.emptyFlow()
         every { socialSocket.postUpdated } returns postUpdated
         every { socialSocket.postReposted } returns postReposted
-        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository)
+        return FeedViewModel(repository, session, socialSocket, config, reportRepository, workManager, engagement, publications)
+    }
+
+    @Test
+    fun `a post handed to the device's queue tells the feed it is on its way`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Empty)
+        val vm = viewModel()
+
+        publicationNotices.emit(PublicationNotice.QUEUED)
+
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.PUBLISH_QUEUED)
+    }
+
+    @Test
+    fun `a post the device could not queue tells the feed it failed`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Empty)
+        val vm = viewModel()
+
+        publicationNotices.emit(PublicationNotice.FAILED)
+
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.PUBLISH_FAILED)
     }
 
     @Test
@@ -156,7 +188,8 @@ class FeedViewModelTest {
             skipItems(1) // initial empty
             cancelAndIgnoreRemainingEvents()
         }
-        assertThat(vm.state.value.errorMessage).isEqualTo("timeout")
+        assertThat(vm.state.value.loadFailed).isTrue()
+        assertThat(vm.state.value.showSkeleton).isFalse()
     }
 
     @Test
@@ -167,6 +200,23 @@ class FeedViewModelTest {
         vm.toggleLike("p1")
 
         coVerify(exactly = 1) { repository.toggleLike("p1") }
+    }
+
+    /**
+     * Regression guard: `PostRepository.toggleLike` only persists an outbox row —
+     * nothing replays it on reconnect unless a `WorkManager` flush is scheduled.
+     * `FeedViewModel` is the only caller of the post-like outbox path, so it must
+     * schedule [me.meeshy.sdk.outbox.OutboxFlushWorker] itself, matching every
+     * other outbox producer (ChatViewModel, SettingsViewModel, ...).
+     */
+    @Test
+    fun `toggleLike schedules an outbox flush after enqueueing`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Empty)
+
+        val vm = viewModel()
+        vm.toggleLike("p1")
+
+        verify(exactly = 1) { workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
     }
 
     @Test
@@ -189,7 +239,7 @@ class FeedViewModelTest {
         val vm = viewModel()
         vm.pinPost("p1")
 
-        assertThat(vm.state.value.errorMessage).isEqualTo("offline")
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.PIN_FAILED)
         coVerify(exactly = 0) { repository.refresh() }
     }
 
@@ -232,7 +282,7 @@ class FeedViewModelTest {
         val vm = viewModel()
         vm.repost("p1")
 
-        assertThat(vm.state.value.errorMessage).isEqualTo("offline")
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.REPOST_FAILED)
         coVerify(exactly = 0) { repository.refresh() }
     }
 
@@ -415,6 +465,7 @@ class FeedViewModelTest {
     ): FeedViewModel {
         every { session.currentUser } returns MutableStateFlow(user)
         every { repository.feedHasMore } returns MutableStateFlow(true)
+        every { repository.gestureRefusals } returns MutableSharedFlow()
         every { repository.feedStream(any(), any()) } returns stream
         every { socialSocket.postCreated } returns postCreated
         every { socialSocket.postDeleted } returns postDeleted
@@ -424,9 +475,10 @@ class FeedViewModelTest {
         every { socialSocket.commentAdded } returns commentAdded
         every { socialSocket.commentDeleted } returns commentDeleted
         every { socialSocket.postTranslationUpdated } returns postTranslationUpdated
+        every { socialSocket.mediaCaptionTranslationUpdated } returns mediaCaptionTranslationUpdated
         every { socialSocket.postUpdated } returns postUpdated
         every { socialSocket.postReposted } returns postReposted
-        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository)
+        return FeedViewModel(repository, session, socialSocket, config, reportRepository, workManager, engagement, publications)
     }
 
     @Test
@@ -448,6 +500,38 @@ class FeedViewModelTest {
 
         vm.onPostFlagTap("1", "es")
         assertThat(vm.state.value.posts.single().content).isEqualTo("Hello")
+    }
+
+    @Test
+    fun `picking a language in the explorer shows it on the card and marks that row active`() = runTest {
+        val vm = viewModel(bilingualUser, flowOf(CacheResult.Fresh(listOf(translatedPost("1")), 0L)))
+
+        vm.onPostLanguageSelected("1", "es")
+
+        val card = vm.state.value.posts.single()
+        assertThat(card.content).isEqualTo("Hola")
+        assertThat(card.languageExplorer?.translations?.first { it.isActive }?.code).isEqualTo("es")
+    }
+
+    @Test
+    fun `picking the language already shown keeps it instead of reverting to the default`() = runTest {
+        val vm = viewModel(bilingualUser, flowOf(CacheResult.Fresh(listOf(translatedPost("1")), 0L)))
+
+        vm.onPostLanguageSelected("1", "es")
+        vm.onPostLanguageSelected("1", "es")
+
+        assertThat(vm.state.value.posts.single().content).isEqualTo("Hola")
+    }
+
+    @Test
+    fun `picking the original from the explorer shows the original text`() = runTest {
+        val vm = viewModel(bilingualUser, flowOf(CacheResult.Fresh(listOf(translatedPost("1")), 0L)))
+
+        vm.onPostLanguageSelected("1", "fr")
+
+        val card = vm.state.value.posts.single()
+        assertThat(card.content).isEqualTo("Bonjour")
+        assertThat(card.languageExplorer?.originalIsActive).isTrue()
     }
 
     @Test
@@ -482,6 +566,26 @@ class FeedViewModelTest {
         stream.value = CacheResult.Fresh(listOf(translatedPost("1")), 0L)
 
         assertThat(vm.state.value.posts.single().content).isEqualTo("Hola")
+    }
+
+    @Test
+    fun `a manual language choice survives a realtime translation of another language and can be reset`() = runTest {
+        val stream = MutableStateFlow<CacheResult<List<ApiPost>>>(
+            CacheResult.Stale(listOf(translatedPost("1")), 0L),
+        )
+        val vm = viewModel(bilingualUser, stream)
+        vm.onPostFlagTap("1", "es")
+
+        val withGerman = translatedPost("1").let {
+            it.copy(translations = it.translations.orEmpty() + ("de" to ApiPostTranslationEntry(text = "Hallo", confidenceScore = 0.8)))
+        }
+        stream.value = CacheResult.Fresh(listOf(withGerman), 0L)
+
+        assertThat(vm.state.value.posts.single().content).isEqualTo("Hola")
+
+        vm.clearLanguageOverride("1")
+
+        assertThat(vm.state.value.posts.single().content).isEqualTo("Hello")
     }
 
     // --- On-demand post translation (tapping a configured-but-absent flag) ---
@@ -753,7 +857,19 @@ class FeedViewModelTest {
             SocketPostTranslationUpdatedData(postId = "1", language = "es", translation = entry),
         )
 
-        verify { repository.applyTranslationUpdate("1", "es", entry) }
+        coVerify { repository.applyTranslationUpdate("1", "es", entry) }
+    }
+
+    @Test
+    fun `a realtime media-caption-translation-updated folds the pushed entry via the repository (#6280)`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+        val entry = ApiMediaCaptionTranslationEntry(text = "Hola", translationModel = "nllb", confidenceScore = 0.97)
+
+        mediaCaptionTranslationUpdated.emit(
+            SocketMediaCaptionTranslationUpdatedData(mediaId = "m1", postId = "1", language = "es", translation = entry),
+        )
+
+        coVerify { repository.applyMediaCaptionTranslationUpdate("1", "m1", null, "es", entry) }
     }
 
     @Test
@@ -763,7 +879,7 @@ class FeedViewModelTest {
 
         postUpdated.emit(SocketPostUpdatedData(post = edited))
 
-        verify { repository.applyPostUpdate(edited) }
+        coVerify { repository.applyPostUpdate(edited) }
     }
 
     @Test
@@ -933,6 +1049,16 @@ class FeedViewModelTest {
         coVerify(exactly = 1) { repository.toggleBookmark("p1") }
     }
 
+    /** Bookmark analogue of the like-flush regression guard above. */
+    @Test
+    fun `toggleBookmark schedules an outbox flush after enqueueing`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+
+        vm.toggleBookmark("p1")
+
+        verify(exactly = 1) { workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
     // --- live comment-count sync (comment:added / comment:deleted) ---
 
     private fun commentedPost(id: String, count: Int) =
@@ -1022,237 +1148,6 @@ class FeedViewModelTest {
         assertThat(vm.state.value.posts.single().commentCount).isEqualTo(2)
     }
 
-    // --- Create post (publishPost) ---
-
-    @Test
-    fun `publishPost sends the content, POST type and chosen visibility to the repository`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        coEvery {
-            repository.create(content = "hello world", type = "POST", visibility = "FRIENDS")
-        } returns NetworkResult.Success(post("new"))
-
-        vm.publishPost(content = "hello world", visibility = "FRIENDS")
-
-        coVerify(exactly = 1) {
-            repository.create(content = "hello world", type = "POST", visibility = "FRIENDS")
-        }
-    }
-
-    @Test
-    fun `a successfully published post is prepended to the feed immediately`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC")
-        } returns NetworkResult.Success(post("new"))
-
-        vm.publishPost(content = "hi", visibility = "PUBLIC")
-
-        assertThat(vm.state.value.posts.map { it.id }).containsExactly("new", "1").inOrder()
-    }
-
-    @Test
-    fun `a successfully published post never raises the new-posts banner — it is already visible`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC")
-        } returns NetworkResult.Success(post("new"))
-
-        vm.publishPost(content = "hi", visibility = "PUBLIC")
-
-        assertThat(vm.state.value.newPostsCount).isEqualTo(0)
-    }
-
-    @Test
-    fun `a publish failure surfaces the error message and leaves the feed untouched`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC")
-        } returns NetworkResult.Failure(ApiError(message = "network down"))
-
-        vm.publishPost(content = "hi", visibility = "PUBLIC")
-
-        val s = vm.state.value
-        assertThat(s.errorMessage).isEqualTo("network down")
-        assertThat(s.posts.map { it.id }).containsExactly("1")
-    }
-
-    @Test
-    fun `a publish exception surfaces its message and leaves the feed untouched`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC")
-        } throws RuntimeException("boom")
-
-        vm.publishPost(content = "hi", visibility = "PUBLIC")
-
-        val s = vm.state.value
-        assertThat(s.errorMessage).isEqualTo("boom")
-        assertThat(s.posts.map { it.id }).containsExactly("1")
-    }
-
-    @Test
-    fun `the server echo of a just-published post via the socket is not rendered twice`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC")
-        } returns NetworkResult.Success(post("new"))
-        vm.publishPost(content = "hi", visibility = "PUBLIC")
-
-        // The gateway broadcasts `post:created` back to the author too.
-        postCreated.emit(SocketPostCreatedData(post("new")))
-
-        val s = vm.state.value
-        assertThat(s.posts.map { it.id }).containsExactly("new", "1").inOrder()
-        assertThat(s.newPostsCount).isEqualTo(0)
-    }
-
-    @Test
-    fun `publishPost with attached media sends the media ids alongside the content`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", mediaIds = listOf("m1", "m2"))
-        } returns NetworkResult.Success(post("new"))
-
-        vm.publishPost(content = "hi", visibility = "PUBLIC", mediaIds = listOf("m1", "m2"))
-
-        coVerify(exactly = 1) {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", mediaIds = listOf("m1", "m2"))
-        }
-    }
-
-    @Test
-    fun `publishPost with blank text and only media sends a null content, not an empty string`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        coEvery {
-            repository.create(content = null, type = "POST", visibility = "PUBLIC", mediaIds = listOf("m1"))
-        } returns NetworkResult.Success(post("new"))
-
-        vm.publishPost(content = "", visibility = "PUBLIC", mediaIds = listOf("m1"))
-
-        coVerify(exactly = 1) {
-            repository.create(content = null, type = "POST", visibility = "PUBLIC", mediaIds = listOf("m1"))
-        }
-    }
-
-    @Test
-    fun `a media-only publish is prepended to the feed like any other`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
-        coEvery {
-            repository.create(content = null, type = "POST", visibility = "PUBLIC", mediaIds = listOf("m1"))
-        } returns NetworkResult.Success(post("new"))
-
-        vm.publishPost(content = "   ", visibility = "PUBLIC", mediaIds = listOf("m1"))
-
-        assertThat(vm.state.value.posts.map { it.id }).containsExactly("new", "1").inOrder()
-    }
-
-    @Test
-    fun `publishPost sends the reel-classification type the caller resolved`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        coEvery {
-            repository.create(content = "check this out", type = "REEL", visibility = "PUBLIC", mediaIds = listOf("m1"))
-        } returns NetworkResult.Success(post("new"))
-
-        vm.publishPost(content = "check this out", visibility = "PUBLIC", mediaIds = listOf("m1"), type = "REEL")
-
-        coVerify(exactly = 1) {
-            repository.create(content = "check this out", type = "REEL", visibility = "PUBLIC", mediaIds = listOf("m1"))
-        }
-    }
-
-    @Test
-    fun `publishPost with no location forwards a null location to the repository`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", location = null)
-        } returns NetworkResult.Success(post("new"))
-
-        vm.publishPost(content = "hi", visibility = "PUBLIC")
-
-        coVerify(exactly = 1) {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", location = null)
-        }
-    }
-
-    @Test
-    fun `publishPost forwards an attached location to the repository verbatim`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        val place = SharedPlace(latitude = 48.8566, longitude = 2.3522)
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", location = place)
-        } returns NetworkResult.Success(post("new"))
-
-        vm.publishPost(content = "hi", visibility = "PUBLIC", location = place)
-
-        coVerify(exactly = 1) {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", location = place)
-        }
-    }
-
-    @Test
-    fun `publishPost with no language override forwards a null originalLanguage to the repository`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", originalLanguage = null)
-        } returns NetworkResult.Success(post("new"))
-
-        vm.publishPost(content = "hi", visibility = "PUBLIC")
-
-        coVerify(exactly = 1) {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", originalLanguage = null)
-        }
-    }
-
-    @Test
-    fun `publishPost forwards the author's chosen language override to the repository verbatim`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", originalLanguage = "ja")
-        } returns NetworkResult.Success(post("new"))
-
-        vm.publishPost(content = "hi", visibility = "PUBLIC", language = "ja")
-
-        coVerify(exactly = 1) {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", originalLanguage = "ja")
-        }
-    }
-
-    // --- Composer media upload (uploadMedia) ---
-
-    @Test
-    fun `uploadMedia delegates to the feed media uploader and returns its result`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        val items = listOf(MediaUploadItem(bytes = byteArrayOf(1), fileName = "a.jpg", mimeType = "image/jpeg"))
-        val uploaded = listOf(
-            UploadedMedia(
-                id = "m1",
-                url = "https://cdn.meeshy.me/m1.jpg",
-                mimeType = "image/jpeg",
-                fileSize = 10,
-                width = null,
-                height = null,
-                durationMs = null,
-                thumbnailUrl = null,
-            ),
-        )
-        coEvery { feedMediaUploader.upload(items) } returns NetworkResult.Success(uploaded)
-
-        val result = vm.uploadMedia(items)
-
-        assertThat(result).isEqualTo(NetworkResult.Success(uploaded))
-        coVerify(exactly = 1) { feedMediaUploader.upload(items) }
-    }
-
-    @Test
-    fun `uploadMedia propagates an uploader failure unchanged`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        val items = listOf(MediaUploadItem(bytes = byteArrayOf(1), fileName = "a.jpg", mimeType = "image/jpeg"))
-        val failure = NetworkResult.Failure(ApiError("offline"))
-        coEvery { feedMediaUploader.upload(items) } returns failure
-
-        assertThat(vm.uploadMedia(items)).isEqualTo(failure)
-    }
-
     // --- Fullscreen media gallery (openImageViewer / dismissImageViewer) ---
 
     private fun imagePost(id: String, vararg urls: String) = ApiPost(
@@ -1307,5 +1202,100 @@ class FeedViewModelTest {
         vm.dismissImageViewer()
 
         assertThat(vm.state.value.imageViewer).isNull()
+    }
+
+    // --- Localized notices and drawn states (iOS FeedView error/empty + FeedbackToast) ---
+
+    @Test
+    fun `a sync error with posts on screen raises the localized load notice, not the error state`() = runTest {
+        every { repository.feedStream(any(), captureLambda()) } answers {
+            val onError = lambda<(Throwable) -> Unit>().captured
+            kotlinx.coroutines.flow.flow {
+                emit(CacheResult.Stale(listOf(post("1")), 1L))
+                onError(RuntimeException("timeout"))
+            }
+        }
+
+        val vm = viewModel()
+
+        assertThat(vm.state.value.loadFailed).isFalse()
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.LOAD_FAILED)
+    }
+
+    @Test
+    fun `a refresh failure on an empty feed shows the error state`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Empty)
+        coEvery { repository.refreshReporting() } returns RuntimeException("offline")
+
+        val vm = viewModel()
+        vm.refresh()
+
+        assertThat(vm.state.value.loadFailed).isTrue()
+        assertThat(vm.state.value.isSyncing).isFalse()
+    }
+
+    @Test
+    fun `retrying clears the error state`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Empty)
+        coEvery { repository.refreshReporting() } returns RuntimeException("offline")
+        val vm = viewModel()
+        vm.refresh()
+        coEvery { repository.refreshReporting() } returns null
+
+        vm.refresh()
+
+        assertThat(vm.state.value.loadFailed).isFalse()
+        assertThat(vm.state.value.isSyncing).isFalse()
+    }
+
+    @Test
+    fun `a sent report is confirmed, a failed one is said`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Empty)
+        coEvery { reportRepository.reportPost("p1", any(), any()) } returns NetworkResult.Success(Unit)
+        coEvery { reportRepository.reportPost("p2", any(), any()) } returns NetworkResult.Failure(ApiError("x"))
+        val vm = viewModel()
+
+        vm.reportPost("p1", ReportReason.SPAM)
+        val afterSent = vm.state.value.notice
+        vm.consumeNotice()
+        vm.reportPost("p2", ReportReason.SPAM)
+
+        assertThat(afterSent).isEqualTo(FeedNotice.REPORTED)
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.REPORT_FAILED)
+    }
+
+    @Test
+    fun `deleting hides the post at once, before the network answers`() = runTest {
+        val gate = CompletableDeferred<NetworkResult<Unit>>()
+        coEvery { repository.delete("1") } coAnswers { gate.await() }
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1"), post("2")), 0L)))
+
+        vm.deletePost("1")
+
+        assertThat(vm.state.value.posts.map { it.id }).containsExactly("2")
+        gate.complete(NetworkResult.Success(Unit))
+    }
+
+    @Test
+    fun `a failed delete brings the post back and says so`() = runTest {
+        coEvery { repository.delete("1") } returns NetworkResult.Failure(ApiError("down"))
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1"), post("2")), 0L)))
+
+        vm.deletePost("1")
+
+        assertThat(vm.state.value.posts.map { it.id }).containsExactly("1", "2")
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.DELETE_FAILED)
+    }
+
+    @Test
+    fun `consuming a notice clears it so the same one can show again`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Empty)
+        coEvery { repository.pinPost("p1") } returns NetworkResult.Failure(ApiError("offline"))
+        val vm = viewModel()
+        vm.pinPost("p1")
+
+        vm.consumeNotice()
+
+        assertThat(vm.state.value.notice).isNull()
     }
 }

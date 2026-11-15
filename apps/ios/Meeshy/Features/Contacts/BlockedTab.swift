@@ -7,8 +7,6 @@ struct BlockedTab: View {
     @ObservedObject var viewModel: BlockedViewModel
     var isActive: Bool = true
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
     @State private var unblockTarget: BlockedUser?
@@ -24,12 +22,12 @@ struct BlockedTab: View {
             }
         }
         .task { await viewModel.loadBlocked() }
-        .alert(String(localized: "contacts.blocked.unblock-title", defaultValue: "Debloquer ?", bundle: .main), isPresented: Binding(
+        .alert(String(localized: "contacts.blocked.unblock-title", defaultValue: "Débloquer ?", bundle: .main), isPresented: Binding(
             get: { unblockTarget != nil },
             set: { if !$0 { unblockTarget = nil } }
         )) {
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { unblockTarget = nil }
-            Button(String(localized: "contacts.blocked.unblock", defaultValue: "Debloquer", bundle: .main), role: .destructive) {
+            Button(String(localized: "contacts.blocked.unblock", defaultValue: "Débloquer", bundle: .main), role: .destructive) {
                 if let user = unblockTarget {
                     Task { await viewModel.unblock(userId: user.id) }
                 }
@@ -37,7 +35,7 @@ struct BlockedTab: View {
             }
         } message: {
             if let user = unblockTarget {
-                Text(String(format: String(localized: "contacts.blocked.unblock-message", defaultValue: "Debloquer %@ ?", bundle: .main), user.name))
+                Text(String(format: String(localized: "contacts.blocked.unblock-message", defaultValue: "Débloquer %@ ?", bundle: .main), user.name))
             }
         }
     }
@@ -52,7 +50,7 @@ struct BlockedTab: View {
                     blockedRow(user, index: index)
                 }
             }
-            .padding(.top, 8)
+            .padding(.top, MeeshySpacing.sm)
         }
         .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
         .refreshable { await viewModel.loadBlocked(forceNetwork: true) }
@@ -61,7 +59,7 @@ struct BlockedTab: View {
     private func blockedRow(_ user: BlockedUser, index: Int) -> some View {
         let color = DynamicColorGenerator.colorForName(user.name)
 
-        return HStack(spacing: 14) {
+        return HStack(spacing: MeeshySpacing.mdPlus) {
             MeeshyAvatar(
                 name: user.name,
                 context: .userListItem,
@@ -70,15 +68,15 @@ struct BlockedTab: View {
             )
             .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(user.name)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
                 Text("@\(user.username)")
                     .font(.caption.weight(.medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             .accessibilityElement(children: .combine)
 
@@ -87,19 +85,19 @@ struct BlockedTab: View {
             Button {
                 unblockTarget = user
             } label: {
-                Text(String(localized: "contacts.blocked.unblock", defaultValue: "Debloquer", bundle: .main))
+                Text(String(localized: "contacts.blocked.unblock", defaultValue: "Débloquer", bundle: .main))
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(MeeshyColors.warning)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .foregroundStyle(MeeshyColors.warning)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(
-                        Capsule().stroke(MeeshyColors.warning.opacity(0.3), lineWidth: 1)
+                        Capsule().stroke(MeeshyColors.warning.opacity(MeeshyOpacity.medium), lineWidth: 1)
                     )
             }
-            .accessibilityLabel(String(format: String(localized: "contacts.blocked.unblock-a11y", defaultValue: "Debloquer %@", bundle: .main), user.name))
+            .accessibilityLabel(String(format: String(localized: "contacts.blocked.unblock-a11y", defaultValue: "Débloquer %@", bundle: .main), user.name))
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.md)
         .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.04), value: viewModel.blockedUsers.count)
     }
 
@@ -108,8 +106,7 @@ struct BlockedTab: View {
     private var emptyState: some View {
         EmptyStateView(
             icon: "hand.raised.slash",
-            title: String(localized: "contacts.blocked.empty", defaultValue: "Aucun utilisateur bloqué", bundle: .main),
-            subtitle: String(localized: "contacts.blocked.empty-subtitle", defaultValue: "Les personnes que vous bloquez apparaitront ici.", bundle: .main)
+            title: String(localized: "contacts.blocked.empty", defaultValue: "Aucun utilisateur bloqué", bundle: .main)
         )
     }
 }

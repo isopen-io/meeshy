@@ -36,14 +36,16 @@ public enum ComposerMode: Equatable {
     case comment
     case caption
 
+    /// Dans la langue de l'interface (#14879) : le texte d'invite est le
+    /// premier mot que lit l'utilisateur dans la barre de saisie.
     public var placeholder: String {
         switch self {
-        case .message: return "Message..."
-        case .post: return "Quoi de neuf ?"
-        case .status: return "Votre statut..."
-        case .story: return "R\u{00E9}pondre..."
-        case .comment: return "Commenter..."
-        case .caption: return "Ajouter une l\u{00E9}gende..."
+        case .message: return String(localized: "composer.placeholder.message", defaultValue: "Message…", bundle: .module)
+        case .post: return String(localized: "composer.placeholder.post", defaultValue: "Quoi de neuf ?", bundle: .module)
+        case .status: return String(localized: "composer.placeholder.status", defaultValue: "Votre statut…", bundle: .module)
+        case .story: return String(localized: "composer.placeholder.story", defaultValue: "Répondre…", bundle: .module)
+        case .comment: return String(localized: "composer.placeholder.comment", defaultValue: "Commenter…", bundle: .module)
+        case .caption: return String(localized: "composer.placeholder.caption", defaultValue: "Ajouter une légende…", bundle: .module)
         }
     }
 
@@ -80,6 +82,15 @@ public enum ComposerMode: Equatable {
     }
 
     public var showEphemeral: Bool {
+        switch self {
+        case .message: return true
+        default: return false
+        }
+    }
+
+    /// La vue unique protège un MESSAGE adressé : un commentaire, une légende
+    /// ou un post public n'ont personne à qui la brûler (#8431).
+    public var showViewOnce: Bool {
         switch self {
         case .message: return true
         default: return false
@@ -507,36 +518,6 @@ public enum CodeLanguage: String, CaseIterable, Sendable {
     }
 }
 
-// MARK: - Crop Ratio
-
-public enum CropRatio: Equatable, Hashable {
-    case square
-    case ratio4x3
-    case ratio16x9
-    case ratio9x16
-    case free
-
-    public var aspectRatio: Double? {
-        switch self {
-        case .square: return 1.0
-        case .ratio4x3: return 4.0 / 3.0
-        case .ratio16x9: return 16.0 / 9.0
-        case .ratio9x16: return 9.0 / 16.0
-        case .free: return nil
-        }
-    }
-
-    public var label: String {
-        switch self {
-        case .square: return "1:1"
-        case .ratio4x3: return "4:3"
-        case .ratio16x9: return "16:9"
-        case .ratio9x16: return "9:16"
-        case .free: return "Libre"
-        }
-    }
-}
-
 // MARK: - Media Preview Context
 
 public enum MediaPreviewContext: Equatable {
@@ -560,16 +541,6 @@ public enum MediaPreviewContext: Equatable {
         self == .story
     }
 
-    public var preferredCropRatio: CropRatio? {
-        switch self {
-        case .story: return .ratio9x16
-        case .post: return nil
-        case .message: return nil
-        case .avatar: return .square
-        case .banner: return .ratio16x9
-        }
-    }
-
     public var contextLabel: String {
         switch self {
         case .story: return "Story"
@@ -591,26 +562,3 @@ public enum MediaPreviewContext: Equatable {
     }
 }
 
-// MARK: - Format Helpers
-
-public func formatMediaDuration(_ seconds: TimeInterval) -> String {
-    let mins = Int(seconds) / 60
-    let secs = Int(seconds) % 60
-    return String(format: "%d:%02d", mins, secs)
-}
-
-public func formatMediaDurationMs(_ ms: Int) -> String {
-    formatMediaDuration(Double(ms) / 1000.0)
-}
-
-/// Single source of truth for human-readable file sizes across the app —
-/// download badges (image/video), audio play-button labels and upload
-/// progress all render through this one helper so a "870 KB" reads
-/// identically everywhere. Previously the SDK's audio label used a binary
-/// (1024-based) `ByteCountFormatter` while the app's download badge and
-/// upload progress each hand-rolled a decimal (1000-based)
-/// `.formatted(.byteCount(style: .file))` — two divergent algorithms behind
-/// a comment claiming parity. `.file` matches Finder's decimal convention.
-nonisolated public func formatMediaFileSize(_ bytes: Int64) -> String {
-    bytes.formatted(.byteCount(style: .file))
-}

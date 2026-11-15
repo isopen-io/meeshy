@@ -23,15 +23,19 @@ enum class PersistentEffect(val flag: Long) {
  * the `:sdk-ui` `Modifier.messageEffects` treatment layer. [appearance] holds the
  * one-shot effects that should still play; [persistent] holds the continuous treatments;
  * [glowIntensity] is the resolved glow strength (only meaningful when [PersistentEffect.GLOW]
- * is present).
+ * is present). The rainbow is NOT a persistent treatment of the bubble: it paints the LETTERS
+ * ([rainbowLetters]) and never an outline around the bubble (iOS `RainbowLetters`).
  */
 data class MessageEffectRenderPlan(
     val appearance: Set<AppearanceEffect> = emptySet(),
     val persistent: Set<PersistentEffect> = emptySet(),
     val glowIntensity: Double = MessageEffectRenderPlanner.DEFAULT_GLOW_INTENSITY,
+    val rainbowLetters: Boolean = false,
+    /** False under « Reduire les animations » : the surviving treatments render STILL (iOS `animatesPersistent`). */
+    val animatesPersistent: Boolean = true,
 ) {
     /** True when no effect renders — no one-shot to play and no continuous treatment. */
-    val isEmpty: Boolean get() = appearance.isEmpty() && persistent.isEmpty()
+    val isEmpty: Boolean get() = appearance.isEmpty() && persistent.isEmpty() && !rainbowLetters
 }
 
 /**
@@ -43,22 +47,36 @@ data class MessageEffectRenderPlan(
  * - Persistent effects render continuously and are never gated by the played flag.
  * - Glow intensity resolves `effects.glowIntensity ?? 0.5` (iOS `effects.glowIntensity ?? 0.5`).
  *
+ * - Under [reduceMotion] (iOS `playbackPlan(reduceMotion:)`) no appearance plays, only the glow and
+ *   the rainbow letters survive, and [MessageEffectRenderPlan.animatesPersistent] turns false.
+ *
  * Lifecycle bits (ephemeral / blurred / view-once) are behaviours, not render effects, so
  * they never appear in the plan.
  */
 object MessageEffectRenderPlanner {
     const val DEFAULT_GLOW_INTENSITY: Double = 0.5
 
-    fun plan(effects: MessageEffects, hasPlayedAppearance: Boolean): MessageEffectRenderPlan {
+    /**
+     * iOS `MessageEffectPlan.reduceMotionSafeMask` : sous « Reduire les animations », seuls les effets qui gardent un
+     * sens FIXES survivent (halo, lettres arc-en-ciel) ; pulse et sparkle sont du mouvement pur et sont retires.
+     */
+    private val REDUCE_MOTION_SAFE: Set<PersistentEffect> = setOf(PersistentEffect.GLOW, PersistentEffect.RAINBOW)
+
+    fun plan(effects: MessageEffects, hasPlayedAppearance: Boolean, reduceMotion: Boolean = false): MessageEffectRenderPlan {
         val appearance =
-            if (hasPlayedAppearance) emptySet()
+            if (hasPlayedAppearance || reduceMotion) emptySet()
             else AppearanceEffect.entries.filterTo(LinkedHashSet()) { effects.has(it.flag) }
-        val persistent = PersistentEffect.entries.filterTo(LinkedHashSet()) { effects.has(it.flag) }
+        val persistent = PersistentEffect.entries
+            .filter { it != PersistentEffect.RAINBOW }
+            .filter { !reduceMotion || it in REDUCE_MOTION_SAFE }
+            .filterTo(LinkedHashSet()) { effects.has(it.flag) }
         val glowIntensity = effects.glowIntensity ?: DEFAULT_GLOW_INTENSITY
         return MessageEffectRenderPlan(
             appearance = appearance,
             persistent = persistent,
             glowIntensity = glowIntensity,
+            rainbowLetters = effects.has(PersistentEffect.RAINBOW.flag),
+            animatesPersistent = !reduceMotion,
         )
     }
 

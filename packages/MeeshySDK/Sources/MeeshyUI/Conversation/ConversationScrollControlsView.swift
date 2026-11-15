@@ -6,6 +6,11 @@ public struct ConversationScrollControlsView: View {
     public var unreadCount: Int
     public var typingParticipants: [TypingParticipant]
     public var lastUnreadMessageContent: String?
+    /// Nom affiché de l'expéditeur du dernier message non lu — préfixe
+    /// l'aperçu (« Maiza Biyoko : Bonjour à tous »). `nil` en conversation
+    /// directe (décision app-side : le nom de l'unique interlocuteur n'ajoute
+    /// rien qu'on ne sache déjà) ; toujours fourni en groupe (#3921).
+    public var lastUnreadMessageSenderName: String?
     public var unreadAttachmentTypeLabel: String?
     public var unreadAttachmentThumbHash: String?
     public var unreadAttachmentThumbnailUrl: String?
@@ -23,6 +28,9 @@ public struct ConversationScrollControlsView: View {
     public var isAudioPlaying: Bool
     public var isOffline: Bool
     public var isSearchingQuotedMessage: Bool
+    /// #9304 — la page plus récente d'une fenêtre sautée est en vol. Le
+    /// bouton ne le dit qu'au-delà de `loadingNewerSignalDelay`.
+    public var isLoadingNewer: Bool
     public var accentColor: String
     public var secondaryColor: String
     /// SF Symbol du dernier message non lu quand c'est une notice d'appel
@@ -39,6 +47,7 @@ public struct ConversationScrollControlsView: View {
         unreadCount: Int,
         typingParticipants: [TypingParticipant],
         lastUnreadMessageContent: String?,
+        lastUnreadMessageSenderName: String? = nil,
         unreadAttachmentTypeLabel: String?,
         unreadAttachmentThumbHash: String?,
         unreadAttachmentThumbnailUrl: String?,
@@ -49,6 +58,7 @@ public struct ConversationScrollControlsView: View {
         isAudioPlaying: Bool,
         isOffline: Bool,
         isSearchingQuotedMessage: Bool = false,
+        isLoadingNewer: Bool = false,
         accentColor: String,
         secondaryColor: String,
         unreadCallSymbol: String? = nil,
@@ -59,6 +69,7 @@ public struct ConversationScrollControlsView: View {
         self.unreadCount = unreadCount
         self.typingParticipants = typingParticipants
         self.lastUnreadMessageContent = lastUnreadMessageContent
+        self.lastUnreadMessageSenderName = lastUnreadMessageSenderName
         self.unreadAttachmentTypeLabel = unreadAttachmentTypeLabel
         self.unreadAttachmentThumbHash = unreadAttachmentThumbHash
         self.unreadAttachmentThumbnailUrl = unreadAttachmentThumbnailUrl
@@ -69,6 +80,7 @@ public struct ConversationScrollControlsView: View {
         self.isAudioPlaying = isAudioPlaying
         self.isOffline = isOffline
         self.isSearchingQuotedMessage = isSearchingQuotedMessage
+        self.isLoadingNewer = isLoadingNewer
         self.accentColor = accentColor
         self.secondaryColor = secondaryColor
         self.unreadCallSymbol = unreadCallSymbol
@@ -117,6 +129,10 @@ public struct ConversationScrollControlsView: View {
     }
     
     @State private var searchPulse: Bool = false
+    /// `isLoadingNewer` retardé de `loadingNewerSignalDelay` : une page servie
+    /// vite ne fait rien clignoter ; servie, le signal s'éteint sur-le-champ.
+    @State private var showsLoadingNewer: Bool = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Phase d'animation des points "typing" (0 -> 1 -> 2), possedee par la vue.
     /// L'indicateur n'a de sens qu'ici : son timer 0.5s vit dans la feuille qui
     /// l'affiche, au lieu de remonter dans ConversationView (qui re-evaluait
@@ -124,6 +140,7 @@ public struct ConversationScrollControlsView: View {
     /// d'animation dans la sous-vue" ; le garde sur hasTypingIndicator evite tout
     /// tick utile quand personne ne tape.
     @State private var typingDotPhase: Int = 0
+    @Environment(\.meeshyPresenceResolver) private var presenceResolver
     // `@State` (not `let`) — a plain stored `let` re-evaluates its initializer
     // every time ConversationView reconstructs this leaf view (any unrelated
     // body re-evaluation — the very churn this view was pulled out to avoid,
@@ -137,11 +154,13 @@ public struct ConversationScrollControlsView: View {
 
     /// Couleur de contenu lisible sur la teinte glass. L'accent est déterministe
     /// par conversation et peut tomber sur une couleur claire (jaune/cyan/vert) —
-    /// un contenu blanc y serait illisible (WCAG < 3:1). On choisit blanc ou sombre
-    /// selon la luminance WCAG de l'accent (seuil 0.6, convention repo). Offline :
-    /// la teinte neutral500 est sombre, le blanc reste lisible.
+    /// un contenu blanc y serait illisible (WCAG < 3:1). `Color.readableInk`
+    /// choisit noir/blanc au point d'égalité de contraste WCAG (#5950 — l'ancien
+    /// seuil arrondi `0.6` élisait l'encre blanche sur toute la plage 0,179 → 0,6,
+    /// ex. `#46BDCA` : 1,98:1 en schéma clair, sous la barre AA). Offline : la
+    /// teinte neutral500 est sombre, le blanc reste lisible.
     private var contentColor: Color {
-        isOffline ? .white : (Color(hex: accentColor).luminance > 0.6 ? .black : .white)
+        isOffline ? .white : Color(hex: accentColor).readableInk
     }
 
     /// Repos = cercle parfait ; contenu riche/hors-ligne/recherche = capsule
@@ -149,15 +168,62 @@ public struct ConversationScrollControlsView: View {
     /// `shouldShowAttachmentPreview` plus bas) car XCTest ne peut pas
     /// introspecter la `Shape` passée à un modificateur SwiftUI — seule la
     /// DÉCISION est vérifiable, pas le rendu.
-    nonisolated static func isCompactShape(hasUnreadContent: Bool, isOffline: Bool, isSearchingQuotedMessage: Bool) -> Bool {
-        hasUnreadContent || isOffline || isSearchingQuotedMessage
+    nonisolated static func isCompactShape(
+        hasUnreadContent: Bool, isOffline: Bool, isSearchingQuotedMessage: Bool, showsLoadingNewer: Bool = false
+    ) -> Bool {
+        hasUnreadContent || isOffline || isSearchingQuotedMessage || showsLoadingNewer
+    }
+
+    /// Ce que la pastille montre, par ordre de force : la recherche d'une
+    /// citation (rien n'est encore servi), la page plus récente en vol
+    /// (#9304), l'aperçu des non-lus, le hors-ligne, le chevron.
+    nonisolated enum PillContent: Equatable, Sendable {
+        case searching, loadingNewer, unread, offline, rest
+    }
+
+    nonisolated static func pillContent(
+        isSearchingQuotedMessage: Bool, showsLoadingNewer: Bool, hasUnreadContent: Bool, isOffline: Bool
+    ) -> PillContent {
+        if isSearchingQuotedMessage { return .searching }
+        if showsLoadingNewer { return .loadingNewer }
+        if hasUnreadContent { return .unread }
+        if isOffline { return .offline }
+        return .rest
+    }
+
+    /// Insensible pendant la seule recherche de citation : revenir au présent
+    /// avant que la fenêtre arrive la ferait atterrir par-dessus. Pendant le
+    /// chargement de la page plus récente, le retour au présent reste permis.
+    nonisolated static func acceptsTaps(isSearchingQuotedMessage: Bool) -> Bool {
+        !isSearchingQuotedMessage
+    }
+
+    /// Seuil du web (`THREAD_LOAD_SIGNAL_DELAY_MS`, #9302).
+    nonisolated static let loadingNewerSignalDelay: Duration = .milliseconds(200)
+
+    static var loadingNewerLabel: String {
+        String(localized: "conversation.loading_newer", defaultValue: "Chargement…", bundle: .module)
     }
 
     public var body: some View {
-        if Self.isCompactShape(hasUnreadContent: hasUnreadContent, isOffline: isOffline, isSearchingQuotedMessage: isSearchingQuotedMessage) {
-            pill(shape: Capsule())
-        } else {
-            pill(shape: Circle())
+        Group {
+            if Self.isCompactShape(
+                hasUnreadContent: hasUnreadContent, isOffline: isOffline,
+                isSearchingQuotedMessage: isSearchingQuotedMessage, showsLoadingNewer: showsLoadingNewer
+            ) {
+                pill(shape: Capsule())
+            } else {
+                pill(shape: Circle())
+            }
+        }
+        .accessibilityValue(showsLoadingNewer ? Self.loadingNewerLabel : "")
+        .task(id: isLoadingNewer) {
+            guard isLoadingNewer else {
+                showsLoadingNewer = false
+                return
+            }
+            guard await cancellableSleep(for: Self.loadingNewerSignalDelay) else { return }
+            showsLoadingNewer = true
         }
     }
 
@@ -173,33 +239,36 @@ public struct ConversationScrollControlsView: View {
             onScrollToBottom()
         } label: {
             Group {
-                if isSearchingQuotedMessage {
-                    // Pulsing search indicator while loading quoted message
+                switch Self.pillContent(
+                    isSearchingQuotedMessage: isSearchingQuotedMessage, showsLoadingNewer: showsLoadingNewer,
+                    hasUnreadContent: hasUnreadContent, isOffline: isOffline
+                ) {
+                case .searching:
                     quotedMessageSearchContent
-                } else if hasUnreadContent {
-                    // Rich button with preview
+                case .loadingNewer:
+                    loadingNewerContent
+                case .unread:
                     unreadPreviewContent
-                } else if isOffline {
-                    // Offline indicator when no unread/typing
-                    HStack(spacing: 8) {
+                case .offline:
+                    HStack(spacing: MeeshySpacing.sm) {
                         Image(systemName: "wifi.slash")
-                            .font(.system(size: 13, weight: .bold))
+                            .meeshyScaledFont(MeeshyIconSize.xs, weight: .bold)
                         Text(String(localized: "conversation.offline", defaultValue: "Hors ligne", bundle: .module))
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     }
-                    .foregroundColor(contentColor)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                } else {
+                    .foregroundStyle(contentColor)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.vertical, MeeshySpacing.smPlus)
+                case .rest:
                     // Chevron-only pill au repos : frame CARRÉE explicite avant
                     // .adaptiveGlass(in: Circle()) — sans elle le disque peint
                     // (inscrit dans les bounds ~37×32 laissées par padding(12))
                     // est plus étroit que le glyphe et déborde horizontalement.
                     // 44×44 atteint au passage la cible tactile HIG.
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(contentColor)
-                        .frame(width: 44, height: 44)
+                        .font(.system(size: MeeshyIconSize.xs, weight: .bold))
+                        .foregroundStyle(contentColor)
+                        .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 }
             }
             // Liquid Glass iOS 26 (fallback material teinté < 26). Teinte accent
@@ -210,47 +279,65 @@ public struct ConversationScrollControlsView: View {
                 tint: isOffline ? MeeshyColors.neutral500.opacity(0.9) : Color(hex: accentColor).opacity(0.85)
             )
         }
-        .allowsHitTesting(!isSearchingQuotedMessage)
-        .onReceive(typingDotTimer) { _ in
-            guard hasTypingIndicator else { return }
-            typingDotPhase = (typingDotPhase + 1) % 3
+        .allowsHitTesting(Self.acceptsTaps(isSearchingQuotedMessage: isSearchingQuotedMessage))
+    }
+
+    // MARK: - Newer Page Loading Indicator (#9304)
+
+    private var loadingNewerContent: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            Text(Self.loadingNewerLabel)
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                .lineLimit(1)
+            pulsingDots
         }
+        .foregroundStyle(contentColor)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
+        .frame(maxWidth: 180)
+        .onAppear { searchPulse = !reduceMotion }
+        .onDisappear { searchPulse = false }
     }
 
     // MARK: - Quoted Message Search Indicator
 
+    /// Trois points pulsés — partagés par la recherche de citation et le
+    /// chargement de la page plus récente.
+    private var pulsingDots: some View {
+        HStack(spacing: MeeshySpacing.xxs) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(contentColor.opacity(searchPulse ? 1.0 : 0.4))
+                    .frame(width: 4, height: 4)
+                    .scaleEffect(searchPulse ? 1.2 : 0.7)
+                    .animation(
+                        .easeInOut(duration: 0.6)
+                            .repeatForever(autoreverses: true)
+                            .delay(Double(i) * 0.15),
+                        value: searchPulse
+                    )
+            }
+        }
+    }
+
     private var quotedMessageSearchContent: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .bold))
+                .font(.system(size: MeeshyIconSize.sm, weight: .bold))
                 .scaleEffect(searchPulse ? 1.15 : 0.85)
                 .opacity(searchPulse ? 1.0 : 0.6)
 
             Text(String(localized: "conversation.searching", defaultValue: "Recherche…", bundle: .module))
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .lineLimit(1)
 
             Spacer(minLength: 0)
 
-            // Animated dots to show activity
-            HStack(spacing: 3) {
-                ForEach(0..<3, id: \.self) { i in
-                    Circle()
-                        .fill(Color.white.opacity(searchPulse ? 1.0 : 0.4))
-                        .frame(width: 4, height: 4)
-                        .scaleEffect(searchPulse ? 1.2 : 0.7)
-                        .animation(
-                            .easeInOut(duration: 0.6)
-                                .repeatForever(autoreverses: true)
-                                .delay(Double(i) * 0.15),
-                            value: searchPulse
-                        )
-                }
-            }
+            pulsingDots
         }
-        .foregroundColor(contentColor)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .foregroundStyle(contentColor)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .frame(maxWidth: 180)
         .onAppear { searchPulse = true }
         .onDisappear { searchPulse = false }
@@ -301,20 +388,37 @@ public struct ConversationScrollControlsView: View {
         unreadCount > 0 && hasAttachmentPreview
     }
 
+    /// Jusqu'à 5 messages accumulés pendant que le lecteur est remonté dans
+    /// l'historique, la pastille se contente de l'aperçu (nom + dernier
+    /// message) — le format condensé « N nouveaux messages » n'apparaît
+    /// qu'au-delà (#3921).
+    nonisolated static func shouldShowCountHeadline(unreadCount: Int) -> Bool {
+        unreadCount > 5
+    }
+
+    /// Compose l'aperçu texte du dernier message non lu, préfixé par le nom
+    /// de son expéditeur quand fourni (« Maiza Biyoko : Bonjour à tous ») —
+    /// `nil` quand il n'y a ni contenu ni nom à montrer (#3921).
+    nonisolated static func lastMessageLineText(senderName: String?, content: String?) -> String? {
+        guard let content, !content.isEmpty else { return nil }
+        guard let senderName, !senderName.isEmpty else { return content }
+        return "\(senderName) : \(content)"
+    }
+
     /// Unified rich preview used for BOTH single and multiple unreads. Shows
     /// the count headline when more than one message is pending, followed by a
     /// preview of the LAST received message — its text, or for media its type
     /// label plus formatted detail (size / duration). Mirrors the product
     /// requirement: "le nombre de messages ET à la suite le dernier message".
     private var unreadPreviewContent: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             // Left: rich attachment preview (audio play / image|video thumbnail
             // / type glyph) of the last unread message.
             if Self.shouldShowAttachmentPreview(unreadCount: unreadCount, hasAttachmentPreview: hasAttachmentPreview) {
-                unreadAttachmentPreview
+                unreadAttachmentColumn
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 // Typing indicator (top priority — someone is composing now).
                 if hasTypingIndicator {
                     // Les visages des frappeurs, points animés PAR-DESSUS, sur
@@ -324,18 +428,38 @@ public struct ConversationScrollControlsView: View {
                     // Y loger les visages faisait disparaître la miniature pendant
                     // toute la durée d'une frappe, alors que les deux
                     // informations sont vraies en même temps.
-                    HStack(spacing: 6) {
+                    //
+                    // **Les visages et les points, PAS le nom**.
+                    // Le nom y était redondant à deux
+                    // titres : la pile porte déjà la photo — ou les initiales —
+                    // de celui qui écrit, et le libellé d'accessibilité du
+                    // bouton entier annonce déjà « <nom>, Défiler vers le bas ».
+                    // Il volait en prime la largeur de la capsule à l'aperçu du
+                    // dernier message, qui vit sur la même ligne.
+                    //
+                    // `typingLabel(for:)` reste : c'est VoiceOver qui le
+                    // consomme. Une même chaîne ne sert pas l'œil et le lecteur
+                    // d'écran quand les deux n'ont pas besoin de la même chose.
+                    // **Les points SUIVENT le visage, sans cadre** (#5987).
+                    //
+                    // Ils étaient posés PAR-DESSUS la pile, dans une pastille
+                    // sombre — un cadre dans un cadre, qui masquait la photo
+                    // même qu'il annonce. Cette pastille n'était pas
+                    // décorative : elle gardait des points BLANCS lisibles sur
+                    // une photo quelconque. Les sortir retire cette raison, et
+                    // les points prennent donc `contentColor` — l'encre que la
+                    // capsule élit déjà pour tout son contenu (#5950). Blancs,
+                    // ils disparaîtraient sur un accent clair.
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         typingAvatarStack
-                        Text(typingLabel)
-                            .font(.system(size: 11, weight: .semibold))
-                            .lineLimit(1)
+                        typingDotsView
                     }
                 }
 
-                // Count headline — only when more than one message is pending.
-                if unreadCount > 1 {
+                // Count headline — only past the 5-message threshold (#3921).
+                if Self.shouldShowCountHeadline(unreadCount: unreadCount) {
                     Text(String(localized: "conversation.unread_messages", defaultValue: "\(unreadCount) messages", bundle: .module))
-                        .font(.system(size: 13, weight: .heavy))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .heavy))
                         .lineLimit(1)
                 }
 
@@ -345,21 +469,35 @@ public struct ConversationScrollControlsView: View {
                 }
             }
 
-            Spacer(minLength: 0)
+            // **Le ressort ne pousse que s'il y a quelque chose à pousser**
+            // (#5963). Il étalait la capsule à sa largeur maximale même quand
+            // elle ne portait plus que les visages et les points : une pastille
+            // large et vide, avec le chevron seul à trois cents points de son
+            // contenu. Sans lui, la rangée ÉPOUSE ce qu'elle montre — une
+            // annonce de frappe est compacte, un aperçu de message reste large.
+            if unreadCount > 0 {
+                Spacer(minLength: 0)
+            }
 
             // Right: chevron / offline glyph.
             if isOffline {
                 Image(systemName: "wifi.slash")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
             } else {
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
             }
         }
-        .foregroundColor(contentColor)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(maxWidth: 260)
+        .foregroundStyle(contentColor)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
+        // **Une BORNE, pas une largeur** (#5963). `maxWidth` s'ÉTEND à ce que
+        // le parent offre : posée sans condition, elle donnait 260 pt à une
+        // rangée qui ne porte que des visages et des points, et la capsule
+        // s'affichait large et creuse. Elle ne borne donc que ce qui peut
+        // vraiment déborder — l'aperçu du dernier message ; sans aperçu, la
+        // rangée épouse son contenu.
+        .frame(maxWidth: unreadCount > 0 ? 260 : nil)
     }
 
     /// Single-line preview of the last received message: its text when present,
@@ -367,37 +505,50 @@ public struct ConversationScrollControlsView: View {
     /// (e.g. "Audio · 0:34 · 410 KB", "Photo · 1280×720 · 2.3 MB").
     @ViewBuilder
     private var lastMessageLine: some View {
-        if let content = lastUnreadMessageContent, !content.isEmpty {
-            Text(content)
-                .font(.system(size: 12, weight: .regular))
+        if let text = Self.lastMessageLineText(senderName: lastUnreadMessageSenderName, content: lastUnreadMessageContent) {
+            Text(text)
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
                 .lineLimit(1)
                 .opacity(0.95)
         } else if let label = unreadAttachmentTypeLabel {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 if let symbol = unreadAttachmentSymbol {
                     Image(systemName: symbol)
-                        .font(.system(size: 10, weight: .semibold))
+                        .meeshyScaledFont(MeeshyIconSize.xxs, weight: .semibold)
                 }
-                Text(attachmentSummary(label: label))
-                    .font(.system(size: 12, weight: .regular))
+                Text(label)
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
                     .lineLimit(1)
                     .opacity(0.95)
             }
         }
     }
 
-    /// Joins the attachment type label with its formatted detail when present.
-    private func attachmentSummary(label: String) -> String {
-        guard let detail = unreadAttachmentDetail, !detail.isEmpty else { return label }
-        return "\(label) · \(detail)"
+    /// **La miniature ET son détail, l'un sous l'autre** (#5987).
+    ///
+    /// Le détail suivait le libellé sur la ligne de texte — « Photo · 1280×720
+    /// · 2,3 Mo » — et lui volait sa largeur, alors que cette ligne la partage
+    /// déjà avec l'aperçu du dernier message. Sous la miniature, il occupe une
+    /// place que rien d'autre ne réclame, et il décrit ce qu'il touche.
+    @ViewBuilder
+    private var unreadAttachmentColumn: some View {
+        VStack(spacing: MeeshySpacing.xxs) {
+            unreadAttachmentPreview
+            if let detail = unreadAttachmentDetail, !detail.isEmpty {
+                Text(detail)
+                    .meeshyScaledFont(MeeshyFont.microSize, weight: .regular)
+                    .lineLimit(1)
+                    .opacity(0.85)
+            }
+        }
     }
 
     @ViewBuilder
     private var unreadAttachmentPreview: some View {
         if unreadAttachmentIsAudio {
             Image(systemName: isAudioPlaying ? "pause.fill" : "play.fill")
-                .font(.system(size: 14, weight: .bold))
-                .frame(width: 36, height: 36)
+                .font(.system(size: MeeshyIconSize.sm, weight: .bold))
+                .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 .background(Circle().fill(Color.white.opacity(isAudioPlaying ? 0.4 : 0.25)))
                 .contentShape(Circle())
                 .highPriorityGesture(
@@ -411,26 +562,26 @@ public struct ConversationScrollControlsView: View {
                 thumbnailUrl: unreadAttachmentThumbnailUrl,
                 fullUrl: unreadAttachmentFullUrl ?? unreadAttachmentThumbnailUrl
             ) {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                     .fill(Color.white.opacity(0.2))
-                    .frame(width: 36, height: 36)
+                    .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     .overlay(
                         Image(systemName: unreadAttachmentTypeLabel == "Video" ? "video.fill" : "photo.fill")
-                            .font(.system(size: 14))
-                            .foregroundColor(.white.opacity(0.6))
+                            .font(.system(size: MeeshyIconSize.sm))
+                            .foregroundStyle(Color.white.opacity(0.6))
                     )
             }
             .aspectRatio(contentMode: .fill)
-            .frame(width: 36, height: 36)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs))
         } else if let symbol = unreadAttachmentSymbol {
             // Media without a thumbnail (file, location, thumbnail-less video):
             // render the type glyph so the preview still reads as media.
             Image(systemName: symbol)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(width: 36, height: 36)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.2)))
+                .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
+                .foregroundStyle(Color.white)
+                .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(Color.white.opacity(0.2)))
         } else if let callSymbol = unreadCallSymbol {
             // Notice d'appel (en cours/manqué/rejeté/annulé/échoué) : même
             // gabarit que le glyphe générique ci-dessus, mais teinté par
@@ -438,10 +589,10 @@ public struct ConversationScrollControlsView: View {
             // `nil` (ex. appel en cours, pastille déjà teintée accent) retombe
             // sur `contentColor` pour rester lisible.
             Image(systemName: callSymbol)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                 .foregroundColor(unreadCallTint.map { Color(hex: $0) } ?? contentColor)
-                .frame(width: 36, height: 36)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.2)))
+                .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(Color.white.opacity(0.2)))
         } else {
             EmptyView()
         }
@@ -477,19 +628,12 @@ public struct ConversationScrollControlsView: View {
             name: face.displayName,
             context: .custom(Self.typingFaceSize),
             accentColor: accentColor,
-            avatarURL: face.avatarURL
+            avatarURL: face.avatarURL,
+            presenceState: presenceResolver?(face.id),
+            ring: face.ring
         )
-        .overlay(Circle().strokeBorder(Color(hex: accentColor), lineWidth: 1.5))
+        .overlay(Circle().strokeBorder(Color(hex: accentColor), lineWidth: MeeshyBorder.emphasis))
         .offset(x: offsetX)
-    }
-
-    /// Les points animés, posés sur une pastille sombre qui les garde lisibles
-    /// quelle que soit la photo dessous.
-    private var typingDotsBadge: some View {
-        typingDotsView
-            .padding(.horizontal, 5)
-            .padding(.vertical, 3)
-            .background(Capsule().fill(Color.black.opacity(0.55)))
     }
 
     /// Les visages de ceux qui écrivent, avec les trois points animés
@@ -505,15 +649,14 @@ public struct ConversationScrollControlsView: View {
             }
         }
         .frame(width: typingStackWidth, height: Self.typingFaceSize, alignment: .leading)
-        .overlay(typingDotsBadge)
         .accessibilityHidden(true)
     }
 
     private var typingDotsView: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
             ForEach(0..<3, id: \.self) { i in
                 Circle()
-                    .fill(Color.white)
+                    .fill(contentColor)
                     .frame(width: 5, height: 5)
                     .offset(y: typingDotPhase == i ? -3 : 0)
                     .animation(
@@ -522,6 +665,20 @@ public struct ConversationScrollControlsView: View {
                         value: typingDotPhase
                     )
             }
+        }
+        // L'abonnement vit sur la VUE DES POINTS, pas sur le bouton entier :
+        // attaché au bouton, l'`autoconnect` réveillait le main thread 2×/s
+        // tant que la pill « retour au bas » était montée (tout le temps qu'un
+        // lecteur remonte l'historique), pour un garde qui jetait le tick sans
+        // frappe en cours (audit chauffe 2026-08-26 — même forme que le
+        // `dotTimer` de SyncPill). Ici, pas de frappe ⇒ pas de vue ⇒ pas de
+        // timer ; et la réapparition repart d'un publisher NEUF plutôt que de
+        // parier sur la reconnexion d'un `autoconnect` déjà annulé.
+        .onReceive(typingDotTimer) { _ in
+            typingDotPhase = (typingDotPhase + 1) % 3
+        }
+        .onAppear {
+            typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
         }
     }
 }

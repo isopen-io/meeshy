@@ -1,6 +1,6 @@
 # Plan — Iteration 183i
 
-**Surface** : `apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift`
+**Surface** : `apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift`
 **Type** : design-system dedup + i18n + VoiceOver
 **Branche** : `claude/laughing-thompson-8vaq6w` (base `main` HEAD `64f943d`)
 

@@ -1,0 +1,264 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+// MARK: - Les ACTIONS du cadre — la colonne, et la traînée qu'elle ouvre
+//
+// Extrait de `ConversationMediaGalleryView.swift` (#6161). La colonne est du
+// code NEUF, et le fichier racine était à 949 lignes sur un plafond DUR de
+// 1 200 : y ajouter la règle, la cible tactile et le gabarit aurait poussé
+// l'ensemble vers le plafond pour une responsabilité qui se tient toute seule.
+//
+// Ce que ce fichier porte : la règle de cotes de la colonne (pure, jouable en
+// XCTest) et la traînée d'émojis — la rangée du SDK (`FullscreenReactionStrip`,
+// #8878), à l'échelle par défaut du composant que tous les hôtes partagent.
+
+// MARK: - Les cotes de la colonne
+
+/// **Ce que la colonne d'actions mesure** — et pourquoi deux nombres et non un.
+///
+/// Le VERRE est le disque du chrome plein écran (`FullscreenChromeMetrics`,
+/// #8878) : le glyphe est borné par un cadre fixe et ne scale pas (doctrine 82i).
+/// La CIBLE est le minimum tactile de la dimension 5. Les confondre
+/// rend soit une pastille trop grosse, soit une cible trop petite — et la
+/// seconde erreur est la pire ici, parce qu'un doigt qui RATE une action
+/// atterrit sur le cadre, qui l'interprète comme le tap de #6142 et entre en
+/// plein écran. L'action ne part pas, et l'écran fait autre chose.
+///
+/// `nonisolated` : le target app compile en `defaultIsolation MainActor` et le
+/// bundle de tests est nonisolated — sans ce modificateur, la règle n'est pas
+/// jouable depuis XCTest.
+nonisolated enum MediaStageActionColumn {
+
+    /// Le cercle de verre — ce qu'on VOIT. Même valeur que la porte de sortie du
+    /// couloir haut : les contrôles du visualiseur ont UN gabarit.
+    static let glass: CGFloat = FullscreenChromeMetrics.discDiameter
+
+    /// La zone tactile — ce qu'on TOUCHE. Elle déborde le verre tout autour.
+    static let target: CGFloat = FullscreenChromeMetrics.tapTarget
+
+    /// L'intervalle entre deux actions. Le gabarit de la barre latérale du
+    /// lecteur de story (`StoryViewerView+Sidebar.swift`, « rapprocher les FABs, on y voit trop d'espace »).
+    static let spacing: CGFloat = FullscreenChromeMetrics.railSpacing
+
+    /// La largeur que la colonne occupe SUR le cadre. Elle n'en retire rien au
+    /// solveur : `MediaStageFraming.Corridors` ne gagne aucun champ au #6161 —
+    /// le cadre garde exactement la taille qu'il avait.
+    static var width: CGFloat { target }
+
+    /// La hauteur d'une colonne de `actions` actions. Zéro pour zéro action :
+    /// une colonne vide ne prend aucune place (loi 4, un contrôle absent n'a
+    /// même pas d'espace).
+    static func height(actions: Int) -> CGFloat {
+        guard actions > 0 else { return 0 }
+        return CGFloat(actions) * target + CGFloat(actions - 1) * spacing
+    }
+}
+
+// MARK: - Enregistrer et Transférer, dans le rail (#12420)
+
+/// **Les deux sorties de la pièce, au rail ET au ⋯** (demande porteur, #12420).
+///
+/// Elles appellent les MÊMES transports que les entrées du menu
+/// (`requestSaveCurrent`, `forwardCurrent`) : deux boutons, un seul chemin.
+/// « Enregistrer » lit le portillon de sortie de l'hôte (#9573) dans
+/// l'environnement — une extension de la galerie ne le peut pas —, et la photo
+/// d'une flamme ou d'une vue unique n'a donc pas ce bouton. « Transférer » suit
+/// le verdict de l'hôte, qui connaît la loi de transfert du message porteur.
+/// « Imager » au rail du plein écran (#16332) : la baguette fait du message
+/// porteur une carte image. Même garde que Transférer : la loi de sortie du
+/// PORTEUR (`offers(.imagine)`) et la protection de la pièce ou de son message
+/// (vue unique, flou, flamme, chiffré). Un porteur inconnu n'a pas de baguette.
+enum GalleryImagerOffer {
+    static func offers(_ attachment: MessageAttachment, carrier: Message?) -> Bool {
+        guard let carrier else { return false }
+        return carrier.exitOffer.offers(.imagine) && !MessagePieceTarget.isProtected(attachment, in: carrier)
+    }
+
+    static func action(for attachment: MessageAttachment?,
+                       _ handler: ((MessageAttachment) -> Void)?,
+                       offered: ((MessageAttachment) -> Bool)?) -> (() -> Void)? {
+        guard let handler, let offered, let attachment, offered(attachment),
+              !ComposableAttachment.isProtected(attachment) else { return nil }
+        return { HapticFeedback.light(); handler(attachment) }
+    }
+}
+
+struct GalleryRailExitActions: View {
+    let contentId: String
+    let offersSave: Bool
+    let offersForward: Bool
+    let onSave: () -> Void
+    let onForward: () -> Void
+    var onImager: (() -> Void)? = nil
+    @Environment(\.contentExitGate) private var exitGate
+
+    var body: some View {
+        if offersSave && exitGate.mayLeave(contentId) {
+            FullscreenActionButton(
+                systemImage: FullscreenChromeSymbol.save,
+                label: String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main),
+                hint: String(localized: "media.save.rail.hint",
+                             defaultValue: "Enregistre ce média sur l'appareil.", bundle: .main),
+                style: .disc(.adaptive),
+                action: onSave
+            )
+        }
+        if offersForward {
+            FullscreenActionButton(
+                systemImage: MessageActionVerb.forward.filledSymbol,
+                label: MessageActionVerb.forward.label,
+                hint: String(localized: "media.forward.rail.hint",
+                             defaultValue: "Envoie ce média dans une autre conversation.", bundle: .main),
+                style: .disc(.adaptive),
+                action: onForward
+            )
+        }
+        if let onImager {
+            FullscreenActionButton(
+                systemImage: FullscreenChromeSymbol.imager,
+                label: MessageCardExportMenu.imageLabel,
+                hint: String(localized: "media.imager.rail.hint",
+                             defaultValue: "Fait du message et de ce média une carte image.", bundle: .main),
+                style: .disc(.adaptive),
+                action: onImager
+            )
+        }
+    }
+}
+
+extension ConversationMediaGalleryView {
+
+    // MARK: - Couche haute : la traînée d'émojis
+
+    /// **Rien ne passe devant elle, rien ne la rogne**.
+    ///
+    /// Montée en DERNIER dans le `ZStack` racine — voir `body`. Aucun ancêtre de
+    /// cette chaîne ne porte `.clipped()`, `.mask()` ni `.cornerRadius()` :
+    /// vérifié ligne à ligne, la contrainte qu'elle subissait n'était pas un
+    /// rognage mais un PARTAGE DE HAUTEUR (le `VStack` de `controlsOverlay`
+    /// distribuait la même colonne entre elle et le bloc bas).
+    ///
+    /// **Le `Spacer` ne teste aucune touche** : quand la traînée est fermée,
+    /// `attachmentReactionBar` ne rend rien et cette couche laisse passer
+    /// INTÉGRALEMENT le doigt vers le pager. `allowsHitTesting(reactionBarOpen)`
+    /// est la ceinture par-dessus la bretelle — il lit l'état d'interaction, pas
+    /// la loi, donc il ne peut pas contredire la garde de protection qui, elle,
+    /// reste dans `attachmentReactionBar`.
+    ///
+    /// La couche RESPECTE la zone sûre (seuls le fond noir et le pager
+    /// l'ignorent), donc la traînée ne se glisse jamais sous l'indicateur
+    /// d'accueil ni sous une encoche.
+    ///
+    /// **Elle reste ANCRÉE EN BAS au #6161**, pendant que le bouton qui l'ouvre
+    /// monte dans la colonne de droite. Ce n'est pas un oubli : la traînée
+    /// demande ~340 pt de large à l'échelle 1,5, soit plus que ce qui reste à
+    /// droite d'un cadre de 366. La faire jaillir du bouton — le geste de la
+    /// story — l'aurait poussée hors du cadre ou l'aurait comprimée. Elle garde
+    /// donc la largeur entière, et la précision porteur (« par-dessus tous les
+    /// autres contrôleurs ») avec elle.
+    @ViewBuilder
+    var reactionLayer: some View {
+        if currentIndex < allAttachments.count {
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                attachmentReactionBar(allAttachments[currentIndex])
+                    .padding(.bottom, reactionBarBottomInset)
+            }
+            .allowsHitTesting(reactionBarOpen)
+        }
+    }
+
+    /// **Marge basse de la traînée : la gouttière du plateau, et rien d'autre**
+    /// (#6789).
+    ///
+    /// Elle valait `rail + transport + 8` jusqu'au 2026-09-16, pour ne pas
+    /// couvrir les deux bandes qui servent à PARCOURIR — le rail parcourt la
+    /// série, la bande de transport parcourt le média (#6162). **La directive du
+    /// jour a retiré la raison en même temps que les bandes** : la même
+    /// ouverture qui monte la traînée efface tout le chrome, et une marge qui
+    /// éviterait des bandes absentes laisserait une centaine de points de vide
+    /// sous les émojis.
+    ///
+    /// La règle — et l'INVARIANCE aux couloirs qui la dit — vit dans
+    /// `MediaStageVeil` ; ceci n'en est que la projection sur cet hôte.
+    /// La couche respecte la zone sûre alors que les couloirs la réservent à
+    /// part : `safeBottom` n'entre donc pas dans cette somme, sans quoi la
+    /// traînée flotterait une encoche trop haut.
+    var reactionBarBottomInset: CGFloat {
+        MediaStageVeil.rowBottomInset(corridors: stageCorridors)
+    }
+
+    // MARK: - Réaction sur la pièce
+
+    /// **La rangée de réactions rapides du plein écran** (#6084, directive
+    /// porteur 2026-09-11 : « lorsqu'on affiche une image pièce jointe en plein
+    /// écran, il faut pouvoir ajouter une réaction à l'attachement directement » ;
+    /// révision du même jour : « il faut mettre un bouton réagir (emoji +) qui
+    /// affiche la traille des emojis de réaction »).
+    ///
+    /// **Elle n'existe qu'OUVERTE.** Le bouton « Réagir » de la colonne d'actions
+    /// la révèle ; un second appui, un choix d'émoji ou un changement de page la
+    /// retire. Au repos rien ne se pose sur l'image — c'est ce que la révision
+    /// porteur demande, et c'est aussi ce qui rend le visualiseur cohérent avec
+    /// ses voisins Répondre et Composer, qui sont des actions et non des
+    /// ornements.
+    ///
+    /// Gabarit de la story (#6083) : **aucun habillage**. Le média remplit
+    /// l'écran et EST le fond — une capsule y ajouterait un cadre là où la story
+    /// vient justement d'en retirer un. `scrollable` est le COROLLAIRE de
+    /// l'échelle et non une option : à 1,5, six émojis plus le « + » demandent
+    /// ~340 pt, et un `ScrollView` ne défile que dans une largeur bornée.
+    ///
+    /// **Aucun geste de cession n'est nécessaire ici**, contrairement à la story
+    /// (`StoryReactionStripGesture`). Le pager de la galerie est un
+    /// `UIScrollView` SŒUR dans le `ZStack` racine, pas un ancêtre montant un
+    /// `.simultaneousGesture` : une touche qui atterrit sur la rangée ne lui
+    /// parvient jamais, et les deux `UIScrollView` imbriqués s'arbitrent seuls.
+    /// Y recopier la loi de la story aurait gardé un conflit qui n'existe pas.
+    @ViewBuilder
+    private func attachmentReactionBar(_ att: MessageAttachment) -> some View {
+        if AttachmentReactionOffer.showsPicker(surface: .fullscreen,
+                                               attachment: att,
+                                               hasHandler: onReactToMedia != nil && (reactableMedia?(att) ?? true),
+                                               isOpen: reactionBarOpen) {
+            FullscreenReactionStrip(
+                onReact: { emoji in
+                    onReactToMedia?(att, emoji)
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        reactionBarOpen = false
+                    }
+                },
+                onExpandFullPicker: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        reactionBarOpen = false
+                    }
+                    showFullEmojiPicker = true
+                }
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, MeeshySpacing.xs)
+            .transition(.asymmetric(
+                insertion: .scale(scale: 0.85, anchor: .bottomLeading).combined(with: .opacity),
+                removal: .opacity
+            ))
+        }
+    }
+
+    /// **Le sélecteur complet vit sur la RACINE, jamais sur la rangée.**
+    ///
+    /// Le « + » referme la rangée et ouvre cette feuille dans la même
+    /// transaction : montée sur la rangée, elle serait présentée par une vue en
+    /// train d'être retirée — et SwiftUI ne présente rien. La cible se relit à la
+    /// page COURANTE au moment du choix, ce qui est la seule lecture juste : la
+    /// feuille survit au feuilletage, l'ancienne pièce non.
+    @ViewBuilder
+    var fullEmojiPickerSheet: some View {
+        EmojiPickerSheet(quickReactions: MeeshyQuickReactions.standard) { emoji in
+            if currentIndex < allAttachments.count {
+                onReactToMedia?(allAttachments[currentIndex], emoji)
+            }
+            showFullEmojiPicker = false
+        }
+    }
+}

@@ -4,20 +4,24 @@ import AVFoundation
 /// Profil de session qu'un moteur de lecture transmet à
 /// `MediaSessionCoordinator.request(role:playbackOptions:)`.
 ///
-/// `.content` → session `.playback` NON-mixable : l'app devient la
-/// « Now Playing app » système (carte lock screen, remote commands) et met en
-/// pause l'audio des autres apps — comportement WhatsApp. `.transient` →
-/// `[.duckOthers]` : préviews/réels atténuent les autres apps et ne prennent
-/// jamais la carte. Le SDK expose le réglage ; QUEL moteur est `.content`
-/// est une décision produit app-side (règle SDK purity).
+/// Les deux profils posent la MÊME session, celle de
+/// `ContentPlaybackSessionLaw` : `.playback` NON mélangeable, qui met en pause
+/// l'audio des autres apps. Décision porteur du 2026-10-19 (#11039) : toute
+/// surface Meeshy qui lance un son le fait — aperçus et réels compris, qui
+/// atténuaient jusque-là la musique des autres apps (`.duckOthers`) sans
+/// jamais être interrompus par elle.
+///
+/// Ce qui les distingue reste la carte « À l'écoute » : `.content` est le
+/// moteur qui la publie (vocaux de conversation), `.transient` ne la prend
+/// jamais. QUEL moteur est `.content` est une décision produit app-side
+/// (règle SDK purity).
 public enum AudioSessionProfile: Sendable, Equatable {
     case content
     case transient
 
     public var categoryOptions: AVAudioSession.CategoryOptions {
         switch self {
-        case .content: return []
-        case .transient: return [.duckOthers]
+        case .content, .transient: return ContentPlaybackSessionLaw.audibleOptions
         }
     }
 }

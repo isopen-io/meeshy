@@ -10,8 +10,6 @@ struct ProfileLanguagePickerSheet: View {
     let allowClear: Bool
     let onSelect: (String) -> Void
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @State private var searchText = ""
 
@@ -31,7 +29,7 @@ struct ProfileLanguagePickerSheet: View {
                 theme.backgroundGradient.ignoresSafeArea()
 
                 ScrollView {
-                    LazyVStack(spacing: 2) {
+                    LazyVStack(spacing: MeeshySpacing.xxs) {
                         if allowClear {
                             clearRow
                         }
@@ -39,17 +37,17 @@ struct ProfileLanguagePickerSheet: View {
                             languageRow(lang)
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.top, MeeshySpacing.sm)
                 }
             }
-            .searchable(text: $searchText, prompt: String(localized: "language-picker.search", defaultValue: "Search a language", bundle: .main))
+            .searchable(text: $searchText, prompt: String(localized: "language-picker.search", defaultValue: "Rechercher une langue", bundle: .main))
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.close", defaultValue: "Close", bundle: .main)) { dismiss() }
-                        .foregroundColor(MeeshyColors.indigo500)
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { dismiss() }
+                        .foregroundStyle(MeeshyColors.indigo500)
                 }
             }
         }
@@ -61,30 +59,30 @@ struct ProfileLanguagePickerSheet: View {
             onSelect("")
             dismiss()
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "xmark.circle")
                     .font(.title3)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .frame(width: 36)
-                Text(String(localized: "language-picker.none", defaultValue: "None", bundle: .main))
+                Text(String(localized: "language-picker.none", defaultValue: "Aucune", bundle: .main))
                     .font(.body.weight(.medium))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Spacer()
                 if selectedCode.isEmpty {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(MeeshyColors.indigo500)
+                        .foregroundStyle(MeeshyColors.indigo500)
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.md)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(selectedCode.isEmpty
-                        ? MeeshyColors.indigo500.opacity(0.1)
+                        ? MeeshyColors.indigo500.opacity(MeeshyOpacity.subtle)
                         : Color.clear)
             )
         }
-        .accessibilityLabel(Text(String(localized: "language-picker.none", defaultValue: "None", bundle: .main)))
+        .accessibilityLabel(Text(String(localized: "language-picker.none", defaultValue: "Aucune", bundle: .main)))
         .accessibilityAddTraits(selectedCode.isEmpty ? .isSelected : [])
     }
 
@@ -95,33 +93,33 @@ struct ProfileLanguagePickerSheet: View {
             onSelect(lang.code)
             dismiss()
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 Text(lang.flag)
                     .font(.title2)
                     .frame(width: 36)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(lang.nativeName)
                         .font(.body.weight(.medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                     Text(lang.name)
                         .font(.caption)
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 Spacer()
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(Color(hex: lang.colorHex))
+                        .foregroundStyle(Color(hex: lang.colorHex))
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(isSelected
-                        ? Color(hex: lang.colorHex).opacity(0.1)
+                        ? Color(hex: lang.colorHex).opacity(MeeshyOpacity.subtle)
                         : Color.clear)
             )
         }
@@ -129,6 +127,6 @@ struct ProfileLanguagePickerSheet: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityHint(isSelected
             ? Text("")
-            : Text(String(localized: "language-picker.select.hint", defaultValue: "Sets this as your language", bundle: .main)))
+            : Text(String(localized: "language-picker.select.hint", defaultValue: "Définit cette langue", bundle: .main)))
     }
 }

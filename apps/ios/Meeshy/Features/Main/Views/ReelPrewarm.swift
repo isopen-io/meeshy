@@ -1,0 +1,423 @@
+import Foundation
+import UIKit
+import MeeshySDK
+import MeeshyUI
+
+// MARK: - Qui préchauffer
+
+/// **Le réel qui SUIT l'actif dans le fil** (#7009).
+///
+/// Le coordinateur d'autoplay n'élisait que le réel ACTIF : le voisin n'était
+/// touché qu'au moment où il devenait actif à son tour, et le swipe montrait un
+/// trou noir le temps du premier frame. Le tableau des frames porte pourtant
+/// déjà tout ce qu'il faut — chacune sait son `midY`.
+///
+/// Règle purement GÉOMÉTRIQUE, donc éprouvable sans lecteur ni réseau : le fil
+/// défile vers le bas, « suivant » est le `midY` immédiatement supérieur à
+/// celui de l'actif. Le PRÉCÉDENT n'est pas préchauffé — il vient d'être joué,
+/// et `SharedAVPlayerManager.load` rend son lecteur au pool (borné à trois,
+/// éviction FIFO) au lieu de le détruire (#9702 ; avant ce lot, cette phrase
+/// décrivait un comportement qui n'existait pas : le lecteur sortant était
+/// jeté). Lui réserver une place de plus coûterait celle du suivant pour
+/// servir le geste minoritaire.
+nonisolated enum ReelPrewarmWindow {
+
+    static func next(after activeId: String?, in frames: [ReelFrame]) -> String? {
+        guard let activeId,
+              let active = frames.first(where: { $0.id == activeId }) else { return nil }
+        return frames
+            .filter { $0.midY > active.midY }
+            .min(by: { $0.midY < $1.midY })?
+            .id
+    }
+}
+
+// MARK: - Préchauffage d'un réel
+
+/// Prépare l'`AVPlayerItem` d'un réel AVANT qu'il ne devienne actif.
+///
+/// Orchestration produit, donc app-side : elle lit un `FeedPost`, résout son
+/// URL par `MeeshyConfig`, et encode une règle « quand préchauffer ». Le SDK
+/// fournit les atomes — `StoryMediaLoader.preloadAndCachePlayer(url:)`, dont le
+/// pool est déjà **borné à trois lecteurs** avec éviction FIFO et purge sur
+/// avertissement mémoire ; c'est lui qui libère N−2 quand N+1 entre, et rien
+/// ici n'a à le refaire.
+///
+/// Deux disciplines reprises du préchauffage de pagination
+/// (`FeedViewModel`) et du prefetcher de stories :
+/// - **garde thermique** — un appareil qui chauffe cesse d'ouvrir des sessions
+///   de décodage, sinon un défilement rapide en empile jusqu'au throttling ;
+/// - **priorité de fond** — le préchauffage ne dispute jamais le thread du
+///   geste en cours.
+///
+/// Et surtout : on PRÉPARE, on ne JOUE pas. `preloadAndCachePlayer` ne appelle
+/// jamais `play()`, donc la session audio n'est pas activée
+/// (`SharedAVPlayerManager.play` en est le seul site) et le voisin reste muet.
+@MainActor
+enum ReelPrewarm {
+
+    /// L'URL vidéo d'un réel, ou `nil` quand il n'en porte pas (réel photo,
+    /// audio, scène sans vidéo) — auquel cas il n'y a rien à préchauffer.
+    ///
+    /// **`primaryReelDisplayMedia`, et surtout pas `media.first(…)`** : c'est
+    /// la propriété que `ReelFeedVideoSurface` interroge pour décider quoi
+    /// JOUER, et le préchauffage doit remplir le cache sous la clé que la
+    /// lecture ira y chercher. Elle est de plus repost-consciente — un réel
+    /// republié ne porte aucun média sur le post extérieur, et une résolution
+    /// écrite à la main ici aurait silencieusement cessé de préchauffer toute
+    /// cette famille. Un cache alimenté sous une clé que personne ne lit ne
+    /// préchauffe rien ; il ne fait que dépenser.
+    nonisolated static func videoURL(for post: FeedPost) -> URL? {
+        guard let media = post.primaryReelDisplayMedia, media.type == .video,
+              let raw = media.url, !raw.isEmpty else { return nil }
+        return MeeshyConfig.resolveMediaURL(raw)
+    }
+
+    /// Prépare le réel `post` : son FICHIER d'abord, son lecteur ensuite.
+    ///
+    /// **Le fichier est la moitié qui manquait** (#7625). La surface vidéo
+    /// (`ReelVideoView`, `ReelFeedVideoSurface`) ne charge le moteur que
+    /// lorsque `VideoAvailabilityResolver` rend `.ready` — le fichier SUR
+    /// DISQUE. Un lecteur préparé en streaming dormait donc dans le pool
+    /// pendant que la page affichait poster et indicateur le temps du
+    /// téléchargement, lancé seulement quand la page entrait à l'écran. Le
+    /// fichier part désormais dans le registre partagé, en silence, et la
+    /// surface montée au swipe le rejoint ou le trouve prêt.
+    ///
+    /// **Le lecteur se prépare SUR le fichier, donc après lui** (#9702). Un
+    /// lecteur préparé pendant le téléchargement lisait l'URL distante : il
+    /// jouait en streaming et re-téléchargeait le réel. Le préroulage attend
+    /// désormais que le fichier soit posé, et le moteur partagé n'adopte un
+    /// lecteur préparé que s'il lit ce fichier.
+    ///
+    /// `preroll: false` pour un voisin qu'on garde sans le préparer à jouer —
+    /// le précédent, déjà vu : son fichier suffit, sa place dans le pool
+    /// (trois lecteurs) revient au suivant.
+    static func prepare(
+        _ post: FeedPost,
+        preroll: Bool = true,
+        center: AttachmentDownloadCenter = .shared
+    ) async {
+        guard MediaPolicyMonitor.shared.policy.prefetchesVideo else { return }
+        guard let key = prefetchFile(of: post, center: center) else { return }
+        guard preroll else { return }
+        await awaitFile(key: key, center: center)
+        await prerollFromDisk(post)
+    }
+
+    /// Lance — ou rejoint — le téléchargement silencieux du fichier vidéo de
+    /// `post` dans le registre partagé. Rend la clé de cache, `nil` pour un
+    /// réel sans vidéo. Le palier choisit la session réseau (#11283) : un
+    /// palier lointain est discrétionnaire et ne part sur cellulaire que si le
+    /// réglage vidéo de l'utilisateur l'autorise.
+    @discardableResult
+    static func prefetchFile(
+        of post: FeedPost,
+        tier: ReelPreloadWindow.Tier = .decode,
+        center: AttachmentDownloadCenter = .shared
+    ) -> String? {
+        guard let media = post.primaryReelDisplayMedia, media.type == .video,
+              videoURL(for: post) != nil else { return nil }
+        let attachment = media.toMessageAttachment()
+        center.prefetch(urlString: attachment.fileUrl,
+                        expectedSize: Int64(attachment.fileSize),
+                        cacheStore: .video,
+                        profile: ReelTransferPolicy.profile(
+                            for: tier,
+                            videoPolicy: MediaDownloadPreferencesStore.shared.preferences.video))
+        return AttachmentDownloadCenter.key(for: attachment.fileUrl)
+    }
+
+    /// Amorce la TÊTE du fichier vidéo de `post` (#11288) : `bytes` octets par
+    /// plage, gardés hors du cache, que le transfert de l'élection reprendra
+    /// à leur dernier octet. Sous la clé que le centre et la lecture liront.
+    static func prefetchHead(of post: FeedPost, bytes: Int, profile: MediaTransferProfile) async {
+        guard bytes > 0, let media = post.primaryReelDisplayMedia, media.type == .video,
+              videoURL(for: post) != nil else { return }
+        let key = AttachmentDownloadCenter.key(for: media.toMessageAttachment().fileUrl)
+        await CacheCoordinator.shared.video.prefetchHead(of: key, bytes: bytes, profile: profile)
+    }
+
+    /// Attend que le téléchargement de `key` se termine — fini, échoué ou
+    /// annulé — ou que la tâche soit annulée. La fin est SIGNALÉE par le
+    /// registre (#9882) : la passe s'endort jusqu'à elle, sans relire l'état.
+    static func awaitFile(key: String, center: AttachmentDownloadCenter = .shared) async {
+        await center.awaitEnd(of: key)
+    }
+
+    /// Prépare le lecteur de `post` — seulement si son fichier est sur le
+    /// disque : préparé sur l'URL distante, il serait jeté à l'adoption.
+    static func prerollFromDisk(_ post: FeedPost) async {
+        guard !Task.isCancelled, let url = videoURL(for: post),
+              CacheCoordinator.videoLocalFileURL(for: url.absoluteString) != nil else { return }
+        await StoryMediaLoader.shared.preloadAndCachePlayer(url: url, resume: resumePosition(of: post))
+    }
+
+    /// La reprise du réel `post`, résolue comme le moteur la résoudra à
+    /// l'adoption (#10354) : position locale, sinon servie, sous la règle des
+    /// bords — le lecteur préparé arrive à sa place, `play()` suffit.
+    static func resumePosition(of post: FeedPost) -> ((TimeInterval) -> TimeInterval?)? {
+        guard let media = post.primaryReelDisplayMedia, media.type == .video else { return nil }
+        let local = VideoPlaybackPositionStore.shared.position(for: media.id)
+        let served = media.toMessageAttachment().currentUserConsumption
+        return { total in
+            MediaResumeResolver.resumePosition(
+                localPositionSeconds: local,
+                servedConsumption: served,
+                medium: .video,
+                totalDuration: total,
+                isEligible: SharedAVPlayerManager.isResumable)
+        }
+    }
+
+    /// Rend ce que `post` tenait : son téléchargement automatique en cours
+    /// (jamais un téléchargement manuel), et son lecteur préparé.
+    static func release(_ post: FeedPost, center: AttachmentDownloadCenter = .shared) {
+        guard let media = post.primaryReelDisplayMedia, media.type == .video,
+              let url = videoURL(for: post) else { return }
+        center.cancelPrefetch(urlString: media.toMessageAttachment().fileUrl)
+        StoryMediaLoader.shared.discardCachedPlayer(for: url)
+    }
+}
+
+// MARK: - Le poster arrive net (#10354)
+
+/// **L'image que la page d'un réel montre avant sa première image vidéo** —
+/// préchargée, décodée et réduite à la taille de l'écran HORS du fil
+/// principal, puis posée dans le cache mémoire que la page lit en synchrone.
+///
+/// Constat filmé sur l'iPhone 16 Pro Max : le réel entrant n'était qu'un fond
+/// sombre avec une petite vignette. Aucun poster n'était préchargé, et l'init
+/// du poster lisait et réduisait le fichier SUR le fil principal.
+///
+/// La clé est celle que la page lit, et nulle autre :
+/// - réel vidéo : `ReelPoster(url: media.thumbnailUrl ?? media.url)` — seule la
+///   vignette se précharge (l'adresse vidéo n'est pas une image) ;
+/// - réel image : `ReelImageCell` (`fullUrl: media.url ?? media.thumbnailUrl`).
+///
+/// Le décodage passe par `DiskCacheStore.image(for:maxPixelSize:)` — le même
+/// décodeur que tout le dépôt (`CGImageSourceCreateThumbnailAtIndex`, décodage
+/// immédiat sur l'acteur du cache), sans jumeau. Au-dessus de 1 200 px, la
+/// variante occupe le slot plein format, celui que `WarmImageProbe.residentImage`
+/// lit à l'init de la page.
+nonisolated enum ReelPosterPrefetch {
+
+    /// L'adresse RÉSOLUE de l'image que la page de `reel` affiche d'abord,
+    /// `nil` quand il n'y en a pas (scène, son, vidéo sans vignette).
+    static func posterURL(for reel: FeedPost) -> String? {
+        guard let media = reel.primaryReelDisplayMedia else { return nil }
+        let raw: String?
+        switch media.type {
+        case .video: raw = media.thumbnailUrl
+        case .image: raw = media.url ?? media.thumbnailUrl
+        default: raw = nil
+        }
+        guard let raw, !raw.isEmpty else { return nil }
+        return MeeshyConfig.resolveMediaURL(raw)?.absoluteString ?? raw
+    }
+
+    /// La taille de décodage : le plus grand côté de l'écran en pixels, borné
+    /// par le plafond de la lecture synchrone du cache.
+    static func pixelSize(screenPoints: CGSize, scale: CGFloat) -> CGFloat {
+        min(max(screenPoints.width, screenPoints.height) * scale, DiskCacheStore.warmedPixelCap)
+    }
+}
+
+// MARK: - Le lecteur plein écran : la fenêtre de préchargement (#9702)
+
+/// **Prépare, autour du réel affiché, la fenêtre que l'USAGE réclame** —
+/// de N±2 toujours à N±10 pour un balayeur rapide (`ReelPreloadWindow`, loi
+/// pure jumelle de `apps/web/src/lib/reels/preload-window.ts`).
+///
+/// Chaque palier prend la ressource qu'il mérite, et pas plus :
+/// - **décode** (N±1) — fichier, puis lecteur préparé SUR le fichier. Les
+///   décodeurs matériels sont bornés : c'est le seul palier qui en tient un,
+///   et le pool de `StoryMediaLoader` reste à trois.
+/// - **monté** (N±2) — fichier entier, lancé aussitôt avec le palier décode.
+/// - **amorcé** (N±3…N±R) — la TÊTE seule (#11288) : `moov` et premier GOP,
+///   bornés par le tier de l'appareil (`ReelPreloadWindow.headBytes`), APRÈS
+///   les proches et un à la fois. Le reste arrive en flux quand le réel entre
+///   au palier monté : son transfert reprend la tête à son dernier octet.
+///
+/// Le plus proche d'abord, devant avant derrière. Ce qui sort de la fenêtre
+/// rend son téléchargement automatique et son lecteur ; un appareil qui chauffe
+/// garde son plancher (loi) et cesse tout préchargement au stade critique
+/// (`MediaThermalPolicy`).
+///
+/// Classe et non valeur : l'horloge des visites traverse les `.task(id:)` du
+/// pager, que chaque balayage annule et relance.
+@MainActor
+final class ReelPagerPreloader {
+    // Même garde que les autres classes MainActor du dépôt (SE-0466, iOS 26.1).
+    nonisolated deinit {}
+
+    private var clock = ReelPreloadWindow.VisitClock()
+    private let center: AttachmentDownloadCenter
+    /// Hors du premier plan, la fenêtre ne télécharge ni ne prépare plus rien ;
+    /// elle repart au retour (#11284).
+    private let activity: PreloadActivityGate
+
+    init(center: AttachmentDownloadCenter = .shared, activity: PreloadActivityGate = .shared) {
+        self.center = center
+        self.activity = activity
+    }
+
+    /// Note l'arrivée sur `index` (temps passé sur le réel quitté, sens du
+    /// geste) et rend la fenêtre que l'usage et l'appareil réclament.
+    func enter(index: Int, at now: Date = Date()) -> ReelPreloadWindow.Window {
+        clock.enter(index: index, at: now)
+        return ReelPreloadWindow.window(for: Self.liveContext(visits: clock.visits))
+    }
+
+    /// Les signaux de l'appareil, lus à l'instant : chemin réseau, mémoire,
+    /// économie d'énergie, état thermique, et son tier média (#11281).
+    /// L'énergie, la chaleur et le tier viennent de la politique VIVANTE
+    /// (#9880), la même que lisent les lecteurs.
+    static func liveContext(visits: [ReelPreloadWindow.Visit]) -> ReelPreloadWindow.Context {
+        MediaPolicyMonitor.shared.policy.reelWindowContext(
+            visits: visits,
+            network: ReelPreloadWindow.Network(snapshot: NetworkPathSource.shared.current),
+            deviceMemoryGb: ReelPreloadWindow.gigabytes(physicalMemory: ProcessInfo.processInfo.physicalMemory)
+        )
+    }
+
+    /// Rend ce que tiennent les réels sortis de la fenêtre — téléchargement
+    /// automatique en cours, lecteur préparé — et les lecteurs des réels qui
+    /// n'y sont plus au palier « décode ». Synchrone : rien n'attend le réseau.
+    func retire(reels: [FeedPost], activeIndex: Int, window: ReelPreloadWindow.Window) {
+        StoryMediaLoader.shared.setRetentionDistances(
+            Self.retentionDistances(reels: reels, activeIndex: activeIndex))
+        let plan = ReelPreloadWindow.plan(count: reels.count, activeIndex: activeIndex, window: window)
+        let tiers = Dictionary(uniqueKeysWithValues: plan.map { ($0.index, $0.tier) })
+        for (index, reel) in reels.enumerated() where index != activeIndex {
+            switch tiers[index] {
+            case nil:
+                ReelPrewarm.release(reel, center: center)
+            // N±2 garde aussi le lecteur qu'il tient déjà (#10354) — le réel
+            // quitté il y a deux pages reprend à l'instant ; le pool, borné à
+            // trois, déborde par le plus loin (`PlayerPoolEviction`).
+            case .some(.decode), .some(.mount):
+                continue
+            case .some:
+                if let url = ReelPrewarm.videoURL(for: reel) {
+                    StoryMediaLoader.shared.discardCachedPlayer(for: url)
+                }
+            }
+        }
+    }
+
+    /// Prépare la fenêtre autour de `activeIndex`, palier par palier.
+    /// Annulable à tout instant : le balayage suivant relance le tout. L'app qui
+    /// quitte le premier plan (ou dont l'écran est couvert) l'arrête, son retour
+    /// la relance (`PreloadActivityGate`, #11284).
+    func prepare(reels: [FeedPost], activeIndex: Int, window: ReelPreloadWindow.Window) async {
+        retire(reels: reels, activeIndex: activeIndex, window: window)
+        await activity.runWhileActive { [self] in
+            await self.prepareWindow(reels: reels, activeIndex: activeIndex, window: window)
+        }
+    }
+
+    private func prepareWindow(reels: [FeedPost], activeIndex: Int, window: ReelPreloadWindow.Window) async {
+        guard MediaPolicyMonitor.shared.policy.prefetchesVideo else { return }
+        let plan = ReelPreloadWindow.plan(count: reels.count, activeIndex: activeIndex, window: window)
+        // Les posters partent EN MÊME TEMPS que les fichiers : quelques
+        // centaines de Ko, et c'est ce que la page montre la première.
+        async let posters: Void = prefetchPosters(reels: reels, indices: [activeIndex] + plan.map(\.index))
+        await prepareFiles(reels: reels, plan: plan)
+        await posters
+    }
+
+    /// Fichiers, lecteurs préparés et sons de la fenêtre, palier par palier.
+    private func prepareFiles(reels: [FeedPost], plan: [ReelPreloadWindow.Step]) async {
+        let near = plan.filter { $0.tier == .decode || $0.tier == .mount }
+        let nearKeys: [(step: ReelPreloadWindow.Step, key: String)] = near.compactMap { step in
+            ReelPrewarm.prefetchFile(of: reels[step.index], tier: step.tier, center: center)
+                .map { (step: step, key: $0) }
+        }
+
+        await prefetchAudio(reels: reels, plan: plan)
+        for entry in nearKeys where entry.step.tier == .decode {
+            guard !Task.isCancelled else { return }
+            await ReelPrewarm.awaitFile(key: entry.key, center: center)
+            await ReelPrewarm.prerollFromDisk(reels[entry.step.index])
+        }
+        for entry in nearKeys where entry.step.tier == .mount {
+            await ReelPrewarm.awaitFile(key: entry.key, center: center)
+        }
+        await primeHeads(reels: reels, plan: plan)
+    }
+
+    /// Les têtes de la fenêtre lointaine, la plus proche d'abord (#11288) —
+    /// jamais le fichier entier d'un réel qu'on ne verra peut-être pas.
+    private func primeHeads(reels: [FeedPost], plan: [ReelPreloadWindow.Step]) async {
+        let network = ReelPreloadWindow.Network(snapshot: NetworkPathSource.shared.current)
+        let device = MediaPolicyMonitor.shared.policy.tier
+        let videoPolicy = MediaDownloadPreferencesStore.shared.preferences.video
+        for step in plan where step.tier == .prime {
+            guard !Task.isCancelled else { return }
+            await ReelPrewarm.prefetchHead(
+                of: reels[step.index],
+                bytes: ReelPreloadWindow.headBytes(tier: step.tier, distance: abs(step.offset), network: network, device: device),
+                profile: ReelTransferPolicy.profile(for: step.tier, videoPolicy: videoPolicy)
+            )
+        }
+    }
+
+    /// **Les posters de la fenêtre, le plus proche d'abord** (#10354) : décodés
+    /// à la taille de l'écran sur l'acteur du cache, puis résidents en mémoire
+    /// sous la clé que la page lit à son init. Un poster déjà en mémoire ne
+    /// repart pas.
+    private func prefetchPosters(reels: [FeedPost], indices: [Int]) async {
+        let scale = DeviceLayout.activeWindow?.traitCollection.displayScale ?? UITraitCollection.current.displayScale
+        let pixels = ReelPosterPrefetch.pixelSize(screenPoints: DeviceLayout.windowSize, scale: scale)
+        for index in indices where reels.indices.contains(index) {
+            guard !Task.isCancelled else { return }
+            guard let url = ReelPosterPrefetch.posterURL(for: reels[index]),
+                  WarmImageProbe.residentImage(for: url) == nil else { continue }
+            _ = await CacheCoordinator.shared.images.image(for: url, maxPixelSize: pixels)
+        }
+    }
+
+    /// **Le son des voisins, avant leurs vidéos** (#9837) : une piste pèse
+    /// quelques centaines de Ko et fait le premier instant du réel ; sans elle,
+    /// le réel élu partait la chercher sur le réseau. Mis en cache sous la clé
+    /// que la lecture lira (`CacheCoordinator.audio`, URL résolue). Le cache
+    /// disque est borné par son budget ; rien à rendre en s'éloignant.
+    private func prefetchAudio(reels: [FeedPost], plan: [ReelPreloadWindow.Step]) async {
+        let languages = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
+        for step in plan where ReelAudioPrefetch.prefetches(tier: step.tier) {
+            for url in ReelAudioPrefetch.urls(for: reels[step.index], preferredLanguages: languages)
+            where CacheCoordinator.audioLocalFileURL(for: url.absoluteString) == nil {
+                guard !Task.isCancelled else { return }
+                _ = try? await CacheCoordinator.shared.audio.data(for: url.absoluteString)
+            }
+        }
+    }
+
+    /// Le lecteur se ferme : rien de ce qu'il préparait ne doit continuer à
+    /// consommer réseau ou décodeur.
+    func releaseAll(reels: [FeedPost], except activeId: String?) {
+        StoryMediaLoader.shared.setRetentionDistances([:])
+        for reel in reels where reel.id != activeId {
+            ReelPrewarm.release(reel, center: center)
+        }
+    }
+
+    /// **La distance de chaque lecteur au réel affiché** (#10354), que le pool
+    /// lit pour déborder par le plus LOIN : N±1 puis N±2 restent, le réel
+    /// qu'on vient de quitter garde son lecteur. Clé : l'URL distante, celle du
+    /// pool. Une vidéo présente deux fois prend sa plus petite distance ; hors
+    /// de N±`radius`, aucune déclaration (le pool les rend d'abord).
+    nonisolated static func retentionDistances(
+        reels: [FeedPost], activeIndex: Int, radius: Int = 10
+    ) -> [String: Int] {
+        reels.indices
+            .filter { abs($0 - activeIndex) <= radius }
+            .reduce(into: [String: Int]()) { distances, index in
+                guard let key = ReelPrewarm.videoURL(for: reels[index])?.absoluteString else { return }
+                let distance = index - activeIndex
+                if let known = distances[key], abs(known) <= abs(distance) { return }
+                distances[key] = distance
+            }
+    }
+}

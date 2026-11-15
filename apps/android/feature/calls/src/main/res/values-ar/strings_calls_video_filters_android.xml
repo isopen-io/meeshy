@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_filter_backgroundBlur">تمويه الخلفية</string>
+    <string name="video_filter_brightness">السطوع</string>
+    <string name="video_filter_contrast">التباين</string>
+    <string name="video_filter_exposure">التعريض</string>
+    <string name="video_filter_naturalComplexion">بشرة طبيعية</string>
+    <string name="video_filter_naturalComplexion_hint">يوحّد البشرة ويضيئها دون تعديل ظاهر</string>
+    <string name="video_filter_performanceDegraded">أداء منخفض — بعض المرشّحات معطّلة</string>
+    <string name="video_filter_radius">نصف القطر</string>
+    <string name="video_filter_reinit">إعادة تعيين</string>
+    <string name="video_filter_reset">إعادة تعيين</string>
+    <string name="video_filter_saturation">التشبّع</string>
+    <string name="video_filter_skinSmoothing">تنعيم البشرة</string>
+    <string name="video_filter_temperature">الحرارة</string>
+    <string name="video_filter_title">مرشّحات الفيديو</string>
+</resources>

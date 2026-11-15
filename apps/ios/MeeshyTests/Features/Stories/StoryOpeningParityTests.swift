@@ -53,9 +53,13 @@ final class StoryOpeningParityTests: XCTestCase {
     /// contradictoires ne doivent pas revenir. Ancré sur les VALEURS, pas sur
     /// une formulation — un renommage de variable ne doit pas casser ce test.
     func test_readerSourceDoesNotReintroduceItsOwnConstants() throws {
-        let source = try String(contentsOfFile: Self.readerContentPath, encoding: .utf8)
-        let body = try XCTUnwrap(Self.openingSection(of: source),
+        let content = try String(contentsOfFile: Self.readerContentPath, encoding: .utf8)
+        let body = try XCTUnwrap(Self.openingSection(of: content),
                                  "Section d'ouverture introuvable — le test doit être ré-ancré.")
+        // La table d'armement a son propre fichier (`StoryOpeningEntrance`) : elle fait
+        // partie de la source du lecteur au même titre que sa fenêtre d'ouverture.
+        let entrance = try String(contentsOfFile: Self.entrancePath, encoding: .utf8)
+        let source = content + "\n" + entrance
 
         // La valeur inversée reste interdite dans la fenêtre d'ouverture ET
         // dans la table d'armement — elle ne doit revenir NULLE PART.
@@ -64,8 +68,11 @@ final class StoryOpeningParityTests: XCTestCase {
         XCTAssertFalse(source.contains("openingScale: 0.88"),
                        "Le zoom d'ouverture inversé est de retour dans la table d'armement.")
 
-        // La durée reste résolue dans la fenêtre d'ouverture elle-même.
-        XCTAssertTrue(body.contains("StoryRenderer.slideTransitionDuration"),
+        // La courbe de la fenêtre d'ouverture vient de la table, qui lit la
+        // durée du SDK (#13135).
+        XCTAssertTrue(body.contains("StoryOpeningEntrance.animation(for:"),
+                      "La fenêtre d'ouverture doit lire sa courbe dans la table partagée.")
+        XCTAssertTrue(entrance.contains("StoryRenderer.slideTransitionDuration"),
                       "Le lecteur doit lire la durée du SDK, pas la redéclarer.")
 
         // L'échelle et le débattement sont désormais armés par
@@ -86,7 +93,15 @@ final class StoryOpeningParityTests: XCTestCase {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
+            .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+Content.swift")
+            .path
+    }
+
+    private static var entrancePath: String {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Stories/Views/StoryOpeningEntrance.swift")
             .path
     }
 

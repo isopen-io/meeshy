@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="piece_delete_confirm_title">Dieses Medium</string>
+    <string name="piece_delete_confirm_action">Medium löschen</string>
+    <string name="piece_remove_failed">Dieses Medium konnte nicht gelöscht werden.</string>
+</resources>

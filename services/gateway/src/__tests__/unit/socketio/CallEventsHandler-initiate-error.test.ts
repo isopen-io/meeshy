@@ -21,6 +21,7 @@ const mockScheduleRingingTimeout = jest.fn<any>();
 const mockCreateCallSummaryMessage4 = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn().mockImplementation(() => ({
     initiateCall: mockInitiateCall,
     generateIceServers: mockGenerateIceServers4,
@@ -86,6 +87,7 @@ import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
 import { validateSocketEvent } from '../../../middleware/validation';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { openCallRingTables } from '../../helpers/call-ring-policy-tables';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -111,6 +113,7 @@ function makePrisma(overrides: {
   participantFindMany?: jest.MockedFunction<any>;
 } = {}) {
   return {
+    ...openCallRingTables(),
     participant: {
       findFirst: overrides.participantFindFirst
         ?? jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
@@ -324,6 +327,24 @@ describe('CallEventsHandler — call:initiate error fallback branch', () => {
       });
     });
 
+    it('le refus CALL_ALREADY_ACTIVE porte l’appel en cours, que le client rejoint (#9111)', async () => {
+      mockInitiateCall.mockRejectedValue(new Error('CALL_ALREADY_ACTIVE: A call is already active'));
+      const base = makePrisma() as unknown as { callSession: Record<string, unknown> };
+      const prisma = { ...base, callSession: { ...base.callSession, findFirst: jest.fn<any>().mockResolvedValue({ id: 'call-live' }) } } as unknown as PrismaClient;
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        success: false,
+        error: { code: 'CALL_ALREADY_ACTIVE', message: 'A call is already active', activeCallId: 'call-live' }
+      });
+    });
+
     it('acks {code: CALL_ALREADY_ACTIVE, message} preserving the CODE:message split from a thrown Error', async () => {
       mockInitiateCall.mockRejectedValue(new Error('CALL_ALREADY_ACTIVE: A call is already active'));
 
@@ -507,7 +528,7 @@ describe('CallEventsHandler — call:initiate error fallback branch', () => {
         participantFindMany: jest.fn<any>().mockResolvedValue([{ userId: offlineMemberId }]),
       });
       (prisma as any).user = {
-        findMany: jest.fn<any>().mockRejectedValue(new Error('db down')),
+        findMany: jest.fn<any>(async (args: any) => (args?.select?.birthDate ? [] : Promise.reject(new Error('db down')))),
       };
 
       const { socket, handlers } = makeSocket();

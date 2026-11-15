@@ -1,0 +1,424 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+// MARK: - Le plein écran des médias de la conversation, et ce qu'on y déclenche
+
+/// **Le montage du plein écran a quitté `ConversationView.body`** (#4014).
+///
+/// Deux raisons, et la première est mécanique : `ConversationView.swift` fait
+/// plus de trois mille lignes et figure dans la dette héritée du cliquet de
+/// taille — la y interdit tout ajout. Câbler une action
+/// de plus dans son corps était donc impossible avant d'en sortir quelque
+/// chose. Ce modificateur emporte le cover ET son câblage : l'hôte y perd des
+/// lignes au lieu d'en gagner.
+///
+/// La seconde est de fond : « ouvrir le composer depuis le plein écran » est
+/// une SÉQUENCE de deux présentations, et une séquence a besoin d'un endroit
+/// où se lire d'un seul tenant.
+struct ConversationMediaGalleryLayer: ViewModifier {
+
+    @ObservedObject var viewModel: ConversationViewModel
+    /// `@Binding`, pas `@ObservedObject` : les deux états de l'hôte sont des
+    /// STRUCTS tenues en `@State`. Les lier plutôt que les copier est ce qui
+    /// fait que `armCompose` écrit bien chez l'hôte — une copie de valeur y
+    /// aurait armé une cible que personne n'aurait promue.
+    @Binding var scrollState: ConversationScrollState
+    @Binding var composerState: ConversationComposerState
+    let accentColor: String
+    /// La loi du menu de l'écran : « Transférer » ne s'offre que là où le menu
+    /// d'une pièce l'offre (#12420).
+    let authority: ConversationMenuAuthority
+
+    /// Le chemin de citation de l'hôte, passé en closure : `triggerReply` vit
+    /// dans `ConversationView+MessageRow` et compose la `ReplyReference`
+    /// complète — média représentatif, aperçu, avatar gravé. Le rappeler ici
+    /// aurait été une SECONDE écriture de la citation, qui aurait divergé de la
+    /// bannière du composer au premier ajustement de l'une.
+    let onReply: (Message) -> Void
+    /// « Imager » (#16332) : l'export du message porteur, celui des menus (`beginMessageExport`).
+    let onImager: (Message) -> Void
+
+    /// **TOUS les médias de la conversation, pas seulement la fenêtre** (#8095).
+    ///
+    /// Le catalogue vit le temps de la conversation mais ne TIENT rien tant que
+    /// la galerie est fermée : il s'ouvre avec elle (index persisté, puis pages
+    /// `view=media` en arrière-plan) et se vide à sa fermeture.
+    @StateObject private var catalog: ConversationMediaCatalog
+    /// #9617 — la surface que ce plein écran présente au rapporteur de capture.
+    @State private var fullscreenCapture: FullscreenCaptureSurface?
+
+    init(viewModel: ConversationViewModel,
+         scrollState: Binding<ConversationScrollState>,
+         composerState: Binding<ConversationComposerState>,
+         accentColor: String,
+         authority: ConversationMenuAuthority,
+         onReply: @escaping (Message) -> Void,
+         onImager: @escaping (Message) -> Void) {
+        self.viewModel = viewModel
+        self._scrollState = scrollState
+        self._composerState = composerState
+        self.accentColor = accentColor
+        self.authority = authority
+        self.onReply = onReply
+        self.onImager = onImager
+        self._catalog = StateObject(wrappedValue: ConversationMediaCatalog(conversationId: viewModel.conversationId))
+    }
+
+    func body(content: Content) -> some View {
+        content.conversationCover(item: $scrollState.galleryStartAttachment,
+                                onDismiss: handleGalleryDismiss) { startAttachment in
+            // Un vocal (cité, #8230) a son propre plein écran ; la galerie ne
+            // sait rendre que l'image et la vidéo.
+            Group {
+                if startAttachment.type == .audio {
+                    audioFullscreen(start: startAttachment, actions: audioFullscreenActions)
+                        .captureShield(captureScope.shields(startAttachment.id))
+                } else {
+                    gallery(start: startAttachment)
+                }
+            }
+            // Posé sur le CONTENU présenté : c'est lui qui rend les boutons
+            // d'enregistrement et de partage (#9573).
+            .contentExitGate(mediaExitGate)
+            // Et chaque page d'une pièce protégée se rend dans la couche
+            // sécurisée (#9574).
+            .captureShieldScope(captureScope)
+            // #9617 — une capture déclare la pièce à l'écran, pas le fil dessous.
+            .onAppear { registerFullscreenCapture(start: startAttachment) }
+            .onDisappear(perform: unregisterFullscreenCapture)
+        }
+    }
+
+    private func registerFullscreenCapture(start: MessageAttachment) {
+        let viewModel = viewModel
+        let catalog = catalog
+        let surface = FullscreenCaptureSurface(
+            startAttachmentId: start.id,
+            carrier: { attachmentId in
+                viewModel.messages.first { $0.attachments.contains { $0.id == attachmentId } }
+                    ?? catalog.snapshot.carrier(ofAttachment: attachmentId)
+            },
+            // La passerelle n'annonce qu'un message LU : ce qui est en grand l'est.
+            acknowledgeRead: { viewModel.markAsRead(messageIds: [$0.id]) }
+        )
+        unregisterFullscreenCapture()
+        fullscreenCapture = surface
+        ContentCaptureReporter.shared.register(surface)
+    }
+
+    private func unregisterFullscreenCapture() {
+        if let fullscreenCapture { ContentCaptureReporter.shared.unregister(fullscreenCapture) }
+        fullscreenCapture = nil
+    }
+
+    /// **Les pièces que le plein écran peut laisser sortir** (#9573) : celles
+    /// d'un message dont la loi de sortie offre l'enregistrement. La photo
+    /// d'une flamme, d'une vue unique ou d'un message flouté n'en est pas ;
+    /// une pièce dont le porteur est inconnu non plus. Le porteur se lit dans
+    /// la fenêtre, sinon dans l'index des médias.
+    private var mediaExitGate: ContentExitGate {
+        let windowed = Set(viewModel.messages.flatMap { $0.attachments.map(\.id) })
+        let indexed = catalog.snapshot.attachments
+            .filter { !windowed.contains($0.id) }
+            .compactMap { catalog.snapshot.carrier(ofAttachment: $0.id) }
+        return MessageExitOffer.mediaExitGate(for: viewModel.messages + indexed)
+    }
+
+    /// Les pièces que le plein écran rend dans la couche sécurisée (#9574) —
+    /// mêmes porteurs que `mediaExitGate`, verdict de capture.
+    private var captureScope: CaptureShieldScope {
+        let windowed = Set(viewModel.messages.flatMap { $0.attachments.map(\.id) })
+        let indexed = catalog.snapshot.attachments
+            .filter { !windowed.contains($0.id) }
+            .compactMap { catalog.snapshot.carrier(ofAttachment: $0.id) }
+        // #9617 — ce plein écran est enregistré auprès du détecteur de
+        // capture (`registerFullscreenCapture`) : une flamme y est annoncée.
+        return MessageExitOffer.captureShieldScope(for: viewModel.messages + indexed, surfaceAnnounces: true)
+    }
+
+    private func gallery(start startAttachment: MessageAttachment) -> some View {
+        ConversationMediaGalleryView(
+            allAttachments: Self.galleryAttachments(start: startAttachment, all: galleryPieces),
+            startAttachmentId: startAttachment.id,
+            accentColor: accentColor,
+            captionMap: viewModel.mediaCaptionMap.merging(catalog.snapshot.captions) { loaded, _ in loaded },
+            senderInfoMap: viewModel.mediaSenderInfoMap.merging(catalog.snapshot.senderInfo) { loaded, _ in loaded },
+            onComposeWithMedia: armCompose,
+            onReplyToMedia: replyToCarrier,
+            onSendReplyToMedia: sendReplyToMedia,
+            replyCitation: { viewModel.fullscreenReplyCitation(for: $0.id, carrier: carrier(of: $0)) },
+            onReactToMedia: reactToMedia,
+            onForwardMedia: forwardFromGallery,
+            onImagerMedia: { att in
+                guard let porteur = carrier(of: att), GalleryImagerOffer.offers(att, carrier: porteur) else { return }
+                onImager(porteur)
+            },
+            imageableMedia: { GalleryImagerOffer.offers($0, carrier: carrier(of: $0)) },
+            // « Composer » n'existe que si l'armer produit une cible (loi 4) :
+            // la règle d'offre lit la loi de sortie (#9573), donc la pièce d'une
+            // flamme ou d'une vue unique n'a pas ce bouton.
+            composableMedia: { carrier(of: $0).map(ComposableAttachment.offers(message:)) ?? false },
+            // #9910 — toute pièce dont le porteur est connu se réagit : la
+            // fenêtre par le ViewModel, l'index par le catalogue qui la repeint.
+            reactableMedia: { catalog.snapshot.carrier(ofAttachment: $0.id) != nil },
+            forwardableMedia: offersForward
+        )
+        .onAppear(perform: openCatalog).environment(\.conversationMentionTarget, viewModel.mentionController.target)
+        .onReceive(viewModel.$messages) { messages in
+            catalog.syncLive(messages, serverId: viewModel.serverId(for:))
+        }
+        .onDisappear { catalog.close() }
+    }
+
+    /// La fenêtre tant que le catalogue n'a rien fusionné — le premier rendu de
+    /// la galerie est donc exactement celui d'avant #8095 —, puis la fusion
+    /// fenêtre + index, qui ne fait que S'ÉTENDRE autour de la page ouverte.
+    private var galleryPieces: [MessageAttachment] {
+        catalog.snapshot.attachments.isEmpty ? viewModel.allVisualAttachments : catalog.snapshot.attachments
+    }
+
+    private func openCatalog() {
+        catalog.syncLive(viewModel.messages, serverId: viewModel.serverId(for:))
+        catalog.open(preferredLanguages: viewModel.preferredLanguages)
+    }
+
+    /// **Le porteur d'une pièce** : la fenêtre d'abord, sinon l'index des
+    /// médias — une pièce feuilletée depuis un message jamais chargé se cite et
+    /// se recompose comme les autres.
+    private func carrier(of attachment: MessageAttachment) -> Message? {
+        viewModel.messages.first { message in
+            message.attachments.contains { $0.id == attachment.id }
+        } ?? catalog.snapshot.carrier(ofAttachment: attachment.id)
+    }
+
+    /// Ce que le plein écran fait défiler (#7618) : la conversation sans ses
+    /// vues uniques, ou la SEULE vue unique qu'on vient d'ouvrir par sa puce.
+    static func galleryAttachments(start: MessageAttachment, all: [MessageAttachment]) -> [MessageAttachment] {
+        all.contains(where: { $0.id == start.id }) ? all : [start]
+    }
+
+    /// **Armer, puis fermer** — jamais présenter tout de suite.
+    ///
+    /// Le meuble et la galerie sont deux `fullScreenCover` du même hôte : poser
+    /// la cible pendant que la galerie est encore montée présenterait deux
+    /// modaux à la fois, et SwiftUI n'en montre alors aucun. C'est exactement le
+    /// motif que la feuille de transfert applique déjà quelques lignes plus haut
+    /// dans `ConversationView` — `pendingComposeTarget` est SA case, réemployée
+    /// ici plutôt que dupliquée : deux états pour une même attente auraient
+    /// divergé au premier ajustement de l'un.
+    ///
+    /// Le porteur est résolu ICI parce que la galerie ne connaît que des pièces
+    /// jointes. `ComposerSeedTarget.init?` applique la règle d'offre — vue
+    /// unique, flouté, chiffré, lot — donc un média non composable n'arme rien,
+    /// et le plein écran se referme simplement.
+    private func armCompose(_ attachment: MessageAttachment) {
+        composerState.pendingComposeTarget = carrier(of: attachment).flatMap(ComposerSeedTarget.init(message:))
+        scrollState.galleryStartAttachment = nil
+    }
+
+    /// **Répondre au média, c'est répondre à son PORTEUR** (#4013).
+    ///
+    /// Le plein écran se referme et rend la main au composer, déjà armé de la
+    /// citation. Rien n'est différé ici, contrairement à `armCompose` : la
+    /// citation n'ouvre aucun second modal — elle pose une bannière dans un
+    /// composer qui est déjà là, sous la galerie.
+    private func replyToCarrier(_ attachment: MessageAttachment) {
+        guard let porteur = carrier(of: attachment) else { return }
+        onReply(porteur)
+        scrollState.galleryStartAttachment = nil
+    }
+
+    /// **Répondre à la pièce SANS quitter son plein écran** (#6165).
+    ///
+    /// Ce chemin remplace `replyToCarrier` dès qu'il est câblé — la bascule vit
+    /// dans `FullscreenReplyRoute`, côté galerie. Deux différences, et la
+    /// seconde n'était pas possible avant #6164 :
+    ///
+    /// 1. **rien ne se referme.** `scrollState.galleryStartAttachment` n'est
+    ///    PAS remis à `nil` : on parle de la pièce en la regardant. C'est
+    ///    l'inverse exact de `replyToCarrier`, et c'est tout l'objet du lot ;
+    /// 2. **la citation NOMME la pièce regardée.** `sendReplyToAttachment`
+    ///    résout le porteur, applique la garde de protection et grave l'ancre
+    ///    (`metadata.attachmentReplyTo`) — répondre à la troisième photo d'un
+    ///    carrousel de cinq cite la troisième.
+    ///
+    /// Le composer du FIL n'est pas armé au passage : ce serait poser une
+    /// citation que l'utilisateur n'a pas demandée sous une galerie qu'il n'a
+    /// pas quittée, et qu'il retrouverait armée en sortant.
+    private func sendReplyToMedia(_ attachment: MessageAttachment,
+                                  _ text: String,
+                                  _ language: String) {
+        Task {
+            await viewModel.sendReplyToAttachment(
+                attachmentId: attachment.id, text: text, language: language,
+                carrier: carrier(of: attachment)
+            )
+        }
+    }
+
+    /// **Réagir au MÉDIA, c'est réagir à la PIÈCE — jamais à son porteur**
+    /// (#6084, critère 2).
+    ///
+    /// Le chemin est celui que le fil emprunte déjà pour la réaction par-image
+    /// (`onReactToAttachment` → `toggleAttachmentReaction`) : optimiste, écrit
+    /// en base, poussé par `attachment:reaction-add`. La galerie RESTE ouverte —
+    /// à la différence de `armCompose` et de `replyToCarrier`, qui partent
+    /// ailleurs : on réagit à plusieurs pièces d'affilée en feuilletant, et
+    /// refermer après chaque émoji ferait de la barre un aller-retour.
+    ///
+    /// Le porteur n'est résolu que pour son `messageId`, que le socket exige
+    /// (`AttachmentReaction` est indexée sur le couple pièce + message). Il ne
+    /// devient jamais la CIBLE : `toggleReaction(messageId:)` — la réaction du
+    /// message — n'est pas appelée ici.
+    ///
+    /// **Hors de la fenêtre chargée aussi** (#9910) : la pièce feuilletée depuis
+    /// l'index des médias n'a pas de porteur dans `viewModel.messages`, et le
+    /// geste ne faisait rien. Son porteur vient alors de l'index, la bascule
+    /// est la même, et le catalogue la repeint.
+    private func reactToMedia(_ attachment: MessageAttachment, _ emoji: String) {
+        if let porteur = viewModel.messages.first(where: { message in
+            message.attachments.contains { $0.id == attachment.id }
+        }) {
+            viewModel.toggleAttachmentReaction(attachmentId: attachment.id,
+                                               messageId: porteur.id,
+                                               emoji: emoji)
+            return
+        }
+        guard let indexe = catalog.snapshot.carrier(ofAttachment: attachment.id),
+              let piece = indexe.attachments.first(where: { $0.id == attachment.id }) else { return }
+        let bascule = viewModel.toggleAttachmentReaction(outOfWindow: piece, carrierId: indexe.id, emoji: emoji)
+        catalog.applyReaction(bascule, toAttachment: attachment.id)
+    }
+
+    /// **Ce qu'on fait d'un vocal depuis son plein écran** (#8916) — les
+    /// chemins de la galerie, jamais des jumeaux : la citation et l'envoi de
+    /// `sendReplyToMedia`, l'armement différé de `armCompose`.
+    ///
+    /// **Réagir vise le MESSAGE**, à la différence de la galerie qui vise la
+    /// pièce (#6084) : la bulle d'un vocal peint les réactions de son message
+    /// et aucune pastille par pièce — une réaction posée sur la pièce n'y
+    /// apparaîtrait nulle part. Le porteur doit donc être dans la fenêtre,
+    /// là où la réaction optimiste se pose.
+    private var audioFullscreenActions: AudioFullscreenActions {
+        AudioFullscreenActions(
+            react: { source, emoji in
+                guard let porteur = carrier(of: source.attachment),
+                      viewModel.messages.contains(where: { $0.id == porteur.id }) else { return }
+                viewModel.toggleReaction(messageId: porteur.id, emoji: emoji)
+            },
+            sendReply: { source, text, language in
+                sendReplyToMedia(source.attachment, text, language)
+            },
+            replyCitation: { source in
+                viewModel.fullscreenReplyCitation(for: source.attachment.id, carrier: carrier(of: source.attachment))
+            },
+            compose: { source in armCompose(source.attachment) },
+            offer: { source in
+                let porteur = carrier(of: source.attachment)
+                let verdict = AudioFullscreenOffer.resolve(
+                    isProtected: ComposableAttachment.isProtected(source.attachment)
+                        || (porteur.map { $0.isViewOnce || $0.isBlurred || $0.isEncrypted } ?? false),
+                    hasCarrier: porteur != nil,
+                    composable: porteur.map(ComposableAttachment.offers(message:)) ?? false
+                )
+                let inWindow = porteur.map { p in viewModel.messages.contains { $0.id == p.id } } ?? false
+                return AudioFullscreenOffer(react: verdict.react && inWindow,
+                                            reply: verdict.reply,
+                                            compose: verdict.compose)
+            }
+        )
+    }
+
+    /// **« Transférer » suit le menu d'une pièce** (#12420) : même loi
+    /// (`MessagePieceMenu.actions`), donc jamais une pièce protégée, ni un message
+    /// que la loi de transfert retient (E2EE, avis, envoi raté).
+    private func offersForward(_ attachment: MessageAttachment) -> Bool {
+        guard let porteur = carrier(of: attachment) else { return false }
+        let menu = MessageMenuContext.make(message: porteur, viewModel: viewModel, authority: authority)
+        let context = MessagePieceMenu.Context(
+            isProtected: MessagePieceTarget.isProtected(attachment, in: porteur), menu: menu)
+        return MessagePieceMenu.actions(context).contains(.forwardPiece)
+    }
+
+    /// **Armer, puis fermer** — comme `armCompose` : l'écran de partage est une
+    /// feuille de l'hôte, qui ne se présente pas sous le plein écran.
+    private func forwardFromGallery(_ attachment: MessageAttachment) {
+        guard let porteur = carrier(of: attachment) else { return }
+        composerState.pendingForward = (porteur, attachment.id)
+        scrollState.galleryStartAttachment = nil
+    }
+
+    /// La galerie est DÉMONTÉE : l'écran de partage prend la pièce transférée.
+    private func promotePendingForward() {
+        guard let attendu = composerState.pendingForward else { return }
+        composerState.pendingForward = nil
+        composerState.forwardAdditionalMessages = []
+        composerState.forwardPieceId = attendu.pieceId
+        composerState.forwardMessage = attendu.message
+    }
+
+    /// La galerie est DÉMONTÉE : le meuble peut prendre sa place.
+    private func promotePendingCompose() {
+        guard let attendue = composerState.pendingComposeTarget else { return }
+        composerState.pendingComposeTarget = nil
+        composerState.composeMediaTarget = attendue
+    }
+
+    /// **C'est en SORTANT qu'on a vu** (#7499).
+    ///
+    /// Une vue unique s'ouvre au toucher et se consomme à la fermeture de son
+    /// plein écran — jamais à l'ouverture, qui détruisait le contenu sans
+    /// l'avoir montré. Ce site est le seul de la chaîne qui voie la SORTIE : la
+    /// bulle sait qu'on ouvre, la galerie sait ce qu'on regarde, l'hôte seul
+    /// sait quand le plein écran se referme.
+    ///
+    /// `takeAll()` vide dans le même geste : deux fermetures — un `onDismiss`
+    /// rejoué, un retour suivi d'un passage en arrière-plan — ne consomment
+    /// qu'une fois, et le serveur COMPTE les ouvertures.
+    private func consumeOpenedViewOnce() {
+        let ouvertes = scrollState.pendingViewOnceConsumption.takeAll()
+        guard !ouvertes.isEmpty else { return }
+        Task {
+            for messageId in ouvertes {
+                _ = await viewModel.consumeViewOnce(messageId: messageId)
+            }
+        }
+    }
+
+    /// Les deux gestes de la fermeture, dans l'ordre où ils comptent : on
+    /// consomme ce qu'on vient de regarder, puis on promeut la composition
+    /// différée. Les enchaîner dans UNE fermeture plutôt que d'en passer deux
+    /// au `onDismiss` évite qu'un ajout futur en oublie une.
+    private func handleGalleryDismiss() {
+        consumeOpenedViewOnce()
+        promotePendingCompose()
+        promotePendingForward()
+    }
+}
+
+// MARK: - Le toucher d'un média du fil ouvre la galerie
+
+extension ConversationView {
+
+    /// **L'ouvreur UNIQUE du plein écran depuis le fil** — Bulles, Focal,
+    /// Script et, depuis #8310, la Rivière, dont le voile d'un message flouté
+    /// n'avait aucun ouvreur : l'image y restait inatteignable.
+    ///
+    /// Extrait de l'hôte, qui le portait en fermeture littérale : la Rivière
+    /// devait recevoir le MÊME geste, et une seconde copie aurait divergé à la
+    /// première règle ajoutée (la garde du menu, l'armement de la vue unique).
+    func openMediaFullscreen(_ attachment: MessageAttachment) {
+        // #8009 — le relâcher d'un appui long n'ouvre rien : son menu est déjà là.
+        guard !overlayState.showOverlayMenu else { return }
+        // Préchauffe ce que le plein écran AFFICHE (variante élue, poster net).
+        GalleryPrewarm.warm(attachment)
+        // #7499 — une vue unique s'OUVRE au toucher et se consomme à la
+        // FERMETURE. On arme ici, la galerie consomme en se refermant : c'est
+        // le seul endroit qui voie les deux.
+        if attachment.declaresViewOnce {
+            scrollState.pendingViewOnceConsumption.arm(attachment.messageId)
+        }
+        scrollState.galleryStartAttachment = attachment
+    }
+}

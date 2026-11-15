@@ -82,13 +82,14 @@ ssh $REMOTE_HOST "
     fi
 "
 
-# Config Nginx (depuis prod si existe)
-echo "   → config/nginx/static-files.conf..."
-ssh $REMOTE_HOST "
-    if [ -f /opt/meeshy/docker/nginx/static-files.conf ]; then
-        cp /opt/meeshy/docker/nginx/static-files.conf $STAGING_DIR/config/nginx/
-    fi
-"
+# Config Nginx du domaine statique : celle de STAGING, depuis le dépôt (#11419).
+# Jamais celle de production (/opt/meeshy/docker/nginx/) : staging et production
+# partagent l'hôte, pas la configuration (#9232). Garde :
+# static-nginx-config-per-environment.test.ts.
+echo "   → config/nginx/static-files.conf (staging)..."
+ssh $REMOTE_HOST "mkdir -p $STAGING_DIR/config/nginx"
+scp infrastructure/docker/nginx/static-files.staging.conf \
+    $REMOTE_HOST:$STAGING_DIR/config/nginx/static-files.conf
 
 # Secrets Firebase (depuis prod)
 echo "   → secrets/firebase-admin-sdk.json..."
@@ -107,6 +108,15 @@ echo ""
 # =============================================================================
 # ÉTAPE 4: PULL DES IMAGES DOCKER
 # =============================================================================
+
+echo "🧹 Purge des images obsolètes sur l'hôte..."
+
+# Purge NON INTERACTIVE avant le pull (#6556). `docker image prune` demande
+# `y/N` : sans `-f`, et sans terminal au bout du `ssh`, la confirmation vide
+# se lit « N » et rien n'est retiré. La purge précède le pull — après, elle
+# arrive trop tard : c'est l'écriture des couches qui manque de place.
+# `image prune -a` épargne toujours les images portées par un conteneur.
+ssh $REMOTE_HOST "docker image prune -f || true; docker image prune -af --filter 'until=168h' || true"
 
 echo "🐋 Pull des images Docker staging..."
 
@@ -209,8 +219,14 @@ test_endpoint() {
 }
 
 test_endpoint "Gateway Health" "https://gate.staging.meeshy.me/health"
-test_endpoint "ML Service Health" "https://ml.staging.meeshy.me/health"
 test_endpoint "Frontend" "https://staging.meeshy.me"
+# L'API ML n'a aucun routage public (#9662) : sonde interne seulement.
+echo -n "   Testing ML Service Health (interne)... "
+if ssh $REMOTE_HOST "docker exec meeshy-translator-staging python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)\"" >/dev/null 2>&1; then
+    echo "✅"
+else
+    echo "⏳ (le chargement des modèles peut prendre quelques minutes)"
+fi
 
 echo ""
 
@@ -225,10 +241,12 @@ echo ""
 echo "🌐 URLs disponibles:"
 echo "   - Frontend:  https://staging.meeshy.me"
 echo "   - Gateway:   https://gate.staging.meeshy.me"
-echo "   - ML:        https://ml.staging.meeshy.me"
-echo "   - MongoDB:   https://mongo.staging.meeshy.me"
-echo "   - Redis:     https://redis.staging.meeshy.me"
+echo "   - ML:        interne seulement (translator-staging:8000, #9662)"
 echo "   - Traefik:   https://traefik.staging.meeshy.me"
+echo ""
+echo "🔒 MongoDB UI / Redis UI (#6254 — plus routées par Traefik, accès tunnel SSH uniquement) :"
+echo "   ssh -L 8091:127.0.0.1:8091 -L 8092:127.0.0.1:8092 root@meeshy.me"
+echo "   puis http://localhost:8091 (Mongo) / http://localhost:8092 (Redis) en local"
 echo ""
 echo "⚠️  NOTES:"
 echo "   - Les certificats SSL peuvent prendre 2-5 minutes"

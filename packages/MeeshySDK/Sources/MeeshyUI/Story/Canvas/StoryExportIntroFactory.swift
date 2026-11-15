@@ -4,8 +4,8 @@ import MeeshySDK
 
 // MARK: - StoryExportIntroFactory
 //
-// Task 9 (2026-07-26) : déplacée depuis
-// `apps/ios/Meeshy/Features/Main/Services/StoryExportPreflight.swift`, où
+// Task 9 : déplacée depuis
+// `apps/ios/Meeshy/Features/Stories/Services/StoryExportPreflight.swift`, où
 // elle ne vivait que par accident de la Task 1. Aucune de ses dépendances
 // n'est app-side : `AuthManager` / `CacheCoordinator` (MeeshySDK),
 // `MeeshyConfig` / `ThumbHashDecoder` / `StoryExportIntroContent` (MeeshyUI,
@@ -19,35 +19,123 @@ import MeeshySDK
 // côté app (`StoryExportPreflight.swift`) : elle dépend de `StoryItem`, un
 // modèle de LISTE, pas du bake.
 
+/// **Ce qu'il faut pour peindre l'identité de QUELQU'UN** (#10536) — des
+/// paramètres opaques : la fabrique ne sait pas si c'est l'utilisateur connecté
+/// ou l'auteur d'une story qu'un lecteur emporte ; l'app le décide
+/// (`StoryExportDressing`).
+public nonisolated struct StoryExportIntroSource: Equatable, Sendable {
+    /// Sert à retrouver le mood ; `nil` ⇒ pas de mood.
+    public let userId: String?
+    public let displayName: String
+    public let username: String
+    public let avatarURL: String?
+    public let bannerURL: String?
+    /// Fond de repli quand la bannière manque : un thumbHash (bannière ou avatar).
+    public let backgroundThumbHash: String?
+    /// Le contour équipé, tel que servi ; la fabrique le résout dans le catalogue
+    /// embarqué (`ProfileDecorResolver.ring`). `nil` ⇒ l'avatar nu.
+    public let avatarRing: ServedProfileDecorItem?
+    /// La présence de l'auteur que le serveur a SERVIE (#13997), déjà projetée par l'app ;
+    /// `nil` ⇒ aucune information de présence n'est peinte.
+    public let presence: StoryExportPresence?
+    /// Le niveau EFFECTIF du lien lecteur ↔ auteur, tel que servi (chaîne brute) ; la fabrique en
+    /// tire le logo du cercle (`RelationExportBadge`). `nil` ⇒ aucun logo.
+    public let servedRelationLevel: String?
+
+    public init(userId: String?,
+                displayName: String,
+                username: String,
+                avatarURL: String? = nil,
+                bannerURL: String? = nil,
+                backgroundThumbHash: String? = nil,
+                avatarRing: ServedProfileDecorItem? = nil,
+                presence: StoryExportPresence? = nil,
+                servedRelationLevel: String? = nil) {
+        self.userId = userId
+        self.displayName = displayName
+        self.username = username
+        self.avatarURL = avatarURL
+        self.bannerURL = bannerURL
+        self.backgroundThumbHash = backgroundThumbHash
+        self.avatarRing = avatarRing
+        self.presence = presence
+        self.servedRelationLevel = servedRelationLevel
+    }
+}
+
 /// Identité peinte sur le préambule de marque de l'export.
 ///
-/// L'export est réservé à l'auteur (`railPlan.showsExport == isOwnStory`) :
-/// l'auteur de la story et celui qui l'exporte sont la même personne, donc
-/// l'utilisateur courant EST l'identité à graver. Résolution `async` : l'avatar
-/// et le fond (bannière ou thumbHash) sont chargés depuis le cache image ; le
-/// bake attend cette résolution (rapide, cache-first) pour un interlude complet.
+/// Deux entrées, une seule peinture : `currentUser()` grave l'utilisateur
+/// connecté (sa propre story, « Mes stories », le composer) ; `content(for:)`
+/// grave l'identité qu'on lui remet — l'auteur d'une story qu'un lecteur
+/// emporte (#10536). Résolution `async` : l'avatar et le fond (bannière ou
+/// thumbHash) sont chargés depuis le cache image ; le bake attend cette
+/// résolution (rapide, cache-first, BORNÉE par l'appelant) pour un interlude
+/// complet.
 public enum StoryExportIntroFactory {
 
     @MainActor
     public static func currentUser() async -> StoryExportIntroContent? {
         guard let user = AuthManager.shared.currentUser else { return nil }
+        return await content(for: source(forSignedInUser: user))
+    }
 
-        let avatarImage = await resolveImage(user.avatar)
-        let backgroundImage = await resolveBackground(user: user)
-        let status = await resolveMood(userId: user.id)
-
-        return StoryExportIntroContent(
+    /// L'identité de l'utilisateur connecté. Sa PROPRE story : soi est toujours visible, donc
+    /// en ligne (#13997) ; et on ne porte jamais le logo d'un cercle avec soi-même.
+    nonisolated static func source(forSignedInUser user: MeeshyUser) -> StoryExportIntroSource {
+        StoryExportIntroSource(
+            userId: user.id,
             displayName: resolveDisplayName(displayName: user.displayName,
                                             firstName: user.firstName,
                                             lastName: user.lastName,
                                             username: user.username),
             username: user.username,
+            avatarURL: user.avatar,
+            bannerURL: user.banner,
+            backgroundThumbHash: user.avatarThumbHash,
+            avatarRing: user.profileDecor?.avatarRing,
+            presence: .online,
+            servedRelationLevel: nil)
+    }
+
+    @MainActor
+    public static func content(for source: StoryExportIntroSource) async -> StoryExportIntroContent {
+        let avatarImage = await resolveImage(source.avatarURL)
+        let backgroundImage = await resolveBackground(bannerURL: source.bannerURL,
+                                                      thumbHash: source.backgroundThumbHash)
+        let status: StatusEntry?
+        if let userId = source.userId {
+            status = await resolveMood(userId: userId)
+        } else {
+            status = nil
+        }
+
+        return StoryExportIntroContent(
+            displayName: source.displayName,
+            username: source.username,
             avatar: avatarImage,
             banner: backgroundImage,
             moodEmoji: status?.moodEmoji,
             moodMessage: status?.content,
-            accentColorHex: DynamicColorGenerator.colorForName(user.username)
+            accentColorHex: DynamicColorGenerator.colorForName(source.username),
+            avatarRing: ProfileDecorResolver.ring(source.avatarRing),
+            presence: source.presence,
+            relationLogo: RelationExportBadge.emoji(forServedLevel: source.servedRelationLevel)
         )
+    }
+
+    /// L'interlude SANS image — nom, pseudo, teinte de repli. Ce qu'on peint
+    /// quand l'avatar et la bannière ne sont pas revenus dans la borne de
+    /// temps : un interlude sobre plutôt qu'une story sans prélude. Le contour
+    /// reste : il se lit dans le catalogue EMBARQUÉ, sans réseau ni attente.
+    @MainActor
+    public static func unresolvedContent(for source: StoryExportIntroSource) -> StoryExportIntroContent {
+        StoryExportIntroContent(displayName: source.displayName,
+                                username: source.username,
+                                accentColorHex: DynamicColorGenerator.colorForName(source.username),
+                                avatarRing: ProfileDecorResolver.ring(source.avatarRing),
+                                presence: source.presence,
+                                relationLogo: RelationExportBadge.emoji(forServedLevel: source.servedRelationLevel))
     }
 
     /// Nom à graver sur l'interlude. Priorité au `displayName` explicite de
@@ -79,14 +167,14 @@ public enum StoryExportIntroFactory {
     }
 
     /// Fond de l'interlude, dans l'ordre demandé : bannière de l'auteur → sinon
-    /// le thumbHash de son avatar (flou une fois agrandi en aspectFill) → sinon
-    /// `nil`, ce qui laisse le SDK peindre un gradient d'accent vibrant.
-    private static func resolveBackground(user: MeeshyUser) async -> CGImage? {
-        if let banner = await resolveImage(user.banner) {
+    /// le thumbHash remis (flou une fois agrandi en aspectFill) → sinon `nil`,
+    /// ce qui laisse le SDK peindre un gradient d'accent vibrant.
+    private static func resolveBackground(bannerURL: String?, thumbHash: String?) async -> CGImage? {
+        if let banner = await resolveImage(bannerURL) {
             return banner
         }
-        if let hash = user.avatarThumbHash, !hash.isEmpty,
-           let thumb = ThumbHashDecoder.decodeIfAvailable(hash)?.cgImage {
+        if let thumbHash, !thumbHash.isEmpty,
+           let thumb = ThumbHashDecoder.decodeIfAvailable(thumbHash)?.cgImage {
             return thumb
         }
         return nil

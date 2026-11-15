@@ -85,6 +85,25 @@ describe('AnalyticsKpisQuerySchema', () => {
 // ─── Anonymous Users ──────────────────────────────────────────────────────────
 
 describe('AnonymousUsersQuerySchema', () => {
+  // #7873 — tri et langue : une valeur inconnue retombe sur le défaut, jamais un 400.
+  it('defaults sortBy=joinedAt, sortOrder=desc', () => {
+    expect(AnonymousUsersQuerySchema.parse({})).toMatchObject({ sortBy: 'joinedAt', sortOrder: 'desc' });
+  });
+
+  it('accepts the whitelisted sort keys and order', () => {
+    expect(AnonymousUsersQuerySchema.parse({ sortBy: 'displayName', sortOrder: 'asc' })).toMatchObject({ sortBy: 'displayName', sortOrder: 'asc' });
+    expect(AnonymousUsersQuerySchema.parse({ sortBy: 'lastActiveAt' })).toMatchObject({ sortBy: 'lastActiveAt' });
+  });
+
+  it('falls back to defaults for an unknown sort key or order', () => {
+    expect(AnonymousUsersQuerySchema.parse({ sortBy: 'sessionTokenHash', sortOrder: 'up' })).toMatchObject({ sortBy: 'joinedAt', sortOrder: 'desc' });
+  });
+
+  it('keeps a language filter and drops an unusable one', () => {
+    expect(AnonymousUsersQuerySchema.parse({ language: 'fr' })).toMatchObject({ language: 'fr' });
+    expect(AnonymousUsersQuerySchema.parse({ language: 'x' }).language).toBeUndefined();
+  });
+
   it('accepts all fields with valid values', () => {
     const result = AnonymousUsersQuerySchema.parse({ offset: '5', limit: '10', search: 'hello', status: 'active' });
     expect(result).toMatchObject({ offset: 5, limit: 10, search: 'hello', status: 'active' });
@@ -106,6 +125,34 @@ describe('AnonymousUsersQuerySchema', () => {
   it('allows search to be omitted', () => {
     const result = AnonymousUsersQuerySchema.parse({});
     expect(result.search).toBeUndefined();
+  });
+
+  // Converged on the bounded sibling shape (Invitations/Broadcasts) so the
+  // `pagination-parse-sweep` premise — admin querystrings are Zod-validated
+  // before the route's inline parseInt — actually holds for this schema too.
+  it('rejects limit > 100', () => {
+    expect(() => AnonymousUsersQuerySchema.parse({ limit: '101' })).toThrow();
+  });
+
+  it('rejects non-positive limit (Prisma take must stay >= 1)', () => {
+    expect(() => AnonymousUsersQuerySchema.parse({ limit: '0' })).toThrow();
+    expect(() => AnonymousUsersQuerySchema.parse({ limit: '-5' })).toThrow();
+  });
+
+  it('rejects non-integer limit', () => {
+    expect(() => AnonymousUsersQuerySchema.parse({ limit: '2.5' })).toThrow();
+  });
+
+  it('rejects non-numeric limit', () => {
+    expect(() => AnonymousUsersQuerySchema.parse({ limit: 'abc' })).toThrow();
+  });
+
+  it('rejects negative offset (Prisma skip must stay >= 0)', () => {
+    expect(() => AnonymousUsersQuerySchema.parse({ offset: '-1' })).toThrow();
+  });
+
+  it('rejects non-integer offset', () => {
+    expect(() => AnonymousUsersQuerySchema.parse({ offset: '1.5' })).toThrow();
   });
 });
 
@@ -139,6 +186,18 @@ describe('BroadcastsListQuerySchema', () => {
 
   it('rejects limit < 1', () => {
     expect(() => BroadcastsListQuerySchema.parse({ limit: '0' })).toThrow();
+  });
+
+  it('rejects non-integer limit', () => {
+    expect(() => BroadcastsListQuerySchema.parse({ limit: '2.5' })).toThrow();
+  });
+
+  it('rejects negative offset (Prisma skip must stay >= 0)', () => {
+    expect(() => BroadcastsListQuerySchema.parse({ offset: '-1' })).toThrow();
+  });
+
+  it('rejects non-integer offset', () => {
+    expect(() => BroadcastsListQuerySchema.parse({ offset: '1.5' })).toThrow();
   });
 });
 
@@ -240,13 +299,13 @@ describe('InvitationIdParamSchema', () => {
 });
 
 describe('UpdateInvitationBodySchema', () => {
-  it('accepts pending status', () => {
-    expect(UpdateInvitationBodySchema.parse({ status: 'pending' })).toMatchObject({ status: 'pending' });
+  it('accepts rejected — the only gesture the console offers', () => {
+    expect(UpdateInvitationBodySchema.parse({ status: 'rejected' })).toMatchObject({ status: 'rejected' });
   });
 
-  it('accepts accepted and rejected', () => {
-    expect(UpdateInvitationBodySchema.parse({ status: 'accepted' })).toMatchObject({ status: 'accepted' });
-    expect(UpdateInvitationBodySchema.parse({ status: 'rejected' })).toMatchObject({ status: 'rejected' });
+  it('refuses accepted (it IS the friendship) and pending (no reopening)', () => {
+    expect(() => UpdateInvitationBodySchema.parse({ status: 'accepted' })).toThrow();
+    expect(() => UpdateInvitationBodySchema.parse({ status: 'pending' })).toThrow();
   });
 
   it('rejects invalid status', () => {
@@ -385,6 +444,10 @@ describe('RankingsQuerySchema', () => {
 
   it('rejects limit < 1', () => {
     expect(() => RankingsQuerySchema.parse({ limit: '0' })).toThrow();
+  });
+
+  it('rejects non-integer limit', () => {
+    expect(() => RankingsQuerySchema.parse({ limit: '2.5' })).toThrow();
   });
 
   it('accepts optional criterion', () => {

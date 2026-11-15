@@ -1,7 +1,10 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { MentionParticipant } from '@meeshy/shared/utils/mention-parser';
+import { participationEstVivante } from '../../routes/conversations/utils/access-control';
 import { MAX_MENTIONS_PER_MESSAGE } from '../../validation/mention-list.js';
-import { protectedPreview } from '../notifications/NotificationService';
+import { protectedPreview } from '../notifications/notification-preview';
+import { messageReadership, blockedReaderKeys } from '../../socketio/editedAudience';
+import { pendingRequestUserIds } from './pendingMessageRequests';
 
 /**
  * Le masque servi quand la relecture des drapeaux ne conclut pas — message
@@ -17,7 +20,7 @@ const PROTECTION_ON_UNKNOWN = { preview: '🔒 💬', locKey: 'notification.hidd
  * `senderId` est un `Participant.id` — c'est ce que la colonne `Message.senderId`
  * référence, et c'est donc tout ce que les quatre appelants tiennent. La
  * validation des permissions, elle, raisonne en `User.id` ; la traduction entre
- * les deux vit ICI (cf. `resolveSenderUserId`), une fois, plutôt que dans quatre
+ * les deux vit ICI (cf. `resolveSender`), une fois, plutôt que dans quatre
  * appelants qui auraient chacun l'occasion de l'oublier.
  */
 export interface MentionTargetMessage {
@@ -39,7 +42,18 @@ export interface MentionTargetMessage {
  * délégués générés portent des surcharges que rien de recopié à la main ne
  * satisfait.
  */
-export type MentionPrisma = Pick<PrismaClient, 'participant' | 'user' | 'message' | 'mention'>;
+/**
+ * `conversationShareLink` n'est pas décoratif : la loi du plancher
+ * d'historique le lit pour savoir si le lien d'entrée d'un participant
+ * autorise l'historique (`editedAudience.ts` → `translationReaders`). Une
+ * projection trop ÉTROITE rend la descente impossible EN AVAL sans qu'aucun
+ * témoin ne rougisse — c'est la leçon du cycle 124, où dix-sept sites avaient
+ * sauté la forme du `select` plutôt que l'appel.
+ */
+export type MentionPrisma = Pick<
+  PrismaClient,
+  'participant' | 'user' | 'message' | 'mention' | 'conversationShareLink'
+>;
 
 /**
  * L'identité UTILISATEUR derrière le participant expéditeur.
@@ -50,25 +64,36 @@ export type MentionPrisma = Pick<PrismaClient, 'participant' | 'user' | 'message
  * vraie, et la règle « on ne se mentionne pas soi-même » d'une conversation
  * directe ne se déclenche jamais.
  *
- * `null` pour un expéditeur anonyme (aucun `User.id`) comme pour une lecture en
- * échec : dans les deux cas l'expéditeur n'est aucun des mentionnés, ce qui est
- * la réponse sûre — au pire une auto-mention passe, jamais un tiers rejeté.
+ * `userId: null` pour un expéditeur anonyme (aucun `User.id`) : il n'est aucun
+ * des mentionnés, au pire une auto-mention passe, jamais un tiers rejeté.
+ *
+ * `OUTSIDER` (#14066) quand le participant expéditeur n'est pas une
+ * participation VIVANTE de CETTE conversation — absent, parti, banni, d'une
+ * autre conversation : un non-membre ne cite personne. C'est ici, et non dans
+ * `validateMentionPermissions`, que l'anonyme se vérifie : seul son
+ * `Participant.id` le désigne.
+ *
+ * Une lecture en ÉCHEC n'est PAS une réponse : elle LÈVE. Rendre `OUTSIDER`
+ * ferait conclure à l'édition que plus personne n'est mentionné et détruirait
+ * des mentions vivantes ; levée, elle laisse chaque appelant s'abstenir
+ * (`UNRESOLVED`) — à l'envoi aucune mention, à l'édition rien de détruit.
  */
-async function resolveSenderUserId(
+type SenderIdentity = { readonly kind: 'member'; readonly userId: string | null } | { readonly kind: 'outsider' };
+
+const OUTSIDER: SenderIdentity = { kind: 'outsider' };
+
+async function resolveSender(
   prisma: Pick<MentionPrisma, 'participant'>,
-  senderParticipantId: string,
-  onError?: (error: unknown) => void
-): Promise<string | null> {
-  try {
-    const participant = await prisma.participant.findUnique({
-      where: { id: senderParticipantId },
-      select: { userId: true },
-    });
-    return participant?.userId ?? null;
-  } catch (error) {
-    onError?.(error);
-    return null;
+  message: MentionTargetMessage
+): Promise<SenderIdentity> {
+  const participant = await prisma.participant.findUnique({
+    where: { id: message.senderId },
+    select: { userId: true, isActive: true, bannedAt: true, conversationId: true },
+  });
+  if (!participant || !participationEstVivante(participant) || participant.conversationId !== message.conversationId) {
+    return OUTSIDER;
   }
+  return { kind: 'member', userId: participant.userId ?? null };
 }
 
 /**
@@ -356,7 +381,7 @@ async function loadMessageProtection(
       where: { id: messageId },
       select: {
         messageType: true, isEncrypted: true, isViewOnce: true,
-        isBlurred: true, effectFlags: true, expiresAt: true, createdAt: true,
+        isBlurred: true, effectFlags: true, expiresAt: true, ephemeralDuration: true,
       },
     });
     if (!row) return PROTECTION_ON_UNKNOWN;
@@ -382,7 +407,12 @@ async function notifyNewlyMentioned(
       }),
       prisma.conversation.findUnique({
         where: { id: message.conversationId },
-        select: { participants: { where: { isActive: true }, select: { userId: true } } },
+        // `messageRequestAt` n'est pas une colonne de plus pour le plaisir :
+        // c'est ce qui rend la garde #14107 GRATUITE ici (#17074). La lecture
+        // existait déjà ; il ne manquait que la colonne — et une projection
+        // trop étroite rend une loi impossible en aval sans qu'aucun témoin ne
+        // rougisse.
+        select: { participants: { where: { isActive: true }, select: { userId: true, messageRequestAt: true } } },
       }),
     ]);
     if (!sender || !conversation) return;
@@ -400,8 +430,57 @@ async function notifyNewlyMentioned(
     // notifier, cas rare sur le chemin d'édition.
     const protection = await loadMessageProtection(prisma, message.id, onError);
 
+    // Le PLANCHER D'HISTORIQUE, relu ICI pour la raison que le paragraphe
+    // ci-dessus donne déjà : « une garde de confidentialité qui dépend du
+    // câblage de l'appelant échoue en montrant PLUS ».
+    //
+    // `loadMessageProtection` couvre la vue unique, le flou, l'éphémère et le
+    // chiffré — jamais le plancher. Un INSCRIT entré par un lien sans
+    // historique recevait donc sur son écran verrouillé le texte intégral d'un
+    // message écrit avant son arrivée, dès qu'une édition l'y nommait, pendant
+    // que `GET …/messages` et `/sync` le lui refusent. Même raisonnement que le
+    // cycle 123 bis au paragraphe précédent — « ce sont des TIERS » — sur la
+    // dimension qu'il ne couvrait pas.
+    //
+    // Sur un message NEUF personne n'est sous plancher (son `createdAt` est
+    // postérieur à tout plancher), donc la loi rend `{ kind: 'room' }` sans
+    // restreindre : le chemin d'envoi ne paie qu'une requête qui ne rend rien.
+    const readership = await messageReadership(prisma, message.conversationId, message.id, onError);
+    // `'unknown'` ⇒ on ne sait NI qui est bloqué, NI qui est autorisé, et la
+    // bannière est une sortie de CONTENU : elle se tait, comme `message:edited`
+    // au même instant. Lire l'ensemble de clés au lieu du verdict rendait ici
+    // un ensemble VIDE, donc poussait le texte à TOUS les nommés exactement
+    // quand l'autre sortie se fermait — une ignorance collapsée en affirmation
+    // (leçon `[]`-vs-`undefined`, cycle 116).
+    if (readership.kind === 'unknown') return;
+    const blocked = blockedReaderKeys(readership);
+
+    // #17074 — une DEMANDE de message en attente ne sonne PAS, et l'édition
+    // était la porte par laquelle elle sonnait quand même. La garde est posée
+    // sur l'éventail d'ENVOI (`messageNotificationFanOut`) et sur l'événement
+    // socket `mention:created` de cette même édition ; elle manquait à sa
+    // NOTIFICATION — c'est-à-dire au seul des trois canaux qui perce la
+    // sourdine, pousse un e-mail immédiat et fait PRÉ-ENREGISTRER le texte dans
+    // la base locale de l'appareil (la NSE lit `content` sur le fil push).
+    //
+    // Un inconnu dont la demande n'est pas acceptée obtenait donc, en ÉDITANT
+    // son message pour y ajouter `@cible`, exactement ce que le chemin d'envoi
+    // venait de lui refuser.
+    //
+    // Le prédicat est PARTAGÉ avec l'éventail d'envoi (`pendingRequestUserIds`)
+    // plutôt que reformulé : c'est la reformulation locale qui avait laissé
+    // cette porte ouverte. Il est posé ICI et non chez l'appelant, pour la
+    // raison que les deux paragraphes au-dessus donnent déjà — « une garde de
+    // confidentialité qui dépend du câblage de l'appelant échoue en montrant
+    // PLUS » — et parce que trois des quatre transports d'édition sont des
+    // routes REST qui ne passent pas par le handler socket.
+    const pending = pendingRequestUserIds(conversation.participants);
+
+    const admitted = newlyMentionedUserIds.filter((userId) => !blocked.has(userId) && !pending.has(userId));
+    if (admitted.length === 0) return;
+
     await notificationService.createMentionNotificationsBatch(
-      [...newlyMentionedUserIds],
+      [...admitted],
       {
         senderId: editorUserId,
         senderProfile: sender,
@@ -491,7 +570,14 @@ async function computeValidatedMentions(
     // deux sources décrivent la même intention, et un message ne doit pas
     // échouer pour avoir nommé trop de monde là où l'autre chemin se contente
     // d'en retenir cinquante.
-    candidateUserIds = Array.from(explicit).slice(0, MAX_MENTIONS_PER_MESSAGE);
+    // DÉDOUBLONNÉE AVANT la troncature (#17073) : l'autre source de la même
+    // donnée — l'extraction depuis le contenu — passe par une carte
+    // `username → user`, donc elle ne peut pas porter deux fois la même
+    // personne. La liste explicite, elle, pouvait : `slice(0, 50)` bornait
+    // alors cinquante COPIES au lieu de cinquante personnes, et une charge
+    // `[victime ×50]` consommait tout le plafond pour un seul destinataire.
+    // Le plafond compte des PERSONNES, comme son nom le dit.
+    candidateUserIds = [...new Set(explicit)].slice(0, MAX_MENTIONS_PER_MESSAGE);
   } else {
     const participants = await loadMentionParticipants(prisma, message.conversationId, onError);
     const extracted = mentionService.extractMentionsWithParticipants(content, participants);
@@ -506,12 +592,13 @@ async function computeValidatedMentions(
 
   if (candidateUserIds.length === 0) return NOTHING;
 
-  const senderUserId = await resolveSenderUserId(prisma, message.senderId, onError);
+  const sender = await resolveSender(prisma, message);
+  if (sender.kind === 'outsider') return NOTHING;
 
   const { validUserIds } = await mentionService.validateMentionPermissions(
     message.conversationId,
     candidateUserIds,
-    senderUserId
+    sender.userId
   );
   if (validUserIds.length === 0) return NOTHING;
 

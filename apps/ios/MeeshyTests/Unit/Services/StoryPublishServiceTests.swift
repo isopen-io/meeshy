@@ -260,4 +260,72 @@ final class StoryPublishServiceTests: XCTestCase {
         )
         XCTAssertEqual(orphans, [unknown])
     }
+
+    // MARK: - #14879 — une story en file garde son média jusqu'à l'envoi ou l'annulation
+
+    /// Le conteneur de l'app change de chemin entre deux lancements : la file
+    /// relue visait l'ancien, et le fichier, présent, était déclaré introuvable.
+    func test_mediaReference_decodedAfterAContainerMove_pointsIntoTheCurrentContainer() throws {
+        let ancien = "/Users/x/Library/Developer/CoreSimulator/Devices/D/data/Containers/Data/Application/75F6D7AA-C98C-4D5D-82DD-163055A01D5A"
+        let rest = "/Documents/meeshy_offline_queue/pending_A/photo.jpg"
+        let json = Data(#"{"elementId":"e1","mediaType":"image","localFilePath":"\#(ancien + rest)"}"#.utf8)
+
+        let ref = try JSONDecoder().decode(StoryMediaReference.self, from: json)
+
+        XCTAssertEqual(ref.localFilePath, NSHomeDirectory() + rest)
+    }
+
+    func test_rebasing_leavesAPathOfTheCurrentContainerOrOutsideAnyContainerUntouched() {
+        let home = "/var/mobile/Containers/Data/Application/AAAA"
+        XCTAssertEqual(StoryMediaReference.rebasing(home + "/Documents/a.jpg", ontoHome: home), home + "/Documents/a.jpg")
+        XCTAssertEqual(StoryMediaReference.rebasing("/tmp/a.jpg", ontoHome: home), "/tmp/a.jpg")
+        XCTAssertEqual(
+            StoryMediaReference.rebasing("/private/var/mobile/Containers/Data/Application/BBBB/Documents/a.jpg", ontoHome: home),
+            home + "/Documents/a.jpg"
+        )
+    }
+
+    /// Le balayage de démarrage gardait les seuls dossiers de la file
+    /// d'attente : une story en échec perdait son média après une heure, et
+    /// « Réessayer » ne trouvait plus rien.
+    func test_liveTempStoryIds_keepTheMediaOfFailedStories() {
+        let enAttente = makeItem(tempStoryId: "pending_A")
+        let enEchec = makeItem(tempStoryId: "pending_B")
+
+        XCTAssertEqual(StoryPublishService.liveTempStoryIds(pending: [enAttente], failed: [enEchec]),
+                       ["pending_A", "pending_B"])
+    }
+
+    func test_cancelSend_isOfferedWhileNothingIsInFlight() {
+        typealias Phase = StoryViewModel.StoryUploadState.UploadPhase
+        XCTAssertTrue(StoryUploadPresentation.offersCancelSend(Phase.failed("hors ligne")), "un échec reste annulable, pas seulement relançable")
+        XCTAssertTrue(StoryUploadPresentation.offersCancelSend(Phase.queued))
+        XCTAssertFalse(StoryUploadPresentation.offersCancelSend(Phase.uploading))
+        XCTAssertFalse(StoryUploadPresentation.offersCancelSend(Phase.publishing))
+    }
+
+    func test_failureText_missingMedia_speaksTheInterfaceLanguage() {
+        XCTAssertEqual(
+            StoryFailureText.display(StoryPublishQueue.missingLocalMediaError),
+            String(localized: "story.mine.failed.missingMedia", defaultValue: "Un média local est introuvable", bundle: .main)
+        )
+        XCTAssertEqual(StoryFailureText.display("Server said no"), "Server said no")
+        XCTAssertNil(StoryFailureText.display(nil))
+    }
+
+    func test_missingMediaKey_isTranslatedInTheSevenLanguages() throws {
+        let catalogue = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Localizable.xcstrings")
+        let racine = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: catalogue)) as? [String: Any])
+        let cles = try XCTUnwrap(racine["strings"] as? [String: Any])
+        let entree = try XCTUnwrap(cles["story.mine.failed.missingMedia"] as? [String: Any])
+        let langues = try XCTUnwrap(entree["localizations"] as? [String: Any])
+        XCTAssertEqual(Set(langues.keys), ["fr", "en", "es", "de", "it", "pt-BR", "ar"])
+    }
+
+    private func makeItem(tempStoryId: String) -> StoryPublishQueueItem {
+        StoryPublishQueueItem(visibility: "PUBLIC", slidesPayload: Data("[]".utf8), mediaReferences: [], tempStoryId: tempStoryId)
+    }
 }

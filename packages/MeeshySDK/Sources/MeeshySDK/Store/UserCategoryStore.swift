@@ -131,7 +131,7 @@ public actor UserCategoryStore {
 
     public func hydrate() async throws {
         let fresh = try await service.listCategories()
-        categoriesById = Dictionary(uniqueKeysWithValues: fresh.map { ($0.id, $0) })
+        categoriesById = Dictionary(fresh.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         publish()
     }
 
@@ -139,7 +139,7 @@ public actor UserCategoryStore {
     /// hitting the network. The caller is expected to follow up with a
     /// background `hydrate()` for the stale-while-revalidate path.
     public func hydrateFromSnapshot(_ snapshot: [ConversationCategory]) {
-        categoriesById = Dictionary(uniqueKeysWithValues: snapshot.map { ($0.id, $0) })
+        categoriesById = Dictionary(snapshot.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         publish()
     }
 
@@ -339,7 +339,7 @@ struct DefaultUserCategoryWritingAdapter: UserCategoryWriting {
     ) async throws -> ConversationCategory {
         let body = UpdateBody(name: name, color: color, icon: icon, isExpanded: isExpanded)
         let response: APIResponse<ConversationCategory> = try await APIClient.shared.patch(
-            endpoint: "/me/preferences/categories/\(id)",
+            MeEndpoint.preferencesCategoriesByCategoryId(categoryId: id),
             body: body
         )
         return response.data
@@ -352,7 +352,7 @@ struct DefaultUserCategoryWritingAdapter: UserCategoryWriting {
         // `DecodingError.keyNotFound`; route through `request<T>` with
         // `SimpleAPIResponse` which accepts the response shape directly.
         let _: SimpleAPIResponse = try await APIClient.shared.request(
-            endpoint: "/me/preferences/categories/\(id)",
+            MeEndpoint.preferencesCategoriesByCategoryId(categoryId: id),
             method: "DELETE"
         )
     }
@@ -363,7 +363,7 @@ struct DefaultUserCategoryWritingAdapter: UserCategoryWriting {
         let body = ReorderBody(updates: updates.map { ReorderItem(categoryId: $0.id, order: $0.order) })
         let bodyData = try JSONEncoder().encode(body)
         let _: SimpleAPIResponse = try await APIClient.shared.request(
-            endpoint: "/me/preferences/categories/reorder",
+            MeEndpoint.preferencesCategoriesReorder,
             method: "POST",
             body: bodyData
         )

@@ -1,33 +1,49 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.FirstUnreadBoundary
+import me.meeshy.sdk.model.FirstUnreadCandidate
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.bubble.BubbleContent
 
 /**
- * Pure SSOT for the "unread messages" boundary — port of the iOS
- * `ConversationViewModel` first-unread derivation
- * (`unreadStartIndex = messages.count - initialUnreadCount`, guarded by
- * `!candidate.isMe`).
- *
- * The boundary is computed **once** from the initial unread count captured
- * before the conversation is marked read; the caller latches the result so a
- * later message arrival never shifts the divider.
+ * Ce que l'ouverture retient de la conversation AVANT de la marquer lue : le curseur de lecture serveur
+ * et le compte serveur. Il alimente [FirstUnreadBoundary], la loi du premier non lu.
  */
+data class UnreadCursor(
+    val lastReadMessageId: String?,
+    val lastReadAtMillis: Long?,
+    val lastReadMessageCreatedAtMillis: Long?,
+    val joinedAtMillis: Long?,
+    val serverUnreadCount: Int,
+) {
+    companion object {
+        fun of(conversation: ApiConversation?, viewerId: String?): UnreadCursor = UnreadCursor(
+            lastReadMessageId = conversation?.lastReadMessageId,
+            lastReadAtMillis = isoToEpochMillisOrNull(conversation?.lastReadAt),
+            lastReadMessageCreatedAtMillis = isoToEpochMillisOrNull(conversation?.lastReadMessageCreatedAt),
+            joinedAtMillis = viewerId?.let { id ->
+                isoToEpochMillisOrNull(conversation?.participants?.firstOrNull { it.userId == id }?.joinedAt)
+            },
+            serverUnreadCount = conversation?.unreadCount ?: 0,
+        )
+    }
+}
+
+/** Le séparateur « Nouveaux messages » : le résultat de [FirstUnreadBoundary], projeté sur les bulles chargées. */
 object UnreadMarker {
 
-    /**
-     * The id of the first unread message in [bubbles] (ascending order), or
-     * `null` when there is no boundary to draw:
-     * - a non-positive [unreadCount] (nothing unread),
-     * - an empty window,
-     * - an [unreadCount] larger than the loaded window (can't place it), or
-     * - a boundary that lands on the viewer's own message (you never "unread"
-     *   your own send).
-     */
-    fun firstUnreadId(bubbles: List<BubbleContent>, unreadCount: Int): String? {
-        if (unreadCount <= 0) return null
-        if (unreadCount > bubbles.size) return null
-        val candidate = bubbles[bubbles.size - unreadCount]
-        if (candidate.isOutgoing) return null
-        return candidate.messageId
-    }
+    /** L'id du premier message non lu de [bubbles] (ordre croissant), ou `null` quand il n'y a rien à tracer. */
+    fun firstUnreadId(bubbles: List<BubbleContent>, cursor: UnreadCursor, viewerId: String?): String? =
+        FirstUnreadBoundary.resolve(
+            messages = bubbles.filterNot { it.isOutgoing }.map {
+                FirstUnreadCandidate(it.messageId, it.senderId ?: it.messageId, isoToEpochMillisOrNull(it.createdAtIso) ?: 0L)
+            },
+            lastReadMessageId = cursor.lastReadMessageId,
+            lastReadAtMillis = cursor.lastReadAtMillis,
+            lastReadMessageCreatedAtMillis = cursor.lastReadMessageCreatedAtMillis,
+            joinedAtMillis = cursor.joinedAtMillis,
+            viewerId = viewerId,
+            unreadCountHint = cursor.serverUnreadCount,
+        )?.firstUnreadId
 }

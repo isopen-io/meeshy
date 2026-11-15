@@ -1,18 +1,33 @@
+import { randomUUID } from 'crypto';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { EngagementService } from './engagement/EngagementService.js';
+import { recordFriendship } from './relations/userRelationWriter.js';
+import { isBlockedBetween } from '../utils/blocking.js';
 
 const logger = enhancedLogger.child({ module: 'AffiliateTrackingService' });
+
+/** La durée de vie d'une visite : au plus 30 jours (conformité H-9). */
+export const AFFILIATE_VISIT_RETENTION_DAYS = 30;
+
+/**
+ * Un lien d'invitation PARRAINE un compte qui vient de naître, et lui seul
+ * (#13926) : la conversion noue une amitié FRIEND/FRIEND sans demande, ce
+ * qu'un compte ancien ne doit pas pouvoir obtenir en rejouant le lien d'un
+ * inconnu. L'inscription convertit à la création ; le client rappelle
+ * `POST /affiliate/register` juste après, bien en deçà de cette fenêtre.
+ */
+export const AFFILIATE_CONVERSION_WINDOW_HOURS = 24;
+
+const isFreshAccount = (createdAt: unknown, now: Date): boolean =>
+  createdAt instanceof Date &&
+  now.getTime() - createdAt.getTime() <= AFFILIATE_CONVERSION_WINDOW_HOURS * 60 * 60 * 1000;
 
 export class AffiliateTrackingService {
   /**
    * Enregistre une visite d'affiliation (pour tracking même si l'utilisateur ne s'inscrit pas immédiatement)
    */
-  static async trackAffiliateVisit(prisma: any, token: string, visitorData: {
-    ipAddress?: string;
-    userAgent?: string;
-    referrer?: string;
-    country?: string;
-    language?: string;
-  }) {
+  static async trackAffiliateVisit(prisma: any, token: string, _visitorData?: unknown) {
     try {
       // Trouver le token d'affiliation
       const affiliateToken = await prisma.affiliateToken.findUnique({
@@ -33,29 +48,19 @@ export class AffiliateTrackingService {
         return { success: false, error: 'Limite d\'utilisation atteinte' };
       }
 
-      // Créer ou mettre à jour une session de tracking
-      // On peut utiliser une table de sessions ou stocker dans les préférences utilisateur
-      const sessionData = {
-        affiliateTokenId: affiliateToken.id,
-        affiliateUserId: affiliateToken.createdBy,
-        visitorData: JSON.stringify(visitorData),
-        visitedAt: new Date(),
-        converted: false
-      };
-
-      // Stocker dans une table de sessions d'affiliation (à créer si nécessaire)
-      // Pour l'instant, on peut utiliser les préférences utilisateur avec une clé spéciale
-      const sessionKey = `affiliate_session_${token}_${Date.now()}`;
-      
-      // Créer une préférence temporaire pour le tracking
-      await prisma.userPreference.create({
+      // Une visite ne garde QUE son identité de session (conformité H-9, RGPD art. 5(1)(c)
+      // et (e), 25(1)) : ni l'adresse IP, ni l'agent utilisateur, ni le référent, ni le pays,
+      // ni la langue du visiteur — la clé de session suffit à rattacher une inscription. La
+      // session expire seule (index TTL sur `expiresAt`, 30 jours au plus).
+      const sessionKey = `affiliate_session_${randomUUID()}`;
+      await prisma.affiliateVisitSession.create({
         data: {
-          userId: affiliateToken.createdBy, // Stocker chez l'affiliateur
-          key: sessionKey,
-          value: JSON.stringify(sessionData),
-          valueType: 'json',
-          description: 'Session de tracking d\'affiliation'
-        }
+          sessionKey,
+          affiliateTokenId: affiliateToken.id,
+          affiliateUserId: affiliateToken.createdBy,
+          expiresAt: new Date(Date.now() + AFFILIATE_VISIT_RETENTION_DAYS * 24 * 60 * 60 * 1000),
+        },
+        select: { id: true },
       });
 
       return { 
@@ -114,6 +119,20 @@ export class AffiliateTrackingService {
         };
       }
 
+      // Ni un blocage, ni un compte ancien : la conversion crée une amitié,
+      // elle ne doit pas effacer un « non » ni lier deux inconnus de longue date.
+      // Le refus reste celui d'un lien invalide : il ne dit pas qui a bloqué.
+      const referred = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, createdAt: true },
+      });
+      if (!referred || !isFreshAccount(referred.createdAt, new Date())) {
+        return { success: false, error: 'Parrainage réservé aux comptes qui viennent de s\'inscrire' };
+      }
+      if (await isBlockedBetween(prisma, affiliateToken.createdBy, userId)) {
+        return { success: false, error: 'Token invalide' };
+      }
+
       // Réserver une place de façon atomique AVANT de créer la relation.
       // Le pré-check `currentUses >= maxUses` (plus haut) est un simple fast-path :
       // deux conversions concurrentes peuvent toutes deux le franchir quand
@@ -153,6 +172,19 @@ export class AffiliateTrackingService {
         }
       });
 
+      // Axe `social.invite_joined` (#5766) — le crédit va à celui qui a INVITÉ,
+      // jamais à celui qui arrive : l'axe mesure « quelqu'un est venu par moi ».
+      // Il est posé ICI, après la création de la relation, et non à la VISITE :
+      // un lien cliqué ne prouve rien, une inscription si.
+      //
+      // L'amitié qui se noue juste en dessous crédite en plus `social.friendship`
+      // aux deux parties, par son propre chemin — deux gestes distincts, deux
+      // axes, et c'est voulu : inviter quelqu'un qui vient VAUT plus que se
+      // lier à quelqu'un qu'on connaît déjà.
+      new EngagementService(prisma)
+        .recordActivity(affiliateToken.createdBy, 'social.invite_joined', { actorId: userId, targetId: userId })
+        .catch((err: unknown) => logger.warn('engagement social.invite_joined failed', { err } as never));
+
       // Créer automatiquement une demande d'amitié entre les utilisateurs (ou
       // accepter une demande préexistante dans un autre statut) — FriendRequest
       // n'a pas d'index unique, donc un simple create() peut créer un doublon
@@ -167,20 +199,34 @@ export class AffiliateTrackingService {
           },
         });
 
-        if (existingFriendRequest) {
-          if (existingFriendRequest.status !== 'accepted') {
-            await prisma.friendRequest.update({
-              where: { id: existingFriendRequest.id },
-              data: { status: 'accepted', respondedAt: new Date() },
-            });
-          }
-        } else {
+        // Seule une demande EN ATTENTE se promeut : un refus ou un blocage est
+        // un « non » qu'un lien d'invitation n'efface pas, et rien ne s'écrit.
+        const linked = !existingFriendRequest || ['pending', 'accepted'].includes(existingFriendRequest.status);
+
+        if (existingFriendRequest?.status === 'pending') {
+          await prisma.friendRequest.update({
+            where: { id: existingFriendRequest.id, status: 'pending' },
+            data: { status: 'accepted', respondedAt: new Date() },
+          });
+        } else if (!existingFriendRequest) {
           await prisma.friendRequest.create({
             data: {
               senderId: affiliateToken.createdBy,
               receiverId: userId,
-              status: 'accepted' // Accepter automatiquement pour les affiliations
+              status: 'accepted', // Accepter automatiquement pour les affiliations
+              respondedAt: new Date(),
             }
+          });
+        }
+
+        // Le lien (#13926) : la demande acceptée d'une affiliation vaut FRIEND des
+        // deux côtés, par le MÊME écrivain que l'acceptation d'une demande.
+        if (linked) {
+          await recordFriendship(prisma, {
+            userA: affiliateToken.createdBy,
+            userB: userId,
+            origin: 'request',
+            at: new Date(),
           });
         }
       } catch (friendRequestError) {
@@ -190,29 +236,13 @@ export class AffiliateTrackingService {
         );
       }
 
-      // Marquer la session comme convertie si elle existe
+      // Marquer la session comme convertie si elle existe (une seule fois).
       if (sessionKey) {
         try {
-          const sessionPreference = await prisma.userPreference.findFirst({
-            where: {
-              userId: affiliateToken.createdBy,
-              key: sessionKey
-            }
+          await prisma.affiliateVisitSession.updateMany({
+            where: { sessionKey, affiliateUserId: affiliateToken.createdBy, OR: [{ convertedAt: null }, { convertedAt: { isSet: false } }] },
+            data: { convertedAt: new Date(), referredUserId: userId },
           });
-
-          if (sessionPreference) {
-            const sessionData = JSON.parse(sessionPreference.value);
-            sessionData.converted = true;
-            sessionData.convertedAt = new Date();
-            sessionData.referredUserId = userId;
-
-            await prisma.userPreference.update({
-              where: { id: sessionPreference.id },
-              data: {
-                value: JSON.stringify(sessionData)
-              }
-            });
-          }
         } catch (sessionError) {
           logger.error('Failed to persist affiliate session data', sessionError instanceof Error ? sessionError : new Error(String(sessionError)));
         }
@@ -276,7 +306,6 @@ export class AffiliateTrackingService {
                 lastName: true,
                 email: true,
                 avatar: true,
-                isOnline: true,
                 createdAt: true
               }
             },
@@ -364,7 +393,26 @@ export class AffiliateTrackingService {
   }
 
   /**
-   * Nettoie les sessions d'affiliation expirées (à appeler périodiquement)
+   * Supprime les visites expirées (`AffiliateVisitSession`). L'index TTL le fait
+   * déjà côté base ; cette purge applicative double la garantie, branchée dans
+   * `cleanupExpiredData` (conformité H-9).
+   */
+  static async cleanupExpiredVisitSessions(prisma: Pick<PrismaClient, 'affiliateVisitSession'>, now: Date = new Date()) {
+    try {
+      const deleted = await prisma.affiliateVisitSession.deleteMany({ where: { expiresAt: { lt: now } } });
+      return { success: true, deletedCount: deleted.count };
+    } catch (error) {
+      logger.error('Erreur nettoyage des visites de parrainage', error as Error);
+      return { success: false, error: 'Erreur lors du nettoyage' };
+    }
+  }
+
+  /**
+   * Nettoie les LIGNES D'ANCIEN FORMAT (`UserPreference` « affiliate_session_* »,
+   * qui portaient IP, agent utilisateur et référent en clair sous l'identifiant du
+   * parrain). **Volontairement NON branchée** : la purge de l'existant en
+   * production attend le feu vert du porteur, après une sauvegarde vérifiée
+   * (conformité H-9). Plus aucun écrivain ne crée ces lignes.
    */
   static async cleanupExpiredSessions(prisma: any) {
     try {

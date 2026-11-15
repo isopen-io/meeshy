@@ -157,14 +157,33 @@ export interface GatewayMessage {
   readonly isViewOnce?: boolean;
   /** Nombre max de lecteurs uniques (null = tous les membres) */
   readonly maxViewOnceCount?: number;
-  /** Nombre d'utilisateurs ayant vu le message */
+  /** Destinataires ACTIFS (auteur exclu) qui ont ouvert la vue unique (#7578) */
   readonly viewOnceCount?: number;
+  /** Vue unique (#7578) : CE lecteur l'a déjà ouverte — le contenu n'est plus servi */
+  readonly consumedByMe?: boolean;
+  /** Vue unique (#7578) : tous les destinataires actifs l'ont ouverte — ne retire jamais la bulle */
+  readonly isFullyConsumed?: boolean;
   /** Contenu flouté jusqu'à ce que l'utilisateur clique */
   readonly isBlurred?: boolean;
   /** Bitfield for message effects (lifecycle, appearance, persistent) */
   readonly effectFlags?: number;
-  /** Date d'expiration pour messages éphémères */
+  /**
+   * Échéance SERVIE À CE LECTEUR pour un éphémère (#7451) : `D(lecteur)` pour un
+   * destinataire, la plus tardive des `D` connues pour l'expéditeur, absente
+   * tant qu'aucun décompte n'a démarré. Ce n'est PAS la colonne `Message.expiresAt`,
+   * qui porte l'heure interne de destruction. Pour un message non éphémère,
+   * c'est la grâce de vue unique, inchangée.
+   */
   readonly expiresAt?: Date;
+  /**
+   * Durée d'un message éphémère, en secondes (#7451).
+   *
+   * Servie PARTOUT — REST, `message:new`, push — parce qu'elle est la même pour
+   * tout le monde. `expiresAt`, lui, est par lecteur et n'accompagne jamais une
+   * diffusion de room : un client qui reçoit la durée sans échéance décompte
+   * depuis SA réception locale.
+   */
+  readonly ephemeralDuration?: number;
 
   // ===== ÉPINGLAGE =====
   /** Date à laquelle le message a été épinglé (null = non épinglé) */
@@ -214,6 +233,8 @@ export interface GatewayMessage {
   readonly translations?: readonly MessageTranslation[];
   /** Message de réponse référencé */
   readonly replyTo?: GatewayMessage;
+  /** #9915 — sur un message CITÉ : nombre total de photos et vidéos (les pièces servies sont plafonnées à quatre). */
+  readonly visualAttachmentCount?: number;
   /** Réactions (optionnel: include_reactions=true) */
   readonly reactions?: readonly MessageReaction[];
   /** Pièces jointes */
@@ -275,16 +296,6 @@ export interface ReadStatus {
   readonly userId: string;
   readonly readAt?: Date;
   readonly receivedAt?: Date;
-}
-
-/**
- * Permissions disponibles pour un message
- */
-export interface MessagePermissions {
-  readonly canEdit: boolean;
-  readonly canDelete: boolean;
-  readonly canTranslate: boolean;
-  readonly canReply: boolean;
 }
 
 /**

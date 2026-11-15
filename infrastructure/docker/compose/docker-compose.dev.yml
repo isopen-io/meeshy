@@ -200,6 +200,25 @@ services:
       timeout: 5s
       retries: 2
       start_period: 120s
+    labels:
+      # unhealthy déclenche un restart (#5610) — voir le service `autoheal`.
+      - "autoheal=true"
+
+  # Autoheal — restaure un conteneur `unhealthy` (#5610 : le translator est
+  # resté bloqué 7 jours en production, `restart: unless-stopped` ne
+  # réagissant qu'à une sortie de process, jamais à un healthcheck rouge).
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: meeshy-dev-autoheal
+    restart: unless-stopped
+    profiles: ["full"]
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=30
+      - AUTOHEAL_START_PERIOD=60
+      - AUTOHEAL_DEFAULT_STOP_TIMEOUT=10
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
   # ===========================================================================
   # GATEWAY - API Service (profile: full)
@@ -236,6 +255,8 @@ services:
       ATTACHMENT_MASTER_KEY: ${ATTACHMENT_MASTER_KEY:-ZGV2LWF0dGFjaG1lbnQta2V5LTMyLWJ5dGVzLW9ubHk=}
       # User initialization
       FORCE_DB_RESET: ${FORCE_DB_RESET:-false}
+      WORLD_SEED_ENABLED: ${WORLD_SEED_ENABLED:-true}
+      WORLD_ADMIN_EMAILS: ${WORLD_ADMIN_EMAILS:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@meeshy.local}
       MEESHY_PASSWORD: ${MEESHY_PASSWORD:-meeshy123}
@@ -359,7 +380,7 @@ services:
     profiles: ["full"]
     network_mode: host
     volumes:
-      - ../config/turnserver.conf:/etc/turnserver.conf:ro
+      - ../../config/turnserver.conf:/etc/turnserver.conf:ro
     healthcheck:
       test: ["CMD", "turnutils_stunclient", "-p", "3478", "localhost"]
       interval: 30s

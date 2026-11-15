@@ -7,7 +7,10 @@ import PencilKit
 // MARK: - StoryComposerViewModel + Slides
 
 extension StoryComposerViewModel {
-    var currentSlide: StorySlide {
+    // `public` (Phase 2, #3939) : le meuble app-side (`MeeshyComposerHost`) lie
+    // `EmbeddedSceneCanvas` à la slide courante pour l'incruster dans l'écran
+    // document. Déjà exposée par le protocole `StoryComposerProviding`.
+    public var currentSlide: StorySlide {
         get {
             // The composer holds the invariant `slides` is never empty
             // (init seeds [StorySlide()], removeSlide refuses to drop the
@@ -26,9 +29,9 @@ extension StoryComposerViewModel {
         }
     }
 
-    var canAddSlide: Bool { slides.count < 10 }
+    public var canAddSlide: Bool { slides.count < 10 }
 
-    var currentSlideDuration: Float {
+    public var currentSlideDuration: Float {
         // Source de vérité = `effects.timelineDuration` (autoritaire, lu par
         // `computedTotalDuration`). Régler explicitement la durée du slide via ce
         // contrôle POSE donc un pin timeline — sinon le réglage serait ignoré au
@@ -36,7 +39,9 @@ extension StoryComposerViewModel {
         // retombe sur la durée auto du contenu tant qu'aucun pin n'est posé.
         get { Float(currentSlide.effects.timelineDuration ?? currentSlide.computedTotalDuration()) }
         set {
-            let clamped = max(2, min(600, newValue))
+            let ceiling = max(2, StoryComposerLimits.remainingDuration(excludingSceneAt: currentSlideIndex, of: slides))
+            let clamped = max(2, min(ceiling, newValue))
+            if newValue > ceiling { refuse(.duration) }
             var slide = currentSlide
             slide.duration = TimeInterval(clamped)            // miroir legacy
             slide.effects.timelineDuration = Double(clamped)  // autoritaire
@@ -44,17 +49,23 @@ extension StoryComposerViewModel {
         }
     }
 
+    /// La slide visée par un travail ASYNCHRONE (sélecteur de photos, mesure
+    /// d'un asset) : celle qu'il a épinglée, sinon la courante. Une slide
+    /// épinglée SUPPRIMÉE entre-temps ne retombe plus sur la courante — le
+    /// média, sa durée ou son URL atterrissaient sur la slide visible, celle
+    /// d'un autre contenu.
+    func slideIndex(pinnedTo slideId: String?) -> Int? {
+        if let slideId {
+            return slides.firstIndex { $0.id == slideId }
+        }
+        return slides.indices.contains(currentSlideIndex) ? currentSlideIndex : nil
+    }
+
     func autoExtendDuration(forElementEnd end: Float, slideId: String? = nil) {
         // Target the slide that owns the element, NOT the currently-visible one.
         // Without this, a video added to slide 0 while the user is on slide 1
         // (PhotosPicker async race) would extend slide 1's duration.
-        let targetIndex: Int = {
-            if let id = slideId, let idx = slides.firstIndex(where: { $0.id == id }) {
-                return idx
-            }
-            return currentSlideIndex
-        }()
-        guard slides.indices.contains(targetIndex) else { return }
+        guard let targetIndex = slideIndex(pinnedTo: slideId) else { return }
         // Miroir legacy : `slide.duration` n'est plus la source de vérité (ignoré par
         // `computedTotalDuration`). Le contenu foreground est désormais couvert par
         // `contentDerivedDuration()` (qui inclut les vidéos non-bg), et le timeline pose
@@ -62,23 +73,25 @@ extension StoryComposerViewModel {
         // on n'écrit PAS de pin ici (éviterait un pin obsolète après suppression du média).
         let current = Float(slides[targetIndex].duration)
         if end > current {
-            slides[targetIndex].duration = TimeInterval(min(600, end + 0.5))
+            let room = StoryComposerLimits.remainingDuration(excludingSceneAt: targetIndex, of: slides)
+            slides[targetIndex].duration = TimeInterval(min(max(current, room), end + 0.5))
         }
     }
 
-    func addSlide() {
+    public func addSlide() {
         guard canAddSlide else { return }
         let slide = StorySlide(order: slides.count)
         slides.append(slide)
         currentSlideIndex = slides.count - 1
     }
 
-    func removeSlide(at index: Int) {
+    public func removeSlide(at index: Int) {
         guard slides.count > 1, slides.indices.contains(index) else { return }
         let slide = slides[index]
         let slideId = slide.id
         let mediaIds = (slide.effects.mediaObjects ?? []).map(\.id)
         let audioIds = (slide.effects.audioPlayerObjects ?? []).map(\.id)
+        let stickerIds = (slide.effects.stickerObjects ?? []).map(\.id)
         slides.remove(at: index)
         // C9 Inc.3 — retrait PARESSEUX (parité deleteElement) : un slide
         // supprimé reste restaurable par l'undo global avec ses ressources.
@@ -94,12 +107,21 @@ extension StoryComposerViewModel {
             if let url = loadedAudioURLs.removeValue(forKey: id) { retiredAudioURLs[id] = url }
             zIndexMap.removeValue(forKey: id)
         }
+        // Parité `deleteElement` pour les stickers image (#3956) : leurs
+        // ressources partaient avec la slide sans jamais être mises de côté.
+        for id in stickerIds {
+            if let img = loadedImages.removeValue(forKey: id) { retiredImages[id] = img }
+            if let bytes = loadedStickerAnimations.removeValue(forKey: id) {
+                retiredStickerAnimations[id] = bytes
+            }
+            zIndexMap.removeValue(forKey: id)
+        }
         // Supprimer un slide AVANT le slide courant décale tout le contenu d'un
         // cran vers la gauche : il faut décrémenter `currentSlideIndex` pour
         // rester sur le MÊME slide que l'on éditait. Sans ça (l'ancien code ne
         // faisait que clamper `>= count`), supprimer un slide antérieur via le
         // menu contextuel d'une vignette faisait sauter l'édition au slide
-        // suivant (bug 2026-06-01). Le clamp couvre ensuite le cas « on a
+        // suivant. Le clamp couvre ensuite le cas « on a
         // supprimé le dernier slide qui était le courant ».
         if index < currentSlideIndex {
             currentSlideIndex -= 1
@@ -126,7 +148,7 @@ extension StoryComposerViewModel {
     /// silently still pointing at via the shared old key.
     ///
     /// Mirrors the per-element id reassignment performed by `duplicateElement`.
-    func duplicateSlide(at index: Int) {
+    public func duplicateSlide(at index: Int) {
         guard canAddSlide, slides.indices.contains(index) else { return }
         let originalSlideId = slides[index].id
         var copy = slides[index]
@@ -202,7 +224,7 @@ extension StoryComposerViewModel {
         reorderSlides()
     }
 
-    func selectSlide(at index: Int) {
+    public func selectSlide(at index: Int) {
         guard slides.indices.contains(index) else { return }
         saveBackgroundTransform()
         selectedElementId = nil
@@ -221,7 +243,7 @@ extension StoryComposerViewModel {
     /// so a move needs no cache surgery — only `order` is reindexed. (it.37: was a
     /// remove+insert with a `destination < count` guard that rejected move-to-end and
     /// produced an off-by-one vs the drop offset; that path was also entirely unwired.)
-    func moveSlide(from source: Int, to destination: Int) {
+    public func moveSlide(from source: Int, to destination: Int) {
         guard slides.indices.contains(source),
               destination >= 0, destination <= slides.count,
               source != destination, source != destination - 1 else { return }

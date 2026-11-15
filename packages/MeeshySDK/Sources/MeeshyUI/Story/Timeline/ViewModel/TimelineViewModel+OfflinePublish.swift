@@ -22,7 +22,7 @@ extension TimelineViewModel {
     // MARK: - Logger
 
     internal var offlinePublishLogger: Logger {
-        Logger(subsystem: "me.meeshy.app", category: "media")
+        MeeshyLog.logger(.media)
     }
 
     /// Resets the snackbar confirmation flag after the view has shown it.
@@ -99,8 +99,7 @@ extension TimelineViewModel {
         // clipTransitions) is round-trip-pinned by
         // `TimelineOfflinePayloadSchemaTests`.
         let payloadJSON: String = {
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
+            let encoder = MeeshyCoders.encoder(.persistence)
             var slide = StorySlide(id: project.slideId)
             project.apply(to: &slide)
             guard let data = try? encoder.encode([slide]),

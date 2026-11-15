@@ -1,0 +1,75 @@
+package me.meeshy.sdk.model.engagement
+
+import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.ConversationEngagementSnapshot
+import org.junit.Test
+
+class HeaderFlameLawTest {
+
+    @Test
+    fun `the flame hangs under the folded avatar while a streak runs and nobody dismissed it`() {
+        assertThat(HeaderFlameLaw.isShown(headerExpanded = false, dismissed = false, hasEngagement = true)).isTrue()
+        assertThat(HeaderFlameLaw.isShown(headerExpanded = true, dismissed = false, hasEngagement = true)).isFalse()
+        assertThat(HeaderFlameLaw.isShown(headerExpanded = false, dismissed = true, hasEngagement = true)).isFalse()
+        assertThat(HeaderFlameLaw.isShown(headerExpanded = false, dismissed = false, hasEngagement = false)).isFalse()
+    }
+
+    @Test
+    fun `unfolding the header lights the flame again, folding keeps the dismissal`() {
+        assertThat(HeaderFlameLaw.dismissedAfterHeaderExpanded(expanded = true, wasDismissed = true)).isFalse()
+        assertThat(HeaderFlameLaw.dismissedAfterHeaderExpanded(expanded = false, wasDismissed = true)).isTrue()
+        assertThat(HeaderFlameLaw.dismissedAfterHeaderExpanded(expanded = false, wasDismissed = false)).isFalse()
+    }
+
+    @Test
+    fun `the glow lives in the first orbit then dies, the flame ignites afterwards`() {
+        assertThat(HeaderFlameLaw.glowLength(0f)).isEqualTo(0f)
+        assertThat(HeaderFlameLaw.glowLength(0.225f)).isWithin(1e-4f).of(0.32f)
+        assertThat(HeaderFlameLaw.glowLength(0.6f)).isEqualTo(0f)
+        assertThat(HeaderFlameLaw.glowOpacity(0.6f)).isEqualTo(0f)
+        assertThat(HeaderFlameLaw.flameScale(0.3f)).isEqualTo(1f)
+        assertThat(HeaderFlameLaw.flameScale(0.625f)).isWithin(1e-4f).of(HeaderFlameLaw.PEAK_SCALE)
+        assertThat(HeaderFlameLaw.flameScale(1f)).isEqualTo(1f)
+    }
+
+    @Test
+    fun `the flame dims during the orbit and is whole again after`() {
+        assertThat(HeaderFlameLaw.flameOpacity(0f)).isEqualTo(1f)
+        assertThat(HeaderFlameLaw.flameOpacity(0.2f)).isLessThan(0.5f)
+        assertThat(HeaderFlameLaw.flameOpacity(0.5f)).isEqualTo(1f)
+    }
+
+    @Test
+    fun `the glow head makes one eased turn from the bottom`() {
+        assertThat(HeaderFlameLaw.glowHeadDegrees(0f)).isEqualTo(90f)
+        assertThat(HeaderFlameLaw.glowHeadDegrees(0.45f)).isWithin(1e-3f).of(450f)
+        assertThat(HeaderFlameLaw.glowHeadDegrees(2f)).isWithin(1e-3f).of(450f)
+    }
+
+    @Test
+    fun `touching the flame opens a card with the streak, today and the total (#17770)`() {
+        val running = ConversationEngagementSnapshot("c", totalPoints = 340, todayPoints = 40, streakDays = 12, day = "2026-11-12")
+        assertThat(HeaderFlameLaw.card(running)).isEqualTo(HeaderFlameCard(streakDays = 12, todayPoints = 40, totalPoints = 340))
+    }
+
+    @Test
+    fun `no running streak, no flame, so no card (#17770)`() {
+        assertThat(HeaderFlameLaw.card(ConversationEngagementSnapshot("c", totalPoints = 340, streakDays = 0))).isNull()
+        assertThat(HeaderFlameLaw.card(null)).isNull()
+    }
+
+    @Test
+    fun `the unfolded pill opens the same card as the folded flame while a streak runs (#17987)`() {
+        val running = ConversationEngagementSnapshot("c", totalPoints = 340, todayPoints = 40, streakDays = 12, day = "2026-11-13")
+        assertThat(HeaderFlameLaw.pillTap(running))
+            .isEqualTo(EngagementPillTap.FlameCard(HeaderFlameCard(streakDays = 12, todayPoints = 40, totalPoints = 340)))
+    }
+
+    @Test
+    fun `the total alone leads to My Legend, and no points means no gesture (#17987)`() {
+        assertThat(HeaderFlameLaw.pillTap(ConversationEngagementSnapshot("c", totalPoints = 340, streakDays = 0)))
+            .isEqualTo(EngagementPillTap.Legend)
+        assertThat(HeaderFlameLaw.pillTap(ConversationEngagementSnapshot("c", totalPoints = 0, streakDays = 0))).isNull()
+        assertThat(HeaderFlameLaw.pillTap(null)).isNull()
+    }
+}

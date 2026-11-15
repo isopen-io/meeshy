@@ -29,6 +29,21 @@ jest.mock('../../../utils/pagination', () => ({
 // participant : `{ ...undefined }` le réduisait à une déclaration vide, et
 // toute assertion sur ce `user` passait pour la mauvaise raison.
 
+// La présence, elle, EST mockée : ce fichier couvre le ROUTAGE CRUD des 16
+// endpoints, pas la politique de présence (gardée par
+// `communities-presence-gate.test.ts`). Le critère STRICT (directive produit
+// 2026-08-25) interroge en vrai `user.findMany`/`friendRequest.findMany`/les
+// préférences — les doubler ici serait de la profondeur hors sujet ; ce
+// fichier vérifie seulement que la route répond, pas qui elle sert.
+const mockResolveForTargets = jest.fn<any>().mockResolvedValue(new Map());
+const mockResolveForTarget = jest.fn<any>().mockResolvedValue({ showOnline: false, showLastSeenTimestamp: false });
+jest.mock('../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({
+    resolveForTargets: (...args: any[]) => mockResolveForTargets(...args),
+    resolveForTarget: (...args: any[]) => mockResolveForTarget(...args),
+  }),
+}));
+
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { communityRoutes } from '../../../routes/communities';
@@ -113,9 +128,20 @@ async function buildApp(): Promise<FastifyInstance> {
     },
     conversation: {
       findMany: jest.fn().mockResolvedValue([]),
+      // #4165 : `GET /communities/:id/conversations` compte le VRAI total à
+      // part de la page (`.count()`), en plus du `.findMany` déjà mocké.
+      count: jest.fn().mockResolvedValue(0),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
+    userCommunityPreferences: {
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
+    conversationShare: {
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
+    $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
     user: {
-      findFirst: jest.fn().mockResolvedValue({ id: OTHER_USER_ID, username: 'bob' }),
+      findFirst: jest.fn().mockImplementation(async ({ where }: any) => (where?.OR ? null : { id: OTHER_USER_ID, username: 'bob' })),
       findUnique: jest.fn().mockResolvedValue({ id: OTHER_USER_ID, username: 'bob' }),
     },
   });
@@ -381,11 +407,25 @@ describe('DELETE /communities/:id/members/:memberId', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('returns 200 on successful member removal', async () => {
+  it('returns 200 on successful member removal, sets isActive:false + leftAt instead of deleting the row (#5800)', async () => {
     // Default: community.members[0].role = 'admin'
+    (app as any).prisma.communityMember.findFirst.mockResolvedValueOnce({
+      id: MEMBER_ID, communityId: COMM_ID, userId: MEMBER_ID, isActive: true,
+    });
     const res = await app.inject({ method: 'DELETE', url: '/communities/' + COMM_ID + '/members/' + MEMBER_ID });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+    expect((app as any).prisma.communityMember.deleteMany).not.toHaveBeenCalled();
+    expect((app as any).prisma.communityMember.update).toHaveBeenCalledWith({
+      where: { id: MEMBER_ID },
+      data: { isActive: false, leftAt: expect.any(Date) },
+    });
+  });
+
+  it('returns 404 when the target is not an active member', async () => {
+    const res = await app.inject({ method: 'DELETE', url: '/communities/' + COMM_ID + '/members/' + MEMBER_ID });
+    expect(res.statusCode).toBe(404);
+    expect((app as any).prisma.communityMember.deleteMany).not.toHaveBeenCalled();
   });
 });
 
@@ -512,6 +552,7 @@ describe('POST /communities/:id/leave', () => {
 
   it('returns 200 on successful leave', async () => {
     (app as any).prisma.community.findFirst.mockResolvedValueOnce({ id: COMM_ID, createdBy: OTHER_USER_ID });
+    (app as any).prisma.communityMember.findFirst.mockResolvedValueOnce({ id: 'mem-leave', userId: USER_ID, isActive: true });
     const res = await app.inject({ method: 'POST', url: '/communities/' + COMM_ID + '/leave' });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);

@@ -1,0 +1,299 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+// MARK: - Le menu ⋯ du couloir haut
+//
+// Extrait de `ConversationMediaGalleryView.swift` (#6145), qui était à 989
+// lignes sur un plafond DUR de 1 200 : le menu et ses deux transports ne s'y
+// ajoutaient pas sans consommer la marge que #6141 venait déjà d'entamer. La
+// découpe suit la règle des frères précédents — une responsabilité par fichier.
+//
+// Une garde ancrée sur le FICHIER racine suit ce code dans le même commit,
+// parce qu'une découpe éteint en silence ce qui s'ancre sur un chemin
+// (leçon 578) : `LocalizationConsistencyTests.fullyLocalizedScreens` — les clés
+// neuves du menu doivent rester tenues par le cliquet qui épingle l'écran.
+// Le disque du ⋯ est celui du chrome plein écran (`FullscreenMoreMenu`, #8878).
+
+// MARK: - Ce que cette page-ci sait enregistrer
+
+/// **Une page porte une ŒUVRE ou une PIÈCE, jamais les deux** (#7052).
+///
+/// Le menu pose cette question UNE fois, et trois lecteurs la lisent : son
+/// MONTAGE (pas de sujet ⇒ pas de menu, loi 4), le TRANSPORT d'« Enregistrer »,
+/// et la NOTE de marque. Trois résolutions parallèles divergeraient, et l'une
+/// d'elles le prouve déjà : `brandingNote`, adossée à `currentSaveRequest`
+/// seule, rendait `""` — un verbe sans sous-titre — dès que le menu se montait
+/// sur une surface que cette requête ne décrit pas.
+enum GallerySaveSubject {
+
+    /// **Une SCÈNE de post.** Rien d'enregistrable ne vit sur sa pièce jointe
+    /// (#6709 : elle est synthétique, sa seule URL est la vignette de son
+    /// média — l'écrire sortirait un fond sans le texte ni les stickers de
+    /// l'auteur). Ce qui s'enregistre est l'œuvre BAKÉE, par la chaîne d'export
+    /// de story, sans prélude ni outro (`StoryPhotoSaveService.save(scene:)`).
+    case scene(GallerySceneItem)
+
+    /// **Une pièce TRANSMISE** : le fichier tel qu'il est arrivé, par le
+    /// composant unifié d'enregistrement.
+    case media(MediaSaveRequest)
+
+    /// Ce que le prédicat de la marque interroge — l'origine d'abord, la
+    /// famille ensuite (`MeeshyMediaSaveBranding.stamps`). Une scène est une
+    /// œuvre composée chez nous et sort en MP4 : le bake y grave
+    /// `MeeshyExportWatermark`, que `appendsBrandOutro: false` ne retire pas —
+    /// il ne retire que la CARTE DE FIN.
+    var branding: (origin: MediaOrigin, kind: AttachmentKind) {
+        switch self {
+        case .scene: return (.composed, .video)
+        case .media(let request): return (request.origin, request.kind)
+        }
+    }
+
+    /// **Ce que l'enregistrement fera se LIT sur la règle, il ne se rédige pas.**
+    ///
+    /// La note vient du prédicat de la marque lui-même. Une phrase écrite à la
+    /// main dirait ce que son auteur croyait le jour où il l'a tapée ; le jour
+    /// où la règle change, les deux divergeraient sans que rien ne rougisse —
+    /// et le menu affirmerait au lecteur le contraire de ce qui part sur son
+    /// disque.
+    ///
+    /// **Elle se lit sur le SUJET, pas sur la requête** (#7052). Une page scène
+    /// n'a pas de `MediaSaveRequest` — sa pièce est synthétique — et la note
+    /// rendait donc `""` le jour où le menu s'y est monté : le verbe perdait
+    /// son sous-titre sur la SEULE surface dont l'enregistrement porte
+    /// réellement la marque.
+    var brandingNote: String {
+        MeeshyMediaSaveBranding.stamps(origin: branding.origin, kind: branding.kind)
+            ? String(localized: "gallery.menu.brand.meeshy",
+                     defaultValue: "Œuvre composée — l'enregistrement porte la marque Meeshy.",
+                     bundle: .main)
+            : String(localized: "gallery.menu.brand.none",
+                     defaultValue: "Média original — enregistré tel quel, sans marque.",
+                     bundle: .main)
+    }
+
+    /// **« Partager » ne s'offre QUE sur une pièce**, et c'est
+    /// une décision, pas un oubli. Ce verbe va DROIT à la share sheet système
+    /// avec l'URL de la requête ; sur une page scène cette URL est la vignette
+    /// du média, donc le partage sortirait exactement le fichier que #6709 a
+    /// retiré du menu. Un partage HONNÊTE d'une scène demanderait d'attendre
+    /// son bake, comme la sheet d'export d'une story — un autre lot. Tant
+    /// qu'il n'existe pas, offrir le verbe serait un contrôle inerte (loi 4).
+    var offersExternalShare: Bool {
+        if case .media = self { return true }
+        return false
+    }
+}
+
+/// Monte le menu ⋯ quand le portillon de sortie laisse partir la pièce de la
+/// page ; sinon réserve sa place, pour que le couloir haut ne bouge pas d'une
+/// page à l'autre.
+///
+/// Il remet aussi le portillon au coordinateur d'enregistrement de la galerie :
+/// les deux transports du menu (`requestSaveCurrent`, `shareCurrentOutsideMeeshy`)
+/// vivent dans une extension, qui ne lit pas l'environnement — c'est le
+/// coordinateur qui refuse pour eux.
+struct GalleryExitGatedMenu<Menu: View>: View {
+    let contentId: String?
+    let coordinator: MediaSaveCoordinator
+    @ViewBuilder let menu: () -> Menu
+    @Environment(\.contentExitGate) private var exitGate
+
+    var body: some View {
+        Group {
+            if let contentId, exitGate.mayLeave(contentId) {
+                menu()
+            } else {
+                Color.clear.frame(width: FullscreenChromeMetrics.tapTarget, height: FullscreenChromeMetrics.tapTarget)
+            }
+        }
+        .onAppear { coordinator.exitGate = exitGate }
+        .adaptiveOnChange(of: exitGate) { _, gate in coordinator.exitGate = gate }
+    }
+}
+
+extension ConversationMediaGalleryView {
+
+    /// **Le sujet de cette page**, lu une fois pour les trois. La scène d'abord :
+    /// elle se lit sur `sceneContext`, jamais sur le MIME (#6709), et c'est ce
+    /// même contexte qui rend `currentSaveRequest` nulle sur cette surface.
+    var currentSaveSubject: GallerySaveSubject? {
+        if let scene = currentScene { return .scene(scene) }
+        return currentSaveRequest.map(GallerySaveSubject.media)
+    }
+
+    /// **Le menu ⋯ — ce que la page sait faire, et ce que chacun fera dit sous
+    /// lui.** Enregistrer, Imager (une scène, #13871), Transférer (#12420 : aussi dans
+    /// le rail) et Partager.
+    ///
+    /// **Il n'y a pas d'entrée « Enregistrer sans la marque »** : la marque se
+    /// déduit de l'ORIGINE du média (#6146, `MeeshyMediaSaveBranding.stamps`), et
+    /// un média de conversation est `.transmitted` — offrir le choix serait un
+    /// contrôle sans effet (loi 4).
+    ///
+    /// **Aucune entrée n'est listée sans chemin.** Sur une PIÈCE, Enregistrer et
+    /// Partager passent par le composant unifié `mediaSaveFlow` — la sheet de
+    /// destinations, ou droit à sa destination `.share`. Sur une SCÈNE,
+    /// « Enregistrer » part sur la chaîne d'export de story (#7052) et
+    /// « Partager » n'est pas listé (`GallerySaveSubject.offersExternalShare`).
+    /// Transférer est le chemin de l'hôte (`onForwardMedia`).
+    ///
+    /// **Une pièce que la loi de sortie retient n'a pas de menu** (#9573) : la
+    /// photo d'une flamme ou d'une vue unique ne sort pas. Le portillon se lit par
+    /// `GalleryExitGatedMenu`, dans l'environnement.
+    @ViewBuilder
+    var overflowMenu: some View {
+        if let subject = currentSaveSubject {
+            GalleryExitGatedMenu(contentId: currentExitContentId, coordinator: saveCoordinator) {
+                FullscreenMoreMenu(isBusy: saveCoordinator.isProcessing) {
+                    Button {
+                        requestSaveCurrent()
+                    } label: {
+                        // Trois vues dans le label d'une entrée de menu : titre,
+                        // SOUS-TITRE, glyphe. C'est le seul emplacement où la note
+                        // de marque peut vivre sous son verbe plutôt qu'à côté.
+                        Text(saveVerb)
+                        Text(subject.brandingNote)
+                        Image(systemName: "arrow.down.to.line")
+                    }
+                    .accessibilityLabel(saveVerb)
+                    .accessibilityHint(subject.brandingNote)
+
+                    if case .scene(let scene) = subject {
+                        ImagerMenuButton(action: { imageCurrent(scene) })
+                    }
+
+                    if currentOffersForward {
+                        Button {
+                            forwardCurrent()
+                        } label: {
+                            Label(MessageActionVerb.forward.label, systemImage: MessageActionVerb.forward.filledSymbol)
+                        }
+                        .accessibilityLabel(MessageActionVerb.forward.label)
+                    }
+
+                    if subject.offersExternalShare {
+                        Button {
+                            shareCurrentOutsideMeeshy()
+                        } label: {
+                            Label(shareVerb, systemImage: "square.and.arrow.up")
+                        }
+                        .accessibilityLabel(shareVerb)
+                    }
+                }
+                .disabled(saveCoordinator.isProcessing)
+                .accessibilityValue(saveStateAccessibilityValue)
+                // Le flux vit DANS la présentation plein écran : une sheet attachée
+                // sous un `fullScreenCover` ne se présente pas (SwiftUI iOS 16).
+                .mediaSaveFlow(saveCoordinator)
+            }
+        } else {
+            Color.clear.frame(width: FullscreenChromeMetrics.tapTarget, height: FullscreenChromeMetrics.tapTarget)
+        }
+    }
+
+    /// L'identifiant que le portillon juge : celui de la pièce affichée.
+    private var currentExitContentId: String? {
+        currentIndex < allAttachments.count ? allAttachments[currentIndex].id : nil
+    }
+
+    // MARK: - Les deux transports
+
+    /// **UN verbe, DEUX chemins — celui de la page décide** (#7052). Une pièce
+    /// ouvre la sheet de destinations du composant unifié ; une SCÈNE part sur la
+    /// chaîne d'export de story (`StoryPhotoSaveService.save(scene:)`, sans prélude
+    /// ni outro) — le coordinateur enregistre un FICHIER DISTANT, et une œuvre
+    /// composée n'en a aucun tant qu'elle n'est pas bakée. Le rail et le ⋯
+    /// appellent ce même transport (#12420) : deux boutons, un seul chemin.
+    ///
+    /// **Pas d'anneau de progression, et c'est mesuré** : observer
+    /// `StoryPhotoSaveService.jobs` republierait la racine à chaque tour de
+    /// progression, sous un pager qui doit tenir ses 60 images. Le retour immédiat
+    /// est le haptique, la fin est le toast du service ; un second tap pendant le
+    /// bake est ignoré par `bakeThenSave` (garde `jobs`).
+    func requestSaveCurrent() {
+        guard let subject = currentSaveSubject, saveCoordinator.mayLeave(currentExitContentId) else { return }
+        HapticFeedback.light()
+        switch subject {
+        case .scene(let scene):
+            StoryPhotoSaveService.shared.save(scene: scene)
+        case .media(let request):
+            saveCoordinator.save(request)
+        }
+    }
+
+    func imageCurrent(_ scene: GallerySceneItem) {
+        guard saveCoordinator.mayLeave(currentExitContentId) else { return }
+        HapticFeedback.light()
+        MessageCardExportPresenter.present(ImagerCardRequest.scene(scene, accentColor: accentColor))
+    }
+
+    /// Va DROIT à la share sheet système : c'est tout ce que « Partager » promet.
+    func shareCurrentOutsideMeeshy() {
+        guard let request = currentSaveRequest, saveCoordinator.mayLeave(currentExitContentId) else { return }
+        HapticFeedback.light()
+        Task { await saveCoordinator.pick(.share, request: request) }
+    }
+
+    /// **Transférer** (#12420) : l'hôte résout le porteur et ouvre son écran de
+    /// partage ; la galerie ne connaît que la pièce.
+    var currentOffersForward: Bool {
+        guard onForwardMedia != nil, let att = currentAttachment,
+              !ComposableAttachment.isProtected(att) else { return false }
+        return forwardableMedia?(att) ?? true
+    }
+
+    func forwardCurrent() {
+        guard currentOffersForward, let att = currentAttachment else { return }
+        HapticFeedback.light()
+        onForwardMedia?(att)
+    }
+
+    /// **Un seul site compose la requête**, que les deux verbes partagent. Deux
+    /// compositions parallèles divergeraient sur l'origine ou sur le nom de
+    /// fichier, et le média sortirait différemment selon l'entrée choisie.
+    var currentSaveRequest: MediaSaveRequest? {
+        guard currentIndex < allAttachments.count else { return nil }
+        let attachment = allAttachments[currentIndex]
+        // **Une scène ne s'enregistre pas par ce menu** (#6709). Sa pièce est
+        // SYNTHÉTIQUE : sa seule URL est la vignette de son média, et
+        // l'enregistrer ferait sortir un fond sans le texte ni les stickers que
+        // l'auteur a posés — l'œuvre composée n'est pas ce fichier. Sans
+        // requête, le menu n'est pas monté (loi 4).
+        guard sceneContext?.scenes[attachment.id] == nil else { return nil }
+        let urlString = attachment.fileUrl.isEmpty
+            ? (attachment.thumbnailUrl ?? "")
+            : attachment.fileUrl
+        guard !urlString.isEmpty else { return nil }
+        return MediaSaveRequest(
+            kind: attachment.type == .video ? .video : .image,
+            // La galerie d'une CONVERSATION ne montre que du média transmis —
+            // jamais une œuvre composée chez nous. L'origine se déclare, elle
+            // ne se devine pas (`MediaOrigin`).
+            origin: .transmitted,
+            remoteURLString: urlString,
+            suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
+            attachmentId: attachment.id.isEmpty ? nil : attachment.id
+        )
+    }
+
+    // MARK: - Ce que le menu DIT
+
+    private var saveVerb: String {
+        String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main)
+    }
+
+    private var shareVerb: String {
+        String(localized: "gallery.menu.share", defaultValue: "Partager", bundle: .main)
+    }
+
+    /// Annonce VoiceOver de l'état d'enregistrement. Vide au repos — un lecteur
+    /// d'écran qui énoncerait « au repos » à chaque survol serait bavard sans
+    /// informer.
+    var saveStateAccessibilityValue: String {
+        saveCoordinator.isProcessing
+            ? String(localized: "common.saving", defaultValue: "Enregistrement…", bundle: .main)
+            : ""
+    }
+}

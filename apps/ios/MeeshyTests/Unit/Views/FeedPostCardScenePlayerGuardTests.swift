@@ -27,12 +27,15 @@ import XCTest
 ///    de la carte (texte, auteur), donc le plein écran EXISTANT
 ///    (PostDetailView) — jamais un nouveau `.fullScreenCover`/`.sheet`
 ///    dédié à la scène (« pas de nouveau viewer ») ;
-/// 5. `isPlaying` est un `.constant(false)` figé — jamais un `@State` de
-///    lecture basculable (recherche par MOTIF, pas par nom littéral — un
-///    renommage ne doit pas pouvoir contourner la garde) : la carte de POST
-///    naît en pause et le RESTE (surface NEUVE, revue Fable n°25 — le
-///    mouvement vit dans la destination du tap, pas dans la carte), donc
-///    aucun AVPlayer/décodage actif ici ;
+/// 5. `isPlaying` projette l'ÉLECTION du viewport (`.constant(isActive)`,
+///    valeur reçue du container) et la scène RAPPORTE sa frame — jamais un
+///    `.constant(false)` figé, et jamais un `@State` de lecture basculable
+///    (recherche par MOTIF, pas par nom littéral — un renommage ne doit pas
+///    pouvoir contourner la garde). Le gel d'origine (revue Fable n°25) est
+///    renversé par la directive porteur du 2026-09-05 : « repartage ou non,
+///    les scènes sont comme les vidéos ». La carte ne DÉCIDE toujours pas de
+///    sa lecture — le viewport le fait pour tout le fil, et au plus une
+///    surface décode à la fois ;
 /// 6. l'élément d'accessibilité de la scène est une FEUILLE activable
 ///    (`.accessibilityElement(children: .ignore)` + `.accessibilityLabel` +
 ///    `.accessibilityAction`) — jamais un CONTENEUR (`children: .contain`)
@@ -40,8 +43,27 @@ import XCTest
 ///    promis (correctif rejet DoD rév. 15, constat 4).
 final class FeedPostCardScenePlayerGuardTests: XCTestCase {
 
-    private func source() throws -> String {
+    /// **Deux sources, nommées par RESPONSABILITÉ — jamais par fichier seul.**
+    ///
+    /// La surface de scène a quitté `FeedPostCard.swift` le 2026-09-05
+    /// (`FeedSceneAutoplay.swift`) : ce fichier est en dette de taille, et la
+    /// directive interdit d'y ajouter avant d'en avoir extrait. Une garde
+    /// ancrée sur un chemin en dur vire au rouge à chaque découpe sans qu'aucun
+    /// COMPORTEMENT n'ait changé — d'où deux accesseurs qui disent ce qu'ils
+    /// cherchent : l'HÔTE (le site d'appel et son accessibilité) et la SURFACE
+    /// (le player lui-même).
+    private func hostSource() throws -> String {
         try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/FeedPostCard.swift")
+    }
+
+    private func sceneSource() throws -> String {
+        try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/FeedSceneAutoplay.swift")
+    }
+
+    /// Le corpus des deux — pour les gardes qui interdisent quelque chose
+    /// PARTOUT, quel que soit le fichier où la scène a fini par vivre.
+    private func source() throws -> String {
+        try hostSource() + "\n" + sceneSource()
     }
 
     /// Le bloc de code entre deux marqueurs (le second exclu). `end == nil`
@@ -54,10 +76,12 @@ final class FeedPostCardScenePlayerGuardTests: XCTestCase {
         return String(tail[..<endRange.lowerBound])
     }
 
+    /// Le corps de la SURFACE de scène — `PostSceneCard.body`, borné par la
+    /// conformance `Equatable` qui la suit.
     private func cardScenePlayerBlock(in text: String) throws -> String {
-        let block = block(from: "private func cardScenePlayer(document:", to: "var body: some View {", in: text)
+        let block = block(from: "struct PostSceneCard: View {", to: "extension PostSceneCard: Equatable", in: text)
         if block.isEmpty {
-            XCTFail("cardScenePlayer(document:) introuvable dans FeedPostCard.swift")
+            XCTFail("PostSceneCard introuvable dans FeedSceneAutoplay.swift")
         }
         return block
     }
@@ -101,7 +125,7 @@ final class FeedPostCardScenePlayerGuardTests: XCTestCase {
     }
 
     func test_gatedOnOwnCanvasV3_notRepostCanvas() throws {
-        let text = try source()
+        let text = try hostSource()
         XCTAssertTrue(
             text.contains("post.storyEffects?.canvasV3"),
             "La porte doit lire le storyEffects PROPRE du post — jamais celui d'un repost " +
@@ -112,7 +136,7 @@ final class FeedPostCardScenePlayerGuardTests: XCTestCase {
     // MARK: - 2. Prisme Linguistique câblé (correctif rejet DoD rév. 15, constat 1)
 
     func test_scenePlayer_appliesPreferredContentLanguages() throws {
-        let text = try source()
+        let text = try sceneSource()
         let block = try cardScenePlayerBlock(in: text)
         XCTAssertTrue(
             block.contains(".preferredContentLanguages("),
@@ -121,33 +145,83 @@ final class FeedPostCardScenePlayerGuardTests: XCTestCase {
             "inconditionnellement le texte ORIGINAL de l'auteur, quelle que soit la langue du " +
             "lecteur (violation du Prisme Linguistique, « le prisme s'applique à TOUT le contenu »)."
         )
+        // La SOURCE des langues vit chez le CONTAINER, pas dans la feuille : une
+        // feuille de liste ne lit jamais un singleton global, elle reçoit des
+        // valeurs (« Zero Unnecessary Re-render »). Le témoin interroge donc le
+        // fichier, pas le bloc. Et cette source est le Prisme STRICT du LECTEUR
+        // (#11832) : `preferredContentLanguages` (repli « fr ») sert les défauts
+        // de COMPOSITION, jamais ce qui s'affiche.
         XCTAssertTrue(
-            block.contains("AuthManager.shared.currentUser?.preferredContentLanguages"),
-            "La source des langues préférées doit être la MÊME que celle du voisin " +
-            "StoryRepostEmbedCell (branche isStoryRepost, même fichier) — " +
-            "AuthManager.shared.currentUser?.preferredContentLanguages — jamais une resolution " +
-            "locale divergente ni une liste vide en dur."
+            text.contains("ReaderPrism.resolve(for: AuthManager.shared.currentUser)"),
+            "La scène de carte lit ses langues sur ReaderPrism.resolve(for:) — la descente " +
+            "stricte rangs 1→4, sans repli « fr » — jamais une résolution locale divergente " +
+            "ni une liste vide en dur."
+        )
+        XCTAssertFalse(
+            text.contains("currentUser?.preferredContentLanguages"),
+            "Les défauts de composition ne choisissent pas la langue qu'une carte AFFICHE (#11832)."
         )
     }
 
     // MARK: - 3. Hauteur dérivée du ratio 9:16 sur la largeur RÉELLE (correctif rejet DoD rév. 15, constat 2)
 
+    /// **Le témoin garde la RÈGLE, plus le littéral** (révision 2026-09-06,
+    /// puis #6767 le 2026-09-16).
+    ///
+    /// Il exigeait `.aspectRatio(9.0 / 16.0, …)` au caractère près. Sa raison
+    /// écrite, elle, n'a jamais porté sur le nombre : « dériver la hauteur d'un
+    /// RATIO appliqué à la largeur réellement proposée par le parent, jamais
+    /// une hauteur en POINTS figée sur la largeur maximale ». C'est la forme
+    /// qui compte, et le 9:16 n'en était qu'une valeur.
+    ///
+    /// Le cadrage par contenu (#5322) rend ce ratio VARIABLE : une carte qui
+    /// resserre sur la bande d'une photo paysage adopte le rapport de cette
+    /// bande. Épingler `9.0 / 16.0` interdisait donc la feature au nom d'une
+    /// règle qu'elle respecte.
+    ///
+    /// **#6767 rejoue le même renversement une marche plus haut.** Le ratio
+    /// n'est plus appliqué directement par un `.aspectRatio(…)` sur le corps
+    /// de la carte : il passe par `SceneCardHeightCap`, qui le PLAFONNE en
+    /// hauteur (1,4 × la largeur) sans jamais rogner ni zoomer le contenu.
+    /// Épingler l'ancien `.aspectRatio(…, contentMode: .fit)` littéral aurait
+    /// rougi sur ce correctif légitime.
+    ///
+    /// > Un témoin qui épingle une VALEUR là où sa raison parle d'une FORME
+    /// > rougit sur le premier changement légitime — et pousse à l'affaiblir
+    /// > au lieu de le repointer. Il garde désormais les moitiés qui
+    /// > comptent : un ratio est appliqué (plafonné), et aucune hauteur n'est
+    /// > figée en points.
     func test_scenePlayer_usesAspectRatioNineBySixteen() throws {
-        let text = try source()
+        let text = try sceneSource()
         let block = try cardScenePlayerBlock(in: text)
         XCTAssertTrue(
-            block.contains(".aspectRatio(9.0 / 16.0, contentMode: .fit)"),
-            "La scène de carte doit dériver sa hauteur du ratio 9:16 appliqué à la largeur " +
-            "RÉELLEMENT proposée par le parent — même patron que le voisin StoryRepostEmbedCell " +
-            "(même hôte StoryReaderRepresentable, même fil) — jamais une hauteur en points figée " +
-            "sur la largeur MAXIMALE (420pt × 16/9 = 747pt), qui déforme la scène dès que la " +
-            "largeur réelle de la carte (≈329pt sur iPhone 16 Pro, après le double padding " +
-            "horizontal de 16pt) est inférieure au plafond."
+            block.contains("SceneCardHeightCap(naturalAspect:"),
+            "La scène de carte doit dériver sa hauteur d'un RATIO — plafonné en hauteur par " +
+            "SceneCardHeightCap (#6767) — jamais une hauteur en points figée."
+        )
+        XCTAssertFalse(
+            block.contains(".frame(height:"),
+            "…et jamais d'une hauteur en POINTS figée sur la largeur MAXIMALE " +
+            "(420pt × 16/9 = 747pt), qui déforme la scène dès que la largeur réelle de la " +
+            "carte (≈329pt sur iPhone 16 Pro, après le double padding horizontal de 16pt) " +
+            "est inférieure au plafond."
+        )
+        XCTAssertTrue(
+            block.contains("?? SceneShape.aspect"),
+            "Le 9:16 doit rester le REPLI du rapport NATUREL : sans cadrage à appliquer, la " +
+            "carte part du gabarit de composition de la scène avant que SceneCardHeightCap ne " +
+            "le plafonne — et ce gabarit est la LOI `SceneShape.aspect` (#6904), lue, jamais " +
+            "réécrite."
+        )
+        XCTAssertFalse(
+            block.contains("9.0 / 16.0"),
+            "…et jamais un littéral 9.0 / 16.0 : la carte du fil garde son cadrage d'APERÇU " +
+            "(hors loi par décision du 2026-09-17), mais la valeur du gabarit n'a qu'une source."
         )
     }
 
     func test_scenePlayer_doesNotDeriveHeightFromMeasuredLayout() throws {
-        let text = try source()
+        let text = try sceneSource()
         let block = try cardScenePlayerBlock(in: text)
         XCTAssertFalse(
             block.contains("GeometryReader"),
@@ -160,39 +234,121 @@ final class FeedPostCardScenePlayerGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - 4. Tap → plein écran EXISTANT, pas de nouveau viewer
+    // MARK: - 4. Tap → PLEIN ÉCRAN, et le repli mène quand même quelque part
 
-    func test_tap_routesThroughExistingOnTapPost() throws {
-        let text = try source()
+    /// **La destination du tap a CHANGÉ le 2026-09-05**, sur directive porteur :
+    ///
+    /// > « dans la restitution des cards, le touché de l'image doit afficher en
+    /// > plein écran et non ouvrir les détails du post »
+    ///
+    /// Ces trois témoins gardaient l'ANCIENNE destination — `onTapPost`, donc
+    /// le détail. Ils ne sont pas affaiblis : chacun garde exactement la même
+    /// exigence contre la NOUVELLE. Ce qui reste interdit reste interdit — un
+    /// tap sans effet, et une activation VoiceOver qui n'atteint pas ce que le
+    /// doigt atteint.
+    ///
+    /// > **Une garde qui épingle une décision renversée est PIRE qu'une absence
+    /// > de garde** : elle rougit sur le correctif et laisse croire à une
+    /// > régression. La corriger n'est pas « faire passer le test » — c'est
+    /// > déplacer la cible sur ce que le produit exige aujourd'hui.
+    func test_tap_routesThroughFullscreen_withFallbackThatLeadsSomewhere() throws {
+        let text = try sceneSource()
         let block = try cardScenePlayerBlock(in: text)
         XCTAssertTrue(
-            block.contains(".onTapGesture { onTapPost?(post) }"),
-            "Le tap doit router vers onTapPost?(post) — le MÊME callback que le reste de la " +
-            "carte (texte, auteur), donc le plein écran EXISTANT (PostDetailView), jamais un " +
-            "nouveau viewer dédié."
+            block.contains(".onTapGesture { (onTapScene ?? { onTapPost?(post) })() }"),
+            "Le tap doit ouvrir le PLEIN ÉCRAN (`onTapScene`), et retomber sur `onTapPost` chez " +
+            "les hôtes qui ne savent pas en présenter un (aperçu de repost, liste de profil). " +
+            "Un tap SANS effet serait pire que la mauvaise destination — c'est la loi 4."
         )
     }
 
-    func test_noNewFullscreenCoverIntroducedForScene() throws {
-        let text = try source()
-        let fullscreenCoverCount = text.components(separatedBy: ".fullScreenCover(").count - 1
-        XCTAssertEqual(
-            fullscreenCoverCount, 2,
-            "E3 ne doit introduire AUCUN nouveau `.fullScreenCover` — seuls les deux déjà " +
-            "existants (position, galerie média) doivent rester : la scène route par " +
-            "onTapPost?(post), pas par une présentation neuve."
+    /// **Le plein écran d'un post passe par son SITE UNIQUE** (#4927).
+    ///
+    /// Le compte de `.fullScreenCover(` dans l'hôte est tombé de 2 à 1 quand la
+    /// carte a cessé de recopier vingt lignes de galerie pour appeler
+    /// `socialMediaGallery`. Compter des présentations épinglait donc un
+    /// NOMBRE là où la règle porte sur un CHEMIN : la garde interroge désormais
+    /// le chemin, et le nombre peut bouger sans mentir.
+    func test_fullscreenGoesThroughTheSingleSite() throws {
+        let text = try hostSource()
+        XCTAssertTrue(
+            text.contains(".socialMediaGallery("),
+            "La carte doit ouvrir son plein écran par le site unique — c'est lui qui sait " +
+            "qu'une SCÈNE se rejoue et qu'un jeu de médias se feuillette."
+        )
+        XCTAssertFalse(
+            text.contains("ConversationMediaGalleryView("),
+            "…et ne doit pas remonter sa propre copie de la galerie : c'est l'exemplaire " +
+            "recopié que le site unique a été écrit pour supprimer."
         )
     }
 
-    // MARK: - 5. Née en pause, et le RESTE — aucun AVPlayer/décodage actif dans la carte
+    // MARK: - 5. La lecture appartient au VIEWPORT, jamais à la carte
 
-    func test_isPlaying_isConstantFalse_neverToggled() throws {
-        let text = try source()
+    /// **`isPlaying` est une valeur REÇUE, jamais une décision locale.**
+    ///
+    /// Ce témoin exigeait `.constant(false)` jusqu'au 2026-09-05 : la carte
+    /// naissait en pause et le RESTAIT (revue Fable n°25, « zéro AVPlayer actif
+    /// ici »). La directive porteur — « repartage ou non, les scènes sont comme
+    /// les vidéos : face à elles dans le viewport, il faut maintenir une
+    /// cohérence générale » — le renverse, et pour une raison plus forte que sa
+    /// date : **le gel ne tenait son objectif de performance que sur la surface
+    /// qu'il gelait.** La story repartagée d'à côté jouait sans élection ni
+    /// call-awareness — donc autant de décodages simultanés que de cellules
+    /// visibles. L'élection unique tient l'objectif MIEUX : au plus une surface
+    /// active dans tout le fil, scènes et réels confondus.
+    ///
+    /// Ce qui NE change pas, et que le témoin suivant garde : la carte ne
+    /// FABRIQUE pas cet état. `.constant(…)` sur une valeur reçue le dit dans la
+    /// syntaxe même — aucun chemin ne fait jouer une carte toute seule.
+    func test_isPlaying_isDrivenByTheViewportElection_neverFrozen() throws {
+        let text = try sceneSource()
         let block = try cardScenePlayerBlock(in: text)
         XCTAssertTrue(
+            block.contains("isPlaying: .constant(isActive)"),
+            "isPlaying doit projeter l'élection du viewport (`isActive`), reçue en VALEUR " +
+            "du container — jamais un état fabriqué par la carte."
+        )
+        XCTAssertFalse(
             block.contains("isPlaying: .constant(false)"),
-            "isPlaying doit être un .constant(false) figé — la carte ne joue JAMAIS " +
-            "localement, le mouvement vit dans la destination du tap (revue Fable n°25)."
+            "Une scène FIGÉE rompt la cohérence imposée le 2026-09-05 : dans le même fil, " +
+            "une story repartagée et un réel jouent quand le viewport les élit. Le même " +
+            "canvas ne peut pas bouger ou non selon la façon dont il est arrivé au fil."
+        )
+    }
+
+    /// **La scène RAPPORTE sa frame, sinon elle ne peut pas être élue.**
+    ///
+    /// C'est la moitié qu'on oublie : `mostCenteredReel` n'a jamais regardé
+    /// `kind`, donc rien n'interdisait à une scène de gagner l'élection — elle
+    /// n'y CONCOURAIT simplement pas, faute de publier sa frame. Une surface
+    /// pilotée par une élection à laquelle elle ne participe pas reste éteinte
+    /// pour toujours, et aucun test de coordinateur ne peut le voir.
+    func test_scene_reportsItsFrameToTheElection() throws {
+        let text = try sceneSource()
+        let block = try cardScenePlayerBlock(in: text)
+        XCTAssertTrue(
+            block.contains(".reportReelFrame(id: post.id, kind: .scene)"),
+            "Sans `reportReelFrame`, la scène n'entre jamais dans l'élection et reste en " +
+            "pause quoi qu'il arrive. L'identité est celle du POST contenant — jamais " +
+            "celle de la story citée : un même canvas affiché deux fois dans le fil doit " +
+            "élire exactement une surface."
+        )
+    }
+
+    /// **L'étiquette « scène · muette, en pause » a disparu avec l'état qu'elle
+    /// décrivait.** Elle reposait sur un raisonnement juste — « un état gardé
+    /// mais muet se lit comme une panne » — mais elle décrivait l'état de la
+    /// MACHINE, pas l'option du lecteur, et c'est ce que le porteur a signalé
+    /// (« je ne comprends pas les scènes muettes en pause dans le feed »). Une
+    /// surface qui joue quand on la regarde n'a plus rien à excuser.
+    func test_noMutedPausedBadgeSurvives() throws {
+        let text = try source()
+        XCTAssertFalse(
+            text.contains("feed.post.scene.muted_paused"),
+            "Le badge d'annonce du gel ne doit plus exister — la scène joue quand le " +
+            "viewport l'élit, et une étiquette qui décrit un état révolu se lit comme " +
+            "une panne à son tour."
         )
     }
 
@@ -228,7 +384,7 @@ final class FeedPostCardScenePlayerGuardTests: XCTestCase {
     // MARK: - 6. Accessibilité : feuille activable, pas un conteneur muet (correctif rejet DoD rév. 15, constat 4)
 
     func test_callSite_usesLeafAccessibilityElement_notContainer() throws {
-        let text = try source()
+        let text = try hostSource()
         let block = try cardSceneCallSiteBlock(in: text)
         XCTAssertTrue(
             block.contains(".accessibilityElement(children: .ignore)"),
@@ -245,7 +401,7 @@ final class FeedPostCardScenePlayerGuardTests: XCTestCase {
     }
 
     func test_callSite_hasAccessibilityLabel() throws {
-        let text = try source()
+        let text = try hostSource()
         let block = try cardSceneCallSiteBlock(in: text)
         XCTAssertTrue(
             block.contains(".accessibilityLabel("),
@@ -254,22 +410,50 @@ final class FeedPostCardScenePlayerGuardTests: XCTestCase {
         )
     }
 
-    func test_callSite_hasAccessibilityAction_matchingOnTapPost() throws {
-        let text = try source()
+    /// **L'oreille atteint ce que le doigt atteint.** L'exigence est inchangée
+    /// depuis l'écriture de cette garde ; seule sa DESTINATION a suivi la
+    /// directive du 2026-09-05. Une activation VoiceOver qui ouvrirait le
+    /// détail pendant que le doigt ouvre le plein écran décrirait à qui n'y
+    /// voit pas un écran que l'app ne montre plus.
+    func test_callSite_hasAccessibilityAction_matchingTheFinger() throws {
+        let text = try hostSource()
         let block = try cardSceneCallSiteBlock(in: text)
         XCTAssertTrue(
-            block.contains(".accessibilityAction { onTapPost?(post) }"),
-            "L'activation VoiceOver doit atteindre onTapPost?(post) — le MÊME patron déjà " +
-            "utilisé ailleurs dans ce fichier (.accessibilityHint + .accessibilityAction, lignes " +
-            "385-386 et 402-403) pour exactement ce besoin, jamais un .onTapGesture seul que " +
-            "VoiceOver ne peut pas déclencher."
+            block.contains("if cardSceneOpensFullscreen { openSceneFullscreen() }"),
+            "L'activation VoiceOver doit ouvrir le PLEIN ÉCRAN, comme le doigt."
+        )
+        XCTAssertTrue(
+            block.contains("else { onTapPost?(post) }"),
+            "…avec le MÊME repli que le doigt quand la scène n'a aucun média à agrandir : " +
+            "une activation sans effet est le défaut que cette garde interdit depuis toujours."
+        )
+    }
+
+
+    /// **Ce qui ouvre le plein écran est la SCÈNE, pas la présence d'un média.**
+    ///
+    /// Le porteur demande d'éprouver les canvas SANS image — texte, sticker,
+    /// dessin, fond de couleur seul. Le player les peint tous ; la porte, elle,
+    /// demandait encore « y a-t-il une image à agrandir ? » et retombait sur le
+    /// détail du post. L'écart ne rougissait nulle part : ouvrir le détail est
+    /// un comportement licite, juste pas celui qu'on a demandé.
+    func test_fullscreenIsGatedOnTheScene_notOnAMedia() throws {
+        let text = try hostSource()
+        XCTAssertTrue(
+            text.contains("SocialFullscreenRoute.scene(of: post) != nil"),
+            "La porte du plein écran doit interroger la SCÈNE — sans quoi un canvas de texte, " +
+            "de dessin ou de stickers reste enfermé dans le détail du post."
+        )
+        XCTAssertFalse(
+            text.contains("onTapScene: cardSceneFullscreenMedia.map"),
+            "…et ne doit plus se monter sur la présence d'un média, qui était l'ancienne question."
         )
     }
 
     // MARK: - Non-régression E1/E2 : l'accent de chrome reste l'accent du post
 
     func test_scenePlayer_usesPostAccentColor_notBadgeAccent() throws {
-        let text = try source()
+        let text = try sceneSource()
         let block = try cardScenePlayerBlock(in: text)
         XCTAssertTrue(
             block.contains("accentColorHex: accentColor"),

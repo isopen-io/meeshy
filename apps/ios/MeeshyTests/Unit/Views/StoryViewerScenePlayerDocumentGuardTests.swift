@@ -41,7 +41,7 @@ import XCTest
 /// est chaîné après la parenthèse fermante n'en fait pas partie.
 final class StoryViewerScenePlayerDocumentGuardTests: XCTestCase {
 
-    private static let canvasFile = "Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"
+    private static let canvasFile = "Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift"
 
     private func source() throws -> String {
         try MyStoriesSourceCorpus.text(of: Self.canvasFile)

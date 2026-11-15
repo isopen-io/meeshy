@@ -50,8 +50,45 @@ class NotificationAccentTest {
     fun `community, membership and achievements are the gold family`() {
         assertThat(notificationTypeAccentHex("community_invite")).isEqualTo("F8B500")
         assertThat(notificationTypeAccentHex("member_promoted")).isEqualTo("F8B500")
-        assertThat(notificationTypeAccentHex("achievement_unlocked")).isEqualTo("F8B500")
-        assertThat(notificationTypeAccentHex("badge_earned")).isEqualTo("F8B500")
+    }
+
+    @Test
+    fun `engagement achievements levels and game are amber`() {
+        listOf(
+            "achievement_unlocked", "ACHIEVEMENT_UNLOCKED", "badge_earned", "streak_milestone", "level_up",
+            "game_duo_invited", "game_duo_accepted", "game_league_result", "game_season_step",
+            "game_mission_window",
+        ).forEach { assertThat(notificationTypeAccentHex(it)).isEqualTo("FBBF24") }
+    }
+
+    @Test
+    fun `contact joined and recently active are the teal family`() {
+        assertThat(notificationTypeAccentHex("contact_joined")).isEqualTo("4ECDC4")
+        assertThat(notificationTypeAccentHex("contact_recently_active")).isEqualTo("4ECDC4")
+    }
+
+    @Test
+    fun `content removed is alert red and report resolved is brand indigo`() {
+        assertThat(notificationTypeAccentHex("content_removed")).isEqualTo("EF4444")
+        assertThat(notificationTypeAccentHex("report_resolved")).isEqualTo("6366F1")
+    }
+
+    @Test
+    fun `the china region call alias is pink and an unknown type keeps the brand indigo`() {
+        assertThat(notificationTypeAccentHex("call")).isEqualTo("E91E63")
+        assertThat(notificationTypeAccentHex("type_du_futur")).isEqualTo("6366F1")
+    }
+
+    @Test
+    fun `every known type has an accent and a glyph`() {
+        NotificationTypeVocabulary.KNOWN_TYPES.forEach { type ->
+            assertThat(notificationTypeAccentHex(type)).matches("[0-9A-F]{6}")
+        }
+        assertThat(notificationTypeGlyph("level_up")).isEqualTo(NotificationGlyph.STAR)
+        assertThat(notificationTypeGlyph("game_mission_window")).isEqualTo(NotificationGlyph.GAME_TIMER)
+        assertThat(notificationTypeGlyph("content_removed")).isEqualTo(NotificationGlyph.CONTENT_REMOVED)
+        assertThat(notificationTypeGlyph("contact_recently_active")).isEqualTo(NotificationGlyph.CONTACT_ACTIVE)
+        assertThat(notificationTypeGlyph("type_du_futur")).isEqualTo(NotificationGlyph.BELL)
     }
 
     @Test

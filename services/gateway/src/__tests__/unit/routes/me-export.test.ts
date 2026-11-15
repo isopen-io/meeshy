@@ -162,6 +162,46 @@ function makePrisma(opts: PrismaOpts = {}) {
         ? jest.fn().mockRejectedValue(opts.messageError)
         : jest.fn().mockResolvedValue(opts.messagesResult !== undefined ? opts.messagesResult : [makeMessage()]),
     },
+    // #3633 — sections ajoutées (posts, stories, comments, reactions, media,
+    // voiceProfile, sessions). Ce fichier ne teste QUE profile/messages/contacts ;
+    // ces doubles n'existent que pour que le défaut "toutes les types" (désormais
+    // dix, pas trois) ne lève pas sur un modèle non simulé.
+    post: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    postComment: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    reaction: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    postReaction: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    commentReaction: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    messageAttachment: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    postMedia: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    userVoiceModel: { findFirst: jest.fn().mockResolvedValue(null) },
+    userSession: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    securityEvent: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    // Le jeu (#9384) : des collections vides, comme un compte qui n'a jamais joué.
+    ...Object.fromEntries(
+      ['gameProfile', 'leaguePseudonym', 'leagueMembership', 'gameWeekPoints', 'gameDuo', 'gameSeason', 'gameTrophy', 'atlasStamp', 'dailyMission', 'gloryLedger', 'meeshLedger', 'mythicSeat', 'gamePhotoMoment'].map(
+        (model) => [model, { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null) }],
+      ),
+    ),
+    // Les packs (#10151) : aucun choix, aucune bibliothèque, aucune proposition.
+    ...Object.fromEntries(
+      ['userStickerPack', 'userSticker', 'stickerPack', 'userPackOwnership', 'communityAppearancePack', 'lensPack', 'partnerProfile'].map(
+        (model) => [model, { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) }],
+      ),
+    ),
+    // La télémétrie de lecture (#10499, O6) : un compte qui n'a rien lu.
+    ...Object.fromEntries(
+      ['postImpression', 'postEngagement', 'postView', 'contentEvent'].map(
+        (model) => [model, { findMany: jest.fn().mockResolvedValue([]) }],
+      ),
+    ),
+    // La télémétrie d'appel (#11277) : un compte qui n'a jamais appelé.
+    callParticipant: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    // Les cercles (#14400) : aucun lien, aucun échange, aucun consentement.
+    ...Object.fromEntries(
+      ['userRelation', 'pairInteractionDay', 'relationFeatureSetting', 'bloodLocationPoint', 'bloodLocationConsultation'].map(
+        (model) => [model, { findMany: jest.fn().mockResolvedValue([]) }],
+      ),
+    ),
   };
 }
 

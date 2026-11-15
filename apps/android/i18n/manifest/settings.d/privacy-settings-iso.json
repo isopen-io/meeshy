@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        { "androidName": "settings_privacy_encryption_coming_soon_a11y", "status": "android-only" }
+      ]
+    }
+  }
+}

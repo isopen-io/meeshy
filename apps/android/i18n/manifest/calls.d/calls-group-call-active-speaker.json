@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.group.tile.speaking",
+          "androidName": "call_group_tile_speaking",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

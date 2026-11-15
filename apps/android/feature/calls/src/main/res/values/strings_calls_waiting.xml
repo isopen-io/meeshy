@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_waiting_reject">Decline</string>
+    <string name="call_waiting_answer">Answer</string>
+    <string name="call_waiting_reject_hint">Declines the new incoming call; your current call is not interrupted</string>
+    <string name="call_waiting_answer_hint">Ends your current call and answers the new incoming call</string>
+</resources>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_audio_chip_playing">Wird abgespielt</string>
+    <string name="story_audio_chip_muted">Stummgeschaltet</string>
+    <string name="story_audio_chip_a11y">%1$s, Dauer %2$s</string>
+</resources>

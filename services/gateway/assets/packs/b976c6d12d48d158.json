@@ -1,0 +1,881 @@
+{
+ "mood": "glauque",
+ "motifs": [
+  {
+   "id": "glauque.vhs",
+   "mood": "glauque",
+   "name": "VHS",
+   "surfaces": [
+    "capture",
+    "live"
+   ],
+   "base": {
+    "layout": {
+     "arrangement": "grid",
+     "margin": 0.05,
+     "gap": 0.025,
+     "top": 0.13,
+     "bottom": 0.13
+    },
+    "slot": {
+     "shape": "rect",
+     "tilt": "none",
+     "tone": "faded"
+    },
+    "background": {
+     "kind": "solid",
+     "color": "#0A0A10"
+    },
+    "pattern": {
+     "kind": "scanlines",
+     "color": "#000000",
+     "opacity": 0.5
+    },
+    "ornaments": [
+     {
+      "kind": "lightleak",
+      "color": "#FF3EA5",
+      "density": "low",
+      "layer": "back",
+      "motion": "loop"
+     },
+     {
+      "kind": "glitch",
+      "color": "#E8E8F0",
+      "density": "mid",
+      "layer": "front",
+      "motion": "loop"
+     },
+     {
+      "kind": "rec",
+      "color": "#F5F5F5",
+      "density": "low",
+      "layer": "front",
+      "motion": "loop"
+     },
+     {
+      "kind": "grain",
+      "color": "#FFFFFF",
+      "density": "low",
+      "layer": "back"
+     }
+    ],
+    "brand": {
+     "mark": "wordmark",
+     "place": "top-left",
+     "color": "#F5F5F5",
+     "size": "s",
+     "font": "typewriter"
+    },
+    "names": {
+     "show": "name",
+     "style": "caption",
+     "font": "typewriter",
+     "color": "#E8E8F0"
+    },
+    "title": {
+     "source": "date",
+     "font": "typewriter",
+     "color": "#FFB000",
+     "place": "bottom",
+     "size": "l",
+     "effect": "glow",
+     "case": "upper"
+    }
+   },
+   "variants": {
+    "duo": {
+     "layout": {
+      "arrangement": "split",
+      "margin": 0.05,
+      "gap": 0.035,
+      "top": 0.12,
+      "bottom": 0.14
+     },
+     "subtitle": {
+      "source": "names",
+      "font": "typewriter",
+      "color": "#E8E8F0",
+      "place": "bottom",
+      "size": "s",
+      "case": "upper"
+     }
+    },
+    "comite": {},
+    "groupe": {
+     "layout": {
+      "arrangement": "grid",
+      "margin": 0.04,
+      "gap": 0.02,
+      "top": 0.12,
+      "bottom": 0.14
+     },
+     "names": {
+      "show": "name",
+      "style": "plate",
+      "font": "typewriter",
+      "color": "#E8E8F0",
+      "fill": "#0A0A10B3"
+     }
+    }
+   },
+   "styles": [
+    {
+     "id": "relief",
+     "name": "Relief",
+     "look": {
+      "background": {
+       "kind": "solid",
+       "color": "#0B0D11"
+      },
+      "slot": {
+       "shape": "rect",
+       "stroke": {
+        "color": "#E7DECB",
+        "width": 0.004
+       },
+       "tilt": "none",
+       "tone": "faded"
+      },
+      "ornaments": [
+       {
+        "kind": "glitch",
+        "color": "#AFC3D3",
+        "density": "low",
+        "layer": "front",
+        "motion": "loop"
+       },
+       {
+        "kind": "rec",
+        "color": "#FF3B30",
+        "density": "low",
+        "layer": "front",
+        "motion": "loop"
+       }
+      ],
+      "title": {
+       "source": "date",
+       "font": "typewriter",
+       "color": "#FFB000",
+       "place": "bottom",
+       "size": "l",
+       "effect": "glow",
+       "case": "upper"
+      },
+      "scene": [
+       {
+        "id": "matiere",
+        "kind": "image",
+        "depth": "back",
+        "src": "assets/call-frames/glauque_vhs_back.webp"
+       },
+       {
+        "id": "moulure",
+        "kind": "image",
+        "depth": "front",
+        "src": "assets/call-frames/glauque_vhs_front.webp",
+        "slice": 0.18
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "glauque.videosurveillance",
+   "mood": "glauque",
+   "name": "Vidéosurveillance",
+   "surfaces": [
+    "capture",
+    "live"
+   ],
+   "base": {
+    "layout": {
+     "arrangement": "grid",
+     "margin": 0.05,
+     "gap": 0.015,
+     "top": 0.12,
+     "bottom": 0.1
+    },
+    "slot": {
+     "shape": "rect",
+     "stroke": {
+      "color": "#7CFF6B",
+      "width": 0.003
+     },
+     "tilt": "none",
+     "tone": "duotone",
+     "duotone": [
+      "#021A05",
+      "#9DFF8A"
+     ]
+    },
+    "background": {
+     "kind": "solid",
+     "color": "#050A05"
+    },
+    "pattern": {
+     "kind": "scanlines",
+     "color": "#7CFF6B",
+     "opacity": 0.08
+    },
+    "border": {
+     "kind": "brackets",
+     "color": "#7CFF6B",
+     "width": 0.006,
+     "inset": 0.025
+    },
+    "ornaments": [
+     {
+      "kind": "vignette",
+      "color": "#000000",
+      "density": "mid",
+      "layer": "back"
+     },
+     {
+      "kind": "crosshair",
+      "color": "#7CFF6B",
+      "density": "mid",
+      "layer": "front",
+      "motion": "loop"
+     },
+     {
+      "kind": "rec",
+      "color": "#9DFF8A",
+      "density": "low",
+      "layer": "front",
+      "motion": "loop"
+     },
+     {
+      "kind": "scanlines",
+      "color": "#7CFF6B10",
+      "density": "low",
+      "layer": "back",
+      "motion": "loop"
+     }
+    ],
+    "brand": {
+     "mark": "logo",
+     "place": "top-right",
+     "color": "#7CFF6B",
+     "size": "s"
+    },
+    "names": {
+     "show": "handle",
+     "style": "plate",
+     "font": "typewriter",
+     "color": "#9DFF8A",
+     "fill": "#021A05CC"
+    },
+    "title": {
+     "source": "date",
+     "font": "typewriter",
+     "color": "#9DFF8A",
+     "place": "top",
+     "size": "m",
+     "effect": "glow",
+     "case": "upper"
+    }
+   },
+   "variants": {
+    "duo": {
+     "layout": {
+      "arrangement": "split",
+      "margin": 0.05,
+      "gap": 0.015,
+      "top": 0.12,
+      "bottom": 0.1
+     },
+     "subtitle": {
+      "source": "names",
+      "font": "typewriter",
+      "color": "#7CFF6B",
+      "place": "top",
+      "size": "s",
+      "case": "upper"
+     }
+    },
+    "comite": {},
+    "groupe": {
+     "layout": {
+      "arrangement": "grid",
+      "margin": 0.04,
+      "gap": 0.012,
+      "top": 0.12,
+      "bottom": 0.1
+     },
+     "names": {
+      "show": "handle",
+      "style": "plate",
+      "font": "typewriter",
+      "color": "#9DFF8A",
+      "fill": "#021A05CC"
+     }
+    },
+    "tablee": {
+     "layout": {
+      "arrangement": "grid",
+      "margin": 0.04,
+      "gap": 0.01,
+      "top": 0.11,
+      "bottom": 0.12
+     },
+     "names": {
+      "show": "handle",
+      "style": "list",
+      "font": "typewriter",
+      "color": "#9DFF8A"
+     },
+     "ornaments": [
+      {
+       "kind": "vignette",
+       "color": "#000000",
+       "density": "mid",
+       "layer": "back"
+      },
+      {
+       "kind": "rec",
+       "color": "#9DFF8A",
+       "density": "low",
+       "layer": "front",
+       "motion": "loop"
+      },
+      {
+       "kind": "scanlines",
+       "color": "#7CFF6B10",
+       "density": "low",
+       "layer": "back",
+       "motion": "loop"
+      }
+     ]
+    }
+   },
+   "styles": [
+    {
+     "id": "relief",
+     "name": "Relief",
+     "look": {
+      "background": {
+       "kind": "solid",
+       "color": "#061009"
+      },
+      "slot": {
+       "shape": "rect",
+       "stroke": {
+        "color": "#7CFF6B",
+        "width": 0.003
+       },
+       "tilt": "none",
+       "tone": "duotone",
+       "duotone": [
+        "#021A05",
+        "#9DFF8A"
+       ]
+      },
+      "ornaments": [
+       {
+        "kind": "crosshair",
+        "color": "#7CFF6B",
+        "density": "low",
+        "layer": "front",
+        "motion": "loop"
+       },
+       {
+        "kind": "rec",
+        "color": "#FF2A1A",
+        "density": "low",
+        "layer": "front",
+        "motion": "loop"
+       }
+      ],
+      "title": {
+       "source": "date",
+       "font": "typewriter",
+       "color": "#9DFF8A",
+       "place": "top",
+       "size": "m",
+       "effect": "glow",
+       "case": "upper"
+      },
+      "scene": [
+       {
+        "id": "matiere",
+        "kind": "image",
+        "depth": "back",
+        "src": "assets/call-frames/glauque_videosurveillance_back.webp"
+       },
+       {
+        "id": "moulure",
+        "kind": "image",
+        "depth": "front",
+        "src": "assets/call-frames/glauque_videosurveillance_front.webp",
+        "slice": 0.17
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "glauque.sous-sol",
+   "mood": "glauque",
+   "name": "Sous-sol",
+   "surfaces": [
+    "capture",
+    "live"
+   ],
+   "base": {
+    "layout": {
+     "arrangement": "scatter",
+     "margin": 0.07,
+     "gap": 0.03,
+     "top": 0.14,
+     "bottom": 0.1
+    },
+    "slot": {
+     "shape": "rect",
+     "card": {
+      "color": "#C9C3A6",
+      "pad": 0.04,
+      "foot": 0.14
+     },
+     "shadow": true,
+     "tilt": "wild",
+     "tone": "faded"
+    },
+    "background": {
+     "kind": "linear",
+     "colors": [
+      "#1E2319",
+      "#0A0B08"
+     ],
+     "angle": 0
+    },
+    "pattern": {
+     "kind": "grain",
+     "color": "#C8C27A",
+     "opacity": 0.12
+    },
+    "ornaments": [
+     {
+      "kind": "drips",
+      "color": "#3D4A2E",
+      "density": "mid",
+      "layer": "back"
+     },
+     {
+      "kind": "cobwebs",
+      "color": "#9A968059",
+      "density": "low",
+      "layer": "back"
+     },
+     {
+      "kind": "vignette",
+      "color": "#000000CC",
+      "density": "high",
+      "layer": "back"
+     }
+    ],
+    "brand": {
+     "mark": "both",
+     "place": "bottom-left",
+     "color": "#9A9680",
+     "size": "s"
+    },
+    "names": {
+     "show": "name",
+     "style": "tag",
+     "font": "note",
+     "color": "#2A2418",
+     "fill": "#C9C3A6"
+    },
+    "title": {
+     "source": "group",
+     "font": "retro",
+     "color": "#C8C27A",
+     "place": "top",
+     "size": "m",
+     "effect": "shadow"
+    },
+    "subtitle": {
+     "source": "date",
+     "font": "typewriter",
+     "color": "#9A9680",
+     "place": "top",
+     "size": "s",
+     "effect": "none",
+     "case": "upper"
+    }
+   },
+   "variants": {
+    "duo": {
+     "layout": {
+      "arrangement": "cascade",
+      "margin": 0.08,
+      "gap": 0.03,
+      "top": 0.14,
+      "bottom": 0.1
+     },
+     "slot": {
+      "shape": "rect",
+      "card": {
+       "color": "#C9C3A6",
+       "pad": 0.04,
+       "foot": 0.14
+      },
+      "shadow": true,
+      "tilt": "gentle",
+      "tone": "faded"
+     },
+     "title": {
+      "source": "names",
+      "font": "retro",
+      "color": "#C8C27A",
+      "place": "top",
+      "size": "m",
+      "effect": "shadow"
+     }
+    },
+    "comite": {},
+    "groupe": {
+     "layout": {
+      "arrangement": "tiers",
+      "margin": 0.06,
+      "gap": 0.02,
+      "top": 0.12,
+      "bottom": 0.1
+     }
+    }
+   }
+  },
+  {
+   "id": "glauque.disparus",
+   "mood": "glauque",
+   "name": "Disparus",
+   "surfaces": [
+    "capture"
+   ],
+   "base": {
+    "layout": {
+     "arrangement": "grid",
+     "margin": 0.08,
+     "gap": 0.04,
+     "top": 0.2,
+     "bottom": 0.12
+    },
+    "slot": {
+     "shape": "rect",
+     "stroke": {
+      "color": "#1A1A1A",
+      "width": 0.005
+     },
+     "tilt": "none",
+     "tone": "noir"
+    },
+    "background": {
+     "kind": "linear",
+     "colors": [
+      "#D9D4C0",
+      "#B8B19A"
+     ],
+     "angle": 0
+    },
+    "pattern": {
+     "kind": "halftone",
+     "color": "#1A1A1A",
+     "opacity": 0.1
+    },
+    "border": {
+     "kind": "torn",
+     "color": "#0C0F0B",
+     "width": 0.02,
+     "inset": 0
+    },
+    "ornaments": [
+     {
+      "kind": "tape",
+      "color": "#C8C27AB3",
+      "density": "low",
+      "layer": "front"
+     },
+     {
+      "kind": "grain",
+      "color": "#1A1A1A40",
+      "density": "mid",
+      "layer": "back"
+     }
+    ],
+    "brand": {
+     "mark": "wordmark",
+     "place": "watermark",
+     "color": "#1A1A1A1F",
+     "size": "s",
+     "font": "typewriter"
+    },
+    "names": {
+     "show": "both",
+     "style": "caption",
+     "font": "typewriter",
+     "color": "#1A1A1A"
+    },
+    "title": {
+     "source": "group",
+     "font": "retro",
+     "color": "#1A1A1A",
+     "place": "top",
+     "size": "l",
+     "effect": "none",
+     "case": "upper"
+    },
+    "subtitle": {
+     "source": "date",
+     "font": "typewriter",
+     "color": "#6B4A2B",
+     "place": "top",
+     "size": "s",
+     "effect": "none",
+     "case": "upper"
+    }
+   },
+   "variants": {
+    "comite": {
+     "layout": {
+      "arrangement": "hero",
+      "margin": 0.08,
+      "gap": 0.04,
+      "top": 0.2,
+      "bottom": 0.12
+     }
+    },
+    "groupe": {
+     "layout": {
+      "arrangement": "grid",
+      "margin": 0.07,
+      "gap": 0.03,
+      "top": 0.18,
+      "bottom": 0.12
+     }
+    }
+   }
+  },
+  {
+   "id": "glauque.prison",
+   "mood": "glauque",
+   "name": "Prison",
+   "surfaces": [
+    "capture",
+    "live"
+   ],
+   "base": {
+    "layout": {
+     "arrangement": "grid",
+     "margin": 0.06,
+     "gap": 0.03,
+     "top": 0.15,
+     "bottom": 0.12
+    },
+    "slot": {
+     "shape": "rect",
+     "stroke": {
+      "color": "#16181B",
+      "width": 0.008
+     },
+     "tilt": "none",
+     "tone": "noir"
+    },
+    "background": {
+     "kind": "linear",
+     "colors": [
+      "#C9CDD2",
+      "#A9AFB6"
+     ],
+     "angle": 0
+    },
+    "pattern": {
+     "kind": "grid",
+     "color": "#16181B",
+     "opacity": 0.3
+    },
+    "border": {
+     "kind": "brackets",
+     "color": "#16181B",
+     "width": 0.008,
+     "inset": 0.03
+    },
+    "ornaments": [
+     {
+      "kind": "lightleak",
+      "color": "#FFFFFF",
+      "density": "low",
+      "layer": "back",
+      "motion": "loop"
+     },
+     {
+      "kind": "scanlines",
+      "color": "#16181B1A",
+      "density": "low",
+      "layer": "front",
+      "motion": "loop"
+     },
+     {
+      "kind": "vignette",
+      "color": "#0B0C0E",
+      "density": "mid",
+      "layer": "back"
+     }
+    ],
+    "brand": {
+     "mark": "wordmark",
+     "place": "bottom",
+     "color": "#FF7A1A",
+     "size": "s",
+     "font": "typewriter"
+    },
+    "names": {
+     "show": "name",
+     "style": "plate",
+     "font": "typewriter",
+     "color": "#111111",
+     "fill": "#FF7A1A"
+    },
+    "title": {
+     "source": "group",
+     "font": "poster",
+     "color": "#16181B",
+     "place": "top",
+     "size": "l",
+     "effect": "none",
+     "case": "upper"
+    },
+    "subtitle": {
+     "source": "date",
+     "font": "typewriter",
+     "color": "#16181B",
+     "place": "top",
+     "size": "s",
+     "case": "upper"
+    }
+   },
+   "variants": {
+    "duo": {
+     "layout": {
+      "arrangement": "split",
+      "margin": 0.07,
+      "gap": 0.035,
+      "top": 0.15,
+      "bottom": 0.1
+     },
+     "title": {
+      "source": "names",
+      "font": "poster",
+      "color": "#16181B",
+      "place": "top",
+      "size": "l",
+      "effect": "none",
+      "case": "upper"
+     }
+    },
+    "comite": {},
+    "groupe": {
+     "layout": {
+      "arrangement": "grid",
+      "margin": 0.05,
+      "gap": 0.025,
+      "top": 0.15,
+      "bottom": 0.1
+     }
+    },
+    "tablee": {
+     "layout": {
+      "arrangement": "grid",
+      "margin": 0.05,
+      "gap": 0.02,
+      "top": 0.14,
+      "bottom": 0.12
+     },
+     "names": {
+      "show": "name",
+      "style": "list",
+      "font": "typewriter",
+      "color": "#16181B"
+     }
+    }
+   },
+   "styles": [
+    {
+     "id": "relief",
+     "name": "Relief",
+     "look": {
+      "background": {
+       "kind": "linear",
+       "colors": [
+        "#9EA2A6",
+        "#53585E"
+       ],
+       "angle": 0
+      },
+      "slot": {
+       "shape": "rect",
+       "stroke": {
+        "color": "#2E3338",
+        "width": 0.01
+       },
+       "double": true,
+       "shadow": true,
+       "tilt": "none",
+       "tone": "noir"
+      },
+      "ornaments": [
+       {
+        "kind": "scanlines",
+        "color": "#16181B1A",
+        "density": "low",
+        "layer": "front",
+        "motion": "loop"
+       },
+       {
+        "kind": "vignette",
+        "color": "#0B0C0E",
+        "density": "mid",
+        "layer": "back"
+       }
+      ],
+      "title": {
+       "source": "group",
+       "font": "poster",
+       "color": "#F4F4F2",
+       "place": "top",
+       "size": "l",
+       "effect": "shadow",
+       "case": "upper"
+      },
+      "subtitle": {
+       "source": "date",
+       "font": "typewriter",
+       "color": "#F4F4F2",
+       "place": "top",
+       "size": "s",
+       "effect": "shadow",
+       "case": "upper"
+      },
+      "scene": [
+       {
+        "id": "matiere",
+        "kind": "image",
+        "depth": "back",
+        "src": "assets/call-frames/glauque_prison_back.webp"
+       },
+       {
+        "id": "moulure",
+        "kind": "image",
+        "depth": "front",
+        "src": "assets/call-frames/glauque_prison_front.webp",
+        "slice": 0.17
+       }
+      ]
+     }
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,418 @@
+import XCTest
+@testable import Meeshy
+
+/// **En Post, un média posé EN FOND devient sa slide (#4038 — modèle § 3,
+/// révisé au #4724).**
+///
+/// Le modèle dit qu'en profil Post une slide EST un média du post : c'est ce qui
+/// distingue un CARROUSEL (N slides d'un média) d'une SCÈNE COMPOSÉE (une slide,
+/// un fond et des premiers plans). Cette suite éprouve la SOURCE — même patron
+/// que `MeeshyComposerHostSceneInspectorGuardTests` : la dérivation vit dans une
+/// `View`, dont l'état `@State` n'est pas atteignable sans monter UIKit.
+///
+/// **Le mot qui manquait est « EN FOND »** (directive porteur 2026-09-01 : « le
+/// comportement actuel qui fait que lorsqu'on ajoute n'importe quel média ça
+/// vient [dans] la trail des slides doit être supprimé ! »). La doctrine ne
+/// distinguait pas le fond du premier plan, si bien que toute image posée SUR la
+/// scène ouvrait une page et gagnait une tuile — un carrousel qui grossit sans
+/// qu'on ait ajouté de page. Le modèle portait pourtant la distinction depuis
+/// toujours (`StoryMediaObject.isBackground`) ; c'est l'ingestion qui ne la
+/// demandait pas.
+final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
+
+    private func hostSource() throws -> String {
+        return AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+    }
+
+    private func compact(_ text: String) -> String {
+        text.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    func test_theGuardReadsANonEmptySource() throws {
+        let code = try hostSource()
+        XCTAssertGreaterThan(code.count, 400,
+            "La source du host est introuvable ou vide — les gardes ci-dessous ne mesureraient RIEN.")
+        XCTAssertTrue(code.contains("struct MeeshyComposerHost"),
+            "Le fichier lu n'est pas celui du host.")
+    }
+
+    /// **Story et Réel ne passent PAS par ici.** En Réel il n'y a qu'une slide
+    /// (le réel EST la scène) ; en Story l'auteur compose sur celle qu'il
+    /// regarde. Sans ce gate, choisir une photo en Story fabriquerait une slide
+    /// au lieu de la poser sur la scène courante.
+    func test_sync_isGatedOnThePostProfile() throws {
+        let compacted = compact(try hostSource())
+        // **Le gate s'est ÉLARGI le 2026-09-02** (#4879), et cette garde le suit.
+        //
+        // Il lisait `guardselectedFormat==.postelse{return}` : une slide par
+        // média est bien la sémantique du POST (modèle § 3), et sortir hors de
+        // ce profil était juste — tant que le seul chemin d'entrée était la
+        // rangée du document.
+        //
+        // La porte MÉDIA du rail en est un second, et elle POSE sur la scène
+        // courante quel que soit le format. Sous l'ancien gate, une photo posée
+        // par le rail en Story n'atteignait jamais la slide : le canvas restait
+        // noir, et rien ne le disait.
+        //
+        // > Un gate nommé d'après UN chemin d'entrée se périme au second. Ce
+        // > qu'il garde est la sémantique « une slide par média », pas le
+        // > format qui, seul, la produisait hier.
+        XCTAssertTrue(compacted.contains("guardselectedFormat==.post||posePourLaSceneelse{return}"),
+            "`syncPostMediaIntoSlides` sort hors du profil Post — SAUF pour ce que le rail vient de "
+                + "poser sur la scène : une photo posée en Story doit atteindre sa slide (#4879).")
+        XCTAssertTrue(compacted.contains("letposePourLaScene=documentContentMedia.contains{"),
+            "… et la condition se DÉRIVE de ce qui a été posé, jamais d'un drapeau que le site "
+                + "d'appel aurait à tenir à jour.")
+    }
+
+    /// La première slide est RÉEMPLOYÉE : un composer neuf naît avec une slide
+    /// vierge, et lui en ajouter une pour le premier média laisserait un
+    /// carrousel dont la première vue est vide.
+    func test_sync_reusesTheVirginFirstSlide_beforeAddingAny() throws {
+        let compacted = compact(try hostSource())
+        // Une SÉRIE (#8540) a sa propre règle de réemploi, juste au-dessus :
+        // elle remplit la scène courante si elle n'a pas de fond.
+        XCTAssertTrue(compacted.contains("ifporte!=.sceneSeries,slideIdByMediaURL.isEmpty,"),
+            "La dérivation doit d'abord regarder si AUCUN média n'a encore sa slide…")
+        XCTAssertTrue(compacted.contains("(viewModel.currentSlide.effects.mediaObjects??[]).isEmpty{"),
+            "…ET si la slide courante est vierge, pour la réemployer au lieu d'en ajouter une.")
+    }
+
+    /// Un média retiré de la bande retire SA slide — sinon le carrousel garderait
+    /// une vue vide que rien ne peut plus atteindre.
+    func test_sync_removesTheSlideOfAMediaThatIsGone() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(compacted.contains("for(url,slideId)inslideIdByMediaURLwhere!present.contains(url)"),
+            "La dérivation doit retirer la slide de tout média absent de `documentContentMedia`.")
+        XCTAssertTrue(compacted.contains("viewModel.removeSlide(at:index)"),
+            "…par `removeSlide`, la primitive du SDK — jamais en mutant `slides` directement.")
+    }
+
+    /// **Site UNIQUE.** Les trois portes d'ingestion (photothèque, caméra,
+    /// importateur) écrivent toutes dans `documentLocalMedia` : brancher la
+    /// dérivation sur la LISTE plutôt que sur chaque porte évite d'en oublier
+    /// une — un inventaire qu'on ne peut pas laisser diverger.
+    func test_sync_isWiredOnTheMediaList_notOnEachIngestionDoor() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(compacted.contains(".adaptiveOnChange(of:documentLocalMedia,initial:true){_,_insyncPostMediaIntoSlides()}"),
+            "La dérivation doit être branchée sur `documentLocalMedia` — le seul point que les trois "
+                + "portes d'ingestion traversent toutes.")
+    }
+
+    /// Taper une vignette amène SA slide sur la scène. Sans le relais, la bande
+    /// resterait un inventaire et le carrousel ne serait pas navigable depuis
+    /// l'écran document (loi 4 : un contrôle existe s'il a un effet).
+    ///
+    /// **#5599 — le rail s'adresse par INDEX de slide, plus par URL de média.**
+    /// Le relais `onSelectMedia:` n'existe plus : le rail rend un `Int`, et le
+    /// meuble le passe tel quel. Ce que ce témoin garde est INCHANGÉ — taper
+    /// une vignette change l'écran —, seul le vocabulaire de l'adresse a
+    /// changé. Garder `onSelectMedia:` reviendrait à exiger le retour d'une
+    /// indirection que le modèle des slides a rendue inutile.
+    func test_thumbnailTap_selectsTheSlideOfThatMedia() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(compacted.contains("onSelect:{viewModel.selectSlide(at:$0)}"),
+            "Taper une vignette doit amener SA slide sur la scène — sans ce relais, le rail "
+                + "est un inventaire et le carrousel n'est pas navigable (loi 4).")
+    }
+
+    // MARK: - Le rôle d'un média posé (#4724)
+
+    /// **Le rôle vient de la RÈGLE, jamais d'une condition écrite dans le
+    /// `body`.** C'est la faute que ce dossier a déjà commise deux fois (la
+    /// conjonction de l'éventail, puis le gate du plateau) : une décision posée
+    /// en ligne est invisible aux tests, et se met à diverger de sa jumelle.
+    func test_sync_asksTheRuleForTheRoleOfEachMedia() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(compacted.contains("ComposerMediaPlacement.role(door:porte,"),
+            "La dérivation doit DEMANDER le rôle à `ComposerMediaPlacement` — un `if` écrit ici serait "
+                + "une seconde loi, et la première à diverger.")
+        XCTAssertTrue(
+            compacted.contains("railPosedMediaURLs.contains(media.sourceURL)?.sceneRail:.documentRow"),
+            "La PORTE est ce qui distingue les deux gestes : le rail pose sur la scène, la rangée du "
+                + "document ouvre une page.")
+    }
+
+    // MARK: - Le cap de dix slides est un REFUS, jamais une pose sur la dixième (#4059)
+
+    /// **`addSlide()` au cap est un no-op silencieux — le consulter APRÈS
+    /// l'appel lit `currentSlide.id` comme si l'ajout avait eu lieu.**
+    ///
+    /// C'était exactement le défaut : le onzième média entrait dans la même
+    /// branche que le dixième, `addSlide()` ne faisait rien, et
+    /// `viewModel.currentSlide.id` restait celui de la DIXIÈME slide — deux
+    /// médias, un seul id dans `slideIdByMediaURL`. La garde exige que
+    /// `canAddSlide` soit consulté AVANT `addSlide()`, jamais après.
+    func test_sync_asksCanAddSlide_beforeCallingAddSlide() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(
+            compacted.contains(
+                "elseifviewModel.canAddSlide{viewModel.addSlide()target=viewModel.currentSlide.id}else{"),
+            "`addSlide()` doit être derrière un `canAddSlide` consulté d'ABORD — sinon un onzième média "
+                + "lit l'id de la DIXIÈME slide comme si sa propre slide avait été créée."
+        )
+    }
+
+    /// **Un média refusé ne fabrique AUCUNE entrée de `slideIdByMediaURL`.**
+    ///
+    /// La ligne `slideIdByMediaURL[media.sourceURL] = target` vit APRÈS le
+    /// bloc `if/else` de ciblage, partagée par les branches qui aboutissent.
+    /// La branche de refus doit `continue` en DERNIÈRE instruction pour que
+    /// cette ligne — et la pose du média — ne s'exécute jamais pour lui.
+    /// Sans ce `continue` terminal, le média refusé se poserait quand même
+    /// sur `target` (resté à la dernière slide résolue), reproduisant
+    /// exactement le bug d'origine.
+    func test_sync_refusedMedia_neverReachesThePlacementOrTheIndex() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(
+            compacted.contains(
+                "FeedbackToastManager.shared.showError(ComposerDocumentCopy.mediaCapReached)continue}"
+                    + "documentMediaObjectIdBySource.merge("),
+            "Le refus doit `continue` en dernière instruction de sa branche, immédiatement suivi — hors "
+                + "du `if/else` — par la pose partagée : c'est ce qui prouve qu'un média refusé n'atteint "
+                + "ni `applyContentMedia` ni `slideIdByMediaURL`."
+        )
+    }
+
+    /// **Le refus doit se VOIR** (dimension 8 — un geste sans effet doit être
+    /// visible) : un média qui n'entre nulle part sans un mot est avalé, pas
+    /// refusé.
+    func test_sync_refusedMedia_isAnnouncedToTheAuthor() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(compacted.contains("ComposerDocumentCopy.mediaCapReached"),
+            "Le onzième média doit être annoncé comme refusé — sinon il disparaît en silence, ce que "
+                + "cette issue interdit précisément.")
+    }
+
+    /// **Le prédicat « cette slide a déjà un fond » doit être celui du MODÈLE,
+    /// mot pour mot.** `addMediaObject` refuse le rôle de fond à un média posé
+    /// sur une slide qui porte une image de fond au niveau de la SLIDE — pas
+    /// seulement un `mediaObject`. En omettre la seconde moitié ferait déclarer
+    /// « fond » un objet que le modèle écrirait en premier plan : une tuile pour
+    /// un média qui n'est pas une page, c'est-à-dire le défaut du #4724 dans
+    /// l'autre sens.
+    func test_sync_readsTheSameBackgroundPredicateAsTheModel() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(compacted.contains("viewModel.currentSlide.effects.resolvedBackgroundMedia!=nil"),
+            "Première moitié du prédicat : un `mediaObject` résolu comme fond.")
+        XCTAssertTrue(compacted.contains("viewModel.slideImages[viewModel.currentSlide.id]!=nil"),
+            "Seconde moitié : une image de fond posée AU NIVEAU DE LA SLIDE — celle qu'on oublie.")
+    }
+
+    /// **Un média de premier plan ne fonde RIEN.** Le témoin lit la branche
+    /// `.foreground` et vérifie les deux faces : ce qu'elle fait (poser sur la
+    /// slide courante) et ce qu'elle ne fait pas (ni `addSlide`, ni entrée dans
+    /// l'index des fondations). La borne est prouvée non vide avant de conclure
+    /// — une garde négative qui mesure une tranche introuvable passe au vert en
+    /// ayant perdu sa protection.
+    func test_aForegroundMedia_foundsNoPageAndEarnsNoTile() throws {
+        let compacted = compact(try hostSource())
+        guard let debut = compacted.range(of: "case.foreground:"),
+              let fin = compacted.range(of: "case.background:", range: debut.upperBound..<compacted.endIndex)
+        else {
+            return XCTFail("Les deux branches de rôle sont introuvables — cette garde ne mesurerait RIEN.")
+        }
+        let branche = String(compacted[debut.upperBound..<fin.lowerBound])
+        XCTAssertTrue(
+            branche.contains("viewModel.applyContentMedia([media],intoSlideId:viewModel.currentSlide.id)"),
+            "Un média de premier plan rejoint la scène COURANTE — sinon il n'atteint aucun écran.")
+        XCTAssertFalse(branche.contains("slideIdByMediaURL["),
+            "…et il n'entre PAS dans l'index des fondations : c'est cet index qui décide des tuiles.")
+        XCTAssertFalse(branche.contains("viewModel.addSlide()"),
+            "…et il n'ouvre AUCUNE page : poser sur la scène n'est pas ajouter une vue au carrousel.")
+    }
+
+    /// **La mémoire des rôles s'oublie avec son média.** Elle sert AUSSI de
+    /// garde d'idempotence (« ce média a déjà été posé ») : une garde qui
+    /// survit à son objet refuserait la pose suivante du même fichier, en
+    /// silence — exactement le défaut que `viewModel.reset()` ferme pour
+    /// `carriedContentSources`.
+    func test_theRoleMemory_isForgottenWithItsMedia() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(compacted.contains("mediaRoleByURL.removeValue(forKey:url)"),
+            "Un média retiré doit rendre son rôle, sinon le re-choisir serait sauté.")
+        // « Tout effacer » ne nomme plus les porteurs un à un depuis #6577 : il
+        // consomme `ComposerMediaPorters.empty`, dont le compilateur exige les
+        // HUIT champs. C'est ce qui a rendu visibles les deux que l'énumération
+        // oubliait (`documentMediaAlts`, `railPosedMediaURLs`). La garde vise
+        // donc la valeur, jamais la ligne — et `ComposerClearAllBehaviourTests`
+        // l'ÉPROUVE sur un store instancié.
+        XCTAssertTrue(compacted.contains("roleByURL:[:]"),
+            "La page blanche des porteurs doit remettre la mémoire des rôles à zéro.")
+    }
+
+    /// **La scène se démonte sur ce qu'elle CONTIENT, jamais sur ce qui l'a
+    /// fait naître** (#4724, V2). Et elle compte les objets par la somme du SDK
+    /// (`StorySlide.sceneObjects`, cinq cas) : réénumérer `mediaObjects`,
+    /// `textObjects`, `stickerObjects`… ici en oublierait un, et le jour où une
+    /// sixième famille naîtrait, rien ne le dirait.
+    func test_laScene_seMonteSurCeQuElleContient_parLaSommeDuSDK() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(compacted.contains("ComposerScenePresence.hasScene("),
+            "`documentHasScene` doit passer par la règle — une condition écrite en ligne serait "
+                + "invisible aux tests, et c'est elle qui a démonté la scène sous ses objets.")
+        XCTAssertTrue(compacted.contains("sceneObjectCount:viewModel.currentSlide.sceneObjects.count"),
+            "…et compter par `sceneObjects`, la somme à cinq cas du SDK, jamais tableau par tableau.")
+    }
+
+    // MARK: - Le rail en barre haute (#4047)
+
+    /// **Le rail DIT où l'on est, pas seulement ce que le post contient.**
+    /// Sans anneau, taper une vignette change la scène sans que rien, dans le
+    /// rail, ne le confirme : un contrôle dont l'effet est ailleurs ET
+    /// invisible ici. La résolution appartient au MEUBLE — lui seul tient la
+    /// carte `média → slide` et la slide courante.
+    ///
+    /// **#5599 — la slide courante se dit par son INDEX.** Le meuble n'a plus à
+    /// résoudre `média → slide` pour répondre « laquelle cercler » : les slides
+    /// SONT le modèle, et `viewModel.currentSlideIndex` est la réponse. La
+    /// vieille résolution par carte inverse a disparu avec le besoin qui la
+    /// justifiait — elle traduisait une adresse (l'URL) dans une autre (la
+    /// position), ce que plus personne ne demande.
+    func test_theRailKnowsWhichSlideIsOnScreen() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(compacted.contains("currentIndex:viewModel.currentSlideIndex"),
+            "Le meuble doit dire au rail QUELLE vignette cercler — sans anneau, taper une "
+                + "vignette change la scène sans que rien, dans le rail, ne le confirme.")
+    }
+
+    /// **Le rail des slides existe en UN seul exemplaire.** Deux bandes montrant
+    /// les mêmes vignettes seraient deux inventaires à faire diverger, et la
+    /// seconde mentirait au premier chemin d'ingestion qui n'alimente que l'une.
+    /// C'est le « d'un seul tenant » de #4047.
+    ///
+    /// Il vivait dans la barre haute (`ComposerTopBar`), qui a quitté le projet
+    /// au #13907 : l'hôte l'injecte en slot, la scène le relaie, et aucune vue ne
+    /// le redéclare.
+    func test_theRail_isInjectedOnce_andNeverRedeclared() throws {
+        func source(_ fichier: String) throws -> String {
+            if fichier == "ComposerSceneSurface.swift" {
+                return AppSourceGuard.stripComments(try AppSourceGuard.composerSceneSurfaceSource())
+            }
+            let url = URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("Meeshy/Features/Composer/\(fichier)")
+            return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        }
+
+        // **La moitié « et nulle part ailleurs », désormais VÉRIFIABLE.** Les
+        // deux surfaces consomment la barre ; qu'aucune ne nomme le rail est ce
+        // qui garantit qu'il n'en existe qu'un.
+        // Depuis #13839, la scène ne monte plus la barre haute : elle relaie le
+        // MÊME slot à son chrome du repos (`ComposerSceneOverlayChrome`), qui
+        // le pose entre ✕ et ↶ ↷ dès deux diapos. Un seul rail, deux places.
+        let reposDeScene = try source("ComposerSceneOverlayChrome.swift")
+        XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: "slideRail", in: reposDeScene), 0,
+                       "le chrome du repos redéclare un rail de slides au lieu de relayer le slot")
+        // #13864 : la surface document est partie — seule la scène relaie le slot.
+        for surface in ["ComposerSceneSurface.swift"] {
+            let code = try source(surface)
+            XCTAssertTrue(code.contains("slideRow: slideRailSlot"),
+                "\(surface) doit RELAYER le rail injecté — sinon cette garde ne dit rien de cette surface.")
+            // Là encore l'IDENTIFIANT, pas la sous-chaîne — et ici la nuance PORTE
+            // l'architecture : les deux surfaces déclarent bien `slideRailSlot`,
+            // un slot OPAQUE qu'elles relaient sans rien savoir du rail (une
+            // mini-preview demande les effets vivants et les bitmaps chargés,
+            // donc le ViewModel, que ces surfaces ne connaissent pas). Relayer un
+            // slot n'est pas déclarer un rail ; c'est même ce qui garantit qu'il
+            // n'en existe qu'un.
+            XCTAssertEqual(
+                AppSourceGuard.occurrences(ofIdentifier: "slideRail", in: code), 0,
+                "\(surface) redéclare un rail de slides : c'est le second inventaire que #4047 interdit.")
+        }
+    }
+
+    // MARK: - Le `⋯` de la barre haute (#4047)
+
+    /// **La règle, par COMPORTEMENT.** Ce qu'un menu offre est une décision
+    /// produit : elle s'éprouve sur la règle pure, jamais en lisant une vue.
+    func test_theOverflow_servesOnlyEntriesThatHaveSomethingToDo() {
+        XCTAssertEqual(
+            ComposerOverflowPolicy.entries(
+                hasBackground: false, hasMedia: false, hasText: false, hasLocation: false),
+            [],
+            "Un composer VIERGE n'offre aucune entrée — donc aucun `⋯`. Un bouton qui n'ouvre rien est "
+                + "l'UI morte que la loi 4 interdit, et un menu vide en est la forme la plus sournoise : "
+                + "il a l'air de marcher jusqu'au tap."
+        )
+        XCTAssertEqual(
+            ComposerOverflowPolicy.entries(
+                hasBackground: false, hasMedia: true, hasText: false, hasLocation: false),
+            [.clearAll],
+            "Sans fond, « retirer le fond » n'a rien à retirer — elle est ABSENTE, jamais grisée."
+        )
+        XCTAssertEqual(
+            ComposerOverflowPolicy.entries(
+                hasBackground: true, hasMedia: false, hasText: false, hasLocation: false),
+            [.removeBackground, .clearAll],
+            "Un fond posé sert les deux, et dans cet ORDRE : le geste ciblé avant le geste destructeur."
+        )
+        XCTAssertEqual(
+            ComposerOverflowPolicy.entries(
+                hasBackground: false, hasMedia: false, hasText: false, hasLocation: true),
+            [.clearAll],
+            "Un LIEU seul suffit à rendre « tout effacer » utile — l'oublier laisserait un lieu posé "
+                + "qu'aucun geste du menu ne retire."
+        )
+    }
+
+    /// **Le meuble ne réécrit pas la règle.** Une condition posée dans un `body`
+    /// est invisible aux tests — c'est la faute que ce dossier a déjà commise
+    /// deux fois (la conjonction de l'éventail, puis le gate du plateau).
+    func test_theOverflow_isGatedOnTheRule_notOnAnInlineCondition() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(compacted.contains("ComposerOverflowPolicy.entries("),
+            "Les entrées doivent venir de la RÈGLE, lue une seule fois.")
+        XCTAssertTrue(
+            compacted.contains("overflow:host.documentOverflowEntries"),
+            "Le ⋯ de la scène lit les entrées de la RÈGLE — jamais une liste écrite ici."
+        )
+    }
+
+    /// **« Tout effacer » doit passer par `viewModel.reset()`.**
+    ///
+    /// Vider le seul état du MEUBLE laisserait `carriedContentSources` intact
+    /// dans le ViewModel — le cache d'idempotence d'`applyContentMedia`. La
+    /// MÊME photo re-choisie après un effacement serait alors sautée EN
+    /// SILENCE : rien ne casse, rien ne loggue, l'écran reste vide là où
+    /// l'auteur vient de poser une image. C'est le défaut que ce lot corrige
+    /// dans le SDK, et cette garde interdit de le rouvrir depuis l'app.
+    /// **L'ordre a changé au #6577, et pour une raison qui se dit :** le relevé
+    /// du canvas — qui nomme les fichiers des objets de scène, le SON en tête,
+    /// absent des huit porteurs — n'a plus rien à lire après `reset()`. Le
+    /// retrait des porteurs précède donc le reset, et le reste de l'état du
+    /// meuble le suit toujours.
+    func test_clearAll_goesThroughTheViewModelReset_notOnlyTheHostState() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(compacted.contains("ComposerMediaRetractionRun.clear("),
+            "« Tout effacer » doit consommer la page blanche des porteurs — l'énumération à la "
+                + "main en oubliait DEUX sur huit, et n'oubliait aucune pré-montée.")
+        guard let porteurs = compacted.range(of: "ComposerMediaRetractionRun.clear("),
+              let reset = compacted.range(of: "viewModel.reset()") else {
+            return XCTFail("`case .clearAll:` ne fait plus ni l'un ni l'autre")
+        }
+        XCTAssertLessThan(porteurs.lowerBound, reset.lowerBound,
+            "Le relevé du canvas se dresse AVANT `reset()` : après lui, le fichier d'un son de "
+                + "scène n'est plus nommable par personne, et sa pré-montée reste orpheline.")
+        XCTAssertTrue(compacted.contains("viewModel.reset()"),
+            "L'effacement doit passer par `viewModel.reset()` — lui seul oublie les sources portées.")
+        for efface in ["documentText=\"\"", "documentBackground=nil", "documentLocation=nil"] {
+            XCTAssertTrue(compacted.contains(efface),
+                "« Tout effacer » laisse `\(efface)` derrière lui — un effacement partiel est pire "
+                    + "qu'aucun : l'auteur croit être reparti de zéro.")
+        }
+    }
+
+    /// Retirer le fond touche les DEUX niveaux, et pour deux raisons distinctes :
+    /// l'INTENTION de l'auteur (`documentBackground`, qui fait naître la scène)
+    /// et la couleur du CANVAS, qui doit rester valide — `background` n'est pas
+    /// optionnel dans `StoryEffects`, et du vide y peindrait du NOIR.
+    func test_removeBackground_clearsTheIntentAndKeepsTheCanvasPaintable() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(
+            compacted.contains("case.removeBackground:documentBackground=nilviewModel.clearBackground()"),
+            "Retirer le fond doit effacer l'INTENTION et remettre le canvas sur une couleur valide."
+        )
+    }
+}

@@ -6,7 +6,7 @@ Architecture: PUB/SUB + REQ/REP avec pool de connexions et traitement asynchrone
 """
 
 import asyncio
-import json
+import os
 import logging
 import uuid
 import zmq
@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 from .zmq_models import TranslationTask
 from .zmq_pool_manager import TranslationPoolManager
 from .zmq_translation_handler import TranslationHandler
+from .zmq_request_frame import parse_request_frame
 from .zmq_audio_handler import AudioHandler
 from .zmq_transcription_handler import TranscriptionHandler
 from .zmq_voice_handler import VoiceHandler
@@ -29,6 +30,7 @@ from .zmq_voice_handler import VoiceHandler
 # Import du service de base de données
 from .database_service import DatabaseService
 from .audio_fetcher import get_audio_fetcher
+from utils.audio_admission import AudioAdmission, audio_process_concurrency, audio_request_priority
 
 
 class ZMQTranslationServer:
@@ -47,8 +49,12 @@ class ZMQTranslationServer:
                  gateway_sub_port: int = 5558,   # Port où Translator PUB bind (Gateway SUB connect ici)
                  normal_pool_size: int = 10000,
                  any_pool_size: int = 10000,
-                 normal_workers: int = 3,
-                 any_workers: int = 2,
+                 # None laisse TranslationPoolManager résoudre le défaut
+                 # (NORMAL_WORKERS_DEFAULT / ANY_WORKERS_DEFAULT, sinon
+                 # calculate_optimal_workers) — SEULE source de ces défauts
+                 # depuis #3664, plutôt qu'un troisième jeu de valeurs ici.
+                 normal_workers: Optional[int] = None,
+                 any_workers: Optional[int] = None,
                  translation_service=None,
                  database_url: str = None):
         
@@ -90,6 +96,8 @@ class ZMQTranslationServer:
 
         # ✨ Tracking des tâches asynchrones en cours (pour métriques et cleanup)
         self.active_tasks: set[asyncio.Task] = set()
+        # #11268 — le vocal d'un message passe avant le média d'un post, à concurrence bornée.
+        self.audio_admission = AudioAdmission(audio_process_concurrency(os.environ))
         self.task_counters = {
             'translation': 0,
             'audio_process': 0,
@@ -239,10 +247,8 @@ class ZMQTranslationServer:
                         logger.error(f"Erreur ZMQ: {e}")
                     break
                 except Exception as e:
-                    logger.error(f"Erreur inattendue: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    
+                    logger.error(f"[TRANSLATOR] Requête non traitée par la boucle de réception: {type(e).__name__}")
+
         except KeyboardInterrupt:
             logger.info("Arrêt demandé par l'utilisateur")
         finally:
@@ -281,7 +287,7 @@ class ZMQTranslationServer:
             try:
                 exc = t.exception()
                 if exc:
-                    logger.error(f"❌ Erreur non catchée dans tâche {task_type}: {exc}")
+                    logger.error(f"❌ [TRANSLATOR] Erreur non catchée dans tâche {task_type}: {type(exc).__name__}")
             except asyncio.CancelledError:
                 pass
 
@@ -339,8 +345,9 @@ class ZMQTranslationServer:
         metadata_frame = frames[0]
         binary_frames = frames[1:] if len(frames) > 1 else []
 
-        # Parser le JSON
-        request_data = json.loads(metadata_frame.decode('utf-8'))
+        request_data = parse_request_frame(metadata_frame)
+        if request_data is None:
+            return
         request_type = request_data.get('type', 'translation')
 
         # Router vers le handler approprié EN MODE NON-BLOQUANT
@@ -360,7 +367,10 @@ class ZMQTranslationServer:
             self._inject_binary_frames(request_data, binary_frames)
             # ✨ Lancer en tâche asynchrone trackée (peut prendre 5-10s)
             self._create_tracked_task(
-                self.audio_handler._handle_audio_process_request(request_data),
+                self.audio_admission.run(
+                    audio_request_priority(request_data),
+                    lambda: self.audio_handler._handle_audio_process_request(request_data),
+                ),
                 'audio_process'
             )
             logger.debug(f"🚀 [NON-BLOCKING] Audio process task créée ({len(self.active_tasks)} actives)")
@@ -390,6 +400,13 @@ class ZMQTranslationServer:
                 'story_text_object_translation'
             )
             logger.debug(f"🚀 [NON-BLOCKING] StoryTextObject task créée ({len(self.active_tasks)} actives)")
+        elif request_type == 'cache_forget':
+            # #13102 — l'oubli d'une pièce ou d'un message effacés par la
+            # passerelle : identifiants seuls, acquitté par `cache_forget_done`.
+            self._create_tracked_task(
+                self.translation_handler._handle_cache_forget(request_data),
+                'cache_forget'
+            )
         elif request_type == 'voice_api':
             # ✨ Lancer en tâche asynchrone trackée
             self._create_tracked_task(

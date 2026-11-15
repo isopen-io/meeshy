@@ -17,12 +17,17 @@ DIRECTION 1 — every USED identifier key resolves (code -> catalog):
   For each `String(localized: "K" …)` call WITHOUT a `defaultValue:` (a default
   value is itself a safe fallback), K must exist with an `en` entry in the
   catalog it resolves against — the SDK catalog when the call passes
-  `bundle: .module`, otherwise the app catalog (`bundle: .main` / default).
+  `bundle: .module`, otherwise the MAIN-bundle catalog of the target that owns
+  the source: an app extension ships its own (CATALOG_BY_TARGET_FRAGMENT), and
+  only the app target itself resolves against apps/ios/Meeshy/Localizable.xcstrings.
 
 DIRECTION 2 — every EXISTING app-catalog identifier key is used (catalog -> code):
   Every identifier key in the app catalog must appear as the literal `"K"`
   somewhere in the scanned sources (app targets + extensions + SDK, since SDK
-  code references app-catalog keys via `bundle: .main`).
+  code references app-catalog keys via `bundle: .main`) — or be ADOPTED by an
+  Android manifest (`apps/android/i18n/manifest`, `"catalog": "app"`,
+  `"status": "adopted"`): `xcstrings_to_android.py` reads its translations
+  from this catalog, so the key is alive even once iOS code stops citing it.
 
 Run: python3 apps/ios/scripts/check_localization.py
 Exit code 0 = consistent, 1 = violations found.
@@ -43,15 +48,29 @@ SDK_CATALOG = REPO / "packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.
 SOURCE_ROOTS = [
     "apps/ios/Meeshy",
     "apps/ios/MeeshyNotificationExtension",
+    "apps/ios/MeeshyNotificationContentExtension",
     "apps/ios/MeeshyWidgets",
     "apps/ios/MeeshyShareExtension",
-    "apps/ios/MeeshyContextMenu",
     "apps/ios/MeeshyIntents",
     "packages/MeeshySDK/Sources",
 ]
 
+# An app extension is a SEPARATE BUNDLE: a String(localized:) in its sources
+# resolves against the catalog shipped INSIDE it, never the host app's. Path
+# fragment -> the catalog that target actually resolves against. Mirrors
+# `Environment.catalogByTargetFragment` in LocalizationConsistencyTests.swift —
+# the two must be edited together (270i).
+CATALOG_BY_TARGET_FRAGMENT = {
+    "/MeeshyShareExtension/": "apps/ios/MeeshyShareExtension/Localizable.xcstrings",
+    "/MeeshyNotificationExtension/": "apps/ios/MeeshyNotificationExtension/Localizable.xcstrings",
+    "/MeeshyNotificationContentExtension/": "apps/ios/MeeshyNotificationContentExtension/Localizable.xcstrings",
+    "/MeeshyWidgets/": "apps/ios/MeeshyWidgets/Localizable.xcstrings",
+}
+
 # Documented exceptions. Keep empty; add a key only with a justifying comment.
 ALLOWLIST_ORPHAN: set[str] = set()
+
+ANDROID_MANIFESTS = REPO / "apps/android/i18n/manifest"
 ALLOWLIST_RAW: set[str] = set()
 
 LOCALIZED_CALL = re.compile(r'String\(\s*localized:\s*"((?:[^"\\]|\\.)*)"')
@@ -96,6 +115,18 @@ def call_segment(text: str, start: int) -> str:
     return text[seg_start : i + 1]
 
 
+def android_adopted_app_keys() -> set[str]:
+    if not ANDROID_MANIFESTS.exists():
+        return set()
+    return {
+        entry["iosKey"]
+        for path in ANDROID_MANIFESTS.rglob("*.json")
+        for module in json.loads(path.read_text(encoding="utf-8")).get("modules", {}).values()
+        for entry in module.get("entries", [])
+        if entry.get("catalog") == "app" and entry.get("status") == "adopted" and "iosKey" in entry
+    }
+
+
 def has_en(catalog: dict, key: str) -> bool:
     entry = catalog.get(key)
     return bool(entry and entry.get("localizations", {}).get("en") is not None)
@@ -109,6 +140,18 @@ def main() -> int:
 
     app = json.loads(APP_CATALOG.read_text(encoding="utf-8"))["strings"]
     sdk = json.loads(SDK_CATALOG.read_text(encoding="utf-8"))["strings"]
+    per_target = {
+        fragment: json.loads((REPO / path).read_text(encoding="utf-8"))["strings"]
+        for fragment, path in CATALOG_BY_TARGET_FRAGMENT.items()
+        if (REPO / path).exists()
+    }
+
+    def main_bundle_catalog(path: Path) -> dict:
+        """The catalog the given source file's bundle resolves against."""
+        for fragment, strings in per_target.items():
+            if fragment in str(path):
+                return strings
+        return app
 
     files = []
     for root in SOURCE_ROOTS:
@@ -131,15 +174,16 @@ def main() -> int:
             if "defaultValue:" in segment:
                 continue
             is_module = ".module" in segment
-            catalog = sdk if is_module else app
+            catalog = sdk if is_module else main_bundle_catalog(path)
             if not has_en(catalog, key):
                 raw_violations.append((key, path.name, "SDK" if is_module else "APP"))
     blob = "\n".join(blob_parts)
 
+    adopted = android_adopted_app_keys()
     orphans = sorted(
         k
         for k in app
-        if is_identifier(k) and k not in ALLOWLIST_ORPHAN and f'"{k}"' not in blob
+        if is_identifier(k) and k not in ALLOWLIST_ORPHAN and k not in adopted and f'"{k}"' not in blob
     )
 
     ok = True

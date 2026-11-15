@@ -1,5 +1,5 @@
 /**
- * Route tests — POST/GET /posts/:postId/share (LOT 6 tracked share).
+ * Route tests — POST /posts/:postId/share (LOT 6 tracked share).
  *
  * @jest-environment node
  */
@@ -8,8 +8,13 @@ import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
-const sharePost = jest.fn<(...a: unknown[]) => Promise<{ shareCount: number } | null>>()
-  .mockResolvedValue({ shareCount: 3 });
+const sharePost = jest.fn<(...a: unknown[]) => Promise<{ shareCount: number; authorId: string } | null>>()
+  .mockResolvedValue({ shareCount: 3, authorId: 'author-1' });
+const creditPostEngagement = jest.fn();
+jest.mock('../services/posts/postEngagementCredits', () => ({
+  ...(jest.requireActual('../services/posts/postEngagementCredits') as object),
+  creditPostEngagement: (...args: unknown[]) => creditPostEngagement(...args),
+}));
 const shareWithTrackingLink = jest.fn<(...a: unknown[]) => Promise<unknown>>()
   .mockResolvedValue({ shared: true, shareCount: 4, token: 'tok123', shortUrl: 'https://meeshy.me/l/tok123', reused: false });
 const getPostShareLink = jest.fn<(...a: unknown[]) => Promise<unknown>>()
@@ -27,6 +32,12 @@ jest.mock('../utils/withMutationLog', () => ({
   // les laissait à `undefined` — `instanceof undefined` lève un TypeError
   // qui se déguise en 500 sur des chemins d'erreur sans rapport.
   ...(jest.requireActual('../utils/withMutationLog') as object), withMutationLog: jest.fn().mockImplementation(({ op }: any) => op()) }));
+const relayActivityToEntourage = jest.fn<(...a: unknown[]) => Promise<void>>().mockResolvedValue(undefined);
+jest.mock('../services/notifications/fanout/activity-relay', () => ({
+  relayActivityToEntourage: (...args: unknown[]) => relayActivityToEntourage(...args),
+}));
+const createNotification = jest.fn();
+const blockBetween = jest.fn<(...a: unknown[]) => Promise<{ id: string } | null>>().mockResolvedValue(null);
 jest.mock('../services/MentionService', () => ({ resolveMentionedUsers: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]) }));
 
 const POST_ID = '507f1f77bcf86cd799439011';
@@ -39,9 +50,29 @@ const noAuth = (_req: any, _reply: unknown, done: () => void) => done();
 
 async function buildApp(authed: boolean): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
-  const prisma = {} as unknown as PrismaClient;
+  // #4146 — le partage verifie l'audience du post avant de frapper le lien
+  // trace : `loadPostAcl` lit `post.findFirst`. Le double rend un post PUBLIC,
+  // donc les trois cas mesures ici restent ceux d'avant la garde ; le refus
+  // hors audience a son temoin dans
+  // `unit/routes/posts/interactions-consumption-audience.test.ts`.
+  const prisma = {
+    post: {
+      findFirst: (args: { where: { id: string } }) => Promise.resolve({
+        id: args.where.id,
+        authorId: 'author-1',
+        visibility: 'PUBLIC',
+        visibilityUserIds: [] as string[],
+        expiresAt: null,
+        repostOfId: null,
+        originalRepostOfId: null,
+      }),
+      findMany: () => Promise.resolve([]),
+    },
+    user: { findFirst: (...args: unknown[]) => blockBetween(...args) },
+  } as unknown as PrismaClient;
   const mw = authed ? auth : noAuth;
   const { registerInteractionRoutes } = await import('../routes/posts/interactions');
+  app.decorate('notificationService', { createNotification } as never);
   app.register(async (instance) => {
     instance.addHook('preValidation', mw as any);
     registerInteractionRoutes(instance, prisma, mw);
@@ -63,6 +94,16 @@ describe('POST /posts/:postId/share', () => {
     expect(sharePost).toHaveBeenCalled();
   });
 
+  it('le partage simple crédite social.share comme le partage suivi — une fois par post, jamais pour le sien (#9635)', async () => {
+    creditPostEngagement.mockClear();
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/share`, payload: {} });
+    expect(creditPostEngagement).toHaveBeenCalledWith(expect.anything(), 'u1', 'social.share', {
+      postId: POST_ID,
+      targetId: POST_ID,
+      targetOwnerId: 'author-1',
+    });
+  });
+
   it('tracked share (generateLink) returns token + shortUrl via shareWithTrackingLink', async () => {
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/share`, payload: { generateLink: true } });
     expect(res.statusCode).toBe(200);
@@ -77,29 +118,47 @@ describe('POST /posts/:postId/share', () => {
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/share`, payload: { generateLink: true } });
     expect(res.statusCode).toBe(404);
   });
-});
 
-describe('GET /posts/:postId/share', () => {
-  let app: FastifyInstance;
-  let unauthApp: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(true); unauthApp = await buildApp(false); });
-  afterAll(async () => { await app.close(); await unauthApp.close(); });
-
-  it('returns the caller share-link analytics', async () => {
-    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/share` });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data).toMatchObject({ token: 'tok123', totalClicks: 8, uniqueClicks: 5 });
+  it('un partage, simple ou suivi, est relayé à l’entourage (#14069)', async () => {
+    relayActivityToEntourage.mockClear();
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/share`, payload: {} });
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/share`, payload: { generateLink: true } });
+    expect(relayActivityToEntourage).toHaveBeenCalledTimes(2);
+    expect(relayActivityToEntourage.mock.calls[0][1]).toEqual({ activity: 'share', postId: POST_ID, actorId: 'u1' });
   });
 
-  it('returns null data when the caller has no share link', async () => {
-    getPostShareLink.mockResolvedValueOnce(null);
-    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/share` });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data).toBeNull();
+  it('un partage refusé (contenu introuvable) n’est pas relayé (#14069)', async () => {
+    relayActivityToEntourage.mockClear();
+    shareWithTrackingLink.mockResolvedValueOnce(null);
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/share`, payload: { generateLink: true } });
+    expect(relayActivityToEntourage).not.toHaveBeenCalled();
   });
 
-  it('rejects unauthenticated requests with 401', async () => {
-    const res = await unauthApp.inject({ method: 'GET', url: `/posts/${POST_ID}/share` });
-    expect(res.statusCode).toBe(401);
+  it("partager le contenu d'un auteur avec qui un blocage existe se refuse comme un contenu introuvable, sans frappe ni relais (#14242)", async () => {
+    sharePost.mockClear();
+    relayActivityToEntourage.mockClear();
+    blockBetween.mockResolvedValueOnce({ id: 'author-1' });
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/share`, payload: {} });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ success: false, code: 'POST_NOT_FOUND' });
+    expect(sharePost).not.toHaveBeenCalled();
+    expect(relayActivityToEntourage).not.toHaveBeenCalled();
+  });
+
+  it('un partage hors audience (refusé par la garde) n’est pas relayé (#14069)', async () => {
+    const denied = Fastify({ logger: false });
+    const prisma = { post: { findFirst: () => Promise.resolve(null) } } as unknown as PrismaClient;
+    denied.decorate('notificationService', { createNotification } as never);
+    const { registerInteractionRoutes } = await import('../routes/posts/interactions');
+    denied.register(async (instance) => {
+      instance.addHook('preValidation', auth as any);
+      registerInteractionRoutes(instance, prisma, auth);
+    });
+    await denied.ready();
+    relayActivityToEntourage.mockClear();
+    const res = await denied.inject({ method: 'POST', url: `/posts/${POST_ID}/share`, payload: {} });
+    expect(res.statusCode).toBe(404);
+    expect(relayActivityToEntourage).not.toHaveBeenCalled();
+    await denied.close();
   });
 });

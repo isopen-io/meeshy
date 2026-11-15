@@ -34,7 +34,10 @@ describe('E2E: /me/preferences/categories', () => {
       updateMany: jest.fn(),
       delete: jest.fn()
     },
-    conversationPreference: {
+    // `categoryId` lives on `UserConversationPreferences`, never on the generic
+    // key/value store `ConversationPreference` the DELETE route used to write.
+    userConversationPreferences: {
+      findMany: jest.fn(),
       updateMany: jest.fn()
     },
     $transaction: jest.fn()
@@ -335,7 +338,8 @@ describe('E2E: /me/preferences/categories', () => {
       };
 
       mockPrisma.userConversationCategory.findFirst.mockResolvedValue(existingCategory);
-      mockPrisma.$transaction.mockResolvedValue([{}, {}]);
+      mockPrisma.userConversationPreferences.findMany.mockResolvedValue([]);
+      mockPrisma.userConversationCategory.delete.mockResolvedValue(existingCategory);
 
       const response = await app.inject({
         method: 'DELETE',
@@ -347,8 +351,15 @@ describe('E2E: /me/preferences/categories', () => {
       expect(body.success).toBe(true);
       expect(body.message).toContain('deleted');
 
-      // Verify transaction was called with updateMany and delete
-      expect(mockPrisma.$transaction).toHaveBeenCalled();
+      // The detach looks for attached conversations on the model that carries
+      // `categoryId`, then the category itself is removed.
+      expect(mockPrisma.userConversationPreferences.findMany).toHaveBeenCalledWith({
+        where: { userId, categoryId: 'cat-1' },
+        select: { conversationId: true }
+      });
+      expect(mockPrisma.userConversationCategory.delete).toHaveBeenCalledWith({
+        where: { id: 'cat-1' }
+      });
     });
 
     it('should return 404 for non-existent category', async () => {

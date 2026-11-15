@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.door.rules",
+          "androidName": "game_door_rules",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

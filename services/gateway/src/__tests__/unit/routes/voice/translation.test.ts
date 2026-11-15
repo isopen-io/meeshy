@@ -60,12 +60,38 @@ function makeTranslationService(overrides: Record<string, any> = {}) {
   } as any;
 }
 
+/**
+ * #3624 — le chemin `attachmentId` vérifie désormais l'appartenance de
+ * l'appelant à la conversation de la pièce jointe avant tout accès
+ * (`ensureVoiceAttachmentAccessible` → `resolveAttachmentReadVerdict`). Le
+ * défaut simule un membre légitime : attachement rattaché à un message
+ * vivant d'une conversation où `USER_ID` participe activement.
+ */
+function makePrismaMock(overrides: {
+  messageAttachment?: { id: string | null; messageId: string | null; uploadedBy: string | null } | null;
+  message?: { conversationId: string; deletedAt: Date | null; expiresAt: Date | null } | null;
+  participant?: { id: string } | null;
+} = {}) {
+  const {
+    messageAttachment = { id: 'att-1', messageId: 'msg-1', uploadedBy: USER_ID },
+    message = { conversationId: 'conv-1', deletedAt: null, expiresAt: null },
+    participant = { id: 'participant-1' },
+  } = overrides;
+
+  return {
+    messageAttachment: { findUnique: jest.fn<any>().mockResolvedValue(messageAttachment) },
+    message: { findUnique: jest.fn<any>().mockResolvedValue(message) },
+    participant: { findFirst: jest.fn<any>().mockResolvedValue(participant) },
+  } as any;
+}
+
 // ─── Helper ────────────────────────────────────────────────────────────────────
 
 async function buildApp(opts: {
   authenticated?: boolean;
   audioService?: ReturnType<typeof makeAudioTranslateService>;
   translationService?: ReturnType<typeof makeTranslationService> | null;
+  prisma?: ReturnType<typeof makePrismaMock>;
 } = {}): Promise<{
   app: FastifyInstance;
   audioService: ReturnType<typeof makeAudioTranslateService>;
@@ -75,6 +101,7 @@ async function buildApp(opts: {
     authenticated = true,
     audioService = makeAudioTranslateService(),
     translationService = makeTranslationService(),
+    prisma = makePrismaMock(),
   } = opts;
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
@@ -98,7 +125,7 @@ async function buildApp(opts: {
     }
   });
 
-  registerTranslationRoutes(app, audioService, translationService ?? undefined, PREFIX);
+  registerTranslationRoutes(app, audioService, translationService ?? undefined, PREFIX, prisma);
   await app.ready();
   return { app, audioService, translationService };
 }
@@ -674,6 +701,170 @@ describe('les charges utiles `attachment` / `transcription` traversent le séria
     expect(res.json().data.translatedAudios).toEqual([
       { id: 'att-1_en', targetLanguage: 'en', translatedText: 'hello' },
     ]);
+    await app.close();
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// #3624 — le chemin `attachmentId` de /translate, /translate/async et
+// /transcribe chargeait et traduisait/transcrivait une pièce jointe PAR ID
+// sans jamais vérifier que l'appelant appartient à sa conversation :
+// n'importe quel compte authentifié pouvait lire la transcription d'autrui,
+// écrire des traductions, ou déclencher un coût Whisper/TTS sur un fichier
+// qui ne lui appartient pas. Ces témoins assertent sur l'EFFET (le service
+// n'est PAS appelé pour un non-membre), pas seulement sur le statut — même
+// famille que la garde jumelle sur `routes/attachments/translation.ts` (#5152).
+// ═════════════════════════════════════════════════════════════════════════════
+
+const OWNING_MESSAGE_ID = 'mmmmmmmmmmmmmmmmmmmmmmmm';
+const CONVERSATION_ID = 'ccccccccccccccccccccccc';
+const OTHER_USER_ID = '507f1f77bcf86cd799439099';
+
+describe('POST /api/v1/voice/translate — #3624 appartenance à la conversation', () => {
+  it("refuse un compte authentifié qui n'est PAS membre de la conversation — 403, sans déclencher AUCUNE traduction", async () => {
+    const getAttachmentWithTranscription = jest.fn<any>();
+    const translateAttachment = jest.fn<any>();
+    const translationService = makeTranslationService({ getAttachmentWithTranscription, translateAttachment });
+    const prisma = makePrismaMock({
+      messageAttachment: { id: 'att-1', messageId: OWNING_MESSAGE_ID, uploadedBy: OTHER_USER_ID },
+      message: { conversationId: CONVERSATION_ID, deletedAt: null, expiresAt: null },
+      participant: null,
+    });
+
+    const { app } = await buildApp({ translationService, prisma });
+    const res = await app.inject({
+      method: 'POST', url: `${PREFIX}/translate`,
+      payload: { attachmentId: 'att-1', targetLanguages: ['fr'] },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(getAttachmentWithTranscription).not.toHaveBeenCalled();
+    expect(translateAttachment).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('refuse — sans appeler le service — quand le message porteur a été SUPPRIMÉ (404)', async () => {
+    const getAttachmentWithTranscription = jest.fn<any>();
+    const translationService = makeTranslationService({ getAttachmentWithTranscription });
+    const prisma = makePrismaMock({
+      messageAttachment: { id: 'att-1', messageId: OWNING_MESSAGE_ID, uploadedBy: OTHER_USER_ID },
+      message: { conversationId: CONVERSATION_ID, deletedAt: new Date('2026-01-01T00:00:00Z'), expiresAt: null },
+    });
+
+    const { app } = await buildApp({ translationService, prisma });
+    const res = await app.inject({
+      method: 'POST', url: `${PREFIX}/translate`,
+      payload: { attachmentId: 'att-1', targetLanguages: ['fr'] },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(getAttachmentWithTranscription).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('sert le DÉPOSANT sur une pièce jointe pas encore rattachée à un message (messageId null)', async () => {
+    const prisma = makePrismaMock({
+      messageAttachment: { id: 'att-1', messageId: null, uploadedBy: USER_ID },
+    });
+    const translationService = makeTranslationService({
+      getAttachmentWithTranscription: jest.fn<any>().mockResolvedValue({
+        attachment: { id: 'att-1' }, transcription: null, translatedAudios: [],
+      }),
+    });
+    const { app } = await buildApp({ translationService, prisma });
+
+    const res = await app.inject({
+      method: 'POST', url: `${PREFIX}/translate`,
+      payload: { attachmentId: 'att-1', targetLanguages: ['fr'] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("refuse quiconque N'EST PAS le déposant tant que l'envoi est en cours (messageId null)", async () => {
+    const getAttachmentWithTranscription = jest.fn<any>();
+    const translationService = makeTranslationService({ getAttachmentWithTranscription });
+    const prisma = makePrismaMock({
+      messageAttachment: { id: 'att-1', messageId: null, uploadedBy: OTHER_USER_ID },
+    });
+
+    const { app } = await buildApp({ translationService, prisma });
+    const res = await app.inject({
+      method: 'POST', url: `${PREFIX}/translate`,
+      payload: { attachmentId: 'att-1', targetLanguages: ['fr'] },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(getAttachmentWithTranscription).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('sert un membre INSCRIT de la conversation', async () => {
+    const prisma = makePrismaMock({
+      messageAttachment: { id: 'att-1', messageId: OWNING_MESSAGE_ID, uploadedBy: OTHER_USER_ID },
+      message: { conversationId: CONVERSATION_ID, deletedAt: null, expiresAt: null },
+      participant: { id: 'participant-1' },
+    });
+    const translationService = makeTranslationService({
+      getAttachmentWithTranscription: jest.fn<any>().mockResolvedValue({
+        attachment: { id: 'att-1' }, transcription: null, translatedAudios: [],
+      }),
+    });
+    const { app } = await buildApp({ translationService, prisma });
+
+    const res = await app.inject({
+      method: 'POST', url: `${PREFIX}/translate`,
+      payload: { attachmentId: 'att-1', targetLanguages: ['fr'] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe('POST /api/v1/voice/translate/async — #3624 appartenance à la conversation', () => {
+  it("refuse un compte authentifié qui n'est PAS membre de la conversation — 403, sans déclencher AUCUNE traduction", async () => {
+    const translateAttachment = jest.fn<any>();
+    const translationService = makeTranslationService({ translateAttachment });
+    const prisma = makePrismaMock({
+      messageAttachment: { id: 'att-1', messageId: OWNING_MESSAGE_ID, uploadedBy: OTHER_USER_ID },
+      message: { conversationId: CONVERSATION_ID, deletedAt: null, expiresAt: null },
+      participant: null,
+    });
+
+    const { app } = await buildApp({ translationService, prisma });
+    const res = await app.inject({
+      method: 'POST', url: `${PREFIX}/translate/async`,
+      payload: { attachmentId: 'att-1', targetLanguages: ['fr'] },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(translateAttachment).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe('POST /api/v1/voice/transcribe — #3624 appartenance à la conversation', () => {
+  it("refuse un compte authentifié qui n'est PAS membre de la conversation — 403, sans déclencher AUCUNE transcription", async () => {
+    const getAttachmentWithTranscription = jest.fn<any>();
+    const transcribeAttachment = jest.fn<any>();
+    const translationService = makeTranslationService({ getAttachmentWithTranscription, transcribeAttachment });
+    const prisma = makePrismaMock({
+      messageAttachment: { id: 'att-1', messageId: OWNING_MESSAGE_ID, uploadedBy: OTHER_USER_ID },
+      message: { conversationId: CONVERSATION_ID, deletedAt: null, expiresAt: null },
+      participant: null,
+    });
+
+    const { app } = await buildApp({ translationService, prisma });
+    const res = await app.inject({
+      method: 'POST', url: `${PREFIX}/transcribe`,
+      payload: { attachmentId: 'att-1' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(getAttachmentWithTranscription).not.toHaveBeenCalled();
+    expect(transcribeAttachment).not.toHaveBeenCalled();
     await app.close();
   });
 });

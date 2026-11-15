@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        { "androidName": "sdk_upload_progress", "status": "android-only" },
+        { "androidName": "sdk_upload_unit_kb", "status": "android-only" },
+        { "androidName": "sdk_upload_unit_mb", "status": "android-only" },
+        { "androidName": "sdk_upload_unit_gb", "status": "android-only" },
+        { "androidName": "sdk_upload_progress_a11y", "status": "android-only" }
+      ]
+    }
+  }
+}

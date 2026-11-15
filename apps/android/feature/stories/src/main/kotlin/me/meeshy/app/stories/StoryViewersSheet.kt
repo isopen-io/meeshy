@@ -19,6 +19,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -30,6 +31,10 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.StoryViewer
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
+import me.meeshy.ui.profile.opensProfile
+import me.meeshy.sdk.model.profile.ProfileSheetUser
+import me.meeshy.sdk.model.profile.ofAuthor
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
 
@@ -87,7 +92,7 @@ private fun stringResourceTitle() =
 
 @Composable
 private fun countLabel(count: Int) =
-    androidx.compose.ui.res.stringResource(R.string.stories_viewers_count, count)
+    androidx.compose.ui.res.pluralStringResource(R.plurals.stories_viewers_count, count, count)
 
 @Composable
 private fun loadingLabel() =
@@ -110,9 +115,12 @@ private fun ViewerList(viewers: List<StoryViewer>) {
 }
 
 @Composable
-private fun ViewerRow(viewer: StoryViewer) {
+internal fun ViewerRow(viewer: StoryViewer) {
+    val profile = remember(viewer.id, viewer.username, viewer.displayName, viewer.avatarUrl) {
+        ProfileSheetUser.ofAuthor(viewer.id, viewer.username, viewer.displayName, viewer.avatarUrl)
+    }
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().opensProfile(profile),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
@@ -120,6 +128,8 @@ private fun ViewerRow(viewer: StoryViewer) {
             name = viewer.displayName,
             size = 40.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(viewer.displayName)),
+            imageUrl = viewer.avatarUrl,
+            presence = rememberPresence(viewer.id),
         )
         Text(
             text = viewer.displayName,
@@ -146,12 +156,6 @@ private fun EmptyViewers() {
             text = androidx.compose.ui.res.stringResource(R.string.stories_viewers_empty_title),
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            text = androidx.compose.ui.res.stringResource(R.string.stories_viewers_empty_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
     }

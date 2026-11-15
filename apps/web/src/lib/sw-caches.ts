@@ -1,0 +1,106 @@
+import { SW_RECENT_MEDIA_CACHE } from './media/recent-media-cache-name';
+
+/**
+ * LES NOMS DE CACHE DU SERVICE WORKER, DÉCLARÉS UNE FOIS (#6936).
+ *
+ * Le Cache Storage vit à l'échelle de l'ORIGINE, pas du worker : `caches.keys()`
+ * rend AUSSI ce qu'un autre script y a écrit. Toute purge de l'application doit
+ * donc nommer ce qu'elle POSSÈDE, et rien d'autre — c'est la frontière de
+ * propriété que le legacy documentait déjà (`LEGACY_CACHE_NAMESPACE`,
+ * `apps/web/utils/service-worker.ts`).
+ *
+ * Trois lecteurs partagent ce module, plutôt que trois copies du littéral :
+ *  - `vite.config.ts` (§ VitePWA `runtimeCaching`), qui CRÉE ces seaux ;
+ *  - `lib/api/account-caches.ts`, qui les purge à la FIN d'un compte sur
+ *    l'appareil — déconnexion, révocation (#8674 ; le seau `api` range chaque
+ *    réponse sous son identité, changer de compte ne le purge donc plus) ;
+ *  - `lib/app-update/service-worker.ts`, qui les purge à la mise à jour.
+ */
+
+/** Les seaux d'exécution déclarés par `runtimeCaching` — ceux qui portent de la donnée de lecteur. */
+export const SW_RUNTIME_CACHES = {
+  /**
+   * Le JSON `/api/**` en NetworkFirst — 200 entrées, sept jours. Ni
+   * l'administration (#6862) ni les MÉDIAS (#6973) : le plafond de 200 entrées
+   * est RÉSERVÉ au JSON, sans quoi un défilement de fil évince les réponses de
+   * conversations et de messages dont la lecture hors ligne dépend.
+   */
+  api: 'api',
+  /**
+   * Les IMAGES en CacheFirst — 300 entrées, trente jours, `statuses: [0, 200]`.
+   * Enregistré AVANT le seau `api` (le routeur de Workbox retient la première
+   * route qui matche) ; audio et vidéo n'y entrent pas, décision inscrite dans
+   * `vite.config.ts` et gardée par `scripts/check-sw-api-cache.mjs`.
+   */
+  medias: 'medias',
+} as const;
+
+export const SW_RUNTIME_CACHE_NAMES: readonly string[] = Object.values(SW_RUNTIME_CACHES);
+
+/**
+ * LE SEAU DE `/config.js` (#10208) — la configuration du DÉPLOIEMENT, pas une
+ * donnée de lecteur : hors de `SW_RUNTIME_CACHES`, donc ni la fin d'un compte
+ * ni une mise à jour ne le purgent. Le purger ne ferait que priver le prochain
+ * démarrage hors ligne de l'origine déclarée.
+ */
+export const SW_DEPLOYMENT_CONFIG_CACHE = 'deployment-config';
+
+/**
+ * LE SEAU DES FICHIERS DE PACKS (#10149) — vignettes, contrats et chaînes
+ * servis par `packAssets.byFile` (`<sha16>.<ext>`), adressés par CONTENU donc
+ * immuables : la page les y range elle-même (`lib/packs/pack-asset-store.ts`,
+ * qui en porte le JUMEAU pour ne pas tirer ce module hors de la première peinture)
+ * après avoir vérifié leur SHA-256. Hors de `SW_RUNTIME_CACHES` : ce n'est pas
+ * une donnée de lecteur (le même fichier sert tout le monde), ni la fin d'un
+ * compte ni une mise à jour ne le purgent — le purger ne ferait que les
+ * retélécharger.
+ */
+export const SW_PACK_ASSETS_CACHE = 'meeshy-pack-assets';
+
+/**
+ * LE NAMESPACE DU LEGACY, dont la v2 a HÉRITÉ la responsabilité (#6702) : son
+ * worker ne s'exécutera plus jamais, donc plus rien d'autre n'effacera ce qu'il
+ * a laissé. `public/sw-legacy-purge.js` le purge à l'activation ; ce littéral
+ * est son JUMEAU côté page — un script classique chargé par `importScripts` ne
+ * peut pas importer ce module.
+ */
+export const LEGACY_CACHE_NAMESPACE = 'meeshy-cache-';
+
+/**
+ * LE SEAU DES MÉDIAS VUS RÉCEMMENT (#11326) — audio et vidéo ENTIERS, rangés
+ * par la page (`lib/media/recent-media-store.ts`), resservis par plages par
+ * `public/sw-recent-media.js`, qui en porte le JUMEAU. Trois jours, Wi-Fi,
+ * 500 Mo — son nom vit dans `media/recent-media-cache-name.ts`, que la garde
+ * lit SANS tirer ce module (un chunk nommé `sw-caches` passerait pour un
+ * worker dans la coque, `check-shell-dist`). Donnée de LECTEUR : la fin d'un compte le
+ * purge ({@link SW_ACCOUNT_CACHE_NAMES}) ; une mise à jour de l'application ne
+ * le purge pas — il ne dépend d'aucune version du code.
+ */
+export { SW_RECENT_MEDIA_CACHE };
+
+/** Ce que la FIN d'un compte sur l'appareil efface : les seaux d'exécution et les médias récents. */
+export const SW_ACCOUNT_CACHE_NAMES: readonly string[] = [...SW_RUNTIME_CACHE_NAMES, SW_RECENT_MEDIA_CACHE];
+
+/**
+ * LE PRÉCACHE DE WORKBOX N'APPARTIENT PAS À CETTE PURGE, et c'est une décision
+ * MESURÉE, pas un oubli.
+ *
+ * Son nom (`workbox-precache-v2-<origine>`) ne porte pas la version : le worker
+ * EN ATTENTE y a déjà écrit les entrées de la version NEUVE à son installation,
+ * et son activation supprime celles qui ne sont plus au manifeste
+ * (`PrecacheController.activate`, workbox-precaching). Le détruire depuis la
+ * page ferait donc partir la version neuve avec l'ancienne — et Workbox ne
+ * RÉPARE un précache manquant que sous intégrité SRI
+ * (`PrecacheStrategy._handleFetch`, « It's only "safe" to repair the cache if
+ * we're using SRI ») : hors ligne serait cassé jusqu'à la prochaine
+ * installation de worker, pour un gain nul.
+ */
+export const WORKBOX_PRECACHE_PREFIX = 'workbox-precache';
+
+/**
+ * Ce cache appartient-il à l'application — donc une purge de mise à jour ou de
+ * changement d'identité doit-elle l'effacer ?
+ */
+export function isAppOwnedCache(name: string): boolean {
+  return SW_RUNTIME_CACHE_NAMES.includes(name) || name.startsWith(LEGACY_CACHE_NAMESPACE);
+}

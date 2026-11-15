@@ -6,7 +6,7 @@
  *    (« Votre humeur : « … » », « En réponse à « … » ») ;
  *  - story / publication / humeur — fan-out typé (« Story de X »,
  *    « Nouvelle humeur ») au lieu d'un wording story hardcodé ;
- *  - partage (repost) typé (« a partagé votre story ») ;
+ *  - republication typée (« a republié votre story », #10525) ;
  *  - un commentaire sur un post non-story ne déclenche PLUS le bucket auteur
  *    story_new_comment (double notification avec post_comment).
  *
@@ -26,11 +26,25 @@
  */
 import { NotificationService } from '../../../../services/notifications/NotificationService';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { CIRCLE_NOTIFY_KEYS } from '@meeshy/shared/utils/relation-levels';
+import { sharedFriendships } from '../../../helpers/shared-friendships';
+
+/** Entourage réglé à « Ami » (#13929) : ces cas portent sur le wording, pas sur le cran. */
+const ENTOURAGE_FRIEND = { notification: Object.fromEntries(CIRCLE_NOTIFY_KEYS.map((key) => [key, 'FRIEND'])) };
 
 jest.mock('../../../../utils/logger-enhanced', () => ({
   notificationLogger: { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() },
   securityLogger: { logViolation: jest.fn() },
 }));
+
+/** Le post que le bâtisseur RELIT pour servir son extrait (#8731) — vivant, sans traduction. */
+const liveExcerptSource = (content: string) => ({
+  content,
+  originalLanguage: null,
+  translations: null,
+  deletedAt: null,
+  expiresAt: null,
+});
 
 const ACTOR_ID = '507f1f77bcf86cd799439011';
 const RECIPIENT_ID = '507f1f77bcf86cd799439012';
@@ -52,7 +66,8 @@ const makePrismaMock = () => ({
   },
   user: {
     findUnique: jest.fn(),
-    findMany: jest.fn().mockResolvedValue([]),
+    findMany: jest.fn(async (args: any) => (args?.where?.isActive === true ? (args.where.id?.in ?? []).map((id: string) => ({ id })) : [])), // #14234 comptes vivants
+    findFirst: jest.fn().mockResolvedValue(null),
   },
   conversation: {
     findUnique: jest.fn(),
@@ -69,6 +84,8 @@ const makePrismaMock = () => ({
   postComment: { findMany: jest.fn().mockResolvedValue([]) },
   postReaction: { findMany: jest.fn().mockResolvedValue([]) },
   friendRequest: { findMany: jest.fn().mockResolvedValue([]) },
+  userRelation: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null) },
+  participant: { findMany: jest.fn().mockResolvedValue([]) },
 }) as any;
 
 const makeIO = () => ({
@@ -110,6 +127,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
   describe('createPostCommentNotification', () => {
     it('met la cible typée + extrait du post en subtitle, le commentaire en body', async () => {
       const createdAt = new Date('2026-06-23T09:00:00.000Z');
+      prisma.post = { ...prisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('Journée de ouf au bureau')) };
       await service.createPostCommentNotification({
         actorId: ACTOR_ID,
         postId: POST_ID,
@@ -117,15 +135,14 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
         commentId: COMMENT_ID,
         commentPreview: 'Trop drôle !',
         postType: 'STATUS',
-        postPreview: 'Journée de ouf au bureau',
         postCreatedAt: createdAt,
       });
 
       const payload = payloadOfType(mockIO, 'post_comment');
       expect(payload).toBeDefined();
       expect(payload.title).toBe('Bob Commentateur');
-      expect(payload.subtitle).toBe('a commenté votre statut');
-      expect(payload.content).toBe('Trop drôle !');
+      expect(payload.subtitle).toBe('a commenté votre humeur');
+      expect(payload.content).toBe('Petit message texte');
       // postCreatedAt voyage en contexte → le client en dérive « du JJ/MM/AAAA HH:MM ».
       expect(payload.context.postCreatedAt).toBe(createdAt.toISOString());
     });
@@ -180,7 +197,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       // Sous-titre = l'ENTITÉ portant le commentaire (« Story »), le client y
       // append la date locale. Le body reste la réponse.
       expect(created.subtitle).toBe('Story');
-      expect(payloadOfType(mockIO, 'comment_reply').content).toBe('Complètement d\'accord');
+      expect(payloadOfType(mockIO, 'comment_reply').content).toBe('Petit message texte');
     });
 
     it('replie sur « Publication » quand le type de contenu n\'est pas précisé', async () => {
@@ -255,7 +272,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       const payload = payloadOfType(mockIO, 'comment_like');
       // Le corps montre le commentaire visé ; la phrase d'action, portée par
       // le titre et le sous-titre, n'y est plus recopiée.
-      expect(payload.content).toBe('« Mon avis sur la question »');
+      expect(payload.content).toBe('Message texte');
       expect(payload.subtitle).toBe('a réagi 🔥 à votre commentaire');
     });
   });
@@ -306,22 +323,22 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
   });
 
   describe('createPostRepostNotification', () => {
-    it('wording typé « a partagé votre story » + extrait en subtitle', async () => {
+    it('wording typé « a republié votre story » + synthèse du post en corps (#14318)', async () => {
+      prisma.post = { ...prisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('Coucher de soleil à Douala')) };
       await service.createPostRepostNotification({
         actorId: ACTOR_ID,
         originalPostId: POST_ID,
         postAuthorId: RECIPIENT_ID,
         repostId: 'cccccccccccccccccccccccc',
         postType: 'STORY',
-        postPreview: 'Coucher de soleil à Douala',
       });
 
       const payload = payloadOfType(mockIO, 'post_repost');
-      expect(payload.content).toBe('Coucher de soleil à Douala');
-      expect(payload.subtitle).toBe('a partagé votre story');
+      expect(payload.content).toBe('Message texte');
+      expect(payload.subtitle).toBe('a republié votre story');
     });
 
-    it('défaut « a partagé votre publication » sans type ni extrait', async () => {
+    it('défaut « a republié votre publication » sans type ni extrait', async () => {
       await service.createPostRepostNotification({
         actorId: ACTOR_ID,
         originalPostId: POST_ID,
@@ -332,7 +349,84 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       const payload = payloadOfType(mockIO, 'post_repost');
       // Sans texte ni média, le corps nomme l'entité plutôt que de rester vide.
       expect(payload.content).toBe('Votre publication');
-      expect(payload.subtitle).toBe('a partagé votre publication');
+      expect(payload.subtitle).toBe('a republié votre publication');
+    });
+
+    it.each([
+      ['REEL', 'a republié votre réel', 'Votre réel'],
+      ['STORY', 'a republié votre story', 'Votre story'],
+      ['STATUS', 'a republié votre humeur', 'Votre humeur'],
+      ['POST', 'a republié votre publication', 'Votre publication'],
+    ] as const)('#10525 — un %s republié se NOMME dans la bannière, le titre et la ligne persistée', async (postType, action, cible) => {
+      await service.createPostRepostNotification({
+        actorId: ACTOR_ID,
+        originalPostId: POST_ID,
+        postAuthorId: RECIPIENT_ID,
+        repostId: 'cccccccccccccccccccccccc',
+        postType,
+      });
+
+      const payload = payloadOfType(mockIO, 'post_repost');
+      expect(payload.subtitle).toBe(action);
+      const persisted = prisma.notification.create.mock.calls[0][0].data;
+      expect(persisted.title).toBe(`Bob Commentateur ${action}`);
+      expect(persisted.subtitle).toBe(cible);
+      expect(persisted.metadata.postType).toBe(postType);
+    });
+
+    it('#10525 — cadrée dans la langue du DESTINATAIRE, pas de l’acteur', async () => {
+      prisma.user.findUnique.mockImplementation(({ where }: any) =>
+        Promise.resolve(
+          where.id === ACTOR_ID
+            ? { username: 'bob', displayName: 'Bob Commentateur', avatar: null, systemLanguage: 'fr' }
+            : { username: 'alice', displayName: 'Alice Autrice', avatar: null, systemLanguage: 'ar' }
+        )
+      );
+      await service.createPostRepostNotification({
+        actorId: ACTOR_ID,
+        originalPostId: POST_ID,
+        postAuthorId: RECIPIENT_ID,
+        repostId: 'cccccccccccccccccccccccc',
+        postType: 'REEL',
+      });
+
+      expect(prisma.notification.create.mock.calls[0][0].data.title).toBe('Bob Commentateur أعاد نشر ريلك');
+    });
+
+    it('#10525 — l’auteur qui ne peut pas VOIR la republication n’en apprend rien', async () => {
+      prisma.post.findFirst.mockImplementation(({ where }: any) =>
+        Promise.resolve(
+          where.id === 'cccccccccccccccccccccccc'
+            ? { id: where.id, authorId: ACTOR_ID, visibility: 'EXCEPT', visibilityUserIds: [RECIPIENT_ID], expiresAt: null }
+            : { id: where.id, authorId: RECIPIENT_ID, visibility: 'PUBLIC', visibilityUserIds: [], expiresAt: null }
+        )
+      );
+
+      const result = await service.createPostRepostNotification({
+        actorId: ACTOR_ID,
+        originalPostId: POST_ID,
+        postAuthorId: RECIPIENT_ID,
+        repostId: 'cccccccccccccccccccccccc',
+        postType: 'STORY',
+      });
+
+      expect(result).toBeNull();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('#10525 — une republication PRIVÉE ne s’annonce pas', async () => {
+      prisma.post.findFirst.mockResolvedValue({
+        id: 'cccccccccccccccccccccccc', authorId: ACTOR_ID, visibility: 'PRIVATE', visibilityUserIds: [], expiresAt: null,
+      });
+
+      await service.createPostRepostNotification({
+        actorId: ACTOR_ID,
+        originalPostId: POST_ID,
+        postAuthorId: RECIPIENT_ID,
+        repostId: 'cccccccccccccccccccccccc',
+      });
+
+      expect(prisma.notification.create).not.toHaveBeenCalled();
     });
 
     it('persiste postExpiresAt/postCreatedAt en contexte (story partagée expirée)', async () => {
@@ -357,25 +451,26 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
   describe('createPostLikeNotification — contexte expiry', () => {
     it('persiste postExpiresAt pour une réaction sur une story expirée', async () => {
       const expiresAt = new Date('2026-06-21T10:00:00.000Z');
+      prisma.post = { ...prisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('Coucher de soleil')) };
       await service.createPostLikeNotification({
         actorId: ACTOR_ID,
         postId: POST_ID,
         postAuthorId: RECIPIENT_ID,
         emoji: '😍',
         postType: 'STORY',
-        postPreview: 'Coucher de soleil',
         postExpiresAt: expiresAt,
       });
 
       const ctx = prisma.notification.create.mock.calls[0][0].data.context;
       expect(ctx.postExpiresAt).toBe(expiresAt.toISOString());
       const meta = prisma.notification.create.mock.calls[0][0].data.metadata;
-      expect(meta.postPreview).toBe('Coucher de soleil');
+      expect(meta.postPreview).toBe('Petit message texte');
     });
   });
 
   describe('createFriendContentNotificationsBatch — subtitle typé', () => {
     beforeEach(() => {
+      prisma.userPreferences.findUnique.mockResolvedValue(ENTOURAGE_FRIEND);
       prisma.friendRequest.findMany.mockResolvedValue([
         { senderId: ACTOR_ID, receiverId: FRIEND_ID },
       ]);
@@ -392,7 +487,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       const payload = payloadOfType(mockIO, 'friend_new_mood');
       expect(payload).toBeDefined();
       expect(payload.subtitle).toBe('a publié une nouvelle humeur');
-      expect(payload.content).toBe('Motivé comme jamais 💪');
+      expect(payload.content).toBe('Petit message texte');
     });
 
     it('« Nouvelle story » en subtitle pour une STORY sans texte', async () => {
@@ -422,7 +517,8 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
 
     beforeEach(() => {
       prisma.postComment.findMany.mockResolvedValue([{ authorId: PREV_COMMENTER_ID }]);
-      prisma.friendRequest.findMany.mockResolvedValue([
+      prisma.userPreferences.findUnique.mockResolvedValue(ENTOURAGE_FRIEND);
+      sharedFriendships(prisma.friendRequest.findMany, RECIPIENT_ID, ACTOR_ID)([
         { senderId: RECIPIENT_ID, receiverId: FRIEND_ID },
       ]);
     });
@@ -449,15 +545,88 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       expect(payloadOfType(mockIO, 'friend_story_comment').content).toBe('a commenté une publication');
     });
 
-    it('STATUS : article masculin (« a répondu dans un statut »)', async () => {
+    it('STATUS : se dit « humeur » (« a répondu dans une humeur »), le fil garde STATUS (#10526)', async () => {
       await service.createStoryCommentNotificationsBatch({
         ...baseParams,
         commentExcerpt: undefined,
         postType: 'STATUS',
       });
 
-      expect(payloadOfType(mockIO, 'story_thread_reply').content).toBe('a répondu dans un statut');
-      expect(payloadOfType(mockIO, 'story_thread_reply').subtitle).toBe('a répondu dans un statut de Alice Autrice');
+      expect(payloadOfType(mockIO, 'story_thread_reply').content).toBe('a répondu dans une humeur');
+      expect(payloadOfType(mockIO, 'story_thread_reply').subtitle).toBe('a répondu dans une humeur de Alice Autrice');
+    });
+  });
+
+  // #8724 — une notification sur un COMMENTAIRE décrit aussi le POST qui le
+  // porte : la ligne in-app pose en pied l'icône et l'extrait du post au lieu
+  // de redire le commentaire.
+  describe('le post qui porte le commentaire voyage en métadonnée (#8724)', () => {
+    const persistedMetadata = (type: string) =>
+      prisma.notification.create.mock.calls
+        .map((c: any[]) => c[0].data)
+        .find((d: any) => d.type === type)?.metadata;
+
+    it('comment_reaction porte postPreview et le média du post', async () => {
+      prisma.postMedia = {
+        findFirst: jest.fn().mockResolvedValue({ mimeType: 'image/jpeg', fileUrl: '/u/p.jpg', thumbnailUrl: '/u/p_thumb.jpg' }),
+      };
+      prisma.post = { ...prisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('  Nouvelle version de Meeshy  ')) };
+      await service.createCommentReactionNotification({
+        commentAuthorId: RECIPIENT_ID,
+        reactorUserId: ACTOR_ID,
+        commentId: COMMENT_ID,
+        postId: POST_ID,
+        reactionEmoji: '❤️',
+        commentPreview: 'Superbe features',
+      });
+
+      const metadata = persistedMetadata('comment_reaction');
+      expect(metadata.postPreview).toBe('Petit message texte');
+      expect(metadata.commentPreview).toBe('Petit message texte');
+      expect(metadata.mediaType).toBe('image');
+      expect(metadata.postThumbnailUrl).toEqual(expect.stringContaining('p_thumb.jpg'));
+    });
+
+    it('comment_like porte postPreview', async () => {
+      prisma.userPreferences.findUnique.mockResolvedValue({ notification: { commentLikeEnabled: true } });
+      prisma.post = { ...prisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('Le post commenté')) };
+      await service.createCommentLikeNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        commentId: COMMENT_ID,
+        commentAuthorId: RECIPIENT_ID,
+        emoji: '🔥',
+        commentPreview: 'Mon avis',
+      });
+
+      expect(persistedMetadata('comment_like').postPreview).toBe('Petit message texte');
+    });
+
+    it('comment_reply porte postPreview', async () => {
+      prisma.post = { ...prisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('Lancement')) };
+      await service.createCommentReplyNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        commentAuthorId: RECIPIENT_ID,
+        commentId: COMMENT_ID,
+        replyPreview: 'Merci !',
+        parentCommentPreview: 'Bravo',
+      });
+
+      expect(persistedMetadata('comment_reply').postPreview).toBe('Petit mot reçu');
+    });
+
+    it('un post sans texte ne pose aucune clé postPreview', async () => {
+      prisma.post = { ...prisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('   ')) };
+      await service.createCommentReplyNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        commentAuthorId: RECIPIENT_ID,
+        commentId: COMMENT_ID,
+        replyPreview: 'Merci !',
+      });
+
+      expect(persistedMetadata('comment_reply')).not.toHaveProperty('postPreview');
     });
   });
 });

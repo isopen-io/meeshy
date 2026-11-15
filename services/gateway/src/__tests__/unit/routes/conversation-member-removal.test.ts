@@ -62,10 +62,10 @@ jest.mock('../../../socketio/endConversationMembership', () => ({
   endConversationMembership: jest.fn(async () => undefined),
 }));
 
-const mockResolvePrefsOnly = jest.fn<any>();
+const mockResolveForTargets = jest.fn<any>();
 jest.mock('../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({
-    resolvePrefsOnly: (...args: unknown[]) => mockResolvePrefsOnly(...args),
+    resolveForTargets: (...args: unknown[]) => mockResolveForTargets(...args),
   }),
 }));
 
@@ -73,7 +73,7 @@ type Emitted = { event: string; payload: any };
 
 function makeIo(emitted: Emitted[]) {
   const chain = (): any => ({
-    to: () => chain(),
+    to: () => chain(), except: () => chain(),
     emit: (event: string, payload: unknown) => emitted.push({ event, payload: payload as any }),
   });
   return { to: () => chain() };
@@ -111,7 +111,7 @@ function createMockPrisma(targets: Array<Record<string, unknown>>) {
   const participantUpdate = jest.fn(async ({ where }: any) => ({
     ...targets.find((t) => t.id === where.id),
   }));
-  const shareLinkUpdate = jest.fn(async () => ({ id: SHARE_LINK_ID, isActive: false }));
+  const shareLinkUpdate = jest.fn(async () => ({ count: 1 }));
 
   const findFirst = jest.fn(async ({ where }: any) => {
     // L'appelant : administrateur de la conversation.
@@ -135,7 +135,7 @@ function createMockPrisma(targets: Array<Record<string, unknown>>) {
       updateMany: jest.fn(async () => ({ count: 0 })),
     },
     conversation: { findUnique: jest.fn(async () => ({ id: CONV_ID, isActive: true, closedAt: null })) },
-    conversationShareLink: { update: shareLinkUpdate },
+    conversationShareLink: { updateMany: shareLinkUpdate },
   } as unknown as PrismaClient;
 
   return { prisma, participantUpdate, shareLinkUpdate };
@@ -175,8 +175,8 @@ const call = (app: FastifyInstance, method: 'DELETE' | 'PATCH', url: string) =>
 beforeEach(() => {
   mockResolveConversationId.mockReset();
   mockResolveConversationId.mockResolvedValue(CONV_ID);
-  mockResolvePrefsOnly.mockReset();
-  mockResolvePrefsOnly.mockResolvedValue(new Map());
+  mockResolveForTargets.mockReset();
+  mockResolveForTargets.mockResolvedValue(new Map());
 });
 
 describe('DELETE /conversations/:id/participants/:key — expulser', () => {

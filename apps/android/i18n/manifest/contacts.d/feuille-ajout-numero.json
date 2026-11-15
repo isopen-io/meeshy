@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:contacts": {
+      "resDir": "feature/contacts/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "contacts.phonePrompt.title",
+          "androidName": "phone_prompt_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.phonePrompt.benefit",
+          "androidName": "phone_prompt_benefit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.phonePrompt.add",
+          "androidName": "phone_prompt_send_code",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.phonePrompt.later",
+          "androidName": "phone_prompt_later",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.phonePrompt.later.a11y",
+          "androidName": "phone_prompt_later_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.verify",
+          "androidName": "phone_prompt_verify",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.edit",
+          "androidName": "phone_prompt_edit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.phone",
+          "androidName": "phone_prompt_phone_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.phone.code_sent",
+          "androidName": "phone_prompt_code_sent",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.phone.code_placeholder",
+          "androidName": "phone_prompt_code_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.phone.code_invalid",
+          "androidName": "phone_prompt_error_code_invalid",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.error.generic",
+          "androidName": "phone_prompt_error_generic",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.phone.tooShort",
+          "androidName": "phone_prompt_too_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.phone.implausible",
+          "androidName": "phone_prompt_implausible",
+          "status": "adopted"
+        },
+        {
+          "androidName": "phone_prompt_placeholder",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

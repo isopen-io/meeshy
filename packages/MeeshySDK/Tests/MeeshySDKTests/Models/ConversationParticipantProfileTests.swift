@@ -216,5 +216,175 @@ final class ConversationParticipantProfileTests: XCTestCase {
         XCTAssertNil(profile.entryCapabilities)
         XCTAssertNil(profile.entryLink)
         XCTAssertEqual(profile.username, "alice")
+        XCTAssertNil(profile.historyVisibleFrom)
+        XCTAssertNil(profile.canGrantHistory)
+    }
+
+    // MARK: - Octroi d'historique par date (#3877)
+
+    /// Vaut pour TOUT participant, contrairement à `entryCapabilities` /
+    /// `entryLink` — d'où un payload d'INSCRIT dédié, où les deux blocs
+    /// ci-dessus sont absents mais l'octroi peut quand même être servi.
+    private func registeredHostPayload(historyVisibleFrom: String?, canGrantHistory: Bool) -> String {
+        """
+        {
+            "participantId": "p2",
+            "conversationId": "c1",
+            "isAnonymous": false,
+            "userId": "u1",
+            "username": "alice",
+            "displayName": "Alice",
+            "firstName": null,
+            "lastName": null,
+            "avatar": null,
+            "language": "fr",
+            "country": null,
+            "conversationRole": "member",
+            "joinedAt": "2026-08-18T09:00:00.000Z",
+            "isOnline": true,
+            "lastActiveAt": null,
+            "shareLinkName": null,
+            "hasEmail": false,
+            "hasBirthday": false,
+            "email": null,
+            "birthday": null,
+            "historyVisibleFrom": \(historyVisibleFrom.map { "\"\($0)\"" } ?? "null"),
+            "canGrantHistory": \(canGrantHistory)
+        }
+        """
+    }
+
+    func test_historyVisibleFrom_decodesForAnyParticipant_notJustAnonymous() throws {
+        let profile = try decode(registeredHostPayload(historyVisibleFrom: "2026-01-15T00:00:00.000Z", canGrantHistory: true))
+
+        XCTAssertNotNil(profile.historyVisibleFrom)
+        XCTAssertEqual(profile.canGrantHistory, true)
+    }
+
+    /// `canGrantHistory` répond à « ce lecteur peut-il écrire ? » — distinct de
+    /// « quel est l'octroi ? ». Un modérateur lit l'octroi mais ne peut pas
+    /// l'écrire : les deux valeurs doivent pouvoir varier indépendamment.
+    func test_canGrantHistory_canBeFalseWhileHistoryVisibleFromIsSet() throws {
+        let profile = try decode(registeredHostPayload(historyVisibleFrom: "2026-01-15T00:00:00.000Z", canGrantHistory: false))
+
+        XCTAssertNotNil(profile.historyVisibleFrom)
+        XCTAssertEqual(profile.canGrantHistory, false)
+    }
+
+    func test_historyVisibleFrom_decodesNullAsNoGrant() throws {
+        let profile = try decode(registeredHostPayload(historyVisibleFrom: nil, canGrantHistory: true))
+
+        XCTAssertNil(profile.historyVisibleFrom)
+        XCTAssertEqual(profile.canGrantHistory, true)
+    }
+
+    // MARK: - `participant:rights-updated` — `null` EFFACE, une clé ABSENTE non
+
+    /// `Date?` seul ne sait dire qu'une chose ; le fil en dit DEUX. Le
+    /// consommateur (`ParticipantProfileSheet`) recopie l'octroi seulement quand
+    /// la charge le PORTE — sans ce discriminant, un producteur antérieur au
+    /// champ ferait disparaître un octroi affiché à chaque basculement de
+    /// capacité ordinaire, alors qu'il n'affirme rien à son sujet.
+    private func rightsUpdatedEvent(_ json: String) throws -> ParticipantRightsUpdatedEvent {
+        try makeDecoder().decode(ParticipantRightsUpdatedEvent.self, from: Data(json.utf8))
+    }
+
+    private let rightsBlock = """
+    "rights": {
+        "canSendMessages": true, "canSendFiles": true, "canSendImages": true,
+        "canSendVideos": true, "canSendAudios": true, "canSendLocations": true,
+        "canSendLinks": true, "canViewHistory": true
+    }
+    """
+
+    func test_rightsUpdated_carriesTheGrant_whenTheKeyHoldsADate() throws {
+        let event = try rightsUpdatedEvent("""
+        { "conversationId": "c1", "participantId": "p1", "updatedBy": "u1",
+          \(rightsBlock), "historyVisibleFrom": "2026-01-15T00:00:00.000Z" }
+        """)
+
+        XCTAssertTrue(event.carriesHistoryGrant)
+        XCTAssertNotNil(event.historyVisibleFrom)
+    }
+
+    /// `null` est une AFFIRMATION — « j'ai calculé, il n'y a pas d'octroi ».
+    /// Le consommateur doit donc effacer, et non garder : la charge la PORTE.
+    func test_rightsUpdated_carriesTheGrant_whenTheKeyIsExplicitNull() throws {
+        let event = try rightsUpdatedEvent("""
+        { "conversationId": "c1", "participantId": "p1", "updatedBy": "u1",
+          \(rightsBlock), "historyVisibleFrom": null }
+        """)
+
+        XCTAssertTrue(event.carriesHistoryGrant, "an explicit null is an assertion, not a silence — it must erase")
+        XCTAssertNil(event.historyVisibleFrom)
+    }
+
+    /// La clé ABSENTE est un SILENCE — un producteur plus ancien. Elle rend la
+    /// même valeur que `null` (`nil`), et c'est exactement pourquoi le
+    /// discriminant ne peut pas être cette valeur.
+    func test_rightsUpdated_doesNotCarryTheGrant_whenTheKeyIsAbsent() throws {
+        let event = try rightsUpdatedEvent("""
+        { "conversationId": "c1", "participantId": "p1", "updatedBy": "u1", \(rightsBlock) }
+        """)
+
+        XCTAssertFalse(event.carriesHistoryGrant, "an absent key asserts nothing — the reader keeps what it has")
+        XCTAssertNil(event.historyVisibleFrom)
+    }
+
+    // MARK: - `canViewHistory` absent — la room n'apprend pas ce fait (#4009)
+
+    /// **Le fil sait dire « je ne te le dis pas ».**
+    ///
+    /// #4009 retire `rights.canViewHistory` de la charge diffusée à la ROOM de
+    /// conversation : « qui a le droit de voir l'historique » est un fait de
+    /// modération, comme `historyVisibleFrom` que #3898 avait déjà retiré du
+    /// même payload. Seuls les autres HÔTES et l'INTÉRESSÉ le reçoivent, sur
+    /// leur room personnelle.
+    ///
+    /// Sans ce test, la conséquence serait invisible et brutale : le champ était
+    /// `Bool` NON optionnel, donc le décodage LÈVE sur la charge réduite et
+    /// l'événement entier est perdu. Un simple membre cesserait de voir TOUT
+    /// changement de droits — pas seulement celui qu'on lui cache.
+    private let rightsBlockWithoutHistory = """
+    "rights": {
+        "canSendMessages": true, "canSendFiles": true, "canSendImages": true,
+        "canSendVideos": true, "canSendAudios": false, "canSendLocations": true,
+        "canSendLinks": true
+    }
+    """
+
+    func test_rightsUpdated_decodes_whenCanViewHistoryIsAbsent() throws {
+        let event = try rightsUpdatedEvent("""
+        { "conversationId": "c1", "participantId": "p1", "updatedBy": "u1", \(rightsBlockWithoutHistory) }
+        """)
+
+        XCTAssertNil(event.rights.canViewHistory, "la clé absente ne s'invente pas en `false` — elle n'est pas dite")
+        XCTAssertEqual(event.rights.canSendAudios, false, "les autres droits continuent d'arriver")
+    }
+
+    /// Un droit NON DIT n'est pas un droit REFUSÉ. La carte n'énonce que les
+    /// refus : y ranger l'indicible ferait afficher « Ne voit pas les messages
+    /// antérieurs » à toute la salle — exactement le fait que #4009 retire.
+    func test_deniedCapabilities_omitTheUndisclosedOne() throws {
+        let event = try rightsUpdatedEvent("""
+        { "conversationId": "c1", "participantId": "p1", "updatedBy": "u1", \(rightsBlockWithoutHistory) }
+        """)
+
+        XCTAssertFalse(event.rights.denied.contains(.canViewHistory),
+                       "non dit n'est pas refusé")
+        XCTAssertTrue(event.rights.denied.contains(.canSendAudios),
+                      "un refus RÉELLEMENT dit reste énoncé")
+    }
+
+    func test_deniedCapabilities_stillReportTheDisclosedRefusal() throws {
+        let event = try rightsUpdatedEvent("""
+        { "conversationId": "c1", "participantId": "p1", "updatedBy": "u1",
+          "rights": { "canSendMessages": true, "canSendFiles": true, "canSendImages": true,
+                      "canSendVideos": true, "canSendAudios": true, "canSendLocations": true,
+                      "canSendLinks": true, "canViewHistory": false } }
+        """)
+
+        XCTAssertTrue(event.rights.denied.contains(.canViewHistory),
+                      "servi à un hôte, le refus s'énonce comme avant")
     }
 }

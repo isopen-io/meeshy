@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "media.audio.transcribe",
+          "androidName": "media_audio_transcribe",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

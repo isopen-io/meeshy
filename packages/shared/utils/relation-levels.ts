@@ -1,0 +1,410 @@
+/**
+ * LA CONFIG DES CERCLES — ce que chaque niveau ouvre, comment il se nomme, à
+ * quel seuil on y entre (#13927, décisions porteur du 2026-10-31).
+ *
+ * La LOI (`relation-access.ts`) est pure et ne code aucun niveau en dur : elle
+ * lit cette table. Changer qui voit quoi, c'est changer UNE ligne ici, et les
+ * cas partagés (`fixtures/relation-access-cases.json`) rougissent chez les
+ * trois miroirs — jamais un seuil recopié dans un service.
+ *
+ * Placement : `utils/` et non `config/` (écart justifié du cadrage) — `config/`
+ * n'existe pas dans ce paquet, et l'y créer coûterait un `include` de tsconfig
+ * et un `exports`/`files` de package.json pour aucun gain.
+ *
+ * ATOM (lien parent/tuteur vérifié) est RÉSERVÉ : aucune feature n'y est liée
+ * au MVP, seul le quota du Bring le nomme (illimité, `null`).
+ */
+
+import type { RelationLevel } from '../types/relation.js';
+
+export const RELATION_FEATURES = [
+  'presence.online',
+  'presence.detailed',
+  'game.basic',
+  'game.sparksGlory',
+  'notify.newContent',
+  'relay.commentersOnMyPosts',
+  'relay.myCommentsElsewhere',
+  'dm.direct',
+  'dm.request',
+  'dm.readReceipts',
+  'dm.typing',
+  'presence.dnd',
+  'call.ring',
+  'views.identity',
+  'audience.acquaintances',
+  'audience.close',
+  'audience.blood',
+  'listening.category',
+  'listening.title',
+  'talkie',
+  'together',
+  'bring',
+  'location.live',
+  'location.temporary',
+  'location.history',
+  'location.proximity',
+  'device.battery',
+  'device.battery.pull',
+  'acquaintance.auto',
+] as const;
+
+export type RelationFeature = (typeof RELATION_FEATURES)[number];
+
+/**
+ * Niveau EFFECTIF minimal pour chaque feature (§ 1.3 de la spec). La Connaissance
+ * automatique n'a pas de niveau : elle CRÉE le premier lien, sa seule garde est
+ * l'âge déclaré (voir `relation-access.ts`).
+ */
+export const RELATION_FEATURE_MIN_LEVEL: Readonly<Record<RelationFeature, RelationLevel>> = {
+  'presence.online': 'FRIEND',
+  'presence.detailed': 'CLOSE',
+  'game.basic': 'FRIEND',
+  'game.sparksGlory': 'CLOSE',
+  'notify.newContent': 'CLOSE',
+  'relay.commentersOnMyPosts': 'CLOSE',
+  'relay.myCommentsElsewhere': 'BLOOD',
+  'dm.direct': 'ACQUAINTANCE',
+  'dm.request': 'PUBLIC',
+  'dm.readReceipts': 'ACQUAINTANCE',
+  'dm.typing': 'ACQUAINTANCE',
+  'presence.dnd': 'ACQUAINTANCE',
+  'call.ring': 'PUBLIC',
+  'views.identity': 'COMMUNITY',
+  'audience.acquaintances': 'ACQUAINTANCE',
+  'audience.close': 'CLOSE',
+  'audience.blood': 'BLOOD',
+  'listening.category': 'CLOSE',
+  'listening.title': 'BLOOD',
+  talkie: 'CLOSE',
+  together: 'CLOSE',
+  bring: 'FRIEND',
+  'location.live': 'BLOOD',
+  'location.temporary': 'FRIEND',
+  'location.history': 'BLOOD',
+  'location.proximity': 'BLOOD',
+  'device.battery': 'CLOSE',
+  'device.battery.pull': 'BLOOD',
+  'acquaintance.auto': 'PUBLIC',
+};
+
+/**
+ * Les audiences de PUBLICATION qui suivent un cercle (`PostVisibility`, #13931) et
+ * la feature de la matrice qui fixe leur plancher. `FRIENDS` n'y figure pas : son
+ * sens historique « Amis et au-dessus » garde son chemin (amis ∪ contacts de
+ * message direct), aucune feature ne le porte.
+ */
+export const POST_CIRCLE_AUDIENCE_FEATURE = {
+  ACQUAINTANCES: 'audience.acquaintances',
+  CLOSE: 'audience.close',
+  BLOOD: 'audience.blood',
+} as const satisfies Readonly<Record<string, RelationFeature>>;
+
+export type PostCircleVisibility = keyof typeof POST_CIRCLE_AUDIENCE_FEATURE;
+
+export const POST_CIRCLE_VISIBILITIES = Object.keys(POST_CIRCLE_AUDIENCE_FEATURE) as readonly PostCircleVisibility[];
+
+/**
+ * La feature de la matrice que juge une audience de cercle, `null` pour toute autre
+ * valeur (historique, inconnue, absente) : c'est elle qu'on passe à `resolveRelationAccess`.
+ */
+export const postCircleAudienceFeature = (visibility: unknown): RelationFeature | null =>
+  typeof visibility === 'string' && Object.prototype.hasOwnProperty.call(POST_CIRCLE_AUDIENCE_FEATURE, visibility)
+    ? POST_CIRCLE_AUDIENCE_FEATURE[visibility as PostCircleVisibility]
+    : null;
+
+/**
+ * Le niveau EFFECTIF minimal qu'exige une audience de cercle, `null` pour toute
+ * autre valeur (historique, inconnue, absente) : l'appelant garde alors son
+ * chemin, et une valeur inconnue ne devient jamais un cercle.
+ */
+export const postCircleAudienceFloor = (visibility: unknown): RelationLevel | null =>
+  typeof visibility === 'string' && Object.prototype.hasOwnProperty.call(POST_CIRCLE_AUDIENCE_FEATURE, visibility)
+    ? RELATION_FEATURE_MIN_LEVEL[POST_CIRCLE_AUDIENCE_FEATURE[visibility as PostCircleVisibility]]
+    : null;
+
+/**
+ * Deux NATURES derrière l'entrée `consent` de la loi (analyse de conformité #13942,
+ * écart E9, #14407) — la loi les traite de même (refus tant que `consent` ne vaut
+ * pas `'granted'`), l'orchestrateur ne les RÉSOUT pas de même :
+ *
+ * 1. le CONSENTEMENT RGPD de l'ÉMETTEUR (art. 7) — ce que je partage de moi :
+ *    catégorie et titre d'écoute, position, historique, proximité, batterie. Recueilli
+ *    explicitement (écran à l'entrée en Proche, rituel du Sang), FAUX par défaut,
+ *    retirable ; `consent: 'granted'` seulement sur un accord stocké ;
+ * 2. la PRÉFÉRENCE DE RÉCEPTION du DESTINATAIRE — ce que j'accepte de recevoir :
+ *    Bring, talkie. Base : l'exécution du contrat (art. 6(1)(b)), pas un
+ *    consentement ; ACTIVE par défaut, coupée par personne ou globalement ;
+ *    l'orchestrateur la traduit en `consent: 'granted'` tant qu'elle n'est pas
+ *    coupée. L'interface la nomme « autorisation », jamais « consentement ».
+ *
+ * La loi dit le PLAFOND ; l'une ou l'autre dit si la personne l'ouvre — les deux
+ * sont requis. Ce n'est JAMAIS un refus d'âge.
+ */
+export const RELATION_RECEPTION_PREFERENCE_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
+  'bring',
+  'talkie',
+]);
+
+export const RELATION_EMITTER_CONSENT_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
+  'listening.category',
+  'listening.title',
+  'location.live',
+  'location.temporary',
+  'location.history',
+  'location.proximity',
+  'device.battery',
+  'device.battery.pull',
+]);
+
+/**
+ * LE CONSENTEMENT DE L'ÉMETTEUR ACCORDÉ PAR DÉFAUT À PARTIR D'UN NIVEAU (#14147, décision
+ * porteur du 2026-11-14) — la batterie entre Sangs part sans confirmation, retirable par
+ * personne ou pour tous ; entre Proches, elle attend un accord donné une fois, jamais
+ * pré-coché. La colonne de la paire est TRI-ÉTAT : nulle = ce défaut, `true` = accordé,
+ * `false` = refusé. Une feature absente de cette table garde le sens historique : seul un
+ * accord stocké l'ouvre. Résolution : `resolveEmitterConsent` (`relation-emitter-consent.ts`).
+ *
+ * Écrite en LITTÉRAL : les miroirs Swift et Kotlin relisent cette table dans ce fichier.
+ */
+export const RELATION_EMITTER_CONSENT_DEFAULT_LEVEL: Readonly<Partial<Record<RelationFeature, RelationLevel>>> = {
+  'device.battery': 'BLOOD',
+  'device.battery.pull': 'BLOOD',
+};
+
+/**
+ * Les features dont la loi exige `consent: 'granted'` — l'UNION des deux natures
+ * ci-dessus (témoin : `__tests__/bring-contract.test.ts`). Écrite en LITTÉRAL : les
+ * miroirs Swift et Kotlin relisent cette liste dans ce fichier.
+ */
+export const RELATION_CONSENT_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
+  'bring',
+  'talkie',
+  'listening.category',
+  'listening.title',
+  'location.live',
+  'location.temporary',
+  'location.history',
+  'location.proximity',
+  'device.battery',
+  'device.battery.pull',
+]);
+
+/** Actions adressées à UNE AUTRE personne : elles n'ont aucun sens envers soi-même. */
+export const RELATION_DIRECTED_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
+  'bring',
+  'talkie',
+  'together',
+  'acquaintance.auto',
+  'dm.request',
+  'call.ring',
+  'device.battery.pull',
+]);
+
+/**
+ * LE BOUCLIER DES MINEURS (RG-21, colonne « Règle mineurs » du classeur) — le
+ * niveau EFFECTIF qu'un viewer qui n'est PAS mineur déclaré doit atteindre pour
+ * s'adresser à un mineur DÉCLARÉ (`targetMinor === 'minor'`). Il RELÈVE le
+ * minimum de la matrice, ne l'abaisse jamais. Un âge inconnu n'est pas un
+ * mineur ici : sans date de naissance, personne ne serait joignable.
+ *
+ * - `dm.request` : une demande de message d'un inconnu vers un mineur est
+ *   CONTENUE (MSG-01, RG-21) tant qu'ils ne sont pas Connaissance — la porte
+ *   répond comme pour un majeur (aucune issue ne distingue un mineur), et la
+ *   demande est rangée filtrée, sans média, sans son, sans appel. Une
+ *   communauté commune n'y suffit pas : n'importe quel membre peut en fabriquer
+ *   une (audit #14107, B3).
+ * - `call.ring` : pas d'appel d'un majeur qui n'est pas Ami vers un mineur
+ *   (CAL-01/02, colonne « Règle mineurs ») — l'appel ne sonne pas, et rien ne le
+ *   distingue d'un appel resté sans réponse.
+ *
+ * Le refus rend `reason: 'level'`, jamais `'minor'` : le dire apprendrait à un
+ * inconnu l'âge de la personne qu'il cherche à joindre.
+ */
+export const RELATION_MINOR_TARGET_MIN_LEVEL: Readonly<Partial<Record<RelationFeature, RelationLevel>>> = {
+  'dm.request': 'ACQUAINTANCE',
+  'call.ring': 'FRIEND',
+};
+
+/** Les seules features qu'un ADMIN/BIGBOSS lit sans lien (loi du 2026-08-25). */
+export const RELATION_PRESENCE_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
+  'presence.online',
+  'presence.detailed',
+]);
+
+/**
+ * CE QUE LE PRIVILÈGE D'ÉQUIPE N'OUVRE PAS (#16623, correction porteur 2026-11-08).
+ * Entre deux comptes de l'équipe (`isPlatformTeam`), le niveau effectif de TOUTE
+ * feature de cercle vaut Sang sans lien à construire : outils, audiences de contenu,
+ * notifications d'entourage et relais. Une seule reste fermée :
+ *
+ * - `acquaintance.auto` : ce n'est pas une feature qu'on utilise, c'est la création
+ *   automatique d'un lien ; un rôle ne crée aucun lien.
+ *
+ * Le blocage, soi-même, `NOBODY`, le consentement et le bouclier des mineurs
+ * déclarés restent entiers, hors de ce privilège.
+ *
+ * Écrite en LITTÉRAL : les miroirs Swift et Kotlin relisent cette liste dans ce fichier.
+ */
+export const RELATION_TEAM_CLOSED_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
+  'acquaintance.auto',
+]);
+
+/**
+ * LE PRIVILÈGE D'ÉQUIPE S'ÉTEINT ENTRE UN MINEUR ET UN MAJEUR DÉCLARÉS pour ces features
+ * (#16623, audit du 2026-11-08). Ailleurs, le bouclier des mineurs ne protège que la
+ * CIBLE ; ici, le viewer de la loi est le LECTEUR d'une publication ou le DESTINATAIRE
+ * d'une notification d'entourage : un collègue adulte sans lien ne pousse ni ses
+ * publications Connaissances, Proches ou Sang, ni son entourage vers un mineur déclaré,
+ * et l'inverse non plus. Deux mineurs, ou deux majeurs, gardent le privilège.
+ *
+ * Écrite en LITTÉRAL : les miroirs Swift et Kotlin relisent cette liste dans ce fichier.
+ */
+export const RELATION_TEAM_MINOR_APART_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
+  'audience.acquaintances',
+  'audience.close',
+  'audience.blood',
+  'notify.newContent',
+  'relay.commentersOnMyPosts',
+  'relay.myCommentsElsewhere',
+]);
+
+/**
+ * LE RÉGLAGE D'ENTOURAGE (#13929, directives porteur du 2026-10-31) — chacun
+ * choisit, action par action, le cran minimal de son entourage qui est PRÉVENU.
+ * Il ne gouverne que la diffusion à l'entourage : la personne directement visée
+ * (l'auteur commenté, la personne mentionnée) est prévenue par ses propres
+ * notifications, hors de ce réglage.
+ *
+ * `NOBODY` ferme ; `COMMUNITY` ajoute les co-membres d'une communauté ;
+ * `PUBLIC` n'envoie jamais à « tout Meeshy » : sans modèle d'abonnés, il vise
+ * les mêmes personnes NOMMÉES que `COMMUNITY` (tous les liens, communauté
+ * comprise) — ADR `2026-10-31-l-entourage-prevenu-se-regle-action-par-action-13929`.
+ * Le réglage ne peut jamais ouvrir plus que le cercle : la loi compare le
+ * niveau EFFECTIF au cran choisi, et le blocage coupe tout.
+ */
+export const RELATION_AUDIENCE_CHOICES = ['NOBODY', 'BLOOD', 'CLOSE', 'FRIEND', 'ACQUAINTANCE', 'COMMUNITY', 'PUBLIC'] as const;
+export type RelationAudienceChoice = (typeof RELATION_AUDIENCE_CHOICES)[number];
+
+export const isRelationAudienceChoice = (value: unknown): value is RelationAudienceChoice =>
+  typeof value === 'string' && (RELATION_AUDIENCE_CHOICES as readonly string[]).includes(value);
+
+/** Les trois familles d'actions relayées à l'entourage, et la feature de la loi qui les porte. */
+export const CIRCLE_NOTIFY_FAMILIES = {
+  /** A — mes publications. */
+  publication: { feature: 'notify.newContent', actions: ['post', 'reel', 'story', 'mood', 'repost', 'share'] },
+  /** B — l'activité des autres sur MES contenus, relayée à mon entourage. */
+  onMyContent: {
+    feature: 'relay.commentersOnMyPosts',
+    actions: ['comment', 'reaction', 'share', 'repost', 'quote', 'reference', 'mention'],
+  },
+  /** C — mon activité AILLEURS, montrée à mon entourage. */
+  elsewhere: {
+    feature: 'relay.myCommentsElsewhere',
+    actions: ['comment', 'reaction', 'share', 'quote', 'reference', 'mention'],
+  },
+} as const satisfies Readonly<
+  Record<string, { readonly feature: RelationFeature; readonly actions: readonly string[] }>
+>;
+
+export type CircleNotifyFamily = keyof typeof CIRCLE_NOTIFY_FAMILIES;
+export type CircleNotifyAction<F extends CircleNotifyFamily> = (typeof CIRCLE_NOTIFY_FAMILIES)[F]['actions'][number];
+/** La clé de préférence (`notification.<clé>`) : `circle` + famille + action, ex. `circlePublicationPost`. */
+export type CircleNotifyKey = {
+  [F in CircleNotifyFamily]: `circle${Capitalize<F>}${Capitalize<CircleNotifyAction<F>>}`;
+}[CircleNotifyFamily];
+
+const capitalize = <S extends string>(value: S): Capitalize<S> =>
+  `${value.charAt(0).toUpperCase()}${value.slice(1)}` as Capitalize<S>;
+
+export const circleNotifyKey = <F extends CircleNotifyFamily>(family: F, action: CircleNotifyAction<F>): CircleNotifyKey =>
+  `circle${capitalize(family)}${capitalize(action)}` as CircleNotifyKey;
+
+/** Toutes les clés, avec la feature qui les porte — dix-neuf actions. */
+export const CIRCLE_NOTIFY_KEY_FEATURE: Readonly<Record<CircleNotifyKey, RelationFeature>> = Object.fromEntries(
+  (Object.keys(CIRCLE_NOTIFY_FAMILIES) as CircleNotifyFamily[]).flatMap((family) =>
+    CIRCLE_NOTIFY_FAMILIES[family].actions.map((action) => [
+      circleNotifyKey(family, action as CircleNotifyAction<typeof family>),
+      CIRCLE_NOTIFY_FAMILIES[family].feature,
+    ]),
+  ),
+) as Record<CircleNotifyKey, RelationFeature>;
+
+export const CIRCLE_NOTIFY_KEYS = Object.keys(CIRCLE_NOTIFY_KEY_FEATURE) as readonly CircleNotifyKey[];
+
+/**
+ * Le défaut d'une action : le niveau minimal de SA feature dans la matrice
+ * (A → Proche, B → Proche, C → Sang). Une seule source : changer la matrice
+ * change le défaut servi par la route de préférences.
+ */
+export const CIRCLE_NOTIFY_DEFAULTS: Readonly<Record<CircleNotifyKey, RelationAudienceChoice>> = Object.fromEntries(
+  CIRCLE_NOTIFY_KEYS.map((key) => [key, RELATION_FEATURE_MIN_LEVEL[CIRCLE_NOTIFY_KEY_FEATURE[key]]]),
+) as Record<CircleNotifyKey, RelationAudienceChoice>;
+
+/** Les features dont le PROPRIÉTAIRE du contenu choisit le cran (entrée `ownerAudience` de la loi). */
+export const RELATION_TUNABLE_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>(
+  Object.values(CIRCLE_NOTIFY_FAMILIES).map((family) => family.feature),
+);
+
+export type RelationLevelPresentation = { readonly labelKey: string; readonly icon: string };
+
+export const RELATION_LEVEL_PRESENTATION: Readonly<Record<RelationLevel, RelationLevelPresentation>> = {
+  PUBLIC: { labelKey: 'relation.level.PUBLIC', icon: '🌐' },
+  COMMUNITY: { labelKey: 'relation.level.COMMUNITY', icon: '👥' },
+  ACQUAINTANCE: { labelKey: 'relation.level.ACQUAINTANCE', icon: '👋' },
+  FRIEND: { labelKey: 'relation.level.FRIEND', icon: '🤝' },
+  CLOSE: { labelKey: 'relation.level.CLOSE', icon: '🔥' },
+  BLOOD: { labelKey: 'relation.level.BLOOD', icon: '🩸' },
+};
+
+/** Les SEPT langues du catalogue des clients (iOS `Localizable.xcstrings`). */
+export const RELATION_LABEL_LANGUAGES = ['ar', 'de', 'en', 'es', 'fr', 'it', 'pt-BR'] as const;
+export type RelationLabelLanguage = (typeof RELATION_LABEL_LANGUAGES)[number];
+
+export const RELATION_LEVEL_LABELS: Readonly<Record<RelationLabelLanguage, Readonly<Record<RelationLevel, string>>>> = {
+  ar: { PUBLIC: 'عام', COMMUNITY: 'المجتمع', ACQUAINTANCE: 'معرفة', FRIEND: 'صديق', CLOSE: 'مقرّب', BLOOD: 'دم' },
+  de: { PUBLIC: 'Öffentlich', COMMUNITY: 'Community', ACQUAINTANCE: 'Bekannter', FRIEND: 'Freund', CLOSE: 'Vertrauter', BLOOD: 'Blut' },
+  en: { PUBLIC: 'Public', COMMUNITY: 'Community', ACQUAINTANCE: 'Acquaintance', FRIEND: 'Friend', CLOSE: 'Close', BLOOD: 'Blood' },
+  es: { PUBLIC: 'Público', COMMUNITY: 'Comunidad', ACQUAINTANCE: 'Conocido', FRIEND: 'Amigo', CLOSE: 'Cercano', BLOOD: 'Sangre' },
+  fr: { PUBLIC: 'Public', COMMUNITY: 'Communauté', ACQUAINTANCE: 'Connaissance', FRIEND: 'Ami', CLOSE: 'Proche', BLOOD: 'Sang' },
+  it: { PUBLIC: 'Pubblico', COMMUNITY: 'Comunità', ACQUAINTANCE: 'Conoscente', FRIEND: 'Amico', CLOSE: 'Intimo', BLOOD: 'Sangue' },
+  'pt-BR': { PUBLIC: 'Público', COMMUNITY: 'Comunidade', ACQUAINTANCE: 'Conhecido', FRIEND: 'Amigo', CLOSE: 'Próximo', BLOOD: 'Sangue' },
+};
+
+export type RelationBringQuota = Readonly<{ FRIEND: number; CLOSE: number; BLOOD: number; ATOM: number | null }>;
+
+export type RelationThresholds = {
+  readonly acquaintance: { readonly minInteractions: number };
+  readonly close: { readonly activeWeeks: number };
+  readonly blood: { readonly activeWeeks: number };
+  readonly bring: { readonly perDay: RelationBringQuota };
+  readonly cooldownDays: number;
+  readonly proximity: { readonly cooldownHours: number };
+};
+
+export const RELATION_THRESHOLDS: RelationThresholds = {
+  acquaintance: { minInteractions: 10 },
+  close: { activeWeeks: 4 },
+  blood: { activeWeeks: 12 },
+  bring: { perDay: { FRIEND: 1, CLOSE: 3, BLOOD: 30, ATOM: null } },
+  cooldownDays: 30,
+  proximity: { cooldownHours: 2 },
+};
+
+/**
+ * Seuils abaissés sur staging pour qu'une recette atteigne Proche et Sang sans
+ * attendre des semaines. Seuls les seuils d'ENTRÉE baissent : les quotas, le
+ * cool-down et la matrice sont ceux de la production.
+ */
+const STAGING_THRESHOLDS: RelationThresholds = {
+  ...RELATION_THRESHOLDS,
+  acquaintance: { minInteractions: 3 },
+  close: { activeWeeks: 1 },
+  blood: { activeWeeks: 2 },
+};
+
+export const relationThresholdsFor = (environment: string | null | undefined): RelationThresholds =>
+  environment === 'staging' ? STAGING_THRESHOLDS : RELATION_THRESHOLDS;
+
+export const isRelationFeature = (value: unknown): value is RelationFeature =>
+  typeof value === 'string' && (RELATION_FEATURES as readonly string[]).includes(value);

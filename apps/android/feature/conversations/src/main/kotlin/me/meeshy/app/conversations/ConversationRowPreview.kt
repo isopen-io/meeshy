@@ -1,12 +1,14 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.model.preview.PreviewEffect
+
 /**
  * The resolved preview line for a conversation row plus whether it renders in the
  * conversation accent colour and its message-summary [kind]. Priority mirrors iOS
  * `ThemedConversationRow`: a live typing indicator supersedes an unsent draft,
- * which supersedes the last message. Typing and draft both paint in the accent —
- * they signal live, personal activity — while a plain last message stays in the
- * secondary text colour. [kind] is the classifier decision (used only when neither
+ * which supersedes the last message. Typing paints in the accent; a draft paints its
+ * label in the error colour and its body in the secondary ink (iOS `draftLine`); a plain
+ * last message stays in the secondary text colour. [kind] is the classifier decision (used only when neither
  * typing nor draft applies) — the Compose row picks a kind-appropriate style
  * (icon + italic for EXPIRED/HIDDEN/VIEW_ONCE, timer badge for EPHEMERAL_ACTIVE).
  * Defaulted to STANDARD so a plain typing/draft path is trivially expressible.
@@ -15,7 +17,16 @@ data class RowPreview(
     val text: String,
     val isAccent: Boolean,
     val kind: MessageSummaryKind = MessageSummaryKind.STANDARD,
+    /** Set for a draft line: painted in the error colour before [text] (iOS `draftLine`). */
+    val draftLabel: String? = null,
+    /** The last message's applied effect (#16975) — only on the last-message line, never typing/draft. */
+    val effect: PreviewEffect? = null,
+    /** The last message id, keying the one-shot entrance of [effect]. */
+    val messageId: String? = null,
 )
+
+private fun DraftPreview.asRowPreview(): RowPreview =
+    RowPreview(text = body.orEmpty(), isAccent = false, draftLabel = label)
 
 /**
  * The "<name> is typing…" line for a row, or `null` when nobody is typing there (so the
@@ -36,11 +47,11 @@ fun typingPreview(typingDisplayName: String?, format: String): String? {
  */
 fun conversationRowPreview(
     typingLine: String?,
-    draftLine: String?,
+    draft: DraftPreview?,
     lastMessage: String,
 ): RowPreview = when {
     typingLine != null -> RowPreview(typingLine, isAccent = true)
-    draftLine != null -> RowPreview(draftLine, isAccent = true)
+    draft != null -> draft.asRowPreview()
     else -> RowPreview(lastMessage, isAccent = false)
 }
 
@@ -53,10 +64,16 @@ fun conversationRowPreview(
  */
 fun conversationRowPreview(
     typingLine: String?,
-    draftLine: String?,
+    draft: DraftPreview?,
     summary: SummaryLine,
 ): RowPreview = when {
     typingLine != null -> RowPreview(typingLine, isAccent = true, kind = MessageSummaryKind.STANDARD)
-    draftLine != null -> RowPreview(draftLine, isAccent = true, kind = MessageSummaryKind.STANDARD)
-    else -> RowPreview(summary.text, isAccent = false, kind = summary.kind)
+    draft != null -> draft.asRowPreview()
+    else -> RowPreview(
+        summary.text,
+        isAccent = false,
+        kind = summary.kind,
+        effect = summary.effect,
+        messageId = summary.messageId,
+    )
 }

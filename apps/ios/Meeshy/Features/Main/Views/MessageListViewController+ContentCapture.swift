@@ -1,0 +1,36 @@
+import UIKit
+import MeeshySDK
+
+// MARK: - Ce que le fil montre à l'instant d'une capture (#9617)
+
+/// Le fil (Bulles, Focal, Script) répond par ses cellules VISIBLES — la même
+/// source que les accusés de lecture (`visibleServerMessageIds`), lue à
+/// l'instant de la capture, jamais tenue dans un second registre. Sous la
+/// Rivière ou le Résumé, panes opaques, et hors fenêtre (un écran poussé
+/// par-dessus), il ne montre rien.
+extension MessageListViewController: ContentCaptureSource {
+
+    var isCaptureCover: Bool { false }
+
+    /// Ce qui est à l'écran est LU : l'accusé part tout de suite, seuil de
+    /// présence franchi ou non (`flushSeenNow`).
+    func acknowledgeVisibleReads() {
+        guard isViewLoaded, dataSource != nil, rendersThread else { return }
+        flushSeenNow()
+    }
+
+    func visibleCaptureCandidates() -> [ContentCaptureCandidate] {
+        guard isViewLoaded, dataSource != nil, rendersThread, view.window != nil else { return [] }
+        return collectionView.indexPathsForVisibleItems.flatMap { indexPath -> [ContentCaptureCandidate] in
+            // Pas de garde sur l'identifiant serveur : une réponse encore en vol
+            // montre quand même sa citation. Un message d'autrui sans
+            // identifiant serveur est rendu NOIR (`renderedVerdict`).
+            guard case .message(let localId)? = dataSource.itemIdentifier(for: indexPath),
+                  var message = store.domainMessage(for: localId, currentUserId: currentUserId) else { return [] }
+            // La vue unique texte RÉVÉLÉE vit à la visite, pas en base : la
+            // même pose que la cellule (`applyVisitState`).
+            applyVisitState(to: &message)
+            return ContentCaptureVisibility.candidates(for: message, serverId: store.message(for: localId)?.serverId)
+        }
+    }
+}

@@ -23,6 +23,8 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { matchesMongoWhere } from '../../../helpers/mongo-where';
+import { sharedTranslationRow, sharedTranslationTable } from '../../../helpers/shared-translation-table';
 
 // Le singleton des compteurs est doublé ; `resolveAttachmentType` reste le VRAI
 // (même table MIME → compteur que `recompute()`, cf. le jumeau côté post-save).
@@ -79,6 +81,8 @@ interface NotificationRow {
   id: string;
   userId: string;
   messageId: string | null;
+  /** Relu par le retrait : la révocation push ne vise que ce qui est parti. */
+  delivery?: { pushSent: boolean };
 }
 
 let notificationRows: NotificationRow[] = [];
@@ -91,8 +95,8 @@ function seedNotifications(rows: NotificationRow[]): void {
 }
 
 const ANCHORED_ON_REMOVED: NotificationRow[] = [
-  { id: 'notif-mention', userId: MENTIONED_USER_ID, messageId: MESSAGE_ID },
-  { id: 'notif-reply', userId: REPLIED_USER_ID, messageId: MESSAGE_ID },
+  { id: 'notif-mention', userId: MENTIONED_USER_ID, messageId: MESSAGE_ID, delivery: { pushSent: true } },
+  { id: 'notif-reply', userId: REPLIED_USER_ID, messageId: MESSAGE_ID, delivery: { pushSent: true } },
 ];
 const ANCHORED_ELSEWHERE: NotificationRow = {
   id: 'notif-autre-message',
@@ -133,10 +137,12 @@ beforeEach(() => {
   trackingLinkUpdateMany.mockResolvedValue({ count: 1 });
   seedNotifications([]);
   announceNotificationsRetracted.mockResolvedValue(undefined);
+  // Projette ce que le retrait SÉLECTIONNE, `delivery` compris : la révocation
+  // push le lit pour ne réveiller que les appareils qui portent une bannière.
   notificationFindMany.mockImplementation(async ({ where }: any) =>
     notificationRows
       .filter((row) => matchesWhere(row, where))
-      .map(({ id, userId }) => ({ id, userId }))
+      .map(({ id, userId, delivery }) => ({ id, userId, delivery }))
   );
   notificationDeleteMany.mockImplementation(async ({ where }: any) => {
     const kept = notificationRows.filter((row) => !matchesWhere(row, where));
@@ -303,10 +309,16 @@ describe('applyMessageRemovalEffects — lastMessageAt', () => {
     await applyMessageRemovalEffects(prisma, removedMessage());
 
     expect(messageFindFirst).toHaveBeenCalledWith({
-      where: { conversationId: CONVERSATION_ID, deletedAt: null },
+      where: expect.objectContaining({ conversationId: CONVERSATION_ID, deletedAt: null }),
       orderBy: { createdAt: 'desc' },
       select: { createdAt: true },
     });
+    // #9630 — l'horloge ne se pose jamais sur un avis de capture, et reste sur tout autre message.
+    const where = (messageFindFirst.mock.calls[0][0] as { where: Record<string, unknown> }).where;
+    const at = { conversationId: CONVERSATION_ID, deletedAt: null, messageSource: 'system', messageType: 'system' };
+    expect(matchesMongoWhere({ ...at, expiresAt: new Date() }, where)).toBe(false);
+    expect(matchesMongoWhere(at, where)).toBe(true);
+    expect(matchesMongoWhere({ ...at, messageSource: 'user', messageType: 'text', expiresAt: new Date() }, where)).toBe(true);
     expect(conversationUpdateMany).toHaveBeenCalledWith({
       where: { id: CONVERSATION_ID, lastMessageAt: LAST_MESSAGE_AT },
       data: { lastMessageAt: SURVIVOR_CREATED_AT },
@@ -446,8 +458,8 @@ describe('applyMessageRemovalEffects — notifications ancrées sur le message',
     await applyMessageRemovalEffects(prisma, removedMessage(), announcer);
 
     expect(announceNotificationsRetracted).toHaveBeenCalledWith([
-      { id: 'notif-mention', userId: MENTIONED_USER_ID },
-      { id: 'notif-reply', userId: REPLIED_USER_ID },
+      { id: 'notif-mention', userId: MENTIONED_USER_ID, pushSent: true },
+      { id: 'notif-reply', userId: REPLIED_USER_ID, pushSent: true },
     ]);
   });
 
@@ -487,5 +499,92 @@ describe('applyMessageRemovalEffects — notifications ancrées sur le message',
 
     expect(conversationUpdateMany).toHaveBeenCalledTimes(1);
     expect(trackingLinkUpdateMany).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Le cinquième effet du retrait : les traductions PARTAGÉES (#9899, audit C4).
+ *
+ * Elles vivent dans leur propre table, à côté de `Message.translations` que
+ * chaque écrivain vide (`translations: null`). Aucun ne regardait la table
+ * voisine : la version scellée d'un message supprimé restait lisible, pour qui
+ * détenait la clé, aussi longtemps que la base la gardait. Les trois routes, le
+ * handler socket, l'anonymisation d'un compte supprimé et l'échéance des
+ * éphémères passent tous par cette unité — c'est donc ICI qu'un effet ajouté
+ * s'applique à tous les chemins, et nulle part ailleurs.
+ *
+ * Le double de la table APPLIQUE le `where` : ces témoins lisent les lignes qui
+ * RESTENT, jamais la clause reçue.
+ */
+describe('applyMessageRemovalEffects — traductions partagées', () => {
+  const EDITED_AT = '2026-10-09T08:30:00.000Z';
+  const prismaWith = (table: ReturnType<typeof sharedTranslationTable>) =>
+    ({ ...prisma, sharedTranslation: table.delegate }) as any;
+
+  it('efface les traductions partagées du message retiré — toutes ses langues, toutes ses versions', async () => {
+    const table = sharedTranslationTable([
+      sharedTranslationRow({ id: 'fr-originale', messageId: MESSAGE_ID, targetLanguage: 'fr' }),
+      sharedTranslationRow({ id: 'en-originale', messageId: MESSAGE_ID, targetLanguage: 'en' }),
+      sharedTranslationRow({ id: 'fr-éditée', messageId: MESSAGE_ID, targetLanguage: 'fr', sourceVersion: EDITED_AT }),
+    ]);
+
+    await applyMessageRemovalEffects(prismaWith(table), removedMessage());
+
+    expect(table.remainingIds()).toEqual([]);
+  });
+
+  it("laisse intactes les traductions partagées d'un AUTRE message de la conversation", async () => {
+    // Le témoin qui interdit d'élargir : un `deleteMany` gardé sur la
+    // conversation, ou sur rien, viderait des lignes qui pointent vers des
+    // messages toujours affichés.
+    const table = sharedTranslationTable([
+      sharedTranslationRow({ id: 'retirée', messageId: MESSAGE_ID }),
+      sharedTranslationRow({ id: 'voisine', messageId: OTHER_MESSAGE_ID }),
+    ]);
+
+    await applyMessageRemovalEffects(prismaWith(table), removedMessage());
+
+    expect(table.remainingIds()).toEqual(['voisine']);
+  });
+
+  it("efface sans annonceur câblé : l'écriture durable ne dépend pas du câblage socket", async () => {
+    const table = sharedTranslationTable([sharedTranslationRow({ messageId: MESSAGE_ID })]);
+
+    await applyMessageRemovalEffects(prismaWith(table), removedMessage(), undefined);
+
+    expect(table.remainingIds()).toEqual([]);
+  });
+
+  it('ne fait jamais échouer le retrait, déjà committé, quand la table voisine ne répond pas', async () => {
+    const table = sharedTranslationTable([sharedTranslationRow({ id: 'reste', messageId: MESSAGE_ID })]);
+    table.deleteMany.mockRejectedValueOnce(new Error('mongo down'));
+
+    await expect(applyMessageRemovalEffects(prismaWith(table), removedMessage(), announcer)).resolves.toBeUndefined();
+    expect(table.remainingIds()).toEqual(['reste']);
+  });
+
+  it("applique quand même les autres effets du retrait quand l'effacement échoue", async () => {
+    // Cinq effets indépendants : l'un ne doit pas emporter les autres.
+    const table = sharedTranslationTable();
+    table.deleteMany.mockRejectedValueOnce(new Error('mongo down'));
+
+    await applyMessageRemovalEffects(prismaWith(table), removedMessage(), announcer);
+
+    expect(mockOnMessageDeleted).toHaveBeenCalledTimes(1);
+    expect(trackingLinkUpdateMany).toHaveBeenCalledTimes(1);
+    expect(conversationUpdateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("n'empêche pas l'effacement quand un autre effet du retrait échoue avant lui", async () => {
+    // L'inverse du précédent : les compteurs, les notifications et le recalcul
+    // peuvent tomber, la copie scellée du message rappelé n'a pas à les attendre.
+    const table = sharedTranslationTable([sharedTranslationRow({ messageId: MESSAGE_ID })]);
+    mockOnMessageDeleted.mockRejectedValue(new Error('counters down'));
+    notificationFindMany.mockRejectedValue(new Error('mongo down'));
+    conversationFindUnique.mockRejectedValue(new Error('mongo down'));
+
+    await applyMessageRemovalEffects(prismaWith(table), removedMessage(), announcer);
+
+    expect(table.remainingIds()).toEqual([]);
   });
 });

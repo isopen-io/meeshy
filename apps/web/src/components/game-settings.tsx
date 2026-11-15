@@ -1,0 +1,331 @@
+import type { ReactNode } from 'react';
+
+import type { GameLeagueBlock, GameVisibility } from '@meeshy/shared/types/game';
+import { PHOTO_INVITATIONS, type PhotoInvitations } from '@meeshy/shared/types/game-photo-settings';
+import type { GloryAtmosphere } from '@meeshy/shared/types/glory-atmospheres';
+import { ATLAS_DEFAULT_VISIBILITY, SHOWCASE_DEFAULT_VISIBILITY } from '@meeshy/shared/utils/game/trophies';
+
+import type { GameDevicePrefs } from '@/lib/game/preferences';
+import { gameText } from '@/lib/view/game-copy';
+
+import { atmosphereName } from './game-atmosphere-choice';
+import { gameHint } from './game-hint';
+import { InfoHintButton, InfoHintText, InfoNoted, useInfoHint, type InfoHint } from './info-hint';
+import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GameCard } from './game-surface';
+import { GameVisibilityPicker } from './game-visibility-picker';
+
+/**
+ * LES RÉGLAGES DU JEU (#9481) — un seul écran pour ce que le jeu laisse
+ * choisir : les célébrations de Mee et Meo, les notifications du jeu (#9490), le mode « Jeu masqué », qui voit
+ * quoi (rang, trésor, vitrine, Atlas — #5738), la ligue publique (consentement
+ * et pseudonyme). Aucun lien transverse (carte de navigation, #9563, amendement
+ * n° 4) : les règles et le carnet sont des portes de Progression, et la ligue se
+ * rejoint depuis sa fiche — un écran du jeu n'a qu'un parent.
+ *
+ * **« Jeu masqué » est un geste composé, et il le dit.** Il masque le jeu sur le
+ * compte (`PUT /me/game/privacy` ; `gamePrefs.hidden` n'en est que la copie du
+ * dernier état connu), ferme les quatre visibilités à « moi seul » et retire la
+ * personne de la ligue publique (conformité A-7, D-2). Le réafficher ne rouvre
+ * RIEN des visibilités : l'écran le dit, la personne rouvre ce qu'elle veut, un
+ * réglage à la fois. Défaut sûr : on ne devine jamais ce qu'elle aurait choisi
+ * d'ouvrir. Dans les deux sens le geste exige le réseau : le serveur fait foi.
+ *
+ * Les valeurs par défaut quand le serveur ne les sert pas encore sont les PLUS
+ * FERMÉES de la loi : « amis » (rang, trésor, vitrine) et « moi seul » (Atlas).
+ */
+export type GameSettingsProps = {
+  readonly prefs: GameDevicePrefs;
+  readonly visibility: GameVisibility | undefined;
+  readonly league: GameLeagueBlock | undefined;
+  readonly online: boolean;
+  readonly savingVisibility: boolean;
+  readonly leavingLeague: boolean;
+  readonly errors: { readonly visibility?: string | undefined; readonly league?: string | undefined; readonly notifications?: string | undefined };
+  /**
+   * L'interrupteur « Notifications du jeu » (#9490) — `notification.gameEnabled`, la préférence du COMPTE. `undefined` :
+   * pas encore lu (il attend, désactivé). Le branchement (`onGameNotifications`) est facultatif : sans lui, pas de carte.
+   */
+  readonly gameNotifications?: boolean | undefined;
+  readonly onGameNotifications?: ((on: boolean) => void) | undefined;
+  /**
+   * « Moments à immortaliser » (#10268) — `notification.gamePhotoEnabled`, le PUSH d'une étape franchie app fermée, rangé
+   * dans la carte des notifications du jeu : les couper le coupe aussi (D8), l'interrupteur s'éteint alors sans écraser le
+   * choix gardé. `undefined` : pas encore lu (il attend). Sans branchement (`onGamePhoto`), pas d'interrupteur.
+   */
+  readonly gamePhoto?: boolean | undefined;
+  readonly onGamePhoto?: ((on: boolean) => void) | undefined;
+  /**
+   * « Mon atmosphère » (#10163) — l'atmosphère des cadres de rang, une préférence du COMPTE ; `null` : pas encore
+   * choisie, l'Afrique éternelle décore. Le geste ouvre l'écran de choix chez l'hôte. Sans branchement, pas de carte.
+   */
+  readonly atmosphere?: { readonly current: GloryAtmosphere | null; readonly onChange: () => void; readonly notice?: string | undefined } | undefined;
+  /**
+   * « Me proposer d'immortaliser » (#10174, L18) — chaque étape (défaut), les grands moments, jamais : une préférence du
+   * COMPTE, qui gouverne la bannière, la feuille, la carte photo des célébrations et la pastille du carnet. Sans
+   * branchement, pas de carte.
+   */
+  readonly invitations?: { readonly current: PhotoInvitations; readonly onChange: (next: PhotoInvitations) => void; readonly notice?: string | undefined } | undefined;
+  readonly onCelebrations: (on: boolean) => void;
+  readonly onHidden: (on: boolean) => void;
+  readonly onVisibility: (patch: Partial<GameVisibility>) => void;
+  readonly onLeaveLeague: () => void;
+  /** Le (i) de chaque titre de bloc (#17587, épure #17584) — absent : le titre seul. */
+  readonly notes?: Partial<Record<GameSettingsBlock, InfoHint>> | undefined;
+};
+
+export type GameSettingsBlock = 'celebrations' | 'hidden' | 'atmosphere' | 'invitations' | 'notifications' | 'visibility' | 'league';
+
+function BlockTitle({ block, note, children }: { readonly block: GameSettingsBlock; readonly note: InfoHint | undefined; readonly children: ReactNode }) {
+  return (
+    <InfoNoted note={note}>
+      <h2 id={`game-settings-${block}-title`} className="text-body font-bold" style={{ color: GAME_INK }}>
+        {children}
+      </h2>
+    </InfoNoted>
+  );
+}
+
+const defaultNotes = (hidden: boolean): Readonly<Partial<Record<GameSettingsBlock, InfoHint>>> => ({
+  hidden: gameHint('game.settings.hidden.note_q', 'game.settings.hidden.note', hidden ? gameText('game.settings.hidden.reopen_note') : undefined),
+  atmosphere: gameHint('game.settings.atmosphere.note_q', 'game.settings.atmosphere.note'),
+  invitations: gameHint('game.settings.invitations.note_q', 'game.settings.invitations.note'),
+  notifications: gameHint('game.settings.notifications.note_q', 'game.settings.notifications.body'),
+  visibility: gameHint('game.settings.visibility.note_q', 'game.settings.visibility.note'),
+});
+
+const FIELDS = ['rank', 'treasury', 'showcase', 'atlas'] as const;
+
+const DEFAULT_LEVEL: Readonly<Record<(typeof FIELDS)[number], GameVisibility['showcase']>> = {
+  rank: 'friends',
+  treasury: 'friends',
+  showcase: SHOWCASE_DEFAULT_VISIBILITY,
+  atlas: ATLAS_DEFAULT_VISIBILITY,
+};
+
+function SwitchRow({ marker, label, checked, disabled, note, onChange }: { readonly marker: string; readonly label: string; readonly checked: boolean; readonly disabled?: boolean; readonly note?: InfoHint | undefined; readonly onChange: (on: boolean) => void }) {
+  const state = useInfoHint();
+  return (
+    <>
+      <div className="flex items-center gap-1">
+        <label className="flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-3 rounded-chip px-1 has-[:disabled]:opacity-60" style={{ minHeight: 44 }}>
+          <span className="min-w-0 break-words text-body font-semibold" style={{ color: GAME_INK }}>
+            {label}
+          </span>
+          <input
+            type="checkbox"
+            role="switch"
+            {...{ [marker]: '' }}
+            checked={checked}
+            disabled={disabled === true}
+            onChange={(event) => onChange(event.currentTarget.checked)}
+            className="size-6 shrink-0 accent-[var(--color-ios-brand)]"
+          />
+        </label>
+        {note === undefined ? null : <InfoHintButton hint={note} state={state} />}
+      </div>
+      {note === undefined ? null : <InfoHintText hint={note} state={state} />}
+    </>
+  );
+}
+
+function GamePhotoSwitch({ online, game, photo, onChange }: { readonly online: boolean; readonly game: boolean | undefined; readonly photo: boolean | undefined; readonly onChange: (on: boolean) => void }) {
+  const cutByGame = game === false;
+  return (
+    <>
+      <SwitchRow
+        marker="data-game-setting-photo"
+        label={gameText('game.settings.notifications.photo_switch')}
+        note={gameHint('game.settings.notifications.photo_note_q', 'game.settings.notifications.photo_body')}
+        checked={!cutByGame && (photo ?? true)}
+        disabled={!online || photo === undefined || cutByGame}
+        onChange={onChange}
+      />
+      {cutByGame ? (
+        <p className="text-caption" style={{ color: GAME_INK_2 }}>
+          {gameText('game.settings.notifications.photo_cut')}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+export function GameSettings(props: GameSettingsProps) {
+  const { prefs, visibility, league, online, savingVisibility, leavingLeague, errors } = props;
+  const inLeague = league?.access === 'open';
+  const notes = { ...defaultNotes(prefs.hidden), ...props.notes };
+  return (
+    <>
+      <GameCard id="game-settings-celebrations" labelledBy="game-settings-celebrations-title">
+        <BlockTitle block="celebrations" note={notes.celebrations}>
+          {gameText('game.settings.celebrations.title')}
+        </BlockTitle>
+        <p className="text-caption" style={{ color: GAME_INK_2 }}>
+          {gameText('game.settings.celebrations.body')}
+        </p>
+        <SwitchRow marker="data-game-setting-celebrations" label={gameText('game.settings.celebrations.switch')} checked={prefs.celebrations} onChange={props.onCelebrations} />
+      </GameCard>
+
+      <GameCard id="game-settings-hidden" labelledBy="game-settings-hidden-title">
+        <BlockTitle block="hidden" note={notes.hidden}>
+          {gameText('game.settings.hidden.section')}
+        </BlockTitle>
+        <p className="text-caption" style={{ color: GAME_INK_2 }}>
+          {gameText('game.settings.hidden.body')}
+        </p>
+        <SwitchRow marker="data-game-setting-hidden" label={gameText('game.settings.hidden.row')} checked={prefs.hidden} disabled={!online} onChange={props.onHidden} />
+        {online ? null : (
+          <p className="text-caption" style={{ color: GAME_INK_2 }}>
+            {gameText('game.offline.action')}
+          </p>
+        )}
+      </GameCard>
+
+      {props.atmosphere === undefined ? null : (
+        <GameCard id="game-settings-atmosphere" labelledBy="game-settings-atmosphere-title">
+          <BlockTitle block="atmosphere" note={notes.atmosphere}>
+            {gameText('game.settings.atmosphere.title')}
+          </BlockTitle>
+          <p className="text-caption" style={{ color: GAME_INK_2 }}>
+            {gameText('game.settings.atmosphere.body')}
+          </p>
+          <p data-game-setting-atmosphere-current="" className="text-body font-semibold" style={{ color: GAME_INK }}>
+            {atmosphereName(props.atmosphere.current ?? 'afrique')}
+          </p>
+          <button
+            type="button"
+            id="game-settings-atmosphere-action"
+            data-game-setting-atmosphere=""
+            aria-labelledby="game-settings-atmosphere-action game-settings-atmosphere-title"
+            onClick={props.atmosphere.onChange}
+            className="self-start rounded-chip px-4 text-body font-semibold"
+            style={{ minHeight: 44, color: GAME_BRAND, backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' }}
+          >
+            {props.atmosphere.current === null ? gameText('game.settings.atmosphere.choose') : gameText('game.settings.atmosphere.change')}
+          </button>
+          {props.atmosphere.notice === undefined ? null : (
+            <p role="status" className="text-caption" style={{ color: GAME_INK_2 }}>
+              {props.atmosphere.notice}
+            </p>
+          )}
+        </GameCard>
+      )}
+
+      {props.invitations === undefined ? null : (
+        <GameCard id="game-settings-invitations" labelledBy="game-settings-invitations-title">
+          <BlockTitle block="invitations" note={notes.invitations}>
+            {gameText('game.settings.invitations.title')}
+          </BlockTitle>
+          <p className="text-caption" style={{ color: GAME_INK_2 }}>
+            {gameText('game.settings.invitations.body')}
+          </p>
+          <fieldset className="flex flex-col" aria-labelledby="game-settings-invitations-title">
+            {PHOTO_INVITATIONS.map((value) => (
+              <label key={value} className="flex cursor-pointer items-center gap-3 rounded-chip px-1" style={{ minHeight: 44 }}>
+                <input
+                  type="radio"
+                  name="game-photo-invitations"
+                  value={value}
+                  data-game-setting-invitations={value}
+                  checked={props.invitations?.current === value}
+                  onChange={() => props.invitations?.onChange(value)}
+                  className="size-5 shrink-0 accent-[var(--color-ios-brand)]"
+                />
+                <span className="text-body font-semibold" style={{ color: GAME_INK }}>
+                  {gameText(`game.settings.invitations.${value}`)}
+                </span>
+              </label>
+            ))}
+          </fieldset>
+          {props.invitations.notice === undefined ? null : (
+            <p role="status" className="text-caption" style={{ color: GAME_INK_2 }}>
+              {props.invitations.notice}
+            </p>
+          )}
+        </GameCard>
+      )}
+
+      {props.onGameNotifications === undefined ? null : (
+        <GameCard id="game-settings-notifications" labelledBy="game-settings-notifications-title">
+          <BlockTitle block="notifications" note={notes.notifications}>
+            {gameText('game.settings.notifications.title')}
+          </BlockTitle>
+          <SwitchRow
+            marker="data-game-setting-notifications"
+            label={gameText('game.settings.notifications.switch')}
+            checked={props.gameNotifications ?? true}
+            disabled={!online || props.gameNotifications === undefined}
+            onChange={props.onGameNotifications}
+          />
+          {props.onGamePhoto === undefined ? null : (
+            <GamePhotoSwitch online={online} game={props.gameNotifications} photo={props.gamePhoto} onChange={props.onGamePhoto} />
+          )}
+          {errors.notifications === undefined ? null : (
+            <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>
+              {errors.notifications}
+            </p>
+          )}
+        </GameCard>
+      )}
+
+      {visibility === undefined ? null : (
+        <GameCard id="game-settings-visibility" labelledBy="game-settings-visibility-title">
+          <BlockTitle block="visibility" note={notes.visibility}>
+            {gameText('game.settings.visibility.title')}
+          </BlockTitle>
+          <p className="text-caption" style={{ color: GAME_INK_2 }}>
+            {gameText('game.settings.visibility.body')}
+          </p>
+          {FIELDS.map((field) => (
+            <GameVisibilityPicker
+              key={field}
+              legend={gameText(`game.visibility.field.${field}`)}
+              value={visibility[field] ?? DEFAULT_LEVEL[field]}
+              disabled={!online}
+              busy={savingVisibility}
+              onChange={(level) => props.onVisibility({ [field]: level })}
+            />
+          ))}
+          {errors.visibility === undefined ? null : (
+            <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>
+              {errors.visibility}
+            </p>
+          )}
+        </GameCard>
+      )}
+
+      {league === undefined ? null : (
+        <GameCard id="game-settings-league" labelledBy="game-settings-league-title">
+          <BlockTitle block="league" note={notes.league}>
+            {gameText('game.settings.league.title')}
+          </BlockTitle>
+          <p className="text-caption" style={{ color: GAME_INK_2 }}>
+            {inLeague
+              ? league.pseudonym === null
+                ? gameText('game.settings.league.on_unnamed')
+                : gameText('game.settings.league.on', { name: league.pseudonym })
+              : gameText('game.settings.league.off')}
+          </p>
+          {inLeague ? (
+            <button
+              type="button"
+              data-game-setting-league-leave=""
+              disabled={!online || leavingLeague}
+              aria-busy={leavingLeague}
+              onClick={props.onLeaveLeague}
+              className="rounded-chip px-4 text-body font-semibold disabled:opacity-60"
+              style={{ minHeight: 44, color: GAME_ERROR }}
+            >
+              {gameText('game.league.consent.leave')}
+            </button>
+          ) : null}
+          {errors.league === undefined ? null : (
+            <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>
+              {errors.league}
+            </p>
+          )}
+        </GameCard>
+      )}
+
+    </>
+  );
+}

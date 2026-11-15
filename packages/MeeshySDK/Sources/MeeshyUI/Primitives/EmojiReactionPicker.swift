@@ -11,7 +11,7 @@ public struct EmojiCategory: Identifiable, Sendable {
     }
 
     public static let all: [EmojiCategory] = [
-        EmojiCategory(name: String(localized: "emoji.category.reactions", defaultValue: "Reactions", bundle: .module), icon: "🔥", emojis: [
+        EmojiCategory(name: String(localized: "emoji.category.reactions", defaultValue: "Réactions", bundle: .module), icon: "🔥", emojis: [
             "❤️", "😂", "🔥", "👏", "😮", "😢", "🥰", "😍",
             "💯", "🙏", "🤣", "😭", "✨", "🎉", "💪", "👍",
             "😊", "💕", "🤩", "😘", "❤️‍🔥", "🥺", "😎", "👀",
@@ -23,7 +23,7 @@ public struct EmojiCategory: Identifiable, Sendable {
             "🥲", "😋", "😛", "😜", "🤪", "😝", "🤑", "🤗",
             "🤭", "🫢", "🫣", "🤫", "🤔", "🫡", "🤐", "🤨",
             "😐", "😑", "😶", "🫥", "😏", "😒", "🙄", "😬",
-            "😮‍💨", "🤥", "🫨", "😌", "😔", "😪", "🤤", "😴",
+            "😮‍💨", "🤥", "🫨", "😞", "😔", "😪", "🤤", "😴",
             "😷", "🤒", "🤕", "🤢", "🤮", "🥵", "🥶", "🥴",
             "😵", "🤯", "🤠", "🥳", "🥸", "😎", "🤓", "🧐",
         ]),
@@ -58,24 +58,71 @@ public struct EmojiCategory: Identifiable, Sendable {
 /// terminal porte l'index `count`). Publiés dans le coordinateSpace nommé
 /// fourni par l'appelant via `scrubFrameSpace` — le SDK reste agnostique :
 /// il publie des cadres, l'app décide quoi en faire (hit-testing du scrub).
-public struct ScrubTileFramesKey: PreferenceKey {
+public nonisolated struct ScrubTileFramesKey: PreferenceKey {
     public static let defaultValue: [Int: CGRect] = [:]
     public static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
         value.merge(nextValue()) { _, new in new }
     }
 }
 
+/// **L'habillage de la barre de réaction rapide — une décision de l'HÔTE.**
+///
+/// La capsule `QuickReactionStripChrome` était une propriété du composant : tout
+/// appelant recevait la pilule, sans moyen de la refuser. Elle est juste partout
+/// où la barre flotte AU-DESSUS d'un contenu qu'elle doit trancher (liste de
+/// messages) — elle y sépare la rangée de ce qu'elle survole. Elle a tort sur
+/// une story plein écran, où la scène EST le fond et où la pilule ajoute un
+/// cadre que la directive porteur refuse (#6083, 2026-09-11 : « pas de
+/// contour ») — et, (#9043), sur le voile de l'appui long
+/// d'un message, « sans cadre comme pour les story ».
+///
+/// `nonisolated` : un habillage est une VALEUR. Le paquet est sous
+/// `defaultIsolation(MainActor)` ; sans ce mot-clé, décider de l'habillage hors
+/// du main actor serait impossible alors que rien dans le type ne touche l'UI.
+nonisolated public enum EmojiReactionPickerChrome: Equatable, Sendable {
+    /// La pilule flottante (Liquid Glass sur iOS 26, voile de matière avant) —
+    /// le DÉFAUT, pour que les sites existants ne changent pas d'un pixel.
+    case capsule
+    /// Ni capsule ni fond : la rangée se pose nue sur ce qui est déjà là.
+    case none
+}
+
 public struct EmojiReactionPicker: View {
     public var quickEmojis: [String]
     public enum Style { case dark, light }
     public var style: Style
-    /// Scale factor applied to all sizes (default 1.0). Use < 1.0 for compact contexts.
+    /// Facteur d'échelle appliqué à TOUTES les tailles de la rangée.
+    ///
+    /// **Le défaut EST la taille de Meeshy** (1,5 — directive porteur du
+    /// 2026-09-12 : « agrandi les barres de reaction de x1.4 au moins, en
+    /// profiter pour aligner cette taille partout où on peut réagir — story,
+    /// message, image, commentaire, attachement »).
+    ///
+    /// Il valait 1,0, et sept hôtes le montaient sous TROIS échelles — 0,78 en
+    /// grille média, 1,0 pour quatre d'entre eux, 2 en plein écran et au rail
+    /// de story. Un rapport de 2,56 entre la plus petite et la plus grande,
+    /// pour le même geste sur le même objet, et aucune des trois valeurs n'était
+    /// justifiée ailleurs que par le site qui la portait.
+    ///
+    /// **La valeur 1,5 n'est pas choisie ici, elle est REPRISE** : le porteur
+    /// l'a arrêtée le matin même sur capture (« ×0,75, elles sont trop
+    /// grosses », #6112, qui a ramené la story et le plein écran de 2 à 1,5).
+    /// Entre deux valeurs qui satisfont « ×1,4 au moins », prendre celle qu'une
+    /// décision a déjà produite — une constante neuve, même conforme, oblige à
+    /// rejouer l'arbitrage qui l'a fixée.
+    ///
+    /// **Surcharger ce paramètre est désormais une EXCEPTION**, et une
+    /// exception s'écrit — donc se justifie. Il n'y en a aucune à justifier
+    /// aujourd'hui : garde `ReactionBarScaleParityTests`.
     public var scale: CGFloat
     /// When true, the emoji strip is wrapped in a horizontal ScrollView so callers can
     /// pass more emojis than fit on-screen and let the user swipe to access the rest.
     /// The capsule background is rendered around the visible viewport so the strip
     /// keeps its anchored "pill" look even with overflow content.
     public var scrollable: Bool
+    /// Habillage de la rangée. `.capsule` par défaut — cf.
+    /// `EmojiReactionPickerChrome`.
+    public var chrome: EmojiReactionPickerChrome
     public var onReact: ((String) -> Void)?
     public var onDismiss: (() -> Void)?
     /// When nil, the "+" expand button is hidden.
@@ -96,8 +143,9 @@ public struct EmojiReactionPicker: View {
     public init(
         quickEmojis: [String] = ["❤️", "😂", "😮", "🔥", "😢", "👏"],
         style: Style = .dark,
-        scale: CGFloat = 1.0,
+        scale: CGFloat = 1.5,
         scrollable: Bool = false,
+        chrome: EmojiReactionPickerChrome = .capsule,
         onReact: ((String) -> Void)? = nil,
         onDismiss: (() -> Void)? = nil,
         onExpandFullPicker: (() -> Void)? = nil,
@@ -107,6 +155,7 @@ public struct EmojiReactionPicker: View {
     ) {
         self.quickEmojis = quickEmojis; self.style = style; self.scale = scale
         self.scrollable = scrollable
+        self.chrome = chrome
         self.onReact = onReact; self.onDismiss = onDismiss
         self.onExpandFullPicker = onExpandFullPicker
         self.highlightedIndex = highlightedIndex
@@ -132,27 +181,35 @@ public struct EmojiReactionPicker: View {
         .onPreferenceChange(ScrubTileFramesKey.self) { frames in
             onTileFrames?(frames)
         }
+        .settling($reactedEmoji, to: nil, after: .milliseconds(300), animation: .default)
     }
 
+    /// Les tuiles sont construites ICI, sur le fil principal : la barre est
+    /// montée dans le rail d'une story, candidat d'un `ViewThatFits` que le
+    /// rendu asynchrone d'iOS 26 mesure — un `ForEach` n'y appelle aucune
+    /// fermeture isolée (#9456, `AsyncRenderRow`).
     private var emojiList: some View {
         HStack(spacing: 6 * scale) {
-            ForEach(Array(quickEmojis.enumerated()), id: \.element) { index, emoji in
-                Button {
-                    reactToEmoji(emoji)
-                } label: {
-                    Text(emoji)
-                        .font(.system(size: (reactedEmoji == emoji ? 28 : 22) * scale))
-                        .scaleEffect(tileScale(for: index, reactedTo: emoji))
-                        .animation(.spring(response: 0.25, dampingFraction: 0.5), value: reactedEmoji)
-                        .animation(.spring(response: 0.25, dampingFraction: 0.5), value: highlightedIndex)
-                        .background(tileFrameReader(index: index))
-                }
-                // Entree en vague sinusoidale : la tuile `index` apparait
-                // apres celles a sa gauche, en suivant une courbe d'ease
-                // ondulante (cf. `WaveTileModifier`).
-                .modifier(WaveTileModifier(index: index, hasEntered: hasEntered))
-            }
+            ForEach(quickEmojis.enumerated().map { AsyncRenderRow(id: $0.element, content: emojiTile(index: $0.offset, emoji: $0.element)) },
+                    content: asyncRenderRowContent)
         }
+    }
+
+    private func emojiTile(index: Int, emoji: String) -> some View {
+        Button {
+            reactToEmoji(emoji)
+        } label: {
+            Text(emoji)
+                .font(.system(size: (reactedEmoji == emoji ? 28 : 22) * scale))
+                .scaleEffect(tileScale(for: index, reactedTo: emoji))
+                .animation(.spring(response: 0.25, dampingFraction: 0.5), value: reactedEmoji)
+                .animation(.spring(response: 0.25, dampingFraction: 0.5), value: highlightedIndex)
+                .background(tileFrameReader(index: index))
+        }
+        // Entree en vague sinusoidale : la tuile `index` apparait
+        // apres celles a sa gauche, en suivant une courbe d'ease
+        // ondulante (cf. `WaveTileModifier`).
+        .modifier(WaveTileModifier(index: index, hasEntered: hasEntered))
     }
 
     @ViewBuilder
@@ -164,30 +221,45 @@ public struct EmojiReactionPicker: View {
             } label: {
                 ZStack {
                     Circle()
-                        .fill(style == .dark ? Color.white.opacity(0.15) : Color.gray.opacity(0.15))
+                        .fill(style == .dark ? Color.white.opacity(MeeshyOpacity.light) : Color.gray.opacity(MeeshyOpacity.light))
                         .frame(width: 32 * scale, height: 32 * scale)
                     Image(systemName: "plus")
                         .font(.system(size: 14 * scale, weight: .bold))
-                        .foregroundColor(style == .dark ? .white.opacity(0.8) : .gray)
+                        .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.intense) : .gray)
                 }
                 .scaleEffect(highlightedIndex == quickEmojis.count ? 1.35 : 1.0)
                 .animation(.spring(response: 0.25, dampingFraction: 0.5), value: highlightedIndex)
                 .background(tileFrameReader(index: quickEmojis.count))
             }
+            .accessibilityLabel(String(localized: "reaction.picker.more.a11y", bundle: .module))
             // La tuile "+" cloture la vague — son index est place juste
             // apres le dernier emoji pour qu'elle arrive en derniere.
             .modifier(WaveTileModifier(index: quickEmojis.count, hasEntered: hasEntered))
         }
     }
 
-    private var quickEmojiStrip: some View {
-        HStack(spacing: 6 * scale) {
-            emojiList
-            expandButton
+    /// **Le point de décision UNIQUE de l'habillage.** Les deux rangées passent
+    /// par lui — sans quoi `chrome: .none` retirerait la capsule d'une seule des
+    /// deux, et le défaut ne se verrait que dans le mode qu'on n'a pas relu.
+    @ViewBuilder
+    private func chromed<Content: View>(_ content: Content) -> some View {
+        switch chrome {
+        case .capsule:
+            content.modifier(QuickReactionStripChrome(style: style))
+        case .none:
+            content
         }
-        .padding(.horizontal, 10 * scale)
-        .padding(.vertical, 6 * scale)
-        .modifier(QuickReactionStripChrome(style: style))
+    }
+
+    private var quickEmojiStrip: some View {
+        chromed(
+            HStack(spacing: 6 * scale) {
+                emojiList
+                expandButton
+            }
+            .padding(.horizontal, 10 * scale)
+            .padding(.vertical, 6 * scale)
+        )
     }
 
     private var scrollableQuickEmojiStrip: some View {
@@ -196,37 +268,35 @@ public struct EmojiReactionPicker: View {
         // pour qu'il reste accessible meme apres avoir scrolle. Un fade
         // mask sur le bord droit du ScrollView indique visuellement qu'il
         // y a plus de contenu apres.
-        HStack(spacing: 6 * scale) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                emojiList
-                    .padding(.vertical, 6 * scale)
-                    .padding(.leading, 10 * scale)
-                    .padding(.trailing, 4 * scale)
-            }
-            .mask(
-                LinearGradient(
-                    stops: [
-                        .init(color: .black, location: 0),
-                        .init(color: .black, location: 0.92),
-                        .init(color: .black.opacity(0.0), location: 1.0)
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
+        chromed(
+            HStack(spacing: 6 * scale) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    emojiList
+                        .padding(.vertical, 6 * scale)
+                        .padding(.leading, 10 * scale)
+                        .padding(.trailing, 4 * scale)
+                }
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black, location: 0),
+                            .init(color: .black, location: 0.92),
+                            .init(color: .black.opacity(0.0), location: 1.0)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
                 )
-            )
 
-            expandButton
-                .padding(.trailing, 10 * scale)
-        }
-        .modifier(QuickReactionStripChrome(style: style))
+                expandButton
+                    .padding(.trailing, 10 * scale)
+            }
+        )
     }
 
     private func reactToEmoji(_ emoji: String) {
         HapticFeedback.light()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { reactedEmoji = emoji }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            withAnimation { reactedEmoji = nil }
-        }
         onReact?(emoji)
     }
 
@@ -238,12 +308,8 @@ public struct EmojiReactionPicker: View {
     @ViewBuilder
     private func tileFrameReader(index: Int) -> some View {
         if let scrubFrameSpace {
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: ScrubTileFramesKey.self,
-                    value: [index: proxy.frame(in: .named(scrubFrameSpace))]
-                )
-            }
+            GeometryReader(content: FramePreferenceProbe(ScrubTileFramesKey.self,
+                                                         in: .named(scrubFrameSpace)) { [index: $0] }.content)
         }
     }
 }
@@ -281,12 +347,12 @@ private struct QuickReactionStripChrome: ViewModifier {
         if style == .dark {
             Capsule().fill(.ultraThinMaterial)
                 .overlay(Capsule().fill(Color.black.opacity(0.2)))
-                .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
+                .overlay(Capsule().stroke(Color.white.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
+                .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 12, y: 4)
         } else {
             Capsule().fill(.regularMaterial)
-                .overlay(Capsule().stroke(Color.gray.opacity(0.15), lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+                .overlay(Capsule().stroke(Color.gray.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
+                .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: 8, y: 2)
         }
     }
 }
@@ -368,6 +434,7 @@ public struct EmojiFullPickerSheet: View {
     @State private var reactedEmoji: String?
     @State private var sheetHeight: CGFloat = 340
     @State private var dragOffset: CGFloat = 0
+    @State private var dismissal: Task<Void, Never>?
     /// Dernière hauteur du conteneur lue dans le `GeometryReader` du body.
     /// Captée ici parce que `sheetDragGesture` et `dismiss()` tournent en
     /// dehors du scope du `GeometryReader` (computed properties) et ont
@@ -394,7 +461,7 @@ public struct EmojiFullPickerSheet: View {
     public var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .bottom) {
-                Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { dismiss() }
+                Color.black.opacity(0.4).ignoresSafeArea().meeshyTapAction(label: String(localized: "common.close", bundle: .module)) { dismiss() }
                 VStack(spacing: 0) {
                     dragHandle
                     categoryTabs
@@ -403,7 +470,7 @@ public struct EmojiFullPickerSheet: View {
                 .frame(height: currentHeight(for: geo.size.height))
                 .frame(maxWidth: min(geo.size.width, 560))
                 .background(sheetBackground)
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous))
                 .gesture(sheetDragGesture)
                 .transition(.move(edge: .bottom))
             }
@@ -414,73 +481,74 @@ public struct EmojiFullPickerSheet: View {
             }
         }
         .ignoresSafeArea()
+        .settling($reactedEmoji, to: nil, after: .milliseconds(300), animation: .default)
     }
 
     private var dragHandle: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             Capsule()
-                .fill(style == .dark ? Color.white.opacity(0.3) : Color.gray.opacity(0.3))
-                .frame(width: 36, height: 4).padding(.top, 10)
-            Text(String(localized: "emoji.picker.title", defaultValue: "Reactions", bundle: .module))
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(style == .dark ? .white.opacity(0.8) : .primary)
-                .padding(.bottom, 4)
+                .fill(style == .dark ? Color.white.opacity(MeeshyOpacity.medium) : Color.gray.opacity(MeeshyOpacity.medium))
+                .frame(width: 36, height: 4).padding(.top, MeeshySpacing.smPlus)
+            Text(String(localized: "emoji.picker.title", defaultValue: "Réactions", bundle: .module))
+                .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
+                .foregroundStyle(style == .dark ? .white.opacity(MeeshyOpacity.intense) : Color.primary)
+                .padding(.bottom, MeeshySpacing.xs)
         }
     }
 
     private var categoryTabs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 2) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 ForEach(Array(EmojiCategory.all.enumerated()), id: \.element.id) { index, category in
                     Button {
                         withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { selectedCategory = index }
                     } label: {
-                        VStack(spacing: 2) {
-                            Text(category.icon).font(.system(size: 20))
+                        VStack(spacing: MeeshySpacing.xxs) {
+                            Text(category.icon).font(MeeshyFont.relative(MeeshyFont.title3Size))
                             Text(category.name)
-                                .font(.system(size: 9, weight: .medium))
+                                .meeshyScaledFont(MeeshyFont.microSize, weight: .medium)
                                 .foregroundColor(selectedCategory == index
                                     ? (style == .dark ? .white : MeeshyColors.brandPrimary)
-                                    : (style == .dark ? .white.opacity(0.5) : .gray))
+                                    : (style == .dark ? .white.opacity(MeeshyOpacity.strong) : .gray))
                         }
-                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .padding(.horizontal, MeeshySpacing.smPlus).padding(.vertical, MeeshySpacing.xsPlus)
                         .background(
-                            RoundedRectangle(cornerRadius: 10)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                                 .fill(selectedCategory == index
-                                    ? (style == .dark ? Color.white.opacity(0.15) : MeeshyColors.brandPrimary.opacity(0.12))
+                                    ? (style == .dark ? Color.white.opacity(MeeshyOpacity.light) : MeeshyColors.brandPrimary.opacity(MeeshyOpacity.light))
                                     : Color.clear)
                         )
                     }
                 }
-            }.padding(.horizontal, 12)
-        }.padding(.bottom, 6)
+            }.padding(.horizontal, MeeshySpacing.md)
+        }.padding(.bottom, MeeshySpacing.xsPlus)
     }
 
     private var emojiGrid: some View {
         let category = EmojiCategory.all[selectedCategory]
         return ScrollView {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 8), spacing: 10) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: MeeshySpacing.xxs), count: 8), spacing: MeeshySpacing.smPlus) {
                 ForEach(category.emojis, id: \.self) { emoji in
                     Button { selectEmoji(emoji) } label: {
-                        Text(emoji).font(.system(size: 30)).frame(maxWidth: .infinity)
+                        Text(emoji).font(.system(size: MeeshyFont.displaySize)).frame(maxWidth: .infinity)
                             .scaleEffect(reactedEmoji == emoji ? 1.35 : 1.0)
                             .animation(.spring(response: 0.2, dampingFraction: 0.5), value: reactedEmoji)
                     }
                 }
-            }.padding(.horizontal, 10).padding(.vertical, 8)
+            }.padding(.horizontal, MeeshySpacing.smPlus).padding(.vertical, MeeshySpacing.sm)
         }
     }
 
     private var sheetBackground: some View {
         Group {
             if style == .dark {
-                RoundedRectangle(cornerRadius: 24, style: .continuous).fill(.ultraThinMaterial)
-                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color.black.opacity(0.45)))
-                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 0.5))
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous).fill(.ultraThinMaterial)
+                    .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous).fill(Color.black.opacity(MeeshyOpacity.strong)))
+                    .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous).stroke(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: MeeshyBorder.hairline))
             } else {
-                RoundedRectangle(cornerRadius: 24, style: .continuous).fill(.regularMaterial)
-                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color.gray.opacity(0.1), lineWidth: 0.5))
-                    .shadow(color: .black.opacity(0.15), radius: 20, y: -5)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous).fill(.regularMaterial)
+                    .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous).stroke(Color.gray.opacity(MeeshyOpacity.subtle), lineWidth: MeeshyBorder.hairline))
+                    .shadow(color: .black.opacity(MeeshyOpacity.light), radius: 20, y: -5)
             }
         }
     }
@@ -504,13 +572,12 @@ public struct EmojiFullPickerSheet: View {
     private func selectEmoji(_ emoji: String) {
         HapticFeedback.light()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { reactedEmoji = emoji }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { withAnimation { reactedEmoji = nil } }
         onReact?(emoji)
     }
 
     private func dismiss() {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { dragOffset = maxHeight(for: containerHeight) }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { onDismiss?() }
+        dismissal = Task { await DelayedUI.perform(after: .milliseconds(300)) { onDismiss?() } }
     }
 }
 
@@ -534,13 +601,13 @@ public struct CategorizedEmojiPickerSheet: View {
     }
 
     public var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             // Titre seul — pas de bouton Close (dismiss via drag/detent) ni recherche.
-            Text(String(localized: "emoji.picker.title", defaultValue: "Reactions", bundle: .module))
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(style == .dark ? .white.opacity(0.85) : .primary)
-                .padding(.top, 16)
-                .padding(.bottom, 2)
+            Text(String(localized: "emoji.picker.title", defaultValue: "Réactions", bundle: .module))
+                .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
+                .foregroundStyle(style == .dark ? .white.opacity(MeeshyOpacity.intense) : Color.primary)
+                .padding(.top, MeeshySpacing.lg)
+                .padding(.bottom, MeeshySpacing.xxs)
             categoryTabs
             emojiGrid
         }
@@ -549,55 +616,55 @@ public struct CategorizedEmojiPickerSheet: View {
         // (`adaptiveSheetGlassBackground`) laisse le verre échantillonner le fond.
         .adaptiveGlass(in: Rectangle())
         .adaptiveSheetGlassBackground()
+        .settling($reactedEmoji, to: nil, after: .milliseconds(300), animation: .default)
     }
 
     private var categoryTabs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 2) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 ForEach(Array(EmojiCategory.all.enumerated()), id: \.element.id) { index, category in
                     Button {
                         withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { selectedCategory = index }
                     } label: {
-                        VStack(spacing: 2) {
-                            Text(category.icon).font(.system(size: 20))
+                        VStack(spacing: MeeshySpacing.xxs) {
+                            Text(category.icon).font(MeeshyFont.relative(MeeshyFont.title3Size))
                             Text(category.name)
-                                .font(.system(size: 9, weight: .medium))
+                                .meeshyScaledFont(MeeshyFont.microSize, weight: .medium)
                                 .foregroundColor(selectedCategory == index
                                     ? (style == .dark ? .white : MeeshyColors.brandPrimary)
-                                    : (style == .dark ? .white.opacity(0.5) : .gray))
+                                    : (style == .dark ? .white.opacity(MeeshyOpacity.strong) : .gray))
                         }
-                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .padding(.horizontal, MeeshySpacing.smPlus).padding(.vertical, MeeshySpacing.xsPlus)
                         .background(
-                            RoundedRectangle(cornerRadius: 10)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                                 .fill(selectedCategory == index
-                                    ? (style == .dark ? Color.white.opacity(0.15) : MeeshyColors.brandPrimary.opacity(0.12))
+                                    ? (style == .dark ? Color.white.opacity(MeeshyOpacity.light) : MeeshyColors.brandPrimary.opacity(MeeshyOpacity.light))
                                     : Color.clear)
                         )
                     }
                 }
-            }.padding(.horizontal, 12)
-        }.padding(.bottom, 4)
+            }.padding(.horizontal, MeeshySpacing.md)
+        }.padding(.bottom, MeeshySpacing.xs)
     }
 
     private var emojiGrid: some View {
         let category = EmojiCategory.all[selectedCategory]
         return ScrollView {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 8), spacing: 10) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: MeeshySpacing.xxs), count: 8), spacing: MeeshySpacing.smPlus) {
                 ForEach(category.emojis, id: \.self) { emoji in
                     Button { selectEmoji(emoji) } label: {
-                        Text(emoji).font(.system(size: 30)).frame(maxWidth: .infinity)
+                        Text(emoji).font(.system(size: MeeshyFont.displaySize)).frame(maxWidth: .infinity)
                             .scaleEffect(reactedEmoji == emoji ? 1.35 : 1.0)
                             .animation(.spring(response: 0.2, dampingFraction: 0.5), value: reactedEmoji)
                     }
                 }
-            }.padding(.horizontal, 10).padding(.vertical, 8)
+            }.padding(.horizontal, MeeshySpacing.smPlus).padding(.vertical, MeeshySpacing.sm)
         }
     }
 
     private func selectEmoji(_ emoji: String) {
         HapticFeedback.light()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { reactedEmoji = emoji }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { withAnimation { reactedEmoji = nil } }
         onReact?(emoji)
     }
 }
@@ -616,55 +683,55 @@ public struct EmojiKeyboardPanel: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            Rectangle().fill(style == .dark ? Color.white.opacity(0.1) : Color.gray.opacity(0.15)).frame(height: 0.5)
+            Rectangle().fill(style == .dark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.gray.opacity(MeeshyOpacity.light)).frame(height: 0.5)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 2) {
+                HStack(spacing: MeeshySpacing.xxs) {
                     ForEach(Array(EmojiCategory.all.enumerated()), id: \.element.id) { index, category in
                         Button {
                             withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { selectedCategory = index }
                         } label: {
-                            VStack(spacing: 2) {
-                                Text(category.icon).font(.system(size: 20))
+                            VStack(spacing: MeeshySpacing.xxs) {
+                                Text(category.icon).font(MeeshyFont.relative(MeeshyFont.title3Size))
                                 Text(category.name)
-                                    .font(.system(size: 9, weight: .medium))
+                                    .meeshyScaledFont(MeeshyFont.microSize, weight: .medium)
                                     .foregroundColor(selectedCategory == index
                                         ? (style == .dark ? .white : MeeshyColors.brandPrimary)
                                         : (style == .dark ? .white.opacity(0.4) : .gray))
                             }
-                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .padding(.horizontal, MeeshySpacing.smPlus).padding(.vertical, MeeshySpacing.xsPlus)
                             .background(
-                                RoundedRectangle(cornerRadius: 10)
+                                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                                     .fill(selectedCategory == index
-                                        ? (style == .dark ? Color.white.opacity(0.15) : MeeshyColors.brandPrimary.opacity(0.12))
+                                        ? (style == .dark ? Color.white.opacity(MeeshyOpacity.light) : MeeshyColors.brandPrimary.opacity(MeeshyOpacity.light))
                                         : Color.clear)
                             )
                         }
                     }
-                }.padding(.horizontal, 12)
-            }.padding(.vertical, 6)
+                }.padding(.horizontal, MeeshySpacing.md)
+            }.padding(.vertical, MeeshySpacing.xsPlus)
             ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 8), spacing: 8) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: MeeshySpacing.xxs), count: 8), spacing: MeeshySpacing.sm) {
                     ForEach(EmojiCategory.all[selectedCategory].emojis, id: \.self) { emoji in
                         Button {
                             HapticFeedback.light()
                             withAnimation(.spring(response: 0.2, dampingFraction: 0.5)) { tappedEmoji = emoji }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { withAnimation { tappedEmoji = nil } }
                             onSelect?(emoji)
                         } label: {
-                            Text(emoji).font(.system(size: 28)).frame(maxWidth: .infinity)
+                            Text(emoji).font(.system(size: MeeshyFont.displaySize)).frame(maxWidth: .infinity)
                                 .scaleEffect(tappedEmoji == emoji ? 1.3 : 1.0)
                                 .animation(.spring(response: 0.2, dampingFraction: 0.5), value: tappedEmoji)
                         }
                     }
-                }.padding(.horizontal, 10).padding(.vertical, 4)
+                }.padding(.horizontal, MeeshySpacing.smPlus).padding(.vertical, MeeshySpacing.xs)
             }
         }
         .background(Group {
             if style == .dark {
-                Rectangle().fill(.ultraThinMaterial).overlay(Rectangle().fill(Color.black.opacity(0.5)))
+                Rectangle().fill(.ultraThinMaterial).overlay(Rectangle().fill(Color.black.opacity(MeeshyOpacity.strong)))
             } else {
                 Rectangle().fill(.regularMaterial)
             }
         })
+        .settling($tappedEmoji, to: nil, after: .milliseconds(150), animation: .default)
     }
 }

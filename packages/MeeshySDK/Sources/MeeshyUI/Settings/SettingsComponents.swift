@@ -28,7 +28,7 @@ public enum SettingsRowMetrics {
     public static let horizontalPadding: CGFloat = 16
     public static let verticalPadding: CGFloat = 15
     /// Cible tactile minimale (Apple HIG).
-    public static let minimumHeight: CGFloat = 44
+    public static let minimumHeight: CGFloat = MeeshyControlSize.tapTarget
 
     /// Décalage gauche du filet séparateur — aligné sur le titre.
     public static var separatorInset: CGFloat {
@@ -78,14 +78,14 @@ public struct SettingsSectionHeader: View {
     }
 
     public var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
             Text(title.uppercased())
-                .font(MeeshyFont.relative(12, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .rounded))
                 .tracking(1.1)
         }
-        .foregroundColor(Color(hex: color))
+        .foregroundStyle(Color(hex: color))
         .padding(.leading, MeeshySpacing.sm)
         .accessibilityAddTraits(.isHeader)
     }
@@ -136,7 +136,7 @@ public struct SettingsSeparator: View {
 
     public var body: some View {
         Rectangle()
-            .fill(Color(hex: tint).opacity(0.16))
+            .fill(Color(hex: tint).opacity(MeeshyOpacity.light))
             .frame(height: 0.5)
             .padding(.leading, SettingsRowMetrics.separatorInset)
             .accessibilityHidden(true)
@@ -155,6 +155,11 @@ public struct SettingsRow<Trailing: View>: View {
     private let color: String
     private let info: SettingsInfo?
     private let onInfo: ((SettingsInfo) -> Void)?
+    /// L'épure (#17584) : la note dépliée SOUS la rangée, derrière un (i) dont le
+    /// nom accessible est la question. `openNoteID` tient la note ouverte de
+    /// l'écran (une seule à la fois).
+    private let note: MeeshyInfoNote?
+    private let openNoteID: Binding<String?>?
     private let trailing: Trailing
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -166,6 +171,8 @@ public struct SettingsRow<Trailing: View>: View {
         color: String,
         info: SettingsInfo? = nil,
         onInfo: ((SettingsInfo) -> Void)? = nil,
+        note: MeeshyInfoNote? = nil,
+        openNoteID: Binding<String?>? = nil,
         @ViewBuilder trailing: () -> Trailing
     ) {
         self.icon = icon
@@ -174,6 +181,8 @@ public struct SettingsRow<Trailing: View>: View {
         self.color = color
         self.info = info
         self.onInfo = onInfo
+        self.note = note
+        self.openNoteID = openNoteID
         self.trailing = trailing()
     }
 
@@ -181,21 +190,37 @@ public struct SettingsRow<Trailing: View>: View {
         HStack(spacing: SettingsRowMetrics.iconTextSpacing) {
             iconTile
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(title)
-                        .font(MeeshyFont.relative(16, weight: .medium))
-                        .foregroundColor(theme.textPrimary)
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .medium))
+                        .foregroundStyle(theme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     if let info, let onInfo {
                         SettingsInfoButton(info: info, color: color, action: onInfo)
                     }
+                    if let note, let openNoteID {
+                        MeeshyInfoNoteButton(
+                            note: note,
+                            isExpanded: openNoteID.wrappedValue == note.id,
+                            tint: Color(hex: color).opacity(MeeshyOpacity.intense)
+                        ) {
+                            openNoteID.wrappedValue = MeeshyInfoNote.toggled(open: openNoteID.wrappedValue, tapped: note.id)
+                        }
+                    }
                 }
                 if let subtitle {
                     Text(subtitle)
-                        .font(MeeshyFont.relative(13, weight: .regular))
-                        .foregroundColor(theme.textSecondary)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
+                        .foregroundStyle(theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
+                }
+                if let note, let openNoteID, openNoteID.wrappedValue == note.id {
+                    Text(verbatim: note.text)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
+                        .foregroundStyle(theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityHidden(true)
                 }
             }
 
@@ -212,11 +237,11 @@ public struct SettingsRow<Trailing: View>: View {
     private var iconTile: some View {
         Image(systemName: icon)
             .font(MeeshyFont.relative(15, weight: .medium))
-            .foregroundColor(Color(hex: color))
+            .foregroundStyle(Color(hex: color))
             .frame(width: SettingsRowMetrics.iconSize, height: SettingsRowMetrics.iconSize)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
-                    .fill(Color(hex: color).opacity(0.14))
+                    .fill(Color(hex: color).opacity(MeeshyOpacity.light))
             )
             .accessibilityHidden(true)
     }
@@ -244,8 +269,8 @@ public struct SettingsInfoButton: View {
             action(info)
         } label: {
             Image(systemName: "info.circle")
-                .font(MeeshyFont.relative(14, weight: .regular))
-                .foregroundColor(Color(hex: color).opacity(0.85))
+                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .regular))
+                .foregroundStyle(Color(hex: color).opacity(MeeshyOpacity.intense))
                 // La cible tactile atteint 44 pt sans que l'icône grossisse.
                 .frame(width: SettingsRowMetrics.minimumHeight,
                        height: SettingsRowMetrics.minimumHeight)
@@ -290,7 +315,7 @@ private struct SettingsInfoOverlay: ViewModifier {
             .overlay {
                 if let presented = info {
                     ZStack {
-                        Color.black.opacity(0.45)
+                        Color.black.opacity(MeeshyOpacity.strong)
                             .ignoresSafeArea()
                             .contentShape(Rectangle())
                             .onTapGesture { dismiss() }
@@ -300,6 +325,7 @@ private struct SettingsInfoOverlay: ViewModifier {
                                 bundle: .module
                             ))
                             .accessibilityAddTraits(.isButton)
+                            .accessibilityAction { dismiss() }
 
                         card(presented)
                             .padding(.horizontal, MeeshySpacing.xxl)
@@ -317,21 +343,21 @@ private struct SettingsInfoOverlay: ViewModifier {
     private func card(_ presented: SettingsInfo) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             Text(presented.title)
-                .font(MeeshyFont.relative(18, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold))
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             Text(presented.message)
-                .font(MeeshyFont.relative(15, weight: .regular))
-                .foregroundColor(theme.textSecondary)
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
+                .foregroundStyle(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Button {
                 dismiss()
             } label: {
                 Text(String(localized: "common.close", defaultValue: "Fermer", bundle: .module))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
-                    .foregroundColor(Color(hex: MeeshyColors.brandPrimaryHex))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.brandPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, MeeshySpacing.md)
             }
@@ -347,7 +373,7 @@ private struct SettingsInfoOverlay: ViewModifier {
             RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous)
                 .stroke(MeeshyColors.glassBorderGradient(isDark: true), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.35), radius: 24, y: 12)
+        .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 24, y: 12)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
     }

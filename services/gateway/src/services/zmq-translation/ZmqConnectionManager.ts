@@ -26,6 +26,14 @@ export interface ConnectionManagerConfig {
 export class ZmqConnectionManager {
   private pushSocket: Push | null = null;
   private subSocket: Subscriber | null = null;
+  // Socket PUSH dédiée à la sonde de santé — jamais celle des traductions.
+  // zeromq.js interdit deux `send()` concurrents sur une même socket PUSH
+  // ("Socket is busy writing"). Avant cette socket dédiée, une sonde tirée
+  // pendant qu'une traduction était en vol échouait sur SA PROPRE
+  // concurrence et rendait ce faux négatif pour un translator parfaitement
+  // sain (#5611). Les deux sockets connectent le même port : le PULL du
+  // translator accepte plusieurs pairs PUSH sans distinction.
+  private pingSocket: Push | null = null;
   private context: Context | null = null;
 
   private config: ConnectionManagerConfig;
@@ -48,6 +56,9 @@ export class ZmqConnectionManager {
 
       this.pushSocket = new zmq.Push();
       await this.pushSocket.connect(`tcp://${this.config.host}:${this.config.pushPort}`);
+
+      this.pingSocket = new zmq.Push();
+      await this.pingSocket.connect(`tcp://${this.config.host}:${this.config.pushPort}`);
 
       this.subSocket = new zmq.Subscriber();
       await this.subSocket.connect(`tcp://${this.config.host}:${this.config.subPort}`);
@@ -160,23 +171,34 @@ export class ZmqConnectionManager {
   }
 
   /**
-   * Envoie un ping pour vérifier la connectivité
+   * Envoie un ping pour vérifier la connectivité.
+   *
+   * Émis sur `pingSocket`, jamais sur `pushSocket` : les deux sont des
+   * sockets PUSH indépendantes connectées au même port, donc un envoi de
+   * traduction en vol ne peut plus faire échouer la sonde sur sa propre
+   * concurrence.
+   *
+   * Une erreur ICI est un verdict — elle est RELANCÉE, pas avalée.
+   * L'avaler rendait `healthCheck()` vert quel que soit l'état réel du
+   * translator : la sonde existait pour distinguer deux états et ne
+   * pouvait plus en rendre qu'un seul (#5611).
    */
   async sendPing(): Promise<void> {
-    if (!this.pushSocket) {
-      logger.warn('Health check skipped: PUSH socket not initialized');
+    if (!this.pingSocket) {
+      logger.warn('Health check skipped: PING socket not initialized');
       return;
     }
 
-    try {
-      const pingMessage = {
-        type: 'ping',
-        timestamp: Date.now()
-      };
+    const pingMessage = {
+      type: 'ping',
+      timestamp: Date.now()
+    };
 
-      await this.pushSocket.send(JSON.stringify(pingMessage));
+    try {
+      await this.pingSocket.send(JSON.stringify(pingMessage));
     } catch (error) {
       logger.error('ZMQ health check ping failed', error as Error, { port: this.config.pushPort });
+      throw error;
     }
   }
 
@@ -192,6 +214,11 @@ export class ZmqConnectionManager {
       if (this.pushSocket) {
         await this.pushSocket.close();
         this.pushSocket = null;
+      }
+
+      if (this.pingSocket) {
+        await this.pingSocket.close();
+        this.pingSocket = null;
       }
 
       if (this.subSocket) {
@@ -213,10 +240,11 @@ export class ZmqConnectionManager {
   /**
    * Récupère les sockets pour des opérations avancées (tests uniquement)
    */
-  getSockets(): { pushSocket: Push | null; subSocket: Subscriber | null } {
+  getSockets(): { pushSocket: Push | null; subSocket: Subscriber | null; pingSocket: Push | null } {
     return {
       pushSocket: this.pushSocket,
-      subSocket: this.subSocket
+      subSocket: this.subSocket,
+      pingSocket: this.pingSocket
     };
   }
 }

@@ -1,0 +1,98 @@
+import type { Conversation } from './types';
+
+/**
+ * LES PRÉFÉRENCES DE CONVERSATION PAR LECTEUR — épinglage, sourdine, archive.
+ *
+ * `flagsOf`/`customNameOf` NARROWENT `Conversation.userPreferences`, déclaré
+ * `unknown` côté `@meeshy/shared` (`packages/shared/types/conversation.ts:377`)
+ * parce que le wire le porte en TABLEAU d'au plus une entrée — `take: 1`,
+ * `services/gateway/src/routes/conversations/core-list.ts:365` — projetée par
+ * `conversationUserPreferencesSelect`
+ * (`services/gateway/src/routes/conversations/core-selects.ts:62-80`) et
+ * déclarée au wire par
+ * `packages/shared/types/api-schemas/conversation.ts:588-600` :
+ * `{ isPinned, isMuted, isArchived, tags, categoryId, customName, reaction }`.
+ *
+ * FAIL-CLOSED : toute forme qui ne correspond pas exactement à l'attendu
+ * (absente, non-tableau, tableau vide, entrée non-objet, champ manquant) rend
+ * `false` — jamais une exception, jamais un `true` optimiste. Une préférence
+ * mal lue doit se tromper du côté qui ne PRIVILÉGIE personne par erreur : une
+ * conversation qu'on croit à tort épinglée dérange moins qu'une conversation
+ * muette qu'on croit à tort audible.
+ *
+ * Les ports (`pushConversationFlags`, `pushRead`, `pushUnread`, désormais dans
+ * `./preference-ports`) composent les requêtes EXACTES des routes réelles (#5559 §3.2-3.4) — jamais l'alias
+ * déprécié `POST /conversations/:id/mark-read`
+ * (`services/gateway/src/routes/conversations/messages-read-status.ts:97-145`,
+ * dépréciée depuis 2026-08-30) : le successeur est
+ * `POST /conversations/:id/receipts` avec `{ type: 'read' }`
+ * (`receipts.ts:689-701`).
+ */
+export type ConversationFlags = {
+  readonly isPinned: boolean;
+  readonly isMuted: boolean;
+  readonly isArchived: boolean;
+  /**
+   * L'archive est IMPOSÉE par la passerelle (#9928) — Meeshy Global fermée en
+   * écriture à un mineur : elle vit aux archives jusqu'à ses 18 ans, et le
+   * menu ne propose pas de l'en sortir. Absent = aucune contrainte.
+   */
+  readonly archiveLocked?: boolean;
+};
+
+const NO_FLAGS: ConversationFlags = { isPinned: false, isMuted: false, isArchived: false };
+
+/** L'entrée UNIQUE du tableau `userPreferences`, ou `undefined` si la forme
+ * n'y correspond pas — le narrowing s'arrête ici, jamais plus loin. */
+const preferenceEntryOf = (conversation: Conversation): Record<string, unknown> | undefined => {
+  const raw = conversation.userPreferences;
+  if (!Array.isArray(raw)) return undefined;
+  const [entry] = raw;
+  if (typeof entry !== 'object' || entry === null) return undefined;
+  return entry as Record<string, unknown>;
+};
+
+const boolOf = (entry: Record<string, unknown> | undefined, field: string): boolean =>
+  entry !== undefined && entry[field] === true;
+
+export function flagsOf(conversation: Conversation): ConversationFlags {
+  const entry = preferenceEntryOf(conversation);
+  if (entry === undefined) return NO_FLAGS;
+  return {
+    isPinned: boolOf(entry, 'isPinned'),
+    isMuted: boolOf(entry, 'isMuted'),
+    isArchived: boolOf(entry, 'isArchived'),
+  };
+}
+
+/** La catégorie où le lecteur a rangé la conversation (#10103) — `undefined`
+ * pour toute forme qui n'est pas un identifiant : la conversation tombe alors
+ * dans les sections par date, jamais dans une section fantôme. */
+export function categoryIdOf(conversation: Conversation): string | undefined {
+  const value = preferenceEntryOf(conversation)?.['categoryId'];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+export function customNameOf(conversation: Conversation): string | undefined {
+  const entry = preferenceEntryOf(conversation);
+  const value = entry?.['customName'];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/** Le FAVORI du lecteur (#10593) — l'emoji qu'il a posé sur la conversation,
+ * `reaction` au wire comme sur iOS (`userState.reaction`). */
+export function reactionOf(conversation: Conversation): string | undefined {
+  const value = preferenceEntryOf(conversation)?.['reaction'];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/**
+ * LES PRÉFÉRENCES QUI NE SONT PAS DES DRAPEAUX (#10593) — favori, catégorie,
+ * nom personnel. `null` RETIRE : la passerelle l'écrit tel quel
+ * (`conversation-preferences.ts`, `nullable: true` sur les trois).
+ */
+export type ConversationPreferencePatch = {
+  readonly reaction?: string | null;
+  readonly categoryId?: string | null;
+  readonly customName?: string | null;
+};

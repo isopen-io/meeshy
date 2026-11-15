@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_notice_publish_queued">Votre publication est en cours d’envoi</string>
+    <string name="feed_unsent_retry">Réessayer</string>
+    <string name="feed_unsent_reopen">Rouvrir</string>
+    <string name="feed_unsent_delete">Supprimer</string>
+    <string name="feed_unsent_cancel">Annuler</string>
+    <string name="feed_unsent_kind_post">Post</string>
+    <string name="feed_unsent_kind_reel">Réel</string>
+    <string name="feed_unsent_kind_story">Story</string>
+    <plurals name="feed_unsent_media_count">
+        <item quantity="one">%1$d média</item>
+        <item quantity="many">%1$d médias</item>
+        <item quantity="other">%1$d médias</item>
+    </plurals>
+</resources>

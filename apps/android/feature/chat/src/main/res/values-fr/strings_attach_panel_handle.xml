@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_panel_handle_label">Poignée du panneau de pièces</string>
+    <string name="composer_panel_handle_open_library">Ouvrir toute la photothèque</string>
+    <string name="composer_panel_handle_close">Fermer les pièces jointes</string>
+</resources>

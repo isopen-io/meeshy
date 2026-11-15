@@ -1,0 +1,1110 @@
+import { QueryClient } from '@tanstack/react-query';
+import { describe, expect, test } from 'bun:test';
+
+import { createHttpTransport } from '@/lib/api/http';
+import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
+import { findCachedThreadMessage, messagesQueryKey } from '@/lib/api/messages';
+import { applyMessageNew } from '@/lib/api/realtime-apply';
+import type { Conversation, Message, MessageTranslation } from '@/lib/api/types';
+
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+
+import { pendingAttachmentOf } from './attachments';
+import { entriesOf, createOutboxStore } from './outbox-store';
+import { performSend, retrySend, type SendDeps } from './perform-send';
+
+function fakeFetch(response: { readonly status: number; readonly body?: unknown }) {
+  const calls: { readonly url: string; readonly init: RequestInit }[] = [];
+  const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({ url: String(input), init: init ?? {} });
+    return new Response(response.body === undefined ? null : JSON.stringify(response.body), {
+      status: response.status,
+    });
+  }) as typeof fetch;
+  return { impl, calls };
+}
+
+/** Un `fetchImpl` qui rejoue une SÉQUENCE de réponses, un appel = une réponse. */
+function sequencedFetch(responses: readonly { readonly status: number; readonly body?: unknown }[]) {
+  const calls: { readonly url: string; readonly init: RequestInit }[] = [];
+  let n = 0;
+  const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({ url: String(input), init: init ?? {} });
+    const r = responses[Math.min(n, responses.length - 1)]!;
+    n += 1;
+    return new Response(r.body === undefined ? null : JSON.stringify(r.body), { status: r.status });
+  }) as typeof fetch;
+  return { impl, calls };
+}
+
+const conv = (partial: Partial<Conversation>): Conversation =>
+  ({
+    id: 'c-a',
+    type: 'direct',
+    status: 'active',
+    visibility: 'private',
+    isActive: true,
+    memberCount: 2,
+    participants: [],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    unreadCount: 0,
+    ...partial,
+  }) as Conversation;
+
+const m1: Message = {
+  id: 'm1',
+  conversationId: 'c-a',
+  senderId: 'u-other',
+  content: 'salut',
+  originalLanguage: 'fr',
+  messageType: 'text',
+  messageSource: 'user',
+  isEdited: false,
+  isViewOnce: false,
+  viewOnceCount: 0,
+  isBlurred: false,
+  deliveredCount: 1,
+  readCount: 0,
+  reactionCount: 0,
+  isEncrypted: false,
+  translations: [],
+  createdAt: new Date('2026-09-09T09:00:00.000Z'),
+  timestamp: new Date('2026-09-09T09:00:00.000Z'),
+};
+
+/** La traduction que seul l'écho socket porte — ce que la greffe de l'accusé ne doit pas effacer (#9262). */
+const echoTranslation: MessageTranslation = {
+  id: 'tr-en',
+  messageId: 'echo',
+  targetLanguage: 'en',
+  translatedContent: 'hi',
+  translationModel: 'basic',
+  createdAt: new Date('2026-09-09T09:00:01.000Z'),
+};
+
+/**
+ * UN `fetchImpl` ROUTÉ PAR CHEMIN (#5668) — les témoins d'attachements
+ * traversent DEUX endpoints distincts (`POST /attachments/upload` puis
+ * `POST /conversations/:id/messages`, § 0 de la spécification #5668) : un
+ * `fetchImpl` unique ne peut plus répondre à l'aveugle par ORDRE d'appel.
+ */
+function routedFetch(routes: Readonly<Record<string, { readonly status: number; readonly body?: unknown }>>) {
+  const calls: { readonly url: string; readonly init: RequestInit }[] = [];
+  const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    calls.push({ url, init: init ?? {} });
+    const path = Object.keys(routes).find((p) => url.includes(p));
+    const response = path === undefined ? { status: 404 } : routes[path]!;
+    return new Response(response.body === undefined ? null : JSON.stringify(response.body), {
+      status: response.status,
+    });
+  }) as typeof fetch;
+  return { impl, calls };
+}
+
+function pngFile(name = 'a.png'): File {
+  return new File([new Uint8Array([1, 2, 3])], name, { type: 'image/png' });
+}
+
+/** `readConversations` (#6195) — le cache de liste porte désormais des
+ * PAGES (`InfiniteData`) ; ce fichier n'écrit que par la seule page
+ * qu'il sème, jamais par `patchConversation` — c'est cette fonction de
+ * production qui absorbe le changement de forme (`conversations.ts`). */
+function readConversations(client: QueryClient): readonly Conversation[] | undefined {
+  const data = client.getQueryData<{ readonly pages: readonly { readonly conversations: readonly Conversation[] }[] }>(
+    CONVERSATIONS_QUERY_KEY,
+  );
+  return data?.pages.flatMap((p) => p.conversations);
+}
+
+function seededClient(): QueryClient {
+  const queryClient = new QueryClient();
+  queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([m1]));
+  queryClient.setQueryData(CONVERSATIONS_QUERY_KEY, {
+    pages: [
+      {
+        conversations: [conv({ id: 'c-a' }), conv({ id: 'c-b' })],
+        pagination: { limit: 30, offset: 0, total: 2, hasMore: false },
+        cursorPagination: { limit: 30, hasMore: false, nextCursor: null },
+      },
+    ],
+    pageParams: [undefined],
+  });
+  return queryClient;
+}
+
+function ackBody(id: string, clientMessageId: string, overrides: Record<string, unknown> = {}) {
+  return {
+    success: true,
+    data: {
+      id,
+      clientMessageId,
+      conversationId: 'c-a',
+      senderId: 'u-viewer',
+      createdAt: '2026-09-09T10:00:00.000Z',
+      deliveredCount: 0,
+      readCount: 0,
+      ...overrides,
+    },
+  };
+}
+
+/**
+ * LA FORME `InfiniteData` DU CACHE DU FIL (#6972) — `threadPages` la POSE,
+ * `threadOf` la RELIT APLATIE. Les deux SEULS endroits de ce fichier qui la
+ * connaissent : les témoins mesurent la RÈGLE, jamais la structure.
+ */
+const threadPages = (messages: readonly Message[]) => ({
+  pages: [{ messages, hasOlder: false, nextCursor: null }],
+  pageParams: [undefined],
+});
+
+const threadOf = (
+  client: QueryClient,
+  conversationId: string,
+): { readonly messages: readonly Message[] } | undefined => {
+  const data = client.getQueryData<{ readonly pages: readonly { readonly messages: readonly Message[] }[] }>(
+    messagesQueryKey(conversationId),
+  );
+  return data === undefined ? undefined : { messages: data.pages.flatMap((p) => [...p.messages]) };
+};
+
+describe('performSend', () => {
+  test('2xx : outbox VIDE, page = [m1, confirmé], confirmé.deliveredCount = celui de l’accusé, un seul appel', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: ackBody('m9', 'IGNORED') });
+    const queryClient = seededClient();
+    const outbox = createOutboxStore();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient,
+      outbox,
+      online: true,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'bonjour 1', originalLanguage: 'fr' },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    expect(entriesOf(outbox.getState(), 'c-a')).toHaveLength(0);
+    const page = threadOf(queryClient, 'c-a');
+    expect(page?.messages).toHaveLength(2);
+    expect(page?.messages[0]).toBe(m1);
+    expect(page?.messages[1]?.id).toBe('m9');
+    expect(page?.messages[1]?.deliveredCount).toBe(0);
+    const sentClientMessageId = JSON.parse(String(calls[0]?.init.body)).clientMessageId as string;
+    expect((page?.messages[1] as { readonly clientMessageId?: string }).clientMessageId).toBe(sentClientMessageId);
+    expect(calls.length).toBe(1);
+  });
+
+  /**
+   * REVUE-CORRECTION #5813, DÉFAUT MAJEUR 6 — `draft.replyTo` (le message
+   * cité ENTIER) doit atteindre l'entrée d'outbox AVANT tout accusé serveur,
+   * pour que la bulle optimiste rende sa citation et son saut sans attendre
+   * le réseau. `online: false` isole ce test du transport : aucun appel ne
+   * part, l'entrée reste `pending`/`failed` selon D-16, ce qui n'est pas ce
+   * qu'on vérifie ici.
+   */
+  test('draft.replyTo (le message cité ENTIER) atteint le message local AVANT tout accusé', async () => {
+    const outbox = createOutboxStore();
+    const queryClient = seededClient();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: fakeFetch({ status: 200 }).impl }),
+      queryClient,
+      outbox,
+      online: false,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'je réponds', originalLanguage: 'fr', replyToId: m1.id, replyTo: m1 },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const entry = entriesOf(outbox.getState(), 'c-a')[0];
+    expect(entry?.message.replyToId).toBe(m1.id);
+    expect(entry?.message.replyTo).toBe(m1);
+  });
+
+  /**
+   * RÉPONDRE À UNE HUMEUR, C'EST LA CITER (#10813) — `storyReplyToId` part
+   * dans le corps (la passerelle y gèle l'instantané `postReplyTo`,
+   * `storyReplyAdmission.ts`) ET reste sur la bulle optimiste, pour qu'elle
+   * porte sa citation avant tout accusé.
+   */
+  test('un brouillon qui cite une humeur part avec `storyReplyToId`, et la bulle locale le porte', async () => {
+    const outbox = createOutboxStore();
+    const fetched = fakeFetch({ status: 200, body: { success: true, data: { id: 'srv-1', conversationId: 'c-a', createdAt: '2026-10-16T10:00:00.000Z' } } });
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'Trop bien !', originalLanguage: 'fr', storyReplyToId: 'st-1' },
+      viewerId: 'u-viewer',
+      deps: { source: 'gateway', transport: createHttpTransport({ base: '', fetchImpl: fetched.impl }), queryClient: seededClient(), outbox, online: true },
+    });
+    const body = JSON.parse(String(fetched.calls[0]?.init.body)) as Record<string, unknown>;
+    expect(body.storyReplyToId).toBe('st-1');
+    expect(body.content).toBe('Trop bien !');
+    expect(body.replyToId).toBeUndefined();
+  });
+
+  test('sans humeur citée, aucune clé `storyReplyToId` ne part', async () => {
+    const fetched = fakeFetch({ status: 200, body: { success: true, data: { id: 'srv-2', conversationId: 'c-a', createdAt: '2026-10-16T10:00:00.000Z' } } });
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'salut', originalLanguage: 'fr' },
+      viewerId: 'u-viewer',
+      deps: { source: 'gateway', transport: createHttpTransport({ base: '', fetchImpl: fetched.impl }), queryClient: seededClient(), outbox: createOutboxStore(), online: true },
+    });
+    expect('storyReplyToId' in (JSON.parse(String(fetched.calls[0]?.init.body)) as object)).toBe(false);
+  });
+
+  test('la bulle optimiste porte l’humeur citée avant tout accusé', async () => {
+    const outbox = createOutboxStore();
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'Trop bien !', originalLanguage: 'fr', storyReplyToId: 'st-1' },
+      viewerId: 'u-viewer',
+      deps: { source: 'gateway', transport: createHttpTransport({ base: '', fetchImpl: fakeFetch({ status: 200 }).impl }), queryClient: seededClient(), outbox, online: false },
+    });
+    expect(entriesOf(outbox.getState(), 'c-a')[0]?.message.storyReplyToId).toBe('st-1');
+  });
+
+  /**
+   * #9262 — l'intitulé disait « REMPLACÉ » et le site FUSIONNE depuis
+   * `mergedThreadRow` (`api/messages.ts`). Ce qu'il mesurait n'a pas changé —
+   * l'identifiant SERVEUR gagne, la rangée reste UNIQUE — mais il dit
+   * désormais ce que la loi dit, et il porte la moitié qui manquait : ce que
+   * l'écho socket portait SEUL survit à la greffe de l'accusé.
+   *
+   * Cette assertion-ci passe par `performSend`, là où celles de
+   * `api/messages.test.ts` appellent `upsertThreadMessage` directement. C'est
+   * la même loi à une altitude de plus : elle garde le fait que le chemin
+   * d'envoi remet bien au site unique la rangée greffée, et pas une autre.
+   */
+  test('pas de doublon : un message clientMessageId déjà présent (écho socket) est FUSIONNÉ, jamais dupliqué', async () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([]));
+    const outbox = createOutboxStore();
+
+    // Le `fetchImpl` LIT le `clientMessageId` que `performSend` vient de
+    // générer dans le corps de la requête, et simule un écho socket déjà
+    // reçu AVANT l'accusé REST : la page porte déjà une ligne sous ce même
+    // `clientMessageId` au moment où le 2xx arrive.
+    const impl = (async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const cid = JSON.parse(String(init?.body)).clientMessageId as string;
+      queryClient.setQueryData(
+        messagesQueryKey('c-a'),
+        threadPages([{ ...m1, id: 'echo', clientMessageId: cid, translations: [echoTranslation] } as Message]),
+      );
+      return new Response(JSON.stringify(ackBody('m9', cid)), { status: 200 });
+    }) as typeof fetch;
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient,
+      outbox,
+      online: true,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'bonjour 2', originalLanguage: 'fr' },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const page = threadOf(queryClient, 'c-a');
+    expect(page?.messages).toHaveLength(1);
+    expect(page?.messages[0]?.id).toBe('m9');
+    // Ce que l'écho socket portait SEUL — la traduction que le Prisme sert —
+    // n'est pas effacé par la liste VIDE que le message local transporte.
+    expect(page?.messages[0]?.translations.map((t) => t.targetLanguage)).toEqual(['en']);
+  });
+
+  test('4xx (403 USER_BLOCKED) : entrée failed, lastError.status/code posés, page toBe-identique', async () => {
+    const { impl } = fakeFetch({ status: 403, body: { success: false, error: 'blocked', code: 'USER_BLOCKED' } });
+    const queryClient = seededClient();
+    const before = queryClient.getQueryData(messagesQueryKey('c-a'));
+    const outbox = createOutboxStore();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient,
+      outbox,
+      online: true,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'bonjour 3', originalLanguage: 'fr' },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const entries = entriesOf(outbox.getState(), 'c-a');
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.delivery).toBe('failed');
+    expect(entries[0]?.lastError?.status).toBe(403);
+    expect(entries[0]?.lastError?.code).toBe('USER_BLOCKED');
+    expect(queryClient.getQueryData(messagesQueryKey('c-a'))).toBe(before);
+  });
+
+  test('réseau : pending pendant le vol, failed status:0 après rejet du fetch', async () => {
+    const deferred: { reject: ((e: unknown) => void) | null } = { reject: null };
+    const deferredImpl = (async () =>
+      new Promise<Response>((_resolve, r) => {
+        deferred.reject = r;
+      })) as typeof fetch;
+    const outbox = createOutboxStore();
+    const queryClient = seededClient();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: deferredImpl }),
+      queryClient,
+      outbox,
+      online: true,
+    };
+
+    const promise = performSend({
+      conversationId: 'c-a',
+      draft: { content: 'bonjour 4', originalLanguage: 'fr' },
+      viewerId: 'u-viewer',
+      deps,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(entriesOf(outbox.getState(), 'c-a')[0]?.delivery).toBe('pending');
+
+    deferred.reject?.(new Error('offline'));
+    await promise;
+    const entry = entriesOf(outbox.getState(), 'c-a')[0];
+    expect(entry?.delivery).toBe('failed');
+    expect(entry?.lastError?.status).toBe(0);
+  });
+
+  test('5xx : failed, lastError.status === 500', async () => {
+    const { impl } = fakeFetch({ status: 500, body: { success: false, error: 'panne' } });
+    const outbox = createOutboxStore();
+    const queryClient = seededClient();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient,
+      outbox,
+      online: true,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'bonjour 4b', originalLanguage: 'fr' },
+      viewerId: 'u-viewer',
+      deps,
+    });
+    const entry = entriesOf(outbox.getState(), 'c-a')[0];
+    expect(entry?.delivery).toBe('failed');
+    expect(entry?.lastError?.status).toBe(500);
+  });
+
+  test('timeout RÉEL : pending à 10ms, failed code:TIMEOUT à 60ms', async () => {
+    const neverResolves = (async (_url: RequestInfo | URL, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+        if (signal?.aborted) {
+          reject(signal.reason);
+          return;
+        }
+        signal?.addEventListener('abort', () => reject(signal.reason));
+      })) as typeof fetch;
+    const outbox = createOutboxStore();
+    const queryClient = seededClient();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: neverResolves, timeoutMs: 20 }),
+      queryClient,
+      outbox,
+      online: true,
+    };
+
+    const promise = performSend({
+      conversationId: 'c-a',
+      draft: { content: 'bonjour 5', originalLanguage: 'fr' },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(entriesOf(outbox.getState(), 'c-a')[0]?.delivery).toBe('pending');
+
+    await new Promise((r) => setTimeout(r, 50));
+    await promise;
+    const entry = entriesOf(outbox.getState(), 'c-a')[0];
+    expect(entry?.delivery).toBe('failed');
+    expect(entry?.lastError?.code).toBe('TIMEOUT');
+  });
+
+  /**
+   * AUCUNE EXCEPTION NE LAISSE UN MESSAGE SUR L'HORLOGE (revue-correction
+   * #5813). `performSend` est appelé en `void` par le hook : une exception y
+   * devient un rejet non traité, et l'entrée d'outbox reste `pending` POUR
+   * TOUJOURS — une horloge qui tourne sans reprise possible, exactement le
+   * mensonge d'interface que `check-thread-states.mjs` existe pour interdire.
+   * `ApiResult` ne rejette jamais (doctrine `http.ts`), mais ce module reçoit
+   * son transport de l'extérieur : la garde tient sur ce qu'on lui DONNE, pas
+   * sur ce qu'on espère. Direction de l'erreur choisie par le COÛT DE
+   * RÉPARATION : un « Réessayer » de trop se rejoue (l'appel est idempotent
+   * par `clientMessageId`) ; une horloge figée ne se répare pas.
+   */
+  test('un transport qui LÈVE ⇒ failed, jamais une horloge figée', async () => {
+    const outbox = createOutboxStore();
+    const queryClient = seededClient();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: {
+        request: () => {
+          throw new Error('transport cassé');
+        },
+      } as unknown as SendDeps['transport'],
+      queryClient,
+      outbox,
+      online: true,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'bonjour transport cassé', originalLanguage: 'fr' },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const entry = entriesOf(outbox.getState(), 'c-a')[0];
+    expect(entry?.delivery).toBe('failed');
+  });
+
+  test('retrySend REJOUE avec le MÊME clientMessageId et la MÊME originalLanguage (compte d’appels = 2)', async () => {
+    const { impl, calls } = sequencedFetch([
+      { status: 500, body: { success: false, error: 'panne' } },
+      { status: 200, body: ackBody('m9', 'ignored') },
+    ]);
+    const outbox = createOutboxStore();
+    const queryClient = seededClient();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient,
+      outbox,
+      online: true,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'bonjour 6', originalLanguage: 'en' },
+      viewerId: 'u-viewer',
+      deps,
+    });
+    const failedEntry = entriesOf(outbox.getState(), 'c-a')[0]!;
+    expect(failedEntry.delivery).toBe('failed');
+    const clientMessageId = failedEntry.message.clientMessageId;
+    const firstBody = JSON.parse(String(calls[0]?.init.body));
+
+    const retryPromise = retrySend({ conversationId: 'c-a', clientMessageId, deps });
+    await Promise.resolve();
+    const inFlight = entriesOf(outbox.getState(), 'c-a')[0];
+    expect(inFlight?.attempts).toBe(2);
+    await retryPromise;
+
+    expect(calls.length).toBe(2);
+    const secondBody = JSON.parse(String(calls[1]?.init.body));
+    expect(secondBody.clientMessageId).toBe(firstBody.clientMessageId);
+    expect(secondBody.originalLanguage).toBe('en');
+    expect(entriesOf(outbox.getState(), 'c-a')).toHaveLength(0);
+    const page = threadOf(queryClient, 'c-a');
+    expect(page?.messages.some((m) => m.id === 'm9')).toBe(true);
+  });
+
+  test('hors ligne : échec immédiat, aucun appel, lastError absent ; retrySend hors ligne reste failed sans appel', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: ackBody('m9', 'x') });
+    const outbox = createOutboxStore();
+    const queryClient = seededClient();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient,
+      outbox,
+      online: false,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'bonjour 7', originalLanguage: 'fr' },
+      viewerId: 'u-viewer',
+      deps,
+    });
+    expect(calls.length).toBe(0);
+    const entry = entriesOf(outbox.getState(), 'c-a')[0]!;
+    expect(entry.delivery).toBe('failed');
+    expect(entry.lastError).toBeUndefined();
+
+    await retrySend({ conversationId: 'c-a', clientMessageId: entry.message.clientMessageId, deps });
+    expect(calls.length).toBe(0);
+    expect(entriesOf(outbox.getState(), 'c-a')[0]?.delivery).toBe('failed');
+  });
+
+  test('source fixtures : fetchImpl jamais appelé, entrée retirée, id fx-sent-…', async () => {
+    const outbox = createOutboxStore();
+    const queryClient = seededClient();
+    let calls = 0;
+    const impl = (async () => {
+      calls += 1;
+      return new Response(null, { status: 200 });
+    }) as typeof fetch;
+    const deps: SendDeps = {
+      source: 'fixtures',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient,
+      outbox,
+      online: true,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'bonjour 8', originalLanguage: 'fr' },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    expect(calls).toBe(0);
+    expect(entriesOf(outbox.getState(), 'c-a')).toHaveLength(0);
+    const page = threadOf(queryClient, 'c-a');
+    expect(page?.messages).toHaveLength(2);
+    expect(page?.messages[1]?.id).toMatch(/^fx-sent-/);
+  });
+
+  test('la liste suit l’envoi : conv(c-a).lastMessage, lastMessageAt, lastMessageOriginalLanguage posés ; lastMessageTranslations ABSENT ; c-b intact', async () => {
+    const { impl } = fakeFetch({ status: 200, body: ackBody('m9', 'x', { content: 'bonjour 9' }) });
+    const outbox = createOutboxStore();
+    const queryClient = seededClient();
+    const before = readConversations(queryClient)!;
+    const cB = before.find((c) => c.id === 'c-b')!;
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient,
+      outbox,
+      online: true,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'bonjour 9', originalLanguage: 'en' },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const after = readConversations(queryClient)!;
+    const cA = after.find((c) => c.id === 'c-a')!;
+    expect(cA.lastMessage?.id).toBe('m9');
+    expect(cA.lastMessageAt as unknown).toBe('2026-09-09T10:00:00.000Z');
+    expect(cA.lastMessageOriginalLanguage).toBe('en');
+    expect('lastMessageTranslations' in cA).toBe(false);
+    expect(after.find((c) => c.id === 'c-b')).toBe(cB);
+  });
+
+  /**
+   * LES EMOJIS PARTENT EN SÉRIE (#7985, directive porteur 2026-09-25) — plus
+   * aucun dédoublonnage par CONTENU : 😂 😂 😂 tapés à la suite sont TROIS
+   * messages. La seule déduplication qui reste est celle du MESSAGE, par son
+   * `clientMessageId` (un même message rejoué ne fait qu'une ligne — témoins
+   * « pas de doublon » et « retrySend REJOUE » ci-dessus) : chaque envoi en
+   * reçoit donc un NEUF.
+   */
+  test('deux envois IDENTIQUES à la même milliseconde ⇒ DEUX appels, chacun son clientMessageId', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: ackBody('m9', 'x') });
+    const outbox = createOutboxStore();
+    const queryClient = seededClient();
+    const clock = 10_000_000;
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient,
+      outbox,
+      online: true,
+      now: () => clock,
+    };
+
+    const draft = { content: '😂', originalLanguage: 'fr' } as const;
+    await Promise.all([
+      performSend({ conversationId: 'c-a', draft, viewerId: 'u-viewer', deps }),
+      performSend({ conversationId: 'c-a', draft, viewerId: 'u-viewer', deps }),
+      performSend({ conversationId: 'c-a', draft, viewerId: 'u-viewer', deps }),
+    ]);
+
+    expect(calls.length).toBe(3);
+    const ids = calls.map((c) => JSON.parse(String(c.init.body)).clientMessageId as string);
+    expect(new Set(ids).size).toBe(3);
+    expect(calls.every((c) => JSON.parse(String(c.init.body)).content === '😂')).toBe(true);
+  });
+
+  test('deux PIÈCES identiques envoyées à la suite ⇒ DEUX messages en file, jamais fusionnés', async () => {
+    const outbox = createOutboxStore();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: fakeFetch({ status: 200, body: ackBody('m9', 'x') }).impl }),
+      queryClient: seededClient(),
+      outbox,
+      online: false,
+      now: () => 10_000_000,
+    };
+    const draft = { content: '', originalLanguage: 'fr', attachments: [pendingAttachmentOf(pngFile('serie.png'))] } as const;
+    await performSend({ conversationId: 'c-a', draft, viewerId: 'u-viewer', deps });
+    await performSend({ conversationId: 'c-a', draft, viewerId: 'u-viewer', deps });
+    expect(entriesOf(outbox.getState(), 'c-a')).toHaveLength(2);
+  });
+});
+
+/**
+ * LES PIÈCES JOINTES (#5668) — deux appels réseau distincts, DANS L'ORDRE :
+ * `POST /attachments/upload` (multipart) PUIS
+ * `POST /conversations/:id/messages` (JSON, `attachmentIds`).
+ */
+describe('performSend — pièces jointes (#5668)', () => {
+  test('un vocal PUR (aucun texte) : upload PUIS message avec attachmentIds + messageType, SANS clé content', async () => {
+    const { impl, calls } = routedFetch({
+      '/attachments/upload': {
+        status: 200,
+        body: { success: true, data: { attachments: [{ id: 'att-1', messageId: '', fileName: 'voix.webm', originalName: 'voix.webm', mimeType: 'audio/webm', fileSize: 3, fileUrl: 'https://x/voix.webm' }] } },
+      },
+      '/conversations/c-a/messages': { status: 200, body: ackBody('m9', 'x') },
+    });
+    const queryClient = seededClient();
+    const outbox = createOutboxStore();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient,
+      outbox,
+      online: true,
+    };
+    const pending = [pendingAttachmentOf(new File([new Uint8Array(3)], 'voix.webm', { type: 'audio/webm' }), { durationMs: 900 })];
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: '', originalLanguage: 'fr', attachments: pending },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.url).toContain('/attachments/upload');
+    expect(calls[0]?.init.body).toBeInstanceOf(FormData);
+    expect(calls[1]?.url).toContain('/conversations/c-a/messages');
+    const sentBody = JSON.parse(String(calls[1]?.init.body));
+    expect(sentBody.attachmentIds).toEqual(['att-1']);
+    expect(sentBody.messageType).toBe('audio');
+    expect('content' in sentBody).toBe(false);
+    expect(entriesOf(outbox.getState(), 'c-a')).toHaveLength(0);
+  });
+
+  /**
+   * **L'ÉCHO AVANT L'ACCUSÉ (#10690)** — la passerelle peut diffuser
+   * `message:new` (pièces SERVIES) avant que la réponse REST ne revienne.
+   * L'accusé repartait des pièces LOCALES (`pending-N`, `blob:`) et les
+   * réimposait : le vocal restait lu depuis le blob, et sa transcription,
+   * keyée par l'identifiant servi, était ignorée jusqu'à la réouverture.
+   */
+  test('un vocal dont l’écho précède l’accusé garde ses pièces SERVIES', async () => {
+    const queryClient = seededClient();
+    const outbox = createOutboxStore();
+    const served = { id: 'A1', messageId: 'm9', fileName: 'voix.webm', originalName: 'voix.webm', mimeType: 'audio/webm', fileSize: 3, fileUrl: 'https://x/voix.webm' };
+    const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/attachments/upload')) {
+        return new Response(JSON.stringify({ success: true, data: { attachments: [served] } }), { status: 200 });
+      }
+      const sent = JSON.parse(String(init?.body));
+      applyMessageNew(queryClient, outbox, {
+        id: 'm9', clientMessageId: sent.clientMessageId, conversationId: 'c-a', senderId: 'u-viewer',
+        content: '', originalLanguage: 'fr', messageType: 'audio', createdAt: '2026-09-09T10:00:00.000Z',
+        attachments: [served],
+      } as unknown as Parameters<typeof applyMessageNew>[2]);
+      return new Response(JSON.stringify(ackBody('m9', sent.clientMessageId)), { status: 200 });
+    }) as typeof fetch;
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient,
+      outbox,
+      online: true,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: '', originalLanguage: 'fr', attachments: [pendingAttachmentOf(new File([new Uint8Array(3)], 'voix.webm', { type: 'audio/webm' }), { durationMs: 900 })] },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const row = findCachedThreadMessage(queryClient, 'c-a', 'm9');
+    expect(row?.attachments?.map((a) => a.id)).toEqual(['A1']);
+    expect(row?.attachments?.[0]?.fileUrl).toBe('https://x/voix.webm');
+  });
+
+  test('texte + photo : messageType image, une seule photo ⇒ une seule catégorie', async () => {
+    const { impl, calls } = routedFetch({
+      '/attachments/upload': {
+        status: 200,
+        body: { success: true, data: { attachments: [{ id: 'att-2', messageId: '', fileName: 'a.png', originalName: 'a.png', mimeType: 'image/png', fileSize: 3, fileUrl: 'https://x/a.png' }] } },
+      },
+      '/conversations/c-a/messages': { status: 200, body: ackBody('m9', 'x') },
+    });
+    const outbox = createOutboxStore();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient: seededClient(),
+      outbox,
+      online: true,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'regarde', originalLanguage: 'fr', attachments: [pendingAttachmentOf(pngFile())] },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const sentBody = JSON.parse(String(calls[1]?.init.body));
+    expect(sentBody.content).toBe('regarde');
+    expect(sentBody.messageType).toBe('image');
+  });
+
+  /**
+   * RÉCONCILIATION PAR COMPTE (§ 0 « UPLOAD_PARTIAL ») — `uploadMultiple`
+   * avale les échecs PAR FICHIER sous `success: true` : moins d'attachements
+   * que de fichiers envoyés est un ÉCHEC, jamais un envoi partiel silencieux.
+   * `POST …/messages` n'est JAMAIS appelé dans ce cas.
+   */
+  test('upload PARTIEL (moins d’attachements que de fichiers) ⇒ failed UPLOAD_PARTIAL, message JAMAIS envoyé', async () => {
+    const { impl, calls } = routedFetch({
+      '/attachments/upload': {
+        status: 200,
+        body: { success: true, data: { attachments: [{ id: 'att-3', messageId: '', fileName: 'a.png', originalName: 'a.png', mimeType: 'image/png', fileSize: 3, fileUrl: 'https://x/a.png' }] } },
+      },
+    });
+    const outbox = createOutboxStore();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient: seededClient(),
+      outbox,
+      online: true,
+    };
+    const pending = [pendingAttachmentOf(pngFile('a.png')), pendingAttachmentOf(pngFile('b.png'))];
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: '', originalLanguage: 'fr', attachments: pending },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    expect(calls).toHaveLength(1); // jamais de second appel vers …/messages.
+    const entry = entriesOf(outbox.getState(), 'c-a')[0]!;
+    expect(entry.delivery).toBe('failed');
+    expect(entry.lastError?.code).toBe('UPLOAD_PARTIAL');
+  });
+
+  /**
+   * JAMAIS UN MESSAGE AMPUTÉ (revue-correction #5668) — si l'entrée d'outbox
+   * a perdu sa phase d'upload alors que le message DÉCLARE des pièces,
+   * l'envoi ÉCHOUE (« Réessayer » offert) plutôt que de partir sans elles :
+   * une bulle qui montre la photo en local pendant que le serveur enregistre
+   * un message vide est un écart que personne ne verrait jamais.
+   */
+  test('entrée sans phase d’upload mais message AVEC pièces ⇒ échec, jamais un POST sans attachmentIds', async () => {
+    const { impl, calls } = routedFetch({ '/conversations/c-a/messages': { status: 200, body: ackBody('m9', 'x') } });
+    const outbox = createOutboxStore();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient: seededClient(),
+      outbox,
+      online: true,
+    };
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: '', originalLanguage: 'fr', attachments: [pendingAttachmentOf(pngFile('amputee.png'))] },
+      viewerId: 'u-viewer',
+      deps,
+    });
+    const entry = entriesOf(outbox.getState(), 'c-a')[0]!;
+    // On SIMULE la perte de la phase (course de reprise) en rejouant la
+    // tentative sur une entrée dont `upload` a été retiré.
+    outbox.setState((state) => ({
+      entries: {
+        ...state.entries,
+        'c-a': state.entries['c-a']!.map(({ upload: _dropped, ...rest }) => ({ ...rest, delivery: 'failed' as const })),
+      },
+    }));
+    const before = calls.length;
+
+    await retrySend({ conversationId: 'c-a', clientMessageId: entry.message.clientMessageId, deps });
+
+    expect(calls.length).toBe(before); // aucun POST supplémentaire
+    expect(entriesOf(outbox.getState(), 'c-a')[0]?.delivery).toBe('failed');
+    expect(entriesOf(outbox.getState(), 'c-a')[0]?.lastError?.code).toBe('UPLOAD_PARTIAL');
+  });
+
+  /**
+   * REPRISE SANS RE-UPLOAD (§ 0 « Reprise ») — l'upload a RÉUSSI, mais
+   * `POST …/messages` a échoué (500). `retrySend` ne rappelle PAS
+   * `/attachments/upload` : il réutilise `attachmentIds` déjà obtenus.
+   */
+  test('upload réussi puis message en échec : retrySend NE RE-UPLOAD PAS, réutilise attachmentIds', async () => {
+    let messageAttempts = 0;
+    const calls: { readonly url: string; readonly init: RequestInit }[] = [];
+    const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push({ url, init: init ?? {} });
+      if (url.includes('/attachments/upload')) {
+        return new Response(
+          JSON.stringify({ success: true, data: { attachments: [{ id: 'att-4', messageId: '', fileName: 'a.png', originalName: 'a.png', mimeType: 'image/png', fileSize: 3, fileUrl: 'https://x/a.png' }] } }),
+          { status: 200 },
+        );
+      }
+      messageAttempts += 1;
+      if (messageAttempts === 1) return new Response(JSON.stringify({ success: false, error: 'panne' }), { status: 500 });
+      return new Response(JSON.stringify(ackBody('m9', 'x')), { status: 200 });
+    }) as typeof fetch;
+
+    const outbox = createOutboxStore();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient: seededClient(),
+      outbox,
+      online: true,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: '', originalLanguage: 'fr', attachments: [pendingAttachmentOf(pngFile())] },
+      viewerId: 'u-viewer',
+      deps,
+    });
+    const failedEntry = entriesOf(outbox.getState(), 'c-a')[0]!;
+    expect(failedEntry.delivery).toBe('failed');
+    expect(failedEntry.upload?.attachmentIds).toEqual(['att-4']);
+    const uploadCallsBeforeRetry = calls.filter((c) => c.url.includes('/attachments/upload')).length;
+    expect(uploadCallsBeforeRetry).toBe(1);
+
+    await retrySend({ conversationId: 'c-a', clientMessageId: failedEntry.message.clientMessageId, deps });
+
+    const uploadCallsAfterRetry = calls.filter((c) => c.url.includes('/attachments/upload')).length;
+    expect(uploadCallsAfterRetry).toBe(1); // JAMAIS un second upload.
+    expect(entriesOf(outbox.getState(), 'c-a')).toHaveLength(0); // la reprise a réussi.
+  });
+});
+
+/**
+ * LA PROTECTION (#6175) — `services/gateway/src/routes/conversations/messages-send.ts:41-105,240-245`.
+ * Chaque témoin lit le CORPS réellement POSTÉ (`calls[0].init.body`) et la
+ * bulle optimiste (l'entrée d'outbox, AVANT tout accusé — `online: false`
+ * isole ces témoins du réseau, comme le fait déjà « draft.replyTo » plus
+ * haut).
+ */
+describe('performSend — la protection (#6175)', () => {
+  const NOW = 1_757_600_000_000; // 2026-09-11T13:33:20.000Z
+
+  function bodyOfLastCall(calls: readonly { readonly init: RequestInit }[]): Record<string, unknown> {
+    return JSON.parse(String(calls[calls.length - 1]?.init.body)) as Record<string, unknown>;
+  }
+
+  test('éphémère 60 s ⇒ la bulle optimiste porte la DURÉE, jamais une échéance (#8905) ; effectFlags porte EPHEMERAL ; isBlurred ABSENT', async () => {
+    const outbox = createOutboxStore();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: fakeFetch({ status: 200 }).impl }),
+      queryClient: seededClient(),
+      outbox,
+      online: false,
+      now: () => NOW,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'ça brûle', originalLanguage: 'fr', protection: { ephemeralSeconds: 60 } },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const entry = entriesOf(outbox.getState(), 'c-a')[0]!;
+    expect(entry.message.expiresAt).toBeUndefined();
+    expect(entry.message.ephemeralDuration).toBe(60);
+    expect(entry.message.effectFlags).toBe(MESSAGE_EFFECT_FLAGS.EPHEMERAL);
+    expect(entry.message.isBlurred).toBe(false);
+  });
+
+  test('éphémère 60 s, EN LIGNE ⇒ le corps POSTÉ porte ephemeralDuration et effectFlags, jamais expiresAt ni isBlurred', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: ackBody('m9', 'x') });
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient: seededClient(),
+      outbox: createOutboxStore(),
+      online: true,
+      now: () => NOW,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'ça brûle 2', originalLanguage: 'fr', protection: { ephemeralSeconds: 60 } },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const body = bodyOfLastCall(calls);
+    expect(body.ephemeralDuration).toBe(60);
+    expect('expiresAt' in body).toBe(false);
+    expect(body.effectFlags).toBe(MESSAGE_EFFECT_FLAGS.EPHEMERAL);
+    expect(body.isBlurred).toBeUndefined();
+    expect(body.isViewOnce).toBeUndefined();
+  });
+
+  test('flou ⇒ isBlurred: true dans le corps, effectFlags porte BLURRED, la bulle optimiste est VOILÉE', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: ackBody('m9', 'x') });
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient: seededClient(),
+      outbox: createOutboxStore(),
+      online: true,
+      now: () => NOW,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'secret', originalLanguage: 'fr', protection: { blurred: true } },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const body = bodyOfLastCall(calls);
+    expect(body.isBlurred).toBe(true);
+    expect(body.effectFlags).toBe(MESSAGE_EFFECT_FLAGS.BLURRED);
+    expect(body.ephemeralDuration).toBeUndefined();
+  });
+
+  test('vue unique (loi seule — aucun contrôle ne l’arme en conversation) ⇒ isViewOnce: true, bit VIEW_ONCE', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: ackBody('m9', 'x') });
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient: seededClient(),
+      outbox: createOutboxStore(),
+      online: true,
+      now: () => NOW,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'une seule fois', originalLanguage: 'fr', protection: { viewOnce: true } },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const body = bodyOfLastCall(calls);
+    expect(body.isViewOnce).toBe(true);
+    expect(body.effectFlags).toBe(MESSAGE_EFFECT_FLAGS.VIEW_ONCE);
+  });
+
+  test('effets décoratifs (SHAKE|GLOW) combinés au flou ⇒ effectFlags = SHAKE|GLOW|BLURRED', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: ackBody('m9', 'x') });
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient: seededClient(),
+      outbox: createOutboxStore(),
+      online: true,
+      now: () => NOW,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: {
+        content: 'boum',
+        originalLanguage: 'fr',
+        protection: { effectFlags: MESSAGE_EFFECT_FLAGS.SHAKE | MESSAGE_EFFECT_FLAGS.GLOW, blurred: true },
+      },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const body = bodyOfLastCall(calls);
+    expect(body.effectFlags).toBe(MESSAGE_EFFECT_FLAGS.SHAKE | MESSAGE_EFFECT_FLAGS.GLOW | MESSAGE_EFFECT_FLAGS.BLURRED);
+    expect(body.isBlurred).toBe(true);
+  });
+
+  test('NO_PROTECTION (aucune clé `protection`) ⇒ aucune des quatre clés dans le corps — rétro-compatible', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: ackBody('m9', 'x') });
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient: seededClient(),
+      outbox: createOutboxStore(),
+      online: true,
+      now: () => NOW,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'rien de spécial', originalLanguage: 'fr' },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const body = bodyOfLastCall(calls);
+    expect('isBlurred' in body).toBe(false);
+    expect('expiresAt' in body).toBe(false);
+    expect('ephemeralDuration' in body).toBe(false);
+    expect('effectFlags' in body).toBe(false);
+    expect('isViewOnce' in body).toBe(false);
+  });
+
+  test('retrySend rejoue la MÊME durée, et aucune échéance — même quand l’horloge a avancé', async () => {
+    const sequence = sequencedFetch([{ status: 0 }, { status: 200, body: ackBody('m9', 'x') }]);
+    let clock = NOW;
+    const outbox = createOutboxStore();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: sequence.impl }),
+      queryClient: seededClient(),
+      outbox,
+      online: true,
+      now: () => clock,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'reprise éphémère', originalLanguage: 'fr', protection: { ephemeralSeconds: 60 } },
+      viewerId: 'u-viewer',
+      deps,
+    });
+    const failedEntry = entriesOf(outbox.getState(), 'c-a')[0]!;
+    expect(failedEntry.delivery).toBe('failed');
+    const firstBody = bodyOfLastCall(sequence.calls);
+
+    clock += 30_000; // l'horloge a avancé de 30 s avant le rejeu.
+    await retrySend({ conversationId: 'c-a', clientMessageId: failedEntry.message.clientMessageId, deps });
+
+    const secondBody = bodyOfLastCall(sequence.calls);
+    expect(secondBody.ephemeralDuration).toBe(60);
+    expect(firstBody.ephemeralDuration).toBe(60);
+    expect('expiresAt' in secondBody).toBe(false);
+  });
+});

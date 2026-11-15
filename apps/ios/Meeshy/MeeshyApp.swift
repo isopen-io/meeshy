@@ -5,59 +5,61 @@ import MeeshySDK
 import MeeshyUI
 import os
 
-@main
 struct MeeshyApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    private let dependencies = DependencyContainer.shared
-    @StateObject private var authManager = AuthManager.shared
+    let dependencies = DependencyContainer.shared
     @StateObject private var toastManager = FeedbackToastManager.shared
     @StateObject private var pushManager = PushNotificationManager.shared
-    @StateObject private var deepLinkRouter = DeepLinkRouter.shared
+    @StateObject var deepLinkRouter = DeepLinkRouter.shared
     @StateObject private var theme = ThemeManager.shared
     @StateObject private var a11yPrefs = MeeshyAccessibilityPreferences.shared
+    /// La célébration de l'arrivée, au-dessus de la racine connectée.
+    @StateObject private var arrivalCelebration = ArrivalCelebrationController.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    // Splash : shown ALWAYS on cold start, regardless of auth state, until the
-    // boot work in `.task` finishes (session check + conversations cache
-    // preload). Dismissed explicitly from the task once data is ready ; the
-    // SplashScreen itself no longer auto-dismisses. A minimum elapsed time
-    // (1.2s) is enforced so the animation never flashes when the cache is hot.
-    @State private var showSplash = true
-    @State private var hasCheckedSession = false
+    /// Le splash et sa loi de vie : il tombe dès que la session et la
+    /// liste en cache sont prêtes, et à son plafond quoi que fasse le démarrage.
+    @StateObject var launchSplash = LaunchSplashController()
+    @State var hasCheckedSession = false
     @State private var activeGuestSession: GuestSession?
+    /// Le contenu d'un lien ouvert sans session, au-dessus de la connexion.
+    @StateObject private var visitorPresenter = VisitorContentPresenter.shared
     @State private var crashReportsToShow: [CrashDiagnostic] = []
     @State private var showCrashSheet = false
     @State private var hasSurfacedCrashReports = false
-    /// True once we've actually reached `.background` (socket suspended), so the
-    /// next `.active` knows to rearm. A transient `.inactive→.active` leaves it
-    /// false → no needless socket churn (#11).
-    @State private var didEnterBackground = false
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.scenePhase) private var scenePhase
-
-    private var shouldShowOnboarding: Bool {
-        !hasCompletedOnboarding && !authManager.isAuthenticated
-    }
 
     // Kept alive for the process lifetime so the Combine pipeline is never
     // deallocated. A static var on the App struct survives SwiftUI re-evaluations.
     private static var nearCapacityCancellable: AnyCancellable?
 
     init() {
-        // Prisme Linguistique — l'utilisateur consomme TOUT dans sa langue
-        // préférée, y compris le chrome de l'app (menus, boutons, libellés
-        // système). Applique l'override de langue UI (mis en cache au dernier
-        // login/refresh) le plus TÔT possible, avant la 1re vue. iOS lit
-        // `AppleLanguages` une SEULE fois au démarrage du process → l'override
-        // prend effet au (re)lancement, ce qui est acceptable (l'app est
-        // relancée aux tests). Garde-fous stricts dans `applyIfNeeded` : no-op
-        // si le cache est nil/vide/non-supporté (iOS garde alors la locale
-        // appareil), ne crashe jamais.
-        UILanguageOverride.applyIfNeeded()
+        // Prisme Linguistique — l'override de langue UI est écrit AVANT
+        // `UIApplicationMain`, par `MeeshyLaunch.main()` : le bundle fige sa
+        // localisation au lancement, un override tardif ne l'atteindrait pas.
 
-        // Programme bêta — lecture au lancement : si « Activer les bêta » est
-        // ON, `UserDefaults` dit quelles fonctionnalités le sont (tout-ou-rien
-        // aujourd'hui, une par une demain). Journal `me.meeshy.app:beta`.
-        BetaFeaturesPreference.resolveAtLaunch()
+        // Les extensions de notification tournent dans leur propre
+        // processus : elles lisent cette langue dans le groupe d'app, et les
+        // catégories que l'AppDelegate enregistre juste après aussi.
+        UILanguageOverride.publishInterfaceLanguageInBackground()
+
+        // Le mot qui me désigne dans le préfixe d'auteur d'une ligne de liste.
+        // Lu APRÈS l'override de `MeeshyLaunch.main()` : c'est lui
+        // qui décide dans quelle langue le catalogue va répondre.
+        //
+        // Le SDK ne lit pas le catalogue de l'app ; il reçoit ce mot une fois,
+        // et ses chemins (pont socket, moteur de synchro) le relaient.
+        ConversationListAuthor.configureReaderLabel(ConversationListViewModel.youAuthorLabel)
+        // La citation d'un avis (appel, arrivée, départ — #17441) se dit dans la
+        // langue de l'app : le SDK reçoit nos libellés, il n'en porte aucun.
+        QuotedNotice.lend(strings: { ConversationPreviewCatalog.strings() })
+
+        // Sortie de bêta : la clé de la préférence « Activer les bêta » est effacée de l'appareil.
+        LentilleFeatureFlag.removeRetiredBetaPreference()
+
+        // Publier, inviter par e-mail ou créer un lien sans adresse
+        // prouvée ouvre la validation, puis la requête repart (`APIClient`).
+        EmailVerificationGate.current = EmailVerificationGateController.shared
+        SheetKeyboardDismissal.install()
 
         #if DEBUG
         // Filet de diagnostic dev : capture la stack des SIGSEGV que
@@ -76,7 +78,7 @@ struct MeeshyApp: App {
         // submits the request later, when `willTerminate` fires.
         CacheBackgroundFlushTask().register()
 
-        // CALL-FIX 2026-06-05 — wire the "is a call active?" guard into both socket
+        // Wire the "is a call active?" guard into both socket
         // managers. While a call is active, `forceReconnect()` (token rotation,
         // re-auth, lifecycle) is suppressed so the realtime socket carrying the
         // WebRTC signaling is never torn down mid-call (which strands the call on
@@ -85,13 +87,28 @@ struct MeeshyApp: App {
         MessageSocketManager.shared.isCallActiveGuard = { CallManager.isCallActiveFlag }
         SocialSocketManager.shared.isCallActiveGuard = { CallManager.isCallActiveFlag }
 
-        // Surface a one-shot toast when the offline outbox reaches 80% of its
-        // 500-item capacity. removeDuplicates() in nearCapacityPublisher ensures
-        // the toast fires exactly once per true→false→true crossing, not on
-        // every new enqueue while near capacity.
+        Self.installOfflineQueueNearCapacityToast()
+
+        // Arrière-plan, retour et ouverture/fermeture de session : une fois par
+        // transition de l'APPLICATION, même quand l'iPad a fermé la fenêtre
+        // principale (`AppLifecycleHooks`).
+        Self.installApplicationLifecycleHooks()
+    }
+
+    // Surface a one-shot toast when the offline outbox reaches 80% of its
+    // 500-item capacity. removeDuplicates() in nearCapacityPublisher ensures
+    // the toast fires exactly once per true→false→true crossing, not on
+    // every new enqueue while near capacity.
+    //
+    // Le saut sur le main PRÉCÈDE le filter : `OfflineQueue` est un actor
+    // et émet depuis son exécuteur. Une fermeture écrite ici est isolée au
+    // MainActor ; reçue hors du main, elle trappe
+    // (`_dispatch_assert_queue_fail`) — même forme que le plantage
+    // TestFlight 1915/1916. Garde : OffMainCombineHopSourceGuardTests.
+    private static func installOfflineQueueNearCapacityToast() {
         Self.nearCapacityCancellable = OfflineQueue.shared.nearCapacityPublisher
-            .filter { $0 }
             .receive(on: DispatchQueue.main)
+            .filter { $0 }
             .sink { _ in
                 Task { @MainActor in
                     FeedbackToastManager.shared.showError(
@@ -103,708 +120,181 @@ struct MeeshyApp: App {
             }
     }
 
-    var body: some Scene {
-        WindowGroup {
-            SystemThemeDetector {
-                ZStack {
-                    Group {
-                        if authManager.isAuthenticated {
-                            AdaptiveRootView()
-                        } else if hasCheckedSession {
-                            LoginView()
-                                .iPadFormWidth()
-                        }
-                    }
-                    .opacity(showSplash ? 0 : 1)
+    /// L'aperçu DEBUG de l'onboarding REMPLACE l'écran de connexion au lieu de
+    /// s'y superposer : un frère de `ZStack` est proposé la taille du plus
+    /// grand, et `LoginView` en arabe sur iPhone SE en annonce 666 pour 647 —
+    /// le calque débordait alors de 19 pt, coupant son bouton au bord.
+    /// Le catalogue du kit le remplace aussi, et aucun des deux n'est recouvert
+    /// par l'accueil plein écran : sans compte, il recouvrait le catalogue une
+    /// demi-seconde après son apparition (#17397).
+    private static var debugPreviewReplacesLogin: Bool {
+        #if DEBUG
+        OnboardingPreviewLaunch.isActive || KitCatalogLaunch.isActive
+        #else
+        false
+        #endif
+    }
 
-                    if showSplash {
-                        // onFinish is kept as a no-op so the existing component
-                        // signature is preserved ; dismissal is driven by the
-                        // `.task` block once boot work completes.
-                        SplashScreen(onFinish: {})
-                            .transition(.opacity.combined(with: .scale(scale: 1.1)))
-                            .zIndex(1)
-                    }
-                }
-                // `!isAuthenticated` protège d'un ACCIDENT — un lien traité
-                // avant la fin de `checkExistingSession`, qui échouerait un
-                // utilisateur connecté dans un flux invité. `isDeliberate`
-                // nomme l'INTENTION inverse : quelqu'un qui a un compte et
-                // choisit malgré tout d'entrer sans lui. Les deux doivent
-                // coexister ; les confondre reviendrait soit à rouvrir
-                // l'accident, soit à interdire le choix.
+    /// Les scènes ne reçoivent que des fonctions `nonisolated` (#11167) : sous iOS 27, le rendu asynchrone de
+    /// SwiftUI peut redemander le contenu d'une fenêtre hors du fil principal, et une fermeture héritant du main
+    /// actor y trappait à son entrée (SIGTRAP, `closure #1 in MeeshyApp.body.getter`). Le contenu est construit
+    /// ici, sur le fil principal ; la scène ne fait que le relire.
+    var body: some Scene {
+        WindowGroup(content: PrebuiltSceneContent(mainWindow).make)
+            .commands(content: PrebuiltSceneContent(MeeshyCommands()).make)
+        detachedWindows
+    }
+
+    @ViewBuilder
+    private var mainWindow: some View {
+        let inputs = rootInputs
+        MainWindowGate {
+        SystemThemeDetector {
+            AppRootGate { session, commands in
+                RootScene(
+                    session: session,
+                    commands: commands,
+                    state: inputs.scene,
+                    actions: RootSceneActions(
+                        onLoginAppear: { deepLinkRouter.discardPendingCallRequest() },
+                        onSkipCelebration: { arrivalCelebration.dismiss() },
+                        holdSplashUntilCeiling: { await launchSplash.holdUntilCeiling() }
+                    )
+                )
+                .modifier(GuestSessionCover(
+                    guest: inputs.activeGuestSession,
+                    isAuthenticated: session.isAuthenticated,
+                    actions: guestSessionCoverActions
+                ))
+                .onReceive(NotificationCenter.default.publisher(for: .meeshyGuestSessionEnded).receive(on: DispatchQueue.main)) { endGuestSession($0) }
+                .visitorContentCover(
+                    presenter: visitorPresenter,
+                    isEligible: RootPresentationRules.visitorContentIsEligible(
+                        isAuthenticated: session.isAuthenticated,
+                        hasGuestSession: inputs.activeGuestSession != nil,
+                        splashPhase: inputs.splashPhase
+                    )
+                )
                 .fullScreenCover(isPresented: .init(
-                    get: { activeGuestSession != nil && (!authManager.isAuthenticated || activeGuestSession?.isDeliberate == true) },
-                    set: { if !$0 { dismissGuestSession() } }
-                )) {
-                    if let guestSession = activeGuestSession {
-                        GuestConversationContainer(
-                            session: guestSession,
-                            onSessionCreated: { ctx in
-                                if !AnonymousSessionStore.save(ctx) {
-                                    toastManager.showError(String(localized: "guest.session.save.error", defaultValue: "Unable to save session", bundle: .main))
-                                }
-                                activeGuestSession = GuestSession(
-                                    identifier: guestSession.identifier,
-                                    context: ctx,
-                                    isDeliberate: guestSession.isDeliberate
-                                )
-                            },
-                            onDismiss: { dismissGuestSession() }
+                    get: {
+                        RootPresentationRules.showsOnboarding(
+                            hasCompletedOnboarding: inputs.hasCompletedOnboarding,
+                            isAuthenticated: session.isAuthenticated,
+                            splashPhase: inputs.splashPhase,
+                            hasGuestSession: inputs.activeGuestSession != nil,
+                            hasVisitorRequest: inputs.hasVisitorRequest,
+                            previewReplacesLogin: Self.debugPreviewReplacesLogin
                         )
-                    }
-                }
-                .fullScreenCover(isPresented: .init(
-                    get: { shouldShowOnboarding && !showSplash && activeGuestSession == nil },
+                    },
                     set: { _ in }
                 )) {
-                    OnboardingView(hasCompletedOnboarding: $hasCompletedOnboarding)
+                    WelcomeView(hasCompletedOnboarding: $hasCompletedOnboarding)
                 }
-                .overlay(alignment: .top) {
-                    if let toast = toastManager.currentToast {
-                        FeedbackToastView(toast: toast)
-                            .transition(.feedbackToastReveal)
-                            .padding(.top, MeeshySpacing.xxl)
-                            .onTapGesture {
-                                if let action = toastManager.onTapAction {
-                                    action()
-                                }
-                                toastManager.dismiss()
-                            }
-                            .accessibilityIdentifier(MeeshyA11yID.toastContainer)
-                            .zIndex(999)
-                    }
-                }
-                .meeshyAnimation(MeeshyAnimation.springBouncy, value: toastManager.currentToast)
-                .sheet(isPresented: $showCrashSheet) {
-                    CrashReportSheet(reports: crashReportsToShow)
-                }
-                .environmentObject(authManager)
+                .modifier(OverlayHost(crashReports: inputs.crashReports, isCrashSheetPresented: $showCrashSheet))
+                .environmentObject(AuthManager.shared)
                 .environmentObject(deepLinkRouter)
+                .meeshyMotionRoot()
                 .environment(\.meeshyForceReduceMotion, a11yPrefs.reduceMotion)
-                .preferredColorScheme(theme.preferredColorScheme)
-                .onOpenURL { url in
-                    let destination = DeepLinkParser.parse(url)
-                    if case .magicLink = destination {
-                        handleAppLevelDeepLink(url)
-                        return
-                    }
-                    let _ = deepLinkRouter.handle(url: url)
-                }
-                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { userActivity in
-                    guard let url = userActivity.webpageURL else { return }
-                    let destination = DeepLinkParser.parse(url)
-                    if case .magicLink = destination {
-                        handleAppLevelDeepLink(url)
-                        return
-                    }
-                    let _ = deepLinkRouter.handle(url: url)
-                }
-                .task {
-                    // Splash : capture boot start so we can enforce a minimum
-                    // 1.2s display time once data is ready. Without this, a
-                    // hot-cache cold start would flash the splash away mid-
-                    // animation.
-                    let splashStart = ContinuousClock.now
-
-                    ImageDownsamplingConfig.applyGlobal()
-                    KeychainManager.shared.migrateToAfterFirstUnlock()
-                    MeeshyConfig.shared.restoreEnvironment()
-                    // Miroir de l'environnement pour les extensions (NSE +
-                    // partage), qui n'ont pas accès à MeeshyConfig. À poser
-                    // APRÈS restoreEnvironment, sinon on publierait la valeur
-                    // par défaut au lieu de l'environnement restauré.
-                    WidgetDataManager.shared.publishAPIBaseURL()
-                    // Local-First : résous le sous-titre des toasts de
-                    // conversation (nom renommé + favori) depuis le snapshot
-                    // local App Group, jamais le titre brut serveur.
-                    NotificationToastManager.shared.conversationPresentationProvider = { conversationId in
-                        WidgetDataManager.shared.conversationToastPresentation(forId: conversationId)
-                    }
-                    // « Vibrations » : le SDK gate sur `vibrationEnabled` et
-                    // appelle ce player à l'apparition d'un toast — l'haptique
-                    // vit app-side (le SDK core n'importe pas UIKit).
-                    NotificationToastManager.shared.hapticPlayer = {
-                        HapticFeedback.light()
-                    }
-                    await CacheCoordinator.shared.start()
-                    // Touch PresenceManager early so it has subscribed to
-                    // `presence:snapshot` + `user:status` + `didReconnect`
-                    // BEFORE the first socket auth lands. Without this, the
-                    // very first snapshot emitted after a cold start could
-                    // land before any view referencing PresenceManager.shared
-                    // has been built, and PassthroughSubject would drop it.
-                    _ = PresenceManager.shared
-                    // Start NWPathMonitor at the very top of boot so the splash
-                    // gating below can read a resolved `isOffline` (the keychain +
-                    // session work between here and the socket-wait gives the
-                    // initial path time to land). Without this early touch the
-                    // monitor would first start at the gate and still report the
-                    // optimistic `online` default, defeating the offline fast-path.
-                    _ = NetworkMonitor.shared
-                    // `StoryOfflineQueueBootstrap` a été supprimé : son
-                    // gestionnaire de publication ré-enfilait l'item dans la
-                    // MÊME file (`StoryPublishQueue`), et sa vidange sur retour
-                    // réseau doublait l'observateur de connexion que la file
-                    // possède déjà. Le seul gestionnaire légitime est posé par
-                    // `StoryPublishService.setExecutor`, depuis les racines.
-                    // Wire the outbox pool so OfflineQueue can persist every
-                    // outbox kind (sendMessage, sendReaction, edit/delete,
-                    // and the 14 non-message mutations) to SQLite on enqueue.
-                    // Must run before any enqueue call to avoid silent
-                    // poolNotConfigured throws on the hot path.
-                    //
-                    // Wave 1 Task 3.6 — the legacy MessageRetryQueue +
-                    // ReactionQueue actors were collapsed into OfflineQueue ;
-                    // they shared the same `outbox` table and namespaces
-                    // (`ofq_*` / `mrq_*` / `rxq_*`), so the unified
-                    // `OfflineQueue.bootRecovery()` already resets every
-                    // inflight record regardless of kind or id prefix.
-                    let bootPool = dependencies.dbPool
-                    await OfflineQueue.shared.configure(pool: bootPool)
-
-                    // Partages que l'extension n'a pas pu envoyer : ils
-                    // rejoignent l'outbox dès qu'il est capable d'enfiler,
-                    // donc juste APRÈS `configure(pool:)` — plus tôt, chaque
-                    // enfilement échouerait sur `poolNotConfigured`. Non
-                    // bloquant pour le boot ; un échec laisse le relais sur
-                    // disque pour la reprise en avant-plan.
-                    Task { await SharePendingSendConsumer.shared.consumeAll() }
-
-                    // Wire preference mutations to flush the outbox immediately after
-                    // enqueue so changes don't get stuck `.pending` until boot/foreground
-                    // transition. The SDK cannot import app-side OutboxFlushTrigger
-                    // (SDK purity), so we inject this Sendable closure at boot.
-                    UserPreferencesManager.shared.onSettingsMutationEnqueued = {
-                        Task { await OutboxFlushTrigger.flushNow() }
-                    }
-
-                    // Phase 4 §6.1.1 — boot crash recovery. Any record left
-                    // `.inflight` from a previous process (the app was killed
-                    // mid-dispatch) is reset to `.pending` so the flusher
-                    // picks it back up. The gateway dedup contract on
-                    // `(conversationId, clientMessageId)` ensures a message
-                    // that actually reached the server before the crash is
-                    // not duplicated at replay time. The sweep covers ALL
-                    // kinds (sendMessage, sendReaction, edit/delete,
-                    // non-message mutations) thanks to the unified outbox.
-                    Task.detached(priority: .background) {
-                        do {
-                            _ = try await OfflineQueue.shared.bootRecovery()
-                        } catch {
-                            Logger.messages.error("Boot recovery failed: \(error.localizedDescription, privacy: .public)")
-                        }
-                    }
-
-                    // Wire the in-memory retry handlers so the reconnection
-                    // path (socket reconnect → retryAll/retryPending) can
-                    // send queued items without going through the outbox
-                    // flusher. The outbox flusher handles items that survive
-                    // a crash or cold start; these handlers handle the hot
-                    // reconnection path for items that were in-memory.
-                    //
-                    // Phase 4 — `clientMessageId` is propagated through the
-                    // SendMessageRequest so the server applies the same
-                    // catch-P2002 idempotent dedup (cf. spec §6.2) regardless
-                    // of which path (cold flush or hot retry) sent the item.
-                    await OfflineQueue.shared.setRetrySend { @Sendable item in
-                        do {
-                            let request = SendMessageRequest(
-                                content: item.content,
-                                originalLanguage: item.originalLanguage,
-                                replyToId: item.replyToId,
-                                forwardedFromId: item.forwardedFromId,
-                                forwardedFromConversationId: item.forwardedFromConversationId,
-                                attachmentIds: item.attachmentIds,
-                                clientMessageId: item.clientMessageId,
-                                location: item.location
-                            )
-                            let response = try await MessageService.shared.send(
-                                conversationId: item.conversationId, request: request
-                            )
-                            return response.id
-                        } catch {
-                            return nil
-                        }
-                    }
-                    await SettingsActionQueue.shared.setFlushHandler { @Sendable action in
-                        do {
-                            // Most settings endpoints return the updated user.
-                            // We only care that the request succeeded; the
-                            // optimistic UI already reflects the new value.
-                            let _: APIResponse<MeeshyUser> = try await APIClient.shared.request(
-                                endpoint: action.endpoint,
-                                method: action.httpMethod,
-                                body: action.payload
-                            )
-                            return true
-                        } catch MeeshyError.server(let code, _) where [400, 404, 413, 422].contains(code) {
-                            // P1 — `APIClient.request` only ever throws `MeeshyError`
-                            // (never the legacy `APIError`), so this catch NEVER
-                            // matched and every 4xx (validation error, etc.) fell
-                            // through to the generic `catch` below and was kept
-                            // queued — replayed forever against a payload that can
-                            // never succeed. Treat client-side validation errors as
-                            // terminal — replaying the same payload won't help. Drop
-                            // the action so the queue doesn't bounce forever.
-                            //
-                            // 429 is deliberately EXCLUDED from this set — mirrors
-                            // `OutboxFlusher.permanentRejectionStatusCodes`
-                            // (packages/MeeshySDK/Sources/MeeshySDK/Persistence/OutboxFlusher.swift),
-                            // which documents 408/429/503 as retryable (APIClient's
-                            // own `retryableStatusCodes` already treats 429 as
-                            // transient). An unfiltered `(400..<500)` range here
-                            // would silently sweep 429 into "terminal", permanently
-                            // dropping a queued settings mutation that only failed
-                            // because of rate limiting.
-                            return true
-                        } catch MeeshyError.forbidden {
-                            // 403 is also a terminal client-side error (thrown as
-                            // its own `MeeshyError` case rather than `.server`) —
-                            // same "drop, don't replay" treatment as the other 4xx.
-                            return true
-                        } catch {
-                            // Transient (5xx / connectivity): keep the action
-                            // queued; the next NetworkMonitor `online` edge
-                            // will replay it.
-                            return false
-                        }
-                    }
-                    // Delete legacy JSON queue files from disk on the first boot
-                    // after migration to the SQLite outbox pipeline. The files are
-                    // no longer written to; this removes any stale data on device.
-                    // Wave 1 Task 3.6 — `OfflineQueue.deleteLegacyFile()` now
-                    // sweeps the `message_retry_queue.json` + `reaction_queue.json`
-                    // files in addition to the original `offline_queue.json`
-                    // since the corresponding actors were folded into the
-                    // unified queue.
-                    let didDeleteLegacyKey = "meeshy.outbox.legacyFilesDeleted"
-                    if !UserDefaults.standard.bool(forKey: didDeleteLegacyKey) {
-                        Task.detached(priority: .background) {
-                            OfflineQueue.deleteLegacyFile()
-                            await MainActor.run {
-                                UserDefaults.standard.set(true, forKey: didDeleteLegacyKey)
-                            }
-                        }
-                    }
-                    // Drain any outbox rows that survived a crash or cold start.
-                    // This runs at every boot (not just once) so items from the
-                    // previous session are retried as soon as the app is active.
-                    Task.detached(priority: .background) {
-                        // bootRecovery resets any rows that were left in the
-                        // `.inflight` state by a prior crash mid-dispatch. Without
-                        // this, those rows are invisible to flush() (which only
-                        // selects `.pending`) until the next background/foreground
-                        // cycle triggers BackgroundTransitionCoordinator which also
-                        // calls bootRecovery. SwiftUI's onChange(of:scenePhase) does
-                        // NOT fire on the initial `.active` state, so the coordinator
-                        // path is skipped on cold start. P2 — do/catch + log
-                        // instead of a silent `try?`: BackgroundTransitionCoordinator's
-                        // own `resumeFromBackground()` call to `bootRecovery()`
-                        // (on the next foreground) is an independent retry
-                        // path, so a failure here is not fatal, but it MUST
-                        // be visible — a silent failure here previously left
-                        // crash-orphaned `.inflight` rows invisible to
-                        // flush() for the rest of THIS cold start with zero
-                        // trace in the logs.
-                        do {
-                            _ = try await OfflineQueue.shared.bootRecovery()
-                        } catch {
-                            Logger.messages.error("Boot recovery (outbox flusher path) failed: \(error.localizedDescription, privacy: .public) — retried on next foreground")
-                        }
-                        let flusher = OutboxFlusher(
-                            pool: bootPool,
-                            dispatcher: OutboxDispatcher(),
-                            onOutcome: { @Sendable outcome in
-                                Task { await OfflineQueue.shared.publishOutcome(outcome) }
-                            },
-                            // BW1 — skip flushing while offline so retries
-                            // do not burn through 60s URLSession timeouts ×
-                            // 5 maxAttempts in airplane mode.
-                            isNetworkReachable: { @Sendable in
-                                await MainActor.run { NetworkConditionMonitor.shared.isOnline }
-                            }
-                        )
-                        let nextRetry = await flusher.flush()
-                        await OutboxRetryScheduler.shared.schedule(at: nextRetry)
-                        // T10 — wake the outbox flusher on every network
-                        // reconnect: a mutation enqueued offline leaves no
-                        // backoff timer armed, so without this it waits for an
-                        // incidental lifecycle event.
-                        await OutboxRetryScheduler.shared.startObservingNetworkReconnect()
-                        // outbox-04 — wake the flusher immediately after any
-                        // social mutation is enqueued online (like/post/
-                        // comment), instead of leaving it `.pending` until the
-                        // next incidental lifecycle event.
-                        await OutboxRetryScheduler.shared.startObservingMutationEnqueued()
-                    }
-
-                    // Engagement outbox boot: recover orphan .open sessions
-                    // (crash-truncated), evict rows older than 7d / over the cap,
-                    // flush finalized rows, and arm the reconnect observer so a
-                    // session finalized offline ships as soon as the link returns.
-                    Task { @MainActor in
-                        await EngagementOutbox.shared.bootSweep()
-                        await EngagementOutbox.shared.purge(olderThan: Date().addingTimeInterval(-7 * 86400), maxRows: 5000)
-                        await EngagementFlushTrigger.flushNow()
-                        EngagementRetryScheduler.shared.startObservingNetworkReconnect()
-                    }
-
-                    // Session check gates auth and MUST finish before the splash
-                    // dismisses. Friendship hydration only powers non-critical
-                    // friend-status badges, yet it fetches ALL sent + received
-                    // requests over the network (paginated) — keep it OFF the
-                    // cold-start critical path. `hydrate()` coalesces concurrent
-                    // callers and fast-paths when already hydrated, so firing it
-                    // here and letting it finish in the background is safe; the
-                    // badges fill in shortly after the list is already on screen.
-                    Task { await FriendshipCache.shared.hydrate() }
-                    await authManager.checkExistingSession()
-                    hasCheckedSession = true
-                    // Prisme Linguistique — mémorise la langue UI (langue
-                    // principale de l'utilisateur) dès que la session cold-start
-                    // est résolue, pour l'appliquer au prochain lancement.
-                    UILanguageOverride.cache(from: authManager.currentUser?.systemLanguage)
-                    // Splash gating : trois bornes temporelles concurrentes
-                    //   floor   1.0s — laisse l'intro jouer : à 1.0s logo/title
-                    //                    sont posés et le sous-titre (spring lancé
-                    //                    à 0.35s) est ~95% settled ; le résidu de
-                    //                    rebond passe sous le fade-out de 0.6s.
-                    //                    AVANT 1.2s = 200ms de splash en trop.
-                    //   socket  1.5s — fenêtre BORNÉE pour que les sockets
-                    //                    échangent leur 1er handshake. Cache-first
-                    //                    (NON-NÉGOCIABLE) : on n'attend PAS le
-                    //                    réseau quand le cache est prêt. Sur une
-                    //                    connexion lente, la liste cachée s'affiche
-                    //                    à 1.5s puis se rafraîchit (présences /
-                    //                    unreads) dès que les sockets landent —
-                    //                    plutôt que de retenir le splash 3s.
-                    //   ceiling 5.0s — hard cap : si le réseau est down,
-                    //                    on dismiss quand même pour ne JAMAIS
-                    //                    bloquer l'utilisateur derrière un
-                    //                    splash infini.
-                    let minSplashDuration: Duration = .milliseconds(1000)
-                    let socketTimeout: Duration = .milliseconds(1500)
-                    let maxSplashDuration: Duration = .seconds(5)
-
-                    if authManager.isAuthenticated {
-                        // P1 — prime SessionManager's `lastKnownUserId` cache
-                        // on EVERY cold start with an already-restored session,
-                        // not just on a fresh login transition. Without this,
-                        // a session restored at launch that is torn down via
-                        // `logout()` before any E2EE activity in this process
-                        // (no DM sent/received) would leave `clearSessions()`
-                        // with no userId to scope its Keychain wipe against.
-                        Task { await SessionManager.shared.migrateKeychainIfNeeded() }
-                        // Précharge le cache liste — SQLite read instantané,
-                        // retourne `.empty` au tout premier install.
-                        let cacheResult = await CacheCoordinator.shared.conversations.load(for: "list")
-                        let hasCachedContent = cacheResult.snapshot() != nil
-
-                        // Détacher TOUS les bootstraps réseau (push, VoIP,
-                        // unread, sync). Sur un réseau dégradé, chacun peut
-                        // timeout 60s — un cold start observé a déjà tenu
-                        // le splash 86s. Ces tâches tournent en parallèle
-                        // du reste du splash et finalisent imperceptiblement
-                        // après que la vue principale soit affichée.
-                        Task { [authManager] in
-                            _ = authManager  // capture explicite (lint)
-                            await Self.runPushBootstrapSequence(
-                                voipRegister: { VoIPPushManager.shared.register() },
-                                requestPushPermission: requestPushPermissionIfNeeded
-                            )
-                            await NotificationToastManager.shared.refreshUnreadCount()
-                            await NotificationCoordinator.shared.syncNow()
-                        }
-
-                        // Si on a déjà du contenu en cache, attendre que LES
-                        // DEUX sockets (Message + Social) aient confirmé leur
-                        // connexion avant de dismiss → la liste s'affiche
-                        // avec présences + unreads "frais" sans flash post-
-                        // splash. Bounded par maxSplashDuration depuis
-                        // splashStart pour ne jamais bloquer.
-                        //
-                        // Si cache vide (premier lancement, cold-start total),
-                        // on NE bloque PAS : ConversationListView a son
-                        // skeleton (`loadState == .loading`) qui prend le
-                        // relais et anime le chargement initial.
-                        // Offline fast-path : when the device is confirmed offline
-                        // the sockets cannot handshake, so awaiting them only burns
-                        // the full `socketTimeout` (1.5s) of dead time behind the
-                        // splash. The cached list is ready — dismiss on the 1.0s
-                        // floor instead and let presences/unreads refresh once the
-                        // sockets land after reconnect. Only the optimistic `online`
-                        // default (path not yet resolved) or a real online path
-                        // takes the bounded wait.
-                        if hasCachedContent && !NetworkMonitor.shared.isOffline {
-                            let remaining = maxSplashDuration - splashStart.duration(to: .now)
-                            let bounded = min(socketTimeout, remaining)
-                            if bounded > .zero {
-                                await Self.awaitBothSocketsConnected(timeout: bounded)
-                            }
-                        }
-                    } else {
-                        handleGuestDeepLink(deepLinkRouter.pendingDeepLink)
-                    }
-
-                    // Floor 1.2s : enforce que l'animation joue intégralement.
-                    let elapsed = splashStart.duration(to: .now)
-                    if elapsed < minSplashDuration {
-                        try? await Task.sleep(for: minSplashDuration - elapsed)
-                    }
-                    withAnimation(.easeInOut(duration: 0.6)) {
-                        showSplash = false
-                    }
-                    // Surface any crash/hang reports captured since the last
-                    // foreground. Done after the splash + session work so the
-                    // toast lands on a stable UI rather than racing the splash
-                    // animation.
-                    surfacePendingCrashReports()
-
-                    // Retention policy: purge messages older than 6 months from
-                    // GRDB on every cold start. The server remains the source of
-                    // truth — purged messages can be re-fetched via pagination.
-                    // Runs at background priority so it never blocks the UI.
-                    // grdb-08 — réutilise l'acteur DÉJÀ démarré du container :
-                    // une seconde instance relançait le write worker ET le GC
-                    // outbox exhausted à chaque boot. purgeOldMessages n'a
-                    // aucune dépendance à start().
-                    let retentionPersistence = dependencies.messagePersistence
-                    Task.detached(priority: .background) {
-                        do {
-                            let count = try await retentionPersistence.purgeOldMessages()
-                            if count > 0 {
-                                Logger(subsystem: "com.meeshy.app", category: "retention")
-                                    .info("Purged \(count) messages older than \(MessagePersistenceActor.defaultRetentionMonths) months")
-                            }
-                        } catch {
-                            // grdb-02 — le try? avaleur a masqué pendant des
-                            // mois un rollback à 100 % de la rétention.
-                            Logger(subsystem: "com.meeshy.app", category: "retention")
-                                .error("purgeOldMessages failed: \(error.localizedDescription, privacy: .public)")
-                        }
-                    }
-                }
-                .adaptiveOnChange(of: scenePhase) { _, newPhase in
-                    switch newPhase {
-                    case .active:
-                        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
-                        // CALL-FIX 2026-06-06 — tell the gateway we're foreground so
-                        // incoming calls use the in-app banner (socket) instead of a
-                        // VoIP push / CallKit.
-                        MessageSocketManager.shared.emitAppForeground(true)
-                        Task { await AuthManager.shared.refreshCurrentUserProfile() }
-                        // Only rearm the socket + backfill if we ACTUALLY backgrounded.
-                        // A transient .inactive→.active (Control Center, notification
-                        // banner, app-switcher peek, Face ID) never suspended the
-                        // socket, so force-reconnecting a healthy socket here is pure
-                        // churn — disconnect/reconnect + the presence-refresh loop (#11).
-                        // Cold launch also lands here with the flag false: RootView's
-                        // own connect() handles the initial connection.
-                        if didEnterBackground {
-                            didEnterBackground = false
-                            Task { await handleForegroundTransition() }
-                        }
-                        // Drain any mark-as-read actions the user tapped from the
-                        // widget while the app was suspended.
-                        Task { await WidgetActionFlusher.shared.flush() }
-                    case .background:
-                        didEnterBackground = true
-                        // CALL-FIX 2026-06-06 — tell the gateway we're backgrounded
-                        // FIRST (while the socket is still alive, before the
-                        // coordinator may suspend it) so incoming calls fall back to
-                        // a VoIP push (CallKit) — a suspended socket can't ring.
-                        MessageSocketManager.shared.emitAppForeground(false)
-                        // Delegate the whole background entry to a single
-                        // coordinator guarded by a beginBackgroundTask. The
-                        // coordinator owns the order (stop players → flush
-                        // caches → ack pushes → stop heartbeats → schedule
-                        // BGTasks → sync widgets) and guarantees the task id
-                        // is ended even if a step throws.
-                        Task { await BackgroundTransitionCoordinator.shared.enterBackground() }
-                        // Persist current dwell/watch into the open engagement
-                        // rows so an OS kill while suspended is recovered as a
-                        // truncated session at next boot (no network flush here —
-                        // background time is too scarce, the resume/boot paths flush).
-                        Task { await EngagementTracker.shared.checkpointAll() }
-                    case .inactive:
-                        break
-                    @unknown default:
-                        break
-                    }
-                }
-                .adaptiveOnChange(of: authManager.isAuthenticated) { _, isAuth in
-                    // Tag every subsequent crash report with the active user
-                    // so we can filter the Crashlytics dashboard per account.
-                    // Cleared on logout to prevent the next user inheriting
-                    // the previous identity.
-                    CrashDiagnosticsManager.shared.setUserID(
-                        isAuth ? authManager.currentUser?.id : nil
-                    )
-                    if isAuth {
-                        activeGuestSession = nil
-                        // Re-arm every coordinator after a logout/login cycle.
-                        // `start()` is idempotent-guarded, so without the
-                        // matching `reset()` on the logout branch below the
-                        // second login would be a silent no-op and socket
-                        // publishers would be left without subscribers.
-                        NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
-                        NotificationCoordinator.shared.start()
-                        // A5.3 — resync notifications quand SyncSeqTracker
-                        // détecte un trou de séquence (_seq) sur notification:new.
-                        NotificationGapResyncCoordinator.shared.start()
-                        Task { await CacheCoordinator.shared.start() }
-                        // SOTA audit Pilier 22 V2 — register the publish-queue
-                        // handler + listeners so any pending stories from a
-                        // previous session start surfacing to the UI as soon
-                        // as the user authenticates.
-                        StoryPublishService.shared.configure()
-                        // Re-hydrate the friendship cache for the now-active
-                        // user. `MeeshyApp.task` only hydrates once per view
-                        // lifecycle, so without this call an account switch
-                        // (logout A → login B) would leave B with A's friend
-                        // graph until the next cold start.
-                        if !FriendshipCache.shared.isHydrated {
-                            Task { await FriendshipCache.shared.hydrate() }
-                        }
-                        // `MeeshyApp.task` only runs once per view lifecycle;
-                        // force a fresh socket connection so we don't rely on
-                        // any stale state carried over from a prior session.
-                        MessageSocketManager.shared.forceReconnect()
-                        SocialSocketManager.shared.forceReconnect()
-                        // Route conversation/category socket events (deleted,
-                        // reordered, category:×4) into ConversationStore /
-                        // UserCategoryStore. Idempotent (re-wires cleanly) and
-                        // the 6 publishers live on the socket singleton, so a
-                        // single activation after login survives reconnects.
-                        //
-                        // `onReadingModePreferenceChanged` — G-124, volet
-                        // « préférence serveur » de P7. Le SDK relaie la
-                        // valeur BRUTE reçue sur `user:preferences-updated`
-                        // (scope conversation) ; ici, et ici seulement, elle
-                        // devient un `ReadingModePreference` typé et atterrit
-                        // dans le MÊME magasin scopé que les trois autres
-                        // points d'entrée (encoche liste, sous-menu, fil
-                        // ouvert — `LentilleReadingModePreferenceCenter`,
-                        // `Lentille/Mode/LentilleReadingModeContext.swift`) :
-                        // ce n'est PAS un second canal, c'est une quatrième
-                        // écriture dans le magasin optimiste existant, qui
-                        // devient cache devant ce canal serveur (contrat
-                        // LWS-2bis, en-tête de `ReadingModePreferenceStoring`).
-                        // Gate sur le MÊME drapeau que ces trois surfaces —
-                        // écrire sous drapeau OFF n'aurait aucun lecteur, mais
-                        // couper la garde ferait dépendre R19 d'une future
-                        // purge plutôt que d'un simple gate au point d'écriture.
-                        // Une valeur brute hors des 5 cas gelés (`rawValue:`
-                        // échoue) est ignorée — jamais une préférence
-                        // fabriquée depuis une chaîne inconnue.
-                        ConversationStoreSocketBridge.shared.activate(
-                            onReadingModePreferenceChanged: { conversationId, rawReadingMode in
-                                guard LentilleFeatureFlag.isReadingModesEnabled,
-                                      let value = ReadingModePreference(rawValue: rawReadingMode)
-                                else { return }
-                                Task {
-                                    await LentilleReadingModePreferenceCenter.shared.set(
-                                        conversationId: conversationId, value: value, optimistic: false
-                                    )
-                                }
-                            }
-                        )
-                        Task { await requestPushPermissionIfNeeded() }
-                        Task { await NotificationToastManager.shared.refreshUnreadCount() }
-                        pushManager.reRegisterTokenIfNeeded()
-                        // Force a PushKit re-registration on every login so the
-                        // gateway UPSERT-by-(userId,token,type) flips back to
-                        // isActive=true any device row deactivated during a
-                        // previous BadDeviceToken burst. register() alone is a
-                        // no-op when voipRegistry is already set.
-                        VoIPPushManager.shared.forceReregister()
-                        Task {
-                            do {
-                                let bundle = try E2EEService.shared.generatePublicBundle()
-                                try await E2EAPI.shared.uploadBundle(bundle: bundle)
-                            } catch {
-                                Logger.e2ee.error("E2EE bundle upload failed: \(error)")
-                            }
-                        }
-                        Task { await SessionManager.shared.migrateKeychainIfNeeded() }
-                        // A push tapped from the login screen leaves a pending
-                        // payload on `PushNotificationManager`; the root view
-                        // mounted by this login transition consumes it directly
-                        // via its `$pendingNotificationPayload` subscription
-                        // (the published value is replayed to that late
-                        // subscriber), so no manual hop is needed here.
-                    } else {
-                        NotificationToastManager.shared.reset()
-                        NotificationCoordinator.shared.reset()
-                        // Clear the in-memory friendship graph BEFORE the
-                        // cache purge so any view that re-renders during the
-                        // transition can't read user A's friend list.
-                        FriendshipCache.shared.clear()
-                        // Wipe the Signal/E2EE material — IdentityKey,
-                        // SignedPreKey, per-peer SymmetricKeys, peer list.
-                        // Without this, user B logging in next would
-                        // generate a public bundle from user A's leftover
-                        // IdentityKey and upload it under their own
-                        // account — a hard cross-account identity leak.
-                        Task { await SessionManager.shared.clearSessions() }
-                        // `reset()` purges every disk-backed store (GRDB +
-                        // media) — required because the stores are not
-                        // namespaced by userId and would otherwise expose
-                        // user A's data to user B on the next login.
-                        Task { await CacheCoordinator.shared.reset() }
-                        // Purge the device's VoIP registration (PushKit +
-                        // keychain-backed token record) — without this, a
-                        // different user logging in on this device inherits
-                        // user A's VoIP push registration until the
-                        // registration cooldown naturally expires.
-                        Task { await VoIPPushManager.shared.unregisterAndClearToken() }
-                        // End any active call before the sockets go down —
-                        // otherwise the call is orphaned locally: the peer
-                        // keeps ringing/connecting to a device that vanished
-                        // without sending a hangup signal.
-                        if CallManager.shared.callState.isActive {
-                            CallManager.shared.endCall()
-                        }
-                        MessageSocketManager.shared.disconnect()
-                        SocialSocketManager.shared.disconnect()
-                        // Drop the store subscriptions so an event from user A
-                        // can't mutate the store after logout.
-                        ConversationStoreSocketBridge.shared.deactivate()
-                        // startup-08 — une BGTask soumise avant le logout ne
-                        // doit pas survivre pour réveiller un appareil
-                        // déconnecté (delta sync 401 en boucle, prefetch sur
-                        // cache vidé).
-                        BackgroundTaskManager.shared.cancelAllScheduled()
-                    }
+                .meeshyThemeRoot(theme)
+                .modifier(ExternalEntryHandlers(dispatcher: LiveExternalEntryDispatcher(router: deepLinkRouter)))
+                .task { await runLaunchSequence() }
+                .adaptiveOnChange(of: session.isAuthenticated) { _, isAuth in
+                    if isAuth { activeGuestSession = nil }
                 }
                 .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink) { _, link in
                     handleGuestDeepLink(link)
                 }
-                // Entrée SANS COMPTE choisie depuis un appareil qui en a un.
-                // `RootView` a posé la question et reçu la réponse ; la session
-                // invitée, elle, vit ici. Le canal est distinct de
-                // `pendingDeepLink` parce qu'il ne porte pas une destination à
-                // résoudre mais une identité déjà choisie — le confondre
-                // reposerait la question.
                 .adaptiveOnChange(of: deepLinkRouter.requestedGuestJoin) { _, identifier in
-                    guard let identifier else { return }
-                    deepLinkRouter.requestedGuestJoin = nil
-                    activeGuestSession = GuestSession(
-                        identifier: identifier,
-                        context: AnonymousSessionStore.load(linkId: identifier),
-                        isDeliberate: true
-                    )
+                    openRequestedGuestJoin(identifier)
                 }
-                // Prisme Linguistique — dès que la langue principale de
-                // l'utilisateur change (login, changement de préférence), on la
-                // met en cache pour l'override de langue UI appliqué au prochain
-                // lancement (cf. `UILanguageOverride`).
-                .adaptiveOnChange(of: authManager.currentUser?.systemLanguage) { _, newLanguage in
+                .adaptiveOnChange(of: deepLinkRouter.requestedWorldEntry) { _, entry in
+                    openRequestedWorldEntry(entry)
+                }
+                .adaptiveOnChange(of: session.systemLanguage) { _, newLanguage in
                     UILanguageOverride.cache(from: newLanguage)
+                    UILanguageOverride.refreshNotificationLanguage()
                 }
             }
         }
+        }
+        .publishingSceneWindowSize()
+    }
+
+    @SceneBuilder
+    private var detachedWindows: some Scene {
+        // Les fenêtres DÉTACHÉES (iPad) : une conversation, ou le fil de réels, à côté de la fenêtre principale.
+        WindowGroup(
+            id: DetachedWindowOpener.sceneId,
+            for: DetachedWindowContent.self,
+            content: DetachedWindowScene(decoration: DetachedWindowDecoration(
+                reduceMotion: a11yPrefs.reduceMotion,
+                deepLinkRouter: deepLinkRouter,
+                theme: theme
+            )).make
+        )
+        .handlesExternalEvents(matching: [DetachedWindowOpener.activityIdentifier])
+    }
+
+    private var rootInputs: RootInputs {
+        RootInputs(
+            hasCheckedSession: hasCheckedSession,
+            activeGuestSession: activeGuestSession,
+            splashPhase: launchSplash.phase,
+            isCelebrating: arrivalCelebration.isShowing,
+            pendingDeepLink: deepLinkRouter.pendingDeepLink,
+            hasCompletedOnboarding: hasCompletedOnboarding,
+            hasVisitorRequest: visitorPresenter.request != nil,
+            crashReports: crashReportsToShow,
+            previewReplacesLogin: Self.debugPreviewReplacesLogin
+        )
+    }
+
+    private var guestSessionCoverActions: GuestSessionCoverActions {
+        GuestSessionCoverActions(
+            dismiss: { dismissGuestSession() },
+            sessionCreated: { guest, context in
+                if !AnonymousSessionStore.save(context) {
+                    toastManager.showError(String(localized: "guest.session.save.error", defaultValue: "Impossible d'enregistrer la session", bundle: .main))
+                }
+                activeGuestSession = GuestSession(
+                    identifier: guest.identifier,
+                    context: context,
+                    isDeliberate: guest.isDeliberate,
+                    origin: guest.origin
+                )
+            },
+            accountRequested: { guest, entry in
+                deepLinkRouter.requestAccount(entry, forShareLink: guest.identifier)
+                dismissGuestSession()
+            },
+            newLink: { guest, identifier in
+                activeGuestSession = GuestSession(
+                    identifier: identifier,
+                    context: AnonymousSessionStore.load(linkId: identifier),
+                    isDeliberate: guest.isDeliberate
+                )
+            }
+        )
+    }
+
+    private func openRequestedGuestJoin(_ identifier: String?) {
+        guard let identifier else { return }
+        deepLinkRouter.requestedGuestJoin = nil
+        activeGuestSession = GuestSession(
+            identifier: identifier,
+            context: AnonymousSessionStore.load(linkId: identifier),
+            isDeliberate: true
+        )
+    }
+
+    private func openRequestedWorldEntry(_ entry: WorldEntry?) {
+        guard let entry else { return }
+        deepLinkRouter.requestedWorldEntry = nil
+        activeGuestSession = GuestSession(
+            identifier: entry.shareLinkIdentifier,
+            context: AnonymousSessionStore.load(linkId: entry.shareLinkIdentifier),
+            origin: .world(entry)
+        )
     }
 
     // MARK: - Test seam (DEBUG)
@@ -814,34 +304,6 @@ struct MeeshyApp: App {
     /// when the conversation audio coordinator is actively playing we do NOT
     /// tear down the shared `AVAudioSession`, so iOS keeps streaming the
     /// engine in background under the `UIBackgroundModes: audio` declaration.
-    // MARK: - Splash gating
-
-    /// Bloque jusqu'à ce que `MessageSocketManager.isConnected` ET
-    /// `SocialSocketManager.isConnected` soient simultanément `true`, ou
-    /// jusqu'à expiration de `timeout` — celui des deux qui arrive en
-    /// premier. Aucune erreur ni Throwable : en cas de timeout réseau, on
-    /// retourne silencieusement pour laisser le splash dismiss.
-    ///
-    /// Polling 100ms : empreinte mémoire négligeable, < 50 cycles sur le
-    /// timeout 3-5s typique, et évite la complexité d'un `withCheckedContinuation`
-    /// qui leak si annulé pendant l'attente Combine.
-    @MainActor
-    fileprivate static func awaitBothSocketsConnected(timeout: Duration) async {
-        // Already connected: pas d'attente nécessaire
-        if MessageSocketManager.shared.isConnected && SocialSocketManager.shared.isConnected {
-            return
-        }
-        let pollInterval: Duration = .milliseconds(100)
-        let deadline = ContinuousClock.now.advanced(by: timeout)
-        while ContinuousClock.now < deadline {
-            if MessageSocketManager.shared.isConnected && SocialSocketManager.shared.isConnected {
-                return
-            }
-            try? await Task.sleep(for: pollInterval)
-            if Task.isCancelled { return }
-        }
-    }
-
     static func handleScenePhaseForTesting(_ newPhase: ScenePhase) async {
         switch newPhase {
         case .background:
@@ -858,13 +320,12 @@ struct MeeshyApp: App {
 
     // MARK: - Push Notifications
 
-    private func requestPushPermissionIfNeeded() async {
-        await pushManager.checkAuthorizationStatus()
-        if !pushManager.isAuthorized {
-            _ = await pushManager.requestPermission()
-        } else {
-            UIApplication.shared.registerForRemoteNotifications()
-        }
+    /// Un RELAIS vers le site unique (`PushPermissionPrompt`), jamais une
+    /// seconde copie : le fil d'envoi la déclenche aussi. Au démarrage
+    /// à froid, le report de l'inscription et la carte 5 de l'onboarding
+    /// passent d'abord.
+    func requestPushPermissionIfNeeded() async {
+        await PushPermissionPrompt.onColdStart(request: { await PushPermissionPrompt.requestIfNeeded(using: pushManager) })
     }
 
     /// VoIP registration must run unconditionally, before the notification-
@@ -890,7 +351,7 @@ struct MeeshyApp: App {
     /// Each report is also logged via `Logger.crash` so the full call stack
     /// is grep-able in Console.app under subsystem `me.meeshy.app` /
     /// category `crash`.
-    private func surfacePendingCrashReports() {
+    func surfacePendingCrashReports() {
         guard !hasSurfacedCrashReports else { return }
         hasSurfacedCrashReports = true
 
@@ -898,7 +359,7 @@ struct MeeshyApp: App {
         guard let mostRecent = reports.first else { return }
 
         for report in reports {
-            let when = report.timestamp.formatted(.iso8601)
+            let when = WireDate.string(from: report.timestamp)
             Logger.crash.error("""
                 [\(report.kind.rawValue, privacy: .public)] \
                 \(when, privacy: .public) — \
@@ -926,19 +387,6 @@ struct MeeshyApp: App {
         }
     }
 
-    // MARK: - App Lifecycle Transitions
-
-    private func handleForegroundTransition() async {
-        guard authManager.isAuthenticated else { return }
-        // Coordinator rearms the sockets (force reconnect), flushes pending
-        // delivery receipts and drives the conversation sync. We do NOT
-        // check `isConnected` here — that flag is unreliable after iOS
-        // suspension because the Socket.IO `disconnect` callback may not
-        // fire when the OS kills the WebSocket. The coordinator forces a
-        // fresh disconnect + connect cycle regardless of the flag state.
-        await BackgroundTransitionCoordinator.shared.resumeFromBackground()
-    }
-
     // MARK: - Guest Session Lifecycle
 
     private func dismissGuestSession() {
@@ -951,9 +399,21 @@ struct MeeshyApp: App {
         activeGuestSession = nil
     }
 
+    /// La passerelle a terminé la session (lien échu, accès retiré) :
+    /// l'appareil l'oublie (trousseau, jeton, socket et ses reconnexions) et
+    /// le fil laisse place à l'écran qui le dit.
+    private func endGuestSession(_ notification: Notification) {
+        guard let session = activeGuestSession, let end = GuestSessionEnd(notification: notification),
+              session.isEnded(byRefusedToken: GuestSessionEnd.refusedSessionToken(in: notification)) else { return }
+        session.storedSessionKeys.forEach { AnonymousSessionStore.delete(linkId: $0) }
+        APIClient.shared.anonymousSessionToken = nil
+        MessageSocketManager.shared.disconnect()
+        activeGuestSession = session.ended(by: end)
+    }
+
     // MARK: - Guest Deep Link (handles join/chat links when not authenticated)
 
-    private func handleGuestDeepLink(_ link: DeepLink?) {
+    func handleGuestDeepLink(_ link: DeepLink?) {
         guard let link else { return }
         // Hold the link until the session check finishes. Otherwise an
         // incoming join/chat link would activate a guest session BEFORE
@@ -963,20 +423,22 @@ struct MeeshyApp: App {
         // after `hasCheckedSession = true`, so the link survives in
         // `deepLinkRouter.pendingDeepLink` and is processed then.
         guard hasCheckedSession else { return }
-        guard !authManager.isAuthenticated else { return }
+        guard !AuthManager.shared.isAuthenticated else { return }
         switch link {
         case .joinLink(let id), .chatLink(let id):
             activeGuestSession = GuestSession(identifier: id, context: AnonymousSessionStore.load(linkId: id))
             deepLinkRouter.consumePendingDeepLink()
-        case .magicLink(let token):
-            // Cold-launch Universal Link magic link. `AppDelegate
+        case .magicLink, .emailVerificationLink:
+            // Cold-launch Universal Link sign-in link. `AppDelegate
             // .application(_:continue:)` set `pendingDeepLink = .magicLink`
             // before any view mounted, and `RootView` (the warm consumer)
             // never mounts while unauthenticated — so this is the ONLY place
             // a cold-launch magic link gets validated. Consume first so the
             // `.task` + `.onChange` callers don't double-fire the request.
             deepLinkRouter.consumePendingDeepLink()
-            validateMagicLinkToken(token)
+            if let signIn = SignInLink(link) {
+                Task { await SignInLinkOpener.open(signIn) }
+            }
         case .externalLink(let url):
             // `/l/<token>` de cible EXTERNAL reçu SANS compte : `RootView` n'est
             // pas monté, donc personne d'autre ne l'ouvrirait. Le lien vise le
@@ -984,153 +446,50 @@ struct MeeshyApp: App {
             deepLinkRouter.consumePendingDeepLink()
             UIApplication.shared.open(url)
         default:
-            break
-        }
-    }
-
-    // MARK: - App-Level Deep Link (handles magic link when not authenticated)
-
-    private func handleAppLevelDeepLink(_ url: URL) {
-        let destination = DeepLinkParser.parse(url)
-        guard case .magicLink(let token) = destination else { return }
-        validateMagicLinkToken(token)
-    }
-
-    /// Validate a passwordless magic-link token and surface the outcome.
-    /// Shared by the warm path (`.onOpenURL` / `.onContinueUserActivity` via
-    /// `handleAppLevelDeepLink`) and the cold-launch path
-    /// (`handleGuestDeepLink`) so both report success/failure identically.
-    private func validateMagicLinkToken(_ token: String) {
-        Task {
-            // P0 — a magic link tapped while ALREADY authenticated (possibly
-            // as a DIFFERENT account) must never `applySession(B)` on top of
-            // account A without a full teardown first: A's caches, sockets
-            // (still carrying A's JWT), and E2EE session keys would all leak
-            // into B's session. `applySession`'s `isTokenRotation` only
-            // special-cases the SAME user re-authenticating — a magic link
-            // for a different account is a genuine account switch, so we log
-            // out completely before validating. The cold-launch path
-            // (`handleGuestDeepLink`) already only reaches here while
-            // unauthenticated, so this is a no-op there.
-            if authManager.isAuthenticated {
-                await authManager.logout()
-            }
-            await authManager.validateMagicLink(token: token)
-
-            if authManager.isAuthenticated {
-                toastManager.showSuccess(String(localized: "magicLink.success", defaultValue: "Login successful!", bundle: .main))
-            } else {
-                toastManager.showError(authManager.errorMessage ?? String(localized: "magicLink.error.invalidLink", defaultValue: "Invalid or expired link", bundle: .main))
-            }
+            // Une publication ou un réel s'affiche au visiteur, SANS
+            // consommer le lien : il s'ouvrira encore après la connexion.
+            visitorPresenter.present(link)
         }
     }
 }
 
-// MARK: - UI Language Override (Prisme Linguistique)
+// MARK: - Detached window scene (#11167)
 
-/// Force le chrome de l'app (menus, boutons, libellés système) dans la langue
-/// principale configurée de l'utilisateur (`MeeshyUser.systemLanguage`) plutôt
-/// que la locale de l'appareil — le Prisme Linguistique appliqué au chrome :
-/// l'utilisateur consomme TOUT dans sa langue préférée.
-///
-/// Mécanisme : on écrit `AppleLanguages` dans `UserDefaults`. iOS lit cette clé
-/// UNE seule fois au démarrage du process → l'override prend effet au prochain
-/// (re)lancement (acceptable : l'app est relancée aux tests).
-///
-/// Garde-fous : on ne force JAMAIS une langue absente du catalogue traduit —
-/// sinon `String(localized:)` afficherait la source française à côté de
-/// libellés traduits, et l'écran deviendrait un panachage de deux langues.
-/// Un cache nil/vide/non-supporté ⇒ no-op total (iOS garde la locale appareil).
-/// Aucune de ces opérations ne peut crasher.
-enum UILanguageOverride {
-    /// Langues réellement traduites dans les catalogues. Toute langue hors de
-    /// cet ensemble est refusée.
-    ///
-    /// La liste est explicite plutôt que dérivée de `Bundle.main.localizations` :
-    /// une langue peut être déclarée dans le bundle bien avant d'être traduite,
-    /// et c'est la traduction — pas la déclaration — qui décide si l'affichage
-    /// tient debout. `LocalizationCatalogGuardTests` vérifie que les deux
-    /// restent d'accord, pour que cette liste ne puisse pas se périmer en
-    /// silence comme elle l'a fait pour l'allemand et le portugais.
-    ///
-    /// `it` et `ar` rejoignent la liste le 2026-07-25 : les deux catalogues
-    /// (app + SDK), l'extension de notification et les descriptions
-    /// d'autorisation y sont complets à 100 %.
-    /// `nonisolated` : une simple liste de codes, lue aussi bien depuis
-    /// `MeeshyApp.init()` que depuis les tests, hors du main actor.
-    nonisolated static let supportedUICodes: [String] = ["fr", "en", "es", "de", "pt-BR", "it", "ar"]
+/// Le contenu d'une fenêtre détachée, sans fermeture isolée : la scène appelle `make` (non isolée) avec la
+/// liaison de la fenêtre ; la décoration a été construite par le `body` de l'`App`, sur le fil principal.
+nonisolated struct DetachedWindowScene {
+    let decoration: DetachedWindowDecoration
 
-    private static let cacheKey = "meeshy.ui.language"
-    private static let appleLanguagesKey = "AppleLanguages"
-    private static let explicitKey = "meeshy.ui.language.explicit"
-
-    /// Sentinelle « suivre la langue principale » — un choix, pas une langue.
-    nonisolated static let automaticCode = "auto"
-
-    /// Langues proposées dans les Réglages, hors sentinelle. Dérivée de ce que
-    /// l'app sait réellement afficher : la liste des choix ne peut pas
-    /// s'écarter des catalogues.
-    nonisolated static var selectableCodes: [String] { supportedUICodes }
-
-    /// Langue d'affichage retenue : le choix explicite de l'auteur s'il est
-    /// posé ET livré, sinon la langue principale du compte.
-    ///
-    /// Le repli n'est pas un détail. `AppearancePreferences.interfaceLanguage`
-    /// vaut « en » par défaut pour tout le monde : faire primer cette
-    /// préférence telle quelle aurait basculé en anglais l'interface de chaque
-    /// utilisateur qui n'y a jamais touché. Le choix explicite vit donc à part,
-    /// et son absence rend la main à la langue principale.
-    nonisolated static func resolvedCode(explicit: String?, fallback: String?) -> String? {
-        if let explicit, explicit != automaticCode, let code = normalized(explicit) {
-            return code
-        }
-        return normalized(fallback)
+    func make(_ content: Binding<DetachedWindowContent?>) -> ModifiedContent<DetachedWindowSlot, DetachedWindowDecoration> {
+        DetachedWindowSlot(content: content.wrappedValue).modifier(decoration)
     }
+}
 
-    /// Choix explicite de langue d'interface. `nil` = automatique.
-    static var explicitChoice: String? {
-        get { UserDefaults.standard.string(forKey: explicitKey) }
-        set {
-            if let newValue, newValue != automaticCode, normalized(newValue) != nil {
-                UserDefaults.standard.set(newValue, forKey: explicitKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: explicitKey)
-            }
-        }
+nonisolated struct DetachedWindowSlot: View {
+    let content: DetachedWindowContent?
+
+    @MainActor var body: some View {
+        DetachedWindowView(content: content)
     }
+}
 
-    /// Normalise un code de langue vers un code UI supporté, ou `nil`.
-    /// - Comparaison insensible à la casse contre `supportedUICodes`.
-    /// - `pt` (ou `pt_PT`, `pt-BR`…) → `pt-BR` (seule variante portugaise traduite).
-    /// - Sinon réduit à la base 2-lettres lowercase et re-teste l'appartenance.
-    nonisolated static func normalized(_ raw: String?) -> String? {
-        guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !trimmed.isEmpty else { return nil }
-        let lower = trimmed.lowercased()
-        if let exact = supportedUICodes.first(where: { $0.lowercased() == lower }) {
-            return exact
-        }
-        let base = lower.split(whereSeparator: { $0 == "-" || $0 == "_" })
-            .first.map(String.init) ?? lower
-        if base == "pt" { return "pt-BR" }
-        return supportedUICodes.first(where: { $0.lowercased() == base })
-    }
+/// Mêmes barrière d'âge, préférence d'animation, routeur et thème que la fenêtre principale.
+struct DetachedWindowDecoration: ViewModifier {
+    let reduceMotion: Bool
+    let deepLinkRouter: DeepLinkRouter
+    let theme: ThemeManager
 
-    /// Mémorise la langue UI depuis la préférence utilisateur. No-op si la
-    /// langue n'est pas supportée (la valeur précédente / la locale appareil
-    /// reste en place).
-    static func cache(from systemLanguage: String?) {
-        guard let code = normalized(systemLanguage) else { return }
-        UserDefaults.standard.set(code, forKey: cacheKey)
-    }
-
-    /// Applique l'override au tout début du lancement (à appeler depuis
-    /// `MeeshyApp.init()`). No-op si rien n'est choisi ni mis en cache.
-    static func applyIfNeeded() {
-        guard let code = resolvedCode(explicit: explicitChoice,
-                                      fallback: UserDefaults.standard.string(forKey: cacheKey))
-        else { return }
-        UserDefaults.standard.set([code], forKey: appleLanguagesKey)
+    func body(content: Content) -> some View {
+        content
+            .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
+            .feedbackToastOverlay()
+            .ageGateOverlay()
+            .meeshyMotionRoot()
+            .environment(\.meeshyForceReduceMotion, reduceMotion)
+            .environmentObject(AuthManager.shared)
+            .environmentObject(deepLinkRouter)
+            .meeshyThemeRoot(theme)
+            .publishingSceneWindowSize()
     }
 }
 
@@ -1155,138 +514,49 @@ struct SystemThemeDetector<Content: View>: View {
     }
 }
 
-// MARK: - Splash Screen
-struct SplashScreen: View {
-    let onFinish: () -> Void
+// MARK: - Profile sheet environment
 
-    @State private var showLogo = false
-    @State private var showTitle = false
-    @State private var showSubtitle = false
-    @State private var glowPulse = false
-    @State private var backgroundScale: CGFloat = 1.2
-    @ObservedObject private var theme = ThemeManager.shared
+struct ProfileSheetEnvironment: ViewModifier {
+    /// Le niveau et le rang d'un membre, sur la BANNIÈRE de sa fiche : ce que SA visibilité autorise,
+    /// rien sinon. Le chargeur de profil (cache, conversations partagées) est posé au même endroit : une seule
+    /// injection, toutes les feuilles de profil la reçoivent.
+    func body(content: Content) -> some View {
+        content
+            .environment(\.profileGameSection, ProfileGameSection { userId, displayName in
+                ProfileSlot.view(.banner, userId: userId, displayName: displayName)
+            })
+            .environment(\.profileRelationSection, ProfileRelationSection { userId, displayName, linked in
+                ProfileSlot.view(.relation, userId: userId, displayName: displayName, linked: linked)
+            })
+            .environment(\.profileLoading, LiveProfileLoading())
+            .environment(\.avatarListeningSource, ListeningCenter.shared.source)
+    }
+}
 
-    private var isDark: Bool { theme.mode.isDark }
+/// Les emplacements opaques de la fiche de profil, effacés en UN seul point : le jeu sur la bannière et le cercle à la
+/// place de « Connectés » (#13940). Le cercle se reconstruit à chaque membre (`.id`) : la fiche garde ses vues d'un
+/// membre à l'autre, et le niveau du précédent ne doit jamais se peindre sous le nom du suivant.
+enum ProfileSlot {
+    case banner, relation
+
+    static func view(_ slot: ProfileSlot, userId: String, displayName: String, linked: Binding<Bool> = .constant(false)) -> AnyView {
+        AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName, linked: linked))
+    }
+}
+
+private struct ProfileSlotContent: View {
+    let slot: ProfileSlot
+    let userId: String
+    let displayName: String
+    @Binding var linked: Bool
 
     var body: some View {
-        ZStack {
-            // Animated gradient background
-            LinearGradient(
-                colors: isDark ? [
-                    Color(hex: "09090B"),
-                    Color(hex: "13111C"),
-                    MeeshyColors.indigo950
-                ] : [
-                    Color(hex: "FFFFFF"),
-                    Color(hex: "F8F7FF"),
-                    MeeshyColors.indigo50
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .scaleEffect(backgroundScale)
-            .ignoresSafeArea()
-
-            // Ambient orbs
-            Circle()
-                .fill(MeeshyColors.indigo600.opacity(isDark ? 0.15 : 0.10))
-                .frame(width: 200, height: 200)
-                .blur(radius: 60)
-                .offset(x: -80, y: -200)
-                .scaleEffect(glowPulse ? 1.3 : 0.8)
-
-            Circle()
-                .fill(MeeshyColors.indigo400.opacity(isDark ? 0.12 : 0.08))
-                .frame(width: 160, height: 160)
-                .blur(radius: 50)
-                .offset(x: 90, y: 180)
-                .scaleEffect(glowPulse ? 1.2 : 0.9)
-
-            Circle()
-                .fill(MeeshyColors.indigo800.opacity(isDark ? 0.10 : 0.06))
-                .frame(width: 120, height: 120)
-                .blur(radius: 40)
-                .offset(x: 60, y: -80)
-                .scaleEffect(glowPulse ? 1.1 : 1.0)
-
-            VStack(spacing: 0) {
-                Spacer()
-
-                // Animated Logo
-                AnimatedLogoView(color: isDark ? .white : MeeshyColors.indigo950, lineWidth: 10, continuous: false)
-                    .frame(width: 120, height: 120)
-                    .opacity(showLogo ? 1 : 0)
-                    .scaleEffect(showLogo ? 1 : 0.5)
-                    .padding(.bottom, 32)
-
-                // App Name
-                Text("Meeshy")
-                    .font(MeeshyFont.relative(46, weight: .bold, design: .rounded))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .shadow(color: MeeshyColors.indigo500.opacity(isDark ? 0.5 : 0.25), radius: 12, x: 0, y: 4)
-                    .fixedSize()
-                    .frame(height: 80)
-                    .opacity(showTitle ? 1 : 0)
-                    .offset(y: showTitle ? 0 : -40)
-                    .padding(.bottom, 8)
-
-                // Tagline
-                Text(String(localized: "splash.tagline", bundle: .main))
-                    .font(MeeshyFont.relative(16, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-                    .frame(height: 40)
-                    .opacity(showSubtitle ? 1 : 0)
-                    .offset(y: showSubtitle ? 0 : -20)
-
-                Spacer()
-
-                // Footer : version + signature + brand logo (shared — see BrandSignature)
-                BrandSignature()
-                    .opacity(showSubtitle ? 1 : 0)
-                    .padding(.bottom, 24)
-            }
-        }
-        .onAppear {
-            // Staggered entrance — fast and punchy
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-                showLogo = true
-            }
-
-            // Title: fade in + descend with bounce overshoot
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.6).delay(0.2)) {
-                showTitle = true
-            }
-
-            // Subtitle: same bounce, slightly later
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.6).delay(0.35)) {
-                showSubtitle = true
-            }
-
-            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                glowPulse = true
-            }
-
-            withAnimation(.easeInOut(duration: 1.0)) {
-                backgroundScale = 1.0
-            }
-
-            // Dismissal is driven by MeeshyApp.task once boot data is ready.
-            // The `onFinish` callback is kept in the signature for backwards
-            // compatibility (callers may still wire it) but is no longer
-            // invoked automatically here — the previous 1.2s timer caused
-            // the splash to vanish before the conversations cache was
-            // hydrated, which defeated its purpose.
-        }
-        .onDisappear {
-            withTransaction(Transaction(animation: nil)) {
-                glowPulse = false
-            }
+        switch slot {
+        case .banner:
+            GameBannerBadge(userId: userId)
+        case .relation:
+            ProfileCircleSection(userId: userId, displayName: displayName, linked: $linked)
+                .id(userId)
         }
     }
 }

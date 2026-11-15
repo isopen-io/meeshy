@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_decline_end_to_end_refused">Nachricht nicht gesendet: Diese Unterhaltung ist Ende-zu-Ende-verschlüsselt. Antworte in der Meeshy-App auf dem iPhone.</string>
+</resources>

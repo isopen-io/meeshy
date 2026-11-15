@@ -44,9 +44,11 @@ describe('Phase 1 - Corrections Critiques Schémas', () => {
       expect(messageSchema.properties).toHaveProperty('maxViewOnceCount');
       expect(messageSchema.properties.maxViewOnceCount).toMatchObject({
         type: 'number',
-        nullable: true,
-        description: 'Maximum unique viewers allowed for view-once messages'
+        nullable: true
       });
+      // #7578 — ce n'est plus un budget global de spectateurs : c'est le
+      // dénominateur PAR LECTEUR (destinataires actifs, auteur exclu).
+      expect(messageSchema.properties.maxViewOnceCount.description).toContain('destinataires ACTIFS');
     });
 
     it('devrait avoir maxViewOnceCount correctement typé', () => {
@@ -169,7 +171,7 @@ describe('Phase 1 - Corrections Critiques Schémas', () => {
     it('les descriptions doivent être claires et complètes', () => {
       expect(messageSchema.properties.encryptedContent.description).toContain('E2EE');
       expect(messageSchema.properties.encryptionMetadata.description).toContain('IV');
-      expect(messageSchema.properties.maxViewOnceCount.description).toContain('view-once');
+      expect(messageSchema.properties.maxViewOnceCount.description).toContain('Vue unique');
       expect(conversationSchema.properties.serverEncryptionKeyId.description).toContain('key rotation');
       expect(conversationSchema.properties.isAnnouncementChannel.description).toContain('Announcement');
     });

@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 // MARK: - Button Position (stored as normalized 0-1 values)
 public struct ButtonPosition: Equatable, Sendable {
@@ -18,45 +19,34 @@ public struct ButtonPosition: Equatable, Sendable {
     public var isTop: Bool { y < 0.5 }
 }
 
-// MARK: - Zone sûre du haut, pour les boutons flottants
+// MARK: - Bandes réservées d'avant #9679
 
-/// Hauteur que les boutons flottants ne doivent JAMAIS mordre, en haut.
+/// Les bandes que les boutons flottants ne pouvaient pas mordre avant #9679 :
+/// 246 pt en haut (encoche majorée + en-tête étendu + bande de stories, la zone
+/// sûre lue étant NULLE sous `.ignoresSafeArea()`) et 110 pt en bas.
 ///
-/// **Pourquoi elle ne vaut pas simplement la marge sous l'encoche.**
-/// `FreeFloatingButtonsContainer` calcule ses bornes avec
-/// `minY = safeArea.top + topSafeZone + halfButton`, où `safeArea` vient du
-/// `GeometryReader` de son `body`. Mais ce `GeometryReader` porte un
-/// `.ignoresSafeArea()` : il s'étend alors à l'écran ENTIER et ses
-/// `safeAreaInsets` retombent à ZÉRO. La formule est juste ; son entrée est
-/// nulle en production. `topSafeZone` doit donc dégager l'en-tête ENTIER
-/// mesuré depuis le bord PHYSIQUE de l'écran — encoche comprise — et non la
-/// seule hauteur de barre.
-///
-/// **Le défaut qu'elle corrige** (mesuré à `idb ui describe-all`, iPhone 16 Pro
-/// 402x874 pt, position par défaut `"0.0,0.0"`, AUCUNE position persistée donc
-/// bien la valeur du code) : à 50 pt, le centre tombait à `y = 76`, le disque
-/// commençait à `y = 50` — dans la Dynamic Island — et recouvrait « Créer une
-/// story » sur 40.8 x 28.7 pt, soit 60 % de sa surface. À droite, le bouton
-/// Menu recouvrait « Nouvelle conversation » sur 40.0 x 22.7 pt. Deux cibles
-/// tactiles superposées, livrées par défaut à tout nouvel utilisateur.
-///
-/// Elle vit ICI, en une seule copie, parce que le `50` qu'elle remplace était
-/// écrit à TROIS endroits (`FloatingButtons`, `RootView.menuLadder`,
-/// `RootView.FeedButtonAnchor`) qui doivent rester d'accord au point près :
-/// `FeedButtonAnchor` se documente lui-même comme miroir EXACT du calcul du
-/// conteneur, et l'échelle de menu se positionne relativement au bouton.
+/// Elles ne bornent plus rien : la plage est désormais la zone sûre réelle
+/// (`FloatingButtonGeometry`). Elles servent à RELIRE une position persistée
+/// sous l'ancienne forme `x,y` — dont les positions par défaut — à l'endroit
+/// exact où l'ancienne géométrie la posait : le Flux et le Menu par défaut
+/// restent sous la bande de stories (#9363), et une position choisie avant la
+/// mise à jour ne saute pas ailleurs.
 public enum FloatingButtonSafeZone {
-    /// La plus haute encoche du parc pris en charge (Dynamic Island). Le
-    /// conteneur ne peut pas la lire — voir ci-dessus — donc on la majore :
-    /// sur un appareil à encoche plus courte le disque descend de quelques
-    /// points de plus, ce qui ne gêne rien et reste déplaçable au doigt.
+    /// La plus haute encoche du parc pris en charge (Dynamic Island).
     nonisolated public static var maxTopInset: CGFloat { 62 }
 
-    /// Encoche + barre de titre étendue. La trail de stories vit dans cette
-    /// hauteur : la dégager dégage aussi ses boutons.
+    /// La bande de stories posée SOUS l'en-tête étendu, au repos (#9363) —
+    /// la plus haute des bandes de l'app (le tray du flux, 120 pt) ; l'app
+    /// vérifie qu'aucune ne la dépasse (`FeedButtonAnchorTests`).
+    nonisolated public static var storyBand: CGFloat { 120 }
+
+    /// Encoche + barre de titre étendue + bande de stories.
     nonisolated public static var top: CGFloat {
-        maxTopInset + CollapsibleHeaderMetrics.expandedHeight
+        maxTopInset + CollapsibleHeaderMetrics.expandedHeight + storyBand
     }
+
+    /// La bande du bas, barre de recherche visible (l'état au repos).
+    nonisolated public static var legacyBottom: CGFloat { 110 }
 }
 
 // MARK: - Legacy ButtonCorner (for compatibility)
@@ -85,6 +75,11 @@ public enum ButtonCorner: String, CaseIterable {
 }
 
 // MARK: - Free Position Floating Buttons Container
+
+/// Les deux boutons flottants, posables à n'importe quelle hauteur, contre le
+/// bord gauche ou droit (#9679). Toute la géométrie vient de
+/// `FloatingButtonGeometry` ; le conteneur la remonte par
+/// `FloatingButtonGeometryKey` pour l'échelle du menu et l'ancre des réels.
 public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View>: View {
     @Binding public var leftPositionRaw: String
     @Binding public var rightPositionRaw: String
@@ -95,7 +90,11 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
     public let onRightTap: () -> Void
     public var onLeftLongPress: (() -> Void)? = nil
     public var onRightLongPress: (() -> Void)? = nil
-    public var isSearchBarVisible: Bool = true
+    /// La course VIVE du bouton de gauche / de droite, à chaque image du glisser
+    /// (`nil` à la levée). C'est ce que l'échelle du menu suit (#18201) ; rien
+    /// n'en est persisté — `onDragEnded` reste le seul producteur d'une position.
+    public var onLeftDragChanged: ((CGSize?) -> Void)? = nil
+    public var onRightDragChanged: ((CGSize?) -> Void)? = nil
     public var leftA11yLabel: String
     public var leftA11yHint: String? = nil
     public var leftA11yValue: String? = nil
@@ -104,12 +103,6 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
     public var rightA11yHint: String? = nil
     public var rightA11yValue: String? = nil
     public var rightA11yActionName: String? = nil
-
-    private let buttonSize: CGFloat = 52
-    private let minEdgePadding: CGFloat = 20
-    private let topSafeZone: CGFloat = FloatingButtonSafeZone.top
-    private let bottomSafeZoneWithSearch: CGFloat = 110
-    private let bottomSafeZoneNoSearch: CGFloat = 50
 
     public init(
         leftPosition: Binding<String>,
@@ -120,7 +113,8 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
         onRightTap: @escaping () -> Void,
         onLeftLongPress: (() -> Void)? = nil,
         onRightLongPress: (() -> Void)? = nil,
-        isSearchBarVisible: Bool = true,
+        onLeftDragChanged: ((CGSize?) -> Void)? = nil,
+        onRightDragChanged: ((CGSize?) -> Void)? = nil,
         leftA11yHint: String? = nil,
         leftA11yValue: String? = nil,
         leftA11yActionName: String? = nil,
@@ -136,7 +130,8 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
         self.onRightTap = onRightTap
         self.onLeftLongPress = onLeftLongPress
         self.onRightLongPress = onRightLongPress
-        self.isSearchBarVisible = isSearchBarVisible
+        self.onLeftDragChanged = onLeftDragChanged
+        self.onRightDragChanged = onRightDragChanged
         self.leftA11yLabel = leftA11yLabel
         self.leftA11yHint = leftA11yHint
         self.leftA11yValue = leftA11yValue
@@ -149,88 +144,74 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
         self.rightContent = rightContent()
     }
 
-    private var currentBottomSafeZone: CGFloat {
-        isSearchBarVisible ? bottomSafeZoneWithSearch : bottomSafeZoneNoSearch
-    }
-
-    private func parsePosition(_ raw: String, default defaultPos: ButtonPosition) -> ButtonPosition {
-        let parts = raw.split(separator: ",")
-        guard parts.count == 2,
-              let x = Double(parts[0]),
-              let y = Double(parts[1]) else {
-            return defaultPos
-        }
-        return ButtonPosition(x: CGFloat(x), y: CGFloat(y))
-    }
-
     public var body: some View {
-        GeometryReader { geometry in
-            let safeArea = geometry.safeAreaInsets
-            let size = geometry.size
-
-            ZStack {
-                FreeFloatingButton(
-                    position: Binding(
-                        get: { parsePosition(leftPositionRaw, default: .topLeft) },
-                        set: { leftPositionRaw = "\($0.x),\($0.y)" }
-                    ),
-                    screenSize: size,
-                    safeArea: safeArea,
-                    buttonSize: buttonSize,
-                    minEdgePadding: minEdgePadding,
-                    topSafeZone: topSafeZone,
-                    bottomSafeZone: currentBottomSafeZone,
-                    snapToEdges: true,
-                    onTap: onLeftTap,
-                    onLongPress: onLeftLongPress,
-                    a11yLabel: leftA11yLabel,
-                    a11yHint: leftA11yHint,
-                    a11yValue: leftA11yValue,
-                    a11yActionName: leftA11yActionName
-                ) {
-                    leftContent
-                }
-
-                FreeFloatingButton(
-                    position: Binding(
-                        get: { parsePosition(rightPositionRaw, default: .topRight) },
-                        set: { rightPositionRaw = "\($0.x),\($0.y)" }
-                    ),
-                    screenSize: size,
-                    safeArea: safeArea,
-                    buttonSize: buttonSize,
-                    minEdgePadding: minEdgePadding,
-                    topSafeZone: topSafeZone,
-                    bottomSafeZone: currentBottomSafeZone,
-                    snapToEdges: true,
-                    onTap: onRightTap,
-                    onLongPress: onRightLongPress,
-                    a11yLabel: rightA11yLabel,
-                    a11yHint: rightA11yHint,
-                    a11yValue: rightA11yValue,
-                    a11yActionName: rightA11yActionName
-                ) {
-                    rightContent
-                }
+        FloatingButtonsSafeAreaReader { geometry in
+            if geometry.isMeasured {
+                buttons(in: geometry)
             }
         }
-        .ignoresSafeArea()
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isSearchBarVisible)
+    }
+
+    private func buttons(in geometry: FloatingButtonGeometry) -> some View {
+        let layout = geometry.layout(feedStorage: leftPositionRaw, menuStorage: rightPositionRaw)
+        return ZStack {
+            FreeFloatingButton(
+                center: geometry.local(layout.feed),
+                buttonSize: FloatingButtonGeometry.buttonSize,
+                onDragEnded: { translation in
+                    guard let stored = geometry.storage(afterDragFrom: layout.feed, translation: translation, avoiding: layout.menu) else { return }
+                    leftPositionRaw = stored
+                },
+                onTap: onLeftTap,
+                onLongPress: onLeftLongPress,
+                onDragChanged: onLeftDragChanged,
+                a11yLabel: leftA11yLabel,
+                a11yHint: leftA11yHint,
+                a11yValue: leftA11yValue,
+                a11yActionName: leftA11yActionName
+            ) {
+                leftContent
+            }
+
+            FreeFloatingButton(
+                center: geometry.local(layout.menu),
+                buttonSize: FloatingButtonGeometry.buttonSize,
+                onDragEnded: { translation in
+                    guard let stored = geometry.storage(afterDragFrom: layout.menu, translation: translation, avoiding: layout.feed) else { return }
+                    rightPositionRaw = stored
+                },
+                onTap: onRightTap,
+                onLongPress: onRightLongPress,
+                onDragChanged: onRightDragChanged,
+                a11yLabel: rightA11yLabel,
+                a11yHint: rightA11yHint,
+                a11yValue: rightA11yValue,
+                a11yActionName: rightA11yActionName
+            ) {
+                rightContent
+            }
+        }
+        .preference(key: FloatingButtonGeometryKey.self, value: geometry)
     }
 }
 
 // MARK: - Free Floating Button
+
+/// Un disque flottant posé en `center` (repère du conteneur qui le dessine). Il suit
+/// le doigt image par image pendant le glisser ; à la levée, `onDragEnded`
+/// reçoit la course, et la géométrie décide s'il y a quelque chose à écrire
+/// (`FloatingButtonGeometry.storage(afterDragFrom:…)`).
+///
+/// Pendant le geste, `onDragChanged` publie la course à chaque image, puis `nil`
+/// à la levée : ce qui s'accroche au disque (l'échelle du menu, #18201) le suit
+/// sans attendre la position persistée, et sans rien persister lui-même.
 public struct FreeFloatingButton<Content: View>: View {
-    @Binding public var position: ButtonPosition
-    public let screenSize: CGSize
-    public let safeArea: EdgeInsets
+    public let center: CGPoint
     public let buttonSize: CGFloat
-    public let minEdgePadding: CGFloat
-    public let topSafeZone: CGFloat
-    public let bottomSafeZone: CGFloat
-    public let snapToEdges: Bool
+    public let onDragEnded: (CGSize) -> Void
     public let onTap: () -> Void
     public var onLongPress: (() -> Void)? = nil
+    public var onDragChanged: ((CGSize?) -> Void)? = nil
     public var a11yLabel: String? = nil
     public var a11yHint: String? = nil
     public var a11yValue: String? = nil
@@ -239,34 +220,33 @@ public struct FreeFloatingButton<Content: View>: View {
 
     @State private var dragOffset: CGSize = .zero
     @State private var isDragging = false
+    @State private var isPressed = false
+    @GestureState private var isHolding = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
+    }
 
     public init(
-        position: Binding<ButtonPosition>,
-        screenSize: CGSize,
-        safeArea: EdgeInsets,
+        center: CGPoint,
         buttonSize: CGFloat,
-        minEdgePadding: CGFloat,
-        topSafeZone: CGFloat,
-        bottomSafeZone: CGFloat,
-        snapToEdges: Bool = true,
+        onDragEnded: @escaping (CGSize) -> Void,
         onTap: @escaping () -> Void,
         onLongPress: (() -> Void)? = nil,
+        onDragChanged: ((CGSize?) -> Void)? = nil,
         a11yLabel: String? = nil,
         a11yHint: String? = nil,
         a11yValue: String? = nil,
         a11yActionName: String? = nil,
         @ViewBuilder content: () -> Content
     ) {
-        self._position = position
-        self.screenSize = screenSize
-        self.safeArea = safeArea
+        self.center = center
         self.buttonSize = buttonSize
-        self.minEdgePadding = minEdgePadding
-        self.topSafeZone = topSafeZone
-        self.bottomSafeZone = bottomSafeZone
-        self.snapToEdges = snapToEdges
+        self.onDragEnded = onDragEnded
         self.onTap = onTap
         self.onLongPress = onLongPress
+        self.onDragChanged = onDragChanged
         self.a11yLabel = a11yLabel
         self.a11yHint = a11yHint
         self.a11yValue = a11yValue
@@ -274,68 +254,19 @@ public struct FreeFloatingButton<Content: View>: View {
         self.content = content()
     }
 
-    private var bounds: (minX: CGFloat, maxX: CGFloat, minY: CGFloat, maxY: CGFloat) {
-        let halfButton = buttonSize / 2
-        let minX = safeArea.leading + minEdgePadding + halfButton
-        let maxX = screenSize.width - safeArea.trailing - minEdgePadding - halfButton
-        let minY = safeArea.top + topSafeZone + halfButton
-        let maxY = screenSize.height - safeArea.bottom - bottomSafeZone - halfButton
-        return (minX, maxX, minY, maxY)
-    }
-
-    private func screenPosition(for pos: ButtonPosition) -> CGPoint {
-        let b = bounds
-        let x = b.minX + (b.maxX - b.minX) * pos.x
-        let y = b.minY + (b.maxY - b.minY) * pos.y
-        return CGPoint(x: x, y: y)
-    }
-
-    private func normalizedPosition(from point: CGPoint) -> ButtonPosition {
-        let b = bounds
-        let rangeX = b.maxX - b.minX
-        let rangeY = b.maxY - b.minY
-
-        var x = rangeX > 0 ? (point.x - b.minX) / rangeX : 0.5
-        var y = rangeY > 0 ? (point.y - b.minY) / rangeY : 0.5
-
-        x = max(0, min(1, x))
-        y = max(0, min(1, y))
-
-        if snapToEdges {
-            x = x < 0.5 ? 0 : 1
-        }
-
-        return ButtonPosition(x: x, y: y)
-    }
-
     public var body: some View {
-        let pos = screenPosition(for: position)
-
         content
             .frame(width: buttonSize, height: buttonSize)
-            .background(
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .shadow(color: Color.black.opacity(0.35), radius: 10, x: 0, y: 5)
-            )
-            .overlay(
-                Circle()
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.35), Color.white.opacity(0.1)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1.5
-                    )
-            )
-            .scaleEffect(isDragging ? 1.15 : 1.0)
-            .position(x: pos.x + dragOffset.width, y: pos.y + dragOffset.height)
-            .gesture(dragGesture(from: pos))
+            .meeshyGlass(in: Circle(), isInteractive: true, isPressed: isPressed)
+            .scaleEffect(FloatingButtonPress.dragScale(isDragging: isDragging, reduceMotion: reduceMotion))
+            .modifier(FloatingButtonHoldSquashEffect(isHolding: isHolding, hasLongPress: onLongPress != nil))
+            .position(x: center.x + dragOffset.width, y: center.y + dragOffset.height)
+            .gesture(dragGesture)
+            .simultaneousGesture(pressGesture)
             .simultaneousGesture(tapGesture)
             .simultaneousGesture(longPressGesture)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: position)
+            .meeshyAnimation(MeeshyAnimation.springFast, value: isDragging)
+            .meeshyAnimation(MeeshyAnimation.springDefault, value: center)
             .floatingButtonAccessibility(
                 label: a11yLabel,
                 hint: a11yHint,
@@ -346,27 +277,26 @@ public struct FreeFloatingButton<Content: View>: View {
             )
     }
 
-    private func dragGesture(from startPos: CGPoint) -> some Gesture {
-        DragGesture()
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: FloatingButtonGeometry.dragThreshold)
             .onChanged { value in
                 isDragging = true
                 dragOffset = value.translation
+                onDragChanged?(value.translation)
             }
             .onEnded { value in
-                let endPoint = CGPoint(
-                    x: startPos.x + value.translation.width,
-                    y: startPos.y + value.translation.height
-                )
-                let newPosition = normalizedPosition(from: endPoint)
-
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                    position = newPosition
+                meeshyWithAnimation(MeeshyAnimation.springDefault, reduceMotion: reduceMotion) {
+                    onDragEnded(value.translation)
                     dragOffset = .zero
                     isDragging = false
+                    onDragChanged?(nil)
                 }
-
                 HapticFeedback.light()
             }
+    }
+
+    private var pressGesture: some Gesture {
+        FloatingButtonPress.gesture(threshold: FloatingButtonGeometry.dragThreshold) { isPressed = $0 }
     }
 
     private var tapGesture: some Gesture {
@@ -378,11 +308,56 @@ public struct FreeFloatingButton<Content: View>: View {
     }
 
     private var longPressGesture: some Gesture {
-        LongPressGesture(minimumDuration: 0.5)
+        LongPressGesture(minimumDuration: FloatingButtonHoldSquash.holdDuration)
+            .updating($isHolding) { pressing, holding, _ in holding = pressing }
             .onEnded { _ in
                 HapticFeedback.medium()
                 onLongPress?()
             }
+    }
+}
+
+// MARK: - Floating Button Press
+
+/// **L'appui d'un bouton flottant** : le doigt posé enfonce le disque (le verre
+/// du kit répond), le doigt levé le relâche, et un glisser au-delà du seuil
+/// n'est plus un appui : c'est un déplacement, que l'échelle de glisser montre.
+/// Sous « Réduire les animations », le disque ne grossit pas au glisser.
+nonisolated enum FloatingButtonPress {
+    enum Phase: Equatable {
+        case changed(CGSize)
+        case ended(CGSize)
+    }
+
+    /// Le seuil du `DragGesture()` par défaut du bouton hérité.
+    static let legacyDragThreshold: CGFloat = 10
+    /// Le grossissement au glisser du bouton hérité.
+    static let legacyLiftScale: CGFloat = 1.12
+
+    static func isPressed(after phase: Phase, threshold: CGFloat) -> Bool {
+        switch phase {
+        case .changed(let translation):
+            return hypot(translation.width, translation.height) < threshold
+        case .ended:
+            return false
+        }
+    }
+
+    static func dragScale(
+        isDragging: Bool,
+        reduceMotion: Bool,
+        lifted: CGFloat = FloatingMenuLadderFollow.discScale
+    ) -> CGFloat {
+        isDragging && !reduceMotion ? lifted : 1
+    }
+
+    /// Le geste qui suit le doigt dès qu'il se pose et rend l'état pressé de la
+    /// loi ; il ne change l'état que s'il bascule.
+    @MainActor
+    static func gesture(threshold: CGFloat, update: @escaping @MainActor (Bool) -> Void) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in update(isPressed(after: .changed(value.translation), threshold: threshold)) }
+            .onEnded { value in update(isPressed(after: .ended(value.translation), threshold: threshold)) }
     }
 }
 
@@ -536,7 +511,7 @@ public struct FloatingButtonsContainer<LeftContent: View, RightContent: View>: V
             }
         }
         .ignoresSafeArea()
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isSearchBarVisible)
+        .meeshyAnimation(MeeshyAnimation.springDefault, value: isSearchBarVisible)
     }
 }
 
@@ -559,6 +534,13 @@ public struct LegacyFloatingButton<Content: View>: View {
 
     @State private var dragOffset: CGSize = .zero
     @State private var isDragging = false
+    @State private var isPressed = false
+    @GestureState private var isHolding = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
+    }
 
     public init(
         corner: Binding<ButtonCorner>,
@@ -612,28 +594,17 @@ public struct LegacyFloatingButton<Content: View>: View {
 
         content
             .frame(width: buttonSize, height: buttonSize)
-            .background(
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .shadow(color: Color.black.opacity(0.35), radius: 10, x: 0, y: 5)
-            )
-            .overlay(
-                Circle()
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.35), Color.white.opacity(0.1)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1.5
-                    )
-            )
-            .scaleEffect(isDragging ? 1.12 : 1.0)
+            .meeshyGlass(in: Circle(), isInteractive: true, isPressed: isPressed)
+            .scaleEffect(FloatingButtonPress.dragScale(
+                isDragging: isDragging, reduceMotion: reduceMotion, lifted: FloatingButtonPress.legacyLiftScale
+            ))
+            .modifier(FloatingButtonHoldSquashEffect(isHolding: isHolding, hasLongPress: onLongPress != nil))
             .position(x: pos.x + dragOffset.width, y: pos.y + dragOffset.height)
             .gesture(dragGesture(from: pos))
+            .simultaneousGesture(pressGesture)
             .simultaneousGesture(tapGesture)
             .simultaneousGesture(longPressGesture)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
+            .meeshyAnimation(MeeshyAnimation.springFast, value: isDragging)
             .floatingButtonAccessibility(
                 label: a11yLabel,
                 hint: a11yHint,
@@ -656,12 +627,16 @@ public struct LegacyFloatingButton<Content: View>: View {
                     y: startPos.y + value.translation.height
                 )
                 let newCorner = findNearestCorner(to: endPoint)
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                meeshyWithAnimation(MeeshyAnimation.springDefault, reduceMotion: reduceMotion) {
                     corner = newCorner
                     dragOffset = .zero
                     isDragging = false
                 }
             }
+    }
+
+    private var pressGesture: some Gesture {
+        FloatingButtonPress.gesture(threshold: FloatingButtonPress.legacyDragThreshold) { isPressed = $0 }
     }
 
     private var tapGesture: some Gesture {
@@ -673,7 +648,8 @@ public struct LegacyFloatingButton<Content: View>: View {
     }
 
     private var longPressGesture: some Gesture {
-        LongPressGesture(minimumDuration: 0.5)
+        LongPressGesture(minimumDuration: FloatingButtonHoldSquash.holdDuration)
+            .updating($isHolding) { pressing, holding, _ in holding = pressing }
             .onEnded { _ in
                 HapticFeedback.medium()
                 onLongPress?()
@@ -730,8 +706,8 @@ public struct NotificationBadge: View {
     public var body: some View {
         if count > 0 {
             Text(Self.displayed(count))
-                .font(MeeshyFont.relative(10, weight: Self.fontWeight))
-                .foregroundColor(.white)
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: Self.fontWeight))
+                .foregroundStyle(.white)
                 .lineLimit(1)
                 // Ni `minimumScaleFactor`, ni cadre carré figé : la pastille
                 // s'ÉLARGIT. L'ancien 18×18 forçait « 71 » à rétrécir et aurait
@@ -742,7 +718,7 @@ public struct NotificationBadge: View {
                 .background(
                     Capsule()
                         .fill(MeeshyColors.error)
-                        .shadow(color: MeeshyColors.error.opacity(0.5), radius: 3)
+                        .shadow(color: MeeshyColors.error.opacity(MeeshyOpacity.strong), radius: 3)
                 )
                 // Halo pulsant en capsule et non en cercle : à trois glyphes un
                 // cercle centré déborderait des extrémités. `scaleEffect`
@@ -753,12 +729,29 @@ public struct NotificationBadge: View {
                         .scaleEffect(isPulsing ? 1.55 : 1.0)
                 )
                 .offset(x: 16, y: -16)
-                .onAppear {
+                // Halo d'ANNONCE, plus jamais un pulse sans fin : ce badge vit
+                // dans le chrome FLOTTANT du root (zIndex 100), au-dessus de la
+                // liste de conversations ET de chaque fil ouvert — un
+                // `repeatForever` y tournait en continu pour tout utilisateur
+                // ayant ≥ 1 notification non lue, c'est-à-dire l'état NOMINAL
+                // (audit chauffe 2026-08-26, même famille que le glow invisible
+                // de l'échelle de menu). Le halo respire quelques cycles à
+                // l'apparition et à CHAQUE changement de compteur (`task(id:)`
+                // rejoue l'annonce quand une notification arrive), puis se pose
+                // au repos — l'intention (« du non-lu t'attend ») reste portée
+                // par la pastille elle-même, en permanence.
+                .task(id: count) {
                     // Reduce Motion (system or in-app): the halo stays static —
                     // the badge keeps its intention, it loses its movement.
                     guard !MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced) else { return }
                     withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
                         isPulsing = true
+                    }
+                    guard await cancellableSleep(for: .seconds(Self.announcementPulseDuration)) else { return }
+                    // Retour au repos ANIMÉ (une respiration de sortie) — un
+                    // arrêt sec au milieu d'un cycle claquerait visuellement.
+                    withAnimation(.easeInOut(duration: 1.2)) {
+                        isPulsing = false
                     }
                 }
                 .onDisappear {
@@ -768,4 +761,8 @@ public struct NotificationBadge: View {
                 }
         }
     }
+
+    /// Durée de la fenêtre d'annonce du halo (~2,5 respirations à 1,2 s le
+    /// demi-cycle) avant le retour au repos.
+    public static let announcementPulseDuration: TimeInterval = 6
 }

@@ -5,10 +5,13 @@
  * - DELETE with socketIO manager (socket emit)
  * - PUT with socketIO manager (socket emit)
  * - PUT without translationService (warn branch)
- * - POST /status with invalid status (400)
- * - POST /status with socketIO manager (socket emit)
  * - POST /attachments/status with 'watched' action
  * - POST /attachments/status with socketIO manager (socket emit)
+ *
+ * Les trois blocs `POST /messages/:messageId/status` ont disparu avec la route
+ * (#4188) : porte morte sur les quatre clients, 200 au corps VIDE sur
+ * `status: 'delivered'` — un acquittement sans écriture —, quatrième copie du
+ * fan-out d'accusés.
  *
  * @jest-environment node
  */
@@ -72,7 +75,6 @@ jest.mock('../../../validation/messages-schemas', () => ({
   MessageParamsSchema: {},
   AttachmentParamsSchema: {},
   UpdateMessageBodySchema: {},
-  MessageStatusBodySchema: {},
   MessageStatusDetailsQuerySchema: {},
   AttachmentStatusBodySchema: {},
 }));
@@ -236,17 +238,40 @@ async function buildApp(opts: {
       // Voir messages.test.ts : `applyMessageRemovalEffects` relit
       // `lastMessageAt` lui-même au lieu de le recevoir joint au message.
       findUnique: jest.fn().mockResolvedValue({
+        type: 'group',
+        title: 'Les Amis',
         lastMessageAt: mockMessage.conversation.lastMessageAt,
         createdAt: mockMessage.conversation.createdAt,
       }),
       update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
+    adminAuditLog: {
+      create: jest.fn().mockResolvedValue({ id: 'audit-1' }),
+    },
     trackingLink: {
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     conversationReadCursor: {
       findUnique: jest.fn().mockResolvedValue({ lastReadAt: new Date('2026-08-16T09:00:00Z') }),
+    },
+    // `85494dee00` a soumis la diffusion de `attachment-status:updated` à la
+    // réciprocité `showReadReceipts` : le chemin d'émission lit désormais les
+    // préférences de confidentialité avant de choisir sa room. Ce faux prisma
+    // ne les servait pas, et l'échec partait dans le `catch` qui entoure toute
+    // la diffusion — la route rendait 200 pendant que l'émission n'avait pas
+    // lieu. Un test qui n'assère que le statut aurait été vert.
+    //
+    // Les deux modèles, parce que la résolution est en DEUX temps : le document
+    // `userPreferences` d'abord, puis le repli sur les lignes `userPreference`
+    // de janvier pour les utilisateurs qu'il ne couvre pas. Vides tous les deux
+    // ⇒ aucune préférence stockée ⇒ `showReadReceipts !== false` ⇒ diffusion à
+    // la room de conversation, ce que ces témoins mesurent.
+    userPreferences: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    userPreference: {
+      findMany: jest.fn().mockResolvedValue([]),
     },
   });
 
@@ -321,20 +346,55 @@ describe('DELETE /messages/:messageId — admission', () => {
     sender: { ...mockMessage.sender, userId: OTHER_USER },
   };
 
-  async function deleteAs(opts: { membership?: any; globalRole?: string | null }) {
+  async function deleteAs(opts: { membership?: any; globalRole?: string | null; reason?: string | null; conversationType?: string }) {
     const app = await buildApp({ messageOverride: foreignMessage });
     (app as any).prisma.participant.findFirst.mockResolvedValue(opts.membership ?? null);
     (app as any).prisma.user.findUnique.mockResolvedValue(
       opts.globalRole === undefined ? { role: 'USER' } : { role: opts.globalRole }
     );
+    if (opts.conversationType) {
+      (app as any).prisma.conversation.findUnique.mockResolvedValue({ type: opts.conversationType, title: 'Duo' });
+    }
     (app as any).prisma.message.findFirst
       .mockResolvedValueOnce(foreignMessage)
       .mockResolvedValueOnce(null);
-    const res = await app.inject({ method: 'DELETE', url: '/messages/' + MSG_ID });
+    const reason = opts.reason === undefined ? 'Propos hors charte' : opts.reason;
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/messages/' + MSG_ID,
+      ...(reason === null ? {} : { payload: { reason } }),
+    });
     const participantQuery = (app as any).prisma.participant.findFirst.mock.calls[0]?.[0];
+    const auditCalls = (app as any).prisma.adminAuditLog.create.mock.calls;
+    const updated = (app as any).prisma.message.update.mock.calls.length > 0;
     await app.close();
-    return { res, participantQuery };
+    return { res, participantQuery, auditCalls, updated };
   }
+
+  it('#11149 — un tiers sans motif reçoit 400 MODERATION_REASON_REQUIRED et rien ne part', async () => {
+    const { res, updated } = await deleteAs({ membership: { role: 'admin', user: { role: 'USER' } }, reason: null });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).code).toBe('MODERATION_REASON_REQUIRED');
+    expect(updated).toBe(false);
+  });
+
+  it('#11149 — un tiers est refusé en conversation directe, même BIGBOSS', async () => {
+    const { res, updated } = await deleteAs({ globalRole: 'BIGBOSS', conversationType: 'direct' });
+
+    expect(res.statusCode).toBe(403);
+    expect(updated).toBe(false);
+  });
+
+  it('#11149 — admet le créateur et journalise REMOVE_CONTENT avec le motif nettoyé', async () => {
+    const { res, auditCalls } = await deleteAs({ membership: { role: 'creator', user: { role: 'USER' } }, reason: '  Spam répété  ' });
+
+    expect(res.statusCode).toBe(200);
+    expect(auditCalls).toEqual([[{ data: expect.objectContaining({
+      action: 'REMOVE_CONTENT', entity: 'Message', entityId: MSG_ID, adminId: USER_ID, userId: OTHER_USER,
+      metadata: JSON.stringify({ reason: 'Spam répété', via: 'app' }),
+    }) }]]);
+  });
 
   it("admet l'admin de CONVERSATION qui n'est qu'un USER global", async () => {
     const { res } = await deleteAs({ membership: { role: 'admin', user: { role: 'USER' } } });
@@ -431,113 +491,6 @@ describe('PUT /messages/:messageId — without translationService', () => {
   });
 });
 
-// ─── POST /messages/:messageId/status — invalid status ───────────────────────
-
-describe('POST /messages/:messageId/status — invalid status', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 400 for invalid status value', async () => {
-    const res = await app.inject({
-      method: 'POST', url: '/messages/' + MSG_ID + '/status',
-      payload: { status: 'invalid' },
-    });
-    expect(res.statusCode).toBe(400);
-  });
-
-  it('returns 400 when status is missing', async () => {
-    const res = await app.inject({
-      method: 'POST', url: '/messages/' + MSG_ID + '/status',
-      payload: {},
-    });
-    expect(res.statusCode).toBe(400);
-  });
-});
-
-// ─── POST /messages/:messageId/status — with socketIO ────────────────────────
-
-describe('POST /messages/:messageId/status — with socketIO manager', () => {
-  let app: FastifyInstance;
-  let mockEmit: jest.Mock;
-  let rooms: string[];
-  beforeAll(async () => {
-    const { mockEmit: emit, rooms: r, manager } = makeMockSocketIO();
-    mockEmit = emit;
-    rooms = r;
-    app = await buildApp({ socketIOManager: manager });
-  });
-  afterAll(async () => { await app.close(); });
-
-  function readMessage() {
-    return {
-      ...mockMessage,
-      senderId: 'other-part-id',
-      conversation: {
-        id: CONV_ID,
-        createdAt: new Date(),
-        participants: [{ id: PART_ID, userId: USER_ID }],
-      },
-    };
-  }
-
-  it('emits READ_STATUS_UPDATED via socketIO', async () => {
-    (app as any).prisma.message.findFirst.mockResolvedValueOnce(readMessage());
-    const res = await app.inject({
-      method: 'POST', url: '/messages/' + MSG_ID + '/status',
-      payload: { status: 'read' },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(mockEmit).toHaveBeenCalledWith('read-status:updated', expect.any(Object));
-  });
-
-  // Cette route portait la QUATRIÈME copie verbatim du fan-out d'accusés, et la
-  // dernière encore adressée par `userId` seul : l'expéditeur sans compte du
-  // message qu'on vient de lire n'apprenait jamais qu'il avait été lu, sa bulle
-  // restant sur un tic « envoyé » indéfiniment.
-  //
-  // L'éventail ne nomme plus la room de l'ACTEUR : elle en est retirée, et il
-  // reçoit à la place une copie ciblée portant sa frontière de lecture et son
-  // arriéré — deux champs qui décrivent une personne, pas la conversation. Sa
-  // room reste donc nommée, mais par une autre chaîne, plus bas.
-  it('adresse un participant sans compte par son participant id', async () => {
-    (app as any).prisma.message.findFirst.mockResolvedValueOnce(readMessage());
-
-    // Le double distingue les DEUX lectures de participants que cette route
-    // fait maintenant : l'éventail des accusés (`{conversationId, isActive}`)
-    // et la résolution du lecteur par la passe de pont ✦ (`OR: [{id},
-    // {userId}]`, cycle 63). Un `mockResolvedValueOnce` servait la première
-    // lecture ARRIVÉE — la passe de pont partant en parallèle, l'éventail
-    // retombait sur le défaut et le témoin accusait un défaut d'adressage qui
-    // n'existait pas. Un double qui ne regarde pas sa clause décrit un autre
-    // programme dès qu'un second appelant apparaît.
-    const findMany = (app as any).prisma.participant.findMany;
-    const previous = findMany.getMockImplementation();
-    findMany.mockImplementation(async (args: any) =>
-      args?.where?.OR
-        ? [] // la passe de pont ne résout aucun participant ⇒ aucun pont, hors sujet ici
-        : [
-            { id: PART_ID, userId: USER_ID },
-            { id: 'part-anonyme', userId: null },
-          ]
-    );
-    rooms.length = 0;
-
-    try {
-      const res = await app.inject({
-        method: 'POST', url: '/messages/' + MSG_ID + '/status',
-        payload: { status: 'read' },
-      });
-
-      expect(res.statusCode).toBe(200);
-      expect(rooms).toContain(`conversation:${CONV_ID}`);
-      expect(rooms).toContain('user:part-anonyme');
-    } finally {
-      findMany.mockImplementation(previous ?? (async () => [{ userId: USER_ID }]));
-    }
-  });
-});
-
 // ─── POST /attachments/:id/status — watched action ───────────────────────────
 
 describe('POST /attachments/:attachmentId/status — watched action', () => {
@@ -552,10 +505,15 @@ describe('POST /attachments/:attachmentId/status — watched action', () => {
       payload: { action: 'watched', complete: true, playPositionMs: 1000, durationMs: 5000 },
     });
     expect(res.statusCode).toBe(200);
+    // `durationMs` (5000, la durée de la PISTE — dénominateur de `percentage`
+    // sur le fil Socket.IO) n'est PAS repassé au service : celui-ci dérive la
+    // durée réellement écoutée de `stretches`, jamais de la durée de la piste
+    // répétée à chaque rapport par les clients (#7359).
     expect(mockMarkVideoAsWatched).toHaveBeenCalledWith(
       PART_ID, ATTACHMENT_ID,
-      expect.objectContaining({ watchPositionMs: 1000, watchDurationMs: 5000, complete: true })
+      expect.objectContaining({ watchPositionMs: 1000, complete: true })
     );
+    expect(mockMarkVideoAsWatched.mock.calls[0][2]).not.toHaveProperty('watchDurationMs');
   });
 });
 
@@ -644,21 +602,6 @@ describe('POST /attachments/:attachmentId/status — with socketIO manager', () 
 });
 
 // ─── Error paths not covered in messages.test.ts ─────────────────────────────
-
-describe('POST /messages/:messageId/status — DB error', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 500 on unexpected DB error', async () => {
-    (app as any).prisma.message.findFirst.mockRejectedValueOnce(new Error('DB crash'));
-    const res = await app.inject({
-      method: 'POST', url: '/messages/' + MSG_ID + '/status',
-      payload: { status: 'read' },
-    });
-    expect(res.statusCode).toBe(500);
-  });
-});
 
 describe('GET /messages/:messageId/translations — DB error', () => {
   let app: FastifyInstance;
@@ -773,7 +716,14 @@ describe('DELETE /messages/:messageId — offline delivery replay', () => {
         actorUserId: USER_ID,
         eventType: 'deleted',
         messageId: MSG_ID,
-        payload: { messageId: MSG_ID, conversationId: CONV_ID },
+        // #18159 — le retrait voyage avec l'heure SERVEUR qui vient d'être
+        // écrite : un destinataire absent rejoue des heures plus tard, et son
+        // horloge locale daterait la pierre tombale de sa RECONNEXION.
+        payload: {
+          messageId: MSG_ID,
+          conversationId: CONV_ID,
+          deletedAt: ((app as any).prisma.message.update.mock.calls.at(-1)[0].data.deletedAt as Date).toISOString(),
+        },
       })
     );
   });

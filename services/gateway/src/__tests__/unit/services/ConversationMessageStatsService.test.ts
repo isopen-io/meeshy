@@ -1,9 +1,7 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
-import {
-  ConversationMessageStatsService,
-  resolveAttachmentType,
-  statsAuthorKey,
-} from '../../../services/ConversationMessageStatsService';
+import { ConversationMessageStatsService, statsAuthorKey } from '../../../services/ConversationMessageStatsService';
+// La table MIME vit avec le PLI depuis #17076 (fichier hors budget : on n'y ajoute pas de ligne).
+import { resolveAttachmentType } from '../../../services/conversations/messageStatsAggregate';
 
 // Reset the singleton between tests to ensure isolation.
 // The private static field must be cleared because there is no other way to
@@ -1062,7 +1060,8 @@ describe('resolveAttachmentType — via recompute attachment classification', ()
 });
 
 /**
- * `resolveAttachmentType` et `statsAuthorKey` sont exportés depuis que les deux
+ * `statsAuthorKey` est exporté — et `resolveAttachmentType` l'est depuis
+ * `conversations/messageStatsAggregate` — depuis que les deux
  * unités partagées d'effets (post-commit et retrait) les appliquent : la table
  * MIME → compteur et la clé de crédit vivaient recopiées inline dans le handler
  * socket et dans la route de suppression, c'est-à-dire à côté de `recompute()`,

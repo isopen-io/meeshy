@@ -2,6 +2,7 @@ package me.meeshy.sdk.socket
 
 import javax.inject.Inject
 import javax.inject.Singleton
+import timber.log.Timber
 
 /**
  * App-lifetime owner of the realtime socket's session binding: the single place
@@ -26,22 +27,51 @@ class RealtimeSessionCoordinator @Inject constructor(
     private val messageSocketManager: MessageSocketManager,
     private val socialSocketManager: SocialSocketManager,
     private val categorySocketManager: CategorySocketManager,
+    private val preferencesSocketManager: PreferencesSocketManager,
+    private val preferencesSyncCoordinator: me.meeshy.sdk.preferences.PreferencesSyncCoordinator,
     private val callSignalManager: CallSignalManager,
+    private val bindings: Set<@JvmSuppressWildcards RealtimeBinding> = emptySet(),
 ) {
     private var lastAuthenticated = false
 
+    /** Injecte par membre (Provider : l'executeur dépend du runner, qui dépend de ce coordinateur). */
+    @set:Inject
+    lateinit var transitions: javax.inject.Provider<me.meeshy.sdk.session.SessionTransitionExecutor>
+
     @Synchronized
     fun onAuthenticatedChanged(isAuthenticated: Boolean) {
+        if (::transitions.isInitialized) {
+            transitions.get().onAuthenticatedChanged(isAuthenticated)
+            return
+        }
         val commands = RealtimeLifecyclePlan.commandsFor(lastAuthenticated, isAuthenticated)
         lastAuthenticated = isAuthenticated
         commands.forEach(::execute)
+    }
+
+    /** Étape « reconnecter les sockets » du plan d'ouverture. */
+    @Synchronized
+    fun openRealtime() {
+        lastAuthenticated = true
+        RealtimeLifecyclePlan.commandsFor(false, true).forEach(::execute)
+    }
+
+    /** Étapes « couper sockets et relais » du plan de fermeture. */
+    @Synchronized
+    fun closeRealtime() {
+        lastAuthenticated = false
+        RealtimeLifecyclePlan.commandsFor(true, false).forEach(::execute)
     }
 
     private fun execute(command: RealtimeCommand) {
         when (command) {
             RealtimeCommand.Connect -> socketManager.connect()
             RealtimeCommand.Attach -> attachAll()
-            RealtimeCommand.Disconnect -> socketManager.disconnect()
+            RealtimeCommand.Disconnect -> {
+                detachBindings()
+                preferencesSyncCoordinator.stop()
+                socketManager.disconnect()
+            }
         }
     }
 
@@ -49,6 +79,25 @@ class RealtimeSessionCoordinator @Inject constructor(
         messageSocketManager.attach()
         socialSocketManager.attach()
         categorySocketManager.attach()
+        preferencesSocketManager.attach()
         callSignalManager.attach()
+        // Le pont vers les magasins locaux : les managers ci-dessus n'exposent que des
+        // flux, et un flux qu'aucun collecteur ne lit ne met rien a jour. Le collecteur
+        // des preferences user-level vit ici, pour la session, et non dans un ecran de
+        // reglages qui ne serait ouvert qu'au moment ou l'on en a le moins besoin.
+        preferencesSyncCoordinator.start()
+        bindings.forEach { binding -> isolated(binding) { binding.attach() } }
+    }
+
+    private fun detachBindings() {
+        bindings.forEach { binding -> isolated(binding) { binding.detach() } }
+    }
+
+    private inline fun isolated(binding: RealtimeBinding, action: () -> Unit) {
+        try {
+            action()
+        } catch (failure: Exception) {
+            Timber.e(failure, "RealtimeBinding %s en echec", binding.javaClass.name)
+        }
     }
 }

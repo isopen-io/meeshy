@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="talkie_info_a11y">متى أستخدم جهاز اللاسلكي؟</string>
+    <string name="talkie_send_e2ee">غير متاح في محادثة مشفّرة.</string>
+    <string name="voiceProfile_age_birthDate">تاريخ الميلاد</string>
+    <string name="voiceProfile_age_description">الاستنساخ الصوتي متاح لمن هم في سن 18 عامًا فأكثر.</string>
+    <string name="voiceProfile_age_title">التحقق من العمر</string>
+    <string name="voiceProfile_age_tooYoungError">يجب أن يكون عمرك 18 عامًا أو أكثر لاستخدام الاستنساخ الصوتي.</string>
+    <string name="voiceProfile_age_verify">تحقّق</string>
+    <string name="voiceProfile_complete_description">ستستخدم ترجماتك الصوتية من الآن فصاعدًا صوتك المستنسَخ.</string>
+    <string name="voiceProfile_complete_finish">إنهاء</string>
+    <string name="voiceProfile_complete_title">تم إنشاء الملف الصوتي!</string>
+    <string name="voiceProfile_consent_continue">متابعة</string>
+    <string name="voiceProfile_consent_description">‏يمكن لـ Meeshy استنساخ صوتك لترجمة رسائلك الصوتية إلى لغات أخرى بصوتك أنت.</string>
+    <string name="voiceProfile_consent_point1">سجّل بضع عيّنات من صوتك</string>
+    <string name="voiceProfile_consent_point2">يُنشأ نموذج صوتي فريد من عيّناتك</string>
+    <string name="voiceProfile_consent_point3">ستستخدم ترجماتك الصوتية صوتك المستنسَخ</string>
+    <string name="voiceProfile_consent_point4">يمكنك حذف بياناتك الصوتية في أي وقت (اللائحة العامة لحماية البيانات)</string>
+    <string name="voiceProfile_consent_point5">عيّناتك مشفّرة ولا تُشارَك أبدًا</string>
+    <string name="voiceProfile_consent_title">الاستنساخ الصوتي</string>
+    <string name="voiceProfile_consent_toggle">أوافق على استخدام عيّناتي الصوتية لإنشاء ملف صوتي</string>
+    <string name="voiceProfile_processing_title">جارٍ إنشاء الملف الصوتي...</string>
+    <string name="voiceProfile_recording_title">سجّل صوتك</string>
+    <string name="voiceProfile_wizard_close">إغلاق</string>
+    <string name="voiceProfile_wizard_errorTitle">خطأ</string>
+    <string name="voiceProfile_wizard_ok">حسنًا</string>
+    <string name="voiceProfile_wizard_title">الملف الصوتي</string>
+    <string name="talkie_send_explain">اضغط مطولًا وتحدّث: يخرج صوتك مباشرةً لدى %1$s دون الحاجة إلى الرد.</string>
+</resources>

@@ -1,0 +1,785 @@
+#!/usr/bin/env node
+// Cliquet de dette du catalogue d'endpoints TypeScript (#5372, suite de #4889).
+//
+// LE DÉFAUT QU'IL FERME
+//
+// Même défaut que son jumeau Swift (`check-swift-catalog-dead-entries.mjs`),
+// sur l'autre catalogue GÉNÉRÉ : `packages/shared/api/endpoints.ts` porte
+// l'en-tête « GÉNÉRÉ, ne pas éditer à la main » et est régénéré depuis
+// `services/gateway/route-manifest.json`
+// (`cd packages/shared && npm run api-endpoints:generate`), protégé en plus
+// par un cliquet de régénération
+// (`packages/shared/api/__tests__/endpoints-manifest-ratchet.test.ts`) qui
+// rougit à la moindre divergence avec une régénération fraîche. Un marqueur
+// posé à la main sur une entrée serait donc écrasé OU rejeté par ce cliquet
+// avant même la prochaine régénération — la dette « sans appelant » doit donc
+// se garder à côté du catalogue, jamais dedans, exactement comme côté Swift.
+//
+// MÉTHODOLOGIE
+//
+// 1. Depuis #7716, chaque NAMESPACE du catalogue est un module généré
+//    (`packages/shared/api/endpoints/<groupe>.ts`, nom de fichier = namespace
+//    en kebab-case) et chaque ENTRÉE y est un `export const clé = …` — ou
+//    `export { clé_ as clé }` quand la clé est un mot réservé (`me.export`).
+//    `endpoints.ts` ne fait plus que les réunir dans `API_ENDPOINTS`, à côté
+//    d'`API_PATH_TEMPLATES` et d'`API_PATH_METHODS` : les entrées se lisent
+//    dans les modules, jamais dans l'index.
+// 2. Un module généré porte une entrée par déclaration, sur une ligne ; les
+//    commentaires qui citent un chemin ne commencent pas par `export` et ne
+//    sont donc jamais pris pour des entrées.
+// 3. Un APPELANT est une occurrence de `API_ENDPOINTS.namespace.entrée`, ou —
+//    la forme du web depuis #7716 — `alias.entrée` dans un fichier qui importe
+//    le module du groupe en espace de noms (`import * as alias from
+//    '…/api/endpoints/<groupe>'`), dans l'arbre CLIENT (`apps/web`,
+//    `packages/shared` hors les fichiers qui déclarent le catalogue), HORS
+//    répertoires `__tests__` et fichiers `*.test.ts(x)` / `*.spec.ts(x)`.
+// 4. Le compte de dette est le nombre d'entrées SANS AUCUNE occurrence ainsi
+//    définie. Cliquet à DEUX SENS, comme `check-type-debt.sh` et son jumeau
+//    Swift : régression si le compte DÉPASSE la référence, amélioration NON
+//    ENREGISTRÉE si le compte baisse sans que la référence ne soit abaissée.
+//
+// COHÉRENCE AVEC #4889
+//
+// #4889 rapporte 444 entrées et 277 sans appelant — ce script mesure
+// exactement les deux mêmes nombres. Ce n'est pas garanti par construction
+// (son jumeau Swift diverge légèrement du comptage manuel de #4889, pour la
+// raison écrite dans son propre en-tête) ; ici la méthodologie mécanique
+// rejoint la mesure manuelle. La référence ci-dessous reste ancrée sur CE
+// script, pas sur #4889 : c'est SA stabilité et son auto-test qui font
+// foi pour la suite.
+//
+// --self-test : un monde synthétique (deux namespaces, quelques entrées, des
+// appelants connus) prouve le comptage, puis le cliquet à deux sens, puis que
+// le parseur sait borner l'objet API_ENDPOINTS sans déborder sur
+// API_PATH_METHODS voisin (un faux négatif classique : compter des chemins
+// littéraux comme des entrées de catalogue).
+//
+// EXCEPTIONS CONNUES (#5427)
+//
+// Quatre entrées mesurées en instruisant #5373 étaient des FAUX MORTS (trois
+// depuis #7716 : `static.byFilename` a gagné un appelant par le catalogue) : la
+// route est réellement appelée en production, mais jamais via
+// `API_ENDPOINTS.ns.entrée` — la seule forme que ce script reconnaît comme
+// appelant. Un marqueur manuel, documenté par cas et vérifié par grep avant
+// écriture, est plus honnête qu'une heuristique qui devinerait un chemin
+// (cf. le rejet symétrique dans `endpoint-literal-audit.ts`, § « une liste
+// d'exemptions serait pire ») — et contrairement à une liste qui grossirait
+// en silence, `applyKnownLiveExceptions` rougit si l'une d'elles cesse de
+// correspondre à une entrée réellement morte (voir plus bas).
+const KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE = new Set([
+  // `GET /api/v1/l/:token` — atteinte par NAVIGATION DIRECTE du navigateur
+  // (lien partagé), jamais par un appel `fetch` typé. Chemin `/l/${token}`
+  // écrit à la main dans plusieurs sites de composition de lien partageable :
+  // `apps/web/lib/utils/link-parser.ts:116-117`,
+  // `apps/web/components/chat/message-with-links.tsx`.
+  'l.byToken',
+  // `GET /api/v1/u/:username` — navigation directe via des liens `<Link
+  // href={\`/u/${username}\`}>` écrits à la main dans des dizaines de sites
+  // (profils, mentions), jamais via `API_ENDPOINTS.u.byUsername`. Exemples :
+  // `apps/web/components/common/bubble-message/MessageNameDate.tsx`,
+  // `apps/web/components/v2/MessageBubble.tsx`.
+  'u.byUsername',
+  // `PATCH`/`DELETE /api/v1/guest-sessions/me` — appelée en production par le
+  // SDK iOS (`ShareLinkService` → `GuestSessionsEndpoint.me`), hors du périmètre
+  // `SEARCH_ROOTS` de ce script (`apps/web`, `packages/shared`). Son appelant web
+  // construisait le chemin à la main dans l'ancienne refonte v3, retirée du dépôt
+  // depuis (#5994) : la route reste appelée, l'exception reste juste.
+  'guestSessions.me',
+  // `POST`/`DELETE /api/v1/users/me/push-to-talk-token` — le jeton PushToTalk
+  // n'existe que sur iOS (`PTChannelManager`) : appelé par
+  // `apps/ios/Meeshy/Features/Talkie/TalkiePushToTalkChannel.swift` (chemin
+  // écrit à la main), hors `SEARCH_ROOTS`. Aucun client web n'en aura (#17142).
+  'users.mePushToTalkToken',
+  // `GET /api/v1/talkie/:talkieId/audio` — atteinte par l'URL SIGNÉE que le push
+  // de suivi porte (`attachmentUrl` / `audioUrl`, #17165), téléchargée telle
+  // quelle par la NSE iOS et le lecteur ; jamais composée depuis le catalogue.
+  'talkie.byTalkieIdAudio',
+  // `POST /api/v1/me/device/battery` — le relevé de batterie ne part que d'un TÉLÉPHONE (#14147) : le SDK iOS
+  // (`MeEndpoint.deviceBattery`) et Android l'envoient ; le web REÇOIT et n'émet aucun relevé (un navigateur n'a pas
+  // de batterie fiable, le serveur ne suit que le téléphone).
+  'me.deviceBattery',
+  // `GET /api/v1/relations/:userId/battery` — l'état d'UN Proche, lu par la fiche iOS (`RelationsEndpoint.byUserIdBattery`,
+  // #14147) ; le web tient l'état de tous par l'instantané (`relations.battery`) et la socket, sans relecture unitaire.
+  'relations.byUserIdBattery',
+]);
+
+import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+const CATALOG_FILE = 'packages/shared/api/endpoints.ts';
+const GROUPS_DIR = 'packages/shared/api/endpoints';
+
+const SEARCH_ROOTS = ['apps/web', 'packages/shared'];
+
+const EXCLUDED_DIR_NAMES = new Set(['__tests__', 'node_modules', '.next', 'dist', 'test-results']);
+const TEST_FILE_RE = /\.(test|spec)\.tsx?$/;
+
+
+const listSourceFiles = (absRoot, relRoot) => {
+  const out = [];
+  const walk = (absDir, relDir) => {
+    let names;
+    try {
+      names = readdirSync(absDir);
+    } catch {
+      return;
+    }
+    for (const name of names) {
+      if (EXCLUDED_DIR_NAMES.has(name)) continue;
+      const absPath = join(absDir, name);
+      const relPath = relDir ? `${relDir}/${name}` : name;
+      const st = statSync(absPath);
+      if (st.isDirectory()) {
+        walk(absPath, relPath);
+      } else if ((name.endsWith('.ts') || name.endsWith('.tsx')) && !TEST_FILE_RE.test(name)) {
+        out.push(relPath);
+      }
+    }
+  };
+  walk(absRoot, relRoot);
+  return out;
+};
+
+// Depuis #7716, chaque namespace est un MODULE généré
+// (`packages/shared/api/endpoints/<groupe>.ts`) : une entrée par
+// `export const clé =`, et `export { clé_ as clé };` pour une clé qui est un
+// mot réservé (`me.export`). L'index `endpoints.ts` ne fait que les réunir
+// dans `API_ENDPOINTS` — ce n'est plus là que les entrées se lisent.
+const EXPORT_CONST_RE = /^export const ([A-Za-z_$][\w$]*) =/gm;
+const EXPORT_ALIAS_RE = /^export \{ [A-Za-z_$][\w$]* as ([A-Za-z_$][\w$]*) \};$/gm;
+
+export const parseGroupModule = (source) => [
+  ...[...source.matchAll(EXPORT_CONST_RE)].map((m) => m[1]),
+  ...[...source.matchAll(EXPORT_ALIAS_RE)].map((m) => m[1]),
+];
+
+/** `api-legacy-attachments.ts` → `apiLegacyAttachments` (inverse de `groupFileName`, build-catalog.ts). */
+export const namespaceOfGroupFile = (fileName) =>
+  fileName.replace(/\.ts$/, '').replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase());
+
+// Un APPELANT a deux formes : `API_ENDPOINTS.ns.clé` (l'objet réuni), et —
+// la forme du web depuis #7716 — un import du module de groupe en espace de
+// noms (`import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin'`)
+// suivi de `adminEndpoints.clé`. L'alias est lu dans l'import de CHAQUE
+// fichier : aucun nom n'est imposé à l'appelant.
+const GROUP_IMPORT_RE = /import\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s+['"][^'"]*api\/endpoints\/([a-z0-9-]+)(?:\.js)?['"]/g;
+const escapeRe = (text) => text.replace(/[$]/g, '\\$&');
+
+export const callersIn = (contents, nsNames) => {
+  const viaIndex = [...contents.matchAll(new RegExp(`API_ENDPOINTS\\.(${nsNames.join('|')})\\.([A-Za-z_$][\\w$]*)`, 'g'))].map(
+    (m) => `${m[1]}.${m[2]}`,
+  );
+  const viaGroups = [...contents.matchAll(GROUP_IMPORT_RE)].flatMap(([, alias, file]) =>
+    [...contents.matchAll(new RegExp(`(?<![\\w$.])${escapeRe(alias)}\\.([A-Za-z_$][\\w$]*)`, 'g'))].map(
+      (m) => `${namespaceOfGroupFile(file)}.${m[1]}`,
+    ),
+  );
+  return [...viaIndex, ...viaGroups];
+};
+
+// La référence est ancrée sur CE script (voir méthodologie ci-dessus), pas sur
+// le comptage manuel de #4889. Qui la baisse doit avoir mesuré une vraie
+// baisse ; qui la relève documente ici pourquoi une entrée neuve est morte à
+// la naissance.
+//
+// 277 → 276 (#5430) : `API_ENDPOINTS.admin.shareLinksByIdReveal` a reçu son
+// premier appelant hors test — `apps/web/app/admin/share-links/page.tsx`,
+// qui l'appelle désormais pour réparer les contrôles « Copier »/« Ouvrir ».
+//
+// 276 → 272 (#5427) : `l.byToken`, `static.byFilename`, `u.byUsername`,
+// `guestSessions.me` retirées du compte de dette — quatre faux morts, voir
+// `KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE` ci-dessus.
+//
+// 272 → 269 (#5423) : les trois routes de sondage mortes (`conversation`,
+// `detectLanguage`, `status`) sont retirées du catalogue avec leurs routes.
+//
+// 269 → 270 (#3690) : `users.meReferralCode` (`GET /users/me/referral-code`,
+// nouvelle route) — morte à la naissance PAR CONSTRUCTION : le milestone
+// « Parrainage attribué et boucles virales » sépare la route gateway (cette
+// issue) de ses appelants clients, portés par les issues sœurs (#3691 web,
+// et les équivalents iOS/Android). Le catalogue déclare la route avant que
+// la première surface ne l'appelle — à retirer de ce compte le jour où l'une
+// de ces issues câble un premier appelant.
+//
+// 270 → 271 (#3600) : `posts.byPostIdMediaByMediaIdExport`
+// (`GET /posts/:postId/media/:mediaId/export`, export watermarké côté
+// serveur) — morte à la naissance PAR CONSTRUCTION, même forme que
+// `users.meReferralCode` ci-dessus : cette issue livre la route serveur
+// (watermark sharp/ffmpeg, cache) et son exposition dans les catalogues
+// générés ; l'appelant web (bouton d'export sur un média de post) est un
+// travail d'écran séparé, à ouvrir en issue de suivi.
+//
+// 271 → 266 (#5424) : cinq entrées retirées du catalogue généré — quatre
+// routes d'exploitation (`cleanup`, `stats`, `userStatus`, `test`) filtrées
+// par `packages/shared/api/ops-only-routes.ts` (jamais destinées à un
+// client), et `info` dont la route serveur elle-même a été retirée
+// (`route-registration.ts`, périmée et sans appelant mesuré).
+//
+// 266 → 267 (#5547) : `me.engagement` (`GET /me/engagement`, écran de
+// consultation « Progression ») — morte à la naissance PAR CONSTRUCTION,
+// même forme que `users.meReferralCode` (#3690) ci-dessus : cette issue
+// livre la route gateway (lecture des compteurs/paliers/streak, #5530) et
+// son exposition dans les catalogues générés ; l'appelant web-v2 (l'écran
+// « Progression ») est un travail d'écran séparé, pas encore ouvert — voir
+// le corps de la PR qui livre cette route pour le détail du périmètre
+// différé.
+//
+// 267 → 268 (#3635) : `me.terms` (`GET`/`PUT /me/terms`, signal + action de
+// re-consentement CGU versionné) — morte à la naissance PAR CONSTRUCTION,
+// même forme que `me.engagement` (#5547) ci-dessus : cette issue livre la
+// route gateway et son exposition dans les catalogues générés ; l'écran de
+// ré-acceptation (iOS/Android/web) qui l'appellera est un travail client à
+// part, ouvert séparément (#5716).
+//
+// 268 → 269 (#5743) : `me.meeshMint` (`POST /me/meesh/mint`, la frappe d'une
+// Meesh). La raison DIFFÈRE des deux précédentes, et c'est pourquoi elle est
+// écrite plutôt que rangée sous « même forme que » : cette route A un appelant
+// client — `mintMeesh` dans `apps/web/src/lib/api/engagement.ts` — mais il
+// ne passe PAS par ce catalogue. La v3.1 n'importe `@meeshy/shared/api/endpoints`
+// nulle part : ses 444 adresses se paieraient avant le premier pixel (D-14), et
+// chaque kilo-octet y est mesuré par un gate. Elle adresse donc ses routes par
+// un chemin littéral, ce qui rend MORTE au sens de ce cliquet toute entrée
+// `me.*` qu'elle consomme — `me.engagement` l'est déjà pour exactement ce
+// motif, et le sera tant que la v3.1 ne pourra pas importer un sous-ensemble
+// du catalogue.
+//
+// Ce qu'il faudrait pour la ressusciter, et qui n'est pas de ce lot : un
+// catalogue SCINDABLE, dont un client puisse tirer trois adresses sans en
+// embarquer 444. (FAIT par #7716 : un module par groupe, importé en espace de
+// noms — `me.meeshMint` et `me.engagement` ont désormais leur appelant.)
+//
+// 269 → 270 (#3954) : `posts.byPostIdObjectsByObjectIdResponses`
+// (`POST`/`DELETE`/`GET /posts/:postId/objects/:objectId/responses`, table
+// légère votes/réponses des stickers interactifs, O10) — morte à la
+// naissance PAR CONSTRUCTION, même forme que `users.meReferralCode` (#3690)
+// et `me.engagement` (#5547) ci-dessus : le kind `interactive` du canvas
+// reste RÉSERVÉ au contrat (`RESERVED_KINDS`, #3953, non traité ici) — aucun
+// client ne peut encore poser un tel sticker, donc aucun n'appelle ces
+// routes. #3954 livre le contrat serveur et son exposition dans les
+// catalogues générés ; les appelants (iOS/web/Android) sont le périmètre de
+// #3953, une issue distincte.
+//
+// 270 → 276 (#4317) : `conversations.byConversationIdClearHistory`,
+// `.byConversationIdRestoreForMe`, `messages.bulkDeleteForMe`,
+// `.byMessageIdDeleteForMe`, `.byMessageIdRestoreForMe` et
+// `user.deletedConversations` — six gestes utilisateur qui vivaient sous
+// `/api` sans jamais avoir été versionnés migrent enfin sous `/api/v1`
+// (adresse CANONIQUE, en plus de leur alias legacy déprécié). Mortes à la
+// naissance PAR CONSTRUCTION, même forme que `usersByUserIdBan` (#5528,
+// miroir Swift) ci-dessus : les trois clients continuent d'appeler l'adresse
+// legacy — aucun n'a besoin de migrer dans l'immédiat, le retrait de l'alias
+// restant gouverné par le compteur d'accès nul (#4275). Faire pointer un
+// client vers la nouvelle adresse est un travail à part, pas ouvert par ce
+// lot.
+//
+// 276 → 277 (#6280) : `posts.mediaByMediaIdCaptionTranslate`
+// (`POST /posts/media/:mediaId/caption/translate`, traduction à la demande de
+// la LÉGENDE d'un média — un contenu distinct du texte du post). Morte à la
+// naissance DANS CE COMPTAGE, par construction : son appelant est le SDK iOS
+// (`PostService.requestMediaCaptionTranslation`, catalogue Swift, où elle
+// n'est pas morte), et ce script ne balaie que `apps/web` (legacy gelé) et
+// `packages/shared` — pas `apps/web-v2`. Même forme que
+// `posts.byPostIdTranslate`, déjà sans appelant ici pour la même raison.
+// 277 → 278 (#6822) : une entrée d'administration née sans appelant ici —
+// elle l'a regagné depuis (voir 276 → 275 ci-dessous) ; l'historique git de ce
+// fichier garde la note d'origine.
+// 278 → 279 (#6861) : `admin.conversations`
+// (`GET /admin/conversations`, le listing de l'instance au rang
+// d'administration). Morte à la naissance DANS CE COMPTAGE, même raison que
+// l'entrée #6822 juste au-dessus : ce script ne balaie que
+// `apps/web` (legacy gelé) et `packages/shared`, jamais `apps/web-v2` — seul
+// client de l'administration, et qui appelle cette route par son chemin
+// littéral (`lib/api/admin-conversations.ts`, #6862).
+//
+// NOTE DE RÉSOLUTION : ce lot et #6822 ont relevé cette référence EN PARALLÈLE,
+// chacun de 277 vers 278, pour des routes DIFFÉRENTES. Les deux valeurs étaient
+// identiques par coïncidence, pas par accord. La valeur ci-dessous est MESURÉE
+// sur l'arbre fusionné, jamais additionnée : additionner aurait donné 281 et
+// fait rougir le cliquet dans l'AUTRE sens (amélioration non enregistrée), ce
+// qu'un cliquet à deux sens sanctionne autant qu'une régression.
+// 279 → 282 (#6851) : `admin.usersByUserIdSessions`,
+// `admin.usersByUserIdSessionsBySessionId` et
+// `admin.usersByUserIdSecurityEvents` — l'historique de connexion d'un membre
+// (sessions listées, session révoquée, événements de sécurité). Mortes à la
+// naissance DANS CE COMPTAGE, même raison que les dizaines d'autres entrées
+// `admin.usersByUserId*` ci-dessus : ce script ne balaie que `apps/web`
+// (legacy gelé) et `packages/shared`, jamais `apps/web-v2` — seul client de
+// l'administration, et celui qui les appellera. La route est SERVIE et testée
+// (`admin/user-sessions.test.ts`) ; c'est son écran qui reste à écrire.
+//
+// Valeur MESURÉE sur l'arbre fusionné avec le dev qui porte déjà #6861, comme
+// la note de résolution ci-dessus l'impose — jamais additionnée.
+// 282 → 284 (#7377) : `me.starredMessages` (`GET /me/starred-messages`) et
+// `me.starredMessagesByMessageId` (`PUT`/`DELETE
+// /me/starred-messages/:messageId`) — la liste et l'écriture du favori de
+// message. Mortes à la naissance PAR CONSTRUCTION : #7377 livre la moitié
+// SERVEUR seule, et les entrées sont GÉNÉRÉES depuis le manifeste au moment où
+// la route est montée, avant qu'aucun client ne l'appelle. Leurs appelants
+// sont suivis : #7378 (le geste web) et #7286 (l'écran web) côté `apps/web-v2`
+// — que ce script ne balaie pas, voir la note sur
+// `posts.mediaByMediaIdCaptionTranslate` —, et #7379 côté iOS (catalogue
+// Swift). Valeur MESURÉE sur l'arbre fusionné avec le dev du 2026-09-21.
+// 284 → 455 (#7668, 2026-09-24) : aucune entrée ajoutée — c'est le CLIENT qui
+// est parti. `SEARCH_ROOTS` balayait le legacy `apps/web`, seul consommateur
+// d'`API_ENDPOINTS` ; il a quitté le dépôt, et l'application qui a pris son
+// chemin écrit ses adresses en littéraux (`path: '/api/v1/…'`) sans importer
+// le catalogue. 455 entrées sur 459 n'ont donc plus d'appelant. Trancher entre
+// « le web adopte le catalogue » et « le catalogue part » : #7716.
+// 455 → 478 (2026-09-24 → 27) : vingt-trois entrées générées pour des routes
+// neuves (#7729, #7797, #7873, #7845, #6937, #7938, #7999, #8083, #8101,
+// #8099, #8066, #8051, #8217), toutes appelées par le web en écrivant leur
+// adresse à la main — donc mortes ici. Le détail de ces relèvements est dans
+// l'historique git de ce fichier ; leur motif commun a disparu avec #7716.
+// 478 → 337 (#7716, 2026-09-27) : le web n'écrit plus AUCUNE adresse
+// `/api/v1/…` (`scripts/check-web-api-literals.mjs`, interdiction pure) ; il
+// importe le module de groupe du catalogue (`import * as adminEndpoints from
+// '@meeshy/shared/api/endpoints/admin'`), que ce script reconnaît comme
+// appelant. Les 337 restantes n'ont aucun appelant sous `apps/web` ni
+// `packages/shared` : routes servies aux clients natifs (catalogue Swift),
+// routes d'administration sans écran web, ou routes sans client. Valeur
+// MESURÉE sur l'arbre fusionné avec `dev` du 2026-09-27.
+// 337 → 335 (#8239, 2026-09-27) : la modal « Validez votre compte » du web
+// appelle `users.meChangePhone` et `users.meVerifyPhoneChange`.
+// 335 → 334 (#8167, 2026-09-27) : Paramètres > Confidentialité efface le
+// carnet d'adresses par `directory.contacts` (`lib/api/address-book.ts`).
+// 334 → 335 (#8284, 2026-09-27) : décision porteur — le carnet s'efface à la
+// suppression du compte, jamais à la main. La rangée web et `DELETE
+// /directory/contacts` sont partis ; `directory.contacts` (GET · PUT · PATCH)
+// n'a plus d'appelant TS, il reste servi au catalogue Swift (synchronisation et
+// lecture du Répertoire iOS). Retour exact à la valeur d'avant #8167.
+// 335 → 333 (#8289, 2026-09-27) : la fiche éditable d'un membre appelle
+// `admin.usersByUserIdVerifications`, `admin.usersByUserIdSecurity` et la
+// route neuve `admin.usersByUserIdVerificationRequests`
+// (`lib/api/admin-user-verifications.ts`) — trois entrées vivantes pour une
+// entrée ajoutée.
+// 333 → 334 (#8302, 2026-09-27) : `conversations.byIdMessagesAfterReadConsume`,
+// la flamme-œil consommée, GÉNÉRÉE depuis `route-manifest.json`. Le web
+// l'appelle déjà par un chemin relatif (`lib/api/after-read.ts`) plutôt que par
+// le catalogue ; passer ce site au catalogue ramène cette valeur à 333.
+// 333 → 332 (#8342, 2026-09-27) : `lib/api/after-read.ts` appelle désormais
+// `conversations.byIdMessagesAfterReadConsume` par le catalogue.
+// 332 → 331 (#8583, 2026-09-28) : les réponses d'un commentaire se chargent
+// par `posts.byPostIdCommentsByCommentIdReplies` (`lib/api/comment-replies.ts`).
+// 331 -> 337 (#8876, 2026-09-30) : six entrées `admin` GÉNÉRÉES depuis
+// `route-manifest.json` pour la vue de Dieu de l'administration —
+// `admin.auditLogs`, `admin.trackingLinks`, `admin.trackingLinksByLinkId`,
+// `admin.monitoring`, `admin.communitiesByCommunityId` et
+// `admin.communitiesByCommunityIdMembers`. Mortes à la naissance PAR
+// CONSTRUCTION : le lot passerelle livre la moitié SERVEUR seule, et la console
+// web qui les appelle par le module de groupe (`adminEndpoints`) est le lot
+// suivant du même chantier, qui ramène cette valeur à 331. Valeur MESURÉE le
+// 2026-09-30.
+// 337 → 286 (#8876, 2026-09-30) : l'intégration de la vue de Dieu. Les dix
+// lots d'écrans de l'administration appellent désormais par le module de groupe
+// (`adminEndpoints`) les six entrées nées mortes ci-dessus — et quarante-cinq
+// autres, servies de longue date par la passerelle sans qu'aucun écran v2 ne
+// les lise (statistiques, langues, signalements, liens, diffusions, anonymes,
+// communautés, publications, classement…). 45 sous la valeur d'avant le chantier
+// (331), là où la dette annoncée n'était que de 6. Valeur MESURÉE le 2026-09-30.
+// 286 → 285 (#8876, 2026-09-30) : la revue de la vue de Dieu. La fiche d'un
+// membre révoque une session précise par
+// `adminEndpoints.usersByUserIdSessionsBySessionId`
+// (`lib/api/admin-user-dossier.ts`) — une entrée servie de longue date par la
+// passerelle, sans lecteur jusque-là, a enfin son appelant. Valeur MESURÉE le
+// 2026-09-30.
+// 285 → 287 (#9141, 2026-10-02) : `stickerPacks.pending` et
+// `stickerPacks.bySlugReview`, les deux routes de MODÉRATION des packs de
+// stickers tiers. Mortes à la naissance PAR CONSTRUCTION : #9141 livre la
+// Boutique et la proposition de pack côté web (leurs cinq voisines ont leur
+// appelant dans `lib/api/sticker-packs.ts`) ; l'écran de modération web qui
+// lira ces deux-là est un suivi à part. Valeur MESURÉE le 2026-10-02.
+// 287 → 285 (#9256, 2026-10-04) : `attachments.byAttachmentIdTranscribe` et
+// `attachments.byAttachmentIdTranslate` regagnent leur appelant — le lecteur
+// audio plein écran web transcrit et traduit à la demande
+// (`lib/api/attachment-processing.ts`). Valeur MESURÉE le 2026-10-04.
+// 285 → 276 (#6408, #6409, #6410, 2026-10-04) : les routes des liens de
+// suivi, de parrainage et de « mes communautés » regagnent leur appelant —
+// la page « Mes liens » web gère les quatre familles d'iOS
+// (`lib/api/my-tracking-links.ts`, `affiliate-tokens.ts`,
+// `community-links.ts`). Valeur MESURÉE le 2026-10-04.
+// 276 → 281 (#9399, 2026-10-05) : les cinq entrées `me.game*`
+// (`.gameChestClaim`, `.gameFlameFreezes`, `.gameFlameRelight`,
+// `.gameGuideSeen`, `.gameMissionsByMissionIdReroll`) GÉNÉRÉES depuis
+// `route-manifest.json` en régénérant `api/endpoints.ts` (resté périmé après
+// le lot du jeu, #9382). Mortes à la naissance PAR CONSTRUCTION, même motif
+// que `stickerPacks.pending`/`bySlugReview` ci-dessus : les routes sont
+// livrées côté gateway, l'écran web qui les appellera est un suivi à part.
+// Valeur MESURÉE le 2026-10-05.
+// 281 → 260 (#9414, 2026-10-05) : le lot « Progression joue le jeu » câble
+// l'écran web et ses tests contre vingt-et-une entrées qui n'avaient encore
+// aucun appelant — dont les cinq `me.game*` ci-dessus. Valeur MESURÉE le
+// 2026-10-05.
+// 260 → 274 (#9507, 2026-10-05) : quatorze entrées GÉNÉRÉES depuis
+// `route-manifest.json` en régénérant `api/endpoints.ts` (resté périmé après
+// la vague 2 du jeu — ligues, duos, saisons, prestige, parrainage —
+// #9225/#9230, #9504) : `me.gameDuoByDuoIdAbandon`, `.gameDuoByDuoIdAccept`,
+// `.gameDuoInvite`, `.gameLeagueConsent`, `.gameLeagueFriends`,
+// `.gameLeaguePseudonym`, `.gameLeagueWeek`, `.gamePrestige`, `.gamePrivacy`,
+// `.gameSeasonSeal`, `.gameSeasonStepsByStepClaim`, `.gameShowcaseOrder`,
+// `.gameVisibility`, et `users.byUserIdGameShowcase`. Mortes à la naissance
+// PAR CONSTRUCTION, même motif que #9399 ci-dessus : la vague 2 est livrée
+// côté gateway ; aucun écran web ne les appelle encore. Valeur MESURÉE le
+// 2026-10-05.
+// 274 → 275 (#9529, 2026-10-06) : `users.byUserIdGame`
+// (`GET /users/:userId/game`), GÉNÉRÉE depuis `route-manifest.json` par
+// `e0a8b73588` (#9481) sans relever cette référence — la jumelle TS de
+// `UsersEndpoint.byUserIdGame` (`check-swift-catalog-dead-entries.mjs`, même
+// issue, même commit). Le web APPELLE cette route (`fetchUserGame`,
+// `apps/web/src/lib/api/game-integration.ts`), mais par la table du jeu
+// `GAME_INTEGRATION_ROUTES` / `gameUserGamePath`
+// (`packages/shared/types/game-routes.ts`), jamais par le catalogue généré —
+// comme `users.byUserIdGameShowcase` et les `me.game*` ci-dessus. Valeur
+// MESURÉE le 2026-10-06.
+// 275 → 277 (2026-10-08) : les jumelles TS des deux entrées relevées côté Swift par
+// `06aa6144f2` — `attachments.signedByTokenByWildcard` (#9600 : l'adresse signée est
+// SERVIE dans les charges, aucun client ne la compose) et `me.securityEvents`
+// (prématurée : ses écrans viennent par #9651). Valeur MESURÉE le 2026-10-08.
+// 275 → 274 (2026-10-10, #9945) : une entrée morte de moins, consommée par les lots
+// #9906-#9911 (pièce visée). Valeur MESURÉE le 2026-10-10.
+// 274 → 275 (#10000, 2026-10-10) : `world.root` (`GET /api/v1/world`), GÉNÉRÉE
+// depuis `route-manifest.json` par `916e564ac9` sans relever cette référence —
+// PRÉMATURÉE : l'entrée publique de World Wide sera lue par la landing et la
+// connexion web (#10003, #10007), qui la feront redescendre. Valeur MESURÉE le
+// 2026-10-10.
+// 275 → 277 (2026-10-11, #9947) : `me.gameSeasonsByNumber` et `me.gameLeagueWeeksByWeekKey` —
+// comme les autres `me.game*`, le web les lira par leur table partagée `GAME_ARCHIVE_ROUTES`
+// (`packages/shared/types/game-archive.ts`, écrans de #10018), jamais par le catalogue.
+// Valeur MESURÉE le 2026-10-11.
+// 277 → 276 (2026-10-11, #10002/#10003) : `world.root` a son appelant web — la landing et
+// l'entrée invité lisent `GET /api/v1/world` par le catalogue. Valeur MESURÉE le 2026-10-11.
+// 276 → 275 (2026-10-11, #10103) : `me.categories` et `me.categoriesByCategoryId` ont leur
+// appelant web — les catégories de la liste et la préférence de pliage (`isExpanded`).
+// Mesuré 277 juste avant ce lot (une entrée générée entre-temps, non relevée) : 277 − 2.
+// Valeur MESURÉE le 2026-10-11.
+// 275 → 274 (2026-10-11, #10102) : `world.participantsByParticipantId` a son appelant web —
+// la fiche d'un participant de World Wide (`apps/web/src/lib/api/world-participant-card.ts`),
+// ouverte par l'équipe depuis le fil. Valeur MESURÉE le 2026-10-11.
+// 274 → 278 (#10201, 2026-10-11) : `packs.gloryFrame`, `.gloryFrameBySlug`,
+// `.gloryFrameBySlugInstall` et `.gloryFrameInstalled` (LP0 #10148, `/api/v1/packs/glory-frame`),
+// GÉNÉRÉES avec leurs routes — PRÉMATURÉES : LP1 #10149 (« le web installe des packs de tout
+// domaine »), qui dépend explicitement de LP0, leur donnera leur appelant (`apps/web/src/lib/api/packs.ts`)
+// et ramènera la référence à 274. Valeur MESURÉE le 2026-10-11 sur dev 4c4c56ebd8 (CI run
+// 38150253397 rouge sur 278).
+// 278 -> 279 (#10157, 2026-10-11) : `packAssets.byFile` (L5, `GET /api/v1/pack-assets/:file`, le magasin
+// adressé par contenu des packs officiels), GÉNÉRÉE avec sa route — PRÉMATURÉE : LP1 #10149 lira
+// couvertures, contrats et vignettes par cette adresse. Valeur MESURÉE le 2026-10-11 en local.
+// 279 -> 274 (2026-10-11) : plusieurs lots partis de bases différentes (packs, aperçus
+// Open Graph #10192, accueil des visiteurs sans compte) ont donné leur appelant à cinq
+// entrées sur dev sans relever le cliquet. Valeur MESURÉE sur dev 827ee17789.
+// 274 -> 277 (#10162, 2026-10-11) : `me.gameFramesAtmosphere`, `me.gamePhotoMomentsInvitations` et
+// `me.gamePhotoMomentsPresented` (L10a, `GAME_PHOTO_ROUTES`), GÉNÉRÉES avec leurs routes — comme les
+// autres `me.game*`, le web les lira par leur table partagée (`packages/shared/types/game-routes.ts`),
+// jamais par le catalogue (L10b #10163, L18 #10174). Valeur MESURÉE le 2026-10-11 en local.
+// 277 -> 278 (#10235, 2026-10-12) : `admin.gameSeasonsAppEventsYaml` (`GET /api/v1/admin/game/seasons/app-events.yaml`),
+// le téléchargement DIRECT du bloc `store.app_events` d'andp, pour un script ou un `curl` d'administrateur — l'écran
+// web télécharge le champ `yaml` de la réponse JSON (`admin.gameSeasonsAppEvents`). Les sept autres entrées
+// `admin.gameSeasons*` et `me.gameSeasonsCalendar` ont leur appelant (`apps/web/src/lib/api/admin-game-seasons.ts`,
+// `game-season-calendar.ts`). Valeur MESURÉE le 2026-10-12 en local.
+// 276 -> 275 (#10502, #10499, 2026-10-13) : `me.consents` (`GET /api/v1/me/consents`) a son appelant web —
+// `apps/web/src/lib/api/consents.ts`, qui confirme l'accord d'analyse du contexte de lot `/social/events`
+// (a44deebecf). Valeur MESURÉE le 2026-10-13 en CI (run 38380030207 rouge sur 275) et en local.
+// 275 -> 276 (#10559, 2026-10-13) : `affiliate.byTokenOg` (`GET /api/v1/affiliate/:token/og`) — la page d'aperçu
+// Open Graph d'un lien d'affiliation, servie par la passerelle aux ROBOTS que Traefik trie par User-Agent
+// (jumelle des aperçus `/chat/<lien>` et `/l/<jeton>`). Aucun client ne l'appelle jamais : l'entrée existe parce
+// que le catalogue est généré depuis le manifeste. Valeur MESURÉE le 2026-10-13 en CI (run 38460483889 rouge sur 276).
+// 271 -> 270 (#7558, 2026-10-14) : `conversations.byIdMessagesByMessageIdPin` (`PUT`/`DELETE
+// …/messages/:messageId/pin`) a son appelant web — `apps/web/src/lib/api/pin-message.ts`, le geste « Épingler /
+// Désépingler » de la feuille « Plus… » du fil. Valeur MESURÉE le 2026-10-14 en local.
+// 270 -> 267 (#10613, #7836, #10615, 2026-10-14) : la fiche de groupe du web gagne trois appelants —
+// `conversations.byIdParticipantsByParticipantKey` (`DELETE …/participants/:key`, expulser),
+// `conversations.byIdParticipantsByUserIdBan` (`…/ban`) et `conversations.byIdParticipantsByUserIdRole`
+// (`…/participants/:key/role`, promouvoir/rétrograder). Valeur MESURÉE en CI (run 38602621428, rouge sur 267).
+// 265 -> 277 (#10709, 2026-10-15) : la relecture des vendeurs tiers d'apparence inscrit au catalogue, pour les
+// fonds, les contours et les bannières, `…BySlugContract`, `…BySlugReview`, `…Pending` et `…Submissions` —
+// 12 entrées. Prématurées : la passerelle les sert, aucun client n'a encore l'écran de modération ni de dépôt
+// d'un pack vendeur. Valeur MESURÉE le 2026-10-15 en local sur 79129ae28f.
+// 277 -> 276 (2026-10-17) : une entrée de plus a trouvé son appelant sur dev. Valeur MESURÉE en CI
+// (run 38990820855, « AMÉLIORATION NON ENREGISTRÉE ») et en local sur origin/dev.
+// 276 -> 275 (2026-10-19) : une entrée de plus a trouvé son appelant sur dev, révélé une fois la première
+// peinture repassée sous son plafond (#10974). Valeur MESURÉE en CI (run 39191671718, « AMÉLIORATION NON ENREGISTRÉE ») et en local sur origin/dev.
+// 275 -> 276 (#10162, 2026-10-22) : `me.gamePhotoMomentsKept` (`POST /api/v1/me/game/photo-moments/kept`, le
+// signal « immortalisée » de D22(b), #10182). La passerelle le sert et son miroir Swift est déjà compté
+// prématuré (check-swift-catalog-dead-entries.mjs) ; le web l'émettra quand le carnet gardera une photo par
+// ce signal (#11585), iOS dans son lot. Entrée PRÉMATURÉE, pas un faux mort (#5427). Valeur MESURÉE le
+// 2026-10-22 en CI (Quality, run 39754795559) et en local en diffant les entrées mortes entre origin/dev
+// (275) et la branche de #11538 (276) : une seule entrée nouvelle.
+// 276 -> 277 (#11329, 2026-10-23) : `attachments.byAttachmentIdSubtitlesByLang`, la jumelle TS de l'entrée
+// Swift relevée le même jour (sous-titres WebVTT d'une pièce, servis depuis la fusion de #12375). Le lecteur
+// vidéo web la lira dans #9275. Entrée PRÉMATURÉE, pas un faux mort (#5427). Valeur MESURÉE le 2026-10-23 en
+// local sur origin/dev : une seule entrée nouvelle.
+// 277 -> 276 (#10175, 2026-10-25) : `notifications.readByTypes` (`POST /api/v1/notifications/read-by-types`) a son
+// appelant web — `apps/web/src/lib/api/notifications.ts`, qui éteint « moments à immortaliser » quand le carnet
+// s'ouvre à froid, sans liste de notifications en cache. Valeur MESURÉE le 2026-10-25 en CI (Gardes du dépôt, run
+// 40172020147, « AMÉLIORATION NON ENREGISTRÉE ») et en local.
+// 276 -> 277 (#13142, 2026-10-26) : `e2Ee.conversationsByConversationIdSignals` (`POST
+// /api/v1/e2ee/conversations/:conversationId/signals`, la route unique des signaux chiffrés d'une
+// conversation e2ee). La passerelle la sert, iOS l'appelle ; le web l'appellera quand il parlera
+// libsignal (#13201, décision #12975). Entrée PRÉMATURÉE, pas un faux mort (#5427). Valeur MESURÉE
+// le 2026-10-26 en CI (Gardes du dépôt, PR #13207) : une seule entrée nouvelle.
+// 277 -> 281 (#13933, 2026-10-31) : `relations.byUserIdLevel`, `byUserIdRitual`, `config`, `root`, les quatre routes
+// des cercles que la passerelle sert et que les clients appelleront avec l'écran des cercles (#13933, ui-cercles).
+// Entrées PRÉMATURÉES, pas de faux morts (#5427). Valeur MESURÉE en CI (Gardes du dépôt, PR #14082) : quatre nouvelles.
+// 277 -> 276 (#14910, 2026-11-03) : `relations.byUserIdLevel` (`POST /api/v1/relations/:userId/level`) a son
+// appelant web — `apps/web/src/lib/api/relations.ts#lowerRelation`, « Rétrograder » / « Annuler le lien » de la
+// fiche. Valeur MESURÉE en local sur origin/dev.
+// ENTRÉES EN ATTENTE DE CLIENT — déclarées, jamais comptées dans la référence.
+//
+// Une route que la passerelle sert AVANT que son client n'existe n'est pas une
+// promesse rompue (#4889) : c'est une promesse datée, dont l'issue nomme qui la
+// tiendra. Relever BASELINE_DEAD_ENTRIES l'aurait noyée dans la dette générale
+// sans dire quand elle se solde ; la déclarer ici l'attache à son issue, et
+// `applyKnownLiveExceptions` la fait rougir (PÉRIMÉE) le jour où son appelant
+// arrive — la déclaration doit alors partir dans le même commit.
+const PENDING_CLIENT_ENTRIES = {
+  // La boîte de demandes (#14107, PR #14449) : le serveur sert « Accepter » avant le tour client, qui le portera.
+  'conversations.byIdMessageRequestAccept': { issue: 14107, reason: 'POST /conversations/:id/message-request/accept — le bouton « Accepter » de la boîte de demandes (web)' },
+  // #11327 (S26) — `/api/v1/lens` : le crédit « Lens par X », le logo du filigrane et le ping d'usage, que la
+  // bulle et la caméra du web liront (#14095).
+  'lens.credits': { issue: 14095, reason: 'GET /lens/credits — le crédit des médias reçus, lu par la bulle web' },
+  'lens.partnersByPartnerIdLogo': { issue: 14095, reason: 'GET /lens/partners/:partnerId/logo — le logo du double filigrane' },
+  'lens.usageBySlug': { issue: 14095, reason: 'POST /lens/usage/:slug — le ping d’usage de la caméra web (le GET suit #14097)' },
+  // … et le profil partenaire, la file de vérification et ses deux gestes, que la console web portera (#14097).
+  'lens.partnersMe': { issue: 14097, reason: 'GET|PUT /lens/partners/me — le profil du partenaire, écrit depuis le web' },
+  'lens.partnersPending': { issue: 14097, reason: 'GET /lens/partners/pending — la file de vérification de la console' },
+  'lens.partnersByUserIdVerify': { issue: 14097, reason: 'POST /lens/partners/:userId/verify — vérifier l’état vu' },
+  'lens.partnersByUserIdRevoke': { issue: 14097, reason: 'POST /lens/partners/:userId/revoke — retirer une vérification' },
+  // L'éditeur de packs lié à un compte Meeshy vérifié (#16274, servi par la PR #16378) : la
+  // boutique et la console web liront sa fiche, son espace et sa liste d'administration.
+  'publishers.bySlug': { issue: 16274, reason: 'GET /publishers/:slug — la fiche publique de l’éditeur, lue par la boutique web' },
+  'publishers.me': { issue: 16274, reason: 'GET|PUT /publishers/me — l’espace de l’éditeur connecté' },
+  'publishers.admin': { issue: 16274, reason: 'GET|POST /publishers/admin — la liste et la liaison des éditeurs, console web' },
+  // La page éditeur (#16433) : iOS la lit d'abord ; la boutique web la lira avec sa page éditeur.
+  'publishers.bySlugPage': { issue: 16433, reason: 'GET /publishers/:slug/page — l’identité de l’éditeur et le profil qui l’édite, page éditeur web' },
+  // Le réveil par push d'un talkie vers un Proche hors ligne (#17142, chapeau #17141) : la
+  // passerelle sert déjà le tampon et le jeton ; aucun client (web, iOS, Android) n'appelle encore
+  // ces deux routes REST — le relais se fait pour l'instant par socket (`talkie:join`).
+  'talkie.byTalkieIdAudio': { issue: 17142, reason: 'GET /talkie/:talkieId/audio — l’audio tamponné d’un talkie de réveil, que le web et Android liront (#17142)' },
+  'users.mePushToTalkToken': { issue: 17142, reason: 'POST|DELETE /users/me/push-to-talk-token — le jeton PushToTalk, lié à la session côté iOS' },
+  // La conversation externe (#17117, chantier #17007) : la passerelle ouvre une conversation chiffrée de bout en
+  // bout avec un ami WhatsApp, derrière un drapeau éteint en production ; le lot clients (#17118) l'appellera.
+  'conversations.external': { issue: 17118, reason: 'POST /conversations/external — ouvrir une conversation avec un ami WhatsApp, depuis le web, iOS et Android' },
+  // La position du Sang (#13937, derrière un drapeau éteint) : la passerelle sert l'historique scellé, le fantôme, le
+  // journal et la proximité avant les clients (web, iOS, Android) qui les appelleront.
+  'me.locationBlood': { issue: 13937, reason: 'POST /me/location/blood — ranger un point au réveil sur changement significatif' },
+  'me.locationHistory': { issue: 13937, reason: 'DELETE /me/location/history — effacer son historique' },
+  'me.locationConsultations': { issue: 13937, reason: 'GET /me/location/consultations — qui a consulté ma position' },
+  'me.locationBloodSettings': { issue: 13937, reason: 'PUT /me/location/blood-settings — fantôme et rayon de proximité' },
+  'relations.byUserIdLocationHistory': { issue: 13937, reason: 'GET /relations/:userId/location/history — l’historique d’un Sang' },
+};
+
+// 274 -> 271 (#6375, 2026-11-07) : `communities.byIdMembers`, `.byIdMembersByMemberId` et
+// `.byIdMembersByMemberIdRole` ont leur appelant web (l'écran Membres d'une communauté).
+const BASELINE_DEAD_ENTRIES = 269;
+
+export const readWorld = (root) => {
+  const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();
+  if (groupFiles.length === 0) throw new Error(`${GROUPS_DIR} : aucun module de groupe — le catalogue a changé de forme.`);
+  const namespaces = groupFiles.map((name) => ({
+    name: namespaceOfGroupFile(name),
+    entries: parseGroupModule(readFileSync(join(root, GROUPS_DIR, name), 'utf8')),
+  }));
+
+  const searchFiles = SEARCH_ROOTS.flatMap((r) => listSourceFiles(join(root, r), r)).filter(
+    (relPath) => relPath !== CATALOG_FILE && !relPath.startsWith(`${GROUPS_DIR}/`), // hors fichiers de déclaration
+  );
+
+  const nsNames = namespaces.map((n) => n.name);
+  const usedPairs = new Set(searchFiles.flatMap((relPath) => callersIn(readFileSync(join(root, relPath), 'utf8'), nsNames)));
+
+  return { namespaces, usedPairs };
+};
+
+export const deadEntries = (world) =>
+  world.namespaces.flatMap((ns) =>
+    ns.entries.filter((e) => !world.usedPairs.has(`${ns.name}.${e}`)).map((e) => `${ns.name}.${e}`),
+  );
+
+// Retire du compte de dette les faux morts PROUVÉS (#5427), et signale toute
+// exception devenue STALE : une entrée listée qui n'apparaît plus dans le
+// compte brut a soit regagné un appelant réel (l'exception est alors un
+// bruit à retirer), soit disparu du catalogue (même remède). Une liste
+// d'exceptions qui ne peut jamais rougir sur sa propre péremption est
+// exactement la « liste qui se périme en silence » que #5427 refuse.
+export const applyKnownLiveExceptions = (dead, exceptions) => {
+  const deadSet = new Set(dead);
+  const stale = [...exceptions].filter((e) => !deadSet.has(e));
+  const filtered = dead.filter((e) => !exceptions.has(e));
+  return { filtered, stale };
+};
+
+const RESULT = Object.freeze({ OK: 'ok', REGRESSION: 'regression', UNRECORDED_IMPROVEMENT: 'unrecorded-improvement' });
+
+// Une entrée EN ATTENTE DE CLIENT n'existe que sous l'issue qui portera son
+// appelant : une déclaration sans numéro d'issue, ou sans raison écrite, est
+// refusée — elle redeviendrait la « liste qui se périme en silence ».
+export const pendingClientProblems = (pending) =>
+  Object.entries(pending)
+    .filter(([, why]) => !Number.isInteger(why?.issue) || why.issue <= 0 || typeof why?.reason !== 'string' || why.reason.length < 20)
+    .map(([entry]) => entry);
+
+export const evaluateRatchet = (deadCount, baseline) => {
+  if (deadCount > baseline) return RESULT.REGRESSION;
+  if (deadCount < baseline) return RESULT.UNRECORDED_IMPROVEMENT;
+  return RESULT.OK;
+};
+
+const selfTest = () => {
+  const world = {
+    namespaces: [
+      { name: 'foo', entries: ['alive', 'dead1', 'dead2'] },
+      { name: 'bar', entries: ['aliveToo'] },
+    ],
+    usedPairs: new Set(['foo.alive', 'bar.aliveToo']),
+  };
+  const dead = deadEntries(world);
+  if (dead.length !== 2 || !dead.includes('foo.dead1') || !dead.includes('foo.dead2')) {
+    console.error(`AVEUGLE : dead entries attendues [foo.dead1, foo.dead2], obtenu ${JSON.stringify(dead)}.`);
+    return 1;
+  }
+
+  if (evaluateRatchet(2, 2) !== RESULT.OK) {
+    console.error('AVEUGLE : un compte égal à la référence doit être OK.');
+    return 1;
+  }
+  if (evaluateRatchet(3, 2) !== RESULT.REGRESSION) {
+    console.error('AVEUGLE : une régression (+1 entrée morte) doit être détectée.');
+    return 1;
+  }
+  if (evaluateRatchet(1, 2) !== RESULT.UNRECORDED_IMPROVEMENT) {
+    console.error('AVEUGLE : une amélioration non enregistrée (-1) doit être détectée.');
+    return 1;
+  }
+
+  // Le module ci-dessous imite la forme GÉNÉRÉE d'un groupe : une constante
+  // par entrée, une fonction pour une entrée paramétrée, et l'alias d'une clé
+  // qui est un mot réservé. Les commentaires portent des chemins : un parseur
+  // qui les lirait compterait des entrées fantômes.
+  const groupModule = [
+    '/** GET /api/v1/admin/dashboard */',
+    "export const dashboard = '/api/v1/admin/dashboard';",
+    '',
+    '/** GET /api/v1/admin/:id */',
+    'export const byId = (id: string): string => `/api/v1/admin/${encodeURIComponent(id)}`;',
+    '',
+    '/** GET /api/v1/admin/export */',
+    "const export_ = '/api/v1/admin/export';",
+    'export { export_ as export };',
+  ].join('\n');
+  const entries = parseGroupModule(groupModule);
+  const expected = ['dashboard', 'byId', 'export'];
+  if (entries.length !== 3 || !expected.every((e) => entries.includes(e))) {
+    console.error(`AVEUGLE : le parseur doit lire exactement ${JSON.stringify(expected)}, obtenu ${JSON.stringify(entries)}.`);
+    return 1;
+  }
+  if (namespaceOfGroupFile('api-legacy-attachments.ts') !== 'apiLegacyAttachments' || namespaceOfGroupFile('me.ts') !== 'me') {
+    console.error('AVEUGLE : le nom de fichier d’un groupe doit redonner son namespace (kebab → camel).');
+    return 1;
+  }
+
+  // Les deux formes d'appel sont reconnues, l'alias est celui que CHAQUE
+  // fichier choisit, et un membre homonyme d'un autre objet (`other.adminEndpoints.x`)
+  // n'est pas un appel.
+  const caller = [
+    "import * as adminApi from '@meeshy/shared/api/endpoints/admin';",
+    "import * as legacy from '../api/endpoints/api-legacy-attachments.js';",
+    'const a = adminApi.byId(id);',
+    'const b = legacy.fileByWildcard(path);',
+    'const c = API_ENDPOINTS.auth.login;',
+    'const d = other.adminApi.dashboard;',
+  ].join('\n');
+  const calls = callersIn(caller, ['admin', 'auth', 'apiLegacyAttachments']).sort();
+  const expectedCalls = ['admin.byId', 'apiLegacyAttachments.fileByWildcard', 'auth.login'];
+  if (JSON.stringify(calls) !== JSON.stringify(expectedCalls)) {
+    console.error(`AVEUGLE : appelants attendus ${JSON.stringify(expectedCalls)}, obtenu ${JSON.stringify(calls)}.`);
+    return 1;
+  }
+
+  // Une exception PROUVÉE retire l'entrée du compte, même si elle serait
+  // "morte" au sens strict des appelants.
+  const withException = applyKnownLiveExceptions(['foo.dead1', 'foo.dead2'], new Set(['foo.dead1']));
+  if (withException.filtered.length !== 1 || withException.filtered[0] !== 'foo.dead2' || withException.stale.length !== 0) {
+    console.error(`AVEUGLE : une exception valide doit retirer exactement l'entrée exceptée, obtenu ${JSON.stringify(withException)}.`);
+    return 1;
+  }
+
+  // Une exception qui ne correspond plus à AUCUNE entrée morte (regagné un
+  // appelant, ou retirée du catalogue) doit être signalée STALE, jamais
+  // silencieusement ignorée.
+  const withStale = applyKnownLiveExceptions(['foo.dead1'], new Set(['foo.dead1', 'foo.longGone']));
+  if (withStale.stale.length !== 1 || withStale.stale[0] !== 'foo.longGone') {
+    console.error(`AVEUGLE : une exception qui ne matche plus aucune entrée morte doit être signalée STALE, obtenu ${JSON.stringify(withStale)}.`);
+    return 1;
+  }
+
+  // Une entrée en attente de client sans issue ni raison est refusée.
+  const problems = pendingClientProblems({
+    'foo.ok': { issue: 1, reason: 'le client web la lira dans son lot' },
+    'foo.noIssue': { reason: 'le client web la lira dans son lot' },
+    'foo.noReason': { issue: 2, reason: '' },
+  });
+  if (JSON.stringify(problems) !== JSON.stringify(['foo.noIssue', 'foo.noReason'])) {
+    console.error(`AVEUGLE : une entrée en attente sans issue ou sans raison doit être refusée, obtenu ${JSON.stringify(problems)}.`);
+    return 1;
+  }
+
+  console.log('self-test : 10/10 vérifications passées (comptage, cliquet à deux sens, lecture des modules de groupe, deux formes d’appelant, exceptions #5427, entrées en attente de client).');
+  return 0;
+};
+
+const main = () => {
+  if (process.argv.includes('--self-test')) return selfTest();
+
+  const world = readWorld(REPO_ROOT);
+  const unanchored = pendingClientProblems(PENDING_CLIENT_ENTRIES);
+  if (unanchored.length > 0) {
+    console.error(`ENTRÉE EN ATTENTE SANS ISSUE : ${unanchored.join(', ')} — chaque entrée de PENDING_CLIENT_ENTRIES nomme l'issue qui portera son appelant et sa raison.`);
+    return 1;
+  }
+  const exceptions = new Set([...KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE, ...Object.keys(PENDING_CLIENT_ENTRIES)]);
+  const { filtered, stale } = applyKnownLiveExceptions(deadEntries(world), exceptions);
+
+  if (stale.length > 0) {
+    console.error(
+      `EXCEPTION PÉRIMÉE (#5427) : ${stale.join(', ')} ne figure(nt) plus parmi les entrées sans appelant — ` +
+        'a/ont regagné un appelant réel, ou disparu du catalogue. Retirez cette entrée de KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE ou de PENDING_CLIENT_ENTRIES (son issue a livré l’appelant).',
+    );
+    return 1;
+  }
+
+  const dead = filtered.sort();
+  const verdict = evaluateRatchet(dead.length, BASELINE_DEAD_ENTRIES);
+
+  if (verdict === RESULT.OK) {
+    console.log(
+      `Catalogue TS : ${dead.length} entrée(s) sans appelant hors test, conforme à la référence (${BASELINE_DEAD_ENTRIES}).`,
+    );
+    return 0;
+  }
+
+  if (verdict === RESULT.REGRESSION) {
+    const added = dead.length - BASELINE_DEAD_ENTRIES;
+    console.error(
+      `RÉGRESSION : ${dead.length} entrées de catalogue TS sans appelant hors test, ` +
+        `${added} de plus que la référence (${BASELINE_DEAD_ENTRIES}).`,
+    );
+    console.error(
+      'Une entrée qui a perdu son dernier appelant est une promesse que le code ne tient plus (#4889) : ' +
+        'retirez-la, ou documentez pourquoi elle est prématurée et relevez BASELINE_DEAD_ENTRIES dans ce script.',
+    );
+    console.error(`Entrées mortes : ${dead.join(', ')}`);
+    return 1;
+  }
+
+  console.error(
+    `AMÉLIORATION NON ENREGISTRÉE : ${dead.length} entrées de catalogue TS sans appelant hors test, ` +
+      `en dessous de la référence (${BASELINE_DEAD_ENTRIES}). Abaissez BASELINE_DEAD_ENTRIES à ${dead.length} dans ce script.`,
+  );
+  return 1;
+};
+
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
+  process.exit(main());
+}

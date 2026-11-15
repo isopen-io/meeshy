@@ -1,0 +1,362 @@
+import XCTest
+import Foundation
+
+final class SDKTapZoneButtonGuardTests: XCTestCase {
+
+    private static let sourcesRoot: URL = {
+        let tests = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        return tests
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources")
+            .appendingPathComponent("MeeshyUI")
+    }()
+
+    private static let convertedSites: [(file: String, action: String)] = [
+        ("Profile/UserProfileSheet+ConversationsTab.swift", "openSharedConversation(conv)"),
+        ("Story/StoryTextEditTopBar.swift", "onFinish()"),
+        ("Story/DrawingEditFloatingBubbles.swift", "onSelectTool(tool)"),
+        ("Story/DrawingEditFloatingBubbles.swift", "action()"),
+        ("Story/DrawingEditFloatingBubbles.swift", "onDismiss()"),
+        ("Community/CommunitySettingsScreen.swift", "viewModel.localColor = hex"),
+        ("Community/CommunityListScreen.swift", "onTap()"),
+        ("Community/CommunityDetailScreen.swift", "onSelectConversation?(conversation)"),
+        ("Primitives/UserIdentityBar.swift", "Button(action: action)"),
+        ("Primitives/MoodBadge.swift", "onTap(CGPoint("),
+        ("Media/AudioRecorderSheet.swift", "toggleRecording()")
+    ]
+
+    private static let exposedGestures: [(file: String, action: String)] = [
+        ("Story/Timeline/Views/Track/TransitionBadge.swift", "onTap()"),
+        ("Story/Timeline/Views/Track/TransitionCreationBadge.swift", "onCreate()"),
+        ("Story/Controls/AudioForegroundChip.swift", "onTap"),
+        ("Primitives/MeeshyAvatar.swift", "performTap"),
+        ("Primitives/UserIdentityBar.swift", "onTap?(code)"),
+        ("Location/LocationMessageView.swift", "onTapFullscreen?()"),
+        ("Media/MeeshyVideoThumbnail.swift", "onTap?()"),
+        ("Media/ImageViewerView.swift", "openFullscreen()")
+    ]
+
+    private static let newLabelKeys = [
+        "community.settings.color.swatch.a11y",
+        "media.image.open.a11y",
+        "userIdentity.language.show.a11y",
+        "story.timeline.transition.select.a11y",
+        "story.text.align.left.a11y",
+        "story.text.align.center.a11y",
+        "story.text.align.right.a11y",
+        "story.text.background.toggle.a11y",
+        "story.timeline.step.decrease.a11y",
+        "story.timeline.step.increase.a11y",
+        "community.react.a11y",
+        "reaction.picker.more.a11y",
+        "audio.transcript.show.a11y",
+        "audio.transcript.hide.a11y",
+        "media.code.copy.a11y",
+        "audio.editor.skip.backward.a11y",
+        "audio.editor.skip.forward.a11y",
+        "media.controls.toggle.a11y",
+        "media.image.zoom.toggle.a11y",
+        "avatar.presence.details.a11y"
+    ]
+
+    private static let catalogLanguages = ["fr", "en", "es", "de", "it", "ar", "pt-BR"]
+
+    private static func lines(of relativePath: String) -> [String]? {
+        let url = sourcesRoot.appendingPathComponent(relativePath)
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        return text.components(separatedBy: "\n")
+    }
+
+    private static func actionLineIndices(_ action: String, in lines: [String]) -> [Int] {
+        lines.indices.filter { index in
+            let line = lines[index].trimmingCharacters(in: .whitespaces)
+            guard !line.hasPrefix("//"), !line.contains("func ") else { return false }
+            return line.contains(action)
+        }
+    }
+
+    enum Invoker: Equatable {
+        case button
+        case gesture
+        case none
+    }
+
+    static func invoker(above index: Int, in lines: [String]) -> Invoker {
+        let lowest = max(0, index - 8)
+        for position in stride(from: index, through: lowest, by: -1) {
+            let line = lines[position]
+            if line.trimmingCharacters(in: .whitespaces).hasPrefix("//") { continue }
+            if line.contains(".onTapGesture") { return .gesture }
+            if line.contains("Button {") || line.contains("Button(action:") { return .button }
+        }
+        return .none
+    }
+
+    private static func gestureIndices(in lines: [String]) -> [Int] {
+        lines.indices.filter { index in
+            let line = lines[index].trimmingCharacters(in: .whitespaces)
+            return !line.hasPrefix("//") && line.contains(".onTapGesture")
+        }
+    }
+
+    static func isExposed(gestureAt index: Int, in lines: [String]) -> Bool {
+        let nextGesture = gestureIndices(in: lines).first { $0 > index } ?? lines.count
+        let upper = min(index + 20, nextGesture - 1, lines.count - 1)
+        guard upper >= index else { return false }
+        let window = lines[index...upper].joined(separator: "\n")
+        if window.contains("CycleButtonAccessibility(") { return true }
+        let hasTrait = window.contains(".accessibilityAddTraits(") && window.contains("isButton")
+        return hasTrait && window.contains(".accessibilityAction")
+    }
+
+    private static func gesturesInvoking(_ action: String, in lines: [String]) -> [Int] {
+        gestureIndices(in: lines).filter { gesture in
+            let nextGesture = gestureIndices(in: lines).first { $0 > gesture } ?? lines.count
+            let upper = min(gesture + 6, nextGesture - 1, lines.count - 1)
+            guard upper >= gesture else { return false }
+            return lines[gesture...upper].contains { $0.contains(action) && !$0.contains("func ") }
+        }
+    }
+
+    func test_uneZoneTouchableConvertieDuSDKEstUnBoutonAuSurvolPointeur() {
+        for site in Self.convertedSites {
+            guard let lines = Self.lines(of: site.file) else {
+                XCTFail("\(site.file) est introuvable")
+                continue
+            }
+            let indices = Self.actionLineIndices(site.action, in: lines)
+            XCTAssertFalse(indices.isEmpty, "\(site.file) n'invoque plus \(site.action)")
+            let invokers = indices.map { Self.invoker(above: $0, in: lines) }
+            XCTAssertFalse(invokers.contains(.gesture),
+                           "\(site.file) invoque encore \(site.action) sous un .onTapGesture")
+            XCTAssertTrue(invokers.contains(.button),
+                          "\(site.file) n'invoque pas \(site.action) sous un Button")
+            XCTAssertTrue(lines.joined(separator: "\n").contains("MeeshyPointerPlainButtonStyle("),
+                          "\(site.file) ne pose pas MeeshyPointerPlainButtonStyle")
+        }
+    }
+
+    func test_unGesteGardeDuSDKSeDeclareBoutonAVoiceOver() {
+        for site in Self.exposedGestures {
+            guard let lines = Self.lines(of: site.file) else {
+                XCTFail("\(site.file) est introuvable")
+                continue
+            }
+            let gestures = Self.gesturesInvoking(site.action, in: lines)
+            XCTAssertFalse(gestures.isEmpty, "\(site.file) : aucun .onTapGesture n'invoque \(site.action)")
+            for gesture in gestures {
+                XCTAssertTrue(Self.isExposed(gestureAt: gesture, in: lines),
+                              "\(site.file):\(gesture + 1) : le geste \(site.action) n'est ni trait bouton ni action VoiceOver")
+            }
+        }
+    }
+
+    func test_unCurseurDeClipSeDeclareBouton() {
+        let lines = Self.lines(of: "Story/Timeline/Views/Track/ClipBarAccessibility.swift") ?? []
+        let text = lines.joined(separator: "\n")
+        XCTAssertTrue(text.contains(".accessibilityAddTraits(.isButton)"))
+        XCTAssertTrue(text.contains(".accessibilityAction { callbacks.onTap() }"))
+    }
+
+    func test_lesCyclesDuTexteOntUneActionParDefaut() {
+        let text = (Self.lines(of: "Story/StoryTextEditTopBar.swift") ?? []).joined(separator: "\n")
+        XCTAssertTrue(text.contains("let onActivate: () -> Void"))
+        XCTAssertTrue(text.contains(".accessibilityAction { onActivate() }"))
+    }
+
+    func test_aucuneActionDAccessibiliteNePorteLeLibellePerform() throws {
+        let root = Self.sourcesRoot
+        let files = try XCTUnwrap(FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil))
+        let offenders = files.compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" }
+            .filter { (try? String(contentsOf: $0, encoding: .utf8))?.contains(".accessibilityAction(perform:") == true }
+            .map(\.lastPathComponent)
+        XCTAssertEqual(offenders, [])
+    }
+
+    /// Xcode 27 ne résout plus `.accessibilityAction(handler)` (référence de fonction passée en position) :
+    /// « missing argument for parameter 'named' ». La fermeture de queue compile sous Xcode 26.1 ET 27.
+    func test_aucuneActionDAccessibiliteNePasseUneReferenceDeFonctionEnPosition() throws {
+        let root = Self.sourcesRoot
+        let files = try XCTUnwrap(FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil))
+        let positional = try NSRegularExpression(pattern: #"\.accessibilityAction\([A-Za-z_][A-Za-z0-9_.]*\)"#)
+        let offenders = files.compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" }
+            .filter { url in
+                guard let text = try? String(contentsOf: url, encoding: .utf8) else { return false }
+                return positional.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+            }
+            .map(\.lastPathComponent)
+        XCTAssertEqual(offenders, [])
+    }
+
+    func test_leScannerDistingueUnBoutonDUnGesteNu() {
+        let button = ["Button {", "    onTap()", "}"]
+        let gesture = ["Text(\"x\")", ".onTapGesture {", "    onTap()", "}"]
+        let exposed = [".onTapGesture { onTap() }", ".accessibilityAddTraits(.isButton)", ".accessibilityAction { onTap() }"]
+        let bare = [".onTapGesture { onTap() }", ".accessibilityLabel(\"x\")"]
+        XCTAssertEqual(Self.invoker(above: 1, in: button), .button)
+        XCTAssertEqual(Self.invoker(above: 2, in: gesture), .gesture)
+        XCTAssertTrue(Self.isExposed(gestureAt: 0, in: exposed))
+        XCTAssertFalse(Self.isExposed(gestureAt: 0, in: bare))
+        let builder = [".onTapGesture(count: 2) { open() }", ".accessibilityActions {", "    if on { Button(\"x\") { open() } }", "}"]
+        let emptyBuilder = [".onTapGesture { open() }", ".accessibilityActions { rows }"]
+        XCTAssertTrue(MeeshyUISourceScan.ungatedTapGestures(in: builder.joined(separator: "\n")).isEmpty)
+        XCTAssertEqual(MeeshyUISourceScan.ungatedTapGestures(in: emptyBuilder.joined(separator: "\n")), [1])
+    }
+
+    func test_lesLibellesNeufsSontTraduitsDansLesSeptLangues() throws {
+        let url = Self.sourcesRoot
+            .appendingPathComponent("Resources")
+            .appendingPathComponent("Localizable.xcstrings")
+        let data = try Data(contentsOf: url)
+        let root = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try XCTUnwrap(root["strings"] as? [String: Any])
+        for key in Self.newLabelKeys {
+            let entry = strings[key] as? [String: Any]
+            XCTAssertNotNil(entry, "clé absente : \(key)")
+            let localizations = entry?["localizations"] as? [String: Any] ?? [:]
+            for language in Self.catalogLanguages {
+                let unit = (localizations[language] as? [String: Any])?["stringUnit"] as? [String: Any]
+                let value = unit?["value"] as? String ?? ""
+                XCTAssertFalse(value.isEmpty, "\(key) n'a pas de valeur en \(language)")
+            }
+        }
+    }
+
+    func test_leStyleSurvolNeChangePasLeRenduALaPression() {
+        guard let lines = Self.lines(of: "Primitives/PointerPlainButtonStyle.swift") else {
+            XCTFail("Primitives/PointerPlainButtonStyle.swift est introuvable")
+            return
+        }
+        let text = lines.joined(separator: "\n")
+        XCTAssertTrue(text.contains("meeshyPointerInteractive(shape:"))
+        XCTAssertFalse(text.contains("isPressed"))
+        XCTAssertFalse(text.contains("opacity"))
+        XCTAssertFalse(text.contains("scaleEffect"))
+    }
+
+    func test_aucunBoutonAIconeSeuleDuSDKNEstMuet() throws {
+        let offenders = try MeeshyUISourceScan.allSources().flatMap { source in
+            MeeshyUISourceScan.buttons(in: source.text)
+                .filter(MeeshyUISourceScan.isIconOnlyAndMute)
+                .map { "\(source.path):\($0.line)" }
+        }
+        XCTAssertEqual(offenders, [], "Bouton à icône seule sans libellé VoiceOver")
+    }
+
+    func test_leScannerDIconeSeuleReconnaitLesFormes() {
+        let bare = MeeshyUISourceScan.buttons(in: "Button { go() } label: { Image(systemName: \"xmark\") }")
+        let named = MeeshyUISourceScan.buttons(in: "Button { go() } label: { Image(systemName: \"xmark\") }\n.accessibilityLabel(\"x\")")
+        let inner = MeeshyUISourceScan.buttons(in: "Button(action: go) { Image(systemName: \"xmark\").accessibilityLabel(\"x\") }")
+        let withText = MeeshyUISourceScan.buttons(in: "Button(action: go) { HStack { Image(systemName: \"xmark\"); Text(\"x\") } }")
+        let roleBare = MeeshyUISourceScan.buttons(in: "Button(role: .destructive) { go() } label: { Image(systemName: \"trash\") }")
+        XCTAssertEqual(bare.filter(MeeshyUISourceScan.isIconOnlyAndMute).count, 1)
+        XCTAssertEqual(named.filter(MeeshyUISourceScan.isIconOnlyAndMute).count, 0)
+        XCTAssertEqual(inner.filter(MeeshyUISourceScan.isIconOnlyAndMute).count, 0)
+        XCTAssertEqual(withText.filter(MeeshyUISourceScan.isIconOnlyAndMute).count, 0)
+        XCTAssertEqual(roleBare.filter(MeeshyUISourceScan.isIconOnlyAndMute).count, 1)
+    }
+
+    func test_toutOnTapGestureDuSDKEstExposeAVoiceOver() throws {
+        let offenders = try MeeshyUISourceScan.allSources().flatMap { source in
+            MeeshyUISourceScan.ungatedTapGestures(in: source.text).map { "\(source.path):\($0)" }
+        }
+        XCTAssertEqual(offenders, [], ".onTapGesture ni bouton ni action nommée pour VoiceOver")
+    }
+
+    private static let featuresMainNonActionableGestures: [(file: String, action: String)] = [
+        ("Components/MessagePieceOverlay.swift", "{}"),
+        ("Components/UniversalComposerBar+Layout.swift", "focusTextField"),
+        ("Views/MoodSpotlight/MoodSpotlightView.swift", "replyFocused = false"),
+        ("Components/MiniAudioPlayerBar.swift", "openConversation(for: context)")
+    ]
+
+    private static let featuresMainIconOnlyExceptions: Set<String> = ["Components/ConversationPreferencesTab.swift"]
+
+    private static let newAppLabelKeys: [String] = [
+        "a11y.main.quotedReply.open",
+        "a11y.main.gallery.zoomToggle",
+        "a11y.main.bubble.quickReact",
+        "a11y.main.reel.playPause"
+    ]
+
+    private static var appCatalogURL: URL {
+        MeeshyUISourceScan.appFeaturesMainRoot
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Localizable.xcstrings")
+    }
+
+    private static func isNamedException(_ source: MeeshyUISourceScan.Source, line: Int) -> Bool {
+        let lines = source.text.components(separatedBy: "\n")
+        guard line - 1 < lines.count else { return false }
+        let window = lines[(line - 1)...min(line + 1, lines.count - 1)].joined(separator: "\n")
+        return featuresMainNonActionableGestures.contains { $0.file == source.path && window.contains($0.action) }
+    }
+
+    func test_leScannerDIconeSeuleLitLesFermeturesDeQueue() {
+        let queue = "Button { go() } label: { Image(systemName: \"x\") }\n.simultaneousGesture(G).accessibilityAction(named: Text(\"y\")) { z() }.accessibilityLabel(\"x\")"
+        let menu = "Button { go() } label: { Image(systemName: \"x\") }\n.contextMenu { Button(\"a\") {} }.accessibilityLabel(\"x\")"
+        let hidden = "Button { go() } label: { Image(systemName: \"x\") }\n.accessibilityHidden(true)"
+        let bare = "Button { go() } label: { Image(systemName: \"x\") }\n.accessibilityAction(named: Text(\"y\")) { z() }"
+        for text in [queue, menu, hidden] {
+            XCTAssertEqual(MeeshyUISourceScan.buttons(in: text).filter(MeeshyUISourceScan.isIconOnlyAndMute).count, 0)
+        }
+        XCTAssertEqual(MeeshyUISourceScan.buttons(in: bare).filter(MeeshyUISourceScan.isIconOnlyAndMute).count, 1)
+    }
+
+    func test_leBalayageDeFeaturesMainVoitLeDossier() throws {
+        let sources = try MeeshyUISourceScan.sources(under: MeeshyUISourceScan.appFeaturesMainRoot)
+        XCTAssertGreaterThan(sources.count, 900)
+        XCTAssertTrue(sources.contains { $0.path == "Views/FeedView.swift" })
+    }
+
+    func test_aucunBoutonAIconeSeuleDeFeaturesMainNEstMuet() throws {
+        let sources = try MeeshyUISourceScan.sources(under: MeeshyUISourceScan.appFeaturesMainRoot)
+        let offenders = sources.flatMap { source in
+            MeeshyUISourceScan.buttons(in: source.text)
+                .filter(MeeshyUISourceScan.isIconOnlyAndMute)
+                .map { "\(source.path):\($0.line)" }
+        }.filter { site in !Self.featuresMainIconOnlyExceptions.contains { site.hasPrefix($0) } }
+        XCTAssertEqual(offenders, [], "Bouton à icône seule sans libellé VoiceOver dans Features/Main")
+    }
+
+    func test_toutOnTapGestureDeFeaturesMainEstExposeAVoiceOver() throws {
+        let sources = try MeeshyUISourceScan.sources(under: MeeshyUISourceScan.appFeaturesMainRoot)
+        let offenders = sources.flatMap { source in
+            MeeshyUISourceScan.ungatedTapGestures(in: source.text)
+                .filter { !Self.isNamedException(source, line: $0) }
+                .map { "\(source.path):\($0)" }
+        }
+        XCTAssertEqual(offenders, [], ".onTapGesture ni bouton ni action nommée pour VoiceOver dans Features/Main")
+    }
+
+    func test_aucuneActionDAccessibiliteDeFeaturesMainNEstPositionnelle() throws {
+        let positional = try NSRegularExpression(pattern: #"\.accessibilityAction\([A-Za-z_][A-Za-z0-9_.]*\)"#)
+        let sources = try MeeshyUISourceScan.sources(under: MeeshyUISourceScan.appFeaturesMainRoot)
+        let offenders = sources
+            .filter { positional.firstMatch(in: $0.text, range: NSRange($0.text.startIndex..., in: $0.text)) != nil }
+            .map(\.path)
+        XCTAssertEqual(offenders, [])
+    }
+
+    func test_lesLibellesNeufsDeLAppSontTraduitsDansLesSeptLangues() throws {
+        let data = try Data(contentsOf: Self.appCatalogURL)
+        let root = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try XCTUnwrap(root["strings"] as? [String: Any])
+        for key in Self.newAppLabelKeys {
+            let entry = strings[key] as? [String: Any]
+            XCTAssertNotNil(entry, "clé absente : \(key)")
+            let localizations = entry?["localizations"] as? [String: Any] ?? [:]
+            for language in Self.catalogLanguages {
+                let unit = (localizations[language] as? [String: Any])?["stringUnit"] as? [String: Any]
+                let value = unit?["value"] as? String ?? ""
+                XCTAssertFalse(value.isEmpty, "\(key) n'a pas de valeur en \(language)")
+            }
+        }
+    }
+}

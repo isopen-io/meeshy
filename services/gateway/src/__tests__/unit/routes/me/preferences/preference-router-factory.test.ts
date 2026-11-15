@@ -34,17 +34,6 @@ jest.mock('../../../../../utils/withMutationLog', () => ({
   withMutationLog: jest.fn<any>(({ op }: { op: () => Promise<any> }) => op()),
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-      code: { type: 'string' },
-    },
-  },
-}));
-
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { createPreferenceRouter } from '../../../../../routes/me/preferences/preference-router-factory';
@@ -196,6 +185,47 @@ describe('GET / — preference-router-factory', () => {
     const res = await errApp.inject({ method: 'GET', url: '/' });
     expect(res.statusCode).toBe(500);
     await errApp.close();
+  });
+});
+
+// ─── Deprecation — RFC 9745, pas le brouillon 2019 (#4181) ────────────────────
+
+/**
+ * La factory posait SA PROPRE annonce (`Deprecation: 'true'`, un hook
+ * `onSend` manuscrit) — écrite avant `utils/deprecation.ts` (#4274), et restée
+ * JUMELLE et DIVERGENTE de lui après coup. Ce bloc garde la délégation au site
+ * unique, au niveau où elle doit vivre : la factory elle-même, PARAMÉTRÉE par
+ * catégorie — si une seule catégorie régressait vers un hook local, ce serait
+ * ici que ça se verrait, pas seulement sur `audio` via `index.ts`.
+ */
+describe('Deprecation — factory (#4181)', () => {
+  it('pose la forme RFC 9745 sur les QUATRE verbes, sans Sunset codé en dur', async () => {
+    const app = await buildApp();
+
+    for (const method of ['GET', 'PUT', 'PATCH', 'DELETE'] as const) {
+      const res = await app.inject({
+        method,
+        url: '/',
+        headers: { 'content-type': 'application/json' },
+        payload: method === 'GET' || method === 'DELETE'
+          ? undefined
+          : { pushEnabled: false, soundEnabled: false },
+      });
+      expect(res.headers.deprecation).toMatch(/^@\d+$/);
+      expect(res.headers.deprecation).not.toBe('true');
+      expect(res.headers.link).toContain('rel="successor-version"');
+      expect(res.headers.sunset).toBeUndefined();
+    }
+
+    await app.close();
+  });
+
+  it('annonce le sursis même sur un 401 — le hook court avant la garde', async () => {
+    const anonApp = await buildApp({ auth: 'no-user-id' });
+    const res = await anonApp.inject({ method: 'GET', url: '/' });
+    expect(res.statusCode).toBe(401);
+    expect(res.headers.deprecation).toMatch(/^@\d+$/);
+    await anonApp.close();
   });
 });
 
@@ -563,17 +593,48 @@ describe('PATCH / — n\'applique QUE les clés envoyées', () => {
     await app.close();
   });
 
-  it('ignore toujours une clé inconnue du schéma', async () => {
+  // #4589 — remplace « ignore toujours une clé inconnue du schéma », qui
+  // gardait exactement le défaut : la clé était retirée en SILENCE et la route
+  // répondait 200. Mesuré sur staging le 2026-08-31 — `PATCH
+  // /me/preferences/privacy {"profileVisibility":"private"}` rendait
+  // `{"success":true}` et n'écrivait rien. Le client croit avoir transmis.
+  //
+  // Le témoin garde désormais les DEUX moitiés : le refus, et le fait qu'il
+  // NOMME la clé. Sans la seconde, un 400 muet passerait — et c'est
+  // exactement ce que servait `sendBadRequest(reply, 'VALIDATION_ERROR')`.
+  it('REFUSE une clé inconnue du schéma, et la nomme', async () => {
     const app = await buildDefaultedApp({ pushEnabled: false });
 
-    await app.inject({
+    const res = await app.inject({
       method: 'PATCH',
       url: '/',
       payload: { vibrate: false, sneaky: 'x' },
     });
 
+    expect(res.statusCode).toBe(400);
+    const corps = res.json();
+    expect(corps.error).toBe('VALIDATION_ERROR');
+    expect(corps.issues[0].code).toBe('unrecognized_keys');
+    // `keys`, pas `path` : une clé refusée par `strict()` laisse `path` VIDE.
+    // Le fait est mesuré, pas déduit — un témoin posé sur `path` resterait
+    // vert sur un tableau vide et ne garderait rien.
+    expect(corps.issues[0].keys).toEqual(['sneaky']);
+    expect((app as any).prisma.userPreferences.upsert).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('et laisse passer un corps entièrement déclaré — la rigueur ne referme pas la porte', async () => {
+    const app = await buildDefaultedApp({ pushEnabled: false });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/',
+      payload: { vibrate: false },
+    });
+
+    expect(res.statusCode).toBe(200);
     const written = (app as any).prisma.userPreferences.upsert.mock.calls[0][0].update.notification;
-    expect(written).not.toHaveProperty('sneaky');
+    expect(written).toHaveProperty('vibrate', false);
     await app.close();
   });
 });

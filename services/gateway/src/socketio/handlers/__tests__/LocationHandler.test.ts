@@ -30,6 +30,8 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 import { LocationHandler } from '../LocationHandler';
 import type { Socket, Server as SocketIOServer } from 'socket.io';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { findFirstHonouringWhere } from '../../../__tests__/helpers/find-first-honouring-where';
+import { noBlocksUserSurface } from '../../__tests__/helpers/no-blocks';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -38,6 +40,12 @@ const USER_ID = 'user-loc-001';
 const CONV_ID = '507f1f77bcf86cd799439011';
 const NORMALIZED_CONV_ID = '507f1f77bcf86cd799439022';
 const PARTICIPANT_ID = 'participant-loc-001';
+// Un AUTRE participant, ACTIF dans la MÊME conversation — ni `USER_ID` ni
+// `PARTICIPANT_ID`. Placé en tête du double, il fait échouer tout `where` qui
+// perdrait son `userId` (branche inscrite) ou son `id` (branche anonyme) : la
+// garde plate rendrait alors CET intrus, jamais `null` (#5191).
+const INTRUDER_USER_ID = 'user-loc-intruder';
+const INTRUDER_PARTICIPANT_ID = 'participant-loc-intruder';
 
 const VALID_COORDINATES = { latitude: 48.8566, longitude: 2.3522 };
 
@@ -61,15 +69,32 @@ function makeIo() {
   };
 }
 
-function makePrisma(participantResult: unknown = { id: PARTICIPANT_ID }): any {
+// Une ligne satisfaisant les DEUX `where` (`id` pour la branche anonyme,
+// `userId` pour la branche inscrite) — comme une vraie ligne `Participant`,
+// qui porte toujours les deux colonnes à la fois.
+const REAL_PARTICIPANT_ROW = {
+  id: PARTICIPANT_ID,
+  userId: USER_ID,
+  conversationId: NORMALIZED_CONV_ID,
+  isActive: true,
+};
+const INTRUDER_ROW = {
+  id: INTRUDER_PARTICIPANT_ID,
+  userId: INTRUDER_USER_ID,
+  conversationId: NORMALIZED_CONV_ID,
+  isActive: true,
+};
+
+function makePrisma(rows: ReadonlyArray<Record<string, unknown>> = [INTRUDER_ROW, REAL_PARTICIPANT_ROW]): any {
   return {
     participant: {
-      findFirst: jest.fn<any>().mockResolvedValue(participantResult),
+      findFirst: jest.fn<any>(findFirstHonouringWhere(rows)),
     },
     // Conversation OUVERTE par défaut — l'état terminal a sa propre suite.
     conversation: {
       findUnique: jest.fn<any>().mockResolvedValue({ isActive: true, closedAt: null }),
     },
+    user: noBlocksUserSurface(),
   };
 }
 
@@ -95,6 +120,7 @@ function makeHandler({
       io: io as any,
       prisma,
       connectedUsers,
+      userSockets: new Map(),
       socketToUser,
       normalizeConversationId: mockNormalize,
     }),
@@ -185,7 +211,7 @@ describe('LocationHandler', () => {
         latitude: 200, longitude: 0, conversationId: CONV_ID, durationMinutes: 5,
       }, cb);
 
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid coordinates' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Validation failed: Invalid coordinates' });
     });
 
     it('returns error for durationMinutes = 0', async () => {
@@ -197,7 +223,7 @@ describe('LocationHandler', () => {
         ...VALID_COORDINATES, conversationId: CONV_ID, durationMinutes: 0,
       }, cb);
 
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid duration (must be 1-480 minutes)' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Validation failed: Invalid duration (must be 1-480 minutes)' });
     });
 
     it('returns error for durationMinutes = 481 (over max)', async () => {
@@ -209,7 +235,7 @@ describe('LocationHandler', () => {
         ...VALID_COORDINATES, conversationId: CONV_ID, durationMinutes: 481,
       }, cb);
 
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid duration (must be 1-480 minutes)' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Validation failed: Invalid duration (must be 1-480 minutes)' });
     });
 
     it('accepts durationMinutes = 1 (boundary min)', async () => {
@@ -237,7 +263,7 @@ describe('LocationHandler', () => {
     });
 
     it('returns error when user is not a participant', async () => {
-      const prisma = makePrisma(null);
+      const prisma = makePrisma([INTRUDER_ROW]);
       const cb = jest.fn();
       const { handler } = makeHandler({ prisma });
       const socket = makeSocket();
@@ -265,7 +291,7 @@ describe('LocationHandler', () => {
 
     it('catches errors and returns error via callback', async () => {
       mockNormalize.mockRejectedValue(new Error('normalize failed'));
-      const prisma = makePrisma({ id: PARTICIPANT_ID });
+      const prisma = makePrisma();
       const cb = jest.fn();
       const { handler } = makeHandler({ prisma });
       const socket = makeSocket();
@@ -337,7 +363,7 @@ describe('LocationHandler', () => {
     });
 
     it('returns early when user is not a participant', async () => {
-      const prisma = makePrisma(null);
+      const prisma = makePrisma([INTRUDER_ROW]);
       const { handler } = makeHandler({ prisma });
       const socket = makeSocket();
 
@@ -368,6 +394,62 @@ describe('LocationHandler', () => {
       const emittedData = ((socket as any)._toRoom.emit as jest.Mock).mock.calls[0][1] as any;
       expect(emittedData.timestamp).toBeInstanceOf(Date);
       expect(emittedData.timestamp.getTime()).toBeGreaterThanOrEqual(before);
+    });
+
+    // ── Boundary: the four optional telemetry fields travel À CÔTÉ of the two
+    // guarded coordinates. They are broadcast verbatim to every peer's map, so
+    // a forged non-finite / non-numeric value must be REFUSED at the boundary,
+    // never relayed (cycle 107 "douzième famille" + itération 280 emoji bound).
+    it.each([
+      ['speed', Number.POSITIVE_INFINITY],
+      ['altitude', Number.NaN],
+      ['accuracy', Number.NEGATIVE_INFINITY],
+    ])('drops an update whose %s is non-finite (never relays it to peers)', async (field, value) => {
+      const { handler } = makeHandler();
+      const socket = makeSocket();
+
+      await handler.handleLiveLocationUpdate(socket, {
+        ...VALID_COORDINATES, conversationId: CONV_ID, [field]: value,
+      } as any);
+
+      expect((socket as any)._toRoom.emit).not.toHaveBeenCalled();
+    });
+
+    it('drops an update whose heading is not a number', async () => {
+      const { handler } = makeHandler();
+      const socket = makeSocket();
+
+      await handler.handleLiveLocationUpdate(socket, {
+        ...VALID_COORDINATES, conversationId: CONV_ID, heading: 'north',
+      } as any);
+
+      expect((socket as any)._toRoom.emit).not.toHaveBeenCalled();
+    });
+
+    it('drops an update whose latitude is non-finite (NaN)', async () => {
+      const { handler } = makeHandler();
+      const socket = makeSocket();
+
+      await handler.handleLiveLocationUpdate(socket, {
+        latitude: Number.NaN, longitude: 0, conversationId: CONV_ID,
+      } as any);
+
+      expect((socket as any)._toRoom.emit).not.toHaveBeenCalled();
+    });
+
+    it('still relays valid finite telemetry', async () => {
+      const { handler } = makeHandler();
+      const socket = makeSocket();
+
+      await handler.handleLiveLocationUpdate(socket, {
+        ...VALID_COORDINATES, conversationId: CONV_ID,
+        altitude: 12.5, accuracy: 3, speed: 0, heading: 359.9,
+      });
+
+      expect((socket as any)._toRoom.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.LOCATION_LIVE_UPDATED,
+        expect.objectContaining({ altitude: 12.5, accuracy: 3, speed: 0, heading: 359.9 }),
+      );
     });
   });
 
@@ -415,8 +497,22 @@ describe('LocationHandler', () => {
       expect((socket as any)._toRoom.emit).not.toHaveBeenCalled();
     });
 
+    it('rejects a forged payload missing conversationId at the Zod boundary', async () => {
+      // location:live-stop had no boundary guard before iter 281 — a forged
+      // payload without conversationId went straight to normalizeConversationId.
+      // The schema now refuses it before any work; the stream verb has no
+      // callback, so the only observable is that nothing is normalized/emitted.
+      const { handler } = makeHandler();
+      const socket = makeSocket();
+
+      await handler.handleLiveLocationStop(socket, {} as any);
+
+      expect(mockNormalize).not.toHaveBeenCalled();
+      expect((socket as any)._toRoom.emit).not.toHaveBeenCalled();
+    });
+
     it('returns early when user is not a participant', async () => {
-      const prisma = makePrisma(null);
+      const prisma = makePrisma([INTRUDER_ROW]);
       const { handler } = makeHandler({ prisma });
       const socket = makeSocket();
 
@@ -463,6 +559,21 @@ describe('LocationHandler', () => {
       await handler.handleLiveLocationStop(socket, { conversationId: CONV_ID });
 
       expect((socket as any)._toRoom.emit).toHaveBeenCalledWith(SERVER_EVENTS.LOCATION_LIVE_STOPPED, expect.anything());
+    });
+
+    // La branche anonyme n'avait AUCUN témoin de refus : les deux tests
+    // ci-dessus prouvent seulement que « quelqu'un » de trouvé suffit. Ici
+    // aucune ligne ne porte `PARTICIPANT_ID` — seul un `where` honorant `id`
+    // peut légitimement rendre `null` ; un `where` qui l'aurait perdu
+    // trouverait l'intrus, actif dans la MÊME conversation (#5191).
+    it('handleLiveLocationUpdate stays silent for an anonymous session whose participantId matches no one', async () => {
+      const prisma = makePrisma([INTRUDER_ROW]);
+      const { handler } = makeHandler({ prisma });
+      const socket = makeSocket();
+
+      await handler.handleLiveLocationUpdate(socket, { ...VALID_COORDINATES, conversationId: CONV_ID });
+
+      expect((socket as any)._toRoom.emit).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,0 +1,298 @@
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
+
+import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
+import { conversationPreviewString } from '@meeshy/shared/utils/conversation-preview-strings';
+import { conversationIsEndToEnd } from '@meeshy/shared/utils/message-action-policy';
+
+import { accentOf, personalBubbleVars, withAccent } from '@/lib/accent';
+import { apiDeps } from '@/lib/api/deps';
+import type { ConversationsDeps } from '@/lib/api/conversations';
+import { messagesInfiniteOptions, messagesQueryKey } from '@/lib/api/messages';
+import { flattenMessagePages, type MessagesInfiniteData } from '@/lib/api/messages-pages';
+import { appQueryClient } from '@/lib/api/query-client';
+import type { Conversation, Message } from '@/lib/api/types';
+import { place, type PlacedMessage } from '@/lib/grouping';
+import { rowMenuText } from '@/lib/i18n-row-menu-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
+import { appearanceOf } from '@/lib/appearance/read';
+import { resolveThreadMode, toStickyPreference, type FlatRowMode } from '@/lib/reading-mode/decision';
+import { readingModeScopeOf } from '@/lib/reading-mode/scope';
+import { readingModeStore, type ReadingModeStore } from '@/lib/reading-mode/store';
+import { isGroup, titleOf, unreadOf } from '@/lib/view/conversation';
+import { resolveEphemeralDeadline } from '@/lib/view/ephemeral-reception';
+import { endToEndRegimeOf, endToEndSealed, sealForgedPlaintext } from '@/lib/view/end-to-end-sealed';
+import { isMineOf } from '@/lib/view/message';
+
+import { Bubble } from './bubble';
+import { ConversationBackdrop } from './conversation-backdrop';
+import { FocalRow } from './focal-row';
+import { Glyph } from './glyph';
+
+import '@/styles/conversation-peek.css';
+
+/**
+ * L'APERÇU D'UNE CONVERSATION TENUE (#11211) — ce que le fil montrerait en
+ * l'ouvrant, sans l'ouvrir : les vingt derniers messages au plus, dans le MODE
+ * DE LECTURE que le fil élirait (décision #11204), à l'accent de la
+ * conversation. Rien n'est demandé au réseau : le cache des messages est LU
+ * (`getQueryData`), jamais observé — une conversation jamais ouverte montre son
+ * squelette, et c'est le seul cas où il paraît.
+ *
+ * STALE-WHILE-REVALIDATE : le cache est rendu tel quel, immédiatement, puis
+ * une revalidation silencieuse part quand il est vide ou plus vieux que
+ * `PEEK_STALE_MS` — la première page seule, sans spinner ; les rangées
+ * paraissent à son arrivée. Un cache frais ne déclenche aucune requête.
+ *
+ * Les rangées sont celles du fil (`FocalRow`, `Bubble`) : le Prisme, la
+ * protection et la mise en forme sont les leurs. Elles sont INERTES ici — la
+ * carte entière est un geste, ouvrir la conversation.
+ *
+ * LA PEAU DU FIL (#12633) : la carte pose ce que le fil pose sur sa racine
+ * (`routes/thread.tsx`) — l'accent, la couleur PERSONNELLE des bulles envoyées
+ * (`personalBubbleVars`) et, quand le lecteur en a choisi un, le FOND de la
+ * conversation (`ConversationBackdrop`, non vivant comme dans la feuille
+ * d'apparence). Signature garde la surface de la carte, comme iOS (#11231) :
+ * ce que le fond choisi n'a pas encore prêt (photo en route) la laisse voir.
+ * Le fond se lit du cache du client de la carte — aucune requête de plus quand
+ * le fil l'a déjà chargé.
+ */
+
+/** Ce que l'aperçu dessine : ce que le fil dessinerait, le Résumé retombant sur Focal. */
+export type PeekReadingMode = FlatRowMode | 'bubbles';
+
+/** Assez pour remplir la carte agrandie (#17243), sous la première page du fil (50). */
+export const PEEK_MESSAGE_COUNT = 20;
+/** Un cache plus jeune que ça est servi sans revalidation. */
+export const PEEK_STALE_MS = 30_000;
+
+/**
+ * LA MÊME DÉCISION QUE LE FIL — `resolveThreadMode`, avec ce que
+ * `useThreadReadingMode` lui remet (préférence collante, dernière ouverture,
+ * non-lus, effectif), à ceci près que l'aperçu ne NOTE pas d'ouverture : tenir
+ * une ligne n'est pas lire. Aucun mode n'est redécidé ici : la Rivière, que le
+ * fil ne dessine pas encore, y est ramenée par `resolveThreadMode` lui-même, et
+ * l'aperçu montre ce que l'ouverture montrera (revue #11211).
+ */
+export function peekReadingMode(input: {
+  readonly conversation: Conversation;
+  readonly sticky: ConversationReadingMode | null;
+  readonly lastOpenedAt: Date | null;
+  readonly now: number;
+  readonly isAnonymous: boolean;
+  readonly readingModesEnabled?: boolean;
+}): PeekReadingMode {
+  const decision = resolveThreadMode({
+    unreadCount: unreadOf(input.conversation),
+    lastOpenedAt: input.lastOpenedAt,
+    now: input.now,
+    sticky: toStickyPreference(input.sticky),
+    isAnonymous: input.isAnonymous,
+    conversationType: input.conversation.type,
+    memberCount: input.conversation.memberCount ?? null,
+    ...(input.readingModesEnabled === undefined ? {} : { readingModesEnabled: input.readingModesEnabled }),
+  });
+  return decision.mode === 'summary' ? 'focal' : decision.mode;
+}
+
+/**
+ * Les derniers messages du cache, sous la loi unique du fil (#12992) : un clair
+ * forgé après l'activation du bout en bout s'y montre scellé, comme dans le fil
+ * (`useSealedThread`) et la ligne de liste (`previewInputOf`). Un message que
+ * le serveur ne lit pas se dit « chiffré » (`endToEndSealed`).
+ */
+function cachedMessages(client: QueryClient, conversation: Conversation): readonly Message[] | null {
+  const data = client.getQueryData<MessagesInfiniteData>(messagesQueryKey(conversation.id));
+  if (data === undefined) return null;
+  const trail = flattenMessagePages(data);
+  const regime = endToEndRegimeOf({
+    conversationId: conversation.id,
+    servedMode: conversation.encryptionMode,
+    servedSince: conversation.encryptionEnabledAt,
+    trail,
+    isDirect: conversation.type === 'direct',
+  });
+  return sealForgedPlaintext(trail, regime).slice(-PEEK_MESSAGE_COUNT);
+}
+
+const NOOP = (): void => undefined;
+
+export type ConversationPeekCardProps = {
+  readonly conversation: Conversation;
+  readonly viewerId: string;
+  readonly languages: readonly string[];
+  readonly isAnonymous: boolean;
+  readonly interfaceLanguage: InterfaceLanguage;
+  /**
+   * La hauteur que le cran courant de la grappe laisse à la carte
+   * (`peek-sheet.ts`, #17243). La carte suit son hôte (`height: 100%`, que le
+   * tirage pilote sans la re-rendre) ; ce nombre ne sert qu'à re-mesurer le
+   * débordement quand le cran change.
+   */
+  readonly maxHeight: number;
+  readonly onOpen: () => void;
+  /**
+   * LES ATTACHES DU LECTEUR D'ÉCRAN (revue #11211) — la grappe qui porte la
+   * carte se nomme par elle (`${idBase}-card`) et son menu se décrit par les
+   * derniers messages (`${idBase}-body`) : le corps est inerte, mais un nœud
+   * DÉSIGNÉ par `aria-describedby` se lit quand même.
+   */
+  readonly idBase?: string;
+  readonly client?: QueryClient;
+  readonly deps?: ConversationsDeps;
+  readonly store?: ReadingModeStore;
+  readonly readingModesEnabled?: boolean;
+  readonly now?: () => number;
+};
+
+export function ConversationPeekCard({
+  conversation,
+  viewerId,
+  languages,
+  isAnonymous,
+  interfaceLanguage,
+  maxHeight,
+  onOpen,
+  idBase,
+  client = appQueryClient,
+  deps = apiDeps,
+  store = readingModeStore,
+  readingModesEnabled,
+  now = Date.now,
+}: ConversationPeekCardProps) {
+  const group = isGroup(conversation);
+  const title = titleOf(conversation, viewerId);
+  const accent = accentOf(conversation);
+  const [openedAt] = useState(now);
+  const [revision, setRevision] = useState(0);
+  const [failed, setFailed] = useState(false);
+  const messages = useMemo(() => cachedMessages(client, conversation), [client, conversation, revision]);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const [overflowing, setOverflowing] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    const updatedAtOf = () => client.getQueryState(messagesQueryKey(conversation.id))?.dataUpdatedAt ?? 0;
+    const before = updatedAtOf();
+    setFailed(false);
+    client
+      .fetchInfiniteQuery({ ...messagesInfiniteOptions(deps, conversation.id), staleTime: PEEK_STALE_MS, pages: 1 })
+      .then(() => {
+        if (alive && updatedAtOf() !== before) setRevision((current) => current + 1);
+      })
+      .catch(() => {
+        if (alive) setFailed(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [client, deps, conversation.id]);
+  const mode = useMemo(() => {
+    const scope = readingModeScopeOf({ id: viewerId === '' ? null : viewerId });
+    return peekReadingMode({
+      conversation,
+      sticky: store.getPreference(scope, conversation.id),
+      lastOpenedAt: store.lastOpenedAt(scope, conversation.id),
+      now: openedAt,
+      isAnonymous,
+      ...(readingModesEnabled === undefined ? {} : { readingModesEnabled }),
+    });
+  }, [conversation, viewerId, store, openedAt, isAnonymous, readingModesEnabled]);
+  const placed = useMemo(() => (messages === null ? null : place(messages, { locale: interfaceLanguage })), [messages, interfaceLanguage]);
+  useLayoutEffect(() => {
+    const body = bodyRef.current;
+    if (body === null) return;
+    setOverflowing(body.scrollHeight > body.clientHeight);
+  }, [placed, maxHeight, mode]);
+  const label = rowMenuText(interfaceLanguage, 'rowMenu.peek');
+  const background = appearanceOf(conversation).background.kind;
+  const painted = background !== 'signature';
+  const e2ee = conversationIsEndToEnd({ type: conversation.type, encryptionMode: conversation.encryptionMode ?? null });
+  const name = [title, label, ...(e2ee ? [rowMenuText(interfaceLanguage, 'rowMenu.peek.e2ee')] : [])].join(', ');
+
+  return (
+    <div
+      role="group"
+      aria-label={name}
+      {...(idBase === undefined ? {} : { id: `${idBase}-card` })}
+      data-peek-card
+      data-peek-mode={mode}
+      {...(painted ? { 'data-peek-backdrop': background } : {})}
+      className="conversation-peek-card"
+      style={withAccent(accent, { height: '100%', ...personalBubbleVars(conversation) })}
+    >
+      {painted ? (
+        <QueryClientProvider client={client}>
+          <ConversationBackdrop conversation={conversation} accent={accent} live={false} deps={deps} />
+        </QueryClientProvider>
+      ) : null}
+      <div ref={bodyRef} className="conversation-peek-body" inert {...(overflowing ? { 'data-peek-overflowing': '' } : {})} {...(idBase === undefined ? {} : { id: `${idBase}-body` })}>
+        {placed === null && !failed ? <PeekSkeleton /> : null}
+        {placed === null && failed ? (
+          <span data-peek-failed role="status" className="text-title" style={{ color: 'var(--color-ios-ink-3)' }}>
+            {rowMenuText(interfaceLanguage, 'rowMenu.peek.failed')}
+          </span>
+        ) : null}
+        {placed !== null && placed.length === 0 ? (
+          <span className="text-title" style={{ color: 'var(--color-ios-ink-3)' }}>
+            {rowMenuText(interfaceLanguage, 'rowMenu.peek.empty')}
+          </span>
+        ) : null}
+        {(placed ?? []).map((entry) => (
+          <PeekRow key={entry.message.id} entry={entry} mode={mode} group={group} languages={languages} viewerId={viewerId} interfaceLanguage={interfaceLanguage} now={now} />
+        ))}
+      </div>
+      <button type="button" data-peek-open aria-label={rowMenuText(interfaceLanguage, 'rowMenu.peek.open')} className="conversation-peek-open" onClick={onOpen} />
+    </div>
+  );
+}
+
+function PeekRow({
+  entry,
+  mode,
+  group,
+  languages,
+  viewerId,
+  interfaceLanguage,
+  now,
+}: {
+  readonly entry: PlacedMessage;
+  readonly mode: PeekReadingMode;
+  readonly group: boolean;
+  readonly languages: readonly string[];
+  readonly viewerId: string;
+  readonly interfaceLanguage: InterfaceLanguage;
+  readonly now: () => number;
+}) {
+  const { message } = entry;
+  if (endToEndSealed(message)) {
+    return (
+      <span data-peek-encrypted data-peek-row className="conversation-peek-placeholder text-title">
+        <Glyph name="lock" size={12} />
+        {conversationPreviewString(interfaceLanguage, 'protection.encrypted')}
+      </span>
+    );
+  }
+  const ephemeralDeadline = resolveEphemeralDeadline({ message, isMine: isMineOf(message, viewerId), now: now() });
+  return (
+    <div data-peek-row>
+      {mode === 'bubbles' ? (
+        <Bubble place={entry} languages={languages} isGrouped={group} viewerId={viewerId} ephemeralDeadline={ephemeralDeadline} onJumpToMessage={NOOP} now={now} />
+      ) : (
+        <FocalRow mode={mode} place={entry} group={group} languages={languages} viewerId={viewerId} ephemeralDeadline={ephemeralDeadline} onJumpToMessage={NOOP} now={now} />
+      )}
+    </div>
+  );
+}
+
+function PeekSkeleton() {
+  return (
+    <div data-peek-skeleton aria-hidden className="flex flex-col gap-2">
+      <span className="conversation-peek-skeleton" style={{ width: '62%' }} />
+      <span className="conversation-peek-skeleton" style={{ width: '78%', alignSelf: 'flex-end' }} />
+      <span className="conversation-peek-skeleton" style={{ width: '48%' }} />
+    </div>
+  );
+}
+
+export default ConversationPeekCard;

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {
+          "androidName": "signup_verified_no_session",
+          "status": "android-only"
+        },
+        {
+          "androidName": "signup_verified_open_failed",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

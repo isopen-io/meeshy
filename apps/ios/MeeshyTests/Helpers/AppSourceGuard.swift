@@ -60,7 +60,335 @@ enum AppSourceGuard {
 
     /// Variante en LIGNES, pour les gardes qui raisonnent ligne à ligne
     /// (remontée de constructeur, comptages locaux).
+    /// **Compte un IDENTIFIANT, jamais une sous-chaîne.**
+    ///
+    /// `components(separatedBy:)` compte des sous-chaînes, et une sous-chaîne ne
+    /// distingue pas `slideRail` de `slideRailSlot`. Le jour où le rail est passé
+    /// en SLOT injecté (`slideRailSlot: AnyView?`), la garde « le rail vit dans la
+    /// barre haute, et là seulement » a compté cinq sites au lieu de deux et a
+    /// rougi — alors que le rail, lui, allait très bien : `slideRail` y était
+    /// toujours déclaré une fois et monté une fois.
+    ///
+    /// C'est la forme la plus discrète d'un piège que ce dépôt a déjà payé : un
+    /// lot qui RENOMME n'éteint pas les gardes qui reconnaissent par le nom, il
+    /// les INVERSE. Ici le lot n'a même rien renommé — il a introduit un nom
+    /// VOISIN, dont l'ancien est le préfixe. Une garde qui reconnaît par
+    /// sous-chaîne n'a aucun moyen de voir la différence.
+    ///
+    /// Un identifiant Swift ne se poursuit ni par une lettre, ni par un chiffre,
+    /// ni par `_` : on ne compte donc que les occurrences que ni le caractère
+    /// précédent ni le suivant ne prolongent.
+    static func occurrences(ofIdentifier identifiant: String, in source: String) -> Int {
+        func prolonge(_ caractere: Character) -> Bool {
+            caractere.isLetter || caractere.isNumber || caractere == "_"
+        }
+        var compte = 0
+        var curseur = source.startIndex
+        while let plage = source.range(of: identifiant, range: curseur..<source.endIndex) {
+            let avant = plage.lowerBound == source.startIndex
+                ? nil
+                : source[source.index(before: plage.lowerBound)]
+            let apres = plage.upperBound == source.endIndex
+                ? nil
+                : source[plage.upperBound]
+            if !(avant.map(prolonge) ?? false), !(apres.map(prolonge) ?? false) {
+                compte += 1
+            }
+            curseur = plage.upperBound
+        }
+        return compte
+    }
+
     static func strippedLines(_ source: String) -> [String] {
         stripComments(source).components(separatedBy: "\n")
+    }
+
+    // MARK: - L'UNITÉ de source d'un type découpé (#4102)
+
+    /// La racine `apps/ios`, lue depuis CE fichier — jamais depuis l'appelant :
+    /// une garde qui déménage d'un répertoire ne doit pas déplacer la racine
+    /// avec elle.
+    private static var appRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Helpers
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // apps/ios
+    }
+
+    /// **Une vue se trouve par son nom, quel que soit son domaine** (#13139).
+    ///
+    /// `Features/Main/Views` se range par domaine (`Features/Stories/Views`,
+    /// `Features/Settings/Views`…). Une garde qui lit une vue par son nom ne
+    /// doit pas rougir parce qu'elle a changé de dossier : ce chemin la cherche
+    /// dans les `Views/` de chaque domaine, et rend celui de `Main` quand elle
+    /// n'existe nulle part — l'erreur « fichier introuvable » reste bruyante.
+    static func featureViewPath(_ relativeToViews: String) -> String {
+        let features = appRoot.appendingPathComponent("Meeshy/Features")
+        let domains = (try? FileManager.default.contentsOfDirectory(atPath: features.path)) ?? []
+        let found = domains.sorted().first { domain in
+            FileManager.default.fileExists(
+                atPath: features.appendingPathComponent("\(domain)/Views/\(relativeToViews)").path)
+        }
+        return "Meeshy/Features/\(found ?? "Main")/Views/\(relativeToViews)"
+    }
+
+    /// **Un type découpé garde UNE adresse.**
+    ///
+    /// `Type.swift` scindé en `Type+Rôle.swift` reste une seule source aux yeux
+    /// des gardes. Sans cela, chaque découpage éteint en SILENCE toutes les
+    /// gardes négatives du type : elles passent au vert en lisant la moitié qui
+    /// ne contient pas l'interdit. C'est le mode de panne exact contre lequel
+    /// chaque suite pose déjà un `test_…ReadANonEmptySource` — celui-là attrape
+    /// un chemin FAUX, aucun n'attrapait un chemin devenu PARTIEL.
+    ///
+    /// Le balayage est un GLOB, jamais une liste : une liste de parties se
+    /// périme au premier fichier ajouté, et se périme en silence puisque le
+    /// résultat reste non vide. `alsoIncluding` ne sert qu'aux compagnons qui ne
+    /// portent PAS le nom du type — les règles pures sorties du fichier, qui
+    /// n'ont aucune raison de s'appeler `Type+…`.
+    static func unitURLs(_ relativeToAppRoot: String,
+                         alsoIncluding compagnons: [String] = []) -> [URL] {
+        familyURLs(of: appRoot.appendingPathComponent(relativeToAppRoot))
+            + compagnons.map(appRoot.appendingPathComponent)
+    }
+
+    private static func familyURLs(of principal: URL) -> [URL] {
+        let dossier = principal.deletingLastPathComponent()
+        let base = principal.deletingPathExtension().lastPathComponent
+        let voisins = (try? FileManager.default.contentsOfDirectory(
+            at: dossier, includingPropertiesForKeys: nil)) ?? []
+        let parties = voisins
+            .filter { $0.pathExtension == "swift"
+                && $0.deletingPathExtension().lastPathComponent.hasPrefix(base + "+") }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        return [principal] + parties + layerURLs(of: base, in: dossier)
+    }
+
+    /// Les couches nominales de l'écran de conversation vivent dans
+    /// `ConversationLayers/` (LOT-10) : elles font partie de l'unité
+    /// `ConversationView`, comme ses extensions. Les collaborateurs de
+    /// `CallManager` vivent dans `CallCollaborators/` (#11522) : les gardes de
+    /// l'appel les balaient avec lui, sans quoi chaque extraction éteindrait en
+    /// silence les gardes négatives de l'unité.
+    private static let layerFolders = [
+        "ConversationView": "ConversationLayers",
+        "CallManager": "CallCollaborators",
+    ]
+
+    private static func layerURLs(of base: String, in dossier: URL) -> [URL] {
+        guard let folder = layerFolders[base] else { return [] }
+        let couches = (try? FileManager.default.contentsOfDirectory(
+            at: dossier.appendingPathComponent(folder), includingPropertiesForKeys: nil)) ?? []
+        return couches
+            .filter { $0.pathExtension == "swift" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    /// Les types découpés par responsabilité qu'une garde lit comme leur unité :
+    /// `BubbleStandardLayout` (#10678), `MessageListViewController` (#10758),
+    /// `PostDetailView` (#10956), `ConversationListViewModel`, `FeedViewModel`,
+    /// `ConversationListView`, `ConversationView`, `StoryViewerView`,
+    /// `FeedCommentsSheet`, `P2PWebRTCClient`, `FeedView`,
+    /// `ConversationDashboardView`, `FocalRow`, `ComposerMoodSurface`,
+    /// `ConversationMediaGalleryView`, `AudioPostComposerView`, `PostDetailViewModel`,
+    /// `ConversationInfoSheet`, `StoryTrayView` et `RootViewComponents` (#10988).
+    static let splitUnits: Set<String> = [
+        "AudioPostComposerView.swift",
+        "BubbleStandardLayout.swift",
+        "ComposerMoodSurface.swift",
+        "ComposerSceneSurface.swift",
+        "ConversationDashboardView.swift",
+        "ConversationInfoSheet.swift",
+        "ConversationListView.swift",
+        "ConversationListViewModel.swift",
+        "ConversationMediaGalleryView.swift",
+        "ConversationView.swift",
+        "FeedCommentsSheet.swift",
+        "FeedView.swift",
+        "FeedViewModel.swift",
+        "FocalRow.swift",
+        "MessageListViewController.swift",
+        "P2PWebRTCClient.swift",
+        "PostDetailView.swift",
+        "PostDetailViewModel.swift",
+        "RootViewComponents.swift",
+        "StoryViewerView+Canvas.swift",
+        "StoryViewerView+Content.swift",
+        "StoryTrayView.swift",
+        "StoryViewerView.swift",
+    ]
+
+    /// Lit un fichier ; un type de `splitUnits` se lit comme son UNITÉ
+    /// (`<Type>+*.swift`), par le même glob que
+    /// `unit(_:)` : le type a été découpé par responsabilité et une garde ne
+    /// doit ni rougir ni verdir parce que du code a changé de fichier.
+    static func text(at url: URL) throws -> String {
+        let urls = Self.splitUnits.contains(url.lastPathComponent) ? familyURLs(of: url) : [url]
+        return try urls
+            .map { try String(contentsOf: $0, encoding: .utf8) }
+            .joined(separator: "\n")
+    }
+
+    static func unit(_ relativeToAppRoot: String,
+                     alsoIncluding compagnons: [String] = []) throws -> String {
+        try unitURLs(relativeToAppRoot, alsoIncluding: compagnons)
+            .map { try String(contentsOf: $0, encoding: .utf8) }
+            .joined(separator: "\n")
+    }
+
+    /// L'unité du meuble du composer : le type, ses trois extensions, et les
+    /// règles pures qui en sont sorties au #4102.
+    static let composerHostPath = "Meeshy/Features/Composer/MeeshyComposerHost.swift"
+    static let composerHostCompanions = [
+        "Meeshy/Features/Composer/ComposerHostRules.swift",
+        // Sortie de `ComposerHostRules` quand l'inspecteur a cessé de ne
+        // connaître que le texte (#4073). Elle reste DANS l'unité du meuble :
+        // une règle qui déménage sans emmener son adresse éteint en silence
+        // toutes les gardes négatives qui la balayaient.
+        "Meeshy/Features/Composer/ComposerObjectChips.swift",
+        // **Le relevé du rail (#4994), entré dans l'unité au #5007.** Il vivait
+        // hors d'elle, et `test_lesBalises_neSontDeriveesQuUneFois` — qui
+        // interdit une seconde dérivation des hashtags — ne le balayait donc
+        // pas : le doublon y était INVISIBLE parce que le fichier était neuf,
+        // pas parce qu'il était subtil.
+        //
+        // > Une règle qui naît hors de l'unité de son hôte naît hors de toutes
+        // > les gardes qui protègent cet hôte. C'est le miroir de « une règle
+        // > qui déménage sans emmener son adresse les éteint en silence » :
+        // > même angle mort, à la création plutôt qu'au déplacement.
+        "Meeshy/Features/Composer/ComposerRailDoorBadge.swift",
+        // **Le retrait d'un média, sorti du meuble au #6577.** La règle pure et
+        // le relevé du canvas vivent ici ; le store porte les huit `@State`
+        // devenus valeurs, et donc les déclarations que plusieurs gardes du
+        // meuble citent (`documentMediaAlts`, la carte des légendes…). Sans ces
+        // deux adresses, toutes les gardes NÉGATIVES du meuble cesseraient de
+        // balayer le code qui retire — le mode d'oubli que ce fichier nomme
+        // trois lignes plus haut, à la création plutôt qu'au déplacement.
+        "Meeshy/Features/Composer/ComposerMediaRetraction.swift",
+        "Meeshy/Features/Composer/ComposerMediaPorterStore.swift",
+        // **Les poses de la feuille de stickers, sorties du meuble au #9189** :
+        // la feuille est devenue UNE pour la conversation et la scène, et ce
+        // que la scène fait d'un choix vit dans cette règle. Sans son adresse,
+        // les gardes qui lisent « la feuille POSE par le viewmodel » liraient
+        // un meuble qui ne pose plus rien lui-même.
+        "Meeshy/Features/Composer/SceneStickerPose.swift",
+        // Le voile de progression d'export, sorti du meuble au #10988 : il reste
+        // dans l'unité pour que les gardes négatives du meuble le balaient.
+        "Meeshy/Features/Composer/ComposerExportProgressVeil.swift",
+    ]
+
+    /// L'unité de la surface de scène : le type et ses extensions par
+    /// responsabilité (`ComposerSceneSurface+RestChrome`, `+Stage`, `+Floors`,
+    /// `+FreeZone`), par le glob de `unit(_:)`. Un témoin qui lit le seul fichier
+    /// principal ne voit plus le code qui a déménagé.
+    static let composerSceneSurfacePath = "Meeshy/Features/Composer/ComposerSceneSurface.swift"
+
+    static func composerSceneSurfaceSource() throws -> String {
+        try unit(composerSceneSurfacePath)
+    }
+
+    static func composerHostURLs() -> [URL] {
+        unitURLs(composerHostPath, alsoIncluding: composerHostCompanions)
+    }
+
+    static func composerHostSource() throws -> String {
+        try unit(composerHostPath, alsoIncluding: composerHostCompanions)
+    }
+
+    /// L'unité de l'écran CONVERSATION : la vue, ses extensions, et l'état du
+    /// composer sorti du fichier le 2026-09-02 (`ConversationComposerState`,
+    /// #4823 — extraire d'abord, ajouter ensuite). Il ne porte pas le nom du
+    /// type hôte, donc le glob `ConversationView+*.swift` ne le voit pas ; sans
+    /// cette adresse, la garde du brouillon d'édition lisait une unité qui ne
+    /// contenait plus son ancre (leçon 347).
+    static let conversationViewPath = "Meeshy/Features/Main/Views/ConversationView.swift"
+    static let conversationViewCompanions = [
+        "Meeshy/Features/Main/Views/ConversationComposerState.swift"
+    ]
+
+    static func conversationViewSource() throws -> String {
+        try unit(conversationViewPath, alsoIncluding: conversationViewCompanions)
+    }
+
+    /// L'unité de ce qui reste de la surface DOCUMENT : la vue est partie au
+    /// #13864 — un post se compose sur la scène —, ses RÈGLES pures restent
+    /// (`ComposerDocumentRules`, `ComposerSurfaceRules`), lues par le meuble et
+    /// par la publication. Même raison que pour le meuble : sans l'unité, toute
+    /// garde négative dont l'interdit a suivi les règles passerait au vert en
+    /// lisant la moitié qui ne le contient plus.
+    static let composerSurfacePath = "Meeshy/Features/Composer/ComposerDocumentRules.swift"
+    static let composerSurfaceCompanions = [
+        "Meeshy/Features/Composer/ComposerSurfaceRules.swift",
+        "Meeshy/Features/Composer/ComposerDocumentSurface+Copy.swift",
+        // **Les deux types extraits le 2026-08-30**, quand le fichier a franchi
+        // le plafond de 1 100 lignes. Ils ne portent PAS le nom du type, donc le
+        // glob `ComposerDocumentSurface+*.swift` ne les voit pas — c'est
+        // exactement ce à quoi `alsoIncluding` sert.
+        //
+        // Sans eux, une dizaine de gardes qui ancrent sur `composerHost`,
+        // `publishMood`, `publishDocument` ou la vignette perdraient leur objet
+        // en silence. Un découpage n'est pas fini quand le fichier passe sous le
+        // budget : il l'est quand les gardes qui le nommaient pointent l'unité
+        // (leçon 347).
+        "Meeshy/Features/Composer/DocumentComposerDoor.swift",
+        // `ComposerMediaThumbnail.swift` vivait ici : il est SUPPRIMÉ au #6577,
+        // faute d'appelant de production depuis que le rail de scènes a remplacé
+        // la bande de médias (#5599). Une adresse qui survit à son fichier ne
+        // rougit pas — `unitURLs` lit ce qui existe — mais elle fait croire que
+        // la garde couvre quelque chose.
+        // **Les cinq types de l'ENVOI, extraits le 2026-09-06** quand
+        // `ComposerDocumentRules` a franchi le plafond DUR de 1200 lignes —
+        // chemin, aiguillage, refus, plan et issue. Même raison que les quatre
+        // compagnons ci-dessus, et le doc-comment le disait d'avance : « un
+        // découpage n'est pas fini quand le fichier passe sous le budget ; il
+        // l'est quand les gardes qui le nommaient pointent l'unité ».
+        //
+        // Trois gardes l'ont appris à mes dépens le jour même : elles
+        // cherchaient `enum ComposerDocumentSendPlan` dans une unité qui ne le
+        // contenait plus, et rendaient « bloc introuvable — la garde ne
+        // mesurerait RIEN ».
+        "Meeshy/Features/Composer/ComposerDocumentSendRules.swift"
+    ]
+
+    static func composerSurfaceURLs() -> [URL] {
+        unitURLs(composerSurfacePath, alsoIncluding: composerSurfaceCompanions)
+    }
+
+    static func composerSurfaceSource() throws -> String {
+        try unit(composerSurfacePath, alsoIncluding: composerSurfaceCompanions)
+    }
+
+    /// L'unité de `StoryViewModel` (#4425) : le fichier historique, ses
+    /// extensions `StoryViewModel+*.swift` (attrapées par le glob de
+    /// `unitURLs`), et `StoryViewModelRules`, le compagnon de règles pures
+    /// sorti du même découpage. Ce dernier doit être nommé explicitement en
+    /// `alsoIncluding` — même raison que `ComposerHostRules` et les deux
+    /// compagnons de `composerSurfaceCompanions` avant lui : il ne porte PAS
+    /// le préfixe `StoryViewModel+…`, donc le glob ne l'attrape pas, et sans
+    /// lui toute garde négative dont l'interdit a suivi les règles pures
+    /// passerait au vert en lisant la moitié qui ne les contient plus.
+    static let storyViewModelPath = "Meeshy/Features/Stories/ViewModels/StoryViewModel.swift"
+    static let storyViewModelCompanions = ["Meeshy/Features/Stories/ViewModels/StoryViewModelRules.swift"]
+
+    static func storyViewModelURLs() -> [URL] {
+        unitURLs(storyViewModelPath, alsoIncluding: storyViewModelCompanions)
+    }
+
+    static func storyViewModelSource() throws -> String {
+        try unit(storyViewModelPath, alsoIncluding: storyViewModelCompanions)
+    }
+
+    /// L'unité de l'écran d'APPEL (#8276) : `CallView.swift`, ses extensions
+    /// `CallView+*.swift` (en-tête, états, appel établi, vignette perso,
+    /// sous-titres, pilule…), et les vues feuilles de la pilule et des
+    /// sous-titres sorties au #8394/#8396, qui ne portent pas le préfixe.
+    static let callViewPath = "Meeshy/Features/Call/Views/CallView.swift"
+    static let callViewCompanions = [
+        "Meeshy/Features/Call/Views/CallDeviceControls.swift",
+        "Meeshy/Features/Call/Views/CallCaptionsViews.swift",
+    ]
+
+    static func callViewSource() throws -> String {
+        try unit(callViewPath, alsoIncluding: callViewCompanions)
     }
 }

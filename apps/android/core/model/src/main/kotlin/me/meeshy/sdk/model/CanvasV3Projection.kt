@@ -15,9 +15,11 @@ import kotlinx.serialization.json.jsonPrimitive
  * (`CanvasV3Migration.swift:522-706`).
  *
  * Rien ne se peint en v3 : le document est rabattu sur les familles que le
- * viewer Android peint déjà. Les familles absentes du modèle Android
- * (`place`, `drawing`) sont ignorées plutôt que fabriquées — un objet qu'on ne
- * sait pas rendre ne doit pas coûter les autres.
+ * viewer Android peint déjà. La famille `place` absente du modèle Android est
+ * ignorée plutôt que fabriquée — un objet qu'on ne sait pas rendre ne doit pas
+ * coûter les autres. La famille `drawing`, elle, projette ses traits éditables
+ * (`payload.strokes`) sur [StoryEffects.drawingStrokes] ; seul le blob PKDrawing
+ * legacy (`payload.data`, base64) reste ignoré, faute de rendu Android.
  */
 private const val SCENE_ASPECT = 9.0 / 16.0
 private const val BAND_ANCHOR_TOP = 0.08
@@ -101,6 +103,12 @@ private fun ObjectV3.asText(at: Pair<Double, Double>): StoryTextObject? {
         backgroundStyle = decodeWire(payload.obj("backgroundStyle")),
         borderColor = payload.str("borderColor"),
         borderWidth = payload.dbl("borderWidth"),
+        textEffect = payload.str("textEffect"),
+        fontWeight = payload.str("fontWeight"),
+        frameShape = payload.str("frameShape"),
+        framePaddingScale = payload.dbl("framePaddingScale"),
+        frameBorderWidth = payload.dbl("frameBorderWidth"),
+        frameBorderColor = payload.str("frameBorderColor"),
         translations = payload.strMap("translations"),
         sourceLanguage = locale,
         startTime = timing?.start,
@@ -125,18 +133,36 @@ private fun ObjectV3.asMedia(at: Pair<Double, Double>): StoryMediaObject {
         scale = transform.scale,
         rotation = transform.rotation,
         volume = if (muted) 0f else (payload.dbl("volume")?.toFloat() ?: 1f),
-        aspectRatio = payload.dbl("aspectRatio") ?: 1.0,
+        aspectRatio = payload.dbl("aspectRatio"),
+        filter = payload.str("filter"),
         anchor = pivot(),
         intrinsicDuration = payload.dbl("intrinsicDuration"),
         isBackground = payload.bool("isBackground") ?: false,
         loop = payload.bool("loop") ?: false,
+        // Les quatre bornes se lisent ENSEMBLE ou pas du tout (#5085) : un
+        // recadrage amputé n'a pas de repli sensé, et le compléter
+        // fabriquerait un cadrage que personne n'a posé.
+        crop = StoryMediaCrop.fromPayloadBounds(
+            payload.dbl("cropX"), payload.dbl("cropY"),
+            payload.dbl("cropW"), payload.dbl("cropH"),
+        ),
         zIndex = z,
         startTime = timing?.start,
         duration = payload.dbl("duration"),
+        // **Les deux bornes se lisent ENSEMBLE ou pas du tout** (#5129), même
+        // règle que le recadrage juste au-dessus : un début sans fin n'a pas de
+        // repli sensé. Et ce ne sont PAS `startTime`/`duration` — celles-là
+        // disent quand l'objet est à l'écran, celles-ci quelle partie de la
+        // source joue.
+        sourceStart = StorySourceWindow
+            .fromPayloadBounds(payload.dbl("sourceStart"), payload.dbl("sourceEnd"))?.first,
+        sourceEnd = StorySourceWindow
+            .fromPayloadBounds(payload.dbl("sourceStart"), payload.dbl("sourceEnd"))?.second,
         fadeIn = payload.dbl("fadeIn"),
         fadeOut = payload.dbl("fadeOut"),
         sourceLanguage = locale,
         keyframes = timing?.keyframes,
+        adjustments = ImageAdjustments.fromJson(payload["adjustments"]),
     )
 }
 
@@ -150,12 +176,17 @@ private fun ObjectV3.asMedia(at: Pair<Double, Double>): StoryMediaObject {
 private fun ObjectV3.asSticker(at: Pair<Double, Double>): StorySticker? {
     val emoji = payload.str("emoji")
     val postMediaId = payload.str("postMediaId")
-    if (emoji == null && postMediaId == null) return null
+    val templateId = payload.str("templateId").orEmpty()
+    if (emoji == null && postMediaId == null && templateId.isEmpty()) return null
     return StorySticker(
         id = id,
         emoji = emoji ?: "",
         postMediaId = postMediaId ?: "",
         provider = payload.str("provider"),
+        templateId = templateId,
+        slots = payload.strMap("slots") ?: emptyMap(),
+        animation = payload.str("animation"),
+        sourceLanguage = locale,
         x = at.first,
         y = at.second,
         scale = transform.scale,
@@ -163,6 +194,27 @@ private fun ObjectV3.asSticker(at: Pair<Double, Double>): StorySticker? {
         zIndex = z,
         baseSize = payload.dbl("baseSize") ?: 140.0,
         anchor = pivot(),
+        startTime = timing?.start,
+        duration = payload.dbl("duration"),
+        fadeIn = payload.dbl("fadeIn"),
+        fadeOut = payload.dbl("fadeOut"),
+    )
+}
+
+/** Une pastille de lieu sans `place` lisible n'a rien à montrer : rejetée comme iOS. */
+private fun ObjectV3.asLocation(at: Pair<Double, Double>): StoryLocationObject? {
+    val place = decodeWire<SharedPlace>(payload.obj("place")) ?: return null
+    return StoryLocationObject(
+        id = id,
+        place = place,
+        x = at.first,
+        y = at.second,
+        scale = transform.scale,
+        rotation = transform.rotation,
+        zIndex = z,
+        anchor = pivot(),
+        sourceLanguage = locale,
+        styleId = payload.str("styleId")?.takeIf { it.isNotEmpty() },
         startTime = timing?.start,
         duration = payload.dbl("duration"),
         fadeIn = payload.dbl("fadeIn"),
@@ -183,11 +235,44 @@ private fun ObjectV3.asAudio(at: Pair<Double, Double>): StoryAudioPlayerObject =
     zIndex = z,
     startTime = timing?.start?.toFloat(),
     duration = payload.dbl("duration")?.toFloat(),
+    // iOS écrit les deux bornes sur les DEUX familles (`CanvasV3Migration.swift:457`
+    // et `:542`) : les lire pour le seul média laisserait un vocal rogné jouer
+    // en entier (#5129).
+    sourceStart = StorySourceWindow
+        .fromPayloadBounds(payload.dbl("sourceStart"), payload.dbl("sourceEnd"))?.first?.toFloat(),
+    sourceEnd = StorySourceWindow
+        .fromPayloadBounds(payload.dbl("sourceStart"), payload.dbl("sourceEnd"))?.second?.toFloat(),
     loop = payload.bool("loop"),
     fadeIn = payload.dbl("fadeIn")?.toFloat(),
     fadeOut = payload.dbl("fadeOut")?.toFloat(),
     sourceLanguage = locale,
+    waveformSamples = (payload["waveformSamples"] as? JsonArray)
+        ?.mapNotNull { (it as? JsonPrimitive)?.doubleOrNull?.toFloat() }.orEmpty(),
+    keyframes = timing?.keyframes,
+    name = payload.str("name"),
+    mutedVolumeMemento = payload.dbl("mutedVolumeMemento")?.toFloat(),
+    // Le fichier et la PROVENANCE d'un son emprunté (iOS `CanvasV3RenderRules.audioObject`) : sans eux, le son posé sur la
+    // scène d'un post n'avait rien à jouer ni à nommer (#13893, #14201).
+    mediaURL = payload.str("mediaURL"),
+    soundId = payload.str("soundId"),
+    soundAuthorUsername = payload.str("soundAuthorUsername"),
+    soundCreatedAt = payload.str("soundCreatedAt"),
+    scale = transform.scale.takeIf { it != 1.0 },
+    rotation = transform.rotation.takeIf { it != 0.0 },
 )
+
+/**
+ * Les traits éditables d'un objet `drawing`. Port de la branche `.drawing` d'iOS
+ * (`CanvasV3Migration.swift:580-583`) : seul `payload.strokes` est lu — le
+ * `payload.data` (PKDrawing legacy en base64) n'a pas de rendu Android. Un objet
+ * `drawing` sans trait exploitable rend `null` (idiome des autres familles :
+ * `medias/stickers/audios` normalisent aussi le vide en `null`), si bien qu'un
+ * `data`-seul, tolérable au décodeur, ne fabrique pas une couche de dessin vide.
+ */
+private fun ObjectV3.asDrawingStrokes(): List<StoryDrawingStroke>? =
+    (payload["strokes"] as? JsonArray)
+        ?.mapNotNull { decodeWire<StoryDrawingStroke>(it as? JsonObject) }
+        ?.takeIf { it.isNotEmpty() }
 
 private fun transitionOf(wire: JsonObject?): StoryTransitionEffect? {
     val raw = wire?.str("type") ?: return null
@@ -215,6 +300,7 @@ fun StoryEffects.Companion.rendering(document: CanvasV3, sceneIndex: Int = 0): S
             backgroundAudioEnd = sound?.bounds?.end,
             voiceTranscriptions = sound?.transcriptions,
             backgroundAudioVariants = sound?.variants,
+            layout = document.layout,
         )
 
     var background: String? = null
@@ -222,7 +308,11 @@ fun StoryEffects.Companion.rendering(document: CanvasV3, sceneIndex: Int = 0): S
     val texts = mutableListOf<StoryTextObject>()
     val medias = mutableListOf<StoryMediaObject>()
     val stickers = mutableListOf<StorySticker>()
+    val locations = mutableListOf<StoryLocationObject>()
+    val unpaintableKinds = mutableSetOf<String>()
+    val unpaintableObjects = mutableListOf<ObjectV3>()
     val audios = mutableListOf<StoryAudioPlayerObject>()
+    var drawingStrokes: List<StoryDrawingStroke>? = null
 
     for (item in scene.objects) {
         val at = item.position(scene.carrierAspect)
@@ -231,11 +321,29 @@ fun StoryEffects.Companion.rendering(document: CanvasV3, sceneIndex: Int = 0): S
                 background = item.payload.str("background")
                 backgroundTransform = decodeWire(item.payload.obj("transform"))
             }
-            item.kind == "media" -> medias += item.asMedia(at)
+            item.kind == "media" -> {
+                val media = item.asMedia(at)
+                medias += media
+                // Le fond posé en plan `content` porte lui-même son cadrage (iOS, « second passage ») : sans cette lecture,
+                // un fond AJUSTÉ se peignait rempli et rogné (#14199).
+                if (media.isBackground) {
+                    background = background ?: item.payload.str("background")
+                    backgroundTransform = backgroundTransform ?: decodeWire(item.payload.obj("transform"))
+                }
+            }
             item.kind == "text" -> item.asText(at)?.let { texts += it }
             item.kind == "sticker" -> item.asSticker(at)?.let { stickers += it }
+            item.kind == "place" -> item.asLocation(at)?.let { locations += it }
             item.kind == "audio" -> audios += item.asAudio(at)
-            else -> Unit
+            // Le dernier objet `drawing` gagne, comme iOS (`drawingStrokes = decode(...)`,
+            // une affectation, pas une accumulation) ; l'écrivain n'en émet qu'un.
+            item.kind == "drawing" -> drawingStrokes = item.asDrawingStrokes()
+            // Une mention est connue et non peinte : une métadonnée, jamais une rupture.
+            item.kind == "mention" -> unpaintableObjects += item
+            else -> {
+                unpaintableKinds += item.kind
+                unpaintableObjects += item
+            }
         }
     }
 
@@ -251,9 +359,13 @@ fun StoryEffects.Companion.rendering(document: CanvasV3, sceneIndex: Int = 0): S
         filter = filterCarrier?.payload?.str("filter"),
         filterIntensity = filterCarrier?.payload?.dbl("filterIntensity"),
         textObjects = texts,
+        locationObjects = locations,
+        unpaintableKinds = unpaintableKinds.sorted(),
+        unpaintableObjects = unpaintableObjects,
         mediaObjects = medias.ifEmpty { null },
         stickerObjects = stickers.ifEmpty { null },
         audioPlayerObjects = audios.ifEmpty { null },
+        drawingStrokes = drawingStrokes,
         backgroundAudioId = soundId,
         backgroundAudioVolume = sound?.volume?.toFloat(),
         backgroundAudioStart = sound?.bounds?.start,
@@ -265,5 +377,6 @@ fun StoryEffects.Companion.rendering(document: CanvasV3, sceneIndex: Int = 0): S
         opening = transitionOf(scene.opening),
         closing = transitionOf(scene.closing),
         clipTransitions = scene.clipTransitions?.mapNotNull { decodeWire<StoryClipTransition>(it) },
+        layout = document.layout,
     )
 }

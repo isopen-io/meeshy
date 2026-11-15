@@ -32,36 +32,82 @@ let package = Package(
     defaultLocalization: "fr",
     platforms: [.iOS(.v16)],
     products: [
+        // #13137 — le noyau LÉGER : ce que l'extension de notification lie,
+        // sans Socket.IO ni WebRTC. MeeshySDK le ré-exporte.
+        .library(name: "MeeshyCore", targets: ["MeeshyCore"]),
         .library(name: "MeeshySDK", targets: ["MeeshySDK"]),
         .library(name: "MeeshyUI", targets: ["MeeshyUI"]),
+        // #12536 — l'E2EE libsignal (AGPL-3.0, avis juridique #11548 avant la
+        // production). Produit À PART : seules l'app et l'extension de
+        // notification le lient, jamais les widgets ni le partage.
+        .library(name: "MeeshyE2EE", targets: ["MeeshyE2EE"]),
     ],
     dependencies: [
         .package(url: "https://github.com/socketio/socket.io-client-swift", exact: "16.1.1"),
         .package(url: "https://github.com/groue/GRDB.swift.git", exact: "6.29.3"),
         .package(url: "https://github.com/stasel/WebRTC", exact: "146.0.0"),
         .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", exact: "1.17.6"),
+        // Le moteur Lottie des stickers, fonds, contours et bannières (#10638) :
+        // un XCFramework précompilé, lié à MeeshyUI seul — jamais aux extensions.
+        .package(url: "https://github.com/airbnb/lottie-spm.git", exact: "4.6.1"),
+        // libsignal au tag épinglé de packages/LibSignalClient/LIBSIGNAL_VERSION.
+        .package(path: "../LibSignalClient"),
     ],
     targets: [
         .target(
+            name: "MeeshyCore",
+            swiftSettings: coreSwiftSettings
+        ),
+        .target(
             name: "MeeshySDK",
             dependencies: [
+                "MeeshyCore",
                 .product(name: "SocketIO", package: "socket.io-client-swift"),
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "WebRTC", package: "WebRTC"),
             ],
+            // `Resources/appearance-catalog.json` n'est PAS une ressource SwiftPM : elle ferait générer
+            // `Bundle.module` ici, ambigu avec celui de MeeshyUI dans tout test qui importe les deux.
+            // Son contenu est embarqué en Swift (`AppearanceCatalogData.swift`), copie gardée identique.
+            exclude: ["Resources"],
             swiftSettings: coreSwiftSettings
         ),
         .target(
             name: "MeeshyUI",
-            dependencies: ["MeeshySDK"],
+            dependencies: [
+                "MeeshySDK",
+                .product(name: "Lottie", package: "lottie-spm"),
+            ],
             resources: [
                 .process("Resources"),
             ],
             swiftSettings: uiSwiftSettings
         ),
+        .target(
+            name: "MeeshyE2EE",
+            dependencies: [
+                "MeeshySDK",
+                .product(name: "LibSignalClient", package: "LibSignalClient"),
+                .product(name: "GRDB", package: "GRDB.swift"),
+            ],
+            swiftSettings: coreSwiftSettings
+        ),
+        // #10854 — le sceau réseau de CHAQUE bundle de test du package. Cible
+        // de support : dépendance des seules cibles de test, jamais d'un
+        // produit livré. Le chargeur C pose un constructeur qui s'exécute au
+        // chargement du bundle, avant la première classe de test.
+        .target(
+            name: "MeeshyTestSupportLoader",
+            path: "Sources/MeeshyTestSupportLoader"
+        ),
+        .target(
+            name: "MeeshyTestSupport",
+            dependencies: ["MeeshySDK", "MeeshyTestSupportLoader"],
+            swiftSettings: coreSwiftSettings
+        ),
         .testTarget(
             name: "MeeshySDKTests",
-            dependencies: ["MeeshySDK"],
+            dependencies: ["MeeshySDK", "MeeshyE2EE", "MeeshyTestSupport"],
             swiftSettings: coreSwiftSettings
         ),
         .testTarget(
@@ -69,6 +115,7 @@ let package = Package(
             dependencies: [
                 "MeeshyUI",
                 "MeeshySDK",
+                "MeeshyTestSupport",
                 .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
             ],
             exclude: ["__Snapshots__"],

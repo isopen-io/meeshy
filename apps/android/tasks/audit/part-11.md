@@ -52,7 +52,7 @@ Files covered: 20. Feature areas: app shell / root navigation, settings & securi
 
 **Android-port note**: Feed overlay = a Compose `LazyColumn` modal sheet/overlay. The optimistic-like reconciliation (local set + delta map + in-flight set, socket reconcile) is the canonical pattern — implement in `FeedViewModel` with `StateFlow`. `.equatable()` cells → stable keys + `@Stable`/`@Immutable` data classes. Drop ALL legacy shim structs — do not port. The attachment menu = a Compose dropdown / floating action chip group.
 
-## apps/ios/Meeshy/Features/Main/Views/SecurityView.swift
+## apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift
 
 **Purpose**: Account security settings: password change, 2FA, email change/verify, phone change/verify, conversation-lock master PIN, active sessions.
 
@@ -69,7 +69,7 @@ Files covered: 20. Feature areas: app shell / root navigation, settings & securi
 
 **Android-port note**: Compose screen with sections; back-stack via Navigation Compose. 2FA / PIN / sessions = sub-screens or modal bottom sheets. Email/phone change flows are stateful multi-step — model with a `SecurityViewModel` exposing per-section sealed UI states. Resend cooldown `Timer` → coroutine `delay` loop or `CountDownTimer`. Numeric code filtering → `OutlinedTextField` with `KeyboardType.Number` + input filter.
 
-## apps/ios/Meeshy/Features/Main/Views/SettingsView.swift
+## apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift
 
 **Purpose**: Main settings hub — profile card + grouped sections (account, appearance, voice profile, transcription, notifications, data, tools, support, about, logout).
 
@@ -89,7 +89,7 @@ Files covered: 20. Feature areas: app shell / root navigation, settings & securi
 
 **Android-port note**: Compose `LazyColumn` of `PreferenceCategory`-style sections. `UserPreferencesManager` → a `SettingsRepository` backed by DataStore + a backend sync. Collapsible header → `TopAppBar` with `enterAlwaysScrollBehavior` / `LargeTopAppBar`. The accessibility labels/hints are thorough — replicate via `contentDescription` + `semantics`.
 
-## apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailView.swift
+## apps/ios/Meeshy/Features/Links/Views/ShareLinkDetailView.swift
 
 **Purpose**: Detail screen for one share link — header card, action bar (copy/share/toggle/delete), stats, info.
 
@@ -104,7 +104,7 @@ Files covered: 20. Feature areas: app shell / root navigation, settings & securi
 
 **Android-port note**: Compose detail screen. Clipboard → `ClipboardManager`. Share → `Intent.ACTION_SEND` chooser. Confirmation dialog → `AlertDialog`. The 2s copy-feedback → coroutine `delay`.
 
-## apps/ios/Meeshy/Features/Main/Views/ShareLinksView.swift
+## apps/ios/Meeshy/Features/Links/Views/ShareLinksView.swift
 
 **Purpose**: List of the user's share links with a stats overview and create entry.
 
@@ -196,7 +196,7 @@ Files covered: 20. Feature areas: app shell / root navigation, settings & securi
 
 **Android-port note**: Compose `LazyColumn`; `StarredMessagesStore` → a repository backed by local DB. Navigation via the shared event bus carrying `conversationId` + `highlightMessageId`.
 
-## apps/ios/Meeshy/Features/Main/Views/StatsTimelineChart.swift
+## apps/ios/Meeshy/Features/Profile/Views/StatsTimelineChart.swift
 
 **Purpose**: 30-day activity line/area chart.
 
@@ -241,7 +241,7 @@ Files covered: 20. Feature areas: app shell / root navigation, settings & securi
 
 **Android-port note**: Compose modal sheet. `StatusVisibility` → Kotlin enum. Emoji grid → `LazyVerticalGrid`. `@AppStorage` → DataStore. Char-cap via input filter. The `.except`/`.only` user-picker is referenced but not in this file — needs a member picker screen.
 
-## apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift
+## apps/ios/Meeshy/Features/Stories/Views/StoryExportShareSheet.swift
 
 **Purpose**: Author-only sheet that bakes the current story slide into an MP4 and presents the system share sheet. NEVER touches the Meeshy backend.
 
@@ -257,7 +257,7 @@ Files covered: 20. Feature areas: app shell / root navigation, settings & securi
 
 **Android-port note**: Author-only local video export. Implement the MP4 bake with MediaCodec/Media3 Transformer (render overlays onto frames). Share via `Intent.ACTION_SEND` with a `FileProvider` URI. Keep the absolute rule: export is client-side only, never uploaded. Language picker stays — baked text language is viewer-chosen at export time.
 
-## apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift
+## apps/ios/Meeshy/Features/Stories/Views/StoryRepostEmbedCell.swift
 
 **Purpose**: Renders a feed POST that reposts a STORY — outer post text + embedded read-only story canvas.
 
@@ -272,7 +272,7 @@ Files covered: 20. Feature areas: app shell / root navigation, settings & securi
 
 **Android-port note**: Compose cell — text + an embedded muted story renderer at 9:16. The story renderer is a `UIViewRepresentable` on iOS; on Android it becomes a Compose `AndroidView` wrapping a custom story player view, or a fully-Compose story renderer.
 
-## apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift
+## apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift
 
 **Purpose**: Horizontal story carousel (my-story button + other users' rings) above the feed/conversation list.
 
@@ -293,7 +293,7 @@ Files covered: 20. Feature areas: app shell / root navigation, settings & securi
 
 **Android-port note**: Compose `LazyRow`. The deliberate "read singleton directly, don't observe" perf pattern → in Compose, do NOT collect presence/theme `StateFlow` inside the tray composable; pass snapshots or use derived state. Upload overlay = circular progress indicator. Story RAW-publish background flow is core — keep `publishStoryInBackground` decoupled from any local bake.
 
-## apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift
+## apps/ios/Meeshy/Features/Stories/Views/StoryViewerContainer.swift
 
 **Purpose**: Reactive wrapper that shows a loading/not-found state until the requested user's story group is available, then transitions into `StoryViewerView`. Solves the cover-opens-before-load race.
 
@@ -308,7 +308,7 @@ Files covered: 20. Feature areas: app shell / root navigation, settings & securi
 
 **Android-port note**: A Compose composable that observes the VM's story groups; shows loading → content → error per a `StoryViewerLoadState`. The race it solves (navigation target opens before async data) is real in Compose too — keep the wrapper. `.task(id:)` → `LaunchedEffect(uid)`.
 
-## apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift
+## apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift
 
 **Purpose**: Dedicated View structs extracted from `StoryViewerView` so the deeply nested story canvas is its own type-metadata unit (the monolithic opaque type blew the Swift type-checker budget and crashed on low-memory devices).
 

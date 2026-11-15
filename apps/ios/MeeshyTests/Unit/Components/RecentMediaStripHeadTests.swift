@@ -45,30 +45,34 @@ final class RecentMediaStripHeadTests: XCTestCase {
     }
 
     private func stripSource() throws -> String {
-        try source("Meeshy/Features/Main/Components/RecentMediaStrip.swift")
+        try ["RecentMediaStrip", "RecentMediaCell", "RecentMediaPreview"]
+            .map { try source("Meeshy/Features/Main/Components/\($0).swift") }
+            .joined(separator: "\n")
     }
 
     // MARK: - Taille de l'échantillon
 
-    /// 19 vignettes + la tuile photothèque = 20 cellules : deux rangées pleines
-    /// de dix sur iPhone, cinq rangées de quatre sur iPad. Un compte qui ne
-    /// remplit pas ses rangées laisse un trou en fin de bande.
-    func test_headSampleCount_fillsWholeRowsOnBothLayouts() {
-        let cells = RecentMediaStrip.headSampleCount + 1
-        XCTAssertEqual(RecentMediaStrip.headSampleCount, 19)
-        XCTAssertEqual(cells % 2, 0, "iPhone rend deux rangées : le total doit être pair")
-        XCTAssertEqual(cells % 4, 0, "iPad rend quatre colonnes : le total doit être multiple de 4")
-    }
-
-    /// L'échantillon ne peut pas dépasser ce que le modèle va chercher, sinon la
-    /// bande afficherait moins que ce qu'elle annonce sans que rien ne le dise.
-    func test_headSampleCount_staysWithinTheModelFetchLimit() throws {
+    /// L'échantillon affiché est TOUT ce que le modèle va chercher (#8869) :
+    /// 40 médias. Le plafond de 19 masquait 21 médias déjà chargés, et la bande
+    /// horizontale de deux rangées n'en laissait voir que 7 sans défiler.
+    func test_headSampleCount_showsEveryFetchedMedia() throws {
+        XCTAssertEqual(RecentMediaStrip.headSampleCount, 40)
         let src = try stripSource()
         XCTAssertTrue(
-            src.contains("func load(limit: Int = 40)"),
-            "Le plafond de fetch a bougé : revérifier qu'il couvre headSampleCount"
+            src.contains("func load(limit: Int = RecentMediaStrip.headSampleCount)"),
+            "Le fetch doit chercher exactement ce que la grille affiche"
         )
-        XCTAssertLessThanOrEqual(RecentMediaStrip.headSampleCount, 40)
+    }
+
+    /// iPhone comme iPad : une grille VERTICALE défilante qui remplit l'espace
+    /// sous la rangée des types. La bande horizontale de hauteur figée à deux
+    /// rangées laissait un vide au-dessus et au-dessous d'elle (#8869).
+    func test_recentMedia_isAVerticalGridOnEveryIdiom() throws {
+        let src = try stripSource()
+        XCTAssertFalse(src.contains("ScrollView(.horizontal"), "Plus de bande horizontale")
+        XCTAssertFalse(src.contains("LazyHGrid"), "Plus de grille à rangées figées")
+        XCTAssertTrue(src.contains("ScrollView(.vertical"))
+        XCTAssertTrue(src.contains("LazyVGrid"))
     }
 
     // MARK: - Position de la tuile photothèque
@@ -78,9 +82,8 @@ final class RecentMediaStripHeadTests: XCTestCase {
     /// pour la trouver — le raccourci le plus utile était le plus caché.
     func test_openLibraryTile_isRenderedBeforeTheSamples() throws {
         let src = try stripSource()
-        // Les deux dispositions se suivent dans le fichier (grille iPad puis
-        // bande iPhone) : la trace attendue est donc tuile, échantillon, tuile,
-        // échantillon. Toute inversion casse l'alternance.
+        // Une seule disposition (grille verticale, #8869) : la trace attendue
+        // est tuile puis échantillon. Toute inversion la casse.
         var trace: [String] = []
         var cursor = src.startIndex
         while cursor < src.endIndex {
@@ -98,8 +101,8 @@ final class RecentMediaStripHeadTests: XCTestCase {
             }
         }
         XCTAssertEqual(
-            trace, ["tile", "samples", "tile", "samples"],
-            "Chaque disposition doit rendre la tuile photothèque AVANT ses vignettes"
+            trace, ["tile", "samples"],
+            "La grille doit rendre la tuile photothèque AVANT ses vignettes"
         )
     }
 
@@ -116,7 +119,7 @@ final class RecentMediaStripHeadTests: XCTestCase {
             "L'aperçu vidéo ne doit plus être coupé"
         )
         XCTAssertTrue(
-            src.contains("MediaSessionCoordinator.shared.activatePlaybackSync"),
+            src.contains("MediaSessionCoordinator.shared.activateContentPlayback(.audible)"),
             "Sans session .playback l'aperçu reste muet interrupteur Silence enclenché"
         )
     }
@@ -138,7 +141,7 @@ final class RecentMediaStripHeadTests: XCTestCase {
     func test_videoPreview_silencesOtherPlayersBeforeArmingTheSession() throws {
         let src = try stripSource()
         let stop = try XCTUnwrap(src.range(of: "PlaybackCoordinator.shared.stopAll()"))
-        let arm = try XCTUnwrap(src.range(of: "MediaSessionCoordinator.shared.activatePlaybackSync"))
+        let arm = try XCTUnwrap(src.range(of: "MediaSessionCoordinator.shared.activateContentPlayback"))
         XCTAssertTrue(stop.lowerBound < arm.lowerBound)
     }
 

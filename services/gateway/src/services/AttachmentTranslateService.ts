@@ -8,15 +8,21 @@
  * - application/pdf, text/* → DocumentTranslateService (stub)
  */
 
-import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { promises as fs } from 'fs';
+import { readStoredFileBytes } from './attachments/atRest/atRestFiles';
+import { gatedVoiceClone, userIdOfParticipant } from './voice-cloning-gate';
+import { PrismaClient, type Prisma } from '@meeshy/shared/prisma/client';
 import path from 'path';
 import { AudioTranslateService } from './AudioTranslateService';
 import { ZmqTranslationClient } from './zmq-translation';
 import { MultiLevelJobMappingCache } from './MultiLevelJobMappingCache';
-import type { VoiceTranslationResult, ServiceResult, VoiceProfileData } from '@meeshy/shared/types';
+import type { VoiceTranslationResult, ServiceResult } from '@meeshy/shared/types';
 import type { AttachmentTranscription, AttachmentTranslations } from '@meeshy/shared/types/attachment-audio';
+import {
+  attachmentTranslateSelect,
+  type AttachmentTranslateRowPayload,
+} from './attachments/attachmentIncludes';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { diffTranslationTargets } from '../utils/translation-targets';
 
 const logger = enhancedLogger.child({ module: 'AttachmentTranslateService' });
 
@@ -104,25 +110,28 @@ export class AttachmentTranslateService {
   }
 
   /**
-   * Translate an attachment based on its type
+   * Translate an attachment based on its type.
+   *
+   * #4166, critère 4 — `POST /attachments/:attachmentId/translate` already
+   * reads this row for its own consent gate before calling here. Without
+   * `preloadedAttachment`, this method re-read the SAME row via a bare
+   * `include` (every scalar column) — two round-trips for one row. A caller
+   * that already holds the row (read via `attachmentTranslateSelect`) passes
+   * it and this method skips its own fetch entirely. Omitting the parameter
+   * keeps the old behaviour — every other caller (this service's own tests
+   * included) is unaffected.
    */
   async translate(
     userId: string,
     attachmentId: string,
-    options: TranslateOptions
+    options: TranslateOptions,
+    preloadedAttachment?: AttachmentTranslateRowPayload
   ): Promise<ServiceResult<TranslationResult>> {
     try {
-      // 1. Get attachment from database
-      const attachment = await this.prisma.messageAttachment.findUnique({
+      // 1. Get attachment from database (unless the caller already has it)
+      const attachment = preloadedAttachment ?? await this.prisma.messageAttachment.findUnique({
         where: { id: attachmentId },
-        include: {
-          message: {
-            select: {
-              conversationId: true,
-              senderId: true
-            }
-          }
-        }
+        select: attachmentTranslateSelect
       });
 
       if (!attachment) {
@@ -182,7 +191,7 @@ export class AttachmentTranslateService {
   async getTranslationStatus(
     userId: string,
     jobId: string
-  ): Promise<ServiceResult<{ status: string; progress?: number; result?: any }>> {
+  ): Promise<ServiceResult<{ status: string; progress?: number; result?: VoiceTranslationResult }>> {
     try {
       // Delegate to audio service for now (only audio supports async)
       const job = await this.audioTranslateService.getJobStatus(userId, jobId);
@@ -194,10 +203,10 @@ export class AttachmentTranslateService {
           result: job.result
         }
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: error.message || 'Failed to get job status',
+        error: error instanceof Error ? error.message : 'Failed to get job status',
         errorCode: 'JOB_STATUS_ERROR'
       };
     }
@@ -216,10 +225,10 @@ export class AttachmentTranslateService {
         success: true,
         data: { cancelled: result.success }
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: error.message || 'Failed to cancel job',
+        error: error instanceof Error ? error.message : 'Failed to cancel job',
         errorCode: 'JOB_CANCEL_ERROR'
       };
     }
@@ -237,7 +246,7 @@ export class AttachmentTranslateService {
     return 'unknown';
   }
 
-  private async verifyUserAccess(userId: string, attachment: any): Promise<boolean> {
+  private async verifyUserAccess(userId: string, attachment: AttachmentTranslateRowPayload): Promise<boolean> {
     // User uploaded the attachment
     if (attachment.uploadedBy === userId) {
       return true;
@@ -258,9 +267,10 @@ export class AttachmentTranslateService {
     return false;
   }
 
+  /** #13100 — le clair, que le fichier soit scellé au repos ou non. */
   private async readAttachmentFile(filePath: string): Promise<Buffer> {
     const fullPath = path.join(this.uploadBasePath, filePath);
-    return fs.readFile(fullPath);
+    return readStoredFileBytes(fullPath, { uploadRoot: this.uploadBasePath });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -269,7 +279,7 @@ export class AttachmentTranslateService {
 
   private async translateAudio(
     userId: string,
-    attachment: any,
+    attachment: AttachmentTranslateRowPayload,
     options: TranslateOptions
   ): Promise<ServiceResult<TranslationResult>> {
     // =========================================================================
@@ -329,10 +339,17 @@ export class AttachmentTranslateService {
       voiceQuality: t.quality || 0
     })) : [];
 
-    const existingLanguages = new Set(existingTranslations.map(t => t.targetLanguage));
+    // Canonicaliser cibles demandées et clés stockées via la SSOT partagée : une
+    // cible région-taguée (`'en-US'`) ou en casse mixte (`'FR'`) doit matcher la
+    // clé canonique du store (`'en'`, `'fr'`), et deux variantes d'une même langue
+    // ne comptent que pour une cible NLLB.
+    const targetDiff = diffTranslationTargets(
+      options.targetLanguages,
+      existingTranslations.map(t => t.targetLanguage)
+    );
 
     // Filtrer les langues qui ne sont pas encore traduites
-    const languagesToTranslate = options.targetLanguages.filter(lang => !existingLanguages.has(lang));
+    const languagesToTranslate = targetDiff.missing;
 
     const isForwarded = attachment.isForwarded || attachment.forwardedFromAttachmentId;
 
@@ -347,7 +364,7 @@ export class AttachmentTranslateService {
 
       // Si c'est un transfert, copier les traductions de l'original vers le nouvel attachement
       if (isForwarded && attachment.id !== originalAttachmentId) {
-        await this._copyTranslationsForForward(originalAttachmentId, attachment.id, attachment.message?.id);
+        await this._copyTranslationsForForward(originalAttachmentId, attachment.id);
       }
 
       // Construire la réponse à partir du cache
@@ -360,7 +377,7 @@ export class AttachmentTranslateService {
           confidence: 1.0
         },
         translations: existingTranslations
-          .filter(t => options.targetLanguages.includes(t.targetLanguage))
+          .filter(t => targetDiff.wasRequested(t.targetLanguage))
           .map(t => ({
             targetLanguage: t.targetLanguage,
             translatedText: t.translatedText,
@@ -388,6 +405,14 @@ export class AttachmentTranslateService {
 
     logger.debug('Envoi au Translator', { languageCount: languagesToTranslate.length });
 
+    // #17309 — la voix de l'audio est celle de l'émetteur ORIGINAL (un `Participant`) ;
+    // sans voix originale, celle du demandeur. Aucune n'est clonée sans 18 ans révolus.
+    const originalSenderUserId = await userIdOfParticipant(this.prisma, originalSenderId);
+    const generateVoiceClone = await gatedVoiceClone(this.prisma, {
+      requested: options.generateVoiceClone,
+      voiceOwnerUserIds: useOriginalVoice ? [originalSenderUserId] : [originalSenderUserId, userId],
+    });
+
     // Read audio file
     const audioBuffer = await this.readAttachmentFile(attachment.filePath);
     const audioBase64 = audioBuffer.toString('base64');
@@ -402,7 +427,7 @@ export class AttachmentTranslateService {
           audioBase64,
           targetLanguages: languagesToTranslate,
           sourceLanguage: options.sourceLanguage,
-          generateVoiceClone: options.generateVoiceClone,
+          generateVoiceClone,
           webhookUrl: options.webhookUrl,
           priority: options.priority,
           originalSenderId: originalSenderId || undefined,
@@ -413,7 +438,7 @@ export class AttachmentTranslateService {
             language: existingTranscription.language,
             confidence: existingTranscription.confidence,
             source: existingTranscription.source,
-            segments: existingTranscription.segments as any
+            segments: existingTranscription.segments
           } : undefined
         });
 
@@ -444,7 +469,7 @@ export class AttachmentTranslateService {
         audioBase64,
         targetLanguages: languagesToTranslate,
         sourceLanguage: options.sourceLanguage,
-        generateVoiceClone: options.generateVoiceClone,
+        generateVoiceClone,
         originalSenderId: originalSenderId || undefined,
         existingVoiceProfile: voiceProfile || undefined,
         useOriginalVoice,
@@ -453,7 +478,7 @@ export class AttachmentTranslateService {
           language: existingTranscription.language,
           confidence: existingTranscription.confidence,
           source: existingTranscription.source,
-          segments: existingTranscription.segments as any
+          segments: existingTranscription.segments
         } : undefined
       });
 
@@ -465,7 +490,7 @@ export class AttachmentTranslateService {
       let fullResult = syncResult as AudioTranslationResult;
       if (existingTranslations.length > 0 && fullResult.translations) {
         const cachedForRequest = existingTranslations
-          .filter(t => options.targetLanguages.includes(t.targetLanguage))
+          .filter(t => targetDiff.wasRequested(t.targetLanguage))
           .map(t => ({
             targetLanguage: t.targetLanguage,
             translatedText: t.translatedText,
@@ -486,10 +511,10 @@ export class AttachmentTranslateService {
           result: fullResult
         }
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: error.message || 'Translation failed',
+        error: error instanceof Error ? error.message : 'Translation failed',
         errorCode: 'TRANSLATION_ERROR'
       };
     }
@@ -614,8 +639,7 @@ export class AttachmentTranslateService {
    */
   private async _copyTranslationsForForward(
     originalAttachmentId: string,
-    targetAttachmentId: string,
-    targetMessageId?: string
+    targetAttachmentId: string
   ): Promise<void> {
     try {
       // 1. Récupérer l'attachement source avec transcription et traductions
@@ -650,7 +674,7 @@ export class AttachmentTranslateService {
 
         await this.prisma.messageAttachment.update({
           where: { id: targetAttachmentId },
-          data: { transcription: transcriptionData as any }
+          data: { transcription: transcriptionData as unknown as Prisma.InputJsonValue }
         });
 
         logger.debug('Transcription copiée depuis original');
@@ -661,7 +685,7 @@ export class AttachmentTranslateService {
       if (sourceTranslations) {
         await this.prisma.messageAttachment.update({
           where: { id: targetAttachmentId },
-          data: { translations: sourceTranslations as any }
+          data: { translations: sourceTranslations as unknown as Prisma.InputJsonValue }
         });
 
         const translationCount = Object.keys(sourceTranslations).length;
@@ -673,9 +697,9 @@ export class AttachmentTranslateService {
   }
 
   private async translateImage(
-    userId: string,
-    attachment: any,
-    options: TranslateOptions
+    _userId: string,
+    _attachment: AttachmentTranslateRowPayload,
+    _options: TranslateOptions
   ): Promise<ServiceResult<TranslationResult>> {
     // STUB: Image translation not yet implemented
     return {
@@ -686,9 +710,9 @@ export class AttachmentTranslateService {
   }
 
   private async translateVideo(
-    userId: string,
-    attachment: any,
-    options: TranslateOptions
+    _userId: string,
+    _attachment: AttachmentTranslateRowPayload,
+    _options: TranslateOptions
   ): Promise<ServiceResult<TranslationResult>> {
     // STUB: Video translation not yet implemented
     return {
@@ -699,9 +723,9 @@ export class AttachmentTranslateService {
   }
 
   private async translateDocument(
-    userId: string,
-    attachment: any,
-    options: TranslateOptions
+    _userId: string,
+    _attachment: AttachmentTranslateRowPayload,
+    _options: TranslateOptions
   ): Promise<ServiceResult<TranslationResult>> {
     // STUB: Document translation not yet implemented
     return {

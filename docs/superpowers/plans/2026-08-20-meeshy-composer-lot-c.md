@@ -133,7 +133,7 @@ Le `draftDocument` de l'aperçu vient de `CanvasV3(migrating: viewModel.currentE
 ### Task C3: Les portes — chaque entrée fixe l'intention
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift` (porte `.storyTray` — l'état `StoryViewModel.showStoryComposer` reste le déclencheur, la présentation racine `:175` pointe le host)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryTrayActions.swift` (porte `.storyTray` — l'état `StoryViewModel.showStoryComposer` reste le déclencheur, la présentation racine `:175` pointe le host)
 - Modify: `apps/ios/Meeshy/Features/Main/Views/iPadRootView.swift` (rév. 2, G6 : l'iPad monte SES propres composers — `showStoryComposer`, `storyEditComposerCover` — la porte tray y pointe le MÊME host ; sans quoi l'iPad garde l'ancien chemin et ne verra jamais la porte 426 de C4)
 - Test: `apps/ios/MeeshyTests/Unit/Composer/ComposerEntryGuardTests.swift` (source)
 
@@ -243,7 +243,7 @@ run, repli CONSIGNÉ : `UIPasteControl` (UIKit, représentable), même contrat O
 ### Task C7: L'Étagère — MyStoriesView + file d'envoi + archive
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift`
 - Test: `apps/ios/MeeshyTests/Unit/Composer/EtagereSectionsTests.swift`
 
 - [ ] **Step 1: Tests rouges** — `MyStoriesView` est à ONGLETS (`MyStoriesTab`,

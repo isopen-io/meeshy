@@ -12,6 +12,7 @@ import type {
   CursorPaginationMeta,
   ResponseMeta
 } from '@meeshy/shared/types';
+import { AUTH_ERROR_CODES } from './auth-error-codes';
 
 /**
  * Send a success response with data
@@ -72,6 +73,7 @@ export function sendError(
     code?: string;
     details?: Record<string, unknown>;
     violations?: unknown[];
+    accountId?: string;
   }
 ): void {
   // `details` est étalé à la RACINE — c'est là que les clients lisent les champs
@@ -80,13 +82,17 @@ export function sendError(
   // deux mondes : l'appelant croit avoir transmis. L'enveloppe reste maîtresse
   // de ses quatre clés, et le schéma de réponse de chaque route reste l'arbitre
   // final de ce qui sort.
-  const response: ApiResponse<never> & { violations?: unknown[] } = {
+  // `accountId` nomme le compte qu'un refus concerne (#10264, `ACCOUNT_DELETED`) :
+  // déclaré au superset `errorResponseSchema`, il survit à toute route qui le
+  // déclare, quand un étalement de `details` serait supprimé.
+  const response: ApiResponse<never> & { violations?: unknown[]; accountId?: string } = {
     ...(options?.details ?? {}),
     success: false,
     error,
     message: options?.message || error,
     code: options?.code,
-    ...(options?.violations ? { violations: options.violations } : {})
+    ...(options?.violations ? { violations: options.violations } : {}),
+    ...(options?.accountId ? { accountId: options.accountId } : {})
   };
 
   reply.status(statusCode).send(response);
@@ -95,23 +101,52 @@ export function sendError(
 /**
  * Send a 400 Bad Request error
  */
+/**
+ * 400 Bad Request.
+ *
+ * `violations` porte les erreurs PAR CHAMP, et l'oubli de cette option dans la
+ * signature avait une conséquence bien à elle (#4487) : `sendError` l'accepte,
+ * `errorResponseSchema` la déclare, mais l'aide spécialisée que tout le monde
+ * appelle ne l'offrait pas. Les routes se rabattaient donc sur
+ * `details: { issues }` — étalé à la RACINE, non déclaré au schéma, et **retiré
+ * en silence par `fast-json-stringify`**. Le détail était calculé, sérialisé,
+ * puis jeté au dernier mètre.
+ *
+ * L'asymétrie qui l'avait rendu invisible mérite d'être dite : `sendForbidden`
+ * portait `violations` et pas `sendBadRequest` — c'est-à-dire l'inverse de
+ * l'usage, les violations par champ appartenant bien plus à un refus de
+ * VALIDATION qu'à un refus de DROIT.
+ *
+ * > Une aide spécialisée qui offre MOINS que l'aide générale qu'elle enveloppe
+ * > détourne ses appelants vers un contournement — et le contournement, lui,
+ * > n'a pas de schéma.
+ */
 export function sendBadRequest(
   reply: FastifyReply,
   error: string,
-  options?: { message?: string; code?: string; details?: Record<string, unknown> }
+  options?: { message?: string; code?: string; details?: Record<string, unknown>; violations?: unknown[] }
 ): void {
   sendError(reply, 400, error, options);
 }
 
 /**
  * Send a 401 Unauthorized error
+ *
+ * #4857 — `code` était en OPTION, et l'omission (127 des 180 appels de
+ * production) servait `undefined`, qui disparaît à la sérialisation JSON :
+ * la seule façon de distinguer deux 401 était le filage de chaîne sur une
+ * prose française. Le défaut est désormais EXPLICITE —
+ * `AUTH_ERROR_CODES.UNAUTHORIZED`, jamais l'absence — et un appelant qui
+ * refuse pour un sens distinct (session invalide, lien magique, identifiants,
+ * second facteur…) le dit en passant `options.code`. Voir
+ * `utils/auth-error-codes.ts` pour la liste des sens nommés.
  */
 export function sendUnauthorized(
   reply: FastifyReply,
   error: string = 'Authentication required',
   options?: { message?: string; code?: string }
 ): void {
-  sendError(reply, 401, error, options);
+  sendError(reply, 401, error, { code: AUTH_ERROR_CODES.UNAUTHORIZED, ...options });
 }
 
 /**
@@ -176,6 +211,33 @@ export function sendUpgradeRequired(
   options?: { message?: string; details?: Record<string, unknown> }
 ): void {
   sendError(reply, 426, error, { code: 'UPGRADE_REQUIRED', ...options });
+}
+
+/**
+ * Send a 413 Payload Too Large error — a file exceeds the size limit for
+ * its category (#6604).
+ */
+export function sendPayloadTooLarge(
+  reply: FastifyReply,
+  error: string,
+  options?: { message?: string; code?: string }
+): void {
+  sendError(reply, 413, error, { code: 'FILE_TOO_LARGE', ...options });
+}
+
+/**
+ * Send a 415 Unsupported Media Type error — a request-shaped refusal, never
+ * a server failure (#6604, same family as #6557 : a DEMANDE error must not
+ * surface as a 500). The caller names the received type and the accepted
+ * ones in `error`/`message` so the client can act (convert the file) rather
+ * than retry (which a 500 would suggest).
+ */
+export function sendUnsupportedMediaType(
+  reply: FastifyReply,
+  error: string,
+  options?: { message?: string; code?: string }
+): void {
+  sendError(reply, 415, error, { code: 'UNSUPPORTED_MEDIA_TYPE', ...options });
 }
 
 /**

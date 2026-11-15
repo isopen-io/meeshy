@@ -23,8 +23,8 @@
  *
  * Ce qui voyage est l'ORIGINAL, jamais la traduction : `MessageRecord.content`
  * est le champ d'origine, et `originalLanguage` l'étiquette. Y poser le texte
- * traduit ferait mentir le couple — et la traduction, elle, a déjà son champ
- * (`translatedContent`) et son rang (cycle 121).
+ * traduit ferait mentir le couple — et la traduction, elle, compose le corps
+ * de la bannière ; elle ne voyage plus à côté (#14319).
  *
  * @jest-environment node
  */
@@ -130,15 +130,15 @@ describe('push data — ce que la NSE pré-enregistre au démarrage à froid', (
 
   it('porte l\'ORIGINAL, jamais la traduction servie dans la bannière', async () => {
     // Le couple `content` / `originalLanguage` est le champ d'ORIGINE et son
-    // étiquette : y poser le texte traduit ferait mentir les deux, et la
-    // traduction a déjà son champ. Ce témoin garde le mode d'échec du
+    // étiquette : y poser le texte traduit ferait mentir les deux. La
+    // traduction compose le corps et ne voyage pas à côté (#14319). Ce témoin garde le mode d'échec du
     // CORRECTIF — la bannière, elle, sert bien « Hola » (cycle 122).
     const data = await run({
       translations: { es: { text: 'Hola' } },
       originalLanguage: 'en',
     });
 
-    expect(data?.translatedContent).toBe('Hola');
+    expect(data).not.toHaveProperty('translatedContent');
     expect(data?.content).toBe('Hello');
     expect(data?.originalLanguage).toBe('en');
   });

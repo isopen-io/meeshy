@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="signup_verified_open_failed">Dein Konto ist bestätigt, aber dieses Gerät konnte die Sitzung nicht öffnen. Versuche es erneut.</string>
+    <string name="signup_verified_no_session">Dein Konto ist bestätigt. Melde dich an, um fortzufahren.</string>
+</resources>

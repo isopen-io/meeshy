@@ -11,23 +11,31 @@ import MeeshyUI
 /// vue distingue les deux au tap plutôt que de tout envoyer sur le détail.
 struct BookmarksView: View {
     @StateObject private var viewModel = BookmarksViewModel()
-    /// `@StateObject` sur le singleton, PAS `@EnvironmentObject` : ni `RootView`
-    /// ni `iPadRootView` n'injectent `ThemeManager`, et l'exiger de
-    /// l'environnement faisait planter l'app à l'ouverture de cet écran
-    /// (« No ObservableObject of type ThemeManager found »). Le défaut est
-    /// resté invisible tant que l'écran n'avait aucun point d'entrée.
-    /// Observé — un basculement Clair/Sombre doit repeindre la liste, ce que le
-    /// `{ ThemeManager.shared }` calculé des écrans voisins ne fait pas.
-    @StateObject private var theme = ThemeManager.shared
-    @EnvironmentObject private var router: Router
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// Retour opérant dans les trois contextes de présentation : pile iPhone,
+    /// panneau droit iPad, sheet — même dispositif que `StarredMessagesView`.
+    private var back: PanelBackAction {
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
+    }
+    @Environment(\.routerCommands) private var routerCommands
+    @Environment(\.meeshyRouter) private var meeshyRouter
     @EnvironmentObject private var storyViewModel: StoryViewModel
-    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    @Environment(\.meeshyConversationList) private var conversationListViewModel
     @EnvironmentObject private var statusViewModel: StatusViewModel
     /// Avatar d'auteur tappé → story de cet auteur (singleGroup, 1re non-vue).
     @State private var storyAuthorUserId: String?
     @State private var filter: BookmarkFilter = .all
+    /// Publication citée depuis son bouton Repost (#15911).
+    @State private var quotedPost: FeedPost?
+    @Environment(\.meeshyQuoteComposerHost) private var quoteHost
+    /// Lien présenté par « Partager » du menu ⋯ (#15994).
+    @State private var shareableLink: ShareableLink?
 
-    @StateObject private var impressions = ImpressionBatcher(source: "profile")
+    @StateObject private var impressions = ImpressionBatcher(source: "profile", surface: .bookmarks)
 
     /// Facette de tri de l'écran. `nonisolated` sur le TYPE : `CaseIterable` et
     /// `Identifiable` sont exercés hors du MainActor par le `ForEach` du picker.
@@ -39,7 +47,7 @@ struct BookmarksView: View {
         var label: String {
             switch self {
             case .all: return String(localized: "bookmarks.filter.all", defaultValue: "Tout", bundle: .main)
-            case .posts: return String(localized: "bookmarks.filter.posts", defaultValue: "Posts", bundle: .main)
+            case .posts: return String(localized: "bookmarks.filter.posts", defaultValue: "Publications", bundle: .main)
             case .reels: return String(localized: "bookmarks.filter.reels", defaultValue: "Réels", bundle: .main)
             }
         }
@@ -58,8 +66,53 @@ struct BookmarksView: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            header
+            bookmarkList
+        }
+        .background(theme.backgroundGradient.ignoresSafeArea())
+        .task { await viewModel.loadBookmarks() }
+        .onDisappear { Task { await impressions.flushNow() } }
+        .relayingMeeshyRouter(meeshyRouter) { content, router in content.modifier(StoryReaderCover(
+            request: Binding(
+                get: { storyAuthorUserId.map { StoryViewerRequest(id: $0, startAtFirstUnviewed: true, singleGroup: true) } },
+                set: { storyAuthorUserId = $0?.id }
+            ),
+            storyViewModel: storyViewModel,
+            statusViewModel: statusViewModel,
+            router: router,
+            conversationList: conversationListViewModel,
+            presentationSource: "BookmarksView.authorAvatar",
+            onReply: { replyContext in
+                router.navigateToStoryReply(replyContext, conversationList: conversationListViewModel)
+            }
+        )) }
+        .modifier(QuoteComposerCover(quoted: $quotedPost, host: quoteHost))
+        .sheet(item: $shareableLink) { link in
+            ShareSheet(activityItems: link.activityItems)
+                .presentationDetents([.medium, .large])
+        }
+    }
+
+    /// En-tête partagé, FIXE (`scrollOffset: 0`) — même raison que la liste des
+    /// utilisateurs bloqués : la liste porte `.refreshable`, et un en-tête posé
+    /// en surimpression couvrirait le tirer-pour-rafraîchir (#6481). Il remplace
+    /// la barre système, que la route masque désormais.
+    private var header: some View {
+        CollapsibleHeader(
+            title: String(localized: "bookmarks.title", defaultValue: "Publications enregistrées", bundle: .main),
+            scrollOffset: 0,
+            onBack: { back() },
+            titleColor: theme.textPrimary,
+            backArrowColor: MeeshyColors.brandPrimary,
+            backgroundColor: theme.backgroundPrimary,
+            trailing: { EmptyView() }
+        )
+    }
+
+    private var bookmarkList: some View {
         ScrollView(showsIndicators: false) {
-            LazyVStack(spacing: 12) {
+            LazyVStack(spacing: MeeshySpacing.md) {
                 // Le sélecteur ne s'affiche que si la liste contient bien les
                 // deux natures : proposer « Réels » sur une liste sans réel
                 // n'offre qu'un moyen de vider l'écran.
@@ -73,6 +126,20 @@ struct BookmarksView: View {
                     ForEach(visiblePosts) { post in
                         FeedPostCard(
                             post: post,
+                            // Une carte des favoris EST enregistrée : la toucher retire le favori.
+                            isBookmarked: true,
+                            displayRepostCount: post.repostCount,
+                            isReposted: post.isRepostedByMe,
+                            onLike: { postId in
+                                Task { await viewModel.toggleLike(postId) }
+                            },
+                            onRepost: { postId in
+                                Task { await viewModel.toggleRepost(postId) }
+                            },
+                            onQuote: quoteHost == nil ? nil : { _ in quotedPost = post },
+                            onShare: { postId in
+                                Task { shareableLink = await viewModel.shareLink(for: postId) }
+                            },
                             onBookmark: { postId in
                                 Task { await viewModel.removeBookmark(postId) }
                             },
@@ -83,9 +150,9 @@ struct BookmarksView: View {
                                 Task {
                                     do {
                                         try await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
-                                        FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.reported", defaultValue: "Post reported", bundle: .main))
+                                        FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.reported", defaultValue: "Publication signalée", bundle: .main))
                                     } catch {
-                                        FeedbackToastManager.shared.showError(String(localized: "feed.post.reportError", defaultValue: "Error reporting post", bundle: .main))
+                                        FeedbackToastManager.shared.showError(String(localized: "feed.post.reportError", defaultValue: "Erreur lors du signalement", bundle: .main))
                                     }
                                 }
                             },
@@ -97,7 +164,9 @@ struct BookmarksView: View {
                         // comme n'importe quelle autre surface : leur apparition
                         // compte une impression. Elle était la dernière vue de
                         // contenu à ne rien remonter.
-                        .onAppear { trackImpression(postId: post.id) }
+                        .countsListedImpression(of: post.id, isVideo: post.isReel, in: impressions) {
+                            visiblePosts.firstIndex { $0.id == post.id }
+                        }
                     }
 
                     if viewModel.isLoading {
@@ -114,35 +183,10 @@ struct BookmarksView: View {
                     }
                 }
             }
-            .padding(.top, 8)
-            .padding(.bottom, 20)
+            .padding(.top, MeeshySpacing.sm)
+            .padding(.bottom, MeeshySpacing.xl)
         }
-        .background(theme.backgroundGradient.ignoresSafeArea())
-        .navigationTitle(String(localized: "bookmarks.title", defaultValue: "Favoris", bundle: .main))
-        .navigationBarTitleDisplayMode(.inline)
         .refreshable { await viewModel.refresh() }
-        .task { await viewModel.loadBookmarks() }
-        .fullScreenCover(isPresented: Binding(
-            get: { storyAuthorUserId != nil },
-            set: { if !$0 { storyAuthorUserId = nil } }
-        )) {
-            StoryViewerContainer(
-                viewModel: storyViewModel,
-                userId: storyAuthorUserId,
-                isPresented: Binding(
-                    get: { storyAuthorUserId != nil },
-                    set: { if !$0 { storyAuthorUserId = nil } }
-                ),
-                singleGroup: true,
-                startAtFirstUnviewed: true,
-                presentationSource: "BookmarksView.authorAvatar"
-            )
-            // fullScreenCover n'hérite pas des EnvironmentObjects — trio
-            // requis par StoryViewerView (SharePickerView interne).
-            .environmentObject(router)
-            .environmentObject(statusViewModel)
-            .environmentObject(conversationListViewModel)
-        }
     }
 
     private var filterPicker: some View {
@@ -152,12 +196,8 @@ struct BookmarksView: View {
             }
         }
         .pickerStyle(.segmented)
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
         .accessibilityLabel(String(localized: "bookmarks.filter.a11y", defaultValue: "Filtrer les favoris", bundle: .main))
-    }
-
-    private func trackImpression(postId: String) {
-        impressions.record(postId)
     }
 
     /// Un réel s'ouvre dans le lecteur immersif, amorcé avec les SEULS réels
@@ -168,46 +208,29 @@ struct BookmarksView: View {
         if post.isReel {
             ReelsPresenter.shared.present(
                 posts: FeedPost.reels(from: viewModel.posts),
-                startId: post.id
+                startId: post.id,
+                from: .bookmarks
             )
         } else {
-            router.push(.postDetail(post.id, post))
+            routerCommands.openPostDetail(post, from: .bookmarks)
         }
-        Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
     }
 
     private var bookmarksEmptyTitle: String {
         String(localized: "bookmarks.empty.title", defaultValue: "Aucun favori", bundle: .main)
     }
 
-    private var bookmarksEmptySubtitle: String {
-        String(localized: "bookmarks.empty.subtitle", defaultValue: "Les posts et les réels que vous enregistrez apparaîtront ici", bundle: .main)
-    }
-
-    // Reconstruit localement le rendu de `EmptyStateView` : ce composant
-    // partagé encapsule son icône, ce qui empêche de la masquer
-    // individuellement depuis un site d'appel. Le glyphe (bookmark) est
-    // purement décoratif — le titre et le sous-titre disent déjà tout — donc
-    // `.accessibilityHidden(true)` l'exclut explicitement avant que
-    // `.accessibilityElement(children: .combine)` ne fusionne le reste
-    // (titre + sous-titre) en un seul arrêt VoiceOver ; sans ce masquage, le
-    // nom brut du symbole ("bookmark") s'ajoutait à l'annonce.
+    // Le glyphe est décoratif : masqué pour que VoiceOver n'annonce que le titre.
     private var emptyState: some View {
         VStack(spacing: MeeshySpacing.lg) {
             Image(systemName: "bookmark")
-                .font(MeeshyFont.relative(52, weight: .light))
-                .foregroundColor(Color(hex: MeeshyColors.brandPrimaryHex).opacity(0.4))
+                .font(MeeshyFont.relative(MeeshyIconSize.hero, weight: .light))
+                .foregroundStyle(Color(hex: MeeshyColors.brandPrimaryHex).opacity(0.4))
                 .accessibilityHidden(true)
 
             Text(bookmarksEmptyTitle)
-                .font(MeeshyFont.relative(18, weight: .bold))
-                .foregroundColor(theme.textPrimary)
-
-            Text(bookmarksEmptySubtitle)
-                .font(MeeshyFont.relative(14))
-                .foregroundColor(theme.textMuted)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, MeeshySpacing.xxxl)
+                .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold))
+                .foregroundStyle(theme.textPrimary)
         }
         .padding(.top, 80)
         .accessibilityElement(children: .combine)

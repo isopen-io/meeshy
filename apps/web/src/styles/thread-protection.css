@@ -1,0 +1,435 @@
+/*
+ * LA PROTECTION DU FIL (D-23, #5676) — feuille propre à l'écran du fil,
+ * importée UNE fois par `routes/thread.tsx` (même mécanisme que
+ * `thread-scene.css` : Vite la scinde dans le CHUNK du fil, jamais dans la
+ * feuille critique — un message protégé n'est visible que là).
+ *
+ * AUCUNE VALEUR DE COULEUR NOUVELLE : `white`/`black` ci-dessous sont les
+ * littéraux CITÉS de `BubbleSystemViews.swift:34-37` (question 10 de D-23,
+ * réponse retenue : littéraux cités en commentaire, par sélecteur de schéma,
+ * plutôt qu'un jeton généré pour deux capsules) ; le reste vient des jetons
+ * (`--color-warn`, `--color-error`, `--color-ios-card`, `--color-ios-ink`).
+ * `prefers-reduced-motion` n'a rien à couper de spécifique : la règle 32
+ * d'`app.css` ramène déjà toute transition à 0,01 ms.
+ */
+
+/* LE VOILE — bouton plein bloc, substitut flouté (BLUR_RADIUS_PX porté en
+   style inline par `ProtectedContent`, dérivé de `protection.ts`). */
+/* LE FLOU SE FOND DANS LE FIL (#18021) — miroir de `BlurRevealModifier`
+   (`BubbleBlurRevealLifecycle.swift`), qui masque le flou par un rectangle
+   arrondi LUI-MÊME flouté : aucun bord ne se lit. Le voile ne rogne donc
+   plus son substitut ; il s'étend d'une marge de fondu (marge négative =
+   rembourrage, rien ne bouge) et un masque en dégradé, dans les deux axes,
+   l'estompe jusqu'à zéro au bord. Le substitut reste flou, sans cadre. */
+.protected-veil {
+  --veil-feather-x: 24px;
+  --veil-feather-y: 14px;
+  display: block;
+  box-sizing: border-box;
+  width: calc(100% + 2 * var(--veil-feather-x));
+  min-height: calc(44px + 2 * var(--veil-feather-y));
+  margin: calc(-1 * var(--veil-feather-y)) calc(-1 * var(--veil-feather-x));
+  padding: var(--veil-feather-y) var(--veil-feather-x);
+  text-align: start;
+  cursor: pointer;
+  position: relative;
+  -webkit-mask-image:
+    linear-gradient(to right, transparent, #000 var(--veil-feather-x), #000 calc(100% - var(--veil-feather-x)), transparent),
+    linear-gradient(to bottom, transparent, #000 var(--veil-feather-y), #000 calc(100% - var(--veil-feather-y)), transparent);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right, transparent, #000 var(--veil-feather-x), #000 calc(100% - var(--veil-feather-x)), transparent),
+    linear-gradient(to bottom, transparent, #000 var(--veil-feather-y), #000 calc(100% - var(--veil-feather-y)), transparent);
+  mask-composite: intersect;
+}
+.protected-veil:focus-visible {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+[data-surrogate] {
+  display: inline-block;
+  pointer-events: none;
+  color: var(--color-ios-ink);
+  opacity: 0.55;
+}
+
+/* Le média masqué — 160×120, rayon 16, `--color-ios-card` à 70 % (question 1 :
+   AUCUNE URL sous le voile). */
+[data-masked-media] {
+  display: grid;
+  place-items: center;
+  width: 160px;
+  height: 120px;
+  border-radius: 16px;
+  background-color: color-mix(in srgb, var(--color-ios-card) 70%, transparent);
+  color: var(--color-ios-ink-2);
+  font-size: var(--text-check, 12px);
+}
+
+/* LE BROUILLARD — une seule transition d'opacité (D-23 §1.4 point 6), couleurs
+ * reprises du radial iOS (`BubbleStandardLayout.swift:1519-1528`), jouée à
+ * la FERMETURE (revue #5676, défaut 5 — `data-fog` piloté par
+ * `protected-content.tsx`, jamais `@starting-style`) : les trois phases
+ * iOS (`BubbleBlurRevealLifecycle.scheduleReveal`) sont TOUTES après les
+ * 5 s, parce que c'est la DISPARITION du secret qui a besoin d'être
+ * expliquée — son APPARITION n'a besoin d'aucun fondu. Le nœud reste monté
+ * pendant `revealed` ET `fogging` (`data-protected="revealed"` couvre les
+ * deux) : une transition CSS ordinaire sur un élément déjà peint suffit,
+ * sans naissance opaque ni second rendu. `prefers-reduced-motion` la ramène
+ * à 0,01 ms par la règle 32 d'`app.css`.
+ */
+.protected-revealed {
+  position: relative;
+  /* MÊME PLANCHER que `.protected-veil` (revue #5676, défaut 4) : sans lui
+     un message d'une ligne (~24px de contenu réel) rendait une rangée 24px
+     plus BASSE une fois révélé que voilé (le voile porte, lui, un
+     `min-height` de cible tactile) — le texte qu'on venait de demander
+     apparaissait sous la boîte qu'on avait touchée, puis la rangée
+     remontait seule 5 s plus tard. Le plancher commun rend la géométrie
+     IDENTIQUE voilée et révélée pour tout contenu tenant sur une ligne ;
+     un contenu plus long (attaché, multi-lignes) dépasse déjà 44px des
+     deux côtés et n'est pas affecté. */
+  min-height: 44px;
+}
+.protected-fog {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 400ms ease-out;
+  background: radial-gradient(circle, color-mix(in srgb, white 35%, transparent), color-mix(in srgb, white 12%, transparent) 60%, transparent);
+}
+.protected-fog[data-fog='closing'] {
+  opacity: 1;
+}
+
+/* LA LÉGENDE D'ÉCHEC — grammaire d'ERREUR, pas de contenu (revue #5676,
+   défaut 6) : mêmes jetons que la bande « Non envoyé » voisine
+   (`focal-row.tsx:353-366`), jamais l'encre de corps. */
+.protected-notice-error {
+  background-color: color-mix(in srgb, var(--color-error) 18%, transparent);
+  color: var(--color-error);
+}
+
+/* LE TOMBSTONE DE LA BULLE — capsules `white/black` LITTÉRALES
+   (`BubbleSystemViews.swift:34-37`, question 10 de D-23). */
+.protected-notice {
+  padding-inline: var(--ios-space-md, 12px);
+  padding-block: var(--ios-space-sm, 8px);
+}
+.protected-notice--deleted {
+  background-color: color-mix(in srgb, white 5%, transparent);
+  border: 0.5px solid color-mix(in srgb, white 8%, transparent);
+}
+:root.light .protected-notice--deleted {
+  background-color: color-mix(in srgb, black 3%, transparent);
+  border-color: color-mix(in srgb, black 5%, transparent);
+}
+/* LE CONTENU RETENU AU SERVEUR (#6862) — la lecture souveraine de
+   l'administration ne REÇOIT pas le texte : la passerelle le garde
+   (`messageContentIsProtected`). La capsule reprend la grammaire NEUTRE du
+   tombstone supprimé — un fait constaté, pas une alerte — et jamais l'ambre de
+   `--burned`, qui raconte une consommation qui n'a pas eu lieu. */
+.protected-notice--withheld,
+.protected-notice--endToEnd {
+  background-color: color-mix(in srgb, white 5%, transparent);
+  border: 0.5px solid color-mix(in srgb, white 8%, transparent);
+}
+:root.light .protected-notice--withheld,
+:root.light .protected-notice--endToEnd {
+  background-color: color-mix(in srgb, black 3%, transparent);
+  border-color: color-mix(in srgb, black 5%, transparent);
+}
+
+/* LE BADGE ÉPHÉMÈRE — ORANGE (#7599, `MeeshyColors.stateEphemeral` dérivé en
+   `--ios-state-ephemeral`, #7603). Il était peint au rouge d'erreur, et se
+   confondait avec l'échec d'envoi. Fond `opacity(isDark ? 0.15 : 0.1)` : un
+   SÉLECTEUR, jamais une lecture JS du schéma. */
+.protected-ephemeral-badge {
+  padding-inline: 8px;
+  padding-block: 4px;
+  color: var(--ios-state-ephemeral);
+  border: 0.5px solid color-mix(in srgb, var(--ios-state-ephemeral) 30%, transparent);
+  --ephemeral-fill: 15%;
+  background-color: color-mix(in srgb, var(--ios-state-ephemeral) var(--ephemeral-fill), transparent);
+}
+:root.light .protected-ephemeral-badge {
+  --ephemeral-fill: 10%;
+}
+
+/**
+ * LA PUCE DE LA VUE UNIQUE (#7580) — UNE seule, à la place du contenu, lue
+ * d'abord par sa COULEUR (#7599) : violet d'accent PLEIN tant qu'elle est à
+ * ouvrir (`--ios-state-view-once`), gris ATTÉNUÉ une fois ouverte
+ * (`--ios-state-opened`, fond moins prononcé). Les deux jetons sont DÉRIVÉS
+ * de `MeeshyColors.state*` (`packages/design-tokens/ios.css`) : même code
+ * couleur que le fil iOS.
+ */
+.view-once-chip {
+  min-height: 32px;
+  padding-inline: 10px;
+  padding-block: 4px;
+  --view-once-tint: var(--ios-state-view-once);
+  --view-once-fill: 18%;
+  color: var(--view-once-tint);
+  border: 0.5px solid color-mix(in srgb, var(--view-once-tint) 35%, transparent);
+  background-color: color-mix(in srgb, var(--view-once-tint) var(--view-once-fill), transparent);
+}
+button.view-once-chip {
+  cursor: pointer;
+  min-height: 44px;
+}
+.view-once-chip--opened {
+  --view-once-tint: var(--ios-state-opened);
+  --view-once-fill: 8%;
+}
+:root.light .view-once-chip {
+  --view-once-fill: 12%;
+}
+:root.light .view-once-chip--opened {
+  --view-once-fill: 6%;
+}
+
+/* LE PLEIN ÉCRAN D'UNE VUE UNIQUE MÉDIA (#7580) — monté dans `body`. */
+.view-once-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: max(56px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  background-color: color-mix(in srgb, black 92%, transparent);
+  color: white;
+  overflow: auto;
+}
+.view-once-stage-content {
+  width: min(100%, 640px);
+}
+.view-once-stage-close {
+  position: absolute;
+  top: max(8px, env(safe-area-inset-top));
+  inset-inline-end: 8px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 9999px;
+  color: white;
+  background-color: color-mix(in srgb, white 14%, transparent);
+}
+
+/* LA VUE UNIQUE SE MASQUE QUAND LA FENÊTRE PERD LE FOCUS (#9574, spec § 4) —
+   un navigateur ne noircit pas une capture : l'attribut n'est posé que hors
+   coque, tant qu'une vue unique est affichée (`use-capture-shield.ts`). */
+:root[data-view-once-away] [data-view-once-open],
+:root[data-view-once-away] .view-once-stage-content,
+:root[data-view-once-away] [data-media-viewer] {
+  visibility: hidden;
+}
+
+/**
+ * **LA COMBUSTION D'UN ÉPHÉMÈRE** (#7468, #17938, #18556) — la loi partagée
+ * (`@meeshy/shared/utils/ephemeral-burn`) donne la durée (1 200 ms, fondu de
+ * 250 ms sous « Réduire les animations ») et les trois temps : ignition
+ * jusqu'à 15 %, propagation jusqu'à 80 %, cendres ensuite.
+ *
+ * POSÉE SUR LE NŒUD DE RANGÉE (`thread-modes.tsx`), qui enveloppe la rangée
+ * plate ET la bulle. `data-burn-front` dit où file le front, d'après le côté
+ * de la bulle (`burnFrontOf`).
+ *
+ * Le feu se peint par masque, `translate`, `scale` et `opacity` : aucune mise
+ * en page pendant que les lettres brûlent. Seuls les cendres replient la
+ * rangée (`grid-template-rows`, que le virtualiseur suit), une fois le
+ * contenu entièrement consumé.
+ */
+.ephemeral-destroying {
+  --ephemeral-destruction-ms: 1200ms;
+  --burn-to: to right;
+  --burn-mask-from: 100%;
+  --burn-mask-ignite: 72%;
+  --burn-mask-end: 15%;
+  --burn-x-from: -50%;
+  --burn-x-to: 50%;
+  --burn-drift: 1;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-rows: 1fr;
+  animation: ephemeral-burn-collapse var(--ephemeral-destruction-ms) linear forwards;
+  pointer-events: none;
+}
+
+.ephemeral-destroying[data-burn-front='left'] {
+  --burn-to: to left;
+  --burn-mask-from: 0%;
+  --burn-mask-ignite: 28%;
+  --burn-mask-end: 85%;
+  --burn-x-from: 50%;
+  --burn-x-to: -50%;
+  --burn-drift: -1;
+}
+
+.ephemeral-destroying > * {
+  min-height: 0;
+  -webkit-mask-image: linear-gradient(var(--burn-to), transparent 45%, black 55%);
+  mask-image: linear-gradient(var(--burn-to), transparent 45%, black 55%);
+  -webkit-mask-size: 300% 100%;
+  mask-size: 300% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: var(--burn-mask-from) 0;
+  mask-position: var(--burn-mask-from) 0;
+  animation: ephemeral-burn-front var(--ephemeral-destruction-ms) linear forwards;
+}
+
+.ephemeral-destroying::before,
+.ephemeral-destroying::after {
+  content: '';
+  position: absolute;
+  inset: -32px 0 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  will-change: translate, opacity;
+}
+
+.ephemeral-destroying::before {
+  background:
+    radial-gradient(ellipse 10px 70% at 50% 100%, var(--color-warning), transparent 70%),
+    linear-gradient(
+      to right,
+      transparent calc(50% - 20px),
+      color-mix(in srgb, var(--color-danger) 75%, transparent) calc(50% - 7px),
+      var(--color-warning) 50%,
+      color-mix(in srgb, var(--color-danger) 75%, transparent) calc(50% + 7px),
+      transparent calc(50% + 20px)
+    );
+  -webkit-mask-image: linear-gradient(to top, black 35%, transparent);
+  mask-image: linear-gradient(to top, black 35%, transparent);
+  filter: blur(1.5px);
+  transform-origin: 50% 100%;
+  translate: var(--burn-x-from) 0;
+  animation: ephemeral-burn-ember var(--ephemeral-destruction-ms) linear forwards;
+}
+
+.ephemeral-destroying::after {
+  background:
+    radial-gradient(circle 1.5px at 18% 78%, var(--color-warning), transparent),
+    radial-gradient(circle 1px at 32% 60%, var(--color-danger), transparent),
+    radial-gradient(circle 1.5px at 47% 84%, var(--color-warning), transparent),
+    radial-gradient(circle 1px at 58% 52%, var(--color-warning), transparent),
+    radial-gradient(circle 1.5px at 71% 70%, var(--color-danger), transparent),
+    radial-gradient(circle 1px at 84% 58%, var(--color-warning), transparent),
+    radial-gradient(circle 1px at 26% 40%, color-mix(in srgb, var(--color-warning) 60%, transparent), transparent),
+    radial-gradient(circle 1px at 66% 34%, color-mix(in srgb, var(--color-danger) 60%, transparent), transparent);
+  translate: 0 8px;
+  animation: ephemeral-burn-sparks var(--ephemeral-destruction-ms) ease-out forwards;
+}
+
+@keyframes ephemeral-burn-front {
+  0% {
+    -webkit-mask-position: var(--burn-mask-from) 0;
+    mask-position: var(--burn-mask-from) 0;
+  }
+  15% {
+    -webkit-mask-position: var(--burn-mask-ignite) 0;
+    mask-position: var(--burn-mask-ignite) 0;
+  }
+  80% {
+    -webkit-mask-position: var(--burn-mask-end) 0;
+    mask-position: var(--burn-mask-end) 0;
+  }
+  100% {
+    -webkit-mask-position: var(--burn-mask-end) 0;
+    mask-position: var(--burn-mask-end) 0;
+  }
+}
+
+@keyframes ephemeral-burn-ember {
+  0% {
+    opacity: 0;
+    translate: var(--burn-x-from) 0;
+    scale: 1 0.4;
+  }
+  15% {
+    opacity: 1;
+    scale: 1 1;
+  }
+  45% {
+    scale: 1 1.25;
+  }
+  80% {
+    opacity: 0.9;
+    translate: var(--burn-x-to) 0;
+    scale: 1 0.9;
+  }
+  100% {
+    opacity: 0;
+    translate: var(--burn-x-to) 0;
+    scale: 1 0.3;
+  }
+}
+
+@keyframes ephemeral-burn-sparks {
+  0% {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  15% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+    translate: calc(var(--burn-drift) * 36px) -28px;
+  }
+}
+
+@keyframes ephemeral-burn-collapse {
+  0% {
+    grid-template-rows: 1fr;
+  }
+  80% {
+    grid-template-rows: 1fr;
+  }
+  100% {
+    grid-template-rows: 0fr;
+  }
+}
+
+/**
+ * RÉDUCTION DES ANIMATIONS : « un simple fondu » (#7468, verbatim) de 250 ms,
+ * ni flamme, ni étincelle, ni repli. La minuterie de retrait lit la même
+ * durée (`destructionWindowMs`).
+ */
+@media (prefers-reduced-motion: reduce) {
+  .ephemeral-destroying {
+    --ephemeral-destruction-ms: 250ms;
+    display: block;
+    animation: ephemeral-fade var(--ephemeral-destruction-ms) linear forwards;
+  }
+
+  .ephemeral-destroying > * {
+    -webkit-mask-image: none;
+    mask-image: none;
+    animation: none;
+  }
+
+  .ephemeral-destroying::before,
+  .ephemeral-destroying::after {
+    content: none;
+  }
+
+  @keyframes ephemeral-fade {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+}

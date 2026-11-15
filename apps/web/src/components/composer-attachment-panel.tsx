@@ -1,0 +1,428 @@
+import type { ReactNode } from 'react';
+
+import { CONTACT_CARD_MIME_TYPE } from '@meeshy/shared/types/contact-card';
+import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
+
+import { Glyph, GlyphSvg } from './glyph';
+import { COMPOSER_GLYPHS } from './glyphs-composer';
+import { developShots } from '@/lib/media/develop-shots';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { mayAttach } from '@/lib/send/attachments';
+import type { ContactSource } from '@/lib/send/contact-card';
+import type { GuestAttachmentKind } from '@meeshy/shared/types/guest-attachment-kind-rules';
+import { guestAcceptAttribute, guestKindsAllowMime, guestKindsPhrase, type GuestAttachments } from '@/lib/send/guest-attachment-policy';
+import { Link } from '@/routes/route-table';
+
+/**
+ * LE PANNEAU DES SOURCES (#7280) — extrait de `composer-tray.tsx`, qui
+ * approchait son budget AVANT que ce lot n'y ajoute quatre tuiles : on
+ * extrait D'ABORD, on ajoute ENSUITE (CLAUDE.md racine, § budget de taille).
+ *
+ * ## SEPT SOURCES CHEZ IOS, TROIS SUR LE WEB
+ *
+ * `UniversalComposerBar+Attachments.swift:246-298` fait foi, et son ORDRE
+ * avec lui (dimension 6, « est-ce à la place où l'utilisateur la
+ * chercherait ») : photo · caméra · fichier · position · vocal · emoji ·
+ * sticker. Le web servait photo, fichier, vocal ; #7280 a ajouté caméra,
+ * position et emoji, et #7938 le STICKER : sa tuile ouvre « Mes stickers »
+ * (`composer-sticker-sheet.tsx`), la bibliothèque SERVEUR que l'on remplit
+ * depuis une image ou un collage, et dont un choix compose un message à lui
+ * seul. Elle est gardée par le droit « Photos » : un sticker part en image.
+ * #8242 a ajouté « Contact » (#8101 sur iOS), après « Fichier » : une carte
+ * de visite `text/vcard`, gardée par le droit « Fichiers » comme la passerelle
+ * la jugera.
+ *
+ * ## LOI 4 — UNE TUILE N'EXISTE QUE SI SON GESTE A UN EFFET
+ *
+ * Chaque tuile est gardée par ce qui la rendrait vaine : le DROIT d'envoi
+ * (`mayAttach`, le MÊME chemin que la passerelle appliquera), le moteur
+ * d'enregistrement pour le vocal, et `navigator.geolocation` pour la
+ * position. Jamais grisée — iOS ne liste pas une tuile dont l'hôte n'a pas
+ * câblé le rappel, et une porte fermée qu'on montre quand même est pire que
+ * l'absence de porte.
+ *
+ * ## AUCUN LIBELLÉ EN DUR
+ *
+ * Les trois libellés historiques (`label="Photos"`, `"Fichier"`, `"Vocal"`)
+ * vivaient ici même, en français, pour sept langues servies. Ils passent par
+ * `composer.attach.*` comme les quatre nouveaux — la dette #6310 ne se
+ * répand pas par le lot qui l'aurait triplée.
+ */
+
+const TILE_SIZE = 58;
+
+/* LA CAMÉRA N'A PAS DE GARDE D'ENVIRONNEMENT, ET C'EST VOULU — `capture` est
+   un attribut que le navigateur honore ou ignore, et l'ignorer ne casse rien
+   (le champ retombe sur le sélecteur de fichiers). La tuile reste donc
+   offerte partout où l'image l'est. C'est la POSITION, qui demande une
+   PERMISSION, qui a besoin d'une garde : `locationSupported()`
+   (`lib/view/use-location-request.ts`), site unique. */
+
+function Tile({ label, color, children }: { readonly label: string; readonly color: string; readonly children: ReactNode }) {
+  return (
+    <>
+      <span
+        className="grid place-items-center rounded-full text-white shadow-sm"
+        style={{
+          width: TILE_SIZE,
+          height: TILE_SIZE,
+          background: `linear-gradient(135deg, ${color}, color-mix(in srgb, ${color} 70%, transparent))`,
+        }}
+      >
+        {children}
+      </span>
+      <span data-composer-source-label className="text-check">
+        {label}
+      </span>
+    </>
+  );
+}
+
+/**
+ * UNE SOURCE QUI OUVRE UN SÉLECTEUR DE FICHIERS — le `<label>` porte le champ
+ * caché ; `capture` le détourne vers l'appareil photo quand il est fourni
+ * (`'environment'` = la caméra ARRIÈRE, celle qu'on pointe sur le monde).
+ * `e.currentTarget.value = ''` après chaque choix : sans lui, rechoisir le
+ * MÊME fichier ne lève aucun `change`.
+ */
+function FileSource({
+  id,
+  label,
+  action,
+  color,
+  accept,
+  capture,
+  multiple,
+  onPick,
+  children,
+}: {
+  readonly id: string;
+  readonly label: string;
+  readonly action: string;
+  readonly color: string;
+  readonly accept?: string;
+  readonly capture?: 'environment';
+  readonly multiple?: boolean;
+  readonly onPick: (files: FileList | null) => void;
+  readonly children: ReactNode;
+}) {
+  return (
+    <label data-composer-source={id} className="flex flex-col items-center gap-1.5" style={{ width: TILE_SIZE + 8 }}>
+      <Tile label={label} color={color}>
+        {children}
+      </Tile>
+      <input
+        type="file"
+        {...(accept === undefined ? {} : { accept })}
+        {...(capture === undefined ? {} : { capture })}
+        {...(multiple === true ? { multiple: true } : {})}
+        className="sr-only"
+        aria-label={action}
+        onChange={(e) => {
+          onPick(e.currentTarget.files);
+          e.currentTarget.value = '';
+        }}
+      />
+    </label>
+  );
+}
+
+/** UNE SOURCE QUI DÉCLENCHE UN GESTE — vocal, position, emoji : rien à
+ * choisir dans un système de fichiers, donc un bouton, pas un champ. */
+function GestureSource({
+  id,
+  label,
+  action,
+  color,
+  onTrigger,
+  children,
+}: {
+  readonly id: string;
+  readonly label: string;
+  readonly action: string;
+  readonly color: string;
+  readonly onTrigger: () => void;
+  readonly children: ReactNode;
+}) {
+  return (
+    <button
+      data-composer-source={id}
+      type="button"
+      onClick={onTrigger}
+      className="flex flex-col items-center gap-1.5"
+      style={{ width: TILE_SIZE + 8 }}
+      aria-label={action}
+    >
+      <Tile label={label} color={color}>
+        {children}
+      </Tile>
+    </button>
+  );
+}
+
+/**
+ * LA TUILE « CONTACT » (#8242) — sa SOURCE décide de sa forme : un sélecteur
+ * (coque Android ou API Contact Picker) s'ouvre par un geste ; sans lui, la
+ * tuile est un champ qui ne propose que des fiches `.vcf`. Jamais grisée :
+ * chaque hôte a une source (`contactSourceOf`, `lib/send/contact-card.ts`).
+ */
+export type ComposerContactSource = {
+  readonly source: ContactSource;
+  readonly onRequest: () => void;
+  readonly onPickFile: (files: FileList | null) => void;
+};
+
+const CONTACT_FILE_TYPES = '.vcf,.vcard,text/vcard,text/x-vcard';
+
+export type ComposerAttachmentPanelProps = {
+  readonly onPickPhotos: (files: FileList | null) => void;
+  /** Les photos prises, déjà développées (`developPhotoFile`, #8695). */
+  readonly onPickCamera: (files: readonly File[]) => void;
+  /** LA CAMÉRA DE LA BARRE (#9123) : présente ⇒ la tuile ouvre le studio,
+   * viseur armé ; absente ⇒ l'appareil photo de l'OS (`onPickCamera`). */
+  readonly onOpenCamera?: () => void;
+  readonly onPickFile: (files: FileList | null) => void;
+  readonly onRequestLocation: () => void;
+  readonly onRequestEmoji: () => void;
+  /** ABSENT ⇒ PAS DE TUILE (loi 4) : un hôte qui ne monte pas « Mes stickers »
+   * ne montre pas une porte qui ne mène nulle part. */
+  readonly onRequestSticker?: () => void;
+  /** ABSENT ⇒ PAS DE TUILE (loi 4), même discipline que le sticker. */
+  readonly contact?: ComposerContactSource;
+  readonly onStartVoice: () => void;
+  readonly canRecord: boolean;
+  /** `navigator.geolocation` existe DANS CE NAVIGATEUR — reçu, jamais lu ici :
+   * l'hôte le mesure une fois (`locationSupported`) et le sert, motif de
+   * `canRecord`. */
+  readonly canLocate: boolean;
+  readonly rights?: ParticipantPermissions;
+  /** L'INVITÉ D'UN LIEN RESTREINT PAR FAMILLE (#10003, planche « Attach ») :
+   * présent ⇒ seules les familles ouvertes ont une tuile (« Fichier texte
+   * (.txt) », « Audio »…), leurs sélecteurs ne proposent qu'elles, et une note
+   * dit ce qui passe — les droits instantanés de la jonction n'y décident plus
+   * (#10029). Absent ⇒ le panneau d'un compte, inchangé. */
+  readonly guest?: GuestAttachments;
+};
+
+/** Les tuiles de fichier d'un invité restreint, dans l'ordre de la planche. */
+const GUEST_FILE_TILES: ReadonlyArray<{ readonly kind: Exclude<GuestAttachmentKind, 'image'>; readonly color: string }> = [
+  { kind: 'text', color: 'var(--ios-tile-file)' },
+  { kind: 'audio', color: 'var(--ios-tile-voice)' },
+  { kind: 'pdf', color: 'var(--ios-tile-file)' },
+];
+
+const GUEST_TILE_LABEL = {
+  text: 'composer.guest.kind.text',
+  audio: 'composer.guest.kind.audio',
+  pdf: 'composer.guest.kind.pdf',
+} as const;
+
+export function ComposerAttachmentPanel({
+  onPickPhotos,
+  onPickCamera,
+  onOpenCamera,
+  onPickFile,
+  onRequestLocation,
+  onRequestEmoji,
+  onRequestSticker,
+  contact,
+  onStartVoice,
+  canRecord,
+  canLocate,
+  rights,
+  guest,
+}: ComposerAttachmentPanelProps) {
+  /* `translate` SE LIT AVEC UNE CLÉ LITTÉRALE, jamais par un raccourci
+     `say(key)` : c'est la clé LITTÉRALE qui TYPE les paramètres attendus
+     (`TranslateArgs<K>`, `i18n-catalog.ts`), et un helper générique rend ce
+     contrôle impossible — le compilateur ne saurait plus dire qu'un `{name}`
+     manque. */
+  const language = currentInterfaceLanguage();
+
+  /* LE DROIT SE LIT PAR LE MÊME CHEMIN QUE CELUI QU'APPLIQUERA LA PASSERELLE
+     (`mayAttach`, miroir `attachmentSendRightForMimeType`) — jamais une
+     seconde table écrite ici. La CAMÉRA produit une image : elle partage le
+     droit de « Photos », sans quoi une tuile ouvrirait l'objectif pour un
+     envoi que le serveur refuserait en 403 après téléversement. */
+  const allows = (mimeType: string): boolean => (guest === undefined ? mayAttach(rights, mimeType) : guestKindsAllowMime(guest.kinds, mimeType));
+  const canImages = allows('image/*');
+  const canFiles = guest === undefined && mayAttach(rights, 'application/octet-stream');
+  const canAudios = canRecord && allows('audio/*');
+  const canContacts = allows(CONTACT_CARD_MIME_TYPE);
+  const guestTiles = guest === undefined ? [] : GUEST_FILE_TILES.filter((tile) => guest.kinds.includes(tile.kind));
+
+  return (
+    /* `data-composer-panel` — L'ANCRE STRUCTURELLE DU PANNEAU (#7280), même
+       convention que `data-composer`/`data-message`. Les gates le
+       désignaient par son `aria-label` français en dur ; depuis que ce
+       libellé vient du catalogue, il vaut « Attachment types » sur un
+       Chromium en anglais — et une garde qui reconnaît par le NOM s'inverse
+       au premier renommage (`tasks/lessons.md`). L'ancre, elle, ne se traduit
+       pas. */
+    <div
+      data-composer-panel
+      role="group"
+      aria-label={translate(language, 'composer.attach.group')}
+      style={{ paddingInline: 18, paddingBlock: 12 }}
+    >
+      {/* La POIGNÉE du panneau iOS (`+Attachments.swift`, en tête du
+          carrousel) : purement décorative, elle dit « ceci est un tiroir ». */}
+      <span
+        aria-hidden
+        className="mx-auto mb-3 block h-1 w-9 rounded-full"
+        style={{ backgroundColor: 'color-mix(in srgb, var(--accent) 35%, transparent)' }}
+      />
+      {/* LES SOURCES DÉFILENT (revue #7280) — six tuiles de 66 px tiennent sur
+          un écran large, jamais sur 320 px : iOS les porte dans un carrousel
+          horizontal (`+Attachments.swift`, `ScrollView(.horizontal)`), et sans
+          lui la sixième sortait de l'écran sans moyen de l'atteindre. */}
+      <div className="scrollbar-none flex gap-3.5 overflow-x-auto">
+        {canImages ? (
+          <FileSource
+            id="photo"
+            label={translate(language, 'composer.attach.photo')}
+            action={translate(language, 'composer.attach.photo.action')}
+            color="var(--ios-tile-photo)"
+            accept="image/*,video/*"
+            multiple
+            onPick={onPickPhotos}
+          >
+            <Glyph name="image" size={26} />
+          </FileSource>
+        ) : null}
+
+        {canImages && onOpenCamera !== undefined ? (
+          <GestureSource
+            id="camera"
+            label={translate(language, 'composer.attach.camera')}
+            action={translate(language, 'composer.attach.camera.action')}
+            color="var(--ios-tile-camera)"
+            onTrigger={onOpenCamera}
+          >
+            <GlyphSvg glyph={COMPOSER_GLYPHS.camera} size={26} />
+          </GestureSource>
+        ) : canImages ? (
+          <FileSource
+            id="camera"
+            label={translate(language, 'composer.attach.camera')}
+            action={translate(language, 'composer.attach.camera.action')}
+            color="var(--ios-tile-camera)"
+            accept="image/*"
+            capture="environment"
+            onPick={(files) => void developShots([...(files ?? [])]).then(onPickCamera)}
+          >
+            <GlyphSvg glyph={COMPOSER_GLYPHS.camera} size={26} />
+          </FileSource>
+        ) : null}
+
+        {canFiles ? (
+          <FileSource
+            id="file"
+            label={translate(language, 'composer.attach.file')}
+            action={translate(language, 'composer.attach.file.action')}
+            color="var(--ios-tile-file)"
+            multiple
+            onPick={onPickFile}
+          >
+            <Glyph name="file" size={26} />
+          </FileSource>
+        ) : null}
+
+        {guestTiles.map((tile) => (
+          <FileSource
+            key={tile.kind}
+            id={`guest-${tile.kind}`}
+            label={translate(language, GUEST_TILE_LABEL[tile.kind])}
+            action={translate(language, GUEST_TILE_LABEL[tile.kind])}
+            color={tile.color}
+            accept={guestAcceptAttribute([tile.kind])}
+            multiple
+            onPick={onPickFile}
+          >
+            {tile.kind === 'text' ? <GlyphSvg glyph={COMPOSER_GLYPHS.clipboardText} size={26} /> : <Glyph name={tile.kind === 'audio' ? 'microphone' : 'file'} size={26} />}
+          </FileSource>
+        ))}
+
+        {contact !== undefined && canContacts ? (
+          contact.source === 'file' ? (
+            <FileSource
+              id="contact"
+              label={translate(language, 'composer.attach.contact')}
+              action={translate(language, 'composer.attach.contact.action')}
+              color="var(--ios-tile-contact)"
+              accept={CONTACT_FILE_TYPES}
+              onPick={contact.onPickFile}
+            >
+              <GlyphSvg glyph={COMPOSER_GLYPHS.userCircle} size={26} />
+            </FileSource>
+          ) : (
+            <GestureSource
+              id="contact"
+              label={translate(language, 'composer.attach.contact')}
+              action={translate(language, 'composer.attach.contact.action')}
+              color="var(--ios-tile-contact)"
+              onTrigger={contact.onRequest}
+            >
+              <GlyphSvg glyph={COMPOSER_GLYPHS.userCircle} size={26} />
+            </GestureSource>
+          )
+        ) : null}
+
+        {canLocate && guest === undefined ? (
+          <GestureSource
+            id="location"
+            label={translate(language, 'composer.attach.location')}
+            action={translate(language, 'composer.attach.location.action')}
+            color="var(--ios-tile-location)"
+            onTrigger={onRequestLocation}
+          >
+            <GlyphSvg glyph={COMPOSER_GLYPHS.mapPin} size={26} />
+          </GestureSource>
+        ) : null}
+
+        {canAudios ? (
+          <GestureSource
+            id="voice"
+            label={translate(language, 'composer.attach.voice')}
+            action={translate(language, 'composer.attach.voice.action')}
+            color="var(--ios-tile-voice)"
+            onTrigger={onStartVoice}
+          >
+            <Glyph name="microphone" size={26} />
+          </GestureSource>
+        ) : null}
+
+        <GestureSource
+          id="emoji"
+          label={translate(language, 'composer.attach.emoji')}
+          action={translate(language, 'composer.attach.emoji.action')}
+          color="var(--ios-tile-emoji)"
+          onTrigger={onRequestEmoji}
+        >
+          <Glyph name="smiley" size={26} />
+        </GestureSource>
+
+        {canImages && onRequestSticker !== undefined ? (
+          <GestureSource
+            id="sticker"
+            label={translate(language, 'composer.attach.sticker')}
+            action={translate(language, 'composer.attach.sticker.action')}
+            color="var(--ios-tile-sticker)"
+            onTrigger={onRequestSticker}
+          >
+            <GlyphSvg glyph={COMPOSER_GLYPHS.sticker} size={26} />
+          </GestureSource>
+        ) : null}
+      </div>
+      {guest === undefined ? null : (
+        <p data-composer-guest-note className="mt-3 rounded-card px-3.5 py-3 text-caption leading-snug" style={{ backgroundColor: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}>
+          {translate(language, 'composer.guest.note', { title: `\u2068${guest.title}\u2069`, kinds: guestKindsPhrase(language, guest.kinds) })}{' '}
+          <Link to="signup" data-composer-guest-signup className="font-semibold underline-offset-2 hover:underline" style={{ color: 'var(--accent)' }}>
+            {translate(language, 'composer.guest.createAccount')}
+          </Link>
+        </p>
+      )}
+    </div>
+  );
+}

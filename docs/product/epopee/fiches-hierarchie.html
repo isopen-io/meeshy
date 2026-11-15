@@ -1,0 +1,277 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Une fiche, une hiérarchie</title><style>
+:root{--text-primary:#14121f;--text-secondary:#5d5a72;--text-tertiary:#8a87a0;--bg-primary:#ffffff;--bg-secondary:#f6f5fb;--bg-tertiary:#ecebf4;--border:#dedbea;--accent:#7c5cff;--warning:#ff9f0a}
+@media (prefers-color-scheme: dark){:root{--text-primary:#f3f1ff;--text-secondary:#b4afd0;--text-tertiary:#8e88ad;--bg-primary:#0f0d1c;--bg-secondary:#1a1730;--bg-tertiary:#24203f;--border:#34305a}}
+body{margin:0;padding:24px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;background:var(--bg-primary);color:var(--text-primary);line-height:1.45}
+h2{margin:0 0 .4rem} .subtitle{color:var(--text-secondary);margin:.2rem 0 1rem} .label{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary)}
+.cards{display:grid;gap:1rem} .card{border:1px solid var(--border);border-radius:14px;background:var(--bg-secondary)} .card.selected{outline:2px solid var(--accent)}
+</style><script>function toggleSelect(el){el.classList.toggle('selected')}</script></head><body><!-- Maquette de la séance « épopée du jeu » du 2026-10-20 (design, pas un état). Conception : docs/superpowers/specs/2026-10-20-epopee-du-jeu-design.md --><style>
+  .fh { max-width: 1120px; }
+  .fh-lead { color: var(--text-secondary); max-width: 900px; margin-bottom: 1.2rem; }
+  .fh-rules { background: var(--bg-secondary); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 12px; padding: .9rem 1.2rem; margin-bottom: 1.6rem; }
+  .fh-rules ol { margin: .3rem 0 0 1.2rem; font-size: .9rem; line-height: 1.6; }
+  .fh-sec { margin: 2rem 0 .8rem; }
+  .fh-sec h3 { font-size: 1.15rem; margin-bottom: .25rem; }
+  .fh-sec p.sub { color: var(--text-secondary); font-size: .86rem; margin-bottom: .8rem; max-width: 900px; }
+  .fh-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 1.2rem; align-items: start; }
+  .fh-col { display: flex; flex-direction: column; gap: .6rem; }
+  .fh-tag { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-secondary); }
+  .fh-tag.ok { color: #2fbf71; }
+  .fh-tag.ko { color: #e5484d; }
+
+  .ph { border-radius: 26px; padding: 14px 14px 16px; background: #120f22; color: #f3f0ff;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+    display: flex; flex-direction: column; gap: 10px; max-width: 390px; }
+  .ph-nav { display: flex; align-items: center; gap: 10px; padding: 2px 2px 4px; }
+  .ph-back { width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,.08); display: grid; place-items: center; color: #8b7dff; font-weight: 700; }
+  .ph-title { font-size: 1.35rem; font-weight: 800; }
+  .ph-card { border-radius: 16px; background: #1c1712; box-shadow: inset 0 0 0 1px rgba(255,200,110,.18); padding: 12px; display: flex; flex-direction: column; gap: 8px; position: relative; }
+  .ph-sect { font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #8f86c2; margin: 4px 2px -2px; }
+  .ph-text { font-size: .86rem; line-height: 1.45; color: #ece8ff; }
+  .ph-text b { font-weight: 700; }
+  .ph-row { display: flex; justify-content: space-between; gap: 8px; font-size: .78rem; color: #b9b0e6; }
+  .ph-row b { color: #f3f0ff; }
+
+  .coin { width: 58px; height: 58px; border-radius: 50%; flex-shrink: 0; background: radial-gradient(circle at 35% 30%, #f4f4f8, #a9a9b6 70%, #7d7d8a); box-shadow: inset 0 0 0 3px rgba(0,0,0,.18); display: grid; place-items: center; color: #555; font-weight: 800; font-size: .7rem; }
+  .coin.big { width: 76px; height: 76px; }
+  .bird { width: 26px; height: 26px; border-radius: 50%; background: #5fd3a6; flex-shrink: 0; display: grid; place-items: center; font-size: .75rem; color: #10331f; font-weight: 800; }
+  .bird.meo { background: #7ad1ff; color: #0d2a3d; }
+  .spark { width: 58px; height: 58px; border-radius: 50%; background: #5b4fd6; flex-shrink: 0; display: grid; place-items: center; color: #ffd98a; font-size: 1.4rem; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { border-radius: 10px; background: rgba(255,255,255,.07); padding: 5px 8px; font-size: .74rem; line-height: 1.25; }
+  .chip i { display: block; font-style: normal; color: #9f94d8; font-weight: 600; }
+  .chip.glory { background: rgba(47,191,113,.18); color: #8ff0bd; font-weight: 700; border-radius: 999px; }
+  .btn { border-radius: 14px; background: #f2c14e; color: #1b1640; font-weight: 800; text-align: center; padding: 11px 10px; font-size: .92rem; }
+  .btn small { display: block; font-weight: 600; font-size: .72rem; opacity: .8; margin-top: 1px; }
+
+  .mk { position: absolute; width: 20px; height: 20px; border-radius: 50%; background: #e5484d; color: #fff; font-size: .68rem; font-weight: 800; display: grid; place-items: center; box-shadow: 0 0 0 2px #120f22; z-index: 2; }
+  .rel { position: relative; }
+  .legend { font-size: .84rem; line-height: 1.5; margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: .3rem; }
+  .legend li { display: grid; grid-template-columns: 22px 1fr; gap: .4rem; align-items: start; }
+  .legend .n { width: 18px; height: 18px; border-radius: 50%; background: #e5484d; color: #fff; font-size: .66rem; font-weight: 800; display: grid; place-items: center; margin-top: 2px; }
+
+  .h-label { font-size: .74rem; font-weight: 700; color: #c9b8ff; letter-spacing: .02em; }
+  .h-big { font-size: 1.85rem; font-weight: 800; line-height: 1.05; letter-spacing: -.01em; }
+  .h-big span { font-size: 1rem; font-weight: 700; color: #ddd5ff; }
+  .h-small { font-size: .78rem; color: #b9b0e6; line-height: 1.35; }
+  .h-tiny { font-size: .72rem; color: #8f86c2; }
+  .gauge { height: 6px; border-radius: 6px; background: rgba(255,255,255,.1); overflow: hidden; }
+  .gauge b { display: block; height: 100%; background: linear-gradient(90deg, #ffd27a, #ffb84d); border-radius: 6px; }
+  .say { display: flex; gap: 8px; align-items: flex-start; font-size: .78rem; color: #d6cffa; font-style: italic; line-height: 1.35; }
+
+  .why { background: var(--bg-secondary); border: 1px solid var(--border); border-left: 4px solid var(--warning); border-radius: 12px; padding: .8rem 1rem; font-size: .86rem; line-height: 1.5; margin-top: .8rem; max-width: 1060px; }
+
+  .grid-main { display: grid; grid-template-columns: 1fr; gap: 8px; }
+  .mc { border-radius: 14px; background: #1b1830; box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); padding: 10px 12px; display: grid; grid-template-columns: 34px 1fr; gap: 2px 10px; align-items: center; }
+  .mc .ic { grid-row: span 3; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-size: .95rem; }
+  .mc .nm { font-size: .7rem; font-weight: 700; color: #9f94d8; text-transform: uppercase; letter-spacing: .05em; }
+  .mc .vl { font-size: 1.22rem; font-weight: 800; line-height: 1.1; }
+  .mc .sc { font-size: .74rem; color: #b9b0e6; }
+</style>
+
+<div class="fh">
+  <h2>Une fiche, une hiérarchie</h2>
+  <p class="fh-lead">Vos deux captures, relues. À gauche, ce qu'elles montrent aujourd'hui, avec chaque défaut numéroté. À droite, la même fiche selon vos règles, avec les mots de l'épopée. Les valeurs sont les vôtres.</p>
+
+  <div class="fh-rules">
+    <b>Les règles que j'en tire, pour chaque cadre de chaque écran du jeu</b>
+    <ol>
+      <li><b>Rien ne glisse de côté</b> : tout s'empile ou passe à la ligne.</li>
+      <li><b>Un chiffre ne se dit qu'une fois par écran</b> : jamais redit dans une pastille, dans une phrase ou sous un autre nom.</li>
+      <li><b>Un seul chiffre en grand par cadre</b> : celui qui répond à la question de l'écran. Tout le reste en petit, sur une ou deux lignes.</li>
+      <li><b>Ce que tu possèdes passe avant ce que tu as cumulé</b> : le « depuis toujours » reste en petit.</li>
+      <li><b>Le calcul vit dans les règles</b> : ni prix de base, ni pourcentage, ni soustraction sur une fiche.</li>
+      <li><b>Mee et Meo parlent</b> : ils disent une phrase utile, ils n'encadrent pas la pièce.</li>
+    </ol>
+  </div>
+
+  <!-- ============ FICHE MEESHES ============ -->
+  <div class="fh-sec">
+    <h3>La fiche des Meeshes</h3>
+    <p class="sub">La question de cet écran est : « qu'est-ce que je possède, et puis-je frapper ? » Aujourd'hui, le plus gros chiffre est un prix, et ce que vous possédez arrive en petit, dans le second cadre.</p>
+    <div class="fh-pair">
+      <div class="fh-col">
+        <div class="fh-tag ko">Aujourd'hui</div>
+        <div class="ph">
+          <div class="ph-nav"><div class="ph-back">‹</div><div class="ph-title">Meeshes</div></div>
+          <div class="ph-card">
+            <div class="mk" style="top:6px;left:6px">2</div>
+            <div style="display:flex;gap:6px;align-items:center">
+              <div class="bird">M</div><div class="coin">MEESH</div><div class="bird meo">M</div>
+              <div class="rel" style="flex:1;min-width:0">
+                <div class="mk" style="top:20px;right:-4px">1</div>
+                <div class="h-label">Prochaine Meesh · n° 92</div>
+                <div style="font-size:1.35rem;font-weight:800;line-height:1.1">10 423<br>étincelles</div>
+                <div class="rel h-small" style="color:#9f94d8">Prix de base 12 948 · 80,5 %<br>au niveau 61<div class="mk" style="top:2px;right:-4px">3</div></div>
+              </div>
+            </div>
+            <div class="chips rel">
+              <div class="chip"><i>En poche</i>108 233 étincelles</div>
+              <div class="chip rel"><i>Convertibles</i>108 233 étincelles<div class="mk" style="top:-8px;right:-8px">4</div></div>
+              <div class="chip rel"><i>Coûte</i>10 423 étincelles<div class="mk" style="top:-8px;right:-8px">5</div></div>
+              <div class="chip"><i>Restera</i>97 810 étincelles</div>
+            </div>
+            <div class="rel" style="display:flex"><div class="chip glory">+1000 Gloire</div><div class="mk" style="position:relative;margin-left:6px">6</div></div>
+            <div class="btn">Frapper avec Mee et Meo</div>
+          </div>
+          <div class="ph-card rel" style="flex-direction:row;align-items:center;gap:10px">
+            <div class="mk" style="top:6px;right:8px">7</div>
+            <div class="coin" style="width:44px;height:44px"></div>
+            <div><div style="font-weight:700;font-size:.9rem">Coffret</div><div class="h-small" style="color:#9f94d8">88 Meeshes</div></div>
+          </div>
+          <div class="ph-sect">Où j'en suis</div>
+          <div class="ph-card rel">
+            <div class="mk" style="top:6px;right:8px">8</div>
+            <div class="ph-text"><b>Tu gardes 88 Meeshes. Depuis le début, tu en as frappé 91. Tu peux frapper la Meesh n° 92 : elle coûte 10 423 étincelles.</b></div>
+            <div class="ph-row rel"><span>Record de Meeshes</span><b>91</b><div class="mk" style="top:-4px;right:22px">9</div></div>
+          </div>
+        </div>
+        <ol class="legend">
+          <li><span class="n">1</span><span>Le plus gros chiffre est le <b>prix</b> de la prochaine pièce, et non ce que vous possédez.</span></li>
+          <li><span class="n">2</span><span>Mee, la pièce et Meo prennent la moitié de la largeur. Le titre, serré, se coupe sur deux lignes.</span></li>
+          <li><span class="n">3</span><span>Le <b>calcul</b> s'affiche sur la carte : prix de base, pourcentage, niveau.</span></li>
+          <li><span class="n">4</span><span>« En poche » et « Convertibles » montrent le <b>même nombre sous deux noms</b>.</span></li>
+          <li><span class="n">5</span><span>« Coûte » redit le prix, pour la deuxième fois. « Restera » est une soustraction.</span></li>
+          <li><span class="n">6</span><span>« +1000 Gloire » n'est rattaché à rien, et s'écrit sans l'espace de « 10 423 ».</span></li>
+          <li><span class="n">7</span><span>Ce que vous possédez (88 Meeshes) arrive en petit, dans un second cadre.</span></li>
+          <li><span class="n">8</span><span>« Où j'en suis » redit 88, 91, le n° 92 et 10 423 : quatre redites. Le prix y apparaît pour la troisième fois.</span></li>
+          <li><span class="n">9</span><span>« Record de Meeshes : 91 » est faux et redit. 91, c'est le nombre de pièces frappées, et la phrase juste au-dessus le donne déjà.</span></li>
+        </ol>
+      </div>
+
+      <div class="fh-col">
+        <div class="fh-tag ok">Proposé</div>
+        <div class="ph">
+          <div class="ph-nav"><div class="ph-back">‹</div><div class="ph-title">L'Héritage</div></div>
+          <div class="ph-card">
+            <div style="display:flex;gap:12px;align-items:center">
+              <div class="coin big">MEESH</div>
+              <div style="flex:1;min-width:0">
+                <div class="h-label">Ton Coffret</div>
+                <div class="h-big">88 <span>Meeshes</span></div>
+                <div class="h-small">le Coffre s'ouvre à 100</div>
+              </div>
+            </div>
+            <div class="gauge"><b style="width:88%"></b></div>
+            <div class="h-tiny">91 frappées depuis toujours</div>
+          </div>
+          <div class="ph-card">
+            <div class="h-label">La frappe</div>
+            <div style="font-size:1.05rem;font-weight:700">La Meesh n° 92</div>
+            <div class="ph-text" style="margin-top:-4px">Elle fige 10 423 étincelles de ta lumière, qui en compte 108 233.</div>
+            <div class="btn">Frapper avec Mee et Meo<small>+1 000 de gloire</small></div>
+            <div class="say"><div class="bird">M</div><span>« La centième sera d'or. »</span></div>
+          </div>
+          <div class="ph-sect">C'est quoi ?</div>
+          <div class="ph-card">
+            <div class="ph-text"><b>Une Meesh, c'est ta lumière figée dans une pièce numérotée.</b> Une sur cent est d'or, une sur mille de prisme. Garde-la pour ton héritage, ou dépense-la pour veiller sur ta Flamme et t'offrir des parures.</div>
+          </div>
+        </div>
+        <ol class="legend" style="--n:#2fbf71">
+          <li><span class="n" style="background:#2fbf71">✓</span><span>En grand : <b>ce que vous possédez</b>. En petit, la suite de l'héritage et le « depuis toujours ».</span></li>
+          <li><span class="n" style="background:#2fbf71">✓</span><span>Le prix apparaît une seule fois, dans une phrase, et la gloire est attachée au bouton.</span></li>
+          <li><span class="n" style="background:#2fbf71">✓</span><span>Plus de « Où j'en suis » ici : le premier cadre le dit déjà. Le calcul du prix part dans les règles.</span></li>
+          <li><span class="n" style="background:#2fbf71">✓</span><span>Mee dit une phrase qui donne envie, sous l'action.</span></li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ FICHE ÉTINCELLES ============ -->
+  <div class="fh-sec">
+    <h3>La fiche des Étincelles</h3>
+    <p class="sub">La question de cet écran est : « combien d'étincelles ai-je ? » Aujourd'hui, l'en-tête répond par tout ce que vous avez reçu depuis toujours.</p>
+    <div class="fh-pair">
+      <div class="fh-col">
+        <div class="fh-tag ko">Aujourd'hui</div>
+        <div class="ph">
+          <div class="ph-nav"><div class="ph-back">‹</div><div class="ph-title">Étincelles</div></div>
+          <div class="ph-card rel" style="flex-direction:row;align-items:center;gap:12px">
+            <div class="mk" style="top:6px;right:8px">1</div>
+            <div class="spark">✦</div>
+            <div><div class="h-label" style="text-transform:uppercase;color:#9f94d8">Étincelles</div><div style="font-size:1.45rem;font-weight:800">377 752 étincelles</div></div>
+          </div>
+          <div class="ph-sect">C'est quoi ?</div>
+          <div class="ph-card rel">
+            <div class="mk" style="top:6px;right:8px">2</div>
+            <div class="ph-text">Tes étincelles convertibles sont ta seule valeur réelle : elles font ton niveau, et la frappe y prend son prix. Ton record d'étincelles, tout ce que tu as cumulé, dit ton potentiel.</div>
+            <div class="ph-text"><b>Convertibles, elles font ton niveau ; leur record, ton potentiel.</b></div>
+          </div>
+          <div class="ph-sect">Où j'en suis</div>
+          <div class="ph-card rel">
+            <div class="mk" style="top:6px;right:8px">3</div>
+            <div class="ph-text"><b>Tu as 108 233 étincelles convertibles : elles couvrent la Meesh n° 92, qui coûte 10 423 étincelles.</b></div>
+            <div class="ph-row rel"><span>Étincelles convertibles</span><b>108 233 étincelles</b><div class="mk" style="top:-22px;left:-10px">4</div></div>
+          </div>
+          <div class="ph-sect">Comment en gagner</div>
+          <div class="ph-card rel">
+            <div class="mk" style="top:6px;right:8px">5</div>
+            <div class="ph-text">Publie, commente, réagis : chaque famille de gestes a son barème. Déclenche un élan pour multiplier tes étincelles.</div>
+          </div>
+        </div>
+        <ol class="legend">
+          <li><span class="n">1</span><span>L'en-tête affiche <b>377 752</b>, tout ce que vous avez reçu, sans dire de quoi il s'agit. Vous possédez 108 233 étincelles.</span></li>
+          <li><span class="n">2</span><span>Le concept est défini par son « record » et son « potentiel » plutôt que par ce qu'il est.</span></li>
+          <li><span class="n">3</span><span>Le prix de la Meesh n° 92 revient ici, alors que la fiche des Meeshes le donne déjà trois fois.</span></li>
+          <li><span class="n">4</span><span>108 233 apparaît deux fois dans le même cadre, dans la phrase puis dans la ligne.</span></li>
+          <li><span class="n">5</span><span>« Convertibles », « valeur réelle », « barème » : ce sont des mots de comptable.</span></li>
+        </ol>
+      </div>
+
+      <div class="fh-col">
+        <div class="fh-tag ok">Proposé</div>
+        <div class="ph">
+          <div class="ph-nav"><div class="ph-back">‹</div><div class="ph-title">Étincelles</div></div>
+          <div class="ph-card">
+            <div style="display:flex;gap:12px;align-items:center">
+              <div class="spark">✦</div>
+              <div style="flex:1;min-width:0">
+                <div class="h-label">Ta lumière</div>
+                <div class="h-big">108 233 <span>étincelles</span></div>
+                <div class="h-tiny" style="margin-top:3px">377 752 reçues depuis toujours</div>
+              </div>
+            </div>
+          </div>
+          <div class="ph-sect">C'est quoi ?</div>
+          <div class="ph-card">
+            <div class="ph-text"><b>Chaque vrai échange fait jaillir des étincelles : ensemble, elles forment ta lumière.</b> Plus elle grandit, plus elle brille, et son éclat, c'est ton niveau. Frapper une Meesh en fige une part dans la pièce. Ce que tu as reçu reste reçu.</div>
+          </div>
+          <div class="ph-sect">Comment en gagner</div>
+          <div class="ph-card">
+            <div class="ph-text">Écris, parle, publie, commente, réagis : chaque geste fait jaillir les siennes. Un Élan les multiplie.</div>
+          </div>
+          <div class="ph-sect">À quoi elles servent</div>
+          <div class="ph-card">
+            <div class="ph-row" style="font-size:.86rem;color:#ece8ff"><span>Ta lumière frappe les Meeshes de ton héritage</span><b style="color:#8b7dff">›</b></div>
+          </div>
+        </div>
+        <ol class="legend">
+          <li><span class="n" style="background:#2fbf71">✓</span><span>En grand : <b>ce que vous avez</b>. En petit : le « depuis toujours ».</span></li>
+          <li><span class="n" style="background:#2fbf71">✓</span><span>Chaque chiffre ne paraît qu'une fois. Le prix reste sur la fiche de l'Héritage, où mène un lien.</span></li>
+          <li><span class="n" style="background:#2fbf71">✓</span><span>Le concept se dit par une image : les étincelles forment une lumière, et la frappe en fige une part.</span></li>
+        </ol>
+      </div>
+    </div>
+    <div class="why"><b>D'où vient 377 752, et pourquoi le niveau 61 ?</b> Votre téléphone est servi par la production. Sa dernière mise à jour réussie date du 17 octobre à 22 h 17, 52 minutes avant la loi qui lit le niveau sur la poche (#10892, 23 h 09). La production lit donc encore le niveau sur votre total du cycle (377 752, soit le niveau 61 et une frappe à 80,5 %). Avec la loi du 17 octobre, déjà sur staging, le niveau se lit sur la poche, et l'en-tête affiche la poche. <b>Quand la production recevra cette loi, votre niveau affiché passera de 61 à 32, et la Meesh n° 92 coûtera 8 546 étincelles au lieu de 10 423.</b> C'est la loi que vous avez décidée le 17 octobre, mais le saut se verra. Indépendamment de cette loi, la fiche doit lier son en-tête à ce que vous possédez, et non à la base du niveau. Le web le fait déjà, iOS non.</div>
+  </div>
+
+  <!-- ============ VUE PRINCIPALE ============ -->
+  <div class="fh-sec">
+    <h3>La vue principale de Progression, en synthèse</h3>
+    <p class="sub">Chaque cadre a un nom en petit, une valeur en grand et une seule ligne en petit. Aucune rangée ne déborde : une ligne trop longue passe à la ligne. Les valeurs de la Flamme, du Rang, de la Joute et du Voyage sont des exemples.</p>
+    <div class="ph" style="max-width:390px">
+      <div class="ph-nav"><div class="ph-title">Progression</div></div>
+      <div class="grid-main">
+        <div class="mc"><div class="ic" style="background:rgba(255,210,122,.16);color:#ffd27a">✦</div><div class="nm">La Lumière</div><div class="vl">Éclat</div><div class="sc">niveau 32</div></div>
+        <div class="mc"><div class="ic" style="background:rgba(139,125,255,.18);color:#c3b8ff">✧</div><div class="nm">Étincelles</div><div class="vl">108 233</div><div class="sc">377 752 depuis toujours</div></div>
+        <div class="mc"><div class="ic" style="background:rgba(255,226,140,.14);color:#ffe28c">●</div><div class="nm">L'Héritage</div><div class="vl">88 Meeshes</div><div class="sc">Coffret · le Coffre à 100</div></div>
+        <div class="mc"><div class="ic" style="background:rgba(255,207,92,.16);color:#ffcf5c">◆</div><div class="nm">Le Rang</div><div class="vl">Passeur IV</div><div class="sc">gloire 44 600</div></div>
+        <div class="mc"><div class="ic" style="background:rgba(255,128,64,.16);color:#ff9a57">▲</div><div class="nm">La Flamme</div><div class="vl">23 jours</div><div class="sc">+46 % sur tes rêves</div></div>
+        <div class="mc"><div class="ic" style="background:rgba(170,140,255,.18);color:#c3a8ff">☾</div><div class="nm">Le Rêve</div><div class="vl">2 actes sur 3</div><div class="sc">l'Acte III vaut 250 de gloire</div></div>
+        <div class="mc"><div class="ic" style="background:rgba(70,214,160,.16);color:#59e0ae">⬢</div><div class="nm">La Joute</div><div class="vl">Jade · 4ᵉ</div><div class="sc">les 7 premiers montent au Saphir</div></div>
+        <div class="mc"><div class="ic" style="background:rgba(143,200,255,.16);color:#8fc8ff">✈</div><div class="nm">Le Voyage</div><div class="vl">9ᵉ halte</div><div class="sc">en terre française</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>

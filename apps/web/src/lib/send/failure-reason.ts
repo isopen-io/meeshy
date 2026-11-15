@@ -1,0 +1,87 @@
+import { UPLOAD_FORMAT_REFUSED } from '@/lib/media/heif';
+import type { ApiFailure } from '@/lib/api/http';
+import { translate } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
+import { E2EE_PLAINTEXT_WITHHELD } from '@/lib/end-to-end-regime-ledger';
+import { E2EE_PLAINTEXT_REFUSED, GLOBAL_ADULTS_ONLY } from '@/lib/write-restriction';
+
+import { GUEST_ATTACHMENT_REFUSAL_CODES } from '@meeshy/shared/types/guest-attachment-kind-rules';
+import { guestMaxSizeLabel } from './guest-attachment-policy';
+
+/**
+ * LA CAUSE D'UN ENVOI QUI N'EST PAS PARTI (#5813, revue-correction) — le
+ * SITE UNIQUE qui traduit un `ApiFailure` en une phrase que L'UTILISATEUR
+ * peut lire.
+ *
+ * POURQUOI CE FICHIER EXISTE. `lastError` était STOCKÉ sur l'entrée d'outbox
+ * et lu par PERSONNE : ni la bande de reprise, ni l'annonce, ni un journal.
+ * C'est le défaut du cycle 122 du `CLAUDE.md` racine — « un correctif dont la
+ * valeur n'atteint aucun lecteur n'a corrigé personne » : la question à poser
+ * n'est pas « la cause est-elle capturée ? » mais « QUI l'affiche ? ».
+ *
+ * ON NE SERT JAMAIS `failure.error` TEL QUEL : c'est la prose de la
+ * passerelle, écrite pour un développeur et pas toujours en français
+ * (« You are not a participant of this conversation », mesuré sur
+ * `gate.staging.meeshy.me` le 2026-09-09). Le STATUT, lui, est un contrat.
+ *
+ * LA PHRASE SE DIT DANS LA LANGUE D'INTERFACE (#7740) — elle s'embarque dans
+ * `message.send.failed.reason` et `announce.messageNotSent.reason`, déjà au
+ * catalogue : la servir en français laissait une annonce anglaise finir en
+ * français.
+ *
+ * `undefined` ⇒ AUCUNE cause à dire : c'est l'échec HORS LIGNE, que le
+ * bandeau de coupure explique déjà en haut de l'écran (D-16) — le redire sur
+ * chaque bulle serait du bruit.
+ */
+export function sendFailureReason(
+  failure: ApiFailure | undefined,
+  language: InterfaceLanguage,
+  { shell = __SHELL__ }: { readonly shell?: boolean } = {},
+): string | undefined {
+  if (failure === undefined) return undefined;
+  const endToEnd = (): string => translate(language, shell ? 'composer.writeRestriction.endToEnd.shell' : 'composer.writeRestriction.endToEnd');
+  /* #12986 — le refus LOCAL d'un clair vers une conversation vue chiffrée porte le statut 0 : ce n'est pas une coupure. */
+  if (failure.code === E2EE_PLAINTEXT_WITHHELD) return endToEnd();
+  if (failure.status === 0)
+    return translate(language, failure.code === 'TIMEOUT' ? 'send.failure.timeout' : 'send.failure.offline');
+  /**
+   * UN LOT DE PIÈCES INCOMPLET (#5668, § 0 « UPLOAD_PARTIAL ») — synthétisé
+   * par `send/perform-send.ts` quand `POST /attachments/upload` rend MOINS
+   * d'attachements que de fichiers envoyés (`UploadProcessor.ts:744-751`,
+   * qui avale les échecs PAR FICHIER sous `success: true`, statut 200 ici).
+   * Distinct de tout statut HTTP réel : c'est ce module-ci, et lui seul, qui
+   * doit reconnaître ce code AVANT de tomber dans les branches par statut.
+   */
+  if (failure.code === UPLOAD_FORMAT_REFUSED) return translate(language, 'send.failure.formatRefused');
+  if (failure.code === 'UPLOAD_PARTIAL') return translate(language, 'send.failure.uploadPartial');
+  /**
+   * LE DROIT DE PIÈCE JOINTE (#16053) — la passerelle sert
+   * `code: ATTACHMENT_RIGHT_NOT_PERMITTED` sur le 403 de
+   * `POST /conversations/:id/messages` : la cause dit que CE TYPE de pièce
+   * jointe ne passe pas encore ici. Le 403 reste permanent
+   * (`isPermanentFailure`) : l'envoi ne se rejoue pas. `WRITE_NOT_PERMITTED`
+   * garde le refus générique du 403, qui le dit déjà.
+   */
+  if (failure.code === 'ATTACHMENT_RIGHT_NOT_PERMITTED') return translate(language, 'send.failure.attachmentRight');
+  /* #7740 — le mode lent des nouveaux comptes (Meeshy Global) : temporaire,
+     et le délai est celui du serveur (`retryAfter`), jamais une constante. */
+  if (failure.code === 'NEWCOMER_SLOW_MODE') {
+    return failure.retryAfter === undefined
+      ? translate(language, 'send.failure.newcomerSlowMode.soon')
+      : translate(language, 'send.failure.newcomerSlowMode', { seconds: String(failure.retryAfter) });
+  }
+  /* #9928 — Meeshy Global est fermée en écriture aux 13-17 ans : la cause dit
+     quand elle s'ouvrira (le composeur bascule dans le même état). */
+  if (failure.code === GLOBAL_ADULTS_ONLY) return translate(language, 'composer.writeRestriction.minorGlobal');
+  /* #11216 — un clair refusé dans une conversation chiffrée de bout en bout. */
+  if (failure.code === E2EE_PLAINTEXT_REFUSED) return endToEnd();
+  /* #10001, #10003 — la passerelle a jugé le CONTENU réel d'une pièce jointe
+     d'invité (REST 403/413, socket) : la cause se dit, jamais « envoi refusé ». */
+  if (failure.code === GUEST_ATTACHMENT_REFUSAL_CODES.KIND_NOT_ALLOWED) return translate(language, 'send.failure.guestKind');
+  if (failure.code === GUEST_ATTACHMENT_REFUSAL_CODES.TOO_LARGE) return translate(language, 'send.failure.guestTooLarge', { max: guestMaxSizeLabel(language) });
+  if (failure.status === 401) return translate(language, 'send.failure.sessionExpired');
+  if (failure.status === 403) return translate(language, 'send.failure.forbidden');
+  if (failure.status === 429) return translate(language, 'send.failure.tooMany');
+  if (failure.status >= 400 && failure.status < 500) return translate(language, 'send.failure.rejected');
+  return translate(language, 'send.failure.gatewayUnavailable');
+}

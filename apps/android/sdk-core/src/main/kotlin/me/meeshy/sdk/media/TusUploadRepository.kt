@@ -5,19 +5,27 @@ import me.meeshy.core.database.entity.TusUploadCheckpointEntity
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.media.TusCheckpointKey
 import me.meeshy.sdk.model.media.TusChunkPlan
-import me.meeshy.sdk.model.media.TusChunkRange
 import me.meeshy.sdk.model.media.TusResumeDecision
 import me.meeshy.sdk.model.media.TusResumePlanner
+import me.meeshy.sdk.model.media.TusServerProbe
+import me.meeshy.sdk.model.media.TusSessionOrigin
 import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.model.media.TusUploadMetadata
 import me.meeshy.sdk.model.toUploadedMedia
+import me.meeshy.sdk.net.ApiError
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.TusApi
 import me.meeshy.sdk.net.api.createSession
 import me.meeshy.sdk.net.api.patchChunk
+import me.meeshy.sdk.net.api.probeSession
 import me.meeshy.sdk.net.apiCall
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import java.util.UUID
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.RequestBody.Companion.toRequestBody
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -36,15 +44,13 @@ import javax.inject.Singleton
  * **Checkpointed retries** (`feature-parity.md` §Q): every acknowledged
  * intermediate chunk persists a [TusUploadCheckpointEntity] keyed by
  * [TusCheckpointKey]. A retried [upload] call for the same content
- * ([TusResumePlanner] decides — see its doc comment for the safety trade-off)
+ * (the gateway is asked what it holds — [TusResumePlanner.reconcile])
  * resumes at the last confirmed offset instead of re-uploading from byte zero,
  * skipping [TusApi.createUpload] entirely. The row is deleted once the final
- * chunk succeeds. This does **not** yet survive an app kill mid-upload — the
- * source bytes ([MediaUploadItem.bytes]) are still fully resident in memory for
- * the call's lifetime, so a killed process loses them regardless of the Room
- * checkpoint; genuine app-kill survival additionally needs a lazily-read file
- * source and a boot-time recovery scan, both tracked separately in
- * `feature-parity.md` §Q ("Crash-safe boot recovery for in-flight queue items").
+ * chunk succeeds. Each slice is STREAMED from the item's source
+ * ([MediaUploadItem.rangeBody], #13551): a file-backed item never sits in memory,
+ * whatever its size, and a durably queued one is re-read from its sealed file
+ * ([MediaBlobStore]) on every retry.
  * A body no larger than one chunk (the common case — compressed images) still
  * makes exactly one PATCH, unchanged from before — it never writes an
  * intermediate checkpoint (there is no partial progress to persist) but a
@@ -55,6 +61,12 @@ import javax.inject.Singleton
 public class TusUploadRepository @Inject constructor(
     private val tusApi: TusApi,
     private val checkpoints: TusUploadCheckpointDao,
+    private val sanitizer: OutgoingMediaSanitizer,
+    private val config: MeeshyConfig,
+    private val seeder: UploadedMediaSeeder = UploadedMediaSeeder.None,
+    private val leases: TusUploadLeases = TusUploadLeases(),
+    private val digests: FileDigestMemo = FileDigestMemo(),
+    private val progress: UploadProgressCenter = UploadProgressCenter(),
 ) {
     /**
      * Uploads one [item] tagged with [context]. See [TusUploadRepository].
@@ -67,18 +79,92 @@ public class TusUploadRepository @Inject constructor(
         item: MediaUploadItem,
         context: TusUploadContext,
         chunkSizeBytes: Long = DEFAULT_CHUNK_SIZE_BYTES,
+        extras: TusUploadExtras = TusUploadExtras(),
+        onProgress: (sent: Long, total: Long) -> Unit = { _, _ -> },
     ): NetworkResult<List<UploadedMedia>> {
-        val fileName = MediaUpload.fileName(item.fileName)
-        val mimeType = MediaUpload.mimeType(item.mimeType)
-        val totalBytes = item.bytes.size.toLong()
-        val checkpointKey = TusCheckpointKey.of(context, fileName, mimeType, totalBytes)
+        val progressId = extras.progressId
+        progressId?.let(progress::queued)
+        val outgoing = when (val result = sanitizer.sanitize(item)) {
+            is NetworkResult.Failure -> return result.also { progressId?.let { id -> progress.failed(id, retryable = false) } }
+            is NetworkResult.Success -> result.data
+        }
+        val contentKey = withContext(Dispatchers.IO) { contentKey(outgoing, context, extras) }
+        // Un envoi des mêmes octets déjà en vol tient cette session : celui-ci ouvre la sienne, sous une clé à lui
+        // (jamais reprise, purgée comme tout checkpoint périmé si l'envoi échoue).
+        val leased = leases.claim(contentKey)
+        val checkpointKey = if (leased) contentKey else "$contentKey|${UUID.randomUUID()}"
+        return try {
+            sendResuming(outgoing, context, extras, checkpointKey, chunkSizeBytes, onProgress).also { result ->
+                if (result is NetworkResult.Success) result.data.forEach { seeder.seed(outgoing, it) }
+                progressId?.let { id -> settle(id, result) }
+            }
+        } catch (cancelled: CancellationException) {
+            // Le point de reprise reste en base : la prochaine tentative repart de l'offset accepté.
+            progressId?.let { id -> progress.queued(id) }
+            throw cancelled
+        } finally {
+            if (leased) leases.release(contentKey)
+            sanitizer.release(outgoing, item)
+        }
+    }
 
-        val existing = checkpoints.find(checkpointKey)
-        val decision = TusResumePlanner.plan(
-            existingLocation = existing?.location,
-            existingUploadedBytes = existing?.uploadedBytes ?: 0L,
-            totalBytes = totalBytes,
-        )
+    private fun settle(id: String, result: NetworkResult<*>) = when (result) {
+        is NetworkResult.Success -> progress.done(id)
+        is NetworkResult.Failure -> progress.failed(id, retryable = isResumable(result.error))
+    }
+
+    /** L'empreinte SHA-256 du CONTENU (en flux, mémorisée par fichier) : renommer le fichier ne casse pas la reprise. */
+    private fun contentKey(outgoing: MediaUploadItem, context: TusUploadContext, extras: TusUploadExtras): String {
+        val source = outgoing.source
+        val digest = when (source) {
+            is MediaUploadSource.OnDisk -> digests.digest(source.file) { ContentHash.sha256Hex(source) }
+            else -> ContentHash.sha256Hex(source)
+        }
+        return TusCheckpointKey.ofContent(digest, context, extras.thumbHash, extras.transcription, extras.capturedInApp)
+    }
+
+    /**
+     * Un envoi interrompu reprend SEUL (#13959) : sur un échec de transport (réseau coupé, délai dépassé, `5xx`, décalage
+     * contesté `409`, session verrouillée `423`), au plus [MAX_RESUMES] fois, après une courte pause croissante. Chaque
+     * reprise repasse par [resolveSession], donc par un `HEAD` : elle repart du décalage que la passerelle a RÉELLEMENT
+     * reçu, sur la même session, jamais de l'octet zéro. Un refus (`4xx`, média refusé) n'est jamais rejoué.
+     */
+    private suspend fun sendResuming(
+        outgoing: MediaUploadItem,
+        context: TusUploadContext,
+        extras: TusUploadExtras,
+        checkpointKey: String,
+        chunkSizeBytes: Long,
+        onProgress: (sent: Long, total: Long) -> Unit,
+    ): NetworkResult<List<UploadedMedia>> {
+        var resumes = 0
+        while (true) {
+            val result = send(outgoing, context, extras, checkpointKey, chunkSizeBytes, onProgress)
+            if (result !is NetworkResult.Failure || !isResumable(result.error) || resumes >= MAX_RESUMES) return result
+            resumes++
+            delay(RESUME_PAUSE_MILLIS * resumes)
+        }
+    }
+
+    private fun isResumable(error: ApiError): Boolean =
+        error.code == NETWORK_CODE || error.code == SESSION_PURGED_CODE || error.httpStatus?.let { it >= SERVER_ERROR || it in RESUMABLE_STATUSES } == true
+
+    private suspend fun send(
+        outgoing: MediaUploadItem,
+        context: TusUploadContext,
+        extras: TusUploadExtras,
+        checkpointKey: String,
+        chunkSizeBytes: Long,
+        onProgress: (sent: Long, total: Long) -> Unit,
+    ): NetworkResult<List<UploadedMedia>> {
+        val fileName = MediaUpload.fileName(outgoing.fileName)
+        val mimeType = MediaUpload.mimeType(outgoing.mimeType)
+        val totalBytes = outgoing.sizeBytes
+
+        val decision = when (val verdict = resolveSession(checkpointKey, totalBytes, extras.authorization)) {
+            is NetworkResult.Failure -> return verdict
+            is NetworkResult.Success -> verdict.data
+        }
 
         val location: String
         val resumeOffset: Long
@@ -90,37 +176,43 @@ public class TusUploadRepository @Inject constructor(
             TusResumeDecision.Fresh -> {
                 val locationResult = tusApi.createSession(
                     uploadLength = totalBytes,
-                    uploadMetadata = TusUploadMetadata.headerValue(fileName, mimeType, context),
+                    uploadMetadata = TusUploadMetadata.headerValue(
+                        fileName, mimeType, context, extras.thumbHash, extras.transcription, extras.capturedInApp,
+                    ),
                     tusResumable = TusUploadMetadata.TUS_RESUMABLE_VERSION,
+                    bearer = extras.authorization,
                 )
                 location = when (locationResult) {
                     is NetworkResult.Failure -> return locationResult
                     is NetworkResult.Success -> locationResult.data
                 }
+                if (!isOurs(location)) return NetworkResult.Failure(foreignSessionError())
                 resumeOffset = 0L
+                checkpoint(checkpointKey, location, uploadedBytes = 0L, totalBytes = totalBytes)
             }
         }
 
-        val ranges = TusChunkPlan.chunks(totalBytes = totalBytes, chunkSize = chunkSizeBytes)
-            .filter { it.offset >= resumeOffset }
+        val report: (Long, Long) -> Unit = { sent, total ->
+            extras.progressId?.let { id ->
+                if (resumeOffset > 0L && sent <= resumeOffset) progress.resuming(id, sent, total) else progress.uploading(id, sent, total)
+            }
+            onProgress(sent, total)
+        }
+        report(resumeOffset, totalBytes)
+        val ranges = TusChunkPlan.chunks(totalBytes = totalBytes - resumeOffset, chunkSize = chunkSizeBytes)
+            .map { it.copy(offset = it.offset + resumeOffset) }
         for (range in ranges) {
             if (!range.isFinal) {
                 val chunkResult = tusApi.patchChunk(
                     location = location,
                     uploadOffset = range.offset,
                     tusResumable = TusUploadMetadata.TUS_RESUMABLE_VERSION,
-                    body = rangeBody(item.bytes, range),
+                    body = outgoing.rangeBody(range.offset, range.length, OCTET_STREAM_MEDIA_TYPE),
+                    bearer = extras.authorization,
                 )
-                if (chunkResult is NetworkResult.Failure) return chunkResult
-                checkpoints.upsert(
-                    TusUploadCheckpointEntity(
-                        checkpointKey = checkpointKey,
-                        location = location,
-                        uploadedBytes = range.offset + range.length,
-                        totalBytes = totalBytes,
-                        updatedAt = System.currentTimeMillis(),
-                    ),
-                )
+                if (chunkResult is NetworkResult.Failure) return purgedOr(chunkResult, checkpointKey)
+                checkpoint(checkpointKey, location, uploadedBytes = range.offset + range.length, totalBytes = totalBytes)
+                report(range.offset + range.length, totalBytes)
                 continue
             }
 
@@ -129,44 +221,113 @@ public class TusUploadRepository @Inject constructor(
                     location = location,
                     uploadOffset = range.offset,
                     tusResumable = TusUploadMetadata.TUS_RESUMABLE_VERSION,
-                    body = rangeBody(item.bytes, range),
+                    body = outgoing.rangeBody(range.offset, range.length, OCTET_STREAM_MEDIA_TYPE),
+                    authorization = extras.authorization,
                 )
             }
-            if (finishResult is NetworkResult.Failure) return finishResult
+            if (finishResult is NetworkResult.Failure) return purgedOr(finishResult, checkpointKey)
             checkpoints.delete(checkpointKey)
+            report(totalBytes, totalBytes)
             return finishResult.map { data -> listOfNotNull(data.attachment?.toUploadedMedia()) }
         }
 
         // Unreachable: TusChunkPlan.chunks always returns at least one (final) range, and
         // TusResumePlanner never resumes at an offset that has already reached totalBytes.
-        error("TusChunkPlan produced no ranges for ${item.bytes.size} bytes at resumeOffset=$resumeOffset")
+        error("TusChunkPlan produced no ranges for $totalBytes bytes at resumeOffset=$resumeOffset")
     }
 
-    private fun rangeBody(bytes: ByteArray, range: TusChunkRange) =
-        bytes.copyOfRange(range.offset.toInt(), (range.offset + range.length).toInt()).toRequestBody(OCTET_STREAM_MEDIA_TYPE)
+    /**
+     * Un PATCH qui répond `404`/`410` dit que la session a été purgée côté serveur : le point de reprise ne mène plus
+     * nulle part, il est supprimé et l'erreur devient retriable — le rejeu repart d'une session neuve.
+     */
+    private suspend fun purgedOr(failure: NetworkResult.Failure, checkpointKey: String): NetworkResult.Failure {
+        if (failure.error.httpStatus !in PURGED_STATUSES) return failure
+        checkpoints.delete(checkpointKey)
+        return NetworkResult.Failure(failure.error.copy(code = SESSION_PURGED_CODE))
+    }
+
+    /**
+     * The session and what it has confirmed. Written from its creation on (#13959), so that even a single-chunk upload cut
+     * mid-body is resumed from the gateway's own offset ([resolveSession]) instead of opening a second session.
+     */
+    private suspend fun checkpoint(key: String, location: String, uploadedBytes: Long, totalBytes: Long) =
+        checkpoints.upsert(
+            TusUploadCheckpointEntity(
+                checkpointKey = key,
+                location = location,
+                uploadedBytes = uploadedBytes,
+                totalBytes = totalBytes,
+                updatedAt = System.currentTimeMillis(),
+            ),
+        )
+
+    /**
+     * Whether to resume a stored session or open a new one (#13429). A stored session is never trusted
+     * on its own: the gateway is asked (`HEAD`) what it really holds, so a lost acknowledgement does not
+     * earn a `409` forever and a session the gateway swept does not fail every retry — its checkpoint
+     * is dropped and the upload starts over. An unreachable gateway is a failure the caller retries.
+     */
+    private suspend fun resolveSession(checkpointKey: String, totalBytes: Long, bearer: String?): NetworkResult<TusResumeDecision> {
+        val existing = checkpoints.find(checkpointKey)
+        val location = existing?.location
+        if (location.isNullOrBlank()) return NetworkResult.Success(TusResumeDecision.Fresh)
+        if (!isOurs(location)) {
+            checkpoints.delete(checkpointKey)
+            return NetworkResult.Success(TusResumeDecision.Fresh)
+        }
+        val probe = when (val result = tusApi.probeSession(location, TusUploadMetadata.TUS_RESUMABLE_VERSION, bearer)) {
+            is NetworkResult.Failure -> return result
+            is NetworkResult.Success -> result.data
+        }
+        if (probe == TusServerProbe.Gone) checkpoints.delete(checkpointKey)
+        return NetworkResult.Success(TusResumePlanner.reconcile(location, probe, totalBytes))
+    }
+
+    /** The bearer rides on every call to a session address: only the API's own origin may receive it (#13429). */
+    private fun isOurs(location: String): Boolean = TusSessionOrigin.isSameOrigin(location, config.apiBaseUrl)
+
+    private fun foreignSessionError() = ApiError(message = "Upload session outside the API origin", code = FOREIGN_SESSION_CODE)
 
     /**
      * Uploads every item in [items], sequentially and in order, all tagged with the
      * same [context]. TUS has no batch endpoint (unlike [MediaRepository.upload]'s
      * single multipart call for a whole list) — this folds N single-file uploads into
      * the same all-or-nothing [NetworkResult] contract callers already expect:
-     * **stops at the first failure** and returns it (mirrors iOS `TusUploadManager.
+     * **stops at the first failure** (cancelling the siblings still in flight) and returns it (mirrors iOS `TusUploadManager.
      * uploadFiles`'s task group, which cancels its siblings on the first thrown
      * error) rather than uploading the remainder or silently dropping the failed one.
      */
     public suspend fun uploadAll(
         items: List<MediaUploadItem>,
         context: TusUploadContext,
-    ): NetworkResult<List<UploadedMedia>> {
-        val uploaded = mutableListOf<UploadedMedia>()
-        for (item in items) {
-            when (val result = upload(item, context)) {
-                is NetworkResult.Success -> uploaded += result.data
-                is NetworkResult.Failure -> return result
+        onProgress: (index: Int, sent: Long, total: Long) -> Unit = { _, _, _ -> },
+    ): NetworkResult<List<UploadedMedia>> = try {
+        // Pool borné de 3 envois, résultats rendus dans l'ordre des ENTRÉES (rang de pièce) ; le premier échec lève
+        // pour annuler les frères en vol, et ressort tel quel.
+        val perItem = OrderedParallelUpload.run(items) { index, item ->
+            when (val result = upload(item, context) { sent, total -> onProgress(index, sent, total) }) {
+                is NetworkResult.Success -> result.data
+                is NetworkResult.Failure -> throw BatchFailed(result)
             }
         }
-        return NetworkResult.Success(uploaded)
+        NetworkResult.Success(perItem.flatten())
+    } catch (failed: BatchFailed) {
+        failed.failure
     }
+
+    private class BatchFailed(val failure: NetworkResult.Failure) : RuntimeException(null, null, false, false)
+
+    /**
+     * Uploads every item in [items] on its own (#13959): one outcome per item, in order, and a failed item never stops nor
+     * discards the others — a video already received by the gateway is not thrown away because the photo picked with it
+     * failed. Sequential, so the items share the link rather than fight for it.
+     */
+    public suspend fun uploadEach(
+        items: List<MediaUploadItem>,
+        context: TusUploadContext,
+        onProgress: (index: Int, sent: Long, total: Long) -> Unit = { _, _, _ -> },
+    ): List<NetworkResult<List<UploadedMedia>>> =
+        items.mapIndexed { index, item -> upload(item, context) { sent, total -> onProgress(index, sent, total) } }
 
     public companion object {
         /**
@@ -176,6 +337,18 @@ public class TusUploadRepository @Inject constructor(
          * parameter from any caller/module.
          */
         public const val DEFAULT_CHUNK_SIZE_BYTES: Long = 10L * 1024 * 1024
+
+        /** How many times an interrupted upload resumes on its own before its failure is said (#13959). */
+        public const val MAX_RESUMES: Int = 3
+
+        private const val RESUME_PAUSE_MILLIS = 1_500L
+        private const val NETWORK_CODE = "NETWORK"
+        private const val SERVER_ERROR = 500
+        private val RESUMABLE_STATUSES = setOf(408, 409, 423)
+
+        private const val FOREIGN_SESSION_CODE = "TUS_FOREIGN_SESSION"
+        private const val SESSION_PURGED_CODE = "TUS_SESSION_PURGED"
+        private val PURGED_STATUSES = setOf(404, 410)
 
         private val OCTET_STREAM_MEDIA_TYPE = "application/offset+octet-stream".toMediaTypeOrNull()
     }

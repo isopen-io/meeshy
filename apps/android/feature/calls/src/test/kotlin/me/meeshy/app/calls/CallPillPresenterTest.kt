@@ -55,4 +55,21 @@ class CallPillPresenterTest {
         assertThat(CallPillPresenter.shouldShow(CallStatus.ENDED, onCallScreen = false)).isFalse()
         assertThat(CallPillPresenter.shouldShow(CallStatus.IDLE, onCallScreen = false)).isFalse()
     }
+
+    @Test
+    fun `back on a ringing incoming call is inert - the ring is answered or declined, never dismissed`() {
+        assertThat(CallPillPresenter.backAction(CallStatus.INCOMING)).isEqualTo(CallBackAction.Inert)
+    }
+
+    @Test
+    fun `back on a live call minimises it like the chevron`() {
+        listOf(CallStatus.OUTGOING_RINGING, CallStatus.CONNECTING, CallStatus.CONNECTED, CallStatus.RECONNECTING)
+            .forEach { assertThat(CallPillPresenter.backAction(it)).isEqualTo(CallBackAction.Minimize) }
+    }
+
+    @Test
+    fun `back on a settled call closes the screen`() {
+        assertThat(CallPillPresenter.backAction(CallStatus.ENDED)).isEqualTo(CallBackAction.Close)
+        assertThat(CallPillPresenter.backAction(CallStatus.IDLE)).isEqualTo(CallBackAction.Close)
+    }
 }

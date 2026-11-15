@@ -88,14 +88,16 @@ class MessageEffectRenderPlannerTest {
     fun plan_eachPersistentBit_mapsToItsEnum() {
         assertThat(plan(MessageEffectFlags.GLOW).persistent).containsExactly(PersistentEffect.GLOW)
         assertThat(plan(MessageEffectFlags.PULSE).persistent).containsExactly(PersistentEffect.PULSE)
-        assertThat(plan(MessageEffectFlags.RAINBOW).persistent).containsExactly(PersistentEffect.RAINBOW)
+        assertThat(plan(MessageEffectFlags.RAINBOW).persistent).isEmpty()
+        assertThat(plan(MessageEffectFlags.RAINBOW).rainbowLetters).isTrue()
         assertThat(plan(MessageEffectFlags.SPARKLE).persistent).containsExactly(PersistentEffect.SPARKLE)
     }
 
     @Test
-    fun plan_allPersistentBits_includesEveryFour() {
+    fun plan_allPersistentBits_keepsRainbowOutOfTheOutline() {
         assertThat(plan(MessageEffectFlags.PERSISTENT_MASK).persistent)
-            .containsExactlyElementsIn(PersistentEffect.entries)
+            .containsExactly(PersistentEffect.GLOW, PersistentEffect.PULSE, PersistentEffect.SPARKLE)
+        assertThat(plan(MessageEffectFlags.PERSISTENT_MASK).rainbowLetters).isTrue()
     }
 
     @Test
@@ -204,5 +206,48 @@ class MessageEffectRenderPlannerTest {
     @Test
     fun renderEffects_deletedWithNoEffects_isEmpty() {
         assertThat(renderEffects(0L, isDeleted = true).hasAnyEffect).isFalse()
+    }
+
+    @Test
+    fun plan_rainbowAlone_isNotEmptyButHasNoOutlineTreatment() {
+        val result = plan(MessageEffectFlags.RAINBOW)
+        assertThat(result.isEmpty).isFalse()
+        assertThat(result.persistent).isEmpty()
+    }
+
+    private val everyVisualEffect = MessageEffectFlags.SHAKE or MessageEffectFlags.ZOOM or
+        MessageEffectFlags.CONFETTI or MessageEffectFlags.GLOW or MessageEffectFlags.PULSE or
+        MessageEffectFlags.RAINBOW or MessageEffectFlags.SPARKLE
+
+    private fun reducedPlan(flags: Long) = MessageEffectRenderPlanner.plan(
+        MessageEffects(flags = flags),
+        hasPlayedAppearance = false,
+        reduceMotion = true,
+    )
+
+    @Test
+    fun plan_reduceMotion_playsNoAppearanceEffect() {
+        assertThat(reducedPlan(everyVisualEffect).appearance).isEmpty()
+    }
+
+    @Test
+    fun plan_reduceMotion_keepsOnlyTheStaticGlowAndTheRainbowLetters() {
+        val result = reducedPlan(everyVisualEffect)
+        assertThat(result.persistent).containsExactly(PersistentEffect.GLOW)
+        assertThat(result.rainbowLetters).isTrue()
+        assertThat(result.animatesPersistent).isFalse()
+    }
+
+    @Test
+    fun plan_reduceMotion_pulseAndSparkleAloneRenderNothing() {
+        assertThat(reducedPlan(MessageEffectFlags.PULSE or MessageEffectFlags.SPARKLE).isEmpty).isTrue()
+    }
+
+    @Test
+    fun plan_byDefault_keepsTheAnimatedPlan() {
+        val result = plan(everyVisualEffect)
+        assertThat(result.appearance).containsExactly(AppearanceEffect.SHAKE, AppearanceEffect.ZOOM, AppearanceEffect.CONFETTI)
+        assertThat(result.persistent).containsExactly(PersistentEffect.GLOW, PersistentEffect.PULSE, PersistentEffect.SPARKLE)
+        assertThat(result.animatesPersistent).isTrue()
     }
 }

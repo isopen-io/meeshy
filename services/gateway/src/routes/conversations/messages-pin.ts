@@ -1,0 +1,798 @@
+/**
+ * Surface ÉPINGLAGE DE MESSAGES (issue #4284 — découpage de `messages.ts`,
+ * 2945 lignes, en fichiers frères par responsabilité). Porte les trois routes
+ * PIN / UNPIN / LISTE DES ÉPINGLÉS :
+ *   - `PUT    /conversations/:id/messages/:messageId/pin`
+ *   - `DELETE /conversations/:id/messages/:messageId/pin`
+ *   - `GET    /conversations/:id/pinned-messages`
+ * Voir `messages.ts` pour le composeur (`registerMessagesRoutes`), qui
+ * appelle `registerMessagePinRoutes`.
+ */
+import { FastifyInstance } from 'fastify';
+import { signMessagesAttachmentsForReader } from '../../services/attachments/signServedAttachments';
+import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
+import { readerParticipantIdOf } from './readerParticipant';
+import { MESSAGE_PROTECTION_SELECT, mapMessageProtectionFields } from './messageProtectionProjection';
+import { keepAliveForReader, withInheritedExpiry } from '../../services/messaging/quoteCascade';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
+import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
+import { stickerFromMetadata } from '../../services/stickers/messageSticker';
+import {
+  applyHistoryFloor,
+  historyReaderFromAuthContext,
+  loadReaderHistoryFloor
+} from '../../services/historyFloor';
+import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
+import { resolveConversationId } from '../../utils/conversation-id-cache';
+import { attachmentForwardPreviewSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
+import {
+  loadPersonalHistoryHiding,
+  applyPersonalHistoryHiding
+} from '../../services/personalHistoryFilter';
+import { validatePagination } from '../../utils/pagination';
+import {
+  messageSchema,
+  errorResponseSchema
+} from '@meeshy/shared/types/api-schemas';
+import { canAccessConversation, refuserCommeIntrouvable } from './utils/access-control';
+import { readerShareLinkHasExpired, refuseExpiredShareLink } from '../../services/shareLinkReadGate';
+import { ouvrirConversationLisible } from './utils/conversation-read-gate';
+import { sendSuccess, sendError, sendForbidden, sendNotFound, sendInternalError, sendBadRequest } from '../../utils/response.js';
+import { refusesContentGesture, withoutCaptureNotices } from '../../services/messaging/captureNoticeVisibility';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
+import { AT_REST_MESSAGE_SELECT, revealAtRestRows } from '../../services/messaging/serverAtRest';
+import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
+import type { UnifiedAuthRequest } from '../../middleware/auth';
+import { logger } from './messages-shared';
+import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import { EngagementService } from '../../services/engagement/EngagementService';
+import { announceConversationActivity } from '../../services/conversations/conversationActivity';
+import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
+import { refusesMinorInConversationOfType } from '../../services/messaging/globalMinorGate';
+import {
+  admitMessagePin,
+  isMessagePinRefused,
+  PIN_CONVERSATION_SELECT,
+  type MessagePinAdmission
+} from '../../services/messaging/messagePinAdmission';
+import { conversationRefusesPlainSignal, SIGNAL_CHANNEL_REFUSAL } from '../../services/e2ee/e2ee-signal-channel';
+
+/**
+ * #9927 — épingler ou dépingler dans Meeshy Global met un message en avant pour
+ * tout le salon (`message:pinned`) : c'est y écrire, et un mineur déclaré ne le
+ * fait pas. Posé APRÈS l'existence du message (le 404 reste ce qu'il était), et
+ * sur le type déjà chargé avec lui : la date de naissance n'est lue que dans Global.
+ */
+const refusesMinorPin = (
+  prisma: PrismaClient,
+  authRequest: UnifiedAuthRequest,
+  conversationType: string | null | undefined
+): Promise<boolean> =>
+  refusesMinorInConversationOfType(prisma, {
+    conversationType,
+    userId: authRequest.authContext.isAnonymous ? null : authRequest.authContext.userId,
+    now: new Date(),
+  });
+
+/**
+ * #11219 — PUT et DELETE partagent UNE porte : épingler ou désépingler met en
+ * avant (ou retire) un message pour TOUS, donc exige le droit d'écrire ici.
+ * Posée APRÈS l'existence du message (le 404 reste ce qu'il était), sur la
+ * conversation chargée AVEC lui.
+ */
+const admitPinGesture = (
+  prisma: PrismaClient,
+  authRequest: UnifiedAuthRequest,
+  conversationId: string,
+  conversation: Parameters<typeof admitMessagePin>[1]['conversation']
+): Promise<MessagePinAdmission> =>
+  admitMessagePin(prisma, {
+    conversation,
+    conversationId,
+    caller: authRequest.authContext,
+    now: new Date(),
+  });
+
+/**
+ * Enregistre les routes d'épinglage : pin, unpin, liste des messages épinglés.
+ */
+const REFUS_DES_EPINGLES = {
+  sansSession: 'Authentication required to read the pinned messages of this conversation'
+} as const;
+
+export function registerMessagePinRoutes(
+  fastify: FastifyInstance,
+  prisma: PrismaClient,
+  requiredAuth: any,
+  socketIOHandler: any
+) {
+  const engagement = new EngagementService(prisma);
+
+  // #9026 — épingler ou dépingler est une ACTIVITÉ : la conversation remonte en
+  // tête pour TOUS ses participants (`lastActivityAt` pour le rechargement,
+  // `listRankAt` servi à chacun en direct). Hors du chemin de la réponse.
+  const announcePinActivity = (conversationId: string, actorUserId: string, at: Date): void => {
+    void announceConversationActivity({
+      prisma,
+      io: socketIOHandler ? fastify.socketIOHandler.getManager()?.getIO() ?? null : null,
+      conversationId,
+      at,
+      updatedByUserId: actorUserId,
+    }).catch((error: unknown) => logger.warn('[PIN] conversation activity failed', { conversationId, error }));
+  };
+
+  // ============================================================================
+  // PIN / UNPIN MESSAGE
+  // ============================================================================
+
+  fastify.put<{
+    Params: { id: string; messageId: string };
+  }>('/conversations/:id/messages/:messageId/pin', {
+    schema: {
+      description: 'Pin a message in a conversation',
+      tags: ['conversations', 'messages'],
+      summary: 'Pin message',
+      params: {
+        type: 'object',
+        required: ['id', 'messageId'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' },
+          messageId: { type: 'string', description: 'Message ID to pin' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                pinnedAt: { type: 'string', format: 'date-time' },
+                pinnedBy: { type: 'string' }
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        409: errorResponseSchema,
+        410: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [requiredAuth]
+  }, async (request, reply) => {
+    try {
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+      const { id, messageId } = request.params;
+
+      const conversationId = await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return refuserCommeIntrouvable(reply);
+      }
+
+      const hasAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
+      if (!hasAccess) {
+        return sendForbidden(reply, 'Access denied');
+      }
+
+      // `deletedAt: null` — un message supprimé pour tout le monde n'est plus
+      // un objet épinglable, et c'est ce que TOUTES les lectures de ce fichier
+      // disent déjà : la liste des messages, la recherche, et la liste des
+      // messages épinglés cent lignes plus bas (`{ pinnedAt: { not: null },
+      // deletedAt: null }`). Les deux écritures de l'épingle étaient les seules
+      // à ne pas le dire. Sans la garde, l'appel répond 200, écrit sur un
+      // tombstone, et diffuse `message:pinned` — dans la room ET dans la file
+      // hors-ligne — pour un message que tous les clients ont déjà retiré. Le
+      // web l'applique à son cache, iOS à sa persistance, et rien ne les
+      // détrompe : la liste des épinglés filtre ce message, donc aucun
+      // rechargement ne corrige l'état.
+      //
+      // `select: { id: true }` : seule l'existence est en question ici. La
+      // requête chargeait le document entier — contenu, traductions, metadata —
+      // pour un `if (!message)`. Le jumeau qui dépingle sélectionnait déjà `id`
+      // seul ; c'est l'asymétrie que le correctif précédent avait laissée.
+      //
+      // `pinnedAt` et `pinnedBy` en plus : ce sont les DEUX colonnes qui disent
+      // qu'un appel est un REJEU, et ce que le rejeu doit servir sans y toucher
+      // (#17031). Elles ne sont plus seulement lues pour le crédit
+      // d'engagement — « seul un message qui DEVIENT épinglé rapporte
+      // `tool.pin` (#8959) » — mais pour la décision, en amont, de ne rien
+      // écrire et de ne rien annoncer.
+      const message = await prisma.message.findFirst({
+        where: { id: messageId, conversationId, deletedAt: null },
+        select: { id: true, pinnedAt: true, pinnedBy: true, messageType: true, metadata: true, conversation: { select: { ...PIN_CONVERSATION_SELECT, encryptionMode: true } } }
+      });
+      if (!message) {
+        return sendNotFound(reply, 'Message not found');
+      }
+      // #13142 — dans une conversation chiffrée, l'épingle part en signal chiffré.
+      if (conversationRefusesPlainSignal(message.conversation)) {
+        return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
+      }
+      const admission = await admitPinGesture(prisma, authRequest, conversationId, message.conversation);
+      if (isMessagePinRefused(admission)) {
+        return sendError(reply, admission.status, admission.message, admission.code ? { code: admission.code } : {});
+      }
+      if (await refusesMinorPin(prisma, authRequest, message.conversation?.type)) {
+        return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
+      }
+      // #9629 — un avis de capture n'est pas un contenu : l'épingler le
+      // diffuserait à toute la conversation (`message:pinned`).
+      if (refusesContentGesture(message)) {
+        return sendBadRequest(reply, 'A capture notice cannot be pinned', { code: 'CAPTURE_NOTICE_NOT_PINNABLE' });
+      }
+
+      // ─── Un REJEU n'est pas un geste (#17031) ────────────────────────────
+      // Rien à écrire : le message est déjà épinglé. Ce qui PARTAIT pourtant à
+      // chaque rejeu, et que rien ne rattrape :
+      //   - `pinnedBy = moi`, donc l'attribution volée à qui a épinglé, et la
+      //     liste des épinglés réordonnée (`orderBy: { pinnedAt: 'desc' }`) ;
+      //   - `announcePinActivity`, qui avance `lastActivityAt` — jamais
+      //     réversible — et émet un `conversation:updated` porteur d'un
+      //     `listRankAt` neuf À CHAQUE PARTICIPANT : la conversation remontait
+      //     en tête de liste de tout le monde, autant de fois qu'on rejoue ;
+      //   - la diffusion `message:pinned` et son entrée de file, pour un état
+      //     que tous les clients portent déjà.
+      // La réponse sert l'épingle EXISTANTE, pas `now` : c'est ce que la base
+      // dit, et c'est la seule forme qui rend l'appel idempotent jusqu'à son
+      // corps. `pinnedBy` n'est servi que s'il existe — une ligne ancienne peut
+      // porter la date sans l'auteur, et le schéma le déclare `string` :
+      // omettre la clé dit « je ne sais pas qui », là où un `null` coercé par
+      // le sérialiseur dirait n'importe quoi.
+      if (message.pinnedAt) {
+        logger.info(`[PIN] message ${messageId} already pinned — no write, no activity, no broadcast`);
+        return sendSuccess(reply, {
+          pinnedAt: message.pinnedAt.toISOString(),
+          ...(message.pinnedBy ? { pinnedBy: message.pinnedBy } : {})
+        });
+      }
+
+      const now = new Date();
+      await prisma.message.update({
+        where: { id: messageId },
+        data: { pinnedAt: now, pinnedBy: userId }
+      });
+      announcePinActivity(conversationId, userId, now);
+
+      // Le court-circuit ci-dessus EST la garde de `tool.pin` : passé lui,
+      // l'épingle est une TRANSITION. La condition `!message.pinnedAt` qui
+      // vivait ici la redisait une seconde fois, à un endroit où la retirer un
+      // jour n'aurait fait tomber que ce crédit — alors que c'est l'annonce qui
+      // coûte un éventail par participant.
+      if (!authRequest.authContext.isAnonymous && userId) {
+        void engagement
+          .recordActivity(userId, 'tool.pin', { conversationId })
+          .catch((error: unknown) => logger.warn('[PIN] tool.pin engagement credit failed', { messageId, error }));
+      }
+
+      logger.info(`[PIN] User ${userId} pinned message ${messageId} in conversation ${conversationId}`);
+
+      // Broadcast pin event via Socket.IO
+      if (socketIOHandler) {
+        const pinPayload = {
+          messageId,
+          conversationId,
+          pinnedAt: now.toISOString(),
+          pinnedBy: userId
+        };
+        // `broadcastMessageMutation` — le site UNIQUE de cette famille — plutôt
+        // que la room et la file re-codées ici (cycle 130 bis). Il porte les deux
+        // gardes que la copie manuscrite n'avait pas : l'émission de room dans
+        // un `try` (une levée d'adaptateur rendait 500 sur une épingle DÉJÀ
+        // commise, et sautait la mise en file au passage), et le `.catch` sur la
+        // promesse détachée qu'exige la leçon 230.
+        await broadcastMessageMutation({
+          manager: fastify.socketIOHandler.getManager(),
+          conversationId,
+          actorUserId: userId,
+          eventType: 'pinned',
+          messageId,
+          payload: pinPayload,
+          onError: (error) => logger.warn('[PIN] broadcast side-channel failed', { messageId, error })
+        });
+      }
+
+      return sendSuccess(reply, { pinnedAt: now.toISOString(), pinnedBy: userId });
+    } catch (error) {
+      logger.error('Error pinning message', error);
+      return sendInternalError(reply, 'Error pinning message');
+    }
+  });
+
+  fastify.delete<{
+    Params: { id: string; messageId: string };
+  }>('/conversations/:id/messages/:messageId/pin', {
+    schema: {
+      description: 'Unpin a message in a conversation',
+      tags: ['conversations', 'messages'],
+      summary: 'Unpin message',
+      params: {
+        type: 'object',
+        required: ['id', 'messageId'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' },
+          messageId: { type: 'string', description: 'Message ID to unpin' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        409: errorResponseSchema,
+        410: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [requiredAuth]
+  }, async (request, reply) => {
+    try {
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+      const { id, messageId } = request.params;
+
+      const conversationId = await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return refuserCommeIntrouvable(reply);
+      }
+
+      const hasAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
+      if (!hasAccess) {
+        return sendForbidden(reply, 'Access denied');
+      }
+
+      // Localiser le message DANS la conversation, comme le fait déjà le jumeau
+      // qui épingle — et comme le font `consume`, l'édition et la suppression.
+      // Cette entrée était la seule du fichier à écrire par id seul : être
+      // membre actif de N'IMPORTE QUELLE conversation suffisait alors à
+      // dépingler le message de N'IMPORTE QUELLE autre, pour qui en connaît
+      // l'id — ce que tout ancien membre garde en cache local. La diffusion
+      // partait vers la conversation de la ROUTE, jamais vers celle du message :
+      // les clients réellement concernés gardaient l'épingle affichée jusqu'au
+      // prochain chargement complet, sans qu'aucun événement ne les détrompe.
+      // `deletedAt: null` pour la même raison que le jumeau qui épingle : les
+      // deux sens du même geste portent la même garde, sinon le dépinglage
+      // redevient le chemin par lequel un événement fantôme part vers une room
+      // et vers la file hors-ligne. L'épingle qui SURVIT à une suppression
+      // (épingler puis supprimer) reste en base sans être atteignable ici —
+      // elle n'est visible nulle part (toutes les lectures filtrent
+      // `deletedAt: null`) et le tombstone lui-même part au balayage.
+      // `pinnedAt` : sans cette colonne, ce jumeau ne pouvait pas APERCEVOIR
+      // qu'on lui demande de dépingler un message qui ne l'est pas (#17031) —
+      // il écrivait `{ pinnedAt: null, pinnedBy: null }` sur une ligne déjà
+      // nulle, puis annonçait l'activité. C'est l'asymétrie exacte que le
+      // jumeau qui épingle avait refermée pour son crédit d'engagement.
+      const message = await prisma.message.findFirst({
+        where: { id: messageId, conversationId, deletedAt: null },
+        select: { id: true, pinnedAt: true, conversation: { select: { ...PIN_CONVERSATION_SELECT, encryptionMode: true } } }
+      });
+      if (!message) {
+        return sendNotFound(reply, 'Message not found');
+      }
+      // #13142 — dans une conversation chiffrée, l'épingle part en signal chiffré.
+      if (conversationRefusesPlainSignal(message.conversation)) {
+        return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
+      }
+      const admission = await admitPinGesture(prisma, authRequest, conversationId, message.conversation);
+      if (isMessagePinRefused(admission)) {
+        return sendError(reply, admission.status, admission.message, admission.code ? { code: admission.code } : {});
+      }
+      if (await refusesMinorPin(prisma, authRequest, message.conversation?.type)) {
+        return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
+      }
+
+      // Même règle que le jumeau, même raison (#17031) : dépingler un message
+      // qui ne l'est pas n'a rien à écrire, et son annonce remontait pourtant
+      // la conversation en tête de liste de TOUS les participants. La réponse
+      // ne change pas — `DELETE` sur un état déjà atteint réussit.
+      if (!message.pinnedAt) {
+        logger.info(`[UNPIN] message ${messageId} is not pinned — no write, no activity, no broadcast`);
+        return sendSuccess(reply, null);
+      }
+
+      await prisma.message.update({
+        where: { id: messageId },
+        data: { pinnedAt: null, pinnedBy: null }
+      });
+      announcePinActivity(conversationId, userId, new Date());
+
+      logger.info(`[UNPIN] User ${userId} unpinned message ${messageId} in conversation ${conversationId}`);
+
+      // Broadcast unpin event via Socket.IO
+      if (socketIOHandler) {
+        const unpinPayload = {
+          messageId,
+          conversationId
+        };
+        // Même site unique que le jumeau qui épingle, pour les mêmes deux
+        // gardes — les deux sens du même geste ne se diffusent pas autrement.
+        await broadcastMessageMutation({
+          manager: fastify.socketIOHandler.getManager(),
+          conversationId,
+          actorUserId: userId,
+          eventType: 'unpinned',
+          messageId,
+          payload: unpinPayload,
+          onError: (error) => logger.warn('[UNPIN] broadcast side-channel failed', { messageId, error })
+        });
+      }
+
+      return sendSuccess(reply, null);
+    } catch (error) {
+      logger.error('Error unpinning message', error);
+      return sendInternalError(reply, 'Error unpinning message');
+    }
+  });
+
+  // ============================================================================
+  // LIST PINNED MESSAGES
+  // ============================================================================
+
+  /**
+   * `GET /conversations/:id/pinned-messages` — ce que cette LISTE sert, et
+   * pourquoi (#4392, critère 3 : « pour que le prochain lot n'ait pas à
+   * reposer la question »).
+   *
+   * GARDÉ, avec son lecteur nommé :
+   *   - `content` / `originalLanguage` / `translations` (le Prisme du MESSAGE,
+   *     sérialisé par `transformTranslationsToArray`) : lus par
+   *     `apps/web/components/conversations/PinnedMessageBanner.tsx`, qui les
+   *     passe à `resolveLastMessagePreview` pour rendre l'aperçu dans la
+   *     langue du lecteur. Les retirer rendrait la bannière à la langue de
+   *     l'expéditeur — c'est la règle 3 du Prisme.
+   *   - `sender` : même fichier, `senderLabel`.
+   *   - `metadata` puis `location` / `sticker` hissés : une épingle est une
+   *     bulle complète (Lot 1, #4823).
+   *
+   * RETIRÉ, à zéro lecteur mesuré sur les QUATRE surfaces : le Prisme de la
+   * PIÈCE JOINTE (`transcription`, `translations`) et l'enveloppe de
+   * chiffrement, qui voyageaient dans la relation nue — voir le `select` de
+   * `attachments` ci-dessous.
+   *
+   * PAS TRANCHÉ ICI (critère 2, décision produit) : servir la pièce jointe
+   * COMPLÈTE sur demande (`?include=attachments`) le jour où un client
+   * rendrait la bulle épinglée entière plutôt que d'y naviguer.
+   */
+  fastify.get<{
+    Params: { id: string };
+    Querystring: { limit?: string; offset?: string };
+  }>('/conversations/:id/pinned-messages', {
+    schema: {
+      description: 'List all pinned messages in a conversation',
+      tags: ['conversations', 'messages'],
+      summary: 'List pinned messages',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: { type: 'string', description: 'Max number of pinned messages to return', default: '50' },
+          offset: { type: 'string', description: 'Offset for pagination', default: '0' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'array', items: messageSchema },
+            // #4177 — le handler calcule et ENVOIE `pagination` depuis
+            // toujours (`sendSuccess(reply, formattedMessages, {
+            // pagination })`) ; non déclarée ici, fast-json-stringify la
+            // retirait AVANT le fil — même défaut que celui documenté sur
+            // `cursorPagination` de `GET .../messages` un peu plus haut dans
+            // ce fichier. Aucun client ne pouvait lire `total`/`hasMore`,
+            // qu'ils soient justes ou fautifs (cf. le plancher appliqué
+            // ci-dessous au calcul du total).
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'integer' },
+                offset: { type: 'integer' },
+                limit: { type: 'integer' },
+                hasMore: { type: 'boolean' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [requiredAuth]
+  }, async (request, reply) => {
+    try {
+      const authRequest = request as UnifiedAuthRequest;
+      const { id } = request.params;
+      // SSOT guard: a malformed `?limit`/`?offset` (string schema, no AJV
+      // coercion) would otherwise reach Prisma as `take: NaN` → HTTP 500.
+      const { limit, offset } = validatePagination(request.query.offset, request.query.limit, { defaultLimit: 50, maxLimit: 100 });
+
+      const conversationId = await ouvrirConversationLisible({
+        prisma,
+        reply,
+        authContext: authRequest.authContext,
+        identifiant: id,
+        messages: REFUS_DES_EPINGLES
+      });
+      if (!conversationId) {
+        return;
+      }
+      // #7388 — la porte d'un lien de partage ÉCHU, la même que sur le fil.
+      if (await readerShareLinkHasExpired(prisma, { conversationId, reader: historyReaderFromAuthContext(authRequest.authContext) })) {
+        return refuseExpiredShareLink(reply);
+      }
+
+      // Une épingle est posée pour TOUT le monde, mais elle ne rend pas au
+      // lecteur un message qu'il a retiré de sa propre vue : sans ce filtre,
+      // `clear-history` laissait une porte dérobée sur l'historique effacé.
+      const pinnedHiding = await loadPersonalHistoryHiding(prisma, {
+        userId: authRequest.authContext.type === 'anonymous' ? null : authRequest.authContext.userId,
+        conversationId
+      });
+      // Et pas plus qu'elle ne rend un message d'AVANT l'arrivée du lecteur :
+      // une épingle est la porte la plus évidente sur l'historique interdit.
+      const pinnedFloor = await loadReaderHistoryFloor(prisma, {
+        conversationId,
+        reader: historyReaderFromAuthContext(authRequest.authContext)
+      });
+
+      const pinnedMessages = await withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () => prisma.message.findMany({
+        where: applyPersonalHistoryHiding(
+          applyHistoryFloor(withoutCaptureNotices({ conversationId, pinnedAt: { not: null }, deletedAt: null }), pinnedFloor),
+          pinnedHiding
+        ),
+        orderBy: { pinnedAt: 'desc' },
+        skip: offset,
+        take: limit,
+        select: {
+          id: true,
+          conversationId: true,
+          senderId: true,
+          content: true,
+          originalLanguage: true,
+          messageType: true,
+          editedAt: true,
+          deletedAt: true,
+          replyToId: true,
+          forwardedFromId: true,
+          forwardedFromConversationId: true,
+          pinnedAt: true,
+          pinnedBy: true,
+          // #16578 — le bloc PARTAGÉ, jamais quatre champs recopiés. La copie
+          // manuscrite portait `isViewOnce`, `isBlurred`, `expiresAt` et
+          // `effectFlags` — assez pour ressembler à une porte conforme, et sans
+          // les deux compteurs de vue unique ni la DURÉE de l'éphémère, que
+          // `messageSchema` déclare tous les trois. Une cinquième famille de
+          // protection ajoutée demain arrive ici sans qu'on y pense.
+          ...MESSAGE_PROTECTION_SELECT,
+          translations: true,
+          createdAt: true,
+          updatedAt: true,
+          // #12822 — de quoi ouvrir une épingle `server`/`hybrid` ; la projection ci-dessous n'en sert rien.
+          ...AT_REST_MESSAGE_SELECT,
+          // Lot 1 : un message épinglé est une bulle complète — sans
+          // `metadata`, un message géolocalisé épinglé n'affiche jamais sa
+          // position alors que la liste complète la restitue déjà.
+          metadata: true,
+          sender: {
+            select: {
+              id: true,
+              userId: true,
+              displayName: true,
+              avatar: true,
+              type: true,
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  firstName: true,
+                  lastName: true,
+                  displayName: true,
+                  avatar: true,
+                  isOnline: true
+                }
+              }
+            }
+          },
+          // #4392 — la relation était demandée NUE (`attachments: true`) : toute
+          // colonne du modèle partait, et `messageSchema` la sert par
+          // `messageAttachmentSchema` (le schéma COMPLET). La liste des
+          // épingles poussait donc, par épingle, la transcription mot-à-mot
+          // d'un vocal, la carte de TOUTES ses traductions et l'enveloppe de
+          // chiffrement — 51 clés mesurées.
+          //
+          // Le comptage des lecteurs (critère 1 de l'issue) rend zéro sur les
+          // quatre surfaces : `PinnedMessageBanner.tsx` est le seul appelant du
+          // dépôt et son type `PinnedMessage` ne déclare pas `attachments` ;
+          // iOS déclare `ConversationsEndpoint.byIdPinnedMessages` sans jamais
+          // l'appeler (`ConversationInfoSheet.pinnedMessages` filtre les
+          // messages DÉJÀ chargés) ; Android n'a pas d'endpoint du tout
+          // (`PinnedMessagesList.of(messages)` dérive de la liste locale).
+          //
+          // D'où l'APERÇU canonique : la bannière annonce l'épingle et
+          // NAVIGUE vers le message, dont `GET .../messages` sert le média
+          // complet (`attachmentMediaSelect`). C'est mot pour mot le contrat
+          // que `attachmentForwardPreviewSelect` documente — « the user taps
+          // through to the full message for playback » — et une forme NOMMÉE,
+          // jamais une copie locale qui dériverait (`attachmentIncludes.ts`).
+          attachments: { select: attachmentForwardPreviewSelect, orderBy: MESSAGE_ATTACHMENT_ORDER },
+          _count: { select: { reactions: true, replies: true } }
+        }
+      }));
+
+      // #4177 — le total DOIT appliquer le même plancher que la page
+      // (`pinnedFloor`, quelques lignes plus haut) : il ne l'appliquait pas,
+      // seulement `applyPersonalHistoryHiding`. Un arrivant tardif (plancher
+      // non nul) voyait donc un total qui COMPTE les épingles d'avant son
+      // arrivée — la pagination lui promettait des pages que la page réelle,
+      // elle correctement planchée, ne pouvait jamais servir.
+      const total = await prisma.message.count({
+        where: applyPersonalHistoryHiding(
+          applyHistoryFloor(
+            {
+              conversationId,
+              pinnedAt: { not: null },
+              deletedAt: null
+            },
+            pinnedFloor
+          ),
+          pinnedHiding
+        )
+      });
+
+      // Régime STRICT (2026-08-25) : self/ADMIN+/ami seuls.
+      const pinnedPresenceViewer = viewerFromRequest(request);
+      const pinnedMissingEntry = presenceMissingEntryPolicy(pinnedPresenceViewer);
+      const pinnedPresenceVis = await getPresenceVisibilityService(prisma).resolveForTargets(
+        pinnedPresenceViewer,
+        pinnedMessages
+          .map((message: any) => message.sender?.userId)
+          .filter((uid: string | null | undefined): uid is string => !!uid)
+      );
+
+      // #16578 — LES DEUX COUPURES DE SERVICE D'UNE PAGE LUE PAR UN LECTEUR.
+      //
+      // `keepAliveForReader` porte l'éphémère échu pour CE lecteur (#7451) puis
+      // la réponse à ce qui est mort pour lui (#8630). Son doc-comment ÉNUMÈRE
+      // ses portes — « recherche, fil, lien de partage » — et l'épingle était
+      // la quatrième, absente de l'énumération (leçon 261 : une liste de sites
+      // affirme aussi « ce sont les sites où la règle s'applique », et cette
+      // seconde moitié n'est presque jamais vérifiée). Or `admitMessagePin` ne
+      // refuse ni l'éphémère, ni la vue unique, ni le flou : un message à
+      // flamme est épinglable, et l'épingle est la porte la plus évidente sur
+      // l'historique — ce fichier l'écrit lui-même à propos du plancher.
+      //
+      // La clé de lecteur est résolue ICI, une fois, et réutilisée par la
+      // signature des pièces jointes plus bas, qui la relisait pour son compte.
+      const pinnedReaderParticipantId = await readerParticipantIdOf(prisma, conversationId, authRequest.authContext);
+      const pinnedReaderPage = await keepAliveForReader(prisma, pinnedMessages, pinnedReaderParticipantId);
+
+      const openedPins = await revealAtRestRows(pinnedReaderPage.alive, gatewayKeyring(prisma));
+      const formattedMessages = openedPins.map((message: any) => {
+        const sender = message.sender;
+        const place = sharedPlaceFromMetadata(message.metadata);
+        const sticker = stickerFromMetadata(message.metadata);
+        return {
+          id: message.id,
+          conversationId: message.conversationId,
+          // #4177 — `Message.senderId` est en base une FK vers
+          // `Participant.id`, jamais vers `User.id` : servi brut, cette
+          // porte donnait au MÊME message un `senderId` différent de celui
+          // de `GET .../messages`, qui résout depuis toujours vers
+          // `User.id` (les clients comparent `senderId` à LEUR `userId` pour
+          // décider « est-ce moi qui l'ai envoyé ? »). Même résolution ici.
+          senderId: sender?.userId ?? sender?.user?.id ?? message.senderId,
+          content: message.content,
+          // #12822 — une épingle qu'aucune clé n'ouvre sort scellée (`content: ''`) :
+          // sans ce drapeau, le client rendait une bulle VIDE au lieu de « Message chiffré ».
+          isEncrypted: message.isEncrypted === true,
+          encryptionMode: message.encryptionMode ?? null,
+          originalLanguage: message.originalLanguage,
+          messageType: message.messageType,
+          isEdited: !!message.editedAt,
+          editedAt: message.editedAt,
+          deletedAt: message.deletedAt,
+          replyToId: message.replyToId,
+          forwardedFromId: message.forwardedFromId,
+          forwardedFromConversationId: message.forwardedFromConversationId,
+          pinnedAt: message.pinnedAt,
+          pinnedBy: message.pinnedBy,
+          // #16578 — la MÊME projection que `GET .../messages` et la recherche
+          // (`mapMessageProtectionFields`), donc l'échéance DU LECTEUR. La
+          // copie manuscrite servait `message.expiresAt` BRUT : depuis #7451
+          // cette colonne porte l'heure INTERNE de destruction, qui vaut le
+          // plafond de rétention de sept jours tant que personne n'a reçu —
+          // « ce message disparaît dans 7 jours » sous un éphémère de trente
+          // secondes.
+          ...mapMessageProtectionFields(message, pinnedReaderPage.deadlines.get(message.id)),
+          // `Message.translations` est une CARTE Mongo, jamais un tableau — et
+          // le schéma de cette réponse déclare `translations: { type: 'array' }`
+          // (`messageSchema`). `fast-json-stringify` ne coerce pas : la carte
+          // faisait échouer la sérialisation, donc répondre 500 sur la route
+          // ENTIÈRE dès qu'une épingle portait une traduction, c'est-à-dire dès
+          // que le Prisme avait tourné. Même sérialiseur que toutes les autres
+          // routes de messages — source unique de vérité.
+          translations: transformTranslationsToArray(
+            message.id,
+            message.translations as Record<string, MessageTranslationJSON> | null
+          ),
+          createdAt: message.createdAt,
+          updatedAt: message.updatedAt,
+          sender: sender ? applyPresenceVisibilityAsOffline(
+            {
+              id: sender.id,
+              userId: sender.userId,
+              displayName: resolveParticipantDisplayName(sender),
+              avatar: resolveParticipantAvatar(sender),
+              type: sender.type,
+              username: sender.user?.username ?? null,
+              firstName: sender.user?.firstName ?? null,
+              lastName: sender.user?.lastName ?? null,
+              isOnline: sender.user?.isOnline ?? false
+            },
+            sender.userId ? pinnedPresenceVis.get(sender.userId) : undefined,
+            { onMissingEntry: pinnedMissingEntry },
+          ) : null,
+          attachments: message.attachments || [],
+          reactionCount: message._count?.reactions ?? 0,
+          replyCount: message._count?.replies ?? 0,
+          // Lot 1 : hisser metadata.location en champ top-level `location`,
+          // même miroir que la liste complète des messages — et `sticker`
+          // (#4823) avec lui.
+          ...(place ? { location: place } : {}),
+          ...(sticker ? { sticker } : {})
+        };
+      });
+
+      // #16578 — une épingle qui CITE un éphémère n'en survit pas : son
+      // échéance servie devient la plus proche de la sienne et de celle qu'elle
+      // hérite. `keepAliveForReader` a déjà RETIRÉ celles dont la chaîne est
+      // morte ; celle-ci raccourcit ce qui vit encore. N'allonge jamais une vie.
+      const heirsApplied = formattedMessages.map((served) => withInheritedExpiry(served, pinnedReaderPage.inherited));
+
+      // #9646 — les pièces d'un message protégé épinglé, signées pour CE lecteur.
+      // #18453 — une épingle ne sert pas `metadata` : un résumé d'appel épinglé n'a pas de participants à nommer.
+      const servedMessages = await signMessagesAttachmentsForReader(prisma, {
+        messages: heirsApplied,
+        readerParticipantId: pinnedReaderParticipantId,
+        signer: readerFileUrlSignerFromEnv(new Date()),
+      });
+
+      // #16578 — `total` est un `count()` : il ne peut pas appliquer une
+      // échéance PAR LECTEUR, qui vit dans `MessageStatusEntry`. Il compte donc
+      // les éphémères que les deux coupures ci-dessus retirent de la page, et
+      // `hasMore` reste vrai — le lecteur pagine, il ne perd rien. C'est la
+      // même propriété que la recherche et le fil, et elle échoue du bon côté
+      // (montrer MOINS). La faire disparaître demande de compter par lecteur :
+      // suivi #16579.
+      return sendSuccess(reply, servedMessages, {
+        pagination: { total, offset, limit, hasMore: offset + formattedMessages.length < total }
+      });
+    } catch (error) {
+      logger.error('Error listing pinned messages', error);
+      return sendInternalError(reply, 'Error listing pinned messages');
+    }
+  });
+}

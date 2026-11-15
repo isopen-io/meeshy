@@ -1,0 +1,226 @@
+import SwiftUI
+import UIKit
+import MeeshySDK
+import MeeshyUI
+import os
+
+// La vignette perso (PiP in-app) : déplaçable, aimantée aux coins, et la
+// tuile « vidéo en pause ». Sortie de `CallView.swift` (#8276).
+
+extension CallView {
+    // MARK: - Picture-in-Picture (§7.2)
+
+    /// The four anchor corners a PiP can snap to.
+    typealias PiPCorner = CallSelfTileCorner
+
+    private static let pipMargin: CGFloat = 16
+
+    /// Resting center for the PiP in a given container, accounting for device
+    /// safe area insets (landscape notch/Dynamic Island cutouts) plus fixed
+    /// clearances for the minimize chevron/badge (top) and control bar (bottom).
+    /// #17327 — ma vignette ne porte aucune commande autour d'elle : rien à lui réserver.
+    func pipCenter(_ corner: PiPCorner, in container: CGSize, size: CGSize = CallSelfTileScale.standard.size, safeArea: EdgeInsets = .init()) -> CGPoint {
+        let yields = selfTileYieldsToRails(in: container)
+        let edge = { (inset: CGFloat) in CallRailsLayout.selfTileEdgeDistance(ownInset: inset + Self.pipMargin, safeHorizontal: Self.railsSafeHorizontal, yieldsToRails: yields) }
+        return corner.center(of: size, in: container, insets: EdgeInsets(top: safeArea.top + QualityThresholds.pipTopClearance + selfTileTopBannerClearance, leading: edge(safeArea.leading), bottom: safeArea.bottom + QualityThresholds.pipBottomClearance, trailing: edge(safeArea.trailing)))
+    }
+
+    /// #17965 — (…) ouvert en paysage, ma vignette cède le coin au rail (L2.8) ; la pile des bannières la laisse à côté (L1.8).
+    var selfTileRailsShown: Bool { isChromeVisible && !controlsDisposition.railRows(currentActionSet, layer: layer).isEmpty }
+
+    func selfTileYieldsToRails(in container: CGSize) -> Bool {
+        CallRailsLayout.selfTileYieldsToRails(isLandscape: CallSelfTileScale.isLandscape(container), railsShown: selfTileRailsShown)
+    }
+
+    var selfTileBannerNeighbor: CallTopBannerTileNeighbor? {
+        CallTopBannerTileNeighbor.duoTile(isShown: !isGroupStage && !isLiveFrameShown && callManager.isVideoEnabled && chromeVisibility.isVisible(.selfView), isAtTop: pipCorner.isTop, width: selfTileScale.width(isLandscape: true) * selfTileStowFactor, ownInset: Self.pipMargin, safeHorizontal: Self.railsSafeHorizontal, railsShown: selfTileRailsShown)
+    }
+
+    /// #17791 · #18227 — la place de la pile de bannières sous l'en-tête (partage local, enregistrement, capture, pastilles de service), à sa hauteur mesurée.
+    var selfTileTopBannerClearance: CGFloat {
+        guard !CallTopBannerStack.span(window: DeviceLayout.windowSize, safeHorizontal: Self.railsSafeHorizontal, selfTile: selfTileBannerNeighbor).keepsSelfTileBeside else { return 0 }
+        let counted = CallTopBannerStack.countedForSelfTile(isLocalScreenShareShown: callManager.screenShare.isSharing, isRecordingShown: callManager.recording.phase != .idle || callManager.recording.notice != nil, isCaptureAlertShown: transcriptionService.captureJournal.alert != nil, service: servicePills.banners)
+        return CallTopBannerStack.selfTileClearance(counted: counted, heights: topBannerHeights)
+    }
+
+    /// #18227 (E3 · E4) — les pastilles de service de cet instant : le SEUL site qui lit la loi pour l'écran.
+    var servicePills: CallServicePills { CallServicePills.live(callManager, isConnectedLayout: showsConnectedLayout) }
+
+    /// G1.11 — rangée, ma vignette garde son cadre et passe à sa petite taille par une échelle.
+    var selfTileStowFactor: CGFloat { CallSelfTileScale.restingFactor(selfTileScale, isChromeVisible: isChromeVisible) }
+
+    /// #8577 — la taille de la vignette : son palier, suivi du pincement en
+    /// cours, et bornée à la zone sûre de l'écran.
+    func pipTileSize(in container: CGSize, safeArea: EdgeInsets) -> CGSize {
+        let available = CGSize(
+            width: container.width - safeArea.leading - safeArea.trailing - 2 * Self.pipMargin,
+            height: container.height - safeArea.top - safeArea.bottom
+                - QualityThresholds.pipTopClearance - QualityThresholds.pipBottomClearance - selfTileTopBannerClearance
+        )
+        return CallSelfTileScale.fitted(CallSelfTileScale.liveSize(pinch: selfTilePinch, from: selfTileScale, isLandscape: CallSelfTileScale.isLandscape(container)), in: available)
+    }
+
+    /// Nearest corner to a point — used to snap on drag end.
+    private func nearestCorner(to point: CGPoint, in container: CGSize, safeArea: EdgeInsets = .init()) -> PiPCorner {
+        let size = pipTileSize(in: container, safeArea: safeArea)
+        return PiPCorner.nearest(to: point) { pipCenter($0, in: container, size: size, safeArea: safeArea) }
+    }
+
+    var pipView: some View {
+        GeometryReader { geo in
+            let size = pipTileSize(in: geo.size, safeArea: geo.safeAreaInsets)
+            let base = pipCenter(pipCorner, in: geo.size, size: size, safeArea: geo.safeAreaInsets)
+            ZStack {
+                // §7.2 — the PiP shows the SECONDARY stream (the opposite of the
+                // primary). Swap flips both with one tap.
+                videoStream(local: !effectiveSwapStreams, contentMode: .scaleAspectFill)
+                    .frame(width: size.width, height: size.height)
+                    .modifier(CallSelfTileOutline(color: CallSelfTileStroke.color(forKey: CallSelfTileStroke.colorKey(showsLocal: !effectiveSwapStreams, myId: AuthManager.shared.currentUser?.id, peerId: callManager.remoteUserId)), lineWidth: CallSelfTileStroke.lineWidth, stowFactor: selfTileStowFactor))
+                    .overlay(alignment: .topTrailing) { selfTileZoomSlot(tileSize: size) }
+                    .overlay(alignment: .bottom) { CallSelfTileNameplate(title: selfTilePlateTitle, tileWidth: size.width, stowFactor: selfTileStowFactor, reservesBadge: showsPeerMutedBadge && effectiveSwapStreams) }
+                    .overlay(alignment: .bottomLeading) {
+                        if showsPeerMutedBadge && effectiveSwapStreams {
+                            CallPeerMutedBadge(compact: true).padding(MeeshySpacing.xs).scaleEffect(CallSelfTileScale.counterScaled(1, by: selfTileStowFactor), anchor: .bottomLeading)
+                        }
+                    }
+                    .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
+                    .modifier(CallSelfTileStow(factor: selfTileStowFactor, anchor: CallSelfTileScale.anchor(of: base, in: geo.size), isChromeVisible: isChromeVisible, reduceMotion: reduceMotion))
+                    .modifier(CallSelfTilePlacement(position: CGPoint(x: base.x + pipDragOffset.width, y: base.y + pipDragOffset.height), isLandscape: CallSelfTileScale.isLandscape(geo.size), clearance: selfTileTopBannerClearance, reduceMotion: reduceMotion))
+                    .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: selfTileYieldsToRails(in: geo.size))
+                    .gesture(
+                        DragGesture()
+                            .onChanged { pipDragOffset = $0.translation }
+                            .onEnded { value in
+                                let dropped = CGPoint(x: base.x + value.translation.width,
+                                                      y: base.y + value.translation.height)
+                                let corner = nearestCorner(to: dropped, in: geo.size, safeArea: geo.safeAreaInsets)
+                                withAnimation(CallSelfTileMotion.spring(response: 0.35, dampingFraction: 0.75, reduceMotion: reduceMotion)) {
+                                    pipCorner = corner
+                                    pipDragOffset = .zero
+                                }
+                                HapticFeedback.light()
+                            }
+                    )
+                    .simultaneousGesture(selfTilePinchGesture)
+                    .onTapGesture { tapPictureInPicture() }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { swapPictureInPicture() }
+                    .accessibilityLabel(String(localized: "call.pip.swap", defaultValue: "Permuter les vidéos", bundle: .main))
+                    .accessibilityHint(String(localized: "call.pip.swap.hint", defaultValue: "Touchez pour échanger la petite et la grande vidéo ; faites glisser pour déplacer", bundle: .main))
+                    .accessibilityValue(CallSelfTilePlate.accessibilityValue(name: selfTilePlateTitle, size: CallSelfTileCopy.sizeName(selfTileScale)))
+                    .accessibilityAdjustableAction { direction in
+                        switch direction {
+                        case .increment: settleSelfTile(on: selfTileScale.larger)
+                        case .decrement: settleSelfTile(on: selfTileScale.smaller)
+                        @unknown default: return
+                        }
+                    }
+            }
+        }
+        .onAppear { selfTileScale = selfTileMemory.scale(for: callManager.currentCallId) }
+    }
+
+    private var selfTilePlateTitle: String {
+        CallSelfTilePlate.title(showsLocal: !effectiveSwapStreams, you: String(localized: "call.group.tile.you", defaultValue: "Vous", bundle: .main), peer: peerDisplayName)
+    }
+
+    /// #8577 — pincer la vignette la fait changer de palier x1 · x2 · x3 : elle
+    /// suit les doigts, puis s'accroche au palier le plus proche.
+    private var selfTilePinchGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { selfTilePinch = $0 }
+            .onEnded { value in
+                settleSelfTile(on: CallSelfTileScale.selfTileScale(fromPinch: value, from: selfTileScale))
+            }
+    }
+
+    private func settleSelfTile(on scale: CallSelfTileScale) {
+        let changed = scale != selfTileScale
+        withAnimation(CallSelfTileMotion.spring(response: 0.35, dampingFraction: 0.8, reduceMotion: reduceMotion)) {
+            selfTileScale = scale
+            selfTilePinch = 1
+        }
+        guard changed else { return }
+        HapticFeedback.light()
+        selfTileMemory.remember(scale, for: callManager.currentCallId)
+    }
+
+    /// G1.9 — la règle de la scène de groupe vaut pour ma vignette (`showControls`, jamais un mode).
+    private func tapPictureInPicture() {
+        if GroupStageTapRule.outcome(isChromeVisible: showControls) == .spotlight { swapPictureInPicture() } else { noteChromeInteraction(.revive) }
+    }
+
+    private func swapPictureInPicture() {
+        withAnimation(CallSelfTileMotion.spring(response: 0.4, dampingFraction: 0.8, reduceMotion: reduceMotion)) { swapStreams.toggle() }
+        HapticFeedback.light()
+    }
+
+    /// True when the survival layer has auto-dropped our outbound video while the
+    /// user still wants the camera on (distinct from a deliberate camera-off).
+    var videoAutoPaused: Bool {
+        callManager.isVideoSuspended && callManager.isVideoEnabled
+    }
+
+    /// Survival self-tile: the local user's avatar with a discreet "video paused
+    /// · auto-resume" overlay ON TOP, shown where the PiP normally sits when the
+    /// adaptive controller has dropped our outbound video to audio-only.
+    var localVideoSuspendedTile: some View {
+        GeometryReader { geo in
+            let size = pipTileSize(in: geo.size, safeArea: geo.safeAreaInsets)
+            let base = pipCenter(pipCorner, in: geo.size, size: size, safeArea: geo.safeAreaInsets)
+            CallVideoSuspendedTileBody()
+                .frame(width: size.width, height: size.height)
+                .modifier(CallSelfTileOutline(color: MeeshyColors.warning.opacity(MeeshyOpacity.heavy), lineWidth: 1, stowFactor: selfTileStowFactor))
+                .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
+                .modifier(CallSelfTileStow(factor: selfTileStowFactor, anchor: CallSelfTileScale.anchor(of: base, in: geo.size), isChromeVisible: isChromeVisible, reduceMotion: reduceMotion))
+                .modifier(CallSelfTilePlacement(position: base, isLandscape: CallSelfTileScale.isLandscape(geo.size), clearance: selfTileTopBannerClearance, reduceMotion: reduceMotion))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(String(localized: "call.video.suspended", defaultValue: "Vidéo en pause", bundle: .main))
+                .accessibilityHint(String(localized: "call.video.suspended.hint", defaultValue: "Connexion faible, la vidéo reprendra automatiquement", bundle: .main))
+        }
+    }
+}
+
+/// La tuile « vidéo en pause » : mon avatar et son bandeau discret (sortie du type `CallView`, #17791).
+struct CallVideoSuspendedTileBody: View {
+    var body: some View {
+        // The suspended camera is OURS : our own face, photo else initials.
+        let localUser = AuthManager.shared.currentUser
+        let localName = localUser?.displayName ?? localUser?.username ?? "?"
+        return ZStack {
+            Color.black.opacity(MeeshyOpacity.strong)
+            // Avatar behind…
+            CachedAvatarImage(
+                urlString: localUser?.avatar,
+                thumbHash: localUser?.avatarThumbHash,
+                name: localName,
+                size: 56,
+                accentColor: MeeshyColors.brandPrimaryHex
+            )
+            .opacity(MeeshyOpacity.strong)
+            // …"video paused" affordance on top.
+            VStack(spacing: MeeshySpacing.xsPlus) {
+                Image(systemName: "video.slash.fill")
+                    .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.warning)
+                    .accessibilityHidden(true)
+                Text(String(localized: "call.video.suspended", defaultValue: "Vidéo en pause", bundle: .main))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Color.white)
+                Text(String(localized: "call.video.suspended.short", defaultValue: "Reprise auto", bundle: .main))
+                    .font(.caption2)
+                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
+            }
+        }
+    }
+}
+
+enum CallSelfTileCopy {
+    static func sizeName(_ scale: CallSelfTileScale) -> String {
+        switch scale {
+        case .x1: return String(localized: "call.pip.size.small", defaultValue: "Petite vignette", bundle: .main)
+        case .x2: return String(localized: "call.pip.size.medium", defaultValue: "Vignette moyenne", bundle: .main)
+        case .x3: return String(localized: "call.pip.size.large", defaultValue: "Grande vignette", bundle: .main)
+        }
+    }
+}

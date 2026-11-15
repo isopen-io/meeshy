@@ -158,6 +158,7 @@ parse_args() {
                 ;;
             --secure|--https)
                 SECURE_MODE=true
+                print_warning "--https : mkcert est déjà porté par docker-compose.local.yml, c'est donc le défaut. Ce drapeau sera retiré (voir #5351) ; vous pouvez l'omettre."
                 shift
                 ;;
             --ip)
@@ -197,7 +198,7 @@ print_usage() {
     echo "Options:"
     echo "  --with-containers    Launch MongoDB/Redis via Docker"
     echo "  --memory             Memory mode (Redis fallback to memory)"
-    echo "  --secure, --https    HTTPS with mkcert + Traefik"
+    echo "  --secure, --https    HTTPS with mkcert + Traefik (default already ships mkcert; deprecated, will be removed — see #5351)"
     echo "  --ip <IP>            Custom local IP (e.g., 192.168.1.39)"
     echo "  --domain <DOMAIN>    Custom domain (e.g., meeshy.local)"
     echo "  -h, --help           Show this help"
@@ -240,9 +241,11 @@ start_infra() {
                 generate_certs
             fi
 
-            # Use HTTPS compose with Traefik
+            # --secure/--https is now an alias for the local compose file, which
+            # already ships mkcert + Traefik (see #4547) — there is no distinct
+            # "local-https" composition anymore.
             LOCAL_DOMAIN="$LOCAL_DOMAIN" docker compose \
-                -f "$COMPOSE_DIR/docker-compose.local-https.yml" \
+                -f "$COMPOSE_DIR/docker-compose.local.yml" \
                 up -d database mongo-init redis traefik
         else
             docker compose -f "$COMPOSE_DIR/docker-compose.local.yml" up -d database redis
@@ -386,7 +389,6 @@ stop_all() {
     if [ -f "$COMPOSE_DIR/docker-compose.local.yml" ]; then
         cd "$ROOT_DIR"
         docker compose -f "$COMPOSE_DIR/docker-compose.local.yml" down 2>/dev/null || true
-        docker compose -f "$COMPOSE_DIR/docker-compose.local-https.yml" down 2>/dev/null || true
     fi
 
     # Kill any remaining processes on dev ports

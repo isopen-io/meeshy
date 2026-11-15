@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "androidName": "global_search_message_blurred",
+          "status": "android-only"
+        },
+        {
+          "androidName": "global_search_transcript_audio",
+          "status": "android-only"
+        },
+        {
+          "androidName": "global_search_transcript_video",
+          "status": "android-only"
+        },
+        {
+          "androidName": "global_search_transcript_image",
+          "status": "android-only"
+        },
+        {
+          "androidName": "global_search_transcript_document",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

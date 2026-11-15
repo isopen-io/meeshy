@@ -144,7 +144,7 @@ public struct Plan2DView: View, Equatable {
                     var gridLine = Path()
                     gridLine.move(to: CGPoint(x: x, y: 0))
                     gridLine.addLine(to: CGPoint(x: x, y: size.height))
-                    context.stroke(gridLine, with: .color(gridColor), lineWidth: 0.5)
+                    context.stroke(gridLine, with: .color(gridColor), lineWidth: MeeshyBorder.hairline)
                 }
             }
 
@@ -222,11 +222,10 @@ public struct Plan2DView: View, Equatable {
         // reste intact — ces enfants ne coûtent aucun dessin.
         .accessibilityChildren {
             VStack(spacing: 0) {
-                ForEach(tracks) { track in
+                ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                     Color.clear
                         .frame(height: TimelineMetrics.laneHeight)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(Self.accessibilityLabel(for: track))
+                        .modifier(Plan2DTrackAccessibilityModifier(plan: self, track: track, index: index, label: Self.accessibilityLabel(for: track)))
                 }
             }
         }
@@ -816,9 +815,7 @@ public struct Plan2DView: View, Equatable {
                                        trackCount: tracks.count) ?? startRow
         if currentRow != lastPlaneCrossingRow {
             if Self.crossedPlaneBoundary(from: lastPlaneCrossingRow ?? startRow, to: currentRow, tracks: tracks) {
-                #if canImport(UIKit) && os(iOS)
-                UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
-                #endif
+                HapticFeedback.rigid()
             }
             lastPlaneCrossingRow = currentRow
         }

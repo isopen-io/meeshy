@@ -245,18 +245,72 @@ describe('SocketConversationLeaveSchema', () => {
 });
 
 describe('SocketReactionAddSchema', () => {
-  it('accepts a valid emoji up to 10 chars', () => {
+  it('accepts a simple single emoji', () => {
     const result = SocketReactionAddSchema.safeParse({ messageId: VALID_MONGO_ID, emoji: '👍' });
     expect(result.success).toBe(true);
   });
 
-  it('rejects an emoji exceeding 10 chars', () => {
-    const result = SocketReactionAddSchema.safeParse({ messageId: VALID_MONGO_ID, emoji: '😀'.repeat(11) });
+  it('accepts a multi-person RGI family emoji (11 UTF-16 units)', () => {
+    // 👨‍👩‍👧‍👦 is a single valid RGI grapheme (isValidEmoji accepts it) but is
+    // 11 code units — the old max(10) length bound rejected it at the boundary
+    // before the format check ran, blocking a nominal picker emoji.
+    const result = SocketReactionAddSchema.safeParse({ messageId: VALID_MONGO_ID, emoji: '👨‍👩‍👧‍👦' });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts the longest common RGI grapheme (kiss with two skin tones, 15 units)', () => {
+    const result = SocketReactionAddSchema.safeParse({ messageId: VALID_MONGO_ID, emoji: '👩🏽‍❤️‍💋‍👨🏼' });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an oversized forged emoji payload', () => {
+    const result = SocketReactionAddSchema.safeParse({ messageId: VALID_MONGO_ID, emoji: '😀'.repeat(20) });
     expect(result.success).toBe(false);
   });
 
   it('rejects an empty emoji', () => {
     const result = SocketReactionAddSchema.safeParse({ messageId: VALID_MONGO_ID, emoji: '' });
     expect(result.success).toBe(false);
+  });
+});
+
+// Sticker (#4823) — les DEUX schémas d'envoi le conservent. Non déclaré,
+// `z.object` le stripperait en silence et iOS ne verrait que le PNG de repli.
+describe('sticker — les deux schémas d’envoi le conservent', () => {
+  const sticker = { templateId: 'love.heart', slots: { caption: 'Toi' }, animation: 'heartbeat', emoji: '❤️' };
+
+  it('SocketMessageSendSchema conserve `sticker`', () => {
+    const result = SocketMessageSendSchema.safeParse({
+      conversationId: VALID_MONGO_ID,
+      content: '',
+      clientMessageId: VALID_CLIENT_ID,
+      sticker,
+    });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.sticker).toEqual(sticker);
+  });
+
+  it('SocketMessageSendWithAttachmentsSchema conserve `sticker` — le chemin nominal (PNG + descripteur)', () => {
+    const result = SocketMessageSendWithAttachmentsSchema.safeParse({
+      conversationId: VALID_MONGO_ID,
+      content: '',
+      attachmentIds: [VALID_MONGO_ID],
+      clientMessageId: VALID_CLIENT_ID,
+      sticker,
+    });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.sticker).toEqual(sticker);
+  });
+
+  it('aucun des deux ne laisse passer un `metadata` brut', () => {
+    const forged = { metadata: { sticker, postReplyTo: { id: 'volé' } } };
+    const text = SocketMessageSendSchema.safeParse({
+      conversationId: VALID_MONGO_ID, content: 'x', clientMessageId: VALID_CLIENT_ID, ...forged,
+    });
+    const media = SocketMessageSendWithAttachmentsSchema.safeParse({
+      conversationId: VALID_MONGO_ID, content: '', attachmentIds: [VALID_MONGO_ID], clientMessageId: VALID_CLIENT_ID, ...forged,
+    });
+    expect(text.success && 'metadata' in text.data).toBe(false);
+    expect(media.success && 'metadata' in media.data).toBe(false);
   });
 });

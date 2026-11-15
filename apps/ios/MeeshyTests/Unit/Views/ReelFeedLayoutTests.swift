@@ -52,4 +52,24 @@ final class ReelFeedLayoutTests: XCTestCase {
     func test_mostCenteredReel_noFrames_returnsNil() {
         XCTAssertNil(mostCenteredReel(frames: [], viewportMinY: 0, viewportMaxY: 800))
     }
+
+    // MARK: - #iPad — la carte se mesure à SA colonne, jamais à la fenêtre
+
+    /// Le rapport largeur / hauteur de la carte : la même loi que `reelCardHeight`, sans largeur à deviner — la carte
+    /// en déduit sa hauteur de SA largeur réelle (colonne d'iPad, fenêtre détachée, Split View).
+    func test_aspectRatio_isTheSameLawAsTheHeight_atAnyWidth() {
+        for width: CGFloat in [343, 420, 700] {
+            let ratio = reelCardAspectRatio(mediaWidth: 1080, mediaHeight: 1920)
+            XCTAssertEqual(width / ratio, reelCardHeight(mediaWidth: 1080, mediaHeight: 1920, cardWidth: width), accuracy: 1)
+        }
+        XCTAssertEqual(reelCardAspectRatio(mediaWidth: nil, mediaHeight: nil), 1 / 1.25, accuracy: 0.0001)
+        XCTAssertEqual(reelCardAspectRatio(mediaWidth: 1920, mediaHeight: 1080), 1 / 0.75, accuracy: 0.0001)
+    }
+
+    /// 11" en paysage : une colonne de ~420 pt recevait une carte de ~1 450 pt de haut, calculée sur la fenêtre.
+    func test_theCard_neverSizesItselfFromTheWindow() throws {
+        let card = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ReelFeedCard.swift"))
+        XCTAssertFalse(card.contains("DeviceLayout.windowSize"))
+        XCTAssertTrue(card.contains(".aspectRatio(reelCardAspectRatio("))
+    }
 }

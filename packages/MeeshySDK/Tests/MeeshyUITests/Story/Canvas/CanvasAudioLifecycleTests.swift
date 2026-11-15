@@ -20,16 +20,13 @@ final class CanvasAudioLifecycleTests: XCTestCase {
         view.frame = CGRect(x: 0, y: 0, width: 412, height: 732)
         view.layoutIfNeeded()
         view.setReaderContext(StoryReaderContext())
-        // `startAudioPlayback()` est gated sur `contentReadyFired` (anti-flash,
-        // ajouté après ces tests) : pour un slide solid-color/vide il fire au
-        // PROCHAIN tick runloop (DispatchQueue.main.async). On pompe le runloop
-        // jusqu'à ce que le gate s'ouvre, ce qui rejoue le `startAudioPlayback()`
-        // différé et flippe `isPlaying` — exactement comme le reader réel démarre
-        // l'audio une fois la slide visuellement prête.
-        let deadline = Date(timeIntervalSinceNow: 2.0)
-        while !view.contentReadyFired && Date() < deadline {
-            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
-        }
+        // `startAudioPlayback()` est gated sur `contentReadyFired` (anti-flash) :
+        // on ouvre le gate par le VRAI `fireContentReadyIfNeeded()`, fond marqué
+        // prêt, qui rejoue le `startAudioPlayback()` différé et flippe `isPlaying`
+        // dans le même tour — exactement comme le reader réel démarre l'audio une
+        // fois la slide visuellement prête. Attendre le tick runloop sous une
+        // échéance de 2 s rougissait sur un runner saturé.
+        view._markBackgroundReadyForTesting()
         return view
     }
 

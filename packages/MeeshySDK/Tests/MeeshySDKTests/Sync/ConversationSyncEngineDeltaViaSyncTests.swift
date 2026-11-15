@@ -1,0 +1,317 @@
+import XCTest
+@testable import MeeshySDK
+
+/// LE DELTA PAR `/sync` (#4172 tranche 2b) — le chemin nominal, sa FUSION par
+/// champs servis, et le repli NOMMÉ. Chaque scénario pilote le moteur entier
+/// (`syncSinceLastCheckpoint`) : ce que le cache contient APRÈS est la seule
+/// vérité opposée.
+final class ConversationSyncEngineDeltaViaSyncTests: XCTestCase {
+
+    // MARK: - Mock scripté (pattern maison)
+
+    final class MockSyncDeltaClient: SyncDeltaClientProviding, @unchecked Sendable {
+        enum Scripte { case muet, inchange, delta(json: String, validateur: String?) }
+        var scripte: Scripte = .muet
+        private(set) var demandes: [SyncDeltaRequest] = []
+        private(set) var creances: [SyncDeltaCredential] = []
+
+        func demandeLeDelta<Row: Decodable & Sendable>(
+            _ demande: SyncDeltaRequest,
+            creance: SyncDeltaCredential,
+            rangeant _: Row.Type
+        ) async -> SyncDeltaOutcome<Row> {
+            demandes.append(demande)
+            creances.append(creance)
+            switch scripte {
+            case .muet: return .muet
+            case .inchange: return .inchange
+            case let .delta(json, validateur):
+                // Le mock DÉCODE l'enveloppe réelle plutôt que de fabriquer des
+                // valeurs : la forme opposée est celle que `routes/sync` sert.
+                let delta = try! MeeshyCoders.decoder(.api).decode(SyncDelta<Row>.self, from: Data(json.utf8))
+                return .delta(delta, validateur: validateur)
+            }
+        }
+    }
+
+    private var mockAPI: MockAPIClient!
+    private var mockSync: MockSyncDeltaClient!
+    private var mockService: MockConversationService!
+    private var engine: ConversationSyncEngine!
+
+    override func setUp() {
+        super.setUp()
+        mockAPI = MockAPIClient()
+        mockAPI.authToken = "jeton-de-test"
+        mockSync = MockSyncDeltaClient()
+        mockService = MockConversationService()
+        engine = ConversationSyncEngine(
+            cache: .shared,
+            conversationService: mockService,
+            messageService: MockMessageService(),
+            messageSocket: MockMessageSocket(),
+            socialSocket: MockSocialSocket(),
+            api: mockAPI,
+            syncDelta: mockSync
+        )
+        // La réconciliation 24 h ne doit pas s'inviter dans ces scénarios.
+        UserDefaults.standard.set(Date(), forKey: "me.meeshy.lastFullReconcileAt")
+    }
+
+    override func tearDown() {
+        mockAPI.reset()
+        super.tearDown()
+    }
+
+    private func semeLeCache() async -> MeeshyConversation {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        var riche = MeeshyConversation(
+            id: "c1", identifier: "equipe-lagos", type: .group,
+            // L'activité SERVIE par `deltaJSON` : ces scénarios parlent de
+            // champs maigres (renommage), pas d'un message reçu — celui-là se
+            // réhydrate par la route riche (#7787, `…RehydratationTests`).
+            lastMessageAt: WireDate.date(from: "2026-09-04T11:59:00.000Z")!, unreadCount: 5
+        )
+        riche.title = "Équipe Lagos"
+        riche.lastMessagePreview = "On se cale à 15 h ?"
+        riche.lastMessageTranslations = ["es": "¿Nos vemos a las 15?"]
+        try? await CacheCoordinator.shared.conversations.save([riche], for: "list")
+        return riche
+    }
+
+    private func deltaJSON(
+        hasGap: Bool = false,
+        hasMore: Bool = false,
+        checkpoint: String = "2026-09-04T12:00:00.000Z"
+    ) -> String {
+        """
+        {
+          "checkpoint": "\(checkpoint)",
+          "checkpointSeq": 42,
+          "hasGap": \(hasGap),
+          "hasMore": \(hasMore),
+          "collections": {
+            "conversations": {
+              "added": [],
+              "modified": [{
+                "id": "c1",
+                "type": "group",
+                "identifier": "equipe-lagos",
+                "title": "Lagos — renommée",
+                "isActive": true,
+                "memberCount": 5,
+                "lastMessageAt": "2026-09-04T11:59:00.000Z",
+                "createdAt": "2026-08-01T10:00:00.000Z",
+                "updatedAt": "2026-09-04T11:59:30.000Z"
+              }],
+              "deleted": []
+            }
+          }
+        }
+        """
+    }
+
+    // MARK: - Le chemin nominal et sa fusion
+
+    func test_deltaViaSync_avanceLesChampsServis_etPreserveCeQueLaLigneMaigreNePortePas() async {
+        _ = await semeLeCache()
+        mockSync.scripte = .delta(json: deltaJSON(), validateur: nil)
+
+        let succes = await engine.syncSinceLastCheckpoint()
+
+        XCTAssertTrue(succes)
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        let c1 = cached.first(where: { $0.id == "c1" })
+        XCTAssertEqual(c1?.title, "Lagos — renommée", "le champ SERVI avance")
+        XCTAssertEqual(c1?.memberCount, 5)
+        XCTAssertEqual(c1?.userState.unreadCount, 5, "le non-lu, que /sync ne sert pas, ne bouge pas")
+        XCTAssertEqual(c1?.lastMessagePreview, "On se cale à 15 h ?", "l'aperçu, non servi, ne s'efface pas")
+        XCTAssertEqual(c1?.lastMessageTranslations?["es"], "¿Nos vemos a las 15?", "sa carte non plus")
+        // Le chemin nominal n'a touché NI /conversations NI quoi que ce soit d'autre.
+        XCTAssertEqual(mockAPI.requestCount, 0, "aucun repli, aucune escalade : /sync a suffi")
+        XCTAssertEqual(mockSync.demandes.first?.collections, ["conversations"])
+        XCTAssertEqual(mockSync.demandes.count, 1)
+    }
+
+    func test_inchange_neToucheNiCacheNiReseau() async {
+        let riche = await semeLeCache()
+        mockSync.scripte = .inchange
+
+        let succes = await engine.syncSinceLastCheckpoint()
+
+        XCTAssertTrue(succes)
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        XCTAssertEqual(cached.first(where: { $0.id == "c1" })?.title, riche.title)
+        XCTAssertEqual(mockAPI.requestCount, 0)
+    }
+
+    // MARK: - Les dates du fil (#6609)
+
+    /// L'oracle est le CONTRAT de la passerelle — `z.string().datetime({ offset: true })` :
+    /// une date-heure ISO 8601 complète, avec ou sans fractions. Il ne passe
+    /// volontairement pas par le helper du SDK qu'il juge.
+    private static func dateHeureDeLaPasserelle(_ chaine: String) -> Date? {
+        let avecFractions = ISO8601DateFormatter()
+        avecFractions.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let sansFractions = ISO8601DateFormatter()
+        sansFractions.formatOptions = [.withInternetDateTime]
+        return avecFractions.date(from: chaine) ?? sansFractions.date(from: chaine)
+    }
+
+    private static func millisecondes(_ date: Date) -> Int64 {
+        Int64((date.timeIntervalSince1970 * 1_000).rounded())
+    }
+
+    func test_deltaViaSync_since_estUneDateHeureCompleteEgaleAuWatermark() async throws {
+        _ = await semeLeCache()
+        let avant = engine.lastSyncTimestamp
+        defer { engine.lastSyncTimestamp = avant }
+        let watermark = Date(timeIntervalSince1970: 1_789_464_863.563)
+        engine.lastSyncTimestamp = watermark
+        mockSync.scripte = .inchange
+
+        _ = await engine.syncSinceLastCheckpoint()
+
+        let since = try XCTUnwrap(mockSync.demandes.first?.since)
+        let relue = try XCTUnwrap(Self.dateHeureDeLaPasserelle(since),
+            "since=\(since) n'est pas une date-heure ISO 8601 : la passerelle rend 400 et le delta retombe sur le plein")
+        XCTAssertEqual(Self.millisecondes(relue), Self.millisecondes(watermark),
+            "since=\(since) doit porter le watermark à la milliseconde")
+    }
+
+    func test_deltaViaSync_checkpointAMillisecondes_avanceLeWatermark() async {
+        _ = await semeLeCache()
+        let avant = engine.lastSyncTimestamp
+        defer { engine.lastSyncTimestamp = avant }
+        engine.lastSyncTimestamp = Date(timeIntervalSince1970: 1_788_000_000)
+        mockSync.scripte = .delta(json: deltaJSON(checkpoint: "2026-09-04T12:00:00.563Z"), validateur: nil)
+
+        _ = await engine.syncSinceLastCheckpoint()
+
+        XCTAssertEqual(Self.millisecondes(engine.lastSyncTimestamp),
+                       Self.millisecondes(Date(timeIntervalSince1970: 1_788_523_200.563)),
+            "le checkpoint servi à millisecondes doit se relire et devenir le watermark")
+    }
+
+    // MARK: - Le repli NOMMÉ
+
+    func test_survolMuet_retombeSurLeCheminHistorique_updatedSince() async {
+        _ = await semeLeCache()
+        mockSync.scripte = .muet
+        mockAPI.stub("/conversations", result: OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true, data: [],
+            pagination: OffsetPagination(total: 0, hasMore: false, limit: 500, offset: 0),
+            error: nil
+        ))
+
+        let succes = await engine.syncSinceLastCheckpoint()
+
+        XCTAssertTrue(succes)
+        XCTAssertEqual(mockAPI.lastRequest?.endpoint, "/conversations",
+                       "le repli est le chemin historique — jamais un échec avalé")
+    }
+
+    func test_creanceAbsente_retombeSansMemeAppelerLeClient() async {
+        _ = await semeLeCache()
+        mockAPI.authToken = nil
+        mockSync.scripte = .delta(json: deltaJSON(), validateur: nil)
+        mockAPI.stub("/conversations", result: OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true, data: [],
+            pagination: OffsetPagination(total: 0, hasMore: false, limit: 500, offset: 0),
+            error: nil
+        ))
+
+        _ = await engine.syncSinceLastCheckpoint()
+
+        XCTAssertTrue(mockSync.demandes.isEmpty, "sans créance, /sync n'est jamais tenté")
+        XCTAssertEqual(mockAPI.lastRequest?.endpoint, "/conversations")
+    }
+
+    /// #10927 — après 24 h d'absence le JWT est échu : `/sync` le présentait
+    /// tel quel, et le démarrage payait un 401 (ou 15 s de silence) avant le
+    /// repli REST, qui, lui, rafraîchit. La créance est le jeton RAFRAÎCHI.
+    func test_deltaViaSync_presenteLeJetonRafraichi_jamaisLeJetonEchu() async {
+        _ = await semeLeCache()
+        mockAPI.authToken = "jeton-echu"
+        mockAPI.freshAuthTokenStub = "jeton-rafraichi"
+        mockSync.scripte = .inchange
+
+        _ = await engine.syncSinceLastCheckpoint()
+
+        XCTAssertEqual(mockSync.creances, [.membre(jeton: "jeton-rafraichi")])
+    }
+
+    // MARK: - L'escalade
+
+    func test_hasGap_escaladeVersFullSync() async {
+        _ = await semeLeCache()
+        mockSync.scripte = .delta(json: deltaJSON(hasGap: true), validateur: nil)
+
+        let succes = await engine.syncSinceLastCheckpoint()
+
+        XCTAssertTrue(succes)
+        // L'escalade passe désormais par la VOIE DOUCE du plein (#4172,
+        // seconde moitié du critère 1) : une demande `/sync` depuis l'ÉPOQUE.
+        // Le mock scripté sert son delta unique (nextCursor absent ⇒ une
+        // page), donc le plein ABOUTIT sans jamais toucher le chemin
+        // historique — c'est la nouvelle vérité que ce témoin fige.
+        XCTAssertTrue(mockSync.demandes.contains { $0.since.hasPrefix("1970-01-01") },
+            "hasGap escalade vers le PLEIN — servi par /sync depuis l'époque, plus par ≈100 requêtes de rang")
+        XCTAssertEqual(mockService.listCallCount, 0,
+            "le chemin historique ne sert qu'en repli nommé — jamais quand /sync répond")
+    }
+
+    // MARK: - Le trou de séquence déclenche la resynchronisation (#4172 critère 3)
+
+    func test_gapDetecte_declencheLeDeltaViaSync() async throws {
+        _ = await semeLeCache()
+        mockSync.scripte = .inchange
+        await engine.startSocketRelay()
+        // L'état du singleton est REMIS avant ET après : un traqueur partagé
+        // qui garde le seq d'un témoin fait mentir le suivant.
+        await SyncSeqTracker.shared.reset()
+        defer { Task { await SyncSeqTracker.shared.reset() } }
+
+        // 1 puis 5 : le saut émet sur `gapDetected`.
+        await SyncSeqTracker.shared.observe(1)
+        await SyncSeqTracker.shared.observe(5)
+
+        // L'abonnement relaie par Task : on attend l'EFFET, jamais une minuterie aveugle.
+        for _ in 0..<50 where mockSync.demandes.isEmpty {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertFalse(mockSync.demandes.isEmpty,
+            "un trou de séquence doit déclencher la resynchronisation /sync — le socket ne rejouera rien")
+    }
+
+    // MARK: - La reconnexion n'est pas absorbée par l'anti-rafale
+
+    /// Le retour au premier plan lance un delta AVANT que le socket ait rejoint
+    /// ses salles ; la reconnexion, une seconde plus tard, tombait dans les 3 s
+    /// d'anti-rafale et rendait « fait » sans rien relire. Ce qui arrivait entre
+    /// les deux restait invisible jusqu'à la synchro suivante.
+    func test_reconnectWithinTheCooldown_stillRunsItsCatchUpDelta() async {
+        _ = await semeLeCache()
+        mockSync.scripte = .inchange
+
+        await engine.syncSinceLastCheckpoint()
+        await engine.syncSinceLastCheckpoint()
+        XCTAssertEqual(mockSync.demandes.count, 1, "deux signaux ordinaires dans la fenêtre : un seul delta")
+
+        engine.requestReconnectCatchUp()
+        await engine.syncSinceLastCheckpoint()
+        XCTAssertEqual(mockSync.demandes.count, 2, "la reconnexion relit, anti-rafale ou non")
+        XCTAssertFalse(engine.hasReconnectCatchUpPending)
+    }
+
+    // MARK: - La fusion, à l'unité
+
+    func test_fusionneLigneDeSync_ligneNeuve_passeTelleQuelle() {
+        let recue = MeeshyConversation(
+            id: "c9", identifier: "neuve", type: .direct,
+            lastMessageAt: Date(), unreadCount: 0
+        )
+        let fusion = ConversationSyncEngine.fusionneLigneDeSync(existante: nil, recue: recue)
+        XCTAssertEqual(fusion.id, "c9")
+    }
+}

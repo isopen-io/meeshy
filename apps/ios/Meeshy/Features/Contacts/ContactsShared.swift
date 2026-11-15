@@ -6,17 +6,21 @@ import MeeshyUI
 
 /// Top-level tabs of the People hub. The three primary surfaces of the
 /// redesigned contact view: the call journal, the dial pad, and the contact
-/// directory (an annuaire filtered by `ContactFilter`).
+/// directory (an annuaire filtered by `ContactFilter`) — plus « Cercles »
+/// (#13938), the circles of proximity: my links by level, what is missing to
+/// climb, my level-up requests.
 enum PeopleTab: String, CaseIterable, Hashable {
     case calls = "Appels"
     case keypad = "Clavier"
     case contacts = "Contacts"
+    case circles = "Cercles"
 
     var icon: String {
         switch self {
         case .calls: return "phone.fill"
         case .keypad: return "circle.grid.3x3.fill"
         case .contacts: return "person.2.fill"
+        case .circles: return "circle.circle.fill"
         }
     }
 
@@ -31,6 +35,8 @@ enum PeopleTab: String, CaseIterable, Hashable {
             return String(localized: "contacts.tab.keypad", defaultValue: "Clavier", bundle: .main)
         case .contacts:
             return String(localized: "contacts.tab.contacts", defaultValue: "Contacts", bundle: .main)
+        case .circles:
+            return String(localized: "contacts.tab.circles", defaultValue: "Cercles", bundle: .main)
         }
     }
 }
@@ -67,6 +73,25 @@ enum ContactFilter: String, CaseIterable {
     case offline = "Hors ligne"
     case phonebook = "Repertoire"
     case affiliates = "Affilies"
+
+    /// Libellé affiché. Le `rawValue` reste la clé stable d'identité et de
+    /// persistance (littéraux FR non accentués) ; ce titre est la SEULE
+    /// surface livrée à l'écran, donc il passe par `String(localized:)`.
+    /// Même doctrine que `PeopleTab.title` et `RequestFilter`.
+    var title: String {
+        switch self {
+        case .all:
+            return String(localized: "contacts.list.filter.all", defaultValue: "Tous", bundle: .main)
+        case .online:
+            return String(localized: "contacts.list.filter.online", defaultValue: "En ligne", bundle: .main)
+        case .offline:
+            return String(localized: "contacts.list.filter.offline", defaultValue: "Hors ligne", bundle: .main)
+        case .phonebook:
+            return String(localized: "contacts.list.filter.phonebook", defaultValue: "Répertoire", bundle: .main)
+        case .affiliates:
+            return String(localized: "contacts.list.filter.affiliates", defaultValue: "Filleuls", bundle: .main)
+        }
+    }
 }
 
 enum RequestFilter: String, CaseIterable {
@@ -80,6 +105,37 @@ enum RequestFilter: String, CaseIterable {
 // single source of truth across the app — Contacts, Conversations, Feed
 // all share the same set of cases. The local re-declaration that used
 // to live here is gone; consumers `import MeeshySDK` to get it.
+
+extension LoadState {
+    /// Projection « liste » d'un état `CacheFirstLoader` : un cache (frais ou
+    /// périmé) vaut chargé, l'erreur porte le message de l'écran. Partagée par
+    /// `BlockedViewModel` et `CallsViewModel`, dont les deux `setLoadState`
+    /// réduisaient le même jeu de cas côte à côte.
+    func collapsedForList(errorMessage: String) -> LoadState {
+        switch self {
+        case .cachedFresh, .cachedStale, .loaded: return .loaded
+        case .loading: return .loading
+        case .offline: return .offline
+        case .error: return .error(errorMessage)
+        case .idle: return .idle
+        }
+    }
+}
+
+// MARK: - Call Direction Label
+
+extension CallDirection {
+    /// Libellé localisé de la direction d'un appel, partagé par la fiche
+    /// détail (`CallDetailSheet.statusLine`) et la ligne du journal
+    /// (`CallJournalRow.rowAccessibilityLabel`).
+    var localizedLabel: String {
+        switch self {
+        case .outgoing: return String(localized: "calls.direction.outgoing", defaultValue: "appel émis", bundle: .main)
+        case .incoming, .unknown: return String(localized: "calls.direction.incoming", defaultValue: "appel reçu", bundle: .main)
+        case .missed: return String(localized: "calls.direction.missed", defaultValue: "appel manqué", bundle: .main)
+        }
+    }
+}
 
 // MARK: - Date Extension
 
@@ -151,20 +207,19 @@ extension View {
 // MARK: - Friend List Aggregation
 
 /// Single source of truth for building the user's friend (contact) list from
-/// their accepted friend requests. The gateway exposes friendships only as
-/// `/friend-requests/received` + `/friend-requests/sent`; a "friend" is any
-/// request with `status == "accepted"`, in either direction. Shared by
-/// `ContactsListViewModel` (the Contacts directory) and
-/// `NewConversationViewModel` (the contact-first conversation picker) so the
-/// definition of "who is a contact" never drifts between the two surfaces.
+/// their accepted friend requests — the requests accepted in EITHER
+/// direction, fetched via `/users/friend-requests?direction=any` so a single
+/// page already covers both. Shared by `ContactsListViewModel` (the Contacts
+/// directory) and `NewConversationViewModel` (the contact-first conversation
+/// picker) so the definition of "who is a contact" never drifts between the
+/// two surfaces.
 enum FriendListAggregator {
-    /// Merges accepted received + sent requests into a deduplicated,
-    /// online-first friend list. `currentUserId` is excluded defensively so a
-    /// self-referencing request can never surface the user as their own
-    /// contact. Pure function — no I/O, trivially testable.
+    /// Merges accepted requests into a deduplicated, online-first friend
+    /// list. `currentUserId` is excluded defensively so a self-referencing
+    /// request can never surface the user as their own contact. Pure
+    /// function — no I/O, trivially testable.
     static func aggregate(
         received: [FriendRequest],
-        sent: [FriendRequest],
         currentUserId: String
     ) -> [FriendRequestUser] {
         var friendMap: [String: FriendRequestUser] = [:]
@@ -174,14 +229,6 @@ enum FriendListAggregator {
                 friendMap[sender.id] = sender
             } else if let receiver = request.receiver, receiver.id != currentUserId {
                 friendMap[receiver.id] = receiver
-            }
-        }
-
-        for request in sent where request.status == "accepted" {
-            if let receiver = request.receiver, receiver.id != currentUserId {
-                friendMap[receiver.id] = receiver
-            } else if let sender = request.sender, sender.id != currentUserId {
-                friendMap[sender.id] = sender
             }
         }
 
@@ -208,15 +255,15 @@ struct ContactsSearchField: View {
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "magnifyingglass")
                 .font(.subheadline.weight(.medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .accessibilityHidden(true)
 
             TextField(placeholder, text: $query)
                 .font(.subheadline)
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
 
@@ -226,15 +273,89 @@ struct ContactsSearchField: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.subheadline)
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(theme.inputBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
+    }
+}
+
+/// La pastille de filtre de l'annuaire — trois onglets la dessinaient chacun
+/// (RequestsTab garde la sienne : paddings et compteur différents).
+struct ContactsFilterChip: View {
+    let title: String
+    let isSelected: Bool
+    /// `true` sur CallsTab : cible 44 pt DANS le label (la zone sensible d'un
+    /// Button est son label) ; la capsule reste visuellement compacte.
+    var hitTarget: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(isSelected ? Color.white : MeeshyColors.indigo500)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.xsPlus)
+                .background(Capsule().fill(isSelected ? MeeshyColors.indigo500 : Color.clear))
+                .overlay(Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo900.opacity(MeeshyOpacity.medium), lineWidth: 1))
+                .frame(minHeight: hitTarget ? 44 : nil)
+                .contentShape(Rectangle())
+        }
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+}
+
+/// Un onglet de la barre supérieure d'un hub — icône, titre, badge optionnel,
+/// soulignement animé. Partagé par `ContactsHubView.tabButton` et
+/// `PeopleDiscoveryView.subTabButton`, qui le peignaient à l'identique.
+/// `Selection` porte le type de la valeur observée par `.animation(value:)`
+/// (`PeopleTab` ou `DiscoveryTab`) : seule cette valeur diffère entre les deux
+/// hôtes.
+struct HubTabButton<Selection: Equatable>: View {
+    let icon: String
+    let title: String
+    let badge: Int
+    let isSelected: Bool
+    let selection: Selection
+    let action: () -> Void
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: MeeshySpacing.xsPlus) {
+                HStack(spacing: MeeshySpacing.xs) {
+                    Image(systemName: icon)
+                        .font(.footnote.weight(.medium))
+
+                    Text(title)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+
+                    if badge > 0 {
+                        Text("\(badge)")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(Color.white)
+                            .frame(minWidth: 16, minHeight: 16)
+                            .background(Circle().fill(MeeshyColors.indigo500))
+                    }
+                }
+                .foregroundColor(isSelected ? MeeshyColors.indigo500 : theme.textMuted)
+
+                Rectangle()
+                    .fill(isSelected ? MeeshyColors.indigo500 : Color.clear)
+                    .frame(height: 2)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selection)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, MeeshySpacing.smPlus)
+        }
     }
 }
 
@@ -263,7 +384,7 @@ struct DirectoryPersonRow: View, Equatable {
         var title: String {
             switch self {
             case .write:
-                return String(localized: "contacts.phonebook.write", defaultValue: "Lui ecrire", bundle: .main)
+                return String(localized: "contacts.phonebook.write", defaultValue: "Lui écrire", bundle: .main)
             case .invite:
                 return String(localized: "contacts.phonebook.invite", defaultValue: "Inviter", bundle: .main)
             }
@@ -276,6 +397,10 @@ struct DirectoryPersonRow: View, Equatable {
     let name: String
     let subtitle: String?
     let avatarURL: String?
+    /// La présence SERVIE de la personne (#10956) — `nil` ⇒ aucun point.
+    var presence: PresenceState? = nil
+    /// Son contour équipé, la référence servie (#10946).
+    var ring: ServedProfileDecorItem? = nil
     let action: Action
     /// Complément lu par VoiceOver après le nom (« sur Meeshy », etc.).
     var accessibilityDetail: String?
@@ -288,30 +413,34 @@ struct DirectoryPersonRow: View, Equatable {
         lhs.name == rhs.name
             && lhs.subtitle == rhs.subtitle
             && lhs.avatarURL == rhs.avatarURL
+            && lhs.presence == rhs.presence
+            && lhs.ring == rhs.ring
             && lhs.action == rhs.action
             && lhs.accessibilityDetail == rhs.accessibilityDetail
             && lhs.isDark == rhs.isDark
     }
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: MeeshySpacing.mdPlus) {
             MeeshyAvatar(
                 name: name,
                 context: .userListItem,
                 accentColor: DynamicColorGenerator.colorForName(name),
-                avatarURL: avatarURL
+                avatarURL: avatarURL,
+                presenceState: presence,
+                ring: ring
             )
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
                         .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .lineLimit(1)
                 }
             }
@@ -319,25 +448,25 @@ struct DirectoryPersonRow: View, Equatable {
             Spacer(minLength: 8)
 
             Button(action: onAction) {
-                HStack(spacing: 5) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: action.icon).font(.caption2.weight(.bold))
                     Text(action.title).font(.caption.weight(.semibold))
                 }
                 .foregroundColor(action.isFilled ? .white : MeeshyColors.indigo500)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.xsPlus)
                 .background(
                     Capsule().fill(action.isFilled ? MeeshyColors.indigo500 : Color.clear)
                 )
                 .overlay(
-                    Capsule().stroke(action.isFilled ? Color.clear : MeeshyColors.indigo500.opacity(0.5), lineWidth: 1)
+                    Capsule().stroke(action.isFilled ? Color.clear : MeeshyColors.indigo500.opacity(MeeshyOpacity.strong), lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)
             .accessibilityLabel(action.title)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.md)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityDetail.map { "\(name), \($0)" } ?? name)
     }

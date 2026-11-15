@@ -23,12 +23,10 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     let onCancel: () -> Void
 
     @ObservedObject private var recorder: Recorder
-    @ObservedObject private var theme: ThemeManager = .shared
+    @ResolvedThemePalette private var theme
 
     @State private var recordedURL: URL?
-    @State private var showEditor = false
     @State private var showPreview = false
-    @State private var wavePhase: CGFloat = 0
     /// Refus micro : le tap sur « Enregistrer » retournait en silence, laissant
     /// l'écran inerte sans la moindre explication. Rendu sous les contrôles.
     @State private var permissionMessage: String?
@@ -55,7 +53,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
 
             VStack(spacing: 0) {
                 header
-                    .padding(.top, 12)
+                    .padding(.top, MeeshySpacing.md)
 
                 Spacer()
 
@@ -65,16 +63,16 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
 
                 if let permissionMessage {
                     Text(permissionMessage)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(MeeshyColors.error)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                        .foregroundStyle(MeeshyColors.error)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-                        .padding(.bottom, 12)
+                        .padding(.horizontal, MeeshySpacing.xxxl)
+                        .padding(.bottom, MeeshySpacing.md)
                         .transition(.opacity)
                 }
 
                 bottomControls
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.bottom, 40)
             }
         }
@@ -118,7 +116,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
         ZStack {
             theme.backgroundPrimary.ignoresSafeArea()
             LinearGradient(
-                colors: [Color(hex: accentColor).opacity(0.06), Color.clear],
+                colors: [Color(hex: accentColor).opacity(MeeshyOpacity.faint), Color.clear],
                 startPoint: .top, endPoint: .bottom
             ).ignoresSafeArea()
         }
@@ -135,44 +133,45 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                 onCancel()
             } label: {
                 ZStack {
-                    Circle().fill(Color.white.opacity(0.07)).frame(width: 38, height: 38)
+                    Circle().fill(Color.white.opacity(MeeshyOpacity.subtle)).frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.75))
+                        .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
+                        .foregroundStyle(.white.opacity(MeeshyOpacity.heavy))
                 }
             }
+            .accessibilityLabel(String(localized: "common.cancel", bundle: .module))
             .buttonStyle(.plain)
 
             Spacer()
 
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: context.contextIcon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .meeshyScaledFont(MeeshyIconSize.xs, weight: .semibold)
                 Text(context.contextLabel)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
             }
-            .foregroundColor(Color(hex: accentColor))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .foregroundStyle(Color(hex: accentColor))
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .background(
-                Capsule().fill(Color(hex: accentColor).opacity(0.12))
+                Capsule().fill(Color(hex: accentColor).opacity(MeeshyOpacity.light))
             )
 
             Spacer()
 
-            Circle().fill(Color.clear).frame(width: 38, height: 38)
+            Circle().fill(Color.clear).frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     // MARK: - Center Content
 
     private var centerContent: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: MeeshySpacing.xxl) {
             if recorder.isRecording {
                 liveWaveform
                     .frame(height: 80)
-                    .padding(.horizontal, 32)
+                    .padding(.horizontal, MeeshySpacing.xxxl)
 
                 durationDisplay
             } else {
@@ -182,7 +181,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     }
 
     private var liveWaveform: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
             ForEach(0..<15, id: \.self) { i in
                 let level: CGFloat = i < recorder.audioLevels.count ? recorder.audioLevels[i] : 0
                 RoundedRectangle(cornerRadius: 3)
@@ -199,46 +198,46 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     }
 
     private var durationDisplay: some View {
-        VStack(spacing: 4) {
-            Text(formatDuration(recorder.duration))
-                .font(.system(size: 48, weight: .light, design: .monospaced))
-                .foregroundColor(.white)
+        VStack(spacing: MeeshySpacing.xs) {
+            Text(MediaFormat.duration(recorder.duration))
+                .meeshyScaledFont(48, weight: .light, design: .monospaced)
+                .foregroundStyle(.white)
                 .contentTransition(.numericText())
 
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Circle()
-                    .fill(Color(hex: "EF4444"))
+                    .fill(MeeshyColors.errorStrong)
                     .frame(width: 8, height: 8)
                     .opacity(recorder.duration.truncatingRemainder(dividingBy: 1) < 0.5 ? 1 : 0.3)
 
                 Text(String(localized: "audio.recorder.recording", defaultValue: "Enregistrement", bundle: .module))
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(Color(hex: "EF4444"))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                    .foregroundStyle(MeeshyColors.errorStrong)
             }
         }
     }
 
     private var idlePrompt: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             ZStack {
                 Circle()
-                    .fill(Color(hex: accentColor).opacity(0.08))
+                    .fill(Color(hex: accentColor).opacity(MeeshyOpacity.subtle))
                     .frame(width: 100, height: 100)
                 Image(systemName: "mic.fill")
                     .font(.system(size: 36, weight: .medium))
-                    .foregroundColor(Color(hex: accentColor).opacity(0.5))
+                    .foregroundStyle(Color(hex: accentColor).opacity(MeeshyOpacity.strong))
             }
 
             Text(String(localized: "audio.recorder.tapToRecord", defaultValue: "Appuyez pour enregistrer", bundle: .module))
-                .font(.system(size: 15, weight: .medium))
-                .foregroundColor(.white.opacity(0.4))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
+                .foregroundStyle(.white.opacity(0.4))
         }
     }
 
     // MARK: - Bottom Controls (always at the bottom)
 
     private var bottomControls: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: MeeshySpacing.xl) {
             if recorder.isRecording {
                 recordingControls
             } else {
@@ -256,13 +255,14 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
             } label: {
                 ZStack {
                     Circle()
-                        .fill(Color.white.opacity(0.08))
+                        .fill(Color.white.opacity(MeeshyOpacity.subtle))
                         .frame(width: 56, height: 56)
                     Image(systemName: "trash.fill")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(Color(hex: "EF4444"))
+                        .font(.system(size: MeeshyIconSize.xl, weight: .medium))
+                        .foregroundStyle(MeeshyColors.errorStrong)
                 }
             }
+            .accessibilityLabel(String(localized: "common.delete", bundle: .module))
             .buttonStyle(.plain)
 
             // Stop (large)
@@ -273,16 +273,16 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: "EF4444"), Color(hex: "DC2626")],
+                                colors: [MeeshyColors.errorStrong, Color(hex: "DC2626")],
                                 startPoint: .topLeading, endPoint: .bottomTrailing
                             )
                         )
                         .frame(width: 80, height: 80)
-                        .shadow(color: Color(hex: "EF4444").opacity(0.4), radius: 16)
+                        .shadow(color: MeeshyColors.errorStrong.opacity(0.4), radius: 16)
 
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                         .fill(Color.white)
-                        .frame(width: 28, height: 28)
+                        .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                 }
                 .scaleEffect(recorder.duration.truncatingRemainder(dividingBy: 1) < 0.5 ? 1.05 : 1.0)
                 .animation(.easeInOut(duration: 0.5), value: recorder.duration)
@@ -297,7 +297,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     }
 
     private var idleControls: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             // Record button (large)
             Button {
                 handleStartRecording()
@@ -306,7 +306,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: accentColor), Color(hex: "4338CA")],
+                                colors: [Color(hex: accentColor), MeeshyColors.indigo700],
                                 startPoint: .topLeading, endPoint: .bottomTrailing
                             )
                         )
@@ -315,14 +315,15 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
 
                     Image(systemName: "mic.fill")
                         .font(.system(size: 30, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                 }
             }
+            .accessibilityLabel(String(localized: "story.voiceRecorder.start", bundle: .module))
             .buttonStyle(.plain)
 
             Text(String(localized: "audio.recorder.record", defaultValue: "Enregistrer", bundle: .module))
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.4))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                .foregroundStyle(.white.opacity(0.4))
         }
     }
 
@@ -358,10 +359,4 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     }
 
     // MARK: - Helpers
-
-    private func formatDuration(_ seconds: TimeInterval) -> String {
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return String(format: "%d:%02d", mins, secs)
-    }
 }

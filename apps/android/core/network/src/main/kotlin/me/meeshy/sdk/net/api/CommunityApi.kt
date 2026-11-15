@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiCommunitySearchResult
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.CommunityMini
 import me.meeshy.sdk.model.CreateCommunityRequest
 import me.meeshy.sdk.model.IdentifierAvailability
 import me.meeshy.sdk.model.InviteMemberRequest
@@ -39,6 +40,10 @@ interface CommunityApi {
         @Query("limit") limit: Int? = null,
         @Query("search") search: String? = null,
     ): ApiResponse<List<ApiCommunity>>
+
+    /** Les communautés créées ou administrées (`role=admin,moderator`) — port de `CommunityLinkService`. */
+    @GET("communities/mine")
+    suspend fun mine(@Query("role") role: String? = null): ApiResponse<List<CommunityMini>>
 
     @GET("communities/search")
     suspend fun search(

@@ -1,0 +1,56 @@
+{
+  "scenes": [
+    {
+      "id": "s1",
+      "objects": [
+        {
+          "anchor": {
+            "t": "free",
+            "x": 0.5,
+            "y": 0.5
+          },
+          "id": "bg",
+          "kind": "media",
+          "payload": {
+            "transform": {
+              "videoFitMode": "fit"
+            }
+          },
+          "plane": "bg",
+          "transform": {
+            "opacity": 1,
+            "rotation": 0,
+            "scale": 1
+          },
+          "z": 0
+        },
+        {
+          "anchor": {
+            "t": "free",
+            "x": 0.5,
+            "y": 0.5
+          },
+          "id": "0B22C31C-6FB5-452A-8E1A-F124999878B4",
+          "kind": "media",
+          "locale": "fr",
+          "payload": {
+            "aspectRatio": 1.5003663003663004,
+            "isBackground": true,
+            "loop": true,
+            "mediaType": "image",
+            "mediaURL": "https://gate.meeshy.me/api/v1/attachments/file/64b000000000000000000001.jpg",
+            "postMediaId": "64b000000000000000000001"
+          },
+          "plane": "content",
+          "transform": {
+            "opacity": 1,
+            "rotation": 0,
+            "scale": 1
+          },
+          "z": 1
+        }
+      ]
+    }
+  ],
+  "v": 3
+}

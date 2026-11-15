@@ -14,10 +14,12 @@ import logging
 import tempfile
 import uuid
 import os
+import re
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, asdict
 from datetime import datetime
+from services.task_privacy import shown
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,32 @@ MIN_PROFILE_AUDIO_DURATION_MS = 10000
 
 # Minimum similarity threshold for profile updates
 UPDATE_SIMILARITY_THRESHOLD = 0.80
+
+ACCEPTED_AUDIO_FORMATS = frozenset({
+    'wav', 'wave', 'x-wav',
+    'mp3', 'mpeg', 'mpga',
+    'ogg', 'oga', 'opus',
+    'webm', 'weba',
+    'm4a', 'x-m4a', 'mp4', 'aac',
+    'flac', 'caf', '3gp', '3gpp', 'amr',
+})
+
+UNSUPPORTED_AUDIO_FORMAT_ERROR = 'Unsupported audio format'
+
+INVALID_USER_ID_ERROR = 'Invalid user_id'
+
+OBJECT_ID_PATTERN = re.compile(r'[0-9a-fA-F]{24}')
+
+
+def is_object_id(user_id: Any) -> bool:
+    return isinstance(user_id, str) and OBJECT_ID_PATTERN.fullmatch(user_id) is not None
+
+
+def normalized_audio_extension(audio_format: Any) -> Optional[str]:
+    if not isinstance(audio_format, str):
+        return None
+    extension = audio_format.lower()
+    return extension if extension in ACCEPTED_AUDIO_FORMATS else None
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -144,6 +172,15 @@ class VoiceProfileHandler:
             'ar': "مرحبا، هذه معاينة لصوتي المستنسخ."
         }
 
+    def _temp_audio_path(self, prefix: str, audio_format: Any) -> Optional[Path]:
+        extension = normalized_audio_extension(audio_format)
+        if extension is None:
+            return None
+        candidate = self.temp_dir / f"{prefix}{uuid.uuid4().hex}.{extension}"
+        if candidate.resolve().parent != self.temp_dir.resolve():
+            return None
+        return candidate
+
     def is_voice_profile_request(self, message_type: str) -> bool:
         """Check if message type is a voice profile request"""
         return message_type in [
@@ -221,6 +258,13 @@ class VoiceProfileHandler:
                 error='user_id is required'
             ).to_dict()
 
+        if not is_object_id(user_id):
+            return VoiceProfileAnalysisResult(
+                success=False,
+                user_id='',
+                error=INVALID_USER_ID_ERROR
+            ).to_dict()
+
         if not self.voice_clone_service:
             return VoiceProfileAnalysisResult(
                 success=False,
@@ -240,6 +284,14 @@ class VoiceProfileHandler:
                     error='audio_data is required'
                 ).to_dict()
 
+            temp_file = self._temp_audio_path('profile_', audio_format)
+            if temp_file is None:
+                return VoiceProfileAnalysisResult(
+                    success=False,
+                    user_id=user_id,
+                    error=UNSUPPORTED_AUDIO_FORMAT_ERROR
+                ).to_dict()
+
             # Decode base64 audio
             import base64
             try:
@@ -251,8 +303,6 @@ class VoiceProfileHandler:
                     error=f'Invalid base64 audio data: {e}'
                 ).to_dict()
 
-            # Save to temp file
-            temp_file = self.temp_dir / f"{user_id}_{uuid.uuid4().hex}.{audio_format}"
             with open(temp_file, 'wb') as f:
                 f.write(audio_bytes)
 
@@ -449,6 +499,13 @@ class VoiceProfileHandler:
                 error='user_id is required'
             ).to_dict()
 
+        if not is_object_id(user_id):
+            return VoiceProfileVerifyResult(
+                success=False,
+                user_id='',
+                error=INVALID_USER_ID_ERROR
+            ).to_dict()
+
         existing_fingerprint = request_data.get('existing_fingerprint')
         if not existing_fingerprint:
             return VoiceProfileVerifyResult(
@@ -469,10 +526,17 @@ class VoiceProfileHandler:
                     error='audio_data is required'
                 ).to_dict()
 
+            temp_file = self._temp_audio_path('verify_', audio_format)
+            if temp_file is None:
+                return VoiceProfileVerifyResult(
+                    success=False,
+                    user_id=user_id,
+                    error=UNSUPPORTED_AUDIO_FORMAT_ERROR
+                ).to_dict()
+
             import base64
             audio_bytes = base64.b64decode(audio_data)
 
-            temp_file = self.temp_dir / f"verify_{user_id}_{uuid.uuid4().hex}.{audio_format}"
             with open(temp_file, 'wb') as f:
                 f.write(audio_bytes)
 
@@ -617,7 +681,7 @@ class VoiceProfileHandler:
                     continue
 
                 # Generate TTS with cloned voice
-                logger.info(f"[VOICE_PREVIEW] Generating TTS for {target_lang}: '{preview_text[:50]}...'")
+                logger.info(f"[VOICE_PREVIEW] Generating TTS for {target_lang}: '{shown(preview_text, 50)}...'")
 
                 # Try to use the TTS service with voice cloning
                 audio_result = None

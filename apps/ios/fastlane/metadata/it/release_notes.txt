@@ -1,0 +1,9 @@
+Meeshy 1.1.8 — chiamate più belle, più chiare, nella tua lingua.
+
+• Chiamate ridisegnate: ogni pulsante è di vetro (Liquid Glass su iOS 26), chi parla si illumina del suo colore e, in orizzontale, fino a quattro persone stanno su una sola riga.
+• Sottotitoli: ogni frase indica la sua lingua e mostra l'originale con un tocco. Dopo la chiamata, il registro si apre sotto la sua bolla nella conversazione.
+• Registrazione e condivisione schermo: tutti vedono chi chiede e chi accetta, la registrazione parte in Audio o in Video, e «Interrompi condivisione» è sempre a portata di mano.
+• Creazione: incolla un'immagine per lo sfondo della scena o un testo per la didascalia; il mirino propone per primi Testo, Sfondo, Galleria e Sticker.
+• Più semplice ovunque: registrazione, impostazioni e gioco dicono ogni cosa una sola volta, e i dettagli aspettano dietro una (i).
+
+E naturalmente, correzioni e più fluidità ovunque.

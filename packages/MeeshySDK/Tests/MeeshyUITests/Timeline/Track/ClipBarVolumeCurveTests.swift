@@ -105,4 +105,11 @@ final class ClipBarVolumeCurveTests: XCTestCase {
     func test_noSourceAtAll_yieldsNothing() {
         XCTAssertTrue(AudioClipBar.resolveSamples(local: [], published: []).isEmpty)
     }
+
+    /// Chaque source se lit à SON échelle (#9886) : la mesure locale (RMS
+    /// absolu) en décibels, le repli publié (normalisé au pic) en linéaire.
+    func test_eachSourceIsReadAtItsOwnScale() {
+        XCTAssertEqual(AudioClipBar.resolveReading(local: [0.4]), .measured)
+        XCTAssertEqual(AudioClipBar.resolveReading(local: []), .published)
+    }
 }

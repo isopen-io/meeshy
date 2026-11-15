@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// SOURCE DE VÉRITÉ UNIQUE des bornes d'une fenêtre de clip sur la timeline.
 ///
@@ -48,7 +49,7 @@ public nonisolated enum ClipWindowResolver {
     /// Plafond absolu de la timeline. Portée auparavant par
     /// `TimelineViewModel.setSlideDuration`, supprimée avec le pin manuel :
     /// c'est désormais le seul rempart, `recomputeSlideDuration()` n'en a aucun.
-    public static let maximumEnd: Float = 600
+    public static let maximumEnd: Float = StoryComposerLimits.maxStoryDurationSeconds
 
     public static func resolve(_ edit: Edit, from window: Window) -> Window {
         guard window.start.isFinite, window.duration.isFinite,

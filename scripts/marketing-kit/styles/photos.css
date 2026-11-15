@@ -1,0 +1,48 @@
+/* ─── Photos réelles des scènes (#8825) ─── */
+
+/* Grille d'un message (BubbleStandardLayout.visualMediaGrid) : 300 × 240 pour une photo,
+   300 × 180 pour deux, écart de 2 pt, coins de 16 pt sur fond noir. */
+.media-grid { position: relative; width: 300px; display: grid; gap: 2px; border-radius: 16px; overflow: hidden; background: #000; box-shadow: 0 8px 22px color-mix(in srgb, black 22%, transparent); }
+.media-grid.n1 { height: 240px; grid-template-columns: 1fr; }
+.media-grid.n2 { height: 180px; grid-template-columns: 1fr 1fr; }
+.media-cell { position: relative; overflow: hidden; }
+.media-cell .photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.media-footer {
+  position: absolute;
+  bottom: 8px;
+  inset-inline-end: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: color-mix(in srgb, black 42%, transparent);
+  backdrop-filter: blur(8px);
+}
+/* La grille et le texte d'un même message : 4 pt d'écart, comme le VStack de l'app. */
+.msg-row.media + .msg-row { margin-top: -2px; }
+
+/* Vocal REÇU (AudioPlayerView) : fond neutre, l'accent de la conversation sur le bouton, les
+   barres jouées et la piste active. */
+.bubble.theirs.audio { color: var(--kit-ink); }
+.bubble.theirs .audio-play { background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #fff)); color: #fff; box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 35%, transparent); }
+.bubble.theirs .audio-wave i { background: color-mix(in srgb, var(--kit-ink) 16%, transparent); }
+.bubble.theirs .audio-wave i.on { background: var(--accent); }
+.bubble.theirs .audio-times { color: var(--kit-muted); }
+.bubble.theirs .audio-chips span { background: color-mix(in srgb, var(--kit-ink) 8%, transparent); color: var(--kit-ink-2); }
+.bubble.theirs .audio-chips span.on { background: var(--accent); color: #fff; }
+.bubble.theirs .audio-transcript { background: color-mix(in srgb, var(--accent) 13%, transparent); }
+.bubble.theirs .audio-lang { color: var(--kit-ink-2); background: color-mix(in srgb, var(--kit-ink) 7%, transparent); }
+.bubble.theirs .audio-lang.active { background: var(--accent); color: #fff; box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 35%, transparent); }
+.bubble.theirs .audio-footer { justify-content: space-between; align-items: center; }
+.bubble.theirs .audio-footer .pill { color: var(--kit-muted); background: transparent; padding-inline: 0; }
+.audio-sender { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 650; color: var(--kit-ink); }
+
+/* Fil, story, appel : la photo remplit son cadre. */
+.post-media .photo,
+.story .story-photo,
+.appel .call-photo { width: 100%; height: 100%; object-fit: cover; display: block; }
+.appel.amour .call-shade { background: linear-gradient(180deg, color-mix(in srgb, black 55%, transparent) 0%, transparent 22%, transparent 42%, color-mix(in srgb, black 80%, transparent) 100%); }

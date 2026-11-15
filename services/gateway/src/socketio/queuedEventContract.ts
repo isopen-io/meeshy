@@ -43,6 +43,7 @@ export const DRAINED_EVENT = {
   new: SERVER_EVENTS.MESSAGE_NEW,
   edited: SERVER_EVENTS.MESSAGE_EDITED,
   deleted: SERVER_EVENTS.MESSAGE_DELETED,
+  expired: SERVER_EVENTS.MESSAGE_EXPIRED,
   'reaction-added': SERVER_EVENTS.REACTION_ADDED,
   'reaction-removed': SERVER_EVENTS.REACTION_REMOVED,
   'attachment-reaction-added': SERVER_EVENTS.ATTACHMENT_REACTION_ADDED,
@@ -52,7 +53,30 @@ export const DRAINED_EVENT = {
   pinned: SERVER_EVENTS.MESSAGE_PINNED,
   unpinned: SERVER_EVENTS.MESSAGE_UNPINNED,
   'link-message': SERVER_EVENTS.LINK_MESSAGE_NEW,
+  starred: SERVER_EVENTS.MESSAGE_STARRED,
+  'hidden-for-me': SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME,
+  'restored-for-me': SERVER_EVENTS.MESSAGE_RESTORED_FOR_ME,
 } as const satisfies Record<QueuedEventType, ServerEventName>;
+
+/**
+ * Les MARQUES PERSONNELLES du lecteur (#16688) — les trois familles de cette
+ * file dont l'ACTEUR est le destinataire.
+ *
+ * Elles s'enfilent par `enqueuePersonalMessageMark`, jamais par
+ * `enqueueForOfflineParticipants` : ce dernier décide de l'audience par
+ * `connectedUsers.has(queueKey)`, et cette question n'a pas de réponse utile
+ * ici. La clé de file est le COMPTE (`p.userId ?? p.id`, indexé pour TOUTES les
+ * sockets du compte par `AuthHandler._registerUser`) ; l'appareil qui pose
+ * l'étoile en fournit une. Le test répondait donc toujours « joignable », et
+ * l'appareil resté éteint du même compte n'a jamais rien reçu.
+ *
+ * Le `satisfies` les rattache à l'union : une famille retirée de l'union ne
+ * compile plus ici, et le balayage de `personal-message-mark-offline-queue`
+ * exige en retour que chacune ait un producteur d'entrées.
+ */
+export const PERSONAL_MARK_EVENT_TYPES = ['starred', 'hidden-for-me', 'restored-for-me'] as const satisfies readonly QueuedEventType[];
+
+export type PersonalMarkEventType = (typeof PERSONAL_MARK_EVENT_TYPES)[number];
 
 /**
  * L'événement serveur qu'une entrée de file rejoue. L'absence d'`eventType`
@@ -132,7 +156,7 @@ export function isDeliverableQueuedPayload(payload: unknown): payload is Record<
  * l'AGRÈGE — un seul `conversationId: { in: [...] }` porte la totalité du lot —
  * pour deux requêtes qui décident du sort de tous :
  *
- * 1. `_dropEndedMemberships`, le gate d'AUTORISATION du rejeu ;
+ * 1. `authorizeDrainedEntries`, le gate d'AUTORISATION du rejeu ;
  * 2. la résolution des participants qui porte les accusés de remise.
  *
  * **Le plancher est la forme ObjectId, pas « une chaîne ».** Mesuré contre le
@@ -146,7 +170,7 @@ export function isDeliverableQueuedPayload(payload: unknown): payload is Record<
  * traduit un identifiant lisible en ObjectId).
  *
  * Ce que la garde vaut, et c'est le point : le `catch` de
- * `_dropEndedMemberships` échoue OUVERT **par décision** — « une absence de
+ * `authorizeDrainedEntries` échoue OUVERT **par décision** — « une absence de
  * réponse n'autorise rien à conclure », écrite pour une base indisponible. Il ne
  * peut pas distinguer « la base n'a pas répondu » de « nous ne lui avons jamais
  * posé de question valide », et la seconde rend le gate d'autorisation
@@ -187,8 +211,83 @@ export type QueuedPayloadFor<T extends QueuedEventType> = Anonymized<
  * ne doivent pas être forcés de l'écrire pour rester typés.
  */
 export type QueuedEventVariant =
-  | { eventType?: undefined; payload: QueuedPayloadFor<'new'> }
-  | { [T in QueuedEventType]: { eventType: T; payload: QueuedPayloadFor<T> } }[QueuedEventType];
+  | { eventType?: undefined; payload: QueuedPayloadFor<'new'>; readonly atRest: boolean }
+  | QueuedVariantFor<QueuedEventType>;
+
+/**
+ * #12822 — les familles dont la charge porte le TEXTE d'un message, ou ce qui
+ * voyage avec lui (traductions, transcription, noms de fichiers).
+ *
+ * Leur producteur DÉCLARE le régime de la conversation (`atRest`) : `true`
+ * scelle l'entrée avant Redis (`RedisDeliveryQueue`, 48 h, AOF), `false` la
+ * laisse telle quelle. Le champ est REQUIS au type, pour que le compilateur
+ * prouve qu'aucun producteur n'a oublié la question — l'oubli rangeait le clair
+ * d'une conversation chiffrée au repos (le lien de partage, troisième audit).
+ * Les autres familles (suppression, expiration, épingle, réactions) ne portent
+ * que des identifiants et un emoji : elles ne déclarent rien.
+ */
+export type TextBearingQueuedEvent = 'new' | 'edited' | 'translation' | 'link-message' | 'attachment-updated';
+
+type AtRestDeclarationFor<K extends QueuedEventType> = K extends TextBearingQueuedEvent
+  ? { readonly atRest: boolean }
+  : { readonly atRest?: never };
+
+/**
+ * La forme RUNTIME de `TextBearingQueuedEvent`, et le `Record` est ce qui
+ * interdit à la liste de dériver du type : ajouter un membre à l'union sans
+ * l'ajouter ici ne compile plus. Une seconde énumération écrite à la main
+ * aurait divergé au premier `eventType` neuf — c'est exactement la jumelle que
+ * ce fichier existe pour empêcher.
+ */
+const TEXT_BEARING_TABLE: Record<TextBearingQueuedEvent, true> = {
+  new: true,
+  edited: true,
+  translation: true,
+  'link-message': true,
+  'attachment-updated': true,
+};
+
+/**
+ * Le même ensemble en `Set`, parce que le test d'appartenance porte sur une
+ * valeur venue de Redis : `'constructor' in TEXT_BEARING_TABLE` est VRAI, et
+ * `eventType` sort d'un `JSON.parse(...) as QueuedMessagePayload` — une
+ * AFFIRMATION, jamais une vérification. Le sens de l'erreur serait ici
+ * inoffensif (une entrée de trop est GARDÉE, donc relue), mais une garde ne se
+ * repose pas sur la direction de sa propre faille.
+ */
+const TEXT_BEARING = new Set<string>(Object.keys(TEXT_BEARING_TABLE));
+
+/**
+ * Cette entrée transporte-t-elle le TEXTE du message ?
+ *
+ * C'est la question qui CADRE la garde de vivacité du rejeu (#16685), et le
+ * cadrage est la moitié difficile du lot : une garde de vivacité posée sur
+ * TOUTES les entrées serait un défaut PIRE que celui qu'elle corrige.
+ * `'deleted'` et `'expired'` ont pour UNIQUE objet d'annoncer la mort du
+ * message — les refuser PARCE QUE le message est mort laisserait le client
+ * afficher indéfiniment un message détruit, et la garde aurait l'air de
+ * marcher.
+ *
+ * | famille | la charge porte | la garde de vivacité |
+ * |---|---|---|
+ * | `new` `edited` `translation` `link-message` `attachment-updated` | le TEXTE | **s'applique** |
+ * | `deleted` `expired` | la MORT du message | **doit passer** |
+ * | `pinned` `unpinned` + les quatre réactions | des identifiants, un emoji | rien à garder |
+ *
+ * L'ensemble n'est pas choisi pour ce lot : c'est `TextBearingQueuedEvent`
+ * (#12822), déjà déclaré pour décider qui doit SCELLER sa charge avant Redis.
+ * Les deux questions sont distinctes — « faut-il chiffrer au repos ? » et
+ * « faut-il revérifier que le message existe encore ? » — et ont la même
+ * réponse pour une raison qui n'est pas une coïncidence : **toutes deux portent
+ * sur la présence d'un secret dans la charge.**
+ *
+ * L'absence d'`eventType` vaut `'new'`, la forme héritée — donc GARDÉE. C'est
+ * le bon défaut : une entrée dont on ne sait pas ce qu'elle porte est traitée
+ * comme si elle portait le secret.
+ */
+export function carriesMessageText(eventType: QueuedMessagePayload['eventType']): boolean {
+  return TEXT_BEARING.has(eventType ?? 'new');
+}
 
 /**
  * Le sous-ensemble corrélé des variantes, pour les relais qui n'en portent que
@@ -201,7 +300,7 @@ export type QueuedEventVariant =
  * bien même la file l'aurait exigé.
  */
 export type QueuedVariantFor<T extends QueuedEventType> = {
-  [K in T]: { eventType: K; payload: QueuedPayloadFor<K> };
+  [K in T]: { eventType: K; payload: QueuedPayloadFor<K> } & AtRestDeclarationFor<K>;
 }[T];
 
 /**
@@ -215,10 +314,11 @@ export type QueuedVariantFor<T extends QueuedEventType> = {
  * d'appel ; c'est seulement leur RÉUNION que le compilateur ne sait pas nommer.
  *
  * À n'employer que là où le couple arrive déjà séparé (une signature héritée à
- * plusieurs paramètres). Quand l'appelant tient une union DISCRIMINÉE, le
+ * plusieurs paramètres). Fermée aux familles qui portent du texte (#12822) :
+ * l'effacement y forgerait une variante sans sa déclaration `atRest`. Quand l'appelant tient une union DISCRIMINÉE, le
  * `switch` reste préférable : il corrèle sans rien effacer.
  */
-export function queuedVariantOf<T extends QueuedEventType>(
+export function queuedVariantOf<T extends Exclude<QueuedEventType, TextBearingQueuedEvent>>(
   eventType: T,
   payload: QueuedPayloadFor<T>,
 ): QueuedVariantFor<T> {
@@ -277,10 +377,28 @@ type _EditedMapsToMessageEdited = AssertQueue<
   Same<(typeof DRAINED_EVENT)['edited'], typeof SERVER_EVENTS.MESSAGE_EDITED>
 >;
 
+/**
+ * `'deleted'` et `'expired'` portent la MÊME charge — `{messageId,
+ * conversationId}` des deux côtés — précisément la condition qui rend une
+ * inversion silencieuse (§ commentaire des paires `added`/`removed`
+ * ci-dessus). L'ancre porte donc sur le NOM, pas sur la forme : un rejeu
+ * d'expiration sous `message:deleted` ferait perdre la distinction que
+ * `MESSAGE_EXPIRED` existe pour porter, sans qu'aucun test de forme ne le
+ * voie.
+ */
+type _DeletedMapsToMessageDeleted = AssertQueue<
+  Same<(typeof DRAINED_EVENT)['deleted'], typeof SERVER_EVENTS.MESSAGE_DELETED>
+>;
+type _ExpiredMapsToMessageExpired = AssertQueue<
+  Same<(typeof DRAINED_EVENT)['expired'], typeof SERVER_EVENTS.MESSAGE_EXPIRED>
+>;
+
 export type QueuedEventContractRatchet = [
   _ReactionsMapToTheirOwnEvent,
   _ReactionRemovalMapsToItsOwnEvent,
   _LinkMessageStoresTheEnvelope,
   _NewMapsToMessageNew,
   _EditedMapsToMessageEdited,
+  _DeletedMapsToMessageDeleted,
+  _ExpiredMapsToMessageExpired,
 ];

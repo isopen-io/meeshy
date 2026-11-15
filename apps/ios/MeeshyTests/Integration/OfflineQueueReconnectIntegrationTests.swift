@@ -156,7 +156,7 @@ final class OfflineQueueReconnectIntegrationTests: XCTestCase {
 
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let store = MessageStore(conversationId: "conv-cycle", persistence: persistence)
-        store.startObserving(dbPool: pool)
+        store.startObserving()
 
         let localId = "ofq_cycle_001"
         let clientMsgId = "cid_cycle_001"

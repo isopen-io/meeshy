@@ -5,12 +5,17 @@ import MeeshySDK
 
 public struct ConversationSettingsView: View {
     @StateObject private var viewModel: ConversationSettingsViewModel
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.meeshyPresenceResolver) private var presenceResolver
 
     @State private var avatarItem: PhotosPickerItem? = nil
     @State private var bannerItem: PhotosPickerItem? = nil
     @State private var showDeleteForMeAlert = false
+    /// Les gestes rares (supprimer, quitter) sont rangés derrière « Plus » (épure #18078, règle 6).
+    @State private var showMoreActions = false
+    @State private var openNoteID: String?
 
     public var onUpdated: ((MeeshyConversation) -> Void)? = nil
     public var onLeft: (() -> Void)? = nil
@@ -37,7 +42,7 @@ public struct ConversationSettingsView: View {
                 settingsHeader
 
                 ScrollView {
-                    VStack(spacing: 20) {
+                    VStack(spacing: MeeshySpacing.xl) {
                         visualSection
                         editSection
 
@@ -49,8 +54,8 @@ public struct ConversationSettingsView: View {
 
                         dangerSection
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.vertical, MeeshySpacing.lg)
                 }
             }
         }
@@ -69,7 +74,7 @@ public struct ConversationSettingsView: View {
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
         } message: {
-            Text(String(localized: "conversation.settings.leave.confirm.message", defaultValue: "Vous ne recevrez plus de messages. Votre historique restera lisible.", bundle: .module))
+            Text(String(localized: "conversation.settings.leave.confirm.message", defaultValue: "Vous ne recevrez plus de messages ; votre historique reste lisible.", bundle: .module))
         }
         .alert(String(localized: "conversation.settings.deleteForMe.confirm.title", defaultValue: "Supprimer pour moi ?", bundle: .module), isPresented: $showDeleteForMeAlert) {
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
@@ -83,7 +88,7 @@ public struct ConversationSettingsView: View {
                 }
             }
         } message: {
-            Text(String(localized: "conversation.settings.deleteForMe.confirm.message", defaultValue: "Cette conversation disparaitra definitivement de votre liste. Les autres membres ne seront pas affectes.", bundle: .module))
+            Text(String(localized: "conversation.settings.deleteForMe.confirm.message", defaultValue: "Retirée définitivement de votre liste ; les autres membres ne sont pas affectés.", bundle: .module))
         }
         .alert(String(localized: "conversation.settings.delete.confirm.title", defaultValue: "Supprimer la conversation", bundle: .module), isPresented: $viewModel.showDeleteConversation) {
             Button(String(localized: "conversation.settings.delete.button", defaultValue: "Supprimer", bundle: .module), role: .destructive) {
@@ -95,12 +100,12 @@ public struct ConversationSettingsView: View {
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
         } message: {
-            Text(String(localized: "conversation.settings.delete.confirm.message", defaultValue: "Cette conversation sera fermee pour tous les membres. Plus personne ne pourra ecrire.", bundle: .module))
+            Text(String(localized: "conversation.settings.delete.confirm.message", defaultValue: "Cette conversation sera fermée pour tous les membres. Plus personne ne pourra écrire.", bundle: .module))
         }
-        .entityImagePickerFlow(pickerItem: $avatarItem, context: .avatar, accentColor: viewModel.accentColor, maxSizeKB: 500) { data in
+        .entityImagePickerFlow(pickerItem: $avatarItem, format: .avatar, accentColor: viewModel.accentColor, maxSizeKB: 500) { data in
             Task { await viewModel.uploadCompressedAvatar(data) }
         }
-        .entityImagePickerFlow(pickerItem: $bannerItem, context: .banner, accentColor: viewModel.accentColor, maxSizeKB: 800) { data in
+        .entityImagePickerFlow(pickerItem: $bannerItem, format: .banner, accentColor: viewModel.accentColor, maxSizeKB: 800) { data in
             Task { await viewModel.uploadCompressedBanner(data) }
         }
         .task {
@@ -114,13 +119,13 @@ public struct ConversationSettingsView: View {
         HStack {
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module)) { dismiss() }
                 .font(.system(size: 16, design: .rounded))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
 
             Spacer()
 
-            Text(String(localized: "conversation.settings.title", defaultValue: "Reglages", bundle: .module))
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+            Text(String(localized: "conversation.settings.title", defaultValue: "Réglages", bundle: .module))
+                .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold, design: .rounded))
+                .foregroundStyle(theme.textPrimary)
 
             Spacer()
 
@@ -138,15 +143,15 @@ public struct ConversationSettingsView: View {
                         .scaleEffect(0.8)
                         .tint(MeeshyColors.indigo500)
                 } else {
-                    Text(String(localized: "common.save", defaultValue: "Sauvegarder", bundle: .module))
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .foregroundColor(viewModel.hasChanges ? MeeshyColors.indigo500 : theme.textMuted)
+                    Text(String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold, design: .rounded))
+                        .foregroundStyle(viewModel.hasChanges ? MeeshyColors.indigo500 : theme.textMuted)
                 }
             }
             .disabled(!viewModel.hasChanges || viewModel.isSaving)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.mdPlus)
         .background(theme.backgroundPrimary)
         .overlay(alignment: .bottom) {
             Rectangle()
@@ -169,21 +174,21 @@ public struct ConversationSettingsView: View {
             ZStack(alignment: .bottomTrailing) {
                 bannerView
                     .frame(height: 120)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
 
                 PhotosPicker(selection: $bannerItem, matching: .images) {
                     Label(bannerEditLabel, systemImage: "photo.fill")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(Capsule().fill(Color.black.opacity(0.5)))
                 }
                 .disabled(viewModel.isUploadingBanner)
-                .padding(8)
+                .padding(MeeshySpacing.sm)
 
                 if viewModel.isUploadingBanner {
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .fill(Color.black.opacity(0.4))
                         .frame(height: 120)
                         .overlay(ProgressView().tint(.white))
@@ -205,7 +210,7 @@ public struct ConversationSettingsView: View {
 
                 PhotosPicker(selection: $avatarItem, matching: .images) {
                     Image(systemName: "pencil.circle.fill")
-                        .font(.system(size: 28))
+                        .font(.system(size: MeeshyIconSize.xxxl))
                         .foregroundColor(avatarPencilColor)
                         .background(Circle().fill(avatarPencilBackground))
                 }
@@ -223,9 +228,9 @@ public struct ConversationSettingsView: View {
             .padding(.bottom, -40)
 
             Text(viewModel.title.isEmpty ? viewModel.conversationName : viewModel.title)
-                .font(.system(size: 18, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
-                .padding(.top, 8)
+                .meeshyScaledFont(MeeshyFont.subtitleSize, weight: .bold, design: .rounded)
+                .foregroundStyle(theme.textPrimary)
+                .padding(.top, MeeshySpacing.sm)
         }
     }
 
@@ -256,20 +261,20 @@ public struct ConversationSettingsView: View {
     // MARK: - Edit Section
 
     private var editSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             sectionHeader(String(localized: "conversation.settings.section.info", defaultValue: "Infos", bundle: .module))
 
-            VStack(spacing: 12) {
+            VStack(spacing: MeeshySpacing.md) {
                 settingsField(label: String(localized: "conversation.settings.field.title", defaultValue: "Titre", bundle: .module)) {
                     TextField(String(localized: "conversation.settings.field.title.placeholder", defaultValue: "Titre de la conversation", bundle: .module), text: $viewModel.title)
-                        .font(.system(size: 16, design: .rounded))
-                        .foregroundColor(theme.textPrimary)
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, design: .rounded))
+                        .foregroundStyle(theme.textPrimary)
                 }
 
                 settingsField(label: String(localized: "conversation.settings.field.description", defaultValue: "Description", bundle: .module)) {
                     TextField(String(localized: "conversation.settings.field.description", defaultValue: "Description", bundle: .module), text: $viewModel.descriptionText, axis: .vertical)
-                        .font(.system(size: 16, design: .rounded))
-                        .foregroundColor(theme.textPrimary)
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, design: .rounded))
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(3...6)
                 }
             }
@@ -279,15 +284,15 @@ public struct ConversationSettingsView: View {
     // MARK: - Permissions Section
 
     private var permissionsSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             sectionHeader(String(localized: "conversation.settings.section.permissions", defaultValue: "Permissions", bundle: .module))
 
-            VStack(spacing: 12) {
-                settingsField(label: String(localized: "conversation.settings.permissions.writeRole", defaultValue: "Qui peut ecrire", bundle: .module)) {
+            VStack(spacing: MeeshySpacing.md) {
+                settingsField(label: String(localized: "conversation.settings.permissions.writeRole", defaultValue: "Qui peut écrire", bundle: .module)) {
                     Picker("", selection: $viewModel.defaultWriteRole) {
                         Text(String(localized: "conversation.settings.permissions.writeRole.everyone", defaultValue: "Tout le monde", bundle: .module)).tag("everyone")
                         Text(String(localized: "conversation.settings.permissions.writeRole.members", defaultValue: "Membres", bundle: .module)).tag("member")
-                        Text(String(localized: "conversation.settings.permissions.writeRole.moderators", defaultValue: "Moderateurs", bundle: .module)).tag("moderator")
+                        Text(String(localized: "conversation.settings.permissions.writeRole.moderators", defaultValue: "Modérateurs", bundle: .module)).tag("moderator")
                         Text(String(localized: "conversation.settings.permissions.writeRole.admins", defaultValue: "Admins", bundle: .module)).tag("admin")
                     }
                     .pickerStyle(.segmented)
@@ -295,26 +300,31 @@ public struct ConversationSettingsView: View {
                 }
 
                 HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(String(localized: "conversation.settings.permissions.announcement", defaultValue: "Mode annonce", bundle: .module))
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
-                            .foregroundColor(theme.textPrimary)
-                        Text(String(localized: "conversation.settings.permissions.announcement.subtitle", defaultValue: "Seuls les admins peuvent ecrire", bundle: .module))
-                            .font(.system(size: 11, design: .rounded))
-                            .foregroundColor(theme.textMuted)
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                        MeeshyInfoNoted(note: ConversationSettingsNotes.announcement, openNoteID: $openNoteID, tint: theme.textMuted) {
+                            Text(String(localized: "conversation.settings.permissions.announcement", defaultValue: "Mode annonce", bundle: .module))
+                                .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium, design: .rounded)
+                                .foregroundStyle(theme.textPrimary)
+                        }
+                        Text(String(localized: "conversation.settings.permissions.announcement.rule", defaultValue: "Seuls les admins écrivent.", bundle: .module))
+                            .meeshyScaledFont(MeeshyFont.footnoteSize, weight: .regular, design: .rounded)
+                            .foregroundStyle(theme.textMuted)
                     }
                     Spacer()
-                    Toggle("", isOn: $viewModel.isAnnouncementChannel)
+                    Toggle(String(localized: "conversation.settings.permissions.announcement", defaultValue: "Mode annonce", bundle: .module), isOn: $viewModel.isAnnouncementChannel)
                         .labelsHidden()
                         .tint(Color(hex: viewModel.accentColor))
                 }
-                .padding(12)
+                .padding(MeeshySpacing.md)
                 .background(theme.backgroundSecondary.opacity(0.5))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
 
-                settingsField(label: String(localized: "conversation.settings.permissions.slowMode", defaultValue: "Mode lent", bundle: .module)) {
+                settingsField(
+                    label: String(localized: "conversation.settings.permissions.slowMode", defaultValue: "Mode lent", bundle: .module),
+                    note: ConversationSettingsNotes.slowMode
+                ) {
                     Picker("", selection: $viewModel.slowModeSeconds) {
-                        Text(String(localized: "conversation.settings.permissions.slowMode.off", defaultValue: "Desactive", bundle: .module)).tag(0)
+                        Text(String(localized: "conversation.settings.permissions.slowMode.off", defaultValue: "Désactivé", bundle: .module)).tag(0)
                         Text("10s").tag(10)
                         Text("30s").tag(30)
                         Text(String(localized: "conversation.settings.slowmode.1min", defaultValue: "1 min", bundle: .module)).tag(60)
@@ -324,22 +334,22 @@ public struct ConversationSettingsView: View {
                 }
 
                 HStack {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(String(localized: "conversation.settings.permissions.autoTranslate", defaultValue: "Traduction automatique", bundle: .module))
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
-                            .foregroundColor(theme.textPrimary)
-                        Text(String(localized: "conversation.settings.permissions.autoTranslate.subtitle", defaultValue: "Les messages sont traduits automatiquement", bundle: .module))
-                            .font(.system(size: 11, design: .rounded))
-                            .foregroundColor(theme.textMuted)
+                            .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium, design: .rounded)
+                            .foregroundStyle(theme.textPrimary)
+                        Text(String(localized: "conversation.settings.permissions.autoTranslate.subtitle", defaultValue: "Chacun lit les messages dans sa langue.", bundle: .module))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .rounded))
+                            .foregroundStyle(theme.textMuted)
                     }
                     Spacer()
                     Toggle("", isOn: $viewModel.autoTranslateEnabled)
                         .labelsHidden()
                         .tint(Color(hex: viewModel.accentColor))
                 }
-                .padding(12)
+                .padding(MeeshySpacing.md)
                 .background(theme.backgroundSecondary.opacity(0.5))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
             }
         }
     }
@@ -347,40 +357,41 @@ public struct ConversationSettingsView: View {
     // MARK: - Members Section
 
     private var membersSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             sectionHeader(String(format: String(localized: "conversation.settings.section.members", defaultValue: "Membres (%d)", bundle: .module), viewModel.totalMemberCount))
 
             VStack(spacing: 0) {
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     Image(systemName: "magnifyingglass")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .font(.system(size: MeeshyIconSize.xs, weight: .medium))
+                        .foregroundStyle(theme.textMuted)
                     TextField(String(localized: "conversation.settings.members.search.placeholder", defaultValue: "Rechercher un membre...", bundle: .module), text: $viewModel.memberSearchText)
-                        .font(.system(size: 14, design: .rounded))
-                        .foregroundColor(theme.textPrimary)
+                        .meeshyScaledFont(MeeshyFont.labelSize, design: .rounded)
+                        .foregroundStyle(theme.textPrimary)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
                     if !viewModel.memberSearchText.isEmpty {
                         Button { viewModel.memberSearchText = "" } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 14))
-                                .foregroundColor(theme.textMuted)
+                                .font(.system(size: MeeshyIconSize.sm))
+                                .foregroundStyle(theme.textMuted)
                         }
+                        .accessibilityLabel(String(localized: "common.clear_input", bundle: .module))
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.smPlus)
 
                 if viewModel.isLoadingMembers && viewModel.participants.isEmpty {
                     ProgressView()
-                        .padding(.vertical, 20)
+                        .padding(.vertical, MeeshySpacing.xl)
                 } else {
                     let filtered = filteredMembers
                     if filtered.isEmpty {
-                        Text(String(localized: "conversation.settings.members.empty", defaultValue: "Aucun membre trouve", bundle: .module))
-                            .font(.system(size: 13, weight: .medium, design: .rounded))
-                            .foregroundColor(theme.textMuted)
-                            .padding(.vertical, 20)
+                        Text(String(localized: "conversation.settings.members.empty", defaultValue: "Aucun membre trouvé", bundle: .module))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium, design: .rounded))
+                            .foregroundStyle(theme.textMuted)
+                            .padding(.vertical, MeeshySpacing.xl)
                     } else {
                         ForEach(Array(filtered.enumerated()), id: \.element.id) { index, participant in
                             memberRow(participant)
@@ -392,7 +403,7 @@ public struct ConversationSettingsView: View {
                 }
             }
             .background(theme.backgroundSecondary.opacity(0.5))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
         }
     }
 
@@ -406,20 +417,23 @@ public struct ConversationSettingsView: View {
         let displayName = participant.name
         let role = MemberRole(rawValue: participant.effectiveRole) ?? .member
 
-        return HStack(spacing: 12) {
+        return HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
                 name: displayName,
                 context: .userListItem,
                 accentColor: DynamicColorGenerator.colorForName(displayName),
-                avatarURL: participant.resolvedAvatar
+                avatarURL: participant.resolvedAvatar,
+                presenceState: presenceResolver?(participant.userId ?? participant.id)
+                    ?? participant.isOnline.map { UserPresence(isOnline: $0, lastActiveAt: participant.lastActiveAt).state },
+                ring: participant.avatarRing
             )
-            .frame(width: 36, height: 36)
+            .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
             .clipShape(Circle())
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(displayName)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
+                    .meeshyScaledFont(MeeshyFont.labelSize, weight: .semibold, design: .rounded)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
                 memberRoleBadge(role)
             }
@@ -431,35 +445,37 @@ public struct ConversationSettingsView: View {
                     memberActions(for: participant, targetRole: role)
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
-                        .frame(width: 32, height: 32)
+                        .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
+                        .foregroundStyle(theme.textMuted)
+                        .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                         .contentShape(Circle())
+                        .meeshyTapTarget()
+                        .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.compact))
                 }
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
     }
 
     @ViewBuilder
     private func memberRoleBadge(_ role: MemberRole) -> some View {
         switch role {
         case .creator:
-            HStack(spacing: 3) {
-                Image(systemName: "crown.fill").font(.system(size: 9))
-                Text(String(localized: "conversation.role.creator", defaultValue: "Createur", bundle: .module)).font(.system(size: 11, weight: .medium))
-            }.foregroundColor(Color(hex: "F8B500"))
+            HStack(spacing: MeeshySpacing.xxs) {
+                Image(systemName: "crown.fill").meeshyScaledFont(MeeshyIconSize.xxs)
+                Text(String(localized: "conversation.role.creator", defaultValue: "Créateur", bundle: .module)).font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+            }.foregroundStyle(MeeshyColors.tileSaffron)
         case .admin:
-            HStack(spacing: 3) {
-                Image(systemName: "shield.fill").font(.system(size: 9))
-                Text(String(localized: "conversation.role.admin", defaultValue: "Admin", bundle: .module)).font(.system(size: 11, weight: .medium))
-            }.foregroundColor(Color(hex: "3B82F6"))
+            HStack(spacing: MeeshySpacing.xxs) {
+                Image(systemName: "shield.fill").meeshyScaledFont(MeeshyIconSize.xxs)
+                Text(String(localized: "conversation.role.admin", defaultValue: "Admin", bundle: .module)).font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+            }.foregroundStyle(MeeshyColors.blue500)
         case .moderator:
-            HStack(spacing: 3) {
-                Image(systemName: "checkmark.shield.fill").font(.system(size: 9))
-                Text(String(localized: "conversation.role.moderator", defaultValue: "Moderateur", bundle: .module)).font(.system(size: 11, weight: .medium))
-            }.foregroundColor(MeeshyColors.success)
+            HStack(spacing: MeeshySpacing.xxs) {
+                Image(systemName: "checkmark.shield.fill").meeshyScaledFont(MeeshyIconSize.xxs)
+                Text(String(localized: "conversation.role.moderator", defaultValue: "Modérateur", bundle: .module)).font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+            }.foregroundStyle(MeeshyColors.success)
         case .member:
             EmptyView()
         }
@@ -487,26 +503,35 @@ public struct ConversationSettingsView: View {
         if let accountId = participant.userId {
             if viewModel.currentUserRole == .creator && targetRole < .admin {
                 Button { Task { await viewModel.updateRole(userId: accountId, newRole: "ADMIN") } } label: {
-                    Label(String(localized: "conversation.settings.member.promoteAdmin", defaultValue: "Promouvoir Admin", bundle: .module), systemImage: "shield.fill")
+                    Label(String(localized: "conversation.settings.member.promoteAdmin", defaultValue: "Promouvoir admin", bundle: .module), systemImage: "shield.fill")
                 }
             }
             if viewModel.currentUserRole.hasMinimumRole(.admin) && targetRole == .member {
                 Button { Task { await viewModel.updateRole(userId: accountId, newRole: "MODERATOR") } } label: {
-                    Label(String(localized: "conversation.settings.member.promoteModerator", defaultValue: "Promouvoir Moderateur", bundle: .module), systemImage: "checkmark.shield.fill")
+                    Label(String(localized: "conversation.settings.member.promoteModerator", defaultValue: "Promouvoir modérateur", bundle: .module), systemImage: "checkmark.shield.fill")
                 }
             }
             if viewModel.currentUserRole > targetRole && targetRole > .member {
                 Button { Task { await viewModel.updateRole(userId: accountId, newRole: "MEMBER") } } label: {
-                    Label(String(localized: "conversation.settings.member.demoteMember", defaultValue: "Retrograder Membre", bundle: .module), systemImage: "person.fill")
+                    Label(String(localized: "conversation.settings.member.demoteMember", defaultValue: "Rétrograder en membre", bundle: .module), systemImage: "person.fill")
                 }
             }
         }
         Button(role: .destructive) { Task { await viewModel.expelParticipant(key: targetKey) } } label: {
             Label(String(localized: "conversation.settings.member.expel", defaultValue: "Expulser", bundle: .module), systemImage: "person.fill.xmark")
         }
-        if viewModel.currentUserRole.hasMinimumRole(.admin) {
-            Button(role: .destructive) { Task { await viewModel.banParticipant(key: targetKey) } } label: {
-                Label(String(localized: "conversation.settings.member.ban", defaultValue: "Bannir", bundle: .module), systemImage: "hand.raised.fill")
+        // Bannir ET lever, sous la MÊME condition de rang : depuis #4176 la
+        // passerelle applique une seule loi aux deux sens. Offrir l'un sans
+        // l'autre laissait un geste sans marche arrière.
+        if viewModel.currentUserRole.hasMinimumRole(.moderator) {
+            if participant.bannedAt == nil {
+                Button(role: .destructive) { Task { await viewModel.banParticipant(key: targetKey) } } label: {
+                    Label(String(localized: "conversation.settings.member.ban", defaultValue: "Bannir", bundle: .module), systemImage: "hand.raised.fill")
+                }
+            } else {
+                Button { Task { await viewModel.unbanParticipant(key: targetKey) } } label: {
+                    Label(String(localized: "conversation.settings.member.unban", defaultValue: "Lever le bannissement", bundle: .module), systemImage: "hand.raised.slash.fill")
+                }
             }
         }
     }
@@ -514,9 +539,35 @@ public struct ConversationSettingsView: View {
     // MARK: - Danger Section
 
     private var dangerSection: some View {
-        VStack(spacing: 12) {
-            sectionHeader(String(localized: "conversation.settings.section.danger", defaultValue: "Zone dangereuse", bundle: .module))
+        VStack(spacing: MeeshySpacing.md) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { showMoreActions.toggle() }
+            } label: {
+                HStack {
+                    Text(String(localized: "conversation.settings.more", defaultValue: "Plus", bundle: .module))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold, design: .rounded))
+                        .foregroundStyle(theme.textMuted)
+                    Spacer()
+                    Image(systemName: "chevron.forward")
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                        .foregroundStyle(theme.textMuted)
+                        .rotationEffect(.degrees(showMoreActions ? 90 : 0))
+                        .accessibilityHidden(true)
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(showMoreActions ? [.isButton, .isSelected] : .isButton)
 
+            if showMoreActions {
+                moreActions
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var moreActions: some View {
             Button(role: .destructive) {
                 showDeleteForMeAlert = true
             } label: {
@@ -525,11 +576,11 @@ public struct ConversationSettingsView: View {
                     Text(String(localized: "conversation.settings.deleteForMe.label", defaultValue: "Supprimer pour moi", bundle: .module))
                 }
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
-                .foregroundColor(MeeshyColors.error)
+                .foregroundStyle(MeeshyColors.error)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .padding(.vertical, MeeshySpacing.mdPlus)
                 .background(MeeshyColors.error.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
             }
 
             if viewModel.currentUserRole == .creator {
@@ -541,11 +592,11 @@ public struct ConversationSettingsView: View {
                         Text(String(localized: "conversation.settings.deleteForAll.label", defaultValue: "Supprimer pour tous", bundle: .module))
                     }
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                    .padding(.vertical, MeeshySpacing.mdPlus)
                     .background(MeeshyColors.error.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
                 }
             } else {
                 Button {
@@ -556,36 +607,37 @@ public struct ConversationSettingsView: View {
                         Text(String(localized: "conversation.settings.leave.label", defaultValue: "Quitter la conversation", bundle: .module))
                     }
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundColor(.orange)
+                    .foregroundStyle(.orange)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                    .padding(.vertical, MeeshySpacing.mdPlus)
                     .background(Color.orange.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
                 }
             }
-        }
     }
 
     // MARK: - Helpers
 
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 13, weight: .bold, design: .rounded))
-            .foregroundColor(theme.textMuted)
+            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold, design: .rounded))
+            .foregroundStyle(theme.textMuted)
             .textCase(.uppercase)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func settingsField<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundColor(theme.textSecondary)
+    private func settingsField<Content: View>(label: String, note: MeeshyInfoNote? = nil, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+            MeeshyInfoNoted(note: note, openNoteID: $openNoteID, tint: theme.textSecondary) {
+                Text(label)
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.textSecondary)
+            }
             content()
                 .textFieldStyle(.plain)
-                .padding(12)
+                .padding(MeeshySpacing.md)
                 .background(theme.backgroundSecondary.opacity(0.5))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
         }
     }
 }
@@ -594,6 +646,11 @@ public struct ConversationSettingsView: View {
 
 @MainActor
 public final class ConversationSettingsViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published var title: String
     @Published var descriptionText: String
     @Published var avatarUrl: String
@@ -629,6 +686,8 @@ public final class ConversationSettingsViewModel: ObservableObject {
     public let accentColor: String
     public let currentUserRole: MemberRole
 
+    private let imageUploader: UserServiceProviding
+
     private let originalTitle: String
     private let originalDescription: String
     private let originalAvatarUrl: String
@@ -649,7 +708,12 @@ public final class ConversationSettingsViewModel: ObservableObject {
         autoTranslateEnabled != originalAutoTranslateEnabled
     }
 
-    init(conversation: MeeshyConversation, currentUserRole: MemberRole = .member) {
+    init(
+        conversation: MeeshyConversation,
+        currentUserRole: MemberRole = .member,
+        imageUploader: UserServiceProviding = UserService.shared
+    ) {
+        self.imageUploader = imageUploader
         self.originalConversation = conversation
         self.conversationId = conversation.id
         self.conversationName = conversation.name
@@ -713,7 +777,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
                 autoTranslateEnabled: newAutoTranslate
             )
 
-            postToast(message: String(localized: "conversation.settings.toast.updated", defaultValue: "Conversation mise a jour", bundle: .module), isSuccess: true)
+            postToast(message: String(localized: "conversation.settings.toast.updated", defaultValue: "Conversation mise à jour", bundle: .module), isSuccess: true)
             return originalConversation.mergingMetadata(from: apiConversation)
         } catch {
             errorMessage = error.localizedDescription
@@ -727,9 +791,9 @@ public final class ConversationSettingsViewModel: ObservableObject {
         defer { isUploadingAvatar = false }
         if let url = await uploadCompressedImage(data, prefix: "conversation_avatar") {
             avatarUrl = url
-            postToast(message: String(localized: "conversation.settings.toast.avatarUploaded", defaultValue: "Avatar televerse", bundle: .module), isSuccess: true)
+            postToast(message: String(localized: "conversation.settings.toast.avatarUploaded", defaultValue: "Avatar téléversé", bundle: .module), isSuccess: true)
         } else {
-            postToast(message: String(localized: "conversation.settings.toast.avatarFailed", defaultValue: "Echec du telechargement de l'avatar", bundle: .module), isSuccess: false)
+            postToast(message: String(localized: "conversation.settings.toast.avatarFailed", defaultValue: "Échec du téléchargement de l'avatar", bundle: .module), isSuccess: false)
         }
     }
 
@@ -738,9 +802,9 @@ public final class ConversationSettingsViewModel: ObservableObject {
         defer { isUploadingBanner = false }
         if let url = await uploadCompressedImage(data, prefix: "conversation_banner") {
             bannerUrl = url
-            postToast(message: String(localized: "conversation.settings.toast.bannerUploaded", defaultValue: "Banniere televersee", bundle: .module), isSuccess: true)
+            postToast(message: String(localized: "conversation.settings.toast.bannerUploaded", defaultValue: "Bannière téléversée", bundle: .module), isSuccess: true)
         } else {
-            postToast(message: String(localized: "conversation.settings.toast.bannerFailed", defaultValue: "Echec du telechargement de la banniere", bundle: .module), isSuccess: false)
+            postToast(message: String(localized: "conversation.settings.toast.bannerFailed", defaultValue: "Échec du téléchargement de la bannière", bundle: .module), isSuccess: false)
         }
     }
 
@@ -794,7 +858,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
                 userId: userId,
                 role: newRole
             )
-            postToast(message: String(localized: "conversation.settings.toast.roleUpdated", defaultValue: "Role mis a jour", bundle: .module), isSuccess: true)
+            postToast(message: String(localized: "conversation.settings.toast.roleUpdated", defaultValue: "Rôle mis à jour", bundle: .module), isSuccess: true)
             await loadMembers()
         } catch {
             errorMessage = error.localizedDescription
@@ -811,7 +875,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
                 conversationId: conversationId,
                 key: key
             )
-            postToast(message: String(localized: "conversation.settings.toast.memberExpelled", defaultValue: "Membre expulse", bundle: .module), isSuccess: true)
+            postToast(message: String(localized: "conversation.settings.toast.memberExpelled", defaultValue: "Membre expulsé", bundle: .module), isSuccess: true)
             await loadMembers()
         } catch {
             errorMessage = error.localizedDescription
@@ -835,34 +899,38 @@ public final class ConversationSettingsViewModel: ObservableObject {
         }
     }
 
+    /// Le pendant EXACT de `banParticipant` : depuis #4176 la passerelle autorise
+    /// la levée à qui pouvait poser le bannissement, pas seulement aux admins.
+    /// Sans ce geste, bannir restait irréversible depuis l'app — la moitié
+    /// destructrice offerte, la moitié réparatrice absente.
+    public func unbanParticipant(key: String) async {
+        do {
+            try await ConversationService.shared.unbanParticipant(
+                conversationId: conversationId,
+                key: key
+            )
+            postToast(message: String(localized: "conversation.settings.toast.memberUnbanned", defaultValue: "Bannissement levé", bundle: .module), isSuccess: true)
+            await loadMembers()
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+
+    /// L'avatar et la bannière d'une conversation sont des images d'IDENTITÉ :
+    /// elles passent par `UserService.uploadImage`, jamais par un TUS sans
+    /// contexte, réservé aux pièces jointes de message (#16896).
     private func uploadCompressedImage(_ data: Data, prefix: String) async -> String? {
         do {
-            let fileName = "\(prefix)_\(UUID().uuidString).jpg"
-            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-            try data.write(to: tempURL)
-
-            let serverOrigin = MeeshyConfig.shared.serverOrigin
-            guard let baseURL = URL(string: serverOrigin),
-                  let token = APIClient.shared.authToken else { return nil }
-
-            let manager = TusUploadManager(baseURL: baseURL)
-            let result = try await manager.uploadFile(fileURL: tempURL, mimeType: "image/jpeg", credential: .bearer(token))
-            try? FileManager.default.removeItem(at: tempURL)
-            return result.fileUrl
+            return try await imageUploader.uploadImage(data, filename: "\(prefix)_\(UUID().uuidString).jpg")
         } catch {
-            await MainActor.run {
-                self.errorMessage = error.localizedDescription
-                self.showError = true
-            }
+            errorMessage = error.localizedDescription
+            showError = true
             return nil
         }
     }
 
     private func postToast(message: String, isSuccess: Bool) {
-        NotificationCenter.default.post(
-            name: Notification.Name("meeshy.showToast"),
-            object: nil,
-            userInfo: ["message": message, "isSuccess": isSuccess]
-        )
+        FeedbackToastCenter.post(message, isSuccess: isSuccess)
     }
 }

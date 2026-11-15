@@ -1,0 +1,383 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+/// Les deux boutons flottants (Flux à gauche, Menu à droite) et l'échelle du
+/// menu, sortis de `RootView.swift` (cohésion du fichier). La racine garde ce
+/// qu'elle OBSERVE — profondeur de la pile, réels, onboarding, compteur de
+/// notifications — et décide de monter ou non ce chrome ; il reçoit en
+/// `Binding` ce qu'il écrit (`showFeed`, `showMenu`, positions persistées,
+/// géométrie mesurée) et pousse ses routes par `onPush`. Les deux positions
+/// restent des `@AppStorage` de la racine : seul le conteneur du SDK, à la fin
+/// d'un glisser, les écrit (garde `FeedButtonAnchorTests`).
+struct RootFloatingChrome: View {
+    @Binding var showFeed: Bool
+    @Binding var showMenu: Bool
+    @Binding var feedButtonPosition: String
+    @Binding var menuButtonPosition: String
+    @Binding var floatingGeometry: FloatingButtonGeometry?
+    let unreadCount: Int
+    /// L'aperçu d'appui long ouvert : les bulles lui cèdent la place (#17260).
+    let peekPresence: LongPressPeekPresence
+    let onPush: (Route) -> Void
+    /// « Jeu masqué » : le barreau du jeu quitte l'échelle (#17769), comme le bandeau quitte l'écran.
+    @ObservedObject var gamePrefs: GameDevicePrefsStore = .current()
+    /// L'anneau des actes du jour autour du disque du menu (#17768), lu dans le cache du jeu.
+    @StateObject var actsRingStore = MenuActsRingStore()
+    /// La course VIVE du bouton Menu pendant un glisser, `nil` au repos : l'échelle
+    /// la suit image par image (#18201) au lieu d'attendre la position persistée,
+    /// qui ne s'écrit qu'à la levée du doigt.
+    @State private var menuLiveDrag: CGSize? = nil
+    /// Batterie : en Économie d'énergie, l'échelle suit RIGIDEMENT — ni chaîne ni
+    /// échelle — comme toute décoration animée (`MediaPolicy.animatesDecoration`).
+    @State private var animatesDecoration = MediaPolicyMonitor.shared.policy.animatesDecoration
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+
+    /// « Réduire les animations », système OU préférence de l'app.
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
+    }
+
+    /// La loi de suivi de l'échelle, pour l'état de mouvement et de batterie du moment.
+    private var ladderFollow: FloatingMenuLadderFollow {
+        FloatingMenuLadderFollow(
+            reduceMotion: MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion),
+            animatesDecoration: animatesDecoration
+        )
+    }
+
+    /// Ouvre ou ferme l'échelle : ressort rapide, fondu court sous réduction.
+    private func setMenu(_ isOpen: Bool) {
+        meeshyWithAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion) {
+            showMenu = isOpen
+        }
+    }
+
+    /// « Jeu masqué » : aucun anneau, comme aucun barreau du jeu.
+    private var actsRing: GameActsRing? { gamePrefs.prefs.hidden ? nil : actsRingStore.ring }
+
+    /// Ce que VoiceOver lit après « Menu » : les notifications en attente, puis les actes du jour, menu fermé.
+    private var menuA11yValue: String? {
+        let notifications = unreadCount > 0
+            ? String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), unreadCount)
+            : nil
+        let acts = showMenu ? nil : actsRing.map { ring in
+            String(format: String(localized: "a11y.floating.menu.acts", defaultValue: "Actes du jour : %1$lld sur %2$lld", bundle: .main),
+                   ring.done, ring.total)
+        }
+        let parts = [notifications, acts].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
+    }
+
+    /// Ce que le jeu signale au barreau « Ma Légende » (#18165) — rien sous « Jeu masqué ».
+    private var gameAttention: GameAttention { gamePrefs.prefs.hidden ? .none : actsRingStore.attention }
+
+    private var ladder: [RootMenuLadderEntry] { RootMenuLadderEntry.ladder(gameHidden: gamePrefs.prefs.hidden) }
+
+    var body: some View {
+        ZStack {
+            draggableFloatingButtons
+
+            if showMenu {
+                Color.clear
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { setMenu(false) }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(String(localized: "common.close", bundle: .main))
+                    .accessibilityAction { setMenu(false) }
+                    .zIndex(99)
+            }
+
+            menuLadder
+        }
+        .task(id: gamePrefs.prefs.hidden) { @MainActor in
+            await actsRingStore.activate(hidden: gamePrefs.prefs.hidden)
+        }
+        .onReceive(MediaPolicyMonitor.shared.$policy.dropFirst().receive(on: DispatchQueue.main)) { policy in
+            animatesDecoration = policy.animatesDecoration
+        }
+        // L'aperçu d'appui long d'une conversation passe au-dessus de tout :
+        // les bulles s'effacent et ne captent aucun de ses touchers (#17260).
+        .modifier(ConcealedUnderLongPressPeek(presence: peekPresence))
+    }
+
+    // MARK: - Draggable Floating Buttons (Free Position)
+    private var draggableFloatingButtons: some View {
+        FreeFloatingButtonsContainer(
+            leftPosition: $feedButtonPosition,
+            rightPosition: $menuButtonPosition,
+            leftA11yLabel: String(localized: "a11y.floating.feed", defaultValue: "Flux", bundle: .main),
+            rightA11yLabel: String(localized: "a11y.floating.menu", defaultValue: "Menu", bundle: .main),
+            onLeftTap: {
+                HapticFeedback.light()
+                // Le tap ouvre l'overlay Feed (sa vocation : l'icône est le Feed).
+                // L'ouverture des Reels n'est PLUS déclenchée ici — elle se fait
+                // désormais via le bouton Réels du header « Meeshy Feed ».
+                meeshyWithAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion) {
+                    showFeed.toggle()
+                }
+            },
+            onRightTap: {
+                HapticFeedback.light()
+                // Le bouton porte l'avatar de l'utilisateur. 1er tap = déplie le
+                // menu ; 2e tap (menu déjà ouvert) = ouvre la page profil dans les
+                // réglages et referme le menu, comme n'importe quel autre item.
+                if showMenu {
+                    setMenu(false)
+                    onPush(.profile)
+                } else {
+                    setMenu(true)
+                }
+            },
+            onLeftLongPress: {
+                HapticFeedback.medium()
+                // Long-press : les Réels, en plein écran, sans graine — le lecteur
+                // va chercher sa page. Le tap garde le Flux ; les deux gestes du
+                // même bouton mènent donc aux deux formes du même contenu.
+                //
+                // `presentFresh()` a été écrite POUR ce geste (sa documentation dit
+                // « long-press launch »), et l'ancrage du liquid reveal se calcule
+                // depuis la position de CE bouton — cf. `FeedButtonAnchor` et ses
+                // tests. Le rebranchement rend au geste l'infrastructure qui
+                // l'attendait.
+                //
+                // Le bouton Réels du header « Meeshy Feed » RESTE en place : un
+                // appui long n'est pas découvrable et ne peut pas être le seul
+                // accès à une section entière.
+                ReelsPresenter.shared.presentFresh()
+            },
+            onRightLongPress: {
+                // Long-press sur l'avatar = raccourci direct vers la page profil
+                // (sans passer par le menu). Les réglages restent accessibles via
+                // le dernier item du menu (roue dentée).
+                HapticFeedback.medium()
+                if showMenu { setMenu(false) }
+                onPush(.profile)
+            },
+            // L'échelle suit le disque pendant le glisser (#18201) : la course vive
+            // est lue ici, jamais persistée — `FeedButtonAnchorTests` y veille.
+            onRightDragChanged: { menuLiveDrag = $0 },
+            // L'appui long lance les Réels : un geste que rien ne signale à l'écran
+            // doit au moins être annoncé à VoiceOver, sinon il n'existe pas pour qui
+            // ne peut pas le découvrir par tâtonnement.
+            leftA11yHint: String(localized: "a11y.floating.feed.hint", defaultValue: "Ouvre le flux d'actualité", bundle: .main),
+            rightA11yHint: String(localized: "a11y.floating.menu.hint", defaultValue: "Ouvre le menu de navigation", bundle: .main),
+            rightA11yValue: menuA11yValue,
+            rightA11yActionName: String(localized: "a11y.floating.menu.profile-action", defaultValue: "Modifier le profil", bundle: .main),
+            leftContent: { feedButtonContent },
+            rightContent: { menuButtonContent }
+        )
+        .onPreferenceChange(FloatingButtonGeometryKey.self) { measured in
+            if let measured, measured.isMeasured { floatingGeometry = measured }
+        }
+        .zIndex(100)
+    }
+
+    /// Le disque du Flux : le dégradé, et le logo qui respire quand le flux est ouvert.
+    private var feedButtonContent: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [MeeshyColors.error, MeeshyColors.indigo300],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            if showFeed {
+                AnimatedLogoView(color: .white, lineWidth: 3, continuous: true)
+                    .frame(width: MeeshySpacing.xxl + MeeshySpacing.xs, height: MeeshySpacing.xxl + MeeshySpacing.xs)
+            } else {
+                Image(systemName: "square.stack.fill")
+                    .font(MeeshyFont.relative(MeeshyIconSize.xl, weight: .semibold))
+                    .foregroundStyle(Color.white)
+            }
+        }
+    }
+
+    /// Le disque du menu : l'avatar dans l'anneau dégradé, l'anneau des actes du jour autour, et le badge.
+    private var menuButtonContent: some View {
+        // Menu button content — porte l'avatar de l'utilisateur (ou ses
+        // initiales) à l'intérieur de l'anneau dégradé. L'anneau vire au
+        // rouge quand le menu est ouvert ; le badge de notifications reste.
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: showMenu ? [MeeshyColors.error, MeeshyColors.indigo300] : [MeeshyColors.indigo600, MeeshyColors.indigo300],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            MeeshyAvatar(
+                name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
+                context: .custom(38),
+                avatarURL: AuthManager.shared.currentUser?.avatar, thumbHash: AuthManager.shared.currentUser?.avatarThumbHash,
+                ring: AuthManager.shared.currentUser?.profileDecor?.avatarRing
+            )
+            .allowsHitTesting(false)
+
+            // L'anneau des actes du jour (#17768) entoure le disque, sans le toucher ; immobile (#17381).
+            if let actsRing {
+                MenuActsRingView(ring: actsRing, diameter: FloatingButtonGeometry.buttonSize)
+                    .frame(width: FloatingButtonGeometry.buttonSize, height: FloatingButtonGeometry.buttonSize)
+            }
+
+            // Badge
+            if !showMenu && unreadCount > 0 {
+                NotificationBadge(count: unreadCount)
+                    .accessibilityLabel(UnreadCountLabel.notifications(unreadCount))
+            }
+        }
+    }
+
+    // MARK: - Menu Ladder (positioned relative to menu button)
+    private var menuLadder: some View {
+        GeometryReader { proxy in
+            let frame = proxy.frame(in: .global)
+            let geometry = floatingGeometry
+                ?? FloatingButtonGeometry.measured(container: frame, safeRegion: frame, reported: proxy.safeAreaInsets)
+            let globalCenter = geometry.layout(feedStorage: feedButtonPosition, menuStorage: menuButtonPosition).menu
+            let restingCenter = CGPoint(x: globalCenter.x - frame.minX, y: globalCenter.y - frame.minY)
+            // Le centre VIVANT : la position persistée, décalée de la course du doigt
+            // tant qu'il est posé (#18201). Le sens d'ouverture, lui, se lit sur la
+            // position AU REPOS : décidé à l'image sur le centre vivant, il
+            // basculerait haut/bas à chaque passage du seuil sous le doigt ; il se
+            // rejoue à la levée, quand la nouvelle place est écrite.
+            let anchor = LadderFollowAnchor(
+                center: FloatingMenuLadderFollow.liveCenter(resting: restingCenter, drag: menuLiveDrag),
+                dragging: menuLiveDrag != nil
+            )
+            let follow = ladderFollow
+            let halfButton = FloatingButtonGeometry.buttonSize / 2
+            let menuItemSize: CGFloat = 46
+            let menuSpacing: CGFloat = MeeshySpacing.md
+            let ladderExtent = CGFloat(ladder.count) * (menuItemSize + menuSpacing)
+            let expandDown = geometry.menuOpensDownward(from: globalCenter, ladderExtent: ladderExtent)
+            let menuX = anchor.center.x
+            let menuStartY = expandDown
+                ? anchor.center.y + halfButton + menuSpacing + menuItemSize / 2
+                : anchor.center.y - halfButton - menuSpacing - menuItemSize / 2
+
+            // Contenu de l'échelle : `RootMenuLadderEntry` (descripteurs purs).
+            ForEach(Array(ladder.enumerated()), id: \.offset) { index, entry in
+                let yOffset = expandDown
+                    ? CGFloat(index) * (menuItemSize + menuSpacing)
+                    : -CGFloat(index) * (menuItemSize + menuSpacing)
+
+                let itemY = menuStartY + yOffset
+
+                ThemedActionButton(
+                    icon: entry.icon,
+                    color: entry.colorHex,
+                    label: entry.accessibilityLabel(attention: gameAttention),
+                    hint: String(localized: "a11y.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main),
+                    badge: menuBadgeCount(entry.badge),
+                    showsDot: entry.showsAttentionDot(gameAttention),
+                    // L'échelle est montée EN PERMANENCE (opacité 0, zIndex −1
+                    // menu fermé) pour que le ressort d'ouverture parte d'un
+                    // état existant : le glow/pulse ne doit vivre que menu
+                    // OUVERT — six ombres re-rasterisées par frame en continu
+                    // derrière la liste, sinon.
+                    isGlowEnabled: showMenu,
+                    action: { openMenuEntry(entry) }
+                )
+                // L'accordéon du glisser : chaque barreau suit le centre vivant avec
+                // un ressort au retard croissant, et une échelle qui décroît depuis
+                // le disque ; rigide et à taille fixe sous Reduce Motion ou en
+                // Économie d'énergie (`FloatingMenuLadderFollow`).
+                .scaleEffect(follow.scale(rung: index, dragging: anchor.dragging))
+                .position(x: menuX, y: itemY)
+                .animation(follow.animation(rung: index), value: anchor)
+                .menuAnimation(showMenu: showMenu, delay: Double(index) * MeeshyAnimation.staggerDelay)
+            }
+        }
+        .ignoresSafeArea()
+        .zIndex(showMenu ? 151 : -1)
+        .allowsHitTesting(showMenu)
+    }
+
+    private func menuBadgeCount(_ badge: RootMenuBadge?) -> Int {
+        switch badge {
+        case .unreadNotifications: return unreadCount
+        case .pendingFriendRequests: return FriendshipCache.shared.pendingReceivedCount
+        case nil: return 0
+        }
+    }
+
+    private func openMenuEntry(_ entry: RootMenuLadderEntry) {
+        setMenu(false)
+        onPush(entry.route)
+    }
+}
+
+/// Ce que l'échelle suit, et ce qui déclenche son ressort : le centre vivant du
+/// disque et l'état du doigt. Une seule valeur `Equatable` pour `.animation(_:value:)`,
+/// pour que la pose ET le retour à l'échelle 1 partent dans la même transaction.
+private struct LadderFollowAnchor: Equatable {
+    let center: CGPoint
+    let dragging: Bool
+}
+
+/// La pose d'un barreau d'échelle de menu, ouvert ou fermé.
+nonisolated struct MenuRungPose: Equatable {
+    let scale: CGFloat
+    let rotationDegrees: Double
+    let opacity: Double
+    let delay: Double
+}
+
+/// La loi des barreaux d'une échelle de menu : depuis le disque, en échelle et
+/// en rotation, décalés par rang à l'ouverture.
+nonisolated enum MenuRungMotion {
+    static let closedScale: CGFloat = 0.3
+    static let closedRotationDegrees: Double = -30
+
+    /// Sous « Réduire les animations », l'opacité seule : ni échelle, ni
+    /// rotation, ni décalage par rang.
+    static func pose(isOpen: Bool, reduceMotion: Bool, delay: Double) -> MenuRungPose {
+        guard !reduceMotion else {
+            return MenuRungPose(scale: 1, rotationDegrees: 0, opacity: isOpen ? 1 : 0, delay: 0)
+        }
+        return isOpen
+            ? MenuRungPose(scale: 1, rotationDegrees: 0, opacity: 1, delay: delay)
+            : MenuRungPose(scale: closedScale, rotationDegrees: closedRotationDegrees, opacity: 0, delay: 0)
+    }
+}
+
+/// Un barreau posé par `MenuRungMotion` : `springBouncy` à l'ouverture,
+/// `springFast` à la fermeture, fondu court sous réduction (les deux moitiés).
+private struct MenuRungAnimation: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    let isOpen: Bool
+    let delay: Double
+
+    func body(content: Content) -> some View {
+        let pose = MenuRungMotion.pose(
+            isOpen: isOpen,
+            reduceMotion: MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion),
+            delay: delay
+        )
+        return content
+            .scaleEffect(pose.scale)
+            .opacity(pose.opacity)
+            .rotationEffect(.degrees(pose.rotationDegrees))
+            .meeshyAnimation(
+                (isOpen ? MeeshyAnimation.springBouncy : MeeshyAnimation.springFast).delay(pose.delay),
+                reduced: MeeshyMotion.reducedFade,
+                value: isOpen
+            )
+    }
+}
+
+// MARK: - Menu Animation Modifier
+extension View {
+    func menuAnimation(showMenu: Bool, delay: Double) -> some View {
+        modifier(MenuRungAnimation(isOpen: showMenu, delay: delay))
+    }
+}

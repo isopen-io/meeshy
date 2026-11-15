@@ -1,8 +1,5 @@
 package me.meeshy.sdk.model
 
-import java.time.Instant
-import java.time.OffsetDateTime
-
 /**
  * Canonical best-effort ISO-8601 → epoch-millis conversion; returns null when the
  * value is absent, blank or unparseable, and the parsed epoch (which may legitimately
@@ -11,13 +8,11 @@ import java.time.OffsetDateTime
  * Callers that need to distinguish "no reliable timestamp" from "the epoch instant"
  * — e.g. presence resolution, where an absent timestamp must stay online but an
  * ancient one goes away — use this variant; [isoToEpochMillis] collapses both to 0L.
+ *
+ * The parsing itself lives in [WireDate] (the gateway wire date, with or without fractions);
+ * this is its best-effort projection, kept for the callers that predate it.
  */
-public fun isoToEpochMillisOrNull(value: String?): Long? {
-    if (value.isNullOrBlank()) return null
-    return runCatching { Instant.parse(value).toEpochMilli() }
-        .recoverCatching { OffsetDateTime.parse(value).toInstant().toEpochMilli() }
-        .getOrNull()
-}
+public fun isoToEpochMillisOrNull(value: String?): Long? = WireDate.epochMillis(value)
 
 /**
  * Canonical best-effort ISO-8601 → epoch-millis conversion; returns 0L when the

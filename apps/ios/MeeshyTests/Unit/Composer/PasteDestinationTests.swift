@@ -1,4 +1,7 @@
 import XCTest
+import UIKit
+import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// C5 / règle **O12 — LA SURFACE DÉCIDE**, étendue par la directive produit du
@@ -125,5 +128,147 @@ final class PasteDestinationTests: XCTestCase {
             PasteDestination.resolve(surface: .scene, ingest: .file).product,
             PasteDestination.resolve(surface: .stickers, ingest: .file).product
         )
+    }
+
+    // MARK: - Le bouton « Coller » (décision porteur du 2026-11-11, #13640, #17434)
+
+    private func cible(_ item: StoryPastedItem, _ format: ComposerFormat = .story,
+                       visuel: Bool = false, son: Bool = false) -> ComposerPasteTarget {
+        ComposerPasteRouting.target(for: item, format: format,
+                                    background: ComposerPasteBackground(visual: visuel, sound: son))
+    }
+
+    private let image = StoryPastedItem.image(UIImage())
+    private let video = StoryPastedItem.video(URL(fileURLWithPath: "/tmp/a.mov"))
+    private let audio = StoryPastedItem.audio(URL(fileURLWithPath: "/tmp/a.m4a"))
+
+    func test_target_visualWithoutVisualBackground_becomesTheBackground_evenOverABackgroundSound() {
+        XCTAssertEqual(cible(image), .sceneBackground)
+        XCTAssertEqual(cible(video), .sceneBackground)
+        XCTAssertEqual(cible(image, son: true), .sceneBackground, "un son de fond n'est pas un fond visuel")
+        XCTAssertEqual(cible(video, son: true), .sceneBackground)
+    }
+
+    func test_target_visualOnAVisualBackground_isPosedOnTheScene() {
+        XCTAssertEqual(cible(image, visuel: true), .sceneObject, "le fond déjà posé reste")
+        XCTAssertEqual(cible(video, visuel: true, son: true), .sceneObject)
+    }
+
+    func test_target_soundWithoutBackgroundSound_becomesTheBackgroundSound_evenOverAVisual() {
+        XCTAssertEqual(cible(audio), .sceneBackground)
+        XCTAssertEqual(cible(audio, visuel: true), .sceneBackground, "un fond visuel n'est pas un son de fond")
+    }
+
+    func test_target_soundOnABackgroundSound_isPosedOnTheScene() {
+        XCTAssertEqual(cible(audio, son: true), .sceneObject)
+        XCTAssertEqual(cible(audio, visuel: true, son: true), .sceneObject)
+    }
+
+    func test_posing_marksOnlyThePastedFamily() {
+        let vide = ComposerPasteBackground(visual: false, sound: false)
+        XCTAssertEqual(vide.posing(image), ComposerPasteBackground(visual: true, sound: false))
+        XCTAssertEqual(vide.posing(audio), ComposerPasteBackground(visual: false, sound: true))
+        XCTAssertEqual(vide.posing(.text("x")), vide)
+    }
+
+    func test_target_textOnAPost_goesToThePublicationContent() {
+        XCTAssertEqual(cible(.text("Bonjour"), .post), .publicationContent)
+        XCTAssertEqual(cible(.text("Bonjour"), .post, visuel: true), .publicationContent)
+        XCTAssertEqual(cible(.text("Bonjour"), .status), .publicationContent)
+    }
+
+    func test_target_textOnAStoryOrAReel_becomesTheSlideLegend() {
+        XCTAssertEqual(cible(.text("Bonjour"), .story), .slideLegend)
+        XCTAssertEqual(cible(.text("Bonjour"), .reel, visuel: true), .slideLegend)
+        XCTAssertEqual(cible(.text(Array(repeating: "mot", count: 40).joined(separator: " ")), .story),
+                       .slideLegend, "un texte long comme un texte court : jamais un objet texte de scène")
+    }
+
+    func test_background_readsEachFamilyApart() {
+        var effets = StoryEffects()
+        XCTAssertEqual(ComposerPasteBackground(effects: effets, slideImage: false),
+                       ComposerPasteBackground(visual: false, sound: false))
+        XCTAssertEqual(ComposerPasteBackground(effects: effets, slideImage: true),
+                       ComposerPasteBackground(visual: true, sound: false), "l'image de slide est un fond visuel")
+        effets.audioPlayerObjects = [StoryAudioPlayerObject(postMediaId: "s", placement: "overlay", x: 0.5, y: 0.5,
+                                                            volume: 1, waveformSamples: [], isBackground: true)]
+        XCTAssertEqual(ComposerPasteBackground(effects: effets, slideImage: false),
+                       ComposerPasteBackground(visual: false, sound: true), "le son de fond ne compte que pour un son")
+    }
+
+    func test_publicationText_emptyContent_takesThePastedText() {
+        XCTAssertEqual(ComposerPasteRouting.publicationText(current: "", pasted: "  Bonjour  "), "Bonjour")
+    }
+
+    func test_publicationText_existingContent_appendsOnANewLine() {
+        XCTAssertEqual(ComposerPasteRouting.publicationText(current: "Déjà écrit", pasted: "Collé"),
+                       "Déjà écrit\nCollé", "coller n'efface jamais ce que l'auteur a écrit")
+    }
+
+    func test_publicationText_blankPaste_leavesTheContentUntouched() {
+        XCTAssertEqual(ComposerPasteRouting.publicationText(current: "Déjà écrit", pasted: " \n "), "Déjà écrit")
+    }
+
+    @MainActor
+    func test_paste_story_writesTheSlideLegend_andLeavesTheDocumentText() {
+        let scene = StoryComposerViewModel()
+        var texteDuPost = ""
+        ComposerPasteRouting.paste("  Ma légende  ", format: .story, documentText: &texteDuPost, scene: scene)
+        XCTAssertEqual(scene.currentSlide.content, "Ma légende", "la story publie ce texte en légende")
+        XCTAssertEqual(texteDuPost, "", "le texte du post, qu'une story n'envoie pas, reste vide")
+    }
+
+    @MainActor
+    func test_paste_reel_writesTheSlideLegend() {
+        let scene = StoryComposerViewModel()
+        var texteDuPost = ""
+        ComposerPasteRouting.paste("Légende du réel", format: .reel, documentText: &texteDuPost, scene: scene)
+        XCTAssertEqual(scene.currentSlide.content, "Légende du réel")
+        XCTAssertEqual(texteDuPost, "")
+    }
+
+    @MainActor
+    func test_paste_story_existingLegend_appendsOnANewLine() {
+        let scene = StoryComposerViewModel()
+        scene.applyContentText("Déjà écrit")
+        var texteDuPost = ""
+        ComposerPasteRouting.paste("Collé", format: .story, documentText: &texteDuPost, scene: scene)
+        XCTAssertEqual(scene.currentSlide.content, "Déjà écrit\nCollé")
+    }
+
+    @MainActor
+    func test_paste_post_writesTheContent_andLeavesTheSlide() {
+        let scene = StoryComposerViewModel()
+        var texteDuPost = ""
+        ComposerPasteRouting.paste("Bonjour", format: .post, documentText: &texteDuPost, scene: scene)
+        XCTAssertEqual(texteDuPost, "Bonjour")
+        XCTAssertNil(scene.currentSlide.content)
+    }
+
+    func test_host_pastedItems_followThePasteLaw() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+        let debut = try XCTUnwrap(source.range(of: "func handlePastedItems("))
+        let corps = String(source[debut.upperBound...].prefix(1800))
+        XCTAssertTrue(corps.contains("ComposerPasteRouting.target(for: item, format: selectedFormat"),
+                      "la destination vient de la loi, avec le format choisi")
+        XCTAssertTrue(corps.contains("ComposerPasteBackground(") && corps.contains("effects: viewModel.currentSlide.effects"),
+                      "le fond déjà posé compte, par famille")
+        XCTAssertTrue(corps.contains("ComposerPasteRouting.paste(contenu, format: selectedFormat"))
+        XCTAssertFalse(corps.contains("StoryPastePolicy.placement"), "le texte ne devient plus un objet de scène")
+        XCTAssertFalse(corps.contains("backgroundReplacementId"), "coller ne remplace jamais un fond déjà posé")
+    }
+
+    func test_pasteEntry_showsTheGlyphOnly_inTheBrandBlue() throws {
+        let source = AppSourceGuard.stripComments(try String(contentsOf: Self.appFile("ComposerPasteEntryGate.swift"), encoding: .utf8))
+        XCTAssertTrue(source.contains(".labelStyle(.iconOnly)"), "aucun libellé visible")
+        XCTAssertTrue(source.contains("MeeshyColors.brandPrimary"), "le glyphe est bleu, couleur de marque")
+        XCTAssertTrue(source.contains("ComposerPasteEntry.accessibilityIdentifier"), "la recette l'atteint")
+    }
+
+    private static func appFile(_ name: String) -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Composer/\(name)")
     }
 }

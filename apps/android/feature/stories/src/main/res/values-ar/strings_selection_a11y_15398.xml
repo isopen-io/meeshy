@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_scene_a11y_labeled">%1$s: %2$s</string>
+    <string name="composer_scene_a11y_selected">تم تحديد %1$s، الطبقة %2$s، المستوى %3$d</string>
+    <string name="composer_scene_a11y_plane_foreground">الأمام</string>
+    <string name="composer_scene_a11y_plane_background">الخلفية</string>
+    <string name="composer_scene_a11y_place_named">مكان: %1$s</string>
+    <string name="composer_scene_a11y_sticker_named">ملصق %1$s</string>
+</resources>

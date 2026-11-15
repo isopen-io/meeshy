@@ -9,6 +9,7 @@ import asyncio
 import base64
 import json
 import logging
+import os
 import time
 import traceback
 import uuid
@@ -18,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 from .segment_serialization import _get_voice_similarity_score, _segment_to_dict
 from utils.audio_format import read_audio_bytes
+from config.message_limits import validate_audio_duration
+from services.task_privacy import in_at_rest_task, shown, under_declared_regime
+from utils.audio_path_guard import AUDIO_PATH_REJECTED, AUDIO_PATH_REJECTED_MESSAGE, AudioPathRejected
 
 # Import du pipeline audio.
 #
@@ -101,6 +105,7 @@ class AudioHandler:
             self.audio_pipeline = get_audio_pipeline()
         else:
             self.audio_pipeline = None
+    @under_declared_regime
     async def _handle_audio_process_request(self, request_data: dict):
         """
         Traite une requête de processing audio.
@@ -192,6 +197,26 @@ class AudioHandler:
                 if not request_data.get(field):
                     raise ValueError(f"Champ requis manquant: {field}")
 
+            # Plafond de durée (#3668) — refus propre AVANT l'acquisition
+            # (téléchargement/décodage) de l'audio, qui est le coût qu'un audio
+            # trop long ferait justement payer inutilement.
+            duration_ok, duration_error = validate_audio_duration(
+                request_data.get('audioDurationMs')
+            )
+            if not duration_ok:
+                logger.warning(
+                    f"⚠️ [TRANSLATOR] Audio refusé (durée): {duration_error} "
+                    f"(messageId={request_data.get('messageId')})"
+                )
+                await self._publish_audio_error(
+                    task_id=task_id,
+                    message_id=request_data.get('messageId', ''),
+                    attachment_id=request_data.get('attachmentId', ''),
+                    error=duration_error,
+                    error_code="audio_too_long"
+                )
+                return
+
             # ═══════════════════════════════════════════════════════════════
             # ACQUISITION AUDIO (binaire multipart > base64 > URL > path legacy)
             # ═══════════════════════════════════════════════════════════════
@@ -205,7 +230,7 @@ class AudioHandler:
                 audio_base64=request_data.get('audioBase64'),   # Legacy base64
                 audio_mime_type=request_data.get('audioMimeType'),
                 audio_url=request_data.get('audioUrl'),
-                audio_path=request_data.get('audioPath')  # Legacy fallback
+                audio_path=request_data.get('audioPath')  # Legacy, gardé par racine (#18628)
             )
 
             if not local_audio_path:
@@ -215,7 +240,7 @@ class AudioHandler:
                     f"url={request_data.get('audioUrl') or 'none'}"
                 )
 
-            logger.info(f"[TRANSLATOR] Audio acquis via {audio_source}: {local_audio_path}")
+            logger.info(f"[TRANSLATOR] Audio acquis via {audio_source}")
 
             # Flag pour savoir si on doit nettoyer le fichier temp après.
             # 'binary' (ZMQ multipart, le chemin PRIMAIRE) écrit aussi un fichier
@@ -288,13 +313,16 @@ class AudioHandler:
                     logger.info(f"   🌍 Langue détectée: {transcription.language} (confiance: {transcription.confidence:.2f})")
                     logger.info(f"   🎭 Locuteurs: {transcription.speaker_count or 1}")
                     logger.info(f"   ⏱️ Durée: {transcription.duration_ms}ms")
-                    logger.info(f"   📝 TEXTE: \"{transcription.text}\"")
+                    logger.info(f"   📝 TEXTE: \"{shown(transcription.text)}\"")
                     logger.info("=" * 70)
                 await self._publish_transcription_result(task_id, transcription_data)
 
             # Callback pour publier chaque traduction dès qu'elle est prête
-            # (envoi progressif des traductions au lieu d'attendre la fin)
+            # (envoi progressif des traductions au lieu d'attendre la fin).
+            # #13102 — retenues pour être effacées même si la tâche échoue ensuite.
+            progressive_tracks = []
             async def on_translation_ready(translation_data: dict):
+                progressive_tracks.append(translation_data.get('translation'))
                 await self._publish_translation_ready(task_id, translation_data)
 
             # Exécuter le pipeline audio avec le chemin local acquis
@@ -310,7 +338,7 @@ class AudioHandler:
                 user_language=request_data.get('userLanguage'),  # Langue utilisateur pour fallback
                 metadata=metadata,
                 target_languages=request_data.get('targetLanguages'),
-                generate_voice_clone=request_data.get('generateVoiceClone', True),
+                generate_voice_clone=request_data.get('generateVoiceClone', False),
                 model_type=request_data.get('modelType', 'medium'),
                 # Voice profile options (pour messages transférés - voix de l'émetteur original)
                 original_sender_id=request_data.get('originalSenderId'),
@@ -334,7 +362,7 @@ class AudioHandler:
             logger.info("═" * 70)
             logger.info(f"📊 [TRANSLATOR] RÉSULTAT TRAITEMENT AUDIO")
             logger.info(f"   ├─ Message ID: {result.message_id}")
-            logger.info(f"   ├─ Texte: \"{orig_text[:100]}{'...' if len(orig_text) > 100 else ''}\"")
+            logger.info(f"   ├─ Texte: \"{shown(orig_text, 100)}{'...' if len(orig_text) > 100 else ''}\"")
             logger.info(f"   ├─ Langue: {original.language} (confiance: {original.confidence:.2f})")
             logger.info(f"   ├─ Durée: {original.duration_ms}ms")
 
@@ -348,7 +376,7 @@ class AudioHandler:
             logger.info(f"   ├─ Traductions: {len(result.translations)} langue(s)")
             for lang, trans in result.translations.items():
                 trans_text = trans.translated_text if hasattr(trans, 'translated_text') else trans.get('translated_text', '')
-                logger.info(f"   │   └─ {lang}: \"{trans_text[:50]}{'...' if len(trans_text) > 50 else ''}\"")
+                logger.info(f"   │   └─ {lang}: \"{shown(trans_text, 50)}{'...' if len(trans_text) > 50 else ''}\"")
 
             # Info clonage vocal
             logger.info(f"   ├─ Voice quality: {result.voice_model_quality:.2f}")
@@ -359,6 +387,7 @@ class AudioHandler:
             logger.info(f"📤 [TRANSLATOR] Publication résultat audio: {task_id}")
             await self._publish_audio_result(task_id, result, processing_time)
             logger.info(f"✅ [TRANSLATOR] Résultat audio publié: {task_id}")
+            self._forget_translated_audio_files(result)
 
             # Le résultat porte la transcription même sans traduction : on le
             # publie d'abord, puis on signale l'échec pour sortir le client de
@@ -378,9 +407,8 @@ class AudioHandler:
                 audio_fetcher.cleanup_temp_file(local_audio_path)
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur audio process: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"❌ [TRANSLATOR] Erreur audio process: {type(e).__name__}")
+            self._forget_tracks(locals().get('progressive_tracks') or [])
 
             # Nettoyer le fichier temporaire en cas d'erreur
             try:
@@ -391,13 +419,42 @@ class AudioHandler:
             except Exception:
                 pass  # Ignorer les erreurs de nettoyage
 
+            rejected = isinstance(e, AudioPathRejected)
             await self._publish_audio_error(
                 task_id=task_id,
                 message_id=request_data.get('messageId', ''),
                 attachment_id=request_data.get('attachmentId', ''),
-                error=str(e),
-                error_code="processing_failed"
+                error=AUDIO_PATH_REJECTED_MESSAGE if rejected else "Audio processing failed",
+                error_code=AUDIO_PATH_REJECTED if rejected else "processing_failed"
             )
+
+    @staticmethod
+    def _forget_translated_audio_files(result) -> int:
+        """
+        #13102 — une tâche au repos ou éphémère ne laisse aucune piste sur le
+        disque du translator : une fois publiées à la passerelle (qui les
+        scelle), elles sont effacées. Une tâche ordinaire les garde.
+        """
+        return AudioHandler._forget_tracks((getattr(result, 'translations', None) or {}).values())
+
+    @staticmethod
+    def _forget_tracks(translations) -> int:
+        """Efface du disque les pistes de ces traductions, pour une tâche au repos ou éphémère seulement."""
+        if not in_at_rest_task():
+            return 0
+        removed = 0
+        for translation in translations:
+            path = getattr(translation, 'audio_path', None)
+            if not path:
+                continue
+            try:
+                os.remove(path)
+                removed += 1
+            except FileNotFoundError:
+                continue
+            except OSError as error:
+                logger.warning(f"[TRANSLATOR] piste d'une tâche au repos non effacée ({type(error).__name__})")
+        return removed
 
     async def _report_total_translation_failure(self, task_id: str, request_data: dict, result) -> bool:
         """Signale au client l'échec de TOUTES les langues demandées.
@@ -463,7 +520,7 @@ class AudioHandler:
                         audio_data_base64=t.audio_data_base64,
                     )
                 except Exception as e:
-                    logger.warning(f"[MULTIPART] Erreur lecture audio {t.language}: {e}")
+                    logger.warning(f"[MULTIPART] Erreur lecture audio {t.language}: {type(e).__name__}")
 
                 if audio_bytes:
                     binary_frames.append(audio_bytes)
@@ -488,7 +545,8 @@ class AudioHandler:
                     'durationMs': t.duration_ms,
                     'voiceCloned': t.voice_cloned,
                     'voiceQuality': t.voice_quality,
-                    'audioMimeType': t.audio_mime_type or 'audio/mp3'
+                    'audioMimeType': t.audio_mime_type or 'audio/mp3',
+                    'textOnly': bool(getattr(t, 'text_only', False)),
                     # Pas de audioDataBase64 - données dans binaryFrames
                 }
 
@@ -532,7 +590,7 @@ class AudioHandler:
 
                     logger.debug(f"[MULTIPART] Frame {frame_index-1}: embedding vocal ({len(embedding_bytes)} bytes)")
                 except Exception as e:
-                    logger.warning(f"[MULTIPART] Erreur décodage embedding: {e}")
+                    logger.warning(f"[MULTIPART] Erreur décodage embedding: {type(e).__name__}")
 
                 # Metadata sans embedding base64 (envoyé en binaire via binaryFrames)
                 new_voice_profile_metadata = {
@@ -599,7 +657,7 @@ class AudioHandler:
             logger.info(f"📜 [TRANSLATOR] TRANSCRIPTION FINALE: {result.message_id}")
             logger.info(f"   🌍 Langue: {result.original.language} | Confiance: {result.original.confidence:.2f}")
             logger.info(f"   🎭 Speakers: {result.original.speaker_count or 1} | Primary: {result.original.primary_speaker_id or 'N/A'}")
-            logger.info(f"   📝 Texte complet: \"{result.original.transcription}\"")
+            logger.info(f"   📝 Texte complet: \"{shown(result.original.transcription)}\"")
 
             # Log par speaker si diarisation disponible
             if result.original.segments and result.original.speaker_count and result.original.speaker_count > 1:
@@ -610,7 +668,7 @@ class AudioHandler:
                     txt = seg.text if hasattr(seg, 'text') else seg.get('text', '')
                     by_speaker[spk or '?'].append(txt)
                 for spk_id, texts in sorted(by_speaker.items()):
-                    logger.info(f"   [{spk_id}]: \"{' '.join(texts)}\"")
+                    logger.info(f"   [{spk_id}]: \"{shown(' '.join(texts))}\"")
             logger.info("─" * 70)
 
             metadata = {
@@ -649,9 +707,7 @@ class AudioHandler:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour audio result")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur publication audio result multipart: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"❌ [TRANSLATOR] Erreur publication audio result multipart: {type(e).__name__}")
 
     async def _publish_transcription_result(self, task_id: str, transcription_data: dict):
         """
@@ -706,7 +762,7 @@ class AudioHandler:
                 payload_str = json.dumps(metadata)
                 logger.info(f"[DEBUG] Transcription payload size: {len(payload_str)} bytes")
                 logger.info(f"[DEBUG] Transcription payload type: {metadata['type']}")
-                logger.info(f"[DEBUG] Transcription text preview: {transcription.text[:50]}...")
+                logger.info(f"[DEBUG] Transcription text preview: {shown(transcription.text, 50)}...")
 
                 # Envoyer en simple frame (pas de binaire pour la transcription)
                 await self.pub_socket.send_json(metadata)
@@ -722,9 +778,7 @@ class AudioHandler:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour transcription")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur publication transcription: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"❌ [TRANSLATOR] Erreur publication transcription: {type(e).__name__}")
 
     async def _publish_translation_ready(self, task_id: str, translation_data: dict):
         """
@@ -761,7 +815,7 @@ class AudioHandler:
                         audio_data_base64=translation.audio_data_base64,
                     )
                 except Exception as e:
-                    logger.warning(f"[MULTIPART] Erreur lecture audio {translation.language}: {e}")
+                    logger.warning(f"[MULTIPART] Erreur lecture audio {translation.language}: {type(e).__name__}")
 
             # Préparer le metadata JSON (Frame 0)
             translated_audio_dict = {
@@ -772,7 +826,8 @@ class AudioHandler:
                 'durationMs': translation.duration_ms,
                 'voiceCloned': translation.voice_cloned,
                 'voiceQuality': translation.voice_quality,
-                'audioMimeType': translation.audio_mime_type or 'audio/mp3'
+                'audioMimeType': translation.audio_mime_type or 'audio/mp3',
+                'textOnly': bool(getattr(translation, 'text_only', False)),
             }
 
             # Ajouter les segments si disponibles (convertir en dicts)
@@ -854,9 +909,7 @@ class AudioHandler:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour translation ready")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur publication translation ready: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"❌ [TRANSLATOR] Erreur publication translation ready: {type(e).__name__}")
 
     async def _publish_audio_error(
         self,
@@ -885,7 +938,7 @@ class AudioHandler:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour audio error")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur publication audio error: {e}")
+            logger.error(f"❌ [TRANSLATOR] Erreur publication audio error: {type(e).__name__}")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # TRANSCRIPTION ONLY - Transcription sans traduction ni TTS

@@ -2,6 +2,7 @@ import {
   attachmentMediaSelect,
   attachmentFullSelect,
   attachmentForwardPreviewSelect,
+  attachmentSocketSelect,
 } from '../attachmentIncludes';
 import { messageAttachmentSchema } from '@meeshy/shared/types/api-schemas';
 
@@ -20,7 +21,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
     // Fields fetched from DB for server-side aggregation only — intentionally
     // absent from messageAttachmentSchema because they are transformed before
     // serialization. BUG2 A': raw reactions → reactionSummary + currentUserReactions.
-    const INTERNAL_AGGREGATION_FIELDS = new Set(['reactions']);
+    const INTERNAL_AGGREGATION_FIELDS = new Set(['reactions', 'message']);
 
     it('attachmentMediaSelect ⊆ messageAttachmentSchema.properties', () => {
       const missing = Object.keys(attachmentMediaSelect)
@@ -47,6 +48,19 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
       const missing = Object.keys(attachmentForwardPreviewSelect).filter(
         (k) => !schemaKeys.has(k),
       );
+      expect(missing).toEqual([]);
+    });
+
+    /**
+     * #7070 — jumeau de la garde ci-dessus, pour la forme du CANAL SOCKET.
+     * Sinon `GET /messages` et `GET /sync` (qui appliquent `messageAttachmentSchema`
+     * en réponse) SERVIRAIENT moins que `message:new`/`message:edited` sur le
+     * MÊME `select` — la divergence inverse de celle que #7070 ferme.
+     */
+    it('attachmentSocketSelect ⊆ messageAttachmentSchema.properties', () => {
+      const missing = Object.keys(attachmentSocketSelect)
+        .filter((k) => !INTERNAL_AGGREGATION_FIELDS.has(k))
+        .filter((k) => !schemaKeys.has(k));
       expect(missing).toEqual([]);
     });
 
@@ -97,6 +111,13 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
       );
     });
 
+    it('includes lensSlug — le crédit « Lens par X » voyage avec le média (#11327)', () => {
+      // Le média reçu affiche la lens qui l'a produit ; la LISTE de messages et le
+      // canal socket le livrent depuis ce select. Absent d'ici, le crédit ne
+      // s'affiche jamais, E2EE compris (l'identifiant voyage en clair, #11251).
+      expect(attachmentMediaSelect).toEqual(expect.objectContaining({ lensSlug: true }));
+    });
+
     it('keeps the full file + audio/video codec set', () => {
       expect(attachmentMediaSelect).toEqual(
         expect.objectContaining({
@@ -138,7 +159,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
       });
     });
 
-    it('selects exactly 29 documented fields — guards against silent omission', () => {
+    it('selects exactly 34 documented fields — guards against silent omission', () => {
       const expectedKeys = [
         'id',
         'messageId',
@@ -150,6 +171,9 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         'thumbnailUrl',
         'thumbHash',
         'imageVariants',
+        'avifVariants',
+        'renditions',
+        'processingState',
         'width',
         'height',
         'duration',
@@ -157,6 +181,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         'sampleRate',
         'codec',
         'channels',
+        'loudnessLufs',
         'fps',
         'videoCodec',
         'pageCount',
@@ -168,10 +193,11 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         'transcription',
         'translations',
         'capturedInApp',
+        'lensSlug',
         'reactions',
       ];
       expect(Object.keys(attachmentMediaSelect).sort()).toEqual(expectedKeys.sort());
-      expect(Object.keys(attachmentMediaSelect)).toHaveLength(29);
+      expect(Object.keys(attachmentMediaSelect)).toHaveLength(34);
     });
   });
 
@@ -230,6 +256,89 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
       // drop transcription/translations during a future refactor.
       expect(attachmentFullSelect.transcription).toBe(true);
       expect(attachmentFullSelect.translations).toBe(true);
+    });
+  });
+
+  describe('attachmentSocketSelect — la forme du canal socket, étendue (#7070)', () => {
+    it('est un superset de attachmentMediaSelect et attachmentProtectionSelect', () => {
+      for (const key of Object.keys(attachmentMediaSelect)) {
+        expect(attachmentSocketSelect).toHaveProperty(
+          key,
+          (attachmentMediaSelect as Record<string, unknown>)[key],
+        );
+      }
+    });
+
+    it('porte les CINQ familles que #7070 a trouvées absentes du chemin REST/ZMQ', () => {
+      expect(attachmentSocketSelect).toEqual(
+        expect.objectContaining({
+          // protection (#7014, déjà là)
+          isViewOnce: true,
+          isBlurred: true,
+          effectFlags: true,
+          // forwarding
+          forwardedFromAttachmentId: true,
+          isForwarded: true,
+          // effets de vue-unique
+          maxViewOnceCount: true,
+          viewOnceCount: true,
+          // consommation
+          deliveredToAllAt: true,
+          viewedByAllAt: true,
+          downloadedByAllAt: true,
+          listenedByAllAt: true,
+          watchedByAllAt: true,
+          viewedCount: true,
+          downloadedCount: true,
+          consumedCount: true,
+          // fait + mode du chiffrement (jamais l'enveloppe)
+          isEncrypted: true,
+          encryptionMode: true,
+        }),
+      );
+    });
+
+    it("N'AJOUTE PAS l'enveloppe de chiffrement — secret de serveur, pas de fil (#7070)", () => {
+      expect(attachmentSocketSelect).not.toHaveProperty('encryptionIv');
+      expect(attachmentSocketSelect).not.toHaveProperty('encryptionAuthTag');
+      expect(attachmentSocketSelect).not.toHaveProperty('filePath');
+    });
+
+    /**
+     * LE CLIQUET DE DÉRIVE, et la raison pour laquelle il n'est pas remplacé
+     * par une dérivation.
+     *
+     * Mesuré après #7070 : `attachmentSocketSelect` est EXACTEMENT
+     * `attachmentFullSelect` moins l'enveloppe de chiffrement — deux listes
+     * de colonnes tenues À LA MAIN, dans le MÊME fichier, à trente lignes
+     * l'une de l'autre. Les deux témoins ci-dessus n'énumèrent que les cinq
+     * familles de ce lot : une SIXIÈME ajoutée demain à `attachmentFullSelect`
+     * (une ligne, un endpoint de détail) n'atteindrait pas le fil, et aucun
+     * témoin ne rougirait — « un relais qui RECOPIE champ par champ est un
+     * inventaire à tenir à jour, et il ne l'est jamais » (doc-comment du
+     * sérialiseur).
+     *
+     * Écrire `socket = full − enveloppe` en CODE aurait fermé la dérive dans
+     * le mauvais sens : un secret de serveur ajouté un jour à
+     * `attachmentFullSelect` aurait alors atteint la room toute entière sans
+     * un mot. Le cliquet, lui, est FAIL-CLOSED : il ne laisse rien fuir, il
+     * exige seulement qu'un humain tranche à quel canal appartient la
+     * nouvelle colonne — et nomme la colonne en défaut dans son échec.
+     */
+    it('ne DÉRIVE pas de attachmentFullSelect en silence — tout écart est NOMMÉ (#7070)', () => {
+      const ENVELOPPE_SERVEUR = ['encryptionIv', 'encryptionAuthTag'];
+      const clesSocket = new Set(Object.keys(attachmentSocketSelect));
+      const clesCompletes = new Set(Object.keys(attachmentFullSelect));
+
+      expect({
+        absentesDuFil: [...clesCompletes].filter((k) => !clesSocket.has(k)).sort(),
+        absentesDuDetail: [...clesSocket].filter((k) => !clesCompletes.has(k)).sort(),
+      }).toEqual({
+        absentesDuFil: [...ENVELOPPE_SERVEUR].sort(),
+        // #12333 — la description (et la protection du porteur qui la garde)
+        // est servie par le FIL ; le détail ne la sert pas encore.
+        absentesDuDetail: ['alt', 'altLanguage', 'altTranslations', 'message'],
+      });
     });
   });
 

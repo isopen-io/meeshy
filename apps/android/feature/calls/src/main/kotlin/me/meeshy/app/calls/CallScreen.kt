@@ -1,68 +1,44 @@
 package me.meeshy.app.calls
 
-import android.Manifest
-import android.content.Context
-import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.CallEnd
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material.icons.filled.VideocamOff
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
-import me.meeshy.feature.calls.R
-import me.meeshy.sdk.model.call.CallEndReason
-import me.meeshy.sdk.model.call.ConnectionQuality
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import androidx.compose.runtime.CompositionLocalProvider
 import me.meeshy.sdk.theme.DynamicColorGenerator
-import me.meeshy.ui.theme.MeeshyRadius
+import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.sdk.model.call.CallPreflightDecision
+import me.meeshy.sdk.model.call.CallChromeElement
+import me.meeshy.sdk.model.call.CallChromeInteraction
+import me.meeshy.sdk.model.call.CallScreenMode
+import me.meeshy.sdk.model.call.CallScreenPanel
+import me.meeshy.sdk.model.call.CallVerticalEdge
+import me.meeshy.sdk.model.call.CallStatusLabelLaw
+import me.meeshy.sdk.model.call.IncomingCallAnswer
+import me.meeshy.sdk.model.call.group.GroupCallStageFocus
 import me.meeshy.ui.theme.hexColor
-
-private const val CALL_ENDED_AUTO_DISMISS_MS = 1500L
-
-private fun hasSelfPermission(context: Context, permission: String): Boolean =
-    ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
 /**
  * The minimal 1:1 call screen — pure glue over [CallViewModel]. It starts the
@@ -70,56 +46,64 @@ private fun hasSelfPermission(context: Context, permission: String): Boolean =
  * accept/decline/hang-up/mute/camera affordances the state exposes. Dismissal on
  * a settled call returns to the caller via [onClose] (natural back-out, coherent
  * place). The accent is derived from the peer identity for colour coherence.
+ *
+ * It owns the geometry and nothing else: what capabilities add to the call — a
+ * layer in a [CallOverlaySlot], an action on the controls, a toast — comes from
+ * the view model's `extensions`, so adding one never edits this file.
  */
 @Composable
 fun CallScreen(
     config: CallConfig,
     onClose: () -> Unit,
     onMinimize: () -> Unit = {},
+    /** #17329 — le bouton Conversation de l'en-tête OUVRE la conversation (il ne réduit pas l'appel). */
+    onOpenConversation: () -> Unit = onMinimize,
     /** Bouton « Répondre » de la notification : décrocher dès l'arrivée (gated permissions). */
     autoAnswer: Boolean = false,
     viewModel: CallViewModel = hiltViewModel(),
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
-
-    // Runtime media permissions (mic always, camera for video). WebRTC capture
-    // records silence / fails without RECORD_AUDIO, and it is never granted by
-    // default. Mirrors iOS, where AVAudioSession prompts for the mic at first media
-    // access: an OUTGOING call gates its start on the grant; an INCOMING call rings
-    // first (no prompt) and gates accept — matching iOS's ask-at-answer flow.
-    val context = LocalContext.current
-    val requiredPermissions = remember(config.isVideo) { CallPermissions.required(config.isVideo) }
-    val pendingMediaAction = remember { mutableStateOf<(() -> Unit)?>(null) }
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions(),
-    ) { grants ->
-        // The mic is the vital minimum; the camera is optional (video degrades to audio).
-        val micGranted = grants[Manifest.permission.RECORD_AUDIO]
-            ?: hasSelfPermission(context, Manifest.permission.RECORD_AUDIO)
-        if (micGranted) pendingMediaAction.value?.invoke()
-        pendingMediaAction.value = null
-    }
-
-    fun withMediaPermissions(action: () -> Unit) {
-        if (hasSelfPermission(context, Manifest.permission.RECORD_AUDIO)) {
-            action()
-        } else {
-            pendingMediaAction.value = action
-            permissionLauncher.launch(requiredPermissions)
-        }
+    // L'écran voit un état à chrono GELÉ : un tic de 1 Hz ne le recompose pas. Le temps vivant
+    // voyage en `State` (LocalCallLiveSeconds) et n'est lu que par les feuilles qui l'affichent.
+    val callState by remember(viewModel) { viewModel.state.map(CallUiState::withFrozenClock).distinctUntilChanged() }
+        .collectAsStateWithLifecycle(initialValue = viewModel.state.value.withFrozenClock())
+    // Les sous-titres (#13333) entrent dans l'état que l'écran dessine : le bouton s'allume au toucher.
+    val captionsViewModel: CallCaptionsViewModel = hiltViewModel()
+    val captionsChip by remember(captionsViewModel) { captionsViewModel.state.map(CallCaptionsChip::of).distinctUntilChanged() }
+        .collectAsStateWithLifecycle(initialValue = CallCaptionsChip.of(captionsViewModel.state.value))
+    // Le principal parti d'un groupe qui continue, l'appel se nomme par ceux qui restent (#13754, iOS #9091) : le
+    // ViewModel le sert déjà dans `peerName`, que la pilule et la notification lisent aussi (#13768).
+    val groupMesh by viewModel.groupMesh.collectAsStateWithLifecycle()
+    val state = callState.withCaptions(captionsChip)
+    val liveSeconds = remember(viewModel) { viewModel.state.map { it.durationSeconds }.distinctUntilChanged() }
+        .collectAsStateWithLifecycle(initialValue = viewModel.state.value.durationSeconds)
+    val permissionGate = rememberCallPermissionGate()
+    val declineReply: CallDeclineReplyViewModel = hiltViewModel()
+    val pipViewModel: CallPictureInPictureViewModel = hiltViewModel()
+    val autoAnswerGate: IncomingAutoAnswerViewModel = hiltViewModel()
+    val inPip by pipViewModel.inPip.collectAsStateWithLifecycle()
+    val headerConversationId = config.conversationId.ifBlank { viewModel.activeConfig.conversationId }
+    val headerNames by rememberCallHeaderNames(headerConversationId)
+    DisposableEffect(pipViewModel) {
+        pipViewModel.callScreenShown(true)
+        onDispose { pipViewModel.callScreenShown(false) }
     }
 
     LaunchedEffect(config.peerId, config.isOutgoing, config.isVideo) {
         if (config.isOutgoing) {
-            withMediaPermissions { viewModel.start(config) }
+            permissionGate.preflightOutgoing(config.isVideo) { decision ->
+                viewModel.startAfterPreflight(config, decision)
+                if (decision == CallPreflightDecision.MicrophoneDenied) onClose()
+            }
         } else {
             viewModel.start(config)
             // Bouton « Répondre » de la notification : décrocher directement —
             // même chemin gated permissions que le bouton Accepter de l'écran.
             // Gardé sur INCOMING : une ré-entrée (second tap de notification,
-            // onNewIntent) sur un appel déjà décroché ne re-join jamais.
-            if (autoAnswer && viewModel.state.value.status == CallStatus.INCOMING) {
-                withMediaPermissions { viewModel.accept() }
+            // onNewIntent) sur un appel déjà décroché ne re-join jamais. Et seulement l'appel que la
+            // passerelle tient pour en cours sous cet identifiant, jamais un callId arbitraire (#13504) :
+            // la sonde passe d'abord, le statut se relit après (l'utilisateur a pu refuser entre-temps).
+            if (autoAnswer && autoAnswerGate.confirms(config) && viewModel.state.value.status == CallStatus.INCOMING) {
+                permissionGate.answerIncoming(config.isVideo) { answer -> answerIncoming(viewModel, answer) }
             }
         }
     }
@@ -131,416 +115,362 @@ fun CallScreen(
     // « Réessayer » (parity web retry-on-failure) — auto-dismiss would yank it.
     LaunchedEffect(state.isEnded, state.canRetry) {
         if (state.isEnded && !state.canRetry) {
-            delay(CALL_ENDED_AUTO_DISMISS_MS)
+            delay(CallStatusLabelLaw.ENDED_AUTO_DISMISS_MILLIS)
             viewModel.dismiss()
             onClose()
         }
     }
 
     val accent = hexColor(DynamicColorGenerator.colorForName(config.peerId.ifBlank { config.peerName }))
+    permissionGate.flow?.let { PermissionFlowHost(it, accent = accent) }
+    val extensions = viewModel.extensions
+    val chrome = remember { CallChromeController() }
+    val remoteVideo by viewModel.remoteVideoTracks.collectAsStateWithLifecycle(initialValue = null)
+    val groupShown = groupStageShown(state, groupMesh)
+    // G1.13 : en groupe, la scène est vidéo dès qu'UNE caméra est allumée, la mienne ou celle d'un autre.
+    val groupVideo = if (groupShown) CallGroupVideoStage.of(groupMesh, isPrimaryVideoActive = remoteVideo != null && !state.isPeerCameraOff) else null
+    val chromeVisibility = rememberCallChromeVisibility(chrome, state, groupVideo)
+    val reduceMotion = rememberCallReduceMotion()
+    val peer by viewModel.peerVisual.collectAsStateWithLifecycle()
+    val preview by viewModel.previewUi.collectAsStateWithLifecycle()
+    val avatarUrl = peer.avatarUrl
+    val backdropUrl = if (remoteVideo == null) peer.backdropUrl else null
+    val close = {
+        viewModel.dismiss()
+        onClose()
+    }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MeeshyTheme.tokens.backgroundPrimary),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (state.isVideoCall) {
-            val remoteVideo by viewModel.remoteVideoTracks.collectAsStateWithLifecycle(initialValue = null)
-            remoteVideo?.let { track ->
-                VideoRenderer(
-                    track = track,
-                    eglContext = viewModel.eglBaseContext,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-            viewModel.localVideoTrack?.let { local ->
-                VideoRenderer(
-                    track = local,
-                    eglContext = viewModel.eglBaseContext,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(MeeshySpacing.lg)
-                        .size(width = 108.dp, height = 148.dp)
-                        .clip(RoundedCornerShape(MeeshyRadius.md)),
-                    mirror = true,
-                    overlay = true,
-                )
-            }
+    CallImmersiveEffect()
+    CallStatusAnnouncer(state.status)
+    ScreenShareFoldsCall(onMinimize)
+    BackHandler {
+        when (CallPillPresenter.backAction(state.status)) {
+            CallBackAction.Inert -> Unit
+            CallBackAction.Minimize -> onMinimize()
+            CallBackAction.Close -> close()
         }
+    }
+    val chromeState by chrome.state.collectAsStateWithLifecycle()
+    val overlayContext = CallOverlayContext(
+        state = state,
+        accent = accent,
+        activeMode = chromeState.layer.activeMode,
+        chrome = chromeVisibility,
+        onChromeRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
+        inPip = inPip,
+        isGroupStage = groupShown,
+    )
+    BackHandler(enabled = chromeState.layer.activeMode != null) { chrome.exitMode() }
+    LaunchedEffect(captionsViewModel, chrome) { captionsViewModel.journalRequests.collect { chrome.open(CallScreenPanel.Journal) } }
 
-        Column(
+    val duo = rememberCallDuoStage(
+        state = state,
+        viewModel = viewModel,
+        config = config,
+        activeMode = chromeState.layer.activeMode,
+        groupShown = groupShown,
+        hasRemoteVideo = remoteVideo != null,
+        reduceMotion = reduceMotion,
+    )
+    var groupFocus by remember { mutableStateOf<GroupCallStageFocus>(GroupCallStageFocus.Grid) }
+    // Loi 3 : sur un écran partagé reçu (contenu clair), le verre de l'en-tête, de la pilule et des rails s'assombrit.
+    val glassTone = callGlassTone(groupShown, state.isPeerScreenSharing, duo, chromeState.layer.activeMode, groupFocus)
+    // R1.5 : ma vignette descend sous la pile entière des bandeaux (partage, enregistrement, capture), à leur hauteur mesurée.
+    val bannerHeights = remember { CallTopBannerHeights() }
+    // L1.8 · L2.8 : ma vignette longe la pile des bannières et cède son coin aux rails, en paysage.
+    val selfTileNeighbours = remember { CallSelfTileNeighbours() }
+    // E3 · E4 (#18227) : « En attente » et « Vidéo réduite » sont des maillons de la pile ; ma vignette et la grille leur cèdent la place.
+    val servicePills = overlayContext.servicePills()
+    val selfTileClearance = rememberSelfTileBannerClearance(
+        bannerHeights, state.isPeerScreenCapturing && !inPip, servicePills, reduceMotion,
+    )
+    // P11.1 : sur la grille, l'en-tête flotte et la scène part de la zone sûre ; à la une, elle reste sous lui.
+    val groupGridClearance = rememberGroupGridBannerClearance(
+        bannerHeights, state.isPeerScreenSharing, state.isPeerScreenCapturing && !inPip, chromeState.isStageFullScreen,
+        servicePills, reduceMotion, isGroupGrid = groupFocus == GroupCallStageFocus.Grid,
+    )
+
+    // L'écran d'appel est blanc sur un fond sombre ÉPINGLÉ, en thème clair comme en thème sombre :
+    // on épingle aussi le thème pour que les jetons de texte et de surface des enfants restent clairs.
+    MeeshyTheme(darkTheme = true) {
+        CompositionLocalProvider(
+            LocalCallLiveSeconds provides liveSeconds,
+            LocalCallGlassTone provides glassTone,
+            LocalCallGlassToneProgress provides rememberCallGlassToneProgress(glassTone, reduceMotion),
+            LocalCallSelfTileBannerClearance provides selfTileClearance,
+            LocalCallTopBannerHeights provides bannerHeights,
+            LocalCallSelfTileNeighbours provides selfTileNeighbours,
+            LocalCallGroupGridClearance provides groupGridClearance,
+        ) {
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(MeeshySpacing.xl),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
+                .callSwipeToMinimize(
+                    enabled = CallPillPresenter.isMinimizable(state.status),
+                    onMinimize = onMinimize,
+                ),
+            contentAlignment = Alignment.Center,
         ) {
-            Spacer(Modifier.height(MeeshySpacing.xl))
+            CallBackdrop(imageUrl = backdropUrl)
 
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                if (!state.isVideoCall) {
-                    Box(
-                        modifier = Modifier
-                            .size(96.dp)
-                            .clip(CircleShape)
-                            .background(accent),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = state.peerName.take(1).uppercase(),
-                            style = MaterialTheme.typography.headlineLarge,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
+            val touchExploration = rememberCallTouchExploration()
+            val sceneTap = rememberCallSceneTap(chrome, state, groupVideo, touchExploration)
+            val selfCamera = remember(viewModel) {
+                CallSelfCameraActions(viewModel.cameraZoom)
+            }
+            val pill = rememberCallPillActions(state, viewModel, chrome)
+            val peerSpeech = rememberCallPeerSpeechSource(viewModel, config.peerId.ifBlank { viewModel.activeConfig.peerId }, groupMesh)
+            if (duo.shown) {
+                CallDuoVideoStage(
+                    state = state,
+                    callKey = duo.callKey,
+                    remoteTrack = remoteVideo,
+                    localTrack = duo.localTrack,
+                    eglContext = viewModel.eglBaseContext,
+                    peerAvatarUrl = avatarUrl,
+                    connected = state.showsConnectedLayout,
+                    reduceMotion = reduceMotion,
+                    layout = duo.layout,
+                    onSwap = duo.onSwap,
+                    onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
+                    onSceneTap = sceneTap,
+                    selfCamera = selfCamera,
+                    controlsVisible = chromeVisibility.isVisible(CallChromeElement.Controls) && !inPip,
+                    framed = duo.framed,
+                    selfUserId = viewModel.selfUserId,
+                    peerUserId = config.peerId.ifBlank { viewModel.activeConfig.peerId },
+                    peerSpeech = peerSpeech,
+                )
+            } else if ((groupShown || !duo.videoStage) && chromeState.layer.activeMode == null) {
+                // #17945 : le fond (derrière l'avatar d'un duo audio, autour de la grille d'un groupe, caméras allumées ou non)
+                // prend le toucher qui range l'en-tête, la pilule et le journal — et, rangés, les rend (iOS `stageRevealTarget`).
+                sceneTap?.let { CallSceneBackgroundTapTarget(onTap = it) }
+            }
+
+            // L'aperçu avant décroché : la vidéo de l'appelant derrière la sonnerie, jusqu'au vrai lien.
+            preview.video?.takeIf { !state.showsConnectedLayout }?.let { track ->
+                CallPreviewBackdrop(track = track, eglContext = viewModel.eglBaseContext)
+            }
+
+            CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Background, overlayContext, Modifier.fillMaxSize())
+
+            // Cet ecran n'a pas de Scaffold : il pose lui-meme l'inset des barres systeme. Le fond
+            // reste PLEIN ECRAN, seul le CONTENU est retreci.
+            val content = Modifier.fillMaxSize().systemBarsPadding()
+            when {
+                state.showsConnectedLayout || state.status == CallStatus.IDLE -> CallConnectedColumn(
+                    state = state,
+                    accent = accent,
+                    viewModel = viewModel,
+                    overlayContext = overlayContext,
+                    chrome = chrome,
+                    videoStage = duo.videoStage,
+                    peer = peer,
+                    pill = pill,
+                    modifier = content,
+                    inPip = inPip,
+                    groupVideo = groupVideo,
+                    peerSpeech = peerSpeech,
+                    groupStage = if (groupShown) {
+                        { stageModifier, isCompactHeight ->
+                            CallGroupStage(
+                                state = state,
+                                mesh = groupMesh,
+                                localTrack = duo.localTrack,
+                                primaryTrack = remoteVideo,
+                                eglContext = viewModel.eglBaseContext,
+                                isChromeVisible = chromeVisibility.isVisible(CallChromeElement.Controls),
+                                isCapsuleVisible = chromeVisibility.isVisible(CallChromeElement.FeaturedCapsule),
+                                onChromeRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
+                                isFullScreen = chromeState.isStageFullScreen,
+                                onFullScreenChange = chrome::setStageFullScreen,
+                                onStageTap = sceneTap,
+                                modifier = stageModifier,
+                                onFocusChange = { groupFocus = it },
+                                isCompactHeight = isCompactHeight,
+                                selfCameraZoom = selfCamera.zoom,
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                )
+                state.status == CallStatus.INCOMING -> IncomingCallScreen(
+                    state = state,
+                    peer = peer,
+                    reduceMotion = reduceMotion,
+                    onAccept = {
+                        permissionGate.answerIncoming(config.isVideo) { answer -> answerIncoming(viewModel, answer) }
+                    },
+                    onDecline = viewModel::decline,
+                    modifier = content,
+                    onDeclineWithMessage = CallDeclineReplyTarget.of(config)?.let { target ->
+                        { text ->
+                            declineReply.send(target.peerId, target.conversationId, text)
+                            viewModel.decline()
+                        }
+                    },
+                    preview = preview,
+                    onTogglePreviewSound = viewModel::togglePreviewSound,
+                    preAnswer = rememberIncomingPreAnswerHost(viewModel, state.isVideoCall),
+                    // « Sans vidéo » (P17) : seul le micro est demandé, et ma caméra ne s'ouvre jamais.
+                    onAcceptWithoutVideo = {
+                        permissionGate.answerIncoming(isVideo = false) { answer -> answerWithoutVideo(viewModel, answer) }
+                    },
+                )
+                state.status == CallStatus.OUTGOING_RINGING -> CallOutgoingRingingScreen(
+                    state = state,
+                    peer = peer,
+                    reduceMotion = reduceMotion,
+                    onHangUp = viewModel::hangUp,
+                    previewPanel = {
+                        CallPreviewOutgoingPanel(
+                            preview = preview,
+                            peerName = state.peerName,
+                            isVideoCall = state.isVideoCall,
+                            onToggleAudio = viewModel::togglePreviewAudio,
+                            onToggleVideo = viewModel::togglePreviewVideo,
+                            modifier = Modifier.padding(bottom = MeeshySpacing.xxl),
                         )
-                    }
-                    Spacer(Modifier.height(MeeshySpacing.lg))
-                }
-                Text(
-                    text = state.peerName,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MeeshyTheme.tokens.textPrimary,
+                    },
                 )
-                Spacer(Modifier.height(MeeshySpacing.sm))
-                Text(
-                    text = statusLabel(state),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MeeshyTheme.tokens.textSecondary,
-                    textAlign = TextAlign.Center,
+                state.isEnded -> CallEndedPanel(
+                    state = state,
+                    peer = peer,
+                    onRetry = viewModel::retry,
+                    onClose = close,
+                    modifier = content,
                 )
-                state.connectionQuality?.let { quality ->
-                    Spacer(Modifier.height(MeeshySpacing.sm))
-                    ConnectionQualityBars(quality = quality, accent = accent)
-                }
-                if (state.isPeerQualityDegraded) {
-                    Spacer(Modifier.height(MeeshySpacing.sm))
-                    Text(
-                        text = stringResource(R.string.call_peer_quality_degraded, state.peerName),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MeeshyTheme.tokens.warning,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-                if (state.isPeerScreenCapturing) {
-                    Spacer(Modifier.height(MeeshySpacing.sm))
-                    Text(
-                        text = stringResource(R.string.call_peer_screen_capturing, state.peerName),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MeeshyTheme.tokens.error,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-                if (state.isPeerMuted) {
-                    Spacer(Modifier.height(MeeshySpacing.sm))
-                    Text(
-                        text = stringResource(R.string.call_peer_muted, state.peerName),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MeeshyTheme.tokens.textSecondary,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-                if (state.isPeerCameraOff) {
-                    Spacer(Modifier.height(MeeshySpacing.sm))
-                    Text(
-                        text = stringResource(R.string.call_peer_camera_off, state.peerName),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MeeshyTheme.tokens.textSecondary,
-                        textAlign = TextAlign.Center,
+                else -> CallConnectingScreen(
+                    state = state,
+                    peer = peer,
+                    reduceMotion = reduceMotion,
+                    onHangUp = viewModel::hangUp,
+                    modifier = content,
+                )
+            }
+
+            CallOverlaySlotHost(
+                extensions.overlays, CallOverlaySlot.Center, overlayContext,
+                Modifier.align(Alignment.Center),
+            )
+            CallOverlaySlotHost(
+                extensions.overlays, CallOverlaySlot.Panel, overlayContext,
+                Modifier.align(Alignment.BottomCenter).systemBarsPadding(),
+            )
+
+            state.waitingBanner?.let { banner ->
+                CallWaitingBanner(
+                    banner = banner,
+                    onReject = viewModel::rejectWaiting,
+                    onAnswer = viewModel::acceptWaitingSwap,
+                    modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding(),
+                )
+            }
+
+            // En-tête (miroir de iOS `topChrome`) : Réduire · Image dans l'image · Conversation à gauche, capsule à
+            // droite (nom · durée en vidéo, réseau dégradé seul en audio). Il s'efface avec la pilule d'un toucher sur la scène.
+            var qualityDetailOpen by remember { mutableStateOf(false) }
+            if (qualityDetailOpen) CallQualitySheet(onDismiss = { qualityDetailOpen = false })
+            if (CallPillPresenter.isMinimizable(state.status)) {
+                CallChromeFade(
+                    isVisible = chromeVisibility.isVisible(CallChromeElement.Header) && !inPip,
+                    onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
+                    modifier = Modifier.align(Alignment.TopStart).systemBarsPadding().padding(horizontal = MeeshySpacing.lg),
+                    stowsToward = CallVerticalEdge.Top,
+                    edgeMargin = MeeshySpacing.xl,
+                ) {
+                    CallHeaderBar(
+                        state = state,
+                        conversationId = headerConversationId,
+                        showsMinimize = true,
+                        onMinimize = onMinimize,
+                        modifier = Modifier.padding(top = MeeshySpacing.xs),
+                        isVideoStage = duo.videoStage,
+                        onOpenQualityDetail = { qualityDetailOpen = true },
+                        isGroupStage = groupShown,
+                        names = headerNames,
+                        participantCount = groupMesh.roster.participantCount,
+                        canEnterPictureInPicture = pipViewModel.offers(state),
+                        isPictureInPictureActive = inPip,
+                        onEnterPictureInPicture = pipViewModel::enter,
+                        onOpenConversation = onOpenConversation,
                     )
                 }
             }
 
-            state.captionText?.let { caption ->
-                Text(
-                    text = caption,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .padding(horizontal = MeeshySpacing.lg)
-                        .clip(RoundedCornerShape(MeeshyRadius.md))
-                        .background(Color.Black.copy(alpha = 0.55f))
-                        .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
-                )
-            }
+            CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Fullscreen, overlayContext, Modifier.fillMaxSize())
 
-            CallControls(
+            // Le mode « Capturer l'appel » : la scène qui se photographie (deux tapes) ou se filme (appui
+            // long), sous le choix du cadre en direct ; le chrome de l'appel s'efface.
+            CallMontageMode(
+                visible = chromeState.layer.activeMode == CallScreenMode.Montage,
                 state = state,
-                accent = accent,
-                onAccept = { withMediaPermissions { viewModel.accept() } },
-                onDecline = viewModel::decline,
-                onHangUp = viewModel::hangUp,
-                onToggleMute = viewModel::toggleMute,
-                onToggleCamera = viewModel::toggleCamera,
-                onClose = {
-                    viewModel.dismiss()
-                    onClose()
-                },
-                onRetry = viewModel::retry,
+                localTrack = viewModel.localVideoTrack,
+                remoteTrack = remoteVideo,
+                eglContext = viewModel.eglBaseContext,
+                reduceMotion = reduceMotion,
+                onClose = chrome::exitMode,
+                onOpenEffects = { chrome.enter(CallScreenMode.Effects) },
             )
-        }
 
-        state.waitingBanner?.let { banner ->
-            CallWaitingBanner(
-                banner = banner,
-                accent = accent,
-                onReject = viewModel::rejectWaiting,
-                onAnswer = viewModel::acceptWaitingSwap,
-                modifier = Modifier.align(Alignment.TopCenter),
-            )
-        }
-
-        // Minimise affordance — parity with iOS's collapse-to-pill. Offered only
-        // for a live, non-incoming call (the same phases that surface the floating
-        // pill); [onMinimize] opens the conversation while the Activity-scoped
-        // CallViewModel keeps the call alive. On a video call the chevron rides the
-        // remote feed, so it stays white for contrast.
-        if (CallPillPresenter.isMinimizable(state.status)) {
-            IconButton(
-                onClick = onMinimize,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(MeeshySpacing.sm),
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.KeyboardArrowDown,
-                    contentDescription = stringResource(R.string.call_action_minimize),
-                    tint = if (state.isVideoCall) Color.White else MeeshyTheme.tokens.textPrimary,
+            // Le mode « Effets de ma caméra » : mon image en plein écran, telle qu'elle part, sous le choix d'un effet. Sa couche
+            // fond à l'entrée et à la sortie, sans monter du bas (P8.14, loi 17, #17819 ; iOS `.transition(.opacity)`).
+            CallModeLayer(
+                visible = chromeState.layer.activeMode == CallScreenMode.Effects,
+                mode = CallScreenMode.Effects,
+                reduceMotion = reduceMotion,
+            ) { _ ->
+                CallEffectsMode(
+                    state = state,
+                    localTrack = viewModel.localVideoTrack,
+                    remoteTrack = remoteVideo,
+                    eglContext = viewModel.eglBaseContext,
+                    reduceMotion = reduceMotion,
+                    onClose = chrome::exitMode,
+                    onOpenFrames = { chrome.enter(CallScreenMode.Montage) },
+                    peerUserId = config.peerId.ifBlank { viewModel.activeConfig.peerId },
+                    peerAvatarUrl = avatarUrl,
+                    active = chromeState.layer.activeMode == CallScreenMode.Effects,
                 )
             }
-        }
-    }
-}
 
-/**
- * The call-waiting banner: a second incoming call arrived while this one is
- * active. Pinned to the top, it offers *Decline* (end the waiting call, keep this
- * one) and *Answer* (end this call and take the waiting one). Colour-coherent with
- * the call controls — the answer action carries the peer [accent], the reject the
- * semantic error hue. Pure glue: every decision lives in [CallViewModel].
- */
-@Composable
-private fun CallWaitingBanner(
-    banner: WaitingBannerUi,
-    accent: Color,
-    onReject: () -> Unit,
-    onAnswer: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val bannerLabel = stringResource(R.string.call_waiting_banner_a11y, banner.callerName)
-    Row(
-        modifier = modifier
-            .padding(MeeshySpacing.md)
-            .clip(RoundedCornerShape(16.dp))
-            .background(MeeshyTheme.tokens.backgroundSecondary)
-            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md)
-            .semantics { contentDescription = bannerLabel },
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md, Alignment.Start),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.width(140.dp)) {
-            Text(
-                text = banner.callerName,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MeeshyTheme.tokens.textPrimary,
-            )
-            Text(
-                text = stringResource(R.string.call_waiting_subtitle),
-                style = MaterialTheme.typography.bodySmall,
-                color = MeeshyTheme.tokens.textSecondary,
-            )
-        }
-        Spacer(Modifier.width(MeeshySpacing.sm))
-        CallCircleButton(
-            icon = Icons.Filled.CallEnd,
-            background = MaterialTheme.colorScheme.error,
-            contentDescription = stringResource(R.string.call_waiting_reject_a11y, banner.callerName),
-            onClick = onReject,
-        )
-        CallCircleButton(
-            icon = Icons.Filled.Call,
-            background = accent,
-            contentDescription = stringResource(R.string.call_waiting_answer_a11y, banner.callerName),
-            onClick = onAnswer,
-        )
-    }
-}
+            // La pile des bandeaux du haut (partage, enregistrement, capture, cadre) se compose APRÈS les modes Effets et Montage, comme
+            // iOS : la carte d'accord ne se perd pas sous une scène noire (R2.5).
+            CallTopBannerStackHost(extensions.overlays, overlayContext, Modifier.align(Alignment.TopCenter))
 
-@Composable
-private fun statusLabel(state: CallUiState): String = when (state.status) {
-    CallStatus.IDLE -> ""
-    CallStatus.INCOMING -> stringResource(R.string.call_status_incoming)
-    CallStatus.OUTGOING_RINGING -> stringResource(R.string.call_status_ringing)
-    CallStatus.CONNECTING -> stringResource(R.string.call_status_connecting)
-    CallStatus.CONNECTED -> state.durationLabel ?: stringResource(R.string.call_status_connected)
-    CallStatus.RECONNECTING -> stringResource(R.string.call_status_reconnecting, state.reconnectAttempt)
-    CallStatus.ENDED -> {
-        val base = endedLabel(state.endReason)
-        state.durationLabel?.let { "$base · $it" } ?: base
-    }
-}
-
-@Composable
-private fun endedLabel(reason: CallEndReason?): String = when (reason) {
-    CallEndReason.Missed -> stringResource(R.string.call_ended_missed)
-    CallEndReason.Rejected -> stringResource(R.string.call_ended_declined)
-    CallEndReason.ConnectionLost -> stringResource(R.string.call_ended_connection_lost)
-    is CallEndReason.Failed -> stringResource(R.string.call_ended_failed)
-    else -> stringResource(R.string.call_ended)
-}
-
-/**
- * A subtle 4-bar signal indicator for the live [ConnectionQuality] — bars fill
- * up to [ConnectionQuality.bars], tinted the peer accent, or the error hue on a
- * weak link. A single VoiceOver label describes the tier (the bars themselves
- * are decorative). Accent-coherent per the conversation colour rule.
- */
-@Composable
-private fun ConnectionQualityBars(quality: ConnectionQuality, accent: Color) {
-    val filledColor = if (quality.isWeak) MaterialTheme.colorScheme.error else accent
-    val emptyColor = MeeshyTheme.tokens.textSecondary.copy(alpha = 0.3f)
-    val description = qualityDescription(quality)
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.Bottom,
-        modifier = Modifier.semantics { contentDescription = description },
-    ) {
-        val heights = listOf(6.dp, 10.dp, 14.dp, 18.dp)
-        heights.forEachIndexed { index, barHeight ->
-            Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .height(barHeight)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(if (index < quality.bars) filledColor else emptyColor),
-            )
-        }
-    }
-}
-
-@Composable
-private fun qualityDescription(quality: ConnectionQuality): String = when (quality) {
-    ConnectionQuality.EXCELLENT -> stringResource(R.string.call_quality_excellent)
-    ConnectionQuality.GOOD -> stringResource(R.string.call_quality_good)
-    ConnectionQuality.FAIR -> stringResource(R.string.call_quality_fair)
-    ConnectionQuality.POOR -> stringResource(R.string.call_quality_poor)
-}
-
-@Composable
-private fun CallControls(
-    state: CallUiState,
-    accent: Color,
-    onAccept: () -> Unit,
-    onDecline: () -> Unit,
-    onHangUp: () -> Unit,
-    onToggleMute: () -> Unit,
-    onToggleCamera: () -> Unit,
-    onClose: () -> Unit,
-    onRetry: () -> Unit,
-) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xl, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(bottom = MeeshySpacing.xl),
-    ) {
-        if (state.canToggleMedia) {
-            CallToggleButton(
-                on = !state.isMuted,
-                onIcon = Icons.Filled.Mic,
-                offIcon = Icons.Filled.MicOff,
-                contentDescription = stringResource(R.string.call_action_mute),
-                onClick = onToggleMute,
-            )
-            if (state.isVideoCall) {
-                CallToggleButton(
-                    on = state.isCameraOn,
-                    onIcon = Icons.Filled.Videocam,
-                    offIcon = Icons.Filled.VideocamOff,
-                    contentDescription = stringResource(R.string.call_action_camera),
-                    onClick = onToggleCamera,
+            // « Ajouter à l'appel » : une feuille, comme iOS ; la fermer rend le menu de la pilule.
+            if (chromeState.layer.openPanel == CallScreenPanel.People) {
+                CallAddPeopleSheet(
+                    selfId = groupMesh.roster.localUserId,
+                    primaryUserId = groupMesh.primaryUserId ?: config.peerId,
+                    mesh = groupMesh,
+                    onDismiss = chrome::backToMenu,
                 )
             }
-        }
 
-        if (state.showAnswerControls) {
-            CallCircleButton(
-                icon = Icons.Filled.Call,
-                background = accent,
-                contentDescription = stringResource(R.string.call_action_accept),
-                onClick = onAccept,
-            )
-            CallCircleButton(
-                icon = Icons.Filled.CallEnd,
-                background = MaterialTheme.colorScheme.error,
-                contentDescription = stringResource(R.string.call_action_decline),
-                onClick = onDecline,
+            CallToastHost(
+                toasts = extensions.toasts.toasts,
+                modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding(),
             )
         }
-
-        if (state.showHangUp) {
-            CallCircleButton(
-                icon = Icons.Filled.CallEnd,
-                background = MaterialTheme.colorScheme.error,
-                contentDescription = stringResource(R.string.call_action_hang_up),
-                onClick = onHangUp,
-            )
-        }
-
-        if (state.canRetry) {
-            // A transient failure — offer « Réessayer » (re-initiates the same
-            // call) beside the close button. Parité web retry-on-failure.
-            CallCircleButton(
-                icon = if (state.isVideoCall) Icons.Filled.Videocam else Icons.Filled.Call,
-                background = MeeshyTheme.tokens.success,
-                contentDescription = stringResource(R.string.call_action_retry),
-                onClick = onRetry,
-            )
-        }
-
-        if (state.isEnded) {
-            CallCircleButton(
-                icon = Icons.Filled.CallEnd,
-                background = MeeshyTheme.tokens.textSecondary,
-                contentDescription = stringResource(R.string.call_action_close),
-                onClick = onClose,
-            )
         }
     }
 }
 
-@Composable
-private fun CallToggleButton(
-    on: Boolean,
-    onIcon: androidx.compose.ui.graphics.vector.ImageVector,
-    offIcon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit,
-) {
-    IconButton(onClick = onClick) {
-        Icon(
-            imageVector = if (on) onIcon else offIcon,
-            contentDescription = contentDescription,
-            tint = MeeshyTheme.tokens.textPrimary,
-        )
-    }
+/** Ce que « Sans vidéo » devient une fois le micro tranché (refusé ⇒ raccrocher) : ma caméra ne s'ouvre jamais. */
+private fun answerWithoutVideo(viewModel: CallViewModel, answer: IncomingCallAnswer) {
+    if (answer == IncomingCallAnswer.HangUp) viewModel.decline() else viewModel.acceptWithoutVideo()
 }
 
-@Composable
-private fun CallCircleButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    background: Color,
-    contentDescription: String,
-    onClick: () -> Unit,
-) {
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier
-            .size(64.dp)
-            .clip(CircleShape)
-            .background(background),
-    ) {
-        Icon(imageVector = icon, contentDescription = contentDescription, tint = Color.White)
+/** Ce que « Accepter » devient une fois les permissions tranchées (micro refusé ⇒ raccrocher, caméra refusée ⇒ audio). */
+private fun answerIncoming(viewModel: CallViewModel, answer: IncomingCallAnswer) {
+    when (answer) {
+        IncomingCallAnswer.HangUp -> viewModel.decline()
+        IncomingCallAnswer.Answer -> viewModel.accept()
+        IncomingCallAnswer.AnswerAudioOnly -> {
+            viewModel.accept()
+            if (viewModel.state.value.isCameraOn) viewModel.toggleCamera()
+        }
     }
 }

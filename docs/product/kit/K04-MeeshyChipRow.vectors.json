@@ -1,0 +1,548 @@
+{
+  "kit": "K04",
+  "disabledOpacity": 0.4,
+  "toneFadeMs": 200,
+  "edgeFadeMs": 150,
+  "revealMs": 250,
+  "edgeTolerance": 0.5,
+  "edgeFade": 44,
+  "tapTarget": {
+    "ios": 44,
+    "android": 48,
+    "web": 44
+  },
+  "sizes": [
+    {
+      "size": "regular",
+      "height": 36,
+      "padding": 12,
+      "font": 13
+    },
+    {
+      "size": "compact",
+      "height": 28,
+      "padding": 10,
+      "font": 12
+    }
+  ],
+  "glyph": {
+    "leading": 14,
+    "alone": 16,
+    "trailing": 12
+  },
+  "spacing": {
+    "chips": 6,
+    "glyphAndText": 6,
+    "rows": 8
+  },
+  "voiles": {
+    "rest": 0.08,
+    "pressed": 0.15,
+    "selectedPressed": 0.85,
+    "selected": 1.0
+  },
+  "next": [
+    {
+      "mode": "single",
+      "kind": "choice",
+      "selection": [
+        "a"
+      ],
+      "tapped": "a",
+      "response": "ignored",
+      "next": [
+        "a"
+      ]
+    },
+    {
+      "mode": "single",
+      "kind": "choice",
+      "selection": [
+        "a"
+      ],
+      "tapped": "b",
+      "response": "changed",
+      "next": [
+        "b"
+      ]
+    },
+    {
+      "mode": "single",
+      "kind": "choice",
+      "selection": [],
+      "tapped": "b",
+      "response": "changed",
+      "next": [
+        "b"
+      ]
+    },
+    {
+      "mode": "singleOrNone",
+      "kind": "choice",
+      "selection": [
+        "a"
+      ],
+      "tapped": "a",
+      "response": "changed",
+      "next": []
+    },
+    {
+      "mode": "singleOrNone",
+      "kind": "choice",
+      "selection": [
+        "a"
+      ],
+      "tapped": "b",
+      "response": "changed",
+      "next": [
+        "b"
+      ]
+    },
+    {
+      "mode": "singleOrNone",
+      "kind": "choice",
+      "selection": [],
+      "tapped": "a",
+      "response": "changed",
+      "next": [
+        "a"
+      ]
+    },
+    {
+      "mode": "multiple",
+      "kind": "choice",
+      "selection": [
+        "a"
+      ],
+      "tapped": "b",
+      "response": "changed",
+      "next": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "mode": "multiple",
+      "kind": "choice",
+      "selection": [
+        "a",
+        "b"
+      ],
+      "tapped": "a",
+      "response": "changed",
+      "next": [
+        "b"
+      ]
+    },
+    {
+      "mode": "multiple",
+      "kind": "choice",
+      "selection": [
+        "a"
+      ],
+      "tapped": "a",
+      "response": "changed",
+      "next": []
+    },
+    {
+      "mode": "actions",
+      "kind": "choice",
+      "selection": [
+        "a"
+      ],
+      "tapped": "b",
+      "response": "action",
+      "next": [
+        "a"
+      ]
+    },
+    {
+      "mode": "single",
+      "kind": "action",
+      "selection": [
+        "a"
+      ],
+      "tapped": "b",
+      "response": "action",
+      "next": [
+        "a"
+      ]
+    },
+    {
+      "mode": "multiple",
+      "kind": "menu",
+      "selection": [
+        "a"
+      ],
+      "tapped": "b",
+      "response": "action",
+      "next": [
+        "a"
+      ]
+    },
+    {
+      "mode": "singleOrNone",
+      "kind": "menu",
+      "selection": [],
+      "tapped": "b",
+      "response": "action",
+      "next": []
+    }
+  ],
+  "edges": [
+    {
+      "name": "tout tient",
+      "content": 300,
+      "viewport": 300,
+      "offset": 0,
+      "start": false,
+      "end": false
+    },
+    {
+      "name": "plus petit que la rangée",
+      "content": 200,
+      "viewport": 390,
+      "offset": 0,
+      "start": false,
+      "end": false
+    },
+    {
+      "name": "au début",
+      "content": 800,
+      "viewport": 390,
+      "offset": 0,
+      "start": false,
+      "end": true
+    },
+    {
+      "name": "au milieu",
+      "content": 800,
+      "viewport": 390,
+      "offset": 200,
+      "start": true,
+      "end": true
+    },
+    {
+      "name": "au bout",
+      "content": 800,
+      "viewport": 390,
+      "offset": 410,
+      "start": true,
+      "end": false
+    },
+    {
+      "name": "demi-point au début",
+      "content": 800,
+      "viewport": 390,
+      "offset": 0.4,
+      "start": false,
+      "end": true
+    },
+    {
+      "name": "demi-point au bout",
+      "content": 800,
+      "viewport": 390,
+      "offset": 409.7,
+      "start": true,
+      "end": false
+    },
+    {
+      "name": "arrondi qui dépasse d'un demi-point",
+      "content": 390.4,
+      "viewport": 390,
+      "offset": 0,
+      "start": false,
+      "end": false
+    },
+    {
+      "name": "sans contenu",
+      "content": 0,
+      "viewport": 390,
+      "offset": 0,
+      "start": false,
+      "end": false
+    },
+    {
+      "name": "rebond au-delà du début",
+      "content": 800,
+      "viewport": 390,
+      "offset": -30,
+      "start": false,
+      "end": true
+    },
+    {
+      "name": "rebond au-delà de la fin",
+      "content": 800,
+      "viewport": 390,
+      "offset": 450,
+      "start": true,
+      "end": false
+    }
+  ],
+  "recipe": [
+    {
+      "surface": "onMedia",
+      "tinted": false,
+      "selected": false,
+      "pressed": false,
+      "hovered": false,
+      "enabled": true,
+      "fill": "onMedia",
+      "fillOpacity": 0.08,
+      "ink": "onMedia",
+      "opacity": 1.0
+    },
+    {
+      "surface": "onMedia",
+      "tinted": false,
+      "selected": false,
+      "pressed": true,
+      "hovered": false,
+      "enabled": true,
+      "fill": "onMedia",
+      "fillOpacity": 0.15,
+      "ink": "onMedia",
+      "opacity": 1.0
+    },
+    {
+      "surface": "onMedia",
+      "tinted": false,
+      "selected": false,
+      "pressed": false,
+      "hovered": true,
+      "enabled": true,
+      "fill": "onMedia",
+      "fillOpacity": 0.15,
+      "ink": "onMedia",
+      "opacity": 1.0
+    },
+    {
+      "surface": "onMedia",
+      "tinted": false,
+      "selected": true,
+      "pressed": false,
+      "hovered": false,
+      "enabled": true,
+      "fill": "onMedia",
+      "fillOpacity": 1.0,
+      "ink": "indigo950",
+      "opacity": 1.0
+    },
+    {
+      "surface": "onMedia",
+      "tinted": false,
+      "selected": true,
+      "pressed": true,
+      "hovered": false,
+      "enabled": true,
+      "fill": "onMedia",
+      "fillOpacity": 0.85,
+      "ink": "indigo950",
+      "opacity": 1.0
+    },
+    {
+      "surface": "onMedia",
+      "tinted": false,
+      "selected": true,
+      "pressed": false,
+      "hovered": true,
+      "enabled": true,
+      "fill": "onMedia",
+      "fillOpacity": 0.85,
+      "ink": "indigo950",
+      "opacity": 1.0
+    },
+    {
+      "surface": "onMedia",
+      "tinted": true,
+      "selected": false,
+      "pressed": false,
+      "hovered": false,
+      "enabled": true,
+      "fill": "onMedia",
+      "fillOpacity": 0.08,
+      "ink": "onMedia",
+      "opacity": 1.0
+    },
+    {
+      "surface": "onMedia",
+      "tinted": true,
+      "selected": true,
+      "pressed": false,
+      "hovered": false,
+      "enabled": true,
+      "fill": "tint",
+      "fillOpacity": 1.0,
+      "ink": "onMedia",
+      "opacity": 1.0
+    },
+    {
+      "surface": "onMedia",
+      "tinted": true,
+      "selected": true,
+      "pressed": true,
+      "hovered": false,
+      "enabled": true,
+      "fill": "tint",
+      "fillOpacity": 0.85,
+      "ink": "onMedia",
+      "opacity": 1.0
+    },
+    {
+      "surface": "onMedia",
+      "tinted": false,
+      "selected": false,
+      "pressed": true,
+      "hovered": false,
+      "enabled": false,
+      "fill": "onMedia",
+      "fillOpacity": 0.08,
+      "ink": "onMedia",
+      "opacity": 0.4
+    },
+    {
+      "surface": "onMedia",
+      "tinted": false,
+      "selected": true,
+      "pressed": true,
+      "hovered": true,
+      "enabled": false,
+      "fill": "onMedia",
+      "fillOpacity": 1.0,
+      "ink": "indigo950",
+      "opacity": 0.4
+    },
+    {
+      "surface": "theme",
+      "tinted": false,
+      "selected": false,
+      "pressed": false,
+      "hovered": false,
+      "enabled": true,
+      "fill": "themeInk",
+      "fillOpacity": 0.08,
+      "ink": "themeInk",
+      "opacity": 1.0
+    },
+    {
+      "surface": "theme",
+      "tinted": false,
+      "selected": false,
+      "pressed": true,
+      "hovered": false,
+      "enabled": true,
+      "fill": "themeInk",
+      "fillOpacity": 0.15,
+      "ink": "themeInk",
+      "opacity": 1.0
+    },
+    {
+      "surface": "theme",
+      "tinted": false,
+      "selected": false,
+      "pressed": false,
+      "hovered": true,
+      "enabled": true,
+      "fill": "themeInk",
+      "fillOpacity": 0.15,
+      "ink": "themeInk",
+      "opacity": 1.0
+    },
+    {
+      "surface": "theme",
+      "tinted": false,
+      "selected": true,
+      "pressed": false,
+      "hovered": false,
+      "enabled": true,
+      "fill": "themeInk",
+      "fillOpacity": 1.0,
+      "ink": "themeInverse",
+      "opacity": 1.0
+    },
+    {
+      "surface": "theme",
+      "tinted": false,
+      "selected": true,
+      "pressed": true,
+      "hovered": false,
+      "enabled": true,
+      "fill": "themeInk",
+      "fillOpacity": 0.85,
+      "ink": "themeInverse",
+      "opacity": 1.0
+    },
+    {
+      "surface": "theme",
+      "tinted": false,
+      "selected": true,
+      "pressed": false,
+      "hovered": true,
+      "enabled": true,
+      "fill": "themeInk",
+      "fillOpacity": 0.85,
+      "ink": "themeInverse",
+      "opacity": 1.0
+    },
+    {
+      "surface": "theme",
+      "tinted": true,
+      "selected": false,
+      "pressed": false,
+      "hovered": false,
+      "enabled": true,
+      "fill": "themeInk",
+      "fillOpacity": 0.08,
+      "ink": "themeInk",
+      "opacity": 1.0
+    },
+    {
+      "surface": "theme",
+      "tinted": true,
+      "selected": true,
+      "pressed": false,
+      "hovered": false,
+      "enabled": true,
+      "fill": "tint",
+      "fillOpacity": 1.0,
+      "ink": "onMedia",
+      "opacity": 1.0
+    },
+    {
+      "surface": "theme",
+      "tinted": true,
+      "selected": true,
+      "pressed": true,
+      "hovered": false,
+      "enabled": true,
+      "fill": "tint",
+      "fillOpacity": 0.85,
+      "ink": "onMedia",
+      "opacity": 1.0
+    },
+    {
+      "surface": "theme",
+      "tinted": false,
+      "selected": false,
+      "pressed": true,
+      "hovered": false,
+      "enabled": false,
+      "fill": "themeInk",
+      "fillOpacity": 0.08,
+      "ink": "themeInk",
+      "opacity": 0.4
+    },
+    {
+      "surface": "theme",
+      "tinted": false,
+      "selected": true,
+      "pressed": true,
+      "hovered": true,
+      "enabled": false,
+      "fill": "themeInk",
+      "fillOpacity": 1.0,
+      "ink": "themeInverse",
+      "opacity": 0.4
+    }
+  ]
+}

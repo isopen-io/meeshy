@@ -1,0 +1,115 @@
+User-Agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /account
+Disallow: /auth/
+Disallow: /auth-status
+Disallow: /settings
+Disallow: /notifications
+Disallow: /conversation
+Disallow: /conversations
+Disallow: /chats
+Disallow: /chat
+Disallow: /call
+Disallow: /feed
+Disallow: /feeds
+Disallow: /groups
+Disallow: /contacts
+Disallow: /search
+Disallow: /mood
+Disallow: /story
+Disallow: /reel
+Disallow: /post
+Disallow: /hashtag
+Disallow: /l/
+Disallow: /links
+Disallow: /u
+
+# Les robots d'APERÇU des messageries (#9712) déplient une invitation /chat/<lien> :
+# la page qu'ils reçoivent (passerelle, routeur Traefik *-unfurl) porte
+# `noindex`, rien ne s'indexe. Ils déplient aussi /chats, /c/<id> et /l/<jeton>
+# (#10192) : un aperçu GÉNÉRIQUE, qui ne dit rien de ce que l'adresse désigne,
+# ou celui de la cible publique d'un lien suivi. Le reste leur est fermé comme
+# à tous.
+User-Agent: Twitterbot
+User-Agent: LinkedInBot
+User-Agent: facebookexternalhit
+User-Agent: Facebot
+User-Agent: Slackbot
+User-Agent: Slackbot-LinkExpanding
+User-Agent: Discordbot
+User-Agent: TelegramBot
+User-Agent: WhatsApp
+User-Agent: SkypeUriPreview
+Allow: /chat/
+Allow: /chats
+Allow: /l/
+Disallow: /api/
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /account
+Disallow: /auth/
+Disallow: /auth-status
+Disallow: /settings
+Disallow: /notifications
+Disallow: /conversation
+Disallow: /conversations
+Disallow: /chat
+Disallow: /call
+Disallow: /feed
+Disallow: /feeds
+Disallow: /groups
+Disallow: /contacts
+Disallow: /search
+Disallow: /mood
+Disallow: /story
+Disallow: /reel
+Disallow: /post
+Disallow: /hashtag
+Disallow: /links
+Disallow: /u
+
+# Crawlers d'AGENTS IA (#12939) — stance ASSUMÉE, identique à celle du groupe générique `*`
+# ci-dessus : la vitrine est autorisée, les surfaces applicatives refusées. On
+# les NOMME explicitement plutôt que de les laisser retomber en silence sur la
+# règle générique. La fiche agent et le pointeur OpenAPI sont annoncés plus bas.
+User-Agent: GPTBot
+User-Agent: ChatGPT-User
+User-Agent: ClaudeBot
+User-Agent: Claude-Web
+User-Agent: PerplexityBot
+User-Agent: Google-Extended
+Allow: /
+Disallow: /api/
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /account
+Disallow: /auth/
+Disallow: /auth-status
+Disallow: /settings
+Disallow: /notifications
+Disallow: /conversation
+Disallow: /conversations
+Disallow: /chats
+Disallow: /chat
+Disallow: /call
+Disallow: /feed
+Disallow: /feeds
+Disallow: /groups
+Disallow: /contacts
+Disallow: /search
+Disallow: /mood
+Disallow: /story
+Disallow: /reel
+Disallow: /post
+Disallow: /hashtag
+Disallow: /l/
+Disallow: /links
+Disallow: /u
+
+# Fiche pour agents IA et pointeur OpenAPI machine (#12939)
+# llms.txt : https://meeshy.me/llms.txt
+# OpenAPI  : https://gate.meeshy.me/docs/json (annoncé par /.well-known/openapi)
+Sitemap: https://meeshy.me/sitemap.xml

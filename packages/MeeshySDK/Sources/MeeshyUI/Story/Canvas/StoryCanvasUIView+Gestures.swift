@@ -30,11 +30,14 @@ extension StoryCanvasUIView {
         // qu'un double-tap déclenche deux fois le format panel (open puis
         // open-via-double). Pattern UIKit standard.
         singleTapRecognizer.require(toFail: doubleTapRecognizer)
+        backgroundLongPressRecognizer = UILongPressGestureRecognizer(
+            target: self, action: #selector(handleBackgroundLongPress(_:)))
+        backgroundLongPressRecognizer.allowableMovement = Self.longPressTolerance
         canvasZoomPinchRecognizer = ThreeFingerPinchGestureRecognizer(
             target: self,
             action: #selector(handleCanvasZoomPinch(_:))
         )
-        for recognizer: UIGestureRecognizer in [panRecognizer, pinchRecognizer, rotationRecognizer, singleTapRecognizer, doubleTapRecognizer, canvasZoomPinchRecognizer] {
+        for recognizer: UIGestureRecognizer in [panRecognizer, pinchRecognizer, rotationRecognizer, singleTapRecognizer, doubleTapRecognizer, backgroundLongPressRecognizer, canvasZoomPinchRecognizer] {
             recognizer.delegate = self
             addGestureRecognizer(recognizer)
         }
@@ -42,9 +45,77 @@ extension StoryCanvasUIView {
         addInteraction(UIContextMenuInteraction(delegate: self))
     }
 
+    /// **La tolérance du doigt immobile, le slop système** (#14206) : au-delà,
+    /// l'appui long échoue et le glissé prend la main.
+    static let longPressTolerance: CGFloat = 10
+
+    /// **L'appui long IMMOBILE : le menu d'un objet, ou le geste du fond.**
+    ///
+    /// Trois gestes ne se chevauchent jamais (#14206) : toucher sélectionne,
+    /// toucher-déplacer déplace, appui long immobile ouvre le menu. Le menu peint
+    /// par l'hôte partait de `UIContextMenuInteraction`, qui le demande dès que le
+    /// doigt se pose ; il part d'ici, d'un appui qui échoue au-delà de
+    /// `longPressTolerance` et qui s'exclut du glissé.
+    ///
+    /// - `mode == .edit` — en lecture, la scène se regarde ;
+    /// - `.began` — l'appui long émet `.began` puis `.changed`/`.ended` ; sans
+    ///   ce filtre l'hôte serait appelé plusieurs fois pour un seul geste ;
+    /// - un objet de premier plan sous le doigt ⇒ son menu ; sinon le FOND, que
+    ///   `hitTestItem` rend aussi, garde ce geste (#13974).
+    @objc func handleBackgroundLongPress(_ recognizer: UILongPressGestureRecognizer) {
+        // **La LEVÉE d'abord** (#5041) : un appui long ARMÉ doit rendre sa durée
+        // et sa fin, sinon le viseur n'a de quoi ouvrir un objectif, jamais de
+        // quoi tenir une prise.
+        //
+        // `backgroundLongPressOrigin` porte la condition à lui seul : sa présence
+        // EST la preuve que `.began` a passé les trois gardes ci-dessous. Sans
+        // elle, relâcher un appui long REFUSÉ — en lecture, sur un objet, pendant
+        // une saisie — terminerait une prise que rien n'avait armée.
+        switch recognizer.state {
+        case .changed:
+            guard let origine = backgroundLongPressOrigin else { return }
+            let ici = recognizer.location(in: self)
+            onBackgroundLongPressChanged?(CGPoint(x: ici.x - origine.x,
+                                                  y: ici.y - origine.y))
+            return
+        case .ended, .cancelled, .failed:
+            guard backgroundLongPressOrigin != nil else { return }
+            backgroundLongPressOrigin = nil
+            onBackgroundLongPressEnded?()
+            return
+        default:
+            break
+        }
+        guard mode == .edit, recognizer.state == .began else { return }
+        if let objet = hitTestForegroundItem(at: recognizer.location(in: self)) {
+            requestItemMenu(id: objet, at: recognizer.location(in: self))
+            return
+        }
+        guard inlineEditingTextId == nil else { return }
+        // **« Aucun objet devant » n'est pas « scène vide »** (#5041). La garde
+        // ci-dessus interroge `itemsContainer`, qui ne contient que le PREMIER
+        // PLAN ; un média de fond n'y figure pas et laissait donc le geste filer
+        // au viseur — proposant de reprendre une photo par-dessus celle qu'on
+        // voulait retoucher. La règle porte le raisonnement et ses témoins ; ici
+        // on ne fait que router.
+        switch StoryCanvasBackgroundLongPress.outcome(
+            backgroundMediaObjectId: backgroundMediaObjectId,
+            hostSelectsBackground: onBackgroundMediaLongPressed != nil) {
+        case .selectBackground(let id):
+            // **La sélection, pas un menu** (#13974) : le même effet que le
+            // toucher, le niveau « Fond » prend le rail chez l'hôte. Aucune
+            // prise n'est armée : ce geste ne tient pas un déclencheur.
+            onBackgroundMediaLongPressed?(id)
+        case .openViewfinder:
+            backgroundLongPressOrigin = recognizer.location(in: self)
+            onBackgroundLongPressed?()
+        }
+    }
+
     @objc func handleSingleTap(_ recognizer: UITapGestureRecognizer) {
         guard mode == .edit, recognizer.state == .ended else { return }
         let location = recognizer.location(in: self)
+        if let touche = hitTestItem(at: location), resumeSuspendedInlineEdit(tappedId: touche) { return }
         guard let id = hitTestItem(at: location), let kind = itemKind(forId: id) else {
             // Tap sur une zone vide du canvas pendant l'édition de texte en
             // place → sortie de l'édition (déclencheur nº2 de la spec). `endEditing`
@@ -82,29 +153,27 @@ extension StoryCanvasUIView {
             return
         }
 
-        // Background double-tap → cycle videoFitMode (auto → fit → fill → auto).
+        // Background double-tap → bascule AJUSTER ⇄ REMPLIR.
         // Use `resolveManipulationTarget` to honour the active manipulation
         // layer (so a tap on the bg in `.background` layer triggers the cycle
         // even when no foreground item is hit). Foreground items still get
         // their dedicated double-tap handling below via `hitTestItem`.
+        //
+        // **Le cycle était à TROIS branches pour DEUX rendus** (#6125). Il
+        // passait par `nil`, que le renderer peint exactement comme `"fill"` :
+        // tant que le défaut d'un fond neuf était `nil`, les trois valeurs se
+        // suivaient sans qu'on voie la redite. Le #6125 fait entrer les fonds
+        // AJUSTÉS, et la redite devient visible — deux appuis d'affilée sans
+        // effet à l'écran.
+        //
+        // La règle vit désormais dans `StoryBackgroundFraming`, avec sa jumelle
+        // de test, et ce site cesse d'en porter une copie. C'était la SECONDE :
+        // `performDoubleTapForTesting` en gardait une identique, si bien que le
+        // faisceau de test éprouvait la copie plutôt que le geste.
         if let bgId = backgroundMediaObjectId,
            resolveManipulationTarget(at: location) == bgId,
            hitTestItem(at: location) == nil {
-            let current = slide.effects.backgroundTransform?.videoFitMode
-            let next: String?
-            switch current {
-            case nil:    next = "fit"
-            case "fit":  next = "fill"
-            case "fill": next = nil
-            default:     next = nil
-            }
-            var updated = slide
-            var bg = updated.effects.backgroundTransform ?? StoryBackgroundTransform()
-            bg.videoFitMode = next
-            updated.effects.backgroundTransform = bg.isIdentity ? nil : bg
-            slide = updated
-            onItemModified?(slide)
-            onBackgroundTransformChanged?(bg)
+            toggleBackgroundFitMode()
             return
         }
 
@@ -112,11 +181,50 @@ extension StoryCanvasUIView {
         onItemDoubleTapped?(id, kind)
     }
 
+    /// **La bascule du cadrage de fond, site UNIQUE** (#6125).
+    ///
+    /// Le geste et son faisceau de test (`performDoubleTapForTesting`)
+    /// portaient chacun leur copie de cette mutation, et les deux copies
+    /// avaient déjà divergé : le faisceau ne notifiait pas `onItemModified`. Un
+    /// témoin vert y prouvait donc quelque chose que le doigt ne faisait pas.
+    ///
+    /// > Un faisceau de test qui RECOPIE le geste qu'il prétend jouer n'éprouve
+    /// > que sa propre copie. La seule forme qui tienne est celle-ci : le
+    /// > faisceau APPELLE ce que le geste appelle.
+    func toggleBackgroundFitMode() {
+        var updated = slide
+        var bg = updated.effects.backgroundTransform ?? StoryBackgroundTransform()
+        bg.videoFitMode = StoryBackgroundFraming.nextFitMode(current: bg.videoFitMode)
+        // `isIdentity` reste consulté : la transformation peut porter une
+        // échelle ou un décalage devenus neutres par ailleurs. Ce qu'elle ne
+        // peut plus faire, c'est jeter le cadrage — `nextFitMode` ne rend
+        // jamais `nil`, donc `videoFitMode` suffit à la rendre non neutre.
+        updated.effects.backgroundTransform = bg.isIdentity ? nil : bg
+        slide = updated
+        onItemModified?(slide)
+        onBackgroundTransformChanged?(bg)
+    }
+
+    /// **De quelle famille est l'objet touché** — site UNIQUE (#4671).
+    ///
+    /// `audio` y est entré, et son absence coûtait plus qu'un
+    /// éditeur manquant : `handleSingleTap` fait
+    /// `guard let id = hitTestItem(…), let kind = itemKind(forId: id) else { … onBackgroundTapped?() }`.
+    /// Le hit-test TROUVAIT bien la pastille audio — sa couche est nommée — mais
+    /// le kind manquait, donc toucher une pastille audio se comportait
+    /// exactement comme toucher le vide : ça DÉSÉLECTIONNAIT. Pas un contrôle
+    /// inerte : un contrôle qui fait le contraire.
+    ///
+    /// **Le menu contextuel POSAIT la même question et répondait autrement** :
+    /// son classifieur retombait sur `.media` pour un audio, là où celui-ci
+    /// rendait `nil`. Deux écritures d'une seule règle, déjà divergentes ; il
+    /// appelle désormais cette fonction.
     func itemKind(forId id: String) -> CanvasItemKind? {
         if slide.effects.textObjects.contains(where: { $0.id == id }) { return .text }
         if (slide.effects.mediaObjects ?? []).contains(where: { $0.id == id }) { return .media }
         if (slide.effects.stickerObjects ?? []).contains(where: { $0.id == id }) { return .sticker }
-        if slide.locationObjects.contains(where: { $0.id == id }) { return .location }
+        if slide.locationObjects.contains(where: { $0.id == id }) { return .place }
+        if (slide.effects.audioPlayerObjects ?? []).contains(where: { $0.id == id }) { return .audio }
         return nil
     }
 
@@ -132,11 +240,12 @@ extension StoryCanvasUIView {
         }
         switch recognizer.state {
         case .began:
+            let saisi = suspendInlineEditForManipulation(at: recognizer.location(in: self))
             // Routage par couche : `.canvas` absorbe (recognizer cancelled),
             // `.background` cible le bg media, `.foreground` hit-teste les fg
             // (avec fallback bg si le doigt ne touche aucun foreground).
             //
-            // Unification BG ↔ FG (2026-05-29) : le bg media est dans
+            // Unification BG ↔ FG : le bg media est dans
             // `mediaObjects[]` avec `isBackground: true`, donc `currentScale`
             // / `updateScale` fonctionnent déjà pour lui. On utilise donc
             // EXACTEMENT le même flow que les items foreground (mute
@@ -144,22 +253,30 @@ extension StoryCanvasUIView {
             // reader voient le changement live via @Binding/slide.didSet,
             // updateManipulatedItemLayer route le bg vers backgroundLayer
             // pour le rendu live sur le canvas principal).
-            guard let id = resolveManipulationTarget(at: recognizer.location(in: self)) else {
+            guard let id = saisi ?? resolveManipulationTarget(at: recognizer.location(in: self)) else {
                 recognizer.state = .cancelled
                 return
             }
             manipulatedItemId = id
             baseScale = currentScale(forId: id) ?? 1.0
+            showManipulationLimits()
             if id != backgroundMediaObjectId {
                 bringForegroundToFront(id: id)
             }
         case .changed:
             guard let id = manipulatedItemId else { return }
-            let newScale = max(0.3, min(4.0, baseScale * Double(recognizer.scale)))
+            let geste = Double(recognizer.scale)
+            let newScale = id == backgroundMediaObjectId
+                ? SceneObjectScalePolicy.settledBackground(base: baseScale, gestureScale: geste)
+                : SceneObjectScalePolicy.settled(base: baseScale, gestureScale: geste,
+                                                 unitSide: slide.sceneObject(id: id)
+                                                    .map(SceneObjectUnitSide.designSide(of:)) ?? 0)
             slide = updateScale(slideId: id, scale: newScale)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
+            releaseParkedInlineEditor()
             manipulatedItemId = nil
+            hideManipulationLimits()
             slideContentRevision &+= 1
             rebuildLayers()
         default:
@@ -178,7 +295,8 @@ extension StoryCanvasUIView {
         guard mode == .edit else { return }
         switch recognizer.state {
         case .began:
-            guard let id = resolveManipulationTarget(at: recognizer.location(in: self)) else {
+            let saisi = suspendInlineEditForManipulation(at: recognizer.location(in: self))
+            guard let id = saisi ?? resolveManipulationTarget(at: recognizer.location(in: self)) else {
                 recognizer.state = .cancelled
                 return
             }
@@ -193,19 +311,19 @@ extension StoryCanvasUIView {
             }
             manipulatedItemId = id
             baseRotation = currentRotation(forId: id) ?? 0
+            showManipulationLimits()
             bringForegroundToFront(id: id)
         case .changed:
             guard let id = manipulatedItemId else { return }
-            // Sensibilité rotation divisée par 2 — user feedback 2026-05-27 :
-            // la rotation 1:1 (chaque degré de doigt = 1° sur l'élément) était
-            // trop sensible et difficile à contrôler avec précision. Le user
-            // peut quand même tourner à 360° en faisant 2 tours avec les
-            // doigts, ce qui reste raisonnable pour un geste manuel.
-            let degrees = (Double(recognizer.rotation) * 180 / .pi) * 0.5
-            slide = updateRotation(slideId: id, rotation: baseRotation + degrees)
+            // La sensibilité est celle de la puce sonore : une seule loi.
+            slide = updateRotation(slideId: id,
+                                   rotation: SceneObjectRotationPolicy.settled(base: baseRotation,
+                                                                               gestureRadians: Double(recognizer.rotation)))
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
+            releaseParkedInlineEditor()
             manipulatedItemId = nil
+            hideManipulationLimits()
             slideContentRevision &+= 1
             rebuildLayers()
         default:
@@ -218,7 +336,8 @@ extension StoryCanvasUIView {
         let location = recognizer.location(in: self)
         switch recognizer.state {
         case .began:
-            guard let id = resolveManipulationTarget(at: location),
+            let saisi = suspendInlineEditForManipulation(at: location)
+            guard let id = saisi ?? resolveManipulationTarget(at: location),
                   let (sx, sy) = currentItemNormalizedPosition(forId: id) else {
                 recognizer.state = .cancelled
                 return
@@ -226,6 +345,7 @@ extension StoryCanvasUIView {
             manipulatedItemId = id
             dragStartSlideX = sx
             dragStartSlideY = sy
+            showManipulationLimits()
             lastBgSnapX = nil
             lastBgSnapY = nil
 
@@ -251,7 +371,7 @@ extension StoryCanvasUIView {
             let dxNorm = Double(translation.x / bounds.width)
             let dyNorm = Double(translation.y / renderHeightForDesign)
 
-            // Unification BG/FG (2026-05-29) : updatePosition mute
+            // Unification BG/FG : updatePosition mute
             // mediaObjects[bg].x/y qui est lu par le converter bgTransform de
             // rebuildLayers et appliqué via applyContentTransform sur le
             // contentLayer du bg.
@@ -262,7 +382,7 @@ extension StoryCanvasUIView {
             // trop sensible pour ajuster finement le cadrage (user feedback
             // 2026-05-29 : « avec une faible sensibilité »).
             //
-            // Snap de CADRAGE (directive user 2026-07-14) : contrairement au
+            // Snap de CADRAGE : contrairement au
             // foreground (rails 0.18/0.25/0.5/0.75/0.82), le bg s'accroche au
             // centre (0.5) et aux bords (0.0/1.0) — « centrer ou coller la
             // bordure que l'utilisateur approche ». Guides + haptic à l'entrée.
@@ -289,10 +409,12 @@ extension StoryCanvasUIView {
             slide = updatePosition(slideId: id, x: snappedX, y: snappedY)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
+            releaseParkedInlineEditor()
             manipulatedItemId = nil
             lastBgSnapX = nil
             lastBgSnapY = nil
             hideSnapGuides()
+            hideManipulationLimits()
             slideContentRevision &+= 1
             rebuildLayers()
         default:
@@ -396,7 +518,7 @@ extension StoryCanvasUIView {
         // via `applyContentTransform`, miroir exact du chemin que prend le
         // converter `bgTransform` lors d'un rebuildLayers complet.
         //
-        // Unification BG/FG (2026-05-29) : le bg passe par les mêmes
+        // Unification BG/FG : le bg passe par les mêmes
         // updateScale/updatePosition/updateRotation que les items FG (qui
         // mutent `mediaObjects[bg]`), donc les valeurs lues ici viennent de
         // la même source de vérité que le mini-preview et le reader.
@@ -413,7 +535,8 @@ extension StoryCanvasUIView {
             return
         }
 
-        guard let layer = itemsContainer.sublayers?.first(where: { $0.name == id }) else { return }
+        guard let layer = itemsContainer.sublayers?.first(where: { $0.name == id }),
+              !StoryAudioChipLayer.follows(layer, in: slide) else { return }
 
         // Position dans le même référentiel que `StoryRenderer.renderItem` :
         // - x  est mappé en `media.x * renderWidth` (linéaire sur la largeur)
@@ -431,17 +554,18 @@ extension StoryCanvasUIView {
             return geo.render(CGPoint(x: designX, y: designY))
         }
 
-        // Read the current model values for this item
         if let media = slide.effects.mediaObjects?.first(where: { $0.id == id }) {
             // Alignement strict sur `StoryMediaLayer.configure` : scale cuit
             // dans `bounds` (base × scale), transform = rotation only.
             // L'ancien chemin posait `transform = scale × rotation` sur des
             // `bounds` déjà × scale (depuis le dernier configure), ce qui
             // double-scale dès le 2e geste sur le même media → bug
-            // "media grossit après rotation puis pan" (2026-05-27). Même
+            // "media grossit après rotation puis pan". Même
             // pattern que la branche text plus bas qui ne pose que la
             // rotation parce que scale est déjà cuit dans fontSize.
-            let baseDesign = StoryMediaLayer.baseMediaDesignSize(aspectRatio: media.aspectRatio)
+            // Au rapport RECADRÉ (#9499) : le geste ne rend pas sa forme
+            // d'origine à une image recadrée.
+            let baseDesign = StoryMediaLayer.baseMediaDesignSize(for: media)
             let scaledDesign = CGSize(width: baseDesign.width * CGFloat(media.scale),
                                       height: baseDesign.height * CGFloat(media.scale))
             let renderedSize = geo.render(scaledDesign)
@@ -459,37 +583,53 @@ extension StoryCanvasUIView {
             CATransaction.setDisableActions(true)
             layer.position = renderPosition(x: text.x, y: text.y)
             // Échelle LIVE pendant le pinch (user 2026-07-11 « le zoom/dézoom
-            // de texte doit être rendu en temps réel ») : le scale d'un texte
-            // est CUIT dans `fontSize` au configure (`text.fontSize ×
-            // text.scale`, cf. StoryTextLayer) — la layer restait donc FIGÉE à
-            // sa taille d'avant-geste, seul le rebuild `.ended` montrait la
-            // nouvelle taille. On applique un ratio transitoire (scale modèle
-            // courant / scale cuit lu sur `StoryTextLayer.textObject`) par-
-            // dessus la rotation ; hors geste le ratio vaut 1 (pas de
-            // double-scale — régression 2026-05-27 toujours couverte) et le
-            // rebuild de fin de geste re-rend les glyphes NETS à la taille
-            // finale.
-            let bakedScale = (layer as? StoryTextLayer)?.textObject?.scale ?? text.scale
-            layer.transform = Self.liveTextGestureTransform(rotationDegrees: text.rotation,
-                                                            modelScale: text.scale,
-                                                            bakedScale: bakedScale)
+            // de texte doit être rendu en temps réel »). Depuis le #9139 le
+            // scale d'un texte n'est plus cuit dans sa police : c'est la
+            // transformation du calque qui agrandit le cadre entier — la même
+            // que pose `StoryTextLayer.configure`, donc les lignes ne bougent
+            // ni pendant le geste ni au rebuild `.ended`, qui re-rasterise
+            // seulement NET à la taille finale.
+            layer.transform = StoryTextLayer.sceneTransform(rotationDegrees: text.rotation,
+                                                            scale: text.scale)
             CATransaction.commit()
         } else if let sticker = slide.effects.stickerObjects?.first(where: { $0.id == id }) {
-            // Alignement strict sur `StoryStickerLayer.configure` : scale cuit
-            // dans bounds (baseSide × scale), transform = rotation only.
-            // Mêmes raisons que la branche media — éviter le double-scale au
-            // 2e geste sur le même sticker.
-            let designSide = CGFloat(sticker.baseSize * sticker.scale)
-            let renderedSide = geo.render(designSide)
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            let newBounds = CGRect(x: 0, y: 0, width: renderedSide, height: renderedSide)
-            if layer.bounds.size != newBounds.size {
-                layer.bounds = newBounds
+            if sticker.kind == .template {
+                // **Un gabarit n'est PAS carré** (#4744). La branche ci-dessous
+                // reconstruit des bounds de côté `baseSize × scale` — vrai d'un
+                // GLYPHE, qui est carré par nature ; faux d'une décoration, dont
+                // la boîte est MESURÉE par `StickerTemplateRenderer` (une carte
+                // postale est large et basse, un ruban plus large encore).
+                // L'imposer écrasait la décoration dans un carré faux pendant
+                // tout le geste, puis la laissait sauter au rebuild de fin.
+                //
+                // Même remède que la pastille de lieu, dont la boîte est
+                // mesurée pour les mêmes raisons : un RATIO
+                // transitoire par-dessus la rotation, la re-rasterisation nette
+                // venant à `.ended`. On ne touche pas aux bounds : les
+                // remesurer à chaque image coûterait un dessin Core Graphics
+                // par frame.
+                let bakedScale = (layer as? StoryStickerLayer)?.sticker?.scale ?? sticker.scale
+                layer.position = renderPosition(x: sticker.x, y: sticker.y)
+                layer.transform = Self.liveTextGestureTransform(rotationDegrees: sticker.rotation,
+                                                               modelScale: sticker.scale,
+                                                               bakedScale: bakedScale)
+            } else {
+                // Alignement strict sur `StoryStickerLayer.configure` : scale cuit
+                // dans bounds (baseSide × scale), transform = rotation only.
+                // Mêmes raisons que la branche media — éviter le double-scale au
+                // 2e geste sur le même sticker.
+                let designSide = CGFloat(sticker.baseSize * sticker.scale)
+                let renderedSide = geo.render(designSide)
+                let newBounds = CGRect(x: 0, y: 0, width: renderedSide, height: renderedSide)
+                if layer.bounds.size != newBounds.size {
+                    layer.bounds = newBounds
+                }
+                layer.position = renderPosition(x: sticker.x, y: sticker.y)
+                let rotation = CGFloat(sticker.rotation * .pi / 180)
+                layer.transform = CATransform3DMakeRotation(rotation, 0, 0, 1)
             }
-            layer.position = renderPosition(x: sticker.x, y: sticker.y)
-            let rotation = CGFloat(sticker.rotation * .pi / 180)
-            layer.transform = CATransform3DMakeRotation(rotation, 0, 0, 1)
             CATransaction.commit()
         } else if let location = slide.locationObjects.first(where: { $0.id == id }) {
             // La pastille position rasterise son scale dans `bounds` au
@@ -511,7 +651,10 @@ extension StoryCanvasUIView {
         }
     }
 
-    /// Transform de geste LIVE d'un texte : rotation modèle + ratio d'échelle
+    /// Transform de geste LIVE d'un objet dont l'échelle est cuite dans le
+    /// rendu (gabarit de sticker, pastille de lieu — plus le texte depuis le
+    /// #9139, mis à l'échelle par `StoryTextLayer.sceneTransform`) : rotation
+    /// modèle + ratio d'échelle
     /// transitoire (scale modèle courant ÷ scale cuit dans le rendu au dernier
     /// configure). L'échelle uniforme commute avec la rotation 2D — l'ordre de
     /// composition est donc indifférent. `bakedScale` ≤ 0 (layer jamais
@@ -531,7 +674,7 @@ extension StoryCanvasUIView {
         // `CALayer.hitTest` natif ignore les zPosition ET se fait avaler par
         // les overlays pleine-toile sans nom (layer de DESSIN, zPosition
         // 9999) — dès qu'un dessin existait, plus AUCUN item n'était
-        // touchable et le pan retombait sur le fond (bug user 2026-07-11).
+        // touchable et le pan retombait sur le fond.
         let named = (itemsContainer.sublayers ?? []).enumerated()
             .filter { !($0.element.name ?? "").isEmpty }
             .sorted {

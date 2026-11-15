@@ -19,6 +19,27 @@ extension Error {
     }
 }
 
+/// La forme de la conversation que la feuille de création dessine (#14646) :
+/// un invité ⇒ tête-à-tête, plusieurs ⇒ groupe, et un groupe DEMANDÉ reste un
+/// groupe même sans aucun invité — pour un audit ou une récolte d'avis où je
+/// suis seul. Un groupe exige alors un titre, comme la passerelle.
+nonisolated enum NewConversationShape: Equatable, Sendable {
+    case none, direct, group
+
+    static func resolve(selectedCount: Int, groupRequested: Bool) -> NewConversationShape {
+        if groupRequested || selectedCount > 1 { return .group }
+        return selectedCount == 1 ? .direct : .none
+    }
+
+    static func canCreate(selectedCount: Int, groupRequested: Bool, groupTitle: String) -> Bool {
+        switch resolve(selectedCount: selectedCount, groupRequested: groupRequested) {
+        case .none: return false
+        case .direct: return true
+        case .group: return !groupTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+}
+
 /// MVVM extraction for ``NewConversationView``.
 ///
 /// Before this extraction the view called `APIClient.shared.request` /
@@ -32,6 +53,11 @@ extension Error {
 /// The view binds to `@Published` properties; all network work happens here.
 @MainActor
 final class NewConversationViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     // MARK: - Published state
 
@@ -39,12 +65,12 @@ final class NewConversationViewModel: ObservableObject {
     @Published private(set) var isSearching = false
     /// `true` when the LAST `performSearch` call failed on a network/server
     /// error — distinguishes "zero results" from "the search itself broke"
-    /// (audit 2026-07-20: `performSearch`'s catch cleared `searchResults`
-    /// with no log and no distinct state, so a failed search looked
+    /// (so a failed search looked
     /// identical to a genuine empty result set). Cleared at the start of
     /// every new search attempt.
     @Published private(set) var searchFailed = false
     @Published private(set) var isCreating = false
+    @Published private(set) var openingUserId: String?
     @Published private(set) var errorMessage: String?
     /// Set after a successful `createConversation` so the view can dismiss
     /// itself and trigger navigation. Cleared back to `nil` by `consume…`.
@@ -61,15 +87,22 @@ final class NewConversationViewModel: ObservableObject {
     /// `false` when cached contacts are already on screen (Cache-First: no
     /// spinner over existing data).
     @Published private(set) var isLoadingContacts = false
+    /// Le mode de chiffrement que l'utilisateur a touché, s'il en a touché un
+    /// (directive porteur). `nil` : le défaut de l'offre.
+    @Published private(set) var chosenEncryptionMode: ConversationCreationEncryption.Mode?
 
     // MARK: - Dependencies
 
     private let api: APIClientProviding
     private let friendService: FriendServiceProviding
     private let currentUserIdProvider: @MainActor () -> String?
+    private let platformRoleProvider: @MainActor () -> String?
     private var searchTask: Task<Void, Never>?
 
     static let searchDebounce: UInt64 = 350_000_000  // ns
+    /// iOS lit ET écrit le bout en bout d'un tête-à-tête : là où la règle le
+    /// permet, il est choisissable dès la création.
+    static let endToEndSupported = true
     /// Taille de page des relations acceptées — même valeur que
     /// `ContactsListViewModel`, le budget `limit` étant plafonné à 100 côté
     /// gateway.
@@ -88,11 +121,39 @@ final class NewConversationViewModel: ObservableObject {
     init(
         api: APIClientProviding = APIClient.shared,
         friendService: FriendServiceProviding = FriendService.shared,
-        currentUserIdProvider: @MainActor @escaping () -> String? = { AuthManager.shared.currentUser?.id }
+        currentUserIdProvider: @MainActor @escaping () -> String? = { AuthManager.shared.currentUser?.id },
+        platformRoleProvider: @MainActor @escaping () -> String? = { ConversationEncryptionActivationPolicy.currentPlatformRole() }
     ) {
         self.api = api
         self.friendService = friendService
         self.currentUserIdProvider = currentUserIdProvider
+        self.platformRoleProvider = platformRoleProvider
+    }
+
+    // MARK: - Encryption
+
+    /// Ce que l'écran propose pour un tête-à-tête ou un groupe : la règle
+    /// partagée (`ConversationCreationEncryption`), lue, jamais réécrite.
+    func encryptionOffer(isGroup: Bool) -> ConversationCreationEncryption.Offer {
+        ConversationCreationEncryption.offer(
+            platformRole: platformRoleProvider(),
+            conversationType: isGroup ? "group" : "direct",
+            endToEndSupported: Self.endToEndSupported
+        )
+    }
+
+    /// Le mode qui partira : celui touché s'il reste choisissable (un groupe
+    /// n'a pas encore le bout en bout), sinon le défaut de l'offre.
+    func encryptionMode(isGroup: Bool) -> ConversationCreationEncryption.Mode {
+        let offer = encryptionOffer(isGroup: isGroup)
+        if let chosenEncryptionMode, offer.isAvailable(chosenEncryptionMode) { return chosenEncryptionMode }
+        return offer.defaultMode
+    }
+
+    /// Un mode « bientôt » ou absent de l'offre ne se choisit pas.
+    func chooseEncryptionMode(_ mode: ConversationCreationEncryption.Mode, isGroup: Bool) {
+        guard encryptionOffer(isGroup: isGroup).isAvailable(mode) else { return }
+        chosenEncryptionMode = mode
     }
 
     // MARK: - Search
@@ -112,8 +173,7 @@ final class NewConversationViewModel: ObservableObject {
         isSearching = true
         searchFailed = false
         searchTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(350))
-            guard !Task.isCancelled, let self else { return }
+            guard await cancellableSleep(for: .milliseconds(350)), !Task.isCancelled, let self else { return }
             await self.performSearch(query: trimmed)
         }
     }
@@ -129,23 +189,28 @@ final class NewConversationViewModel: ObservableObject {
                 URLQueryItem(name: "offset", value: "0")
             ]
             let response: APIResponse<[SearchedUser]> = try await api.request(
-                endpoint: "/users/search",
+                UsersEndpoint.search,
                 method: "GET",
                 body: nil,
                 queryItems: queryItems
             )
+            // Une frappe plus récente a pris la main : ses résultats arrivent.
+            guard !Task.isCancelled else { return }
             let currentUserId = currentUserIdProvider()
             searchResults = response.data.filter { $0.id != currentUserId }
             isSearching = false
             searchFailed = false
         } catch {
+            // La requête ANNULÉE par la frappe suivante n'est pas une panne :
+            // elle vidait la liste et montrait « recherche impossible » le
+            // temps que la suivante réponde, à chaque lettre.
+            guard !Task.isCancelled, !(error is CancellationError) else { return }
             searchResults = []
             isSearching = false
             searchFailed = true
             // `query` is free-text the user typed to look up a contact (name,
             // email fragment, phone number…) — logged `.private` so it isn't
-            // persisted in cleartext by the unified logging system (fix
-            // 2026-07-21; matches the existing `.private` convention for
+            // persisted in cleartext by the unified logging system (matches the existing `.private` convention for
             // user-entered PII, e.g. `MagicLinkView`'s email log).
             Logger.network.warning("[NewConversationViewModel] user search failed for query=\(query, privacy: .private): \(error.localizedDescription, privacy: .public)")
         }
@@ -194,24 +259,19 @@ final class NewConversationViewModel: ObservableObject {
     private func fetchContactsFromNetwork() async {
         do {
             var collected: [FriendRequest] = []
-            var offset = 0
+            var cursor: String?
             while collected.count < Self.friendsFetchCap {
-                let page = try await friendService.allFriendRequests(
-                    status: "accepted",
-                    offset: offset,
-                    limit: Self.friendsPageSize
+                let page = try await friendService.friendRequests(
+                    direction: .any, status: "accepted", q: nil, cursor: cursor, limit: Self.friendsPageSize
                 )
                 collected.append(contentsOf: page.data)
-                // `hasMore` peut manquer sur un gateway antérieur à la Task 1 :
-                // le repli sur la taille de page garde le comportement correct.
                 let more = page.pagination?.hasMore ?? (page.data.count == Self.friendsPageSize)
-                if !more || page.data.isEmpty { break }
-                offset += Self.friendsPageSize
+                cursor = page.pagination?.nextCursor
+                if !more || page.data.isEmpty || cursor == nil { break }
             }
 
             let friends = FriendListAggregator.aggregate(
                 received: collected,
-                sent: [],
                 currentUserId: currentUserIdProvider() ?? ""
             )
             contacts = friends.map(SearchedUser.init(friend:))
@@ -232,8 +292,7 @@ final class NewConversationViewModel: ObservableObject {
     ///
     /// Deliberately NOT routed through the `.createConversation` outbox kind
     /// (`OutboxDispatcher.dispatchCreateConversation`) despite that kind
-    /// existing and never being enqueued anywhere (audit 2026-07-20,
-    /// "OutboxKinds morts"): the outbox is fire-and-forget/eventually
+    /// existing and never being enqueued anywhere ("OutboxKinds morts"): the outbox is fire-and-forget/eventually
     /// consistent — its dispatcher discards the POST response body — while
     /// this call site needs the created `MeeshyConversation` SYNCHRONOUSLY
     /// to navigate the user into it. Reconciling/removing the dead kind
@@ -242,22 +301,43 @@ final class NewConversationViewModel: ObservableObject {
     /// audit backlog) — out of scope here to avoid touching those files.
     func createConversation(
         selectedUsers: [SearchedUser],
-        groupTitle: String
+        groupTitle: String,
+        groupRequested: Bool = false
     ) async {
-        guard !selectedUsers.isEmpty else { return }
+        guard NewConversationShape.canCreate(
+            selectedCount: selectedUsers.count, groupRequested: groupRequested, groupTitle: groupTitle
+        ) else { return }
         isCreating = true
         errorMessage = nil
 
-        let isGroup = selectedUsers.count > 1
-        let body = CreateConversationBody(
+        let isGroup = NewConversationShape.resolve(selectedCount: selectedUsers.count, groupRequested: groupRequested) == .group
+        let body = CreateConversationRequest(
             type: isGroup ? "group" : "direct",
-            title: isGroup ? groupTitle.trimmingCharacters(in: .whitespaces) : nil,
-            participantIds: selectedUsers.map(\.id)
+            title: isGroup ? groupTitle.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
+            participantIds: selectedUsers.map(\.id),
+            encryptionMode: encryptionMode(isGroup: isGroup)
         )
+        await submit(body)
+    }
 
+    func openDirect(with user: SearchedUser) async {
+        guard !isCreating else { return }
+        isCreating = true
+        openingUserId = user.id
+        errorMessage = nil
+        await submit(CreateConversationRequest(
+            type: "direct",
+            title: nil,
+            participantIds: [user.id],
+            encryptionMode: encryptionMode(isGroup: false)
+        ))
+    }
+
+    private func submit(_ body: CreateConversationRequest) async {
+        defer { openingUserId = nil }
         do {
             let response: APIResponse<APIConversation> = try await api.post(
-                endpoint: "/conversations",
+                ConversationsEndpoint.root,
                 body: body
             )
             let userId = currentUserIdProvider() ?? ""
@@ -273,8 +353,7 @@ final class NewConversationViewModel: ObservableObject {
                 )
             } else {
                 errorMessage = String(
-                    localized: "Impossible de creer la conversation",
-                    defaultValue: "Impossible de cr\u{00E9}er la conversation"
+                    localized: "conversation.new.create.error", defaultValue: "Impossible de créer la conversation"
                 )
             }
         }
@@ -303,13 +382,5 @@ final class NewConversationViewModel: ObservableObject {
         searchResults = []
         isSearching = false
         searchFailed = false
-    }
-
-    // MARK: - Body
-
-    private struct CreateConversationBody: Encodable {
-        let type: String
-        let title: String?
-        let participantIds: [String]
     }
 }

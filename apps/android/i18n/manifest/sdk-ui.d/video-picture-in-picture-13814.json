@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        { "catalog": "ui", "iosKey": "media.video.pip.enter", "androidName": "media_video_pip_enter", "status": "adopted" }
+      ]
+    }
+  }
+}

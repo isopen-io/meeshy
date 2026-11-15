@@ -27,9 +27,21 @@ jest.mock('../../../services/GeoIPService', () => ({
   getRequestContext: (...a: any[]) => mockGetRequestContext(...a),
 }));
 
+// Le double d'un limiteur porte les TROIS méthodes que la route emploie, pas
+// seulement `middleware` : depuis #5216 un 400 REND la tentative comptée
+// (`keyFor` + `refund`). Un double partiel n'aurait pas fait rougir un témoin de
+// remboursement — il aurait fait tomber la route en 500 sur `refund is not a
+// function`, très loin du contrat mesuré (§ « un double PARTIEL perd en silence
+// ce que le module gagne »).
+const doubleDeLimiteur = () => ({
+  middleware: jest.fn(() => async () => {}),
+  refund: jest.fn(async () => {}),
+  keyFor: jest.fn(() => 'ip:test'),
+});
+
 jest.mock('../../../utils/rate-limiter.js', () => ({
-  createRegisterRateLimiter: () => ({ middleware: () => async () => {} }),
-  createAuthGlobalRateLimiter: () => ({ middleware: () => async () => {} }),
+  createRegisterRateLimiter: jest.fn(() => doubleDeLimiteur()),
+  createAuthGlobalRateLimiter: jest.fn(() => doubleDeLimiteur()),
 }));
 
 const mockFormatUserResponse = jest.fn<any>((user: any) => ({ ...user, formatted: true }));
@@ -38,17 +50,34 @@ jest.mock('../../../routes/auth/types', () => ({
   formatUserResponse: (...a: any[]) => mockFormatUserResponse(...a),
 }));
 
+// `routes/auth/register.ts` importe ses schemas du BARIL `@meeshy/shared/types`,
+// donc le double se pose la ; mais les VALEURS viennent du vrai module de
+// schemas (#4649). Reecrire `errorResponseSchema` a la main remplacait le
+// contrat que les cinq assertions de corps d'erreur ci-dessous pretendent
+// mesurer. `api-schemas` plutot que le baril entier : meme objets (le baril le
+// re-exporte), 72 ms au lieu de 388 ms de chargement.
+//
+// `registerRequestSchema` reste permissif — un schema de REQUETE reel deplace
+// le refus dans AJV, avant le handler : autre sujet, autre temoin (#4649).
 jest.mock('@meeshy/shared/types', () => ({
-  userSchema: { type: 'object', additionalProperties: true },
+  ...(jest.requireActual('@meeshy/shared/types/api-schemas') as object),
   registerRequestSchema: { type: 'object', additionalProperties: true },
-  validationErrorResponseSchema: { type: 'object', additionalProperties: true },
-  errorResponseSchema: { type: 'object', properties: { success: { type: 'boolean' }, error: { type: 'string' } } },
 }));
 
 const mockNormalizePhoneWithCountry = jest.fn<any>();
 jest.mock('../../../utils/normalize', () => ({
   normalizePhoneNumber: jest.fn<any>(),
   normalizePhoneWithCountry: (...a: any[]) => mockNormalizePhoneWithCountry(...a),
+}));
+
+// #4264 — l'inscription crée désormais une SESSION, comme la connexion : le
+// JWT d'un compte frais ne nommait rien, et depuis #4213 son premier
+// `POST /auth/refresh` rendait 401 « Session révoquée » à quelqu'un qui
+// n'avait rien révoqué (`count({ userId, isValid: true })` valait zéro).
+const mockCreateSession = jest.fn<any>().mockResolvedValue({ id: 'session-inscription' });
+jest.mock('../../../services/SessionService', () => ({
+  createSession: (...args: any[]) => mockCreateSession(...args),
+  generateSessionToken: jest.fn(() => 'session-token-inscription'),
 }));
 
 jest.mock('../../../services/InitService', () => ({
@@ -63,7 +92,8 @@ import { registerRegistrationRoutes } from '../../../routes/auth/register';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const MOCK_USER = { id: 'user-1', username: 'alice', email: 'alice@example.com', role: 'USER' };
+// Avec un numéro : le compte est actif tout de suite et la session s'ouvre (#8055).
+const MOCK_USER = { id: 'user-1', username: 'alice', email: 'alice@example.com', role: 'USER', phoneNumber: '+33600000000' };
 const MOCK_TOKEN = 'jwt.token.here';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
@@ -256,71 +286,62 @@ describe('POST /register — phone transfer fails after registration', () => {
   });
 });
 
-describe('POST /register — duplicate field error', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp({
-      authService: makeAuthService({ register: jest.fn<any>().mockRejectedValue(new Error('Email déjà utilisé')) }),
-    });
-  });
-  afterAll(async () => { await app.close(); });
+// Quatre `describe` vivaient ici — « duplicate field », « invalid email »,
+// « invalid password », « invalid username » — et les quatre simulaient un
+// `reject(new Error('…'))` dont la route lisait le TEXTE pour choisir un code.
+// **La production n'a jamais produit ces rejets** : `AuthService.register`
+// rattrapait tout et rendait `null`, donc les branches étaient inatteignables et
+// les témoins attestaient un comportement absent (#5216).
+//
+// Le refus est désormais une valeur TYPÉE, et le témoin porte sur ce que le
+// client lit : le code, le statut, le champ.
 
-  it('returns 400 for duplicate field error', async () => {
+describe('POST /register — un refus TYPÉ sert son code, son statut et son champ', () => {
+  const refus = (code: string, status: number, field: string, extra: Record<string, unknown> = {}) =>
+    Object.assign(new Error(`refus ${code}`), { code, status, field, ...extra });
+
+  const inscrireAvecRefus = async (erreur: Error) => {
+    const app = await buildApp({
+      authService: makeAuthService({ register: jest.fn<any>().mockRejectedValue(erreur) }),
+    });
     mockValidateSchema.mockReturnValueOnce(REGISTER_BODY);
     const res = await app.inject({ method: 'POST', url: '/register', payload: REGISTER_BODY });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error).toContain('utilisé');
-  });
-});
+    await app.close();
+    return res;
+  };
 
-describe('POST /register — invalid email error', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp({
-      authService: makeAuthService({ register: jest.fn<any>().mockRejectedValue(new Error('Email invalide')) }),
+  it('409 USERNAME_TAKEN, avec le champ et les remplaçants SERVIS', async () => {
+    const res = await inscrireAvecRefus(
+      refus('USERNAME_TAKEN', 409, 'username', { suggestions: ['alice1', 'alice7'] }),
+    );
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({
+      code: 'USERNAME_TAKEN',
+      field: 'username',
+      suggestions: ['alice1', 'alice7'],
     });
   });
-  afterAll(async () => { await app.close(); });
 
-  it('returns 400 for invalid email error', async () => {
-    mockValidateSchema.mockReturnValueOnce(REGISTER_BODY);
-    const res = await app.inject({ method: 'POST', url: '/register', payload: REGISTER_BODY });
+  it('409 EMAIL_TAKEN, avec son champ', async () => {
+    const res = await inscrireAvecRefus(refus('EMAIL_TAKEN', 409, 'email'));
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: 'EMAIL_TAKEN', field: 'email' });
+  });
+
+  it('400 PHONE_INVALID, avec son champ', async () => {
+    const res = await inscrireAvecRefus(refus('PHONE_INVALID', 400, 'phoneNumber'));
+
     expect(res.statusCode).toBe(400);
-    expect(res.json().error).toContain('invalide');
+    expect(res.json()).toMatchObject({ code: 'PHONE_INVALID', field: 'phoneNumber' });
   });
-});
 
-describe('POST /register — invalid password error', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp({
-      authService: makeAuthService({ register: jest.fn<any>().mockRejectedValue(new Error('mot de passe trop court')) }),
-    });
-  });
-  afterAll(async () => { await app.close(); });
+  it("une erreur NON typée reste une panne — le texte ne décide plus du statut", async () => {
+    const res = await inscrireAvecRefus(new Error('Email déjà utilisé'));
 
-  it('returns 400 for invalid password error', async () => {
-    mockValidateSchema.mockReturnValueOnce(REGISTER_BODY);
-    const res = await app.inject({ method: 'POST', url: '/register', payload: REGISTER_BODY });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error).toContain('mot de passe');
-  });
-});
-
-describe('POST /register — invalid username error', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp({
-      authService: makeAuthService({ register: jest.fn<any>().mockRejectedValue(new Error('username trop court')) }),
-    });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 400 for invalid username error', async () => {
-    mockValidateSchema.mockReturnValueOnce(REGISTER_BODY);
-    const res = await app.inject({ method: 'POST', url: '/register', payload: REGISTER_BODY });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error).toContain('username');
+    expect(res.statusCode).toBe(500);
+    expect(res.json().code).toBe('REGISTRATION_ERROR');
   });
 });
 
@@ -342,142 +363,6 @@ describe('POST /register — generic error falls through to 500', () => {
 
 // ─── GET /check-availability ──────────────────────────────────────────────────
 
-describe('GET /check-availability — no query params', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 400 when no params provided', async () => {
-    const res = await app.inject({ method: 'GET', url: '/check-availability' });
-    expect(res.statusCode).toBe(400);
-  });
-});
-
-describe('GET /check-availability — username available', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp({ prisma: makePrisma({ user: { findFirst: jest.fn<any>().mockResolvedValue(null) } }) });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 with usernameAvailable=true', async () => {
-    const res = await app.inject({ method: 'GET', url: '/check-availability?username=newuser' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.usernameAvailable).toBe(true);
-  });
-});
-
-describe('GET /check-availability — username taken with suggestions', () => {
-  let app: FastifyInstance;
-  const mockFindFirst = jest.fn<any>();
-  beforeAll(async () => {
-    mockFindFirst
-      .mockResolvedValueOnce({ id: 'existing-user' }) // username taken
-      .mockResolvedValue(null); // suggestion candidates available
-    app = await buildApp({ prisma: makePrisma({ user: { findFirst: mockFindFirst } }) });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 with usernameAvailable=false and suggestions', async () => {
-    const res = await app.inject({ method: 'GET', url: '/check-availability?username=taken' });
-    expect(res.statusCode).toBe(200);
-    const data = res.json().data;
-    expect(data.usernameAvailable).toBe(false);
-    expect(Array.isArray(data.suggestions)).toBe(true);
-    expect(data.suggestions.length).toBeGreaterThan(0);
-  });
-});
-
-describe('GET /check-availability — email available', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp({ prisma: makePrisma({ user: { findFirst: jest.fn<any>().mockResolvedValue(null) } }) });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 with emailAvailable=true', async () => {
-    const res = await app.inject({ method: 'GET', url: '/check-availability?email=new@example.com' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.emailAvailable).toBe(true);
-  });
-});
-
-describe('GET /check-availability — email taken', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp({ prisma: makePrisma({ user: { findFirst: jest.fn<any>().mockResolvedValue({ id: 'u1' }) } }) });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 with emailAvailable=false', async () => {
-    const res = await app.inject({ method: 'GET', url: '/check-availability?email=taken@example.com' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.emailAvailable).toBe(false);
-  });
-});
-
-describe('GET /check-availability — phone valid and available', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    mockNormalizePhoneWithCountry.mockReturnValue({ isValid: true, phoneNumber: '+33600000000' });
-    app = await buildApp({ prisma: makePrisma({ user: { findFirst: jest.fn<any>().mockResolvedValue(null) } }) });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 with phoneNumberAvailable=true and phoneNumberValid=true', async () => {
-    const res = await app.inject({ method: 'GET', url: '/check-availability?phoneNumber=%2B33600000000' });
-    expect(res.statusCode).toBe(200);
-    const data = res.json().data;
-    expect(data.phoneNumberAvailable).toBe(true);
-    expect(data.phoneNumberValid).toBe(true);
-  });
-});
-
-describe('GET /check-availability — phone valid but taken', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    mockNormalizePhoneWithCountry.mockReturnValue({ isValid: true, phoneNumber: '+33600000001' });
-    app = await buildApp({ prisma: makePrisma({ user: { findFirst: jest.fn<any>().mockResolvedValue({ id: 'u1' }) } }) });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 with phoneNumberAvailable=false', async () => {
-    const res = await app.inject({ method: 'GET', url: '/check-availability?phoneNumber=%2B33600000001' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.phoneNumberAvailable).toBe(false);
-  });
-});
-
-describe('GET /check-availability — phone invalid format', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    mockNormalizePhoneWithCountry.mockReturnValue({ isValid: false });
-    app = await buildApp();
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 with phoneNumberValid=false', async () => {
-    const res = await app.inject({ method: 'GET', url: '/check-availability?phoneNumber=not-a-phone' });
-    expect(res.statusCode).toBe(200);
-    const data = res.json().data;
-    expect(data.phoneNumberValid).toBe(false);
-    expect(data.phoneNumberAvailable).toBe(false);
-  });
-});
-
-describe('GET /check-availability — DB error', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp({ prisma: makePrisma({ user: { findFirst: jest.fn<any>().mockRejectedValue(new Error('DB failure')) } }) });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 500 on DB error', async () => {
-    const res = await app.inject({ method: 'GET', url: '/check-availability?username=test' });
-    expect(res.statusCode).toBe(500);
-  });
-});
-
 // ─── POST /force-init ─────────────────────────────────────────────────────────
 
 describe('POST /force-init — retirée', () => {
@@ -493,3 +378,20 @@ describe('POST /force-init — retirée', () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+
+// ─── `GET /check-availability` — le contrat a CHANGÉ (#4158) ─────────────────
+//
+// Les témoins qui vivaient ici exigeaient `emailAvailable` et
+// `phoneNumberAvailable` : ils asseyaient l'ORACLE. Cette route confirmait sans
+// compte qu'une adresse ou un numéro appartient à un utilisateur Meeshy, alors
+// que `/forgot-password` et `/magic-link/request` répondent délibérément
+// « succès » dans tous les cas pour ne rien révéler.
+//
+// L'adresse et le numéro ne rendent plus qu'un verdict de FORME. Le pseudo,
+// lui, répond toujours sur l'existence — c'est une clé publique, déjà
+// énumérable par `GET /u/:username`.
+//
+// Le contrat de la porte cible est couvert par
+// `directory-availability.test.ts` ; ce qui suit garde l'ALIAS, y compris
+// l'assertion NÉGATIVE qui empêche l'oracle de revenir.

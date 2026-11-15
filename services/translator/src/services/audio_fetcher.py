@@ -22,6 +22,8 @@ from datetime import datetime
 
 import aiohttp
 
+from utils.audio_path_guard import guard_requested_audio_path
+
 logger = logging.getLogger(__name__)
 
 # Timeout pour le téléchargement HTTP (en secondes)
@@ -104,7 +106,8 @@ class AudioFetcherService:
             audio_base64: Données audio encodées en base64
             audio_mime_type: Type MIME de l'audio
             audio_url: URL publique pour télécharger l'audio
-            audio_path: Chemin local (legacy, pour compatibilité)
+            audio_path: Chemin local (legacy). Lu seulement sous une racine
+                autorisée (utils.audio_path_guard) ; sinon AudioPathRejected.
 
         Returns:
             Tuple (chemin_local, source) où source est 'binary', 'base64', 'url', 'path' ou 'error'
@@ -153,17 +156,18 @@ class AudioFetcherService:
             except Exception as e:
                 logger.warning(f"[AudioFetcher] ⚠️ Erreur téléchargement URL: {e}")
 
-        # 3. Fallback: chemin local (legacy)
-        if audio_path and os.path.exists(audio_path):
-            logger.info(f"[AudioFetcher] ✅ Audio trouvé localement (legacy): {Path(audio_path).name}")
-            return audio_path, "path"
+        # 3. Fallback: chemin local (legacy). Venu d'un socket non authentifié,
+        # il n'est lu que sous une racine autorisée (#18628) : un refus lève
+        # AudioPathRejected, que le handler publie en AUDIO_PATH_REJECTED.
+        if audio_path:
+            return guard_requested_audio_path(audio_path), "path"
 
         # Aucune source valide
         logger.error(
             f"[AudioFetcher] ❌ Impossible d'acquérir l'audio: "
             f"base64={'yes' if audio_base64 else 'no'}, "
-            f"url={audio_url or 'none'}, "
-            f"path={audio_path or 'none'}"
+            f"url={'yes' if audio_url else 'none'}, "
+            f"path={'yes' if audio_path else 'none'}"
         )
         return None, "error"
 
@@ -283,15 +287,24 @@ class AudioFetcherService:
             return None
 
     def cleanup_temp_file(self, file_path: str):
-        """Supprime un fichier temporaire après utilisation"""
-        try:
-            if file_path and os.path.exists(file_path):
-                # Ne supprimer que si c'est dans notre répertoire temp
-                if str(TEMP_AUDIO_DIR) in file_path:
-                    os.remove(file_path)
-                    logger.debug(f"[AudioFetcher] 🗑️ Fichier temp supprimé: {Path(file_path).name}")
-        except Exception as e:
-            logger.warning(f"[AudioFetcher] Erreur suppression fichier temp: {e}")
+        """
+        Supprime un fichier temporaire après utilisation, ET sa conversion WAV
+        (`<nom>.converted.wav`, `utils.audio_format_converter`) : #13102 — le
+        clair d'un vocal ne reste pas sur le disque du translator une fois la
+        tâche finie. Seulement sous le répertoire temporaire.
+        """
+        if not file_path or str(TEMP_AUDIO_DIR) not in file_path:
+            return
+        from utils.audio_format_converter import _conversion_cache
+        converted = str(Path(file_path).with_suffix('.converted.wav'))
+        _conversion_cache.pop(file_path, None)
+        for path in (file_path, converted):
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+                    logger.debug(f"[AudioFetcher] 🗑️ Fichier temp supprimé: {Path(path).name}")
+            except Exception as e:
+                logger.warning(f"[AudioFetcher] Erreur suppression fichier temp: {type(e).__name__}")
 
     def cleanup_old_temp_files(self, max_age_hours: int = 24):
         """Nettoie les fichiers temporaires plus vieux que max_age_hours"""

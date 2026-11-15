@@ -44,8 +44,10 @@ function makeSocketIO() {
   const mockLeave = jest.fn<any>();
   const mockEmit = jest.fn<any>();
   const mockFetchSockets = jest.fn<any>().mockResolvedValue([{ leave: mockLeave }]);
+  const target: { emit: typeof mockEmit; except: jest.Mock<any> } = { emit: mockEmit, except: jest.fn<any>() };
+  target.except.mockReturnValue(target);
   const mockIo = {
-    to: jest.fn<any>().mockReturnValue({ emit: mockEmit }),
+    to: jest.fn<any>().mockReturnValue(target),
     in: jest.fn<any>().mockReturnValue({ fetchSockets: mockFetchSockets }),
     _emit: mockEmit,
     _leave: mockLeave,
@@ -62,8 +64,17 @@ function makePrisma(overrides: Record<string, any> = {}) {
   return {
     participant: {
       findFirst: jest.fn<any>(),
+      // La succession du créateur (#4058) lit les candidats EN BLOC et
+      // classe en mémoire — une seule loi, partagée avec `leave.ts`.
+      findMany: jest.fn<any>().mockResolvedValue([]),
       update: jest.fn<any>().mockResolvedValue({}),
       ...(overrides.participant ?? {}),
+    },
+    notification: {
+      // La trace des promotions : `PATCH …/role` la pose, la succession la
+      // lit. Absente par défaut — la règle replie alors sur `joinedAt`.
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      ...(overrides.notification ?? {}),
     },
     conversation: {
       update: jest.fn<any>().mockResolvedValue({}),
@@ -72,6 +83,12 @@ function makePrisma(overrides: Record<string, any> = {}) {
       // to 0 here regardless.
       count: jest.fn<any>().mockResolvedValue(0),
       ...(overrides.conversation ?? {}),
+    },
+    // #3740 — la clôture désactive aussi les liens de partage encore actifs du
+    // fil, dans la MÊME transaction.
+    conversationShareLink: {
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      ...(overrides.conversationShareLink ?? {}),
     },
     // La clôture (ou la promotion du successeur) et le masquage de l'appelant
     // committent ensemble (cycle 69).
@@ -183,7 +200,7 @@ describe('DELETE /conversations/:id/delete-for-me — regular member', () => {
   });
 });
 
-describe('DELETE /conversations/:id/delete-for-me — creator with moderator successor', () => {
+describe('DELETE /conversations/:id/delete-for-me — creator with an admin successor', () => {
   let app: FastifyInstance;
   let prisma: ReturnType<typeof makePrisma>;
   let socket: ReturnType<typeof makeSocketIO>;
@@ -193,20 +210,30 @@ describe('DELETE /conversations/:id/delete-for-me — creator with moderator suc
     ({ app, prisma, socket } = await buildApp({
       prismaOverrides: {
         participant: {
-          findFirst: jest.fn<any>()
-            .mockResolvedValueOnce({
-              id: PARTICIPANT_ID,
-              userId: USER_ID,
-              conversationId: CONV_ID,
-              role: 'creator',
-              isActive: true,
-            })
-            .mockResolvedValueOnce({
+          findFirst: jest.fn<any>().mockResolvedValue({
+            id: PARTICIPANT_ID,
+            userId: USER_ID,
+            conversationId: CONV_ID,
+            role: 'creator',
+            isActive: true,
+          }),
+          // Un modérateur ARRIVÉ AVANT l'administrateur : la décision
+          // porteur (#4058) ne connaît que deux étages, et le rang de
+          // modérateur n'en est pas un.
+          findMany: jest.fn<any>().mockResolvedValue([
+            {
+              id: 'p-moderateur',
+              userId: 'u-moderateur',
+              role: 'moderator',
+              joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+            },
+            {
               id: SUCCESSOR_ID,
               userId: SUCCESSOR_USER_ID,
-              role: 'moderator',
-              isActive: true,
-            }),
+              role: 'admin',
+              joinedAt: new Date('2026-05-01T00:00:00.000Z'),
+            },
+          ]),
           update: jest.fn<any>().mockResolvedValue({}),
         },
       },
@@ -215,13 +242,13 @@ describe('DELETE /conversations/:id/delete-for-me — creator with moderator suc
 
   afterAll(async () => { await app.close(); });
 
-  it('returns 200 when creator transfers to moderator', async () => {
+  it("returns 200 when creator transfers to the first admin", async () => {
     const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
   });
 
-  it('promotes moderator to creator role', async () => {
+  it('promotes the admin to creator role, over an older moderator', async () => {
     expect(prisma.participant.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: SUCCESSOR_ID },
@@ -270,7 +297,7 @@ describe('DELETE /conversations/:id/delete-for-me — creator, empty direct DM',
     const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
     expect(res.statusCode).toBe(200);
     expect(prisma.conversation.count).toHaveBeenCalledWith({
-      where: { id: CONV_ID, type: 'direct', firstMessageSentAt: null },
+      where: { id: CONV_ID, type: { in: ['direct', 'group'] }, firstMessageSentAt: null },
     });
     // La clôture porte son horodatage : `loadConversationTombstones` interroge
     // `closedAt > since`, donc une fermeture qui n'écrit que `isActive: false`
@@ -304,20 +331,21 @@ describe('DELETE /conversations/:id/delete-for-me — creator, legacy direct DM 
     ({ app, prisma } = await buildApp({
       prismaOverrides: {
         participant: {
-          findFirst: jest.fn<any>()
-            .mockResolvedValueOnce({
-              id: PARTICIPANT_ID,
-              userId: USER_ID,
-              conversationId: CONV_ID,
-              role: 'creator',
-              isActive: true,
-            })
-            .mockResolvedValueOnce({
+          findFirst: jest.fn<any>().mockResolvedValue({
+            id: PARTICIPANT_ID,
+            userId: USER_ID,
+            conversationId: CONV_ID,
+            role: 'creator',
+            isActive: true,
+          }),
+          findMany: jest.fn<any>().mockResolvedValue([
+            {
               id: SUCCESSOR_ID,
               userId: SUCCESSOR_USER_ID,
-              role: 'moderator',
-              isActive: true,
-            }),
+              role: 'member',
+              joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+            },
+          ]),
           update: jest.fn<any>().mockResolvedValue({}),
         },
         conversation: {
@@ -342,7 +370,7 @@ describe('DELETE /conversations/:id/delete-for-me — creator, legacy direct DM 
   });
 });
 
-describe('DELETE /conversations/:id/delete-for-me — creator with no moderator but oldest member', () => {
+describe('DELETE /conversations/:id/delete-for-me — creator with no admin, oldest member inherits', () => {
   let app: FastifyInstance;
   let prisma: ReturnType<typeof makePrisma>;
 
@@ -351,21 +379,27 @@ describe('DELETE /conversations/:id/delete-for-me — creator with no moderator 
     ({ app, prisma } = await buildApp({
       prismaOverrides: {
         participant: {
-          findFirst: jest.fn<any>()
-            .mockResolvedValueOnce({
-              id: PARTICIPANT_ID,
-              userId: USER_ID,
-              conversationId: CONV_ID,
-              role: 'creator',
-              isActive: true,
-            })
-            .mockResolvedValueOnce(null) // no moderator
-            .mockResolvedValueOnce({
+          findFirst: jest.fn<any>().mockResolvedValue({
+            id: PARTICIPANT_ID,
+            userId: USER_ID,
+            conversationId: CONV_ID,
+            role: 'creator',
+            isActive: true,
+          }),
+          findMany: jest.fn<any>().mockResolvedValue([
+            {
               id: SUCCESSOR_ID,
               userId: SUCCESSOR_USER_ID,
               role: 'member',
-              isActive: true,
-            }),
+              joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+            },
+            {
+              id: 'p-recent',
+              userId: 'u-recent',
+              role: 'moderator',
+              joinedAt: new Date('2026-06-01T00:00:00.000Z'),
+            },
+          ]),
           update: jest.fn<any>().mockResolvedValue({}),
         },
       },
@@ -399,16 +433,14 @@ describe('DELETE /conversations/:id/delete-for-me — creator with no other memb
     ({ app, prisma } = await buildApp({
       prismaOverrides: {
         participant: {
-          findFirst: jest.fn<any>()
-            .mockResolvedValueOnce({
-              id: PARTICIPANT_ID,
-              userId: USER_ID,
-              conversationId: CONV_ID,
-              role: 'creator',
-              isActive: true,
-            })
-            .mockResolvedValueOnce(null)  // no moderator
-            .mockResolvedValueOnce(null), // no other active member
+          findFirst: jest.fn<any>().mockResolvedValue({
+            id: PARTICIPANT_ID,
+            userId: USER_ID,
+            conversationId: CONV_ID,
+            role: 'creator',
+            isActive: true,
+          }),
+          findMany: jest.fn<any>().mockResolvedValue([]), // plus personne
           update: jest.fn<any>().mockResolvedValue({}),
         },
         conversation: {

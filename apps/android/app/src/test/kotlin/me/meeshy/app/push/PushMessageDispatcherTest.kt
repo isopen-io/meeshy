@@ -1,0 +1,368 @@
+package me.meeshy.app.push
+
+import com.google.common.truth.Truth.assertThat
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import me.meeshy.sdk.model.call.CallStopPush
+import me.meeshy.sdk.model.call.IncomingCallPush
+import me.meeshy.sdk.net.InMemoryTokenStore
+import me.meeshy.sdk.session.SessionRepository
+import org.junit.Test
+
+/**
+ * The thin dispatcher behind `MeeshyFcmService` : one presenter per push, in the former
+ * priority (call > stop-ring > revocation > message), then every [PushObserver], each stage
+ * isolated from the others.
+ */
+class PushMessageDispatcherTest {
+
+    private class Fixture(observers: Set<PushObserver> = emptySet(), sessionUserId: String? = "me") {
+        val session: SessionRepository = mockk { every { currentUserId } returns sessionUserId }
+        val tokenStore = InMemoryTokenStore(jwt = "jwt").apply { userId = "me" }
+        val callPresenter: IncomingCallNotificationPresenter = mockk(relaxed = true)
+        val revocationHandler: RevocationPushHandler = mockk { every { handle(any()) } answers {
+            firstArg<Map<String, String>>()["type"] == NotificationRevocationParser.TYPE
+        } }
+        val messagePresenter: MessageNotificationPresenter = mockk(relaxed = true)
+        val ringer = RecordingRinger()
+        val waker = RecordingWaker()
+        var batteryPulls = 0
+        val freshness: me.meeshy.sdk.call.CallFreshnessChecker = mockk {
+            io.mockk.coEvery { check(any()) } returns me.meeshy.sdk.model.call.CallFreshness.Live
+        }
+        val dispatcher = PushMessageDispatcher(
+            ringStore = IncomingCallRingStore(),
+            session = session,
+            tokenStore = tokenStore,
+            callPresenter = callPresenter,
+            revocationHandler = revocationHandler,
+            bringHandler = me.meeshy.app.bring.BringPushHandler(ringer),
+            talkieHandler = me.meeshy.app.talkie.TalkieWakeHandler(waker),
+            batteryHandler = me.meeshy.app.battery.BatteryPushHandler(
+                notices = me.meeshy.sdk.battery.BatteryForegroundNotices(),
+                foreground = { false },
+                pullRunner = { batteryPulls += 1 },
+            ),
+            messagePresenter = messagePresenter,
+            freshness = freshness,
+            observers = observers,
+        )
+    }
+
+    private class RecordingRinger : me.meeshy.app.bring.BringRinger {
+        val rings = mutableListOf<String>()
+        val stops = mutableListOf<String>()
+        override fun ring(push: me.meeshy.sdk.model.relation.BringRingPush) { rings += push.bringId }
+        override fun stop(bringId: String) { stops += bringId }
+    }
+
+    private class RecordingWaker : me.meeshy.app.talkie.TalkieWaker {
+        val woken = mutableListOf<String>()
+        override fun wake(push: me.meeshy.sdk.model.relation.TalkieWakePush) { woken += push.talkieId }
+        override fun voiceLeft(push: me.meeshy.sdk.model.relation.TalkieWakePush) { woken += push.deliveryKey }
+    }
+
+    @Test
+    fun `un reveil de talkie demarre le service et jamais une banniere de message`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(push("type" to "talkie_incoming", "talkieId" to "t1", "fromUserId" to "alice", "fromName" to "Ada"))
+        fixture.dispatcher.dispatch(push("type" to "talkie_incoming", "talkieId" to "t1", "fromUserId" to "alice"))
+
+        assertThat(fixture.waker.woken).containsExactly("t1")
+        verify(exactly = 0) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `un push battery_pull fait un releve et jamais une banniere`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(push("type" to "battery_pull", "requestedAt" to "2026-11-15T10:00:00.000Z"))
+
+        assertThat(fixture.batteryPulls).isEqualTo(1)
+        verify(exactly = 0) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `un push device_battery app fermee part en banniere`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(push("type" to "device_battery", "title" to "Alice", "body" to "5 %"))
+
+        verify(exactly = 1) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `un Bring sonne par son gardien et jamais comme une banniere de message`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(
+            push("type" to "bring", "bringId" to "b1", "fromUserId" to "alice", "expiresAt" to "2100-01-01T00:00:00Z"),
+            nowMillis = 100,
+        )
+        fixture.dispatcher.dispatch(push("type" to "bring_stopped", "bringId" to "b1", "reason" to "recipient"), nowMillis = 200)
+
+        assertThat(fixture.ringer.rings).containsExactly("b1")
+        assertThat(fixture.ringer.stops).containsExactly("b1")
+        verify(exactly = 0) { fixture.messagePresenter.present(any()) }
+    }
+
+    private class RecordingObserver(
+        private val label: String,
+        private val log: MutableList<String>,
+        override val order: Int = 0,
+        private val failure: RuntimeException? = null,
+    ) : PushObserver {
+        override fun onPush(push: IncomingPush) {
+            log += label
+            failure?.let { throw it }
+        }
+    }
+
+    @Test
+    fun `un appel deja fini ne sonne pas`() {
+        val fixture = Fixture()
+        io.mockk.coEvery { fixture.freshness.check("call-1") } returns me.meeshy.sdk.model.call.CallFreshness.Finished
+
+        fixture.dispatcher.dispatch(callPush, nowMillis = 100)
+
+        verify(exactly = 0) { fixture.callPresenter.show(any()) }
+    }
+
+    @Test
+    fun `une erreur de verification retombe sur sonner`() {
+        val fixture = Fixture()
+        io.mockk.coEvery { fixture.freshness.check(any()) } throws java.io.IOException("offline")
+
+        fixture.dispatcher.dispatch(callPush, nowMillis = 100)
+
+        verify { fixture.callPresenter.show(any()) }
+    }
+
+    private fun push(vararg pairs: Pair<String, String>) = IncomingPush.of(mapOf(*pairs))
+
+    private val callPush = push("type" to "call", "callId" to "call-1", "callerUserId" to "caller-9", "conversationId" to "conv-1")
+
+    @Test
+    fun `un push d appel fait sonner et rien d autre`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(callPush, nowMillis = 100)
+
+        verify(exactly = 1) { fixture.callPresenter.show(match<IncomingCallPush> { it.callId == "call-1" }) }
+        verify(exactly = 0) { fixture.revocationHandler.handle(any()) }
+        verify(exactly = 0) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `un arret de sonnerie annule la notification d appel`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(push("type" to "call_cancel", "callId" to "call-1"), nowMillis = 100)
+
+        verify(exactly = 1) { fixture.callPresenter.cancel(match<CallStopPush> { it.callId == "call-1" }) }
+        verify(exactly = 0) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `un appel de soi-meme est ecarte sans rendu`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(
+            push("type" to "call", "callId" to "call-2", "callerUserId" to "me", "conversationId" to "conv-1"),
+            nowMillis = 100,
+        )
+
+        verify(exactly = 0) { fixture.callPresenter.show(any()) }
+        verify(exactly = 0) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `une revocation passe avant le chemin message`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(push("type" to "notification_revoked", "notificationIds" to "n1"))
+
+        verify(exactly = 1) { fixture.revocationHandler.handle(any()) }
+        verify(exactly = 0) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `tout autre push suit le chemin message avec la charge decodee une fois`() {
+        val fixture = Fixture()
+        val message = push("type" to "new_message", "conversationId" to "c1", "unreadCount" to "3")
+
+        fixture.dispatcher.dispatch(message)
+
+        verify(exactly = 1) {
+            fixture.messagePresenter.present(match { it.payload.conversationId == "c1" && it.payload.unreadCount == 3 })
+        }
+    }
+
+    @Test
+    fun `un observateur qui leve ne prive ni les autres ni le rendu`() {
+        val log = mutableListOf<String>()
+        val fixture = Fixture(
+            linkedSetOf(
+                RecordingObserver("a", log, order = 0, failure = IllegalStateException("boom")),
+                RecordingObserver("b", log, order = 1),
+            ),
+        )
+
+        fixture.dispatcher.dispatch(push("type" to "new_message"))
+
+        assertThat(log).containsExactly("a", "b").inOrder()
+        verify(exactly = 1) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `un rendu qui leve ne prive pas les observateurs`() {
+        val log = mutableListOf<String>()
+        val fixture = Fixture(setOf(RecordingObserver("a", log)))
+        every { fixture.messagePresenter.present(any()) } throws IllegalStateException("render")
+
+        fixture.dispatcher.dispatch(push("type" to "new_message"))
+
+        assertThat(log).containsExactly("a")
+    }
+
+    @Test
+    fun `les observateurs suivent un ordre stable et recoivent aussi les appels`() {
+        val log = mutableListOf<String>()
+        val fixture = Fixture(
+            linkedSetOf(
+                RecordingObserver("late", log, order = 10),
+                RecordingObserver("early", log, order = -1),
+                RecordingObserver("middle", log, order = 0),
+            ),
+        )
+
+        fixture.dispatcher.dispatch(callPush, nowMillis = 100)
+
+        assertThat(log).containsExactly("early", "middle", "late").inOrder()
+    }
+
+    @Test
+    fun `sans observateur enregistre le rendu a lieu`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(push("type" to "new_message"))
+
+        verify(exactly = 1) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `un push destine au compte quitte n'affiche rien et ne parvient a aucun observateur sous le compte suivant`() {
+        val log = mutableListOf<String>()
+        val fixture = Fixture(setOf(RecordingObserver("prepersist", log)))
+
+        fixture.dispatcher.dispatch(push("type" to "new_message", "conversationId" to "c1", "recipientUserId" to "user-a"))
+
+        verify(exactly = 0) { fixture.messagePresenter.present(any()) }
+        assertThat(log).isEmpty()
+    }
+
+    @Test
+    fun `un appel destine au compte quitte ne sonne pas sous le compte suivant`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(
+            push("type" to "call", "callId" to "call-3", "callerUserId" to "caller-9", "conversationId" to "conv-1", "recipientUserId" to "user-a"),
+            nowMillis = 100,
+        )
+
+        verify(exactly = 0) { fixture.callPresenter.show(any()) }
+    }
+
+    @Test
+    fun `apres la deconnexion, un push qui nomme le compte parti n'affiche rien`() {
+        val fixture = Fixture()
+        fixture.tokenStore.clear()
+
+        fixture.dispatcher.dispatch(push("type" to "new_message", "conversationId" to "c1", "recipientUserId" to "me"))
+
+        verify(exactly = 0) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `une revocation et un arret de sonnerie du compte quitte ne retirent rien au compte connecte`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(
+            push("type" to "notification_revoked", "notificationIds" to "n1", "conversationIds" to "conv-1", "types" to "new_message", "recipientUserId" to "user-a"),
+        )
+        fixture.dispatcher.dispatch(push("type" to "call_answered_elsewhere", "callId" to "call-1", "recipientUserId" to "user-a"), nowMillis = 100)
+
+        verify(exactly = 0) { fixture.revocationHandler.handle(any()) }
+        verify(exactly = 0) { fixture.callPresenter.cancel(any()) }
+    }
+
+    @Test
+    fun `l appel de groupe sonne encore pour le compte connecte quand le compte quitte a ete appele le premier`() {
+        val fixture = Fixture()
+        val ring = arrayOf("type" to "call", "callId" to "call-3", "callerUserId" to "caller-9", "conversationId" to "conv-1")
+
+        fixture.dispatcher.dispatch(push(*ring, "recipientUserId" to "user-a"), nowMillis = 100)
+        fixture.dispatcher.dispatch(push(*ring, "recipientUserId" to "me"), nowMillis = 110)
+
+        verify(exactly = 1) { fixture.callPresenter.show(match<IncomingCallPush> { it.callId == "call-3" }) }
+    }
+
+    @Test
+    fun `l appel de groupe sonne encore quand le compte quitte a decroche ailleurs juste avant`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(push("type" to "call_answered_elsewhere", "callId" to "call-3", "recipientUserId" to "user-a"), nowMillis = 100)
+        fixture.dispatcher.dispatch(
+            push("type" to "call", "callId" to "call-3", "callerUserId" to "caller-9", "conversationId" to "conv-1", "recipientUserId" to "me"),
+            nowMillis = 110,
+        )
+
+        verify(exactly = 1) { fixture.callPresenter.show(match<IncomingCallPush> { it.callId == "call-3" }) }
+    }
+
+    @Test
+    fun `sans compte persiste, l'identite de la session courante juge le push`() {
+        val fixture = Fixture()
+        fixture.tokenStore.userId = null
+
+        fixture.dispatcher.dispatch(push("type" to "new_message", "conversationId" to "c1", "recipientUserId" to "me"))
+        fixture.dispatcher.dispatch(push("type" to "new_message", "conversationId" to "c2", "recipientUserId" to "user-a"))
+
+        verify(exactly = 1) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `une identite introuvable ne laisse passer aucun push qui nomme un destinataire`() {
+        val log = mutableListOf<String>()
+        val fixture = Fixture(setOf(RecordingObserver("prepersist", log)), sessionUserId = null)
+        fixture.tokenStore.userId = null
+
+        fixture.dispatcher.dispatch(push("type" to "new_message", "conversationId" to "c1", "recipientUserId" to "me"))
+
+        verify(exactly = 0) { fixture.messagePresenter.present(any()) }
+        assertThat(log).isEmpty()
+    }
+
+    @Test
+    fun `une identite introuvable garde l'ancien chemin pour un push qui ne nomme personne`() {
+        val fixture = Fixture(sessionUserId = null)
+        fixture.tokenStore.userId = null
+
+        fixture.dispatcher.dispatch(push("type" to "new_message", "conversationId" to "c1"))
+
+        verify(exactly = 1) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `un push qui nomme le compte connecte suit son chemin ordinaire`() {
+        val log = mutableListOf<String>()
+        val fixture = Fixture(setOf(RecordingObserver("prepersist", log)))
+
+        fixture.dispatcher.dispatch(push("type" to "new_message", "conversationId" to "c1", "recipientUserId" to "me"))
+
+        verify(exactly = 1) { fixture.messagePresenter.present(any()) }
+        assertThat(log).containsExactly("prepersist")
+    }
+}

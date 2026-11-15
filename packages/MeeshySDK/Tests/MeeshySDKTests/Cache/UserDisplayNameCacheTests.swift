@@ -132,4 +132,24 @@ final class UserDisplayNameCacheTests: XCTestCase {
         XCTAssertNil(sut.displayName(for: "b"))
         XCTAssertTrue(sut.allMappings().isEmpty)
     }
+
+    // MARK: - Borne
+
+    /// Sans borne, chaque expéditeur, participant et mention vus pendant des
+    /// heures dans de grands groupes restaient en mémoire, et `allMappings()`
+    /// recopiait toute la table à chaque reconstruction des noms de mention.
+    func test_cache_staysWithinItsCapacity_keepingTheNewestNames() {
+        let cache = UserDisplayNameCache(capacity: 100)
+        for i in 0..<250 { cache.track(username: "user\(i)", displayName: "Name \(i)") }
+
+        XCTAssertLessThanOrEqual(cache.allMappings().count, 100)
+        XCTAssertEqual(cache.displayName(for: "user249"), "Name 249")
+        XCTAssertNil(cache.displayName(for: "user0"))
+    }
+
+    func test_updatingAKnownName_doesNotGrowTheCache() {
+        let cache = UserDisplayNameCache(capacity: 10)
+        for _ in 0..<50 { cache.track(username: "awa", displayName: "Awa D") }
+        XCTAssertEqual(cache.allMappings().count, 1)
+    }
 }

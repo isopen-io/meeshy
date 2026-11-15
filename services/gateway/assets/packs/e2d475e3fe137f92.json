@@ -1,0 +1,278 @@
+{
+ "domain": "wallpaper",
+ "designs": [
+  {
+   "key": "art-deco",
+   "style": "pattern",
+   "palettes": {
+    "light": {
+     "base": "#F7F3EA",
+     "ink": "#B08D57",
+     "soft": "#EDE5D3"
+    },
+    "dark": {
+     "base": "#14161C",
+     "ink": "#C9A86A",
+     "soft": "#1E2029"
+    }
+   },
+   "tile": {
+    "width": 64,
+    "height": 32,
+    "scale": 1,
+    "rotation": 0,
+    "paths": [
+     {
+      "d": "M12 32 A20 20 0 0 1 52 32",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 0.8
+     },
+     {
+      "d": "M20 32 A12 12 0 0 1 44 32",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 0.8
+     },
+     {
+      "d": "M28 32 A4 4 0 0 1 36 32",
+      "role": "accent",
+      "opacity": 0.08,
+      "width": 0.8
+     },
+     {
+      "d": "M32 32 L32 12 M32 32 L18 18 M32 32 L46 18",
+      "role": "ink",
+      "opacity": 0.08,
+      "width": 0.7
+     },
+     {
+      "d": "M0 20 A20 20 0 0 0 20 0",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 0.8
+     },
+     {
+      "d": "M0 12 A12 12 0 0 0 12 0",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 0.8
+     },
+     {
+      "d": "M64 20 A20 20 0 0 1 44 0",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 0.8
+     },
+     {
+      "d": "M64 12 A12 12 0 0 1 52 0",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 0.8
+     }
+    ]
+   },
+   "fit": "fill"
+  },
+  {
+   "key": "seigaiha",
+   "style": "pattern",
+   "palettes": {
+    "light": {
+     "base": "#F4F6FB",
+     "ink": "#2E3A6E",
+     "soft": "#DFE4F2"
+    },
+    "dark": {
+     "base": "#0D1120",
+     "ink": "#8EA2E8",
+     "soft": "#161B30"
+    }
+   },
+   "tile": {
+    "width": 40,
+    "height": 20,
+    "scale": 1,
+    "rotation": 0,
+    "paths": [
+     {
+      "d": "M0 20 A20 20 0 0 1 40 20",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 0.8
+     },
+     {
+      "d": "M6 20 A14 14 0 0 1 34 20",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 0.8
+     },
+     {
+      "d": "M12 20 A8 8 0 0 1 28 20",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 0.8
+     },
+     {
+      "d": "M-20 10 A20 20 0 0 1 20 10",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 0.8
+     },
+     {
+      "d": "M-14 10 A14 14 0 0 1 14 10",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 0.8
+     },
+     {
+      "d": "M-8 10 A8 8 0 0 1 8 10",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 0.8
+     },
+     {
+      "d": "M20 10 A20 20 0 0 1 60 10",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 0.8
+     },
+     {
+      "d": "M26 10 A14 14 0 0 1 54 10",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 0.8
+     },
+     {
+      "d": "M32 10 A8 8 0 0 1 48 10",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 0.8
+     },
+     {
+      "d": "M15 20 A5 5 0 0 1 25 20",
+      "role": "accent",
+      "opacity": 0.1,
+      "width": 0.8
+     }
+    ]
+   },
+   "fit": "fill"
+  },
+  {
+   "key": "zellige",
+   "style": "pattern",
+   "palettes": {
+    "light": {
+     "base": "#F3F7F5",
+     "ink": "#0F6B5C",
+     "soft": "#DCEBE5"
+    },
+    "dark": {
+     "base": "#0B1513",
+     "ink": "#5FC2A8",
+     "soft": "#13221F"
+    }
+   },
+   "tile": {
+    "width": 56,
+    "height": 56,
+    "scale": 1,
+    "rotation": 0,
+    "paths": [
+     {
+      "d": "M28 8 L48 28 L28 48 L8 28 Z",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 0.9
+     },
+     {
+      "d": "M14 14 L42 14 L42 42 L14 42 Z",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 0.9
+     },
+     {
+      "d": "M0 0 L14 14 M56 0 L42 14 M0 56 L14 42 M56 56 L42 42",
+      "role": "accent",
+      "opacity": 0.1,
+      "width": 0.9
+     },
+     {
+      "d": "M23 28 a5 5 0 1 0 10 0 a5 5 0 1 0 -10 0 Z",
+      "role": "accent",
+      "opacity": 0.1,
+      "width": 0.8
+     }
+    ]
+   },
+   "fit": "fill"
+  },
+  {
+   "key": "bogolan",
+   "style": "pattern",
+   "palettes": {
+    "light": {
+     "base": "#EFE4D2",
+     "ink": "#5B3A29",
+     "soft": "#E2D2B8"
+    },
+    "dark": {
+     "base": "#1E1712",
+     "ink": "#C9A27E",
+     "soft": "#2A2018"
+    }
+   },
+   "tile": {
+    "width": 72,
+    "height": 72,
+    "scale": 1,
+    "rotation": 0,
+    "paths": [
+     {
+      "d": "M0 8 L72 8",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 2.4
+     },
+     {
+      "d": "M0 14 L72 14",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 0.8
+     },
+     {
+      "d": "M0 30 L6 25 L12 30 L18 25 L24 30 L30 25 L36 30 L42 25 L48 30 L54 25 L60 30 L66 25 L72 30",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 1.1
+     },
+     {
+      "d": "M11 50 L21 50 M16 45 L16 55 M35 50 L45 50 M40 45 L40 55 M59 50 L69 50 M64 45 L64 55",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 1.2
+     },
+     {
+      "d": "M26.4 52 a1.6 1.6 0 1 0 3.2 0 a1.6 1.6 0 1 0 -3.2 0 Z M50.4 52 a1.6 1.6 0 1 0 3.2 0 a1.6 1.6 0 1 0 -3.2 0 Z M2.4 52 a1.6 1.6 0 1 0 3.2 0 a1.6 1.6 0 1 0 -3.2 0 Z",
+      "role": "accent",
+      "opacity": 0.1
+     },
+     {
+      "d": "M0 64 L72 64",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 2.4
+     },
+     {
+      "d": "M0 60 L72 60",
+      "role": "ink",
+      "opacity": 0.1,
+      "width": 0.8
+     }
+    ]
+   },
+   "fit": "fill"
+  }
+ ]
+}

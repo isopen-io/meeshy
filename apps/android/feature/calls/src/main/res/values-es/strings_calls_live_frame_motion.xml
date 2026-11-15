@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_live_frame_suspended_device">Marco en pausa: el dispositivo se está protegiendo (calor o ahorro de batería)</string>
+    <string name="call_live_frame_suspended_motion">Este marco es animado: permanece oculto mientras «Quitar animaciones» esté activado</string>
+    <string name="call_live_frame_declination_state">Versión %1$d de %2$d</string>
+    <string name="call_live_frame_declination_next">Versión siguiente</string>
+    <string name="call_live_frame_declination_previous">Versión anterior</string>
+</resources>

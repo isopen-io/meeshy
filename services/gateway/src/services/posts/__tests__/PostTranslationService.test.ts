@@ -104,6 +104,34 @@ describe('PostTranslationService', () => {
       expect(targets).not.toContain('en');
     });
 
+    // #5349 — `detectedLanguage` (mesure on-device, jamais une préférence) est
+    // un SECOND recours : il ne joue que quand `originalLanguage` (la
+    // revendication) manque, et bat toujours la détection regex maison.
+    describe('detectedLanguage (#5349)', () => {
+      it('is used when originalLanguage is absent', async () => {
+        const { service, zmqClient } = makeService();
+        await service.translatePost('post-1', 'Hello world', undefined, 'es');
+        const [, sourceLang] = (zmqClient.translateToMultipleLanguages as jest.Mock).mock.calls[0] as [string, string, string[], string, string];
+        expect(sourceLang).toBe('es');
+      });
+
+      it('never overrides a provided originalLanguage', async () => {
+        const { service, zmqClient } = makeService();
+        await service.translatePost('post-1', 'Hello world', 'en', 'es');
+        const [, sourceLang] = (zmqClient.translateToMultipleLanguages as jest.Mock).mock.calls[0] as [string, string, string[], string, string];
+        expect(sourceLang).toBe('en');
+      });
+
+      it('wins over the regex-based fallback detection', async () => {
+        const { service, zmqClient } = makeService();
+        // Texte sans marqueur reconnu par `detectLanguage` — retomberait sur
+        // 'en' sans la mesure.
+        await service.translatePost('post-1', 'Ola tudo bem', undefined, 'pt');
+        const [, sourceLang] = (zmqClient.translateToMultipleLanguages as jest.Mock).mock.calls[0] as [string, string, string[], string, string];
+        expect(sourceLang).toBe('pt');
+      });
+    });
+
     it('detects French content via keywords', async () => {
       const { service, zmqClient } = makeService();
       await service.translatePost('post-1', 'Bonjour, comment est le chat?');
@@ -216,6 +244,40 @@ describe('PostTranslationService', () => {
       expect(zmqClient.translateToMultipleLanguages).toHaveBeenCalledTimes(1);
       const [, , targets] = (zmqClient.translateToMultipleLanguages as jest.Mock).mock.calls[0] as [string, string, string[], string, string];
       expect(targets).toEqual(['fr']);
+    });
+
+    // #5422 — la mesure on-device PERSISTÉE (#5349) est relue ici au même rang
+    // qu'à la création : second recours, après la revendication et avant la
+    // détection regex du serveur (une supposition, pas une mesure).
+    describe('detectedLanguage (#5422)', () => {
+      it('is used as source when originalLanguage is absent', async () => {
+        const { service, zmqClient } = makeService({
+          post: { content: 'Ola tudo bem', originalLanguage: null, detectedLanguage: 'pt', translations: {} },
+        });
+        await service.translateOnDemand('post-1', 'fr');
+        const [, sourceLang] = (zmqClient.translateToMultipleLanguages as jest.Mock).mock.calls[0] as [string, string, string[], string, string];
+        expect(sourceLang).toBe('pt');
+      });
+
+      it('never overrides a persisted originalLanguage', async () => {
+        const { service, zmqClient } = makeService({
+          post: { content: 'Hello', originalLanguage: 'en', detectedLanguage: 'es', translations: {} },
+        });
+        await service.translateOnDemand('post-1', 'fr');
+        const [, sourceLang] = (zmqClient.translateToMultipleLanguages as jest.Mock).mock.calls[0] as [string, string, string[], string, string];
+        expect(sourceLang).toBe('en');
+      });
+
+      it('wins over the regex-based fallback detection', async () => {
+        const { service, zmqClient } = makeService({
+          // Sans marqueur reconnu par `detectLanguage` — retomberait sur 'en'
+          // sans la mesure persistée.
+          post: { content: 'Ola tudo bem', originalLanguage: null, detectedLanguage: 'pt', translations: {} },
+        });
+        await service.translateOnDemand('post-1', 'de');
+        const [, sourceLang] = (zmqClient.translateToMultipleLanguages as jest.Mock).mock.calls[0] as [string, string, string[], string, string];
+        expect(sourceLang).toBe('pt');
+      });
     });
 
     // ─── Textes du CANVAS (feuille « Traductions » du lecteur story) ────────
@@ -590,6 +652,42 @@ describe('PostTranslationService', () => {
       expect(prisma.$runCommandRaw).toHaveBeenCalledTimes(1);
       const cmd = (prisma.$runCommandRaw as jest.Mock).mock.calls[0] as [object];
       expect(cmd[0]).toMatchObject({ update: 'PostComment' });
+    });
+
+    describe('une traduction vers la langue d\'origine ne s\'écrit pas (#9861)', () => {
+      it('n\'écrit la traduction d\'un post que si sa langue d\'origine diffère de la cible', async () => {
+        const { prisma, zmqClient } = makeService({ post: { authorId: 'author-1' } });
+        zmqClient.emit('translationCompleted', makeEvent('post:post-1'));
+        await flushPromises();
+        const cmd = (prisma.$runCommandRaw as jest.Mock).mock.calls[0] as [{ updates: Array<{ q: object }> }];
+        expect(cmd[0].updates[0].q).toEqual({ _id: { $oid: 'post-1' }, originalLanguage: { $ne: 'fr' } });
+      });
+
+      it('n\'écrit la traduction d\'un commentaire que si sa langue d\'origine diffère de la cible', async () => {
+        const { prisma, zmqClient } = makeService({ postComment: { postId: 'post-1' }, post: { authorId: 'author-1' } });
+        zmqClient.emit('translationCompleted', makeEvent('comment:comment-1'));
+        await flushPromises();
+        const cmd = (prisma.$runCommandRaw as jest.Mock).mock.calls[0] as [{ updates: Array<{ q: object }> }];
+        expect(cmd[0].updates[0].q).toEqual({ _id: { $oid: 'comment-1' }, originalLanguage: { $ne: 'fr' } });
+      });
+
+      it('ne diffuse pas une traduction de post que la garde a refusée', async () => {
+        const { prisma, zmqClient, socialEvents } = makeService({ post: { authorId: 'author-1' } });
+        (prisma.$runCommandRaw as jest.Mock).mockResolvedValue({ n: 0, nModified: 0, ok: 1 } as never);
+        zmqClient.emit('translationCompleted', makeEvent('post:post-1'));
+        await flushPromises();
+        await flushPromises();
+        expect(socialEvents.broadcastPostTranslationUpdated).not.toHaveBeenCalled();
+      });
+
+      it('ne diffuse pas une traduction de commentaire que la garde a refusée', async () => {
+        const { prisma, zmqClient, socialEvents } = makeService({ postComment: { postId: 'post-1' }, post: { authorId: 'author-1' } });
+        (prisma.$runCommandRaw as jest.Mock).mockResolvedValue({ n: 0, nModified: 0, ok: 1 } as never);
+        zmqClient.emit('translationCompleted', makeEvent('comment:comment-1'));
+        await flushPromises();
+        await flushPromises();
+        expect(socialEvents.broadcastCommentTranslationUpdated).not.toHaveBeenCalled();
+      });
     });
 
     it('does not broadcast post translation when post author is not found', async () => {

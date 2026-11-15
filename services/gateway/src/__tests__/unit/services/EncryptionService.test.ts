@@ -444,34 +444,25 @@ describe('EncryptionService - Extended Coverage', () => {
   });
 
   describe('ServerKeyVault constructor - master key validation', () => {
-    it('should throw in production when ENCRYPTION_MASTER_KEY is missing', () => {
+    it.each(['production', 'development'])('#11381 — démarre sans ENCRYPTION_MASTER_KEY (%s), plus de clé éphémère : la création de clé est refusée', async (env) => {
       const savedEnv = process.env.NODE_ENV;
       delete process.env.ENCRYPTION_MASTER_KEY;
-      process.env.NODE_ENV = 'production';
+      process.env.NODE_ENV = env;
       try {
-        expect(() => new EncryptionService(mockPrisma)).toThrow('ENCRYPTION_MASTER_KEY environment variable is required in production');
+        const service = new EncryptionService(mockPrisma);
+        await expect(service.getOrCreateConversationKey('conv-x')).rejects.toMatchObject({ code: 'SERVER_AT_REST_UNAVAILABLE' });
+        await expect(service.encryptMessage('x', 'server', 'conv-x')).rejects.toMatchObject({ code: 'SERVER_AT_REST_UNAVAILABLE' });
       } finally {
         process.env.NODE_ENV = savedEnv;
         process.env.ENCRYPTION_MASTER_KEY = masterKey;
       }
     });
 
-    it('should use ephemeral key in development when ENCRYPTION_MASTER_KEY is missing', () => {
-      const savedEnv = process.env.NODE_ENV;
-      delete process.env.ENCRYPTION_MASTER_KEY;
-      process.env.NODE_ENV = 'development';
-      try {
-        expect(() => new EncryptionService(mockPrisma)).not.toThrow();
-      } finally {
-        process.env.NODE_ENV = savedEnv;
-        process.env.ENCRYPTION_MASTER_KEY = masterKey;
-      }
-    });
-
-    it('should throw when ENCRYPTION_MASTER_KEY is not exactly 32 bytes', () => {
+    it('#11381 — une clé de mauvaise longueur ne fait pas tomber la passerelle, et refuse', async () => {
       process.env.ENCRYPTION_MASTER_KEY = Buffer.from('tooshort').toString('base64');
       try {
-        expect(() => new EncryptionService(mockPrisma)).toThrow('ENCRYPTION_MASTER_KEY must be 32 bytes');
+        const service = new EncryptionService(mockPrisma);
+        await expect(service.getOrCreateConversationKey('conv-y')).rejects.toMatchObject({ code: 'SERVER_AT_REST_UNAVAILABLE' });
       } finally {
         process.env.ENCRYPTION_MASTER_KEY = masterKey;
       }

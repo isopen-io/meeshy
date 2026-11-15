@@ -15,8 +15,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 from utils.text_segmentation import (
     TextSegmenter,
     EMOJI_PATTERN,
-    EMOJI_PLACEHOLDER,
+    PROTECTED_PLACEHOLDER,
     NEWLINE_MARKER,
+    protect_entities,
+    restore_entities,
 )
 
 
@@ -116,7 +118,7 @@ class TestEmojiExtraction:
     def test_extract_single_emoji(self, segmenter):
         """Test extracting a single emoji"""
         text = "Hello 😊 world"
-        result_text, emojis_map = segmenter.extract_emojis(text)
+        result_text, emojis_map = protect_entities(text)
 
         assert "😊" not in result_text
         assert len(emojis_map) >= 1
@@ -125,7 +127,7 @@ class TestEmojiExtraction:
     def test_extract_multiple_emojis(self, segmenter):
         """Test extracting multiple emojis (consecutive emojis are grouped)"""
         text = "Hello 😊🎉🚀 world"
-        result_text, emojis_map = segmenter.extract_emojis(text)
+        result_text, emojis_map = protect_entities(text)
 
         # Check placeholders are in result
         assert "🔹EMOJI_" in result_text
@@ -138,7 +140,7 @@ class TestEmojiExtraction:
     def test_extract_no_emojis(self, segmenter):
         """Test text without emojis"""
         text = "Hello world, this is plain text!"
-        result_text, emojis_map = segmenter.extract_emojis(text)
+        result_text, emojis_map = protect_entities(text)
 
         assert result_text == text
         assert len(emojis_map) == 0
@@ -146,7 +148,7 @@ class TestEmojiExtraction:
     def test_extract_emojis_at_boundaries(self, segmenter):
         """Test emojis at start and end of text"""
         text = "😊 Hello world 🚀"
-        result_text, emojis_map = segmenter.extract_emojis(text)
+        result_text, emojis_map = protect_entities(text)
 
         assert len(emojis_map) >= 2
         assert "🔹EMOJI_" in result_text
@@ -154,7 +156,7 @@ class TestEmojiExtraction:
     def test_extract_consecutive_emojis(self, segmenter):
         """Test consecutive emojis (grouped as single entry due to regex pattern)"""
         text = "Check this out: 🎉🎊🎁"
-        result_text, emojis_map = segmenter.extract_emojis(text)
+        result_text, emojis_map = protect_entities(text)
 
         # Consecutive emojis are captured as a single group
         assert len(emojis_map) >= 1
@@ -164,7 +166,7 @@ class TestEmojiExtraction:
     def test_extract_emojis_only_text(self, segmenter):
         """Test text that is only emojis (grouped as single entry)"""
         text = "😊🎉🚀"
-        result_text, emojis_map = segmenter.extract_emojis(text)
+        result_text, emojis_map = protect_entities(text)
 
         # Consecutive emojis are captured as a single group
         assert len(emojis_map) >= 1
@@ -174,7 +176,7 @@ class TestEmojiExtraction:
     def test_empty_text(self, segmenter):
         """Test empty text"""
         text = ""
-        result_text, emojis_map = segmenter.extract_emojis(text)
+        result_text, emojis_map = protect_entities(text)
 
         assert result_text == ""
         assert len(emojis_map) == 0
@@ -182,7 +184,7 @@ class TestEmojiExtraction:
     def test_placeholder_format(self, segmenter):
         """Test that placeholders follow expected format"""
         text = "Hello 😊 world"
-        result_text, emojis_map = segmenter.extract_emojis(text)
+        result_text, emojis_map = protect_entities(text)
 
         # Check placeholder format
         placeholder_pattern = re.compile(r'🔹EMOJI_\d+🔹')
@@ -192,18 +194,18 @@ class TestEmojiExtraction:
         """Regression: EMOJI_PATTERN must NOT match CJK/Kana/Hangul. Writing the
         enclosed-characters branch as the range "\\U000024C2-\\U0001F251" makes it
         span U+4E00..U+9FFF (CJK), U+3040..U+30FF (Kana) and U+AC00..U+D7AF
-        (Hangul), so extract_emojis() pulled whole Chinese/Japanese/Korean
+        (Hangul), so the emoji extraction pulled whole Chinese/Japanese/Korean
         sentences out as fake emojis and replaced them with placeholders — the CJK
         text was then never sent to the translation model."""
         for text in ("你好世界", "これはテスト", "안녕하세요", "日本語のテキスト"):
-            result_text, emojis_map = segmenter.extract_emojis(text)
+            result_text, emojis_map = protect_entities(text)
             assert result_text == text
             assert len(emojis_map) == 0
 
     def test_cjk_with_real_emoji_extracts_only_the_emoji(self, segmenter):
         """Mixed CJK + emoji: only the emoji is extracted, the CJK stays inline."""
         text = "日本語 😊 english"
-        result_text, emojis_map = segmenter.extract_emojis(text)
+        result_text, emojis_map = protect_entities(text)
         assert "日本語" in result_text
         assert "english" in result_text
         assert len(emojis_map) == 1
@@ -213,7 +215,7 @@ class TestEmojiExtraction:
         """The intended enclosed-emoji code points must still be extracted after
         removing the CJK-swallowing range."""
         for glyph in ("Ⓜ", "🈵", "🅰", "🉐", "🇫🇷", "㊗"):
-            _, emojis_map = segmenter.extract_emojis(f"x {glyph}")
+            _, emojis_map = protect_entities(f"x {glyph}")
             all_emojis = ''.join(emojis_map.values())
             assert glyph in all_emojis, f"{glyph!r} should still be extracted"
 
@@ -230,7 +232,7 @@ class TestEmojiRestoration:
         emojis_map = {0: "😊"}
         text_with_placeholders = "Hello 🔹EMOJI_0🔹 world"
 
-        result = segmenter.restore_emojis(text_with_placeholders, emojis_map)
+        result = restore_entities(text_with_placeholders, emojis_map)
 
         assert result == "Hello 😊 world"
 
@@ -239,7 +241,7 @@ class TestEmojiRestoration:
         emojis_map = {0: "😊", 1: "🎉", 2: "🚀"}
         text_with_placeholders = "Hello 🔹EMOJI_0🔹🔹EMOJI_1🔹🔹EMOJI_2🔹 world"
 
-        result = segmenter.restore_emojis(text_with_placeholders, emojis_map)
+        result = restore_entities(text_with_placeholders, emojis_map)
 
         assert "😊" in result
         assert "🎉" in result
@@ -250,7 +252,7 @@ class TestEmojiRestoration:
         emojis_map = {}
         text = "Hello world"
 
-        result = segmenter.restore_emojis(text, emojis_map)
+        result = restore_entities(text, emojis_map)
 
         assert result == "Hello world"
 
@@ -260,7 +262,7 @@ class TestEmojiRestoration:
         # Only placeholder 0 is present
         text_with_placeholders = "Hello 🔹EMOJI_0🔹 world"
 
-        result = segmenter.restore_emojis(text_with_placeholders, emojis_map)
+        result = restore_entities(text_with_placeholders, emojis_map)
 
         assert "😊" in result
         # Missing placeholder should be logged but not crash
@@ -268,8 +270,8 @@ class TestEmojiRestoration:
     def test_roundtrip_extraction_restoration(self, segmenter):
         """Test full roundtrip: extract then restore"""
         original = "Hello 😊 world 🎉!"
-        text_without_emojis, emojis_map = segmenter.extract_emojis(original)
-        restored = segmenter.restore_emojis(text_without_emojis, emojis_map)
+        text_without_emojis, emojis_map = protect_entities(original)
+        restored = restore_entities(text_without_emojis, emojis_map)
 
         assert restored == original
 
@@ -831,8 +833,8 @@ class TestConstants:
     """Test module constants"""
 
     def test_emoji_placeholder_format(self):
-        """Test EMOJI_PLACEHOLDER format"""
-        formatted = EMOJI_PLACEHOLDER.format(index=5)
+        """Test PROTECTED_PLACEHOLDER format"""
+        formatted = PROTECTED_PLACEHOLDER.format(index=5)
         assert formatted == "🔹EMOJI_5🔹"
 
     def test_newline_marker(self):

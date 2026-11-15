@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "engines": {
-    "node": ">=22.0.0",
+    "node": ">=22.19.0",
     "pnpm": ">=9.0.0"
   },
   "workspaces": [
@@ -35,7 +35,7 @@
     "docker:down": "docker-compose -f docker-compose.yml down",
     "docker:logs": "docker-compose -f docker-compose.yml logs -f",
     "docker:dev": "docker-compose -f docker-compose.dev.yml up -d",
-    "prepare": "turbo run prepare",
+    "prepare": "git config core.hooksPath .githooks || true; turbo run prepare",
     "postinstall": "turbo run generate --filter=@meeshy/shared",
     "changeset": "changeset",
     "changeset:add": "changeset add",
@@ -50,13 +50,14 @@
     "test:notification-serialization": "tsx scripts/test-notification-serialization.ts"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.31.0",
-    "@playwright/test": "^1.59.1",
+    "@changesets/cli": "^2.31.1",
+    "@phosphor-icons/core": "2.1.1",
+    "@playwright/test": "^1.62.1",
     "concurrently": "^9.2.1",
     "dotenv": "^17.4.2",
     "mongodb": "^7.5.0",
-    "tsx": "^4.21.0",
-    "turbo": "^2.10.11",
+    "tsx": "^4.23.15",
+    "turbo": "^2.11.10",
     "typescript": "^6.0.3"
   },
   "pnpm": {
@@ -70,21 +71,24 @@
     }
   },
   "overrides": {
+    "zod": "4.4.3",
     "dompurify": "3.4.11",
     "fast-uri": "3.1.2",
     "markdown-it": "14.2.0",
-    "protobufjs": "7.6.3",
-    "vitest": "4.1.10",
+    "protobufjs": "7.6.6",
+    "vitest": "^5.1.0",
     "node-forge": "1.4.0",
     "form-data@2": "2.5.6",
     "undici@6": "6.24.0",
     "lodash": "4.17.21",
     "lodash-es": "4.17.23",
-    "@grpc/grpc-js": "1.14.4",
+    "@grpc/grpc-js": "1.14.7",
     "postcss": "8.5.13",
     "serialize-javascript": "7.0.3",
     "uuid": "11.1.1",
-    "react": "19.2.7",
-    "react-dom": "19.2.7"
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "browserslist": "4.28.8",
+    "light-my-request": "6.6.0"
   }
 }

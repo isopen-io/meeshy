@@ -8,6 +8,8 @@ import {
   PRESENCE_AWAY_WINDOW_MS,
   PRESENCE_IDLE_WINDOW_MS,
   PRESENCE_HEX,
+  PRESENCE_HERE_HEX,
+  presenceDotHex,
 } from '../utils/user-presence';
 
 const NOW = Date.UTC(2026, 6, 20, 12, 0, 0);
@@ -122,5 +124,26 @@ describe('helpers', () => {
 
   it('hex de référence cross-platform (identiques iOS/Android/web)', () => {
     expect(PRESENCE_HEX).toEqual({ success: '#34D399', warning: '#FBBF24', muted: '#9CA3AF' });
+  });
+});
+
+describe('presenceDotHex — le pair qui a la conversation ouverte (#8892)', () => {
+  it('rend la couleur primaire Meeshy quand le pair est dans la conversation', () => {
+    expect(presenceDotHex('online', { here: true })).toBe(PRESENCE_HERE_HEX);
+    expect(PRESENCE_HERE_HEX).toBe('#6366F1');
+  });
+
+  it('rend le point même quand la présence globale est masquée : être là est une activité', () => {
+    expect(presenceDotHex('offline', { here: true })).toBe(PRESENCE_HERE_HEX);
+  });
+
+  it('retombe sur le ton de présence quand le pair n’est pas dans la conversation', () => {
+    expect(presenceDotHex('online', { here: false })).toBe(PRESENCE_HEX.success);
+    expect(presenceDotHex('away', { here: false })).toBe(PRESENCE_HEX.warning);
+    expect(presenceDotHex('idle', { here: false })).toBe(PRESENCE_HEX.muted);
+  });
+
+  it('ne rend aucun point pour un pair hors ligne et absent', () => {
+    expect(presenceDotHex('offline', { here: false })).toBeNull();
   });
 });

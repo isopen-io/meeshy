@@ -37,13 +37,18 @@ public struct DecryptionResult: Sendable {
 public actor DecryptionActor {
     private let provider: any DecryptionSessionProviding
 
-    /// Mémo `messageId → (ciphertext, plaintext)` : chaque `messagesDidChange`
+    /// Mémo `messageId → (senderId, ciphertext, plaintext)` : chaque `messagesDidChange`
     /// re-déchiffrait TOUTE la fenêtre (200+ messages) en DM. Même clé
     /// symétrique par pair ⇒ même ciphertext = même plaintext ; un edit
     /// re-chiffré change le ciphertext et invalide donc l'entrée d'office.
     /// Les échecs ne sont JAMAIS mémoïsés — une session E2EE transitoirement
     /// indisponible doit pouvoir réessayer au refresh suivant.
-    private var plaintextMemo: [String: (ciphertext: Data, plaintext: String?)] = [:]
+    ///
+    /// L'entrée retient AUSSI l'identifiant sous lequel la clé a été cherchée
+    /// (#11232, F1) : un même message rejoué par le serveur dans une autre
+    /// conversation directe — donc sous une autre clé — ne sort jamais du
+    /// mémo, il repasse par la recherche de clé.
+    private var plaintextMemo: [String: (senderId: String, ciphertext: Data, plaintext: String?)] = [:]
     private var memoInsertionOrder: [String] = []
     private static let memoLimit = 1000
 
@@ -55,7 +60,8 @@ public actor DecryptionActor {
         var memoized: [DecryptionResult] = []
         var toDecrypt: [DecryptionPayload] = []
         for payload in payloads {
-            if let entry = plaintextMemo[payload.messageId], entry.ciphertext == payload.ciphertext {
+            if let entry = plaintextMemo[payload.messageId],
+               entry.senderId == payload.senderId, entry.ciphertext == payload.ciphertext {
                 memoized.append(DecryptionResult(
                     messageId: payload.messageId, plaintext: entry.plaintext, error: nil
                 ))
@@ -88,20 +94,24 @@ public actor DecryptionActor {
             return results
         }
 
-        let ciphertextById = Dictionary(toDecrypt.map { ($0.messageId, $0.ciphertext) },
-                                        uniquingKeysWith: { _, last in last })
+        // Un résultat ne porte que l'identifiant du message : un identifiant
+        // demandé deux fois dans le lot (sous deux clés) ne dit pas laquelle a
+        // ouvert le clair, et n'entre pas au mémo.
+        let payloadById = Dictionary(grouping: toDecrypt, by: \.messageId)
+            .compactMapValues { $0.count == 1 ? $0.first : nil }
         for result in fresh where result.error == nil {
-            guard let ciphertext = ciphertextById[result.messageId] else { continue }
-            memoize(messageId: result.messageId, ciphertext: ciphertext, plaintext: result.plaintext)
+            guard let payload = payloadById[result.messageId] else { continue }
+            memoize(payload, plaintext: result.plaintext)
         }
         return memoized + fresh
     }
 
-    private func memoize(messageId: String, ciphertext: Data, plaintext: String?) {
+    private func memoize(_ payload: DecryptionPayload, plaintext: String?) {
+        let messageId = payload.messageId
         if plaintextMemo[messageId] == nil {
             memoInsertionOrder.append(messageId)
         }
-        plaintextMemo[messageId] = (ciphertext, plaintext)
+        plaintextMemo[messageId] = (payload.senderId, payload.ciphertext, plaintext)
         while plaintextMemo.count > Self.memoLimit, !memoInsertionOrder.isEmpty {
             let oldest = memoInsertionOrder.removeFirst()
             plaintextMemo.removeValue(forKey: oldest)

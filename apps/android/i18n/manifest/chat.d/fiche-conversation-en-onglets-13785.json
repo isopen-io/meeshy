@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.tab.members",
+          "androidName": "conversation_info_tab_members",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.tab.media",
+          "androidName": "conversation_info_tab_media",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.tab.stats",
+          "androidName": "conversation_info_tab_stats",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.tab.options",
+          "androidName": "conversation_info_tab_options",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.pinned.see-all",
+          "androidName": "conversation_info_pinned_see_all",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

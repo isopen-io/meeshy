@@ -1,0 +1,211 @@
+import * as usersEndpoints from '@meeshy/shared/api/endpoints/users';
+
+import type { Credential, HttpTransport } from '@/lib/api/http';
+import { heldAccountOf, type SessionState } from '@/lib/api/session';
+import type { SocialEventV2Input } from '@/lib/api/social-events-v2-types';
+import { notificationEventOf } from '@/lib/notifications/notification-telemetry';
+import { pushTapTarget, type NotificationTargetInput, type PushTapTarget } from '@/lib/notifications/target';
+
+/** L'identifiant de publication de la coque (#13619) : `me.meeshy.app` est celui de l'application native. */
+export const SHELL_APP_PACKAGE = 'me.meeshy.webapp';
+
+/**
+ * **LA COQUE ANDROID REÇOIT UN PUSH, APPLICATION FERMÉE** (#7307, ombrelle #7282).
+ *
+ * La WebView Android n'implémente pas le Push API et la coque n'embarque aucun
+ * service worker (`scripts/check-shell-dist.mjs`) : son chemin est FCM NATIF,
+ * par `@capacitor/push-notifications`. Un seul chemin d'ENVOI pour autant — la
+ * passerelle sert déjà `platform: 'android'` (`PushNotificationService`,
+ * bloc `android.notification`), et le jeton s'enregistre par le MÊME port
+ * qu'iOS et que le navigateur (`POST users.registerDeviceToken`).
+ *
+ * Ce module ne REND rien : application en arrière-plan ou tuée, le bloc
+ * `notification` de FCM est affiché par le SYSTÈME, dans le canal que la
+ * passerelle nomme. Il ne re-résout pas non plus le Prisme — le corps est
+ * composé serveur (`servedBannerBody`) ; de la carte `data`, seuls les champs
+ * qui servent à NAVIGUER sont lus. La REMISE s'accuse en natif, une seule fois
+ * (`MeeshyMessagingService`, #8124, #11122), comme `accuserRemise` dans
+ * `sw-push.js`.
+ *
+ * Tout est injecté : le plugin, la session, le transport, la navigation.
+ * `startShellPushInShell()` (`shell-push-runtime.ts`) branche les réels.
+ */
+
+export type ShellPushPermission = 'prompt' | 'prompt-with-rationale' | 'granted' | 'denied';
+
+type Listener<T> = (event: T) => void;
+
+/** La tranche du plugin que ce module consomme — `PushNotificationsPlugin` la satisfait par structure. */
+export type ShellPushPlugin = {
+  checkPermissions(): Promise<{ readonly receive: ShellPushPermission }>;
+  requestPermissions(): Promise<{ readonly receive: ShellPushPermission }>;
+  register(): Promise<void>;
+  unregister(): Promise<void>;
+  addListener(eventName: 'registration', listener: Listener<{ readonly value: string }>): Promise<unknown>;
+  addListener(eventName: 'registrationError', listener: Listener<{ readonly error: string }>): Promise<unknown>;
+  addListener(eventName: 'pushNotificationReceived', listener: Listener<{ readonly data?: unknown }>): Promise<unknown>;
+  addListener(
+    eventName: 'pushNotificationActionPerformed',
+    listener: Listener<{ readonly notification: { readonly data?: unknown } }>,
+  ): Promise<unknown>;
+};
+
+export type ShellPushSessionStore = {
+  getState(): { readonly session: SessionState };
+  subscribe(listener: (state: { readonly session: SessionState }) => void): () => void;
+};
+
+export type ShellPushEnvironment = {
+  readonly plugin: ShellPushPlugin;
+  readonly sessionStore: ShellPushSessionStore;
+  readonly transport: Pick<HttpTransport, 'request'>;
+  readonly navigate: (url: string) => void;
+  readonly urlOf: (target: PushTapTarget) => string;
+  readonly appVersion: string;
+  /** L'appareil, par le pont natif (`MeeshyNotificationSettings.deviceIdentity`) — #10858. */
+  readonly deviceIdentity: () => Promise<unknown>;
+  /** L'entonnoir des notifications (#10507, #10910) : la file v2 de la télémétrie. */
+  readonly record: (event: SocialEventV2Input) => void;
+};
+
+export type ShellDeviceIdentity = { readonly deviceId?: string; readonly deviceName?: string };
+
+const boundedText = (value: unknown, max: number): string | undefined =>
+  typeof value === 'string' && value.trim() !== '' ? value.trim().slice(0, max) : undefined;
+
+/**
+ * **UN APPAREIL, UN JETON ACTIF PAR TYPE** (#10858). La passerelle désactive les
+ * jetons précédents du même `(userId, deviceId, type)` ; sans `deviceId`, chaque
+ * réinstallation laissait une ligne FCM active de plus. Seules des chaînes non
+ * vides et bornées par le schéma de la route partent ; un pont absent (coque
+ * plus ancienne) ou une réponse inattendue n'empêche pas l'enregistrement.
+ */
+export function shellDeviceIdentityOf(raw: unknown): ShellDeviceIdentity {
+  if (raw === null || typeof raw !== 'object') return {};
+  const { deviceId, deviceName } = raw as Record<string, unknown>;
+  const id = boundedText(deviceId, 255);
+  const name = boundedText(deviceName, 100);
+  return { ...(id === undefined ? {} : { deviceId: id }), ...(name === undefined ? {} : { deviceName: name }) };
+}
+
+/** La carte `data` d'un push FCM : des chaînes plates, `''` valant absence. */
+function dataOf(raw: unknown): Readonly<Record<string, string>> {
+  if (raw === null || typeof raw !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(raw as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+  );
+}
+
+/** Les SEULS champs de navigation — jamais `translatedContent`, `content` ni `encryptedContent`. */
+export function shellPushTargetInput(raw: unknown): NotificationTargetInput {
+  const data = dataOf(raw);
+  return {
+    type: data.type,
+    conversationId: data.conversationId,
+    postId: data.postId,
+    postType: data.postType,
+    contentType: data.contentType,
+    friendRequestId: data.friendRequestId,
+    senderUsername: data.senderUsername,
+    route: data.route,
+  };
+}
+
+/**
+ * LE COMPTE, jamais l'identité qui parle (#8816) : lire une conversation sous
+ * une identité anonyme TENUE par le compte ne ferme pas ses notifications, et
+ * rien de ce qui appartient à l'appareil — son jeton FCM, ses accusés — ne
+ * part sous l'invité, ce qui relierait les deux identités côté passerelle.
+ */
+const accountCredentialOf = (session: SessionState): Credential | null => {
+  const account = heldAccountOf(session);
+  return account === null ? null : { kind: 'registered', token: account.token };
+};
+
+const userIdOf = (session: SessionState): string | null => heldAccountOf(session)?.user.id ?? null;
+
+/**
+ * Monte la coque sur FCM. Idempotent par construction : appelé UNE fois au
+ * démarrage (`main.tsx`, derrière `__SHELL__`), il suit ensuite la session.
+ *
+ * - une session enregistrée qui s'ouvre ⇒ permission demandée si elle ne l'a
+ *   jamais été, puis `register()` si elle est accordée ;
+ * - le jeton reçu ⇒ enregistré auprès de la passerelle sous le compte COURANT ;
+ * - la session qui se ferme ⇒ `unregister()` : le jeton FCM est détruit sur
+ *   l'appareil, la passerelle le désactive au premier envoi refusé
+ *   (`TOKEN_INVALID`) — aucune requête n'a besoin d'un crédential déjà effacé.
+ */
+export async function startShellPush(env: ShellPushEnvironment): Promise<void> {
+  const { plugin, sessionStore, transport } = env;
+  let token: string | null = null;
+  let activeUser: string | null = null;
+  const account = (): Credential | null => accountCredentialOf(sessionStore.getState().session);
+  let device: ShellDeviceIdentity | null = null;
+  const deviceResolved = env
+    .deviceIdentity()
+    .then(shellDeviceIdentityOf)
+    .catch((): ShellDeviceIdentity => ({}))
+    .then((identity) => {
+      device = identity;
+      return identity;
+    });
+
+  const registerToken = (): void => {
+    const credential = account();
+    if (token === null || activeUser === null || credential === null) return;
+    // L'identifiant de publication sépare la coque de l'application native sur `platform: 'android'` : sans lui,
+    // la passerelle ne sert aucun type qui exige une version de client (#10267, `push-type-routing.ts`).
+    const body = { token, platform: 'android', type: 'fcm', appVersion: env.appVersion, bundleId: SHELL_APP_PACKAGE };
+    const send = (identity: ShellDeviceIdentity) =>
+      transport.request({
+        method: 'POST',
+        path: usersEndpoints.registerDeviceToken,
+        body: { ...body, ...identity },
+        credential,
+      });
+    void (device === null ? deviceResolved.then(send) : send(device)).catch(() => undefined);
+  };
+
+  await plugin.addListener('registration', ({ value }) => {
+    token = value;
+    registerToken();
+  });
+  await plugin.addListener('registrationError', () => undefined);
+
+  const note = (data: unknown, action: 'received' | 'opened'): void => {
+    const event = notificationEventOf(data, action, 'fcm');
+    if (event !== null) env.record(event);
+  };
+
+  await plugin.addListener('pushNotificationActionPerformed', ({ notification }) => {
+    note(notification.data, 'opened');
+    env.navigate(env.urlOf(pushTapTarget(shellPushTargetInput(notification.data))));
+  });
+
+  await plugin.addListener('pushNotificationReceived', ({ data }) => note(data, 'received'));
+
+  const opened = async (): Promise<void> => {
+    const current = await plugin.checkPermissions().catch(() => ({ receive: 'denied' as const }));
+    const permission =
+      current.receive === 'prompt' || current.receive === 'prompt-with-rationale'
+        ? (await plugin.requestPermissions().catch(() => ({ receive: 'denied' as const }))).receive
+        : current.receive;
+    if (permission !== 'granted') return;
+    await plugin.register().catch(() => undefined);
+  };
+
+  const follow = (session: SessionState): void => {
+    const next = userIdOf(session);
+    if (next === activeUser) return;
+    const previous = activeUser;
+    activeUser = next;
+    if (previous !== null) {
+      token = null;
+      void plugin.unregister().catch(() => undefined);
+    }
+    if (next !== null) void opened();
+  };
+
+  follow(sessionStore.getState().session);
+  sessionStore.subscribe((state) => follow(state.session));
+}

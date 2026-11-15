@@ -18,6 +18,7 @@
  */
 
 import crypto from 'crypto';
+import { generateNumericCode } from '../utils/verification-code';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CacheStore } from './CacheStore';
 import { SmsService } from './SmsService';
@@ -452,6 +453,11 @@ export class PhoneTransferService {
       // 6. Set resend rate limit
       await this.cache.set(resendKey, '1', 60);
 
+      await this.logSecurityEvent(transferData.toUserId, 'PHONE_TRANSFER_CODE_RESENT', 'LOW', {
+        transferId,
+        ipAddress,
+      });
+
       return { success: true };
     } catch (error) {
       logger.error('[PhoneTransfer] Error in resendCode', error);
@@ -792,7 +798,8 @@ export class PhoneTransferService {
   // ============================================================================
 
   private generateCode(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    // Cryptographically secure 6-digit code (CWE-338) — single source of truth.
+    return generateNumericCode();
   }
 
   private hashForLog(value: string): string {

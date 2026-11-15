@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_sound_sheet_title">Story-Ton</string>
+    <string name="story_sound_sheet_current">Auf dieser Folie</string>
+    <string name="story_sound_sheet_role_background">Im Hintergrund</string>
+    <string name="story_sound_sheet_role_scene">Auf der Szene</string>
+    <string name="story_sound_sheet_volume">Lautstärke</string>
+    <string name="story_sound_sheet_language">Sprache des Tons</string>
+    <string name="story_sound_sheet_language_more">Mehr</string>
+    <string name="story_sound_sheet_transcription">Transkription</string>
+    <string name="story_sound_sheet_transcription_edit">Bearbeiten</string>
+    <string name="story_sound_sheet_transcription_write">Schreiben</string>
+    <string name="story_sound_sheet_transcription_retry">Erneut versuchen</string>
+    <string name="story_sound_sheet_transcription_running">Transkription auf deinem Gerät…</string>
+    <string name="story_sound_sheet_transcription_server">Dein Gerät transkribiert diese Sprache nicht: Meeshy übernimmt das beim Veröffentlichen.</string>
+    <string name="story_sound_sheet_transcription_failed">Die Transkription ist fehlgeschlagen.</string>
+    <string name="story_sound_sheet_transcription_silent">Es war nichts zu hören.</string>
+    <string name="story_sound_sheet_trim">Kürzen</string>
+    <string name="story_sound_sheet_ducking">Videos unter dem Hintergrundton leiser stellen</string>
+    <string name="story_sound_sheet_source_record">Aufnehmen</string>
+    <string name="story_sound_sheet_source_files">Dateien</string>
+    <string name="story_sound_sheet_source_library">Bibliothek</string>
+    <string name="story_sound_sheet_recording">Aufnahme %1$s</string>
+    <string name="story_sound_sheet_stop">Stopp</string>
+    <string name="story_sound_sheet_redo">Neu aufnehmen</string>
+    <string name="story_sound_sheet_add">Hinzufügen</string>
+    <string name="story_sound_sheet_uploading">Wird hinzugefügt…</string>
+    <string name="story_sound_sheet_mic_denied">Erlaube das Mikrofon, um einen Ton aufzunehmen.</string>
+    <string name="story_sound_sheet_import_failed">Diese Datei konnte nicht als Ton gelesen werden.</string>
+    <string name="story_sound_sheet_upload_failed">Der Ton konnte nicht gesendet werden. Prüfe deine Verbindung und versuche es erneut.</string>
+    <string name="story_sound_sheet_back">Zurück</string>
+    <string name="story_sound_sheet_new_take">Neuer Ton</string>
+</resources>

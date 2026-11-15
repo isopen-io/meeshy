@@ -205,6 +205,23 @@ final class ConversationLanguagePreferencesTests: XCTestCase {
         XCTAssertEqual(prefs.resolved, ["fr"])
     }
 
+    // MARK: - UNE descente : la même que le chemin socket (ReaderPrism)
+
+    /// Le chemin REST grave `replyToJson` avec `resolved` ; le chemin socket
+    /// avec `MessagePersistenceActor.readerPrism()` → `ReaderPrism.resolve(for:)`.
+    /// Deux producteurs qui divergent gravent deux citations pour un même
+    /// message, et chaque ouverture rejoue un changement de ligne — et un
+    /// reconfigure — pour un contenu identique.
+    func test_resolved_isTheSameDescentAsTheSDKReaderPrism() {
+        let user = MeeshyUser(
+            id: "u-1", username: "alice",
+            systemLanguage: "fr", regionalLanguage: "EN", customDestinationLanguage: "en",
+            deviceLocale: "it_IT"
+        )
+        XCTAssertEqual(ConversationLanguagePreferences(user: user).resolved, ReaderPrism.resolve(for: user))
+        XCTAssertEqual(ConversationLanguagePreferences(user: user).resolved, ["fr", "EN", "it"])
+    }
+
     func test_resolved_skipsDeviceLocale_whenMalformed() {
         let prefs = ConversationLanguagePreferences(
             userId: "u",

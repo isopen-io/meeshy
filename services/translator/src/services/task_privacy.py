@@ -1,0 +1,167 @@
+"""
+#13102 — le régime de la tâche en cours : un contenu chiffré AU REPOS
+(conversations `server` / `hybrid`) ne se pose sur aucun disque du translator.
+
+La passerelle déclare le régime sur la requête (`atRest: true`, comme le
+texte depuis #12822). Le handler l'installe pour la DURÉE de la tâche
+(`task_scope`) ; les services de cache (`AudioCacheService`,
+`TranslationCacheService`) le lisent eux-mêmes. FAIL-CLOSED : le cache ne se
+lit ni ne s'écrit que sous un régime DÉCLARÉ ordinaire (`False`). Une tâche
+au repos (`True`) et une tâche dont personne n'a déclaré le régime (`None`,
+le défaut — un thread où le contexte n'aurait pas été recopié, une porte qui
+l'aurait oublié) ne rangent rien et ne journalisent pas leur texte.
+
+`contextvars` suit la tâche asyncio et les sous-tâches qu'elle crée
+(`asyncio.gather`, `create_task` copient le contexte) ; un thread ne le reçoit
+QUE par `contextvars.copy_context().run(...)` (`run_in_thread_with_context`).
+Deux tâches concurrentes de régimes différents ne se contaminent pas.
+"""
+
+import contextvars
+import functools
+from contextlib import contextmanager
+from contextvars import ContextVar
+import re
+from typing import Iterable, Iterator, Optional, Tuple
+
+_AT_REST: ContextVar[Optional[bool]] = ContextVar("meeshy_task_at_rest", default=None)
+_MESSAGE: ContextVar[Optional[str]] = ContextVar("meeshy_task_message_id", default=None)
+_LIVE_CAPTION: ContextVar[bool] = ContextVar("meeshy_task_live_caption", default=False)
+_OBJECT_ID = re.compile(r"^[0-9a-f]{24}$")
+_LIVE_CAPTION_PREFIXES = ("call-caption:", "call-")
+
+
+def is_live_call_caption(message_id) -> bool:
+    """
+    #16648 — l'identifiant désigne un sous-titre d'appel en direct :
+    `call-caption:<callId>:<startMs>` (#16625) ou l'ancien
+    `call-<callId>-<startMs>`, gardé pendant la transition. Un sous-titre ne
+    se retraduit jamais à l'identique : il ne se lit ni ne se range dans aucun
+    cache. Un ObjectId (24 hex) ne commence jamais par `call`.
+    """
+    return isinstance(message_id, str) and message_id.startswith(_LIVE_CAPTION_PREFIXES)
+
+
+def request_is_at_rest(request_data: dict) -> bool:
+    """Seul le booléen `true` compte : une chaîne « true » ne déclare rien."""
+    return isinstance(request_data, dict) and request_data.get("atRest") is True
+
+
+def in_at_rest_task() -> bool:
+    """Le régime déclaré est « au repos » — ou n'est pas déclaré du tout : les deux se taisent."""
+    return _AT_REST.get() is not False
+
+
+def cache_allowed() -> bool:
+    """Le cache ne sert qu'une tâche dont le régime ORDINAIRE a été déclaré — jamais un sous-titre d'appel (#16648)."""
+    return _AT_REST.get() is False and not _LIVE_CAPTION.get()
+
+
+def text_may_be_logged() -> bool:
+    """Un journal ne dit le texte que d'une tâche ordinaire DÉCLARÉE — jamais d'un sous-titre d'appel (#16682)."""
+    return not in_at_rest_task() and not _LIVE_CAPTION.get()
+
+
+@contextmanager
+def at_rest_scope(at_rest: bool) -> Iterator[None]:
+    token = _AT_REST.set(bool(at_rest))
+    try:
+        yield
+    finally:
+        _AT_REST.reset(token)
+
+
+def current_message_id() -> Optional[str]:
+    return _MESSAGE.get()
+
+
+@contextmanager
+def message_scope(message_id) -> Iterator[None]:
+    """
+    #13102 — le message dont la tâche traduit le contenu : chaque traduction
+    rangée pour lui est INDEXÉE sous son identifiant, pour que la passerelle
+    puisse la faire oublier par l'identifiant seul, sans renvoyer le texte.
+    """
+    token = _MESSAGE.set(message_id if isinstance(message_id, str) and _OBJECT_ID.match(message_id) else None)
+    caption_token = _LIVE_CAPTION.set(is_live_call_caption(message_id))
+    try:
+        yield
+    finally:
+        _LIVE_CAPTION.reset(caption_token)
+        _MESSAGE.reset(token)
+
+
+@contextmanager
+def task_scope(at_rest: bool, message_id) -> Iterator[None]:
+    with at_rest_scope(at_rest), message_scope(message_id):
+        yield
+
+
+def batch_is_ordinary(regimes: Iterable[Tuple[bool, object]]) -> bool:
+    """#16716 — un lot n'est ordinaire que si chacune de ses tâches `(at_rest, message_id)` l'est."""
+    members = list(regimes)
+    return bool(members) and all(
+        at_rest is False and not is_live_call_caption(message_id) for at_rest, message_id in members
+    )
+
+
+@contextmanager
+def batch_scope(regimes: Iterable[Tuple[bool, object]]) -> Iterator[None]:
+    """
+    Le régime d'un lot qui traduit plusieurs tâches d'un appel : ordinaire si
+    toutes le sont, tu sinon. Aucun message n'est nommé : le lot n'en traduit
+    pas un seul.
+    """
+    with task_scope(not batch_is_ordinary(regimes), None):
+        yield
+
+
+def shown(text, limit=None) -> str:
+    """
+    Ce qu'un journal peut dire d'un texte : le texte (tronqué à `limit`) pour
+    une tâche ordinaire, sa seule longueur pour une tâche au repos ou un
+    sous-titre d'appel. Les journaux du translator sont un stockage comme un
+    autre.
+    """
+    value = "" if text is None else str(text)
+    if not text_may_be_logged():
+        return f"<{len(value)} caractères tus>"
+    return value if limit is None else value[:limit]
+
+
+def caused_by(error: BaseException, cause: BaseException) -> BaseException:
+    """
+    #16715 — la cause qu'une erreur peut porter : l'exception d'origine pour
+    une tâche ordinaire, aucune pour une tâche au repos ou un sous-titre
+    d'appel. Une exception du pipeline peut citer l'entrée, et un
+    `exc_info=True` ou un `traceback.print_exc()` en amont rendrait la chaîne
+    entière. L'appelant lève l'erreur rendue HORS de son bloc `except`, pour
+    qu'aucun `__context__` ne la rattache non plus à l'exception d'origine.
+    """
+    if text_may_be_logged():
+        error.__cause__ = cause
+    return error
+
+
+def under_declared_regime(handler):
+    """
+    Décore un handler `async (self, request_data)` : la requête s'exécute sous
+    le régime que la passerelle déclare (`atRest`) et pour le message qu'elle
+    nomme (`messageId`), du premier au dernier `await`.
+    """
+    @functools.wraps(handler)
+    async def wrapper(self, request_data, *args, **kwargs):
+        message_id = request_data.get("messageId") if isinstance(request_data, dict) else None
+        with task_scope(request_is_at_rest(request_data), message_id):
+            return await handler(self, request_data, *args, **kwargs)
+    return wrapper
+
+
+def run_in_thread_with_context(executor_submit, fn, *args):
+    """
+    Soumet `fn` à un pool de threads AVEC le contexte courant (régime et
+    message) : `run_in_executor` et `ThreadPoolExecutor.submit` ne le recopient
+    pas, et un thread sans contexte retomberait sur le régime non déclaré.
+    """
+    return executor_submit(contextvars.copy_context().run, fn, *args)
+

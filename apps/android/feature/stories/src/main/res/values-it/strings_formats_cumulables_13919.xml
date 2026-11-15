@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_publish_failed_story">La storia non è partita</string>
+    <string name="composer_publish_failed_post">Il post non è partito</string>
+    <string name="composer_publish_failed_reel">Il reel non è partito</string>
+</resources>

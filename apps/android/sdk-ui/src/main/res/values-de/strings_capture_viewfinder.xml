@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="capture_disarm">Zurück zur Szene</string>
+    <string name="capture_flip">Kamera wechseln</string>
+    <string name="capture_flash_on">Blitz an</string>
+    <string name="capture_flash_auto">Blitz automatisch</string>
+    <string name="capture_flash_off">Blitz aus</string>
+    <string name="capture_flash_intensity">Blitzstärke</string>
+    <string name="capture_drop_segment">Letztes Segment entfernen</string>
+    <string name="capture_validate">In die Szene legen</string>
+    <string name="capture_recording">Aufnahme</string>
+    <string name="capture_hint_photo">doppelt tippen für ein Foto · halten zum Filmen</string>
+    <string name="capture_hint_holding">loslassen, um in die Szene zu legen</string>
+    <string name="capture_hint_lock">Zum Schloss ziehen, um zu sperren</string>
+    <string name="capture_hint_locked">tippen zum Stoppen und Ablegen in der Szene</string>
+    <string name="capture_discard_video">Video verwerfen?</string>
+    <string name="capture_discard_confirm">Verwerfen</string>
+    <string name="capture_discard_keep">Weitermachen</string>
+    <string name="capture_camera_unavailable">Die Kamera konnte nicht gestartet werden</string>
+    <string name="capture_take_lost">Die Aufnahme ging verloren</string>
+    <string name="capture_zoom_reset">Zoom %1$s</string>
+    <string name="capture_shutter">Foto aufnehmen</string>
+    <string name="capture_shutter_film">Filmen, freihändig</string>
+    <plurals name="capture_segments">
+        <item quantity="one">%1$d Segment</item>
+        <item quantity="other">%1$d Segmente</item>
+    </plurals>
+</resources>

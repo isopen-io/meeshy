@@ -1,0 +1,237 @@
+import { useEffect, useRef, useState } from 'react';
+
+import { CommentThread } from '@/components/comment-thread';
+import { Glyph } from '@/components/glyph';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+import type { StoryPlaybackStory } from '@/lib/stories/playback';
+import { useFlip } from '@/lib/use-flip';
+import { COMMENTS_ZONE_MOTION, commentsZoneOf, commentsZoneStageOf, type CommentsComposerPresence, type CommentsZone, type CommentsZoneStage } from '@/lib/view/comments-zone';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+import { CLAIMS_GESTURE_ATTRIBUTE } from '@/lib/view/shortcut-scope';
+import type { WritingBar } from '@/lib/view/use-comments-sheet-host';
+import { usePublicationRoom } from '@/lib/view/use-publication-room';
+import { useVirtualKeyboard } from '@/lib/view/use-virtual-keyboard';
+import { useKeyboardInset, useWritingBarReport } from '@/lib/view/use-writing-bar';
+
+/**
+ * **LE FIL DE COMMENTAIRES D'UNE PUBLICATION**, posé en feuille au-dessus du
+ * lecteur qui la monte — miroir de l'overlay `showCommentsOverlay` du lecteur
+ * de stories iOS (`StoryViewerView+Sidebar.swift`, `loadStoryComments`) : la
+ * LISTE et UNE seule zone de saisie (spécification porteur du 2026-05-28).
+ *
+ * **DEUX HÔTES, UN SEUL COMPOSANT** (D-89, #6484) — le lecteur de stories
+ * (`routes/story.tsx`) et le lecteur des Réels (`routes/reels.tsx`) montent
+ * la MÊME feuille : une story et un réel sont tous deux des publications, et
+ * leur fil de commentaires en est un aussi (ex `StoryCommentsSheet`, renommé
+ * quand le second hôte est arrivé — la raison même pour laquelle ce composant
+ * ne porte plus le nom d'un seul de ses deux hôtes).
+ *
+ * **LE FIL EST CELUI DE LA PUBLICATION** — `CommentThread`, la même surface
+ * que `/post/$post`, sur le même cache : un commentaire posé depuis cette
+ * feuille apparaît dans le détail de la publication sans relecture. Une story
+ * ou un réel EST une publication ; lui écrire un second fil aurait fait
+ * diverger les deux au premier ajustement.
+ *
+ * **LA LECTURE EST EN PAUSE TANT QUE LA FEUILLE EST OUVERTE** — c'est l'hôte
+ * qui la pose (`onOpenChange`), parce que lui seul tient l'horloge ; sans
+ * cela le média sous-jacent avancerait sous le fil qu'on est en train de
+ * lire, et le composeur changerait de publication à mi-phrase.
+ *
+ * **ÉCHAP ET LE RETOUR FERMENT LA FEUILLE, PAS LE LECTEUR.** Le lecteur écoute
+ * déjà `Escape` pour se fermer (`routes/story.tsx`, `routes/reels.tsx`) : sans
+ * cette capture, une seule touche fermerait les deux, et le texte en cours de
+ * frappe partirait avec. La capture se fait en phase de CAPTURE, sur
+ * `document`, pour passer AVANT l'écouteur du lecteur quel que soit l'ordre
+ * de montage.
+ *
+ * **LE RETOUR MATÉRIEL PASSE PAR `useBackDismiss`, PAS PAR UN ÉCOUTEUR
+ * MAISON** (revue-correction #6484, défaut majeur 1). La feuille l'annonçait
+ * sans le tenir : seul `Escape` était câblé, et sur la coque Android le
+ * bouton retour matériel appelle `history.back()` — sans entrée d'historique
+ * posée à l'ouverture, ce retour remonte la route `/reels` ou `/story/…`
+ * SOUS la feuille (le lecteur se ferme, le brouillon en cours part avec),
+ * exactement le motif déjà mesuré pour `MessageMenu`
+ * (`AND-9-back-depuis-menu.png`, `lib/view/use-back-dismiss.ts`). `Sheet` et
+ * `MessageMenu` partagent déjà cette loi ; cette feuille, qui EST une couche
+ * modale posée sur un écran inchangé, la rejoint plutôt que d'en écrire une
+ * jumelle.
+ */
+export type PublicationCommentsSheetProps = {
+  readonly postId: string;
+  readonly onClose: () => void;
+  /** ON ÉCRIT (#8643) : la feuille rapporte sa barre à l'hôte, qui réduit sa
+   * scène au-dessus d'elle ; `null` quand on revient à la lecture. */
+  readonly onWritingBar?: (bar: WritingBar | null) => void;
+  /**
+   * **LA ZONE MONTE AVEC LE COMPOSEUR** (#9894, lecteur de stories) — composeur
+   * visible, la zone de commentaires monte ; clavier virtuel ouvert, elle
+   * occupe tout l'espace libre au-dessus de lui ; replié en bulle, elle
+   * redescend (`lib/view/comments-zone.ts`). La liste ne se retire plus et la
+   * scène n'est plus réduite : aucune barre n'est rapportée. Absent (lecteur
+   * des Réels) : la loi d'écriture de #8643.
+   */
+  readonly risesWithComposer?: boolean;
+  /** La story que le lecteur joue (#13922) — « Imager » compose la carte de ses commentaires autour d'elle. */
+  readonly story?: StoryPlaybackStory;
+};
+
+/** LE CLAVIER ET LE COMPOSEUR FONT LA ZONE (#9894) — `null` hors lecteur de stories. */
+function useRisingZone(rises: boolean): { readonly stage: CommentsZoneStage; readonly zone: CommentsZone; readonly onComposerChange: (presence: CommentsComposerPresence) => void } | null {
+  const [composer, setComposer] = useState<CommentsComposerPresence>('open');
+  const keyboard = useVirtualKeyboard(rises);
+  if (!rises) return null;
+  const stage = commentsZoneStageOf({ composer, keyboardOpen: keyboard.open });
+  return { stage, zone: commentsZoneOf({ stage, keyboardInset: keyboard.inset }), onComposerChange: setComposer };
+}
+
+export function PublicationCommentsSheet({ postId, onClose, onWritingBar, risesWithComposer = false, story }: PublicationCommentsSheetProps) {
+  const language = currentInterfaceLanguage();
+  const panneau = useRef<HTMLDivElement | null>(null);
+  /* ÉCRIRE (#8643, jumelle de #8642) — lecteur des Réels : la liste se
+     retire — la scène réduite prend sa place au-dessus du composeur —, la
+     feuille se pose au-dessus du clavier virtuel, et sa barre est rapportée à
+     l'hôte. Replier (⌄) ou envoyer rend la lecture. Lecteur de stories
+     (#9894) : la zone monte au lieu de se retirer (`useRisingZone`). */
+  const [focused, setWriting] = useState(false);
+  const rising = useRisingZone(risesWithComposer);
+  const writing = focused && rising === null;
+  useFlip(panneau, { key: rising === null ? null : `${rising.stage}|${rising.zone.height}|${rising.zone.translate}`, ...COMMENTS_ZONE_MOTION });
+  const keyboardInset = useKeyboardInset(writing);
+  useWritingBarReport({ sheet: panneau, writing, keyboardInset, report: onWritingBar });
+  /* LA SALLE DE LA STORY, tant que son fil est ouvert (#7395) — un contact DM
+     qui n'est pas ami peut lire le fil d'une story `FRIENDS`
+     (`canUserConsumePost`), mais il n'est dans aucun salon de fil : sans la
+     salle, aucun commentaire ne lui arrive en direct. */
+  usePublicationRoom(postId);
+  useBackDismiss(onClose);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      /* Un `<dialog>` ouvert PAR-DESSUS (motifs de « Signaler », atelier
+         « Imagine », #8734) possède son Échap : il se ferme seul (action par
+         défaut, que l'arrêt de propagation ne retient pas), et ni la feuille
+         ni le lecteur dessous ne se ferment avec lui. */
+      if (e.target instanceof Element && e.target.closest('dialog[open]') !== null) return;
+      onClose();
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [onClose]);
+
+  /**
+   * **LE FOCUS ENTRE DANS LA FEUILLE** — sans cela, la touche suivante irait
+   * au plateau, qui navigue d'une story à l'autre.
+   *
+   * **LE RENDRE N'EST PAS DE SON RESSORT, ET C'EST MESURÉ** (revue #7112).
+   * Une couche qui prend le focus le rend d'ordinaire en se démontant, en
+   * mémorisant `document.activeElement` à son montage — écrit ainsi ici, le
+   * témoin navigateur a rendu `BODY`. La raison est en AMONT : l'hôte rend le
+   * rail `inert` quand la feuille s'ouvre (D-90), et un sous-arbre inerte
+   * ÉJECTE le focus qu'il contient. Le bouton était donc déjà flouté avant
+   * que cet effet ne tourne : la feuille ne peut pas savoir d'où l'on vient.
+   *
+   * C'est l'HÔTE qui mémorise, parce que c'est lui qui détruit
+   * (`routes/story.tsx`, `returnFocusRef`).
+   */
+  useEffect(() => {
+    panneau.current?.focus();
+  }, []);
+
+  return (
+    <div
+      /* Le nom de l'attribut reste `story-comments-sheet` (#6484) — c'est le
+         hook que `scripts/check-story-scene.mjs` et
+         `publication-room-live.test.tsx` lisent déjà : le renommer aurait
+         élargi ce lot à des gates qu'il ne touche pas, pour un gain nul (les
+         DEUX hôtes ont un contrat IDENTIQUE sur cet attribut). */
+      data-story-comments-sheet={postId}
+      data-comments-zone={rising?.stage}
+      role="dialog"
+      /**
+       * **PAS D'`aria-modal` : CETTE FEUILLE N'EST PAS UNE MODALE, ET ELLE NE
+       * DOIT PAS EN ÊTRE UNE** (revue #7112).
+       *
+       * `aria-modal="true"` ANNONCE une modale ; il n'en fait pas une — c'est
+       * mot pour mot la raison écrite dans `components/sheet.tsx:11-19`, et le
+       * dépôt a déjà payé ce défaut (la tabulation continuait DERRIÈRE la
+       * feuille, `auth-screens.test.tsx:142`). Le posé ici était donc une
+       * DÉCLARATION que rien n'appliquait : la croix du lecteur restait
+       * atteignable au clavier (mesuré au navigateur — `focus()` puis
+       * `activeElement`) pendant que l'attribut ordonnait au lecteur d'écran
+       * de faire comme si elle n'existait pas.
+       *
+       * Et la modalité serait le MAUVAIS produit : iOS garde délibérément
+       * l'arrière-plan interactif sous son overlay de commentaires — « user
+       * can still tap React / Reply / mute while comments are visible »,
+       * `StoryViewerView+Canvas.swift:1640-1645`. La feuille est donc un
+       * dialogue NON MODAL, ce que `role="dialog"` seul dit exactement.
+       */
+      aria-label={translate(language, 'comments.title')}
+      ref={panneau}
+      tabIndex={-1}
+      /* Le plateau navigue au `pointerdown`/`pointerup` : la feuille RÉCLAME
+         le geste, sinon un tap dans la liste ferait avancer la story
+         derrière. L'attribut le DÉCLARE à l'hôte — qui est le seul à savoir
+         ce que son geste fait — et `stopPropagation` reste la seconde
+         barrière ; la déclaration seule survit à une couche voisine posée un
+         jour sans le gestionnaire (`lib/view/shortcut-scope.ts`, #7112). */
+      {...{ [CLAIMS_GESTURE_ATTRIBUTE]: '' }}
+      onPointerDown={(e) => e.stopPropagation()}
+      onPointerUp={(e) => e.stopPropagation()}
+      className="absolute inset-x-0 bottom-0 flex flex-col overflow-hidden"
+      style={{
+        ...(rising === null ? { maxHeight: '68%' } : { height: rising.zone.height, translate: rising.zone.translate }),
+        /* `--color-ios-surface`, et JAMAIS `--color-ios-bg` : ce second nom
+           n'existe dans AUCUNE feuille (mesuré — `src/styles/ios.css` déclare
+           `--color-ios-surface`, dérivé de `--ios-surface`). Une variable
+           inexistante ne rougit nulle part : la feuille s'est peinte
+           TRANSPARENTE, et son texte d'encre claire est tombé sur la photo
+           de la story — illisible, capture à l'appui. Deux autres sites du
+           dépôt portent la même faute (`components/derived-identity.tsx:125`
+           et `:187`) : issue de suivi, hors tranche de ce lot. */
+        background: 'var(--color-ios-surface)',
+        /* Le lecteur force `colorScheme: 'dark'` sur sa racine
+           (`routes/story.tsx`) pour que la scène soit peinte sur du noir ; la
+           feuille est un ÉCRAN, pas une scène — elle reprend le schéma du
+           document, comme `/post/$post` qui montre le même fil. */
+        colorScheme: 'light dark',
+        /* L'ENCOCHE BASSE (revue-correction #6484, défaut de coque 5a) :
+           posée au bas d’un écran plein cadre sous `viewport-fit=cover`, la
+           feuille laissait son composeur SOUS l'indicateur d'accueil d'un
+           iPhone. Le fond de la feuille s'étend dessous ; le contenu, non. */
+        paddingBottom: rising?.zone.paddingBottom ?? 'env(safe-area-inset-bottom, 0px)',
+        ...(rising === null ? { bottom: writing ? keyboardInset : 0 } : { bottom: 0 }),
+        borderTopLeftRadius: 18,
+        borderTopRightRadius: 18,
+        zIndex: 3,
+      }}
+    >
+      <div className="flex shrink-0 items-center justify-between px-3 pt-2 pb-1">
+        <h2 className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+          {translate(language, 'comments.title')}
+        </h2>
+        <button
+          type="button"
+          data-story-comments-close
+          onClick={onClose}
+          aria-label={translate(language, 'comments.close')}
+          className="grid place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{ width: 44, height: 44, color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}
+        >
+          <Glyph name="x" size={16} />
+        </button>
+      </div>
+      <CommentThread
+        postId={postId}
+        onWritingChange={setWriting}
+        foldOnSend
+        listHidden={writing}
+        {...(rising === null ? {} : { onComposerChange: rising.onComposerChange })}
+        {...(story === undefined ? {} : { story })}
+      />
+    </div>
+  );
+}

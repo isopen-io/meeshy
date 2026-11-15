@@ -15,12 +15,15 @@
  *   - Header absent          → `request.clientMutationId === undefined`,
  *                              request proceeds (routes opt in).
  *   - Header present + valid → `request.clientMutationId === '<cmid>'`.
- *   - Header present + invalid → 400 with `INVALID_MUTATION_ID` envelope.
+ *   - Header present + invalid → 400 servi par `sendError`, `error ===
+ *     'INVALID_MUTATION_ID'` (une CHAÎNE — voir le corps du hook, #4434).
  *
  * Registered globally from `server.ts` so EVERY route benefits.
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+
+import { sendError } from '../utils/response';
 
 /** Matches `cmid_<uuid v4 lowercase>` exactly (no surrounding whitespace). */
 export const CLIENT_MUTATION_ID_REGEX =
@@ -58,24 +61,30 @@ export function registerClientMutationIdHook(app: FastifyInstance): void {
   app.addHook('onRequest', async (req: FastifyRequest, reply: FastifyReply) => {
     const raw = req.headers['x-client-mutation-id'];
     if (raw === undefined) return;
-    if (typeof raw !== 'string') {
-      return reply.code(400).send({
-        success: false,
-        error: {
-          code: 'INVALID_MUTATION_ID',
-          message: 'Invalid cmid format',
-        },
-      });
-    }
-    if (!CLIENT_MUTATION_ID_REGEX.test(raw)) {
-      return reply.code(400).send({
-        success: false,
-        error: {
-          code: 'INVALID_MUTATION_ID',
-          message: 'Invalid cmid format',
-        },
-      });
-    }
+    /**
+     * Le refus passe par `sendError` — la source UNIQUE de l'enveloppe — et
+     * non par une charge écrite à la main (#4434).
+     *
+     * L'enveloppe déclare `error` en CHAÎNE (`utils/response.ts`,
+     * `errorResponseSchema`). Ce hook y posait un OBJET `{ code, message }`,
+     * et fast-json-stringify COERCE une clé du mauvais type au lieu de la
+     * supprimer : mesuré sur staging, le client recevait
+     * `{"success":false,"error":"[object Object]"}`. `INVALID_MUTATION_ID`,
+     * que le contrat de ce module promet dix lignes plus haut, n'atteignait
+     * donc AUCUN client — ni la file hors ligne iOS, dont c'est pourtant le
+     * mécanisme de déduplication, ni un rapport d'incident.
+     *
+     * Les témoins voisins ne pouvaient pas le voir : ils exercent le hook
+     * contre un DOUBLE de `reply`, où rien ne sérialise. La garde qui le
+     * tient est `clientMutationId-served-envelope.test.ts`, qui monte une
+     * vraie app avec le schéma d'erreur de production.
+     */
+    const refuser = (): FastifyReply => {
+      sendError(reply, 400, 'INVALID_MUTATION_ID', { message: 'Invalid cmid format' });
+      return reply;
+    };
+    if (typeof raw !== 'string') return refuser();
+    if (!CLIENT_MUTATION_ID_REGEX.test(raw)) return refuser();
     (req as FastifyRequest & { clientMutationId?: string }).clientMutationId = raw;
   });
 }

@@ -7,7 +7,7 @@ import MeeshyUI
 /// state stay visible and the bubble right-aligns like every other bubble.
 /// Tapping it re-triggers the send.
 ///
-/// Interaction (2026-06-11):
+/// Interaction:
 /// - **At rest** the band is steady (no animation): a calm orange strip with a
 ///   centred `arrow.clockwise` glyph. It does NOT blink while merely displayed.
 /// - **On tap** it commits to a resend: the glyph swaps to a spinner and the
@@ -31,7 +31,7 @@ struct BubbleFailedRetryBar: View {
     var body: some View {
         ZStack {
             Rectangle()
-                .fill(MeeshyColors.warning)
+                .fill(MeeshyColors.stateFailed)
                 // Steady at rest; only the active-resend blink modulates it.
                 .opacity(isRetrying && blink ? 1.0 : 0.92)
 
@@ -43,8 +43,8 @@ struct BubbleFailedRetryBar: View {
                     .scaleEffect(0.7)
             } else {
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
+                    .font(.system(size: MeeshyIconSize.sm, weight: .bold))
+                    .foregroundStyle(Color.white)
             }
         }
         .frame(maxHeight: .infinity)

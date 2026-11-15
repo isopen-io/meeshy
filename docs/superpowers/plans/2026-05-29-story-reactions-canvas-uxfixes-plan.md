@@ -29,8 +29,8 @@
 
 | Fichier | Changement |
 |---|---|
-| `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` | `triggerStoryReaction` : dismiss full picker immédiat |
-| `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift` | `applyCommentReactionEvent` (drop guard overlay), `loadStoryCommentsAsync` + `fetchStoryCommentsFromNetwork` (recompute likedIds), mapping `APIPostComment → FeedComment` (propager currentUserReactions), nouvelle overload `computeLikedIds(fromCachedComments:)` |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` | `triggerStoryReaction` : dismiss full picker immédiat |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift` | `applyCommentReactionEvent` (drop guard overlay), `loadStoryCommentsAsync` + `fetchStoryCommentsFromNetwork` (recompute likedIds), mapping `APIPostComment → FeedComment` (propager currentUserReactions), nouvelle overload `computeLikedIds(fromCachedComments:)` |
 | `apps/ios/MeeshyTests/Features/Stories/StoryViewerCommentReactionTests.swift` | Étendre avec tests B.1, B.2, B.3 |
 | `packages/MeeshySDK/Sources/MeeshySDK/Models/FeedModels.swift` | `FeedComment` : ajouter `currentUserReactions: [String]?` + CodingKey + init + Codable manuels |
 | `packages/MeeshySDK/Sources/MeeshyUI/Story/TextEditToolOptions.swift` | Refondre `borderOptions` : slider continu + palette toujours active |
@@ -59,7 +59,7 @@ Toutes mergées sur `main`.
 ## Task 1 — Section 1A : Full picker emoji dismiss + animation visible
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:1004-1040`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift:1004-1040`
 - Create: `apps/ios/MeeshyTests/Features/Stories/StoryViewerReactionFlowTests.swift`
 
 - [ ] **Step 1.1 : Créer la branche**
@@ -121,7 +121,7 @@ Expected : compile OK ; le 1er test passe déjà car c'est un mirror du futur SU
 
 - [ ] **Step 1.4 : Modifier `triggerStoryReaction`**
 
-Éditer `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:1004-1040` :
+Éditer `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift:1004-1040` :
 
 ```swift
 private func triggerStoryReaction(_ emoji: String) {
@@ -191,7 +191,7 @@ Expected : tous les tests existants + les 2 nouveaux passent.
 - [ ] **Step 1.7 : Commit + push**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift apps/ios/MeeshyTests/Features/Stories/StoryViewerReactionFlowTests.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift apps/ios/MeeshyTests/Features/Stories/StoryViewerReactionFlowTests.swift
 git commit -m "fix(stories): full picker emoji dismisses immediately so big-reaction anim is visible"
 git push -u origin fix/story-full-picker-dismiss
 gh pr create --base main --title "fix(stories): full picker emoji dismiss" --body "$(cat <<'EOF'
@@ -380,7 +380,7 @@ EOF
 ## Task 3 — Section 1B.2 : Reload recompute likedIds + mapping APIPostComment → FeedComment
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift` (mapping ligne 1398, `loadStoryCommentsAsync`, overload `computeLikedIds`)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift` (mapping ligne 1398, `loadStoryCommentsAsync`, overload `computeLikedIds`)
 - Modify: `apps/ios/MeeshyTests/Features/Stories/StoryViewerCommentReactionTests.swift`
 
 **Dépendance** : Task 2 mergée d'abord (besoin de `FeedComment.currentUserReactions`).
@@ -395,7 +395,7 @@ git checkout -b fix/story-comment-likes-reload
 - [ ] **Step 3.2 : Lire le mapping existant ligne 1393-1410**
 
 ```bash
-sed -n '1390,1415p' apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift
+sed -n '1390,1415p' apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift
 ```
 
 Le mapping `APIPostComment → FeedComment` crée `FeedComment(...)` sans passer `currentUserReactions`. À corriger.
@@ -433,7 +433,7 @@ Expected : `'computeLikedIds(fromCachedComments:)' not found`.
 
 - [ ] **Step 3.5 : Ajouter l'overload + propager currentUserReactions au mapping**
 
-Éditer `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift` :
+Éditer `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift` :
 
 **A.** Ligne 1527 — ajouter l'overload sous la fonction existante :
 ```swift
@@ -508,7 +508,7 @@ Run : `./apps/ios/meeshy.sh run`
 - [ ] **Step 3.8 : Commit + push**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift apps/ios/MeeshyTests/Features/Stories/StoryViewerCommentReactionTests.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift apps/ios/MeeshyTests/Features/Stories/StoryViewerCommentReactionTests.swift
 git commit -m "fix(stories): comment likes restored from cache via FeedComment.currentUserReactions"
 git push -u origin fix/story-comment-likes-reload
 gh pr create --base main --title "fix(stories): comment likes restored from cache" --body "$(cat <<'EOF'
@@ -530,7 +530,7 @@ EOF
 ## Task 4 — Section 1B.1 : `applyCommentReactionEvent` sans guard overlay
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:1457`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift:1457`
 - Modify: `apps/ios/MeeshyTests/Features/Stories/StoryViewerCommentReactionTests.swift`
 
 - [ ] **Step 4.1 : Branche**
@@ -575,7 +575,7 @@ Expected : assertion failure (event ignoré → likes reste à 5).
 
 - [ ] **Step 4.4 : Retirer le guard**
 
-Éditer `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:1457` — supprimer la ligne :
+Éditer `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift:1457` — supprimer la ligne :
 ```swift
         guard showCommentsOverlay else { return }
 ```
@@ -610,7 +610,7 @@ Run : `./apps/ios/meeshy.sh run`
 - [ ] **Step 4.7 : Commit + push**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift apps/ios/MeeshyTests/Features/Stories/StoryViewerCommentReactionTests.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift apps/ios/MeeshyTests/Features/Stories/StoryViewerCommentReactionTests.swift
 git commit -m "fix(stories): comment reaction events apply even when overlay closed"
 git push -u origin fix/story-comment-event-without-overlay
 gh pr create --base main --title "fix(stories): comment events apply with overlay closed" --body "Drop the showCommentsOverlay guard from applyCommentReactionEvent. State stays aligned to server when overlay is closed."

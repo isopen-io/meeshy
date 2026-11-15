@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        {
+          "androidName": "voice_playback_channel_name",
+          "status": "android-only"
+        },
+        {
+          "androidName": "voice_playback_voice_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "voice_playback_protected",
+          "status": "android-only"
+        },
+        {
+          "androidName": "voice_playback_back",
+          "status": "android-only"
+        },
+        {
+          "androidName": "voice_playback_forward",
+          "status": "android-only"
+        },
+        {
+          "androidName": "voice_playback_play",
+          "status": "android-only"
+        },
+        {
+          "androidName": "voice_playback_pause",
+          "status": "android-only"
+        },
+        {
+          "androidName": "voice_playback_return",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -5,10 +5,171 @@ import MeeshyUI
 
 // MARK: - iPad Root View Right Panel Content (Hub Routes)
 
-extension iPadRootView {
+/// Ce que la colonne droite de l'iPad montre.
+///
+/// Une route ouverte PASSE DEVANT la conversation, comme une page poussée par-dessus un fil sur iPhone. L'ordre
+/// inverse laissait la route posée mais invisible : réglages, notifications, le post d'un push ou d'un lien touché
+/// fil ouvert n'ouvraient rien, et le premier « retour » se dépensait à retirer cette route que personne ne voyait.
+/// `Router.onPopRequested` retire déjà la route avant la conversation : cet ordre est le sien.
+enum iPadRightColumn: Equatable {
+    case panel(Route)
+    case conversation(Conversation)
+    case conversationList
 
-    @ViewBuilder
-    func rightPanelContent(for route: Route) -> some View {
+    static func resolve(conversation: Conversation?, panelRoute: Route?) -> iPadRightColumn {
+        if let panelRoute { return .panel(panelRoute) }
+        if let conversation { return .conversation(conversation) }
+        return .conversationList
+    }
+
+    /// La conversation que la personne a SOUS LES YEUX : `nil` quand une route la recouvre. La pastille de
+    /// synchronisation et le mini-lecteur s'effacent devant un fil visible, pas devant un fil recouvert.
+    static func visibleConversationId(conversation: Conversation?, panelRoute: Route?) -> String? {
+        panelRoute == nil ? conversation?.id : nil
+    }
+}
+
+/// Le retour d'une page du panneau droit (#18443) : une sous-page d'une communauté rend la communauté, comme
+/// la pile de l'iPhone ; toute autre page ferme le panneau. `Router.onPopRequested` le lit.
+enum iPadPanelBack {
+    static func route(poppedFrom route: Route) -> Route? {
+        switch route {
+        case .communityMembers(let communityId), .communityInvite(let communityId):
+            return .communityDetail(communityId)
+        case .communitySettings(let community):
+            return .communityDetail(community.id)
+        default:
+            return nil
+        }
+    }
+}
+
+/// La pile du JEU au-dessus de la route racine du panneau droit (#9564, amendement n° 4). Elle ne vaut que pour SA
+/// racine : un panneau ouvert sur une autre route part d'une pile vide, sans jamais rejouer une page d'avant.
+struct GamePanelTrail {
+    var root: Route?
+    var path = NavigationPath()
+    /// Les pages empilées, lisibles : `NavigationPath` ne rend pas ses éléments, et le relais vers l'iPhone
+    /// (`RootNavigationHandoff`) doit pouvoir les reprendre.
+    private(set) var routes: [Route] = []
+
+    init(root: Route? = nil) {
+        self.root = root
+    }
+
+    /// La pile renvoyée par la `NavigationStack` du panneau : un retour par glissement ne fait que la
+    /// raccourcir, et les pages lisibles suivent.
+    init(root: Route, path: NavigationPath, previous: GamePanelTrail) {
+        self.root = root
+        self.path = path
+        self.routes = previous.root == root ? Array(previous.routes.prefix(path.count)) : []
+    }
+
+    func path(over route: Route) -> NavigationPath { root == route ? path : NavigationPath() }
+
+    func routes(over route: Route) -> [Route] { root == route ? routes : [] }
+
+    mutating func push(_ route: Route, over root: Route) {
+        if self.root != root { self = GamePanelTrail(root: root) }
+        path.append(route)
+        routes.append(route)
+    }
+
+    mutating func pop() {
+        guard !path.isEmpty else { return }
+        path.removeLast()
+        if !routes.isEmpty { routes.removeLast() }
+    }
+}
+
+/// La pile du jeu, tenue par RÉFÉRENCE : une `Route` est lourde, et `iPadRootView` est une valeur que chaque
+/// closure de son corps copie (budget de `ConversationViewValueSizeGuardTests`).
+final class GamePanelTrailStore: ObservableObject {
+    // Même garde que `Router` : une deinit synthétisée isolée plante au démontage hors d'une tâche (iOS 26.1).
+    nonisolated deinit {}
+    @Published var trail = GamePanelTrail()
+}
+
+/// Le panneau droit de l'iPad quand une route (autre qu'une conversation) y
+/// est ouverte : une `NavigationStack` locale autour de `iPadPanelDestination`.
+///
+/// `NavigationStack` OBLIGATOIRE : sans lui, tout `NavigationLink` interne à un
+/// écran du panneau est inerte (lignes de TrackingLinksView / ShareLinksView /
+/// CommunityLinksView vers leur vue de détail — mortes sur iPad jusqu'au
+/// 2026-07-29). `.id(route)` vide la pile locale quand on change de route,
+/// sinon la vue de détail poussée survivrait au changement d'écran racine.
+struct iPadRightPanel: View {
+    let route: Route
+    @Binding var rightPanelRoute: Route?
+    /// La pile du jeu au-dessus de `route` (#9564) : vide hors de Progression.
+    @Binding var gamePath: NavigationPath
+    let notificationManager: NotificationToastManager
+    let onOpenConversation: (Conversation) -> Void
+    let onNotificationTap: (APINotification) -> Void
+    /// `router.pop()` : le retour anime le panneau et rend le parent d'une sous-page (#18443).
+    let onPop: () -> Void
+
+    var body: some View {
+        NavigationStack(path: $gamePath) {
+            iPadPanelDestination(
+                route: route,
+                rightPanelRoute: $rightPanelRoute,
+                notificationManager: notificationManager,
+                onOpenConversation: onOpenConversation,
+                onNotificationTap: onNotificationTap
+            )
+            // Les pages du jeu poussées DANS le panneau : fiche, sous-page — le retour système et le glissement
+            // depuis le bord y ramènent à la page d'au-dessus (#9564).
+            .navigationDestination(for: Route.self) { pushed in
+                iPadPanelDestination(
+                    route: pushed,
+                    rightPanelRoute: $rightPanelRoute,
+                    notificationManager: notificationManager,
+                    onOpenConversation: onOpenConversation,
+                    onNotificationTap: onNotificationTap
+                )
+            }
+            // Filet de sécurité pour les écrans qui délèguent leur chrome à la
+            // barre système (membres d'une communauté…) :
+            // racine du panneau, ils n'ont ni bouton retour propre ni geste de
+            // retour, donc aucune sortie. Les écrans à en-tête maison posent
+            // `.navigationBarHidden(true)` et ne voient jamais ce bouton.
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        HapticFeedback.light()
+                        onPop()
+                    } label: {
+                        Image(systemName: "chevron.backward")
+                    }
+                    .accessibilityLabel(String(localized: "root.ipad.close_panel", defaultValue: "Fermer", bundle: .main))
+                }
+            }
+        }
+        .id(route)
+        // Rend `dismiss()` opérant pour les écrans racine du panneau : ils ne
+        // sont ni poussés ni présentés, leur bouton retour n'avait donc aucun
+        // effet. Cf. `PanelBackAction`.
+        .environment(\.meeshyPanelDismiss, onPop)
+    }
+}
+
+/// L'écran du PANNEAU DROIT de l'iPad pour une `Route`.
+///
+/// Une struct NOMINALE, et non une fonction `@ViewBuilder` d'extension
+/// (#5837) : appelée depuis `rightColumn`, le `switch` à 27 cas — arbre
+/// `_ConditionalContent` plus la chaîne de chaque cas — entrait dans le type
+/// concret de `iPadRootView.body`. Ici la racine ne voit qu'un nom.
+struct iPadPanelDestination: View {
+    let route: Route
+    @Binding var rightPanelRoute: Route?
+    let notificationManager: NotificationToastManager
+    let onOpenConversation: (Conversation) -> Void
+    let onNotificationTap: (APINotification) -> Void
+    /// Le retour du panneau (`router.pop()`) : « Terminé » d'une invitation rend la communauté (#18443).
+    @Environment(\.meeshyPanelDismiss) private var panelBack
+
+    var body: some View {
         switch route {
         case .settings:
             SettingsView()
@@ -42,7 +203,7 @@ extension iPadRootView {
                 onSelectConversation: { apiConversation in
                     let currentUserId = AuthManager.shared.currentUser?.id ?? ""
                     let conv = apiConversation.toConversation(currentUserId: currentUserId)
-                    openConversation(conv)
+                    onOpenConversation(conv)
                 },
                 onOpenSettings: { community in
                     rightPanelRoute = .communitySettings(community)
@@ -67,9 +228,11 @@ extension iPadRootView {
         case .communitySettings(let community):
             CommunitySettingsView(
                 community: community,
-                onUpdated: { _ in rightPanelRoute = .communityList },
+                onUpdated: { _ in rightPanelRoute = .communityDetail(community.id) },
                 onDeleted: { rightPanelRoute = nil },
-                onLeft: { rightPanelRoute = nil }
+                onLeft: { rightPanelRoute = nil },
+                // « Annuler » revient au détail de la communauté, comme le retour de pile sur iPhone.
+                onCancel: { rightPanelRoute = .communityDetail(community.id) }
             )
         case .communityMembers(let communityId):
             CommunityMembersView(
@@ -79,13 +242,17 @@ extension iPadRootView {
                 }
             )
         case .communityInvite(let communityId):
-            CommunityInviteView(communityId: communityId, onDone: { rightPanelRoute = nil })
+            CommunityInviteView(communityId: communityId, onDone: { panelBack?() })
         case .notifications:
             NotificationListView(
                 onNotificationTap: { notification in
-                    handleNotificationTap(notification)
+                    onNotificationTap(notification)
                 },
-                onDismiss: { rightPanelRoute = nil }
+                onDismiss: { rightPanelRoute = nil },
+                onQuickAction: { action in
+                    await NotificationQuickActionPerformer(openConversation: onOpenConversation)
+                        .perform(action)
+                }
             )
                         .navigationBarHidden(true)
             .onDisappear {
@@ -94,6 +261,25 @@ extension iPadRootView {
         case .userStats:
             UserStatsView()
                                 .navigationBarHidden(true)
+        // L'ancien tableau de bord (#9564, amendement n° 4) ouvre la première page, une version durant.
+        case .progression, .progressionDashboard:
+            ProgressionView()
+                                .navigationBarHidden(true)
+        case .progressionSection(let section):
+            ProgressionSectionPage(section: section)
+                .navigationBarHidden(true)
+        case .progressionRules(let rule, let section):
+            GameRulesPage(focusedRule: rule, focusedSection: section)
+                .navigationBarHidden(true)
+        case .progressionNotebook:
+            GameNotebookPage()
+                .navigationBarHidden(true)
+        case .gamePage(let page, let focus):
+            GamePageView(page: page, focus: focus)
+                .navigationBarHidden(true)
+        case .progressionConcept(let concept, let section):
+            ProgressionConceptPage(concept: concept, section: section)
+                .navigationBarHidden(true)
         case .links:
             LinksHubView()
                         case .affiliate:
@@ -116,11 +302,13 @@ extension iPadRootView {
         case .hashtagResults(let tag):
             HashtagResultsView(tag: tag)
         case .bookmarks:
-            // Idem iPhone : la barre système porte le titre, et sur iPad le
-            // bouton retour du panneau droit y vit aussi.
+            // Idem iPhone : l'en-tête partagé porte le titre et le retour, qui
+            // ferme le panneau par `PanelBackAction` (#6481).
             BookmarksView()
+                .navigationBarHidden(true)
         case .starredMessages:
             StarredMessagesView()
+                .navigationBarHidden(true)
         case .friendRequests:
             FriendRequestListView()
                                 .navigationBarHidden(true)
@@ -139,11 +327,11 @@ extension iPadRootView {
                 parentCommentId: parentCommentId
             )
             .navigationBarHidden(true)
+        case .moodSpotlight(let statusId):
+            MoodSpotlightView(statusId: statusId)
         }
     }
 }
-
-// MARK: - iPad Left Column Header
 
 struct iPadLeftColumnHeader: View {
     let title: String
@@ -158,17 +346,17 @@ struct iPadLeftColumnHeader: View {
     private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             if showFeedButton {
                 Button {
                     HapticFeedback.light()
                     onFeedTap?()
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "square.stack.fill")
-                            .font(MeeshyFont.relative(14, weight: .semibold))
-                        Text(String(localized: "root.ipad.feed", defaultValue: "Feed", bundle: .main))
-                            .font(MeeshyFont.relative(14, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
+                        Text(String(localized: "root.ipad.feed", defaultValue: "Flux", bundle: .main))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                     }
                     .foregroundStyle(
                         LinearGradient(
@@ -177,8 +365,8 @@ struct iPadLeftColumnHeader: View {
                             endPoint: .trailing
                         )
                     )
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(
                         Capsule()
                             .fill(MeeshyColors.indigo100.opacity(isDark ? 0.15 : 1))
@@ -187,8 +375,8 @@ struct iPadLeftColumnHeader: View {
             }
 
             Text(title)
-                .font(MeeshyFont.relative(20, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             Spacer()
@@ -200,17 +388,17 @@ struct iPadLeftColumnHeader: View {
                 } label: {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "bell.fill")
-                            .font(MeeshyFont.relative(16, weight: .medium))
-                            .foregroundColor(theme.textSecondary)
+                            .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
+                            .foregroundStyle(theme.textSecondary)
 
                         if notificationCount > 0 {
                             Text(NotificationBadge.displayed(notificationCount))
                                 // Doctrine 86i : le compteur reste figé face au Dynamic
                                 // Type, mais la pastille s'élargit — « 99+ » entier.
-                                .font(MeeshyFont.relative(9, weight: NotificationBadge.fontWeight))
-                                .foregroundColor(.white)
+                                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: NotificationBadge.fontWeight))
+                                .foregroundStyle(Color.white)
                                 .lineLimit(1)
-                                .padding(.horizontal, 5)
+                                .padding(.horizontal, MeeshySpacing.xs)
                                 .frame(minWidth: 16, minHeight: 16)
                                 .background(Capsule().fill(MeeshyColors.error))
                                 .offset(x: 6, y: -6)
@@ -228,14 +416,14 @@ struct iPadLeftColumnHeader: View {
                     onSettingsTap()
                 } label: {
                     Image(systemName: "gearshape.fill")
-                        .font(MeeshyFont.relative(16, weight: .medium))
-                        .foregroundColor(theme.textSecondary)
+                        .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
+                        .foregroundStyle(theme.textSecondary)
                 }
                 .accessibilityLabel(String(localized: "root.ipad.settings", defaultValue: "Paramètres", bundle: .main))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
         .background(theme.backgroundPrimary.opacity(0.95))
     }
 }
@@ -243,55 +431,60 @@ struct iPadLeftColumnHeader: View {
 // MARK: - iPad Resizable Handle
 
 struct iPadResizableHandle: View {
-    @Binding var ratio: CGFloat
-    let screenWidth: CGFloat
+    @Binding var ratio: Double
+    let windowWidth: CGFloat
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     @State private var isDragging = false
+    /// La part de la colonne AU DÉBUT du geste. `value.translation` se mesure depuis ce début : l'ajouter à une
+    /// part déjà déplacée par l'événement précédent comptait le même déplacement à chaque image, et la poignée
+    /// filait devant le doigt.
+    @State private var dragStartRatio: Double?
 
-    private let minRatio: CGFloat = 0.30
-    private let maxRatio: CGFloat = 0.50
     private let handleWidth: CGFloat = 20
 
     var body: some View {
         ZStack {
             Rectangle()
-                .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.08))
+                .fill(isDark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.black.opacity(MeeshyOpacity.subtle))
                 .frame(width: 1)
 
             RoundedRectangle(cornerRadius: 2)
-                .fill(isDragging ? MeeshyColors.indigo400 : (isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.15)))
+                .fill(isDragging ? MeeshyColors.indigo400 : (isDark ? Color.white.opacity(MeeshyOpacity.light) : Color.black.opacity(MeeshyOpacity.light)))
                 .frame(width: 4, height: 36)
-                .animation(.easeInOut(duration: 0.15), value: isDragging)
+                .animation(.easeInOut(duration: MeeshyGlassRecipe.toneFadeDuration), value: isDragging)
         }
         .frame(width: handleWidth)
         .contentShape(Rectangle())
+        .meeshyColumnResizePointer()
         .gesture(
             // minimumDistance > tap-wobble so an accidental tap near the divider
             // never starts a resize (and never swallows a nearby tap sequence).
             DragGesture(minimumDistance: 8)
                 .onChanged { value in
                     isDragging = true
-                    let currentX = screenWidth * ratio + value.translation.width
-                    let newRatio = currentX / screenWidth
-                    ratio = min(maxRatio, max(minRatio, newRatio))
+                    let start = dragStartRatio ?? ratio
+                    dragStartRatio = start
+                    ratio = ColumnWidthLaw.dragged(
+                        from: start, translation: value.translation.width, windowWidth: windowWidth)
                 }
                 .onEnded { _ in
                     isDragging = false
+                    dragStartRatio = nil
                 }
         )
         .ignoresSafeArea()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(localized: "root.ipad.resizable_handle.label", defaultValue: "Séparateur de colonnes", bundle: .main))
-        .accessibilityValue(String(format: String(localized: "root.ipad.resizable_handle.value_format", defaultValue: "%d pour cent", bundle: .main), Int(ratio * 100)))
-        .accessibilityHint(String(localized: "root.ipad.resizable_handle.hint", defaultValue: "Ajuste la largeur de la colonne de gauche de 30 à 50 pour cent", bundle: .main))
+        .accessibilityValue(String(format: String(localized: "root.ipad.resizable_handle.value_points", defaultValue: "%d points", bundle: .main), Int(ColumnWidthLaw.width(ratio: ratio, windowWidth: windowWidth))))
+        .accessibilityHint(String(format: String(localized: "root.ipad.resizable_handle.hint_width", defaultValue: "Ajuste la largeur de la colonne de gauche entre %d et %d points", bundle: .main), Int(ColumnWidthLaw.minimumWidth), Int(ColumnWidthLaw.maximumWidth)))
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment:
-                ratio = min(maxRatio, ratio + 0.02)
+                ratio = ColumnWidthLaw.stepped(ratio, by: 1, windowWidth: windowWidth)
             case .decrement:
-                ratio = max(minRatio, ratio - 0.02)
+                ratio = ColumnWidthLaw.stepped(ratio, by: -1, windowWidth: windowWidth)
             @unknown default:
                 break
             }

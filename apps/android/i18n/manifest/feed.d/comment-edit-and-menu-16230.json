@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        { "androidName": "comment_menu_edit", "status": "android-only" },
+        { "androidName": "comment_menu_report", "status": "android-only" },
+        { "androidName": "comment_menu_remove", "status": "android-only" },
+        { "androidName": "comment_menu_cancel_edit", "status": "android-only" },
+        { "androidName": "comment_menu_edit_failed", "status": "android-only" },
+        { "androidName": "comment_menu_report_title", "status": "android-only" },
+        { "androidName": "comment_menu_reported", "status": "android-only" },
+        { "androidName": "comment_menu_report_failed", "status": "android-only" },
+        { "androidName": "comment_menu_remove_title", "status": "android-only" },
+        { "androidName": "comment_menu_remove_hint", "status": "android-only" },
+        { "androidName": "comment_menu_removed", "status": "android-only" },
+        { "androidName": "comment_menu_remove_failed", "status": "android-only" }
+      ]
+    }
+  }
+}

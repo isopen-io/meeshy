@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="account_lifecycle_deletion_pending">Una richiesta di eliminazione attende la tua conferma. Apri il link ricevuto via e-mail.</string>
+    <string name="account_lifecycle_deletion_pending_expires">Il link scade il %1$s.</string>
+    <string name="account_lifecycle_deletion_grace">Il tuo account sarà eliminato il %1$s. Per annullare, apri il link dell’e-mail prima di quella data.</string>
+    <string name="account_lifecycle_deletion_grace_no_date">Il tuo account è in fase di eliminazione. Per annullare, apri il link dell’e-mail.</string>
+    <string name="activation_invite_banner_title">Convalida il tuo account</string>
+    <string name="activation_invite_banner_days">Giorni rimasti: %1$d</string>
+    <string name="activation_invite_banner_no_days">Dimostra il tuo indirizzo e-mail e aggiungi un numero.</string>
+    <string name="activation_invite_banner_later">Più tardi</string>
+    <string name="birth_date_title">Data di nascita</string>
+    <string name="birth_date_message">Indica la tua data di nascita. Può essere dichiarata una sola volta.</string>
+    <string name="birth_date_pick">Scegli la mia data</string>
+    <string name="birth_date_confirm">Conferma</string>
+    <string name="birth_date_done">Grazie, la tua data di nascita è registrata.</string>
+    <string name="birth_date_done_restricted">Grazie. Puoi leggere Meeshy, ma la scrittura è chiusa per la tua età.</string>
+    <string name="birth_date_error_already_set">La tua data di nascita è già registrata.</string>
+    <string name="birth_date_error_below_minimum">Meeshy non è aperto ai minori di 13 anni.</string>
+    <string name="birth_date_error_invalid">Questa data non è valida.</string>
+    <string name="birth_date_error_unsupported">Questo server non supporta ancora questo passaggio.</string>
+    <string name="birth_date_error_unavailable">Impossibile salvare la data di nascita. Riprova.</string>
+</resources>

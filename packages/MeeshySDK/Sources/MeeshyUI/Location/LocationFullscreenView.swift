@@ -53,91 +53,74 @@ public struct LocationFullscreenView: View {
     }
 
     private var headerBar: some View {
-        HStack {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.black.opacity(0.5)))
-            }
-
-            Spacer()
-
+        FullscreenTopBar(onClose: { dismiss() }) {
             // `.mapStyle` (hybrid/standard) is iOS 17+, so the toggle is only
             // surfaced where it actually does something. On iOS 16 the map is
             // standard-only — showing a dead control would mislead the user.
             if Platform.isIOS17OrLater {
-                Button {
+                FullscreenChromeButton(
+                    systemImage: isHybridMap ? "map" : "map.fill",
+                    label: String(localized: "location.fullscreen.mapStyle", defaultValue: "Style de carte", bundle: .module)
+                ) {
                     withAnimation {
                         isHybridMap.toggle()
                     }
-                } label: {
-                    Image(systemName: isHybridMap ? "map" : "map.fill")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color.black.opacity(0.5)))
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
     }
 
     private var bottomCard: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             if let name = senderName {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "person.fill")
-                        .font(.system(size: 11))
-                        .foregroundColor(Color(hex: accentColor))
+                        .meeshyScaledFont(MeeshyIconSize.xs)
+                        .foregroundStyle(Color(hex: accentColor))
                     Text(name)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                        .foregroundStyle(Color.primary)
                     Spacer()
                 }
             }
 
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "mappin.and.ellipse")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(Color(hex: accentColor))
+                    .meeshyScaledFont(MeeshyIconSize.md, weight: .medium)
+                    .foregroundStyle(Color(hex: accentColor))
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(placeName ?? String(localized: "location.fullscreen.sharedPosition", defaultValue: "Position partagee", bundle: .module))
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.primary)
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    Text(placeName ?? String(localized: "location.fullscreen.sharedPosition", defaultValue: "Position partagée", bundle: .module))
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                        .foregroundStyle(Color.primary)
                     if let addr = address {
                         Text(addr)
-                            .font(.system(size: 12))
-                            .foregroundColor(.secondary)
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                            .foregroundStyle(Color.secondary)
                     }
                     Text(String(format: "%.5f, %.5f", latitude, longitude))
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.secondary.opacity(0.7))
+                        .meeshyScaledFont(MeeshyFont.captionSize, design: .monospaced)
+                        .foregroundStyle(Color.secondary.opacity(0.7))
                 }
 
                 Spacer()
             }
 
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 Button {
                     openInMaps()
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "map.fill")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                         Text(String(localized: "location.fullscreen.openInMaps", defaultValue: "Ouvrir dans Plans", bundle: .module))
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     }
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, MeeshySpacing.smPlus)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                             .fill(Color(hex: accentColor))
                     )
                 }
@@ -145,29 +128,29 @@ public struct LocationFullscreenView: View {
                 Button {
                     openDirections()
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text(String(localized: "location.fullscreen.directions", defaultValue: "Itineraire", bundle: .module))
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
+                        Text(String(localized: "location.fullscreen.directions", defaultValue: "Itinéraire", bundle: .module))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     }
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, MeeshySpacing.smPlus)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color(hex: accentColor), lineWidth: 1.5)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                            .stroke(Color(hex: accentColor), lineWidth: MeeshyBorder.emphasis)
                     )
                 }
             }
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
                 .fill(.ultraThinMaterial)
         )
-        .padding(.horizontal, 12)
-        .padding(.bottom, 20)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.bottom, MeeshySpacing.xl)
     }
 
     private func openInMaps() {

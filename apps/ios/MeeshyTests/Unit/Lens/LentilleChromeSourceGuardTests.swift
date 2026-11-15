@@ -1,0 +1,382 @@
+import XCTest
+@testable import Meeshy
+
+/// Garde de source DÉDIÉE LWS-6/I-064 : `ConversationListView.swift` et
+/// `Lens/Chrome/*.swift` ne réintroduisent ni un second détecteur de
+/// défilement, ni une constante de loi gelée recopiée en dur.
+///
+/// **Pourquoi une suite séparée de `ScrollPillStateTests`.** Ce fichier
+/// vérifiait déjà, en passant, l'absence de `ScrollViewReader` /
+/// `onScrollGeometryChange` / `PreferenceKey` sur `ConversationListView.swift`
+/// et `SectionScrollPillHost.swift` (I-063/I-063bis) — mais le contrat cite
+/// `LentilleChromeSourceGuardTests` comme sa PROPRE suite, et le périmètre
+/// devait de toute façon s'étendre : chaque fichier de `Lens/Chrome/`
+/// (pas seulement l'hôte de la pilule), et les littéraux de loi R15, jamais
+/// vérifiés app-side pour `ConversationListView.swift` puisque ce fichier
+/// vit HORS des `SKIN_DIRS` de `scripts/check-law-literals.sh` (il n'est pas
+/// sous `Lens/**`).
+///
+/// **Alignement sur `scripts/check-law-literals.sh`.** Le script ne « strip »
+/// AUCUN commentaire — il fait un `grep` verbatim sur le fichier source. La
+/// consigne I-064 est explicite : « le script ne tolère même pas les
+/// commentaires — aligne ta garde sur son comportement. » Les témoins de
+/// littéraux ci-dessous lisent donc la source BRUTE (aucun
+/// `AppSourceGuard.stripComments`), à la différence des autres suites
+/// Lentille qui, elles, gardent une FORME de code et doivent donc ignorer
+/// les commentaires pour ne pas se faire piéger par une indentation ou une
+/// prose qui changent sans changer le code.
+///
+/// **Leçon 257 (garde d'ensemble).** Le contenu de `Lens/Chrome/` est
+/// DÉCOUVERT par `FileManager`, jamais recopié dans une liste : un fichier
+/// ajouté demain à ce dossier entre automatiquement dans le périmètre de la
+/// garde, et la suite échoue explicitement si elle n'en trouve aucun — une
+/// garde qui charge zéro fichier passe toujours au vert sans rien vérifier.
+final class LentilleChromeSourceGuardTests: XCTestCase {
+
+    // MARK: - Localisation des sources
+
+    private static var iosRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Unit/Lens
+            .deletingLastPathComponent()   // .../Unit
+            .deletingLastPathComponent()   // .../MeeshyTests
+            .deletingLastPathComponent()   // .../apps/ios
+    }
+
+    private static var chromeDirectory: URL {
+        iosRoot.appendingPathComponent("Meeshy/Features/Lens/Chrome")
+    }
+
+    /// `+Overlays` et les types qui en sont sortis (en-tête, barre du bas, glisser de chip, items de menu).
+    private static let overlayFamily: Set<String> = [
+        "ConversationListView+Overlays.swift", "ConversationListView+ChipDrag.swift",
+        "ConversationListView+HeaderOverlay.swift", "ConversationListView+BottomBar.swift",
+        "ConversationListView+MoveToSectionMenuItems.swift",
+    ]
+
+    /// Le code qui vient de `ConversationListView.swift` : le fichier-tête ET les types qui en ont été extraits
+    /// (`+StoryRail`, `+SectionHeader`, `+ScrollChrome`…). `+Overlays` et ses types extraits en sont exclus — le menu
+    /// contextuel et ses constantes de geste (`0.45`, auto-scroll) ont leurs propres gardes et n'ont jamais été sous celle-ci.
+    private func listViewSource() throws -> (name: String, code: String) {
+        let code = try AppSourceGuard.unitURLs("Meeshy/Features/Main/Views/ConversationListView.swift")
+            .filter { !Self.overlayFamily.contains($0.lastPathComponent) }
+            .map { try String(contentsOf: $0, encoding: .utf8) }
+            .joined(separator: "\n")
+        return ("ConversationListView.swift", code)
+    }
+
+    /// Tout `.swift` de `Lens/Chrome/`, découvert au moment du test —
+    /// jamais une liste de noms recopiée à la main.
+    private func chromeSources() throws -> [(name: String, code: String)] {
+        let entries = try FileManager.default.contentsOfDirectory(
+            at: Self.chromeDirectory,
+            includingPropertiesForKeys: nil
+        )
+        let swiftFiles = entries
+            .filter { $0.pathExtension == "swift" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        return try swiftFiles.map { url in
+            (url.lastPathComponent, try String(contentsOf: url, encoding: .utf8))
+        }
+    }
+
+    private func allGuardedSources() throws -> [(name: String, code: String)] {
+        try [listViewSource()] + chromeSources()
+    }
+
+    /// Les mêmes sources, **commentaires retirés** — réservé aux témoins de
+    /// LITTÉRAUX, jamais aux détecteurs.
+    ///
+    /// La distinction n'est pas cosmétique, elle sépare deux intentions
+    /// opposées :
+    ///
+    /// - un **détecteur** (`ScrollViewReader`, `onScrollGeometryChange`, un
+    ///   `PreferenceKey` de défilement) interdit jusqu'à la MENTION du symbole,
+    ///   parce qu'une mention en commentaire est déjà une invitation à le
+    ///   réintroduire. Ces trois-là lisent le BRUT, et le disent dans leur
+    ///   message (« commentaires compris ») ;
+    /// - un **littéral de loi** interdit qu'une constante soit RECOPIÉE dans le
+    ///   code au lieu d'être lue depuis son miroir Swift. En CITER une dans une
+    ///   phrase qui explique une décision n'est pas la recopier.
+    ///
+    /// Le cas qui a tranché : `463547f5d` a retiré la pilule de section, et a
+    /// laissé dans `ConversationListView.swift` le commentaire qui explique
+    /// pourquoi — « invisible 900 ms après le dernier [événement d'offset] ».
+    /// Le témoin des littéraux, qui lisait en brut, s'est mis à rougir sur la
+    /// PROSE qui documente le retrait. La garde accusait le texte qui la
+    /// justifiait.
+    ///
+    /// Même idiome que `FocalNoBubbleSourceGuardTests`, qui strippe déjà dans
+    /// son chargeur et épingle à part ses occurrences légitimes.
+    ///
+    /// Portée VOLONTAIREMENT étroite : seul le témoin des littéraux interdits
+    /// de `ConversationListView` consomme cette lecture. Les deux autres
+    /// témoins de littéraux du fichier n'en ont pas besoin et ne sont pas
+    /// touchés — `test_softLawLiterals_areNeverUsedAsNumericComparisons` ne
+    /// compte que des COMPARAISONS (un chiffre en prose n'en est pas une), et
+    /// `test_hardLawLiteral520_…` épingle un compte de 1 sur une occurrence qui
+    /// vit dans le CODE (`min(windowWidth * 0.42, 520)`), donc identique dans
+    /// les deux lectures. Élargir sans nécessité aurait déplacé les bases de
+    /// comptage de gardes actuellement justes.
+    private func listViewLiteralSource() throws -> (name: String, code: String) {
+        let source = try listViewSource()
+        return (source.name, AppSourceGuard.stripComments(source.code))
+    }
+
+    private func occurrences(of needle: String, in haystack: String) -> Int {
+        haystack.components(separatedBy: needle).count - 1
+    }
+
+    /// Compte les comparaisons numériques `>`, `>=`, `<`, `<=` immédiatement
+    /// suivies (espaces optionnels) du littéral — même patron que
+    /// `check-law-literals.sh` (`grep -nE "\s*(>|>=|<|<=)\s*$literal\b"`).
+    /// Restreindre les littéraux « mous » (25/24) à leur usage en
+    /// COMPARAISON évite les faux positifs sur des entiers ordinaires
+    /// (`duration: 0.25`, `- 24` dans une soustraction de padding) — même
+    /// nuance que le script.
+    private func comparisonOccurrences(of literal: String, in code: String) -> Int {
+        let pattern = "[<>]=?\\s*\(NSRegularExpression.escapedPattern(for: literal))\\b"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            XCTFail("Regex de garde invalide pour le littéral « \(literal) » — corriger le motif dans LentilleChromeSourceGuardTests avant de faire confiance à ce témoin.")
+            return 0
+        }
+        let range = NSRange(code.startIndex..., in: code)
+        return regex.numberOfMatches(in: code, range: range)
+    }
+
+    // MARK: - Garde d'ensemble (leçon 257)
+
+    func test_guardDiscoversAtLeastOneChromeFile_neverSilentlyEmpty() throws {
+        let sources = try chromeSources()
+        XCTAssertFalse(
+            sources.isEmpty,
+            "LentilleChromeSourceGuardTests n'a chargé AUCUN fichier depuis " +
+            "`\(Self.chromeDirectory.path)` — vérifier que ce chemin existe encore depuis le " +
+            "bundle de test (`apps/ios/Meeshy/Features/Lens/Chrome/`). Une garde qui " +
+            "charge zéro fichier passe TOUJOURS au vert sans avoir rien vérifié (leçon 257) : " +
+            "c'est le défaut le plus coûteux de cette suite, bien pire qu'un simple trou de " +
+            "couverture."
+        )
+    }
+
+    // MARK: - Aucun détecteur de défilement neuf (contrat LWS-6 travail 4)
+
+    func test_noScrollViewReader_inAnyGuardedFile() throws {
+        for source in try allGuardedSources() {
+            let count = occurrences(of: "ScrollViewReader", in: source.code)
+            XCTAssertEqual(
+                count, 0,
+                "\(source.name) contient \(count) occurrence(s) de « ScrollViewReader » " +
+                "(commentaires compris) : la Lentille réutilise le détecteur EXISTANT " +
+                "(`onScrollOffsetChange` de `MeeshyRefreshableScroll`) — contrat LWS-6 travail " +
+                "4, « un seul détecteur, aucun observateur de scroll nouveau »."
+            )
+        }
+    }
+
+    func test_noOnScrollGeometryChange_inAnyGuardedFile() throws {
+        for source in try allGuardedSources() {
+            let count = occurrences(of: "onScrollGeometryChange", in: source.code)
+            XCTAssertEqual(
+                count, 0,
+                "\(source.name) contient \(count) occurrence(s) de « onScrollGeometryChange » " +
+                "(commentaires compris) : cette sonde de géométrie appartient à l'élection de " +
+                "la focus card (LWS-8, I-070), pas au périmètre LWS-6 — la pilule et le sticky " +
+                "sticker se contentent du relais d'offset déjà publié."
+            )
+        }
+    }
+
+    func test_noNewScrollPreferenceKey_inAnyGuardedFile() throws {
+        for source in try allGuardedSources() {
+            let count = occurrences(of: "PreferenceKey", in: source.code)
+            XCTAssertEqual(
+                count, 0,
+                "\(source.name) contient \(count) occurrence(s) de « PreferenceKey » " +
+                "(commentaires compris) : un `PreferenceKey` de défilement serait un second " +
+                "canal de mesure, concurrent du relais `ScrollOffsetRelay` existant — contrat " +
+                "LWS-6 travail 4."
+            )
+        }
+    }
+
+    // MARK: - Littéraux de loi (R15) dans Lens/Chrome/*.swift
+    //
+    // Ce périmètre EST sous les `SKIN_DIRS` de `check-law-literals.sh` (tout
+    // `.swift` sous `Lens/**`, hors `Lens/Core/**`) : le script le
+    // garde déjà en CI. Ces témoins le rejouent app-side, en RAW (comme le
+    // script), pour que la garde soit visible dans la MÊME suite que le
+    // reste du contrat I-064 — pas une redondance inerte, une seconde ligne
+    // de défense qui n'a pas besoin du script pour rougir.
+
+    func test_hardLawLiterals_areAbsent_fromChromeFiles() throws {
+        let hardLiterals = ["900", "520", "380", "0.45", "0.82"]
+        for source in try chromeSources() {
+            for literal in hardLiterals {
+                let count = occurrences(of: literal, in: source.code)
+                XCTAssertEqual(
+                    count, 0,
+                    "\(source.name) contient « \(literal) » (\(count) fois, commentaires " +
+                    "compris) — constante de loi gelée (fenêtre pilule 900 ms, ou courbe de " +
+                    "focus 520/380/0.45/0.82, packages/shared/utils/focus-curve.ts) : elle " +
+                    "doit être LUE depuis son miroir Swift (`ScrollTimePillLaw.lingerMs`, " +
+                    "`FOCUS_CURVE_CONSTANTS`), jamais recopiée dans une peau (garde R15)."
+                )
+            }
+        }
+    }
+
+    /// `25` et `24` ne sont interdits qu'en COMPARAISON numérique (seuils de
+    /// l'orchestrateur LWS-8 : `ORCHESTRATOR_UNREAD_CAP = 25`,
+    /// `ORCHESTRATOR_ABSENCE_WINDOW_MS` = 24 h) — un zéro aveugle sur le
+    /// chiffre lui-même ferait rougir du code n'ayant rien à voir avec la loi
+    /// (un index, une taille de police). Même règle sur `ConversationListView.swift` :
+    /// aucune des deux valeurs n'y a de rôle légitime, comparaison ou non.
+    func test_softLawLiterals_areNeverUsedAsNumericComparisons() throws {
+        let softLiterals = ["25", "24"]
+        for source in try allGuardedSources() {
+            for literal in softLiterals {
+                let count = comparisonOccurrences(of: literal, in: source.code)
+                XCTAssertEqual(
+                    count, 0,
+                    "\(source.name) compare une valeur à « \(literal) » (\(count) fois) — " +
+                    "seuils de l'orchestrateur LWS-8 (plafond de non-lus, fenêtre d'absence) : " +
+                    "à lire depuis leur miroir Swift, jamais à comparer en dur dans une peau."
+                )
+            }
+        }
+    }
+
+    // MARK: - Littéraux de loi (R15) dans ConversationListView.swift
+    //
+    // `ConversationListView.swift` n'est PAS sous les `SKIN_DIRS` du script
+    // (il vit hors `Lens/**`) : ce fichier hôte porte du code bien
+    // antérieur à la Lentille, et notamment UNE occurrence légitime de
+    // « 520 » sans rapport avec la loi — voir le test dédié ci-dessous. Un
+    // zéro aveugle sur CE fichier ferait rougir sur du code hérité ; le
+    // compte FIXE détecte toute variation dans les deux sens.
+
+    func test_hardLawLiterals_thatHaveNoLegitimateOccurrence_areAbsent_fromConversationListView() throws {
+        let (name, code) = try listViewLiteralSource()
+        for literal in ["900", "380", "0.45", "0.82"] {
+            let count = occurrences(of: literal, in: code)
+            XCTAssertEqual(
+                count, 0,
+                "\(name) contient « \(literal) » (\(count) fois, hors commentaires) — " +
+                "aucune occurrence légitime de cette constante n'existe dans ce fichier ; " +
+                "c'est une constante de loi gelée (pilule 900 ms ou courbe de focus " +
+                "380/0.45/0.82) qui doit être lue depuis son miroir Swift, jamais recopiée."
+            )
+        }
+    }
+
+    /// `520` est le SEUL des sept littéraux cités par le contrat I-064 à
+    /// avoir une occurrence PRÉ-EXISTANTE et sans rapport dans ce fichier :
+    /// `min(windowWidth * 0.42, 520)` (clampage de largeur de colonne iPad,
+    /// hérité de la fusion `95aa95c`, antérieure à toute la Lentille — sans
+    /// lien avec `FOCUS_CURVE_CONSTANTS.list.maxDistance`, qui vaut la même
+    /// valeur par pure coïncidence). Un zéro aveugle ferait rougir ce test
+    /// sur du code légitime et déjà en production ; le compte FIXE (1)
+    /// détecte au contraire toute VARIATION — à la hausse (fuite d'une
+    /// constante de loi ailleurs dans le fichier) comme à la baisse (le jour
+    /// où ce clamp change ou disparaît, mettre à jour CE commentaire et le
+    /// nombre ci-dessous, jamais relâcher la garde en la supprimant).
+    // MARK: - Une SEULE écriture de la cascade de couverture de story (lot 3)
+    //
+    // Le rail de tête de liste doit montrer la PREVIEW de la story, ce que le
+    // tray fait depuis 2026-05-27 via `latestStoryThumbnailURL` — cascade
+    // « cover composite locale > `thumbnailUrl` serveur > `url` image >
+    // avatar », dont le premier maillon touche le cache disque. Une seconde
+    // écriture app-side serait la TROISIÈME du même arbitrage (la première
+    // étant `StoryCoverThumbnail.preferredCoverURLString`, la règle pure) et
+    // la première à diverger : le rail et le tray montreraient alors deux
+    // images pour la même story.
+    //
+    // Périmètre : TOUT `apps/ios/Meeshy/**`, découvert par `FileManager` —
+    // jamais une liste de fichiers recopiée, sinon la garde laisse passer le
+    // prochain doublon (leçon 257). Commentaires RETIRÉS ici (à la différence
+    // des témoins de littéraux ci-dessus, qui doivent lire en brut comme le
+    // script) : une docstring qui NOMME `latestStoryThumbnailURL` pour
+    // expliquer d'où vient la couverture n'est pas une seconde écriture.
+
+    private func appSources() throws -> [(name: String, code: String)] {
+        let root = Self.iosRoot.appendingPathComponent("Meeshy")
+        guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else { return [] }
+        var out: [(name: String, code: String)] = []
+        for case let url as URL in walker where url.pathExtension == "swift" {
+            let relative = url.path.replacingOccurrences(of: root.path + "/", with: "")
+            let raw = try String(contentsOf: url, encoding: .utf8)
+            out.append((relative, AppSourceGuard.stripComments(raw)))
+        }
+        return out.sorted { $0.name < $1.name }
+    }
+
+    func test_appSourceWalk_neverSilentlyEmpty() throws {
+        XCTAssertGreaterThan(
+            try appSources().count, 100,
+            "Le parcours de `Meeshy/**` n'a presque rien chargé — une garde d'ensemble qui " +
+            "ne lit aucun fichier passe TOUJOURS au vert (leçon 257)."
+        )
+    }
+
+    func test_theStoryCoverCascade_isWrittenExactlyOnce_inTheWholeApp() throws {
+        let sources = try appSources()
+
+        let definitions = sources.filter { $0.code.contains("func latestStoryThumbnailURL(") }.map(\.name)
+        XCTAssertEqual(
+            definitions, ["Features/Stories/Views/StoryTrayView.swift"],
+            "Le résolveur de couverture doit exister UNE fois, dans StoryTrayView.swift. " +
+            "Trouvé : \(definitions)."
+        )
+
+        // #4002 — RELOCALISATION, pas un second appelant. La consommation de la
+        // cascade a suivi la lecture disque dans `StoryCoverURLMemo`, qui la
+        // mémoïse ; `latestStoryThumbnailURL` délègue et n'appelle plus rien
+        // lui-même. Le COMPTE reste un — c'est ce que cette garde protège.
+        // Une garde qui nomme un FICHIER devient aveugle dès qu'on extrait :
+        // il faut la repointer, jamais l'élargir.
+        let callers = sources.filter { $0.code.contains("StoryCoverThumbnail.preferredCoverURLString(") }.map(\.name)
+        XCTAssertEqual(
+            callers, ["Features/Stories/Views/StoryCoverURLMemo.swift"],
+            "La cascade pure (`preferredCoverURLString`) ne doit être consommée qu'à UN endroit — " +
+            "la mémoire de couverture, seul site qui touche encore le disque. Un second appelant " +
+            "serait une troisième écriture de l'ordre de préférence. Trouvé : \(callers)."
+        )
+    }
+
+    /// #11033 — la liste monte le tray du fil : elle ne résout plus AUCUNE
+    /// couverture elle-même, le tray le fait pour les deux emplacements.
+    func test_theListResolvesNoCoverItself_theSharedTrayDoes() throws {
+        let (name, raw) = try listViewSource()
+        let code = AppSourceGuard.stripComments(raw)
+        XCTAssertEqual(
+            occurrences(of: "latestStoryThumbnailURL(", in: code), 0,
+            "\(name) ne mappe plus de pastilles : il monte `StoryTrayView`, qui résout la " +
+            "couverture pour la liste ET pour le fil."
+        )
+    }
+
+    /// Contrôle positif : sans lui, un chemin cassé ou un motif trop étroit
+    /// rendrait les deux témoins ci-dessus verts pour toujours.
+    func test_theCoverGuardActuallyDetectsASecondWriting() {
+        let fake = "func latestStoryThumbnailURL(_ group: StoryGroup) -> String? { nil }"
+        XCTAssertTrue(fake.contains("func latestStoryThumbnailURL("))
+        XCTAssertFalse(
+            AppSourceGuard.stripComments("// func latestStoryThumbnailURL(_ g: G) -> String?\n")
+                .contains("func latestStoryThumbnailURL("),
+            "Une CITATION en commentaire ne doit pas compter pour une écriture."
+        )
+    }
+
+    /// Le seul « 520 » connu de la vue — `min(windowWidth * 0.42, 520)`, sans rapport avec la loi — est parti dans
+    /// `ConversationRowWidthLaw` (repli d'avant la première mesure de la colonne) : la vue n'en porte plus aucun.
+    func test_hardLawLiteral520_neverAppearsInConversationListView() throws {
+        let (name, code) = try listViewSource()
+        XCTAssertEqual(
+            occurrences(of: "520", in: code), 0,
+            "\(name) : un « 520 » est réapparu dans la vue (le repère connu est désormais 0). Si ce changement AJOUTE " +
+            "une seconde occurrence, vérifier qu'elle n'est pas `FOCUS_CURVE_CONSTANTS.list." +
+            "maxDistance` recopiée en dur avant de faire quoi que ce soit d'autre."
+        )
+    }
+}

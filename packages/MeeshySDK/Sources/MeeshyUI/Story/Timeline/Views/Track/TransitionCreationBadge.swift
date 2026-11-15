@@ -47,10 +47,12 @@ public struct TransitionCreationBadge: View, Equatable {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(localized: "story.timeline.transition.add",
                                    defaultValue: "Ajouter une transition", bundle: .module))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { onCreate() }
     }
 }
 
-private struct Diamond: Shape {
+nonisolated private struct Diamond: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
         p.move(to: CGPoint(x: rect.midX, y: rect.minY))

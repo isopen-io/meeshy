@@ -1,0 +1,209 @@
+import { describe, expect, test } from 'bun:test';
+import { QueryClient } from '@tanstack/react-query';
+
+import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
+
+import { postQueryKey } from '@/lib/api/publication-detail';
+import { commentsQueryKey, flattenCommentPages, performComment, type CommentInfiniteData } from '@/lib/api/publication-comments';
+import type { ApiResult } from '@/lib/api/http';
+import type { PostMediaUploadResult } from '@/lib/api/post-media-upload';
+import { pendingAttachmentOf } from '@/lib/send/attachments';
+
+import { COMMENT_MEDIA_ACCEPT, acceptCommentFiles, forgetUploadedCommentMedia, uploadCommentMedia, withCommentPiece } from './comment-media';
+import { ownerPresent } from '@/test-support/comment-owner';
+
+/**
+ * #9167 — UN COMMENTAIRE WEB JOINT UNE PHOTO OU UNE VIDÉO, par le MÊME contrat
+ * que `CommentMediaUploader` iOS : chaque pièce part en TUS sous
+ * `uploadContext: comment`, puis ses ids voyagent dans `attachmentIds` de
+ * `POST /posts/:postId/comments` (`CreateCommentSchema`, borné à `MAX_POST_MEDIA`).
+ */
+
+/**
+ * Une date de modification FIXE : la signature d'une pièce (`fileSignature`) la
+ * compte, et un `File` sans date prend l'instant de sa construction — deux
+ * « x.jpg » construits à cheval sur une milliseconde seraient deux pièces.
+ */
+const FILE_MODIFIED_AT = Date.UTC(2026, 9, 9, 12, 0, 0);
+const file = (name: string, type: string) => new File([new Uint8Array([1, 2, 3])], name, { type, lastModified: FILE_MODIFIED_AT });
+
+describe('acceptCommentFiles — photos, vidéos et sons (#9167, #9318)', () => {
+  test('ouvre les photos, les vidéos et les sons', () => {
+    expect(COMMENT_MEDIA_ACCEPT).toBe('image/*,video/*,audio/*');
+  });
+
+  test('garde images, GIF, vidéos et sons, écarte le reste', () => {
+    const { list: accepted, refusal } = acceptCommentFiles([], [
+      file('a.jpg', 'image/jpeg'),
+      file('b.pdf', 'application/pdf'),
+      file('c.mp4', 'video/mp4'),
+      file('d.mp3', 'audio/mpeg'),
+      file('e.gif', 'image/gif'),
+    ]);
+    expect(accepted.map((piece) => piece.name)).toEqual(['a.jpg', 'c.mp4', 'd.mp3', 'e.gif']);
+    expect(accepted.map((piece) => piece.kind)).toEqual(['image', 'video', 'audio', 'image']);
+    expect(refusal).toEqual({ reason: 'unsupported', name: 'b.pdf' });
+  });
+
+  test('#9736 — la même pièce reprise n’entre pas deux fois', () => {
+    const déjà = [pendingAttachmentOf(file('x.jpg', 'image/jpeg'))];
+    const { list, refusal } = acceptCommentFiles(déjà, [file('x.jpg', 'image/jpeg'), file('y.jpg', 'image/jpeg'), file('y.jpg', 'image/jpeg')]);
+    expect(list.map((piece) => piece.name)).toEqual(['x.jpg', 'y.jpg']);
+    expect(refusal).toBeUndefined();
+  });
+
+  test('#9736 — une sélection juste n’annonce aucun écart', () => {
+    expect(acceptCommentFiles([], [file('a.jpg', 'image/jpeg')]).refusal).toBeUndefined();
+  });
+
+  test('#9693 — garde un .wav nommé audio/x-wav et un .mp3 sans type', () => {
+    const { list: accepted } = acceptCommentFiles([], [file('note.wav', 'audio/x-wav'), file('chanson.mp3', '')]);
+    expect(accepted.map((piece) => piece.kind)).toEqual(['audio', 'audio']);
+  });
+
+  test('s’ajoute à la sélection, jamais au-delà de MAX_POST_MEDIA', () => {
+    const déjà = [pendingAttachmentOf(file('x.jpg', 'image/jpeg'))];
+    const many = Array.from({ length: MAX_POST_MEDIA + 3 }, (_, i) => file(`p${i}.jpg`, 'image/jpeg'));
+    const { list: accepted, refusal } = acceptCommentFiles(déjà, many);
+    expect(accepted).toHaveLength(MAX_POST_MEDIA);
+    expect(accepted[0]).toBe(déjà[0]);
+    expect(refusal).toEqual({ reason: 'limit' });
+  });
+});
+
+describe('withCommentPiece — le vocal enregistré rejoint la sélection (#9318)', () => {
+  test('s’ajoute à la fin, en gardant sa durée', () => {
+    const déjà = [pendingAttachmentOf(file('x.jpg', 'image/jpeg'))];
+    const vocal = pendingAttachmentOf(file('Message vocal.webm', 'audio/webm'), { durationMs: 2_000 });
+    const after = withCommentPiece(déjà, vocal);
+    expect(after).toEqual([déjà[0], vocal]);
+    expect(déjà).toHaveLength(1);
+  });
+
+  test('jamais au-delà de MAX_POST_MEDIA', () => {
+    const pleine = Array.from({ length: MAX_POST_MEDIA }, (_, i) => pendingAttachmentOf(file(`p${i}.jpg`, 'image/jpeg')));
+    const vocal = pendingAttachmentOf(file('Message vocal.webm', 'audio/webm'));
+    expect(withCommentPiece(pleine, vocal)).toBe(pleine);
+  });
+});
+
+describe('uploadCommentMedia — chaque pièce en contexte « comment »', () => {
+  test('téléverse dans l’ordre et rend les accusés', async () => {
+    const seen: string[] = [];
+    const upload = async (f: File): Promise<ApiResult<PostMediaUploadResult>> => {
+      seen.push(f.name);
+      return { ok: true, status: 201, data: { postMediaId: `pm-${f.name}`, fileUrl: `/u/${f.name}`, mimeType: f.type } };
+    };
+    const pending = [pendingAttachmentOf(file('a.jpg', 'image/jpeg')), pendingAttachmentOf(file('b.mp4', 'video/mp4'))];
+    const result = await uploadCommentMedia(pending, upload);
+    expect(seen).toEqual(['a.jpg', 'b.mp4']);
+    expect(result).toEqual({
+      ok: true,
+      media: [
+        { postMediaId: 'pm-a.jpg', fileUrl: '/u/a.jpg', mimeType: 'image/jpeg' },
+        { postMediaId: 'pm-b.mp4', fileUrl: '/u/b.mp4', mimeType: 'video/mp4' },
+      ],
+    });
+  });
+
+  test('#9736 — rapporte la montée de chaque pièce par son `localId`, et la clôt à 1', async () => {
+    const upload = async (f: File, onProgress?: (fraction: number) => void): Promise<ApiResult<PostMediaUploadResult>> => {
+      onProgress?.(0.5);
+      return { ok: true, status: 201, data: { postMediaId: `pm-${f.name}`, fileUrl: `/u/${f.name}`, mimeType: f.type } };
+    };
+    const pending = [pendingAttachmentOf(file('a.jpg', 'image/jpeg')), pendingAttachmentOf(file('b.mp4', 'video/mp4'))];
+    const seen: [string, number][] = [];
+    await uploadCommentMedia(pending, upload, { report: (localId, fraction) => seen.push([localId, fraction]) });
+    const [a, b] = pending.map((piece) => piece.localId);
+    expect(seen).toEqual([[a, 0.5], [a, 1], [b, 0.5], [b, 1]] as [string, number][]);
+  });
+
+  test('#9743 — à la reprise, une pièce déjà montée ne remonte pas ; passé six heures, si', async () => {
+    const seen: string[] = [];
+    let coupé = true;
+    const upload = async (f: File): Promise<ApiResult<PostMediaUploadResult>> => {
+      seen.push(f.name);
+      if (f.name === 'b.mp4' && coupé) return { ok: false, status: 0, error: 'réseau' };
+      return { ok: true, status: 201, data: { postMediaId: `pm-${f.name}-${seen.length}`, fileUrl: `/u/${f.name}`, mimeType: f.type } };
+    };
+    const pending = [pendingAttachmentOf(file('a.jpg', 'image/jpeg')), pendingAttachmentOf(file('b.mp4', 'video/mp4'))];
+    expect(await uploadCommentMedia(pending, upload, { owner: 'u_a', now: () => 0 })).toEqual({ ok: false });
+    coupé = false;
+    const reprise = await uploadCommentMedia(pending, upload, { owner: 'u_a', now: () => 1_000 });
+    expect(seen).toEqual(['a.jpg', 'b.mp4', 'b.mp4']);
+    expect(reprise.ok && reprise.media.map((m) => m.postMediaId)).toEqual(['pm-a.jpg-1', 'pm-b.mp4-3']);
+    await uploadCommentMedia(pending, upload, { owner: 'u_a', now: () => 7 * 60 * 60 * 1000 });
+    expect(seen.slice(3)).toEqual(['a.jpg', 'b.mp4']);
+  });
+
+  test('SÉCURITÉ (#9743) — une pièce montée par A n’est jamais reprise pour B, ni sans propriétaire', async () => {
+    const seen: string[] = [];
+    const upload = async (f: File): Promise<ApiResult<PostMediaUploadResult>> => {
+      seen.push(f.name);
+      return { ok: true, status: 201, data: { postMediaId: `pm-${seen.length}`, fileUrl: `/u/${f.name}`, mimeType: f.type } };
+    };
+    const pending = [pendingAttachmentOf(file('a.jpg', 'image/jpeg'))];
+    await uploadCommentMedia(pending, upload, { owner: 'u_a' });
+    const pourB = await uploadCommentMedia(pending, upload, { owner: 'u_b' });
+    expect(pourB.ok && pourB.media[0]?.postMediaId).toBe('pm-2');
+    await uploadCommentMedia(pending, upload);
+    expect(seen).toHaveLength(3);
+  });
+
+  test('A4 (#9743) — un lot oublié remonte à l’envoi suivant', async () => {
+    const seen: string[] = [];
+    const upload = async (f: File): Promise<ApiResult<PostMediaUploadResult>> => {
+      seen.push(f.name);
+      return { ok: true, status: 201, data: { postMediaId: `pm-${seen.length}`, fileUrl: `/u/${f.name}`, mimeType: f.type } };
+    };
+    const pending = [pendingAttachmentOf(file('a.jpg', 'image/jpeg'))];
+    await uploadCommentMedia(pending, upload, { owner: 'u_a' });
+    forgetUploadedCommentMedia(pending);
+    await uploadCommentMedia(pending, upload, { owner: 'u_a' });
+    expect(seen).toHaveLength(2);
+  });
+
+  test('une seule pièce refusée : rien ne part, et les suivantes ne montent pas', async () => {
+    const seen: string[] = [];
+    const upload = async (f: File): Promise<ApiResult<PostMediaUploadResult>> => {
+      seen.push(f.name);
+      return { ok: false, status: 413, error: 'trop gros' };
+    };
+    const pending = [pendingAttachmentOf(file('a.jpg', 'image/jpeg')), pendingAttachmentOf(file('b.mp4', 'video/mp4'))];
+    expect(await uploadCommentMedia(pending, upload)).toEqual({ ok: false });
+    expect(seen).toEqual(['a.jpg']);
+  });
+});
+
+describe('performComment — les médias joints', () => {
+  const author = { id: 'u-me', username: 'moi', displayName: 'Moi', avatar: null };
+  const PHOTO = { postMediaId: '507f1f77bcf86cd799439011', fileUrl: '/u/a.jpg', mimeType: 'image/jpeg' };
+  const VIDEO = { postMediaId: '507f1f77bcf86cd799439012', fileUrl: '/u/b.mp4', mimeType: 'video/mp4' };
+
+  const fresh = () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(commentsQueryKey('p1'), { pages: [{ comments: [], pagination: { limit: 20, hasMore: false, nextCursor: null } }], pageParams: [undefined] });
+    queryClient.setQueryData(postQueryKey('p1'), { id: 'p1', commentCount: 0 });
+    return queryClient;
+  };
+
+  test('un commentaire MÉDIA SEUL part : ses ids dans `attachmentIds`, la rangée provisoire les montre', async () => {
+    const queryClient = fresh();
+    const calls: { body?: unknown }[] = [];
+    const transport = { request: (request: { body?: unknown }) => (calls.push(request), new Promise<never>(() => undefined)) };
+    void performComment({ postId: 'p1', content: '', author, media: [PHOTO, VIDEO], deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent } });
+    await Promise.resolve();
+    expect(calls[0]?.body).toEqual({ content: '', attachmentIds: [PHOTO.postMediaId, VIDEO.postMediaId] });
+    const [optimistic] = flattenCommentPages(queryClient.getQueryData<CommentInfiniteData>(commentsQueryKey('p1')));
+    expect(optimistic?.media?.map((m) => m.id)).toEqual([PHOTO.postMediaId, VIDEO.postMediaId]);
+  });
+
+  test('sans texte ni média ni sticker, rien ne part', async () => {
+    const queryClient = fresh();
+    const calls: unknown[] = [];
+    const transport = { request: (request: unknown) => (calls.push(request), new Promise<never>(() => undefined)) };
+    const result = await performComment({ postId: 'p1', content: '  ', author, media: [], deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent } });
+    expect(result.ok).toBe(false);
+    expect(calls).toHaveLength(0);
+  });
+});

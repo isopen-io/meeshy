@@ -1,0 +1,101 @@
+import XCTest
+import AVFoundation
+import UIKit
+@testable import Meeshy
+
+/// **Ce qu'on voit avant la prise est ce qu'on a après** (#9464) : la photo et
+/// la vidéo de l'objectif avant sortent EN MIROIR, comme l'aperçu, et debout.
+@MainActor
+final class ComposerCaptureMirrorRuleTests: XCTestCase {
+
+    func test_mirrors_frontPhotoAndMovie_likeThePreview() {
+        XCTAssertTrue(ComposerCaptureMirrorRule.mirrors(.photo, position: .front))
+        XCTAssertTrue(ComposerCaptureMirrorRule.mirrors(.movie, position: .front))
+    }
+
+    func test_mirrors_backNever() {
+        XCTAssertFalse(ComposerCaptureMirrorRule.mirrors(.photo, position: .back))
+        XCTAssertFalse(ComposerCaptureMirrorRule.mirrors(.movie, position: .back))
+    }
+
+    func test_mirrors_framesStayRaw_theirOrientationMirrorsThemAtDisplay() {
+        XCTAssertFalse(ComposerCaptureMirrorRule.mirrors(.frames, position: .front),
+                       "la trame est redressée EN MIROIR par `ComposerLiveLookRule.orientation` — la miroiter deux fois l'endroiterait")
+        XCTAssertEqual(ComposerLiveLookRule.orientation(for: .front), .leftMirrored)
+    }
+
+    func test_rotatesToPortrait_photoAndMovie() {
+        XCTAssertTrue(ComposerCaptureMirrorRule.rotatesToPortrait(.photo))
+        XCTAssertTrue(ComposerCaptureMirrorRule.rotatesToPortrait(.movie))
+        XCTAssertEqual(ComposerCaptureMirrorRule.portraitAngle, 90)
+    }
+
+    func test_camera_orientsEveryConnection_atEachInput() throws {
+        let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift") + Self.code("Meeshy/Features/Main/Components/CameraInputInstaller.swift")
+        XCTAssertTrue(camera.contains("ComposerCaptureMirrorRule.mirrors("))
+        XCTAssertTrue(camera.contains("automaticallyAdjustsVideoMirroring = false"))
+        XCTAssertTrue(camera.contains("videoRotationAngle = ComposerCaptureMirrorRule.portraitAngle"))
+    }
+
+    func test_stabilization_movieOnly_standardWhenServed() {
+        XCTAssertEqual(ComposerCaptureStabilizationRule.preferred(.movie, supportsStandard: true), .standard)
+        XCTAssertEqual(ComposerCaptureStabilizationRule.preferred(.movie, supportsStandard: false), .off)
+    }
+
+    func test_stabilization_photoAndFramesNever_theirDelayWouldShowInTheViewfinder() {
+        XCTAssertEqual(ComposerCaptureStabilizationRule.preferred(.photo, supportsStandard: true), .off)
+        XCTAssertEqual(ComposerCaptureStabilizationRule.preferred(.frames, supportsStandard: true), .off)
+    }
+
+    func test_camera_stabilizesEachNewInput_andBoostsLowLight() throws {
+        let installeur = try Self.code("Meeshy/Features/Main/Components/CameraInputInstaller.swift")
+        XCTAssertTrue(installeur.contains("stabilize(outputs, on: device)"))
+        XCTAssertTrue(installeur.contains("ComposerCaptureStabilizationRule.preferred("))
+        XCTAssertTrue(installeur.contains("automaticallyEnablesLowLightBoostWhenAvailable = true"))
+    }
+
+    func test_horizonAngle_followsHowTheDeviceIsHeld() {
+        XCTAssertEqual(ComposerCaptureHorizonRule.angle(for: .portrait), 90)
+        XCTAssertEqual(ComposerCaptureHorizonRule.angle(for: .landscapeLeft), 0)
+        XCTAssertEqual(ComposerCaptureHorizonRule.angle(for: .landscapeRight), 180)
+        XCTAssertEqual(ComposerCaptureHorizonRule.angle(for: .portraitUpsideDown), 270)
+    }
+
+    func test_horizonAngle_flatOrUnknown_designatesNoHorizon() {
+        XCTAssertNil(ComposerCaptureHorizonRule.angle(for: .faceUp))
+        XCTAssertNil(ComposerCaptureHorizonRule.angle(for: .faceDown))
+        XCTAssertNil(ComposerCaptureHorizonRule.angle(for: .unknown))
+    }
+
+    func test_videoOrientation_matchesTheRotationAngleTable() {
+        XCTAssertEqual(ComposerCaptureHorizonRule.videoOrientation(for: 0), .landscapeRight)
+        XCTAssertEqual(ComposerCaptureHorizonRule.videoOrientation(for: 90), .portrait)
+        XCTAssertEqual(ComposerCaptureHorizonRule.videoOrientation(for: 180), .landscapeLeft)
+        XCTAssertEqual(ComposerCaptureHorizonRule.videoOrientation(for: 270), .portraitUpsideDown)
+    }
+
+    func test_everyPhotoCamera_levelsTheConnectionAtTheShutter() throws {
+        let unites = [
+            "Meeshy/Features/Main/Components/CameraModel.swift": ["Meeshy/Features/Main/Components/CameraModel.swift",
+                                                                  "Meeshy/Features/Main/Components/CameraModel+PhotoCapture.swift"],
+            "Meeshy/Features/Game/Photo/GamePhotoCamera.swift": ["Meeshy/Features/Game/Photo/GamePhotoCamera.swift"],
+        ]
+        for (chemin, fichiers) in unites {
+            let camera = try fichiers.map { try Self.code($0) }.joined(separator: "\n")
+            XCTAssertTrue(camera.contains("horizon.follow("), "\(chemin) : l'horizon doit suivre l'objectif installé")
+            // Sur la file de la session (#17433), l'angle lu au toucher s'applique par `apply`.
+            let niveau = try XCTUnwrap(camera.range(of: "ComposerCaptureHorizon.apply(") ?? camera.range(of: "horizon.level("),
+                                       "\(chemin) : la photo doit être mise à l'horizon")
+            let prise = try XCTUnwrap(camera.range(of: ".capturePhoto(with:"), chemin)
+            XCTAssertLessThan(niveau.lowerBound, prise.lowerBound, "\(chemin) : l'horizon se pose AVANT le déclenchement")
+        }
+    }
+
+    private static func code(_ relative: String) throws -> String {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        return AppSourceGuard.stripComments(try String(
+            contentsOf: racine.appendingPathComponent(relative), encoding: .utf8))
+    }
+}

@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.AnonymousSessionContext
+import me.meeshy.sdk.model.security.SecureStore
 
 /**
  * Durable store for the single active anonymous (shared-link guest) session —
@@ -79,4 +80,70 @@ public class DataStoreAnonymousSessionStore(
     private companion object {
         private val KEY = stringPreferencesKey("anonymous_session")
     }
+}
+
+/**
+ * [AnonymousSessionStore] on the device [SecureStore]: the guest session token no
+ * longer sits in clear in a DataStore file. The first [load] after an update
+ * migrates the legacy DataStore value ONCE — the vault write must succeed before
+ * the clear source is erased — then the vault is the only home. An unreadable blob
+ * is no guest session at all.
+ */
+public class SecureAnonymousSessionStore(
+    private val secureStore: SecureStore,
+    private val legacy: AnonymousSessionStore,
+    private val json: Json,
+) : AnonymousSessionStore {
+
+    override suspend fun load(): AnonymousSessionContext? {
+        secureStore.getSuspend(KEY)?.let { return decode(it) }
+        return migrateLegacy()
+    }
+
+    override suspend fun save(context: AnonymousSessionContext) {
+        val saved = secureStore.putSuspend(KEY, json.encodeToString(AnonymousSessionContext.serializer(), context))
+        if (saved) legacy.clear()
+    }
+
+    override suspend fun clear() {
+        secureStore.removeSuspend(KEY)
+        legacy.clear()
+    }
+
+    private suspend fun migrateLegacy(): AnonymousSessionContext? {
+        val context = legacy.load() ?: return null
+        val written = secureStore.putSuspend(
+            KEY,
+            json.encodeToString(AnonymousSessionContext.serializer(), context),
+        )
+        if (written) legacy.clear()
+        return context
+    }
+
+    private fun decode(raw: String): AnonymousSessionContext? =
+        runCatching { json.decodeFromString(AnonymousSessionContext.serializer(), raw) }.getOrNull()
+
+    private companion object {
+        private const val KEY = "anonymous_session"
+    }
+}
+
+/**
+ * Une session invitee ne coexiste jamais avec un COMPTE : des qu'un JWT est detenu, le contexte invite persiste est un
+ * reste (session d'avant la mise a jour, jetons vides par un refus sans deconnexion) — il est ECARTE et efface au lieu
+ * de brider le composeur du compte, dans toutes ses conversations, avec les droits et les familles de l'invite.
+ */
+public class AccountAwareAnonymousSessionStore(
+    private val delegate: AnonymousSessionStore,
+    private val tokenStore: me.meeshy.sdk.net.TokenStore,
+) : AnonymousSessionStore {
+    override suspend fun load(): AnonymousSessionContext? {
+        if (tokenStore.jwt == null) return delegate.load()
+        delegate.clear()
+        return null
+    }
+
+    override suspend fun save(context: AnonymousSessionContext) = delegate.save(context)
+
+    override suspend fun clear() = delegate.clear()
 }

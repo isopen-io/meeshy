@@ -1,8 +1,13 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { logError } from '../../utils/logger';
+import { logError, logWarn } from '../../utils/logger';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendInternalError } from '../../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { normalizeContacts, MAX_CONTACTS_PER_SYNC } from '../../utils/contact-identifiers';
+import {
+  countContactIdentifiers,
+  refuseContactIdentifierBudget,
+  spendContactIdentifierBudget,
+} from '../../utils/contact-identifier-budget';
 import { ContactDirectoryService } from '../../services/ContactDirectoryService';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
@@ -78,6 +83,7 @@ export async function matchContacts(fastify: FastifyInstance) {
         },
         400: errorResponseSchema,
         401: errorResponseSchema,
+        429: errorResponseSchema,
         500: errorResponseSchema
       }
     }
@@ -97,10 +103,14 @@ export async function matchContacts(fastify: FastifyInstance) {
       const contacts = normalizeContacts(body.contacts, body.defaultCountry as string | undefined);
 
       if (totalContacts > MAX_CONTACTS_PER_SYNC) {
-        fastify.log.warn(
+        logWarn(
+          fastify.log,
           `[CONTACTS-MATCH] Lot tronqué à ${MAX_CONTACTS_PER_SYNC} contacts (reçus: ${totalContacts}) — le client doit paginer le reste`
         );
       }
+
+      const budget = await spendContactIdentifierBudget(fastify, authContext.userId, countContactIdentifiers(contacts));
+      if (!budget.allowed) return refuseContactIdentifierBudget(reply, budget.retryAfter);
 
       const service = new ContactDirectoryService(fastify.prisma);
       const matchesByKey = await service.match({ contacts, excludeUserId: authContext.userId });

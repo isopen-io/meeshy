@@ -43,17 +43,30 @@ function makePrisma(overrides: PrismaOverrides = {}): PrismaClient {
 
   return {
     message: {
-      count: jest.fn((args: { where?: { translations?: unknown } }) =>
-        Promise.resolve(args?.where?.translations ? translationCount : messageCount)
-      ),
+      // `count` porte DEUX usages depuis #4391 : les agrégats du profil (sans
+      // `createdAt`) et les tranches de `/stats/timeline` (une fenêtre par
+      // jour). Le double les distingue par la forme du `where`, et filtre le
+      // jeu `messages` sur la fenêtre — c'est ce qui garde aux témoins de
+      // timeline leurs dents, maintenant que la route COMPTE au lieu de lire.
+      count: jest.fn((args: {
+        where?: { translations?: unknown; createdAt?: { gte: Date; lt: Date } };
+      }) => {
+        const fenetre = args?.where?.createdAt;
+        if (fenetre) {
+          return Promise.resolve(
+            messages.filter((m) => m.createdAt >= fenetre.gte && m.createdAt < fenetre.lt).length
+          );
+        }
+        return Promise.resolve(args?.where?.translations ? translationCount : messageCount);
+      }),
       groupBy: jest.fn(() =>
         Promise.resolve(languages.map((l) => ({ originalLanguage: l })))
       ),
       findMany: jest.fn(() => Promise.resolve(messages)),
     },
-    participant: { count: jest.fn(() => Promise.resolve(conversationCount)) },
+    participant: { findMany: jest.fn(() => Promise.resolve([{ id: "p1" }])), count: jest.fn(() => Promise.resolve(conversationCount)) },
     friendRequest: { count: jest.fn(() => Promise.resolve(friendCount)) },
-    user: { findUnique: jest.fn(() => Promise.resolve(createdAt ? { createdAt } : null)) },
+    user: { findUnique: jest.fn(() => Promise.resolve(createdAt ? { createdAt } : null)), findMany: jest.fn(() => Promise.resolve([])) },
     post: { count: jest.fn(() => Promise.resolve(0)) },
   } as unknown as PrismaClient;
 }
@@ -136,9 +149,9 @@ describe('GET /users/me/stats — error path', () => {
         groupBy: jest.fn(() => Promise.reject(new Error('db error'))),
         findMany: jest.fn(() => Promise.resolve([])),
       },
-      participant: { count: jest.fn(() => Promise.reject(new Error('db error'))) },
+      participant: { findMany: jest.fn(() => Promise.resolve([{ id: "p1" }])), count: jest.fn(() => Promise.reject(new Error('db error'))) },
       friendRequest: { count: jest.fn(() => Promise.reject(new Error('db error'))) },
-      user: { findUnique: jest.fn(() => Promise.reject(new Error('db error'))) },
+      user: { findUnique: jest.fn(() => Promise.reject(new Error("db error"))), findMany: jest.fn(() => Promise.resolve([])) },
       post: { count: jest.fn(() => Promise.reject(new Error('db error'))) },
     } as unknown as PrismaClient;
     app = await buildApp(prisma);
@@ -213,7 +226,8 @@ describe('GET /users/me/stats/timeline — error path', () => {
 
   beforeAll(async () => {
     const prisma = makePrisma();
-    (prisma.message.findMany as ReturnType<typeof jest.fn>).mockRejectedValue(new Error('timeout'));
+    // `count`, plus `findMany` : la route COMPTE en base depuis #4391.
+    (prisma.message.count as ReturnType<typeof jest.fn>).mockRejectedValue(new Error('timeout'));
     app = await buildApp(prisma);
   });
   afterAll(() => app.close());
@@ -278,9 +292,9 @@ describe('GET /users/me/stats/achievements — error path', () => {
         groupBy: jest.fn(() => Promise.reject(new Error('db error'))),
         findMany: jest.fn(() => Promise.resolve([])),
       },
-      participant: { count: jest.fn(() => Promise.reject(new Error('db error'))) },
+      participant: { findMany: jest.fn(() => Promise.resolve([{ id: "p1" }])), count: jest.fn(() => Promise.reject(new Error('db error'))) },
       friendRequest: { count: jest.fn(() => Promise.reject(new Error('db error'))) },
-      user: { findUnique: jest.fn(() => Promise.reject(new Error('db error'))) },
+      user: { findUnique: jest.fn(() => Promise.reject(new Error("db error"))), findMany: jest.fn(() => Promise.resolve([])) },
       post: { count: jest.fn(() => Promise.reject(new Error('db error'))) },
     } as unknown as PrismaClient;
     app = await buildApp(prisma);

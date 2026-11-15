@@ -1,0 +1,293 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+/// LA SURFACE COMMUNE DU JEU (#9383) — la carte teintée de l'écran Progression
+/// (`ProgressionCard`), une puce, un bouton d'action. Des vues FEUILLES : aucune
+/// n'observe de singleton, le thème se lit par une propriété calculée (Zero
+/// Unnecessary Re-render).
+struct GameCard<Content: View>: View {
+    var tint: Color = MeeshyColors.brandPrimary
+    var anchor: GameAnchor?
+    var title: String?
+    /// Le détail du titre, rangé derrière un (i) : sa question en est le nom accessible (épure, règle 1).
+    var note: MeeshyInfoNote?
+    @ViewBuilder let content: () -> Content
+
+    @State private var openNoteID: String?
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        ProgressionCard(tint: tint) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                if let title {
+                    MeeshyInfoNoted(note: note, openNoteID: $openNoteID, tint: theme.textMuted) {
+                        Text(title)
+                            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
+                            .foregroundStyle(theme.textPrimary)
+                            .accessibilityAddTraits(.isHeader)
+                    }
+                }
+                content()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .modifier(GameAnchorModifier(anchor: anchor))
+    }
+}
+
+private struct GameAnchorModifier: ViewModifier {
+    let anchor: GameAnchor?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let anchor {
+            content.id(anchor)
+        } else {
+            content
+        }
+    }
+}
+
+/// UNE PASTILLE TIENT SUR UNE LIGNE, ET N'ÉLARGIT JAMAIS LA PAGE (#9564). Une rangée trop longue passe à la ligne
+/// ENTRE les pastilles (`FlowLayout`), jamais dans une pastille. Une pastille plus longue que sa rangée entière
+/// RÉTRÉCIT (jusqu'à 70 %) puis se tronque en dernier recours : elle ne garde pas sa largeur de force — un
+/// `fixedSize()` ici poussait la carte, puis la page, au-delà de l'écran.
+struct GameChip: View {
+    /// Jusqu'où une pastille rétrécit avant de se tronquer.
+    static let minimumScale: CGFloat = 0.7
+
+    let text: String
+    var tint: Color = MeeshyColors.brandPrimary
+
+    var body: some View {
+        Text(text)
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+            .foregroundStyle(ThemeManager.shared.textPrimary)
+            .lineLimit(1)
+            .minimumScaleFactor(GameChip.minimumScale)
+            .truncationMode(.tail)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xxs)
+            .background(Capsule().fill(tint.opacity(0.2)))
+    }
+}
+
+/// Le bouton d'un geste du jeu : il RESTE pendant le geste, avec son état dit (un
+/// indicateur d'activité) — le faire disparaître au tap donnerait l'impression
+/// d'un échec. Désactivé, il se tait en disant pourquoi (l'hôte pose la phrase) ;
+/// il ne reste jamais grisé sans explication.
+struct GameActionButton: View {
+    let title: String
+    var busyTitle: String?
+    /// Ce que le geste rapporte, en petit SOUS le titre, dans le bouton (« +1 000 de gloire », #11180) : la récompense
+    /// se lit sur l'action qui la donne, jamais à côté.
+    var detail: String?
+    var busy = false
+    var disabled = false
+    var tint: Color = MeeshyColors.warning
+    var identifier: String
+    let action: () -> Void
+
+    /// L'encre est SOMBRE sur l'ambre, dans les deux thèmes : un texte clair sur
+    /// #FBBF24 tombe à 1,6:1 en thème clair — sous le seuil de lisibilité.
+    private static let ink = MeeshyColors.indigo950
+
+    var body: some View {
+        Button {
+            HapticFeedback.light()
+            action()
+        } label: {
+            HStack(spacing: MeeshySpacing.sm) {
+                if busy {
+                    ProgressView().tint(Self.ink)
+                }
+                VStack(spacing: 0) {
+                    Text(busy ? (busyTitle ?? title) : title)
+                        .multilineTextAlignment(.center)
+                    if let detail {
+                        Text(detail)
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                            .opacity(0.8)
+                            .multilineTextAlignment(.center)
+                    }
+                }
+            }
+            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+            .foregroundColor(Self.ink)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(tint))
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled || busy)
+        .opacity(disabled || busy ? 0.7 : 1)
+        .accessibilityIdentifier(identifier)
+    }
+}
+
+/// Une ligne d'erreur, sous l'action qu'on peut retenter.
+struct GameErrorLine: View {
+    let message: String?
+    var identifier: String
+
+    var body: some View {
+        if let message {
+            HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.xsPlus) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .accessibilityHidden(true)
+                Text(message)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+            .foregroundStyle(MeeshyColors.error)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier(identifier)
+        }
+    }
+}
+
+/// Une phrase d'aide discrète sous un contrôle.
+struct GameNote: View {
+    let text: String
+    var tone: Color?
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        Text(text)
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+            .foregroundColor(tone ?? theme.textMuted)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Une phrase d'orientation du jeu, lisible au repos, suivie du (i) de son détail secondaire (épure, règles 1 et 7).
+/// L'hôte tient l'identifiant de la note ouverte : un seul (i) est ouvert par écran.
+struct GameNoteInfo: View {
+    let text: String
+    let note: MeeshyInfoNote
+    @Binding var openNoteID: String?
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        MeeshyInfoNoted(note: note, openNoteID: $openNoteID, tint: theme.textMuted) {
+            GameNote(text: text)
+        }
+    }
+}
+
+// MARK: - Ce qu'un geste dépense ou exige, avant le geste (#9705)
+
+/// UNE DONNÉE QUI SE TOUCHE, dans une rangée posée au-dessus d'un geste : son libellé, sa valeur, et la phrase
+/// qu'ouvre son toucher (`detail`), ou les précisions d'un ÉLÉMENT (`element`, une étoile de Prestige).
+struct GameFactChipItem: Equatable, Identifiable {
+    let label: String
+    let value: String
+    let detail: GameDetailFactKey
+    /// La valeur dit un MANQUE : la pastille prend la teinte d'alerte.
+    var short = false
+    var element: GameElementDetail?
+    /// CE QU'IL MANQUE, en une PHRASE qui nomme son but (#10540) — « Il manque 1 Meesh pour acheter un gel. ». La
+    /// pastille la dit alors en entier, à la place du couple libellé / valeur : un manque sans cible se lisait à côté
+    /// de trois autres chiffres sans dire lequel il visait.
+    var sentence: String?
+
+    var id: String { label }
+}
+
+/// Les rangées de ce qu'un geste dépense ou exige. Pur : les chiffres viennent de la loi (`GameSpend`), le
+/// libellé du catalogue — miroir de `apps/web/src/components/game-spend-line.tsx`.
+enum GameSpendRows {
+    /// Le manque d'un geste, dit en une phrase qui nomme sa cible : la pastille la porte en entier.
+    static func missingItem(sentence: String, amount: String, detail: GameDetailFactKey) -> GameFactChipItem {
+        GameFactChipItem(label: sentence, value: amount, detail: detail, short: true, sentence: sentence)
+    }
+
+    /// Ce que tu as · Il faut — ou, le solde ne suffisant pas, la même paire puis CE QU'IL MANQUE en une phrase. Jamais
+    /// ce qui RESTERA après le geste : aucun calcul sur une fiche (épopée § 3.3, #11180), la soustraction vit dans les
+    /// règles. `missing` est OBLIGATOIRE (#10540) : il reçoit le manque dans son unité et rend la phrase entière,
+    /// cible comprise — aucun geste ne dit « Il manque » sans dire pour quoi. `between` : une donnée de plus entre
+    /// le solde et le prix (les points à convertir d'une frappe, la part du solde qui paie).
+    static func spend(
+        _ spend: SpendPreview,
+        format: @MainActor (Int) -> String,
+        formatMissing: (@MainActor (Int) -> String)? = nil,
+        heldFact: GameDetailFactKey = .spendHeld,
+        missingFact: GameDetailFactKey = .spendMissing,
+        between: GameFactChipItem? = nil,
+        missing: @MainActor (String) -> String
+    ) -> [GameFactChipItem] {
+        let amount: String
+        if let formatMissing {
+            amount = formatMissing(spend.missing)
+        } else {
+            amount = format(spend.missing)
+        }
+        let last = spend.affordable ? nil : missingItem(sentence: missing(amount), amount: amount, detail: missingFact)
+        let head = GameFactChipItem(label: ConceptText.factBalance, value: format(spend.held), detail: heldFact)
+        let cost = GameFactChipItem(label: ConceptText.factCost, value: format(spend.cost), detail: .spendCost)
+        return [head, between, cost, last].compactMap { $0 }
+    }
+
+    /// Ton niveau (ou ton record) · Requis, puis ce qu'il manque pour l'ouvrir — le manque se tait quand l'exigence
+    /// est remplie.
+    static func requirement(_ requirement: RequirementPreview, record: Bool = false) -> [GameFactChipItem] {
+        let current = record
+            ? GameFactChipItem(label: ConceptText.factRecord, value: GameCopy.formatCount(requirement.current), detail: .levelRecord)
+            : GameFactChipItem(label: ConceptText.name(.level), value: GameCopy.formatCount(requirement.current), detail: .levelNow)
+        let required = GameFactChipItem(label: ConceptText.factRequired, value: GameCopy.formatCount(requirement.required), detail: .levelRequired)
+        guard !requirement.met else { return [current, required] }
+        let amount = GameCopy.levels(requirement.missing)
+        return [current, required, missingItem(sentence: ConceptText.spendMissingUnlock(missing: amount), amount: amount, detail: .spendMissing)]
+    }
+}
+
+/// La rangée elle-même : chaque pastille rebondit et ouvre SES précisions (`gameElement`).
+struct GameFactChipRow: View {
+    let concept: ProgressionConcept
+    let items: [GameFactChipItem]
+    let identifier: String
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        FlowLayout(spacing: MeeshySpacing.xs) {
+            ForEach(items) { item in
+                VStack(alignment: .leading, spacing: 0) {
+                    if let sentence = item.sentence {
+                        // Le manque est une phrase : elle se lit en entier, sur autant de lignes qu'il faut.
+                        Text(sentence)
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                            .foregroundStyle(theme.textPrimary)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text(item.label)
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                            .foregroundStyle(theme.textMuted)
+                        Text(item.value)
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
+                            .foregroundStyle(theme.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(GameChip.minimumScale)
+                    }
+                }
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.vertical, MeeshySpacing.xxs)
+                .frame(minHeight: MeeshyControlSize.tapTarget)
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                        .fill(item.short ? MeeshyColors.warning.opacity(MeeshyOpacity.light) : MeeshyColors.brandPrimary.opacity(MeeshyOpacity.subtle))
+                )
+                .accessibilityElement(children: .combine)
+                .gameElement(item.element ?? GameElementDetails.fact(
+                    ProgressionConceptFact(label: item.label, value: item.value, detail: item.detail), of: concept
+                ), identifier: identifier + "." + item.detail.rawValue)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(identifier)
+    }
+}

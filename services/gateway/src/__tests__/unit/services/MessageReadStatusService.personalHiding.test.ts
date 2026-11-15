@@ -176,15 +176,19 @@ describe('getUnreadCountsForUser — le badge de la liste de conversations', () 
       ],
       cursors: [],
       prefs: [{ conversationId: CONV, clearHistoryBefore: cutoff }],
-      count: 0,
     });
 
     await serviceOn(prisma).getUnreadCountsForUser(USER, [CONV, OTHER_CONV]);
 
-    const wheres = prisma.message.count.mock.calls.map((_c, i) => callArgs(prisma.message.count, i).where);
+    // #7199 : le calcul partagé (`computeUnreadCounts`) interroge par
+    // `message.findMany`, pas `message.count` — et restitue la coupure en borne
+    // EXCLUSIVE (`gt: cutoff - 1ms`, `exclusiveFloorMsFor`), équivalente à
+    // l'ancien `gte: cutoff` mais dans le même langage que le plancher de
+    // lecture (voir `getUnreadCountsForParticipants` ci-dessous, même borne).
+    const wheres = prisma.message.findMany.mock.calls.map((_c, i) => callArgs(prisma.message.findMany, i).where);
     const hidden = wheres.find((w) => w.conversationId === CONV);
     const untouched = wheres.find((w) => w.conversationId === OTHER_CONV);
-    expect(hidden.createdAt).toEqual({ gte: cutoff });
+    expect(hidden.createdAt).toEqual({ gt: new Date(cutoff.getTime() - 1) });
     expect(untouched.createdAt).toBeUndefined();
   });
 
@@ -192,20 +196,29 @@ describe('getUnreadCountsForUser — le badge de la liste de conversations', () 
     const prisma = makePrisma({
       participants: [{ id: PARTICIPANT, userId: USER, conversationId: CONV, joinedAt: null }],
       cursors: [],
+      // #7199 : le masquage individuel n'est plus un `id: notIn` posé côté
+      // base — il s'applique EN MÉMOIRE (calcul partagé) sur les lignes
+      // rendues par `message.findMany`. m3 est masqué, m4 doit rester compté.
+      messages: [
+        { id: 'm3', createdAt: at('2026-05-21T11:00:00.000Z'), senderId: OTHER_PARTICIPANT },
+        { id: 'm4', createdAt: at('2026-05-21T12:00:00.000Z'), senderId: OTHER_PARTICIPANT },
+      ],
       deletions: [{ messageId: 'm3', message: { conversationId: CONV } }],
-      count: 0,
     });
 
-    await serviceOn(prisma).getUnreadCountsForUser(USER, [CONV]);
+    const counts = await serviceOn(prisma).getUnreadCountsForUser(USER, [CONV]);
 
-    expect(callArgs(prisma.message.count).where.id).toEqual({ notIn: ['m3'] });
+    expect(counts.get(CONV)).toBe(1);
   });
 
   it('ne consulte aucune des deux tables quand l\'appelant est un participant sans compte', async () => {
     const prisma = makePrisma({
       participants: [{ id: PARTICIPANT, userId: null, conversationId: CONV, joinedAt: null }],
       cursors: [],
-      count: 2,
+      messages: [
+        { id: 'm1', createdAt: at('2026-05-21T11:00:00.000Z'), senderId: OTHER_PARTICIPANT },
+        { id: 'm2', createdAt: at('2026-05-21T12:00:00.000Z'), senderId: OTHER_PARTICIPANT },
+      ],
     });
 
     const counts = await serviceOn(prisma).getUnreadCountsForUser(PARTICIPANT, [CONV]);
@@ -281,7 +294,7 @@ describe('getUnreadCountsForParticipants — le badge POUSSÉ à chaque message'
     expect(counts.get(OTHER_PARTICIPANT)).toBe(0);
   });
 
-  it('ne demande pas les ids des messages quand personne ne masque de message individuel', async () => {
+  it('ne lit aucun contenu : l’horloge, l’expéditeur et de quoi reconnaître un avis de capture (#9630)', async () => {
     const prisma = makePrisma({
       cursors: [],
       messages: rows,
@@ -291,8 +304,12 @@ describe('getUnreadCountsForParticipants — le badge POUSSÉ à chaque message'
     await serviceOn(prisma).getUnreadCountsForParticipants(participants, CONV);
 
     expect(callArgs(prisma.message.findMany).select).toEqual({
+      id: true,
       createdAt: true,
       senderId: true,
+      messageSource: true,
+      messageType: true,
+      expiresAt: true,
     });
   });
 

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="audio_fullscreen_transcription_choose_hint">Gedrückt halten, um Gerät oder Server zu wählen</string>
+</resources>

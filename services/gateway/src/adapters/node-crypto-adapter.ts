@@ -16,7 +16,6 @@ import type {
 
 const ALGORITHM = 'aes-256-gcm';
 const KEY_LENGTH = 32; // 256 bits = 32 bytes
-const IV_LENGTH = 12; // 96 bits = 12 bytes
 const AUTH_TAG_LENGTH = 16; // 128 bits = 16 bytes
 
 /**

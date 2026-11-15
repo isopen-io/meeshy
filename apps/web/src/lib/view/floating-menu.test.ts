@@ -1,0 +1,294 @@
+import { readFileSync } from 'node:fs';
+
+import { describe, expect, test } from 'bun:test';
+
+import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
+import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
+import { ROUTES } from '@/routes/route-table';
+import {
+  ADMIN_DESTINATION,
+  CONVERSATIONS_DESTINATION,
+  FEED_DESTINATION,
+  GAME_DESTINATION,
+  MENU_LADDER,
+  PROFILE_DESTINATION,
+  allFloatingDestinations,
+  feedDiscDestination,
+  FLOATING_RUNG_MS,
+  FLOATING_RUNG_STAGGER_MS,
+  floatingLadderExitMs,
+  menuLadderFor,
+} from './floating-menu';
+import { showsFloatingMenus } from './floating-gate';
+
+/**
+ * LA TABLE DES DESTINATIONS FLOTTANTES (#6214, #6104) — miroir de
+ * `RootMenuLadderEntry.swift`, dont `RootMenuLadderEntryTests.swift:15-19`
+ * verrouille l'ordre exactement de cette façon.
+ *
+ * Ce fichier garde DEUX choses qu'aucune capture ne montre : l'ORDRE des six
+ * barreaux — qui est un fait de produit, pas un détail d'implémentation, et
+ * qu'un tri accidentel casserait en silence — et le fait que chaque
+ * destination MÈNE QUELQUE PART.
+ */
+
+describe('les sept barreaux de l’échelle', () => {
+  /**
+   * L'ordre vient d'iOS et ne se renégocie pas au fil des lots. Un témoin
+   * écrit sur l'ENSEMBLE (« les six sont là ») resterait vert si deux
+   * barreaux permutaient — or permuter Notifications et Appels déplace la
+   * cible la plus fréquente sous le doigt de la moins fréquente.
+   */
+  test('sont exactement ceux d’iOS, dans l’ordre d’iOS', () => {
+    expect(MENU_LADDER.map((e) => e.key)).toEqual([
+      'game',
+      'links',
+      'notifications',
+      'calls',
+      'discover',
+      'communities',
+      'settings',
+    ]);
+  });
+
+  /**
+   * LE PROFIL N'EST PAS UN BARREAU. iOS l'ouvre au second tap sur l'avatar
+   * (`RootView.swift:1570-1579`) et le documente en toutes lettres dans
+   * `RootMenuLadderEntry.swift:13-15`. Lui inventer une septième entrée
+   * serait ajouter au produit une porte qu'il n'a pas.
+   */
+  test('n’incluent pas le profil, qui s’ouvre depuis l’avatar', () => {
+    expect(MENU_LADDER.map((e) => e.key)).not.toContain('profile');
+  });
+
+  /**
+   * Le Flux non plus : il est le bouton de GAUCHE en entier, pas une entrée
+   * de l'échelle de droite.
+   */
+  test('n’incluent pas le Flux, qui est l’autre bouton', () => {
+    expect(MENU_LADDER.map((e) => e.key)).not.toContain('feed');
+  });
+});
+
+/**
+ * **LE BARREAU D'ADMINISTRATION** (#6458) — une extension WEB assumée : iOS n'a
+ * pas d'espace d'administration. Deux faits se gardent ici, et un témoin écrit
+ * sur un seul d'entre eux resterait vert sur la mauvaise implémentation.
+ */
+describe('le barreau « Administration »', () => {
+  /**
+   * Sans le droit, l'échelle est celle d'iOS À L'IDENTIQUE — pas « six
+   * barreaux », mais les six d'iOS dans l'ordre d'iOS. Une échelle qui
+   * insérerait le barreau puis le masquerait en CSS le laisserait dans le
+   * parcours de tabulation.
+   */
+  test('n’existe pas sans le droit : l’échelle est celle d’iOS', () => {
+    expect(menuLadderFor({ canAccessAdmin: false }).map((e) => e.key)).toEqual(MENU_LADDER.map((e) => e.key));
+  });
+
+  /**
+   * AVEC le droit, il vient EN DERNIER : les six barreaux d'iOS gardent leur
+   * rang, donc leur place sous le doigt — un administrateur qui passe de l'app
+   * native au web retrouve « Réglages » là où il l'a laissé.
+   */
+  test('vient en dernier avec le droit, les six d’iOS gardant leur rang', () => {
+    expect(menuLadderFor({ canAccessAdmin: true }).map((e) => e.key)).toEqual([...MENU_LADDER.map((e) => e.key), 'admin']);
+  });
+
+  /**
+   * Même mot que la rangée des Réglages et que le titre de l'écran (`admin.title`),
+   * même glyphe que la rangée (`key`) : la dimension 6 — « même mot, même
+   * icône » — se tient par la CLÉ, pas par une chaîne recopiée.
+   */
+  test('mène à /admin, se nomme comme l’écran et porte le glyphe de la rangée des Réglages', () => {
+    expect(ADMIN_DESTINATION.route).toBe('admin');
+    expect(ADMIN_DESTINATION.labelKey).toBe('admin.title');
+    expect(ADMIN_DESTINATION.glyph).toEqual({ set: 'socle', name: 'key' });
+  });
+
+  /** Sa teinte est un JETON de la palette dérivée d'iOS, jamais un hexadécimal inventé. */
+  test('porte une teinte de jeton, distincte des six', () => {
+    expect(ADMIN_DESTINATION.tint).toMatch(/^var\(--ios-[a-z0-9-]+\)$/);
+    expect(MENU_LADDER.map((e) => e.tint)).not.toContain(ADMIN_DESTINATION.tint);
+  });
+});
+
+/**
+ * **LE DISQUE DU FLUX BASCULE** (#6456) — `onLeftTap: showFeed.toggle()`
+ * (`RootView.swift:1557-1565`). Le même disque montre le Flux ou ramène aux
+ * conversations ; son nom et son glyphe disent où le tap MÈNE, jamais où l'on
+ * est — un disque « Flux » posé sur le Flux annoncerait un geste sans effet.
+ */
+describe('la destination du disque de gauche', () => {
+  test('sur le Flux, il ramène aux conversations', () => {
+    expect(feedDiscDestination('feed')).toBe(CONVERSATIONS_DESTINATION);
+    expect(CONVERSATIONS_DESTINATION.route).toBe('list');
+  });
+
+  /**
+   * Toutes les AUTRES routes qui portent les disques, pas seulement la liste :
+   * un témoin écrit sur `list` seul resterait vert sur une loi « liste ⇒ Flux,
+   * sinon conversations », qui ferait du disque un retour sur les Réglages.
+   */
+  test('partout ailleurs où les disques paraissent, il ouvre le Flux', () => {
+    const autres = ['list', 'links', 'notifications', 'calls', 'discover', 'communities', 'settings', 'profile'];
+    for (const route of autres) {
+      expect({ route, porte: showsFloatingMenus(route) }).toEqual({ route, porte: true });
+      expect({ route, destination: feedDiscDestination(route).key }).toEqual({ route, destination: 'feed' });
+    }
+  });
+
+  /** « Même mot, même icône » (dimension 6) : le glyphe du retour est la marque, celle qu'iOS peint Flux ouvert. */
+  test('les deux faces portent deux noms et deux glyphes distincts', () => {
+    expect(CONVERSATIONS_DESTINATION.labelKey).not.toBe(FEED_DESTINATION.labelKey);
+    expect(CONVERSATIONS_DESTINATION.glyph).toEqual({ set: 'marque' });
+    expect(FEED_DESTINATION.glyph).toEqual({ set: 'flottant', name: 'stack' });
+  });
+});
+
+describe('aucune destination flottante ne ment', () => {
+  /**
+   * **LE TÉMOIN QUI JUSTIFIE #6214.** La loi 4 de la planche — « un contrôle
+   * existe s'il a un effet » — ne se prouve pas en regardant le bouton : elle
+   * se prouve en vérifiant que son adresse est DÉCLARÉE. Ce dépôt a déjà payé
+   * l'inverse sur le rail des stories, dont chaque tuile pointait vers un fil
+   * « faute de route ».
+   *
+   * Il rougit sur la faute la plus probable du lot : ajouter un barreau sans
+   * ajouter sa route.
+   */
+  test('chaque destination nomme une route déclarée', () => {
+    for (const destination of allFloatingDestinations()) {
+      expect(Object.keys(ROUTES)).toContain(destination.route);
+    }
+  });
+
+  /**
+   * Les neuf, pas seulement les six — le Flux et le profil sont des
+   * destinations à part entière, et ce sont précisément celles qu'une
+   * énumération centrée sur l'échelle oublie. L'administration aussi (#6458) :
+   * absente de `MENU_LADDER`, elle échapperait sinon aux deux témoins qui
+   * suivent — la route déclarée et le libellé unique dans sept langues.
+   */
+  test('les onze destinations sont comptées', () => {
+    expect(allFloatingDestinations()).toHaveLength(11);
+    expect(allFloatingDestinations()).toContain(GAME_DESTINATION);
+    expect(allFloatingDestinations()).toContain(FEED_DESTINATION);
+    expect(allFloatingDestinations()).toContain(CONVERSATIONS_DESTINATION);
+    expect(allFloatingDestinations()).toContain(PROFILE_DESTINATION);
+    expect(allFloatingDestinations()).toContain(ADMIN_DESTINATION);
+  });
+});
+
+describe('chaque destination se dit', () => {
+  /**
+   * Un libellé vide rendrait un barreau muet pour VoiceOver comme pour l'œil :
+   * le disque coloré ne dit rien de ce qu'il ouvre.
+   */
+  test('porte un libellé dans chacune des sept langues', async () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      await loadInterfaceCatalog(language);
+      for (const destination of allFloatingDestinations()) {
+        expect(translate(language, destination.labelKey).trim().length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  /**
+   * Deux destinations qui se NOMMENT pareil seraient indiscernables au lecteur
+   * d'écran — dans chaque langue, pas seulement en français.
+   */
+  test('porte un libellé qui n’appartient qu’à elle, dans chaque langue', async () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      await loadInterfaceCatalog(language);
+      const labels = allFloatingDestinations().map((d) => translate(language, d.labelKey));
+      expect({ language, distinct: new Set(labels).size }).toEqual({ language, distinct: labels.length });
+    }
+  });
+
+  /**
+   * Deux barreaux de la même teinte seraient indiscernables au coin de l'œil,
+   * qui est exactement la façon dont on lit une échelle qu'on connaît déjà.
+   */
+  test('porte une teinte qui n’appartient qu’à elle', () => {
+    const teintes = MENU_LADDER.map((e) => e.tint);
+    expect(new Set(teintes).size).toBe(teintes.length);
+  });
+});
+
+describe('le barreau du jeu (#17769)', () => {
+  /**
+   * Le jeu s'ouvre en deux touchers depuis tout écran racine : en tête de
+   * l'échelle, au plus près du bouton, sous le mot et le trophée qu'il porte
+   * déjà dans les Réglages et le Profil (« même mot, même icône »).
+   */
+  test('ouvre la Progression, en tête, avec le trophée', () => {
+    expect(MENU_LADDER[0]).toBe(GAME_DESTINATION);
+    expect(GAME_DESTINATION.route).toBe('progression');
+    expect(GAME_DESTINATION.glyph).toEqual({ set: 'socle', name: 'trophy' });
+  });
+
+  /**
+   * « Jeu masqué » retire le barreau — jamais monté puis caché, sinon le lien
+   * resterait dans le parcours de tabulation.
+   */
+  test('quitte l’échelle quand le jeu est masqué', () => {
+    const keys = menuLadderFor({ canAccessAdmin: false, gameHidden: true }).map((e) => e.key);
+    expect(keys).not.toContain('game');
+    expect(keys).toEqual(MENU_LADDER.filter((e) => e !== GAME_DESTINATION).map((e) => e.key));
+    expect(menuLadderFor({ canAccessAdmin: false }).map((e) => e.key)[0]).toBe('game');
+  });
+});
+
+/**
+ * LA SORTIE DE L'ÉCHELLE (#18460) — `menuAnimation` d'iOS joue l'aller ET le
+ * retour. La sortie rejoue l'entrée à l'envers, cascade inversée : l'échelle
+ * reste montée le temps du dernier barreau, retard compris.
+ */
+describe('floatingLadderExitMs', () => {
+  test('un barreau : la durée d’un barreau', () => {
+    expect(floatingLadderExitMs(1)).toBe(FLOATING_RUNG_MS);
+  });
+
+  test('chaque barreau de plus ajoute un pas de cascade', () => {
+    expect(floatingLadderExitMs(MENU_LADDER.length)).toBe(FLOATING_RUNG_MS + (MENU_LADDER.length - 1) * FLOATING_RUNG_STAGGER_MS);
+  });
+
+  test('les valeurs d’iOS : 0,32 s par barreau, 0,04 s par rang', () => {
+    expect({ rung: FLOATING_RUNG_MS, stagger: FLOATING_RUNG_STAGGER_MS }).toEqual({ rung: 320, stagger: 40 });
+  });
+
+  test('aucun barreau : rien à attendre', () => {
+    expect(floatingLadderExitMs(0)).toBe(0);
+  });
+});
+
+/**
+ * **LA SORTIE JOUE VRAIMENT** (#18460, revue). CSS ne relance pas une animation
+ * dont le NOM ne change pas : passer `floating-rung-in` en `reverse` une fois
+ * l'entrée finie met l'animation dans sa phase « après », et la tenue `forwards`
+ * d'un sens inversé est sa PREMIÈRE image. Mesuré dans Chromium : l'opacité tombe
+ * à 0 dans l'image même, aucune cascade ne se voit, et l'échelle reste montée,
+ * invisible, le temps de `floatingLadderExitMs`. La sortie nomme donc ses propres
+ * images, identiques à celles de l'entrée, pour que le sens inverse en soit
+ * l'exact miroir.
+ */
+describe('la sortie de l’échelle démarre une animation neuve', () => {
+  const css = readFileSync(new URL('../../styles/floating-menus.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const nomAnime = (selecteur: string): string | undefined => {
+    const regle = css.match(new RegExp(`${selecteur.replace(/[.[\]]/g, '\\$&')}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+    return regle.match(/\banimation:\s*([\w-]+)/)?.[1];
+  };
+  const images = (nom: string | undefined): string | undefined =>
+    nom === undefined ? undefined : css.match(new RegExp(`@keyframes\\s+${nom}\\s*\\{([\\s\\S]*?\\})\\s*\\}`))?.[1]?.replace(/\s+/g, ' ').trim();
+
+  test('le barreau en sortie anime un autre nom que le barreau qui entre, aux mêmes images', () => {
+    const entree = nomAnime('.floating-rung');
+    const sortie = nomAnime('.floating-rung[data-leaving]');
+    expect({ entree, sortieDistincte: sortie !== undefined && sortie !== entree, memesImages: images(sortie) === images(entree) && images(entree) !== undefined }).toEqual({
+      entree: 'floating-rung-in',
+      sortieDistincte: true,
+      memesImages: true,
+    });
+  });
+});

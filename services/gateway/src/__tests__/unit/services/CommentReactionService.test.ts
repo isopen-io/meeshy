@@ -363,7 +363,7 @@ describe('CommentReactionService', () => {
 
   describe('removeReaction', () => {
     beforeEach(() => {
-      mockPrisma.commentReaction.deleteMany.mockResolvedValue({ count: 1 });
+      mockPrisma.commentReaction.findMany.mockResolvedValue([{ id: 'reaction-removed' }]); mockPrisma.commentReaction.deleteMany.mockResolvedValue({ count: 1 });
       mockPrisma.postComment.findUnique.mockResolvedValue(createMockPostComment());
       mockPrisma.postComment.update.mockResolvedValue(createMockPostComment());
       mockPrisma.$transaction.mockImplementation((fn: (tx: any) => Promise<unknown>) => {

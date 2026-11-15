@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        { "catalog": "ui", "iosKey": "location.fullscreen.sharedPosition", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "location.fullscreen.directions", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "location.fullscreen.mapStyle", "status": "adopted" },
+        { "androidName": "location_a11y_label", "status": "android-only" }
+      ]
+    }
+  }
+}

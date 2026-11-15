@@ -1,0 +1,259 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { PACK_LANGUAGES } from '../types/content-pack';
+import { APPEARANCE_LIMITS, AppearancePackContractSchema, isDiscreetPattern, parseAppearanceDesign, parseAppearancePackContract, patternInkOpacity } from '../types/appearance-design';
+import { AvatarRingPackContractSchema, parseAvatarRingDesign, parseAvatarRingPackContract } from '../types/avatar-ring-design';
+import { canUseFrame } from '../types/frame-usage';
+import { parsePackIndex } from '../types/content-pack-index';
+import { GAMUT_KEYS } from '../design/appearance/gamut';
+import { validateLottie } from '../utils/lottie-validate';
+import { MEESHY_COLLECTION_SLUGS } from '../scripts/compose-meeshy-collections';
+import { CHRISTMAS_WALLPAPER_SLUGS } from '../scripts/compose-assorted-banners';
+import { SEASONAL_ADDED_SLUGS } from '../scripts/seasonal/slugs';
+
+const DIR = join(__dirname, '../design/appearance');
+const read = (file: string): unknown => JSON.parse(readFileSync(join(DIR, file), 'utf8')) as unknown;
+
+type PackFile = { readonly packs: readonly { readonly slug: string; readonly order: number; readonly installedByDefault: boolean; readonly removable: boolean; readonly usage?: unknown; readonly designs?: readonly unknown[]; readonly rings?: readonly unknown[] }[] };
+/**
+ * Les collections Meeshy de #15158, les fonds de Noël de #15553 et les offres saisonnières de #16270 et #16271 ont leur
+ * propre témoin (`meeshy-collections-catalog.test.ts`, `christmas-wallpapers.test.ts`, `seasonal-offers.test.ts`) : ce
+ * fichier compte le catalogue qui les précède.
+ */
+const OWN_WITNESS = [...MEESHY_COLLECTION_SLUGS, ...CHRISTMAS_WALLPAPER_SLUGS, ...SEASONAL_ADDED_SLUGS];
+const beforeCollections = (file: PackFile): PackFile => ({ packs: file.packs.filter((pack) => !OWN_WITNESS.includes(pack.slug)) });
+const allWallpapers = read('wallpapers/designs.json') as PackFile;
+const wallpapers = beforeCollections(allWallpapers);
+const allBanners = read('banners/designs.json') as PackFile;
+const banners = beforeCollections(allBanners);
+const allRings = read('avatar-rings/rings.json') as PackFile;
+const rings = beforeCollections(allRings);
+const allFrames = read('banner-frames/frames.json') as PackFile;
+const frames = beforeCollections(allFrames);
+
+const wallpaperDesigns = wallpapers.packs.flatMap((pack) => pack.designs ?? []);
+
+describe('le catalogue des 17 modèles de fond (#10632, #10638, #13950, § 6)', () => {
+  it('compte cinq packs builtin et 17 modèles que le contrat lit tous', () => {
+    expect(wallpapers.packs.map((pack) => pack.slug)).toEqual(['essentiels', 'heritages', 'nature-et-ciel', 'illustrations', 'animes']);
+    expect(wallpaperDesigns).toHaveLength(17);
+    wallpapers.packs.forEach((pack) => {
+      const contract = parseAppearancePackContract({ domain: 'wallpaper', designs: pack.designs });
+      expect(contract?.designs).toHaveLength(pack.designs?.length ?? -1);
+    });
+  });
+
+  it('ne réutilise aucune clé, ni dans un pack, ni entre les packs de fonds', () => {
+    const keys = wallpaperDesigns.map((design) => (design as { key: string }).key);
+    expect(new Set(keys).size).toBe(17);
+  });
+
+  it('installe « Essentiels » d’office et le garde ; les quatre autres se retirent', () => {
+    expect(wallpapers.packs.map((pack) => [pack.installedByDefault, pack.removable])).toEqual([
+      [true, false],
+      [false, true],
+      [false, true],
+      [false, true],
+      [true, true],
+    ]);
+  });
+
+  it('couvre les trois styles', () => {
+    const styles = new Set(wallpaperDesigns.map((design) => parseAppearanceDesign(design)?.style));
+    expect(styles).toEqual(new Set(['pattern', 'illustration', 'gradient']));
+  });
+
+  it('tient le plafond d’opacité : tout motif reste discret (12 % d’encre)', () => {
+    const patterns = wallpaperDesigns.map((design) => parseAppearanceDesign(design)).filter((design) => design?.style === 'pattern');
+    expect(patterns).toHaveLength(10);
+    patterns.forEach((design) => expect(isDiscreetPattern(design!)).toBe(true));
+    expect(Math.max(...patterns.map((design) => patternInkOpacity(design!)))).toBeLessThanOrEqual(0.12);
+  });
+
+  it('refuse un motif trop dense, un chemin injecté et un bloc de forme qui ne correspond pas au style', () => {
+    const [monogramme] = wallpaperDesigns as { tile: { paths: { opacity: number; d: string }[] } }[];
+    const dense = structuredClone(monogramme);
+    dense.tile.paths[0]!.opacity = 0.4;
+    expect(parseAppearanceDesign(dense)).toBeNull();
+    expect(parseAppearancePackContract({ domain: 'wallpaper', designs: [dense] })).toBeNull();
+    expect(parseAppearancePackContract({ domain: 'banner', designs: [dense] })).toBeNull();
+    const atCap = structuredClone(monogramme);
+    atCap.tile.paths[0]!.opacity = 0.12;
+    expect(parseAppearanceDesign(atCap)).not.toBeNull();
+    const injected = structuredClone(monogramme);
+    injected.tile.paths[0]!.d = 'M0 0 L1 1"/><script>';
+    expect(parseAppearanceDesign(injected)).toBeNull();
+    expect(parseAppearanceDesign({ ...(monogramme as object), style: 'illustration' })).toBeNull();
+    expect(parseAppearanceDesign({ ...(monogramme as object), palettes: { light: { base: '#fff', ink: '#000', soft: '#eee' }, dark: {} } })).toBeNull();
+  });
+
+  it('refuse un contrat de pack à clés dupliquées', () => {
+    const [first] = wallpaperDesigns;
+    expect(AppearancePackContractSchema.safeParse({ domain: 'wallpaper', designs: [first, first] }).success).toBe(false);
+  });
+});
+
+describe('les 6 bannières et les 6 contours (#10632, § 6)', () => {
+  it('six bannières que le contrat de bannière lit toutes', () => {
+    const [pack] = banners.packs;
+    expect(pack?.slug).toBe('bannieres-essentielles');
+    expect(pack?.designs).toHaveLength(6);
+    expect(parseAppearancePackContract({ domain: 'banner', designs: pack?.designs })?.designs).toHaveLength(6);
+  });
+
+  it('chaque bannière a son PROPRE dessin (#11165) : « Aurore » et « Aurore vive » ne se confondent plus, même image fixe', () => {
+    const drawing = (design: unknown) => {
+      const { key: _key, lottie: _lottie, ...rest } = design as { key: string; lottie?: unknown };
+      return JSON.stringify(rest);
+    };
+    const drawings = banners.packs.flatMap((pack) => pack.designs ?? []).map(drawing);
+    expect(new Set(drawings).size).toBe(drawings.length);
+  });
+
+  it('une bannière à motif se VOIT (#11165) : son encre dépasse le plafond discret d’un fond, sans le plafond de bannière', () => {
+    const patterns = banners.packs.flatMap((pack) => pack.designs ?? []).map((design) => parseAppearanceDesign(design, 'banner')).filter((design) => design?.style === 'pattern');
+    expect(patterns).toHaveLength(4);
+    patterns.forEach((design) => {
+      expect(patternInkOpacity(design!)).toBeGreaterThan(APPEARANCE_LIMITS.maxPatternOpacity);
+      expect(isDiscreetPattern(design!, 'banner')).toBe(true);
+    });
+  });
+
+  it('le plafond d’encre dépend de la SURFACE : 12 % sous un fil, 32 % sur une bannière, refus au-delà', () => {
+    const [monogramme] = wallpaperDesigns as { tile: { paths: { opacity: number }[] } }[];
+    const marked = structuredClone(monogramme);
+    marked.tile.paths.forEach((path) => { path.opacity = 0.3; });
+    expect(parseAppearanceDesign(marked)).toBeNull();
+    expect(parseAppearanceDesign(marked, 'banner')).not.toBeNull();
+    expect(parseAppearancePackContract({ domain: 'wallpaper', designs: [marked] })).toBeNull();
+    expect(parseAppearancePackContract({ domain: 'banner', designs: [marked] })).not.toBeNull();
+    const loud = structuredClone(monogramme);
+    loud.tile.paths[0]!.opacity = 0.4;
+    expect(parseAppearanceDesign(loud, 'banner')).toBeNull();
+    expect(parseAppearancePackContract({ domain: 'banner', designs: [loud] })).toBeNull();
+  });
+
+  it('les six contours se lisent, aux clés uniques, et le contrat refuse un index de couleur hors palette', () => {
+    const [pack] = rings.packs;
+    expect(pack?.slug).toBe('contours-essentiels');
+    const contract = parseAvatarRingPackContract({ domain: 'avatar-ring', rings: pack?.rings });
+    expect(contract?.rings.map((ring) => ring.key)).toEqual(['filet', 'double-filet', 'perle', 'aurore', 'deco', 'laurier']);
+    const laurier = structuredClone(pack?.rings?.[5]) as { ornament: { paths: { color: number }[] } };
+    laurier.ornament.paths[0]!.color = 2;
+    expect(parseAvatarRingDesign(laurier)).toBeNull();
+    expect(AvatarRingPackContractSchema.safeParse({ domain: 'avatar-ring', rings: [pack?.rings?.[0], pack?.rings?.[0]] }).success).toBe(false);
+  });
+
+  it('le registre du pack de contours est lisible et ne sert que l’avatar', () => {
+    const [pack] = rings.packs;
+    const asset = (prefix: string, ext = 'webp') => ({ src: `${prefix}.${ext}`, bytes: 10, sha256: prefix.padEnd(64, '0') });
+    const { entries } = parsePackIndex([
+      { slug: pack?.slug, domain: 'avatar-ring', origin: 'builtin', version: 1, order: 0, installedByDefault: true, removable: false, hidden: false, contractSchema: 1, cover: asset('a1b2c3d4e5f60718'), preview: null, contract: asset('c1b2c3d4e5f60718', 'json'), strings: {}, downloadBytes: { story: 0, square: null }, names: { fr: { name: 'Contours', description: 'Six contours.' } }, usage: pack?.usage },
+    ]);
+    expect(entries).toHaveLength(1);
+    expect(canUseFrame(entries[0]!.usage!, { kind: 'avatar' })).toBe(true);
+    expect(canUseFrame(entries[0]!.usage!, { kind: 'call' })).toBe(false);
+  });
+});
+
+describe('les noms en sept langues', () => {
+  const keysOf = (lang: string) => read(`strings/${lang}.json`) as { packs: object; designs: object; rings: object; frames: object; gamut: object; modes: object; avatarUsage: string };
+  const itemKeys = (file: PackFile, field: 'rings' | 'frames') => file.packs.flatMap((pack) => ((pack as Record<string, unknown>)[field] as { key: string }[] | undefined) ?? []).map((item) => item.key).sort();
+
+  it.each(PACK_LANGUAGES.map((lang) => [lang] as const))('%s nomme chaque pack, modèle, contour, cadre de bannière et couleur', (lang) => {
+    const strings = keysOf(lang);
+    expect(Object.keys(strings.designs).sort()).toEqual([...new Set([...allWallpapers.packs.flatMap((pack) => pack.designs ?? []).map((design) => (design as { key: string }).key), ...allBanners.packs.flatMap((pack) => pack.designs ?? []).map((design) => (design as { key: string }).key)])].sort());
+    expect(Object.keys(strings.rings).sort()).toEqual(itemKeys(allRings, 'rings'));
+    expect(Object.keys(strings.frames).sort()).toEqual(itemKeys(allFrames, 'frames'));
+    expect(Object.values(strings.frames).every((name) => typeof name === 'string' && name.length > 0)).toBe(true);
+    expect(Object.keys(strings.gamut).sort()).toEqual([...GAMUT_KEYS].sort());
+    expect(Object.keys(strings.packs).sort()).toEqual([...allWallpapers.packs, ...allBanners.packs, ...allRings.packs, ...allFrames.packs].map((pack) => pack.slug).sort());
+    expect(Object.values(strings.designs).every((name) => typeof name === 'string' && name.length > 0)).toBe(true);
+  });
+});
+
+describe('les couches animées du catalogue (#10638)', () => {
+  const animated = [...wallpapers.packs, ...banners.packs].flatMap((pack) => pack.designs ?? []).filter((design) => (design as { lottie?: unknown }).lottie !== undefined);
+  const animatedRings = rings.packs.flatMap((pack) => pack.rings ?? []).filter((ring) => (ring as { lottie?: unknown }).lottie !== undefined);
+
+  it('porte au moins un fond, une bannière et un contour animés, que les contrats lisent', () => {
+    expect(animated.length).toBeGreaterThanOrEqual(2);
+    expect(animatedRings.length).toBeGreaterThanOrEqual(1);
+    animated.forEach((design) => expect(parseAppearanceDesign(design)).not.toBeNull());
+    animatedRings.forEach((ring) => expect(parseAvatarRingDesign(ring)).not.toBeNull());
+  });
+
+  it('chaque couche désigne un fichier adressé par contenu, valide et sous le plafond', () => {
+    [...animated, ...animatedRings].forEach((item) => {
+      const ref = (item as { lottie: { src: string; bytes: number; sha256: string } }).lottie;
+      const bytes = readFileSync(join(DIR, 'lottie', ref.src));
+      expect(bytes.length).toBe(ref.bytes);
+      expect(createHash('sha256').update(bytes).digest('hex')).toBe(ref.sha256);
+      expect(validateLottie(JSON.parse(bytes.toString('utf8')) as unknown, { bytes: bytes.length }).ok).toBe(true);
+    });
+  });
+});
+
+describe('les six décorations animées de profil et de fil de #13950', () => {
+  type Layer = { readonly key: string; readonly lottie?: { readonly src: string; readonly bytes: number; readonly sha256: string } };
+  const keysOf = (file: PackFile, slug: string, field: 'designs' | 'rings') =>
+    (((file.packs.find((pack) => pack.slug === slug) as Record<string, unknown> | undefined)?.[field] as Layer[] | undefined) ?? []).map((item) => item.key);
+  const ADDED = {
+    wallpapers: ['bulles-legeres', 'pluie-de-petales'],
+    banners: ['maree', 'braises'],
+    rings: ['prisme-vivant', 'onde'],
+  } as const;
+  const FRENCH: Readonly<Record<string, string>> = {
+    'bulles-legeres': 'Bulles légères',
+    'pluie-de-petales': 'Pluie de pétales',
+    maree: 'Marée',
+    braises: 'Braises',
+    'prisme-vivant': 'Prisme vivant',
+    onde: 'Onde',
+  };
+  const added = [
+    ...[...wallpapers.packs, ...banners.packs].flatMap((pack) => (pack.designs ?? []) as Layer[]),
+    ...rings.packs.flatMap((pack) => (pack.rings ?? []) as Layer[]),
+  ].filter((item) => Object.keys(FRENCH).includes(item.key));
+  const animation = (item: Layer) => JSON.parse(readFileSync(join(DIR, 'lottie', item.lottie!.src), 'utf8')) as { fr: number; ip: number; op: number };
+
+  it('rejoignent les packs animés installés d’office, après la couche qui les a précédées', () => {
+    expect(keysOf(wallpapers, 'animes', 'designs')).toEqual(['brume-vivante', ...ADDED.wallpapers]);
+    expect(keysOf(banners, 'bannieres-animees', 'designs')).toEqual(['aurore-vive', ...ADDED.banners]);
+    expect(keysOf(rings, 'contours-animes', 'rings')).toEqual(['halo-or', ...ADDED.rings]);
+    expect(parseAppearancePackContract({ domain: 'wallpaper', designs: wallpapers.packs.find((pack) => pack.slug === 'animes')?.designs })?.designs).toHaveLength(3);
+    expect(parseAppearancePackContract({ domain: 'banner', designs: banners.packs.find((pack) => pack.slug === 'bannieres-animees')?.designs })?.designs).toHaveLength(3);
+    expect(parseAvatarRingPackContract({ domain: 'avatar-ring', rings: rings.packs.find((pack) => pack.slug === 'contours-animes')?.rings })?.rings).toHaveLength(3);
+  });
+
+  it('chacune porte SA couche animée, distincte de toutes les autres du catalogue', () => {
+    expect(added).toHaveLength(6);
+    expect(added.every((item) => item.lottie !== undefined)).toBe(true);
+    const everyLayer = [...wallpapers.packs, ...banners.packs, ...rings.packs]
+      .flatMap((pack) => [...((pack.designs ?? []) as Layer[]), ...((pack.rings ?? []) as Layer[])])
+      .flatMap((item) => (item.lottie === undefined ? [] : [item.lottie.src]));
+    expect(everyLayer).toHaveLength(9);
+    expect(new Set(everyLayer).size).toBe(9);
+  });
+
+  it('chaque couche est légère et douce : moins de 8 Ko, 30 images par seconde au plus, une boucle de 4 à 16 secondes', () => {
+    added.forEach((item) => {
+      expect({ key: item.key, light: item.lottie!.bytes < 8 * 1024 }).toEqual({ key: item.key, light: true });
+      const { fr, ip, op } = animation(item);
+      expect(fr).toBeLessThanOrEqual(30);
+      const seconds = (op - ip) / fr;
+      expect({ key: item.key, soft: seconds >= 4 && seconds <= 16 }).toEqual({ key: item.key, soft: true });
+    });
+  });
+
+  it.each(PACK_LANGUAGES.map((lang) => [lang] as const))('%s nomme les six nouvelles venues', (lang) => {
+    const strings = read(`strings/${lang}.json`) as { designs: Record<string, string>; rings: Record<string, string> };
+    Object.keys(FRENCH).forEach((key) => {
+      const name = strings.designs[key] ?? strings.rings[key];
+      expect({ key, named: typeof name === 'string' && name.length > 0 }).toEqual({ key, named: true });
+      if (lang === 'fr') expect(name).toBe(FRENCH[key]);
+    });
+  });
+});

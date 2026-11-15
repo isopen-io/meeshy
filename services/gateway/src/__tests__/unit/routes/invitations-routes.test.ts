@@ -10,6 +10,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
 jest.mock('../../../utils/logger', () => ({
+  ...(jest.requireActual('../../../utils/logger') as object),
   logError: jest.fn(),
 }));
 
@@ -38,6 +39,14 @@ function makePrisma(overrides: PrismaOverrides = {}) {
       findUnique: jest.fn().mockResolvedValue(user),
       findFirst: jest.fn().mockResolvedValue(existingUser),
     },
+    affiliateToken: {
+      // Jamais pris — laisse `generateUniqueAffiliateToken` aboutir au premier essai.
+      findUnique: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockResolvedValue({ id: 'affiliate-token-id', token: 'aff_test1234' }),
+    },
+    emailInvitation: {
+      create: jest.fn().mockResolvedValue({ id: 'email-invitation-id' }),
+    },
   };
 }
 
@@ -45,18 +54,33 @@ type AppOptions = {
   prismaOverrides?: PrismaOverrides;
   withEmailService?: boolean;
   emailServiceRejects?: boolean;
+  emailVerified?: boolean;
+  withinGrace?: boolean;
 };
 
 async function buildApp({
   prismaOverrides = {},
   withEmailService = true,
   emailServiceRejects = false,
+  emailVerified = true,
+  withinGrace = false,
 }: AppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
 
   app.decorate('prisma', makePrisma(prismaOverrides) as unknown);
   app.decorate('authenticate', async (req: Parameters<typeof app.authenticate>[0]) => {
     (req as unknown as Record<string, unknown>).user = { userId: USER_ID };
+    // #6437 — la même chose que `createUnifiedAuthMiddleware` pose en
+    // production, seule forme que lit `requireEmailVerification` (montée
+    // juste après `fastify.authenticate` sur cette route).
+    (req as unknown as Record<string, unknown>).authContext = {
+      isAuthenticated: true,
+      registeredUser: {
+        id: USER_ID,
+        emailVerifiedAt: emailVerified ? new Date() : null,
+        ...(withinGrace ? { activation: { phase: 'quiet', deadline: '2026-10-30T00:00:00.000Z', missing: ['email'] } } : {}),
+      },
+    };
   });
 
   const sendInvitationEmail = emailServiceRejects
@@ -98,6 +122,79 @@ describe('POST /invitations/email', () => {
     expect(body.success).toBe(true);
     expect(body.data.email).toBe('friend@example.com');
     expect(body.data.sentAt).toBeDefined();
+    expect(body.data.invitationUrl).toMatch(/^http:\/\/localhost:3100\/signup\/affiliate\/aff_[A-Za-z0-9]+$/);
+  });
+
+  // #6437 — inviter sort du compte vers quelqu'un qui n'est pas encore sur
+  // Meeshy : un e-mail non confirmé ne peut plus l'emprunter.
+  it('returns 403 EMAIL_NOT_VERIFIED when the sender has not confirmed their e-mail', async () => {
+    const appUnverified = await buildApp({ emailVerified: false });
+
+    const res = await appUnverified.inject({
+      method: 'POST',
+      url: '/invitations/email',
+      headers: AUTH_HEADER,
+      payload: { email: 'friend@example.com' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
+    await appUnverified.close();
+  });
+
+  // #9713 — le délai de grâce ouvre la création de liens, PAS l'invitation par
+  // e-mail : elle écrit à une adresse tierce, et reste sous la garde stricte.
+  it('stays 403 EMAIL_NOT_VERIFIED for an unproven address even within its grace (#9713)', async () => {
+    const appInGrace = await buildApp({ emailVerified: false, withinGrace: true });
+
+    const res = await appInGrace.inject({
+      method: 'POST',
+      url: '/invitations/email',
+      headers: AUTH_HEADER,
+      payload: { email: 'friend@example.com' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
+    await appInGrace.close();
+  });
+
+  it('persists a dedicated single-use affiliate token and the invitation relation (#3691)', async () => {
+    const prisma = makePrisma();
+    const appTracked = Fastify({ logger: false });
+    appTracked.decorate('prisma', prisma as unknown);
+    appTracked.decorate('authenticate', async (req: Parameters<typeof app.authenticate>[0]) => {
+      (req as unknown as Record<string, unknown>).user = { userId: USER_ID };
+      (req as unknown as Record<string, unknown>).authContext = {
+        isAuthenticated: true,
+        registeredUser: { id: USER_ID, emailVerifiedAt: new Date() },
+      };
+    });
+    await appTracked.register(invitationRoutes);
+    await appTracked.ready();
+
+    const res = await appTracked.inject({
+      method: 'POST',
+      url: '/invitations/email',
+      headers: AUTH_HEADER,
+      payload: { email: 'friend@example.com' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(prisma.affiliateToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ createdBy: USER_ID, maxUses: 1 }),
+    });
+    // Jamais l'adresse du destinataire dans le nom — public via /affiliate/validate/:token.
+    const affiliateTokenCall = prisma.affiliateToken.create.mock.calls[0][0];
+    expect(affiliateTokenCall.data.name).not.toContain('friend@example.com');
+    expect(prisma.emailInvitation.create).toHaveBeenCalledWith({
+      data: {
+        senderId: USER_ID,
+        email: 'friend@example.com',
+        affiliateTokenId: 'affiliate-token-id',
+      },
+    });
+    await appTracked.close();
   });
 
   it('returns 201 and logs warn when emailService is not available', async () => {
@@ -106,6 +203,10 @@ describe('POST /invitations/email', () => {
     appNoEmail.decorate('prisma', makePrisma() as unknown);
     appNoEmail.decorate('authenticate', async (req: Parameters<typeof app.authenticate>[0]) => {
       (req as unknown as Record<string, unknown>).user = { userId: USER_ID };
+      (req as unknown as Record<string, unknown>).authContext = {
+        isAuthenticated: true,
+        registeredUser: { id: USER_ID, emailVerifiedAt: new Date() },
+      };
     });
     (appNoEmail as unknown as Record<string, { warn: typeof warnSpy }>).log = {
       ...(appNoEmail.log as unknown as Record<string, unknown>),
@@ -250,6 +351,10 @@ describe('POST /invitations/email', () => {
     appBad.decorate('prisma', badPrisma as unknown);
     appBad.decorate('authenticate', async (req: Parameters<typeof app.authenticate>[0]) => {
       (req as unknown as Record<string, unknown>).user = { userId: USER_ID };
+      (req as unknown as Record<string, unknown>).authContext = {
+        isAuthenticated: true,
+        registeredUser: { id: USER_ID, emailVerifiedAt: new Date() },
+      };
     });
     await appBad.register(invitationRoutes);
     await appBad.ready();

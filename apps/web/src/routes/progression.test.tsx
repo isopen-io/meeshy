@@ -1,0 +1,705 @@
+import { describe, expect, test } from 'bun:test';
+import { renderToStaticMarkup } from 'react-dom/server';
+
+import { BADGE_THRESHOLDS, ENGAGEMENT_ACHIEVEMENT_KEYS, ENGAGEMENT_AXES } from '@meeshy/shared/types/engagement';
+import { ENGAGEMENT_FAMILY_TOP_POINTS } from '@meeshy/shared/types/engagement-operations';
+import { axesByFamily, resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
+
+import { gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
+import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
+import { familyName, formatCount } from '@/lib/view/game-copy';
+import { achievementCopy, axisLabel } from '@/lib/view/progression';
+
+import { progressionConcepts } from '@meeshy/shared/utils/progression-layout';
+import type { EngagementProgress } from '@meeshy/shared/utils/engagement-progress';
+
+import { ElansHero, MeeshDetail, ProgressionBody } from './progression';
+import { ConceptFiche } from './progression-concept';
+import type { GameActions } from './progression-game-actions';
+import {
+  AchievementsSection,
+  AxisRow,
+  GeneratedAchievements,
+  ProgressionError,
+  ProgressionSkeleton,
+} from './progression-parts';
+
+/**
+ * L'ÉCRAN « PROGRESSION », RENDU (#5547) — ce que les témoins purs ne prouvent
+ * pas : qui AFFICHE ce que la loi décide. Un résolveur juste dont la valeur
+ * n'atteint aucun pixel n'a corrigé personne (§ Prisme, cycle 122).
+ *
+ * `renderToStaticMarkup` et non un DOM (même méthode que `auth-screens.test.tsx`) :
+ * c'est l'ÉTAT INITIAL qui est mesuré, sans TanStack Query — `ProgressionBody`
+ * est pur, c'est la raison de la découpe.
+ */
+
+const fixture = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE);
+
+const repos: GameActions = {
+  mint: () => undefined,
+  reroll: () => undefined,
+  claimChest: () => undefined,
+  buyFreeze: () => undefined,
+  relight: () => undefined,
+  pending: { mint: false, rerollId: null, chest: false, freeze: false, relight: false },
+  errors: {},
+  celebration: null,
+  strikeKey: 0,
+};
+
+/** La première page SEULE : ses cartes de concept. */
+const premierePage = (progress: EngagementProgress): string => renderToStaticMarkup(<ProgressionBody progress={progress} />);
+
+/**
+ * L'ÉCRAN ENTIER (#9563) : la première page ET chaque fiche qu'elle ouvre. Ce
+ * que la progression dit n'est plus empilé sur une page ; un témoin de « qui
+ * AFFICHE ce que la loi décide » suit donc le contenu jusque dans sa fiche.
+ */
+const ecran = (progress: EngagementProgress): string =>
+  renderToStaticMarkup(
+    <>
+      <ProgressionBody progress={progress} />
+      {progressionConcepts(progress).map((concept) => (
+        <ConceptFiche key={concept} concept={concept} progress={progress} host={{ actions: repos, online: true }} />
+      ))}
+    </>,
+  );
+
+const html = ecran(fixture);
+
+/**
+ * Le MÊME écran, servi par une passerelle qui ne connaît AUCUN des trois blocs
+ * optionnels — un client déployé avant ce lot, ou parlant à une version
+ * antérieure. C'est le support des témoins d'ABSENCE, qui doivent retirer ce
+ * qu'ils prétendent absent plutôt que de compter sur une fixture incomplète.
+ */
+const sansBlocsOptionnels = (() => {
+  // Les clés sont OMISES, pas posées à `undefined` : sous
+  // `exactOptionalPropertyTypes`, « absent » et « présent et undefined » sont
+  // deux types distincts, et c'est bien l'ABSENCE que ce rendu doit servir.
+  const { meesh: _m, elan: _e, achievementReach: _r, ...sansOptions } = ENGAGEMENT_PROGRESS_FIXTURE;
+  return ecran(resolveEngagementProgress(sansOptions));
+})();
+
+/**
+ * **Le total de badges se CALCULE, il ne s'écrit pas.** Il valait 65 (13 axes ×
+ * 5 paliers) ; la famille sociale l'a porté à 85 (#5766). Un nombre en dur se
+ * périme au premier axe ajouté, et fait échouer un témoin qui n'a rien à dire
+ * sur le défaut réel — ici, il aurait accusé l'écran alors que seul le
+ * catalogue avait bougé.
+ */
+const TOTAL_BADGES = ENGAGEMENT_AXES.length * BADGE_THRESHOLDS.length;
+
+/**
+ * LE HUB rend ce que la séquence partagée déclare : trois heros, trois portes.
+ * Le DÉTAIL — les axes, les défis, les succès nommés — a migré vers les pages
+ * dédiées, et les témoins l'y suivent. Un témoin qui reste sur l'ancienne
+ * surface après une découpe ne mesure plus l'écran, il mesure l'habitude.
+ */
+describe('le hub — un utilisateur à mi-chemin', () => {
+  test('ouvre sur le DERNIER succès décroché, pas sur le prochain', () => {
+    expect(html).toContain('Dernier haut fait');
+    expect(html).toContain('Accompli le');
+  });
+
+  /**
+   * Les chiffres se DÉRIVENT de la fixture, ils ne s'y recopient pas — le
+   * porteur a réglé le barème le 2026-09-09, et un nombre en dur accuserait
+   * l'ÉCRAN d'une régression que seule la donnée a causée.
+   */
+  test('le hero du niveau dit le rang et le score', () => {
+    expect(html).toContain(`Niveau ${fixture.level.level}`);
+    expect(html).toContain(`${formatCount(fixture.level.value)} étincelles`);
+  });
+
+  /**
+   * LA FLAMME est son propre hero depuis #5838 — elle vivait dans celui du
+   * niveau, le porteur a tranché « 1 Hero Niveau, 1 Hero Élan, 1 Hero Flamme »
+   * (`packages/shared/utils/progression-layout.ts`). Un client qui ne rend
+   * pas ce bloc ne compile même plus : la séquence partagée est un type
+   * SOMME, `ProgressionBody` doit épuiser ses cas.
+   */
+  /* La série EST la valeur de tête (« N jours ») : aucune ligne « Série » ne la redit (#9563, amendement n° 4, règle 2). */
+  test('le hero de la flamme dit la série qu\'il a recueillie', () => {
+    expect(html).toContain(`>${fixture.streak.value} jours<`);
+    expect(html).toContain(`Au plus haut : ${ENGAGEMENT_PROGRESS_FIXTURE.streak.longestStreakDays} jours`);
+  });
+
+  test('la carte de niveau nomme le RANG suivant, jamais le seuil de points', () => {
+    const manque = (fixture.level.nextThreshold ?? 0) - fixture.level.value;
+    expect(html).toContain(`${formatCount(manque)} étincelles jusqu’au niveau ${fixture.level.level + 1}`);
+    expect(html).not.toContain(`niveau ${fixture.level.nextThreshold}`);
+  });
+
+  /**
+   * Le barème est DÉRIVÉ du catalogue des opérations (`ENGAGEMENT_FAMILY_TOP_POINTS`,
+   * #9667) : ce qu'un geste de chaque famille rapporte AU PLUS. Ce témoin cherche
+   * les valeurs RÉELLES : les recopier passerait au vert sur une énumération figée.
+   */
+  test('le hero du niveau ÉNUMÈRE comment gagner, avec les points du catalogue', () => {
+    expect(html).toContain('Comment faire jaillir des étincelles');
+    for (const p of Object.values(ENGAGEMENT_FAMILY_TOP_POINTS)) expect(html).toContain(`jusqu’à\u00a0+${formatCount(p)}`);
+  });
+
+  test('le hero du niveau dit le prix d\'une Meesh, servi par le serveur', () => {
+    expect(html).toContain(`${formatCount(fixture.meesh?.mintCost ?? 0)} étincelles de ta lumière se figent dans une Meesh`);
+  });
+
+  test('les barres sont des `progressbar` NOMMÉES, avec leur valeur', () => {
+    const barres = html.match(/role="progressbar"[^>]*/g) ?? [];
+    expect(barres.length).toBeGreaterThanOrEqual(1);
+    for (const barre of barres) {
+      expect(barre).toContain('aria-valuenow=');
+      expect(barre).toMatch(/aria-label=|aria-labelledby=/);
+    }
+  });
+
+  /**
+   * Les trois portes sont là, chacune avec SON compte — c'est le compte qui
+   * donne envie d'ouvrir. Un lien sans chiffre ne dit pas s'il vaut le geste.
+   */
+  test('les trois entrées de section annoncent leur compte', () => {
+    expect(html).toContain('Médailles');
+    expect(html).toContain('Défis');
+    expect(html).toContain('Hauts faits');
+    expect(html).toContain(`${fixture.badgesEarned} / ${TOTAL_BADGES}`);
+    expect(html).toContain(
+      `${fixture.achievements.filter((a) => a.unlocked).length} / ${fixture.achievements.length}`,
+    );
+  });
+
+  /** Le DÉTAIL n'est plus ici : il a sa page. Le hub doit tenir court. */
+  test('ne rend PAS le détail des axes — il a sa page', () => {
+    expect(premierePage(fixture)).not.toContain('Palier');
+  });
+});
+
+/**
+ * LA PAGE DÉDIÉE DES BADGES — le détail que le hub n'annonce que par un compte.
+ */
+describe('la page des badges', () => {
+  const htmlBadges = renderToStaticMarkup(
+    <>
+      {axesByFamily(fixture.axes).map((groupe) =>
+        groupe.axes.map((axe) => <AxisRow key={axe.axisKey} axis={axe} />),
+      )}
+    </>,
+  );
+
+  test('rend les axes du catalogue ENTIER — y compris ceux à zéro', () => {
+    for (const key of ENGAGEMENT_AXES) expect(htmlBadges).toContain(axisLabel(key));
+    expect(htmlBadges).toContain('1 jusqu’au palier 1');
+  });
+
+  test('les pastilles pleines et vides CONCORDENT avec le compte du hub', () => {
+    const obtenus = fixture.badgesEarned;
+    expect(htmlBadges.match(/Palier \d+ atteint/g)?.length).toBe(obtenus);
+    expect(htmlBadges.match(/Palier \d+ à atteindre/g)?.length).toBe(TOTAL_BADGES - obtenus);
+  });
+});
+
+/**
+ * LA PAGE DÉDIÉE DES SUCCÈS — les cinq composés, nommés un par un.
+ */
+describe('la page des succès', () => {
+  const htmlSucces = renderToStaticMarkup(<AchievementsSection progress={fixture} />);
+
+  test('quatre débloqués et datés, un verrouillé avec sa condition', () => {
+    expect(htmlSucces).toContain('Un haut fait récompense une première fois ou un exploit.');
+    expect(htmlSucces).not.toContain('4 / 5');
+    for (const key of ENGAGEMENT_ACHIEVEMENT_KEYS) expect(htmlSucces).toContain(achievementCopy(key).title);
+    expect(htmlSucces).toContain(achievementCopy('achievement.all_content_types').condition);
+    expect(htmlSucces.match(/Obtenu le /g)?.length).toBe(4);
+  });
+});
+
+/**
+ * L'ÉTAT VIDE — porté par les HEROS eux-mêmes.
+ *
+ * Un bandeau « aucune activité » séparé existait ; il est devenu redondant, et
+ * moins utile : le hero du dernier succès dit quoi faire pour décrocher le
+ * premier, celui des élans dit ce qui multiplie. Une phrase générique
+ * au-dessus de trois blocs qui disent la même chose en mieux occupait la place
+ * sans rien ajouter.
+ */
+describe('le hub — un compte VIDE parle quand même', () => {
+  const empty = ecran(
+    resolveEngagementProgress({
+      counters: [],
+      milestones: [],
+      streak: { currentStreakDays: 0, longestStreakDays: 0 },
+      level: { engagementScore: 0 },
+    }),
+  );
+
+  test('le hero des succès dit comment décrocher le PREMIER', () => {
+    expect(empty).toContain('Premier haut fait');
+    expect(empty).toContain('Envoie un message');
+    expect(empty).not.toContain('Accompli le');
+  });
+
+  test('le hero des élans explique ce qui multiplie, plutôt que de se taire', () => {
+    expect(empty).toContain('Tes élans');
+    expect(empty).toContain('multiplie');
+  });
+
+  test('le niveau 0 et les trois portes restent servis — un catalogue vide reste un catalogue', () => {
+    expect(empty).toContain('Niveau 0');
+    expect(empty).toContain(`0 / ${TOTAL_BADGES}`);
+    expect(empty).toContain('0 / 5');
+  });
+});
+
+describe('les autres états', () => {
+  test('le squelette est marqué occupé — jamais un spinner', () => {
+    const skeleton = renderToStaticMarkup(<ProgressionSkeleton />);
+    expect(skeleton).toContain('aria-busy="true"');
+    expect(skeleton).not.toContain('spinner');
+  });
+
+  test('l’erreur est une alerte NOMMÉE avec sa reprise ; hors ligne, c’est la coupure qui est nommée', () => {
+    const noop = () => undefined;
+    const online = renderToStaticMarkup(<ProgressionError message="Erreur 500" online onRetry={noop} />);
+    expect(online).toContain('role="alert"');
+    expect(online).toContain('Erreur 500');
+    expect(online).toContain('Réessayer');
+
+    const offline = renderToStaticMarkup(<ProgressionError message="Réseau indisponible" online={false} onRetry={noop} />);
+    expect(offline).toContain('Hors ligne — aucune progression en mémoire');
+    expect(offline).not.toContain('Réseau indisponible');
+  });
+});
+
+/**
+ * LE HÉROS DES MEESHES (#5743) — et surtout ce qu'il REFUSE d'afficher.
+ *
+ * La directive du porteur est une NÉGATION (« le bouton quand les points le
+ * permettent, sinon pas de bouton »), et une négation ne se prouve que par un
+ * témoin qui cherche l'absence. Les trois cas ci-dessous couvrent les trois
+ * états possibles du bloc : absent, insuffisant, frappable.
+ */
+const rendreAvecMeesh = (meesh: {
+  balance: number;
+  mintedLifetime: number;
+  debitablePoints: number;
+  floorPoints: number;
+  missingPoints: number;
+  mintCost: number;
+}) =>
+  renderToStaticMarkup(
+    <MeeshDetail
+      meesh={resolveEngagementProgress({ ...ENGAGEMENT_PROGRESS_FIXTURE, meesh }).meesh!}
+      onMint={() => {}}
+      isMinting={false}
+    />,
+  );
+
+describe('MeeshDetail — le héros des Meeshes (#5743)', () => {
+  /**
+   * L'absence se CONSTRUIT, elle ne s'hérite pas de la fixture.
+   *
+   * Ce témoin lisait `html` — le rendu de la fixture — et passait au vert
+   * uniquement parce que la fixture ne portait PAS de bloc `meesh`. Le jour où
+   * la démonstration en a reçu un (pour que le porteur voie le hero), il est
+   * tombé : il ne mesurait pas l'absence du bloc, il mesurait un manque de
+   * données. Un témoin d'absence doit RETIRER ce qu'il prétend absent.
+   */
+  test('n’affiche RIEN quand la passerelle ne sert pas le bloc', () => {
+    expect(sansBlocsOptionnels).not.toContain('data-concept-card="meesh"');
+    expect(sansBlocsOptionnels).not.toContain('data-meesh-mint');
+    expect(sansBlocsOptionnels).not.toContain('Aucune Meesh');
+  });
+
+  test('sans assez de points : le solde, le manque, et AUCUN bouton', () => {
+    const rendu = rendreAvecMeesh({
+      balance: 0,
+      mintedLifetime: 0,
+      debitablePoints: 100,
+      floorPoints: 1300,
+      missingPoints: 1121,
+      mintCost: 1221,
+    });
+    expect(rendu).toContain('Aucune Meesh');
+    expect(rendu).toContain(`${formatCount(1121)} étincelles jusqu’à ta prochaine Meesh`);
+    // Le sort des points de conversation doit être DIT : ils partiront en
+    // dernier, sans éteindre de badge (option C, #5743).
+    expect(rendu).toContain(`${formatCount(1300)} étincelles de conversation`);
+    expect(rendu).toContain('sans éteindre aucune médaille');
+    expect(rendu).not.toContain('<button');
+  });
+
+  test('avec assez de points : le bouton de conversion apparaît', () => {
+    const rendu = rendreAvecMeesh({
+      balance: 2,
+      mintedLifetime: 5,
+      debitablePoints: 1300,
+      floorPoints: 40,
+      missingPoints: 0,
+      mintCost: 1221,
+    });
+    expect(rendu).toContain('2 Meeshes');
+    expect(rendu).toContain('5 frappées depuis toujours');
+    expect(rendu).toContain(`Frapper une Meesh avec ${formatCount(1221)} étincelles`);
+    expect(rendu).toContain('<button');
+  });
+
+  test('accorde le singulier — « 1 Meesh », jamais « 1 Meeshes »', () => {
+    const rendu = rendreAvecMeesh({
+      balance: 1,
+      mintedLifetime: 1,
+      debitablePoints: 0,
+      floorPoints: 0,
+      missingPoints: 1221,
+      mintCost: 1221,
+    });
+    expect(rendu).toContain('>1 Meesh<');
+    expect(rendu).toContain('1 frappée depuis toujours');
+  });
+});
+
+/**
+ * L'ÉLAN AFFICHÉ (#5749) — « un accélérateur qu'on ne voit pas n'accélère rien,
+ * il surprend ». Et son corollaire, tout aussi important : au neutre il ne doit
+ * RIEN occuper.
+ */
+const rendreAvecElan = (elan: {
+  factor: number;
+  activeFamilyCount: number;
+  hasStanding: boolean;
+  windowDays: number;
+  activeFamilies?: readonly string[];
+}) =>
+  renderToStaticMarkup(
+    <ElansHero progress={resolveEngagementProgress({ ...ENGAGEMENT_PROGRESS_FIXTURE, elan })} />,
+  );
+
+describe('ElansHero — le bandeau d’élan (#5749)', () => {
+  test('n’affiche RIEN au neutre — un badge « ×1 » n’apprend rien', () => {
+    const rendu = rendreAvecElan({
+      factor: 1,
+      activeFamilyCount: 1,
+      hasStanding: false,
+      windowDays: 7,
+      activeFamilies: ['content'],
+    });
+    expect(rendu).not.toContain('Élan');
+  });
+
+  test('n’affiche rien non plus quand la passerelle ne sert pas le bloc', () => {
+    expect(sansBlocsOptionnels).not.toContain('Élan ×');
+    expect(sansBlocsOptionnels).not.toContain('Points ×');
+  });
+
+  test('dit le facteur ET ce qui le porte — sinon il se subit au lieu de se piloter', () => {
+    const rendu = rendreAvecElan({
+      factor: 3,
+      activeFamilyCount: 3,
+      hasStanding: false,
+      windowDays: 7,
+      activeFamilies: ['content', 'comment', 'conversation'],
+    });
+    expect(rendu).toContain('Élan ×3');
+    expect(rendu).toContain('3 familles actives');
+    expect(rendu).toContain('sur 7 jours');
+    expect(rendu).toContain('rapportent 3 fois plus');
+  });
+
+  test('nomme l’assise quand elle porte le dernier cran', () => {
+    const rendu = rendreAvecElan({
+      factor: 5,
+      activeFamilyCount: 4,
+      hasStanding: true,
+      windowDays: 7,
+      activeFamilies: ['content', 'comment', 'conversation', 'tool'],
+    });
+    expect(rendu).toContain('Élan ×5');
+    expect(rendu).toContain('plus ton assise');
+  });
+
+  test('accorde le singulier — « 1 famille active »', () => {
+    const rendu = rendreAvecElan({
+      factor: 2,
+      activeFamilyCount: 1,
+      hasStanding: true,
+      windowDays: 7,
+      activeFamilies: ['content'],
+    });
+    expect(rendu).toContain('1 famille active');
+  });
+
+  test('borne un facteur aberrant servi par la passerelle', () => {
+    // Le plafond est une règle de PRODUIT, pas une convention de sérialisation.
+    const rendu = rendreAvecElan({
+      factor: 9,
+      activeFamilyCount: 4,
+      hasStanding: true,
+      windowDays: 7,
+      activeFamilies: ['content', 'comment', 'conversation', 'tool'],
+    });
+    expect(rendu).toContain('Élan ×5');
+    expect(rendu).not.toContain('Élan ×9');
+  });
+});
+
+/**
+ * LES CHIPS SERVENT LA FENÊTRE, PAS LE CUMUL (#5897).
+ *
+ * `ENGAGEMENT_PROGRESS_FIXTURE` porte des compteurs CUMULÉS positifs pour les
+ * cinq familles (`content`, `comment`, `conversation`, `tool`, `social`) — le
+ * score qui ne redescend jamais. Avant ce lot, les chips venaient de
+ * `axes.filter(value > 0)` : elles auraient donc affiché les CINQ familles
+ * quel que soit `elan.activeFamilies`. Ce témoin le fait ROUGIR sur l'ancienne
+ * implémentation en servant un élan dont la fenêtre ne retient qu'UNE
+ * famille — le cas nominal dès qu'une famille est délaissée depuis plus de
+ * `windowDays`.
+ */
+describe('ElansHero — les chips servent la fenêtre, jamais le score cumulé', () => {
+  test('une famille au cumul positif mais HORS de la fenêtre ne figure pas dans les chips', () => {
+    const rendu = rendreAvecElan({
+      factor: 2,
+      activeFamilyCount: 1,
+      hasStanding: false,
+      windowDays: 7,
+      // Le cumul de la fixture couvre aussi `comment`/`conversation`/`tool`/
+      // `social` — la fenêtre ne retient que `content`.
+      activeFamilies: ['content'],
+    });
+    expect(rendu).toContain(familyName('content'));
+    expect(rendu).not.toContain(familyName('comment'));
+    expect(rendu).not.toContain(familyName('conversation'));
+    expect(rendu).not.toContain(familyName('tool'));
+    expect(rendu).not.toContain(familyName('social'));
+  });
+
+  test('aucune chip, jamais le repli sur le cumul, quand la passerelle ne sert pas encore le champ', () => {
+    // `elan` est présent (l'écran doit donc dire « Élan ×3 ») mais son champ
+    // `activeFamilies` est ABSENT — un serveur antérieur à #5897.
+    const rendu = rendreAvecElan({ factor: 3, activeFamilyCount: 3, hasStanding: false, windowDays: 7 });
+    expect(rendu).toContain('Élan ×3');
+    for (const label of (['content', 'comment', 'conversation', 'tool', 'social'] as const).map((family) => familyName(family))) {
+      expect(rendu).not.toContain(label);
+    }
+  });
+
+  test('ignore une famille inconnue plutôt que de la peindre — un axe neuf côté serveur', () => {
+    const rendu = rendreAvecElan({
+      factor: 1,
+      activeFamilyCount: 1,
+      hasStanding: false,
+      windowDays: 7,
+      activeFamilies: ['content', 'famille-du-futur'],
+    });
+    expect(rendu).toContain(familyName('content'));
+    expect(rendu).not.toContain('famille-du-futur');
+  });
+});
+
+/**
+ * LES SUCCÈS GÉNÉRÉS EN RANGÉES (#5759) — ce que la fenêtre montre, et ce
+ * qu'elle refuse de montrer.
+ */
+const rendreAvecDefis = (params: {
+  reach: Record<string, number>;
+  milestones?: Array<{ milestoneType: string; milestoneKey: string; reachedAt: string }>;
+}) =>
+  (() => {
+    const progress = resolveEngagementProgress({
+      ...ENGAGEMENT_PROGRESS_FIXTURE,
+      milestones: params.milestones ?? [],
+      achievementReach: params.reach,
+    } as never);
+    return progress.achievementSections === undefined
+      ? ''
+      : renderToStaticMarkup(<GeneratedAchievements sections={progress.achievementSections} />);
+  })();
+
+describe('GeneratedAchievements', () => {
+  test('n’affiche rien quand la passerelle ne sert pas la carte', () => {
+    expect(sansBlocsOptionnels).not.toContain('Défis');
+  });
+
+  test('ne rend JAMAIS un palier d’ampleur que le produit ne peut pas tenir', () => {
+    // La plus grande conversation compte 300 membres. Le palier 1 000 est
+    // retiré EN AMONT — il n'entre pas dans l'arbre, il n'est pas masqué en
+    // CSS : un objectif qu'on ne peut pas tenir ne doit pas exister.
+    //
+    // Ce témoin ne dit RIEN de ce qui est visible : c'est la FENÊTRE qui en
+    // décide, et confondre les deux le rendrait fragile. Il ne prouve qu'une
+    // chose — l'inatteignable est absent.
+    const rendu = rendreAvecDefis({ reach: { 'conversation.join.size': 300 } });
+    expect(rendu).toContain('Conversation de 10 membres');
+    expect(rendu).not.toContain('Conversation de 1 000 membres');
+    expect(rendu).not.toContain('Conversation de 1 000 000 membres');
+  });
+
+  test('laisse le VOLUME visible sans mesure — répéter n’est pas impossible', () => {
+    const rendu = rendreAvecDefis({ reach: {} });
+    expect(rendu).toContain('conversations rejointes');
+  });
+
+  test('montre SEPT entrées à un compte qui n’a rien décroché', () => {
+    const rendu = rendreAvecDefis({ reach: { 'conversation.join.size': 1000000 } });
+    const cercles = rendu.slice(rendu.indexOf('Cercles'));
+    const items = cercles.split('<li').length - 1;
+    expect(items).toBeGreaterThanOrEqual(7);
+  });
+
+  test('ouvre la fenêtre DEUX PAR DEUX à mesure que les succès tombent', () => {
+    // La règle est `max(7, acquis + 2)` : deux acquis laissent la fenêtre à 7
+    // (2 + 2 = 4 < 7), dix acquis l'ouvrent à douze. C'est CETTE progression
+    // qu'il faut mesurer — pas la présence d'un palier précis, qui dépendrait
+    // de l'ordre de difficulté et rendrait le témoin fragile.
+    const reach = { 'conversation.join.size': 1000000 };
+    const compter = (rendu: string) => {
+      const debut = rendu.indexOf('Cercles');
+      return rendu.slice(debut, rendu.indexOf('</ul>', debut)).split('<li').length - 1;
+    };
+
+    const avec2 = compter(
+      rendreAvecDefis({
+        reach,
+        milestones: [10, 100].map((t) => ({
+          milestoneType: 'achievement',
+          milestoneKey: `achievement.cercles.conversation.join.size:${t}`,
+          reachedAt: '2026-09-08T00:00:00.000Z',
+        })),
+      }),
+    );
+    const avec10 = compter(
+      rendreAvecDefis({
+        reach,
+        milestones: [
+          ...[10, 100, 1000, 10000, 100000, 1000000].map((t) => ({
+            milestoneType: 'achievement',
+            milestoneKey: `achievement.cercles.conversation.join.size:${t}`,
+            reachedAt: '2026-09-08T00:00:00.000Z',
+          })),
+          ...[1, 10, 100, 1000].map((t) => ({
+            milestoneType: 'achievement',
+            milestoneKey: `achievement.cercles.conversation.join.count:${t}`,
+            reachedAt: '2026-09-08T00:00:00.000Z',
+          })),
+        ],
+      }),
+    );
+
+    expect(avec2).toBe(7);
+    expect(avec10).toBe(12);
+    // Le prochain objectif est TOUJOURS visible : la fenêtre dépasse toujours
+    // les acquis de deux.
+    expect(avec10).toBeGreaterThan(10);
+  });
+
+  test('affiche le compte ACQUIS sur ATTEIGNABLE, jamais sur le total déclaré', () => {
+    // Promettre un dénominateur qu'on ne peut pas atteindre découragerait pour
+    // rien : le total est celui du réel.
+    const rendu = rendreAvecDefis({ reach: { 'conversation.join.size': 300 } });
+    expect(rendu).toContain('Cercles');
+    expect(rendu).not.toContain('/ 0');
+  });
+});
+
+describe('MeeshDetail — l’activité et l’échec se DISENT (#6470)', () => {
+  // `canMint` est DÉRIVÉ (`debitablePoints >= mintCost`, `engagement-progress.ts`),
+  // jamais servi par le fil : le poser à `true` dans la fixture ne le rend pas
+  // vrai. C'est `debitablePoints` qui décide.
+  const meeshFrappable = resolveEngagementProgress({
+    ...ENGAGEMENT_PROGRESS_FIXTURE,
+    meesh: { balance: 2, mintedLifetime: 2, debitablePoints: 2400, floorPoints: 0, missingPoints: 0, mintCost: 1200 },
+  }).meesh!;
+
+  function rendre(props: { isMinting: boolean; mintError?: string }) {
+    return renderToStaticMarkup(
+      <MeeshDetail meesh={meeshFrappable} onMint={() => {}} isMinting={props.isMinting} mintError={props.mintError} />,
+    );
+  }
+
+  /**
+   * Un LIBELLÉ seul ne distingue pas « en cours » de « figé ». Le jumeau iOS
+   * pose un `ProgressView` à gauche du texte ; le web pose son rouet.
+   */
+  test('en vol, un indicateur d’activité accompagne le libellé', () => {
+    const rendu = rendre({ isMinting: true });
+    expect(rendu).toContain('data-meesh-mint-spinner');
+    expect(rendu).toContain('Frappe en cours');
+    expect(rendu).toContain('aria-busy="true"');
+  });
+
+  test('au repos, aucun indicateur — il décrirait un état qui n’est pas', () =>
+    expect(rendre({ isMinting: false })).not.toContain('data-meesh-mint-spinner'));
+
+  /**
+   * L'échec se lit SOUS l'action qu'on peut retenter, jamais en haut de l'écran
+   * où le détail le cacherait. `role="alert"` pour qu'un lecteur d'écran
+   * l'entende sans avoir à le chercher.
+   */
+  test('un échec se dit sous l’action, et s’annonce', () => {
+    const rendu = rendre({ isMinting: false, mintError: 'La frappe n’a pas abouti.' });
+    expect(rendu).toContain('data-meesh-mint-error');
+    expect(rendu).toContain('role="alert"');
+    expect(rendu).toContain('La frappe n’a pas abouti.');
+  });
+
+  /** Pendant une nouvelle frappe, l'échec PRÉCÉDENT décrit un état révolu. */
+  test('un échec ne survit pas au geste suivant', () =>
+    expect(rendre({ isMinting: true, mintError: 'La frappe n’a pas abouti.' })).not.toContain('data-meesh-mint-error'));
+
+  test('sans échec, rien ne se dit', () =>
+    expect(rendre({ isMinting: false })).not.toContain('data-meesh-mint-error'));
+});
+
+/**
+ * LE DÉTAIL DES MEESHES EST MONTÉ, DANS SA FICHE (#6497, #9563).
+ *
+ * Le défaut de #6497 n'était pas un rendu fautif : le composant était exporté,
+ * testé, et monté NULLE PART — un fichier de test n'est pas un consommateur. Ce
+ * témoin part donc de l'ÉCRAN. Depuis #9563 la première page ne porte plus aucun
+ * geste : la frappe d'avant le jeu vit dans la fiche des Meeshes, et là seulement.
+ */
+describe('la frappe d’avant le jeu vit dans la fiche des Meeshes', () => {
+  const frappable = resolveEngagementProgress({
+    ...ENGAGEMENT_PROGRESS_FIXTURE,
+    meesh: { balance: 2, mintedLifetime: 2, debitablePoints: 2400, floorPoints: 0, missingPoints: 0, mintCost: 1200 },
+  });
+  const fiche = renderToStaticMarkup(<ConceptFiche concept="meesh" progress={frappable} host={{ actions: repos, online: true }} />);
+
+  test('la fiche des Meeshes porte le bouton de frappe', () => expect(fiche).toContain('data-meesh-mint'));
+
+  test('la première page, non : sa carte dit le solde et ouvre la fiche', () => {
+    const page = premierePage(frappable);
+    expect(page).not.toContain('data-meesh-mint');
+    expect(page).toContain('data-concept-card="meesh"');
+    expect(page).toContain('2 Meeshes');
+  });
+
+  test('la carte des Meeshes vient APRÈS le niveau et AVANT les élans — la séquence partagée la place là', () => {
+    const page = premierePage(frappable);
+    const [niveau, meesh, elans] = ['level', 'meesh', 'elans'].map((concept) => page.indexOf(`data-concept-card="${concept}"`));
+    expect(niveau).toBeGreaterThan(-1);
+    expect(meesh).toBeGreaterThan(niveau ?? -1);
+    expect(elans).toBeGreaterThan(meesh ?? -1);
+  });
+
+  /** Sans solde servi, ni carte ni fiche : on ne parle pas à la place du serveur. */
+  test('aucune carte quand la passerelle ne sert pas le solde', () => {
+    const sansMeesh = { ...ENGAGEMENT_PROGRESS_FIXTURE };
+    delete (sansMeesh as { meesh?: unknown }).meesh;
+    expect(premierePage(resolveEngagementProgress(sansMeesh))).not.toContain('data-concept-card="meesh"');
+  });
+});
+
+/**
+ * LA PASTILLE DE LA CHRONIQUE (#10174, L18) — un point neutre d'accent, sans chiffre ni animation, nommé pour le
+ * lecteur d'écran ; absente quand rien n'est nouveau depuis la dernière visite du carnet.
+ */
+describe('la pastille de la Chronique', () => {
+  test('allumée : un point sur la porte de la Chronique, dit au lecteur d’écran ; éteinte : rien', () => {
+    const avecJeu = { ...fixture, game: gameBlockWithExtrasFixture() };
+    const lit = renderToStaticMarkup(<ProgressionBody progress={avecJeu} photoBadge />);
+    expect(lit).toContain('data-progression-badge="carnet"');
+    expect(lit).toContain('Un moment nouveau à immortaliser');
+    expect(lit).not.toMatch(/data-progression-badge="carnet"[^>]*>\s*\d/);
+    expect(renderToStaticMarkup(<ProgressionBody progress={avecJeu} />)).not.toContain('data-progression-badge');
+  });
+});

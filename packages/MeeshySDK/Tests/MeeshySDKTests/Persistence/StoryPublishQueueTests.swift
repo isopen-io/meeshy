@@ -412,8 +412,61 @@ final class StoryPublishQueueTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: mediaFile.path))
     }
 
-    func test_failedItems_capped_dropsOldestWhenExceedingLimit() async {
-        let seeded = (0..<20).map { _ in makeItem(visibility: "PUBLIC") }
+    // MARK: - #10331 — annuler une story EN ATTENTE d'envoi
+
+    func test_cancelPendingItem_onWaitingItem_removesItAndItsMedia() async throws {
+        let mediaDir = tempDir.appendingPathComponent("pending_cancel", isDirectory: true)
+        try FileManager.default.createDirectory(at: mediaDir, withIntermediateDirectories: true)
+        let mediaFile = mediaDir.appendingPathComponent("clip.mp4")
+        try Data([0x01]).write(to: mediaFile)
+        let item = makeItem(visibility: "PUBLIC", mediaReferences: [
+            StoryMediaReference(elementId: "e1", mediaType: "video", localFilePath: mediaFile.path),
+        ])
+        await queue.enqueue(item)
+        let waiting = await queue.waitingItems
+        XCTAssertEqual(waiting.map(\.id), [item.id], "une story en attente s'offre à l'annulation")
+
+        let verdict = await queue.cancelPendingItem(item.id)
+
+        XCTAssertEqual(verdict, .removed)
+        let pending = await queue.pendingItems
+        XCTAssertFalse(pending.contains { $0.id == item.id }, "rien ne part au retour du réseau")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: mediaFile.path))
+    }
+
+    func test_cancelPendingItem_onItemInFlight_leavesItUnderTheUpload() async {
+        let item = makeItem(visibility: "PUBLIC")
+        await queue.enqueue(item)
+        await queue.markInFlight(item.id)
+
+        let verdict = await queue.cancelPendingItem(item.id)
+
+        XCTAssertEqual(verdict, .inFlight, "un téléversement en cours n'est pas retiré sous ses pieds")
+        let pending = await queue.pendingItems
+        XCTAssertTrue(pending.contains { $0.id == item.id })
+        let waiting = await queue.waitingItems
+        XCTAssertFalse(waiting.contains { $0.id == item.id }, "un item en vol ne s'offre pas à l'annulation")
+        await queue.clearInFlight(item.id)
+    }
+
+    func test_cancelPendingItem_onUnknownItem_saysNotFound() async {
+        let verdict = await queue.cancelPendingItem("absent")
+
+        XCTAssertEqual(verdict, .notFound)
+    }
+
+    /// #13415 — une story non publiée ne quitte l'appareil que par le geste
+    /// de son auteur : l'historique des échecs n'a plus de plafond qui jette
+    /// la plus ancienne, ni ses médias.
+    func test_failedItems_neverDropAStoryTheAuthorDidNotDelete() async throws {
+        let mediaDir = tempDir.appendingPathComponent("pending_oldest_failed", isDirectory: true)
+        try FileManager.default.createDirectory(at: mediaDir, withIntermediateDirectories: true)
+        let oldestMedia = mediaDir.appendingPathComponent("clip.mp4")
+        try Data([0x01]).write(to: oldestMedia)
+        let oldest = makeItem(visibility: "PUBLIC", mediaReferences: [
+            StoryMediaReference(elementId: "e0", mediaType: "video", localFilePath: oldestMedia.path),
+        ])
+        let seeded = [oldest] + (1..<20).map { _ in makeItem(visibility: "PUBLIC") }
         await queue._testSetFailedItems(seeded)
 
         // Handler BEFORE enqueue: avoids racing the M5 auto-drain trigger.
@@ -425,9 +478,23 @@ final class StoryPublishQueueTests: XCTestCase {
         await queue.processNext()
 
         let failed = await queue.failedPendingItems
-        XCTAssertEqual(failed.count, 20, "the failed-items history stays capped")
-        XCTAssertFalse(failed.contains { $0.id == seeded[0].id }, "the oldest failed item is dropped to make room")
+        XCTAssertEqual(failed.count, 21)
+        XCTAssertTrue(failed.contains { $0.id == oldest.id }, "la plus ancienne reste, l'auteur ne l'a pas supprimée")
         XCTAssertTrue(failed.contains { $0.id == newItem.id })
+        XCTAssertTrue(FileManager.default.fileExists(atPath: oldestMedia.path), "ses médias restent aussi")
+    }
+
+    /// #13415 — une file pleine ne JETTE plus la story la plus ancienne : elle
+    /// passe dans l'historique des échecs, où l'auteur la reprend ou la supprime.
+    func test_enqueue_onAFullQueue_movesTheOldestToTheFailures_neverLosesIt() async {
+        await queue.setPublishHandler { _ in throw StoryPublishDeferredError() }
+        let pending = (0..<50).map { _ in makeItem(visibility: "PUBLIC") }
+        await queue._testSetItems(pending)
+
+        await queue.enqueue(makeItem(visibility: "PUBLIC"))
+
+        let failed = await queue.failedPendingItems
+        XCTAssertEqual(failed.map(\.id), [pending[0].id], "la plus ancienne attend son auteur dans « Brouillons »")
     }
 
     func test_clearAll_alsoPurgesFailedItemsAndMedia() async throws {

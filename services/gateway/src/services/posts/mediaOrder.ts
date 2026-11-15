@@ -1,5 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
+import { inBatches } from './inBatches';
+
 /**
  * Le RANG des médias d'une publication, gravé au moment de la réclamation.
  *
@@ -41,9 +43,38 @@ export async function applyMediaOrder(
   const ranked = [...new Set(mediaIds)];
   if (ranked.length === 0) return;
 
-  await Promise.all(
-    ranked.map((id, order) =>
-      client.postMedia.updateMany({ where: { id, postId }, data: { order } }),
-    ),
+  await inBatches(ranked.map((id, order) => () =>
+    client.postMedia.updateMany({ where: { id, postId }, data: { order } })));
+}
+
+/**
+ * Le même RANG, pour les médias d'un COMMENTAIRE (#6578).
+ *
+ * Jumelle exacte de `applyMediaOrder` : même raison (la liste de la requête est
+ * le seul porteur de l'ordre voulu), même garde (le porteur dans le `where`,
+ * si bien qu'un id que la réclamation vient de refuser n'est pas touché). Elle
+ * n'existe séparément que parce que la colonne du porteur change — `commentId`
+ * et `postId` sont exclusifs par construction, et une fonction qui prendrait
+ * « un porteur quelconque » permettrait d'écrire l'un en croyant écrire
+ * l'autre.
+ *
+ * Elle n'avait pas lieu d'être tant qu'un commentaire ne portait qu'un média :
+ * un seul rang ne s'ordonne pas.
+ *
+ * Les écritures se suivent UNE À UNE (#9745) : cette fonction s'exécute dans la
+ * transaction de la création, et une session MongoDB ne porte qu'une opération
+ * à la fois. Dix médias au plus — la mise en parallèle n'achetait rien.
+ */
+export async function applyCommentMediaOrder(
+  client: Pick<PrismaClient, 'postMedia'>,
+  commentId: string,
+  mediaIds: readonly string[],
+): Promise<void> {
+  const ranked = [...new Set(mediaIds)];
+
+  await ranked.reduce(
+    (previous, id, order) =>
+      previous.then(() => client.postMedia.updateMany({ where: { id, commentId }, data: { order } })),
+    Promise.resolve<unknown>(undefined),
   );
 }

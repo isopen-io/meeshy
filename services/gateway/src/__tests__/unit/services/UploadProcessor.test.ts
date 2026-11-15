@@ -40,6 +40,8 @@ const mockPrismaClient = {
     findMany: jest.fn(),
     delete: jest.fn(),
   },
+  lensPack: { findUnique: jest.fn() },
+  userStickerPack: { findFirst: jest.fn() },
 } as any;
 
 jest.mock('../../../services/attachments/MetadataManager', () => ({
@@ -61,9 +63,9 @@ jest.mock('fs', () => ({
 }));
 
 // Import after mocks
-import { UploadProcessor } from '../../../services/attachments/UploadProcessor';
-import type { FileToUpload } from '../../../services/attachments/UploadProcessor';
+import { UploadProcessor, type FileToUpload } from '../../../services/attachments/UploadProcessor';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { SIGNATURE_BYTES_BY_MIME_TYPE } from '../../../services/attachments/__tests__/signature-fixtures';
 
 describe('UploadProcessor', () => {
   let processor: UploadProcessor;
@@ -74,7 +76,7 @@ describe('UploadProcessor', () => {
   const testAttachmentId = '507f1f77bcf86cd799439013';
 
   const createTestFile = (overrides?: Partial<FileToUpload>): FileToUpload => ({
-    buffer: Buffer.from('test file content'),
+    buffer: SIGNATURE_BYTES_BY_MIME_TYPE[overrides?.mimeType ?? 'image/jpeg'] ?? Buffer.from('test file content'),
     filename: 'test_image.jpg',
     mimeType: 'image/jpeg',
     size: 1024 * 100, // 100KB
@@ -234,8 +236,8 @@ describe('UploadProcessor', () => {
 
       expect(result.valid).toBe(false);
       expect(result.error).toBeDefined();
-      expect(result.error).toContain('Fichier trop volumineux');
-      expect(result.error).toContain('GB');
+      expect(result.error).toContain('File too large');
+      expect(result.error).toContain('100 MB');
     });
 
     it('should validate different file types with appropriate limits', () => {
@@ -372,21 +374,11 @@ describe('UploadProcessor', () => {
       expect(mockPrismaClient.messageAttachment.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
+            // L'attente est LITTÉRALE : la calculer par `getAttachmentPath`
+            // faisait passer ce témoin quelle que soit la forme rendue (#7022).
             imageVariants: [
-              {
-                width: 640,
-                height: 360,
-                url: processor.getAttachmentPath('2024/01/test/test_image_uuid_640w.webp'),
-                size: 4096,
-                format: 'webp',
-              },
-              {
-                width: 1080,
-                height: 608,
-                url: processor.getAttachmentPath('2024/01/test/test_image_uuid_1080w.webp'),
-                size: 9216,
-                format: 'webp',
-              },
+              { width: 640, height: 360, url: '2024/01/test/test_image_uuid_640w.webp', size: 4096, format: 'webp' },
+              { width: 1080, height: 608, url: '2024/01/test/test_image_uuid_1080w.webp', size: 9216, format: 'webp' },
             ],
           }),
         })
@@ -433,6 +425,44 @@ describe('UploadProcessor', () => {
 
       const createCall = mockPrismaClient.messageAttachment.create.mock.calls[0][0] as any;
       expect(createCall.data.capturedInApp).toBe(false);
+    });
+
+    describe('le crédit de lens voyage avec le média (#11327)', () => {
+      const lensPublishedAndInstalled = () => {
+        mockPrismaClient.lensPack.findUnique.mockResolvedValueOnce({ status: 'approved' });
+        mockPrismaClient.userStickerPack.findFirst.mockResolvedValueOnce({ id: 'choice-1' });
+      };
+
+      it('retient la lens déclarée quand elle est publiée et installée par l’expéditeur', async () => {
+        lensPublishedAndInstalled();
+
+        await processor.uploadFile(createTestFile({ mimeType: 'image/jpeg' }), testUserId, false, testMessageId, { lensSlug: 'aurore' });
+
+        const createCall = mockPrismaClient.messageAttachment.create.mock.calls.at(-1)[0] as any;
+        expect(createCall.data.lensSlug).toBe('aurore');
+        expect(mockPrismaClient.userStickerPack.findFirst).toHaveBeenCalledWith(
+          expect.objectContaining({ where: expect.objectContaining({ userId: testUserId, packSlug: 'lens.aurore' }) }),
+        );
+      });
+
+      it('ne crédite rien quand l’expéditeur n’a pas installé la lens — le média part quand même', async () => {
+        mockPrismaClient.lensPack.findUnique.mockResolvedValueOnce({ status: 'approved' });
+        mockPrismaClient.userStickerPack.findFirst.mockResolvedValueOnce(null);
+
+        await processor.uploadFile(createTestFile({ mimeType: 'image/jpeg' }), testUserId, false, testMessageId, { lensSlug: 'aurore' });
+
+        const createCall = mockPrismaClient.messageAttachment.create.mock.calls.at(-1)[0] as any;
+        expect(createCall.data).not.toHaveProperty('lensSlug');
+      });
+
+      it('un média CHIFFRÉ porte la lens EN CLAIR (décision #11251 : métadonnée assumée)', async () => {
+        lensPublishedAndInstalled();
+
+        await processor.uploadEncryptedFile(createTestFile(), testUserId, 'e2ee' as any, false, testMessageId, { lensSlug: 'aurore' });
+
+        const createCall = mockPrismaClient.messageAttachment.create.mock.calls.at(-1)[0] as any;
+        expect(createCall.data).toMatchObject({ isEncrypted: true, lensSlug: 'aurore' });
+      });
     });
 
     it('should handle anonymous upload', async () => {
@@ -517,7 +547,7 @@ describe('UploadProcessor', () => {
       });
 
       await expect(processor.uploadFile(file, testUserId, false)).rejects.toThrow(
-        'Fichier trop volumineux'
+        'File too large'
       );
     });
 
@@ -583,7 +613,7 @@ describe('UploadProcessor', () => {
 
       await expect(
         processor.uploadEncryptedFile(file, testUserId, 'e2ee' as any)
-      ).rejects.toThrow('Fichier trop volumineux');
+      ).rejects.toThrow('File too large');
     });
 
     it('should encrypt file using encryption service', async () => {
@@ -695,7 +725,7 @@ describe('UploadProcessor', () => {
 
       await processor.uploadEncryptedFile(file, testUserId, 'e2ee' as any, false, testMessageId);
 
-      expect(mockMetadataManager.extractImageMetadataFromBuffer).toHaveBeenCalledWith(file.buffer);
+      expect(mockMetadataManager.extractImageMetadataFromBuffer).toHaveBeenCalledWith(mockEncryptionService.encryptAttachment.mock.calls[0][0].fileBuffer);
     });
 
     it('should handle provided audio metadata', async () => {
@@ -968,29 +998,32 @@ describe('UploadProcessor', () => {
     });
   });
 
+  // #7022 — ce site rend la CLÉ DE STOCKAGE, jamais une route : ni hôte, ni
+  // préfixe d'API, ni percent-encodage (#4324). Ce que la base en reçoit est
+  // gardé par `uploadProcessorPersistsStorageKey.test.ts`, sur les données
+  // remises à `prisma.messageAttachment.create` plutôt que sur cette fonction.
   describe('getAttachmentPath', () => {
-    it('should generate relative API path without domain', () => {
+    it('should return the bare storage key', () => {
       const filePath = '2024/01/user/file.jpg';
 
       const path = processor.getAttachmentPath(filePath);
 
-      expect(path).toBe(`/api/v1/attachments/file/${encodeURIComponent(filePath)}`);
+      expect(path).toBe('2024/01/user/file.jpg');
       expect(path).not.toContain('http');
-      expect(path).not.toContain('meeshy.me');
+      expect(path).not.toContain('/api/');
     });
 
-    it('should encode file path in relative path', () => {
-      const filePath = '2024/01/user/file with spaces.jpg';
+    it('should leave a space-bearing key unencoded', () => {
+      const path = processor.getAttachmentPath('2024/01/user/file with spaces.jpg');
 
-      const path = processor.getAttachmentPath(filePath);
-
-      expect(path).toContain(encodeURIComponent(filePath));
+      expect(path).toBe('2024/01/user/file with spaces.jpg');
+      expect(path).not.toContain('%2F');
     });
 
     it('should handle empty file path', () => {
       const path = processor.getAttachmentPath('');
 
-      expect(path).toBe('/api/v1/attachments/file/');
+      expect(path).toBe('');
     });
   });
 
@@ -1120,61 +1153,10 @@ describe('UploadProcessor', () => {
         new Error('chmod failed')
       );
 
-      // Should not throw
+      // Should not throw, and still reports the byte size written
       await expect(
         (processor as any).saveFile(buffer, relativePath)
-      ).resolves.toBeUndefined();
-    });
-  });
-
-  describe('amplifyAudio format mapping', () => {
-    it('should use correct ffmpeg format flag for m4a (ipod container)', async () => {
-      // Access the amplifyAudio private method through saveFile with audio mimeType
-      // The spawn call is not mocked, so we just verify the format detection logic
-      // by checking the internal format mapping
-
-      // Test format mapping logic
-      const mimeToFormat: Record<string, string> = {
-        'audio/mp4': 'mp4',
-        'audio/webm': 'webm',
-        'audio/wav': 'wav',
-        'audio/mpeg': 'mp3',
-        'audio/ogg': 'ogg',
-        'audio/m4a': 'm4a',
-        'audio/x-m4a': 'm4a',
-      };
-
-      // Verify the mapping is correctly implemented in the source code
-      for (const [mime, expected] of Object.entries(mimeToFormat)) {
-        let outputFormat = 'mp4';
-        if (mime.includes('webm')) outputFormat = 'webm';
-        else if (mime.includes('wav')) outputFormat = 'wav';
-        else if (mime.includes('mp3') || mime.includes('mpeg')) outputFormat = 'mp3';
-        else if (mime.includes('ogg')) outputFormat = 'ogg';
-        else if (mime.includes('m4a')) outputFormat = 'm4a';
-
-        // Verify ffmpeg format mapping (m4a -> ipod)
-        let ffmpegFormat = outputFormat;
-        if (outputFormat === 'm4a') ffmpegFormat = 'ipod';
-
-        if (expected === 'm4a') {
-          expect(ffmpegFormat).toBe('ipod');
-        } else {
-          expect(ffmpegFormat).toBe(expected);
-        }
-      }
-    });
-
-    it('should use correct file extensions for temp files (not .tmp)', () => {
-      // Verify that temp file extensions match the output format
-      const formats = ['mp4', 'webm', 'wav', 'mp3', 'ogg', 'm4a'];
-
-      for (const format of formats) {
-        const ext = format === 'mp4' ? 'mp4' : format;
-        // Temp files should have proper extensions, not .tmp
-        expect(ext).not.toBe('tmp');
-        expect(ext).toBe(format);
-      }
+      ).resolves.toEqual({ size: buffer.length, relativePath, mimeType: undefined });
     });
   });
 

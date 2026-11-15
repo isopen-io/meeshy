@@ -18,6 +18,19 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     let storyItem: StoryItem
     public internal(set) var preferredLanguages: [String]
     public internal(set) var mute: Bool
+    /// **Le muet de cette surface est-il VERROUILLÉ ?** (#4084) — `mute` dit
+    /// l'état, celui-ci dit s'il a le droit de changer. Projection de
+    /// `ScenePlayerConfig.locksMute` jusqu'au canvas, qui seul peut refuser une
+    /// notification diffusée.
+    public internal(set) var locksMute: Bool = false
+    /// **L'hôte présente-t-il le canvas ENTIER ?** (#6636) — `false` quand le
+    /// lecteur rogne la carte au seul rectangle de l'image : les bandes sortent
+    /// alors du cadre visible, et leur remplissage ne se peint plus. `true` par
+    /// défaut : toute autre surface garde ses bandes.
+    public internal(set) var servesLetterboxFill: Bool = true
+    /// La couleur d'auteur sur laquelle une scène sans fond se lit (#14258) —
+    /// `nil` garde le sol noir (réel, aperçu, conversation).
+    public internal(set) var sceneFloorHex: String?
     /// Drives `StoryCanvasUIView.setPaused(_:)` — gels la timeline canvas
     /// (displayLink + AVPlayer + audioMixer) en phase avec la progress bar
     /// du viewer parent. Sans ça, ouvrir un sheet pendant la lecture laissait
@@ -32,13 +45,17 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     /// (`outgoingStory` dans `StoryCardView`) pendant un cross-fade. Force le
     /// canvas à monter en `.edit` mode dès `makeUIView` — ses AVPlayer bg /
     /// FG et son audio mixer ne démarrent JAMAIS, supprimant la double-lecture
-    /// 350-400 ms pendant la transition (user 2026-05-28).
+    /// 350-400 ms pendant la transition.
     ///
     /// Visuellement, le slide affiche son image bg + ses textes/stickers
     /// rendus par `rebuildLayers()` mais les vidéos sont figées frame 0. C'est
     /// suffisant pour un cross-fade d'animation : le canvas sort en opacity 0
     /// avant qu'on perçoive l'absence de mouvement vidéo.
     public internal(set) var isOutgoing: Bool
+    /// L'identifiant de la story dont la QoE se mesure (#11287) : celui de
+    /// l'item par défaut, celui du PORTEUR quand le lecteur de scènes compose
+    /// l'identité, `nil` pour un repost ou un post synthétisés.
+    public internal(set) var playbackQoEStoryId: String?
     /// Stored as `@Sendable` so it can be forwarded into `StoryReaderContext`
     /// which requires `@Sendable () -> Void`. Call-sites supply a plain `() -> Void`
     /// which Swift coerces automatically when the closure itself has no captures
@@ -81,26 +98,110 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     let preloadedImages: [String: UIImage]
     let preloadedVideoURLs: [String: URL]
     let preloadedAudioURLs: [String: URL]
+    /// Lecteur d'images que l'hôte a déjà en main, transmis tel quel au
+    /// `StoryReaderContext` quand aucune image n'est préchargée (#4852). Les
+    /// couches (fond, média, sticker image) l'interrogent AVANT le resolver ;
+    /// `nil` — le défaut de toutes les surfaces de lecture — les laisse sur
+    /// `resolver` + `CacheCoordinator.shared.images`, qui suffit à un asset
+    /// publié.
+    let imageCache: (any ImageCacheReader)?
+
+    /// **Position (secondes) à laquelle la slide s'OUVRE** — `0` par défaut,
+    /// donc toute surface existante est inchangée.
+    ///
+    /// C'est la moitié manquante de `onPlaybackTime` (#6580) : la carte du fil
+    /// publiait sa position et aucun hôte ne la rendait à la surface suivante,
+    /// si bien qu'ouvrir le détail d'un post en lecture recommençait tout à
+    /// zéro — la vidéo comme le fond sonore. L'hôte du détail passe ici la
+    /// dernière position publiée par la carte.
+    ///
+    /// Une seule horloge : `StoryCanvasUIView.currentTime`, que
+    /// `seedPlayhead(_:)` sème au montage.
+    let startAt: Double
+
+    /// **Sous quelle clé cette surface MÉMORISE sa position** (#6580), `nil`
+    /// pour celles qui n'ont rien à léguer.
+    ///
+    /// C'est l'ENVERS de `startAt` : l'un reprend, l'autre lègue. Deux surfaces
+    /// qui jouent la même scène — la carte du fil, puis le plein écran qu'elle
+    /// ouvre — partagent la clé, donc la position (cf. `ScenePlaybackPositions`).
+    /// La mémoire s'écrit depuis l'émission que le canvas fait déjà : elle ne
+    /// crée aucun rappel de plus, et n'a rien à voir avec `onPlaybackTime`, qui
+    /// reste le fil d'une CHROME (le mode `.card` continue de ne pas le payer).
+    let positionKey: String?
+
+    /// **Le pont du parcours au doigt** (#7878), `nil` pour les surfaces qui ne
+    /// se parcourent pas. Le canvas monté s'y attache ; la barre de l'hôte le
+    /// pilote sans passer par une ré-évaluation SwiftUI.
+    public internal(set) var scrubber: ScenePlaybackScrubber?
+
+    /// **Le seuil au-delà duquel une position REÇUE recale la lecture.**
+    ///
+    /// Une valeur DÉCLARÉE, pas un hasard : la position d'ouverture arrive de
+    /// la carte, et sans seuil chaque rendu qui la reporte d'un cheveu
+    /// relancerait le playhead ET la passe audio. 0,35 s est le plus petit
+    /// écart au-delà duquel un recalage coûte moins cher que la désynchro
+    /// qu'il corrige — en deçà, l'utilisateur n'entend pas le décalage mais
+    /// verrait le recalage.
+    public static let startAtReseedThreshold: Double = 0.35
+
+    /// `true` quand la position DEMANDÉE diffère assez de celle déjà SEMÉE.
+    ///
+    /// La référence est ce qui a été semé, jamais le playhead courant : ce
+    /// dernier avance en permanence, et le comparer à une position d'ouverture
+    /// ferait reculer la lecture une image sur deux.
+    ///
+    /// Pure et statique — la garde d'idempotence s'éprouve sans monter de vue.
+    static func shouldReseed(requested: Double, seeded: Double) -> Bool {
+        guard requested.isFinite, requested > 0 else { return false }
+        return abs(requested - seeded) > startAtReseedThreshold
+    }
+
+    /// **Ce que cette vue montée a déjà SEMÉ** — la seule mémoire que le
+    /// re-semis réclame.
+    ///
+    /// Ni dans la `struct` (recréée à chaque rendu, donc sans mémoire), ni sur
+    /// le canvas (qui porte le playhead COURANT, une autre question). Le
+    /// coordinateur SwiftUI a exactement la durée de vie voulue : celle de la
+    /// vue montée.
+    public final class Coordinator {
+        // iOS 26.1 : cf. `MeeshyUIDeinitSourceGuardTests` — une `deinit`
+        // synthétisée isolée double-libère à la libération hors tâche.
+        nonisolated deinit {}
+
+        var seededStartAt: Double = 0
+    }
+
+    public func makeCoordinator() -> Coordinator { Coordinator() }
 
     // MARK: - Primary init
 
     public init(story: StoryItem,
+                sceneFloorHex: String? = nil,
                 preferredLanguage: String? = nil,
                 preferredLanguages: [String] = [],
                 preferredContentLanguages: [String]? = nil,
                 preloadedImages: [String: UIImage] = [:],
                 preloadedVideoURLs: [String: URL] = [:],
                 preloadedAudioURLs: [String: URL] = [:],
+                imageCache: (any ImageCacheReader)? = nil,
                 playerProvider: (any StoryCarrierPlayerProviding)? = nil,
                 mute: Bool = false,
+                locksMute: Bool = false,
                 isPaused: Bool = false,
                 isOutgoing: Bool = false,
+                startAt: Double = 0,
+                servesLetterboxFill: Bool = true,
+                positionKey: String? = nil,
+                scrubber: ScenePlaybackScrubber? = nil,
                 onCompletion: (@Sendable () -> Void)? = nil,
                 onContentReady: (() -> Void)? = nil,
                 onContentProgress: ((Double) -> Void)? = nil,
                 onPlaybackTime: ((Double) -> Void)? = nil,
                 onPlaybackProgressing: ((Bool) -> Void)? = nil) {
         self.storyItem = story
+        self.sceneFloorHex = sceneFloorHex
+        self.playbackQoEStoryId = story.id
         // `preferredContentLanguages` is the legacy label; it takes priority over
         // `preferredLanguages` when provided so existing call-sites compile unchanged.
         let effective = preferredContentLanguages ?? preferredLanguages
@@ -110,8 +211,13 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         self.preferredLanguages = chain
         self.playerProvider = playerProvider
         self.mute = mute
+        self.locksMute = locksMute
         self.isPaused = isPaused
         self.isOutgoing = isOutgoing
+        self.startAt = startAt
+        self.servesLetterboxFill = servesLetterboxFill
+        self.positionKey = positionKey
+        self.scrubber = scrubber
         self.onCompletion = onCompletion
         self.onContentReady = onContentReady
         self.onContentProgress = onContentProgress
@@ -120,37 +226,64 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         self.preloadedImages = preloadedImages
         self.preloadedVideoURLs = preloadedVideoURLs
         self.preloadedAudioURLs = preloadedAudioURLs
+        self.imageCache = imageCache
+    }
+
+    /// La slide que le canvas peint : celle du porteur, posée sur le dégradé
+    /// de l'auteur quand elle ne déclare aucun fond.
+    var renderableSlide: StorySlide {
+        var slide = storyItem.toRenderableSlide(preferredLanguages: preferredLanguages)
+        slide.effects = slide.effects.flooredOnAuthorGradient(sceneFloorHex)
+        return slide
     }
 
     // MARK: - UIViewRepresentable
 
     public func makeUIView(context: Context) -> StoryCanvasUIView {
-        let slide = storyItem.toRenderableSlide(preferredLanguages: preferredLanguages)
+        let slide = renderableSlide
         // Outgoing canvas (cross-fade sortant) doit naître en `.edit` pour ne
         // jamais démarrer ses médias — sinon les bg/FG AVPlayer + audio mixer
         // jouent en double avec le canvas visible 350-400 ms le temps de
         // l'anim (user 2026-05-28 « les média jouent en double / s'entrevauche »).
         let initialMode: RenderMode = isOutgoing ? .edit : .play
-        let view = StoryCanvasUIView(slide: slide, mode: initialMode)
+        // Né EN PAUSE dès l'init (#9827) : la pause posée plus bas arrivait
+        // après que l'init avait préempté le canvas qui joue — une page voisine
+        // du lecteur de réels coupait ainsi le son du réel affiché.
+        let view = StoryCanvasUIView(slide: slide, mode: initialMode, startsPaused: true)
+        view.servesLetterboxFill = servesLetterboxFill
         let mediaList = storyItem.media
         let completion = onCompletion
         let contentReady = onContentReady
 
-        // Preloaded composer assets. `preloadedImages` are in-memory bitmaps
-        // (non-`Sendable`), so we persist them to temp `file://` URLs ONCE here
-        // — URLs are `Sendable`, which lets both the resolver closure and the
-        // `ImageCacheReader` capture them without crossing Swift 6 strict
-        // concurrency. `makeUIView` runs once per representable instance, so
-        // the writes happen exactly once.
+        // **Les bitmaps préchargés restent EN MÉMOIRE** (#7008).
+        //
+        // Ce site encodait chaque image en PNG et l'écrivait dans
+        // `temporaryDirectory`, SYNCHRONEMENT et sur le thread principal :
+        // 100-300 ms par image 1080×1920, soit un gel de 0,5 à 2 s à
+        // l'ouverture de l'aperçu du composer. L'argument était la
+        // `Sendable`-ité (« `UIImage` ne l'est pas, une `URL` oui ») — il est
+        // faux depuis que le SDK marque `UIImage` `Sendable` : son voisin
+        // `ComposerImageCacheReader` sert des `UIImage` depuis la mémoire
+        // derrière le MÊME protocole, dans le même répertoire, depuis
+        // toujours.
+        //
+        // Et l'entrée `imageURLs` du résolveur ci-dessous était redondante :
+        // le lecteur d'images était construit À PARTIR de la même carte, donc
+        // toute clé que le résolveur aurait servie, le cache la servait déjà
+        // — et il est consulté AVANT lui (`StoryBackgroundLayer.configure`
+        // essaie `cachedImage(for:)` puis seulement l'URL).
         let videoURLs = preloadedVideoURLs
         let audioURLs = preloadedAudioURLs
-        let imageURLs = Self.persistPreloadedImages(preloadedImages)
+        let images = preloadedImages
+        // Les PNG déjà posés par les versions antérieures n'ont aucun autre
+        // propriétaire : ce site est le seul du dépôt à connaître leur préfixe.
+        _ = StoryPreviewTempSweeper.sweepOnce
 
         // Resolver: preloaded local assets take priority (composer preview),
         // then fall through to the published `StoryItem.media` remote URLs so
         // the live viewer behaves identically when the preloaded dicts are empty.
         let resolver: @Sendable (String) -> URL? = { postId in
-            if let local = videoURLs[postId] ?? audioURLs[postId] ?? imageURLs[postId] {
+            if let local = videoURLs[postId] ?? audioURLs[postId] {
                 return local
             }
             // Normalize through the SSRF-guarded resolver (relative → absolute,
@@ -170,18 +303,17 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
 
         // The background-image branch of `StoryBackgroundLayer.configure`
         // only consults the resolver when `imageCache` is non-nil. Supply a
-        // file-backed cache reader so preloaded images reach the resolver path;
-        // it stays `nil` when no images were preloaded so the live viewer is
-        // unaffected.
-        let imageCache: ImageCacheReader? = imageURLs.isEmpty
-            ? nil
-            : PreloadedImageCacheReader(fileURLs: imageURLs)
+        // memory-backed cache reader so preloaded images reach the layers; it
+        // falls back to the host's own reader (`nil` on every live surface)
+        // when no images were preloaded so the live viewer is unaffected.
+        let imageCache: ImageCacheReader? = images.isEmpty
+            ? self.imageCache
+            : PreloadedImageCacheReader(images: images)
 
         view.onContentReady = { contentReady?() }
         let progress = onContentProgress
         view.onContentProgress = { value in progress?(value) }
-        let playback = onPlaybackTime
-        view.onPlaybackTime = { t in playback?(t) }
+        view.onPlaybackTime = playbackTimeRelay()
         let progressing = onPlaybackProgressing
         view.onPlaybackProgressing = { p in progressing?(p) }
         // Le canvas naît TOUJOURS en pause, et c'est `updateUIView` — appelé par
@@ -191,9 +323,20 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         // pose souvent son gel APRÈS coup (l'interstitiel d'identité est armé
         // dans `onAppear`/`onChange`, donc après l'évaluation du body qui a créé
         // ce canvas). L'audio démarrait alors dans `setReaderContext` et on
-        // entendait la story PENDANT l'interlude (bug user 2026-07-25). Naître
+        // entendait la story PENDANT l'interlude. Naître
         // en pause supprime la course au lieu de tenter de la gagner.
+        // La QoE ne mesure que la story PUBLIÉE que l'hôte déclare lire : ni
+        // l'aperçu du composer (médias préchargés, id local), ni le calque
+        // sortant d'un fondu, ni une carte de fil, un repost ou une galerie.
+        view.backgroundLayer.declarePlaybackQoETarget(playbackQoETarget(in: context))
         view.setPaused(true)
+        // La position SÈME avant `setReaderContext`, le premier site qui
+        // démarre quoi que ce soit (audio compris) : semée après, la vidéo
+        // aurait déjà été calée sur zéro et l'audio déjà planifié depuis le
+        // début de sa fenêtre — c'est le retour à zéro que #6580 corrige.
+        view.seedPlayhead(startAt)
+        context.coordinator.seededStartAt = startAt
+        scrubber?.attach(view)
         view.setReaderContext(StoryReaderContext(
             preferredLanguages: preferredLanguages,
             mute: mute,
@@ -201,35 +344,20 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
             postMediaURLResolver: resolver,
             imageCache: imageCache,
             localAudioURLResolver: localAudioResolver,
-            playerProvider: playerProvider
+            playerProvider: playerProvider,
+            locksMute: locksMute
         ))
         return view
     }
 
-    /// Writes each preloaded `UIImage` to a unique temp `file://` URL and
-    /// returns a `[mediaId: URL]` map. PNG keeps the bitmap lossless (composer
-    /// previews may include transparency). Images that fail to encode are
-    /// silently dropped — the resolver then falls back to the remote lookup.
-    private static func persistPreloadedImages(_ images: [String: UIImage]) -> [String: URL] {
-        guard !images.isEmpty else { return [:] }
-        let dir = FileManager.default.temporaryDirectory
-        var result: [String: URL] = [:]
-        for (mediaId, image) in images {
-            guard let data = image.pngData() else { continue }
-            let url = dir.appendingPathComponent("story-preview-\(UUID().uuidString).png")
-            guard (try? data.write(to: url, options: .atomic)) != nil else { continue }
-            result[mediaId] = url
-        }
-        return result
-    }
 
     public func updateUIView(_ view: StoryCanvasUIView, context: Context) {
         // Le changement de langue ne touche NI l'id NI le `content` du slide
         // (la légende du post n'a pas forcément de traduction) : sans ce test,
         // choisir une langue dans le strip du viewer laissait le canvas afficher
-        // les textes dans l'ancienne langue (bug 2026-07-25).
+        // les textes dans l'ancienne langue.
         let languagesChanged = view.readerContext.preferredLanguages != preferredLanguages
-        let newSlide = storyItem.toRenderableSlide(preferredLanguages: preferredLanguages)
+        let newSlide = renderableSlide
         let identityChanged = newSlide.id != view.slide.id
         if identityChanged || languagesChanged || newSlide.content != view.slide.content {
             view.slide = newSlide
@@ -237,6 +365,10 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         if languagesChanged {
             view.setPreferredLanguages(preferredLanguages)
         }
+        // #6636 — le verdict de l'image seule peut changer sans nouvelle vue
+        // (rotation d'un iPad, traduction arrivée) ; le canvas l'ignore s'il
+        // n'a pas bougé.
+        view.servesLetterboxFill = servesLetterboxFill
         if identityChanged && !isOutgoing {
             // Reset défensif de la timeline canvas quand l'id slide change :
             // garantit que `currentTime` redémarre à zéro EN PHASE avec
@@ -249,12 +381,65 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
             // Skip pour outgoing : le canvas reste en `.edit` et son média
             // reste figé jusqu'à ce que SwiftUI détruise la vue.
             view.setMode(.play, time: .zero)
+            view.backgroundLayer.declarePlaybackQoETarget(playbackQoETarget(in: context))
+        }
+        // **La position d'ouverture peut arriver APRÈS le montage** (#6580).
+        // Elle vient de la carte : un hôte qui monte avant de la connaître
+        // resterait à zéro, `makeUIView` ne s'exécutant qu'une fois. Le seuil
+        // est ce qui empêche chaque rendu de recaler — cf. `shouldReseed`.
+        if Self.shouldReseed(requested: startAt, seeded: context.coordinator.seededStartAt) {
+            context.coordinator.seededStartAt = startAt
+            view.reseedPlayhead(startAt)
         }
         // Pause synchronisée avec le viewer : sheets, composer, drag, long-press.
         // `setPaused` est idempotent côté canvas. Pour outgoing, le canvas est
         // en `.edit` donc `setPaused` est no-op (gate `guard mode == .play`)
         // — mais on l'appelle quand même pour préserver le contrat idempotent.
+        // Un glissé en cours tient la scène en pause : un rendu de l'hôte
+        // pendant le geste ne doit pas la relancer sous le doigt (#7878).
+        scrubber?.hostPaused = isPaused || isOutgoing
+        guard scrubber?.isScrubbing != true else {
+            view.setPaused(true)
+            return
+        }
         view.setPaused(isPaused || isOutgoing)
+    }
+}
+
+@MainActor
+extension StoryReaderRepresentable {
+    /// La MÉMOIRE s'écrit sur l'émission qui existe déjà — aucun rappel de
+    /// plus, et une écriture de dictionnaire n'invalide aucune vue SwiftUI.
+    /// C'est ce qui permet à la carte de léguer sa position sans payer le fil
+    /// de chrome que son mode lui refuse (`config.showsChrome`).
+    ///
+    /// Personne n'écoute ⇒ aucun relais : le canvas lit `onPlaybackTime` pour
+    /// savoir si une barre d'hôte suit son tick, et garde alors son lien à
+    /// 60–120 Hz. Le lecteur de stories n'en pose pas — sa barre a sa propre
+    /// horloge — et une slide immobile y descend au palier bas (#9864).
+    func playbackTimeRelay() -> (@MainActor (Double) -> Void)? {
+        let playback = onPlaybackTime
+        let memoire = positionKey
+        guard memoire != nil || playback != nil else { return nil }
+        return { t in
+            if let memoire { ScenePlaybackPositions.shared.publish(t, for: memoire) }
+            playback?(t)
+        }
+    }
+
+    /// La SESSION se ferme quand SwiftUI retire le canvas (#11287) : une scène
+    /// allée au bout se ferme `completed`, toute autre sortie `swiped`.
+    public static func dismantleUIView(_ view: StoryCanvasUIView, coordinator: Coordinator) {
+        view.backgroundLayer.playbackQoE.finish(reason: view.completionFired ? .completed : .swiped)
+    }
+
+    func playbackQoETarget(in context: Context) -> SocialTarget? {
+        StoryPlaybackQoETarget.resolve(
+            readsPublishedStories: context.environment.readsPublishedStories,
+            isOutgoing: isOutgoing,
+            playsPreloadedMedia: !(preloadedImages.isEmpty && preloadedVideoURLs.isEmpty && preloadedAudioURLs.isEmpty),
+            storyId: playbackQoEStoryId
+        )
     }
 }
 
@@ -288,6 +473,7 @@ extension StoryReaderRepresentable {
                   onCompletion: onCompletion,
                   onContentReady: nil,
                   onContentProgress: nil)
+        self.playbackQoEStoryId = nil
     }
 
     /// Construct from an `APIPost` (used in feed contexts where stories arrive
@@ -329,6 +515,7 @@ extension StoryReaderRepresentable {
                   onCompletion: onCompletion,
                   onContentReady: nil,
                   onContentProgress: nil)
+        self.playbackQoEStoryId = nil
     }
 
     // MARK: - Private helpers
@@ -343,19 +530,68 @@ extension StoryReaderRepresentable {
 
 // MARK: - Preloaded image cache
 
-/// `ImageCacheReader` backed by composer-preloaded images that were persisted
-/// to temp `file://` URLs by `StoryReaderRepresentable.persistPreloadedImages`.
+/// `ImageCacheReader` servant les bitmaps préchargés du composer **depuis la
+/// mémoire**.
 ///
-/// Only a `[String: URL]` is captured — `URL` is `Sendable`, so the struct is
-/// trivially `Sendable` and sidesteps the fact that `UIImage` is not. The
-/// background image layer calls `cachedImage(for:)` with the media id; we
-/// decode the matching temp file lazily on first lookup.
+/// Il a longtemps servi des fichiers : `makeUIView` encodait chaque image en
+/// PNG dans `temporaryDirectory`, et ce lecteur relisait puis redécodait le
+/// fichier **à chaque appel**, sans aucun cache (#7008). Le détour coûtait
+/// deux fois — à l'écriture (synchrone, sur le thread principal, 100-300 ms
+/// par image 1080×1920) et à chaque lecture.
+///
+/// Le motif en mémoire existait pourtant déjà dans le même répertoire, sous le
+/// même protocole : `ComposerImageCacheReader` (`StoryCanvasRepresentable`)
+/// rend `images[key]` et rien de plus. La contrainte qui avait justifié le
+/// disque — « `UIImage` n'est pas `Sendable` » — ne tient plus : ce voisin
+/// prouve le contraire depuis toujours.
 struct PreloadedImageCacheReader: ImageCacheReader {
-    let fileURLs: [String: URL]
+    let images: [String: UIImage]
 
     func cachedImage(for key: String) async -> UIImage? {
-        guard let url = fileURLs[key],
-              let data = try? Data(contentsOf: url) else { return nil }
-        return UIImage(data: data)
+        images[key]
+    }
+}
+
+// MARK: - Balayage des PNG d'aperçu laissés par les versions antérieures
+
+/// **Le dossier temporaire ne grossit plus, et ce qu'il contient déjà s'en
+/// va** (#7008).
+///
+/// Jusqu'au 2026-09-18, chaque ouverture de l'aperçu du composer écrivait un
+/// `story-preview-<UUID>.png` par image préchargée, et **aucun site du dépôt
+/// ne les effaçait** — le préfixe n'apparaissait qu'à l'écriture. Plus aucun
+/// n'est écrit ; ceux déjà posés sur les appareils mis à jour, eux, restent, et
+/// personne d'autre ne sait les nommer.
+///
+/// Une seule passe par lancement, en tâche détachée de fond : le balayage ne
+/// doit rien coûter au montage de l'aperçu, qui est précisément ce que ce lot
+/// vient d'alléger.
+nonisolated enum StoryPreviewTempSweeper {
+
+    /// Le préfixe que `makeUIView` posait. Il est déclaré ICI et nulle part
+    /// ailleurs : un balayage qui ne partagerait pas le littéral de
+    /// l'écriture est la façon dont une purge cesse de purger sans rougir.
+    static let filePrefix = "story-preview-"
+
+    /// `static let` ⇒ `swift_once` : le balayage part au PREMIER accès, une
+    /// seule fois par processus, sans verrou à tenir ni drapeau à écrire.
+    static let sweepOnce: Void = {
+        Task.detached(priority: .background) { _ = StoryPreviewTempSweeper.sweep() }
+    }()
+
+    /// Supprime les fichiers d'aperçu d'un répertoire. Paramétrable pour que
+    /// le témoin n'ait pas à écrire dans le vrai dossier temporaire.
+    @discardableResult
+    static func sweep(in directory: URL = FileManager.default.temporaryDirectory) -> Int {
+        let manager = FileManager.default
+        guard let entries = try? manager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil
+        ) else { return 0 }
+        var removed = 0
+        for url in entries where url.lastPathComponent.hasPrefix(filePrefix) {
+            if (try? manager.removeItem(at: url)) != nil { removed += 1 }
+        }
+        return removed
     }
 }

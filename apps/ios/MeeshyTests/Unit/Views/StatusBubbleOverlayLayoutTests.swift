@@ -155,11 +155,29 @@ final class StatusBubbleOverlayLayoutTests: XCTestCase {
     /// Le bouton Republier doit désormais partager la ligne de pied avec
     /// l'ancienneté (séparés par un point médian), pas former un bloc
     /// Divider + bouton pleine largeur autonome.
+    ///
+    /// **Ce test épinglait `Text("·")` — une GRAPHIE, pas l'intention** (leçon
+    /// 272), et il est tombé au 251i quand le séparateur est devenu
+    /// `MetaSeparator` : le pied de bulle était rigoureusement intact, seul le
+    /// nom du jeton avait changé. Il épingle désormais l'ORDRE de la rangée —
+    /// ancienneté, puis séparateur, puis l'action — ce qui survit à un
+    /// renommage et tombe sur ce que le nom du test annonce : une rangée qui se
+    /// disloque.
     func test_bubbleContent_republish_sitsInlineWithTimeAgo_viaMidDotSeparator() throws {
         let source = try overlaySource()
-        XCTAssertTrue(
-            source.contains("Text(\"·\")"),
-            "Le pied de bulle doit séparer ancienneté et « Republier » par un point médian, sur la même ligne."
+        let timeAgo = try XCTUnwrap(source.range(of: "Text(status.timeAgo)"),
+                                    "l'ancienneté doit vivre dans le pied de bulle")
+        let separator = try XCTUnwrap(source.range(of: "MetaSeparator(", range: timeAgo.upperBound ..< source.endIndex),
+                                      "le pied doit porter un séparateur après l'ancienneté")
+        let republish = try XCTUnwrap(source.range(of: "onRepublish?(status)", range: separator.upperBound ..< source.endIndex),
+                                      "« Republier » doit suivre le séparateur sur la même ligne")
+
+        let betweenTimeAgoAndAction = source[timeAgo.upperBound ..< republish.lowerBound]
+        XCTAssertFalse(
+            betweenTimeAgoAndAction.contains("Divider("),
+            "Un Divider entre l'ancienneté et « Republier » remettrait le bouton sur son ancien "
+            + "bloc pleine largeur : la rangée doit rester une seule ligne. Obtenu : "
+            + "« \(betweenTimeAgoAndAction) »"
         )
     }
 

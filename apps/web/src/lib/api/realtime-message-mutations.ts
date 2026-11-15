@@ -1,0 +1,207 @@
+import type { QueryClient } from '@tanstack/react-query';
+import type { MessageDeletedEventData, SocketIOMessage } from '@meeshy/shared/types/socketio-events/message';
+
+import { quotedIsProtected } from '@/lib/view/quoted-protection';
+
+import { decodeAttachment } from './decode';
+
+import { deleteLastMessage, editLastMessage } from './list-preview';
+import { findCachedThreadMessage, latestSurvivingThreadMessage, patchThreadMessages } from './messages';
+import { belongsTo, quotes, tombstone } from './quote-tombstone';
+import type { Attachment, Message } from './types';
+import { purgeViewOnceIn } from './view-once-seal';
+
+/**
+ * LES PUITS DE `message:edited` ET `message:deleted` (#7926) — la passerelle
+ * les diffuse à la room de la conversation (`MessageHandler`,
+ * `broadcastMessageMutation`). Trois surfaces suivent, en un geste :
+ *
+ *  1. **la rangée** du fil ouvert ;
+ *  2. **les citations** (`replyTo`) que les AUTRES messages du fil embarquent
+ *     — le message cité peut être hors de la fenêtre chargée, ses réponses
+ *     non ;
+ *  3. **la ligne de liste** qui le décrit (`list-preview.ts`).
+ *
+ * Miroir iOS (`ConversationSocketHandler`) : `markEdited` pose texte,
+ * `isEdited` et `editedAt` avec une garde d'ORDRE (une édition plus ancienne
+ * que celle en place est ignorée) ; `markDeleted` pose une pierre tombale
+ * (`deletedAt`, contenu vidé) et SCELLE une vue unique « déjà ouverte »
+ * (`sparingOpenedViewOnce`) au lieu de la tomber.
+ *
+ * **Aucune fuite inter-conversation** : tout se lit et s'écrit sous la clé de
+ * la conversation que la charge NOMME, et une rangée qui se dit d'une autre
+ * conversation n'est pas touchée.
+ */
+
+/**
+ * CE QU'UNE ÉDITION DOIT PORTER POUR ÊTRE APPLIQUÉE (#10581) — l'identité et
+ * le texte ; le reste suit s'il est servi. L'édition que le lecteur vient de
+ * faire lui-même (`edit-message.ts`) passe par les mêmes puits que celle
+ * reçue d'ailleurs, sans fabriquer une charge de socket entière.
+ */
+export type MessageEditPayload = Pick<SocketIOMessage, 'id' | 'conversationId' | 'content'> &
+  Partial<Pick<SocketIOMessage, 'isEdited' | 'editedAt' | 'editedById' | 'editedByRole' | 'translations' | 'attachments' | 'metadata' | 'validatedMentions' | 'systemEvent'>>;
+
+export function isMessageEditedEvent(payload: unknown): payload is SocketIOMessage {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  return typeof p.id === 'string' && typeof p.conversationId === 'string' && typeof p.content === 'string';
+}
+
+/**
+ * Ce qu'un retrait REÇU prouve, qui n'est pas ce que le contrat DÉCLARE.
+ *
+ * `MessageDeletedEventData.deletedAt` est requis — un émetteur doit le servir
+ * (#18159). Il est ici OPTIONNEL, pour trois raisons qui ne se recouvrent pas :
+ * un serveur d'avant #18159 ne l'envoie pas, une entrée de la file hors ligne
+ * écrite avant est rejouée telle qu'elle a été stockée, et **deux appelants
+ * LOCAUX dérivent ce retrait sans aucune horloge serveur** — la suppression
+ * optimiste (`performDeleteForEveryone`) et la dernière pièce jointe retirée
+ * d'un message (`applyAttachmentDeleted`). Exiger le champ les forcerait à en
+ * fabriquer un, c'est-à-dire à faire passer une horloge locale pour celle du
+ * serveur : exactement ce que ce lot corrige.
+ */
+export type MessageDeletedDelivery = Omit<MessageDeletedEventData, 'deletedAt'> &
+  Partial<Pick<MessageDeletedEventData, 'deletedAt'>>;
+
+/** La garde ne prouve que `messageId` et `conversationId` — voir [[MessageDeletedDelivery]]. */
+export function isMessageDeletedEvent(payload: unknown): payload is MessageDeletedDelivery {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  return typeof p.messageId === 'string' && typeof p.conversationId === 'string';
+}
+
+/**
+ * L'heure SERVEUR du retrait quand le fil la porte (#18159), sinon `undefined`.
+ *
+ * Deux absences, un seul repli : le champ peut MANQUER (les trois cas
+ * ci-dessus) et il peut être ILLISIBLE (une valeur qui ne se parse pas).
+ * L'appelant retombe alors sur son horloge locale, ce que les trois clients
+ * faisaient déjà — dater la pierre tombale avec `NaN` serait strictement pire
+ * que l'horloge du device, qui est au moins plausible.
+ */
+export function serverDeletedAt(data: MessageDeletedDelivery): string | undefined {
+  const raw: unknown = data.deletedAt;
+  if (typeof raw !== 'string') return undefined;
+  return Number.isNaN(new Date(raw).getTime()) ? undefined : raw;
+}
+
+/** Tolérance de la garde d'ordre — celle d'iOS (`editOrderingTolerance`), les horloges comparées étant celles du SERVEUR. */
+const EDIT_ORDERING_TOLERANCE_MS = 1;
+
+const timeOf = (value: unknown): number => (value === undefined || value === null ? Number.NaN : new Date(value as string).getTime());
+
+const isStaleEdit = (known: Message, incomingEditedAt: unknown): boolean => {
+  const knownMs = timeOf(known.editedAt);
+  const incomingMs = timeOf(incomingEditedAt);
+  if (Number.isNaN(knownMs) || Number.isNaN(incomingMs)) return false;
+  return incomingMs < knownMs - EDIT_ORDERING_TOLERANCE_MS;
+};
+
+
+/** Les traductions de l'ANCIEN texte sont périmées ; seule une carte servie AVEC l'édition peut la suivre. */
+const servedTranslations = (data: MessageEditPayload): Message['translations'] =>
+  Array.isArray(data.translations) && data.translations.length > 0 ? (data.translations as Message['translations']) : [];
+
+/** Une rediffusion qui porte ses pièces jointes les pose (l'enregistrement rattaché à la bulle d'un appel, #8064) ; une charge qui n'en dit rien garde celles en place. */
+const isServedAttachment = (value: unknown): value is Attachment =>
+  typeof value === 'object' && value !== null && typeof (value as { readonly id?: unknown }).id === 'string';
+
+const servedAttachments = (data: MessageEditPayload): Pick<Message, 'attachments'> | Record<string, never> =>
+  Array.isArray(data.attachments) ? { attachments: data.attachments.filter(isServedAttachment).map(decodeAttachment) } : {};
+
+/**
+ * Un avis que le SERVEUR complète sur place (la ligne d'arrivées de Meeshy
+ * Global, #8565) arrive avec `isEdited: false` et son `metadata` à jour :
+ * personne ne l'a modifié, et la rangée le relit depuis `metadata`. Une
+ * charge qui tait `isEdited` reste une édition d'utilisateur.
+ */
+const wasEdited = (data: MessageEditPayload): boolean => data.isEdited !== false;
+
+const servedMetadata = (data: MessageEditPayload): Pick<Message, 'metadata'> | Record<string, never> =>
+  typeof data.metadata === 'object' && data.metadata !== null
+    ? { metadata: data.metadata as NonNullable<Message['metadata']> }
+    : {};
+
+/**
+ * L'AUTEUR D'UNE MODIFICATION FAITE PAR UN MODÉRATEUR (#11375) — servi, il
+ * remplace celui de la rangée ; `null` (l'auteur a réécrit) l'efface ; une
+ * charge d'une passerelle antérieure, qui tait la clé, garde celui en place.
+ */
+const withServedEditor = (row: Message, data: MessageEditPayload): Message => {
+  if (data.editedById === undefined) return row;
+  const { editedById: _id, editedByRole: _role, ...rest } = row;
+  if (data.editedById === null) return rest;
+  return { ...rest, editedById: data.editedById, ...(typeof data.editedByRole === 'string' ? { editedByRole: data.editedByRole } : {}) };
+};
+
+const editedRow = (known: Message, data: MessageEditPayload): Message => withServedEditor({
+  ...known,
+  ...servedAttachments(data),
+  ...servedMetadata(data),
+  content: data.content,
+  isEdited: wasEdited(data),
+  translations: servedTranslations(data),
+  ...(data.editedAt === undefined ? {} : { editedAt: data.editedAt }),
+  ...(data.validatedMentions === undefined ? {} : { validatedMentions: data.validatedMentions }),
+}, data);
+
+/**
+ * Une citation PROTÉGÉE porte un placeholder servi : le texte en clair n'y entre jamais.
+ * Une citation SCELLÉE (supprimée, ou éphémère échu pour ce lecteur — #8562) non plus :
+ * une édition du message cité ne la ressuscite pas. Miroir de `followsParentEdits` (iOS).
+ */
+const isSealedQuote = (quote: Message): boolean => quote.deletedAt !== undefined && quote.deletedAt !== null;
+
+const editedQuote = (quote: Message, data: MessageEditPayload): Message =>
+  quotedIsProtected(quote) || isSealedQuote(quote) || isStaleEdit(quote, data.editedAt) ? quote : editedRow(quote, data);
+
+
+
+export { tombstoneQuotesOf } from './quote-tombstone';
+
+export function applyMessageEdited(queryClient: QueryClient, data: MessageEditPayload): void {
+  const known = findCachedThreadMessage(queryClient, data.conversationId, data.id);
+  const rowMayChange = known !== undefined && belongsTo(known, data.conversationId) && !isStaleEdit(known, data.editedAt);
+
+  patchThreadMessages(queryClient, data.conversationId, (messages) =>
+    messages.some((m) => (m.id === data.id && rowMayChange) || (quotes(m, data.id) && belongsTo(m, data.conversationId)))
+      ? messages.map((m) => {
+          if (m.id === data.id) return rowMayChange ? editedRow(m, data) : m;
+          if (!quotes(m, data.id) || !belongsTo(m, data.conversationId)) return m;
+          const next = editedQuote(m.replyTo as Message, data);
+          return next === m.replyTo ? m : { ...m, replyTo: next };
+        })
+      : messages,
+  );
+
+  if (known !== undefined && !rowMayChange) return;
+  editLastMessage(queryClient, data.conversationId, {
+    messageId: data.id,
+    content: data.content,
+    isEdited: wasEdited(data),
+    ...(data.editedAt === undefined ? {} : { editedAt: data.editedAt }),
+    ...(data.systemEvent === undefined ? {} : { systemEvent: data.systemEvent }),
+  });
+}
+
+export function applyMessageDeleted(queryClient: QueryClient, data: MessageDeletedDelivery, now: Date = new Date()): void {
+  const known = findCachedThreadMessage(queryClient, data.conversationId, data.messageId);
+  if (known !== undefined && !belongsTo(known, data.conversationId)) return;
+  /* L'horloge du SERVEUR quand elle voyage, celle du navigateur sinon (#18159). */
+  const deletedAt = serverDeletedAt(data) ?? now.toISOString();
+  const touches = (m: Message): boolean => m.id === data.messageId || (quotes(m, data.messageId) && belongsTo(m, data.conversationId));
+
+  patchThreadMessages(queryClient, data.conversationId, (messages) => {
+    if (!messages.some(touches)) return messages;
+    /* Une vue unique est SCELLÉE « déjà ouverte » (`purgeViewOnceIn`), jamais tombée — miroir `sparingOpenedViewOnce`. */
+    const sealed = known?.isViewOnce === true ? purgeViewOnceIn(messages, data.messageId) : messages;
+    return sealed.map((m) => {
+      if (m.id === data.messageId) return m.isViewOnce === true ? m : tombstone(m, deletedAt);
+      if (!touches(m)) return m;
+      return { ...m, replyTo: tombstone(m.replyTo as Message, deletedAt) };
+    });
+  });
+
+  deleteLastMessage(queryClient, data.conversationId, data.messageId, new Date(deletedAt), latestSurvivingThreadMessage(queryClient, data.conversationId, data.messageId));
+}

@@ -1,0 +1,316 @@
+import { describe, expect, test } from 'bun:test';
+
+import type { FeedPost } from '@/lib/api/feed-pages';
+
+import {
+  REEL_WINDOW_RADIUS,
+  activeIndexOf,
+  composeReelThread,
+  entryReelIds,
+  holdReelThread,
+  neighborIndex,
+  pageModeOf,
+  playbackIntentOf,
+  reelPreloadOf,
+  reelSeedOf,
+  reelDisplayOf,
+  reelVisitorState,
+  shouldLoadMoreReels,
+  withoutHiddenReels,
+} from './thread';
+
+/**
+ * LA LOI DU FIL DES RÉELS (#6457) — pure, sans DOM : quel réel se montre, dans
+ * quel ordre, lequel joue, lesquels restent montés. Miroir de `ReelsViewModel`
+ * (`seed(posts:startId:)`, `loadMoreIfNeeded`) et de `AdaptiveVerticalPager`.
+ */
+const reel = (id: string, partial: Partial<FeedPost> = {}): FeedPost => ({
+  id,
+  type: 'REEL',
+  createdAt: '2026-09-14T08:00:00.000Z',
+  ...partial,
+});
+
+const post = (id: string): FeedPost => ({ id, type: 'POST', createdAt: '2026-09-14T08:00:00.000Z' });
+
+const known = (...posts: readonly FeedPost[]): ReadonlyMap<string, FeedPost> => new Map(posts.map((p) => [p.id, p]));
+
+describe('entryReelIds — l’ouverture instantanée depuis le Flux', () => {
+  test('la graine vient EN TÊTE, suivie des autres réels du Flux dans leur ordre, jamais les posts', () => {
+    const feed = [reel('r1'), post('p1'), reel('r2'), reel('r3')];
+    expect(entryReelIds({ seedId: 'r2', feedPosts: feed })).toEqual(['r2', 'r1', 'r3']);
+  });
+
+  test('sans graine, les réels du Flux dans leur ordre', () => {
+    expect(entryReelIds({ feedPosts: [post('p1'), reel('r1'), reel('r2')] })).toEqual(['r1', 'r2']);
+  });
+
+  test('une graine absente du Flux (lien profond) garde sa place en tête', () => {
+    expect(entryReelIds({ seedId: 'rX', feedPosts: [reel('r1')] })).toEqual(['rX', 'r1']);
+  });
+});
+
+describe('composeReelThread — l’ordre ne bouge jamais sous le doigt', () => {
+  test('entrée d’abord, puis la suite servie, dédoublonnée, première occurrence gagnante', () => {
+    const thread = composeReelThread({
+      entryIds: ['r2', 'r1'],
+      known: known(reel('r1'), reel('r2'), reel('r5')),
+      served: [reel('r5'), reel('r1'), reel('r6')],
+    });
+    expect(thread.map((r) => r.id)).toEqual(['r2', 'r1', 'r5', 'r6']);
+  });
+
+  test('la donnée la plus RÉCENTE sert : un réel servi remplace sa copie du Flux, à la même place', () => {
+    const thread = composeReelThread({
+      entryIds: ['r1'],
+      known: known(reel('r1', { likeCount: 3 })),
+      served: [reel('r1', { likeCount: 9 })],
+    });
+    expect(thread).toHaveLength(1);
+    expect(thread[0]?.likeCount).toBe(9);
+  });
+
+  test('un identifiant sans donnée (graine encore en vol, réel supprimé) ne peint rien', () => {
+    const thread = composeReelThread({ entryIds: ['rX', 'r1'], known: known(reel('r1')), served: [] });
+    expect(thread.map((r) => r.id)).toEqual(['r1']);
+  });
+
+  test('un POST servi par erreur ne se glisse jamais dans le fil des réels', () => {
+    const thread = composeReelThread({ entryIds: [], known: known(), served: [post('p1'), reel('r1')] });
+    expect(thread.map((r) => r.id)).toEqual(['r1']);
+  });
+});
+
+/**
+ * Recette du 2026-10-09 (#9702) — jumelle de `ReelThreadOrder.refreshed`
+ * (`ReelThreadOrderTests.swift`). La passerelle reclasse sa page à chaque
+ * lecture (les réels vus coulent) : une relecture ne déplace ni le réel
+ * regardé ni ce qui le précède.
+ */
+describe('holdReelThread — une relecture ne déplace pas le réel regardé', () => {
+  const ids = (thread: readonly FeedPost[]): readonly string[] => thread.map((r) => r.id);
+
+  test('le réel d’ouverture garde la tête quand la passerelle le reclasse en queue', () => {
+    const held = holdReelThread({
+      heldIds: ['r14', 'r13', 'r12'],
+      activeId: 'r14',
+      composed: [reel('r13'), reel('r12'), reel('r11'), reel('image'), reel('video'), reel('r14')],
+    });
+    expect(ids(held)).toEqual(['r14', 'r13', 'r12', 'r11', 'image', 'video']);
+  });
+
+  test('ce qui PRÉCÈDE le réel regardé ne bouge pas, ce qui le SUIT prend l’ordre composé', () => {
+    const held = holdReelThread({
+      heldIds: ['a', 'b', 'c', 'd', 'e'],
+      activeId: 'c',
+      composed: [reel('e'), reel('c'), reel('a'), reel('f'), reel('d'), reel('b')],
+    });
+    expect(ids(held)).toEqual(['a', 'b', 'c', 'e', 'f', 'd']);
+  });
+
+  test('chaque réel tenu est peint depuis sa donnée composée, la plus récente', () => {
+    const held = holdReelThread({
+      heldIds: ['a', 'b'],
+      activeId: 'a',
+      composed: [reel('b', { likeCount: 7 }), reel('a', { likeCount: 9 })],
+    });
+    expect(held.map((r) => r.likeCount)).toEqual([9, 7]);
+  });
+
+  test('un réel tenu que la composition ne porte plus (supprimé) quitte le fil', () => {
+    const held = holdReelThread({ heldIds: ['a', 'b', 'c'], activeId: 'c', composed: [reel('c'), reel('a'), reel('d')] });
+    expect(ids(held)).toEqual(['a', 'c', 'd']);
+  });
+
+  test('sans réel regardé connu (premier rendu), l’ordre composé s’applique tel quel', () => {
+    const composed = [reel('b'), reel('a')];
+    expect(holdReelThread({ heldIds: [], activeId: '', composed })).toBe(composed);
+    expect(holdReelThread({ heldIds: ['a', 'b'], activeId: 'zz', composed })).toBe(composed);
+  });
+
+  test('une graine lue APRÈS la page de réels prend la tête : rien n’était regardé sous le squelette', () => {
+    const composed = [reel('graine'), reel('a'), reel('b')];
+    expect(holdReelThread({ heldIds: ['a', 'b'], activeId: 'a', composed, entryId: 'graine' })).toBe(composed);
+  });
+
+  test('une graine déjà tenue ne lève pas la tenue : le réel regardé garde sa place', () => {
+    const held = holdReelThread({
+      heldIds: ['graine', 'a', 'b'],
+      activeId: 'a',
+      composed: [reel('b'), reel('graine'), reel('a')],
+      entryId: 'graine',
+    });
+    expect(ids(held)).toEqual(['graine', 'a', 'b']);
+  });
+
+  test('une graine que la composition ne porte pas (refusée, supprimée) ne lève pas la tenue', () => {
+    const held = holdReelThread({ heldIds: ['a', 'b'], activeId: 'b', composed: [reel('b'), reel('a')], entryId: 'graine' });
+    expect(ids(held)).toEqual(['a', 'b']);
+  });
+
+  test('un ordre inchangé rend la composition elle-même', () => {
+    const composed = [reel('a'), reel('b'), reel('c')];
+    expect(holdReelThread({ heldIds: ['a', 'b'], activeId: 'b', composed })).toBe(composed);
+  });
+});
+
+describe('activeIndexOf — le réel visible', () => {
+  test('arrondi à la page la plus proche du défilement', () => {
+    expect(activeIndexOf({ scrollTop: 0, pageHeight: 800, count: 5 })).toBe(0);
+    expect(activeIndexOf({ scrollTop: 390, pageHeight: 800, count: 5 })).toBe(0);
+    expect(activeIndexOf({ scrollTop: 410, pageHeight: 800, count: 5 })).toBe(1);
+    expect(activeIndexOf({ scrollTop: 3200, pageHeight: 800, count: 5 })).toBe(4);
+  });
+
+  test('borné au fil, et 0 tant que la hauteur est inconnue', () => {
+    expect(activeIndexOf({ scrollTop: 99_999, pageHeight: 800, count: 3 })).toBe(2);
+    expect(activeIndexOf({ scrollTop: -40, pageHeight: 800, count: 3 })).toBe(0);
+    expect(activeIndexOf({ scrollTop: 400, pageHeight: 0, count: 3 })).toBe(0);
+    expect(activeIndexOf({ scrollTop: 400, pageHeight: 800, count: 0 })).toBe(0);
+  });
+});
+
+describe('pageModeOf — un seul réel joue, N±2 restent montés, les autres sont libérés (#9702)', () => {
+  test('la fenêtre montée est de deux réels de part et d’autre', () => {
+    expect(REEL_WINDOW_RADIUS).toBe(2);
+    expect(pageModeOf(3, 3)).toBe('active');
+    expect(pageModeOf(2, 3)).toBe('near');
+    expect(pageModeOf(4, 3)).toBe('near');
+    expect(pageModeOf(1, 3)).toBe('warm');
+    expect(pageModeOf(5, 3)).toBe('warm');
+    expect(pageModeOf(0, 3)).toBe('far');
+    expect(pageModeOf(6, 3)).toBe('far');
+  });
+});
+
+describe('reelPreloadOf — seul N±1 est décodé, N±2 n’est que des octets (#11308, défaut de #11253)', () => {
+  test('le réel visible et ses voisins immédiats chargent tout : leur première image est décodée avant le balayage', () => {
+    expect(reelPreloadOf(pageModeOf(3, 3))).toBe('auto');
+    expect(reelPreloadOf(pageModeOf(2, 3))).toBe('auto');
+    expect(reelPreloadOf(pageModeOf(4, 3))).toBe('auto');
+  });
+
+  test('N±2 reste monté sans rien charger ni décoder : ses octets de tête viennent de l’amorceur, son affiche de l’élément', () => {
+    expect(reelPreloadOf(pageModeOf(1, 3))).toBe('none');
+    expect(reelPreloadOf(pageModeOf(5, 3))).toBe('none');
+    expect(reelPreloadOf(pageModeOf(0, 3))).toBe('none');
+  });
+});
+
+describe('playbackIntentOf — la lecture suit la visibilité', () => {
+  test('le réel qui devient visible joue, sauf s’il joue déjà', () => {
+    expect(playbackIntentOf({ active: true, status: 'idle' })).toBe('play');
+    expect(playbackIntentOf({ active: true, status: 'paused' })).toBe('play');
+    expect(playbackIntentOf({ active: true, status: 'playing' })).toBeNull();
+  });
+
+  test('le réel qui sort du champ se met en pause s’il jouait, et rien d’autre', () => {
+    expect(playbackIntentOf({ active: false, status: 'playing' })).toBe('pause');
+    expect(playbackIntentOf({ active: false, status: 'idle' })).toBeNull();
+    expect(playbackIntentOf({ active: false, status: 'paused' })).toBeNull();
+  });
+
+  test('un échec de lecture ne se rejoue pas en boucle : seul le geste « Réessayer » relance', () => {
+    expect(playbackIntentOf({ active: true, status: 'error' })).toBeNull();
+    expect(playbackIntentOf({ active: false, status: 'error' })).toBeNull();
+  });
+});
+
+describe('neighborIndex — les flèches du clavier valent le balayage', () => {
+  test('suivant et précédent, bornés aux extrémités', () => {
+    expect(neighborIndex({ index: 0, direction: 'next', count: 3 })).toBe(1);
+    expect(neighborIndex({ index: 2, direction: 'next', count: 3 })).toBe(2);
+    expect(neighborIndex({ index: 1, direction: 'previous', count: 3 })).toBe(0);
+    expect(neighborIndex({ index: 0, direction: 'previous', count: 3 })).toBe(0);
+  });
+});
+
+describe('reelDisplayOf — la scène montre ce qui se lit, la vidéo d’abord', () => {
+  const m = (id: string, kind: string) => ({ id, kind });
+
+  test('la vidéo gagne sur les images, même rangée après elles', () => {
+    expect(reelDisplayOf([m('i1', 'image'), m('v1', 'video')])).toEqual({ kind: 'video', media: m('v1', 'video') });
+  });
+
+  test('l’audio passe avant les images', () => {
+    expect(reelDisplayOf([m('i1', 'image'), m('a1', 'audio')])).toEqual({ kind: 'audio', media: m('a1', 'audio') });
+  });
+
+  test('les images se parcourent toutes, dans leur ordre ; un fichier illisible ne se montre pas', () => {
+    expect(reelDisplayOf([m('i1', 'image'), m('f1', 'other'), m('i2', 'image')])).toEqual({ kind: 'images', images: [m('i1', 'image'), m('i2', 'image')] });
+    expect(reelDisplayOf([m('f1', 'other')])).toEqual({ kind: 'none' });
+    expect(reelDisplayOf([])).toEqual({ kind: 'none' });
+  });
+});
+
+describe('shouldLoadMoreReels — la suite se demande avant la fin, comme `loadMoreIfNeeded`', () => {
+  test('à trois réels du bout', () => {
+    expect(shouldLoadMoreReels({ activeIndex: 6, count: 10 })).toBe(false);
+    expect(shouldLoadMoreReels({ activeIndex: 7, count: 10 })).toBe(true);
+    expect(shouldLoadMoreReels({ activeIndex: 0, count: 2 })).toBe(true);
+    expect(shouldLoadMoreReels({ activeIndex: 0, count: 0 })).toBe(false);
+  });
+});
+
+/**
+ * LA GRAINE, D'OÙ QU'ELLE VIENNE (#7298) — le lecteur s'ouvre sur un réel
+ * NOMMÉ par deux portes : `/reels?seed=<id>` (un réel touché dans le Flux) et
+ * `/reel/<id>` (le lien que la passerelle grave à chaque partage). Une seule
+ * loi les lit, pour qu'aucune des deux ne puisse s'ouvrir sur un autre réel
+ * que celui qu'on a nommé.
+ */
+describe('reelSeedOf — les deux portes d’un réel nommé', () => {
+  const noSearch = new URLSearchParams();
+
+  test('le paramètre de chemin de `/reel/<id>` est la graine', () => {
+    expect(reelSeedOf({ params: { post: 'r7' }, search: noSearch })).toBe('r7');
+  });
+
+  test('`?seed=` reste la graine sur `/reels`', () => {
+    expect(reelSeedOf({ params: {}, search: new URLSearchParams('seed=r9') })).toBe('r9');
+  });
+
+  test('le CHEMIN l’emporte sur la recherche — c’est lui qui NOMME l’adresse', () => {
+    expect(reelSeedOf({ params: { post: 'r7' }, search: new URLSearchParams('seed=r9') })).toBe('r7');
+  });
+
+  test('sans graine, `undefined` — jamais une chaîne vide, qui ferait chercher un réel sans identifiant', () => {
+    expect(reelSeedOf({ params: {}, search: noSearch })).toBeUndefined();
+    expect(reelSeedOf({ params: { post: '' }, search: noSearch })).toBeUndefined();
+    expect(reelSeedOf({ params: {}, search: new URLSearchParams('seed=') })).toBeUndefined();
+  });
+});
+
+/* #9172 — ce que l'invitation d'un VISITEUR dit des réels. La passerelle ne
+   sert aucun fil de réels sans compte (`scope=reels`) : sans réel NOMMÉ, il n'y
+   a rien à montrer — et rien n'est refusé non plus. */
+describe('reelVisitorState', () => {
+  test('un réel peint est servi, l’invitation se pose par-dessus', () => {
+    expect(reelVisitorState({ count: 1, hasSeed: true, seedRefused: false })).toBe('served');
+  });
+
+  test('un réel nommé en lecture attend, même sur un réseau lent', () => {
+    expect(reelVisitorState({ count: 0, hasSeed: true, seedRefused: false })).toBe('pending');
+  });
+
+  test('un réel nommé que la passerelle refuse est refusé', () => {
+    expect(reelVisitorState({ count: 0, hasSeed: true, seedRefused: true })).toBe('refused');
+  });
+
+  test('`/reels` sans identifiant invite à rejoindre, jamais « contenu indisponible »', () => {
+    expect(reelVisitorState({ count: 0, hasSeed: false, seedRefused: false })).toBe('invite');
+  });
+});
+
+describe('withoutHiddenReels — un réel retiré quitte la pile sur-le-champ (#11156)', () => {
+  const reel = (id: string): FeedPost => ({ id, type: 'POST', createdAt: '2026-09-13T11:55:00.000Z' });
+
+  test('le réel caché disparaît, l’ordre des autres est gardé', () => {
+    expect(withoutHiddenReels([reel('a'), reel('b'), reel('c')], new Set(['b'])).map((post) => post.id)).toEqual(['a', 'c']);
+  });
+
+  test('rien de caché : la MÊME pile, sans recomposition', () => {
+    const thread = [reel('a')];
+    expect(withoutHiddenReels(thread, new Set())).toBe(thread);
+  });
+});

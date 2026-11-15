@@ -10,6 +10,11 @@ import MeeshySDK
 /// Within a story, multiple tracks can play simultaneously (timeline multi-track).
 @MainActor
 public final class StoryMediaCoordinator: StoppablePlayer {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public static let shared = StoryMediaCoordinator()
     private var isRegistered = false
     private var stopHandler: (() -> Void)?
@@ -36,10 +41,12 @@ public final class StoryMediaCoordinator: StoppablePlayer {
         }
         PlaybackCoordinator.shared.willStartPlaying(external: self)
 
-        // Session de lecture story via la source UNIQUE (call-aware) : `.mixWithOthers`
-        // pour laisser une éventuelle musique de fond, `.duckOthers` pour atténuer.
-        // Ne reconfigure pas pendant un appel VoIP (micro préservé).
-        MediaSessionCoordinator.shared.activatePlaybackSync(options: [.mixWithOthers, .duckOthers])
+        // Ouvrir une story ne coupe pas la musique des autres apps : rien ne
+        // sonne encore. C'est le canvas qui lance le son — et met alors la
+        // musique en pause (#11039) — quand la slide en a un
+        // (`StoryAudioActivationPolicy`), comme chaque couche vidéo audible.
+        // Call-aware : ne reconfigure pas pendant un appel VoIP.
+        MediaSessionCoordinator.shared.activateContentPlayback(.muted)
     }
 
     /// Release exclusive audio (story dismissed). Triggers stop handler for cleanup.

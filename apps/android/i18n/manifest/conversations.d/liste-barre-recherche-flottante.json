@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "accessibility.search.list.hint",
+          "androidName": "accessibility_search_list_hint",
+          "status": "adopted"
+        },
+        {
+          "androidName": "conversations_search_bar_toggle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversations_search_bar_clear",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

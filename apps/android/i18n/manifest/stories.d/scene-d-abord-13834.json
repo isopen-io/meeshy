@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "common.close",
+          "androidName": "composer_scene_close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.more.animation",
+          "androidName": "composer_scene_more_animation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.selection.time",
+          "androidName": "composer_scene_more_timing",
+          "status": "adopted"
+        },
+        {
+          "androidName": "composer_scene_done",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

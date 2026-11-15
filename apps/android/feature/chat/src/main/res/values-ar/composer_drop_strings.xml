@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_drop_here">أفلت هنا</string>
+    <string name="composer_drop_import_failed">تعذّر الاستيراد: %1$s</string>
+    <string name="composer_drop_unnamed_item">عنصر بلا اسم</string>
+</resources>

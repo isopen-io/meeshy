@@ -3,34 +3,50 @@ import MeeshyUI
 
 // MARK: - StoryNotificationOfflineContent
 //
-// Shown when `StoryNotificationTargetViewModel.load()` fails for any reason
-// OTHER than a confirmed 404 (no connectivity, timeout, 5xx). Distinct from
-// `StoryExpiredContent`: the story may still exist, so this offers a retry
-// instead of a "Create a story" CTA that implies the original is gone for
-// good. Reuses the existing `connection.offline`/`story.viewer.retry`
-// catalog keys rather than minting new ones.
+// Shown when `StoryNotificationTargetViewModel.load()` got no answer: the
+// request never arrived (`.network`) or the server failed (`.server`).
+// Distinct from `StoryExpiredContent`: the story may still exist, so this
+// offers a retry instead of a "Create a story" CTA that implies the original
+// is gone for good. The words come from `ContentFetchFailure+Copy`, shared
+// with the post detail and the reel reader: a server failure no longer says
+// "offline" (#6508).
 
 public struct StoryNotificationOfflineContent: View {
 
+    let cause: ContentFetchFailure
     public let onRetry: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// Retour opérant dans les trois contextes : pile iPhone, panneau droit iPad — à la racine de sa pile,
+    /// où la fermeture de l’environnement ne fait rien et laissait la colonne sur son chargeur —, et feuille.
+    private var back: PanelBackAction {
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
+    }
 
-    public init(onRetry: @escaping () -> Void) {
+    init(cause: ContentFetchFailure, onRetry: @escaping () -> Void) {
+        self.cause = cause
         self.onRetry = onRetry
     }
 
     public var body: some View {
         ZStack {
-            Color.black.opacity(0.85).ignoresSafeArea()
+            Color.black.opacity(MeeshyOpacity.intense).ignoresSafeArea()
 
-            VStack(spacing: 20) {
-                Image(systemName: "wifi.slash")
-                    .font(.system(size: 40))
-                    .foregroundStyle(.white.opacity(0.85))
-                Text(String(localized: "connection.offline", defaultValue: "Hors ligne", bundle: .main))
-                    .font(.title3.bold())
-                    .foregroundStyle(.white)
+            VStack(spacing: MeeshySpacing.xl) {
+                Image(systemName: cause.symbolName)
+                    .font(MeeshyFont.fixedGlyph(40))
+                    .foregroundStyle(.white.opacity(MeeshyOpacity.intense))
+                    .accessibilityHidden(true)
+                VStack(spacing: MeeshySpacing.sm) {
+                    Text(cause.title)
+                        .font(.title3.bold())
+                        .foregroundStyle(.white)
+                    ContentFetchFailureMessage(message: cause.message, tint: .white.opacity(MeeshyOpacity.heavy))
+                }
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, MeeshySpacing.xxxl)
 
                 Button {
                     HapticFeedback.light()
@@ -39,19 +55,19 @@ public struct StoryNotificationOfflineContent: View {
                     Text(String(localized: "story.viewer.retry", defaultValue: "Réessayer", bundle: .main))
                         .font(.headline)
                         .padding(.horizontal, 28)
-                        .padding(.vertical, 12)
+                        .padding(.vertical, MeeshySpacing.md)
                         .background(Capsule().fill(.white))
                         .foregroundStyle(.black)
                 }
                 .buttonStyle(.plain)
 
                 Button {
-                    dismiss()
+                    back()
                 } label: {
                     Text("notifications.story.expired.back")
                         .font(.subheadline)
                         .underline()
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(.white.opacity(MeeshyOpacity.heavy))
                 }
                 .buttonStyle(.plain)
             }

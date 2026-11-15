@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "progression.a11y.bar.level",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.next.level",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.meesh.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.meesh.none",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.meesh.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.meesh.many",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.meesh.minted.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.meesh.minted.many",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.meesh.first_mint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.meesh.last_mint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.meesh.never_minted",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.a11y.bar.meesh",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.meesh.mint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.meesh.minting",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.points",
+          "status": "adopted",
+          "kind": "plurals",
+          "fillMissingQuantities": true
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.meesh.missing",
+          "status": "adopted",
+          "kind": "plurals",
+          "fillMissingQuantities": true
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.meesh.floor",
+          "status": "adopted",
+          "kind": "plurals",
+          "fillMissingQuantities": true
+        }
+      ]
+    }
+  }
+}

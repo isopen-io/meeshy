@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_composer_fold">Ocultar la zona de comentarios</string>
+    <string name="story_composer_fold_hint">Cierra el teclado y pliega la zona de comentarios en una burbuja</string>
+    <string name="story_composer_unfold">Mostrar la zona de comentarios</string>
+    <string name="story_composer_unfold_hint">Vuelve a abrir la zona de comentarios sin abrir el teclado</string>
+    <string name="story_composer_unfold_recording">Grabación de voz en curso</string>
+    <string name="story_composer_unfold_replying">Respuesta en curso</string>
+</resources>

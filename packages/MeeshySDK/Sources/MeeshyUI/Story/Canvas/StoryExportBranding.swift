@@ -29,6 +29,9 @@ public enum StoryExportBranding {
         case compositionTrackUnavailable
         case introRenderFailed
         case encodingFailed(Error?)
+        /// Le fichier du jingle ne porte aucune piste audio, même régénéré :
+        /// une vidéo marquée sans son serait livrée comme si de rien n'était.
+        case jingleUnavailable
     }
 
     /// Chevauchement de la carte de fin sur la fin de la story — miroir exact
@@ -58,6 +61,9 @@ public enum StoryExportBranding {
         /// Durée du clip de fin, et décalage de son jingle par rapport à son début.
         public let outroDuration: CMTime
         public let outroJingleOffset: CMTime
+
+        /// La carte de fin peint un auteur : son jingle n'entre qu'à la 2ᵉ phase.
+        var outroCarriesAuthor: Bool { outroJingleOffset > .zero }
     }
 
     /// Résout le plan de marque : encode (ou récupère du cache) les clips et
@@ -119,12 +125,58 @@ public enum StoryExportBranding {
     /// de notes figé) puis l'écrit en M4A. Le refaire à chaque export était du
     /// calcul pur perdu.
     public static func brandJingle(_ jingle: Jingle) async throws -> URL {
-        try await cachedArtifact(key: "meeshy-brand-jingle-\(jingle.rawValue).m4a") {
+        try await cachedArtifact(key: jingleCacheKey(jingle)) {
             switch jingle {
             case .intro: return try MeeshyBrandJingle.renderToTemporaryFile()
             case .outro: return try MeeshyBrandJingle.renderOutroToTemporaryFile()
             }
         }
+    }
+
+    static func jingleCacheKey(_ jingle: Jingle) -> String {
+        "meeshy-brand-jingle-\(jingle.rawValue).m4a"
+    }
+
+    /// Un jingle chargé. L'asset voyage avec sa piste : une `AVAssetTrack` ne
+    /// retient pas l'asset qui la porte, et l'insérer une fois celui-ci libéré
+    /// échoue (`AVFoundationErrorDomain -11800`, `-12780`).
+    struct LoadedJingle {
+        let asset: AVURLAsset
+        let track: AVAssetTrack
+        let duration: CMTime
+    }
+
+    /// La piste audio du fichier et sa durée, `nil` s'il ne porte aucun son.
+    static func loadJingle(at url: URL) async -> LoadedJingle? {
+        let asset = AVURLAsset(url: url)
+        guard let track = try? await asset.loadTracks(withMediaType: .audio).first,
+              let duration = try? await asset.load(.duration), duration > .zero else { return nil }
+        return LoadedJingle(asset: asset, track: track, duration: duration)
+    }
+
+    /// La piste audio du jingle et sa durée. Un fichier en cache tronqué ou
+    /// illisible est purgé puis régénéré une fois ; s'il reste sans son,
+    /// l'export échoue au lieu de livrer une marque muette.
+    static func loadJingle(_ jingle: Jingle) async throws -> LoadedJingle {
+        for attempt in 0..<2 {
+            if let loaded = await loadJingle(at: try await brandJingle(jingle)) { return loaded }
+            if attempt == 0 { await CacheCoordinator.shared.video.remove(for: jingleCacheKey(jingle)) }
+        }
+        throw BrandingError.jingleUnavailable
+    }
+
+    /// Pose l'enveloppe de `StoryExportJingleMix` sur le son de la story : il
+    /// monte pendant la queue du jingle d'ouverture et s'éteint avant celui de
+    /// fermeture.
+    static func applyStoryEnvelope(to parameters: AVMutableAudioMixInputParameters,
+                                   story: CMTimeRange, introJingleEnd: CMTime?,
+                                   outroJingleStart: CMTime? = nil, outroFade: TimeInterval = 0) {
+        setVolumeRamps(StoryExportJingleMix.storyRamps(storyStart: story.start.seconds,
+                                                       storyEnd: story.end.seconds,
+                                                       introJingleEnd: introJingleEnd?.seconds,
+                                                       outroJingleStart: outroJingleStart?.seconds,
+                                                       outroFade: outroFade),
+                       on: parameters)
     }
 
     /// Retourne le clip de la carte de fin, encodé une seule fois par gabarit
@@ -158,7 +210,9 @@ public enum StoryExportBranding {
         var hasher = SHA256()
         for field in [content.displayName, content.username,
                       content.moodEmoji ?? "", content.moodMessage ?? "",
-                      content.accentColorHex] {
+                      content.accentColorHex,
+                      content.presence.map { "\($0)" } ?? "",
+                      content.relationLogo ?? ""] {
             hasher.update(data: Data(field.utf8))
             hasher.update(data: Data([0x1f]))   // séparateur : évite les collisions par concaténation
         }
@@ -209,11 +263,21 @@ public enum StoryExportBranding {
     ///     et l'enregistrement Photos peignent l'auteur en fermeture, l'export
     ///     depuis le composer timeline ferme sur le logo seul.
     ///   - renderSize: gabarit du MP4 final — celui de la story.
+    ///   - appendsBrandOutro: la carte de fin est-elle DUE ? `true` par défaut,
+    ///     et c'est l'invariant du 2026-07-26 : `outro: nil` change le CONTENU
+    ///     de la carte, jamais sa présence, et un témoin le garde
+    ///     (`test_wrap_withoutIntro_stillAppendsBrandOutro`).
+    ///
+    ///     `false` est réservé à l'export d'une SCÈNE DE POST (#7052) : le
+    ///     porteur a tranché que ce fichier-là rend l'œuvre SEULE — ni
+    ///     interlude, ni carte, ni jingle. Un seul appelant le passe ; tous
+    ///     les autres chemins gardent leur marque sans rien changer.
     /// - Returns: l'URL du MP4 assemblé. L'appelant en est propriétaire.
     public static func wrap(storyURL: URL,
                             intro: StoryExportIntroContent?,
                             outro: StoryExportIntroContent?,
-                            renderSize: CGSize) async throws -> URL {
+                            renderSize: CGSize,
+                            appendsBrandOutro: Bool = true) async throws -> URL {
         let storyAsset = AVURLAsset(url: storyURL)
         let storyDuration = try await storyAsset.load(.duration)
 
@@ -237,6 +301,7 @@ public enum StoryExportBranding {
         if let sv = try await storyAsset.loadTracks(withMediaType: .video).first {
             try storyVideo.insertTimeRange(storyRange, of: sv, at: storyStart)
         }
+        let storyPorteDuSon = try await storyAsset.loadTracks(withMediaType: .audio).first != nil
         if let sa = try await storyAsset.loadTracks(withMediaType: .audio).first {
             try storyAudioTrack.insertTimeRange(storyRange, of: sa, at: storyStart)
         } else {
@@ -254,6 +319,7 @@ public enum StoryExportBranding {
         // Fin du fondu d'entrée — borne basse du fondu de sortie plus bas, pour
         // que les deux rampes d'opacité de la couche story restent disjointes.
         var introFadeEnd = CMTime.zero
+        var introJingleEnd: CMTime?
 
         // MARK: Interlude d'identité
         if let intro {
@@ -265,7 +331,7 @@ public enum StoryExportBranding {
             temporaryFiles.append(introURL)
             // Artefact de marque mémoïsé — surtout PAS dans `temporaryFiles`,
             // qui est purgé en sortie : ce fichier appartient au cache.
-            let jingleURL = try await brandJingle(.intro)
+            let jingle = try await loadJingle(.intro)
 
             guard let introVideo = composition.addMutableTrack(
                     withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
@@ -279,12 +345,10 @@ public enum StoryExportBranding {
                 try introVideo.insertTimeRange(
                     CMTimeRange(start: .zero, duration: introDuration), of: iv, at: .zero)
             }
-            let jingleAsset = AVURLAsset(url: jingleURL)
-            let jingleDuration = try await jingleAsset.load(.duration)
-            if let ja = try await jingleAsset.loadTracks(withMediaType: .audio).first {
-                try jingleTrack.insertTimeRange(
-                    CMTimeRange(start: .zero, duration: jingleDuration), of: ja, at: .zero)
-            }
+            // Le jingle joue EN ENTIER ; la story lui fait place (`StoryExportJingleMix`).
+            try jingleTrack.insertTimeRange(
+                CMTimeRange(start: .zero, duration: jingle.duration), of: jingle.track, at: .zero)
+            introJingleEnd = jingle.duration
 
             // Crossfade symétrique : l'interlude s'efface, la story se révèle.
             let fade = CMTimeRange(
@@ -297,13 +361,51 @@ public enum StoryExportBranding {
             layer.setOpacityRamp(fromStartOpacity: 1, toEndOpacity: 0, timeRange: fade)
             introLayer = layer
             storyLayer.setOpacityRamp(fromStartOpacity: 0, toEndOpacity: 1, timeRange: fade)
-
-            let jingleParams = AVMutableAudioMixInputParameters(track: jingleTrack)
-            jingleParams.setVolumeRamp(fromStartVolume: 1, toEndVolume: 0, timeRange: fade)
-            audioParameters.append(jingleParams)
         }
 
         // MARK: Carte de fin
+        //
+        // TOUTE CETTE SECTION EST CONDITIONNELLE DEPUIS #7052, et elle ne
+        // l'était pas : `outro: nil` changeait le CONTENU de la carte (logo
+        // seul au lieu de l'identité), jamais sa PRÉSENCE — invariant du
+        // 2026-07-26, gardé par `test_wrap_withoutIntro_stillAppendsBrandOutro`.
+        //
+        // `appendsBrandOutro` vaut `true` par défaut : aucun appelant existant
+        // ne change de comportement, et le témoin de l'invariant reste vert.
+        // Seul l'export d'une SCÈNE DE POST passe `false`, le porteur ayant
+        // tranché que ce fichier-là rend l'œuvre SEULE.
+        //
+        // Sans carte, la story n'a plus de fondu de sortie — rien ne la
+        // recouvre — mais ses paramètres audio restent DUS : c'est
+        // `audioParameters` qui porte la piste de la story jusqu'au mixage, et
+        // les oublier livrerait une vidéo muette. Ce fil-là court sous les
+        // deux branches.
+        guard appendsBrandOutro else {
+            // UNE PISTE AUDIO PUREMENT VIDE FAIT ÉCHOUER L'EXPORT — mesuré :
+            // `AVFoundationErrorDomain -11838 « Operation Stopped »` sur une
+            // scène muette, attrapé par `test_wrap_sansMarque_rendLaStorySeule`.
+            //
+            // Le silence explicite posé plus haut existe pour que la piste ne
+            // s'arrête pas AVANT le jingle de fermeture (`:253-256`). Sans
+            // carte de fin, il n'y a plus de jingle — donc plus rien à
+            // compenser, et la piste ne contient QUE du vide. On la retire.
+            //
+            // Le chemin marqué, lui, n'est pas concerné : le jingle y apporte
+            // toujours de l'audio réel.
+            if storyPorteDuSon {
+                applyStoryEnvelope(to: storyAudioParams, story: CMTimeRange(start: storyStart, end: baseEnd),
+                                   introJingleEnd: introJingleEnd)
+                audioParameters.append(storyAudioParams)
+            } else {
+                composition.removeTrack(storyAudioTrack)
+            }
+            return try await assemble(composition: composition,
+                                      layers: [storyLayer, introLayer].compactMap { $0 },
+                                      totalDuration: baseEnd,
+                                      renderSize: renderSize,
+                                      audioParameters: audioParameters)
+        }
+
         let overlap = CMTime(seconds: outroOverlap, preferredTimescale: 600)
         let rawOutroStart = CMTimeSubtract(baseEnd, overlap)
         // Deux bornes : jamais avant le début du temps, et jamais à l'intérieur
@@ -320,7 +422,7 @@ public enum StoryExportBranding {
         // la carte de fin (105 frames CoreGraphics + H.264) et la signature
         // sonore de fermeture. Ni l'un ni l'autre ne dépend de la story.
         let outroURL = try await brandOutroClip(size: renderSize, content: outro)
-        let outroJingleURL = try await brandJingle(.outro)
+        let outroJingle = try await loadJingle(.outro)
 
         guard let outroVideo = composition.addMutableTrack(
                 withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
@@ -340,27 +442,44 @@ public enum StoryExportBranding {
             ? CMTimeAdd(outroStart, CMTime(seconds: StoryExportOutro.logoPhase,
                                            preferredTimescale: 600))
             : outroStart
-        let outroJingleAsset = AVURLAsset(url: outroJingleURL)
-        let outroJingleDuration = try await outroJingleAsset.load(.duration)
-        if let oa = try await outroJingleAsset.loadTracks(withMediaType: .audio).first {
-            try outroJingleTrack.insertTimeRange(
-                CMTimeRange(start: .zero, duration: outroJingleDuration),
-                of: oa, at: outroJingleStart)
-        }
+        try outroJingleTrack.insertTimeRange(
+            CMTimeRange(start: .zero, duration: outroJingle.duration),
+            of: outroJingle.track, at: outroJingleStart)
 
         let outroLayer = AVMutableVideoCompositionLayerInstruction(assetTrack: outroVideo)
         outroLayer.setOpacityRamp(fromStartOpacity: 0, toEndOpacity: 1, timeRange: outroFade)
         storyLayer.setOpacityRamp(fromStartOpacity: 1, toEndOpacity: 0, timeRange: outroFade)
-        storyAudioParams.setVolumeRamp(fromStartVolume: 1, toEndVolume: 0, timeRange: outroFade)
+        applyStoryEnvelope(to: storyAudioParams, story: CMTimeRange(start: storyStart, end: baseEnd),
+                           introJingleEnd: introJingleEnd, outroJingleStart: outroJingleStart,
+                           outroFade: StoryExportJingleMix.outroFade(authorCard: outro != nil, overlap: outroOverlap))
         audioParameters.append(storyAudioParams)
 
         let totalDuration = CMTimeAdd(outroStart, outroDuration)
 
-        let instruction = AVMutableVideoCompositionInstruction()
-        instruction.timeRange = CMTimeRange(start: .zero, duration: totalDuration)
         // Premier élément = couche de devant. La carte de fin couvre la story,
         // qui couvre l'interlude.
-        instruction.layerInstructions = [outroLayer, storyLayer, introLayer].compactMap { $0 }
+        return try await assemble(composition: composition,
+                                  layers: [outroLayer, storyLayer, introLayer].compactMap { $0 },
+                                  totalDuration: totalDuration,
+                                  renderSize: renderSize,
+                                  audioParameters: audioParameters)
+    }
+
+    /// LE MIXAGE ET L'ENCODAGE, partagés par les deux sorties de `wrap`
+    /// (#7052) — avec carte de fin, et sans.
+    ///
+    /// Extrait plutôt que recopié : la branche sans marque a besoin du MÊME
+    /// mixage audio, du MÊME gabarit et du MÊME piège d'encodage. Deux copies
+    /// auraient divergé au premier correctif porté d'un seul côté, et c'est
+    /// précisément ce que ce fichier a déjà payé sur sa chaîne en deux passes.
+    private static func assemble(composition: AVMutableComposition,
+                                 layers: [AVMutableVideoCompositionLayerInstruction],
+                                 totalDuration: CMTime,
+                                 renderSize: CGSize,
+                                 audioParameters: [AVMutableAudioMixInputParameters]) async throws -> URL {
+        let instruction = AVMutableVideoCompositionInstruction()
+        instruction.timeRange = CMTimeRange(start: .zero, duration: totalDuration)
+        instruction.layerInstructions = layers
 
         let videoComposition = AVMutableVideoComposition()
         videoComposition.instructions = [instruction]
@@ -370,23 +489,8 @@ public enum StoryExportBranding {
         let audioMix = AVMutableAudioMix()
         audioMix.inputParameters = audioParameters
 
-        let outputURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("meeshy-story-\(UUID().uuidString).mp4")
-        guard let session = AVAssetExportSession(
-            asset: composition, presetName: AVAssetExportPresetHighestQuality)
-        else { throw BrandingError.compositionTrackUnavailable }
-        session.outputURL = outputURL
-        session.outputFileType = .mp4
-        session.videoComposition = videoComposition
-        session.audioMix = audioMix
-
-        // `export()` sans argument — le `export(to:as:)` d'iOS 18 tombe en
-        // SIGSEGV combiné à outputURL/outputFileType (même piège que
-        // `StoryExportIntro` et `StoryExportOutro`).
-        await session.export()
-        guard session.status == .completed else {
-            throw BrandingError.encodingFailed(session.error)
+        return try await exportRetryingDecodeFailure {
+            try await export(composition, videoComposition: videoComposition, audioMix: audioMix)
         }
-        return outputURL
     }
 }

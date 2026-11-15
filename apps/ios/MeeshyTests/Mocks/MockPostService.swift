@@ -24,6 +24,14 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var getTrendingHashtagsResult: Result<[APIHashtag], Error> = .success([])
     var createResult: Result<APIPost, Error> = .success(stubPost)
     var deleteResult: Result<Void, Error> = .success(())
+    var makePrivateResult: Result<Void, Error> = .success(())
+    /// `nil` ⇒ rend l'état demandé, comme la passerelle qui l'écrit.
+    var setCommentsDisabledResult: Result<Bool, Error>? = nil
+    var setCommentsDisabledCalls: [(postId: String, disabled: Bool)] = []
+    var makePrivateCallCount = 0
+    var lastMakePrivatePostId: String?
+    var lastMakePrivateAuthorId: String?
+    var lastMakePrivateReason: String?
     var likeResult: Result<Void, Error> = .success(())
     var unlikeResult: Result<Void, Error> = .success(())
     var bookmarkResult: Result<Void, Error> = .success(())
@@ -74,9 +82,14 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     /// et laisse tomber le champ en silence — un test comptant les appels
     /// resterait vert pendant que le consentement disparaît.
     var lastCreateDiscoverabilityPrecision: DiscoverabilityPrecision?
+    /// La LÉGENDE par média, observée pour elle-même. L'enregistrer n'est pas
+    /// du zèle : un paramètre qu'aucun observatoire ne lit se perd au premier
+    /// élargissement suivant, exactement comme celui-ci s'est perdu.
+    var lastCreateMediaCaption: [String: String]?
 
     var deleteCallCount = 0
     var lastDeletePostId: String?
+    var lastDeleteReason: String?
 
     var likeCallCount = 0
     var lastLikePostId: String?
@@ -103,6 +116,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var deleteCommentCallCount = 0
     var lastDeleteCommentPostId: String?
     var lastDeleteCommentCommentId: String?
+    var lastDeleteCommentReason: String?
 
     var repostCallCount = 0
     var lastRepostPostId: String?
@@ -143,6 +157,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     /// par défaut, sans quoi « le format n'est pas parti » et « il est parti en
     /// story » se confondraient.
     var lastCreateCanvasPostType: PostType?
+    var lastCreateCanvasMediaCaption: [String: String]?
 
     var createWithTypeCallCount = 0
     var lastCreateWithTypeType: PostType?
@@ -162,9 +177,6 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     /// `nil` (clé absente — le serveur préserve), `[]` (effacement explicite),
     /// une liste (remplacement).
     var lastUpdateMentions: [PostMentionInput]?
-
-    var viewPostCallCount = 0
-    var lastViewPostId: String?
 
     var getPostViewsCallCount = 0
     var getUserPostsCallCount = 0
@@ -189,6 +201,12 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     /// Même pattern que `getCommentsResultsQueue`.
     var getCommentRepliesResultsQueue: [Result<PaginatedAPIResponse<[APIPostComment]>, Error>] = []
     var getCommunityPostsCallCount = 0
+    /// Communauté et curseur reçus par le dernier `getCommunityPosts` (#16878).
+    var lastGetCommunityPostsCommunityId: String?
+    var lastGetCommunityPostsCursor: String?
+    /// File de résultats page par page pour `getCommunityPosts` ; vide → repli
+    /// sur `getFeedResult` (comportement historique).
+    var getCommunityPostsResultsQueue: [Result<PaginatedAPIResponse<[APIPost]>, Error>] = []
 
     var getBookmarksResult: Result<PaginatedAPIResponse<[APIPost]>, Error> = .success(emptyPaginatedPosts)
     var getBookmarksCallCount = 0
@@ -210,21 +228,53 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     }()
     var getCommentsCallCount = 0
     var lastGetCommentsPostId: String?
+    var lastGetCommentsCursor: String?
+    var lastGetCommentsLimit: Int?
     /// File de pages pour les tests multi-pages (chasse paginée d'un
     /// commentaire notifié) : consommée en priorité, une entrée par appel.
     var getCommentsResultsQueue: [Result<PaginatedAPIResponse<[APIPostComment]>, Error>] = []
 
-    var recordImpressionsResult: Result<Void, Error> = .success(())
-    var recordImpressionsCallCount = 0
-    var lastRecordImpressionPostIds: [String]?
-    var lastRecordImpressionsSource: String?
-
-    var recordImpressionCallCount = 0
-    var lastRecordImpressionPostId: String?
-    var lastRecordImpressionSource: String?
-
-    var recordEngagementCallCount = 0
-    var lastRecordEngagementSessions: [EngagementSession]?
+    /// #10483 — la porte `POST /social/events` : chaque lot reçu, dans l'ordre,
+    /// et l'identité sous laquelle il est parti. La file de résultats est
+    /// consommée en priorité, une entrée par appel.
+    var recordSocialEventsCallCount = 0
+    var recordedSocialEventBatches: [[SocialEvent]] = []
+    /// #10500 — les mêmes lots, enveloppes comprises (`eventId`, `occurredAt`).
+    var recordedStampedSocialEventBatches: [[StampedSocialEvent]] = []
+    var recordedSocialEventsCredentials: [SocialEventsCredential] = []
+    var recordSocialEventsResult: Result<SocialEventsReceipt, Error> = .success(SocialEventsReceipt(recorded: 0, rejected: 0))
+    var recordSocialEventsResultsQueue: [Result<SocialEventsReceipt, Error>] = []
+    var recordedSocialEvents: [SocialEvent] { recordedSocialEventBatches.flatMap { $0 } }
+    /// #10500 — les lots v2, tels que partis sur le fil (corps JSON décodé).
+    var recordedSocialEventsV2Bodies: [[String: Any]] = []
+    var recordSocialEventsV2Result: Result<SocialEventsV2Receipt, Error> = .success(SocialEventsV2Receipt(recorded: 0, rejected: 0))
+    var recordedSocialEventsV2Types: [String] {
+        recordedSocialEventsV2Bodies.flatMap { ($0["events"] as? [[String: Any]] ?? []).compactMap { $0["type"] as? String } }
+    }
+    /// Les impressions reçues par la porte, dans l'ordre.
+    var recordedImpressions: [SocialEvent] {
+        recordedSocialEvents.filter { if case .impression = $0 { return true } else { return false } }
+    }
+    /// Les vues reçues par la porte, dans l'ordre.
+    var recordedViews: [SocialEvent] {
+        recordedSocialEvents.filter { if case .view = $0 { return true } else { return false } }
+    }
+    /// Les identifiants du dernier lot reçu par la porte.
+    var lastSocialEventPostIds: [String]? { recordedSocialEventBatches.last?.map(\.postId) }
+    /// Les identifiants des impressions reçues, dans l'ordre.
+    var recordedImpressionPostIds: [String] { recordedImpressions.map(\.postId) }
+    /// Les sources des impressions reçues, dans l'ordre.
+    var recordedImpressionSources: [String] {
+        recordedImpressions.compactMap { if case .impression(_, let source, _, _, _) = $0 { return source } else { return nil } }
+    }
+    /// #10501 — les impressions reçues, sans leur contexte de listing ni leur
+    /// visibilité : ce qui est COMPTÉ, quel que soit ce qui le qualifie.
+    var recordedCountedImpressions: [SocialEvent] {
+        recordedImpressions.compactMap {
+            guard case .impression(let postId, let source, let surface, _, _) = $0 else { return nil }
+            return .impression(postId: postId, source: source, surface: surface)
+        }
+    }
 
     // MARK: - Protocol Conformance
 
@@ -245,8 +295,14 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         return try (getReelsResult ?? getFeedResult).get()
     }
 
+    /// Une réponse par curseur, servie après ce que le témoin fait PENDANT l'appel.
+    var getPostsByHashtagByCursor: [String: PaginatedAPIResponse<[APIPost]>] = [:]
+    var duringGetPostsByHashtag: (@MainActor (_ cursor: String?) async -> Void)?
+
     func getPostsByHashtag(tag: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
         getPostsByHashtagCallCount += 1
+        await duringGetPostsByHashtag?(cursor)
+        if let served = getPostsByHashtagByCursor[cursor ?? ""] { return served }
         return try getPostsByHashtagResult.get()
     }
 
@@ -272,6 +328,13 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     /// défaut du protocole rabat l'appel sur la signature `visibilityUserIds`
     /// et `discoverabilityPrecision` s'évapore — un test vert prouverait
     /// l'inverse de ce qu'il croit.
+    ///
+    /// **`mediaCaption` a été AJOUTÉ à la requirement, et l'oublier ici a rendu
+    /// deux suites rouges** (#4117, #4118). Une surcharge du double qui perd un
+    /// paramètre ne casse RIEN à la compilation — l'extension par défaut du
+    /// protocole rabat l'appel sur une signature plus pauvre, en silence. Le
+    /// paragraphe ci-dessus l'annonçait mot pour mot et ça n'a rien empêché :
+    /// `test_leDouble_observeLaRequirementCompleteDeCreate` le fait rougir.
     func create(content: String?, type: String, visibility: String, visibilityUserIds: [String]?,
                 moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?,
                 originalLanguage: String?,
@@ -279,8 +342,10 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
                 repostOfId: String?, location: SharedPlace?,
                 mentions: [PostMentionInput]?,
                 allowSoundExtraction: Bool?, mediaAlt: [String: String]?,
+                mediaCaption: [String: String]?,
                 discoverabilityPrecision: DiscoverabilityPrecision?) async throws -> APIPost {
         lastCreateDiscoverabilityPrecision = discoverabilityPrecision
+        lastCreateMediaCaption = mediaCaption
         return try await create(content: content, type: type, visibility: visibility,
                                 visibilityUserIds: visibilityUserIds, moodEmoji: moodEmoji,
                                 mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration,
@@ -323,9 +388,22 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     }
 
     func delete(postId: String) async throws {
+        try await delete(postId: postId, reason: nil)
+    }
+
+    func delete(postId: String, reason: String?) async throws {
         deleteCallCount += 1
         lastDeletePostId = postId
+        lastDeleteReason = reason
         try deleteResult.get()
+    }
+
+    func makePrivate(postId: String, authorId: String, reason: String?) async throws {
+        makePrivateCallCount += 1
+        lastMakePrivatePostId = postId
+        lastMakePrivateAuthorId = authorId
+        lastMakePrivateReason = reason
+        try makePrivateResult.get()
     }
 
     func like(postId: String) async throws {
@@ -359,7 +437,8 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
     func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, clientMutationId: String?) async throws -> APIPostComment {
         lastAddCommentClientMutationId = clientMutationId
-        return try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags)
+        return try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
+                                    attachmentIds: nil, mobileTranscription: nil, originalLanguage: nil)
     }
 
     func likeComment(postId: String, commentId: String) async throws {
@@ -377,9 +456,14 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     }
 
     func deleteComment(postId: String, commentId: String) async throws {
+        try await deleteComment(postId: postId, commentId: commentId, reason: nil)
+    }
+
+    func deleteComment(postId: String, commentId: String, reason: String?) async throws {
         deleteCommentCallCount += 1
         lastDeleteCommentPostId = postId
         lastDeleteCommentCommentId = commentId
+        lastDeleteCommentReason = reason
         try deleteCommentResult.get()
     }
 
@@ -497,11 +581,31 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     func createCanvasPost(type: PostType, content: String?, storyEffects: StoryEffects?,
                           visibility: String, visibilityUserIds: [String]?, originalLanguage: String?,
                           mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?,
-                          allowSoundExtraction: Bool?, mediaAlt: [String: String]?) async throws -> APIPost {
+                          allowSoundExtraction: Bool?, mediaAlt: [String: String]?,
+                          mediaCaption: [String: String]?) async throws -> APIPost {
         lastCreateCanvasPostType = type
+        lastCreateCanvasMediaCaption = mediaCaption
         return try await createStory(content: content, storyEffects: storyEffects, visibility: visibility,
                                      visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage,
                                      mediaIds: mediaIds, repostOfId: repostOfId, mentions: mentions)
+    }
+
+    /// #10321 — la clé d'idempotence de chaque publication par canevas, dans l'ordre.
+    var createCanvasClientMutationIds: [String?] = []
+
+    func createCanvasPost(type: PostType, content: String?, storyEffects: StoryEffects?,
+                          visibility: String, visibilityUserIds: [String]?, originalLanguage: String?,
+                          mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?,
+                          allowSoundExtraction: Bool?, mediaAlt: [String: String]?,
+                          mediaCaption: [String: String]?, alsoAsReel: Bool?,
+                          clientMutationId: String?) async throws -> APIPost {
+        createCanvasClientMutationIds.append(clientMutationId)
+        return try await createCanvasPost(type: type, content: content, storyEffects: storyEffects,
+                                          visibility: visibility, visibilityUserIds: visibilityUserIds,
+                                          originalLanguage: originalLanguage, mediaIds: mediaIds,
+                                          repostOfId: repostOfId, mentions: mentions,
+                                          allowSoundExtraction: allowSoundExtraction, mediaAlt: mediaAlt,
+                                          mediaCaption: mediaCaption)
     }
 
     func createWithType(_ type: PostType, content: String, visibility: String,
@@ -512,6 +616,13 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     }
 
     func requestTranslation(postId: String, targetLanguage: String) async throws {}
+
+    func requestMediaCaptionTranslation(mediaId: String, targetLanguage: String) async throws {}
+
+    func setCommentsDisabled(postId: String, disabled: Bool) async throws -> Bool {
+        setCommentsDisabledCalls.append((postId, disabled))
+        return try setCommentsDisabledResult?.get() ?? disabled
+    }
 
     func pinPost(postId: String) async throws {}
 
@@ -544,15 +655,15 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
                                 mediaIds: mediaIds, location: location)
     }
 
-    func viewPost(postId: String, duration: Int?) async throws {
-        viewPostCallCount += 1
-        lastViewPostId = postId
-    }
-
-    func getPostViews(postId: String, limit: Int, offset: Int) async throws -> PostViewersResponse {
+    func getPostViews(
+        postId: String, limit: Int, offset: Int
+    ) async throws -> OffsetPaginatedAPIResponse<[APIPostViewer]> {
         getPostViewsCallCount += 1
+        // La forme que la ROUTE sert : la liste dans `data`, la pagination en
+        // sœur (`routes/posts/interactions.ts`). Le double décodait l'ancienne
+        // forme, que rien n'a jamais servie.
         return JSONStub.decode("""
-        {"items":[],"pagination":{"total":0,"offset":0,"limit":\(limit),"hasMore":false}}
+        {"success":true,"data":[],"pagination":{"total":0,"offset":\(offset),"limit":\(limit),"hasMore":false}}
         """)
     }
 
@@ -561,12 +672,14 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var lastUpdateCommentId: String?
     var lastUpdateCommentContent: String?
     var lastUpdateCommentEffectFlags: Int?
+    var lastUpdateCommentOriginalLanguage: String?
 
-    func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?) async throws -> APIPostComment {
+    func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?, originalLanguage: String?) async throws -> APIPostComment {
         updateCommentCallCount += 1
         lastUpdateCommentId = commentId
         lastUpdateCommentContent = content
         lastUpdateCommentEffectFlags = effectFlags
+        lastUpdateCommentOriginalLanguage = originalLanguage
         return try updateCommentResult.get()
     }
 
@@ -592,6 +705,11 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
     func getCommunityPosts(communityId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
         getCommunityPostsCallCount += 1
+        lastGetCommunityPostsCommunityId = communityId
+        lastGetCommunityPostsCursor = cursor
+        if !getCommunityPostsResultsQueue.isEmpty {
+            return try getCommunityPostsResultsQueue.removeFirst().get()
+        }
         return try getFeedResult.get()
     }
 
@@ -601,10 +719,15 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         return try getBookmarksResult.get()
     }
 
+    /// Joué PENDANT l'appel : ce qui arrive à l'écran le temps de la réponse.
+    var onRemoveBookmark: (@MainActor (String) async -> Void)?
+
     func removeBookmark(postId: String) async throws {
         removeBookmarkCallCount += 1
         lastRemoveBookmarkPostId = postId
-        try removeBookmarkResult.get()
+        let result = removeBookmarkResult
+        if let onRemoveBookmark { await onRemoveBookmark(postId) }
+        try result.get()
     }
 
     func getPost(postId: String) async throws -> APIPost {
@@ -616,28 +739,28 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     func getComments(postId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]> {
         getCommentsCallCount += 1
         lastGetCommentsPostId = postId
+        lastGetCommentsCursor = cursor
+        lastGetCommentsLimit = limit
         if !getCommentsResultsQueue.isEmpty {
             return try getCommentsResultsQueue.removeFirst().get()
         }
         return try getCommentsResult.get()
     }
 
-    func recordImpressions(postIds: [String], source: String) async throws {
-        recordImpressionsCallCount += 1
-        lastRecordImpressionPostIds = postIds
-        lastRecordImpressionsSource = source
-        try recordImpressionsResult.get()
+    func recordSocialEventsV2(body: Data, credential: SocialEventsCredential) async throws -> SocialEventsV2Receipt {
+        recordedSocialEventsV2Bodies.append((try? JSONSerialization.jsonObject(with: body) as? [String: Any]) ?? [:])
+        return try recordSocialEventsV2Result.get()
     }
 
-    func recordImpression(postId: String, source: String) async throws {
-        recordImpressionCallCount += 1
-        lastRecordImpressionPostId = postId
-        lastRecordImpressionSource = source
-    }
-
-    func recordEngagement(_ sessions: [EngagementSession]) async throws {
-        recordEngagementCallCount += 1
-        lastRecordEngagementSessions = sessions
+    func recordSocialEvents(_ events: [StampedSocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
+        recordSocialEventsCallCount += 1
+        recordedSocialEventBatches.append(events.map(\.event))
+        recordedStampedSocialEventBatches.append(events)
+        recordedSocialEventsCredentials.append(credential)
+        if !recordSocialEventsResultsQueue.isEmpty {
+            return try recordSocialEventsResultsQueue.removeFirst().get()
+        }
+        return try recordSocialEventsResult.get()
     }
 
     // MARK: - Reset
@@ -667,6 +790,13 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         deleteResult = .success(())
         deleteCallCount = 0
         lastDeletePostId = nil
+        lastDeleteReason = nil
+
+        makePrivateResult = .success(())
+        makePrivateCallCount = 0
+        lastMakePrivatePostId = nil
+        lastMakePrivateAuthorId = nil
+        lastMakePrivateReason = nil
 
         likeResult = .success(())
         likeCallCount = 0
@@ -700,6 +830,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         deleteCommentCallCount = 0
         lastDeleteCommentPostId = nil
         lastDeleteCommentCommentId = nil
+        lastDeleteCommentReason = nil
 
         repostResult = .success(stubPost)
         repostCallCount = 0
@@ -723,6 +854,8 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         createStoryHangs = false
         createStoryCallCount = 0
         lastCreateCanvasPostType = nil
+        lastCreateCanvasMediaCaption = nil
+        lastCreateMediaCaption = nil
         lastCreateStoryContent = nil
         lastCreateStoryRepostOfId = nil
         lastCreateStoryOriginalLanguage = nil
@@ -741,8 +874,6 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastUpdateStoryEffects = nil
         lastUpdateMediaIds = nil
         lastUpdateLocation = nil
-        viewPostCallCount = 0
-        lastViewPostId = nil
         getPostViewsCallCount = 0
         getUserPostsCallCount = 0
         lastGetUserPostsCursor = nil
@@ -774,17 +905,16 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
         getCommentsCallCount = 0
         lastGetCommentsPostId = nil
+        lastGetCommentsCursor = nil
+        lastGetCommentsLimit = nil
 
-        recordImpressionsCallCount = 0
-        lastRecordImpressionsSource = nil
-        recordImpressionsResult = .success(())
-        lastRecordImpressionPostIds = nil
-
-        recordImpressionCallCount = 0
-        lastRecordImpressionPostId = nil
-        lastRecordImpressionSource = nil
-
-        recordEngagementCallCount = 0
-        lastRecordEngagementSessions = nil
+        recordSocialEventsCallCount = 0
+        recordedSocialEventBatches = []
+        recordedStampedSocialEventBatches = []
+        recordedSocialEventsCredentials = []
+        recordSocialEventsResult = .success(SocialEventsReceipt(recorded: 0, rejected: 0))
+        recordSocialEventsResultsQueue = []
+        recordedSocialEventsV2Bodies = []
+        recordSocialEventsV2Result = .success(SocialEventsV2Receipt(recorded: 0, rejected: 0))
     }
 }

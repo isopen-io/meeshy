@@ -24,8 +24,7 @@ nonisolated enum NearbyDistanceLabel {
 
 // MARK: - « Voir près d'ici »
 
-/// Action contextuelle sur un badge de position DÉJÀ affiché (spec du
-/// 2026-08-02 §4 — points d'entrée).
+/// Action contextuelle sur un badge de position DÉJÀ affiché.
 ///
 /// Elle est INDÉPENDANTE de l'opt-in de découvrabilité : le lieu est déjà
 /// public sur la publication, ouvrir la carte autour de lui n'expose rien de
@@ -62,7 +61,7 @@ struct SeeNearbyContextMenu: ViewModifier {
 
 // MARK: - Écran
 
-/// **Découverte de publications par proximité** (spec du 2026-08-02 §4).
+/// **Découverte de publications par proximité**.
 ///
 /// Trois lectures d'un même rayon — densité, pins, liste — et surtout : un
 /// écran vide qui DIT pourquoi il est vide.
@@ -78,9 +77,12 @@ struct SeeNearbyContextMenu: ViewModifier {
 /// le squelette n'apparaît qu'au démarrage à froid — quand il n'y a réellement
 /// rien.
 struct NearbyDiscoveryView: View {
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
     @StateObject private var viewModel: NearbyDiscoveryViewModel
     @State private var selectedPostId: String?
+    /// #10483 — un post listé ou épinglé ici est un affichage de la surface
+    /// « autour de moi ».
+    @StateObject private var impressions = ImpressionBatcher(source: "search", surface: .nearby)
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -90,8 +92,18 @@ struct NearbyDiscoveryView: View {
         )
     }
 
+    /// Cherché dans les DEUX jeux : les résultats de proximité et, pour le
+    /// staff, les publications du fil du mode Discover.
     private var selectedPost: FeedPost? {
-        selectedPostId.flatMap { id in viewModel.posts.first(where: { $0.id == id }) }
+        selectedPostId.flatMap { id in
+            (viewModel.posts + viewModel.discoverPosts).first(where: { $0.id == id })
+        }
+    }
+
+    /// En mode Discover, les raisons de proximité (position refusée, hors
+    /// ligne…) ne s'appliquent pas : la carte du fil a la sienne.
+    private var shownEmptyReason: NearbyEmptyReason? {
+        viewModel.section == .discover ? viewModel.discoverEmptyReason : viewModel.emptyReason
     }
 
     var body: some View {
@@ -106,7 +118,7 @@ struct NearbyDiscoveryView: View {
                 modePicker
                 statusPill
                 Spacer(minLength: 0)
-                if let reason = viewModel.emptyReason {
+                if let reason = shownEmptyReason {
                     NearbyEmptyStateCard(
                         reason: reason,
                         radiusKm: viewModel.radiusKm,
@@ -119,22 +131,48 @@ struct NearbyDiscoveryView: View {
                 if let post = selectedPost {
                     selectedPostCard(post)
                 }
-                radiusPicker
+                // Le rayon ne gouverne que la proximité ; Discover montre la
+                // plateforme entière.
+                if viewModel.section != .discover {
+                    radiusPicker
+                }
             }
             .padding(.top, MeeshySpacing.sm)
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: selectedPostId)
         .animation(.easeInOut(duration: 0.2), value: viewModel.mode)
+        .animation(.easeInOut(duration: 0.2), value: viewModel.section)
         .task { await viewModel.load() }
+        .adaptiveOnChange(of: selectedPostId) { _, postId in
+            if let postId { impressions.record(postId) }
+        }
+        .onDisappear { Task { await impressions.flushNow() } }
     }
 
     // MARK: - Surface : carte ou liste
 
     @ViewBuilder
     private var surface: some View {
-        if viewModel.mode == .list {
-            listSurface
+        // La SECTION décide d'abord. Discover montre la
+        // plateforme (posts du fil sur la carte) ; son sous-mode Populaire
+        // chauffe les points par la popularité (vues + impressions).
+        if viewModel.section == .discover {
+            PostsMapRepresentable(posts: viewModel.discoverPosts,
+                                  weightByPopularity: viewModel.mode == .popular,
+                                  selectedPostId: $selectedPostId)
         } else {
+            nearbySurface
+        }
+    }
+
+    @ViewBuilder
+    private var nearbySurface: some View {
+        switch viewModel.mode {
+        case .list:
+            listSurface
+        // `.popular` n'existe que dans la section Discover (rendue à part) ;
+        // il n'atteint jamais la surface Nearby, mais le switch reste exhaustif.
+        case .density, .pins, .popular:
             NearbyDiscoveryMapView(
                 mode: viewModel.mode,
                 showsPins: viewModel.showsIndividualPins,
@@ -170,7 +208,10 @@ struct NearbyDiscoveryView: View {
                             distanceMeters: viewModel.distanceMeters(for: post.id)
                         ) {
                             HapticFeedback.light()
-                            router.push(.postDetail(post.id, post))
+                            router.openPostDetail(post, from: .nearby)
+                        }
+                        .countsListedImpression(of: post.id, isVideo: post.isReel, in: impressions) {
+                            viewModel.posts.firstIndex { $0.id == post.id }
                         }
                         .onAppear {
                             guard post.id == viewModel.posts.last?.id else { return }
@@ -197,23 +238,17 @@ struct NearbyDiscoveryView: View {
             } label: {
                 Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(15, weight: .bold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(theme.backgroundSecondary.opacity(0.9)))
+                    .meeshyTapTarget()
+                    .padding(-MeeshyTapTarget.inset(forVisualSide: 36))
             }
             .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
 
             Spacer()
 
-            // Même clé que le titre de la route : deux entrées de catalogue
-            // pour un même mot finiraient par diverger d'une langue à l'autre.
-            Text(String(localized: "route.title.nearby", defaultValue: "À proximité", bundle: .main))
-                .font(MeeshyFont.relative(14, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
-                .padding(.horizontal, MeeshySpacing.md)
-                .padding(.vertical, MeeshySpacing.sm)
-                .background(Capsule().fill(theme.backgroundSecondary.opacity(0.9)))
-                .accessibilityAddTraits(.isHeader)
+            sectionSwitch
 
             Spacer()
 
@@ -226,10 +261,12 @@ struct NearbyDiscoveryView: View {
                 Task { await viewModel.refresh() }
             } label: {
                 Image(systemName: "arrow.clockwise")
-                    .font(MeeshyFont.relative(14, weight: .bold))
-                    .foregroundColor(theme.textPrimary)
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
+                    .foregroundStyle(theme.textPrimary)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(theme.backgroundSecondary.opacity(0.9)))
+                    .meeshyTapTarget()
+                    .padding(-MeeshyTapTarget.inset(forVisualSide: 36))
             }
             .buttonStyle(.plain)
             .accessibilityLabel(
@@ -240,19 +277,65 @@ struct NearbyDiscoveryView: View {
         .padding(.horizontal, MeeshySpacing.lg)
     }
 
+    /// **Le switch de SECTION** — Nearby ⟷ Discover, en
+    /// haut. Discover n'existe que pour le staff (`availableSections`) ; sans
+    /// lui, la place tient le titre « À proximité » comme avant.
+    @ViewBuilder
+    private var sectionSwitch: some View {
+        if viewModel.availableSections.count > 1 {
+            Picker("", selection: $viewModel.section) {
+                ForEach(viewModel.availableSections, id: \.self) { section in
+                    Text(Self.sectionLabel(section)).tag(section)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 220)
+            .accessibilityIdentifier("feed.nearby.section")
+        } else {
+            Text(Self.sectionLabel(.nearby))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                .foregroundStyle(theme.textPrimary)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.sm)
+                .background(Capsule().fill(theme.backgroundSecondary.opacity(0.9)))
+                .accessibilityAddTraits(.isHeader)
+        }
+    }
+
+    private static func sectionLabel(_ section: NearbyDiscoverySection) -> String {
+        switch section {
+        case .nearby:
+            return String(localized: "route.title.nearby", defaultValue: "À proximité", bundle: .main)
+        case .discover:
+            return String(localized: "feed.nearby.mode.discover", defaultValue: "Découvrir", bundle: .main)
+        }
+    }
+
+    /// Les segments viennent d'`availableModes` (= `section.modes`) — le picker
+    /// contextuel des sous-modes de la section courante.
     private var modePicker: some View {
         Picker("", selection: $viewModel.mode) {
-            Text(String(localized: "feed.nearby.mode.density", defaultValue: "Densité", bundle: .main))
-                .tag(NearbyDiscoveryMode.density)
-            Text(String(localized: "feed.nearby.mode.pins", defaultValue: "Points", bundle: .main))
-                .tag(NearbyDiscoveryMode.pins)
-            Text(String(localized: "feed.nearby.mode.list", defaultValue: "Liste", bundle: .main))
-                .tag(NearbyDiscoveryMode.list)
+            ForEach(viewModel.availableModes, id: \.self) { mode in
+                Text(Self.label(for: mode)).tag(mode)
+            }
         }
         .pickerStyle(.segmented)
         .labelsHidden()
         .padding(.horizontal, MeeshySpacing.xl)
         .accessibilityIdentifier("feed.nearby.mode")
+    }
+
+    private static func label(for mode: NearbyDiscoveryMode) -> String {
+        switch mode {
+        case .density:
+            return String(localized: "feed.nearby.mode.density", defaultValue: "Densité", bundle: .main)
+        case .pins:
+            return String(localized: "feed.nearby.mode.pins", defaultValue: "Points", bundle: .main)
+        case .list:
+            return String(localized: "feed.nearby.mode.list", defaultValue: "Liste", bundle: .main)
+        case .popular:
+            return String(localized: "feed.nearby.mode.popular", defaultValue: "Populaire", bundle: .main)
+        }
     }
 
     /// **Jamais un voile, jamais un spinner par-dessus des données.** Une
@@ -263,10 +346,10 @@ struct NearbyDiscoveryView: View {
         if let text = statusText {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: viewModel.isOffline ? "wifi.slash" : "clock.arrow.circlepath")
-                    .font(MeeshyFont.relative(10, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                     .accessibilityHidden(true)
                 Text(text)
-                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
             }
             .foregroundColor(viewModel.isOffline ? MeeshyColors.warning : theme.textSecondary)
             .padding(.horizontal, MeeshySpacing.md)
@@ -277,6 +360,8 @@ struct NearbyDiscoveryView: View {
     }
 
     private var statusText: String? {
+        // Discover lit le cache du fil : ni recherche, ni revalidation à dire.
+        if viewModel.section == .discover { return nil }
         if viewModel.isOffline && viewModel.hasContent {
             return String(
                 localized: "feed.nearby.status.offline",
@@ -323,8 +408,8 @@ struct NearbyDiscoveryView: View {
             Task { await viewModel.setRadius(kilometers: km) }
         } label: {
             Text(String(format: "%.0f km", km))
-                .font(MeeshyFont.relative(12, weight: isSelected ? .semibold : .regular))
-                .foregroundColor(isSelected ? .white : theme.textSecondary)
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: isSelected ? .semibold : .regular))
+                .foregroundStyle(isSelected ? Color.white : theme.textSecondary)
                 .padding(.horizontal, MeeshySpacing.md)
                 .padding(.vertical, MeeshySpacing.xs)
                 .background(
@@ -340,26 +425,27 @@ struct NearbyDiscoveryView: View {
     private func selectedPostCard(_ post: FeedPost) -> some View {
         Button {
             HapticFeedback.light()
-            router.push(.postDetail(post.id, post))
+            router.openPostDetail(post, from: .nearby)
         } label: {
             HStack(spacing: MeeshySpacing.md) {
                 MeeshyAvatar(
                     name: post.author,
                     context: .custom(40),
                     accentColor: post.authorColor,
-                    avatarURL: post.authorAvatarURL
+                    avatarURL: post.authorAvatarURL,
+                    ring: post.authorRing
                 )
                 .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(post.author)
-                        .font(MeeshyFont.relative(13, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
                     if !post.displayContent.isEmpty {
                         Text(post.displayContent)
-                            .font(MeeshyFont.relative(12))
-                            .foregroundColor(theme.textSecondary)
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                            .foregroundStyle(theme.textSecondary)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
                     }
@@ -369,13 +455,13 @@ struct NearbyDiscoveryView: View {
 
                 if let meters = viewModel.distanceMeters(for: post.id) {
                     Text(NearbyDistanceLabel.short(meters: meters))
-                        .font(MeeshyFont.relative(11, weight: .semibold))
-                        .foregroundColor(MeeshyColors.indigo500)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                        .foregroundStyle(MeeshyColors.indigo500)
                 }
 
                 Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(11, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .accessibilityHidden(true)
             }
             .padding(MeeshySpacing.md)
@@ -394,7 +480,7 @@ struct NearbyDiscoveryView: View {
         switch reason {
         case .locationDenied:
             MediaPermissionCoordinator.openSettings()
-        case .awaitingLocation, .offline, .signInRequired, .serviceUnavailable:
+        case .awaitingLocation, .offline, .signInRequired, .serviceUnavailable, .nothingOnTheMap:
             await viewModel.refresh()
         case .noneInRadius:
             guard let wider = NearbyDiscoveryViewModel.offeredRadiiKm
@@ -423,10 +509,12 @@ struct NearbyDiscoveryView: View {
 struct NearbyEmptyStateCard: View {
     let reason: NearbyEmptyReason
     let radiusKm: Double
-    let action: () async -> Void
-    let secondaryAction: () async -> Void
+    let action: @MainActor () async -> Void
+    let secondaryAction: @MainActor () async -> Void
 
     private var theme: ThemeManager { ThemeManager.shared }
+
+    @State private var openNoteID: String?
 
     private var secondaryTitle: String? {
         guard reason == .locationDenied else { return nil }
@@ -437,40 +525,44 @@ struct NearbyEmptyStateCard: View {
         VStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(30, weight: .medium))
-                .foregroundColor(MeeshyColors.indigo400)
+                .foregroundStyle(MeeshyColors.indigo400)
                 .accessibilityHidden(true)
 
             Text(title)
-                .font(MeeshyFont.relative(16, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
+                .foregroundStyle(theme.textPrimary)
                 .multilineTextAlignment(.center)
 
-            Text(detail)
-                .font(MeeshyFont.relative(13))
-                .foregroundColor(theme.textSecondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+            if let detail = Self.detail(for: reason, radiusKm: radiusKm) {
+                Text(detail)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
+                    .foregroundStyle(theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             if reason == .noneInRadius {
-                Text(
-                    String(
-                        localized: "feed.nearby.empty.none.why",
-                        defaultValue: "Seules les publications dont l'auteur a activé « trouvable à proximité » apparaissent ici. Les publications antérieures à cette option n'y figurent pas.",
-                        bundle: .main
+                MeeshyInfoNoted(note: Self.whyNote, openNoteID: $openNoteID, tint: theme.textMuted) {
+                    Text(
+                        String(
+                            localized: "feed.nearby.empty.none.why",
+                            defaultValue: "Seules les publications « trouvables à proximité » apparaissent ici.",
+                            bundle: .main
+                        )
                     )
-                )
-                .font(MeeshyFont.relative(11))
-                .foregroundColor(theme.textMuted)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                    .foregroundColor(theme.textMuted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             Button {
                 Task { await action() }
             } label: {
                 Text(actionTitle)
-                    .font(MeeshyFont.relative(13, weight: .semibold))
-                    .foregroundColor(.white)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                    .foregroundStyle(Color.white)
                     .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.vertical, MeeshySpacing.sm)
                     .background(Capsule().fill(MeeshyColors.indigo500))
@@ -483,8 +575,8 @@ struct NearbyEmptyStateCard: View {
                     Task { await secondaryAction() }
                 } label: {
                     Text(secondaryTitle)
-                        .font(MeeshyFont.relative(13, weight: .semibold))
-                        .foregroundColor(MeeshyColors.indigo500)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                        .foregroundStyle(MeeshyColors.indigo500)
                         .padding(.horizontal, MeeshySpacing.xl)
                         .padding(.vertical, MeeshySpacing.xs)
                 }
@@ -509,6 +601,7 @@ struct NearbyEmptyStateCard: View {
         case .signInRequired:  return "person.crop.circle.badge.questionmark"
         case .serviceUnavailable: return "exclamationmark.icloud"
         case .noneInRadius:    return "mappin.slash"
+        case .nothingOnTheMap: return "map"
         }
     }
 
@@ -526,27 +619,27 @@ struct NearbyEmptyStateCard: View {
             return String(localized: "feed.nearby.empty.unavailable.title", defaultValue: "Service indisponible", bundle: .main)
         case .noneInRadius:
             return String(localized: "feed.nearby.empty.none.title", defaultValue: "Rien à découvrir ici", bundle: .main)
+        case .nothingOnTheMap:
+            return String(localized: "feed.map.empty.title", defaultValue: "Aucun post localisé", bundle: .main)
         }
     }
 
-    private var detail: String {
+    /// Pourquoi une publication manque-t-elle ? Le cas limite (l'auteur n'a pas activé l'option, les
+    /// publications antérieures n'y figurent pas) derrière un (i) ; la phrase qui oriente reste au repos.
+    static var whyNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "feed.nearby.empty.none.why.question", defaultValue: "Pourquoi une publication manque-t-elle ?", bundle: .main),
+            text: String(localized: "feed.nearby.empty.none.why.note", defaultValue: "L'auteur doit avoir activé « trouvable à proximité ». Les publications antérieures à cette option n'y figurent pas.", bundle: .main)
+        )
+    }
+
+    /// Une phrase, ou rien : l'état vide de la carte tient dans son titre.
+    static func detail(for reason: NearbyEmptyReason, radiusKm: Double) -> String? {
         switch reason {
-        case .locationDenied:
-            return String(localized: "feed.nearby.empty.denied.detail", defaultValue: "Meeshy n'a pas accès à votre position. Autorisez-la dans les Réglages, ou déplacez la carte à la main.", bundle: .main)
-        case .awaitingLocation:
-            return String(localized: "feed.nearby.empty.awaiting.detail", defaultValue: "Aucun relevé pour l'instant. Réessayez, ou déplacez la carte pour choisir un point de départ.", bundle: .main)
-        case .offline:
-            return String(localized: "feed.nearby.empty.offline.detail", defaultValue: "Reconnectez-vous pour explorer autour de vous.", bundle: .main)
-        case .signInRequired:
-            return String(localized: "feed.nearby.empty.signin.detail", defaultValue: "La recherche à proximité demande un compte Meeshy.", bundle: .main)
-        case .serviceUnavailable:
-            return String(localized: "feed.nearby.empty.unavailable.detail", defaultValue: "Le serveur n'a pas pu répondre. Ce n'est pas votre rayon de recherche — réessayez dans un instant.", bundle: .main)
-        case .noneInRadius:
-            return String(
-                localized: "feed.nearby.empty.none.detail",
-                defaultValue: "Aucune publication à découvrir dans un rayon de \(Int(radiusKm)) km.",
-                bundle: .main
-            )
+        case .awaitingLocation, .locationDenied:
+            return String(localized: "feed.nearby.empty.awaiting.detail", defaultValue: "Déplacez la carte pour choisir un point de départ.", bundle: .main)
+        case .offline, .signInRequired, .serviceUnavailable, .noneInRadius, .nothingOnTheMap:
+            return nil
         }
     }
 
@@ -556,7 +649,7 @@ struct NearbyEmptyStateCard: View {
             return String(localized: "feed.nearby.empty.denied.action", defaultValue: "Ouvrir les Réglages", bundle: .main)
         case .noneInRadius:
             return String(localized: "feed.nearby.empty.none.action", defaultValue: "Élargir le rayon", bundle: .main)
-        case .awaitingLocation, .offline, .signInRequired, .serviceUnavailable:
+        case .awaitingLocation, .offline, .signInRequired, .serviceUnavailable, .nothingOnTheMap:
             return String(localized: "feed.nearby.empty.retry", defaultValue: "Réessayer", bundle: .main)
         }
     }
@@ -578,38 +671,39 @@ struct NearbyPostRow: View {
                     name: post.author,
                     context: .custom(40),
                     accentColor: post.authorColor,
-                    avatarURL: post.authorAvatarURL
+                    avatarURL: post.authorAvatarURL,
+                    ring: post.authorRing
                 )
                 .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     HStack(spacing: MeeshySpacing.xs) {
                         Text(post.author)
-                            .font(MeeshyFont.relative(13, weight: .semibold))
-                            .foregroundColor(theme.textPrimary)
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                            .foregroundStyle(theme.textPrimary)
                             .lineLimit(1)
                         Spacer(minLength: 0)
                         if let distanceMeters {
                             Text(NearbyDistanceLabel.short(meters: distanceMeters))
-                                .font(MeeshyFont.relative(11, weight: .semibold))
-                                .foregroundColor(MeeshyColors.indigo500)
+                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                                .foregroundStyle(MeeshyColors.indigo500)
                         }
                     }
                     if !post.displayContent.isEmpty {
                         Text(post.displayContent)
-                            .font(MeeshyFont.relative(12))
-                            .foregroundColor(theme.textSecondary)
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                            .foregroundStyle(theme.textSecondary)
                             .lineLimit(3)
                             .multilineTextAlignment(.leading)
                     }
                     if let label = post.location.flatMap({ $0.name ?? $0.address }), !label.isEmpty {
-                        HStack(spacing: 4) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Image(systemName: "mappin.circle.fill")
-                                .font(MeeshyFont.relative(10, weight: .semibold))
+                                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                                 .accessibilityHidden(true)
                             Text(label).lineLimit(1)
                         }
-                        .font(MeeshyFont.relative(11))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundColor(theme.textMuted)
                     }
                 }
@@ -637,9 +731,9 @@ struct NearbySkeletonRow: View {
                 .fill(theme.backgroundTertiary)
                 .frame(width: 40, height: 40)
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                RoundedRectangle(cornerRadius: 4).fill(theme.backgroundTertiary).frame(width: 120, height: 10)
-                RoundedRectangle(cornerRadius: 4).fill(theme.backgroundTertiary).frame(height: 10)
-                RoundedRectangle(cornerRadius: 4).fill(theme.backgroundTertiary).frame(width: 180, height: 10)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxs).fill(theme.backgroundTertiary).frame(width: 120, height: 10)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxs).fill(theme.backgroundTertiary).frame(height: 10)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxs).fill(theme.backgroundTertiary).frame(width: 180, height: 10)
             }
         }
         .padding(MeeshySpacing.md)

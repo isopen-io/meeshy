@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_display_language">Lingua di visualizzazione</string>
+    <string name="settings_regional_language_search">Cerca lingue</string>
+    <string name="settings_regional_language_empty">Nessuna lingua corrisponde alla ricerca</string>
+    <string name="settings_notif_show_preview">Anteprima del messaggio</string>
+    <string name="settings_notif_badge_enabled">Badge sull\'icona dell\'app</string>
+    <string name="settings_dnd_start">Dalle</string>
+    <string name="settings_dnd_end">Fino alle</string>
+    <string name="settings_dnd_days">Ripeti il</string>
+    <string name="settings_dnd_every_day">Ogni giorno</string>
+    <string name="settings_dnd_active">Ore di silenzio attive ora</string>
+    <string name="settings_dnd_inactive">Disattivato al momento</string>
+    <string name="settings_dnd_day_mon">Lun</string>
+    <string name="settings_dnd_day_tue">Mar</string>
+    <string name="settings_dnd_day_wed">Mer</string>
+    <string name="settings_dnd_day_thu">Gio</string>
+    <string name="settings_dnd_day_fri">Ven</string>
+    <string name="settings_dnd_day_sat">Sab</string>
+    <string name="settings_dnd_time_picker_confirm">Imposta</string>
+    <string name="settings_notification_types_title">Tipi di notifica</string>
+    <string name="settings_notification_types_search">Cerca tipi di notifica</string>
+    <string name="settings_notification_types_empty">Nessun tipo di notifica corrisponde alla ricerca</string>
+    <string name="settings_notif_cat_groups">Gruppi e contatti</string>
+    <string name="settings_notif_type_conversation">Aggiornamenti delle conversazioni</string>
+    <string name="settings_notif_type_voicemail">Segreteria</string>
+    <string name="settings_notif_type_friend_content">Attività degli amici</string>
+    <string name="settings_notif_type_group_invite">Inviti ai gruppi</string>
+    <string name="settings_notif_type_system">Avvisi di sistema</string>
+    <!-- Two-factor authentication (§L) -->
+    <string name="twofactor_status_enabled">Attivata</string>
+    <string name="twofactor_regenerate_button">Rigenera i codici di backup</string>
+    <string name="twofactor_regenerate_title">Rigenera i codici di backup</string>
+    <string name="twofactor_regenerate_confirm">Rigenera</string>
+    <string name="twofactor_error_status">Impossibile caricare lo stato della 2FA</string>
+    <string name="twofactor_error_setup">Impossibile avviare la configurazione della 2FA</string>
+    <string name="twofactor_error_disable">Impossibile disattivare la 2FA</string>
+    <string name="twofactor_error_backup_codes">Impossibile rigenerare i codici di backup</string>
+    <!-- Change password (§L) -->
+    <string name="change_password_hint_match">Le password coincidono</string>
+    <string name="change_password_hint_different">Diversa dalla password attuale</string>
+    <string name="change_password_error_current">La password attuale non è corretta</string>
+    <string name="change_password_error_weak">La nuova password è troppo debole. Scegline una più lunga e meno prevedibile.</string>
+    <string name="change_password_error_rejected">Password rifiutata. Controllala e riprova.</string>
+    <!-- Email / phone change (§K) -->
+    <string name="account_contact_email_resend_cooldown">Invia di nuovo (%1$ds)</string>
+    <string name="account_contact_phone_new_label">Nuovo numero di telefono</string>
+    <string name="account_contact_phone_send_code">Invia il codice</string>
+    <string name="account_contact_error_phone_change">Impossibile inviare il codice di verifica. Controlla il numero e riprova.</string>
+    <!-- Privacy & visibility (§L) -->
+    <string name="privacy_title">Privacy e visibilità</string>
+    <!-- Account deletion (§L) -->
+    <string name="delete_account_warning_title">Questa azione non può essere annullata</string>
+    <string name="delete_account_warning_intro">L\'eliminazione dell\'account rimuove definitivamente:</string>
+    <string name="delete_account_warning_media">Tutti i contenuti multimediali condivisi</string>
+    <string name="delete_account_confirm_prompt">Digita %1$s per confermare</string>
+    <string name="delete_account_error_invalid_password">Password errata. Riprova.</string>
+    <string name="delete_account_error_pending">Una richiesta di eliminazione è già in corso. Controlla la posta in arrivo.</string>
+    <string name="delete_account_error_no_email">Aggiungi e verifica un indirizzo e-mail prima di poter eliminare l\'account.</string>
+    <string name="delete_account_email_title">Un\'e-mail di conferma sta arrivando</string>
+    <string name="delete_account_email_body">Controlla la posta in arrivo per confermare l\'eliminazione dell\'account.</string>
+
+    <!-- Data export (GDPR) -->
+    <string name="data_export_format_json">JSON</string>
+    <string name="data_export_format_csv">CSV</string>
+    <string name="data_export_content_profile">Profilo (sempre incluso)</string>
+    <string name="data_export_ready_title">Esportazione pronta</string>
+
+    <!-- Media cache management -->
+
+    <!-- Crash diagnostics -->
+    <string name="settings_diagnostics">Diagnostica</string>
+    <string name="crash_reports_title">Diagnostica</string>
+    <string name="crash_reports_clear_all">Elimina i rapporti</string>
+    <string name="crash_reports_confirm_title">Elimina i rapporti</string>
+    <string name="crash_reports_confirm_message">Tutti i rapporti di arresto anomalo salvati su questo dispositivo verranno eliminati definitivamente.</string>
+    <string name="crash_reports_error_load">Impossibile leggere i rapporti di arresto anomalo.</string>
+    <string name="crash_reports_error_clear">Impossibile eliminare i rapporti di arresto anomalo. Riprova.</string>
+    <string name="crash_kind_anr">ANR</string>
+    <string name="about_version_label">Versione %1$s</string>
+    <string name="about_info_application_id">ID applicazione</string>
+    <string name="licenses_type_mit">MIT</string>
+    <string name="licenses_type_apache">Apache 2.0</string>
+    <string name="licenses_type_bsd">BSD</string>
+    <string name="support_title">Aiuto e assistenza</string>
+
+    <!-- Active sessions -->
+</resources>

@@ -1,5 +1,7 @@
 import XCTest
+import CoreImage
 import CoreVideo
+import MeeshyUI
 @testable import Meeshy
 
 #if canImport(WebRTC)
@@ -81,7 +83,7 @@ final class VideoFilterPresetTests: XCTestCase {
         let config = VideoFilterPreset.warm.config
         XCTAssertEqual(config.temperature, 7500)
         XCTAssertEqual(config.tint, 5)
-        XCTAssertEqual(config.brightness, 0.02, accuracy: 0.001)
+        XCTAssertEqual(config.brightness, 0)
         XCTAssertEqual(config.contrast, 1.05, accuracy: 0.001)
         XCTAssertEqual(config.saturation, 1.1, accuracy: 0.001)
         XCTAssertTrue(config.isEnabled)
@@ -109,7 +111,7 @@ final class VideoFilterPresetTests: XCTestCase {
     }
 
     func test_allCases_returnsAllPresets() {
-        XCTAssertEqual(VideoFilterPreset.allCases.count, 5)
+        XCTAssertEqual(VideoFilterPreset.allCases.count, 12)
     }
 
     func test_presetPreservesAdvancedFilters() {
@@ -157,12 +159,24 @@ final class VideoFilterPresetTests: XCTestCase {
     }
 
     func test_matching_handTunedColorimetry_returnsNil() {
-        // A user dragging a slider in VideoFilterControlView produces
+        // A user dragging a slider in the effects mode produces
         // colorimetry that (generically) matches no preset — a legitimate
         // "no preset selected" state, not a bug.
         var config = VideoFilterPreset.warm.config
-        config.brightness = 0.4123
+        config.saturation = 0.4123
         XCTAssertNil(VideoFilterPreset.matching(config))
+    }
+
+    /// #9289 — la luminosité est le décalage de l'utilisateur, pas une part de la teinte :
+    /// la régler après avoir choisi « Chaud » laisse « Chaud » choisi.
+    func test_matching_brightnessOffset_keepsTheLook() {
+        let config = VideoFilterPreset.warm.config.withBrightness(0.2)
+        XCTAssertEqual(VideoFilterPreset.matching(config), .warm)
+        XCTAssertEqual(config.activePreset, .warm)
+    }
+
+    func test_presets_carryNoBrightnessOfTheirOwn() {
+        XCTAssertTrue(VideoFilterPreset.allCases.allSatisfy { $0.config.brightness == 0 })
     }
 
     func test_matching_untouchedDefaultConfig_returnsNatural() {
@@ -171,6 +185,28 @@ final class VideoFilterPresetTests: XCTestCase {
         // panel that never touched a preset still highlights "Natural",
         // matching the pre-Vague-108 default chip selection.
         XCTAssertEqual(VideoFilterPreset.matching(.default), .natural)
+    }
+}
+
+// MARK: - CallVideoLowLight Tests
+
+final class CallVideoLowLightTests: XCTestCase {
+
+    func test_boost_darkFrame_returnsStrengthBetweenZeroAndOne() throws {
+        let boost = try XCTUnwrap(CallVideoLowLight.boost(averageBrightness: 38.25, isConstrained: false))
+        XCTAssertEqual(boost, 0.5, accuracy: 0.001)
+    }
+
+    func test_boost_brightFrame_returnsNil() {
+        XCTAssertNil(CallVideoLowLight.boost(averageBrightness: 120, isConstrained: false))
+    }
+
+    func test_boost_unknownBrightness_returnsNil() {
+        XCTAssertNil(CallVideoLowLight.boost(averageBrightness: nil, isConstrained: false))
+    }
+
+    func test_boost_constrainedDevice_returnsNil() {
+        XCTAssertNil(CallVideoLowLight.boost(averageBrightness: 10, isConstrained: true))
     }
 }
 
@@ -258,6 +294,46 @@ final class VideoFilterPipelineTests: XCTestCase {
         XCTAssertNil(sut.lastFrameProcessingTime, "with no filters active at all, process() must still early-return")
     }
 
+    // MARK: - #8695 — amélioration légère du flux d'appel : la scène sombre
+
+    func test_process_darkSceneWithoutFilters_liftsTheFrame() {
+        let sut = VideoFilterPipeline(isPowerConstrained: { false })
+
+        _ = sut.process(makePixelBuffer(), averageBrightness: 20)
+
+        XCTAssertNotNil(sut.lastFrameProcessingTime, "une scène sombre s'éclaire sans qu'aucun filtre soit choisi")
+    }
+
+    func test_process_darkSceneInLowPowerMode_leavesTheFrame() {
+        let sut = VideoFilterPipeline(isPowerConstrained: { true })
+
+        _ = sut.process(makePixelBuffer(), averageBrightness: 20)
+
+        XCTAssertNil(sut.lastFrameProcessingTime, "en économie d'énergie, aucune passe GPU n'est ajoutée")
+    }
+
+    func test_process_brightSceneWithoutFilters_leavesTheFrame() {
+        let sut = VideoFilterPipeline(isPowerConstrained: { false })
+
+        _ = sut.process(makePixelBuffer(), averageBrightness: 180)
+
+        XCTAssertNil(sut.lastFrameProcessingTime, "une scène déjà claire ne coûte rien")
+    }
+
+    func test_process_overBudgetThenFiltersCleared_restoresDarkSceneLift() {
+        let sut = VideoFilterPipeline(faceEffects: SlowFaceEffectsRenderer(delay: 0.03), isPowerConstrained: { false })
+        var stylized = VideoFilterConfig.default
+        stylized.faceEffect = .toad
+        sut.config = stylized
+        (0..<10).forEach { _ in _ = sut.process(makePixelBuffer(), averageBrightness: 20) }
+        XCTAssertTrue(sut.isAutoDegraded)
+
+        sut.config = .default
+        (0..<30).forEach { _ in _ = sut.process(makePixelBuffer(), averageBrightness: 20) }
+
+        XCTAssertFalse(sut.isAutoDegraded, "une surcharge passée ne doit pas couper l'éclaircissement pour tout l'appel")
+    }
+
     // Regression test for a data race: `config` used to be a plain
     // unsynchronized `var`, written from the MainActor (slider drags) and read
     // from WebRTC's capture queue inside `process(_:averageBrightness:)` at
@@ -301,6 +377,106 @@ final class VideoFilterPipelineTests: XCTestCase {
                 )
             }
         }
+    }
+}
+
+// MARK: - #11298 — l'appel peint ses étages par LE peintre de lens
+
+final class CallLensStagesTests: XCTestCase {
+
+    /// Le fond est remplacé d'abord, l'étalonnage harmonise ensuite la personne
+    /// ET son fond, l'effet du visage se pose sur l'image étalonnée — l'ordre
+    /// du composer, plus celui que l'appel tenait (colorimétrie puis flou).
+    func test_paint_blursThenGradesThenStylizes() {
+        let journal = StageJournal()
+        let stages = CallLensStages(
+            backgroundBlur: { journal.note("segmentation"); return $0 },
+            colorimetry: { journal.note("lut"); return $0 },
+            faceEffect: { journal.note("face"); return $0 }
+        )
+
+        _ = stages.paint(Self.solid(red: 1, green: 0, blue: 0))
+
+        XCTAssertEqual(journal.entries, ["segmentation", "lut", "face"])
+    }
+
+    /// Le fond remplacé passe sous l'étalonnage : un fond bleu, inversé par la
+    /// colorimétrie, sort jaune.
+    func test_paint_gradesTheReplacedBackground() throws {
+        let stages = CallLensStages(
+            backgroundBlur: { _ in Self.solid(red: 0, green: 0, blue: 1) },
+            colorimetry: { $0.applyingFilter("CIColorInvert") },
+            faceEffect: nil
+        )
+
+        let pixel = try XCTUnwrap(Self.pixel(of: stages.paint(Self.solid(red: 1, green: 0, blue: 0))))
+
+        XCTAssertEqual(pixel.red, 255, accuracy: 2)
+        XCTAssertEqual(pixel.green, 255, accuracy: 2)
+        XCTAssertEqual(pixel.blue, 0, accuracy: 2)
+    }
+
+    func test_passes_skipAbsentStages() {
+        let stages = CallLensStages(backgroundBlur: nil, colorimetry: { $0 }, faceEffect: nil)
+
+        XCTAssertEqual(stages.passes.map(\.stage), [.lut])
+    }
+
+    private static func solid(red: CGFloat, green: CGFloat, blue: CGFloat) -> CIImage {
+        CIImage(color: CIColor(red: red, green: green, blue: blue))
+            .cropped(to: CGRect(x: 0, y: 0, width: 4, height: 4))
+    }
+
+    private static func pixel(of image: CIImage) -> (red: Double, green: Double, blue: Double)? {
+        var octets = [UInt8](repeating: 0, count: 4)
+        guard let srgb = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        CIContext(options: [.workingColorSpace: NSNull()]).render(
+            image, toBitmap: &octets, rowBytes: 4,
+            bounds: CGRect(x: 1, y: 1, width: 1, height: 1), format: .RGBA8, colorSpace: srgb
+        )
+        return (Double(octets[0]), Double(octets[1]), Double(octets[2]))
+    }
+}
+
+private final class StageJournal {
+    private(set) var entries: [String] = []
+
+    func note(_ entry: String) {
+        entries.append(entry)
+    }
+}
+
+@MainActor
+final class VideoFilterPipelineLensStagesTests: XCTestCase {
+
+    private func makePixelBuffer() -> CVPixelBuffer {
+        var pixelBuffer: CVPixelBuffer?
+        let attrs: [String: Any] = [kCVPixelBufferIOSurfacePropertiesKey as String: [:]]
+        let status = CVPixelBufferCreate(kCFAllocatorDefault, 64, 64, kCVPixelFormatType_32BGRA, attrs as CFDictionary, &pixelBuffer)
+        precondition(status == kCVReturnSuccess, "CVPixelBufferCreate failed")
+        return pixelBuffer!
+    }
+
+    private func stages(for config: VideoFilterConfig) -> [LensStage] {
+        VideoFilterPipeline(isPowerConstrained: { false })
+            .lensStages(for: config, pixelBuffer: makePixelBuffer(), rotation: 0,
+                        ladder: CallVideoDegradation(), isConstrained: false)
+            .passes.map(\.stage)
+    }
+
+    func test_lensStages_blurLookAndFaceEffect_declareSegmentationLutFace() {
+        var config = VideoFilterPreset.warm.config.selectingFaceEffect(.toad)
+        config.backgroundBlurEnabled = true
+
+        XCTAssertEqual(stages(for: config), [.segmentation, .lut, .face])
+    }
+
+    func test_lensStages_noChosenFilter_declareNothing() {
+        XCTAssertEqual(stages(for: .default), [])
+    }
+
+    func test_lensStages_lookOnly_declareTheLutAlone() {
+        XCTAssertEqual(stages(for: VideoFilterPreset.vivid.config), [.lut])
     }
 }
 
@@ -387,3 +563,25 @@ final class VideoFilterCapturerDelegateTests: XCTestCase {
 }
 
 #endif
+
+private final class SlowFaceEffectsRenderer: CallFaceEffectsRendererProviding, @unchecked Sendable {
+    private let delay: TimeInterval
+
+    init(delay: TimeInterval) {
+        self.delay = delay
+    }
+
+    nonisolated func render(
+        _ effect: CallFaceEffect,
+        on image: CIImage,
+        pixelBuffer: CVPixelBuffer,
+        rotation: Int,
+        intensity: Float,
+        isDegraded: Bool
+    ) -> CIImage {
+        Thread.sleep(forTimeInterval: delay)
+        return image
+    }
+
+    nonisolated func reset() {}
+}

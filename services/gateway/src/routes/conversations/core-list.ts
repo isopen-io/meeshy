@@ -1,0 +1,999 @@
+/**
+ * Surface LISTE de `conversations/core.ts` — `GET /conversations` (pagination,
+ * delta-sync, aperçu de dernier message, pont ✦, présence des participants).
+ * Extrait de `core.ts` lors du découpage #4284 ; voir `core.ts` pour le point
+ * d'entrée `registerCoreRoutes` qui appelle ce registrar.
+ */
+import { lazyKeyring, revealAtRestRows } from '../../services/messaging/serverAtRest';
+import { getEncryptionService } from '../../services/EncryptionService';
+import { FastifyInstance, FastifyRequest } from 'fastify';
+import { CONVERSATION_LIST_PAGINATION, conversationListQuerystringSchema } from './list-querystring';
+import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+import { participantAccountClosure, resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
+import { canViewExactMemberCount, presentMemberCount } from '@meeshy/shared/utils/member-visibility';
+import { memberCountServedToViewer, membersServedToViewer } from '../../services/guests/guestMemberVisibility';
+import {
+  generateDefaultConversationTitle,
+  resolveUserLanguagesOrdered
+} from '@meeshy/shared/utils/conversation-helpers';
+import { buildLastMessagePreviewTranslations } from './utils/last-message-preview';
+import { loadConversationListActivity } from './utils/list-activity';
+import { loadRankedConversationPage } from './utils/list-rank';
+import { listRankFromColumns } from '@meeshy/shared/utils/conversation-list-rank';
+import { loadListEphemeralExpiries, loadListInheritedExpiries } from './utils/list-ephemeral-expiry';
+import { inheritedEphemeralExpiresAt } from '@meeshy/shared/utils/ephemeral-countdown';
+import { isPreviewWithheld, resolvePreviewProtection } from './utils/last-message-nature';
+import { namedCallSummaryPreviews, projectListLastMessageBody } from './utils/list-last-message-body';
+import { loadViewOnceConsumptions, viewOnceConsumptionKey } from '../../services/messaging/readViewOnceConsumption';
+import { UnifiedAuthRequest } from '../../middleware/auth';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { conversationListWithEngagementResponseSchema, loadViewerEngagementsOrEmpty } from './engagement';
+import { loadConversationTombstones } from './utils/delta-tombstones';
+import { sendUnauthorized, sendInternalError, sendBadRequest } from '../../utils/response';
+import { resolveListCursor } from './list-cursor';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { presenceFor, viewerFromRequest } from '../users/presence-gate';
+import { validatePagination, buildCursorPaginationMeta } from '../../utils/pagination';
+import { sendWithETag } from '../../utils/etag';
+import { resolveVisibleLastMessages } from '../../services/resolveVisibleLastMessage';
+import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsOrFail } from '../../services/historyFloor';
+import {
+  ConversationBridgeService,
+  type BridgeOrchestratorInput
+} from '../../services/ConversationBridgeService';
+import { AgentHttpClient } from '../../services/AgentHttpClient';
+import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
+import {
+  loadReadCursorBoundaries,
+  projectReadCursorBoundary,
+  type ReadCursorBoundary
+} from './read-cursor-projection';
+import { resolveCapabilities } from '@meeshy/shared/utils/reading-modes';
+import { ReadingModePreferenceSchema, type ReadingModePreference } from '@meeshy/shared/types/reading-modes';
+import { loadWithdrawnCitations, servePostReplyCitation } from '../../services/messaging/servedPostReply';
+import type { ConversationType } from '@meeshy/shared/types/conversation';
+import { loadViewerBirthDate, servedListRowRestriction } from './viewerWriteRestriction';
+import { loadListViewerCapabilities } from '../../services/conversations/obsoleteCapability';
+import { servedMessageRequest, withoutRequestFields, type MessageRequestListMode, type ServedMessageRequest } from '../../services/messaging/messageRequests';
+import { emptyDirectVisibility, withExternalVisibility, withViewerRequests } from './utils/list-viewer-scope';
+import { announcesCapability, appendVary, CLIENT_CAPABILITIES, CLIENT_CAPABILITIES_HEADER } from '../../utils/client-capabilities';
+import { participantProfileDecor } from '../../services/appearance/profileDecor';
+import { authorProfileDecor } from '../../services/appearance/authorProfileDecor';
+import { startupPackIndex } from '../../services/packs/PackIndex';
+import {
+  conversationListQuerySelect,
+  conversationLastMessagePreviewSelect,
+  type ConversationListRow,
+  type ConversationListPreviewSender
+} from './core-selects';
+
+const logger = enhancedLogger.child({ module: 'conversations/core' });
+
+/**
+ * Enregistre `GET /conversations` (liste paginée des conversations de
+ * l'utilisateur courant).
+ */
+export function registerConversationListRoute(
+  fastify: FastifyInstance,
+  prisma: PrismaClient,
+  optionalAuth: any
+) {
+  // Route pour obtenir toutes les conversations de l'utilisateur
+  fastify.get<{ Querystring: { limit?: string; offset?: string; before?: string; includeCount?: string; type?: string; withUserId?: string; updatedSince?: string; requests?: MessageRequestListMode } }>('/conversations', {
+    schema: {
+      description: 'Get all conversations for the authenticated user with pagination support',
+      tags: ['conversations'],
+      summary: 'List user conversations',
+      querystring: conversationListQuerystringSchema,
+      // `403` a été RETIRÉ de cette liste avec le correctif ci-dessous : plus
+      // aucun refus de cette route ne le sert. Sa garde `optionalAuth` est
+      // construite `{ requireAuth: false, allowAnonymous: true }`
+      // (`routes/conversations/index.ts:26`), régime sous lequel les DEUX
+      // branches de refus de `createUnifiedAuthMiddleware` sont mortes — celle
+      // du 401 est gardée par `options.requireAuth`, celle du 403 par
+      // `!options.allowAnonymous`. Le déclarer encore décrirait un corps que
+      // rien n'émet.
+      response: {
+        200: conversationListWithEngagementResponseSchema,
+        // #6857 — la route ÉMET désormais un 400 : le `pattern` du curseur
+        // `before` est appliqué par Fastify avant le handler. Le déclarer suit
+        // la règle que le commentaire du 403 ci-dessus énonce à l'envers — on
+        // ne décrit que des corps que la route produit, et celui-ci, elle le
+        // produit.
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [optionalAuth]
+  }, async (request: FastifyRequest<{ Querystring: { limit?: string; offset?: string; before?: string; includeCount?: string; type?: string; withUserId?: string; updatedSince?: string; requests?: MessageRequestListMode } }>, reply) => {
+    try {
+      const authRequest = request as UnifiedAuthRequest;
+
+      /**
+       * PAS DE SESSION ⇒ 401, JAMAIS 403 (#4789, la forme de #4760 sur la route
+       * la plus appelée du produit).
+       *
+       * Ce refus disait « Authentication required » au statut d'un refus de
+       * DROIT. Les deux situations ne sont pas la même : « je ne sais pas qui tu
+       * es » (401) contre « je sais qui tu es et ce n'est pas pour toi » (403).
+       * Seul le second est ce que servent les dix-huit « Unauthorized access to
+       * this conversation » de la surface `conversations/` (mesuré) — ils
+       * refusent un NON-MEMBRE et restent 403 à juste titre.
+       *
+       * CE QUE LE 403 COÛTAIT, MESURÉ CLIENT PAR CLIENT.
+       * `APIClient.mapUnauthorized` (`packages/MeeshySDK/.../APIClient.swift`)
+       * est le site UNIQUE qui décide qu'une réponse veut dire « ta session est
+       * morte », et il n'est atteint que par la branche 401 : un membre dont le
+       * jeton expirait en ouvrant sa liste de conversations recevait 403, que
+       * `APIClient.swift:785` traduit en `MeeshyError.forbidden` — « NOT an
+       * auth/session problem » — sans jamais appeler
+       * `AuthManager.handleUnauthorized()`. Aucun rafraîchissement, aucune
+       * reconnexion proposée. `apps/web` rafraîchit sur 401. Android est NEUTRE
+       * (`AuthExpiryInterceptor.EXPIRY_CODES = {401, 403}` contient déjà 401 —
+       * il JUSTIFIE d'ailleurs son 403 en citant la phrase de CE site, ce qui
+       * fait de ce commentaire-là un suivi). `apps/web-v2` portait une ligne
+       * `status === 403` écrite POUR ce défaut (`lib/api/compte.ts`) ; elle
+       * disparaît avec lui.
+       *
+       * `UNAUTHORIZED` n'est pas inventé : `ErrorCode.UNAUTHORIZED`
+       * (`packages/shared/types/errors.ts`) le déclare et `ErrorStatusMap` le
+       * mappe sur 401.
+       *
+       * LA GARDE NE REFUSE RIEN, C'EST BIEN ICI QUE ÇA SE TRANCHE :
+       * `optionalAuth` est `{ requireAuth: false, allowAnonymous: true }`. Un
+       * jeton absent, expiré ou révoqué arrive donc jusqu'ici avec un
+       * `authContext` non authentifié — c'est le cas NOMINAL d'un retour après
+       * quelques jours, pas un incident.
+       */
+      if (!authRequest.authContext.isAuthenticated) {
+        return sendUnauthorized(reply, 'Authentication required to access conversations', { code: 'UNAUTHORIZED' });
+      }
+
+      const userId = authRequest.authContext.userId;
+
+      // Paramètres de pagination. Default 30 (compromise between perf and
+      // round-trips); max 100 to let large-account clients fetch their full
+      // list in fewer pages — previously capped at 50, which forced 88+
+      // conversation accounts through 2 pages and exposed pagination bugs
+      // (offset stagnation, hasMore mis-reads) for any partial sync.
+      // SSOT `validatePagination` clamps NaN/negative/zero: a malformed
+      // querystring (`?limit=abc`, `?limit=-1`) would otherwise reach Prisma as
+      // `take: NaN`/negative and throw a `PrismaClientValidationError` → HTTP 500
+      // on caller-controlled input. The schema declares `limit`/`offset` as plain
+      // strings (no AJV coercion), so the guard has to live here.
+      const { limit, offset } = validatePagination(request.query.offset, request.query.limit, CONVERSATION_LIST_PAGINATION);
+      const includeCount = request.query.includeCount === 'true';
+
+      // OPTIMIZED: Filtres optionnels pour éviter de charger toutes les conversations
+      const typeFilter = request.query.type;
+      const withUserId = request.query.withUserId;
+      const beforeCursor = request.query.before;
+      const updatedSince = request.query.updatedSince;
+
+      // === PERFORMANCE INSTRUMENTATION ===
+      const perfStart = performance.now();
+      const perfTimings: Record<string, number> = {};
+
+      let t0 = performance.now();
+
+      // Build the where clause with optional filters.
+      //
+      // `deletedForMe` matches en deux temps : valeur null explicite OU champ
+      // absent. Sans le `isSet: false` (filtre MongoDB-only de Prisma), les
+      // documents Participant herites ne possedant pas le champ `deletedForMe`
+      // du tout (cree avant l'introduction du concept, 10 docs sur 716 dans
+      // l'instance prod du 2026-05-11) etaient exclus de la liste — les
+      // conversations DM correspondantes (Bertine, Suz, etc.) disparaissaient
+      // meme apres pull-to-refresh. Le `NOT: { not: null }` precedent et le
+      // `deletedForMe: null` simple ont la meme limite : ils ne matchent que
+      // les champs presents avec valeur null.
+      const whereClause: Prisma.ConversationWhereInput = {
+        participants: {
+          some: {
+            userId: userId,
+            isActive: true,
+            OR: [
+              { deletedForMe: null },
+              { deletedForMe: { isSet: false } }
+            ]
+          }
+        },
+        isActive: true
+      };
+
+      // Add type filter if specified
+      if (typeFilter) {
+        whereClause.type = typeFilter;
+      }
+
+      // Add withUserId filter - find conversations where BOTH users are members
+      if (withUserId) {
+        whereClause.participants = {
+          every: {
+            OR: [
+              { userId: userId, isActive: true },
+              { userId: withUserId, isActive: true }
+            ]
+          }
+        };
+        // Override to use AND with both conditions
+        whereClause.AND = [
+          { participants: { some: { userId: userId, isActive: true } } },
+          { participants: { some: { userId: withUserId, isActive: true } } }
+        ];
+        delete whereClause.participants;
+      }
+
+      // Visibilité DM vide (Prisme 2026-08-04) et boîte de demandes (#14107) : `utils/list-viewer-scope.ts`.
+      whereClause.OR = emptyDirectVisibility(userId);
+      if (request.query.requests) whereClause.AND = withViewerRequests(whereClause.AND, userId, request.query.requests);
+      // #17117 — un ancien client ne reçoit pas de conversation externe (`utils/list-viewer-scope.ts`).
+      whereClause.AND = withExternalVisibility(whereClause.AND, announcesCapability(request.headers, CLIENT_CAPABILITIES.externalConversations));
+      appendVary(reply, CLIENT_CAPABILITIES_HEADER);
+
+      // Pagination par curseur — résolue DANS LE SCOPE DU LECTEUR (#6991).
+      //
+      // La résolution vivait ici, sans scope, et la garde `?.lastMessageAt`
+      // faisait repartir la PAGE 1 en silence quand elle échouait : un appelant
+      // distinguait ainsi une conversation tierce existante et active d'une qui
+      // ne l'est pas. `messages-list.ts` scope son propre curseur depuis #4177
+      // et son commentaire l'exige — « les deux curseurs de la même route
+      // doivent se comporter pareil ici » ; c'est cette phrase qu'on honore.
+      //
+      // Un curseur irrecevable se REFUSE, il ne se ressert pas : c'est la page 1
+      // muette qui transformait une garde manquante en canal d'observation.
+      const curseur = await resolveListCursor({ prisma, beforeCursor, userId });
+      if (curseur.genre === 'refus') {
+        return sendBadRequest(reply, 'Unknown pagination cursor', { code: 'INVALID_CURSOR' });
+      }
+      // La borne du curseur porte sur le RANG de la ligne (#9026) : elle est posée
+      // par `loadRankedConversationPage`, pas sur `whereClause`.
+
+      // Filtre delta-sync. DEUX consommateurs, qui doivent rester d'accord sur
+      // ce que « mis à jour » veut dire :
+      //   - iOS   : `ConversationSyncEngine.deltaSyncCore`
+      //   - web   : `syncConversationsDelta` (use-conversations-delta-sync.ts)
+      // Il porte son propre index (`@@index([isActive, updatedAt])`). La borne
+      // est STRICTE (`gt`) : un client qui repasse son dernier `updatedAt` ne
+      // re-télécharge pas la ligne qu'il détient déjà.
+      let isDeltaPage = false;
+      let deltaSince: Date | null = null;
+      if (updatedSince) {
+        const sinceDate = new Date(updatedSince);
+        if (!isNaN(sinceDate.getTime())) {
+          whereClause.updatedAt = { gt: sinceDate };
+          isDeltaPage = true;
+          deltaSince = sinceDate;
+        }
+      }
+
+      // Le delta ci-dessus est UPSERT-ONLY : son `whereClause` exige une
+      // conversation `isActive` et un participant actif sans `deletedForMe`,
+      // donc une conversation qui SORT de la vue (fermée, quittée, bannie,
+      // supprimée-pour-moi depuis un autre appareil) ne revient dans aucune
+      // réponse. Rien ne la retirait du cache client avant la réconciliation
+      // complète — 24 h sur iOS (`fullReconcileInterval`) comme sur le web
+      // (`FULL_RECONCILE_INTERVAL_MS`).
+      //
+      // Les tombstones partent EN PARALLÈLE de la page (elles ne dépendent que
+      // de `since`), sont ids-only, cappées, et n'existent QUE sur une page
+      // delta : le chemin chaud de l'écran de liste ne paie rien.
+      //
+      // Le `.catch` n'est pas une ceinture de plus sur les bretelles du module :
+      // la promesse est créée ICI et attendue 400 lignes plus bas. Tout `throw`
+      // entre les deux (la page principale qui rejette, par exemple) la
+      // laisserait sans écouteur — et sous le `--unhandled-rejections=throw` par
+      // défaut de Node 22, un rejet non écouté termine le PROCESS. Que
+      // `loadConversationTombstones` avale déjà ses erreurs est une propriété du
+      // COLLABORATEUR, pas une garantie de ce site d'appel (cf. leçon 230).
+      const tombstonesPromise = deltaSince
+        ? loadConversationTombstones(prisma, {
+            userId: authRequest.authContext.type === 'anonymous' ? null : userId,
+            since: deltaSince
+          }).catch(() => ({ ids: [] as string[], truncated: true }))
+        : null;
+
+      t0 = performance.now();
+      // Effectif compté par la base, PAS la colonne dénormalisée du même nom :
+      // voir `conversationActiveMemberCountSelect` (badge de groupe, saturation
+      // de la couleur d'accent). Le `select` est extrait dans `core-selects.ts`
+      // pour porter un type Prisma nommé (#3679).
+      //
+      // L'ORDRE est le RANG de la ligne (#9026) — toute activité (réaction,
+      // appel, épingle) la remonte pour tous ; une page delta garde `updatedAt asc`. Les raisons des
+      // deux ordres et la fusion des deux flux vivent dans `utils/list-rank.ts`.
+      const conversations: ConversationListRow[] = await loadRankedConversationPage({
+        prisma,
+        readRows: ({ where, orderBy, skip, take }) =>
+          prisma.conversation.findMany({ where, orderBy, skip, take, select: conversationListQuerySelect(userId) }),
+        where: whereClause,
+        curseur,
+        deltaOrder: isDeltaPage,
+        limit,
+        offset: beforeCursor ? 0 : offset
+      });
+      perfTimings.conversationsQuery = performance.now() - t0;
+
+      // Optimisation : Calculer tous les unreadCounts avec le système de curseur
+      const conversationIds = conversations.map(c => c.id);
+
+      // `authContext.userId` porte un `User.id` pour un compte mais un
+      // `Participant.id` pour un invité de lien partagé (branche anonyme
+      // d'`UnifiedAuthService`, documentée dans `utils/access-control.ts`) : la
+      // COLONNE se branche sur la NATURE de la clé, exactement comme
+      // `GET /conversations/search`.
+      const isAnonymousViewer = authRequest.authContext.type === 'anonymous';
+
+      // Le PLANCHER d'historique du lecteur, conversation par conversation :
+      // l'aperçu de liste est une lecture comme une autre, et le dernier message
+      // GLOBAL d'un salon peut précéder l'arrivée de ce lecteur. Une lecture
+      // batchée de SES lignes (`services/historyFloor` lit ce qu'il faut) — le
+      // top-5 ci-dessous ne projette pas ces champs, et un `select` qui les
+      // porterait multiplierait cinq lignes par conversation sur le fil.
+      // Fail-closed : une conversation dont le plancher est ILLISIBLE perd son
+      // aperçu plutôt que de le servir sans borne.
+      t0 = performance.now();
+      const readerJoins = userId && conversationIds.length > 0
+        ? await prisma.participant.findMany({
+            where: {
+              conversationId: { in: conversationIds },
+              isActive: true,
+              ...(isAnonymousViewer ? { id: userId } : { userId })
+            },
+            select: { id: true, conversationId: true, type: true, leftAt: true, bannedAt: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
+          })
+        : [];
+      const { floors: historyFloors, unreadableConversationIds } = await loadHistoryFloorsOrFail(prisma, readerJoins);
+      const unreadableFloors = new Set(unreadableConversationIds);
+      perfTimings.historyFloors = performance.now() - t0;
+
+      // L'aperçu de la ligne de liste obéit au masquage personnel du lecteur.
+      // Le `take: 1` imbriqué ne peut pas porter de filtre par conversation
+      // (Prisma applique UN `where` à toute la sélection imbriquée), donc la
+      // question est tranchée après coup — et seules les conversations dont
+      // l'aperçu est effectivement masqué paient une requête de reprise. Un
+      // lecteur qui n'a rien masqué paie une lecture indexée qui ne rend rien.
+      t0 = performance.now();
+      const visibleLastMessages = await resolveVisibleLastMessages(prisma, {
+        // `authContext.userId` porte le jeton de session pour un participant
+        // anonyme, pas un ObjectId — le passer ferait échouer les deux lectures
+        // (rattrapées, mais une erreur par requête de liste pour rien). Un
+        // anonyme ne possède de ligne dans NI l'une NI l'autre table.
+        userId: authRequest.authContext.type === 'anonymous' ? null : userId,
+        candidates: conversations.map(c => {
+          const preview = c.messages[0];
+          return {
+            conversationId: c.id,
+            message: preview ? { id: preview.id, createdAt: preview.createdAt } : null,
+            clearHistoryBefore: c.userPreferences[0]?.clearHistoryBefore ?? null
+          };
+        }),
+        query: { select: conversationLastMessagePreviewSelect as unknown as Record<string, unknown> },
+        historyFloors
+      });
+      for (const conversation of conversations) {
+        if (unreadableFloors.has(conversation.id)) {
+          conversation.messages = [];
+          continue;
+        }
+        if (!visibleLastMessages.has(conversation.id)) continue;
+        const replacement = visibleLastMessages.get(conversation.id);
+        // `resolveVisibleLastMessages` rend `unknown` par construction (§ son
+        // doc-comment) : elle sert aussi la recherche de conversations, dont le
+        // `query` est un `include` de forme différente. Le cast ci-dessous
+        // n'élargit rien — CETTE route lui passe `query.select ===
+        // conversationLastMessagePreviewSelect`, donc la ligne de remplacement a
+        // structurellement la même forme que `conversation.messages[0]`.
+        conversation.messages = replacement
+          ? [replacement as ConversationListRow['messages'][number]]
+          : [];
+      }
+      perfTimings.personalPreviewHiding = performance.now() - t0;
+      // #11381 — la ligne d'une conversation `server`/`hybrid` lit le clair.
+      const previewKeyring = lazyKeyring(() => getEncryptionService(prisma));
+      await Promise.all(conversations.map(async (c) => { c.messages = await revealAtRestRows(c.messages, previewKeyring); }));
+      const namedCallPreviews = await namedCallSummaryPreviews(prisma, conversations.flatMap((c) => c.messages));
+
+      // Extract current user's participant data from already-fetched participants (take:5 per conv).
+      // For DMs and small groups the current user is always in the first 5 — zero extra DB queries.
+      // Only fall back to a batch query for large groups where the current user wasn't in top 5.
+      const currentUserRoleMap = new Map<string, string>();
+      const currentUserJoinedAtMap = new Map<string, Date | null>();
+      const currentUserRequestMap = new Map<string, ServedMessageRequest | null>();
+      // Participant.id du LECTEUR par conversation — G-123 : c'est la clé qui
+      // relie une conversation à son curseur de lecture (`lastOpenedAt` de
+      // l'orchestrateur, voir plus bas). Repose sur la même résolution que les
+      // deux maps ci-dessus (top-5 + repli batché) : aucune requête de plus.
+      const currentUserParticipantIdMap = new Map<string, string>();
+      const convsMissingCurrentUser: string[] = [];
+
+      // Comparer un `Participant.id` à la colonne `userId` ne matche RIEN — pas
+      // une erreur, une map vide : le rôle du lecteur disparaissait, et avec
+      // lui son droit à l'effectif ENTIER. Un admin de groupe anonyme (que
+      // `canViewExactMemberCount` autorise explicitement) était donc plafonné à
+      // « 199+ » ici et servi entier par la recherche : deux réponses pour un
+      // même lecteur. D'où `isAnonymousViewer`, résolu plus haut.
+      if (userId) {
+        for (const conv of conversations) {
+          const found = conv.participants.find((p) =>
+            isAnonymousViewer ? p.id === userId : p.userId === userId
+          );
+          if (found) {
+            currentUserRoleMap.set(conv.id, found.role);
+            currentUserJoinedAtMap.set(conv.id, found.joinedAt);
+            currentUserParticipantIdMap.set(conv.id, found.id);
+            currentUserRequestMap.set(conv.id, isAnonymousViewer ? null : servedMessageRequest(found));
+          } else {
+            convsMissingCurrentUser.push(conv.id);
+          }
+        }
+        if (convsMissingCurrentUser.length > 0) {
+          const remaining = await prisma.participant.findMany({
+            where: {
+              conversationId: { in: convsMissingCurrentUser },
+              isActive: true,
+              ...(isAnonymousViewer ? { id: userId } : { userId })
+            },
+            select: { id: true, conversationId: true, role: true, joinedAt: true }
+          });
+          for (const p of remaining) {
+            currentUserRoleMap.set(p.conversationId, p.role);
+            currentUserJoinedAtMap.set(p.conversationId, p.joinedAt);
+            currentUserParticipantIdMap.set(p.conversationId, p.id);
+          }
+        }
+      }
+
+      // === OPTIMIZED: Parallelize independent queries ===
+      // firstName/lastName now fetched via conversationListParticipantSelect.user.select —
+      // memberUsers query eliminated (iter-8).
+      t0 = performance.now();
+
+      const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
+      const readStatusService = new MessageReadStatusService(prisma);
+
+      const [totalCount, unreadCountMap, readCursorBoundaries, viewerEngagementByConversation, viewerCapabilitiesOf] = await Promise.all([
+        // Count (if requested) - skip when using cursor pagination
+        (!beforeCursor && (includeCount || offset === 0))
+          ? prisma.conversation.count({ where: whereClause })
+          : Promise.resolve(0),
+
+        // Unread counts — iter-4: appel direct par userId (2+N queries vs 4×N)
+        conversationIds.length > 0
+          ? readStatusService.getUnreadCountsForUser(userId, conversationIds)
+          : Promise.resolve(new Map<string, number>()),
+
+        // La frontière de lecture du lecteur (#7198) — lastReadMessageId /
+        // lastReadAt / lastReadMessageCreatedAt, batchés pour TOUTE la page,
+        // pas seulement les conversations à non-lus : c'est elle qui gouverne
+        // où un fil s'ouvre (D-L2) et son séparateur (D-L3), indépendamment
+        // du pont ✦ ci-dessous (qui en réutilise le résultat — R6-6).
+        currentUserParticipantIdMap.size > 0
+          ? loadReadCursorBoundaries(prisma, [...currentUserParticipantIdMap.values()])
+          : Promise.resolve(new Map<string, ReadCursorBoundary>()),
+
+        // « N (M) 🔥 » du lecteur (#8906) — UNE lecture groupée pour la page.
+        // Un invité anonyme n'a pas de compte, donc pas d'état d'engagement.
+        loadViewerEngagementsOrEmpty(prisma, isAnonymousViewer ? undefined : userId, conversationIds),
+
+        // #14690 — ce que le lecteur peut faire de chaque ligne, par la décision qui garde la route.
+        loadListViewerCapabilities(prisma, {
+          authContext: authRequest.authContext, conversations, readerJoins,
+          onError: (error) => logger.warn('viewer capabilities read failed', { error }),
+        }),
+      ]);
+
+      // Par CONVERSATION plutôt que par participant — c'est la clé que la
+      // réponse et le pont (orchestratorInputs) consomment tous les deux.
+      const readCursorByConversation = new Map<string, ReadCursorBoundary>();
+      for (const [convId, participantId] of currentUserParticipantIdMap) {
+        const boundary = readCursorBoundaries.get(participantId);
+        if (boundary) readCursorByConversation.set(convId, boundary);
+      }
+
+      perfTimings.parallelQueries = performance.now() - t0;
+
+      // Override runtime de isOnline : la DB peut être obsolète (heartbeat manqué,
+      // crash gateway, déconnexion non détectée). La source de vérité est `connectedUsers`
+      // Map du SocketIOManager, exposée via le décorateur `presenceChecker`.
+      const presenceChecker = fastify.presenceChecker;
+
+      // Présence des co-participants : régime STRICT (2026-08-25) — la
+      // co-participation n'ouvre plus rien, seul le viewer (soi/ADMIN+/ami)
+      // voit isOnline/lastActiveAt d'un co-participant qui ne l'est pas.
+      const presenceViewer = viewerFromRequest(request);
+      const presenceVis = await getPresenceVisibilityService(prisma).resolveForTargets(
+        presenceViewer,
+        conversations.flatMap((conversation) => [
+          ...conversation.participants.slice(0, 5).map((m) => m.userId),
+          conversation.messages[0]?.sender?.userId,
+        ]).filter((uid): uid is string => !!uid)
+      );
+
+      // Calculate hasMore. Two strategies:
+      //   1. When we have a real `totalCount` (includeCount=true OR
+      //      offset===0 — see L401-405), `hasMore = offset + N < total`.
+      //   2. When totalCount is a sentinel `0` (skipped to save a query),
+      //      fall back to "the page is full" → `length === limit`. This
+      //      is conservative: if the page is exactly full we assume there
+      //      MIGHT be another, and let the next request settle it.
+      // Previously, branch (1) fired even when `totalCount===0` (because
+      // includeCount=false and offset>0 still skipped the count query),
+      // making `hasMore` falsely false and freezing infinite scroll.
+      let hasMore: boolean;
+      if (totalCount > 0 && (includeCount || offset === 0)) {
+        hasMore = offset + conversations.length < totalCount;
+      } else {
+        hasMore = conversations.length === limit;
+      }
+
+      // Prisme Linguistique du lecteur : systemLanguage → regionalLanguage →
+      // customDestinationLanguage → deviceLocale. Résolu UNE fois pour la page
+      // entière, depuis l'utilisateur déjà chargé (et mis en cache) par le
+      // middleware d'auth — aucune requête supplémentaire sur ce hot path.
+      // `resolveUserLanguagesOrdered` est la seule autorité du dépôt sur cet
+      // ordre : ne jamais le réimplémenter ici.
+      const viewerPrefs = authRequest.authContext.registeredUser as
+        | {
+            systemLanguage?: string | null;
+            regionalLanguage?: string | null;
+            customDestinationLanguage?: string | null;
+            deviceLocale?: string | null;
+          }
+        | undefined;
+      const viewerLanguages = viewerPrefs
+        ? resolveUserLanguagesOrdered(viewerPrefs, {
+            deviceLocale: viewerPrefs.deviceLocale ?? undefined
+          })
+        : [];
+
+      // #7545 — dernière réaction (plancher de l'aperçu) et appel en cours.
+      t0 = performance.now();
+      const clearHistoryBeforeById = new Map(
+        conversations.map((c) => [c.id, c.userPreferences?.[0]?.clearHistoryBefore ?? null] as const)
+      );
+      const activityByConversation = await loadConversationListActivity(prisma, conversations, {
+        viewerLanguages,
+        historyFloorFor: (conversationId) => {
+          if (unreadableFloors.has(conversationId)) return new Date(8.64e15);
+          const floors = [historyFloors.get(conversationId), clearHistoryBeforeById.get(conversationId)]
+            .filter((d): d is Date => d instanceof Date);
+          return floors.length === 0 ? null : new Date(Math.max(...floors.map((d) => d.getTime())));
+        }
+      });
+      // #7451 — l'échéance d'un éphémère servie à CE lecteur, comme le fil.
+      const readerParticipantByConversation = new Map(readerJoins.map((j) => [j.conversationId, j.id] as const));
+      const [servedEphemeralExpiry, consumedViewOnce, quotedDeaths] = await Promise.all([
+        loadListEphemeralExpiries(
+          prisma,
+          conversations.map((c) => ({ conversationId: c.id, message: c.messages?.[0] })),
+          (conversationId) => readerParticipantByConversation.get(conversationId)
+        ),
+        // #7594 — la vue unique déjà OUVERTE par ce lecteur (« 👁 Ouvert »).
+        loadViewOnceConsumptions(
+          prisma,
+          conversations.flatMap((c) => {
+            const message = c.messages?.[0];
+            const participantId = readerParticipantByConversation.get(c.id);
+            return message?.isViewOnce && participantId ? [{ messageId: message.id, participantId }] : [];
+          }),
+          (error) => logger.warn('view-once consumption read failed', { error })
+        ),
+        // #8630 — une réponse meurt, pour ce lecteur, avec ce qu'elle cite.
+        loadListInheritedExpiries(
+          prisma,
+          conversations.map((c) => ({ conversationId: c.id, message: c.messages?.[0] })),
+          (conversationId) => readerParticipantByConversation.get(conversationId)
+        )
+      ]);
+      perfTimings.listActivity = performance.now() - t0;
+
+      // ── Le pont ✦ (G-123) ──────────────────────────────────────────────
+      // Attaché DANS cette passe, jamais dans une passe séparée : `buildBridgeData`
+      // a besoin d'`unreadCountMap`, qui vient d'être calculé ci-dessus — le
+      // pont se calcule donc APRÈS, mais sans requête additionnelle PAR
+      // CONVERSATION (`ConversationBridgeService` reste à 5 requêtes
+      // constantes, cf. son fichier). `unreadCount === 0` est filtré avant
+      // même d'entrer dans la passe : ces conversations ne coûtent rien et
+      // n'auront jamais de pont (contrat gelé §3.2, LWS-4).
+      const bridgeCandidates = conversations
+        .map((conversation) => ({
+          conversationId: conversation.id,
+          unreadCount: unreadCountMap.get(conversation.id) || 0
+        }))
+        .filter((candidate) => candidate.unreadCount > 0);
+
+      let bridgeByConversation = new Map<string, { bridge: ConversationBridge; lastReadAt?: Date }>();
+
+      if (bridgeCandidates.length > 0) {
+        try {
+          // A6 — `orchestratorInputs` porte l'entrée RÉELLE de l'orchestrateur
+          // pour que `suggestedMode` soit la vraie décision de
+          // `resolveOrchestratorDecision`, pas sa branche par défaut :
+          //   - `stickyChoice`  : `UserConversationPreferences.readingMode`,
+          //     déjà chargé par `userPreferences` (G-121) — ZÉRO requête de plus ;
+          //   - `lastOpenedAt`  : le curseur de lecture du VIEWER, en UNE
+          //     lecture batchée sur les participants déjà résolus
+          //     (`currentUserParticipantIdMap`, top-5 + repli) — jamais une
+          //     par conversation ;
+          //   - `capabilities`  : `resolveCapabilities` (loi partagée), avec
+          //     `activeParticipantCount: null` — aucune définition serveur
+          //     honnête d'« actif » n'existe (jamais `0`, un chiffre fabriqué) ;
+          //   - `isFlagEnabled: true` : la Lentille est un drapeau CLIENT
+          //     (UserDefaults / ProcessInfo), le serveur n'en connaît pas
+          //     l'état par requête — précalculer en supposant le drapeau actif
+          //     est sans risque, un client drapeau-éteint ignore `bridge`
+          //     entièrement.
+          //
+          // Une conversation dont le participant du lecteur n'a pas pu être
+          // résolu (anonyme, ou repli manqué) est ABSENTE d'`orchestratorInputs` :
+          // `lastOpenedAt: null` affirmerait « jamais ouverte », une donnée que
+          // l'absence de résolution ne permet pas de connaître honnêtement.
+          // Le service retombe alors sur sa branche par défaut pour CETTE
+          // conversation — dégradation prévue, jamais une fabrication.
+          const bridgeConvIds = new Set(bridgeCandidates.map((c) => c.conversationId));
+
+          const lastOpenedAtByConversation = new Map<string, Date | null>();
+          for (const [convId, boundary] of readCursorByConversation) {
+            if (bridgeConvIds.has(convId)) lastOpenedAtByConversation.set(convId, boundary.lastReadAt);
+          }
+
+          // R6-6 — mutualisée avec `ConversationBridgeService.buildBridgeData` :
+          // dérivée de la MÊME lecture batchée que la frontière de lecture
+          // servie au lecteur (#7198, `readCursorBoundaries` au-dessus), pas
+          // d'une requête à part — la page entière ne paie plus qu'UNE lecture
+          // de `conversationReadCursor`, pour les DEUX besoins (le pont et la
+          // frontière servie inconditionnellement).
+          const cursorsByParticipant = new Map<
+            string,
+            { lastReadAt: Date | null; lastReadMessageCreatedAt: Date | null }
+          >();
+          for (const [participantId, boundary] of readCursorBoundaries) {
+            cursorsByParticipant.set(participantId, {
+              lastReadAt: boundary.lastReadAt,
+              lastReadMessageCreatedAt: boundary.lastReadMessageCreatedAt
+            });
+          }
+
+          const now = new Date();
+          const orchestratorInputs = new Map<string, BridgeOrchestratorInput>();
+
+          for (const conversation of conversations) {
+            if (!bridgeConvIds.has(conversation.id)) continue;
+            if (!currentUserParticipantIdMap.has(conversation.id)) continue;
+
+            const prefs = conversation.userPreferences[0];
+            const parsedPreference = ReadingModePreferenceSchema.safeParse(prefs?.readingMode);
+            const stickyChoice: ReadingModePreference = parsedPreference.success
+              ? parsedPreference.data
+              : 'auto';
+
+            const capabilities = resolveCapabilities({
+              identity: { isAnonymous: isAnonymousViewer },
+              isFlagEnabled: true,
+              conversationType: conversation.type as ConversationType,
+              // G-123 : aucun décompte serveur honnête d'« actif » — JAMAIS 0.
+              activeParticipantCount: null
+            });
+
+            orchestratorInputs.set(conversation.id, {
+              lastOpenedAt: lastOpenedAtByConversation.get(conversation.id) ?? null,
+              now,
+              stickyChoice,
+              capabilities,
+              isFlagEnabled: true
+            });
+          }
+
+          // G-127 — top-up agent, OPTIONNEL et borné, REST seulement.
+          // `AGENT_HOST` absent (comme le client ZMQ de `server.ts`, même
+          // convention) ⇒ `agentClient` reste `undefined`, et
+          // `buildBridgeData` ne consulte jamais l'agent : plancher G-122
+          // strictement inchangé. Ce paramètre n'existe PAS sur l'interface
+          // `UnreadBridgeBuilder` du chemin socket
+          // (`emitUnreadCountsToRecipients`) — le fan-out temps réel d'un
+          // compteur de non-lus ne paie donc jamais cet appel HTTP.
+          const agentHost = process.env.AGENT_HOST;
+          const agentHttpPort = process.env.AGENT_HTTP_PORT || '3200';
+          const agentClient = agentHost
+            ? new AgentHttpClient(`http://${agentHost}:${agentHttpPort}`)
+            : undefined;
+
+          const bridgeService = new ConversationBridgeService(prisma);
+          bridgeByConversation = await bridgeService.buildBridgeData({
+            viewerId: userId,
+            candidates: bridgeCandidates,
+            orchestratorInputs,
+            // R6-6 — évite la seconde lecture de `conversationReadCursor`
+            // que le service ferait sinon lui-même sur ces mêmes participants.
+            cursorsByParticipant,
+            ...(agentClient ? { agent: agentClient } : {})
+          });
+        } catch (error) {
+          // Posture d'échec identique à celle du service : le pont est un
+          // confort, la liste est le produit. Aucune ligne n'affiche un pont
+          // faux ; toutes perdent seulement leur pont.
+          logger.warn('bridge attach failed for conversation list, serving no bridge', { error });
+          bridgeByConversation = new Map();
+        }
+      }
+
+      // #7950 — le dernier message qui cite une story RETIRÉE sert sa
+      // `metadata.postReplyTo` expurgée : UNE requête pour la page.
+      const withdrawnCitations = await loadWithdrawnCitations(prisma, conversations.map((c) => c.messages[0]));
+
+      // #9927 — Global en lecture seule et archivée pour un mineur déclaré :
+      // une lecture de la date de naissance, et seulement si Global est dans la page.
+      const viewerBirthDate = await loadViewerBirthDate(prisma, {
+        userId,
+        isAnonymous: isAnonymousViewer,
+        conversationTypes: conversations.map((c) => c.type)
+      });
+      const restrictionNow = new Date();
+
+      // Mapper les conversations avec unreadCount et merge user data
+      const conversationsWithUnreadCount = conversations.map((conversation) => {
+        const unreadCount = unreadCountMap.get(conversation.id) || 0;
+        const bridgeEntry = bridgeByConversation.get(conversation.id);
+
+        // Merge presence override. firstName/lastName now come directly from m.user
+        // (participant select was extended in iter-8 — no separate memberUsers query needed).
+        const isDirect = conversation.type === 'direct';
+        const membersWithUser = conversation.participants
+          .slice(0, 5)
+          .map((m) => {
+            const liveOnline = presenceChecker?.isOnline(m.userId ?? m.id);
+            // Entrée absente (sans compte, ou inscrit non résolu) : UN site,
+            // `presenceFor` — masqué, sauf ADMIN+. Jamais `undefined` ici.
+            const vis = presenceFor(presenceViewer, presenceVis, m.userId);
+            const hideOnline = !vis.showOnline;
+            const hideLastSeen = !vis.showLastSeenTimestamp;
+            const profileDecor = participantProfileDecor(startupPackIndex(), m.user);
+            return {
+              ...withoutRequestFields(m),
+              // #10713 — le contour équipé du pair, dessiné par la ligne de liste.
+              ...(profileDecor === undefined ? {} : { profileDecor }),
+              // #15717 — le compte du pair est fermé : un booléen, clé absente sinon.
+              ...participantAccountClosure(m),
+              // Bannière de profil top-level : le schéma participant (minimal) est
+              // plat et strippe `user`, donc on lève la bannière au niveau
+              // participant pour la remontée en DM. Réservé aux DM — en groupe le
+              // client ignore `participantBanner` (évite le sur-transfert).
+              // Note : `Participant` n'a pas de colonne `banner`, seule `User` en a.
+              banner: isDirect ? (m.user?.banner ?? null) : null,
+              isOnline: hideOnline ? false : (liveOnline === undefined ? m.isOnline : liveOnline),
+              lastActiveAt: hideLastSeen ? null : m.lastActiveAt,
+              user: m.userId
+                ? {
+                    ...m.user,
+                    isOnline: hideOnline ? false : (liveOnline === undefined ? m.user?.isOnline : liveOnline),
+                    lastActiveAt: hideLastSeen ? null : m.user?.lastActiveAt
+                  }
+                : null
+            };
+          });
+
+        // Pour les DMs, pas de titre obligatoire — le frontend résout le nom de l'interlocuteur
+        // Pour les groupes/publics, s'assurer qu'un titre existe
+        const displayTitle = conversation.type === 'direct'
+          ? (conversation.title || null)
+          : (conversation.title && conversation.title.trim() !== ''
+              ? conversation.title
+              : generateDefaultConversationTitle(
+                  membersWithUser.map((m) => ({
+                    id: m.userId,
+                    displayName: m.user?.displayName,
+                    username: m.user?.username,
+                    firstName: m.user?.firstName,
+                    lastName: m.user?.lastName
+                  })),
+                  userId
+                ));
+
+        const latestMessage = conversation.messages[0] as
+          | {
+              translations?: unknown;
+              originalLanguage?: string | null;
+              isBlurred?: boolean | null;
+              isViewOnce?: boolean | null;
+              /* `Date | string` et non `Date` seul (porté de #6112 à la fusion
+                 du 2026-09-12) : ce site LIT une valeur qui peut arriver déjà
+                 sérialisée selon le chemin — un cast trop étroit décrit mal ce
+                 qu'on lit, et `isLastMessageProtected` accepte les deux. */
+              expiresAt?: Date | string | null;
+              ephemeralDuration?: number | null;
+              isEncrypted?: boolean | null;
+              /* #8634 — porte la flamme-œil, que `resolvePreviewProtection` retient. */
+              effectFlags?: number | null;
+            }
+          | undefined;
+        // #6111 — un dernier message à vue unique, flouté ou éphémère périmé
+        // ne transporte plus rien de son contenu, carte du Prisme comprise :
+        // masquer `lastMessage.content` sans y toucher aurait laissé partir
+        // la traduction du même message sous un autre nom.
+        //
+        // #7545 — le prédicat est celui du socket (`resolvePreviewProtection`),
+        // `ephemeralDuration` compris : sans elle, l'heure interne de
+        // destruction d'un éphémère (#7451) se lisait comme son échéance. Le
+        // chiffrement retient aussi le contenu (« 🔒 Message chiffré »).
+        const firstId = conversation.messages[0]?.id;
+        const ownExpiresAt = firstId && servedEphemeralExpiry.has(firstId) ? servedEphemeralExpiry.get(firstId) ?? null : undefined;
+        const quotedDeathAt = firstId ? quotedDeaths.get(firstId) ?? null : null;
+        const servedExpiresAt = quotedDeathAt ? inheritedEphemeralExpiresAt([ownExpiresAt, quotedDeathAt]) : ownExpiresAt;
+        const lastMessageProtection = latestMessage ? resolvePreviewProtection({ ...latestMessage, servedExpiresAt, quotedDeathAt }) : null;
+        const lastMessageProtected = isPreviewWithheld(lastMessageProtection);
+
+        // `_count` est retiré du spread : c'est une forme d'agrégat Prisma que
+        // le schéma wire ne déclare pas, et le champ que les clients lisent est
+        // `memberCount`. Le laisser passer paierait la sérialisation d'un objet
+        // que `fast-json-stringify` strippe.
+        const { _count: activeMembers, ...conversationData } = conversation as typeof conversation & {
+          _count: { participants: number };
+        };
+
+        return {
+          ...conversationData,
+          ...servedListRowRestriction({
+            conversationType: conversation.type,
+            birthDate: viewerBirthDate,
+            now: restrictionNow,
+            userPreferences: conversation.userPreferences
+          }),
+          // Cap 199+ : l'effectif ENTIER est réservé aux lecteurs autorisés —
+          // ADMIN/BIGBOSS/MODERATOR plateforme, OU creator/admin de CETTE
+          // conversation. Le second titre est ce que ce site ignorait : un
+          // admin de groupe administrait 250 personnes sans jamais pouvoir en
+          // lire l'effectif. `currentUserRoleMap` porte déjà son rôle, résolu
+          // plus haut par le top-5 et son repli batché — aucune requête de plus.
+          // #10205 — un invité (sans compte) : aucun effectif, sa seule ligne.
+          ...memberCountServedToViewer(presentMemberCount(activeMembers.participants, {
+            viewerSeesExactCount: canViewExactMemberCount({
+              platformRole: authRequest.authContext.registeredUser?.role ?? null,
+              conversationRole: currentUserRoleMap.get(conversation.id) ?? null
+            })
+          }), authRequest.authContext),
+          participants: membersServedToViewer(membersWithUser, authRequest.authContext),
+          title: displayTitle,
+          // Prisme Linguistique de la ligne de liste. Ces deux champs sont posés
+          // au niveau CONVERSATION et non dans `lastMessage` parce que c'est là
+          // que le client les attend depuis toujours
+          // (`MeeshyConversation.lastMessageTranslations`), et parce que la
+          // carte compacte `{ langue: aperçu }` n'a pas la forme de
+          // `Message.translations` (un tableau de `MessageTranslation`) : deux
+          // formes sous un même nom auraient dérivé.
+          lastMessageOriginalLanguage: lastMessageProtected ? null : (latestMessage?.originalLanguage ?? null),
+          lastMessageTranslations: lastMessageProtected ? null : buildLastMessagePreviewTranslations({
+            translations: latestMessage?.translations,
+            originalLanguage: latestMessage?.originalLanguage,
+            viewerLanguages: viewerLanguages
+          }),
+          lastMessage: (() => {
+            const msg = conversation.messages[0] && (namedCallPreviews.get(conversation.messages[0].id) ?? conversation.messages[0]);
+            if (!msg) return null;
+            const readerParticipantId = readerParticipantByConversation.get(conversation.id);
+            const sender = msg.sender as ConversationListPreviewSender | null;
+            const senderLiveOnline = sender
+              ? presenceChecker?.isOnline(sender.userId ?? sender.id)
+              : undefined;
+            const senderVis = sender ? presenceFor(presenceViewer, presenceVis, sender.userId) : undefined;
+            return {
+              ...servePostReplyCitation(projectListLastMessageBody(msg, {
+                protection: lastMessageProtection,
+                servedExpiresAt,
+                viewOnceConsumed: readerParticipantId !== undefined
+                  && consumedViewOnce.has(viewOnceConsumptionKey({ messageId: msg.id, participantId: readerParticipantId })),
+              }), withdrawnCitations),
+              sender: sender && senderVis ? {
+                ...withoutNestedUser(sender),
+                username: sender.user?.username ?? sender.username ?? null,
+                firstName: sender.user?.firstName ?? null,
+                lastName: sender.user?.lastName ?? null,
+                displayName: resolveParticipantDisplayName(sender),
+                avatar: resolveParticipantAvatar(sender),
+                isOnline: senderVis.showOnline
+                  ? (senderLiveOnline ?? sender.user?.isOnline ?? sender.isOnline ?? null)
+                  : false,
+                lastActiveAt: senderVis.showLastSeenTimestamp
+                  ? (sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null)
+                  : null,
+                ...authorProfileDecor(sender.user),
+              } : null
+            };
+          })(),
+          unreadCount,
+          // #9026 — le rang de la ligne, la clé du tri ci-dessus : les
+          // clients trient dessus au lieu de le recalculer.
+          listRankAt: listRankFromColumns(conversation)?.toISOString() ?? null,
+          lastReaction: activityByConversation.get(conversation.id)?.lastReaction ?? null,
+          activeCall: activityByConversation.get(conversation.id)?.activeCall ?? null,
+          // Le pont ✦ (G-123). ABSENT — jamais `null`, jamais un objet vide —
+          // quand `unreadCount === 0` ou que la passe n'a rien à annoncer
+          // (contrat gelé §3.2).
+          ...(bridgeEntry ? { bridge: bridgeEntry.bridge } : {}),
+          // La frontière de lecture du lecteur (#7198) — lastReadMessageId /
+          // lastReadAt / lastReadMessageCreatedAt, servie INCONDITIONNELLEMENT
+          // (pas seulement quand le pont s'affiche) : une conversation
+          // ENTIÈREMENT lue en a autant besoin qu'une conversation à
+          // non-lus — c'est elle qui gouverne où un fil s'ouvre (D-L2) et son
+          // séparateur (D-L3). ABSENTE sans curseur, jamais fabriquée (REV-4).
+          ...projectReadCursorBoundary(readCursorByConversation.get(conversation.id)),
+          currentUserRole: currentUserRoleMap.get(conversation.id) || null,
+          currentUserJoinedAt: currentUserJoinedAtMap.get(conversation.id) || null,
+          messageRequest: currentUserRequestMap.get(conversation.id) ?? null,
+          viewerCapabilities: viewerCapabilitiesOf(userId, conversation.id),
+          // ABSENT tant que le lecteur n'a rien crédité ici (#8906).
+          ...(viewerEngagementByConversation.has(conversation.id)
+            ? { viewerEngagement: viewerEngagementByConversation.get(conversation.id) }
+            : {})
+        };
+      });
+
+      const totalTime = performance.now() - perfStart;
+      logger.debug('CONVERSATIONS_PERF', {
+        conversationsQuery: perfTimings.conversationsQuery?.toFixed(2),
+        parallelQueries: perfTimings.parallelQueries?.toFixed(2),
+        total: totalTime.toFixed(2)
+      });
+
+      // Build cursor pagination meta
+      const lastConversation = conversationsWithUnreadCount.length > 0
+        ? conversationsWithUnreadCount[conversationsWithUnreadCount.length - 1]
+        : null;
+      const cursorPaginationMeta = buildCursorPaginationMeta(
+        limit,
+        conversationsWithUnreadCount.length,
+        lastConversation?.id ?? null
+      );
+
+      // NOTE: Cannot use sendSuccess() — response includes top-level `pagination` and
+      // `cursorPagination` fields that iOS SDK (ConversationListResponse) and web
+      // (conversations.service.ts) parse at root level. Migration to sendSuccess requires
+      // a coordinated client update (breaking change).
+      const tombstones = tombstonesPromise ? await tombstonesPromise : null;
+
+      const responseBody = {
+        success: true,
+        data: conversationsWithUnreadCount,
+        pagination: {
+          limit,
+          offset,
+          total: totalCount,
+          hasMore
+        },
+        cursorPagination: cursorPaginationMeta,
+        // Bloc additif, présent UNIQUEMENT sur une page delta. Il entre dans le
+        // corps hashé par `sendWithETag` : un 304 ne peut donc pas masquer une
+        // sortie de vue qui vient d'apparaître.
+        ...(tombstones
+          ? {
+              meta: {
+                deletedConversationIds: tombstones.ids,
+                deletedConversationIdsTruncated: tombstones.truncated
+              }
+            }
+          : {})
+      };
+      // T15 — ETag + If-None-Match→304: don't re-send an unchanged conversation
+      // list body. `sendWithETag` sets ETag + Cache-Control: private, no-cache
+      // (always revalidate) and short-circuits with a body-less 304 on a match.
+      if (sendWithETag(request, reply, responseBody)) return;
+      reply.send(responseBody);
+
+    } catch (error) {
+      logger.error('error fetching conversations', { error });
+      return sendInternalError(reply, 'Error retrieving conversations');
+    }
+  });
+}
+
+/**
+ * #10945 — l'expéditeur d'aperçu part SANS sa jointure `user` : elle porte la
+ * colonne brute `equippedAvatarRing`, déjà résolue en `profileDecor`, et ne
+ * doit pas dépendre du sérialiseur pour être retenue.
+ */
+function withoutNestedUser<T extends { readonly user?: unknown }>(sender: T): Omit<T, 'user'> {
+  const { user: _user, ...rest } = sender;
+  return rest;
+}

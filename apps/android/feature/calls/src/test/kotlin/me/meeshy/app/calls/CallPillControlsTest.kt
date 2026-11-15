@@ -1,0 +1,202 @@
+package me.meeshy.app.calls
+
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertWidthIsAtLeast
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
+import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.call.CallHeaderNames
+import me.meeshy.sdk.model.call.CallState
+import me.meeshy.ui.theme.MeeshyTheme
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
+class CallPillControlsTest {
+    @get:Rule val rule = createComposeRule()
+
+    private val config = CallConfig(peerId = "u1", peerName = "Alice", isVideo = false, isOutgoing = true)
+
+    private fun connected(media: CallMedia = CallMedia()) =
+        CallPresenter.present(CallState.Connected, config, media, elapsedSeconds = 65)
+
+    private class Taps {
+        var reopen = 0
+        var mute = 0
+        var speaker = 0
+        var hangUp = 0
+        var stopShare = 0
+    }
+
+    private fun show(
+        state: CallUiState,
+        sharing: Boolean = false,
+        names: CallHeaderNames = CallHeaderNames(givenName = null, groupName = null),
+    ): Taps {
+        val taps = Taps()
+        rule.setContent {
+            MeeshyTheme {
+                CallPill(
+                    state = state,
+                    onClick = { taps.reopen++ },
+                    onToggleMute = { taps.mute++ },
+                    onToggleSpeaker = { taps.speaker++ },
+                    onHangUp = { taps.hangUp++ },
+                    isScreenSharing = sharing,
+                    onStopScreenShare = { taps.stopShare++ },
+                    names = names,
+                )
+            }
+        }
+        return taps
+    }
+
+    @Test
+    fun `the minimised pill hangs up without reopening the call`() {
+        val taps = show(connected())
+
+        rule.onNodeWithContentDescription("Hang up").performClick()
+
+        assertThat(taps.hangUp).isEqualTo(1)
+        assertThat(taps.reopen).isEqualTo(0)
+    }
+
+    @Test
+    fun `the minimised pill mutes, and once muted offers to unmute`() {
+        val taps = show(connected(CallMedia(isMuted = true)))
+
+        rule.onNodeWithContentDescription("Unmute").performClick()
+
+        assertThat(taps.mute).isEqualTo(1)
+        assertThat(taps.reopen).isEqualTo(0)
+    }
+
+    @Test
+    fun `the minimised pill switches the audio output and names the current one`() {
+        val taps = show(connected(CallMedia(isSpeakerOn = false)))
+
+        rule.onNodeWithContentDescription("Earpiece").performClick()
+
+        assertThat(taps.speaker).isEqualTo(1)
+    }
+
+    @Test
+    fun `touching the identity part reopens the call`() {
+        val taps = show(connected())
+
+        rule.onNodeWithContentDescription("Ongoing call with Alice").performClick()
+
+        assertThat(taps.reopen).isEqualTo(1)
+    }
+
+    @Test
+    fun `while I share my screen the pill turns into Stop, and nothing else can be touched by mistake`() {
+        val taps = show(connected(), sharing = true)
+
+        rule.onNodeWithContentDescription("Stop sharing screen").performClick()
+
+        assertThat(taps.stopShare).isEqualTo(1)
+        assertThat(taps.reopen).isEqualTo(0)
+        rule.onNodeWithContentDescription("Hang up").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Earpiece").assertDoesNotExist()
+    }
+
+    @Test
+    fun `while I share my screen the banner says name and duration, not a generic sentence`() {
+        show(connected(), sharing = true)
+
+        rule.onNodeWithText("Alice · 01:05").assertExists()
+        rule.onNodeWithText("You're sharing your screen").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the Stop button of the sharing banner is a 48 dp target`() {
+        show(connected(), sharing = true)
+
+        rule.onNodeWithContentDescription("Stop sharing screen").assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
+    }
+
+    @Test
+    fun `while I share my screen the banner names the person as the header does, by the name I gave them`() {
+        show(connected(), sharing = true, names = CallHeaderNames(givenName = "Mamie", groupName = null))
+
+        rule.onNodeWithText("Mamie · 01:05").assertExists()
+        rule.onNodeWithText("Alice · 01:05").assertDoesNotExist()
+    }
+
+    @Test
+    fun `P18-3 - the reduced call says name and duration in one label, by the name I gave the person`() {
+        show(connected(), names = CallHeaderNames(givenName = "Mamie", groupName = null))
+
+        rule.onNodeWithText("Mamie · 01:05").assertExists()
+        rule.onNodeWithText("Alice").assertDoesNotExist()
+        rule.onNodeWithText("01:05").assertDoesNotExist()
+    }
+
+    @Test
+    fun `P18-3 - without a given name, the reduced call says the display name and the duration in one label`() {
+        show(connected())
+
+        rule.onNodeWithText("Alice · 01:05").assertExists()
+    }
+
+    @Test
+    fun `P18-3 - TalkBack names the person as the label does`() {
+        show(connected(), names = CallHeaderNames(givenName = "Mamie", groupName = null))
+
+        rule.onNodeWithContentDescription("Ongoing call with Mamie").performClick()
+    }
+
+    @Test
+    fun `P18-3 - in a group the reduced call is named after the group`() {
+        show(connected(), names = CallHeaderNames(givenName = "Mamie", groupName = "Famille"))
+
+        rule.onNodeWithText("Famille · 01:05").assertExists()
+    }
+
+    @Test
+    fun `starting then stopping the share swaps the pill and the capsule, both ways`() = swapsBothWays(reduce = false)
+
+    @Test
+    fun `the same swap holds under reduced motion`() = swapsBothWays(reduce = true)
+
+    private fun swapsBothWays(reduce: Boolean) {
+        var sharing by mutableStateOf(false)
+        rule.setContent {
+            MeeshyTheme {
+                CallPill(
+                    state = connected(),
+                    onClick = {},
+                    onToggleMute = {},
+                    onToggleSpeaker = {},
+                    onHangUp = {},
+                    isScreenSharing = sharing,
+                    reduceMotion = reduce,
+                )
+            }
+        }
+        rule.onNodeWithContentDescription("Hang up").assertExists()
+
+        sharing = true
+        rule.waitForIdle()
+        rule.mainClock.advanceTimeBy(500)
+        rule.onNodeWithContentDescription("Stop sharing screen").assertExists()
+        rule.onNodeWithContentDescription("Hang up").assertDoesNotExist()
+
+        sharing = false
+        rule.waitForIdle()
+        rule.mainClock.advanceTimeBy(500)
+        rule.onNodeWithContentDescription("Hang up").assertExists()
+        rule.onNodeWithContentDescription("Stop sharing screen").assertDoesNotExist()
+    }
+}

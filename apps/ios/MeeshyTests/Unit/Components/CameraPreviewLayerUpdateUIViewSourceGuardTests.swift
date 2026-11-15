@@ -22,21 +22,28 @@ final class CameraPreviewLayerUpdateUIViewSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Components/CameraView.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Components/CameraPreviewLayer.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
     /// Isole le corps de `updateUIView(_:context:)` plutôt que de grepper le fichier entier — une
-    /// future occurrence non liée de `DispatchQueue.main.async` ailleurs dans `CameraView.swift` ne
+    /// future occurrence non liée de `DispatchQueue.main.async` ailleurs dans `CameraPreviewLayer.swift` ne
     /// doit ni faire échouer ni masquer cette garde précise.
     private func updateUIViewBody(in src: String) throws -> String {
-        let marker = "func updateUIView(_ uiView: UIView, context: Context) {"
+        // **Le NOM, jamais la SIGNATURE** (2026-09-06). Ce marqueur épinglait
+        // `(_ uiView: UIView, context: Context)`. Le paramètre est devenu
+        // `PreviewHost` — un type d'hôte plus précis —, et la garde a cessé de
+        // trouver son bloc : elle a rougi en accusant le fichier d'« avoir
+        // changé de forme », alors qu'elle ne mesurait plus rien. Une garde
+        // aveugle est pire que rouge, parce qu'un `DispatchQueue.main.async`
+        // réintroduit dans ce corps serait passé inaperçu.
+        let marker = "func updateUIView("
         guard let start = src.range(of: marker) else {
-            XCTFail("Signature de updateUIView introuvable — CameraView.swift a changé de forme.")
+            XCTFail("`func updateUIView(` introuvable dans CameraPreviewLayer.swift — la garde ne mesure plus rien.")
             throw XCTSkip("marker")
         }
-        guard let end = src.range(of: "\n    func makeCoordinator()", range: start.upperBound..<src.endIndex) else {
-            XCTFail("Fin du corps de updateUIView introuvable — CameraView.swift a changé de forme.")
+        guard let end = src.range(of: "\n}\n", range: start.upperBound..<src.endIndex) else {
+            XCTFail("Fin du corps de updateUIView introuvable — CameraPreviewLayer.swift a changé de forme.")
             throw XCTSkip("marker")
         }
         return String(src[start.upperBound..<end.lowerBound])
@@ -52,10 +59,38 @@ final class CameraPreviewLayerUpdateUIViewSourceGuardTests: XCTestCase {
             "l'idiome déjà utilisé pour cette catégorie de hop dans ce même fichier " +
             "(CameraModel.fileOutput/photoOutput delegates)."
         )
+        // **Le hop n'a pas été REMPLACÉ, il a été SUPPRIMÉ** (2026-09-06).
+        //
+        // Cette garde exigeait `Task { @MainActor in }`. Il n'y a plus rien à
+        // faire sauter : `updateUIView` ne pose plus la frame du tout. L'hôte
+        // est devenu un `PreviewHost` dont le `layerClass` EST la couche de
+        // prévisualisation — le layout la dimensionne, comme n'importe quelle
+        // vue. Le corps ne fait plus que réassigner la session quand elle change.
+        //
+        // > La meilleure façon de ne pas se tromper de fil n'est pas de sauter
+        // > correctement, c'est de n'avoir rien à y faire. Une garde qui exige
+        // > le hop interdit la solution qui le rend inutile.
+        //
+        // Ce qui reste gardé — et c'est l'essentiel de #3641 — est l'assertion
+        // NÉGATIVE ci-dessus : pas de `DispatchQueue.main.async` brut. Elle vaut
+        // toujours, et elle vaudra encore si un hop redevient nécessaire.
         XCTAssertTrue(
-            body.contains("Task { @MainActor in"),
-            "updateUIView doit sauter sur MainActor via une Task structurée pour poser la frame du " +
-            "preview layer."
+            body.contains("context.coordinator.bind(uiView.previewLayer, to: session, on: sessionQueue)"),
+            "updateUIView doit rester le site qui réassigne la SESSION : c'est la seule chose qui change " +
+            "après le montage, et la perdre laisserait le viseur sur une session morte au ré-armement."
+        )
+        // **Mais il ne l'AFFECTE plus lui-même** (#17041) : `previewLayer.session = …`
+        // valide une configuration de la session sur le fil qui l'écrit — le
+        // fil principal, ici —, et l'iPhone du porteur l'a vu attendre la file
+        // de capture. Le rattachement part sur la file de la session.
+        XCTAssertFalse(
+            body.contains("previewLayer.session ="),
+            "updateUIView n'affecte jamais la session de la couche sur le fil principal (#17041)."
+        )
+        XCTAssertFalse(
+            body.contains(".frame ="),
+            "et il ne doit PAS reposer la frame à la main : `PreviewHost.layerClass` s'en charge, et la " +
+            "reposer ici rouvrirait le hop que ce lot supprime."
         )
     }
 }

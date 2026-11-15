@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
@@ -24,7 +23,12 @@ import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -36,17 +40,23 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.LanguageData
+import me.meeshy.sdk.model.RepostLanguageFlag
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.format.shortDateTimeLabel
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.story.isExpired
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -60,15 +70,39 @@ import java.util.Locale
  * read-only, and its tap opens the ORIGINAL reposted post ([RepostEmbedPresentation.id]),
  * never the outer card — mirrors iOS `FeedPostCard.repostTapTargetId`.
  *
- * A full story/reel canvas embed is out of scope for this slice: STORY/REEL
- * reposts render the same quote block with a discreet kind badge (there is no
- * Android story-canvas renderer yet).
+ * A reposted STORY plays through the shared scene renderer (only when the feed elects it, [sceneId]; a tap opens THAT story full screen while it is alive and its author known, else the post); a reposted REEL shows
+ * its cover above the quote (poster, resting scene or accent backdrop — never a
+ * player per card) and opens the reels player on that reel (iOS `ReelRepostEmbedCell`).
  */
 @Composable
 fun RepostEmbedCell(
     embed: RepostEmbedPresentation,
     onOpen: (String) -> Unit,
+    onOpenReel: ((String) -> Unit)? = null,
+    sceneId: String? = null,
 ) {
+    if (embed.isUnavailable) {
+        UnavailableRepostCell(embed)
+        return
+    }
+    val sceneRenderer = LocalRepostSceneRenderer.current
+    val scene = embed.storyItem
+    if (scene != null && sceneRenderer != null) {
+        val live by rememberSceneLive(sceneId)
+        val openStory = LocalStoryOpener.current
+        val authorId = embed.authorId
+        // Le lecteur de stories ne joue que ce qu'il sait trouver : une story expirée, ou sans auteur connu, ouvre la fiche du post.
+        val open: () -> Unit = {
+            if (openStory != null && authorId != null && !scene.isExpired()) openStory(authorId, embed.id) else onOpen(embed.id)
+        }
+        sceneRenderer(scene, embed.authorName, live, open, Modifier.fillMaxWidth().sceneZoom(sceneId?.let(SceneZoomPolicy::sourceKey)).sceneFrame(sceneId))
+        return
+    }
+    if (embed.isReel && embed.reelCover != null) {
+        ReelRepostEmbedCell(embed = embed, containingPostId = sceneId, onOpen = { (onOpenReel ?: onOpen)(embed.id) })
+        return
+    }
+    var secondaryCode by rememberSaveable(embed.id) { mutableStateOf<String?>(null) }
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     val header = stringResource(
         if (embed.isQuote) R.string.feed_repost_quoted else R.string.feed_repost_reposted,
@@ -111,18 +145,7 @@ fun RepostEmbedCell(
         Spacer(Modifier.height(MeeshySpacing.sm))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(contentAlignment = Alignment.Center) {
-                MeeshyAvatar(name = embed.authorName ?: unknownAuthor, size = 28.dp)
-                if (!embed.authorAvatarUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = embed.authorAvatarUrl,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape),
-                    )
-                }
-            }
+            MeeshyAvatar(name = embed.authorName ?: unknownAuthor, size = 28.dp, imageUrl = embed.authorAvatarUrl, presence = rememberPresence(embed.authorId), modifier = Modifier.opensAuthorProfile(embed.authorProfile()))
             Spacer(Modifier.width(MeeshySpacing.sm))
             Column(Modifier.weight(1f)) {
                 Text(
@@ -132,6 +155,7 @@ fun RepostEmbedCell(
                     color = MeeshyTheme.tokens.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.opensAuthorProfile(embed.authorProfile()),
                 )
                 embed.createdAtIso?.let {
                     Text(
@@ -141,7 +165,12 @@ fun RepostEmbedCell(
                     )
                 }
             }
-            if (embed.isTranslated) {
+            if (embed.languageFlags.isNotEmpty()) {
+                RepostLanguageFlags(
+                    flags = embed.languageFlags.map { it.copy(isActive = it.code == secondaryCode) },
+                    onToggle = { code -> secondaryCode = code.takeUnless { it == secondaryCode } },
+                )
+            } else if (embed.isTranslated) {
                 Icon(
                     imageVector = Icons.Filled.Translate,
                     contentDescription = stringResource(R.string.feed_translated),
@@ -174,6 +203,22 @@ fun RepostEmbedCell(
                     )
                 }
             }
+        }
+
+        secondaryCode?.let { code -> embed.languageTexts[code] }?.let { text ->
+            Spacer(Modifier.height(MeeshySpacing.xs))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MeeshyTheme.tokens.textSecondary,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(MeeshyRadius.sm))
+                    .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f))
+                    .padding(MeeshySpacing.sm),
+            )
         }
 
         embed.previewImageUrl?.let { url ->
@@ -246,6 +291,80 @@ fun RepostEmbedCell(
                     fontWeight = FontWeight.Medium,
                     color = MeeshyPalette.Indigo500.copy(alpha = 0.7f),
                 )
+                Text(
+                    text = stringResource(R.string.feed_repost_original),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MeeshyTheme.tokens.textSecondary,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * L'original d'un repost n'est plus servi (supprimé, retiré, hors de portée) : un état dessiné, de la même
+ * silhouette que la citation, qui n'ouvre rien — pas un bloc vide qui promet un contenu.
+ */
+@Composable
+private fun UnavailableRepostCell(embed: RepostEmbedPresentation) {
+    val message = stringResource(R.string.feed_repost_unavailable)
+    val header = stringResource(
+        if (embed.isQuote) R.string.feed_repost_quoted else R.string.feed_repost_reposted,
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(MeeshyRadius.md))
+            .border(
+                width = 1.dp,
+                color = MeeshyTheme.tokens.textSecondary.copy(alpha = 0.25f),
+                shape = RoundedCornerShape(MeeshyRadius.md),
+            )
+            .background(MeeshyTheme.tokens.textSecondary.copy(alpha = 0.05f))
+            .padding(MeeshySpacing.md)
+            .semantics(mergeDescendants = true) { contentDescription = "$header. $message" },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Icon(
+            imageVector = MeeshyIcons.Block,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.size(18.dp),
+        )
+        Column {
+            Text(
+                text = header,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
+        }
+    }
+}
+
+/** Les drapeaux du post CITÉ : un toucher ouvre (ou ferme) le panneau secondaire de l'embed, sans toucher au post extérieur. */
+@Composable
+private fun RepostLanguageFlags(flags: List<RepostLanguageFlag>, onToggle: (String) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs), verticalAlignment = Alignment.CenterVertically) {
+        flags.forEach { flag ->
+            val name = LanguageData.info(flag.code)?.name ?: flag.code
+            val label = stringResource(R.string.feed_repost_show_language, name)
+            Box(
+                modifier = Modifier
+                    .minimumInteractiveComponentSize()
+                    .clip(RoundedCornerShape(MeeshyRadius.sm))
+                    .background(if (flag.isActive) MeeshyPalette.Indigo500.copy(alpha = 0.18f) else Color.Transparent)
+                    .clickable(role = Role.Button) { onToggle(flag.code) }
+                    .semantics { contentDescription = label; selected = flag.isActive },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(text = flag.flag, style = MaterialTheme.typography.bodyMedium)
             }
         }
     }

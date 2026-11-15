@@ -1,0 +1,398 @@
+import { quotableNoticeKind, quotedNoticeText } from '@meeshy/shared/utils/quotable-notice';
+
+import { served } from '@/lib/api/prism';
+import { contactCardLabelOf } from '@/lib/contact-card/label';
+import { attachmentSrc } from '@/lib/api/media-url';
+import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
+import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { Attachment, Message } from '@/lib/api/types';
+
+import { kindOf } from './message';
+import { quotedIsProtected } from './quoted-protection';
+import { attachmentSegments } from './message-a11y-label';
+import { attachmentDurationLabel } from './media-transport';
+
+/**
+ * CE QU'UNE CITATION MONTRE — SITE UNIQUE (#7556), miroir de
+ * `ConversationViewModel.optimisticReplyReference(quoting:)`
+ * (`apps/ios/.../ConversationViewModel+ReplyReference.swift:49-63`), où la
+ * résolution d'une citation vit elle aussi en UN seul endroit.
+ *
+ * DEUX DÉFAUTS, UNE SEULE CAUSE. `Quote` (`components/message-blocks.tsx`)
+ * rendait `quote.content` et rien d'autre :
+ *  1. répondre à une photo, une vidéo, un vocal ou un document SANS légende
+ *     produisait une citation VIDE — un filet coloré, un nom, rien ;
+ *  2. le texte cité restait en langue d'ORIGINE pendant que le bandeau du
+ *     composeur, lui, descendait le Prisme (`use-reply-preview.ts`) : le MÊME
+ *     message cité s'affichait traduit avant l'envoi et en langue d'origine
+ *     une fois gravé dans la bulle.
+ *
+ * La donnée, elle, ARRIVAIT INTACTE : `decodeMessage` décode `attachments`
+ * récursivement sur `replyTo` (`api/decode.ts`) et un témoin VERT le garde
+ * (`decode.test.ts`). Ce témoin prouve le TRANSPORT, jamais le PIXEL — « suivre
+ * une donnée jusqu'à son consommateur s'arrête un cran trop tôt : la suivre
+ * jusqu'au PIXEL » (CLAUDE.md § Prisme, cycle 123, `PostCard`).
+ *
+ * `Quote` et `useReplyToPreview` sont deux PROJECTIONS de cette fonction.
+ * Deux descentes parallèles serviraient deux langues pour un même message
+ * cité — la forme exacte du défaut 2, et celle que le cycle 128 a fermée sur
+ * la piste audio d'une bannière.
+ */
+
+export type QuotedMediaKind = 'image' | 'video' | 'audio' | 'file' | 'contact';
+
+/**
+ * LE GENRE → SON LIBELLÉ COURT, miroir `AttachmentKind.shortLabel`
+ * (`packages/MeeshySDK/.../Models/AttachmentKind.swift:140-153`) ramené aux
+ * QUATRE catégories que `kindOf` distingue côté web. Des clés de CATALOGUE,
+ * jamais des chaînes françaises en dur : ce libellé est de l'INTERFACE (il
+ * décrit un genre de fichier), pas du contenu — il suit la langue du lecteur,
+ * pas celle du message.
+ */
+export const QUOTED_KIND_KEY = {
+  image: 'attachment.kind.image',
+  video: 'attachment.kind.video',
+  audio: 'attachment.kind.audio',
+  file: 'attachment.kind.file',
+  contact: 'contactCard.shared',
+} as const satisfies Readonly<Record<QuotedMediaKind, InterfaceCatalogKey>>;
+
+export { quotedIsProtected };
+
+export type QuotedMedia = {
+  readonly kind: QuotedMediaKind;
+  /** « Photo », « Vidéo », « Audio », « Fichier » — dans la langue d'INTERFACE. */
+  readonly label: string;
+  /** `null` quand rien ne peut voyager (protection) ou qu'aucune miniature n'est servie. */
+  readonly thumbnailSrc: string | null;
+  /** Le flou ThumbHash peint AVANT toute requête réseau — `null` sur un média protégé : un flou EST une image. */
+  readonly placeholderSrc: string | null;
+  /** « 0:42 » — `null` sans durée connue : un « 0:00 » faux est pire qu'aucun chiffre. */
+  readonly durationLabel: string | null;
+  /** Piste temporelle (vidéo, vocal) : le badge de lecture se pose sur la vignette. */
+  readonly timebased: boolean;
+  /**
+   * LE CADRE DE LA MINIATURE (#7929) — non nul quand la citation vise UNE
+   * image ou UNE vidéo (pièce seule, ou pièce NOMMÉE d'un carrousel) : la
+   * citation la montre alors en grand, à la largeur de la carte de story et au
+   * rapport d'aspect du média. `null` sur un média protégé : ses dimensions
+   * décrivent ce que le lecteur n'a pas le droit de voir.
+   */
+  readonly frame: QuotedFrame | null;
+  /**
+   * LE FICHIER D'UNE PISTE TEMPORELLE (#8233) — la vidéo dont on tire la
+   * première image quand le serveur n'a servi aucune vignette, le vocal qu'on
+   * joue depuis la citation. `null` pour une image (sa vignette suffit), un
+   * document, une pièce sans fichier ou PROTÉGÉE : l'URL d'un secret est le
+   * secret (cycle 125).
+   */
+  readonly fileSrc: string | null;
+  /**
+   * LA PIÈCE QUE L'APERÇU OUVRE (#8233, miroir `ReplyReference.quotedAttachment`
+   * iOS) — image, vidéo ou vocal, reconstruite depuis la citation elle-même :
+   * elle s'ouvre même quand le message cité est hors de la fenêtre chargée.
+   * `null` sur un document, une pièce sans fichier ou protégée — la zone média
+   * n'existe alors pas, et le toucher reste « aller au message ».
+   */
+  readonly openable: Attachment | null;
+  /**
+   * LES AUTRES PIÈCES DU MESSAGE CITÉ (#9911) — la citation d'un message ENTIER
+   * à sept photos en montre une et en compte six de plus (« +6 »). `0` quand
+   * la citation vise UNE pièce (nommée ou seule), ou que le message est
+   * protégé : le nombre de pièces décrit un contenu qu'on n'a pas le droit de voir.
+   */
+  readonly more: number;
+};
+
+/**
+ * `aspectRatio` = largeur / hauteur du média cité, BORNÉ : jamais plus haut
+ * que la scène de story (9:16), jamais plus plat que 3:1. `measured` est faux
+ * quand la pièce ne porte pas ses dimensions — repli CARRÉ, jamais inventé.
+ */
+export type QuotedFrame = { readonly aspectRatio: number; readonly measured: boolean };
+
+const FRAME_TALLEST = 9 / 16;
+const FRAME_FLATTEST = 3;
+
+const frameOf = (attachment: Attachment): QuotedFrame => {
+  const { width, height } = attachment;
+  if (width === undefined || height === undefined || width <= 0 || height <= 0) return { aspectRatio: 1, measured: false };
+  return { aspectRatio: Math.min(FRAME_FLATTEST, Math.max(FRAME_TALLEST, width / height)), measured: true };
+};
+
+export type QuotedPreview = {
+  /** Le texte SERVI — la traduction élue, sinon l'original, sinon le libellé court du média. */
+  readonly text: string;
+  /** La langue de `text` — `''` quand il n'y a rien à déclarer (libellé d'interface, placeholder). */
+  readonly language: string;
+  readonly media: QuotedMedia | null;
+  /** `attachmentSegments` du message cité, pour le nom accessible du bouton — jamais une seconde écriture. */
+  readonly inventory: readonly string[];
+  /**
+   * `text` est un PLACEHOLDER, pas du contenu. La peau le lit pour taire ses
+   * ORNEMENTS : le placeholder porte déjà son icône de genre (« 👁️ 🖼️ »), et
+   * un glyphe de plus dirait deux fois la même chose.
+   */
+  readonly isProtected: boolean;
+};
+
+/**
+ * LE MÉDIA REPRÉSENTATIF — miroir de `quotedRepresentative`
+ * (`packages/MeeshySDK/.../CoreModels.swift:1362-1364`, « le premier hors
+ * localisation »). Côté web il n'existe PAS de pièce jointe de localisation :
+ * un lieu partagé vit dans `message.metadata` et se rend par `placeOf`
+ * (`message-body.ts`) — la première pièce EST donc la règle, et non une
+ * simplification de celle d'iOS.
+ *
+ * LA PIÈCE NOMMÉE PRIME (#6164, #7881) — répondre à la troisième photo
+ * d'un carrousel : la passerelle sert `replyTo.attachmentReplyTo =
+ * { attachmentId, kind }` (`servedQuotedMessage.ts`), que `decode.ts` laisse
+ * passer tel quel sur la citation. Elle prime ici comme `citing` prime sur le
+ * représentatif côté iOS ; une pièce nommée que la citation ne porte plus
+ * (retirée, masquée pièce par pièce) ne retombe JAMAIS sur la première
+ * (#9911, `vanishedKindOf`).
+ */
+const namedPieceIdOf = (quoted: object): string | undefined => {
+  const named: unknown = (quoted as { readonly attachmentReplyTo?: unknown }).attachmentReplyTo;
+  if (named === null || typeof named !== 'object') return undefined;
+  const id: unknown = (named as { readonly attachmentId?: unknown }).attachmentId;
+  return typeof id === 'string' && id !== '' ? id : undefined;
+};
+
+/**
+ * LA CITATION D'UNE PIÈCE DISPARUE (#9911) — la pièce nommée n'est plus sur
+ * le message cité (retirée, masquée pièce par pièce) : la citation ne montre
+ * JAMAIS sa voisine à sa place, comme iOS. Il ne reste que sa NATURE, gravée
+ * dans l'instantané de la passerelle (`attachmentReplyTo.kind`) ; un lieu,
+ * que le web ne range pas en pièce jointe, et une nature inconnue se disent
+ * « Fichier ».
+ */
+const VANISHED_KINDS: Readonly<Record<string, QuotedMediaKind>> = { image: 'image', video: 'video', audio: 'audio' };
+
+const vanishedKindOf = (quoted: object): QuotedMediaKind => {
+  const named: unknown = (quoted as { readonly attachmentReplyTo?: unknown }).attachmentReplyTo;
+  const kind: unknown = named !== null && typeof named === 'object' ? (named as { readonly kind?: unknown }).kind : undefined;
+  return (typeof kind === 'string' ? VANISHED_KINDS[kind] : undefined) ?? 'file';
+};
+
+export type QuotedRepresentative =
+  | { readonly attachment: Attachment; readonly single: boolean; readonly more: number }
+  | { readonly vanished: QuotedMediaKind };
+
+/**
+ * `single` — la citation vise UNE pièce : la pièce nommée, ou la seule du message cité.
+ *
+ * `more` (#9915) — la passerelle ne sert que QUATRE pièces du message cité et
+ * dit à côté combien de tuiles il porte (`visualAttachmentCount`) ; absent
+ * (ancienne passerelle, citation optimiste), les pièces servies font foi.
+ */
+export const representativeOf = (
+  quoted: Pick<Message, 'attachments'> & Partial<Pick<Message, 'visualAttachmentCount'>>,
+): QuotedRepresentative | undefined => {
+  const namedId = namedPieceIdOf(quoted);
+  if (namedId !== undefined) {
+    const named = quoted.attachments?.find((a) => a.id === namedId);
+    return named === undefined ? { vanished: vanishedKindOf(quoted) } : { attachment: named, single: true, more: 0 };
+  }
+  const first = quoted.attachments?.[0];
+  const count = Math.max(quoted.attachments?.length ?? 0, quoted.visualAttachmentCount ?? 0);
+  return first === undefined ? undefined : { attachment: first, single: count === 1, more: Math.max(0, count - 1) };
+};
+
+/** La pièce que nomme une citation (#9911) — le saut au message cité met en évidence SA tuile. */
+export const quotedPieceIdOf = (quoted: object): string | undefined => namedPieceIdOf(quoted);
+
+/**
+ * `quotedThumbnailUrl` (`ConversationViewModel+ReplyReference.swift:171-173`) :
+ * « une photo tout juste envoyée n'a pas encore de vignette serveur — la
+ * citation montre le fichier lui-même plutôt qu'un carré vide ». Le repli ne
+ * vaut QUE pour une image : servir le `fileUrl` d'une vidéo ou d'un PDF dans
+ * un `<img>` peindrait une case brisée.
+ */
+const OPENABLE_KINDS: ReadonlySet<QuotedMediaKind> = new Set(['image', 'video', 'audio']);
+
+const hasFile = (attachment: Attachment): boolean => typeof attachment.fileUrl === 'string' && attachment.fileUrl !== '';
+
+const thumbnailOf = (attachment: Attachment, kind: QuotedMediaKind): string | null => {
+  const raw = attachment.thumbnailUrl ?? (kind === 'image' ? attachment.fileUrl : undefined);
+  if (raw === undefined || raw === '') return null;
+  return attachmentSrc(raw);
+};
+
+/**
+ * LES FAITS D'UNE PIÈCE JOINTE CITÉE, ET CE QUI LES RETIENT.
+ *
+ * La protection se lit aux DEUX niveaux qui la déclarent — celui du MESSAGE et
+ * celui de la PIÈCE (`mediaMayTravel`, passerelle ; `quotedFacts(of:
+ * mediaMayTravel:)`, iOS) : un message parfaitement ordinaire peut porter une
+ * photo à vue unique, et c'est exactement le cas qu'une lecture au seul niveau
+ * message laisserait sortir.
+ *
+ * Ce que la protection retient n'est pas seulement l'IMAGE : dimensions, durée
+ * et taille DÉCRIVENT un contenu que le lecteur n'a pas le droit de voir — les
+ * servir, c'est décrire le secret par la bande (`detailsLabel(for:)`,
+ * `QuotedReplyPresentation.swift:154-158`). Le GENRE, lui, reste dit : le
+ * dépôt divulgue déjà l'icône de type d'un contenu protégé
+ * (`protectedPreview` → `contentTypeIcon`).
+ */
+const vanishedMediaOf = (kind: QuotedMediaKind, interfaceLanguage: InterfaceLanguage): QuotedMedia => ({
+  kind,
+  label: translate(interfaceLanguage, QUOTED_KIND_KEY[kind]),
+  thumbnailSrc: null,
+  placeholderSrc: null,
+  durationLabel: null,
+  timebased: kind === 'video' || kind === 'audio',
+  frame: null,
+  fileSrc: null,
+  openable: null,
+  more: 0,
+});
+
+const mediaOf = (params: {
+  readonly attachment: Attachment;
+  readonly single: boolean;
+  readonly more: number;
+  readonly messageIsProtected: boolean;
+  readonly interfaceLanguage: InterfaceLanguage;
+}): QuotedMedia => {
+  const { attachment, single, more, messageIsProtected, interfaceLanguage } = params;
+  /* UNE CARTE DE VISITE SE DIT PAR SON CONTACT (#8122), jamais « Fichier » ni
+     `contact_<UUID>_….vcf` — `contactCardLabelOf` est le site unique. */
+  const contactLabel = contactCardLabelOf(attachment, interfaceLanguage);
+  const kind: QuotedMediaKind = contactLabel !== null ? 'contact' : kindOf(attachment);
+  const mayTravel = !messageIsProtected && !quotedIsProtected(attachment);
+  const framed = mayTravel && single && (kind === 'image' || kind === 'video');
+  const timebased = kind === 'video' || kind === 'audio';
+  return {
+    kind,
+    label: contactLabel ?? translate(interfaceLanguage, QUOTED_KIND_KEY[kind]),
+    thumbnailSrc: mayTravel ? thumbnailOf(attachment, kind) : null,
+    placeholderSrc: (mayTravel ? thumbHashPlaceholder(attachment.thumbHash) : undefined) ?? null,
+    durationLabel: mayTravel ? attachmentDurationLabel(attachment.duration) : null,
+    timebased,
+    frame: framed ? frameOf(attachment) : null,
+    fileSrc: mayTravel && timebased && hasFile(attachment) ? attachmentSrc(attachment.fileUrl) : null,
+    openable: mayTravel && OPENABLE_KINDS.has(kind) && hasFile(attachment) ? attachment : null,
+    more: messageIsProtected ? 0 : more,
+  };
+};
+
+/**
+ * @param readerLanguages le prisme du LECTEUR, ordonné — celui que la rangée
+ *   hôte a déjà reçu. La langue EXPLORÉE au geste (`displayLanguage`) n'entre
+ *   PAS ici : elle appartient au message qui PORTE la citation, pas au message
+ *   CITÉ, dont la bulle a sa propre exploration.
+ * @param interfaceLanguage la langue du LECTEUR — celle du libellé court, qui
+ *   est de l'interface et non du contenu. OBLIGATOIRE, même discipline que
+ *   `composeMessageLabel` : un défaut silencieux servirait une langue au
+ *   premier appelant qui l'oublie, et le défaut serait invisible pour qui
+ *   parle français.
+ */
+/**
+ * #8631 — UNE CITATION SCELLÉE N'A PAS TOUJOURS ÉTÉ SUPPRIMÉE. La passerelle
+ * scelle la citation d'un éphémère échu pour son lecteur sous la forme d'une
+ * suppression datée de son échéance, et y joint `expiresAt` = la même date
+ * (`sealedQuotedMessage`) ; le scellement local fait de même. Une échéance
+ * atteinte AU PLUS TARD à la date de scellement dit une EXPIRATION ; une
+ * suppression posée avant l'échéance reste une suppression.
+ */
+const instantOf = (value: unknown): number => new Date(value as string).getTime();
+
+function sealedByExpiry(deletedAt: unknown, expiresAt: unknown): boolean {
+  if (expiresAt === undefined || expiresAt === null) return false;
+  const expiry = instantOf(expiresAt);
+  const sealed = instantOf(deletedAt);
+  return Number.isFinite(expiry) && Number.isFinite(sealed) && expiry <= sealed;
+}
+
+/**
+ * L'AVIS CITÉ (#17441) — un appel, une arrivée, des arrivées regroupées ou un
+ * départ annoncé. Sa métadonnée arrive sous `metadata` quand la citation vient
+ * du fil (bandeau du composeur) et sous `notice` quand la passerelle la sert
+ * (`servedQuotedMessage`). Son texte est de l'INTERFACE : il suit la langue du
+ * lecteur, et l'appel se dit de SON point de vue (`viewerId`).
+ */
+function quotedNoticeOf(params: {
+  readonly quoted: Partial<Pick<Message, 'messageType' | 'metadata' | 'notice'>>;
+  readonly viewerId: string | null;
+  readonly interfaceLanguage: InterfaceLanguage;
+}): string | null {
+  const { quoted, viewerId, interfaceLanguage } = params;
+  const metadata: unknown = quoted.notice ?? quoted.metadata;
+  if (quotableNoticeKind({ messageType: quoted.messageType ?? null, metadata }) === null) return null;
+  return quotedNoticeText({ metadata, viewerId: viewerId ?? '', language: interfaceLanguage });
+}
+
+export function quotedPreviewOf(params: {
+  readonly quoted: Pick<
+    Message,
+    'content' | 'originalLanguage' | 'translations' | 'attachments' | 'isViewOnce' | 'isBlurred' | 'isEncrypted' | 'effectFlags'
+  > &
+    Partial<Pick<Message, 'deletedAt' | 'expiresAt' | 'visualAttachmentCount' | 'messageType' | 'metadata' | 'notice'>>;
+  readonly readerLanguages: readonly string[];
+  readonly interfaceLanguage: InterfaceLanguage;
+  /** Le LECTEUR (`useViewer().id`) — un appel manqué cité se dit « manqué » ou « sans réponse » selon qui l'a passé. */
+  readonly viewerId: string | null;
+}): QuotedPreview {
+  const { quoted, readerLanguages, interfaceLanguage, viewerId } = params;
+  /* UN MESSAGE CITÉ SUPPRIMÉ NE DIT PLUS RIEN DE LUI (#7926) — le libellé du
+     catalogue, celui de la bulle supprimée (`ProtectionNotice`), jamais
+     l'ancien texte, sa traduction ou sa pièce, même si une charge en garde
+     encore une trace. Aucune langue de CONTENU : c'est de l'interface. */
+  if (quoted.deletedAt !== undefined && quoted.deletedAt !== null) {
+    const key = sealedByExpiry(quoted.deletedAt, quoted.expiresAt) ? 'message.expired.a11y' : 'message.deleted';
+    return { text: translate(interfaceLanguage, key), language: '', media: null, inventory: [], isProtected: true };
+  }
+  const noticeText = quotedNoticeOf({ quoted, viewerId, interfaceLanguage });
+  if (noticeText !== null) return { text: noticeText, language: '', media: null, inventory: [], isProtected: false };
+  const messageIsProtected = quotedIsProtected(quoted);
+  const piece = representativeOf(quoted);
+  const media =
+    piece === undefined
+      ? null
+      : 'vanished' in piece
+        ? vanishedMediaOf(piece.vanished, interfaceLanguage)
+        : mediaOf({ ...piece, messageIsProtected, interfaceLanguage });
+
+  /* UN PLACEHOLDER NE SE TRADUIT PAS. La passerelle retire déjà les
+     traductions d'une citation protégée (`servedQuotedMessage`), mais ce
+     refus est posé ICI aussi, et fail-closed : `content` porte alors le
+     placeholder (« 👁️ 🖼️ »), qui n'est pas du contenu et n'a donc aucune
+     langue à déclarer — un `lang="fr"` sur deux émojis ferait prononcer un
+     secret dans une voix qu'il n'a pas. */
+  if (messageIsProtected) {
+    return { text: quoted.content, language: '', media, inventory: [], isProtected: true };
+  }
+
+  const rendered = served({
+    preferredLanguages: readerLanguages,
+    originalLanguage: quoted.originalLanguage,
+    translations: quoted.translations,
+    original: quoted.content,
+  });
+
+  /* LE LIBELLÉ COURT EST UN REPLI, JAMAIS UN PRÉFIXE (`quotedFlow`,
+     `BubbleQuotedReply.swift:427-429` : « aperçu VIDE + pièce jointe → le
+     libellé court du genre »). Sa langue est celle du DOCUMENT — c'est de
+     l'interface : ne rien déclarer le fait hériter du `lang` de la page,
+     alors qu'annoncer la langue du CONTENU ferait lire « Photo » avec la
+     voix de la langue d'origine du message. */
+  if (rendered.text === '') {
+    return {
+      text: media?.label ?? '',
+      language: '',
+      media,
+      inventory: attachmentSegments(quoted.attachments),
+      isProtected: false,
+    };
+  }
+
+  return {
+    text: rendered.text,
+    language: rendered.language,
+    media,
+    inventory: attachmentSegments(quoted.attachments),
+    isProtected: false,
+  };
+}

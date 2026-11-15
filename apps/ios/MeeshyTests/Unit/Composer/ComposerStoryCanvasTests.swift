@@ -1,0 +1,285 @@
+import XCTest
+@testable import Meeshy
+@testable import MeeshySDK
+
+/// **La story se compose dans le NOUVEAU composer** (directive porteur
+/// 2026-09-01).
+///
+/// > « Il faut déjà désactiver dans le nouveau composer de charger l'autre vue
+/// > de composer de story, et de simplement mettre à jour le type du champ en
+/// > story, créer un canvas automatiquement si inexistant, enlever les éléments
+/// > de la rangée canonique car destinés pour les posts. »
+final class ComposerStoryCanvasTests: XCTestCase {
+
+    private func slideVierge() -> StorySlide { StorySlide(order: 0) }
+
+    // MARK: - L'autre composer ne se charge plus
+
+    /// **Le témoin central.** `.scene` monte `StoryComposerView` — l'atelier,
+    /// c'est-à-dire la vue de composition de story qui préexistait au meuble.
+    /// Là où l'auteur CHOISIT son format, il ne s'y rend plus.
+    func test_uneSTORY_choisie_neMonteJamaisLAtelier() {
+        for ouverture in [ComposerOpening.keyboardOnContent, .moodGrid] {
+            XCTAssertEqual(
+                ComposerSurfaceRouting.surface(opening: ouverture, format: .story),
+                .document,
+                "l'ouverture \(ouverture) ramène l'atelier sous une story"
+            )
+        }
+    }
+
+    /// **L'exemption, écrite comme une règle et non subie comme un reste.**
+    ///
+    /// Les quatre ouvertures qui portent déjà de la matière — capture photo,
+    /// capture vidéo, reprise de brouillon, média reçu d'une conversation —
+    /// gardent la scène. Elles n'ouvrent sur aucun choix : elles ARRIVENT avec
+    /// un contenu, et l'atelier est le seul écran qui le tienne déjà.
+    /// `MediaComposerDoor` le documente pour son propre cas — son
+    /// média semé disparaîtrait de l'écran ET de la publication, le brouillon
+    /// du document n'ayant ni `mediaIds` ni fichier.
+    ///
+    /// > Une exemption qu'aucun témoin ne nomme se lit comme un oubli, et le
+    /// > prochain qui « range » la supprime.
+    /// **`.cameraReady` a QUITTÉ cette liste le 2026-09-01** (#4751). Elle y
+    /// était entrée par ressemblance : l'argument — « elles arrivent avec du
+    /// contenu » — vaut pour les trois autres et pas pour elle, la caméra
+    /// n'arrivant avec RIEN. Elle promet un viseur, que le meuble sait ouvrir.
+    ///
+    /// > Une exemption qui couvre quatre cas d'un seul argument doit être
+    /// > vérifiée sur les quatre.
+    func test_lesOuverturesQuiPORTENTDeLaMatière_seComposentAussiDansLeMeuble() {
+        for ouverture in [ComposerOpening.videoCameraReady, .resume] {
+            XCTAssertEqual(
+                ComposerSurfaceRouting.surface(opening: ouverture, format: .story),
+                .document,
+                "\(ouverture) : le meuble reprend sa matière sur sa propre scène (#15629)"
+            )
+        }
+    }
+
+    /// **Le RÉEL a rejoint le meuble le 2026-09-01** (#4751). Il était resté
+    /// sur l'atelier au #4700 par prudence — sa timeline y vivait. Elle vit
+    /// AUSSI au meuble depuis le #4082 (`ComposerSceneBand` porte une bande
+    /// `timeline`), et le garder à part faisait changer de COMPOSER en
+    /// changeant de format, sur un écran que l'auteur croit unique.
+    ///
+    /// > Ce témoin affirmait « c'est une décision, pas un oubli ». Il avait
+    /// > raison au moment où il l'écrivait, et la décision a été REPRISE — un
+    /// > témoin qui garde une décision doit pouvoir être retourné par une
+    /// > décision, pas seulement par un défaut.
+    func test_leRÉEL_rejointLeMeuble() {
+        XCTAssertEqual(
+            ComposerSurfaceRouting.surface(opening: .keyboardOnContent, format: .reel),
+            .document
+        )
+        XCTAssertEqual(
+            ComposerSurfaceRouting.surface(opening: .cameraReady, format: .post),
+            .document,
+            "la caméra du tray ouvre le meuble, quel que soit le format servi"
+        )
+    }
+
+    // MARK: - Le canvas naît avec le format
+
+    /// Une story montre son canvas AVANT d'avoir la moindre matière : elle
+    /// n'est rien d'autre que ses unités d'histoire.
+    func test_uneSTORY_montreSonCanvas_mêmeVide() {
+        XCTAssertTrue(ComposerStoryCanvas.showsCanvas(format: .story, documentHasScene: false))
+    }
+
+    /// Un POST se compose sur la scène, même vide (#13864) — mais il ne la
+    /// PUBLIE que si elle porte quelque chose : un post de texte seul part avec
+    /// la charge d'avant.
+    func test_unPOST_montreLaScene_maisNeLaPublieQuAvecDeLaMatiere() {
+        XCTAssertTrue(ComposerStoryCanvas.showsCanvas(format: .post, documentHasScene: false))
+        XCTAssertFalse(ComposerStoryCanvas.publishesScene(format: .post, documentHasScene: false))
+        XCTAssertTrue(ComposerStoryCanvas.publishesScene(format: .post, documentHasScene: true))
+    }
+
+    func test_laPremièreUnité_seSèmeSeulement_siAucuneNExiste() {
+        XCTAssertTrue(ComposerStoryCanvas.needsSeedSlide(format: .story, slideCount: 0))
+        XCTAssertFalse(ComposerStoryCanvas.needsSeedSlide(format: .story, slideCount: 1))
+        XCTAssertFalse(ComposerStoryCanvas.needsSeedSlide(format: .post, slideCount: 0),
+                       "un post sans slide est un document, pas une page à semer")
+    }
+
+    // MARK: - Ce qu'on sème ne compte pas comme ce qu'on écrit
+
+    /// **Le témoin qui empêche la flèche de mentir.** Le semis garantit qu'une
+    /// slide existe toujours ; compter les slides rendrait donc publiable une
+    /// story qu'on vient d'ouvrir et où personne n'a rien posé.
+    func test_laSlideSEMÉE_neCompteJamaisCommeDeLaMatière() {
+        XCTAssertFalse(ComposerStoryCanvas.hasMatter(slides: [slideVierge()], slideImageIds: []))
+        XCTAssertFalse(ComposerStoryCanvas.hasMatter(slides: [], slideImageIds: []))
+    }
+
+    /// Un objet POSÉ est de la matière — c'est ainsi qu'on écrit dans une story,
+    /// et le seul signal que le meuble peut lire.
+    func test_unObjetPOSÉ_estDeLaMatière() {
+        var slide = slideVierge()
+        slide.effects.textObjects = [StoryTextObject(text: "bonjour")]
+        XCTAssertTrue(ComposerStoryCanvas.hasMatter(slides: [slide], slideImageIds: []))
+    }
+
+    /// Un FOND choisi aussi : c'est le geste le plus court qui produise une
+    /// story qu'on peut regarder.
+    func test_unFOND_estDeLaMatière() {
+        var slide = slideVierge()
+        slide.effects.background = "#101010"
+        XCTAssertTrue(ComposerStoryCanvas.hasMatter(slides: [slide], slideImageIds: []))
+    }
+
+    /// La matière se cherche sur TOUTES les unités, pas sur la courante : une
+    /// story dont la deuxième page seule est remplie se publie.
+    func test_laMatièreSeCherche_surTOUTESLesUnités() {
+        var seconde = slideVierge()
+        seconde.mediaURL = "file:///tmp/a.jpg"
+        XCTAssertTrue(ComposerStoryCanvas.hasMatter(slides: [slideVierge(), seconde], slideImageIds: []))
+    }
+
+    // MARK: - La rangée canonique appartient au post
+
+    /// > « Enlever les éléments de la rangée canonique car destinés pour les
+    /// > posts (seule entité qui peut avoir un texte spécifiquement pour
+    /// > contenu). »
+    ///
+    /// **Remis en cause le 2026-09-02, puis RÉTABLI le même jour**, sur retour
+    /// porteur. J'avais servi ici les cinq outils qui posent un objet de scène,
+    /// parce que je venais de retirer les rails qui les portaient. Le porteur a
+    /// corrigé la cause plutôt que le symptôme : les rails sont restaurés, et
+    /// cette rangée redevient étrangère à la story.
+    ///
+    /// > Quand un correctif ne se justifie que par un lot précédent du même
+    /// > auteur, c'est ce lot qu'il faut relire, pas le correctif qu'il faut
+    /// > écrire.
+    func test_laRangéeCanonique_neSeSertPasSousUneSTORY() {
+        XCTAssertTrue(ComposerDocumentTool.servedRow(for: .story).isEmpty)
+    }
+
+    /// Et elle reste ENTIÈRE pour les formats qui composent un champ de contenu.
+    func test_laRangéeCanonique_resteEntièrePourLePOSTEtLeRÉEL() {
+        XCTAssertEqual(ComposerDocumentTool.servedRow(for: .post),
+                       ComposerDocumentTool.servedRow)
+        XCTAssertEqual(ComposerDocumentTool.servedRow(for: .reel),
+                       ComposerDocumentTool.servedRow)
+        XCTAssertFalse(ComposerDocumentTool.servedRow(for: .post).isEmpty)
+    }
+}
+
+/// **Un post sans média crée sa scène d'un toucher sur l'outil Texte** (#9137).
+///
+/// La palette faisait naître la scène, puis il fallait encore trouver la porte
+/// Texte du rail de la scène : deux gestes et une découverte pour l'usage le
+/// plus simple qu'une scène ait. L'outil du document fait les deux d'un coup —
+/// un fond, un texte posé, la saisie ouverte — et un texte resté vide rend le
+/// document tel qu'il était.
+@MainActor
+final class ComposerTextSceneDoorTests: XCTestCase {
+
+    func test_servedRow_post_serviceLOutilTexte() {
+        XCTAssertTrue(ComposerDocumentTool.servedRow(for: .post).contains(.textScene))
+    }
+
+    func test_servedRow_reel_serviceLOutilTexte() {
+        XCTAssertTrue(ComposerDocumentTool.servedRow(for: .reel).contains(.textScene))
+    }
+
+    func test_servedRow_status_neServicePasLOutilTexte() {
+        XCTAssertFalse(ComposerDocumentTool.servedRow(for: .status).contains(.textScene),
+                       "Un mood n'a pas de scène : la porte qui en fait naître une n'y a rien à ouvrir.")
+    }
+
+    func test_servedRow_story_resteVide() {
+        XCTAssertTrue(ComposerDocumentTool.servedRow(for: .story).isEmpty)
+    }
+
+    func test_canonicalRow_texte_suitLEmojiEtPrecedeLaPalette() {
+        let rangee = ComposerDocumentTool.canonicalRow
+        guard let emoji = rangee.firstIndex(of: .emoji),
+              let texte = rangee.firstIndex(of: .textScene) else {
+            return XCTFail("La rangée doit porter l'emoji et le texte.")
+        }
+        XCTAssertEqual(texte, emoji + 1)
+        XCTAssertEqual(ComposerDocumentTool.paletteAnchor(in: rangee), .textScene)
+    }
+
+    func test_paletteAnchor_sansTexte_retombeSurLEmoji() {
+        XCTAssertEqual(ComposerDocumentTool.paletteAnchor(in: [.photo, .emoji, .document]), .emoji)
+    }
+
+    func test_effect_texte_composeUneSceneDeTexte() {
+        XCTAssertEqual(ComposerDocumentTool.textScene.effect, .composesTextScene)
+    }
+
+    func test_symbolName_texte_estCeluiDeLaPorteTexteDeLaScene() {
+        XCTAssertEqual(ComposerDocumentTool.textScene.symbolName, ComposerRailDoor.text.symbolName)
+    }
+
+    func test_label_texte_estCeluiDeLaPorteTexteDeLaScene() {
+        XCTAssertEqual(ComposerDocumentCopy.label(.textScene), ComposerRailCopy.label(.text))
+    }
+
+
+    func test_background_aucunFondChoisi_prendLaPremiereCouleurDeLaPalette() {
+        XCTAssertEqual(
+            ComposerTextSceneDoor.background(chosen: nil, palette: StoryBackgroundPalette.colors),
+            StoryBackgroundPalette.colors.first
+        )
+    }
+
+    func test_background_fondDejaChoisi_leGarde() {
+        XCTAssertEqual(
+            ComposerTextSceneDoor.background(chosen: "FF2E63", palette: StoryBackgroundPalette.colors),
+            "FF2E63"
+        )
+    }
+
+    func test_background_paletteVideEtAucunFond_rendNil() {
+        XCTAssertNil(ComposerTextSceneDoor.background(chosen: nil, palette: []))
+    }
+
+    func test_implicitBackground_aucunFondChoisi_marqueLeFondPoseParLOutil() {
+        XCTAssertEqual(ComposerTextSceneDoor.implicitBackground(chosen: nil, posed: "0F0C29"), "0F0C29")
+    }
+
+    func test_implicitBackground_fondDejaChoisi_neMarqueRien() {
+        XCTAssertNil(ComposerTextSceneDoor.implicitBackground(chosen: "FF2E63", posed: "FF2E63"))
+    }
+
+    func test_returnsToDocument_texteVideEtSceneNue_rendLeDocument() {
+        XCTAssertTrue(ComposerTextSceneDoor.returnsToDocument(
+            implicitBackground: "0F0C29", currentBackground: "0F0C29",
+            foundedSlides: 0, sceneObjectCount: 0, slideCount: 1))
+    }
+
+    func test_returnsToDocument_texteSaisi_garde_LaScene() {
+        XCTAssertFalse(ComposerTextSceneDoor.returnsToDocument(
+            implicitBackground: "0F0C29", currentBackground: "0F0C29",
+            foundedSlides: 0, sceneObjectCount: 1, slideCount: 1))
+    }
+
+    func test_returnsToDocument_fondChoisiEnsuite_garde_LaScene() {
+        XCTAssertFalse(ComposerTextSceneDoor.returnsToDocument(
+            implicitBackground: "0F0C29", currentBackground: "FF2E63",
+            foundedSlides: 0, sceneObjectCount: 0, slideCount: 1),
+            "Une couleur choisie à la palette pendant la saisie est un choix de l'auteur.")
+    }
+
+    func test_returnsToDocument_fondChoisiAvantLOutil_garde_LaScene() {
+        XCTAssertFalse(ComposerTextSceneDoor.returnsToDocument(
+            implicitBackground: nil, currentBackground: "FF2E63",
+            foundedSlides: 0, sceneObjectCount: 0, slideCount: 1))
+    }
+
+    func test_returnsToDocument_mediaFondateur_garde_LaScene() {
+        XCTAssertFalse(ComposerTextSceneDoor.returnsToDocument(
+            implicitBackground: "0F0C29", currentBackground: "0F0C29",
+            foundedSlides: 1, sceneObjectCount: 0, slideCount: 1))
+    }
+
+    func test_returnsToDocument_secondeScene_garde_LaScene() {
+        XCTAssertFalse(ComposerTextSceneDoor.returnsToDocument(
+            implicitBackground: "0F0C29", currentBackground: "0F0C29",
+            foundedSlides: 0, sceneObjectCount: 0, slideCount: 2))
+    }
+}

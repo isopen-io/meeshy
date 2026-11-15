@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "attachment.loading.cancel-a11y",
+          "androidName": "attachment_loading_cancel_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "attachment.loading.error",
+          "androidName": "attachment_loading_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "attachment.stage.loading",
+          "androidName": "attachment_stage_loading",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "attachment.stage.compressing",
+          "androidName": "attachment_stage_compressing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "attachment.stage.thumbnailing",
+          "androidName": "attachment_stage_thumbnailing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "attachment.stage.hashing",
+          "androidName": "attachment_stage_hashing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "attachment.loading.a11y-ready",
+          "androidName": "attachment_loading_a11y_ready",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "attachment.loading.a11y-failed",
+          "androidName": "attachment_loading_a11y_failed",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

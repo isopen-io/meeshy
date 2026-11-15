@@ -1,0 +1,162 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+/// Le premier écran, au tout premier lancement : deux boutons, une promesse.
+///
+/// Il remplace un carrousel de cinq pages (#5218). Ce que le carrousel coûtait
+/// se compte : cinq balayages avant de pouvoir faire quoi que ce soit, et une
+/// alerte système de permission de notification posée à la dernière page —
+/// devant quelqu'un qui n'avait pas encore de compte, donc pas un message à
+/// recevoir. Ce qu'il apportait — quatre arguments produit — se lit mieux là où
+/// la feature s'utilise.
+///
+/// La garde `hasCompletedOnboarding` garde exactement son sens : « cet appareil
+/// a déjà vu l'accueil ». Les DEUX boutons la posent, donc aucun chemin ne
+/// laisse l'écran revenir, et aucun ne le quitte sans destination.
+struct WelcomeView: View {
+    @Binding var hasCompletedOnboarding: Bool
+
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
+
+    @State private var isShowingSignup = false
+
+    private var isDark: Bool { theme.mode.isDark }
+
+    var body: some View {
+        ZStack {
+            theme.backgroundGradient
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                Spacer()
+
+                AnimatedLogoView(
+                    color: isDark ? .white : MeeshyColors.indigo950,
+                    lineWidth: 10,
+                    continuous: false
+                )
+                .frame(width: 100, height: 100)
+                .accessibilityHidden(true)
+
+                Text(verbatim: "Meeshy")
+                    .font(MeeshyFont.relative(MeeshyFont.largeTitleSize + 6, weight: .bold, design: .rounded))
+                    .foregroundStyle(MeeshyColors.brandGradient)
+                    .padding(.top, MeeshySpacing.xxl)
+                    .accessibilityAddTraits(.isHeader)
+
+                Text(String(localized: "welcome.tagline", defaultValue: "Écrivez dans votre langue. Tout le monde vous lit dans la sienne.", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize))
+                    .foregroundStyle(theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, MeeshySpacing.xxxl)
+                    .padding(.top, MeeshySpacing.md)
+
+                Spacer()
+
+                VStack(spacing: MeeshySpacing.md) {
+                    createAccountButton
+                    signInButton
+                }
+                .padding(.horizontal, MeeshySpacing.xxxl)
+
+                BrandSignature()
+                    .padding(.top, MeeshySpacing.xl)
+                    .padding(.bottom, MeeshySpacing.xl)
+            }
+            .iPadFormWidth()
+        }
+        .fullScreenCover(isPresented: $isShowingSignup) {
+            SignupView(
+                // L'accueil est SOLDÉ dès que le compte existe : rouvrir le
+                // carrousel au prochain lancement d'un utilisateur connecté
+                // serait un écran mort posé devant sa messagerie.
+                onComplete: { completeWelcome() },
+                onSwitchToLogin: { email in
+                    LoginEmailHandoff.shared.hold(email)
+                    isShowingSignup = false
+                    completeWelcome()
+                },
+                // Code vérifié après une inscription sans numéro (#8059) : l'accueil
+                // est présenté par la racine de l'app, qui survit à l'ouverture
+                // de session — il se referme avec elle.
+                onVerified: { open in
+                    completeWelcome()
+                    open()
+                }
+            )
+            .feedbackToastOverlay()
+        }
+        // #8037 — l'accueil est présenté en `fullScreenCover` par la racine,
+        // qui recouvre son hôte des toasts : un lien de connexion refusé,
+        // ouvert sans compte, se levait derrière lui.
+        .feedbackToastOverlay()
+    }
+
+    // MARK: - Boutons
+
+    private var createAccountButton: some View {
+        Button {
+            HapticFeedback.medium()
+            isShowingSignup = true
+        } label: {
+            // La forme est un FOND, pas un membre de la pile (#6644) : posée
+            // dans un `ZStack` avec un `minHeight` sans plafond, elle prenait
+            // toute la hauteur que l'écran lui proposait — sur iPad, deux
+            // boutons de près de 500 pt. Un fond épouse le libellé ; c'est le
+            // libellé qui donne la hauteur, 52 pt au moins, davantage si le
+            // texte grossit.
+            Text(String(localized: "welcome.createAccount", defaultValue: "Créer un compte", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
+                .foregroundStyle(Color.white)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                        .fill(MeeshyColors.brandGradient)
+                )
+        }
+        .bounceOnTap()
+        .accessibilityIdentifier("welcome.createAccount")
+        .accessibilityLabel(String(localized: "welcome.createAccount", defaultValue: "Créer un compte", bundle: .main))
+        .accessibilityHint(String(localized: "welcome.createAccount.hint", defaultValue: "Ouvre le formulaire d'inscription", bundle: .main))
+    }
+
+    private var signInButton: some View {
+        Button {
+            HapticFeedback.light()
+            completeWelcome()
+        } label: {
+            // Même correction que « Créer un compte ». Et la forme de TOUCHE
+            // est posée à part : un contour ne couvre que son trait, et le
+            // bouton ne se touchait qu'au libellé et au liseré.
+            Text(String(localized: "welcome.signIn", defaultValue: "Se connecter", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
+                .foregroundStyle(theme.textPrimary)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                        .stroke(theme.inputBorder.opacity(0.6), lineWidth: 1)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
+        }
+        .bounceOnTap()
+        .accessibilityIdentifier("welcome.signIn")
+        .accessibilityLabel(String(localized: "welcome.signIn", defaultValue: "Se connecter", bundle: .main))
+        .accessibilityHint(String(localized: "welcome.signIn.hint", defaultValue: "Ouvre l'écran de connexion", bundle: .main))
+    }
+
+    // MARK: - Sortie
+
+    /// Le SEUL site qui solde l'accueil.
+    ///
+    /// Aucune permission n'est demandée ici : la notification se demande au
+    /// premier message ENVOYÉ (`PushPermissionDeferral`), pas devant quelqu'un
+    /// qui n'a encore parlé à personne.
+    private func completeWelcome() {
+        withAnimation(MeeshyAnimation.springDefault) {
+            hasCompletedOnboarding = true
+        }
+    }
+}

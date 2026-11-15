@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "game.photo.author.caption.achievement", "androidName": "game_photo_author_caption_achievement", "status": "adopted" },
+        { "catalog": "app", "iosKey": "game.photo.author.caption.rank", "androidName": "game_photo_author_caption_rank", "status": "adopted" },
+        { "catalog": "app", "iosKey": "game.photo.author.caption.mission", "androidName": "game_photo_author_caption_mission", "status": "adopted" },
+        { "catalog": "app", "iosKey": "game.photo.author.label.rank", "androidName": "game_photo_author_label_rank", "status": "adopted" },
+        { "catalog": "app", "iosKey": "game.photo.author.label.mission", "androidName": "game_photo_author_label_mission", "status": "adopted" }
+      ]
+    }
+  }
+}

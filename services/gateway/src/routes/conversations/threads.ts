@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { servedLinkMetadata, type LinkSenderFacts } from '../../services/messaging/linkTrackingAuthor';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { canAccessConversation } from './utils/access-control';
-import { resolveConversationId } from '../../utils/conversation-id-cache';
+import { ouvrirConversationLisible } from './utils/conversation-read-gate';
 import {
   loadPersonalHistoryHiding,
   applyPersonalHistoryHiding,
@@ -9,12 +9,29 @@ import {
   type PersonalHistoryHiding
 } from '../../services/personalHistoryFilter';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
-import { sendSuccess, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response';
+import { applyHistoryFloor, historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
+import { readerShareLinkHasExpired, refuseExpiredShareLink } from '../../services/shareLinkReadGate';
+import { attachmentMediaSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
+import { sendSuccess, sendNotFound, sendInternalError } from '../../utils/response';
+import { servePostReplyCitations } from '../../services/messaging/servedPostReply';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
+import { hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
+import { MESSAGE_PROTECTION_SELECT } from './messages-list-query';
+import { servedQuotedMessage, type QuotedMessageRow } from '../../services/messaging/servedQuotedMessage';
+import { attachmentReplyToFromMetadata } from '../../services/messaging/attachmentReplySnapshot';
+import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import { loadQuotedEphemeralReaders, type EphemeralReaderResolution } from './ephemeralReaderDeadlines';
+import { keepAliveForReader, withInheritedExpiry } from '../../services/messaging/quoteCascade';
+import { readerParticipantIdOf } from './readerParticipant';
+import { signMessagesAttachmentsForReader } from '../../services/attachments/signServedAttachments';
+import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
+import { captureNoticeWithheldFrom } from '../../services/messaging/captureNoticeVisibility';
+import { AT_REST_MESSAGE_SELECT, revealAtRestRowsForWire } from '../../services/messaging/serverAtRest';
+import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
+import { withCallSummaryParticipantNames } from '../../services/calls/callSummaryParticipantNames';
 
 const logger = enhancedLogger.child({ module: 'ThreadsRoute' });
 
@@ -42,6 +59,14 @@ const threadMessageSelect = {
   // message cité (replyTo) — sans `metadata`, un message géolocalisé perd
   // sa position dans ce thread alors qu'il la restitue ailleurs.
   metadata: true,
+  // #4885 — les quatre drapeaux de protection : `formatThreadMessage` étale
+  // `...message`, donc les sélectionner suffit à les servir. Sans eux, un
+  // message à vue unique ouvert par son fil de réponses était FORWARDABLE
+  // au même titre que celui trouvé par `GET .../messages/search`.
+  ...MESSAGE_PROTECTION_SELECT,
+  // #12822 — de quoi ouvrir un message `server`/`hybrid` et ses traductions
+  // (`revealAtRestRowsForWire`) ; le chiffré ne sort pas.
+  ...AT_REST_MESSAGE_SELECT,
   sender: {
     select: {
       id: true,
@@ -65,17 +90,37 @@ const threadMessageSelect = {
       }
     }
   },
-  attachments: { select: attachmentMediaSelect },
+  attachments: { select: attachmentMediaSelect, orderBy: MESSAGE_ATTACHMENT_ORDER },
   replyTo: {
     select: {
       id: true,
       content: true,
+      // #7927 — un parent supprimé garde `content` en base : sans ce champ, la
+      // citation le resservirait.
+      deletedAt: true,
       originalLanguage: true,
       createdAt: true,
       senderId: true,
       validatedMentions: true,
       // Même rappel que ci-dessus, sur le message CITÉ cette fois.
       metadata: true,
+      // #4952 — sans ces quatre drapeaux, `servedQuotedMessage` ne peut pas
+      // savoir que le message CITÉ est protégé : `quotedMessageIsProtected`
+      // les lit tous, et une citation manquante sur l'un d'eux servirait le
+      // texte en clair en croyant appliquer la garde.
+      isViewOnce: true,
+      isBlurred: true,
+      isEncrypted: true,
+      effectFlags: true,
+      // #12822 — le message CITÉ `server`/`hybrid` s'ouvre comme la racine.
+      conversationId: true,
+      encryptionMode: true,
+      encryptedContent: true,
+      encryptionMetadata: true,
+      // #8562 — l'échéance du LECTEUR se résout depuis ces deux champs ; la
+      // colonne brute n'est jamais resservie pour un éphémère.
+      ephemeralDuration: true,
+      expiresAt: true,
       sender: {
         select: {
           id: true,
@@ -97,6 +142,7 @@ const threadMessageSelect = {
         }
       },
       attachments: {
+        orderBy: MESSAGE_ATTACHMENT_ORDER,
         select: {
           id: true,
           fileName: true,
@@ -104,7 +150,15 @@ const threadMessageSelect = {
           mimeType: true,
           fileSize: true,
           fileUrl: true,
-          thumbnailUrl: true
+          thumbnailUrl: true,
+          thumbHash: true,
+          // Les mêmes trois drapeaux, au niveau de la PIÈCE JOINTE cette
+          // fois : `maskedAttachment` (`servedQuotedMessage`) les lit pour
+          // décider si CETTE pièce, indépendamment du message qui la porte,
+          // doit perdre son URL et son ThumbHash.
+          isViewOnce: true,
+          isBlurred: true,
+          effectFlags: true
         }
       }
     }
@@ -118,16 +172,20 @@ const threadMessageSelect = {
 };
 
 /**
- * Hisse `metadata.location` sur un message de fil ET sur son `replyTo`
- * imbriqué (le message cité). Les deux affichent une vraie bulle complète —
- * un hoist qui ne porterait que sur la racine laisserait la citation sans
- * position, comme si le message cité n'en avait jamais eu.
+ * Hisse `metadata.location` ET `metadata.sticker` sur un message de fil ET
+ * sur son `replyTo` imbriqué (le message cité). Les deux affichent une vraie
+ * bulle complète — un hoist qui ne porterait que sur la racine laisserait la
+ * citation sans position ni décoration, comme si le message cité n'en avait
+ * jamais eu.
  */
 function hoistThreadMessageLocation<T extends Record<string, unknown>>(message: T): T {
-  const hoisted = hoistLocationOnto(message);
+  const hoisted: T = hoistStickerOnto(hoistLocationOnto(message));
   const replyTo = (hoisted as { replyTo?: unknown }).replyTo;
   if (replyTo && typeof replyTo === 'object' && !Array.isArray(replyTo)) {
-    return { ...hoisted, replyTo: hoistLocationOnto(replyTo as Record<string, unknown>) } as T;
+    return {
+      ...hoisted,
+      replyTo: hoistStickerOnto(hoistLocationOnto(replyTo as Record<string, unknown>)),
+    } as T;
   }
   return hoisted;
 }
@@ -149,11 +207,57 @@ function serializeThreadMessage<T extends Record<string, unknown>>(message: T): 
       message.id as string,
       message.translations as Record<string, MessageTranslationJSON> | null
     ),
+    // #10286 — un invité anonyme ne sert jamais sa carte de liens suivis.
+    metadata: servedLinkMetadata(message.metadata, message.sender as LinkSenderFacts | null | undefined),
   };
 }
 
-const formatThreadMessage = <T extends Record<string, unknown>>(message: T): T =>
-  hoistThreadMessageLocation(serializeThreadMessage(message));
+/**
+ * Applique `servedQuotedMessage` — le site UNIQUE partagé avec la liste REST
+ * et `message:new` socket — au `replyTo` imbriqué d'un message de fil (#4952).
+ *
+ * `threadMessageSelect.replyTo` charge la ligne CITÉE en entier (content,
+ * traductions absentes du select, pièces jointes) ; sans ce masquage, un
+ * message à vue unique / flouté / chiffré ouvert par son fil de réponses
+ * servait son texte et ses pièces jointes en clair dans la citation — alors
+ * que le message RACINE porte déjà ses drapeaux depuis #4885 et que le schéma
+ * de réponse (`additionalProperties: true`) ne tronque rien qui les
+ * accompagnerait.
+ *
+ * #6164 — l'instantané de la PIÈCE NOMMÉE passe par la même unité, et il se lit
+ * sur `message.metadata` : il est gravé sur le message QUI CITE, jamais sur le
+ * message CITÉ (dont le `metadata`, chargé ici pour le hoist de position,
+ * porterait la pièce que LUI visait un cran plus haut dans le fil). Sans ce
+ * relais, l'aperçu du parent d'un fil désigne le média représentatif quand la
+ * liste du même fil désigne la pièce nommée.
+ */
+function maskThreadMessageQuote<T extends Record<string, unknown>>(message: T, readers: QuotedReaders): T {
+  const replyTo = (message as { replyTo?: unknown }).replyTo;
+  if (!replyTo || typeof replyTo !== 'object' || Array.isArray(replyTo)) {
+    return message;
+  }
+  const quotedRow = replyTo as Record<string, unknown> & QuotedMessageRow;
+  return {
+    ...message,
+    replyTo: {
+      ...quotedRow,
+      ...servedQuotedMessage(quotedRow, {
+        includeTranslations: false,
+        attachmentReplyTo: attachmentReplyToFromMetadata(message['metadata']),
+        ephemeralReader: { resolution: quotedRow.id ? readers.deadlines.get(quotedRow.id) : undefined, now: readers.now },
+      }),
+    },
+  };
+}
+
+type QuotedReaders = { readonly deadlines: ReadonlyMap<string, EphemeralReaderResolution>; readonly now: Date };
+
+const formatThreadMessage = <T extends Record<string, unknown>>(message: T, readers: QuotedReaders): T =>
+  hoistThreadMessageLocation(maskThreadMessageQuote(serializeThreadMessage(message), readers));
+
+const REFUS_DE_FIL = {
+  sansSession: 'Authentication required to read this thread'
+} as const;
 
 export function registerThreadsRoutes(
   fastify: FastifyInstance,
@@ -200,14 +304,19 @@ export function registerThreadsRoutes(
       const authRequest = request as UnifiedAuthRequest;
       const authContext = authRequest.authContext;
 
-      const conversationId = await resolveConversationId(prisma, id);
+      const conversationId = await ouvrirConversationLisible({
+        prisma,
+        reply,
+        authContext,
+        identifiant: id,
+        messages: REFUS_DE_FIL
+      });
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
+        return;
       }
-
-      const hasAccess = await canAccessConversation(prisma, authContext, conversationId, id);
-      if (!hasAccess) {
-        return sendForbidden(reply, 'You do not have access to this conversation');
+      // #7388 — la porte d'un lien de partage ÉCHU, la même que sur le fil.
+      if (await readerShareLinkHasExpired(prisma, { conversationId, reader: historyReaderFromAuthContext(authContext) })) {
+        return refuseExpiredShareLink(reply);
       }
 
       // La racine du fil est soumise au même masquage que ses réponses : un
@@ -217,24 +326,63 @@ export function registerThreadsRoutes(
         userId: authContext.type === 'anonymous' ? null : authContext.userId,
         conversationId
       });
-
-      const parent = await prisma.message.findFirst({
-        where: applyPersonalHistoryHiding(
-          { id: messageId, conversationId, deletedAt: null },
-          hiding
-        ),
-        select: threadMessageSelect
+      // Même loi pour le plancher d'historique : une racine d'AVANT l'arrivée
+      // du lecteur n'existe pas pour lui, et ses réponses non plus.
+      const historyFloor = await loadReaderHistoryFloor(prisma, {
+        conversationId,
+        reader: historyReaderFromAuthContext(authContext)
       });
+
+      const parent = await withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () =>
+        prisma.message.findFirst({
+          where: applyPersonalHistoryHiding(
+            applyHistoryFloor({ id: messageId, conversationId, deletedAt: null }, historyFloor),
+            hiding
+          ),
+          select: threadMessageSelect
+        })
+      );
 
       if (!parent) {
         return sendNotFound(reply, 'Message not found');
       }
+      if (await captureNoticeWithheldFrom(prisma, { row: parent, reader: historyReaderFromAuthContext(authContext) })) {
+        return sendNotFound(reply, 'Message not found');
+      }
 
-      const replies = await collectThreadReplies(prisma, conversationId, messageId, hiding);
+      const collected = await collectThreadReplies(prisma, conversationId, messageId, hiding, historyFloor);
 
+      // #7451 × #8630 — ce qui est mort pour CE lecteur ne se sert pas : un
+      // éphémère échu, et toute réponse à ce qui l'est. Une racine morte
+      // n'est pas un fil tronqué : le fil n'existe plus pour lui.
+      const readerParticipantId = await readerParticipantIdOf(prisma, conversationId, authContext);
+      const now = new Date();
+      const readerPage = await keepAliveForReader(prisma, [parent, ...collected], readerParticipantId, now);
+      if (!readerPage.alive.some((m) => m.id === parent.id)) {
+        return sendNotFound(reply, 'Message not found');
+      }
+      const replies = readerPage.alive.filter((m) => m.id !== parent.id);
+
+      // #7950 — la citation d'une story retirée sort expurgée : UNE requête
+      // pour le parent et toutes ses réponses.
+      const readers: QuotedReaders = {
+        deadlines: await loadQuotedEphemeralReaders(prisma, [parent, ...replies], async () => readerParticipantId),
+        now,
+      };
+      const served = (m: ThreadMessage) =>
+        withInheritedExpiry(formatThreadMessage(m as unknown as Record<string, unknown>, readers) as Record<string, unknown> & { id: string }, readerPage.inherited);
+      const opened = await revealAtRestRowsForWire([parent, ...replies], gatewayKeyring(prisma));
+      const [servedParent, ...servedReplies] = await servePostReplyCitations(prisma, opened.map((m) => served(m as unknown as ThreadMessage)));
+      // #9646 — les pièces d'un message protégé du fil, signées pour CE lecteur.
+      // #18242 B2 — et le nom des participants d'un résumé d'appel, lu à la lecture.
+      const [signedParent, ...signedReplies] = await withCallSummaryParticipantNames(prisma, await signMessagesAttachmentsForReader(prisma, {
+        messages: [servedParent, ...servedReplies],
+        readerParticipantId,
+        signer: readerFileUrlSignerFromEnv(new Date()),
+      }), { conversationId });
       return sendSuccess(reply, {
-        parent: formatThreadMessage(parent as unknown as Record<string, unknown>),
-        replies: replies.map((m) => formatThreadMessage(m as unknown as Record<string, unknown>)),
+        parent: signedParent,
+        replies: signedReplies,
         totalCount: replies.length
       });
     } catch (error) {
@@ -249,16 +397,19 @@ function findReplies(
   prisma: PrismaClient,
   conversationId: string,
   parentIds: string[],
-  hiding: PersonalHistoryHiding = NO_PERSONAL_HIDING
+  hiding: PersonalHistoryHiding = NO_PERSONAL_HIDING,
+  historyFloor: Date | null = null
 ) {
-  return prisma.message.findMany({
-    where: applyPersonalHistoryHiding(
-      { conversationId, replyToId: { in: parentIds }, deletedAt: null },
-      hiding
-    ),
-    select: threadMessageSelect,
-    orderBy: { createdAt: 'asc' as const }
-  });
+  return withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () =>
+    prisma.message.findMany({
+      where: applyPersonalHistoryHiding(
+        applyHistoryFloor({ conversationId, replyToId: { in: parentIds }, deletedAt: null }, historyFloor),
+        hiding
+      ),
+      select: threadMessageSelect,
+      orderBy: { createdAt: 'asc' as const }
+    })
+  );
 }
 
 type ThreadMessage = Awaited<ReturnType<typeof findReplies>>[number];
@@ -267,7 +418,8 @@ async function collectThreadReplies(
   prisma: PrismaClient,
   conversationId: string,
   rootMessageId: string,
-  hiding: PersonalHistoryHiding = NO_PERSONAL_HIDING
+  hiding: PersonalHistoryHiding = NO_PERSONAL_HIDING,
+  historyFloor: Date | null = null
 ): Promise<ThreadMessage[]> {
   const allReplies: ThreadMessage[] = [];
   let frontier = [rootMessageId];
@@ -280,7 +432,7 @@ async function collectThreadReplies(
     // réponse masquée coupe aussi la branche qu'elle porte, ce qui est le
     // comportement voulu — ses filles descendent d'un message que ce lecteur
     // ne voit plus.
-    const batch = await findReplies(prisma, conversationId, frontier, hiding);
+    const batch = await findReplies(prisma, conversationId, frontier, hiding, historyFloor);
 
     if (batch.length === 0) break;
 

@@ -5,7 +5,12 @@ import MeeshyUI
 
 @MainActor
 final class ContactsListViewModel: ObservableObject {
-    @Published var friends: [FriendRequestUser] = []
+    @Published var friends: [FriendRequestUser] = [] {
+        didSet { onlineCount = friends.filter { $0.isOnline == true }.count }
+    }
+    /// Compte des amis `isOnline` pour la puce « En ligne » — dérivé une fois par
+    /// changement de liste, pas à chaque rendu de la barre de filtres.
+    @Published private(set) var onlineCount = 0
     @Published var loadState: LoadState = .idle
     @Published var activeFilter: ContactFilter = .all
     @Published var searchQuery: String = ""
@@ -16,6 +21,7 @@ final class ContactsListViewModel: ObservableObject {
     private var cacheVersionSubscription: AnyCancellable?
     private var lastObservedFriendIds: Set<String> = []
     private var reconcileTask: Task<Void, Never>?
+    private var profileRepaintSubscription: AnyCancellable?
     private let cacheKey = FriendshipCache.PersistenceKeys.friendsList
     /// Borne de sécurité : au-delà, on cesse de paginer plutôt que de suivre
     /// indéfiniment un `hasMore` qui ne retomberait jamais. Même sémantique
@@ -48,15 +54,29 @@ final class ContactsListViewModel: ObservableObject {
     init(
         friendService: FriendServiceProviding = FriendService.shared,
         currentUserId: String = AuthManager.shared.currentUser?.id ?? "",
-        friendshipCache: FriendshipCache = .shared
+        friendshipCache: FriendshipCache = .shared,
+        profileUpdates: AnyPublisher<UserUpdatedEvent, Never> = MessageSocketManager.shared.userUpdated.eraseToAnyPublisher()
     ) {
         self.friendService = friendService
         self.currentUserId = currentUserId
         self.friendshipCache = friendshipCache
         observeFriendshipCache()
+        observeProfileUpdates(profileUpdates)
     }
 
-    deinit {
+    /// #9307 — un ami renommé ou repeint l'est ici sans relecture. Le cache
+    /// persistant suit par `ConversationSyncEngine` ; seule la liste à l'écran
+    /// se repeint, et seulement quand une ligne change.
+    private func observeProfileUpdates(_ updates: AnyPublisher<UserUpdatedEvent, Never>) {
+        profileRepaintSubscription = updates
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, let repainted = self.friends.repaintedElements(by: event.repainted) else { return }
+                self.friends = repainted
+            }
+    }
+
+    nonisolated deinit {
         reconcileTask?.cancel()
     }
 
@@ -97,14 +117,14 @@ final class ContactsListViewModel: ObservableObject {
             // fetcher keeps the cache layer consistent.
             reconcileTask?.cancel()
             reconcileTask = Task { [weak self] in
-                await self?.fetchFriendsFromNetwork(cacheKey: self?.cacheKey ?? "friends_list")
+                await self?.fetchFriendsFromNetwork()
             }
         }
     }
 
     private func persistFriends() {
         let snapshot = friends
-        Task { try? await CacheCoordinator.shared.friends.save(snapshot, for: cacheKey) }
+        Task { await bestEffort("contactsListViewModel.friends.save", category: .cache) { try await CacheCoordinator.shared.friends.save(snapshot, for: cacheKey) } }
     }
 
     // MARK: - Load Friends
@@ -114,7 +134,7 @@ final class ContactsListViewModel: ObservableObject {
         // raccourci cache `.fresh` qui rendrait le refresh silencieusement
         // inopérant.
         if forceNetwork {
-            await fetchFriendsFromNetwork(cacheKey: cacheKey)
+            await fetchFriendsFromNetwork()
             return
         }
         let cached = await CacheCoordinator.shared.friends.load(for: cacheKey)
@@ -131,7 +151,7 @@ final class ContactsListViewModel: ObservableObject {
             // list converge on the gateway's truth.
             if cacheLagsBehindFriendship(data: data) {
                 Task { [weak self] in
-                    await self?.fetchFriendsFromNetwork(cacheKey: self?.cacheKey ?? FriendshipCache.PersistenceKeys.friendsList)
+                    await self?.fetchFriendsFromNetwork()
                 }
             }
             return
@@ -140,7 +160,7 @@ final class ContactsListViewModel: ObservableObject {
             friends = data
             loadState = .loaded
             Task { [weak self] in
-                await self?.fetchFriendsFromNetwork(cacheKey: self?.cacheKey ?? FriendshipCache.PersistenceKeys.friendsList)
+                await self?.fetchFriendsFromNetwork()
             }
             return
 
@@ -148,7 +168,7 @@ final class ContactsListViewModel: ObservableObject {
             loadState = friends.isEmpty ? .loading : .loaded
         }
 
-        await fetchFriendsFromNetwork(cacheKey: cacheKey)
+        await fetchFriendsFromNetwork()
     }
 
     /// True when the in-memory FriendshipCache and the loaded GRDB list
@@ -161,34 +181,35 @@ final class ContactsListViewModel: ObservableObject {
         return cachedIds != memoryIds
     }
 
-    private func fetchFriendsFromNetwork(cacheKey: String) async {
+    private func fetchFriendsFromNetwork() async {
         do {
             // `/friend-requests/received` filtre `pending` en dur côté serveur :
             // une relation acceptée où je suis le RECEVEUR n'y apparaît jamais.
             // `allFriendRequests` couvre les deux sens via `/users/friend-requests`,
             // donc on pagine jusqu'à épuisement au lieu de fusionner deux endpoints.
             var collected: [FriendRequest] = []
-            var offset = 0
+            var cursor: String?
             let pageSize = 100
             while collected.count < Self.friendsFetchCap {
-                let page = try await friendService.allFriendRequests(status: "accepted", offset: offset, limit: pageSize)
+                let page = try await friendService.friendRequests(
+                    direction: .any, status: "accepted", q: nil, cursor: cursor, limit: pageSize
+                )
                 collected.append(contentsOf: page.data)
-                // `hasMore` peut manquer sur un gateway antérieur à la Task 1 :
-                // le repli sur la taille de page garde le comportement correct.
                 let more = page.pagination?.hasMore ?? (page.data.count == pageSize)
-                if !more || page.data.isEmpty { break }
-                offset += pageSize
+                cursor = page.pagination?.nextCursor
+                // Sans curseur, redemander la même page tournerait en rond
+                // jusqu'au plafond en collectant des doublons.
+                if !more || page.data.isEmpty || cursor == nil { break }
             }
 
             friends = FriendListAggregator.aggregate(
                 received: collected,
-                sent: [],
                 currentUserId: currentUserId
             )
 
             loadState = .loaded
             lastObservedFriendIds = Set(friends.map(\.id))
-            try? await CacheCoordinator.shared.friends.save(friends, for: cacheKey)
+            await bestEffort("contactsListViewModel.friends.save.2", category: .cache) { try await CacheCoordinator.shared.friends.save(friends, for: cacheKey) }
         } catch {
             if friends.isEmpty {
                 loadState = .error("Erreur lors du chargement")
@@ -201,9 +222,5 @@ final class ContactsListViewModel: ObservableObject {
     func setFilter(_ filter: ContactFilter) {
         activeFilter = filter
         HapticFeedback.light()
-    }
-
-    func search(_ query: String) {
-        searchQuery = query
     }
 }

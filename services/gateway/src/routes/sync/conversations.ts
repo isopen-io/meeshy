@@ -1,0 +1,377 @@
+import type { FastifyInstance } from 'fastify';
+import { Prisma } from '@meeshy/shared/prisma/client';
+import type { CursorKey, SyncCursor } from './cursor';
+import { encodeSyncCursor } from './cursor';
+import type { SyncIdentity } from './identity';
+import { resolveSyncMembership } from './membership';
+import { trimToByteBudget, SYNC_MAX_PAGE_BYTES, MAX_ITEMS_PER_COLLECTION } from './budget';
+import { makeSyncCollectionSchema, type SyncCollectionResult } from './schema-shared';
+import { selectForFields, restrictFields, type ColumnPlan, type FieldSet } from '../../utils/sparse-fieldset';
+import { participantProfileDecor } from '../../services/appearance/profileDecor';
+import { startupPackIndex } from '../../services/packs/PackIndex';
+import { participantProfileDecorSchema } from '@meeshy/shared/types/api-schemas';
+import { EXTERNAL_CONVERSATION_TYPE } from '@meeshy/shared/types/external-conversation';
+
+/**
+ * Collection `conversations` de `/sync` (issue #4171, critère 1) — même forme
+ * que `messages` : `added`/`modified` par watermark `createdAt`/`updatedAt`,
+ * RLS fail-closed par appartenance, budget d'octets partagé, keyset
+ * `(updatedAt, id)`.
+ *
+ * `historyFloor` (`routes/sync/membership.ts`) ne s'applique PAS ici, par
+ * choix documenté : le plancher d'un lien sans historique retient le contenu
+ * des vieux MESSAGES, jamais l'existence de la conversation elle-même (titre,
+ * avatar, effectif) — un participant qui vient de rejoindre voit la
+ * conversation en entier, seuls ses vieux messages lui restent fermés.
+ */
+
+/**
+ * Identité minimale de l'AUTRE participant d'un direct (issue #6827, piste 2
+ * — l'alternative étroite, pas le roster complet de la collection
+ * `participants`). Bornée à DEUX lignes (`take: 2`), sans AUCUN champ de
+ * présence (`isOnline`/`lastActiveAt`) — cette ligne ne sert pas un profil de
+ * tiers au sens de la règle du dépôt (`services/gateway/CLAUDE.md` § « Toute
+ * porte qui sort un profil de TIERS filtre sa présence »), elle sert une
+ * IDENTITÉ, jamais un état. `servir()` plus bas vide ce champ pour tout type
+ * autre que `direct` — le select tourne pour toutes les lignes (Prisma ne
+ * conditionne pas un `select` par la valeur d'une colonne sœur dans un même
+ * `findMany`), mais rien n'en sort côté groupe/communauté.
+ */
+const syncConversationOtherParticipantSelect = {
+  where: { isActive: true },
+  orderBy: { joinedAt: 'asc' as const },
+  take: 2,
+  select: {
+    id: true,
+    userId: true,
+    displayName: true,
+    avatar: true,
+    user: {
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        avatar: true,
+        // #10757 — chargé, jamais servi tel quel : composé en `profileDecor`.
+        equippedAvatarRing: true,
+      },
+    },
+  },
+} satisfies Prisma.ParticipantFindManyArgs;
+
+/**
+ * Ce qu'un client doit recevoir pour afficher une entrée de liste de
+ * conversations sans second appel : les champs de rendu de base (titre,
+ * avatar, effectif, dernière activité) et le régime d'écriture/chiffrement
+ * dont dépend l'UI du composer. Le contenu du dernier message n'est PAS
+ * dupliqué ici — la collection `messages` du même appel `/sync` le porte déjà
+ * (voir la note de partage du budget, `routes/sync/budget.ts`).
+ */
+export const syncConversationSelect = Prisma.validator<Prisma.ConversationSelect>()({
+  id: true,
+  identifier: true,
+  type: true,
+  title: true,
+  description: true,
+  avatar: true,
+  banner: true,
+  communityId: true,
+  isActive: true,
+  closedAt: true,
+  memberCount: true,
+  lastMessageAt: true,
+  defaultWriteRole: true,
+  isAnnouncementChannel: true,
+  slowModeSeconds: true,
+  encryptionMode: true,
+  encryptionProtocol: true,
+  autoTranslateEnabled: true,
+  createdAt: true,
+  updatedAt: true,
+  participants: syncConversationOtherParticipantSelect,
+});
+
+type SyncConversation = Prisma.ConversationGetPayload<{ select: typeof syncConversationSelect }>;
+
+/**
+ * Ce que `?fields=conversations.…` peut nommer (#4173) — relevé
+ * MÉCANIQUEMENT depuis le select, comme le schéma de réponse juste en dessous.
+ */
+export const SYNC_CONVERSATION_SERVED_FIELDS = Object.keys(syncConversationSelect) as readonly string[];
+
+/**
+ * Trois colonnes épinglées, pour la MÉCANIQUE de la page seulement : `id` +
+ * `updatedAt` portent le keyset `(updatedAt, id)`, `createdAt` décide du
+ * partage `added` / `modified`. Aucune n'est une garde de confidentialité ici —
+ * la RLS de cette collection est un `where`, pas un champ.
+ */
+export const syncConversationPlan: ColumnPlan<typeof syncConversationSelect> = {
+  full: syncConversationSelect,
+  pinned: ['id', 'createdAt', 'updatedAt'],
+};
+
+/** `id` seul survit à la projection dans la ligne servie : sans lui, le client
+ *  ne sait pas quelle entrée de sa liste il met à jour. */
+const SYNC_CONVERSATION_SERVED_PINNED = ['id'] as const;
+
+/** Clés relevées mécaniquement depuis `syncConversationSelect` — aucune ligne
+ *  de plus, aucune de moins. */
+const syncConversationSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    identifier: { type: 'string' },
+    type: { type: 'string' },
+    title: { type: 'string', nullable: true },
+    description: { type: 'string', nullable: true },
+    avatar: { type: 'string', nullable: true },
+    banner: { type: 'string', nullable: true },
+    communityId: { type: 'string', nullable: true },
+    isActive: { type: 'boolean' },
+    closedAt: { type: 'string', format: 'date-time', nullable: true },
+    memberCount: { type: 'integer' },
+    lastMessageAt: { type: 'string', format: 'date-time' },
+    defaultWriteRole: { type: 'string' },
+    isAnnouncementChannel: { type: 'boolean' },
+    slowModeSeconds: { type: 'integer' },
+    encryptionMode: { type: 'string', nullable: true },
+    encryptionProtocol: { type: 'string', nullable: true },
+    autoTranslateEnabled: { type: 'boolean' },
+    createdAt: { type: 'string', format: 'date-time' },
+    updatedAt: { type: 'string', format: 'date-time' },
+    /**
+     * L'AUTRE participant d'un direct (issue #6827) — vide (`[]`) pour tout
+     * autre type, jamais le roster complet. Décodée sans changement côté iOS :
+     * `APIConversation.participants` existe déjà et `toConversation` en dérive
+     * déjà `displayName`/`otherParticipant` — ce lot ne fait que le PEUPLER
+     * pour le chemin `/sync`, qui ne le servait jamais.
+     */
+    participants: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          userId: { type: 'string', nullable: true },
+          displayName: { type: 'string', nullable: true },
+          avatar: { type: 'string', nullable: true },
+          // #10757 — le contour équipé du pair, comme `GET /conversations` : la
+          // liste iOS se synchronise par ce chemin, et sans lui `toConversation`
+          // effaçait le contour que la liste venait de recevoir.
+          profileDecor: participantProfileDecorSchema,
+          user: {
+            type: 'object',
+            nullable: true,
+            properties: {
+              id: { type: 'string' },
+              username: { type: 'string', nullable: true },
+              displayName: { type: 'string', nullable: true },
+              avatar: { type: 'string', nullable: true },
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
+
+export const syncConversationCollectionSchema = makeSyncCollectionSchema(syncConversationSchema);
+
+/**
+ * Le stream `deleted` de `conversations` — et il ne signifie PAS « la ligne
+ * `Conversation` a été supprimée » (elle ne l'est, en pratique, jamais : les
+ * écrivains du dépôt CLÔTURENT via `closedAt`, ils ne suppriment pas la
+ * ligne). Il signifie « CETTE conversation vient de quitter la LISTE du
+ * lecteur » — parce qu'il l'a quittée, en a été banni, ou l'a effacée pour
+ * lui — exactement le geste qu'un client doit traduire par « retirer
+ * l'entrée de ma liste locale ».
+ *
+ * D'où une requête DISTINCTE de `resolveSyncMembership` : celle-ci filtre
+ * `isActive: true` (« où suis-je encore ? ») quand ce stream veut l'INVERSE —
+ * les lignes `Participant` du lecteur qui viennent de porter `leftAt`,
+ * `bannedAt` ou `deletedForMe`, trois raisons de départ INDÉPENDANTES qui
+ * n'ont pas de colonne `updatedAt` commune à trier. La pagination reste donc
+ * volontairement simple (tri en mémoire par le plus tardif des trois, borné
+ * par `cap`) : un compte quitte rarement des milliers de conversations à la
+ * même fenêtre de rattrapage, contrairement aux messages.
+ */
+async function syncConversationDepartures(opts: {
+  prisma: FastifyInstance['prisma'];
+  identity: SyncIdentity;
+  sinceDate: Date;
+  scope?: string;
+  cap: number;
+  cursor?: CursorKey;
+}): Promise<{ tombstones: Array<{ id: string; conversationId: string; deletedAt: Date }>; truncated: boolean; nextKey: CursorKey | undefined }> {
+  const { prisma, identity, sinceDate, scope, cap, cursor } = opts;
+  const floor = cursor ? new Date(cursor.u) : sinceDate;
+
+  // Trois colonnes indépendantes peuvent porter le départ ; chacune a besoin de
+  // SON propre couple (`gt`) / (`eq` + tiebreak `id`) — même patron que le
+  // keyset `(updatedAt, id)` des messages, répété trois fois plutôt que
+  // factorisé sur une colonne calculée que Mongo n'a pas. Sans le tiebreak, un
+  // lot qui bannit N participants à la MÊME milliseconde (une action de
+  // modération groupée) ferait sauter tout ce qui suit le premier de la page —
+  // exactement le trou qu'un tri sur `updatedAt` seul ferait sur les messages.
+  const rows = await prisma.participant.findMany({
+    where: {
+      ...(identity.kind === 'anonymous' ? { id: identity.participantId } : { userId: identity.userId }),
+      ...(scope ? { conversationId: scope } : {}),
+      OR: [
+        { leftAt: { gt: floor } },
+        { bannedAt: { gt: floor } },
+        { deletedForMe: { gt: floor } },
+        ...(cursor
+          ? [
+              { leftAt: floor, id: { gt: cursor.i } },
+              { bannedAt: floor, id: { gt: cursor.i } },
+              { deletedForMe: floor, id: { gt: cursor.i } },
+            ]
+          : []),
+      ],
+    },
+    select: { id: true, conversationId: true, leftAt: true, bannedAt: true, deletedForMe: true },
+    // Aucun tri composite DB n'est possible sur trois colonnes nullables
+    // indépendantes (le keyset de `messages` trie SUR la colonne qu'il filtre ;
+    // ici la clé de tri — le plus tardif des trois — est CALCULÉE). Le tri et
+    // la coupe à `cap` se font donc en mémoire, après lecture. Cette borne
+    // défensive protège seulement contre un compte pathologique : à la
+    // différence des messages, le nombre de conversations qu'un compte a pu
+    // quitter est borné par son historique d'appartenance, pas par le trafic —
+    // aucun témoin de ce lot n'a mesuré le besoin d'une pagination exacte ici.
+    take: MAX_ITEMS_PER_COLLECTION * 10,
+  });
+
+  const withDepartedAt = rows
+    .map((row) => {
+      const dates = [row.leftAt, row.bannedAt, row.deletedForMe].filter((d): d is Date => d !== null);
+      const departedAt = dates.reduce((latest, d) => (d > latest ? d : latest), dates[0] as Date);
+      return { id: row.conversationId, conversationId: row.conversationId, deletedAt: departedAt, cursorId: row.id };
+    })
+    .sort((a, b) => a.deletedAt.getTime() - b.deletedAt.getTime() || a.cursorId.localeCompare(b.cursorId));
+
+  const truncated = withDepartedAt.length > cap;
+  const page = truncated ? withDepartedAt.slice(0, cap) : withDepartedAt;
+  const last = page[page.length - 1];
+
+  return {
+    tombstones: page.map(({ id, conversationId, deletedAt }) => ({ id, conversationId, deletedAt })),
+    truncated,
+    nextKey: last ? { u: last.deletedAt.toISOString(), i: last.cursorId } : cursor,
+  };
+}
+
+export async function syncConversations(opts: {
+  prisma: FastifyInstance['prisma'];
+  identity: SyncIdentity;
+  sinceDate: Date;
+  cap: number;
+  scope?: string;
+  cursor?: SyncCursor;
+  /** `?fields=conversations.…` déjà analysé — `null` ⇒ le profil par défaut. */
+  fields?: FieldSet;
+  /**
+   * #17117 / #9223 — le client annonce-t-il `external-conversations` ? Sans
+   * lui (défaut), aucune conversation `external` n'est servie : le client iOS
+   * publié la rendrait en tête-à-tête sans interlocuteur.
+   */
+  servesExternal?: boolean;
+}): Promise<SyncCollectionResult<Record<string, unknown>>> {
+  const { prisma, identity, sinceDate, cap, scope, cursor } = opts;
+  const fields = opts.fields ?? null;
+
+  const membership = await resolveSyncMembership({ prisma, identity, scope });
+
+  // Même quand l'appelant n'appartient plus à AUCUNE conversation active, ses
+  // départs récents restent à annoncer — un client qui vient de tout quitter
+  // doit encore recevoir les tombstones qui vident sa liste locale.
+  const departures = await syncConversationDepartures({
+    prisma, identity, sinceDate, scope, cap, cursor: cursor?.d,
+  });
+
+  if (membership.conversationIds.length === 0) {
+    // Aucune conversation active — soit l'appelant n'en a AUCUNE, soit toutes
+    // ont dû être retirées faute de plancher lisible (`droppedCount > 0`,
+    // même posture que `syncMessages`). Le flux `deleted`, lui, reste
+    // interrogé : un compte qui vient de tout quitter doit encore recevoir
+    // les tombstones qui vident sa liste locale.
+    const truncated = membership.droppedCount > 0 || departures.truncated;
+    const nextKey: Record<string, CursorKey> = {};
+    if (cursor?.c) nextKey.c = cursor.c; // rien de neuf sur `changed` : la position entrante est conservée
+    if (departures.nextKey) nextKey.d = departures.nextKey;
+    return {
+      added: [],
+      modified: [],
+      deleted: departures.tombstones,
+      truncated,
+      nextCursor: truncated ? encodeSyncCursor(nextKey) : null,
+    };
+  }
+  const { conversationIds } = membership;
+
+  const changedRowsRaw = await prisma.conversation.findMany({
+    where: {
+      id: { in: [...conversationIds] },
+      ...(opts.servesExternal ? {} : { type: { not: EXTERNAL_CONVERSATION_TYPE } }),
+      ...(cursor?.c
+        ? {
+            OR: [
+              { updatedAt: { gt: new Date(cursor.c.u) } },
+              { updatedAt: new Date(cursor.c.u), id: { gt: cursor.c.i } },
+            ],
+          }
+        : { updatedAt: { gt: sinceDate } }),
+    },
+    select: selectForFields(syncConversationPlan, fields),
+    orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+    take: cap + 1,
+  });
+  // `participants` ci-dessus tourne pour CHAQUE ligne (Prisma ne conditionne
+  // pas un `select` par une colonne sœur) — vidé ici, AVANT le budget
+  // d'octets, pour tout type autre que `direct` : ni la troncature ni la page
+  // ne doivent compter des octets qu'aucun client ne recevra jamais. `row.participants`
+  // est `undefined` quand `?fields=` l'a exclu de la requête (voir
+  // `selectForFields`) — un type déclaré ne garantit pas la présence RUNTIME.
+  // #10205 — un invité (sans compte) ne reçoit ni effectif ni membres.
+  const viewerIsGuest = identity.kind === 'anonymous';
+  const decorated = (participants: SyncConversation['participants']): SyncConversation['participants'] =>
+    participants.map((p) => {
+      const profileDecor = participantProfileDecor(startupPackIndex(), p.user);
+      return profileDecor === undefined ? p : { ...p, profileDecor };
+    });
+  const changedRows = changedRowsRaw.map((row) => {
+    const scoped = row.participants === undefined
+      ? row
+      : row.type === 'direct' && !viewerIsGuest
+        ? { ...row, participants: decorated(row.participants) }
+        : { ...row, participants: [] as typeof row.participants };
+    if (!viewerIsGuest) return scoped;
+    const { memberCount: _memberCount, ...withoutCount } = scoped;
+    return withoutCount as typeof scoped;
+  });
+  const capTruncated = changedRows.length > cap;
+  const cappedRows = capTruncated ? changedRows.slice(0, cap) : changedRows;
+
+  const budgeted = trimToByteBudget(cappedRows, SYNC_MAX_PAGE_BYTES);
+  const changedPage = budgeted.page;
+  const changedTruncated = capTruncated || budgeted.truncated;
+
+  const servir = (c: SyncConversation): Record<string, unknown> =>
+    restrictFields(c as unknown as Record<string, unknown>, fields, SYNC_CONVERSATION_SERVED_PINNED);
+  const added = changedPage.filter((c) => c.createdAt > sinceDate).map(servir);
+  const modified = changedPage.filter((c) => c.createdAt <= sinceDate).map(servir);
+
+  const lastChanged = changedPage[changedPage.length - 1] as SyncConversation | undefined;
+  const cKey: CursorKey | undefined = lastChanged
+    ? { u: lastChanged.updatedAt.toISOString(), i: lastChanged.id }
+    : cursor?.c;
+
+  const truncated = changedTruncated || membership.droppedCount > 0 || departures.truncated;
+
+  const nextKey: Record<string, CursorKey> = {};
+  if (cKey) nextKey.c = cKey;
+  if (departures.nextKey) nextKey.d = departures.nextKey;
+  const nextCursor = truncated ? encodeSyncCursor(nextKey) : null;
+
+  return { added, modified, deleted: departures.tombstones, truncated, nextCursor };
+}

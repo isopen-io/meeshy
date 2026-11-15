@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "message.menu.export", "androidName": "media_imager_title", "status": "adopted" }
+      ]
+    }
+  }
+}

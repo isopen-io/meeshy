@@ -31,6 +31,18 @@ class ShareLinkRepositoryTest {
         var deleteResponse: ApiResponse<Unit> = ApiResponse(success = false),
         var extendResponse: ApiResponse<Unit> = ApiResponse(success = false),
     ) : LinkApi {
+        var updateResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit)
+        var lastUpdate: Pair<String, kotlinx.serialization.json.JsonObject>? = null
+        var lastExpand: String? = null
+
+        override suspend fun update(
+            linkId: String,
+            body: kotlinx.serialization.json.JsonObject,
+        ): ApiResponse<Unit> {
+            lastUpdate = linkId to body
+            return updateResponse
+        }
+
         var lastListOffset: Int? = null
         var lastListLimit: Int? = null
         var lastToggle: Pair<String, ToggleShareLinkRequest>? = null
@@ -42,9 +54,10 @@ class ShareLinkRepositoryTest {
             return response
         }
 
-        override suspend fun listMyLinks(offset: Int, limit: Int): ApiResponse<List<MyShareLink>> {
+        override suspend fun listMyLinks(offset: Int, limit: Int, expand: String?): ApiResponse<List<MyShareLink>> {
             lastListOffset = offset
             lastListLimit = limit
+            lastExpand = expand
             return listResponse
         }
 
@@ -223,5 +236,51 @@ class ShareLinkRepositoryTest {
         val result = ShareLinkRepository(api).extend("link-7", "2026-10-23T12:00:00Z")
 
         assertThat((result as NetworkResult.Failure).error.message).isEqualTo("expired")
+    }
+
+    @Test
+    fun listMyLinks_asksTheServerForTheConversationAndThePolicy() = runTest {
+        val api = FakeLinkApi(listResponse = ApiResponse(success = true, data = emptyList()))
+
+        ShareLinkRepository(api).listMyLinks()
+
+        assertThat(api.lastExpand).isEqualTo("conversation,policy")
+    }
+
+    @Test
+    fun update_forwardsOnlyTheGivenPatchWithAnExplicitNull() = runTest {
+        val api = FakeLinkApi()
+        api.updateResponse = ApiResponse(success = true, data = Unit)
+        val patch = kotlinx.serialization.json.buildJsonObject {
+            put("maxUses", kotlinx.serialization.json.JsonNull)
+        }
+
+        val result = ShareLinkRepository(api).update("link-1", patch)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        assertThat(api.lastUpdate?.first).isEqualTo("link-1")
+        assertThat(api.lastUpdate?.second.toString()).isEqualTo("{\"maxUses\":null}")
+    }
+
+    @Test
+    fun create_success_marksTheCachedListStaleSoTheReturnReadsTheServer() = runTest {
+        val api = FakeLinkApi(
+            response = ApiResponse(
+                success = true,
+                data = CreateShareLinkResponse(
+                    linkId = "l",
+                    conversationId = "c",
+                    shareLink = CreateShareLinkDetail(id = "i", linkId = "l"),
+                ),
+            ),
+        )
+        val repository = ShareLinkRepository(api)
+        repository.cache.put(listOf(MyShareLink(id = "i", linkId = "l")))
+        assertThat(repository.cache.read()?.isFresh).isTrue()
+
+        repository.create(CreateShareLinkRequest(conversationId = "c"))
+
+        assertThat(repository.cache.read()?.isFresh).isFalse()
+        assertThat(repository.cache.read()?.links).hasSize(1)
     }
 }

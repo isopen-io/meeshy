@@ -128,7 +128,7 @@ navigator.serviceWorker.getRegistrations()
 **Solution :**
 - Utilisez Chrome ou Firefox récent
 - OU utilisez `localhost` (HTTPS pas requis en local)
-- OU configurez HTTPS local avec `docker-compose.local-https.yml`
+- OU configurez HTTPS local avec `docker-compose.local.yml` (mkcert y est déjà porté, voir #4547)
 
 ---
 

@@ -1,0 +1,419 @@
+import type { QueryClient } from '@tanstack/react-query';
+import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
+import { isEndToEndMode } from '@/lib/end-to-end-regime-ledger';
+
+import { unwrap } from './client';
+import { deltaWatermark, FULL_RECONCILE_INTERVAL_MS, loadConversationsDelta, mergeConversationsDelta } from './conversations-delta';
+import type { ConversationsInfiniteData, ConversationsPage, ConversationsPageParam } from './conversations-pages';
+import { flattenConversationPages, nextConversationsCursor } from './conversations-pages';
+import type { DataSource } from './config';
+import { decodeConversation } from './decode';
+import { conversationById, conversationsWithSurged, directConversationWith } from './fixtures';
+import { pageOfConversations } from './fixtures-pagination';
+import type { ApiResult, ApiSuccess, HttpTransport } from './http';
+import type { Conversation } from './types';
+import type { CreationEncryptionMode } from '@meeshy/shared/utils/conversation-creation-encryption';
+
+/**
+ * LE PORT DE LA LISTE ET D'UNE CONVERSATION (#5650, F2 ; paginé #6195) —
+ * `source` résolue ICI, jamais dans le hook ni dans l'écran — les fixtures
+ * sont servies par le MÊME chemin (critère b de l'issue).
+ *
+ * `GET conversations.root?limit=30[&before=<id>]`
+ * (`services/gateway/src/routes/conversations/core-list.ts:62-136`,
+ * `optionalAuth`) — voir `loadConversationsPage`.
+ *
+ * `GET conversations.byId` (`core-detail.ts`, `optionalAuth`) —
+ * 404 `'Conversation not found'` (SANS code, `code` reste `undefined`) pour un
+ * identifiant inexistant ET pour une conversation dont le lecteur n'est pas
+ * membre (#8099, anti-énumération) ; 401 sans session.
+ */
+export const CONVERSATIONS_QUERY_KEY = ['conversations'] as const;
+export const conversationQueryKey = (id: string) => ['conversations', id] as const;
+/** Les catégories du lecteur (#10103, `conversation-categories.ts`) — leur clé vit
+ * ICI, à côté de celle de la liste qu'elles sectionnent : la socket l'invalide sur
+ * `category:*` sans tirer le port, son décodeur ni ses fixtures. */
+export const CONVERSATION_CATEGORIES_QUERY_KEY = ['conversation-categories'] as const;
+
+/** Le défaut serveur (`validatePagination`, `core-list.ts:151`) — c'est aussi
+ * la seule limite que ce client demande jamais. */
+export const PAGE_SIZE = 30;
+
+export type ConversationsDeps = {
+  readonly source: DataSource;
+  readonly transport: HttpTransport;
+  /** L'horloge de l'intervalle de réconciliation (#6261) — `Date.now` par défaut. */
+  readonly now?: () => number;
+};
+
+/**
+ * La PRÉCÉDENCE de `hasMore` — miroir `ConversationService.swift:153-156` :
+ * `cursorPagination.hasMore` d'abord (elle seule reste juste sur une page 1
+ * de EXACTEMENT `PAGE_SIZE`, où `pagination.hasMore` peut diverger — § 3 de
+ * la spécification #6195), puis `pagination.hasMore`, puis « la page est
+ * pleine » en tout dernier repli.
+ */
+function hasMoreOf(result: ApiSuccess<readonly Conversation[]>, pageSize: number): boolean {
+  if (result.cursorPagination !== undefined) return result.cursorPagination.hasMore;
+  if (result.pagination !== undefined) return result.pagination.hasMore;
+  return result.data.length === pageSize;
+}
+
+/**
+ * `loadConversationsPage` — UNE page de la Lentille, `before` transmis tel
+ * quel comme paramètre de requête (`ConversationService.swift:140-143`). En
+ * fixtures, `pageOfConversations` (`fixtures-pagination.ts`) mime la MÊME
+ * loi que la passerelle sur le MÊME corpus (`CONVERSATIONS`, 45 lignes).
+ */
+export async function loadConversationsPage(
+  params: ConversationsDeps & { readonly before?: ConversationsPageParam; readonly signal?: AbortSignal },
+): Promise<ApiResult<ConversationsPage>> {
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    return {
+      ok: true,
+      /* `conversationsWithSurged()`, jamais `CONVERSATIONS` (#6807) — le corpus
+         figé PLUS les conversations qu'un `conversation:new` a fait surgir.
+         Sans cela, l'invalidation que #6799 déclenche refaisait une page
+         IDENTIQUE : le correctif était inobservable sous fixtures, donc
+         gardable par aucun gate. Le corpus lui-même reste intouché. */
+      data: pageOfConversations(conversationsWithSurged(), {
+        ...(params.before !== undefined ? { before: params.before } : {}),
+        limit: PAGE_SIZE,
+      }),
+    };
+  }
+  const query = new URLSearchParams({
+    limit: String(PAGE_SIZE),
+    ...(params.before !== undefined ? { before: params.before } : {}),
+  });
+  const result = await params.transport.request<readonly Conversation[]>({
+    method: 'GET',
+    path: `${conversationsEndpoints.root}?${query.toString()}`,
+    ...(params.signal !== undefined ? { signal: params.signal } : {}),
+  });
+  if (!result.ok) return result;
+  const hasMore = hasMoreOf(result, PAGE_SIZE);
+  return {
+    ok: true,
+    data: {
+      conversations: result.data,
+      pagination: result.pagination ?? { limit: PAGE_SIZE, offset: 0, total: 0, hasMore },
+      cursorPagination: { limit: PAGE_SIZE, hasMore, nextCursor: result.cursorPagination?.nextCursor ?? null },
+    },
+  };
+}
+
+export async function loadConversation(
+  params: ConversationsDeps & { readonly id: string; readonly signal?: AbortSignal },
+): Promise<ApiResult<Conversation>> {
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    /* `conversationById`, jamais la seule liste servie : les survenues AUSSI
+       (une conversation qui vient d'apparaître dans la liste doit pouvoir
+       s'OUVRIR, sans quoi la ligne mènerait à « introuvable »), et les corpus
+       de démonstration HORS liste (#7033), qu'un gate atteint par leur
+       adresse et qu'aucune page ne porte. */
+    const found = conversationById(params.id);
+    return found === undefined
+      ? { ok: false, status: 404, error: 'Conversation not found' }
+      : { ok: true, data: found };
+  }
+  return params.transport.request<Conversation>({
+    method: 'GET',
+    path: conversationsEndpoints.byId(params.id),
+    ...(params.signal !== undefined ? { signal: params.signal } : {}),
+  });
+}
+
+/**
+ * L'ÉTAT D'UN RAFRAÎCHISSEMENT, par `QueryClient` (#6261). TanStack rejoue une
+ * requête infinie page par page, la page 1 d'abord puis chaque curseur que
+ * `getNextPageParam` en tire (`infiniteQueryBehavior`). La page 1 fait le delta
+ * et la fusion ; les pages suivantes de la MÊME relecture sont alors servies
+ * par `mergedPages`, sans réseau. Une relecture qui ne passe pas par le delta
+ * vide cet état, et ses pages suivantes partent au réseau comme avant.
+ */
+const mergedPages = new WeakMap<QueryClient, Map<string, ConversationsPage>>();
+const lastFullReadAt = new WeakMap<QueryClient, number>();
+const fullReadRequested = new WeakSet<QueryClient>();
+
+function deltaBasis(client: QueryClient, deps: ConversationsDeps): { readonly data: ConversationsInfiniteData; readonly since: string } | undefined {
+  if (deps.source !== 'gateway') return undefined;
+  if (fullReadRequested.delete(client)) return undefined;
+  const lastFull = lastFullReadAt.get(client);
+  const now = (deps.now ?? Date.now)();
+  if (lastFull === undefined || now - lastFull > FULL_RECONCILE_INTERVAL_MS) return undefined;
+  const data = client.getQueryData<ConversationsInfiniteData>(CONVERSATIONS_QUERY_KEY);
+  if (data === undefined || !Array.isArray(data.pages) || data.pages.length === 0) return undefined;
+  const since = deltaWatermark(data);
+  return since === undefined ? undefined : { data, since };
+}
+
+async function loadFirstPage(
+  client: QueryClient | undefined,
+  deps: ConversationsDeps,
+  signal: AbortSignal | undefined,
+): Promise<ConversationsPage> {
+  if (client !== undefined) mergedPages.delete(client);
+  const basis = client === undefined ? undefined : deltaBasis(client, deps);
+  if (client !== undefined && basis !== undefined) {
+    const delta = unwrap(await loadConversationsDelta({ transport: deps.transport, since: basis.since, ...(signal !== undefined ? { signal } : {}) }));
+    const merged = delta.complete ? mergeConversationsDelta(basis.data, delta) : null;
+    const [first, ...rest] = merged?.pages ?? [];
+    if (merged !== null && first !== undefined) {
+      mergedPages.set(client, new Map(rest.map((page, index) => [String(merged.pageParams[index + 1]), page] as const)));
+      return first;
+    }
+  }
+  const page = unwrap(await loadConversationsPage({ ...deps, ...(signal !== undefined ? { signal } : {}) }));
+  if (client !== undefined) lastFullReadAt.set(client, (deps.now ?? Date.now)());
+  return page;
+}
+
+function takeMergedPage(client: QueryClient | undefined, pageParam: string): ConversationsPage | undefined {
+  const pages = client === undefined ? undefined : mergedPages.get(client);
+  const page = pages?.get(pageParam);
+  if (page !== undefined) pages?.delete(pageParam);
+  return page;
+}
+
+/**
+ * `conversationsInfiniteOptions` — spreadable dans `useInfiniteQuery` OU
+ * `QueryClient.fetchInfiniteQuery`, SANS `select` : `conversationsQuery`
+ * (ci-dessous) en est la seule qui en ajoute un, pour que
+ * `refreshConversations` (qui n'a besoin que des PAGES brutes) n'en paie pas
+ * le coût. `initialPageParam: undefined` ⇒ la première page ne porte aucun
+ * `before` — la MÊME absence que `nextCursor` d'une page épuisée.
+ *
+ * Une relecture d'un cache déjà chargé passe par le delta (#6261) : UNE
+ * requête, quel que soit le nombre de pages, et la relecture complète reste
+ * le repli (premier chargement, delta tronqué, fusion sans curseur sûr,
+ * intervalle de réconciliation écoulé, tirer-pour-rafraîchir).
+ */
+export function conversationsInfiniteOptions(deps: ConversationsDeps) {
+  return {
+    queryKey: CONVERSATIONS_QUERY_KEY,
+    queryFn: async ({ pageParam, signal, client }: { readonly pageParam?: ConversationsPageParam; readonly signal?: AbortSignal; readonly client?: QueryClient }) => {
+      if (pageParam === undefined) return loadFirstPage(client, deps, signal);
+      return (
+        takeMergedPage(client, pageParam) ??
+        unwrap(await loadConversationsPage({ ...deps, before: pageParam, ...(signal !== undefined ? { signal } : {}) }))
+      );
+    },
+    initialPageParam: undefined as ConversationsPageParam,
+    getNextPageParam: nextConversationsCursor,
+  };
+}
+
+/** FABRIQUE (F3) — `{ queryKey, queryFn, select }`, exerçable par
+ * `QueryClient.fetchQuery`/`useInfiniteQuery` SANS DOM (motif
+ * `auth-screens.test.tsx`). `select` reste une fonction de MODULE, jamais une
+ * lambda écrite en ligne — `flattenConversationPages` (`conversations-pages.ts`). */
+export function conversationsQuery(deps: ConversationsDeps) {
+  return { ...conversationsInfiniteOptions(deps), select: flattenConversationPages };
+}
+
+/**
+ * `conversationQuery` — pose `initialData` depuis la liste EN CACHE
+ * (`findCachedConversation`) et `initialDataUpdatedAt` depuis l'état de cette
+ * même requête : la case du fil se peint depuis la liste, sans requête si la
+ * liste est FRAÎCHE (TanStack respecte `staleTime` sur `initialDataUpdatedAt`).
+ * `queryClient` est OPTIONNEL : la fabrique reste appelable sans lui (témoin,
+ * ou un appelant qui n'a pas encore de liste en cache), simplement sans ce
+ * raccourci.
+ */
+/**
+ * `findCachedConversation` — parcourt les PAGES du cache de liste ; `undefined`
+ * si absente, si le cache est vide, ou si le cache porte encore l'ANCIENNE
+ * forme (`readonly Conversation[]`, avant #6195) — jamais une exception : un
+ * cache persisté écrit avant ce lot est purgé par `CACHE_SCHEMA`
+ * (`query-client.ts`), mais un appelant qui lirait entre-temps ne doit rien
+ * casser.
+ */
+export function findCachedConversation(queryClient: QueryClient, id: string): Conversation | undefined {
+  const cache = queryClient.getQueryData<ConversationsInfiniteData>(CONVERSATIONS_QUERY_KEY);
+  if (cache === undefined || !Array.isArray(cache.pages)) return undefined;
+  for (const page of cache.pages) {
+    const found = page.conversations.find((c) => c.id === id);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+/**
+ * LA MUTATION DE LISTE (#5813, étape 0 ; paginée #6195) — le SITE UNIQUE qui
+ * patch UNE conversation du cache `CONVERSATIONS_QUERY_KEY`, quelle que soit
+ * la page où elle vit ; les autres pages et les autres rangées restent
+ * `toBe`-identiques. Réutilisé par `send/perform-send.ts` (« la liste suit
+ * l'envoi ») et par `realtime-apply.ts` (quatre patchs).
+ */
+export function patchConversation(
+  queryClient: QueryClient,
+  conversationId: string,
+  updater: (conversation: Conversation) => Conversation,
+): void {
+  queryClient.setQueryData<ConversationsInfiniteData>(CONVERSATIONS_QUERY_KEY, (data) => {
+    if (data === undefined) return data;
+    return {
+      ...data,
+      pages: data.pages.map((page) =>
+        page.conversations.some((c) => c.id === conversationId)
+          ? { ...page, conversations: page.conversations.map((c) => (c.id === conversationId ? updater(c) : c)) }
+          : page,
+      ),
+    };
+  });
+}
+
+/**
+ * `patchConversationDetail` (#7351, V3) — le MIROIR de `patchConversation`
+ * ci-dessus, sur `conversationQueryKey(id)` (le cache de DÉTAIL) au lieu de
+ * la liste. Deux caches distincts portent la MÊME conversation
+ * (`conversationQuery` amorce le détail depuis la liste via `initialData`,
+ * mais les deux requêtes vivent ensuite sous des clés séparées, et
+ * `query-client.ts` persiste les DEUX telles quelles) : un appelant qui ne
+ * patcherait que la liste (comme `markCaughtUp` avant ce lot) laisse le
+ * détail — celui que `thread.tsx` relit à l'ouverture d'un fil — avec sa
+ * dernière valeur RÉSEAU, potentiellement périmée après un rechargement.
+ */
+export function patchConversationDetail(
+  queryClient: QueryClient,
+  conversationId: string,
+  updater: (conversation: Conversation) => Conversation,
+): void {
+  queryClient.setQueryData<Conversation>(conversationQueryKey(conversationId), (data) =>
+    data === undefined ? data : updater(data),
+  );
+}
+
+/**
+ * `refreshConversations` — le TIRER : UNE requête, page 1 seule, curseur
+ * remis à zéro. `pages: 1` fait REBÂTIR `InfiniteData` depuis `{ pages: [],
+ * pageParams: [] }` (`infiniteQueryBehavior.ts:23-25,94-107` — la boucle
+ * s'arrête après une itération) : le premier `pageParam` essayé est celui de
+ * l'ANCIENNE première page (`undefined`, jamais un `before`), donc c'est bien
+ * la page 1 qui revient. Un ÉCHEC laisse `data` INTACT (TanStack ne remplace
+ * jamais un résultat par une erreur) — fetch-then-replace, iOS `:1961-1966` —
+ * et la promesse REJETTE : c'est `usePullToRefresh` qui la traduit en
+ * `completing failed`.
+ */
+export function refreshConversations(queryClient: QueryClient, deps: ConversationsDeps): Promise<void> {
+  fullReadRequested.add(queryClient);
+  return queryClient
+    .fetchInfiniteQuery({ ...conversationsInfiniteOptions(deps), pages: 1, staleTime: 0 })
+    .then(() => undefined);
+}
+
+/**
+ * `createDirectConversation` (#5652, bloc D) — `POST conversations.root`
+ * (`services/gateway/src/routes/conversations/core-lifecycle.ts:77-91`,
+ * `requiredAuth`), § 3.5 de la spécification. IDEMPOTENT côté serveur : un
+ * direct déjà existant entre les deux comptes est RENDU, jamais recréé — ce
+ * port n'a donc pas à distinguer les deux issues, les DEUX rendent la même
+ * `Conversation`.
+ *
+ * **Deux tête-à-tête par personne au plus** (#12966) : un chiffré de bout en
+ * bout et un que le serveur lit. Sans option, la passerelle rend le chiffré
+ * s'il existe, sinon le plus récemment actif ; `{ plaintext: true }` demande
+ * celui qu'elle lit, et le crée à côté du chiffré s'il n'existe pas.
+ *
+ * **Le mode de chiffrement ne se choisit qu'à l'écran de création** (décision
+ * du 2026-11-01) : lui seul passe `encryptionMode`. Toute autre création
+ * (profil, partage, carte de contact, clavier d'appel, humeur, notification,
+ * geste « sans chiffrement de bout en bout ») n'en envoie aucun, et la
+ * passerelle pose Serveur. `plaintext` et `encryptionMode` s'excluent (la
+ * passerelle rend 400 `ENCRYPTION_MODE_CONFLICT`) : le type l'interdit.
+ */
+export type DirectCreationOptions =
+  | { readonly plaintext?: true; readonly encryptionMode?: never }
+  | { readonly plaintext?: never; readonly encryptionMode?: CreationEncryptionMode };
+
+export function createDirectConversation(
+  deps: ConversationsDeps,
+  participantId: string,
+  options: DirectCreationOptions = {},
+): Promise<ApiResult<Conversation>> {
+  if (__FIXTURES__ && deps.source === 'fixtures') {
+    /* Les survenues AUSSI, et les HORS-LISTE : un direct qui vient
+       d'apparaître, ou qu'aucune page de liste ne porte, est un direct
+       EXISTANT — et le serveur est idempotent, il le rend plutôt que refuser
+       (`fixtures.ts` § `directConversationWith`). */
+    const found = directConversationWith(participantId);
+    const served = options.plaintext === true && found !== undefined && isEndToEndMode(found.encryptionMode) ? undefined : found;
+    if (served !== undefined) return Promise.resolve({ ok: true, data: served });
+    return Promise.resolve({ ok: false, status: 501, error: 'Création de direct indisponible en fixtures' });
+  }
+  return deps.transport.request<Conversation>({
+    method: 'POST',
+    path: conversationsEndpoints.root,
+    body: {
+      type: 'direct',
+      participantIds: [participantId],
+      ...(options.plaintext === true ? { plaintext: true } : {}),
+      ...(options.encryptionMode === undefined ? {} : { encryptionMode: options.encryptionMode }),
+    },
+  });
+}
+
+/**
+ * **CRÉER UN GROUPE** (#6706) — la MÊME porte que le direct
+ * (`POST conversations.root`, `core-lifecycle.ts:77`), et c'est le champ
+ * `type` qui sépare tout le reste.
+ *
+ * **Ce que `group` change, mesuré côté passerelle** : aucune déduplication (un
+ * groupe n'est JAMAIS rouvert, contrairement à un direct idempotent), un
+ * identifiant LISIBLE dérivé du titre (`generateConversationIdentifier`) plutôt
+ * qu'opaque, `CONVERSATION_NEW` émis à TOUS les participants et non au seul
+ * créateur, et une notification d'invitation par invité. Le blocage entre
+ * comptes ne s'applique pas.
+ *
+ * **Le créateur n'est JAMAIS dans `participantIds`** : la passerelle l'ajoute
+ * elle-même en `role: 'creator'`, et l'y mettre rend **422**
+ * `INVALID_OPERATION` — un statut que la route ne déclare même pas dans ses
+ * réponses. L'écran ne propose donc jamais le lecteur (`candidatesFor` l'exclut
+ * déjà pour le direct, pour une raison différente : la passerelle refuse une
+ * conversation avec soi-même).
+ *
+ * **`title` n'est pas obligatoire côté serveur, et il l'est ICI.** Le schéma le
+ * dit en prose (« required for group/public ») sans l'imposer ; un groupe sans
+ * titre reçoit un titre DÉRIVÉ à l'affichage. Laisser partir un groupe sans nom
+ * produirait une conversation que personne ne sait nommer ensuite — la borne
+ * vit dans `validateGroupDraft` (`lib/conversation-new/group.ts`).
+ */
+export function createGroupConversation(
+  deps: ConversationsDeps,
+  body: {
+    readonly title: string;
+    readonly description?: string;
+    readonly participantIds: readonly string[];
+    readonly encryptionMode?: CreationEncryptionMode;
+  },
+): Promise<ApiResult<Conversation>> {
+  if (__FIXTURES__ && deps.source === 'fixtures') {
+    return Promise.resolve({ ok: false, status: 501, error: 'Création de groupe indisponible en fixtures' });
+  }
+  return deps.transport.request<Conversation>({
+    method: 'POST',
+    path: conversationsEndpoints.root,
+    body: {
+      type: 'group',
+      title: body.title,
+      ...(body.description === undefined || body.description === '' ? {} : { description: body.description }),
+      participantIds: [...body.participantIds],
+      ...(body.encryptionMode === undefined ? {} : { encryptionMode: body.encryptionMode }),
+    },
+  });
+}
+
+export function conversationQuery(deps: ConversationsDeps, id: string, init?: { readonly queryClient?: QueryClient }) {
+  const found = init?.queryClient === undefined ? undefined : findCachedConversation(init.queryClient, id);
+  const dataUpdatedAt = init?.queryClient?.getQueryState(CONVERSATIONS_QUERY_KEY)?.dataUpdatedAt;
+
+  return {
+    queryKey: conversationQueryKey(id),
+    queryFn: async ({ signal }: { readonly signal?: AbortSignal }) =>
+      unwrap(await loadConversation({ ...deps, id, ...(signal !== undefined ? { signal } : {}) })),
+    select: decodeConversation,
+    ...(found !== undefined ? { initialData: found } : {}),
+    ...(dataUpdatedAt !== undefined ? { initialDataUpdatedAt: dataUpdatedAt } : {}),
+  };
+}

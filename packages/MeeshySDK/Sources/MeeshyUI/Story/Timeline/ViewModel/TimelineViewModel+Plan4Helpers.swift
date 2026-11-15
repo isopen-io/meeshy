@@ -58,7 +58,7 @@ extension TimelineViewModel {
         project.mediaObjects.first { $0.id == id }?.intrinsicDuration.map(Float.init)
     }
 
-    private func applyWindow(id: String, edit: ClipWindowResolver.Edit) {
+    func applyWindow(id: String, edit: ClipWindowResolver.Edit) {
         guard let kind = clipKind(forId: id),
               let current = currentWindow(id: id) else { return }
         var resolved = ClipWindowResolver.resolve(edit, from: current)
@@ -124,25 +124,31 @@ extension TimelineViewModel {
     /// `nil` quand l'identifiant ne correspond à rien, ou à un audio — qui ne
     /// se voit pas.
     public func clipTransform(id: String) -> ClipTransform? {
-        if let m = project.mediaObjects.first(where: { $0.id == id }) {
-            return ClipTransform(x: m.x, y: m.y, scale: m.scale,
-                                 rotation: m.rotation, zIndex: m.zIndex)
+        guard let objet = project.sceneObject(id: id) else { return nil }
+        // **Le `nil` des trois autres familles est PRÉSERVÉ, et désormais
+        // ÉCRIT** (#4591). La cascade rendait `nil` pour un sticker, un lieu et
+        // un audio sans le dire : seul l'audio avait sa raison au doc-comment
+        // (« qui ne se voit pas »), les deux autres étaient un silence.
+        //
+        // Le `switch` exhaustif ne change aucun comportement — il rend la
+        // décision visible, et oblige une sixième famille à la prendre.
+        switch objet.kind {
+        case .media, .text:
+            return ClipTransform(x: objet.x, y: objet.y, scale: objet.scale,
+                                 rotation: objet.rotation, zIndex: objet.zIndex)
+        case .sticker, .place, .audio:
+            return nil
         }
-        if let t = project.textObjects.first(where: { $0.id == id }) {
-            return ClipTransform(x: t.x, y: t.y, scale: t.scale,
-                                 rotation: t.rotation, zIndex: t.zIndex)
-        }
-        return nil
     }
 
-    /// Règle UN champ de la transformation, en préservant les autres. Le
-    /// bornage vit dans `ClipTransform.applying(_:)`, et l'écriture passe par
-    /// le `CommandStack` comme toute autre édition : une entrée d'annulation
+    /// Règle UN champ en préservant les autres, bornés par `ClipTransform` et,
+    /// pour l'échelle, par `TimelineScaleSetting` (#14304) ; l'écriture passe
+    /// par le `CommandStack` comme toute autre édition : une entrée d'annulation
     /// par réglage, et un réglage sans effet n'en pose aucune.
     public func setClipTransform(id: String, field: ClipTransform.Field) {
         guard let kind = clipKind(forId: id),
               let current = clipTransform(id: id) else { return }
-        let updated = current.applying(field)
+        let updated = current.applying(TimelineScaleSetting.settled(field, from: current, object: project.sceneObject(id: id)))
         guard updated != current else { return }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
                                          property: .transform(old: current, new: updated))
@@ -232,7 +238,7 @@ extension TimelineViewModel {
     //
     // Aucun réglage manuel : `project.slideDuration` a un unique écrivain,
     // `recomputeSlideDuration()`. `setSlideDuration` et `extendSlideDuration`
-    // ont été supprimés (2026-07-27) — ils écrivaient une valeur que le
+    // ont été supprimés — ils écrivaient une valeur que le
     // recalcul depuis le contenu effaçait à l'édition suivante, sans que rien
     // ne marque qu'elle venait de l'auteur. Le plafond de 600 s qu'ils
     // portaient vit désormais dans `ClipWindowResolver.maximumEnd`.
@@ -249,11 +255,10 @@ extension TimelineViewModel {
     // MARK: - Internal clip dimension helper (accessible to extension)
 
     func clipDuration(id: String) -> Float? {
-        if let m = project.mediaObjects.first(where: { $0.id == id }) { return m.duration.map { Float($0) } }
-        if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.duration }
-        if let t = project.textObjects.first(where: { $0.id == id }) { return t.duration.map { Float($0) } }
-        if let s = project.stickerObjects.first(where: { $0.id == id }) { return s.duration.map { Float($0) } }
-        return nil
+        // Cinq lignes pour un champ que la somme porte : `duration` y est
+        // `Double?`, et son `nil` pour un LIEU est le même que celui que cette
+        // cascade rendait — un lieu n'a pas de temps propre (#4591).
+        project.sceneObject(id: id)?.duration.map { Float($0) }
     }
 
     // MARK: - Clip property mutations (used by ClipInspector callbacks)
@@ -266,7 +271,7 @@ extension TimelineViewModel {
             oldVolume = project.mediaObjects.first(where: { $0.id == id })?.volume ?? 1.0
         case .audio:
             oldVolume = project.audioPlayerObjects.first(where: { $0.id == id })?.volume ?? 1.0
-        case .text, .sticker:
+        case .text, .sticker, .place:
             return
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
@@ -300,7 +305,7 @@ extension TimelineViewModel {
             var probe = audio
             probe.toggleMute()
             oldVolume = audio.volume; newVolume = probe.volume
-        case .image, .text, .sticker:
+        case .image, .text, .sticker, .place:
             return
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
@@ -318,7 +323,7 @@ extension TimelineViewModel {
             oldFadeIn = project.audioPlayerObjects.first(where: { $0.id == id })?.fadeIn.map { Double($0) }
         case .text:
             oldFadeIn = project.textObjects.first(where: { $0.id == id })?.fadeIn
-        case .sticker:
+        case .sticker, .place:
             return
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
@@ -336,7 +341,7 @@ extension TimelineViewModel {
             oldFadeOut = project.audioPlayerObjects.first(where: { $0.id == id })?.fadeOut.map { Double($0) }
         case .text:
             oldFadeOut = project.textObjects.first(where: { $0.id == id })?.fadeOut
-        case .sticker:
+        case .sticker, .place:
             return
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
@@ -352,7 +357,7 @@ extension TimelineViewModel {
             oldLoop = project.mediaObjects.first(where: { $0.id == id })?.loop
         case .audio:
             oldLoop = project.audioPlayerObjects.first(where: { $0.id == id })?.loop
-        case .text, .sticker:
+        case .text, .sticker, .place:
             return
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
@@ -368,7 +373,7 @@ extension TimelineViewModel {
             oldBg = project.mediaObjects.first(where: { $0.id == id })?.isBackground
         case .audio:
             oldBg = project.audioPlayerObjects.first(where: { $0.id == id })?.isBackground
-        case .text, .sticker:
+        case .text, .sticker, .place:
             return
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
@@ -405,7 +410,7 @@ extension TimelineViewModel {
             oldName = project.audioPlayerObjects.first(where: { $0.id == id })?.name
         case .text:
             oldName = project.textObjects.first(where: { $0.id == id })?.name
-        case .sticker:
+        case .sticker, .place:
             return
         }
         guard oldName != newName else { return }
@@ -462,6 +467,11 @@ extension TimelineViewModel {
             guard project.stickerObjects[idx].startTime != nil || project.stickerObjects[idx].duration != nil else { return }
             project.stickerObjects[idx].startTime = nil
             project.stickerObjects[idx].duration = nil
+        case .place:
+            guard let idx = project.locationObjects.firstIndex(where: { $0.id == id }) else { return }
+            guard project.locationObjects[idx].startTime != nil || project.locationObjects[idx].duration != nil else { return }
+            project.locationObjects[idx].startTime = nil
+            project.locationObjects[idx].duration = nil
         }
         scheduleEngineReconfigure()
         recomputeSlideDuration()
@@ -491,8 +501,9 @@ extension TimelineViewModel {
             snapshotAudio = nil
             snapshotText = project.textObjects.first(where: { $0.id == id })
             insertionIndex = project.textObjects.firstIndex(where: { $0.id == id }) ?? 0
-        case .sticker:
-            // Les stickers se suppriment depuis le canvas, pas la timeline.
+        case .sticker, .place:
+            // Sticker et pastille de lieu se posent et se retirent depuis le
+            // CANVAS, pas la timeline — qui n'y règle que leur fenêtre (#4840).
             return
         }
         let cmd = DeleteClipCommand(clipId: id, kind: kind,
@@ -576,7 +587,7 @@ extension TimelineViewModel {
             oldY: position != nil ? snapshot.y : nil,
             newY: position?.y,
             oldScale: scale != nil ? snapshot.scale : nil,
-            newScale: scale,
+            newScale: scale.map { TimelineScaleSetting.keyframeScale($0, from: snapshot.scale, object: project.sceneObject(id: clipId)) },
             oldOpacity: opacity != nil ? snapshot.opacity : nil,
             newOpacity: opacity,
             oldEasing: easing != nil ? snapshot.easing : nil,
@@ -612,7 +623,7 @@ extension TimelineViewModel {
         case .text:
             keyframe = project.textObjects.first(where: { $0.id == clipId })?
                 .keyframes?.first(where: { $0.id == keyframeId })
-        case .audio, .sticker:
+        case .audio, .sticker, .place:
             return nil
         }
         guard let kf = keyframe else { return nil }
@@ -648,8 +659,9 @@ extension TimelineViewModel {
             guard let idx = keyframes.firstIndex(where: { $0.id == keyframeId }) else { return }
             snapshot = keyframes[idx]
             insertionIndex = idx
-        case .sticker:
-            // Un sticker s'édite sur le canvas, pas dans la timeline.
+        case .sticker, .place:
+            // Ni le sticker ni la pastille de lieu ne portent de keyframes :
+            // leur famille temporelle est start/duration/fade, sans courbe.
             return
         }
         let cmd = DeleteKeyframeCommand(clipId: clipId, kind: kind,
@@ -699,6 +711,52 @@ extension TimelineViewModel {
             scheduleEngineReconfigure()
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+}
+
+// MARK: - Repère d'annulation (frise plein écran « Quitter · Valider », #17110)
+
+/// **Un repère dans l'historique d'une timeline**, posé à l'ouverture d'une
+/// session de réglage ; « Quitter » le rejoint, « Valider » l'oublie.
+///
+/// Le repère est l'IDENTITÉ de la dernière commande appliquée, jamais un
+/// curseur : la pile plafonne (FIFO, `CommandStack.maxSize`), et une pile
+/// pleine garde le même curseur pendant que chaque réglage évince la plus
+/// vieille entrée — un repère compté ne défaisait alors plus rien.
+public nonisolated struct TimelineUndoMark: Equatable, Sendable {
+    let lastAppliedId: String?
+
+    @MainActor
+    public static func taken(on timeline: TimelineViewModel) -> TimelineUndoMark {
+        let etat = timeline.commandStack.snapshot()
+        return TimelineUndoMark(lastAppliedId: etat.commands.prefix(etat.cursor).last?.underlying.id)
+    }
+
+    /// Combien de commandes défaire pour rejoindre le repère :
+    /// - repère parmi les commandes appliquées ⇒ celles qui le suivent ;
+    /// - repère déjà défait (encore rejouable) ⇒ rien, on est avant lui ;
+    /// - repère évincé par le plafond, ou pile vide à l'ouverture ⇒ tout ce qui
+    ///   reste appliqué date de la session.
+    @MainActor
+    func pendingUndos(on timeline: TimelineViewModel) -> Int {
+        let etat = timeline.commandStack.snapshot()
+        let appliquees = etat.commands.prefix(etat.cursor).map(\.underlying.id)
+        guard let repere = lastAppliedId else { return appliquees.count }
+        if let rang = appliquees.lastIndex(of: repere) { return appliquees.count - 1 - rang }
+        if etat.commands.contains(where: { $0.underlying.id == repere }) { return 0 }
+        return appliquees.count
+    }
+
+    /// Défait tout ce qui a été appliqué depuis le repère, une commande à la
+    /// fois (chacune reprend sa durée de slide) ; s'arrête dès qu'une
+    /// annulation ne recule plus, pour ne jamais boucler.
+    @MainActor
+    public func rewind(_ timeline: TimelineViewModel) {
+        for _ in 0..<pendingUndos(on: timeline) {
+            let avant = timeline.commandStack.snapshot().cursor
+            timeline.undo()
+            guard timeline.commandStack.snapshot().cursor < avant else { return }
         }
     }
 }

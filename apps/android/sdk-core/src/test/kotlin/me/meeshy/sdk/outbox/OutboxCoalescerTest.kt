@@ -239,6 +239,121 @@ class OutboxCoalescerTest {
     }
 
     @Test
+    fun `like then unlike of the same post annihilates the like`() {
+        val like = row("l1", OutboxKind.LIKE_POST, "post1")
+        val unlike = row("ul1", OutboxKind.UNLIKE_POST, "post1")
+
+        assertThat(OutboxCoalescer.decide(unlike, listOf(like)))
+            .isEqualTo(CoalesceDecision.Annihilate(listOf("l1")))
+    }
+
+    @Test
+    fun `unlike then like of the same post annihilates the unlike`() {
+        val unlike = row("ul1", OutboxKind.UNLIKE_POST, "post1")
+        val like = row("l1", OutboxKind.LIKE_POST, "post1")
+
+        assertThat(OutboxCoalescer.decide(like, listOf(unlike)))
+            .isEqualTo(CoalesceDecision.Annihilate(listOf("ul1")))
+    }
+
+    @Test
+    fun `a repeated like of the same post keeps the latest`() {
+        val first = row("l1", OutboxKind.LIKE_POST, "post1")
+        val second = row("l2", OutboxKind.LIKE_POST, "post1")
+
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("l1"), second))
+    }
+
+    @Test
+    fun `a repeated unlike of the same post keeps the latest`() {
+        val first = row("ul1", OutboxKind.UNLIKE_POST, "post1")
+        val second = row("ul2", OutboxKind.UNLIKE_POST, "post1")
+
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("ul1"), second))
+    }
+
+    @Test
+    fun `a first like of a post is enqueued`() {
+        val like = row("l1", OutboxKind.LIKE_POST, "post1")
+
+        assertThat(OutboxCoalescer.decide(like, emptyList()))
+            .isEqualTo(CoalesceDecision.Enqueue(like))
+    }
+
+    @Test
+    fun `liking a different post is not coalesced`() {
+        val likePost1 = row("l1", OutboxKind.LIKE_POST, "post1")
+        val unlikePost2 = row("ul2", OutboxKind.UNLIKE_POST, "post2")
+
+        assertThat(OutboxCoalescer.decide(unlikePost2, listOf(likePost1)))
+            .isEqualTo(CoalesceDecision.Enqueue(unlikePost2))
+    }
+
+    @Test
+    fun `bookmark then unbookmark of the same post annihilates the bookmark`() {
+        val bookmark = row("bm1", OutboxKind.BOOKMARK_POST, "post1")
+        val unbookmark = row("ubm1", OutboxKind.UNBOOKMARK_POST, "post1")
+
+        assertThat(OutboxCoalescer.decide(unbookmark, listOf(bookmark)))
+            .isEqualTo(CoalesceDecision.Annihilate(listOf("bm1")))
+    }
+
+    @Test
+    fun `unbookmark then bookmark of the same post annihilates the unbookmark`() {
+        val unbookmark = row("ubm1", OutboxKind.UNBOOKMARK_POST, "post1")
+        val bookmark = row("bm1", OutboxKind.BOOKMARK_POST, "post1")
+
+        assertThat(OutboxCoalescer.decide(bookmark, listOf(unbookmark)))
+            .isEqualTo(CoalesceDecision.Annihilate(listOf("ubm1")))
+    }
+
+    @Test
+    fun `a repeated bookmark of the same post keeps the latest`() {
+        val first = row("bm1", OutboxKind.BOOKMARK_POST, "post1")
+        val second = row("bm2", OutboxKind.BOOKMARK_POST, "post1")
+
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("bm1"), second))
+    }
+
+    @Test
+    fun `a repeated unbookmark of the same post keeps the latest`() {
+        val first = row("ubm1", OutboxKind.UNBOOKMARK_POST, "post1")
+        val second = row("ubm2", OutboxKind.UNBOOKMARK_POST, "post1")
+
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("ubm1"), second))
+    }
+
+    @Test
+    fun `a first bookmark of a post is enqueued`() {
+        val bookmark = row("bm1", OutboxKind.BOOKMARK_POST, "post1")
+
+        assertThat(OutboxCoalescer.decide(bookmark, emptyList()))
+            .isEqualTo(CoalesceDecision.Enqueue(bookmark))
+    }
+
+    @Test
+    fun `bookmarking a different post is not coalesced`() {
+        val bookmarkPost1 = row("bm1", OutboxKind.BOOKMARK_POST, "post1")
+        val unbookmarkPost2 = row("ubm2", OutboxKind.UNBOOKMARK_POST, "post2")
+
+        assertThat(OutboxCoalescer.decide(unbookmarkPost2, listOf(bookmarkPost1)))
+            .isEqualTo(CoalesceDecision.Enqueue(unbookmarkPost2))
+    }
+
+    @Test
+    fun `a like does not coalesce with a bookmark of the same post`() {
+        val bookmark = row("bm1", OutboxKind.BOOKMARK_POST, "post1")
+        val like = row("l1", OutboxKind.LIKE_POST, "post1")
+
+        assertThat(OutboxCoalescer.decide(like, listOf(bookmark)))
+            .isEqualTo(CoalesceDecision.Enqueue(like))
+    }
+
+    @Test
     fun `a repeated friend request to the same receiver supersedes the pending one`() {
         val first = row("f1", OutboxKind.SEND_FRIEND_REQUEST, "u1")
         val second = row("f2", OutboxKind.SEND_FRIEND_REQUEST, "u1")
@@ -255,6 +370,24 @@ class OutboxCoalescerTest {
 
         assertThat(OutboxCoalescer.decide(toU2, listOf(toU1)))
             .isEqualTo(CoalesceDecision.Enqueue(toU2))
+    }
+
+    @Test
+    fun `the last answer to the same friend request wins`() {
+        val accept = row("r1", OutboxKind.RESPOND_FRIEND_REQUEST, "req-1")
+        val reject = row("r2", OutboxKind.RESPOND_FRIEND_REQUEST, "req-1")
+
+        assertThat(OutboxCoalescer.decide(reject, listOf(accept)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("r1"), reject))
+    }
+
+    @Test
+    fun `answers to different friend requests are not coalesced`() {
+        val first = row("r1", OutboxKind.RESPOND_FRIEND_REQUEST, "req-1")
+        val second = row("r2", OutboxKind.RESPOND_FRIEND_REQUEST, "req-2")
+
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Enqueue(second))
     }
 
     @Test
@@ -330,5 +463,78 @@ class OutboxCoalescerTest {
 
         assertThat(OutboxCoalescer.decide(privacy, listOf(notification)))
             .isEqualTo(CoalesceDecision.Enqueue(privacy))
+    }
+
+    @Test
+    fun `a repeated audio settings update keeps only the latest snapshot`() {
+        val first = row("a1", OutboxKind.UPDATE_AUDIO_SETTINGS, "me")
+        val second = row("a2", OutboxKind.UPDATE_AUDIO_SETTINGS, "me")
+
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("a1"), second))
+    }
+
+    @Test
+    fun `an audio settings update never coalesces with a pending privacy settings update`() {
+        val privacy = row("v1", OutboxKind.UPDATE_PRIVACY_SETTINGS, "me")
+        val audio = row("a1", OutboxKind.UPDATE_AUDIO_SETTINGS, "me")
+
+        assertThat(OutboxCoalescer.decide(audio, listOf(privacy))).isEqualTo(CoalesceDecision.Enqueue(audio))
+    }
+
+    @Test
+    fun `a repeated application settings update keeps only the latest theme`() {
+        val first = row("t1", OutboxKind.UPDATE_APPLICATION_SETTINGS, "me")
+        val second = row("t2", OutboxKind.UPDATE_APPLICATION_SETTINGS, "me")
+
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("t1"), second))
+    }
+
+    @Test
+    fun `an application update never coalesces with a pending privacy, notification or audio update`() {
+        val pending = listOf(
+            row("v1", OutboxKind.UPDATE_PRIVACY_SETTINGS, "me"),
+            row("n1", OutboxKind.UPDATE_SETTINGS, "me"),
+            row("a1", OutboxKind.UPDATE_AUDIO_SETTINGS, "me"),
+        )
+        val application = row("t1", OutboxKind.UPDATE_APPLICATION_SETTINGS, "me")
+
+        assertThat(OutboxCoalescer.decide(application, pending)).isEqualTo(CoalesceDecision.Enqueue(application))
+    }
+
+    @Test
+    fun `two preference snapshots of one conversation keep only the latest`() {
+        val first = row("p1", OutboxKind.UPDATE_CONVERSATION_PREFS, "c1")
+        val second = row("p2", OutboxKind.UPDATE_CONVERSATION_PREFS, "c1")
+
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("p1"), second))
+    }
+
+    @Test
+    fun `preference snapshots of two conversations never merge`() {
+        val first = row("p1", OutboxKind.UPDATE_CONVERSATION_PREFS, "c1")
+        val second = row("p2", OutboxKind.UPDATE_CONVERSATION_PREFS, "c2")
+
+        assertThat(OutboxCoalescer.decide(second, listOf(first))).isEqualTo(CoalesceDecision.Enqueue(second))
+    }
+
+    @Test
+    fun `the oldest rollback state is carried onto the snapshot that supersedes`() {
+        fun prefsRow(cmid: String, pinned: Boolean, previous: ConversationPrefsPrevious?) = row(cmid, OutboxKind.UPDATE_CONVERSATION_PREFS, "c1").copy(
+            payload = me.meeshy.sdk.net.MeeshyApi.json.encodeToString(
+                ConversationPrefsPayload.serializer(),
+                ConversationPrefsPayload(isPinned = pinned, isMuted = false, isArchived = false, mentionsOnly = false, previous = previous),
+            ),
+        )
+        val oldest = ConversationPrefsPrevious(isPinned = false)
+        val first = prefsRow("p1", true, oldest)
+        val second = prefsRow("p2", false, ConversationPrefsPrevious(isPinned = true))
+
+        val decision = OutboxCoalescer.decide(second, listOf(first)) as CoalesceDecision.Replace
+
+        val carried = me.meeshy.sdk.net.MeeshyApi.json.decodeFromString(ConversationPrefsPayload.serializer(), decision.row.payload)
+        assertThat(carried.previous).isEqualTo(oldest)
     }
 }

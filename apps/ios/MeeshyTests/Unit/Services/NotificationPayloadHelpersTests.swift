@@ -910,3 +910,128 @@ final class NSEPrePersistedMessagePlanTests: XCTestCase {
         XCTAssertEqual(plan(makePush())?.content, "")
     }
 }
+
+/// #7168 — **le filtre de TYPE est la première chose qui doit s'exécuter.**
+///
+/// `prePersistMessage` ouvrait `Self.sharedPool` AVANT de regarder le type :
+/// une clause de `guard` s'évalue dans l'ordre, et le premier terme était
+/// l'ouverture de la base — `DatabasePool` plus les migrations, avec un
+/// `busyMode` qui bloque jusqu'à cinq secondes sur collision. Tout push qui
+/// n'annonce PAS l'arrivée d'un message — like, réaction, commentaire,
+/// réponse à une story, demande d'ami, acceptation, mention de publication,
+/// arrivée d'un membre — payait cette ouverture pour repartir les mains vides,
+/// sur le budget de la NSE, celui-là même qui sert à télécharger l'avatar et
+/// la pièce jointe avant d'afficher la bannière.
+///
+/// **L'ordre lui-même n'est pas observable depuis ce bundle** :
+/// `NotificationService.swift` importe `UserNotifications` et GRDB, et n'est
+/// compilé que dans la cible d'extension (cf. `project.yml` § `MeeshyTests`,
+/// qui n'y prend que les helpers PURS). Ce qui est observable, et ce que ces
+/// témoins gardent, est la DÉCISION que le garde consulte désormais en
+/// premier — jusqu'ici exercée seulement à travers `prePersistedMessagePlan`,
+/// jamais en propre.
+final class NSEMessageArrivalGateTests: XCTestCase {
+
+    func test_lesCinqTypesQuiAnnoncentUneArrivee() {
+        for type in ["new_message", "message_reply", "reply", "message_forwarded", "user_mentioned"] {
+            XCTAssertTrue(
+                NotificationPayloadHelpers.announcesMessageArrival(type),
+                "\(type) annonce l'arrivée d'un message"
+            )
+        }
+    }
+
+    func test_toutLeReste_neDeclenchePasLOuvertureDeLaBase() {
+        // Les familles mesurées côté passerelle qui portent un `messageId` ou
+        // arrivent en volume — aucune n'écrit de bulle.
+        for type in [
+            "message_reaction", "post_like", "post_comment", "comment_reply",
+            "story_reaction", "story_new_comment", "friend_request", "contact_request",
+            "friend_accepted", "member_joined", "missed_call", "system",
+        ] {
+            XCTAssertFalse(
+                NotificationPayloadHelpers.announcesMessageArrival(type),
+                "\(type) n'annonce aucune arrivée de message"
+            )
+        }
+    }
+
+    func test_typeAbsentOuVide_neDeclencheRien() {
+        XCTAssertFalse(NotificationPayloadHelpers.announcesMessageArrival(nil))
+        XCTAssertFalse(NotificationPayloadHelpers.announcesMessageArrival(""))
+        XCTAssertFalse(NotificationPayloadHelpers.announcesMessageArrival("   "))
+    }
+
+    func test_leTypeEstLuApresElagage_commeLePlan() {
+        XCTAssertTrue(NotificationPayloadHelpers.announcesMessageArrival("  new_message  "))
+    }
+}
+
+// MARK: - Delivery Receipt Types
+
+/// Delivery receipt acknowledgements — a push type becomes a delivery receipt
+/// if and only if it announces a message arrival to the recipient.
+///
+/// The same distinction exists in two places: `messageArrivalTypes` (which gates
+/// NSE bubble persistence) and `deliveryReceiptTypes` (which gates receipt posting).
+/// They must stay in lockstep — every message-arrival type also triggers a receipt.
+final class NSEDeliveryReceiptGateTests: XCTestCase {
+
+    func test_user_mentioned_triggerDeliveryReceipt() {
+        // user_mentioned doit déclencher l'envoi d'un accusé de remise,
+        // comme new_message, message_reply, reply, et message_forwarded
+        XCTAssertTrue(
+            NotificationPayloadHelpers.isDeliveryReceiptType("user_mentioned"),
+            "user_mentioned doit déclencher l'envoi d'un accusé de remise"
+        )
+    }
+
+    func test_messageTypesRequireDeliveryReceipt() {
+        // Tous les types qui annoncent l'arrivée d'un message doivent
+        // déclencher un accusé de remise
+        for type in ["new_message", "message_reply", "reply", "message_forwarded", "user_mentioned"] {
+            XCTAssertTrue(
+                NotificationPayloadHelpers.isDeliveryReceiptType(type),
+                "\(type) doit déclencher un accusé de remise"
+            )
+        }
+    }
+
+    func test_everyMessageArrivalType_triggersDeliveryReceipt() {
+        for type in NotificationPayloadHelpers.messageArrivalTypes {
+            XCTAssertTrue(
+                NotificationPayloadHelpers.isDeliveryReceiptType(type),
+                "\(type) annonce une arrivée de message : il doit être accusé remis"
+            )
+        }
+    }
+
+    func test_conversationCreationTypes_keepTheirDeliveryReceipt() {
+        for type in ["new_conversation", "new_conversation_direct", "new_conversation_group", "added_to_conversation"] {
+            XCTAssertTrue(
+                NotificationPayloadHelpers.isDeliveryReceiptType(type),
+                "\(type) accusait déjà la remise avant l'extraction"
+            )
+        }
+    }
+
+    func test_missingOrBlankType_doesNotTriggerDeliveryReceipt() {
+        XCTAssertFalse(NotificationPayloadHelpers.isDeliveryReceiptType(nil))
+        XCTAssertFalse(NotificationPayloadHelpers.isDeliveryReceiptType(""))
+        XCTAssertFalse(NotificationPayloadHelpers.isDeliveryReceiptType("   "))
+    }
+
+    func test_nonMessageTypesDoNotRequireDeliveryReceipt() {
+        // Les types sociaux (réactions, commentaires) ne déclenchent pas d'accusé
+        for type in [
+            "message_reaction", "post_like", "post_comment", "comment_reply",
+            "story_reaction", "story_new_comment", "friend_request", "contact_request",
+            "friend_accepted", "member_joined", "missed_call", "system",
+        ] {
+            XCTAssertFalse(
+                NotificationPayloadHelpers.isDeliveryReceiptType(type),
+                "\(type) ne doit pas déclencher d'accusé de remise"
+            )
+        }
+    }
+}

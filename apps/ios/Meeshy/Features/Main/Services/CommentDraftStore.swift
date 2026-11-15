@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import UIKit
+import MeeshySDK
 
 // MARK: - CommentDraftStore
 
@@ -19,10 +20,23 @@ import UIKit
 /// qu'aucun brouillon fantôme ne ressuscite après envoi.
 @MainActor
 final class CommentDraftStore {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = CommentDraftStore()
 
     private let defaults: UserDefaults
     private let prefix = "meeshy.commentDraft.v1."
+    /// L'ORDRE des brouillons écrits, le plus récent en dernier — hors du
+    /// préfixe des brouillons, pour qu'il ne se lise jamais comme l'un d'eux.
+    private let orderKey = "meeshy.commentDraftOrder.v1"
+    /// Un brouillon ABANDONNÉ restait dans `UserDefaults` jusqu'à la
+    /// déconnexion — et `UserDefaults` charge tout son fichier en mémoire à
+    /// chaque lancement. Les plus récents suffisent : un commentaire laissé
+    /// en plan sur cinquante autres posts depuis ne se reprend plus.
+    nonisolated static let maxDrafts = 50
     private let debounceNanos: UInt64
     /// Une écriture en vol par post — `internal` pour que les tests attendent
     /// `.value` de façon déterministe au lieu de dormir.
@@ -50,12 +64,33 @@ final class CommentDraftStore {
         for task in pendingSaves.values { task.cancel() }
         pendingSaves.removeAll()
         for (postId, text) in pendingTexts {
-            defaults.set(text, forKey: key(for: postId))
+            write(text, for: postId)
         }
         pendingTexts.removeAll()
     }
 
     private func key(for postId: String) -> String { prefix + postId }
+
+    /// Écrit un brouillon et le place en tête de l'ordre ; au-delà de
+    /// `maxDrafts`, le plus ancien part avec sa clé.
+    private func write(_ text: String, for postId: String) {
+        defaults.set(text, forKey: key(for: postId))
+        var order = (defaults.stringArray(forKey: orderKey) ?? []).filter { $0 != postId }
+        order.append(postId)
+        while order.count > Self.maxDrafts {
+            defaults.removeObject(forKey: key(for: order.removeFirst()))
+        }
+        defaults.set(order, forKey: orderKey)
+    }
+
+    /// Retire un brouillon et sa place dans l'ordre.
+    private func erase(postId: String) {
+        defaults.removeObject(forKey: key(for: postId))
+        if var order = defaults.stringArray(forKey: orderKey), let index = order.firstIndex(of: postId) {
+            order.remove(at: index)
+            defaults.set(order, forKey: orderKey)
+        }
+    }
 
     /// Sauvegarde le brouillon. Un texte vide (ou blanc) efface la clé — pas de
     /// brouillon « fantôme » qui ferait apparaître un composer pré-rempli vide.
@@ -66,17 +101,15 @@ final class CommentDraftStore {
 
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            defaults.removeObject(forKey: key(for: postId))
+            erase(postId: postId)
             return
         }
 
         pendingTexts[postId] = text
-        let storageKey = key(for: postId)
         let delay = debounceNanos
         pendingSaves[postId] = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: delay)
-            guard !Task.isCancelled, let self else { return }
-            self.defaults.set(text, forKey: storageKey)
+            guard await cancellableSleep(for: .nanoseconds(delay)), !Task.isCancelled, let self else { return }
+            self.write(text, for: postId)
             self.pendingTexts.removeValue(forKey: postId)
             self.pendingSaves.removeValue(forKey: postId)
         }
@@ -95,6 +128,19 @@ final class CommentDraftStore {
         guard !postId.isEmpty else { return }
         pendingSaves.removeValue(forKey: postId)?.cancel()
         pendingTexts.removeValue(forKey: postId)
-        defaults.removeObject(forKey: key(for: postId))
+        erase(postId: postId)
+    }
+
+    /// Fin de session (#8656) : les clés sont rangées par post, sans compte —
+    /// un post vu des deux comptes d'un appareil rendait au second le
+    /// brouillon du premier. Tout part, y compris les écritures en vol.
+    func clearAll() {
+        pendingSaves.values.forEach { $0.cancel() }
+        pendingSaves.removeAll()
+        pendingTexts.removeAll()
+        defaults.dictionaryRepresentation().keys
+            .filter { $0.hasPrefix(prefix) }
+            .forEach { defaults.removeObject(forKey: $0) }
+        defaults.removeObject(forKey: orderKey)
     }
 }

@@ -70,6 +70,11 @@ public nonisolated struct MeeshyColors {
     public static let errorSoft = Color(hex: "FCA5A5")
     /// red-500 — stop appuyé des gradients d'erreur (boutons).
     public static let errorStrong = Color(hex: "EF4444")
+    /// Le rouge d'alerte comme ENCRE sur un fond CLAIR (#9121) : `error`
+    /// (`F87171`) n'y tient que 2,77:1 sur blanc — sous les 3:1 d'une icône.
+    /// Même valeur que `--color-danger` du schéma clair web
+    /// (`packages/design-tokens/light.css`), qui tient la même barre.
+    public static let errorInk = Color(hex: "C81E1E")
     /// emerald-500 — stop appuyé des gradients de succès.
     public static let successDeep = Color(hex: "10B981")
 
@@ -77,6 +82,7 @@ public nonisolated struct MeeshyColors {
 
     public static let successHex = "34D399"
     public static let errorHex = "F87171"
+    public static let errorInkHex = "C81E1E"
     public static let warningHex = "FBBF24"
     public static let infoHex = "60A5FA"
     public static let neutral500Hex = "6B7280"
@@ -99,6 +105,151 @@ public nonisolated struct MeeshyColors {
     public static let communityAccent = warning
     public static let communityAccentHex = warningHex
 
+    // MARK: - États d'un message dans le fil (#7599)
+    //
+    // UN code couleur pour les deux plateformes : l'état se lit par sa teinte
+    // avant tout texte, et le texte ne sert plus qu'au lecteur d'écran. Dérivé
+    // vers `packages/design-tokens/ios.css` (`--ios-state-*`) : le web lit la
+    // même table au lieu de la recopier. Chaque teinte ne dit qu'UN état — le
+    // rouge d'erreur ne peint plus un éphémère, l'indigo ne peint plus un flou.
+
+    /// Vue unique pas encore ouverte — pictogramme PLEIN.
+    public static let stateViewOnce = Color(hex: "6366F1")
+    /// Vue unique ouverte — pictogramme en CONTOUR, atténué (#7579).
+    public static let stateOpened = Color(hex: "9CA3AF")
+    /// Éphémère : la flamme, et le décompte de la dernière minute.
+    public static let stateEphemeral = Color(hex: "F97316")
+    /// Flou, masqué.
+    public static let stateConcealed = Color(hex: "6B7280")
+    /// Échec d'envoi.
+    public static let stateFailed = Color(hex: "EF4444")
+
+    public static let stateViewOnceHex = "6366F1"
+    public static let stateOpenedHex = "9CA3AF"
+    public static let stateEphemeralHex = "F97316"
+    public static let stateConcealedHex = "6B7280"
+    public static let stateFailedHex = "EF4444"
+
+    // MARK: - Monnaie (#6427)
+    //
+    // L'ARGENT de la pièce Meesh. Une Meesh est une monnaie : son glyphe dit
+    // « pièce », et sa couleur « métal », là où l'ambre de l'entrée dit
+    // « récompense à saisir ». Un gris ardoise clair plutôt qu'un gris neutre :
+    // la pointe de bleu est ce qui fait lire du métal et non du plastique, sur
+    // le verre clair comme sur le fond sombre.
+
+    public static let meeshSilver = Color(hex: "A8B1BF")
+    public static let meeshSilverHex = "A8B1BF"
+
+    // MARK: - Teintes franches hors marque (#8877)
+
+    public static let blue500 = Color(hex: "3B82F6")
+    public static let orange500 = Color(hex: "F97316")
+    public static let amber500 = Color(hex: "F59E0B")
+
+    public static let blue500Hex = "3B82F6"
+    public static let orange500Hex = "F97316"
+    public static let amber500Hex = "F59E0B"
+
+    // MARK: - Teintes de tuile (#8877)
+
+    public static let tileCoral = Color(hex: "FF6B6B")
+    public static let tileSaffron = Color(hex: "F8B500")
+    public static let tileBlue = Color(hex: "3498DB")
+    public static let tileAmethyst = Color(hex: "9B59B6")
+    public static let tileSky = Color(hex: "45B7D1")
+    public static let tileEmerald = Color(hex: "2ECC71")
+    public static let tileTeal = Color(hex: "4ECDC4")
+    public static let tileCyan = Color(hex: "08D9D6")
+    public static let tileRose = Color(hex: "FF2E63")
+
+    public static let tileCoralHex = "FF6B6B"
+    public static let tileSaffronHex = "F8B500"
+    public static let tileBlueHex = "3498DB"
+    public static let tileAmethystHex = "9B59B6"
+    public static let tileSkyHex = "45B7D1"
+    public static let tileEmeraldHex = "2ECC71"
+    public static let tileTealHex = "4ECDC4"
+    public static let tileCyanHex = "08D9D6"
+    public static let tileRoseHex = "FF2E63"
+
+    // MARK: - Plans nommés (#8877)
+
+    public static let surfaceDarkBase = Color(hex: "09090B")
+    public static let surfaceDarkDeep = Color(hex: "0F0D19")
+    public static let surfaceDarkRaised = Color(hex: "13111C")
+    public static let surfaceDarkInput = Color(hex: "16142A")
+    public static let surfaceLightRaised = Color(hex: "F8F7FF")
+    public static let surfaceLightMist = Color(hex: "FAFAFF")
+    public static let surfaceLightInput = Color(hex: "F5F3FF")
+
+    // MARK: - Accent neutre d'un profil bloqué (#8877)
+
+    public static let blockedNeutral = Color(hex: "888888")
+    public static let blockedNeutralHex = "888888"
+
+    // MARK: - Chrome posé sur un média plein écran (#8878)
+    //
+    // Les noms des vues iOS, ALIAS de l'échelle `onMedia` / `scrim` ci-dessus
+    // (#8879) : une seule valeur par couleur, dérivée vers le web.
+
+    public static let mediaChromeForeground = onMedia
+    public static let mediaChromeSecondary = onMediaSecondary
+    public static let mediaChromeTertiary = onMediaMuted
+    public static let mediaChromeFill = mediaBackdrop.opacity(0.35)
+    public static let mediaScrim = scrim
+
+    public static let mediaScrimTop = LinearGradient(
+        colors: [Color.black.opacity(0.55), Color.black.opacity(0)],
+        startPoint: .top, endPoint: .bottom
+    )
+
+    public static let mediaScrimBottom = LinearGradient(
+        colors: [Color.black.opacity(0), Color.black.opacity(0.55)],
+        startPoint: .top, endPoint: .bottom
+    )
+
+    // MARK: - Chrome posé sur un média (#8879)
+    //
+    // Une visionneuse plein écran (image d'un commentaire, média d'une
+    // conversation, story, réel) est TOUJOURS sombre, quel que soit le schéma :
+    // ses contrôles s'écrivent en blanc sur un voile noir. Les vues les
+    // portaient en littéral (`.white.opacity(0.85)`, `Color.black.opacity(0.5)`
+    // — plus de trois cents sites) ; l'échelle est nommée ici, FERMÉE, et
+    // dérivée vers `packages/design-tokens/ios.css` (`--ios-on-media*`,
+    // `--ios-media-*`, `--ios-scrim*`) pour que le web lise la même.
+
+    /// L'encre d'un contrôle ou d'un texte posé sur un média.
+    public static let onMedia = Color(hex: "FFFFFF")
+    /// Texte secondaire sur un média (horodatage, sous-titre).
+    public static let onMediaSecondary = onMedia.opacity(0.85)
+    /// Texte discret sur un média (compteur, méta).
+    public static let onMediaMuted = onMedia.opacity(0.7)
+    /// Remplissage d'un bouton ou d'une puce posé sur un média.
+    public static let mediaFill = onMedia.opacity(0.15)
+    /// Filet d'un contrôle posé sur un média.
+    public static let mediaHairline = onMedia.opacity(0.2)
+    /// Le fond d'une visionneuse plein écran.
+    public static let mediaBackdrop = Color(hex: "000000")
+    /// Le jaune de la piste de coupe : ses poignées, son liseré, la durée gardée.
+    /// ALIAS de `warning` — une seule valeur ; le miroir CSS (`--ios-media-trim`)
+    /// et son jumeau Android (`MediaTrim`) arrivent avec les lots Android et web du kit.
+    public static let mediaTrim = warning
+    /// Le jaune de la ligne d'aimantation engagée (K23) : ALIAS de `warning`, la
+    /// même valeur que `mediaTrim` — la frise (K22) le lira aussi. Les miroirs
+    /// (`--ios-media-snap`, `MediaSnap`) arrivent avec les lots Android et web.
+    public static let mediaSnap = warning
+    /// Voile léger : dégradé sous le chrome, disque derrière une icône.
+    public static let scrimSoft = mediaBackdrop.opacity(0.3)
+    /// Voile régulier : sous un texte posé sur un média.
+    public static let scrim = mediaBackdrop.opacity(0.5)
+    /// Voile appuyé : ce qui assombrit un média derrière une feuille.
+    public static let scrimStrong = mediaBackdrop.opacity(0.7)
+
+    /// L'encre posée sur un APLAT de couleur — marque, accent de
+    /// conversation — : le blanc des boutons pleins.
+    public static let onBrand = Color(hex: "FFFFFF")
+
     /// Fond du badge de compteur de messages non lus, thématisé.
     /// Light : rouge vif (`error`). Dark : rouge foncé (`errorDark`).
     public static func unreadBadgeBackground(isDark: Bool) -> Color {
@@ -117,11 +268,27 @@ public nonisolated struct MeeshyColors {
         isDark ? indigo50 : indigo950
     }
 
+    /// D-18 bis (#5625) — la variante CLAIRE, `indigo700
+    /// .opacity(0.6)`, mesurait **2,70–3,12:1** selon le fond (composition
+    /// alpha PUIS luminance WCAG, même loi que `textMuted` ci-dessous) : sous
+    /// AA texte normal (4,5:1) sur CHAQUE fond clair déclaré, y compris le
+    /// fond de rangée le plus fréquent (`backgroundSecondary` `#F8F7FF`,
+    /// mesure `apps/web` : 2,70:1 sur une rangée en sourdine, 2,80–3,12:1
+    /// ailleurs). La variante SOMBRE (`indigo300`, opaque) n'était pas en
+    /// cause (14,05:1 mesuré) — seule la CLAIRE est touchée, comme pour D-18.
+    /// Relevée à `indigo700.opacity(0.8)` — le MÊME cran minimal que
+    /// `textMuted(isDark: false)`, calculé par la même méthode sur les mêmes
+    /// deux fonds clairs déclarés les plus sombres du thème (0.79 échoue sur
+    /// `backgroundTertiary` à 4,496:1) : **4,76:1** sur `backgroundSecondary`
+    /// `#F8F7FF`, **4,60:1** sur `backgroundTertiary` `#EEF2FF`. Les deux
+    /// jetons partagent désormais la même couleur en clair — ils gardent des
+    /// RÔLES distincts (texte secondaire vs méta discrète), ce n'est ni un
+    /// alias ni une fusion de fonctions.
     public static func textSecondary(isDark: Bool) -> Color {
-        isDark ? indigo300 : indigo700.opacity(0.6)
+        isDark ? indigo300 : indigo700.opacity(0.8)
     }
 
-    /// D-18 (2026-08-18, soldée) — `indigo500.opacity(0.4)`/`indigo400.opacity(0.5)`
+    /// D-18 — `indigo500.opacity(0.4)`/`indigo400.opacity(0.5)`
     /// (valeurs d'origine) mesuraient **1,67:1 en clair et 2,46:1 en sombre**
     /// contre `backgroundSecondary`/le fond ambiant (composition alpha PUIS
     /// luminance WCAG, même loi que Q142-a) — les DEUX thèmes étaient sous
@@ -180,6 +347,20 @@ public nonisolated struct MeeshyColors {
         isDark ? indigo400 : indigo800
     }
 
+    // MARK: - Voiles adaptatifs (#8877)
+
+    public static func surfaceFill(isDark: Bool) -> Color {
+        isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04)
+    }
+
+    public static func controlFill(isDark: Bool) -> Color {
+        isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)
+    }
+
+    public static func hairline(isDark: Bool) -> Color {
+        isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05)
+    }
+
     // MARK: - Brand Gradient (The Signature)
 
     public static let brandGradient = LinearGradient(
@@ -217,18 +398,6 @@ public nonisolated struct MeeshyColors {
             ) :
             LinearGradient(
                 colors: [Color(hex: "FFFFFF"), Color(hex: "F8F7FF"), Color(hex: "EEF2FF")],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            )
-    }
-
-    public static func secondaryGradient(isDark: Bool) -> LinearGradient {
-        isDark ?
-            LinearGradient(
-                colors: [indigo500.opacity(0.2), Color(hex: "13111C")],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            ) :
-            LinearGradient(
-                colors: [indigo100.opacity(0.5), Color(hex: "F8F7FF")],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
     }

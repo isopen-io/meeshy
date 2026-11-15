@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * One server page of `GET /conversations/{id}/participants` — the wire shape is
  * cursor-based (`nextCursor`/`hasMore`/`totalCount`), not offset-based.
@@ -26,6 +28,7 @@ data class MemberRosterPage(
  *   being mutated concurrently (someone joins, someone is removed) can legitimately
  *   repeat a row across two pages; a repeat must never render twice.
  */
+@Serializable
 data class MemberRoster(
     val members: List<PaginatedParticipant> = emptyList(),
     val nextCursor: String? = null,
@@ -64,15 +67,19 @@ data class MemberRoster(
     }
 
     /** Rewrite one member's conversation role in place (promotion, demotion). */
-    fun withRole(userIdOrParticipantId: String, role: MemberRole): MemberRoster {
+    fun withRole(userIdOrParticipantId: String, role: MemberRole): MemberRoster =
+        withRoleName(userIdOrParticipantId, role.wireValue)
+
+    /**
+     * Same as [withRole] for a role that arrives as a wire string (a socket event, a cached
+     * mutation): lowercased, because the roster stores roles the way the gateway serves them.
+     */
+    fun withRoleName(userIdOrParticipantId: String, role: String): MemberRoster {
         if (members.none { it.matches(userIdOrParticipantId) }) return this
+        val wire = role.lowercase()
         return copy(
             members = members.map { member ->
-                if (member.matches(userIdOrParticipantId)) {
-                    member.copy(conversationRole = role.wireValue)
-                } else {
-                    member
-                }
+                if (member.matches(userIdOrParticipantId)) member.copy(conversationRole = wire) else member
             },
         )
     }

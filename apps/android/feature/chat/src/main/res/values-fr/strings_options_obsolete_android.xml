@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_options_obsolete">Rendre obsolète</string>
+    <string name="conversation_options_obsolete_title">Rendre cette conversation obsolète ?</string>
+    <string name="conversation_options_obsolete_message">Elle disparaît tout de suite pour tous ses membres et son contenu est effacé sous 48 heures. C\'est irréversible.</string>
+    <string name="conversation_options_error_obsolete">Impossible de rendre la conversation obsolète.</string>
+</resources>

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -28,6 +29,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import me.meeshy.ui.R
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -58,6 +61,7 @@ public fun MeeshySplashScreen(
 ) {
     val dark = MeeshyTheme.isDark
     val logoColor = if (dark) MeeshyPalette.White else MeeshyPalette.Indigo950
+    val logoDescription = stringResource(R.string.brand_logo_description)
     MeeshyBackground(modifier = modifier) {
         Column(
             modifier = Modifier
@@ -70,7 +74,7 @@ public fun MeeshySplashScreen(
                 color = logoColor,
                 modifier = Modifier
                     .size(120.dp)
-                    .semantics { contentDescription = "Meeshy" },
+                    .semantics { contentDescription = logoDescription },
             )
             Spacer(modifier = Modifier.height(MeeshySpacing.lg))
             Text(
@@ -138,12 +142,15 @@ private fun BoxScope.BrandSignature(
  * (top bar first), fading in as they grow — the Compose take on iOS `AnimatedLogoView`'s
  * `.trim(from: 0, to:)` stroke reveal. Geometry + stagger timing live in the pure, tested
  * [SplashLogoGeometry]; this only drives a single `0f..1f` [Animatable] and hands the current
- * value to [StackedDashesMark].
+ * value to [StackedDashesMark]. Under « Reduire les animations » the bars are drawn whole at once,
+ * like iOS `AnimatedLogoView`.
  */
 @Composable
 private fun SplashLogo(color: Color, modifier: Modifier = Modifier) {
-    val progress = remember { Animatable(0f) }
+    val reduceMotion = LocalReduceMotion.current
+    val progress = remember { Animatable(if (reduceMotion) 1f else 0f) }
     LaunchedEffect(Unit) {
+        if (reduceMotion) return@LaunchedEffect
         progress.animateTo(
             targetValue = 1f,
             animationSpec = tween(durationMillis = LOGO_ANIMATION_DURATION_MS, easing = LinearOutSlowInEasing),

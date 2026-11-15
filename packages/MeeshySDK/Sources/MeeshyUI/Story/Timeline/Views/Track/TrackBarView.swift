@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 /// Single track row : sticky leading icon-only label (`labelColumnWidth`) +
 /// scrollable lane. Leaf view — primitive `let` parameters only, no @ObservedObject.
@@ -18,7 +19,7 @@ public struct TrackBarView<Content: View>: View {
     public let iconName: String?
     /// Piste de la section FOND : la tuile d'étiquette prend une teinte indigo
     /// marquée et VoiceOver annonce « Fond » — les sections doivent se VOIR
-    /// dans les noms et types de piste (retour user 2026-07-20), pas seulement
+    /// dans les noms et types de piste, pas seulement
     /// se déduire du préfixe BG_.
     public let isBackgroundSection: Bool
     /// Largeur de la colonne d'étiquette collante. Passée par le conteneur —
@@ -93,9 +94,7 @@ public struct TrackBarView<Content: View>: View {
         if total < 60 {
             return String(format: "%.1f s", total).replacingOccurrences(of: ".", with: ",")
         }
-        let minutes = Int(total) / 60
-        let remainder = Int(total.rounded()) % 60
-        return String(format: "%d:%02d", minutes, remainder)
+        return MediaFormat.duration(TimeInterval(total), rounding: .toNearestOrAwayFromZero)
     }
 
     public var body: some View {
@@ -128,27 +127,27 @@ public struct TrackBarView<Content: View>: View {
     }
 
     private var label: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+            HStack(spacing: MeeshySpacing.xs) {
                 if isLocked {
                     Image(systemName: "lock.fill")
-                        .font(.system(size: 10))
+                        .font(.system(size: MeeshyIconSize.xxs))
                         .foregroundStyle(MeeshyColors.warning)
                 } else if let iconName {
                     // Tinted chip wrapping the type icon — picks up the lane
                     // tint so audio (warning), text (indigo400), video/image
                     // (indigo500) each get their own colour cue at a glance.
                     ZStack {
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.xxs, style: .continuous)
                             .fill(Color(hex: tintHex).opacity(isDark ? 0.30 : 0.18))
                             .frame(width: 18, height: 18)
                         Image(systemName: iconName)
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                             .foregroundStyle(Color(hex: tintHex))
                     }
                 }
                 Text(durationLabel)
-                    .font(.system(size: 10, weight: .semibold))
+                    .meeshyScaledFont(MeeshyFont.captionSize, weight: .semibold)
                     .monospacedDigit()
                     .foregroundStyle(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo700)
                     .lineLimit(1)
@@ -156,7 +155,7 @@ public struct TrackBarView<Content: View>: View {
                 Spacer(minLength: 0)
             }
             Text(typeLabel)
-                .font(.system(size: 11, weight: isSelected ? .bold : .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: isSelected ? .bold : .semibold))
                 .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo900)
                 .lineLimit(1)
                 .allowsTightening(true)

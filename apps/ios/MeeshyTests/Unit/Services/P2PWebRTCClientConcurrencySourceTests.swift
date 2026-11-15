@@ -25,7 +25,7 @@ final class P2PWebRTCClientConcurrencySourceTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
         return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }()
 
@@ -109,7 +109,7 @@ final class P2PWebRTCClientConcurrencySourceTests: XCTestCase {
     }
 
     func test_startDataChannelPing_pinsUnstructuredTaskToMainActor() {
-        guard let fn = body(from: "private func startDataChannelPing()", to: "private func stopDataChannelPing()") else { return }
+        guard let fn = body(from: "func startDataChannelPing()", to: "func stopDataChannelPing()") else { return }
         XCTAssertTrue(
             fn.contains("dataChannelPingTask = Task { @MainActor [weak self] in"),
             "startDataChannelPing's task must run on @MainActor, serialized with disconnect()."

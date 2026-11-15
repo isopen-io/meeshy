@@ -1,0 +1,236 @@
+import { describe, expect, test } from 'bun:test';
+
+import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
+
+import { settle, studioPublishPlan, uploadStateOf, type SettledPage, type StudioPublication, type StudioPublishPlan } from './studio-publish';
+import { emptyStudioPage, pageWithText, pageWithVisual, type StudioPage, type StudioVisualAsset } from './studio-page';
+import { IDENTITY_POSE } from './studio-pose';
+
+const ready = (postMediaId: string) => ({ kind: 'ready', ready: { postMediaId, fileUrl: `2026/09/u1/${postMediaId}.jpg` } }) as const;
+const NONE = { kind: 'none' } as const;
+
+const visual = (caption = ''): StudioVisualAsset => ({
+  previewUrl: 'blob:local',
+  mediaType: 'image',
+  upload: { phase: 'uploading', progress: 0.4 },
+  caption,
+  pose: IDENTITY_POSE,
+});
+
+const pageWithBackground = (id: string, textId: string, caption = ''): StudioPage =>
+  pageWithVisual(emptyStudioPage(id, textId, 'fr'), 'visual', visual(caption));
+
+/** Le canal `.document` (POST) — UNE publication pour tout le document :
+ * les témoins de #7684, migrés sur l'API UNIQUE `studioPublishPlan` (#7707,
+ * revue-correction) quand `studioPublishPayload` n'avait plus d'autre
+ * consommateur qu'eux. */
+const documentPlan = (pages: readonly StudioPage[], settled: ReadonlyMap<string, SettledPage>, layout: 'hero' | null = null) =>
+  studioPublishPlan({ pages, settled, choice: { kind: 'POST', layout } });
+
+const onlyPublication = (plan: StudioPublishPlan): StudioPublication | null =>
+  plan.kind === 'ready' && plan.publications.length === 1 ? plan.publications[0]! : null;
+
+describe('studioPublishPlan — canal `.document` : la loi PURE d’un envoi à plusieurs pages (#7684)', () => {
+  test('deux pages avec fond ⇒ UNE publication, deux scènes, `mediaIds` dans l’ORDRE des pages, `layout` posé', () => {
+    const pages = [pageWithBackground('page-1', 'text-1'), pageWithBackground('page-2', 'text-2')];
+    const settled = new Map<string, SettledPage>([
+      ['page-1', [ready('pm-1'), NONE, NONE]],
+      ['page-2', [ready('pm-2'), NONE, NONE]],
+    ]);
+    const publication = onlyPublication(documentPlan(pages, settled, 'hero'));
+    expect(publication).not.toBeNull();
+    if (publication === null) return;
+    expect(publication.pageIds).toEqual(['page-1', 'page-2']);
+    expect(publication.storyEffects.scenes).toHaveLength(2);
+    expect(publication.storyEffects.layout).toBe('hero');
+    expect(publication.mediaIds).toEqual(['pm-1', 'pm-2']);
+    expect(CanvasV3Schema.safeParse(publication.storyEffects).success).toBe(true);
+  });
+
+  test('sans disposition choisie, la clé `layout` est ABSENTE du document', () => {
+    const pages = [pageWithBackground('page-1', 'text-1'), pageWithBackground('page-2', 'text-2')];
+    const settled = new Map<string, SettledPage>([
+      ['page-1', [ready('pm-1'), NONE, NONE]],
+      ['page-2', [ready('pm-2'), NONE, NONE]],
+    ]);
+    const publication = onlyPublication(documentPlan(pages, settled));
+    expect(publication !== null && 'layout' in publication.storyEffects).toBe(false);
+  });
+
+  test('un média d’une page NON courante qui n’est pas prêt ⇒ `unresolved`, rien ne part', () => {
+    const pages = [pageWithBackground('page-1', 'text-1'), pageWithBackground('page-2', 'text-2')];
+    const settled = new Map<string, SettledPage>([
+      ['page-1', [ready('pm-1'), NONE, NONE]],
+      ['page-2', [{ kind: 'failed' }, NONE, NONE]],
+    ]);
+    expect(documentPlan(pages, settled).kind).toBe('unresolved');
+  });
+
+  test('une page ajoutée APRÈS le règlement (absente de la carte) et portant un média ⇒ `unresolved`', () => {
+    const pages = [pageWithBackground('page-1', 'text-1'), pageWithBackground('page-2', 'text-2')];
+    const settled = new Map<string, SettledPage>([['page-1', [ready('pm-1'), NONE, NONE]]]);
+    expect(documentPlan(pages, settled).kind).toBe('unresolved');
+  });
+
+  test('toutes les pages vides ⇒ `empty`', () => {
+    const pages = [emptyStudioPage('page-1', 'text-1', 'fr'), emptyStudioPage('page-2', 'text-2', 'fr')];
+    expect(documentPlan(pages, new Map(), 'hero').kind).toBe('empty');
+  });
+
+  test('les légendes partent PAGE PAR PAGE, adressées par le `postMediaId` de CHAQUE fond', () => {
+    const pages = [pageWithBackground('page-1', 'text-1', 'Première'), pageWithBackground('page-2', 'text-2', 'Seconde')];
+    const settled = new Map<string, SettledPage>([
+      ['page-1', [ready('pm-1'), NONE, NONE]],
+      ['page-2', [ready('pm-2'), NONE, NONE]],
+    ]);
+    expect(onlyPublication(documentPlan(pages, settled))?.mediaCaption).toEqual({ 'pm-1': 'Première', 'pm-2': 'Seconde' });
+  });
+
+  test('un texte seul sur la page 2 ne réclame aucun média, et part comme scène', () => {
+    const pages = [pageWithBackground('page-1', 'text-1'), pageWithText(emptyStudioPage('page-2', 'text-2', 'fr'), 'text-2', 'Deux')];
+    const settled = new Map<string, SettledPage>([
+      ['page-1', [ready('pm-1'), NONE, NONE]],
+      ['page-2', [NONE, NONE, NONE]],
+    ]);
+    const publication = onlyPublication(documentPlan(pages, settled));
+    expect(publication?.mediaIds).toEqual(['pm-1']);
+    expect(publication?.storyEffects.scenes?.map((scene) => scene.id)).toEqual(['page-1', 'page-2']);
+    expect(publication?.hasText).toBe(true);
+  });
+});
+
+const pageWithBackgroundAndText = (id: string, textId: string, text: string, caption = ''): StudioPage =>
+  pageWithText(pageWithBackground(id, textId, caption), textId, text);
+
+describe('studioPublishPlan — le canal de la STORY publie UNE fois PAR PAGE (#7707)', () => {
+  const threePages = () => [
+    pageWithBackgroundAndText('page-1', 'text-1', 'Un'),
+    pageWithBackgroundAndText('page-2', 'text-2', 'Deux'),
+    pageWithBackgroundAndText('page-3', 'text-3', 'Trois'),
+  ];
+  const settledThree = () =>
+    new Map<string, SettledPage>([
+      ['page-1', [ready('pm-1'), NONE, NONE]],
+      ['page-2', [ready('pm-2'), NONE, NONE]],
+      ['page-3', [ready('pm-3'), NONE, NONE]],
+    ]);
+
+  test('trois pages avec matière, format STORY ⇒ TROIS publications, dans l’ORDRE, chacune SA scène et SES mediaIds', () => {
+    const plan = studioPublishPlan({ pages: threePages(), settled: settledThree(), choice: { kind: 'STORY', layout: null } });
+    expect(plan.kind).toBe('ready');
+    if (plan.kind !== 'ready') return;
+    expect(plan.publications).toHaveLength(3);
+    plan.publications.forEach((publication, index) => {
+      const pageId = `page-${index + 1}`;
+      expect(publication.pageIds).toEqual([pageId]);
+      expect(publication.storyEffects.scenes).toHaveLength(1);
+      expect(publication.storyEffects.scenes?.[0]?.id).toBe(pageId);
+      expect(publication.mediaIds).toEqual([`pm-${index + 1}`]);
+      expect(publication.hasText).toBe(true);
+      expect('layout' in publication.storyEffects).toBe(false);
+    });
+  });
+
+  test('les mêmes trois pages en POST ⇒ UNE publication portant les trois scènes, avec la disposition ; en REEL, SANS disposition', () => {
+    const post = studioPublishPlan({ pages: threePages(), settled: settledThree(), choice: { kind: 'POST', layout: 'hero' } });
+    expect(post.kind).toBe('ready');
+    if (post.kind === 'ready') {
+      expect(post.publications).toHaveLength(1);
+      expect(post.publications[0]!.pageIds).toEqual(['page-1', 'page-2', 'page-3']);
+      expect(post.publications[0]!.storyEffects.scenes).toHaveLength(3);
+      expect(post.publications[0]!.storyEffects.layout).toBe('hero');
+    }
+    const reel = studioPublishPlan({ pages: threePages(), settled: settledThree(), choice: { kind: 'REEL', layout: null } });
+    expect(reel.kind === 'ready' && 'layout' in reel.publications[0]!.storyEffects).toBe(false);
+  });
+
+  test('une page VIDE entre deux pages avec matière ne produit AUCUNE publication — jamais une scène vide', () => {
+    const pages = [pageWithBackgroundAndText('page-1', 'text-1', 'Un'), emptyStudioPage('page-2', 'text-2', 'fr'), pageWithBackgroundAndText('page-3', 'text-3', 'Trois')];
+    const settled = new Map<string, SettledPage>([
+      ['page-1', [ready('pm-1'), NONE, NONE]],
+      ['page-3', [ready('pm-3'), NONE, NONE]],
+    ]);
+    const plan = studioPublishPlan({ pages, settled, choice: { kind: 'STORY', layout: null } });
+    expect(plan.kind).toBe('ready');
+    if (plan.kind === 'ready') expect(plan.publications.map((p) => p.pageIds)).toEqual([['page-1'], ['page-3']]);
+  });
+
+  test('toutes les pages vides ⇒ `empty`', () => {
+    const pages = [emptyStudioPage('page-1', 'text-1', 'fr'), emptyStudioPage('page-2', 'text-2', 'fr')];
+    expect(studioPublishPlan({ pages, settled: new Map(), choice: { kind: 'STORY', layout: null } }).kind).toBe('empty');
+  });
+
+  test('chaque story porte la légende de SA page, et rien d’autre', () => {
+    const pages = [pageWithBackground('page-1', 'text-1', 'Première'), pageWithBackground('page-2', 'text-2', 'Seconde')];
+    const settled = new Map<string, SettledPage>([
+      ['page-1', [ready('pm-1'), NONE, NONE]],
+      ['page-2', [ready('pm-2'), NONE, NONE]],
+    ]);
+    const plan = studioPublishPlan({ pages, settled, choice: { kind: 'STORY', layout: null } });
+    expect(plan.kind === 'ready' ? plan.publications.map((p) => p.mediaCaption) : null).toEqual([{ 'pm-1': 'Première' }, { 'pm-2': 'Seconde' }]);
+  });
+
+  test('`hasText` suit CHAQUE page : une page d’image seule ne porte pas de texte, même si sa voisine en porte', () => {
+    const pages = [pageWithBackground('page-1', 'text-1'), pageWithBackgroundAndText('page-2', 'text-2', 'Deux')];
+    const settled = new Map<string, SettledPage>([
+      ['page-1', [ready('pm-1'), NONE, NONE]],
+      ['page-2', [ready('pm-2'), NONE, NONE]],
+    ]);
+    const plan = studioPublishPlan({ pages, settled, choice: { kind: 'STORY', layout: 'hero' } });
+    expect(plan.kind === 'ready' ? plan.publications.map((p) => p.hasText) : null).toEqual([false, true]);
+    expect(plan.kind === 'ready' && plan.publications.some((p) => 'layout' in p.storyEffects)).toBe(false);
+  });
+
+  test('un média non réglé (échoué) sur UNE page ⇒ `unresolved` pour le PLAN ENTIER, rien ne part — pas même la page 1', () => {
+    const pages = threePages();
+    const settled = new Map<string, SettledPage>([
+      ['page-1', [ready('pm-1'), NONE, NONE]],
+      ['page-2', [ready('pm-2'), NONE, NONE]],
+      ['page-3', [{ kind: 'failed' }, NONE, NONE]],
+    ]);
+    expect(studioPublishPlan({ pages, settled, choice: { kind: 'STORY', layout: null } }).kind).toBe('unresolved');
+  });
+});
+
+describe('settle / uploadStateOf — un média PRÊT n’est jamais remonté, un média EN VOL est attendu', () => {
+  const accepted = { ok: true, data: { postMediaId: 'pm-9', fileUrl: 'f/9.jpg', mimeType: 'image/jpeg' } } as const;
+
+  test('prêt dans le brouillon ⇒ son identité, sans attendre', async () => {
+    expect(await settle({ phase: 'ready', postMediaId: 'pm-1', fileUrl: 'f/1.jpg' }, null)).toEqual({
+      kind: 'ready',
+      ready: { postMediaId: 'pm-1', fileUrl: 'f/1.jpg' },
+    });
+  });
+
+  test('en vol ⇒ l’accusé de SA montée ; sans montée en vol ⇒ échec', async () => {
+    expect(await settle({ phase: 'uploading', progress: 0.5 }, Promise.resolve(accepted))).toEqual({
+      kind: 'ready',
+      ready: { postMediaId: 'pm-9', fileUrl: 'f/9.jpg' },
+    });
+    expect(await settle({ phase: 'uploading', progress: 0.5 }, null)).toEqual({ kind: 'failed' });
+  });
+
+  test('une annulation voulue (ABORTED) ne s’inscrit pas comme un échec', () => {
+    expect(uploadStateOf({ ok: false, status: 0, error: 'annulé', code: 'ABORTED' })).toBeNull();
+  });
+});
+
+describe('le Cadre du fond voyage dans ce qui part (#8414)', () => {
+  test('Remplir + blanc, posés dans le studio, partent dans le `transform` du fond', () => {
+    const page = pageWithVisual(emptyStudioPage('page-1', 'text-1', 'fr'), 'visual', { ...visual(), frame: { fitMode: 'fill', backdrop: 'white' } });
+    const publication = onlyPublication(documentPlan([page], new Map<string, SettledPage>([['page-1', [ready('pm-1'), NONE, NONE]]])));
+    const background = publication?.storyEffects.scenes?.[0]?.objects.find((o) => o.id === 'background');
+    expect(background?.payload.transform).toEqual({ videoFitMode: 'fill', backdrop: 'white' });
+  });
+});
+
+describe('la scène animée voyage dans ce qui part (#8415)', () => {
+  test('`timelineDuration` sur la scène et `timing` sur le texte', () => {
+    const base = pageWithText(emptyStudioPage('page-1', 'text-1', 'fr'), 'text-1', 'Bonjour');
+    const page = { ...base, duration: 6, texts: base.texts.map((layer) => ({ ...layer, timing: { start: 1, end: 4 } })) };
+    const publication = onlyPublication(documentPlan([page], new Map<string, SettledPage>([['page-1', [NONE, NONE, NONE]]])));
+    const scene = publication?.storyEffects.scenes?.[0];
+    expect(scene?.timelineDuration).toBe(6);
+    expect(scene?.objects.find((o) => o.kind === 'text')?.timing).toEqual({ start: 1, end: 4 });
+  });
+});

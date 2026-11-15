@@ -64,6 +64,11 @@ update_prisma_schema() {
     
     ssh -o StrictHostKeyChecking=no root@$DROPLET_IP << 'EOF'
 cd /opt/meeshy
+# Purge NON INTERACTIVE avant le pull (#6556) : `docker image prune` demande
+# `y/N`, et sans `-f` la confirmation vide d'une session non interactive se
+# lit « N ». Avant le pull — après, l'espace manque déjà pour les couches.
+docker image prune -f || true
+docker image prune -af --filter "until=168h" || true
 docker compose pull meeshy-gateway meeshy-translator
 EOF
     
@@ -131,6 +136,11 @@ update_with_rebuild() {
     
     ssh -o StrictHostKeyChecking=no root@$DROPLET_IP << 'EOF'
 cd /opt/meeshy
+# Purge NON INTERACTIVE avant le pull (#6556) : `docker image prune` demande
+# `y/N`, et sans `-f` la confirmation vide d'une session non interactive se
+# lit « N ». Avant le pull — après, l'espace manque déjà pour les couches.
+docker image prune -f || true
+docker image prune -af --filter "until=168h" || true
 docker compose pull meeshy-gateway meeshy-translator
 EOF
     

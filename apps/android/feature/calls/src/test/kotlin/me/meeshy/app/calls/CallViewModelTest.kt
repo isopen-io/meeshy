@@ -3,6 +3,7 @@ package me.meeshy.app.calls
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -16,8 +17,12 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.call.camera.CallCameraZoom
+import me.meeshy.sdk.call.camera.CameraZoomActuator
+import me.meeshy.sdk.model.call.camera.CameraDeviceOption
+import me.meeshy.sdk.model.call.camera.CameraFacing
 import me.meeshy.sdk.session.SessionRepository
-import me.meeshy.sdk.model.call.SocketIceServer
+import me.meeshy.sdk.model.call.IceServersRefreshedPayload
 import me.meeshy.sdk.model.call.CallCue
 import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallEndedSignal
@@ -28,6 +33,7 @@ import me.meeshy.sdk.model.call.CallJoinResult
 import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallQualityAlertPayload
 import me.meeshy.sdk.model.call.CallQualitySample
+import me.meeshy.sdk.model.call.CallCaptureKind
 import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
 import me.meeshy.sdk.model.call.CallTranslatedSegmentPayload
 import me.meeshy.sdk.model.call.CallTranslatedSegmentRef
@@ -49,9 +55,10 @@ class CallViewModelTest {
     private val events = MutableSharedFlow<CallEvent>(extraBufferCapacity = 64)
     private val incomingOffers = MutableSharedFlow<WaitingCall>(extraBufferCapacity = 16)
     private val endedCalls = MutableSharedFlow<CallEndedSignal>(extraBufferCapacity = 16)
-    private val iceServersRefreshed = MutableSharedFlow<List<SocketIceServer>>(extraBufferCapacity = 8)
+    private val iceServersRefreshed = MutableSharedFlow<IceServersRefreshedPayload>(extraBufferCapacity = 8)
     private val qualityAlerts = MutableSharedFlow<CallQualityAlertPayload>(extraBufferCapacity = 16)
     private val screenCaptureAlerts = MutableSharedFlow<CallScreenCaptureAlertPayload>(extraBufferCapacity = 16)
+    private val participantsLeft = MutableSharedFlow<me.meeshy.sdk.model.call.CallParticipantLeftPayload>(extraBufferCapacity = 16)
     private val translatedSegments = MutableSharedFlow<CallTranslatedSegmentPayload>(extraBufferCapacity = 64)
     private val signalManager: CallSignalManager = mockk(relaxed = true)
     private val coordinator: WebRtcCallCoordinator = mockk(relaxed = true)
@@ -99,6 +106,12 @@ class CallViewModelTest {
         override val states: Flow<Boolean> = screenRecordingFlow
     }
 
+    /** #16665 — test-driven screenshot window: emit once to clear a peer screenshot's capsule. */
+    private val screenshotResetFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+
+    /** #16665 — test-driven local screenshots (the activity's `ScreenCaptureWatcher`). */
+    private val screenshotFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+
     /** Pinned wall clock: assign [clockNowMs] to move time for the analytics anchors. */
     private var clockNowMs = 0L
     private val clock = object : CallClock {
@@ -140,7 +153,9 @@ class CallViewModelTest {
     /** Records the exact sequence of telecom connection reports the VM makes. */
     private class RecordingTelecomReporter : TelecomCallReporter {
         val updates = mutableListOf<TelecomConnectionUpdate>()
+        val begun = mutableListOf<TelecomCallInfo>()
         var releaseCount = 0
+        override fun begin(call: TelecomCallInfo) { begun += call }
         override fun report(update: TelecomConnectionUpdate) { updates += update }
         override fun release() { releaseCount += 1 }
     }
@@ -154,10 +169,13 @@ class CallViewModelTest {
         every { signalManager.incomingOffers } returns incomingOffers
         every { signalManager.endedCalls } returns endedCalls
         every { signalManager.iceServersRefreshed } returns iceServersRefreshed
+        every { signalManager.callErrors } returns MutableSharedFlow<me.meeshy.sdk.model.call.CallErrorSignal>()
         every { signalManager.qualityAlerts } returns qualityAlerts
         every { signalManager.screenCaptureAlerts } returns screenCaptureAlerts
         every { signalManager.translatedSegments } returns translatedSegments
         every { signalManager.mediaToggles } returns mediaToggles
+        every { signalManager.participantArrivals } returns MutableSharedFlow()
+        every { signalManager.participantLeft } returns participantsLeft
         every { sessionRepository.currentUser } returns MutableStateFlow(null)
         coEvery { signalManager.emitInitiate(any(), any()) } returns
             CallInitiateResult.Success(CallInitiateAck(callId = "call-1"))
@@ -170,10 +188,35 @@ class CallViewModelTest {
         Dispatchers.resetMain()
     }
 
+    /** The extension points with nothing registered — the core call, as it was before they existed. */
+    private val extensions = CallExtensionPoints(
+        controllers = CallFeatureControllerRegistry(emptySet()),
+        overlays = CallOverlayRegistry(emptySet()),
+        actions = CallActionDispatcher(emptyMap()),
+        toasts = CallToastBus(clock),
+        videoHealth = NoopCallVideoHealth(),
+    )
+
     private fun vm() = CallViewModel(
-        signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, waitingTimer,
-        heartbeatTicker, appStatePresence, qualityResetTimer, screenRecordingDetector, clock, reconnectBudget,
-        connectingWatchdog,
+        signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, appStatePresence,
+        CallPeerIndicatorsController(
+            signalManager, qualityResetTimer, screenRecordingDetector,
+            screenshotResetTimer = { screenshotResetFlow },
+            screenshotSignals = object : CallScreenshotSignals {
+                override val captures: Flow<Unit> = screenshotFlow
+            },
+        ),
+        CallWaitingController(signalManager, waitingTimer, mockk(relaxed = true)),
+        CallWatchdogsController(signalManager, heartbeatTicker, reconnectBudget, connectingWatchdog),
+        CallAnalyticsController(signalManager, clock, InMemoryCallQualitySummaryStore(), silentAnalyticsSnapshots),
+        extensions,
+        mockk(relaxed = true),
+        CallPeerVisualSource { kotlinx.coroutines.flow.emptyFlow() },
+        recordingCallPreview(),
+        silentTurnCredentials(signalManager),
+        testGroupTitleWording,
+        CallEndReconciler(signalManager),
+        CallTeardownController(emptySet()),
     )
 
     @Test
@@ -285,6 +328,34 @@ class CallViewModelTest {
     }
 
     @Test
+    fun `an outgoing video call starts with the speaker on, an audio call with it off`() = runTest {
+        val videoVm = vm()
+        videoVm.start(outgoingVideo)
+        assertThat(videoVm.state.value.isSpeakerOn).isTrue()
+
+        val audioVm = vm()
+        audioVm.start(incomingAudio)
+        assertThat(audioVm.state.value.isSpeakerOn).isFalse()
+    }
+
+    @Test
+    fun `toggling the speaker flips the media intent and routes the coordinator, with no peer signal`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio)
+        assertThat(vm.state.value.isSpeakerOn).isFalse()
+
+        vm.toggleSpeaker()
+        assertThat(vm.state.value.isSpeakerOn).isTrue()
+        verify(exactly = 1) { coordinator.setSpeakerEnabled(true) }
+
+        vm.toggleSpeaker()
+        assertThat(vm.state.value.isSpeakerOn).isFalse()
+        verify(exactly = 1) { coordinator.setSpeakerEnabled(false) }
+
+        verify(exactly = 0) { signalManager.emitToggleAudio(any(), any()) }
+    }
+
+    @Test
     fun `a video call starts with the camera on and can be toggled off`() = runTest {
         val vm = vm()
         vm.start(outgoingVideo)
@@ -292,6 +363,109 @@ class CallViewModelTest {
 
         vm.toggleCamera()
         assertThat(vm.state.value.isCameraOn).isFalse()
+    }
+
+    @Test
+    fun `flipping the camera switches the capturer locally and never signals the peer`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        vm.flipCamera()
+
+        verify(exactly = 1) { coordinator.switchCamera(any()) }
+        verify(exactly = 0) { signalManager.emitToggleVideo(any(), any()) }
+    }
+
+    @Test
+    fun `a video call starts on the front camera, which mirrors the self preview`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        assertThat(vm.state.value.isFrontCamera).isTrue()
+    }
+
+    @Test
+    fun `flipping turns to the rear camera at once and keeps it once the capturer confirms`() = runTest {
+        val done = slot<(Boolean?) -> Unit>()
+        every { coordinator.switchCamera(capture(done)) } returns Unit
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        vm.flipCamera()
+        assertThat(vm.state.value.isFrontCamera).isFalse()
+
+        done.captured(false)
+        assertThat(vm.state.value.isFrontCamera).isFalse()
+    }
+
+    @Test
+    fun `a camera switch the capturer refuses puts the front camera back`() = runTest {
+        val done = slot<(Boolean?) -> Unit>()
+        every { coordinator.switchCamera(capture(done)) } returns Unit
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        vm.flipCamera()
+        done.captured(null)
+
+        assertThat(vm.state.value.isFrontCamera).isTrue()
+    }
+
+    @Test
+    fun `flipping with the camera off does nothing`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+        vm.toggleCamera()
+
+        vm.flipCamera()
+
+        verify(exactly = 0) { coordinator.switchCamera(any()) }
+    }
+
+    @Test
+    fun `choosing a plugged camera opens it and mirrors the preview by the face it opened on`() = runTest {
+        val zoom = pickableZoom()
+        every { coordinator.cameraZoom } returns zoom
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        vm.selectCamera("10")
+
+        assertThat(zoom.state.value.selectedCameraId).isEqualTo("10")
+        assertThat(vm.state.value.isFrontCamera).isFalse()
+        verify(exactly = 0) { signalManager.emitToggleVideo(any(), any()) }
+    }
+
+    @Test
+    fun `choosing a camera with the camera off does nothing`() = runTest {
+        val zoom = pickableZoom()
+        every { coordinator.cameraZoom } returns zoom
+        val vm = vm()
+        vm.start(outgoingVideo)
+        vm.toggleCamera()
+
+        vm.selectCamera("10")
+
+        assertThat(zoom.state.value.selectedCameraId).isEqualTo("1")
+    }
+
+    private fun pickableZoom(): CallCameraZoom {
+        val cameras = listOf(
+            CameraDeviceOption("1", CameraFacing.Front),
+            CameraDeviceOption("0", CameraFacing.Back),
+            CameraDeviceOption("10", CameraFacing.External),
+        )
+        lateinit var zoom: CallCameraZoom
+        zoom = CallCameraZoom(object : CameraZoomActuator {
+            override fun setCrop(zoom: Float, rampRate: Float?) = Unit
+            override fun openLens(lensId: String) = Unit
+            override fun openCamera(cameraId: String): Boolean {
+                zoom.attach(null, cameraId, cameras, cameraId, cameras.first { it.id == cameraId }.facing)
+                return true
+            }
+        })
+        zoom.attach(null, "1", cameras, "1", CameraFacing.Front)
+        return zoom
     }
 
     @Test
@@ -410,6 +584,29 @@ class CallViewModelTest {
         vm.accept()
 
         coVerify(exactly = 1) { signalManager.emitJoinAwaitingAck("call-9") }
+    }
+
+    @Test
+    fun `the socket offer folded before the incoming screen starts does not swallow the caller identity`() = runTest {
+        val vm = vm()
+        events.emit(CallEvent.ReceiveIncoming)
+        vm.start(incomingAudio)
+        vm.accept()
+
+        assertThat(vm.activeConfig).isEqualTo(incomingAudio)
+        coVerify(exactly = 1) { signalManager.emitJoinAwaitingAck("call-9") }
+    }
+
+    @Test
+    fun `accepting listens for the caller's offer before joining the room`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio)
+        vm.accept()
+
+        coVerifyOrder {
+            coordinator.holdIncomingSignals(any(), "call-9")
+            signalManager.emitJoinAwaitingAck("call-9")
+        }
     }
 
     @Test
@@ -606,6 +803,16 @@ class CallViewModelTest {
         screenRecordingFlow.emit(false)
 
         verify(exactly = 1) { signalManager.emitScreenCaptureDetected("call-9", "me", false) }
+    }
+
+    @Test
+    fun `a screenshot on this device during a connected call is relayed as a screenshot start (#16665)`() = runTest {
+        connectedIncomingAs("me")
+
+        screenshotFlow.emit(Unit)
+
+        verify(exactly = 1) { signalManager.emitScreenCaptureDetected("call-9", "me", true, CallCaptureKind.SCREENSHOT) }
+        verify(exactly = 0) { signalManager.emitScreenCaptureDetected("call-9", "me", false, any()) }
     }
 
     @Test
@@ -950,6 +1157,23 @@ class CallViewModelTest {
     }
 
     @Test
+    fun `a peer sharing their screen with the camera off shows their stream and the banner`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio.copy(isVideo = true))
+        vm.onSignal(CallEvent.LocalAnswer)
+        vm.onSignal(CallEvent.MediaConnected)
+        mediaToggles.emit(videoToggle(enabled = false))
+
+        mediaToggles.emit(CallMediaTogglePayload(callId = "call-9", mediaType = "screen", enabled = true))
+
+        assertThat(vm.state.value.isPeerScreenSharing).isTrue()
+        assertThat(vm.state.value.isPeerCameraOff).isFalse()
+        mediaToggles.emit(CallMediaTogglePayload(callId = "call-9", mediaType = "screen", enabled = false))
+        assertThat(vm.state.value.isPeerScreenSharing).isFalse()
+        assertThat(vm.state.value.isPeerCameraOff).isTrue()
+    }
+
+    @Test
     fun `a peer camera-off during an audio call never raises the camera indicator`() = runTest {
         val vm = connectedIncoming()
 
@@ -998,7 +1222,7 @@ class CallViewModelTest {
     fun `the timer reads 0 00 the instant the call connects`() {
         val vm = vm().connect()
         assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTED)
-        assertThat(vm.state.value.durationLabel).isEqualTo("0:00")
+        assertThat(vm.state.value.durationLabel).isEqualTo("00:00")
     }
 
     @Test
@@ -1007,20 +1231,20 @@ class CallViewModelTest {
 
         tick(3)
 
-        assertThat(vm.state.value.durationLabel).isEqualTo("0:03")
+        assertThat(vm.state.value.durationLabel).isEqualTo("00:03")
     }
 
     @Test
     fun `the timer keeps counting through a reconnect`() = runTest {
         val vm = vm().connect()
         tick(2)
-        assertThat(vm.state.value.durationLabel).isEqualTo("0:02")
+        assertThat(vm.state.value.durationLabel).isEqualTo("00:02")
 
         vm.onSignal(CallEvent.ConnectionStalled)
         assertThat(vm.state.value.status).isEqualTo(CallStatus.RECONNECTING)
 
         tick(2)
-        assertThat(vm.state.value.durationLabel).isEqualTo("0:04")
+        assertThat(vm.state.value.durationLabel).isEqualTo("00:04")
     }
 
     @Test
@@ -1030,10 +1254,10 @@ class CallViewModelTest {
 
         vm.onSignal(CallEvent.RemoteHangUp)
         assertThat(vm.state.value.status).isEqualTo(CallStatus.ENDED)
-        assertThat(vm.state.value.durationLabel).isEqualTo("0:02")
+        assertThat(vm.state.value.durationLabel).isEqualTo("00:02")
 
         tick(5)
-        assertThat(vm.state.value.durationLabel).isEqualTo("0:02")
+        assertThat(vm.state.value.durationLabel).isEqualTo("00:02")
     }
 
     @Test
@@ -1055,7 +1279,7 @@ class CallViewModelTest {
         assertThat(first.state.value.status).isEqualTo(CallStatus.IDLE)
 
         first.connect()
-        assertThat(first.state.value.durationLabel).isEqualTo("0:00")
+        assertThat(first.state.value.durationLabel).isEqualTo("00:00")
     }
 
     // --- live connection-quality indicator ---------------------------------
@@ -1080,7 +1304,7 @@ class CallViewModelTest {
     @Test
     fun `a healthy sample lights the indicator once connected`() = runTest {
         val vm = vm().connect()
-        emitQuality(rttMs = 150.0) // > excellentRTT(100), <= fair(200) → GOOD
+        emitQuality(rttMs = 150.0) // > excellentRTT(100), <= videoFairRTT(300) → GOOD
 
         assertThat(vm.state.value.connectionQuality).isEqualTo(ConnectionQuality.GOOD)
     }
@@ -1102,7 +1326,7 @@ class CallViewModelTest {
         vm.onSignal(CallEvent.ConnectionStalled)
         assertThat(vm.state.value.status).isEqualTo(CallStatus.RECONNECTING)
 
-        emitQuality(rttMs = 350.0) // > videoPoorRTT(300) → POOR tier → indicator POOR
+        emitQuality(rttMs = 600.0) // > videoPoorRTT(500) → POOR tier → indicator POOR
         assertThat(vm.state.value.connectionQuality).isEqualTo(ConnectionQuality.POOR)
     }
 
@@ -1227,6 +1451,21 @@ class CallViewModelTest {
 
         assertThat(telecom.updates)
             .containsExactly(TelecomConnectionUpdate(TelecomConnectionState.Dialing))
+    }
+
+    @Test
+    fun `a call tells the system who is calling before its first report`() {
+        val vm = vm()
+        vm.start(incomingAudio)
+
+        assertThat(telecom.begun).containsExactly(
+            TelecomCallInfo(
+                peerId = incomingAudio.peerId,
+                peerName = incomingAudio.peerName,
+                isVideo = incomingAudio.isVideo,
+                isOutgoing = false,
+            ),
+        )
     }
 
     @Test
@@ -1414,6 +1653,16 @@ class CallViewModelTest {
     }
 
     @Test
+    fun `the re-presented waiting call keeps its conversation so minimising has a destination`() = runTest {
+        val vm = vm().connect()
+
+        incomingOffers.emit(offer(callId = "call-77").copy(conversationId = "conv-77"))
+        vm.acceptWaitingSwap()
+
+        assertThat(vm.activeConfig.conversationId).isEqualTo("conv-77")
+    }
+
+    @Test
     fun `answering with no waiting call is inert`() = runTest {
         val vm = vm().connect()
 
@@ -1549,8 +1798,8 @@ class CallViewModelTest {
     private fun qualityAlert(callId: String = "call-9") =
         CallQualityAlertPayload(callId = callId, participantId = "p2", metric = "rtt", value = 900.0, threshold = 500.0)
 
-    private fun captureAlert(callId: String = "call-9", capturing: Boolean = true) =
-        CallScreenCaptureAlertPayload(callId = callId, participantId = "p2", isCapturing = capturing)
+    private fun captureAlert(callId: String = "call-9", capturing: Boolean = true, kind: String? = null) =
+        CallScreenCaptureAlertPayload(callId = callId, participantId = "p2", isCapturing = capturing, kind = kind)
 
     private fun segment(callId: String = "call-9", text: String = "bonjour", translated: String? = "hello") =
         CallTranslatedSegmentPayload(
@@ -1596,6 +1845,36 @@ class CallViewModelTest {
     }
 
     @Test
+    fun `a peer screenshot shows the capsule, which clears itself after the window (#16665)`() = runTest {
+        val vm = vm().connect()
+        screenCaptureAlerts.emit(captureAlert(capturing = true, kind = "screenshot"))
+        assertThat(vm.state.value.isPeerScreenCapturing).isTrue()
+
+        screenshotResetFlow.emit(Unit)
+
+        assertThat(vm.state.value.isPeerScreenCapturing).isFalse()
+    }
+
+    @Test
+    fun `a screenshot end relayed for older clients never clears a peer recording (#16665)`() = runTest {
+        val vm = vm().connect()
+        screenCaptureAlerts.emit(captureAlert(capturing = true, kind = "recording"))
+        screenCaptureAlerts.emit(captureAlert(capturing = false, kind = "screenshot"))
+
+        assertThat(vm.state.value.isPeerScreenCapturing).isTrue()
+    }
+
+    @Test
+    fun `a peer capture enters the live journal once per window, between the sentences (#16665)`() = runTest {
+        val vm = vm().connect()
+        screenCaptureAlerts.emit(captureAlert(capturing = true, kind = "screenshot"))
+        screenCaptureAlerts.emit(captureAlert(capturing = true, kind = "screenshot"))
+
+        assertThat(vm.state.value.liveCaptures.map { it.kind }).containsExactly(CallCaptureKind.SCREENSHOT)
+        assertThat(vm.state.value.liveCaptures.single().userId).isEqualTo("p2")
+    }
+
+    @Test
     fun `a screen-capture alert for another call is inert`() = runTest {
         val vm = vm().connect()
         screenCaptureAlerts.emit(captureAlert(callId = "call-77", capturing = true))
@@ -1603,26 +1882,58 @@ class CallViewModelTest {
         assertThat(vm.state.value.isPeerScreenCapturing).isFalse()
     }
 
+    private fun recorderAlert(who: String, capturing: Boolean = true) =
+        CallScreenCaptureAlertPayload(callId = "call-9", userId = who, isCapturing = capturing, kind = "recording")
+
     @Test
-    fun `a translated segment surfaces the translation as the live caption`() = runTest {
+    fun `one of two screen recorders stopping leaves the capsule for the other (R1_4)`() = runTest {
+        val vm = vm().connect()
+        screenCaptureAlerts.emit(recorderAlert("u-awa"))
+        screenCaptureAlerts.emit(recorderAlert("u-karim"))
+
+        screenCaptureAlerts.emit(recorderAlert("u-awa", capturing = false))
+        assertThat(vm.state.value.isPeerScreenCapturing).isTrue()
+
+        screenCaptureAlerts.emit(recorderAlert("u-karim", capturing = false))
+        assertThat(vm.state.value.isPeerScreenCapturing).isFalse()
+    }
+
+    @Test
+    fun `a recorder leaving the call puts the capsule out, without waiting for an end that never comes (R1_4)`() = runTest {
+        val vm = vm().connect()
+        screenCaptureAlerts.emit(recorderAlert("u-awa"))
+        screenCaptureAlerts.emit(recorderAlert("u-karim"))
+
+        participantsLeft.emit(me.meeshy.sdk.model.call.CallParticipantLeftPayload(callId = "call-9", userId = "u-awa"))
+        assertThat(vm.state.value.isPeerScreenCapturing).isTrue()
+
+        participantsLeft.emit(me.meeshy.sdk.model.call.CallParticipantLeftPayload(callId = "call-9", userId = "u-karim"))
+        assertThat(vm.state.value.isPeerScreenCapturing).isFalse()
+    }
+
+    @Test
+    fun `someone who was not recording leaving never puts the capsule out, nor a departure from another call`() = runTest {
+        val vm = vm().connect()
+        screenCaptureAlerts.emit(recorderAlert("u-awa"))
+
+        participantsLeft.emit(me.meeshy.sdk.model.call.CallParticipantLeftPayload(callId = "call-9", userId = "u-karim"))
+        participantsLeft.emit(me.meeshy.sdk.model.call.CallParticipantLeftPayload(callId = "call-77", userId = "u-awa"))
+        participantsLeft.emit(me.meeshy.sdk.model.call.CallParticipantLeftPayload(callId = "call-9"))
+
+        assertThat(vm.state.value.isPeerScreenCapturing).isTrue()
+    }
+
+    @Test
+    fun `the call publishes who is who, so the consent card names the requester (R2_2)`() = runTest {
+        val vm = vm().connect()
+
+        assertThat(vm.state.value.participantNames[incomingAudio.peerId]).isEqualTo(incomingAudio.peerName)
+    }
+
+    @Test
+    fun `a relayed segment no longer draws a bare caption line — the captions band owns the peer's words (#13333)`() = runTest {
         val vm = vm().connect()
         translatedSegments.emit(segment(text = "bonjour", translated = "hello"))
-
-        assertThat(vm.state.value.captionText).isEqualTo("hello")
-    }
-
-    @Test
-    fun `an untranslated segment falls back to the original text`() = runTest {
-        val vm = vm().connect()
-        translatedSegments.emit(segment(text = "bonjour", translated = null))
-
-        assertThat(vm.state.value.captionText).isEqualTo("bonjour")
-    }
-
-    @Test
-    fun `a segment for another call never leaks onto the caption`() = runTest {
-        val vm = vm().connect()
-        translatedSegments.emit(segment(callId = "call-77"))
 
         assertThat(vm.state.value.captionText).isNull()
     }

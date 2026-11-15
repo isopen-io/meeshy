@@ -120,7 +120,7 @@ public actor CachePurgeService {
     public static let shared = CachePurgeService()
 
     private let coordinator: CacheCoordinator
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "cache-purge")
+    private let logger = MeeshyLog.logger(.cachePurge, subsystem: .legacySDK)
 
     public init(coordinator: CacheCoordinator = .shared) {
         self.coordinator = coordinator

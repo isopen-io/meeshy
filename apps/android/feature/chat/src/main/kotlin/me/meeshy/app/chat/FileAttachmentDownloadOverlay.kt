@@ -1,0 +1,191 @@
+package me.meeshy.app.chat
+
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.InsertDriveFile
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
+import me.meeshy.app.chat.fileviewer.FileViewerRequest
+import me.meeshy.feature.chat.R
+import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.MeeshyTheme
+
+/**
+ * Renders [download]'s current state as a compact banner at the bottom of the
+ * conversation — the visible half of "tap → download with progress → open" for a
+ * FILE attachment ([MessageAction.OpenFile]/[MessageAction.ShareFile]). `null` = no
+ * download in flight, renders nothing.
+ *
+ * On [FileAttachmentDownloadState.Completed] an "Ouvrir" hands the file to the in-app viewers
+ * ([onOpenInApp]) and a "Partager" fires the `ACTION_SEND` chooser itself (it owns the
+ * [LocalContext]); both dismiss — the ViewModel only ever sees "downloaded", never "opened".
+ */
+@Composable
+internal fun FileAttachmentDownloadOverlay(
+    download: FileAttachmentDownloadUiState?,
+    onDismiss: () -> Unit,
+    onRetry: (FileAttachmentDownloadUiState) -> Unit,
+    onOpenInApp: (FileViewerRequest) -> Unit,
+) {
+    val context = LocalContext.current
+    val openFailedMessage = stringResource(R.string.chat_file_open_failed)
+    val savedMessage = stringResource(R.string.chat_piece_saved)
+
+    LaunchedEffect(download?.state, download?.attachmentId) {
+        val completed = (download?.state as? FileAttachmentDownloadState.Completed) ?: return@LaunchedEffect
+        if (download.saveOnly) {
+            Toast.makeText(context, savedMessage, Toast.LENGTH_SHORT).show()
+        } else if (download.openWhenDone) {
+            // « Ouvrir » reste dans Meeshy : fiche de contact, code, PDF ou document (parité des visionneuses iOS).
+            onOpenInApp(FileViewerRequest(download.fileName, completed.mimeType, completed.localUri, attachmentId = download.attachmentId))
+        } else {
+            val intent = FileAttachmentIntentResolver.shareIntent(completed.localUri.toUri(), completed.mimeType, download.fileName)
+            if (runCatching { context.startActivity(intent) }.isFailure) {
+                Toast.makeText(context, openFailedMessage, Toast.LENGTH_SHORT).show()
+            }
+        }
+        onDismiss()
+    }
+
+    FileAttachmentDownloadBanner(download = download, onDismiss = onDismiss, onRetry = onRetry)
+}
+
+/**
+ * Le bandeau seul — avancement d'un « Enregistrer », échecs —, sans l'effet d'ouverture ni de partage : une fenêtre posée
+ * au-dessus du fil (le plein écran audio) le rend chez elle, l'overlay du fil restant le seul à agir à la fin.
+ */
+@Composable
+internal fun FileAttachmentDownloadBanner(
+    download: FileAttachmentDownloadUiState?,
+    onDismiss: () -> Unit,
+    onRetry: (FileAttachmentDownloadUiState) -> Unit,
+) {
+    // `fillMaxSize` (not just width) so `align(BottomCenter)` below has vertical room to
+    // work with — this overlay is a screen-wide sibling of `Scaffold`, not nested inside
+    // one of its own layout slots.
+    Box(modifier = Modifier.fillMaxSize()) {
+        AnimatedVisibility(
+            visible = download != null && FileDownloadBanner.shows(download),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .fillMaxWidth()
+                .padding(MeeshySpacing.md),
+        ) {
+            if (download == null) return@AnimatedVisibility
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = MeeshyTheme.tokens.backgroundSecondary,
+                tonalElevation = 4.dp,
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(MeeshySpacing.md),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+                ) {
+                    FileAttachmentDownloadStatusIcon(download.state)
+                    Text(
+                        text = fileAttachmentDownloadLabel(download),
+                        color = MeeshyTheme.tokens.textPrimary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    val failure = (download.state as? FileAttachmentDownloadState.Failed)?.reason
+                    if (failure == FileAttachmentDownloadFailure.NetworkError ||
+                        failure == FileAttachmentDownloadFailure.ServerError
+                    ) {
+                        TextButton(onClick = { onRetry(download) }) {
+                            Text(stringResource(R.string.chat_retry))
+                        }
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = stringResource(R.string.chat_file_download_dismiss),
+                            tint = MeeshyTheme.tokens.textSecondary,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FileAttachmentDownloadStatusIcon(state: FileAttachmentDownloadState) {
+    when (state) {
+        is FileAttachmentDownloadState.InProgress -> {
+            val percent = state.progressPercent
+            if (percent != null) {
+                LinearProgressIndicator(
+                    progress = { percent / 100f },
+                    modifier = Modifier.width(28.dp),
+                )
+            } else {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            }
+        }
+        is FileAttachmentDownloadState.Failed -> Icon(
+            imageVector = Icons.Filled.InsertDriveFile,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.error,
+        )
+        is FileAttachmentDownloadState.Completed -> Unit
+    }
+}
+
+@Composable
+private fun fileAttachmentDownloadLabel(download: FileAttachmentDownloadUiState): String = when (val s = download.state) {
+    is FileAttachmentDownloadState.InProgress -> s.progressPercent?.let {
+        stringResource(R.string.chat_file_download_progress, download.fileName, it)
+    } ?: stringResource(R.string.chat_file_download_progress_indeterminate, download.fileName)
+    is FileAttachmentDownloadState.Failed -> when (s.reason) {
+        FileAttachmentDownloadFailure.Expired -> stringResource(R.string.chat_file_download_expired)
+        FileAttachmentDownloadFailure.NotAvailable -> stringResource(R.string.chat_file_download_not_available)
+        FileAttachmentDownloadFailure.Protected -> stringResource(R.string.chat_exit_blocked_title)
+        FileAttachmentDownloadFailure.SaveFailed -> stringResource(R.string.chat_file_save_failed)
+        FileAttachmentDownloadFailure.NetworkError -> stringResource(R.string.chat_file_download_failed_network)
+        FileAttachmentDownloadFailure.ServerError -> stringResource(R.string.chat_file_download_failed_server)
+    }
+    is FileAttachmentDownloadState.Completed -> ""
+}
+
+/**
+ * Le bandeau du bas ne double plus la rangée : l'avancement d'un fichier du fil vit sur sa rangée (#13492). Il garde
+ * les échecs (que la rangée ne retente pas toujours) et l'avancement d'un « Enregistrer », dont la tuile n'a pas de badge.
+ */
+internal object FileDownloadBanner {
+    fun shows(download: FileAttachmentDownloadUiState): Boolean = when (download.state) {
+        is FileAttachmentDownloadState.Completed -> false
+        is FileAttachmentDownloadState.InProgress -> download.saveOnly
+        is FileAttachmentDownloadState.Failed -> true
+    }
+}

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "calls.empty.title",
+          "androidName": "call_journal_empty_title",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

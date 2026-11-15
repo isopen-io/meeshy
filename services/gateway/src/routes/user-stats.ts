@@ -4,6 +4,8 @@ import { PostType } from '@meeshy/shared/prisma/client';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { sendInternalError } from '../utils/response';
 import { NOT_DELETED } from '../services/posts/softDelete';
+import { logError } from '../utils/logger.js';
+import { getBlockRelatedUserIds } from '../utils/blocking';
 
 const ACHIEVEMENT_THRESHOLDS = {
   polyglotte: { field: 'languagesUsed', threshold: 5, icon: 'globe', color: '#3498DB' },
@@ -50,15 +52,72 @@ export type UserStats = {
 };
 
 /**
- * Single source of truth for a user's aggregated statistics.
+ * Ce qu'un SUCCÈS a besoin de savoir — et rien d'autre (#4391).
  *
- * Mirrors the iOS `UserStats` decoding shape. Used by both the authenticated
- * `/users/me/stats*` endpoints and the public `/users/:id/stats` endpoint.
+ * Les six métriques numériques de `ACHIEVEMENT_THRESHOLDS`, plus l'inventaire
+ * de langues dont `languagesUsed` est le cardinal. `postsCount` / `reelsCount`
+ * / `storiesCount` n'en font PAS partie : aucun succès ne les lit.
  */
-export async function computeUserStats(
+export type UserAchievementStats = Pick<
+  UserStats,
+  | 'totalMessages'
+  | 'totalConversations'
+  | 'totalTranslations'
+  | 'friendRequestsReceived'
+  | 'languagesUsed'
+  | 'memberDays'
+  | 'languages'
+  | 'achievements'
+>;
+
+/** Les trois compteurs de CONTENU publié — la part que les succès n'utilisent pas. */
+type UserContentCounts = Pick<UserStats, 'postsCount' | 'reelsCount' | 'storiesCount'>;
+
+/**
+ * Les SIX agrégations dont dépendent les succès.
+ *
+ * Extraites de `computeUserStats` par #4391 : `GET /users/me/stats/achievements`
+ * appelait le calcul ENTIER — neuf agrégations, dont trois `post.count` — pour
+ * n'en garder qu'un champ. La projection paresseuse se fait donc à la LECTURE,
+ * pas après elle : ce qui n'est pas servi n'est pas lu.
+ *
+ * **JAMAIS PAR RELATION, TOUJOURS PAR `senderId`** (profil lent, coque
+ * Android). Un message ne connaît pas son `User` : il porte `senderId`, l'id
+ * d'un `Participant`. Le filtre `sender: { userId }` que ce calcul employait,
+ * Prisma le traduit sur MongoDB en un `$lookup` exécuté pour CHAQUE document
+ * de la collection `Message` — trois fois ici (compte, traductions, langues),
+ * en parallèle, et sur la collection la plus grosse de la base. C'est la
+ * mesure déjà consignée dans `GlobalAchievements.ts` : 1 265 ms par compte
+ * relationnel sur staging, 9 ms par `senderId: { in }`. Ce calcul est servi
+ * par `?expand=stats` de `GET /directory/people/:handle` : la fiche d'un
+ * autre (`/u/:username`) restait sur son squelette tant qu'il tournait (plus
+ * de 9 s observées en production), et `/me` peignait des cartes vides.
+ *
+ * Les identités du compte (`Participant.id`, une par conversation rejointe,
+ * index `[userId]`) se lisent donc UNE fois, et les trois agrégations filtrent
+ * sur `senderId` — indexé (`@@index([senderId])`). Le résultat est le même
+ * ensemble de messages : `sender: { userId }` ne retenait que les messages
+ * dont le Participant porte ce `userId`, c'est-à-dire exactement ceux dont le
+ * `senderId` est dans cette liste. Toutes les identités, actives ou non : un
+ * message écrit avant d'avoir quitté une conversation reste un message écrit.
+ *
+ * Toutes comptent EN BASE. Le `groupBy` sur `originalLanguage` rend une ligne
+ * par LANGUE distincte (au plus quelques dizaines), jamais une par message —
+ * c'est une agrégation MongoDB, pas un rapatriement. Il reste sans borne
+ * TEMPORELLE, et c'est délibéré : `languagesUsed`, `languages` et le succès
+ * « Polyglotte » décrivent tout l'historique du compte ; les fenêtrer
+ * changerait silencieusement une valeur servie (cf. #4391, décisions).
+ */
+export async function computeUserAchievementStats(
   prisma: PrismaClient,
   userId: string
-): Promise<UserStats> {
+): Promise<UserAchievementStats> {
+  const [identites, blocked] = await Promise.all([
+    prisma.participant.findMany({ where: { userId }, select: { id: true } }),
+    getBlockRelatedUserIds(prisma, userId),
+  ]);
+  const ecritPar = { senderId: { in: identites.map((identite) => identite.id) } };
+
   const [
     totalMessages,
     totalConversations,
@@ -66,12 +125,9 @@ export async function computeUserStats(
     friendRequestsReceived,
     languagesRaw,
     user,
-    postsCount,
-    reelsCount,
-    storiesCount,
   ] = await Promise.all([
     prisma.message.count({
-      where: { sender: { userId }, deletedAt: null },
+      where: { ...ecritPar, deletedAt: null },
     }),
     // Only conversations the user is CURRENTLY in. Leaving, being banned, or
     // "delete for me" soft-deactivates the Participant row (isActive: false,
@@ -84,7 +140,7 @@ export async function computeUserStats(
     }),
     prisma.message.count({
       where: {
-        sender: { userId },
+        ...ecritPar,
         deletedAt: null,
         // Json?+Mongo : seule la forme not:{equals:null} passe le moteur Prisma
         // (null brut, Prisma.JsonNull et isSet sont tous rejetés à l'exécution
@@ -92,32 +148,21 @@ export async function computeUserStats(
         translations: { not: { equals: null } },
       },
     }),
+    // #13350 — une demande d'une personne en relation de blocage ne compte
+    // pas : les listes servies la retirent déjà (#13298).
     prisma.friendRequest.count({
-      where: { receiverId: userId },
+      where: { receiverId: userId, ...(blocked.size > 0 ? { senderId: { notIn: [...blocked] } } : {}) },
     }),
     prisma.message.groupBy({
       by: ['originalLanguage'],
       where: {
-        sender: { userId },
+        ...ecritPar,
         deletedAt: null,
       },
     }),
     prisma.user.findUnique({
       where: { id: userId },
       select: { createdAt: true },
-    }),
-    // Compteurs de contenu — `deletedAt: NOT_DELETED` (champ ABSENT sur un
-    // post vivant : `null` brut ne matcherait rien sur Mongo, cf. softDelete.ts).
-    // Les stories comptent SANS filtre d'expiration : l'auteur garde l'accès à
-    // ses stories passées (archive), le compteur reflète tout ce qu'il a publié.
-    prisma.post.count({
-      where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.POST },
-    }),
-    prisma.post.count({
-      where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.REEL },
-    }),
-    prisma.post.count({
-      where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.STORY },
     }),
   ]);
 
@@ -139,7 +184,100 @@ export async function computeUserStats(
     .filter((lang: string | null): lang is string => Boolean(lang));
   const achievements = computeAchievements(numericStats);
 
-  return { ...numericStats, postsCount, reelsCount, storiesCount, languages, achievements };
+  return { ...numericStats, languages, achievements };
+}
+
+/**
+ * Les trois compteurs de contenu publié.
+ *
+ * `deletedAt: NOT_DELETED` (champ ABSENT sur un post vivant : `null` brut ne
+ * matcherait rien sur Mongo, cf. softDelete.ts). Les stories comptent SANS
+ * filtre d'expiration : l'auteur garde l'accès à ses stories passées
+ * (archive), le compteur reflète tout ce qu'il a publié.
+ */
+async function computeUserContentCounts(
+  prisma: PrismaClient,
+  userId: string
+): Promise<UserContentCounts> {
+  const [postsCount, reelsCount, storiesCount] = await Promise.all([
+    prisma.post.count({
+      where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.POST },
+    }),
+    prisma.post.count({
+      where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.REEL },
+    }),
+    prisma.post.count({
+      where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.STORY },
+    }),
+  ]);
+
+  return { postsCount, reelsCount, storiesCount };
+}
+
+/**
+ * Single source of truth for a user's aggregated statistics.
+ *
+ * Mirrors the iOS `UserStats` decoding shape. Used by both the authenticated
+ * `/users/me/stats` endpoint, the public `/users/:id/stats` endpoint
+ * (routes/users/preferences.ts) and `?expand=stats` de
+ * `/directory/people/:handle` (routes/directory/person.ts).
+ *
+ * `GET /users/me/stats/achievements` ne l'appelle PLUS (#4391) : il n'a besoin
+ * que de `computeUserAchievementStats`.
+ */
+export async function computeUserStats(
+  prisma: PrismaClient,
+  userId: string
+): Promise<UserStats> {
+  const [base, contenu] = await Promise.all([
+    computeUserAchievementStats(prisma, userId),
+    computeUserContentCounts(prisma, userId),
+  ]);
+
+  return { ...base, ...contenu };
+}
+
+/**
+ * Les quatre compteurs INTIMES d'un profil (#4161).
+ *
+ * `postsCount`, `reelsCount`, `storiesCount`, `memberDays`, `languagesUsed`,
+ * `languages` et les `achievements` décrivent une AUDIENCE — ce que la personne
+ * publie, et qui est déjà visible. Ces quatre-là décrivent son USAGE INTIME du
+ * produit : combien elle écrit, dans combien de fils elle est présente, combien
+ * de demandes d'amis elle reçoit.
+ */
+export const COMPTEURS_PRIVES = [
+  'totalMessages',
+  'totalConversations',
+  'totalTranslations',
+  'friendRequestsReceived',
+] as const satisfies ReadonlyArray<keyof UserStats>;
+
+export type StatsAudience = {
+  /** Le lecteur est le sujet des statistiques. */
+  readonly estSoi: boolean;
+  /** Le lecteur a `canViewUsers` — ADMIN, BIGBOSS. */
+  readonly estAdministration: boolean;
+};
+
+/**
+ * Ce qu'un lecteur DONNÉ a le droit de lire d'un jeu de statistiques.
+ *
+ * SITE UNIQUE de la loi, parce que le calcul et l'autorisation doivent voyager
+ * ensemble : `?expand=stats` et `GET /users/:userId/stats` servent le même
+ * objet, et deux applications séparées de « qui voit quoi » divergeraient à la
+ * première évolution — c'est exactement ce qui est arrivé au CALCUL, dont deux
+ * exemplaires cohabitaient (l'un ici, l'autre recopié dans `preferences.ts`)
+ * sous un doc-comment affirmant qu'il n'y en avait qu'un.
+ *
+ * Fail-CLOSED : un lecteur qui n'est ni le sujet ni l'administration reçoit la
+ * part publique. C'est le défaut, pas une branche.
+ */
+export function servedUserStats(stats: UserStats, audience: StatsAudience): Partial<UserStats> {
+  if (audience.estSoi || audience.estAdministration) return stats;
+  const publics: Record<string, unknown> = { ...stats };
+  for (const cle of COMPTEURS_PRIVES) delete publics[cle];
+  return publics as Partial<UserStats>;
 }
 
 export async function userStatsRoutes(fastify: FastifyInstance) {
@@ -171,7 +309,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
         const stats = await computeUserStats(fastify.prisma, userId);
         return { success: true, data: stats };
       } catch (error) {
-        fastify.log.error({ error }, 'Error fetching user stats');
+        logError(fastify.log, 'Error fetching user stats', error);
         return sendInternalError(reply, 'Failed to fetch user stats');
       }
     }
@@ -218,41 +356,35 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
         /* istanbul ignore next -- AJV useDefaults:true always injects the default; destructuring fallback is unreachable */
         const { days = 30 } = request.query as { days?: number };
 
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - days);
-        startDate.setHours(0, 0, 0, 0);
+        // Un COUNT par tranche, en parallèle — jamais une ligne par message
+        // (#4391). Ce handler ramenait `select: { createdAt: true }` SANS
+        // `take` : une ligne pour CHAQUE message des 90 derniers jours, pour
+        // n'en faire qu'un histogramme de 90 entiers. Le patron est celui de
+        // `admin/analytics.ts` (`/hourly-activity`, `/volume-timeline`), qui a
+        // fait le même remplacement : le comptage vit en base, la réponse ne
+        // porte plus que ses tranches.
+        //
+        // Les CLÉS sont calculées exactement comme avant (`new Date()` reculé
+        // de `i` jours, puis `toISOString().slice(0, 10)`), et chaque tranche
+        // est bornée au JOUR UTC que sa clé dénote — c'est-à-dire précisément
+        // l'ensemble que la boucle JS retenait pour cette clé. Aucune valeur
+        // servie ne bouge, sous n'importe quel fuseau.
+        const timeline = await Promise.all(
+          Array.from({ length: days }, (_, index) => {
+            const jour = new Date();
+            jour.setDate(jour.getDate() - (days - 1 - index));
+            const date = jour.toISOString().slice(0, 10);
+            const debut = new Date(`${date}T00:00:00.000Z`);
+            const fin = new Date(debut.getTime() + 24 * 60 * 60 * 1000);
 
-        const messages = await fastify.prisma.message.findMany({
-          where: {
-            sender: { userId },
-            deletedAt: null,
-            createdAt: { gte: startDate },
-          },
-          select: { createdAt: true },
-        });
-
-        const dailyCounts: Record<string, number> = {};
-        for (let i = days - 1; i >= 0; i--) {
-          const d = new Date();
-          d.setDate(d.getDate() - i);
-          dailyCounts[d.toISOString().slice(0, 10)] = 0;
-        }
-
-        for (const msg of messages) {
-          const key = msg.createdAt.toISOString().slice(0, 10);
-          if (key in dailyCounts) {
-            dailyCounts[key]++;
-          }
-        }
-
-        const timeline = Object.entries(dailyCounts).map(([date, count]) => ({
-          date,
-          messages: count,
-        }));
+            const where = { sender: { userId }, deletedAt: null, createdAt: { gte: debut, lt: fin } };
+            return fastify.prisma.message.count({ where }).then((messages: number) => ({ date, messages }));
+          })
+        );
 
         return { success: true, data: timeline };
       } catch (error) {
-        fastify.log.error({ error }, 'Error fetching user timeline');
+        logError(fastify.log, 'Error fetching user timeline', error);
         return sendInternalError(reply, 'Failed to fetch user timeline');
       }
     }
@@ -282,10 +414,13 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const userId = request.user!.userId;
-        const { achievements } = await computeUserStats(fastify.prisma, userId);
+        // `computeUserAchievementStats`, pas `computeUserStats` (#4391) : la
+        // route ne garde qu'un champ, elle ne paie donc plus les trois
+        // `post.count` de `postsCount` / `reelsCount` / `storiesCount`.
+        const { achievements } = await computeUserAchievementStats(fastify.prisma, userId);
         return { success: true, data: achievements };
       } catch (error) {
-        fastify.log.error({ error }, 'Error fetching achievements');
+        logError(fastify.log, 'Error fetching achievements', error);
         return sendInternalError(reply, 'Failed to fetch achievements');
       }
     }

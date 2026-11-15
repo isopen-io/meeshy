@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_capture_denied">Consenti a Meeshy di salvare nella galleria dalle Impostazioni per conservare le tue acquisizioni.</string>
+    <string name="call_mode_record_stop_hint">Salva il video nella tua galleria</string>
+    <string name="call_capture_faces_hint">Salva un ritratto quadrato di ogni partecipante nella tua galleria</string>
+</resources>

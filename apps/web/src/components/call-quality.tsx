@@ -1,0 +1,134 @@
+import type { ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
+import { lazy, Suspense, useState } from 'react';
+
+import { Glyph, GlyphSvg } from '@/components/glyph';
+import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
+import type { CallHeaderCapsule } from '@/lib/calls/call-header';
+import type { CallMember, CallQuality } from '@/lib/calls/call-store';
+import { useGlassToneRef } from '@/lib/calls/use-pill-motion';
+import { translate } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
+
+/**
+ * **LA QUALITÉ D'UN APPEL, VUE** (#8047) — miroir de `CallSignalGlyph.swift` et
+ * du `CallQualityOverlay` du legacy : quatre barres dans l'en-tête de l'écran
+ * d'appel, qui s'ouvrent sur le détail du dernier relevé (perte, latence,
+ * gigue, débits — dans les unités de la langue, `Intl.NumberFormat`). Les
+ * alertes d'un pair (`call:quality-alert`, `call:screen-capture-alert`) vivent
+ * avec les bandeaux du haut (`call-share-banner.tsx`) : la capture d'écran est
+ * une ALERTE, un lien instable se dit poliment. Le détail, ouvert d'un toucher,
+ * est un chunk à part (`call-quality-detail.tsx`) : l'écran d'appel n'en paie
+ * que l'`import()`.
+ */
+
+const CallQualityDetail = lazy(() => import('./call-quality-detail').then((module) => ({ default: module.CallQualityDetail })));
+
+const TONE: Readonly<Record<ConnectionQualityLevel, string>> = { excellent: 'var(--ios-success)', good: 'var(--ios-success)', fair: 'var(--ios-warning)', poor: 'var(--ios-error)' };
+const LIT: Readonly<Record<ConnectionQualityLevel, number>> = { excellent: 4, good: 3, fair: 2, poor: 1 };
+const LEVEL_KEY = {
+  excellent: 'call.quality.level.excellent',
+  good: 'call.quality.level.good',
+  fair: 'call.quality.level.fair',
+  poor: 'call.quality.level.poor',
+} as const;
+
+/** Le « · » entre le nom, le nombre et la durée (iOS `chipSeparator`, Android `MetaSeparator`) : dessiné, jamais lu — le nom accessible le porte déjà. */
+function Separator() {
+  return (
+    <span className="shrink-0 opacity-70" aria-hidden="true" data-call-chip-sep="">
+      ·
+    </span>
+  );
+}
+
+function SignalBars({ level }: { readonly level: ConnectionQualityLevel }) {
+  return (
+    <svg width="22" height="18" viewBox="0 0 22 18" aria-hidden="true" data-call-signal="">
+      {[0, 1, 2, 3].map((index) => {
+        const lit = index < LIT[level];
+        const height = 5 + index * 4;
+        return <rect key={index} x={index * 6} y={18 - height} width="4" height={height} rx="1" fill={lit ? TONE[level] : 'var(--color-media-hairline)'} data-bar={lit ? 'on' : 'off'} />;
+      })}
+    </svg>
+  );
+}
+
+type CallQualityChipProps = {
+  readonly capsule: CallHeaderCapsule;
+  readonly clock: string | null;
+  readonly quality: CallQuality | null;
+  readonly language: InterfaceLanguage;
+  /** Teinte plus sombre au-dessus d'un fond clair (écran partagé à la une). */
+  readonly prominent: boolean;
+};
+
+/**
+ * LA CAPSULE DE DROITE DE L'EN-TÊTE (#8391, #17341) — un verre qui porte ce que
+ * `callHeaderCapsule` décide : en vidéo « nom donné · durée », en groupe « nom ·
+ * nombre · durée », en audio le seul indicateur réseau ; les barres n'y paraissent
+ * que si le lien est dégradé. La toucher ouvre le détail. Son nom accessible DIT
+ * ce qu'elle montre (nom, nombre de participants, durée) puis le niveau : la
+ * légende visible est contenue dans le nom (WCAG 2.5.3). Sans relevé, la capsule
+ * n'est qu'une étiquette : aucun bouton ne promet un détail absent.
+ */
+export function CallQualityChip({ capsule, clock, quality, language, prominent }: CallQualityChipProps) {
+  const [open, setOpen] = useState(false);
+  const glassRef = useGlassToneRef(prominent);
+  const count = capsule.participantCount === null ? null : translate(language, 'call.members', { count: String(capsule.participantCount) });
+  const title = capsule.receivedScreen === true && capsule.title !== null ? translate(language, 'call.screen.of', { name: capsule.title }) : capsule.title;
+  const spoken = [title, count, capsule.duration ? clock : null].filter((part): part is string => part !== null && part !== '').join(' · ');
+  const glass = `${prominent ? 'glass-call-prominent' : 'glass-call'} flex min-h-11 min-w-0 max-w-[60vw] items-center gap-2 rounded-full px-3 text-body font-semibold tabular-nums`;
+  const identity = [
+    title === null ? null : (
+      <span key="title" className="truncate">
+        {title}
+      </span>
+    ),
+    capsule.participantCount === null ? null : (
+      <span key="count" className="inline-flex shrink-0 items-center gap-1" aria-hidden="true" data-call-chip-count="">
+        <Glyph name="users" size={16} />
+        {capsule.participantCount}
+      </span>
+    ),
+    capsule.duration && clock !== null ? (
+      <span key="clock" className="shrink-0">
+        {clock}
+      </span>
+    ) : null,
+  ].filter((part) => part !== null);
+  const content = (
+    <>
+      {capsule.receivedScreen === true ? (
+        <span className="inline-flex shrink-0 items-center" aria-hidden="true" data-call-chip-screen="">
+          <GlyphSvg glyph={CALL_SCREEN_GLYPHS.monitorArrowUp} size={16} />
+        </span>
+      ) : null}
+      {identity.flatMap((part, index) => (index === 0 ? [part] : [<Separator key={`sep-${part.key}`} />, part]))}
+      {capsule.network && quality !== null ? <SignalBars level={quality.level} /> : null}
+    </>
+  );
+  if (quality === null) {
+    return (
+      <span ref={glassRef} className={glass} data-call-chip="">
+        {content}
+      </span>
+    );
+  }
+  const level = translate(language, 'call.quality.indicator', { level: translate(language, LEVEL_KEY[quality.level]) });
+  const label = spoken === '' ? level : `${spoken} — ${level}`;
+  return (
+    <div className="relative min-w-0">
+      <button ref={glassRef} type="button" aria-label={label} aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((value) => !value)} className={glass} data-call-chip="" data-call-quality={quality.level}>
+        {content}
+      </button>
+      {open ? (
+        <Suspense fallback={null}>
+          <CallQualityDetail quality={quality} language={language} onClose={() => setOpen(false)} />
+        </Suspense>
+      ) : null}
+    </div>
+  );
+}
+
+/** Quelqu'un capture l'écran : la capsule de capture (R1, loi 13) prend sa place dans la pile des bandeaux ; elle vit avec le bandeau de partage (`call-share-banner.tsx`, chunk `call_top_banners`). */
+export const someoneCaptures = (members: Readonly<Record<string, CallMember>>): boolean => Object.values(members).some((member) => member.capturing);

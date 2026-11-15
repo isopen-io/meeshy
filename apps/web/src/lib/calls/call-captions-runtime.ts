@@ -1,0 +1,65 @@
+import { currentDeviceLocale } from '@/lib/api/client';
+import { apiDeps } from '@/lib/api/deps';
+import { appQueryClient } from '@/lib/api/query-client';
+import { sessionStore } from '@/lib/api/session';
+import { resolveViewer } from '@/lib/api/viewer';
+import { coqueCourante } from '@/lib/native-shell';
+import { resolveReaderLanguages } from '@/lib/reader';
+import { quickReplyAllowed } from '@/lib/send/served-regime';
+
+import { createCaptions, type CaptionsContext, type CaptionsPort } from './call-captions-controller';
+import { recognitionFor } from './call-shell-speech';
+import { browserSpeech, recognitionOf, type RecognitionConstructor } from './call-speech';
+
+/**
+ * **LES SOUS-TITRES DANS LE NAVIGATEUR** (#8048) — l'entrée du chunk
+ * `call_captions` (`budgets.json`), chargée par `engine-defaults.ts` au premier
+ * besoin d'un appel : aucun octet de sous-titres ne pèse sur le moteur
+ * (`call_engine`), ni sur qui ne passe aucun appel.
+ *
+ * La langue PARLÉE est le rang 1 du Prisme du lecteur — la même descente que
+ * celle par laquelle la passerelle résout la langue de ses auditeurs
+ * (`resolveUserLanguage`, `call-transcription-relay.ts`), jamais une langue
+ * reconstruite ici.
+ */
+
+function readerPrism(): readonly string[] {
+  return resolveReaderLanguages({ source: apiDeps.source, session: sessionStore.getState().session, deviceLocale: currentDeviceLocale() });
+}
+
+function spokenLanguage(): string {
+  return readerPrism()[0] ?? 'fr';
+}
+
+function viewerName(): string {
+  return resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).displayName;
+}
+
+/**
+ * La reconnaissance du navigateur ; dans la coque, celle qu'elle prête quand
+ * la WebView n'en a pas (#9446). Le build web ne porte pas l'adaptateur.
+ */
+function recognition(): RecognitionConstructor | null {
+  const scope = typeof window === 'undefined' ? null : window;
+  return __SHELL__ ? recognitionFor(scope, coqueCourante()) : recognitionOf(scope);
+}
+
+let sequence = 0;
+
+function utteranceId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  sequence += 1;
+  return `w-${Date.now().toString(36)}-${sequence}`;
+}
+
+export function createBrowserCaptions(ctx: CaptionsContext): CaptionsPort {
+  return createCaptions(ctx, {
+    speech: browserSpeech(recognition()),
+    language: spokenLanguage,
+    prism: readerPrism,
+    viewerName,
+    newId: utteranceId,
+    // #13720 — fail-closed : régime connu du cache ET en clair, comme la réponse rapide d'un refus d'appel.
+    serverMayHearCaptions: (conversationId) => quickReplyAllowed(conversationId, appQueryClient),
+  });
+}

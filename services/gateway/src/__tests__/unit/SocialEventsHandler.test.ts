@@ -24,18 +24,20 @@ import type { Post, PostLikedEventData, PostUnlikedEventData, PostRepostedEventD
 
 function createMockIO() {
   const mockEmit = jest.fn();
-  const mockTo = jest.fn().mockReturnValue({ emit: mockEmit });
-  return { to: mockTo, emit: mockEmit };
+  const mockExcept = jest.fn().mockReturnValue({ emit: mockEmit });
+  const mockTo = jest.fn().mockReturnValue({ emit: mockEmit, except: mockExcept });
+  return { to: mockTo, emit: mockEmit, except: mockExcept };
 }
 
 function createMockPrisma() {
   return {
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: {
       findMany: jest.fn(),
     },
     communityMember: {
       findMany: jest.fn().mockResolvedValue([]),
-    },
+    }, user: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null) },
   } as any;
 }
 
@@ -165,22 +167,21 @@ describe('SocialEventsHandler', () => {
   });
 
   describe('broadcastPostUpdated', () => {
-    it('should emit POST_UPDATED to friend feeds, the author feed AND the post room in a single dedup emit', async () => {
+    // #7407 — l'auteur reçoit SA forme (avec sa liste d'audience) sur sa salle ;
+    // amis + salle de la publication reçoivent l'autre en UN emit dédoublonné,
+    // ses sockets exceptés : chacun reçoit l'événement exactement une fois.
+    it('should emit POST_UPDATED once to friend feeds + post room (author sockets excepted), once to the author feed', async () => {
       const post = createMockPost({ id: 'post-77' });
 
       await handler.broadcastPostUpdated(post, AUTHOR_ID);
 
-      expect(mockIO.to).toHaveBeenCalledTimes(1);
+      expect(mockIO.to).toHaveBeenCalledTimes(2);
       const rooms = mockIO.to.mock.calls[0][0] as string[];
-      expect(rooms).toEqual(
-        expect.arrayContaining([
-          ROOMS.feed(FRIEND_1),
-          ROOMS.feed(FRIEND_2),
-          ROOMS.feed(AUTHOR_ID),
-          ROOMS.post('post-77'),
-        ]),
-      );
-      expect(mockIO.emit).toHaveBeenCalledTimes(1);
+      expect(rooms).toEqual(expect.arrayContaining([ROOMS.feed(FRIEND_1), ROOMS.feed(FRIEND_2), ROOMS.post('post-77')]));
+      expect(rooms).not.toContain(ROOMS.feed(AUTHOR_ID));
+      expect(mockIO.except).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
+      expect(mockIO.emit).toHaveBeenCalledTimes(2);
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.POST_UPDATED, { post });
     });
 
@@ -189,7 +190,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastPostUpdated(post, AUTHOR_ID);
 
-      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      const rooms = mockIO.to.mock.calls.flatMap(([r]) => (Array.isArray(r) ? r : [r])) as string[];
       expect(rooms).toContain(ROOMS.feed(AUTHOR_ID));
       expect(rooms).not.toContain(ROOMS.feed(FRIEND_1));
       expect(rooms).not.toContain(ROOMS.feed(FRIEND_2));
@@ -344,7 +345,7 @@ describe('SocialEventsHandler', () => {
       mockPrisma.communityMember.findMany
         .mockResolvedValueOnce([{ communityId: 'c1' }])
         .mockResolvedValueOnce([{ userId: 'co-1' }]);
-      const story = createMockPost({ id: 'story-2', type: 'STORY', visibility: 'COMMUNITY' });
+      const story = createMockPost({ id: 'story-2', type: 'STORY', visibility: 'COMMUNITY', communityId: null });
 
       await handler.broadcastStoryCreated(story, AUTHOR_ID);
 
@@ -752,15 +753,11 @@ describe('SocialEventsHandler', () => {
       await handler.broadcastPostCreated(post, AUTHOR_ID);
 
       expect(mockPrisma.friendRequest.findMany).toHaveBeenCalledTimes(1);
-      expect(mockPrisma.friendRequest.findMany).toHaveBeenCalledWith({
-        where: {
-          OR: [
-            { senderId: AUTHOR_ID, status: 'accepted' },
-            { receiverId: AUTHOR_ID, status: 'accepted' },
-          ],
-        },
-        select: { senderId: true, receiverId: true },
-      });
+      expect(mockPrisma.friendRequest.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { status: 'accepted', OR: [{ senderId: AUTHOR_ID }, { receiverId: AUTHOR_ID }] },
+        }),
+      );
     });
 
     it('should use cached results on second call within TTL', async () => {

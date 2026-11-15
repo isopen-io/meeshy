@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 import os
 
-private let convStateOutboxLog = Logger(subsystem: "com.meeshy.sdk", category: "conversation-state-outbox")
+private let convStateOutboxLog = MeeshyLog.logger(.conversationStateOutbox, subsystem: .legacySDK)
 
 // MARK: - Public types
 
@@ -60,18 +60,6 @@ public enum OutboxDispatchOutcome: Sendable {
     case failedTransient(reason: String)
 }
 
-/// Backoff schedule per design §4.5: `min(60s, 2^attempts × 5s)`.
-public enum OutboxBackoff {
-    public static let baseSeconds: TimeInterval = 5
-    public static let capSeconds: TimeInterval = 60
-
-    public static func nextDelay(forAttempts attempts: Int) -> TimeInterval {
-        let exponent = max(0, attempts)
-        let raw = pow(2.0, Double(exponent)) * baseSeconds
-        return min(capSeconds, raw)
-    }
-}
-
 // MARK: - Outbox actor
 
 /// Append-and-flush queue for `UserStateMutation`s waiting on the
@@ -87,10 +75,17 @@ public enum OutboxBackoff {
 public actor ConversationStateOutbox {
     public static let shared = ConversationStateOutbox()
 
-    private let db: DatabaseQueue
+    private let storage: DatabaseQueue?
+    private var db: DatabaseQueue {
+        get throws {
+            guard let storage else { throw DatabaseStorageUnavailable() }
+            return storage
+        }
+    }
     private var pending: [UUID: OutboxTask] = [:]
     private var indexByCoalescingKey: [CoalescingKey: UUID] = [:]
     private let now: @Sendable () -> Date
+    private let retryPolicy: RetryPolicy
 
     private struct CoalescingKey: Hashable {
         let convId: String
@@ -101,38 +96,34 @@ public actor ConversationStateOutbox {
 
     private init() {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let path = dir.appendingPathComponent("meeshy_conversation_outbox.db").path
-        let queue = Self.makeQueue(path: path)
-        self.db = queue
-        self.now = { Date() }
-        let snapshot = Self.hydrateFromDisk(db: queue)
-        self.pending = snapshot.pending
-        self.indexByCoalescingKey = snapshot.index
+        self.init(dbPath: dir.appendingPathComponent("meeshy_conversation_outbox.db").path)
     }
 
     /// Test-only init that allows injecting a path and a clock.
-    public init(dbPath: String, clock: @escaping @Sendable () -> Date = { Date() }) {
-        let queue = Self.makeQueue(path: dbPath)
-        self.db = queue
+    public init(dbPath: String, clock: @escaping @Sendable () -> Date = { Date() }, retryPolicy: RetryPolicy = .stateSync) {
+        self.init(storage: ResilientDatabaseQueue.open(path: dbPath), clock: clock, retryPolicy: retryPolicy)
+    }
+
+    init(storage opened: OpenedDatabaseQueue, clock: @escaping @Sendable () -> Date = { Date() }, retryPolicy: RetryPolicy = .stateSync) {
+        let queue = Self.prepare(opened)
+        self.storage = queue
         self.now = clock
+        self.retryPolicy = retryPolicy
         let snapshot = Self.hydrateFromDisk(db: queue)
         self.pending = snapshot.pending
         self.indexByCoalescingKey = snapshot.index
     }
 
-    private static func makeQueue(path: String) -> DatabaseQueue {
-        let queue: DatabaseQueue
-        do {
-            queue = try DatabaseQueue(path: path)
-        } catch {
-            // Bascule mémoire : les mutations d'état ne survivront pas au kill.
-            convStateOutboxLog.error("On-disk state outbox unavailable, falling back to memory (pending mutations lost on relaunch): \(error.localizedDescription, privacy: .public)")
-            do {
-                queue = try DatabaseQueue()
-            } catch {
-                fatalError("[ConversationStateOutbox] Cannot create in-memory GRDB queue — out of memory: \(error)")
-            }
+    private static func prepare(_ opened: OpenedDatabaseQueue) -> DatabaseQueue? {
+        switch opened {
+        case .persistent:
+            break
+        case .memoryFallback(_, let diskError):
+            convStateOutboxLog.error("On-disk state outbox unavailable, falling back to memory (pending mutations lost on relaunch): \(diskError, privacy: .public)")
+        case .unavailable(let diskError, let memoryError):
+            convStateOutboxLog.fault("State outbox has no storage at all, mutations stay in memory only: disk=\(diskError, privacy: .public) memory=\(memoryError, privacy: .public)")
         }
+        guard let queue = opened.queue else { return nil }
         do {
             try Self.createSchema(in: queue)
         } catch {
@@ -173,8 +164,9 @@ public actor ConversationStateOutbox {
     /// `enqueue` calls mutate `pending` + DB, then the hydrator resumed
     /// with the stale snapshot and stomped over the live state.
     private static func hydrateFromDisk(
-        db: DatabaseQueue
+        db: DatabaseQueue?
     ) -> (pending: [UUID: OutboxTask], index: [CoalescingKey: UUID]) {
+        guard let db else { return (pending: [:], index: [:]) }
         let rows: [Row]
         do {
             rows = try db.read { db in
@@ -298,8 +290,7 @@ public actor ConversationStateOutbox {
     public func markFailedTransient(_ id: UUID, reason: String) {
         guard var task = pending[id] else { return }
         task.attempts += 1
-        let delay = OutboxBackoff.nextDelay(forAttempts: task.attempts)
-        task.nextRetryAt = now().addingTimeInterval(delay)
+        task.nextRetryAt = now().addingTimeInterval(retryPolicy.delay(afterFailure: task.attempts))
         pending[id] = task
         upsertRow(task)
     }
@@ -404,8 +395,7 @@ public actor ConversationStateOutbox {
     }
 
     private func encodeMutation(_ mutation: UserStateMutation) -> String? {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         do {
             let data = try encoder.encode(mutation)
             guard let str = String(data: data, encoding: .utf8) else {
@@ -434,8 +424,7 @@ public actor ConversationStateOutbox {
             return nil
         }
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
         guard let data = mutationJSON.data(using: .utf8),
               let mutation = decoder.decodeOrLog(UserStateMutation.self, from: data,
                                                  field: "conversation state mutation",

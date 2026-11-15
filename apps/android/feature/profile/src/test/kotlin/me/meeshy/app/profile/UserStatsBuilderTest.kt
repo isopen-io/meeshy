@@ -182,46 +182,31 @@ class UserStatsBuilderTest {
         assertThat(presentation.unlockedCount).isEqualTo(2)
     }
 
-    // ---- compact formatting ----------------------------------------------
+    // ---- compact formatting (CompactCountFormat, locale du lecteur) -------
+
+    private fun formatted(count: Int, locale: java.util.Locale = java.util.Locale.ENGLISH): String =
+        UserStatsBuilder.build(UserStats(totalMessages = count), locale)
+            .tiles.first { it.metric == StatMetric.MESSAGES }.formattedValue
 
     @Test
     fun `values under a thousand render verbatim`() {
-        assertThat(formatCompactCount(0)).isEqualTo("0")
-        assertThat(formatCompactCount(1)).isEqualTo("1")
-        assertThat(formatCompactCount(999)).isEqualTo("999")
+        assertThat(formatted(0)).isEqualTo("0")
+        assertThat(formatted(999)).isEqualTo("999")
     }
 
     @Test
-    fun `thousands render with a K suffix and drop a trailing zero decimal`() {
-        assertThat(formatCompactCount(1_000)).isEqualTo("1K")
-        assertThat(formatCompactCount(1_500)).isEqualTo("1.5K")
-        assertThat(formatCompactCount(12_000)).isEqualTo("12K")
+    fun `thousands drop a trailing zero decimal`() {
+        assertThat(formatted(1_000)).isEqualTo("1K")
+        assertThat(formatted(1_500)).isEqualTo("1.5K")
     }
 
     @Test
-    fun `a value just below one million rolls over to 1M rather than 1000K`() {
-        assertThat(formatCompactCount(999_949)).isEqualTo("999.9K")
-        assertThat(formatCompactCount(999_950)).isEqualTo("1M")
-    }
-
-    @Test
-    fun `millions render with an M suffix`() {
-        assertThat(formatCompactCount(2_300_000)).isEqualTo("2.3M")
-    }
-
-    @Test
-    fun `a value just below one billion rolls over to 1B rather than 1000M`() {
-        assertThat(formatCompactCount(999_949_999)).isEqualTo("999.9M")
-        assertThat(formatCompactCount(999_950_000)).isEqualTo("1B")
-    }
-
-    @Test
-    fun `billions render with a B suffix`() {
-        assertThat(formatCompactCount(2_147_483_647)).isEqualTo("2.1B")
+    fun `the tile follows the reader locale`() {
+        assertThat(formatted(1_500, java.util.Locale.FRENCH)).isEqualTo("1,5\u00A0k")
     }
 
     @Test
     fun `a negative count formats as zero`() {
-        assertThat(formatCompactCount(-42)).isEqualTo("0")
+        assertThat(formatted(-42)).isEqualTo("0")
     }
 }

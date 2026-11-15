@@ -12,7 +12,7 @@ public actor TusUploadCheckpointStore {
     public static let shared = TusUploadCheckpointStore(pool: AppDatabase.shared.databaseWriter)
 
     private let pool: any DatabaseWriter
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "tus-checkpoint")
+    private let logger = MeeshyLog.logger(.tusCheckpoint, subsystem: .legacySDK)
 
     public init(pool: any DatabaseWriter) {
         self.pool = pool

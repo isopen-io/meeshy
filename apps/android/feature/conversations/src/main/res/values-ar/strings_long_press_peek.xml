@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="peek_menu_handle_expand">عرض كل الإجراءات</string>
+    <string name="peek_menu_handle_collapse">عرض إجراءات أقل</string>
+    <string name="peek_menu_state_compact">إجراءات سريعة</string>
+    <string name="peek_menu_state_expanded">كل الإجراءات</string>
+    <string name="peek_close">إغلاق</string>
+</resources>

@@ -4,7 +4,7 @@ import UserNotifications
 import UIKit
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.app", category: "push")
+private let logger = MeeshyLog.logger(.push)
 
 /// « Un message est arrivé dans cette conversation » — le seul fait qu'une
 /// notification entrante établisse. `messageId` est porté séparément pour que
@@ -25,10 +25,32 @@ public struct MessageActivitySignal: Sendable, Equatable {
 
 @MainActor
 public final class PushNotificationManager: NSObject, ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public static let shared = PushNotificationManager()
 
     @Published public var isAuthorized = false
-    @Published public var deviceToken: String?
+
+    /// Le jeton APNs, lu au trousseau au PREMIER accès (#11558) : le
+    /// gestionnaire est construit par `MeeshyApp` avant le premier écran, et
+    /// chaque lecture du trousseau y était un XPC synchrone du fil principal.
+    public var deviceToken: String? {
+        get {
+            if case .some(let token) = knownDeviceToken { return token }
+            let token = keychainStore.load(forKey: Self.persistedTokenKey, account: nil)
+            knownDeviceToken = .some(token)
+            return token
+        }
+        set {
+            objectWillChange.send()
+            knownDeviceToken = .some(newValue)
+        }
+    }
+    /// `.none` : le trousseau n'a pas encore été lu.
+    private var knownDeviceToken: String?? = .none
 
     /// Published notification payload when user taps a notification.
     /// The app layer observes this to perform navigation.
@@ -81,7 +103,6 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         self.keychainStore = keychainStore
         super.init()
         migrateDeviceTokenFromUserDefaultsIfNeeded()
-        deviceToken = keychainStore.load(forKey: Self.persistedTokenKey, account: nil)
     }
 
     private func migrateDeviceTokenFromUserDefaultsIfNeeded() {
@@ -107,7 +128,7 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     /// Apple endpoint (api.sandbox.push.apple.com vs api.push.apple.com).
     /// Hard-coded at compile time so a release build cannot accidentally
     /// claim to be sandbox (or vice-versa) at runtime.
-    public static let apnsEnvironment: String = {
+    nonisolated public static let apnsEnvironment: String = {
         #if DEBUG
         return "development"
         #else
@@ -160,15 +181,33 @@ public final class PushNotificationManager: NSObject, ObservableObject {
 
     /// Re-register the persisted device token with the backend after login.
     /// Call this when the user authenticates so the backend associates the token with their account.
+    ///
+    /// Appelé avant le premier rendu de la liste (#11558) : le jeton persisté se
+    /// lit au trousseau HORS du fil principal.
     public func reRegisterTokenIfNeeded() {
-        guard let token = deviceToken else {
-            logger.info("No persisted device token to re-register")
-            return
-        }
-        logger.info("Re-registering persisted device token with backend")
         Task {
+            guard let token = await deviceTokenReadOffMain() else {
+                logger.info("No persisted device token to re-register")
+                return
+            }
+            logger.info("Re-registering persisted device token with backend")
             await sendTokenToBackend(token: token)
         }
+    }
+
+    private func deviceTokenReadOffMain() async -> String? {
+        if case .some(let token) = knownDeviceToken { return token }
+        let token = await keychainLoadOffMain(Self.persistedTokenKey)
+        if case .some(let tokenSetMeanwhile) = knownDeviceToken { return tokenSetMeanwhile }
+        knownDeviceToken = .some(token)
+        return token
+    }
+
+    private func keychainLoadOffMain(_ key: String) async -> String? {
+        let store = keychainStore
+        return await Task.detached(priority: .userInitiated) {
+            store.load(forKey: key, account: nil)
+        }.value
     }
 
     /// Handle APNs registration failure.
@@ -182,8 +221,8 @@ public final class PushNotificationManager: NSObject, ObservableObject {
 
         let body = UnregisterDeviceTokenRequest(token: token)
         do {
-            let _: APIResponse<[String: String]> = try await APIClient.shared.request(
-                endpoint: "/users/register-device-token",
+            let _: APIResponse<DiscardedResponseBody> = try await APIClient.shared.request(
+                UsersEndpoint.registerDeviceToken,
                 method: "DELETE",
                 body: try JSONEncoder().encode(body)
             )
@@ -240,35 +279,16 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         guard let conversationId = userInfo["conversationId"] as? String,
               !conversationId.isEmpty else { return }
         let messageId = (userInfo["messageId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-        let isMessage = (userInfo["type"] as? String) == "message" || messageId != nil
+        let type = userInfo["type"] as? String
+        // Une réaction porte le `messageId` du message RÉAGI, pas d'un message
+        // neuf : la lire comme une arrivée avançait la date de la ligne et
+        // vidait son aperçu (#7615).
+        let isReaction = type.map { $0 == "reaction" || $0.hasSuffix("_reaction") } ?? false
+        let isMessage = type == "message" || (messageId != nil && !isReaction)
         guard isMessage else { return }
         messageNotificationReceived.send(
             MessageActivitySignal(conversationId: conversationId, messageId: messageId)
         )
-    }
-
-    // MARK: - Badge
-
-    /// Reset the app badge count to zero.
-    ///
-    /// - Warning: Direct badge writes bypass `NotificationCoordinator`, which owns
-    ///   the alignment between the app icon, widgets and the in-app bell. Prefer
-    ///   `NotificationCoordinator.shared.reset()` — this method only remains for
-    ///   legacy callers and will be removed.
-    @available(*, deprecated, message: "Use NotificationCoordinator.shared.reset() so the widget / in-app bell stay aligned.")
-    public func resetBadge() async {
-        try? await UNUserNotificationCenter.current().setBadgeCount(0)
-    }
-
-    /// Update the app badge count to reflect total unread conversations.
-    ///
-    /// - Warning: Direct badge writes bypass `NotificationCoordinator`, which owns
-    ///   the alignment between the app icon, widgets and the in-app bell. Prefer
-    ///   pushing conversation state through `NotificationCoordinator.shared`.
-    @available(*, deprecated, message: "Route through NotificationCoordinator.shared instead so widgets stay aligned.")
-    public func updateBadge(totalUnread: Int) async {
-        let count = max(totalUnread, 0)
-        try? await UNUserNotificationCenter.current().setBadgeCount(count)
     }
 
     // MARK: - Private
@@ -285,7 +305,7 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         // (native callback firing right after) — both posted the same token
         // back-to-back, generating duplicate 10s+ POSTs in the slow-request log.
         let now = Date()
-        let lastToken = keychainStore.load(forKey: Self.lastRegisteredTokenKey, account: nil)
+        let lastToken = await keychainLoadOffMain(Self.lastRegisteredTokenKey)
         let lastAt = userDefaults.object(forKey: Self.lastRegisteredAtKey) as? Date
         if lastToken == token,
            let lastAt,
@@ -308,12 +328,13 @@ public final class PushNotificationManager: NSObject, ObservableObject {
             token: token,
             platform: "ios",
             type: "apns",
-            apnsEnvironment: Self.apnsEnvironment
+            apnsEnvironment: Self.apnsEnvironment,
+            device: PushDeviceIdentity.current(keychain: keychainStore)
         )
 
         do {
             let _: APIResponse<RegisterDeviceTokenResponse> = try await APIClient.shared.post(
-                endpoint: "/users/register-device-token",
+                UsersEndpoint.registerDeviceToken,
                 body: request
             )
             try? keychainStore.save(token, forKey: Self.lastRegisteredTokenKey, account: nil)
@@ -328,8 +349,20 @@ public final class PushNotificationManager: NSObject, ObservableObject {
 // MARK: - Notification Payload
 
 public struct NotificationPayload {
+    /// **L'identité de la ligne de cloche que ce push annonce (#6999).**
+    ///
+    /// Le gateway la pose depuis toujours (`NotificationService.createNotification`,
+    /// clé `notificationId` de `data`) et son doc-comment dit exactement
+    /// pourquoi : c'est la SEULE clé qui permette de marquer lu au tap
+    /// (`POST /notifications/:id/read`) — les types sans `conversationId` ni
+    /// `postId` (système, nouvelle connexion, mot de passe changé,
+    /// double facteur, demande d'ami) n'ont rien d'autre. Ce décodeur ne la
+    /// lisait pas : ces notifications restaient non lues À VIE après un tap.
+    public let notificationId: String?
     public let type: String?
     public let conversationId: String?
+    /// #18052 — la communauté où le destinataire vient d'être ajouté (`''` vaut absence sur le fil).
+    public let communityId: String?
     public let messageId: String?
     public let senderId: String?
     public let senderUsername: String?
@@ -362,8 +395,12 @@ public struct NotificationPayload {
     public let iceServersJSON: String?
 
     public init(userInfo: [AnyHashable: Any]) {
+        let rawNotificationId = userInfo["notificationId"] as? String ?? ""
+        self.notificationId = rawNotificationId.isEmpty ? nil : rawNotificationId
         self.type = userInfo["type"] as? String
         self.conversationId = userInfo["conversationId"] as? String
+        let rawCommunityId = userInfo["communityId"] as? String ?? ""
+        self.communityId = rawCommunityId.isEmpty ? nil : rawCommunityId
         self.messageId = userInfo["messageId"] as? String
         self.senderId = userInfo["senderId"] as? String
         self.senderUsername = userInfo["senderUsername"] as? String

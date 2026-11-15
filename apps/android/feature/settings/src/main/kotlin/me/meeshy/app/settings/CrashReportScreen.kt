@@ -19,7 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Share
@@ -37,6 +36,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.component.MeeshyInfoNoted
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,6 +63,8 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import java.text.DateFormat
 import java.util.Date
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 /**
  * Crash-diagnostics viewer (feature-parity §L) — the Android port of the iOS `CrashReportSheet`.
@@ -95,8 +98,8 @@ fun CrashReportScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.settings_back),
+                                leadingNavigationIcon(),
+                                contentDescription = leadingNavigationLabel(stringResource(R.string.settings_back)),
                             )
                         }
                     },
@@ -206,16 +209,20 @@ private fun InfoCard() {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Filled.BugReport, contentDescription = null, tint = MeeshyPalette.Info)
-        Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+        var openNote by rememberOpenNote()
+        MeeshyInfoNoted(
+            note = MeeshyInfoNote(
+                question = stringResource(R.string.crash_reports_question),
+                text = stringResource(R.string.crash_reports_note),
+            ),
+            openNoteId = openNote,
+            onOpenNoteIdChange = { openNote = it },
+            modifier = Modifier.weight(1f),
+        ) {
             Text(
-                text = stringResource(R.string.crash_reports_info_title),
-                style = MaterialTheme.typography.titleSmall,
+                text = stringResource(R.string.crash_reports_privacy),
+                style = MaterialTheme.typography.bodyMedium,
                 color = MeeshyTheme.tokens.textPrimary,
-            )
-            Text(
-                text = stringResource(R.string.crash_reports_info_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MeeshyTheme.tokens.textSecondary,
             )
         }
     }

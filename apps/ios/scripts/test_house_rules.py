@@ -1,0 +1,710 @@
+import contextlib
+import importlib.util
+import io
+import json
+import re
+import tempfile
+import unittest
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+
+
+def load_engine():
+    spec = importlib.util.spec_from_file_location("house_rules", HERE / "house_rules.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+ENGINE = load_engine()
+APP = "apps/ios/Meeshy/Features/Sample.swift"
+
+
+def rule(rule_id):
+    return next(r for r in ENGINE.RULES if r.id == rule_id)
+
+
+def count(rule_id, src, rel=APP):
+    return ENGINE.count_file(rule(rule_id), rel, src)
+
+
+class StripComments(unittest.TestCase):
+    def test_line_block_and_nested_comments_are_blanked(self):
+        src = "// UIScreen.main\n/* UIScreen.main */\n/* a /* UIScreen.main */ UIScreen.main */\nlet a = 1\n"
+        self.assertEqual(count("uiscreen-main", src), 0)
+
+    def test_same_token_in_code_counts(self):
+        self.assertEqual(count("uiscreen-main", "let w = UIScreen.main.bounds\n"), 1)
+
+    def test_line_count_is_preserved(self):
+        src = "a\n/* x\ny\nz */\nb // c\n\"\"\"\nm\n\"\"\"\n"
+        self.assertEqual(ENGINE.strip_comments(src).count("\n"), src.count("\n"))
+
+    def test_url_in_string_does_not_open_a_comment(self):
+        self.assertEqual(count("uiscreen-main", 'let u = "https://x"; _ = UIScreen.main\n'), 1)
+
+    def test_raw_and_multiline_strings_do_not_desynchronise(self):
+        src = 'let r = #"a // b "quoted" c"#\nlet m = """\n  // not a comment\n  """\n_ = UIScreen.main\n'
+        self.assertEqual(count("uiscreen-main", src), 1)
+
+    def test_nested_interpolation_keeps_following_code_analysed(self):
+        src = 'Text("\\(n) non lue\\(n > 1 ? "s" : "")")\n_ = UIScreen.main\n'
+        self.assertEqual(count("plural-s", src), 1)
+        self.assertEqual(count("uiscreen-main", src), 1)
+
+
+class PatternRules(unittest.TestCase):
+    CASES = (
+        ("uiscreen-main", "UIScreen.main.bounds\nUIScreen.main\n", "UIScreen.mainish\nMyUIScreen.mainX\n"),
+        ("nslock", "let l = NSLock()\nlet m = NSLock()\n", "NSLockFree()\nNSLocking()\n"),
+        ("nonisolated-unsafe", "nonisolated(unsafe) var a = 1\nnonisolated(unsafe) let b = 2\n", "nonisolated var a = 1\n"),
+        ("try-sleep", "try? await Task.sleep(nanoseconds: 1)\ntry?  await Task.sleep(for: .seconds(1))\n", "try await Task.sleep(nanoseconds: 1)\n"),
+        ("logger-subsystem", 'Logger(subsystem: "a", category: "b")\nLogger(subsystem: "c", category: "d")\n', "MyLogger(subsystem: 1)\n"),
+        ("nslog", 'NSLog("x")\nNSLog("%@", y)\n', "MyNSLog(\"x\")\nNSLogger()\n"),
+        ("fixed-font", ".font(.system(size: 12))\n.font(.system(size: 14, weight: .bold))\n", ".font(.system(.body))\n.font(.title)\n"),
+        ("anyview", "AnyView(Text(\"a\"))\nreturn AnyView(b)\n", "myAnyView(x)\nAnyViewish\n"),
+        ("idiom", "UIDevice.current.userInterfaceIdiom\nuserInterfaceIdiom == .pad\n", "userInterfaceIdiomX\n"),
+        ("plural-s", 'n > 1 ? "s" : ""\nn>1 ?"s":""\n', 'n > 1 ? "x" : ""\nn > 1 ? "s" : "t"\n'),
+        ("foreground-color", ".foregroundColor(.white)\nText(a).foregroundColor(MeeshyColors.x)\n", "text.foregroundColor = base\n[.foregroundColor: UIColor.white]\n.foregroundStyle(Color.white)\n"),
+        ("corner-radius-modifier", "Box()\n    .cornerRadius(8)\nRectangle().cornerRadius(1)\n", "ComposerTriggerOutline.cornerRadius(inner: 8)\nRoundedRectangle(cornerRadius: 8)\n.glassCard(cornerRadius: 12)\n"),
+        ("status-bar-hidden", ".statusBar(hidden: true)\n.statusBar(hidden: flag)\n", ".statusBarHidden(true)\n"),
+        ("autocapitalization", ".autocapitalization(.none)\n.autocapitalization(.words)\n", ".textInputAutocapitalization(.never)\n"),
+        ("disable-autocorrection", ".disableAutocorrection(true)\n.disableAutocorrection(false)\n", ".autocorrectionDisabled(true)\n"),
+        ("onchange-single", ".onChange(of: x) { v in\n.onChange(of: x) { _ in f() }\n", ".onChange(of: x) { _, v in\n.onChange(of: x, initial: true) { old, new in\n.adaptiveOnChange(of: x) { _, v in\n"),
+        ("coder-strategy", "d.dateDecodingStrategy = .iso8601\ne.keyEncodingStrategy = .convertToSnakeCase\n", "if d.dateDecodingStrategy == .deferredToDate {}\nlet d = MeeshyCoders.decoder(.api)\n"),
+        ("onchange-single", ".onChange(of: order) { memory.order = $0 }\n.onChange(of: x, perform: f)\n", ".onChange(of: x) { _, v in\n"),
+    )
+
+    def test_each_rule_counts_its_occurrences_and_ignores_lookalikes(self):
+        for rule_id, hits, misses in self.CASES:
+            with self.subTest(rule=rule_id):
+                self.assertEqual(count(rule_id, hits), 2)
+                self.assertEqual(count(rule_id, misses), 0)
+
+
+class KitGlassRatchets(unittest.TestCase):
+    KIT = "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyGlassButton.swift"
+    COMPAT = "packages/MeeshySDK/Sources/MeeshyUI/Compatibility/AdaptiveLiquidGlass.swift"
+    SRC = (
+        "a.adaptiveGlass(in: Circle())\n"
+        "b.adaptiveLiquidGlass(in: Circle(), interactive: true)\n"
+        "c.adaptiveGlassProminent(in: Capsule(),\n    tint: MeeshyColors.error)\n"
+        "d.glassEffect(.regular.interactive(), in: Circle())\n"
+        "// e.adaptiveGlass(in: Circle())\n"
+    )
+
+    def test_every_call_outside_the_kit_counts_even_across_lines(self):
+        self.assertEqual(count("kit-glass-call", self.SRC), 4)
+
+    def test_round_counts_circle_shapes_only(self):
+        self.assertEqual(count("kit-glass-round", self.SRC), 3)
+
+    def test_no_touch_counts_calls_without_interactive_true(self):
+        self.assertEqual(count("kit-glass-no-touch", self.SRC), 2)
+
+    def test_the_kit_and_the_compatibility_layer_are_exempt(self):
+        for rel in (self.KIT, self.COMPAT):
+            for rule_id in ("kit-glass-call", "kit-glass-round", "kit-glass-no-touch"):
+                self.assertEqual(count(rule_id, self.SRC, rel), 0)
+
+    def test_other_ui_files_are_not_exempt(self):
+        other = "packages/MeeshySDK/Sources/MeeshyUI/Media/Other.swift"
+        self.assertEqual(count("kit-glass-call", self.SRC, other), 4)
+
+
+class MotionRatchets(unittest.TestCase):
+    KIT = "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyGlassPillMorph.swift"
+    RECIPE = "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyGlassPillRecipe.swift"
+    ACCESSIBILITY = "packages/MeeshySDK/Sources/MeeshyUI/Theme/Accessibility.swift"
+    TOKENS = "packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift"
+    ROOT = "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootFeedLayer.swift"
+
+    ANIMATIONS = (
+        "a.animation(.spring(response: 0.3, dampingFraction: 0.8), value: x)\n"
+        "b.animation(\n    .easeOut(duration: 0.2),\n    value: y)\n"
+        "c.animation(reduceMotion ? nil : .default, value: z)\n"
+        "d.animation(nil, value: z)\n"
+        "e.animation(.none, value: z)\n"
+        "f.animation(MeeshyMotion.animation(.default, reduce: r), value: z)\n"
+        "g.meeshyAnimation(.default, value: z)\n"
+        "h.animation(isSystemReduce ? nil : .default, value: z)\n"
+        "// i.animation(.default, value: z)\n"
+    )
+
+    def test_raw_animation_counts_calls_without_a_reduction_predicate(self):
+        self.assertEqual(count("motion-raw-animation", self.ANIMATIONS), 2)
+
+    def test_raw_animation_exempts_the_kit_and_the_motion_module(self):
+        for rel in (self.KIT, self.ACCESSIBILITY):
+            self.assertEqual(count("motion-raw-animation", self.ANIMATIONS, rel), 0)
+
+    def test_raw_animation_root_counts_only_root_files(self):
+        self.assertEqual(count("motion-raw-animation-root", self.ANIMATIONS), 0)
+        self.assertEqual(count("motion-raw-animation-root", self.ANIMATIONS, self.ROOT), 2)
+        root_view = "apps/ios/Meeshy/Features/Main/Views/RootView.swift"
+        self.assertEqual(count("motion-raw-animation-root", self.ANIMATIONS, root_view), 2)
+
+    SPRINGS = (
+        "a = .spring(response: 0.3, dampingFraction: 0.8)\n"
+        "b = .spring(duration: 0.3)\n"
+        "c = .spring(bounce: 0.2)\n"
+        "d = .spring(dampingFraction: 0.7)\n"
+        "e = .spring()\n"
+        "f = .interpolatingSpring(stiffness: 1, damping: 1)\n"
+        "g = .spring\n"
+        "h = MeeshyAnimation.springFast\n"
+        "// i = .spring()\n"
+    )
+
+    def test_literal_spring_counts_hand_written_springs(self):
+        self.assertEqual(count("motion-literal-spring", self.SPRINGS), 6)
+
+    def test_literal_spring_exempts_tokens_and_kit_recipes(self):
+        for rel in (self.TOKENS, self.RECIPE):
+            self.assertEqual(count("motion-literal-spring", self.SPRINGS, rel), 0)
+        self.assertEqual(count("motion-literal-spring", self.SPRINGS, self.KIT), 6)
+
+    REDUCED = (
+        "withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring) { a = 1 }\n"
+        "withAnimation(Motion.animation(reduceMotion: reduce)) { a = 1 }\n"
+        "withAnimation(reduceMotion ? nil : .spring) { a = 1 }\n"
+        "withAnimation(reduceMotion ? .none : .spring) { a = 1 }\n"
+        "withAnimation(MeeshyMotion.animation(.spring, reduce: reduceMotion)) { a = 1 }\n"
+        "meeshyWithAnimation(.spring, reduced: .easeOut(duration: 0.15), reduceMotion: reduceMotion) { a = 1 }\n"
+        "withAnimation(.spring) { a = 1 }\n"
+    )
+
+    def test_reduced_raw_with_animation_counts_sites_the_root_would_flatten(self):
+        self.assertEqual(count("motion-reduced-raw-with-animation", self.REDUCED), 2)
+
+    DISCS = (
+        "Circle().fill(.ultraThinMaterial)\n"
+        "Circle()\n    .fill(.regularMaterial)\n"
+        "x.background(.thinMaterial, in: Circle())\n"
+        "x.background(.ultraThinMaterial, in: .circle)\n"
+        "x.background(.ultraThinMaterial).clipShape(Circle())\n"
+        "x.background(.ultraThinMaterial, in: Capsule())\n"
+        "Capsule().fill(.ultraThinMaterial)\n"
+        "// Circle().fill(.ultraThinMaterial)\n"
+    )
+
+    def test_glass_material_disc_counts_hand_made_glass_discs(self):
+        self.assertEqual(count("kit-glass-material-disc", self.DISCS), 5)
+
+    def test_glass_material_disc_exempts_the_kit_and_the_compatibility_layer(self):
+        compat = "packages/MeeshySDK/Sources/MeeshyUI/Compatibility/AdaptiveLiquidGlass.swift"
+        for rel in (self.KIT, compat):
+            self.assertEqual(count("kit-glass-material-disc", self.DISCS, rel), 0)
+
+
+class UncheckedSendable(unittest.TestCase):
+    BARE = "final class A: @unchecked Sendable {}\n"
+
+    def test_bare_declaration_counts(self):
+        self.assertEqual(count("unchecked-sendable", self.BARE), 1)
+
+    def test_justification_within_three_lines_clears_it(self):
+        for gap in (0, 1, 2):
+            with self.subTest(gap=gap):
+                src = "// unchecked: accès sérialisé par la file\n" + "let x = 1\n" * gap + self.BARE
+                self.assertEqual(count("unchecked-sendable", src), 0)
+
+    def test_justification_four_lines_above_is_too_far(self):
+        src = "// unchecked: raison\n" + "let x = 1\n" * 3 + self.BARE
+        self.assertEqual(count("unchecked-sendable", src), 1)
+
+    def test_same_line_justification_clears_it(self):
+        self.assertEqual(count("unchecked-sendable", "final class A: @unchecked Sendable {} // unchecked: verrou\n"), 0)
+
+    def test_lock_primitive_in_file_clears_it(self):
+        for lock in ("OSAllocatedUnfairLock", "NSLock", "os_unfair_lock", "Mutex<Int>"):
+            with self.subTest(lock=lock):
+                self.assertEqual(count("unchecked-sendable", self.BARE + "let l = " + lock + "\n"), 0)
+
+    def test_locked_state_in_file_clears_it(self):
+        for decl in ("Locked<Int>(0)", "Locked(State())"):
+            with self.subTest(decl=decl):
+                self.assertEqual(count("unchecked-sendable", self.BARE + "let s = " + decl + "\n"), 0)
+
+    def test_locked_lookalike_does_not_clear_it(self):
+        self.assertEqual(count("unchecked-sendable", self.BARE + "let s = isLocked(0)\n"), 1)
+
+
+class UncheckedSendableTotal(unittest.TestCase):
+    def test_counts_every_declaration_whatever_its_justification_or_lock(self):
+        src = (
+            "final class A: @unchecked Sendable {} // unchecked: verrou\n"
+            "final class B: @unchecked  Sendable { let l = NSLock() }\n"
+            "// final class C: @unchecked Sendable {}\n"
+        )
+        self.assertEqual(count("unchecked-sendable-total", src), 2)
+
+
+class AvailableFloor(unittest.TestCase):
+    WIDGET = "apps/ios/MeeshyWidgets/Sample.swift"
+
+    def test_redundant_checks_in_app_count(self):
+        src = "if #available(iOS 16.0, *) {}\nif #available(iOS 16, *) {}\n"
+        self.assertEqual(count("available-floor", src), 2)
+
+    def test_minor_above_floor_is_not_redundant(self):
+        self.assertEqual(count("available-floor", "if #available(iOS 16.4, *) {}\n"), 0)
+
+    def test_comparison_is_numeric_not_lexical(self):
+        self.assertEqual(count("available-floor", "if #available(iOS 9.0, *) {}\n"), 1)
+        self.assertEqual(count("available-floor", "if #available(iOS 16.10, *) {}\n"), 0)
+
+    def test_widgets_floor_is_17(self):
+        src = "if #available(iOS 17.0, *) {}\n"
+        self.assertEqual(count("available-floor", src), 0)
+        self.assertEqual(count("available-floor", src, self.WIDGET), 1)
+
+    def test_floors_follow_project_yml(self):
+        text = (HERE.parent / "project.yml").read_text(encoding="utf-8")
+        widgets = text.split("  MeeshyWidgets:")[1].split("deploymentTarget:")[1].split()[0].strip('"')
+        default = text.split("IPHONEOS_DEPLOYMENT_TARGET:")[1].split()[0].strip('"')
+        as_tuple = lambda v: tuple(int(x) for x in v.split("."))
+        self.assertEqual(ENGINE.floor_for("apps/ios/Meeshy/A.swift"), as_tuple(default))
+        self.assertEqual(ENGINE.floor_for(self.WIDGET), as_tuple(widgets))
+
+
+class Exclusions(unittest.TestCase):
+    def test_designated_files_are_exempt(self):
+        logger = "packages/MeeshySDK/Sources/MeeshyCore/Logging/MeeshyLog.swift"
+        reporter = "apps/ios/Meeshy/Features/Main/Services/SocialEventsV2Reporter.swift"
+        self.assertEqual(count("logger-subsystem", 'Logger(subsystem: "a", category: "b")\n', logger), 0)
+        self.assertEqual(count("idiom", "UIDevice.current.userInterfaceIdiom\n", reporter), 0)
+
+    def test_onchange_backport_keeps_the_deprecated_form(self):
+        backport = "packages/MeeshySDK/Sources/MeeshyUI/Compatibility/AdaptiveOnChange.swift"
+        src = ".onChange(of: value) { newValue in\n"
+        self.assertEqual(count("onchange-single", src, backport), 0)
+        self.assertEqual(count("onchange-single", src), 1)
+
+    def test_same_code_elsewhere_counts(self):
+        self.assertEqual(count("logger-subsystem", 'Logger(subsystem: "a", category: "b")\n'), 1)
+        self.assertEqual(count("idiom", "UIDevice.current.userInterfaceIdiom\n"), 1)
+
+
+class AsyncAfterRule(unittest.TestCase):
+    def test_counts_main_and_injected_queue_forms_and_ignores_comments_strings_lookalikes(self):
+        self.assertEqual(count("async-after", "DispatchQueue.main.asyncAfter(deadline: .now() + 1) { }\n"), 1)
+        self.assertEqual(count("async-after", "queue.asyncAfter(deadline: .now() + 1) { }\n"), 1)
+        self.assertEqual(count("async-after", "// x.asyncAfter(deadline: t)\n"), 0)
+        self.assertEqual(count("async-after", 'let s = ".asyncAfter("\n'), 0)
+        self.assertEqual(count("async-after", "asyncAfterDelay(1)\n"), 0)
+
+
+class ConcurrencyEscapeRules(unittest.TestCase):
+    def test_task_detached_counts_every_launch_and_ignores_lookalikes(self):
+        self.assertEqual(count("task-detached", "Task.detached { }\nTask.detached(priority: .utility) { }\n"), 2)
+        self.assertEqual(count("task-detached", "Task { }\nMyTask.detached { }\n// Task.detached { }\n"), 0)
+
+    def test_dispatch_main_async_counts_async_and_ignores_after_and_sync(self):
+        self.assertEqual(count("dispatch-main-async", "DispatchQueue.main.async { }\nDispatchQueue.main.async(execute: work)\n"), 2)
+        self.assertEqual(count("dispatch-main-async", "DispatchQueue.main.asyncAfter(deadline: t) { }\nDispatchQueue.main.sync { }\n"), 0)
+
+    def test_preconcurrency_import_counts_imports_only(self):
+        self.assertEqual(count("preconcurrency-import", "@preconcurrency import AVFoundation\n@preconcurrency  import WebRTC\n"), 2)
+        self.assertEqual(count("preconcurrency-import", "extension A: @preconcurrency B {}\nimport AVFoundation\n"), 0)
+
+
+class SinkTaskRule(unittest.TestCase):
+    def test_counts_unstored_task_launched_from_a_sink_closure(self):
+        self.assertEqual(count("sink-task", ".sink { _ in Task { await f() } }\n"), 1)
+        self.assertEqual(count("sink-task", ".sink { [weak self] in\n guard let self else { return }\n Task { @MainActor in a() }\n}\n"), 1)
+        self.assertEqual(count("sink-task", ".sink(receiveValue: { v in Task.detached(priority: .utility) { } })\n"), 1)
+        self.assertEqual(count("sink-task", ".sink { _ in _ = Task { } }\n"), 1)
+        self.assertEqual(count("sink-task", ".sink { v in if v { x() } else { y() }; Task { } }\n"), 1)
+
+    def test_ignores_stored_tasks_relays_yield_trailing_tasks_and_comments(self):
+        self.assertEqual(count("sink-task", ".sink { v in self.t?.cancel(); self.t = Task { } }\n"), 0)
+        self.assertEqual(count("sink-task", ".sink { v in apply(v) }\nTask { }\n"), 0)
+        self.assertEqual(count("sink-task", ".relay(through: lane) { await f() }\n"), 0)
+        self.assertEqual(count("sink-task", ".sink { _ in Task.yield() }\n"), 0)
+        self.assertEqual(count("sink-task", "// .sink { Task { } }\n"), 0)
+
+
+class SleepNanosecondsRule(unittest.TestCase):
+    def test_counts_nanoseconds_and_ignores_duration_form(self):
+        self.assertEqual(count("sleep-nanoseconds", "try await Task.sleep(nanoseconds: 1)\n"), 1)
+        self.assertEqual(count("sleep-nanoseconds", "try? await Task.sleep(nanoseconds: 1)\n"), 1)
+        self.assertEqual(count("sleep-nanoseconds", "try await Task.sleep(for: .seconds(1))\n"), 0)
+
+
+class LoggerSubsystemExemption(unittest.TestCase):
+    SAMPLE = "apps/ios/MeeshyBroadcastExtension/SampleHandler.swift"
+    SRC = 'Logger(subsystem: "x", category: "y")\n'
+
+    def test_broadcast_extension_is_exempt(self):
+        self.assertEqual(count("logger-subsystem", self.SRC, self.SAMPLE), 0)
+        self.assertEqual(count("logger-subsystem", self.SRC, "apps/ios/MeeshyBroadcastExtension/Other.swift"), 1)
+
+    def test_exemption_holds_only_while_broadcast_extension_links_no_sdk(self):
+        text = (HERE.parent / "project.yml").read_text(encoding="utf-8")
+        block = text.split("\n  MeeshyBroadcastExtension:\n")[1]
+        block = re.split(r"\n  \w", block)[0]
+        block = "\n".join(line for line in block.split("\n") if not line.lstrip().startswith("#"))
+        self.assertNotIn("MeeshySDK", block)
+        self.assertNotIn("package:", block)
+        self.assertNotIn("dependencies:", block)
+
+
+class ScopedRules(unittest.TestCase):
+    SRC = "_ = Foo.shared\nlet b = AuthManager.shared.user\n"
+
+    def test_viewmodel_shared_counts_in_files_named_viewmodel(self):
+        for rel in (
+            "apps/ios/Meeshy/Features/X/FooViewModel.swift",
+            "apps/ios/Meeshy/Features/X/FooViewModel+Loading.swift",
+            "packages/MeeshySDK/Sources/MeeshyUI/Community/CommunityListViewModel.swift",
+        ):
+            with self.subTest(rel=rel):
+                self.assertEqual(count("viewmodel-shared", self.SRC, rel), 2)
+
+    def test_viewmodel_shared_ignores_other_files_whatever_their_folder(self):
+        for rel in (
+            "apps/ios/Meeshy/Features/Sample.swift",
+            "apps/ios/Meeshy/Features/Main/ViewModels/Helper.swift",
+        ):
+            with self.subTest(rel=rel):
+                self.assertEqual(count("viewmodel-shared", self.SRC, rel), 0)
+
+    def test_viewmodel_shared_ignores_lookalikes(self):
+        src = "x.sharedInstance\nisShared\n// Foo.shared\n"
+        self.assertEqual(count("viewmodel-shared", src, "apps/ios/Meeshy/Features/X/FooViewModel.swift"), 0)
+
+
+class ObservedThemeSingleton(unittest.TestCase):
+    HITS = (
+        "@ObservedObject private var theme = ThemeManager.shared\n",
+        "@StateObject var theme = ThemeManager.shared\n",
+        "@ObservedObject private var theme: ThemeManager = .shared\n",
+        "@ObservedObject\n    private var theme = ThemeManager.shared\n",
+    )
+    MISSES = (
+        "@Environment(\\.colorScheme) private var colorScheme\n",
+        "private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }\n",
+        "@Environment(\\.theme) var theme\n",
+        "let m = ThemeManager.shared.mode\n",
+        "@ObservedObject var theme: ThemeManager\n",
+        "@ResolvedThemePalette private var theme\n",
+        "@ObservedObject private var vm = FooViewModel.shared\n",
+    )
+
+    def test_each_observing_form_counts_once(self):
+        for src in self.HITS:
+            with self.subTest(src=src):
+                self.assertEqual(count("observed-theme-singleton", src), 1)
+
+    def test_lookalikes_do_not_count(self):
+        for src in self.MISSES:
+            with self.subTest(src=src):
+                self.assertEqual(count("observed-theme-singleton", src), 0)
+
+    def test_app_entry_point_is_exempt(self):
+        src = self.HITS[0]
+        self.assertEqual(count("observed-theme-singleton", src, "apps/ios/Meeshy/MeeshyApp.swift"), 0)
+        self.assertEqual(count("observed-theme-singleton", src), 1)
+
+
+class Scope(unittest.TestCase):
+    def test_each_root_counts(self):
+        for root in ENGINE.SCOPE:
+            with self.subTest(root=root):
+                self.assertTrue(ENGINE.in_scope(root + "/A/B.swift", ""))
+
+    def test_tests_generated_and_non_swift_are_out(self):
+        self.assertFalse(ENGINE.in_scope("packages/MeeshySDK/Sources/MeeshySDKTests/B.swift", ""))
+        self.assertFalse(ENGINE.in_scope("apps/ios/Meeshy/MeeshyTests/B.swift", ""))
+        self.assertFalse(ENGINE.in_scope("apps/ios/Meeshy/B.m", ""))
+        self.assertFalse(ENGINE.in_scope("apps/ios/Meeshy/B.swift", "// GÉNÉRÉ par x\n"))
+        self.assertFalse(ENGINE.in_scope("apps/ios/Meeshy/B.swift", "// generated by y\n"))
+        self.assertFalse(ENGINE.in_scope("apps/ios/MeeshyTests/B.swift", ""))
+        self.assertFalse(ENGINE.in_scope("apps/ios/Other/B.swift", ""))
+
+    def test_collect_reads_only_scoped_files(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            files = {
+                "apps/ios/Meeshy/A.swift": "x",
+                "apps/ios/Meeshy/AGen.swift": "// GENERATED\nx",
+                "apps/ios/MeeshyTests/T.swift": "x",
+                "apps/ios/MeeshyWidgets/W.swift": "x",
+                "apps/ios/Meeshy/n.txt": "x",
+            }
+            for rel, body in files.items():
+                (root / rel).parent.mkdir(parents=True, exist_ok=True)
+                (root / rel).write_text(body, encoding="utf-8")
+            rels = sorted(rel for rel, _ in ENGINE.collect(root))
+        self.assertEqual(rels, ["apps/ios/Meeshy/A.swift", "apps/ios/MeeshyWidgets/W.swift"])
+
+
+def run_main(argv):
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        code = ENGINE.main(argv)
+    return code, out.getvalue(), err.getvalue()
+
+
+def zero_baseline(**overrides):
+    return {"version": 1, "rules": {**{r.id: 0 for r in ENGINE.RULES}, **overrides}}
+
+
+class Workspace:
+    def __init__(self, files, baseline):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name) / "repo"
+        for rel, body in files.items():
+            (self.root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (self.root / rel).write_text(body, encoding="utf-8")
+        self.baseline = Path(self.tmp.name) / "baseline.json"
+        if baseline is not None:
+            self.baseline.write_text(baseline if isinstance(baseline, str) else json.dumps(baseline), encoding="utf-8")
+
+    def run(self, *extra):
+        return run_main(["--root", str(self.root), "--baseline", str(self.baseline), *extra])
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.tmp.cleanup()
+
+
+def screens(n):
+    return "".join(f"_ = UIScreen.main.bounds{i}\n" for i in range(n))
+
+
+class Ratchet(unittest.TestCase):
+    def test_rise_fails_and_names_rule_totals_and_five_worst_files(self):
+        files = {f"apps/ios/Meeshy/F{i}.swift": screens(i + 1) for i in range(7)}
+        with Workspace(files, zero_baseline(**{"uiscreen-main": 3})) as ws:
+            code, _, err = ws.run()
+        self.assertEqual(code, 1)
+        self.assertIn("uiscreen-main", err)
+        self.assertIn("3 -> 28", err)
+        self.assertEqual(err.count("apps/ios/Meeshy/F"), 5)
+        self.assertIn("apps/ios/Meeshy/F6.swift", err)
+        self.assertNotIn("apps/ios/Meeshy/F0.swift", err)
+
+    def test_equal_passes(self):
+        with Workspace({"apps/ios/Meeshy/A.swift": screens(2)}, zero_baseline(**{"uiscreen-main": 2})) as ws:
+            self.assertEqual(ws.run()[0], 0)
+
+    def test_drop_passes_and_asks_for_write_baseline(self):
+        with Workspace({"apps/ios/Meeshy/A.swift": screens(1)}, zero_baseline(**{"uiscreen-main": 2})) as ws:
+            code, out, _ = ws.run()
+        self.assertEqual(code, 0)
+        self.assertIn("en baisse", out)
+        self.assertIn("--write-baseline", out)
+
+
+class StrictBaseline(unittest.TestCase):
+    FILES = {"apps/ios/Meeshy/A.swift": "let a = 1\n"}
+
+    def test_rule_missing_from_baseline_fails(self):
+        partial = zero_baseline()
+        del partial["rules"]["nslog"]
+        with Workspace(self.FILES, partial) as ws:
+            code, _, err = ws.run()
+        self.assertEqual(code, 1)
+        self.assertIn("nslog", err)
+
+    def test_unknown_baseline_key_fails(self):
+        with Workspace(self.FILES, zero_baseline(inconnue=0)) as ws:
+            code, _, err = ws.run()
+        self.assertEqual(code, 1)
+        self.assertIn("inconnue", err)
+
+    def test_missing_or_unreadable_baseline_fails(self):
+        with Workspace(self.FILES, None) as ws:
+            self.assertEqual(ws.run()[0], 1)
+        with Workspace(self.FILES, "{pas du json") as ws:
+            self.assertEqual(ws.run()[0], 1)
+
+
+class WriteBaseline(unittest.TestCase):
+    def test_refuses_to_raise_and_leaves_file_untouched(self):
+        with Workspace({"apps/ios/Meeshy/A.swift": screens(3)}, zero_baseline(**{"uiscreen-main": 1})) as ws:
+            before = ws.baseline.read_bytes()
+            code, _, err = ws.run("--write-baseline")
+            self.assertEqual(code, 1)
+            self.assertIn("uiscreen-main", err)
+            self.assertEqual(ws.baseline.read_bytes(), before)
+
+    def test_lowers_totals(self):
+        with Workspace({"apps/ios/Meeshy/A.swift": screens(1)}, zero_baseline(**{"uiscreen-main": 5})) as ws:
+            self.assertEqual(ws.run("--write-baseline")[0], 0)
+            written = json.loads(ws.baseline.read_text(encoding="utf-8"))
+        self.assertEqual(written["rules"]["uiscreen-main"], 1)
+        self.assertEqual(written["version"], 1)
+
+    def test_bootstraps_when_no_file_exists(self):
+        with Workspace({"apps/ios/Meeshy/A.swift": screens(2)}, None) as ws:
+            self.assertEqual(ws.run("--write-baseline")[0], 0)
+            written = json.loads(ws.baseline.read_text(encoding="utf-8"))
+            self.assertEqual(ws.run()[0], 0)
+        self.assertEqual(written["rules"]["uiscreen-main"], 2)
+        self.assertEqual(set(written["rules"]), {r.id for r in ENGINE.RULES})
+
+
+class EnvironmentRouter(unittest.TestCase):
+    HITS = (
+        "@EnvironmentObject private var router: Router\n",
+        "@EnvironmentObject var router: Router\n",
+        "@EnvironmentObject\n    private var router: Router\n",
+    )
+    MISSES = (
+        "@EnvironmentObject private var deepLinkRouter: DeepLinkRouter\n",
+        "@Environment(\\.routerCommands) private var router\n",
+        "@ObservedObject var router: Router\n",
+        "let router: Router\n",
+        "// @EnvironmentObject var router: Router\n",
+        "@EnvironmentObject private var r: RouterCommands\n",
+    )
+
+    def test_each_router_object_declaration_counts_once(self):
+        for src in self.HITS:
+            with self.subTest(src=src):
+                self.assertEqual(count("environment-router", src), 1)
+
+    def test_lookalikes_do_not_count(self):
+        for src in self.MISSES:
+            with self.subTest(src=src):
+                self.assertEqual(count("environment-router", src), 0)
+
+
+class ObservedSingletonRule(unittest.TestCase):
+    HITS = (
+        "@ObservedObject private var security = SecurityManager.shared\n",
+        "@StateObject var store = PrivacyStore.shared\n",
+        "@ObservedObject private var auth: AuthManager = .shared\n",
+        "@ObservedObject\n    private var theme = ThemeManager.shared\n",
+        "@ObservedObject private var player = Audio.Player.shared\n",
+    )
+    MISSES = (
+        "@ObservedObject var security: SecurityManager\n",
+        "init(security: SecurityManager = .shared) { self.security = security }\n",
+        "let m = SecurityManager.shared.isLocked\n",
+        "@State private var shared = false\n",
+        "@ObservedObject var vm = FooViewModel()\n",
+        "// @ObservedObject private var s = SecurityManager.shared\n",
+    )
+
+    def test_each_observing_form_counts_once(self):
+        for src in self.HITS:
+            with self.subTest(src=src):
+                self.assertEqual(count("observed-singleton", src), 1)
+
+    def test_injected_and_lookalike_forms_do_not_count(self):
+        for src in self.MISSES:
+            with self.subTest(src=src):
+                self.assertEqual(count("observed-singleton", src), 0)
+
+    def test_app_entry_point_is_exempt(self):
+        src = self.HITS[0]
+        self.assertEqual(count("observed-singleton", src, "apps/ios/Meeshy/MeeshyApp.swift"), 0)
+
+
+class AppGRDBImportRule(unittest.TestCase):
+    def test_counts_each_app_file_importing_grdb(self):
+        for src in ("import GRDB\n", "@preconcurrency import GRDB\n", "import Foundation\nimport GRDB\n"):
+            with self.subTest(src=src):
+                self.assertEqual(count("app-grdb-import", src), 1)
+
+    def test_lookalikes_do_not_count(self):
+        for src in ("import GRDBQuery\n", "// import GRDB\n", "let s = \"import GRDB\"\n", "import MeeshySDK\n"):
+            with self.subTest(src=src):
+                self.assertEqual(count("app-grdb-import", src), 0)
+
+    def test_extensions_open_the_store_through_the_sdk_too(self):
+        for rel in (
+            "apps/ios/MeeshyNotificationExtension/X.swift",
+            "apps/ios/MeeshyNotificationContentExtension/X.swift",
+            "apps/ios/MeeshyShareExtension/X.swift",
+            "apps/ios/MeeshyBroadcastExtension/X.swift",
+            "apps/ios/MeeshyWidgets/X.swift",
+        ):
+            with self.subTest(rel=rel):
+                self.assertEqual(count("app-grdb-import", "import GRDB\n", rel), 1)
+
+    def test_sdk_and_tests_are_out_of_the_app_measure(self):
+        for rel in (
+            "packages/MeeshySDK/Sources/MeeshySDK/Persistence/X.swift",
+            "apps/ios/MeeshyTests/Unit/X.swift",
+            "apps/ios/MeeshyUIDeviceTests/X.swift",
+        ):
+            with self.subTest(rel=rel):
+                self.assertEqual(count("app-grdb-import", "import GRDB\n", rel), 0)
+
+
+class NotificationExtensionFullSDKImportRule(unittest.TestCase):
+    NSE = "apps/ios/MeeshyNotificationExtension/X.swift"
+
+    def test_counts_each_extension_file_importing_the_whole_sdk(self):
+        for src in ("import MeeshySDK\n", "@preconcurrency import MeeshySDK\n", "import Foundation\nimport MeeshySDK\n"):
+            with self.subTest(src=src):
+                self.assertEqual(count("nse-full-sdk-import", src, self.NSE), 1)
+
+    def test_the_light_core_and_lookalikes_do_not_count(self):
+        for src in ("import MeeshyCore\n", "import MeeshySDKTesting\n", "// import MeeshySDK\n", "let s = \"import MeeshySDK\"\n"):
+            with self.subTest(src=src):
+                self.assertEqual(count("nse-full-sdk-import", src, self.NSE), 0)
+
+    def test_only_the_notification_service_extension_is_measured(self):
+        for rel in (
+            "apps/ios/Meeshy/X.swift",
+            "apps/ios/MeeshyShareExtension/X.swift",
+            "packages/MeeshySDK/Sources/MeeshyUI/X.swift",
+        ):
+            with self.subTest(rel=rel):
+                self.assertEqual(count("nse-full-sdk-import", "import MeeshySDK\n", rel), 0)
+
+
+class CommittedBaseline(unittest.TestCase):
+    def setUp(self):
+        scanned = ENGINE.scan(ENGINE.collect(ENGINE.ROOT))
+        original = (ENGINE.collect, ENGINE.scan)
+        ENGINE.collect, ENGINE.scan = (lambda root: ()), (lambda files: scanned)
+        self.addCleanup(lambda: setattr(ENGINE, "collect", original[0]))
+        self.addCleanup(lambda: setattr(ENGINE, "scan", original[1]))
+
+    def test_every_rule_is_green_and_goes_red_when_lowered(self):
+        committed = json.loads(ENGINE.BASELINE.read_text(encoding="utf-8"))
+        self.assertEqual(run_main([])[0], 0)
+        for rule_id in committed["rules"]:
+            with self.subTest(rule=rule_id):
+                lowered = {"version": 1, "rules": {**committed["rules"], rule_id: committed["rules"][rule_id] - 1}}
+                with tempfile.TemporaryDirectory() as tmp:
+                    path = Path(tmp) / "b.json"
+                    path.write_text(json.dumps(lowered), encoding="utf-8")
+                    code, _, err = run_main(["--baseline", str(path)])
+                self.assertEqual(code, 1)
+                self.assertIn(rule_id, err)
+
+
+class NarrativeCommentRule(unittest.TestCase):
+    def test_compte_une_ligne_par_commentaire_date(self):
+        src = "// 2026-09-03 fix\nlet a = 1 /* 2026-10-01 */\n/* note\n 2025-01-02 */\n"
+        self.assertEqual(count("narrative-comment", src), 3)
+
+    def test_ignore_dates_hors_commentaire(self):
+        src = 'let s = "2026-09-03"\nlet r = #"2026-01-01"#\n// v1.2.3\nlet d = 20260903\n'
+        self.assertEqual(count("narrative-comment", src), 0)
+
+    def test_ligne_mixte_compte_une_fois(self):
+        self.assertEqual(count("narrative-comment", 'let s = "2026-01-01" // 2026-01-02 et 2026-01-03\n'), 1)
+
+    def test_portee_app_et_sources_sdk_seulement(self):
+        src = "// 2026-09-03 fix\n"
+        counted = ("apps/ios/Meeshy/X.swift", "packages/MeeshySDK/Sources/MeeshyUI/X.swift")
+        ignored = ("apps/ios/MeeshyWidgets/X.swift", "apps/ios/MeeshyNotificationExtension/X.swift")
+        self.assertEqual([count("narrative-comment", src, rel) for rel in counted], [1, 1])
+        self.assertEqual([count("narrative-comment", src, rel) for rel in ignored], [0, 0])
+
+
+if __name__ == "__main__":
+    unittest.main()

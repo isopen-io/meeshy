@@ -1,0 +1,338 @@
+#!/usr/bin/env node
+/**
+ * GÉNÈRE `ios.css` DEPUIS LES SOURCES SWIFT.
+ *
+ * Pourquoi ce script existe : la v4 web doit reprendre l'interface iOS
+ * (directive porteur 2026-09-06, #5444). Elle a d'abord recopié la palette iOS
+ * à la main dans `apps/web/src/styles/ios.css` — c'est-à-dire une SECONDE
+ * TABLE, ce que la charte interdit (§ 12.5 règle 1), et le défaut exact que
+ * #5445 demande de solder : une couleur corrigée d'un côté dérive de l'autre
+ * en SILENCE, chaque table restant cohérente avec elle-même.
+ *
+ * La source retenue est SWIFT, pour une raison et une seule : c'est l'interface
+ * que le web doit reproduire. `tokens.css` reste la table de la v3, intacte —
+ * la réécrire changerait le rendu d'une application en service, ce qu'aucune
+ * décision n'a demandé. Les deux tables COEXISTENT donc encore, mais plus
+ * aucune valeur n'est recopiée : `ios.css` est dérivé, et le gate le prouve.
+ *
+ * Le parseur est DÉLIBÉRÉMENT STRICT : toute déclaration d'une forme qu'il ne
+ * connaît pas fait échouer la génération. Un parseur qui saute en silence ce
+ * qu'il ne comprend pas rendrait une table INCOMPLÈTE tout en ayant l'air de
+ * marcher — le pire résultat possible pour un générateur de jetons.
+ *
+ *   node scripts/generate-from-ios.mjs            écrit ios.css
+ *   node scripts/generate-from-ios.mjs --check  échoue si ios.css a dérivé
+ */
+import { readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { parseColors, parseTokenBlocks } from './lib/parse-ios-theme.mjs';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = join(HERE, '../../..');
+const COULEURS = join(ROOT, 'packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift');
+const JETONS = join(ROOT, 'packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift');
+const OUTPUT = join(HERE, '../ios.css');
+
+const echoue = (message) => {
+  console.error(`\n  GÉNÉRATION REFUSÉE — ${message}\n`);
+  process.exit(1);
+};
+
+// ---------------------------------------------------------------- COULEURS
+
+const { constantes, fonctions } = parseColors(readFileSync(COULEURS, 'utf8'), echoue);
+
+const ATTENDUES = ['textPrimary', 'textSecondary', 'textMuted', 'backgroundPrimary', 'backgroundSecondary'];
+const manquantes = ATTENDUES.filter((n) => !fonctions.has(n));
+if (manquantes.length) echoue(`fonctions attendues absentes ou de forme nouvelle : ${manquantes.join(', ')}`);
+
+// ------------------------------------------------------------------ JETONS
+
+const { espaces, rayons, polices } = parseTokenBlocks(readFileSync(JETONS, 'utf8'), echoue);
+
+/**
+ * CE QUE SWIFT N'A PAS EN JETON, et qui vit en LITTÉRAL dans ses vues.
+ *
+ * Ce tableau est le constat le plus utile de cette fusion : l'app iOS elle-même
+ * porte des valeurs hors de ses propres tables. `cornerRadius: 18` de la bulle
+ * n'est pas `MeeshyRadius.md` (14) ni `.lg` (16) ; le champ du composeur pose
+ * 22 ; l'heure d'une bulle emploie `.caption` (≈12) et non `MeeshyFont`. Les
+ * générer est impossible — ils ne sont déclarés nulle part. Les recopier
+ * SANS LE DIRE reproduirait exactement le défaut que cette fusion solde.
+ *
+ * Ils sont donc déclarés ICI, chacun avec son site Swift, et ce tableau vaut
+ * inventaire de ce que iOS doit remonter dans ses propres tables (#5445).
+ */
+const HORS_TABLE_IOS = [
+  ['--ios-radius-bubble', '18px', 'Bubble/BubbleBackground.swift — cornerRadius: 18, littéral'],
+  ['--ios-radius-field', '22px', 'UniversalComposerBar+Recording.swift — RoundedRectangle(cornerRadius: 22)'],
+  ['--ios-radius-quote', '12px', 'Bubble/BubbleQuotedReply.swift — style .card'],
+  ['--ios-radius-repost-embed', '14px', 'FeedPostCard.swift:893 — RoundedRectangle(14) autour de repostView (#6278 c)'],
+  ['--ios-text-time', '12px', 'BubbleFooter.swift — .caption de SwiftUI, hors MeeshyFont'],
+  ['--ios-text-input', '16px', 'UniversalComposerBar — .callout de SwiftUI'],
+  ['--ios-text-large-title', '28px', 'ConversationListView+Overlays.swift — .system(size: 28, weight: .bold)'],
+  ['--ios-avatar-row', '52px', 'MeeshyAvatar.swift — contexte .conversationList'],
+  ['--ios-avatar-header', '44px', 'MeeshyAvatar.swift — contexte .conversationHeaderCollapsed'],
+  ['--ios-avatar-bubble', '32px', 'MeeshyAvatar.swift — contexte .messageBubble'],
+  ['--ios-avatar-stacked', '28px', 'MeeshyAvatar.swift — contexte .conversationHeaderStacked'],
+  ['--ios-avatar-typing', '18px', 'MessageListViewController.swift — TypingIndicatorBubble, tenue bulle'],
+  ['--ios-header-circle', '28px', 'ConversationView+Header.swift — cercle visuel des actions (cible 44)'],
+  ['--ios-bubble-mine', 'var(--ios-indigo-500)', 'BubbleBackground.swift — brandPrimary, le MÊME dans toutes les conversations'],
+  ['--ios-bubble-meta-mine', 'color-mix(in srgb, white 70%, transparent)', 'BubbleFooter.swift:283 — metaColor quand isMe'],
+  ['--ios-text-summary-title', '20px', 'Focal/Summary/LivingSummaryView.swift:64 — relative(20, .heavy), « Résumé Vivant »'],
+  ['--ios-text-summary-counts', '14px', 'Focal/Summary/LivingSummaryView.swift:68 — relative(14, .semibold), « N messages · P personnes »'],
+  ['--ios-text-summary-partial', '12px', 'Focal/Summary/LivingSummaryView.swift:73 — relative(12, .medium), « Sur les N derniers messages »'],
+  /**
+   * LES TUILES DU TIROIR DU COMPOSEUR (#5668, étendu #7280) — des littéraux
+   * Swift, pas de l'indigo de marque : `UniversalComposerBar+Attachments.swift:246-298`
+   * pose `color:` sur chaque `CarouselTile`, hors de toute table
+   * `MeeshyColors` — mêmes dans les deux schémas (aucune branche
+   * claire/sombre dans Swift). Le web servait trois des sept sources ; les
+   * quatre autres apportent leur couleur depuis la MÊME ligne Swift, jamais
+   * une teinte choisie côté web.
+   */
+  ['--ios-tile-photo', '#9B59B6', 'UniversalComposerBar+Attachments.swift:250 — CarouselTile(id: "photo").color'],
+  ['--ios-tile-camera', '#F8B500', 'UniversalComposerBar+Attachments.swift:256 — CarouselTile(id: "camera").color'],
+  ['--ios-tile-file', '#45B7D1', 'UniversalComposerBar+Attachments.swift:262 — CarouselTile(id: "file").color'],
+  ['--ios-tile-contact', '#5B8DEF', 'UniversalComposerBar+Attachments.swift:268 — CarouselTile(id: "contact").color'],
+  ['--ios-tile-location', '#2ECC71', 'UniversalComposerBar+Attachments.swift:268 — CarouselTile(id: "location").color'],
+  ['--ios-tile-voice', '#E74C3C', 'UniversalComposerBar+Attachments.swift:274 — CarouselTile(id: "voice").color'],
+  ['--ios-tile-emoji', '#FF9F43', 'UniversalComposerBar+Attachments.swift:285 — CarouselTile(id: "emoji").color'],
+  ['--ios-tile-sticker', '#6C5CE7', 'UniversalComposerBar+Attachments.swift:295 — CarouselTile(id: "sticker").color'],
+  /**
+   * L'ENCRE DE LA BARRE D'ENREGISTREMENT EN SCHÉMA SOMBRE (#5668,
+   * revue-correction) — `UniversalComposerBar+Recording.swift:148` pose
+   * `waveformColor = isDark ? "FFFFFF" : accentColor`, et les quatre autres
+   * couleurs de cette barre suivent la même bascule (`:144-152`, `:220-225`).
+   * Seule la moitié SOMBRE est une valeur : la moitié CLAIRE est l'accent de
+   * la conversation, que seule l'application connaît — `app.css` compose les
+   * deux (`--recording-ink`).
+   */
+  ['--ios-recording-ink-dark', '#FFFFFF', 'UniversalComposerBar+Recording.swift:148 — waveformColor = isDark ? "FFFFFF" : accentColor'],
+];
+
+/**
+ * Les mêmes, mais DÉPENDANTES DU SCHÉMA. Elles ne pouvaient pas rester dans le
+ * tableau ci-dessus, qui n'alimente que le bloc sombre : les y laisser aurait
+ * donné une bulle reçue à 28 % d'accent en clair comme en sombre, c'est-à-dire
+ * le défaut que cette fusion est censée rendre impossible.
+ */
+const HORS_TABLE_PAR_SCHEMA = [
+  ['--ios-bubble-other-opacity', '28%', '16%', 'BubbleBackground.swift — other.opacity(isDark ? 0.28 : 0.16)'],
+  ['--ios-bubble-other-hairline-opacity', '34%', '26%', 'BubbleBackground.swift — strokeBorder(isDark ? 0.34 : 0.26)'],
+  [
+    '--ios-bubble-meta',
+    'color-mix(in srgb, white 55%, transparent)',
+    'color-mix(in srgb, black 50%, transparent)',
+    'BubbleFooter.swift:283-285 — metaColor hors isMe',
+  ],
+  ['--ios-read-receipt', 'var(--ios-indigo-400)', 'var(--ios-indigo-600)', 'BubbleDeliveryCheck.swift — readTint'],
+  [
+    '--ios-quote-bg',
+    'color-mix(in srgb, white 8%, transparent)',
+    'color-mix(in srgb, black 5%, transparent)',
+    'BubbleQuotedReply.swift — style .card, hôte non-isMe',
+  ],
+  [
+    '--ios-quote-bg-mine',
+    'color-mix(in srgb, white 15%, transparent)',
+    'color-mix(in srgb, white 15%, transparent)',
+    'BubbleQuotedReply.swift — style .card, hôte isMe',
+  ],
+  [
+    '--ios-repost-embed-fill',
+    'color-mix(in srgb, white 5%, transparent)',
+    'color-mix(in srgb, black 3%, transparent)',
+    'FeedPostCard.swift:892-901 — repostView, fond de la carte citée (#6278 c)',
+  ],
+  [
+    '--ios-edge',
+    'color-mix(in srgb, white 6%, transparent)',
+    'color-mix(in srgb, black 6%, transparent)',
+    'ThemedConversationRow.swift:202-241 — strokeBorder de la carte, 0,5 px',
+  ],
+  ['--ios-day-ink', 'var(--ios-indigo-200)', 'var(--ios-indigo-700)', 'MessageDaySeparator.swift'],
+  ['--ios-day-hairline', 'var(--ios-indigo-900)', 'var(--ios-indigo-200)', 'MessageDaySeparator.swift — strokeBorder'],
+  /**
+   * LE NOM DE SOI EN TÊTE DE RANGÉE (revue #5935, défaut majeur 2) —
+   * `FocalIdentityHeader.swift:90-92` peint `nameColor = isMe ?
+   * MeeshyColors.indigo500 : textPrimary` sur la ligne d'identité (13 px,
+   * poids 800). `--ios-indigo-500` servi TEL QUEL y mesure 4,47:1 (clair) et
+   * 4,45:1 (sombre) — SOUS la barre AA de 4,5:1, et 13 px n'ouvre pas
+   * l'exemption « grand texte » (18,5 px). Méthode D-18/#5625 : le cran
+   * suivant qui PASSE, pas un plancher inventé — indigo700/indigo200,
+   * exactement la paire déjà dérivée pour `--ios-day-ink` (7,90:1 / 13,34:1),
+   * mais nommée pour SA fonction : un séparateur de jour et un nom de soi ne
+   * sont pas la même chose, même si leur cran de contraste coïncide
+   * aujourd'hui. iOS lui-même reste sous AA sur ce point précis — c'est un
+   * défaut de la CIBLE (famille #5681-#5683, issue compagnon), pas une
+   * dérivation web qui invente une couleur.
+   */
+  ['--ios-self-name-ink', 'var(--ios-indigo-200)', 'var(--ios-indigo-700)', 'FocalIdentityHeader.swift:90-92 — nameColor quand isMe (indigo500 mesuré sous AA, #5935)'],
+  [
+    '--ios-summary-surface-tint',
+    'color-mix(in srgb, white 6%, transparent)',
+    'color-mix(in srgb, black 4%, transparent)',
+    'FocalMetrics.swift:385-386 — SurfaceTint, fond des cartes d’épisode du Résumé Vivant',
+  ],
+  [
+    '--ios-summary-skeleton-fill',
+    'color-mix(in srgb, white 8%, transparent)',
+    'color-mix(in srgb, black 6%, transparent)',
+    'Focal/Summary/LivingSummaryView.swift:151-164 — remplissage des trois barres du squelette',
+  ],
+];
+
+// ------------------------------------------------------------------ SORTIE
+
+const row = (name, value) => `  ${name}: ${value};`;
+// `purple*` rejoint la rampe indigo (#5555) : le titre « Meeshy » et le lien
+// « Créer un compte » de LoginView.swift dégradent purple700→600→500, une
+// couleur DISTINCTE de la marque indigo qui n'était pas encore dérivée.
+const ramp = [...constantes]
+  .filter(([n]) => /^(indigo|purple)\d+$/.test(n))
+  .map(([n, v]) => row(`--ios-${n.replace(/(\d+)$/, '-$1')}`, v));
+
+const SEMANTIQUES = [
+  ['success', '--ios-success'],
+  ['error', '--ios-error'],
+  ['errorStrong', '--ios-error-strong'],
+  ['errorDark', '--ios-error-dark'],
+  ['errorInk', '--ios-error-ink'],
+  ['warning', '--ios-warning'],
+  ['info', '--ios-info'],
+  ['pinnedBlue', '--ios-pinned'],
+  ['successDeep', '--ios-success-deep'],
+  ['neutral400', '--ios-neutral-400'],
+  ['neutral500', '--ios-neutral-500'],
+  ['neutral600', '--ios-neutral-600'],
+  // L'argent de la pièce Meesh (#6427) — le web ne le recopie pas.
+  ['meeshSilver', '--ios-meesh-silver'],
+  // Les états d'un message dans le fil (#7599) — un code, deux plateformes.
+  ['stateViewOnce', '--ios-state-view-once'],
+  ['stateOpened', '--ios-state-opened'],
+  ['stateEphemeral', '--ios-state-ephemeral'],
+  ['stateConcealed', '--ios-state-concealed'],
+  ['stateFailed', '--ios-state-failed'],
+];
+/**
+ * LE CHROME POSÉ SUR UN MÉDIA (#8879) — une échelle FERMÉE, hors schéma : une
+ * visionneuse plein écran est sombre dans les deux. Le web la lit au lieu de
+ * réécrire `#fff`, `rgba(0,0,0,.5)` ou `bg-black/40` écran par écran.
+ */
+const MEDIA = [
+  ['onMedia', '--ios-on-media'],
+  ['onMediaSecondary', '--ios-on-media-2'],
+  ['onMediaMuted', '--ios-on-media-3'],
+  ['mediaFill', '--ios-media-fill'],
+  ['mediaHairline', '--ios-media-hairline'],
+  ['mediaBackdrop', '--ios-media-backdrop'],
+  ['scrimSoft', '--ios-scrim-soft'],
+  ['scrim', '--ios-scrim'],
+  ['scrimStrong', '--ios-scrim-strong'],
+  ['onBrand', '--ios-on-brand'],
+];
+const media = MEDIA.map(([swift, css]) => {
+  if (!constantes.has(swift)) echoue(`constante attendue absente : ${swift}`);
+  return row(css, constantes.get(swift));
+});
+
+const semantiques = SEMANTIQUES.map(([swift, css]) => {
+  if (!constantes.has(swift)) echoue(`constante attendue absente : ${swift}`);
+  return row(css, constantes.get(swift));
+});
+
+const output = `/* GÉNÉRÉ — ne pas éditer à la main.
+ *
+ * Produit par packages/design-tokens/scripts/generate-from-ios.mjs depuis
+ * MeeshyColors.swift et DesignTokens.swift, qui sont la SOURCE.
+ * Régénérer : cd packages/design-tokens && node scripts/generate-from-ios.mjs
+ * Vérifier  : … --check   (le gate de CI ; échoue si ce fichier a dérivé)
+ *
+ * POURQUOI CE FICHIER EXISTE (#5445) : la v4 web reprend l'interface iOS, donc
+ * elle a besoin des valeurs iOS. Elle les recopiait à la main — une seconde
+ * table, que la charte interdit. Elles sont désormais DÉRIVÉES.
+ *
+ * LES RÔLES DU SDK GAGNENT (#8879, directive porteur 2026-09-30) : là où
+ * tokens.css, dark.css et light.css donnaient à un rôle une autre valeur que
+ * celle-ci, ils POINTENT désormais vers la variable --ios-* correspondante.
+ * Seuls restent des valeurs les rôles qu'iOS n'a pas, ou dont la valeur iOS
+ * tombe sous AA dans l'usage de la table — voir docs/product/charte-visuelle-web.md.
+ */
+
+:root,
+:root.dark {
+  /* Les rampes indigo et purple — la marque, identiques dans les deux schémas. */
+${ramp.join('\n')}
+
+  /* Les couleurs sémantiques et les neutres — hors schéma également. */
+${semantiques.join('\n')}
+
+  /* Le chrome posé sur un média, et l'encre d'un aplat de marque — hors schéma. */
+${media.join('\n')}
+
+  /* Les plans et les encres, schéma SOMBRE. */
+${row('--ios-surface', fonctions.get('backgroundPrimary').dark)}
+${row('--ios-surface-card', fonctions.get('backgroundSecondary').dark)}
+${row('--ios-ink', fonctions.get('textPrimary').dark)}
+${row('--ios-ink-2', fonctions.get('textSecondary').dark)}
+${row('--ios-ink-3', fonctions.get('textMuted').dark)}
+
+  /* L'échelle d'espace (MeeshySpacing). */
+${[...espaces].map(([n, v]) => row(`--ios-space-${n}`, `${v}px`)).join('\n')}
+
+  /* Les rayons déclarés (MeeshyRadius). « full » est une capsule côté CSS. */
+${[...rayons]
+  .filter(([n]) => n !== 'full')
+  .map(([n, v]) => row(`--ios-radius-${n}`, `${v}px`))
+  .join('\n')}
+${row('--ios-radius-full', '9999px')}
+
+  /* Les tailles de police déclarées (MeeshyFont). */
+${[...polices].map(([n, v]) => row(`--ios-font-${n.replace(/Size$/, '')}`, `${v}px`)).join('\n')}
+
+  /* Ce que Swift porte en LITTÉRAL dans ses vues, hors de ses tables — voir
+     le tableau HORS_TABLE_IOS du générateur, qui vaut inventaire de ce que
+     iOS doit remonter chez lui. */
+${HORS_TABLE_IOS.map(([n, v, ou]) => `  ${n}: ${v}; /* ${ou} */`).join('\n')}
+${HORS_TABLE_PAR_SCHEMA.map(([n, dark, , ou]) => `  ${n}: ${dark}; /* ${ou} */`).join('\n')}
+}
+
+:root.light {
+${row('--ios-surface', fonctions.get('backgroundPrimary').light)}
+${row('--ios-surface-card', fonctions.get('backgroundSecondary').light)}
+${row('--ios-ink', fonctions.get('textPrimary').light)}
+${row('--ios-ink-2', fonctions.get('textSecondary').light)}
+${row('--ios-ink-3', fonctions.get('textMuted').light)}
+
+${HORS_TABLE_PAR_SCHEMA.map(([n, , light]) => `  ${n}: ${light};`).join('\n')}
+}
+`;
+
+if (process.argv.includes('--check')) {
+  let current = null;
+  try {
+    current = readFileSync(OUTPUT, 'utf8');
+  } catch {
+    echoue(`ios.css absent — le régénérer`);
+  }
+  if (current !== output) {
+    echoue(
+      `ios.css a DÉRIVÉ de MeeshyColors.swift / DesignTokens.swift.\n` +
+        `  C'est exactement ce que #5445 interdit : une valeur corrigée d'un côté\n` +
+        `  et pas de l'autre. Régénérer avec : node scripts/generate-from-ios.mjs`,
+    );
+  }
+  console.log('  ios.css est conforme à ses sources Swift.');
+  process.exit(0);
+}
+
+writeFileSync(OUTPUT, output);
+console.log(
+  `  ios.css écrit — ${ramp.length} pas de rampe, ${semantiques.length} sémantiques, ${media.length} jetons de chrome sur média, ` +
+    `${espaces.size} espaces, ${rayons.size} rayons, ${polices.size} polices, ` +
+    `${HORS_TABLE_IOS.length + HORS_TABLE_PAR_SCHEMA.length} valeurs hors table iOS ` +
+    `(dont ${HORS_TABLE_PAR_SCHEMA.length} dépendantes du schéma).`,
+);

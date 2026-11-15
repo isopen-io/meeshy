@@ -7,8 +7,6 @@ struct RequestsTab: View {
     @ObservedObject var viewModel: RequestsViewModel
     var isActive: Bool = true
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
@@ -28,7 +26,7 @@ struct RequestsTab: View {
     // MARK: - Filter Pills
 
     private var filterPills: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             ForEach(RequestFilter.allCases, id: \.self) { filter in
                 let count = filter == .received ? viewModel.receivedRequests.count : viewModel.sentRequests.count
                 let isSelected = activeFilter == filter
@@ -38,7 +36,7 @@ struct RequestsTab: View {
                     }
                     HapticFeedback.light()
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Text(filterTitle(filter))
                             .font(.footnote.weight(.semibold))
                         if count > 0 {
@@ -47,13 +45,13 @@ struct RequestsTab: View {
                         }
                     }
                     .foregroundColor(isSelected ? .white : MeeshyColors.indigo500)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.vertical, MeeshySpacing.sm)
                     .background(
                         Capsule().fill(isSelected ? MeeshyColors.indigo500 : Color.clear)
                     )
                     .overlay(
-                        Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1)
+                        Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo900.opacity(MeeshyOpacity.medium), lineWidth: 1)
                     )
                 }
                 .accessibilityLabel(String(format: String(localized: "contacts.requests.filter-a11y", defaultValue: "%@, %d demandes", bundle: .main), filterTitle(filter), count))
@@ -61,8 +59,8 @@ struct RequestsTab: View {
             }
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.smPlus)
     }
 
     /// Localized display title for a request filter. `RequestFilter.rawValue`
@@ -88,8 +86,7 @@ struct RequestsTab: View {
             if viewModel.receivedRequests.isEmpty {
                 emptyState(
                     icon: "person.2.slash",
-                    title: String(localized: "contacts.requests.empty.received", defaultValue: "Aucune demande reçue", bundle: .main),
-                    subtitle: String(localized: "contacts.requests.empty.received.subtitle", defaultValue: "Les demandes de contact reçues apparaîtront ici", bundle: .main)
+                    title: String(localized: "contacts.requests.empty.received", defaultValue: "Aucune demande reçue", bundle: .main)
                 )
             } else {
                 receivedList
@@ -98,8 +95,7 @@ struct RequestsTab: View {
             if viewModel.sentRequests.isEmpty {
                 emptyState(
                     icon: "paperplane",
-                    title: String(localized: "contacts.requests.empty.sent", defaultValue: "Aucune demande envoyée", bundle: .main),
-                    subtitle: String(localized: "contacts.requests.empty.sent.subtitle", defaultValue: "Les demandes que vous envoyez apparaîtront ici", bundle: .main)
+                    title: String(localized: "contacts.requests.empty.sent", defaultValue: "Aucune demande envoyée", bundle: .main)
                 )
             } else {
                 sentList
@@ -115,9 +111,10 @@ struct RequestsTab: View {
             LazyVStack(spacing: 0) {
                 ForEach(Array(viewModel.receivedRequests.enumerated()), id: \.element.id) { index, request in
                     receivedRow(request, index: index)
+                        .onAppear { Task { await viewModel.receivedRowAppeared(id: request.id) } }
                 }
             }
-            .padding(.top, 4)
+            .padding(.top, MeeshySpacing.xs)
         }
         .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
         .refreshable { await viewModel.loadReceived(forceNetwork: true) }
@@ -128,58 +125,52 @@ struct RequestsTab: View {
         let name = sender?.name ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main)
         let color = DynamicColorGenerator.colorForName(name)
 
-        return HStack(spacing: 14) {
+        return HStack(spacing: MeeshySpacing.mdPlus) {
             MeeshyAvatar(
                 name: name,
                 context: .userListItem,
                 accentColor: color,
                 avatarURL: sender?.avatar,
                 moodEmoji: statusViewModel.statusForUser(userId: request.senderId)?.moodEmoji,
+                ring: sender?.avatarRing,
                 onMoodTap: statusViewModel.moodTapHandler(for: request.senderId)
             )
+            .countsImpression(of: statusViewModel.statusForUser(userId: request.senderId)?.id) {
+                statusViewModel.trackImpression($0)
+            }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
                 if let username = sender?.username {
                     Text("@\(username)")
                         .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
-                if let message = request.message, !message.isEmpty {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundColor(theme.textSecondary)
-                        .lineLimit(2)
-                } else {
-                    // Sans message personnalisé, expliciter l'intention pour que la
-                    // ligne se suffise à elle-même (parité avec le sheet profil).
-                    Text(String(localized: "contacts.requests.received.intent", defaultValue: "Souhaite entrer en contact avec vous", bundle: .main))
-                        .font(.footnote)
-                        .foregroundColor(theme.textSecondary)
-                        .lineLimit(2)
-                }
+                receivedIntent(request)
+
+                levelCaption(for: request, key: String(localized: "circles.requests.incoming", defaultValue: "Demande le niveau %@", bundle: .main))
 
                 Text(request.createdAt.relativeTimeString)
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
 
             Spacer()
 
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Button {
                     Task { await viewModel.reject(requestId: request.id) }
                 } label: {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
-                        .foregroundColor(theme.textMuted)
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(theme.textMuted.opacity(0.12)))
+                        .foregroundStyle(theme.textMuted)
+                        .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+                        .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
                 }
                 .accessibilityLabel(String(format: String(localized: "contacts.requests.reject-a11y", defaultValue: "Refuser la demande de %@", bundle: .main), name))
 
@@ -188,12 +179,12 @@ struct RequestsTab: View {
                 } label: {
                     Image(systemName: "checkmark")
                         .font(.caption.weight(.bold))
-                        .foregroundColor(.white)
-                        .frame(width: 44, height: 44)
+                        .foregroundStyle(Color.white)
+                        .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                         .background(
                             Circle().fill(
                                 LinearGradient(
-                                    colors: [MeeshyColors.success, MeeshyColors.success.opacity(0.7)],
+                                    colors: [MeeshyColors.success, MeeshyColors.success.opacity(MeeshyOpacity.heavy)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -203,8 +194,8 @@ struct RequestsTab: View {
                 .accessibilityLabel(String(format: String(localized: "contacts.requests.accept-a11y", defaultValue: "Accepter la demande de %@", bundle: .main), name))
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.md)
         .accessibilityElement(children: .combine)
         .transition(.opacity.combined(with: .move(edge: .trailing)))
         .animation(.easeOut(duration: 0.2).delay(Double(index) * 0.02), value: viewModel.receivedRequests.count)
@@ -218,9 +209,10 @@ struct RequestsTab: View {
             LazyVStack(spacing: 0) {
                 ForEach(Array(viewModel.sentRequests.enumerated()), id: \.element.id) { index, request in
                     sentRow(request, index: index)
+                        .onAppear { Task { await viewModel.sentRowAppeared(id: request.id) } }
                 }
             }
-            .padding(.top, 4)
+            .padding(.top, MeeshySpacing.xs)
         }
         .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
         .refreshable { await viewModel.loadSent(forceNetwork: true) }
@@ -231,40 +223,43 @@ struct RequestsTab: View {
         let name = receiver?.name ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main)
         let color = DynamicColorGenerator.colorForName(name)
 
-        return HStack(spacing: 14) {
+        return HStack(spacing: MeeshySpacing.mdPlus) {
             MeeshyAvatar(
                 name: name,
                 context: .userListItem,
                 accentColor: color,
-                avatarURL: receiver?.avatar
+                avatarURL: receiver?.avatar,
+                ring: receiver?.avatarRing
             )
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
                 if let username = receiver?.username {
                     Text("@\(username)")
                         .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
+
+                levelCaption(for: request, key: String(localized: "circles.requests.outgoing", defaultValue: "Niveau %@", bundle: .main))
 
                 Text(request.createdAt.relativeTimeString)
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
 
             Spacer()
 
             Text(String(localized: "contacts.requests.pending", defaultValue: "En attente", bundle: .main))
                 .font(.caption2.weight(.semibold))
-                .foregroundColor(MeeshyColors.warning)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                .foregroundStyle(MeeshyColors.warning)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.vertical, MeeshySpacing.xs)
                 .background(
-                    Capsule().fill(MeeshyColors.warning.opacity(0.15))
+                    Capsule().fill(MeeshyColors.warning.opacity(MeeshyOpacity.light))
                 )
 
             Button {
@@ -272,19 +267,42 @@ struct RequestsTab: View {
             } label: {
                 Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(MeeshyColors.error)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .foregroundStyle(MeeshyColors.error)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(
-                        Capsule().stroke(MeeshyColors.error.opacity(0.3), lineWidth: 1)
+                        Capsule().stroke(MeeshyColors.error.opacity(MeeshyOpacity.medium), lineWidth: 1)
                     )
             }
-            .accessibilityLabel(String(format: String(localized: "contacts.requests.cancel-a11y", defaultValue: "Annuler la demande envoyee a %@", bundle: .main), name))
+            .accessibilityLabel(String(format: String(localized: "contacts.requests.cancel-a11y", defaultValue: "Annuler la demande envoyée à %@", bundle: .main), name))
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.md)
         .accessibilityElement(children: .combine)
         .animation(.easeOut(duration: 0.2).delay(Double(index) * 0.02), value: viewModel.sentRequests.count)
+    }
+
+    /// Le message de l'expéditeur, quand il en a écrit un : sans message, la ligne n'a rien à redire, le filtre
+    /// « Reçues » dit déjà d'où vient la demande (épure #18088).
+    @ViewBuilder
+    private func receivedIntent(_ request: FriendRequest) -> some View {
+        if let message = request.message, !message.isEmpty {
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(theme.textSecondary)
+                .lineLimit(2)
+        }
+    }
+
+    /// Le cran que vise une demande de montée (#13938) : Connaissance, Proche ou Sang. Une demande d'Ami (le sens
+    /// historique, `targetLevel` absent) ou illisible reste une demande simple — rien n'est ajouté.
+    @ViewBuilder
+    private func levelCaption(for request: FriendRequest, key: String) -> some View {
+        if let level = request.requestedLevel, level != .friend {
+            Text(String(format: key, CircleLevelNames.title(of: level)))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(CircleLevelColor.color(for: level))
+        }
     }
 
     // MARK: - Empty State
@@ -296,12 +314,8 @@ struct RequestsTab: View {
     // one VoiceOver element and adds a guidance subtitle the bespoke version
     // lacked. maxHeight fill keeps it vertically centred like the former Spacer
     // sandwich.
-    private func emptyState(icon: String, title: String, subtitle: String) -> some View {
-        AdaptiveContentUnavailableView(
-            title,
-            systemImage: icon,
-            description: Text(subtitle)
-        )
+    private func emptyState(icon: String, title: String) -> some View {
+        AdaptiveContentUnavailableView(title, systemImage: icon)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

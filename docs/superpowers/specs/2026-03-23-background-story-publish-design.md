@@ -158,8 +158,8 @@ When `activeUpload != nil`, opening the composer is blocked:
 
 | File | Change |
 |------|--------|
-| `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift` | Add `StoryUploadState`, `activeUpload`, `uploadTask`, `publishStoryInBackground()`, `retryUpload()`, `cancelUpload()` |
-| `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift` | Add `StoryUploadOverlay` view, modify `MyStoryButton` to show overlay during upload, always show both context menu items |
+| `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift` | Add `StoryUploadState`, `activeUpload`, `uploadTask`, `publishStoryInBackground()`, `retryUpload()`, `cancelUpload()` |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift` | Add `StoryUploadOverlay` view, modify `MyStoryButton` to show overlay during upload, always show both context menu items |
 | `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView.swift` | Add `onPublishAllInBackground` callback, modify `publishAllSlides()` to use it |
 
 ## Error Handling

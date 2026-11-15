@@ -57,14 +57,18 @@ final class FrenchDefaultValueRatchetTests: XCTestCase {
         return Self.frenchMarkers.firstMatch(in: value, range: range) != nil
     }
 
-    /// Clés utilisées en code avec un `defaultValue`, mais absentes du catalogue.
+    /// Clés utilisées en code avec un `defaultValue`, mais absentes de tout
+    /// catalogue de l'app : `Localizable` et les tables nommées (`ComposerTime`,
+    /// `ComposerShell`, `ComposerCamera`, #17110), dont
+    /// `LocalizationTableCatalogGuardTests` vérifie les sept locales.
     private func untranslatedFrenchKeys() throws -> Set<String> {
-        let catalogURL = iosRoot.appendingPathComponent("Meeshy/Localizable.xcstrings")
-        let data = try Data(contentsOf: catalogURL)
-        let catalogued = Set(
-            ((try JSONSerialization.jsonObject(with: data) as? [String: Any])?["strings"]
-                as? [String: Any] ?? [:]).keys
-        )
+        let dossier = iosRoot.appendingPathComponent("Meeshy")
+        let catalogues = try FileManager.default.contentsOfDirectory(at: dossier, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "xcstrings" && $0.lastPathComponent != "InfoPlist.xcstrings" }
+        let catalogued = try catalogues.reduce(into: Set<String>()) { cles, url in
+            let json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
+            cles.formUnion((json?["strings"] as? [String: Any] ?? [:]).keys)
+        }
 
         // Le tiret DOIT figurer dans la classe de caractères de la clé.
         // Sans lui, `location.move-prompt`, `common.clear-search`,
@@ -227,8 +231,22 @@ final class FrenchDefaultValueRatchetTests: XCTestCase {
         }
     }
 
-    /// Clés qui ressemblent à un identifiant sans en être un. `Jean-Pierre`
-    /// est un NOM employé comme clé d'exemple : la clé fait la valeur, en
-    /// français comme ailleurs.
-    private static let notAnInterfaceString: Set<String> = ["Jean-Pierre"]
+    /// Clés qui ressemblent à un identifiant sans en être un.
+    ///
+    /// **Vidée au 265i, en supprimant la CAUSE plutôt que l'exception.** Elle a
+    /// contenu `"Jean-Pierre"` — un NOM devenu clé de catalogue parce que
+    /// `Text("Jean-Pierre")` prend un `LocalizedStringKey` et qu'Xcode extrait
+    /// tout littéral qu'on lui passe. L'exception décrivait exactement ce
+    /// mécanisme (« la clé fait la valeur ») sans le remonter à sa source.
+    ///
+    /// Trois lignes plus bas dans le même fichier, le MÊME mécanisme avait fait
+    /// traduire le message d'exemple de l'onboarding en de / es / pt-BR, cassant
+    /// la démonstration du Prisme (#4313). Les sites passent désormais par
+    /// `Text(verbatim:)`, qui ne consulte aucune table — donc plus aucune clé de
+    /// ce genre n'entre au catalogue, et cette liste n'a plus rien à excuser.
+    ///
+    /// **La garder vide.** Une entrée ici dit « ce littéral n'aurait jamais dû
+    /// devenir une clé » : c'est une demande de `Text(verbatim:)`, pas une
+    /// dispense. Garde : `LocalizedStringKeyLiteralGuardTests`.
+    private static let notAnInterfaceString: Set<String> = []
 }

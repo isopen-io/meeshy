@@ -1,0 +1,133 @@
+import CoreGraphics
+
+/// APP-1 — les bannières du haut de l'appel établi (partage d'écran,
+/// enregistrement, cadre en direct) forment UNE pile, ancrée sous la rangée
+/// d'en-tête (`topChrome` : Réduire, Conversation, durée). Avant, chacune
+/// était posée à un décalage fixe (60, 110, 160 pt depuis le bord) : sur un
+/// iPhone à Dynamic Island, la première passait sous le chevron « Réduire »,
+/// et deux bannières de hauteur variable se chevauchaient.
+/// #18227 — les pastilles de service (« En attente », « Vidéo réduite ») viennent après la
+/// capture et AVANT le cadre en direct, comme sur Android : ma vignette descend sous elles et
+/// ignore le cadre, qui ne doit donc jamais se poser au-dessus d'elles.
+nonisolated enum CallTopBanner: Int, CaseIterable, Sendable {
+    case screenShare
+    case recording
+    case capture
+    case hold
+    case videoNotice
+    case liveFrame
+}
+
+nonisolated enum CallTopBannerStack {
+    /// Hauteur de la rangée d'en-tête (cible tactile 44 pt) plus l'écart qui
+    /// la sépare de la première bannière. Même valeur que le badge « micro
+    /// coupé » du correspondant, posé lui aussi sous l'en-tête.
+    static let headerRowClearance: CGFloat = 52
+
+    /// P16.4 — la marge latérale de la pile : les bandeaux tiennent presque toute la largeur.
+    static let horizontalMargin: CGFloat = 12
+
+    /// Le plancher d'un bandeau (cible tactile) et l'écart que la pile met entre deux bandeaux
+    /// (`MeeshySpacing.sm`, tenu égal par un témoin) : le même écart sépare le dernier de ma vignette.
+    static let bannerMinimumHeight: CGFloat = 44
+    static let bannerGap: CGFloat = 8
+
+    /// Les maillons des pastilles de service (#18227) : seuls ceux-là passent par le paramètre `service`.
+    static let serviceBanners: Set<CallTopBanner> = [.hold, .videoNotice]
+
+    /// #17791 (R1.6, R3.10) — les bandeaux dont la place revient à ma vignette, pastilles de service
+    /// montrées comprises (`CallServicePills.banners`, E3 · E4 : jamais couverte). Un partage REÇU n'y
+    /// est pas : sa place est en décision porteur (#17730).
+    static func countedForSelfTile(isLocalScreenShareShown: Bool, isRecordingShown: Bool, isCaptureAlertShown: Bool, service: Set<CallTopBanner> = []) -> Set<CallTopBanner> {
+        var counted = service.intersection(serviceBanners)
+        if isLocalScreenShareShown { counted.insert(.screenShare) }
+        if isRecordingShown { counted.insert(.recording) }
+        if isCaptureAlertShown { counted.insert(.capture) }
+        return counted
+    }
+
+    /// #17791 — la place que la pile prend sous l'en-tête : ma vignette descend d'autant. Chaque
+    /// bandeau compte sa hauteur MESURÉE (une puce à deux lignes, un nom long), jamais moins que le
+    /// plancher tant qu'il n'a pas rendu sa mesure.
+    static func selfTileClearance(counted: Set<CallTopBanner>, heights: [CallTopBanner: CGFloat]) -> CGFloat {
+        ordered(counted).reduce(0) { $0 + max(heights[$1] ?? 0, bannerMinimumHeight) + bannerGap }
+    }
+
+    /// #17833 — les bandeaux présents à l'écran : un partage (le mien ou reçu), l'enregistrement, la
+    /// capture, les pastilles de service, le cadre en direct. Le site UNIQUE de la présence, que la
+    /// pile et la grille lisent.
+    static func present(isScreenShareShown: Bool, isRecordingShown: Bool, isCaptureAlertShown: Bool, isLiveFrameShown: Bool, service: Set<CallTopBanner> = []) -> Set<CallTopBanner> {
+        var present = countedForSelfTile(isLocalScreenShareShown: isScreenShareShown, isRecordingShown: isRecordingShown, isCaptureAlertShown: isCaptureAlertShown, service: service)
+        if isLiveFrameShown { present.insert(.liveFrame) }
+        return present
+    }
+
+    /// #17833 (L4.11) — en groupe, la grille cède sa place à la pile au lieu de passer dessous : MÊME loi
+    /// que ma vignette de duo, mais tous les bandeaux présents comptent (un partage reçu aussi, le cadre
+    /// en direct aussi), puisque la grille n'a pas de coin à se garder. Plein écran, la pile est rangée
+    /// avec le chrome : la scène reprend tout l'écran.
+    static func groupGridClearance(present: Set<CallTopBanner>, heights: [CallTopBanner: CGFloat], isStageFullScreen: Bool) -> CGFloat {
+        guard !isStageFullScreen else { return 0 }
+        return selfTileClearance(counted: present, heights: heights)
+    }
+
+    /// Le haut de la pile, depuis le bord de l'écran.
+    static func topInset(chromeTopInset: CGFloat) -> CGFloat {
+        chromeTopInset + headerRowClearance
+    }
+
+    /// Ordre fixe, quel que soit l'ordre d'arrivée : partage → enregistrement
+    /// → capture (R1, #16665) → En attente → Vidéo réduite (#18227) → cadre. Une bannière absente ne laisse pas de trou.
+    static func ordered(_ present: Set<CallTopBanner>) -> [CallTopBanner] {
+        CallTopBanner.allCases.filter(present.contains)
+    }
+}
+
+/// #17965 (L1.8) — ma vignette vue de la pile : sa largeur visible en paysage et sa distance au bord
+/// physique. Absente quand elle n'est pas dans un coin du haut (groupe, coin du bas, cadre en direct).
+nonisolated struct CallTopBannerTileNeighbor: Equatable, Sendable {
+    let width: CGFloat
+    let edgeDistance: CGFloat
+}
+
+extension CallTopBannerTileNeighbor {
+    /// #17965 (L1.8, L2.8) — ma vignette de duo dans un coin du haut, telle que la pile la voit en paysage :
+    /// sa largeur visible (rangée comprise) et sa distance au bord, rail compris quand elle lui cède le coin.
+    /// Hors du duo vidéo, dans un coin du bas ou sous le cadre en direct, elle ne gêne pas la pile.
+    @MainActor static func duoTile(isShown: Bool, isAtTop: Bool, width: CGFloat, ownInset: CGFloat, safeHorizontal: CGFloat, railsShown: Bool) -> CallTopBannerTileNeighbor? {
+        guard isShown, isAtTop else { return nil }
+        let yields = CallRailsLayout.selfTileYieldsToRails(isLandscape: true, railsShown: railsShown)
+        return CallTopBannerTileNeighbor(width: width, edgeDistance: CallRailsLayout.selfTileEdgeDistance(ownInset: ownInset, safeHorizontal: safeHorizontal, yieldsToRails: yields))
+    }
+}
+
+/// #17965 (L1.8) — la largeur de la pile : `nil` en portrait (toute la largeur, ma vignette dessous) ;
+/// en paysage, bornée et centrée, et dite « à côté » quand ma vignette garde son coin.
+nonisolated struct CallTopBannerSpan: Equatable, Sendable {
+    let bannerMaxWidth: CGFloat?
+    let keepsSelfTileBeside: Bool
+
+    var stackMaxWidth: CGFloat {
+        bannerMaxWidth.map { $0 + 2 * CallTopBannerStack.horizontalMargin } ?? .infinity
+    }
+}
+
+nonisolated extension CallTopBannerStack {
+    /// #17965 · #17935 — la borne de la pilule agrandie, que la pile prend en paysage.
+    static let landscapeMaxWidth: CGFloat = 560
+
+    /// Le plus étroit où « Vous partagez votre écran · Arrêter » tient encore sur une ligne.
+    static let landscapeMinimumWidth: CGFloat = 300
+
+    /// #17965 (L1.8, L6) — en paysage, la pile se borne à 560 et se centre ; elle se resserre pour
+    /// laisser ma vignette dans son coin, à côté d'elle, tant qu'elle reste lisible. Trop étroite,
+    /// ma vignette descend sous elle, comme en portrait. La loi lit la forme de la fenêtre.
+    static func span(window: CGSize, safeHorizontal: CGFloat, selfTile: CallTopBannerTileNeighbor?) -> CallTopBannerSpan {
+        guard window.width > window.height else { return CallTopBannerSpan(bannerMaxWidth: nil, keepsSelfTileBeside: false) }
+        let alone = max(0, min(landscapeMaxWidth, window.width - 2 * (safeHorizontal + horizontalMargin)))
+        guard let selfTile else { return CallTopBannerSpan(bannerMaxWidth: alone, keepsSelfTileBeside: false) }
+        let beside = min(alone, window.width - 2 * (selfTile.edgeDistance + selfTile.width + bannerGap))
+        guard beside >= landscapeMinimumWidth else { return CallTopBannerSpan(bannerMaxWidth: alone, keepsSelfTileBeside: false) }
+        return CallTopBannerSpan(bannerMaxWidth: beside, keepsSelfTileBeside: true)
+    }
+}

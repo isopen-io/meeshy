@@ -1,5 +1,6 @@
 import Foundation
 import os
+import MeeshyCore
 
 /// Lightweight data sync for the Notification Service Extension.
 ///
@@ -11,11 +12,13 @@ import os
 /// Constraints:
 /// - 30 second execution budget (iOS kills the extension after that)
 /// - 24 MB memory limit
-/// - No MeeshySDK import (too heavy — Socket.IO, WebRTC, GRDB)
+/// - No MeeshySDK import here (too heavy — Socket.IO, WebRTC, GRDB); the
+///   request identity comes from `NSEAPIRequest`, the one NSE file that reads
+///   `ClientInfoProvider` so every request is served like the app's (#7804)
 /// - Auth token read from shared Keychain (same access group)
-nonisolated enum NSEDataSync {
+enum NSEDataSync {
 
-    private static let appGroupId = "group.me.meeshy.apps"
+    private static let appGroupId = AppGroupPreferences.suiteName
     private static let pendingDirName = "nse_pending_messages"
     private static let pendingPostsDirName = "nse_pending_posts"
     private static let snapshotsKey = "conversation_snapshots"
@@ -84,7 +87,7 @@ nonisolated enum NSEDataSync {
     /// (edit) and DELETE live there, so every prefetch answered 404 and the
     /// App Group staging directory stayed empty. Two guarantees rested on
     /// this call and neither held: cold-start-from-push never had its message
-    /// locally, and `NotificationService.prePersistMessage` deliberately skips
+    /// locally, and `NSEMessagePrePersister.prePersist` deliberately skips
     /// E2EE messages *because* "NSEDataSync already fetches the canonical
     /// record" — so encrypted pushes staged nothing at all. The canonical
     /// single-message read is `GET /messages/:messageId` (membership-checked
@@ -109,9 +112,7 @@ nonisolated enum NSEDataSync {
             return
         }
 
-        var request = URLRequest(url: url, timeoutInterval: 15)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let request = NSEAPIRequest.make(url: url, token: token)
 
         let task = URLSession.shared.dataTask(with: request) { data, response, error in
             guard let data,
@@ -172,9 +173,7 @@ nonisolated enum NSEDataSync {
             return
         }
 
-        var request = URLRequest(url: url, timeoutInterval: 15)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let request = NSEAPIRequest.make(url: url, token: token)
 
         let task = URLSession.shared.dataTask(with: request) { data, response, _ in
             guard let data,
@@ -228,27 +227,6 @@ nonisolated enum NSEDataSync {
         }
     }
 
-    /// Called by the main app on foreground resume to consume pending messages.
-    /// Returns array of (conversationId, messageJSON) tuples.
-    static func consumePendingMessages() -> [(conversationId: String, data: Data)] {
-        guard let dir = pendingDirectory() else { return [] }
-
-        let fm = FileManager.default
-        guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else {
-            return []
-        }
-
-        var results: [(String, Data)] = []
-        for file in files where file.pathExtension == "json" {
-            let name = file.deletingPathExtension().lastPathComponent
-            let parts = name.split(separator: "_", maxSplits: 1)
-            guard parts.count == 2, let data = try? Data(contentsOf: file) else { continue }
-            results.append((String(parts[0]), data))
-            nseRemoveFile(file, context: "consumed staged message")
-        }
-        return results
-    }
-
     private static func pendingPostsDirectory() -> URL? {
         guard let container = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: appGroupId
@@ -295,38 +273,19 @@ nonisolated enum NSEDataSync {
     // MARK: - Trusted base URL resolution
     //
     // The NSE never trusts a URL coming from the push payload (see security
-    // note on syncMessage). The base URL is resolved from a small allowlist
-    // matching the xcconfig environments (Production, Staging, Localhost).
-    // The main app writes the active environment to App Group UserDefaults
-    // (`meeshy_api_base_url`) when the user switches environment via the
-    // dev menu; the NSE reads it at request time. Anything outside the
-    // allowlist falls back to production.
+    // note on syncMessage). The allowlist lives in `NSETrustedOrigin`, shared
+    // with the content extension (#8859).
 
-    private static let allowedApiBaseURLs: Set<String> = [
-        "https://gate.meeshy.me",
-        "https://gate.staging.meeshy.me",
-        "http://localhost:3000"
-    ]
-    private static let defaultApiBaseURL = "https://gate.meeshy.me"
-    private static let apiBaseURLDefaultsKey = "meeshy_api_base_url"
-
-    /// L'origine API de confiance, telle que résolue par l'allowlist ci-dessus.
+    /// L'origine API de confiance (`NSETrustedOrigin`).
     ///
     /// Exposée parce que le NSE en a besoin AILLEURS que pour ses propres
     /// requêtes : les URLs média du payload push (avatar de l'auteur, pièce
     /// jointe du message) arrivent en chemin relatif et doivent être résolues
     /// contre cette même origine — jamais contre une base dictée par le
     /// payload, qui n'est pas une source de confiance.
-    static var trustedApiBaseURL: String { resolveApiBaseURL() }
+    static var trustedApiBaseURL: String { NSETrustedOrigin.apiBaseURL }
 
-    private static func resolveApiBaseURL() -> String {
-        guard let defaults = UserDefaults(suiteName: appGroupId),
-              let stored = defaults.string(forKey: apiBaseURLDefaultsKey),
-              allowedApiBaseURLs.contains(stored) else {
-            return defaultApiBaseURL
-        }
-        return stored
-    }
+    private static func resolveApiBaseURL() -> String { NSETrustedOrigin.apiBaseURL }
 
     // MARK: - Auth token from shared Keychain
 
@@ -362,7 +321,7 @@ nonisolated enum NSEDataSync {
         return "\(teamPrefix).me.meeshy.app"
     }()
 
-    private static func readAuthToken() -> String? {
+    static func readAuthToken() -> String? {
         // Read active user ID from shared UserDefaults
         guard let defaults = UserDefaults(suiteName: appGroupId),
               let userId = defaults.string(forKey: "meeshy_active_user_id") else {
@@ -437,11 +396,7 @@ nonisolated enum NSEDataSync {
         let apiBaseURL = resolveApiBaseURL()
         guard let url = URL(string: "\(apiBaseURL)\(path)") else { return }
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let request = NSEAPIRequest.make(url: url, token: token, method: "POST", timeout: 60)
 
         // Background upload tasks must read their body from a file.
         guard let bodyFileURL = writeBackgroundBodyFile(body) else { return }
@@ -520,10 +475,10 @@ nonisolated enum NSEDataSync {
 /// notification but never disappears silently — the NSE runs for ~30s with no
 /// debugger attached, so the log is the only forensic trail.
 extension Logger {
-    nonisolated static let nse = Logger(subsystem: "me.meeshy.app", category: "nse-datasync")
+    static let nse = MeeshyLog.logger(.nseDatasync)
 }
 
-nonisolated func nseDecodeOrLog<T: Decodable>(
+func nseDecodeOrLog<T: Decodable>(
     _ type: T.Type, from data: Data, field: String, decoder: JSONDecoder = JSONDecoder()
 ) -> T? {
     do {
@@ -534,7 +489,7 @@ nonisolated func nseDecodeOrLog<T: Decodable>(
     }
 }
 
-nonisolated func nseSerializeOrLog(_ object: Any, field: String) -> Data? {
+func nseSerializeOrLog(_ object: Any, field: String) -> Data? {
     do {
         return try JSONSerialization.data(withJSONObject: object)
     } catch {
@@ -543,7 +498,7 @@ nonisolated func nseSerializeOrLog(_ object: Any, field: String) -> Data? {
     }
 }
 
-nonisolated func nseCreateDirectory(_ url: URL, context: String) {
+func nseCreateDirectory(_ url: URL, context: String) {
     do {
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     } catch CocoaError.fileWriteFileExists {
@@ -553,7 +508,7 @@ nonisolated func nseCreateDirectory(_ url: URL, context: String) {
     }
 }
 
-nonisolated func nseRemoveFile(_ url: URL, context: String) {
+func nseRemoveFile(_ url: URL, context: String) {
     do {
         try FileManager.default.removeItem(at: url)
     } catch CocoaError.fileNoSuchFile {

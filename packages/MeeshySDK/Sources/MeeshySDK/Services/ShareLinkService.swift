@@ -10,8 +10,29 @@ public protocol ShareLinkInfoProviding: Sendable {
     func getLinkInfo(identifier: String) async throws -> ShareLinkInfo
 }
 
-public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable {
+/// La gestion des liens par leur PROPRIÉTAIRE — la fiche détails + édition
+/// (#7797) et la liste complète de ses arrivées (#7813).
+public protocol ShareLinkManaging: Sendable {
+    func listMyLinks(offset: Int, limit: Int) async throws -> [MyShareLink]
+    func fetchLinkStats(linkId: String) async throws -> ShareLinkArrivalStats
+    func fetchLinkArrivals(linkId: String, cursor: String?, limit: Int) async throws -> ShareLinkArrivalsPage
+    func updateLink(linkId: String, settings: ShareLinkSettings) async throws
+    func toggleLink(linkId: String, isActive: Bool) async throws
+    func deleteLink(linkId: String) async throws
+}
+
+public final class ShareLinkService: ShareLinkInfoProviding, ShareLinkManaging, Sendable {
     public static let shared = ShareLinkService()
+    #if DEBUG
+    /// Vitrine App Store (#8855, DEBUG uniquement) : un aperçu de lien fixé, servi sans
+    /// passerelle, pour capturer le VRAI accueil d'un invité. `nil` hors vitrine.
+    public static var debugLinkInfoOverride: (@Sendable (String) -> ShareLinkInfo?)? {
+        get { debugLinkInfoOverrideSlot.read { $0 } }
+        set { debugLinkInfoOverrideSlot.mutate { $0 = newValue } }
+    }
+
+    private static let debugLinkInfoOverrideSlot = Locked<(@Sendable (String) -> ShareLinkInfo?)?>(nil)
+    #endif
     private let api: APIClientProviding
 
     init(api: APIClientProviding = APIClient.shared) {
@@ -20,18 +41,52 @@ public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable
 
     // MARK: - User's Own Links (authenticated)
 
-    /// Liste les liens de partage créés par l'utilisateur connecté
+    /// Liste les liens de partage créés par l'utilisateur connecté, avec leur
+    /// conversation et leur configuration (`expand=conversation,policy`) : la
+    /// fiche d'un lien s'affiche depuis cette liste sans second appel.
     public func listMyLinks(offset: Int = 0, limit: Int = 50) async throws -> [MyShareLink] {
         let response: APIResponse<[MyShareLink]> = try await api.request(
-            endpoint: "/links?offset=\(offset)&limit=\(limit)"
+            LinksEndpoint.root,
+            queryItems: [URLQueryItem(name: "offset", value: String(offset)),
+                         URLQueryItem(name: "limit", value: String(limit)),
+                         URLQueryItem(name: "expand", value: "conversation,policy")]
         )
         return response.data
+    }
+
+    /// Visites, arrivées, langues et pays des arrivants d'UN lien.
+    public func fetchLinkStats(linkId: String) async throws -> ShareLinkArrivalStats {
+        let response: APIResponse<ShareLinkArrivalStats> = try await api.request(
+            LinksEndpoint.byLinkIdStats(linkId: linkId)
+        )
+        return response.data
+    }
+
+    /// Une page des arrivées d'UN lien, des plus récentes aux plus anciennes
+    /// (#7813). `cursor` est celui que la page précédente a rendu, jamais
+    /// fabriqué ; `nil` demande la première page.
+    public func fetchLinkArrivals(linkId: String, cursor: String?, limit: Int) async throws -> ShareLinkArrivalsPage {
+        let query = [URLQueryItem(name: "limit", value: String(limit))]
+            + (cursor.map { [URLQueryItem(name: "cursor", value: $0)] } ?? [])
+        let response: APIResponse<ShareLinkArrivalsPage> = try await api.request(
+            LinksEndpoint.byLinkIdArrivals(linkId: linkId),
+            queryItems: query
+        )
+        return response.data
+    }
+
+    /// Enregistre la configuration ENTIÈRE du lien (`PATCH /links/:linkId`).
+    public func updateLink(linkId: String, settings: ShareLinkSettings) async throws {
+        let _: APIResponse<EmptySuccess> = try await api.patch(
+            LinksEndpoint.byLinkId(linkId: linkId),
+            body: UpdateShareLinkRequest(settings: settings)
+        )
     }
 
     /// Stats globales pour les liens de l'utilisateur
     public func fetchMyStats() async throws -> MyShareLinkStats {
         let response: APIResponse<MyShareLinkStats> = try await api.request(
-            endpoint: "/links/stats"
+            LinksEndpoint.stats
         )
         return response.data
     }
@@ -39,8 +94,11 @@ public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable
     // MARK: - Get Link Info (public, no auth required)
 
     public func getLinkInfo(identifier: String) async throws -> ShareLinkInfo {
+        #if DEBUG
+        if let info = Self.debugLinkInfoOverride?(identifier) { return info }
+        #endif
         let response: APIResponse<ShareLinkInfo> = try await api.request(
-            endpoint: "/anonymous/link/\(identifier)"
+            AnonymousEndpoint.linkByIdentifier(identifier: identifier)
         )
         return response.data
     }
@@ -49,7 +107,7 @@ public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable
 
     public func joinAnonymously(linkId: String, request: AnonymousJoinRequest) async throws -> AnonymousJoinResponse {
         let response: APIResponse<AnonymousJoinResponse> = try await api.post(
-            endpoint: "/anonymous/join/\(linkId)",
+            AnonymousEndpoint.joinByLinkId(linkId: linkId),
             body: request
         )
         return response.data
@@ -64,7 +122,7 @@ public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable
     public func joinAuthenticated(linkId: String) async throws -> JoinAuthenticatedResponse {
         struct EmptyBody: Encodable {}
         let response: APIResponse<JoinAuthenticatedResponse> = try await api.post(
-            endpoint: "/conversations/join/\(linkId)",
+            ConversationsEndpoint.joinByLinkId(linkId: linkId),
             body: EmptyBody()
         )
         return response.data
@@ -72,11 +130,17 @@ public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable
 
     // MARK: - Leave Anonymous Session
 
+    /// `DELETE /guest-sessions/me` — successeur de l'alias déprécié
+    /// `POST /anonymous/leave` (#4167 critère 4, #5425). Le jeton voyage en
+    /// en-tête `X-Session-Token`, jamais dans le corps : la route l'identifie
+    /// ainsi, pas via le `sessionToken` du compte actif.
     public func leaveAnonymousSession(sessionToken: String) async throws {
-        struct LeaveRequest: Encodable { let sessionToken: String }
-        let _: APIResponse<[String: String]> = try await api.post(
-            endpoint: "/anonymous/leave",
-            body: LeaveRequest(sessionToken: sessionToken)
+        let _: APIResponse<DiscardedResponseBody> = try await api.requestWithHeaders(
+            GuestSessionsEndpoint.me,
+            method: "DELETE",
+            body: nil,
+            queryItems: nil,
+            headers: ["X-Session-Token": sessionToken]
         )
     }
 
@@ -84,7 +148,7 @@ public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable
 
     public func createShareLink(request: CreateShareLinkRequest) async throws -> CreatedShareLink {
         let response: APIResponse<CreateShareLinkResponse> = try await api.post(
-            endpoint: "/links",
+            LinksEndpoint.root,
             body: request
         )
         let raw = response.data
@@ -102,8 +166,8 @@ public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable
 
     public func toggleLink(linkId: String, isActive: Bool) async throws {
         struct ToggleBody: Encodable { let isActive: Bool }
-        let _: APIResponse<MyShareLink> = try await api.patch(
-            endpoint: "/links/\(linkId)",
+        let _: APIResponse<DiscardedResponseBody> = try await api.patch(
+            LinksEndpoint.byLinkId(linkId: linkId),
             body: ToggleBody(isActive: isActive)
         )
     }
@@ -112,7 +176,7 @@ public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable
 
     public func deleteLink(linkId: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(
-            endpoint: "/links/\(linkId)"
+            LinksEndpoint.byLinkId(linkId: linkId)
         )
     }
 }

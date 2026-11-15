@@ -1,6 +1,7 @@
 package me.meeshy.app.feed
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.StatusComposerDraftSnapshot
 import me.meeshy.sdk.model.StatusEntry
 import org.junit.Test
 
@@ -221,5 +222,89 @@ class StatusComposerDraftTest {
         assertThat(request.repostOfId).isEqualTo("src-1")
         assertThat(request.viaUsername).isEqualTo("alice")
         assertThat(request.audioUrl).isEqualTo("https://cdn/mood.m4a")
+    }
+
+    // --- republish audience (#13667) -------------------------------------------
+
+    private fun sourceWith(visibility: String?) = sourceEntry().copy(visibility = visibility)
+
+    @Test
+    fun `republishing starts on the audience of the original, never wider`() {
+        assertThat(StatusComposerDraft.republish(sourceWith("FRIENDS")).visibility).isEqualTo(StatusVisibility.FRIENDS)
+        assertThat(StatusComposerDraft.republish(sourceWith("COMMUNITY")).visibility).isEqualTo(StatusVisibility.COMMUNITY)
+        assertThat(StatusComposerDraft.republish(sourceWith("PRIVATE")).visibility).isEqualTo(StatusVisibility.PRIVATE)
+        assertThat(StatusComposerDraft.republish(sourceWith("friends")).visibility).isEqualTo(StatusVisibility.FRIENDS)
+    }
+
+    @Test
+    fun `republishing a public original keeps the public default and every audience`() {
+        val draft = StatusComposerDraft.republish(sourceWith("PUBLIC"))
+
+        assertThat(draft.visibility).isEqualTo(StatusVisibility.PUBLIC)
+        assertThat(draft.publishRequest()!!.visibility).isEqualTo("PUBLIC")
+        assertThat(draft.offeredVisibilities).containsExactlyElementsIn(StatusVisibility.entries)
+    }
+
+    @Test
+    fun `an audience the draft cannot express or read falls back on the most restrictive one`() {
+        assertThat(StatusComposerDraft.republish(sourceWith("ONLY")).visibility).isEqualTo(StatusVisibility.PRIVATE)
+        assertThat(StatusComposerDraft.republish(sourceWith("EXCEPT")).visibility).isEqualTo(StatusVisibility.PRIVATE)
+        assertThat(StatusComposerDraft.republish(sourceWith(null)).visibility).isEqualTo(StatusVisibility.PRIVATE)
+        assertThat(StatusComposerDraft.republish(sourceWith("???")).visibility).isEqualTo(StatusVisibility.PRIVATE)
+    }
+
+    @Test
+    fun `a republish of a friends original offers friends, the tighter circles and private`() {
+        val draft = StatusComposerDraft.republish(sourceWith("FRIENDS"))
+
+        assertThat(draft.offeredVisibilities)
+            .containsExactly(StatusVisibility.FRIENDS, StatusVisibility.CLOSE, StatusVisibility.BLOOD, StatusVisibility.PRIVATE)
+            .inOrder()
+    }
+
+    @Test
+    fun `a circle narrows toward a tighter circle, never toward friends from acquaintances`() {
+        assertThat(StatusComposerDraft.republish(sourceWith("ACQUAINTANCES")).offeredVisibilities)
+            .containsExactly(StatusVisibility.ACQUAINTANCES, StatusVisibility.CLOSE, StatusVisibility.BLOOD, StatusVisibility.PRIVATE)
+            .inOrder()
+        assertThat(StatusComposerDraft.republish(sourceWith("CLOSE")).offeredVisibilities)
+            .containsExactly(StatusVisibility.CLOSE, StatusVisibility.BLOOD, StatusVisibility.PRIVATE)
+            .inOrder()
+    }
+
+    @Test
+    fun `a blood mood is never republished, not even privately`() {
+        assertThat(StatusRepostAudience.allowed("BLOOD")).isEmpty()
+        assertThat(StatusRepostAudience.isRepublishable("BLOOD")).isFalse()
+        assertThat(StatusRepostAudience.isRepublishable("CLOSE")).isTrue()
+    }
+
+    @Test
+    fun `a stored draft whose audience this client does not know reopens restricted, never public`() {
+        val restored = StatusComposerDraftSnapshot(emoji = "🔥", text = "", visibility = "MOON", updatedAtMillis = 0L).toComposerDraft()
+
+        assertThat(restored.visibility).isEqualTo(StatusVisibility.PRIVATE)
+    }
+
+    @Test
+    fun `a fresh draft offers the circles ladder`() {
+        assertThat(StatusComposerDraft().offeredVisibilities).containsExactly(
+            StatusVisibility.PUBLIC, StatusVisibility.COMMUNITY, StatusVisibility.ACQUAINTANCES, StatusVisibility.FRIENDS,
+            StatusVisibility.CLOSE, StatusVisibility.BLOOD, StatusVisibility.PRIVATE,
+        ).inOrder()
+    }
+
+    @Test
+    fun `a republish refuses to widen the audience, narrowing is allowed`() {
+        val draft = StatusComposerDraft.republish(sourceWith("FRIENDS"))
+
+        assertThat(draft.withVisibility(StatusVisibility.PUBLIC).visibility).isEqualTo(StatusVisibility.FRIENDS)
+        assertThat(draft.withVisibility(StatusVisibility.COMMUNITY).visibility).isEqualTo(StatusVisibility.FRIENDS)
+        assertThat(draft.withVisibility(StatusVisibility.PRIVATE).visibility).isEqualTo(StatusVisibility.PRIVATE)
+    }
+
+    @Test
+    fun `a fresh draft offers every audience`() {
+        assertThat(StatusComposerDraft().offeredVisibilities).containsExactlyElementsIn(StatusVisibility.entries)
     }
 }

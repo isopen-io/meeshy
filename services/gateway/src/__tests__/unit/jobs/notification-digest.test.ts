@@ -87,13 +87,15 @@ describe('NotificationDigestJob — magic-login re-engagement', () => {
     expect(magicLinkService.issueLoginTokenForUser).toHaveBeenCalledWith('user-1');
   });
 
-  it('embeds the token in the magic-link validate URL with a returnUrl deep-link', async () => {
+  it('carries the token in the magic-link FRAGMENT (never the logged query, #10859) with a returnUrl deep-link', async () => {
     await job.runNow();
     const data = emailService.sendNotificationDigestEmail.mock.calls[0][0];
-    expect(data.magicUrl).toContain('/auth/magic-link/validate');
-    expect(data.magicUrl).toContain('token=RAWTOKEN123');
+    const url = new URL(data.magicUrl);
+    expect(url.pathname).toBe('/auth/email-link/magic-link');
+    expect(url.searchParams.get('token')).toBe('');
+    expect(new URLSearchParams(url.hash.slice(1)).get('token')).toBe('RAWTOKEN123');
     // most-recent notification (n1 @12:00) → conv-abc
-    expect(data.magicUrl).toContain(encodeURIComponent('/conversations/conv-abc'));
+    expect(url.searchParams.get('returnUrl')).toBe('/conversations/conv-abc');
   });
 
   it('does NOT pass actor/content (teaser reveals counts only)', async () => {

@@ -1,0 +1,37 @@
+/*
+ * LE VOILE DE L'APPUI LONG (#11222) — décision porteur du 2026-10-24 : le
+ * voile est le MATÉRIAU SYSTÈME, une seule loi pour iOS et le web. iOS pose
+ * `.ultraThinMaterial` sous un assombrissement de 30 % (`LongPressVeil`,
+ * MeeshyUI) ; le web pose son équivalent : un flou de 20 px saturé, sous le
+ * même assombrissement de 30 %, dans les deux schémas.
+ *
+ * Ce fichier ne déclare que des JETONS. Les voiles les lisent — le menu d'un
+ * message (`thread-menu.css`) et l'aperçu d'une conversation tenue
+ * (`conversation-peek.css`) — et l'importent eux-mêmes : la dépendance est
+ * celle de la feuille, aucun module ne peut l'oublier. Les replis vivent ICI,
+ * avec la loi, pour qu'aucun voile n'ait à les réécrire.
+ */
+:root {
+  --longpress-veil-backdrop: blur(20px) saturate(180%);
+  --longpress-veil-tint: color-mix(in srgb, black 30%, transparent);
+}
+
+/* Sans flou d'arrière-plan, 30 % laisseraient le texte du fil lisible sous
+   le menu : la teinte se densifie. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --longpress-veil-tint: color-mix(in srgb, black 64%, transparent);
+  }
+}
+
+/* Réduire la transparence : le voile devient OPAQUE — la surface de l'écran
+   assombrie des mêmes 30 %, comme le repli opaque d'iOS. La surface est lue
+   sur le jeton GÉNÉRÉ (`--ios-surface`) et non sur son alias Tailwind : cette
+   feuille est importée depuis JS, Tailwind ne la voit pas, et n'émet un alias
+   `@theme inline` que si une feuille qu'il traite le cite. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --longpress-veil-backdrop: none;
+    --longpress-veil-tint: color-mix(in srgb, black 30%, var(--ios-surface));
+  }
+}

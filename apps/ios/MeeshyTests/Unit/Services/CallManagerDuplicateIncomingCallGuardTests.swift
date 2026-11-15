@@ -30,13 +30,7 @@ import XCTest
 final class CallManagerDuplicateIncomingCallGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_reportIncomingVoIPCall_guardsAgainstSameCallIdAlreadyActive_beforeBusyPath() throws {
@@ -57,7 +51,7 @@ final class CallManagerDuplicateIncomingCallGuardTests: XCTestCase {
             return
         }
 
-        guard let busyGuardRange = body.range(of: "guard callState == .idle else {") else {
+        guard let busyGuardRange = body.range(of: "guard call.callState == .idle else {") else {
             XCTFail("reportIncomingVoIPCall's busy-path guard not found"); return
         }
 
@@ -78,6 +72,59 @@ final class CallManagerDuplicateIncomingCallGuardTests: XCTestCase {
             guardToBusy.contains("return"),
             "The same-callId guard must return immediately after phantom-acking, without falling through " +
             "to the busy-path banner or overwriting call state."
+        )
+    }
+
+    /// Calling-stack audit (2026-08-25, L5-F2) — NEGATIVE source guard on the
+    /// ORDER of the three session flags.
+    ///
+    /// `lastCallWasOutgoing = false`, `callUsesCallKit = true` and
+    /// `ringbackPlayer.shouldSelfActivateSession = false` used to sit ABOVE
+    /// `guard callState == .idle`, so a second VoIP push landing while a call
+    /// was already up rewrote the flags of THAT call. A foreground in-app call
+    /// legitimately runs with `callUsesCallKit == false` (answered while the
+    /// app is active, and nothing re-promotes it): flipping it to `true` made
+    /// every subsequent audio-session/hold decision of the live call read a
+    /// CallKit ownership it never had.
+    ///
+    /// Each assertion below uses the FIRST occurrence of the flag in the body,
+    /// so reintroducing the write above the guard — even while leaving the
+    /// correct one in place below — makes this test fail again.
+    ///
+    /// `resetEndedStateForNewCall()` deliberately stays ABOVE the guard: it is
+    /// what turns a residual `.ended` into `.idle` and therefore decides which
+    /// branch is taken.
+    func test_reportIncomingVoIPCall_busyPath_doesNotMutateActiveCallKitFlags() throws {
+        let source = try callManagerSource()
+        guard let body = DeclarationBodyScanner.body(
+            containing: "func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool, iceServers: [IceServer]? = nil, conversationId: String? = nil)",
+            in: source
+        ) else {
+            XCTFail("reportIncomingVoIPCall not found"); return
+        }
+
+        guard let busyGuardRange = body.range(of: "guard call.callState == .idle else {") else {
+            XCTFail("reportIncomingVoIPCall's busy-path guard not found"); return
+        }
+
+        for flag in ["lastCallWasOutgoing = false", "callUsesCallKit = true", "ringbackPlayer.shouldSelfActivateSession = false"] {
+            guard let flagRange = body.range(of: flag) else {
+                XCTFail("`\(flag)` not found in reportIncomingVoIPCall"); continue
+            }
+            XCTAssertTrue(
+                busyGuardRange.lowerBound < flagRange.lowerBound,
+                "`\(flag)` must be written BELOW `guard callState == .idle` — above it, a VoIP push " +
+                "arriving while another call is in progress rewrites the session flags of THAT call."
+            )
+        }
+
+        guard let resetRange = body.range(of: "resetEndedStateForNewCall()") else {
+            XCTFail("resetEndedStateForNewCall() not found in reportIncomingVoIPCall"); return
+        }
+        XCTAssertTrue(
+            resetRange.lowerBound < busyGuardRange.lowerBound,
+            "resetEndedStateForNewCall() must stay ABOVE the busy-path guard — it converts a residual " +
+            "`.ended` state into `.idle` and therefore selects the branch."
         )
     }
 }

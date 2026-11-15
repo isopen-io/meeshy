@@ -34,15 +34,20 @@ extension StoryCanvasUIView {
         var elements: [UIAccessibilityElement] = []
         for txt in slide.effects.textObjects {
             elements.append(makeAccessibilityElement(
-                label: "\(textAccessibilityPrefix) : \(txt.text)",
+                label: textAccessibilityLabel(txt.text),
                 traits: .staticText,
                 id: txt.id,
                 editableKind: .text
             ))
         }
+        // **Le fond se nomme FOND, en composition aussi** (#9521) : annoncé
+        // « Image » comme une image posée, il ne se distinguait pas à l'oreille,
+        // et son « Modifier » — les outils du fond — restait introuvable.
         for media in slide.effects.mediaObjects ?? [] {
             elements.append(makeAccessibilityElement(
-                label: mediaAccessibilityLabel(kind: media.kind),
+                label: media.isBackground
+                    ? backgroundMediaAccessibilityLabel(kind: media.kind)
+                    : mediaAccessibilityLabel(kind: media.kind),
                 traits: .image,
                 id: media.id,
                 editableKind: .media
@@ -65,7 +70,7 @@ extension StoryCanvasUIView {
                 label: locationAccessibilityLabel(for: location),
                 traits: .staticText,
                 id: location.id,
-                editableKind: .location
+                editableKind: .place
             ))
         }
         // Un container UIKit qui expose des enfants via `accessibilityElements`
@@ -76,8 +81,10 @@ extension StoryCanvasUIView {
         // surface `blankCanvasStarters` (SwiftUI, ses propres libellés/actions
         // déjà annotés) se superpose au canvas UIKit dans cet état — un résumé
         // fantôme ici ferait doublon.
-        guard !elements.isEmpty else { return elements }
-        let summaryLabels = elements.compactMap(\.accessibilityLabel)
+        let dessin = slide.effects.carriesDrawing
+        guard !elements.isEmpty || dessin else { return elements }
+        // Le dessin compte dans le résumé, sans être touchable (#13839, L5).
+        let summaryLabels = elements.compactMap(\.accessibilityLabel) + (dessin ? [drawingAccessibilityWord] : [])
         return [compositionSummaryElement(objectLabels: summaryLabels)] + elements
     }
 
@@ -95,9 +102,7 @@ extension StoryCanvasUIView {
         var elements: [UIAccessibilityElement] = []
         for media in slide.effects.mediaObjects ?? [] where media.isBackground {
             elements.append(makeAccessibilityElement(
-                label: media.kind == .video
-                    ? String(localized: "story.canvas.a11y.backgroundVideo", defaultValue: "Vidéo de fond", bundle: .module)
-                    : String(localized: "story.canvas.a11y.backgroundPhoto", defaultValue: "Photo de fond", bundle: .module),
+                label: backgroundMediaAccessibilityLabel(kind: media.kind),
                 traits: .image,
                 id: media.id,
                 editableKind: nil
@@ -163,9 +168,7 @@ extension StoryCanvasUIView {
             : String(localized: "story.composer.a11y.compositionCount.many", defaultValue: "\(count) objets", bundle: .module)
         let joined = objectLabels.joined(separator: ", ")
         let el = UIAccessibilityElement(accessibilityContainer: self)
-        el.accessibilityLabel = String(localized: "story.composer.a11y.composition",
-                                       defaultValue: "Story, \(countLabel) : \(joined)",
-                                       bundle: .module)
+        el.accessibilityLabel = formatWording.compositionSummary(count: countLabel, objects: joined)
         el.accessibilityTraits = .staticText
         el.accessibilityFrameInContainerSpace = bounds
         return el
@@ -211,9 +214,11 @@ extension StoryCanvasUIView {
             if m.isBackground {
                 return CGRect(origin: .zero, size: g.renderSize)
             }
-            let side: CGFloat = 540
-            let designSize = CGSize(width: side * CGFloat(m.scale),
-                                    height: side * CGFloat(m.scale) / CGFloat(max(m.aspectRatio, 0.01)))
+            // Le cadre du CALQUE, recadrage compris (#9499) : VoiceOver
+            // désigne ce que l'œil voit.
+            let base = StoryMediaLayer.baseMediaDesignSize(for: m)
+            let designSize = CGSize(width: base.width * CGFloat(m.scale),
+                                    height: base.height * CGFloat(m.scale))
             return centeredFrame(normalizedX: CGFloat(m.x),
                                  normalizedY: CGFloat(m.y),
                                  designSize: designSize,
@@ -258,6 +263,10 @@ extension StoryCanvasUIView {
         return stickerAccessibilityWord
     }
 
+    var drawingAccessibilityWord: String {
+        String(localized: "story.canvas.a11y.drawing", defaultValue: "Dessin", bundle: .module)
+    }
+
     var stickerAccessibilityWord: String {
         String(localized: "story.canvas.a11y.sticker", defaultValue: "Sticker", bundle: .module)
     }
@@ -275,6 +284,41 @@ extension StoryCanvasUIView {
 
     var textAccessibilityPrefix: String {
         String(localized: "story.canvas.a11y.textPrefix", defaultValue: "Texte", bundle: .module)
+    }
+
+    /// **Un séparateur n'a de sens que s'il sépare deux choses.**
+    ///
+    /// Le libellé se composait en `"\(prefixe) : \(txt.text)"` sans condition.
+    /// Sur la coquille qu'une porte TEXTE vient de poser — et qui reste vide
+    /// jusqu'à la première frappe —, VoiceOver annonçait « Texte : » puis se
+    /// taisait : un deux-points en suspens, que l'oreille lit comme une
+    /// lecture INTERROMPUE plutôt que comme un contenu absent.
+    ///
+    /// **La parade vivait déjà cinq lignes plus bas**, sur le lieu :
+    /// `locationAccessibilityLabel` rend le mot NU quand le nom manque, au
+    /// lieu de le suffixer d'un séparateur orphelin. Le texte ne la suivait
+    /// pas — deux compositions voisines, une seule des deux gardée.
+    ///
+    /// Le vide se DIT plutôt qu'il ne se tait : « Texte » seul laisserait
+    /// l'auditeur se demander si la lecture a échoué. La chaîne est celle que
+    /// `ComposerToolPanelHost` sert déjà à l'œil pour le même état — un mot,
+    /// une clé, une traduction.
+    ///
+    /// Le blanc compte comme du vide, comme partout ailleurs dans le composer
+    /// (l'aperçu de la feuille des textes, la pastille de description).
+    func textAccessibilityLabel(_ text: String) -> String {
+        let net = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !net.isEmpty else {
+            return String(localized: "story.composer.text.empty",
+                          defaultValue: "Texte vide", bundle: .module)
+        }
+        return "\(textAccessibilityPrefix) : \(net)"
+    }
+
+    func backgroundMediaAccessibilityLabel(kind: StoryMediaKind?) -> String {
+        kind == .video
+            ? String(localized: "story.canvas.a11y.backgroundVideo", defaultValue: "Vidéo de fond", bundle: .module)
+            : String(localized: "story.canvas.a11y.backgroundPhoto", defaultValue: "Photo de fond", bundle: .module)
     }
 
     func mediaAccessibilityLabel(kind: StoryMediaKind?) -> String {
@@ -295,9 +339,30 @@ extension StoryCanvasUIView {
     /// sticker/location — the SAME dead end exists there today for sighted
     /// users, pre-existing and out of this pass's scope. Not replicating it
     /// here for VoiceOver avoids adding a NEW instance of the same gap.
+    ///
+    /// Un élément verrouillé (badge d'attribution d'une republication) n'offre
+    /// ni « Modifier », ni « Supprimer », ni « Dupliquer » — la règle est
+    /// celle du menu long-press (`StoryCanvasContextAction.offered`) : les
+    /// annoncer sur un élément qui les refuse serait le même cul-de-sac.
     func makeCustomActions(forId id: String, kind: CanvasItemKind) -> [UIAccessibilityCustomAction] {
+        // **La MÊME règle que le menu long-press (#4046)** — annoncer à
+        // VoiceOver une action que le menu visuel ne sert pas rouvrirait le
+        // cul-de-sac par l'autre porte : « Mettre au premier plan » sur un objet
+        // seul de son plan ne déplace rien, et l'annoncer serait pire que de
+        // l'omettre, puisque rien ne le dit à l'oreille.
+        let offered = StoryCanvasContextAction.offered(
+            isLocked: isLockedItem(id: id),
+            isBackground: isBackgroundItem(id: id),
+            sharesPlaneWithAnother: foregroundSiblingExists(besides: id),
+            hasEditor: hasEditor(for: kind)
+        )
         var actions: [UIAccessibilityCustomAction] = []
-        if kind == .text || kind == .media {
+        // **La restriction par kind a quitté ce site** (#4074). Elle y vivait en
+        // local — `kind == .text || kind == .media` — pendant que le menu visuel
+        // ne l'appliquait PAS : VoiceOver taisait « Modifier » sur un sticker,
+        // l'œil le voyait, et le toucher ne faisait rien. Les deux lisent
+        // désormais `hasEditor(for:)`, le site unique.
+        if offered.contains(.edit) {
             actions.append(UIAccessibilityCustomAction(
                 name: String(localized: "story.composer.editSlide", defaultValue: "Modifier", bundle: .module)
             ) { [weak self] _ in
@@ -308,26 +373,35 @@ extension StoryCanvasUIView {
                 return true
             })
         }
-        actions.append(contentsOf: [
-            UIAccessibilityCustomAction(
+        if offered.contains(.delete) {
+            actions.append(UIAccessibilityCustomAction(
                 name: String(localized: "story.composer.deleteSlide", defaultValue: "Supprimer", bundle: .module)
             ) { [weak self] _ in
                 self?.deleteItem(id: id)
                 return true
-            },
-            UIAccessibilityCustomAction(
+            })
+        }
+        if offered.contains(.duplicate) {
+            actions.append(UIAccessibilityCustomAction(
                 name: String(localized: "story.composer.duplicateSlide", defaultValue: "Dupliquer", bundle: .module)
             ) { [weak self] _ in
                 self?.duplicateItem(id: id)
                 return true
-            },
-            UIAccessibilityCustomAction(
-                name: String(localized: "story.canvas.a11y.sendToBack", defaultValue: "Mettre à l'arrière", bundle: .module)
-            ) { [weak self] _ in
-                self?.sendToBack(id: id)
-                return true
-            },
-        ])
+            })
+        }
+        actions.append(UIAccessibilityCustomAction(
+            name: String(localized: "story.canvas.a11y.sendToBack", defaultValue: "Mettre à l'arrière", bundle: .module)
+        ) { [weak self] _ in
+            self?.sendToBack(id: id)
+            return true
+        })
         return actions
+    }
+}
+
+extension StoryEffects {
+    /// La slide porte-t-elle un dessin — traits modernes ou ancien PencilKit ?
+    var carriesDrawing: Bool {
+        !(drawingStrokes ?? []).isEmpty || !(drawingData ?? Data()).isEmpty
     }
 }

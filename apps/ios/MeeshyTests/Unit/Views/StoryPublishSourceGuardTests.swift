@@ -16,8 +16,8 @@ final class StoryPublishSourceGuardTests: XCTestCase {
 
     func test_noProductionCodeGuardsCreationOnActiveUpload() throws {
         var scannedEntries = 0
-        for file in ["Features/Main/Views/StoryTrayView.swift",
-                     "Features/Main/Views/MyStoriesView.swift"] {
+        for file in ["Features/Stories/Views/StoryTrayView.swift",
+                     "Features/Stories/Views/MyStoriesView.swift"] {
             let lines = try Self.strippedLines(of: file)
             let entries = lines.indices.filter { lines[$0].contains(Self.creationEntryAnchor) }
             scannedEntries += entries.count
@@ -54,11 +54,13 @@ final class StoryPublishSourceGuardTests: XCTestCase {
     /// Non observable de l'extérieur — la fonction n'expose aucun point
     /// intermédiaire — d'où l'ancrage sur l'ordre des appels.
     func test_offlinePublish_insertsOptimisticRowsBeforeAwaitingThumbHashes() throws {
-        let source = try Self.strippedLines(of: "Features/Main/ViewModels/StoryViewModel.swift")
+        let source = try Self.strippedLines(of: "Features/Stories/ViewModels/StoryViewModel.swift")
             .joined(separator: "\n")
         guard let start = source.range(of: "func enqueueStoryForOfflinePublish("),
               let rows = source.range(of: "insertOptimisticOfflineStories(", range: start.upperBound..<source.endIndex),
-              let toast = source.range(of: "story.publish.queue.enqueued", range: rows.upperBound..<source.endIndex),
+              // Le toast nomme désormais le type publié (#8522) : l'ancre est
+              // son site d'appel, plus la clé de la story seule.
+              let toast = source.range(of: "StoryPublishCopy.queuedForOffline(", range: rows.upperBound..<source.endIndex),
               let enrich = source.range(of: "enrichSlidesWithThumbHashes(", range: start.upperBound..<source.endIndex) else {
             XCTFail("Séquence hors-ligne introuvable dans StoryViewModel.swift")
             return
@@ -74,8 +76,12 @@ final class StoryPublishSourceGuardTests: XCTestCase {
     /// `PostVisibility.friends`. Deux défauts dupliqués divergent dès que le
     /// défaut produit bouge.
     func test_storyViewModel_hasNoDuplicatedFriendsLiteral() throws {
-        let source = try Self.strippedLines(of: "Features/Main/ViewModels/StoryViewModel.swift")
+        let source = try Self.strippedLines(of: "Features/Stories/ViewModels/StoryViewModel.swift")
             .joined(separator: "\n")
+        // Garde-fou de la garde : une source vide ferait passer l'assertion
+        // négative ci-dessous au vert sans rien avoir vérifié.
+        XCTAssertGreaterThan(source.count, 400,
+                             "Source (unité) de StoryViewModel introuvable ou vide — la garde ne mesurerait rien.")
 
         XCTAssertFalse(
             source.contains("\"FRIENDS\""),
@@ -123,15 +129,28 @@ final class StoryPublishSourceGuardTests: XCTestCase {
         return lowerBound
     }
 
+    /// `StoryViewModel` s'est scindé en plusieurs fichiers (#4425) : ce chemin
+    /// précis passe par l'UNITÉ (`AppSourceGuard.storyViewModelSource`) — les
+    /// deux gardes ci-dessus cherchent des séquences (ordre d'appels, absence
+    /// d'un littéral) qui peuvent vivre dans un fichier frère
+    /// (`StoryViewModel+Publication.swift`) depuis le découpage. Les deux
+    /// autres appelants (`StoryTrayView.swift`, `MyStoriesView.swift`)
+    /// continuent de lire leur fichier tel quel.
     private static func strippedLines(of relativePath: String) throws -> [String] {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()  // …/Unit/Views
-            .deletingLastPathComponent()  // …/Unit
-            .deletingLastPathComponent()  // …/MeeshyTests
-            .deletingLastPathComponent()  // …/apps/ios
-            .appendingPathComponent("Meeshy")
-            .appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
+        let raw: String
+        if "Meeshy/" + relativePath == AppSourceGuard.storyViewModelPath {
+            raw = try AppSourceGuard.storyViewModelSource()
+        } else {
+            let url = URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()  // …/Unit/Views
+                .deletingLastPathComponent()  // …/Unit
+                .deletingLastPathComponent()  // …/MeeshyTests
+                .deletingLastPathComponent()  // …/apps/ios
+                .appendingPathComponent("Meeshy")
+                .appendingPathComponent(relativePath)
+            raw = try String(contentsOf: url, encoding: .utf8)
+        }
+        return raw
             .components(separatedBy: "\n")
             .map { line -> String in
                 guard let range = line.range(of: "//") else { return line }

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_clear_all_message">Tutte le diapositive ripartono vuote, sullo sfondo neutro. Annulla ripristina le diapositive.</string>
+    <string name="composer_media_sources">Scegli una fonte</string>
+    <string name="composer_preview_close">Chiudi l’anteprima</string>
+    <string name="composer_preview_previous">Diapositiva precedente</string>
+    <string name="composer_preview_next">Diapositiva successiva</string>
+</resources>

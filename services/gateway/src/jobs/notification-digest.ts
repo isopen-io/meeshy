@@ -13,6 +13,8 @@ import { MagicLinkService } from '../services/MagicLinkService';
 import { visibleNotificationsWhere } from '../services/notifications/visibleNotificationsWhere';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { guardedInterval, guardedTimeout } from '../utils/guarded-timer';
+import { EMAIL_LINK_PATHS, emailSecretLink } from '../utils/email-secret-link';
 
 const logger = enhancedLogger.child({ module: 'NotificationDigestJob' });
 
@@ -46,8 +48,7 @@ function buildMagicUrl(frontendUrl: string, returnPath: string, token: string | 
   if (!token) {
     return `${frontendUrl}${returnPath}`;
   }
-  const returnUrl = encodeURIComponent(returnPath);
-  return `${frontendUrl}/auth/magic-link/validate?token=${encodeURIComponent(token)}&returnUrl=${returnUrl}`;
+  return emailSecretLink({ base: frontendUrl, path: EMAIL_LINK_PATHS.magicLink, secret: { token }, query: { returnUrl: returnPath } });
 }
 
 function getMillisecondsUntilNextRun(targetHourUTC: number): number {
@@ -96,13 +97,13 @@ export class NotificationDigestJob {
     const delayHours = (delayMs / 3600000).toFixed(1);
     logger.info(`[NotificationDigestJob] Starting — first run in ${delayHours}h (${TARGET_HOUR_UTC}:00 UTC)`);
 
-    this.timeoutId = setTimeout(() => {
+    this.timeoutId = guardedTimeout({ name: 'notification-digest-first-run', afterMs: delayMs, logger, run: () => {
       this.timeoutId = null;
       this.doWork();
       // Then every 24h
-      this.intervalId = setInterval(() => this.doWork(), 24 * 60 * 60 * 1000);
+      this.intervalId = guardedInterval({ name: 'notification-digest', everyMs: 24 * 60 * 60 * 1000, logger, run: () => this.doWork() });
       this.intervalId.unref?.();
-    }, delayMs);
+    } });
     this.timeoutId.unref?.();
   }
 
@@ -157,9 +158,9 @@ export class NotificationDigestJob {
       for (let i = 0; i < userEntries.length; i += BATCH_SIZE) {
         const batch = userEntries.slice(i, i + BATCH_SIZE);
 
-        for (const [userId, count] of batch) {
+        for (const [userId] of batch) {
           try {
-            const sent = await this.processUser(userId, count);
+            const sent = await this.processUser(userId);
             if (sent) emailsSent++;
             else usersSkipped++;
           } catch (err) {
@@ -179,7 +180,7 @@ export class NotificationDigestJob {
     }
   }
 
-  private async processUser(userId: string, unreadCount: number): Promise<boolean> {
+  private async processUser(userId: string): Promise<boolean> {
     // Check user preferences — source unique : UserPreferences.notification (JSON)
     const prefs = await this.prisma.userPreferences.findFirst({
       where: { userId },

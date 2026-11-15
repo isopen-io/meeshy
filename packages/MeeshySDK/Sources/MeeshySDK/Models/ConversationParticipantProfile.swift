@@ -6,7 +6,7 @@ import Foundation
 /// C'est la résolution EFFECTIVE côté gateway (`rights ?? permissions`), et non
 /// la configuration courante du lien : celle-ci a pu changer depuis l'arrivée,
 /// et ne régit plus qui est déjà entré.
-public struct ParticipantEntryCapabilities: Decodable, Sendable, Equatable {
+public struct ParticipantEntryCapabilities: Codable, Sendable, Equatable {
     public let canSendMessages: Bool
     public let canSendFiles: Bool
     public let canSendImages: Bool
@@ -15,7 +15,19 @@ public struct ParticipantEntryCapabilities: Decodable, Sendable, Equatable {
     public let canSendLocations: Bool
     public let canSendLinks: Bool
     /// Voit les messages écrits AVANT son arrivée.
-    public let canViewHistory: Bool
+    ///
+    /// **Optionnel, et pas par confort : `nil` veut dire « on ne te le dit
+    /// pas ».** #4009 retire ce droit de la charge diffusée à la ROOM de
+    /// conversation — « qui a le droit de voir l'historique » est un fait de
+    /// MODÉRATION, comme `historyVisibleFrom` que #3898 avait déjà retiré du
+    /// même payload. Seuls les autres HÔTES et l'INTÉRESSÉ le reçoivent.
+    ///
+    /// Le laisser `Bool` non optionnel ne l'aurait pas protégé : le décodage
+    /// aurait LEVÉ sur la charge réduite, et un simple membre aurait cessé de
+    /// recevoir TOUT changement de droits — pas seulement celui qu'on lui
+    /// cache. Un champ qu'un client lit autoritativement n'est plus optionnel
+    /// pour l'émetteur ; la réciproque vaut aussi.
+    public let canViewHistory: Bool?
 
     public init(
         canSendMessages: Bool,
@@ -25,7 +37,7 @@ public struct ParticipantEntryCapabilities: Decodable, Sendable, Equatable {
         canSendAudios: Bool,
         canSendLocations: Bool,
         canSendLinks: Bool,
-        canViewHistory: Bool
+        canViewHistory: Bool?
     ) {
         self.canSendMessages = canSendMessages
         self.canSendFiles = canSendFiles
@@ -53,7 +65,9 @@ public struct ParticipantEntryCapabilities: Decodable, Sendable, Equatable {
         case canSendLocations
     }
 
-    public func isAllowed(_ capability: Capability) -> Bool {
+    /// `nil` — la charge ne DIT rien de cette capacité. Distinct de `false`,
+    /// qui la refuse : non dit n'est pas refusé (#4009).
+    public func isAllowed(_ capability: Capability) -> Bool? {
         switch capability {
         case .canViewHistory: return canViewHistory
         case .canSendMessages: return canSendMessages
@@ -73,7 +87,24 @@ public struct ParticipantEntryCapabilities: Decodable, Sendable, Equatable {
     /// une fiche qui récite des autorisations se lit comme un formulaire. Web et
     /// iOS doivent dire la même chose sans réécrire la règle chacun de son côté.
     public var denied: [Capability] {
-        Capability.allCases.filter { !isAllowed($0) }
+        // `== false`, jamais `!` : une capacité NON DITE ne se range pas
+        // parmi les refus (#4009). L'y mettre ferait afficher « Ne voit pas
+        // les messages antérieurs » à toute la salle — exactement le fait
+        // que la charge réduite vient de taire.
+        Capability.allCases.filter { isAllowed($0) == false }
+    }
+
+    /// Ce que la charge DIT, dans l'ordre d'affichage.
+    ///
+    /// L'édition a besoin des huit — on n'accorde pas un droit qu'on ne montre
+    /// pas — mais elle ne peut dessiner un interrupteur pour un droit NON DIT
+    /// (#4009) : il mentirait dans les deux positions. En pratique l'édition est
+    /// réservée aux hôtes, qui reçoivent toujours la charge complète ; cette
+    /// règle tient le cas où cela cesserait d'être vrai.
+    ///
+    /// Jumelle web : `editableCapabilities` (`ParticipantProfileCard.tsx`).
+    public var disclosed: [Capability] {
+        Capability.allCases.filter { isAllowed($0) != nil }
     }
 }
 
@@ -85,16 +116,68 @@ public struct ParticipantRightsUpdateResult: Decodable, Sendable, Equatable {
     public let rights: ParticipantEntryCapabilities
 }
 
+/// Ce que rend la MÊME route `PATCH …/rights` quand l'écriture porte
+/// `historyVisibleFrom` — un appel séparé de `updateParticipantRights` :
+/// l'octroi par date vaut pour TOUT participant (inscrit compris), pas
+/// seulement les visiteurs sans compte, et sa permission d'écriture est plus
+/// étroite côté gateway (admin/creator, pas modérateur).
+public struct ParticipantHistoryGrantUpdateResult: Decodable, Sendable, Equatable {
+    public let participantId: String
+    public let conversationId: String
+    /// `nil` = octroi retiré.
+    public let historyVisibleFrom: Date?
+}
+
 /// Un hôte a modifié les droits d'un visiteur — charge utile de
 /// `participant:rights-updated`.
 ///
 /// Le sujet est nommé par `participantId` et non par `userId` : il n'a
-/// précisément pas de compte. `rights` porte l'état RÉSOLU.
+/// précisément pas de compte, SAUF pour l'octroi d'historique par DATE
+/// (`historyVisibleFrom`), qui vaut pour tout participant, inscrit compris.
+/// `rights` porte l'état RÉSOLU.
 public struct ParticipantRightsUpdatedEvent: Decodable, Sendable, Equatable {
     public let conversationId: String
     public let participantId: String
     public let updatedBy: String
     public let rights: ParticipantEntryCapabilities
+    /// Instant depuis lequel ce participant lit l'historique ; `nil` = aucun
+    /// octroi. Le gateway le pose TOUJOURS dans cette charge, que ce
+    /// changement l'ait touché ou non — optionnel ici pour tolérer un
+    /// producteur plus ancien qui ne le portait pas encore.
+    ///
+    /// **Ne se lit JAMAIS seul** : voir `carriesHistoryGrant`.
+    public let historyVisibleFrom: Date?
+
+    /// La charge PORTAIT-elle la clé ?
+    ///
+    /// `Date?` seul ne distingue pas les deux phrases que le fil sait dire :
+    /// `null` — « j'ai calculé, il n'y a pas d'octroi », qui EFFACE — et clé
+    /// ABSENTE — « ce producteur ne connaît pas encore ce champ », qui n'affirme
+    /// rien et doit laisser en place ce que le lecteur a déjà. Sans ce
+    /// discriminant, la tolérance annoncée ci-dessus n'existe pas : un
+    /// consommateur qui recopie `historyVisibleFrom` inconditionnellement
+    /// EFFACE l'octroi affiché au premier basculement de capacité servi par un
+    /// gateway antérieur au champ.
+    ///
+    /// Même règle et même discriminant — la PRÉSENCE de la clé, jamais sa
+    /// valeur — que le pont ✦ de `conversation:unread-updated`, et que le
+    /// `data.historyVisibleFrom !== undefined` du web
+    /// (`apps/web/hooks/queries/use-participant-rights-sync.ts`).
+    public let carriesHistoryGrant: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case conversationId, participantId, updatedBy, rights, historyVisibleFrom
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        conversationId = try container.decode(String.self, forKey: .conversationId)
+        participantId = try container.decode(String.self, forKey: .participantId)
+        updatedBy = try container.decode(String.self, forKey: .updatedBy)
+        rights = try container.decode(ParticipantEntryCapabilities.self, forKey: .rights)
+        historyVisibleFrom = try container.decodeIfPresent(Date.self, forKey: .historyVisibleFrom)
+        carriesHistoryGrant = container.contains(.historyVisibleFrom)
+    }
 }
 
 /// Les réglages du lien emprunté — second cercle, réservé aux administrateurs
@@ -104,7 +187,7 @@ public struct ParticipantRightsUpdatedEvent: Decodable, Sendable, Equatable {
 /// ce même lien, et sa configuration est celle de l'hôte, pas un renseignement
 /// sur la personne. Les plages IP n'y figurent volontairement pas — une règle de
 /// pare-feu n'a aucune surface d'affichage.
-public struct ParticipantEntryLink: Decodable, Sendable, Equatable {
+public struct ParticipantEntryLink: Codable, Sendable, Equatable {
     public let name: String?
     public let isActive: Bool
     public let expiresAt: Date?
@@ -143,7 +226,7 @@ public struct ParticipantEntryLink: Decodable, Sendable, Equatable {
 /// l'analyse agent (`AgentAnalysisModels.swift`) — un profil de style
 /// rédactionnel, sans rapport. Deux types homonymes dans le même module se
 /// seraient masqués l'un l'autre.
-public struct ConversationParticipantProfile: Decodable, Sendable, Equatable {
+public struct ConversationParticipantProfile: Codable, Sendable, Equatable, CacheIdentifiable {
     public let participantId: String
     public let conversationId: String
     /// Le participant n'a pas de compte.
@@ -173,16 +256,35 @@ public struct ConversationParticipantProfile: Decodable, Sendable, Equatable {
     /// compte : elle n'est entrée par aucun lien, donc aucune condition
     /// d'entrée ne la régit.
     ///
-    /// `var` parce que c'est le SEUL champ que la fiche repose sans recharger :
-    /// après une écriture de l'hôte, ou à réception de `participant:rights-updated`,
-    /// le serveur rend l'état résolu et il n'y a rien d'autre à rafraîchir.
+    /// `var` : après une écriture de l'hôte, ou à réception de
+    /// `participant:rights-updated`, le serveur rend l'état résolu et il n'y a
+    /// rien d'autre à rafraîchir. `historyVisibleFrom` ci-dessous suit la même
+    /// règle, pour la même raison.
     public var entryCapabilities: ParticipantEntryCapabilities?
 
     /// Les réglages du lien emprunté. `nil` hors du cercle des hôtes — c'est le
     /// gateway qui tranche, jamais la vue.
     public let entryLink: ParticipantEntryLink?
 
+    /// Octroi d'historique par DATE posé par un administrateur — vaut pour
+    /// TOUT participant, inscrit compris, pas seulement les visiteurs sans
+    /// compte. `nil` pour un membre ordinaire, que l'octroi existe ou non :
+    /// c'est un fait de modération, pas un attribut de la personne. Servi aux
+    /// hôtes (admin/modérateur/creator). `var` : voir `entryCapabilities`.
+    public var historyVisibleFrom: Date?
+
+    /// Ce lecteur peut-il POSER ou RETIRER l'octroi ci-dessus ? Question
+    /// distincte de `historyVisibleFrom` : un modérateur LIT l'octroi mais ne
+    /// peut pas l'écrire (réservé admin/creator côté gateway) — sans ce
+    /// signal, `historyVisibleFrom == nil` ne distingue pas « pas hôte » de
+    /// « hôte, aucun octroi posé ». Optionnel pour tolérer un gateway plus
+    /// ancien qui ne le portait pas encore ; `nil` se lit comme `false`.
+    public let canGrantHistory: Bool?
+
     /// Nom lisible : ce que la personne a écrit en entrant, à défaut son pseudo.
+    /// #10111 — la clé de la fiche dans le cache : une participation, jamais un compte.
+    public var id: String { "\(conversationId)/\(participantId)" }
+
     public var resolvedFullName: String {
         let full = [firstName, lastName]
             .compactMap { $0?.trimmingCharacters(in: .whitespaces) }

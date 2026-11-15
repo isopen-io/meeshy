@@ -202,7 +202,7 @@ soit un descripteur réel (atteignable), soit supprimé — plus d'état interm�
 
 Supprimer : `UnifiedPostComposer` (cascade morte documentée lignes 16-23,
 195-206, 238-241) · outil `filters` orphelin s'il n'a pas été réhabilité ·
-`apps/ios/Meeshy/Features/Main/Models/StoryModels.swift` (doublon du SDK) ·
+`apps/ios/Meeshy/Features/Stories/Models/StoryModels.swift` (doublon du SDK) ·
 composeurs legacy web · support v1 du blob (union → `CanvasV2` seul) · mettre à
 jour la doc du schéma Prisma (`schema.prisma:3040-3055`, format obsolète).
 

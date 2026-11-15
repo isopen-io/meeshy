@@ -1,0 +1,454 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+// MARK: - La page SCÈNE du plein écran (#6709)
+//
+// « lorsqu'on ouvre les scènes de poste, on doit
+// utiliser LE même composant qu'on utilise pour afficher les attachements de
+// conversation ! ».
+//
+// Une scène de post s'ouvrait dans un second plein écran, `SocialSceneFullscreenView`,
+// qui n'avait ni cadre, ni plein cadre au toucher (#6694), ni couloirs pour ses
+// contrôles (#6695), ni pellicule, ni « Répondre ». La galerie avait tout cela :
+// la scène y devient une PAGE, à côté des pages image et vidéo, et elle hérite
+// du plateau au lieu de le réécrire.
+//
+// Fichier à part plutôt qu'une section de plus dans `+Pages.swift` (858 lignes) :
+// la page scène a son moteur (le player), sa loi de lecture et sa légende
+// traduisible, et le fichier des pages média dépasserait le seuil de 1 000.
+
+/// **Une page scène, PROPRIÉTAIRE de ce qui ne concerne qu'elle.**
+///
+/// Elle ne peint rien elle-même : `MeeshyScenePlayer(mode: .reader)` est le
+/// moteur unique de rendu d'un canvas — le même que la carte du fil monte en
+/// `.card` et que le viewer de story monte en `.reader`. Elle pose ce moteur
+/// aux cotes que la LOI de forme donne à la scène (`GallerySceneStage`, une
+/// projection de `SceneShape.layout(in:)`, #6904), et elle répond aux trois
+/// portes du plateau (#6142) exactement comme ses sœurs image et vidéo : le
+/// tap, l'appui long, le glissement.
+///
+/// **Elle ne passe PLUS par `MediaStageFraming`**, et c'est la décision du
+/// 2026-09-17 : ce solveur cadre des pièces JOINTES — il ajuste, donc il laisse
+/// des bandes même sur une scène au gabarit, et son plein cadre n'était pas
+/// plein (402 × 714,67 mesuré dans un viewport de 402 × 874). Les pages image
+/// et vidéo, elles, y restent : leur contenu est reçu, et le rogner retirerait
+/// ce que l'expéditeur a envoyé.
+///
+/// `Equatable` et montée en `.equatable()`, pour la raison que la galerie écrit
+/// en tête de son fichier : une réévaluation de la racine ne re-rend que les
+/// pages dont la position relative a changé.
+struct GalleryScenePage: View, Equatable {
+    let item: GallerySceneItem
+    /// **Le cadre de cette page — la LOI de forme, pas le solveur des pièces
+    /// jointes** (#6904). `GallerySceneStage` projette
+    /// `SceneShape.layout(in:)` : cadrée, la scène tient entière dans la zone
+    /// libre ; immersive, la MÊME carte occupe le viewport entier, sans couloir
+    /// ni chrome — elle grandit, elle ne se remplit pas.
+    let stage: GallerySceneStage.Frame
+    /// **Le cadre auquel le player est POSÉ, quel que soit l'état** (#8598,
+    /// `GallerySceneStage.reference`) : `stage` ne dit plus que l'ÉCHELLE.
+    let reference: GallerySceneStage.Frame
+    /// L'horloge du curseur de la galerie (#8598). Hors de l'égalité : c'est la
+    /// même instance pour toute la vie de la galerie.
+    let clock: GallerySceneClock
+    /// Voir `GalleryImagePage.presentation` (#6142).
+    let presentation: StagePresentation
+    let accentColor: String
+    /// Le Prisme du LECTEUR, servi aux textes de la scène. Vide ⇒ les textes
+    /// originaux, licite mais jamais souhaitable.
+    let preferredContentLanguages: [String]
+    let isActive: Bool
+    /// La commande de lecture de la galerie. Seule la page ACTIVE la suit : les
+    /// voisines, montées pour la fluidité du glissement, restent en pause —
+    /// sans quoi deux pistes sonneraient à la fois.
+    let isPlaying: Bool
+    /// Dans la fenêtre de rendu (`GalleryRenderWindow`) : le player est monté.
+    /// Hors fenêtre, un aperçu léger — trois canvas vivants au plus, quel que
+    /// soit le nombre de scènes traversées.
+    let rendersPlayer: Bool
+    /// La scène par laquelle on est ENTRÉ — la seule qui reprend la position que
+    /// la carte du fil a léguée (#6580). Une scène rejointe au glissement n'a
+    /// jamais été jouée : elle commence.
+    let isEntry: Bool
+    let accessibilityLabel: String
+    let onEnterStage: (StageEntry) -> Void
+    let onDismiss: () -> Void
+
+    static func == (lhs: GalleryScenePage, rhs: GalleryScenePage) -> Bool {
+        lhs.item == rhs.item
+            && lhs.stage == rhs.stage
+            && lhs.reference == rhs.reference
+            && lhs.presentation == rhs.presentation
+            && lhs.accentColor == rhs.accentColor
+            && lhs.preferredContentLanguages == rhs.preferredContentLanguages
+            && lhs.isActive == rhs.isActive
+            && lhs.isPlaying == rhs.isPlaying
+            && lhs.rendersPlayer == rhs.rendersPlayer
+            && lhs.isEntry == rhs.isEntry
+            && lhs.accessibilityLabel == rhs.accessibilityLabel
+    }
+
+    /// Décalage de fermeture, LOCAL à la page (cf. `GalleryImagePage`).
+    @State private var offset: CGSize = .zero
+    /// **La seconde à laquelle la scène d'entrée s'OUVRE** (#6580) — un
+    /// instantané lu une fois, à l'apparition, jamais un fil : la mémoire
+    /// continue de s'écrire pendant qu'on regarde, et la relire à chaque rendu
+    /// ferait recaler la lecture en boucle.
+    @State private var openingPosition: Double = 0
+    /// La position est lue : la lecture peut partir. Sans ce verrou, le player
+    /// jouerait depuis zéro le temps d'une passe, puis sauterait à la position
+    /// léguée — un hoquet audible sur un fond sonore.
+    @State private var openingResolved = false
+
+    private static let dismissThreshold: CGFloat = 150
+    /// Aperçu hors fenêtre : la VIGNETTE, décodée à une taille modeste — même
+    /// budget que `GalleryImagePage.previewSize`.
+    private static let previewSize = CGSize(width: 320, height: 320)
+
+    var body: some View {
+        // **LA carte de scène — la même que le lecteur de stories monte**
+        // (directive porteur du 2026-09-17). Elle cadre le contenu aux cotes de
+        // la loi, peint le fond DANS la carte et rogne aux coins de la loi.
+        // Cette page n'en refait aucune des trois : elle donne le VIEWPORT que
+        // le plateau laisse (`GallerySceneStage`), et ses gestes.
+        //
+        // **Posée au cadre de RÉFÉRENCE, amenée au cadre de l'état par une
+        // ÉCHELLE** (#8598) — la réponse du lecteur de stories (`readerCard`).
+        // Le canvas ne se re-pose plus au passage cadré ↔ plein cadre : la
+        // transformation s'anime image par image, sans saut. Le rayon courant
+        // est compensé par la carte elle-même (`hostScale`).
+        Color.clear.overlay {
+            SceneCard(layout: reference.layout,
+                      thumbHash: item.thumbHash,
+                      // Le rayon COURANT, REMIS à la carte qui rogne (comme `readerCard`).
+                      cornerRadius: stage.layout.cornerRadius,
+                      hostScale: sceneScale,
+                      // **En plein écran, le SOL est la scène** (#7039, directive
+                      // porteur du 2026-09-18 : « prendre le fond sol comme scène
+                      // directement et dessiner tous les éléments de la scène
+                      // dessus », « le thumbhash habituel est laissé au profit du
+                      // sol »). Le fond ne change pas de NATURE — c'est la même
+                      // empreinte — il change de PORTEUR : `GallerySceneFloor` la
+                      // peint déjà sur l'écran entier, et sans voile dès que la
+                      // porte du plein cadre est franchie (`fullVeil == 0`).
+                      //
+                      // Les proportions, elles, ne bougent pas : le contenu reste
+                      // cadré à `layout.sceneFrame`, aucune coordonnée n'est
+                      // redistribuée sur le viewport. C'est la précision du porteur
+                      // — « les éléments respectent toujours les proportions de la
+                      // scène ».
+                      //
+                      // CARDÉ, rien ne change : la carte doit se détacher de son
+                      // sol, et c'est son fond qui l'en détache.
+                      paintsBackdrop: !presentation.isFull) {
+                if rendersPlayer {
+                    player
+                } else {
+                    preview
+                }
+            }
+            .scaleEffect(sceneScale)
+        }
+        // **Le tap FOND la carte dans le sol** (#7039). Le porteur décrit un
+        // fondu, pas un ressort : « le fondu est la scène avant le tap, qui
+        // fait disparaître les éléments de contrôle et d'information, et fait
+        // disparaître la scène pour préserver le sol déjà peint ». Les
+        // contrôles s'effacent déjà en opacité (`overlayLayer`) ; le fond de la
+        // carte les rejoint, sur la même durée, pour que les deux sorties se
+        // lisent comme un seul geste de mise au point.
+        //
+        // La durée est CELLE de la transaction qui franchit la porte
+        // (`onEnterStage`, 0,25 s) : l'échelle de la carte et les retraits du
+        // pager qui la recentrent doivent finir ensemble (#8598).
+        .animation(.easeInOut(duration: 0.25), value: presentation.isFull)
+        .contentShape(Rectangle())
+        // **Le tap franchit la porte du plein cadre, et en revient** (#6142,
+        // #6694). En lecture, le canvas ne RECONNAÎT aucun geste de manipulation
+        // (`StoryCanvasUIView.gestureRecognizerShouldBegin`) : le doigt reste au
+        // conteneur, qui répond comme celui des pages image et vidéo.
+        .onTapGesture { onEnterStage(.tap) }
+        .accessibilityAction(named: Text(String(localized: "a11y.post.media.open.hint", bundle: .main))) { onEnterStage(.tap) }
+        .offset(y: offset.height)
+        // `isActive` désarme les pages VOISINES — la raison est écrite au SDK
+        // (`MediaStageGestures.longPressArmed`) et reprise par la page vidéo.
+        .gesture(stageDragGesture, including: isActive ? .all : .none)
+        // Une scène n'a ni zoom ni déplacement : rien ne dispute le doigt à
+        // l'appui long. Le dire par le paramètre laisse la MÊME règle répondre
+        // pour les trois natures.
+        .gesture(longPressGesture,
+                 including: MediaStageGestures.longPressArmed(isActive: isActive,
+                                                              isTransformed: false) ? .all : .none)
+        .onAppear(perform: resolveOpening)
+    }
+
+    /// **Le player — et la CARTE le dimensionne** (#6904).
+    ///
+    /// Plus aucun `.frame` ici : `SceneCard` pose le contenu aux cotes que la
+    /// loi donne à la scène, jamais un `.aspectRatio` réécrit à la main —
+    /// c'est la leçon de `GalleryImagePage` (« la taille vient du solveur »),
+    /// et c'est aussi ce qui garantit que le lecteur de stories et cette page
+    /// cadrent la MÊME scène. Elle tient TOUJOURS dans son viewport : depuis la
+    /// directive du 2026-09-17 (3e message), aucune surface ne rogne une scène.
+    private var player: some View {
+        MeeshyScenePlayer(
+            document: item.document,
+            mode: .reader,
+            sceneIndex: .constant(item.sceneIndex),
+            isPlaying: .constant(isPlaying && isActive && openingResolved),
+            accentColorHex: accentColor,
+            carrier: item.carrier,
+            sceneFloorHex: item.sceneFloorHex,
+            preferredContentLanguages: preferredContentLanguages,
+            startAt: isEntry ? openingPosition : 0,
+            // **Le canvas ne peint JAMAIS son hors-champ** (#6791, #6904) :
+            // c'est la CARTE qui le peint, dans les deux plein écrans, comme
+            // aux quatre montages du lecteur de stories. Le laisser peindre le
+            // sien empilait deux dégradés du MÊME hachage, étirés dans deux
+            // cadres différents — mesuré au simulateur, deux teintes au-dessus
+            // d'un même média.
+            //
+            // La valeur était `stage.paintsOwnLetterbox` jusqu'au 3e message de
+            // la directive du 2026-09-17 : l'immersif n'avait alors pas de
+            // plateau, donc le canvas y redevenait le seul peintre possible.
+            // Un seul état de carte ⇒ un seul peintre, et il se dit par la
+            // STRUCTURE — `SceneCard` — plutôt que par un champ de loi devenu
+            // constant.
+            servesLetterboxFill: false,
+            // **Le pont du curseur** (#8598) — seulement pour une scène qui a
+            // une timeline : sur une scène fixe, il n'y a rien à parcourir.
+            scrubber: item.timeline == nil ? nil : clock.scrubber(for: item.id)
+        )
+        .onPlaybackTime { [clock, id = item.id, timeline = item.timeline] seconds in
+            guard let timeline else { return }
+            clock.report(elapsed: seconds, duration: timeline, for: id)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    /// Hors fenêtre de rendu, JAMAIS un canvas : c'est ce qui borne le nombre de
+    /// scènes vivantes, et avec elles les vidéos décodées et les pistes montées.
+    private var preview: some View {
+        ProgressiveCachedImage(
+            thumbHash: item.thumbHash,
+            thumbnailUrl: item.thumbnailURL,
+            fullUrl: item.thumbnailURL,
+            targetSize: Self.previewSize
+        ) {
+            Color.black
+        }
+        .aspectRatio(contentMode: .fill)
+        .clipped()
+        .accessibilityHidden(true)
+    }
+
+    private var sceneScale: CGFloat {
+        GallerySceneStage.scale(of: stage, reference: reference)
+    }
+
+    private func resolveOpening() {
+        guard !openingResolved else { return }
+        if isEntry {
+            openingPosition = ScenePlaybackPositions.shared.position(
+                for: ScenePlaybackPositions.key(carrierId: item.postId, sceneIndex: item.sceneIndex)
+            ) ?? 0
+        }
+        openingResolved = true
+    }
+
+    /// **Le bas ferme, le haut ouvre le plein cadre** (#6142) — la règle du
+    /// SDK, au même seuil que les pages image et vidéo : les trois natures ne
+    /// peuvent pas répondre différemment au même geste.
+    private var stageDragGesture: some Gesture {
+        DragGesture(minimumDistance: 30)
+            .onChanged { value in
+                guard resolveDrag(value.translation) != .ignored else { return }
+                offset = CGSize(width: 0, height: value.translation.height)
+            }
+            .onEnded { value in
+                switch resolveDrag(value.translation) {
+                case .dismisses:
+                    onDismiss()
+                case .entersFull:
+                    withAnimation(.spring()) { offset = .zero }
+                    onEnterStage(.swipeUp)
+                case .follows, .ignored:
+                    withAnimation(.spring()) { offset = .zero }
+                }
+            }
+    }
+
+    private func resolveDrag(_ translation: CGSize) -> MediaStageGestures.DragOutcome {
+        MediaStageGestures.resolveDrag(translation: translation,
+                                       presentation: presentation,
+                                       threshold: Self.dismissThreshold)
+    }
+
+    private var longPressGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.4, maximumDistance: 10)
+            .onEnded { _ in onEnterStage(.longPress) }
+    }
+}
+
+// MARK: - Le SOL d'une page scène
+
+/// **Le sol d'une page scène — celui de la story, pas du noir plat** (directive
+/// porteur du 2026-09-17, lot #6904 : « On préserve le même fond que pour la
+/// story ! »).
+///
+/// `SceneCard` a fermé la divergence DANS la carte ; la recette au simulateur a
+/// trouvé l'écart restant DEHORS. Le lecteur de stories peignait autour de sa
+/// carte une teinte sombre dérivée du ThumbHash ; cette galerie pose
+/// `Color.black.ignoresSafeArea()` sous TOUTES ses pages, et la même carte se
+/// retrouvait sur un fond noir pur, cadrée comme immersive.
+///
+/// **Cette vue est une vue à part, et non deux lignes dans le corps de la
+/// galerie**, pour une raison mesurable : c'est elle qu'un témoin de pixels
+/// monte. Un `@ViewBuilder` privé du fichier racine ne se mesurerait que par une
+/// galerie entière — donc par son contexte, ses messages et son réseau — et le
+/// témoin dériverait de la production au premier refactor.
+///
+/// **Une page IMAGE ou VIDÉO n'a pas de sol** (`scene == nil` ⇒ rien) : elle
+/// garde le noir de la galerie et son `MediaStageBackdrop`, qui habille le
+/// hors-champ d'une pièce jointe. Le sol de scène ne remplace pas ce fond-là :
+/// il se pose par-dessus le noir, et seulement pour une scène.
+struct GallerySceneFloor: View, Equatable {
+    /// La scène de la page COURANTE, ou `nil` pour une page image / vidéo.
+    let scene: GallerySceneItem?
+    let presentation: StagePresentation
+
+    static func == (lhs: GallerySceneFloor, rhs: GallerySceneFloor) -> Bool {
+        lhs.scene?.id == rhs.scene?.id
+            && lhs.scene?.thumbHash == rhs.scene?.thumbHash
+            && lhs.presentation == rhs.presentation
+    }
+
+    var body: some View {
+        ZStack {
+            if let scene {
+                // L'identité est celle de la PAGE : le glissement entre les
+                // scènes d'un même post (repère F5, trois scènes) fond le sol
+                // comme le lecteur de stories fond le sien d'une story à
+                // l'autre. Sans `.id`, SwiftUI garderait la même vue et
+                // remplacerait l'empreinte d'un coup sec.
+                SceneFloorView(thumbHash: scene.thumbHash,
+                               veil: presentation.isFull ? SceneFloorView.fullVeil
+                                                         : SceneFloorView.cardedVeil)
+                    .id(scene.id)
+                    .transition(.opacity)
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        // Le voile suit la porte du plein cadre, et la fusion suit la page :
+        // deux `value:` distincts sur la MÊME couche — l'un anime une opacité,
+        // l'autre une transition d'identité. Les fusionner en un seul ferait
+        // sauter le sol au passage d'une scène à l'autre, ou figerait le voile.
+        .animation(.spring(response: 0.42, dampingFraction: 0.84), value: presentation.isFull)
+        .animation(.easeInOut(duration: 0.28), value: scene?.id)
+    }
+}
+
+// MARK: - Le play/pause d'une scène
+
+/// **Le play/pause d'une scène, au centre du cadre** — là où la galerie pose
+/// celui d'une vidéo (#6162), au même gabarit : verre prominent, 55 %.
+///
+/// Il ne pilote rien lui-même : il bascule la commande de la galerie, que le
+/// player descend à l'hôte canvas, dont `setPaused` gèle EN BLOC la vidéo de
+/// fond, chaque piste d'avant-plan, le mixeur (son de fond compris) et
+/// l'horloge des animations. Une seule pause, pas une par média.
+///
+/// **Il n'existe que si la scène BOUGE** (`GallerySceneItem.moves`) : sur une
+/// scène fixe il mettrait en pause une image (loi 4).
+///
+/// Le glyphe suit le texte (`MeeshyFont.relative`) et le cercle suit le glyphe
+/// (`UIFontMetrics`) : aucune taille figée, donc rien qui déborde ni rapetisse
+/// quand la personne monte son Dynamic Type.
+struct GalleryScenePlayPause: View {
+    let isPlaying: Bool
+    let accentColor: String
+    let onToggle: () -> Void
+
+    var body: some View {
+        Button {
+            HapticFeedback.light()
+            onToggle()
+        } label: {
+            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                .font(MeeshyFont.relative(MeeshyIconSize.xxxl, weight: .bold))
+                .foregroundStyle(MeeshyColors.mediaChromeForeground)
+                .offset(x: isPlaying ? 0 : 2)
+                .frame(width: UIFontMetrics.default.scaledValue(for: 64),
+                       height: UIFontMetrics.default.scaledValue(for: 64))
+                .adaptiveGlassProminent(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.intense))
+        }
+        .opacity(MeeshyOpacity.strong)
+        // **L'annonce SUIT l'état** : un libellé figé ferait dire « Lecture » à
+        // un bouton qui met en pause.
+        .accessibilityLabel(isPlaying
+            ? String(localized: "scene.fullscreen.pause",
+                     defaultValue: "Tout mettre en pause", bundle: .main)
+            : String(localized: "scene.fullscreen.play",
+                     defaultValue: "Tout reprendre", bundle: .main))
+    }
+}
+
+// MARK: - La scène ouverte
+
+extension ConversationMediaGalleryView {
+
+    /// **La page d'une scène**, construite ici plutôt que dans le fichier racine
+    /// (1 020 lignes) : tout ce qu'elle lit est déjà visible des extensions. La
+    /// fermeture vient de l'appelant — `dismissGallery()` arrête aussi la piste
+    /// vidéo, et elle est privée au fichier racine.
+    func scenePage(_ scene: GallerySceneItem,
+                   attachment: MessageAttachment,
+                   distance: Int,
+                   onDismiss: @escaping () -> Void) -> some View {
+        GalleryScenePage(
+            item: scene,
+            stage: sceneStage(),
+            reference: GallerySceneStage.reference(viewport: stageViewport),
+            clock: sceneClock,
+            presentation: stageGeometryPresentation,
+            accentColor: accentColor,
+            preferredContentLanguages: sceneContext?.playerLanguages ?? [],
+            isActive: distance == 0,
+            isPlaying: scenePlaying,
+            rendersPlayer: GalleryRenderWindow.rendersFullPixels(distance: distance),
+            isEntry: attachment.id == startAttachmentId,
+            accessibilityLabel: sceneAccessibilityLabel(attachment),
+            onEnterStage: { onEnterStage($0) },
+            onDismiss: onDismiss
+        )
+        .equatable()
+    }
+
+    /// **Le SOL de la page courante** — monté par la galerie derrière son
+    /// pager, jamais par la page : une page vit dans le pager, et un sol qui
+    /// vivrait avec elle glisserait horizontalement avec elle au lieu de fondre.
+    var sceneFloorLayer: some View {
+        GallerySceneFloor(scene: currentScene, presentation: stageGeometryPresentation)
+            .equatable()
+    }
+
+    /// **La scène de la page OUVERTE, ou `nil`** — la seule question que le
+    /// transport, la pastille, le menu et le play/pause posent à la nature d'une
+    /// page (#6709). Elle se lit sur `sceneContext`, jamais sur le MIME de la
+    /// pièce synthétique.
+    var currentScene: GallerySceneItem? {
+        currentAttachment.flatMap { sceneContext?.scenes[$0.id] }
+    }
+
+    /// **Ce que VoiceOver dit d'une page scène** : sa légende quand elle en a
+    /// une, sinon « Scène partagée par … » — la page ne doit jamais être muette.
+    func sceneAccessibilityLabel(_ attachment: MessageAttachment) -> String {
+        if let legende = captionMap[attachment.id], !legende.isEmpty { return legende }
+        return String(format: String(localized: "a11y.feed.post.scene",
+                                     defaultValue: "Scène partagée par %@", bundle: .main),
+                      senderInfoMap[attachment.id]?.senderName ?? "")
+    }
+}

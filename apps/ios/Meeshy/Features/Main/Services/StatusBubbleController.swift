@@ -8,8 +8,23 @@ import os
 
 @MainActor
 final class StatusBubbleController: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = StatusBubbleController()
-    private init() {}
+
+    private let postService: PostServiceProviding
+    private let currentUserId: @MainActor () -> String?
+
+    init(
+        postService: PostServiceProviding = PostService.shared,
+        currentUserId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id }
+    ) {
+        self.postService = postService
+        self.currentUserId = currentUserId
+    }
 
     @Published var currentEntry: StatusEntry?
     @Published var anchor: CGPoint = .zero
@@ -21,27 +36,38 @@ final class StatusBubbleController: ObservableObject {
     /// Action de réponse à un mood : résout/ouvre la DM avec l'auteur et amorce
     /// le composer. Branchée une fois au niveau racine (RootView / iPadRootView).
     var onConfirmedReply: ((StatusEntry) -> Void)?
+    /// Ouvre la page plein écran de l'humeur (`Route.moodSpotlight`, #10814).
+    /// Branchée une fois au niveau racine (RootView / iPadRootView).
+    var onOpenSpotlight: ((StatusEntry) -> Void)?
+    /// Réaction à une humeur (`StatusViewModel.reactionHandler`, #18110).
+    /// Branchée une fois au niveau racine (RootView / iPadRootView).
+    var reactionHandler: MoodReactionHandler?
 
-    /// Vrai quand le mood courant est affiché DANS la conversation directe de son
-    /// auteur (barre de conversation directe). La réponse est alors immédiate
-    /// (pas de pop-up) : on est déjà dans la bonne conversation. Posé par le site
-    /// d'appel à `show(...)`, jamais stale (chaque ouverture le réécrit).
-    var repliesInline = false
+    /// On ne réagit qu'à l'humeur d'un autre.
+    func reactions(for entry: StatusEntry) -> MoodReactionHandler? {
+        guard entry.userId != currentUserId() else { return nil }
+        return reactionHandler
+    }
 
-    func show(entry: StatusEntry, anchor: CGPoint, repliesInline: Bool = false) {
+    func show(entry: StatusEntry, anchor: CGPoint) {
         currentEntry = entry
         self.anchor = anchor
-        self.repliesInline = repliesInline
 
         // Statut consommé : enregistrer la vue côté serveur (sauf le sien) pour
         // que la notification « X a publié un statut » (friend_new_mood) ne reste
         // pas non lue. Le gateway marque alors les notifications liées à ce post
         // et ré-émet `notification:counts`. Fire-and-forget.
-        guard entry.userId != AuthManager.shared.currentUser?.id else { return }
+        //
+        // #10483 — CHAQUE ouverture est une vue (`viewCount` est le total) ;
+        // c'est le site UNIQUE de la vue d'une humeur, quel que soit l'hôte.
+        guard entry.userId != currentUserId() else { return }
         let statusId = entry.id
-        Task {
+        Task { [postService] in
             do {
-                try await PostService.shared.viewPost(postId: statusId)
+                _ = try await postService.recordSocialEvents(
+                    [.view(postId: statusId, durationMs: nil, surface: .moodAvatar)],
+                    credential: .account
+                )
             } catch {
                 // Compteur de vue perdu — sans impact sur l'affichage.
                 Logger.statusBubble.error("Status view not registered: \(error.localizedDescription, privacy: .public)")
@@ -55,10 +81,19 @@ final class StatusBubbleController: ObservableObject {
         Task { await EngagementTracker.shared.end(surface: .statusBubble) }
     }
 
+    /// En conversation, la boule de mood ouvre DIRECTEMENT la page plein écran
+    /// de l'humeur, sans bulle ni pop-up de réponse (#13987) : la page porte
+    /// déjà l'humeur entière et le champ qui répond dans la directe la plus
+    /// récente avec l'auteur. La vue y est comptée par `MoodSpotlightViewModel`.
+    func openSpotlight(entry: StatusEntry) {
+        currentEntry = nil
+        replyConfirmationEntry = nil
+        onOpenSpotlight?(entry)
+    }
+
     /// Déclenché quand l'utilisateur touche le CONTENU du mood affiché (pas la
-    /// zone extérieure de fermeture). Ouvre la réponse au mood :
-    /// - mood affiché dans la conversation directe courante ⇒ réponse immédiate ;
-    /// - sinon (groupe, story tray, …) ⇒ pop-up de confirmation Répondre / Quitter.
+    /// zone extérieure de fermeture) : pop-up de confirmation Répondre / Quitter.
+    /// En conversation, la bulle n'est plus montrée (`openSpotlight`).
     func requestReply() {
         guard let entry = currentEntry else { return }
         currentEntry = nil
@@ -67,11 +102,7 @@ final class StatusBubbleController: ObservableObject {
         // On ne répond pas à son propre mood.
         guard entry.userId != AuthManager.shared.currentUser?.id else { return }
 
-        if repliesInline {
-            onConfirmedReply?(entry)
-        } else {
-            replyConfirmationEntry = entry
-        }
+        replyConfirmationEntry = entry
     }
 
     var isPresented: Binding<Bool> {
@@ -98,7 +129,11 @@ struct StatusBubbleOverlayModifier: ViewModifier {
     // inherit the presenter's `.environmentObject(...)`. Several sheets apply
     // `.withStatusBubble()` (ConversationInfoSheet, ForwardPickerSheet,
     // FeedCommentsSheet, …) without re-injecting, which crashed on present.
-    @StateObject private var controller = StatusBubbleController.shared
+    @ObservedObject private var controller: StatusBubbleController
+
+    init(controller: StatusBubbleController = .shared) {
+        self.controller = controller
+    }
 
     /// Présentation dans laquelle un hôte ancêtre rend déjà la bulle, `nil`
     /// si aucun. Cf. `shouldRenderOverlay`.
@@ -114,8 +149,7 @@ struct StatusBubbleOverlayModifier: ViewModifier {
     /// les présentations modales (sheet / fullScreenCover) posent le leur.
     /// Poser le modificateur sur des vues sœurs (une carte de feed, une colonne
     /// iPad, un écran poussé) rendait une bulle PAR hôte, chacune convertissant
-    /// l'ancre globale dans son propre repère (bulles dupliquées et flottantes,
-    /// bug 2026-07-30).
+    /// l'ancre globale dans son propre repère (bulles dupliquées et flottantes).
     ///
     /// La frontière est la PRÉSENTATION, pas la hiérarchie de vues : une
     /// `.sheet` a son propre `PresentationHostingController` et l'overlay du
@@ -144,7 +178,8 @@ struct StatusBubbleOverlayModifier: ViewModifier {
                         : nil,
                     onReplyTapped: entry.userId != AuthManager.shared.currentUser?.id
                         ? { controller.requestReply() }
-                        : nil
+                        : nil,
+                    reactionHandler: controller.reactions(for: entry)
                 )
                 .zIndex(200)
             }
@@ -195,57 +230,60 @@ private struct MoodReplyConfirmationOverlay: View {
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture { onCancel() }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel(String(localized: "common.cancel", bundle: .main))
+                .accessibilityAction { onCancel() }
 
-            VStack(spacing: 14) {
+            VStack(spacing: MeeshySpacing.mdPlus) {
                 Text(String(localized: "mood.reply.confirm.title", defaultValue: "Répondre à cette humeur ?", bundle: .main))
-                    .font(MeeshyFont.relative(16, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
+                    .foregroundStyle(theme.textPrimary)
                     .multilineTextAlignment(.center)
 
                 Text(moodSummary)
-                    .font(MeeshyFont.relative(14))
-                    .foregroundColor(theme.textSecondary)
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize))
+                    .foregroundStyle(theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
 
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     Button(action: onCancel) {
                         Text(String(localized: "mood.reply.confirm.cancel", defaultValue: "Quitter", bundle: .main))
-                            .font(MeeshyFont.relative(15, weight: .medium))
-                            .foregroundColor(theme.textSecondary)
+                            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
+                            .foregroundStyle(theme.textSecondary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 11)
                             .background(
-                                RoundedRectangle(cornerRadius: 12)
+                                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                                     .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
                             )
                     }
 
                     Button(action: onReply) {
                         Text(String(localized: "mood.reply.confirm.reply", defaultValue: "Répondre", bundle: .main))
-                            .font(MeeshyFont.relative(15, weight: .semibold))
-                            .foregroundColor(.white)
+                            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                            .foregroundStyle(Color.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 11)
                             .background(
-                                RoundedRectangle(cornerRadius: 12)
+                                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                                     .fill(MeeshyColors.brandGradient)
                             )
                     }
                 }
             }
-            .padding(20)
+            .padding(MeeshySpacing.xl)
             .frame(maxWidth: 320)
             .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
                     .fill(.ultraThinMaterial)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(theme.border(tint: "6366F1", intensity: 0.3), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
+                            .stroke(theme.border(tint: MeeshyColors.brandPrimaryHex, intensity: 0.3), lineWidth: 1)
                     )
                     .shadow(color: Color.black.opacity(0.18), radius: 24, y: 8)
             )
-            .padding(.horizontal, 32)
+            .padding(.horizontal, MeeshySpacing.xxxl)
             .scaleEffect(appear ? 1 : 0.9)
             .opacity(appear ? 1 : 0)
         }
@@ -283,5 +321,5 @@ extension View {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let statusBubble = Logger(subsystem: "me.meeshy.app", category: "status-bubble")
+    nonisolated static let statusBubble = MeeshyLog.logger(.statusBubble)
 }

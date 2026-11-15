@@ -1,5 +1,50 @@
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { FastifyReply } from 'fastify';
+import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
+import type { UnifiedAuthContext } from '../../../middleware/auth';
+import { ErrorCode } from '@meeshy/shared/types/errors';
+import { sendNotFound, sendUnauthorized } from '../../../utils/response';
 import { unsetOrNull } from '../../../utils/prisma-unset';
+
+/**
+ * Une participation VIVANTE : active ET non bannie — UNE définition pour
+ * l'invité et pour l'inscrit, sur toutes les portes de lecture (REST et
+ * socket) (#7389).
+ *
+ * `isActive: true` seul ne suffit pas. Un bannissement d'un membre ACTIF écrit
+ * bien `isActive: false`, mais celui d'un membre déjà INACTIF (parti, ou qui a
+ * supprimé la conversation pour lui) n'écrit que `bannedAt`
+ * (`resolveBanWrite`, `services/conversations/conversationBanState.ts`) ; et
+ * `POST /conversations/:id/restore-for-me` (`routes/user-deletions.ts`)
+ * rallumait ensuite `isActive` sans lire `bannedAt` — fermé par #10436, qui
+ * refuse la restauration d'un banni et porte la garde dans le `where` de
+ * l'écriture. (Ce n'est PAS la restauration de compte de
+ * `routes/me/delete-account.ts` : elle écrit `User.isActive`, jamais une
+ * participation.) Les réintégrations (lien, invitation, ajout) passent par
+ * `resolveConversationEntry`, qui refuse un banni ; le débannissement remet
+ * `bannedAt` à `null` dans la même écriture. La garde de lecture reste
+ * porteuse pour les lignes actives ET bannies déjà en base : elle ne vivait
+ * que sur la branche INVITÉ, et l'inscrit concerné relisait le fil, la
+ * recherche et les épinglés, et rejoignait la room à la connexion socket.
+ *
+ * `unsetOrNull` et non `bannedAt: null` : la colonne est ABSENTE du document de
+ * tout participant jamais banni, et l'égalité à `null` fermerait la
+ * conversation à toute la population (`utils/prisma-unset.ts`). Elle porte une
+ * clé `OR` : un `where` qui a déjà le sien passe par `AND`.
+ */
+export const PARTICIPATION_VIVANTE = {
+  isActive: true,
+  ...unsetOrNull('bannedAt')
+} as const;
+
+/**
+ * `PARTICIPATION_VIVANTE` jugée sur une ligne DÉJÀ lue — pour une porte qui
+ * doit distinguer une participation MORTE (désactivée ou bannie) d'une ligne
+ * absente, et ne peut donc pas filtrer dans son `where` (#10449). Même règle :
+ * active (`true`, pas seulement « non fausse ») et `bannedAt` nul ou absent.
+ */
+export function participationEstVivante(row: { readonly isActive?: boolean | null; readonly bannedAt?: Date | null }): boolean {
+  return row.isActive === true && row.bannedAt == null;
+}
 
 /**
  * The two identities an auth context can name a `Participant` row with.
@@ -45,17 +90,12 @@ export async function resolveCallerParticipant(
   prisma: Pick<PrismaClient, 'participant'>,
   authContext: CallerParticipantIdentity | null | undefined,
   conversationId: string
-): Promise<{ id: string; role: string } | null> {
+): Promise<{ id: string; role: string; joinedAt: Date | null; messageRequestAt?: Date | null; messageRequestRisk?: number | null } | null> {
   const participantId = authContext?.participantId;
   if (participantId) {
     return prisma.participant.findFirst({
-      where: {
-        id: participantId,
-        conversationId,
-        isActive: true,
-        ...unsetOrNull('bannedAt')
-      },
-      select: { id: true, role: true }
+      where: { id: participantId, conversationId, ...PARTICIPATION_VIVANTE },
+      select: { id: true, role: true, joinedAt: true, messageRequestAt: true, messageRequestRisk: true, messageRequestFromId: true }
     });
   }
 
@@ -63,39 +103,128 @@ export async function resolveCallerParticipant(
   if (!userId) return null;
 
   return prisma.participant.findFirst({
-    where: { conversationId, userId, isActive: true },
-    select: { id: true, role: true }
+    where: { conversationId, userId, ...PARTICIPATION_VIVANTE },
+    select: { id: true, role: true, joinedAt: true, messageRequestAt: true, messageRequestRisk: true, messageRequestFromId: true }
   });
 }
 
 /**
- * Vérifie si un utilisateur peut accéder à une conversation via le modèle Participant unifié
+ * Le filtre `Participant` qui désigne l'APPELANT, pour les routes qui le
+ * cherchent dans une relation imbriquée (`conversation.participants`) plutôt
+ * que par `resolveCallerParticipant`. Même préséance, même garde de
+ * bannissement pour l'invité : les deux réponses ne doivent pas diverger sur
+ * qui est l'appelant (#7358 — `where: { userId }` ne trouvait jamais un invité).
+ * Sans identité, le filtre n'apparie PERSONNE — jamais `userId: null`, qui
+ * désignerait tous les invités de la conversation.
  */
-export async function canAccessConversation(
+export function callerParticipantWhere(
+  authContext: CallerParticipantIdentity | null | undefined
+): Prisma.ParticipantWhereInput {
+  const participantId = authContext?.participantId;
+  if (participantId) {
+    return { id: participantId, ...PARTICIPATION_VIVANTE };
+  }
+  const userId = authContext?.userId;
+  if (!userId) return { id: { in: [] } };
+  return { userId, ...PARTICIPATION_VIVANTE };
+}
+
+/**
+ * **UN BOOLÉEN NE PEUT PAS DIRE DEUX CHOSES** (#4792).
+ *
+ * `canAccessConversation` rendait `false` pour DEUX refus que rien ne
+ * rapproche : « je ne sais pas qui tu es » (aucune session, ou une session
+ * morte) et « je sais qui tu es, et cette conversation n'est pas pour toi ».
+ * Chaque appelant traduisait donc l'unique `false` en un unique `sendForbidden`
+ * — et les cinq routes montées en `optionalAuth`, une garde qui ne refuse RIEN,
+ * répondaient **403 à une session absente**, là où la sémantique appelle un
+ * **401**.
+ *
+ * CE QUE LE 403 COÛTE, MESURÉ CLIENT PAR CLIENT (identique à #4789, dont ce lot
+ * est la suite sur les cinq routes que celui-là ne couvrait pas) :
+ * `APIClient.mapUnauthorized` (`packages/MeeshySDK/.../APIClient.swift`) est le
+ * site UNIQUE qui décide qu'une réponse veut dire « ta session est morte », et
+ * seule la branche 401 l'atteint — un membre dont le jeton expirait en ouvrant
+ * un fil voyait ses messages refusés, sans jamais déclencher de
+ * rafraîchissement de session. `apps/web` rafraîchit sur 401 (`api.service.ts`)
+ * et ne fait rien du 403 de ces routes. Android est NEUTRE — son
+ * `AuthExpiryInterceptor.EXPIRY_CODES` contient déjà `{401, 403}`. `web-v2` ne
+ * vise aucune de ces cinq adresses.
+ *
+ * ─── Pourquoi un VERDICT, et pas un booléen de plus ─────────────────────────
+ *
+ * `canAccessConversation` a DIX-HUIT sites d'appel de production répartis sur
+ * quinze modules (mesuré). Changer son type de retour obligerait à les toucher
+ * tous, dont onze n'ont rien à voir avec ce défaut. Le patron retenu est celui
+ * de `participant-geste-verdict.ts` (#4713) et de `chargerPostsProches`
+ * (#4346) : le NOYAU rend une valeur, et la fonction historique en devient une
+ * PROJECTION d'une ligne. Il n'y a donc pas de jumelle à faire diverger — la
+ * règle d'appartenance est écrite UNE fois, ici, et les dix-huit appelants
+ * continuent de marcher sans être modifiés.
+ *
+ * ─── Trois genres, pas deux booléens ────────────────────────────────────────
+ *
+ * `sans-session` se prononce SANS aucune requête : c'est la propriété du
+ * contexte, pas de la conversation. Les deux autres exigent la ligne
+ * `Participant`.
+ */
+export type AccesAccorde = { readonly genre: 'ok' };
+export type RefusSansSession = { readonly genre: 'sans-session' };
+export type RefusNonMembre = { readonly genre: 'non-membre' };
+
+/** Ce que le noyau REFUSE — le complément de `AccesAccorde`. */
+export type RefusAccesConversation = RefusSansSession | RefusNonMembre;
+
+export type VerdictAccesConversation = AccesAccorde | RefusAccesConversation;
+
+const ACCES_ACCORDE: AccesAccorde = { genre: 'ok' };
+export const SANS_SESSION: RefusSansSession = { genre: 'sans-session' };
+const NON_MEMBRE: RefusNonMembre = { genre: 'non-membre' };
+
+/**
+ * Le contexte tel que les dix-huit appelants le passent.
+ *
+ * `undefined` est admis parce qu'un appelant de production le passe déjà :
+ * `appliquerDroitsDeParticipant` déclare `authContext: UnifiedAuthContext |
+ * undefined` (`participant-rights-core.ts`). Le paramètre était typé `any`, ce
+ * que le `CLAUDE.md` interdit, et cet `any` cachait exactement ça — sous lui,
+ * un contexte absent faisait LEVER `authContext.isAuthenticated` (donc 500),
+ * quand la seule lecture honnête d'une identité absente est « pas de session ».
+ */
+export type ContexteDAccesConversation = UnifiedAuthContext | null | undefined;
+
+/**
+ * Le NOYAU : qui est l'appelant, et cette conversation est-elle pour lui ?
+ *
+ * Corps INCHANGÉ depuis la version booléenne, à la seule substitution des
+ * valeurs de retour près — c'est ce qui rend la projection ci-dessous
+ * démontrablement équivalente pour les dix-huit appelants.
+ */
+export async function verdictAccesConversation(
   prisma: PrismaClient,
-  authContext: any,
+  authContext: ContexteDAccesConversation,
   conversationId: string,
   conversationIdentifier: string
-): Promise<boolean> {
-  if (!authContext.isAuthenticated) {
-    return false;
+): Promise<VerdictAccesConversation> {
+  if (!authContext?.isAuthenticated) {
+    return SANS_SESSION;
   }
 
   // Cas spécial : conversation globale "meeshy"
   if (conversationIdentifier === "meeshy" || conversationId === "meeshy") {
     if (authContext.isAnonymous) {
-      return false;
+      return NON_MEMBRE;
     }
 
     const participant = await prisma.participant.findFirst({
       where: {
         conversationId: conversationId,
         userId: authContext.userId,
-        isActive: true
+        ...PARTICIPATION_VIVANTE
       }
     });
 
-    return !!participant;
+    return participant ? ACCES_ACCORDE : NON_MEMBRE;
   }
 
   // Participant unifié : une seule requête pour tous les types
@@ -108,19 +237,20 @@ export async function canAccessConversation(
   // dans leur contexte d'auth — se voyaient refuser l'accès à leur propre
   // conversation. Voir `utils/prisma-unset.ts`.
   //
-  // La garde reste porteuse malgré `isActive: true` : un bannissement écrit bien
-  // `isActive: false`, mais une restauration de compte rallume `isActive` sans
-  // regarder `bannedAt` (`routes/me/delete-account.ts`).
+  // La garde reste porteuse malgré `isActive: true` : une ligne peut être
+  // active ET bannie en base — bannie pendant qu'elle était inactive (seul
+  // `bannedAt` est alors écrit), puis rallumée par `restore-for-me` avant
+  // #10436 (voir `PARTICIPATION_VIVANTE`). Elle vaut pour les branches
+  // INSCRITES ci-dessous aussi (#7389).
   if (authContext.participantId) {
     const participant = await prisma.participant.findFirst({
       where: {
         id: authContext.participantId,
         conversationId: conversationId,
-        isActive: true,
-        ...unsetOrNull('bannedAt')
+        ...PARTICIPATION_VIVANTE
       }
     });
-    return !!participant;
+    return participant ? ACCES_ACCORDE : NON_MEMBRE;
   }
 
   // Fallback: rechercher par userId (registered users)
@@ -136,28 +266,104 @@ export async function canAccessConversation(
       });
 
       if (!conversation) {
-        return false;
+        return NON_MEMBRE;
       }
 
       const participant = await prisma.participant.findFirst({
         where: {
           conversationId: conversation.id,
           userId: authContext.userId,
-          isActive: true
+          ...PARTICIPATION_VIVANTE
         }
       });
-      return !!participant;
+      return participant ? ACCES_ACCORDE : NON_MEMBRE;
     }
 
     const participant = await prisma.participant.findFirst({
       where: {
         conversationId: conversationId,
         userId: authContext.userId,
-        isActive: true
+        ...PARTICIPATION_VIVANTE
       }
     });
-    return !!participant;
+    return participant ? ACCES_ACCORDE : NON_MEMBRE;
   }
 
-  return false;
+  // Authentifié, mais sans identité exploitable : ce n'est pas une absence de
+  // session — c'est un appelant qu'on connaît et qu'on ne retrouve dans aucune
+  // ligne `Participant`.
+  return NON_MEMBRE;
+}
+
+/**
+ * Vérifie si un utilisateur peut accéder à une conversation via le modèle Participant unifié
+ *
+ * PROJECTION du verdict ci-dessus, et rien d'autre : les dix-huit appelants qui
+ * ne cherchent qu'un OUI/NON restent inchangés, et il n'existe qu'UNE source de
+ * vérité pour l'appartenance.
+ */
+export async function canAccessConversation(
+  prisma: PrismaClient,
+  authContext: ContexteDAccesConversation,
+  conversationId: string,
+  conversationIdentifier: string
+): Promise<boolean> {
+  return (await verdictAccesConversation(prisma, authContext, conversationId, conversationIdentifier)).genre === 'ok';
+}
+
+/**
+ * Le CODE machine d'un refus d'appartenance.
+ *
+ * Il est le seul signal qu'un client peut brancher : la prose anglaise du
+ * `message` ne l'est pas, et c'est tout ce qui séparait les deux refus avant ce
+ * lot. `UNAUTHORIZED` n'est pas inventé non plus — `ErrorCode.UNAUTHORIZED`
+ * (`packages/shared/types/errors.ts`) le déclare, `ErrorStatusMap` le mappe sur
+ * 401, et 49 des 84 modules qui appellent `sendUnauthorized` le servent déjà.
+ */
+export const CODE_SANS_SESSION = 'UNAUTHORIZED';
+export const CODE_NON_MEMBRE = 'CONVERSATION_ACCESS_DENIED';
+
+/** Ce que chaque route DIT d'une session absente — la seule prose qui varie. */
+export type MessagesDeRefusDAcces = {
+  readonly sansSession: string;
+};
+
+/**
+ * La prose UNIQUE d'une conversation qu'on ne sert pas — qu'elle n'existe pas,
+ * ou qu'elle existe et que l'appelant n'en soit pas membre (#8099).
+ *
+ * Directive porteur 2026-09-26 : un lien DIRECT ne dit rien à un non-membre,
+ * pas même que la conversation existe. Les identifiants sont LISIBLES
+ * (`mee_meeshy`) : un 403 « pas pour toi » à côté d'un 404 « introuvable »
+ * était un oracle d'existence énumérable. Les deux refus partent donc
+ * identiques — même statut, même prose, même code.
+ */
+export const CONVERSATION_INTROUVABLE = 'Conversation not found';
+
+/**
+ * #13820 — le code STABLE de ce refus, identique pour une conversation absente et
+ * pour un non-membre (#8099) : il dit seulement que c'est la PASSERELLE qui ne sert
+ * pas la conversation. Un client y distingue un refus définitif du 404 brut d'un
+ * proxy (Traefik pendant un redémarrage), qu'il doit réessayer.
+ */
+export function refuserCommeIntrouvable(reply: FastifyReply): void {
+  return sendNotFound(reply, CONVERSATION_INTROUVABLE, { code: ErrorCode.CONVERSATION_NOT_FOUND });
+}
+
+/**
+ * La TRADUCTION du refus en réponse — site UNIQUE.
+ *
+ * Session absente ou morte ⇒ 401 `UNAUTHORIZED` (#4792). Non-membre ⇒ le même
+ * 404 qu'un identifiant inexistant (#8099).
+ */
+export function refuserAccesConversation(
+  reply: FastifyReply,
+  refus: RefusAccesConversation,
+  messages: MessagesDeRefusDAcces
+): void {
+  if (refus.genre === 'sans-session') {
+    return sendUnauthorized(reply, messages.sansSession, { code: CODE_SANS_SESSION });
+  }
+
+  return refuserCommeIntrouvable(reply);
 }

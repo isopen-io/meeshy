@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// F-080 (WS-1) — `MessageAccessibilityLabelComposer` : réplique fidèle,
@@ -15,6 +16,7 @@ final class A11yLabelComposerTests: XCTestCase {
     // MARK: - Fabrique minimale
 
     private func makeContent(
+        kind: BubbleContent.Kind = .standard,
         isMe: Bool = false,
         senderName: String? = "Ali",
         text: String? = nil,
@@ -23,13 +25,13 @@ final class A11yLabelComposerTests: XCTestCase {
         location: SharedPlace? = nil,
         editedAt: Date? = nil,
         isPinned: Bool = false,
-        ephemeral: BubbleContent.Ephemeral? = nil,
+        protection: MessageProtectionDescriptor = .unprotected,
         reactions: [MeeshyReactionSummary] = [],
         deliveryStatus: MeeshyMessage.DeliveryStatus? = nil
     ) -> BubbleContent {
         BubbleContent(
             messageId: "m1",
-            kind: .standard,
+            kind: kind,
             text: text.map {
                 BubbleContent.Text(
                     raw: $0, isEmojiOnly: false, emojiFontSize: nil,
@@ -40,11 +42,11 @@ final class A11yLabelComposerTests: XCTestCase {
             reply: reply,
             attachments: attachments,
             location: location,
-            ephemeral: ephemeral,
+            protection: protection,
             isBlurred: false,
             isViewOnce: false,
             isPinned: isPinned,
-            isForwarded: false,
+            forwardAttribution: nil,
             editedAt: editedAt,
             isEditSaving: false,
             hasEditHistory: false,
@@ -110,20 +112,61 @@ final class A11yLabelComposerTests: XCTestCase {
         XCTAssertTrue(MessageAccessibilityLabelComposer.compose(content).contains(expected))
     }
 
-    func test_compose_ephemeralMessage_includesEphemeralLabel() {
-        let expected = String(localized: "a11y.message.ephemeral", bundle: .main)
-        let content = makeContent(text: "Salut", ephemeral: BubbleContent.Ephemeral(expiresAt: Date()))
+    /// #7452 — le libellé dit désormais l'ÉCHÉANCE (« disparaît dans 4
+    /// minutes »), et il vient du site unique partagé avec la capsule. Le
+    /// libellé précédent (`a11y.message.ephemeral`) disait « Message
+    /// éphémère » sans jamais dire quand.
+    func test_compose_ephemeralMessage_includesEphemeralDeadlineLabel() {
+        let deadline = Date().addingTimeInterval(240)
+        let descriptor = MessageProtectionDescriptor(
+            badges: [.ephemeral(.running(deadline: deadline))],
+            ephemeralState: .running(deadline: deadline)
+        )
+        let content = makeContent(text: "Salut", protection: descriptor)
+        let expected = MessageProtectionChrome.accessibilityLabels(for: descriptor)
+        XCTAssertFalse(expected.isEmpty)
+        let composed = MessageAccessibilityLabelComposer.compose(content)
+        XCTAssertTrue(expected.allSatisfy(composed.contains))
+    }
+
+    /// #8635 — une flamme-œil n'a ni capsule ni décompte : VoiceOver ne disait
+    /// pas qu'elle disparaît après lecture.
+    func test_compose_afterReadMessage_announcesItDisappearsAfterReading() {
+        let descriptor = MessageProtectionDescriptor(badges: [], ephemeralState: .notEphemeral, isAfterRead: true)
+        let content = makeContent(text: "Salut", protection: descriptor)
+        XCTAssertTrue(
+            MessageAccessibilityLabelComposer.compose(content)
+                .contains(MessageProtectionChrome.afterReadA11y)
+        )
+    }
+
+    /// Une vue unique n'était annoncée NULLE PART au lecteur d'écran : la
+    /// protection la plus forte du produit était la seule invisible.
+    func test_compose_viewOnceMessage_includesViewOnceLabel() {
+        let descriptor = MessageProtectionDescriptor(badges: [.viewOnce], ephemeralState: .notEphemeral)
+        let content = makeContent(text: "Salut", protection: descriptor)
+        XCTAssertTrue(
+            MessageAccessibilityLabelComposer.compose(content)
+                .contains(MessageProtectionChrome.viewOnceA11y)
+        )
+    }
+
+    /// The literal « lu » these two asserted on until 270i was doubly wrong. It only
+    /// ever matched because `a11y.delivery.read` was ABSENT from the catalog, so every
+    /// locale fell back to the French `defaultValue` — and the positive assertion passed
+    /// for the wrong reason on top of that: its own fixture text, « Salut », CONTAINS
+    /// « lu », so it would have held even if the delivery segment were dropped entirely.
+    /// Asking the catalog, as every neighbouring test here already does, fixes both.
+    func test_compose_ownMessage_includesDeliveryStatusSegment() {
+        let expected = String(localized: "a11y.delivery.read", bundle: .main)
+        let content = makeContent(isMe: true, text: "Salut", deliveryStatus: .read)
         XCTAssertTrue(MessageAccessibilityLabelComposer.compose(content).contains(expected))
     }
 
-    func test_compose_ownMessage_includesDeliveryStatusSegment() {
-        let content = makeContent(isMe: true, text: "Salut", deliveryStatus: .read)
-        XCTAssertTrue(MessageAccessibilityLabelComposer.compose(content).contains("lu"))
-    }
-
     func test_compose_receivedMessage_omitsDeliveryStatusSegment() {
+        let unexpected = String(localized: "a11y.delivery.read", bundle: .main)
         let content = makeContent(isMe: false, senderName: "Ali", text: "Bonjour", deliveryStatus: nil)
-        XCTAssertFalse(MessageAccessibilityLabelComposer.compose(content).contains("lu"))
+        XCTAssertFalse(MessageAccessibilityLabelComposer.compose(content).contains(unexpected))
     }
 
     func test_compose_locationMessage_includesLocationLabel() {
@@ -186,4 +229,14 @@ final class A11yLabelComposerTests: XCTestCase {
         XCTAssertTrue(textIndex < imagesIndex)
         XCTAssertTrue(imagesIndex < reactionsIndex)
     }
+
+    /// #12917 — un avis système n'est la parole de personne : VoiceOver ne
+    /// l'attribue ni à un auteur ni à « Inconnu », même reçu sans nom.
+    func test_compose_systemNotice_namesNoAuthor() {
+        let label = MessageAccessibilityLabelComposer.compose(makeContent(kind: .system, senderName: nil, text: "Chiffrement de bout en bout activé"))
+
+        XCTAssertFalse(label.contains(String(localized: "a11y.message.unknown_sender", bundle: .main)))
+        XCTAssertTrue(label.hasPrefix("Chiffrement de bout en bout activé"))
+    }
+
 }

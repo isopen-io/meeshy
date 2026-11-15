@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "profile_avatar_view_fullscreen_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_banner_label",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

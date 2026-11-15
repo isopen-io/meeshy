@@ -112,8 +112,8 @@ public nonisolated struct ComposerDismissOutcome: Equatable, Sendable {
     public let resultingContext: ComposerChromeContext
 }
 
-/// Règle UNIQUE de visibilité du chrome plein du composer (C-DIR2, directive
-/// user 2026-07-04) : le header (X / strip / visibilité / preview / Publier / ⋯)
+/// Règle UNIQUE de visibilité du chrome plein du composer:
+/// le header (X / strip / visibilité / preview / Publier / ⋯)
 /// et la colonne annuler/rétablir apparaissent sous les MÊMES conditions que la
 /// colonne de FABs — canvas plein écran, aucun panneau ouvert, aucune édition en
 /// cours, pas de zoom viewport. Pendant l'édition, le chrome est inutile : on

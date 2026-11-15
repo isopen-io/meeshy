@@ -1,0 +1,712 @@
+{
+  "$format": "{ law, ...paramètres } — meesh-display-edition { n } : `edition` est la LOI de la frappe (meeshEdition), `displayEdition` le DESSIN (meeshDisplayEdition, la plus haute édition atteinte) ; une valeur illisible s’écrit en chaîne (\"NaN\", \"Infinity\", \"-Infinity\"). mint-ceremony-plan { edition, look, mode } : la cérémonie d’une pièce dont la LOI (`edition`) règle les coups et les aïeux et le DESSIN (`look`) les poussières. `expected` est la sortie des lois TypeScript (utils/game/mint.ts, utils/game/mint-ceremony.ts).",
+  "vectors": [
+    {
+      "_label": "aucune pièce : le flan d’argent",
+      "input": {
+        "law": "meesh-display-edition",
+        "n": 0
+      },
+      "expected": {
+        "edition": "silver",
+        "displayEdition": "silver"
+      }
+    },
+    {
+      "_label": "la première : argent",
+      "input": {
+        "law": "meesh-display-edition",
+        "n": 1
+      },
+      "expected": {
+        "edition": "silver",
+        "displayEdition": "silver"
+      }
+    },
+    {
+      "_label": "la dernière avant l’or : argent",
+      "input": {
+        "law": "meesh-display-edition",
+        "n": 99
+      },
+      "expected": {
+        "edition": "silver",
+        "displayEdition": "silver"
+      }
+    },
+    {
+      "_label": "la première d’or : or",
+      "input": {
+        "law": "meesh-display-edition",
+        "n": 100
+      },
+      "expected": {
+        "edition": "gold",
+        "displayEdition": "gold"
+      }
+    },
+    {
+      "_label": "après l’or, une pièce ordinaire se dessine en or",
+      "input": {
+        "law": "meesh-display-edition",
+        "n": 101
+      },
+      "expected": {
+        "edition": "silver",
+        "displayEdition": "gold"
+      }
+    },
+    {
+      "_label": "le n° 247 dessiné en or (porteur, 2026-10-21)",
+      "input": {
+        "law": "meesh-display-edition",
+        "n": 247
+      },
+      "expected": {
+        "edition": "silver",
+        "displayEdition": "gold"
+      }
+    },
+    {
+      "_label": "la dernière avant le prisme : or",
+      "input": {
+        "law": "meesh-display-edition",
+        "n": 999
+      },
+      "expected": {
+        "edition": "silver",
+        "displayEdition": "gold"
+      }
+    },
+    {
+      "_label": "la première prisme : prisme",
+      "input": {
+        "law": "meesh-display-edition",
+        "n": 1000
+      },
+      "expected": {
+        "edition": "prism",
+        "displayEdition": "prism"
+      }
+    },
+    {
+      "_label": "après le prisme, une pièce ordinaire se dessine en prisme",
+      "input": {
+        "law": "meesh-display-edition",
+        "n": 1001
+      },
+      "expected": {
+        "edition": "silver",
+        "displayEdition": "prism"
+      }
+    },
+    {
+      "_label": "une pièce ordinaire du deuxième millier : prisme",
+      "input": {
+        "law": "meesh-display-edition",
+        "n": 1999
+      },
+      "expected": {
+        "edition": "silver",
+        "displayEdition": "prism"
+      }
+    },
+    {
+      "_label": "le deuxième millième : prisme",
+      "input": {
+        "law": "meesh-display-edition",
+        "n": 2000
+      },
+      "expected": {
+        "edition": "prism",
+        "displayEdition": "prism"
+      }
+    },
+    {
+      "_label": "illisible : un numéro fractionnaire se tronque",
+      "input": {
+        "law": "meesh-display-edition",
+        "n": 247.9
+      },
+      "expected": {
+        "edition": "silver",
+        "displayEdition": "gold"
+      }
+    },
+    {
+      "_label": "illisible : négatif, comme la loi",
+      "input": {
+        "law": "meesh-display-edition",
+        "n": -1
+      },
+      "expected": {
+        "edition": "silver",
+        "displayEdition": "silver"
+      }
+    },
+    {
+      "_label": "illisible : négatif au-delà de cent, comme la loi",
+      "input": {
+        "law": "meesh-display-edition",
+        "n": -150
+      },
+      "expected": {
+        "edition": "silver",
+        "displayEdition": "silver"
+      }
+    },
+    {
+      "_label": "illisible : NaN, comme la loi",
+      "input": {
+        "law": "meesh-display-edition",
+        "n": "NaN"
+      },
+      "expected": {
+        "edition": "silver",
+        "displayEdition": "silver"
+      }
+    },
+    {
+      "_label": "illisible : l’infini, comme la loi",
+      "input": {
+        "law": "meesh-display-edition",
+        "n": "Infinity"
+      },
+      "expected": {
+        "edition": "silver",
+        "displayEdition": "silver"
+      }
+    },
+    {
+      "_label": "illisible : moins l’infini, comme la loi",
+      "input": {
+        "law": "meesh-display-edition",
+        "n": "-Infinity"
+      },
+      "expected": {
+        "edition": "silver",
+        "displayEdition": "silver"
+      }
+    },
+    {
+      "_label": "le n° 247 : un coup d’argent, des poussières d’or",
+      "input": {
+        "law": "mint-ceremony-plan",
+        "edition": "silver",
+        "look": "gold",
+        "mode": "normal"
+      },
+      "expected": {
+        "edition": "silver",
+        "mode": "normal",
+        "grand": false,
+        "particles": {
+          "weave": 2600,
+          "dust": [
+            {
+              "from": "meo",
+              "material": "gold",
+              "count": 1500
+            }
+          ],
+          "bursts": [
+            320
+          ],
+          "puff": 70
+        },
+        "phases": {
+          "open": {
+            "fromMs": 0,
+            "toMs": 400
+          },
+          "emit": {
+            "fromMs": 350,
+            "toMs": 1400
+          },
+          "braid": {
+            "fromMs": 350,
+            "toMs": 2200
+          },
+          "tighten": {
+            "fromMs": 2000,
+            "toMs": 2550
+          },
+          "dust": {
+            "fromMs": 2200,
+            "toMs": 2900
+          },
+          "blank": {
+            "fromMs": 3300,
+            "toMs": 3800
+          },
+          "descent": {
+            "fromMs": 3800,
+            "toMs": 4200
+          },
+          "places": {
+            "fromMs": 3950,
+            "toMs": 4300
+          },
+          "die": {
+            "fromMs": 4150,
+            "toMs": 4450
+          },
+          "windup": {
+            "fromMs": 4400,
+            "toMs": 4750
+          },
+          "hold": {
+            "fromMs": 4750,
+            "toMs": 4800
+          },
+          "strikes": {
+            "fromMs": 4800,
+            "toMs": 4890
+          },
+          "engrave": {
+            "fromMs": 4890,
+            "toMs": 5070
+          },
+          "dieOff": {
+            "fromMs": 5010,
+            "toMs": 5310
+          },
+          "reveal": {
+            "fromMs": 5140,
+            "toMs": 5940
+          },
+          "ancestors": null,
+          "celebrate": {
+            "fromMs": 5940,
+            "toMs": 6590
+          },
+          "flight": {
+            "fromMs": 6590,
+            "toMs": 7240
+          },
+          "glory": {
+            "fromMs": 7040,
+            "toMs": 7890
+          }
+        },
+        "strikes": [
+          {
+            "atMs": 4800,
+            "impactMs": 4890,
+            "hitters": [
+              "meo"
+            ],
+            "final": true
+          }
+        ],
+        "refusal": null,
+        "endMs": 8040
+      }
+    },
+    {
+      "_label": "le n° 1001 : un coup d’argent, l’or et le diamant",
+      "input": {
+        "law": "mint-ceremony-plan",
+        "edition": "silver",
+        "look": "prism",
+        "mode": "normal"
+      },
+      "expected": {
+        "edition": "silver",
+        "mode": "normal",
+        "grand": false,
+        "particles": {
+          "weave": 2600,
+          "dust": [
+            {
+              "from": "meo",
+              "material": "gold",
+              "count": 900
+            },
+            {
+              "from": "mee",
+              "material": "diamond",
+              "count": 950
+            }
+          ],
+          "bursts": [
+            320
+          ],
+          "puff": 70
+        },
+        "phases": {
+          "open": {
+            "fromMs": 0,
+            "toMs": 400
+          },
+          "emit": {
+            "fromMs": 350,
+            "toMs": 1400
+          },
+          "braid": {
+            "fromMs": 350,
+            "toMs": 2200
+          },
+          "tighten": {
+            "fromMs": 2000,
+            "toMs": 2550
+          },
+          "dust": {
+            "fromMs": 2200,
+            "toMs": 2900
+          },
+          "blank": {
+            "fromMs": 3300,
+            "toMs": 3800
+          },
+          "descent": {
+            "fromMs": 3800,
+            "toMs": 4200
+          },
+          "places": {
+            "fromMs": 3950,
+            "toMs": 4300
+          },
+          "die": {
+            "fromMs": 4150,
+            "toMs": 4450
+          },
+          "windup": {
+            "fromMs": 4400,
+            "toMs": 4750
+          },
+          "hold": {
+            "fromMs": 4750,
+            "toMs": 4800
+          },
+          "strikes": {
+            "fromMs": 4800,
+            "toMs": 4890
+          },
+          "engrave": {
+            "fromMs": 4890,
+            "toMs": 5070
+          },
+          "dieOff": {
+            "fromMs": 5010,
+            "toMs": 5310
+          },
+          "reveal": {
+            "fromMs": 5140,
+            "toMs": 5940
+          },
+          "ancestors": null,
+          "celebrate": {
+            "fromMs": 5940,
+            "toMs": 6590
+          },
+          "flight": {
+            "fromMs": 6590,
+            "toMs": 7240
+          },
+          "glory": {
+            "fromMs": 7040,
+            "toMs": 7890
+          }
+        },
+        "strikes": [
+          {
+            "atMs": 4800,
+            "impactMs": 4890,
+            "hitters": [
+              "meo"
+            ],
+            "final": true
+          }
+        ],
+        "refusal": null,
+        "endMs": 8040
+      }
+    },
+    {
+      "_label": "le n° 1100 : trois coups d’or et les aïeux, l’or et le diamant",
+      "input": {
+        "law": "mint-ceremony-plan",
+        "edition": "gold",
+        "look": "prism",
+        "mode": "normal"
+      },
+      "expected": {
+        "edition": "gold",
+        "mode": "normal",
+        "grand": true,
+        "particles": {
+          "weave": 2600,
+          "dust": [
+            {
+              "from": "meo",
+              "material": "gold",
+              "count": 900
+            },
+            {
+              "from": "mee",
+              "material": "diamond",
+              "count": 950
+            }
+          ],
+          "bursts": [
+            120,
+            120,
+            420
+          ],
+          "puff": 70
+        },
+        "phases": {
+          "open": {
+            "fromMs": 0,
+            "toMs": 400
+          },
+          "emit": {
+            "fromMs": 350,
+            "toMs": 1400
+          },
+          "braid": {
+            "fromMs": 350,
+            "toMs": 2200
+          },
+          "tighten": {
+            "fromMs": 2000,
+            "toMs": 2550
+          },
+          "dust": {
+            "fromMs": 2200,
+            "toMs": 2900
+          },
+          "blank": {
+            "fromMs": 3300,
+            "toMs": 3800
+          },
+          "descent": {
+            "fromMs": 3800,
+            "toMs": 4200
+          },
+          "places": {
+            "fromMs": 3950,
+            "toMs": 4300
+          },
+          "die": {
+            "fromMs": 4150,
+            "toMs": 4450
+          },
+          "windup": {
+            "fromMs": 4400,
+            "toMs": 4750
+          },
+          "hold": {
+            "fromMs": 4750,
+            "toMs": 4800
+          },
+          "strikes": {
+            "fromMs": 4800,
+            "toMs": 6140
+          },
+          "engrave": {
+            "fromMs": 4890,
+            "toMs": 5070
+          },
+          "dieOff": {
+            "fromMs": 6260,
+            "toMs": 6560
+          },
+          "reveal": {
+            "fromMs": 6390,
+            "toMs": 7640
+          },
+          "ancestors": {
+            "fromMs": 6640,
+            "toMs": 7140
+          },
+          "celebrate": {
+            "fromMs": 7640,
+            "toMs": 8840
+          },
+          "flight": {
+            "fromMs": 8840,
+            "toMs": 9490
+          },
+          "glory": {
+            "fromMs": 9290,
+            "toMs": 10140
+          }
+        },
+        "strikes": [
+          {
+            "atMs": 4800,
+            "impactMs": 4890,
+            "hitters": [
+              "meo"
+            ],
+            "final": false
+          },
+          {
+            "atMs": 5380,
+            "impactMs": 5470,
+            "hitters": [
+              "meo"
+            ],
+            "final": false
+          },
+          {
+            "atMs": 6050,
+            "impactMs": 6140,
+            "hitters": [
+              "meo"
+            ],
+            "final": true
+          }
+        ],
+        "refusal": null,
+        "endMs": 10290
+      }
+    },
+    {
+      "_label": "le n° 247 refusé : la poussière d’or se dénoue",
+      "input": {
+        "law": "mint-ceremony-plan",
+        "edition": "silver",
+        "look": "gold",
+        "mode": "refused",
+        "answeredAtMs": 2600
+      },
+      "expected": {
+        "edition": "silver",
+        "mode": "refused",
+        "grand": false,
+        "particles": {
+          "weave": 2600,
+          "dust": [
+            {
+              "from": "meo",
+              "material": "gold",
+              "count": 1500
+            }
+          ],
+          "bursts": [],
+          "puff": 70
+        },
+        "phases": {
+          "open": {
+            "fromMs": 0,
+            "toMs": 400
+          },
+          "emit": {
+            "fromMs": 350,
+            "toMs": 1400
+          },
+          "braid": {
+            "fromMs": 350,
+            "toMs": 2200
+          },
+          "tighten": {
+            "fromMs": 2000,
+            "toMs": 2550
+          },
+          "dust": {
+            "fromMs": 2200,
+            "toMs": 2900
+          },
+          "blank": null,
+          "descent": null,
+          "places": null,
+          "die": null,
+          "windup": null,
+          "hold": null,
+          "strikes": null,
+          "engrave": null,
+          "dieOff": null,
+          "reveal": null,
+          "ancestors": null,
+          "celebrate": null,
+          "flight": null,
+          "glory": null
+        },
+        "strikes": [],
+        "refusal": {
+          "atMs": 2600,
+          "rewind": {
+            "fromMs": 2600,
+            "toMs": 3800
+          },
+          "rewindToMs": 350,
+          "shadowIn": {
+            "fromMs": 2600,
+            "toMs": 3300
+          },
+          "shadowOut": {
+            "fromMs": 4250,
+            "toMs": 4850
+          },
+          "sayMs": 3900
+        },
+        "endMs": 6400
+      }
+    },
+    {
+      "_label": "le n° 247 en animations réduites : un fondu",
+      "input": {
+        "law": "mint-ceremony-plan",
+        "edition": "silver",
+        "look": "gold",
+        "mode": "reduced"
+      },
+      "expected": {
+        "edition": "silver",
+        "mode": "reduced",
+        "grand": false,
+        "particles": {
+          "weave": 0,
+          "dust": [],
+          "bursts": [],
+          "puff": 0
+        },
+        "phases": {
+          "open": {
+            "fromMs": 0,
+            "toMs": 260
+          },
+          "emit": null,
+          "braid": null,
+          "tighten": null,
+          "dust": null,
+          "blank": null,
+          "descent": null,
+          "places": null,
+          "die": null,
+          "windup": null,
+          "hold": null,
+          "strikes": null,
+          "engrave": null,
+          "dieOff": null,
+          "reveal": {
+            "fromMs": 0,
+            "toMs": 260
+          },
+          "ancestors": null,
+          "celebrate": {
+            "fromMs": 260,
+            "toMs": 2600
+          },
+          "flight": null,
+          "glory": null
+        },
+        "strikes": [
+          {
+            "atMs": 0,
+            "impactMs": 0,
+            "hitters": [
+              "meo"
+            ],
+            "final": true
+          }
+        ],
+        "refusal": null,
+        "endMs": 2600
+      }
+    }
+  ]
+}

@@ -93,6 +93,21 @@ class ContactListTest {
     }
 
     @Test
+    fun `one any-direction listing aggregates sent and received relations without duplicates`() {
+        val me = user("me")
+        val friends = ContactList.fromAcceptedRequests(
+            requests = listOf(
+                request("r1", sender = user("alice"), receiver = me),
+                request("s1", sender = me, receiver = user("bob")),
+                request("r2", sender = user("bob"), receiver = me),
+                request("p1", status = "pending", sender = user("carol"), receiver = me),
+            ),
+            currentUserId = "me",
+        )
+        assertThat(friends.map { it.id }).containsExactly("alice", "bob")
+    }
+
+    @Test
     fun `a friend appearing in both received and sent is deduplicated`() {
         val friends = ContactList.fromAcceptedRequests(
             received = listOf(request("r1", sender = user("alice", isOnline = true))),
@@ -289,9 +304,134 @@ class ContactListTest {
     }
 
     @Test
-    fun `forFilter treats the pass-through filters as the whole roster`() {
-        val counts = ContactList.counts(roster, query = "")
+    fun `forFilter counts the phonebook and affiliates views from the injected numbers, zero by default`() {
+        assertThat(ContactList.counts(roster, query = "").forFilter(ContactFilter.Phonebook)).isEqualTo(0)
+        val counts = ContactList.counts(roster, query = "", phonebook = 3, affiliates = 5)
         assertThat(counts.forFilter(ContactFilter.Phonebook)).isEqualTo(3)
-        assertThat(counts.forFilter(ContactFilter.Affiliates)).isEqualTo(3)
+        assertThat(counts.forFilter(ContactFilter.Affiliates)).isEqualTo(5)
+    }
+
+    // MARK: - fromAcceptedRequests — one `direction=any` listing
+
+    @Test
+    fun `a single any-direction listing yields the other party whichever side initiated`() {
+        val friends = ContactList.fromAcceptedRequests(
+            requests = listOf(
+                request("r1", sender = user("alice"), receiver = user("me")),
+                request("r2", sender = user("me"), receiver = user("bob")),
+            ),
+            currentUserId = "me",
+        )
+
+        assertThat(friends.map { it.id }).containsExactly("alice", "bob")
+    }
+
+    @Test
+    fun `a relation accepted while the user was the RECEIVER is listed - the old received-only read lost it`() {
+        val friends = ContactList.fromAcceptedRequests(
+            requests = listOf(request("r1", sender = user("carol"), receiver = user("me"))),
+            currentUserId = "me",
+        )
+
+        assertThat(friends.map { it.id }).containsExactly("carol")
+    }
+
+    @Test
+    fun `the any-direction listing keeps only accepted rows`() {
+        val friends = ContactList.fromAcceptedRequests(
+            requests = listOf(
+                request("r1", status = "accepted", sender = user("alice")),
+                request("r2", status = "pending", sender = user("bob")),
+                request("r3", status = "rejected", sender = user("carol")),
+            ),
+            currentUserId = "me",
+        )
+
+        assertThat(friends.map { it.id }).containsExactly("alice")
+    }
+
+    @Test
+    fun `the first occurrence of a person wins the deduplication`() {
+        val friends = ContactList.fromAcceptedRequests(
+            requests = listOf(
+                request("r1", sender = user("alice", displayName = "first", isOnline = false)),
+                request("r2", sender = user("me"), receiver = user("alice", displayName = "second", isOnline = true)),
+            ),
+            currentUserId = "me",
+        )
+
+        assertThat(friends).hasSize(1)
+        assertThat(friends.single().displayName).isEqualTo("first")
+    }
+
+    @Test
+    fun `a self-referencing row never lists the user as their own contact`() {
+        val friends = ContactList.fromAcceptedRequests(
+            requests = listOf(
+                request("r1", sender = user("me"), receiver = user("me")),
+                request("r2", sender = user("me"), receiver = null),
+            ),
+            currentUserId = "me",
+        )
+
+        assertThat(friends).isEmpty()
+    }
+
+    @Test
+    fun `online contacts come first, then the most recently active`() {
+        val friends = ContactList.fromAcceptedRequests(
+            requests = listOf(
+                request("r1", sender = user("offline-old", isOnline = false, lastActiveAt = "2026-01-01T00:00:00Z")),
+                request("r2", sender = user("online", isOnline = true, lastActiveAt = "2025-01-01T00:00:00Z")),
+                request("r3", sender = user("offline-new", isOnline = false, lastActiveAt = "2026-06-01T00:00:00Z")),
+                request("r4", sender = user("never-seen")),
+            ),
+            currentUserId = "me",
+        )
+
+        assertThat(friends.map { it.id })
+            .containsExactly("online", "offline-new", "offline-old", "never-seen").inOrder()
+    }
+
+    @Test
+    fun `last activity is compared as an instant, not as text, across time zones`() {
+        val friends = ContactList.fromAcceptedRequests(
+            requests = listOf(
+                request("r1", sender = user("earlier", isOnline = false, lastActiveAt = "2026-06-01T10:30:00+02:00")),
+                request("r2", sender = user("later", isOnline = false, lastActiveAt = "2026-06-01T09:00:00Z")),
+            ),
+            currentUserId = "me",
+        )
+
+        // 10:30+02:00 is 08:30Z, so 09:00Z is the more recent instant although it sorts lower as text.
+        assertThat(friends.map { it.id }).containsExactly("later", "earlier").inOrder()
+    }
+
+    @Test
+    fun `an empty listing is an empty contact list`() {
+        assertThat(ContactList.fromAcceptedRequests(requests = emptyList(), currentUserId = "me")).isEmpty()
+    }
+
+    @Test
+    fun `injected phonebook and affiliates counts show on their chips and hide at zero`() {
+        val counts = ContactList.counts(listOf(user("a", isOnline = true)), query = "", phonebook = 4, affiliates = 0)
+
+        assertThat(counts.forFilter(ContactFilter.Phonebook)).isEqualTo(4)
+        assertThat(counts.badgeFor(ContactFilter.Phonebook)).isEqualTo(4)
+        assertThat(counts.badgeFor(ContactFilter.Affiliates)).isNull()
+        assertThat(counts.badgeFor(ContactFilter.Offline)).isNull()
+        assertThat(counts.badgeFor(ContactFilter.Online)).isEqualTo(1)
+    }
+
+    @Test
+    fun `caption says online for a live online state and last seen for an older activity`() {
+        val now = 1_700_000_000_000L
+        val iso = java.time.Instant.ofEpochMilli(now - 5 * 60_000L).toString()
+
+        assertThat(ContactList.caption(me.meeshy.sdk.model.PresenceState.ONLINE, null, now))
+            .isEqualTo(ContactPresenceCaption.Online)
+        assertThat(ContactList.caption(me.meeshy.sdk.model.PresenceState.OFFLINE, iso, now))
+            .isEqualTo(ContactPresenceCaption.LastSeen(me.meeshy.sdk.model.PresenceLastSeen.MinutesAgo(5)))
+        assertThat(ContactList.caption(null, null, now)).isEqualTo(ContactPresenceCaption.None)
     }
 }

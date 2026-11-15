@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="feed_composer_media_limit">
+        <item quantity="one">You can attach up to %1$d item</item>
+        <item quantity="other">You can attach up to %1$d items</item>
+    </plurals>
+</resources>

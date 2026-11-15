@@ -307,10 +307,12 @@ describe('NotificationService — un emit socket en panne ne commande pas les ca
   it('un rappel annonce TOUS ses destinataires même si le premier emit lève', async () => {
     installFailingSocketIO();
 
+    // `pushSent: false` : ce témoin observe l'ISOLATION des emits socket, pas
+    // le push de révocation.
     await service.announceNotificationsRetracted([
-      { id: 'n1', userId: 'u1' },
-      { id: 'n2', userId: 'u2' },
-      { id: 'n3', userId: 'u3' },
+      { id: 'n1', userId: 'u1', pushSent: false },
+      { id: 'n2', userId: 'u2', pushSent: false },
+      { id: 'n3', userId: 'u3', pushSent: false },
     ]);
 
     expect(deletedIdsEmitted()).toEqual(['n1', 'n2', 'n3']);

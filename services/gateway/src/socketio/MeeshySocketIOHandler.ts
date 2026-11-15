@@ -3,20 +3,47 @@
  * Point d'entrée pour configurer Socket.IO sur le serveur Fastify
  */
 
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { setE2EEEnvelopeIOProvider } from '../services/e2ee/envelope-delivery';
+import { FastifyInstance } from 'fastify';
 import { Server as HTTPServer } from 'http';
 import { MeeshySocketIOManager } from './MeeshySocketIOManager';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { GameBlock } from '@meeshy/shared/types/game';
 import { logger } from '../utils/logger';
-import { requireAdmin } from '../middleware/auth';
+import { socketIOAdminRoutes } from './socketio-admin-routes';
+import { setEngagementEmitIOProvider } from '../services/engagement/engagement-emit-registry';
+import { shareTogetherCuts } from '../services/together/togetherDeps';
+import { GameStateBroadcast, setGameStateBroadcast } from '../services/game/GameStateBroadcast';
+import { gravedGameRevision } from '../services/game/GameRevision';
+import { GameBlockService } from '../services/game/GameBlockService';
+import { MissionService, READ_ONLY_CREDIT } from '../services/game/MissionService';
+import { PersonalMissionService } from '../services/game/PersonalMissionService';
+import { mediaQueueEnabled } from '../services/attachments/media-processing/queue';
+import { gatewayLocalMediaRenderer, gatewaySweepEnabled, startGatewayPendingSweep } from '../services/attachments/media-processing/gateway-sweep-runner';
+import type { LocalMediaRenderer } from '../services/attachments/media-processing/local-render';
+import { mediaReadyPorts } from '../services/attachments/media-processing/ready-listener';
+import { MessageAttachmentAltTranslationService } from '../services/attachments/MessageAttachmentAltTranslationService';
+import { startMediaReadyListener } from '../services/attachments/media-processing/ready-listener';
+import { getSharedOfflineEnqueuer } from '../services/delivery-queue-registry';
+import { getCacheStore } from '../services/CacheStore';
+
+/** Le bloc `game` tel que `GET /me/engagement` le compose : la lecture ne crédite rien (`READ_ONLY_CREDIT`). */
+function gameBlockBuilder(prisma: PrismaClient): (userId: string) => Promise<GameBlock | null> {
+  const missions = new MissionService(prisma, { creditPoints: READ_ONLY_CREDIT });
+  const blocks = new GameBlockService(prisma, { missions, personal: new PersonalMissionService(prisma, { missions }) });
+  return (userId) => blocks.build({ userId });
+}
 
 export class MeeshySocketIOHandler {
   private socketIOManager: MeeshySocketIOManager | null = null;
 
+  private mediaReadyListener: { close(): Promise<void> } | null = null;
+  private mediaPendingSweep: { close(): void } | null = null;
+  private localMediaRenderer: LocalMediaRenderer | null = null;
+
   constructor(
     private readonly prisma: PrismaClient,
-    private readonly jwtSecret: string,
     private readonly translationService: MessageTranslationService
   ) {
     // Ne pas initialiser le manager ici, attendre setupSocketIO
@@ -32,78 +59,130 @@ export class MeeshySocketIOHandler {
     // Initialiser Socket.IO avec le serveur HTTP et translationService
     this.socketIOManager = new MeeshySocketIOManager(httpServer, this.prisma, this.translationService);
     await this.socketIOManager.initialize();
+    // Les crédits d'engagement annoncent « N (M) 🔥 » au crédité (#8906).
+    setEngagementEmitIOProvider(() => this.socketIOManager?.getIO());
+    // Les enveloppes libsignal partent vers la room de LEUR appareil (#3706).
+    setE2EEEnvelopeIOProvider(() => this.socketIOManager?.getIO());
+    // Une séance « ensemble » s'arrête dans le geste qui ferme sa porte, dès le démarrage (#17022).
+    shareTogetherCuts({ prisma: this.prisma, io: () => this.socketIOManager?.getIO() });
+    // L'état du jeu se propage aux appareils du compte après chaque écriture (#10900).
+    setGameStateBroadcast(
+      new GameStateBroadcast({
+        io: () => this.socketIOManager?.getIO() ?? undefined,
+        build: gameBlockBuilder(this.prisma),
+        // La révision GRAVÉE du compte (#10912), lue avant le bloc : jamais l'heure de l'émission.
+        revision: (userId) => gravedGameRevision(this.prisma, userId),
+      }),
+    );
 
-    // Ajouter une route pour les statistiques Socket.IO (admin seulement)
-    fastify.get('/api/socketio/stats', {
-      preHandler: [
-        (req: FastifyRequest, rep: FastifyReply) => fastify.authenticate(req, rep),
-        requireAdmin
-      ]
-    }, async (request, reply) => {
-      try {
-        const stats = this.socketIOManager.getStats();
-        reply.send({
-          success: true,
-          data: {
-            ...stats,
-            timestamp: new Date().toISOString()
-          }
-        });
-      } catch (error) {
-        logger.error('Erreur récupération stats Socket.IO:', error);
-        reply.status(500).send({
-          success: false,
-          error: 'Erreur serveur lors de la récupération des statistiques'
-        });
-      }
+    // Les deux gestes d'administration vivent dans `socketio-admin-routes.ts`
+    // et se MONTENT ici, plutôt que d'être déclarés en ligne. La raison n'est
+    // pas cosmétique : cette méthode est appelée par `MeeshyServer.start()`
+    // AVANT `setupRoutes()`, donc hors de `registerAllRoutes` — le seul graphe
+    // que `route-manifest/collect.ts` monte. Déclarées ici, ces quatre routes
+    // étaient SERVIES et invisibles au manifeste, au catalogue client qui en
+    // dérive et à tout audit qui s'y appuie (#4376). Extraites en plugin, le
+    // collecteur monte EXACTEMENT le même objet que la production.
+    //
+    // `getManager` plutôt que le manager lui-même : il vient d'être construit
+    // ci-dessus, mais le collecteur n'en a aucun — un accesseur sert les deux
+    // sans qu'aucun ait à fabriquer l'autre.
+    await fastify.register(socketIOAdminRoutes, {
+      getManager: () => this.socketIOManager,
     });
 
-    // Route pour forcer la déconnexion d'un utilisateur (admin seulement)
-    fastify.post('/api/socketio/disconnect-user', {
-      preHandler: [
-        (req: FastifyRequest, rep: FastifyReply) => fastify.authenticate(req, rep),
-        requireAdmin
-      ]
-    }, async (request, reply) => {
-      try {
-        const { userId } = request.body as { userId: string };
-
-        if (!userId) {
-          return reply.status(400).send({
-            success: false,
-            error: 'userId requis'
-          });
-        }
-
-        if (this.socketIOManager) {
-          const disconnected = this.socketIOManager.disconnectUser(userId);
-          if (disconnected) {
-            reply.send({
-              success: true,
-              message: `Utilisateur ${userId} déconnecté`
-            });
-          } else {
-            reply.status(404).send({
-              success: false,
-              error: `Utilisateur ${userId} non trouvé ou non connecté`
-            });
-          }
-        } else {
-          reply.status(500).send({
-            success: false,
-            error: 'Socket.IO non initialisé'
-          });
-        }
-      } catch (error) {
-        logger.error('Erreur déconnexion utilisateur:', error);
-        reply.status(500).send({
-          success: false,
-          error: 'Erreur serveur lors de la déconnexion'
-        });
-      }
-    });
+    this.startMediaPipelines(this.socketIOManager);
 
     logger.info('✅ Socket.IO configuré et routes ajoutées');
+  }
+
+  /** Le rendu de fond des médias (#13984) ; nul tant que la file est éteinte. */
+  getLocalMediaRenderer(): LocalMediaRenderer | null {
+    return this.localMediaRenderer;
+  }
+
+  /**
+   * Les trois chemins qui republient une pièce rendue ou traduite. Leurs
+   * dépendances (file de livraison Redis, bail) ne se construisent que si l'un
+   * d'eux est allumé : éteints, la passerelle ne touche pas à Redis pour eux.
+   */
+  private startMediaPipelines(manager: MeeshySocketIOManager): void {
+    // #11264 — les médias rendus par le worker se signalent ici (file allumée seulement).
+    const listenerRedisUrl = mediaQueueEnabled() ? process.env.REDIS_URL : undefined;
+    // R1 — sans worker vivant, ou file mise à l'arrêt (`MEDIA_QUEUE=drain`),
+    // la passerelle reprend elle-même les pièces restées `pending`.
+    const sweepOn = gatewaySweepEnabled();
+    // #12333 — la description d'une pièce traduite par NLLB rejoint ses
+    // lecteurs par `message:attachment-updated`, sous la loi de `servedDescription`.
+    const zmqClient = this.translationService.getZmqClient();
+    if (!listenerRedisUrl && !sweepOn && !zmqClient) return;
+
+    const mediaDeps = {
+      prisma: this.prisma,
+      io: manager.getIO() as never,
+      // #18616 — la file se RÉSOUT, elle ne se construit pas. Une seconde
+      // instance partage la tranche Redis (donc le cas nominal marche) et
+      // possède sa PROPRE tranche mémoire — celle qu'emprunte toute entrée
+      // écrite pendant un hoquet Redis. Sur cette tranche-là, ni le drain
+      // (`this.deliveryQueue` du manager), ni la purge d'un message détruit
+      // (`getSharedDeliveryQueue`), ni le balayage de TTL n'arrivaient jamais :
+      // la transcription d'un message brûlé y survivait, et l'enrichissement
+      // d'un vocal pour un destinataire hors ligne n'en sortait jamais.
+      //
+      // Résolue par un ACCESSEUR et non une fois pour toutes : l'enregistrement
+      // (`setSharedDeliveryQueue`, constructeur de `server.ts`) précède bien ce
+      // câblage, mais un ordre d'initialisation n'est pas une garantie qu'on
+      // puisse relire ici — et un `undefined` capturé figerait le pipeline
+      // média hors de la file pour toute la vie du processus.
+      get deliveryQueue() {
+        return getSharedOfflineEnqueuer() ?? null;
+      },
+      connectedUsers: () => manager.getReachability(),
+      socialEvents: () => manager.getSocialEventsHandler(),
+      leaseStore: getCacheStore(),
+    };
+    if (listenerRedisUrl) {
+      this.mediaReadyListener = startMediaReadyListener(mediaDeps, listenerRedisUrl);
+      // #13984 — sans worker qui bat, la porte tus rend ici, après sa réponse.
+      this.localMediaRenderer = gatewayLocalMediaRenderer(mediaDeps);
+    }
+    if (sweepOn) {
+      this.mediaPendingSweep = startGatewayPendingSweep(mediaDeps);
+    }
+    if (zmqClient) {
+      const ports = mediaReadyPorts(mediaDeps);
+      MessageAttachmentAltTranslationService.init(this.prisma, zmqClient, async (attachmentId) => {
+        const attachment = await ports.loadMessageAttachment(attachmentId);
+        const conversationId = attachment?.message?.conversationId;
+        if (attachment?.messageId && conversationId) {
+          await ports.emitAttachmentUpdated({ conversationId, messageId: attachment.messageId, attachment });
+        }
+      });
+    }
+  }
+
+  /**
+   * Ferme le temps réel à l'arrêt de la passerelle (#8297) : les appels passent
+   * d'abord en mode arrêt — la rafale de déconnexions qui suit n'est pas un
+   * raccrochage, le média pair-à-pair continue —, puis les sockets tombent et
+   * les clients se reconnectent aussitôt à la nouvelle instance.
+   */
+  public async close(): Promise<void> {
+    const manager = this.socketIOManager;
+    if (!manager) return;
+    try {
+      const calls = manager.getCallEventsHandler();
+      calls.prepareForShutdown();
+      calls.destroy();
+      manager.getCallService().destroy();
+      logger.info('✓ Call handler set to shutdown mode (active calls preserved for reconnect)');
+    } catch (error) {
+      logger.warn('⚠️ Could not set call handler shutdown mode', error);
+    }
+    await this.mediaReadyListener?.close().catch((error: unknown) => logger.warn('⚠️ Media ready listener close failed', error));
+    this.mediaPendingSweep?.close();
+    await manager.close();
+    logger.info('✓ Socket.IO closed (clients reconnect to the new instance)');
   }
 
   /**

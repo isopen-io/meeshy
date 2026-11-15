@@ -8,7 +8,7 @@ import UIKit
 /// Conversion best-effort des dessins legacy (`StoryEffects.drawingData` = `PKDrawing.dataRepresentation()`)
 /// vers le nouveau format `[StoryDrawingStroke]`. Appelée à la lecture (`init(from:)` de `StoryEffects`)
 /// pour que les stories déjà publiées continuent d'apparaître dans le composer après la refonte
-/// dessin (2026-05-30).
+/// dessin.
 ///
 /// **Limitations** (acceptables — annotation "best-effort") :
 /// - `PKEraserTool` strokes ne sont pas conservés (pas modélisés en `StoryDrawingStroke`).

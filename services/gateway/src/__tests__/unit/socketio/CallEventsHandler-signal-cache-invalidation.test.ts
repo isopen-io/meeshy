@@ -40,19 +40,34 @@ const mockResolveEndReason = jest.fn((reason?: string) => {
   }
 }) as jest.Mock<any>;
 
-jest.mock('../../../services/CallService', () => ({
-  CallService: jest.fn().mockImplementation(() => ({
-    getCallSession: mockGetCallSession,
-    leaveCall: mockLeaveCall,
-    endCall: mockEndCall,
-    clearRingingTimeout: mockClearRingingTimeout,
-    createCallSummaryMessage: mockCreateCallSummaryMessage,
-    forceEndOrphanedCallSession: mockForceEndOrphanedCallSession,
-    updateCallStatus: jest.fn<any>().mockResolvedValue(undefined),
-    getIceServerTtl: jest.fn<any>().mockReturnValue(86400),
-    resolveEndReason: mockResolveEndReason,
-  })),
-}));
+jest.mock('../../../services/CallService', () => {
+  // Mirrors the real CallAlreadyEndedError (services/CallService.ts) — Issue
+  // #3581: endCall() now throws this (instead of returning silently) on a
+  // call already in a terminal state, so the handler's `instanceof` check
+  // needs a real class here, not `undefined`.
+  class CallAlreadyEndedError extends Error {
+    readonly endReason: string;
+    constructor(endReason: string) {
+      super('CALL_ENDED: This call has already ended');
+      this.name = 'CallAlreadyEndedError';
+      this.endReason = endReason;
+    }
+  }
+  return {
+    CallService: jest.fn().mockImplementation(() => ({
+      getCallSession: mockGetCallSession,
+      leaveCall: mockLeaveCall,
+      endCall: mockEndCall,
+      clearRingingTimeout: mockClearRingingTimeout,
+      createCallSummaryMessage: mockCreateCallSummaryMessage,
+      forceEndOrphanedCallSession: mockForceEndOrphanedCallSession,
+      updateCallStatus: jest.fn<any>().mockResolvedValue(undefined),
+      getIceServerTtl: jest.fn<any>().mockReturnValue(86400),
+      resolveEndReason: mockResolveEndReason,
+    })),
+    CallAlreadyEndedError,
+  };
+});
 
 jest.mock('../../../services/notifications/NotificationService', () => ({
   NotificationService: jest.fn(),
@@ -77,6 +92,7 @@ jest.mock('../../../utils/socket-rate-limiter', () => ({
     destroy: jest.fn(),
   }),
   checkSocketRateLimit: jest.fn<any>().mockResolvedValue(true),
+  callSignalBudgetId: jest.requireActual<typeof import('../../../utils/socket-rate-limiter')>('../../../utils/socket-rate-limiter').callSignalBudgetId,
   SOCKET_RATE_LIMITS: {
     CALL_SIGNAL: { maxRequests: 100, windowMs: 10000, keyPrefix: 'socket:call:signal' },
     CALL_ICE_CANDIDATE: { maxRequests: 60, windowMs: 10000, keyPrefix: 'socket:call:ice' },
@@ -200,7 +216,11 @@ describe('CallEventsHandler — signalSessionCache invalidated on leave/end', ()
 
   it('call:force-leave evicts the cached session for that callId', async () => {
     const prisma = makePrisma();
-    (prisma as any).callSession.findMany = jest.fn<any>().mockResolvedValue([makeActiveSession()]);
+    // Un appel où A est seul (B parti) : un appel vivant à deux est épargné par force-leave (#9111).
+    const zombie = makeActiveSession();
+    (prisma as any).callSession.findMany = jest.fn<any>().mockResolvedValue([
+      { ...zombie, participants: [zombie.participants[0], { ...zombie.participants[1], leftAt: new Date() }] },
+    ]);
     const handlers: Record<string, (...args: any[]) => any> = {};
     const socket = {
       id: 'socket-inv-2',

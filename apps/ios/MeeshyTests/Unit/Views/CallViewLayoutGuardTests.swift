@@ -13,14 +13,10 @@ import XCTest
 @MainActor
 final class CallViewLayoutGuardTests: XCTestCase {
 
+    /// L'UNITÉ de l'écran d'appel (#8276) : `CallView.swift` et ses
+    /// extensions — un découpage ne doit pas éteindre ces gardes.
     private func callViewSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        try AppSourceGuard.callViewSource()
     }
 
     /// Le backdrop plein écran doit être confiné dans un overlay layout-neutre.
@@ -107,9 +103,13 @@ final class CallViewLayoutGuardTests: XCTestCase {
             "morph rogne alors le fond au ras de la safe area haute, et le " +
             "blanc du cover apparaît en bandeau sous la Dynamic Island."
         )
+        XCTAssertFalse(
+            source.contains("cornerRadius: pipMorphProgress"),
+            "P18.8 — le morph ne joue que sur la transformation et l'opacité : aucun rayon de coins animé."
+        )
         let clip = try XCTUnwrap(
-            source.range(of: ".clipShape(RoundedRectangle(cornerRadius: pipMorphProgress"),
-            "Le morph PiP doit toujours clipper ses coins arrondis."
+            source.range(of: ".modifier(CallPipMorphEffect("),
+            "Le morph PiP (`CallPipMorphEffect`) découpe sa racine, d'une découpe droite et constante, avant de la mettre à l'échelle."
         )
         let before = String(source[source.startIndex ..< clip.lowerBound])
         let ignore = try XCTUnwrap(
@@ -127,19 +127,20 @@ final class CallViewLayoutGuardTests: XCTestCase {
     /// chrome flottant. Posé à 8 pt nus, le chevron minimize et le badge durée
     /// se rendraient SOUS la Dynamic Island — le défaut que l'ancien `.padding(
     /// .top, 50)` compensait à la main avant que le conteneur ne s'en charge.
-    /// L'encart est PARTAGÉ : deux rangées le lisent, et deux constantes les
-    /// auraient désalignées.
+    /// Depuis #8394 la puce durée/qualité vit DANS la rangée d'en-tête, à
+    /// droite : une seule rangée porte l'encart, et la puce ne peut plus se
+    /// désaligner du chevron.
     func test_topChromeReInsetsTheSafeAreaItself_fromTheWindow() throws {
         let source = try callViewSource()
         XCTAssertTrue(
-            source.contains("private static var chromeTopInset: CGFloat { DeviceLayout.safeAreaTop + 8 }"),
+            source.contains("static var chromeTopInset: CGFloat { DeviceLayout.safeAreaTop + 8 }"),
             "L'encart doit venir de la FENÊTRE : `GeometryProxy.safeAreaInsets` " +
             "répond 0 dans un sous-arbre qui ignore la safe area."
         )
         XCTAssertEqual(
-            source.components(separatedBy: ".padding(.top, Self.chromeTopInset)").count - 1, 2,
-            "Les deux rangées de chrome haut (chevron/conversation, badge durée " +
-            "vidéo) doivent partager le MÊME encart — sinon elles se désalignent."
+            source.components(separatedBy: ".padding(.top, Self.chromeTopInset)").count - 1, 1,
+            "Une seule rangée de chrome haut (Réduire, Conversation, puce durée) " +
+            "porte l'encart — une seconde rangée se désalignerait d'elle (#8394)."
         )
     }
 
@@ -179,6 +180,137 @@ final class CallViewLayoutGuardTests: XCTestCase {
             "The PiP stream call site must mirror the primary via " +
             "`!effectiveSwapStreams`, not the raw `!swapStreams` binding, or " +
             "the two surfaces fall out of sync when the local track drops."
+        )
+    }
+
+    // MARK: - Le disque d'avatar du correspondant (#12336)
+
+    /// Le disque d'avatar de l'écran d'appel porte le contour que le correspondant a
+    /// équipé, comme partout ailleurs dans l'app (`MeeshyAvatar`) : dans l'empreinte du
+    /// disque, sans rien décaler. Sans lui, l'appel était le seul écran où le contour
+    /// d'un contact disparaissait.
+    func test_avatarCircle_wearsThePeersEquippedRing() throws {
+        let code = try callViewCode()
+        guard let start = code.range(of: "func avatarCircle(size: CGFloat) -> some View {"),
+              let end = code.range(of: "func callAvatarPair(size: CGFloat)", range: start.upperBound ..< code.endIndex)
+        else {
+            XCTFail("CallView doit garder `avatarCircle(size:)` et `callAvatarPair(size:)`")
+            return
+        }
+        let block = String(code[start.upperBound ..< end.lowerBound])
+        XCTAssertTrue(
+            block.contains(".avatarRingWithin(") && block.contains("ProfileDecorResolver.ring(remoteProfile?.profileDecor?.avatarRing)"),
+            "Le disque d'avatar doit poser `avatarRingWithin` avec le contour équipé du " +
+            "correspondant (`remoteProfile?.profileDecor?.avatarRing`)."
+        )
+    }
+
+    /// L'appel entrant hérite du même profil résolu que le reste de l'écran d'appel.
+    func test_incomingCall_receivesTheResolvedPeerProfile() throws {
+        let code = try callViewCode()
+        XCTAssertTrue(
+            code.contains("IncomingCallView(callManager: callManager, peerProfile: remoteProfile)"),
+            "CallView doit passer `remoteProfile` à IncomingCallView : sans lui, l'appel " +
+            "entrant n'a ni photo ni contour du correspondant."
+        )
+    }
+
+    // MARK: - L'identité du correspondant ne dépend pas de la politique média (#12442)
+
+    /// La bannière en fond et les photos des disques sont l'IDENTITÉ du correspondant,
+    /// comme `CachedAvatarImage` / `CachedBannerImage`, qui ne passent pas par
+    /// `MediaDownloadPolicy`. Avec un `CachedAsyncImage` soumis à cette politique, un
+    /// utilisateur qui règle les images sur « jamais » (ou « Wi-Fi seulement » en
+    /// cellulaire) voyait le fond et le disque rester vides : aucune requête ne partait.
+    func test_everyCallScreenImage_bypassesTheMediaDownloadPolicy() throws {
+        let sources = [try callViewCode(), AppSourceGuard.stripComments(try incomingCallViewSource())]
+        let calls = sources.flatMap { source in
+            source.components(separatedBy: "CachedAsyncImage(").dropFirst().map { String($0.prefix(260)) }
+        }
+        let faces = sources.reduce(0) { $0 + $1.components(separatedBy: "CachedAvatarImage(").count - 1 }
+        XCTAssertGreaterThanOrEqual(calls.count, 1, "le fond du correspondant")
+        XCTAssertGreaterThanOrEqual(
+            faces, 4,
+            "disque du correspondant, pastille locale, vignette en pause, appel entrant : `CachedAvatarImage` " +
+            "ne passe pas par `MediaDownloadPolicy` et montre la photo OU les initiales (#12568)"
+        )
+        for call in calls {
+            XCTAssertTrue(
+                call.contains("autoLoad: true"),
+                "Chaque image de l'écran d'appel doit passer `autoLoad: true` : sans lui, la " +
+                "politique de téléchargement retient la bannière et la photo du correspondant.\n\(call)"
+            )
+        }
+    }
+
+    private func incomingCallViewSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Call/Views/IncomingCallView.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func callViewStatesSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Call/Views/CallView+States.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    // MARK: - Les commandes du bas suivent chromeBottomInset, comme la pilule (#16517)
+
+    /// La rangée de boutons de la sonnerie sortante et celle de la connexion
+    /// portaient un padding bas en dur (`80`) sans rapport avec la safe area
+    /// réelle de l'appareil, alors que la pilule de l'appel établi
+    /// (`CallView+Connected.swift`) retrouve déjà son encart bas depuis la
+    /// fenêtre via `chromeBottomInset`. Une seule constante, partout.
+    func test_outgoingAndConnecting_bottomControlRows_useChromeBottomInset() throws {
+        let states = try callViewStatesSource()
+        XCTAssertEqual(
+            states.components(separatedBy: ".padding(.bottom, Self.chromeBottomInset)").count - 1, 2,
+            "La rangée de boutons de la sonnerie sortante ET celle de la " +
+            "connexion doivent porter le même encart bas que la pilule de " +
+            "l'appel établi."
+        )
+        XCTAssertFalse(
+            states.contains(".padding(.bottom, 80)"),
+            "Un padding bas en dur est revenu sur l'écran d'appel — il doit " +
+            "suivre `Self.chromeBottomInset`, comme la pilule."
+        )
+    }
+
+    /// Même règle pour l'appel entrant : le bouton « Décliner avec un
+    /// message », tout en bas de l'écran, suivait un padding de `40` en dur.
+    func test_incomingCall_declineWithMessage_usesChromeBottomInset() throws {
+        let incoming = try incomingCallViewSource()
+        XCTAssertTrue(
+            incoming.contains(".padding(.bottom, CallView.chromeBottomInset)"),
+            "Le bouton « Décliner avec un message » doit porter le même " +
+            "encart bas que le reste de l'écran d'appel."
+        )
+        XCTAssertFalse(
+            incoming.contains(".padding(.bottom, 40)"),
+            "Un padding bas en dur est revenu sur l'appel entrant."
+        )
+    }
+
+    /// Filet plus large que les deux gardes ci-dessus : sur TOUTE l'unité de
+    /// l'écran d'appel (CallView + ses extensions), le total des sites qui
+    /// portent `chromeBottomInset` ne doit pas chuter — une régression locale
+    /// dans un fichier non couvert par un test dédié y resterait sinon invisible.
+    func test_chromeBottomInset_usageCount_doesNotRegress() throws {
+        let unit = try callViewSource()
+        XCTAssertGreaterThanOrEqual(
+            unit.components(separatedBy: "chromeBottomInset").count - 1, 8,
+            "La déclaration, la pilule (duo + groupe), la vignette perso, la " +
+            "sonnerie et la connexion portent toutes cette constante — un " +
+            "total qui chute signale qu'un site est revenu à une valeur en dur."
         )
     }
 

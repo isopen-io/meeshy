@@ -8,6 +8,9 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
+import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.media.MediaLocationRefusal
+import me.meeshy.sdk.media.MediaLoss
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.story.PublishMediaWriteBack
@@ -201,6 +204,45 @@ class OutboxDrainerTest {
     }
 
     @Test
+    fun `a dependent of an upload refused for its location carries that reason, the row handed to onExhausted too`() = runTest {
+        enqueueOn("upload", OutboxLanes.MEDIA)
+        outbox.markExhausted("upload", MediaLocationRefusal.REASON)
+        enqueueOn("other", OutboxLanes.MEDIA)
+        outbox.markExhausted("other", "upload failed")
+        enqueueOn("send", lane, dependsOn = setOf("other", "upload"))
+        enqueueOn("plain", lane, dependsOn = setOf("other"))
+        val handed = mutableMapOf<String, String?>()
+
+        OutboxDrainer(
+            outbox,
+            mapOf(OutboxKind.SEND_MESSAGE to MutationSender { SendResult.Success }),
+            onExhausted = { handed[it.cmid] = it.lastError },
+        ).drainLane(lane)
+
+        assertThat(outbox.row("send")?.lastError).isEqualTo(MediaLocationRefusal.REASON)
+        assertThat(handed["send"]).isEqualTo(MediaLocationRefusal.REASON)
+        assertThat(MediaLocationRefusal.isReason(outbox.row("plain")?.lastError)).isFalse()
+        assertThat(handed["plain"]).startsWith("Prerequisite(s) failed")
+    }
+
+    @Test
+    fun `a dependent of an upload whose bytes are lost carries that loss, so its bubble says it instead of retrying`() = runTest {
+        enqueueOn("upload", OutboxLanes.MEDIA)
+        outbox.markExhausted("upload", MediaLoss.REASON)
+        enqueueOn("send", lane, dependsOn = setOf("upload"))
+        val handed = mutableMapOf<String, String?>()
+
+        OutboxDrainer(
+            outbox,
+            mapOf(OutboxKind.SEND_MESSAGE to MutationSender { SendResult.Success }),
+            onExhausted = { handed[it.cmid] = it.lastError },
+        ).drainLane(lane)
+
+        assertThat(outbox.row("send")?.lastError).isEqualTo(MediaLoss.REASON)
+        assertThat(handed["send"]).isEqualTo(MediaLoss.REASON)
+    }
+
+    @Test
     fun `drainLane delivers a dependent whose prerequisite never existed`() = runTest {
         val story = OutboxLanes.STORY
         enqueueOn("publish", story, dependsOn = setOf("never-enqueued"))
@@ -237,7 +279,9 @@ class OutboxDrainerTest {
         OutboxDrainer(
             outbox,
             mapOf(OutboxKind.SEND_MESSAGE to sender, OutboxKind.PUBLISH_STORY to sender),
-            graftProducedId = PublishMediaWriteBack::graft,
+            graftProducedId = { dependent, placeholder, realId ->
+                PublishMediaWriteBack.graft(dependent.payload, placeholder, realId)
+            },
         )
 
     @Test
@@ -358,5 +402,93 @@ class OutboxDrainerTest {
 
         assertThat(exhaustedCmids).containsExactly("m1")
         assertThat(outbox.observeAll().first().single().stateEnum).isEqualTo(OutboxState.EXHAUSTED)
+    }
+
+    // --- Post like/bookmark FIFO replay on the shared SOCIAL lane (issue #4800) ---
+
+    private suspend fun enqueueLike(cmid: String, postId: String, kind: OutboxKind) {
+        outbox.enqueue(
+            OutboxMutation(kind, OutboxLanes.SOCIAL, targetId = postId, payload = "", cmid = cmid),
+        )
+    }
+
+    private fun socialDrainer(sender: MutationSender) = OutboxDrainer(
+        outbox,
+        mapOf(
+            OutboxKind.LIKE_POST to sender,
+            OutboxKind.UNLIKE_POST to sender,
+            OutboxKind.BOOKMARK_POST to sender,
+            OutboxKind.UNBOOKMARK_POST to sender,
+        ),
+    )
+
+    @Test
+    fun `drainLane replays a like queued while offline once the sender succeeds`() = runTest {
+        enqueueLike("l1", "post1", OutboxKind.LIKE_POST)
+
+        val report = socialDrainer { SendResult.Success }.drainLane(OutboxLanes.SOCIAL)
+
+        assertThat(report.delivered).isEqualTo(1)
+        assertThat(outbox.observeAll().first()).isEmpty()
+    }
+
+    @Test
+    fun `drainLane replays a like-then-bookmark burst of the same post in FIFO order`() = runTest {
+        enqueueLike("l1", "post1", OutboxKind.LIKE_POST)
+        enqueueLike("bm1", "post1", OutboxKind.BOOKMARK_POST)
+        val deliveredOrder = mutableListOf<String>()
+
+        val report = socialDrainer { row -> deliveredOrder += row.cmid; SendResult.Success }
+            .drainLane(OutboxLanes.SOCIAL)
+
+        assertThat(report.delivered).isEqualTo(2)
+        assertThat(deliveredOrder).containsExactly("l1", "bm1").inOrder()
+    }
+
+    @Test
+    fun `drainLane stops the social lane on a transient failure so a later unlike never races ahead`() = runTest {
+        enqueueLike("l1", "post1", OutboxKind.LIKE_POST)
+        enqueueLike("ul2", "post2", OutboxKind.UNLIKE_POST)
+        var calls = 0
+
+        val report = socialDrainer { calls++; SendResult.TransientFailure }.drainLane(OutboxLanes.SOCIAL)
+
+        assertThat(report.stoppedOnTransientFailure).isTrue()
+        assertThat(calls).isEqualTo(1)
+        assertThat(outbox.observeAll().first().map { it.cmid }).containsExactly("l1", "ul2")
+    }
+
+    @Test
+    fun `drainLane exhausts a permanently-rejected like and reports it through onExhausted`() = runTest {
+        enqueueLike("l1", "post1", OutboxKind.LIKE_POST)
+        val exhausted = mutableListOf<OutboxEntity>()
+
+        val report = OutboxDrainer(
+            outbox,
+            mapOf(OutboxKind.LIKE_POST to MutationSender { SendResult.PermanentFailure("post gone") }),
+            onExhausted = { exhausted += it },
+        ).drainLane(OutboxLanes.SOCIAL)
+
+        assertThat(report.exhausted).isEqualTo(1)
+        assertThat(exhausted.single().cmid).isEqualTo("l1")
+        assertThat(exhausted.single().kindEnum).isEqualTo(OutboxKind.LIKE_POST)
+        assertThat(exhausted.single().targetId).isEqualTo("post1")
+        assertThat(outbox.observeAll().first().single().stateEnum).isEqualTo(OutboxState.EXHAUSTED)
+    }
+
+    @Test
+    fun `an offline like-then-unlike of the same post never reaches the sender`() = runTest {
+        // Coalescing (OutboxCoalescer) annihilates the pair before the drainer ever
+        // sees a row — the definitive proof a rapid offline toggle burst costs one
+        // delivery, not two, and never a stray call to the network.
+        outbox.enqueue(OutboxMutation(OutboxKind.LIKE_POST, OutboxLanes.SOCIAL, targetId = "post1", payload = ""))
+        outbox.enqueue(OutboxMutation(OutboxKind.UNLIKE_POST, OutboxLanes.SOCIAL, targetId = "post1", payload = ""))
+        var calls = 0
+
+        val report = socialDrainer { calls++; SendResult.Success }.drainLane(OutboxLanes.SOCIAL)
+
+        assertThat(calls).isEqualTo(0)
+        assertThat(report.delivered).isEqualTo(0)
+        assertThat(outbox.observeAll().first()).isEmpty()
     }
 }

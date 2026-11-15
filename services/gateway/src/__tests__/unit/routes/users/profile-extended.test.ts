@@ -73,13 +73,13 @@ jest.mock('../../../../utils/normalize', () => ({
 const mockBcryptCompare = jest.fn<any>().mockResolvedValue(true);
 const mockBcryptHash = jest.fn<any>().mockResolvedValue('hashed_new_password');
 
-jest.mock('bcryptjs', () => ({
-  default: {
-    compare: (...args: any[]) => mockBcryptCompare(...args),
-    hash: (...args: any[]) => mockBcryptHash(...args),
-  },
-  compare: (...args: any[]) => mockBcryptCompare(...args),
-  hash: (...args: any[]) => mockBcryptHash(...args),
+// Le hachage vit dans `utils/password-hash` — SITE UNIQUE depuis #5216. Doubler
+// `bcryptjs` ne suffirait plus : le module charge d'abord le binaire NATIF, et
+// le repli JavaScript n'est atteint que s'il manque.
+jest.mock('../../../../utils/password-hash', () => ({
+  ...(jest.requireActual('../../../../utils/password-hash') as Record<string, unknown>),
+  verifyPassword: (...args: any[]) => mockBcryptCompare(...args),
+  hashPassword: (...args: any[]) => mockBcryptHash(...args),
 }));
 
 jest.mock('@meeshy/shared/utils/validation', () => ({
@@ -88,6 +88,19 @@ jest.mock('@meeshy/shared/utils/validation', () => ({
   updateBannerSchema: { parse: jest.fn((b: any) => b) },
   updatePasswordSchema: { parse: jest.fn((b: any) => b) },
   updateUsernameSchema: { parse: jest.fn((b: any) => b) },
+}));
+
+// #6435 — updateUserPassword relève et coupe désormais les AUTRES sessions.
+// Ce fichier ne teste pas ce comportement (voir
+// profile-password-session-revocation.test.ts) : une liste vide n'a personne
+// à couper.
+jest.mock('../../../../services/SessionService', () => ({
+  getUserSessions: jest.fn<any>().mockResolvedValue([]),
+  invalidateAllSessions: jest.fn<any>().mockResolvedValue(0),
+}));
+
+jest.mock('../../../../socketio/disconnectSession', () => ({
+  disconnectSession: jest.fn<any>().mockResolvedValue(undefined),
 }));
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
@@ -160,6 +173,8 @@ function makePrisma(overrides: Record<string, any> = {}) {
     user: {
       findFirst:  jest.fn<any>().mockResolvedValue(mockUser),
       findUnique: jest.fn<any>().mockResolvedValue(mockUser),
+      // « qui m'a bloqué ? » — la requête POSITIVE de `blockedIdsAroundViewer`.
+      findMany:   jest.fn<any>().mockResolvedValue([]),
       update:     jest.fn<any>().mockResolvedValue(mockUser),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },
@@ -405,7 +420,7 @@ describe('PATCH /users/me/password — notification catch fires on reject (line 
     const app = await buildApp({ routes: [updateUserPassword], prisma, notificationService });
     const res = await app.inject({
       method: 'PATCH', url: '/users/me/password',
-      payload: { currentPassword: 'oldpass123', newPassword: 'newpass456' },
+      payload: { currentPassword: 'oldpass123', newPassword: 'Xk9$mQ2vLp8#nR4wZ' },
     });
     expect(res.statusCode).toBe(200);
     await Promise.resolve(); // drain the .catch() microtask
@@ -550,62 +565,36 @@ describe('PATCH /users/me — displayName and regionalLanguage (lines 139, 149)'
   });
 });
 
-// ─── Lines 142-146: phoneNumber ternary (empty→null, non-empty→normalize) ─────────
+// ─── #4184 — email/phoneNumber retirés de la route, PAS de leurs branches ─────────
+//
+// Les deux describe ci-dessous ciblaient les lignes 142-146 et 166 de
+// `updateUserProfile` — la ternaire de normalisation de `phoneNumber` et le
+// contrôle d'unicité d'`email` « pas de conflit ». Ces lignes ont été
+// SUPPRIMÉES par #4184 : cette route n'écrit plus ces deux champs sous AUCUNE
+// forme, avec ou sans conflit — la preuve de possession (jeton envoyé à la
+// nouvelle adresse) doit d'abord passer par `contact-change.ts`. Reformuler
+// « pas de conflit ⇒ 200 » en « email/phoneNumber ⇒ toujours 400,
+// indépendamment de tout conflit » aurait dupliqué exactement les témoins
+// mutation-prouvés de `profile.test.ts` (« email/phoneNumber are not writable
+// via this route ») ; ces deux blocs sont donc retirés au lieu d'être
+// maquillés en tests qui ne testeraient plus rien de spécifique à CE fichier.
+//
+// Ce qui reste ICI, et qui est complémentaire (pas redondant) : la preuve, au
+// niveau du SCHÉMA RÉEL isolé (même patron que le bloc « réel » plus bas), que
+// `updateUserRequestSchema` ne déclare plus `email`/`phoneNumber`/`avatar`/
+// `timezone` — la garde qui, seule, peut faire tomber une régression de
+// PARITÉ entre AJV et Zod sans dépendre du comportement du handler.
+describe('updateUserRequestSchema (réel) — email/phoneNumber/avatar/timezone absents (#4184)', () => {
+  const { updateUserRequestSchema: realSchema } = jest.requireActual(
+    '@meeshy/shared/types/api-schemas'
+  ) as { updateUserRequestSchema: { properties: Record<string, unknown> } };
 
-describe('PATCH /users/me — phoneNumber ternary branches (lines 142-146)', () => {
-  it('maps empty phoneNumber to null in updateData', async () => {
-    const prisma = makePrisma();
-    const app = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'PATCH', url: '/users/me',
-      payload: { phoneNumber: '' },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(prisma.user.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ phoneNumber: null }) })
-    );
-    await app.close();
-  });
-
-  it('normalizes non-empty phoneNumber and continues on no conflict (line 180 false branch)', async () => {
-    const prisma = makePrisma({
-      user: {
-        findFirst:  jest.fn<any>().mockResolvedValue(null),
-        findUnique: jest.fn<any>().mockResolvedValue(mockUser),
-        update:     jest.fn<any>().mockResolvedValue(mockUser),
-        updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
-      },
-    });
-    const app = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'PATCH', url: '/users/me',
-      payload: { phoneNumber: '+33612345678' },
-    });
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-});
-
-// ─── Line 166 false branch: email provided but no conflict ────────────────────────
-
-describe('PATCH /users/me — email no-conflict (line 166 false branch)', () => {
-  it('returns 200 when email is provided and no conflict exists', async () => {
-    const prisma = makePrisma({
-      user: {
-        findFirst:  jest.fn<any>().mockResolvedValue(null),
-        findUnique: jest.fn<any>().mockResolvedValue(mockUser),
-        update:     jest.fn<any>().mockResolvedValue(mockUser),
-        updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
-      },
-    });
-    const app = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'PATCH', url: '/users/me',
-      payload: { email: 'newemail@example.com' },
-    });
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
+  it.each(['email', 'phoneNumber', 'avatar', 'timezone'])(
+    'ne déclare pas `%s`',
+    (champ) => {
+      expect(realSchema.properties).not.toHaveProperty(champ);
+    }
+  );
 });
 
 // ─── Line 562: || 'Invalid data' in updateUserPassword ZodError catch ─────────────

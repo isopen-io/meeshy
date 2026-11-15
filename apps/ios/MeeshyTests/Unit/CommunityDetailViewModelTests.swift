@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import Meeshy
 import MeeshySDK
@@ -28,5 +29,234 @@ final class CommunityDetailViewModelTests: XCTestCase {
         viewModel.isAdmin = viewModel.currentUserRole == .admin || viewModel.isCreator
         
         XCTAssertTrue(viewModel.isAdmin, "Creator should always be an admin")
+    }
+
+    func test_conversationTitles_directChannel_servesThePeerNameNotTheStoredTitle() throws {
+        let payload: [String: Any] = [
+            "id": "conv-direct",
+            "type": "direct",
+            "identifier": "mshy_iHs95XtqLr_S",
+            "title": "mshy_iHs95XtqLr_S, 2",
+            "createdAt": "2026-10-01T10:00:00Z",
+            "participants": [["id": "p2", "userId": "u2", "displayName": "Bob Martin"]],
+        ]
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let direct = try decoder.decode(APIConversation.self, from: JSONSerialization.data(withJSONObject: payload))
+        // Le lecteur est NOMMÉ : sans lui, le SDK refuse d'élire l'interlocuteur
+        // (`interlocutor(readerId:)`) et sert le nom générique honnête.
+        let viewModel = CommunityDetailViewModel(communityId: "test-id", currentUserId: { "u1" })
+
+        viewModel.conversations = [direct]
+
+        XCTAssertEqual(viewModel.conversationTitles["conv-direct"], "Bob Martin")
+    }
+
+    func test_load_createurSansFicheMembre_estAdmin() async {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", members: []))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service, currentUserId: { "u-creator" })
+
+        await viewModel.load()
+
+        XCTAssertTrue(viewModel.isCreator)
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertTrue(viewModel.isAdmin)
+        XCTAssertEqual(viewModel.currentUserRole, .admin)
+    }
+
+    func test_load_visiteurNonMembre_neChargePasLesConversations() async {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", members: []))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service, currentUserId: { "u-visitor" })
+
+        await viewModel.load()
+
+        XCTAssertFalse(viewModel.isMember)
+        XCTAssertFalse(viewModel.isAdmin)
+        XCTAssertTrue(viewModel.conversations.isEmpty)
+    }
+    // #6378 — le détail ne sert jamais `members` : c'est `currentUserRole` qui
+    // dit au lecteur ce qu'il est. Sans lui, un membre se voyait offrir
+    // « Rejoindre » (409) et jamais « Quitter ».
+    func test_load_membreServiParSonRole_estMembreSansListeDeMembres() async {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", members: nil, currentUserRole: "member"))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service, currentUserId: { "u-member" })
+
+        await viewModel.load()
+
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertFalse(viewModel.isCreator)
+        XCTAssertFalse(viewModel.isAdmin)
+        XCTAssertEqual(viewModel.currentUserRole, .member)
+    }
+
+    func test_load_moderateurServiParSonRole_nEstPasAdmin() async {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", members: nil, currentUserRole: "moderator"))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service, currentUserId: { "u-mod" })
+
+        await viewModel.load()
+
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertFalse(viewModel.isAdmin)
+        XCTAssertEqual(viewModel.currentUserRole, .moderator)
+    }
+
+    func test_load_roleServiNul_nEstPasMembre() async {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", members: nil, currentUserRole: nil))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service, currentUserId: { "u-visitor" })
+
+        await viewModel.load()
+
+        XCTAssertFalse(viewModel.isMember)
+        XCTAssertEqual(service.getConversationsCallCount, 0)
+    }
+
+    // #16878 — les publications d'une communauté vivent en cache : la quitter
+    // les retire (une communauté privée ne se relit plus hors ligne), la
+    // rejoindre les fait relire (un membre peut lire plus qu'un visiteur).
+    private static func seededPostsCache(_ communityId: String) -> InMemoryFeedPostsCache {
+        let post: APIPost = JSONStub.decode(#"{"id":"p1","type":"POST","content":"Bonjour","createdAt":"2026-11-01T00:00:00.000Z","author":{"id":"a1","username":"alice"}}"#)
+        return InMemoryFeedPostsCache(
+            seed: [CommunityPostsViewModel.cacheKey(communityId: communityId): [post.toFeedPost(preferredLanguages: ["fr"])]],
+            freshness: .fresh
+        )
+    }
+
+    func test_leaveCommunity_success_forgetsTheCachedPosts() async {
+        let cache = Self.seededPostsCache("c1")
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: MockCommunityService(), postsCache: { cache })
+
+        await viewModel.leaveCommunity()
+
+        let stored = await cache.stored(for: CommunityPostsViewModel.cacheKey(communityId: "c1"))
+        XCTAssertNil(stored)
+    }
+
+    func test_leaveCommunity_failure_keepsTheCachedPosts() async {
+        let service = MockCommunityService()
+        service.voidResult = .failure(APIError.serverError(500, nil))
+        let cache = Self.seededPostsCache("c1")
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service, postsCache: { cache })
+
+        await viewModel.leaveCommunity()
+
+        let stored = await cache.stored(for: CommunityPostsViewModel.cacheKey(communityId: "c1"))
+        XCTAssertEqual(stored?.map(\.id), ["p1"])
+    }
+
+    func test_joinCommunity_success_forgetsTheVisitorsCachedPosts() async {
+        let cache = Self.seededPostsCache("c1")
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: MockCommunityService(), postsCache: { cache })
+
+        await viewModel.joinCommunity()
+
+        let stored = await cache.stored(for: CommunityPostsViewModel.cacheKey(communityId: "c1"))
+        XCTAssertNil(stored)
+    }
+
+    // #7816 — un 403 est une RÉPONSE : le détail dit pourquoi dans la langue du
+    // lecteur, jamais le message brut du serveur, et n'offre pas de réessayer.
+
+    func test_load_communautePriveeRefusee_estRefusee_sansReessayer() async {
+        let service = MockCommunityService()
+        service.getResult = .failure(MeeshyError.forbidden(reason: "Access denied to this community", body: nil))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service)
+
+        await viewModel.load()
+
+        XCTAssertEqual(viewModel.loadFailure, .refused)
+        XCTAssertEqual(viewModel.loadFailure?.offersRetry, false)
+        XCTAssertNil(viewModel.community)
+    }
+
+    func test_load_communauteIntrouvable_seDitCommeUnRefus() async {
+        let service = MockCommunityService()
+        service.getResult = .failure(MeeshyError.server(statusCode: 404, message: "Community not found"))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service)
+
+        await viewModel.load()
+
+        XCTAssertEqual(viewModel.loadFailure, .refused)
+    }
+
+    func test_load_reseauAbsent_proposeDeReessayer() async {
+        let service = MockCommunityService()
+        service.getResult = .failure(MeeshyError.network(.noConnection))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service)
+
+        await viewModel.load()
+
+        XCTAssertEqual(viewModel.loadFailure, .network)
+        XCTAssertEqual(viewModel.loadFailure?.offersRetry, true)
+    }
+
+    func test_load_panneServeur_nAccusePasLaConnexion() async {
+        let service = MockCommunityService()
+        service.getResult = .failure(MeeshyError.server(statusCode: 500, message: "Internal Server Error"))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service)
+
+        await viewModel.load()
+
+        XCTAssertEqual(viewModel.loadFailure, .server)
+    }
+
+    func test_load_reussiApresUnEchec_effaceLaCause() async {
+        let service = MockCommunityService()
+        service.getResult = .failure(MeeshyError.network(.noConnection))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service)
+        await viewModel.load()
+
+        service.getResult = .success(CommunityStubs.community())
+        await viewModel.load()
+
+        XCTAssertNil(viewModel.loadFailure)
+        XCTAssertNotNil(viewModel.community)
+    }
+
+    func test_causeDuRefus_seDitDansLeCatalogue_jamaisDansLeMessageDuServeur() {
+        XCTAssertFalse((CommunityLoadFailure.refused.message ?? "").contains("Access denied"))
+        XCTAssertFalse(CommunityLoadFailure.refused.title.isEmpty)
+        XCTAssertNotEqual(CommunityLoadFailure.refused.actionLabel, CommunityLoadFailure.network.actionLabel)
+    }
+
+    // MARK: - community:updated (#18439)
+
+    func test_communityUpdated_reecritLIdentiteEtGardeLeRoleDuLecteur() async {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", currentUserRole: "moderator"))
+        let viewModel = CommunityDetailViewModel(
+            communityId: "c1", service: service, currentUserId: { "u-mod" },
+            communityUpdates: Empty().eraseToAnyPublisher()
+        )
+        await viewModel.load()
+
+        viewModel.apply(CommunityStubs.communityUpdated(communityId: "c1", name: "Alpha renommée", memberCount: 9))
+
+        XCTAssertEqual(viewModel.community?.name, "Alpha renommée")
+        XCTAssertEqual(viewModel.community?.description, "Réglée ailleurs")
+        XCTAssertEqual(viewModel.community?.isPrivate, true)
+        XCTAssertEqual(viewModel.community?.memberCount, 9)
+        XCTAssertEqual(viewModel.currentUserRole, .moderator)
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertEqual(service.getCallCount, 1, "aucune relance réseau")
+    }
+
+    func test_communityUpdated_autreCommunaute_neTouchePasLeDetail() async {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator"))
+        let updates = PassthroughSubject<CommunityUpdatedEvent, Never>()
+        let viewModel = CommunityDetailViewModel(
+            communityId: "c1", service: service, currentUserId: { "u-creator" },
+            communityUpdates: updates.eraseToAnyPublisher()
+        )
+        await viewModel.load()
+
+        viewModel.apply(CommunityStubs.communityUpdated(communityId: "c2", name: "Voisine"))
+
+        XCTAssertEqual(viewModel.community?.name, "Alpha")
     }
 }

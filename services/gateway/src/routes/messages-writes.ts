@@ -1,0 +1,854 @@
+/**
+ * Routes messages — surface ÉCRITURE : PUT /messages/:messageId (édition),
+ * DELETE /messages/:messageId (suppression), POST
+ * /attachments/:attachmentId/status (marquage écouté/vu/téléchargé). Issue
+ * #4284. Point d'entrée : messages.ts.
+ */
+import { FastifyInstance } from 'fastify';
+import { UnifiedAuthRequest } from '../middleware/auth.js';
+import { attachmentMediaSelect, attachmentProtectionSelect, MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
+import { emitMentionCreated } from '../socketio/emitMentionCreated';
+import { messageReadership } from '../socketio/editedAudience';
+import { reconcileEditedMentions } from '../services/messaging/messageMentions';
+import { mergeTrackingLinksIntoMetadata } from '../services/messaging/messageLinks';
+import {
+  admitMessageEdit,
+  isEditRefused,
+  describeEditRefusalForSocket,
+  editRefusalCode,
+  isContentEditRefusal,
+  editAttributionOf,
+  CONVERSATION_CLOSED_EDIT_MESSAGE,
+} from '../services/messaging/messageEditAdmission';
+import { editAttributionReaderOf } from '../services/messaging/editAttributionReader';
+import { withServedEditAttribution } from '@meeshy/shared/utils/message-edit-attribution';
+import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../services/messaging/conversationWriteAdmission';
+import { admitMessageDelete } from '../services/messaging/messageDeleteAdmission';
+import { completeModeratedMessageRemoval, moderationReasonOf, MODERATION_REASON_MESSAGE, MODERATION_REASON_REQUIRED } from '../services/moderation/contentRemoval';
+import { applyMessageRemovalEffects } from '../services/messaging/messageRemovalEffects';
+import { applyMessageEditEffects } from '../services/messaging/messageEditEffects';
+import {
+  admitEditedContent,
+  isEditedContentRefused,
+  EMPTY_EDIT_REFUSAL_MESSAGE,
+} from '../services/messaging/messageEditContent';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { loadPrivacyPreferencesCached } from '../services/preferences/privacy-cache';
+import { broadcastMessageMutation } from '../socketio/broadcastMessageMutation';
+import { isServerAtRestUnavailable, queuedEventSealsAtRest } from '../services/messaging/serverAtRest';
+import { editedLinksFor, editSealsAtRest, gatewayEditCrypto, prepareEditedText, servedEditedRow } from '../services/messaging/atRestEdit';
+import { buildMessageEditedCore } from '../socketio/messageEditedPayload';
+import type { Message } from '@meeshy/shared/types/index';
+import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
+import { validateParams, validateBody } from '../validation/helpers.js';
+import {
+  MessageParamsSchema,
+  AttachmentParamsSchema,
+  UpdateMessageBodySchema,
+  AttachmentStatusBodySchema,
+} from '../validation/messages-schemas.js';
+import {
+  sendSuccess,
+  sendBadRequest,
+  sendNotFound,
+  sendForbidden,
+  sendInternalError,
+  sendError,
+} from '../utils/response.js';
+import { logger, type MessageParams, type MessagesRouteDeps } from './messages-shared';
+import { callerParticipantWhere } from './conversations/utils/access-control';
+import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../services/messaging/withOrphanedSenderRepair';
+import { messageRefusesPlainErasure, SIGNAL_CHANNEL_REFUSAL } from '../services/e2ee/e2ee-signal-channel';
+
+interface UpdateMessageBody {
+  content?: string;
+  isEdited?: boolean;
+}
+
+/**
+ * L'audience de `attachment-status:updated`, et ce que vaut son verdict.
+ *
+ * `repli` DÉCLARE que la préférence n'a pas pu être lue : la room qu'il porte
+ * n'est pas un choix de l'utilisateur, c'est une posture d'incident. Un booléen
+ * `showReadReceipts` seul ne pouvait pas dire ça — il aurait rangé « il a
+ * refusé » et « on n'a pas pu demander » sous la même valeur, alors que les
+ * deux n'envoient pas chercher au même endroit quand on relit le journal.
+ */
+type AudienceStatutPiece =
+  | { readonly kind: 'lue'; readonly room: string }
+  | { readonly kind: 'repli'; readonly room: string; readonly cause: unknown };
+
+/**
+ * Choisit la room de `attachment-status:updated` — et ne LÈVE JAMAIS (#4530).
+ *
+ * ## Ce que ce site était le seul à ne pas avoir
+ *
+ * `privacy-cache.ts` pose sa règle en toutes lettres : il ne rattrape rien, et
+ * « chaque appelant garde son propre repli ». Mesuré, les cinq autres appelants
+ * de `loadPrivacyPreferencesCached` le font — `PrivacyPreferencesService`
+ * (`getPreferences`, `getPreferencesForUsers`),
+ * `MessageReadStatusService._loadReadReceiptOptOuts`, et les deux résolveurs de
+ * `preferences/forward-source-visibility`. Celui-ci n'en avait aucun : il
+ * héritait du `catch` de la DIFFUSION, qui ne se replie sur rien — il journalise
+ * et passe. Une base indisponible faisait donc disparaître l'événement ENTIER,
+ * y compris pour les propres appareils de celui qui venait d'écouter, pendant
+ * que la route rendait 200 ; rien dans la réponse ne distinguait ce cas du cas
+ * nominal. Le `try` de la diffusion n'entourait au départ que l'émission :
+ * `85494dee00` y a fait entrer cette lecture, et le `catch` a hérité d'un appel
+ * qui tombe pour des raisons ordinaires (base, coupe-circuit, timeout).
+ *
+ * ## Pourquoi le repli est RESTRICTIF ici, et OUVERT chez les cinq autres
+ *
+ * L'écart est délibéré, pas une divergence. Les cinq autres décident si un
+ * CHAMP part dans une charge qui part de toute façon — se fermer y priverait
+ * tout le monde d'un contenu sur la foi d'un incident. Ici la préférence
+ * choisit une ADRESSE : la room personnelle porte l'événement à celui qui a agi
+ * (ses autres appareils restent synchronisés, ce qui est le service rendu), et
+ * n'élargit l'audience à personne — un incident ne publie pas à toute une
+ * conversation la position d'écoute de quelqu'un qui l'a peut-être refusée.
+ * Doctrine du dépôt : une garde échoue en montrant MOINS, jamais plus. Rien
+ * n'est mémoïsé (`privacy-cache` ne cache pas les échecs) : la requête suivante
+ * relit et retrouve la room nominale.
+ *
+ * L'absence de préférence stockée reste PERMISSIVE (`!== false`) : ne rien
+ * avoir réglé n'est pas un refus, et seul l'ÉCHEC de la lecture déclenche le
+ * repli.
+ */
+const resolveAudienceStatutPiece = async (
+  prisma: MessagesRouteDeps['prisma'],
+  userId: string,
+  conversationId: string
+): Promise<AudienceStatutPiece> => {
+  try {
+    const prefs = await loadPrivacyPreferencesCached(prisma, [userId]);
+    const diffuseAuxAutres = prefs.get(userId)?.showReadReceipts !== false;
+    return {
+      kind: 'lue',
+      room: diffuseAuxAutres ? ROOMS.conversation(conversationId) : ROOMS.user(userId),
+    };
+  } catch (cause) {
+    return { kind: 'repli', room: ROOMS.user(userId), cause };
+  }
+};
+
+export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: MessagesRouteDeps): void {
+  const { prisma, requiredAuth, attachmentService, translationService, socketIOHandler, trackingLinkService } = deps;
+
+  // Route pour éditer un message
+  fastify.put<{
+    Params: MessageParams;
+    Body: UpdateMessageBody;
+  }>('/messages/:messageId', {
+    preValidation: [requiredAuth],
+    preHandler: [validateParams(MessageParamsSchema), validateBody(UpdateMessageBodySchema)]
+  }, async (request, reply) => {
+    try {
+      const { messageId } = request.params;
+      const { content } = request.body;
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+
+      // La lecture n'ENCODE plus la règle d'admission. Elle filtrait
+      // `sender: { userId }` — donc la ligne d'un message qu'on n'a pas écrit
+      // n'atteignait jamais la décision, et aucun modérateur ne pouvait être
+      // admis ici alors que l'UI web le lui propose. Une politique qui se cache
+      // dans un `where` est une politique qu'on ne peut plus unifier.
+      const message = await withOrphanedSenderRepair(
+        { prisma, conversationIds: discoverConversationIdsByMessageIds(prisma, [messageId]) },
+        () =>
+          prisma.message.findFirst({
+            where: {
+              id: messageId,
+              deletedAt: null
+            },
+            include: {
+              sender: { select: { userId: true } },
+              // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
+              // colonnes sur une lecture déjà là : aucun aller-retour de plus.
+              conversation: { select: { isActive: true, closedAt: true, type: true, encryptionMode: true, serverEncryptionKeyId: true } },
+              // #12792 — la protection PROPRE de chaque pièce : une pièce à vue
+              // unique refuse l'édition de son message (`admitMessageEdit`).
+              attachments: { select: { ...attachmentMediaSelect, ...attachmentProtectionSelect }, orderBy: MESSAGE_ATTACHMENT_ORDER }
+            }
+          })
+      );
+
+      if (!message) {
+        return sendNotFound(reply, 'Message not found or you are not authorized to modify it');
+      }
+
+      // L'unique énoncé de « qui peut éditer, et jusqu'à quand »
+      // (`messageEditAdmission`). Ce transport — celui du client iOS —
+      // n'imposait AUCUNE fenêtre de 24h, là où le socket et la route
+      // conversation-scopée la refusent : un iPhone éditait un message vieux de
+      // trois ans que le web refusait d'éditer.
+      //
+      // Les refus non temporels gardent le **404** que cette route rendait déjà,
+      // plutôt que le 403 de la route conversation-scopée : passer à 403 ferait
+      // de cette route un oracle d'existence pour qui sonde des ObjectIds. Une
+      // seule politique, deux vocabulaires de transport.
+      const admission = await admitMessageEdit({
+        prisma,
+        editorUserId: userId,
+        message: {
+          authorUserId: message.sender?.userId,
+          conversationId: message.conversationId,
+          conversation: message.conversation,
+          createdAt: message.createdAt,
+          messageType: message.messageType,
+          metadata: message.metadata,
+          isViewOnce: message.isViewOnce,
+          effectFlags: message.effectFlags,
+          isEncrypted: message.isEncrypted,
+          encryptionMode: message.encryptionMode,
+          attachments: message.attachments,
+        },
+        onError: (err) => logger.error('Edit - admission lookup failed', err as Error),
+      });
+
+      if (isEditRefused(admission)) {
+        // Le 404 indistinct de cette route protège d'un oracle d'existence — il
+        // ne s'applique donc PAS ici. `admitMessageEdit` ne tranche la clôture
+        // que sur une décision qui allait être ADMISE : qui reçoit ce 410 avait
+        // déjà prouvé son droit d'éditer, et n'apprend rien qu'il ne pouvait
+        // apprendre autrement. Lui rendre un 404 le ferait réessayer sans fin.
+        if (admission.reason === 'conversation-closed') {
+          return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
+        }
+        if (editRefusalCode(admission.reason) !== undefined) {
+          return sendBadRequest(reply, describeEditRefusalForSocket(admission.reason), { code: editRefusalCode(admission.reason) });
+        }
+        if (isContentEditRefusal(admission.reason)) {
+          return sendForbidden(reply, describeEditRefusalForSocket(admission.reason));
+        }
+        if (admission.reason === 'minor-global') {
+          return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
+        }
+        return admission.reason === 'edit-window-expired'
+          ? sendForbidden(reply, 'You can no longer edit this message (24-hour limit exceeded)')
+          : sendNotFound(reply, 'Message not found or you are not authorized to modify it');
+      }
+
+      // Ce qu'une édition a le droit d'ÉCRIRE (`admitEditedContent`) : un
+      // message ne peut pas devenir vide, sauf si une pièce jointe le porte.
+      //
+      // `content` est OPTIONNEL dans `UpdateMessageBodySchema` — retirer la
+      // légende d'un message à pièce jointe consiste précisément à l'omettre.
+      // Le `content.trim()` qui vivait plus bas jetait alors un TypeError, que
+      // le catch traduisait en 500 : le seul cas que la garde autorise
+      // explicitement était le seul que l'écriture ne savait pas traiter. C'est
+      // pourquoi l'unité rend le texte À ÉCRIRE en même temps que son verdict —
+      // il n'y a plus de `trim` d'appelant pour diverger d'elle.
+      const contentAdmission = admitEditedContent({
+        content,
+        hasAttachments: (message.attachments?.length ?? 0) > 0,
+      });
+
+      if (isEditedContentRefused(contentAdmission)) {
+        return sendBadRequest(reply, EMPTY_EDIT_REFUSAL_MESSAGE);
+      }
+
+      const trimmedContent = contentAdmission.content;
+
+      // Les liens `[[url]]` / `<url>` deviennent des `m+<token>` traçables AVANT
+      // l'écriture, exactement comme à l'envoi et comme sur les deux autres
+      // transports d'édition. Le contenu traité est ensuite le SEUL en
+      // circulation : base, mentions, retraduction, payload diffusé.
+      //
+      // Décision 2026-11-01 — au repos (`server`/`hybrid`), aucune adresse ne se
+      // range en clair à côté du chiffré (`editedLinksFor`), et le texte modifié
+      // se SCELLE avant l'écriture (`prepareEditedText`) : une clé absente
+      // échoue ici, sans qu'aucune colonne n'ait été touchée.
+      const reconciledLinks = await editedLinksFor(editSealsAtRest(message), {
+        linkService: trackingLinkService,
+        message: { id: messageId, conversationId: message.conversationId, sender: message.sender },
+        content: trimmedContent,
+        editorUserId: userId,
+        onError: (err) => logger.error('Error processing tracking links in edit', err as Error),
+      });
+      const editedContent = reconciledLinks.processedContent;
+      const editCrypto = gatewayEditCrypto(prisma);
+      const preparedText = await prepareEditedText({ crypto: editCrypto, row: message, text: editedContent });
+
+      // Le mapping des URLs BRUTES n'était recomposé par aucun transport
+      // d'édition : il n'existait qu'à la création. Écrit seulement s'il a été
+      // ÉTABLI — sur panne, la base garde celui qu'elle avait.
+      const nextMetadata = reconciledLinks.reconciled
+        ? { metadata: mergeTrackingLinksIntoMetadata(message.metadata, reconciledLinks.trackingLinks) }
+        : {};
+
+      // Mettre à jour le message — garde de concurrence optimiste : n'écrire
+      // que si le message est toujours non supprimé. Un `DELETE` concurrent
+      // entre la lecture ci-dessus et cette écriture ferait sinon ressusciter
+      // la ligne avec le contenu édité (un `update` par id réussit quel que
+      // soit `deletedAt`), et l'API répondrait succès pour un message que le
+      // client a déjà retiré. Miroir du garde `updateMany` du handler socket
+      // `handleMessageEdit`.
+      //
+      // `translations: null` appartient à CETTE écriture, pas à une seconde plus
+      // bas : un nouveau contenu périme ses traductions à l'instant où il est
+      // écrit. Séparées, les deux écritures ouvraient une fenêtre — traversée
+      // par la réconciliation des mentions, le fan-out `mention:created` et la
+      // relecture qui compose la réponse — pendant laquelle la ligne portait le
+      // texte d'APRÈS et les traductions d'AVANT. La relecture tombait dedans :
+      // la réponse HTTP et la charge `message:edited` diffusée à toute la
+      // conversation emportaient la traduction du texte périmé, et le Prisme
+      // Linguistique fait que la plupart des lecteurs ne voient QUE celle-là.
+      // Les trois autres transports d'édition invalident déjà dans l'écriture
+      // du contenu ; celui-ci était le dernier à ne pas le faire.
+      const editedAt = new Date();
+      const editResult = await prisma.message.updateMany({
+        where: { id: messageId, deletedAt: null },
+        data: {
+          ...preparedText.columns,
+          isEdited: true,
+          editedAt,
+          // #11375 — le tiers modérateur est enregistré ; l'auteur efface la mention.
+          ...editAttributionOf(admission, userId),
+          translations: null,
+          ...nextMetadata
+        }
+      });
+
+      if (editResult.count === 0) {
+        return sendNotFound(reply, 'Message not found or you are not authorized to modify it');
+      }
+
+      // Les effets DURABLES de l'édition — l'écart de mots et de caractères sur
+      // les compteurs de la conversation. Ce transport — celui qu'emploie iOS —
+      // ne les ajustait pas. La liste vit dans `applyMessageEditEffects`, une
+      // fois pour les quatre transports.
+      await applyMessageEditEffects(prisma, {
+        id: messageId,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        senderUserId: message.sender?.userId ?? null,
+        previousContent: preparedText.previousContent,
+        content: editedContent,
+        editedAt,
+      });
+
+      // Ce que cette édition doit aux gens qu'elle NOMME. Ce transport — celui
+      // que le client iOS emploie réellement (`MessageService.editMessage` →
+      // `PUT /messages/:id`) — n'écrivait AUCUNE mention : ni ligne `Mention`,
+      // ni `validatedMentions`, ni notification. Éditer « salut @alice » en
+      // « salut @bob » laissait Alice mentionnée et ne nommait jamais Bob.
+      // Les deux unités partagées existaient déjà ; les commentaires qui les
+      // accompagnent désignaient même cette route par son chemin — mais elles
+      // avaient été câblées sur `PUT /conversations/:id/messages/:messageId`,
+      // qu'aucun client n'appelle pour éditer.
+      //
+      // L'appel précède la relecture : `reconcileEditedMentions` écrit
+      // `validatedMentions` en base, et `findUniqueOrThrow` rend alors l'état
+      // réconcilié sans qu'aucun recopiage conditionnel soit nécessaire. Quand
+      // la réconciliation n'a RIEN pu établir, la ligne porte toujours la
+      // valeur précédente — qui est la bonne, et qu'un `[]` recopié aurait
+      // effacée.
+      const editedMentions = await reconcileEditedMentions({
+        prisma,
+        mentionService: fastify.mentionService,
+        notificationService: fastify.notificationService,
+        message: { id: messageId, conversationId: message.conversationId, senderId: message.senderId },
+        content: editedContent,
+        editorUserId: userId,
+        onError: (err) => logger.error('Edit - Error processing mentions', err as Error),
+      });
+
+      // `mention:created` aux seuls ENTRANTS, dans leur salon PERSONNEL : la
+      // diffusion qui suit ne fan qu'à `conversation:<id>`, où quelqu'un que
+      // cette édition vient de nommer n'est pas forcément assis.
+      // Le PLANCHER D'HISTORIQUE. Ce site avait été OMIS au premier essai sur
+      // la foi d'un « c'est un chemin d'envoi, donc personne n'est sous
+      // plancher » — faux, et contredit par le commentaire quinze lignes plus
+      // haut : c'est la route que le client iOS emploie réellement pour
+      // ÉDITER. Elle appelle `reconcileEditedMentions` et
+      // `broadcastMessageMutation({ eventType: 'edited' })` dans le MÊME
+      // gestionnaire, si bien qu'elle avait son `message:edited` gardé et son
+      // `mention:created` nu.
+      emitMentionCreated({
+        readership: await messageReadership(prisma, message.conversationId, messageId, (err) =>
+          logger.error('Edit - edit readership unresolvable, mention withheld', err as Error),
+        ),
+        io: socketIOHandler?.getManager()?.getIO(),
+        newlyMentionedUserIds: editedMentions.newlyMentionedUserIds,
+        messageId,
+        conversationId: message.conversationId,
+        editorUserId: userId,
+        content: editedContent,
+        timestamp: editedAt,
+        onError: (err) => logger.error('Edit - mention:created fanout failed', err as Error),
+      });
+
+      // La ligne relue porte le chiffré au repos : elle part avec le texte
+      // modifié en clair, et sans chiffré sur le fil (`servedEditedRow`).
+      const updatedMessage = await servedEditedRow(await prisma.message.findUniqueOrThrow({
+        where: { id: messageId },
+        include: {
+          sender: {
+            select: {
+              id: true,
+              userId: true,
+              displayName: true,
+              avatar: true,
+              user: { select: { username: true } }
+            }
+          }
+        }
+      }), { prepared: preparedText, text: editedContent }, editCrypto);
+
+      // Déclencher la retraduction automatique du message modifié.
+      // L'invalidation de `translations` n'est plus faite ici : elle appartient
+      // à l'écriture du contenu, plus haut, et la faire deux fois rouvrirait la
+      // fenêtre que cette écriture vient de fermer.
+      try {
+        const messageForRetranslation = {
+          id: messageId,
+          content: editedContent,
+          originalLanguage: message.originalLanguage,
+          conversationId: message.conversationId,
+          senderId: message.senderId
+        };
+
+        // `retranslateMessageAsync` est l'entrée PUBLIQUE prévue pour ce geste —
+        // celle qu'emploie le handler socket. Les deux routes REST appelaient
+        // `_processRetranslationAsync` derrière un `as any`, c'est-à-dire le même
+        // geste sous un second vocabulaire, au prix d'une assertion de type qui
+        // perçait l'encapsulation du service.
+        if (translationService) {
+          await translationService.retranslateMessageAsync(messageId, messageForRetranslation);
+        } else {
+          logger.warn('MessageTranslationService non disponible, retraduction non effectuée');
+        }
+
+      } catch (translationError) {
+        logger.error('Erreur lors de la retraduction', translationError as Error);
+        // Ne pas faire échouer l'édition si la retraduction échoue
+      }
+
+      // Transformer `translations` (Object stocké en MongoDB) en Array conforme
+      // au contrat API consommé par iOS (`[APITextTranslation]`) et web. Sans
+      // cette transformation, le client reçoit `translations: { "fr": {...} }`
+      // au lieu d'un tableau et échoue au décodage ("Type mismatch for type
+      // Array<Any> at path data.translations"). L'ÉCRITURE DU CONTENU a déjà
+      // invalidé `translations` en base, donc cette relecture rapporte `null` et
+      // le payload reflète cet état : `[]`. Cette phrase créditait auparavant
+      // l'invalidation qui vivait dans le bloc de retraduction — placée APRÈS
+      // la relecture, elle arrivait trop tard pour la charge déjà composée.
+      const transformedMessage = {
+        // #11375 — les colonnes de l'éditeur tiers ne partent jamais brutes : ce
+        // lecteur reçoit ce que `servedEditAttribution` lui accorde, et la
+        // diffusion (le noyau, étalé après) la mention seule.
+        ...withServedEditAttribution(updatedMessage, editAttributionReaderOf(authRequest.authContext)),
+        translations: transformTranslationsToArray(
+          messageId,
+          (updatedMessage as unknown as { translations?: Record<string, MessageTranslationJSON> | null }).translations
+        )
+      };
+
+      // Diffuser la mise à jour via Socket.IO (room + aperçu de liste + file
+      // de livraison hors ligne — voir broadcastMessageMutation)
+      await broadcastMessageMutation({
+        prisma,
+        manager: socketIOHandler?.getManager(),
+        conversationId: message.conversationId,
+        actorUserId: userId,
+        eventType: 'edited',
+        messageId,
+        atRest: queuedEventSealsAtRest(message),
+        // Le NOYAU du contrat vient de `buildMessageEditedCore`, source unique
+        // partagée avec les deux producteurs socket. Étalé APRÈS la ligne
+        // relue, il n'ajoute rien qui ne soit déjà servi — il corrige la seule
+        // valeur que l'étalement brut servait fausse : `senderId`, qui portait
+        // le `Participant.id` de la colonne là où les clients comparent un
+        // `User.id` pour reconnaître leurs propres bulles.
+        payload: {
+          ...transformedMessage,
+          ...buildMessageEditedCore(updatedMessage as unknown as Message, {
+            conversationId: message.conversationId,
+            content: editedContent,
+            isEdited: updatedMessage.isEdited,
+            editedAt,
+          }),
+        },
+        onError: (err) => logger.error('Erreur lors de la diffusion Socket.IO', err as Error),
+      });
+
+      return sendSuccess(reply, {
+        ...transformedMessage,
+        message: 'Message modifié avec succès'
+      });
+
+    } catch (error) {
+      // Décision 2026-11-01 — sans clé maîtresse, un texte au repos ne se rescelle pas : refusé, jamais écrit en clair.
+      if (isServerAtRestUnavailable(error)) {
+        return sendError(reply, 503, error.message, { code: error.code });
+      }
+      logger.error('Error updating message', error as Error);
+      return sendInternalError(reply, 'Erreur lors de la modification du message');
+    }
+  });
+
+  // Route pour supprimer un message (soft delete)
+  fastify.delete<{
+    Params: MessageParams;
+  }>('/messages/:messageId', {
+    preValidation: [requiredAuth],
+    preHandler: [validateParams(MessageParamsSchema)]
+  }, async (request, reply) => {
+    try {
+      const { messageId } = request.params;
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+
+      // Vérifier que le message existe
+      const message = await withOrphanedSenderRepair(
+        { prisma, conversationIds: discoverConversationIdsByMessageIds(prisma, [messageId]) },
+        () =>
+          prisma.message.findFirst({
+            where: {
+              id: messageId,
+              deletedAt: null
+            },
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  userId: true,
+                  displayName: true,
+                  user: { select: { username: true } }
+                }
+              },
+              // Ni l'appartenance ni la conversation ne sont jointes ici :
+              // `admitMessageDelete` lit la première lui-même (avec le filtre
+              // `isActive: true` que cette jointure n'avait jamais, et seulement
+              // quand l'acteur n'est PAS l'auteur), et `applyMessageRemovalEffects`
+              // relit `lastMessageAt` au plus près de son écriture conditionnelle.
+              // Le chemin nominal coûte donc deux lectures de moins qu'avant.
+              // `mimeType` est capturé ICI, avec l'admission : les attachements
+              // sont supprimés quelques lignes plus bas, et le décompte des
+              // compteurs de conversation ne pourrait plus les relire.
+              attachments: {
+                select: {
+                  id: true,
+                  mimeType: true
+                }
+              }
+            }
+          })
+      );
+
+      if (!message) {
+        return sendNotFound(reply, 'Message non trouvé');
+      }
+
+      // Qui peut supprimer : `admitMessageDelete`, l'unique énoncé de la règle.
+      // Cette copie-ci — la route qu'ANDROID emploie — avait dérivé sur deux
+      // points que rien ne mesurait :
+      //   - elle joignait les participants SANS `isActive: true`, donc une ligne
+      //     laissée derrière par un départ conservait indéfiniment le droit de
+      //     supprimer ;
+      //   - elle testait `registeredUser?.role === 'CREATOR'`, absent de l'enum
+      //     `UserRole` : une branche qui ne pouvait jamais être vraie et qui
+      //     donnait à lire une permission inexistante.
+      // Le rôle global se lit désormais en BASE et non dans le jeton : un rôle
+      // révoqué depuis l'émission du jeton ne supprime plus.
+      const { admitted: canDelete, actorParticipantId, byModeration } = await admitMessageDelete({
+        prisma,
+        deleterUserId: userId,
+        message: {
+          authorUserId: message.sender?.userId,
+          conversationId: message.conversationId,
+          messageType: message.messageType,
+          metadata: message.metadata,
+        },
+        onError: (err) => logger.error('delete admission read failed', err as Error),
+      });
+
+      if (!canDelete) {
+        return sendForbidden(reply, 'Vous n\'êtes pas autorisé à supprimer ce message');
+      }
+      // #13142 — un message scellé au serveur se supprime pour tous par signal
+      // chiffré signé de l'auteur ; un message d'avant l'activation, en clair, ici.
+      if (await messageRefusesPlainErasure(prisma, message)) {
+        return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
+      }
+      const moderationReason = byModeration ? moderationReasonOf(request.body) : null;
+      if (byModeration && moderationReason === null) {
+        return sendBadRequest(reply, MODERATION_REASON_MESSAGE, { code: MODERATION_REASON_REQUIRED });
+      }
+
+      // Supprimer les attachments et leurs fichiers physiques
+      if (message.attachments && message.attachments.length > 0) {
+        for (const attachment of message.attachments) {
+          try {
+            await attachmentService.deleteAttachment(attachment.id);
+          } catch (error) {
+            logger.error('Erreur suppression attachment', error as Error);
+            // Continuer même en cas d'erreur pour supprimer les autres
+          }
+        }
+      }
+
+      // UNE écriture — jumelle exacte de celle de `messages-advanced.ts`, et
+      // même argument que la route d'ÉDITION de CE fichier deux cents lignes
+      // plus haut : « `translations: null` appartient à CETTE écriture, pas à
+      // une seconde plus bas ». Cette phrase-là finissait sur « celui-ci était
+      // le dernier à ne pas le faire » — vrai de la famille d'ÉDITION, qui a
+      // été balayée en entier. La famille de SUPPRESSION ne l'avait pas été.
+      //
+      // Séparées, elles ouvraient une fenêtre où la ligne est VIVANTE et
+      // dépouillée de ses traductions. Le prix qui compte n'est pas la fenêtre
+      // mais son échec : si la SECONDE écriture échoue, le message reste vivant
+      // sans aucune traduction, DÉFINITIVEMENT — `MessageTranslationService`
+      // écrit lui-même qu'« aucun chemin ne retente une traduction absente ».
+      // L'écriture destructrice committait donc en premier, et celle qui la
+      // rend inoffensive en second : l'échec tombait du mauvais côté.
+      //
+      // Elle ferme aussi la course avec l'édition, dont la garde optimiste
+      // (`where: { id, deletedAt: null }`, décrite plus haut) lisait `deletedAt`
+      // encore nul pendant la fenêtre : l'édition était acceptée et diffusée
+      // pour une ligne que l'écriture suivante effaçait.
+      //
+      // Forme reprise du handler socket, seul des quatre écrivains à la porter
+      // avec les deux champs dans le même `update`.
+      // Une seule heure pour le retrait : celle qui est écrite est celle qui
+      // part sur le fil (#18159).
+      const deletedAt = new Date();
+      await prisma.message.update({
+        where: { id: messageId },
+        data: { translations: null, deletedAt }
+      });
+
+      // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et
+      // désactivation des `/l/<token>` que ce message emporte. La liste vit
+      // dans `applyMessageRemovalEffects`, une fois pour les quatre écrivains.
+      await applyMessageRemovalEffects(prisma, {
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        senderUserId: message.sender?.userId ?? null,
+        messageType: message.messageType,
+        attachmentMimeTypes: (message.attachments ?? []).map((att) => att.mimeType ?? ''),
+        content: message.content,
+        metadata: message.metadata,
+        removedByParticipantId: actorParticipantId ?? null,
+      });
+      if (moderationReason !== null) {
+        await completeModeratedMessageRemoval({ prisma }, {
+          actorUserId: userId,
+          authorUserId: message.sender?.userId,
+          messageId: message.id,
+          conversationId: message.conversationId,
+          reason: moderationReason,
+        });
+      }
+
+      // Diffuser la suppression via Socket.IO (room + aperçu de liste + file
+      // de livraison hors ligne — voir broadcastMessageMutation)
+      await broadcastMessageMutation({
+        prisma,
+        manager: socketIOHandler?.getManager(),
+        conversationId: message.conversationId,
+        actorUserId: userId,
+        eventType: 'deleted',
+        // L'AUTEUR, pas l'acteur : la pastille de l'acteur bouge aussi quand un
+        // modérateur retire le message de quelqu'un d'autre.
+        authorId: message.senderId,
+        messageId,
+        payload: { messageId, conversationId: message.conversationId, deletedAt: deletedAt.toISOString() },
+        onError: (err) => logger.error('Erreur lors de la diffusion Socket.IO', err as Error),
+      });
+
+      return sendSuccess(reply, { message: 'Message supprimé avec succès' });
+
+    } catch (error) {
+      logger.error('Error deleting message', error as Error);
+      return sendInternalError(reply, 'Erreur lors de la suppression du message');
+    }
+  });
+
+  // Route pour marquer un attachment comme écouté/vu/téléchargé
+  fastify.post<{
+    Params: { attachmentId: string };
+    Body: {
+      action: 'listened' | 'watched' | 'viewed' | 'downloaded';
+      playPositionMs?: number;
+      durationMs?: number;
+      complete?: boolean;
+      wasZoomed?: boolean;
+      stretches?: Array<{ startMs: number; endMs: number; endedBy: string }>;
+      language?: string;
+    };
+  }>('/attachments/:attachmentId/status', {
+    preValidation: [requiredAuth],
+    preHandler: [validateParams(AttachmentParamsSchema), validateBody(AttachmentStatusBodySchema)]
+  }, async (request, reply) => {
+    try {
+      const { attachmentId } = request.params;
+      const { action, playPositionMs, durationMs, complete, wasZoomed, stretches, language } = request.body;
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+
+      if (!action || !['listened', 'watched', 'viewed', 'downloaded'].includes(action)) {
+        return sendBadRequest(reply, 'Action invalide. Valeurs acceptées: listened, watched, viewed, downloaded');
+      }
+
+      // Vérifier que l'attachment existe et que l'utilisateur a accès
+      const attachment = await prisma.messageAttachment.findFirst({
+        where: { id: attachmentId },
+        include: {
+          message: {
+            include: {
+              conversation: {
+                include: {
+                  participants: {
+                    // `isActive: true` — même règle que la garde du message :
+                    // un ancien membre ne lit plus, et n'écrit plus, les reçus
+                    // d'une conversation qu'il a quittée. L'invité se trouve par
+                    // son `participantId` (#7358), jamais par `userId`.
+                    where: callerParticipantWhere(authRequest.authContext),
+                    select: { id: true, userId: true }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+
+      const participant = attachment?.message.conversation.participants[0];
+      if (!attachment || !participant) {
+        return sendNotFound(reply, 'Attachment non trouvé ou accès non autorisé');
+      }
+
+      // Utiliser le service pour mettre à jour le statut.
+      // `AttachmentStatusEntry.participantId` attend un PARTICIPANT.id —
+      // passer `authContext.userId` (User.id pour un inscrit) écrivait des
+      // lignes orphelines que toute lecture filtrait (`if (!participant)
+      // return null`) : l'onglet « Écouté » restait vide pour tout le monde
+      // et la reprise cross-device ne retrouvait rien. Même règle que la
+      // route mark-read ci-dessus (« participantId, pas userId »).
+      const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
+      const readStatusService = new MessageReadStatusService(prisma);
+
+      // La position et le complet SERVIS (#7359) — la valeur la plus avancée
+      // / collante que le service vient d'écrire, jamais le rapport BRUT de
+      // CETTE requête. C'est elle, pas `playPositionMs`/`complete` du corps,
+      // que la diffusion Socket.IO ci-dessous doit annoncer : sinon une
+      // reprise à 10 % après une écoute à 80 % pousserait 10 % en direct,
+      // contredisant ce que la base vient de protéger.
+      let served: { position: number | null; complete: boolean } | undefined;
+
+      switch (action) {
+        case 'listened':
+          // `durationMs` n'est JAMAIS passé au service : c'est la durée de la
+          // PISTE (dénominateur de `percentage` ci-dessous), identique à
+          // chaque rapport du même client — pas le temps réellement écouté
+          // depuis le rapport précédent. Le service dérive `totalListenDurationMs`
+          // de `stretches` lui-même (#7359) ; lui repasser `durationMs` ferait
+          // recompter la piste entière à chaque appel.
+          served = await readStatusService.markAudioAsListened(participant.id, attachmentId, {
+            playPositionMs,
+            complete,
+            stretches,
+            language
+          });
+          break;
+        case 'watched':
+          // Même raison que `listened` ci-dessus.
+          served = await readStatusService.markVideoAsWatched(participant.id, attachmentId, {
+            watchPositionMs: playPositionMs,
+            complete,
+            stretches,
+            language
+          });
+          break;
+        case 'viewed':
+          await readStatusService.markImageAsViewed(participant.id, attachmentId, {
+            viewDurationMs: durationMs,
+            wasZoomed,
+            language
+          });
+          break;
+        case 'downloaded':
+          await readStatusService.markAttachmentAsDownloaded(participant.id, attachmentId);
+          break;
+      }
+
+      // Diffuser le statut via Socket.IO
+      try {
+        const socketIOManager = socketIOHandler.getManager();
+        if (socketIOManager) {
+          // #3907 — la réciprocité `showReadReceipts` gouverne AUSSI ce flux.
+          //
+          // Cet événement pousse `userId`, `playPositionMs`, `durationMs` et
+          // `percentage` à TOUTE la room, et le web les persiste en cache
+          // (`use-socket-cache-sync.ts`). Un participant qui a désactivé ses
+          // accusés y annonçait donc en direct où il en est dans un vocal —
+          // plus intime que l'accusé texte qu'il a refusé, et sans qu'aucune
+          // porte de lecture ne puisse le rattraper : le cache du destinataire
+          // le tient déjà.
+          //
+          // Il n'est pas SILENCIÉ pour autant : la diffusion se replie sur SA
+          // room à lui, pour que ses propres appareils restent synchronisés.
+          // « Ne pas dire aux autres » n'est pas « ne rien savoir soi-même ».
+          //
+          // La lecture qui tranche vit dans `resolveAudienceStatutPiece`, qui ne
+          // lève jamais : c'est ELLE qui a l'incident, pas la diffusion, et le
+          // `catch` ci-dessous ne doit plus l'avaler (#4530).
+          const audience = await resolveAudienceStatutPiece(
+            prisma,
+            userId,
+            attachment.message.conversationId
+          );
+          if (audience.kind === 'repli') {
+            logger.error(
+              'Préférences de confidentialité illisibles — repli sur la room restrictive, l\'événement part quand même',
+              audience.cause,
+              { userId, attachmentId, room: audience.room }
+            );
+          }
+          // La position SERVIE prime sur le rapport brut : `served` n'existe
+          // que pour `listened`/`watched` (les seules actions temporelles) et
+          // porte la valeur la plus avancée déjà protégée en base. Un double
+          // de service qui ne la rend pas (ancien contrat) replie sur le
+          // rapport brut — la route reste fonctionnelle, seule la garantie
+          // anti-régression dépend alors du service réel.
+          const servedPositionMs = served?.position ?? playPositionMs;
+          const percentage = servedPositionMs !== undefined && servedPositionMs !== null
+            && durationMs !== undefined && durationMs > 0
+            ? Math.min(100, Math.round((servedPositionMs / durationMs) * 100))
+            : undefined;
+          socketIOManager.getIO().to(audience.room).emit(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, {
+            attachmentId,
+            messageId: attachment.messageId,
+            conversationId: attachment.message.conversationId,
+            userId,
+            action,
+            updatedAt: new Date(),
+            ...(servedPositionMs !== undefined && servedPositionMs !== null && { playPositionMs: servedPositionMs }),
+            ...(durationMs !== undefined && { durationMs }),
+            ...(percentage !== undefined && { percentage }),
+            ...(served !== undefined && { complete: served.complete })
+          });
+        }
+      } catch (socketError) {
+        // Ce `catch` ne couvre plus qu'un incident de TRANSPORT — la lecture de
+        // préférences a son propre repli, un cran au-dessus. Le message le dit,
+        // parce qu'un refus à plusieurs causes possibles doit les SÉPARER : les
+        // deux n'envoient pas chercher au même endroit (#4530).
+        logger.error(
+          'Diffusion Socket.IO en échec — le transport, pas la lecture des préférences',
+          socketError as Error,
+          { userId, attachmentId }
+        );
+      }
+
+      return sendSuccess(reply, { message: `Attachment marqué comme ${action}` });
+
+    } catch (error) {
+      logger.error('Error updating attachment status', error as Error);
+      return sendInternalError(reply, 'Erreur lors de la mise à jour du statut de l\'attachment');
+    }
+  });
+}

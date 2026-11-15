@@ -1,0 +1,537 @@
+{
+  "kit": "K02",
+  "disabledOpacity": 0.4,
+  "toneFadeMs": 200,
+  "shadowActive": {
+    "opacity": 0.22,
+    "blur": 14,
+    "y": 4
+  },
+  "tapTarget": {
+    "ios": 44,
+    "android": 48,
+    "web": 44
+  },
+  "longPress": {
+    "durationMs": 500,
+    "maxMovement": 10
+  },
+  "sizes": [
+    {
+      "size": "s36",
+      "diameter": 36,
+      "glyph": 18,
+      "target": 44,
+      "slack": 4
+    },
+    {
+      "size": "s40",
+      "diameter": 40,
+      "glyph": 18,
+      "target": 44,
+      "slack": 2
+    },
+    {
+      "size": "s44",
+      "diameter": 44,
+      "glyph": 20,
+      "target": 44,
+      "slack": 0
+    },
+    {
+      "size": "s48",
+      "diameter": 48,
+      "glyph": 22,
+      "target": 48,
+      "slack": 0
+    }
+  ],
+  "matter": [
+    {
+      "kind": "normal",
+      "material": "liquid",
+      "nested": false,
+      "fill": "none",
+      "glass": "neutral",
+      "restFill": 0,
+      "pressedFill": 0,
+      "hoveredFill": 0,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "normal",
+      "material": "drawn",
+      "nested": false,
+      "fill": "none",
+      "glass": "neutral",
+      "restFill": 0,
+      "pressedFill": 0,
+      "hoveredFill": 0,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "normal",
+      "material": "opaque",
+      "nested": false,
+      "fill": "none",
+      "glass": "neutral",
+      "restFill": 0,
+      "pressedFill": 0,
+      "hoveredFill": 0,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "active",
+      "material": "liquid",
+      "nested": false,
+      "fill": "white",
+      "glass": "neutral",
+      "restFill": 0.94,
+      "pressedFill": 0.94,
+      "hoveredFill": 0.94,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "active",
+      "material": "drawn",
+      "nested": false,
+      "fill": "white",
+      "glass": "none",
+      "restFill": 0.94,
+      "pressedFill": 0.78,
+      "hoveredFill": 0.86,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "active",
+      "material": "opaque",
+      "nested": false,
+      "fill": "white",
+      "glass": "none",
+      "restFill": 0.94,
+      "pressedFill": 0.78,
+      "hoveredFill": 0.86,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "destructive",
+      "material": "liquid",
+      "nested": false,
+      "fill": "none",
+      "glass": "red",
+      "restFill": 0,
+      "pressedFill": 0,
+      "hoveredFill": 0,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "destructive",
+      "material": "drawn",
+      "nested": false,
+      "fill": "red",
+      "glass": "none",
+      "restFill": 0.94,
+      "pressedFill": 0.94,
+      "hoveredFill": 0.94,
+      "pressedVeil": 0.22,
+      "hoveredVeil": 0.11
+    },
+    {
+      "kind": "destructive",
+      "material": "opaque",
+      "nested": false,
+      "fill": "red",
+      "glass": "none",
+      "restFill": 0.94,
+      "pressedFill": 0.94,
+      "hoveredFill": 0.94,
+      "pressedVeil": 0.22,
+      "hoveredVeil": 0.11
+    },
+    {
+      "kind": "soft",
+      "material": "liquid",
+      "nested": false,
+      "fill": "none",
+      "glass": "neutral",
+      "restFill": 0,
+      "pressedFill": 0,
+      "hoveredFill": 0,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "soft",
+      "material": "drawn",
+      "nested": false,
+      "fill": "veil",
+      "glass": "none",
+      "restFill": 0.12,
+      "pressedFill": 0.22,
+      "hoveredFill": 0.17,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "soft",
+      "material": "opaque",
+      "nested": false,
+      "fill": "veil",
+      "glass": "none",
+      "restFill": 0.12,
+      "pressedFill": 0.22,
+      "hoveredFill": 0.17,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "normal",
+      "material": "liquid",
+      "nested": true,
+      "fill": "none",
+      "glass": "neutral",
+      "restFill": 0,
+      "pressedFill": 0,
+      "hoveredFill": 0,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "normal",
+      "material": "drawn",
+      "nested": true,
+      "fill": "none",
+      "glass": "neutral",
+      "restFill": 0,
+      "pressedFill": 0,
+      "hoveredFill": 0,
+      "pressedVeil": 0.22,
+      "hoveredVeil": 0.11
+    },
+    {
+      "kind": "normal",
+      "material": "opaque",
+      "nested": true,
+      "fill": "none",
+      "glass": "neutral",
+      "restFill": 0,
+      "pressedFill": 0,
+      "hoveredFill": 0,
+      "pressedVeil": 0.22,
+      "hoveredVeil": 0.11
+    },
+    {
+      "kind": "active",
+      "material": "liquid",
+      "nested": true,
+      "fill": "white",
+      "glass": "neutral",
+      "restFill": 0.94,
+      "pressedFill": 0.94,
+      "hoveredFill": 0.94,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "active",
+      "material": "drawn",
+      "nested": true,
+      "fill": "white",
+      "glass": "none",
+      "restFill": 0.94,
+      "pressedFill": 0.78,
+      "hoveredFill": 0.86,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "active",
+      "material": "opaque",
+      "nested": true,
+      "fill": "white",
+      "glass": "none",
+      "restFill": 0.94,
+      "pressedFill": 0.78,
+      "hoveredFill": 0.86,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "destructive",
+      "material": "liquid",
+      "nested": true,
+      "fill": "none",
+      "glass": "red",
+      "restFill": 0,
+      "pressedFill": 0,
+      "hoveredFill": 0,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "destructive",
+      "material": "drawn",
+      "nested": true,
+      "fill": "red",
+      "glass": "none",
+      "restFill": 0.94,
+      "pressedFill": 0.94,
+      "hoveredFill": 0.94,
+      "pressedVeil": 0.22,
+      "hoveredVeil": 0.11
+    },
+    {
+      "kind": "destructive",
+      "material": "opaque",
+      "nested": true,
+      "fill": "red",
+      "glass": "none",
+      "restFill": 0.94,
+      "pressedFill": 0.94,
+      "hoveredFill": 0.94,
+      "pressedVeil": 0.22,
+      "hoveredVeil": 0.11
+    },
+    {
+      "kind": "soft",
+      "material": "liquid",
+      "nested": true,
+      "fill": "none",
+      "glass": "neutral",
+      "restFill": 0,
+      "pressedFill": 0,
+      "hoveredFill": 0,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "soft",
+      "material": "drawn",
+      "nested": true,
+      "fill": "veil",
+      "glass": "none",
+      "restFill": 0.12,
+      "pressedFill": 0.22,
+      "hoveredFill": 0.17,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "soft",
+      "material": "opaque",
+      "nested": true,
+      "fill": "veil",
+      "glass": "none",
+      "restFill": 0.12,
+      "pressedFill": 0.22,
+      "hoveredFill": 0.17,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    }
+  ],
+  "ink": [
+    {
+      "kind": "normal",
+      "tone": "deep",
+      "glyphTint": false,
+      "ink": "onMedia"
+    },
+    {
+      "kind": "normal",
+      "tone": "theme",
+      "glyphTint": false,
+      "ink": "themeInk"
+    },
+    {
+      "kind": "normal",
+      "tone": "deep",
+      "glyphTint": true,
+      "ink": "custom"
+    },
+    {
+      "kind": "soft",
+      "tone": "deep",
+      "glyphTint": false,
+      "ink": "onMedia"
+    },
+    {
+      "kind": "soft",
+      "tone": "theme",
+      "glyphTint": false,
+      "ink": "themeInk"
+    },
+    {
+      "kind": "soft",
+      "tone": "deep",
+      "glyphTint": true,
+      "ink": "custom"
+    },
+    {
+      "kind": "active",
+      "tone": "deep",
+      "glyphTint": false,
+      "ink": "onSolid"
+    },
+    {
+      "kind": "active",
+      "tone": "deep",
+      "glyphTint": true,
+      "ink": "onSolid"
+    },
+    {
+      "kind": "active",
+      "tone": "theme",
+      "glyphTint": false,
+      "ink": "themeInverse"
+    },
+    {
+      "kind": "destructive",
+      "tone": "deep",
+      "glyphTint": false,
+      "ink": "onMedia"
+    },
+    {
+      "kind": "destructive",
+      "tone": "deep",
+      "glyphTint": true,
+      "ink": "onMedia"
+    }
+  ],
+  "activeThemeFill": "themeInk",
+  "contrast": {
+    "glyphMin": 3.0,
+    "active": 15.99,
+    "destructive": 3.76,
+    "tolerance": 0.05,
+    "softOnDense": 5.34,
+    "softOnLight": 4.68
+  },
+  "activation": [
+    {
+      "activation": "none",
+      "impliedKind": "normal",
+      "toggle": false,
+      "selected": false,
+      "toggleOn": null
+    },
+    {
+      "activation": "toggle(true)",
+      "impliedKind": "active",
+      "toggle": true,
+      "selected": false,
+      "toggleOn": true
+    },
+    {
+      "activation": "toggle(false)",
+      "impliedKind": "normal",
+      "toggle": true,
+      "selected": false,
+      "toggleOn": false
+    },
+    {
+      "activation": "selected(true)",
+      "impliedKind": "active",
+      "toggle": false,
+      "selected": true,
+      "toggleOn": null
+    },
+    {
+      "activation": "selected(false)",
+      "impliedKind": "normal",
+      "toggle": false,
+      "selected": false,
+      "toggleOn": null
+    },
+    {
+      "activation": "expanded(true)",
+      "impliedKind": "active",
+      "toggle": false,
+      "selected": false,
+      "toggleOn": null
+    },
+    {
+      "activation": "expanded(false)",
+      "impliedKind": "normal",
+      "toggle": false,
+      "selected": false,
+      "toggleOn": null
+    }
+  ],
+  "value": [
+    {
+      "toggleWord": null,
+      "value": null,
+      "said": ""
+    },
+    {
+      "toggleWord": "Activé",
+      "value": null,
+      "said": "Activé"
+    },
+    {
+      "toggleWord": "Activé",
+      "value": "AirPods",
+      "said": "Activé, AirPods"
+    },
+    {
+      "toggleWord": null,
+      "value": "3 textes",
+      "said": "3 textes"
+    }
+  ],
+  "states": [
+    {
+      "enabled": true,
+      "action": true,
+      "haptic": true,
+      "touchResponse": true,
+      "opacity": 1
+    },
+    {
+      "enabled": false,
+      "action": false,
+      "haptic": false,
+      "touchResponse": false,
+      "opacity": 0.4
+    }
+  ],
+  "pressReport": [
+    {
+      "from": false,
+      "to": true,
+      "report": true
+    },
+    {
+      "from": true,
+      "to": false,
+      "report": false
+    },
+    {
+      "from": true,
+      "to": true,
+      "report": null
+    },
+    {
+      "from": false,
+      "to": false,
+      "report": null
+    },
+    {
+      "from": true,
+      "to": null,
+      "report": false
+    },
+    {
+      "from": false,
+      "to": null,
+      "report": null
+    }
+  ]
+}

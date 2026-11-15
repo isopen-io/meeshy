@@ -1,0 +1,202 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import type { ConversationFlags } from '@/lib/api/preferences';
+import { installHapticsDriver, type HapticCue } from '@/lib/view/haptics';
+import { LAYER_MOTION_MS } from '@/lib/view/layer-presence';
+
+import { RowActions } from './row-actions';
+
+/**
+ * LE RETOUR MATÉRIEL FERME LE MENU DE RANGÉE, PAS LA LISTE (#6357).
+ *
+ * Mesuré sur l'émulateur Android contre staging : menu « Actions de
+ * conversation » ouvert sur `/`, `history.length` inchangé, un appui RETOUR
+ * fermait le menu ET quittait la liste pour `/settings`. Le menu Meeshy
+ * flottant, lui, consomme ce retour (`useBackDismiss`). Ces témoins portent la
+ * même loi sur le menu de rangée, par son API publique : on ouvre par le
+ * bouton, on observe l'historique et le DOM.
+ */
+
+const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+beforeAll(() => {
+  ensureHappyDomRegistered();
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+});
+
+afterAll(async () => {
+  await act(async () => {});
+  delete globals.IS_REACT_ACT_ENVIRONMENT;
+  await releaseHappyDomIfRegistered();
+});
+
+let container: HTMLDivElement;
+let root: Root;
+
+afterEach(() => {
+  act(() => {
+    root.unmount();
+  });
+  container.remove();
+});
+
+const flagsOf = (overrides: Partial<ConversationFlags> = {}): ConversationFlags => ({
+  isPinned: false,
+  isMuted: false,
+  isArchived: false,
+  ...overrides,
+});
+
+function mountRowActions(): { readonly actions: string[] } {
+  const actions: string[] = [];
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+  act(() => {
+    root.render(
+      <ul>
+        <li data-row>
+          <RowActions
+            flags={flagsOf({ isPinned: true })}
+            unread
+            magnified
+            language="fr"
+            onAction={(id) => actions.push(id)}
+          />
+        </li>
+      </ul>,
+    );
+  });
+  return { actions };
+}
+
+/** Un BOOLÉEN, jamais le nœud : un `expect(node).toBeNull()` en échec imprime
+ * tout l'objet global de happy-dom (mesuré : 20 s, test tué à 5 s). */
+/* Le menu OUVERT : celui qui SORT (`data-leaving`, le temps du fondu — #18327) n'en est plus un. */
+const menuIsOpen = (): boolean =>
+  document.body.querySelector('[role="menu"][aria-label="Actions de conversation"]:not([data-leaving])') !== null;
+
+function openMenu(): void {
+  const button = container.querySelector<HTMLButtonElement>('button[aria-label="Actions de conversation"]');
+  if (button === null) throw new Error('bouton « Actions de conversation » introuvable');
+  act(() => {
+    button.click();
+  });
+}
+
+const carriesBackDismiss = (state: unknown): boolean =>
+  typeof state === 'object' && state !== null && 'backDismiss' in state;
+
+describe('RowActions — le retour matériel consomme le menu, jamais la liste (#6357)', () => {
+  test('ouvrir le menu pose SA propre entrée d’historique', () => {
+    mountRowActions();
+    const before = window.history.length;
+
+    openMenu();
+
+    expect(menuIsOpen()).toBe(true);
+    expect(window.history.length).toBe(before + 1);
+    expect(carriesBackDismiss(window.history.state)).toBe(true);
+  });
+
+  test('popstate (retour matériel) menu ouvert ⇒ le menu se ferme', () => {
+    mountRowActions();
+    openMenu();
+    expect(menuIsOpen()).toBe(true);
+
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+
+    expect(menuIsOpen()).toBe(false);
+  });
+
+  test('refermé, le panneau SORT en fondu : encore peint, inerte, hors de la pile du retour, puis retiré (#18327)', async () => {
+    mountRowActions();
+    openMenu();
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    const leaving = document.body.querySelector('[role="menu"][aria-label="Actions de conversation"]');
+    expect(leaving?.hasAttribute('data-leaving')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(true);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, LAYER_MOTION_MS + 30));
+    });
+    expect(document.body.querySelector('[role="menu"][aria-label="Actions de conversation"]')).toBeNull();
+  });
+
+  test('menu fermé, un popstate ne touche à rien : aucune entrée n’est posée tant que le menu n’est pas ouvert', () => {
+    mountRowActions();
+    const before = window.history.length;
+
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+
+    expect(menuIsOpen()).toBe(false);
+    expect(window.history.length).toBe(before);
+  });
+});
+
+describe('RowActions — #17243 : le panneau passe AU-DESSUS du chrome fixe du haut', () => {
+  test('ouvert près du haut, le panneau couvre la bannière du joueur (z-index 40) au lieu de passer dessous', () => {
+    mountRowActions();
+    openMenu();
+    const panel = document.body.querySelector<HTMLElement>('[role="menu"]');
+    expect(Number(panel?.style.zIndex)).toBeGreaterThan(40);
+    expect(panel?.className ?? '').not.toContain('z-30');
+  });
+});
+
+describe('RowActions — le menu de la ligne, au clic droit comme à l’appui long (#8109)', () => {
+  const menuItem = (label: string): HTMLButtonElement | null =>
+    [...document.body.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((b) => b.textContent === label) ?? null;
+
+  test('#17243 — ni « Appel vocal » ni « Appel vidéo » : l’appel se passe depuis la conversation', () => {
+    mountRowActions();
+    openMenu();
+    expect(menuItem('Appel vocal')).toBeNull();
+    expect(menuItem('Appel vidéo')).toBeNull();
+    expect(menuItem('Désépingler')).not.toBeNull();
+  });
+
+  test('le menu contextuel de la ligne (clic droit, appui long) ouvre le même menu, sans le menu du navigateur', () => {
+    mountRowActions();
+    const row = container.querySelector('li[data-row]');
+    if (row === null) throw new Error('ligne introuvable');
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    act(() => {
+      row.dispatchEvent(event);
+    });
+    expect(menuIsOpen()).toBe(true);
+    expect(event.defaultPrevented).toBe(true);
+    expect(menuItem('Désépingler') !== null).toBe(true);
+  });
+
+  /**
+   * L'APPUI LONG DE LA LIGNE SE SENT COMME CELUI D'UN MESSAGE (revue #11207) :
+   * Chromium Android ouvre ce panneau par `contextmenu`, et il s'ouvrait sans
+   * la vibration que donne le menu d'un message. La pression et le seuil de
+   * 350 ms viennent avec `useLongPress` (#11211).
+   */
+  test('le menu contextuel de la ligne vibre une fois, comme celui d’un message', () => {
+    const cues: HapticCue[] = [];
+    installHapticsDriver({ cue: (name) => (cues.push(name), true), pattern: () => true });
+    try {
+      mountRowActions();
+      const row = container.querySelector('li[data-row]');
+      if (row === null) throw new Error('ligne introuvable');
+      act(() => {
+        row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+      });
+      expect(menuIsOpen()).toBe(true);
+      expect(cues).toEqual(['medium']);
+    } finally {
+      installHapticsDriver(null);
+    }
+  });
+});

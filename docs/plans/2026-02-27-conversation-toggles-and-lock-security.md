@@ -983,7 +983,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ## Task 5 : Redesign `SecurityView` — section Conversations Verrouillées
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/SecurityView.swift`
+- Modify: `apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift`
 
 ### Step 1 : Mettre à jour les `@State` variables lock (lignes ~13-18)
 
@@ -1190,7 +1190,7 @@ cd /Users/smpceo/Documents/v2_meeshy && git add \
     apps/ios/Meeshy/Features/Main/Components/ConversationLockSheet.swift \
     apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift \
     apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift \
-    apps/ios/Meeshy/Features/Main/Views/SecurityView.swift
+    apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift
 git commit -m "feat(ios): système de verrous conversations — master PIN 6ch + PIN 4ch individuel
 
 - ConversationLockManager: master PIN Keychain (6ch) + PIN Keychain par conversation (4ch)

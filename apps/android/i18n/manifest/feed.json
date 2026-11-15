@@ -1,0 +1,690 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "a11y.back",
+          "androidName": "bookmarks_back",
+          "status": "adopted"
+        },
+        {
+          "androidName": "bookmarks_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bookmarks_remove",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bookmarks_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "reels.action.bookmark",
+          "androidName": "feed_action_bookmark",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.detail.copy_link",
+          "androidName": "feed_action_copy_link",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.copy_text",
+          "androidName": "feed_action_copy_text",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.view_profile",
+          "androidName": "feed_action_view_profile",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "comment.action.delete",
+          "androidName": "feed_action_delete",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "action.pin",
+          "androidName": "feed_action_pin",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.quote",
+          "androidName": "feed_action_quote",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "comment.action.report",
+          "androidName": "feed_action_report",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.repost",
+          "androidName": "feed_action_repost",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "action.share",
+          "androidName": "feed_action_share",
+          "status": "adopted"
+        },
+        {
+          "androidName": "feed_action_unbookmark",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_bookmark",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.detail.comments",
+          "androidName": "feed_comments",
+          "status": "adopted"
+        },
+        {
+          "androidName": "feed_composer_attach_media",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_composer_media_limit",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_composer_media_unusable",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.feed.compose.open",
+          "androidName": "feed_composer_open_label",
+          "status": "adopted"
+        },
+        {
+          "androidName": "feed_composer_open_placeholder",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_composer_remove_media",
+          "status": "android-only"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.timeline.inspector.delete.cancel",
+          "androidName": "feed_delete_cancel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.audio.delete.confirm",
+          "androidName": "feed_delete_confirm",
+          "status": "adopted"
+        },
+        {
+          "androidName": "feed_delete_confirm_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_delete_confirm_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_edited",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.empty.title",
+          "androidName": "feed_empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.nearby.open",
+          "androidName": "feed_header_nearby",
+          "status": "adopted"
+        },
+        {
+          "androidName": "feed_header_reels",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_hidden_images",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_image_description",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.feed.post.like",
+          "androidName": "feed_like",
+          "status": "adopted"
+        },
+        {
+          "androidName": "feed_location_open",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.location.shared",
+          "androidName": "feed_location_shared",
+          "status": "adopted"
+        },
+        {
+          "androidName": "feed_media_next",
+          "status": "android-only"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "%lld/%lld",
+          "androidName": "feed_media_page_counter",
+          "status": "adopted"
+        },
+        {
+          "androidName": "feed_media_previous",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_media_save_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_media_saved",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.new-posts.count",
+          "androidName": "feed_new_posts",
+          "status": "adopted",
+          "kind": "plurals",
+          "fillMissingQuantities": true
+        },
+        {
+          "androidName": "feed_open_media",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_pinned",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_post_options",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_post_reach_a11y",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_cancel",
+          "androidName": "feed_quote_cancel",
+          "status": "adopted"
+        },
+        {
+          "androidName": "feed_quote_hint",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.repost",
+          "androidName": "feed_quote_submit",
+          "status": "adopted"
+        },
+        {
+          "androidName": "feed_quote_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "content.type.reel",
+          "androidName": "feed_reel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.user.reason.harassment",
+          "androidName": "feed_report_reason_harassment",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "report.reason.hate_speech",
+          "androidName": "feed_report_reason_hate_speech",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.user.reason.impersonation",
+          "androidName": "feed_report_reason_impersonation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.user.reason.inappropriate",
+          "androidName": "feed_report_reason_inappropriate",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.user.reason.other",
+          "androidName": "feed_report_reason_other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.user.reason.spam",
+          "androidName": "feed_report_reason_spam",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "report.reason.violence",
+          "androidName": "feed_report_reason_violence",
+          "status": "adopted"
+        },
+        {
+          "androidName": "feed_report_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.repost.likes_count",
+          "androidName": "feed_repost_likes_count",
+          "status": "adopted",
+          "kind": "plurals",
+          "fillMissingQuantities": true
+        },
+        {
+          "androidName": "feed_repost_more_media",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_repost_open",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_repost_quoted",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.repost.success",
+          "androidName": "feed_repost_reposted",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.reply.story",
+          "androidName": "feed_repost_story",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.reposts",
+          "androidName": "feed_reposts",
+          "status": "adopted"
+        },
+        {
+          "androidName": "feed_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "userIdentity.translation.available",
+          "androidName": "feed_translated",
+          "status": "adopted"
+        },
+        {
+          "androidName": "feed_unbookmark",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.message.unknown_sender",
+          "androidName": "feed_unknown_author",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.comment.unlike",
+          "androidName": "feed_unlike",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.back",
+          "androidName": "nearby_back",
+          "status": "adopted"
+        },
+        {
+          "androidName": "nearby_distance_km",
+          "status": "android-only"
+        },
+        {
+          "androidName": "nearby_distance_meters",
+          "status": "android-only"
+        },
+        {
+          "androidName": "nearby_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "nearby_location_unavailable",
+          "status": "android-only"
+        },
+        {
+          "androidName": "nearby_permission_action",
+          "status": "android-only"
+        },
+        {
+          "androidName": "nearby_permission_message",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.nearby.empty.retry",
+          "androidName": "nearby_retry",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.nearby",
+          "androidName": "nearby_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.comment.cancel_reply",
+          "androidName": "post_comments_cancel_reply",
+          "status": "adopted"
+        },
+        {
+          "androidName": "post_comments_delete_action",
+          "status": "android-only"
+        },
+        {
+          "androidName": "post_comments_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "post_comments_hide_replies",
+          "status": "android-only"
+        },
+        {
+          "androidName": "post_comments_input_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "post_comments_load_more",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "comments.reply.button",
+          "androidName": "post_comments_reply_action",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "comments.reply.button",
+          "androidName": "post_comments_reply_badge",
+          "status": "adopted"
+        },
+        {
+          "androidName": "post_comments_reply_hint",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.bubble.replyTo",
+          "androidName": "post_comments_replying_to",
+          "status": "adopted"
+        },
+        {
+          "androidName": "post_comments_replying_to_generic",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.feedback.send",
+          "androidName": "post_comments_send",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "activation.email.sending",
+          "androidName": "post_comments_sending",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.post.comments",
+          "androidName": "post_comments_title",
+          "status": "adopted"
+        },
+        {
+          "androidName": "post_comments_view_all_replies",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.comment.show_replies",
+          "androidName": "post_comments_view_replies",
+          "status": "adopted",
+          "kind": "plurals",
+          "fillMissingQuantities": true
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.detail.unavailable.back",
+          "androidName": "post_detail_back",
+          "status": "adopted"
+        },
+        {
+          "androidName": "post_detail_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "post_detail_not_found",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.post",
+          "androidName": "post_detail_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_close",
+          "androidName": "status_composer_close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "%lld/%lld",
+          "androidName": "status_composer_counter",
+          "status": "adopted"
+        },
+        {
+          "androidName": "status_composer_mood_label",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "status.composer.mood.question",
+          "androidName": "status_composer_mood_question",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "status.composer.bare.title",
+          "androidName": "status_composer_bare_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "status.composer.bare.add",
+          "androidName": "status_composer_bare_add",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "status.composer.bare.publish",
+          "androidName": "status_composer_bare_publish",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "status.composer.emoji.more",
+          "androidName": "status_composer_emoji_more",
+          "status": "adopted"
+        },
+        {
+          "androidName": "status_composer_emoji_too_long",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.socle.publish",
+          "androidName": "status_composer_publish",
+          "status": "adopted"
+        },
+        {
+          "androidName": "status_composer_republishing",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "communityLink.status",
+          "androidName": "status_composer_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "post.visibility.community",
+          "androidName": "status_composer_visibility_community",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "post.visibility.friends",
+          "androidName": "status_composer_visibility_friends",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "post.visibility.private",
+          "androidName": "status_composer_visibility_private",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "post.visibility.public",
+          "androidName": "status_composer_visibility_public",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.back",
+          "androidName": "user_posts_back",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.posts.empty",
+          "androidName": "user_posts_empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bookmarks.filter.posts",
+          "androidName": "user_posts_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.viewer.views.title",
+          "androidName": "post_detail_viewers",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "mood.spotlight.close",
+          "androidName": "mood_spotlight_close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "mood.spotlight.loading",
+          "androidName": "mood_spotlight_loading",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "mood.spotlight.unavailable",
+          "androidName": "mood_spotlight_unavailable",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "mood.spotlight.reply.sent",
+          "androidName": "mood_spotlight_reply_sent",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "mood.spotlight.reply.failed",
+          "androidName": "mood_spotlight_reply_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "mood.spotlight.reply.placeholder",
+          "androidName": "mood_spotlight_reply_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "mood.spotlight.reply.send",
+          "androidName": "mood_spotlight_reply_send",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "hashtag.results.empty",
+          "androidName": "hashtag_results_empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.nearby.empty.denied.action",
+          "androidName": "nearby_denied_action",
+          "status": "adopted"
+        },
+        {
+          "androidName": "nearby_denied_detail",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

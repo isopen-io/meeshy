@@ -26,6 +26,35 @@ backend/node_modules/
 # production
 /build
 **/*/*.d.*
+# ... sauf les déclarations ÉCRITES À LA MAIN, qui sont des sources.
+# La v3.1 en a besoin, et l'oubli s'est payé cash. `apps/web-v2`
+# n'entrait dans le type-check de `ci.yml` que depuis le renommage
+# (2026-09-07) : à sa PREMIÈRE exécution, la CI a rendu quatre TS2307/TS7016
+# sur des fichiers présents dans l'arbre de travail et absents du clone.
+#
+#   · `src/bun-test.d.ts` déclare le module `bun:test` qu'importent les trois
+#     suites de tests — il n'avait JAMAIS été commité, depuis la création de
+#     l'application ;
+#   · `scripts/lib/institutional-routes.d.mts` type la source unique des
+#     cinq adresses institutionnelles, que `vite.config.ts` importe.
+#
+# Le défaut ne peut pas se voir localement : l'arbre de travail porte les
+# fichiers, seul un clone FRAIS en manque — et `git status` ne dit rien, un
+# fichier ignoré n'y figurant pas. `apps/web/scripts/check-git-tracking.mjs`
+# le fige désormais, pour la classe entière et pas seulement les `.d.*`.
+!apps/web/src/*.d.ts
+!apps/web/src/lib/*.d.ts
+!apps/web/scripts/*.d.mts
+!apps/web/scripts/lib/*.d.mts
+# La déclaration de la colle du pont libsignal (#17114), écrite par
+# `packages/libsignal-wasm/build.sh` avec le binaire : sans elle, un clone
+# frais rend TS7016 sur `libsignal-bridge.ts`.
+!apps/web/src/lib/e2ee/libsignal/libsignal_wasm.d.ts
+# Même classe côté gateway (#6160) : `bun-test-shim.d.ts` déclare le module
+# `bun:test` qu'importe `bun-preload.ts` (chargé par `bunfig.toml`, jamais
+# par ts-jest) — sans lui, `tsc -p tsconfig.test.json` lève TS2307 sur un
+# fichier présent dans l'arbre de travail et absent d'un clone frais.
+!services/gateway/src/__tests__/bun-test-shim.d.ts
 **/*/build/
 **/*/dist/
 **/*/*.*.map
@@ -101,6 +130,8 @@ services/translator/models/*
 */**/cache
 !packages/MeeshySDK/Sources/MeeshySDK/Cache/
 !packages/MeeshySDK/Tests/MeeshySDKTests/Cache/
+# Android : les paquets Kotlin `cache` (sdk-core, core:model) sont du code source, pas un cache d'outil
+!apps/android/**/cache/
 # Logs
 *.log
 logs/
@@ -182,11 +213,30 @@ post-*
 # individually rather than narrowing the pattern blind, since its original intent
 # (likely a stray root-level artifact) is undocumented.
 !packages/shared/types/post-reference.ts
+!services/gateway/src/__tests__/unit/post-service-mocks.ts
+!services/gateway/src/__tests__/unit/post-service-geo-discoverability.test.ts
 !packages/shared/fixtures/canvas-v3/post-carousel-sound-library.json
 !packages/shared/fixtures/canvas-v3/post-sound-original.json
-!apps/web/__tests__/components/post-card-repost-attribution.test.tsx
-!apps/web/__tests__/components/post-detail-repost-attribution.test.tsx
-!apps/web/__tests__/components/post-detail-background-sound.test.tsx
+!apps/web/src/lib/api/post-media-upload.ts
+!apps/web/src/lib/api/post-media-upload.test.ts
+!services/gateway/src/services/notifications/post-media-thumbnail.ts
+!services/gateway/src/services/notifications/fanout/post-mention.ts
+# 2026-09-21 (#7284) : la garde d'INVENTAIRE des hôtes de `FeedPostCard`
+# vivait sur disque, verte en local, et sur AUCUNE branche — le motif
+# ci-dessus l'avait avalée à sa naissance. Une garde qu'aucun dépôt ne
+# porte ne garde personne.
+!apps/web/src/routes/post-card-hosts.test.ts
+# 2026-09-22 (#7449) : le composeur de publication du fil et son témoin. Même
+# motif, même piège — `post-*` matche par BASENAME à toute profondeur, et il
+# aurait avalé l'écran ENTIER : gates verts en local, route introuvable sur un
+# clone frais. `check-git-tracking.mjs` l'a attrapé avant le premier commit,
+# ce qui est exactement ce pour quoi il a été écrit.
+!apps/web/src/routes/post-compose.tsx
+!apps/web/src/routes/post-compose.test.tsx
+# 2026-09-25 (#6278, revue-correction — la confirmation avant un repost) :
+# même piège, même motif « post-* » avalant par BASENAME à toute profondeur.
+!apps/web/src/components/post-repost-confirm.tsx
+!apps/web/src/components/post-repost-confirm.test.tsx
 
 # Development runtime (dev.sh)
 .pids/
@@ -261,6 +311,9 @@ fastlane/screenshots/**/*.png
 apps/ios/screenshots/
 .claude/worktrees/
 **/.claude/settings.json
+# La racine porte les réglages PARTAGÉS de l'équipe (le hook SessionStart, #7711).
+# Les permissions personnelles vont dans settings.local.json, toujours ignoré.
+!/.claude/settings.json
 **/.claude/settings.local.json
 fastlane/test_output
 fastlane/ui_test_output
@@ -289,8 +342,6 @@ apps/ios/Meeshy/Resources/MLModels/
 GoogleService-Info.plist
 google-services.json
 # Voice cloning output files
-apps/ios/scripts/voice_cloning_output/*.wav
-apps/ios/scripts/voice_cloning_output/history/**/*.wav
 *.backup
 infrastructure/docker/compose/.env.staging
 secrets/
@@ -308,9 +359,6 @@ TEST_NOTIFICATION_SYSTEM.md
 # Anciens fichiers de service (backups)
 services/gateway/src/routes/notifications.old.ts
 services/gateway/src/services/notifications/NotificationServiceExtensions.ts.old
-
-# Dossier de debug temporaire
-apps/web/components/debug/
 
 # Local coverage reports from test-coverage-routine
 services/gateway/coverage-p2/
@@ -339,15 +387,44 @@ match_key.pub
 # sur apps/ios/ laissait un .andp/ de racine traçable — donc committable.
 .andp/
 secrets.yml
-apps/ios/andp.yml
+# apps/ios/andp.yml est SUIVI depuis le 2026-10-09 (#9752) : il ne porte aucun
+# secret (cibles de build, politique de conformité, fiche App Store dont les
+# valeurs sensibles passent par des clés `_env`). La release ne le réécrit
+# plus (meeshy.sh ne le crée que s'il manque).
 
 apps/ios/SourcePackages/
 .superpowers/
+/.claude/projects/
 tasks/screenshots/
 
 # iOS test result bundles (xcresult, generated by xcodebuild test)
 apps/ios/test-results*/
 
+# apps/web : sorties de test (Playwright) et bundles de route générés — déjà
+# exclus du témoin de suivi de l'application (`scripts/verifie-suivi-git.mjs`
+# § HORS_SUJET), qui manquait à la racine.
+apps/web/test-results/
+apps/web/.rt/
+
 # publish-monthly-digest : annonces + état runtime (ne pas committer)
 scripts/announcements/
 apps/android/tasks/webrtc-parity/
+
+# Pilotage — page Avancement générée (scripts/pilotage), jamais committée
+/site/
+scripts/pilotage/site/
+scripts/pilotage/data.json
+
+# Kit marketing — rendus générés (scripts/marketing-kit/render.mjs), jamais committés (#7727, #7728)
+scripts/marketing-kit/out/
+apps/ios/fastlane/screenshots/
+
+# Production marketing (vidéos, voix, captures) — hors dépôt, volontairement
+/Marketing/
+
+# Médias de la fiche App Store : produits par scripts/marketing-kit/vitrine/monter.mjs, envoyés par andp, jamais versionnés (#9807, #9811)
+apps/ios/fastlane/metadata/*/previews/
+apps/ios/fastlane/metadata/*/product_page_header/
+apps/ios/fastlane/metadata/*/search_results/
+apps/ios/fastlane/metadata/*/screenshots/
+tools/ml-conversion/voice_cloning_output/

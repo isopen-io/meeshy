@@ -1,7 +1,7 @@
 # Iteration-181i — LinksHubView adaptive surfaces + VoiceOver cleanup
 
 **Date**: 2026-07-20
-**Surface**: `apps/ios/Meeshy/Features/Main/Views/LinksHubView.swift` (link hub, deep link `/links`)
+**Surface**: `apps/ios/Meeshy/Features/Links/Views/LinksHubView.swift` (link hub, deep link `/links`)
 **Scope**: iOS only · 1 file · 0 logic · 0 new tests
 **Base**: `main` HEAD `5ddec12`
 

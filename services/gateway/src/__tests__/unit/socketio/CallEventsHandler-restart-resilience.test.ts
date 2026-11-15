@@ -65,7 +65,12 @@ jest.mock('../../../services/PushNotificationService', () => ({
 
 jest.mock('../../../middleware/validation', () => ({
   validateSocketEvent: jest.fn(),
-  isValidationFailure: jest.fn((r) => !r.success),
+  // Annoté sur la forme réelle (`SocketValidationResult<T>`, middleware/validation.ts)
+  // plutôt que laissé inférer : sans contexte le paramètre d'un jest.fn() dans une
+  // factory jest.mock() retombe sur `unknown`, et `r.success` y est un TS2339.
+  // L'annotation de type est effacée à la compilation — aucune référence hors
+  // portée n'atteint le runtime de la factory.
+  isValidationFailure: jest.fn((r: SocketValidationResult<unknown>) => !r.success),
 }));
 
 jest.mock('../../../utils/socket-rate-limiter', () => ({
@@ -100,9 +105,10 @@ jest.mock('../../../utils/logger', () => ({
 
 import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
-import { validateSocketEvent } from '../../../middleware/validation';
+import { validateSocketEvent, type SocketValidationResult } from '../../../middleware/validation';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CallEndReason } from '@meeshy/shared/prisma/client';
+import { CALL_REJOIN_GRACE_MS } from '@meeshy/shared/types/call-rules';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -113,7 +119,7 @@ const CALL_ID = '507f1f77bcf86cd799439011';
 const CONV_ID = '507f1f77bcf86cd799439012';
 const PARTICIPANT_ID = 'conv-participant-abc';
 const PARTICIPANT_DBID = 'call-participant-row-abc';
-const GRACE_MS = 30_000;
+const GRACE_MS = CALL_REJOIN_GRACE_MS;
 const PRE_ANSWER_GRACE_MS = 10_000;
 
 // ---------------------------------------------------------------------------
@@ -152,6 +158,7 @@ function makePrisma(overrides: {
     },
     participant: {
       findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+      findMany: jest.fn<any>().mockResolvedValue([{ id: PARTICIPANT_ID }]),
     },
     $transaction: jest.fn<any>(async (fn: any) => fn({
       callParticipant: { update: jest.fn(), count: jest.fn<any>().mockResolvedValue(0) },
@@ -226,6 +233,28 @@ describe('CallEventsHandler — restart / disconnect resilience', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  describe('la grâce de reprise dure 60 s (#9111)', () => {
+    it('un appel décroché tient encore à 31 s — l’ancienne grâce de 30 s ne le termine plus', async () => {
+      const prisma = makePrisma({ activeParticipations: [makeParticipation('active')] });
+      const { handlers } = setup({ prisma });
+
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(31_000);
+
+      expect(mockLeaveCall).not.toHaveBeenCalled();
+    });
+
+    it('sans retour, la grâce expirée sort le participant', async () => {
+      const prisma = makePrisma({ activeParticipations: [makeParticipation('active')] });
+      const { handlers } = setup({ prisma });
+
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(CALL_REJOIN_GRACE_MS + 100);
+
+      expect(mockLeaveCall).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('graceful shutdown', () => {
@@ -435,7 +464,11 @@ describe('CallEventsHandler — restart / disconnect resilience', () => {
 
     it('swallows a DB error during the grace-expiry re-check (no crash, no end)', async () => {
       const prisma = makePrisma({ activeParticipations: [makeParticipation('active')] });
-      (prisma.callParticipant.findUnique as jest.Mock).mockRejectedValue(new Error('DB down'));
+      // `jest.Mock` sans générique retombe sur `UnknownFunction` : `mockRejectedValue`
+      // y attend alors un paramètre `never`. `jest.Mock<any>` est l'idiome déjà en
+      // place dans tout le dépôt pour ce même re-cast d'une méthode Prisma typée
+      // (MaintenanceService.test.ts, AffiliateTrackingService.test.ts, etc.).
+      (prisma.callParticipant.findUnique as jest.Mock<any>).mockRejectedValue(new Error('DB down'));
       const { handlers } = setup({ prisma });
 
       await handlers['disconnect']();

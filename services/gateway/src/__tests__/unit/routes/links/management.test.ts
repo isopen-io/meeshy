@@ -1,6 +1,17 @@
 /**
  * Unit tests for links management routes (management.ts)
- * Tests PUT /links/:conversationShareLinkId, PATCH /links/:linkId.
+ * Tests PATCH /links/:linkId — la seule porte de mise à jour d'un lien.
+ *
+ * `PUT /links/:conversationShareLinkId` a été RETIRÉE (#4188) : jumelle du
+ * `PATCH` exigeant ADMIN là où celui-ci exige MODERATOR. Le seuil EFFECTIF
+ * d'une règle est celui de sa porte la plus permissive, donc cette ADMIN était
+ * DÉCORATIVE — elle donnait l'illusion d'un seuil que personne n'avait. Aucun
+ * client n'émettait de `PUT` vers `/links`.
+ *
+ * Note de méthode : le bloc « PUT — link not found » attendait un 404 et serait
+ * resté VERT après le retrait, la route absente rendant elle aussi 404 — un
+ * anti-témoin parfait. C'est pourquoi l'absence est verrouillée sur la TABLE de
+ * routes (`dead-doors-are-not-mounted.test.ts`) et non sur un code HTTP.
  *
  * @jest-environment node
  */
@@ -96,127 +107,6 @@ async function buildApp(opts: {
   await app.ready();
   return { app, prisma };
 }
-
-// ─── PUT /links/:conversationShareLinkId — auth ───────────────────────────────
-
-describe('PUT /links/:id — not registered user', () => {
-  it('returns 403 when auth context has no registeredUser', async () => {
-    const { app } = await buildApp({ auth: 'unauthenticated' });
-    const res = await app.inject({
-      method: 'PUT', url: `/links/${LINK_DB_ID}`,
-      payload: { name: 'Updated' },
-    });
-    expect(res.statusCode).toBe(403);
-    await app.close();
-  });
-});
-
-// ─── PUT /links/:conversationShareLinkId — not found ─────────────────────────
-
-describe('PUT /links/:id — link not found', () => {
-  it('returns 404 when link does not exist', async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue(null);
-    const { app } = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'PUT', url: `/links/${LINK_DB_ID}`,
-      payload: { name: 'Updated' },
-    });
-    expect(res.statusCode).toBe(404);
-    await app.close();
-  });
-});
-
-// ─── PUT /links/:conversationShareLinkId — forbidden ─────────────────────────
-
-describe('PUT /links/:id — not creator and not admin', () => {
-  it('returns 403 when user is neither creator nor conversation admin', async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue({
-      ...mockShareLink,
-      createdBy: OTHER_USER_ID,
-      conversation: { participants: [] },
-    });
-    const { app } = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'PUT', url: `/links/${LINK_DB_ID}`,
-      payload: { name: 'Updated' },
-    });
-    expect(res.statusCode).toBe(403);
-    await app.close();
-  });
-});
-
-// ─── PUT /links/:conversationShareLinkId — success as creator ─────────────────
-
-describe('PUT /links/:id — success as link creator', () => {
-  it('returns 200 when user is the link creator', async () => {
-    const { app } = await buildApp();
-    const res = await app.inject({
-      method: 'PUT', url: `/links/${LINK_DB_ID}`,
-      payload: { name: 'Updated', isActive: false },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
-    await app.close();
-  });
-});
-
-// ─── PUT /links/:conversationShareLinkId — success as conversation admin ──────
-
-describe('PUT /links/:id — success as conversation admin', () => {
-  it('returns 200 when user is a conversation admin', async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue({
-      ...mockShareLink,
-      createdBy: OTHER_USER_ID,
-      conversation: { participants: [{ userId: USER_ID, isActive: true, role: 'admin' }] },
-    });
-    const { app } = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'PUT', url: `/links/${LINK_DB_ID}`,
-      payload: { name: 'Updated' },
-    });
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-});
-
-// ─── PUT /links/:conversationShareLinkId — success as conversation creator ────
-
-describe('PUT /links/:id — success as conversation creator', () => {
-  it('returns 200 when user has creator role in conversation', async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue({
-      ...mockShareLink,
-      createdBy: OTHER_USER_ID,
-      conversation: { participants: [{ userId: USER_ID, isActive: true, role: 'creator' }] },
-    });
-    const { app } = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'PUT', url: `/links/${LINK_DB_ID}`,
-      payload: { name: 'Updated' },
-    });
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-});
-
-// ─── PUT /links/:conversationShareLinkId — DB error ──────────────────────────
-
-describe('PUT /links/:id — DB error', () => {
-  it('returns 500 when update throws', async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.update = jest.fn<any>().mockRejectedValue(new Error('DB failure'));
-    const { app } = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'PUT', url: `/links/${LINK_DB_ID}`,
-      payload: { name: 'Updated' },
-    });
-    expect(res.statusCode).toBe(500);
-    await app.close();
-  });
-});
 
 // ─── PATCH /links/:linkId — not registered user ───────────────────────────────
 
@@ -319,23 +209,6 @@ describe('PATCH /links/:linkId — DB error', () => {
   });
 });
 
-// ─── PUT /links/:id — Zod validation error (line 153) ────────────────────────
-// maxUses: 1.5 passes AJV (type: number, minimum: 1) but fails Zod (.int())
-
-describe('PUT /links/:id — Zod validation error', () => {
-  it('returns 400 when body fails Zod validation (non-integer maxUses)', async () => {
-    const { app } = await buildApp();
-    const res = await app.inject({
-      method: 'PUT', url: `/links/${LINK_DB_ID}`,
-      payload: { maxUses: 1.5 },
-    });
-    expect(res.statusCode).toBe(400);
-    await app.close();
-  });
-});
-
-// ─── PATCH /links/:linkId — Zod validation error (line 301) ──────────────────
-// maxUses: 1.5 passes AJV (type: number, minimum: 1) but fails Zod (.int())
 
 describe('PATCH /links/:linkId — Zod validation error', () => {
   it('returns 400 when body fails Zod validation (non-integer maxUses)', async () => {

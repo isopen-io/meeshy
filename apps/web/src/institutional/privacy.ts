@@ -1,0 +1,406 @@
+import type { ContentPage } from './type';
+
+/**
+ * « Politique de confidentialité » — le contenu de
+ * `apps/web/locales/fr/privacy.json`, mot pour mot, dans l'ordre où la page
+ * legacy le rend.
+ *
+ * `print` n'entre pas, pour la raison donnée dans `app/terms/contenu.ts` : un
+ * bouton d'impression sur une page sans JavaScript serait inerte.
+ * `footer.home` non plus — le retour à l'accueil est porté par l'en-tête de
+ * chrome, à la même place sur les sept pages, et le répéter en bas dédoublerait
+ * un repère.
+ *
+ * ET AUCUNE ACCROCHE. Le catalogue n'en porte pas — la page legacy affiche son
+ * titre, sa date, puis sa section « Introduction ». Lui en fabriquer une en
+ * reprenant `introduction.content` faisait lire DEUX FOIS le même paragraphe,
+ * l'un sous l'autre : c'est ce que le rendu a montré, et ce que le témoin
+ * « aucune page ne répète son accroche en section » interdit désormais. La
+ * description `<meta>`, elle, reste alimentée par ce texte — un résumé pour un
+ * robot n'est pas un doublon pour un lecteur.
+ */
+export const PAGE_PRIVACY: ContentPage = {
+  title: 'Politique de Confidentialité',
+  mention: 'Dernière mise à jour : 22 octobre 2026',
+  description: 'Chez Meeshy, nous prenons votre vie privée au sérieux. Cette politique explique comment nous collectons, utilisons et protégeons vos informations personnelles conformément au RGPD.',
+  mee: { sticker: 'mee-rougit', caption: 'Mee se cache les yeux : vos conversations ne regardent que vous.' },
+  sections: [
+    {
+      title: 'Introduction',
+      blocks: [
+        {
+          kind: 'paragraphes',
+          body: [
+            'Chez Meeshy, nous prenons votre vie privée au sérieux. Cette politique explique comment nous collectons, utilisons et protégeons vos informations personnelles conformément au RGPD.',
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Informations Collectées',
+      blocks: [
+        {
+          kind: 'cartes',
+          cards: [
+            {
+              title: 'Informations de Profil',
+              items: [
+                "Nom, prénom et nom d'utilisateur",
+                'Adresse email',
+                'Numéro de téléphone (optionnel)',
+                'Date de naissance (facultative, voir « Âge et Mineurs »)',
+                'Photo de profil et bannière (optionnels)',
+              ],
+            },
+            {
+              title: 'Préférences Linguistiques',
+              items: [
+                'Langue système principale',
+                'Langues additionnelles (optionnel)',
+                'Préférences de traduction automatique',
+              ],
+            },
+            {
+              title: 'Sécurité de Votre Compte',
+              items: [
+                'Mot de passe chiffré de manière sécurisée',
+                'Double authentification (si activée)',
+                'Clés de chiffrement pour protéger vos conversations privées',
+                'Sessions actives sur vos appareils',
+                'Journal des connexions pour votre sécurité',
+              ],
+            },
+            {
+              title: 'Informations Techniques',
+              items: [
+                'Adresse IP lors des connexions',
+                'Localisation approximative (ville, pays)',
+                "Type d'appareil et navigateur",
+                'Fuseau horaire',
+              ],
+            },
+            {
+              title: 'Données Vocales',
+              items: [
+                'Votre consentement pour utiliser les fonctionnalités vocales',
+                'Enregistrements audio (si vous utilisez les fonctions vocales)',
+                "Vérification de l'âge (pour certaines fonctionnalités)",
+              ],
+            },
+            {
+              title: 'Messagerie et Traduction',
+              items: [
+                'Vos messages et leurs traductions',
+                'Langues utilisées dans vos conversations',
+                'Transcriptions audio (si activées)',
+                'Historique de vos conversations',
+              ],
+            },
+            {
+              title: 'Vos Préférences',
+              items: [
+                'Paramètres de confidentialité',
+                'Paramètres audio et vidéo',
+                'Préférences de notifications',
+                "Paramètres d'affichage (thème, langue)",
+              ],
+            },
+            {
+              title: 'Activité',
+              items: [
+                'Statut en ligne et dernière activité',
+                'Liste des utilisateurs bloqués',
+                'Vos conversations et communautés',
+                'Mentions et réactions',
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Utilisation de Vos Données',
+      blocks: [
+        {
+          kind: 'cartes',
+          cards: [
+            {
+              title: 'Fourniture du service',
+              body: 'Traduction en temps réel de vos messages et fonctionnement de toutes les fonctionnalités',
+            },
+            {
+              title: 'Amélioration',
+              body: "Développer de nouvelles fonctionnalités et améliorer l'expérience",
+            },
+            { title: 'Support', body: 'Répondre à vos questions et résoudre les problèmes' },
+            { title: 'Sécurité', body: 'Protéger votre compte contre les abus et la fraude' },
+            {
+              title: 'Communication',
+              body: 'Vous tenir informé des nouveautés et changements importants',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Âge et Mineurs',
+      blocks: [
+        {
+          kind: 'paragraphes',
+          body: [
+            "Meeshy est réservé aux personnes de 13 ans et plus. Une date de naissance indiquant moins de 13 ans est refusée et n'est pas enregistrée.",
+            "Votre date de naissance vous est demandée après l'inscription, et sa déclaration est facultative : vous pouvez passer cette étape.",
+            "Si vous la déclarez, elle sert uniquement à calculer votre tranche d'âge, à chaque fois que c'est nécessaire, sans qu'aucun autre indicateur ne soit conservé : Meeshy Global n'est ouverte en écriture qu'à partir de 18 ans. De 13 à 17 ans, vous pouvez la lire sans y écrire, et l'écriture s'ouvre d'elle-même le jour de vos 18 ans.",
+          ],
+        },
+      ],
+    },
+    {
+      title: "Votre Carnet d'Adresses",
+      blocks: [
+        {
+          kind: 'paragraphes',
+          body: [
+            "Si vous l'autorisez — et seulement dans ce cas —, Meeshy envoie à nos serveurs les numéros de téléphone, les adresses e-mail et les noms tels que vous les avez enregistrés dans le carnet d'adresses de votre téléphone. L'autorisation se retire à tout moment dans les réglages du téléphone : plus rien n'est envoyé ensuite.",
+          ],
+        },
+        {
+          kind: 'cartes',
+          cards: [
+            {
+              title: 'Pourquoi',
+              body: "Retrouver ceux de vos contacts qui sont déjà sur Meeshy, et vous prévenir quand l'un d'eux rejoint Meeshy. Seuls les numéros et e-mails vérifiés par leur titulaire servent à ce rapprochement, et l'annonce d'une arrivée ne transmet jamais le numéro ni l'e-mail qui a permis de la reconnaître.",
+            },
+            {
+              title: 'Ce que nous ne faisons pas',
+              body: "Personne n'est contacté à votre place : aucun SMS, aucun e-mail, aucune invitation n'est envoyé à vos contacts. Votre carnet ne sert à rien d'autre, et il n'est ni vendu ni partagé.",
+            },
+            {
+              title: 'Conservation',
+              body: "Votre carnet est conservé tant que votre compte existe, pour que l'arrivée d'un contact puisse vous être annoncée. Un contact que vous retirez de votre téléphone disparaît de nos serveurs à la synchronisation complète suivante.",
+            },
+            {
+              title: 'Effacement',
+              body: "Supprimer votre compte efface aussi votre carnet synchronisé : à l'issue de la suppression de votre compte, il part de nos serveurs avec la trace des arrivées qui vous ont été annoncées, vos notifications, et les annonces de votre propre arrivée faites à vos contacts.",
+            },
+          ],
+        },
+        {
+          kind: 'accent',
+          body: "Vous ne voulez pas qu'on vous retrouve par votre numéro ou votre e-mail ? Activez « Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail » dans Paramètres > Confidentialité : vos contacts ne vous retrouveront plus ainsi et ne seront pas prévenus de votre arrivée.",
+        },
+      ],
+    },
+    {
+      title: 'Protection de Vos Données',
+      blocks: [
+        {
+          kind: 'cartes',
+          cards: [
+            {
+              title: 'Chiffrement de Vos Conversations',
+              body: 'Meeshy propose plusieurs niveaux de protection selon vos besoins : chiffrement de bout en bout (personne, même pas nous, ne peut lire vos messages), chiffrement serveur (vos messages sont protégés sur nos serveurs), ou conversations publiques. Toutes les communications sont sécurisées pendant leur transmission sur Internet.',
+            },
+            {
+              title: 'Utilisateurs Sans Compte',
+              body: 'Si vous utilisez Meeshy sans créer de compte, vos messages ne peuvent bénéficier que du chiffrement serveur. Pour une protection maximale, créez un compte et activez le chiffrement de bout en bout.',
+            },
+            {
+              title: 'Stockage Sécurisé',
+              body: 'Vos données sont stockées sur des serveurs sécurisés en Europe avec des sauvegardes régulières. Votre mot de passe est chiffré et ne peut jamais être lu en clair. Vos clés de chiffrement privées sont protégées.',
+            },
+            {
+              title: 'Traitement Interne',
+              body: "Les traductions sont effectuées directement sur nos serveurs sécurisés. Aucune donnée n'est envoyée à des services tiers comme Google ou Microsoft pour la traduction. Nous contrôlons tout le processus.",
+            },
+            {
+              title: 'Journal de Sécurité',
+              body: 'Nous conservons un historique de tous les événements de sécurité de votre compte : connexions, changements de mot de passe, activation de la double authentification. Vous pouvez consulter cet historique à tout moment dans vos paramètres.',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Partage de Vos Données',
+      blocks: [
+        {
+          kind: 'paragraphes',
+          body: [
+            'Nous ne vendons JAMAIS vos données personnelles. Nous ne partageons vos données que dans les cas suivants :',
+          ],
+        },
+        {
+          kind: 'list',
+          items: [
+            'Avec les autres participants de vos conversations (vos messages et traductions)',
+            'Avec votre consentement explicite (export de données, partage de profil)',
+            'Pour respecter nos obligations légales (réquisitions judiciaires)',
+            'Avec nos sous-traitants techniques (hébergement, e-mails, SMS, notifications, assistant conversationnel), listés dans la section suivante, qui ne traitent vos données que pour notre compte',
+            'En cas de fusion ou acquisition (vous serez notifié au préalable)',
+          ],
+        },
+        {
+          kind: 'accent',
+          body: "Aucune donnée n'est partagée avec des services tiers pour la traduction. Tout est fait en interne sur nos serveurs.",
+        },
+      ],
+    },
+    {
+      title: 'Nos Sous-traitants',
+      blocks: [
+        {
+          kind: 'paragraphes',
+          body: [
+            "Pour faire fonctionner Meeshy, nous confions certaines données à des prestataires qui les traitent pour notre compte et selon nos instructions. Certains ne sont sollicités que selon la configuration de notre service : nous les citons tous.",
+          ],
+        },
+        {
+          kind: 'cartes',
+          cards: [
+            {
+              title: 'Hébergement',
+              body: "Nos serveurs hébergent votre compte, vos messages et vos fichiers. La traduction, la transcription et la synthèse vocale y sont calculées, sans service tiers.",
+            },
+            {
+              title: 'E-mails',
+              body: "Brevo (France), et selon la configuration SendGrid ou Mailgun (États-Unis), envoient les e-mails de compte et de sécurité. Ils reçoivent votre adresse e-mail, votre nom et le contenu de l'e-mail.",
+            },
+            {
+              title: 'SMS',
+              body: "Brevo (France), Twilio ou Vonage (États-Unis), selon la configuration, envoient les codes de vérification. Ils reçoivent votre numéro de téléphone et le texte du SMS.",
+            },
+            {
+              title: 'Notifications',
+              body: "Google Firebase Cloud Messaging (Android et navigateur) et Apple Push Notification service (iPhone), aux États-Unis, acheminent les notifications. Ils reçoivent le jeton de votre appareil et le contenu de la notification — l'aperçu d'un message, jamais celui d'un message éphémère, à vue unique ou flouté.",
+            },
+            {
+              title: 'Assistant conversationnel',
+              body: "Selon la configuration, OpenAI ou Anthropic (États-Unis) fournissent le modèle de langage de l'assistant de Meeshy. Ils reçoivent le texte des messages des conversations de groupe, des chaînes et des conversations publiques où l'assistant est actif.",
+            },
+            {
+              title: 'Reconnaissance vocale de votre appareil',
+              body: "Pendant un appel sous-titré, votre voix est transcrite par le service de reconnaissance vocale de votre téléphone ou de votre navigateur, souvent fourni par Google ou Apple, qui applique ses propres conditions.",
+            },
+          ],
+        },
+        {
+          kind: 'accent',
+          body: "Votre localisation approximative (ville, pays) est déduite de votre adresse IP sur nos serveurs, à partir d'une base locale : votre adresse IP n'est envoyée à aucun service de géolocalisation.",
+        },
+      ],
+    },
+    {
+      title: 'Vos Droits',
+      blocks: [
+        { kind: 'paragraphes', body: ['Conformément au RGPD, vous avez les droits suivants :'] },
+        {
+          kind: 'list',
+          items: [
+            'Consulter toutes vos données personnelles',
+            'Corriger des informations inexactes',
+            'Supprimer votre compte et toutes vos données (avec une période de grâce de 30 jours)',
+            'Exporter vos données dans un format standard',
+            'Vous opposer au traitement de vos données',
+            'Limiter le traitement dans certains cas',
+            'Retirer votre consentement à tout moment',
+          ],
+        },
+        {
+          kind: 'accent',
+          body: 'Pour exercer ces droits, rendez-vous dans Paramètres > Confidentialité ou contactez-nous à privacy@meeshy.me. Nous répondrons sous 30 jours.',
+        },
+      ],
+    },
+    {
+      title: 'Conservation de Vos Données',
+      blocks: [
+        {
+          kind: 'paragraphes',
+          body: [
+            'Nous conservons vos données tant que votre compte est actif. Si vous supprimez votre compte : (1) Période de grâce de 30 jours permettant la récupération ; (2) Après 30 jours, suppression définitive de toutes vos données personnelles ; (3) Les messages dans les conversations partagées sont anonymisés ; (4) Les journaux de sécurité sont conservés 90 jours ; (5) Les données de facturation selon les obligations légales.',
+          ],
+        },
+        {
+          kind: 'accent',
+          body: 'Les profils vocaux expirent automatiquement selon votre âge : 18-25 ans = 5 ans, 26-40 ans = 10 ans, 41-60 ans = 15 ans, 60+ ans = 20 ans.',
+        },
+      ],
+    },
+    {
+      title: 'Notifications',
+      blocks: [
+        {
+          kind: 'paragraphes',
+          body: [
+            "Vous pouvez configurer individuellement les notifications pour les messages, appels, mentions, réactions, demandes d'ami, événements de sécurité, etc. Le mode Ne Pas Déranger vous permet de définir des plages horaires sans notifications (sauf alertes de sécurité critiques).",
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Cookies',
+      blocks: [
+        {
+          kind: 'paragraphes',
+          body: [
+            'Nous utilisons uniquement des cookies essentiels pour le fonctionnement du service (authentification, sessions, préférences). Aucun cookie publicitaire ou de tracking. Vous pouvez gérer vos préférences dans votre navigateur.',
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Transferts Internationaux',
+      blocks: [
+        {
+          kind: 'paragraphes',
+          body: [
+            "Vos données sont hébergées en France et dans l'Union Européenne. Si vous accédez à Meeshy depuis l'extérieur de l'UE, vos données peuvent être transférées vers l'UE avec toutes les protections RGPD.",
+            "Certains de nos sous-traitants sont établis aux États-Unis (Google, Apple, OpenAI, Anthropic, Twilio et SendGrid, Mailgun, Vonage) : les données qui leur sont confiées y sont transférées. Ces transferts reposent sur les garanties du chapitre V du RGPD : la décision d'adéquation de la Commission européenne pour les prestataires certifiés au cadre de protection des données UE–États-Unis, ou à défaut les clauses contractuelles types de la Commission. Vous pouvez en obtenir une copie en écrivant à privacy@meeshy.me.",
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Mises à Jour',
+      blocks: [
+        {
+          kind: 'paragraphes',
+          body: [
+            "Nous pouvons mettre à jour cette politique. Les changements importants vous seront notifiés par email et dans l'application. La date de dernière mise à jour est indiquée en haut de cette page.",
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Nous Contacter',
+      blocks: [
+        {
+          kind: 'paragraphes',
+          body: ['Pour toute question concernant vos données personnelles ou pour exercer vos droits :'],
+        },
+        {
+          kind: 'encadre',
+          rows: [
+            { text: 'Email : privacy@meeshy.me', href: 'mailto:privacy@meeshy.me' },
+            { text: 'Adresse postale : 12 Rue de la Paix, 75002 Paris, France' },
+            { text: 'Délai de réponse : Maximum 30 jours' },
+          ],
+        },
+        {
+          kind: 'accent',
+          body: "En cas de litige, vous pouvez déposer une plainte auprès de la CNIL (Commission Nationale de l'Informatique et des Libertés) : www.cnil.fr",
+        },
+      ],
+    },
+  ],
+  run: {
+    title: 'Liens Utiles',
+    links: [
+      { label: 'À propos', href: '/about' },
+      { label: 'Contact', href: '/contact' },
+      { label: 'Partenaires', href: '/partners' },
+      { label: 'Sécurité des enfants', href: '/child-safety' },
+    ],
+  },
+};

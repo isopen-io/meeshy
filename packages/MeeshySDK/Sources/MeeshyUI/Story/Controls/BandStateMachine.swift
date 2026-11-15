@@ -27,7 +27,7 @@ public nonisolated enum BandState: Equatable, Sendable {
     /// Whether the bottom band can be dragged via its grabber to resize and
     /// collapse to a handle (canvas-full) — for ANY tool panel, not just drawing.
     /// Historically only `.drawing` was resizable; the user wants the retract
-    /// handle on every editing tool (2026-06-02). The format sub-panel and the
+    /// handle on every editing tool. The format sub-panel and the
     /// hidden state keep their non-resizable behaviour.
     public var allowsCollapsibleDrawer: Bool {
         switch self {
@@ -81,7 +81,7 @@ public nonisolated struct BandStateMachine: Equatable, Sendable {
     ///
     /// soit fermé par construction : c'est sa violation qui produisait un
     /// composer sans « Fermer » ni « Publier » après un « Retour » (bug terrain
-    /// 2026-07-31 — le drapeau de la vue et l'état de la machine ne se parlaient
+    /// Le drapeau de la vue et l'état de la machine ne se parlaient
     /// pas, et « Retour » ne touchait que le second).
     public private(set) var isChromeHidden: Bool = false
 

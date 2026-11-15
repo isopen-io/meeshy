@@ -79,6 +79,18 @@
  * déclaration mérite d'être crue — rôles différents, ne pas fusionner.
  */
 
+import { GUEST_ATTACHMENT_KIND_CEILINGS } from '@meeshy/shared/types/world';
+import {
+  GUEST_ATTACHMENT_KIND_EXTENSIONS,
+  GUEST_ATTACHMENT_MAX_BYTES,
+  GUEST_ATTACHMENT_REFUSAL_CODES,
+  effectiveGuestAttachmentKinds,
+  guestAttachmentKindOfMimeType,
+  type GuestAttachmentKind,
+  type GuestAttachmentRefusalCode,
+} from '@meeshy/shared/types/guest-attachment-kinds';
+import { decodeAudioContent } from './AudioContentDecoding.js';
+
 /**
  * Nombre d'octets de tête suffisant pour évaluer TOUTES les signatures
  * ci-dessous (la plus profonde lit jusqu'à l'octet 16, plus la fenêtre de
@@ -213,8 +225,20 @@ function isPlausibleWebpFourCc(buffer: Buffer): boolean {
 }
 
 /**
+ * Marques `ftyp` d'une image HEIF (#11263) : HEIC d'iPhone (`heic`, `heix`,
+ * `mif1`…), séquences (`msf1`, `hevc`…) et AVIF (`avif`, `avis`). La marque
+ * majeure suffit, la box elle-même devant être plausible.
+ */
+const HEIF_IMAGE_BRANDS = new Set(['heic', 'heix', 'heim', 'heis', 'hevc', 'hevx', 'hevm', 'hevs', 'mif1', 'msf1', 'avif', 'avis']);
+
+function isHeifImage(buffer: Buffer): boolean {
+  return startsWithAscii(buffer, 'ftyp', 4) && isPlausibleFtypBox(buffer) && HEIF_IMAGE_BRANDS.has(buffer.toString('latin1', 8, 12));
+}
+
+/**
  * Signatures des formats acceptés par `isImageMimeType`
- * (`ACCEPTED_MIME_TYPES.IMAGE` : jpeg/jpg, png, gif, webp).
+ * (`ACCEPTED_MIME_TYPES.IMAGE` : jpeg/jpg, png, gif, webp, et HEIC/HEIF/AVIF
+ * depuis #11263).
  *
  * GIF : NON renforcé au-delà de sa signature officielle (6 octets) — voir
  * « Formats volontairement laissés au magic number nu » dans la docstring
@@ -225,7 +249,260 @@ export function matchesImageSignature(buffer: Buffer): boolean {
   if (startsWithBytes(buffer, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) && isPlausiblePngIhdr(buffer)) return true; // PNG
   if (startsWithAscii(buffer, 'GIF87a') || startsWithAscii(buffer, 'GIF89a')) return true; // GIF
   if (startsWithAscii(buffer, 'RIFF') && startsWithAscii(buffer, 'WEBP', 8) && isPlausibleWebpFourCc(buffer)) return true; // WEBP
+  if (isHeifImage(buffer)) return true; // HEIC / HEIF / AVIF (#11263)
   return false;
+}
+
+// ─── Vidéo (#11266) ─────────────────────────────────────────────────────────
+
+/**
+ * Atomes de tête d'un QuickTime ancien, écrit sans box `ftyp` : `moov`,
+ * `mdat`, `wide`, `free`, `skip` ou `pnot` à l'octet 4 — un `.mov` d'appareil
+ * photo ou de logiciel antérieur à la norme ISO reste admis.
+ */
+const LEGACY_QUICKTIME_ATOMS = new Set(['moov', 'mdat', 'wide', 'free', 'skip', 'pnot']);
+
+/** DocType EBML d'une vidéo : WebM ou Matroska, dans la fenêtre de tête. */
+function hasEbmlVideoDocType(buffer: Buffer): boolean {
+  const window = buffer.subarray(0, RECOMMENDED_SIGNATURE_PREFIX_BYTES);
+  return window.indexOf('webm', 4, 'latin1') !== -1 || window.indexOf('matroska', 4, 'latin1') !== -1;
+}
+
+function isLegacyQuickTime(buffer: Buffer): boolean {
+  return buffer.length >= 8 && LEGACY_QUICKTIME_ATOMS.has(buffer.toString('latin1', 4, 8));
+}
+
+/**
+ * Signatures des conteneurs vidéo admis (`ACCEPTED_MIME_TYPES.VIDEO` : MP4,
+ * MOV, WebM, Ogg — plus 3GP et Matroska que les appareils produisent). Mêmes
+ * renforts que l'audio (box `ftyp` plausible, DocType EBML, page Ogg), même
+ * contrat : un PRÉFIXE structurel, pas le fichier entier.
+ */
+export function matchesVideoSignature(buffer: Buffer): boolean {
+  if (startsWithAscii(buffer, 'ftyp', 4) && isPlausibleFtypBox(buffer)) return true; // MP4 / MOV / 3GP / M4V
+  if (startsWithBytes(buffer, [0x1a, 0x45, 0xdf, 0xa3]) && hasEbmlVideoDocType(buffer)) return true; // WebM / Matroska
+  if (startsWithAscii(buffer, 'OggS') && isPlausibleOggPage(buffer)) return true; // Ogg (Theora / VP8)
+  return isLegacyQuickTime(buffer); // QuickTime sans ftyp
+}
+
+/**
+ * Les types vidéo dont une signature est connue. Un autre `video/*` (FLV,
+ * AVI, MPEG-TS…) reste cru : on rejette ce qu'on sait faux, on n'exige pas de
+ * preuve pour ce qu'on ne sait pas vérifier (décision #5615 ci-dessous).
+ */
+const SNIFFED_VIDEO_MIME_TYPES = new Set([
+  'video/mp4',
+  'video/quicktime',
+  'video/x-m4v',
+  'video/3gpp',
+  'video/3gpp2',
+  'video/webm',
+  'video/x-matroska',
+  'video/ogg',
+]);
+
+// ─── SVG / PDF ──────────────────────────────────────────────────────────────
+
+/**
+ * Fenêtre de recherche du prologue SVG : assez large pour un BOM UTF-8 suivi
+ * d'un commentaire XML ou d'un DOCTYPE avant la première balise significative,
+ * sans lire le document entier.
+ */
+const SVG_SIGNATURE_SEARCH_WINDOW = 512;
+
+/**
+ * Un SVG légitime commence, une fois le BOM UTF-8 optionnel retiré, par un
+ * prologue XML (`<?xml`) ou directement par la balise racine (`<svg`) —
+ * insensible à la casse et aux espaces de tête (RFC citant la spec SVG 1.1 §5.1).
+ */
+function matchesSvgSignature(buffer: Buffer): boolean {
+  if (buffer.length === 0) return false;
+  const start = startsWithBytes(buffer, [0xef, 0xbb, 0xbf]) ? 3 : 0;
+  const window = buffer.toString('latin1', start, Math.min(buffer.length, start + SVG_SIGNATURE_SEARCH_WINDOW));
+  const head = window.trimStart().toLowerCase();
+  return head.startsWith('<?xml') || head.startsWith('<svg');
+}
+
+/** Signature officielle PDF — `%PDF-` en tête de fichier (spec PDF §7.5.2). */
+function matchesPdfSignature(buffer: Buffer): boolean {
+  return startsWithAscii(buffer, '%PDF-');
+}
+
+// ─── Vérification du mimeType déclaré contre le contenu réel ───────────────
+
+export type DeclaredMimeSignatureVerdict =
+  | { readonly verified: true }
+  | { readonly verified: false; readonly reason: string };
+
+/**
+ * Vérifie qu'un `mimeType` déclaré par le client correspond au contenu réel du
+ * fichier, pour les familles dont ce module connaît une signature (#5615).
+ *
+ * Contexte : `classifyAnonymousAttachment` ci-dessus ne se sert des fonctions
+ * de signature que pour DÉCIDER un rang de permission (voix vs image vs
+ * fichier) sur l'exemption anonyme — une signature qui ne correspond pas
+ * retombe silencieusement dans le seau « fichier », plus permissif. Cette
+ * fonction répond à une question différente, posée pour TOUT upload (inscrit
+ * ou anonyme) : le mimeType déclaré ment-il sur ce que le fichier EST ? Un
+ * mensonge avéré REJETTE l'upload plutôt que de le reclassifier.
+ *
+ * Décision produit (#5615) — que faire d'un type dont ce module ne connaît
+ * AUCUNE signature (texte, code, la plupart des formats de document ; la
+ * vidéo est vérifiée depuis #11266, ses conteneurs courants seulement) ?
+ * **Accepté par défaut.** Vérifier une signature demande un vrai parseur de
+ * conteneur pour la plupart de ces formats (`ACCEPTED_MIME_TYPES.DOCUMENT`/
+ * `.CODE` couvrent des dizaines de types textuels indiscernables d'un texte
+ * arbitraire par leurs seuls octets de tête) — les inventer produirait une
+ * fausse impression de renfort, exactement ce que la docstring du module
+ * refuse déjà pour GIF/MP3 non renforcés. La vérification porte donc
+ * uniquement sur les familles où une signature FIABLE existe : image
+ * (raster), audio, vidéo, SVG, PDF. Pour tout le reste, la déclaration est crue —
+ * c'est une liste noire implicite (on rejette ce qu'on sait faux), pas une
+ * allowlist stricte (on n'exige pas de preuve pour ce qu'on ne sait pas
+ * vérifier).
+ */
+export function verifyDeclaredMimeType(declaredMimeType: string, buffer: Buffer): DeclaredMimeSignatureVerdict {
+  const normalized = (declaredMimeType.split(';')[0] || declaredMimeType).trim().toLowerCase();
+
+  if (normalized === 'image/svg+xml') {
+    return matchesSvgSignature(buffer)
+      ? { verified: true }
+      : { verified: false, reason: `Declared type "${declaredMimeType}" does not match SVG content` };
+  }
+
+  if (normalized === 'application/pdf') {
+    return matchesPdfSignature(buffer)
+      ? { verified: true }
+      : { verified: false, reason: `Declared type "${declaredMimeType}" does not match PDF content` };
+  }
+
+  if (normalized.startsWith('image/')) {
+    return matchesImageSignature(buffer)
+      ? { verified: true }
+      : { verified: false, reason: `Declared type "${declaredMimeType}" does not match any known image signature` };
+  }
+
+  if (SNIFFED_VIDEO_MIME_TYPES.has(normalized)) {
+    return matchesVideoSignature(buffer)
+      ? { verified: true }
+      : { verified: false, reason: `Declared type "${declaredMimeType}" does not match any known video signature` };
+  }
+
+  if (normalized.startsWith('audio/')) {
+    return matchesAudioSignature(buffer)
+      ? { verified: true }
+      : { verified: false, reason: `Declared type "${declaredMimeType}" does not match any known audio signature` };
+  }
+
+  // Aucune signature fiable connue pour cette famille — voir la décision
+  // produit ci-dessus. Retourner `verified: true` ici n'authentifie rien,
+  // c'est un aveu explicite d'absence de vérification.
+  return { verified: true };
+}
+
+// ─── Familles de pièces jointes d'un invité (#10001, #10029) ───────────────
+//
+// Quand un lien liste ses familles (`ConversationShareLink.allowedAttachmentKinds`)
+// — ou que sa conversation les plafonne, comme World Wide —, cette liste seule
+// décide, et chaque famille se MÉRITE par le contenu ENTIER du fichier :
+//
+// - `text`  : type déclaré `text/plain`, extension `.txt`, UTF-8 valide, aucun
+//   caractère de contrôle hors tabulation et fins de ligne, aucune signature
+//   binaire (un JPEG ou un PDF renommé `.txt` est refusé) ;
+// - `audio` : type déclaré `audio/*`, extension audio, conteneur décodé de bout
+//   en bout et sans piste vidéo (`AudioContentDecoding.ts`) ;
+// - `image` : image matricielle dont la signature confirme le type déclaré ;
+// - `pdf`   : `application/pdf` dont la signature est celle d'un PDF.
+//
+// Elle ne lit jamais `allowAnonymousFiles` / `allowAnonymousImages`, ni les
+// droits gravés à l'entrée (`Participant.permissions`) : un invité entré sous
+// d'autres termes est couvert à chaque envoi.
+
+const PDF_MAGIC = Buffer.from('%PDF-', 'latin1');
+const ZIP_LOCAL_MAGIC = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
+const UTF8_BOM = Buffer.from([0xef, 0xbb, 0xbf]);
+
+/**
+ * Les caractères de contrôle C0, DEL et C1, hors tabulation, saut de ligne,
+ * saut de page et retour chariot — les seuls contrôles d'un texte. Une
+ * expression balaie la chaîne sans la découper : un texte au plafond (25 Mio)
+ * découpé en tableau d'un élément par caractère gelait la boucle une seconde
+ * et coûtait ~400 Mo par envoi.
+ */
+const FORBIDDEN_TEXT_CHARACTER = /[\u0000-\u0008\u000b\u000e-\u001f\u007f-\u009f]/;
+
+/** Le contenu ENTIER est-il un texte brut UTF-8, sans signature binaire ? */
+export function isPlainUtf8Text(buffer: Buffer): boolean {
+  const body = startsWithBytes(buffer, [...UTF8_BOM]) ? buffer.subarray(UTF8_BOM.length) : buffer;
+  const binary =
+    body.subarray(0, PDF_MAGIC.length).equals(PDF_MAGIC) ||
+    body.subarray(0, ZIP_LOCAL_MAGIC.length).equals(ZIP_LOCAL_MAGIC) ||
+    matchesImageSignature(body) ||
+    matchesAudioSignature(body);
+  if (binary) return false;
+  try {
+    return !FORBIDDEN_TEXT_CHARACTER.test(new TextDecoder('utf-8', { fatal: true }).decode(body));
+  } catch {
+    return false;
+  }
+}
+
+/** `null` : aucun nom n'a été transmis. Un nom VIDE en est un, sans extension. */
+function extensionOf(fileName: string | null | undefined): string | null {
+  if (fileName === undefined || fileName === null) return null;
+  const base = fileName.split(/[\\/]/).pop() ?? '';
+  const dot = base.lastIndexOf('.');
+  return dot > 0 ? base.slice(dot + 1).toLowerCase() : '';
+}
+
+function contentRefutesKind(kind: GuestAttachmentKind, buffer: Buffer): string | null {
+  switch (kind) {
+    case 'text':
+      return isPlainUtf8Text(buffer) ? null : 'content is not plain UTF-8 text';
+    case 'audio': {
+      const verdict = decodeAudioContent(buffer);
+      return verdict.ok ? null : `content is not audio (${verdict.reason})`;
+    }
+    case 'image':
+      return matchesImageSignature(buffer) ? null : 'content is not an image';
+    case 'pdf':
+      return matchesPdfSignature(buffer) ? null : 'content is not a PDF';
+  }
+}
+
+export type GuestAttachmentCandidate = {
+  readonly declaredMimeType: string;
+  readonly buffer: Buffer;
+  readonly fileName?: string | null;
+};
+
+/** La décision pour une liste de familles EFFECTIVE — jamais `null` ici. */
+export function classifyGuestAttachmentByKinds(
+  candidate: GuestAttachmentCandidate,
+  allowedKinds: readonly GuestAttachmentKind[],
+): AnonymousAttachmentVerdict {
+  const refuseKind = (reason: string): AnonymousAttachmentVerdict => ({
+    allowed: false,
+    reason,
+    code: GUEST_ATTACHMENT_REFUSAL_CODES.KIND_NOT_ALLOWED,
+  });
+  if (candidate.buffer.length > GUEST_ATTACHMENT_MAX_BYTES) {
+    return {
+      allowed: false,
+      reason: `Guest attachments are limited to ${GUEST_ATTACHMENT_MAX_BYTES} bytes on this conversation`,
+      code: GUEST_ATTACHMENT_REFUSAL_CODES.TOO_LARGE,
+    };
+  }
+  const kind = guestAttachmentKindOfMimeType(candidate.declaredMimeType);
+  if (!kind || !allowedKinds.includes(kind)) {
+    return refuseKind(`Guests may only attach ${allowedKinds.join(', ') || 'nothing'} on this conversation`);
+  }
+  const extension = extensionOf(candidate.fileName);
+  if (extension !== null && !GUEST_ATTACHMENT_KIND_EXTENSIONS[kind].includes(extension)) {
+    return refuseKind(`The file name does not match a ${kind} attachment`);
+  }
+  const refutation = contentRefutesKind(kind, candidate.buffer);
+  return refutation ? refuseKind(`Declared ${kind} attachment refused: ${refutation}`) : { allowed: true };
 }
 
 // ─── Décision d'autorisation anonyme ───────────────────────────────────────
@@ -233,18 +510,44 @@ export function matchesImageSignature(buffer: Buffer): boolean {
 export type ShareLinkAnonymousFlags = {
   readonly allowAnonymousFiles: boolean;
   readonly allowAnonymousImages: boolean;
+  /** Les familles ouvertes aux invités (#10001) — vide ou absent : aucune restriction par famille. */
+  readonly allowedAttachmentKinds?: readonly string[] | null;
+  /** La conversation que le lien ouvre — elle peut plafonner les familles (World Wide). */
+  readonly conversation?: { readonly identifier?: string | null } | null;
 };
+
+/** Les familles qu'un invité de ce lien peut joindre, ou `null` si le lien ne restreint pas par famille. */
+export function guestAttachmentKindsOf(
+  shareLink: Pick<ShareLinkAnonymousFlags, 'allowedAttachmentKinds' | 'conversation'>,
+): readonly GuestAttachmentKind[] | null {
+  return effectiveGuestAttachmentKinds(
+    { allowedAttachmentKinds: shareLink.allowedAttachmentKinds, conversationIdentifier: shareLink.conversation?.identifier },
+    GUEST_ATTACHMENT_KIND_CEILINGS,
+  );
+}
+
+/**
+ * La garde par familles lit le fichier ENTIER : un appelant qui ne tient qu'un
+ * préfixe (tus) doit charger le reste quand elle s'applique.
+ */
+export function guestAttachmentNeedsFullContent(shareLink: ShareLinkAnonymousFlags): boolean {
+  return guestAttachmentKindsOf(shareLink) !== null;
+}
 
 export type AnonymousAttachmentVerdict =
   | { readonly allowed: true }
-  | { readonly allowed: false; readonly reason: string };
+  | { readonly allowed: false; readonly reason: string; readonly code?: GuestAttachmentRefusalCode };
 
 /**
  * Décision UNIQUE de classification/autorisation anonyme, partagée par
  * `routes/attachments/upload.ts` (REST, fichier entier en mémoire) et
- * `routes/uploads/tus-handler.ts` (resumable, préfixe lu depuis le disque) —
- * pour que les deux chemins d'upload ne puissent pas diverger (task-1-fix-
- * round-2, Critical 1).
+ * `routes/uploads/tus-handler.ts` (resumable) — pour que les deux chemins
+ * d'upload ne puissent pas diverger (task-1-fix-round-2, Critical 1).
+ *
+ * Quand le lien liste ses familles, ou que sa conversation les plafonne
+ * (World Wide, #10001), `classifyGuestAttachmentByKinds` décide seule, sur le
+ * fichier ENTIER. Sinon, le comportement d'avant : un préfixe structurel et les
+ * drapeaux du lien.
  *
  * Normalise la casse du `mimeType` déclaré : `IMAGE/PNG` sur une vraie image
  * doit rester classée « image », pas basculer dans le seau « fichier » plus
@@ -253,8 +556,14 @@ export type AnonymousAttachmentVerdict =
 export function classifyAnonymousAttachment(
   declaredMimeType: string,
   buffer: Buffer,
-  shareLink: ShareLinkAnonymousFlags
+  shareLink: ShareLinkAnonymousFlags,
+  options: { readonly fileName?: string | null } = {},
 ): AnonymousAttachmentVerdict {
+  const kinds = guestAttachmentKindsOf(shareLink);
+  if (kinds !== null) {
+    return classifyGuestAttachmentByKinds({ declaredMimeType, buffer, fileName: options.fileName }, kinds);
+  }
+
   const normalizedMimeType = declaredMimeType.toLowerCase();
   const declaresImage = normalizedMimeType.startsWith('image/');
   const declaresAudio = normalizedMimeType.startsWith('audio/');

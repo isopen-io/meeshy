@@ -7,13 +7,19 @@ import MeeshySDK
 /// RUNTIME via un adaptateur pur — pas CanvasV3 : le composer édite le
 /// runtime, le plan reflète ce qui s'édite. »
 ///
-/// `TimelineProject` ne porte que QUATRE des familles de `StoryEffects` —
-/// texte, sticker, média, audio (`init(from: StorySlide)`, `StoryModels.swift`).
-/// `background` / `locationObjects` / `drawingStrokes` / `backgroundAudioId`
+/// `TimelineProject` porte CINQ des familles de `StoryEffects` — texte,
+/// sticker, média, audio et **lieu** (`init(from: StorySlide)`,
+/// `StoryModels.swift`). `background` / `drawingStrokes` / `backgroundAudioId`
 /// vivent uniquement sur `slide.effects`, jamais sur le projet timeline : cet
 /// adaptateur les laisse à leur défaut plutôt que d'en fabriquer un —
 /// `StoryEffects` reste honnête sur ce qu'il sait, un `StoryEffects` mensonger
 /// serait pire qu'un plan incomplet.
+///
+/// **Le lieu a rejoint la liste le 2026-08-31** (directive porteur, #4591) :
+/// une pastille de lieu apparaît et disparaît quand elle veut, donc elle a une
+/// fenêtre, donc elle a une piste. Tant qu'elle ne traversait pas cet
+/// adaptateur, la fenêtre posée au modèle n'atteignait AUCUN pixel du plan —
+/// un champ nourri par personne.
 ///
 /// `mediaObjects` traverse SANS filtre ni réécriture : `id` (synthétique ou
 /// non) et `isBackground` restent ceux du projet — c'est sur EUX que
@@ -28,6 +34,7 @@ public nonisolated enum Plan2DProjectAdapter {
         StoryEffects(
             stickerObjects: project.stickerObjects,
             textObjects: project.textObjects,
+            locationObjects: project.locationObjects,
             mediaObjects: project.mediaObjects,
             audioPlayerObjects: project.audioPlayerObjects
         )

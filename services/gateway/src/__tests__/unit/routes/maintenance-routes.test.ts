@@ -27,6 +27,7 @@ jest.mock('../../../services/MaintenanceService', () => ({
     getMaintenanceStats: (...a: unknown[]) => mockGetMaintenanceStats(...a),
     cleanupExpiredData: (...a: unknown[]) => mockCleanupExpiredData(...a),
     updateUserOnlineStatus: (...a: unknown[]) => mockUpdateUserOnlineStatus(...a),
+    setShareLinkRevocationLive: jest.fn(),
   })),
 }));
 

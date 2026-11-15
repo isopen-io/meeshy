@@ -14,9 +14,10 @@ import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
 import crypto from 'crypto';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { verifyPassword } from '../utils/password-hash.js';
+import { EngagementService } from './engagement/EngagementService';
 
 const logger = enhancedLogger.child({ module: 'TwoFactorService' });
-import bcrypt from 'bcryptjs';
 
 // Constants
 const APP_NAME = 'Meeshy';
@@ -63,7 +64,27 @@ export interface BackupCodesResult {
 }
 
 export class TwoFactorService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(
+    private prisma: PrismaClient,
+    /** Le moteur d'engagement — un double en test ; absent ⇒ celui de `prisma`, créé au premier crédit. */
+    private engagement?: Pick<EngagementService, 'recordActivity'>,
+  ) {}
+
+  /**
+   * `profile.two_factor` (#8959) — le geste de l'utilisateur qui arme son
+   * second facteur, une fois par compte. L'activation par l'administration
+   * (`user-management.service`) ne passe pas par ici et ne crédite rien.
+   */
+  private creditTwoFactor(userId: string): void {
+    try {
+      this.engagement ??= new EngagementService(this.prisma);
+      this.engagement
+        .recordActivity(userId, 'profile.two_factor')
+        .catch((error: unknown) => logger.warn('engagement profile.two_factor non crédité', { error }));
+    } catch (error) {
+      logger.warn('engagement profile.two_factor non crédité', { error });
+    }
+  }
 
   /**
    * Génère un hash SHA-256 pour les codes de secours
@@ -221,6 +242,7 @@ export class TwoFactorService {
       });
 
       logger.debug('2FA enabled', { username: user.username });
+      this.creditTwoFactor(userId);
 
       return {
         success: true,
@@ -259,8 +281,10 @@ export class TwoFactorService {
         return { success: false, error: '2FA n\'est pas activé sur ce compte' };
       }
 
-      // Vérifier le mot de passe
-      const passwordValid = await bcrypt.compare(password, user.password);
+      // Vérifier le mot de passe — `verifyPassword` (`utils/password-hash`),
+      // SITE UNIQUE du hachage de mot de passe (#5216), jamais un
+      // `bcrypt.compare` direct (#5235).
+      const passwordValid = await verifyPassword(password, user.password);
       if (!passwordValid) {
         return { success: false, error: 'Mot de passe incorrect' };
       }

@@ -3,7 +3,7 @@
 **Date:** 2026-07-19
 **Scope:** iOS only
 **Area:** Native platform integration (HIG) + code simplification — community join-link sharing
-**File touched:** `apps/ios/Meeshy/Features/Main/Views/CommunityLinkDetailView.swift` (1 file, 0 logic behavior change, 0 new test)
+**File touched:** `apps/ios/Meeshy/Features/Links/Views/CommunityLinkDetailView.swift` (1 file, 0 logic behavior change, 0 new test)
 
 ## Component
 

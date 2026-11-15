@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_search_translation_badge">Übersetzung</string>
+    <string name="chat_search_failed">Suche fehlgeschlagen</string>
+    <string name="chat_search_retry">Erneut versuchen</string>
+    <string name="chat_search_offline">Offline: nur lokale Ergebnisse</string>
+    <string name="chat_search_open_result">Zur Nachricht von %1$s</string>
+</resources>

@@ -284,10 +284,16 @@ final class MockStoryComposerViewModel: StoryComposerProviding {
     }
 
     var _addAudioObjectCalls: Int = 0
+    var _addAudioObjectLastRole: ComposerAudioRole??
     var stubAddAudioObject: StoryAudioPlayerObject?
+    /// Le rôle est RETENU, pas seulement accepté : la doublure d'un contrat qui
+    /// vient de gagner un argument doit pouvoir dire ce qu'elle a reçu, sinon
+    /// elle rend le nouvel argument intestable. `ComposerAudioRole??` distingue
+    /// « jamais appelée » de « appelée sans rôle », qui sont deux verdicts.
     @discardableResult
-    func addAudioObject() -> StoryAudioPlayerObject? {
+    func addAudioObject(role: ComposerAudioRole?) -> StoryAudioPlayerObject? {
         _addAudioObjectCalls += 1
+        _addAudioObjectLastRole = role
         return stubAddAudioObject
     }
 

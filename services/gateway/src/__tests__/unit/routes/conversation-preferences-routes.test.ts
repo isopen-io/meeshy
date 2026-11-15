@@ -16,7 +16,10 @@ import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({
+  ...(jest.requireActual('../../../utils/logger') as object),
+  logError: jest.fn(),
+}));
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
   errorResponseSchema: {
@@ -52,7 +55,6 @@ const STORED_PREF = {
   orderInCategory: null,
   customName: null,
   reaction: null,
-  deletedForUserAt: null,
   clearHistoryBefore: null,
   version: 3,
   category: null,
@@ -400,8 +402,11 @@ describe('DELETE /user-preferences/conversations/:conversationId', () => {
       orderInCategory: null,
       customName: null,
       reaction: null,
-      deletedForUserAt: null,
       clearHistoryBefore: null,
+      // #10632 § 10.1 — « DELETE (remise à zéro) l'efface comme le reste » :
+      // un fond photo ou un modèle survivait au reset, que les autres appareils
+      // venaient pourtant d'effacer sur la foi de `reset: true`.
+      appearance: null,
       version: { increment: 1 },
     });
     await appCustom.close();

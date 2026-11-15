@@ -84,6 +84,10 @@ function createMockPrisma() {
     conversation: {
       update: conversationUpdate,
     },
+    // #3740 — `DELETE /conversations/:id` désactive aussi les liens de
+    // partage encore actifs du fil, dans la MÊME transaction que la clôture.
+    conversationShareLink: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    $transaction: jest.fn((ops: any) => Promise.all(ops)),
   } as unknown as PrismaClient;
 
   return { prisma, conversationUpdate };

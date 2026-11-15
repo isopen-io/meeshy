@@ -656,6 +656,38 @@ final class MessageSocketEventTests: XCTestCase {
         XCTAssertEqual(event.summary.totalMembers, 3)
         XCTAssertEqual(event.summary.deliveredCount, 2)
         XCTAssertEqual(event.summary.readCount, 1)
+        // Repli legacy (gateway pré-G5) : absents ⇒ `nil`, jamais une erreur
+        // de décodage — même contrat que web (`messageId`/`readByAllAt`
+        // optionnels, `ReadStatusSummary`, `packages/shared/types/
+        // socketio-events/message.ts`).
+        XCTAssertNil(event.summary.messageId)
+        XCTAssertNil(event.summary.readByAllAt)
+    }
+
+    /// G-5 (#7347) — le miroir Swift de `ReadStatusSummary` gagne
+    /// `messageId`/`readByAllAt`, mirroring le type partagé DANS LE MÊME LOT
+    /// (règle du dépôt : « type partagé + miroir Swift changent ensemble »).
+    func testReadStatusUpdateEventDecoding_withMessageIdAndReadByAllAt() throws {
+        let json = """
+        {
+            "conversationId": "c1",
+            "participantId": "p1",
+            "userId": "u1",
+            "type": "read",
+            "updatedAt": "2026-03-06T14:30:00.000Z",
+            "summary": {
+                "totalMembers": 2,
+                "deliveredCount": 2,
+                "readCount": 2,
+                "messageId": "m-1",
+                "readByAllAt": "2026-09-22T08:00:00.000Z"
+            }
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ReadStatusUpdateEvent.self, from: json)
+        XCTAssertEqual(event.summary.messageId, "m-1")
+        XCTAssertNotNil(event.summary.readByAllAt)
     }
 
     // MARK: - AttachmentStatusUpdatedEvent
@@ -914,6 +946,28 @@ final class MessageSocketEventTests: XCTestCase {
         XCTAssertNil(event.conversationId)
         XCTAssertNil(event.messageId)
         XCTAssertEqual(event.notificationType, .system)
+    }
+
+    // MARK: - AttachmentDeletedEvent (attachment:deleted)
+
+    func testAttachmentDeleted_decodesTheThreeIdentifiers() throws {
+        let json = Data(#"{"conversationId":"c1","messageId":"m1","attachmentId":"a1","extra":1}"#.utf8)
+
+        let event = try decoder.decode(AttachmentDeletedEvent.self, from: json)
+
+        XCTAssertEqual(event, AttachmentDeletedEvent(conversationId: "c1", messageId: "m1", attachmentId: "a1"))
+    }
+
+    func testAttachmentDeleted_failsClosedOnAnIncompleteOrBlankPayload() {
+        let payloads = [
+            #"{"conversationId":"c1","messageId":"m1"}"#,
+            #"{"messageId":"m1","attachmentId":"a1"}"#,
+            #"{"conversationId":"c1","messageId":"","attachmentId":"a1"}"#,
+            #"{"conversationId":"c1","messageId":"m1","attachmentId":7}"#,
+        ]
+        for payload in payloads {
+            XCTAssertThrowsError(try decoder.decode(AttachmentDeletedEvent.self, from: Data(payload.utf8)), payload)
+        }
     }
 
     // MARK: - AttachmentUpdatedEvent (message:attachment-updated)

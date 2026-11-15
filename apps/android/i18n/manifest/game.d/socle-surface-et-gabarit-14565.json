@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.spend.missing.mint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.spend.missing.unlock",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

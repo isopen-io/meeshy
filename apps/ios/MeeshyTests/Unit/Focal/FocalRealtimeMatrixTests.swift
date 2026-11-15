@@ -42,11 +42,11 @@ final class FocalRealtimeMatrixTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Focal/Row")
+            .appendingPathComponent("Meeshy/Features/Focal/Row")
     }
 
     private func source(_ url: URL) throws -> String {
-        AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
     }
 
     // MARK: - F01 — message entrant temps réel, focus suit si au fond
@@ -197,15 +197,18 @@ final class FocalRealtimeMatrixTests: XCTestCase {
         )
     }
 
-    /// Arbitrage user 2026-08-18 : le chip 🌐 et la bande de drapeaux sont
-    /// RETIRÉS de la rangée — le signal multi-langue est le drapeau de la
-    /// langue D'ORIGINE (`LanguageData.info(for:)`), affiché seulement quand
-    /// plusieurs versions existent ; le menu d'appui long porte l'exploration.
+    /// Arbitrage user 2026-08-18 : le chip 🌐 est RETIRÉ de la rangée. Le
+    /// signal multi-langue est la bande `plainLanguageFlags` (directive
+    /// 2026-08-24), bâtie depuis la langue D'ORIGINE (`originalLangCode`) et
+    /// montée seulement quand plusieurs versions existent ; le menu d'appui
+    /// long porte l'exploration. L'ancien toggle unique `originalLanguageFlag`,
+    /// jamais monté depuis la bande, a quitté `FocalRow` le 2026-09-25.
     func test_F06_originalLanguageFlagSignalsMultilingual_inFocalRow() throws {
         let code = try source(rowRoot().appendingPathComponent("FocalRow.swift"))
         XCTAssertTrue(
-            code.contains("LanguageData.info(for: translation.originalLangCode"),
-            "F06 : le drapeau de la langue d'origine doit signaler le message multilingue — sans lui, aucune trace visuelle du Prisme sur le Fil"
+            code.contains("plainLanguageFlags(translation)")
+                && code.contains("originalLangCode: translation.originalLangCode"),
+            "F06 : la bande de drapeaux doit être bâtie depuis la langue d'origine et montée sur la rangée — sans elle, aucune trace visuelle du Prisme sur le Fil"
         )
         XCTAssertFalse(
             code.lowercased().contains("systemname: \"globe\""),
@@ -222,7 +225,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     /// exactement la garde F07 « carrousel multi-pistes » — vérifié ici sur
     /// un `.mixed` à 3 pistes audio (arité jamais exercée par
     /// `FocalAudioRoutingTests`, qui s'arrête à 2).
-    func test_F07_mixedThreeTrackAudio_isNeverCarousel() {
+    func test_F07_mixedThreeTrackAudio_isNeverStack() {
         let content = BubbleContent(
             messageId: "m", kind: .standard, text: nil, translation: nil, reply: nil,
             attachments: .mixed(
@@ -234,13 +237,13 @@ final class FocalRealtimeMatrixTests: XCTestCase {
                 ],
                 nonMedia: []
             ),
-            location: nil, ephemeral: nil, isBlurred: false, isViewOnce: false, isPinned: false,
-            isForwarded: false, editedAt: nil, isEditSaving: false, hasEditHistory: false, reactions: [],
+            location: nil, protection: .unprotected, isBlurred: false, isViewOnce: false, isPinned: false,
+            forwardAttribution: nil, editedAt: nil, isEditSaving: false, hasEditHistory: false, reactions: [],
             meta: BubbleContent.Meta(timeString: "10:00", deliveryStatus: nil), isMe: false, senderName: "A", callNotice: nil, joinNotice: nil
         )
         XCTAssertNotEqual(
-            FocalAudioRouting.mode(for: content), .carousel,
-            "F07 : un `.mixed` à 3 pistes audio ne doit JAMAIS devenir un carrousel — le carrousel est " +
+            FocalAudioRouting.mode(for: content), .stack,
+            "F07 : un `.mixed` à 3 pistes audio ne doit JAMAIS devenir une pile — la pile est " +
             "réservé au cas `.audio` PUR (garde déjà exercée à 2 pistes par FocalAudioRoutingTests, " +
             "confirmée ici à 3)"
         )
@@ -268,7 +271,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     // behaviour-matrix:F09
 
     /// Preuve exhaustive du rendu : `FocalDynamicTypeTests.
-    /// test_quotedReply_lineLimitOneIsDocumentedPolicy_notAnOmission` (F-090)
+    /// test_quotedReply_lineBudgetComesFromTheSharedRule_notALiteral` (F-090)
     /// + `FocalRichBlockEquatableTests` (railWidth). Ancrage frais F09 : le
     /// SAUT vers l'original passe par `onReplyTap`, que l'hôte fait atterrir
     /// via `scrollToItem(.centeredVertically)` (mécanisme partagé avec la
@@ -384,9 +387,18 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     /// deux via le MÊME mécanisme UIKit natif `.centeredVertically`, jamais
     /// deux implémentations divergentes.
     func test_F12_searchAndQuoteJump_shareTheSameLandingMechanism() throws {
-        let root = rowRoot().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Views/MessageListViewController.swift")
-        let code = try source(root)
+        let views = rowRoot().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Main/Views")
+        // La fin de passe (re-visée) vit dans l'extension `+ScrollSettle`
+        // depuis #9907 : le témoin lit l'hôte SEUL et cette extension — pas
+        // l'unité entière, où `+UnreadSeparator` pose son propre atterrissage,
+        // étranger aux deux sauts comptés ici (#10758).
+        let code = try [
+            "MessageListViewController.swift",
+            "MessageListViewController+ScrollSettle.swift",
+        ]
+        .map { AppSourceGuard.stripComments(try String(contentsOf: views.appendingPathComponent($0), encoding: .utf8)) }
+        .joined(separator: "\n")
         XCTAssertFalse(
             code.contains("landOnFocusBand"),
             "F12 : `landOnFocusBand` appartient au pass retiré — il ne doit pas réapparaître dans l'hôte."
@@ -423,7 +435,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     /// MessageListLayout.
     func test_F14_offsetPreservation_isCarriedByMessageListLayout() throws {
         let root = rowRoot().deletingLastPathComponent().deletingLastPathComponent()
-        let code = try source(root.appendingPathComponent("Views/MessageListViewController.swift"))
+        let code = try source(root.appendingPathComponent("Main/Views/MessageListViewController.swift"))
         XCTAssertTrue(
             code.contains("MessageListLayout {"),
             "F14 : l'hôte doit construire MessageListLayout — c'est lui qui préserve le champ visuel au prepend de pagination"
@@ -486,7 +498,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     /// silencieusement (refactor de ce fichier) se voie immédiatement.
     func test_allFifteenMatrixIds_haveAtLeastOneAnchorTestInThisFile() throws {
         let selfURL = URL(fileURLWithPath: #filePath)
-        let code = try String(contentsOf: selfURL, encoding: .utf8)
+        let code = try AppSourceGuard.text(at: selfURL)
         let declaredIds = (1...15).map { String(format: "F%02d", $0) }
         let missing = declaredIds.filter { !code.contains("func test_\($0)_") }
         XCTAssertTrue(

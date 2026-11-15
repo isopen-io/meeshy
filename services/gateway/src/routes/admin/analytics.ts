@@ -1,11 +1,21 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
+import { sendSuccess, sendInternalError } from '../../utils/response';
 import { logError } from '../../utils/logger';
-import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery } from '../../validation/helpers.js';
 import { AnalyticsMessageTypesQuerySchema, AnalyticsLanguageDistQuerySchema, AnalyticsKpisQuerySchema } from '../../validation/admin-schemas.js';
 import { getCacheStore } from '../../services/CacheStore';
-import { coerceCallAnalytics, summarizeCallReliability } from '../../services/callAnalyticsAggregate';
+import { coerceCallAnalytics, coerceCallFeedback, summarizeCallFeedback, summarizeCallReliability } from '../../services/callAnalyticsAggregate';
+import { coerceCallQuality, summarizeCallQuality } from '../../services/callQualityAggregate';
+import { readPlaybackQoeRows, summarizePlaybackQoe } from '../../services/social/playbackQoeAggregate';
+import { utcDayOf } from '../../services/social/contentEvents';
+import {
+  PLAYBACK_QOE_DEFAULT_WINDOW_DAYS,
+  PLAYBACK_QOE_MAX_WINDOW_DAYS,
+  PLAYBACK_QOE_MIN_DEVICES,
+  type PlaybackQoeSummary,
+} from '@meeshy/shared/types/playback-qoe';
+import { requirePermission } from '../../middleware/authorize';
+import type { Prisma } from '@meeshy/shared/prisma/client';
 
 const CACHE_TTL = {
   realtime: 60,         // 1 min — "real-time" freshness
@@ -16,19 +26,36 @@ const CACHE_TTL = {
 } as const;
 
 // Middleware pour vérifier les permissions analytics
-const requireAnalyticsPermission = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return sendUnauthorized(reply, 'Authentification requise');
-  }
+// `requireAnalyticsPermission` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+//
+// #4157 — `canViewAnalytics` admet ANALYST, qui n'a PAS `canAccessAdmin` dans
+// la matrice centrale : ces huit routes vivent sous `/admin/analytics/*`, un
+// périmètre d'ADMINISTRATION, pas la surface où `canViewAnalytics` d'ANALYST
+// est censée s'exercer (une surface hors `/admin`, hors périmètre de cette
+// issue). La garde d'ENTRÉE de tout `/admin/*` est `canAccessAdmin` — elle
+// admet BIGBOSS/ADMIN/MODERATOR/AUDIT (comme `canViewAnalytics` le faisait
+// déjà pour ces quatre-là) et exclut ANALYST, qui n'a rien à faire ici.
+const requireAnalyticsPermission = requirePermission('canAccessAdmin');
 
-  const userRole = authContext.registeredUser.role;
-  const canViewAnalytics = ['BIGBOSS', 'ADMIN', 'AUDIT', 'ANALYST'].includes(userRole);
-
-  if (!canViewAnalytics) {
-    return sendForbidden(reply, 'Permission insuffisante pour voir les analyses');
-  }
-};
+/**
+ * Les COMPTES distincts ayant envoyé au moins un message depuis `since`.
+ * `Message.senderId` est un PARTICIPANT : on le résout en compte, invités
+ * (participation sans `userId`) exclus, puis on compte les comptes distincts.
+ * Même forme que `distinctUsersByLanguagePipeline` (`languages.ts`).
+ */
+function distinctSendersPipeline(since: Date): Prisma.InputJsonValue[] {
+  return [
+    { $match: { createdAt: { $gte: { $date: since.toISOString() } }, deletedAt: null, senderId: { $ne: null } } },
+    { $group: { _id: '$senderId' } },
+    { $lookup: { from: 'Participant', localField: '_id', foreignField: '_id', as: 'sender' } },
+    { $unwind: '$sender' },
+    { $match: { 'sender.userId': { $ne: null } } },
+    { $group: { _id: '$sender.userId' } },
+    { $count: 'total' },
+  ] as unknown as Prisma.InputJsonValue[];
+}
 
 export async function analyticsRoutes(fastify: FastifyInstance) {
   /**
@@ -37,7 +64,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
    */
   fastify.get('/realtime', {
     onRequest: [fastify.authenticate, requireAnalyticsPermission]
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const cacheKey = 'admin:analytics:realtime';
       const cached = await getCacheStore().get(cacheKey);
@@ -88,7 +115,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
    */
   fastify.get('/hourly-activity', {
     onRequest: [fastify.authenticate, requireAnalyticsPermission]
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const cacheKey = 'admin:analytics:hourly-activity';
       const cached = await getCacheStore().get(cacheKey);
@@ -104,9 +131,11 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
           const bucketEnd = new Date(now.getTime() - i * 3 * 60 * 60 * 1000);
           const bucketStart = new Date(bucketEnd.getTime() - 3 * 60 * 60 * 1000);
           const label = `${String(bucketStart.getHours()).padStart(2, '0')}h`;
+          // `startsAt` (ISO) : le client formate la tranche dans le fuseau du
+          // LECTEUR ; `hour` reste l'étiquette d'hier, au fuseau du serveur.
           return fastify.prisma.message.count({
             where: { createdAt: { gte: bucketStart, lt: bucketEnd }, deletedAt: null }
-          }).then(activity => ({ hour: label, activity }));
+          }).then(activity => ({ hour: label, startsAt: bucketStart.toISOString(), activity }));
         })
       );
 
@@ -139,7 +168,6 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         return reply.send(JSON.parse(cached));
       }
 
-      const now = new Date();
       const startDate = new Date();
       switch (period) {
         case '24h': startDate.setHours(startDate.getHours() - 24); break;
@@ -177,7 +205,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
    */
   fastify.get('/user-distribution', {
     onRequest: [fastify.authenticate, requireAnalyticsPermission]
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const cacheKey = 'admin:analytics:user-distribution';
       const cached = await getCacheStore().get(cacheKey);
@@ -202,9 +230,10 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         fastify.prisma.user.count({
           where: { lastActiveAt: { gte: thirtyDaysAgo, lt: sevenDaysAgo } }
         }),
-        fastify.prisma.user.count({
-          where: { OR: [{ lastActiveAt: { lt: thirtyDaysAgo } }, { lastActiveAt: null }] }
-        }),
+        // `lastActiveAt` est REQUIS (`@default(now())`) : un compte jamais actif
+        // porte sa date d'inscription. `lastActiveAt: null` (ou `isSet`) est
+        // refusé par le client généré et faisait échouer toute la route.
+        fastify.prisma.user.count({ where: { lastActiveAt: { lt: thirtyDaysAgo } } }),
       ]);
 
       const responseBody = {
@@ -285,7 +314,6 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         return reply.send(JSON.parse(cached));
       }
 
-      const now = new Date();
       const startDate = new Date();
       switch (period) {
         case '7d':  startDate.setDate(startDate.getDate() - 7);  break;
@@ -295,14 +323,21 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         default:    startDate.setDate(startDate.getDate() - 30);
       }
 
-      const [totalMessages, totalUsers, activeUsers, newUsers] = await Promise.all([
+      const [totalMessages, totalUsers, activeUsers, newUsers, expediteurs] = await Promise.all([
         fastify.prisma.message.count({ where: { createdAt: { gte: startDate }, deletedAt: null } }),
         fastify.prisma.user.count(),
         fastify.prisma.user.count({ where: { lastActiveAt: { gte: startDate } } }),
-        fastify.prisma.user.count({ where: { createdAt: { gte: startDate } } })
+        fastify.prisma.user.count({ where: { createdAt: { gte: startDate } } }),
+        fastify.prisma.message.aggregateRaw({ pipeline: distinctSendersPipeline(startDate) })
       ]);
+      const sendersInPeriod = Number((expediteurs as unknown as Array<{ total?: number }>)[0]?.total ?? 0);
 
-      const engagementRate = totalUsers > 0 ? Math.round((activeUsers / totalUsers) * 100) : 0;
+      // `engagementRate` = comptes ayant ÉCRIT au moins un message dans la
+      // période / comptes ACTIFS dans la période (`lastActiveAt` dans la
+      // période). Il avait la formule d'`activeUserRate` (actifs / total) :
+      // deux étiquettes pour un seul chiffre (audit 2026-10-04). Borné à 100 :
+      // `lastActiveAt` peut retarder sur un envoi.
+      const engagementRate = activeUsers > 0 ? Math.min(100, Math.round((sendersInPeriod / activeUsers) * 100)) : 0;
       const growthRate     = totalUsers > 0 ? Math.round((newUsers / totalUsers) * 100)    : 0;
 
       const responseBody = {
@@ -332,7 +367,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
    */
   fastify.get('/volume-timeline', {
     onRequest: [fastify.authenticate, requireAnalyticsPermission]
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const cacheKey = 'admin:analytics:volume-timeline';
       const cached = await getCacheStore().get(cacheKey);
@@ -385,7 +420,8 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         ? Math.min(90, Math.max(1, Math.floor(parsedDays)))
         : 7;
 
-      const cacheKey = `admin:analytics:calls:${days}`;
+      // `v2` (#11277) : une réponse mise en cache avant `quality` ne la masque pas jusqu'à son expiration.
+      const cacheKey = `admin:analytics:calls:v2:${days}`;
       const cached = await getCacheStore().get(cacheKey);
       if (cached) {
         return reply.send(JSON.parse(cached));
@@ -405,7 +441,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       // skipped.
       const rows = await fastify.prisma.callParticipant.findMany({
         where: { joinedAt: { gte: windowStart } },
-        select: { analytics: true },
+        select: { analytics: true, feedback: true },
         orderBy: { joinedAt: 'desc' },
         take: ROW_CAP,
       });
@@ -415,6 +451,19 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         .filter((r): r is NonNullable<typeof r> => r !== null);
 
       const summary = summarizeCallReliability(records);
+      // La note d'après-appel (#8072) : une par participant qui a noté.
+      const feedback = summarizeCallFeedback(
+        rows
+          .map((row) => coerceCallFeedback(row.feedback))
+          .filter((r): r is NonNullable<typeof r> => r !== null)
+      );
+      // La qualité (#11277) : gels, limitation, MOS, relais, codec, plateforme
+      // — même fenêtre, même lecture, aucun appareil ni appel dans la réponse.
+      const quality = summarizeCallQuality(
+        rows
+          .map((row) => coerceCallQuality(row.analytics))
+          .filter((r): r is NonNullable<typeof r> => r !== null)
+      );
       const responseBody = {
         success: true,
         data: {
@@ -422,6 +471,8 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
           sampled: rows.length >= ROW_CAP,
           rowsWithTelemetry: records.length,
           ...summary,
+          feedback,
+          quality,
         }
       };
 
@@ -430,6 +481,46 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
     } catch (error) {
       logError(fastify.log, 'Get call reliability analytics error:', error);
       return sendInternalError(reply, 'Erreur lors de la récupération des métriques d\'appels');
+    }
+  });
+
+  /**
+   * GET /api/admin/analytics/playback?days=7
+   * Temps-à-première-image et rebuffer (#11280), p50/p95 par surface × tier
+   * d'appareil × jour, lus sur les sessions `playback` rangées par l'ingestion v2.
+   * k-anonymat : une cellule sous 20 comptes distincts n'est pas servie, seul
+   * son nombre l'est. Fenêtre ≤ 30 j (la conservation du brut). Cache 10 min.
+   */
+  fastify.get('/playback', {
+    onRequest: [fastify.authenticate, requireAnalyticsPermission]
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const rawDays = Number((request.query as { days?: string }).days ?? PLAYBACK_QOE_DEFAULT_WINDOW_DAYS);
+      const days = Number.isFinite(rawDays)
+        ? Math.min(PLAYBACK_QOE_MAX_WINDOW_DAYS, Math.max(1, Math.floor(rawDays)))
+        : PLAYBACK_QOE_DEFAULT_WINDOW_DAYS;
+
+      const cacheKey = `admin:analytics:playback:v2:${days}`;
+      const cached = await getCacheStore().get(cacheKey);
+      if (cached) {
+        return sendSuccess(reply, JSON.parse(cached));
+      }
+
+      const ROW_CAP = 50_000;
+      const sinceDay = utcDayOf(new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000));
+      const rows = await readPlaybackQoeRows(fastify.prisma, { sinceDay, cap: ROW_CAP });
+      const data: PlaybackQoeSummary = {
+        windowDays: days,
+        sampled: rows.length >= ROW_CAP,
+        minDevices: PLAYBACK_QOE_MIN_DEVICES,
+        ...summarizePlaybackQoe(rows, { minDevices: PLAYBACK_QOE_MIN_DEVICES }),
+      };
+
+      getCacheStore().set(cacheKey, JSON.stringify(data), CACHE_TTL.daily).catch(/* istanbul ignore next -- fire-and-forget cache write */ () => {});
+      return sendSuccess(reply, data);
+    } catch (error) {
+      logError(fastify.log, 'Get playback QoE analytics error:', error);
+      return sendInternalError(reply, 'Erreur lors de la récupération de la qualité de lecture');
     }
   });
 }

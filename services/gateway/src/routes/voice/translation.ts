@@ -3,10 +3,18 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AudioTranslateService, AudioTranslateError } from '../../services/AudioTranslateService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
+import { resolveAttachmentReadVerdict, denyAttachmentRead } from '../../services/attachments/attachmentReadVerdict';
+import { gatedVoiceClone } from '../../services/voice-cloning-gate';
 import { logger } from '../../utils/logger';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../../utils/response';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendBadRequest } from '../../utils/response';
+import type { UnifiedAuthRequest } from '../../middleware/auth';
+import {
+  creditAcceptedTranslationRequest,
+  lazyTranslationRequestEngagement
+} from '../../services/messaging/translationRequestCredit';
 import {
   voiceTranslationResultSchema,
   translationJobSchema,
@@ -15,6 +23,53 @@ import {
   errorResponseSchema,
   getUserId
 } from './types';
+
+/**
+ * #3624 — les trois routes `attachmentId` de ce fichier chargeaient et
+ * traduisaient/transcrivaient une pièce jointe PAR ID sans jamais vérifier
+ * que l'appelant appartient à sa conversation : lecture de transcriptions
+ * d'autrui, écriture de traductions, coût Whisper/TTS déclenchable par
+ * n'importe quel utilisateur authentifié. Même verdict que les octets
+ * (`routes/attachments/download.ts`), le détail (#4923) et la route jumelle
+ * `routes/attachments/translation.ts` (#5152) — source unique
+ * `resolveAttachmentReadVerdict`, jamais réécrite ici.
+ *
+ * Ce fichier authentifie via `getUserId()`/`request.user` (JWT registered
+ * user only — `fastify.authenticate` est monté avec `allowAnonymous: false`,
+ * voir server.ts), pas via `UnifiedAuthRequest.authContext` comme les routes
+ * d'attachments. Le verdict partagé ne lit que `authContext` : on lui fournit
+ * donc un contexte minimal dérivé de l'identité déjà vérifiée, plutôt que de
+ * dupliquer sa logique d'appartenance.
+ */
+async function ensureVoiceAttachmentAccessible(
+  reply: FastifyReply,
+  prisma: PrismaClient,
+  userId: string,
+  attachmentId: string
+): Promise<boolean> {
+  const attachment = await prisma.messageAttachment.findUnique({
+    where: { id: attachmentId },
+    select: { messageId: true, uploadedBy: true }
+  });
+
+  if (!attachment) {
+    sendNotFound(reply, 'NOT_FOUND', { message: 'Attachment not found' });
+    return false;
+  }
+
+  const verdict = await resolveAttachmentReadVerdict(
+    { authContext: { isAuthenticated: true, isAnonymous: false, userId } } as unknown as FastifyRequest,
+    attachment,
+    prisma
+  );
+
+  if (verdict !== 'allow') {
+    denyAttachmentRead(reply, verdict, 'Attachment not found');
+    return false;
+  }
+
+  return true;
+}
 
 function errorResponse(reply: FastifyReply, error: unknown, statusCode: number = 500) {
   if (error instanceof AudioTranslateError) {
@@ -37,8 +92,20 @@ export function registerTranslationRoutes(
   fastify: FastifyInstance,
   audioTranslateService: AudioTranslateService,
   translationService: MessageTranslationService | undefined,
-  prefix: string
+  prefix: string,
+  prisma: PrismaClient
 ): void {
+  // #8959 — traduire ou transcrire une voix À LA DEMANDE rapporte
+  // `tool.translation_request` ; le crochet ne voit que les réponses 2xx.
+  // Les routes de SUIVI de tâche (`/job/:jobId`) ne sont pas des demandes.
+  const creditAccepted = creditAcceptedTranslationRequest({
+    engagement: lazyTranslationRequestEngagement(() => prisma),
+    requesterOf: (request) => ({
+      userId: getUserId(request),
+      isAnonymous: (request as UnifiedAuthRequest).authContext?.isAnonymous ?? false
+    }),
+    onError: (error) => logger.warn('[VoiceRoutes] tool.translation_request engagement credit failed', { error })
+  });
   /**
    * POST /api/v1/voice/translate
    * Flexible voice translation - accepts audioBase64 OR attachmentId
@@ -53,6 +120,7 @@ export function registerTranslationRoutes(
     // déjà utilisé par routes/translation.ts (`/translate-blocking`) et
     // routes/translation-non-blocking.ts:268.
     preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
+    onResponse: creditAccepted,
     schema: {
       description: 'Translate audio to one or more target languages with voice cloning support. Accepts either direct audio (audioBase64) or an existing attachment (attachmentId). When using attachmentId, returns existing translations if available.',
       tags: ['voice'],
@@ -114,6 +182,10 @@ export function registerTranslationRoutes(
           description: 'Authentication required',
           ...errorResponseSchema
         },
+        403: {
+          description: 'Access denied to this attachment (caller is not a member of its conversation)',
+          ...errorResponseSchema
+        },
         404: {
           description: 'Attachment not found (when using attachmentId)',
           ...errorResponseSchema
@@ -154,7 +226,7 @@ export function registerTranslationRoutes(
           audioBase64,
           targetLanguages,
           sourceLanguage,
-          generateVoiceClone: generateVoiceClone ?? true
+          generateVoiceClone: await gatedVoiceClone(prisma, { requested: generateVoiceClone, voiceOwnerUserIds: [userId] })
         });
 
         return sendSuccess(reply, {
@@ -174,6 +246,10 @@ export function registerTranslationRoutes(
 
       if (!translationService) {
         return sendInternalError(reply, 'SERVICE_UNAVAILABLE', { message: 'Translation service not available' });
+      }
+
+      if (!(await ensureVoiceAttachmentAccessible(reply, prisma, userId, attachmentId!))) {
+        return;
       }
 
       const existingData = await translationService.getAttachmentWithTranscription(attachmentId!);
@@ -222,6 +298,7 @@ export function registerTranslationRoutes(
     // SECURITY: authentification obligatoire — voir commentaire sur
     // POST /translate ci-dessus. Même faille, même correctif.
     preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
+    onResponse: creditAccepted,
     schema: {
       description: 'Asynchronous voice translation with advanced options. Accepts audioBase64 or attachmentId. Supports webhooks for completion notification, priority queuing, and custom metadata.',
       tags: ['voice'],
@@ -297,6 +374,10 @@ export function registerTranslationRoutes(
           description: 'Authentication required',
           ...errorResponseSchema
         },
+        403: {
+          description: 'Access denied to this attachment (caller is not a member of its conversation)',
+          ...errorResponseSchema
+        },
         404: {
           description: 'Attachment not found (when using attachmentId)',
           ...errorResponseSchema
@@ -349,7 +430,7 @@ export function registerTranslationRoutes(
           audioBase64,
           targetLanguages,
           sourceLanguage,
-          generateVoiceClone: generateVoiceClone ?? true,
+          generateVoiceClone: await gatedVoiceClone(prisma, { requested: generateVoiceClone, voiceOwnerUserIds: [userId] }),
           webhookUrl,
           priority,
           callbackMetadata
@@ -365,6 +446,10 @@ export function registerTranslationRoutes(
 
       if (!translationService) {
         return sendInternalError(reply, 'SERVICE_UNAVAILABLE', { message: 'Translation service not available' });
+      }
+
+      if (!(await ensureVoiceAttachmentAccessible(reply, prisma, userId, attachmentId!))) {
+        return;
       }
 
       const result = await translationService.translateAttachment(attachmentId!, {
@@ -532,6 +617,7 @@ export function registerTranslationRoutes(
     // SECURITY: authentification obligatoire — voir commentaire sur
     // POST /translate ci-dessus. Même faille, même correctif.
     preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
+    onResponse: creditAccepted,
     schema: {
       description: 'Transcribe audio to text using Whisper. Accepts file upload (multipart/form-data), direct audio (audioBase64), or existing attachment (attachmentId). Returns transcription with detected language, confidence score, and word-level timestamps. OpenAI-compatible when using file upload.',
       tags: ['voice'],
@@ -597,6 +683,10 @@ export function registerTranslationRoutes(
         },
         401: {
           description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Access denied to this attachment (caller is not a member of its conversation)',
           ...errorResponseSchema
         },
         404: {
@@ -691,6 +781,10 @@ export function registerTranslationRoutes(
 
       if (!translationService) {
         return sendInternalError(reply, 'SERVICE_UNAVAILABLE', { message: 'Translation service not available' });
+      }
+
+      if (!(await ensureVoiceAttachmentAccessible(reply, prisma, userId, attachmentId!))) {
+        return;
       }
 
       const existingData = await translationService.getAttachmentWithTranscription(attachmentId!);

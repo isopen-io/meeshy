@@ -1,0 +1,167 @@
+{
+  "$doc": "LA MEESH (épopée § 6, #11176) — la géométrie UNIQUE de la pièce, dans le repère 120 × 120 de son SVG (origine en haut à gauche, y vers le bas, angles en degrés dans le sens horaire depuis 3 h). Le web (apps/web/src/components/game/meesh-coin.tsx, via lib/game/coin-geometry.ts) et iOS (MeeshCoinView.swift, GameEngravedBirds.swift) la LISENT ou la rejouent : aucune coordonnée de décor ne s'écrit ailleurs. Les couleurs n'y sont pas : chaque matière nomme une peinture dont les jetons vivent dans apps/web/src/styles/game.css (miroir iOS GamePalette). Les chemins n'emploient que M, L, Q, C et Z.",
+  "frame": 120,
+  "center": 60,
+  "body": {
+    "radius": 57,
+    "flute": { "radius": 53, "width": 1.4, "dash": [1.4, 2] }
+  },
+  "field": {
+    "obverse": { "radius": 35, "stroke": 1.6 },
+    "reverse": { "radius": 45, "stroke": 1.4 }
+  },
+  "inscription": {
+    "$doc": "La couronne de l'avers, UNIVERSELLE : jamais traduite. Le texte est répété `repeat` fois ; le glyphe d'indice i (espaces compris) se pose à l'angle startDeg + i × 360 / (longueur × repeat), centré sur le cercle de rayon `radius`, tourné de angle + 90 (la tête des lettres vers l'extérieur). Les espaces ne se dessinent pas ; le séparateur est un point, ou le décor de séparateur de l'édition (`editions.*.separator`).",
+    "text": "MEESHY · 1 MEESH · ",
+    "repeat": 2,
+    "separator": "·",
+    "radius": 45,
+    "startDeg": 180,
+    "fontSize": 8.4
+  },
+  "signature": { "size": 66, "strokeWidth": 100 },
+  "year": { "y": 27, "fontSize": 8, "letterSpacing": 2 },
+  "number": {
+    "$doc": "« Nº » : le N, puis le o en EXPOSANT et SOULIGNÉ (monté de ordinalRise), puis le nombre, plus petit que le N, redescendu sur la ligne de base. Le tout centré sur x = 60, ligne de base y. Jamais localisé.",
+    "y": 97,
+    "sign": "N",
+    "ordinal": "o",
+    "signSize": 12,
+    "ordinalSize": 6.6,
+    "ordinalRise": 4.6,
+    "valueSize": 8,
+    "valueGap": 1.4
+  },
+  "editions": {
+    "silver": {
+      "$doc": "SOBRE. De l'argent veiné d'un peu d'or ; Mee au revers.",
+      "metal": "coin-silver",
+      "flute": "rim",
+      "field": "coin-silver-in",
+      "separator": "dot",
+      "birds": [{ "bird": "meeJoy", "x": 35, "y": 31, "scale": 0.36, "flip": false }],
+      "decor": { "obverse": ["veins"], "reverse": ["veins"] }
+    },
+    "gold": {
+      "$doc": "RAFFINÉ. De l'or pur, centre compris ; Meo au revers.",
+      "metal": "coin-gold",
+      "flute": "ink",
+      "field": "coin-gold-in",
+      "separator": "star",
+      "birds": [{ "bird": "meoOpen", "x": 35, "y": 31, "scale": 0.36, "flip": false }],
+      "decor": { "obverse": ["beads", "rosette", "stars"], "reverse": ["beads", "rosette", "laurels"] }
+    },
+    "prism": {
+      "$doc": "ROYAL. De l'or mêlé de diamant, la tranche irisée ; Mee et Meo face à face au revers, Meo retourné.",
+      "metal": "prism",
+      "flute": "iris",
+      "field": "coin-diamond-in",
+      "separator": "dot",
+      "birds": [
+        { "bird": "meeJoy", "x": 13, "y": 33, "scale": 0.34, "flip": false },
+        { "bird": "meoOpen", "x": 107, "y": 33, "scale": 0.34, "flip": true }
+      ],
+      "decor": {
+        "obverse": ["iris", "beads", "cabochons", "sunburst", "sparkles"],
+        "reverse": ["iris", "beads", "cabochons", "sunburst", "crown", "sparkles"]
+      }
+    }
+  },
+  "decor": {
+    "veins": {
+      "$doc": "Les veines d'or de l'argent : quelques fils longs et souples, découpés au disque, à peine plus clairs que le métal.",
+      "width": 0.4,
+      "opacity": 0.42,
+      "paths": [
+        "M4 52 C22 46 36 56 54 50 C72 44 88 40 116 46",
+        "M10 86 C30 80 48 88 66 82 C84 76 98 80 112 72",
+        "M44 6 C50 18 46 28 56 38"
+      ]
+    },
+    "beads": {
+      "$doc": "Le grènetis : `count` perles de rayon `dot` sur le cercle `radius`, la première à startDeg. L'or en porte une couronne, le prisme deux (de part et d'autre de la tranche cannelée).",
+      "gold": [{ "radius": 49.8, "count": 96, "dot": 0.55, "startDeg": 0 }],
+      "prism": [
+        { "radius": 49.6, "count": 90, "dot": 0.5, "startDeg": 2 },
+        { "radius": 55.6, "count": 120, "dot": 0.45, "startDeg": 0 }
+      ]
+    },
+    "cabochons": {
+      "$doc": "Huit diamants taillés, sertis SUR la tranche : octogones réguliers de rayon `size`, la table (le plat taillé) à `table` × size, le premier à startDeg.",
+      "count": 8,
+      "radius": 53,
+      "startDeg": 22.5,
+      "size": 2.5,
+      "table": 0.5
+    },
+    "rosette": {
+      "$doc": "Le guilloché en rosace de l'or : `count` cercles de rayon `radius` dont les centres tournent sur le cercle `orbit` autour du centre de la pièce.",
+      "count": 24,
+      "orbit": 13,
+      "radius": 13,
+      "width": 0.22,
+      "opacity": 0.45
+    },
+    "sunburst": {
+      "$doc": "Le guilloché en soleil du prisme : `count` rayons du cercle `inner` au bord du champ moins `margin`, un sur deux raccourci à `short`.",
+      "count": 64,
+      "inner": 4,
+      "margin": 2,
+      "short": 0.74,
+      "width": 0.3,
+      "opacity": 0.4
+    },
+    "stars": {
+      "$doc": "Les petites étoiles de l'or, à la place des points de la couronne : étoile à `points` branches, rayons `outer` et `inner`, tournée comme la couronne.",
+      "points": 5,
+      "outer": 2.1,
+      "inner": 0.85
+    },
+    "laurels": {
+      "$doc": "Deux rameaux encadrent le numéro de l'or : la branche GAUCHE est décrite, la droite est son miroir autour de x = mirrorX. Une feuille : de (x, y) vers `angle`, longue de `length`, large de `width`.",
+      "mirrorX": 60,
+      "stem": "M43.2 96.8 Q34 95 31.8 81.5",
+      "stemWidth": 0.7,
+      "leaves": [
+        {"x": 41.43, "y": 96.32, "angle": 159.3, "length": 4.4, "width": 1.5},
+        {"x": 41.43, "y": 96.32, "angle": 239.3, "length": 4.4, "width": 1.5},
+        {"x": 38.31, "y": 94.67, "angle": 176.8, "length": 4.2, "width": 1.46},
+        {"x": 38.31, "y": 94.67, "angle": 256.8, "length": 4.2, "width": 1.46},
+        {"x": 35.75, "y": 92.08, "angle": 193.3, "length": 4.0, "width": 1.42},
+        {"x": 35.75, "y": 92.08, "angle": 273.3, "length": 4.0, "width": 1.42},
+        {"x": 33.75, "y": 88.55, "angle": 206.7, "length": 3.8, "width": 1.38},
+        {"x": 33.75, "y": 88.55, "angle": 286.7, "length": 3.8, "width": 1.38},
+        {"x": 31.8, "y": 81.5, "angle": 260.7, "length": 3.6, "width": 1.25}
+      ]
+    },
+    "crown": {
+      "$doc": "La couronne royale qui coiffe Mee et Meo au revers du prisme : un bandeau, cinq fleurons, des joyaux.",
+      "body": "M49 42.5 L48 33.0 L53.5 37.0 L56.5 31.0 L60 35.0 L63.5 31.0 L66.5 37.0 L72 33.0 L71 42.5 Z",
+      "band": "M48.6 42.5 L71.4 42.5 L71.4 45.1 L48.6 45.1 Z",
+      "width": 0.5,
+      "jewels": [
+        { "x": 48, "y": 33.0, "r": 0.9 },
+        { "x": 56.5, "y": 31.0, "r": 0.9 },
+        { "x": 63.5, "y": 31.0, "r": 0.9 },
+        { "x": 72, "y": 33.0, "r": 0.9 },
+        { "x": 60, "y": 43.8, "r": 1.05 },
+        { "x": 54, "y": 43.8, "r": 0.7 },
+        { "x": 66, "y": 43.8, "r": 0.7 }
+      ]
+    },
+    "sparkles": {
+      "$doc": "Les éclats de diamant du prisme : étoiles à quatre branches de rayon `size` (taille de la gorge : inner × size), teinte `--game-sparkle-<tint>`, scintillement décalé de `delay` secondes.",
+      "inner": 0.22,
+      "points": [
+        { "x": 38, "y": 44, "size": 3.2, "tint": 0, "delay": 0 },
+        { "x": 82, "y": 30, "size": 2.6, "tint": 1, "delay": 0.37 },
+        { "x": 88, "y": 74, "size": 3.4, "tint": 0, "delay": 0.74 },
+        { "x": 33, "y": 80, "size": 2.4, "tint": 2, "delay": 1.11 },
+        { "x": 70, "y": 88, "size": 2.8, "tint": 0, "delay": 1.48 },
+        { "x": 94, "y": 52, "size": 2, "tint": 3, "delay": 1.85 },
+        { "x": 26, "y": 58, "size": 2.2, "tint": 1, "delay": 2.22 },
+        { "x": 52, "y": 22, "size": 1.8, "tint": 4, "delay": 2.59 }
+      ]
+    }
+  }
+}

@@ -7,14 +7,17 @@ import XCTest
 @MainActor
 final class ConversationMediaGalleryVideoControlsTests: XCTestCase {
 
+    /// **L'UNITÉ, jamais le fichier seul** — `ConversationMediaGalleryView` a été
+    /// DÉCOUPÉ au #4014 (1259 lignes ⇒ vue / `+Rules` / `+Pages`), et une garde
+    /// qui adresse un fichier survit mal à une découpe : elle cesse de trouver
+    /// ce qu'elle garde, sans que rien ne dise que c'est un déménagement et non
+    /// une suppression.
+    ///
+    /// `AppSourceGuard.unit` résout l'unité par GLOB (`Type+*.swift`), jamais
+    /// par liste : un `+Overlays.swift` ajouté demain y entre sans que personne
+    /// ait à s'en souvenir.
     private func gallerySource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift")
     }
 
     func test_galleryVideoPage_postersButton_gatedOnPlayerAttached_notPlaying() throws {
@@ -23,7 +26,7 @@ final class ConversationMediaGalleryVideoControlsTests: XCTestCase {
         // play/pause du transport partagé. Le poster ne doit exister que
         // tant que le player n'est pas attaché à cette URL.
         let source = try gallerySource()
-        guard source.range(of: "if !isPlayerAttached {\n                playOrDownloadButton") != nil else {
+        guard source.range(of: #"if !isPlayerAttached \{\s*\n\s*playOrDownloadButton"#, options: .regularExpression) != nil else {
             XCTFail(
                 "GalleryVideoPage must gate playOrDownloadButton on !isPlayerAttached " +
                 "(not !isPlayerActive) so the paused state shows ONLY the shared transport controls."
@@ -32,20 +35,46 @@ final class ConversationMediaGalleryVideoControlsTests: XCTestCase {
         }
     }
 
+    /// **Le chrome du couloir haut est en Liquid Glass.**
+    ///
+    /// ## Ce témoin mesurait une FENÊTRE D'OCTETS, et il a fini par le payer
+    ///
+    /// Il découpait 2 600 caractères à partir de `controlsOverlay` et y comptait
+    /// trois `.adaptiveGlass(` — « X, compteur et save ». Deux de ces trois
+    /// contrôles n'existent plus : le compteur « n / N » est parti au #6144
+    /// (directive porteur) et la flèche d'enregistrement est devenue une entrée
+    /// du menu ⋯ au #6145. Le témoin restait vert parce que sa fenêtre DÉBORDAIT
+    /// sur les déclarations suivantes du fichier, où la colonne d'actions porte
+    /// ses propres cercles de verre.
+    ///
+    /// > **Une garde qui découpe au caractère ne mesure pas ce qu'elle nomme.**
+    /// > Elle est verte tant que le voisinage veut bien fournir le compte, et
+    /// > elle rougit au premier commentaire ajouté — c'est exactement ce que le
+    /// > #6162 a produit. Le témoin lit désormais le CORPS de la déclaration, et
+    /// > suit le second contrôle jusqu'au fichier où il vit réellement.
     func test_controlsOverlay_chrome_usesAdaptiveGlass() throws {
         let source = try gallerySource()
-        guard let start = source.range(of: "private var controlsOverlay") else {
-            XCTFail("controlsOverlay not found"); return
+        guard let body = declarationBody("private var controlsOverlay", in: source),
+              let menu = declarationBody("var overflowMenu: some View {", in: source)
+        else {
+            XCTFail("controlsOverlay ou overflowMenu introuvable"); return
         }
-        let end = source.index(start.lowerBound, offsetBy: 2600, limitedBy: source.endIndex) ?? source.endIndex
-        let body = String(source[start.lowerBound..<end])
         XCTAssertFalse(
             body.contains("xmark.circle.fill"),
-            "Le X doit être un glyphe xmark dans un cercle .adaptiveGlass, pas le xmark.circle.fill plein."
+            "Le X doit être un glyphe xmark dans un cercle de verre, pas le xmark.circle.fill plein."
         )
-        XCTAssertGreaterThanOrEqual(
-            body.components(separatedBy: ".adaptiveGlass(").count - 1, 3,
-            "X, compteur et save doivent porter chacun leur surface .adaptiveGlass."
+        // Le verre n'est plus peint ICI : la croix et le ⋯ montent les briques du
+        // chrome plein écran (#8878), dont le disque porte `.adaptiveGlass(` — épinglé
+        // côté SDK par `FullscreenChromeMetricsTests`. Suivre le contrôle jusqu'à la
+        // déclaration qui le PEINT, c'est la même remonte que celle des gardes de muet.
+        XCTAssertTrue(
+            body.contains("FullscreenCloseButton("),
+            "Le X du couloir haut est la croix partagée du chrome plein écran."
+        )
+        XCTAssertTrue(
+            menu.contains("FullscreenMoreMenu("),
+            "Et le ⋯, qui a remplacé la flèche d'enregistrement au #6145, est le menu partagé "
+            + "du même chrome — les deux occupants du couloir haut sont en verre, pas un seul."
         )
         XCTAssertFalse(
             body.contains("Circle().fill(Color.white.opacity(0.2))"),
@@ -53,13 +82,28 @@ final class ConversationMediaGalleryVideoControlsTests: XCTestCase {
         )
     }
 
+    /// Le corps d'une déclaration, accolades équilibrées — jamais un nombre de
+    /// caractères, qui fait dépendre le verdict de la longueur des commentaires.
+    private func declarationBody(_ ancre: String, in code: String) -> String? {
+        guard let debut = code.range(of: ancre) else { return nil }
+        var profondeur = 0
+        var resultat = ""
+        for caractere in code[debut.lowerBound...] {
+            resultat.append(caractere)
+            if caractere == "{" { profondeur += 1 }
+            if caractere == "}" {
+                profondeur -= 1
+                if profondeur == 0 { return resultat }
+            }
+        }
+        return nil
+    }
+
     func test_galleryVideoPage_posterButton_usesAdaptiveGlass() throws {
         let source = try gallerySource()
-        guard let start = source.range(of: "private var playOrDownloadButton") else {
+        guard let body = DeclarationBodyScanner.body(containing: "private var playOrDownloadButton", in: source) else {
             XCTFail("playOrDownloadButton not found"); return
         }
-        let end = source.index(start.lowerBound, offsetBy: 1400, limitedBy: source.endIndex) ?? source.endIndex
-        let body = String(source[start.lowerBound..<end])
         XCTAssertTrue(
             body.contains(".adaptiveGlassProminent(in: Circle()"),
             "Le bouton poster doit être en Liquid Glass prominent teinté accent " +

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "bubble.joinNotice.joined", "androidName": "bubble_joinNotice_joined", "status": "adopted" },
+        { "catalog": "app", "iosKey": "bubble.joinNotice.noAccount", "androidName": "bubble_joinNotice_noAccount", "status": "adopted" },
+        { "catalog": "app", "iosKey": "bubble.joinNotice.rule.messages.allowed", "androidName": "bubble_joinNotice_rule_messages_allowed", "status": "adopted" },
+        { "catalog": "app", "iosKey": "bubble.joinNotice.rule.messages.denied", "androidName": "bubble_joinNotice_rule_messages_denied", "status": "adopted" },
+        { "catalog": "app", "iosKey": "bubble.joinNotice.rule.files.allowed", "androidName": "bubble_joinNotice_rule_files_allowed", "status": "adopted" },
+        { "catalog": "app", "iosKey": "bubble.joinNotice.rule.files.denied", "androidName": "bubble_joinNotice_rule_files_denied", "status": "adopted" },
+        { "catalog": "app", "iosKey": "bubble.joinNotice.rule.images.allowed", "androidName": "bubble_joinNotice_rule_images_allowed", "status": "adopted" },
+        { "catalog": "app", "iosKey": "bubble.joinNotice.rule.images.denied", "androidName": "bubble_joinNotice_rule_images_denied", "status": "adopted" }
+      ]
+    }
+  }
+}

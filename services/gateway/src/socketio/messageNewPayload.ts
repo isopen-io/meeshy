@@ -1,5 +1,12 @@
 import type { Message } from '@meeshy/shared/types/index';
+import { e2eeUpgradeRequired } from '../services/e2ee/e2ee-upgrade-required';
+import { hasPerReaderEphemeralDeadline } from '@meeshy/shared/utils/ephemeral-countdown';
+import { servedMessageSender } from '@meeshy/shared/utils/participant-helpers';
 import { resolveWireSenderId } from './messageEditedPayload';
+import { stickerFromMetadata } from '../services/stickers/messageSticker';
+import { servedQuotedMessage } from '../services/messaging/servedQuotedMessage';
+import { attachmentReplyToFromMetadata } from '../services/messaging/attachmentReplySnapshot';
+import { authorProfileDecor, type AuthorAccount } from '../services/appearance/authorProfileDecor';
 
 /**
  * Source UNIQUE de la charge utile `message:new`.
@@ -41,11 +48,16 @@ import { resolveWireSenderId } from './messageEditedPayload';
  * - `replyTo` : passthrough BRUT côté socket, sender RECONSTRUIT et APLATI côté
  *   REST. Les fusionner changerait la forme consommée par un client sans
  *   certitude sur lequel des deux en dépend.
- * - `attachments` : normalisés par `serializeAttachmentForSocket` côté socket,
- *   servis bruts côté REST (le `select` du chemin REST les livre déjà à la
- *   forme rendue).
  * - `translations` : chaque chemin les obtient par sa propre voie (relecture
  *   Mongo côté socket, transformation directe côté REST).
+ *
+ * `attachments` a QUITTÉ cette liste (#7070) : les deux appelants le
+ * construisent désormais par la MÊME fonction (`serializeMessageAttachmentsForSocket`,
+ * `serializeAttachmentForSocket.ts`), sur le MÊME argument (`message.attachments`)
+ * — le chemin socket tenait jusque-là une boucle privée jumelle, supprimée par
+ * ce lot. Il reste un PARAMÈTRE plutôt qu'un champ de cette unité, et c'est
+ * une dette assumée : l'absorber ici retirerait à `MessageHandler.handleMessageEdit`
+ * la seule voie qui lui conserve le type Prisma exact de son `select` (#7028).
  *
  * Toute famille de champs DÉRIVÉE DE LA LIGNE MESSAGE appartient à cette unité,
  * jamais au site d'appel : c'est la seule disposition où « ajouter un champ »
@@ -77,8 +89,10 @@ export type MessageNewPayloadInputs = {
  * contrat `SocketIOMessage`, et l'émission REST cesserait d'être vérifiée.
  */
 function buildSenderPayload(message: Message) {
-  const participant = message.sender;
-  if (!participant) return undefined;
+  if (!message.sender) return undefined;
+  // #10120 — un invité y porte le nom DONNÉ, son pseudo `ano_…` en handle :
+  // la forme de la liste des messages, et rien du profil de session.
+  const participant = servedMessageSender(message.sender);
   const user = participant.user;
   return {
     id: participant.id,
@@ -87,9 +101,11 @@ function buildSenderPayload(message: Message) {
     type: participant.type,
     userId: participant.userId,
     username: user?.username
-      ?? (participant.type === 'anonymous' ? participant.displayName : undefined),
+      ?? (participant.type === 'anonymous' ? participant.username ?? participant.displayName : undefined),
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
+    // #10713 — le contour équipé de l'auteur, résolu au registre ; clé absente sans lui.
+    ...authorProfileDecor(user as AuthorAccount),
   };
 }
 
@@ -151,7 +167,29 @@ export function buildMessageNewPayload(
     isViewOnce: Boolean(message.isViewOnce),
     maxViewOnceCount: message.maxViewOnceCount ?? undefined,
     effectFlags: typeof raw['effectFlags'] === 'number' ? raw['effectFlags'] : 0,
-    expiresAt: message.expiresAt || undefined,
+    // #7451 — la DURÉE voyage, l'ÉCHÉANCE non.
+    //
+    // `message:new` est une diffusion de ROOM : une seule charge utile pour
+    // tous les lecteurs. Or l'échéance d'un éphémère est PAR DESTINATAIRE
+    // (`D(u) = sa première réception + la durée`), et `Message.expiresAt` porte
+    // désormais l'heure INTERNE de destruction — le plafond de rétention tant
+    // que personne n'a reçu. La servir ici afficherait « ce message disparaît
+    // dans 7 jours » sous un éphémère de trente secondes, sur TOUS les écrans.
+    //
+    // Le client décompte donc depuis SA réception locale, et `message:countdown-started`
+    // lui porte l'échéance serveur dès qu'elle existe — vers sa room PERSONNELLE,
+    // la seule adresse où une valeur par lecteur a un sens.
+    //
+    // Un message NON éphémère garde sa colonne : c'est la grâce de vue unique.
+    ephemeralDuration: message.ephemeralDuration ?? undefined,
+    // Flamme-œil (#8302) : pas de durée, mais la colonne est le plafond de
+    // rétention — même règle, rien ne part.
+    expiresAt: hasPerReaderEphemeralDeadline({
+      ephemeralDuration: message.ephemeralDuration,
+      effectFlags: typeof raw['effectFlags'] === 'number' ? raw['effectFlags'] : 0,
+    })
+      ? undefined
+      : message.expiresAt || undefined,
     isEdited: Boolean(message.isEdited),
     deletedAt: message.deletedAt || undefined,
     createdAt: message.createdAt || new Date(),
@@ -161,14 +199,41 @@ export function buildMessageNewPayload(
     sender: buildSenderPayload(message),
     attachments: inputs.attachments,
     replyToId: message.replyToId || undefined,
-    replyTo: inputs.replyTo,
+    // La PROTECTION et les TRADUCTIONS du message cité sont DÉRIVÉES DE LA
+    // LIGNE (cf. en-tête), donc elles appartiennent à cette unité : la forme du
+    // `replyTo` reste propre au transport, ce qu'il a le DROIT de transporter
+    // ne l'est pas. Le producteur REST/ZMQ reconstruisait sa citation champ par
+    // champ sans un seul champ de protection : répondre à un message à vue
+    // unique republiait son texte EN CLAIR dans la bulle temps réel, alors que
+    // le même fil rechargé par REST affichait « 👁️ 💬 ».
+    // #6164 — la PIÈCE NOMMÉE voyage avec la citation, et elle est DÉRIVÉE DE
+    // LA LIGNE (`metadata` du message QUI CITE, jamais du message cité), donc
+    // elle appartient à cette unité comme `sticker` dix lignes plus bas. Sans
+    // elle, la bulle temps réel désigne le média représentatif et le même fil
+    // rechargé par REST en désigne un autre : la citation SAUTE de la vignette
+    // 3 à la vignette 1 au premier rafraîchissement.
+    replyTo: message.replyTo
+      ? {
+          ...(inputs.replyTo as Record<string, unknown>),
+          ...servedQuotedMessage(message.replyTo, {
+            attachmentReplyTo: attachmentReplyToFromMetadata(message.metadata),
+          }),
+        }
+      : inputs.replyTo,
     storyReplyToId: message.storyReplyToId || undefined,
     forwardedFromId: message.forwardedFromId || undefined,
     forwardedFromConversationId: message.forwardedFromConversationId || undefined,
+    // Sticker (#4823) — hissé depuis `metadata.sticker` ICI, et chez aucun des
+    // deux producteurs : c'est une famille DÉRIVÉE DE LA LIGNE MESSAGE (cf.
+    // en-tête), et `location` a montré ce que coûte un hoist recopié par
+    // transport. iOS rend la décoration animée depuis ce champ ; sans lui le
+    // destinataire ne voit que le PNG de repli jusqu'au rechargement REST.
+    sticker: stickerFromMetadata(message.metadata) ?? undefined,
     isEncrypted: message.isEncrypted,
     encryptionMode: message.encryptionMode,
     encryptedContent: message.encryptedContent,
     encryptionMetadata: message.encryptionMetadata,
     encryptedPayload: buildEncryptedPayload(message),
+    e2eeUpgradeRequired: e2eeUpgradeRequired(message),
   };
 }

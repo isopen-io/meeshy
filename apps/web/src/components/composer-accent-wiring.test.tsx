@@ -1,0 +1,196 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+
+import { openComposerTools } from '@/test-support/composer-tools';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { Composer } from './composer';
+
+/**
+ * L'ACCENT SUBSTITUÉ DE `Composer`, CÂBLÉ (#6175, revue-correction défaut
+ * majeur 2 puis 3) — EXTRAIT de `composer.test.tsx` (le fichier franchissait
+ * le plafond dur de 1200 lignes du CLAUDE.md racine). Responsabilité
+ * DISTINCTE du câblage de la rangée haute (`composer-top-row-wiring.test.tsx`) :
+ * ici l'effet mesuré est un JETON CSS (`--accent` sur `[data-composer]`),
+ * jamais un bit de la charge envoyée.
+ *
+ * Au repos, `[data-composer]` n'écrit RIEN sur `--accent` (l'élément hérite
+ * l'accent de la conversation, posé par `withAccent` au niveau de l'écran) ;
+ * dès qu'une protection s'arme, il la SUBSTITUE localement, sans toucher au
+ * reste de l'écran. La LOI PURE (`composerAccentOf`, l'ordre iOS
+ * éphémère > flou > effets > conversation) est testée séparément par
+ * `lib/send/composer-accent.test.ts` — ce fichier-ci ne mesure QUE le
+ * câblage entre cette loi et le DOM réel de `Composer`.
+ */
+describe('Composer — l’accent substitué de la rangée haute est CÂBLÉ (#6175)', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+  beforeAll(() => {
+    ensureHappyDomRegistered();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  afterAll(async () => {
+    await act(async () => {});
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+
+  let container: HTMLDivElement;
+  let root: Root;
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  const mount = (onSend: (payload: { text: string; attachments: readonly unknown[]; language: string; protection: unknown }) => void) => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<Composer onSend={onSend} preferred={['fr']} />);
+    });
+    openComposerTools(container);
+    return container;
+  };
+
+  const type = (field: HTMLTextAreaElement, value: string) => {
+    act(() => {
+      field.value = value;
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
+
+  test('au repos, aucune substitution : `--accent` n’est pas écrit sur la racine', () => {
+    const el = mount(() => {});
+    const root = el.querySelector<HTMLElement>('[data-composer]')!;
+    expect(root.style.getPropertyValue('--accent')).toBe('');
+  });
+
+  test('flou armé ⇒ `--accent` de la racine devient `var(--ios-state-concealed)`', () => {
+    const el = mount(() => {});
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-composer-blur]')!.click();
+    });
+    const root = el.querySelector<HTMLElement>('[data-composer]')!;
+    expect(root.style.getPropertyValue('--accent')).toBe('var(--ios-state-concealed)');
+  });
+
+  test('éphémère armé ⇒ `--accent` de la racine devient `var(--color-error)`, et REVIENT à rien une fois désarmé', () => {
+    const el = mount(() => {});
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-composer-ephemeral]')!.click();
+    });
+    act(() => {
+      const buttons = [...el.querySelectorAll<HTMLButtonElement>('[data-composer-ephemeral-picker] button')];
+      buttons[1]!.click(); // « 30s »
+    });
+    const root = el.querySelector<HTMLElement>('[data-composer]')!;
+    expect(root.style.getPropertyValue('--accent')).toBe('var(--color-error)');
+
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-composer-ephemeral]')!.click(); // désarme.
+    });
+    expect(root.style.getPropertyValue('--accent')).toBe('');
+  });
+
+  test('flou ET éphémère : l’éphémère GAGNE (ordre iOS, `composerAccentOf`)', () => {
+    const el = mount(() => {});
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-composer-blur]')!.click();
+    });
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-composer-ephemeral]')!.click();
+    });
+    act(() => {
+      const buttons = [...el.querySelectorAll<HTMLButtonElement>('[data-composer-ephemeral-picker] button')];
+      buttons[1]!.click();
+    });
+    const root = el.querySelector<HTMLElement>('[data-composer]')!;
+    expect(root.style.getPropertyValue('--accent')).toBe('var(--color-error)');
+  });
+
+  test('après un envoi, la substitution TIENT — la protection reste armée (#8306)', () => {
+    const el = mount(() => {});
+    const field = el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!;
+    type(field, 'texte');
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-composer-blur]')!.click();
+    });
+    const root = el.querySelector<HTMLElement>('[data-composer]')!;
+    expect(root.style.getPropertyValue('--accent')).toBe('var(--ios-state-concealed)');
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[aria-label="Envoyer"]')!.click();
+    });
+    expect(root.style.getPropertyValue('--accent')).toBe('var(--ios-state-concealed)');
+  });
+
+  /**
+   * #7667 — la vue unique colore la barre, prime sur le flou, et les deux
+   * sont EXCLUSIFS : armer l'un éteint l'autre, jusqu'au `aria-pressed` de la
+   * bascule qu'on n'a pas touchée.
+   */
+  test('vue unique armée ⇒ `--accent` devient `var(--ios-state-view-once)` et le champ l’annonce', () => {
+    const el = mount(() => {});
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-composer-view-once]')!.click();
+    });
+    const root = el.querySelector<HTMLElement>('[data-composer]')!;
+    expect(root.style.getPropertyValue('--accent')).toBe('var(--ios-state-view-once)');
+    const field = el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!;
+    expect(field.getAttribute('aria-description')).toBe('Mode vue unique actif');
+  });
+
+  test('flou puis vue unique ⇒ le flou s’ÉTEINT (exclusifs), la barre prend la vue unique', () => {
+    const el = mount(() => {});
+    const blur = el.querySelector<HTMLButtonElement>('[data-composer-blur]')!;
+    const viewOnce = el.querySelector<HTMLButtonElement>('[data-composer-view-once]')!;
+    act(() => {
+      blur.click();
+    });
+    act(() => {
+      viewOnce.click();
+    });
+    expect(el.querySelector('[data-composer-blur]')!.getAttribute('aria-pressed')).toBe('false');
+    expect(el.querySelector('[data-composer-view-once]')!.getAttribute('aria-pressed')).toBe('true');
+    expect(el.querySelector<HTMLElement>('[data-composer]')!.style.getPropertyValue('--accent')).toBe('var(--ios-state-view-once)');
+
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-composer-blur]')!.click();
+    });
+    expect(el.querySelector('[data-composer-view-once]')!.getAttribute('aria-pressed')).toBe('false');
+    expect(el.querySelector('[data-composer-blur]')!.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  test('sans protection, le champ n’annonce rien', () => {
+    const el = mount(() => {});
+    const field = el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!;
+    expect(field.hasAttribute('aria-description')).toBe(false);
+  });
+
+  test('#9121 — toutes les icônes de la barre lisent `--composer-icon` : commune au repos, la couleur de l’effet armé sinon', () => {
+    const el = mount(() => {});
+    const root = el.querySelector<HTMLElement>('[data-composer]')!;
+    expect(root.style.getPropertyValue('--composer-icon')).toBe('var(--color-ios-ink-2)');
+    for (const selector of ['[data-composer-ephemeral]', '[data-composer-blur]', '[data-composer-view-once]', '[data-composer-effects]']) {
+      expect(el.querySelector<HTMLElement>(selector)?.style.color).toBe('var(--composer-icon)');
+    }
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-composer-ephemeral]')!.click();
+    });
+    act(() => {
+      [...el.querySelectorAll<HTMLButtonElement>('[data-composer-ephemeral-picker] button')][1]!.click();
+    });
+    expect(root.style.getPropertyValue('--composer-icon')).toBe('var(--color-error)');
+    expect(el.querySelector<HTMLElement>('[data-composer-blur]')?.style.color).toBe('var(--composer-icon)');
+  });
+
+  test('#9121 — la pastille de langue lit `--composer-icon`, comme sur iOS (`languageSelectorPill` → `iconTint`)', () => {
+    const el = mount(() => {});
+    const capsule = el.querySelector<HTMLElement>('[data-composer-language] > span')!;
+    expect(capsule.className).toContain('text-[var(--composer-icon,var(--color-ios-ink))]');
+  });
+});

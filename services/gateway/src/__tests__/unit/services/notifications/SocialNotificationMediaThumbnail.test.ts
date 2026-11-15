@@ -14,11 +14,21 @@
  */
 import { NotificationService } from '../../../../services/notifications/NotificationService';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { aliveAndUnblocked } from '../../../helpers/linked-to-everyone';
 
 jest.mock('../../../../utils/logger-enhanced', () => ({
   notificationLogger: { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() },
   securityLogger: { logViolation: jest.fn() },
 }));
+
+/** Le post que le bâtisseur RELIT pour servir son extrait (#8731) — vivant, sans traduction. */
+const liveExcerptSource = (content: string) => ({
+  content,
+  originalLanguage: null,
+  translations: null,
+  deletedAt: null,
+  expiresAt: null,
+});
 
 const ACTOR_ID = '507f1f77bcf86cd799439011';
 const RECIPIENT_ID = '507f1f77bcf86cd799439012';
@@ -37,7 +47,8 @@ const makePrismaMock = () => ({
   },
   user: {
     findUnique: jest.fn(),
-    findMany: jest.fn().mockResolvedValue([]),
+    findMany: jest.fn(aliveAndUnblocked()) as any, // #14251 comptes vivants
+    findFirst: jest.fn().mockResolvedValue(null),
   },
   conversation: { findUnique: jest.fn() },
   userPreferences: { findUnique: jest.fn().mockResolvedValue(null) },
@@ -103,11 +114,12 @@ describe('Notifications sociales — vignette média du contenu visé', () => {
 
       const created = createdDataOfType(prisma, 'story_reaction');
       expect(created.subtitle).toBe('Votre story');
-      expect(created.content).toBe('📷 Photo');
+      expect(created.content).toBe('Image haute définition');
       expect(created.metadata.mediaType).toBe('image');
-      // Image → on attache le fichier lui-même, absolutisé pour l'extension iOS.
-      expect(created.metadata.postThumbnailUrl).toBe('https://gate.meeshy.me/api/v1/static/story-bg.jpg');
-      expect(created.context.firstAttachmentUrl).toBe('https://gate.meeshy.me/api/v1/static/story-bg.jpg');
+      // #14318 — image → seule sa VIGNETTE voyage, absolutisée pour l'extension iOS.
+      expect(created.metadata.postThumbnailUrl).toBe('https://gate.meeshy.me/api/v1/static/story-bg-thumb.jpg');
+      expect(created.context.firstAttachmentUrl).toBe('https://gate.meeshy.me/api/v1/static/story-bg-thumb.jpg');
+      expect(JSON.stringify(created)).not.toContain('story-bg.jpg');
       expect(created.context.firstAttachmentMimeType).toBe('image/jpeg');
     });
 
@@ -128,27 +140,27 @@ describe('Notifications sociales — vignette média du contenu visé', () => {
 
       const created = createdDataOfType(prisma, 'post_like');
       expect(created.subtitle).toBe('Votre réel');
-      expect(created.content).toBe('🎬 Vidéo');
+      expect(created.content).toBe('Vidéo haute définition');
       expect(created.metadata.mediaType).toBe('video');
       expect(created.metadata.postThumbnailUrl).toBe('https://cdn.meeshy.me/reel-thumb.jpg');
       expect(created.context.firstAttachmentUrl).toBe('https://cdn.meeshy.me/reel-thumb.jpg');
       expect(created.context.firstAttachmentMimeType).toBe('image/jpeg');
     });
 
-    it('texte présent : l\'extrait prime sur le résumé média dans le sous-titre', async () => {
+    it('texte présent : le corps dit la longueur du texte puis le média — et une image SANS vignette ne voyage pas (#14318)', async () => {
       prisma.postMedia.findFirst.mockResolvedValue({
         mimeType: 'image/jpeg',
         fileUrl: 'https://cdn.meeshy.me/p.jpg',
         thumbnailUrl: null,
       });
 
+      prisma.post = { ...prisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('Mon plus beau voyage')) };
       await service.createPostLikeNotification({
         actorId: ACTOR_ID,
         postId: POST_ID,
         postAuthorId: RECIPIENT_ID,
         emoji: '😍',
         postType: 'POST',
-        postPreview: 'Mon plus beau voyage',
       });
 
       const payload = payloadOfType(mockIO, 'post_like');
@@ -156,10 +168,10 @@ describe('Notifications sociales — vignette média du contenu visé', () => {
       // contenu visé occupe le corps — texte ici, média sinon, les deux si
       // les deux existent.
       expect(payload.subtitle).toBe('a réagi 😍 à votre publication');
-      expect(payload.content).toBe('📷 Photo · Mon plus beau voyage');
-      // La vignette voyage quand même (push + in-app).
-      expect(payload.context.firstAttachmentUrl).toBe('https://cdn.meeshy.me/p.jpg');
-      expect(payload.metadata.postThumbnailUrl).toBe('https://cdn.meeshy.me/p.jpg');
+      expect(payload.content).toBe('Petit message texte · Image haute définition');
+      expect(payload.context.firstAttachmentUrl).toBeUndefined();
+      expect(JSON.stringify(payload)).not.toContain('cdn.meeshy.me/p.jpg');
+      expect(JSON.stringify(payload)).not.toContain('Mon plus beau voyage');
     });
 
     it('sans média ni texte : sous-titre = label nu (comportement historique préservé)', async () => {
@@ -179,7 +191,7 @@ describe('Notifications sociales — vignette média du contenu visé', () => {
   });
 
   describe('createPostCommentNotification — post photo sans texte', () => {
-    it('retombe sur le résumé média quand le post n\'a pas de texte + attache la vignette', async () => {
+    it('décrit le média quand le post n\'a pas de texte ; sans vignette, aucune image ne part (#14318)', async () => {
       prisma.postMedia.findFirst.mockResolvedValue({
         mimeType: 'image/png',
         fileUrl: '/uploads/photo.png',
@@ -196,10 +208,10 @@ describe('Notifications sociales — vignette média du contenu visé', () => {
       });
 
       const created = createdDataOfType(prisma, 'post_comment');
-      expect(created.subtitle).toBe('Votre publication · 📷 Photo');
-      expect(created.content).toBe('Magnifique !');
-      expect(created.metadata.postThumbnailUrl).toBe('https://gate.meeshy.me/uploads/photo.png');
-      expect(created.context.firstAttachmentUrl).toBe('https://gate.meeshy.me/uploads/photo.png');
+      expect(created.subtitle).toBe('Votre publication · Image haute définition');
+      expect(created.content).toBe('Petit mot reçu');
+      expect(created.metadata.postThumbnailUrl).toBeUndefined();
+      expect(created.context.firstAttachmentUrl).toBeUndefined();
     });
   });
 

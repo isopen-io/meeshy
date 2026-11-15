@@ -15,7 +15,7 @@ final class SharePendingSendContractTests: XCTestCase {
 
     private let photo = ShareStagedMedia(
         relPath: "cid_00000000-0000-4000-8000-000000000000/0.jpg",
-        ext: "jpg", mime: "image/jpeg", bytes: 2048
+        ext: "jpg", mime: "image/jpeg", bytes: 2048, originalName: "IMG_0111.jpg"
     )
 
     /// `.make()` génère un `clientMessageId` ALÉATOIRE par cible (round 1 de
@@ -90,6 +90,37 @@ final class SharePendingSendContractTests: XCTestCase {
         XCTAssertEqual(decoded.media[0].ext, "jpg")
         XCTAssertEqual(decoded.media[0].mime, "image/jpeg")
         XCTAssertEqual(decoded.media[0].bytes, 2048)
+        XCTAssertEqual(decoded.media[0].originalName, "IMG_0111.jpg", "le nom d'origine traverse la frontière (#11531)")
+    }
+
+    /// Une fiche écrite avant le nom d'origine se relit des deux côtés, sans
+    /// nom : l'envoi garde alors le nom de la copie, comme avant (#11531).
+    func test_ficheWrittenBeforeTheOriginalName_decodesWithoutIt_onBothSides() throws {
+        let legacy = Data("""
+        {"relPath":"cid_abc/0.jpg","ext":"jpg","mime":"image/jpeg","bytes":4}
+        """.utf8)
+
+        let extensionSide = try JSONDecoder().decode(ShareStagedMedia.self, from: legacy)
+        let appSide = try JSONDecoder().decode(SharePendingSendConsumer.PendingMedia.self, from: legacy)
+        let relaySide = try JSONDecoder().decode(ShareRelayHandoff.Media.self, from: legacy)
+
+        XCTAssertNil(extensionSide.originalName)
+        XCTAssertEqual(extensionSide.uploadFileName, "0.jpg")
+        XCTAssertNil(appSide.originalName)
+        XCTAssertNil(relaySide.originalName)
+    }
+
+    /// Le relais vers l'écran de l'app (sans session, conversation chiffrée)
+    /// porte le nom jusqu'à la pièce que l'écran envoie.
+    func test_relayHandoff_carriesTheOriginalNameToTheIncomingMedia() throws {
+        let handoff = ShareRelayHandoff(
+            shareId: "s1", createdAt: Date(timeIntervalSince1970: 1_785_000_000), text: nil,
+            media: [ShareRelayHandoff.Media(staged: photo)], conversationIds: ["conv42"])
+        let data = try JSONEncoder().encode(handoff)
+
+        let decoded = try JSONDecoder().decode(ShareRelayHandoff.self, from: data)
+
+        XCTAssertEqual(decoded.incoming(mediaRoot: nil).media.map(\.originalName), ["IMG_0111.jpg"])
     }
 
     /// Le sens RETOUR compte aussi : l'extension du lot B-2 relit sa propre

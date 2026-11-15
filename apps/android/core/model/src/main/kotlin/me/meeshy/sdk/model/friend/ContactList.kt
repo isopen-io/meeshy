@@ -2,8 +2,8 @@ package me.meeshy.sdk.model.friend
 
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.FriendRequestUser
-import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.UserPresence
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 
 /**
  * The filter a Contacts-list surface applies over the friend list. Port of the
@@ -35,13 +35,11 @@ val FriendRequestUser.resolvedName: String
     }
 
 /**
- * The three-state presence dot for a friend row at the caller's reference clock
- * [nowEpochMillis]. Bridges the roster record (whose `isOnline` is a nullable flag)
- * to the pure [UserPresence.state] SSOT: a null flag is treated as offline, so an
- * unknown-presence friend shows no dot rather than a false green one.
+ * La présence que la ligne du carnet a SERVIE (`isOnline` + `lastActiveAt`), ou `null` quand elle
+ * n'en porte aucune : rien n'est fabriqué, la ligne ne donne alors aucun point. La surface la passe
+ * à `rememberPresence`, qui la recoupe avec la carte vivante et la fait décroître avec l'horloge.
  */
-fun FriendRequestUser.presenceState(nowEpochMillis: Long): PresenceState =
-    UserPresence(isOnline = isOnline == true, lastActiveAt = lastActiveAt).state(nowEpochMillis)
+fun FriendRequestUser.servedPresence(): UserPresence? = UserPresence.served(isOnline, lastActiveAt)
 
 /**
  * The friend counts shown as a badge on each selectable Contacts filter chip
@@ -53,16 +51,24 @@ data class ContactFilterCounts(
     val all: Int,
     val online: Int,
     val offline: Int,
+    val phonebook: Int = 0,
+    val affiliates: Int = 0,
 ) {
     /**
-     * The count a filter chip displays. The pass-through filters ([ContactFilter.Phonebook]/
-     * [ContactFilter.Affiliates]) mirror [ContactFilter.All] since they narrow nothing yet.
+     * The count a filter chip displays. [ContactFilter.Phonebook] and [ContactFilter.Affiliates]
+     * count rows the friend roster does not hold (device phonebook, affiliate graph): their
+     * numbers are INJECTED by the hub that owns those sources, 0 until it provides them.
      */
     fun forFilter(filter: ContactFilter): Int = when (filter) {
         ContactFilter.Online -> online
         ContactFilter.Offline -> offline
-        ContactFilter.All, ContactFilter.Phonebook, ContactFilter.Affiliates -> all
+        ContactFilter.All -> all
+        ContactFilter.Phonebook -> phonebook
+        ContactFilter.Affiliates -> affiliates
     }
+
+    /** The chip suffix « (n) » — hidden at 0, as on iOS. */
+    fun badgeFor(filter: ContactFilter): Int? = forFilter(filter).takeIf { it > 0 }
 
     companion object {
         val Zero = ContactFilterCounts(all = 0, online = 0, offline = 0)
@@ -86,15 +92,40 @@ data class ContactReconcile(
 object ContactList {
 
     /**
-     * Assemble the accepted-friend list from the current user's received and
-     * sent friend requests (the app has no dedicated `/friends` endpoint — the
-     * friend graph is exactly the accepted requests, exactly like iOS).
+     * Assemble the accepted-friend list from ONE `direction=any&status=accepted` listing
+     * (`GET /directory/friend-requests`, read by cursor) — the friend graph is exactly the
+     * accepted requests, there is no dedicated `/friends` endpoint. Port of the iOS
+     * `FriendListAggregator.aggregate`.
      *
-     * For each accepted request the counterparty is the party that is **not**
-     * the current user (sender for received, receiver for sent, falling back to
-     * the other side for malformed rows). Deduplicated by user id (first record
-     * wins) and sorted online-first, then most-recently-active first.
+     * For each accepted request the counterparty is the party that is **not** the current
+     * user, whichever side initiated (the sender when the user received it, the receiver
+     * when the user sent it). A row with no such party is skipped, and the current user
+     * is excluded defensively so a self-referencing request can never list them as their
+     * own contact. Deduplicated by user id — the FIRST occurrence wins — and sorted
+     * online-first, then most-recently-active first.
      */
+    fun fromAcceptedRequests(
+        requests: List<FriendRequest>,
+        currentUserId: String,
+    ): List<FriendRequestUser> {
+        val byId = LinkedHashMap<String, FriendRequestUser>()
+        for (request in requests) {
+            if (request.status != ACCEPTED) continue
+            counterparty(request.sender, request.receiver, currentUserId)?.let { byId.putIfAbsent(it.id, it) }
+        }
+        return byId.values.sortedWith(onlineFirst)
+    }
+
+    /**
+     * The pre-cursor assembly from the two directional reads (`received` + `sent`).
+     * Kept compilable while its consumers migrate to [fromAcceptedRequests] over a single
+     * `direction=any` listing, which also sees the accepted relations the `received`
+     * read never returned.
+     */
+    @Deprecated(
+        message = "Read one direction=any listing and use fromAcceptedRequests(requests, currentUserId).",
+        replaceWith = ReplaceWith("fromAcceptedRequests(received + sent, currentUserId)"),
+    )
     fun fromAcceptedRequests(
         received: List<FriendRequest>,
         sent: List<FriendRequest>,
@@ -143,13 +174,20 @@ object ContactList {
      * `visible(friends, Online, query).size`. [online] and [offline] partition
      * [all] by construction (Offline is exactly "not online").
      */
-    fun counts(friends: List<FriendRequestUser>, query: String): ContactFilterCounts {
+    fun counts(
+        friends: List<FriendRequestUser>,
+        query: String,
+        phonebook: Int = 0,
+        affiliates: Int = 0,
+    ): ContactFilterCounts {
         val matching = visible(friends, ContactFilter.All, query)
         val online = matching.count { it.isOnline == true }
         return ContactFilterCounts(
             all = matching.size,
             online = online,
             offline = matching.size - online,
+            phonebook = phonebook.coerceAtLeast(0),
+            affiliates = affiliates.coerceAtLeast(0),
         )
     }
 
@@ -169,6 +207,17 @@ object ContactList {
         return ContactReconcile(friends = kept, needsRefetch = additions)
     }
 
+    /**
+     * The roster caption under a row's @handle (iOS `ContactRow`): « En ligne » when the live
+     * [state] is online, « Vu … » when a last-activity instant is served, nothing otherwise —
+     * a presence the server withheld is never fabricated.
+     */
+    fun caption(state: me.meeshy.sdk.model.PresenceState?, lastActiveAt: String?, nowMillis: Long): ContactPresenceCaption {
+        if (state == me.meeshy.sdk.model.PresenceState.ONLINE) return ContactPresenceCaption.Online
+        val at = isoToEpochMillisOrNull(lastActiveAt) ?: return ContactPresenceCaption.None
+        return ContactPresenceCaption.LastSeen(me.meeshy.sdk.model.PresenceLabels.lastSeen(at, nowMillis))
+    }
+
     private fun counterparty(
         primary: FriendRequestUser?,
         fallback: FriendRequestUser?,
@@ -178,9 +227,21 @@ object ContactList {
         return fallback?.takeIf { it.id != currentUserId }
     }
 
+    /**
+     * Online first, then the most recent activity. The activity is compared as an INSTANT
+     * (an unparseable or absent stamp sorts last): two ISO strings in different offsets
+     * do not order the same as text.
+     */
     private val onlineFirst: Comparator<FriendRequestUser> =
         compareByDescending<FriendRequestUser> { it.isOnline == true }
-            .thenByDescending { it.lastActiveAt ?: "" }
+            .thenByDescending { isoToEpochMillisOrNull(it.lastActiveAt) ?: Long.MIN_VALUE }
 
     private const val ACCEPTED = "accepted"
+}
+
+/** What a contact row says about presence under the handle. */
+sealed interface ContactPresenceCaption {
+    data object Online : ContactPresenceCaption
+    data class LastSeen(val since: me.meeshy.sdk.model.PresenceLastSeen) : ContactPresenceCaption
+    data object None : ContactPresenceCaption
 }

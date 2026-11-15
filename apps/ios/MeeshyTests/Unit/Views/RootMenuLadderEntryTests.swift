@@ -1,9 +1,10 @@
 import XCTest
 @testable import Meeshy
+import MeeshySDK
 
 /// Verrouille le contenu de l'échelle du bouton flottant menu.
 ///
-/// Le 3e barreau est le **journal d'appels** : icône téléphone, destination
+/// Le barreau qui suit les notifications est le **journal d'appels** : icône téléphone, destination
 /// `ContactsHubView` ouverte sur l'onglet Appels. Il a remplacé l'ancien
 /// barreau Contacts (icône `person.2.fill` → annuaire), qui restait atteignable
 /// via l'onglet Contacts du hub. Un retour en arrière casse ce test.
@@ -15,8 +16,34 @@ final class RootMenuLadderEntryTests: XCTestCase {
     func test_allCases_ordersLadderFromLinksToSettings() {
         XCTAssertEqual(
             RootMenuLadderEntry.allCases,
-            [.links, .notifications, .calls, .discover, .communities, .settings]
+            [.game, .links, .notifications, .calls, .discover, .communities, .settings]
         )
+    }
+
+    // MARK: - Le premier barreau ouvre le jeu (#17769)
+
+    func test_firstRung_isTheGame_closestToTheButton() {
+        XCTAssertEqual(RootMenuLadderEntry.allCases.first, .game)
+    }
+
+    func test_game_opensProgression_withTheTrophyItWearsElsewhere() {
+        XCTAssertEqual(RootMenuLadderEntry.game.route, .progression)
+        XCTAssertEqual(RootMenuLadderEntry.game.icon, "trophy.fill", "même icône que le Profil et les Réglages")
+    }
+
+    func test_ladder_dropsTheGameWhenTheGameIsHidden() {
+        XCTAssertEqual(RootMenuLadderEntry.ladder(gameHidden: false), RootMenuLadderEntry.allCases)
+        XCTAssertEqual(RootMenuLadderEntry.ladder(gameHidden: true), [.links, .notifications, .calls, .discover, .communities, .settings])
+    }
+
+    func test_chrome_drawsTheFilteredLadder() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/RootFloatingChrome.swift")
+        let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        XCTAssertFalse(source.contains("RootMenuLadderEntry.allCases"), "l'échelle dessinée suit « Jeu masqué »")
+        XCTAssertTrue(source.contains("RootMenuLadderEntry.ladder(gameHidden:"))
     }
 
     func test_allCases_lastRungIsSettings() {
@@ -25,8 +52,9 @@ final class RootMenuLadderEntryTests: XCTestCase {
 
     // MARK: - Le 3e barreau est le journal d'appels
 
-    func test_thirdRung_isCalls() {
-        XCTAssertEqual(RootMenuLadderEntry.allCases[2], .calls)
+    func test_callsRung_followsNotifications() {
+        let ladder = RootMenuLadderEntry.allCases
+        XCTAssertEqual(ladder[ladder.firstIndex(of: .notifications)! + 1], .calls)
     }
 
     func test_calls_usesPhoneIcon() {
@@ -54,10 +82,13 @@ final class RootMenuLadderEntryTests: XCTestCase {
         XCTAssertEqual(RootMenuLadderEntry.settings.route, .settings)
     }
 
-    func test_allRoutes_areHubRoutes() {
-        for entry in RootMenuLadderEntry.allCases {
+    /// La Progression reste un écran PROFOND : le bandeau du jeu ne se pose pas au-dessus du jeu lui-même
+    /// (`PlayerBannerPlacement`). C'est la seule exception de l'échelle.
+    func test_allRoutes_areHubRoutes_butTheGame() {
+        for entry in RootMenuLadderEntry.allCases where entry != .game {
             XCTAssertTrue(entry.route.isHub, "\(entry) doit pointer sur une route hub")
         }
+        XCTAssertFalse(RootMenuLadderEntry.game.route.isHub)
     }
 
     // MARK: - Badges
@@ -69,6 +100,7 @@ final class RootMenuLadderEntryTests: XCTestCase {
         XCTAssertNil(RootMenuLadderEntry.links.badge)
         XCTAssertNil(RootMenuLadderEntry.communities.badge)
         XCTAssertNil(RootMenuLadderEntry.settings.badge)
+        XCTAssertNil(RootMenuLadderEntry.game.badge, "« Ma Légende » signale par un point, sans chiffre (#18165)")
     }
 
     // MARK: - Présentation
@@ -92,5 +124,29 @@ final class RootMenuLadderEntryTests: XCTestCase {
                 "\(entry): \(entry.colorHex) n'est pas hexadécimal"
             )
         }
+    }
+
+    // MARK: - Le point de « Ma Légende » (#18165)
+
+    func test_onlyTheGameRungSignalsTheGameAttention() {
+        let raised = GameAttention(chestReady: true, flameAtRisk: true)
+        XCTAssertTrue(RootMenuLadderEntry.game.showsAttentionDot(raised))
+        for entry in RootMenuLadderEntry.allCases where entry != .game {
+            XCTAssertFalse(entry.showsAttentionDot(raised), "\(entry) ne porte pas le point du jeu")
+        }
+    }
+
+    func test_theGameRung_showsNoDot_whenNothingIsSignaled() {
+        XCTAssertFalse(RootMenuLadderEntry.game.showsAttentionDot(.none))
+    }
+
+    func test_theGameRungLabel_saysWhatTheGameSignals() {
+        XCTAssertEqual(RootMenuLadderEntry.game.accessibilityLabel(attention: .none), RootMenuLadderEntry.game.label)
+        let chest = RootMenuLadderEntry.game.accessibilityLabel(attention: GameAttention(chestReady: true, flameAtRisk: false))
+        let flame = RootMenuLadderEntry.game.accessibilityLabel(attention: GameAttention(chestReady: false, flameAtRisk: true))
+        let both = RootMenuLadderEntry.game.accessibilityLabel(attention: GameAttention(chestReady: true, flameAtRisk: true))
+        XCTAssertEqual(Set([RootMenuLadderEntry.game.label, chest, flame, both]).count, 4, "quatre états, quatre noms")
+        XCTAssertEqual(RootMenuLadderEntry.notifications.accessibilityLabel(attention: GameAttention(chestReady: true, flameAtRisk: true)),
+                       RootMenuLadderEntry.notifications.label)
     }
 }

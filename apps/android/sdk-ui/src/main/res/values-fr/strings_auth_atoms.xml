@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Atomes d'authentification : libellés alignés sur le catalogue iOS (MeeshyUI). -->
+
+
+    <string name="brand_signature_credit_open">Ouvrir la plateforme services.ceo dans le navigateur</string>
+</resources>

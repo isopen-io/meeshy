@@ -18,7 +18,7 @@ extension View {
                 let f = proxy.frame(in: .global)
                 Color.clear.preference(
                     key: ReelVisibilityPreferenceKey.self,
-                    value: [ReelFrame(id: id, midY: f.midY, height: f.height, kind: kind)]
+                    value: [ReelFrame(id: id, midY: FeedScrollPublication.reportedMidY(f.midY), height: f.height, kind: kind)]
                 )
             }
         )

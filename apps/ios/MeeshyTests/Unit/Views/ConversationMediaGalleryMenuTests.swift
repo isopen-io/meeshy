@@ -1,0 +1,228 @@
+import XCTest
+import MeeshyUI
+@testable import Meeshy
+
+/// **Le menu ⋯ remplace le bouton d'enregistrement direct** (#6145, directive
+/// porteur : « plutôt un menu hamburger … vertical » à droite du couloir haut,
+/// avec l'option de partager hors de l'application).
+///
+/// Le couloir haut portait DEUX boutons d'action directe : la croix, et une
+/// flèche descendante qui déclenchait l'enregistrement. La flèche devient un
+/// menu, parce qu'un second verbe — partager hors de Meeshy — n'avait aucune
+/// place où se poser sans encombrer un couloir de 56 pt.
+///
+/// Trois choses se vérifient ici, et la troisième est celle qui compte :
+///
+/// 1. le couloir ne monte plus de bouton d'enregistrement direct ;
+/// 2. le menu porte EXACTEMENT deux verbes — il n'y a pas d'entrée
+///    « Enregistrer sans la marque », et c'est une conséquence de #6146, pas un
+///    oubli : la marque ne se choisit plus, elle se déduit de l'origine du
+///    média, et l'offrir là où rien n'est marqué serait un contrôle inerte
+///    (loi 4 de la planche) ;
+/// 3. **chaque entrée a un TRANSPORT réel.** Un menu dont une ligne ne mène
+///    nulle part est pire que le bouton qu'il remplace : le bouton, lui, ne
+///    promettait qu'une seule chose et la tenait.
+///
+/// La note portée sous les verbes ne se rédige pas non plus : elle se DÉDUIT
+/// du prédicat de la marque (`MeeshyMediaSaveBranding.stamps`). Une phrase
+/// écrite à la main dirait ce que l'auteur croyait, pas ce que
+/// l'enregistrement fera — et les deux divergeraient au premier changement de
+/// règle, en silence.
+@MainActor
+final class ConversationMediaGalleryMenuTests: XCTestCase {
+
+    private static let gallery = "Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift"
+    private static let catalogPath = "Meeshy/Localizable.xcstrings"
+
+    /// Les sept locales expédiées (`CFBundleLocalizations`), moins aucune : le
+    /// catalogue de l'app est écrit en `fr`, qui en fait partie.
+    private static let shippedLocales = ["ar", "de", "en", "es", "fr", "it", "pt-BR"]
+
+    // MARK: - Le couloir haut
+
+    func test_topCorridor_mountsTheMenu_andNoLongerADirectSaveButton() throws {
+        let corridor = try body(of: "private var controlsOverlay: some View {")
+
+        XCTAssertTrue(
+            corridor.contains("overflowMenu"),
+            "le couloir haut monte le menu ⋯ à droite, là où vivait la flèche d'enregistrement"
+        )
+        XCTAssertFalse(
+            corridor.contains("requestSaveCurrent()"),
+            "l'enregistrement ne se déclenche plus d'un tap sur le couloir — il est devenu "
+                + "une ENTRÉE du menu, et un couloir qui garde les deux offre deux chemins "
+                + "vers la même action"
+        )
+    }
+
+    // MARK: - Le glyphe
+
+    /// **Le ⋯ est le menu du chrome plein écran** (#8878) : l'ellipse HORIZONTALE,
+    /// vocabulaire du fil, du réel et de la story — la verticalité (#6145) est
+    /// abandonnée pour que les visualiseurs n'aient qu'un seul ⋯. Ce qui survit de
+    /// l'intention d'origine : le MÊME disque que la croix, et une cible de 44 pt.
+    /// Les deux cotes vivent dans `FullscreenChromeMetrics` (épinglées côté SDK par
+    /// `FullscreenChromeMetricsTests`), pas dans ce fichier.
+    func test_theMenuGlyph_isTheSharedChromeMenu_inTheSameDiscAsTheCross() throws {
+        let menu = try body(of: "var overflowMenu: some View {")
+
+        XCTAssertTrue(
+            menu.contains("FullscreenMoreMenu(isBusy: saveCoordinator.isProcessing)"),
+            "le ⋯ est la brique partagée du SDK, son état occupé vient du coordinateur d'enregistrement"
+        )
+        XCTAssertFalse(
+            try source().contains("rotationEffect(.degrees(90))"),
+            "l'ellipse n'est plus tournée : un seul ⋯, horizontal, pour tous les visualiseurs"
+        )
+        XCTAssertTrue(
+            menu.contains("width: FullscreenChromeMetrics.tapTarget")
+                && menu.contains("height: FullscreenChromeMetrics.tapTarget"),
+            "l'emplacement du ⋯ absent garde la cible de 44 pt du chrome — le couloir ne saute pas"
+        )
+        XCTAssertEqual(FullscreenChromeMetrics.discDiameter, MeeshyControlSize.regular,
+                       "même disque que la croix : les deux occupants du couloir ont UN gabarit")
+        XCTAssertGreaterThanOrEqual(FullscreenChromeMetrics.tapTarget, 44,
+                                    "la cible tactile vaut 44 pt")
+    }
+
+    // MARK: - Deux verbes, deux transports
+
+    /// **Trois verbes depuis #12420** : « Enregistrer » et « Transférer » vivent
+    /// dans le rail ET dans le ⋯ (demande porteur 2026-10-23), et « Partager »
+    /// reste au ⋯ seul. Transférer n'est listé que si l'hôte sait transférer.
+    func test_theMenu_carriesSaveForwardAndShare_andEachHasARealTransport() throws {
+        let menu = try body(of: "var overflowMenu: some View {")
+
+        XCTAssertEqual(
+            menu.components(separatedBy: "Button {").count - 1, 3,
+            "trois verbes : Enregistrer, Transférer, Partager — « Enregistrer sans la marque » n'existe pas (#6146)"
+        )
+        XCTAssertTrue(menu.contains("ImagerMenuButton(action: { imageCurrent(scene) })"),
+                      "« Imager » s'ajoute sur une scène, par l'entrée partagée des menus de post (#13871)")
+        let saveVerb = try body(of: "private var saveVerb: String {")
+        let shareVerb = try body(of: "private var shareVerb: String {")
+        XCTAssertTrue(
+            saveVerb.contains("media.save.title") && shareVerb.contains("gallery.menu.share"),
+            "les verbes sont « Enregistrer » et « Partager »"
+        )
+        XCTAssertTrue(
+            menu.contains("requestSaveCurrent()") && menu.contains("shareCurrentOutsideMeeshy()")
+                && menu.contains("forwardCurrent()"),
+            "aucune entrée n'est listée sans chemin — chacune appelle son transport"
+        )
+        XCTAssertTrue(menu.contains("MessageActionVerb.forward"),
+                      "« Transférer » dit le mot et l'icône du fil — un seul vocabulaire")
+
+        let entries = menu.components(separatedBy: "Button {").dropFirst()
+        XCTAssertEqual(entries.count, 3)
+        for entry in entries {
+            XCTAssertTrue(
+                entry.contains(".accessibilityLabel("),
+                "chaque entrée porte son libellé VoiceOver"
+            )
+        }
+    }
+
+    /// **« Partager », tout simplement** (demande porteur 2026-10-23, #12420) :
+    /// le verbe ne dit plus « hors de Meeshy », dans aucune des sept locales.
+    func test_theShareVerb_saysShare_inEveryShippedLocale() throws {
+        let catalog = try JSONSerialization.jsonObject(
+            with: try Data(contentsOf: Self.appRoot.appendingPathComponent(Self.catalogPath)))
+        let strings = ((catalog as? [String: Any])?["strings"] as? [String: Any]) ?? [:]
+        let localizations = ((strings["gallery.menu.share"] as? [String: Any])?["localizations"] as? [String: Any]) ?? [:]
+        let expected = ["ar": "مشاركة", "de": "Teilen", "en": "Share", "es": "Compartir",
+                        "fr": "Partager", "it": "Condividi", "pt-BR": "Compartilhar"]
+        XCTAssertEqual(Set(expected.keys), Set(Self.shippedLocales))
+        for (locale, value) in expected {
+            let unit = (localizations[locale] as? [String: Any])?["stringUnit"] as? [String: Any]
+            XCTAssertEqual(unit?["value"] as? String, value, "`gallery.menu.share` en \(locale)")
+        }
+        XCTAssertTrue(try body(of: "private var shareVerb: String {").contains("defaultValue: \"Partager\""),
+                      "le texte de repli est le même mot")
+    }
+
+    func test_bothTransports_reuseTheExistingSaveFlow_ratherThanReimplementIt() throws {
+        let unit = try source()
+
+        XCTAssertTrue(
+            unit.contains(".mediaSaveFlow(saveCoordinator)"),
+            "le flux d'enregistrement existant reste l'hôte du menu"
+        )
+        XCTAssertTrue(
+            try body(of: "func shareCurrentOutsideMeeshy() {").contains("pick(.share"),
+            "partager hors de Meeshy passe par la destination `.share` du coordinateur, "
+                + "qui stage le fichier puis présente la share sheet système"
+        )
+        XCTAssertTrue(
+            try body(of: "func requestSaveCurrent() {").contains("saveCoordinator.save("),
+            "enregistrer passe par le composant unifié — l'image et la vidéo vont droit à l'album Meeshy (#8307)"
+        )
+    }
+
+    // MARK: - La note se DÉDUIT
+
+    func test_theBrandingNote_isDeducedFromTheSaveRule_neverWritten() throws {
+        let note = try body(of: "var brandingNote: String {")
+
+        XCTAssertTrue(
+            note.contains("MeeshyMediaSaveBranding.stamps("),
+            "ce que l'enregistrement fera se lit sur le prédicat de la marque, jamais sur "
+                + "une phrase recopiée : deux sources divergeraient au premier changement de règle"
+        )
+    }
+
+    // MARK: - Les clés neuves, dans les sept locales
+
+    func test_theMenuKeys_areTranslatedInEveryShippedLocale() throws {
+        let catalog = try JSONSerialization.jsonObject(
+            with: try Data(contentsOf: Self.appRoot.appendingPathComponent(Self.catalogPath)))
+        guard let strings = (catalog as? [String: Any])?["strings"] as? [String: Any] else {
+            return XCTFail("catalogue illisible")
+        }
+
+        for key in ["gallery.menu.share",
+                    "gallery.menu.brand.none", "gallery.menu.brand.meeshy"] {
+            let localizations = ((strings[key] as? [String: Any])?["localizations"] as? [String: Any]) ?? [:]
+            let missing = Self.shippedLocales.filter { localizations[$0] == nil }
+            XCTAssertTrue(
+                missing.isEmpty,
+                "`\(key)` manque dans \(missing.joined(separator: ", ")) — un `defaultValue` "
+                    + "est écrit en français, donc une locale sans entrée sert du français"
+            )
+        }
+    }
+
+    // MARK: - Helpers
+
+    private static var appRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
+    private func source() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
+    }
+
+    private func body(of anchor: String) throws -> String {
+        let code = try source()
+        guard let start = code.range(of: anchor) else {
+            XCTFail("ancre introuvable dans l'unité de la galerie : \(anchor)")
+            return ""
+        }
+        var depth = 0
+        var result = ""
+        for character in code[start.lowerBound...] {
+            result.append(character)
+            if character == "{" { depth += 1 }
+            if character == "}" {
+                depth -= 1
+                if depth == 0 { return result }
+            }
+        }
+        XCTFail("corps non refermé pour \(anchor)")
+        return ""
+    }
+}

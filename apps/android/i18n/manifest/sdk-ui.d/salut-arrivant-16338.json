@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        { "androidName": "bubble_joinNotice_sayHi", "status": "android-only" }
+      ]
+    }
+  }
+}

@@ -1,39 +1,69 @@
 /**
- * Preference Router Factory
- * Génère automatiquement les routes CRUD pour chaque catégorie de préférences
- * Inclut la validation automatique des consentements GDPR
+ * Preference Router Factory — les VINGT-HUIT alias par catégorie.
+ *
+ * Génère `GET`/`PUT`/`PATCH`/`DELETE` pour une catégorie de préférences. Depuis
+ * #4181, ces routes sont des ALIAS : la surface vivante est
+ * `GET`/`PATCH`/`DELETE /me/preferences` (`unified-routes.ts`), qui fait tout ce
+ * qu'elles font, en un appel, avec un débit par compte et un `If-None-Match`.
+ * Elles restent montées, marquées `Deprecation`, tant que le compteur d'accès
+ * par route n'est pas tombé à zéro sur deux versions publiées de CHAQUE client —
+ * iOS (dont l'outbox porte des mutations écrites HORS LIGNE), web et Android.
+ *
+ * Ce qu'elles gardent en propre : leur `schema` et leurs `defaults` viennent de
+ * leurs PARAMÈTRES, pas du registre. Un témoin qui monte un routeur `audio` sur
+ * le schéma de `privacy` doit obéir à ce qu'on lui passe. Ce qu'elles ne gardent
+ * PAS en propre : les RÈGLES — complétion par défauts, réduction aux clés
+ * soumises, lecture de la colonne JSON, et les trois gestes d'après-écriture.
+ * Toutes vivent dans `preference-registry.ts` et sont partagées avec les routes
+ * unifiées. C'est la seule forme où une fusion ne peut pas faire diverger les
+ * deux surfaces pendant la période d'alias.
  */
 
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { ZodSchema } from 'zod';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { zodIssueSchema, issuesServies } from '../../../utils/zod-issue-schema';
 import { ConsentValidationService } from '../../../services/ConsentValidationService';
 import { withMutationLog } from '../../../utils/withMutationLog';
-import { submittedKeysOnly } from '../../../utils/partial-update';
-import { invalidatePrivacyPreferences } from '../../../services/preferences/privacy-cache';
-import { emitPreferenceCategoryUpdated } from '../../../services/preferences/preferences-broadcast';
-import { sendSuccess, sendForbidden, sendBadRequest, sendUnauthorized, sendInternalError } from '../../../utils/response.js';
-import type { PreferenceCategory } from '../../../services/preferences/preferences-broadcast';
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { sendSuccess, sendBadRequest, sendUnauthorized, sendInternalError } from '../../../utils/response.js';
+import { depreciee, type AdresseDepreciee } from '../../../utils/deprecation';
+import {
+  applyCategoryWriteEffects,
+  readJsonPreferenceColumn,
+  resolveComplete,
+  keepUnnamedKeys,
+  resetDocumentFor,
+  submittedFrom,
+  type CategoryStorage,
+  type PreferenceCategory,
+  type PreferenceDocument,
+  type PreferenceSchema,
+} from './preference-registry';
+import { apiPath } from '@meeshy/shared/api/prefix';
+import { logError } from '../../../utils/logger.js';
+
+export type { CategoryStorage };
 
 /**
- * Où vit l'état d'une catégorie, quand ce n'est pas seulement son champ JSON.
+ * L'annonce de sursis d'un alias — déléguée au site UNIQUE (`utils/deprecation`,
+ * #4274), jamais réimplémentée ici.
  *
- * Une seule catégorie a besoin de le dire : `privacy` possède, en plus de son
- * document, les lignes clé/valeur héritées de janvier 2026 que les six portes
- * de diffusion obéissent encore (`services/preferences/privacy-storage`).
- * Tant que la factory lisait le seul document, la route et les portes se
- * contredisaient — et le `PATCH`, reconstruisant sa base sur ce que la route
- * lisait, écrasait un opt-out que personne n'avait demandé de lever.
- *
- * Injecté plutôt que testé sur `category` : la factory n'a pas à connaître
- * l'histoire d'une catégorie, seulement à demander à qui la connaît.
+ * Ce module en portait sa PROPRE version (`Deprecation: 'true'` posé à la main
+ * par un hook `onSend`) : le brouillon 2019, écrit avant que le site unique
+ * n'existe. Le jour où il a existé, les deux ont coexisté JUMELLES et
+ * DIVERGENTES — exactement ce que la dimension 11 (maintenabilité, UNE source
+ * de vérité) interdit, et exactement ce qu'un correctif de #4181 ne peut pas
+ * laisser derrière lui : sept catégories × quatre verbes auraient été la SEULE
+ * famille d'adresses dépréciées du dépôt à ne pas porter la forme RFC 9745
+ * (`Deprecation: @<secondes-epoch>`, une date structurée) que portent déjà
+ * `reports.ts`, `users-write.ts`, `profile.ts`, `register.ts`, `sharing.ts`,
+ * `feed.ts`, `friends.ts`. Pas de `retraitLe` : la date de retrait n'est pas
+ * connue, elle est CONDITIONNÉE au compteur d'accès de #4275. L'annoncer avant
+ * qu'il ne l'établisse serait pire que le silence — un client qui la lit et
+ * cesse d'appeler perdrait ses écritures hors ligne le jour où elle passe.
  */
-export type CategoryStorage<T> = {
-  /** Ce que le serveur tient pour stocké — au-delà du seul document JSON. */
-  readStored: (prisma: PrismaClient, userId: string) => Promise<Partial<T> | null>;
-  /** Après CHAQUE écriture réussie, une fois le document autoritatif. */
-  afterWrite?: (prisma: PrismaClient, userId: string) => Promise<void>;
+const ALIAS_DEPRECIE: AdresseDepreciee = {
+  depuis: '2026-08-29',
+  successeur: apiPath('/me/preferences'),
 };
 
 /**
@@ -45,19 +75,20 @@ export type CategoryStorage<T> = {
  * @param defaults - Valeurs par défaut si aucune préférence n'est settée
  * @param storage - Rangement de la catégorie ; le document JSON par défaut
  */
-export function createPreferenceRouter<T>(
+export function createPreferenceRouter(
   category: PreferenceCategory,
-  schema: ZodSchema<T>,
-  defaults: T,
-  storage?: CategoryStorage<T>
+  schema: PreferenceSchema,
+  defaults: PreferenceDocument,
+  storage?: CategoryStorage
 ) {
   return async function (fastify: FastifyInstance) {
     // Instancier le service de validation de consentement
     const consentService = new ConsentValidationService(fastify.prisma);
 
-    const isEmpty = (obj: any): boolean => {
-      return !obj || (typeof obj === 'object' && Object.keys(obj).length === 0);
-    };
+    // `onRequest`, pas `onSend` : c'est le choix documenté par
+    // `utils/deprecation.ts` lui-même — l'annonce doit sortir AVANT toute
+    // garde (auth, débit, rôle), quel que soit le verdict rendu ensuite.
+    fastify.addHook('onRequest', depreciee(ALIAS_DEPRECIE));
 
     /**
      * L'UNIQUE lecture de l'état stocké — partagée par le `GET` et par la base
@@ -65,49 +96,28 @@ export function createPreferenceRouter<T>(
      * document brut, le `PATCH` le complétait par les défauts. Un document
      * partiel se lisait donc différemment selon le verbe qui le regardait.
      */
-    const readStored = async (userId: string): Promise<Partial<T> | null> => {
-      if (storage) return storage.readStored(fastify.prisma, userId);
-
-      const prefs = await fastify.prisma.userPreferences.findUnique({
-        where: { userId },
-        select: { [category]: true }
-      });
-
-      return isEmpty(prefs?.[category]) ? null : (prefs[category] as Partial<T>);
-    };
-
-    /** L'état complet servi au client : les défauts, comblés par le stocké. */
-    const resolveComplete = async (userId: string): Promise<T> => ({
-      ...defaults,
-      ...((await readStored(userId)) ?? {})
-    });
+    const readStored = async (userId: string): Promise<PreferenceDocument | null> =>
+      storage
+        ? storage.readStored(fastify.prisma, userId)
+        : readJsonPreferenceColumn(fastify.prisma, userId, category);
 
     /**
-     * Le rangement hérité disparaît dès qu'une écriture rend le document
-     * autoritatif. Une panne ici rend 500 sans diffuser : sur la remise à zéro,
-     * des lignes de janvier survivantes RESSUSCITERAIENT le réglage effacé —
-     * annoncer un succès partiel serait annoncer l'inverse de ce qui s'est
-     * passé. Les trois verbes sont idempotents, le client peut retenter.
+     * L'état complet servi au client : les défauts, comblés par le stocké.
+     * La complétion elle-même est le SITE UNIQUE du registre — l'agrégat la
+     * réimplémentait, et un défaut ajouté n'apparaissait alors que d'un côté.
      */
-    const retireSupersededStorage = (userId: string) =>
-      storage?.afterWrite ? storage.afterWrite(fastify.prisma, userId) : Promise.resolve();
+    const resolveCompleteFor = async (userId: string): Promise<PreferenceDocument> =>
+      resolveComplete(defaults, await readStored(userId));
 
     /**
-     * Six portes de diffusion mémoïsent la confidentialité pendant cinq minutes
-     * (`services/preferences/privacy-cache`). Sans cette purge, couper ses
-     * accusés de lecture ne prenait effet qu'après ce délai — le serveur
-     * continuait de diffuser ce que l'utilisateur venait de demander de taire,
-     * l'écran lui confirmant l'inverse.
-     *
-     * Seule la confidentialité a une mémoire côté serveur : les autres
-     * catégories ne sont relues que par le `GET` de cette même porte.
+     * Les TROIS gestes d'après-écriture, en UN appel : retrait des lignes
+     * héritées de janvier 2026, purge du cache des portes de diffusion,
+     * diffusion `preferences:updated`. Partagés avec les routes unifiées
+     * (`preference-registry.ts`) — en perdre un d'un seul côté est le défaut le
+     * plus silencieux du module.
      */
-    const invalidateServerCache = (userId: string) => {
-      if (category === 'privacy') invalidatePrivacyPreferences(userId);
-    };
-
-    const emitPreferencesUpdated = (userId: string) =>
-      emitPreferenceCategoryUpdated(fastify, userId, category);
+    const afterWrite = (userId: string) =>
+      applyCategoryWriteEffects(fastify, userId, [category]);
     // GET /me/preferences/{category}
     fastify.get(
       '/',
@@ -138,16 +148,16 @@ export function createPreferenceRouter<T>(
         }
 
         try {
-          return sendSuccess(reply, await resolveComplete(userId));
+          return sendSuccess(reply, await resolveCompleteFor(userId));
         } catch (error: any) {
-          fastify.log.error({ error, category }, 'Error fetching preferences');
+          logError(fastify.log, `Error fetching preferences (category=${category})`, error);
           return sendInternalError(reply, 'FETCH_ERROR', { message: 'Failed to fetch preferences' });
         }
       }
     );
 
     // PUT /me/preferences/{category} - Remplacement complet
-    fastify.put<{ Body: T }>(
+    fastify.put<{ Body: PreferenceDocument }>(
       '/',
       {
         schema: {
@@ -164,7 +174,17 @@ export function createPreferenceRouter<T>(
                 data: { type: 'object', additionalProperties: true }
               }
             },
-            400: errorResponseSchema,
+            400: {
+              ...errorResponseSchema,
+              properties: {
+                ...errorResponseSchema.properties,
+                issues: {
+                  type: 'array',
+                  items: zodIssueSchema,
+                  description: 'Une entrée par champ refusé — une clé inconnue vit dans `keys` (#4589)',
+                },
+              },
+            },
             401: errorResponseSchema,
             403: {
               description: 'Consentements requis manquants',
@@ -187,14 +207,22 @@ export function createPreferenceRouter<T>(
         }
 
         try {
-          // Validation Zod
-          const validated = schema.parse(request.body);
+          // Validation Zod, STRICTE (#4589) : une clé non déclarée LÈVE ici
+          // plutôt que d'être retirée en silence par le mode *strip*.
+          const parsed = schema.strict().parse(request.body);
+          // #13936 — un remplacement ne rouvre pas une coupure de réception qu'il ne nomme pas.
+          const validated = await keepUnnamedKeys(fastify.prisma, userId, category, submittedFrom(schema, request.body), parsed);
 
-          // Validation des consentements GDPR
+          // #4578 — la garde lit les clés que le corps NOMME, pas celles que
+          // `schema.parse` vient d'injecter depuis les `default()`. Sur ce
+          // verbe la distinction est encore plus nette : `parse` REMPLIT le
+          // document, si bien qu'un `PUT {"theme":"dark"}` arrivait à la garde
+          // en affirmant les vingt autres clés — dont `telemetryEnabled: true`.
+          // Voir le commentaire détaillé sur le PATCH ci-dessous.
           const consentViolations = await consentService.validatePreferences(
             userId,
             category,
-            validated as Record<string, any>
+            submittedFrom(schema, request.body) as Record<string, any>
           );
 
           if (consentViolations.length > 0) {
@@ -228,10 +256,10 @@ export function createPreferenceRouter<T>(
                 where: { userId },
                 create: {
                   userId,
-                  [category]: validated as any
+                  [category]: validated
                 },
                 update: {
-                  [category]: validated as any
+                  [category]: validated
                 },
                 select: { [category]: true, id: true }
               });
@@ -246,24 +274,30 @@ export function createPreferenceRouter<T>(
             },
           });
 
-          await retireSupersededStorage(userId);
-          invalidateServerCache(userId);
-          emitPreferencesUpdated(userId);
+          await afterWrite(userId);
 
-          return sendSuccess(reply, (updated as any)[category] as T);
+          return sendSuccess(reply, (updated as Record<string, unknown> | null)?.[category]);
         } catch (error: any) {
           if (error.name === 'ZodError') {
-            return sendBadRequest(reply, 'VALIDATION_ERROR');
+            // #4589 — le refus NOMME ce qu'il refuse. Il servait
+            // `VALIDATION_ERROR` nu : le serveur savait exactement quelle clé
+            // était en cause, et ne le disait pas. Même défaut que #4487 sur
+            // `/me/consents`, et même correctif — `details` étale à la racine,
+            // et `issues` est DÉCLARÉ au schéma de réponse ci-dessus, sans quoi
+            // `fast-json-stringify` l'effacerait au dernier mètre.
+            return sendBadRequest(reply, 'VALIDATION_ERROR', {
+              details: { issues: issuesServies(error.issues ?? []) },
+            });
           }
 
-          fastify.log.error({ error, category }, 'Error updating preferences');
+          logError(fastify.log, `Error updating preferences (category=${category})`, error);
           return sendInternalError(reply, 'UPDATE_ERROR', { message: 'Failed to update preferences' });
         }
       }
     );
 
     // PATCH /me/preferences/{category} - Mise à jour partielle
-    fastify.patch<{ Body: Partial<T> }>(
+    fastify.patch<{ Body: PreferenceDocument }>(
       '/',
       {
         schema: {
@@ -280,7 +314,17 @@ export function createPreferenceRouter<T>(
                 data: { type: 'object', additionalProperties: true }
               }
             },
-            400: errorResponseSchema,
+            400: {
+              ...errorResponseSchema,
+              properties: {
+                ...errorResponseSchema.properties,
+                issues: {
+                  type: 'array',
+                  items: zodIssueSchema,
+                  description: 'Une entrée par champ refusé — une clé inconnue vit dans `keys` (#4589)',
+                },
+              },
+            },
             401: errorResponseSchema,
             403: {
               description: 'Consentements requis manquants',
@@ -306,21 +350,60 @@ export function createPreferenceRouter<T>(
           // Validation partielle Zod, réduite aux clés que le corps nomme :
           // `partial()` ne retire pas les `default()`, et sans cette réduction
           // la fusion ci-dessous serait inerte (cf. `utils/partial-update`).
-          const validated = submittedKeysOnly(
-            (schema as any).partial().parse(request.body) as Record<string, unknown>,
-            request.body
-          );
+          // Même site que le `mode=merge` unifié — l'`any` qui traînait ici
+          // était le seul endroit du module où le schéma perdait son type.
+          const validated = submittedFrom(schema, request.body);
 
           // La base de fusion est CE QUE LE SERVEUR OBÉIT, pas ce que le seul
           // document dit : sinon une clé absente du document repart au défaut,
           // et un réglage qu'on ne touchait pas se trouve levé en silence.
-          const merged = { ...(await resolveComplete(userId)), ...validated };
+          const merged = { ...(await resolveCompleteFor(userId)), ...validated };
 
-          // Validation des consentements GDPR sur les données mergées
+          // #4578 — la garde de consentement lit ce que le corps NOMME, jamais
+          // le document fusionné ni les défauts du schéma.
+          //
+          // Mesuré sur staging le 2026-08-31, sur un compte créé pour
+          // l'occasion : un `PATCH {"theme":"dark"}` était REFUSÉ en nommant
+          // `telemetryEnabled`, une clé que le corps ne portait pas. Trois
+          // catégories sur sept étaient inaccessibles à un compte neuf —
+          // `application`, `privacy`, `audio` — parce que cinq préférences
+          // gardées par un consentement valent `true` PAR DÉFAUT. L'utilisateur
+          // ne pouvait ni changer son thème, ni sa visibilité, ni sa qualité
+          // audio, et le refus nommait un champ qu'il n'avait pas touché.
+          //
+          // Le commentaire qui justifiait la lecture fusionnée disait : « une
+          // clé absente n'est pas éteinte, elle relève de son défaut — et c'est
+          // ce défaut qui sera servi et appliqué ». La seconde moitié est ce
+          // qu'il fallait vérifier, et la mesure la partage en deux :
+          //
+          //  · AUDIO — `transcriptionEnabled`, `audioTranslationEnabled`,
+          //    `ttsEnabled` : une garde d'USAGE existe et fait le travail
+          //    (`routes/attachments/translation.ts:186`/`:365`,
+          //    `MessageTranslationService.ts:2439`). Stocker `true` sans le
+          //    consentement voix n'applique RIEN — la garde d'écriture était
+          //    redondante, et c'est elle qui verrouillait les réglages.
+          //  · TÉLÉMÉTRIE / ANALYTIQUE — `telemetryEnabled`, `allowAnalytics` :
+          //    aucune garde d'usage CÔTÉ PASSERELLE. La garde d'écriture était
+          //    donc la seule, et la retirer laisserait un document affirmant
+          //    `true` pour un non-consentant. C'est pourquoi ces deux-là
+          //    passent à `false` PAR DÉFAUT dans le même lot : un système dont
+          //    l'état PAR DÉFAUT viole son propre modèle de consentement n'a
+          //    pas un problème de validation, il a un problème de défaut.
+          //    Mais `allowAnalytics` a des lecteurs CÔTÉ CLIENT (#10405) : le
+          //    traceur d'engagement iOS (`EngagementTracker`) s'éteint quand il
+          //    vaut `false`. Tant qu'un client n'écrit pas le consentement
+          //    (`PUT /me/consents/analytics`) avant la préférence, ce défaut
+          //    fige les sessions d'engagement — temps regardé, lecture
+          //    complète, ouverture d'un réel. Témoin :
+          //    `consent-gated-defaults-invariant.test.ts`.
+          //
+          // L'invariant qui en résulte est gardé par
+          // `consent-gated-defaults-invariant.test.ts` : aucune préférence
+          // gardée ne peut valoir `true` par défaut sans garde d'usage.
           const consentViolations = await consentService.validatePreferences(
             userId,
             category,
-            merged as Record<string, any>
+            validated as Record<string, any>
           );
 
           if (consentViolations.length > 0) {
@@ -345,10 +428,10 @@ export function createPreferenceRouter<T>(
                 where: { userId },
                 create: {
                   userId,
-                  [category]: merged as any
+                  [category]: merged
                 },
                 update: {
-                  [category]: merged as any
+                  [category]: merged
                 },
                 select: { [category]: true, id: true }
               });
@@ -363,17 +446,23 @@ export function createPreferenceRouter<T>(
             },
           });
 
-          await retireSupersededStorage(userId);
-          invalidateServerCache(userId);
-          emitPreferencesUpdated(userId);
+          await afterWrite(userId);
 
-          return sendSuccess(reply, (updated as any)[category] as T);
+          return sendSuccess(reply, (updated as Record<string, unknown> | null)?.[category]);
         } catch (error: any) {
           if (error.name === 'ZodError') {
-            return sendBadRequest(reply, 'VALIDATION_ERROR');
+            // #4589 — le refus NOMME ce qu'il refuse. Il servait
+            // `VALIDATION_ERROR` nu : le serveur savait exactement quelle clé
+            // était en cause, et ne le disait pas. Même défaut que #4487 sur
+            // `/me/consents`, et même correctif — `details` étale à la racine,
+            // et `issues` est DÉCLARÉ au schéma de réponse ci-dessus, sans quoi
+            // `fast-json-stringify` l'effacerait au dernier mètre.
+            return sendBadRequest(reply, 'VALIDATION_ERROR', {
+              details: { issues: issuesServies(error.issues ?? []) },
+            });
           }
 
-          fastify.log.error({ error, category }, 'Error partially updating preferences');
+          logError(fastify.log, `Error partially updating preferences (category=${category})`, error);
           return sendInternalError(reply, 'UPDATE_ERROR', { message: 'Failed to update preferences' });
         }
       }
@@ -419,16 +508,14 @@ export function createPreferenceRouter<T>(
           // sans lever, et ne crée aucune ligne vide pour le dire.
           await fastify.prisma.userPreferences.updateMany({
             where: { userId },
-            data: { [category]: null }
+            data: { [category]: await resetDocumentFor(fastify.prisma, userId, category) }
           });
 
-          await retireSupersededStorage(userId);
-          invalidateServerCache(userId);
-          emitPreferencesUpdated(userId);
+          await afterWrite(userId);
 
           return sendSuccess(reply, undefined, { message: `${category} preferences reset to defaults` });
         } catch (error: any) {
-          fastify.log.error({ error, category }, 'Error resetting preferences');
+          logError(fastify.log, `Error resetting preferences (category=${category})`, error);
           return sendInternalError(reply, 'RESET_ERROR', { message: 'Failed to reset preferences' });
         }
       }

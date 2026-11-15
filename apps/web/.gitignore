@@ -1,49 +1,14 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+node_modules
+dist
+dist-*
+.vite
+*.local
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
-.pnpm-store/
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-.cert/
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# local env files
-.env*.local
-.env
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-# Docker build artifacts (copied by prepare-docker-build.sh)
-shared/
-pnpm-workspace.yaml
-package.json.workspace
-
-# Uploads (runtime)
-uploads/
-
-certificates
+# Les plateformes natives sont VERSIONNEES depuis #5604 (D-18, decisions.md) :
+# elles portent des reglages qu'aucune commande ne rejoue — SYMROOT dans
+# `ios/App/App.xcodeproj/project.pbxproj`, icones et splash du travail
+# `assets`, demain signature et permissions. `bunx cap add android`/`ios` ne
+# les recree PAS si elles existent deja ; leurs propres `.gitignore` GENERES
+# (`android/.gitignore`, `ios/.gitignore`) gouvernent ce qui, A L'INTERIEUR,
+# ne se committe jamais (copie du dist, produits de build, Pods).
+render

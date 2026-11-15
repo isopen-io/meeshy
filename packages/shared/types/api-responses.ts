@@ -10,29 +10,31 @@
 
 import type { ConversationStats } from './conversation.js';
 import type { MentionedUser } from './mention.js';
+import type { PaginationMeta } from './pagination.js';
 
 /**
- * Standard pagination metadata - SINGLE SOURCE OF TRUTH
- * All pagination across the application should use this interface.
- *
- * @example Gateway response:
- * {
- *   success: true,
- *   data: [...],
- *   pagination: { total: 100, offset: 0, limit: 20, hasMore: true }
- * }
+ * Ré-exportée depuis `pagination.ts` (#4683) : la primitive vit dans un
+ * fichier sans dépendance pour que `user.ts` puisse l'importer sans repasser
+ * par `api-responses.ts` → `conversation.ts` → `user.ts` → (ici), qui formait
+ * un cycle. Aucun importeur de `PaginationMeta` depuis `api-responses.ts`
+ * n'a besoin de changer d'adresse.
  */
-export interface PaginationMeta {
-  total: number;
-  offset: number;
-  limit: number;
-  hasMore: boolean;
-}
+export type { PaginationMeta } from './pagination.js';
 
 export interface CursorPaginationMeta {
   limit: number;
   hasMore: boolean;
   nextCursor: string | null;
+  /**
+   * Forme de la pagination servie — `keyset` (curseur) ou `offset`.
+   *
+   * Un client qui reçoit `nextCursor` ne peut pas deviner s'il tient un
+   * curseur stable ou un décalage déguisé : les deux se relancent par la même
+   * clé, mais un `offset` saute des lignes dès qu'une insertion survient entre
+   * deux pages. Sans ce champ, la seule façon de le savoir est de lire le code
+   * de la route — donc de ne pas le savoir.
+   */
+  form?: 'keyset' | 'offset';
 }
 
 /**
@@ -40,6 +42,40 @@ export interface CursorPaginationMeta {
  */
 export interface ResponseMeta {
   conversationStats?: ConversationStats;
+  /**
+   * Identifiant OPAQUE de la page d'un fil (#10501) — l'impression d'un client
+   * le recopie dans `listing.feedRequestId`. Gardé nulle part par la passerelle.
+   */
+  feedRequestId?: string;
+  /**
+   * Identifiant OPAQUE et signé d'une recherche (#10506) — l'événement
+   * `discovery` le recopie. Il ne contient jamais le texte cherché.
+   */
+  searchId?: string;
+  /**
+   * `GET /posts/:postId/views` (#10483) — les vues de lecteurs SANS compte,
+   * annoncées en agrégat (« et N visiteurs ») à côté de la liste nommée.
+   */
+  anonymousViewCount?: number;
+  /**
+   * `GET /posts/:postId/views` (#10483) — les vues UNIQUES par jeton (comptes
+   * et anonymes) et leur part anonyme. Enregistrées, pas encore affichées.
+   */
+  uniqueViewCount?: number;
+  anonymousUniqueViewCount?: number;
+  /**
+   * L'attribution de la géolocalisation (#9609) — la licence CC-BY 4.0 de
+   * DB-IP Lite l'exige partout où un lieu déduit de l'adresse est servi ; la
+   * ville est approximative. Valeur : `GEOLOCATION_ATTRIBUTION`
+   * (`utils/client-session.ts`).
+   */
+  geolocation?: {
+    readonly provider: string;
+    readonly text: string;
+    readonly url: string;
+    readonly license: string;
+    readonly approximate: boolean;
+  };
   pagination?: PaginationMeta;
   timestamp?: string;
   requestId?: string;
@@ -66,6 +102,25 @@ export interface ResponseMeta {
    * une couverture complète.
    */
   deletedStoryIdsTruncated?: boolean;
+  /**
+   * Généralisation de `deletedStoryIds` à TOUS les scopes de
+   * `GET /social/posts` (#4149) : mêmes pierres tombales de delta-sync, plus
+   * réservées aux stories.
+   *
+   * La raison est identique et vaut pour chaque scope : un delta ne renvoie que
+   * ce qui existe ENCORE, donc un client qui a manqué l'événement de suppression
+   * (application fermée, hors-ligne) garde indéfiniment le contenu disparu dans
+   * son cache. `deletedStoryIds` reste servi tel quel pour les clients installés.
+   */
+  deletedIds?: string[];
+  /**
+   * `deletedIds` a débordé son plafond serveur : des disparitions plus anciennes
+   * n'ont PAS été rendues. Les pierres tombales n'ont aucun curseur de reprise,
+   * donc il n'existe pas de page suivante à demander — le seul recours est un
+   * chargement complet. Sans ce drapeau, un plafond atteint se lit exactement
+   * comme une couverture complète.
+   */
+  deletedIdsTruncated?: boolean;
 }
 
 /**
@@ -264,13 +319,6 @@ export interface StatsResponse extends ApiResponse<StatsResponseData> {}
  */
 export function isSuccessResponse<T>(response: ApiResponse<T>): response is ApiResponse<T> & { success: true; data: T } {
   return response.success === true && response.data !== undefined;
-}
-
-/**
- * Type guard to check if a response is an error
- */
-export function isErrorResponse<T>(response: ApiResponse<T>): response is ApiResponse<T> & { success: false; error: string } {
-  return response.success === false && response.error !== undefined;
 }
 
 /**

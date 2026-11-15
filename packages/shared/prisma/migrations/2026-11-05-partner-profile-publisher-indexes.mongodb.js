@@ -1,0 +1,116 @@
+/**
+ * Migration MongoDB — les index uniques des ÉDITEURS de packs (#16274), sans
+ * `prisma db push` (même raisons et même méthode que
+ * `2026-10-01-schema-indexes.mongodb.js`, #9035).
+ *
+ *  - `PartnerProfile.userId` UNIQUE : un compte possède au plus un éditeur. Le
+ *    schéma le déclare (`@unique`) depuis #11327, mais aucune migration ne le
+ *    posait : il n'existait que là où un `db push` avait tourné ;
+ *  - `PartnerProfile.slug` UNIQUE PARTIEL (`{ slug: { $type: 'string' } }`) :
+ *    deux éditeurs n'ont pas la même adresse, et un profil d'avant les éditeurs,
+ *    sans adresse, ne bloque rien ;
+ *  - `PartnerProfile.nameKey` UNIQUE PARTIEL : deux éditeurs ne portent pas un
+ *    nom qui se LIT pareil (`publisherNameKey`).
+ *
+ * `PackPublishers` vérifie ces unicités lui-même sans supposer les index ; les
+ * index ferment la course que le code ne peut pas fermer seul.
+ *
+ * ORDRE, IMPOSÉ : l'index de `nameKey` n'est pas posé tant qu'un profil nommé
+ * n'a ni clé ni marque « à arbitrer » (`nameDisputedAt`). Jouer d'abord le
+ * rattrapage `services/gateway/scripts/2026-11-05-backfill-pack-publishers.ts`
+ * (avec `DRY_RUN=1` pour lire son plan), qui pose `nameKey` sur les profils
+ * existants : pour un nom en double, la clé va au profil vérifié, puis au plus
+ * ancien, et l'autre GARDE son nom sans clé, marqué à arbitrer — aucun nom
+ * réécrit, aucune vérification retirée. Puis ce script, sur le staging AVANT
+ * la fusion du code, et en production après feu vert et sauvegarde.
+ *
+ * Idempotente : un index se reconnaît à sa CLÉ et à ses options ; présent tel
+ * quel, rien ne se passe ; présent avec d'autres options (l'unique NON partiel
+ * d'un ancien `db push`), il est remplacé. Les DOUBLONS sont relevés AVANT
+ * toute écriture : un index qu'ils bloquent n'est pas posé, le script le dit et
+ * sort en code 2 — les résoudre à la main, puis rejouer.
+ *
+ * Exécution (DRY_RUN=1 pour simuler, staging d'abord ; production après feu
+ * vert du porteur et sauvegarde vérifiée) :
+ *   docker exec -i -e DRY_RUN=1 meeshy-database-staging mongosh meeshy --quiet < 2026-11-05-partner-profile-publisher-indexes.mongodb.js
+ *   docker exec -i meeshy-database-staging mongosh meeshy --quiet < 2026-11-05-partner-profile-publisher-indexes.mongodb.js
+ */
+
+const dryRun = process.env.DRY_RUN === '1';
+
+const COLLECTION = 'PartnerProfile';
+
+const specs = [
+  { name: 'PartnerProfile_userId_key', key: { userId: 1 }, unique: true },
+  { name: 'PartnerProfile_slug_key', key: { slug: 1 }, unique: true, partialFilterExpression: { slug: { $type: 'string' } } },
+  { name: 'PartnerProfile_nameKey_key', key: { nameKey: 1 }, unique: true, partialFilterExpression: { nameKey: { $type: 'string' } }, requiresKeyedNames: true },
+];
+
+/** Le nom neutre (`NEUTRAL_PUBLISHER_NAME`) n'a pas de clé : tous les éditeurs sans nom le partagent. */
+const NEUTRAL_NAME = 'Éditeur';
+/** Le profil officiel « Meeshy » n'a pas de clé non plus : il ne porte aucun nom qu'un tiers pourrait prendre. */
+const OFFICIAL_NAME = 'Meeshy';
+
+const sameJson = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+const sameOptions = (index, spec) => (index.unique === true) === (spec.unique === true) && sameJson(index.partialFilterExpression, spec.partialFilterExpression);
+
+const duplicateGroups = (spec) => {
+  const field = Object.keys(spec.key)[0];
+  const pipeline = [
+    ...(spec.partialFilterExpression ? [{ $match: spec.partialFilterExpression }] : []),
+    { $group: { _id: { [field]: `$${field}` }, n: { $sum: 1 } } },
+    { $match: { n: { $gt: 1 } } },
+    { $count: 'groups' },
+  ];
+  const [row] = db.getCollection(COLLECTION).aggregate(pipeline).toArray();
+  return row ? row.groups : 0;
+};
+
+const report = { created: [], present: [], blocked: [] };
+const exists = db.getCollectionNames().includes(COLLECTION);
+
+for (const spec of specs) {
+  const existing = exists ? db.getCollection(COLLECTION).getIndexes() : [];
+  const match = existing.find((index) => sameJson(index.key, spec.key));
+
+  if (match && sameOptions(match, spec)) {
+    report.present.push(`${COLLECTION}.${match.name}`);
+    continue;
+  }
+
+  if (spec.requiresKeyedNames && exists) {
+    const unkeyed = db.getCollection(COLLECTION).countDocuments({
+      $or: [{ nameKey: null }, { nameKey: { $exists: false } }],
+      displayName: { $nin: [NEUTRAL_NAME, OFFICIAL_NAME] },
+      nameDisputedAt: null,
+    });
+    if (unkeyed > 0) {
+      report.blocked.push(`${COLLECTION}.${spec.name} — ${unkeyed} profil(s) nommé(s) sans clé : jouer d'abord services/gateway/scripts/2026-11-05-backfill-pack-publishers.ts`);
+      continue;
+    }
+  }
+
+  const groups = exists ? duplicateGroups(spec) : 0;
+  if (groups > 0) {
+    report.blocked.push(`${COLLECTION}.${spec.name} — ${groups} groupe(s) en doublon`);
+    continue;
+  }
+
+  const options = { name: spec.name, unique: true };
+  if (spec.partialFilterExpression) options.partialFilterExpression = spec.partialFilterExpression;
+
+  if (!dryRun) {
+    if (match) db.getCollection(COLLECTION).dropIndex(match.name);
+    db.getCollection(COLLECTION).createIndex(spec.key, options);
+  }
+  report.created.push(`${COLLECTION}.${spec.name}${match ? ` (remplace ${match.name})` : ''}`);
+}
+
+print(dryRun ? '===== SIMULATION — rien n’est écrit =====' : '===== Index des éditeurs de packs =====');
+print(`Créés (${report.created.length}) :`);
+report.created.forEach((line) => print(`  + ${line}`));
+print(`Déjà présents (${report.present.length})`);
+print(`Bloqués par des doublons (${report.blocked.length}) :`);
+report.blocked.forEach((line) => print(`  ! ${line}`));
+if (report.blocked.length > 0) quit(2);

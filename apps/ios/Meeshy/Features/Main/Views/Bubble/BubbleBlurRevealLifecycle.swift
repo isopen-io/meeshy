@@ -1,5 +1,7 @@
 import Foundation
 import SwiftUI
+import MeeshyUI
+import MeeshySDK
 
 /// Logique pure de cycle de vie pour la revelation d'un message floute.
 /// Was: ThemedMessageBubble.scheduleBlurReveal() + revealBlurredContent().
@@ -35,6 +37,11 @@ enum BubbleBlurRevealLifecycle {
 /// Encapsule la sequence d'animations (visible -> fog-in -> re-blur -> fog-out).
 @MainActor
 final class BubbleBlurRevealController: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published private(set) var isRevealed: Bool = false
     @Published private(set) var fogOpacity: CGFloat = 0
 
@@ -46,19 +53,44 @@ final class BubbleBlurRevealController: ObservableObject {
         self.visibilityDuration = duration
     }
 
-    /// Demande la revelation. Pour les messages view-once, le `consumeViewOnce`
-    /// est appele d'abord; la revelation ne demarre que si le serveur confirme.
+    /// Demande la révélation.
+    ///
+    /// **Une vue unique se révèle et RESTE lisible** (#7500) : elle ne
+    /// re-disparaît pas au bout de la durée de visibilité, parce que sa
+    /// disparition n'est pas une affaire de secondes — c'est la SORTIE de la
+    /// conversation qui la consomme. La relire le temps de la comprendre est
+    /// exactement ce que la directive demande.
+    ///
+    /// Le flou, lui, garde son va-et-vient : on révèle, on regarde, ça se
+    /// referme — rien n'est consommé, on peut recommencer.
+    ///
+    /// `consumeViewOnce` reste le canal, mais il ne DÉTRUIT plus ici : l'hôte
+    /// s'en sert pour ARMER la consommation et confirme aussitôt, puis
+    /// consomme quand on quitte. La révélation ne dépend donc plus d'un
+    /// aller-retour serveur — elle dépendait de lui pour afficher ce que ce
+    /// même aller-retour venait de détruire.
     func requestReveal(
         request: BubbleBlurRevealLifecycle.RevealRequest,
         consumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
     ) {
-        if request.requiresConsume {
-            consumeViewOnce?(request.messageId) { [weak self] success in
-                guard let self, success else { return }
-                Task { @MainActor in self.scheduleReveal() }
-            }
-        } else {
+        guard request.requiresConsume else {
             scheduleReveal()
+            return
+        }
+        consumeViewOnce?(request.messageId) { [weak self] success in
+            guard let self, success else { return }
+            Task { @MainActor in self.revealUntilLeaving() }
+        }
+    }
+
+    /// Révèle SANS programmer la disparition : ce contenu restera lisible tant
+    /// qu'on est dans la conversation.
+    private func revealUntilLeaving() {
+        revealTask?.cancel()
+        revealTask = nil
+        fogOpacity = 0
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            isRevealed = true
         }
     }
 
@@ -78,27 +110,44 @@ final class BubbleBlurRevealController: ObservableObject {
         revealTask?.cancel()
         revealTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            try? await Task.sleep(for: .seconds(self.visibilityDuration))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(self.visibilityDuration)), !Task.isCancelled else { return }
 
             // Phase 1: Fog condensation appears
             withAnimation(.easeIn(duration: BubbleBlurRevealLifecycle.Phase.fogIn.duration)) {
                 self.fogOpacity = 1
             }
-            try? await Task.sleep(for: .seconds(BubbleBlurRevealLifecycle.Phase.fogIn.duration - 0.05))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(BubbleBlurRevealLifecycle.Phase.fogIn.duration - 0.05)), !Task.isCancelled else { return }
 
             // Phase 2: Blur applies behind fog
             withAnimation(.easeOut(duration: BubbleBlurRevealLifecycle.Phase.blurApply.duration)) {
                 self.isRevealed = false
             }
-            try? await Task.sleep(for: .seconds(BubbleBlurRevealLifecycle.Phase.blurApply.duration + 0.05))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(BubbleBlurRevealLifecycle.Phase.blurApply.duration + 0.05)), !Task.isCancelled else { return }
 
             // Phase 3: Fog dissipates
             withAnimation(.easeOut(duration: BubbleBlurRevealLifecycle.Phase.fogOut.duration)) {
                 self.fogOpacity = 0
             }
+        }
+    }
+}
+
+/// Gate le blur+mask sur le fait que la bulle soit floutable. Voir l'appel
+/// dans `BubbleStandardLayout.contentStack` pour le rationale (perf GPU au
+/// scroll). Sorti de `BubbleStandardLayout.swift`, hors budget de taille (#8009).
+struct BlurRevealModifier: ViewModifier {
+    let isBlurrable: Bool
+    let shouldBlur: Bool
+    func body(content: Content) -> some View {
+        if isBlurrable {
+            content
+                .blur(radius: shouldBlur ? 20 : 0)
+                .mask(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
+                        .blur(radius: shouldBlur ? 5 : 0)
+                )
+        } else {
+            content
         }
     }
 }

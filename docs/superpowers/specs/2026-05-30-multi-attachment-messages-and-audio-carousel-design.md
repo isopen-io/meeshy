@@ -48,6 +48,7 @@ Décisions figées :
 
 1. **Ordre des groupes** = ordre d'ajout au composer (la première pièce de chaque type détermine la position du groupe).
 2. **Texte = message séparé, TOUJOURS, partout** (envoyé en **dernier**, après les pièces). Dès qu'au moins une pièce est jointe, le texte du composer part comme son propre message sans attachment. Ex. « légende + 3 vocaux (ajoutés en 1er) + 2 photos » → ① message audio (3 pistes), ② message photos (2), ③ message texte. **Inclut le cas 1 pièce + texte** : 1 vocal + légende → 2 messages (vocal, puis texte), pas de caption inline. Décision utilisateur informée 2026-05-30 (cf. *Réconciliation post-merge* ci-dessous).
+   **Révisé le 2026-10-10 (#9860)** : la légende d'un lot VISUEL (image, vidéo, fichier) voyage avec ses pièces dans UN message, comme l'envoient les autres clients — « légende + 5 photos » → un seul message. Le texte reste un message séparé, envoyé en dernier, quand le lot n'a aucune pièce visuelle (vocaux seuls). Source : `MultiAttachmentSendPlanner`.
 3. **Reply/forward reference** : posée sur le **premier** message envoyé uniquement (jamais dupliquée).
 4. **Optimistic insert** : un `insertOptimisticMediaMessage` par groupe (chacun son `cid`/`tempId`), pour affichage instantané.
 5. **`messageType`** : calculé par groupe (`.audio` pour le groupe audio, `.image`/`.video` pour le visuel).

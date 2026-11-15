@@ -11,7 +11,7 @@ logique ni le rendu visuel :
 3. titres de section/écran ancrés au rotor VoiceOver (parité `DeleteAccountView`).
 
 ## Périmètre (1 fichier)
-`apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift`
+`apps/ios/Meeshy/Features/Settings/Views/ChangePasswordView.swift`
 
 ## Étapes
 1. `validationRow` : masquer l'icône décorative (`.accessibilityHidden(true)`) ; combiner la

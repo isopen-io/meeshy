@@ -29,6 +29,7 @@ const mockGetCallSession = jest.fn<any>();
 const mockUpdateCallStatus = jest.fn<any>().mockResolvedValue(undefined);
 
 jest.mock('../../../services/CallService', () => ({
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn().mockImplementation(() => ({
     generateIceServers: jest.fn<any>().mockReturnValue([]),
     clearRingingTimeout: mockClearRingingTimeout,
@@ -64,6 +65,7 @@ jest.mock('../../../utils/socket-rate-limiter', () => ({
     destroy: jest.fn(),
   }),
   checkSocketRateLimit: jest.fn<any>().mockResolvedValue(true),
+  callSignalBudgetId: jest.requireActual<typeof import('../../../utils/socket-rate-limiter')>('../../../utils/socket-rate-limiter').callSignalBudgetId,
   SOCKET_RATE_LIMITS: {
     MESSAGE_SEND: { maxRequests: 20, windowMs: 60000, keyPrefix: 'socket:message:send' },
     CALL_SIGNAL: { maxRequests: 100, windowMs: 10000, keyPrefix: 'socket:call:signal' },

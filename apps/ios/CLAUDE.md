@@ -1,5 +1,8 @@
 # apps/ios - SwiftUI iOS App
 
+> ## ⛔ Aucune feature sans issue — règle de démarrage (directive 2026-08-26)
+> **Avant d'écrire la première ligne d'une feature, d'une amélioration ou d'un correctif non trivial**, ouvrir (ou retrouver) son **issue** dans `isopen-io/meeshy`, la placer dans un **milestone précis** (nommé par le résultat attendu, avec échéance) et l'inscrire au projet « Meeshy — pilotage » (https://github.com/orgs/isopen-io/projects/1) avec `Status = In Progress`. Le commit qui livre la ferme (`Closes #n`) avec sa preuve (gate, mesure, PR). **Une tâche sans issue n'existe pas ; un travail sans milestone n'est pas planifié.** Ce qu'on découvre en chemin (dette, dimension non mûre, suivi) devient une issue à son tour — jamais une ligne dans un fichier ou une page. Détail : § « Pilotage du développement » du `CLAUDE.md` racine.
+
 ## Tech Stack
 - SwiftUI (NOT UIKit), iOS 16.0+ (extension MeeshyWidgets : iOS 17.0+), Swift 6 (swift-tools-version 6.2)
 - MVVM architecture
@@ -85,6 +88,29 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 `** TEST FAILED **` + `Testing cancelled because the build failed` (exit 65) = le bundle de tests n'a pas compilé/linké. Lire la ligne `error:` juste au-dessus et corriger la compile — ne pas fouiller la logique des tests.
 - **Piège accès cross-file** : un `@State private var` d'une `View` SwiftUI est **inaccessible depuis un fichier d'extension `View+Xxx.swift`** (même module). Symptôme CI : `'<prop>' is inaccessible due to 'private' protection level`. Fix : retirer `private` (internal par défaut) sur toute propriété stockée touchée par un fichier extension frère. Cas vécu `composerFocusTrigger` (StoryViewerView ↔ StoryViewerView+Content.swift), corrigé 2026-06-23.
 
+### Piloter un iPhone branché depuis le Mac (#10682)
+
+`devicectl` n'a aucune entrée tactile, et `idb` ne voit que les simulateurs. Pour toucher l'écran d'un iPhone réel sans les mains du porteur, on passe par la télécommande XCUITest `MeeshyUIDeviceTests/DeviceRemote.swift`. C'est un serveur TCP lancé sur l'appareil, que `iproxy` relie au Mac par USB. Elle n'est dans aucun gate.
+
+```bash
+R=apps/ios/scripts/iphone-remote/iphone-remote.sh
+$R start                                        # compile, installe la build du dépôt, lance le serveur (≈ 2 min)
+$R url meeshy://conversation/<id>               # lien profond
+$R tap "Sticker"                                # toucher par libellé ou identifiant d'accessibilité
+$R xy 220 545                                   # toucher en POINTS (capture en pixels ÷ 3 sur un Pro Max)
+$R swipe 90 690 330 690                         # glisser rapide ; drag x1 y1 x2 y2 s pour un glisser lent
+$R tree | grep Button                           # arbre d'accessibilité
+$R shot nom                                     # capture → $IPHONE_REMOTE_OUT/nom.png
+$R log RECETTE                                  # journal de Meeshy filtré
+$R stop
+```
+
+- `start` **remplace l'app de l'iPhone** par la build du dépôt (Debug), sur l'environnement que l'app avait déjà choisi (staging ou production). En production, n'écrire qu'aux comptes de test convenus avec le porteur.
+- Ce qui n'a pas d'identifiant d'accessibilité ne se touche que par coordonnées, et un décalage de mise en page fait tomber le toucher à côté. Poser un `accessibilityIdentifier` sur tout ce qu'une recette doit atteindre (#10683).
+- Un NSLog temporaire (préfixe `RECETTE`) lu par `$R log RECETTE` mesure ce que l'écran ne montre pas. Il ne se commite jamais.
+- **iPhone relié en Wi-Fi** (`devicectl device info details` → `Transport Type: localNetwork`) : `iproxy` ne passe que par USB. Viser le tunnel CoreDevice avec `IPHONE_REMOTE_HOST=<Tunnel IP Address>` (l'adresse change à chaque reconnexion).
+- **Meeshy s'anime sans cesse**, donc XCUITest attend en vain qu'elle soit « au repos » avant chaque geste. Lancer le serveur avec `TEST_RUNNER_IPHONE_REMOTE_SPRINGBOARD=1` : les touchers passent par le tremplin, par coordonnées (`xy`, `dxy`, `press`, `swipe`). Dans ce mode, `url` fait tomber le serveur : ouvrir les liens avec `xcrun devicectl device process launch --payload-url <lien> me.meeshy.app`, et capturer l'écran avec `xcrun devicectl device capture screenshot`.
+
 ## Naming Conventions
 
 Based on [Swift.org API Design Guidelines](https://www.swift.org/documentation/api-design-guidelines/):
@@ -147,7 +173,7 @@ MediaCacheManager.shared    // Disk caching
 ### Bubble Component Architecture
 La bulle de message est decomposee sous `Meeshy/Features/Main/Views/Bubble/`. Le god object historique a ete elimine — `ThemedMessageBubble.swift` est un orchestrateur fin (~265 lignes) qui :
 1. Construit un `BubbleContent` (value model immuable) depuis le `Message` + contexte de traduction.
-2. Dispatche sur `content.kind` (`.deleted` / `.burned` / `.standard`) vers `BubbleDeletedView`, `BubbleBurnedView`, ou `BubbleStandardLayout`.
+2. Dispatche sur `content.kind` (`.deleted` / `.viewOnceSealed` / `.viewOnceOpened` / `.standard`) vers `BubbleDeletedView`, `BubbleViewOnceSealedView` (la puce `(1) · …`, #7618/#7579), ou `BubbleStandardLayout`.
 3. Possede les `@StateObject` de cycle de vie (`BubbleEphemeralController`, `BubbleBlurRevealController`) et les `@State` de presentation (sheets, fullscreen) — passes aux sous-vues comme `@ObservedObject`/`@Binding`.
 
 `BubbleStandardLayout` est l'orchestrateur du chemin standard. Il lit `content.text`, `content.attachments`, `content.reply`, `content.translation`, `content.reactions` via des `if let`/`switch` qui early-exit. Une bulle "Salut" n'instancie que le texte + meta-row : pas de quoted-reply, pas de panneau de traduction, pas de grille visuelle.
@@ -172,7 +198,7 @@ Source de verite : `BubbleContent.swift` (value model), `BubbleContentBuilder.sw
 - **Hybrid NavigationStack + ZStack** pattern
 - NavigationStack for hierarchical flows (conversation list → conversation detail)
 - ZStack for overlays (feed, menu ladder, floating buttons)
-- Router.swift (`Features/Main/Navigation/Router.swift`) manages NavigationPath
+- Router.swift (`Features/Navigation/Router.swift`) manages NavigationPath
 - `@Environment(\.dismiss)` for back navigation (replaces custom `onBack` callbacks)
 - Native iOS swipe-to-back gesture (replaces custom DragGesture)
 
@@ -283,6 +309,7 @@ Toute évolution de la logique de normalisation doit toucher les **trois** sites
 
 ### Regles
 - Ne JAMAIS afficher de popup ou banniere pour indiquer une traduction — c'est un indicateur subtil dans le meta row
+- **La descente du lecteur est UNE fonction : `ReaderPrism.resolve(for:)` (`packages/MeeshySDK/Sources/MeeshySDK/Auth/ReaderPrism.swift`).** `ConversationLanguagePreferences.resolved` (la bulle, le chemin REST) et `MessagePersistenceActor.readerPrism()` (chemin socket, drain NSE) la projettent toutes deux. Ne jamais réécrire la boucle, ni lire `MeeshyUser.preferredContentLanguages` (repli « fr », locale appareil du serveur seulement) pour ce qui se GRAVE dans `replyToJson` ou s'affiche dans le fil : deux prismes gravaient deux citations pour un même message (2026-09-03, #4945). Garde : `ConversationSyncEnginePrismTests` + parité `ConversationLanguagePreferencesTests`.
 - Le contenu traduit doit s'afficher EXACTEMENT comme du contenu natif (meme style, meme layout)
 - La resolution automatique de langue doit etre instantanee (pas de loading pour les traductions deja cachees)
 - La vue Langue du MessageMoreSheet est le SEUL point d'entree pour explorer les traductions (pas de sheet separee)
@@ -293,13 +320,15 @@ Conventions pour l'affichage de la taille de fichier sur un attachment non telec
 
 | Type | Composant | Layout |
 |---|---|---|
-| Video | `DownloadBadgeView(compact: true)` | Pill coin bas-droit avec icone + taille |
-| Image | `DownloadBadgeView(compact: false)` | Cercle 56pt centre + pill taille sous |
+| Video | `VideoAvailabilityResolver` + `MeeshyVideoPlayer` (bouton play → « ↓ taille » / anneau) | **Seul** composant de téléchargement vidéo (#7492) : `DownloadBadgeView` s'efface devant le lecteur (`yieldsToThePlayer`) |
+| Image | `DownloadBadgeView` | Cercle 56pt centre + pill taille sous |
 | Audio | `AudioPlayerView.playButtonLabel` | Cercle play-button + label taille sous (parite visuelle) |
 
 Source de verite : `attachment.fileSize` (Int, bytes) hydrate par le payload REST `/messages` et le payload socket `message:new` (ce dernier via `serializeAttachmentForSocket` cote gateway). Si la taille est 0, le label n'apparait pas (no-op).
 
 Le label audio est rendu par les helpers purs `AudioPlayerView.formattedNeedsDownloadLabel` / `formattedDownloadingLabel` / `formatBytes` (tests dans `MeeshyUITests/Media/AudioPlayerViewLabelTests.swift`).
+
+**Un téléchargement par média, partagé par toutes les surfaces (#7492).** `AttachmentDownloadCenter` (`Meeshy/Features/Main/Views/AttachmentDownloadCenter.swift`) tient, par clé de cache (URL résolue), le SEUL téléchargement en cours et sa progression ; chaque `AttachmentDownloader` n'est qu'une façade par vue qui observe la clé de son média (`observe(_:)`, appelé par les résolveurs, la galerie et `AudioMediaView`). Deux surfaces montrant le même média affichent la même progression et finissent ensemble ; une clé déjà sur disque se termine sans réseau. Ne jamais réintroduire un téléchargeur à état local.
 
 Pendant le telechargement, le label passe a `"410 KB / 850 KB"` via le payload `.downloading(progress:downloadedBytes:totalBytes:)` enrichi de `AudioAvailability`. `AudioMediaView` et `AudioAvailabilityResolver` propagent les bytes depuis `AttachmentDownloader.downloadedBytes` / `totalBytes`.
 
@@ -342,7 +371,7 @@ Le bitfield `effectFlags` est persisté par le gateway et lu par TOUS les client
 
 **Sources de vérité jumelles — toute évolution de la règle touche les deux :**
 - Swift : `MessageEffectPlan` (`packages/MeeshySDK/.../Models/MessageEffects.swift`)
-- TypeScript : `resolveMessageEffectPlan()` (`apps/web/lib/message-effects.ts`)
+- TypeScript : `effectPlaybackPlanOf()` (`apps/web/src/lib/effects-playback.ts`) — ex `resolveMessageEffectPlan()` du legacy retiré le 2026-09-24 (#7668)
 
 Bits partagés : `packages/shared/types/message-effect-flags.ts` ↔ `MessageEffectFlags`.
 
@@ -411,6 +440,434 @@ final class SomeViewModelTests: XCTestCase {
 - `@MainActor` on ALL test classes that test `@MainActor` ViewModels
 - Default param trick for `@MainActor` mocks: use `Type? = nil` + coalescing inside function
 
+## Le composer se pose SUR LA SCÈNE, et la scène prend tout l'écran (directive porteur 2026-10-30, #13839)
+
+**La scène est le plus grand 9:16 de la zone sûre** (`ComposerSceneFit`) : ni carte, ni couloir. Quand le clavier ou une vraie feuille ancrée monte, elle se réduit par une échelle ancrée en haut et un décalage, en UNE transaction ; le canvas ne se remet jamais en page pendant le geste. **Une bande, la frise, les effets, la barre de dessin, les réglages d'un outil ou les propriétés d'un objet sélectionné se posent PAR-DESSUS une scène qui garde sa taille** (#15226, loi `ComposerRestChrome.sceneIsReduced`, même règle qu'Android #15192).
+
+**Au repos, tout se pose SUR la scène** (`ComposerSceneOverlayChrome`, état servi par `ComposerRestChrome`) :
+- ✕ en haut à gauche ; ↶ ↷ en haut à droite, seulement s'il y a un historique (VoiceOver : « Défaire », jamais « Annuler », qui est le mot de la fermeture) ;
+- au centre du haut, la rangée des diapos dès deux diapos ;
+- à droite, la colonne des six boutons ronds de 44 pt : Texte, Média (appui long : les sources), Sticker, Son (un point dit le son de fond, son menu le retire ou le pose sur la scène), Dessin, ⋯ ;
+- en bas, « Public » et « Publier la story ▾ ». Publier est toujours là ; grisé, son toucher dit pourquoi. Le chevron se lit « Type de publication ».
+
+**⋯ porte tout le reste, par une loi pure** (`ComposerMoreMenuPolicy`) : ajouter une diapo, le fond (ou, avec un média de fond, transitions, effet visuel et cadrage), animation, durée, légende, écrire le post, mention, hashtags, lieu, puis les entrées d'export de `ComposerOverflowPolicy`, « Tout effacer » en dernier et confirmé. Aucune option n'a disparu : chacune a UN chemin.
+
+**Un outil ouvert retire le repos.** Le dessin a sa barre en bas (`ComposerDrawingBar` : stylo, marqueur, gomme, couleur, épaisseur, lissage, ↶, OK) ; le texte en frappe a sa barre collée au clavier (L4). **Un objet touché est SÉLECTIONNÉ, sans s'ouvrir** (L5) : le canvas du SDK l'encadre d'un pointillé blanc hors export, les outils se retirent et la barre libellée Modifier · Ordre · Dupliquer · Temps · Retirer paraît au-dessus de Public et Publier (`ComposerSelectionBar`, servie par la loi `ComposerSelectionActions`) ; le menu d'appui long n'en est qu'un raccourci, toucher la scène à vide désélectionne. La colonne droite (`ComposerTrailingColumn`) ne sert plus que les contrôles d'un outil ouvert. Le viseur garde sa sortie visible (« Revenir à la scène »).
+
+**Grand écran : deux rails LIBELLÉS autour de la scène** (L6, directive porteur du 2026-10-30). La bascule dépend de la PLACE LIBRE, jamais de la classe de taille ni du modèle : `ComposerSceneArrangement.resolve(width:height:previous:)` pose les rails quand, à côté d'une scène 9:16 pleine hauteur (Publier, 56 pt, et deux marges de 16 pt déduits), il reste deux rails de 112 pt et leurs marges (256 pt), avec 16 pt d'hystérésis ; le meuble la nourrit de la taille de sa racine, clavier ignoré, et la rejoue à la rotation, en Split View et en Stage Manager sans toucher à l'état ; aux tailles de texte d'accessibilité, repli en surimpression. Rail gauche (`ComposerLabeledRail`, loi `ComposerLabeledRailLayout`) : Fermer · Texte · Média · Sticker · Son · Dessin · Fond, puis les entrées de ⋯ qui tiennent, puis « ⋯ Plus » pour le reste (Animation et Tout effacer y restent toujours), l'outil ouvert surligné. Rail droit « SÉLECTION » (`ComposerSelectionRail`) : les actions de L5, vide sans sélection, ↶ ↷ au pied. Publier sous la scène, à sa largeur ou au moins 300 pt ; la rangée des diapos au-dessus d'elle ; feuilles, bandes, frise, réglages d'outil et barre de dessin sous la scène, dans sa colonne, jamais dessus ni sous un rail (`ComposerSceneRailsInsets.lowerFloors`). Les rails se taisent pendant la frappe et au viseur sans libérer leur place ; sous une feuille, ils restent parlants. Échap (`ComposerHardwareKeys`) ferme la feuille, puis le viseur, puis l'outil, puis la sélection, puis demande la fermeture ; Retour valide OK ; aucune `focusedValue` (#11239).
+
+**Partis** : le rail gauche, la colonne droite au repos, les pastilles de compte des portes, la barre haute et le champ de légende permanent (il ne paraît qu'en écrivant ou quand une légende existe). *(La photothèque d'ouverture n'est plus partie : #17269 l'a rétablie — un composer vierge arme la caméra derrière et ouvre la photothèque à mi-hauteur devant, `ComposerOpeningPlan`.)*
+
+**Le viseur porte sa colonne de scène sur son rail bas gauche, et la scène se pose PAR-DESSUS lui** (#17432, directives porteur du 2026-11-10, qui retournent « pas de rail au viseur » d'A8, #17109). Les rails de la SCÈNE cèdent toujours au viseur (`ComposerSceneCameraOverlay.yieldsToViewfinder(.rails)`), mais le rail bas gauche de la capture (`ComposerCaptureBottomRow`, `.bottomLeading`) porte **Galerie · Texte · Fond · Stickers · Son** (noms simples, Galerie en premier, directive porteur du 2026-11-10 ; « Son » ouvre la feuille des sons de la scène, #18654) AVANT l'entrée de look, **une seule, « Effets »** (#18639, porteur 2026-11-15 : elle ouvre la bande mêlée que ses puces trient — Tout · Filtres · Cadres · Effets image · Effets visage · ambiances —, la retoucher la replie ; `ComposerLookStripRule.railFamily`, les familles ne sont plus qu'un détail de tri), chaque case nommée SOUS elle avant tout choix, la choisie en gras et deux points plus grand (`nameSize(chosen:)`), alignés avec elle et séparés d'un trait (`ComposerViewfinderColumn.separatesLooks`, vue A8 de `docs/product/composer-vue-finale.md`), par une loi pure (`ComposerViewfinderColumn.entries`, `ComposerViewfinderColumn.label`) ; chaque entrée réutilise l'action du composer (`handleRailDoor`, photothèque d'ouverture). **Le viseur reste vivant pendant tout le processus** (`ComposerViewfinderEntry.camera(after:)` : ouverte, fermée sans choix ou choix fait, la caméra est GARDÉE, sauf un élément CHOISI en Galerie). Galerie, Fond et Stickers ouvrent leur feuille PAR-DESSUS le viseur : la feuille ancrée se monte au-dessus de l'enveloppe de capture tant que le viseur se montre (`anchoredSheetRidesViewfinder`, `ComposerHostAnchoredSheetLayer(aboveViewfinder:)`), la photothèque est une feuille système. **Le texte se saisit SUR le viseur vivant** (#18638, porteur 2026-11-15, qui retourne « le texte prend la scène ») : le clavier monte avec sa barre de style (`keyboardDock`), la saisie se pose sur l'aperçu par le canvas du viseur (`ComposerViewfinderSceneCanvas.Typing`, loi `ComposerViewfinderScene.typedTextId` : un seul canvas tient le clavier, la scène couverte se tait), le déclencheur, le rail et la phrase du geste se retirent pendant la frappe (`servesCaptureControls`), et un toucher à vide la termine sans rien prendre (`route(…typing:)` → `.endTyping`) ; sous un fond média, où les objets ne se montrent pas sur l'aperçu, le texte s'écrit encore sur la scène (`ComposerViewfinderColumn.typesOnViewfinder`). Le cadre d'un fond média s'édite SUR la scène : le viseur la lui cède, caméra armée (`ComposerViewfinderColumn.yieldsToScene(toolPresentsSheet:typesOnViewfinder:)`, `MeeshyComposerHost.viewfinderYieldsToScene`, lu par `ComposerCaptureSurfaceRule.showsViewfinder`), puis revient dès que l'outil se referme — la bande du cadre compte comme outil ouvert (`ComposerViewfinderColumn.entryToolIsOpen`), et armer la caméra reprend toujours la scène. Le fond choisi reste celui de la scène tant qu'aucune prise ne le remplace. Choisir en Galerie (comme dans la photothèque d'ouverture) passe par `closeOpeningLibraryForPick` : le viseur s'arrête et le composer de base revient. **L'aperçu EST le fond de la scène** (`ComposerViewfinderScene`) : calques aperçu → objets de la scène → chrome du viseur. Les objets posés se peignent sur un canvas SANS fond (`EmbeddedSceneCanvas(paintsSceneBackground: false)`), à la place de la carte, monté entre la nappe de gestes et le chrome (`ComposerCaptureChrome.sceneObjectsLayer`) ; ce canvas écrit la même slide, et ne garde que le doigt posé sur un objet (`passesThroughEmptyTouches`, loi `StoryCanvasTouchClaim`) : une zone vide garde toucher-photo, appui long-vidéo et zoom (`ComposerViewfinderScene.route`), un objet se sélectionne, se déplace, se pince, viseur armé seulement (ni tenue ni prise). Ils ne se montrent que si la prise sera le FOND (pas de fond média, ou « Reprendre une photo ») ; en retouche ils se voient sur la prise sans prendre le doigt, sauf pendant le recadrage, qui pose la prise dans un cadre (`showsSceneObjects(cropFrames:)`, `objectsTakeTouches(editing:)`, #18654) ; la prise posée devient le média de fond (`isBackground`), sous eux, positions et rangs intacts. **Après la prise, la retouche garde la colonne du viseur** (#18638, #18654, porteur 2026-11-15) : Galerie · Texte · Stickers · Son, un trait, Effets · Recadrer · Couper, en colonne en bas à gauche, SUR la prise (loi `ComposerRetouchRail.items`, `ComposerCaptureBottomRow.editRail`, `ComposerLookRail`) — sans « Fond », la prise est là ; Galerie, Stickers et Son passent par l'entrée de scène du viseur, la feuille se posant sur la prise (`ComposerViewfinderTyping.yieldsToScene` ne cède jamais la scène en retouche) ; le « Son » d'une prise qui en porte un règle son volume, sinon il pose un son sur la scène ; un élément choisi en Galerie REMPLACE la prise (`ComposerOpeningPlan.disarmsCameraOnLibraryPick(editing:)`), les pistes de coupe et de son dessous ; la colonne ne retient aucune hauteur (`ComposerEditScene.bottomReserve`) et les formats du recadrage commencent à sa droite (`railColumnWidth`), en puces de tri (`CallFrameMoodChip`) : chaque format s'applique à l'instant, retoucher Recadrer ou ouvrir un autre outil le referme en GARDANT le format (#18639) ; « Annuler », à la place de « Terminé » pendant le recadrage, rend le format et le cadrage d'avant l'outil et le range (`ComposerCropSnapshot`, `ComposerCropFlow.cancel`, `ComposerCropCancelButton`, #18654). Le bas n'a plus de voile gris (seule la rangée haute garde le sien sous un cadre, `ComposerCaptureChromeVeil`) ; le réglage d'ambiance a un fond plein et s'ouvre à droite de la colonne. Aucune entrée en filmant ni pendant une tenue ; des segments en attente retirent la Galerie, dont le choix couperait la caméra. La caméra de conversation n'a ni colonne ni scène (l'environnement `composerViewfinderSceneEntry` et `sceneObjects` ne sont posés que par le composer).
+
+**La prise est prête quand la SESSION l'est, et une interruption se traite** (#17433). L'état « prête » se dérive des faits de la session réelle — vœu de marche, marche, interruption et sa raison, bascule, connexion photo — par la loi `CameraCaptureAvailability` ; un toucher attend selon `CameraCaptureWait` (une session qui démarre, bascule ou se remet a six secondes, une session en régime trois, une session fermée zéro), jamais trois secondes comptées depuis le doigt quel que soit l'état. Un autre client audio qui prend le micro interrompt TOUTE la session (`audioDeviceInUseByAnotherClient`) : hors prise, le micro sort et la vidéo repart (`CameraInterruptionResponse`, `CameraModel.handleInterruption`). L'obturateur part sur la file de la session (la garde y est reposée devant `capturePhoto`), le traitement de la photo sur sa propre file, et `stop()` libère une photo en vol : une livraison tardive ne touche plus un viseur fermé.
+
+**Les anciennes gardes de géographie ont été RETOURNÉES, jamais supprimées** : `ComposerSceneFloatingRailTests` garde désormais « chaque porte offerte a un chemin, et un seul », `ComposerRailPlateauOrderTests` et `ComposerRailGeometryTests` gardent l'ordre des calques et l'absence de barre haute.
+
+## (CLOS le 2026-10-30 — #13839) Le composer met ses portes SUR LE PLATEAU, et les répartit par NIVEAU (directive porteur 2026-08-31)
+
+> **Bandeau CLOS, conservé pour l'histoire** : cette section décrit la géographie des rails du 2026-08-31 au 2026-10-30. La section ci-dessus la remplace ; ses règles de géographie ne s'appliquent plus. Le NIVEAU de chaque porte (`ComposerRailDoor.level`) reste la loi qui dit si un résultat se voit sur la scène.
+
+> « Cette approche est meilleure, ce qui permet de manipuler tout le canvas sans
+> problème : on exploite la place du plateau sans encombrer le canvas. […] On
+> préserve des actions sur la ligne canonique comme la description du contenu,
+> l'ajout de son de fond, image et vidéo de fond, mention et localisation de la
+> publication ; et sur la rangée à gauche, ce sont les features qui apparaissent
+> sur le canvas visuellement. »
+
+> **⚠️ SUPERSÉDÉ PAR LA MAQUETTE PLEIN ÉCRAN (directive porteur 2026-09-27, #8281).**
+> La scène occupe désormais tout l'écran et les contrôles FLOTTENT dessus ; la
+> géographie « rails dans les couloirs » des §§ 1 à 2 quater ci-dessous se porte
+> vers `docs/product/composer-plein-ecran/` par lots, chacun sous son issue — elle
+> reste en place tant que son lot n'est pas livré, et ce paragraphe dit laquelle
+> gagne. Deux règles s'appliquent déjà : **le type se choisit à l'envoi** (capsule
+> `[Publier … | ^]`, aucun sélecteur en haut) et **la flèche CHOISIT sans publier —
+> seul l'appui sur Publier envoie** (`ComposerPublishMenuRule.armed`), sur iOS,
+> iPad, web mobile et navigateur à l'identique. Chaque média garde son format
+> (panneau Cadre : Ajuster/Remplir + fond). **Lot 2 (#8370)** : les deux rails
+> FLOTTENT sur la scène, qui prend toute la largeur
+> (`ComposerRailGeometry.floatingInset = 0`) — le § 1 ci-dessous ne vaut plus
+> pour les rails.
+
+### 1. Aucun contrôle ne se pose SUR la scène
+
+Les rails, les contrôleurs et les portes vivent **dans les couloirs du plateau**,
+jamais en surimpression du canvas. Deux raisons, et la seconde est celle que la
+directive ajoute :
+
+- **loi 6** — un contrôle posé sur la scène fait mentir l'aperçu sur le rendu
+  final : l'auteur compose avec des pixels qui ne partiront pas ;
+- **la manipulation** — un objet se déplace, se pince et se tourne *n'importe où*
+  dans le cadre. Un rail flottant vole les touches de la bande qu'il couvre, et
+  l'auteur découvre la zone morte en essayant d'y traîner quelque chose.
+
+Le plateau est de la place DISPONIBLE : la scène est figée en 9:16 et l'écran ne
+l'est pas. L'occuper ne coûte rien ; occuper le canvas coûte une zone morte.
+
+> Un arbitrage antérieur (2026-08-28) avait posé le rail **à droite, dans la
+> scène**, en s'appuyant sur les quatre bulles de la planche `1b`. Cette
+> directive le remplace. Un doc-comment qui décrit l'ancien arbitrage est un
+> piège au sens du § *contrôle inerte* : il énonce une raison juste pour une
+> disposition qui n'est plus celle du produit.
+
+### 2. La place d'une porte se lit à son NIVEAU, jamais à une liste
+
+`ComposerRailDoor.level` classe déjà chaque porte, avec un `switch` exhaustif :
+`.publication`, `.slide`, `.object`, `.scene`. **C'est lui qui décide où la porte
+se pose**, et aucune liste écrite à la main ne double cette décision.
+
+| ce que la porte vise | où elle se pose | pourquoi |
+|---|---|---|
+| `.object` · `.scene` — ce qui APPARAÎT visuellement sur le canvas (texte, dessin, sticker, média de premier plan, son posé, **et le FOND lui-même**) | **rangée de gauche**, sur le plateau | le geste part de la colonne et atterrit sur la scène : la main suit le sens de l'action |
+| `.publication` · `.slide` — ce qui appartient à l'ENVOI ou à la slide (description du contenu, son de fond, mention, localisation de la publication) | **ligne canonique**, en bas | rien de tout cela n'a de place sur la scène ; le bas est déjà la zone de ce qui décide de l'envoi (loi 5) |
+
+**Le même média n'est pas la même porte selon son PLAN.** Une image de PREMIER
+PLAN devient un `MeeshySceneObject` et vit à gauche ; un FOND se règle par la porte
+`background`, à gauche elle aussi (#4919) — voir la correction ci-dessous. Idem
+pour le son : un son de fond est un attribut de la publication (il porte son
+crédit au socle) et vit en bas, un son POSÉ est un objet visible. Ranger les deux
+sous une seule porte « média » ou « son » est ce qui rend la sémantique illisible
+pour l'auteur.
+
+> **Correction du 2026-09-03 (#4919) : le FOND VISUEL a changé de côté.** Ce
+> tableau le rangeait sur la ligne canonique, avec la description, la mention et
+> le lieu. La directive porteur du 2026-09-02 — « il faut un outil de fond dans
+> la liste de gauche dès qu'on a une scène » — le déplace, et elle a raison pour
+> une meilleure raison que sa date : **la justification écrite ici pour le
+> ranger en bas était « rien de tout cela n'a de place sur la scène ».** C'est
+> vrai d'une mention, d'un lieu, d'un son de fond. C'est faux d'un fond visuel —
+> il n'est rien d'autre QUE la scène, et c'est le seul de la liste qui occupe
+> 100 % des pixels du canvas. La ligne était mal classée ; la directive la
+> corrige au lieu de la contredire.
+>
+> Le **son** de fond, lui, n'a pas bougé : il ne se voit sur aucun pixel, donc il
+> reste hors de la rangée de gauche. Sa TRACE vit dans le couloir bas depuis
+> #4918, et il s'ajoute toujours par la porte `sound` → placement `.background`.
+> Une porte de niveau « ce qui se voit » ne peut pas contenir l'invisible.
+
+### Le témoin
+
+Une garde compare la répartition rendue à `ComposerRailDoor.level` — jamais à une
+liste recopiée. Une dixième porte ne peut alors pas naître sans dire de quel
+niveau elle est, et son niveau la range tout seul.
+
+**Et le témoin d'un renversement s'écrit sur un format AUTRE que la story**
+(`ComposerBackgroundDoorTests`) : en Story, `.object` et `.scene` vont tous deux
+à gauche, donc un mauvais classement y rend le même verdict que le bon. C'est sur
+un POST que l'ancienne ligne se lisait ; c'est là qu'un retour en arrière se
+voit.
+
+### 2 bis. Les TROIS zones du plateau, et sur quoi chacune agit (directive porteur 2026-08-31, révision)
+
+> « Ce qui est affiché **en bas du plateau lorsqu'aucun outil n'est actif** agit
+> sur le canvas de manière générale. À **gauche** du plateau, ce sont les
+> contrôles qui agissent sur les **objets du slide**. À **droite**, ça agit sur
+> les **dimensions des objets**, + undo/redo devrait y être, + création d'un
+> autre slide dès lors qu'on a déjà un slide de créé. »
+
+Cette formulation PRÉCISE celle du § 2. Elle ne parle plus de « ce qui apparaît
+visuellement » mais de **sur quoi le contrôle agit** — et les deux coïncident
+pour les portes, tout en tranchant ce que la première laissait flou : la place
+des contrôleurs, de l'historique et de la création de slide.
+
+> **« Trois » compte les zones qui AGISSENT, et le reste vrai.** Le § 2 quater
+> en ajoute une quatrième qui n'agit sur rien — elle CONSTATE ce que la scène
+> emporte d'invisible (le son de fond en tête, les hashtags et les mentions
+> référencées au pied). Deux natures, deux comptes : une zone de constat
+> n'édite rien, elle ouvre la feuille qui édite.
+
+| zone | agit sur | contenu |
+|---|---|---|
+| **bas du plateau** (aucun outil actif) | le CANVAS en général | ce qui vaut pour la scène entière ou la publication — fond, description, mention, lieu |
+| **gauche** | les OBJETS du slide | les portes qui posent ou éditent un objet — média, sticker, dessin, texte |
+| **droite** | les DIMENSIONS des objets | empilement, duplication, suppression, rognage — **plus l'historique (undo/redo)** et **la création d'une autre slide** |
+| **bas, un outil ouvert** | l'OUTIL en cours | ses contrôleurs, qui prennent la place de la zone « canvas » |
+
+> **Le SOCLE n'est dans aucune de ces zones, et ce n'est pas un oubli.** Audience ·
+> Aperçu · Publier vivent au MEUBLE, sous les trois surfaces, et ne bougent jamais
+> (loi 5 de la planche — trois membres, jamais plus). `ComposerSceneSurface.swift:35`
+> l'écrit à l'endroit où on le chercherait : « Le SOCLE n'est pas ici ». Le « bas du
+> plateau » de la première ligne est la **rangée d'outils**, une autre rangée : y
+> ranger une entrée du socle, ou l'inverse, mélange ce qui décide de la PUBLICATION
+> avec ce qui agit sur la SCÈNE.
+
+**Ce que la révision déplace — FAIT et RESTE, mesuré le 2026-09-01 :**
+
+- ✅ **FAIT — undo / redo ont quitté le socle pour le rail DROIT** (#4586,
+  première moitié). Ils sont montés sur le rail *trailing*
+  (`MeeshyComposerHost+Surfaces.swift:464-466` → `ComposerTrailingRail.swift:60,99`)
+  et le socle n'en porte plus qu'un commentaire. La raison qui l'a décidé tient
+  toujours : ils agissent sur ce qui a été fait aux OBJETS, pas sur l'envoi ; au
+  socle ils voisinaient avec l'audience et le bouton publier, qui décident de la
+  publication.
+- ⬜ **RESTE — la création d'une slide doit être CONDITIONNELLE** : « dès lors
+  qu'on a déjà un slide de créé ». Le `[+]` est monté **sans condition**
+  (`MeeshyComposerHost+Surfaces.swift:458`), et `ComposerTrailingRail.swift:70`
+  revendique explicitement l'inverse (« créer une slide s'offre en
+  permanence ») — les deux doivent tomber dans le même commit, sans quoi le
+  correctif laissera derrière lui un doc-comment qui le contredit.
+
+**⚠️ Le son A DE NOUVEAU une porte, depuis le 2026-09-01** (#4722). Le
+paragraphe qui suit décrit l'état d'AVANT ce jour ; il est conservé parce que le
+raisonnement qui l'a produit reste juste et que la panne qu'il a causée est
+instructive.
+
+*Ce qui avait été écrit* : « le son n'a plus de porte — il n'y a qu'une façon
+d'ajouter un son sur le canvas, une chip par la palette du § 3, et le son de
+FOND reste au socle ». La porte du rail ouvrait alors la MÊME feuille que la
+pastille du socle (`presentedPortal = .sound`, ligne pour ligne) : un bouton en
+double, jamais une capacité en double.
+
+*Ce qui est vrai aujourd'hui*, mesuré : `ComposerRailDoor.sound` existe
+(`ComposerRailDoor.swift:89`) et `ComposerHostRules.swift:436` écrit « **La
+porte SON est REVENUE le 2026-09-01** ». Les deux destinations de remplacement
+sur lesquelles le retrait s'appuyait **n'existaient ni l'une ni l'autre** : la
+palette porte cinq onglets — `emoji`, `love`, `time`, `place`, `library` — et
+pas de son (#4579 **ouvert**), et la pastille du socle est partie le lendemain,
+remplacée par une pastille d'avatar qui n'affiche qu'un CRÉDIT — donc qui ne se
+peint que s'il y a déjà un son.
+
+> **Deux retraits justifiés, chacun renvoyant vers un chemin que l'autre ne
+> fournit pas.** Ni l'un ni l'autre commit n'était faux ; c'est leur SOMME qui a
+> fermé la porte — et une somme n'a pas de site où rougir. Le témoin qui
+> l'attrape n'interroge donc aucun retrait : il demande que la scène serve AU
+> MOINS UN chemin vers le son.
+
+> **Vérifier LAQUELLE des deux avant de retirer est ce qui sépare une
+> déduplication d'une régression.** Deux boutons qui ouvrent la même feuille se
+> retirent l'un l'autre sans rien coûter ; deux boutons qui ouvrent deux
+> chemins obligent à choisir lequel survit — et à le dire.
+
+### 2 ter. Le composer crée une MeeshyPublication — pas une story à slides (directive porteur 2026-08-31)
+
+> « Et non `StorySlide` — on adopte la sémantique nouvelle de la structure des
+> MeeshyDocument, qui utilise **MeeshyComposer** pour se créer. »
+>
+> « **`MeeshyPublication` EST `MeeshyDocument`** — fusionner la terminologie en
+> `MeeshyPublication`. » (arbitrage du même jour)
+
+Le composer est né dans le pipeline STORY et en a hérité la nomenclature
+(`StorySlide`, `StoryEffects`, `StoryTextObject`…). **Ce n'est plus ce qu'il
+fait.** Il compose une PUBLICATION, dont une story n'est qu'un des profils de
+sortie — au même titre que le post, le réel et le mood.
+
+**`MeeshyDocument` n'existe pas.** Le terme est apparu une fois dans la planche
+et une fois dans une directive ; l'arbitrage le fond dans `MeeshyPublication`.
+Un concept à deux noms se paie deux fois : à l'écriture, où il faut choisir, et
+à la lecture, où il faut se demander si la différence en est une.
+
+Le vocabulaire à employer — doc-comments, issues, raisonnements :
+
+| terme | ce qu'il désigne | type Swift |
+|---|---|---|
+| `MeeshyPublication` | ce que le composer produit, tous profils confondus | — (enveloppe à écrire) |
+| `MeeshyScene` | la surface 9:16 d'une slide | — (`StoryEffects` la porte) |
+| `MeeshySlide` | une page de la publication | — (`StorySlide`) |
+| `MeeshySceneObject` | ce qu'on pose sur une scène — texte, média fg, sticker, chip de lieu, chip de son | **`MeeshySceneObject`** (somme à cinq cas) |
+| `MeeshyComposer` | l'outil qui crée la publication | `MeeshyComposerHost` |
+
+**`MeeshyObject` → `MeeshySceneObject`** (arbitrage porteur du même jour) : le
+nom dit OÙ l'objet vit. Un « objet Meeshy » sans qualificatif aurait aussi bien
+désigné une publication ou une slide.
+
+Source : `docs/product/planche-meeshy-composer.html` (78 occurrences de
+`MeeshyObject`, 64 de `MeeshyScene`, 38 de `MeeshySlide`, 35 de
+`MeeshyPublication`).
+
+**Le premier de ces noms EST un type depuis le 2026-08-31** :
+`MeeshySceneObject` (`packages/MeeshySDK/Sources/MeeshySDK/Models/MeeshySceneObject.swift`),
+une somme à cinq cas — `text` · `media` · `sticker` · **`place`** · `audio` — qui
+rend `kind`, `id`, `x`, `y`, `scale`, `rotation`, `zIndex`, `duration`,
+`isBackground` sans que l'appelant ait à savoir dans quel tableau l'objet vit.
+Les quatre autres noms restent à écrire.
+
+> **`place`, et non `location`** (#4960) — et cette ligne a dit `location`
+> jusqu'au 2026-09-04, seule de tout le dépôt. Le contrat du fil dit `place`
+> (`ACTIVE_KINDS`, `packages/shared/types/canvas-v3.ts`), son miroir Swift dit
+> `place` (`ObjectKind`), la timeline dit `place` (`TimelineClipKind`) et
+> l'inspecteur aussi (`ClipSnapshot.Kind`). Un document qui GOUVERNE le
+> vocabulaire est le pire endroit où laisser le mot abandonné : il ne casse
+> aucune compilation, et il réintroduit la divergence chez le prochain qui
+> nomme quelque chose d'après lui.
+
+**Ce que la somme a rendu visible.** Des dizaines de fonctions interrogeaient
+quatre ou cinq tableaux à la suite pour UN identifiant ; chacune décidait seule
+de l'ordre des familles, et les divergences n'étaient visibles nulle part. Douze
+sont repointées sur la somme ; **une seule** exclusion est écrite dans le code
+(`StoryComposerViewModel+ZOrder.swift:59` — à `zIndex` égal, l'ordre décide avec
+qui `bringForward` permute).
+
+**Le reste se COMPTE, il ne se cite pas.** Les nombres qui vivaient ici
+(« trente-quatre », « trois exclues ») avaient été DÉRIVÉS d'une addition dont
+les trois termes n'avaient pas la même unité — des fonctions, des fonctions, et
+des *raisons*. Aucune garde ne les épinglait : ils ont donc pu dériver sans
+jamais contredire personne. Ce qui les remplace est le critère :
+
+```bash
+# les cascades restantes : un id cherché dans ≥ 2 familles, forme `first(where:)`
+git grep -nE "(textObjects|mediaObjects|stickerObjects|locationObjects|audioPlayerObjects)\b.*first\(where:" -- '*.swift'
+# la forme que le critère ci-dessus NE VOIT PAS, et où vivaient deux bugs :
+git grep -nE "(textObjects|mediaObjects|stickerObjects|locationObjects|audioPlayerObjects)\??\.removeAll" -- '*.swift'
+```
+
+> **Un inventaire qui rate une syntaxe rate le bug qu'il servait à trouver.** La
+> seconde commande est celle qui manquait : les trois chemins de SUPPRESSION
+> (#4758) et le couple `bringForward`/`sendBackward` (#4759) écrivent la cascade
+> en `removeAll { }` et en fermetures de mutation, jamais en `first(where:)`.
+> Ils étaient donc hors de tout compte — et c'est précisément là que la pastille
+> de lieu est devenue ineffaçable et que le son a cessé d'être classable.
+
+> **Un type qui n'existe pas ne peut pas diverger — il oblige seulement chaque
+> site à réinventer la règle.** C'est ainsi que la pastille de lieu s'est
+> retrouvée sans fenêtre de temps sur cinq sites qui se citaient l'un l'autre
+> (leçon 373).
+
+> C'est l'inverse du motif de la « règle doublée » : là, une règle raisonnée
+> était doublée par un littéral et seul le littéral était appelé ; ici, **le NOM
+> existe sans la CHOSE**. Un vocabulaire sans type ne peut pas diverger de son
+> implémentation — il n'en a pas — mais il oblige chaque relecteur à traduire, et
+> la traduction n'est écrite nulle part. Elle s'est déjà payée : le doc-comment
+> de `ComposerRailDoor.place` promettait « une pastille de lieu posée sur la
+> scène » (vocabulaire cible) là où le code ouvrait le sélecteur de la
+> publication (comportement réel).
+
+**Ne PAS renommer les types Story en masse.** Ils sont sérialisés (`StoryEffects`
+voyage en JSON vers la passerelle, `CanvasV3Migration` lit d'anciennes formes) et
+partagés avec le reader et l'export : un renommage de surface casserait la
+lecture des publications existantes. La migration se fait par enveloppes ou par
+`typealias` documentés — jamais par un `sed`. Pilotage : #4591.
+
+**Corollaire déjà appliqué** : l'historique appartient à la PUBLICATION, pas à
+l'envoi — la planche écrit « Historique de la `MeeshyPublication`, conservé »
+(elle disait `MeeshyDocument` avant la fusion de terminologie). C'est ce qui
+justifie son déplacement du socle vers le rail des objets (#4586).
+
+> Cette phrase a été FAUSSE pendant une minute : elle citait la planche telle
+> qu'elle était avant que le même commit ne la corrige. **Une citation est datée
+> par le fichier qu'elle cite** — la changer sans relire ce qui la cite fabrique
+> une référence qui n'a jamais existé.
+
+### 2 quater. Le plateau a une QUATRIÈME zone — au-dessus de la scène (directive porteur 2026-09-03)
+
+> « Il faut ajouter au dessus de la scene une note suivi du detail de l'audio de
+> fond d'une scene doit être mise et au touché ouvrir la feuille permettant de
+> l'editer. […] les hashtag et mention referencé (pas les mention inline et
+> mention caché) doivent apparaitre en bas de la scene au touché ça ouvre les
+> feuille de mention ou des hashtag ! »
+
+Le § 2 bis décrit trois zones — bas, gauche, droite — et les ordonne par ce sur
+quoi elles AGISSENT. La directive en ouvre une quatrième, et elle n'agit sur
+rien : elle **CONSTATE**.
+
+| zone | ce qu'elle fait | contenu |
+|---|---|---|
+| **au-dessus de la scène** | elle CONSTATE ce que la scène emporte d'invisible | la trace du son de fond (#5001) |
+| **au pied de la scène** | idem, au niveau PUBLICATION | hashtags et mentions `.note` (#5002) |
+
+**Ce que cet ajout amende, et il faut le dire pour que le prochain lot ne le
+défasse pas.** L'escalier du bas descend les niveaux du modèle — objet, scène,
+slide, publication — et il reste juste pour ce qui se RÈGLE. Il l'était moins
+pour ce qui se CONSTATE : un son de fond n'est pas un réglage qu'on descend
+chercher. Il commence avec la scène, dure autant qu'elle, et n'apparaît sur
+aucun de ses pixels — donc rien dans la scène ne le rappelle. Sous la carte, il
+partageait la place avec la bande d'outil et les jetons d'objet et se lisait en
+dernier ; au-dessus, il se lit AVEC la scène, comme un titre se lit avec ce
+qu'il titre.
+
+**La loi 6 tient toujours, et c'est elle qui décide de la géographie.** Les deux
+zones vivent dans les COULOIRS du plateau, jamais sur la carte : ni un son de
+fond, ni un hashtag, ni une personne nommée ne produit un pixel au rendu. Les
+poser sur le canvas ferait mentir l'aperçu — et volerait au passage les touches
+de la bande couverte.
+
+**Ce qui distingue une zone de CONSTAT d'une zone de CONTRÔLE** : elle n'édite
+rien elle-même. Elle lit, et le doigt y ouvre la feuille qui édite — la même que
+la porte du rail ouvre, jamais une seconde. Un pied qui présenterait sa propre
+feuille en ferait deux à tenir d'accord, et la première divergence serait
+invisible.
+
+**Le témoin** : les deux zones sont MONTÉES (une vue sans consommateur n'a aucun
+site où rougir) et ALIMENTÉES par le meuble (un pied monté sur ses valeurs par
+défaut se peint exactement comme une publication qui n'emporte rien). Les deux
+questions sont distinctes, et les deux gardes aussi —
+`ComposerSceneReferencesTests` et `ComposerBackgroundSoundRemovalTests`.
+
+### 3. Une porte n'a pas de JUMELLE — on ouvre une palette, on n'ajoute pas une icône
+
+> « Dans l'icône (smile/sticker) il faudra juste proposer directement des
+> constructions permettant de mettre des chips de lieu (en prenant les lieux
+> autour), des chips de son (en permettant de choisir lequel), etc. — qu'on peut
+> positionner, grandir sur la scène. **Ça évite d'avoir plusieurs icônes
+> redondants aux icônes canoniques** qui concernent le document ou métadonnée du
+> slide. » (directive porteur 2026-08-31)
+
+Deux icônes qui se ressemblent et agissent sur deux NIVEAUX différents ne se
+distinguent pas à l'œil — le niveau est invisible, seul le glyphe se voit. Un ♪
+qui pose un son sur la scène et un ♫ qui choisit le son de fond de la
+publication sont, pour l'auteur, le même bouton à deux endroits.
+
+**La règle** : quand une intention nouvelle POSE un objet sur la scène, elle
+entre dans la **palette de constructions** (derrière l'entrée sticker), jamais
+dans la rangée comme une icône de plus. La rangée nomme des FAMILLES ; la palette
+nomme des constructions.
+
+| ce qu'on ajoute | où ça va |
+|---|---|
+| une construction qui pose un objet sur la scène (chip de lieu, chip de son, sondage, minuteur…) | la **palette**, derrière `sticker` |
+| une entrée qui vise la publication ou la slide | la **ligne canonique** |
+| une famille entièrement nouvelle de matière | et seulement alors, une porte |
+
+**Le témoin** : aucune porte de la rangée de gauche ne pose un objet qu'une
+entrée canonique pose déjà. C'est la formulation vérifiable de « éviter plusieurs
+icônes redondants » — elle s'éprouve sur les niveaux, pas sur les glyphes.
+
+Pilotage : #4579.
+
+## Les gestes de glissement sont PROGRESSIFS et ANNULABLES (directive porteur 2026-08-30)
+
+> « Il faut préférer ce type de swipe À CHAQUE FOIS qu'on parle de mettre un
+> swipe : c'est un swipe progressif et annulable jusqu'à 75-90 % de la fin. »
+
+**Un glissement n'est pas un déclencheur.** Tout geste de glissement que l'app
+propose doit :
+
+1. **suivre le doigt image par image** — ce qu'il déplace bouge pendant le geste,
+   pas à la levée du doigt ;
+2. **rester annulable jusqu'à 75-90 %** de sa course — revenir en arrière sans
+   relâcher restaure l'état d'avant, sans effet de bord ;
+3. **emmener AVEC lui ce qui l'accompagne** — clavier, feuille, barre : le geste
+   les pousse ensemble, il ne les fait pas disparaître l'un après l'autre.
+
+### Ce que cela interdit
+
+`DragGesture().onEnded { … }` comme unique porteur d'une décision. Il DÉCIDE à la
+levée du doigt : rien ne bouge pendant, rien n'est annulable, et l'ordre des
+disparitions n'est pas celui du geste. Un seuil (`translation.height > 40`) n'y
+change rien — il déplace le point de bascule, il ne rend pas le geste progressif.
+
+### Ce qu'il faut employer
+
+| besoin | mécanisme |
+|---|---|
+| renvoyer le clavier | `.scrollDismissesKeyboard(.interactively)` — le clavier suit le doigt et remonte si on relâche avant la fin |
+| refermer une feuille | les détentes système (`presentationDetents`), qui portent déjà le suivi et l'annulation |
+| déplacer un élément | `DragGesture().onChanged` qui pilote une valeur rendue, `.onEnded` ne servant qu'à CONCLURE une animation déjà en cours |
+
+**Le mécanisme système est préféré au geste maison** : une imitation écrite à la
+main diverge du reste de l'OS — seuil différent, courbe différente, pas de
+retour arrière — et l'utilisateur le sent avant de savoir le nommer.
+
+### Le témoin
+
+Un glissement écrit à la main se reconnaît à un `onEnded` qui décide sans
+`onChanged` qui montre. Là où un mécanisme système existe pour le même acte,
+c'est lui qu'on emploie ; là où il n'en existe pas, le geste porte sa progression
+dans une valeur rendue, et son annulation est éprouvée — pas supposée.
+
+Précédent : la zone de description du composer (#4361) est passée d'un
+`DragGesture.onEnded` avec seuil à `.scrollDismissesKeyboard(.interactively)`,
+sur cette directive.
+
 ## Cache-First Pattern (Obligatoire)
 
 Reference: `docs/superpowers/specs/2026-03-17-architecture-bible-design.md` Pattern I1
@@ -420,7 +877,25 @@ Every ViewModel loading data MUST:
 2. Distinguish `.fresh` / `.stale` / `.expired` / `.empty` in a switch
 3. Display `.stale` immediately + silent background refresh
 4. NO spinner when cached data exists
-5. Use SkeletonPlaceholder (not ProgressView) on empty cache
+5. Show a SKELETON (not a ProgressView) on empty cache
+
+**`SkeletonPlaceholder` n'existe pas — c'est un nom générique de la bible.** Le
+dépôt le réalise sous des noms de DOMAINE, un par forme de contenu, et la
+matrice du Pattern I4 en nomme cinq (garde : `SkeletonColdStartGuardTests`) :
+
+| écran | composant | où il vit |
+|---|---|---|
+| Liste conversations | `SkeletonConversationRow` | SDK — `MeeshyUI/Primitives/SkeletonView.swift` |
+| Messages | `SkeletonMessageBubble` | SDK — idem |
+| Feed | `SkeletonFeedList` (→ `SkeletonFeedPost`) | app — `Views/Skeletons/` |
+| Stories | `SkeletonStoryTrayRow` (→ `SkeletonStoryThumb`) | app — `Views/Skeletons/` |
+| Profil | `SkeletonProfileHeader` | app — `Views/Skeletons/` |
+
+Six autres écrans en ont un sans que la bible l'ait exigé : `ContactsSkeletonList`,
+`SkeletonLinkRow`/`SkeletonLinkList`, `LentilleSkeletonRow`, `NearbySkeletonRow`,
+`LivingSummarySkeleton`. Un squelette neuf se bâtit sur `SkeletonShape` +
+`skeletonShimmer()` (Reduce Motion géré par `ShimmerModifier`), et chaque rangée
+porte `.accessibilityElement(children: .ignore)` + un libellé de chargement.
 
 ### LoadState Enum
 Every data-loading ViewModel MUST expose `loadState: LoadState`:
@@ -458,7 +933,7 @@ Meeshy a **deux** systemes de toasts in-app, separes par **source d'evenement**.
 
 Les composants suivants gerent l'**entite** Notification (CRUD, listing, preferences) — distincts du toast in-app. A ne pas confondre :
 
-- `NotificationModels`, `NotificationContext`, `APINotification`, `SocketNotificationEvent` (types)
+- `NotificationContext`, `APINotification`, `SocketNotificationEvent` (types)
 - `NotificationCoordinator` (unread count global, badge, widget)
 - `PushNotificationManager` (APN/Firebase plumbing)
 - `NotificationService` (REST CRUD)
@@ -507,11 +982,25 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
   `<TEAMID>.me.meeshy.app`, d'où le `keychain-access-groups` ajouté aux entitlements),
   liste les vraies conversations (`recent_conversations` enrichie par
   `conversation_snapshots`), et poste elle-même `POST /api/v1/conversations/:id/messages`.
-  Elle n'ouvre JAMAIS l'app.
-  - **Portée lot 1 : texte + URL.** L'`Info.plist` n'annonce que `SupportsText` +
-    `SupportsWebURL` — s'annoncer pour une image qu'on ne sait pas envoyer ferait
-    apparaître Meeshy dans la feuille de partage de Photos pour y échouer. Les images et
-    vidéos reviendront avec le pipeline TUS (lot 2), leur règle d'activation EN MÊME TEMPS.
+  - **Depuis #10947, elle monte L'ÉCRAN DE PARTAGE UNIQUE** — la même `ShareSheetView` que
+    l'app, ses fichiers PORTABLES compilés dans la cible un par un (`project.yml`, garde
+    `ShareExtensionScreenGuardTests`), avec ses propres coutures : `ExtensionShareDirectory`
+    (cliché `share_directory` que l'app dépose dans l'App Group — conversations, amis,
+    carnet apparié, au nom du compte connecté —, repli sur `recent_conversations`, puis le
+    serveur avec le jeton de la session) et `ExtensionShareDispatcher` (une fiche
+    `SharePendingShare` pour tout le partage). Elle lie MeeshySDK + MeeshyUI, et ses mots
+    viennent du catalogue de l'APP (`Bundle.meeshyShare` remonte de l'`.appex` à l'app) :
+    elle n'a plus de `Localizable.xcstrings` à elle. Elle n'ouvre l'app que pour RELAYER
+    (`ShareRelayHandoff`, `meeshy://share-relay`) : sans session (« Connectez-vous pour
+    envoyer · Ouvrir Meeshy ») et vers une conversation chiffrée (D7 — elle n'a pas les
+    clés, jamais de clair d'ici), et pour le studio (`ShareComposeHandoff`).
+  - **Portée : texte, URL, images, vidéos, fichiers** (`Info.plist`, `ShareLimits.maxFiles`
+    par type). Les plafonds communs (D10 : 20 fichiers, 500 Mo, 10 destinataires ; révisés
+    par le porteur le 2026-10-25 à **100 fichiers et 5 Go**, destinataires inchangés, #12974 —
+    `packages/shared/decisions/2026-10-25-un-partage-emporte-100-fichiers-et-5-go-12974.md`)
+    ne refusent plus la copie : l'écran les dit et « Retirer les N derniers » les applique
+    (V9). Les phrases de plafond prennent les chiffres en arguments formatés depuis
+    `ShareLimits` (`ShareSheetCopy.limitSize`) : aucun plafond n'est écrit dans le catalogue.
   - **Échec d'envoi = relais durable, jamais une perte** : `ShareSender` dépose
     `share_pending_sends/<clientMessageId>.json` dans le conteneur App Group ;
     `SharePendingSendConsumer` (app) le verse dans l'`OfflineQueue` au boot et au retour en
@@ -521,8 +1010,11 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
     explicitement. L'ancien `ContactPreview.sampleContacts` masquait une lecture morte
     derrière trois contacts crédibles — c'est ce qui a permis à la panne de survivre aux
     itérations d'audit 220i/221i/222i. `ShareExtensionSourceGuardTests` interdit son retour.
-  - Helpers purs (`ShareSession`, `ShareConversationStore`, `ShareSender`) compilés AUSSI
-    dans `MeeshyTests` via `project.yml` (motif `NSEDecryptor`) — `ShareViewController`
+  - Helpers purs (`ShareSession`, `ShareConversationStore`, `ShareSender`) et coutures de
+    l'écran (`ExtensionShareDirectory`, `ExtensionShareDispatcher`) compilés AUSSI dans
+    `MeeshyTests` via `project.yml` (motif `NSEDecryptor`) — les coutures y importent le
+    module de l'app par `#if !MEESHY_SHARE_EXTENSION` (`canImport(Meeshy)` est vrai dans
+    l'extension aussi : le module est dans les mêmes produits). `ShareViewController`
     (UIKit+SwiftUI) reste hors du bundle, toute sa logique décidable en a été extraite.
     Ces types sont `nonisolated` **sur le type ET sur leurs extensions** : la cible compile
     sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, le bundle de tests sous `nonisolated`.
@@ -538,6 +1030,13 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
     Contrôle : `find apps/ios/Build -name "MeeshyShareExtension.appex.xcent" -newermt "-10 minutes" -exec plutil -p {} \;`
     — filtrer sur la FRAÎCHEUR : `Build/Meeshy.build/` est un résidu d'anciens builds,
     l'actif est `Build/Intermediates.noindex/Meeshy.build/`.
+- **MeeshyNotificationContentExtension** (notification déployée, #8859) et
+  **MeeshyBroadcastExtension** (partage d'écran, #8063) — deux `app-extension` embarquées,
+  groupe `group.me.meeshy.apps`. App IDs au portail : `me.meeshy.app.notification-content`
+  (T75359QHNV, enregistré le 2026-10-01, #8953) et `me.meeshy.app.broadcast` (67U4MGRB8C),
+  tous deux avec APP_GROUPS, listés dans `fastlane/Matchfile` + `sync_certificates`/`force_sync`.
+  **Toute nouvelle extension embarquée suit ce chemin AVANT sa première archive** : App ID
+  enregistré (`POST /v1/bundleIds` + `bundleIdCapabilities`), Matchfile, lanes.
 - **App Intents (Siri/Shortcuts)** — `Meeshy/Features/Intents/MeeshyAppIntents.swift`,
   compilé **dans le target app** (pas d'extension séparée : les `AppIntent` définis par
   l'app sont exposés à Siri/Shortcuts automatiquement). Recâblé 2026-06-24 depuis l'ancien
@@ -553,6 +1052,14 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
 | Production | gate.meeshy.me | Crash reporting |
 
 ## Code Organization
+> **Cohésion d'abord (directive porteur 2026-10-19, #10988) — PRIORITAIRE sur le budget de lignes.** Garde : `apps/ios/scripts/check_cohesion_budget.sh` (cliquet CI, référence `apps/ios/scripts/cohesion-budget.json`).
+> 1. Un type a UNE responsabilité.
+> 2. Une fonction tient sur un écran : <= 80 lignes (cliquet).
+> 3. Une vue SwiftUI se compose de sous-vues qui reçoivent des valeurs, des `Binding` et des closures.
+> 4. L'état privé reste `private` ; l'élargir pour une extension sœur est une exception justifiée.
+> 5. `Type+X.swift` n'est PAS une décomposition : un type se mesure en UNITÉ (déclaration + extensions du module, cliquet <= 1 500 lignes). Extraire un vrai type cohésif, pas un fichier.
+> 6. Le budget de lignes par fichier (1000–1200) n'est plus qu'un indicateur secondaire.
+
 - `// MARK: - SectionName` to divide file sections
 - Extensions group protocol conformances
 - Private properties/methods clearly marked
@@ -1148,6 +1655,11 @@ Avant de migrer un composant vers le SDK, appliquer le **test du grain** (cf. `p
 - Composant qui orchestre + décide → APP
 
 Précédent : 2026-05-24 j'ai migré `AttachmentDownloader` au SDK sous prétexte de réutilisabilité. Rollback (commit `83e55297c`) — c'est de l'orchestration UX produit, pas un atome. "Réutilisable" n'est PAS un critère suffisant ; l'**atomicité** l'est.
+
+## Pilotage & maturité (règle transverse — détail dans le `CLAUDE.md` racine)
+- **Le pilotage se fait EXCLUSIVEMENT sur GitHub** (projet « Meeshy — pilotage », milestones, issues) : toute tâche de ce répertoire est une issue au titre sémantique, passée `In Progress` au démarrage et fermée par le commit qui la livre (`Closes #n`). Pas de `todo.md`, pas de page « progress » ; les artifacts servent aux brouillons, au design et aux comptes rendus — jamais à l'état.
+- **Chaque feature est portée à maturité sur les treize dimensions** (sécurité, performance, mémoire, fluidité, accessibilité, cohérence de positionnement, facilité d'usage, UX, compatibilité, utilité, maintenabilité, simplicité d'usage, complétude). Ici, les témoins qui comptent d'abord : 60/120 fps au scroll et aux transitions (Instruments, appareil réel — jamais le simulateur seul), écran servi depuis le cache au démarrage à froid, mémoire sans rétention après `pop` (Memory Graph), VoiceOver + Dynamic Type + RTL, iOS 16→26 + iPad, les 7 langues du catalogue.
+- **La complexité se paie dans le code, jamais chez l'utilisateur.** Une lenteur, une saccade, une action sans feedback immédiat sont des bugs, pas de la dette : ils ont au moins la priorité de la feature qu'ils dégradent. Le commentaire de clôture d'une issue dit quelles dimensions sont mûres et ouvre une issue par dimension restante.
 
 ## Quality Gate
 Codex will review your output once you are done. Self-evaluate and ensure consistent, coherent code before marking any task as complete.

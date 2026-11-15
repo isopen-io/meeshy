@@ -1,0 +1,661 @@
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+
+import { ComposerAttachmentPanel, type ComposerAttachmentPanelProps } from './composer-attachment-panel';
+
+/** « Éditer » une image en attente (#8416) — le studio en retouche, à la demande. */
+const ComposerRetouch = lazy(() => import('./composer-retouch'));
+/** « Éditer » un audio en attente (#9136) — sa coupe, à la demande. */
+const ComposerAudioTrim = lazy(() => import('./composer-audio-trim'));
+import { Glyph, GlyphSvg } from './glyph';
+import { COMPOSER_GLYPHS } from './glyphs-composer';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { previewUrlFor } from '@/lib/send/attachment-preview-url';
+import { pendingTileGlyph } from '@/lib/send/pending-tile-glyph';
+import { type PendingAttachment } from '@/lib/send/attachments';
+import { retouchSeriesOf } from '@/lib/stories/studio-retouch-series';
+import type { SharedPlace } from '@/lib/send/shared-place';
+import { coordinateNativeMedia } from '@/lib/view/native-media-coordination';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+import { MIN_SENDABLE_DURATION_MS, type RecorderState } from '@/lib/view/use-recorder';
+import { interpolatedLevel, waveformBarCount } from '@/lib/view/waveform';
+
+/**
+ * LE TIROIR DU COMPOSEUR (#5668) — CHARGÉ À LA DEMANDE (`composer.tsx` le
+ * monte par `lazy()`, jamais dans le chunk du fil ni le socle) : le panneau
+ * de pièces jointes, la bande d'aperçu, la barre d'enregistrement et la
+ * bande d'avertissement. AUCUN état ici — tout est REÇU (props), même motif
+ * que `RecordingBar`/`+Attachments.swift` : l'hôte (`composer.tsx`) possède
+ * `pending`/`panelOpen`/`useRecorder()`, cette vue les REND.
+ *
+ * TROIS VARIANTES, et leur PLACE dans la colonne du composeur est celle
+ * d'iOS (`UniversalComposerBar+Layout.swift:158-258`, lu ligne à ligne à la
+ * revue-correction) :
+ *
+ * | variante | où | source iOS |
+ * |---|---|---|
+ * | `above` (aperçu des pièces + avertissement) | AU-DESSUS de la rangée, sous la bande de citation | `:165-171` — `customAttachmentsPreview` est monté APRÈS `replyBanner` et AVANT `// Main composer` |
+ * | `recording-bar` | À LA PLACE de la rangée | `:209-224` — `if effectiveIsRecording { recordingBar } else { HStack … }` |
+ * | `panel` (les tuiles) | SOUS la rangée | `:254-258` — `attachmentCarouselPanel`, à la place du clavier |
+ *
+ * La première version de ce lot posait l'aperçu SOUS la rangée, avec le
+ * panneau : les vignettes en attente se retrouvaient sous le champ, entre
+ * lui et le bord de l'écran, alors que tout ce qui DÉCRIT le message à
+ * partir (citation, pièces, avertissement) vit au-dessus sur les trois
+ * plateformes.
+ */
+export type ComposerTrayProps =
+  | {
+      readonly variant: 'recording-bar';
+      readonly recorderState: RecorderState;
+      readonly onCancelRecording: () => void;
+      readonly onStopToTray: () => void;
+      readonly onSendRecording: () => void;
+    }
+  | {
+      readonly variant: 'above';
+      readonly pending: readonly PendingAttachment[];
+      readonly onRemove: (localId: string) => void;
+      /** « Éditer » une image en attente (#8416) : la retouche REMPLACE la
+       * pièce (`replacePendingAttachment`, chez l'hôte qui possède l'état). */
+      readonly onReplace?: (localId: string, file: File) => void;
+      readonly notice: ComposerNotice | null;
+      /** LE LIEU ATTACHÉ (#7280) — `null` quand aucun. Il se rend AU-DESSUS
+       * de la rangée, avec tout ce qui DÉCRIT le message à partir (citation,
+       * pièces, avertissement) : iOS y pose la même puce
+       * (`composer.chip.kind.location`). */
+      readonly place: SharedPlace | null;
+      readonly onRemovePlace: () => void;
+      /** LA MONTÉE DE CHAQUE PIÈCE (#9736), par `localId`, de 0 à 1 — l'hôte
+       * qui garde le plateau ouvert pendant l'envoi (un commentaire) la
+       * donne ; une pièce qui monte ne s'édite ni ne se retire. */
+      readonly uploading?: ReadonlyMap<string, number>;
+    }
+  | ({ readonly variant: 'panel' } & ComposerAttachmentPanelProps);
+
+/**
+ * CE QUE LE COMPOSEUR A REFUSÉ, ET LA SORTIE (revue-correction #5668) — un
+ * seul emplacement pour les DEUX familles d'avertissement : le micro
+ * (refusé / indisponible) et le fichier écarté (droit, taille, nombre —
+ * `send/attachments.ts § acceptPendingFiles`). Deux bandes distinctes se
+ * seraient empilées ; une seule dit la dernière cause et se ferme.
+ * `onRetry` absent ⇒ aucun bouton « Réessayer » : un refus qu'on ne peut pas
+ * rejouer n'en offre pas la porte (loi 4).
+ */
+export type ComposerNotice = {
+  readonly message: string;
+  readonly onRetry?: () => void;
+  /** Le libellé du geste de reprise — « Réessayer » par défaut ; « Réglages »
+   * quand seule la fiche de l'app rend la permission (#8882). */
+  readonly retryLabel?: string;
+  readonly onDismiss: () => void;
+};
+
+const REDUCED_MOTION = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** `0:12` — miroir `formatDuration` (`+Recording.swift:405-407`) et
+ * `Voice`/`message-blocks.tsx:346-348` (même écriture `m:ss`, pas `MM:SS`). */
+function formatDuration(durationMs: number): string {
+  const seconds = Math.round(durationMs / 1000);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+/** `1 min 12 s` — ce que le lecteur d'écran PRONONCE, là où `0:12` se lit à
+ * l'œil (miroir `LocalizedNumber.spokenDuration`, `+Recording.swift:209`). */
+function spokenDuration(durationMs: number, language: InterfaceLanguage): string {
+  const seconds = Math.round(durationMs / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const rest = String(seconds % 60);
+  return minutes === 0
+    ? translate(language, 'composer.recording.seconds', { seconds: rest })
+    : translate(language, 'composer.recording.minutes', { minutes: String(minutes), seconds: rest });
+}
+
+/**
+ * DÉFAUT 8 (revue #5668) — mesurée sur 178 px disponibles, l'onde
+ * n'occupait que 73 px (41 %) : les 15 échantillons bruts, un par barre,
+ * alignés `flex-start` sans rien pour remplir le reste. Miroir
+ * `UniversalComposerBar+Recording.swift:305-340` — `barCount` dépend de la
+ * LARGEUR MESURÉE du conteneur (`ResizeObserver`), et `interpolatedLevel`
+ * (`lib/view/waveform.ts`) étale les 15 niveaux sur TOUTES les barres :
+ * l'onde lit comme une courbe continue, jamais un tas collé à gauche.
+ * `MAX_LEVELS` (`use-recorder.ts`) reste à 15 côté ÉCHANTILLONNAGE — c'est
+ * l'AFFICHAGE qui interpole, jamais l'échantillonnage qui grossit.
+ */
+function Waveform({ levels }: { readonly levels: readonly number[] }) {
+  const reduced = REDUCED_MOTION();
+  const containerRef = useRef<HTMLSpanElement>(null);
+  const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (el === null) return;
+    const measure = () => setWidth(el.clientWidth);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // AVANT toute mesure (premier rendu, ou environnement sans
+  // `ResizeObserver`) : repli sur les échantillons bruts plutôt qu'UNE
+  // seule barre — jamais un écran qui semble vide.
+  const barCount = width > 0 ? waveformBarCount(width) : Math.max(levels.length, 1);
+  const sampled = levels.length > 0 ? levels : [0];
+  const bars = Array.from({ length: barCount }, (_, i) => interpolatedLevel(i, barCount, sampled));
+
+  return (
+    <span ref={containerRef} className="flex h-6 flex-1 items-center gap-[2.5px]" aria-hidden>
+      {bars.map((level, i) => (
+        <span
+          key={i}
+          className="w-[2.5px] shrink-0 rounded-full"
+          style={{
+            height: reduced ? 3 : Math.round(3 + 22 * level),
+            backgroundColor: 'var(--recording-ink)',
+          }}
+        />
+      ))}
+    </span>
+  );
+}
+
+/**
+ * LA BARRE D'ENREGISTREMENT — `[X annuler][onde][• durée][■ arrêter→joindre]
+ * [↑ envoyer]`, TOUS DANS LA MÊME PILULE : la `HStack` d'iOS porte son
+ * `.background(RoundedRectangle(cornerRadius: 22))` au niveau de la RANGÉE
+ * ENTIÈRE (`+Recording.swift:159-289`), pas autour des trois premiers
+ * éléments. La première version de ce lot laissait « arrêter » et « envoyer »
+ * flotter à côté de la pilule.
+ *
+ * SOUS `MIN_SENDABLE_DURATION_MS`, LES DEUX BOUTONS NE FONT RIEN — c'est le
+ * `guard canSend else { HapticFeedback.error(); return }` d'iOS
+ * (`:212-216` et `:245-249`) : l'enregistrement CONTINUE. La version
+ * précédente appelait quand même les gestes, dont le hook rend `null` sous le
+ * seuil : le tap DÉTRUISAIT l'enregistrement en cours au lieu d'inviter à
+ * tenir un instant de plus. `aria-disabled` (et non `disabled`) garde les
+ * boutons dans le parcours clavier et laisse lire leur indice, exactement
+ * comme iOS les garde focalisables avec un `accessibilityHint` qui change.
+ *
+ * LE SCHÉMA SOMBRE EST BLANC, PAS ACCENTUÉ — iOS bascule les cinq couleurs de
+ * cette barre sur du blanc en sombre (`:144-152`, `:220-225`) ; les peindre
+ * en `--accent` donnait un carré d'arrêt accent sur un fond accent à 12 %,
+ * illisible sur nuit. `--recording-ink` / `--recording-fill` tiennent la
+ * bascule au SEUL endroit qui la connaît.
+ */
+function RecordingBar({
+  recorderState,
+  onCancelRecording,
+  onStopToTray,
+  onSendRecording,
+}: {
+  readonly recorderState: RecorderState;
+  readonly onCancelRecording: () => void;
+  readonly onStopToTray: () => void;
+  readonly onSendRecording: () => void;
+}) {
+  const reduced = REDUCED_MOTION();
+  const canSend = recorderState.durationMs >= MIN_SENDABLE_DURATION_MS;
+  const language = currentInterfaceLanguage();
+  const holdOn = translate(language, 'composer.recording.holdOn');
+  return (
+    <div className="px-3 py-2.5">
+      <div
+        className="flex min-h-11 items-center gap-2.5 rounded-[22px] px-1.5 py-1"
+        style={{
+          backgroundColor: 'var(--recording-surface)',
+          border: '1px solid var(--recording-hairline)',
+        }}
+      >
+        <button
+          type="button"
+          onClick={onCancelRecording}
+          className="tap-target-32 grid size-8 shrink-0 place-items-center rounded-full"
+          style={{ backgroundColor: 'color-mix(in srgb, var(--ios-error-strong) 14%, transparent)' }}
+          aria-label={translate(language, 'composer.recording.cancel')}
+          title={translate(language, 'composer.recording.cancel.hint')}
+        >
+          <Glyph name="x" size={14} style={{ color: 'var(--ios-error-strong)' }} />
+        </button>
+
+        <Waveform levels={recorderState.levels} />
+
+        {/* LA DURÉE EST PRONONCÉE, pas seulement dessinée (revue-correction
+            #5668) — un `aria-label` posé sur ce groupe REMPLAÇAIT son
+            contenu : le lecteur d'écran disait « Enregistrement en cours » et
+            JAMAIS le temps écoulé, la seule information que cette bande
+            porte. iOS sert les deux (`accessibilityLabel` + `accessibilityValue`,
+            `:206-209`). Ici : un libellé invisible, puis le temps LU. */}
+        <span role="timer" className="flex shrink-0 items-center gap-1.5 text-time tabular-nums">
+          <span
+            aria-hidden
+            className={`size-1.5 rounded-full${reduced ? '' : ' animate-pulse'}`}
+            style={{ backgroundColor: 'var(--ios-error-strong)' }}
+          />
+          <span className="sr-only">{`${translate(language, 'composer.recording.inProgress')}, `}</span>
+          <time dateTime={`PT${Math.round(recorderState.durationMs / 1000)}S`}>
+            <span aria-hidden>{formatDuration(recorderState.durationMs)}</span>
+            <span className="sr-only">{spokenDuration(recorderState.durationMs, language)}</span>
+          </time>
+        </span>
+
+        <button
+          type="button"
+          onClick={canSend ? onStopToTray : undefined}
+          aria-disabled={canSend ? undefined : true}
+          className="tap-target-32 grid size-8 shrink-0 place-items-center rounded-full"
+          style={{ backgroundColor: 'var(--recording-fill)', opacity: canSend ? 1 : 0.4 }}
+          aria-label={translate(language, 'composer.recording.stop')}
+          title={canSend ? translate(language, 'composer.recording.stop.hint') : holdOn}
+        >
+          <GlyphSvg glyph={COMPOSER_GLYPHS.stop} size={14} style={{ color: 'var(--recording-ink)' }} />
+        </button>
+
+        <button
+          type="button"
+          onClick={canSend ? onSendRecording : undefined}
+          aria-disabled={canSend ? undefined : true}
+          className="tap-target-32 grid size-8 shrink-0 place-items-center rounded-full"
+          style={{
+            background: 'var(--send-accent-fill)',
+            opacity: canSend ? 1 : 0.4,
+          }}
+          aria-label={translate(language, 'composer.recording.send')}
+          title={canSend ? translate(language, 'composer.recording.send.hint') : holdOn}
+        >
+          <Glyph name="arrowUp" size={16} className="text-ios-on-brand" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const pendingKindGlyph = (kind: PendingAttachment['kind']): 'microphone' | 'image' | 'file' =>
+  kind === 'audio' ? 'microphone' : kind === 'image' ? 'image' : 'file';
+
+function PreviewTile({
+  attachment,
+  onRemove,
+  onEdit,
+  progress,
+}: {
+  readonly attachment: PendingAttachment;
+  readonly onRemove: () => void;
+  /** Présent ⇒ la pièce MONTE (#9736) : sa part, de 0 à 1. */
+  readonly progress?: number;
+  /** « Éditer » (#8416, #9119) — toucher la vignette d'une image, d'une
+   * vidéo ou d'un audio l'ÉDITE ; son centre le dit (`pendingTileGlyph`). */
+  readonly onEdit?: () => void;
+}) {
+  /**
+   * UN URL D'OBJET PAR PIÈCE, PARTAGÉ AVEC LA BULLE OPTIMISTE (défaut 7,
+   * revue #5668) — `previewUrlFor` (`lib/send/attachment-preview-url.ts`)
+   * est le SEUL site qui appelle `URL.createObjectURL`, mémoïsé par
+   * `localId`. Cette tuile ne le RÉVOQUE plus à son démontage : l'envoi
+   * démonte la tuile (le plateau se ferme) exactement quand la bulle
+   * optimiste commence à utiliser la MÊME URL — la révoquer ici casserait
+   * l'image qu'`attachmentPreviewOf` vient de poser. La révocation est
+   * EXPLICITE, au geste qui sait que l'URL ne sert plus jamais : retirer la
+   * pièce AVANT l'envoi (`onRemove`, `composer.tsx § removeAttachment`).
+   */
+  const previewUrl = useMemo(
+    () => (attachment.kind === 'image' || attachment.kind === 'video' ? previewUrlFor(attachment.localId, attachment.file) : undefined),
+    [attachment.localId, attachment.file, attachment.kind],
+  );
+  /* W9 (#11315) — un HEIC que ce navigateur ne décode pas : l'aperçu lève
+     `error`. La vignette montre alors le glyphe d'image, et ne propose plus
+     « Éditer », que l'éditeur ne saurait pas ouvrir. */
+  const [undecodable, setUndecodable] = useState(false);
+  const shownUrl = undecodable ? undefined : previewUrl;
+  const mounting = progress !== undefined;
+  const glyph = onEdit === undefined || mounting || undecodable ? null : pendingTileGlyph({ kind: attachment.kind, mimeType: attachment.file.type });
+  const language = currentInterfaceLanguage();
+
+  const face = (
+    <div
+      className="relative grid size-14 place-items-center overflow-hidden rounded-[10px]"
+      style={{ backgroundColor: 'color-mix(in srgb, var(--accent) 12%, transparent)' }}
+    >
+      {shownUrl !== undefined && attachment.kind === 'image' ? (
+        <img src={shownUrl} alt="" className="size-full object-cover" onError={() => setUndecodable(true)} />
+      ) : null}
+      {shownUrl !== undefined && attachment.kind === 'video' ? (
+        /* `#t` — sans lui, Safari et la WebView ne peignent AUCUNE image d'une
+           vidéo qui n'a pas joué : la vignette restait un carré vide (#9736). */
+        <video src={`${previewUrl}#t=0.001`} muted playsInline preload="metadata" className="size-full object-cover" aria-hidden />
+      ) : null}
+      {/* UN SON OU UN FICHIER SE RECONNAÎT (#9736) — son glyphe reste quand la
+          vignette s'édite : au centre sans crayon, au coin avec lui. */}
+      {shownUrl === undefined ? (
+        <span
+          data-pending-kind={attachment.kind}
+          className={glyph === null ? 'grid' : 'absolute grid'}
+          style={glyph === null ? undefined : { insetInlineStart: 4, bottom: 4 }}
+          aria-hidden
+        >
+          <Glyph name={pendingKindGlyph(attachment.kind)} size={glyph === null ? 22 : 14} style={{ color: 'var(--accent)' }} />
+        </span>
+      ) : null}
+      {mounting ? (
+        <span
+          role="progressbar"
+          aria-label={attachment.name}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(progress * 100)}
+          className="absolute inset-0 flex items-end"
+          style={{ backgroundColor: 'rgb(0 0 0 / 0.35)' }}
+        >
+          <span className="block" style={{ height: 4, width: `${Math.round(progress * 100)}%`, backgroundColor: 'var(--accent)' }} />
+        </span>
+      ) : null}
+      {glyph === 'edit' ? (
+        <span data-pending-glyph="edit" className="absolute inset-0 grid place-items-center" aria-hidden>
+          <span className="grid size-[26px] place-items-center rounded-full text-white" style={{ backgroundColor: 'rgb(0 0 0 / 0.45)' }}>
+            <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 20h4L19 9l-4-4L4 16z" />
+            </svg>
+          </span>
+        </span>
+      ) : null}
+    </div>
+  );
+
+  return (
+    <div data-pending-tile={attachment.localId} className="relative shrink-0" style={{ width: 56 }}>
+      {/* « ÉDITER » (#9119) — TOUTE la vignette est le geste, le crayon en
+          son centre le nomme (miroir de la tuile iOS). */}
+      {glyph === 'edit' && onEdit !== undefined ? (
+        <button
+          type="button"
+          data-composer-edit
+          onClick={onEdit}
+          aria-label={translate(language, 'composer.attachment.edit', { name: attachment.name })}
+          className="block rounded-[10px]"
+        >
+          {face}
+        </button>
+      ) : (
+        face
+      )}
+      {/* « Supprimer » — cible de 32 px au coin, AU-DESSUS de la vignette :
+          elle ne couvre plus le centre, qui appartient à « Éditer » (une
+          cible de 44 px y débordait jusqu'au milieu d'une vignette de 56). */}
+      {mounting ? null : (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="absolute -top-2 z-10 grid size-8 place-items-center"
+          style={{ insetInlineEnd: -8 }}
+          aria-label={translate(language, 'composer.attachment.remove', { name: attachment.name })}
+        >
+          <span
+            className="grid size-[18px] place-items-center rounded-full text-white"
+            style={{ backgroundColor: 'var(--color-error)' }}
+            aria-hidden
+          >
+            <Glyph name="x" size={10} />
+          </span>
+        </button>
+      )}
+      <span className="mt-1 block truncate text-check" style={{ width: 60 }}>
+        {attachment.name}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * L'ÉCOUTE / LE VISIONNAGE D'UNE PIÈCE EN ATTENTE (#9119) — la vidéo et
+ * l'audio n'ont pas encore d'éditeur de scène sur le web (#9124) : toucher
+ * leur vignette ouvre leur lecteur, en couche, sans quitter le brouillon.
+ */
+function PendingMediaPreview({ attachment, onClose }: { readonly attachment: PendingAttachment; readonly onClose: () => void }) {
+  useBackDismiss(onClose, { escape: true });
+  const url = previewUrlFor(attachment.localId, attachment.file);
+  return (
+    <div
+      data-composer-media-preview
+      role="dialog"
+      aria-modal="true"
+      aria-label={attachment.name}
+      className="fixed inset-0 z-50 grid place-items-center bg-black/90 p-4"
+    >
+      {attachment.kind === 'video' ? (
+        <video ref={coordinateNativeMedia} src={url} controls autoPlay playsInline className="max-h-full max-w-full" />
+      ) : (
+        <audio ref={coordinateNativeMedia} src={url} controls autoPlay className="w-full max-w-md" />
+      )}
+      <button
+        type="button"
+        data-composer-media-preview-close
+        onClick={onClose}
+        className="absolute right-3 top-3 grid size-11 place-items-center rounded-full text-white"
+        style={{ top: 'max(12px, env(safe-area-inset-top))', backgroundColor: 'rgb(255 255 255 / 0.15)' }}
+        aria-label={translate(currentInterfaceLanguage(), 'common.close')}
+      >
+        <Glyph name="x" size={16} />
+      </button>
+    </div>
+  );
+}
+
+function PreviewStrip({
+  pending,
+  onRemove,
+  onReplace,
+  uploading,
+}: {
+  readonly pending: readonly PendingAttachment[];
+  readonly onRemove: (localId: string) => void;
+  readonly onReplace?: (localId: string, file: File) => void;
+  readonly uploading?: ReadonlyMap<string, number>;
+}) {
+  /** L'image en RETOUCHE (#8416) — la couche vit en PORTAIL sur `body` : le
+   * plateau peut être posé dans un conteneur qui romprait `position: fixed`. */
+  const [retouching, setRetouching] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState<string | null>(null);
+  const [trimming, setTrimming] = useState<string | null>(null);
+  const trimmed = pending.find((attachment) => attachment.localId === trimming) ?? null;
+  /** TOUTES les pièces du message en scènes, ouvertes sur la touchée (#9126). */
+  const series = retouching === null ? null : retouchSeriesOf(pending, retouching);
+  const previewed = pending.find((attachment) => attachment.localId === previewing) ?? null;
+  const editOf = (attachment: PendingAttachment): (() => void) | undefined => {
+    /* Une VIDÉO s'édite dans la scène, comme une image (#9124) — plus le lecteur. */
+    if (attachment.kind === 'image' || (attachment.kind === 'video' && onReplace !== undefined)) {
+      return onReplace === undefined ? undefined : () => setRetouching(attachment.localId);
+    }
+    /* Un AUDIO se coupe dans son éditeur (#9136) — un son n'a pas de scène. */
+    if (attachment.kind === 'audio' && onReplace !== undefined) return () => setTrimming(attachment.localId);
+    if (attachment.kind === 'video' || attachment.kind === 'audio') return () => setPreviewing(attachment.localId);
+    return undefined;
+  };
+  return (
+    <>
+      <div
+        role="group"
+        aria-label={translate(currentInterfaceLanguage(), 'composer.pending.group')}
+        className="scrollbar-none flex gap-3 overflow-x-auto px-3 py-2.5"
+        style={{
+          height: 100,
+          borderRadius: 16,
+          margin: '0 12px 4px',
+          backgroundColor: 'color-mix(in srgb, var(--accent) 6%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
+        }}
+      >
+        {pending.map((attachment) => {
+          const onEdit = editOf(attachment);
+          const progress = uploading?.get(attachment.localId);
+          return (
+            <PreviewTile
+              key={attachment.localId}
+              attachment={attachment}
+              onRemove={() => onRemove(attachment.localId)}
+              {...(onEdit !== undefined ? { onEdit } : {})}
+              {...(progress !== undefined ? { progress } : {})}
+            />
+          );
+        })}
+      </div>
+      {series !== null && onReplace !== undefined
+        ? createPortal(
+            <Suspense fallback={null}>
+              <ComposerRetouch
+                pieces={series.pieces}
+                focus={series.focus}
+                onCancel={() => setRetouching(null)}
+                onDone={(replaced) => {
+                  replaced.forEach(({ localId, file }) => onReplace(localId, file));
+                  setRetouching(null);
+                }}
+              />
+            </Suspense>,
+            document.body,
+          )
+        : null}
+      {trimmed !== null && onReplace !== undefined
+        ? createPortal(
+            <Suspense fallback={null}>
+              <ComposerAudioTrim
+                attachment={trimmed}
+                onCancel={() => setTrimming(null)}
+                onDone={(file) => {
+                  onReplace(trimmed.localId, file);
+                  setTrimming(null);
+                }}
+              />
+            </Suspense>,
+            document.body,
+          )
+        : null}
+      {previewed !== null ? createPortal(<PendingMediaPreview attachment={previewed} onClose={() => setPreviewing(null)} />, document.body) : null}
+    </>
+  );
+}
+
+/**
+ * L'AVERTISSEMENT DU COMPOSEUR (miroir « toast actionnable »
+ * `AudioRecorderManager.swift:136-157`) — DESSINÉ, jamais un silence : la
+ * cause, un « Réessayer » quand le geste se rejoue, et TOUJOURS une sortie.
+ * `role="status"` : le lecteur d'écran l'annonce sans voler le focus.
+ */
+function NoticeBanner({ notice }: { readonly notice: ComposerNotice }) {
+  return (
+    <div
+      role="status"
+      className="mx-3 mb-1 flex items-center gap-2 rounded-quote px-2.5 py-2"
+      style={{ backgroundColor: 'var(--color-ios-card)' }}
+    >
+      <Glyph name="warningCircle" size={16} style={{ color: 'var(--color-error)' }} />
+      <span className="min-w-0 flex-1 text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
+        {notice.message}
+      </span>
+      {notice.onRetry !== undefined ? (
+        <button
+          type="button"
+          onClick={notice.onRetry}
+          className="tap-target-32 h-8 shrink-0 rounded-chip px-2 text-title font-semibold"
+          style={{ color: 'var(--accent)' }}
+        >
+          {notice.retryLabel ?? translate(currentInterfaceLanguage(), 'common.retry')}
+        </button>
+      ) : null}
+      <button
+        type="button"
+        onClick={notice.onDismiss}
+        className="grid size-11 shrink-0 place-items-center"
+        aria-label={translate(currentInterfaceLanguage(), 'composer.notice.dismiss')}
+      >
+        <Glyph name="x" size={14} style={{ color: 'var(--color-ios-ink-2)' }} />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * LA PUCE DU LIEU ATTACHÉ (#7280) — miroir de la puce « LIEU » d'iOS
+ * (`composer.chip.kind.location`), posée au-dessus de la rangée avec les
+ * pièces en attente.
+ *
+ * ELLE MONTRE DES COORDONNÉES, PAS UN NOM — et c'est délibéré : le web n'a
+ * aucun géocodeur inverse dans ce lot, et afficher « Lieu inconnu » sur une
+ * position parfaitement connue serait dire le contraire de ce qui part. Les
+ * coordonnées sont formatées par la LANGUE D'INTERFACE (`Intl.NumberFormat`) :
+ * le français écrit « 48,8566 », l'anglais « 48.8566 », et concaténer un
+ * `toFixed()` aurait servi le point décimal aux sept langues.
+ *
+ * LE RETRAIT EST UNE CIBLE DE 44 px (dimension 5) contenant un badge de
+ * 18 px — la MÊME anatomie que `PreviewTile`, jamais un bouton de la taille
+ * de son dessin.
+ */
+function PlaceChip({ place, onRemove }: { readonly place: SharedPlace; readonly onRemove: () => void }) {
+  const language = currentInterfaceLanguage();
+  const coordinate = new Intl.NumberFormat(language, { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+  return (
+    <div
+      data-composer-place
+      className="mx-3 mb-1 flex items-center gap-2 rounded-quote px-2.5 py-2"
+      style={{ backgroundColor: 'var(--color-ios-card)' }}
+    >
+      <GlyphSvg glyph={COMPOSER_GLYPHS.mapPin} size={16} style={{ color: 'var(--ios-tile-location)' }} />
+      <span className="min-w-0 flex-1 text-title">
+        <span className="font-semibold" style={{ color: 'var(--ios-tile-location)' }}>
+          {translate(language, 'composer.location.chip')}{' '}
+        </span>
+        <span className="tabular-nums" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {coordinate.format(place.latitude)} · {coordinate.format(place.longitude)}
+        </span>
+      </span>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="grid size-11 shrink-0 place-items-center"
+        aria-label={translate(language, 'composer.location.remove')}
+      >
+        <span
+          className="grid size-[18px] place-items-center rounded-full text-white"
+          style={{ backgroundColor: 'var(--color-error)' }}
+          aria-hidden
+        >
+          <Glyph name="x" size={10} />
+        </span>
+      </button>
+    </div>
+  );
+}
+
+export default function ComposerTray(props: ComposerTrayProps) {
+  if (props.variant === 'recording-bar') {
+    return (
+      <RecordingBar
+        recorderState={props.recorderState}
+        onCancelRecording={props.onCancelRecording}
+        onStopToTray={props.onStopToTray}
+        onSendRecording={props.onSendRecording}
+      />
+    );
+  }
+
+  if (props.variant === 'panel') {
+    const { variant: _variant, ...panel } = props;
+    return <ComposerAttachmentPanel {...panel} />;
+  }
+
+  return (
+    <>
+      {props.pending.length > 0 ? (
+        <PreviewStrip
+          pending={props.pending}
+          onRemove={props.onRemove}
+          {...(props.onReplace !== undefined ? { onReplace: props.onReplace } : {})}
+          {...(props.uploading !== undefined ? { uploading: props.uploading } : {})}
+        />
+      ) : null}
+      {props.place !== null ? <PlaceChip place={props.place} onRemove={props.onRemovePlace} /> : null}
+      {props.notice !== null ? <NoticeBanner notice={props.notice} /> : null}
+    </>
+  );
+}

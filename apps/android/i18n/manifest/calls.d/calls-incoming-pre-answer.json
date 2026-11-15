@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.incoming.preAnswer.seenAndHeard",
+          "androidName": "call_incoming_pre_answer_seen_and_heard",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.incoming.preAnswer.heardOnly",
+          "androidName": "call_incoming_pre_answer_heard_only",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.incoming.preAnswer.seenMuted",
+          "androidName": "call_incoming_pre_answer_seen_muted",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.incoming.preAnswer.neither",
+          "androidName": "call_incoming_pre_answer_neither",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.incoming.preAnswer.mic.hint",
+          "androidName": "call_incoming_pre_answer_mic_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.incoming.preAnswer.camera.hint",
+          "androidName": "call_incoming_pre_answer_camera_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.incoming.selfPreview.label",
+          "androidName": "call_incoming_self_preview_label",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

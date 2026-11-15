@@ -28,7 +28,7 @@ final class VoiceProfileFrenchTypographyTests: XCTestCase {
         "voice.profile.create": "Créer un profil vocal",
         "voice.profile.createdAt": "Créé le",
         "voice.profile.deleteAlert.message": "Cette action est irréversible. Toutes vos données vocales seront supprimées conformément au RGPD.",
-        "voice.profile.empty.description": "Créez un profil vocal pour que vos messages traduits conservent votre voix naturelle.",
+        "voice.profile.empty.description": "Vos vocaux traduits garderont votre voix.",
         "voice.profile.lastUsed": "Dernière utilisation",
         "voice.profile.quality": "Qualité",
         "voice.profile.samples": "Échantillons",
@@ -36,8 +36,6 @@ final class VoiceProfileFrenchTypographyTests: XCTestCase {
         "voice.profile.status.expired.label": "Expiré",
         "voice.profile.status.failed.description": "L'analyse a échoué, veuillez réessayer",
         "voice.profile.status.failed.label": "Échec",
-        "voice.profile.status.processing.description": "L'IA analyse vos échantillons vocaux",
-        "voice.profile.status.ready.description": "Votre profil vocal est prêt à l'emploi",
         "voice.profile.totalDuration": "Durée totale",
         "voice.profile.voiceSamples": "Échantillons vocaux",
     ]
@@ -66,8 +64,8 @@ final class VoiceProfileFrenchTypographyTests: XCTestCase {
         // A `defaultValue` that disagrees with the catalogue is a second, silent copy
         // of the string: it ships whenever the entry is missing, and it is what the
         // next developer duplicates into a new call site.
-        let sources = ["Meeshy/Features/Main/Views/VoiceProfileManageView.swift",
-                       "Meeshy/Features/Main/Views/VoiceProfileWizardView.swift"]
+        let sources = ["Meeshy/Features/Settings/Views/VoiceProfileManageView.swift",
+                       "Meeshy/Features/Settings/Views/VoiceProfileWizardView.swift"]
             .map { iosRoot.appendingPathComponent($0) }
 
         for url in sources {
@@ -86,7 +84,7 @@ final class VoiceProfileFrenchTypographyTests: XCTestCase {
         // The sheet already shows a navigation bar for its Close button; its title
         // belongs in that bar, not in a Text inside the content.
         let source = try String(
-            contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Main/Views/VoiceProfileManageView.swift"),
+            contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Settings/Views/VoiceProfileManageView.swift"),
             encoding: .utf8
         )
         XCTAssertTrue(

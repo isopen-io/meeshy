@@ -20,17 +20,29 @@ import { getUserStats } from '../../../routes/users/preferences';
 function buildPrisma(): PrismaClient {
   const prisma = {
     user: {
+      findMany: jest.fn(async () => []),
       findFirst: jest.fn(() =>
         Promise.resolve({ id: 'real-id', createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000) })
       ),
+      // La route résout la cible (id OU pseudo) par `findFirst`, puis délègue
+      // le calcul à `computeUserStats`, qui relit `createdAt` par `findUnique`.
+      findUnique: jest.fn(() =>
+        Promise.resolve({ createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000) })
+      ),
     },
     message: {
-      count: jest.fn(() => Promise.resolve(1000)),
+      // Deux comptages distincts passent par `message.count` : les messages
+      // envoyés, et ceux qui portent une traduction. Un stub unique les
+      // confondrait — c'est ce qui distingue le témoin d'un décor.
+      count: jest.fn((args: { where?: { translations?: unknown } }) =>
+        Promise.resolve(args?.where?.translations === undefined ? 1000 : 100)
+      ),
       groupBy: jest.fn(() =>
         Promise.resolve([{ originalLanguage: 'fr' }, { originalLanguage: 'en' }])
       ),
     },
     participant: {
+      findMany: jest.fn(() => Promise.resolve([{ id: "p1" }])),
       count: jest.fn(() => Promise.resolve(11)),
     },
     friendRequest: {
@@ -47,7 +59,7 @@ function buildPrisma(): PrismaClient {
         }
       }),
     },
-    $runCommandRaw: jest.fn(() => Promise.resolve({ n: 100 })),
+    // Plus appelé : `computeUserStats` compte les traductions par l'API typée.
   };
   return prisma as unknown as PrismaClient;
 }
@@ -56,7 +68,12 @@ async function buildApp(prisma: PrismaClient): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   app.decorate('prisma', prisma);
   app.decorate('authenticate', async (req: any) => {
-    req.authContext = { isAuthenticated: true, registeredUser: { id: 'me-id' }, userId: 'me-id' };
+    // Le viewer est le PROPRIÉTAIRE de la cible (`real-id`, ce que la
+    // recherche rend). Ce témoin porte sur le SÉRIALISEUR — « le schéma ne
+    // supprime aucun champ calculé » — pas sur l'autorisation ; depuis #4161,
+    // un viewer tiers ne reçoit plus les quatre compteurs privés, et le témoin
+    // mesurerait alors une charge amputée en croyant mesurer un schéma.
+    req.authContext = { isAuthenticated: true, registeredUser: { id: 'real-id' }, userId: 'real-id' };
   });
   await getUserStats(app);
   await app.ready();

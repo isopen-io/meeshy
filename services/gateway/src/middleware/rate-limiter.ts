@@ -2,57 +2,52 @@
  * Rate Limiting Middleware for Meeshy Gateway
  *
  * Protects against:
- * - Message spam (max 20 messages/minute)
  * - Mention abuse (max 50 mentions/message, max 5 mentions/minute per recipient)
  * - API abuse (max 300 requests/minute)
+ *
+ * ## Ce que ce fichier n'enregistre PLUS, et pourquoi (#4687)
+ *
+ * `registerMessageRateLimiter` (20 messages/min, clé `msg:${userId}`) a vécu
+ * ici sans qu'AUCUN appelant de production ne l'invoque — mesuré, et déjà
+ * constaté par `docs/superpowers/specs/2026-07-29-architecture-transport-services.md`
+ * (« jamais branché ») et `docs/product/api-simplification/messaging.md` (« la
+ * limite de 20 messages/minute annoncée dans le CLAUDE.md n'existe pas »).
+ *
+ * Il est SUPPRIMÉ plutôt que laissé, parce qu'un enregistreur mort n'est pas
+ * neutre : c'est un PATRON à copier. Le sien annonçait une clé par compte
+ * (`msg:${authContext.userId}`) et rendait l'adresse — son `keyGenerator`
+ * tournait au hook `onRequest` du plugin, avant toute authentification de
+ * route. C'est exactement la forme qui, recopiée sous `config.rateLimit`, a
+ * produit les défauts de #4347, #4359 et #4429, un site à la fois.
+ *
+ * Le remonter n'était pas une option : il enregistre le plugin en GLOBAL
+ * (défaut du plugin) avec `max: 20`, ce qui plafonnerait TOUTE l'API à 20
+ * requêtes/minute — et un second enregistrement global entrerait en conflit
+ * avec `registerGlobalRateLimiter` ci-dessous. Un plafond par compte sur
+ * l'envoi de message se pose au niveau de la ROUTE, là où l'appelant est
+ * connu, comme le font `createPostRouteRateLimitConfig` et ses sœurs.
  */
 
+import { apiPath } from '@meeshy/shared/api/prefix';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { UnifiedAuthRequest } from './auth';
 import { getCacheStore } from '../services/CacheStore';
+import { addressFingerprintOf } from '../utils/address-fingerprint';
+import { anonymousReaderKeyOf } from '../routes/social/anonymousReader';
 
 /**
- * Rate limiter pour les messages
- * Max 20 messages par minute par utilisateur
+ * Chemins exemptés du débit — sondes de disponibilité (#4219). Nommée et
+ * EXPORTÉE plutôt que fermée dans `allowList`, pour que la garde de #5333
+ * (`rate-limit-allowlist-inheritance-guard.test.ts`) mesure la MÊME liste,
+ * jamais une copie qui pourrait diverger.
  */
-export async function registerMessageRateLimiter(fastify: FastifyInstance) {
-  await fastify.register(rateLimit, {
-    max: 20,
-    timeWindow: '1 minute',
-    // RedisStore natif du plugin via l'option `redis`. NE PAS passer une
-    // instance à `store` : @fastify/rate-limit fait `new Store(opts)` dessus
-    // (index.js) → `new <instance>()` crashe au boot dès que Redis est présent
-    // (ex. staging ; en dev sans Redis `makeRedisStore` renvoyait undefined,
-    // donc ça ne pétait pas). `skipOnError: true` = fail-open (Redis KO → on
-    // laisse passer), comme l'ancien store custom.
-    redis: getCacheStore().getNativeClient() ?? undefined,
-    skipOnError: true,
-    keyGenerator: (request: FastifyRequest) => {
-      // Rate limit par utilisateur
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (authContext && authContext.userId) {
-        return `msg:${authContext.userId}`;
-      }
-      // Fallback sur IP si pas d'auth
-      return `msg:ip:${request.ip}`;
-    },
-    errorResponseBuilder: (request, context) => {
-      return {
-        success: false,
-        error: 'Trop de messages envoyés. Veuillez patienter avant de réessayer.',
-        retryAfter: context.ttl,
-        statusCode: 429
-      };
-    },
-    // Ne pas ajouter les headers X-RateLimit-* dans la réponse
-    addHeaders: {
-      'x-ratelimit-limit': false,
-      'x-ratelimit-remaining': false,
-      'x-ratelimit-reset': false
-    }
-  });
-}
+export const HEALTH_PROBE_ALLOWLISTED_PATHS: readonly string[] = [
+  '/health',
+  '/healthz',
+  '/ready',
+  apiPath('/health/ready'),
+];
 
 /**
  * Rate limiter global pour toutes les routes API
@@ -63,9 +58,25 @@ export async function registerGlobalRateLimiter(fastify: FastifyInstance) {
     global: true,
     max: 300, // Augmenté de 100 à 300 pour l'édition de liens
     timeWindow: '1 minute',
-    // RedisStore natif via `redis` (cf. registerMessageRateLimiter). Passer une
-    // instance à `store` crashait le boot en staging (plugin fait `new store()`).
+    // RedisStore natif du plugin via l'option `redis`. NE PAS passer une
+    // instance à `store` : @fastify/rate-limit fait `new Store(opts)` dessus
+    // (index.js:146) → `new <instance>()` crashe au boot dès que Redis est
+    // présent (ex. staging ; en dev sans Redis, `makeRedisStore` rendait
+    // `undefined`, donc ça ne pétait pas).
     redis: getCacheStore().getNativeClient() ?? undefined,
+    // `request.ip` porte l'adresse de l'APPELANT depuis #4137 (`trustProxy`,
+    // cf. `config/trust-proxy.ts`). Avant cela, c'était l'adresse du conteneur
+    // Traefik — identique pour tout le monde — et cette clé désignait donc UN
+    // SEUL seau de 300 req/min pour la plateforme entière : elle ne freinait
+    // personne individuellement, et un client qui la saturait faisait répondre
+    // 429 à tous les autres.
+    //
+    // La clé reste l'adresse, et NON l'utilisateur, pour une raison d'ordre :
+    // ce limiteur est un hook global posé par `setupMiddleware()`, qui s'exécute
+    // AVANT les gardes d'authentification de chaque route — `authContext`
+    // n'existe pas encore ici. Les limiteurs qui doivent compter par compte le
+    // font au niveau de leur route (`createPostRouteRateLimitConfig` et ses
+    // sœurs), là où l'appelant est connu.
     keyGenerator: (request: FastifyRequest) => {
       return `global:${request.ip}`;
     },
@@ -77,16 +88,54 @@ export async function registerGlobalRateLimiter(fastify: FastifyInstance) {
     // donc silencieusement ignorée, et les sondes subissaient le quota : un
     // flood faisait échouer `/health` et redémarrer le conteneur.
     //
-    // Le test `isLocalIp` de cette clause N'EST PAS repris, délibérément :
-    // Fastify tourne sans `trustProxy` derrière Traefik sur un réseau Docker,
-    // donc `request.ip` est une adresse privée `172.x` pour TOUT LE MONDE.
-    // Réactiver la clause telle quelle aurait désactivé le rate limiting
-    // entier — un renommage naïf était bien pire que le bug.
+    // Le test `isLocalIp` de cette clause N'A JAMAIS été repris, et ne doit pas
+    // l'être : une exemption fondée sur la FORME d'une adresse n'a aucun sens
+    // ici. Elle a d'ailleurs neutralisé les limiteurs d'authentification
+    // pendant toute sa durée de vie (#4137, `utils/rate-limiter.ts`), pour
+    // exactement la raison notée ici — `request.ip` était une adresse privée
+    // `172.x` pour tout le monde. Depuis #4137, `trustProxy` rend l'adresse de
+    // l'appelant ; la conclusion ne change pas pour autant : ce qui exempte
+    // ici, ce sont des CHEMINS de sonde, jamais une plage d'adresses.
+    // `allowList`, comme `skipOnError` au-dessus, est une valeur GLOBALE que
+    // `mergeParams` (`Object.assign`) étale dans toute config de route qui ne
+    // la redéclare pas (#5333, suivi ouvert à la clôture de #4687). Décision :
+    // ne PAS exiger de déclaration explicite par route, contrairement à
+    // `skipOnError` — et la raison n'est pas la même question posée deux fois.
+    //
+    // `skipOnError` varie légitimement par route (le sens de l'échec est un
+    // choix de risque PROPRE à chaque limiteur). `allowList` ici n'encode
+    // AUCUN choix par route : c'est une exemption d'INFRASTRUCTURE (les sondes
+    // de disponibilité) valable pour la plateforme entière, quelle que soit la
+    // route qui l'hérite. Redéclarer cette même fonction sur chacune des ~50
+    // configs de route dupliquerait une connaissance d'infrastructure dans
+    // des dizaines de fabriques qui n'ont rien à voir avec elle — l'inverse
+    // d'une source de vérité unique, pour un risque qui n'existe pas :
+    //
+    // `onRoute` (`@fastify/rate-limit/index.js:174`) monte le limiteur de LA
+    // ROUTE À LA PLACE du global — jamais en plus. L'allowList hérité par une
+    // route ne peut donc s'appliquer QUE si cette route est mesurée sur l'un
+    // des chemins ci-dessous. Mesuré sur `route-manifest.json` (2026-09-06) :
+    // aucune route qui déclare un `config.rateLimit` propre n'est montée sur
+    // `/health`, `/healthz`, `/ready` ou `/api/v1/health/ready` — les trois
+    // routes de sonde (`routes/health/index.ts`) n'ont elles-mêmes AUCUN
+    // `config.rateLimit` et s'appuient directement sur ce limiteur global.
+    // L'héritage est donc structurellement inerte aujourd'hui, et le restera
+    // tant que cette disjonction tient — gardée par
+    // `rate-limit-allowlist-inheritance-guard.test.ts`, qui rougit dès qu'une
+    // route à configuration propre atterrit sur l'un de ces chemins : c'est
+    // CE moment-là qui doit rouvrir la question d'une déclaration explicite,
+    // pas une règle appliquée par réflexe à 50 sites qui n'en ont pas besoin.
     allowList: (request: FastifyRequest) => {
       const path = request.url.split('?')[0];
-      return path === '/health' || path === '/healthz' || path === '/ready';
+      // `/api/v1/health/ready` rejoint les sondes exemptées (#4219), pour la
+      // raison écrite au-dessus : un 429 sur une sonde de disponibilité fait
+      // conclure « instance morte » et redémarrer le conteneur. L'exemption
+      // n'ouvre pas d'amplificateur anonyme — le verdict est mémoïsé 2 s dans
+      // `routes/health/index.ts`, donc une cadence infinie coûte un ping toutes
+      // les 2 s, quoi qu'il arrive.
+      return HEALTH_PROBE_ALLOWLISTED_PATHS.includes(path);
     },
-    errorResponseBuilder: (request, context) => {
+    errorResponseBuilder: (_request, context) => {
       return {
         success: false,
         error: 'Trop de requêtes. Veuillez réessayer plus tard.',
@@ -160,25 +209,120 @@ export async function messageValidationHook(
  *   de scroll produit plusieurs lots (le client les regroupe sur 3 s) ; 10/min
  *   déclenchait des 429 en usage normal.
  */
+/**
+ * Limiteur des portes de RECHERCHE de personnes (#4145).
+ *
+ * Ces routes sont la surface d'énumération du produit : elles répondent, sur un
+ * fragment, par une liste de comptes. La clé est donc l'APPELANT (`userId`), et
+ * non l'adresse — une clé IP seule laisse un compte unique moissonner depuis
+ * autant d'adresses qu'il veut, et pénalise en prime les utilisateurs qui
+ * partagent une sortie NAT.
+ *
+ * Le seuil par minute n'est PAS la garde principale : une moisson patiente
+ * passe sous n'importe quel débit. Ce qui l'arrête est le plafond de lignes
+ * servies (`limit ≤ 100` déjà appliqué par `validatePagination`) combiné à un
+ * budget quotidien — ce dernier reste à poser, cf. #4158.
+ */
+/**
+ * Ce que TOUTE fabrique de ce fichier pose, et pourquoi (#4347).
+ *
+ * `hook: 'preHandler'` — `config.rateLimit` s'applique par défaut au hook
+ * `onRequest`, qui court AVANT `preValidation`, donc avant que `unifiedAuth`
+ * ne pose `authContext`. Un `keyGenerator` qui lit `authContext?.userId` y
+ * reçoit `undefined` et retombe SYSTÉMATIQUEMENT sur `ip:${request.ip}`, pour
+ * un appelant authentifié comme pour un visiteur. Mesuré sur le vrai plugin
+ * (`fastify.inject`), pas déduit : sans `hook`, le générateur voit
+ * `authContext === undefined` ; avec `hook: 'preHandler'`, il voit le compte.
+ *
+ * Ce que ce repli coûte, exactement. Depuis #4137, `trustProxy` est posé
+ * (`config/trust-proxy.ts`, un maillon par défaut), donc `request.ip` est
+ * l'adresse RÉELLE de l'appelant — pas celle du conteneur Traefik. Un
+ * plafond « par compte » silencieusement dégradé en « par adresse » n'est
+ * donc pas un seau unique pour la plateforme ; il reste néanmoins faux dans
+ * les DEUX sens : plusieurs comptes derrière une même sortie (opérateur
+ * mobile, bureau, NAT) se partagent un crédit prévu pour un seul, et un même
+ * compte disposant de plusieurs adresses en obtient autant de crédits. Une
+ * limite par compte se compte par compte.
+ *
+ * Le repli `ip:` reste LÉGITIME là où l'appelant peut être anonyme — c'est
+ * alors la seule identité disponible, et le déplacer au `preHandler` ne le
+ * dégrade pas : il ne s'applique plus qu'aux requêtes réellement sans compte.
+ *
+ * `skipOnError: false` — `registerGlobalRateLimiter` pose `skipOnError: true`,
+ * valeur GLOBALE qu'@fastify/rate-limit fusionne par `Object.assign` dans
+ * toute config qui ne la redéclare pas. Un Redis indisponible ouvrait donc
+ * ces limiteurs en grand : la panne du gardien devenait l'absence de garde.
+ */
+const GARDES_DE_CLE = { hook: 'preHandler' as const, skipOnError: false };
+
+export function createDirectoryRouteRateLimitConfig(
+  type: 'search' | 'resolve'
+): object {
+  const configs = {
+    search: { max: 30, label: 'search' },
+    resolve: { max: 20, label: 'resolve' },
+  };
+  const cfg = configs[type];
+  return {
+    max: cfg.max,
+    timeWindow: '1 minute',
+    ...GARDES_DE_CLE,
+    keyGenerator: (request: FastifyRequest) => {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      const id = authContext?.userId ?? `ip:${request.ip}`;
+      return `directory:${cfg.label}:${id}`;
+    },
+    errorResponseBuilder: () => ({
+      success: false,
+      error: `Trop de recherches (directory/${cfg.label}). Veuillez patienter.`,
+      statusCode: 429,
+    }),
+  };
+}
+
+/**
+ * Le seau d'un appelant SANS compte sur une route de posts (#10483) : sa clé de
+ * lecteur quand il porte un X-Session-Token (un bureau de trente personnes
+ * derrière une même IP = trente seaux), sinon l'EMPREINTE HMAC tournante de son
+ * adresse — jamais l'adresse en clair dans une clé Redis.
+ */
+function anonymousPostRouteKey(request: FastifyRequest): string {
+  const readerKey = anonymousReaderKeyOf(request);
+  return readerKey ? `reader:${readerKey}` : `addr:${addressFingerprintOf({ ip: request.ip })}`;
+}
+
+/**
+ * `view` et `impressionUnit` sont à la mesure d'un DÉFILEMENT de réels (#10403) :
+ * une vue et une impression par réel affiché, et la passerelle dédoublonne
+ * déjà la vue par (post, compte). Un plafond de 60 vues par compte, et
+ * l'impression unitaire laissée au seau global de 300/min par ADRESSE, jetaient
+ * en 429 les premières vues réelles des réels suivants — sans rejeu côté
+ * client (prod, 2026-10-12 : 1430 × 429 sur /view, 204 sur /impression).
+ */
 export function createPostRouteRateLimitConfig(
-  type: 'create' | 'like' | 'view' | 'comment' | 'impression' | 'engagement'
+  type: 'create' | 'like' | 'view' | 'comment' | 'impression' | 'impressionUnit' | 'engagement'
 ): object {
   const configs = {
     create: { max: 10, label: 'create' },
     like: { max: 30, label: 'like' },
-    view: { max: 60, label: 'view' },
+    view: { max: 240, label: 'view' },
     comment: { max: 20, label: 'comment' },
     impression: { max: 30, label: 'impression' },
+    impressionUnit: { max: 240, label: 'impression-unit' },
     engagement: { max: 20, label: 'engagement' },
   };
   const cfg = configs[type];
   return {
     max: cfg.max,
     timeWindow: '1 minute',
+    ...GARDES_DE_CLE,
     keyGenerator: (request: FastifyRequest) => {
       const authContext = (request as UnifiedAuthRequest).authContext;
-      const id = authContext?.userId ?? `ip:${request.ip}`;
-      return `posts:${cfg.label}:${id}`;
+      // Le contexte NON authentifié du middleware facultatif porte
+      // `userId: 'anonymous'` : le lire versait tous les visiteurs dans UN seau
+      // (#10483, alias d'impression ouverts aux lecteurs sans compte).
+      const userId = authContext?.isAuthenticated === false ? undefined : authContext?.userId;
+      return `posts:${cfg.label}:${userId ?? anonymousPostRouteKey(request)}`;
     },
     errorResponseBuilder: () => ({
       success: false,
@@ -193,10 +337,12 @@ export function createPostRouteRateLimitConfig(
  *
  * Le `keyGenerator` EXPLICITE est le point capital. `mergeParams` du plugin est
  * un `Object.assign` : une config de route sans `keyGenerator` hérite du global,
- * soit `global:${request.ip}`. Or Fastify tourne sans `trustProxy` derrière
- * Traefik sur un réseau Docker — `request.ip` est l'IP du conteneur proxy,
- * IDENTIQUE pour tout le monde. Une limite « 20/min » serait alors 20/min pour
- * la plateforme entière, et un seul utilisateur en priverait tous les autres.
+ * soit `global:${request.ip}`. Depuis #4137 `trustProxy` est posé, donc cette
+ * clé n'est plus « tout le monde » mais « toutes les requêtes venant de cette
+ * ADRESSE » — ce qui reste faux dans les deux sens pour une limite censée
+ * compter par compte : plusieurs comptes derrière une même sortie (opérateur
+ * mobile, bureau, NAT) se partagent un crédit prévu pour un seul, et un même
+ * compte disposant de plusieurs adresses en obtient autant de crédits.
  *
  * - upload  : 20/min — écrit un fichier, la route la plus coûteuse du lot
  * - list    : 60/min — liste publique triée par popularité
@@ -204,7 +350,7 @@ export function createPostRouteRateLimitConfig(
  * - detail  : 120/min · patch : 30/min
  */
 export function createSoundRouteRateLimitConfig(
-  type: 'upload' | 'list' | 'stream' | 'detail' | 'patch'
+  type: 'upload' | 'list' | 'stream' | 'detail' | 'patch' | 'delete'
 ): object {
   const configs = {
     upload: { max: 20, label: 'upload' },
@@ -212,11 +358,13 @@ export function createSoundRouteRateLimitConfig(
     stream: { max: 240, label: 'stream' },
     detail: { max: 120, label: 'detail' },
     patch: { max: 30, label: 'patch' },
+    delete: { max: 30, label: 'delete' },
   };
   const cfg = configs[type];
   return {
     max: cfg.max,
     timeWindow: '1 minute',
+    ...GARDES_DE_CLE,
     keyGenerator: (request: FastifyRequest) => {
       const authContext = (request as UnifiedAuthRequest).authContext;
       const id = authContext?.userId ?? `ip:${request.ip}`;
@@ -243,6 +391,82 @@ export function createSoundRouteRateLimitConfig(
  * - POST /keys: 5/minute (generate bundle - rare operation)
  * - POST /session/establish: 20/minute (session creation)
  */
+/**
+ * Limites des gestes de CHANGEMENT DE CONTACT (#4184, critères 3 à 5).
+ *
+ * Ces routes n'avaient AUCUN plafond, et deux d'entre elles font agir un tiers
+ * pour le compte de l'appelant : `change-phone` envoie un SMS vers un numéro
+ * qu'IL choisit, `change-email` un e-mail vers une adresse qu'il choisit. Sans
+ * limite, ce n'est pas seulement un canal de spam — c'est une primitive
+ * d'épuisement du budget SMS du produit, déclenchable par un seul compte.
+ *
+ * Le `keyGenerator` EXPLICITE n'est pas décoratif : `mergeParams` du plugin est
+ * un `Object.assign`, donc une config sans `keyGenerator` hérite du global,
+ * soit `global:${request.ip}`. Depuis #4137 `trustProxy` est posé, donc c'est
+ * l'ADRESSE de l'appelant — jamais son compte. Une limite qui se veut par
+ * compte et compte par adresse se trompe dans les deux sens (voir
+ * `GARDES_DE_CLE`). Un plafond « 3/h » deviendrait 3/h pour la plateforme entière — un
+ * seul utilisateur en priverait tous les autres, et le rendrait par là même
+ * inutile comme protection.
+ *
+ * - initiate : 3/h par COMPTE — c'est le geste qui fait partir le SMS ou l'e-mail
+ * - verify   : 10/h par compte, en plus du compteur d'essais PAR DEMANDE
+ *              (`contact-change.ts`), qui lui annule la demande à son cinquième
+ *              échec. Les deux sont nécessaires : le compteur borne une
+ *              recherche exhaustive sur UN code, le débit borne l'enchaînement
+ *              de demandes neuves.
+ * - resend   : 5/h par compte, au-dessus du délai de 60 s déjà posé dans le
+ *              handler (désormais fail-closed).
+ *
+ * ## `hook: 'preHandler'` — sans quoi la clé « par compte » est une fiction
+ *
+ * `config.rateLimit` s'applique par défaut au hook `onRequest`, qui court
+ * AVANT `preValidation` — donc avant que `unifiedAuth` ne pose `authContext`
+ * sur la requête. Un `keyGenerator` qui lit `authContext?.userId` y reçoit
+ * `undefined` et retombe sur son repli `ip:${request.ip}`. Mesuré sur le vrai
+ * plugin (@fastify/rate-limit, `fastify.inject`), pas déduit : sans `hook`, le
+ * générateur voit `AUCUN-authContext` ; avec `hook: 'preHandler'`, il voit le
+ * compte. Ces trois gestes comptaient donc par ADRESSE — plusieurs comptes
+ * derrière une même sortie se partageant les trois demandes horaires, et un
+ * même compte multipliant son crédit par ses adresses. C'est la découverte de
+ * #4147, portée ici. Voir `GARDES_DE_CLE` pour la portée exacte du repli
+ * depuis que `trustProxy` est posé (#4137).
+ *
+ * ## `skipOnError: false` — la panne du gardien n'est pas l'absence de garde
+ *
+ * `registerGlobalRateLimiter` pose `skipOnError: true`, valeur GLOBALE
+ * qu'@fastify/rate-limit fusionne par `Object.assign` dans toute config qui ne
+ * la redéclare pas. Un Redis indisponible ouvrait donc ces trois gestes en
+ * grand — exactement le motif que #4184 venait de fermer sur le limiteur de
+ * renvoi, rouvert une couche plus bas par un défaut hérité.
+ */
+export function createContactChangeRateLimitConfig(
+  type: 'initiate' | 'verify' | 'resend'
+): object {
+  const configs = {
+    initiate: { max: 3, label: 'initiate' },
+    verify: { max: 10, label: 'verify' },
+    resend: { max: 5, label: 'resend' },
+  };
+  const cfg = configs[type];
+  return {
+    max: cfg.max,
+    timeWindow: '1 hour',
+    hook: 'preHandler' as const,
+    skipOnError: false,
+    keyGenerator: (request: FastifyRequest) => {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      const id = authContext?.userId ?? `ip:${request.ip}`;
+      return `contact-change:${cfg.label}:${id}`;
+    },
+    errorResponseBuilder: () => ({
+      success: false,
+      error: `Trop de demandes de changement de contact. Veuillez patienter.`,
+      statusCode: 429,
+    }),
+  };
+}
+
 export function createSignalProtocolRateLimitConfig(
   type: 'keys_get' | 'keys_post' | 'session_establish'
 ): object {
@@ -250,6 +474,7 @@ export function createSignalProtocolRateLimitConfig(
     keys_get: {
       max: 30,
       timeWindow: '1 minute',
+      ...GARDES_DE_CLE,
       keyGenerator: (request: FastifyRequest) => {
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (authContext && authContext.userId) {
@@ -266,6 +491,7 @@ export function createSignalProtocolRateLimitConfig(
     keys_post: {
       max: 5,
       timeWindow: '1 minute',
+      ...GARDES_DE_CLE,
       keyGenerator: (request: FastifyRequest) => {
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (authContext && authContext.userId) {
@@ -282,6 +508,7 @@ export function createSignalProtocolRateLimitConfig(
     session_establish: {
       max: 20,
       timeWindow: '1 minute',
+      ...GARDES_DE_CLE,
       keyGenerator: (request: FastifyRequest) => {
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (authContext && authContext.userId) {

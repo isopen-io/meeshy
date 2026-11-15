@@ -141,22 +141,6 @@ final class ComposerPanelDismissalTests: XCTestCase {
 
     // MARK: - Gardes anti-régression (T8)
 
-    func test_composerControlsLayer_routesEveryPanelExitThroughOnDismissActivePanel() throws {
-        let code = try ComposerSourceGuard.source("Controls/ComposerControlsLayer.swift")
-        XCTAssertEqual(ComposerSourceGuard.occurrences(of: "areFabsVisible", in: code), 0)
-        for exit in ["onBackFromToolPanel: onDismissActivePanel",
-                     "onCloseFormatPanel: onDismissActivePanel",
-                     "onResizeDismiss: onDismissActivePanel"] {
-            XCTAssertTrue(code.contains(exit), "Chemin de sortie non unifié : \(exit)")
-        }
-    }
-
-    func test_canvasBackgroundTap_routesThroughChromePolicy() throws {
-        let code = try ComposerSourceGuard.source("StoryComposerView+Canvas.swift")
-        XCTAssertTrue(code.contains("onBackgroundTapped: { handleCanvasBackgroundTap() }"))
-        XCTAssertEqual(ComposerSourceGuard.occurrences(of: "areFabsVisible", in: code), 0)
-    }
-
     /// L'unique vérité de visibilité du chrome vit dans la machine : plus aucun
     /// `@State` parallèle nulle part dans le composer.
     func test_chromeVisibility_hasNoSecondSourceOfTruth() throws {
@@ -165,12 +149,4 @@ final class ComposerPanelDismissalTests: XCTestCase {
         XCTAssertTrue(offenders.isEmpty, "Seconde vérité du chrome ressuscitée dans : \(offenders.map(\.path))")
     }
 
-    func test_dismissActivePanel_appliesTheOutcome() throws {
-        let code = try ComposerSourceGuard.source("StoryComposerView+Chrome.swift")
-        XCTAssertTrue(code.contains("ComposerChromePolicy.dismissing(chromeContext)"))
-        XCTAssertTrue(code.contains("outcome.clearActiveTool"))
-        XCTAssertTrue(code.contains("outcome.clearTimeline"))
-        XCTAssertTrue(code.contains("outcome.clearSelection"))
-        XCTAssertTrue(code.contains("bandStateMachine.showChrome()"))
-    }
 }

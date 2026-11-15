@@ -1,11 +1,15 @@
 package me.meeshy.app.stories
 
-import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -13,189 +17,51 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.delay
+import me.meeshy.sdk.model.scene.CanvasFormat
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.friend.BlockCache
+import me.meeshy.sdk.media.MediaBlobStore
+import me.meeshy.sdk.media.MediaIntake
+import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.StoryFilter
-import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.composer.ComposerObjectKind
+import me.meeshy.sdk.model.composer.SceneObjectMenu
+import me.meeshy.sdk.model.composer.AudienceCandidate
+import me.meeshy.sdk.model.composer.ComposerFormat
+import me.meeshy.sdk.model.composer.ComposerPublishChannel
+import me.meeshy.sdk.model.MosaicLayoutMode
+import me.meeshy.sdk.model.composer.ComposerBandState
+import me.meeshy.sdk.model.composer.ComposerHashtags
+import me.meeshy.sdk.model.composer.look.ComposerLookPerson
+import me.meeshy.sdk.model.composer.StoryToolMode
+import me.meeshy.sdk.model.composer.sound.ComposerAudioRole
 import me.meeshy.sdk.model.media.TusUploadContext
-import me.meeshy.sdk.net.ApiError
-import me.meeshy.sdk.net.NetworkResult
-import me.meeshy.sdk.net.api.CreateStoryRequest
+import me.meeshy.sdk.model.media.UnclaimedMediaSweep
+import me.meeshy.sdk.model.scene.StoryCanvasTransform
+import me.meeshy.sdk.net.MeeshyConfig
+import me.meeshy.sdk.model.net.MediaRequestCredential
+import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.outbox.OutboxIds
+import me.meeshy.sdk.post.PostComposerDraftStore
+import me.meeshy.sdk.publication.PublicationOutbox
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.session.commitOrWrite
+import me.meeshy.sdk.story.StoryComposerDraftStore
+import me.meeshy.sdk.story.StoryDraftConfirmation
 import me.meeshy.sdk.story.StoryRepository
-import java.util.UUID
+import java.time.Instant
 import javax.inject.Inject
-
-/** Mints a fresh, collision-free slide id. The pure [StorySlideDeck] reducer stays
- * deterministic — id generation lives here, at the impure ViewModel edge. */
-private fun newSlideId(): String = UUID.randomUUID().toString()
-
-/** Mints a fresh, collision-free text-element id (same impure-edge rationale). */
-private fun newTextElementId(): String = UUID.randomUUID().toString()
-
-/** Mints a fresh, collision-free sticker id (same impure-edge rationale). */
-private fun newStickerId(): String = UUID.randomUUID().toString()
-
-/** Normalised canvas offset given to a duplicated element so the copy is visibly
- * clear of its source rather than hidden directly behind it. */
-private const val DUPLICATE_ELEMENT_OFFSET: Float = 0.04f
-
-/**
- * A media attachment durably queued offline: its bytes live in `MediaBlobStore`
- * and an `UPLOAD_MEDIA` outbox row is enqueued, both keyed by [cmid]. The publish
- * carries [cmid] as a placeholder media id and `dependsOn` it, so the drainer
- * grafts the real id once the upload delivers. [item] is retained only to render
- * the local preview while it waits.
- */
-@Immutable
-data class PendingMediaUpload(
-    val cmid: String,
-    val item: MediaUploadItem,
-)
-
-/**
- * Transient on-canvas feedback shown **only while an element is being dragged**: which
- * alignment guide line(s) the element has snapped onto ([verticalGuide]/[horizontalGuide],
- * normalised positions; `null` when that axis is free) and whether the element is still
- * inside the safe zone ([withinSafeZone] = `false` ⇒ the canvas flashes an out-of-bounds
- * warning). It is cleared the instant the drag ends, so it never lingers as state. The
- * snap math itself lives in the pure [StorySnapResolver]; this just carries its verdict
- * to the Composable.
- */
-@Immutable
-data class SnapFeedback(
-    val verticalGuide: Float?,
-    val horizontalGuide: Float?,
-    val withinSafeZone: Boolean,
-)
-
-/**
- * Immutable state of the story composer. [canPublish] is derived from the draft
- * and gated while a publish or media upload is in flight. [attachments] hold the
- * already-uploaded media for the on-screen preview; [pendingUploads] are the media
- * queued durably offline (their placeholder ids already in the draft) — several may
- * accumulate so a user can stage a whole offline batch. The draft carries every
- * media id (real + placeholder) for the wire request.
- */
-@Immutable
-data class StoryComposerUiState(
-    val draft: StoryComposerDraft = StoryComposerDraft(),
-    val deck: StorySlideDeck = StorySlideDeck.single(newSlideId()),
-    val attachments: List<UploadedMedia> = emptyList(),
-    val pendingUploads: List<PendingMediaUpload> = emptyList(),
-    val selectedTextElementId: String? = null,
-    val selectedStickerId: String? = null,
-    val snapFeedback: SnapFeedback? = null,
-    val band: ComposerBandState = ComposerBandState.Hidden,
-    val isUploadingMedia: Boolean = false,
-    val isPublishing: Boolean = false,
-    val errorMessage: String? = null,
-) {
-    /**
-     * Publishable when some slide carries text, media **or** a publishable text
-     * element, every slide is within the character cap, the per-slide media and
-     * text-element caps hold, and nothing is in flight. The whole **deck** gates
-     * publishing — not just the slide currently being edited — so an over-long
-     * off-screen slide, or media/elements on an off-screen slide, all count.
-     */
-    val canPublish: Boolean
-        get() = (deck.hasText || deck.hasMedia || deck.hasTextElements || deck.hasStickers) &&
-            deck.isWithinTextLimit(StoryComposerDraft.MAX_CHARS) &&
-            deck.isWithinMediaLimit() &&
-            deck.isWithinTextElementLimit() &&
-            deck.isWithinStickerLimit() &&
-            !isPublishing &&
-            !isUploadingMedia
-
-    /**
-     * The uploaded media of the **selected** slide, in slide order — the preview the
-     * composer renders for the slide currently being edited. [attachments] is the
-     * global pool (one entry per upload across all slides); this projects it onto the
-     * selected slide via that slide's [StorySlide.mediaIds].
-     */
-    val selectedSlideAttachments: List<UploadedMedia>
-        get() = deck.selectedSlide.mediaIds.mapNotNull { id -> attachments.firstOrNull { it.id == id } }
-
-    /** The offline-pending media of the **selected** slide, in slide order. */
-    val selectedSlidePending: List<PendingMediaUpload>
-        get() = deck.selectedSlide.mediaIds.mapNotNull { id -> pendingUploads.firstOrNull { it.cmid == id } }
-
-    /** The persisted 9:16 canvas pan/zoom of the **selected** slide — what the canvas renders. */
-    val selectedSlideTransform: StoryCanvasTransform
-        get() = deck.selectedSlide.transform
-
-    /** The on-canvas text elements of the **selected** slide, in z-order, for rendering. */
-    val selectedSlideTextElements: List<StoryTextElement>
-        get() = deck.selectedSlide.elements
-
-    /** The on-canvas stickers of the **selected** slide, in order, for rendering. */
-    val selectedSlideStickers: List<StoryStickerElement>
-        get() = deck.selectedSlide.stickers
-
-    /**
-     * The sticker currently selected for manipulation — the [selectedStickerId]
-     * resolved against the **selected** slide. Null when nothing is selected or the id
-     * no longer lives on the selected slide (e.g. after a slide switch), so the screen
-     * never shows a stale remove handle.
-     */
-    val selectedSticker: StoryStickerElement?
-        get() = selectedStickerId?.let { id -> deck.selectedSlide.stickers.firstOrNull { it.id == id } }
-
-    /** The photo filter applied to the **selected** slide, or null when none is set. */
-    val selectedSlideFilter: StoryFilter?
-        get() = deck.selectedSlide.filter
-
-    /** The **selected** slide's filter strength (0..1) — what the Effets slider shows. */
-    val selectedSlideFilterIntensity: Float
-        get() = deck.selectedSlide.filterIntensity
-
-    /**
-     * The effective colour matrix the canvas renders for the **selected** slide's
-     * media — the neutral identity when no filter is set, otherwise the filter blended
-     * toward identity by its strength. Computed in one pure place
-     * ([StoryFilterMatrix.effectiveMatrix]) so the Composable stays glue.
-     */
-    val selectedSlideFilterMatrix: StoryColorMatrix
-        get() = StoryFilterMatrix.effectiveMatrix(selectedSlideFilter, selectedSlideFilterIntensity)
-
-    /**
-     * The text element currently being edited — the [selectedTextElementId] resolved
-     * against the **selected** slide. Null when nothing is being edited (caption mode)
-     * or the id no longer lives on the selected slide (e.g. after a slide switch), so
-     * the screen never edits a stale element.
-     */
-    val selectedTextElement: StoryTextElement?
-        get() = selectedTextElementId?.let { id -> deck.selectedSlide.elements.firstOrNull { it.id == id } }
-
-    /** True while the text field edits an on-canvas element rather than the slide caption. */
-    val isEditingTextElement: Boolean get() = selectedTextElement != null
-
-    /**
-     * The effective on-screen duration (seconds) of the **selected** slide — the
-     * author's pin when set, otherwise the content-derived value — projected from the
-     * pure [StorySlideDeck.selectedSlideDurationSeconds] so the duration control shows a
-     * live value and the screen stays glue.
-     */
-    val selectedSlideDurationSeconds: Double get() = deck.selectedSlideDurationSeconds
-
-    /**
-     * The **selected** slide's author-chosen backdrop (`null` when none), projected from
-     * the pure [StorySlideDeck.selectedSlideBackground] so the background picker can show
-     * the active swatch and the screen stays glue.
-     */
-    val selectedSlideBackground: me.meeshy.sdk.model.StoryBackgroundValue?
-        get() = deck.selectedSlideBackground
-
-    /**
-     * What the single text field shows and edits: the selected element's text while
-     * one is selected, otherwise the selected slide's caption. One field, two roles —
-     * the screen stays glue.
-     */
-    val editorText: String get() = selectedTextElement?.text ?: draft.text
-}
 
 /**
  * Drives the text story composer — parity with iOS `StoryComposerViewModel` +
@@ -217,630 +83,623 @@ class StoryComposerViewModel @Inject constructor(
     private val mediaUploader: StoryMediaUploader,
     private val mediaUploadQueue: MediaUploadQueue,
     private val workManager: WorkManager,
+    private val draftStore: StoryComposerDraftStore,
+    private val mediaBlobStore: MediaBlobStore,
+    private val draftConfirmation: StoryDraftConfirmation,
+    private val blocks: BlockCache = BlockCache(),
+    private val config: MeeshyConfig = MeeshyConfig(),
+    private val accountFence: AccountFence? = null,
+    private val lookOven: StoryLookOven? = null,
+    private val publications: PublicationOutbox? = null,
+    private val postDrafts: PostComposerDraftStore? = null,
+    private val network: NetworkMonitor? = null,
+    private val draftCover: StoryDraftCoverSink? = null,
+    private val mediaIds: ComposerMediaIds = ComposerMediaIds(),
 ) : ViewModel() {
 
+    /** Le compte sous lequel ce composeur s'est ouvert (#13621) : toute écriture de brouillon se fait sous lui. */
+    private val openedUnder: AccountTicket? = accountFence?.ticket()
+
+    /** `null` : le compte du composeur s'est fermé avant que l'écriture n'atterrisse — rien n'a été écrit. */
+    private suspend fun <T> underOpeningAccount(write: suspend () -> T): T? = accountFence.commitOrWrite(openedUnder, write)
+
     private val _state = MutableStateFlow(StoryComposerUiState())
+    private var history = ComposerHistory(_state.value.snapshot())
     val state: StateFlow<StoryComposerUiState> = _state.asStateFlow()
+
+    val mediaBaseUrl: String? get() = config.apiBaseUrl
+
+    private var bannerJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            _state.map { it.deck.selectedId to StoryComposerCanvasFormat.expected(it) }.distinctUntilChanged().collect {
+                _state.update(StoryComposerCanvasFormat::conformed)
+                if (_state.value.repositionedCount > 0) armRepositionedBanner()
+            }
+        }
+    }
+
+    /** La bannière « N élément(s) repositionné(s) » disparaît d'elle-même. */
+    private fun armRepositionedBanner() {
+        bannerJob?.cancel()
+        bannerJob = viewModelScope.launch {
+            delay(REPOSITIONED_BANNER_MILLIS)
+            _state.update(StoryComposerCanvasFormat::bannerDismissed)
+        }
+    }
+
+    /** The author colour the reader paints a background-less slide with (#12314). */
+    val lookPerson: ComposerLookPerson get() = sessionRepository.lookPerson()
+    val author: StateFlow<me.meeshy.sdk.model.MeeshyUser?> get() = sessionRepository.currentUser
 
     /** One-shot signal that a story was queued — the screen dismisses on it. */
     private val _published = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val published: SharedFlow<Unit> = _published.asSharedFlow()
 
+    /** A repost door brings its own matter: the stored draft is not this session's until it restored or wrote it. */
+    private var seededByDoor = false
+    private var ownsStoredDraft = false
+    private var restoring: Job? = null
+    private var autosave: Job? = null
+
+    /** Une story PUBLIÉE rouverte (#13632) : son enregistrement la met à jour, il ne publie jamais une story neuve. */
+    private var editMode: StoryEditMode? = null
+
+    /** `false` : l'édition est déjà ouverte (l'écran se recompose ou tourne) — rien ne se rouvre par-dessus ce que l'auteur a changé. */
+    fun onEditRequested(): Boolean = (editMode !is StoryEditMode.Active).also { if (it) { editMode = StoryEditMode.Loading; seededByDoor = true } }
+
+    internal fun onEditing(opening: StoryEditOpening, editor: StoryEditor) {
+        editMode = StoryEditMode.Active(opening, editor)
+        _state.update(opening::applied)
+        resetHistory()
+    }
+
+    /** « Composer » depuis une story vue (#13849) : la scène semée devient la composition, son historique repart d'elle. */
+    internal fun onRecomposed(done: StoryRecomposed) { _state.update { StoryRecomposition.applied(it, done.plan, done.uploaded) }; resetHistory() }
+
     /**
-     * Routes the text field: while a text element is selected the keystrokes rewrite
-     * **that element**; otherwise they rewrite the **selected slide's caption** (the
-     * original behaviour). One field serves both roles so the canvas stays a single
-     * coherent surface.
+     * L'hôte pose les formats cochés et la disposition armée (#13863, #13919) : la scène reste la même et suit le premier,
+     * la publication les prend tous.
      */
-    fun onTextChange(text: String) {
-        val editingId = _state.value.selectedTextElement?.id
-        if (editingId != null) {
-            _state.update {
-                it.copy(deck = it.deck.updateTextElement(editingId) { element -> element.copy(text = text) }, errorMessage = null)
+    fun onFormats(formats: List<ComposerFormat>, layout: MosaicLayoutMode?) = _state.update { StoryComposerFormatReducer.formatted(it, formats, layout) }
+
+    fun onFormat(format: ComposerFormat, layout: MosaicLayoutMode?) = onFormats(listOf(format), layout)
+
+    fun onPostTextChange(text: String) = _state.update { StoryComposerFormatReducer.postTyped(it, text) }
+
+    fun onFormatRestoredApplied() = _state.update { it.copy(restoredFormats = null) }
+
+    /**
+     * Restores a persisted draft when the screen opens — iOS `onAppear` + `StoryDraftStore.load`.
+     * Silent and pristine-only: it never clobbers work begun in the async gap, a corrupt blob is
+     * inert, and audience, repost link and annotations are re-armed with the slides.
+     */
+    fun onEnterComposer(seededByDoor: Boolean = false, initialVisibility: StoryVisibility? = null) {
+        this.seededByDoor = seededByDoor
+        initialVisibility?.let { audience -> _state.update { it.copy(draft = it.draft.withVisibility(audience)) } }
+        restoring = viewModelScope.launch {
+            draftConfirmation.settle()
+            val stored = draftStore.load().let { if (seededByDoor) it else StoryPostDraftAdoption.adopted(it, postDrafts) { s -> underOpeningAccount { draftStore.save(s) } } }
+            val restored = StoryComposerAutosave.restore(
+                stored = stored,
+                deckIsPristine = StoryComposerAutosave.deckIsPristine(_state.value.deck),
+                seededByDoor = seededByDoor,
+            ) ?: return@launch
+            ownsStoredDraft = true
+            val swept = UnclaimedMediaSweep.hasSweptMediaUploadedBeforeIso(restored.updatedAt, Instant.now())
+            val availableIds = restored.slides
+                .flatMap { it.mediaIds }
+                .toSet()
+                .filter { id -> isRestoredMediaAvailable(id, swept) }
+                .toSet()
+            val reconciled = StoryDraftMediaReconciler.reconcile(restored) { id -> id in availableIds }
+            // Media loss can empty the whole draft; a snapshot no longer worth
+            // restoring must not seed a deck of blank slides — purge it instead so a
+            // later cold start never rebuilds the dead draft.
+            if (!reconciled.snapshot.isWorthRestoring) {
+                underOpeningAccount { draftStore.clear() }
+                if (reconciled.hasLoss) _state.update { it.copy(errorMessage = MEDIA_RESTORE_LOST) }
+                return@launch
             }
-            return
+            val deck = reconciled.snapshot.toDeck() ?: return@launch
+            _state.update {
+                it.copy(
+                    deck = deck,
+                    draft = it.draft
+                        .withVisibility(StoryVisibility.fromWire(reconciled.snapshot.visibility))
+                        .withVisibilityUserIds(reachable(reconciled.snapshot.visibilityUserIds, StoryVisibility.fromWire(reconciled.snapshot.visibility)))
+                        .withRepostOf(reconciled.snapshot.repostOfId)
+                        .withAnnotations(
+                            reconciled.snapshot.annotations.keepingMedia(
+                                reconciled.snapshot.slides.flatMap { slide -> slide.mediaIds },
+                            ),
+                        ),
+                    errorMessage = if (reconciled.hasLoss) MEDIA_RESTORE_LOST else it.errorMessage,
+                ).audiencePurged().mirrorDraftToSelection().let { s -> StoryComposerFormatReducer.restored(s, reconciled.snapshot) }
+            }
+            resetHistory()
         }
-        _state.update {
-            val deck = it.deck.updateSelectedText(text)
-            it.copy(draft = it.draft.withText(text), deck = deck, errorMessage = null)
-        }
+        if (autosave?.isActive != true) autosave = StoryComposerAutosaveWatch.start(viewModelScope, restoring, _state, ::persistDraft)
     }
 
     /**
-     * Adds an empty on-canvas text element to the selected slide (clamped to the
-     * canvas centre by the deck) and selects it so the field begins editing it
-     * immediately — the natural "tap +Text, then type" flow. Inert-with-a-warning
-     * once the selected slide is at the ≤5-element cap.
+     * Whether a restored draft's media [id] can still be published: an offline placeholder
+     * ([OutboxIds.isCmid]) needs its bytes in the blob store; a server id is gone once the gateway swept
+     * it ([swept], #8012) — a draft picked up after 24 h must not publish a story missing its media unsaid.
      */
-    fun onAddTextElement() {
-        val before = _state.value.deck
-        if (!before.selectedCanAddTextElement) {
-            _state.update { it.copy(errorMessage = TEXT_ELEMENT_LIMIT) }
-            return
-        }
-        val id = newTextElementId()
-        _state.update {
-            it.copy(
-                deck = it.deck.addTextElementToSelected(StoryTextElement(id = id)),
-                selectedTextElementId = id,
-                selectedStickerId = null,
-                errorMessage = null,
-            )
-        }
+    private suspend fun isRestoredMediaAvailable(id: String, swept: Boolean): Boolean =
+        if (OutboxIds.isCmid(id)) mediaBlobStore.has(id) else !swept
+
+    /** « Abandonner » (#13838) : le composeur repart vierge — [persistDraft] purge alors son brouillon, jamais celui d'une porte — et ses envois en cours sont annulés. */
+    fun onDiscardDraft() {
+        if (editMode != null) return
+        uploads.abandonAll()
+        _state.value.also { _state.value = it.blankKeepingFormat() }.pendingUploads.forEach { MediaIntake.release(it.item); cancelDurableUpload(it.cmid) }
+        resetHistory()
     }
 
-    /** Begins editing the on-canvas element [id] (inert when it is not on the selected slide). */
-    fun onSelectTextElement(id: String) {
-        _state.update {
-            if (it.deck.selectedSlide.elements.none { element -> element.id == id }) it
-            else it.copy(selectedTextElementId = id, selectedStickerId = null)
-        }
-    }
-
-    /** Stops editing the active element — the field returns to the slide caption. */
-    fun onDeselectTextElement() {
-        _state.update { if (it.selectedTextElementId == null) it else it.copy(selectedTextElementId = null) }
-    }
-
-    /**
-     * Drags the on-canvas element [id] by the normalised canvas deltas [dx]/[dy], with
-     * **magnetic snapping**: the resulting centre is run through the pure
-     * [StorySnapResolver], which locks each axis onto the nearest alignment guide within
-     * its threshold and reports the active guide lines + safe-zone verdict as transient
-     * [SnapFeedback] (cleared by [onTextElementDragEnd]). The element is then moved by the
-     * snap-adjusted delta through the existing [StorySlideDeck.moveTextElement] path, so
-     * the canvas clamp still lives in one place. Selection and editing are untouched, and
-     * an unknown id (or one not on the selected, draggable slide) is inert. The Composable
-     * converts drag pixels to fractions and renders the returned guides/warning.
-     */
-    fun onTextElementMoved(id: String, dx: Float, dy: Float) {
-        _state.update { state ->
-            val element = state.deck.selectedSlide.elements.firstOrNull { it.id == id }
-                ?: return@update state
-            val snap = StorySnapResolver.resolve(element.x + dx, element.y + dy)
-            state.copy(
-                deck = state.deck.moveTextElement(id, snap.x - element.x, snap.y - element.y),
-                snapFeedback = SnapFeedback(snap.verticalGuide, snap.horizontalGuide, snap.withinSafeZone),
-            )
+    /** Persists or purges the draft on leave ([StoryComposerAutosave]); the write outlives the cleared ViewModel (#13838). */
+    fun persistDraft() {
+        if (editMode != null) return
+        viewModelScope.launch(NonCancellable) {
+            val orphans = underOpeningAccount {
+                val current = _state.value
+                val previous = draftStore.load()
+                val action = StoryComposerAutosave.resolve(
+                    deck = current.deck,
+                    visibility = current.draft.visibility,
+                    repostOfId = current.draft.repostOfId,
+                    nowIso = Instant.now().toString(),
+                    previous = previous,
+                    visibilityUserIds = current.draft.visibilityUserIds,
+                    annotations = current.draft.annotations(),
+                    mayOverwriteStored = !seededByDoor || ownsStoredDraft,
+                    format = current.formatDraft(),
+                )
+                when (action) {
+                    is StoryDraftPersist.Save -> {
+                        StoryComposerAutosave.saveThenCover({ draftStore.save(action.snapshot) }, { draftCover?.onDraftSaved(action.snapshot) })
+                        ownsStoredDraft = true
+                        DraftRelease(StoryComposerAutosave.orphanedUploads(previous, action.snapshot), StoryComposerAutosave.namedUploads(action.snapshot))
+                    }
+                    StoryDraftPersist.Clear -> {
+                        draftStore.clear()
+                        DraftRelease(StoryComposerAutosave.orphanedUploads(previous, null), emptySet())
+                    }
+                    StoryDraftPersist.None -> null
+                }
+            } ?: return@launch
+            val (reachable, lost) = orphans.released.partition(history::reaches)
+            releasedByDraft = (releasedByDraft - orphans.named) + reachable
+            lost.forEach { cancelDurableUpload(it) }
         }
     }
 
-    /**
-     * Ends an on-canvas drag: drops the transient [SnapFeedback] so the guide lines and
-     * any out-of-bounds warning disappear the moment the finger lifts. Inert when no
-     * feedback is showing, so a stray drag-end never churns state.
-     */
-    fun onTextElementDragEnd() {
-        _state.update { if (it.snapFeedback == null) it else it.copy(snapFeedback = null) }
-    }
+    private var releasedByDraft: Set<String> = emptySet()
+
+    fun onOpenElementMenu(id: String) = reduce { StoryComposerTextReducer.menuOpened(it, id) }
+
+    fun onDismissElementMenu() = reduce { StoryComposerSceneReducer.menuDismissed(it) }
+
+    /** Appui long sur un sticker : ouvre son menu, le sélectionne. */
+    fun onOpenStickerMenu(id: String) = reduce { StoryComposerSceneReducer.stickerMenuOpened(it, id) }
 
     /**
-     * Removes the on-canvas element [id] from whichever slide holds it, clearing the
-     * editing selection when it was the one being edited so the field falls back to
-     * the slide caption.
+     * Exécute l'[action] choisie sur l'objet dont le menu est ouvert, puis ferme le menu. Une action
+     * que la loi n'offre pas (ou un menu périmé) ne touche à rien : loi 4, un geste sans effet n'existe pas.
      */
-    fun onRemoveTextElement(id: String) {
-        _state.update {
-            val selected = if (it.selectedTextElementId == id) null else it.selectedTextElementId
-            it.copy(deck = it.deck.removeTextElement(id), selectedTextElementId = selected)
+    fun onSceneMenuAction(action: SceneObjectMenu.Action) {
+        val menu = _state.value.sceneContextMenu
+        if (menu != null && action in menu.actions) {
+            val id = menu.ref.id
+            val text = menu.ref.kind == ComposerObjectKind.TEXT
+            when (action) {
+                SceneObjectMenu.Action.EDIT -> onSelectTextElement(id)
+                SceneObjectMenu.Action.DUPLICATE -> if (text) onDuplicateTextElement(id) else onDuplicateSticker(id)
+                SceneObjectMenu.Action.DELETE -> if (text) onRemoveTextElement(id) else onRemoveSticker(id)
+                SceneObjectMenu.Action.TRIM,
+                SceneObjectMenu.Action.LEAVE_SCENE,
+                SceneObjectMenu.Action.SET_AS_BACKGROUND,
+                SceneObjectMenu.Action.REPLACE_BACKGROUND,
+                -> Unit
+            }
         }
+        onDismissElementMenu()
+    }
+
+    fun onDuplicateSticker(id: String) {
+        val newId = newStickerId()
+        reduce { StoryComposerSceneReducer.stickerDuplicated(it, id, newId) }
+    }
+
+    /** Pose la fenêtre d'un objet (0 = permanent), depuis la frise ou l'inspecteur. */
+    fun onSceneObjectWindow(id: String, startSeconds: Float, durationSeconds: Float) =
+        reduce { StoryComposerSceneReducer.windowed(it, id, startSeconds, durationSeconds) }
+
+    fun onSceneReduce(next: (StoryComposerUiState) -> StoryComposerUiState) = reduce(next = next)
+
+    fun onSceneGesture(gesture: String, next: (StoryComposerUiState) -> StoryComposerUiState) = reduce(gesture, next)
+
+    /** Les répétitions des transitions d'ouverture et de fermeture, rejouées à chaque choix d'effet (#8792). */
+    internal val rehearsals = ComposerRehearsals()
+
+    fun onRehearseTransitions() = _state.value.deck.selectedSlide.frame.let { rehearsals.rehearse(it.opening, it.closing) }
+
+    fun onPlayheadMoved(seconds: Float) = _state.update { StoryComposerSceneReducer.playheadMoved(it, seconds) }
+
+    fun onFriseTrackSelected(id: String) = reduce { StoryComposerSceneReducer.trackSelected(it, id) }
+
+    /** Adds an emoji sticker to the selected slide and selects it (blank ignored, warns at the cap) — never during an intake. */
+    fun onAddSticker(emoji: String) = newStickerId().let { id ->
+        if (_state.value.intakeBlocks) return@let
+        reduce { StoryComposerSceneReducer.placedAtPlayhead(it) { s -> StoryComposerStickerReducer.added(s, emoji, id) } }
+    }
+
+    /** Un sticker à GABARIT (#13847) : son repli et son mouvement viennent du catalogue ; un gabarit inconnu ne pose rien. */
+    fun onAddTemplateSticker(templateId: String, slots: Map<String, String>) {
+        if (_state.value.intakeBlocks) return
+        val sticker = StickerTemplatePose.element(templateId, slots, newStickerId()) ?: return
+        reduce { StoryComposerStickerReducer.posed(it, sticker) }
     }
 
     /**
-     * Restyles the on-canvas element [id] (inert when the id is unknown). Selection
-     * and editing are untouched — you style the element you are editing. The wire
-     * mapping ([StoryTextElement.toTextObject]) carries the style on publish.
+     * Un sticker IMAGE (Mee, pack, Mes stickers) : vu tout de suite, UN pas d'annulation ; tant que ses octets s'envoient
+     * il retient l'écran et s'annule par ✕, un échec le retire et propose « Réessayer » (#15597).
      */
-    fun onTextElementStyle(id: String, style: StoryTextStyle) {
-        _state.update { it.copy(deck = it.deck.updateTextElement(id) { element -> element.copy(style = style) }) }
-    }
+    fun onAddImageSticker(pose: StickerImagePose) = stickerIntake.add(pose, newStickerId())
 
-    /** Recolours the on-canvas element [id] ([color] is a `RRGGBB` hex; inert on unknown id). */
-    fun onTextElementColor(id: String, color: String) {
-        _state.update { it.copy(deck = it.deck.updateTextElement(id) { element -> element.copy(color = color) }) }
-    }
+    /** ✕ sur le sticker qui entre, ou sur son échec (#15597). */
+    fun onCancelStickerIntake() = stickerIntake.cancel()
 
-    /** Realigns the on-canvas element [id]'s lines (inert on unknown id). */
-    fun onTextElementAlign(id: String, align: StoryTextAlign) {
-        _state.update { it.copy(deck = it.deck.updateTextElement(id) { element -> element.copy(align = align) }) }
+    /** « Réessayer » après l'échec d'un sticker image : la même pose repart (#15597). */
+    fun onRetryStickerIntake() = stickerIntake.retry(newStickerId())
+
+    fun onSelectSticker(id: String) = reduce { StoryComposerStickerReducer.selected(it, id) }
+
+    fun onDeselectSticker() = reduce { StoryComposerStickerReducer.deselected(it) }
+
+    fun onRemoveSticker(id: String) = reduce { StoryComposerStickerReducer.removed(it, id) }
+
+    fun onStickerMoved(id: String, dx: Float, dy: Float) = reduce(transformGesture(id)) { StoryComposerStickerReducer.moved(it, id, dx, dy) }
+
+    fun onStickerTransform(id: String, scaleBy: Float, rotateByDeg: Float) =
+        reduce(transformGesture(id)) { StoryComposerStickerReducer.transformed(it, id, scaleBy, rotateByDeg) }
+
+    fun onTogglePlacedMedia(mediaId: String) = reduce { StoryComposerPlacedMediaReducer.toggled(it, mediaId) }
+
+    fun onMediaPlacementMoved(id: String, dx: Float, dy: Float) = reduce(transformGesture(id)) { StoryComposerPlacedMediaReducer.moved(it, id, dx, dy) }
+
+    fun onMediaPlacementTransformed(id: String, scaleBy: Float, rotateByDeg: Float) =
+        reduce(transformGesture(id)) { StoryComposerPlacedMediaReducer.transformed(it, id, scaleBy, rotateByDeg) }
+
+    fun onSelectPlacedMediaFilter(mediaId: String, filter: StoryFilter?) = reduce { StoryComposerPlacedMediaReducer.filtered(it, mediaId, filter) }
+
+    fun onMediaPlacementDragEnd() = reduce { it }
+
+    /** Le doigt quitte le sticker : le geste se referme, le suivant sera son propre cran d'annulation. */
+    fun onStickerDragEnd() = reduce { it }
+
+    fun onVisibilityChange(visibility: StoryVisibility) = _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
+
+    /** La liste « visible par » / « sauf » : l'appelant l'a déjà bornée aux personnes proposées. */
+    fun onAudienceUserIdsChange(ids: List<String>) = _state.update { StoryComposerDraftMetaReducer.audienceIdsChanged(it, ids) }
+
+    /** Nomme [person] dans la publication (rangée « Avec… »), une seule fois par pseudo. */
+    fun onAddMention(person: AudienceCandidate) = _state.update { StoryComposerDraftMetaReducer.mentionAdded(it, person) }
+
+    fun onRemoveMention(username: String) = _state.update { StoryComposerDraftMetaReducer.mentionRemoved(it, username) }
+
+    fun onMediaAltChange(mediaId: String, text: String) = _state.update { StoryComposerDraftMetaReducer.mediaAltChanged(it, mediaId, text) }
+    fun onMediaCaptionChange(mediaId: String, text: String) = _state.update { StoryComposerDraftMetaReducer.mediaCaptionChanged(it, mediaId, text) }
+    fun onAllowSoundExtractionChange(allowed: Boolean) = _state.update { it.copy(draft = it.draft.copy(allowSoundExtraction = allowed)) }
+    /** #16541 — « Désactiver les commentaires » : la publication naît (ou, à l'édition, passe) commentaires fermés. */
+    fun onCommentsDisabledChange(disabled: Boolean) = _state.update { it.copy(draft = it.draft.copy(commentsDisabled = disabled)) }
+
+    /** Retire [tag] du texte de TOUTES les slides (du post, en post) : la balise EST dans la phrase, il n'y a pas de liste à côté. */
+    fun onRemoveHashtag(tag: String) = reduce { current ->
+        if (current.variant.writesPostText) return@reduce current.copy(postText = ComposerHashtags.removing(tag, current.postText))
+        current.withDeckTransform { deck -> deck.mapSlideTexts { ComposerHashtags.removing(tag, it) } }
     }
 
     /**
-     * Sets the text backing (none / solid / glass) of the on-canvas element [id] (inert on
-     * unknown id). Selection and editing are untouched — you restyle the element you are
-     * editing. The wire mapping ([StoryTextElement.toTextObject]) carries it on publish.
+     * Opens the composer as a **repost** of [sourceId]: the link rides onto every published
+     * slide's wire request. Inert on a blank id; the author's own draft is untouched.
      */
-    fun onTextElementBackground(id: String, background: StoryTextBackground) {
-        _state.update { it.copy(deck = it.deck.updateTextElement(id) { element -> element.copy(background = background) }) }
+    fun onRepostSource(sourceId: String, sourceFormat: CanvasFormat = CanvasFormat.PORTRAIT) {
+        if (sourceId.isBlank()) return
+        _state.update { StoryComposerCanvasFormat.reposted(it.copy(draft = it.draft.withRepostOf(sourceId)), sourceFormat) }
+        if (_state.value.repositionedCount > 0) armRepositionedBanner()
     }
 
-    /**
-     * Advances the base font size of the on-canvas element [id] by one tap — to the next
-     * larger step, wrapping past the largest back to the smallest (decided by the pure
-     * [StoryTextSizeCycle.next]). Inert on an unknown id; selection and editing are
-     * untouched — you resize the element you are editing. The wire mapping
-     * ([StoryTextElement.toTextObject]) carries `fontSize` on publish.
-     */
-    fun onTextElementCycleSize(id: String) {
-        _state.update {
-            it.copy(
-                deck = it.deck.updateTextElement(id) { element ->
-                    element.copy(size = StoryTextSizeCycle.next(element.size))
-                },
-            )
-        }
-    }
+    /** Tap on a tool of the row: opens, switches to or closes its panel per [ComposerBandState.tapTool]. */
+    fun onBandToolTap(tool: StoryToolMode) = _state.update { it.copy(band = it.band.tapTool(tool)) }
 
-    /**
-     * Advances the stroke outline of the on-canvas element [id] by one tap — thicken to the
-     * next step, wrap past the thickest back to no-stroke, posting the default white the first
-     * time a stroke appears (all decided by the pure [StoryTextOutlineCycle.advance]). Inert on
-     * an unknown id; selection and editing are untouched — you outline the element you are
-     * editing. The wire mapping ([StoryTextElement.toTextObject]) carries `borderColor`/
-     * `borderWidth` on publish.
-     */
-    fun onTextElementCycleOutline(id: String) {
-        _state.update {
-            it.copy(
-                deck = it.deck.updateTextElement(id) { element ->
-                    element.copy(outline = StoryTextOutlineCycle.advance(element.outline))
-                },
-            )
-        }
-    }
+    /** Swipe up on a tool: forces its panel open. */
+    fun onBandToolSwipeUp(tool: StoryToolMode) = _state.update { it.copy(band = it.band.swipeUpOnTool(tool)) }
 
-    /**
-     * Advances the fade-in of the on-canvas element [id] by one tap — to the next longer
-     * step, wrapping past the longest back to no-fade (decided by the pure
-     * [StoryTextFadeCycle.advance]). The fade-out end is left untouched, mirroring iOS's two
-     * independent timing controls. Inert on an unknown id; selection and editing are
-     * untouched. The wire mapping ([StoryTextElement.toTextObject]) carries `fadeIn` on publish.
-     */
-    fun onTextElementCycleFadeIn(id: String) {
-        _state.update {
-            it.copy(
-                deck = it.deck.updateTextElement(id) { element ->
-                    element.copy(fade = element.fade.cycledIn())
-                },
-            )
-        }
-    }
+    /** Swipe down on the row: closes an open panel, otherwise hides the chrome (bare canvas). */
+    fun onBandSwipeDown() = _state.update { it.copy(band = if (it.band.isPanelOpen) it.band.closeAnyPanel() else it.band.hideChrome()) }
 
-    /**
-     * Advances the fade-out of the on-canvas element [id] by one tap — to the next longer
-     * step, wrapping past the longest back to no-fade (decided by the pure
-     * [StoryTextFadeCycle.advance]). The fade-in end is left untouched. Inert on an unknown id;
-     * selection and editing are untouched. The wire mapping ([StoryTextElement.toTextObject])
-     * carries `fadeOut` on publish.
-     */
-    fun onTextElementCycleFadeOut(id: String) {
-        _state.update {
-            it.copy(
-                deck = it.deck.updateTextElement(id) { element ->
-                    element.copy(fade = element.fade.cycledOut())
-                },
-            )
-        }
-    }
+    /** Gives the chrome back after a voluntary hiding (ghost handle tap). */
+    fun onBandShowChrome() = _state.update { it.copy(band = it.band.showChrome()) }
 
-    /**
-     * Advances the visibility START of the on-canvas element [id] by one tap — to the next
-     * longer step, wrapping past the longest back to no offset (decided by the pure
-     * [StoryElementTimingCycle.advance]). The duration end is left untouched, mirroring iOS's
-     * two independent timing controls. Inert on an unknown id; selection and editing are
-     * untouched. The wire mapping ([StoryTextElement.toTextObject]) carries `startTime` on
-     * publish, and the reader gate ([StoryElementVisibility]) honours the window on playback.
-     */
-    fun onTextElementCycleStart(id: String) {
-        _state.update {
-            it.copy(
-                deck = it.deck.updateTextElement(id) { element ->
-                    element.copy(timing = element.timing.cycledStart())
-                },
-            )
-        }
-    }
+    /** Closes the open panel (handle pulled under its minimum) and gives the row back. */
+    fun onBandDismiss() = _state.update { it.copy(band = it.band.closeAnyPanel()) }
 
-    /**
-     * Advances the visibility DURATION of the on-canvas element [id] by one tap — to the next
-     * longer step, wrapping past the longest back to open-ended (decided by the pure
-     * [StoryElementTimingCycle.advance]). The start end is left untouched. Inert on an unknown
-     * id; selection and editing are untouched. The wire mapping ([StoryTextElement.toTextObject])
-     * carries `duration` on publish, and the reader gate ([StoryElementVisibility]) honours the
-     * window on playback.
-     */
-    fun onTextElementCycleDuration(id: String) {
-        _state.update {
-            it.copy(
-                deck = it.deck.updateTextElement(id) { element ->
-                    element.copy(timing = element.timing.cycledDuration())
-                },
-            )
-        }
-    }
-
-    /**
-     * Pinch-scales / rotates the on-canvas element [id] by the incremental gesture
-     * deltas ([scaleBy] is the multiplicative pinch factor, [rotateByDeg] the additive
-     * rotation; clamped/wrapped by the pure [StoryTextElement.transformed]). Selection
-     * and editing are untouched — you transform the element you are manipulating — and
-     * an unknown id is inert. The wire mapping carries `scale`/`rotation` on publish.
-     */
-    fun onTextElementTransform(id: String, scaleBy: Float, rotateByDeg: Float) {
-        _state.update { it.copy(deck = it.deck.transformTextElement(id, scaleBy, rotateByDeg)) }
-    }
-
-    /**
-     * Duplicates the on-canvas element [id] (which must live on the selected slide):
-     * mints a fresh id, inserts a clone of every styled field just after the source —
-     * nudged by [DUPLICATE_ELEMENT_OFFSET] so the copy is visibly offset — and selects
-     * the copy so the user can immediately move/style it. Inert when [id] is not on the
-     * selected slide; inert-with-a-warning once the slide is at the ≤5-element cap. The
-     * clone/cap rules live in the pure [StorySlideDeck.duplicateTextElement].
-     */
-    /**
-     * Restacks the on-canvas element [id] within its slide's paint order per [op]
-     * (back / one-step-back / one-step-forward / front). Selection and editing are
-     * untouched — you restack the element you are editing — and an inert move (unknown
-     * id, already at the extreme, single element) leaves the state instance unchanged
-     * so it never churns recomposition. The order rules live in the pure
-     * [StorySlideDeck.reorderTextElement].
-     */
-    fun onReorderTextElement(id: String, op: StoryZOrder) {
-        _state.update { state ->
-            val deck = state.deck.reorderTextElement(id, op)
-            if (deck === state.deck) state else state.copy(deck = deck)
-        }
-    }
-
-    fun onDuplicateTextElement(id: String) {
-        val before = _state.value.deck
-        if (before.selectedSlide.elements.none { it.id == id }) return
-        if (!before.selectedCanAddTextElement) {
-            _state.update { it.copy(errorMessage = TEXT_ELEMENT_LIMIT) }
-            return
-        }
-        val newId = newTextElementId()
-        _state.update {
-            it.copy(
-                deck = it.deck.duplicateTextElement(id, newId, DUPLICATE_ELEMENT_OFFSET, DUPLICATE_ELEMENT_OFFSET),
-                selectedTextElementId = newId,
-                errorMessage = null,
-            )
-        }
-    }
-
-    /**
-     * Adds an on-canvas emoji sticker [emoji] to the selected slide (clamped to the
-     * canvas centre by the deck) and selects it so the user can immediately drag /
-     * pinch / remove it. A blank emoji is ignored (nothing to place). Inert-with-a-
-     * warning once the selected slide is at the [StorySlideDeck.MAX_STICKERS_PER_SLIDE]
-     * cap. Selecting the new sticker clears any text-element editing so the canvas keeps
-     * a single selected object.
-     */
-    fun onAddSticker(emoji: String) {
-        if (emoji.isBlank()) return
-        val before = _state.value.deck
-        if (!before.selectedCanAddSticker) {
-            _state.update { it.copy(errorMessage = STICKER_LIMIT) }
-            return
-        }
-        val id = newStickerId()
-        _state.update {
-            it.copy(
-                deck = it.deck.addStickerToSelected(StoryStickerElement(id = id, emoji = emoji)),
-                selectedStickerId = id,
-                selectedTextElementId = null,
-                errorMessage = null,
-            )
-        }
-    }
-
-    /** Selects the sticker [id] for manipulation (inert when it is not on the selected
-     * slide); clears any text-element editing so only one object is selected. */
-    fun onSelectSticker(id: String) {
-        _state.update {
-            if (it.deck.selectedSlide.stickers.none { sticker -> sticker.id == id }) it
-            else it.copy(selectedStickerId = id, selectedTextElementId = null)
-        }
-    }
-
-    /** Deselects the active sticker — the remove handle disappears. Inert when none is selected. */
-    fun onDeselectSticker() {
-        _state.update { if (it.selectedStickerId == null) it else it.copy(selectedStickerId = null) }
-    }
-
-    /**
-     * Removes the sticker [id] from whichever slide holds it, clearing the selection
-     * when it was the selected one so the canvas stops showing its remove handle.
-     */
-    fun onRemoveSticker(id: String) {
-        _state.update {
-            val selected = if (it.selectedStickerId == id) null else it.selectedStickerId
-            it.copy(deck = it.deck.removeSticker(id), selectedStickerId = selected)
-        }
-    }
-
-    /**
-     * Drags the sticker [id] by the normalised canvas deltas [dx]/[dy] (clamped by the
-     * pure [StorySlideDeck.moveSticker]). Inert when the id is unknown. The Composable
-     * converts drag pixels to fractions.
-     */
-    fun onStickerMoved(id: String, dx: Float, dy: Float) {
-        _state.update { it.copy(deck = it.deck.moveSticker(id, dx, dy)) }
-    }
-
-    /**
-     * Pinch-scales / rotates the sticker [id] by the incremental gesture deltas
-     * (clamped/wrapped by the pure [StoryStickerElement.transformed]). Inert when the id
-     * is unknown. Selection is untouched — you transform the sticker you are manipulating.
-     */
-    fun onStickerTransform(id: String, scaleBy: Float, rotateByDeg: Float) {
-        _state.update { it.copy(deck = it.deck.transformSticker(id, scaleBy, rotateByDeg)) }
-    }
-
-    fun onVisibilityChange(visibility: StoryVisibility) {
-        _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
-    }
-
-    /**
-     * Toggles the bottom-band drawer for [category] (the Contenu / Effets FABs): opens
-     * it, switches category, or closes it per the pure [ComposerBandState.tapFab]. All
-     * band navigation state lives in the unit-tested [ComposerBandState].
-     */
-    fun onBandFabTap(category: BandCategory) {
-        _state.update { it.copy(band = it.band.tapFab(category)) }
-    }
-
-    /** Dismisses the band drawer (swipe-down gesture) — back to FAB-only. */
-    fun onBandDismiss() {
-        _state.update { it.copy(band = it.band.swipeDown()) }
-    }
-
-    /** Swaps the open band to the other category (horizontal swipe); inert while hidden. */
-    fun onBandSwapCategory() {
-        _state.update { it.copy(band = it.band.swipeHorizontal()) }
-    }
-
-    /** Appends a fresh empty slide and selects it (inert at the ≤10-slide cap); the
-     * editor follows the new selection, so it clears to the empty slide's text. */
-    fun onAddSlide() = applyDeck { it.addSlide(newSlideId()) }
+    /** Appends a fresh empty slide and selects it (inert at the ≤10-slide cap). */
+    fun onAddSlide() = applyDeck { if (_state.value.editing) it else it.addSlide(newSlideId()) }
 
     /** Inserts a clone of the selected slide right after it and selects the clone. */
-    fun onDuplicateSelectedSlide() = applyDeck { it.duplicate(it.selectedId, newSlideId()) }
+    fun onDuplicateSelectedSlide() = applyDeck { if (_state.value.editing) it else it.duplicate(it.selectedId, newSlideId()) }
 
-    /**
-     * Removes the slide [id] (inert on the last remaining slide / unknown id) and
-     * reclaims its media: each of the removed slide's media ids is dropped from the
-     * global preview pools, and any offline-pending upload among them is **cancelled**
-     * ([MediaUploadQueue.cancel]) so a slide thrown away never leaves an orphaned
-     * `UPLOAD_MEDIA` row streaming bytes to a story it no longer belongs to.
-     */
-    fun onRemoveSlide(id: String) {
-        val before = _state.value.deck
-        val removed = before.slides.firstOrNull { it.id == id } ?: return
-        val after = before.removeSlide(id)
-        if (after === before) return
-        val droppedMedia = removed.mediaIds.toSet()
-        val pendingToCancel = _state.value.pendingUploads
-            .filter { it.cmid in droppedMedia }
-            .map(PendingMediaUpload::cmid)
-        _state.update {
-            it.copy(
-                deck = after,
-                attachments = it.attachments.filterNot { media -> media.id in droppedMedia },
-                pendingUploads = it.pendingUploads.filterNot { pending -> pending.cmid in droppedMedia },
-            ).mirrorDraftToSelection()
-        }
-        pendingToCancel.forEach { cancelDurableUpload(it) }
+    /** Removes the slide [id] (inert on the last one); its media leave the pools, its pending uploads wait in [buried] (a duplicate's shared media stay). */
+    fun onRemoveSlide(id: String) = reduceBurying { StoryComposerEraseReducer.slideRemoved(it, id) }
+
+    /** « ⋯ › Tout effacer » (#13845), confirmé par l'écran : une diapo vierge sur le fond neutre, un cran que ↶ défait. */
+    fun onClearAll() = reduceBurying(StoryComposerEraseReducer::cleared)
+
+    /** « ⋯ › Retirer le fond de la scène » (#13845) : la couleur et le média de fond partent, en un seul cran. */
+    fun onRemoveSceneBackground() {
+        val media = _state.value.selectedSlideBackdropMediaId
+        _state.update { StoryComposerBackgroundReducer.backgroundChanged(it, null) }
+        media?.let(::onRemoveMedia) ?: record()
     }
 
-    /** Reorders the slide [id] to [toIndex] (selection preserved by id). */
+    /** Les envois hors ligne que [next] retire attendent dans [buried] tant qu'une étape de l'historique les montre. */
+    private fun reduceBurying(next: (StoryComposerUiState) -> StoryComposerUiState) {
+        val before = _state.value.pendingUploads
+        _state.update(next)
+        buried.bury(before.filterNot { it in _state.value.pendingUploads })
+        record()
+    }
+
     fun onMoveSlide(id: String, toIndex: Int) = applyDeck { it.move(id, toIndex) }
 
-    /** Switches the active slide to [id] (inert on unknown id). */
     fun onSelectSlide(id: String) = applyDeck { it.select(id) }
 
     /**
-     * Applies one incremental pinch-zoom + drag-pan gesture from the 9:16 canvas to
-     * the **selected** slide's persisted [StoryCanvasTransform], clamped to the canvas
-     * bounds via the pure [StoryCanvasTransform.apply]. The Composable supplies the
-     * gesture deltas and the measured canvas size; all transform math is unit-tested
-     * in one place, so the canvas stays glue.
+     * Applies one pinch-zoom + drag-pan gesture to the selected slide's persisted
+     * [StoryCanvasTransform]. The canvas size that produced the offset is captured here: it
+     * is exactly the size needed to normalise the offset back at publish.
      */
-    fun onCanvasTransform(panX: Float, panY: Float, zoom: Float, canvasWidth: Float, canvasHeight: Float) =
-        applyDeck { deck ->
-            deck.updateSelectedTransform(
-                deck.selectedSlide.transform.apply(panX, panY, zoom, canvasWidth, canvasHeight),
-            )
+    fun onCanvasTransform(panX: Float, panY: Float, zoom: Float, canvasWidth: Float, canvasHeight: Float) {
+        reduce("canvas") {
+            it.copy(
+                deck = it.deck.updateSelectedTransform(
+                    it.deck.selectedSlide.transform.apply(panX, panY, zoom, canvasWidth, canvasHeight),
+                ),
+                canvasWidthPx = canvasWidth,
+                canvasHeightPx = canvasHeight,
+            ).mirrorDraftToSelection()
         }
+    }
 
-    /**
-     * Sets (or clears, with null) the **selected** slide's photo filter — the Effets
-     * drawer's filter picker. Per-slide: each slide keeps its own look. The selection
-     * and any in-progress element edit are preserved (a filter touches no element).
-     */
-    fun onSelectFilter(filter: StoryFilter?) = applyDeck { it.setSelectedFilter(filter) }
+    /** Emprunte un son de l'étagère : il se pose en FOND de la slide sélectionnée (jamais deux fonds). */
+    fun onBorrowSound(sound: me.meeshy.sdk.model.composer.sound.ApiSound) = applyDeck { it.borrowSoundOnSelected(sound) }
 
-    /**
-     * Sets the **selected** slide's filter strength (clamped in the deck via the pure
-     * [StoryFilterMatrix.clampIntensity]) — the Effets drawer's intensity slider.
-     */
-    fun onFilterIntensityChange(intensity: Float) = applyDeck { it.setSelectedFilterIntensity(intensity) }
+    /** L'adresse chargeable d'une piste posée : un son emprunté porte le chemin RELATIF que sert la passerelle. */
+    fun playableSoundUrl(track: StoryAudioPlayerObject): String? =
+        MediaRequestCredential.libraryAudioUrl(track.mediaURL, config.apiBaseUrl)
 
-    /**
-     * Pins the **selected** slide's on-screen duration to [seconds] — the timeline
-     * "pin duration" control. The value is bounded to the iOS `[2, 600]`s range by the
-     * pure [StorySlideDeck.setSelectedDuration]/[me.meeshy.sdk.model.StoryDurationPin],
-     * and rides to the reader as `effects.timelineDuration`, which the reader honours
-     * over content ([me.meeshy.sdk.model.StorySlideDuration]).
-     */
-    fun onSlideDurationChange(seconds: Double) = applyDeck { it.setSelectedDuration(seconds) }
+    /** Retire une piste de la slide sélectionnée — le son reste sur l'étagère, c'est un retrait de la scène. */
+    fun onRemoveSound(id: String) = applyDeck { it.removeSelectedSound(id) }
 
-    /**
-     * Sets (or clears, with null) the **selected** slide's backdrop — the Effets drawer's
-     * background picker (a preset solid/gradient from
-     * [me.meeshy.sdk.model.StoryBackgroundPalette], or a random pastel). Per-slide: each
-     * slide keeps its own colour. The value rides to the reader as `effects.background`,
-     * which the reader paints over its accent→black fallback
-     * ([me.meeshy.sdk.model.StoryBackgroundValue]).
-     */
+    /** Le muet LOCAL d'une piste : elle reste posée, son volume tombe à 0 (mémento pour la rétablir). */
+    fun onToggleSoundMute(id: String) = applyDeck { it.toggleSelectedSoundMute(id) }
+
+    /** Sets (or clears) the selected slide's photo filter. */
+    fun onSelectFilter(filter: StoryFilter?) = reduce { StoryComposerBackgroundReducer.filterSelected(it, filter) }
+
+    fun onFilterIntensityChange(intensity: Float) =
+        reduce("intensity") { StoryComposerBackgroundReducer.filterIntensityChanged(it, intensity) }
+
+    /** Pins the selected slide's on-screen duration (bounded by the pure deck law). */
+    fun onSlideDurationChange(seconds: Double) = reduce("duration") { StoryComposerBackgroundReducer.durationChanged(it, seconds) }
+
+    /** Sets (or clears) the selected slide's backdrop colour. */
     fun onSlideBackgroundChange(background: me.meeshy.sdk.model.StoryBackgroundValue?) =
-        applyDeck { it.setSelectedBackground(background) }
+        reduce { StoryComposerBackgroundReducer.backgroundChanged(it, background) }
+
+    /** Designates (or clears) the selected slide's single looping background media. */
+    fun onToggleSlideBackgroundMedia(mediaId: String) =
+        reduce { StoryComposerBackgroundReducer.backgroundMediaToggled(it, mediaId) }
+
+    /** Sets whether the selected slide's designated video background loops. */
+    fun onSetSlideBackgroundLoop(loop: Boolean) =
+        reduce { StoryComposerBackgroundReducer.backgroundLoopSet(it, loop) }
+
+    /** Annule la dernière modification du deck — iOS `undo()` de l'historique global. Inerte pile vide. */
+    fun onUndo() = travel(history.undone())
+
+    /** Le doigt quitte l'écran (#14209) : deux glissés du même réglage, séparés par un doigt levé, font deux pas. */
+    fun onGestureLifted() {
+        history = history.closed()
+    }
+
+    fun onRedo() = travel(history.redone())
+
+    private fun travel(step: Pair<ComposerHistory, ComposerSnapshot>?) {
+        val (next, snapshot) = step ?: return
+        history = next
+        restore(snapshot)
+    }
+
+    private val buried = BuriedUploads()
+    private val stickerImages = StickerImageUploads()
+    private val stickerIntake = StoryComposerStickerIntake(
+        scope = viewModelScope,
+        state = _state,
+        images = stickerImages,
+        send = { pose -> mediaUploader.uploadSticker(pose)?.let { it.copy(url = ComposerMediaAddress.of(it.url, mediaBaseUrl)) } },
+        pose = { sticker -> reduce { StoryComposerStickerReducer.posed(it, sticker) } },
+    )
+    private val uploads = StoryComposerBackgroundUploads(
+        viewModelScope, _state, mediaUploader, mediaUploadQueue, { cmid, media -> onPendingUploadResolved(cmid, media, queued = false) }, ::onUploadDropped,
+    )
+    private val mediaPick = StoryComposerMediaPick(viewModelScope, _state, uploads, mediaIds) { record() }
+    private val soundUploads = StoryComposerSoundUploads(viewModelScope, _state, mediaUploader, ::onSoundReceived)
 
     /**
-     * Applies a structural deck transform and re-syncs the editor buffer to the
-     * (possibly new) selected slide's text **and** media, keeping `draft` a faithful
-     * mirror of the selected slide — the single invariant the screen relies on.
+     * Un son que la feuille a préparé sur l'appareil (#15598) : il se pose aussitôt — une étape d'historique — et ses octets
+     * partent en arrière-plan ; Publier l'attend. Un son qui ne trouve pas de place rend son fichier.
      */
-    private inline fun applyDeck(transform: (StorySlideDeck) -> StorySlideDeck) {
-        _state.update { it.copy(deck = transform(it.deck)).mirrorDraftToSelection() }
+    fun onPlaceSendingSound(sound: ComposedStorySound, role: ComposerAudioRole, item: MediaUploadItem) {
+        if (_state.value.intakeBlocks) return MediaIntake.release(item)
+        reduce { state -> state.withDeckTransform { it.placeComposedSoundOnSelected(sound, role) } }
+        if (_state.value.deck.selectedSlide.audio.none { it.id == sound.trackId }) return MediaIntake.release(item)
+        soundUploads.send(sound.trackId, item)
+    }
+
+    /** « Réessayer » après l'échec de l'envoi d'un son (#15598). */
+    fun onRetrySoundUploads() = soundUploads.retryFailed()
+
+    private fun onSoundReceived(trackId: String, media: UploadedMedia) {
+        _state.update { it.copy(deck = it.deck.withSoundServed(trackId, media)) }
+        history = history.mapped { ComposerSnapshot(it.deck.withSoundServed(trackId, media), it.attachments) }
+    }
+    private val pendingRetry = StoryComposerPendingRetry(viewModelScope, _state, mediaUploader, ::onPendingUploadResolved).also {
+        it.watch(network?.isOnline ?: MutableStateFlow(true))
     }
 
     /**
-     * Re-points [StoryComposerUiState.draft] at the selected slide's text + media and
-     * drops a now-dangling element-edit selection (an element id only ever lives on
-     * one slide, so switching/removing a slide ends element editing and the field
-     * falls back to the new slide's caption).
+     * Un média en attente REÇU pendant la composition (#13959) : il devient un média envoyé partout ; s'il attendait dans la
+     * file durable ([queued]), elle se vide — un envoi de fond reçu du premier coup n'y est jamais entré (#15598).
      */
-    private fun StoryComposerUiState.mirrorDraftToSelection(): StoryComposerUiState {
-        val elementId = selectedTextElementId
-        val stillSelected = elementId != null && deck.selectedSlide.elements.any { it.id == elementId }
-        val stickerId = selectedStickerId
-        val stickerStillSelected = stickerId != null && deck.selectedSlide.stickers.any { it.id == stickerId }
-        return copy(
-            draft = draft.withText(deck.selectedSlide.text).withMediaIds(deck.selectedSlide.mediaIds),
-            selectedTextElementId = if (stillSelected) elementId else null,
-            selectedStickerId = if (stickerStillSelected) stickerId else null,
-        )
+    private fun onPendingUploadResolved(cmid: String, media: UploadedMedia, queued: Boolean = true) {
+        val pending = _state.value.pendingUploads.firstOrNull { it.cmid == cmid } ?: buried.resolved(cmid)
+        _state.update { StoryComposerUploadResolution.resolved(it, cmid, media) }
+        if (pending == null) return
+        history = history.mapped { StoryComposerUploadResolution.resolvedSnapshot(it, cmid, media) }
+        MediaIntake.release(pending.item)
+        if (queued) cancelDurableUpload(cmid)
+        record()
     }
 
-    /**
-     * Uploads freshly-picked media and attaches the returned ids to the draft.
-     * Empty picks are inert; a second pick while an upload is in flight is ignored
-     * (re-entrancy guard). On success the new media is **appended** so multiple
-     * picks accumulate; an empty result (every row unusable) surfaces a message.
-     *
-     * When the synchronous upload **fails transiently** (offline / throttled / 5xx),
-     * every accepted item is instead queued **durably** ([queueDurably]) and staged
-     * as a [PendingMediaUpload] placeholder, so the user can still publish — the
-     * outbox uploads each and grafts the real ids when the network returns. Several
-     * pending uploads accumulate across picks (and a multi-item offline batch stages
-     * each item), surpassing iOS, which drops the pick on an offline upload. A
-     * permanent failure (4xx) surfaces the error and stages nothing.
-     */
-    fun onMediaPicked(items: List<MediaUploadItem>) {
-        if (items.isEmpty() || _state.value.isUploadingMedia) return
-        val remaining = _state.value.deck.selectedRemainingMediaSlots
-        if (remaining <= 0) {
-            _state.update { it.copy(errorMessage = MEDIA_LIMIT) }
-            return
-        }
-        val accepted = items.take(remaining)
-        _state.update { it.copy(isUploadingMedia = true, errorMessage = null) }
-        viewModelScope.launch {
-            try {
-                when (val result = mediaUploader.upload(accepted)) {
-                    is NetworkResult.Success -> applyUploaded(result.data)
-                    is NetworkResult.Failure -> onUploadFailed(accepted, result.error)
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                _state.update { it.copy(isUploadingMedia = false, errorMessage = e.message ?: MEDIA_FAILED) }
-            }
-        }
-    }
-
-    private fun applyUploaded(uploaded: List<UploadedMedia>) {
-        if (uploaded.isEmpty()) {
-            _state.update { it.copy(isUploadingMedia = false, errorMessage = MEDIA_UNUSABLE) }
-            return
-        }
+    /** Un média que la passerelle refuse pour de bon (#15598) : il quitte la scène et chaque étape, et la raison se dit. */
+    private fun onUploadDropped(cmid: String, reason: String) {
+        val pending = _state.value.pendingUploads.firstOrNull { it.cmid == cmid } ?: buried.resolved(cmid)
         _state.update {
-            val deck = uploaded.fold(it.deck) { acc, media -> acc.addMediaToSelected(media.id) }
-            it.copy(deck = deck, attachments = it.attachments + uploaded, isUploadingMedia = false)
-                .mirrorDraftToSelection()
+            it.copy(deck = it.deck.removeMedia(cmid), pendingUploads = it.pendingUploads.filterNot { upload -> upload.cmid == cmid }, errorMessage = reason)
+                .withDescriptionsPruned().mirrorDraftToSelection()
+        }
+        history = history.mapped { ComposerSnapshot(it.deck.removeMedia(cmid), it.attachments) }
+        pending?.let { MediaIntake.release(it.item) }
+        record()
+    }
+
+    private fun restore(snapshot: ComposerSnapshot) {
+        val before = _state.value.pendingUploads
+        _state.update { stickerImages.reconciled(it.restoredTo(snapshot, buried.held)).withHistoryFlags() }
+        buried.settled(before, _state.value.pendingUploads)
+    }
+
+    private fun abandonUnreachableBuried() {
+        buried.abandoned(history::reaches).forEach { uploads.abandon(it.cmid); MediaIntake.release(it.item); cancelDurableUpload(it.cmid) }
+        val (kept, lost) = releasedByDraft.partition(history::reaches)
+        releasedByDraft = kept.toSet()
+        lost.forEach(::cancelDurableUpload)
+    }
+
+    private fun StoryComposerUiState.withHistoryFlags(): StoryComposerUiState =
+        copy(canUndo = history.canUndo, canRedo = history.canRedo)
+
+    /** Empile le deck courant dans l'historique ; [gesture] = changement continu (un seul cran). */
+    private fun record(gesture: String? = null) {
+        history = history.recorded(_state.value.snapshot(), gesture)
+        abandonUnreachableBuried()
+        if (_state.value.canUndo != history.canUndo || _state.value.canRedo != history.canRedo) {
+            _state.update { it.withHistoryFlags() }
         }
     }
 
+    /** Repart d'un historique vierge sur l'état courant (brouillon restauré, publication). */
+    private fun resetHistory() {
+        history = ComposerHistory(_state.value.snapshot())
+        abandonUnreachableBuried()
+        _state.update { it.withHistoryFlags() }
+    }
+
+    private fun reduce(gesture: String? = null, next: (StoryComposerUiState) -> StoryComposerUiState) {
+        _state.update { StoryComposerTextReducer.blankLeftBehind(it, next(it)) }
+        record(gesture)
+    }
+
+    /** Applies a structural deck transform, re-syncing the editor buffer to the selected slide. */
+    private fun applyDeck(transform: (StorySlideDeck) -> StorySlideDeck) {
+        reduce { it.withDeckTransform(transform) }
+    }
+
     /**
-     * A transient failure → durably queue every accepted item (single pick or batch);
-     * a permanent error (4xx) surfaces the message and stages nothing.
+     * Poses media already prepared on the device onto the selected slide (appended; [asBackground]: the first becomes its
+     * background, #13845); each sends in the background under its `cmid` ([StoryComposerBackgroundUploads], #15598) and a
+     * failed send waits in the durable queue behind its placeholder; [replacing] (« Fond › Remplacer », #13973) leaves at once.
      */
-    private suspend fun onUploadFailed(accepted: List<MediaUploadItem>, error: ApiError) {
-        if (MediaUploadRetryPolicy.isQueueable(error)) {
-            queueDurably(accepted)
-        } else {
-            _state.update { it.copy(isUploadingMedia = false, errorMessage = error.message) }
-        }
-    }
+    fun onMediaPicked(items: List<MediaUploadItem>, asBackground: Boolean = false, replacing: String? = null) =
+        mediaPick.pick(items, asBackground, replacing)
+
+    /** [count] files chosen in a system picker: their placeholder holds the screen while [prepare] copies them (#15598). */
+    fun onMediaChosen(
+        count: Int,
+        asBackground: Boolean = false,
+        replacing: String? = null,
+        hints: List<IncomingMediaHint> = emptyList(),
+        prepare: suspend () -> List<MediaUploadItem>,
+    ) = mediaPick.choose(count, asBackground, replacing, hints, prepare)
+
+    /** ✕ sur l'espace réservé (R5 de #13863) : la préparation s'annule, et l'écran se libère dans la même image. */
+    fun onCancelMediaPick() = mediaPick.cancel()
+
+    /** « Réessayer » après un échec : les médias en file repartent maintenant (#13959). */
+    fun onRetryMediaPick() = pendingRetry.retryFailed()
+
+    /** Toucher la vignette d'un média en file (#13959) : il repart maintenant. */
+    fun onRetryPendingUpload(cmid: String) = pendingRetry.retry(cmid)
 
     /**
-     * Enqueues each item durably and stages it as a pending upload, one at a time so
-     * partial progress survives if a later enqueue throws (the already-staged items
-     * stay, the caller's catch surfaces the error). Each enqueued blob + outbox row
-     * shares the returned cmid, which rides in the draft as a placeholder media id.
-     */
-    private suspend fun queueDurably(items: List<MediaUploadItem>) {
-        items.forEach { item ->
-            val cmid = mediaUploadQueue.enqueue(item, context = TusUploadContext.STORY)
-            _state.update {
-                it.copy(
-                    deck = it.deck.addMediaToSelected(cmid),
-                    pendingUploads = it.pendingUploads + PendingMediaUpload(cmid = cmid, item = item),
-                    errorMessage = null,
-                ).mirrorDraftToSelection()
-            }
-        }
-        _state.update { it.copy(isUploadingMedia = false) }
-    }
-
-    /**
-     * Removes an attached or pending media (and its id from the draft) before
-     * publishing. Removing an offline placeholder also **cancels** only that durable
-     * upload ([MediaUploadQueue.cancel]) — the other pending uploads are untouched —
-     * so no orphaned `UPLOAD_MEDIA` row keeps uploading bytes to a media the story
-     * will never reference. The UI clears instantly (optimistic); the durable cancel
-     * is best-effort — if it fails the stranded row simply exhausts harmlessly.
+     * Removes an attached or pending media before publishing; the UI clears at once. An offline placeholder's durable
+     * upload is not cancelled yet: like a removed slide's (#13541) it waits in [buried], bytes kept, while undo can bring the
+     * media back (#13602), and is cancelled only once no history step shows it any more or the composer is left.
      */
     fun onRemoveMedia(id: String) {
-        val wasPending = _state.value.pendingUploads.any { it.cmid == id }
+        val pending = _state.value.pendingUploads.firstOrNull { it.cmid == id }
+        if (pending != null) buried.bury(listOf(pending))
         _state.update {
             val deck = it.deck.removeMedia(id)
-            val next = if (wasPending) {
+            val next = if (pending != null) {
                 it.copy(deck = deck, pendingUploads = it.pendingUploads.filterNot { pending -> pending.cmid == id })
             } else {
                 it.copy(deck = deck, attachments = it.attachments.filterNot { media -> media.id == id })
             }
-            next.mirrorDraftToSelection()
+            next.withDescriptionsPruned().mirrorDraftToSelection()
         }
-        if (wasPending) cancelDurableUpload(id)
+        record()
     }
 
     private fun cancelDurableUpload(cmid: String) {
-        viewModelScope.launch {
-            try {
-                mediaUploadQueue.cancel(cmid)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Throwable) {
-                // Best-effort: a stranded UPLOAD_MEDIA row exhausts harmlessly on its own.
-            }
-        }
+        viewModelScope.launch { runCatching { mediaUploadQueue.cancel(cmid) }.exceptionOrNull()?.let { if (it is CancellationException) throw it } }
     }
 
     fun publish() {
-        val current = _state.value
+        (editMode as? StoryEditMode.Active)?.let { return it.save(viewModelScope, _state, _published, resolvePublishLanguage()) }
+        if (editMode != null) return
+        val current = _state.updateAndGet { it.audiencePurged() }
         if (!current.canPublish) return
-        _state.update { it.copy(isPublishing = true, errorMessage = null) }
+        val stopped = uploads.stopForPublication()
+        _state.update { it.copy(isPublishing = true, errorMessage = null, publishFailedFormats = emptyList()) }
         viewModelScope.launch {
             try {
-                publishPlans(current, resolvePublishLanguage()).forEach { plan ->
-                    storyRepository.enqueuePublish(plan.request, dependsOn = plan.dependsOn)
-                }
+                uploads.handOff(stopped)
+                val baked = lookOven?.queued(current) ?: current
+                val sent = current.publishedFormats.map { format -> format to runCatchingPublish { enqueueAs(baked, format) } }
+                val failed = sent.filter { it.second.isFailure }.map { it.first }
+                if (failed.size == sent.size) throw sent.first().second.exceptionOrNull()!!
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
-                _state.update { StoryComposerUiState() }
+                if (failed.isNotEmpty()) return@launch partlyPublished(failed)
+                releasedByDraft = releasedByDraft - current.deck.slides.flatMap { it.mediaIds + listOfNotNull(it.backgroundMediaId) }.toSet()
+                keepDraftUntilConfirmed(current, sent.flatMap { it.second.getOrThrow() })
+                _state.update { it.blankKeepingFormat() }
+                resetHistory()
                 _published.tryEmit(Unit)
             } catch (e: CancellationException) {
                 throw e
@@ -850,49 +709,92 @@ class StoryComposerViewModel @Inject constructor(
         }
     }
 
-    /** One publishable slide's wire request paired with the offline uploads it must wait on. */
-    private data class PublishPlan(val request: CreateStoryRequest, val dependsOn: List<String>)
+    /**
+     * Un envoi par format coché (#13919) : la story part par la file des stories, une par slide ; le post et le réel par la file
+     * des publications, un document pour toute la scène. Rend les stories mises en file, que le brouillon attend.
+     */
+    private suspend fun enqueueAs(baked: StoryComposerUiState, format: ComposerFormat): List<String> {
+        val alone = baked.copy(format = format, checkedFormats = emptyList())
+        val language = resolvePublishLanguage()
+        if (alone.variant.channel == ComposerPublishChannel.DOCUMENT) {
+            checkNotNull(publications).enqueueScene(alone, publishPlans(alone, language, alone.postScenesWithBackdrops(), authorFloor), language)
+            return emptyList()
+        }
+        return publishPlans(alone, language, floor = authorFloor).mapNotNull { plan -> storyRepository.enqueuePublish(plan.request, dependsOn = plan.dependsOn) }
+    }
+
+    private suspend fun <T> runCatchingPublish(block: suspend () -> T): Result<T> =
+        try { Result.success(block()) } catch (e: CancellationException) { throw e } catch (e: Throwable) { Result.failure(e) }
+
+    /** Une partie seulement est partie : la composition reste, la scène dit quels formats n'ont pas suivi, et l'hôte ne garde qu'eux. */
+    private fun partlyPublished(failed: List<ComposerFormat>) = _state.update {
+        StoryComposerFormatReducer.formatted(it, failed, it.postLayout)
+            .copy(isPublishing = false, publishFailedFormats = failed, restoredFormats = failed)
+    }
 
     /**
-     * Maps the deck to one wire request **per publishable slide** (non-blank text or
-     * attached media), in deck order. Each story carries **its own** slide's media —
-     * media now belongs to the slide it was added to, not the whole story — and
-     * `dependsOn` only the offline uploads staged on that same slide, so the drainer
-     * gates each story on exactly its own prerequisites and grafts the real ids in.
+     * The draft is not erased at publish (#13417): it stays on the device, marked as awaiting
+     * the stories it queued, until [StoryDraftConfirmation] sees every one of them confirmed by
+     * the server or discarded by the author.
      */
-    private fun publishPlans(current: StoryComposerUiState, language: String): List<PublishPlan> {
-        val pendingCmids = current.pendingUploads.mapTo(mutableSetOf(), PendingMediaUpload::cmid)
-        return current.deck.publishableSlides.map { slide ->
-            val draft = StoryComposerDraft(
-                text = slide.text,
-                visibility = current.draft.visibility,
-                mediaIds = slide.mediaIds,
-                textElements = slide.elements,
-                stickers = slide.stickers,
-                filter = slide.filter,
-                filterIntensity = slide.filterIntensity,
-                durationSecondsPin = slide.durationSecondsPin,
-                background = slide.background,
-            )
-            PublishPlan(
-                request = draft.toCreateStoryRequest(language),
-                dependsOn = slide.mediaIds.filter { it in pendingCmids },
-            )
+    private suspend fun keepDraftUntilConfirmed(published: StoryComposerUiState, queued: List<String>) {
+        if (seededByDoor && !ownsStoredDraft && draftStore.load() != null) return
+        if (queued.isEmpty()) {
+            underOpeningAccount { draftStore.clear() }
+            return
+        }
+        val snapshot = published.deck.toDraftSnapshot(
+            visibility = published.draft.visibility,
+            repostOfId = published.draft.repostOfId,
+            nowIso = Instant.now().toString(),
+            visibilityUserIds = published.draft.visibilityUserIds,
+            annotations = published.draft.annotations(),
+            format = published.formatDraft(),
+        )
+        underOpeningAccount { draftStore.save(snapshot.copy(awaitingPublication = queued)) }
+    }
+
+    private fun reachable(ids: List<String>, visibility: StoryVisibility) =
+        reachableAudience(ids, visibility, sessionRepository.currentUser.value?.id, blocks.currentBlockedIds)
+    private fun StoryComposerUiState.audiencePurged() = withAudiencePurged(sessionRepository.currentUser.value?.id, blocks.currentBlockedIds)
+
+    internal fun resolvePublishLanguage(): String = sessionRepository.currentUser.value?.let { LanguageResolver.resolveUserLanguage(it) } ?: LanguageResolver.FALLBACK_LANGUAGE
+
+    /**
+     * Les copies EN CLAIR des médias en attente (#13553) ne survivent pas au composeur : la file d'envoi garde les siennes, scellées.
+     * Les envois d'une slide supprimée (#13541) n'ont plus d'historique pour la rétablir ni de brouillon qui les montre : leur
+     * envoi durable est annulé, hors de [viewModelScope] déjà fermé, pour ne pas téléverser un média qu'aucune story n'utilisera.
+     */
+    override fun onCleared() {
+        soundUploads.cleared()
+        val shown = _state.value.pendingUploads.mapTo(mutableSetOf(), PendingMediaUpload::cmid)
+        val (sending, abandoned) = uploads.stopForPublication().partition { it.cmid in shown }
+        val held = (buried.held + abandoned).distinctBy(PendingMediaUpload::cmid)
+        (_state.value.pendingUploads.filterNot { it in sending } + held).forEach { MediaIntake.release(it.item) }
+        val doomed = held.map(PendingMediaUpload::cmid) + releasedByDraft
+        if (doomed.isEmpty() && sending.isEmpty()) return
+        CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).launch {
+            sending.forEach { upload -> runCatching { mediaUploadQueue.enqueueAs(upload.cmid, upload.item, TusUploadContext.STORY) }; MediaIntake.release(upload.item) }
+            doomed.forEach { cmid -> runCatching { mediaUploadQueue.cancel(cmid) } }
         }
     }
 
-    private fun resolvePublishLanguage(): String =
-        sessionRepository.currentUser.value
-            ?.let { LanguageResolver.resolveUserLanguage(it) }
-            ?: LanguageResolver.FALLBACK_LANGUAGE
-
-    private companion object {
+    internal companion object {
+        const val MENTION_DISPLAY = "NOTE"
+        const val REPOSITIONED_BANNER_MILLIS = 4_000L
+        /** Plafond de la passerelle (`mentions.max(50)`) : au-delà, toute la story serait refusée. */
+        const val MAX_MENTIONS = 50
         const val MEDIA_FAILED = "Couldn't attach that media"
         const val MEDIA_UNUSABLE = "That media couldn't be attached"
         const val MEDIA_LIMIT = "You can attach up to ${StoryComposerDraft.MAX_MEDIA} items"
         const val TEXT_ELEMENT_LIMIT =
             "You can add up to ${StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE} text elements per slide"
+        const val STICKER_IMAGE_FAILED = "Couldn't add that sticker"
+        const val SOUND_FAILED = "Couldn't send that sound"
         const val STICKER_LIMIT =
             "You can add up to ${StorySlideDeck.MAX_STICKERS_PER_SLIDE} stickers per slide"
+        const val TEXT_LENGTH_LIMIT =
+            "A text holds ${me.meeshy.sdk.model.composer.StoryLimits.TEXT_LENGTH} characters at most"
+        const val MEDIA_RESTORE_LOST = "Some media couldn't be restored"
     }
 }

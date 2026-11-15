@@ -1,0 +1,101 @@
+{
+  "$format": {
+    "input": "{ translations: {lang: text}|null, originalLanguage: string|null, preferredLanguages: string[] }",
+    "expected": "{ language: string, text: string }|null — la PAIRE (langue, texte) servie par le premier rang du lecteur qui gagne, `language` étant la CLÉ STOCKÉE de la carte (jamais sa forme normalisée). `null` quand la langue d'origine gagne à son rang, ou quand aucune langue du lecteur n'est servie (règle #1 — jamais de repli sur une traduction quelconque).",
+    "rule": "Prisme Linguistique — la descente elle-même (CLAUDE.md § « La descente elle-même est UNE fonction »), source de laquelle `resolveLastMessagePreview` (aperçu de liste), l'audio, les posts/commentaires et la bannière de notification serveur sont des PROJECTIONS. Le prisme est ORDONNÉ et la langue d'origine concourt à SON rang, jamais comme court-circuit global. Pour chaque langue L du prisme, dans l'ordre : L == langue d'origine ⇒ rendre `null` (le message EST déjà en L, servir l'original) ; une traduction existe pour L ⇒ la rendre. Aucune ⇒ `null`.",
+    "provenance": "Golden partagé des QUATRE familles de résolveurs du Prisme que CLAUDE.md nomme réécrites trois fois en trois cycles (issue #3677) : aperçu de liste (déjà gardé par prism-preview.vectors.json, qui en est une PROJECTION texte-seul), audio (`resolveAutoLanguage`/`resolveAudioPrismLanguage`, apps/web/hooks/use-audio-translation.ts), posts/commentaires (`usePostTranslation.findTranslation` et `TranslationToggle.resolveAutoTranslation`, apps/web) et bannière de notification (`NotificationService.prismTranslation`, services/gateway — délégation littérale à `resolvePrismTranslation`, gardée par un rejeu direct de ce fichier côté gateway). Sur divergence entre ce fichier et un consommateur, c'est le consommateur qui bouge — jamais le vecteur.",
+    "excluded": "Les cartes à DEUX clés canonisant vers la MÊME langue sont hors contrat, pour la même raison que prism-preview.vectors.json : le gateway n'émet que des clés canoniques, et TS/Android/iOS ne s'accordent pas sur laquelle des deux entrées gagne."
+  },
+  "vectors": [
+    {
+      "_label": "rend la traduction du RANG 1 quand elle existe",
+      "input": { "translations": { "fr": "Bonjour", "es": "Hola" }, "originalLanguage": "en", "preferredLanguages": ["fr", "es"] },
+      "expected": { "language": "fr", "text": "Bonjour" }
+    },
+    {
+      "_label": "descend au rang 2 quand le rang 1 n'a pas de traduction",
+      "input": { "translations": { "es": "Hola" }, "originalLanguage": "en", "preferredLanguages": ["de", "es"] },
+      "expected": { "language": "es", "text": "Hola" }
+    },
+    {
+      "_label": "descend jusqu'au rang 4 — la locale appareil concourt comme les autres",
+      "input": { "translations": { "pt": "Olá" }, "originalLanguage": "en", "preferredLanguages": ["de", "nl", "sv", "pt"] },
+      "expected": { "language": "pt", "text": "Olá" }
+    },
+    {
+      "_label": "rend la CLÉ STOCKÉE, pas sa forme normalisée",
+      "input": { "translations": { "pt-BR": "Olá" }, "originalLanguage": "en", "preferredLanguages": ["pt"] },
+      "expected": { "language": "pt-BR", "text": "Olá" }
+    },
+    {
+      "_label": "rend null quand la langue d'origine gagne AVANT une traduction de rang inférieur",
+      "input": { "translations": { "fr": "Bonjour" }, "originalLanguage": "en", "preferredLanguages": ["de", "en", "fr"] },
+      "expected": null
+    },
+    {
+      "_label": "ne rétrograde PAS la langue primaire quand la langue d'origine est plus bas",
+      "input": { "translations": { "fr": "Bonjour" }, "originalLanguage": "en", "preferredLanguages": ["fr", "en"] },
+      "expected": { "language": "fr", "text": "Bonjour" }
+    },
+    {
+      "_label": "compare la langue d'origine en forme CANONIQUE (région strippée)",
+      "input": { "translations": { "fr": "Bonjour" }, "originalLanguage": "en-US", "preferredLanguages": ["en", "fr"] },
+      "expected": null
+    },
+    {
+      "_label": "règle #1 : rend null quand aucune langue du lecteur n'est servie",
+      "input": { "translations": { "es": "Hola", "it": "Ciao" }, "originalLanguage": "en", "preferredLanguages": ["de"] },
+      "expected": null
+    },
+    {
+      "_label": "rend null sur un prisme vide",
+      "input": { "translations": { "es": "Hola" }, "originalLanguage": "en", "preferredLanguages": [] },
+      "expected": null
+    },
+    {
+      "_label": "ignore les entrées vides ou non textuelles de la carte",
+      "input": { "translations": { "fr": "   ", "es": "Hola" }, "originalLanguage": "en", "preferredLanguages": ["fr", "es"] },
+      "expected": { "language": "es", "text": "Hola" }
+    },
+    {
+      "_label": "carte de traductions absente ⇒ null",
+      "input": { "translations": null, "originalLanguage": null, "preferredLanguages": ["fr"] },
+      "expected": null
+    },
+    {
+      "_label": "matche une langue du lecteur écrite en MAJUSCULES",
+      "input": { "translations": { "fr": "Bonjour" }, "originalLanguage": "en", "preferredLanguages": ["FR"] },
+      "expected": { "language": "fr", "text": "Bonjour" }
+    },
+    {
+      "_label": "matche une CLÉ de carte écrite en MAJUSCULES, et la rend TELLE QUELLE",
+      "input": { "translations": { "FR": "Bonjour" }, "originalLanguage": "en", "preferredLanguages": ["fr"] },
+      "expected": { "language": "FR", "text": "Bonjour" }
+    },
+    {
+      "_label": "réduit un alias ISO 639-1 déprécié en CLÉ (iw) au rang du lecteur (he)",
+      "input": { "translations": { "iw": "Shalom" }, "originalLanguage": "en", "preferredLanguages": ["he"] },
+      "expected": { "language": "iw", "text": "Shalom" }
+    },
+    {
+      "_label": "réduit une LANGUE LECTEUR taguée région (pt-BR) contre une clé normalisée (pt)",
+      "input": { "translations": { "pt": "Olá" }, "originalLanguage": "en", "preferredLanguages": ["pt-BR"] },
+      "expected": { "language": "pt", "text": "Olá" }
+    },
+    {
+      "_label": "réduit une CLÉ à séparateur underscore (fr_FR) au rang normalisé (fr)",
+      "input": { "translations": { "fr_FR": "Bonjour" }, "originalLanguage": "en", "preferredLanguages": ["fr"] },
+      "expected": { "language": "fr_FR", "text": "Bonjour" }
+    },
+    {
+      "_label": "un code hors catalogue (fry, Frisian) ne sur-matche PAS une préférence fr",
+      "input": { "translations": { "fry": "Hallo" }, "originalLanguage": "en", "preferredLanguages": ["fr"] },
+      "expected": null
+    },
+    {
+      "_label": "la langue d'origine au RANG 1 gagne — la traduction du rang 2 n'est jamais regardée",
+      "input": { "translations": { "en": "Hi there" }, "originalLanguage": "fr", "preferredLanguages": ["fr", "en"] },
+      "expected": null
+    }
+  ]
+}

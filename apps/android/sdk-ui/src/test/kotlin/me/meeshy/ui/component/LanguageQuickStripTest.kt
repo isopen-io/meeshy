@@ -30,4 +30,21 @@ class LanguageQuickStripTest {
     fun `no active language matches nothing`() {
         assertThat(isActiveCode("fr", null)).isFalse()
     }
+
+    @Test
+    fun `up to five flags the pill hugs its content`() {
+        assertThat(languageStripScrolls(0)).isFalse()
+        assertThat(languageStripScrolls(5)).isFalse()
+    }
+
+    @Test
+    fun `beyond five flags the row scrolls with the plus pinned`() {
+        assertThat(languageStripScrolls(6)).isTrue()
+    }
+
+    @Test
+    fun `the plus tile is the index right after the last flag`() {
+        assertThat(plusTileIndex(0)).isEqualTo(0)
+        assertThat(plusTileIndex(7)).isEqualTo(7)
+    }
 }

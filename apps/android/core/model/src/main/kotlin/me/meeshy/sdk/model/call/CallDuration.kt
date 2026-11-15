@@ -7,9 +7,11 @@ package me.meeshy.sdk.model.call
  * in-call timer** the connected screen ticks up — so a completed call and its
  * history entry always read identically.
  *
- * Deterministic and locale-independent: `"M:SS"`, widening to `"H:MM:SS"` once
- * past an hour. Zero (or a negative clamped to zero) formats as `"0:00"` — a
- * running timer starts there; callers that must hide a zero-length call (the
+ * Deterministic and locale-independent, the phone-app spelling of iOS
+ * `CallManager.formatDuration`: `"MM:SS"` (minutes zero-padded to two digits),
+ * widening to `"H:MM:SS"` once past an hour. Zero (or a negative clamped to
+ * zero) formats as `"00:00"` — a running timer starts there; digits are
+ * localised at display time, never here; callers that must hide a zero-length call (the
  * journal) guard the zero themselves before calling.
  */
 object CallDuration {
@@ -19,7 +21,7 @@ object CallDuration {
         val h = total / 3600
         val m = (total % 3600) / 60
         val s = total % 60
-        return if (h > 0) "$h:${pad2(m)}:${pad2(s)}" else "$m:${pad2(s)}"
+        return if (h > 0) "$h:${pad2(m)}:${pad2(s)}" else "${pad2(m)}:${pad2(s)}"
     }
 
     private fun pad2(value: Long): String = value.toString().padStart(2, '0')

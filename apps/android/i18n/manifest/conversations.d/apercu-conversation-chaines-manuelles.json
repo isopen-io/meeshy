@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "androidName": "conversation_peek_composer_locked",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_peek_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_peek_open_full",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_peek_placeholder",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_peek_sealed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_peek_sealed_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_peek_send",
+          "status": "android-only"
+        },
+        {
+          "androidName": "conversation_peek_unavailable",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_viewer_export_save">Video speichern</string>
+    <string name="stories_viewer_export_share">Video teilen</string>
+    <string name="stories_viewer_export_imager">Als Bild</string>
+</resources>

@@ -1,0 +1,623 @@
+import { createStore, type StoreApi } from 'zustand/vanilla';
+
+import type { User } from '@meeshy/shared/types/user';
+
+import { safeLocalStorage } from '../storage';
+
+import { claimLegacySession } from './legacy-session';
+
+/**
+ * LE MAGASIN DE SESSION (#5605, T3) — UNE source, motif `conversation-store.ts`
+ * (`zustand/vanilla` : observable HORS de tout composant, sans DOM).
+ *
+ * Miroir `AuthManager`/`SessionSnapshotStore` (Swift), adapté au web : pas de
+ * Keychain — `localStorage`, assumé (README § 9 Q7). `clearSession()` est le
+ * miroir de `SessionSnapshotStore.wipe()` : idempotent, et — comme lui — la
+ * PREMIÈRE opération d'un logout (`auth.ts#logout`), jamais une conséquence
+ * du réseau.
+ *
+ * `storage` ET `now` INJECTABLES : les défauts réels (`localStorage`,
+ * `Date.now`) ne sont résolus QU'À LA CRÉATION du magasin
+ * (`createSessionStore()`, sans argument), jamais relus par un témoin qui
+ * passe les siens.
+ *
+ * DEUX RÈGLES QUE LE TYPE NE SUFFIT PAS À TENIR :
+ *
+ * 1. LA PROJECTION. `SessionUser` déclare quatre champs, mais TypeScript est
+ *    STRUCTUREL : il n'en RETIRE aucun à l'exécution. La charge servie par
+ *    `login.ts:206` est `formatUserResponse(user, permissions)`
+ *    (`services/gateway/src/routes/auth/types.ts:131-165`) — vingt-sept
+ *    champs, dont `email`, `phoneNumber`, `role`, `lastLoginIp`,
+ *    `lastLoginLocation`, `permissions`. Persister l'objet REÇU écrirait tout
+ *    cela dans le `localStorage` du lecteur, durablement. Ce module PROJETTE
+ *    donc à l'entrée, une fois, pour les deux états qui portent un
+ *    utilisateur — c'est la doctrine du cycle 125 (« une protection se mesure
+ *    sur tout ce que la charge TRANSPORTE ») appliquée au stockage.
+ *
+ * 2. L'ÉCHÉANCE. Le jeton servi porte sa durée (`expiresIn`, `login.ts:211` —
+ *    24 h, ou 365 j sous `rememberDevice`). Restaurer une session périmée
+ *    présenterait un écran authentifié que le premier 401 défait aussitôt :
+ *    « la session est tenue » deviendrait un état de plus, pas une session.
+ *    Une entrée SANS échéance est CORROMPUE — jamais « valide pour toujours ».
+ */
+
+/**
+ * `systemLanguage` / `regionalLanguage` / `customDestinationLanguage`
+ * (#5650, F6) — les TROIS rangs du Prisme que la connexion SERT
+ * (`formatUserResponse`, `services/gateway/src/routes/auth/types.ts:146-148`)
+ * et que `resolveReaderLanguages()` (`lib/reader.ts`) consomme. Optionnels :
+ * une session PERSISTÉE d'avant ce lot ne les porte pas (Q6, `staging.md`),
+ * et `pickSessionUser` ne les écrit que quand ils sont PRÉSENTS — même garde
+ * que `displayName`/`avatar`.
+ */
+export type SessionUser = Pick<User, 'id' | 'username' | 'displayName' | 'avatar'> &
+  Partial<Pick<User, 'systemLanguage' | 'regionalLanguage'>> & {
+    /** `string | null` — la charge servie porte `null` sur un compte sans
+     * destination personnalisée (`formatUserResponse`, Prisma nullable) ;
+     * `User.customDestinationLanguage` ne le déclare pas (optional string
+     * seul), un écart déjà présent ailleurs dans le dépôt que ce fichier
+     * n'a pas vocation à corriger — il se contente de ne pas y échouer. */
+    readonly customDestinationLanguage?: string | null;
+    /** L'adresse du compte n'est PAS prouvée (#8365) — posé depuis ce que la
+     * connexion sert (`emailVerifiedAt: null`, ou `activation.missing` qui
+     * contient `email`, #8238), jamais deviné : absent = inconnu. Lu par le
+     * transport pour ouvrir la validation de l'e-mail AVANT d'envoyer une
+     * publication (`lib/activation/email-gated-transport.ts`). */
+    readonly emailUnproven?: true;
+  };
+
+/** La branche « second facteur attendu » ne porte AUCUN jeton d'accès —
+ * seuls les champs que `login.ts:145-158` sert avant vérification. */
+export type PendingUser = Pick<User, 'id' | 'username' | 'email' | 'firstName' | 'lastName' | 'displayName' | 'avatar'>;
+
+/**
+ * **QUI EST L'INVITÉ D'UN LIEN** (#5561) — tout ce que la v2 retient de
+ * quelqu'un qui n'a pas de compte, et rien de plus.
+ *
+ * Pas de `SessionUser` : un invité n'a ni identifiant de compte, ni e-mail, ni
+ * langues du Prisme à porter. Il a un pseudo affiché, un participant dans UNE
+ * conversation, et le lien par lequel il est entré — ce dernier parce que la
+ * session d'invité est liée à SON lien (`GET /links/:identifier/messages` rend
+ * 403 pour la session d'un autre lien) : sans lui, on ne saurait pas quelle
+ * porte rejouer.
+ *
+ * `mayWrite` est l'instantané SERVI à la jonction (`entry.rights.canSendMessages`).
+ * Il gouverne ce que l'écran OFFRE ; la passerelle reste l'autorité, et le fil
+ * relit les droits résolus (`PATCH /guest-sessions/me`).
+ */
+export type GuestIdentity = {
+  readonly participantId: string | null;
+  readonly nickname: string;
+  readonly conversationId: string;
+  readonly link: string;
+  readonly mayWrite: boolean;
+  /**
+   * LA LANGUE CHOISIE EN REJOIGNANT (#9710) — celle que la jonction a
+   * déclarée (`GuestJoinBody.language`). C'est le rang 1 du Prisme de
+   * l'invité (`resolveReaderLanguages`), donc la langue de composition par
+   * défaut : sans elle, l'invité retombait sur le lecteur provisoire (`'fr'`)
+   * et sa réponse partait étiquetée française. Optionnelle : une session
+   * persistée d'avant ce lot ne la porte pas, et reste valide.
+   */
+  readonly language?: string;
+  /**
+   * LES FAMILLES DE PIÈCES JOINTES QUE LE LIEN OUVRE À L'INVITÉ (#10001,
+   * #10003) — `entry.allowedAttachmentKinds`, servi à la jonction. Un tableau
+   * fait foi (World Wide : `['text', 'audio']`) ; `null` = le lien ne
+   * restreint rien par famille. ABSENT sur une session enregistrée avant le
+   * champ : `guestAttachmentKindsFor` (`lib/send/guest-attachment-policy.ts`)
+   * y applique le plafond de la conversation quand il en existe un, et
+   * écarte une famille que ce client ne connaît pas. La session ne garde que
+   * des NOMS : y charger la table des familles la ferait entrer dans la
+   * première peinture.
+   */
+  readonly attachmentKinds?: readonly string[] | null;
+};
+
+export type AuthenticatedSession = {
+  readonly status: 'authenticated';
+  readonly user: SessionUser;
+  readonly token: string;
+  readonly sessionToken: string;
+  /** Horodatage epoch ms — `Date.now() + expiresIn × 1000` au moment où
+   * la passerelle a servi le jeton. Lu par la restauration, et par le
+   * rafraîchissement proactif quand il viendra (miroir
+   * `AuthManager.swift:741`). */
+  readonly expiresAt: number;
+};
+
+export type SessionState =
+  | { readonly status: 'anonymous' }
+  | { readonly status: 'pending2fa'; readonly twoFactorToken: string; readonly user: PendingUser }
+  /**
+   * L'INVITÉ D'UN LIEN — le régime `X-Session-Token`, jamais `Authorization`
+   * (`http.ts § Credential` : présenter un jeton d'invité en Bearer fait
+   * répondre « Invalid JWT token »). Il ne porte AUCUN `token`.
+   *
+   * `account` (#8816) — le COMPTE TENU À CÔTÉ quand c'est un compte connecté
+   * qui a choisi « Anonyme » : l'invité est la session EFFECTIVE le temps de
+   * lire SA conversation (`scopeAnonymous`), le compte n'est ni remplacé ni
+   * fermé, et rien de lui ne voyage avec l'invité (le crédential dérivé ne
+   * lit que `sessionToken`).
+   */
+  | {
+      readonly status: 'guest';
+      readonly sessionToken: string;
+      readonly guest: GuestIdentity;
+      readonly expiresAt: number;
+      readonly account?: AuthenticatedSession;
+    }
+  | AuthenticatedSession;
+
+/**
+ * LES CHAMPS DE SOI QU'UNE ÉDITION DE PROFIL FAIT VOYAGER JUSQU'À LA SESSION
+ * (#6289) — exactement ceux que `SessionUser` porte au-delà de l'identité, et
+ * rien d'autre : la bio, la bannière et les contacts vivent dans le cache du
+ * profil, jamais dans le `localStorage` de la session (règle 1 ci-dessus).
+ *
+ * `undefined` = champ non touché ; `null` = champ EFFACÉ (une langue régionale
+ * retirée quitte le Prisme). `customDestinationLanguage` garde son `null`, que
+ * la connexion sert déjà sous cette forme.
+ */
+export type SessionProfileFields = {
+  readonly displayName?: string | null;
+  readonly avatar?: string | null;
+  readonly systemLanguage?: string;
+  readonly regionalLanguage?: string | null;
+  readonly customDestinationLanguage?: string | null;
+};
+
+export type SessionStorage = {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+};
+
+export type SessionStoreState = {
+  readonly session: SessionState;
+  establish(payload: {
+    readonly user: SessionUser;
+    readonly token: string;
+    readonly sessionToken: string;
+    /** Secondes, tel que la passerelle le sert (`login.ts:211`,
+     * `login.ts:339-346`) — jamais une échéance déjà calculée : deux sites
+     * qui la calculent divergeraient. */
+    readonly expiresIn: number;
+  }): void;
+  /**
+   * OUVRE UNE SESSION D'INVITÉ (#5561). Aucune `expiresIn` n'est servie par la
+   * porte de jonction : l'horizon est posé ICI, côté client
+   * ({@link GUEST_SESSION_HOURS}), et c'est une GARDE, jamais une vérité —
+   * le serveur reste l'autorité, un 401 ferme la session avant l'échéance.
+   * Sans horizon, l'entrée serait CORROMPUE au sens de ce module (règle 2).
+   */
+  establishGuest(payload: { readonly sessionToken: string; readonly guest: GuestIdentity }): void;
+  beginTwoFactor(payload: { readonly user: PendingUser; readonly twoFactorToken: string }): void;
+  /** Applique une édition de profil à la session TENUE, et la persiste —
+   * projetée comme à l'`establish`. Sans effet hors d'une session
+   * authentifiée : il n'y a pas de soi à modifier. */
+  updateUser(fields: SessionProfileFields): void;
+  /** L'adresse vient d'être prouvée (#8365) : le drapeau `emailUnproven`
+   * quitte la session tenue ET persistée. Sans effet hors d'un compte. */
+  noteEmailProven(): void;
+  restoreSession(): void;
+  clearSession(): void;
+  /**
+   * REJOINDRE EN ANONYME (#8816). Sous un compte, l'identité anonyme est
+   * TENUE à côté de lui — une par conversation, persistée sous le compte qui
+   * l'a ouverte — et devient la session effective ; sans compte, c'est
+   * `establishGuest`.
+   */
+  adoptAnonymous(payload: { readonly sessionToken: string; readonly guest: GuestIdentity }): void;
+  /** La conversation dont l'identité anonyme TENUE doit servir, ou `null` :
+   * aucun compte tenu, aucune identité pour elle, ou une identité échue. */
+  anonymousScopeFor(conversationId: string | null): string | null;
+  /** Pose la session effective pour la conversation lue : son identité
+   * anonyme tenue si elle existe, le COMPTE sinon. Idempotent. */
+  scopeAnonymous(conversationId: string | null): void;
+  /** Oublie l'identité anonyme d'une conversation (refusée par la passerelle,
+   * ou remplacée par une jonction du compte) — le compte reste. */
+  dropAnonymous(conversationId: string): void;
+};
+
+export type SessionStoreApi = StoreApi<SessionStoreState>;
+
+/**
+ * QUI PARLE — la clé d'identité d'une session (#8674) : le COMPTE, jamais son
+ * jeton (un jeton renouvelé reste la même personne), l'invité par sa session
+ * de lien, personne sinon. Le transport (`client.ts`), le cache de requêtes
+ * (`query-client.ts`) et les magasins en mémoire la comparent pour savoir
+ * qu'une donnée appartient à une identité QUITTÉE.
+ */
+/** Le COMPTE que la session tient — effectif, ou tenu à côté d'une identité
+ * anonyme (#8816). Ce qui appartient au compte et non à l'identité qui parle
+ * (la notification poussée, la fin d'un compte) le lit ici. */
+export function heldAccountOf(session: SessionState): AuthenticatedSession | null {
+  if (session.status === 'authenticated') return session;
+  if (session.status === 'guest') return session.account ?? null;
+  return null;
+}
+
+/** La conversation dont l'identité anonyme TENUE par un compte est la session
+ * effective (#8816), ou `null` — un invité SANS compte n'est pas « tenu ». */
+export function scopedConversationOf(session: SessionState): string | null {
+  return session.status === 'guest' && session.account !== undefined ? session.guest.conversationId : null;
+}
+
+export function sessionIdentityKey(session: SessionState): string | null {
+  if (session.status === 'authenticated') return `u:${session.user.id}`;
+  if (session.status === 'guest') return `g:${session.sessionToken}`;
+  return null;
+}
+
+/** La clé de la session tenue — exportée pour la landing (#10002), dont le
+ * script lit SANS ce module si un compte est déjà là. */
+export const SESSION_STORAGE_KEY = 'meeshy.session';
+const STORAGE_KEY = SESSION_STORAGE_KEY;
+
+/**
+ * L'HORIZON D'UNE SESSION D'INVITÉ — la valeur du legacy
+ * (`authManager.setAnonymousSession(token, id, 24)`), reprise pour que la
+ * bascule ne raccourcisse ni n'allonge ce que les invités connaissaient.
+ */
+export const GUEST_SESSION_HOURS = 24;
+
+/** Une entrée écrite AVANT #5561 ne porte pas `kind` : elle est un compte.
+ * L'absence est donc la valeur par défaut, jamais une corruption. */
+type PersistedAccount = {
+  readonly kind?: 'account';
+  readonly token: string;
+  readonly sessionToken: string;
+  readonly user: SessionUser;
+  readonly expiresAt: number;
+};
+
+type PersistedGuest = {
+  readonly kind: 'guest';
+  readonly sessionToken: string;
+  readonly guest: GuestIdentity;
+  readonly expiresAt: number;
+};
+
+type PersistedSession = PersistedAccount | PersistedGuest;
+
+/** Ce que la connexion SERT de la preuve d'adresse (#8365) — lu sur la charge
+ * brute, que le type ne déclare pas : `emailVerifiedAt` explicitement `null`,
+ * ou `activation.missing` qui nomme `email`. Une session restaurée porte déjà
+ * le drapeau projeté. */
+function servesUnprovenEmail(user: SessionUser): boolean {
+  if (user.emailUnproven === true) return true;
+  if (Reflect.get(user, 'emailVerifiedAt') === null) return true;
+  const activation: unknown = Reflect.get(user, 'activation');
+  if (typeof activation !== 'object' || activation === null) return false;
+  const missing: unknown = Reflect.get(activation, 'missing');
+  return Array.isArray(missing) && missing.includes('email');
+}
+
+/** La PROJECTION — un objet NEUF, jamais celui reçu du réseau : les champs
+ * absents ne deviennent pas des clés `undefined`, et rien d'autre ne suit. */
+function pickSessionUser(user: SessionUser): SessionUser {
+  return {
+    id: user.id,
+    username: user.username,
+    ...(user.displayName !== undefined ? { displayName: user.displayName } : {}),
+    ...(user.avatar !== undefined ? { avatar: user.avatar } : {}),
+    ...(user.systemLanguage !== undefined ? { systemLanguage: user.systemLanguage } : {}),
+    ...(user.regionalLanguage !== undefined ? { regionalLanguage: user.regionalLanguage } : {}),
+    ...(user.customDestinationLanguage !== undefined
+      ? { customDestinationLanguage: user.customDestinationLanguage }
+      : {}),
+    ...(servesUnprovenEmail(user) ? { emailUnproven: true as const } : {}),
+  };
+}
+
+/** La MÊME discipline pour l'invité (règle 1) : un objet NEUF, cinq champs —
+ * six avec la langue choisie quand elle est connue — et rien de ce que la
+ * charge de jonction transporte à côté. */
+function pickGuest(guest: GuestIdentity): GuestIdentity {
+  return {
+    participantId: guest.participantId,
+    nickname: guest.nickname,
+    conversationId: guest.conversationId,
+    link: guest.link,
+    mayWrite: guest.mayWrite,
+    ...(guest.language === undefined ? {} : { language: guest.language }),
+    ...(guest.attachmentKinds === undefined
+      ? {}
+      : { attachmentKinds: guest.attachmentKinds === null ? null : [...guest.attachmentKinds] }),
+  };
+}
+
+/** Idem pour la branche « second facteur » — les sept champs de
+ * `login.ts:145-158`, pas un de plus. */
+function pickPendingUser(user: PendingUser): PendingUser {
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    ...(user.displayName !== undefined ? { displayName: user.displayName } : {}),
+    ...(user.avatar !== undefined ? { avatar: user.avatar } : {}),
+  };
+}
+
+/** FAIL-CLOSED : toute forme qui ne correspond pas exactement à l'attendu
+ * (JSON non-objet, jeton manquant, utilisateur non identifiable) rend
+ * `false` — jamais une exception, jamais une session à moitié restaurée
+ * (même doctrine que `preferenceEntryOf`, `api/preferences.ts:40-48`). */
+/** Un invité SANS conversation ni lien ne peut rien rejouer : l'entrée est
+ * corrompue, jamais une session à moitié restaurée. */
+function isGuestIdentity(value: unknown): value is GuestIdentity {
+  if (typeof value !== 'object' || value === null) return false;
+  const g = value as Record<string, unknown>;
+  if (typeof g.nickname !== 'string') return false;
+  if (typeof g.conversationId !== 'string' || g.conversationId === '') return false;
+  if (typeof g.link !== 'string' || g.link === '') return false;
+  if (typeof g.mayWrite !== 'boolean') return false;
+  if (g.language !== undefined && typeof g.language !== 'string') return false;
+  if (!isStoredAttachmentKinds(g.attachmentKinds)) return false;
+  return g.participantId === null || typeof g.participantId === 'string';
+}
+
+/** Absent (session d'avant #10003), `null`, ou un tableau de noms de familles. */
+function isStoredAttachmentKinds(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  return Array.isArray(value) && value.every((kind) => typeof kind === 'string');
+}
+
+function isPersistedSession(value: unknown): value is PersistedSession {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  if (typeof v.sessionToken !== 'string') return false;
+  if (typeof v.expiresAt !== 'number' || !Number.isFinite(v.expiresAt)) return false;
+  /* Un invité EXIGE un jeton non vide : c'est sa seule créance. Un compte, lui,
+     peut en porter un vide — la reprise du legacy en écrit un quand le legacy
+     n'en avait pas (`legacy-session.ts:148`), et son `token` suffit. */
+  if (v.kind === 'guest') return v.sessionToken !== '' && isGuestIdentity(v.guest);
+  if (typeof v.token !== 'string') return false;
+  if (typeof v.user !== 'object' || v.user === null) return false;
+  const user = v.user as Record<string, unknown>;
+  return typeof user.id === 'string' && typeof user.username === 'string';
+}
+
+function readPersisted(storage: SessionStorage): PersistedSession | 'absent' | 'corrupted' {
+  let raw: string | null;
+  try {
+    raw = storage.getItem(STORAGE_KEY);
+  } catch {
+    return 'absent';
+  }
+  if (raw === null) return 'absent';
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return 'corrupted';
+  }
+  return isPersistedSession(parsed) ? parsed : 'corrupted';
+}
+
+function persist(storage: SessionStorage, session: PersistedSession): void {
+  try {
+    storage.setItem(STORAGE_KEY, JSON.stringify(session));
+  } catch {
+    /* Stockage refusé : la session tient pour l'onglet, sans se souvenir
+     * (même doctrine que `scheme.ts#setScheme`). */
+  }
+}
+
+function purge(storage: SessionStorage): void {
+  try {
+    storage.removeItem(STORAGE_KEY);
+  } catch {
+    /* idem */
+  }
+}
+
+/**
+ * LES IDENTITÉS ANONYMES QU'UN COMPTE TIENT (#8816) — une par conversation,
+ * sous une clé qui porte le COMPTE (`u_<id>`) : un autre compte du même
+ * appareil ne les lit jamais, et la déconnexion les efface avec le reste de
+ * ce que le compte laisse (`accounts.ts § purgeAccountLocalData`).
+ *
+ * BORNÉ (au plus {@link MAX_ANONYMOUS_SESSIONS}, la plus ancienne part) et
+ * ÉCHU à l'horizon d'un invité ({@link GUEST_SESSION_HOURS}) ; chaque entrée
+ * est PROJETÉE (`pickGuest`) et ne contient rien du compte — ni jeton, ni nom,
+ * ni identifiant autre que celui qui nomme la clé.
+ */
+export const MAX_ANONYMOUS_SESSIONS = 20;
+
+export const anonymousSessionsKey = (userId: string): string => `meeshy.anonymous-sessions.u_${userId}`;
+
+type HeldAnonymous = {
+  readonly sessionToken: string;
+  readonly guest: GuestIdentity;
+  readonly expiresAt: number;
+};
+
+function isHeldAnonymous(value: unknown): value is HeldAnonymous {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  if (typeof v.sessionToken !== 'string' || v.sessionToken === '') return false;
+  if (typeof v.expiresAt !== 'number' || !Number.isFinite(v.expiresAt)) return false;
+  return isGuestIdentity(v.guest);
+}
+
+function readHeldAnonymous(storage: SessionStorage, userId: string, now: number): readonly HeldAnonymous[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(storage.getItem(anonymousSessionsKey(userId)) ?? '[]');
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter(isHeldAnonymous).filter((entry) => entry.expiresAt > now);
+}
+
+function writeHeldAnonymous(storage: SessionStorage, userId: string, entries: readonly HeldAnonymous[]): void {
+  try {
+    if (entries.length === 0) storage.removeItem(anonymousSessionsKey(userId));
+    else storage.setItem(anonymousSessionsKey(userId), JSON.stringify(entries));
+  } catch {
+    /* Stockage refusé : l'identité tient pour l'onglet, sans se souvenir. */
+  }
+}
+
+const withoutConversation = (entries: readonly HeldAnonymous[], conversationId: string): readonly HeldAnonymous[] =>
+  entries.filter((entry) => entry.guest.conversationId !== conversationId);
+
+/**
+ * LA BASCULE DE meeshy.me NE DÉCONNECTE PERSONNE (#6702). Quand
+ * `meeshy.session` est ABSENTE, la session laissée par le legacy
+ * (`legacy-session.ts`) devient une entrée `meeshy.session`, projetée comme à
+ * l'`establish` — puis passe par la MÊME restauration que toute autre : forme,
+ * échéance, projection. Une entrée v2 présente a toujours le dernier mot.
+ */
+function adoptLegacySession(storage: SessionStorage, now: number): void {
+  const legacy = claimLegacySession(storage, now);
+  if (legacy !== null) persist(storage, { ...legacy, user: pickSessionUser(legacy.user) });
+}
+
+export type SessionStoreOptions = {
+  readonly storage?: SessionStorage;
+  readonly now?: () => number;
+};
+
+/** `undefined` garde la valeur tenue, `null` l'EFFACE — la clé disparaît
+ * alors de l'utilisateur plutôt que d'y rester vide. */
+const nextOptional = (value: string | null | undefined, current: string | undefined): string | undefined =>
+  value === undefined ? current : (value ?? undefined);
+
+function withProfileFields(user: SessionUser, fields: SessionProfileFields): SessionUser {
+  const displayName = nextOptional(fields.displayName, user.displayName);
+  const avatar = nextOptional(fields.avatar, user.avatar);
+  const systemLanguage = fields.systemLanguage ?? user.systemLanguage;
+  const regionalLanguage = nextOptional(fields.regionalLanguage, user.regionalLanguage);
+  const customDestinationLanguage =
+    fields.customDestinationLanguage === undefined ? user.customDestinationLanguage : fields.customDestinationLanguage;
+  return {
+    id: user.id,
+    username: user.username,
+    ...(displayName === undefined ? {} : { displayName }),
+    ...(avatar === undefined ? {} : { avatar }),
+    ...(systemLanguage === undefined ? {} : { systemLanguage }),
+    ...(regionalLanguage === undefined ? {} : { regionalLanguage }),
+    ...(customDestinationLanguage === undefined ? {} : { customDestinationLanguage }),
+    ...(user.emailUnproven === true ? { emailUnproven: true as const } : {}),
+  };
+}
+
+export function createSessionStore(options: SessionStoreOptions = {}): SessionStoreApi {
+  const storage = options.storage ?? safeLocalStorage();
+  const now = options.now ?? (() => Date.now());
+
+  return createStore<SessionStoreState>((set, get) => ({
+    session: { status: 'anonymous' },
+    establish: ({ user, token, sessionToken, expiresIn }) => {
+      const projected = pickSessionUser(user);
+      const expiresAt = now() + expiresIn * 1000;
+      persist(storage, { user: projected, token, sessionToken, expiresAt });
+      set({ session: { status: 'authenticated', user: projected, token, sessionToken, expiresAt } });
+    },
+    establishGuest: ({ sessionToken, guest }) => {
+      const projected = pickGuest(guest);
+      const expiresAt = now() + GUEST_SESSION_HOURS * 60 * 60 * 1000;
+      persist(storage, { kind: 'guest', sessionToken, guest: projected, expiresAt });
+      set({ session: { status: 'guest', sessionToken, guest: projected, expiresAt } });
+    },
+    beginTwoFactor: ({ user, twoFactorToken }) => {
+      set({ session: { status: 'pending2fa', user: pickPendingUser(user), twoFactorToken } });
+    },
+    updateUser: (fields) => {
+      const current = get().session;
+      if (current.status !== 'authenticated') return;
+      const user = pickSessionUser(withProfileFields(current.user, fields));
+      persist(storage, { user, token: current.token, sessionToken: current.sessionToken, expiresAt: current.expiresAt });
+      set({ session: { ...current, user } });
+    },
+    noteEmailProven: () => {
+      const current = get().session;
+      if (current.status !== 'authenticated' || current.user.emailUnproven !== true) return;
+      const { emailUnproven: _proven, ...user } = current.user;
+      persist(storage, { user, token: current.token, sessionToken: current.sessionToken, expiresAt: current.expiresAt });
+      set({ session: { ...current, user } });
+    },
+    restoreSession: () => {
+      if (readPersisted(storage) === 'absent') adoptLegacySession(storage, now());
+      const persisted = readPersisted(storage);
+      if (persisted === 'absent') return;
+      if (persisted === 'corrupted' || persisted.expiresAt <= now()) {
+        purge(storage);
+        return;
+      }
+      if (persisted.kind === 'guest') {
+        set({
+          session: {
+            status: 'guest',
+            sessionToken: persisted.sessionToken,
+            guest: pickGuest(persisted.guest),
+            expiresAt: persisted.expiresAt,
+          },
+        });
+        return;
+      }
+      set({
+        session: {
+          status: 'authenticated',
+          user: pickSessionUser(persisted.user),
+          token: persisted.token,
+          sessionToken: persisted.sessionToken,
+          expiresAt: persisted.expiresAt,
+        },
+      });
+    },
+    clearSession: () => {
+      purge(storage);
+      set({ session: { status: 'anonymous' } });
+    },
+    adoptAnonymous: ({ sessionToken, guest }) => {
+      const account = heldAccountOf(get().session);
+      if (account === null) {
+        get().establishGuest({ sessionToken, guest });
+        return;
+      }
+      const projected = pickGuest(guest);
+      const held: HeldAnonymous = { sessionToken, guest: projected, expiresAt: now() + GUEST_SESSION_HOURS * 60 * 60 * 1000 };
+      const kept = withoutConversation(readHeldAnonymous(storage, account.user.id, now()), projected.conversationId);
+      writeHeldAnonymous(storage, account.user.id, [...kept, held].slice(-MAX_ANONYMOUS_SESSIONS));
+      set({ session: { status: 'guest', ...held, account } });
+    },
+    anonymousScopeFor: (conversationId) => {
+      const account = heldAccountOf(get().session);
+      if (account === null || conversationId === null) return null;
+      const held = readHeldAnonymous(storage, account.user.id, now());
+      return held.some((entry) => entry.guest.conversationId === conversationId) ? conversationId : null;
+    },
+    scopeAnonymous: (conversationId) => {
+      const current = get().session;
+      const account = heldAccountOf(current);
+      if (account === null) return;
+      const live = readHeldAnonymous(storage, account.user.id, now());
+      writeHeldAnonymous(storage, account.user.id, live);
+      const held = conversationId === null ? undefined : live.find((entry) => entry.guest.conversationId === conversationId);
+      if (held === undefined) {
+        if (current !== account) set({ session: account });
+        return;
+      }
+      if (current.status === 'guest' && current.sessionToken === held.sessionToken) return;
+      set({ session: { status: 'guest', sessionToken: held.sessionToken, guest: pickGuest(held.guest), expiresAt: held.expiresAt, account } });
+    },
+    dropAnonymous: (conversationId) => {
+      const current = get().session;
+      const account = heldAccountOf(current);
+      if (account === null) return;
+      writeHeldAnonymous(storage, account.user.id, withoutConversation(readHeldAnonymous(storage, account.user.id, now()), conversationId));
+      if (current.status === 'guest' && current.guest.conversationId === conversationId) set({ session: account });
+    },
+  }));
+}
+
+/** L'UNIQUE instance que l'application partage — `auth.ts`, `dev-harness.ts`
+ * et, demain, le socket temps réel (#5494) et tout écran. */
+export const sessionStore = createSessionStore();

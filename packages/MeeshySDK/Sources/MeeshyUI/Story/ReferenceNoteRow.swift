@@ -45,7 +45,13 @@ public struct ReferenceNoteRow: View, Equatable {
 
     /// Les deux gardes, extraites pour être vérifiables sans monter de vue —
     /// c'est ici, et nulle part ailleurs, que se joue la non-fuite des SILENT.
-    static func noted(in references: [PostReference]) -> [PostReference] {
+    ///
+    /// **`public` depuis #5002** : le pied de la scène du composer doit poser la
+    /// MÊME question (« qui paraît, qui ne paraît jamais ») avant même de
+    /// décider s'il y a une ligne à peindre. La réponse ne pouvait pas être
+    /// recopiée côté app — « ici, et nulle part ailleurs » est le contrat de
+    /// cette fonction, et une copie l'aurait annulé au premier mode ajouté.
+    public static func noted(in references: [PostReference]) -> [PostReference] {
         references.filter { $0.display == .note }
     }
 
@@ -65,7 +71,7 @@ public struct ReferenceNoteRow: View, Equatable {
 
     public var body: some View {
         if !noted.isEmpty || viewerIsSilentlyReferenced {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 if !noted.isEmpty { notedRow }
                 if viewerIsSilentlyReferenced { personalMarker }
             }
@@ -75,20 +81,20 @@ public struct ReferenceNoteRow: View, Equatable {
     private var notedRow: some View {
         HStack(spacing: 0) {
             Text(prefixLabel)
-                .font(.system(size: 13))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                 .foregroundStyle(.secondary)
             ForEach(Array(noted.enumerated()), id: \.element.id) { index, reference in
                 Button {
                     onTapReference(reference)
                 } label: {
                     Text(" \(reference.label)")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundStyle(accentColor)
                 }
                 .buttonStyle(.plain)
                 if index < noted.count - 1 {
                     Text(",")
-                        .font(.system(size: 13))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -98,11 +104,11 @@ public struct ReferenceNoteRow: View, Equatable {
     }
 
     private var personalMarker: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: "eye.fill")
-                .font(.system(size: 11, weight: .semibold))
+                .meeshyScaledFont(11, weight: .semibold)
             Text(personalMarkerLabel)
-                .font(.system(size: 12, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
         }
         .foregroundStyle(Color.secondary)
         .accessibilityElement(children: .combine)

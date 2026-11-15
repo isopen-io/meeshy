@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="session_lost_pending_sends">Se cerró tu sesión: se perdieron %1$d envío(s) pendiente(s).</string>
+</resources>

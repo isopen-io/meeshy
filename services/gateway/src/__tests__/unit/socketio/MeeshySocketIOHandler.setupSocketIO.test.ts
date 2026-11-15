@@ -20,7 +20,13 @@ const mockManagerInstance = {
   initialize: jest.fn<any>().mockResolvedValue(undefined),
   getStats: jest.fn<any>().mockReturnValue({ connectedUsers: 3, rooms: 5 }),
   disconnectUser: jest.fn<any>().mockReturnValue(true),
+  getIO: jest.fn<any>().mockReturnValue({ to: () => ({ emit: () => true }) }),
 };
+
+const shareTogetherCuts = jest.fn<(shared: unknown) => void>();
+jest.mock('../../../services/together/togetherDeps', () => ({
+  shareTogetherCuts: (shared: unknown) => shareTogetherCuts(shared),
+}));
 
 jest.mock('../../../socketio/MeeshySocketIOManager', () => ({
   MeeshySocketIOManager: jest.fn().mockImplementation(() => mockManagerInstance),
@@ -58,7 +64,7 @@ async function buildApp(opts: {
   // Satisfy the `fastify.authenticate` decorator used in route preHandlers
   app.decorate('authenticate', async (_req: FastifyRequest, _rep: FastifyReply) => undefined);
 
-  const handler = new MeeshySocketIOHandler({} as any, 'secret', {} as any);
+  const handler = new MeeshySocketIOHandler({} as any, { getZmqClient: () => null } as any);
   await handler.setupSocketIO(app);
 
   await app.ready();
@@ -172,7 +178,7 @@ describe('POST /api/socketio/disconnect-user', () => {
     const nullApp = Fastify({ logger: false });
     nullApp.decorate('authenticate', async (_req: FastifyRequest, _rep: FastifyReply) => undefined);
 
-    const handler = new MeeshySocketIOHandler({} as any, 'secret', {} as any);
+    const handler = new MeeshySocketIOHandler({} as any, { getZmqClient: () => null } as any);
     // Override: make initialize() NOT set socketIOManager
     mockManagerInstance.initialize.mockResolvedValueOnce(undefined);
     // Manually clear the internal manager after setup
@@ -188,5 +194,25 @@ describe('POST /api/socketio/disconnect-user', () => {
 
     expect(res.statusCode).toBe(500);
     await nullApp.close();
+  });
+});
+
+// ─── #17022 — le relais « ensemble » du processus existe dès le démarrage ───────
+
+describe('setupSocketIO — coupures « ensemble » (#17022)', () => {
+  it('partage le relais du processus avant toute connexion, sur le serveur Socket.IO du gestionnaire', async () => {
+    shareTogetherCuts.mockClear();
+    const prisma = { marker: 'prisma' };
+    const handler = new MeeshySocketIOHandler(prisma as any, { getZmqClient: () => null } as any);
+    const app = Fastify({ logger: false });
+    app.decorate('authenticate', async (_req: FastifyRequest, _rep: FastifyReply) => undefined);
+
+    await handler.setupSocketIO(app);
+
+    expect(shareTogetherCuts).toHaveBeenCalledTimes(1);
+    const shared = shareTogetherCuts.mock.calls[0][0] as { prisma: unknown; io: () => unknown };
+    expect(shared.prisma).toBe(prisma);
+    expect(shared.io()).toBe(mockManagerInstance.getIO());
+    await app.close();
   });
 });

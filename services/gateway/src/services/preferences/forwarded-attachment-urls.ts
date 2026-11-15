@@ -26,6 +26,8 @@
  * une redirection à chaque image du fil.
  */
 
+import { apiPath } from '@meeshy/shared/api/prefix';
+
 /** Ce que la réécriture a besoin de lire, et rien de plus. */
 export type ForwardedAttachmentUrls = {
   readonly id?: string | null;
@@ -35,6 +37,25 @@ export type ForwardedAttachmentUrls = {
   readonly thumbnailUrl?: string | null;
 };
 
+/**
+ * Littéral DÉLIBÉRÉ, et non un oubli de la migration `apiPath()` (#4324).
+ *
+ * Ce chemin ne COMPOSE aucune adresse : il DÉCOUPE une URL déjà STOCKÉE en
+ * base (`MessageAttachment.fileUrl`, 198 documents sur staging). Le passer à
+ * `apiPath()` le ferait suivre `MEESHY_API_VERSION` — et le jour où la version
+ * change, `originOf` cesserait de reconnaître les URL écrites sous l'ancienne,
+ * donc rendrait `null` sur toute la population héritée.
+ *
+ * Un littéral qui LIT de la donnée écrite n'a pas la même règle qu'un littéral
+ * qui ÉCRIT une adresse : le premier est daté par la DONNÉE, le second par la
+ * CONFIGURATION.
+ *
+ * Le rapprochement avec `route-usage.service.ts`, écrit ici le 2026-08-31, était
+ * FAUX et a été retiré : ses clés sont comparées à la route MONTÉE, donc datées
+ * par la configuration — elles sont passées à `apiPath()` (`b6b0c82af5`). Les
+ * deux littéraux se ressemblaient ; seule la question « d'où vient la chaîne
+ * qu'on compare ? » les sépare.
+ */
 const FILE_ROUTE = '/api/v1/attachments/file/';
 
 const isForwardedCopy = (attachment: ForwardedAttachmentUrls): boolean =>
@@ -65,8 +86,19 @@ export const redactForwardedAttachmentUrls = <T extends ForwardedAttachmentUrls>
 ): T => {
   if (!isForwardedCopy(attachment)) return attachment;
 
-  const origin = originOf(attachment.fileUrl) ?? originOf(attachment.thumbnailUrl);
-  const base = attachment.id && origin ? `${origin}/api/v1/attachments/${attachment.id}` : null;
+  // La racine n'est plus dérivable depuis le volet A de #4324 : ce qui est
+  // stocké est la CLÉ (`2026/08/<User.id>/photo.png`), sans hôte ni route.
+  // Exiger une racine faisait retomber `base` à `null` et partir la pièce
+  // jointe transférée SANS AUCUNE adresse — le sens sûr, mais un média
+  // invisible pour tout transfert depuis le 2026-08-29.
+  //
+  // Un chemin RELATIF suffit, et c'est la décision du porteur (2026-08-31,
+  // « c'est le client qui décide quelle API attaquer ») : les trois résolveurs
+  // préfixent déjà un chemin à barre initiale par leur origine. La racine
+  // dérivée reste prioritaire quand elle EXISTE — une URL stockée sur un autre
+  // hôte continue d'y pointer, contrat inchangé.
+  const origin = originOf(attachment.fileUrl) ?? originOf(attachment.thumbnailUrl) ?? '';
+  const base = attachment.id ? `${origin}${apiPath(`/attachments/${attachment.id}`)}` : null;
 
   return {
     ...attachment,

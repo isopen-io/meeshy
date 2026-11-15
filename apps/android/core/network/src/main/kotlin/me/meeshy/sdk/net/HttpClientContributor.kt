@@ -1,0 +1,153 @@
+package me.meeshy.sdk.net
+
+import me.meeshy.sdk.model.media.MediaClientRole
+import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
+
+/**
+ * LE point d'extension du client HTTP : un lot qui a besoin d'un intercepteur, d'un
+ * authenticator ou d'un écouteur d'événements le CONTRIBUE par un
+ * `@IntoSet HttpClientContributor` (module Hilt de son lot) au lieu d'éditer
+ * [MeeshyApi.create].
+ *
+ * L'ordre est déterministe : [priority] croissante, puis [id] alphabétique pour départager
+ * deux contributeurs de même priorité. Un intercepteur d'une priorité plus basse est plus
+ * EXTÉRIEUR (il voit la requête en premier et la réponse en dernier). Un seul
+ * authenticator vaut : le dernier contribué gagne.
+ */
+interface HttpClientContributor {
+    val id: String
+    val priority: Int
+    fun contribute(builder: OkHttpClient.Builder)
+
+    companion object {
+        fun of(id: String, priority: Int, block: (OkHttpClient.Builder) -> Unit): HttpClientContributor =
+            FunctionContributor(id, priority, block)
+
+        /** Un contributeur qui tient [role] sur les clients des médias : l'épinglage et la frontière de session. */
+        internal fun granted(
+            id: String,
+            priority: Int,
+            role: MediaClientRole,
+            block: (OkHttpClient.Builder) -> Unit,
+        ): HttpClientContributor = FunctionContributor(id, priority, block, role)
+    }
+}
+
+private class FunctionContributor(
+    override val id: String,
+    override val priority: Int,
+    private val block: (OkHttpClient.Builder) -> Unit,
+    val mediaRole: MediaClientRole? = null,
+) : HttpClientContributor {
+    override fun contribute(builder: OkHttpClient.Builder) = block(builder)
+}
+
+/**
+ * Le rôle que ce contributeur tient sur les clients des médias (#14613), ou `null`. Seul un contributeur ÉMIS par ce
+ * module en porte un ([HttpClientContributor.granted]) : un contributeur d'un autre module — qu'il reprenne le nom de
+ * l'épinglage ou qu'il délègue à `CertificatePinnerContributor.of()` en ajoutant ses propres intercepteurs — n'en a
+ * aucun, puisque le rôle n'est lisible par aucune API publique.
+ */
+internal fun HttpClientContributor.mediaRole(): MediaClientRole? = (this as? FunctionContributor)?.mediaRole
+
+/** Les priorités du socle ; un lot ultérieur choisit une valeur ENTRE elles. */
+object HttpPriority {
+    /** Outermost: a response that outlives the session which asked for it is dropped (#13558). */
+    const val SESSION_BOUNDARY = 50
+
+    /** Un morceau tus attend la réponse de la passerelle à sa mesure, jamais les 10 s par défaut (#13959). */
+    const val UPLOAD_TIMEOUTS = 60
+
+    /** Voit la réponse FINALE, après relance et authentification : un 426 n'est jamais rejoué, il ferme l'application (#13954). */
+    const val UPGRADE_REQUIRED = 70
+    const val URL_GUARD = 100
+    const val ENDPOINT_POLICY = 200
+
+    /** Avant la relance et l'authentification : le rejeu d'une action gardée repasse par les jetons. */
+    const val EMAIL_VERIFICATION_GATE = 250
+    const val RETRY = 300
+    const val PROACTIVE_REFRESH = 900
+    const val AUTH = 1_000
+    const val CLIENT_INFO = 1_050
+    const val CLIENT_CAPABILITIES = 1_100
+
+    /** Déclare la vague du Jeu que ce binaire sait lire, sur les seules routes du jeu. */
+    const val GAME_VERSION = 1_110
+    const val DEVICE_LOCALE = 1_200
+    const val AUTH_EXPIRY = 1_300
+
+    /** Apres l'identite : voit la requete telle qu'elle part, sous son jeton. */
+    const val GUEST_SESSION_END = 1_350
+
+    /** Compte supprimé et refus d'âge : voit la réponse AVANT l'expiration, pour poser « en attente de retrait » d'abord. */
+    const val SESSION_REFUSAL = 1_360
+    const val AUTHENTICATOR = 1_400
+    const val SLOW_REQUEST = 1_500
+    const val LOGGING = 9_000
+}
+
+object HttpClientAssembler {
+
+    fun ordered(contributors: Collection<HttpClientContributor>): List<HttpClientContributor> =
+        contributors.sortedWith(compareBy({ it.priority }, { it.id }))
+
+    fun build(
+        contributors: Collection<HttpClientContributor>,
+        base: OkHttpClient.Builder = OkHttpClient.Builder(),
+    ): OkHttpClient {
+        ordered(contributors).forEach { it.contribute(base) }
+        return base.build()
+    }
+}
+
+/** Le socle historique de [MeeshyApi.create], décomposé en contributeurs ordonnés. */
+internal fun builtInContributors(
+    config: MeeshyConfig,
+    tokenStore: TokenStore,
+    onSessionExpired: () -> Unit,
+    refresher: SessionRefresher,
+    transition: SessionTransitionFlags = SessionTransitionFlags(),
+    visitorKey: VisitorReaderKeyProviding? = null,
+): List<HttpClientContributor> = listOfNotNull(
+    HttpClientContributor.granted("session-boundary", HttpPriority.SESSION_BOUNDARY, MediaClientRole.SESSION_BOUNDARY) {
+        it.addInterceptor(SessionBoundaryInterceptor(transition))
+    },
+    HttpClientContributor.of("upload-timeouts", HttpPriority.UPLOAD_TIMEOUTS) { it.addInterceptor(UploadTransferTimeoutInterceptor()) },
+    HttpClientContributor.of("url-guard", HttpPriority.URL_GUARD) { it.addInterceptor(UrlGuardInterceptor()) },
+    HttpClientContributor.of("endpoint-policy", HttpPriority.ENDPOINT_POLICY) {
+        it.addInterceptor(EndpointPolicyInterceptor())
+    },
+    HttpClientContributor.of("retry", HttpPriority.RETRY) { it.addInterceptor(RetryInterceptor()) },
+    HttpClientContributor.of("proactive-refresh", HttpPriority.PROACTIVE_REFRESH) {
+        it.addInterceptor(ProactiveRefreshInterceptor(tokenStore, refresher))
+    },
+    HttpClientContributor.of("auth", HttpPriority.AUTH) { it.addInterceptor(AuthInterceptor(tokenStore, transition, visitorKey)) },
+    // Annonce ce que ce binaire sait LIRE. Ne se pose qu'apres que la lecture v3 existe :
+    // l'inverse echangerait une sentinelle lisible contre un ecran vide.
+    HttpClientContributor.of("client-capabilities", HttpPriority.CLIENT_CAPABILITIES) {
+        it.addInterceptor(ClientCapabilitiesInterceptor())
+    },
+    // Signal Prisme 4e priorite : la locale de l'appareil (X-Device-Locale).
+    HttpClientContributor.of("device-locale", HttpPriority.DEVICE_LOCALE) {
+        it.addInterceptor(DeviceLocaleInterceptor())
+    },
+    HttpClientContributor.of("auth-expiry", HttpPriority.AUTH_EXPIRY) {
+        it.addInterceptor(AuthExpiryInterceptor(signalsExpiry = refresher::signalsExpiry, onSessionExpired = onSessionExpired))
+    },
+    HttpClientContributor.of("refresh-authenticator", HttpPriority.AUTHENTICATOR) {
+        it.authenticator(RefreshAuthenticator(tokenStore, refresher))
+    },
+    HttpClientContributor.of("slow-request", HttpPriority.SLOW_REQUEST) {
+        it.eventListenerFactory(SlowRequestEventListener.factory())
+    },
+    if (config.enableLogging) {
+        // Le garde REMPLACE le logger (#4811) : niveau BODY par defaut, BASIC des qu'un
+        // mot de passe est au corps — voir `SensitiveBodyLoggingGuard`.
+        HttpClientContributor.of("logging", HttpPriority.LOGGING) {
+            it.addInterceptor(SensitiveBodyLoggingGuard.atLevel(HttpLoggingInterceptor.Level.BODY))
+        }
+    } else {
+        null
+    },
+)

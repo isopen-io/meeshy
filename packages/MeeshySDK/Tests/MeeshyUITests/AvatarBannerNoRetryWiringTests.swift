@@ -48,7 +48,7 @@ final class AvatarBannerNoRetryWiringTests: XCTestCase {
     }
 
     func test_communitySettingsBanner_suppressesRetryOverlay() throws {
-        let source = try sdkSource("Sources/MeeshyUI/Community/CommunitySettingsView.swift")
+        let source = try sdkSource("Sources/MeeshyUI/Community/CommunitySettingsScreen.swift")
         let banner = try block(
             from: "private var communityBannerView: some View {",
             upTo: "private var communityBannerPlaceholder",

@@ -10,9 +10,9 @@ name: CI
 
 on:
   push:
-    branches: [main, dev, develop]
+    branches: [main, dev]
   pull_request:
-    branches: [main, dev, develop]
+    branches: [main, dev]
   workflow_dispatch:
     inputs:
       package_manager:
@@ -34,77 +34,172 @@ on:
           - gpu-cu121
 
 env:
-  NODE_VERSION: '22'
+  # '22.19' et non '22' : undici@8 exige >= 22.19.0 (worker_threads.markAsUncloneable,
+  # arrive en 22.12), et le serveur assemble par les generateurs de manifeste le charge.
+  # La ligne MINEURE, pas une version exacte — figer le patch ferait rater les correctifs
+  # de securite des 22.19.x sans rien garantir de plus : c'est le plancher qui compte ici.
+  NODE_VERSION: '22.19'
   BUN_VERSION: '1.3.14'
   PNPM_VERSION: '9'
   # Python 3.10 required: pkuseg (chatterbox-tts dependency) fails to compile on 3.11+
   PYTHON_VERSION: '3.10'
   UV_VERSION: '0.5.x'
+  # #4861 — `secrets.TURBO_TOKEN` n'est PAS configuré sur ce dépôt (mesuré :
+  # dump `env:` d'un run récent montre `TURBO_TOKEN: ` vide, jamais `***`
+  # comme le rendrait un secret réellement posé). Le cache distant Turborepo
+  # est donc désactivé dans turbo.json (`remoteCache.enabled: false`) plutôt
+  # que déclaré actif sans jamais être joignable — et `signature: true`, qui
+  # l'accompagnait, exigeait `TURBO_REMOTE_CACHE_SIGNATURE_KEY`, absent lui
+  # aussi. Si `TURBO_TOKEN` est posé un jour, réactiver le cache distant ET
+  # poser la clé de signature dans le MÊME lot — l'un sans l'autre reproduit
+  # ce défaut.
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
   # Default to bun, can be overridden by workflow_dispatch
   PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'bun' }}
 
+# `cancel-in-progress` — VRAI sur une branche de PR, FAUX sur les deux branches
+# d'intégration. C'est la piste (a) de #4395, appliquée telle qu'elle y est
+# écrite.
+#
+# CE QUE LE RÉGLAGE UNIFORME COÛTAIT, mesuré le 2026-09-01 à 22:30 UTC : ONZE
+# runs consécutifs de `dev` annulés, aucune `conclusion` sur la branche depuis
+# 20:51 UTC — près de deux heures pendant lesquelles personne ne pouvait dire
+# si `dev` était vert. Trois de ces onze commits réparaient précisément la CI.
+#
+# ET UN RUN ANNULÉ N'EST PAS GRATUIT : les huit derniers ont tourné de 2,8 à
+# 8,0 minutes avant d'être tués (moyenne 5,6, soit environ un tiers d'un run
+# complet), chacun en éventail sur dix-huit jobs. Le réglage ne fait donc pas
+# l'économie des minutes, il les dépense sans jamais rendre de verdict.
+#
+# L'ASYMÉTRIE QUI AGGRAVE LE TOUT : un run qui aboutit VERT met au moins 16,3
+# minutes (médiane 19,6) ; un run qui aboutit ROUGE conclut en ~3 minutes, en
+# s'arrêtant au premier job qui tombe. 65 % des intervalles entre poussées sont
+# sous 16,3 min, mais seulement 27 % sous 2,6 — la famine mange donc les VERTS
+# environ deux fois plus souvent que les ROUGES, et la branche paraît plus rouge
+# qu'elle n'est. C'est l'inverse de ce dont la règle `to-integrate` a besoin,
+# puisqu'elle ne peut se satisfaire que d'un `success`.
+#
+# POURQUOI FAUX PLUTÔT QUE `group: ci-${{ github.sha }}` (la piste (b)) : la
+# file de concurrence ne garde qu'UN run en attente — le dernier arrivé écrase
+# celui qui patientait — donc le run EN COURS va au bout et `dev` obtient
+# toujours un verdict, sans multiplier les runs par le nombre de commits. C'est
+# le comportement sur lequel `pilotage-pages.yml` repose déjà en production
+# depuis le 2026-08-30, et son en-tête le décrit dans ces termes ; cinq autres
+# workflows du dépôt (`release`, `ios-release`, `ios-fastlane-release`,
+# `ios-beta-trigger`, `pilotage-milestone`) portent le même réglage.
+#
+# VÉRIFIÉ SUR `dev`, une heure après la bascule. Ce bloc portait d'abord une
+# réserve — la sémantique de la file n'avait pas pu être confirmée sur
+# `docs.github.com`, bloqué par le proxy de sortie — et la mesure l'a levée :
+#
+#   • DEUX runs sont allés au bout, 28,9 et 32,8 minutes, pendant que SEPT
+#     poussées arrivaient. Sous l'ancien réglage aucun n'aurait dépassé six
+#     minutes ;
+#   • la file NE s'accumule PAS : `run_started_at == created_at` sur les dix
+#     derniers runs, sans exception. Les annulations surviennent à des âges
+#     courts et IRRÉGULIERS (0,23 · 0,60 · 1,17 · 3,00 · 7,97 min), signature
+#     d'un run qui ATTENDAIT et qu'un arrivant plus récent a évincé — un seul
+#     run en attente à la fois.
+#
+# Le symptôme d'une file qui s'accumulerait reste celui-ci, pour qui aurait à
+# le rechercher un jour : `run_started_at` - `created_at` qui GRANDIT d'un run
+# à l'autre. Il est absent. Ne pas lire une file d'attente comme une panne.
+#
+# Et le premier verdict retrouvé a immédiatement montré ce que la famine
+# coûtait : un seul test tombait sur 22 383 — une collision de numéro de leçon
+# que la branche portait depuis des heures, et que onze runs avaient traversée
+# sans jamais conclure.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/dev' && github.ref != 'refs/heads/main' }}
 
 jobs:
+  # ===========================================================================
+  # CHANGES: ce que la poussée touche (#7711, #12531)
+  # Quatre zones ne tournent que si un fichier qu'elles lisent a changé : les
+  # quatre jobs du traducteur, la coque Android, les cadres de gloire et les
+  # gardes navigateur du web. Tout le reste tourne toujours. La règle et ses cas
+  # vivent dans `scripts/ci-affected.mjs` (en cas de doute, tout tourne).
+  # ===========================================================================
+  changes:
+    name: Zones touchées
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      translator: ${{ steps.affected.outputs.translator }}
+      shell_android: ${{ steps.affected.outputs.shell_android }}
+      glory_frames: ${{ steps.affected.outputs.glory_frames }}
+      web_navigateur: ${{ steps.affected.outputs.web_navigateur }}
+      tests_web: ${{ steps.affected.outputs.tests_web }}
+      tests_gateway: ${{ steps.affected.outputs.tests_gateway }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Self-test
+        run: node scripts/ci-affected.mjs --self-test
+
+      # La base de comparaison d'une POUSSÉE est le dernier run VERT de ce workflow sur
+      # cette branche, pas la poussée précédente : une poussée évincée par la suivante,
+      # ou un run resté rouge, emporterait sinon son diff avec lui et une zone serait
+      # sautée à tort. Même résolveur que `docker.yml` (#6551). Tant que la branche est
+      # rouge, la base recule et davantage de zones tournent : sûr par construction.
+      # `--event push` écarte les runs de PR, qui ont testé un commit de fusion.
+      # Le résolveur ne reçoit JAMAIS `github.event.before` : son repli sur la poussée
+      # précédente, juste pour une image, ferait ici sauter une zone sans preuve. Relevé
+      # en échec, aucun vert connu ou SHA disparu de l'historique : aucune base, tout tourne.
+      - name: Dernier run vert de ce workflow sur cette branche
+        id: dernier_vert
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if SHA=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch "$GITHUB_REF_NAME" \
+            --event push --status success --limit 1 --json headSha --jq '.[0].headSha // empty'); then
+            [ -n "$SHA" ] || echo "::notice title=Zones touchées::aucun run vert connu sur $GITHUB_REF_NAME, tout tourne."
+          else
+            SHA=""
+            echo "::warning title=Zones touchées::relevé du dernier run vert impossible, tout tourne."
+          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Base de comparaison
+        id: base
+        if: github.event_name == 'push'
+        env:
+          LAST_SUCCESSFUL_SHA: ${{ steps.dernier_vert.outputs.sha }}
+        run: |
+          node scripts/resolve-docker-detect-base.mjs | tee -a "$GITHUB_OUTPUT"
+
+      - name: Detect affected domains
+        id: affected
+        env:
+          CI_EVENT: ${{ github.event_name }}
+          CI_BASE: ${{ github.event.pull_request.base.sha || steps.base.outputs.base }}
+          CI_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/ci-affected.mjs >> "$GITHUB_OUTPUT"
+
   # ===========================================================================
   # QUALITY: Lint & Type-check (Fast feedback)
   # ===========================================================================
   quality:
-    name: Quality (${{ github.event.inputs.package_manager || 'bun' }})
-    runs-on: ubuntu-latest
+    name: Qualité TS (${{ github.event.inputs.package_manager || 'bun' }})
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      # pnpm is always needed for turborepo (version from package.json packageManager)
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
-
-      - name: Setup Node.js (with pnpm cache)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      - name: Setup Node.js (without cache for bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       # Build shared package first (required for type-check)
       - name: Build shared package (bun)
@@ -119,96 +214,1216 @@ jobs:
           cd packages/shared
           pnpm run build
 
+      # #3658 — la feuille de langues que le translator (Python) reconnaît
+      # est GÉNÉRÉE depuis `packages/shared/utils/language-codes.ts` ; rien
+      # ne garantissait jusqu'ici que `generated_languages.py` n'avait pas
+      # dérivé de sa source (langue ajoutée d'un côté, pas régénérée de
+      # l'autre). Jumeau exact de `check:tokens` (palette dérivée de Swift).
+      - name: Translator language codes parity guard
+        run: |
+          cd packages/shared
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} translator-languages:check
+
+      # #10278 — la version d'un pack de cadres de gloire ne redescend jamais
+      # et ne sert jamais deux contenus. `generate:glory-frames` la dérive de la
+      # valeur COMMITÉE : le témoin de fraîcheur ne voit ni une version abaissée
+      # à la main, ni deux branches qui montent chacune v1 en v2 avec deux
+      # contenus (la fusion garde un v2, l'autre a été publié en staging sous le
+      # même numéro). Le cliquet confronte le registre à `retained.json` ET au
+      # registre de la BRANCHE CIBLE — `github.base_ref` sur une PR, la branche
+      # poussée sinon : `dev` figé ferait tomber une PR de correctif vers `main`
+      # dès que `dev` a monté une version que `main` n'a pas encore reçue. La
+      # seconde commande prouve que le cliquet rougit (chaque pack tombe, nommé,
+      # à sa version abaissée de 1 ⇒ sortie 1, et seulement 1 : une preuve
+      # incomplète sort 0, un plantage 2 — ni l'un ni l'autre ne passe pour une
+      # preuve). La base se lit par `git show`, d'où le fetch : le checkout de
+      # ce job est à profondeur 1. Le témoin
+      # `__tests__/ci/glory-frame-ratchet-baseline.test.ts` garde cette forme.
+      - name: Versions des packs de cadres de gloire (cliquet #10278)
+        env:
+          BASE_BRANCH: ${{ github.base_ref || github.ref_name }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE_BRANCH"
+          cd packages/shared
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} glory-frames:check-versions -- --baseline "origin/$BASE_BRANCH"
+          status=0
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} glory-frames:check-versions -- --baseline "origin/$BASE_BRANCH" --mutate lower-version || status=$?
+          if [ "$status" -ne 1 ]; then
+            echo "::error::le cliquet des versions ne rougit pas sous mutation (version abaissée de 1) : sortie $status, attendu 1 (preuve tenue)"
+            exit 1
+          fi
+
+      # #5442 : cette étape passe par le cache Turborepo (`bun run lint` sans
+      # filtre), donc son verdict dépend de la température du cache — un run à
+      # cache chaud rejoue d'anciens logs sans jamais relinter. Elle reste
+      # informative (`continue-on-error`). Le cliquet ESLint qui en tenait lieu
+      # pour le legacy `apps/web` est parti avec lui (#7668) : il mesurait une
+      # dette qui n'existe plus.
       - name: Lint
         run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} lint
         continue-on-error: true
 
-      # Type-check, en DEUX étapes plutôt qu'une amnistie.
+      # PAS D'ÉTAPE DE LINT DÉDIÉE À `@meeshy/web` (2026-09-07).
       #
-      # L'étape unique qui précédait portait `continue-on-error: true`, et ce
-      # drapeau n'était pas un avis sur le typage : c'était la seule façon pour
-      # elle d'être verte, `apps/web` portant une dette de types que les trois
-      # autres packages TypeScript n'ont pas. Une amnistie, quatre packages —
-      # les 1241 erreurs du quatrième achetaient le silence sur le zéro des
-      # trois premiers.
+      # Elle existait pour l'ancienne refonte v3, annulée puis retirée du dépôt
+      # (#5994). Le nom `@meeshy/web` désigne l'application Vite + Preact
+      # (ex `web-v2`, renommée le 2026-09-24, #7668), qui n'a pas encore de
+      # configuration ESLint :
+      # rebrancher l'étape telle quelle rendrait une case VERTE qui ne linte
+      # rien — un signal pire que l'absence de signal, parce qu'on le croit.
       #
-      # Le prix n'était pas théorique : les cycles 99–104 ont bâti pour la
-      # passerelle un contrat d'émission Socket.IO dont une violation produit
-      # `TS2345` ou `TS2322` — les deux codes que le `ts-jest` de la passerelle
-      # a dans son `diagnostics.ignoreCodes`. Ni le job de test ni celui-ci ne
-      # pouvaient donc rougir sur une charge fausse. Mesuré en retirant un champ
-      # requis d'une émission de `preferences-broadcast.ts`.
+      # Ce qui tient la place en attendant : le type-check bloquant ci-dessous
+      # et les gates de l'application (jetons dérivés, poids). Son ESLint est
+      # un suivi, pas un oubli.
+
+      # Type-check BLOQUANT, une seule étape, aucun `continue-on-error`.
+      #
+      # Il y en a eu deux (cycle 105 bis) : celle-ci, et un ratchet de dette
+      # pour le legacy `apps/web` (1241 erreurs, `check-type-debt.sh`). Une
+      # amnistie qui couvrait quatre packages achetait le silence sur le zéro
+      # des trois autres — et une violation du contrat d'émission Socket.IO de
+      # la passerelle produit `TS2345`/`TS2322`, les deux codes que `ts-jest`
+      # ignore : ce job est le seul qui puisse rougir dessus.
+      #
+      # Le legacy a quitté le dépôt le 2026-09-24 avec son ratchet (#7668).
+      # `@meeshy/web` désigne depuis l'application Vite + Preact + Capacitor
+      # (ex `@meeshy/web-v2`), née à zéro erreur : elle est ICI, dans l'étape
+      # bloquante, et nulle part ailleurs. Un gate qui ne tourne pas n'est pas
+      # un gate.
       - name: Type-check (contract packages — blocking)
-        run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} type-check --filter=@meeshy/shared --filter=@meeshy/gateway --filter=@meeshy/agent
+        run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} type-check --filter=@meeshy/shared --filter=@meeshy/gateway --filter=@meeshy/agent --filter=@meeshy/web
 
-      - name: Type-check (apps/web — debt ratchet)
-        run: bash scripts/check-type-debt.sh --self-test && bash scripts/check-type-debt.sh
+      # LES GATES PROPRES À LA V4 — ils ne rentrent dans aucun filtre turbo
+      # parce qu'ils ne sont pas des tâches de package : ce sont des mesures.
+      #
+      #   check:tokens      la palette dérivée n'a pas dérivé de MeeshyColors.swift
+      #   measure-weight    la première peinture tient sous le plafond de budgets.json
+      #   check-utilities   aucune classe utilitaire n'est morte dans la feuille
+      #
+      # Le second est la raison d'être de cette application (une zone rurale,
+      # un réseau payé au mégaoctet) : le laisser hors CI reviendrait à écrire
+      # un budget que personne ne vérifie. Le build est mesuré à ~200 ms, le
+      # coût d'étape est négligeable.
+      - name: Gates web (jetons dérivés + poids de la première peinture)
+        run: |
+          # `@meeshy/shared` sert son `dist/` : le type-check et le build de la
+          # v3.1 s'y résolvent depuis #5493. Étape EXPLICITE plutôt que filtre
+          # turbo, pour rester alignée sur les trois autres travaux navigateur
+          # qui la portent déjà.
+          cd packages/shared
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+          cd ../../apps/web
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} check:tokens
+          # #5606 — les actifs DÉRIVÉS de l'icône iOS (icônes PWA, splashs des
+          # deux coques) sont commités : sans ce contrôle, une icône iOS
+          # retouchée laisserait `public/` et les coques périmés EN SILENCE.
+          # Le témoin `scripts/brand-assets.test.ts` couvre les copies octet
+          # pour octet, pas les images RECALCULÉES — c'est cette ligne-ci qui
+          # les garde. (Le composite `bun run gate` n'est PAS lancé en CI :
+          # cette étape énumère ses maillons un par un, donc un maillon ajouté
+          # au composite seul ne s'exécuterait nulle part.)
+          python3 scripts/generate-icons.py --check
+          node scripts/check-curve.mjs
+          node scripts/check-river-metrics.mjs
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+          node scripts/check-utilities.mjs
+          node scripts/measure-weight.mjs
+          # #10158 — le budget des polices de CADRE tenu sur les SOURCES, avant
+          # toute émission (`measure-weight.mjs` ne compte que ce que Vite
+          # émet, donc rien tant qu'aucun peintre n'importe la feuille). Sa
+          # facette PRECACHE lit `dist/sw.js`, donc il vient après le build
+          # ci-dessus ; le job `bun test` web rejoue les autres facettes sans
+          # `dist/`, et celle-ci n'existait nulle part en CI tant que ce
+          # maillon n'était qu'au composite (2026-10-22).
+          node scripts/check-glory-fonts.mjs
+          # #6862 — le seul gate qui fasse DÉCIDER le service worker construit.
+          # Workbox stringifie le `urlPattern` du seau `api` : un prédicat
+          # importé s'y perd, et la règle « aucune réponse /api/v1/admin/** sur
+          # le disque » était annoncée par `vite.config.ts` sans être appliquée
+          # par `dist/sw.js`. Lit `dist/sw.js`, donc après le build ci-dessus.
+          node scripts/check-sw-api-cache.mjs
+          # #7305 — le service worker porte enfin `push`/`notificationclick`,
+          # et sa table de destinations est un JUMEAU (un script classique
+          # chargé par `importScripts` ne peut importer aucun module TS). Ce
+          # gate compare le jumeau à `target.ts` ET aux motifs de
+          # `route-table.tsx`, puis le fait DÉCIDER. Il lit aussi `dist/`,
+          # donc il vient après le build ci-dessus. Le fichier qu'il remplace,
+          # `firebase-messaging-sw.js`, portait la bonne règle en commentaire
+          # et avait quand même dérivé sur trois routes sur trois.
+          node scripts/check-push-target-parity.mjs
+          # #5910 — maillon du composite `bun run gate` qui ne s'exécutait
+          # NULLE PART. Il lit `dist/index.html`, donc il vient après le build
+          # ci-dessus ; il n'ouvre aucun navigateur, donc il a sa place ici et
+          # non dans le travail Playwright.
+          node scripts/check-scheme-bootstrap.mjs
+          node scripts/check-interface-language-bootstrap.mjs
+          node scripts/check-docker-context.mjs
+          node scripts/check-git-tracking.mjs
+          # #12939 — découvrabilité par un agent IA, mesurée par l'EFFET :
+          # `public/llms.txt` cite le spec OpenAPI, `.well-known/openapi` le
+          # pointe, et `robots.txt` nomme les crawlers IA. Lit des fichiers
+          # statiques de `public/`, aucun navigateur : sa place est ici.
+          node scripts/check-llms-discovery.mjs
+          # #12938 — la vitrine publique (accueil `/` + landings) reste
+          # indexable (Google) et citable (moteurs IA) : balises SEO + JSON-LD
+          # Organization/WebApplication émis par `landingHead` /
+          # `landingStructuredData`. Garde STATIQUE sur la source, sans build ni
+          # navigateur : sa place est ici. `--self-test` d'abord — il prouve que
+          # la garde refuse une vitrine amputée (sinon elle serait verte par
+          # omission).
+          node scripts/check-seo-vitrine.mjs --self-test
+          node scripts/check-seo-vitrine.mjs
 
-      - name: Law literals guard
-        run: bash scripts/check-law-literals.sh --self-test && bash scripts/check-law-literals.sh
+      # #3679 — cliquet sur l'usage explicite de `any`, mesuré par motif
+      # plutôt que par AST : aucun des trois paquets ne demande
+      # `@typescript-eslint/no-explicit-any` à un ESLint, et une seule
+      # définition de « ce qui compte comme `any` » vaut mieux que trois
+      # (cf. l'en-tête du script). `packages/shared` et `apps/web` sont tenus
+      # à zéro — le web depuis le retrait du legacy et de ses 451 `any`
+      # (#7668) ; `gateway` porte une baseline qui ne peut que descendre.
+      - name: any debt ratchet (gateway + shared + web)
+        run: bash scripts/check-any-debt.sh --self-test && bash scripts/check-any-debt.sh
 
-      # Casse de compilation Swift détectable sans compilateur. Ici (ubuntu,
-      # quelques secondes) plutôt que sur le runner macOS : `xcodebuild` coûte
-      # ~15 min et meurt à la première erreur, alors que ce garde les liste
-      # toutes avant même que le job iOS ne démarre.
-      - name: ViewBuilder statement-chaining guard
-        run: bash scripts/check-swift-viewbuilder.sh --self-test && bash scripts/check-swift-viewbuilder.sh
+      # #10385, #11441 — le runner des opérations serveur : liste blanche, délais,
+      # demandes refusées, et la publication des conteneurs de SON environnement
+      # (étiquette revérifiée, aucun secret, sous le plafond de la passerelle),
+      # confrontée au schéma partagé par bun. `docker` et `systemctl` sont des doubles.
+      - name: Ops runner witness
+        run: node --test infrastructure/scripts/ops-runner/meeshy-ops-runner.test.mjs
 
   # ===========================================================================
-  # TEST: Unit Tests with Coverage (Parallel by package)
-  # Minimum coverage threshold: 90%
+  # GARDES DU DÉPÔT : des cliquets purs, sans installation ni build
   # ===========================================================================
-  test:
-    name: Test ${{ matrix.package.name }}
-    runs-on: ubuntu-latest
-    needs: quality
-    timeout-minutes: 20
+  # Une garde juge là où vivent ses entrées. Celles-ci lisent le DÉPÔT (workflows,
+  # compose, Makefile, catalogues) et rien de ce que `quality` construit : les
+  # sortir de `quality` fait qu'un cliquet rouge ne saute plus aucun « Tests · »
+  # (ils dépendent de `quality`, pas de ce job), alors que « Verdict CI » rougit
+  # quand même. `quality` ne garde que ce qui rend les tests sans objet quand il
+  # échoue : installation, build de shared, lint, types, jetons web, dette `any`.
+  gardes-depot:
+    name: Gardes du dépôt
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: TS catalog dead-entries ratchet
+        run: node scripts/check-ts-catalog-dead-entries.mjs --self-test && node scripts/check-ts-catalog-dead-entries.mjs
+
+      # #7716 — un chemin d'API s'écrit dans le catalogue GÉNÉRÉ, jamais à la
+      # main : `apps/web/src` ne porte plus aucune adresse `/api/v1/…`
+      # littérale (348 lignes → 0), et cette étape l'interdit.
+      - name: web API literal prohibition
+        run: node scripts/check-web-api-literals.mjs --self-test && node scripts/check-web-api-literals.mjs
+
+      # L'invariant porte sur le `bun.lock` de la RACINE et sur tous les
+      # manifestes que la racine déclare comme workspaces : sa surface est le
+      # dépôt, donc il est appelé ici, à côté des autres gates de racine, et
+      # non depuis les tests d'une app. Il rougit dans les DEUX sens — un
+      # manifeste que le lock ignore, un workspace loqué qu'aucun arbre de
+      # fichiers ne porte — pour qu'un `bun.lock` ne puisse plus être commité
+      # sans l'arbre qu'il décrit.
+      - name: Lockfile alignment guard
+        run: node scripts/check-lockfile-alignment.mjs --self-test && node scripts/check-lockfile-alignment.mjs
+
+      # #6351 — filet de sécurité pour la CI ordinaire : un commit qui porte à
+      # la fois un marqueur (beta) et un marqueur de saut CI fait supprimer
+      # TOUS les workflows du push par GitHub, ios-beta-trigger.yml compris.
+      # Cette étape ne verra donc jamais ce cas précis (un push affecté par le
+      # piège ne fait justement tourner aucune CI) ; elle attrape le même
+      # défaut sur un commit de PR normal, avant qu'il n'atteigne `main`. Le
+      # témoin qui couvre le cas que GitHub supprime est périodique, sur
+      # schedule — .github/workflows/beta-marker-audit.yml.
+      - name: Beta/skip commit-message conflict guard
+        run: node scripts/check-beta-skip-conflict.mjs --self-test && node scripts/check-beta-skip-conflict.mjs
+
+      # Même raison de placement que le garde ci-dessus : l'invariant porte sur
+      # le `Makefile` de la RACINE, donc il est appelé ici et non depuis les
+      # tests d'une app. Sa première écriture vivait dans les tests de l'ancienne
+      # refonte v3 (retirée depuis, #5994) — elle remontait de trois crans pour
+      # atteindre sa surface et ne tournait dans AUCUN job — la matrice `test:` ne portait
+      # alors que shared/web/gateway/agent : un contrôle inerte, qui laissait
+      # rouvrir au commit suivant la régression qu'il prétendait fermer.
+      # (`web-v2` A depuis rejoint la matrice ; cette phrase décrit le passé, et
+      # la lire au présent fait conclure à tort qu'une suite de la v3 ne tourne
+      # nulle part.)
+      # Il déroule les cibles avec `make -n` : un `*_DIR` mort se lit dans le
+      # texte, mais un `cd` vers un répertoire absent ne se voit qu'après
+      # expansion des variables.
+      - name: Makefile workspace directories guard
+        run: node scripts/check-makefile-workspaces.mjs --self-test && node scripts/check-makefile-workspaces.mjs
+
+      # Le relevé des branches vivantes (#5242) est un outil de CONSULTATION, pas
+      # un invariant : son rouge dit « une autre session écrit ce fichier en ce
+      # moment », qui est l'état NORMAL d'un dépôt à vingt sessions. Le brancher
+      # sur la CI la rendrait rouge en permanence et apprendrait à l'ignorer.
+      # Seul son `--self-test` a sa place ici — il porte sur l'instrument (les
+      # huit mutations qu'il doit voir, les trois qu'il ne doit PAS rapporter),
+      # jamais sur l'état du dépôt. Sans cette ligne, un relevé devenu aveugle
+      # rendrait « aucune contention » sans que rien ne rougisse : exactement la
+      # forme d'autorisation que son en-tête dit combattre.
+      - name: Live-branch contention survey self-test
+        run: node scripts/releve-branches-vivantes.mjs --self-test
+
+      # Même raison de placement que les gardes ci-dessus : l'invariant porte sur
+      # `ci.yml`, sur `turbo.json` et sur les manifestes des workspaces — la
+      # surface est le DÉPÔT. Il ferme #4761.
+      #
+      # Le dépôt DÉCLARE la dépendance de build à deux endroits corrects
+      # (`turbo.json` → `build.dependsOn: ["^build"]`, et le `workspace:*` du
+      # manifeste), et ce fichier ne consulte ce graphe NULLE PART pour BÂTIR :
+      # mesuré, aucune invocation directe de l'orchestrateur ici, 25 étapes qui
+      # entrent dans un workspace par `cd` et y lancent un script de paquet — donc
+      # HORS du graphe — et 11 copies écrites à la main de « construis le paquet
+      # partagé ». Le jour où `01c49fcfee` a fait importer `@meeshy/shared` par
+      # l'ancienne refonte v3, ses trois jobs sont devenus rouges — et LE JOB QUI
+      # CASSE N'EST PAS CELUI QUI A AJOUTÉ L'IMPORT, puisque la personne qui écrit
+      # l'`import` ne touche aucun fichier de CI.
+      #
+      # Le garde ne change rien à l'exécution : il RELIE, par job et par scénario
+      # de gestionnaire de paquets, les dépendances PRODUCTRICES d'un workspace
+      # aux étapes qui les construisent plus haut. « Productrice » n'est pas une
+      # liste recopiée : c'est « a un script `build` dont la sortie, déclarée par
+      # `turbo.json`, est ce que le consommateur importe » — ce qui laisse
+      # `@meeshy/design-tokens` tranquille, paquet d'actifs commité sans étape
+      # de build.
+      - name: CI build-order guard
+        run: node scripts/check-ci-build-order.mjs --self-test && node scripts/check-ci-build-order.mjs
+
+      # Même placement, même raison : la surface est le DÉPÔT — ici le fichier
+      # de workflow lui-même. Le garde confronte les jobs DÉCLARÉS de `ci.yml`
+      # aux deux listes écrites à la main dont vit son résumé (le `needs:` de
+      # l'agrégateur, et les lignes de son tableau). Il ferme #4860 : le gate des
+      # chaînes de l'ancienne refonte v3 — écrit exprès — ne figurait dans aucune
+      # des deux, et
+      # `test-python`, rallumé au sprint 0.3, y était annoncé « disabled » par
+      # un mot écrit à la main pendant qu'il consommait un runner à chaque
+      # poussée. L'agrégateur est reconnu par ce qu'il FAIT (`if: always()` +
+      # écriture dans `$GITHUB_STEP_SUMMARY`), jamais par son nom : le renommer
+      # ne doit pas éteindre le garde en silence.
+      - name: CI summary coverage guard
+        run: node scripts/check-ci-summary-coverage.mjs --self-test && node scripts/check-ci-summary-coverage.mjs
+
+      - name: CI verdict witness
+        run: node scripts/ci/needs-verdict.mjs --self-test
+
+      # #12559 — l'outil UNIQUE qui dit si une PR est verte, pour tous les
+      # fusionneurs (`.claude/workflows`, `apps/android/scripts/parity`) :
+      # chaque check du SHA de tête fini et vert, « Verdict CI » présent, une
+      # annulation jamais verte.
+      - name: Green PR tool witness
+        run: node scripts/ci/pr-verte.mjs --self-test
+
+      - name: Web navigator zone read-set guard
+        run: node scripts/ci/check-web-navigateur-read-set.mjs --self-test && node scripts/ci/check-web-navigateur-read-set.mjs
+
+      # Pas de mode « balayage du dépôt » ici : `resolve-docker-detect-base.mjs`
+      # est une fonction de décision PURE (docker.yml § job `detect`, #6551),
+      # invoquée à l'exécution avec le SHA du dernier run réussi et
+      # `github.event.before` en entrée — rien à confronter au repos qu'elle
+      # pourrait scanner. Son `--self-test` EST le témoin : sept scénarios,
+      # dont celui qui a ouvert #6551 (un push annulé par le suivant ne doit
+      # plus faire perdre le diff des commits qu'il portait).
+      - name: Docker detect-base resolver guard
+        run: node scripts/resolve-docker-detect-base.mjs --self-test
+
+      # Même placement, même raison : la surface est le DÉPÔT — les workflows qui
+      # publient `isopen/meeshy-<image>:latest` sur `main`. Il ferme #6442 :
+      # `docker.yml` construisait `linux/amd64`, `release.yml`
+      # `linux/amd64,linux/arm64` sous émulation QEMU. L'architecture de `latest`
+      # dépendait donc du workflow arrivé le dernier, et l'étage arm64 émulé de la
+      # passerelle rougissait `main` sans défaut de code
+      # (`qemu: uncaught target signal 4`). Le garde exige un même `env.PLATFORMS`
+      # chez tout publieur de `latest`, reconnu par ce qu'il FAIT, et une étape de
+      # construction qui le lit.
+      - name: Image platforms guard
+        run: node scripts/check-release-platforms.mjs --self-test && node scripts/check-release-platforms.mjs
+
+      # Même raison de placement que les trois gardes ci-dessus : l'invariant
+      # porte sur les quatre `docker-compose*.yml` de `infrastructure/docker/compose/`
+      # et sur les deux modèles d'environnement — la surface est le DÉPÔT.
+      # Il ferme #4537 : une variable d'hôte absente n'arrête pas Docker Compose,
+      # elle est substituée par la chaîne VIDE avec un simple avertissement.
+      # La passerelle reçoit alors une liste d'origines DÉCLARÉE mais vide et
+      # refuse tout (#4480) — sans qu'aucune erreur ne soit levée au démarrage.
+      # La garde exige la forme à refus sur toute variable dont l'absence fait
+      # MENTIR le service, et rougit sur toute substitution nue non classée.
+      - name: Compose host variables guard
+        run: node scripts/check-compose-required-vars.mjs --self-test && node scripts/check-compose-required-vars.mjs
+
+      # #4547 — `scripts/dev.sh --https` invoquait un fichier
+      # (`docker-compose.local-https.yml`) qui n'a jamais existé sous
+      # `infrastructure/docker/compose/` : le drapeau échouait systématiquement,
+      # silencieusement, derrière un message Docker opaque. `--https` est
+      # désormais un alias documenté de `docker-compose.local.yml`. La garde
+      # vérifie que toute référence `$COMPOSE_DIR/docker-compose*.yml` du script
+      # résout réellement, pour qu'une régression future ne redevienne pas
+      # silencieuse jusqu'à ce qu'un développeur lance la commande.
+      - name: dev.sh compose targets guard
+        run: node scripts/check-dev-sh-compose-targets.mjs --self-test && node scripts/check-dev-sh-compose-targets.mjs
+
+      # #4553 — `services/gateway/prebuilds` était un lien symbolique SUIVI par
+      # git dont la cible était un chemin absolu posé sur la machine d'une
+      # personne (`/Users/<login>/…`). Mesuré : `node-gyp-build` résout en
+      # réalité le binaire natif depuis `node_modules/@signalapp/libsignal-client/prebuilds/`,
+      # que le paquet livre lui-même — le lien n'a jamais été consulté, et son
+      # commentaire prescrivait un geste qu'aucun déploiement ne tient. La
+      # garde couvre TOUT lien suivi du dépôt, pas seulement ce cas : une cible
+      # absolue, ou une cible relative qui ne résout pas depuis la racine.
+      - name: Tracked symlinks guard
+        run: node scripts/check-tracked-symlinks.mjs --self-test && node scripts/check-tracked-symlinks.mjs
+
+      # #4544 — le validateur de déploiement ne tient plus de liste : il DÉRIVE
+      # ses variables exigées de la garde ci-dessus. Un témoin qui comparerait
+      # les deux listes ne prouverait rien, deux copies coïncidant toujours le
+      # jour où on les écrit ; celui-ci injecte dans une copie de la table un
+      # nom TIRÉ AU HASARD à l'exécution et vérifie que le shell l'exige, sans
+      # qu'une ligne du shell ait été touchée. Un nom qui n'existe qu'à
+      # l'instant du test ne peut pas être écrit en dur : s'il devient
+      # exigible, il a été dérivé.
+      - name: Deployment validator derivation witness
+        run: bash scripts/deployment/deploy-validate-config.sh --self-test
+
+      # #6556 — une purge qui demande `y/N` au bout d'un `ssh` lit une entrée
+      # vide, comprend « N » et ne retire rien : l'hôte de staging se remplit
+      # jusqu'au `no space left on device`, le déploiement s'arrête et staging
+      # sert une version périmée que rien n'annonce. Ce garde exige le drapeau
+      # non interactif sur CHAQUE purge du dépôt, une purge AVANT chaque `pull`
+      # distant, et — seconde moitié de la directive porteur du 2026-09-15 —
+      # que tout job porteur d'une clé SSH de déploiement reste épinglé à
+      # `refs/heads/dev` : la production ne se déploie jamais toute seule.
+      - name: Docker prune & deploy-only-on-dev guard
+        run: node scripts/check-docker-prune-noninteractive.mjs --self-test && node scripts/check-docker-prune-noninteractive.mjs
+
+      # #14878 — un build Docker lancé sur `dev` va jusqu'au déploiement du
+      # staging : jamais `cancel-in-progress: true` sur `docker.yml`.
+      - name: Docker build never cancelled guard
+        run: node scripts/check-docker-build-never-cancelled.mjs --self-test && node scripts/check-docker-build-never-cancelled.mjs
+
+      # #9825, #10048 — un tag `sha-…` épinglé dans le `.env` de l'hôte de
+      # staging faisait tirer et garder une image figée sous un déploiement
+      # vert. Le verdict de `docker.yml` (job deploy-staging) refuse tout
+      # service recréé qui ne tourne pas `:staging` ; son auto-test rejoue
+      # l'état réel du run 38105794544.
+      - name: Staging deploy verdict self-test
+        run: node infrastructure/scripts/staging-deploy-verdict.mjs --self-test
+
+      # #9668 — la sauvegarde nocturne publie son verdict (etat.json) en succès
+      # ET en échec, y compris hors de tout `|| fail` ; la dernière réussite
+      # survit à un échec ; ni chemin d'hôte ni secret. `docker`, `df`, `flock`
+      # et `rsync` sont des doubles : aucune base, quelques secondes.
+      - name: Nightly backup verdict witness
+        run: node --test infrastructure/scripts/production-backup/meeshy-nightly-backup.test.mjs
+
+  # ===========================================================================
+  # CACHE INSTITUTIONNEL: les cinq pages restent ELLES-MÊMES à la deuxième visite
+  # ===========================================================================
+  # Un job À PART de « Gates web » (job `quality`), et pour une raison de
+  # coût : celui-ci lève un navigateur, donc télécharge Chromium. `quality` est
+  # la dépendance de presque tout le workflow — l'y ajouter retarderait chaque
+  # autre job d'une minute pour une preuve qui n'intéresse que cinq documents.
+  #
+  # CE QU'IL ATTRAPE, et que rien d'autre ne pouvait voir. #5554 a livré les
+  # cinq pages institutionnelles en HTML statique — une requête, zéro script —
+  # et l'a mesuré sur une visite FROIDE. À la deuxième, la `NavigationRoute` du
+  # service worker servait la coquille de l'application à leur place : « À
+  # propos de Meeshy », un h1, 0 script en visite 1 ; « Meeshy », aucun h1,
+  # 2 scripts en visite 2 — et la coquille n'a pas de route `/about`, donc page
+  # blanche. Ni un test de construction (les fichiers étaient sur le disque), ni
+  # la mesure de première peinture (elle n'installe le service worker qu'à la
+  # fin) ne pouvaient le voir. Il faut un navigateur RÉEL et une DEUXIÈME
+  # visite : c'est exactement ce que ce job fait.
+  web-navigateur:
+    name: Web · gardes navigateur (Playwright) · tranche ${{ matrix.tranche }}
+    runs-on: ubuntu-24.04
+    # #12555 — QUATRE TRANCHES PARALLÈLES. En série, les gardes prenaient
+    # ~37 min sur un job de 38 (médiane de 10 runs verts de dev, 23-24 octobre),
+    # et ce job fixait la durée de tout le run. Chaque garde lève son propre
+    # serveur et son propre Chromium : rien ne les lie, la répartition ne change
+    # aucun verdict. Les étapes restent LITTÉRALES (`gate-ci-parity.test.ts`,
+    # `check-web-navigateur-read-set.mjs` les lisent) ; seule leur condition
+    # porte `matrix.tranche`. L'équilibre vient des durées mesurées par étape
+    # sur dev (#12622 : runs 40081153594, 40082491974 et 40085428201, ~420 s
+    # de gardes par tranche ; le cadre téléphone, ~350 s en relevant trois
+    # contextes à la fois, ne partage la sienne qu'avec des gardes courtes) :
+    # une garde NOUVELLE va dans la tranche la plus légère du dernier relevé.
+    # `fail-fast: false` — même règle que `!cancelled()` plus bas : une tranche
+    # rouge n'en tait pas trois autres.
     strategy:
       fail-fast: false
       matrix:
-        package:
-          - name: shared
-            path: packages/shared
-            filter: '@meeshy/shared'
-          - name: web
-            path: apps/web
-            filter: '@meeshy/web'
-          - name: gateway
-            path: services/gateway
-            filter: '@meeshy/gateway'
-          - name: agent
-            path: services/agent
-            filter: '@meeshy/agent'
+        tranche: [1, 2, 3, 4]
+    # #12600 — il ne lit rien de `quality` : l'attendre retardait de ~3,5 min
+    # le job qui fixe la durée de tout le run. Le verdict n'y perd rien, le
+    # job « Verdict CI » attend les deux.
+    needs: [changes]
+    if: needs.changes.outputs.web_navigateur == 'true'
+    # #8580 — 53 gates Playwright en série : le job franchissait ses 25 min
+    # (24 min 23 s puis annulé à 25 min 15 s sur #8593) dès que les gates
+    # d'appel ont gagné leurs témoins. Le plafond suit la charge mesurée.
+    # 2026-10-22 — 40 min ne suffisent plus : les verts du jour ont fini à
+    # 39 min 21 s, 39 min 22 s, 39 min 54 s et 39 min 59 s, puis le run
+    # 39843843835 a été annulé à 40 min 16 s, pendant le gate du cadre
+    # téléphone (13 min à lui seul en CI : 148 adresses × 3 téléphones,
+    # 270 relevés de Progression, 21 textes de landing — ~0,8 s le relevé,
+    # 9 min 48 s en local). 55 min rendent une marge d'un quart.
+    # #12555 — en tranches, la plus lourde attend ~9 min (préparation comprise) :
+    # 25 min gardent plus du double de marge, et un blocage ne coûte plus une heure.
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
 
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
+
+      # Le préchauffage des cinq documents fait partie de CE build depuis
+      # qu'il est un greffon de `vite.config.ts` : le témoin mesure donc
+      # exactement ce qu'un déploiement servirait.
+      - name: Build packages/shared (la v3.1 en importe depuis #5493)
+        run: |
+          cd packages/shared
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+
+      - name: Build apps/web
+        run: |
+          cd apps/web
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      # CHAQUE GATE RAPPORTE SON VERDICT, PAS SEULEMENT LE PREMIER (#6137).
+      # GitHub arrête un travail à la première étape rouge : les dix gates
+      # ci-dessous étant indépendants (chacun lève son propre serveur statique
+      # et son propre Chromium), un rouge en cachait NEUF. Mesuré : `dev` est
+      # resté rouge onze heures sur le gate des états du fil pendant que la
+      # coque, capacitor, la virtualisation et le mode de lecture ne tournaient
+      # plus du tout — et le rouge du mode de lecture (#6130), visible la veille,
+      # avait DISPARU des rapports sans être corrigé, simplement plus mesuré.
+      #
+      # `!cancelled()` et non `always()` : une annulation ne doit pas faire
+      # tourner les gates restants. Les étapes de PRÉPARATION au-dessus gardent
+      # leur arrêt — un gate qui tourne sans `dist` rendrait un rouge de
+      # plomberie qui ne mesure rien, soit le défaut inverse.
+      - name: Gate cache institutionnel
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-institutional.mjs
+
+      # LE CRITÈRE BINAIRE DE LA LENTILLE, dans le MÊME travail : il lève le
+      # même navigateur sur le même `dist`, et un second travail paierait une
+      # installation de Chromium pour rien.
+      - name: Gate flux de la Lentille (mise en page invariable au défilement)
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
+        run: |
+          cd apps/web
+          node scripts/check-lens.mjs
+
+      # #6975 — L'INVENTAIRE : aucune surface ne monte `Avatar` sans `src`, sauf
+      # celles dont le registre dit OÙ la chaîne s'arrête. Le gate de pixels
+      # prouve que la loi peint ; celui-ci prouve qu'aucun écran n'est oublié —
+      # y compris ceux qu'aucun navigateur de gate ne visite. Sans navigateur,
+      # donc joué même si Chromium manque.
+      - name: Gate inventaire des avatars (aucun `Avatar` muet)
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-avatar-src.mjs
+
+      # #6975 — UNE PHOTO DE PROFIL EST PEINTE, pas seulement passée. Tous les
+      # autres gates d'avatar mesurent la GÉOMÉTRIE (check-curve) ou la pastille
+      # de PRÉSENCE (avatar.test.tsx) : aucun ne demandait « une photo est-elle
+      # là ? », et dix-sept surfaces montaient `Avatar` sans `src` sans faire
+      # rougir un seul verdict. `naturalWidth` après `decode()`, sur les trois
+      # RANGS de la loi partagée, plus un contre-témoin sans photo.
+      - name: Gate photo de profil peinte (trois rangs, pixels)
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
+        run: |
+          cd apps/web
+          node scripts/check-avatar-pixels.mjs
+
+      # #6277 / #6133 — aucun disque flottant ne recouvre, au repos, un texte de
+      # carte du Flux, un libellé du plateau ni un contrôle du chrome
+      # (elementFromPoint, deux schémas, 390×844 et 320×568) ; l'en-tête du Flux
+      # s'escamote ; les cotes du plateau sont celles d'iOS (88 / 36).
+      - name: Gate couloir des disques flottants (Flux et liste)
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-floating-clearance.mjs
+
+      # #6456 — le disque du Flux bascule Flux ↔ conversations sans saut (nom,
+      # adresse et marque suivent la destination), son appui long (souris,
+      # doigt, Maj+F10) ouvre les Réels sans navigation ni clic au relâché, un
+      # glisser tenu n'ouvre rien et suit le pointeur sans retard, la place
+      # survit au rechargement, un réel de carte ramène au même défilement.
+      - name: Gate disque du Flux (bascule, appui long, glisser)
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
+        run: |
+          cd apps/web
+          node scripts/check-feed-disc.mjs
+
+      # #6288 — la cloche : la pastille du bouton flottant porte le compte servi
+      # et disparaît à zéro ; une catégorie filtre ; ouvrir une ligne la marque
+      # lue et mène à sa cible ; « Tout lire » a un effet ; aucun texte ni
+      # contrôle n'est volé par un disque (elementFromPoint, deux schémas,
+      # 390×844 et 320×568).
+      - name: Gate cloche des notifications (pastille, catégories, marquage, cible)
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
+        run: |
+          cd apps/web
+          node scripts/check-notifications.mjs
+
+      # #6289 — le profil : il se lit (contact masqué, trois rangs du Prisme,
+      # statistiques), se modifie en optimiste, garde le couple de focus de ses
+      # champs, change une langue par la feuille et la retire, recompresse une
+      # photo avant de l'envoyer, désactive l'écriture hors ligne ; aucun
+      # contrôle ni texte n'est volé par un disque (deux schémas, deux gabarits).
+      - name: Gate profil (lecture, édition optimiste, langues, recompression, hors-ligne)
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
+        run: |
+          cd apps/web
+          node scripts/check-profile.mjs
+
+      # #5563 — les réglages : le thème bascule à chaud et persiste, la langue
+      # d'interface se pose sans rechargement, les bascules que la passerelle
+      # obéit sont optimistes et désactivées hors ligne, chaque entrée non portée
+      # mène au legacy, la déconnexion efface la session ; aucun contrôle ni
+      # texte n'est volé par un disque (deux schémas, deux gabarits).
+      - name: Gate réglages (thème, langue d'interface, bascules, legacy, déconnexion)
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
+        run: |
+          cd apps/web
+          node scripts/check-settings.mjs
+
+      # Le critère de fin de #5561 est une mesure de GÉOMÉTRIE : l'action
+      # primaire de `/chat/:lien` doit tenir dans le premier écran dans TOUS ses
+      # états, refus compris, à 360 et 390 px. Un témoin unitaire dit qu'un
+      # bouton est rendu ; il ne dit pas à quelle ordonnée il tombe.
+      - name: Gate jonction par lien (action primaire dans le premier écran, 360 et 390)
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-join-first-screen.mjs
+
+      # #6364 — ses communautés : la grille remplace l'écran d'attente, la
+      # recherche se peint depuis le cache, une carte ouvre son détail et une
+      # conversation son fil, la création refuse un identifiant pris sous son
+      # champ puis devient le détail ; les textes blancs des cartes tiennent AA
+      # au pire pixel ; aucun contrôle ni texte n'est volé par un disque (deux
+      # schémas, deux gabarits).
+      - name: Gate communautés (liste, recherche, détail, création, hors-ligne)
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-communities.mjs
+
+      # #6362 — le journal d'appels : il remplace l'écran d'attente, les trois
+      # directions se distinguent par un glyphe et un libellé (jamais la couleur
+      # seule), aucune ligne ne porte « Rappeler », « Manqués » se peint depuis
+      # le cache, une ligne ouvre son fil ; chaque texte tient AA et aucun n'est
+      # volé par un disque (deux schémas, deux gabarits).
+      - name: Gate journal d'appels (directions, filtre, fil, hors-ligne)
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
+        run: |
+          cd apps/web
+          node scripts/check-calls.mjs
+
+      # #6383 / #6454 / #3586 — rejoindre, rappeler, composer : le pavé trouve
+      # par nom et par numéro, la fiche /call/:id se lit sans numéro, un appel
+      # vivant se rejoint par lien profond, bannière et pastille « Rejoindre ».
+      - name: Gate appels rejoints (pavé, fiche, reprise)
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
+        run: |
+          cd apps/web
+          node scripts/check-calls-join.mjs
+
+      # #8046 — continuer à discuter pendant l'appel : un appel vivant (faux
+      # micro et fausse caméra de Chromium) se choisit ses périphériques, se
+      # réduit en pastille puis en bulle, survit à la navigation, laisse écrire
+      # et envoyer dans une autre conversation, se déplace au doigt et au
+      # clavier, revient en un geste ; l'image dans l'image s'ouvre.
+      - name: Gate appel en cours (bulle, image dans l'image, périphériques)
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
+        run: |
+          cd apps/web
+          node scripts/check-calls-during.mjs
+
+      # #8063 — on partage son écran pendant un appel : un pair de fixtures
+      # décroche vraiment (RTCPeerConnection dans la page), getDisplayMedia est
+      # simulé par un canevas ; l'écran arrive au pair (renégociation d'un appel
+      # vocal), la fin de la piste arrête le partage, la caméra revient, et
+      # l'écran du pair s'affiche entier sous sa bannière. Sans getDisplayMedia
+      # (coque Android), aucun bouton.
+      - name: Gate partage d'écran pendant un appel
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
+        run: |
+          cd apps/web
+          node scripts/check-calls-screen.mjs
+
+      # #8047 — la qualité d'un appel s'adapte au réseau et se voit : un pair de
+      # fixtures décroche un appel VIDÉO ; getStats est enveloppé pour simuler un
+      # réseau dégradé (20 % de perte, 600 ms). La vidéo se gèle puis se
+      # SUSPEND (le pair ne décode plus d'image), la voix continue chaque
+      # seconde, puis tout reprend ; indicateur et détail de qualité, alertes du
+      # pair, call:quality-report et call:analytics (codec réel).
+      - name: Gate qualité d'appel (paliers, survie vidéo, indicateur, alertes)
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
+        run: |
+          cd apps/web
+          node scripts/check-calls-quality.mjs
+
+      # #8442 / #8441 — les effets s'appliquent à la piste ENVOYÉE : un pair de
+      # fixtures décroche un appel vidéo ; après « Chaud », la piste émise change
+      # et le pair continue de décoder des images ; le micro coupé le reste sous
+      # effets ; la capsule de zoom passe de 1× à 1,3× sur une caméra qui expose
+      # la capacité zoom.
+      - name: Gate effets et zoom d'appel (piste envoyée, micro tenu, zoom)
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-calls-effects.mjs
+
+      # #9099 / #8471 / #8441 — les effets de ma vidéo ne coûtent aucune
+      # image : le traitement vit dans un worker. Dix secondes par passe
+      # (couleur + visage, flou par segmentation, zoom numérique), le
+      # carrousel du mode Effets glissé en continu : ≥ 28 images par seconde
+      # remises à l'envoi, < 5 % perdues, aucune tâche longue pendant un
+      # glissé, p95 du traitement d'une image ≤ 4 ms.
+      - name: Gate perf des effets d'appel (worker, flou, zoom)
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
+        run: |
+          cd apps/web
+          node scripts/check-calls-effects-perf.mjs
+
+      # #8433 / #8438 / #8439 / #8437 — les contrôles d'un appel en cours : le
+      # pair de fixtures enregistre chaque contrôle reçu. « Réagir » part
+      # (call:reaction) et monte aussitôt, la réaction du pair monte sous son
+      # nom (fondu seul sous prefers-reduced-motion) ; « Enregistrer » demande
+      # audio seul ou audio et vidéo ; « Ajouter » invite un contact accepté
+      # (call:invite-participant) qui sonne aussitôt ; le menu de modération
+      # coupe un micro (call:mute-participant) et confirme avant de retirer ;
+      # le pair coupe mon micro et le dit.
+      - name: Gate contrôles d'appel (ajouter, modérer, réagir, enregistrer)
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
+        run: |
+          cd apps/web
+          node scripts/check-calls-controls.mjs
+
+      # #8048 — les sous-titres traduits d'un appel marchent dans les deux sens :
+      # le pair de fixtures ouvre ses sous-titres et parle (call:translated-
+      # segment) ; modes traduit / original / masqué, journal, aria-live. Une
+      # SpeechRecognition simulée fait parler le lecteur : le FINAL seul part en
+      # call:transcription-segment (forme du schéma de la passerelle), brouillon
+      # et final sur le canal de données « transcription », bye au raccroché,
+      # transcriptionUsed dans call:analytics. Puis la bulle d'appel du fil
+      # déplie la transcription gravée, servie par le Prisme du lecteur. Sans
+      # reconnaissance vocale : on reçoit, rien ne part.
+      - name: Gate sous-titres d'appel (deux sens, journal, transcription du fil)
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
+        run: |
+          cd apps/web
+          node scripts/check-calls-captions.mjs
+
+      # #6363 / #6321 — découvrir des personnes : trois onglets (Découvrir,
+      # Demandes, Bloqués), chaque relation par son geste, accepter/refuser
+      # retirent la ligne et font baisser le compte de l'onglet ET du barreau au
+      # geste, aucun point de présence peint ; chaque texte tient AA et aucun
+      # n'est volé par un disque (deux schémas, deux gabarits).
+      - name: Gate découverte de personnes (relations, demandes, bloqués, compte)
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
+        run: |
+          cd apps/web
+          node scripts/check-discover.mjs
+
+      # #6361 — Mes liens : le hub ne montre que la famille servie, la liste
+      # porte les agrégats de la passerelle, « copier » met l'adresse PUBLIQUE
+      # dans le presse-papiers, « Désactiver » se lit au geste, la création
+      # remplace l'écran par le lien créé ; chaque texte tient AA et aucun
+      # n'est volé par un disque (deux schémas, deux gabarits).
+      - name: Gate Mes liens (hub, liens de partage, détail, création)
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
+        run: |
+          cd apps/web
+          node scripts/check-links.mjs
+
+      # #6457 — les Réels : le bouton de l'en-tête du Flux, un réel touché ouvre
+      # le lecteur SUR lui depuis le cache (sans squelette, sans disque), un seul
+      # réel joue, un balayage tactile accroche le suivant puis le précédent, le
+      # clavier aussi, « J'aime » se voit au retour dans le Flux, le texte blanc
+      # tient AA au pixel, le retour ne laisse aucun lecteur ; hors ligne chaud
+      # et froid, lien profond, mouvement réduit (deux schémas, deux gabarits).
+      - name: Gate Réels (lecteur plein écran, balayage, lecture unique, retour)
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-reels.mjs
+
+      # #6807 — LES MÉDIAS DU FIL ET DES STORIES SE JOUENT. Mesure l'EFFET, pas
+      # la présence d'une balise : le temps doit AVANCER quand on demande la
+      # lecture. Porte ses deux contre-épreuves — l'affiche d'un RÉEL ne monte
+      # aucun élément média (#6457), une story IMAGE reste une image.
+      - name: Gate médias du fil (une vidéo, un son et une story vidéo SE JOUENT)
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
+        run: |
+          cd apps/web
+          node scripts/check-feed-media.mjs
+
+      # #7449 — LE FIL SE LIT DANS UNE COLONNE, ET ON Y PUBLIE. Le SEUL gate du
+      # dépôt qui mesure un gabarit LARGE (1440 × 900) : tous les autres
+      # tournent à 390 × 844 et 320 × 568, et c'est exactement pour cela que le
+      # fil a pu s'étaler sur 1416 px sans qu'aucun ne rougisse. Il garde aussi
+      # l'autre moitié — que la borne ne MORD PAS sur un téléphone — puis
+      # traverse la porte de création : ses deux formats, le refus NOMMÉ d'un
+      # réel non qualifiant, la bascule qui garde la saisie, la publication.
+      - name: Gate colonne du fil (centrage large, porte de création, publication)
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
+        run: |
+          cd apps/web
+          node scripts/check-feed-column.mjs
+
+      # #7135 — LES GESTES D'UNE RANGÉE DE COMMENTAIRE ONT UN EFFET. Les
+      # témoins `bun test` tournent sous happy-dom et prouvent que les rappels
+      # partent ; seul un moteur réel peut dire que le cœur se REMPLIT avant la
+      # réponse, que la cible fait 44 px, que le refus défait l'optimiste à la
+      # valeur EXACTE et que « Réessayer » repart. Surface partagée par
+      # `/post/$post` et le panneau du lecteur de stories.
+      - name: Gate commentaires (aimer, modifier, supprimer — optimiste et refus)
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-post-comments.mjs
+
+      # #7022 — UN MÉDIA ABSENT DÉGRADE PROPREMENT. 8 fichiers sur 2912 sont
+      # réellement absents du volume de production (le cadrage du lot en
+      # annonçait 582 : faux, cf. l'issue). Une référence morte doit rendre un
+      # état DESSINÉ, ANNONCÉ, lisible et SANS bouton — il n'y a rien à
+      # retenter — sans emporter la story autour d'elle.
+      - name: Gate médias absents (état dessiné, annoncé, non destructeur)
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
+        run: |
+          cd apps/web
+          node scripts/check-medias-absents.mjs
+
+      # #6898 — UNE PUBLICATION V:3 SE LIT DANS LE FIL AVEC TOUS SES OBJETS.
+      # Texte seul, image, cadrage plafonné à 1,4, une seule scène cinématique
+      # joue à la fois (`prefers-reduced-motion` en tient une hors du jeu), et
+      # chaque tuile d'un agencement montre la scène de SA slide.
+      - name: Gate scènes du fil (texte, cadrage 1,4, une seule lecture, tuiles)
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
+        run: |
+          cd apps/web
+          node scripts/check-feed-scenes.mjs
+
+      # #6899 — LE LECTEUR DE STORY REND SES SCÈNES V3 PAR LE MOTEUR PARTAGÉ.
+      # Placeholder ThumbHash peint AVANT « prêt » (moteur retenu, mesure de
+      # pixels), carte 9:16 centrée dans le plateau aux deux tailles, texte au
+      # Prisme (rang 2), son de fond dont le bouton dit la vérité et a un effet,
+      # image seule sans moteur, épingle de timeline autoritaire, v1 intact.
+      - name: Gate scènes du lecteur de story (placeholder, plateau, son, image seule)
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
+        run: |
+          cd apps/web
+          node scripts/check-story-scene.mjs
+
+      # #7015 — LE SON DE FOND EMPRUNTÉ À LA BIBLIOTHÈQUE JOUE. Mesuré en
+      # production : `GET /api/v1/static/<uuid>.m4a` rend 401, pas 404 — la
+      # route est authentifiée et une balise `<audio src>` ne porte aucun
+      # en-tête. Ce gate mesure l'EFFET (readyState, duration), l'absence de
+      # jeton dans l'URL, et qu'un refus dégrade sans promesse rejetée.
+      - name: Gate son de fond de story (route authentifiée, URL d'objet, refus)
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
+        run: |
+          cd apps/web
+          node scripts/check-story-sound.mjs
+
+      # #6900 — LE STUDIO DE STORY PEINT CE QU'IL PUBLIERA. Publier inerte sur
+      # un brouillon vide, un fond + un son posés font PEINDRE le moteur
+      # partagé (mesure de pixels, pas la présence d'une balise), la carte
+      # 9:16 est centrée dans son plateau aux deux gabarits, cinq cibles
+      # ≥ 44 px, le texte tapé survit à un rechargement (brouillon).
+      - name: Gate studio de story (moteur peint, carte 9:16, cibles, brouillon)
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-story-studio.mjs
+
+      # #10159 — LES CADRES DE GLOIRE SE PEIGNENT AVEC LE VRAI PEINTRE (§ 8.3) :
+      # l'échantillon de L21a (20 cibles, poses exclues) composé par
+      # `lib/game-photo/glory/` depuis les contrats versionnés, les couches du
+      # magasin et la photo fixture ; deux peintures identiques à l'octet ; la
+      # composition descendue à 540 × 960 par la même moyenne 2 × 2 que les
+      # cibles et comparée hors boîtes de texte, de blason et d'oiseaux. Un
+      # cadre qui ne se compose pas, une couche absente du magasin, une
+      # peinture instable, une collection sans manifeste versionné hors liste
+      # de démonstration ou zéro cible composée est ROUGE, `--report` ou non
+      # (`scripts/lib/glory-gate-verdict.ts`). Les mesures de tolérance sont
+      # IMPRIMÉES (`--report`) : les cibles ne sont PAS composées avec les
+      # mêmes entrées que le peintre — le générateur applique
+      # `generateur/lib/anchors.json` (L2, #10153 : Mee et Meo déplacés), que le
+      # contrat versionné porte depuis #10277 (mises en page relevées par
+      # `lib/overlap.mjs`) ; le gate exclut encore les oiseaux aux deux places
+      # et nomme l'écart d'ancres par cadre. Ce qui reste : la plaque sans
+      # message absente des contrats (variantes `plain`) et des couches
+      # servies en q82 (mesuré le 2026-10-22 : 82 à 98 % des pixels à |Δ| ≤ 6 ;
+      # voir #10159, #10153/#10177). Le gate bâtit et sert le peintre par
+      # `Bun.build` / `Bun.serve` : il n'existe que dans le scénario bun, comme
+      # `setup-bun` plus haut — sous pnpm, l'étape est sautée, pas cassée
+      # (check-ci-build-order.mjs, qui lit le scénario AVANT `!cancelled()` :
+      # un appel de fonction lui est opaque, et « opaque && faux » ne se lit
+      # pas comme faux).
+      - name: Gate cadres de gloire (peintre, échantillon de L21a, stabilité)
+        if: ${{ env.PACKAGE_MANAGER == 'bun' && !cancelled() && matrix.tranche == 4 }}
+        run: |
+          cd apps/web
+          bun scripts/check-glory-frames.ts --report
+
+      # #6943/#6944 — LE PLATEAU : poser DEUX objets texte, en déplacer un au
+      # POINTEUR puis le tourner et l'agrandir au CLAVIER, choisir sa langue et
+      # son style (et vérifier qu'ils sont PEINTS, pas seulement annoncés),
+      # placer un son SUR la scène, écrire une LÉGENDE de média — puis RELIRE
+      # le corps de POST /api/v1/posts et y retrouver chaque valeur, un objet
+      # non sélectionné restant intact. Bâtit sa propre variante `gateway`
+      # (`dist-gateway/`) : le `dist/` de fixtures court-circuite la
+      # publication, donc il n'y aurait AUCUN document à relire.
+      - name: Gate plateau de story (deux textes, gestes, langue, style, légende, document publié)
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
+        run: |
+          cd apps/web
+          node scripts/check-story-plateau.mjs
+
+      # #6150 — les DEUX portes de ma cellule du rail de stories : le (+) au
+      # début de ligne au-dessus de l'avatar, la pastille d'humeur en dessous à
+      # la fin, deux cibles de 44 px qui ne se recouvrent PAS (le piège de deux
+      # pastilles sur un même avatar), 💭 sans humeur et l'emoji animé avec,
+      # chaque porte ouverte par un VRAI clic — clair, sombre et RTL miroité.
+      - name: Gate rail « soi » (deux portes, cibles disjointes, 💭 / emoji, RTL)
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
+        run: |
+          cd apps/web
+          node scripts/check-story-self-rail.mjs
+
+      - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
+        run: |
+          cd apps/web
+          node scripts/check-thread-states.mjs
+
+      # #5910 — CINQ MAILLONS DU COMPOSITE QUI NE S'EXÉCUTAIENT NULLE PART.
+      # Tous ouvrent un chromium sur le `dist` déjà construit : ils ont leur
+      # place dans CE travail, qui a payé l'installation du navigateur, et pas
+      # dans `quality`. Placés AVANT le pas de virtualisation ci-dessous, qui
+      # doit rester le dernier pour la raison qu'il donne lui-même.
+      #
+      # `check-shell-dist` et `check-gateway-build` reconstruisent chacun leur
+      # propre sortie (`dist-capacitor`, `dist-gateway`) : ils ne touchent pas
+      # au `dist` que les pas précédents ont mesuré.
+      - name: Gate actions de rangée (un contrôle existe s'il a un EFFET)
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-list-actions.mjs
+
+      # #8694 — une section repliée porte le compte de non-lus qu'elle cache,
+      # à jour sans la déplier (le câblage, que les témoins `bun test` ne voient pas).
+      - name: Gate section repliée (compte de non-lus)
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
+        run: |
+          cd apps/web
+          node scripts/check-list-folded-unread.mjs
+
+      # #12885 — la liste virtualisée ne se fige pas sous « animations réduites » :
+      # une cale ne s'anime jamais, chaque saut de défilement reste où on l'a posé.
+      - name: Gate fenêtre de rangées (animations réduites)
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
+        run: |
+          cd apps/web
+          node scripts/check-list-window-reduced-motion.mjs
+
+      - name: Gate mode de lecture (l'EFFET, pas le rendu du contrôle)
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
+        run: |
+          cd apps/web
+          node scripts/check-reading-mode.mjs
+
+      # #8147 — LE MESSAGE LONG : extrait au quart, dépliage en place, verre
+      # Focal flouté, voisins atténués, mouvement réduit — mesurés au navigateur.
+      - name: Gate message long (dépliage en place, verre Focal)
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
+        run: |
+          cd apps/web
+          node scripts/check-long-message.mjs
+
+      # #5774 — LE CHROME DU FIL : escamotage au geste, pilule de jour
+      # collante, bouton « revenir en bas ». Mesure des `opacity`,
+      # `pointer-events`, positions et `scrollTop` RÉELS, dans les deux
+      # schémas — rien de tout cela n'est visible d'un test unitaire.
+      - name: Gate chrome du fil (escamotage, pilule de jour, retour en bas)
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
+        run: |
+          cd apps/web
+          node scripts/check-thread-chrome.mjs
+
+      # #6101 — AU REPOS, LA PILULE DE JOUR NE RECOUVRE AUCUN TEXTE. Boîtes
+      # des nœuds texte sous la capsule et opacité calculée, deux schémas,
+      # deux gabarits, trois modes rendus — une géométrie, jamais un booléen.
+      - name: Gate pilule de jour au repos (#6101)
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-day-pill-rest.mjs
+
+      # #6206 — UNE SECONDE LANGUE D'INTERFACE S'AFFICHE RÉELLEMENT : <html lang>
+      # résolu (stockage → navigateur → fr), écran d'attente et menus flottants
+      # dans la langue, UN SEUL catalogue téléchargé, aucune erreur de page,
+      # atteignabilité à 320×568 en allemand et en arabe.
+      - name: Gate langue d'interface (#6206)
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
+        run: |
+          cd apps/web
+          node scripts/check-interface-language.mjs
+
+      # #17335 (K00) — LE CATALOGUE DU KIT se voit et se prouve : le cliquet du verre
+      # dessiné hors du kit (il ne fait que descendre), le registre du chantier face au
+      # catalogue lu dans un vrai navigateur (cible, témoin, images de chaque état), la
+      # liste aux trois largeurs, clair et sombre, en RTL et à 200 %, et la clé inconnue
+      # qui laisse la liste. Lit le `dist` de fixtures construit plus haut.
+      - name: Gate catalogue du kit (cliquet du verre, registre, liste)
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
+        run: |
+          cd apps/web
+          node scripts/check-kit.mjs
+
+      # #17587 (épure #17584) — LES MOTS VISIBLES de chaque vue, comptés sur le
+      # `dist` de fixtures construit plus haut (390 × 844, horloge figée) :
+      # rouge si une vue dépasse son budget (`verbosity-budgets.json`) ou si un
+      # budget MONTE par rapport à `origin/dev`. Une vue qu'on ne peut pas ouvrir
+      # en fixtures est listée « non couverte », jamais omise.
+      - name: Gate des mots visibles (épure)
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
+        run: |
+          cd apps/web
+          node scripts/capture-verbosity.mjs
+          node scripts/check-verbosity.mjs
+
+      # #6213 — LE FIL DÉFILE D'UN BORD À L'AUTRE DE L'ÉCRAN. Miroir de
+      # check-thread-chrome.mjs : rien de ceci n'est visible d'un test
+      # unitaire, seule la mesure de rectangles réels le prouve.
+      - name: Gate arêtes de défilement du fil (#6213)
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
+        run: |
+          cd apps/web
+          node scripts/check-thread-scroll-edges.mjs
+
+      # #12634 — un message masqué pour moi sort du fil en se repliant : les
+      # voisines glissent image par image, fil calé en bas ET remonté, et un
+      # refus les fait revenir de même. Seule la mesure à l'écran le prouve.
+      - name: Gate repli d'un message masqué pour moi (#12634)
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
+        run: |
+          cd apps/web
+          node scripts/check-thread-row-exit.mjs
+
+      - name: Gate couple de focus des champs (l'anneau et son contre-anneau)
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
+        run: |
+          cd apps/web
+          node scripts/check-field-focus.mjs
+
+      # #6643 — chaque page et état d'accès (connexion et second facteur,
+      # accueil, inscription, mot de passe oublié, nouveau mot de passe, lien
+      # par e-mail, vérification d'e-mail) tient dans la colonne centrée de la
+      # connexion à 1440×900 et 834×1194, et garde la colonne de la tablette à
+      # 390×844 (plus petit ancêtre commun du contenu perceptible).
+      - name: Gate colonne des pages d'accès (centrée, jamais plus large que la connexion)
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-access-column.mjs
+
+      # #9343 — l'inscription ne se termine pas sans numéro plausible : aucun
+      # moyen de passer le numéro, le refus se dit sous le champ, et la charge
+      # envoyée porte le couple numéro + pays (la passerelle reste permissive).
+      - name: Gate inscription (numéro requis par l'écran)
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
+        run: |
+          cd apps/web
+          node scripts/check-signup.mjs
+
+      # #8418 — sur téléphone (320, 375, 390 px), aucune adresse servie ne
+      # défile de côté (document ET colonnes défilantes, hors bandes), aucun
+      # champ n'est écrit sous 16 px (zoom de Safari iOS au focus), et la
+      # connexion tient entière dans 375×667.
+      - name: Gate cadre téléphone (aucun défilement de côté, connexion dans la vue)
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
+        run: |
+          cd apps/web
+          node scripts/check-phone-frame.mjs
+
+      - name: Gate dist de la coque Capacitor (variante B)
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-shell-dist.mjs
+
+      # #7844 — le maillon `check-android-manifest` du composite n'était
+      # exécuté par AUCUN job : `gate-ci-parity.test.ts` le signalait vert par
+      # omission. Pur node, il ne lit que le manifeste versionné de la coque.
+      - name: Gate manifeste de la coque Android (permissions requises)
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-android-manifest.mjs
+
+      # #5774 revue — capacitor.config.ts se charge en CJS (require.extensions)
+      # par la CLI, jamais en ESM : `bun test` ne peut pas voir un `import.meta`
+      # qui casse ce chargeur-là. Ce gate rejoue le VRAI chargeur (`bunx cap ls`).
+      - name: Gate capacitor.config.ts (chargeur CJS réel de la CLI)
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
+        run: |
+          cd apps/web
+          node scripts/check-capacitor-config.mjs
+
+      - name: Gate build passerelle (VITE_DATA_SOURCE=gateway parle vraiment)
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-gateway-build.mjs
+
+      # #6936 — LE PARCOURS DE MISE À JOUR, de bout en bout : deux versions
+      # servies successivement sur la MÊME origine, la bannière qui s'annonce au
+      # retour au premier plan, le clic qui purge les caches de l'ancienne,
+      # active le worker en attente et recharge UNE fois — le lecteur restant
+      # connecté. Il construit sa propre sortie (`dist-app-update-a`, puis la
+      # version B qui en dérive) et ne touche pas au `dist` mesuré plus haut.
+      - name: Gate mise à jour de l'application (bannière, purge, session gardée)
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-app-update.mjs
+
+      # #7032 — le TEXTE ENRICHI : une mention validée est un lien qui, CLIQUÉ,
+      # peint vraiment le profil ; un pseudo non validé et un hashtag de
+      # CONVERSATION restent du texte (aucune jointure message ↔ hashtag
+      # n'existe) ; les quatre emphases rendent <strong>/<em>/<u>/<s> pendant
+      # que `snake_case` traverse intact ; l'enrichissement porte sur le texte
+      # TRADUIT, mesuré sous un prisme à DEUX échelons (`fr`,`en`) avec son
+      # contre-témoin à un seul ; aucun href hostile, aucun <script>.
+      - name: Gate texte enrichi (liens, mentions, quatre emphases, texte traduit)
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-rich-text.mjs
+
+      # #11314 — les animations de GÉOMÉTRIE passent sur transform et opacity :
+      # width, height, top, left, grid-template-rows… animés recalculent la
+      # mise en page à chaque image. Cliquet sur les sources : aucun nouveau
+      # site, et les sites tolérés ne font que décroître.
+      - name: Gate animations de géométrie (transform et opacity seulement)
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-animated-properties.mjs
+
+      # #12633 — l'aperçu d'une conversation tenue se peint sur son fond : la
+      # couche passe DEVANT la surface de la carte et DERRIÈRE son contenu, la
+      # carte garde sa surface tant que la photo est en route, et l'en-tête
+      # tient AA sur une photo noire puis blanche, en clair et en sombre —
+      # mesuré sur les PIXELS rendus par Chromium, avec les feuilles du dépôt.
+      - name: Gate fond de l'aperçu de conversation (contraste de l'en-tête)
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-peek-backdrop.mjs
+
+      # #6458 — le barreau « Administration » du menu flottant, sur un dist
+      # gateway (l'administration n'a pas de fixtures) : sept barreaux dans
+      # l'écran aux deux poses (deux schémas, 390×844 et 320×568), parcours
+      # clavier et navigation vers /admin sur UNE lecture de la matrice ; six
+      # barreaux sans le droit, sur 403 et en vol ; aucune lecture sans session.
+      - name: Gate barreau Administration du menu flottant (#6458)
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
+        run: |
+          cd apps/web
+          node scripts/check-admin-rung.mjs
+
+      # #6862 / #6733 — la lecture souveraine et la section Agent, sur un dist
+      # gateway : la tuile « Agent » selon `canManageAgent`, `/adm` ≡ `/admin`,
+      # les deux sections repliables à la souris ET au clavier, la ligne qui
+      # ouvre la modale, le motif écrit exigé AVANT toute requête `/messages`,
+      # le texte servi dans le Prisme du MEMBRE (jamais celui de l'administrateur),
+      # et aucune clé de contenu laissée dans `localStorage` après la lecture.
+      # Le gate construit son propre `dist-admin-souverain`, comme son voisin.
+      - name: Gate lecture souveraine et section Agent (#6862, #6733)
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
+        run: |
+          cd apps/web
+          node scripts/check-admin-souverain.mjs
+
+      # #6151 — un seul site résout `apiConfig.source` en dépendances d'appel
+      # (`src/lib/api/deps.ts`). Un huitième site qui reconstruirait
+      # `{ source: apiConfig.source, … }` divergerait en silence sans ce gate.
+      - name: Gate adaptateur unique de apiConfig.source (#6151)
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-api-source.mjs
+
+      # EN DERNIER, et pas par hasard : ce témoin RECONSTRUIT `dist` en variante
+      # de banc (500 messages) pour mesurer la virtualisation, puis le
+      # reconstruit normalement. Le placer avant les deux autres leur ferait
+      # mesurer un `dist` qui n'est pas celui qu'on livre.
+      - name: Gate virtualisation du fil (500 messages)
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
+        run: |
+          cd apps/web
+          node scripts/check-thread-virtualization.mjs
+
+  # ===========================================================================
+  # COQUE ANDROID : l'APK de `apps/web` est construit et audité (#6217)
+  # ===========================================================================
+  # `build-shells.mjs` porte depuis D-45 l'audit de l'ARTEFACT (versionName =
+  # `package.json`, versionCode = le numéro de build posé), mais il ne
+  # tournait qu'à la main, sur une machine outillée : une modification de
+  # `build.gradle`, de la config Capacitor ou d'un greffon natif n'était vue
+  # qu'au premier `build:shells` local, c'est-à-dire sur le téléphone.
+  #
+  # Ce job lance le MÊME pilote que la recette, cible Android seule, avec le
+  # numéro de run comme numéro de build (`MEESHY_SHELL_BUILD_NUMBER` est la
+  # source explicite que `resolveShellBuildNumber` prévoit : un checkout
+  # superficiel ne fabrique donc jamais un « build 1 »). Il ne tourne que si
+  # la poussée touche ce que le pilote LIT (`shell_android`,
+  # `scripts/ci-affected.mjs`). iOS reste local (runner macOS, #5657).
+  shell-android:
+    name: Android coque · APK de recette
+    runs-on: ubuntu-24.04
+    needs: changes
+    if: needs.changes.outputs.shell_android == 'true'
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
       - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      # pnpm is always needed for turborepo (version from package.json packageManager)
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
-
-      - name: Setup Node.js (with pnpm cache)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      - name: Setup Node.js (without cache for bun)
-        if: env.PACKAGE_MANAGER == 'bun'
+      - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
         uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
@@ -217,7 +1432,6 @@ jobs:
             bun-${{ runner.os }}-
 
       - name: Install dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
         run: |
           for i in 1 2 3; do
             bun install && break || {
@@ -226,12 +1440,357 @@ jobs:
             }
           done
 
-      - name: Install dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Build packages/shared
+        run: |
+          cd packages/shared
+          bun run build
+
+      # Capacitor 8 et AGP 8.13 exigent un JDK 21 ; la plateforme (compileSdk
+      # 36, `android/variables.gradle`) est résolue par AGP lui-même, les
+      # licences étant acceptées par setup-android.
+      - name: Setup JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Construire et auditer l'APK (build-shells.mjs --target android)
+        env:
+          MEESHY_SHELL_BUILD_NUMBER: ${{ github.run_number }}
+          VITE_API_BASE: https://gate.staging.meeshy.me
+          VITE_DATA_SOURCE: gateway
+        run: |
+          cd apps/web
+          node scripts/build-shells.mjs --target android
+
+      # #8049 — les décisions PURES de l'appel natif (routage de la poussée,
+      # sorties audio, type du service au premier plan, refus sans socket) se
+      # testent sur la JVM : `app/src/test/java/me/meeshy/app/`.
+      - name: Tests JVM de la coque (testDebugUnitTest)
+        run: |
+          cd apps/web/android
+          ./gradlew testDebugUnitTest
+
+      # #8669 — la variante RELEASE (celle du Play Store, lint vital compris)
+      # se construit à chaque changement de la coque : sans clé ni Firebase sur
+      # ce runner, gradle la rend NON signée, ce qui suffit à prouver qu'elle
+      # compile. La release signée part par `android-shell-release.yml`.
+      - name: Variante release de la coque (bundleRelease, non signée)
+        run: |
+          cd apps/web/android
+          ./gradlew bundleRelease -PmeeshyBuildNumber=${{ github.run_number }}
+
+      # L'APK de recette, installable tel quel (`adb install -r`) : la
+      # régression se voit sur le runner, et le build vert se pose sur le
+      # téléphone sans machine outillée.
+      - name: Publier l'APK de recette
+        uses: actions/upload-artifact@v7
+        with:
+          name: meeshy-web-shell-android-${{ github.run_number }}
+          path: apps/web/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+          if-no-files-found: error
+
+  # ===========================================================================
+  # CADRES DE GLOIRE : Mee et Meo ne recouvrent jamais la photo (lot L2, #10153)
+  # ===========================================================================
+  # La garde d'empiètement du prompt § 5.7 : les SVG des onze ateliers sont
+  # régénérés, puis `lib/overlap.mjs --check` mesure chaque cadre dans Chromium
+  # (fenêtre par différence magenta/vert, oiseaux par `data-layer`) et rougit
+  # dès qu'un cadre dépasse overlap 250 px, depth 6 px ou touche un visage —
+  # dans CHAQUE mise en page qu'il déclare (#10277,
+  # `controle/mises-en-page-<collection>.json`), re-mesurée à ses ancres.
+  # Sur une PR, seules les collections que le diff touche se re-mesurent
+  # (`lib/touched.mjs`) ; un fichier commun (lib/, mee/, fonts/) ou
+  # workflow_dispatch re-mesure tout. Les témoins qui précèdent prouvent
+  # qu'elle rougit : un oiseau dessiné posé au centre de la fenêtre
+  # (`--mutate bird-in-window`), une ancre d'une mise en page générée posée
+  # dans la photo (`--mutate layout-in-window`). Playwright est ÉPINGLÉ, donc
+  # Chromium ; seul ce job lit `docs/product/cadres-de-gloire/` (domaine
+  # `glory_frames`, `scripts/ci-affected.mjs`), il n'installe rien du monorepo.
+  # Le domaine porte aussi les contrats (`packages/shared/design/glory-frames/`)
+  # et le magasin des masques (`services/gateway/assets/packs/`) : le témoin
+  # chemin ↔ masque les lit, une réimportation seule doit le lancer (#10254).
+  # Le même job tient la garde de lisibilité des textes (#10265,
+  # `lib/contrast.mjs`), qui lit le cliquet `lowContrast` et la table du tri
+  # des textes de décor sous `packages/shared/design/glory-frames/`.
+  glory-frames:
+    name: Cadres de gloire · empiètement
+    runs-on: ubuntu-24.04
+    needs: changes
+    if: needs.changes.outputs.glory_frames == 'true'
+    # 60 : plafond de secours au-dessus du jeu complet des cibles (40 min, sur
+    # workflow_dispatch seulement) ; une PR tient en une douzaine de minutes.
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: docs/product/cadres-de-gloire/generateur
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # L'historique sert au choix des collections touchées (lib/touched.mjs).
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Ateliers (numpy et Pillow, l'atelier poses)
+        run: python -m pip install --disable-pip-version-check numpy==2.5.4 Pillow==12.3.0
+
+      # sharp encode les cibles de fidélité (L21a, lib/cible.mjs) ; la version
+      # épinglée est celle du workspace de la passerelle (lib/sharp.mjs), lue
+      # ici par $SHARP_MODULE puisque ce job n'installe rien du monorepo.
+      # playwright@1.56.1 livre Chromium 141.0.7390.37 : celui qui a rendu les
+      # cibles versionnées (docs/product/cadres-de-gloire/cible/index.json).
+      # Bumper l'épingle sans régénérer l'échantillon rougit les témoins du
+      # générateur (lib/cible-ci.test.mjs) : la comparaison plus bas ne vaut
+      # qu'à Chromium identique.
+      - name: Playwright épinglé (Chromium) et sharp
+        run: |
+          npm install --prefix . --no-save --no-package-lock --no-audit --no-fund playwright@1.56.1 sharp@0.35.5
+          ./node_modules/.bin/playwright install --with-deps chromium
+
+      # Les témoins du générateur : le plan des cibles sans navigateur
+      # (lib/cible-plan.test.mjs), la cohérence de ce que ce job épingle —
+      # Playwright donc Chromium, sharp — avec cible/index.json, et le chemin
+      # de chaque fenêtre versionnée rendu à son masque au pixel près
+      # (lib/window-path-contracts.test.mjs, #10254 : sharp y décode les masques).
+      - name: Témoins du générateur
+        env:
+          SHARP_MODULE: sharp
+        run: node --test lib/*.test.mjs
+
+      - name: Générer les SVG des ateliers
+        run: for atelier in ateliers/*/; do (cd "$atelier" && python -B gen.py > /dev/null); done
+
+      # L'amendement L2 de la référence (#10265) : chaque cadre dont Mee et
+      # Meo ont bougé (lib/anchors.json) porte, dans reference/sha256.json,
+      # les ancres et l'empreinte du SVG que les ateliers viennent de produire.
+      # Une ancre corrigée sans `reference.mjs --amend l2` rejoué rougit ici,
+      # plutôt qu'au réexport (recompose.mjs). Le témoin décale une ancre.
+      - name: Témoin — la garde de l'amendement rougit sur une ancre décalée
+        run: |
+          if node lib/amendment.mjs --check --mutate anchor; then
+            echo "::error::la garde de l'amendement n'a pas rougi sur une ancre décalée"
+            exit 1
+          fi
+
+      - name: Garde de l'amendement L2 de la référence
+        run: node lib/amendment.mjs --check
+
+      - name: Témoin — la garde rougit sur un empiètement injecté
+        run: |
+          if node lib/overlap.mjs --check --only neon-ambassadeur-1 --mutate bird-in-window; then
+            echo "::error::la garde d'empiètement n'a pas rougi sur un oiseau posé dans la fenêtre"
+            exit 1
+          fi
+
+      - name: Témoin — la garde rougit sur une mise en page déclarée posée dans la photo
+        run: |
+          if node lib/overlap.mjs --check --only savane-orateur-a --mutate layout-in-window; then
+            echo "::error::la garde d'empiètement n'a pas rougi sur une ancre de mise en page posée dans la photo"
+            exit 1
+          fi
+
+      - name: Collections touchées
+        id: touched
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        # L'affectation seule, sous `bash -e`, fait rougir l'étape quand touched.mjs plante ; dans un `echo`, son
+        # code de sortie se perdait et la sélection partait vide (lib/touched-ci.test.mjs).
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            only=all
+          else
+            only="$(node lib/touched.mjs "$BASE")"
+          fi
+          echo "only=$only" >> "$GITHUB_OUTPUT"
+
+      # « none » est la seule façon de ne rien re-mesurer ; une sélection vide est un défaut, jamais une garde verte.
+      - name: Garde d'empiètement, chaque mise en page déclarée
+        env:
+          ONLY: ${{ steps.touched.outputs.only }}
+        run: |
+          case "$ONLY" in
+            all) node lib/overlap.mjs --check --jobs 2 ;;
+            none) echo "aucune collection touchée : la garde ne re-mesure rien" ;;
+            "") echo "::error::le choix des collections n'a rien rendu : la garde ne passe pas sans mesurer"; exit 1 ;;
+            *) node lib/overlap.mjs --check --jobs 2 --only "$ONLY" ;;
+          esac
+
+      # La garde de lisibilité (#10265, prompt § 5.2) : chaque texte d'un
+      # cadre tient 4,5:1 (3:1 au-dessus de 24 px) contre ce qui est dessous,
+      # ou déclare un effet (ombre, lueur, contour) qui, mesuré au bord du
+      # glyphe sur le rendu, le rend lisible. Un texte bas hors du cliquet
+      # `lowContrast` (packages/shared/design/glory-frames/known-gaps.json)
+      # rougit. Le témoin qui précède efface presque un titre lisible.
+      - name: Témoin — la garde de lisibilité rougit sur un titre effacé
+        env:
+          SHARP_MODULE: sharp
+        run: |
+          if node lib/contrast.mjs --check --only olympe-legende-3 --mutate low-contrast; then
+            echo "::error::la garde de lisibilité n'a pas rougi sur un titre effacé"
+            exit 1
+          fi
+
+      - name: Garde de lisibilité des textes (#10265)
+        env:
+          SHARP_MODULE: sharp
+        run: node lib/contrast.mjs --check --jobs 2
+
+      # Les cibles de fidélité (lot L21a, #10177, prompt § 8.3) : l'échantillon
+      # versionné sous docs/product/cadres-de-gloire/cible/ se régénère ici,
+      # chaque cible rendue deux fois (une cible instable rougit). Un écart
+      # d'OCTETS avec les cibles versionnées n'est que signalé : la fraîcheur
+      # se juge sur l'export normalisé, jamais sur les octets de Chromium
+      # (version, hinting, GPU). Le jeu complet (197 × 2) n'est produit, en
+      # artefact, que sur workflow_dispatch : il coûte une demi-heure.
+      - name: Cibles de fidélité — l'échantillon se régénère (L21a)
+        env:
+          SHARP_MODULE: sharp
+        run: |
+          node lib/cible.mjs --generate --jobs 2 --cible cible-echantillon
+          if ! diff -rq cible-echantillon ../cible; then
+            echo "::warning::les cibles régénérées diffèrent des cibles versionnées (docs/product/cadres-de-gloire/cible/) : voir le journal"
+          fi
+
+      - name: Publier l'échantillon régénéré
+        uses: actions/upload-artifact@v7
+        with:
+          name: cadres-de-gloire-cibles-${{ github.run_number }}
+          path: docs/product/cadres-de-gloire/generateur/cible-echantillon
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Cibles de fidélité — le jeu complet (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        timeout-minutes: 40
+        env:
+          SHARP_MODULE: sharp
+        run: node lib/cible.mjs --full --jobs 2
+
+      - name: Publier le jeu complet des cibles
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v7
+        with:
+          name: cadres-de-gloire-cibles-completes-${{ github.run_number }}
+          path: docs/product/cadres-de-gloire/generateur/cible-complete
+          retention-days: 7
+          if-no-files-found: error
+
+  # ===========================================================================
+  # TEST: Unit Tests with Coverage (Parallel by package)
+  # Minimum coverage threshold: 90%
+  # ===========================================================================
+  # #6884 — `timeout-minutes` était UNIQUE (20) pour toute la matrice, alors
+  # que les paquets n'ont pas le même poids : `Test gateway` tenait avec
+  # moins de 2 min de marge sur 20 (18 min 05 s / 18 min 33 s mesurés sur
+  # `dev`), et toute variance (ex. #6477, montée de `vitest`) le fait
+  # franchir le seuil. Un dépassement de `timeout-minutes` DE JOB tue le job
+  # entier et TOUTES ses étapes en cours — GitHub rend alors `cancelled`,
+  # indiscernable d'une annulation par concurrence (`cancel-in-progress`
+  # ci-dessus). `timeout-minutes` posé sur une ÉTAPE, en revanche, échoue
+  # cette étape avec `failure` et un message explicite (« has timed out
+  # after Nm ») SANS attendre le budget de job — c'est déjà le patron des
+  # jobs `test-python`/`test-audio-pipeline` de ce fichier. `testTimeoutMinutes`
+  # ci-dessous porte donc le budget RÉEL (celui qu'on veut voir nommé), et
+  # `timeoutMinutes` (job) reste un plafond de secours nettement au-dessus —
+  # relevé pour `gateway` seul (30 au lieu de 20), les autres paquets gardant
+  # le budget historique. RELEVÉ À 35/40 le 2026-10-11 (#10058) : même
+  # arbre, 30 616 tests verts, 894 s sur un runner et 1 457 s sur un autre
+  # (chaque suite ~1,6× plus lente — le RUNNER, pas une suite bloquée) ; les
+  # runners lents franchissaient 25 min sans aucun échec. Filet en attendant
+  # l'accélération de ts-jest (isolatedModules, mesurée 584 → 268 s en local).
+  test:
+    name: Tests · ${{ matrix.package.name }}
+    runs-on: ubuntu-24.04
+    needs: [quality, changes]
+    timeout-minutes: ${{ matrix.package.timeoutMinutes }}
+    # #12558 — web et passerelle ne tournent que si leur ZONE est touchée
+    # (`scripts/ci-affected.mjs`, tests_web / tests_gateway) ; leurs tests qui
+    # lisent HORS zone (Swift, Kotlin, infrastructure…) passent à chaque poussée
+    # par `test-parite`. La condition est répétée sur chaque étape lourde, en
+    # clair : un job de matrice ne peut pas se sauter par entrée, et
+    # `check-ci-build-order` lit les étapes à travers elle.
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - name: shared
+            path: packages/shared
+            filter: '@meeshy/shared'
+            zone: toujours
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
+          # #12556 — la passerelle en TROIS tranches Jest (`--shard`) : en un
+          # bloc, 16 à 17,5 min après `quality`, elle fixait la durée du run.
+          # Chaque tranche tourne sans seuil et dépose son `coverage-final.json` ;
+          # `test-gateway-coverage` les fusionne et juge le seuil de
+          # `jest.config.json`, inchangé.
+          - name: gateway · tranche 1/3
+            path: services/gateway
+            filter: '@meeshy/gateway'
+            zone: tests_gateway
+            shard: 1/3
+            artifact: couverture-gateway-1
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
+          - name: gateway · tranche 2/3
+            path: services/gateway
+            filter: '@meeshy/gateway'
+            zone: tests_gateway
+            shard: 2/3
+            artifact: couverture-gateway-2
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
+          - name: gateway · tranche 3/3
+            path: services/gateway
+            filter: '@meeshy/gateway'
+            zone: tests_gateway
+            shard: 3/3
+            artifact: couverture-gateway-3
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
+          - name: agent
+            path: services/agent
+            filter: '@meeshy/agent'
+            zone: toujours
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
+          - name: web
+            path: apps/web
+            filter: '@meeshy/web'
+            zone: tests_web
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Préparer Node et les dépendances
+        if: ${{ (matrix.package.zone == 'toujours' || needs.changes.outputs[matrix.package.zone] == 'true') }}
+        uses: ./.github/actions/preparer-js
 
       # Generate Prisma client before building
       - name: Generate Prisma client
+        if: ${{ (matrix.package.zone == 'toujours' || needs.changes.outputs[matrix.package.zone] == 'true') }}
         env:
           DATABASE_URL: "mongodb://localhost:27017/test"
         run: |
@@ -239,6 +1798,163 @@ jobs:
           npx prisma generate --generator client
 
       # Build shared package first (required for gateway tests)
+      - name: Build shared package (bun)
+        if: ${{ env.PACKAGE_MANAGER == 'bun' && (matrix.package.zone == 'toujours' || needs.changes.outputs[matrix.package.zone] == 'true') }}
+        run: |
+          cd packages/shared
+          bun run build
+
+      - name: Build shared package (pnpm)
+        if: ${{ env.PACKAGE_MANAGER == 'pnpm' && (matrix.package.zone == 'toujours' || needs.changes.outputs[matrix.package.zone] == 'true') }}
+        run: |
+          cd packages/shared
+          pnpm run build
+
+      # #11258 — le retrait des métadonnées vidéo se prouve par ffmpeg/ffprobe
+      # RÉELS (GPS absent, paquets identiques) : la passerelle les embarque en
+      # production (Dockerfile), sa suite les exige ici. #11841 — la rotation
+      # JPEG sans perte se prouve par jpegtran RÉEL (libjpeg-turbo-progs).
+      # #12290 — l'AVIF HDR d'une photo à carte de gain s'écrit par avifenc
+      # RÉEL (libavif-bin). #11263 et #12268 — un HEIC se convertit, et la carte
+      # de gain d'un vrai HEIC d'iPhone se prouve, par heif-convert RÉEL.
+      - name: Install ffmpeg, jpegtran, avifenc and heif-convert (gateway)
+        if: ${{ matrix.package.path == 'services/gateway' && (matrix.package.zone == 'toujours' || needs.changes.outputs[matrix.package.zone] == 'true') }}
+        run: |
+          # Un miroir apt qui CALE (2026-11-05, run 42104330831 : 19 min sur
+          # 97 paquets, tranche 1/3 tuée par le délai du job, couverture
+          # fusionnée privée d'un tiers) doit échouer VITE et se retenter, pas
+          # consommer le budget des tests : délai réseau court, reprises, et
+          # chaque tentative bornée.
+          APT_OPTS=(-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20)
+          for i in 1 2 3; do
+            sudo timeout 240 apt-get "${APT_OPTS[@]}" update \
+              && sudo timeout 300 apt-get "${APT_OPTS[@]}" install -y --no-install-recommends ffmpeg libjpeg-turbo-progs libavif-bin libheif-examples libheif-plugin-libde265 \
+              && break
+            [ "$i" = 3 ] && exit 1
+            echo "apt : tentative $i en échec, nouvelle tentative dans 10 s"
+            sleep 10
+          done
+          ffprobe -version | head -1
+          jpegtran -version 2>&1 | head -1
+          command -v heif-convert
+          avifenc --version | head -1
+
+      - name: Run tests with coverage (bun)
+        if: ${{ env.PACKAGE_MANAGER == 'bun' && (matrix.package.zone == 'toujours' || needs.changes.outputs[matrix.package.zone] == 'true') }}
+        timeout-minutes: ${{ matrix.package.testTimeoutMinutes }}
+        run: |
+          # Le web lance sa suite depuis son répertoire (`bun test`, happy-dom).
+          if [ "${{ matrix.package.name }}" = "web" ]; then
+            cd ${{ matrix.package.path }}
+            echo "Running web tests with bun test..."
+            bun run test:coverage
+          elif [ -n "${{ matrix.package.shard }}" ]; then
+            cd ${{ matrix.package.path }}
+            bun run test:coverage --shard=${{ matrix.package.shard }} --coverageThreshold='{}' --coverageReporters=json --coverageReporters=text-summary
+          else
+            bun run test:coverage --filter=${{ matrix.package.filter }}
+          fi
+
+      - name: Run tests with coverage (pnpm)
+        if: ${{ env.PACKAGE_MANAGER == 'pnpm' && (matrix.package.zone == 'toujours' || needs.changes.outputs[matrix.package.zone] == 'true') }}
+        timeout-minutes: ${{ matrix.package.testTimeoutMinutes }}
+        run: |
+          if [ -n "${{ matrix.package.shard }}" ]; then
+            cd ${{ matrix.package.path }}
+            pnpm run test:coverage --shard=${{ matrix.package.shard }} --coverageThreshold='{}' --coverageReporters=json --coverageReporters=text-summary
+          else
+            pnpm run test:coverage --filter=${{ matrix.package.filter }}
+          fi
+
+      - name: Upload shard coverage
+        if: ${{ matrix.package.artifact && (matrix.package.zone == 'toujours' || needs.changes.outputs[matrix.package.zone] == 'true') }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.package.artifact }}
+          path: ${{ matrix.package.path }}/coverage/coverage-final.json
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Upload coverage
+        if: ${{ !matrix.package.artifact && (matrix.package.zone == 'toujours' || needs.changes.outputs[matrix.package.zone] == 'true') }}
+        uses: codecov/codecov-action@v7
+        continue-on-error: true
+        with:
+          file: ./${{ matrix.package.path }}/coverage/lcov.info
+          flags: ${{ matrix.package.name }}
+          name: ${{ matrix.package.name }}-coverage
+
+  # #12556 — LA COUVERTURE DE LA PASSERELLE, FUSIONNÉE PUIS JUGÉE UNE FOIS.
+  # Chaque tranche ne voit qu'une part des tests : jugée seule, elle tomberait
+  # sous le seuil global à tort. `merge-jest-coverage.mjs` additionne les trois
+  # `coverage-final.json` par emplacement et compare les quatre totaux au
+  # `coverageThreshold.global` de `services/gateway/jest.config.json` ; une
+  # tranche manquante est rouge (`--attendu 3`).
+  test-gateway-coverage:
+    name: Tests · gateway · couverture fusionnée
+    runs-on: ubuntu-24.04
+    needs: [changes, test]
+    if: ${{ !cancelled() && ((github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))) && (needs.test.result != 'skipped' && needs.changes.outputs.tests_gateway == 'true') }}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download shard coverage
+        uses: actions/download-artifact@v8
+        with:
+          pattern: couverture-gateway-*
+          path: couverture
+
+      - name: Merge coverage and enforce the threshold
+        run: |
+          node scripts/ci/merge-jest-coverage.mjs --self-test
+          node scripts/ci/merge-jest-coverage.mjs \
+            --config services/gateway/jest.config.json \
+            --attendu 3 \
+            --sortie services/gateway/coverage/coverage-final.json \
+            couverture/*/coverage-final.json
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v7
+        continue-on-error: true
+        with:
+          file: ./services/gateway/coverage/coverage-final.json
+          flags: gateway
+          name: gateway-coverage
+
+  # #12558 — LA VOIE DE PARITÉ, TOUJOURS EXÉCUTÉE. Les tests web et passerelle
+  # qui lisent hors de leur zone (le Swift des appels, le Kotlin de la
+  # signalisation, `apps/ios/Meeshy` entier, les compose d'`infrastructure/`,
+  # `CLAUDE.md`, les sources de l'autre suite…) se rejouent ici à chaque
+  # poussée : sans elle, sauter « Tests · web » ou « Tests · gateway » par zone
+  # laisserait passer une rupture de parité venue d'iOS ou d'Android. Leur liste
+  # se DÉRIVE du texte des tests (`scripts/ci/voie-parite.mjs`) ; elle ne se
+  # tient pas à la main. Sans `needs` : elle ne lit rien d'un autre job.
+  test-parite:
+    name: Tests · voie de parité (web et passerelle)
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
+
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: "mongodb://localhost:27017/test"
+        run: |
+          cd packages/shared
+          npx prisma generate --generator client
+
       - name: Build shared package (bun)
         if: env.PACKAGE_MANAGER == 'bun'
         run: |
@@ -251,82 +1967,71 @@ jobs:
           cd packages/shared
           pnpm run build
 
-      - name: Run tests with coverage (bun)
+      - name: Install ffmpeg, jpegtran, avifenc and heif-convert (gateway)
+        run: |
+          # Un miroir apt qui CALE (2026-11-05, run 42104330831 : 19 min sur
+          # 97 paquets, tranche 1/3 tuée par le délai du job, couverture
+          # fusionnée privée d'un tiers) doit échouer VITE et se retenter, pas
+          # consommer le budget des tests : délai réseau court, reprises, et
+          # chaque tentative bornée.
+          APT_OPTS=(-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20)
+          for i in 1 2 3; do
+            sudo timeout 240 apt-get "${APT_OPTS[@]}" update \
+              && sudo timeout 300 apt-get "${APT_OPTS[@]}" install -y --no-install-recommends ffmpeg libjpeg-turbo-progs libavif-bin libheif-examples libheif-plugin-libde265 \
+              && break
+            [ "$i" = 3 ] && exit 1
+            echo "apt : tentative $i en échec, nouvelle tentative dans 10 s"
+            sleep 10
+          done
+
+      - name: Parity lane self-test
+        run: node scripts/ci/voie-parite.mjs --self-test
+
+      - name: Parity lane · web
         if: env.PACKAGE_MANAGER == 'bun'
         run: |
-          # Web tests must use Jest (configured with Next.js)
-          if [ "${{ matrix.package.name }}" = "web" ]; then
-            cd ${{ matrix.package.path }}
-            echo "Running web tests with Jest via bun..."
-            bun run test:coverage
-          else
-            bun run test:coverage --filter=${{ matrix.package.filter }}
-          fi
+          cd apps/web
+          bun test $(node ../../scripts/ci/voie-parite.mjs --liste web)
 
-      - name: Run tests with coverage (pnpm)
+      - name: Parity lane · gateway (bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          cd services/gateway
+          bun run test $(node ../../scripts/ci/voie-parite.mjs --liste gateway)
+
+      - name: Parity lane · gateway (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm run test:coverage --filter=${{ matrix.package.filter }}
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v7
-        continue-on-error: true
-        with:
-          file: ./${{ matrix.package.path }}/coverage/lcov.info
-          flags: ${{ matrix.package.name }}
-          name: ${{ matrix.package.name }}-coverage
+        run: |
+          cd services/gateway
+          pnpm run test $(node ../../scripts/ci/voie-parite.mjs --liste gateway)
 
   # ===========================================================================
   # TEST: Python Tests with Coverage
-  # DISABLED: Downloads ML models that fill up GitHub runner disk
-  # Specific tests (audio-pipeline, tts-stt, voice-api) run in dedicated jobs
+  #
+  # RALLUME au sprint 0.3 (un `if: true`, remplacé depuis par le job
+  # `changes`, #7711), et ce bloc a porté
+  # « DISABLED: Downloads ML models that fill up GitHub runner disk » pendant
+  # tout ce temps — trois lignes au-dessus du `if` qui le contredisait. Le
+  # commentaire disait une raison technique précise et plausible, ce qui le
+  # rendait crédible ; c'est ce qui a laissé le résumé annoncer « disabled »
+  # pour un job qui consomme un runner à chaque poussée (#4860).
+  #
+  # Ce qui a rendu le rallumage possible : la découpe par marqueur CPU-only et
+  # un seuil de référence, qui évitent le téléchargement des modèles lourds.
+  # Les suites spécifiques (audio-pipeline, tts-stt, voice-api) gardent leurs
+  # jobs dédiés.
   # ===========================================================================
   test-python:
-    name: Test Python (translator)
-    if: true  # Sprint 0.3: re-enabled with CPU-only marker split + baseline threshold
-    runs-on: ubuntu-latest
-    needs: quality
+    name: Traducteur · tests Python
+    runs-on: ubuntu-24.04
+    needs: [quality, changes]
+    if: needs.changes.outputs.translator == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # Node.js and package manager setup for Prisma CLI
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      # Install Node.js dependencies (required for Prisma CLI)
-      - name: Install Node.js dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install Node.js dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
@@ -378,14 +2083,23 @@ jobs:
           uv venv --python ${{ env.PYTHON_VERSION }}
           # Install build deps then sync, with retry (pytorch mirror returns transient 503s;
           # build deps required for pkuseg build with no-build-isolation)
+          # #14184 — torch CPU vient de l'index `pytorch-cpu` de `[tool.uv.sources]`
+          # (pyproject.toml) : aucun extra `cpu` n'existe. Trois échecs font échouer
+          # l'étape — la boucle ne finit plus sur le code de retour de `sleep`.
+          installed=0
           for i in 1 2 3; do
-            uv pip install numpy setuptools wheel cython \
-              && uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev \
-              && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
+            if uv pip install numpy setuptools wheel cython \
+              && uv sync --python ${{ env.PYTHON_VERSION }} --extra dev; then
+              installed=1
+              break
+            fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
           done
+          if [ "$installed" != 1 ]; then
+            echo "::error::uv sync a échoué trois fois — dépendances du traducteur non installées"
+            exit 1
+          fi
 
       - name: Run tests with coverage (80% minimum)
         env:
@@ -422,51 +2136,16 @@ jobs:
   # Generates audio samples and uploads as artifacts
   # ===========================================================================
   test-audio-pipeline:
-    name: Audio Pipeline Tests
-    runs-on: ubuntu-latest
-    needs: quality
+    name: Traducteur · pipeline audio
+    runs-on: ubuntu-24.04
+    needs: [quality, changes]
+    if: needs.changes.outputs.translator == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # Node.js and package manager setup for Prisma CLI
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      # Install Node.js dependencies (required for Prisma CLI)
-      - name: Install Node.js dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install Node.js dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
@@ -518,14 +2197,23 @@ jobs:
           uv venv --python ${{ env.PYTHON_VERSION }}
           # Install build deps then sync, with retry (pytorch mirror returns transient 503s;
           # build deps required for pkuseg build with no-build-isolation)
+          # #14184 — torch CPU vient de l'index `pytorch-cpu` de `[tool.uv.sources]`
+          # (pyproject.toml) : aucun extra `cpu` n'existe. Trois échecs font échouer
+          # l'étape — la boucle ne finit plus sur le code de retour de `sleep`.
+          installed=0
           for i in 1 2 3; do
-            uv pip install numpy setuptools wheel cython \
-              && uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev \
-              && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
+            if uv pip install numpy setuptools wheel cython \
+              && uv sync --python ${{ env.PYTHON_VERSION }} --extra dev; then
+              installed=1
+              break
+            fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
           done
+          if [ "$installed" != 1 ]; then
+            echo "::error::uv sync a échoué trois fois — dépendances du traducteur non installées"
+            exit 1
+          fi
 
       - name: Create audio output directory
         run: |
@@ -574,51 +2262,16 @@ jobs:
   # Tests UnifiedTTSService, TranscriptionService, and E2E voice pipeline
   # ===========================================================================
   test-tts-stt:
-    name: TTS/STT Integration
-    runs-on: ubuntu-latest
-    needs: quality
+    name: Traducteur · TTS et STT
+    runs-on: ubuntu-24.04
+    needs: [quality, changes]
+    if: needs.changes.outputs.translator == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # Node.js and package manager setup for Prisma CLI
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      # Install Node.js dependencies (required for Prisma CLI)
-      - name: Install Node.js dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install Node.js dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
@@ -670,14 +2323,23 @@ jobs:
           uv venv --python ${{ env.PYTHON_VERSION }}
           # Install build deps then sync, with retry (pytorch mirror returns transient 503s;
           # build deps required for pkuseg build with no-build-isolation)
+          # #14184 — torch CPU vient de l'index `pytorch-cpu` de `[tool.uv.sources]`
+          # (pyproject.toml) : aucun extra `cpu` n'existe. Trois échecs font échouer
+          # l'étape — la boucle ne finit plus sur le code de retour de `sleep`.
+          installed=0
           for i in 1 2 3; do
-            uv pip install numpy setuptools wheel cython \
-              && uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev \
-              && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
+            if uv pip install numpy setuptools wheel cython \
+              && uv sync --python ${{ env.PYTHON_VERSION }} --extra dev; then
+              installed=1
+              break
+            fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
           done
+          if [ "$installed" != 1 ]; then
+            echo "::error::uv sync a échoué trois fois — dépendances du traducteur non installées"
+            exit 1
+          fi
 
       - name: Run UnifiedTTSService tests
         env:
@@ -738,26 +2400,16 @@ jobs:
   # Complete coverage for Voice API endpoints and handlers
   # ===========================================================================
   test-voice-api:
-    name: Voice API Tests
-    runs-on: ubuntu-latest
-    needs: quality
+    name: Traducteur · API vocale
+    runs-on: ubuntu-24.04
+    needs: [quality, changes]
+    if: needs.changes.outputs.translator == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
@@ -795,29 +2447,6 @@ jobs:
           echo "::error::uv python install a échoué après 5 tentatives."
           exit 1
 
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install Node.js dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install Node.js dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
-
       - name: Install system dependencies (ffmpeg + dev libs for PyAV)
         run: |
           sudo apt-get update
@@ -832,14 +2461,23 @@ jobs:
           uv venv --python ${{ env.PYTHON_VERSION }}
           # Install build deps then sync, with retry (pytorch mirror returns transient 503s;
           # build deps required for pkuseg build with no-build-isolation)
+          # #14184 — torch CPU vient de l'index `pytorch-cpu` de `[tool.uv.sources]`
+          # (pyproject.toml) : aucun extra `cpu` n'existe. Trois échecs font échouer
+          # l'étape — la boucle ne finit plus sur le code de retour de `sleep`.
+          installed=0
           for i in 1 2 3; do
-            uv pip install numpy setuptools wheel cython \
-              && uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev \
-              && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
+            if uv pip install numpy setuptools wheel cython \
+              && uv sync --python ${{ env.PYTHON_VERSION }} --extra dev; then
+              installed=1
+              break
+            fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
           done
+          if [ "$installed" != 1 ]; then
+            echo "::error::uv sync a échoué trois fois — dépendances du traducteur non installées"
+            exit 1
+          fi
 
       # Generate JavaScript Prisma client (required for Gateway Voice API tests)
       - name: Generate Prisma client (JavaScript)
@@ -894,50 +2532,16 @@ jobs:
   # Comprehensive pipeline tests matching Python XTTS test script
   # ===========================================================================
   test-voice-e2e:
-    name: Voice E2E Benchmark
-    runs-on: ubuntu-latest
+    name: Traducteur · banc vocal de bout en bout
+    runs-on: ubuntu-24.04
     needs: [quality, test-voice-api]
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[e2e]')
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
@@ -965,15 +2569,29 @@ jobs:
   # SECURITY: Vulnerability Scan
   # ===========================================================================
   security:
-    name: Security
-    runs-on: ubuntu-latest
+    name: Sécurité · Trivy du dépôt
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
+    runs-on: ubuntu-24.04
+    # Sans `security-events: write`, l'envoi du SARIF échoue sur les pushes de
+    # dev (« Resource not accessible by integration », masqué par
+    # continue-on-error) : dev n'a alors AUCUNE analyse Trivy de référence, et
+    # le check « Trivy » d'une PR qui touche bun.lock compte toutes les alertes
+    # déjà présentes comme introduites par elle.
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Install Trivy
+        uses: ./.github/actions/installer-trivy
+
       - name: Run Trivy
         uses: aquasecurity/trivy-action@master
         with:
+          skip-setup-trivy: true
           scan-type: 'fs'
           scan-ref: '.'
           format: 'sarif'
@@ -981,7 +2599,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload results
-        uses: github/codeql-action/upload-sarif@v4.37.8
+        uses: github/codeql-action/upload-sarif@v4.39.3
         if: always()
         continue-on-error: true
         with:
@@ -991,58 +2609,15 @@ jobs:
   # PRISMA: Validate schema and check migrations
   # ===========================================================================
   prisma:
-    name: Prisma
-    runs-on: ubuntu-latest
+    name: Prisma · schéma et client
+    runs-on: ubuntu-24.04
     needs: quality
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      # pnpm is always needed for turborepo (version from package.json packageManager)
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
-
-      - name: Setup Node.js (with pnpm cache)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      - name: Setup Node.js (without cache for bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       - name: Validate Prisma schema
         env:
@@ -1070,58 +2645,15 @@ jobs:
   # BUILD: Verify builds work (like in Dockerfiles)
   # ===========================================================================
   build:
-    name: Build (${{ github.event.inputs.package_manager || 'bun' }})
-    runs-on: ubuntu-latest
+    name: Build · shared, passerelle, agent (${{ github.event.inputs.package_manager || 'bun' }})
+    runs-on: ubuntu-24.04
     needs: [quality, test, prisma]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      # pnpm is always needed for turborepo (version from package.json packageManager)
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
-
-      - name: Setup Node.js (with pnpm cache)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      - name: Setup Node.js (without cache for bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
+      - name: Préparer Node et les dépendances
+        uses: ./.github/actions/preparer-js
 
       # Generate Prisma client before building
       - name: Generate Prisma client
@@ -1170,43 +2702,76 @@ jobs:
           cd services/agent
           pnpm run build
 
-      # Build web frontend (like in Dockerfiles)
-      - name: Build web frontend (bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          cd apps/web
-          bun run build
-
-      - name: Build web frontend (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: |
-          cd apps/web
-          pnpm run build
+      # LE LEGACY `apps/web` N'EST PLUS CONSTRUIT ICI (directive porteur
+      # 2026-09-16), et il a quitté le dépôt le 2026-09-24 (#7668) avec ses
+      # trois témoins — `Test web` et les cliquets de dette ESLint et de
+      # types. Sa dernière forme reste restaurable depuis le tag
+      # `legacy-web-final` : `git checkout legacy-web-final -- apps/web`.
 
   # ===========================================================================
   # SUMMARY
   # ===========================================================================
   summary:
-    name: Summary
-    runs-on: ubuntu-latest
-    needs: [quality, test, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
-    if: always()
+    name: Verdict CI
+    runs-on: ubuntu-24.04
+    needs: [changes, quality, gardes-depot, web-navigateur, shell-android, glory-frames, test, test-gateway-coverage, test-parite, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
+    # `always()` parce qu'un agrégateur doit juger même quand ses dépendances
+    # échouent — sans quoi un rouge en amont le rendrait `skipped`, donc muet.
+    #
+    # #18045 — et le GEL se pose désormais ICI, au niveau du JOB, plus sur
+    # chacune de ses étapes. Gelé par ses étapes, ce job DÉMARRAIT, n'exécutait
+    # rien, et concluait `success` par absence d'échec : la charge réelle d'une
+    # PR sous `PR_CI_GEL` portait dix-sept jobs `skipped` et ce `success`-là, et
+    # `scripts/ci/pr-verte.mjs` — l'outil unique de TOUS les fusionneurs
+    # (#12559) — rendait « vert — 18 checks », EXIT=0. Toute PR du dépôt était
+    # fusionnable sans qu'un seul job ait tourné.
+    #
+    # Sauté au niveau du job, il conclut `skipped`, que l'oracle lit désormais
+    # « n'a pas conclu » ⇒ EN COURS, jamais vert. **Les deux moitiés sont
+    # nécessaires** : un job sauté produit quand même un check run à ce nom, et
+    # `SKIPPED` comptait vert — déplacer ce `if` SANS le correctif de l'oracle
+    # n'aurait rien gardé, en ayant l'air d'une garde.
+    # #18048 — la clause `CI_DEV_SEUL` vient de `dev` et elle est CONSERVÉE :
+    # elle n'est pas en conflit avec ce lot, elle est un SECOND gel. Elle est
+    # simplement portée au JOB avec la première, au lieu d'être répétée sur
+    # chacune des trois étapes — c'est le motif que ce lot retire, et l'y
+    # laisser aurait fait conclure `success` à un job sans étape exécutée dès
+    # que `CI_DEV_SEUL` est posé, c'est-à-dire sur toute branche hors dev,
+    # main et ci/promotion-*.
+    if: always() && (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
     steps:
-      - name: Pipeline Summary
+      - name: Checkout (le script du verdict seul)
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts/ci
+          fetch-depth: 1
+
+      - name: Tableau
         run: |
-          echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## CI — verdict" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package Manager:** ${{ env.PACKAGE_MANAGER }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Quality | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Tests (Node.js) | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Tests (Python) | disabled |" >> $GITHUB_STEP_SUMMARY
-          echo "| Audio Pipeline | ${{ needs.test-audio-pipeline.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| TTS/STT Integration | ${{ needs.test-tts-stt.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Voice API Tests | ${{ needs.test-voice-api.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Voice E2E Benchmark | ${{ needs.test-voice-e2e.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Prisma | ${{ needs.prisma.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Security | ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Zones touchées (translator: ${{ needs.changes.outputs.translator }}) | ${{ needs.changes.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Qualité TS | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Gardes du dépôt | ${{ needs.gardes-depot.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Web · gardes navigateur (web_navigateur: ${{ needs.changes.outputs.web_navigateur }}) | ${{ needs.web-navigateur.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Android coque (shell_android: ${{ needs.changes.outputs.shell_android }}) | ${{ needs.shell-android.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Cadres de gloire (glory_frames: ${{ needs.changes.outputs.glory_frames }}) | ${{ needs.glory-frames.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests · paquets Node | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests · gateway · couverture fusionnée (tests_gateway: ${{ needs.changes.outputs.tests_gateway }}) | ${{ needs.test-gateway-coverage.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests · voie de parité | ${{ needs.test-parite.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Traducteur · tests Python | ${{ needs.test-python.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Traducteur · pipeline audio | ${{ needs.test-audio-pipeline.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Traducteur · TTS et STT | ${{ needs.test-tts-stt.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Traducteur · API vocale | ${{ needs.test-voice-api.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Traducteur · banc vocal de bout en bout | ${{ needs.test-voice-e2e.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Prisma · schéma et client | ${{ needs.prisma.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Sécurité · Trivy du dépôt | ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build · shared, passerelle, agent | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+      - name: Verdict
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: node scripts/ci/needs-verdict.mjs

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #13913 : le compositeur nomme le format qu'il compose — les variantes post et réel (ou story) des libellés qui le nomment. -->
+<resources>
+    <string name="stories_composer_canvas_post">Post canvas — pinch to zoom, drag to pan</string>
+    <string name="stories_composer_canvas_reel">Reel canvas — pinch to zoom, drag to pan</string>
+    <string name="story_sound_sheet_title_post">Post sound</string>
+    <string name="story_sound_sheet_title_reel">Reel sound</string>
+    <string name="story_sound_library_emptyMine_post">Your sounds will appear here as soon as you publish a post with original audio.</string>
+    <string name="story_sound_library_emptyMine_reel">Your sounds will appear here as soon as you publish a reel with original audio.</string>
+    <string name="story_media_soundExtraction_caption_story">Other people will be able to reuse this story\'s video soundtrack.</string>
+    <string name="story_media_soundExtraction_caption_reel">Other people will be able to reuse this reel\'s video soundtrack.</string>
+    <string name="story_media_soundExtraction_a11yHint_story">Other people will be able to reuse this story\'s video soundtrack in their own publications.</string>
+    <string name="story_media_soundExtraction_a11yHint_reel">Other people will be able to reuse this reel\'s video soundtrack in their own publications.</string>
+    <string name="composer_post_text_reel">Reel text</string>
+</resources>

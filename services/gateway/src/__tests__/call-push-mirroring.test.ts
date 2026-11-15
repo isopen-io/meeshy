@@ -20,7 +20,7 @@ import {
 } from '../services/call-push-mirroring';
 
 describe('buildCallSilentPush', () => {
-  it('targets BOTH mobile platforms (apns+fcm, ios+android) — never web', () => {
+  it('targets every ringing platform (apns+fcm, ios+android+web) — the web call notification is withdrawn too (#8043)', () => {
     const push = buildCallSilentPush({
       userId: 'user-1',
       type: 'call_cancel',
@@ -28,8 +28,7 @@ describe('buildCallSilentPush', () => {
     });
 
     expect(push.types).toEqual(['apns', 'fcm']);
-    expect(push.platforms).toEqual(['ios', 'android']);
-    expect(push.platforms).not.toContain('web');
+    expect(push.platforms).toEqual(['ios', 'android', 'web']);
   });
 
   it('builds a silent DND-bypassing payload carrying type and callId', () => {

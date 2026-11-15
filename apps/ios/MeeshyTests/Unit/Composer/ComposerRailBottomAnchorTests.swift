@@ -1,0 +1,52 @@
+import XCTest
+@testable import Meeshy
+
+/// **Tout ce qui se pose au bas de la scène libre partage le MÊME bas** (#8370).
+///
+/// Avant la scène plein écran, la carte se centrait dans une frame plus haute
+/// qu'elle, et les deux rails puis le volet de description devaient s'ancrer au
+/// bas du DESSIN (`ancreAuDessin`, #4119, #4993) pour ne pas flotter dans le
+/// letterbox. La carte se cadre désormais sur le viewport et le chrome flotte
+/// dessus : il n'y a plus de letterbox à retrancher, seulement une scène LIBRE
+/// entre la barre haute et les étages du bas. Ce que ces témoins gardaient
+/// reste vrai sous une autre forme : les trois éléments tombent sur la MÊME
+/// ligne de base, et aucun n'est calé sur une frame qui ne serait pas la leur.
+final class ComposerRailBottomAnchorTests: XCTestCase {
+
+    private func compact() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Composer/ComposerSceneSurface.swift"))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    /// La colonne droite (outil, objet) et le volet vivent dans la scène libre,
+    /// qui s'aligne au BAS. Le rail gauche n'y est plus (#13839) : le repos se
+    /// pose sur la scène par son propre calque.
+    func test_laColonneEtLeVolet_partagentLeBasDeLaSceneLibre_sansRailGauche() throws {
+        let code = try compact()
+        guard let debut = code.range(of: "varfreeZone:someView{"),
+              let etagesDebut = code.range(of: "varcomposingFloors:someView{") else {
+            return XCTFail("La scène libre a changé de nom — la garde doit être re-pointée.")
+        }
+        let libre = code[debut.upperBound...]
+        let etages = code[etagesDebut.upperBound...]
+        XCTAssertTrue(libre.hasPrefix("ZStack(alignment:.bottom){"), "Un seul repère, aligné au bas.")
+        XCTAssertTrue(libre.contains("composingFloors"), "La scène libre pose les étages du bas.")
+        XCTAssertFalse(libre.contains("floatingRail"), "le rail gauche est revenu dans la scène libre")
+        XCTAssertFalse(etages.contains("floatingRail"), "le rail gauche est revenu dans les étages du bas")
+        XCTAssertTrue(etages.contains("ComposerTrailingRail("))
+        XCTAssertTrue(etages.contains("descriptionOverlay"),
+                      "Le volet se pose au bas de la scène libre, entre les deux rails (#4993).")
+        XCTAssertTrue(libre.contains(".frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.bottom)"),
+                      "La scène libre prend tout le vide du chrome et pose son contenu au bas.")
+    }
+
+    /// **Plus aucun ancrage au dessin ne survit.** Il retranchait un letterbox
+    /// qui n'existe plus : laissé en place, il décalerait les rails d'une
+    /// moitié de bande mesurée sur une géométrie abandonnée.
+    func test_aucunAncrageAuDessin_neSurvit() throws {
+        let code = try compact()
+        XCTAssertFalse(code.contains("ancreAuDessin"))
+        XCTAssertFalse(code.contains("sceneBottomInset"))
+    }
+}

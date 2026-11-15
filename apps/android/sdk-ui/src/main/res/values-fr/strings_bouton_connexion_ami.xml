@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="connection_toast_accept_failed">Impossible d\'accepter</string>
+    <string name="connection_toast_decline_failed">Impossible de refuser</string>
+    <string name="connection_toast_cancel_failed">Impossible d\'annuler</string>
+</resources>

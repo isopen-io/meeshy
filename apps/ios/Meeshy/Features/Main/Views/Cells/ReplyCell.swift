@@ -2,6 +2,11 @@ import UIKit
 import MeeshySDK
 
 final class ReplyCell: UICollectionViewCell {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     private let nameLabel = UILabel()
     private let contentLabel = UILabel()
     private let timestampLabel = UILabel()
@@ -70,7 +75,7 @@ final class ReplyCell: UICollectionViewCell {
     static func accessibilityLabel(name: String, content: String, time: String) -> String {
         String(
             localized: "comments.reply.a11yLabel",
-            defaultValue: "\(name), reply. \(content). \(time)",
+            defaultValue: "\(name), réponse. \(content). \(time)",
             bundle: .main
         )
     }

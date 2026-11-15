@@ -2,21 +2,89 @@ import Foundation
 
 // MARK: - CanvasV3 (spec §C1 — miroir Swift du Zod canvas-v3.ts, fixtures gelées A2)
 
+/// **Comment l'auteur veut que ses scènes soient PRÉSENTÉES** (#5322).
+///
+/// > « On peut définir comment la mosaïque sera affichée : il faut proposer 4
+/// > différentes manières — en vague, en mode hero, en mode défilement comme
+/// > pour les réels, en mode sinusoïde une en haut, une en bas, une en haut,
+/// > une en bas. »
+///
+/// C'est une décision d'AUTEUR, donc elle voyage avec la publication : deux
+/// lecteurs doivent voir la même mise en page, et un lecteur qui rouvre son
+/// fil doit la retrouver. La calculer chez le lecteur (d'après le nombre de
+/// scènes, leur format, l'appareil) rendrait deux réponses pour un même post.
+///
+/// **Le décodage est TOLÉRANT et le défaut est `.wave`** : un mode inconnu —
+/// écrit par un client plus récent — ne doit pas faire échouer tout le canvas.
+/// Un post qui ne rend rien coûte infiniment plus qu'un post rendu dans une
+/// autre disposition que celle voulue.
+public enum MosaicLayoutMode: String, CaseIterable, Equatable, Codable, Sendable {
+    /// Hauteurs qui ondulent sur une rangée centrée.
+    case wave
+    /// Une grande tuile, les autres en colonne à côté.
+    case hero
+    /// Défilement horizontal qui déborde — comme les réels.
+    case reel
+    /// Une en haut, une en bas, une en haut, une en bas.
+    case sine
+    /// **Défilement image par image** — une scène par page, on passe à la
+    /// suivante d'un glissement.
+    ///
+    /// > « Le défilement image par image est aussi un mode de mosaïque à
+    /// > prendre et ce doit être le mode par défaut ! »
+    ///
+    /// C'est le seul mode PAGINÉ : les quatre autres posent des tuiles côte à
+    /// côte, celui-ci empile des pages. Il ne plafonne donc pas à quatre et ne
+    /// reporte rien — il n'y a rien à cacher quand on peut tout parcourir.
+    case carousel
+
+    /// **Le défaut est le défilement image par image**, et il vaut pour tout
+    /// le corpus : aucune publication antérieure au 2026-09-06 ne porte de
+    /// `layout`, donc TOUTES reçoivent celui-ci.
+    ///
+    /// C'est ce qui le justifie plus qu'une préférence esthétique : il est le
+    /// seul mode qui ne suppose rien du nombre de visuels, ne rétrécit aucune
+    /// tuile sur un petit écran, et garde la légende — parce qu'il n'affiche
+    /// qu'un sujet à la fois.
+    public static let fallback: MosaicLayoutMode = .carousel
+
+    public init(from decoder: Decoder) throws {
+        let brut = try decoder.singleValueContainer().decode(String.self)
+        self = MosaicLayoutMode(rawValue: brut) ?? .fallback
+    }
+}
+
 public struct CanvasV3: Equatable, Codable, Sendable {
     public let v: Int
     public let scenes: [SceneV3]
     public let sound: BackgroundSoundV3?
+    /// **La disposition choisie par l'auteur.** `nil` pour toutes les
+    /// publications antérieures au 2026-09-06 — le lecteur retombe alors sur
+    /// `MosaicLayoutMode.fallback`, jamais sur une valeur écrite dans la base.
+    ///
+    /// Optionnel et ADDITIF : aucun lecteur existant n'est cassé, et un
+    /// canvas mono-scène n'a rien à en dire (une mosaïque d'un élément n'est
+    /// pas une mosaïque). Il n'est donc encodé que s'il est présent.
+    public let layout: MosaicLayoutMode?
 
-    public init(v: Int = 3, scenes: [SceneV3], sound: BackgroundSoundV3? = nil) {
+    public init(v: Int = 3, scenes: [SceneV3], sound: BackgroundSoundV3? = nil,
+                layout: MosaicLayoutMode? = nil) {
         self.v = v
         self.scenes = scenes
         self.sound = sound
+        self.layout = layout
     }
+
+    /// La disposition à EMPLOYER — celle de l'auteur, ou le défaut. Les
+    /// consommateurs appellent ceci plutôt que de coalescer chacun de leur
+    /// côté : c'est ainsi qu'on évite deux défauts différents dans deux vues.
+    public var resolvedLayout: MosaicLayoutMode { layout ?? .fallback }
 
     private enum CodingKeys: String, CodingKey {
         case v
         case scenes
         case sound
+        case layout
     }
 
     /// `scenes` est OPTIONNEL au fil (O3) : un canvas sans aucun objet visuel
@@ -34,6 +102,7 @@ public struct CanvasV3: Equatable, Codable, Sendable {
         v = mark
         scenes = try container.decodeIfPresent([SceneV3].self, forKey: .scenes) ?? []
         sound = try container.decodeIfPresent(BackgroundSoundV3.self, forKey: .sound)
+        layout = try container.decodeIfPresent(MosaicLayoutMode.self, forKey: .layout)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -41,6 +110,7 @@ public struct CanvasV3: Equatable, Codable, Sendable {
         try container.encode(v, forKey: .v)
         if !scenes.isEmpty { try container.encode(scenes, forKey: .scenes) }
         try container.encodeIfPresent(sound, forKey: .sound)
+        try container.encodeIfPresent(layout, forKey: .layout)
     }
 }
 
@@ -147,6 +217,29 @@ public struct ObjectV3: Equatable, Codable, Sendable {
         self.timing = timing
         self.locale = locale
         self.payload = payload
+    }
+}
+
+/// **La référence média d'un objet, quelle que soit son orthographe** (#6894).
+///
+/// Deux écritures coexistent pour dire « cet objet montre le média X » : le
+/// composer iOS pose `postMediaId` ; la passerelle ACCEPTE et RÉÉCRIT aussi
+/// `mediaId` (`CLAIM_PAYLOAD_KEYS`, `storyEffectsV3.ts`), et les documents
+/// qu'elle sert sous cette forme (fonds `plane: bg` sans porteur `content`)
+/// n'ont jamais de `postMediaId`. `postMediaId` est la forme de RÉFÉRENCE —
+/// c'est elle que le contrat partagé documente (`canvas-v3.ts`) — `mediaId`
+/// n'est lu qu'en second.
+///
+/// **Site unique.** Tout consommateur qui doit savoir si un objet DÉSIGNE un
+/// enregistrement du post appelle cette propriété plutôt que de relire les
+/// deux clés lui-même — une seconde lecture ad hoc est comment le SDK
+/// (`carriesPicture`) et l'app (`SceneCaption.mediaIdentity`) ont pu diverger
+/// sur la même question.
+public extension ObjectV3 {
+    var mediaReference: String? {
+        if case .string(let id)? = payload["postMediaId"], !id.isEmpty { return id }
+        if case .string(let id)? = payload["mediaId"], !id.isEmpty { return id }
+        return nil
     }
 }
 

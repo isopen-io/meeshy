@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_section_encrypted_devices">Ende-zu-Ende-Verschlüsselung</string>
+    <string name="encrypted_devices_title">Meine verschlüsselten Geräte</string>
+    <string name="encrypted_devices_loading">Deine verschlüsselten Geräte werden geladen</string>
+    <string name="encrypted_devices_offline_empty">Offline: deine Geräte kommen mit dem Netz zurück.</string>
+    <string name="encrypted_devices_error">Deine verschlüsselten Geräte konnten nicht geladen werden.</string>
+    <string name="encrypted_devices_retry">Erneut versuchen</string>
+    <string name="encrypted_devices_offline">Offline: zuletzt bekannte Liste.</string>
+    <string name="encrypted_devices_stale">Aktualisierung fehlgeschlagen: zuletzt bekannte Liste.</string>
+    <string name="encrypted_devices_current">Dieses Gerät</string>
+    <string name="encrypted_devices_retiring">%1$s wird entfernt</string>
+    <string name="encrypted_devices_retire_a11y">%1$s entfernen</string>
+    <string name="encrypted_devices_retire">Entfernen</string>
+    <string name="encrypted_devices_retire_confirm_title">Dieses Gerät entfernen?</string>
+    <string name="encrypted_devices_retire_confirm_message">%1$s wird abgemeldet und erhält keine verschlüsselten Nachrichten mehr; seine Schlüssel können nicht zurückkehren. Was es bereits entschlüsselt hat, bleibt darauf. Wurde es verloren oder gestohlen, ändere auch dein Passwort: Sonst könnte sich, wer es hat, als neues Gerät wieder anmelden.</string>
+    <string name="encrypted_devices_retire_confirm_action">Entfernen</string>
+    <string name="encrypted_devices_cancel">Abbrechen</string>
+    <string name="encrypted_devices_retire_offline">Du bist offline: Ein Gerät kann erst entfernt werden, wenn du verbunden bist.</string>
+    <string name="encrypted_devices_retire_failed">Das Gerät konnte nicht entfernt werden. Versuche es erneut.</string>
+    <string name="encrypted_devices_retire_session_not_closed">Die Sitzung dieses Geräts konnte nicht beendet werden: Es wurde nichts entfernt. Versuche es erneut.</string>
+    <string name="encrypted_devices_ok">OK</string>
+    <string name="encrypted_devices_unnamed">%1$s-Gerät Nr. %2$d</string>
+    <string name="encrypted_devices_platform_ios">iOS</string>
+    <string name="encrypted_devices_platform_macos">macOS</string>
+    <string name="encrypted_devices_platform_android">Android</string>
+    <string name="encrypted_devices_platform_web">Webbrowser</string>
+    <string name="encrypted_devices_platform_unknown">Unbekanntes Gerät</string>
+    <string name="encrypted_devices_enrolled">Hinzugefügt am %1$s</string>
+</resources>

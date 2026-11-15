@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 /// Transport row shared by Quick & Pro containers. Strict primitive `let` API
 /// — no @ObservedObject — so SwiftUI can skip body re-evaluation when nothing
@@ -7,11 +8,15 @@ public struct TransportBar: View {
 
     public let isPlaying: Bool
     public let currentTime: Float
+    /// Tête de lecture observée par le SEUL readout (#9874) : quand elle est
+    /// fournie, `currentTime` est ignoré et les boutons ne se réévaluent plus
+    /// à chaque tick. `nil` = valeur figée `currentTime` (surfaces sans moteur).
+    public let playhead: PlayheadClock?
     public let duration: Float
     public let zoomScale: CGFloat
     public let isMuted: Bool
     /// Le readout `courant / durée`. La vue simple (Quick) le masque — la
-    /// position se lit sur le playhead et la règle (retour user 2026-07-11) ;
+    /// position se lit sur le playhead et la règle ;
     /// le Pro le conserve pour le calage précis.
     public let showsTimeReadout: Bool
     /// Undo/redo compacts pour le mode Quick (pas de TimelineToolbar dédiée).
@@ -30,11 +35,12 @@ public struct TransportBar: View {
     public let onRedo: () -> Void
     public let onSnapToggle: () -> Void
     /// Enregistrement de la story (export MP4 watermarké + effets/transitions →
-    /// Fichiers/Photothèque). Rendu juste après le bouton lecture (user
-    /// 2026-07-20). `nil` = surfaces sans export (le bouton n'apparaît pas).
+    /// Fichiers/Photothèque). Rendu juste après le bouton lecture.
+    /// `nil` = surfaces sans export (le bouton n'apparaît pas).
     public let onSave: (() -> Void)?
 
     public init(isPlaying: Bool, currentTime: Float, duration: Float,
+                playhead: PlayheadClock? = nil,
                 zoomScale: CGFloat, isMuted: Bool,
                 showsTimeReadout: Bool = true,
                 canUndo: Bool? = nil, canRedo: Bool? = nil,
@@ -49,6 +55,7 @@ public struct TransportBar: View {
                 onSnapToggle: @escaping () -> Void = {},
                 onSave: (() -> Void)? = nil) {
         self.isPlaying = isPlaying; self.currentTime = currentTime; self.duration = duration
+        self.playhead = playhead
         self.zoomScale = zoomScale; self.isMuted = isMuted
         self.showsTimeReadout = showsTimeReadout
         self.canUndo = canUndo; self.canRedo = canRedo
@@ -75,10 +82,8 @@ public struct TransportBar: View {
     /// - >=60s : `"1:05"`   (no decimal)
     public static func formatTimeCompact(seconds: Float) -> String {
         let total = max(0, seconds)
-        let minutes = Int(total) / 60
-        if minutes >= 1 {
-            let secs = Int(total.rounded()) - minutes * 60
-            return String(format: "%d:%02d", minutes, secs)
+        if total >= 60 {
+            return MediaFormat.duration(TimeInterval(total), rounding: .toNearestOrAwayFromZero)
         }
         return String(format: "0:%04.1f", total)
     }
@@ -119,7 +124,7 @@ public struct TransportBar: View {
             playButton
             if let onSave {
                 saveButton(onSave)
-                    .padding(.leading, 10)
+                    .padding(.leading, MeeshySpacing.smPlus)
             }
             ViewThatFits(in: .horizontal) {
                 trailingCluster(showTime: showsTimeReadout, showZoomLabel: true, spacing: 10)
@@ -129,14 +134,14 @@ public struct TransportBar: View {
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(minHeight: 44)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
+        .frame(minHeight: MeeshyControlSize.tapTarget)
         .background(rowBackground)
         // MARK: - Keyboard Shortcuts (iPad / external keyboard)
-        // Space — play/pause
-        .keyboardShortcut(" ", modifiers: [])
-        // ← / → — step backward / forward by 1 frame (handled via the scrub callback)
+        // Space — play/pause, porté par le SEUL bouton invisible de l'overlay. Posé aussi sur le `HStack`, le raccourci
+        // s'appliquait à CHAQUE bouton de la rangée (lecture, annuler, refaire, aimant, zoom, son) : l'action de la
+        // barre d'espace dépendait de l'ordre de résolution de SwiftUI.
         .background(keyboardShortcutOverlay)
     }
 
@@ -147,7 +152,7 @@ public struct TransportBar: View {
     private func trailingCluster(showTime: Bool, showZoomLabel: Bool, spacing: CGFloat) -> some View {
         HStack(spacing: spacing) {
             if showTime {
-                timeReadout
+                timeReadoutHost
             }
             undoRedoCluster
             snapChip
@@ -189,7 +194,7 @@ public struct TransportBar: View {
     /// Documented HIG contract: effective touch target (visual frame + contentShape inset)
     /// must meet Apple's 44×44pt minimum. Visual icons are 30×30 (or 36×36 for play)
     /// extended via `.contentShape(Rectangle().inset(by: -7))` / `inset(by: -4)`.
-    public static let minimumHitTargetSize = CGSize(width: 44, height: 44)
+    public static let minimumHitTargetSize = CGSize(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
 
     // MARK: - Sub-views
 
@@ -232,14 +237,23 @@ public struct TransportBar: View {
                                    bundle: .module))
     }
 
-    private var timeReadout: some View {
-        let nowCompact = Self.formatTimeCompact(seconds: currentTime)
+    @ViewBuilder
+    private var timeReadoutHost: some View {
+        if let playhead {
+            PlayheadTimeReader(clock: playhead) { timeReadout(at: $0) }
+        } else {
+            timeReadout(at: currentTime)
+        }
+    }
+
+    private func timeReadout(at seconds: Float) -> some View {
+        let nowCompact = Self.formatTimeCompact(seconds: seconds)
         let totalCompact = Self.formatTimeCompact(seconds: duration)
         // Full-precision strings reserved for accessibility — matches what the
         // Pro inspector and tests expect from `formatTime(seconds:)`.
-        let nowPrecise = Self.formatTime(seconds: currentTime)
+        let nowPrecise = Self.formatTime(seconds: seconds)
         let totalPrecise = Self.formatTime(seconds: duration)
-        return HStack(spacing: 4) {
+        return HStack(spacing: MeeshySpacing.xs) {
             Text(nowCompact)
                 .foregroundStyle(MeeshyColors.indigo700)
             Text("/")
@@ -259,7 +273,7 @@ public struct TransportBar: View {
     @ViewBuilder
     private var undoRedoCluster: some View {
         if let canUndo, let canRedo {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Button(action: onUndo) {
                     Image(systemName: "arrow.uturn.backward")
                         .frame(width: 30, height: 30)
@@ -293,15 +307,15 @@ public struct TransportBar: View {
     private var snapChip: some View {
         if let isSnapEnabled {
             Button(action: onSnapToggle) {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Circle()
                         .fill(isSnapEnabled ? MeeshyColors.success : Color.secondary.opacity(0.4))
                         .frame(width: 8, height: 8)
                     Text(String(localized: "story.timeline.toolbar.snap", bundle: .module))
                         .font(.caption2.weight(.semibold))
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.vertical, MeeshySpacing.xs)
                 .background(
                     Capsule().fill(isSnapEnabled
                                    ? MeeshyColors.indigo500.opacity(0.15)
@@ -323,7 +337,7 @@ public struct TransportBar: View {
     ///   le zoom reste réglable via − / + et le pincement. Toujours affiché
     ///   dès qu'il y a la place (16 Pro, iPad, paysage).
     private func zoomCluster(showLabel: Bool) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Button(action: onZoomOut) {
                 Image(systemName: "minus.magnifyingglass")
                     .frame(width: 30, height: 30)

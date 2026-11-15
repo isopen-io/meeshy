@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="audio_transcription_expand_a11y">Expandir o restante da transcrição</string>
+    <string name="audio_transcription_collapse_a11y">Recolher a transcrição</string>
+</resources>

@@ -190,4 +190,47 @@ final class StoryReaderRepresentableOutgoingTests: XCTestCase {
                            "Prefetcher canvas '\(id)' must stay in .edit mode — promoting to .play causes double-playback with the visible StoryReaderRepresentable")
         }
     }
+
+    // MARK: - #9827 — une page voisine née en pause ne coupe pas le réel qui joue
+
+    private func makeSlide(_ id: String) -> StorySlide {
+        StoryItem(id: id, content: id, media: [], storyEffects: StoryEffects(),
+                  createdAt: Date(), expiresAt: nil, isViewed: false)
+            .toRenderableSlide(preferredLanguages: ["fr"])
+    }
+
+    /// Le lecteur de réels monte ses voisins (`LazyVStack` paginé, `TabView`
+    /// sur iOS 16). Chaque scène voisine crée son canvas en `.play` puis le met
+    /// en pause : il ne joue rien, et ne doit donc rien arrêter. Il coupait le
+    /// mixer et la vidéo de fond du réel affiché, qui restait « en lecture »
+    /// pour tout le monde : note du son non barrée, image fixe, silence.
+    func test_canvasBornPaused_doesNotPreemptThePlayingCanvas() {
+        let playing = StoryCanvasUIView(slide: makeSlide("reel-active"), mode: .play)
+        playing.backgroundLayer.isPlaybackActive = true
+
+        let neighbour = StoryCanvasUIView(slide: makeSlide("reel-neighbour"), mode: .play, startsPaused: true)
+
+        XCTAssertTrue(playing.backgroundLayer.isPlaybackActive,
+                      "Une page voisine née en pause ne doit pas figer le média du réel qui joue")
+        XCTAssertTrue(StoryCanvasUIView.activePlayingCanvases.contains(playing),
+                      "Le réel qui joue garde la main : il reste le canvas actif")
+        XCTAssertFalse(StoryCanvasUIView.activePlayingCanvases.contains(neighbour),
+                       "Un canvas en pause ne réclame pas la lecture")
+        XCTAssertTrue(neighbour.isPlaybackPaused, "Le canvas naît bien en pause")
+    }
+
+    /// Le voisin devient le réel affiché : en REPRENANT, il prend la main et
+    /// coupe l'ancien. La préemption a lieu quand on joue, jamais avant.
+    func test_canvasBornPaused_claimsPlaybackWhenItResumes() {
+        let previous = StoryCanvasUIView(slide: makeSlide("reel-previous"), mode: .play)
+        previous.backgroundLayer.isPlaybackActive = true
+        let next = StoryCanvasUIView(slide: makeSlide("reel-next"), mode: .play, startsPaused: true)
+
+        next.setPaused(false)
+
+        XCTAssertFalse(previous.backgroundLayer.isPlaybackActive,
+                       "En reprenant, le canvas préempte celui qui jouait")
+        XCTAssertTrue(StoryCanvasUIView.activePlayingCanvases.contains(next))
+        XCTAssertFalse(StoryCanvasUIView.activePlayingCanvases.contains(previous))
+    }
 }

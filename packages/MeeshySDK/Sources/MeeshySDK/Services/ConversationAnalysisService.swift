@@ -1,6 +1,6 @@
 import Foundation
 
-public final class ConversationAnalysisService: @unchecked Sendable {
+public final class ConversationAnalysisService: Sendable {
     public static let shared = ConversationAnalysisService()
     private let api: APIClientProviding
 
@@ -10,14 +10,14 @@ public final class ConversationAnalysisService: @unchecked Sendable {
 
     public func fetchAnalysis(conversationId: String) async throws -> ConversationAnalysis {
         let response: APIResponse<ConversationAnalysis> = try await api.request(
-            endpoint: "/conversations/\(conversationId)/analysis"
+            ConversationsEndpoint.byIdAnalysis(id: conversationId)
         )
         return response.data
     }
 
     public func fetchStats(conversationId: String) async throws -> ConversationMessageStatsResponse {
         let response: APIResponse<ConversationMessageStatsResponse> = try await api.request(
-            endpoint: "/conversations/\(conversationId)/stats"
+            ConversationsEndpoint.byIdStats(id: conversationId)
         )
         return response.data
     }

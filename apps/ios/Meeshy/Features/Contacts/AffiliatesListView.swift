@@ -10,20 +10,24 @@ struct AffiliatesListView: View {
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
 
     @Environment(\.colorScheme) private var colorScheme
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
+    @State private var sharedLink: ReferralShareLink?
 
     var body: some View {
         VStack(spacing: 0) {
             ContactsSearchField(
-                placeholder: String(localized: "contacts.affiliates.search-placeholder", defaultValue: "Rechercher un affilie", bundle: .main),
+                placeholder: String(localized: "contacts.affiliates.search-placeholder", defaultValue: "Rechercher un filleul", bundle: .main),
                 query: $viewModel.searchQuery
             )
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.sm)
 
             content
         }
         .task { await viewModel.load() }
+        .sheet(item: $sharedLink) { link in
+            ShareSheet(activityItems: [link.url])
+        }
     }
 
     @ViewBuilder
@@ -34,32 +38,50 @@ struct AffiliatesListView: View {
             EmptyStateView(
                 icon: "person.badge.shield.checkmark",
                 title: viewModel.isEmpty
-                    ? String(localized: "contacts.affiliates.empty", defaultValue: "Aucun affilie", bundle: .main)
-                    : String(localized: "contacts.affiliates.no-results", defaultValue: "Aucun resultat", bundle: .main),
-                subtitle: viewModel.isEmpty
-                    ? String(localized: "contacts.affiliates.empty-hint", defaultValue: "Partage ton lien d'affiliation pour retrouver ici ceux qui te rejoignent", bundle: .main)
-                    : ""
+                    ? String(localized: "contacts.affiliates.empty", defaultValue: "Aucun filleul", bundle: .main)
+                    : String(localized: "contacts.affiliates.no-results", defaultValue: "Aucun résultat", bundle: .main),
+                subtitle: viewModel.isEmpty ? Self.emptyOrientation : "",
+                actionLabel: viewModel.isEmpty
+                    ? String(localized: "affiliate.action.share", defaultValue: "Partager le lien de parrainage", bundle: .main)
+                    : nil,
+                onAction: viewModel.isEmpty ? { shareReferralLink() } : nil
             )
         } else {
             ScrollView(.vertical, showsIndicators: false) {
                 ContactsScrollSentinel()
                 LazyVStack(spacing: 0) {
                     ForEach(viewModel.visibleReferrals) { referral in
-                        DirectoryPersonRow(
+                        LivePresence { DirectoryPersonRow(
                             name: referral.resolvedName,
                             subtitle: referral.referredUser.map { "@\($0.username)" },
                             avatarURL: referral.referredUser?.avatar,
+                            presence: referral.referredUser.map { PresenceManager.shared.resolvedState(userId: $0.id, isOnline: $0.isOnline) },
                             action: .write,
                             isDark: colorScheme == .dark,
                             onAction: { open(referral) }
                         )
-                        .equatable()
+                        .equatable() }
                     }
                 }
-                .padding(.top, 4)
+                .padding(.top, MeeshySpacing.xs)
             }
             .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
             .refreshable { await viewModel.load(forceNetwork: true) }
+        }
+    }
+
+    /// Le parrainage est propre à Meeshy : son état vide dit, au repos, qui apparaîtra ici (règle 7, revue #18088).
+    static var emptyOrientation: String {
+        String(localized: "contacts.affiliates.empty.orientation", defaultValue: "Ceux qui s'inscrivent par votre lien de parrainage apparaissent ici.", bundle: .main)
+    }
+
+    private func shareReferralLink() {
+        Task {
+            guard let url = await viewModel.referralLinkToShare() else {
+                router.push(.affiliate)
+                return
+            }
+            sharedLink = ReferralShareLink(url: url)
         }
     }
 
@@ -70,4 +92,10 @@ struct AffiliatesListView: View {
             router.navigateToConversation(conversation)
         }
     }
+}
+
+/// Le lien de parrainage présenté dans la feuille de partage de l'état vide.
+struct ReferralShareLink: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
 }

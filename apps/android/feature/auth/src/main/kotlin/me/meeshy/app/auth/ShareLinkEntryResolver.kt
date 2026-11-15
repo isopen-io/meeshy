@@ -24,6 +24,8 @@ public fun interface ShareLinkPreviewProviding {
 public data class ShareLinkEntryResolution(
     val intent: ShareLinkEntryIntent,
     val conversationTitle: String?,
+    /** L'aperçu résolu, pour peindre la page d'invitation ; `null` = rien à peindre. */
+    val info: ShareLinkInfo? = null,
 )
 
 /**
@@ -33,7 +35,7 @@ public data class ShareLinkEntryResolution(
  * the grain test it is product orchestration. The decision itself is the SDK's.
  *
  * Faithful port of iOS `ShareLinkEntryResolver`
- * (`apps/ios/Meeshy/Features/Main/Navigation/ShareLinkEntryResolver.swift`), with
+ * (`apps/ios/Meeshy/Features/Navigation/ShareLinkEntryResolver.swift`), with
  * two SOTA hardenings over the iOS force-unwrapping original:
  *  - a blank identifier is inert (never the doomed empty-preview request);
  *  - a preview that carries no conversation, or a blank conversation id, resolves
@@ -83,6 +85,7 @@ public class ShareLinkEntryResolver(
         return ShareLinkEntryResolution(
             intent = ShareLinkEntryPolicy.intent(facts),
             conversationTitle = info.conversation?.title,
+            info = info,
         )
     }
 }

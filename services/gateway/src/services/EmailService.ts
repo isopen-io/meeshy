@@ -11,13 +11,41 @@
  */
 
 import crypto from 'crypto';
-import axios from 'axios';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { replaceLiteral } from '../utils/string-replace';
+import {
+  getAccountDeletionConfirmTranslations,
+  getAccountDeletionReminderTranslations,
+  getAlertTypeLabel,
+  getDigestTranslations,
+  getMagicLinkTranslations,
+  translations,
+  type EmailTranslations,
+  type SupportedLanguage,
+} from './email/translations';
+import {
+  accountIdentityBlockHtml,
+  accountIdentityBlockText,
+  type IdentiteDuCompte,
+} from './email/account-identity-block';
+import { composePasswordResetEmail, type PasswordResetEmailData } from './email/password-reset-email';
+import { composeLoginCodeEmail, codeExpiryText, type LoginCodeEmailData } from './email/login-code-email';
+import { composeBackupAlertEmail, type BackupAlertEmailData } from './email/backup-alert-email';
+import { isStagingEnvironment, markForEnvironment } from './email/staging-marker';
+import { sendViaBrevo, sendViaMailgun, sendViaSendGrid, type EmailSender } from './email/providers';
+import { emailBaseStyles } from './email/base-styles';
+import { formatInTimeZone, safeTimeZone } from '../utils/time-zone-format';
+import { claimWarningFor } from './email/claim-warning';
+import { emailMayLeave, registeredEmailRecipientLookup, type RecipientAddressLookup } from './email/recipient-policy';
 
 // Logger dédié pour EmailService
 const logger = enhancedLogger.child({ module: 'EmailService' });
+
+/**
+ * Les TABLES vivent dans `./email/translations` depuis #6424 — ce fichier
+ * COMPOSE et ENVOIE, il ne DIT plus. Voir le doc-comment de ce module pour la
+ * raison du découpage : 1842 lignes pour un plafond dur de 1200.
+ */
 
 
 // ============================================================================
@@ -47,13 +75,7 @@ export interface EmailResult {
   messageId?: string;
 }
 
-export interface PasswordResetEmailData {
-  to: string;
-  name: string;
-  resetLink: string;
-  expiryMinutes: number;
-  language?: string;
-}
+export type { PasswordEmailIntent, PasswordResetEmailData } from './email/password-reset-email';
 
 export interface EmailVerificationData {
   to: string;
@@ -61,7 +83,20 @@ export interface EmailVerificationData {
   verificationLink: string;
   verificationCode?: string;
   expiryHours: number;
+  /** Posé pour une paire de moins d'une heure (#8033) : « expire dans N minutes ». */
+  expiryMinutes?: number;
   language?: string;
+  /**
+   * L'identité DÉRIVÉE et ses liens d'édition (#6424).
+   *
+   * OPTIONNELLE parce que tous les appelants ne l'ont pas — le renvoi de
+   * vérification depuis un chemin qui ne charge pas le profil, par exemple.
+   * Absente, le bloc n'est simplement pas composé : jamais un bloc à moitié
+   * rempli, qui présenterait un pseudo vide comme si c'était le sien.
+   */
+  identity?: IdentiteDuCompte;
+  /** Une REVENDICATION d'adresse (#8227) : l'e-mail dit que le code la retire à un compte existant. */
+  claim?: boolean;
 }
 
 export interface PasswordChangedEmailData {
@@ -119,6 +154,17 @@ export interface MagicLinkEmailData {
   magicLink: string;
   location: string;
   language?: string;
+  /**
+   * L'identité et ses liens (#6424) — servie ici pour une raison propre au
+   * lien magique : tant qu'aucun mot de passe n'est posé, cet e-mail est la
+   * SEULE porte du compte. C'est donc le seul endroit où rappeler qu'on peut
+   * cesser d'en dépendre.
+   *
+   * Quand `identity.hasPassword` est vrai, le bloc se réduit à l'identité et
+   * à son lien d'édition : le paragraphe « définir un mot de passe » ne
+   * s'affiche pas.
+   */
+  identity?: IdentiteDuCompte;
 }
 
 export interface EmailChangeVerificationData {
@@ -152,23 +198,7 @@ export interface BroadcastEmailData {
   unsubscribeUrl: string;
 }
 
-export interface FriendRequestEmailData {
-  to: string;
-  recipientName: string;
-  senderName: string;
-  senderAvatar?: string | null;
-  viewRequestUrl: string;
-  language?: string;
-}
 
-export interface FriendAcceptedEmailData {
-  to: string;
-  recipientName: string;
-  accepterName: string;
-  accepterAvatar?: string | null;
-  conversationUrl: string;
-  language?: string;
-}
 
 export interface InvitationEmailData {
   to: string;
@@ -195,540 +225,11 @@ export interface AccountDeletionReminderEmailData {
   language?: string;
 }
 
-export interface UsernameReminderEmailData {
-  to: string;
-  name: string;
-  username: string;
-  language?: string;
-}
 
 // ============================================================================
 // I18N TRANSLATIONS
 // ============================================================================
 
-type SupportedLanguage = 'fr' | 'en' | 'es' | 'pt' | 'it' | 'de';
-
-interface EmailTranslations {
-  common: {
-    greeting: string;
-    footer: string;
-    copyright: string;
-  };
-  verification: {
-    subject: string;
-    title: string;
-    intro: string;
-    buttonText: string;
-    expiry: string;
-    ignoreNote: string;
-  };
-  passwordReset: {
-    subject: string;
-    title: string;
-    intro: string;
-    buttonText: string;
-    expiry: string;
-    ignoreNote: string;
-  };
-  passwordChanged: {
-    subject: string;
-    title: string;
-    intro: string;
-    warning: string;
-  };
-  securityAlert: {
-    subject: string;
-    title: string;
-    actions: string;
-    action1: string;
-    action2: string;
-    action3: string;
-  };
-  loginAlert: {
-    subject: string;
-    title: string;
-    intro: string;
-    deviceLabel: string;
-    appLabel: string;
-    locationLabel: string;
-    ipLabel: string;
-    timeLabel: string;
-    previousTitle: string;
-    revokeTitle: string;
-    revokeButton: string;
-    revokeExpiry: string;
-    mapAlt: string;
-  };
-  emailChange: {
-    subject: string;
-    title: string;
-    intro: string;
-    buttonText: string;
-    expiry: string;
-    ignoreNote: string;
-  };
-  friendRequest: {
-    subject: string;
-    title: string;
-    intro: string;
-    buttonText: string;
-    footer: string;
-  };
-  friendAccepted: {
-    subject: string;
-    title: string;
-    intro: string;
-    buttonText: string;
-    footer: string;
-  };
-}
-
-const translations: Record<SupportedLanguage, EmailTranslations> = {
-  fr: {
-    common: {
-      greeting: 'Bonjour',
-      footer: "L'équipe Meeshy",
-      copyright: '© {year} Meeshy. Tous droits réservés.'
-    },
-    verification: {
-      subject: 'Vérifiez votre adresse email - Meeshy',
-      title: 'Bienvenue sur Meeshy !',
-      intro: 'Merci de vous être inscrit sur Meeshy ! Pour activer votre compte, veuillez vérifier votre adresse email :',
-      buttonText: 'Vérifier mon email',
-      expiry: 'Ce lien expire dans {hours} heures.',
-      ignoreNote: "Si vous n'avez pas créé de compte, ignorez cet email"
-    },
-    passwordReset: {
-      subject: 'Réinitialisez votre mot de passe - Meeshy',
-      title: 'Réinitialisation de mot de passe',
-      intro: 'Vous avez demandé à réinitialiser votre mot de passe Meeshy :',
-      buttonText: 'Réinitialiser le mot de passe',
-      expiry: 'Ce lien expire dans {minutes} minutes.',
-      ignoreNote: "Si vous n'avez pas fait cette demande, ignorez cet email"
-    },
-    passwordChanged: {
-      subject: 'Votre mot de passe a été modifié - Meeshy',
-      title: 'Mot de passe modifié',
-      intro: 'Votre mot de passe Meeshy a été modifié avec succès.',
-      warning: "Ce n'était pas vous ? Contactez immédiatement notre support : security@meeshy.me"
-    },
-    securityAlert: {
-      subject: 'Alerte de sécurité - Meeshy',
-      title: 'Alerte de sécurité',
-      actions: 'Actions recommandées :',
-      action1: 'Changez votre mot de passe immédiatement',
-      action2: 'Vérifiez vos appareils connectés',
-      action3: "Activez l'authentification à deux facteurs"
-    },
-    loginAlert: {
-      subject: 'Nouvelle connexion detectee - Meeshy',
-      title: 'Nouvelle connexion detectee',
-      intro: 'Une connexion a ete effectuee sur votre compte.',
-      deviceLabel: 'Appareil',
-      appLabel: 'Application',
-      locationLabel: 'Localisation',
-      ipLabel: 'Adresse IP',
-      timeLabel: 'Date/heure',
-      previousTitle: 'Derniere connexion connue',
-      revokeTitle: 'Ce n\'est pas vous ?',
-      revokeButton: 'Deconnecter tous mes appareils',
-      revokeExpiry: 'Ce lien expire dans 24 heures.',
-      mapAlt: 'Carte',
-    },
-    emailChange: {
-      subject: 'Confirmez votre nouvelle adresse email - Meeshy',
-      title: 'Changement d\'adresse email',
-      intro: 'Vous avez demandé à changer votre adresse email Meeshy. Pour confirmer ce changement, cliquez sur le bouton ci-dessous :',
-      buttonText: 'Confirmer le changement',
-      expiry: 'Ce lien expire dans {hours} heures.',
-      ignoreNote: 'Si vous n\'avez pas demandé ce changement, ignorez cet email. Votre adresse email actuelle restera inchangée.'
-    },
-    friendRequest: {
-      subject: 'Nouvelle demande de contact - Meeshy',
-      title: 'Nouvelle demande de contact',
-      intro: '{sender} souhaite vous ajouter comme contact sur Meeshy.',
-      buttonText: 'Voir la demande',
-      footer: 'Vous pouvez accepter ou refuser cette demande depuis votre espace contacts.'
-    },
-    friendAccepted: {
-      subject: 'Demande de contact acceptee - Meeshy',
-      title: 'Demande de contact acceptee',
-      intro: '{accepter} a accepte votre demande de contact sur Meeshy.',
-      buttonText: 'Envoyer un message',
-      footer: 'Vous pouvez maintenant discuter ensemble sur Meeshy.'
-    }
-  },
-  en: {
-    common: {
-      greeting: 'Hello',
-      footer: 'The Meeshy Team',
-      copyright: '© {year} Meeshy. All rights reserved.'
-    },
-    verification: {
-      subject: 'Verify your email address - Meeshy',
-      title: 'Welcome to Meeshy!',
-      intro: 'Thank you for signing up for Meeshy! To activate your account, please verify your email address:',
-      buttonText: 'Verify my email',
-      expiry: 'This link expires in {hours} hours.',
-      ignoreNote: 'If you did not create an account, please ignore this email'
-    },
-    passwordReset: {
-      subject: 'Reset your password - Meeshy',
-      title: 'Password Reset',
-      intro: 'You have requested to reset your Meeshy password:',
-      buttonText: 'Reset password',
-      expiry: 'This link expires in {minutes} minutes.',
-      ignoreNote: 'If you did not make this request, please ignore this email'
-    },
-    passwordChanged: {
-      subject: 'Your password has been changed - Meeshy',
-      title: 'Password Changed',
-      intro: 'Your Meeshy password has been successfully changed.',
-      warning: "Wasn't you? Contact our support immediately: security@meeshy.me"
-    },
-    securityAlert: {
-      subject: 'Security Alert - Meeshy',
-      title: 'Security Alert',
-      actions: 'Recommended actions:',
-      action1: 'Change your password immediately',
-      action2: 'Check your connected devices',
-      action3: 'Enable two-factor authentication'
-    },
-    loginAlert: {
-      subject: 'New login detected - Meeshy',
-      title: 'New login detected',
-      intro: 'A login was made to your account.',
-      deviceLabel: 'Device',
-      appLabel: 'Application',
-      locationLabel: 'Location',
-      ipLabel: 'IP address',
-      timeLabel: 'Date/time',
-      previousTitle: 'Previous login',
-      revokeTitle: 'Not you?',
-      revokeButton: 'Disconnect all my devices',
-      revokeExpiry: 'This link expires in 24 hours.',
-      mapAlt: 'Map',
-    },
-    emailChange: {
-      subject: 'Confirm your new email address - Meeshy',
-      title: 'Email Address Change',
-      intro: 'You have requested to change your Meeshy email address. To confirm this change, click the button below:',
-      buttonText: 'Confirm change',
-      expiry: 'This link expires in {hours} hours.',
-      ignoreNote: 'If you did not request this change, please ignore this email. Your current email address will remain unchanged.'
-    },
-    friendRequest: {
-      subject: 'New friend request - Meeshy',
-      title: 'New Friend Request',
-      intro: '{sender} wants to connect with you on Meeshy.',
-      buttonText: 'View request',
-      footer: 'You can accept or decline this request from your contacts page.'
-    },
-    friendAccepted: {
-      subject: 'Friend request accepted - Meeshy',
-      title: 'Friend Request Accepted',
-      intro: '{accepter} accepted your friend request on Meeshy.',
-      buttonText: 'Send a message',
-      footer: 'You can now chat together on Meeshy.'
-    }
-  },
-  es: {
-    common: {
-      greeting: 'Hola',
-      footer: 'El equipo de Meeshy',
-      copyright: '© {year} Meeshy. Todos los derechos reservados.'
-    },
-    verification: {
-      subject: 'Verifica tu correo electrónico - Meeshy',
-      title: '¡Bienvenido a Meeshy!',
-      intro: '¡Gracias por registrarte en Meeshy! Para activar tu cuenta, verifica tu correo electrónico:',
-      buttonText: 'Verificar mi correo',
-      expiry: 'Este enlace expira en {hours} horas.',
-      ignoreNote: 'Si no creaste una cuenta, ignora este correo'
-    },
-    passwordReset: {
-      subject: 'Restablece tu contraseña - Meeshy',
-      title: 'Restablecimiento de contraseña',
-      intro: 'Has solicitado restablecer tu contraseña de Meeshy:',
-      buttonText: 'Restablecer contraseña',
-      expiry: 'Este enlace expira en {minutes} minutos.',
-      ignoreNote: 'Si no hiciste esta solicitud, ignora este correo'
-    },
-    passwordChanged: {
-      subject: 'Tu contraseña ha sido cambiada - Meeshy',
-      title: 'Contraseña cambiada',
-      intro: 'Tu contraseña de Meeshy ha sido cambiada exitosamente.',
-      warning: '¿No fuiste tú? Contacta inmediatamente a nuestro soporte: security@meeshy.me'
-    },
-    securityAlert: {
-      subject: 'Alerta de seguridad - Meeshy',
-      title: 'Alerta de seguridad',
-      actions: 'Acciones recomendadas:',
-      action1: 'Cambia tu contraseña inmediatamente',
-      action2: 'Verifica tus dispositivos conectados',
-      action3: 'Activa la autenticación de dos factores'
-    },
-    loginAlert: {
-      subject: 'New login detected - Meeshy',
-      title: 'New login detected',
-      intro: 'A login was made to your account.',
-      deviceLabel: 'Device',
-      appLabel: 'Application',
-      locationLabel: 'Location',
-      ipLabel: 'IP address',
-      timeLabel: 'Date/time',
-      previousTitle: 'Previous login',
-      revokeTitle: 'Not you?',
-      revokeButton: 'Disconnect all my devices',
-      revokeExpiry: 'This link expires in 24 hours.',
-      mapAlt: 'Map',
-    },
-    emailChange: {
-      subject: 'Confirma tu nueva dirección de correo - Meeshy',
-      title: 'Cambio de dirección de correo',
-      intro: 'Has solicitado cambiar tu dirección de correo de Meeshy. Para confirmar este cambio, haz clic en el botón de abajo:',
-      buttonText: 'Confirmar cambio',
-      expiry: 'Este enlace expira en {hours} horas.',
-      ignoreNote: 'Si no solicitaste este cambio, ignora este correo. Tu dirección de correo actual permanecerá sin cambios.'
-    },
-    friendRequest: {
-      subject: 'Nueva solicitud de amistad - Meeshy',
-      title: 'Nueva solicitud de amistad',
-      intro: '{sender} quiere conectar contigo en Meeshy.',
-      buttonText: 'Ver solicitud',
-      footer: 'Puedes aceptar o rechazar esta solicitud desde tu pagina de contactos.'
-    },
-    friendAccepted: {
-      subject: 'Solicitud de amistad aceptada - Meeshy',
-      title: 'Solicitud de amistad aceptada',
-      intro: '{accepter} acepto tu solicitud de amistad en Meeshy.',
-      buttonText: 'Enviar un mensaje',
-      footer: 'Ahora pueden chatear juntos en Meeshy.'
-    }
-  },
-  pt: {
-    common: {
-      greeting: 'Olá',
-      footer: 'Equipe Meeshy',
-      copyright: '© {year} Meeshy. Todos os direitos reservados.'
-    },
-    verification: {
-      subject: 'Verifique seu email - Meeshy',
-      title: 'Bem-vindo ao Meeshy!',
-      intro: 'Obrigado por se cadastrar no Meeshy! Para ativar sua conta, verifique seu email:',
-      buttonText: 'Verificar meu email',
-      expiry: 'Este link expira em {hours} horas.',
-      ignoreNote: 'Se você não criou uma conta, ignore este email'
-    },
-    passwordReset: {
-      subject: 'Redefinir sua senha - Meeshy',
-      title: 'Redefinição de Senha',
-      intro: 'Você solicitou a redefinição da sua senha do Meeshy:',
-      buttonText: 'Redefinir senha',
-      expiry: 'Este link expira em {minutes} minutos.',
-      ignoreNote: 'Se você não fez esta solicitação, ignore este email'
-    },
-    passwordChanged: {
-      subject: 'Sua senha foi alterada - Meeshy',
-      title: 'Senha Alterada',
-      intro: 'Sua senha do Meeshy foi alterada com sucesso.',
-      warning: 'Não foi você? Entre em contato imediatamente com nosso suporte: security@meeshy.me'
-    },
-    securityAlert: {
-      subject: 'Alerta de segurança - Meeshy',
-      title: 'Alerta de segurança',
-      actions: 'Ações recomendadas:',
-      action1: 'Altere sua senha imediatamente',
-      action2: 'Verifique seus dispositivos conectados',
-      action3: 'Ative a autenticação de dois fatores'
-    },
-    loginAlert: {
-      subject: 'New login detected - Meeshy',
-      title: 'New login detected',
-      intro: 'A login was made to your account.',
-      deviceLabel: 'Device',
-      appLabel: 'Application',
-      locationLabel: 'Location',
-      ipLabel: 'IP address',
-      timeLabel: 'Date/time',
-      previousTitle: 'Previous login',
-      revokeTitle: 'Not you?',
-      revokeButton: 'Disconnect all my devices',
-      revokeExpiry: 'This link expires in 24 hours.',
-      mapAlt: 'Map',
-    },
-    emailChange: {
-      subject: 'Confirme seu novo email - Meeshy',
-      title: 'Alteração de endereço de email',
-      intro: 'Você solicitou a alteração do seu email do Meeshy. Para confirmar esta alteração, clique no botão abaixo:',
-      buttonText: 'Confirmar alteração',
-      expiry: 'Este link expira em {hours} horas.',
-      ignoreNote: 'Se você não solicitou esta alteração, ignore este email. Seu endereço de email atual permanecerá inalterado.'
-    },
-    friendRequest: {
-      subject: 'Novo pedido de amizade - Meeshy',
-      title: 'Novo pedido de amizade',
-      intro: '{sender} quer se conectar com voce no Meeshy.',
-      buttonText: 'Ver pedido',
-      footer: 'Voce pode aceitar ou recusar este pedido na sua pagina de contatos.'
-    },
-    friendAccepted: {
-      subject: 'Pedido de amizade aceite - Meeshy',
-      title: 'Pedido de amizade aceite',
-      intro: '{accepter} aceitou seu pedido de amizade no Meeshy.',
-      buttonText: 'Enviar uma mensagem',
-      footer: 'Voces agora podem conversar juntos no Meeshy.'
-    }
-  },
-  it: {
-    common: {
-      greeting: 'Ciao',
-      footer: 'Il team Meeshy',
-      copyright: '© {year} Meeshy. Tutti i diritti riservati.'
-    },
-    verification: {
-      subject: 'Verifica la tua email - Meeshy',
-      title: 'Benvenuto su Meeshy!',
-      intro: 'Grazie per esserti registrato su Meeshy! Per attivare il tuo account, verifica il tuo indirizzo email:',
-      buttonText: 'Verifica la mia email',
-      expiry: 'Questo link scade tra {hours} ore.',
-      ignoreNote: 'Se non hai creato un account, ignora questa email'
-    },
-    passwordReset: {
-      subject: 'Reimposta la tua password - Meeshy',
-      title: 'Reimpostazione Password',
-      intro: 'Hai richiesto di reimpostare la tua password Meeshy:',
-      buttonText: 'Reimposta password',
-      expiry: 'Questo link scade tra {minutes} minuti.',
-      ignoreNote: 'Se non hai fatto questa richiesta, ignora questa email'
-    },
-    passwordChanged: {
-      subject: 'La tua password è stata modificata - Meeshy',
-      title: 'Password Modificata',
-      intro: 'La tua password Meeshy è stata modificata con successo.',
-      warning: 'Non sei stato tu? Contatta immediatamente il nostro supporto: security@meeshy.me'
-    },
-    securityAlert: {
-      subject: 'Avviso di sicurezza - Meeshy',
-      title: 'Avviso di sicurezza',
-      actions: 'Azioni consigliate:',
-      action1: 'Cambia immediatamente la tua password',
-      action2: 'Verifica i tuoi dispositivi connessi',
-      action3: "Attiva l'autenticazione a due fattori"
-    },
-    loginAlert: {
-      subject: 'New login detected - Meeshy',
-      title: 'New login detected',
-      intro: 'A login was made to your account.',
-      deviceLabel: 'Device',
-      appLabel: 'Application',
-      locationLabel: 'Location',
-      ipLabel: 'IP address',
-      timeLabel: 'Date/time',
-      previousTitle: 'Previous login',
-      revokeTitle: 'Not you?',
-      revokeButton: 'Disconnect all my devices',
-      revokeExpiry: 'This link expires in 24 hours.',
-      mapAlt: 'Map',
-    },
-    emailChange: {
-      subject: 'Conferma il tuo nuovo indirizzo email - Meeshy',
-      title: 'Cambio indirizzo email',
-      intro: 'Hai richiesto di cambiare il tuo indirizzo email di Meeshy. Per confermare questo cambio, clicca sul pulsante qui sotto:',
-      buttonText: 'Conferma cambio',
-      expiry: 'Questo link scade tra {hours} ore.',
-      ignoreNote: 'Se non hai richiesto questo cambio, ignora questa email. Il tuo indirizzo email attuale rimarrà invariato.'
-    },
-    friendRequest: {
-      subject: 'Nuova richiesta di amicizia - Meeshy',
-      title: 'Nuova richiesta di amicizia',
-      intro: '{sender} vuole connettersi con te su Meeshy.',
-      buttonText: 'Vedi richiesta',
-      footer: 'Puoi accettare o rifiutare questa richiesta dalla tua pagina contatti.'
-    },
-    friendAccepted: {
-      subject: 'Richiesta di amicizia accettata - Meeshy',
-      title: 'Richiesta di amicizia accettata',
-      intro: '{accepter} ha accettato la tua richiesta di amicizia su Meeshy.',
-      buttonText: 'Invia un messaggio',
-      footer: 'Ora potete chattare insieme su Meeshy.'
-    }
-  },
-  de: {
-    common: {
-      greeting: 'Hallo',
-      footer: 'Das Meeshy-Team',
-      copyright: '© {year} Meeshy. Alle Rechte vorbehalten.'
-    },
-    verification: {
-      subject: 'Bestätige deine E-Mail-Adresse - Meeshy',
-      title: 'Willkommen bei Meeshy!',
-      intro: 'Danke für deine Registrierung bei Meeshy! Um dein Konto zu aktivieren, bestätige bitte deine E-Mail-Adresse:',
-      buttonText: 'E-Mail bestätigen',
-      expiry: 'Dieser Link läuft in {hours} Stunden ab.',
-      ignoreNote: 'Wenn du kein Konto erstellt hast, ignoriere diese E-Mail'
-    },
-    passwordReset: {
-      subject: 'Passwort zurücksetzen - Meeshy',
-      title: 'Passwort zurücksetzen',
-      intro: 'Du hast angefordert, dein Meeshy-Passwort zurückzusetzen:',
-      buttonText: 'Passwort zurücksetzen',
-      expiry: 'Dieser Link läuft in {minutes} Minuten ab.',
-      ignoreNote: 'Wenn du diese Anfrage nicht gestellt hast, ignoriere diese E-Mail'
-    },
-    passwordChanged: {
-      subject: 'Dein Passwort wurde geändert - Meeshy',
-      title: 'Passwort geändert',
-      intro: 'Dein Meeshy-Passwort wurde erfolgreich geändert.',
-      warning: 'Das warst nicht du? Kontaktiere sofort unseren Support: security@meeshy.me'
-    },
-    securityAlert: {
-      subject: 'Sicherheitswarnung - Meeshy',
-      title: 'Sicherheitswarnung',
-      actions: 'Empfohlene Maßnahmen:',
-      action1: 'Ändere sofort dein Passwort',
-      action2: 'Überprüfe deine verbundenen Geräte',
-      action3: 'Aktiviere die Zwei-Faktor-Authentifizierung'
-    },
-    loginAlert: {
-      subject: 'New login detected - Meeshy',
-      title: 'New login detected',
-      intro: 'A login was made to your account.',
-      deviceLabel: 'Device',
-      appLabel: 'Application',
-      locationLabel: 'Location',
-      ipLabel: 'IP address',
-      timeLabel: 'Date/time',
-      previousTitle: 'Previous login',
-      revokeTitle: 'Not you?',
-      revokeButton: 'Disconnect all my devices',
-      revokeExpiry: 'This link expires in 24 hours.',
-      mapAlt: 'Map',
-    },
-    emailChange: {
-      subject: 'Bestätige deine neue E-Mail-Adresse - Meeshy',
-      title: 'Änderung der E-Mail-Adresse',
-      intro: 'Du hast angefordert, deine Meeshy E-Mail-Adresse zu ändern. Um diese Änderung zu bestätigen, klicke auf den Button unten:',
-      buttonText: 'Änderung bestätigen',
-      expiry: 'Dieser Link läuft in {hours} Stunden ab.',
-      ignoreNote: 'Wenn du diese Änderung nicht angefordert hast, ignoriere diese E-Mail. Deine aktuelle E-Mail-Adresse bleibt unverändert.'
-    },
-    friendRequest: {
-      subject: 'Neue Freundschaftsanfrage - Meeshy',
-      title: 'Neue Freundschaftsanfrage',
-      intro: '{sender} mochte sich mit dir auf Meeshy verbinden.',
-      buttonText: 'Anfrage ansehen',
-      footer: 'Du kannst diese Anfrage auf deiner Kontaktseite annehmen oder ablehnen.'
-    },
-    friendAccepted: {
-      subject: 'Freundschaftsanfrage akzeptiert - Meeshy',
-      title: 'Freundschaftsanfrage akzeptiert',
-      intro: '{accepter} hat deine Freundschaftsanfrage auf Meeshy akzeptiert.',
-      buttonText: 'Nachricht senden',
-      footer: 'Ihr konnt jetzt zusammen auf Meeshy chatten.'
-    }
-  }
-};
 
 // ============================================================================
 // EMAIL SERVICE CLASS
@@ -741,8 +242,14 @@ export class EmailService {
   private defaultLanguage: SupportedLanguage = 'en';
   private brandLogoUrl: string;
   private frontendUrl: string;
+  /** `MEESHY_ENV=staging`, lu UNE fois (#8036) — voir `./email/staging-marker`. */
+  private readonly staging: boolean;
+  /** Qui lit l'état d'une adresse (#8238) — absent ⇒ celui enregistré au démarrage. */
+  private readonly recipientLookup?: RecipientAddressLookup;
 
-  constructor() {
+  constructor(options: { readonly recipientLookup?: RecipientAddressLookup } = {}) {
+    this.recipientLookup = options.recipientLookup;
+    this.staging = isStagingEnvironment(process.env.MEESHY_ENV);
     this.fromEmail = process.env.EMAIL_FROM || 'noreply@meeshy.me';
     this.fromName = process.env.EMAIL_FROM_NAME || 'Meeshy';
     this.frontendUrl = process.env.FRONTEND_URL || 'https://meeshy.me';
@@ -831,17 +338,28 @@ export class EmailService {
     return `<img src="${this.frontendUrl}/l/meeshy-emails?${params.toString()}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" />`;
   }
 
+  private sender(): EmailSender {
+    return { name: this.fromName, email: this.fromEmail };
+  }
+
   getProviders(): string[] {
     return this.providers.map(p => p.name);
   }
 
-  private async sendEmail(data: EmailData): Promise<EmailResult> {
+  private async sendEmail(input: EmailData): Promise<EmailResult> {
+    // #8238 — la garde CENTRALE : une adresse non vérifiée ne reçoit que ce qui la prouve.
+    const lookup = this.recipientLookup ?? registeredEmailRecipientLookup();
+    if (!(await emailMayLeave({ to: input.to, kind: input.trackingType, lookup }))) {
+      logger.info(`[EmailService] ⛔ adresse non vérifiée — e-mail « ${input.trackingType ?? 'sans famille'} » non envoyé`);
+      return { success: false, error: 'RECIPIENT_ADDRESS_UNVERIFIED' };
+    }
+    const data = markForEnvironment({ ...input }, this.staging);
     if (data.trackingType) {
       const pixel = this.getTrackingPixelHtml(data.trackingType, data.trackingLang);
       data.html = data.html.replace('</body>', `${pixel}\n</body>`);
     }
 
-    const { to, subject, html, text } = data;
+    const { to } = data;
 
     if (this.providers.length === 0) {
       logger.warn(`[EmailService] ❌ No providers configured - email not sent to to=${to}`);
@@ -855,9 +373,9 @@ export class EmailService {
         logger.info(`[EmailService] 🔄 Trying provider: ${provider.name}`);
         let result: EmailResult;
         switch (provider.name) {
-          case 'brevo': result = await this.sendViaBrevo(provider.apiKey, data); break;
-          case 'sendgrid': result = await this.sendViaSendGrid(provider.apiKey, data); break;
-          case 'mailgun': result = await this.sendViaMailgun(provider.apiKey, data); break;
+          case 'brevo': result = await sendViaBrevo(provider.apiKey, this.sender(), data); break;
+          case 'sendgrid': result = await sendViaSendGrid(provider.apiKey, this.sender(), data); break;
+          case 'mailgun': result = await sendViaMailgun(provider.apiKey, this.sender(), data); break;
           default: continue;
         }
         if (result.success) {
@@ -882,100 +400,24 @@ export class EmailService {
     return { success: false, error: `All providers failed: ${errors.join('; ')}` };
   }
 
-  private async sendViaBrevo(apiKey: string, data: EmailData): Promise<EmailResult> {
-    logger.info(`[EmailService] [Brevo] 📤 Sending to Brevo API...`);
-    const response = await axios.post('https://api.brevo.com/v3/smtp/email', {
-      sender: { name: this.fromName, email: this.fromEmail },
-      to: [{ email: data.to }],
-      subject: data.subject,
-      htmlContent: data.html,
-      textContent: data.text
-    }, {
-      headers: { 'accept': 'application/json', 'api-key': apiKey, 'content-type': 'application/json' }
-    });
-    logger.info(`[EmailService] [Brevo] ✅ API Response Status: ${response.status}`);
-    return { success: true, messageId: response.data.messageId };
-  }
-
-  private async sendViaSendGrid(apiKey: string, data: EmailData): Promise<EmailResult> {
-    const response = await axios.post('https://api.sendgrid.com/v3/mail/send', {
-      personalizations: [{ to: [{ email: data.to }] }],
-      from: { email: this.fromEmail, name: this.fromName },
-      subject: data.subject,
-      content: [{ type: 'text/plain', value: data.text }, { type: 'text/html', value: data.html }]
-    }, {
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
-    });
-    return { success: true, messageId: response.headers['x-message-id'] || undefined };
-  }
-
-  private async sendViaMailgun(apiKey: string, data: EmailData): Promise<EmailResult> {
-    const domain = process.env.MAILGUN_DOMAIN || '';
-    if (!domain) return { success: false, error: 'MAILGUN_DOMAIN not configured' };
-
-    const response = await axios.post(
-      `https://api.mailgun.net/v3/${domain}/messages`,
-      new URLSearchParams({
-        from: `${this.fromName} <${this.fromEmail}>`,
-        to: data.to,
-        subject: data.subject,
-        text: data.text,
-        html: data.html
-      }),
-      {
-        headers: {
-          'Authorization': `Basic ${Buffer.from(`api:${apiKey}`).toString('base64')}`,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      }
-    );
-    return { success: true, messageId: response.data.id };
-  }
-
   // ==========================================================================
   // EMAIL TEMPLATES (i18n)
   // ==========================================================================
 
   private getBaseStyles(): string {
-    // Light mode styles
-    const lightStyles = `
-      body{font-family:Arial,sans-serif;line-height:1.6;color:#333;margin:0;padding:0;background-color:#ffffff}
-      .container{max-width:600px;margin:0 auto;padding:20px}
-      .header{background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%);color:white;padding:30px;text-align:center;border-radius:8px 8px 0 0}
-      .header h1{margin:0;font-size:24px}
-      .content{background:#f9fafb;padding:30px;border-radius:0 0 8px 8px;color:#333}
-      .content p{color:#333}
-      .content strong{color:#111}
-      .button{display:inline-block;background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%);color:white!important;padding:14px 32px;text-decoration:none;border-radius:8px;margin:20px 0;font-weight:bold}
-      .footer{margin-top:30px;padding-top:20px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280;text-align:center}
-      .info{background:#EEF2FF;border-left:4px solid #6366F1;padding:12px;margin:20px 0;border-radius:4px;color:#3730a3}
-      .warning{background:#fef2f2;border-left:4px solid #ef4444;padding:12px;margin:20px 0;border-radius:4px;color:#991b1b}
-      .success{background:#f0fdf4;border-left:4px solid #22c55e;padding:12px;margin:20px 0;border-radius:4px;color:#166534}
-      .link-text{color:#6366F1}
-    `;
+    return emailBaseStyles();
+  }
 
-    // Dark mode styles (for clients that support @media prefers-color-scheme)
-    const darkStyles = `
-      @media (prefers-color-scheme:dark){
-        body{background-color:#111827!important;color:#e5e7eb!important}
-        .container{background-color:#111827!important}
-        .content{background:#1f2937!important;color:#e5e7eb!important}
-        .content p{color:#d1d5db!important}
-        .content strong{color:#f3f4f6!important}
-        .footer{border-top-color:#374151!important;color:#9ca3af!important}
-        .info{background:#312e81!important;color:#c7d2fe!important}
-        .warning{background:#7f1d1d!important;color:#fecaca!important}
-        .success{background:#14532d!important;color:#bbf7d0!important}
-        .link-text{color:#a5b4fc!important}
-      }
-    `;
-
-    return (lightStyles + darkStyles).replace(/\s+/g, ' ').trim();
+  /** L'habillage commun des e-mails composés hors de ce fichier : styles et pied de page localisé. */
+  private emailShell(language: string): { styles: string; footerHtml: string; footerText: string } {
+    return { styles: this.getBaseStyles(), footerHtml: this.getFooterContentHtml(language), footerText: this.getFooterContentText(language) };
   }
 
   async sendEmailVerification(data: EmailVerificationData): Promise<EmailResult> {
     const t = this.getTranslations(data.language);
-    const expiry = t.verification.expiry.replace('{hours}', data.expiryHours.toString());
+    const expiry = data.expiryMinutes !== undefined
+      ? codeExpiryText(data.language, data.expiryMinutes)
+      : t.verification.expiry.replace('{hours}', data.expiryHours.toString());
 
     const codeBlockHtml = data.verificationCode
       ? `<div style="text-align:center;margin:20px 0"><p style="font-size:14px;color:#666;margin-bottom:8px">${data.language === 'fr' ? 'Ou entrez ce code dans l\'application' : 'Or enter this code in the app'}:</p><div style="display:inline-block;padding:12px 24px;background:#f4f4f5;border-radius:8px;font-size:32px;font-weight:bold;letter-spacing:8px;font-family:monospace;color:#1e1b4b">${data.verificationCode}</div></div>`
@@ -984,20 +426,41 @@ export class EmailService {
       ? `\n\n${data.language === 'fr' ? 'Ou entrez ce code dans l\'application' : 'Or enter this code in the app'}: ${data.verificationCode}`
       : '';
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>🎉 ${t.verification.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.verification.intro}</p><div style="text-align:center"><a href="${data.verificationLink}" class="button">✓ ${t.verification.buttonText}</a></div><p class="link-text" style="word-break:break-all;font-size:14px">${data.verificationLink}</p>${codeBlockHtml}<div class="info"><strong>ℹ️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.verification.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
-    const text = `${t.verification.title}\n\n${t.common.greeting} ${data.name},\n\n${t.verification.intro}\n\n${data.verificationLink}${codeBlockText}\n\n${expiry}\n\n${t.verification.ignoreNote}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
+    // #6424 — l'identité DÉRIVÉE se découvre ici, ou nulle part : une
+    // inscription par e-mail seul n'a montré ni pseudo ni nom affiché à qui
+    // s'inscrit. Le bloc se place APRÈS le bouton de validation et AVANT les
+    // mentions d'expiration : le geste demandé reste le premier lu.
+    const identityHtml = data.identity ? accountIdentityBlockHtml(data.identity, data.language) : '';
+    const identityText = data.identity ? `\n\n${accountIdentityBlockText(data.identity, data.language)}` : '';
+    const claimWarning = data.claim ? claimWarningFor(this.normalizeLanguage(data.language)) : '';
+    const claimHtml = claimWarning ? `<div class="warning"><strong>⚠️</strong> ${claimWarning}</div>` : '';
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>🎉 ${t.verification.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.verification.intro}</p>${claimHtml}<div style="text-align:center"><a href="${data.verificationLink}" class="button">✓ ${t.verification.buttonText}</a></div><p class="link-text" style="word-break:break-all;font-size:14px">${data.verificationLink}</p>${codeBlockHtml}${identityHtml}<div class="info"><strong>ℹ️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.verification.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
+    const text = `${t.verification.title}\n\n${t.common.greeting} ${data.name},\n\n${t.verification.intro}${claimWarning ? `\n\n${claimWarning}` : ''}\n\n${data.verificationLink}${codeBlockText}${identityText}\n\n${expiry}\n\n${t.verification.ignoreNote}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
 
     return this.sendEmail({ to: data.to, subject: t.verification.subject, html, text, trackingType: 'verification', trackingLang: data.language });
   }
 
+  /** Code de CONNEXION + lien, pour un compte déjà vérifié (#8033). */
+  async sendLoginCodeEmail(data: LoginCodeEmailData): Promise<EmailResult> {
+    const { subject, html, text } = composeLoginCodeEmail(data, this.emailShell(data.language));
+    return this.sendEmail({ to: data.to, subject, html, text, trackingType: 'login_code', trackingLang: data.language });
+  }
+
+  async sendBackupAlertEmail(data: BackupAlertEmailData): Promise<EmailResult> {
+    const monitoringUrl = `${this.frontendUrl}/admin/monitoring`;
+    const { subject, html, text } = composeBackupAlertEmail(data, { ...this.emailShell(data.language), monitoringUrl });
+    return this.sendEmail({ to: data.to, subject, html, text, trackingType: 'backup_alert', trackingLang: data.language });
+  }
+
   async sendPasswordResetEmail(data: PasswordResetEmailData): Promise<EmailResult> {
-    const t = this.getTranslations(data.language);
-    const expiry = t.passwordReset.expiry.replace('{minutes}', data.expiryMinutes.toString());
-
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>🔐 ${t.passwordReset.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.passwordReset.intro}</p><div style="text-align:center"><a href="${data.resetLink}" class="button">${t.passwordReset.buttonText}</a></div><div class="warning"><strong>⚠️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.passwordReset.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
-    const text = `${t.passwordReset.title}\n\n${t.common.greeting} ${data.name},\n\n${t.passwordReset.intro}\n\n${data.resetLink}\n\n${expiry}\n\n${t.passwordReset.ignoreNote}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
-
-    return this.sendEmail({ to: data.to, subject: t.passwordReset.subject, html, text, trackingType: 'password_reset', trackingLang: data.language });
+    const { subject, html, text } = composePasswordResetEmail(data, {
+      translations: this.getTranslations(data.language),
+      baseStyles: this.getBaseStyles(),
+      footerHtml: this.getFooterContentHtml(data.language),
+      footerText: this.getFooterContentText(data.language),
+    });
+    return this.sendEmail({ to: data.to, subject, html, text, trackingType: 'password_reset', trackingLang: data.language });
   }
 
   async sendPasswordChangedEmail(data: PasswordChangedEmailData): Promise<EmailResult> {
@@ -1010,75 +473,6 @@ export class EmailService {
     return this.sendEmail({ to: data.to, subject: t.passwordChanged.subject, html, text, trackingType: 'password_changed', trackingLang: data.language });
   }
 
-  private getAlertTypeLabel(alertType: string, language: string): { label: string; description: string; icon: string; isInfo: boolean } {
-    const labels: Record<string, Record<string, { label: string; description: string; icon: string; isInfo: boolean }>> = {
-      fr: {
-        login_new_device: { label: 'Nouvelle connexion detectee', description: 'Une connexion a ete effectuee depuis un nouvel appareil ou navigateur.', icon: '🔐', isInfo: true },
-        password_changed: { label: 'Mot de passe modifie', description: 'Votre mot de passe a ete change avec succes.', icon: '🔑', isInfo: true },
-        two_factor_enabled: { label: 'Double authentification activee', description: 'La verification en deux etapes a ete activee sur votre compte.', icon: '🛡️', isInfo: true },
-        two_factor_disabled: { label: 'Double authentification desactivee', description: 'La verification en deux etapes a ete desactivee sur votre compte.', icon: '⚠️', isInfo: false },
-        suspicious_activity: { label: 'Activite suspecte', description: 'Nous avons detecte une activite inhabituelle sur votre compte.', icon: '🚨', isInfo: false },
-        user_mentioned: { label: 'Nouvelle mention', description: 'Vous avez ete mentionne.', icon: '💬', isInfo: true },
-        missed_call: { label: 'Appel manque', description: 'Vous avez un appel manque.', icon: '📞', isInfo: true },
-        generic_notification: { label: 'Nouvelle notification', description: 'Vous avez une nouvelle notification.', icon: '🔔', isInfo: true },
-      },
-      en: {
-        login_new_device: { label: 'New login detected', description: 'A login was made from a new device or browser.', icon: '🔐', isInfo: true },
-        password_changed: { label: 'Password changed', description: 'Your password was changed successfully.', icon: '🔑', isInfo: true },
-        two_factor_enabled: { label: 'Two-factor authentication enabled', description: 'Two-step verification has been enabled on your account.', icon: '🛡️', isInfo: true },
-        two_factor_disabled: { label: 'Two-factor authentication disabled', description: 'Two-step verification has been disabled on your account.', icon: '⚠️', isInfo: false },
-        suspicious_activity: { label: 'Suspicious activity', description: 'We detected unusual activity on your account.', icon: '🚨', isInfo: false },
-        user_mentioned: { label: 'New mention', description: 'You were mentioned.', icon: '💬', isInfo: true },
-        missed_call: { label: 'Missed call', description: 'You have a missed call.', icon: '📞', isInfo: true },
-        generic_notification: { label: 'New notification', description: 'You have a new notification.', icon: '🔔', isInfo: true },
-      },
-      es: {
-        login_new_device: { label: 'Nuevo inicio de sesión detectado', description: 'Se ha iniciado sesión desde un nuevo dispositivo o navegador.', icon: '🔐', isInfo: true },
-        password_changed: { label: 'Contraseña modificada', description: 'Tu contraseña se ha cambiado correctamente.', icon: '🔑', isInfo: true },
-        two_factor_enabled: { label: 'Autenticación de dos factores activada', description: 'La verificación en dos pasos se ha activado en tu cuenta.', icon: '🛡️', isInfo: true },
-        two_factor_disabled: { label: 'Autenticación de dos factores desactivada', description: 'La verificación en dos pasos se ha desactivado en tu cuenta.', icon: '⚠️', isInfo: false },
-        suspicious_activity: { label: 'Actividad sospechosa', description: 'Hemos detectado actividad inusual en tu cuenta.', icon: '🚨', isInfo: false },
-        user_mentioned: { label: 'Nueva mención', description: 'Te han mencionado.', icon: '💬', isInfo: true },
-        missed_call: { label: 'Llamada perdida', description: 'Tienes una llamada perdida.', icon: '📞', isInfo: true },
-        generic_notification: { label: 'Nueva notificación', description: 'Tienes una nueva notificación.', icon: '🔔', isInfo: true },
-      },
-      pt: {
-        login_new_device: { label: 'Novo início de sessão detetado', description: 'Foi efetuado um início de sessão a partir de um novo dispositivo ou navegador.', icon: '🔐', isInfo: true },
-        password_changed: { label: 'Palavra-passe alterada', description: 'A sua palavra-passe foi alterada com sucesso.', icon: '🔑', isInfo: true },
-        two_factor_enabled: { label: 'Autenticação de dois fatores ativada', description: 'A verificação em duas etapas foi ativada na sua conta.', icon: '🛡️', isInfo: true },
-        two_factor_disabled: { label: 'Autenticação de dois fatores desativada', description: 'A verificação em duas etapas foi desativada na sua conta.', icon: '⚠️', isInfo: false },
-        suspicious_activity: { label: 'Atividade suspeita', description: 'Detetámos atividade invulgar na sua conta.', icon: '🚨', isInfo: false },
-        user_mentioned: { label: 'Nova menção', description: 'Você foi mencionado.', icon: '💬', isInfo: true },
-        missed_call: { label: 'Chamada perdida', description: 'Tem uma chamada perdida.', icon: '📞', isInfo: true },
-        generic_notification: { label: 'Nova notificação', description: 'Tem uma nova notificação.', icon: '🔔', isInfo: true },
-      },
-      it: {
-        login_new_device: { label: 'Nuovo accesso rilevato', description: 'È stato effettuato un accesso da un nuovo dispositivo o browser.', icon: '🔐', isInfo: true },
-        password_changed: { label: 'Password modificata', description: 'La tua password è stata modificata correttamente.', icon: '🔑', isInfo: true },
-        two_factor_enabled: { label: 'Autenticazione a due fattori attivata', description: 'La verifica in due passaggi è stata attivata sul tuo account.', icon: '🛡️', isInfo: true },
-        two_factor_disabled: { label: 'Autenticazione a due fattori disattivata', description: 'La verifica in due passaggi è stata disattivata sul tuo account.', icon: '⚠️', isInfo: false },
-        suspicious_activity: { label: 'Attività sospetta', description: "Abbiamo rilevato un'attività insolita sul tuo account.", icon: '🚨', isInfo: false },
-        user_mentioned: { label: 'Nuova menzione', description: 'Sei stato menzionato.', icon: '💬', isInfo: true },
-        missed_call: { label: 'Chiamata persa', description: 'Hai una chiamata persa.', icon: '📞', isInfo: true },
-        generic_notification: { label: 'Nuova notifica', description: 'Hai una nuova notifica.', icon: '🔔', isInfo: true },
-      },
-      de: {
-        login_new_device: { label: 'Neue Anmeldung erkannt', description: 'Es wurde eine Anmeldung von einem neuen Gerät oder Browser vorgenommen.', icon: '🔐', isInfo: true },
-        password_changed: { label: 'Passwort geändert', description: 'Dein Passwort wurde erfolgreich geändert.', icon: '🔑', isInfo: true },
-        two_factor_enabled: { label: 'Zwei-Faktor-Authentifizierung aktiviert', description: 'Die Zwei-Schritt-Verifizierung wurde für dein Konto aktiviert.', icon: '🛡️', isInfo: true },
-        two_factor_disabled: { label: 'Zwei-Faktor-Authentifizierung deaktiviert', description: 'Die Zwei-Schritt-Verifizierung wurde für dein Konto deaktiviert.', icon: '⚠️', isInfo: false },
-        suspicious_activity: { label: 'Verdächtige Aktivität', description: 'Wir haben ungewöhnliche Aktivitäten in deinem Konto festgestellt.', icon: '🚨', isInfo: false },
-        user_mentioned: { label: 'Neue Erwähnung', description: 'Du wurdest erwähnt.', icon: '💬', isInfo: true },
-        missed_call: { label: 'Verpasster Anruf', description: 'Du hast einen verpassten Anruf.', icon: '📞', isInfo: true },
-        generic_notification: { label: 'Neue Benachrichtigung', description: 'Du hast eine neue Benachrichtigung.', icon: '🔔', isInfo: true },
-      },
-    };
-    const lang = labels[language] ? language : 'fr';
-    // Unknown types fall back to a neutral notification label — NEVER to
-    // login_new_device, which would mislabel any social notification (a
-    // mention, a missed call, …) as a "new login detected" security alert.
-    return labels[lang][alertType] ?? labels[lang]['generic_notification'];
-  }
 
   /**
    * Shared renderer for label-driven emails (security alerts AND social/general
@@ -1111,7 +505,7 @@ export class EmailService {
   }
 
   async sendSecurityAlertEmail(data: SecurityAlertEmailData): Promise<EmailResult> {
-    return this.composeLabeledEmail(data, this.getAlertTypeLabel(data.alertType, data.language), 'security_alert');
+    return this.composeLabeledEmail(data, getAlertTypeLabel(data.alertType, data.language), 'security_alert');
   }
 
   /**
@@ -1120,7 +514,7 @@ export class EmailService {
    * 'notification' so it is never conflated with account-security alerts.
    */
   async sendNotificationEmail(data: NotificationEmailData): Promise<EmailResult> {
-    const label = this.getAlertTypeLabel(data.notificationType, data.language);
+    const label = getAlertTypeLabel(data.notificationType, data.language);
     return this.composeLabeledEmail(data, { ...label, isInfo: true }, 'notification');
   }
 
@@ -1129,18 +523,17 @@ export class EmailService {
     const locale = this.getLocale(data.language);
     const la = t.loginAlert;
 
-    const timeFormatted = data.loginTime.toLocaleString(locale, {
+    // Un fuseau inconnu ne lève plus : l'alerte part, datée en UTC (audit L2-1).
+    const tzLabel = safeTimeZone(data.timezone);
+    const timeFormatted = formatInTimeZone(data.loginTime, locale, tzLabel, {
       year: 'numeric', month: 'long', day: 'numeric',
       hour: '2-digit', minute: '2-digit',
-      timeZone: data.timezone || 'UTC',
     });
-    const tzLabel = data.timezone || 'UTC';
 
     const prevTimeFormatted = data.previousLoginTime
-      ? data.previousLoginTime.toLocaleString(locale, {
+      ? formatInTimeZone(data.previousLoginTime, locale, tzLabel, {
           year: 'numeric', month: 'long', day: 'numeric',
           hour: '2-digit', minute: '2-digit',
-          timeZone: data.timezone || 'UTC',
         })
       : null;
 
@@ -1194,31 +587,7 @@ export class EmailService {
     return this.sendEmail({ to: data.to, subject: t.emailChange.subject, html, text, trackingType: 'email_change', trackingLang: data.language });
   }
 
-  async sendFriendRequestEmail(data: FriendRequestEmailData): Promise<EmailResult> {
-    const t = this.getTranslations(data.language);
-    const intro = replaceLiteral(t.friendRequest.intro, '{sender}', data.senderName);
-    const avatarHtml = data.senderAvatar
-      ? `<img src="${data.senderAvatar}" alt="${this.escapeHtml(data.senderName)}" style="width:64px;height:64px;border-radius:50%;margin-bottom:10px" onerror="this.style.display='none'">`
-      : '';
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>👋 ${t.friendRequest.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${this.escapeHtml(data.recipientName)}</strong>,</p><div style="text-align:center;margin:20px 0">${avatarHtml}<p style="font-size:16px">${this.escapeHtml(intro)}</p></div><div style="text-align:center"><a href="${data.viewRequestUrl}" class="button">${t.friendRequest.buttonText}</a></div><div class="info"><p style="margin:0">${t.friendRequest.footer}</p></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
-    const text = `${t.friendRequest.title}\n\n${t.common.greeting} ${data.recipientName},\n\n${intro}\n\n${t.friendRequest.buttonText}: ${data.viewRequestUrl}\n\n${t.friendRequest.footer}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
-
-    return this.sendEmail({ to: data.to, subject: t.friendRequest.subject, html, text, trackingType: 'friend_request', trackingLang: data.language });
-  }
-
-  async sendFriendAcceptedEmail(data: FriendAcceptedEmailData): Promise<EmailResult> {
-    const t = this.getTranslations(data.language);
-    const intro = replaceLiteral(t.friendAccepted.intro, '{accepter}', data.accepterName);
-    const avatarHtml = data.accepterAvatar
-      ? `<img src="${data.accepterAvatar}" alt="${this.escapeHtml(data.accepterName)}" style="width:64px;height:64px;border-radius:50%;margin-bottom:10px" onerror="this.style.display='none'">`
-      : '';
-
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header" style="background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%)"><h1>🎉 ${t.friendAccepted.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${this.escapeHtml(data.recipientName)}</strong>,</p><div style="text-align:center;margin:20px 0">${avatarHtml}<p style="font-size:16px">${this.escapeHtml(intro)}</p></div><div style="text-align:center"><a href="${data.conversationUrl}" class="button">${t.friendAccepted.buttonText}</a></div><div class="success"><p style="margin:0">${t.friendAccepted.footer}</p></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
-    const text = `${t.friendAccepted.title}\n\n${t.common.greeting} ${data.recipientName},\n\n${intro}\n\n${t.friendAccepted.buttonText}: ${data.conversationUrl}\n\n${t.friendAccepted.footer}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
-
-    return this.sendEmail({ to: data.to, subject: t.friendAccepted.subject, html, text, trackingType: 'friend_accepted', trackingLang: data.language });
-  }
 
   async sendInvitationEmail(data: InvitationEmailData): Promise<EmailResult> {
     const t = this.getTranslations(data.language);
@@ -1226,8 +595,8 @@ export class EmailService {
       ? `<img src="${data.senderAvatar}" alt="${this.escapeHtml(data.senderName)}" style="width:64px;height:64px;border-radius:50%;margin-bottom:10px" onerror="this.style.display='none'">`
       : '';
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>💬 ${this.escapeHtml(data.senderName)} vous invite sur Meeshy !</h1></div><div class="content"><div style="text-align:center;margin:20px 0">${avatarHtml}<p style="font-size:16px"><strong>${this.escapeHtml(data.senderName)}</strong> vous invite a rejoindre Meeshy, la plateforme de messagerie multilingue.</p><p style="font-size:14px;color:#666">Communiquez sans barrieres linguistiques avec la traduction automatique en temps reel.</p></div><div style="text-align:center"><a href="${data.downloadUrl}" class="button">Telecharger Meeshy</a></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
-    const text = `${data.senderName} vous invite sur Meeshy !\n\nRejoignez la plateforme de messagerie multilingue.\n\nTelecharger : ${data.downloadUrl}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>💬 ${this.escapeHtml(data.senderName)} vous invite sur Meeshy !</h1></div><div class="content"><div style="text-align:center;margin:20px 0">${avatarHtml}<p style="font-size:16px"><strong>${this.escapeHtml(data.senderName)}</strong> vous invite a rejoindre Meeshy, la plateforme de messagerie multilingue.</p><p style="font-size:14px;color:#666">Communiquez sans barrieres linguistiques avec la traduction automatique en temps reel.</p></div><div style="text-align:center"><a href="${data.downloadUrl}" class="button">Rejoindre Meeshy</a></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
+    const text = `${data.senderName} vous invite sur Meeshy !\n\nRejoignez la plateforme de messagerie multilingue.\n\nRejoindre : ${data.downloadUrl}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
 
     return this.sendEmail({ to: data.to, subject: `${data.senderName} vous invite sur Meeshy`, html, text, trackingType: 'invitation', trackingLang: data.language });
   }
@@ -1236,7 +605,7 @@ export class EmailService {
     const lang = data.language || 'en';
     const dateFormatted = new Date().toLocaleString(this.getLocale(lang));
 
-    const content = this.getMagicLinkTranslations(lang);
+    const content = getMagicLinkTranslations(lang);
 
     const html = `<!DOCTYPE html>
 <html lang="${lang}">
@@ -1285,6 +654,8 @@ export class EmailService {
         </p>
       </div>
 
+      ${data.identity ? accountIdentityBlockHtml(data.identity, lang) : ''}
+
       <!-- Fallback Link -->
       <p style="font-size:12px;word-break:break-all;margin-top:20px">
         ${content.fallbackText}<br>
@@ -1313,118 +684,12 @@ export class EmailService {
   </div>
 </body>
 </html>`;
-    const text = `${content.title}\n\n${content.greeting} ${data.name},\n\n${content.intro}\n\n${data.magicLink}\n\n${content.expiryTitle}: ${content.expiryText}\n\n${content.requestFrom} ${data.location}\n${content.requestAt} ${dateFormatted}\n\n${content.notYou}\n\n${content.footer}\n\n${this.getFooterContentText(lang)}`;
+    const identityText = data.identity ? `\n\n${accountIdentityBlockText(data.identity, lang)}` : '';
+    const text = `${content.title}\n\n${content.greeting} ${data.name},\n\n${content.intro}\n\n${data.magicLink}${identityText}\n\n${content.expiryTitle}: ${content.expiryText}\n\n${content.requestFrom} ${data.location}\n${content.requestAt} ${dateFormatted}\n\n${content.notYou}\n\n${content.footer}\n\n${this.getFooterContentText(lang)}`;
 
     return this.sendEmail({ to: data.to, subject: content.subject, html, text, trackingType: 'magic_link', trackingLang: lang });
   }
 
-  private getMagicLinkTranslations(language: string): Record<string, string> {
-    const translations: Record<string, Record<string, string>> = {
-      fr: {
-        subject: '🔐 Votre lien de connexion Meeshy',
-        title: 'Connexion immédiate à Meeshy',
-        subtitle: 'Connexion sécurisée en un clic',
-        greeting: 'Bonjour',
-        intro: 'Cliquez sur le bouton ci-dessous pour vous connecter instantanément à votre compte Meeshy. Ce lien est valide pendant 1 minute seulement.',
-        buttonText: 'Se connecter',
-        expiryTitle: 'Lien à usage unique',
-        expiryText: 'Ce lien expire dans 1 minute et ne peut être utilisé qu\'une seule fois. Pour votre sécurité, ne le partagez avec personne.',
-        requestFrom: 'Demande depuis:',
-        requestAt: 'Demandé le:',
-        fallbackText: 'Si le bouton ne fonctionne pas, copiez et collez ce lien dans votre navigateur:',
-        notYou: 'Si vous n\'avez pas demandé ce lien, vous pouvez ignorer cet email en toute sécurité. Votre compte reste protégé.',
-        footer: 'L\'équipe Meeshy',
-        privacy: 'Confidentialité',
-        terms: 'Conditions'
-      },
-      en: {
-        subject: '🔐 Your Meeshy login link',
-        title: 'Instant Login to Meeshy',
-        subtitle: 'Secure one-click sign in',
-        greeting: 'Hello',
-        intro: 'Click the button below to instantly sign in to your Meeshy account. This link is valid for 1 minute only.',
-        buttonText: 'Sign in',
-        expiryTitle: 'One-time use link',
-        expiryText: 'This link expires in 1 minute and can only be used once. For your security, do not share it with anyone.',
-        requestFrom: 'Request from:',
-        requestAt: 'Requested at:',
-        fallbackText: 'If the button doesn\'t work, copy and paste this link into your browser:',
-        notYou: 'If you did not request this link, you can safely ignore this email. Your account remains protected.',
-        footer: 'The Meeshy Team',
-        privacy: 'Privacy',
-        terms: 'Terms'
-      },
-      es: {
-        subject: '🔐 Tu enlace de inicio de sesión de Meeshy',
-        title: 'Inicio de sesión inmediato en Meeshy',
-        subtitle: 'Inicio de sesión seguro con un clic',
-        greeting: 'Hola',
-        intro: 'Haz clic en el botón de abajo para iniciar sesión instantáneamente en tu cuenta Meeshy. Este enlace es válido solo por 1 minuto.',
-        buttonText: 'Iniciar sesión',
-        expiryTitle: 'Enlace de un solo uso',
-        expiryText: 'Este enlace expira en 1 minuto y solo puede usarse una vez. Por tu seguridad, no lo compartas con nadie.',
-        requestFrom: 'Solicitud desde:',
-        requestAt: 'Solicitado el:',
-        fallbackText: 'Si el botón no funciona, copia y pega este enlace en tu navegador:',
-        notYou: 'Si no solicitaste este enlace, puedes ignorar este correo con seguridad. Tu cuenta permanece protegida.',
-        footer: 'El equipo de Meeshy',
-        privacy: 'Privacidad',
-        terms: 'Términos'
-      },
-      pt: {
-        subject: '🔐 Seu link de login Meeshy',
-        title: 'Login imediato no Meeshy',
-        subtitle: 'Login seguro com um clique',
-        greeting: 'Olá',
-        intro: 'Clique no botão abaixo para entrar instantaneamente na sua conta Meeshy. Este link é válido por apenas 1 minuto.',
-        buttonText: 'Entrar',
-        expiryTitle: 'Link de uso único',
-        expiryText: 'Este link expira em 1 minuto e só pode ser usado uma vez. Para sua segurança, não compartilhe com ninguém.',
-        requestFrom: 'Solicitação de:',
-        requestAt: 'Solicitado em:',
-        fallbackText: 'Se o botão não funcionar, copie e cole este link no seu navegador:',
-        notYou: 'Se você não solicitou este link, pode ignorar este e-mail com segurança. Sua conta permanece protegida.',
-        footer: 'A equipe Meeshy',
-        privacy: 'Privacidade',
-        terms: 'Termos'
-      },
-      it: {
-        subject: '🔐 Il tuo link di accesso Meeshy',
-        title: 'Accesso immediato a Meeshy',
-        subtitle: 'Accesso sicuro con un clic',
-        greeting: 'Ciao',
-        intro: 'Clicca il pulsante qui sotto per accedere istantaneamente al tuo account Meeshy. Questo link è valido solo per 1 minuto.',
-        buttonText: 'Accedi',
-        expiryTitle: 'Link monouso',
-        expiryText: 'Questo link scade in 1 minuto e può essere usato solo una volta. Per la tua sicurezza, non condividerlo con nessuno.',
-        requestFrom: 'Richiesta da:',
-        requestAt: 'Richiesto il:',
-        fallbackText: 'Se il pulsante non funziona, copia e incolla questo link nel tuo browser:',
-        notYou: 'Se non hai richiesto questo link, puoi ignorare questa email in sicurezza. Il tuo account rimane protetto.',
-        footer: 'Il team Meeshy',
-        privacy: 'Privacy',
-        terms: 'Termini'
-      },
-      de: {
-        subject: '🔐 Dein Meeshy-Anmeldelink',
-        title: 'Sofortige Anmeldung bei Meeshy',
-        subtitle: 'Sichere Anmeldung mit einem Klick',
-        greeting: 'Hallo',
-        intro: 'Klicke auf den Button unten, um dich sofort bei deinem Meeshy-Konto anzumelden. Dieser Link ist nur 1 Minute gültig.',
-        buttonText: 'Anmelden',
-        expiryTitle: 'Einmaliger Link',
-        expiryText: 'Dieser Link läuft in 1 Minute ab und kann nur einmal verwendet werden. Zu deiner Sicherheit teile ihn mit niemandem.',
-        requestFrom: 'Anfrage von:',
-        requestAt: 'Angefordert am:',
-        fallbackText: 'Wenn der Button nicht funktioniert, kopiere und füge diesen Link in deinen Browser ein:',
-        notYou: 'Wenn du diesen Link nicht angefordert hast, kannst du diese E-Mail ignorieren. Dein Konto bleibt geschützt.',
-        footer: 'Das Meeshy-Team',
-        privacy: 'Datenschutz',
-        terms: 'AGB'
-      }
-    };
-    return translations[language] || translations['en'];
-  }
 
   // ==========================================================================
   // ACCOUNT DELETION EMAILS
@@ -1432,7 +697,7 @@ export class EmailService {
 
   async sendAccountDeletionConfirmEmail(data: AccountDeletionConfirmEmailData): Promise<EmailResult> {
     const lang = data.language || 'en';
-    const content = this.getAccountDeletionConfirmTranslations(lang);
+    const content = getAccountDeletionConfirmTranslations(lang);
 
     const html = `<!DOCTYPE html>
 <html lang="${lang}">
@@ -1503,7 +768,7 @@ export class EmailService {
 
   async sendAccountDeletionReminderEmail(data: AccountDeletionReminderEmailData): Promise<EmailResult> {
     const lang = data.language || 'en';
-    const content = this.getAccountDeletionReminderTranslations(lang);
+    const content = getAccountDeletionReminderTranslations(lang);
 
     const html = `<!DOCTYPE html>
 <html lang="${lang}">
@@ -1567,297 +832,9 @@ export class EmailService {
     return this.sendEmail({ to: data.to, subject: content.subject, html, text, trackingType: 'deletion_reminder', trackingLang: lang });
   }
 
-  async sendUsernameReminderEmail(data: UsernameReminderEmailData): Promise<EmailResult> {
-    const lang = data.language || 'en';
-    const content = this.getUsernameReminderTranslations(lang);
-    const handle = `@${this.escapeHtml(data.username)}`;
 
-    const html = `<!DOCTYPE html>
-<html lang="${lang}">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="color-scheme" content="light dark">
-  <meta name="supported-color-schemes" content="light dark">
-  <title>${content.subject}</title>
-  <style>${this.getBaseStyles()}</style>
-</head>
-<body>
-  <div class="container">
-    <div class="header" style="background:linear-gradient(135deg,#6366f1 0%,#4338ca 100%);border-radius:12px 12px 0 0">
-      <a href="${this.frontendUrl}" style="text-decoration:none">
-        <img src="${this.brandLogoUrl}" alt="Meeshy" style="height:50px;width:auto;margin-bottom:15px" onerror="this.style.display='none'">
-      </a>
-      <h1 style="margin:0;font-size:28px;font-weight:700;color:white">${content.title}</h1>
-      <p style="margin:10px 0 0;opacity:0.9;font-size:14px">${content.subtitle}</p>
-    </div>
 
-    <div class="content" style="padding:40px 30px;border-radius:0 0 12px 12px">
-      <p>${content.greeting} <strong class="link-text">${this.escapeHtml(data.name)}</strong>,</p>
-      <p>${content.intro} <strong class="link-text">${handle}</strong>.</p>
-      <p style="font-size:14px">${content.loginNote}</p>
-      <p style="font-size:14px;margin-top:25px">${content.footer}</p>
-    </div>
 
-    <div class="footer">
-      <a href="${this.frontendUrl}" style="text-decoration:none">
-        <img src="${this.brandLogoUrl}" alt="Meeshy" style="height:30px;width:auto;opacity:0.6" onerror="this.style.display='none'">
-      </a>
-      ${this.getFooterContentHtml(lang)}
-    </div>
-  </div>
-</body>
-</html>`;
-
-    const text = `${content.title}\n\n${content.greeting} ${data.name},\n\n${content.intro} @${data.username}.\n\n${content.loginNote}\n\n${content.footer}\n\n${this.getFooterContentText(lang)}`;
-
-    return this.sendEmail({ to: data.to, subject: content.subject, html, text, trackingType: 'username_reminder', trackingLang: lang });
-  }
-
-  /**
-   * Copie strictement « rappel ». Chaque libellé énonce un fait vrai au présent ;
-   * aucune formulation n'évoque une modification — c'est une règle produit, pas
-   * une préférence de style, verrouillée par test dans EmailService.test.ts.
-   */
-  private getUsernameReminderTranslations(language: string): Record<string, string> {
-    const translations: Record<string, Record<string, string>> = {
-      fr: {
-        subject: 'Votre identifiant Meeshy',
-        title: 'Votre identifiant',
-        subtitle: 'Petit rappel',
-        greeting: 'Bonjour',
-        intro: 'Petit rappel : votre nom d\'utilisateur Meeshy est',
-        loginNote: 'C\'est avec lui — ou avec votre adresse e-mail — que vous vous connectez.',
-        footer: 'L\'équipe Meeshy',
-      },
-      en: {
-        subject: 'Your Meeshy username',
-        title: 'Your username',
-        subtitle: 'A quick reminder',
-        greeting: 'Hello',
-        intro: 'A quick reminder: your Meeshy username is',
-        loginNote: 'You sign in with it — or with your email address.',
-        footer: 'The Meeshy Team',
-      },
-      es: {
-        subject: 'Tu identificador de Meeshy',
-        title: 'Tu identificador',
-        subtitle: 'Un recordatorio',
-        greeting: 'Hola',
-        intro: 'Un recordatorio: tu nombre de usuario en Meeshy es',
-        loginNote: 'Con él — o con tu correo electrónico — inicias sesión.',
-        footer: 'El equipo de Meeshy',
-      },
-      pt: {
-        subject: 'O seu identificador Meeshy',
-        title: 'O seu identificador',
-        subtitle: 'Um lembrete',
-        greeting: 'Olá',
-        intro: 'Um lembrete: o seu nome de utilizador Meeshy é',
-        loginNote: 'É com ele — ou com o seu e-mail — que inicia sessão.',
-        footer: 'A equipa Meeshy',
-      },
-      it: {
-        subject: 'Il tuo identificativo Meeshy',
-        title: 'Il tuo identificativo',
-        subtitle: 'Un promemoria',
-        greeting: 'Ciao',
-        intro: 'Un promemoria: il tuo nome utente Meeshy è',
-        loginNote: 'Accedi con questo — oppure con il tuo indirizzo e-mail.',
-        footer: 'Il team Meeshy',
-      },
-      de: {
-        subject: 'Ihr Meeshy-Benutzername',
-        title: 'Ihr Benutzername',
-        subtitle: 'Eine kurze Erinnerung',
-        greeting: 'Hallo',
-        intro: 'Eine kurze Erinnerung: Ihr Meeshy-Benutzername lautet',
-        loginNote: 'Damit — oder mit Ihrer E-Mail-Adresse — melden Sie sich an.',
-        footer: 'Ihr Meeshy-Team',
-      },
-    };
-    return translations[language] || translations.en;
-  }
-
-  private getAccountDeletionConfirmTranslations(language: string): Record<string, string> {
-    const translations: Record<string, Record<string, string>> = {
-      fr: {
-        subject: '\u26a0\ufe0f Confirmez la suppression de votre compte Meeshy',
-        title: 'Suppression de compte',
-        subtitle: 'Action irr\u00e9versible',
-        greeting: 'Bonjour',
-        intro: 'Vous avez demand\u00e9 la suppression de votre compte Meeshy. Pour confirmer cette action, veuillez cliquer sur le bouton ci-dessous.',
-        warningTitle: '\u26a0\ufe0f Attention',
-        warningText: 'Cette action est irr\u00e9versible. Toutes vos conversations, messages, m\u00e9dias et contacts seront d\u00e9finitivement supprim\u00e9s.',
-        gracePeriodTitle: '\ud83d\udcc5 P\u00e9riode de gr\u00e2ce',
-        gracePeriodText: 'Apr\u00e8s confirmation, votre compte restera actif pendant 3 mois. Pendant cette p\u00e9riode, vous pourrez annuler la suppression \u00e0 tout moment.',
-        confirmButton: 'Confirmer la suppression',
-        cancelButton: 'Annuler la demande',
-        notYou: 'Si vous n\'avez pas demand\u00e9 cette suppression, cliquez sur "Annuler" ou ignorez cet email. Votre compte reste prot\u00e9g\u00e9.',
-        footer: 'L\'\u00e9quipe Meeshy',
-      },
-      en: {
-        subject: '\u26a0\ufe0f Confirm your Meeshy account deletion',
-        title: 'Account Deletion',
-        subtitle: 'Irreversible action',
-        greeting: 'Hello',
-        intro: 'You have requested the deletion of your Meeshy account. To confirm this action, please click the button below.',
-        warningTitle: '\u26a0\ufe0f Warning',
-        warningText: 'This action is irreversible. All your conversations, messages, media, and contacts will be permanently deleted.',
-        gracePeriodTitle: '\ud83d\udcc5 Grace Period',
-        gracePeriodText: 'After confirmation, your account will remain active for 3 months. During this period, you can cancel the deletion at any time.',
-        confirmButton: 'Confirm deletion',
-        cancelButton: 'Cancel request',
-        notYou: 'If you did not request this deletion, click "Cancel" or ignore this email. Your account remains protected.',
-        footer: 'The Meeshy Team',
-      },
-      es: {
-        subject: '\u26a0\ufe0f Confirma la eliminaci\u00f3n de tu cuenta Meeshy',
-        title: 'Eliminaci\u00f3n de cuenta',
-        subtitle: 'Acci\u00f3n irreversible',
-        greeting: 'Hola',
-        intro: 'Has solicitado la eliminaci\u00f3n de tu cuenta Meeshy. Para confirmar esta acci\u00f3n, haz clic en el bot\u00f3n de abajo.',
-        warningTitle: '\u26a0\ufe0f Advertencia',
-        warningText: 'Esta acci\u00f3n es irreversible. Todas tus conversaciones, mensajes, medios y contactos se eliminar\u00e1n permanentemente.',
-        gracePeriodTitle: '\ud83d\udcc5 Per\u00edodo de gracia',
-        gracePeriodText: 'Despu\u00e9s de la confirmaci\u00f3n, tu cuenta permanecer\u00e1 activa durante 3 meses. Durante este per\u00edodo, puedes cancelar la eliminaci\u00f3n en cualquier momento.',
-        confirmButton: 'Confirmar eliminaci\u00f3n',
-        cancelButton: 'Cancelar solicitud',
-        notYou: 'Si no solicitaste esta eliminaci\u00f3n, haz clic en "Cancelar" o ignora este correo. Tu cuenta permanece protegida.',
-        footer: 'El equipo de Meeshy',
-      },
-      pt: {
-        subject: '\u26a0\ufe0f Confirme a exclus\u00e3o da sua conta Meeshy',
-        title: 'Exclus\u00e3o de conta',
-        subtitle: 'A\u00e7\u00e3o irrevers\u00edvel',
-        greeting: 'Ol\u00e1',
-        intro: 'Voc\u00ea solicitou a exclus\u00e3o da sua conta Meeshy. Para confirmar esta a\u00e7\u00e3o, clique no bot\u00e3o abaixo.',
-        warningTitle: '\u26a0\ufe0f Aten\u00e7\u00e3o',
-        warningText: 'Esta a\u00e7\u00e3o \u00e9 irrevers\u00edvel. Todas as suas conversas, mensagens, m\u00eddias e contatos ser\u00e3o permanentemente exclu\u00eddos.',
-        gracePeriodTitle: '\ud83d\udcc5 Per\u00edodo de carência',
-        gracePeriodText: 'Ap\u00f3s a confirma\u00e7\u00e3o, sua conta permanecer\u00e1 ativa por 3 meses. Durante este per\u00edodo, voc\u00ea pode cancelar a exclus\u00e3o a qualquer momento.',
-        confirmButton: 'Confirmar exclus\u00e3o',
-        cancelButton: 'Cancelar solicita\u00e7\u00e3o',
-        notYou: 'Se voc\u00ea n\u00e3o solicitou esta exclus\u00e3o, clique em "Cancelar" ou ignore este email. Sua conta permanece protegida.',
-        footer: 'A equipe Meeshy',
-      },
-      it: {
-        subject: '\u26a0\ufe0f Conferma l\'eliminazione del tuo account Meeshy',
-        title: 'Eliminazione account',
-        subtitle: 'Azione irreversibile',
-        greeting: 'Ciao',
-        intro: 'Hai richiesto l\'eliminazione del tuo account Meeshy. Per confermare questa azione, clicca sul pulsante qui sotto.',
-        warningTitle: '\u26a0\ufe0f Attenzione',
-        warningText: 'Questa azione \u00e8 irreversibile. Tutte le tue conversazioni, messaggi, media e contatti saranno eliminati permanentemente.',
-        gracePeriodTitle: '\ud83d\udcc5 Periodo di grazia',
-        gracePeriodText: 'Dopo la conferma, il tuo account rester\u00e0 attivo per 3 mesi. Durante questo periodo, puoi annullare l\'eliminazione in qualsiasi momento.',
-        confirmButton: 'Conferma eliminazione',
-        cancelButton: 'Annulla richiesta',
-        notYou: 'Se non hai richiesto questa eliminazione, clicca su "Annulla" o ignora questa email. Il tuo account rimane protetto.',
-        footer: 'Il team Meeshy',
-      },
-      de: {
-        subject: '\u26a0\ufe0f Best\u00e4tige die L\u00f6schung deines Meeshy-Kontos',
-        title: 'Kontol\u00f6schung',
-        subtitle: 'Unwiderrufliche Aktion',
-        greeting: 'Hallo',
-        intro: 'Du hast die L\u00f6schung deines Meeshy-Kontos angefordert. Um diese Aktion zu best\u00e4tigen, klicke auf den Button unten.',
-        warningTitle: '\u26a0\ufe0f Warnung',
-        warningText: 'Diese Aktion ist unwiderruflich. Alle deine Unterhaltungen, Nachrichten, Medien und Kontakte werden dauerhaft gel\u00f6scht.',
-        gracePeriodTitle: '\ud83d\udcc5 Karenzzeit',
-        gracePeriodText: 'Nach der Best\u00e4tigung bleibt dein Konto 3 Monate lang aktiv. In dieser Zeit kannst du die L\u00f6schung jederzeit r\u00fcckg\u00e4ngig machen.',
-        confirmButton: 'L\u00f6schung best\u00e4tigen',
-        cancelButton: 'Anfrage abbrechen',
-        notYou: 'Wenn du diese L\u00f6schung nicht angefordert hast, klicke auf "Abbrechen" oder ignoriere diese E-Mail. Dein Konto bleibt gesch\u00fctzt.',
-        footer: 'Das Meeshy-Team',
-      },
-    };
-    return translations[language] || translations['en'];
-  }
-
-  private getAccountDeletionReminderTranslations(language: string): Record<string, string> {
-    const translations: Record<string, Record<string, string>> = {
-      fr: {
-        subject: '\u23f0 Rappel : Votre compte Meeshy sera bient\u00f4t supprim\u00e9',
-        title: 'Rappel de suppression',
-        subtitle: 'Votre compte est en attente de suppression',
-        greeting: 'Bonjour',
-        intro: 'Votre compte Meeshy est pr\u00e9vu pour \u00eatre supprim\u00e9 le {date}. Si vous souhaitez conserver votre compte, vous pouvez annuler cette demande.',
-        reminderTitle: '\u23f0 Rappel',
-        reminderText: 'La p\u00e9riode de gr\u00e2ce a expir\u00e9. Votre compte sera supprim\u00e9 d\u00e9finitivement si vous ne l\'annulez pas.',
-        cancelButton: 'Annuler la suppression',
-        deleteNowButton: 'Supprimer maintenant',
-        cancelNote: 'Cliquez sur "Annuler la suppression" pour conserver votre compte et toutes vos donn\u00e9es.',
-        footer: 'L\'\u00e9quipe Meeshy',
-      },
-      en: {
-        subject: '\u23f0 Reminder: Your Meeshy account will be deleted soon',
-        title: 'Deletion Reminder',
-        subtitle: 'Your account is pending deletion',
-        greeting: 'Hello',
-        intro: 'Your Meeshy account is scheduled to be deleted on {date}. If you wish to keep your account, you can cancel this request.',
-        reminderTitle: '\u23f0 Reminder',
-        reminderText: 'The grace period has expired. Your account will be permanently deleted unless you cancel.',
-        cancelButton: 'Cancel deletion',
-        deleteNowButton: 'Delete now',
-        cancelNote: 'Click "Cancel deletion" to keep your account and all your data.',
-        footer: 'The Meeshy Team',
-      },
-      es: {
-        subject: '\u23f0 Recordatorio: Tu cuenta Meeshy ser\u00e1 eliminada pronto',
-        title: 'Recordatorio de eliminaci\u00f3n',
-        subtitle: 'Tu cuenta est\u00e1 pendiente de eliminaci\u00f3n',
-        greeting: 'Hola',
-        intro: 'Tu cuenta Meeshy est\u00e1 programada para ser eliminada el {date}. Si deseas conservar tu cuenta, puedes cancelar esta solicitud.',
-        reminderTitle: '\u23f0 Recordatorio',
-        reminderText: 'El per\u00edodo de gracia ha expirado. Tu cuenta ser\u00e1 eliminada permanentemente a menos que la canceles.',
-        cancelButton: 'Cancelar eliminaci\u00f3n',
-        deleteNowButton: 'Eliminar ahora',
-        cancelNote: 'Haz clic en "Cancelar eliminaci\u00f3n" para conservar tu cuenta y todos tus datos.',
-        footer: 'El equipo de Meeshy',
-      },
-      pt: {
-        subject: '\u23f0 Lembrete: Sua conta Meeshy ser\u00e1 exclu\u00edda em breve',
-        title: 'Lembrete de exclus\u00e3o',
-        subtitle: 'Sua conta est\u00e1 pendente de exclus\u00e3o',
-        greeting: 'Ol\u00e1',
-        intro: 'Sua conta Meeshy est\u00e1 programada para ser exclu\u00edda em {date}. Se deseja manter sua conta, pode cancelar esta solicita\u00e7\u00e3o.',
-        reminderTitle: '\u23f0 Lembrete',
-        reminderText: 'O per\u00edodo de carência expirou. Sua conta ser\u00e1 permanentemente exclu\u00edda se voc\u00ea n\u00e3o cancelar.',
-        cancelButton: 'Cancelar exclus\u00e3o',
-        deleteNowButton: 'Excluir agora',
-        cancelNote: 'Clique em "Cancelar exclus\u00e3o" para manter sua conta e todos os seus dados.',
-        footer: 'A equipe Meeshy',
-      },
-      it: {
-        subject: '\u23f0 Promemoria: Il tuo account Meeshy sar\u00e0 eliminato presto',
-        title: 'Promemoria eliminazione',
-        subtitle: 'Il tuo account \u00e8 in attesa di eliminazione',
-        greeting: 'Ciao',
-        intro: 'Il tuo account Meeshy \u00e8 programmato per essere eliminato il {date}. Se desideri mantenere il tuo account, puoi annullare questa richiesta.',
-        reminderTitle: '\u23f0 Promemoria',
-        reminderText: 'Il periodo di grazia \u00e8 scaduto. Il tuo account sar\u00e0 eliminato permanentemente se non annulli.',
-        cancelButton: 'Annulla eliminazione',
-        deleteNowButton: 'Elimina ora',
-        cancelNote: 'Clicca su "Annulla eliminazione" per mantenere il tuo account e tutti i tuoi dati.',
-        footer: 'Il team Meeshy',
-      },
-      de: {
-        subject: '\u23f0 Erinnerung: Dein Meeshy-Konto wird bald gel\u00f6scht',
-        title: 'L\u00f6scherinnerung',
-        subtitle: 'Dein Konto wartet auf L\u00f6schung',
-        greeting: 'Hallo',
-        intro: 'Dein Meeshy-Konto ist f\u00fcr die L\u00f6schung am {date} geplant. Wenn du dein Konto behalten m\u00f6chtest, kannst du diese Anfrage stornieren.',
-        reminderTitle: '\u23f0 Erinnerung',
-        reminderText: 'Die Karenzzeit ist abgelaufen. Dein Konto wird dauerhaft gel\u00f6scht, wenn du nicht stornierst.',
-        cancelButton: 'L\u00f6schung abbrechen',
-        deleteNowButton: 'Jetzt l\u00f6schen',
-        cancelNote: 'Klicke auf "L\u00f6schung abbrechen", um dein Konto und alle deine Daten zu behalten.',
-        footer: 'Das Meeshy-Team',
-      },
-    };
-    return translations[language] || translations['en'];
-  }
 
   // ==========================================================================
   // NOTIFICATION DIGEST EMAIL
@@ -1865,7 +842,7 @@ export class EmailService {
 
   async sendNotificationDigestEmail(data: NotificationDigestEmailData): Promise<EmailResult> {
     const lang = data.language || 'en';
-    const t = this.getDigestTranslations(lang);
+    const t = getDigestTranslations(lang);
 
     // Re-engagement teaser: reveal the aggregate unread count ONLY (no actor
     // names, no message previews) to create curiosity and avoid leaking content
@@ -1938,83 +915,6 @@ export class EmailService {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  private getDigestTranslations(language: string): Record<string, string> {
-    const translations: Record<string, Record<string, string>> = {
-      fr: {
-        subject: 'Vous avez {count} notifications non lues - Meeshy',
-        unreadTitle: 'Vous avez {count} notifications non lues',
-        subtitle: 'Quelque chose vous attend',
-        greeting: 'Bonjour',
-        teaserIntro: 'Vous avez {count} notification(s) en attente sur Meeshy. Revenez voir ce que vous manquez — un seul clic, sans mot de passe.',
-        buttonText: 'Ouvrir Meeshy',
-        linkValidity: 'Ce lien de connexion est valable 24 h.',
-        footer: "L'equipe Meeshy",
-        managePrefs: 'Gerer mes preferences email',
-        privacy: 'Confidentialite',
-      },
-      en: {
-        subject: 'You have {count} unread notifications - Meeshy',
-        unreadTitle: 'You have {count} unread notifications',
-        subtitle: 'Something is waiting for you',
-        greeting: 'Hello',
-        teaserIntro: 'You have {count} notification(s) waiting on Meeshy. Come see what you are missing — one click, no password needed.',
-        buttonText: 'Open Meeshy',
-        linkValidity: 'This login link is valid for 24h.',
-        footer: 'The Meeshy Team',
-        managePrefs: 'Manage email preferences',
-        privacy: 'Privacy',
-      },
-      es: {
-        subject: 'Tienes {count} notificaciones sin leer - Meeshy',
-        unreadTitle: 'Tienes {count} notificaciones sin leer',
-        subtitle: 'Algo te esta esperando',
-        greeting: 'Hola',
-        teaserIntro: 'Tienes {count} notificacion(es) pendientes en Meeshy. Ven a ver lo que te estas perdiendo — un clic, sin contrasena.',
-        buttonText: 'Abrir Meeshy',
-        linkValidity: 'Este enlace de acceso es valido durante 24 h.',
-        footer: 'El equipo de Meeshy',
-        managePrefs: 'Gestionar preferencias de correo',
-        privacy: 'Privacidad',
-      },
-      pt: {
-        subject: 'Voce tem {count} notificacoes nao lidas - Meeshy',
-        unreadTitle: 'Voce tem {count} notificacoes nao lidas',
-        subtitle: 'Algo esta esperando por voce',
-        greeting: 'Ola',
-        teaserIntro: 'Voce tem {count} notificacao(oes) pendentes no Meeshy. Venha ver o que esta perdendo — um clique, sem senha.',
-        buttonText: 'Abrir Meeshy',
-        linkValidity: 'Este link de acesso e valido por 24 h.',
-        footer: 'A equipe Meeshy',
-        managePrefs: 'Gerenciar preferencias de email',
-        privacy: 'Privacidade',
-      },
-      it: {
-        subject: 'Hai {count} notifiche non lette - Meeshy',
-        unreadTitle: 'Hai {count} notifiche non lette',
-        subtitle: 'Qualcosa ti aspetta',
-        greeting: 'Ciao',
-        teaserIntro: 'Hai {count} notifica/e in sospeso su Meeshy. Torna a vedere cosa ti stai perdendo — un clic, senza password.',
-        buttonText: 'Apri Meeshy',
-        linkValidity: 'Questo link di accesso e valido per 24 h.',
-        footer: 'Il team Meeshy',
-        managePrefs: 'Gestisci preferenze email',
-        privacy: 'Privacy',
-      },
-      de: {
-        subject: 'Du hast {count} ungelesene Benachrichtigungen - Meeshy',
-        unreadTitle: 'Du hast {count} ungelesene Benachrichtigungen',
-        subtitle: 'Etwas wartet auf dich',
-        greeting: 'Hallo',
-        teaserIntro: 'Du hast {count} Benachrichtigung(en) auf Meeshy. Schau, was du verpasst — ein Klick, ohne Passwort.',
-        buttonText: 'Meeshy offnen',
-        linkValidity: 'Dieser Login-Link ist 24 Std. gultig.',
-        footer: 'Das Meeshy-Team',
-        managePrefs: 'E-Mail-Einstellungen verwalten',
-        privacy: 'Datenschutz',
-      },
-    };
-    return translations[language] || translations['en'];
-  }
 
   async sendBroadcastEmail(data: BroadcastEmailData): Promise<EmailResult> {
     const lang = data.language || 'en';

@@ -1,0 +1,320 @@
+import SwiftUI
+import Combine
+import MeeshySDK
+import MeeshyUI
+
+// MARK: - ShareLinksView
+
+struct ShareLinksView: View {
+    private var theme: ThemeManager { ThemeManager.shared }
+    @StateObject private var viewModel = ShareLinksViewModel()
+    @Environment(\.meeshyConversationList) private var conversationListViewModel
+    @State private var showCreate = false
+
+    private let accentColor = MeeshyColors.brandPrimaryHex
+
+    var body: some View {
+        LinksPage(
+            title: String(localized: "share.links.title", defaultValue: "Liens de partage", bundle: .main),
+            accent: Color(hex: accentColor),
+            action: LinksPageAction(
+                label: String(localized: "share.links.create.a11y", defaultValue: "Créer un lien de partage", bundle: .main),
+                perform: { showCreate = true }
+            )
+        ) {
+            VStack(spacing: MeeshySpacing.xl) {
+                Text(String(localized: "share.links.intro", defaultValue: "Un lien invite dans une conversation : vous fixez ce que les invités peuvent faire et jusqu’à quand.", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                    .foregroundStyle(theme.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                if let stats = viewModel.stats {
+                    shareLinkStatsOverview(stats)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                }
+                linksSection
+                    .padding(.horizontal, MeeshySpacing.lg)
+            }
+            .padding(.top, MeeshySpacing.sm)
+            .padding(.bottom, 40)
+        }
+        .refreshable {
+            await viewModel.load(.pullToRefresh)
+        }
+        .task { await viewModel.load() }
+        .sheet(isPresented: $showCreate) {
+            CreateShareLinkView { _ in
+                Task { await viewModel.load(.linkCreated) }
+            }
+            .conversationListObject(conversationListViewModel)
+        }
+    }
+
+    // MARK: - Stats overview
+
+    private func shareLinkStatsOverview(_ stats: MyShareLinkStats) -> some View {
+        HStack(spacing: MeeshySpacing.md) {
+            shareLinkStatCard("\(stats.totalLinks)", label: String(localized: "share.links.stats.total", defaultValue: "Liens", bundle: .main), icon: "link")
+            shareLinkStatCard("\(stats.activeLinks)", label: String(localized: "share.links.stats.active", defaultValue: "Actifs", bundle: .main), icon: "checkmark.circle.fill")
+            shareLinkStatCard("\(stats.totalUses)", label: String(localized: "share.links.stats.joined", defaultValue: "Rejoints", bundle: .main), icon: "person.fill.badge.plus")
+        }
+    }
+
+    private func shareLinkStatCard(_ value: String, label: String, icon: String) -> some View {
+        VStack(spacing: MeeshySpacing.xsPlus) {
+            Image(systemName: icon)
+                .font(MeeshyFont.relative(MeeshyIconSize.xl))
+                .foregroundColor(MeeshyColors.shareAccent)
+                .accessibilityHidden(true)
+            Text(value)
+                .font(.title2.weight(.bold))
+                .foregroundStyle(theme.textPrimary)
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(theme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(MeeshySpacing.mdPlus)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                .fill(theme.surfaceGradient(tint: MeeshyColors.shareAccentHex))
+                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                    .stroke(MeeshyColors.shareAccent.opacity(MeeshyOpacity.light), lineWidth: 1))
+        )
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - Links list
+
+    private var linksSection: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            Text(String(localized: "share.links.my_links", defaultValue: "MES LIENS", bundle: .main))
+                .font(.caption.weight(.semibold))
+                .foregroundColor(theme.textSecondary)
+                .kerning(0.8)
+                .accessibilityAddTraits(.isHeader)
+
+            if viewModel.isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(40)
+            } else if viewModel.links.isEmpty {
+                emptyState
+            } else {
+                VStack(spacing: MeeshySpacing.sm) {
+                    ForEach(viewModel.links) { link in
+                        NavigationLink(destination: ShareLinkDetailView(
+                            link: link,
+                            onLinkChanged: viewModel.replace,
+                            onLinkDeleted: viewModel.remove
+                        )) {
+                            shareLinkRow(link)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    // Empty state deferred to the shared design-system `EmptyStateView`
+    // (canonical icon+title+subtitle, combined VoiceOver label + spring appear)
+    // instead of a hand-rolled VStack — same structure the peer settings screen
+    // `BlockedUsersView` already reuses. `compact` keeps it sized for this
+    // in-scroll section; the brand accent (shareAccentHex) is preserved.
+    private var emptyState: some View {
+        EmptyStateView(
+            icon: "link.badge.plus",
+            title: String(localized: "share.links.empty.title", defaultValue: "Aucun lien de partage", bundle: .main),
+            subtitle: "",
+            accentColor: MeeshyColors.shareAccentHex,
+            compact: true
+        )
+        .padding(.vertical, MeeshySpacing.xxl)
+    }
+
+    // Single interpolated localized unit (was a number concatenated with a
+    // standalone word — broke pluralization/word-order across locales).
+    private func joinedCountLabel(_ count: Int) -> String {
+        String(localized: "share.links.joined_count", defaultValue: "\(count) rejoints", bundle: .main)
+    }
+
+    private func createdOnLabel(_ link: MyShareLink) -> String {
+        String(format: String(localized: "share.links.createdOn", defaultValue: "Créé le %@", bundle: .main), ShareLinkDateFormat.day(link.createdAt))
+    }
+
+    private func rowAccessibilityLabel(_ link: MyShareLink) -> String {
+        let status = link.isActive
+            ? String(localized: "share.links.status.active", defaultValue: "Actif", bundle: .main)
+            : String(localized: "share.links.status.inactive", defaultValue: "Inactif", bundle: .main)
+        var parts = [link.displayName, status, createdOnLabel(link), joinedCountLabel(link.currentUses)]
+        if let conv = link.conversationTitle { parts.append(conv) }
+        if let expiry = ShareLinkDetailCopy.rowExpiry(link.expiresAt) { parts.append(expiry) }
+        return parts.joined(separator: ", ")
+    }
+
+    private func shareLinkRow(_ link: MyShareLink) -> some View {
+        HStack(spacing: MeeshySpacing.md) {
+            ZStack {
+                Circle()
+                    .fill((link.isActive ? MeeshyColors.shareAccent : MeeshyColors.neutral500).opacity(MeeshyOpacity.light))
+                    .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
+                // Glyph centered in a fixed 40×40 circle badge — a scalable font
+                // would overflow the frame. Kept fixed + hidden (the link name
+                // carries the meaning; doctrine 86i).
+                Image(systemName: link.isActive ? "link" : "link.badge.minus")
+                    .font(MeeshyFont.fixedGlyph(MeeshyIconSize.md))
+                    .foregroundColor(link.isActive ? MeeshyColors.shareAccent : MeeshyColors.neutral500)
+                    .accessibilityHidden(true)
+            }
+
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                Text(link.displayName)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(theme.textPrimary)
+                    .lineLimit(1)
+                HStack(spacing: MeeshySpacing.xsPlus) {
+                    Text(joinedCountLabel(link.currentUses))
+                        .font(.caption)
+                        .foregroundColor(MeeshyColors.shareAccent)
+                    if let conv = link.conversationTitle {
+                        Text("· \(conv)")
+                            .font(.caption)
+                            .foregroundStyle(theme.textMuted)
+                            .lineLimit(1)
+                    }
+                }
+                Text(createdOnLabel(link))
+                    .font(.caption)
+                    .foregroundStyle(theme.textMuted)
+                    .lineLimit(1)
+                if let expiry = ShareLinkDetailCopy.rowExpiry(link.expiresAt) {
+                    Text(expiry)
+                        .font(.caption)
+                        .foregroundStyle(MeeshyColors.warning)
+                        .lineLimit(1)
+                }
+            }
+            // The active/inactive state was signalled ONLY by the (hidden) badge
+            // glyph's colour/shape — invisible to VoiceOver. Fold the row's text
+            // into one element and surface the status word explicitly so it no
+            // longer relies on colour alone (WCAG 1.4.1; doctrine 155i/164i).
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(rowAccessibilityLabel(link))
+
+            Spacer()
+
+            MeeshyGlassButton(
+                systemImage: "doc.on.doc",
+                label: String(localized: "share.links.copy.a11y", defaultValue: "Copier le lien", bundle: .main),
+                size: .s36,
+                glyphTint: MeeshyColors.shareAccent,
+                haptic: .none,
+                action: { LinksClipboard.copy(link.joinUrl) }
+            )
+
+            Image(systemName: "chevron.forward")
+                .font(MeeshyFont.relative(MeeshyIconSize.xs))
+                .foregroundStyle(theme.textMuted)
+                .accessibilityHidden(true)
+        }
+        .padding(MeeshySpacing.mdPlus)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                .fill(theme.surfaceGradient(tint: MeeshyColors.shareAccentHex))
+                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .stroke(MeeshyColors.shareAccent.opacity(MeeshyOpacity.light), lineWidth: 1))
+        )
+    }
+}
+
+// MARK: - Reload law
+
+/// Ce qui demande la liste : la venue à l'écran se contente d'un cache frais ;
+/// un geste de l'utilisateur (tirer, créer un lien) exige la vérité du serveur.
+nonisolated enum ShareLinksReloadTrigger: Equatable, Sendable {
+    case appear
+    case pullToRefresh
+    case linkCreated
+}
+
+/// #9195 — un cache frais ne dispense du réseau qu'à l'affichage ; une liste
+/// qui n'a pas pu être relue reste celle qu'on montrait.
+nonisolated enum ShareLinksReloadLaw {
+    static func mustFetch(_ trigger: ShareLinksReloadTrigger, cacheIsFresh: Bool) -> Bool {
+        trigger != .appear || !cacheIsFresh
+    }
+
+    static func linksAfterFetch(current: [MyShareLink], fetched: [MyShareLink]?) -> [MyShareLink] {
+        fetched ?? current
+    }
+}
+
+// MARK: - ViewModel
+
+@MainActor
+class ShareLinksViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
+    @Published var links: [MyShareLink] = []
+    @Published var stats: MyShareLinkStats? = nil
+    @Published var isLoading = false
+
+    func load(_ trigger: ShareLinksReloadTrigger = .appear) async {
+        let cached = await CacheCoordinator.shared.shareLinks.load(for: "list")
+        let cacheIsFresh: Bool
+        switch cached {
+        case .fresh(let data, _):
+            links = data
+            cacheIsFresh = true
+        case .stale(let data, _):
+            links = data
+            cacheIsFresh = false
+        case .expired, .empty:
+            isLoading = links.isEmpty
+            cacheIsFresh = false
+        }
+        guard ShareLinksReloadLaw.mustFetch(trigger, cacheIsFresh: cacheIsFresh) else {
+            if stats == nil { await loadStats() }
+            return
+        }
+        await refreshFromAPI()
+    }
+
+    private func refreshFromAPI() async {
+        async let l = ShareLinkService.shared.listMyLinks()
+        async let s = ShareLinkService.shared.fetchMyStats()
+        let fetched = try? await l
+        let fetchedStats = try? await s
+        links = ShareLinksReloadLaw.linksAfterFetch(current: links, fetched: fetched)
+        if let fetchedStats { stats = fetchedStats }
+        if let fetched { await bestEffort("shareLinksView.shareLinks.save", category: .cache) { try await CacheCoordinator.shared.shareLinks.save(fetched, for: "list") } }
+        isLoading = false
+    }
+
+    /// La fiche d'un lien (#7797) écrit ici sa valeur optimiste : revenir à
+    /// la liste montre le lien tel qu'il vient d'être modifié, et le cache
+    /// le garde pour le prochain démarrage.
+    func replace(_ link: MyShareLink) {
+        links = links.map { $0.id == link.id ? link : $0 }
+        persist()
+    }
+
+    func remove(_ linkId: String) {
+        links.removeAll { $0.id == linkId }
+        persist()
+    }
+
+    private func persist() {
+        let snapshot = links
+        Task { await bestEffort("shareLinksView.shareLinks.save.2", category: .cache) { try await CacheCoordinator.shared.shareLinks.save(snapshot, for: "list") } }
+    }
+
+    func loadStats() async {
+        stats = try? await ShareLinkService.shared.fetchMyStats()
+    }
+}

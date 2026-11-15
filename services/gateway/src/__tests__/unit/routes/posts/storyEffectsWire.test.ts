@@ -186,14 +186,18 @@ describe('storyEffects sur le fil — conversion v1→v3 derrière CANVAS_V3_REA
 
   it('drapeau ON : le repost d\'une story v1 SANS références chargées sort en v3 (chemin early-return)', async () => {
     process.env.CANVAS_V3_READ = '1';
+    // ObjectId VALIDE mais distinct de `POST_ID` — un `postId` non conforme
+    // (ex. `'repost-1'`) est désormais refusé en 400 par `postIdParamsSchema`
+    // avant d'atteindre `getPostById` (#6853).
+    const REPOST_ID = '507f1f77bcf86cd799439033';
     mockGetPostById.mockResolvedValue({
-      id: 'repost-1', type: 'POST', authorId: USER_ID, visibility: 'PUBLIC',
+      id: REPOST_ID, type: 'POST', authorId: USER_ID, visibility: 'PUBLIC',
       visibilityUserIds: [], mentions: [],
       repostOf: { id: POST_ID, type: 'STORY', storyEffects: loadV1Blob() },
     });
     const app = await buildApp();
 
-    const res = await app.inject({ method: 'GET', url: '/posts/repost-1', headers: CAPS_HEADER });
+    const res = await app.inject({ method: 'GET', url: `/posts/${REPOST_ID}`, headers: CAPS_HEADER });
 
     expect(res.statusCode).toBe(200);
     const nested = res.json().data.repostOf;

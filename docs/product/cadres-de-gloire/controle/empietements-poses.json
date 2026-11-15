@@ -1,0 +1,127 @@
+[
+ {
+  "file": "poses-cotes",
+  "overlap": 179,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   84,
+   431,
+   460,
+   535
+  ],
+  "windowPx": 160395,
+  "layout": "cotes",
+  "verdict": "ok"
+ },
+ {
+  "file": "poses-groupe",
+  "overlap": 171,
+  "face": 0,
+  "depth": 3,
+  "bbox": [
+   139,
+   709,
+   458,
+   721
+  ],
+  "windowPx": 160394,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "poses-message-cartouche",
+  "overlap": 158,
+  "face": 0,
+  "depth": 2,
+  "bbox": [
+   102,
+   713,
+   406,
+   720
+  ],
+  "windowPx": 160395,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "poses-message-parchemin",
+  "overlap": 169,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   80,
+   424,
+   460,
+   532
+  ],
+  "windowPx": 160395,
+  "layout": "cotes",
+  "verdict": "ok"
+ },
+ {
+  "file": "poses-message-ruban",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 160395,
+  "layout": "perches",
+  "verdict": "ok"
+ },
+ {
+  "file": "poses-perches",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 160395,
+  "layout": "perches",
+  "verdict": "ok"
+ },
+ {
+  "file": "poses-pied",
+  "overlap": 140,
+  "face": 0,
+  "depth": 2,
+  "bbox": [
+   80,
+   699,
+   418,
+   721
+  ],
+  "windowPx": 160395,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "poses-ruban",
+  "overlap": 176,
+  "face": 0,
+  "depth": 3,
+  "bbox": [
+   80,
+   706,
+   460,
+   721
+  ],
+  "windowPx": 160395,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "poses-selfie",
+  "overlap": 13560,
+  "face": 0,
+  "depth": 125,
+  "bbox": [
+   325,
+   550,
+   460,
+   720
+  ],
+  "windowPx": 160395,
+  "layout": "selfie",
+  "verdict": "ok"
+ }
+]

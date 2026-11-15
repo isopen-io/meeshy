@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "conversation.row.avatar.a11y.profile", "androidName": "conversation_row_avatar_a11y_profile", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversation.row.avatar.a11y.details", "androidName": "conversation_row_avatar_a11y_details", "status": "adopted"}
+      ]
+    }
+  }
+}

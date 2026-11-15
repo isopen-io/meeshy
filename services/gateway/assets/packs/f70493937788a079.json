@@ -1,0 +1,202 @@
+{
+ "domain": "banner",
+ "designs": [
+  {
+   "key": "banniere-artifice-vive",
+   "style": "gradient",
+   "palettes": {
+    "light": {
+     "base": "#0B1026",
+     "ink": "#7C3AED",
+     "soft": "#312E81"
+    },
+    "dark": {
+     "base": "#05071A",
+     "ink": "#6D28D9",
+     "soft": "#1E1B4B"
+    }
+   },
+   "gradient": {
+    "angle": 180,
+    "stops": [
+     {
+      "role": "base",
+      "at": 0
+     },
+     {
+      "role": "soft",
+      "at": 1
+     }
+    ],
+    "blobs": [
+     {
+      "x": 0.2,
+      "y": 0.2,
+      "r": 0.5,
+      "role": "ink",
+      "opacity": 0.35
+     },
+     {
+      "x": 0.8,
+      "y": 0.3,
+      "r": 0.45,
+      "role": "ink",
+      "opacity": 0.25
+     }
+    ]
+   },
+   "fit": "fill",
+   "lottie": {
+    "src": "66bec08c33669840.json",
+    "bytes": 26738,
+    "sha256": "66bec08c336698405d4abccc9a2230892c8aaa933bb7d65e8a2c7673ce0ea843"
+   }
+  },
+  {
+   "key": "banniere-confettis-vive",
+   "style": "gradient",
+   "palettes": {
+    "light": {
+     "base": "#FDF2F8",
+     "ink": "#FBCFE8",
+     "soft": "#EDE9FE"
+    },
+    "dark": {
+     "base": "#1F0B1A",
+     "ink": "#4C1D95",
+     "soft": "#2E1065"
+    }
+   },
+   "gradient": {
+    "angle": 120,
+    "stops": [
+     {
+      "role": "base",
+      "at": 0
+     },
+     {
+      "role": "soft",
+      "at": 1
+     }
+    ],
+    "blobs": [
+     {
+      "x": 0.1,
+      "y": 0.9,
+      "r": 0.5,
+      "role": "ink",
+      "opacity": 0.5
+     },
+     {
+      "x": 0.9,
+      "y": 0.1,
+      "r": 0.5,
+      "role": "soft",
+      "opacity": 0.5
+     }
+    ]
+   },
+   "fit": "fill",
+   "lottie": {
+    "src": "73ac775e6ed0c52a.json",
+    "bytes": 32110,
+    "sha256": "73ac775e6ed0c52acde67e393e1f7e40b8feda592c738febeb7165900df114a4"
+   }
+  },
+  {
+   "key": "banniere-minuit-vive",
+   "style": "gradient",
+   "palettes": {
+    "light": {
+     "base": "#0F172A",
+     "ink": "#4338CA",
+     "soft": "#1E1B4B"
+    },
+    "dark": {
+     "base": "#020617",
+     "ink": "#3730A3",
+     "soft": "#172554"
+    }
+   },
+   "gradient": {
+    "angle": 160,
+    "stops": [
+     {
+      "role": "base",
+      "at": 0
+     },
+     {
+      "role": "soft",
+      "at": 1
+     }
+    ],
+    "blobs": [
+     {
+      "x": 0.82,
+      "y": 0.5,
+      "r": 0.45,
+      "role": "ink",
+      "opacity": 0.4
+     }
+    ]
+   },
+   "fit": "fill",
+   "lottie": {
+    "src": "7cecf5480863bd24.json",
+    "bytes": 20552,
+    "sha256": "7cecf5480863bd24e62427441c94400e64cbf40058c273240a3afbdeb355fe7b"
+   }
+  },
+  {
+   "key": "banniere-champagne-vive",
+   "style": "gradient",
+   "palettes": {
+    "light": {
+     "base": "#3B2A05",
+     "ink": "#CA8A04",
+     "soft": "#A16207"
+    },
+    "dark": {
+     "base": "#1C1403",
+     "ink": "#A16207",
+     "soft": "#713F12"
+    }
+   },
+   "gradient": {
+    "angle": 200,
+    "stops": [
+     {
+      "role": "base",
+      "at": 0
+     },
+     {
+      "role": "soft",
+      "at": 1
+     }
+    ],
+    "blobs": [
+     {
+      "x": 0.5,
+      "y": 1,
+      "r": 0.7,
+      "role": "ink",
+      "opacity": 0.45
+     },
+     {
+      "x": 0.15,
+      "y": 0.2,
+      "r": 0.4,
+      "role": "soft",
+      "opacity": 0.35
+     }
+    ]
+   },
+   "fit": "fill",
+   "lottie": {
+    "src": "8de67ccf264aa52e.json",
+    "bytes": 30455,
+    "sha256": "8de67ccf264aa52e03338a3cd058f53a4930a512f1488bc23bf75caaa2b8cd1d"
+   }
+  }
+ ]
+}

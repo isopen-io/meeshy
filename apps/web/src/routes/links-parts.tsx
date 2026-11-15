@@ -1,0 +1,410 @@
+
+import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
+import { Glyph, GlyphSvg } from '@/components/glyph';
+import { LINKS_GLYPHS, type LinksGlyphName } from '@/components/glyphs-links';
+import { SECTION_BRAND_INK, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
+import type { InfoHint } from '@/components/info-hint';
+import type { MyShareLink, ShareLinksSummary } from '@/lib/api/links';
+import { translate } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
+import { displayNameOf } from '@/lib/links/view';
+import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
+import { Link } from '@/routes/route-table';
+
+/**
+ * **LES PIÈCES DE « MES LIENS »** (#6361) — miroir de `LinksHubView.swift`
+ * (cartes de famille), `ShareLinksView.swift` (statistiques, lignes,
+ * état vide) et `ShareLinkDetailView.swift` (carte d'en-tête, barre d'actions,
+ * statistiques, informations).
+ *
+ * Chaque pièce est PURE (primitives en props, aucun magasin global) :
+ * `routes/links.test.tsx` les rend sans DOM ni TanStack Query.
+ *
+ * **Une ligne est un lien ÉTIRÉ, pas un lien qui contient un bouton.** iOS
+ * imbrique le bouton « copier » dans le `NavigationLink` de la ligne ; en HTML
+ * un contrôle dans un lien est invalide et ambigu au lecteur d'écran. Le lien
+ * couvre la ligne par son pseudo-élément, le bouton se pose au-dessus.
+ *
+ * **L'état se dit en toutes lettres** (WCAG 1.4.1) : iOS ne distingue un lien
+ * inactif que par la teinte et la forme du glyphe, et ne le nomme qu'à
+ * VoiceOver ; ici « Inactif » s'écrit sur la ligne.
+ */
+
+export const LINKS_HEADER_HEIGHT = 64;
+/** Au repos, la première carte du hub commence sous les disques flottants (`floating-corridor.ts`). */
+export const LINKS_HUB_TOP_RESERVE = FLOATING_CORRIDOR_BOTTOM - LINKS_HEADER_HEIGHT;
+export const SHARE_LINK_ROW_HEIGHT = 72;
+
+const INK = SECTION_INK;
+const INK_2 = SECTION_INK_2;
+const CARD_STYLE = SECTION_CARD_STYLE;
+const BRAND = 'var(--color-ios-brand)';
+export const SHARE_TINT = 'var(--ios-indigo-500)';
+const NEUTRAL_TINT = 'var(--color-ios-ink-3)';
+export const SKELETON_TINT = 'color-mix(in srgb, var(--color-ios-ink-3) 25%, transparent)';
+export const STRETCHED = "before:absolute before:inset-0 before:rounded-card before:content-['']";
+export const SECTION_TITLE_CLASS = 'ps-1 text-check font-bold uppercase tracking-wide';
+export const BRAND_BUTTON_STYLE = {
+  backgroundColor: 'var(--ios-indigo-600)',
+  backgroundImage: 'linear-gradient(90deg, var(--ios-indigo-600), color-mix(in srgb, var(--ios-indigo-600) 78%, var(--color-media-backdrop)))',
+  color: 'var(--color-ios-on-brand)',
+  outlineColor: BRAND,
+} as const;
+
+/** Le (i) d'un écran de liens : la QUESTION nomme le bouton, la note reste lue repliée. */
+export const linksHint = (question: string, text: string): InfoHint => ({ label: question, text, glyph: LINKS_GLYPHS.info });
+
+export function LinksGlyph({ name, size }: { readonly name: LinksGlyphName; readonly size: number }) {
+  return <GlyphSvg glyph={LINKS_GLYPHS[name]} size={size} {...(name === 'caretRight' ? { className: 'rtl:-scale-x-100' } : {})} />;
+}
+
+export const tinted = (tint: string, percent: number) => `color-mix(in srgb, ${tint} ${percent}%, transparent)`;
+
+function StatusDisc({ active, size }: { readonly active: boolean; readonly size: number }) {
+  const tint = active ? SHARE_TINT : NEUTRAL_TINT;
+  const glyph = Math.round(size * 0.42);
+  return (
+    <span aria-hidden="true" className="grid shrink-0 place-items-center rounded-full" style={{ width: size, height: size, color: tint, backgroundColor: tinted(tint, 15) }}>
+      {active ? <Glyph name="linkSimple" size={glyph} /> : <LinksGlyph name="linkBreak" size={glyph} />}
+    </span>
+  );
+}
+
+export const statusLabel = (language: InterfaceLanguage, active: boolean): string =>
+  translate(language, active ? 'links.status.active' : 'links.status.inactive');
+
+export const joinedLabel = (language: InterfaceLanguage, count: number): string =>
+  translate(language, count === 1 ? 'links.share.joined.one' : 'links.share.joined.other', { count: new Intl.NumberFormat(language).format(count) });
+
+export type LinksBackTarget = 'list' | 'links' | 'shareLinks' | 'myTrackingLinks' | 'communityLinks' | 'affiliateLinks';
+export type LinksCreateTarget = 'shareLinkNew' | 'myTrackingLinkNew' | 'affiliateLinkNew' | 'communityNew';
+
+export function LinksHeader({
+  language,
+  back,
+  backLabel,
+  title,
+  createLabel,
+  createTo = 'shareLinkNew',
+}: {
+  readonly language: InterfaceLanguage;
+  /** Un écran de la famille, ou la page d'UN lien (`{ shareLink: linkId }`). */
+  readonly back: LinksBackTarget | { readonly shareLink: string };
+  readonly backLabel: string;
+  readonly title: string;
+  readonly createLabel?: string;
+  readonly createTo?: LinksCreateTarget;
+}) {
+  const backProps = {
+    'aria-label': backLabel,
+    'data-links-back': true,
+    className: `${CHROME_ACTION_HIT_CLASS} focus-visible:outline-2 focus-visible:outline-offset-2`,
+    style: { color: BRAND, outlineColor: BRAND },
+  } as const;
+  const backDisc = (
+    <ChromeActionDisc>
+      <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
+    </ChromeActionDisc>
+  );
+  return (
+    <header className="flex shrink-0 items-center gap-1 px-2" style={{ height: LINKS_HEADER_HEIGHT }} lang={language}>
+      {typeof back === 'string' ? (
+        <Link to={back} {...backProps}>
+          {backDisc}
+        </Link>
+      ) : (
+        <Link to="shareLink" params={{ link: back.shareLink }} {...backProps}>
+          {backDisc}
+        </Link>
+      )}
+      <h1 className="min-w-0 flex-1 truncate text-center text-body font-semibold" style={{ color: INK }}>
+        {title}
+      </h1>
+      {createLabel === undefined ? (
+        <span aria-hidden="true" className="block shrink-0" style={{ width: 44 }} />
+      ) : (
+        <Link
+          to={createTo}
+          aria-label={createLabel}
+          data-links-create
+          className={`${CHROME_ACTION_HIT_CLASS} focus-visible:outline-2 focus-visible:outline-offset-2`}
+          style={{ color: BRAND, outlineColor: BRAND }}
+        >
+          <ChromeActionDisc>
+            <LinksGlyph name="plusCircle" size={20} />
+          </ChromeActionDisc>
+        </Link>
+      )}
+    </header>
+  );
+}
+
+/** Miroir `ShareLinksView.shareLinkStatsOverview` — les agrégats RÉELS de la passerelle. */
+export function ShareLinksStats({ language, summary }: { readonly language: InterfaceLanguage; readonly summary: ShareLinksSummary }) {
+  const format = new Intl.NumberFormat(language);
+  const items = [
+    { stat: 'total', glyph: <Glyph name="linkSimple" size={18} />, value: summary.totalLinks, label: translate(language, 'links.share.stats.total') },
+    { stat: 'active', glyph: <LinksGlyph name="checkCircle" size={18} />, value: summary.activeLinks, label: translate(language, 'links.share.stats.active') },
+    { stat: 'joined', glyph: <LinksGlyph name="userPlus" size={18} />, value: summary.totalUses, label: translate(language, 'links.share.stats.joined') },
+  ] as const;
+  return (
+    <ul data-share-links-stats className="grid grid-cols-3 gap-3">
+      {items.map((item) => (
+        <li key={item.stat} data-share-links-stat={item.stat} className="grid justify-items-center gap-1 rounded-card px-2 py-3" style={CARD_STYLE}>
+          <span aria-hidden="true" style={{ color: SHARE_TINT }}>
+            {item.glyph}
+          </span>
+          <strong className="font-bold" style={{ color: INK, fontSize: 'var(--text-lg)' }}>
+            {format.format(item.value)}
+          </strong>
+          <span className="text-chip font-medium" style={{ color: INK_2 }}>
+            {item.label}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * #10381 — miroir `ShareLinkDetailCopy.rowExpiry` : la ligne dit l'échéance
+ * choisie à la création ; un lien sans échéance n'ajoute rien à sa ligne.
+ */
+/** « Créé le 10 sept. 2026 » — ce que le lecteur d'écran entend de la date d'une rangée (#17641). */
+export const linkCreatedLabel = (language: InterfaceLanguage, createdAt: string): string =>
+  `${translate(language, 'links.detail.createdAt')} ${new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(createdAt))}`;
+
+/**
+ * La date de création d'une rangée, sur SA ligne : de quoi reconnaître un lien dans sa liste
+ * (règle 7, #17641). Le calendrier la nomme à l'œil, `linkCreatedLabel` au lecteur d'écran.
+ */
+export function LinkCreated({ language, createdAt }: { readonly language: InterfaceLanguage; readonly createdAt: string }) {
+  return (
+    <span data-link-created title={linkCreatedLabel(language, createdAt)} className="flex items-center gap-1 text-caption" style={{ color: INK_2 }}>
+      <span aria-hidden="true">
+        <LinksGlyph name="calendarBlank" size={12} />
+      </span>
+      {new Intl.DateTimeFormat(language, { dateStyle: 'short' }).format(new Date(createdAt))}
+    </span>
+  );
+}
+
+export function shareLinkExpiryLabel(language: InterfaceLanguage, expiresAt: string | null, now: Date = new Date()): string | null {
+  if (expiresAt === null) return null;
+  const deadline = new Date(expiresAt);
+  if (deadline.getTime() <= now.getTime()) return translate(language, 'links.status.expired');
+  return `${translate(language, 'links.detail.expiresAt')} ${new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(deadline)}`;
+}
+
+/** Miroir `ShareLinksView.shareLinkRow` — le lien ouvre le détail, « copier » copie son adresse. */
+export function ShareLinkRow({
+  language,
+  link,
+  copied,
+  onCopy,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly link: MyShareLink;
+  readonly copied: boolean;
+  readonly onCopy: () => void;
+}) {
+  const name = displayNameOf(link);
+  const joined = joinedLabel(language, link.currentUses);
+  const expiry = shareLinkExpiryLabel(language, link.expiresAt);
+  const created = linkCreatedLabel(language, link.createdAt);
+  const label = new Intl.ListFormat(language, { type: 'unit', style: 'short' }).format([
+    name,
+    statusLabel(language, link.isActive),
+    joined,
+    ...(link.conversationTitle === null ? [] : [link.conversationTitle]),
+    created,
+    ...(expiry === null ? [] : [expiry]),
+  ]);
+  return (
+    <li data-share-link={link.linkId} data-share-link-active={link.isActive} className="relative flex items-center gap-1 rounded-card ps-3.5 pe-1" style={{ ...CARD_STYLE, minHeight: SHARE_LINK_ROW_HEIGHT }}>
+      <Link
+        to="shareLink"
+        params={{ link: link.linkId }}
+        aria-label={label}
+        className={`flex min-w-0 flex-1 items-center gap-3 py-3 focus-visible:outline-2 focus-visible:outline-offset-2 ${STRETCHED}`}
+        style={{ outlineColor: BRAND }}
+      >
+        <StatusDisc active={link.isActive} size={40} />
+        <span className="relative grid min-w-0 gap-0.5">
+          <span data-share-link-name className="truncate text-body font-semibold" style={{ color: INK }}>
+            {name}
+          </span>
+          <span className="flex min-w-0 items-center gap-1.5 text-caption">
+            <span data-share-link-joined className={`shrink-0 font-medium ${SECTION_BRAND_INK}`}>
+              {joined}
+            </span>
+            {link.isActive ? null : (
+              <span data-share-link-status className="shrink-0 font-medium" style={{ color: INK_2 }}>
+                · {statusLabel(language, false)}
+              </span>
+            )}
+          </span>
+          {link.conversationTitle === null ? null : (
+            <span data-share-link-conversation className="line-clamp-2 break-words text-caption" style={{ color: INK_2 }}>
+              {link.conversationTitle}
+            </span>
+          )}
+          <LinkCreated language={language} createdAt={link.createdAt} />
+          {expiry === null ? null : (
+            <span data-share-link-expiry className="truncate text-caption" style={{ color: INK_2 }}>
+              {expiry}
+            </span>
+          )}
+        </span>
+      </Link>
+      <button
+        type="button"
+        data-share-link-copy
+        aria-label={translate(language, 'links.share.copy')}
+        onClick={onCopy}
+        className={`${CHROME_ACTION_HIT_CLASS} z-[1] focus-visible:outline-2`}
+        style={{ color: copied ? 'var(--color-success)' : SHARE_TINT, outlineColor: BRAND }}
+      >
+        {copied ? <Glyph name="check" size={18} /> : <LinksGlyph name="copy" size={18} />}
+      </button>
+      <span aria-hidden="true" className="pointer-events-none pe-2.5" style={{ color: INK_2 }}>
+        <LinksGlyph name="caretRight" size={12} />
+      </span>
+    </li>
+  );
+}
+
+export function ShareLinksSkeleton({ language, rows = 3 }: { readonly language: InterfaceLanguage; readonly rows?: number }) {
+  return (
+    <div data-share-links-skeleton aria-busy="true" aria-label={translate(language, 'links.share.loading')} className="grid gap-2">
+      {Array.from({ length: rows }, (_, index) => (
+        <span key={index} className="flex items-center gap-3 rounded-card px-3.5" style={{ ...CARD_STYLE, height: SHARE_LINK_ROW_HEIGHT }}>
+          <span className="block size-10 rounded-full" style={{ backgroundColor: SKELETON_TINT }} />
+          <span className="block h-3 w-40 rounded-chip" style={{ backgroundColor: SKELETON_TINT }} />
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** Miroir `ShareLinksView.emptyState` — nommer, dire ce qu'est un lien de partage, offrir le geste (épure, règle 7). */
+export function ShareLinksEmpty({ language }: { readonly language: InterfaceLanguage }) {
+  return (
+    <div data-share-links-empty className="grid justify-items-center gap-4 px-6 py-10 text-center">
+      <span aria-hidden="true" style={{ color: SHARE_TINT }}>
+        <LinksGlyph name="link" size={48} />
+      </span>
+      <p className="text-thread font-bold" style={{ color: INK }}>
+        {translate(language, 'links.share.empty.title')}
+      </p>
+      <p data-share-links-empty-subtitle className="text-caption" style={{ color: INK_2 }}>
+        {translate(language, 'links.share.empty.subtitle')}
+      </p>
+      <Link
+        to="shareLinkNew"
+        data-share-links-empty-create
+        className="flex items-center gap-1.5 rounded-chip px-6 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ ...BRAND_BUTTON_STYLE, minHeight: 44 }}
+      >
+        <LinksGlyph name="plusCircle" size={18} />
+        {translate(language, 'links.hub.share.create')}
+      </Link>
+    </div>
+  );
+}
+
+export function LinksLoadError({ language, onRetry }: { readonly language: InterfaceLanguage; readonly onRetry: () => void }) {
+  return (
+    <div role="alert" data-links-error className="grid justify-items-center gap-3 rounded-card px-6 py-8 text-center" style={CARD_STYLE}>
+      <span style={{ color: 'var(--color-error)' }}>
+        <Glyph name="warningCircle" size={28} />
+      </span>
+      <p className="text-body font-semibold" style={{ color: INK }}>
+        {translate(language, 'links.error.title')}
+      </p>
+      <p className="text-caption" style={{ color: INK_2 }}>
+        {translate(language, 'links.error.body')}
+      </p>
+      <button
+        type="button"
+        data-links-retry
+        onClick={onRetry}
+        className="grid place-items-center rounded-chip px-5 text-caption font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ ...BRAND_BUTTON_STYLE, minHeight: 44 }}
+      >
+        {translate(language, 'links.retry')}
+      </button>
+    </div>
+  );
+}
+
+export function LinksOfflineNotice({ language }: { readonly language: InterfaceLanguage }) {
+  return (
+    <div role="status" data-links-offline className="flex items-start gap-3 rounded-card px-3.5 py-3" style={CARD_STYLE}>
+      <span aria-hidden="true" className="pt-0.5" style={{ color: 'var(--color-warning)' }}>
+        <Glyph name="warningCircle" size={18} />
+      </span>
+      <span className="grid gap-0.5">
+        <span className="text-body font-semibold" style={{ color: INK }}>
+          {translate(language, 'links.offline.title')}
+        </span>
+        <span className="text-caption" style={{ color: INK_2 }}>
+          {translate(language, 'links.offline.body')}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/** L'issue d'un geste, lue ET vue — la région reste montée pour que l'annonce parte. */
+export function LinksAnnouncement({ text }: { readonly text: string }) {
+  return (
+    <p
+      role="status"
+      aria-live="polite"
+      data-links-announcement
+      className={
+        text === ''
+          ? 'sr-only'
+          : 'pointer-events-none fixed inset-x-0 z-20 mx-auto w-fit max-w-[calc(100%-2rem)] rounded-chip px-4 py-2.5 text-center text-caption font-semibold'
+      }
+      style={text === '' ? undefined : { bottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)', color: 'var(--color-ios-card)', backgroundColor: 'var(--color-ios-ink)' }}
+    >
+      {text}
+    </p>
+  );
+}
+
+export function ShareLinkDetailSkeleton({ language }: { readonly language: InterfaceLanguage }) {
+  return (
+    <div data-share-link-skeleton aria-busy="true" aria-label={translate(language, 'links.detail.loading')} className="grid gap-4">
+      <span className="block rounded-hero" style={{ ...CARD_STYLE, height: 200 }} />
+      <span className="block h-16 rounded-card" style={{ backgroundColor: SKELETON_TINT }} />
+      <span className="block rounded-card" style={{ ...CARD_STYLE, height: 72 }} />
+    </div>
+  );
+}
+
+/** Un linkId inconnu et un lien d'un AUTRE compte rendent le MÊME refus : aucun oracle d'existence. */
+export function ShareLinkRefused({ language }: { readonly language: InterfaceLanguage }) {
+  return (
+    <div role="alert" data-share-link-refused className="grid justify-items-center gap-3 rounded-card px-6 py-8 text-center" style={CARD_STYLE}>
+      <span aria-hidden="true" style={{ color: INK_2 }}>
+        <LinksGlyph name="linkBreak" size={32} />
+      </span>
+      <p className="text-body font-semibold" style={{ color: INK }}>
+        {translate(language, 'links.detail.refused.title')}
+      </p>
+      <p className="text-caption" style={{ color: INK_2 }}>
+        {translate(language, 'links.detail.refused.body')}
+      </p>
+      <Link
+        to="shareLinks"
+        className="grid place-items-center rounded-chip px-5 text-caption font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ ...BRAND_BUTTON_STYLE, minHeight: 44 }}
+      >
+        {translate(language, 'links.detail.back')}
+      </Link>
+    </div>
+  );
+}

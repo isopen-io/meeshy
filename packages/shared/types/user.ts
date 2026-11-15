@@ -3,7 +3,7 @@
  * Harmonisation Gateway - Frontend
  */
 
-import type { PaginationMeta } from './api-responses.js';
+import type { PaginationMeta } from './pagination.js';
 
 /**
  * Rôles utilisateur globaux (aligné avec Prisma enum UserRole)
@@ -121,6 +121,7 @@ export interface FullUser {
   email: string;
   phoneNumber: string | null;
   avatar: string | null;
+  banner: string | null;
   role: string;
   isActive: boolean;
   isOnline: boolean;
@@ -144,6 +145,8 @@ export interface FullUser {
   lockedReason: string | null;
   twoFactorEnabledAt: Date | null;
   twoFactorBackupCodes: string[];
+  /** Date de la dernière connexion (#9642) — l'horloge de la conservation des traces ci-dessous. */
+  lastLoginAt?: Date | null;
   lastLoginIp: string | null;
   lastLoginLocation: string | null;
   lastLoginDevice: string | null;
@@ -156,7 +159,64 @@ export interface FullUser {
     sentMessages?: number;
     conversations?: number;
   };
+  /**
+   * Les colonnes dont `AdminUserMetadata` est tiré (#8876). OPTIONNELLES : un
+   * `FullUser` construit sans elles reste valide, et le bloc servi rend alors
+   * `null` / `0` plutôt que de refuser la ligne. `pendingEmail` et
+   * `pendingPhoneNumber` n'existent ici que pour que le serveur sache QU'UN
+   * changement attend — leur valeur ne quitte jamais cette interface.
+   */
+  deviceLocale?: string | null;
+  deviceCountry?: string | null;
+  birthDate?: Date | null;
+  ageVerifiedAt?: Date | null;
+  voiceProfileConsentAt?: Date | null;
+  voiceDataConsentAt?: Date | null;
+  dataProcessingConsentAt?: Date | null;
+  analyticsConsentAt?: Date | null;
+  voiceCloningEnabledAt?: Date | null;
+  termsAcceptedAt?: Date | null;
+  termsVersion?: string | null;
+  onboardingCompletedAt?: Date | null;
+  currentStreakDays?: number;
+  longestStreakDays?: number;
+  engagementScore?: number;
+  meeshBalance?: number;
+  blockedUserIds?: string[];
+  pendingEmail?: string | null;
+  pendingPhoneNumber?: string | null;
 }
+
+/**
+ * Les MÉTADONNÉES de compte d'un membre, telles que la fiche d'administration les
+ * sert (#8876, #8005) : ce qui aide à COMPRENDRE un compte sans ouvrir la base.
+ *
+ * Servies aux seuls rôles qui voient les données sensibles, et seulement sur la
+ * fiche. Jamais la valeur d'un changement en attente (`hasPendingEmail` /
+ * `hasPendingPhone` disent qu'il existe), jamais la liste des comptes bloqués
+ * (`blockedCount` en dit la taille).
+ */
+export type AdminUserMetadata = {
+  readonly deviceLocale: string | null;
+  readonly deviceCountry: string | null;
+  readonly birthDate: Date | null;
+  readonly ageVerifiedAt: Date | null;
+  readonly voiceProfileConsentAt: Date | null;
+  readonly voiceDataConsentAt: Date | null;
+  readonly dataProcessingConsentAt: Date | null;
+  readonly analyticsConsentAt: Date | null;
+  readonly voiceCloningEnabledAt: Date | null;
+  readonly termsAcceptedAt: Date | null;
+  readonly termsVersion: string | null;
+  readonly onboardingCompletedAt: Date | null;
+  readonly currentStreakDays: number;
+  readonly longestStreakDays: number;
+  readonly engagementScore: number;
+  readonly meeshBalance: number;
+  readonly blockedCount: number;
+  readonly hasPendingEmail: boolean;
+  readonly hasPendingPhone: boolean;
+};
 
 /**
  * Type pour les donnees publiques (visibles par tous les admins)
@@ -170,12 +230,18 @@ export interface PublicUser {
   displayName: string | null;
   bio: string;
   avatar: string | null;
+  banner: string | null;
   role: string;
   isActive: boolean;
   isOnline: boolean;
   emailVerifiedAt: Date | null;
   phoneVerifiedAt: Date | null;
-  lastActiveAt: Date;
+  /**
+   * `null` = présence MASQUÉE pour ce viewer (`UserSanitizationService`, seuil
+   * `canViewPresence` : ADMIN/BIGBOSS). La colonne, elle, n'est jamais nulle
+   * (`FullUser.lastActiveAt: Date`) — c'est la valeur SERVIE qui peut l'être.
+   */
+  lastActiveAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   deactivatedAt: Date | null;
@@ -203,7 +269,14 @@ export interface AdminUser extends PublicUser {
   lockedUntil: Date | null;
   lockedReason: string | null;
   twoFactorEnabledAt: Date | null;
-  twoFactorBackupCodes: string[];
+  /**
+   * Le NOMBRE de codes de secours restants — jamais leurs empreintes (#8876).
+   * `FullUser.twoFactorBackupCodes` reste la colonne ; aucune ligne servie ne la
+   * porte.
+   */
+  twoFactorBackupCodesRemaining: number;
+  /** Date de la dernière connexion (#9642). Adresse, lieu et agent ci-dessous sont masqués 12 mois après elle. */
+  lastLoginAt?: Date | null;
   lastLoginIp: string | null;
   lastLoginLocation: string | null;
   lastLoginDevice: string | null;
@@ -214,6 +287,8 @@ export interface AdminUser extends PublicUser {
   deletedAt: Date | null;
   deletedBy: string | null;
   userFeature?: UserFeatureData | null;
+  /** Présent sur la fiche seulement (#8876) ; absent d'une ligne de liste. */
+  adminMetadata?: AdminUserMetadata;
   _count?: {
     sentMessages?: number;
     conversations?: number;
@@ -277,6 +352,8 @@ export interface CreateUserDTO {
   role?: string;
   systemLanguage?: string;
   regionalLanguage?: string;
+  /** L'administrateur atteste l'adresse : le compte naît actif (#8217). */
+  emailVerified?: boolean;
 }
 
 /**
@@ -316,7 +393,7 @@ export interface ResetPasswordDTO {
  */
 export interface UserFilters {
   search?: string;  // username, email, nom, prenom
-  role?: string;
+  role?: string | readonly string[];  // un rôle, ou plusieurs (OU) — « le rang d'administration » = BIGBOSS + ADMIN
   isActive?: boolean;
   emailVerified?: boolean;
   phoneVerified?: boolean;
@@ -390,7 +467,48 @@ export enum UserAuditAction {
 
   // Actions de verification
   VERIFY_EMAIL = 'VERIFY_EMAIL',
-  VERIFY_PHONE = 'VERIFY_PHONE'
+  VERIFY_PHONE = 'VERIFY_PHONE',
+  VERIFY_AGE = 'VERIFY_AGE',
+  /**
+   * Relance, par un administrateur, de la vérification d'un contact (#8289) —
+   * un code + lien par e-mail, un SMS par téléphone. Distincte de
+   * `VERIFY_EMAIL`/`VERIFY_PHONE`, qui POSENT la preuve : celle-ci n'en écrit
+   * aucune, elle émet ce que le membre aurait pu redemander lui-même.
+   */
+  REQUEST_VERIFICATION = 'REQUEST_VERIFICATION',
+
+  /**
+   * Poser ou retirer, au nom d'un tiers, la preuve d'un consentement (#4154).
+   *
+   * L'age et les consentements etaient journalises en `UPDATE_PROFILE` : la
+   * ligne d'audit ne disait donc pas QUEL geste avait eu lieu, et le geste le
+   * plus lourd du fichier — fabriquer une piece legale — se lisait comme une
+   * modification de profil ordinaire.
+   */
+  UPDATE_CONSENT = 'UPDATE_CONSENT',
+
+  /**
+   * Bannissement durable (#3719) — distinct de `DEACTIVATE_USER`/`ACTIVATE_USER` :
+   * ces deux-là journalisent le SEUL bascule de `User.isActive`, sans motif
+   * structuré ni durée. `BAN_USER`/`UNBAN_USER` journalisent le geste sur la
+   * ligne `Ban` (motif requis, échéance optionnelle) qui pilote ce même bascule.
+   */
+  BAN_USER = 'BAN_USER',
+  UNBAN_USER = 'UNBAN_USER',
+
+  /**
+   * Révocation, par un administrateur, d'une session nommée d'un tiers
+   * (#6821) — distincte de `RESET_PASSWORD`, qui invalide TOUTES les
+   * sessions comme effet de bord d'un autre geste.
+   */
+  REVOKE_SESSION = 'REVOKE_SESSION',
+
+  /**
+   * Écriture, par un administrateur, d'une catégorie de préférences d'un
+   * tiers (#7845). La ligne porte la catégorie et les clés changées ; la
+   * valeur avant/après de chaque clé voyage dans `changes`.
+   */
+  UPDATE_PREFERENCES = 'UPDATE_PREFERENCES'
 }
 
 /**

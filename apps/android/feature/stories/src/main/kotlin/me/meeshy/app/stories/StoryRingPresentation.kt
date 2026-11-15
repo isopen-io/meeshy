@@ -1,9 +1,34 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.util.resolveMediaUrl
+import me.meeshy.sdk.util.resolveServedImageUrl
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.StoryGroup
-import me.meeshy.sdk.story.hasUnviewed
+import me.meeshy.sdk.model.PostServedRing
+import me.meeshy.sdk.model.UserPresence
+import me.meeshy.sdk.story.isExpired
 import me.meeshy.sdk.story.isFullyExpired
+
+/** Le dessin de l'anneau : non lu = double épaisseur accentuée, lu = discret, aucun = pas d'anneau. */
+enum class StoryRingEmphasis { Unread, Read, None }
+
+/** Anneau d'une cellule : [equipped] = contour équipé de l'auteur (rendu par l'atome d'avatar). */
+@Immutable
+data class StoryRingStyle(
+    val emphasis: StoryRingEmphasis,
+    val widthDp: Float,
+    val equipped: PostServedRing?,
+) {
+    companion object {
+        fun resolve(liveCount: Int, hasUnviewed: Boolean, equipped: PostServedRing?): StoryRingStyle = when {
+            liveCount <= 0 -> StoryRingStyle(StoryRingEmphasis.None, 0f, equipped)
+            hasUnviewed -> StoryRingStyle(
+                StoryRingEmphasis.Unread, StoryEntryMetrics.ringWidthAccented.value, equipped,
+            )
+            else -> StoryRingStyle(StoryRingEmphasis.Read, StoryEntryMetrics.ringWidthQuiet.value, equipped)
+        }
+    }
+}
 
 /** A single author's story ring, projected for the tray. Pure data. */
 @Immutable
@@ -16,6 +41,15 @@ data class StoryRing(
     val storyCount: Int,
     val unviewedCount: Int,
     val isMine: Boolean,
+    /** Story que l'anneau MONTRE : première vivante non vue, sinon première vivante (iOS `StoryRailReach`). */
+    val displayedStoryId: String? = null,
+    val coverUrl: String? = null,
+    /**
+     * Présence que la charge a SERVIE pour l'auteur ; `null` = rien servi. Le point la lit à travers
+     * la carte unique (`rememberPresence`), qui la recouvre et la fait décroître : jamais figée ici.
+     */
+    val servedPresence: UserPresence? = null,
+    val style: StoryRingStyle = StoryRingStyle.resolve(storyCount, hasUnviewed, null),
 )
 
 /**
@@ -27,6 +61,11 @@ data class StoryRing(
 data class StoryTrayPresentation(
     val self: StoryRing?,
     val others: List<StoryRing>,
+    /**
+     * Mon groupe même entièrement expiré : le grand plateau le range sous « Votre story / historique », la bande
+     * épinglée en fait sa première cellule (iOS `ownGroup`, qui ne filtre PAS l'expiration).
+     */
+    val ownHistory: StoryRing? = null,
 ) {
     val isEmpty: Boolean get() = self == null && others.isEmpty()
 }
@@ -38,30 +77,42 @@ object StoryTrayBuilder {
         currentUserId: String?,
         mediaBaseUrl: String?,
         nowMillis: Long = System.currentTimeMillis(),
+        coverOf: (StoryGroup) -> String? = { it.avatarURL },
+        localCoverOf: (StoryGroup) -> String? = { null },
     ): StoryTrayPresentation {
         val rings = groups
             .filterNot { it.isFullyExpired(nowMillis) }
-            .map { it.toRing(currentUserId, mediaBaseUrl) }
+            .map { it.toRing(currentUserId, mediaBaseUrl, nowMillis, coverOf, localCoverOf) }
         val self = rings.firstOrNull { it.isMine }
         val others = rings.filterNot { it.isMine }
-        return StoryTrayPresentation(self = self, others = others)
+        val ownHistory = self ?: groups.firstOrNull { currentUserId != null && it.id == currentUserId && it.stories.isNotEmpty() }
+            ?.toRing(currentUserId, mediaBaseUrl, nowMillis, coverOf, localCoverOf)
+        return StoryTrayPresentation(self = self, others = others, ownHistory = ownHistory)
     }
 
-    private fun StoryGroup.toRing(currentUserId: String?, mediaBaseUrl: String?): StoryRing =
-        StoryRing(
+    private fun StoryGroup.toRing(
+        currentUserId: String?,
+        mediaBaseUrl: String?,
+        nowMillis: Long,
+        coverOf: (StoryGroup) -> String?,
+        localCoverOf: (StoryGroup) -> String?,
+    ): StoryRing {
+        val live = stories.filterNot { it.isExpired(nowMillis) }
+        val unviewed = live.count { !it.isViewed }
+        return StoryRing(
             userId = id,
             displayName = username,
-            avatarUrl = avatarURL?.let { resolveMediaUrl(it, mediaBaseUrl) },
+            // La couverture composite rendue sur CET appareil (fichier de notre cache) l'emporte ; une adresse `file:` servie par
+            // le réseau, elle, reste refusée par resolveServedImageUrl.
+            avatarUrl = localCoverOf(this)?.let { "file://$it" } ?: resolveServedImageUrl(coverOf(this), mediaBaseUrl),
             accentHex = avatarColor,
-            hasUnviewed = hasUnviewed(),
-            storyCount = stories.size,
-            unviewedCount = stories.count { !it.isViewed },
+            hasUnviewed = unviewed > 0,
+            storyCount = live.size,
+            unviewedCount = unviewed,
             isMine = currentUserId != null && id == currentUserId,
+            displayedStoryId = (live.firstOrNull { !it.isViewed } ?: live.firstOrNull())?.id,
+            servedPresence = authorPresence,
+            style = StoryRingStyle.resolve(live.size, unviewed > 0, authorRing),
         )
-}
-
-internal fun resolveMediaUrl(url: String, mediaBaseUrl: String?): String = when {
-    url.startsWith("http") -> url
-    mediaBaseUrl == null -> url
-    else -> mediaBaseUrl.trimEnd('/') + (if (url.startsWith("/")) url else "/$url")
+    }
 }

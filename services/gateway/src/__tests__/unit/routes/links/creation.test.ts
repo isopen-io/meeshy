@@ -6,12 +6,25 @@
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
-import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
+import Fastify, { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
+// #14107 — la boîte de demandes a ses propres témoins (`messageRequests.test.ts`) : ici, tout membre entre directement.
+jest.mock('../../../../services/messaging/messageRequests', () => ({
+  ...jest.requireActual<object>('../../../../services/messaging/messageRequests'),
+  decideOpenings: jest.fn(async () => new Map()),
+  decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })),
+}));
+
 jest.mock('../../../../utils/logger', () => ({
   logError: jest.fn(),
+}));
+
+// Directive porteur du 2026-11-01 : une conversation naît chiffrée au repos,
+// sous une clé obtenue avant sa création.
+jest.mock('../../../../services/EncryptionService', () => ({
+  getEncryptionService: jest.fn(async () => ({ activationKeyId: async () => 'server-key' })),
 }));
 
 jest.mock('../../../../utils/sanitize', () => ({
@@ -20,10 +33,28 @@ jest.mock('../../../../utils/sanitize', () => ({
   },
 }));
 
+// #6437 — le double reproduit désormais les deux refus PRÉCOCES de la vraie
+// `createUnifiedAuthMiddleware` (requireAuth / allowAnonymous), pour que
+// `requireEmailVerification` — montée juste après sur la route réelle — ne
+// voie jamais un appelant anonyme : c'est `authRequired` qui le refuse
+// d'abord, exactement comme en production.
 jest.mock('../../../../middleware/auth', () => ({
-  createUnifiedAuthMiddleware: jest.fn(() => async (req: FastifyRequest) => {
-    (req as any).authContext = (req as any)._testAuthContext;
-  }),
+  ...(jest.requireActual('../../../../middleware/auth') as object),
+  createUnifiedAuthMiddleware: jest.fn(
+    (_prisma: unknown, options: { requireAuth?: boolean; allowAnonymous?: boolean } = {}) =>
+      async (req: FastifyRequest, reply: FastifyReply) => {
+        const ctx = (req as any)._testAuthContext;
+        if (options.requireAuth && !ctx?.isAuthenticated) {
+          reply.status(401).send({ error: 'Authentication required', code: 'AUTH_REQUIRED' });
+          return;
+        }
+        if (!options.allowAnonymous && ctx?.isAnonymous && ctx?.type !== 'user') {
+          reply.status(403).send({ error: 'Registered user required', code: 'REGISTERED_USER_REQUIRED' });
+          return;
+        }
+        (req as any).authContext = ctx;
+      }
+  ),
   isRegisteredUser: jest.fn((ctx: any) => ctx?.registeredUser != null),
   UnifiedAuthRequest: {},
 }));
@@ -52,7 +83,7 @@ const USER_ID = '507f1f77bcf86cd799439011';
 const CONV_ID = '507f1f77bcf86cd799439022';
 const LINK_ID = 'link-001';
 
-const mockUser = { id: USER_ID, role: 'USER', username: 'alice', displayName: 'Alice' };
+const mockUser = { id: USER_ID, role: 'USER', username: 'alice', displayName: 'Alice', emailVerifiedAt: new Date() };
 
 const mockShareLink = {
   id: LINK_ID,
@@ -73,7 +104,9 @@ function makePrisma(overrides: Record<string, any> = {}) {
       create: jest.fn<any>().mockResolvedValue({ id: CONV_ID, title: 'New Conv' }),
     },
     participant: {
-      findFirst: jest.fn<any>().mockResolvedValue({ id: 'part-1' }),
+      // `Participant.role` est une colonne REQUISE : une ligne sans rang n'existe
+      // pas, et la loi d'autorité lit son absence comme « aucune ligne » (#11217).
+      findFirst: jest.fn<any>().mockResolvedValue({ id: 'part-1', role: 'member' }),
       findMany: jest.fn<any>().mockResolvedValue([]),
     },
     user: {
@@ -92,8 +125,10 @@ async function buildApp(opts: {
   role?: string;
   prisma?: ReturnType<typeof makePrisma>;
   socketIOHandler?: { getManager: jest.Mock<any> } | null;
+  emailVerified?: boolean;
+  activation?: { phase: 'quiet' | 'invite' | 'blocked' | 'done'; deadline: string | null; missing: string[] };
 } = {}): Promise<{ app: FastifyInstance; prisma: ReturnType<typeof makePrisma> }> {
-  const { auth = 'registered', role = 'USER', prisma = makePrisma(), socketIOHandler = null } = opts;
+  const { auth = 'registered', role = 'USER', prisma = makePrisma(), socketIOHandler = null, emailVerified = true, activation } = opts;
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', prisma);
@@ -106,12 +141,15 @@ async function buildApp(opts: {
         isAuthenticated: true,
         isAnonymous: false,
         userId: USER_ID,
-        registeredUser: { ...mockUser, role },
+        registeredUser: { ...mockUser, role, emailVerifiedAt: emailVerified ? new Date() : null, ...(activation ? { activation } : {}) },
         hasFullAccess: true,
       };
     } else if (auth === 'anonymous') {
+      // #6437 — forme RÉELLE d'une session anonyme valide (`middleware/auth.ts`,
+      // `createAuthContext`) : `isAuthenticated: true` ; c'est `isAnonymous`
+      // qui la distingue d'un inscrit, jamais l'absence de session.
       (req as any)._testAuthContext = {
-        isAuthenticated: false,
+        isAuthenticated: true,
         isAnonymous: true,
         userId: 'anon-1',
         registeredUser: null,
@@ -133,6 +171,57 @@ describe('POST /links — anonymous user', () => {
     const { app } = await buildApp({ auth: 'anonymous' });
     const res = await app.inject({ method: 'POST', url: '/links', payload: {} });
     expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+});
+
+// #6437 — un lien de partage peut être suivi par n'importe qui : le créer
+// sort du compte vers d'autres personnes, donc exige un e-mail confirmé.
+describe('POST /links — email not verified', () => {
+  it('returns 403 EMAIL_NOT_VERIFIED when the sender has not confirmed their e-mail', async () => {
+    const { app } = await buildApp({ emailVerified: false });
+    const res = await app.inject({ method: 'POST', url: '/links', payload: {} });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
+    await app.close();
+  });
+});
+
+// #9713 — pendant le délai de grâce de l'adresse, au plus cinq liens ACTIFS.
+describe('POST /links — unproven address within its grace (#9713)', () => {
+  const grace = { phase: 'invite' as const, deadline: '2026-10-30T00:00:00.000Z', missing: ['email', 'phone'] };
+
+  it('creates the link while fewer than five links are active', async () => {
+    const prisma = makePrisma();
+    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: 'part-1', role: 'moderator' });
+    prisma.conversationShareLink.count = jest.fn<any>().mockResolvedValue(4);
+    const { app } = await buildApp({ prisma, emailVerified: false, activation: grace });
+    const res = await app.inject({ method: 'POST', url: '/links', payload: { conversationId: CONV_ID } });
+    expect(res.statusCode).toBe(201);
+    expect(prisma.conversationShareLink.create).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
+  it('refuses the sixth with 403 EMAIL_NOT_VERIFIED and creates nothing', async () => {
+    const prisma = makePrisma();
+    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: 'part-1', role: 'moderator' });
+    prisma.conversationShareLink.count = jest.fn<any>().mockResolvedValue(5);
+    const { app } = await buildApp({ prisma, emailVerified: false, activation: grace });
+    const res = await app.inject({ method: 'POST', url: '/links', payload: { conversationId: CONV_ID } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
+    expect(prisma.conversationShareLink.create).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('refuses once the grace has run out (blocked)', async () => {
+    const prisma = makePrisma();
+    prisma.conversationShareLink.count = jest.fn<any>().mockResolvedValue(0);
+    const { app } = await buildApp({ prisma, emailVerified: false, activation: { ...grace, phase: 'blocked' } });
+    const res = await app.inject({ method: 'POST', url: '/links', payload: { conversationId: CONV_ID } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
+    expect(prisma.conversationShareLink.create).not.toHaveBeenCalled();
     await app.close();
   });
 });
@@ -210,9 +299,63 @@ describe('POST /links — global conversation with admin role', () => {
   });
 });
 
+// #4169 — la garde de RANG qui manquait aux DEUX portes. Le témoin qui compte
+// n'est pas seulement « cette porte refuse » mais « l'AUTRE porte refuse
+// aussi » : son jumeau vit dans `conversation-sharing.test.ts`
+// (`POST /conversations/:id/new-link`), sur le MÊME prédicat
+// (`mayMintShareLink`, `routes/links/utils/share-link-mint.ts`).
+describe('POST /links — simple member on a group conversation', () => {
+  it('returns 403 when a member (role: member) tries to mint a link', async () => {
+    const prisma = makePrisma();
+    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: 'part-1', role: 'member' });
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST', url: '/links',
+      payload: { conversationId: CONV_ID },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(prisma.conversationShareLink.create).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+// #4169 critère de fin #3 — un anonyme muni du seul lien ne naît plus plus
+// privilégié qu'un inscrit invité par un admin (`canViewHistory: false` par
+// défaut sur `POST /conversations/:id/invite`,
+// `routes/conversations/sharing.ts`). Ce témoin traverse le VRAI pipeline
+// Fastify (`app.inject`, pas un appel direct au handler) : `createLinkBodySchema`
+// active `useDefaults` d'AJV (server.ts ne le désactive pas), et un `default`
+// de schéma de REQUÊTE matérialise la valeur AVANT que le handler ne
+// s'exécute (§ CLAUDE.md « Un default dans un schéma de REQUÊTE est une
+// ÉCRITURE ») — le seul type de témoin qui puisse voir ce piège.
+describe('POST /links — allowViewHistory default', () => {
+  it('defaults allowViewHistory to false in the created row when the body omits it', async () => {
+    const prisma = makePrisma();
+    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: 'part-1', role: 'moderator' });
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST', url: '/links',
+      payload: { conversationId: CONV_ID },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(prisma.conversationShareLink.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ allowViewHistory: false }) })
+    );
+    await app.close();
+  });
+});
+
 describe('POST /links — success with existing conversation', () => {
   it('returns 201 with linkId when creating link for group conversation', async () => {
-    const { app } = await buildApp();
+    // #4169 — `makePrisma()` par défaut ne pose aucun `role` sur la ligne
+    // `Participant` : sous la garde de rang qui manquait avant ce lot, un
+    // acteur sans rang lisible tombe SOUS le plancher MODERATOR (§
+    // `conversation-authority.ts`, un rang illisible vaut 0). Ce test exerce
+    // la MÉCANIQUE de création pour un acteur DÉJÀ autorisé — le témoin
+    // négatif dédié (`role: 'member' ⇒ 403`) vit plus bas dans ce fichier.
+    const prisma = makePrisma();
+    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: 'part-1', role: 'moderator' });
+    const { app } = await buildApp({ prisma });
     const res = await app.inject({
       method: 'POST', url: '/links',
       payload: { conversationId: CONV_ID, name: 'My Link' },
@@ -279,6 +422,9 @@ describe('POST /links — creates legacy conversation without conversationId', (
 describe('POST /links — DB error', () => {
   it('returns 500 when conversationShareLink.create throws', async () => {
     const prisma = makePrisma();
+    // #4169 — atteindre l'écriture qui lève exige d'abord de franchir la
+    // garde de rang (§ commentaire du témoin de succès ci-dessus).
+    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: 'part-1', role: 'moderator' });
     prisma.conversationShareLink.create = jest.fn<any>().mockRejectedValue(new Error('DB failure'));
     const { app } = await buildApp({ prisma });
     const res = await app.inject({

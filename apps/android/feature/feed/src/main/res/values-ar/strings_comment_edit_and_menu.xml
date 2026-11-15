@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="comment_menu_edit">تعديل</string>
+    <string name="comment_menu_report">إبلاغ</string>
+    <string name="comment_menu_remove">إزالة</string>
+    <string name="comment_menu_cancel_edit">إلغاء التعديل</string>
+    <string name="comment_menu_edit_failed">تعذّر تعديل التعليق</string>
+    <string name="comment_menu_report_title">الإبلاغ عن هذا التعليق</string>
+    <string name="comment_menu_reported">تم إرسال البلاغ. شكرًا.</string>
+    <string name="comment_menu_report_failed">تعذّر إرسال البلاغ</string>
+    <string name="comment_menu_remove_title">إزالة هذا التعليق؟</string>
+    <string name="comment_menu_remove_hint">السبب (مطلوب، 3 أحرف على الأقل)</string>
+    <string name="comment_menu_removed">تمت إزالة التعليق</string>
+    <string name="comment_menu_remove_failed">تعذّرت إزالة التعليق</string>
+</resources>

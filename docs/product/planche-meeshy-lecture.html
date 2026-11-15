@@ -1,0 +1,1669 @@
+<title>Le Plateau de Lecture</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --board: #f4f3f9;
+    --board-2: #ffffff;
+    --board-edge: #dedcea;
+    --ink: #1c1a2e;
+    --ink-2: #57536e;
+    --ink-3: #8b87a3;
+    --brand: #4f46e5;
+    --measure: #2563eb;
+    --decide: #b45309;
+    --plateau: #09090b;
+    --plateau-ink: #eef2ff;
+    --plateau-ink-2: #a5b4fc;
+    --accent: #6366f1;
+    --ok: #10b981;
+
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --ios: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", sans-serif;
+
+    --spring: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --board: #100f18;
+      --board-2: #171622;
+      --board-edge: #2a2840;
+      --ink: #eef2ff;
+      --ink-2: #a5a1c4;
+      --ink-3: #6f6b8c;
+      --brand: #a5b4fc;
+      --measure: #60a5fa;
+      --decide: #fbbf24;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --board: #100f18;
+    --board-2: #171622;
+    --board-edge: #2a2840;
+    --ink: #eef2ff;
+    --ink-2: #a5a1c4;
+    --ink-3: #6f6b8c;
+    --brand: #a5b4fc;
+    --measure: #60a5fa;
+    --decide: #fbbf24;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--board);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding-block: 40px 72px;
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  /* ---------- en-tête ---------- */
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--measure);
+    margin: 0 0 14px;
+  }
+
+  h1 {
+    font-size: clamp(30px, 5.4vw, 46px);
+    line-height: 1.05;
+    letter-spacing: -0.025em;
+    font-weight: 700;
+    margin: 0 0 18px;
+    text-wrap: balance;
+    max-width: 18ch;
+  }
+
+  .lede {
+    font-size: 17px;
+    line-height: 1.6;
+    color: var(--ink-2);
+    max-width: 64ch;
+    margin: 0 0 8px;
+  }
+
+  .lede strong { color: var(--ink); font-weight: 600; }
+
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink-3);
+    margin-top: 26px;
+    padding-top: 18px;
+    border-top: 1px solid var(--board-edge);
+  }
+
+  /* ---------- la loi ---------- */
+
+  .law {
+    margin: 40px 0 0;
+    padding: 22px 24px;
+    background: var(--board-2);
+    border: 1px solid var(--board-edge);
+    border-radius: 14px;
+    display: grid;
+    gap: 18px;
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 860px) {
+    .law { grid-template-columns: 1.15fr 1fr; gap: 32px; }
+  }
+
+  .law h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0 0 10px;
+    font-weight: 500;
+  }
+
+  .law p { margin: 0 0 12px; color: var(--ink-2); font-size: 14.5px; }
+  .law p:last-child { margin-bottom: 0; }
+  .law b { color: var(--ink); font-weight: 600; }
+
+  .stack-diagram {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+
+  .zone {
+    padding: 9px 12px;
+    border-radius: 7px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .zone span:last-child { color: var(--ink-3); font-size: 10.5px; white-space: nowrap; }
+
+  .zone.corridor {
+    background: color-mix(in srgb, var(--measure) 13%, transparent);
+    border: 1px dashed color-mix(in srgb, var(--measure) 55%, transparent);
+    color: var(--measure);
+  }
+
+  /* `cadre` et non `frame` : `.frame` est déjà le cadre média du téléphone,
+     et la même classe ici lui volait sa position absolue. */
+  .zone.cadre {
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
+    color: var(--brand);
+    padding-block: 30px;
+  }
+
+  /* ---------- barre de commandes ---------- */
+
+  .toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    margin: 44px 0 0;
+    padding: 12px 0;
+    background: color-mix(in srgb, var(--board) 92%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--board-edge);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .toolbar .hint {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-3);
+    margin-left: auto;
+  }
+
+  button {
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .tgl {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.02em;
+    padding: 7px 13px;
+    border-radius: 999px;
+    border: 1px solid var(--board-edge);
+    background: var(--board-2);
+    color: var(--ink-2);
+    transition: background 160ms, color 160ms, border-color 160ms;
+  }
+
+  .tgl:hover { color: var(--ink); border-color: var(--ink-3); }
+
+  .tgl[aria-pressed="true"] {
+    background: var(--measure);
+    border-color: var(--measure);
+    color: #fff;
+  }
+
+  .tgl:focus-visible, .phone:focus-visible, .solo-close:focus-visible {
+    outline: 2px solid var(--measure);
+    outline-offset: 3px;
+  }
+
+  /* ---------- grille des planches ---------- */
+
+  .boards {
+    display: grid;
+    gap: 46px 28px;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 268px));
+    justify-content: center;
+    margin-top: 34px;
+  }
+
+  .board { width: 100%; }
+
+  .board-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+
+  .board-head h3 {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+
+  .board-head .ratio {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--measure);
+  }
+
+  .board-note {
+    font-size: 13px;
+    color: var(--ink-2);
+    margin: 0 0 14px;
+    min-height: 3.1em;
+  }
+
+  .board-note em { color: var(--decide); font-style: normal; font-weight: 600; }
+
+  /* ---------- le téléphone ---------- */
+
+  .phone-shell {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 390 / 844;
+    border-radius: 42px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    display: block;
+  }
+
+  .phone {
+    position: absolute;
+    inset: 0;
+    width: 390px;
+    height: 844px;
+    transform-origin: top left;
+    border-radius: 42px;
+    overflow: hidden;
+    background: var(--plateau);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 18px 46px -14px rgba(10, 8, 30, 0.55);
+    font-family: var(--ios);
+    color: var(--plateau-ink);
+    border: none;
+    padding: 0;
+    display: block;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  /* ---------- couloir haut ---------- */
+
+  .safe-top { height: 59px; }
+  .safe-bottom { height: 34px; }
+
+  .corridor-top {
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+  }
+
+  .glass-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.13);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    display: grid;
+    place-items: center;
+    border: none;
+    color: #fff;
+    padding: 0;
+    flex: none;
+  }
+
+  .glass-btn svg { width: 17px; height: 17px; }
+
+  /* ---------- la zone du cadre ---------- */
+
+  .stage {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /*
+   * Le cadre est TOUJOURS absolu et centré : seules sa largeur, sa hauteur et
+   * son rayon changent entre les deux états. C'est ce qui rend la croissance
+   * continue — une bascule de `position` ferait sauter les couloirs d'un coup
+   * pendant qu'ils s'effacent, et le geste perdrait sa continuité.
+   */
+  .frame {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    margin: 0;
+    width: var(--fw);
+    height: var(--fh);
+    transform: translate(-50%, -50%);
+    border-radius: 22px;
+    overflow: hidden;
+    background: #000;
+    z-index: 5;
+    transition:
+      width 430ms var(--spring),
+      height 430ms var(--spring),
+      border-radius 430ms var(--spring);
+  }
+
+  .phone[data-state="full"] .frame {
+    width: 390px;
+    height: 844px;
+    border-radius: 0;
+    /*
+     * Les couloirs ne sont pas symétriques, et ils le sont moins depuis que la
+     * bande de progression est descendue (#6162) : 115 pt au-dessus (safe 59 +
+     * barre 56), 162 pt en dessous (progression 48 + rail 80 + safe 34). Le
+     * centre de la zone libre est donc 23,5 pt au-dessus du centre de l'écran :
+     * on le rattrape ici pour que le plein cadre touche vraiment les quatre
+     * bords.
+     */
+    top: calc(50% + 23.5px);
+  }
+
+  .stage-wrap {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  /* ---------- le chrome qui s'escamote ---------- */
+
+  .chrome {
+    transition: opacity 260ms ease, transform 320ms var(--spring);
+  }
+
+  .phone[data-state="full"] .chrome {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .phone[data-state="full"] .corridor-top { transform: translateY(-14px); }
+  .phone[data-state="full"] .corridor-band { transform: translateY(14px); }
+  .phone[data-state="full"] .corridor-bottom { transform: translateY(14px); }
+
+  /* ---------- ce qui est POSÉ sur le cadre ----------
+   *
+   * Une pile ancrée en bas, et non deux couches absolues : la colonne d'actions
+   * doit MONTER avec le bloc d'informations quand la légende se déplie (#6161).
+   * C'est la pile qui fait ce travail — il n'y a aucune cote à tenir d'accord.
+   */
+
+  .frame-stack {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    pointer-events: none;
+  }
+
+  .frame-stack > * { pointer-events: auto; }
+
+  .frame-overlay {
+    position: relative;
+    padding: 40px 12px 12px;
+    background: linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.44) 46%, transparent 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  /*
+   * La légende se REPLIE à deux lignes et se déplie PAR-DESSUS le contenu.
+   * Le voile s'épaissit pendant qu'elle est ouverte — c'est le même geste que
+   * le dégradé du bas, poussé jusqu'à rendre le texte lisible sur n'importe
+   * quelle image.
+   */
+  .caption { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+
+  .caption-text {
+    font-size: 13.5px;
+    line-height: 1.38;
+    color: rgba(255,255,255,0.94);
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .frame-overlay[data-caption="open"] .caption-text {
+    display: block;
+    -webkit-line-clamp: unset;
+    max-height: 46vh;
+    overflow-y: auto;
+  }
+
+  .caption-more {
+    border: none;
+    padding: 1px 0 0;
+    background: transparent;
+    color: rgba(255,255,255,0.82);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .frame-overlay[data-caption="open"] {
+    background: linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.82) 52%, rgba(0,0,0,0.55) 100%);
+    padding-top: 64px;
+  }
+
+  /* La taille et le format, sous la date : ce que le fichier EST. */
+  .specs {
+    font-size: 10.5px;
+    color: rgba(255,255,255,0.5);
+    line-height: 1.3;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+  }
+
+  .author-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+
+  .avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    flex: none;
+    background: linear-gradient(140deg, #6366f1, #a855f7);
+    display: grid;
+    place-items: center;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #fff;
+  }
+
+  .author-id { min-width: 0; flex: 1; }
+  .author-id .name { font-size: 13px; font-weight: 600; line-height: 1.25; }
+  .author-id .when { font-size: 11px; color: rgba(255,255,255,0.62); line-height: 1.25; }
+
+  /* ---------- la colonne d'actions, à DROITE du cadre (#6161) ----------
+   *
+   * Verre de 40 pt (`MediaStageActionColumn.glass`), cible de 44 pt (`.target`,
+   * que `mediaStageActionTarget()` rend pleine), 8 pt entre deux (`.spacing`,
+   * le gabarit de la barre latérale du lecteur de story). La colonne se POSE
+   * sur le cadre : elle ne lui retire aucune largeur.
+   */
+
+  .action-col {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 0 12px 10px 0;
+  }
+
+  .act {
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.15);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    display: grid;
+    place-items: center;
+    border: none;
+    color: #fff;
+    padding: 0;
+    flex: none;
+  }
+
+  .act svg { width: 17px; height: 17px; }
+
+  /* ---------- couloir bas, première bande : la progression (#6162) ----------
+   *
+   * Large comme le CADRE et non comme l'écran, sans capsule de verre : le
+   * couloir est un fond noir CONNU, et une capsule y dessinerait un objet
+   * flottant sur rien (`TransportLayout.wrapsBarInGlass`).
+   *
+   * La bande garde sa hauteur même vide : elle est réservée pour le LOT.
+   */
+
+  .corridor-band {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+  }
+
+  .band-inner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 100%;
+  }
+
+  .band-inner .bar {
+    flex: 1;
+    height: 3px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.28);
+    position: relative;
+  }
+
+  .band-inner .bar i {
+    position: absolute;
+    inset: 0 57% 0 0;
+    border-radius: 999px;
+    background: #fff;
+  }
+
+  .band-inner .bar i::after {
+    content: "";
+    position: absolute;
+    right: -4px;
+    top: -3.5px;
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: #fff;
+  }
+
+  /* La durée : petite, tabulaire, faible opacité, à droite — et lue sur
+     l'ATTACHEMENT, donc lisible avant la première image décodée. */
+  .band-inner .dur {
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255,255,255,0.55);
+    flex: none;
+    padding-right: 12px;
+  }
+
+  /* ---------- couloir bas, seconde bande : le rail ---------- */
+
+  .corridor-bottom {
+    height: 80px;
+    padding: 10px 12px 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    overflow: hidden;
+  }
+
+  .rail-item {
+    width: 46px;
+    height: 62px;
+    border-radius: 8px;
+    flex: none;
+    overflow: hidden;
+    opacity: 0.5;
+    border: 1.5px solid transparent;
+  }
+
+  .rail-item[data-active="true"] { opacity: 1; border-color: #fff; }
+
+  /* ---------- le menu ⋯ ---------- */
+
+  .menu {
+    position: absolute;
+    top: 106px;
+    right: 14px;
+    width: 232px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: rgba(38, 36, 52, 0.92);
+    backdrop-filter: blur(26px);
+    -webkit-backdrop-filter: blur(26px);
+    z-index: 20;
+    transform-origin: top right;
+    transition: opacity 180ms ease, transform 200ms var(--spring);
+    box-shadow: 0 16px 40px -10px rgba(0,0,0,0.7);
+  }
+
+  .menu[hidden] { display: block !important; opacity: 0; transform: scale(0.9); pointer-events: none; }
+
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 11px 13px;
+    font-size: 13.5px;
+    color: #fff;
+    border-bottom: 0.5px solid rgba(255,255,255,0.1);
+  }
+
+  .menu-item:last-child { border-bottom: none; }
+  .menu-item svg { width: 16px; height: 16px; flex: none; opacity: 0.85; }
+  .menu-note {
+    padding: 9px 13px 11px;
+    font-size: 11px;
+    line-height: 1.4;
+    color: rgba(255,255,255,0.56);
+    background: rgba(255,255,255,0.05);
+  }
+
+  /* ---------- annotations ---------- */
+
+  .annots { position: absolute; inset: 0; pointer-events: none; z-index: 30; }
+  .phone[data-annot="off"] .annots { opacity: 0; }
+  .annots { transition: opacity 200ms ease; }
+
+  .annot {
+    position: absolute;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.03em;
+    color: #93c5fd;
+    background: rgba(8, 20, 48, 0.82);
+    border: 1px solid rgba(96, 165, 250, 0.5);
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+
+  .band {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-top: 1px dashed rgba(96, 165, 250, 0.55);
+    border-bottom: 1px dashed rgba(96, 165, 250, 0.55);
+    background: rgba(37, 99, 235, 0.14);
+  }
+
+  .phone[data-state="full"] .annots { opacity: 0; }
+
+  /* ---------- mode solo (éprouver au doigt) ---------- */
+
+  .solo-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: #050509;
+    display: none;
+    place-items: center;
+  }
+
+  .solo-layer[data-open="true"] { display: grid; }
+
+  .solo-layer .phone {
+    position: relative;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .solo-close {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    z-index: 110;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 8px 13px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.25);
+    background: rgba(20,20,30,0.8);
+    color: #fff;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* ---------- décisions ---------- */
+
+  .decisions { margin-top: 68px; }
+
+  .decisions h2 {
+    font-size: 24px;
+    letter-spacing: -0.02em;
+    margin: 0 0 6px;
+    font-weight: 700;
+  }
+
+  .decisions > p { color: var(--ink-2); margin: 0 0 22px; max-width: 62ch; font-size: 14.5px; }
+
+  .dlist { display: grid; gap: 14px; }
+
+  .decision {
+    background: var(--board-2);
+    border: 1px solid var(--board-edge);
+    border-left: 3px solid var(--ok);
+    border-radius: 0 12px 12px 0;
+    padding: 16px 20px;
+  }
+
+  .decision h4 {
+    margin: 0 0 6px;
+    font-size: 15.5px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .decision p { margin: 0 0 8px; font-size: 14px; color: var(--ink-2); }
+  .decision p:last-child { margin-bottom: 0; }
+  .decision code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+
+  .decision .q {
+    font-weight: 500;
+    color: var(--ink);
+    font-size: 14.5px;
+    padding-left: 12px;
+    border-left: 2px solid color-mix(in srgb, var(--ok) 45%, transparent);
+  }
+
+  .foot {
+    margin-top: 54px;
+    padding-top: 20px;
+    border-top: 1px solid var(--board-edge);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-3);
+    line-height: 1.8;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 1ms !important; animation-duration: 1ms !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <p class="eyebrow">Meeshy · lecture · révision 3 · rattrape le code livré le 2026-09-12</p>
+  <h1>Le plateau de lecture</h1>
+  <p class="lede">
+    Un média ne s'affiche plus bord à bord sous un chrome flottant. Il se pose dans un <strong>cadre
+    arrondi centré</strong>, et le plateau qui l'entoure — un couloir en haut, <strong>deux bandes</strong>
+    en bas — porte tout ce qui n'est pas le média.
+  </p>
+  <p class="lede">
+    <strong>Un tap fait grandir le cadre jusqu'aux bords ; un second le repose</strong>, avec ses
+    contrôles, sa légende, son auteur et le rail des autres médias. Deux gestes ouvrent la même
+    porte en disant autre chose : l'<strong>appui long</strong> entre <em>et met en pause</em>, le
+    <strong>glissement vers le haut</strong> entre <em>en laissant courir</em> la lecture.
+  </p>
+  <p class="lede">
+    Une seule surface échappe au tap : le <strong>lecteur de stories</strong>, où il navigue déjà
+    d'une story à l'autre. On y entre par l'appui long ou le glissement — et on en sort par un tap,
+    qui n'a plus rien à naviguer une fois le chrome parti.
+  </p>
+  <p class="lede">
+    Les quatre planches ci-dessous sont vivantes. <strong>Touchez, ou appuyez longuement.</strong>
+    Sur la vidéo, <strong>double-tapez à gauche ou à droite</strong> de l'image.
+  </p>
+
+  <div class="meta-row">
+    <span>390 × 844 pt · iPhone 16 Pro</span>
+    <span>ressort 430 ms · 0.22, 1, 0.36, 1</span>
+    <span>palette dérivée de MeeshyColors.swift</span>
+    <span>4 points arbitrés · 3 rattrapages livrés</span>
+  </div>
+
+  <section class="law" style="grid-template-columns:1fr">
+    <div>
+      <h2>Ce que la révision 3 rattrape</h2>
+      <p>
+        La révision 2 décrivait une intention ; celle-ci décrit <b>ce que le code fait</b>. Trois
+        issues, livrées le 2026-09-12 sur directives porteur du même jour, ont déplacé trois choses
+        que les planches montraient encore à leur ancienne place. <b>Là où la planche et le code
+        divergeaient, c'est le code qui avait raison</b> — la planche le rattrape.
+      </p>
+      <p>
+        <b>#6161 — les actions passent en colonne verticale à droite.</b> Réagir · répondre ·
+        composer étaient en ligne, au bas du cadre, à droite de l'auteur. Elles prennent le gabarit
+        de la barre latérale du lecteur de story : verre de 40 pt, cible de 44, 8 pt entre deux.
+        <b>La colonne se POSE sur le cadre, elle ne lui prend pas de largeur</b> — l'arbitrage
+        « on garde l'aspect des story mais ce ne sont pas des story » a écarté le couloir latéral
+        réservé, qui coûtait 356 × 633 → 322 × 572 sur une scène 9:16. Restent en bas, sous le
+        voile : l'auteur, sa date, la légende dépliable, la ligne format / dimensions / poids.
+      </p>
+      <p>
+        <b>#6162 — la progression descend au couloir, le play/pause reste au centre.</b> Le
+        transport était UNE vue posée sur le cadre ; il devient deux, parce que ses moitiés ne font
+        pas la même chose. Ce qui <b>parcourt</b> rejoint les couloirs — la bande de 48 pt se range
+        juste au-dessus du rail, la durée servie petite, tabulaire, en faible opacité, à droite, et
+        <b>lue sur l'attachement</b>, jamais sur le player. Ce qui <b>commande</b> reste au centre
+        de l'image, à 55 % d'opacité. La bande se réserve <b>pour le LOT</b> : dès qu'un média porte
+        une durée, la hauteur est prise, et les pages sans durée la laissent vide — sinon le cadre
+        sauterait en glissant d'une vidéo vers une image.
+      </p>
+      <p>
+        <b>#6163 — les ±10 s deviennent un geste.</b> Les deux boutons ont quitté la barre ; un
+        <b>double tap dans le tiers gauche recule de dix secondes, dans le tiers droit avance</b>.
+        Le tiers central ne porte aucun geste et laisse passer ce qu'il reçoit : un double tap
+        retarde le tap simple de 250 à 300 ms, et le tap est la porte la plus fréquente du plein
+        cadre. Le geste n'est armé que sur un média <b>à durée</b> dont la piste est attachée —
+        sur une image, les trois tiers gardent leur tap immédiat.
+      </p>
+    </div>
+  </section>
+
+  <section class="law">
+    <div>
+      <h2>La loi de cadrage</h2>
+      <p>
+        <b>Les couloirs sont réservés d'abord ; le cadre prend ce qui reste.</b> C'est ce qui rend
+        l'équilibre stable au lieu de dépendre du ratio : une vidéo 16:9 et une scène 9:16 gardent
+        exactement les mêmes couloirs, seul le cadre change de taille entre eux.
+      </p>
+      <p>
+        Le cadre est ensuite <b>ajusté à son ratio puis centré</b> dans la zone libre — jamais
+        rogné, jamais étiré. Une scène 9:16 y perd un peu de largeur ; c'est le prix pour que
+        le rail ne soit jamais poussé hors de l'écran.
+      </p>
+      <p>
+        <b>Et le cadre ne descend jamais sous 330 pt</b>, soit trois fois la hauteur de son overlay :
+        en dessous, le bloc auteur couvrirait plus d'un tiers du média. Une vidéo 16:9 est donc
+        posée dans un cadre plus haut qu'elle, sur son <b>ThumbHash flouté</b> — le même habillage
+        que la story emploie déjà pour son hors-champ.
+      </p>
+      <p>
+        <b>Le couloir bas porte deux bandes</b> (#6162) : la progression du média d'abord, le rail
+        de la série ensuite. Elles se suivent parce qu'elles font la même chose à deux échelles —
+        l'une parcourt UN média, l'autre parcourt la SÉRIE. Le rail, lui, ne se réserve que s'il y a
+        plusieurs médias : un média seul n'a rien à parcourir, et la hauteur revient au cadre.
+      </p>
+      <p>
+        Ce que le plateau porte ne se pose <b>jamais</b> sur le cadre. Ce qui appartient au média
+        — sa légende, son auteur, les actions qui le visent, le play/pause qui le commande — se pose
+        <b>sur lui</b>, et part avec lui. Les actions y sont une <b>colonne verticale à droite</b>
+        (#6161), ancrée au-dessus du bloc d'informations : elle monte avec lui quand la légende se
+        déplie, et les coins arrondis du cadre la rognent comme ils rognent la légende.
+      </p>
+      <p>
+        Une légende longue se replie à <b>deux lignes</b> et offre « plus », qui la déplie
+        par-dessus l'image en épaississant le voile. Une légende courte n'offre rien : un contrôle
+        n'existe que s'il a un effet. Et <b>sous la date</b>, le fichier dit ce qu'il est — format,
+        dimensions, poids, durée.
+      </p>
+    </div>
+    <div class="stack-diagram">
+      <div class="zone corridor"><span>safe area</span><span>59 pt</span></div>
+      <div class="zone corridor"><span>couloir haut — ✕ · ⋯</span><span>56 pt</span></div>
+      <div class="zone cadre"><span>LE CADRE — média + son overlay</span><span>ce qui reste</span></div>
+      <div class="zone corridor"><span>couloir bas — progression + durée</span><span>48 pt</span></div>
+      <div class="zone corridor"><span>couloir bas — rail des médias</span><span>80 pt</span></div>
+      <div class="zone corridor"><span>safe area</span><span>34 pt</span></div>
+    </div>
+  </section>
+
+  <div class="toolbar">
+    <button class="tgl" id="t-annot" aria-pressed="true">cotes</button>
+    <button class="tgl" id="t-menu" aria-pressed="false">menu ⋯</button>
+    <button class="tgl" id="t-full" aria-pressed="false">tout en plein cadre</button>
+    <span class="hint">tap = entrer / sortir · appui long = entrer + pause · glisser vers le haut = entrer sans pause · double tap latéral (vidéo) = ∓10 s</span>
+  </div>
+
+  <div class="boards" id="boards"></div>
+
+  <section class="decisions">
+    <h2>Les quatre arbitrages</h2>
+    <p>
+      Quatre points ne relevaient pas du dessin : ils changeaient une règle produit ou entraient en
+      conflit avec un geste existant. Ils sont tranchés — voici ce que chacun engage dans le code.
+    </p>
+
+    <div class="dlist">
+
+      <div class="decision">
+        <h4>1 · La marque suit l'œuvre composée, jamais le média original</h4>
+        <p class="q">
+          Seules la <b>story enregistrée ou exportée</b> et les <b>scènes de post et de réel</b>
+          portent la marque Meeshy. L'image, la vidéo et le vocal d'une conversation s'enregistrent
+          <b>nus</b>.
+        </p>
+        <p>
+          C'est une règle plus nette que « avec ou sans, au choix » — et elle a une conséquence
+          heureuse : il n'y a plus d'entrée « Enregistrer sans la marque » à offrir, donc plus de
+          contrôle à expliquer. Le menu ⋯ garde deux verbes, et dit sous eux ce que
+          l'enregistrement fera.
+        </p>
+        <p>
+          Ce qu'elle engage : <code>MediaSaveBranding</code> décide aujourd'hui par le
+          <b>type</b> du fichier (<code>image · video · audio</code>). Il devra décider par
+          l'<b>origine</b> — composé ou transmis. Le prédicat change de nature, et c'est là que le
+          travail se trouve.
+        </p>
+      </div>
+
+      <div class="decision">
+        <h4>2 · Le tap bascule — sauf là où il navigue déjà</h4>
+        <p class="q">
+          <b>Tap</b> → entrer, <b>tap</b> → sortir. <b>Appui long</b> → entrer <b>et mettre en
+          pause</b>. <b>Glissement vers le haut</b> → entrer sans interrompre la lecture. Une seule
+          exception, nommée : sur le <b>lecteur de stories</b>, le tap continue de naviguer ; on y
+          entre par l'appui long ou le glissement.
+        </p>
+        <p>
+          L'exception se paie une fois et se justifie à voix haute : dans une story, toucher les
+          tiers gauche et droit est le geste le plus fréquent du produit. Le lui reprendre coûterait
+          plus cher que de nommer une surface à part.
+        </p>
+        <p>
+          Le vrai gain est ailleurs : <b>deux portes d'entrée qui ne disent pas la même chose</b>.
+          On s'arrête sur ce qu'on veut regarder (appui long, pause), on se laisse porter par ce
+          qu'on veut continuer d'écouter (glissement). Le tap, lui, reste le geste sans intention —
+          celui qu'on fait pour voir plus grand.
+        </p>
+        <p>
+          <b>Une quatrième porte s'est ajoutée depuis (#6163)</b>, et elle se paie sur les trois
+          autres : le <b>double tap latéral</b> d'un média à durée recule ou avance de dix secondes.
+          C'est pour cela qu'il est borné aux tiers gauche et droit — au centre, et sur toute image,
+          le tap garde son effet immédiat. La collision avec le double tap de ZOOM d'une image ne
+          peut pas se produire : les deux gestes sont séparés par la NATURE du média, le zoom
+          appartenant à ce qui a des pixels à inspecter et aucune durée.
+        </p>
+      </div>
+
+      <div class="decision">
+        <h4>3 · Le hors-champ est habillé par le ThumbHash, jamais laissé noir</h4>
+        <p class="q">
+          Le cadre ne descend pas sous <b>330 pt</b> — trois fois la hauteur de son overlay. Une
+          vidéo 16:9 y flotte donc sur son propre <b>ThumbHash flouté</b>, ou sur le noir du plan
+          initial.
+        </p>
+        <p>
+          Le mécanisme existe déjà et il est éprouvé : c'est celui que le lecteur de stories emploie
+          pour remplir les bandes au-dessus et en dessous de son 9:16. Le reprendre ici, c'est une
+          loi de moins à inventer et un chemin de rendu de moins à maintenir.
+        </p>
+      </div>
+
+      <div class="decision">
+        <h4>4 · La transcription d'un vocal est du contenu, pas du chrome</h4>
+        <p class="q">
+          Transcription et sélecteur de langue sont présents <b>dans les deux états</b>. Le plein
+          cadre ne les révèle pas — il <b>agrandit</b> l'onde et la zone de texte.
+        </p>
+        <p>
+          C'est ce qui empêche la règle générale (« en plein cadre, tout le chrome s'efface ») de
+          produire ici un non-sens : effacer la transcription rendrait le plein écran d'un vocal
+          plus pauvre que son cadre. La lisibilité du texte est une exigence des deux états,
+          pas seulement du grand.
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+  <p class="foot">
+    Révision 3 — elle ne dessine plus une intention : elle décrit <b>ce que le code fait</b>, après
+    #6161, #6162 et #6163, livrés le 2026-09-12.<br>
+    Les cotes viennent des constantes du dépôt et non de l'estime : <code>MediaGalleryStage</code>,
+    <code>TransportLayout.barHeight</code>, <code>FilmstripMetrics.reservedHeight</code>,
+    <code>MediaStageActionColumn</code>, <code>MediaStageSeek</code>. En cas d'écart, c'est le code
+    qui a raison — cette planche le rattrape.
+  </p>
+
+</div>
+
+<div class="solo-layer" id="solo" aria-hidden="true">
+  <button class="solo-close" id="solo-close">fermer</button>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var ICON = {
+    close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>',
+    react: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0" stroke-linecap="round"/><circle cx="9" cy="9.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="15" cy="9.5" r="1.1" fill="currentColor" stroke="none"/></svg>',
+    reply: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h9a7 7 0 0 1 7 7v3"/></svg>',
+    compose: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4l5 5L8.5 20.5 3 22l1.5-5.5z"/><path d="M13.5 5.5l5 5"/></svg>',
+    save: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7.5 10.5L12 15l4.5-4.5"/><path d="M4 18v2h16v-2"/></svg>',
+    clean: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7.5 10.5L12 15l4.5-4.5"/><path d="M4 18v2h16v-2"/><path d="M19 3L5 21" stroke-width="1.6"/></svg>',
+    share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M8 8l4-4 4 4"/><path d="M5 14v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5"/></svg>',
+    play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10-6.5z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5.5" width="3.4" height="13" rx="1"/><rect x="13.6" y="5.5" width="3.4" height="13" rx="1"/></svg>'
+  };
+
+  /* Les cotes de la loi de cadrage — une seule table, comme dans le code.
+   *
+   * BAND est la bande de progression descendue au couloir (#6162). Elle vaut
+   * `TransportLayout.barHeight` (48) et RAIL vaut `FilmstripMetrics.reservedHeight`
+   * (itemSide 54 + 2 × 10 + 6 = 80) : aucun des deux n'est un nombre choisi ici.
+   *
+   * Elle se réserve pour le LOT et non pour la page ouverte — les quatre
+   * planches partagent le même rail, qui porte une vidéo : la bande est donc
+   * prise sur les quatre, et reste VIDE sur celles qui n'ont pas de durée.
+   */
+  var SAFE_TOP = 59, TOP = 56, BAND = 48, RAIL = 80, SAFE_BOTTOM = 34, GUTTER = 12;
+  var W = 390, H = 844;
+  var availH = H - SAFE_TOP - TOP - BAND - RAIL - SAFE_BOTTOM - GUTTER;   /* 555 */
+  var availW = W - GUTTER * 2;                                            /* 366 */
+  var MIN_H = 330;   /* trois fois la hauteur de l'overlay */
+
+  /*
+   * Rend QUATRE cotes, pas deux : le cadre et le média n'ont la même taille que
+   * lorsque le ratio remplit le cadre. Dès que le cadre touche son plancher, le
+   * média est plus petit que lui et flotte sur son ThumbHash — et les deux
+   * doivent grandir ensemble, chacun vers sa propre cible.
+   */
+  function fit(ratio) {                 /* ratio = largeur / hauteur */
+    var h = availH, w = h * ratio;
+    if (w > availW) { w = availW; h = w / ratio; }
+    var mw = Math.round(w), mh = Math.round(h);
+
+    var fw = mw, fh = mh;
+    if (fh < MIN_H) { fh = MIN_H; fw = availW; }
+
+    var mh2 = W / ratio, mw2 = W;
+    if (mh2 > H) { mh2 = H; mw2 = H * ratio; }
+
+    return {
+      w: fw, h: fh,
+      mw: mw, mh: mh,
+      mw2: Math.round(mw2), mh2: Math.round(mh2),
+      letterbox: fh > mh
+    };
+  }
+
+  /* Des « photos » peintes en CSS — aucune ressource externe ne franchit la CSP. */
+  var SKINS = {
+    quai: 'radial-gradient(115% 82% at 22% 8%, #ffd9a8 0%, #f0925e 26%, #b4506b 52%, #3d2a56 78%, #16132c 100%), linear-gradient(180deg, transparent 62%, rgba(6,4,18,0.85) 100%)',
+    grue: 'linear-gradient(178deg, #1b2f4b 0%, #35557c 38%, #6d88a8 62%, #22344d 100%), radial-gradient(60% 40% at 70% 30%, rgba(255,224,170,0.5), transparent 70%)',
+    atelier: 'linear-gradient(200deg, #2a2140 0%, #4a3663 40%, #8a5a7d 70%, #24182f 100%)',
+    nuit: 'radial-gradient(80% 60% at 50% 18%, #3b2a6b 0%, #1b1636 45%, #0a0818 100%)',
+    scene: 'linear-gradient(165deg, #4338ca 0%, #6366f1 34%, #a855f7 66%, #1e1b4b 100%)'
+  };
+
+  function railStrip(active) {
+    var keys = ['quai', 'grue', 'atelier', 'nuit', 'scene', 'quai'];
+    return keys.map(function (k, i) {
+      return '<div class="rail-item" data-active="' + (i === active) + '" style="background:' + SKINS[k] + ';background-size:cover"></div>';
+    }).join('');
+  }
+
+  /*
+   * LA COLONNE D'ACTIONS (#6161) — verticale, à droite, POSÉE sur le cadre.
+   *
+   * Elle était une rangée horizontale au bas du cadre, à droite de l'auteur.
+   * Directive porteur 2026-09-12 : « il faut placer les contrôleurs du bas sur
+   * le côté en vertical sur la zone sombre du plateau ». Gabarit de la barre
+   * latérale du lecteur de story — verre 40 pt, cible 44, 8 pt entre deux.
+   *
+   * Elle ne prend AUCUNE largeur au cadre : `MediaStageFraming` n'a gagné aucun
+   * champ au #6161, et la lecture opposée (un vrai couloir latéral réservé
+   * avant le cadre) a été écartée — elle coûtait un cinquième de la surface sur
+   * une scène 9:16.
+   *
+   * Ancrée au-dessus du bloc d'informations, elle MONTE avec lui quand la
+   * légende se déplie : c'est la pile ancrée en bas qui fait le travail, il n'y
+   * a aucune cote à tenir d'accord.
+   */
+  function actionColumn() {
+    return '<div class="action-col">' +
+      '<span class="act">' + ICON.react + '</span>' +
+      '<span class="act">' + ICON.reply + '</span>' +
+      '<span class="act">' + ICON.compose + '</span>' +
+    '</div>';
+  }
+
+  /*
+   * LE PLAY/PAUSE reste au CENTRE du média, à 55 % d'opacité (#6162).
+   *
+   * Il ne descend pas avec la progression : celle-ci RAPPORTE où l'on en est,
+   * lui COMMANDE. Une commande se pose là où l'œil et le doigt sont déjà, et
+   * aucun lecteur du marché ne la met ailleurs.
+   */
+  function centerPlayPause(cfg) {
+    if (cfg.nature !== 'video') return '';
+    return '<div class="center-play">' + ICON.play + '</div>';
+  }
+
+  /*
+   * LA BANDE DE PROGRESSION, descendue au couloir bas (#6162).
+   *
+   * Large comme le CADRE, pas comme l'écran. La durée y est servie petite,
+   * tabulaire, en faible opacité, à droite — et elle vient de l'ATTACHEMENT,
+   * jamais du player : `manager.duration` vaut zéro tant que l'`AVPlayerItem`
+   * n'a pas chargé ses pistes, donc « 0:00 » sur exactement la page qu'on vient
+   * d'ouvrir.
+   *
+   * Plus aucun bouton ±10 s : `TransportLayout.showsSkip` les refuse à tout
+   * placement autre qu'empilé, et #6163 les remplace par un geste.
+   */
+  function transportBand(cfg, box) {
+    var inner = cfg.transport
+      ? '<span class="bar"><i></i></span><span class="dur">' + cfg.duration + '</span>'
+      : '';
+    return '<div class="corridor-band chrome">' +
+      '<div class="band-inner" style="width:' + box.w + 'px">' + inner + '</div>' +
+    '</div>';
+  }
+
+  function overlay(cfg) {
+    /* Une légende longue se REPLIE et offre « plus » ; une courte n'offre rien
+       — un contrôle n'existe que s'il a un effet (loi 4). */
+    /* Le « plus » vit HORS du texte replié : à l'intérieur, le clamp l'avale
+       avec la troisième ligne — un contrôle invisible n'est pas un contrôle. */
+    var longue = cfg.caption.length > 74;
+    var caption = '<div class="caption" data-long="' + longue + '">' +
+      '<p class="caption-text">' + cfg.caption + '</p>' +
+      (longue ? '<button class="caption-more" type="button">plus</button>' : '') +
+    '</div>';
+
+    /* Ce qui RESTE en bas du cadre, sous le voile — l'auteur, sa date, la
+       légende dépliable, la ligne format / dimensions / poids. Les actions n'y
+       sont plus (#6161), le transport non plus (#6162) : ce qui DÉCRIT le média
+       reste avec lui, ce qui le PARCOURT ou le vise a déménagé. */
+    return '<div class="frame-overlay" data-caption="closed">' +
+      caption +
+      '<div class="author-row">' +
+        '<div class="avatar">' + cfg.initials + '</div>' +
+        '<div class="author-id">' +
+          '<div class="name">' + cfg.author + '</div>' +
+          '<div class="when">' + cfg.when + '</div>' +
+          '<div class="specs">' + cfg.specs + '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function annotations(cfg, box) {
+    /* Le centre de la zone libre, en coordonnées écran — voir la note sur
+       l'asymétrie des couloirs dans la feuille de style. */
+    var centreY = SAFE_TOP + TOP + (H - SAFE_TOP - TOP - BAND - RAIL - SAFE_BOTTOM) / 2;
+    var cadreTop = Math.round(centreY - box.h / 2 + 9);
+
+    /* Les deux tiers ARMÉS du double tap (#6163) — montrés seulement là où le
+       geste existe : un média à durée dont la piste est attachée. La largeur
+       vient de `MediaStageSeek.lateralWidth` (un tiers), la même arithmétique
+       qui décide ensuite du sens. */
+    var tiers = cfg.transport
+      ? '<div class="seek-annot" style="width:' + Math.round(box.w / 3) + 'px;left:calc(50% - ' + Math.round(box.w / 2) + 'px);top:' + cadreTop + 'px;height:' + box.h + 'px"><span>−10 s</span></div>' +
+        '<div class="seek-annot" style="width:' + Math.round(box.w / 3) + 'px;left:calc(50% + ' + Math.round(box.w / 2 - box.w / 3) + 'px);top:' + cadreTop + 'px;height:' + box.h + 'px"><span>+10 s</span></div>'
+      : '';
+
+    return '<div class="annots">' +
+      '<div class="band" style="top:' + SAFE_TOP + 'px;height:' + TOP + 'px"></div>' +
+      '<div class="annot" style="top:' + (SAFE_TOP + 17) + 'px;left:62px">couloir haut · 56 pt</div>' +
+      '<div class="band" style="bottom:' + (SAFE_BOTTOM + RAIL) + 'px;height:' + BAND + 'px"></div>' +
+      '<div class="annot" style="bottom:' + (SAFE_BOTTOM + RAIL + 15) + 'px;right:14px">progression · 48 pt</div>' +
+      '<div class="band" style="bottom:' + SAFE_BOTTOM + 'px;height:' + RAIL + 'px"></div>' +
+      '<div class="annot" style="bottom:' + (SAFE_BOTTOM + 31) + 'px;right:14px">rail des médias · 80 pt</div>' +
+      '<div class="annot" style="top:' + cadreTop + 'px;left:50%;transform:translateX(-50%);background:rgba(30,20,60,0.88);border-color:rgba(165,180,252,0.6);color:#c7d2fe">cadre ' + box.w + ' × ' + box.h + ' pt · r22</div>' +
+      tiers +
+    '</div>';
+  }
+
+  /*
+   * Une SEULE entrée « Enregistrer » : la marque ne se choisit plus, elle se
+   * déduit de la nature du média — composée (story, scène) ou originale
+   * (l'image, la vidéo, le vocal d'une conversation). Offrir « sans la marque »
+   * serait un contrôle sans effet là où rien n'est marqué (loi 4).
+   */
+  function menu(cfg) {
+    var marque = cfg.nature === 'scene'
+      ? '<div class="menu-note">Œuvre composée — l’enregistrement porte la marque Meeshy.</div>'
+      : '<div class="menu-note">Média original — enregistré tel quel, sans marque.</div>';
+    return '<div class="menu" hidden>' +
+      '<div class="menu-item">' + ICON.save + '<span>Enregistrer</span></div>' +
+      '<div class="menu-item">' + ICON.share + '<span>Partager hors de Meeshy</span></div>' +
+      marque +
+    '</div>';
+  }
+
+  function langRow() {
+    /* La sélection de langue reste atteignable dans les DEUX états — elle est
+       du contenu, pas du chrome : elle ne s'efface pas en plein cadre. */
+    return '<div class="langs">' +
+      '<span class="lang" data-on="true">FR</span>' +
+      '<span class="lang">EN</span>' +
+      '<span class="lang">ES</span>' +
+      '<span class="lang lang-orig">original · FR</span>' +
+    '</div>';
+  }
+
+  function mediaBody(cfg, box) {
+    if (cfg.nature === 'audio') {
+      var bars = '';
+      for (var i = 0; i < 38; i++) {
+        var amp = 16 + Math.round(Math.abs(Math.sin(i * 0.62)) * 44 + (i % 3) * 5);
+        bars += '<i style="height:' + amp + '%"></i>';
+      }
+      return '<div class="audio-face">' +
+        '<div class="audio-head">' +
+          '<div class="audio-play">' + ICON.play + '</div>' +
+          '<div class="wave">' + bars + '</div>' +
+        '</div>' +
+        '<div class="audio-time"><span>0:04</span><span>0:27</span></div>' +
+        '<p class="transcript">« On se retrouve au quai nord vers six heures, j\'apporte le reste du matériel. Si la grue est encore là, on commence par le côté est. »</p>' +
+        langRow() +
+      '</div>';
+    }
+
+    var skin = cfg.nature === 'scene' ? SKINS.scene : SKINS[cfg.skin];
+    var inner = cfg.nature === 'scene'
+      ? '<div class="scene-text">Six heures<br>au quai nord</div><div class="scene-sticker">📍 Quai nord</div>'
+      : '';   /* le play/pause d'une vidéo est posé par `centerPlayPause` (#6162),
+                 une couche plus haut : il COMMANDE, il n'appartient pas au média. */
+
+    /*
+     * Le ThumbHash flouté est TOUJOURS peint sous un média à pixels — pas
+     * seulement quand le cadre a du hors-champ. Le plein cadre en fabrique du
+     * sien : une 4:5 remplit son cadre à 366 pt de large, et flotte dans
+     * 356 pt de vide une fois l'écran pris. Conditionner le fond au letterbox
+     * du seul état CARDÉ, c'était garantir du noir dans l'autre.
+     */
+    var backdrop = '<div class="backdrop" style="background:' + skin + ';background-size:cover"></div>';
+
+    return backdrop +
+      '<div class="media" style="--mw:' + box.mw + 'px;--mh:' + box.mh + 'px;--mw2:' + box.mw2 + 'px;--mh2:' + box.mh2 + 'px;background:' + skin + ';background-size:cover">' +
+        inner +
+      '</div>';
+  }
+
+  function phoneHTML(cfg) {
+    /* Un vocal n'a pas de ratio : son cadre est dimensionné par ce qu'il DIT —
+       l'onde, la durée, la transcription et les langues. */
+    var box = cfg.nature === 'audio'
+      ? { w: availW, h: 430, mw: availW, mh: 430, mw2: W, mh2: H, letterbox: false }
+      : fit(cfg.ratio);
+    return '' +
+      '<div class="stage-wrap">' +
+        '<div class="safe-top"></div>' +
+        '<div class="corridor-top chrome">' +
+          '<span class="glass-btn">' + ICON.close + '</span>' +
+          '<span class="glass-btn">' + ICON.more + '</span>' +
+        '</div>' +
+        '<div class="stage">' +
+          '<div class="frame" style="--fw:' + box.w + 'px;--fh:' + box.h + 'px">' +
+            mediaBody(cfg, box) +
+            '<div class="paused-pill">⏸ en pause</div>' +
+            '<div class="seek-flash"></div>' +
+            // Le play/pause entre dans la MÊME couche que le reste du plateau :
+            // `controlsOverlay` le porte, donc il s'efface en plein cadre comme
+            // la légende et les actions. Il est centré, elles sont ancrées en
+            // bas — c'est la seule chose qui les distingue ici.
+            '<div class="chrome frame-stack">' + centerPlayPause(cfg) + actionColumn() + overlay(cfg) + '</div>' +
+          '</div>' +
+        '</div>' +
+        transportBand(cfg, box) +
+        '<div class="corridor-bottom chrome">' + railStrip(cfg.railActive) + '</div>' +
+        '<div class="safe-bottom"></div>' +
+      '</div>' +
+      '<div class="chrome">' + menu(cfg) + '</div>' +
+      annotations(cfg, box);
+  }
+
+  var PLANCHES = [
+    {
+      key: 'image', nature: 'image', title: 'Image', ratioLabel: '4:5', ratio: 0.8, skin: 'quai', railActive: 0,
+      note: 'Le cas nominal. Sa légende est longue : elle se replie à deux lignes et offre <em>« plus »</em>, qui la déplie par-dessus l’image — et la colonne d’actions monte avec elle. Sa bande de progression est <em>réservée mais vide</em> : le lot porte une vidéo, et un cadre qui saute en glissant coûterait plus cher que 48 pt.',
+      caption: 'Le quai nord, juste avant que la lumière tombe. On avait attendu deux heures que les grues s’arrêtent, et elles se sont arrêtées toutes ensemble — c’est la seule photo où le bassin est immobile.',
+      author: 'Camille Roux', initials: 'CR', when: 'aujourd’hui à 18:42',
+      specs: 'JPEG · 3024 × 4032 · 2,4 Mo'
+    },
+    {
+      key: 'video', nature: 'video', title: 'Vidéo', ratioLabel: '16:9', ratio: 1.7778, skin: 'grue', railActive: 1,
+      note: 'Trop courte pour son overlay, elle est posée dans un cadre de 330 pt sur <em>son propre ThumbHash flouté</em>. Sa progression est <em>dans le couloir</em>, sa durée en petit à droite, son play/pause translucide au centre — et <em>un double tap latéral</em> remplace les ±10 s.',
+      caption: 'La grue nord, six heures.',
+      author: 'Arto Lehtinen', initials: 'AL', when: 'hier à 06:12', transport: true, duration: '0:14',
+      specs: 'MP4 · 1920 × 1080 · 0:14 · 8,1 Mo'
+    },
+    {
+      key: 'audio', nature: 'audio', title: 'Vocal', ratioLabel: 'sans pixels', ratio: 1, skin: 'nuit', railActive: 2,
+      note: 'Transcription et langues sont là <em>dans les deux états</em> — c’est du contenu, pas du chrome. Le plein cadre les agrandit au lieu de les révéler.',
+      caption: 'Message vocal · 0:27',
+      author: 'Lina Mercier', initials: 'LM', when: 'il y a 12 minutes',
+      specs: 'M4A · 0:27 · 412 Ko'
+    },
+    {
+      key: 'scene', nature: 'scene', title: 'Scène', ratioLabel: '9:16', ratio: 0.5625, skin: 'scene', railActive: 4,
+      note: 'Le cas limite : à 9:16 le cadre perd de la largeur pour que le rail tienne. Seule nature <em>marquée à l’enregistrement</em> — c’est une œuvre composée.',
+      caption: 'Six heures au quai nord',
+      author: 'Camille Roux', initials: 'CR', when: 'il y a 2 heures',
+      specs: 'Scène 9:16 · 3 objets · 1,1 Mo'
+    }
+  ];
+
+  /* styles propres aux faces audio / scène — injectés ici pour rester près de leur code */
+  var extra = document.createElement('style');
+  extra.textContent = [
+    /* le hors-champ habillé : le ThumbHash du média, agrandi et flouté */
+    '.backdrop{position:absolute;inset:-12%;filter:blur(34px) saturate(1.25);opacity:0.62;transform:scale(1.15)}',
+
+    /* le média dans son cadre — deux cotes, une par état */
+    '.media{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:var(--mw);height:var(--mh);overflow:hidden;transition:width 430ms var(--spring),height 430ms var(--spring)}',
+    '.phone[data-state="full"] .media{width:var(--mw2);height:var(--mh2)}',
+
+    /* le vocal : onde, durée, transcription, langues — présents dans les deux états */
+    /* Le retrait de droite (44 de cible + 12 de gouttière) dégage la colonne
+       d'actions : la transcription est du CONTENU, et rien ne doit passer
+       par-dessus ce qu'on est en train de lire. */
+    '.audio-face{position:absolute;inset:0;background:linear-gradient(155deg,#312e81 0%,#4f46e5 55%,#1e1b4b 100%);display:flex;flex-direction:column;justify-content:center;gap:12px;padding:22px 56px 104px 18px}',
+    '.audio-head{display:flex;align-items:center;gap:13px}',
+    '.audio-play{width:48px;height:48px;border-radius:999px;background:rgba(255,255,255,0.94);color:#312e81;display:grid;place-items:center;flex:none;transition:width 380ms var(--spring),height 380ms var(--spring)}',
+    '.phone[data-state="full"] .audio-play{width:64px;height:64px}',
+    '.audio-play svg{width:20px;height:20px;margin-left:2px}',
+    '.wave{display:flex;align-items:center;gap:3px;height:52px;flex:1;transition:height 380ms var(--spring)}',
+    '.phone[data-state="full"] .wave{height:118px}',
+    '.wave i{flex:1;background:rgba(255,255,255,0.78);border-radius:999px;min-width:2px}',
+    '.wave i:nth-child(n+15){background:rgba(255,255,255,0.32)}',
+    '.audio-time{display:flex;justify-content:space-between;font-size:11px;font-variant-numeric:tabular-nums;color:rgba(255,255,255,0.72)}',
+    '.transcript{margin:0;font-size:14px;line-height:1.55;color:#fff;max-height:88px;overflow:hidden;transition:max-height 380ms var(--spring),font-size 380ms var(--spring)}',
+    '.phone[data-state="full"] .transcript{max-height:320px;font-size:17px}',
+    '.langs{display:flex;align-items:center;gap:6px;flex-wrap:wrap}',
+    '.lang{font-size:11px;font-weight:600;letter-spacing:0.04em;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,0.16);color:rgba(255,255,255,0.82)}',
+    '.lang[data-on="true"]{background:#fff;color:#312e81}',
+    '.lang-orig{background:transparent;border:1px solid rgba(255,255,255,0.3);font-weight:500;letter-spacing:0}',
+
+    /* deux témoins de geste : ce que l'appui long a fait, et ce que le tap
+       laisse à la surface quand il n'a rien à fermer */
+    '.paused-pill{position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:9;font-size:11px;font-weight:600;letter-spacing:0.02em;padding:5px 11px;border-radius:999px;background:rgba(0,0,0,0.55);backdrop-filter:blur(14px);color:#fff;opacity:0;transition:opacity 220ms ease;pointer-events:none}',
+    '.phone[data-state="full"][data-paused="true"] .paused-pill{opacity:1}',
+
+    /* Le play/pause CENTRÉ, à 55 % d'opacité (#6162, directive porteur : « le
+       bouton pause/play plus transparent au centre »). Il reste le verre
+       prominent du SDK — seule l'opacité change : un bouton opaque au centre
+       d'une photo cache précisément ce qu'on regarde, un bouton absent ne se
+       retrouve pas. Il ne s'efface PAS en plein cadre : il commande la lecture,
+       ce n'est pas du chrome de plateau. */
+    '.center-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:62px;height:62px;border-radius:999px;background:rgba(0,0,0,0.45);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);display:grid;place-items:center;color:#fff;opacity:0.55;z-index:8}',
+    '.center-play svg{width:26px;height:26px;margin-left:3px}',
+
+    /* Les deux tiers armés du double tap (#6163), montrés avec les cotes. Le
+       tiers central n'est pas dessiné parce qu'il ne porte AUCUN geste : il
+       laisse passer ce qu'il reçoit, et c'est ce qui rend au tap son effet
+       immédiat là où il est le plus fréquent. */
+    /* Le libellé se pose EN HAUT du tiers, pas en son centre : au centre il
+       viendrait sur la colonne d'actions, qu'il ne remplace pas. */
+    '.seek-annot{position:absolute;border:1px dashed rgba(165,180,252,0.55);background:rgba(99,102,241,0.10);border-radius:14px;display:flex;align-items:flex-start;justify-content:center;padding-top:14px;z-index:28}',
+    '.seek-annot span{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:#c7d2fe;background:rgba(30,20,60,0.88);padding:3px 9px;border-radius:999px}',
+
+    /* Ce que le geste RÉPOND, le temps d'un battement. Le retour est posé même
+       quand le saut est borné : se taire à la butée ferait croire à un double
+       tap raté exactement là où l'utilisateur insiste. */
+    '.seek-flash{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:12;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;padding:9px 16px;border-radius:999px;background:rgba(0,0,0,0.62);backdrop-filter:blur(14px);color:#fff;opacity:0;transition:opacity 160ms ease;pointer-events:none}',
+    '.seek-flash[data-on="true"]{opacity:1}',
+    '.scene-text{position:absolute;top:34%;left:0;right:0;text-align:center;font-size:26px;font-weight:700;line-height:1.15;letter-spacing:-0.02em;color:#fff;text-shadow:0 2px 18px rgba(0,0,0,0.45)}',
+    '.scene-sticker{position:absolute;top:58%;left:50%;transform:translateX(-50%) rotate(-4deg);background:rgba(255,255,255,0.92);color:#1e1b4b;font-size:12px;font-weight:600;padding:5px 11px;border-radius:999px;white-space:nowrap}'
+  ].join('');
+  document.head.appendChild(extra);
+
+  /* ---------- montage ---------- */
+
+  var boards = document.getElementById('boards');
+
+  PLANCHES.forEach(function (cfg) {
+    var board = document.createElement('div');
+    board.className = 'board';
+    board.innerHTML =
+      '<div class="board-head"><h3>' + cfg.title + '</h3><span class="ratio">' + cfg.ratioLabel + '</span></div>' +
+      '<p class="board-note">' + cfg.note + '</p>' +
+      '<div class="phone-shell"><div class="phone" role="button" tabindex="0" data-state="carded" data-annot="on" data-key="' + cfg.key + '">' + phoneHTML(cfg) + '</div></div>' +
+      '<div style="display:flex;gap:8px;margin-top:12px">' +
+        '<button class="tgl" data-solo="' + cfg.key + '">au doigt →</button>' +
+      '</div>';
+    boards.appendChild(board);
+  });
+
+  /* Mise à l'échelle : le téléphone est dessiné en 390×844 réels puis réduit. */
+  function rescale() {
+    document.querySelectorAll('.phone-shell').forEach(function (shell) {
+      var phone = shell.querySelector('.phone');
+      if (!phone) return;
+      var k = shell.clientWidth / W;
+      phone.style.transform = 'scale(' + k + ')';
+    });
+  }
+  rescale();
+  window.addEventListener('resize', rescale);
+
+  /* ---------- les gestes ----------
+   *
+   * La loi arbitrée : le TAP bascule dans les deux sens. L'appui long entre ET
+   * met en pause ; le glissement vers le haut entre sans interrompre. Une seule
+   * exception, portée par la surface et non par le geste : dans le lecteur de
+   * stories le tap NAVIGUE, donc il n'y entre pas — il en sort seulement.
+   *
+   * Les quatre planches de cette maquette sont hors story : le tap y bascule.
+   */
+
+  var LONG_MS = 500, SLOP = 8, SWIPE = 40;
+
+  function enter(phone, withPause) {
+    phone.dataset.state = 'full';
+    phone.dataset.paused = withPause ? 'true' : 'false';
+    closeMenu(phone);
+    closeCaption(phone);
+  }
+
+  function leave(phone) { phone.dataset.state = 'carded'; }
+
+  function openMenu(phone) { var m = phone.querySelector('.menu'); if (m) m.hidden = false; }
+  function closeMenu(phone) { var m = phone.querySelector('.menu'); if (m) m.hidden = true; }
+
+  var press = null;
+
+  /* La légende et les actions sont des CONTRÔLES posés sur le cadre : elles ne
+     déclenchent pas la bascule du plateau sous elles. */
+  function pressable(target) {
+    if (!target.closest) return null;
+    var phone = target.closest('.phone');
+    if (!phone) return null;
+    if (target.closest('.corridor-top') || target.closest('.menu')) return null;
+    if (target.closest('.caption') || target.closest('.action-col')) return null;
+    /* Le couloir de progression et le play/pause central sont des CONTRÔLES :
+       ils ne déclenchent pas la bascule du plateau sous eux. */
+    if (target.closest('.corridor-band') || target.closest('.center-play')) return null;
+    return phone;
+  }
+
+  function closeCaption(phone) {
+    var ov = phone.querySelector('.frame-overlay');
+    if (ov) ov.dataset.caption = 'closed';
+  }
+
+  document.addEventListener('pointerdown', function (e) {
+    var phone = pressable(e.target);
+    if (!phone) return;
+    press = { phone: phone, x: e.clientX, y: e.clientY, moved: false, done: false };
+    press.timer = setTimeout(function () {
+      if (!press || press.moved || press.done) return;
+      press.done = true;
+      enter(press.phone, true);
+    }, LONG_MS);
+  });
+
+  document.addEventListener('pointermove', function (e) {
+    if (!press) return;
+    var dx = e.clientX - press.x, dy = e.clientY - press.y;
+    if (Math.abs(dx) > SLOP || Math.abs(dy) > SLOP) press.moved = true;
+    if (!press.done && dy < -SWIPE && Math.abs(dx) < SWIPE) {
+      clearTimeout(press.timer);
+      press.done = true;
+      enter(press.phone, false);
+    }
+  });
+
+  function endPress() {
+    if (!press) return;
+    clearTimeout(press.timer);
+    var p = press;
+    press = null;
+    if (p.done || p.moved) return;
+    if (p.phone.dataset.state === 'full') leave(p.phone);
+    else enter(p.phone, false);
+  }
+
+  document.addEventListener('pointerup', endPress);
+  document.addEventListener('pointercancel', endPress);
+
+  /* ---------- la quatrième porte : le double tap latéral (#6163) ----------
+   *
+   * Tiers gauche ⇒ −10 s, tiers droit ⇒ +10 s, tiers central ⇒ rien. La
+   * largeur d'un tiers et la décision viennent de la MÊME arithmétique
+   * (`MediaStageSeek.lateralWidth` / `.zone`) : des zones posées au jugé
+   * couvriraient une bande que la règle ne reconnaîtrait pas, et le geste y
+   * serait inerte sans qu'aucune moitié ne soit fausse.
+   *
+   * Le geste n'existe que sur un média à DURÉE. Sur une image, les trois tiers
+   * gardent leur tap immédiat — c'est aussi ce qui écarte toute collision avec
+   * le double tap de zoom, que seule l'image porte.
+   */
+  var LATERAL = 1 / 3;
+
+  function seekZone(x, width) {
+    var lateral = width * LATERAL;
+    if (x < lateral) return 'backward';
+    if (x > width - lateral) return 'forward';
+    return null;
+  }
+
+  document.addEventListener('dblclick', function (e) {
+    var frame = e.target.closest && e.target.closest('.frame');
+    if (!frame) return;
+    var phone = frame.closest('.phone');
+    if (!phone || !PLANCHES.some(function (c) { return c.key === phone.dataset.key && c.transport; })) return;
+
+    var rect = frame.getBoundingClientRect();
+    var zone = seekZone(e.clientX - rect.left, rect.width);
+    if (!zone) return;
+
+    var flash = frame.querySelector('.seek-flash');
+    if (!flash) return;
+    flash.textContent = zone === 'backward' ? '⏪ −10 s' : '+10 s ⏩';
+    flash.dataset.on = 'true';
+    clearTimeout(flash._t);
+    flash._t = setTimeout(function () { flash.dataset.on = 'false'; }, 620);
+  });
+
+  document.addEventListener('click', function (e) {
+    var solo = e.target.closest('[data-solo]');
+    if (solo) { openSolo(solo.getAttribute('data-solo')); return; }
+
+    var cap = e.target.closest('.caption[data-long="true"]');
+    if (cap) {
+      var ov = cap.closest('.frame-overlay');
+      ov.dataset.caption = ov.dataset.caption === 'open' ? 'closed' : 'open';
+      var btn = cap.querySelector('.caption-more');
+      if (btn) btn.textContent = ov.dataset.caption === 'open' ? 'moins' : 'plus';
+      return;
+    }
+
+    var moreBtn = e.target.closest('.corridor-top .glass-btn:last-child');
+    if (moreBtn) {
+      var p = moreBtn.closest('.phone');
+      var m = p.querySelector('.menu');
+      if (m.hidden) openMenu(p); else closeMenu(p);
+      return;
+    }
+
+    var inMenu = e.target.closest('.menu');
+    if (inMenu) closeMenu(inMenu.closest('.phone'));
+  });
+
+  /* Au clavier : flèche haut pour entrer, Échap ou Entrée pour sortir. */
+  document.addEventListener('keydown', function (e) {
+    var phone = e.target.closest && e.target.closest('.phone');
+    if (!phone) return;
+    if (e.key === 'ArrowUp') { e.preventDefault(); enter(phone, false); return; }
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (phone.dataset.state === 'full') leave(phone); else enter(phone, true);
+    }
+  });
+
+  /* ---------- commandes de la planche ---------- */
+
+  var tAnnot = document.getElementById('t-annot');
+  var tMenu = document.getElementById('t-menu');
+  var tFull = document.getElementById('t-full');
+
+  tAnnot.addEventListener('click', function () {
+    var on = tAnnot.getAttribute('aria-pressed') !== 'true';
+    tAnnot.setAttribute('aria-pressed', String(on));
+    document.querySelectorAll('.phone').forEach(function (p) { p.dataset.annot = on ? 'on' : 'off'; });
+  });
+
+  tMenu.addEventListener('click', function () {
+    var on = tMenu.getAttribute('aria-pressed') !== 'true';
+    tMenu.setAttribute('aria-pressed', String(on));
+    document.querySelectorAll('.phone').forEach(function (p) {
+      p.dataset.state = 'carded';
+      if (on) openMenu(p); else closeMenu(p);
+    });
+  });
+
+  tFull.addEventListener('click', function () {
+    var on = tFull.getAttribute('aria-pressed') !== 'true';
+    tFull.setAttribute('aria-pressed', String(on));
+    document.querySelectorAll('.phone').forEach(function (p) {
+      if (on) enter(p, false); else leave(p);
+    });
+  });
+
+  /* ---------- mode « au doigt » : taille réelle ---------- */
+
+  var soloLayer = document.getElementById('solo');
+  var soloClose = document.getElementById('solo-close');
+  var soloHost = null;
+
+  function openSolo(key) {
+    var cfg = PLANCHES.filter(function (c) { return c.key === key; })[0];
+    if (!cfg) return;
+    if (soloHost) soloHost.remove();
+    soloHost = document.createElement('div');
+    soloHost.className = 'phone';
+    soloHost.setAttribute('role', 'button');
+    soloHost.setAttribute('tabindex', '0');
+    soloHost.dataset.state = 'carded';
+    soloHost.dataset.annot = 'off';
+    soloHost.dataset.key = cfg.key;
+    soloHost.innerHTML = phoneHTML(cfg);
+    soloLayer.appendChild(soloHost);
+    soloLayer.dataset.open = 'true';
+    soloLayer.setAttribute('aria-hidden', 'false');
+    fitSolo();
+    soloHost.focus();
+  }
+
+  function fitSolo() {
+    if (!soloHost) return;
+    var k = Math.min(window.innerWidth / W, window.innerHeight / H, 1);
+    soloHost.style.transformOrigin = 'center center';
+    soloHost.style.transform = 'scale(' + k + ')';
+  }
+
+  window.addEventListener('resize', fitSolo);
+
+  soloClose.addEventListener('click', function (e) {
+    e.stopPropagation();
+    soloLayer.dataset.open = 'false';
+    soloLayer.setAttribute('aria-hidden', 'true');
+    if (soloHost) { soloHost.remove(); soloHost = null; }
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && soloLayer.dataset.open === 'true') soloClose.click();
+  });
+})();
+</script>

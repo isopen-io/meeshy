@@ -48,15 +48,27 @@ export function buildPaginationMeta(
   };
 }
 
+/**
+ * Keyset cursor meta (`?cursor=<lastId>&limit=<n>`) for a DB-paginated list.
+ *
+ * `nextCursor` follows `hasMore`: a cursor is only handed back when a next page
+ * actually exists. Gating it on `resultCount > 0` instead emitted a cursor on a
+ * partial final page (`hasMore: false`) — a self-contradictory meta that makes a
+ * client driving pagination off `nextCursor` issue one extra `?cursor=<lastId>`
+ * request that keyset-resolves to an empty page. This is the same rule the
+ * sibling {@link sliceByIdCursor} and the canonical `cursorPage`
+ * (`utils/cursor-pagination.ts`) already enforce.
+ */
 export function buildCursorPaginationMeta(
   limit: number,
   resultCount: number,
   lastItemId: string | null
 ): CursorPaginationMeta {
+  const hasMore = resultCount === limit;
   return {
     limit,
-    hasMore: resultCount === limit,
-    nextCursor: resultCount > 0 ? lastItemId : null
+    hasMore,
+    nextCursor: hasMore ? lastItemId : null
   };
 }
 

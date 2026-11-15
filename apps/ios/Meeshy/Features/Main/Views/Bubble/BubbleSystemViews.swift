@@ -4,10 +4,8 @@ import MeeshyUI
 
 /// Vues "systeme" affichees a la place du contenu d'une bulle :
 /// - `BubbleDeletedView` quand le message a ete supprime
-/// - `BubbleBurnedView` quand un message ephemere a ete vu et efface
 ///
-/// Was: ThemedMessageBubble.deletedMessageView (lignes 363-393) +
-/// ThemedMessageBubble.burnedMessageView (lignes 395-425).
+/// Was: ThemedMessageBubble.deletedMessageView (lignes 363-393).
 ///
 /// Stateless : reposent uniquement sur `isMe` et `isDark`. Equatable trivial.
 struct BubbleDeletedView: View, Equatable {
@@ -15,79 +13,42 @@ struct BubbleDeletedView: View, Equatable {
     let isDark: Bool
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
+        HStack(alignment: .bottom, spacing: MeeshySpacing.sm) {
             if isMe { Spacer(minLength: 50) }
 
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "nosign")
-                    .font(MeeshyFont.relative(12, weight: .medium))
-                    .foregroundColor(ThemeManager.shared.textMuted)
-                Text(String(localized: "bubble.system.deleted", defaultValue: "Message deleted", bundle: .main))
-                    .font(MeeshyFont.relative(13, weight: .regular))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .medium))
+                    .foregroundStyle(ThemeManager.shared.textMuted)
+                Text(String(localized: "bubble.system.deleted", defaultValue: "Message supprimé", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
                     .italic()
-                    .foregroundColor(ThemeManager.shared.textMuted)
+                    .foregroundStyle(ThemeManager.shared.textMuted)
             }
             .padding(.horizontal, MeeshySpacing.md)
             .padding(.vertical, MeeshySpacing.sm)
             .background(
                 Capsule()
-                    .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                    .fill(MeeshyColors.surfaceFill(isDark: isDark))
                     .overlay(
                         Capsule()
-                            .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
+                            .stroke(MeeshyColors.hairline(isDark: isDark), lineWidth: MeeshyBorder.hairline)
                     )
             )
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(String(localized: "bubble.system.deleted", defaultValue: "Message deleted", bundle: .main))
+            .accessibilityLabel(String(localized: "bubble.system.deleted", defaultValue: "Message supprimé", bundle: .main))
 
             if !isMe { Spacer(minLength: 50) }
         }
         .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, 2)
-    }
-}
-
-struct BubbleBurnedView: View, Equatable {
-    let isMe: Bool
-    let isDark: Bool
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            if isMe { Spacer(minLength: 50) }
-
-            HStack(spacing: 6) {
-                Image(systemName: "flame.fill")
-                    .font(MeeshyFont.relative(12, weight: .medium))
-                    .foregroundColor(MeeshyColors.warning)
-                Text(String(localized: "bubble.system.burned", defaultValue: "Seen and deleted", bundle: .main))
-                    .font(MeeshyFont.relative(13, weight: .regular))
-                    .italic()
-                    .foregroundColor(ThemeManager.shared.textMuted)
-            }
-            .padding(.horizontal, MeeshySpacing.md)
-            .padding(.vertical, MeeshySpacing.sm)
-            .background(
-                Capsule()
-                    .fill(MeeshyColors.warning.opacity(0.08))
-                    .overlay(
-                        Capsule()
-                            .stroke(MeeshyColors.warning.opacity(0.15), lineWidth: 0.5)
-                    )
-            )
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(String(localized: "bubble.system.burned.a11y", defaultValue: "Message seen and deleted", bundle: .main))
-
-            if !isMe { Spacer(minLength: 50) }
-        }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, 2)
+        .padding(.vertical, MeeshySpacing.xxs)
     }
 }
 
 /// Centered system notice rendered in place of a chat bubble — the FALLBACK
 /// for any system message whose `metadata` did not decode into a richer
 /// notice (legacy call summaries, legacy join notices, future event kinds).
-/// Unlike `BubbleDeletedView`/`BubbleBurnedView` (which still align with the
+/// Unlike `BubbleDeletedView` (which still aligns with the
 /// sender side), a system notice is a milestone of the thread: centered, no
 /// avatar, thread time engraved FIRST — same semantics as the date stickers
 /// and `BubbleJoinNoticeView`. No leading glyph: the producer is unknown by
@@ -96,43 +57,52 @@ struct BubbleBurnedView: View, Equatable {
 /// Stateless: depends only on `text` + `isDark` + `timeString`; the content
 /// string itself carries the localized label from the gateway.
 struct BubbleSystemNoticeView: View, Equatable {
+    static func == (lhs: BubbleSystemNoticeView, rhs: BubbleSystemNoticeView) -> Bool {
+        lhs.text == rhs.text && lhs.isDark == rhs.isDark && lhs.timeString == rhs.timeString
+            && lhs.greeting?.text == rhs.greeting?.text && lhs.greeting?.accentColor == rhs.greeting?.accentColor
+    }
+
     let text: String
     let isDark: Bool
     var timeString: String? = nil
+    /// L'invite « dis-leur salut » d'une ligne d'arrivées (#16338).
+    var greeting: ArrivalGreetingInvite? = nil
 
     var body: some View {
         HStack(spacing: 0) {
             Spacer(minLength: 24)
 
-            VStack(spacing: 3) {
+            VStack(spacing: MeeshySpacing.xxs) {
                 if let timeString, !timeString.isEmpty {
                     Text(timeString)
-                        .font(MeeshyFont.relative(9.5, weight: .semibold))
-                        .foregroundColor(ThemeManager.shared.textMuted.opacity(0.7))
+                        .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
+                        .foregroundStyle(ThemeManager.shared.textMuted.opacity(MeeshyOpacity.heavy))
                         .accessibilityIdentifier("bubble-system-notice-time")
                 }
-                Text(text)
-                    .font(MeeshyFont.relative(12.5, weight: .medium))
-                    .foregroundColor(ThemeManager.shared.textMuted)
-                    .multilineTextAlignment(.center)
+                VStack(spacing: MeeshySpacing.xxs) {
+                    Text(text)
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
+                        .foregroundStyle(ThemeManager.shared.textMuted)
+                        .multilineTextAlignment(.center)
+                    greeting
+                }
                     .padding(.horizontal, MeeshySpacing.md)
-                    .padding(.vertical, 7)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(
                         Capsule()
-                            .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                            .fill(MeeshyColors.surfaceFill(isDark: isDark))
                             .overlay(
                                 Capsule()
-                                    .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
+                                    .stroke(MeeshyColors.hairline(isDark: isDark), lineWidth: MeeshyBorder.hairline)
                             )
                     )
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(text)
+            .accessibilityElement(children: greeting == nil ? .combine : .contain)
 
             Spacer(minLength: 24)
         }
         .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, 3)
+        .padding(.vertical, MeeshySpacing.xxs)
     }
 }
 
@@ -153,9 +123,12 @@ struct BubbleSystemNoticeView: View, Equatable {
 /// l'information la plus utile quand la porte est un lien public.
 /// Loi de présentation de l'avis d'arrivée — décidable à part de SwiftUI.
 ///
-/// Le nom DONNÉ au formulaire prime, le pseudo `ano_…` descend en @handle —
-/// chacun à sa place. Sans nom donné, le pseudo reste le nom principal et le
-/// handle disparaît : « ano_bob » suivi de « @ano_bob » ne dirait rien de plus.
+/// Le nom DONNÉ au formulaire prime. Le pseudo d'un participant SANS COMPTE
+/// n'est jamais affiché en @handle (#9717, jumelle de #9710) : `ano_…` est un
+/// identifiant technique, et la pastille « sans compte » dit déjà qui il est.
+/// La décision lit `isAnonymous`, jamais le préfixe — un compte nommé
+/// `ano_bob` garde son @handle. Un handle identique au nom principal disparaît
+/// aussi : « bob » suivi de « @bob » ne dirait rien de plus.
 struct JoinNoticePresentation: Equatable {
     let primaryName: String
     let handle: String?
@@ -165,7 +138,7 @@ struct JoinNoticePresentation: Equatable {
     init(notice: BubbleContent.JoinNotice) {
         let givenName = notice.givenName?.isEmpty == false ? notice.givenName : nil
         self.primaryName = givenName ?? notice.displayName
-        let username = notice.username?.isEmpty == false ? notice.username : nil
+        let username = notice.isAnonymous ? nil : (notice.username?.isEmpty == false ? notice.username : nil)
         self.handle = username.flatMap { $0 == (givenName ?? notice.displayName) ? nil : "@\($0)" }
         self.showsNoAccountBadge = notice.isAnonymous
         self.rules = notice.linkRules
@@ -182,7 +155,7 @@ struct BubbleJoinNoticeView: View, Equatable {
     /// Ce n'est pas non plus l'appui long, qui l'a porté un temps : ce geste-là
     /// ouvre, PARTOUT ailleurs dans le fil, les options d'un message. Une
     /// pastille système qui se l'approprie ne gagne pas un geste, elle en VOLE
-    /// un — et l'avis d'arrivée reste un message du fil (directive 2026-08-24).
+    /// un — et l'avis d'arrivée reste un message du fil.
     ///
     /// `==` est écrit à la main : une closure n'est pas `Equatable`, et la
     /// synthèse automatique refuserait de compiler. Elle est exclue de la
@@ -191,6 +164,7 @@ struct BubbleJoinNoticeView: View, Equatable {
         lhs.notice == rhs.notice
             && lhs.isDark == rhs.isDark
             && lhs.timeString == rhs.timeString
+            && lhs.greeting?.text == rhs.greeting?.text && lhs.greeting?.accentColor == rhs.greeting?.accentColor
     }
 
     let notice: BubbleContent.JoinNotice
@@ -199,6 +173,8 @@ struct BubbleJoinNoticeView: View, Equatable {
     /// Heure du fil (« 08:26 ») — gravée EN PREMIER, centrée, même sémantique
     /// que les stickers de date : l'avis est un jalon du fil, pas une parole.
     var timeString: String? = nil
+    /// « dis-lui salut » (#16338), sous l'avis — `nil` pour l'arrivant lui-même.
+    var greeting: ArrivalGreetingInvite? = nil
 
     var body: some View {
         let presentation = JoinNoticePresentation(notice: notice)
@@ -207,66 +183,62 @@ struct BubbleJoinNoticeView: View, Equatable {
         return HStack(spacing: 0) {
             Spacer(minLength: 24)
 
-            VStack(spacing: 3) {
+            VStack(spacing: MeeshySpacing.xxs) {
                 if let timeString, !timeString.isEmpty {
                     Text(timeString)
-                        .font(MeeshyFont.relative(9.5, weight: .semibold))
-                        .foregroundColor(ThemeManager.shared.textMuted.opacity(0.7))
+                        .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
+                        .foregroundStyle(ThemeManager.shared.textMuted.opacity(MeeshyOpacity.heavy))
                         .accessibilityIdentifier("bubble-join-notice-time")
                 }
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: notice.isAnonymous ? "theatermasks.fill" : "person.badge.plus")
-                        .font(MeeshyFont.relative(11, weight: .semibold))
-                        .foregroundColor(notice.isAnonymous ? .purple : ThemeManager.shared.textMuted)
+                        .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
+                        .foregroundStyle(notice.isAnonymous ? MeeshyColors.purple700 : ThemeManager.shared.textMuted)
 
                     Text(label(for: presentation))
-                        .font(MeeshyFont.relative(12.5, weight: .medium))
-                        .foregroundColor(ThemeManager.shared.textMuted)
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
+                        .foregroundStyle(ThemeManager.shared.textMuted)
                         .multilineTextAlignment(.center)
 
                     if presentation.showsNoAccountBadge {
-                        Text(String(
-                            localized: "bubble.joinNotice.noAccount",
-                            defaultValue: "sans compte",
-                            bundle: .main
-                        ))
-                        .font(MeeshyFont.relative(10.5, weight: .semibold))
-                        .foregroundColor(.purple)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.purple.opacity(isDark ? 0.22 : 0.12)))
+                        Text(String(localized: "bubble.joinNotice.noAccount", defaultValue: "sans compte", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
+                        .foregroundStyle(MeeshyColors.purple700)
+                        .padding(.horizontal, MeeshySpacing.xsPlus)
+                        .padding(.vertical, MeeshySpacing.xxs)
+                        .background(Capsule().fill(MeeshyColors.purple700.opacity(isDark ? 0.22 : 0.12)))
                         .accessibilityIdentifier("bubble-join-notice-no-account")
                     }
                 }
 
                 if hasDetailRow {
-                    HStack(spacing: 8) {
+                    HStack(spacing: MeeshySpacing.sm) {
                         if let handle = presentation.handle {
                             Text(handle)
-                                .font(MeeshyFont.relative(10.5, weight: .medium))
-                                .foregroundColor(ThemeManager.shared.textMuted.opacity(0.85))
+                                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                                .foregroundStyle(ThemeManager.shared.textMuted.opacity(MeeshyOpacity.intense))
                                 .accessibilityIdentifier("bubble-join-notice-handle")
                         }
                         if let rules = presentation.rules {
                             if presentation.handle != nil {
-                                Text("·")
-                                    .font(MeeshyFont.relative(10.5))
-                                    .foregroundColor(ThemeManager.shared.textMuted.opacity(0.5))
-                                    .accessibilityHidden(true)
+                                MetaSeparator()
+                                    .font(MeeshyFont.relative(MeeshyFont.captionSize))
+                                    .foregroundStyle(ThemeManager.shared.textMuted.opacity(MeeshyOpacity.strong))
                             }
                             JoinNoticeRulesStrip(rules: rules)
                         }
                     }
                 }
+                greeting
             }
             .padding(.horizontal, MeeshySpacing.md)
             .padding(.vertical, hasDetailRow ? 8 : 7)
             .background(
                 RoundedRectangle(cornerRadius: hasDetailRow ? 14 : 18, style: .continuous)
-                    .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                    .fill(MeeshyColors.surfaceFill(isDark: isDark))
                     .overlay(
                         RoundedRectangle(cornerRadius: hasDetailRow ? 14 : 18, style: .continuous)
-                            .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
+                            .stroke(MeeshyColors.hairline(isDark: isDark), lineWidth: MeeshyBorder.hairline)
                     )
             )
             .contentShape(RoundedRectangle(cornerRadius: hasDetailRow ? 14 : 18, style: .continuous))
@@ -289,10 +261,11 @@ struct BubbleJoinNoticeView: View, Equatable {
                 guard let onOpenProfile, !notice.participantId.isEmpty else { return }
                 onOpenProfile(notice.participantId)
             }
+            .modifier(ArrivalGreetingAccessibility(greeting: greeting))
 
             Spacer(minLength: 24)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, MeeshySpacing.xs)
     }
 
     private var openProfileActionLabel: String {
@@ -329,7 +302,7 @@ struct JoinNoticeRulesStrip: View, Equatable {
     let rules: JoinNoticeMetadata.LinkRules
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             ruleGlyph(
                 "bubble.left.fill",
                 allowed: rules.canSendMessages,
@@ -358,7 +331,7 @@ struct JoinNoticeRulesStrip: View, Equatable {
     private func ruleGlyph(_ systemName: String, allowed: Bool, label: String) -> some View {
         Image(systemName: systemName)
             .font(MeeshyFont.relative(9.5, weight: .semibold))
-            .foregroundColor(allowed ? .purple : ThemeManager.shared.textMuted.opacity(0.35))
+            .foregroundStyle(allowed ? MeeshyColors.purple700 : ThemeManager.shared.textMuted.opacity(MeeshyOpacity.medium))
             .accessibilityLabel(label)
     }
 }

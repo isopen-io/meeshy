@@ -1,5 +1,8 @@
 # services/gateway - Fastify API Gateway
 
+> ## ⛔ Aucune feature sans issue — règle de démarrage (directive 2026-08-26)
+> **Avant d'écrire la première ligne d'une feature, d'une amélioration ou d'un correctif non trivial**, ouvrir (ou retrouver) son **issue** dans `isopen-io/meeshy`, la placer dans un **milestone précis** (nommé par le résultat attendu, avec échéance) et l'inscrire au projet « Meeshy — pilotage » (https://github.com/orgs/isopen-io/projects/1) avec `Status = In Progress`. Le commit qui livre la ferme (`Closes #n`) avec sa preuve (gate, mesure, PR). **Une tâche sans issue n'existe pas ; un travail sans milestone n'est pas planifié.** Ce qu'on découvre en chemin (dette, dimension non mûre, suivi) devient une issue à son tour — jamais une ligne dans un fichier ou une page. Détail : § « Pilotage du développement » du `CLAUDE.md` racine.
+
 ## Tech Stack
 - Fastify 5.7 + TypeScript 5.9 (strict: false)
 - Socket.IO 4.8 (WebSocket real-time)
@@ -205,6 +208,107 @@ function registerSubRoutes(ctx: Context) {
 }
 ```
 
+## La table des routes est PUBLIÉE, et un cliquet la tient
+
+`services/gateway/route-manifest.json` liste les routes réellement SERVIES —
+méthode, chemin complet, préfixe de montage, module déclarant, niveau S0–S6 et sa
+preuve — produites depuis le serveur ASSEMBLÉ (`registerAllRoutes`), jamais par
+`grep`. C'est la source qui fait foi pour les catalogues clients (#4276), et le
+collecteur vit dans `src/route-manifest/collect.ts`.
+
+**Ajouter, retirer ou déplacer une route rend
+`src/__tests__/security/route-manifest-ratchet.test.ts` ROUGE tant que le
+manifeste n'est pas régénéré** — c'est voulu :
+
+```bash
+npm run route-manifest:generate   # régénère (à commiter avec la route)
+```
+
+⚠️ **Node ≥ 22.19 requis** : sous une version antérieure, le script échoue sur
+`webidl.util.markAsUncloneable is not a function` — une pile qui pointe
+l'intérieur d'`undici` et ne nomme ni la cause ni le remède. Il le dit lui-même
+quand il détecte la mauvaise version ; ne pas lire l'échec comme un dépôt cassé.
+
+Il n'existe **pas** de variante `--check` : le cliquet ci-dessus EST la
+vérification, et il tourne au gate. Ces trois indications étaient fausses jusqu'au
+2026-08-31 (#4455) — un document qui dit vrai sur le principe et faux sur le
+chemin est plus coûteux qu'un document absent : on lui fait confiance, on suit,
+on échoue, et on ne sait pas si l'erreur est la sienne.
+
+Le manifeste CONSTATE aussi les anomalies d'adressage (chemin hors `/api/v1`,
+préfixe codé en dur dans le module). Ne les corrige pas au passage : c'est #4277.
+
+### Le manifeste recense ce que Meeshy EXPOSE comme API, pas tout ce que le gateway SERT (#4466)
+
+Une surface montée sur l'instance racine peut servir des routes qui ne sont pas
+de l'API Meeshy — l'interface de documentation d'une dépendance, par exemple
+(`swaggerUi` : `/docs`, `/docs/json`, `/docs/yaml` et ses actifs). **Elles ne
+rejoignent pas le manifeste**, et ce n'est pas un oubli : elles sont DÉCLARÉES
+hors périmètre dans `src/__tests__/route-manifest/root-mounted-surfaces.ts`,
+sous `kind: 'outside-manifest'`, avec leur raison.
+
+La règle tient à ce dont le manifeste est la source. `packages/shared/api/endpoints.ts`
+en dérive mécaniquement, et les gardes de contrat client s'y adossent : y faire
+entrer `/docs` publierait, à chaque client, des entrées **qu'aucun client
+n'appellera jamais**. Un catalogue d'API qui liste l'interface de sa propre
+documentation cesse de vouloir dire « ce que tu peux appeler ».
+
+> **La question à poser à une surface racine n'est pas « la sert-on ? » mais
+> « un client Meeshy peut-il l'appeler ? »** — la première est vraie de tout ce
+> que le processus écoute, y compris des actifs d'une dépendance ; la seconde
+> décrit le contrat.
+
+Les trois valeurs de la taxonomie, et ce qu'elles engagent :
+
+| `kind` | le collecteur | ce que ça exige |
+|---|---|---|
+| `declares-api-routes` | DOIT la monter | rien de plus — c'est le cas nominal |
+| `outside-manifest` | ne la monte pas | la RAISON écrite dans l'inventaire |
+| `no-routes` | rien à monter | vérifié : hook, décoration, parseur, en-têtes |
+
+Une surface racine absente des trois est un ROUGE (`root-mounted-surfaces.test.ts`) :
+le silence n'est pas une quatrième valeur.
+
+## Une adresse hors `/api` est hors de tout ce qui s'ancre sur `/api` — jusqu'à son retrait INCLUS
+
+Déprécier une adresse ne la retire pas d'un périmètre : ça annonce sa fin. Les trois
+en-têtes `Deprecation` / `Sunset` / `Link` (#4274) s'adressent à un **client** ; une
+règle de proxy, de WAF, de quota, de journalisation ou de catalogue s'ancre sur un
+**préfixe de chemin** et ne les lit jamais. Un alias racine reste donc servi, et hors
+de ces règles, pendant TOUTE sa fenêtre de retrait (180 jours par défaut,
+`FENETRE_DE_RETRAIT_JOURS`).
+
+**Une entrée montée avec un préfixe vide déclare donc DEUX choses, pas une** : pourquoi
+elle vit à cette adresse (déjà exigé par `RouteRegistrationEntry.prefix`, qui est requis)
+et **ce que cette adresse ne reçoit pas**. Écrire la première sans la seconde est le
+défaut fermé par #4367 — le commentaire de `voice-analysis-legacy-alias`
+(`routes/index.ts`) en est le modèle.
+
+Ancrer une règle sur `/api` sans y nommer les adresses racine SERVIES est le défaut
+symétrique. Deux règles vivent aujourd'hui dans le dépôt, à vérifier avant d'en écrire
+une troisième :
+
+| règle | ancrage | ce qu'elle fait des adresses racine |
+|---|---|---|
+| routage de production (Traefik, `docker-compose.{prod,staging}.yml`) | **HÔTE** — `Host(gate[.staging].meeshy.me)` → `gateway:3000` | les sert, tous chemins : il n'y a pas de porte `/api` à franchir |
+| routeur LAN de développement `gateway-ip` (`docker-compose.local.yml`) | **CHEMIN** — `Host(192.168.1.171) && PathPrefix('/api')` | ne les prend PAS : elles tombent chez `frontend-ip`, qui n'a pas de `PathPrefix` |
+| `ROUTES_SURVEILLEES` (`services/route-usage.service.ts`, #4275) | **CHEMIN** — 57 entrées (2026-08-30), toutes `/api/v1/` | les compte dans la table brute, ne les MATÉRIALISE pas dans la portée `watched` |
+
+Les `handle /api/*` du `Caddyfile` et les `location /api/` des quatre confs nginx qui
+relaient vers la passerelle (`default.conf`, `dev.conf`, `production.conf`,
+`ssl-optimized.conf`) décrivent une topologie mono-hôte que ce dépôt **ne déploie pas** :
+Caddy n'est référencé par aucun compose, trois de ces confs sont sur la liste de
+suppression de `scripts/cleanup-production.sh` et la quatrième n'est référencée nulle
+part. La seule conf nginx réellement montée est `static-files.conf`, qui sert
+`static.meeshy.me` et ne relaie rien vers la passerelle. Ne pas les lire comme des règles
+vivantes.
+
+Témoin : `src/__tests__/route-manifest/unprefixed-mounts.ts` fige les modules montés sans
+préfixe (5 modules, 22 routes) et rougit si l'un rejoint la racine sans décision écrite,
+ou si une décision `hors-api` ne dit pas sa conséquence de périmètre. Il complète, sans
+le doubler, `no-routes-outside-api-v1.ts` — celui-ci balaie les CHEMINS servis, celui-là
+les MONTAGES qui décident de l'adresse.
+
 ## Service Pattern
 ```typescript
 export class ServiceName {
@@ -238,13 +342,16 @@ P2025 → NotFoundError
 
 ## Rate Limiting
 - Global: 300 req/min per IP
-- Messages: 20/min per user
 - Mentions: max 50 per message, 5/min per recipient
+- Contact identifiers (#8104): `POST /users/me/contacts/match`, `POST /users/me/contacts/sync` and `PUT`/`PATCH /directory/contacts` share ONE bucket per account counted in submitted IDENTIFIERS (phones + emails + usernames), not requests — 20 000/hour and 50 000/day (`utils/contact-identifier-budget.ts`). A 5 000-contact book at 3 identifiers each passes in 2 000-contact batches; a repeated sweep gets `429 CONTACT_IDENTIFIER_BUDGET_EXCEEDED`
+- Discoverability (#8104): `hideProfileFromSearch` is honoured by EVERY identifier → account resolution (contacts match/sync/directory read, `/users/email/:email`, `/users/phone/:phone`, `/users/search`, `/directory/people`, mention directory) through ONE law, `services/profile-discoverability.ts` — hidden unless self or accepted friend, fail-closed
 - Status updates: throttled to once per 5 seconds
+- No per-account cap on message sending: `registerMessageRateLimiter` (20/min) had no production caller and was removed by #4687 — the global 300 req/min limiter is the only guard on `POST /messages`
 
 ## Response Format
+Producteur unique : `sendSuccess()`/`sendError()` (`utils/response.ts`), forme déclarée par `errorResponseSchema` (`packages/shared/types/api-schemas/error.ts`) — voir § « Un schéma d'ERREUR se confronte à l'enveloppe » plus bas, ne pas la reproduire ici (#4884). `error` est une CHAÎNE PLATE :
 ```typescript
-{ success: boolean, error?: { code, message }, data?: T, meta?: { total, page, limit } }
+{ success: boolean, error?: string, message?: string, code?: string, data?: T, pagination?: PaginationMeta }
 ```
 
 ## Logging
@@ -282,9 +389,30 @@ GET /api/v1/static/:filename   (JWT-protected)
   avale ses erreurs » : c'est une propriété du collaborateur, pas une garantie du site
   d'appel — et elle est fausse dès que le callee a UNE instruction non gardée avant son
   propre `.catch`. Cf. `tasks/lessons.md` § Leçon 230.
+  **En CLIQUET depuis le cycle 130 bis** : `src/__tests__/detached-promise-catch-sweep.ts`,
+  inventaire VIDE. La règle était écrite, motivée, et commentée sur place partout où
+  elle était appliquée — et le balayage a rendu **quatorze** contre-exemples de
+  production, dont deux à cinquante lignes d'un de ces commentaires. Une règle ne se
+  propage pas depuis son énoncé : elle vaut là où quelqu'un l'a récitée. Quand le
+  cliquet tombe, la réparation est le `.catch`, jamais une ligne d'inventaire — il n'y
+  a pas de promesse détachée non gardée légitime à porter. Cinq des quatorze vivaient
+  dans un `setTimeout`, la forme la plus chère : aucun `try/catch` englobant à
+  invoquer, et un rappel qui se déclenche longtemps après la requête qui l'a armé.
+  Cf. `tasks/lessons.md` § Leçon 307.
 - Audio pipeline only via WS `message:send-with-attachments` (not REST)
 - MessageTranslationService emits `translatedAudio` (singular) - check data shape
 - Anonymous users have NO encryption
+- **Un lecteur SANS compte se désigne par sa CLÉ DE LECTEUR, jamais par son jeton (#10483).**
+  `readerKeyOf()` (`services/posts/readerKey.ts`) = `HMAC-SHA256(READER_KEY_HMAC_SECRET,
+  participant:<id> | token:<valeur>)` en hex 64 : c'est la seule chose qu'une ligne ou un
+  seau de débit garde d'un invité de lien ou d'un visiteur (`visitor_<uuid>`). La valeur de
+  X-Session-Token est un CREDENTIAL pour un invité : elle ne s'écrit nulle part.
+  `READER_KEY_HMAC_SECRET` est obligatoire en production ET en staging (`NODE_ENV=production`) —
+  la passerelle refuse de démarrer sans elle (`loadConfiguration`) ; distincte par environnement,
+  jamais tournée (chaque lecteur serait recompté). Ses vues et impressions entrent dans
+  `viewCount` / `impressionCount` (parts `anonymousViewCount` / `anonymousImpressionCount`)
+  sous la garde de LECTURE anonyme `readServableToAnonymous` : on ne compte que ce qu'un
+  anonyme peut lire. Décision : `decisions/2026-10-13-chaque-affichage-est-compte-avec-ou-sans-compte-10483.md`.
 - Admin audit trail required for all admin actions
 
 ## Tests — un témoin qui ne peut pas tomber n'est pas un témoin
@@ -366,7 +494,7 @@ Pagination is emitted at the ROOT of the response, NOT under `meta` — both
 `pagination` as a top-level key, and the iOS/web decoders read it there. This
 line used to state the opposite, which no route could satisfy while using the
 mandated helper.
-Errors under `error: { code, message }`, NOT `error: "string"`.
+Errors are `sendError(reply, statusCode, error, { message?, code?, violations?, details? })` — `error` and `code` are SIBLING top-level strings, NOT `error: { code, message }`. See § « Un schéma d'ERREUR se confronte à l'enveloppe » below and `errorResponseSchema` (`packages/shared/types/api-schemas/error.ts`), the single source for this shape (#4884).
 
 ### Language Resolution
 ALWAYS use `resolveUserLanguage()` from `@meeshy/shared` for language resolution.
@@ -412,30 +540,82 @@ ne sert ces deux champs bruts — le gate porte les préférences
 (`showOnlineStatus` / `showLastSeen`), la désactivation de compte, et le blocage
 bidirectionnel, qu'aucune route ne rejoue à la main.
 
-Deux régimes, et la question qui les départage : **le lecteur a-t-il un DROIT sur
-cette donnée, ou seulement un lien qu'il a posé tout seul ?**
+**UN régime, la directive du 2026-08-25** (`decisions.md`, « Visibilité de la
+présence ») : la présence d'un utilisateur n'est servie qu'à **lui-même**, à
+**ADMIN/BIGBOSS**, et à un **ami ACCEPTÉ** (`FriendRequest.status = accepted`) —
+et pour l'ami, selon les préférences de la cible (`showOnlineStatus` /
+`showLastSeen`). Tout le reste est MASQUÉ :
 
-| régime | méthode | pour |
-|---|---|---|
-| STRICT | `resolveForTargets` / `resolveForTarget` | découverte : recherche d'utilisateurs, répertoire, profil. Le lien est unilatéral et non vérifié — n'importe qui inscrit n'importe quel numéro dans son téléphone |
-| contexte acquis | `resolvePrefsOnly` | co-participants d'une conversation, co-membres d'une communauté : les DEUX parties ont posé le lien. Seules les préférences s'appliquent |
+- **MODERATOR est un lecteur ordinaire** — aucun bypass (`isGlobalAdmin`, plus
+  `isGlobalModerator`) ; AUDIT, ANALYST, USER, AGENT idem.
+- **« Affilié » (parrainage) ne compte pas**, ni un contact téléphone importé :
+  un lien posé d'un seul côté n'est pas une relation.
+- **Partager une conversation ou une communauté ne donne RIEN** — le « contexte
+  acquis » (co-participant, co-membre) n'existe plus comme critère.
+  `sharesConversation` est retiré du type d'entrée de la loi ; y revenir ne
+  compile pas.
+- **Anonyme / non authentifié** (viewer `null`) : masqué.
 
-Le viewer se lit par `viewerFromRequest(request)` (`routes/users/presence-gate.ts`) —
-jamais depuis `AuthenticatedRequest`, dont le champ `registeredUser` est typé
-`boolean` alors que la production y met un objet.
+Le seul signal qu'un non-ami reçoit encore est l'ACTIVITÉ — frappe
+(`typing:start`), message envoyé — qui voyage par ses propres événements
+Socket.IO, jamais par ce résolveur.
+
+**Une seule méthode, toujours avec le viewer** : `resolveForTarget(viewer, target)`
+/ `resolveForTargets(viewer, ids)`. La résolution AVEUGLE au viewer
+(« préférences seules », `resolvePrefsOnly`) est **SUPPRIMÉE, pas dépréciée** —
+une garde de source (`__tests__/unit/presence-visibility-viewer-aware-guard.test.ts`)
+rougit si l'identifiant réapparaît sous `services/gateway/src/`,
+`packages/shared/utils` ou `packages/shared/types`, défini, appelé ou seulement
+cité ; elle prouve d'abord qu'elle balaie bien ces trois racines (une garde
+négative dont le balayage rend `[]` reste verte). Le viewer se lit par
+`viewerFromRequest(request)` (`routes/users/presence-gate.ts`) — jamais depuis
+`AuthenticatedRequest`, dont le champ `registeredUser` est typé `boolean` alors
+que la production y met un objet.
 
 **Un paramètre `viewer` est REQUIS, jamais optionnel** : un appelant sans viewer
 passe `null`, ce qui MASQUE. Une porte de confidentialité échoue en montrant
-moins, jamais en montrant plus. Même règle sur la carte rendue par
-`resolveForTargets` : **un id ABSENT vaut masqué**, jamais brut.
+moins, jamais en montrant plus.
+
+**Une entrée ABSENTE de la carte vaut masquée, sauf pour ADMIN/BIGBOSS.**
+`resolveForTargets` rend une entrée par id passé ; une entrée absente désigne
+une cible SANS COMPTE (participant anonyme, pas de `userId`) — ou une anomalie.
+Son sort ne se décide pas au site : `presenceMissingEntryPolicy(viewer)` rend
+`'reveal'` pour ADMIN/BIGBOSS et `'hide'` pour tout autre lecteur — dérivé de la
+loi partagée (`resolvePresenceVisibility` appliquée à l'entrée qu'elle aurait
+reçue), pas redéclaré — et `presenceFor(viewer, carte, userId)` sert la
+visibilité d'un id sans jamais rendre `undefined`. L'idiome
+`vis.get(id)?.showOnline === false ? false : x` est INTERDIT : un `undefined`
+laissé passer révèle l'inconnu à tout le monde (`core.ts` le faisait pour un
+inscrit non résolu, avant `presenceFor`).
 
 Le collapse « visibilité résolue → champs servis » ne se réécrit pas à la main.
 Deux applicateurs partagés, et le schéma de la route choisit :
 `applyPresenceVisibility` (`isOnline: null`, pour un schéma nullable) et
 `applyPresenceVisibilityAsOffline` (`isOnline: false`, pour `userMinimalSchema`
 et `contacts-schemas`, qui le déclarent `type: 'boolean'`). Le second prend
-`{ onMissingEntry: 'hide' | 'reveal' }` — le défaut `'hide'` sert le régime
-strict, `'reveal'` le régime prefs-only (voir les défauts opposés plus bas).
+`{ onMissingEntry }`, à alimenter par `presenceMissingEntryPolicy(viewer)` — le
+défaut `'hide'` est le bon pour tout lecteur non-ADMIN. Son type de retour dit
+ce qu'il fait : `lastActiveAt` sort en `Date | null` dès que le profil le porte
+(`PresenceAsOffline<T>`), même si l'entrée l'excluait — `PublicUser` le déclare
+nullable pour cette raison.
+
+**Un participant sérialisé passe par `serializeConversationParticipant`
+(`packages/shared/utils/participant-helpers.ts`) avec
+`presence: presenceFor(viewer, carte, userId)`.** La fabrique FERME par défaut :
+sans visibilité fournie, elle sert `isOnline:false` / `lastActiveAt:null`, jamais
+la colonne. Un appelant qui oublie l'option masque ; il ne fuit pas.
+
+**Une SÉLECTION ou un ORDRE qui dépend de la présence révèle autant que le
+champ.** Filtrer `?onlineOnly=true` en base puis masquer `isOnline` livrait à un
+non-ami la liste exacte des membres en ligne — l'APPARTENANCE à la page était la
+fuite ; trier `isOnline: 'desc'` en base puis masquer laissait lire la présence
+dans la POSITION. La sélection ne porte que sur les ids dont le viewer a le
+DROIT de connaître l'état (`onlineOnlyScope`, `conversations/participants.ts` :
+tout pour ADMIN/BIGBOSS, soi ∪ amis acceptés sinon, vide pour un anonyme), et
+l'ordre par présence brute n'est demandé à la base que si
+`mayOrderByRawPresence(viewer)` — sinon la page se lit sans clé de présence,
+puis se stabilise APRÈS la porte sur ce qui est SERVI (`servedOnlineFirst`,
+`presence-gate.ts`).
 
 **Une amitié acceptée n'est PAS un laissez-passer.** `areConnected` ouvre la
 porte, il ne dispense pas de `showOnlineStatus` — la politique pure masque quand
@@ -458,26 +638,27 @@ assertaient tous les trois que le `select` DEMANDE les champs, aucun sur ce que
 le handler en FAIT, et le défaut vivait dans l'espace exact entre les deux
 (cycle 83). **Un témoin de confidentialité assert sur la VALEUR SERVIE.**
 
-**Le régime peut se trancher par LIGNE, pas seulement par route.** Sur une page
-de stories, `PUBLIC` ne prouve aucun lien (`buildPostVisibilityOrFilter` la sert
-sans condition d'audience) ⇒ strict ; `FRIENDS` / `EXCEPT` / `COMMUNITY` /
-`ONLY` en prouvent un ⇒ `resolvePrefsOnly`. Un régime unique s'y trompe dans les
-deux sens. Et un sujet qui prouve le lien par UNE ligne de la page le prouve
-pour toutes. Voir `PostFeedService.resolveStoryAuthorPresence`.
+**Un LIEN n'est pas une AMITIÉ.** Sur une page de stories, une ligne `FRIENDS` /
+`EXCEPT` / `COMMUNITY` / `ONLY` prouve que l'auteur a CHOISI son audience — un
+lien — et le régime « à deux vitesses » qui en déduisait « préférences seules »
+pour tout auteur ainsi prouvé a été SUPPRIMÉ avec la directive : la présence ne
+se déduit d'aucune audience. `PostFeedService.resolveStoryAuthorPresence` passe
+chaque auteur par `resolveForTargets(viewer, ids)`, sans exception par ligne.
 
 **Attention aux commentaires qui ÉNUMÈRENT une règle au lieu de la citer** : la
 note de `storyAuthorSelect` listait trois audiences gatées et omettait `PUBLIC`,
 la seule qui ne l'est pas. Fausse nulle part, incomplète là où l'incomplétude
 valait autorisation — c'est elle, pas le code, qui a tenu la porte ouverte.
 
-**Les deux régimes ont des défauts OPPOSÉS sur une carte incomplète, et les deux
-ont raison.** Strict (`resolveForTargets`) : un id non rendu vaut MASQUÉ — le
-résolveur rend une entrée par id, donc un manquant est une anomalie, et une
-porte de confidentialité refuse par défaut. Prefs-only (`resolvePrefsOnly`) : un
-id manquant est NORMAL — les participants anonymes n'ont pas de `userId`, donc
-pas de préférences, et restent visibles ; seule une préférence **explicitement**
-négative masque, d'où l'idiome `vis.get(id)?.showOnline === false ? false : x`
-(`participants.ts`, la référence). Ne jamais « simplifier » l'un vers l'autre.
+**Une carte incomplète a UN sort, et il se décide par le VIEWER, pas par le
+site.** Tant que deux régimes coexistaient, un id manquant valait masqué sous
+l'un et visible sous l'autre — et l'idiome
+`vis.get(id)?.showOnline === false ? false : x` (« seule une préférence
+explicitement négative masque ») était la référence du second. Il est désormais
+une FUITE : un participant anonyme n'a pas de `userId`, donc jamais d'entrée, et
+cet idiome le révélait à tout lecteur. La règle unique est celle du
+§ « entrée ABSENTE » plus haut — `presenceFor` / `presenceMissingEntryPolicy`,
+révélé à ADMIN/BIGBOSS seuls.
 
 **Un audit qui liste des `select:` ne liste pas des fuites.** Entre la requête et
 le fil il y a un sérialiseur : au cycle 84, deux des trois portes examinées ne
@@ -534,7 +715,11 @@ garde n'avait aucun endroit unique où être posée.
 est cette source unique. Elle ferme deux pièges par construction :
 
 1. **La présence ne peut sortir qu'à travers son paramètre de visibilité** — pas
-   de champ à recopier, donc pas de champ à oublier.
+   de champ à recopier, donc pas de champ à oublier. Et le paramètre FERME par
+   défaut (`showOnline === true` pour servir, sinon `false` / `null`) : la
+   fabrique avait d'abord été écrite « absente ⇒ révèle », ce que ses trois
+   appelants compensaient chacun chez eux par `presenceFor` — le quatrième
+   aurait fui.
 2. **`role` porte DEUX taxonomies.** `Participant.role` est le rang DANS LA
    CONVERSATION (`creator|admin|moderator|member`) ; le schéma déclare le rôle
    GLOBAL (`USER|ADMIN|…`). Le rang brut servait donc `member` là où le contrat
@@ -544,13 +729,13 @@ est cette source unique. Elle ferme deux pièges par construction :
 à la main est exactement ce qui a produit l'écart — une règle qui doit être
 retapée à chaque site est une règle qu'un site finira par ne pas avoir.
 
-**Une même route peut relever des DEUX régimes, décidés par son contrôle
-d'accès.** `GET /communities/:id/members` ne referme que les communautés
-PRIVÉES : sur une publique, elle répond à un non-membre, et devient une porte de
-découverte. Le régime s'y choisit donc par LECTEUR — `hasAccess` ⇒ prefs-only,
-sinon strict — avec le `onMissingEntry` correspondant. Lire le contrôle d'accès
-avant de choisir le régime : « c'est une route de communauté » ne suffit pas
-(cycle 85-bis).
+**Le contrôle d'accès borne qui ENTRE, jamais ce qu'on sert de la présence.**
+`GET /communities/:id/members` ne referme que les communautés PRIVÉES ; tant que
+deux régimes existaient, `hasAccess` y choisissait « préférences seules » pour
+un membre et strict pour un non-membre (cycle 85-bis). Depuis la directive, la
+co-appartenance ne vaut rien : la route passe TOUTES ses lignes par
+`resolveForTargets(viewer, ids)`, et `hasAccess` ne gouverne plus que la liste.
+Le seul régime est le strict ; la seule variable est le viewer.
 
 ## Un fichier `X.ts` à côté d'un répertoire `X/` : lequel est chargé ?
 
@@ -869,7 +1054,10 @@ mettre à jour un texte, pas publier un secret.
 
 Et rien n'interdit d'éditer un message protégé (mesuré : `messageEditAdmission`
 et `messageEditContent` ne portent aucune occurrence de `isViewOnce`,
-`isBlurred`, `effectFlags` ni `expiresAt`).
+`isBlurred`, `effectFlags` ni `expiresAt`). Depuis #12792, la vue unique et le
+message chiffré refusent l'édition (`editContentRefusal`, loi partagée) ; un
+message FLOUTÉ ou ÉPHÉMÈRE reste éditable, et les relectures ci-dessous restent
+nécessaires.
 
 ### Une garde de confidentialité se relit CHEZ ELLE, pas dans ses paramètres
 
@@ -1079,18 +1267,40 @@ tour, et en cliquet :
 `routes/__tests__/response-payload-mismatch.ts`, gardé par
 `response-payload-mismatch.test.ts` (cycle 91 bis).
 
-Il apparie chaque bloc `response:` avec les `sendSuccess(reply, { … })` qui le
+Il apparie chaque bloc `response:` avec les `sendSuccess(reply, …)` qui le
 SUIVENT — le gestionnaire d'une route vit entre son schéma et le schéma suivant
-— et compare les jeux de clés : `total` (aucune clé envoyée n'est déclarée ⇒
-`data` sort à `{}`) contre `partial` (les clés supprimées, nommées). Il ne
-conclut jamais au vide quand la charge porte un `...spread`, qui peut apporter
-les clés déclarées.
+— et rend TROIS formes : `envelope` (le statut 2xx déclare des `properties` où
+`data` ne figure pas ⇒ la charge ENTIÈRE est supprimée, la réponse part à
+`{"success":true}`), `total` (`data` est déclaré, aucune clé envoyée n'y figure
+⇒ `data` sort à `{}`) et `partial` (les clés supprimées, nommées).
 
-Sa limite, assumée : `sendSuccess(reply, maVariable)` lui échappe — remonter
-jusqu'à la variable demanderait un typeur, pas un balayage.
+Il lit DEUX formes de charge utile : le littéral, et la **variable locale** que
+le handler compose sous ses propres yeux (`const p = { … }`, ou le reste d'une
+déstructuration `const { success: _s, ...p } = result`). C'est l'élargissement
+de #4192, et il n'est pas cosmétique : la limite d'avant — « un
+`sendSuccess(reply, maVariable)` lui échappe, et c'est assumé » — était écrite
+dans un doc-comment, donc INCAPABLE DE ROUGIR, et #4139 y a vécu en entier.
+Mesuré : sur le `password-reset.ts` d'avant le correctif a62555bb15, la sonde
+d'avant rend `[]`, celle d'après nomme les quatre schémas fautifs.
 
-**`FROZEN_MISMATCHES` est VIDE depuis le cycle 92 bis**, et c'est un état à défendre,
-pas un état atteint. Son dernier site — l'invitation — y a été gelé un cycle
+Un jeu de clés est OUVERT dès qu'il porte un `...spread`, qu'il vienne du
+littéral, du reste d'une déstructuration (`result` est un objet INCONNU) ou
+d'une mutation de la variable avant l'envoi : sur un jeu ouvert, l'outil ne
+conclut JAMAIS à `total`. Il se tait de même sur un schéma OUVERT (`200: ref`,
+`{ ...enveloppe }`, `additionalProperties` non `false`) et sur
+`sendSuccess(reply, undefined | null)`, qui n'écrit aucune clé `data`.
+
+Sa limite qui SUBSISTE, redite parce qu'une limite qu'on déplace sans la redire
+redevient un angle mort silencieux : il ne résout QUE ce que le handler déclare
+lui-même — un appel de fonction, un import, un paramètre, une variable de module
+ou un ternaire laissent la charge inconnue, et il se TAIT plutôt que de deviner.
+Elle a une TAILLE, et c'est ce qui la rend actionnable : sur `routes/` au moment
+de #4192, 268 charges littérales, 124 par variable — 20 vides, 14 résolues, et
+**90 hors de portée**. « Une limite assumée » sans chiffre ne dit pas s'il y a
+un trou d'un site ou de quatre-vingt-dix.
+
+**`FROZEN_MISMATCHES` a été VIDE du cycle 92 bis à #4192**, et c'est un état à
+défendre, pas un état atteint. Son dernier site — l'invitation — y a été gelé un cycle
 entier PAR DÉCISION, le temps que son gate de présence soit prêt. Quand le
 cliquet tombe : ouvrir l'ÉMETTEUR (le seul discriminant, cycle 91 bis) avant de
 geler quoi que ce soit, et ne geler que ce qu'une raison ÉCRITE justifie de
@@ -1179,7 +1389,7 @@ du désaccord* ci-dessous.
 **État de l'inventaire** : les sites de niveau `data:` (charge utile ENTIÈRE) et
 les cinq sites de PRÉSENCE sont corrigés ; les onze schémas d'ERREUR écrits à la
 main sont repris au cycle 89 ; les quatre `analysis` de `voice-analysis.ts` au
-cycle 90, avec la PANNE qu'ils recouvraient ; les trois de `voice/translation.ts`
+cycle 90, avec la PANNE qu'ils recouvraient ; les trois de `routes/attachments/translation.ts`
 au cycle 91, avec la TRONCATURE que portait la forme « juste » du même fichier ;
 les trois enveloppes fantômes au cycle 88 bis.
 
@@ -1321,16 +1531,19 @@ Conséquences, dans les deux sens :
   enveloppe qui passait entière TRONQUE ce qui marchait. Le faire avec la liste
   complète des champs servis, ou pas du tout.
 
-### Le régime se lit dans le `where`, pas dans le contrôle d'accès
+### Le `where` dit qui SORT — plus quel régime de présence s'applique
 
-Le contrôle d'accès borne qui ENTRE ; la requête borne ce qui SORT — et c'est la
-seconde qui décide du régime de présence. Sur
-`GET /communities/:id/conversations`, l'accès ne referme que les communautés
-PRIVÉES (ce qui appellerait le strict), mais le `where` porte
-`participants: { some: { userId } }` : la route ne rend que les conversations
-dont l'appelant est lui-même participant, donc tout profil servi est un
-CO-PARTICIPANT ⇒ `resolvePrefsOnly`, sans condition. Choisir sur le contrôle
-d'accès aurait retiré des pastilles légitimes (cycle 88).
+Le contrôle d'accès borne qui ENTRE ; la requête borne ce qui SORT. Au cycle 88,
+la seconde décidait encore du régime de présence : sur
+`GET /communities/:id/conversations`, le `where` porte
+`participants: { some: { userId } }`, donc tout profil servi est un
+CO-PARTICIPANT, et la route servait « préférences seules » sans condition. La
+directive du 2026-08-25 a retiré la co-participation des critères : la route
+passe aujourd'hui par le strict comme les autres (`resolveForTargets` avec le
+viewer, `communities/member-presence.ts`), et les pastilles que le cycle 88
+préservait ne sont légitimes que pour un ami accepté. La leçon de MÉTHODE
+survit — lire le `where` avant de raisonner sur ce qu'une route sert — le
+verdict de présence, non.
 
 ### Un schéma d'ERREUR se confronte à l'enveloppe, pas à l'intuition
 
@@ -1355,6 +1568,11 @@ Les deux étaient déjà utilisés à quelques lignes des blocs fautifs, dans le
 mêmes fichiers. **C'est outillé et en cliquet depuis le cycle 92** —
 `routes/__tests__/error-schema-sweep.ts`, inventaire VIDE : il n'y a pas de dette
 d'erreur légitime à porter, la forme juste étant toujours la même constante.
+Le producteur lui-même (`sendError`) est confronté au même schéma partagé par
+`utils/__tests__/response.test.ts` § « sendError sert une forme ⊆
+errorResponseSchema, et réciproquement » (#4884) — un cliquet complémentaire à
+`global-error-handler-field-closure-guard.test.ts`, qui ne tient que le
+gestionnaire global.
 
 ### La troisième forme : une clé du MAUVAIS TYPE est COERCÉE, pas supprimée
 
@@ -1394,7 +1612,7 @@ déclaration qui dit **faux** — et une déclaration fausse tronque exactement
 comme un objet nu vide, sans qu'aucun outil ne la signale, puisqu'elle porte
 des `properties`.
 
-Cas mesuré (cycle 91) : `routes/voice/translation.ts` portait trois
+Cas mesuré (cycle 91) : `routes/attachments/translation.ts` portait trois
 `attachment: { type: 'object' }` nus **et**, trois cents lignes plus bas, la
 forme « juste » qu'on aurait voulu leur copier. Elle déclarait les six champs du
 producteur COURT (`translateAttachment`) sur une route qui sert le producteur
@@ -1672,9 +1890,18 @@ dépôt, et un cliquet ment plus longtemps qu'un journal.
 
 ### Ce qui reste, à sa taille
 
-Deux familles sur douze valident à la main. Écart de CONSISTANCE, pas de
-couverture : les gardes sont réelles et lisibles. La question utile n'est pas
-« sont-elles gardées ? » mais « la douzième famille le sera-t-elle ? ».
+Deux familles sur douze validaient à la main. Écart de CONSISTANCE, pas de
+couverture : les gardes étaient réelles et lisibles. La question utile n'était
+pas « sont-elles gardées ? » mais « la douzième famille le sera-t-elle ? ».
+
+**SOLDÉ.** `AttachmentReactionHandler` (itération 280) puis `LocationHandler`
+(itération 281) ont rejoint la frontière Zod partagée. Les DOUZE familles
+valident désormais par `validateSocketEvent`. `LocationHandler` exprime ses
+bornes de coordonnées et de durée en Zod pur (`z.number().min().max()`,
+`.gt(0).max(480)`) — `_validateCoordinates` est retiré — et `location:live-stop`
+a reçu sa première garde de frontière (`SocketLocationLiveStopSchema`). Les
+messages métier (`'Invalid coordinates'`, `'Invalid duration (must be 1-480
+minutes)'`) remontent sous le préfixe unifié `'Validation failed: …'`.
 
 ### Et pourtant le CAST, lui, effaçait les DEUX sens
 
@@ -1848,8 +2075,9 @@ disjoints, savoir lequel s'applique :
 - L'étape « Type-check » de `.github/workflows/ci.yml` a porté
   `continue-on-error: true` jusqu'au cycle 105 bis, qui l'a SCINDÉE : les trois
   packages TypeScript à zéro erreur (`shared`, `gateway`, `agent`) sont
-  désormais BLOQUANTS ; `apps/web`, qui en porte 1241, passe par un cliquet
-  chiffré (`scripts/check-type-debt.sh`).
+  désormais BLOQUANTS ; le legacy `apps/web`, qui en portait 1241, passait par
+  un cliquet chiffré, retiré avec lui (#7668). L'application web qui a pris son
+  chemin est dans l'étape bloquante, à zéro erreur.
 
 Noter les codes IGNORÉS par `ts-jest` : `2322` et `2345` sont exactement ceux
 qu'un couple `(événement, charge)` dépareillé produit. **Un témoin ne peut donc
@@ -1938,6 +2166,123 @@ l'inventaire à VIDE. Son discriminant est ÉTROIT par décision — `import typ
 **Quand il tombe** : la réparation est de dériver (`ServerEmitIO`, ou
 `ServerEmitIOWithRooms` si le porteur lit aussi ses rooms), jamais d'ajouter une
 ligne à un inventaire — il n'y a pas de `Server` nu légitime pour émettre.
+
+### La QUATRIÈME forme : la porte est juste, et c'est l'ARGUMENT qu'on caste
+
+Les trois formes ci-dessus décrivent une porte MAL OBTENUE — une signature
+réécrite, un cast du porteur, le `Server` NU pris chez la dépendance. **Leurs
+trois discriminants portent sur le RECEVEUR de `.emit(`.** Aucun ne regarde ce
+qu'on lui PASSE, et c'est par là que deux sites sont passés (#18649, cycle 163) :
+
+```ts
+io?.to(ROOMS.user(userId)).emit(event as never, data as never);   // togetherRelay — porteur `ServerEmitIO`
+emitter.emit(event as keyof ServerToClientEvents, data as any);   // MeeshySocketIOManager
+```
+
+Les deux importent la BONNE porte. `as never` étant assignable à tout, le couple
+`(événement, charge)` n'est confronté **ni sur le nom ni sur la forme** — c'est
+exactement la liberté du `Server` nu du cycle 108, obtenue autrement, donc
+invisible aux deux cliquets, **qui étaient verts**. Les quatre émissions
+d'« Ensemble » voyageaient ainsi hors de tout contrat, sur un canal qui n'a
+aucun sérialiseur pour rattraper l'écart.
+
+> **La règle du cycle 105 vaut de l'ARGUMENT comme elle valait du PORTEUR** :
+> chercher une forme fautive par son NOM de déclaration, c'est manquer tous les
+> sites qui l'obtiennent autrement. Un cliquet qui garde un RECEVEUR ne dit rien
+> de ce qu'on lui remet.
+
+**Et le second site portait un commentaire qui ÉNONÇAIT la contrainte** —
+« event is always SERVER_EVENTS.TYPING_STOP » — sous un cast qui l'empêchait
+d'être vérifiée. C'est une AFFIRMATION (cycle 94) : mesurée vraie, elle devient
+un TYPE (`broadcastFn` déclare `typeof SERVER_EVENTS.TYPING_STOP` et
+`TypingEvent`) et le cast disparaît. Une contrainte qu'on écrit en prose à côté
+du code qui l'annule est le symptôme, pas la documentation.
+
+**Réparer, c'est NARROWER jusqu'au site d'appel, jamais déplacer le cast** : un
+paramètre générique `E extends ServerEventName` porte la corrélation jusqu'où un
+nom CONCRET la vérifie (`emitTo` dans `togetherRelay.ts`), et l'unique effacement
+sanctionné du dépôt reste dans `emitServerEvent`, une fois, documenté sur place.
+
+Cliquet : `sweepErasingEmitArgumentCasts` (`socketio/__tests__/server-emit-door-sweep.ts`),
+inventaire **VIDE**. Son discriminant ne retient que les cibles qui EFFACENT —
+`never`, `any`, `unknown`, `keyof ServerToClientEvents` — **ancrées en fin
+d'argument de premier niveau** :
+
+| forme | compté ? | pourquoi |
+|---|---|---|
+| `event as never` / `data as any` | **oui** | plus aucune confrontation au contrat |
+| `event as keyof ServerToClientEvents` | **oui** | la corrélation s'effondre (cycle 104) |
+| `{ code, message } as CallError` | non | cast vers le type que le canal DÉCLARE — la porte vérifie ensuite |
+| `{ id: id as any }` | non | cast de CHAMP, pas de canal — autre question |
+| un `as any` sur le 3e argument (ack) | non | ni le canal ni la charge |
+
+Le premier relevé, sur « un `as` au premier niveau », rendait **44 sites dont 40
+`as CallError`** : il mesurait la POPULARITÉ d'un idiome, pas une propriété —
+l'erreur du cycle 107, dont le balayage fut JETÉ plutôt que gelé. Narrower le
+discriminant l'a ramené à **4** (deux sites, leurs deux arguments chacun).
+
+**Mesure du lot** : les quatre charges d'« Ensemble » étaient JUSTES contre leurs
+types déclarés — la discipline tenait. Ce lot ne répare donc aucune panne : il
+rend vérifiable ce qui ne l'était pas, et le `tsc` vert APRÈS retrait des casts
+est le résultat, pas l'absence de résultat. Le ROUGE est prouvé dans les trois
+sens (champ inconnu `TS2561`, couple décorrélé `TS2353`, canal étranger `TS2345`).
+
+### La CINQUIÈME forme : le `Socket` NU, jumeau du `Server` NU
+
+Le cycle 108 a fermé le `Server` nu. Son jumeau a la même cause et le même
+effet — sans paramètres de type, socket.io retombe sur `DefaultEventsMap`, donc
+`emit(ev: string, ...args: any[])` — et `sweepRawServerEmitters` ne cherche que
+`Server`. Mesuré le 2026-11-15 (#18655, cycle 164), **un fichier de production**
+tenait le `Socket` nu pour émettre :
+
+```ts
+import { Socket } from 'socket.io';                       // ← nu
+export async function checkSocketRateLimit(socket: Socket, …, errorEvent: string = 'call:error') {
+  socket.emit(errorEvent, { code, message, retryAfter });  // ← `retryAfter` : AUCUN contrat
+}
+```
+
+`CallError` déclare `code`, `message`, `details?`, `callId?`. `retryAfter`
+voyageait à la RACINE, et **aucun des trois clients ne le lit** (toutes les
+occurrences du dépôt sont des chemins HTTP 429). Il vit désormais dans `details`,
+le champ que le contrat porte pour cela — rétrocompatible, personne ne le lisant
+d'un côté comme de l'autre.
+
+> **Le discriminant du jumeau ne se RECOPIE pas.** Celui de `Server` exige un
+> `import type`, parce que `MeeshySocketIOManager` importe `Server` en VALEUR
+> pour le CONSTRUIRE. **Personne ne construit un `Socket`** — socket.io le remet
+> à un handler — donc les deux formes d'import comptent, et ce n'est pas une
+> généralisation gratuite : le site fautif écrivait `import { Socket }` (valeur),
+> et le discriminant de `Server` recopié tel quel **l'aurait manqué**. C'est la
+> règle du cycle 91, une fois de plus : la forme juste d'à côté s'ouvre contre le
+> cas présent, elle ne se copie pas.
+
+La seconde condition est REPRISE sans changement : **détenir n'est pas ÉMETTRE.**
+`typed-socket.ts` importe `Socket` pour en DÉRIVER `MeeshySocket` ;
+`midSessionRoomAdmission`, `join-user-conversations` et `socket-helpers` le
+déclarent pour lire des rooms ou résoudre un utilisateur. Aucun n'émet, et tous
+sortent par CONSTRUCTION — pas par exemption.
+
+**Le grain est le FICHIER, et c'est une décision** : dans un fichier qui ÉMET,
+toute déclaration `: Socket` nue est relevée, même d'une fonction qui n'émet pas
+— c'est le même socket, et le gouverner de bout en bout est strictement meilleur.
+Trouvé en écrivant la fixture NÉGATIVE, qui mélangeait les deux motifs et
+rougissait : une erreur commise en écrivant un cliquet est le meilleur cas de
+test qu'il aura jamais.
+
+Cliquet : `sweepRawSocketEmitters` (`socketio/__tests__/server-emit-door-sweep.ts`),
+inventaire **VIDE**. Réparation : `MeeshySocket`, jamais une ligne d'inventaire.
+
+**Et ce site était INVISIBLE au balayage du cycle 163**, qui a conclu « 262 sites
+réels, zéro champ non déclaré » : celui-ci exigeait un nom d'événement LITTÉRAL
+pour résoudre le type, et a écarté 9 sites « nom non résolu » sans les ouvrir —
+le nom est ici une variable `string`.
+
+> **« Zéro trouvé » et « zéro existe » ne sont pas la même affirmation.** Un
+> balayage qui écarte ce qu'il ne sait pas résoudre doit PUBLIER ce qu'il écarte,
+> et quelqu'un doit l'ouvrir — sans quoi le chiffre qu'il publie se lit comme une
+> propriété du dépôt alors qu'il n'est qu'une propriété de l'instrument. Même
+> famille que la leçon 261.
 
 ### Un lot peut rendre un contournement INUTILE sans le faire disparaître
 
@@ -2109,9 +2454,22 @@ INCONDITIONNELLEMENT avant de regarder ce qu'elle contient. **Il ne pouvait pas
 rendre `[]`.** Le refus du message dérivé, ancien et gardé par ses propres
 témoins, retirait donc la seule émission qui compte et laissait la liste à 1.
 
-Ce que l'enveloppe seule livre : rien — son unique auditeur (le web) lit
-`data.message` ; iOS et Android n'écoutent que le `message:new` dérivé, celui
-qu'on vient de refuser. Ce que la liste non vide AFFIRME, en revanche, coûte
+Ce que l'enveloppe seule livre : rien — et pour une raison PLUS FORTE que celle
+écrite ici jusqu'au cycle 161. Ce paragraphe lui prêtait « son unique auditeur
+(le web) lit `data.message` » : mesuré, **aucun client ne cite `link:message:new`
+ni sa constante** — ni le web, ni iOS, ni Android (#18342, et le cliquet
+`socket-event-orphan-gate` le tient désormais). L'enveloppe ne livre donc rien à
+PERSONNE ; iOS et Android n'écoutent que le `message:new` dérivé, celui qu'on
+vient de refuser, et le web non plus.
+
+> **Un commentaire qui nomme un CONSOMMATEUR est une affirmation**, au même
+> titre qu'un tri (cycle 86 bis), un compte (cycle 93) ou une contrainte de
+> schéma (cycle 94) — et celle-ci a survécu à la disparition de ce qu'elle
+> décrivait. La conclusion du cycle 114 ne bouge pas (l'enveloppe seule ne
+> livre rien) ; sa PRÉMISSE était fausse, et c'est elle qu'on aurait relue pour
+> décider si l'enveloppe mérite encore d'être émise.
+
+Ce que la liste non vide AFFIRME, en revanche, coûte
 trois signaux (cycle 114) : `count` comptait la remise, `conversationIds` ne
 nommait PAS la conversation (donc rien n'envoyait le client rechercher un
 message qui est pourtant toujours en base), et — `announcesMessageArrival('link-message')`
@@ -2156,6 +2514,38 @@ du tout. Toute la suite `_drainPendingMessages` attestait un drain dont la
 requête d'appartenance aurait levé en production. Le correctif est un double qui
 REFUSE ce que le vrai client refuse (`strictMembership`), et des ids de fixture
 de la forme de production (`convId('kept')`).
+
+**Et la forme impossible peut être un MODÈLE, pas une valeur (cycle 129).**
+`DELETE /me/preferences/categories/:categoryId` détachait ses conversations en
+écrivant sur `ConversationPreference` — le magasin CLÉ/VALEUR générique
+(`key`/`value`/`valueType`), qui ne déclare ni `categoryId` ni aucun lien vers
+une catégorie ; la colonne vit sur `UserConversationPreferences`. Le client
+généré refuse l'appel AVANT tout aller-retour (`PrismaClientValidationError`,
+« Unknown argument `categoryId` »), donc le `$transaction` levait et **aucune
+catégorie de conversation n'a jamais pu être supprimée**.
+
+Ce qui l'a tenu en vie n'est pas l'ignorance. Le double d'une des trois suites
+portait, mot pour mot : *« categories.ts uses prisma.conversationPreference…
+(pre-existing) — keep the surface so the route doesn't crash »*, suivi d'un
+`userConversationPreferences` commenté *« real model name (in case Phase 1 fixes
+the surface) »*.
+
+> **Poser une surface de double pour empêcher une route de tomber, c'est
+> supprimer le seul signal qui la ferait réparer.** Devant tout commentaire de
+> double qui décrit une bizarrerie de production — « pre-existing », « keep the
+> surface », « in case X fixes it » — poser la question du cycle 91 bis : **et
+> c'est bien ?**
+
+Deux mesures qui accompagnent ce cas, et qui valent au-delà :
+
+- **`tsc --noEmit` ne voit pas cette erreur de modèle.** Sous le `tsconfig` réel
+  du gateway (`strict: false`), la ligne EXACTE de production rend `EXIT=0` —
+  alors que la même faute prise ISOLÉMENT (`where: { categoryId }` seul) tombe
+  en `TS2353`. **On ne conclut pas d'un site qu'un gate voit une classe.**
+- **Changer la méthode Prisma qu'un handler appelle oblige à repointer le témoin
+  d'erreur** : celui du DELETE rejetait `$transaction`, que la route n'appelle
+  plus, et passait au vert par le chemin nominal en croyant tenir le chemin
+  d'erreur.
 
 #### Gouverner ce que la file CONTIENT ne dit rien de la façon dont on l'ATTEINT
 
@@ -2453,6 +2843,11 @@ typage, la garde runtime subsistant pour la frontière que le typage ne couvre p
 
 ## Architectural Decisions
 Voir `decisions.md` dans ce rpertoire pour l'historique des choix architecturaux (Fastify, Socket.IO, ZeroMQ, auth unifie, Prisma/MongoDB, Redis fallback, erreurs types, rate limiting, Signal Protocol, logging PII, audio pipeline, push notifications) avec contexte, alternatives rejetes et consquences.
+
+## Pilotage & maturité (règle transverse — détail dans le `CLAUDE.md` racine)
+- **Le pilotage se fait EXCLUSIVEMENT sur GitHub** (projet « Meeshy — pilotage », milestones, issues) : toute tâche de ce répertoire est une issue au titre sémantique, passée `In Progress` au démarrage et fermée par le commit qui la livre (`Closes #n`). Pas de `todo.md`, pas de page « progress » ; les artifacts servent aux brouillons, au design et aux comptes rendus — jamais à l'état.
+- **Chaque feature est portée à maturité sur les treize dimensions** (sécurité, performance, mémoire, fluidité, accessibilité, cohérence de positionnement, facilité d'usage, UX, compatibilité, utilité, maintenabilité, simplicité d'usage, complétude). Ici, les témoins qui comptent d'abord : gardes fail-closed et champs VOISINS relus (sécurité — ce qui part à côté du champ gardé), p95 par route sous charge, maps de connexion et caches BORNÉS (mémoire), schémas de réponse complets (complétude — un schéma sans `properties` efface), UNE source de vérité par règle (maintenabilité), chaque champ ajouté lu par les trois clients (compatibilité).
+- **La complexité se paie dans le code, jamais chez l'utilisateur.** Une lenteur, une saccade, une action sans feedback immédiat sont des bugs, pas de la dette : ils ont au moins la priorité de la feature qu'ils dégradent. Le commentaire de clôture d'une issue dit quelles dimensions sont mûres et ouvre une issue par dimension restante.
 
 ## Quality Gate
 Codex will review your output once you are done. Self-evaluate and ensure consistent, coherent code before marking any task as complete.

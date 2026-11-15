@@ -607,6 +607,101 @@ final class GRDBCacheStoreTests: XCTestCase {
         }
     }
 
+    /// Cycle 4 — `upsert` sur un L1 évincé fabriquait `loadedAt = now` : une
+    /// entrée périmée repassait fraîche et son rafraîchissement sautait.
+    func test_upsert_l1MissWithStaleL2Entry_keepsItStale() async throws {
+        let store = try makeStore(ttl: .hours(1), staleTTL: .minutes(5))
+        try await store.save([CacheTestItem(id: "1", name: "A")], for: "k")
+        await store.debugRewindFetchTimestamp(by: 600, for: "k")
+        await store.flushDirtyKeys()
+        await store.evictL1()
+
+        await store.upsert(item: CacheTestItem(id: "2", name: "B"), for: "k") { $0 + [$1] }
+
+        guard case .stale(let items, _) = await store.load(for: "k") else {
+            return XCTFail("une mutation locale ne rajeunit pas une entrée périmée")
+        }
+        XCTAssertEqual(items.map(\.id), ["1", "2"])
+    }
+
+    /// Une liste née d'un seul `upsert` n'a jamais été chargée : elle se
+    /// revalide, elle ne passe pas pour la liste complète.
+    func test_upsert_onAnEmptyKey_isNotServedAsFresh() async throws {
+        let store = try makeStore(ttl: .hours(1), staleTTL: .minutes(5))
+
+        await store.upsert(item: CacheTestItem(id: "1", name: "A"), for: "neuve") { $0 + [$1] }
+
+        guard case .stale(let items, _) = await store.load(for: "neuve") else {
+            return XCTFail("un seul élément reçu n'est pas une liste fraîche")
+        }
+        XCTAssertEqual(items.map(\.id), ["1"])
+    }
+
+    func test_upsertPatch_l1MissWithStaleL2Entry_keepsItStale() async throws {
+        let store = try makeStore(ttl: .hours(1), staleTTL: .minutes(5))
+        try await store.save([CacheTestItem(id: "1", name: "A")], for: "k")
+        await store.debugRewindFetchTimestamp(by: 600, for: "k")
+        await store.flushDirtyKeys()
+        await store.evictL1()
+
+        await store.upsertPatch(for: "k", itemId: "1") { $0 = CacheTestItem(id: "1", name: "A2") }
+
+        guard case .stale(let items, _) = await store.load(for: "k") else {
+            return XCTFail("une mutation locale ne rajeunit pas une entrée périmée")
+        }
+        XCTAssertEqual(items.first?.name, "A2")
+    }
+
+    // MARK: - #7809 — saveAsStale : un instantané DATÉ ne se sert jamais comme frais
+
+    func test_saveAsStale_newKey_loadsStaleWithItems() async throws {
+        let store = try makeStore(ttl: .hours(1), staleTTL: .minutes(5))
+        let items = [CacheTestItem(id: "1", name: "Instantané NSE")]
+
+        try await store.saveAsStale(items, for: "seed")
+
+        let result = await store.load(for: "seed")
+        guard case .stale(let loaded, _) = result else {
+            return XCTFail("un instantané pris hors réseau doit se peindre ET se revalider — attendu .stale, got \(result)")
+        }
+        XCTAssertEqual(loaded, items)
+    }
+
+    func test_saveAsStale_afterL1Eviction_stillLoadsStaleFromL2() async throws {
+        let store = try makeStore(ttl: .hours(1), staleTTL: .minutes(5))
+        try await store.saveAsStale([CacheTestItem(id: "1", name: "A")], for: "seed")
+        await store.flushDirtyKeys()
+        await store.evictL1()
+
+        let result = await store.load(for: "seed")
+        guard case .stale = result else {
+            return XCTFail("l'horloge datée doit être PERSISTÉE en L2, pas seulement en mémoire — got \(result)")
+        }
+    }
+
+    func test_saveAsStale_overFreshEntry_makesItStale() async throws {
+        let store = try makeStore(ttl: .hours(1), staleTTL: .minutes(5))
+        try await store.save([CacheTestItem(id: "1", name: "réseau")], for: "k")
+
+        try await store.saveAsStale([CacheTestItem(id: "1", name: "instantané")], for: "k")
+
+        guard case .stale(let loaded, _) = await store.load(for: "k") else {
+            return XCTFail("un instantané qui REMPLACE le contenu ne peut pas hériter de la fraîcheur réseau")
+        }
+        XCTAssertEqual(loaded.first?.name, "instantané")
+    }
+
+    func test_save_isUnchanged_stillFresh() async throws {
+        let store = try makeStore(ttl: .hours(1), staleTTL: .minutes(5))
+        try await store.saveAsStale([CacheTestItem(id: "1", name: "A")], for: "k")
+
+        try await store.save([CacheTestItem(id: "1", name: "B")], for: "k")
+
+        guard case .fresh = await store.load(for: "k") else {
+            return XCTFail("save() reste un vrai fetch : il rajeunit l'horloge")
+        }
+    }
+
     func test_update_l1MissWithEvictedEntry_preservesL2LastFetchedAt() async throws {
         let db = try makeDB()
         let store = try makeStore(db: db)

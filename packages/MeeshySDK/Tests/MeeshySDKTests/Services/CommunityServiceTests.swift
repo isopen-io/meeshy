@@ -178,7 +178,7 @@ final class CommunityServiceTests: XCTestCase {
     // MARK: - removeMember
 
     func test_removeMember_callsCorrectEndpoint() async throws {
-        let response = APIResponse<[String: String]>(success: true, data: ["ok": "true"], error: nil)
+        let response = APIResponse(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/communities/comm1/members/user2", result: response)
 
         try await service.removeMember(communityId: "comm1", userId: "user2")
@@ -204,7 +204,7 @@ final class CommunityServiceTests: XCTestCase {
     // MARK: - leave
 
     func test_leave_callsCorrectEndpoint() async throws {
-        let response = APIResponse<[String: String]>(success: true, data: ["ok": "true"], error: nil)
+        let response = APIResponse(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/communities/comm1/leave", result: response)
 
         try await service.leave(communityId: "comm1")

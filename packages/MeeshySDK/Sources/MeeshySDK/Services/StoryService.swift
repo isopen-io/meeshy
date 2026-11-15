@@ -7,10 +7,10 @@ public protocol StoryServiceProviding: Sendable {
     /// le gateway ne renvoie que les stories créées/modifiées depuis ce
     /// timestamp. `nil` = tray complet (comportement historique).
     func list(cursor: String?, limit: Int, updatedSince: Date?) async throws -> PaginatedAPIResponse<[APIPost]>
-    func markViewed(storyId: String) async throws
     func delete(storyId: String) async throws
+    /// #11151 — le retrait de la story d'un AUTRE porte son motif.
+    func delete(storyId: String, reason: String?) async throws
     func react(storyId: String, emoji: String) async throws
-    func comment(storyId: String, content: String) async throws -> APIPostComment
     func repost(storyId: String) async throws
     func cachedPost(id: String) -> APIPost?
     func fetchPost(id: String) async throws -> APIPost
@@ -35,6 +35,11 @@ public protocol StoryServiceProviding: Sendable {
 }
 
 public extension StoryServiceProviding {
+    func delete(storyId: String, reason: String?) async throws {
+        guard reason == nil else { throw APIError.serverError(501, "delete(reason:) not implemented by \(Self.self)") }
+        try await delete(storyId: storyId)
+    }
+
     /// Compat : les call sites historiques (tray complet) restent binaires —
     /// seule l'exigence 3-params est à implémenter par les conformers.
     func list(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
@@ -42,7 +47,7 @@ public extension StoryServiceProviding {
     }
 }
 
-public final class StoryService: StoryServiceProviding, @unchecked Sendable {
+public final class StoryService: StoryServiceProviding, Sendable {
     public static let shared = StoryService()
     private let api: APIClientProviding
 
@@ -52,8 +57,7 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
     // Borné (éviction FIFO via BoundedFIFOMap) et purgé au logout : sans ça
     // les payloads de l'utilisateur A restaient résidents pendant la session
     // de l'utilisateur B.
-    private let cacheLock = NSLock()
-    private var postCache = BoundedFIFOMap<String, APIPost>(capacity: 500)
+    private let postCache = Locked(BoundedFIFOMap<String, APIPost>(capacity: 500))
 
     init(api: APIClientProviding = APIClient.shared) {
         self.api = api
@@ -67,28 +71,22 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
         if let updatedSince {
             queryItems.append(URLQueryItem(
                 name: "updatedSince",
-                value: ISO8601DateFormatter().string(from: updatedSince)
+                value: WireDate.string(from: updatedSince)
             ))
         }
         let response: PaginatedAPIResponse<[APIPost]> = try await api.request(
-            endpoint: "/posts/feed/stories", method: "GET", body: nil, queryItems: queryItems
+            PostsEndpoint.feedStories, method: "GET", body: nil, queryItems: queryItems
         )
         cachePosts(response.data)
         return response
     }
 
-    public func markViewed(storyId: String) async throws {
-        // Le gateway renvoie `{ viewed: true }` — une valeur **Bool**. Décoder en
-        // `[String: String]` faisait échouer le décodage à CHAQUE vue (Bool ≠
-        // String) ; l'exception était avalée par le `catch` silencieux côté
-        // ViewModel, masquant du même coup les vrais échecs réseau (la story
-        // pouvait alors réapparaître non-vue au prochain `list()`). On décode
-        // donc la forme réelle. (2026-06-01)
-        let _: APIResponse<[String: Bool]> = try await api.request(endpoint: "/posts/\(storyId)/view", method: "POST")
+    public func delete(storyId: String) async throws {
+        try await delete(storyId: storyId, reason: nil)
     }
 
-    public func delete(storyId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(storyId)")
+    public func delete(storyId: String, reason: String?) async throws {
+        try await api.deleteRemovingContent(PostsEndpoint.byPostId(postId: storyId), reason: reason)
     }
 
     public func react(storyId: String, emoji: String) async throws {
@@ -97,18 +95,19 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
         // l'utilisateur tapait sur n'importe quel emoji de la palette, le serveur
         // enregistrait toujours un coeur. On envoie maintenant l'emoji explicite.
         let body = LikeRequest(emoji: emoji)
-        let _: APIResponse<[String: String]> = try await api.post(endpoint: "/posts/\(storyId)/like", body: body)
+        let _: APIResponse<DiscardedResponseBody> = try await api.post(PostsEndpoint.byPostIdLike(postId: storyId), body: body)
     }
 
-    public func comment(storyId: String, content: String) async throws -> APIPostComment {
+    /// Interne au module : un commentaire se crée par `CommentPublisher` (#9743).
+    func comment(storyId: String, content: String) async throws -> APIPostComment {
         let body = CreateCommentRequest(content: content)
-        let response: APIResponse<APIPostComment> = try await api.post(endpoint: "/posts/\(storyId)/comments", body: body)
+        let response: APIResponse<APIPostComment> = try await api.post(PostsEndpoint.byPostIdComments(postId: storyId), body: body)
         return response.data
     }
 
     public func repost(storyId: String) async throws {
         let body = RepostRequest()
-        let _: APIResponse<[String: String]> = try await api.post(endpoint: "/posts/\(storyId)/repost", body: body)
+        let _: APIResponse<DiscardedResponseBody> = try await api.post(PostsEndpoint.byPostIdRepost(postId: storyId), body: body)
     }
 
     public func listMine(cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
@@ -117,7 +116,7 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
             queryItems.append(URLQueryItem(name: "cursor", value: cursor))
         }
         let response: PaginatedAPIResponse<[APIPost]> = try await api.request(
-            endpoint: "/posts/stories/mine", method: "GET", body: nil, queryItems: queryItems
+            PostsEndpoint.storiesMine, method: "GET", body: nil, queryItems: queryItems
         )
         cachePosts(response.data)
         return response
@@ -125,7 +124,7 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
 
     public func republish(storyId: String) async throws -> APIPost {
         let response: APIResponse<APIPost> = try await api.request(
-            endpoint: "/posts/\(storyId)/republish", method: "POST"
+            PostsEndpoint.byPostIdRepublish(postId: storyId), method: "POST"
         )
         cachePosts([response.data])
         return response.data
@@ -134,13 +133,11 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
     // MARK: - Single-post cache & fetch
 
     public func cachedPost(id: String) -> APIPost? {
-        cacheLock.lock()
-        defer { cacheLock.unlock() }
-        return postCache[id]
+        postCache.read { $0[id] }
     }
 
     public func fetchPost(id: String) async throws -> APIPost {
-        let response: APIResponse<APIPost> = try await api.request(endpoint: "/posts/\(id)")
+        let response: APIResponse<APIPost> = try await api.request(PostsEndpoint.byPostId(postId: id))
         cachePost(response.data)
         return response.data
     }
@@ -151,28 +148,24 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
 
     public func invalidate(postIds: Set<String>) {
         guard !postIds.isEmpty else { return }
-        cacheLock.lock()
-        for id in postIds { _ = postCache.removeValue(forKey: id) }
-        cacheLock.unlock()
+        postCache.mutate { cache in
+            for id in postIds { cache.removeValue(forKey: id) }
+        }
     }
 
     private func cachePost(_ post: APIPost) {
-        cacheLock.lock()
-        postCache[post.id] = post
-        cacheLock.unlock()
+        postCache.mutate { $0[post.id] = post }
     }
 
     private func cachePosts(_ posts: [APIPost]) {
-        cacheLock.lock()
-        for post in posts { postCache[post.id] = post }
-        cacheLock.unlock()
+        postCache.mutate { cache in
+            for post in posts { cache[post.id] = post }
+        }
     }
 
     /// Purge au logout (cascade `AuthManager.logout`) — isolation des données
     /// entre comptes sur le même device.
     public func reset() {
-        cacheLock.lock()
-        postCache.removeAll()
-        cacheLock.unlock()
+        postCache.mutate { $0.removeAll() }
     }
 }

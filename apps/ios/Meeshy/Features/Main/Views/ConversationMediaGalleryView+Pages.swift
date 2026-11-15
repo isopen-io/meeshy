@@ -1,0 +1,884 @@
+import SwiftUI
+import Combine
+import AVKit
+import MeeshySDK
+import MeeshyUI
+
+// MARK: - Les PAGES du plein écran
+//
+// Extraites de `ConversationMediaGalleryView.swift` (#4014). Elles étaient
+// `private` — donc invisibles hors du fichier — et le deviennent `internal`
+// par la seule mécanique de la découpe, exactement comme les 98 membres du
+// meuble du composer au #4102. Ce n'est pas un relâchement choisi : c'est le
+// prix, et il se paie une fois.
+//
+// Chaque page est PROPRIÉTAIRE de sa transformation (zoom, déplacement) et
+// `Equatable` : c'est le cœur du budget de rendu de la galerie, et la raison
+// pour laquelle les deux vivent ensemble plutôt que dans deux fichiers.
+
+// MARK: - Gallery Image Page (pinch-to-zoom, pan, vertical drag-to-dismiss)
+
+/// Une page image de la galerie, PROPRIÉTAIRE de sa transformation.
+///
+/// C'est le point clé du correctif de fluidité : zoom et déplacement sont un
+/// état LOCAL. Un pincement ne peut donc plus invalider la racine — et par elle
+/// toutes les autres pages réalisées — à la fréquence d'affichage.
+struct GalleryImagePage: View, Equatable {
+    let attachment: MessageAttachment
+    @Environment(\.captureShieldScope) private var captureScope
+    /// **Le cadre de CETTE page**, résolu par `MediaStageFraming` (#6141). La
+    /// page ne calcule aucune cote : elle reçoit celles du plateau, les mêmes
+    /// que l'overlay pose une couche plus haut — c'est ce qui garantit que le
+    /// texte se pose exactement sur l'image et non à côté.
+    let stage: MediaStageFraming.Result
+    /// **L'état d'immersion, pour les GESTES** (#6142). Le cadre en porte déjà
+    /// les cotes, mais la règle du glissement a besoin de l'état lui-même : vers
+    /// le haut, un doigt OUVRE le plein cadre depuis la carte et n'ouvre plus
+    /// rien une fois dedans.
+    let presentation: StagePresentation
+    /// La page visible. Seule l'active répond aux gestes et rend l'image plein
+    /// format en priorité ; les autres se contentent d'être prêtes.
+    let isActive: Bool
+    /// Dans la fenêtre de rendu : rend le média plein format. Hors fenêtre, la
+    /// page ne rend qu'un aperçu léger — le décodage plein format est LIBÉRÉ.
+    let rendersFullPixels: Bool
+    let accessibilityLabel: String
+    /// La page dit par quelle PORTE le doigt est passé ; l'hôte décide ce que
+    /// la porte produit (`onEnterStage`, `+Presentation.swift`). Une page qui
+    /// composerait elle-même l'état ferait une seconde écriture, et la
+    /// distinction des portes deviendrait indécidable.
+    let onEnterStage: (StageEntry) -> Void
+    let onDismiss: () -> Void
+
+    /// Les fermetures ne participent pas : elles n'encapsulent que des actions
+    /// stables (franchir une porte, fermer). Comparer l'identité + les drapeaux
+    /// de position suffit à décider d'un re-rendu.
+    static func == (lhs: GalleryImagePage, rhs: GalleryImagePage) -> Bool {
+        lhs.attachment.id == rhs.attachment.id
+            && lhs.stage == rhs.stage
+            && lhs.presentation == rhs.presentation
+            && lhs.isActive == rhs.isActive
+            && lhs.rendersFullPixels == rhs.rendersFullPixels
+            && lhs.accessibilityLabel == rhs.accessibilityLabel
+    }
+
+    /// Échelle EN COURS de pincement. `committedScale` est celle acquise à la
+    /// fin du geste : sans elle, un second pincement repartait de 1 (le geste
+    /// rend un facteur RELATIF), ce qui faisait sauter l'image.
+    @State private var scale: CGFloat = 1
+    @State private var committedScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var committedOffset: CGSize = .zero
+    /// Un fichier introuvable (404/410/refus) sort de l'état « chargement »
+    /// vers un état dessiné avec « Réessayer » (#8141).
+    @State private var loadPhase = GalleryImageLoadPhase()
+
+    private static let maxScale: CGFloat = 5
+    private static let dismissThreshold: CGFloat = 150
+    /// Aperçu hors fenêtre : la VIGNETTE, décodée à une taille d'affichage
+    /// modeste. Une page à ±2 n'est pas atteignable sans être traversée — elle
+    /// n'a donc aucun pixel à fournir au zoom.
+    private static let previewSize = CGSize(width: 320, height: 320)
+
+    /// Le zoom **COMMIS** : ce que la page garde une fois le pincement fini.
+    /// C'est lui qui décide du déplacement — le pan est un
+    /// `highPriorityGesture` à 1 pt, et l'armer au milieu d'un pincement le
+    /// ferait arbitrer contre la magnification à chaque image.
+    private var isZoomed: Bool { committedScale > 1 }
+
+    /// **Le média est-il transformé MAINTENANT ?**
+    ///
+    /// `committedScale` ne s'écrit qu'en FIN de geste (`zoomGesture.onEnded`).
+    /// Pendant le PREMIER pincement, `scale` bouge déjà pendant qu'il vaut
+    /// encore 1 : l'appui long restait donc armé, et un pincement lent — doigts
+    /// posés ≥ 0,4 s, moins de 10 pt de dérive sur le toucher suivi — franchissait
+    /// la porte du plein cadre au milieu d'un zoom, pause comprise.
+    ///
+    /// La règle partagée dit « un média déjà TRANSFORMÉ a pris le doigt », pas
+    /// « déjà commis » (`MediaStageGestures.longPressArmed`, SDK). Le prédicat
+    /// qu'on lui remet lit donc l'état VIVANT, et le glissement du cadre se
+    /// désarme avec lui : un pincement qui dérive de 30 pt vers le bas n'est pas
+    /// une demande de fermeture.
+    private var isTransformed: Bool { scale > 1 || committedScale > 1 }
+
+    private var thumbnailURL: String? {
+        attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
+    }
+
+    private var hasRenderableSource: Bool {
+        !attachment.fileUrl.isEmpty || thumbnailURL != nil || attachment.thumbHash != nil
+    }
+
+    /// Glyphe d'état-vide décoratif ≥40pt figé (doctrine 74i/86i). Partagé par
+    /// les deux cas « rien à afficher » : aucune source exploitable du tout
+    /// (`hasRenderableSource == false`), et — dans la fenêtre de rendu —
+    /// `FullscreenImageSource.resolve` qui rend `nil` (aucune URL plein
+    /// format malgré une source partielle, ex. thumbHash seul).
+    private var emptyStateGlyph: some View {
+        Image(systemName: "photo")
+            .meeshyScaledFont(MeeshyIconSize.hero)
+            .foregroundStyle(Color.white.opacity(MeeshyOpacity.medium))
+            .accessibilityHidden(true)
+    }
+
+    /// #9574 — la page d'une pièce protégée se rend dans la couche sécurisée ;
+    /// la portée est posée par l'hôte de la galerie.
+    var body: some View {
+        pageBody.captureShield(captureScope.shields(attachment.id))
+    }
+
+    @ViewBuilder
+    private var pageBody: some View {
+        // **Le cadre arrondi** (#6141), et son hors-champ HABILLÉ (#6143) : le
+        // fond est celui du CADRE, pas de l'écran — au-delà de lui c'est le
+        // plateau qui se voit. Il porte le ThumbHash flouté du média quand
+        // celui-ci en a un, le noir sinon.
+        // #10352 — le cadre se plie au conteneur que la page reçoit RÉELLEMENT.
+        FittedMediaStage(stage: stage) { stage in
+            ZStack {
+                MediaStageBackdrop(
+                    source: MediaGalleryStage.backdrop(stage: stage,
+                                                       thumbHash: attachment.thumbHash)
+                )
+
+                if hasRenderableSource, rendersFullPixels, loadPhase.isFailed {
+                    GalleryMediaUnavailableView(onRetry: { loadPhase.retry() })
+                } else if hasRenderableSource {
+                    imageLayer
+                        /*
+                         **LA TAILLE VIENT DU SOLVEUR, PAS D'UN `.aspectRatio`**
+                         (retour porteur 2026-09-13 : « ça zoom trop au point où on
+                         ne voit plus tout le contenu »).
+
+                         `MediaStageFraming.Result` rend DEUX tailles : `frame`, le
+                         cadre, et `media`, le média ajusté par un `aspectFit` dont
+                         le doc-comment promet « jamais de rognage, jamais
+                         d'étirement ». **`media` n'était lu par AUCUNE vue** —
+                         mesuré : zéro occurrence dans tout le dépôt. La loi
+                         calculait juste, et personne ne l'écoutait.
+
+                         Ce qui tenait lieu de contrainte était le
+                         `.aspectRatio(contentMode: .fit)` posé ici. Il ne portait
+                         pas sur l'image : `imageLayer` rend un
+                         `ProgressiveCachedImage`, dont le corps est un `ZStack` de
+                         quatre branches (plein format / vignette / thumbHash /
+                         `Color.clear`). Un `.aspectRatio` sans ratio explicite
+                         déduit celui de la vue qu'il enveloppe — et un `ZStack`
+                         dont une branche est un `Color.clear` n'a pas le ratio de
+                         l'image qu'il montre. Le média se posait donc au cadre, et
+                         en plein cadre — où le cadre EST l'écran — une image très
+                         haute débordait par le haut et par le bas.
+
+                         Reproduit au simulateur avec un témoin 600×2400 portant
+                         trois repères : en mode CADRÉ les trois se voyaient ; en
+                         PLEIN CADRE, « HAUT » et « BAS » disparaissaient et seul
+                         « MILIEU » subsistait.
+                         > Une loi qui calcule une valeur que personne ne lit ne
+                         > protège de rien — et elle est PIRE qu'absente, parce que
+                         > son existence et ses tests donnent l'illusion que la
+                         > question est réglée. `MediaGalleryStageGeometryTests`
+                         > éprouvait `aspectFit` et passait ; le pixel, lui, était
+                         > rogné.
+                         La taille est désormais posée en dur depuis `stage.media`.
+                         Le non-rognage devient une propriété de CONSTRUCTION : le
+                         cadre proposé a exactement le ratio de l'image, donc
+                         `.resizable()` le remplit sans déborder ni déformer. Le
+                         `.aspectRatio` est retiré — le garder ferait deux sources
+                         pour une même décision, dont une inopérante.
+                        */
+                        .frame(width: stage.media.width, height: stage.media.height)
+                        .scaleEffect(scale)
+                        .offset(offset)
+                        .gesture(zoomGesture, including: isActive ? .all : .none)
+                        .highPriorityGesture(panGesture, including: isActive && isZoomed ? .all : .none)
+                        // Sans label, l'image plein écran est un élément VoiceOver muet quand
+                        // on balaie la galerie. Caption si fournie, sinon libellé générique.
+                        .accessibilityLabel(accessibilityLabel)
+                        .accessibilityAddTraits(.isImage)
+                } else {
+                    emptyStateGlyph
+                }
+            }
+            .frame(width: stage.frame.width, height: stage.frame.height)
+            .clipShape(RoundedRectangle(cornerRadius: stage.cornerRadius, style: .continuous))
+        }
+        .contentShape(Rectangle())
+        // **Le glissement appartient au CADRE, pas au média ajusté.** Il était
+        // monté sur `imageLayer`, c'est-à-dire sur la vue déjà `.fit` : il ne
+        // couvrait donc que le média, jamais le hors-champ — alors que le cadre
+        // letterboxe par CONSTRUCTION dès que le plancher de 330 pt mord (une
+        // 16:9 rend ~206 pt de média dans 330 pt de cadre, soit ~124 pt de
+        // bandes). Le haut n'y ouvrait rien et le bas n'y fermait rien, pendant
+        // que l'appui long et les deux taps, montés ici, y répondaient ; et une
+        // page SANS source exploitable ne se fermait plus du tout au doigt.
+        // La page vidéo le monte sur son conteneur depuis #6142 — « la vidéo et
+        // l'image ne peuvent pas répondre différemment au même geste » est une
+        // phrase de son doc-comment, pas une intention.
+        .gesture(stageDragGesture, including: isActive && !isTransformed ? .all : .none)
+        .gesture(longPressGesture, including: longPressArmed ? .all : .none)
+        // **Les deux taps vivent sur la MÊME vue, le double déclaré en
+        // premier** (#6142). Le tap ne bascule plus seulement du chrome : il
+        // emporte le CADRAGE. Laissés sur deux vues distinctes — le double sur
+        // l'image, le simple sur le conteneur — un double tap de zoom aurait
+        // aussi franchi la porte, et le média aurait sauté deux fois. Réunis et
+        // dans cet ordre, SwiftUI diffère le simple le temps de la fenêtre du
+        // double : la latence est le prix, et elle coûte moins cher qu'un
+        // cadrage qui change quand on voulait agrandir.
+        .onTapGesture(count: 2) { toggleZoom() }
+        .onTapGesture { onEnterStage(.tap) }
+        .accessibilityAction(named: Text(String(localized: "a11y.post.media.open.hint", bundle: .main))) { onEnterStage(.tap) }
+        .accessibilityAction(named: Text(String(localized: "a11y.main.gallery.zoomToggle", bundle: .main))) { toggleZoom() }
+        .adaptiveOnChange(of: isActive) { _, active in
+            guard !active else { return }
+            resetTransform()
+        }
+    }
+
+    /// L'URL servie DANS la fenêtre : la variante élue, avec repli sur
+    /// l'original puis sur la vignette. Écrit en retours anticipés — un
+    /// ternaire imbriqué mêlant `String` et `String?` se lit mal.
+    private var fullPixelURL: String? {
+        let selected = GalleryImageSource.fullscreenURL(for: attachment)
+        if !selected.isEmpty { return selected }
+        if !attachment.fileUrl.isEmpty { return attachment.fileUrl }
+        return thumbnailURL
+    }
+
+    /// Hors fenêtre de rendu on ne monte JAMAIS l'URL plein format : c'est ce
+    /// qui borne le nombre d'images décodées vivantes, quel que soit le nombre
+    /// de médias traversés. La bascule se produit à ±2 pages — jamais à
+    /// l'écran, donc jamais visible.
+    ///
+    /// Corrigé (#3895) : `mount == nil` — aucune URL plein format exploitable
+    /// — est géré EXPLICITEMENT (glyphe d'état vide), jamais laissé fuiter en
+    /// `ProgressiveCachedImage(fullUrl: nil)` via l'optional-chaining : sans
+    /// `fullUrl`, le `.task` de chargement n'a jamais rien à charger et le
+    /// placeholder (`ProgressView`) tourne pour toujours. Et tant que le plein
+    /// format n'est pas résident, la vignette SERVEUR (centaines de px) reste
+    /// un étage de CHARGEMENT — jamais l'étage final, `fullUrl` reste le plein
+    /// format forcé — pour ne pas régresser vers un thumbHash ~32px étiré
+    /// plein écran pendant le téléchargement sur lien lent.
+    @ViewBuilder
+    private var imageLayer: some View {
+        if rendersFullPixels {
+            // Feature 3 : plein format NET — résident ⇒ tel quel ; sinon chargé
+            // (forcé, geste manuel), la vignette serveur en fond le temps du
+            // téléchargement, jamais comme étage final.
+            let mount = FullscreenImageSource.resolve(
+                fullURL: fullPixelURL,
+                thumbHash: attachment.thumbHash,
+                isFullResident: fullPixelURL.map(FullscreenImageSource.isResident) ?? false
+            )
+            if let mount {
+                let attempt = loadPhase.attempt
+                ProgressiveCachedImage(
+                    thumbHash: mount.backdropThumbHash,
+                    thumbnailUrl: mount.isResident ? nil : thumbnailURL,
+                    fullUrl: mount.fullURL,
+                    autoLoad: true,
+                    onFullImageFailure: { loadPhase.fail(attempt: attempt) }
+                ) {
+                    ProgressView().tint(.white)
+                }
+                .id(attempt)
+            } else {
+                emptyStateGlyph
+            }
+        } else {
+            ProgressiveCachedImage(
+                thumbHash: attachment.thumbHash,
+                thumbnailUrl: thumbnailURL,
+                fullUrl: thumbnailURL,
+                targetSize: Self.previewSize
+            ) {
+                Color.black
+            }
+        }
+    }
+
+    // MARK: Gestures
+
+    private var zoomGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                scale = min(Self.maxScale, max(1, committedScale * value))
+            }
+            .onEnded { _ in
+                let settled = min(Self.maxScale, max(1, scale))
+                withAnimation(.spring(response: 0.3)) {
+                    scale = settled
+                    if settled <= 1 { offset = .zero }
+                }
+                committedScale = settled
+                committedOffset = settled <= 1 ? .zero : offset
+            }
+    }
+
+    /// Déplacement quand l'image est zoomée. En `highPriorityGesture` : sans
+    /// cela le `ScrollView` de pagination gagne l'arbitrage horizontal et
+    /// l'utilisateur ne peut pas atteindre les bords d'une image agrandie.
+    private var panGesture: some Gesture {
+        DragGesture(minimumDistance: 1)
+            .onChanged { value in
+                offset = CGSize(
+                    width: committedOffset.width + value.translation.width,
+                    height: committedOffset.height + value.translation.height
+                )
+            }
+            .onEnded { _ in committedOffset = offset }
+    }
+
+    /// **Le glissement vertical, DEUX sens et deux sens seulement** (#6142).
+    ///
+    /// `minimumDistance: 30` est délibéré et inchangé : il laisse la pagination
+    /// horizontale gagner l'arbitrage. Ce qui change est la décision de fin de
+    /// course, qui ne se prend plus sur `abs(height)` — cette valeur absolue
+    /// rendait la fermeture identique dans les deux sens, et la loi donne
+    /// maintenant le HAUT à l'entrée en plein cadre. La règle est au SDK, donc
+    /// les quatre surfaces du lot la partageront sans la réécrire.
+    private var stageDragGesture: some Gesture {
+        DragGesture(minimumDistance: 30)
+            .onChanged { value in
+                guard resolveDrag(value.translation) != .ignored else { return }
+                offset = CGSize(width: 0, height: value.translation.height)
+            }
+            .onEnded { value in
+                switch resolveDrag(value.translation) {
+                case .dismisses:
+                    onDismiss()
+                case .entersFull:
+                    withAnimation(.spring()) { offset = .zero }
+                    onEnterStage(.swipeUp)
+                case .follows, .ignored:
+                    withAnimation(.spring()) { offset = .zero }
+                }
+            }
+    }
+
+    private func resolveDrag(_ translation: CGSize) -> MediaStageGestures.DragOutcome {
+        MediaStageGestures.resolveDrag(translation: translation,
+                                       presentation: presentation,
+                                       threshold: Self.dismissThreshold)
+    }
+
+    /// **L'appui long cède au déplacement d'un média AGRANDI.** Ce dernier est
+    /// monté en `highPriorityGesture` à 1 pt de distance minimale : les armer
+    /// ensemble ferait décider la première dérive d'un point laquelle gagne.
+    private var longPressArmed: Bool {
+        MediaStageGestures.longPressArmed(isActive: isActive, isTransformed: isTransformed)
+    }
+
+    /// `maximumDistance` borne la dérive tolérée : au-delà, l'appui long échoue
+    /// et le doigt appartient de nouveau au glissement — c'est ce qui laisse la
+    /// porte du haut atteignable sans lâcher.
+    private var longPressGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.4, maximumDistance: 10)
+            .onEnded { _ in onEnterStage(.longPress) }
+    }
+
+    private func toggleZoom() {
+        let target: CGFloat = committedScale > 1 ? 1 : 2.5
+        withAnimation(.spring()) {
+            scale = target
+            offset = .zero
+        }
+        committedScale = target
+        committedOffset = .zero
+    }
+
+    private func resetTransform() {
+        guard scale != 1 || offset != .zero else { return }
+        scale = 1
+        committedScale = 1
+        offset = .zero
+        committedOffset = .zero
+    }
+}
+
+// MARK: - Gallery Video Page (per-item availability gate)
+
+/// Per-page gating wrapper for the video viewer inside
+/// `ConversationMediaGalleryView`. Resolves `VideoAvailability` against
+/// `CacheCoordinator.shared.video`, triggers auto-DL via the policy engine,
+/// and only invokes `SharedAVPlayerManager.load()` once the video is on
+/// disk — coherent with the streaming-fallback removal in the manager.
+///
+/// `isWindowed` borne le travail : hors fenêtre, la page ne résout AUCUNE
+/// disponibilité et ne déclenche AUCUN auto-téléchargement. Sans cette porte,
+/// traverser une conversation de vingt vidéos en lançait vingt.
+struct GalleryVideoPage: View, Equatable {
+    let attachment: MessageAttachment
+    @Environment(\.captureShieldScope) private var captureScope
+    @Environment(\.isCaptureShielded) private var isCaptureShielded
+    /// Le cadre de cette page — voir `GalleryImagePage.stage` (#6141).
+    let stage: MediaStageFraming.Result
+    /// Voir `GalleryImagePage.presentation` (#6142).
+    let presentation: StagePresentation
+    let accentColor: String
+    /// La page que l'utilisateur REGARDE (distance nulle), par opposition aux
+    /// deux voisines que la fenêtre rend sans que personne ne les ait
+    /// ouvertes. C'est ce qui distingue un geste d'un préchauffage : seule la
+    /// page active paie le Mo d'une extraction en politique restrictive.
+    let isActive: Bool
+    let isWindowed: Bool
+    let onEnterStage: (StageEntry) -> Void
+    let onCacheActivation: () -> Void
+    let onDismiss: () -> Void
+
+    static func == (lhs: GalleryVideoPage, rhs: GalleryVideoPage) -> Bool {
+        lhs.attachment.id == rhs.attachment.id
+            && lhs.stage == rhs.stage
+            && lhs.presentation == rhs.presentation
+            && lhs.accentColor == rhs.accentColor
+            && lhs.isActive == rhs.isActive
+            && lhs.isWindowed == rhs.isWindowed
+    }
+
+    init(
+        attachment: MessageAttachment,
+        stage: MediaStageFraming.Result,
+        presentation: StagePresentation,
+        accentColor: String,
+        isActive: Bool,
+        isWindowed: Bool,
+        onEnterStage: @escaping (StageEntry) -> Void,
+        onCacheActivation: @escaping () -> Void,
+        onDismiss: @escaping () -> Void
+    ) {
+        self.attachment = attachment
+        self.stage = stage
+        self.presentation = presentation
+        self.accentColor = accentColor
+        self.isActive = isActive
+        self.isWindowed = isWindowed
+        self.onEnterStage = onEnterStage
+        self.onCacheActivation = onCacheActivation
+        self.onDismiss = onDismiss
+        // Poster NET au montage. La page OUVERTE peut le lire du disque — elle
+        // s'ouvre dessus, sans transition ; la VOISINE se construit pendant le
+        // glissement et ne lit que la mémoire, que `GalleryPrewarm` a remplie
+        // (#16470). Hors fenêtre, rien (leçon 292).
+        let poster: UIImage? = switch (isWindowed, isActive) {
+        case (true, true): VideoPosterResolver.persistedPoster(for: attachment)
+        case (true, false): VideoPosterResolver.residentPoster(for: attachment)
+        case (false, _): nil
+        }
+        _poster = State(initialValue: poster)
+    }
+
+    // Plain reference (NOT @ObservedObject): only `activeURL`/`player`/
+    // `isPlaying` drive this page's rendering — the manager also publishes
+    // `currentTime` at 5-10Hz, which used to re-render EVERY gallery page
+    // continuously. Scoped via onReceive($activeURL/$player/$isPlaying).
+    private let videoManager = SharedAVPlayerManager.shared
+    @State private var videoManagerActiveURL: String = SharedAVPlayerManager.shared.activeURL
+    @State private var videoManagerPlayer: AVPlayer?
+    @State private var videoManagerIsPlaying: Bool = SharedAVPlayerManager.shared.isPlaying
+    /// `nil` tant que la tâche n'a pas résolu : le premier rendu lit le disque
+    /// en synchrone, une vidéo déjà téléchargée ne montre jamais « ↓ » (#10370).
+    @State private var resolvedAvailability: VideoAvailability?
+    @StateObject private var downloader = AttachmentDownloader()
+    /// Décalage de fermeture, LOCAL à la page (cf. `GalleryImagePage`).
+    @State private var offset: CGSize = .zero
+    /// Poster NET (feature 3) : première image de la vidéo, extraite de son
+    /// fichier — persisté sous `thumb:<url>`, résolu sinon par la cascade app
+    /// (`VideoPosterResolver`). La vignette serveur n'en est que l'attente.
+    @State private var poster: UIImage?
+    /// La couche vidéo a COMPOSÉ sa première frame (KVO `isReadyForDisplay`).
+    /// Tant que non : le poster reste — `isPlaying` bascule AVANT la première
+    /// frame, et retirer le poster sur ce seul signal laissait l'écran noir.
+    @State private var surfaceReady = false
+
+    private var availability: VideoAvailability {
+        if downloader.isDownloading {
+            return .downloading(progress: downloader.progress)
+        }
+        if downloader.isCached {
+            return .ready
+        }
+        return resolvedAvailability ?? VideoAvailability.atFirstRender(for: attachment)
+    }
+
+    private var isPlayerActive: Bool {
+        isPlayerAttached && videoManagerIsPlaying
+    }
+
+    /// La vidéo est-elle prête à jouer sans téléchargement ? Gouverne
+    /// l'autoplay de la page active (le « et play » du double-tap).
+    private var isReadyForAutoplay: Bool {
+        availability.playsNow(fileUrl: attachment.fileUrl)
+    }
+
+    /// Le verdict de montage du MOTEUR (#9575), au rôle plein écran : la page
+    /// reprend sa vidéo, PiP compris — c'est elle qui referme la fenêtre.
+    private var isPlayerAttached: Bool {
+        SharedAVPlayerManager.mayMountFullscreenPlayer(surfaceMedia: attachment.fileUrl,
+                                                       activeMedia: videoManagerActiveURL)
+    }
+
+    private func resolveAvailability() async {
+        resolvedAvailability = await VideoAvailability.resting(for: attachment)
+    }
+
+    /// #9574 — voir `GalleryImagePage.body`.
+    var body: some View {
+        pageBody.captureShield(captureScope.shields(attachment.id))
+    }
+
+    @ViewBuilder
+    private var pageBody: some View {
+        // **Le cadre arrondi** (#6141) et son hors-champ habillé (#6143) — voir
+        // `GalleryImagePage.body`. La couche `AVPlayerLayer` cesse d'ignorer la
+        // zone sûre : elle vit maintenant DANS le cadre, et c'est lui qui la
+        // borne. Une vidéo est d'ailleurs la nature qui en profite le plus : un
+        // 16:9 pose son cadre au plancher et laisse deux bandes dans les DEUX
+        // états.
+        // #10352 — le cadre se plie au conteneur que la page reçoit RÉELLEMENT.
+        FittedMediaStage(stage: stage) { stage in
+            ZStack {
+                MediaStageBackdrop(
+                    source: MediaGalleryStage.backdrop(stage: stage,
+                                                       thumbHash: attachment.thumbHash)
+                )
+
+                if !isPlayerActive || !surfaceReady {
+                    thumbnailLayer
+                }
+
+                if isPlayerActive || isPlayerAttached {
+                    if let player = videoManagerPlayer {
+                        FullscreenAVPlayerLayerView(
+                            player: player,
+                            gravity: .resizeAspect,
+                            onReadyForDisplay: { surfaceReady = true }
+                        )
+                    }
+                }
+
+                // Un seul contrôleur : une fois le player attaché à cette URL
+                // (lecture OU pause), play/pause appartient au transport partagé
+                // (`VideoTransportControls`). Gater sur `!isPlayerActive` faisait
+                // réapparaître ce poster 64pt PENDANT la pause, empilé sur le
+                // play/pause 64pt du transport (double contrôleur, bug user).
+                if !isPlayerAttached {
+                    playOrDownloadButton
+                }
+                // **La quatrième porte** (#6163) : double tap à gauche ⇒ −10 s, à
+                // droite ⇒ +10 s. Armée seulement quand une piste est ATTACHÉE à
+                // cette page — sans piste il n'y a rien à parcourir, et la loi 4
+                // refuse un contrôle sans effet. Cette condition est aussi ce qui
+                // évite de retarder le tap d'un point de vue où le bouton central
+                // de lecture est encore là : les deux ne sont jamais montés
+                // ensemble, `!isPlayerAttached` gouvernant l'un et l'autre.
+                //
+                // **La zone reçoit AUSSI la porte du tap** (`onSingleTap`), et c'est
+                // ce qui réunit les deux gestes sur la MÊME vue là où ils se
+                // disputent le doigt — la règle que le corps de `GalleryImagePage`
+                // écrit dix lignes plus haut. Le `.onTapGesture` posé sur cette page
+                // ne disparaît pas pour autant : il sert le tiers CENTRAL, qui ne
+                // porte aucun geste et garde donc son tap immédiat.
+                if isActive, isPlayerAttached {
+                    MediaStageSeekZones(
+                        size: stage.frame,
+                        onSingleTap: { onEnterStage(.tap) },
+                        onDoubleTap: { point in
+                            MediaStageSeekAction.apply(at: point,
+                                                       in: stage.frame,
+                                                       manager: videoManager)
+                        }
+                    )
+                }
+            }
+            .frame(width: stage.frame.width, height: stage.frame.height)
+            .clipShape(RoundedRectangle(cornerRadius: stage.cornerRadius, style: .continuous))
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { onEnterStage(.tap) }
+        .accessibilityAction(named: Text(String(localized: "a11y.post.media.open.hint", bundle: .main))) { onEnterStage(.tap) }
+        .offset(y: offset.height)
+        // **`isActive` désarme les pages VOISINES**, exactement comme il le fait
+        // pour la jumelle image une page plus haut et pour l'appui long de la
+        // ligne suivante — la raison est écrite au SDK (`longPressArmed`) : le
+        // pager réalise deux pages à l'écran pendant le défilement, et un geste
+        // armé sur celle que personne ne regarde décide pour elle. La
+        // conséquence dépasse ici le cadrage : la branche `.dismisses` lit
+        // `videoManager.activeURL` pour choisir entre le passage au PiP et la
+        // libération du player, donc une page voisine trancherait le sort d'une
+        // piste qui n'est pas la sienne.
+        .gesture(stageDragGesture, including: isActive ? .all : .none)
+        // **`isTransformed: false` n'est pas un raccourci** : une page vidéo n'a
+        // ni zoom ni déplacement, donc rien ne dispute le doigt à l'appui long.
+        // Le dire par le paramètre plutôt que d'omettre la garde laisse la
+        // MÊME règle répondre pour les deux natures.
+        .gesture(longPressGesture,
+                 including: MediaStageGestures.longPressArmed(isActive: isActive,
+                                                              isTransformed: false) ? .all : .none)
+        // La clé inclut `isWindowed` : la tâche ne tourne QUE dans la fenêtre,
+        // et rejoue dès qu'une page y entre.
+        .task(id: "\(attachment.id)#\(isWindowed)") {
+            guard isWindowed else { return }
+            // Le registre partagé fait foi (#7492) : un téléchargement lancé
+            // depuis la bulle se poursuit ici, et celui lancé ici rend la bulle
+            // « prête » à la fermeture de la galerie.
+            downloader.observe(attachment)
+            await resolveAvailability()
+            if case .needsDownload? = resolvedAvailability, !downloader.isDownloading {
+                let condition = NetworkConditionMonitor.shared.condition
+                let prefs = MediaDownloadPreferencesStore.shared.preferences
+                if MediaDownloadPolicyEngine.shouldAutoDownload(
+                    kind: .video, condition: condition, prefs: prefs
+                ) {
+                    downloader.start(attachment: attachment, origin: .automatic, onShare: nil)
+                }
+            }
+            await resolvePosterIfNeeded()
+        }
+        // Le fichier vient d'atterrir (auto-DL, ou tap) et la cascade n'avait
+        // rien rendu : la première image nette se décode maintenant du fichier.
+        .task(id: downloader.isCached) {
+            guard isWindowed, downloader.isCached, poster == nil else { return }
+            await resolvePosterIfNeeded()
+        }
+        // La page voisine DEVIENT courante : le geste arrive après coup. Sans ce
+        // relais, une vidéo préchauffée en politique restrictive (aucun octet,
+        // donc aucun poster) resterait sur son thumbHash jusqu'au démontage.
+        .task(id: isActive) {
+            guard isWindowed, isActive, poster == nil else { return }
+            await resolvePosterIfNeeded()
+        }
+        // Autoplay en plein écran (cf. #4015): la
+        // page vidéo ACTIVE et prête démarre la lecture d'elle-même — c'est ce
+        // que le double-tap depuis la bulle attend (« ouvrir en plein écran ET
+        // lire »). Ne rejoue pas si cette vidéo EST déjà le player actif
+        // (expand depuis une lecture inline en cours) ; les pages voisines
+        // fenêtrées (inactives) ne partent jamais. Re-clé sur `isReadyForAutoplay`
+        // pour démarrer dès que le fichier devient disponible.
+        .task(id: isActive && isReadyForAutoplay) {
+            guard isActive, isWindowed, isReadyForAutoplay,
+                  videoManagerActiveURL != attachment.fileUrl else { return }
+            videoManager.isForceMuted = false
+            videoManager.load(urlString: attachment.fileUrl, attachmentId: attachment.id.isEmpty ? nil : attachment.id)
+            // Reposée APRÈS `load()` — qui appelle `cleanup()` — et clé par la
+            // pièce jointe qu'elle qualifie : ce moteur est partagé (#7212).
+            videoManager.setServedConsumption(attachment.currentUserConsumption, for: attachment.id)
+            videoManager.play()
+            onCacheActivation()
+        }
+        // Failsafe temporel (leçon 25) : un KVO manqué ne fige jamais le poster
+        // sur une vidéo qui joue.
+        .task(id: isPlayerActive) {
+            guard isPlayerActive, !surfaceReady else { return }
+            guard await cancellableSleep(for: .milliseconds(2500)), !Task.isCancelled else { return }
+            surfaceReady = true
+        }
+        .adaptiveOnChange(of: isPlayerAttached) { _, attached in
+            guard !attached else { return }
+            surfaceReady = false
+        }
+        .onReceive(videoManager.$activeURL) { videoManagerActiveURL = $0 }
+        .onReceive(videoManager.$player) { videoManagerPlayer = $0 }
+        .onReceive(videoManager.$isPlaying) { videoManagerIsPlaying = $0 }
+        // **Le plein écran REPREND sa vidéo** (#9575) : au retour au premier
+        // plan, la fenêtre PiP ouverte en quittant l'application se referme et
+        // la lecture continue sur la page — jamais aux deux endroits. La page
+        // COURANTE seule : une voisine ne décide pas pour une piste qu'on ne
+        // regarde pas.
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            guard isActive else { return }
+            videoManager.reclaimFromPip(urlString: attachment.fileUrl)
+        }
+        // Même reprise à l'ouverture sur un média que la fenêtre PiP jouait.
+        .task(id: "\(attachment.id)#reclaim#\(isActive)") {
+            guard isActive else { return }
+            videoManager.reclaimFromPip(urlString: attachment.fileUrl)
+        }
+    }
+
+    /// **Le glissement vertical : le bas ferme, le haut ouvre** (#6142). Voir
+    /// `GalleryImagePage.stageDragGesture` — même règle, même seuil, et c'est le
+    /// point : la vidéo et l'image ne peuvent pas répondre différemment au même
+    /// geste.
+    ///
+    /// La sortie par le bas garde intégralement son passage de témoin au PiP,
+    /// qui est ce qui distingue cette page de sa jumelle.
+    ///
+    /// **L'appui long CHANGE ce que la sortie par le bas produit, et c'est
+    /// voulu.** Le contrat n'était écrit que dans un sens (`maximumDistance: 10`
+    /// : au-delà, l'appui long échoue et le doigt revient au glissement) ; voici
+    /// l'autre. Une fois l'appui long reconnu, `onEnterStage(.longPress)` met la
+    /// piste en PAUSE — c'est ce que la porte promet, et la pastille l'annonce.
+    /// Un glissement vers le bas qui suit tombe donc sur la branche `else if` et
+    /// LIBÈRE le player au lieu de passer au PiP. Ce n'est pas une course entre
+    /// recognizers : c'est la conséquence d'un arrêt que le lecteur vient de
+    /// demander, et une fenêtre d'image-dans-l'image sur une image GELÉE serait
+    /// un moins bon produit que la bulle qui retrouve sa vignette.
+    private var stageDragGesture: some Gesture {
+        DragGesture(minimumDistance: 30)
+            .onChanged { value in
+                guard resolveDrag(value.translation) != .ignored else { return }
+                offset = CGSize(width: 0, height: value.translation.height)
+            }
+            .onEnded { value in
+                switch resolveDrag(value.translation) {
+                case .dismisses:
+                    // **Sortir n'abandonne la lecture qu'au PiP** (#9575). Une
+                    // vidéo en pause, ou une fenêtre PiP qui ne part pas
+                    // (appareil sans PiP), LIBÈRE le player : sinon la bulle
+                    // restée dessous reprenait la lecture, ou sa frame gelée,
+                    // sans que personne l'ait demandé.
+                    if videoManager.mayMountPlayer(role: .fullscreen, urlString: attachment.fileUrl) {
+                        let handedOff = videoManager.isPlaying
+                            && !isCaptureShielded
+                            && videoManager.startPip(haltsOnFailure: true)
+                        if SharedAVPlayerManager.fullscreenCloseDisposition(
+                            pipHandedOff: handedOff || videoManager.isPipActive) == .stops {
+                            videoManager.release(urlString: attachment.fileUrl)
+                        }
+                    }
+                    onDismiss()
+                case .entersFull:
+                    withAnimation(.spring()) { offset = .zero }
+                    onEnterStage(.swipeUp)
+                case .follows, .ignored:
+                    withAnimation(.spring()) { offset = .zero }
+                }
+            }
+    }
+
+    private func resolveDrag(_ translation: CGSize) -> MediaStageGestures.DragOutcome {
+        MediaStageGestures.resolveDrag(translation: translation,
+                                       presentation: presentation,
+                                       threshold: 150)
+    }
+
+    private var longPressGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.4, maximumDistance: 10)
+            .onEnded { _ in onEnterStage(.longPress) }
+    }
+
+    /// Ce qui tient l'écran avant la première frame composée : le poster NET
+    /// dès qu'il existe ; sinon la vignette serveur — la MÊME première image —,
+    /// forcée, sur le thumbHash. Elle ne tenait l'écran qu'après l'échec de la
+    /// cascade : la voisine glissait donc en place sous un thumbHash flou que
+    /// le poster remplaçait à l'arrivée (#16470). Le poster la recouvre dès
+    /// qu'il est résolu ; elle n'est jamais l'étage FINAL d'une page ouverte.
+    @ViewBuilder
+    private var thumbnailLayer: some View {
+        if let poster {
+            Image(uiImage: poster)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+        } else if serverThumbnailURL != nil || attachment.thumbHash != nil {
+            ProgressiveCachedImage(
+                thumbHash: attachment.thumbHash,
+                thumbnailUrl: nil,
+                fullUrl: serverThumbnailURL,
+                autoLoad: true
+            ) {
+                Color(hex: attachment.thumbnailColor)
+            }
+            .aspectRatio(contentMode: .fit)
+        }
+    }
+
+    private var serverThumbnailURL: String? {
+        attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
+    }
+
+    private func resolvePosterIfNeeded() async {
+        guard poster == nil else { return }
+        let resolved = await VideoPosterResolver.resolve(
+            attachment: attachment,
+            allowsNetwork: true,
+            intent: isActive ? .userOpened : .ambientPrewarm
+        )
+        guard !Task.isCancelled, let resolved else { return }
+        withAnimation(.easeIn(duration: 0.15)) { poster = resolved }
+    }
+
+    @ViewBuilder
+    private var playOrDownloadButton: some View {
+        Button {
+            switch availability {
+            case .downloading where isReadyForAutoplay, .ready:
+                // #12027 : un téléchargement lisible se joue dès sa tête.
+                // Défense en profondeur : la galerie n'exprime jamais de mute
+                // forcé — si une autre surface (le feed) a laissé `isForceMuted`
+                // activé (elle le relâche normalement d'elle-même en perdant
+                // l'activité), on ne veut jamais en hériter silencieusement ici.
+                videoManager.isForceMuted = false
+                videoManager.load(urlString: attachment.fileUrl, attachmentId: attachment.id.isEmpty ? nil : attachment.id)
+                // Reposée APRÈS `load()` — qui appelle `cleanup()` — et clé par
+                // la pièce jointe qu'elle qualifie : ce moteur est partagé (#7212).
+                videoManager.setServedConsumption(attachment.currentUserConsumption, for: attachment.id)
+                videoManager.play()
+                onCacheActivation()
+                HapticFeedback.light()
+            case .needsDownload:
+                downloader.start(attachment: attachment, origin: .manual, onShare: nil)
+            case .downloading:
+                break
+            }
+        } label: {
+            buttonContent
+                .frame(width: 64, height: 64)
+                .adaptiveGlassProminent(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.intense))
+        }
+        .disabled({
+            if case .downloading = availability { return !isReadyForAutoplay }
+            return false
+        }())
+        .accessibilityLabel(playOrDownloadAccessibilityLabel)
+    }
+
+    /// Label VoiceOver du bouton central selon l'état (lecture / téléchargement
+    /// / progression). Les glyphes internes sont décoratifs.
+    private var playOrDownloadAccessibilityLabel: String {
+        switch availability {
+        case .downloading where isReadyForAutoplay, .ready:
+            return String(localized: "media.playVideo", defaultValue: "Lire la vidéo", bundle: .main)
+        case .needsDownload:
+            return String(localized: "media.downloadVideo", defaultValue: "Télécharger la vidéo", bundle: .main)
+        case .downloading:
+            return String(localized: "common.downloading", defaultValue: "Téléchargement…", bundle: .main)
+        }
+    }
+
+    @ViewBuilder
+    private var buttonContent: some View {
+        // Glyphes/label figés : contenus d'un contrôle circulaire de taille
+        // fixe (56/64pt) — les scaler déborderait le cercle. État porté par
+        // `playOrDownloadAccessibilityLabel` sur le bouton parent.
+        switch availability {
+        case .downloading where isReadyForAutoplay, .ready:
+            Image(systemName: "play.fill")
+                .font(.system(size: MeeshyIconSize.xxl, weight: .bold))
+                .foregroundStyle(MeeshyColors.mediaChromeForeground)
+                .offset(x: 2)
+        case .needsDownload:
+            VStack(spacing: MeeshySpacing.xxs) {
+                Image(systemName: "arrow.down.to.line")
+                    .font(.system(size: MeeshyIconSize.xl, weight: .bold))
+                    .foregroundStyle(MeeshyColors.mediaChromeForeground)
+                if attachment.fileSize > 0 {
+                    Text(MediaFormat.bytes(Int64(attachment.fileSize)))
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(MeeshyColors.mediaChromeSecondary)
+                }
+            }
+        case .downloading(let progress):
+            if progress > 0 {
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(Color.white, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: 32, height: 32)
+                    .animation(.linear(duration: 0.2), value: progress)
+            } else {
+                ProgressView()
+                    .tint(.white)
+                    .scaleEffect(0.9)
+            }
+        }
+    }
+}

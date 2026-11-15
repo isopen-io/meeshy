@@ -1,0 +1,6 @@
+Welcome to Meeshy on Android, our very first version!
+• Write in your language, your friends read in theirs: 76 translatable languages
+• Translated voice messages with their transcripts
+• Audio and video calls with live captions, full-screen ringing even when the app is closed
+• Stories, posts, reels and communities
+Tell us what you think: every piece of feedback helps us do better.

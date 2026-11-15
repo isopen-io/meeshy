@@ -4,6 +4,7 @@
  */
 import { normalizeLanguageCode, normalizeLanguageForDedup } from './language-normalize.js';
 import { OBJECT_ID_REGEX } from './object-id.js';
+import { isPrivilegedPlatformRole } from './platform-privilege.js';
 
 /**
  * Options de résolution de langue. La locale appareil intervient en 4e priorité
@@ -241,6 +242,83 @@ export function resolveLastMessagePreview(params: {
  * `preferredLanguages` doit être ordonnée — c'est la sortie de
  * {@link resolveUserLanguagesOrdered}, jamais une liste reconstruite à la main.
  */
+/**
+ * Dépouille la carte des traductions d'un MESSAGE
+ * (`{ language|targetLanguage, content|translatedContent }[]`) en
+ * `Record<langue → texte>` — la forme qu'attend {@link resolvePrismTranslation}.
+ *
+ * IL VIT ICI, ET PLUS DANS `apps/web`. Il y a été écrit d'abord, avec la
+ * mention « SSOT UNIQUE de cet adaptateur CÔTÉ WEB » — une portée qui était
+ * juste tant qu'une seule application lisait des messages. `apps/web-v2` en est
+ * la seconde : l'y recopier aurait fabriqué la jumelle que le § Prisme du
+ * `CLAUDE.md` racine passe son temps à démonter, et une jumelle d'ADAPTATEUR est
+ * la plus sournoise — elle ne dit pas la règle, elle décide seulement quelles
+ * traductions le résolveur VOIT. Une clé oubliée d'un côté ne fait pas servir
+ * une mauvaise langue : elle fait servir l'ORIGINAL, ce qui ressemble à une
+ * traduction absente.
+ *
+ * `apps/web/utils/translation-record.ts` le réexporte, pour que ses consommateurs
+ * n'aient pas à changer d'adresse.
+ *
+ * La clé rendue est la langue VERBATIM : la comparaison qui suit la normalise
+ * (`normalizeLanguageForDedup`), donc la canonicaliser ici serait la faire deux
+ * fois — et masquerait laquelle des deux fait foi.
+ */
+export function buildTranslationRecord(translations: unknown): Record<string, string> {
+  const record: Record<string, string> = {};
+  if (!Array.isArray(translations)) return record;
+  for (const entry of translations as ReadonlyArray<{
+    language?: string;
+    targetLanguage?: string;
+    content?: string;
+    translatedContent?: string;
+  }>) {
+    const key = entry?.language || entry?.targetLanguage;
+    const text = entry?.content ?? entry?.translatedContent;
+    if (typeof key === 'string' && key.trim() !== '' && typeof text === 'string' && text.trim() !== '') {
+      record[key] = text;
+    }
+  }
+  return record;
+}
+
+/**
+ * Dépouille la carte des traductions d'un POST ou d'un COMMENTAIRE
+ * (`{ [langue]: { text, translationModel, confidenceScore, createdAt, updatedAt } }`,
+ * `schema.prisma` `Post.translations` / `PostComment.translations`) en
+ * `Record<langue → texte>` — la forme qu'attend {@link resolvePrismTranslation}.
+ *
+ * Dialecte DISTINCT de {@link buildTranslationRecord} : celui-ci dépouille un
+ * TABLEAU (`Message.translations`, tel que servi sur le fil par
+ * `transformTranslationsToArray`), celui-ci une CARTE clé→objet — c'est la
+ * forme que la passerelle sert TELLE QUELLE pour un post ou un commentaire,
+ * sans transformation en tableau. Passer l'un à la fonction de l'autre rend
+ * une carte vide plutôt qu'une erreur, ce qui masquerait le défaut derrière un
+ * repli sur l'original — d'où deux fonctions nommées plutôt qu'une signature
+ * qui devine.
+ *
+ * `apps/web/hooks/use-post-translation.ts` en était la jumelle : un
+ * dépouillement local, réécrit à la main, que le § Prisme du `CLAUDE.md`
+ * racine interdit — une jumelle d'ADAPTATEUR ne fait pas servir une MAUVAISE
+ * langue, elle fait servir l'ORIGINAL, ce qui ressemble à une traduction
+ * absente.
+ *
+ * La clé rendue est la langue VERBATIM : la comparaison qui suit la normalise
+ * (`normalizeLanguageForDedup`), donc la canonicaliser ici serait la faire deux
+ * fois — et masquerait laquelle des deux fait foi.
+ */
+export function buildPostTranslationRecord(translations: unknown): Record<string, string> {
+  const record: Record<string, string> = {};
+  if (!translations || typeof translations !== 'object' || Array.isArray(translations)) return record;
+  for (const [key, entry] of Object.entries(translations as Record<string, { text?: unknown }>)) {
+    const text = entry?.text;
+    if (typeof text === 'string' && text.trim() !== '') {
+      record[key] = text;
+    }
+  }
+  return record;
+}
+
 export function resolvePrismTranslation(params: {
   translations?: Readonly<Record<string, string>> | null;
   originalLanguage?: string | null;
@@ -415,17 +493,25 @@ export function resolveParticipantLanguage(participant: LanguageResolvable): str
   // Le fallback (langue déclarée par le call site) est normalisé comme les
   // niveaux de resolveUserLanguagesOrdered : le docstring promet la « même
   // normalisation que resolveUserLanguage » pour TOUS les chemins de retour.
-  // Ces niveaux réduisent la casse ET les sous-tags région/script via
-  // normalizeLanguageCode ('it-IT' → 'it', 'FR' → 'fr') : un fallback laissé
-  // région-taggé ('pt-BR' → 'pt-br') ou en casse haute manquerait les
+  // Ces niveaux réduisent la casse ET les sous-tags région/script : un fallback
+  // laissé région-taggé ('pt-BR' → 'pt-br') ou en casse haute manquerait les
   // traductions indexées en minuscules 2/3-lettres exactement comme une
-  // préférence in-app non normalisée (violation du Prisme). Le repli
-  // `?? .toLowerCase()` préserve le fallback terminal (jamais `undefined`) pour
-  // les codes que normalizeLanguageCode ne sait pas réduire — parité stricte
-  // avec le contrat normalizeLanguageForDedup, zéro régression sur les codes
-  // déjà canoniques.
-  const fallback =
-    normalizeLanguageCode(participant.language) ?? participant.language.toLowerCase()
+  // préférence in-app non normalisée (violation du Prisme).
+  //
+  // Le couple « normalisation avec repli » est une SSOT, `normalizeLanguageForDedup`,
+  // et c'est elle qu'on appelle — pas une troisième réécriture (#9247). Le repli
+  // écrit ici à la main, `normalizeLanguageCode(x) ?? x.toLowerCase()`, se croyait
+  // en « parité stricte » avec elle et ne l'était que sur les codes CATALOGUÉS :
+  // hors catalogue, `normalizeLanguageCode` rend `undefined` et `.toLowerCase()`
+  // GARDE la région — 'yue-HK' → 'yue-hk', 'fil-PH' → 'fil-ph' — quand le chemin
+  // INSCRIT (normalizeInAppLanguage, juste au-dessus) et le pipeline de traduction
+  // strippent tous deux vers 'yue' / 'fil'. Deux formes pour une même langue, donc
+  // un lecteur que la comparaison ne reconnaît plus : la file hors ligne ne
+  // déposait rien pour un invité de lien partagé déclarant un tel code.
+  //
+  // La SSOT préserve la garantie de fallback terminal (jamais `undefined`, jamais
+  // la chaîne vide) et ne change rien aux codes déjà canoniques.
+  const fallback = normalizeLanguageForDedup(participant.language)
   if (participant.type !== 'user' || !participant.user) {
     return fallback
   }
@@ -460,7 +546,7 @@ export function isValidMongoId(id: string): boolean {
  *  - web    : `hooks/use-message-interactions` (`twentyFourHoursInMs`)
  *
  * Un utilisateur normal dispose de 24 heures ; le contournement de la fenêtre
- * est un privilège de rôle GLOBAL (MODERATOR/ADMIN/BIGBOSS), jamais un rôle de
+ * est un privilège de rôle GLOBAL (`PRIVILEGED_PLATFORM_ROLES`), jamais un rôle de
  * conversation (admin/moderator/member) — comparé en majuscules car la DB peut
  * stocker le rôle en minuscules. Un `createdAt` invalide (Date → NaN) ne bloque
  * jamais : `NaN > window` est faux, exactement comme les trois sites ci-dessus.
@@ -469,7 +555,7 @@ export function canEditMessage(
   createdAt: Date | string,
   userRole: string = 'USER'
 ): { canEdit: boolean; reason?: string } {
-  if (['MODERATOR', 'ADMIN', 'BIGBOSS'].includes(userRole.toUpperCase())) {
+  if (isPrivilegedPlatformRole(userRole.toUpperCase())) {
     return { canEdit: true };
   }
 
@@ -487,45 +573,77 @@ export function canEditMessage(
   return { canEdit: true };
 }
 
+/** Ce que {@link generateDefaultConversationTitle} lit d'un membre pour le nommer. */
+type TitleMember = {
+  id?: string;
+  displayName?: string;
+  username?: string;
+  firstName?: string;
+  lastName?: string;
+};
+
 /**
- * Génère un titre par défaut pour une conversation sans titre
+ * Nom d'un membre dans l'ordre CANONIQUE du produit : `displayName` →
+ * `firstName lastName` → `username` → repli. Une chaîne blanche vaut absence.
+ *
+ * Cet ordre n'est pas un choix local : c'est celui que les DEUX clients
+ * appliquent — SDK Swift (`ParticipantModels.swift`, `FriendModels.swift`,
+ * `ShareLinkModels.swift`, `Cache/UserDisplayNameCache.swift`, tous
+ * `displayName ?? [firstName, lastName] ?? username`) et web Vite
+ * (`apps/web/src/lib/api/conversation-members.ts`) — et celui que le SSOT
+ * partagé délègue explicitement au client (`participant-helpers.ts`,
+ * `resolveParticipantDisplayName` : « Ne couvre QUE le niveau `displayName` …
+ * Les fallbacks `firstName lastName` / `username` restent la responsabilité du
+ * client »).
+ *
+ * Ce titre-ci était le SEUL site du produit à placer `username` AVANT le nom
+ * réel (#8970) : un membre ayant un prénom et un nom mais pas de `displayName`
+ * intitulait la conversation `@jdoe123` là où chaque bulle de la même
+ * conversation affiche « John Doe ». La coalescence était de surcroît écrite
+ * DEUX fois — un membre seul, puis plusieurs — donc deux ordres à maintenir
+ * pour une seule règle. Elle ne l'est plus qu'ici.
+ */
+const resolveMemberName = (member: TitleMember): string => {
+  const fullName = [member.firstName, member.lastName]
+    .filter((part): part is string => !!part && part.trim().length > 0)
+    .map((part) => part.trim())
+    .join(' ');
+  return member.displayName?.trim() || fullName || member.username?.trim() || 'Unknown User';
+};
+
+/**
+ * Génère un titre par défaut pour une conversation sans titre.
+ *
+ * Chaque membre est nommé par {@link resolveMemberName} — appelants côté
+ * gateway : `services/conversationCard.ts`, `routes/conversations/core-detail.ts`,
+ * `core-list.ts` et `search.ts`. Tous doivent passer `firstName`/`lastName` ET
+ * les charger dans leur `select` Prisma, sans quoi le nom réel n'atteint jamais
+ * cette fonction et le titre retombe sur `@username` (#8970, défaut 2 : c'était
+ * le cas de `search.ts`). Le garde
+ * `services/gateway/src/__tests__/unit/services/default-title-callers.test.ts`
+ * le vérifie sur les sources.
  */
 export function generateDefaultConversationTitle(
-  members: Array<{ id?: string; displayName?: string; username?: string; firstName?: string; lastName?: string }>,
+  members: Array<TitleMember>,
   currentUserId: string
 ): string {
   const otherMembers = members.filter((m) => m.id !== currentUserId);
-  
+
   if (otherMembers.length === 0) {
     return 'Conversation';
   }
-  
+
   if (otherMembers.length === 1) {
     const member = otherMembers[0];
-    if (member) {
-      const fullName = [member.firstName, member.lastName]
-        .filter((p): p is string => !!p && p.trim().length > 0)
-        .map(p => p.trim())
-        .join(' ');
-      return member.displayName?.trim() || member.username?.trim() || fullName || 'Unknown User';
-    }
-    return 'Unknown User';
+    return member ? resolveMemberName(member) : 'Unknown User';
   }
-  
-  const resolveName = (m: { displayName?: string; username?: string; firstName?: string; lastName?: string }): string => {
-    const fullName = [m.firstName, m.lastName]
-      .filter((p): p is string => !!p && p.trim().length > 0)
-      .map(p => p.trim())
-      .join(' ');
-    return m.displayName?.trim() || m.username?.trim() || fullName || 'Unknown User';
-  };
 
   if (otherMembers.length === 2) {
-    return otherMembers.map(resolveName).join(', ');
+    return otherMembers.map(resolveMemberName).join(', ');
   }
 
   // 3+ membres
-  const firstTwo = otherMembers.slice(0, 2).map(resolveName);
+  const firstTwo = otherMembers.slice(0, 2).map(resolveMemberName);
   return `${firstTwo.join(', ')} and ${otherMembers.length - 2} other(s)`;
 }
 

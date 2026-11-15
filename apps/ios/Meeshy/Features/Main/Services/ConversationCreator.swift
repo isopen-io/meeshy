@@ -21,6 +21,11 @@ protocol ConversationCreating: Sendable {
 
 @MainActor
 final class ConversationCreator: ConversationCreating {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     private let api: APIClientProviding
 
@@ -34,7 +39,7 @@ final class ConversationCreator: ConversationCreating {
     ) async throws -> Conversation {
         let body = CreateDirectBody(type: "direct", participantIds: [userId])
         let response: APIResponse<APIConversation> = try await api.post(
-            endpoint: "/conversations",
+            ConversationsEndpoint.root,
             body: body
         )
         return response.data.toConversation(currentUserId: currentUserId)

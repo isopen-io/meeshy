@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        { "androidName": "story_repost_reprojected", "status": "android-only" }
+      ]
+    }
+  }
+}

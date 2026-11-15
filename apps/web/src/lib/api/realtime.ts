@@ -1,0 +1,267 @@
+import { bridgeCallEvents } from '@/lib/calls/call-socket-bridge';
+import { setCallEngineWake } from '@/lib/calls/call-transport';
+import { callsAvailable } from '@/lib/calls/calls-availability';
+import { conversationStore } from '@/lib/conversation-store';
+import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
+import { createSocketIOClient } from '@/lib/net/socket-io-factory';
+import { bridgeBannerRevocations } from '@/lib/notifications/banner-revocation';
+import { navigate } from '@/lib/router';
+import { href } from '@/routes/route-table';
+import { outboxStore } from '@/lib/send/outbox-store';
+
+import { endRevokedSession } from './account-caches';
+import { retireDeletedAccountLater } from './account-deleted';
+import { bindAppStatePresence, documentVisibility } from './app-state-presence';
+import { apiConfig } from './config';
+import { bindConversationViewing, viewingStore } from './conversation-viewing';
+import { bindConversationEngagement, engagementStore } from './conversation-engagement';
+import { bindPostEngagement } from './publication-engagement';
+import { bindProfileDecorSync } from '../profile-decor/equip';
+import { bindStickerLibrarySync } from '../stickers/library-sync';
+import { bindGameStateSync } from './game-state-live';
+import { bindAppearanceLiveLazily } from './appearance-live';
+import { bindCommunityLiveLazily } from './community-live-binding';
+import { bindPresenceLive } from './presence-live';
+import { presenceStore } from './presence-store';
+import { apiDeps } from './deps';
+import { endGuestAccess } from './guest-access-end';
+import { appQueryClient } from './query-client';
+import { setAttachmentReactionEmitter } from './attachment-reaction-emit';
+import { watchIdentityScopedStores } from './identity-scoped-stores';
+import { createLiveSocketWatchers } from './live-socket-watchers';
+import { sendAttachmentReaction } from './attachment-reaction-socket';
+import { setTypingEmitter } from './typing-emit';
+import { keepRealtimeConnection } from './realtime-identity';
+import { leaveThreadOfGoneConversation } from './realtime-conversation-gone';
+import { relaunchConversationList } from './realtime-thread-catch-up';
+import { sessionStore } from './session';
+import { createRealtimeConnection, type RealtimeConnection } from './socket';
+import { typingStore } from './typing-store';
+import { resolveViewer } from './viewer';
+
+/** Le puits de `message:translation`, offert aux traductions faites sur l'appareil (#9898) : elles le rejoignent par ce chunk déjà chargé, jamais par un second. */
+export { applyMessageTranslation } from './realtime-apply';
+
+/**
+ * L'AMORÇAGE DU TEMPS RÉEL (#5793) — chargé EN `import()` (`main.tsx`), APRÈS
+ * la première peinture, jamais dans le socle : c'est ce qui tient
+ * `socket.io-client` (~13 Ko gzip, mesuré § 7 de la spécification) HORS de
+ * `first_paint`. `vite.config.ts` § `manualChunks` nomme ses dépendances
+ * vendor `socketio` pour que le gate de poids désigne un coupable si elles
+ * grossissent.
+ *
+ * UNE connexion par IDENTITÉ (motif `query-client.ts` § « purge sur
+ * changement d'identité ») : `authenticated` ET `guest` OUVRENT la connexion
+ * (`realtimeIdentityOf`, #9724), `anonymous` la FERME — jamais un socket par
+ * écran. `liveConnection` tient la clé d'identité : un `establish()` qui pose un
+ * jeton DIFFÉRENT (changement de compte sur le même navigateur, D-6), ou la
+ * bascule compte ↔ invité (#8816), reconstruit la connexion plutôt que de la
+ * réutiliser à tort.
+ *
+ * LE BOUCHON DE FIXTURES N'EST PLUS UNE DÉPENDANCE STATIQUE DE CE MODULE
+ * (revue-correction #6171, défaut 1) — `createFixturesSocketClient` et sa
+ * chronologie `LIVE_SCHEDULE` (`fixtures-realtime.ts` → `fixtures-live.ts`)
+ * sont du CORPUS DE RECETTE, jamais servis à un lecteur réel
+ * (`VITE_DATA_SOURCE=gateway` les élague déjà par `__FIXTURES__`), et un
+ * import STATIQUE les faisait payer par le chunk `realtime` — mesuré 5,92 Ko
+ * gzip pour un plafond de 6 (`budgets.json › on_demand_chunks.realtime`,
+ * marge de 0,08 Ko). Un `import()` LOCAL au seul branchement fixtures fait de
+ * ce bouchon un chunk À LUI (`budgets.json ›
+ * on_demand_chunks.fixtures_realtime`), qui n'entre dans AUCUN bundle
+ * `gateway` déployé.
+ */
+let connection: RealtimeConnection | null = null;
+/** Garde la course : un second `syncConnection()` pendant que le `import()`
+ * du bouchon résout ne doit pas ouvrir une SECONDE connexion de fixtures. */
+let fixturesConnecting = false;
+/** Le pont d'appel de la connexion courante (#6382) — refait à chaque connexion. */
+let unbridgeCalls: (() => void) | null = null;
+
+/**
+ * Les écrans qui écoutent la socket vivante le temps où ils sont ouverts (#9899) :
+ * le fil, pour `message:translation-shared`. La connexion se reconstruit à chaque
+ * changement d'identité ; chaque observateur est détaché de l'ancienne et accroché
+ * à la nouvelle par `bridgeCalls`, sans que `socket.ts` (chemin du démarrage) ne
+ * connaisse l'événement.
+ */
+const liveWatchers = createLiveSocketWatchers();
+export const watchLiveSocket = liveWatchers.watch;
+
+/**
+ * UNE SESSION RÉVOQUÉE DIT POURQUOI (#9613) — le motif est NOTÉ avant que la
+ * session ne finisse, pour que l'écran de connexion l'explique
+ * (`lib/session-end.ts`). Sans motif (jeton expiré), la session finit aussitôt ;
+ * un module qui ne se charge pas ne la retient jamais ouverte.
+ */
+function endWithReason(reason?: string): void {
+  if (reason === undefined) {
+    endRevokedSession(sessionStore);
+    return;
+  }
+  void import('@/lib/session-end')
+    .then(({ sessionEnd }) => sessionEnd.note(reason))
+    .catch(() => undefined)
+    .finally(() => endRevokedSession(sessionStore));
+}
+
+function bridgeCalls(next: RealtimeConnection | null): void {
+  unbridgeCalls?.();
+  liveWatchers.connect(next === null ? null : next.socket);
+  if (next === null) {
+    unbridgeCalls = null;
+    return;
+  }
+  const unbridge = callsAvailable() ? bridgeCallEvents(next.socket) : () => undefined;
+  /* `presence:app-state` (B8) : la passerelle choisit la sonnerie socket ou la poussée selon que l'onglet est visible.
+     Un onglet réveillé d'un long sommeil rouvre sa connexion et relit la liste (#10573). */
+  const unwatch =
+    typeof document === 'undefined'
+      ? () => undefined
+      : bindAppStatePresence({ socket: next.socket, visibility: documentVisibility(document), onWake: () => relaunchConversationList(appQueryClient) });
+  /* « est dans la conversation » (#8892) : l'écran de fil s'annonce, les pairs annoncés portent le point primaire. */
+  const unview = typeof document === 'undefined' ? () => undefined : bindConversationViewing({ socket: next.socket, visibility: documentVisibility(document), store: viewingStore, viewerId: currentViewerId });
+  /* « N (M) 🔥 » (#8906) : la passerelle pousse l'état d'engagement au seul lecteur crédité. */
+  const unengage = bindConversationEngagement({ socket: next.socket, store: engagementStore });
+  /* « · +99 » (#9570) : ce qu'un post a rapporté au lecteur crédité, posé sur chaque caisse qui montre sa carte. */
+  const unengagePosts = bindPostEngagement({ socket: next.socket, queryClient: appQueryClient });
+  /* `profile:decor-updated` (#10632) : le contour et la bannière équipés sur un autre de mes appareils. */
+  const undecor = bindProfileDecorSync({ socket: next.socket, queryClient: appQueryClient });
+  /* `sticker:library-updated` (#16515) : un sticker ajouté, remonté ou retiré sur un autre de mes appareils. */
+  const unstickers = bindStickerLibrarySync({ socket: next.socket, queryClient: appQueryClient });
+  /* `game:updated` (#10900) : une frappe ou un gain faits ailleurs mettent le Jeu à jour, jamais avec un état plus ancien. */
+  const ungame = bindGameStateSync({ socket: next.socket, queryClient: appQueryClient });
+  /* `user:preferences-updated` (#10663) : le fond et l'accent changés ailleurs repeignent la liste sans fil ouvert. */
+  const unappearance = bindAppearanceLiveLazily({ socket: next.socket, queryClient: appQueryClient });
+  /* `community:updated` (#18435) : un renommage ou une bascule de confidentialité se voit chez chaque membre. */
+  const uncommunity = bindCommunityLiveLazily({ socket: next.socket, queryClient: appQueryClient });
+  /* La présence vivante (#10571) : `user:status`, `presence:snapshot` et la frappe tiennent chaque pastille à jour. */
+  const unpresence = bindPresenceLive({ socket: next.socket, store: presenceStore, viewerId: currentViewerId });
+  /* `notification:deleted` ferme aussi la bannière du service worker (#8752), comme la coque et iOS. */
+  const unrevoke = bridgeBannerRevocations(next.socket);
+  unbridgeCalls = () => {
+    unbridge();
+    unwatch();
+    unview();
+    unengage();
+    unengagePosts();
+    undecor();
+    unstickers();
+    ungame();
+    unappearance();
+    uncommunity();
+    unpresence();
+    unrevoke();
+  };
+}
+
+function currentViewerId(): string {
+  return resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).id ?? '';
+}
+
+/** La connexion de la passerelle réelle, une par identité (`keepRealtimeConnection`). */
+const liveConnection = keepRealtimeConnection<RealtimeConnection>({
+  open: (auth, account) =>
+    createRealtimeConnection(auth, {
+      base: apiConfig.base,
+      socketFactory: createSocketIOClient,
+      queryClient: appQueryClient,
+      typing: typingStore,
+      conversationStore,
+      outbox: outboxStore,
+      viewerId: currentViewerId,
+      onClearSession: endWithReason,
+      onAccountDeleted: retireDeletedAccountLater,
+      account,
+      onGuestAccessEnded: (reason) => endGuestAccess({ reason, store: sessionStore, end: endRevokedSession, navigate }),
+      onConversationGone: (conversationId) =>
+        leaveThreadOfGoneConversation(conversationId, {
+          pathname: window.location.pathname,
+          threadPath: (id) => href('thread', { conversation: id }),
+          listPath: href('list'),
+          go: (path) => navigate(path, true),
+        }),
+    }),
+  onChange: (next) => {
+    connection = next;
+    bridgeCalls(next);
+  },
+});
+
+function syncConnection(): void {
+  /**
+   * FIXTURES ⇒ TOUJOURS CONNECTÉ, même doctrine que la garde de route
+   * (`session-guard.ts` : « FIXTURES ⇒ TOUJOURS `allow` — le POC et ses
+   * captures n'ont pas de session réelle à faire respecter »). Sous
+   * fixtures, `sessionStore` reste `anonymous` — AUCUN écran de connexion
+   * n'exige `establish()` — donc guetter `authenticated` n'ouvrirait JAMAIS
+   * de connexion et le bouchon de fixtures ne s'exécuterait pour personne.
+   * Le jeton est un LITTÉRAL sans conséquence : `createFixturesSocketClient`
+   * (`fixtures-realtime.ts`) ne le lit jamais.
+   */
+  if (__FIXTURES__ && apiConfig.source === 'fixtures') {
+    if (connection !== null || fixturesConnecting) return;
+    fixturesConnecting = true;
+    void import('./fixtures-realtime').then(({ createFixturesSocketClient }) => {
+      fixturesConnecting = false;
+      if (connection !== null) return;
+      connection = createRealtimeConnection(
+        { token: 'fixtures', sessionToken: 'fixtures' },
+        {
+          base: apiConfig.base,
+          socketFactory: createFixturesSocketClient,
+          queryClient: appQueryClient,
+          typing: typingStore,
+          conversationStore,
+          outbox: outboxStore,
+          viewerId: currentViewerId,
+          onClearSession: () => undefined,
+        },
+      );
+      bridgeCalls(connection);
+    });
+    return;
+  }
+
+  liveConnection.sync(sessionStore.getState().session);
+}
+
+/* Les magasins en mémoire d'une identité (outbox, overrides de rangée,
+   frappe) se vident dès qu'elle change (#8674, `identity-scoped-stores.ts`). */
+watchIdentityScopedStores({ session: sessionStore, outbox: outboxStore, conversations: conversationStore, typing: typingStore, engagement: engagementStore, endToEndRegime: endToEndRegimeLedger });
+/* LE CLIENT SE DÉCLARE (#9611) — appris après la première peinture, publié
+   pour le flux de connexion (`auth.ts`) ; la socket le relit elle-même. */
+void import('@/lib/net/client-session').then(({ publishClientDeclaration }) => publishClientDeclaration()).catch(() => undefined);
+
+sessionStore.subscribe(syncConnection);
+// La session peut déjà être authentifiée au moment où ce module se charge
+// (restauration `localStorage`, `main.tsx` § « LA SESSION EST TENUE » —
+// exécutée AVANT ce `import()` : sans cet appel explicite, une session
+// restaurée n'ouvrirait jamais de connexion, faute d'un CHANGEMENT d'état à
+// observer). Sous fixtures, c'est aussi cet appel qui ouvre la connexion
+// (aucun événement `sessionStore` ne survient jamais).
+syncConnection();
+
+/**
+ * L'ÉMISSION S'ENREGISTRE, ELLE NE S'IMPORTE PAS (revue-correction #5793) —
+ * `view/use-typing-emitter.ts` appelle `emitTyping` depuis `typing-emit.ts`,
+ * un module SANS dépendance. L'importer DEPUIS ce fichier-ci faisait de
+ * `socket.io-client` une dépendance STATIQUE du chunk du fil (mesuré sur
+ * `dist/assets/thread-*.js`), ce que le libellé `on_demand_chunks` de
+ * `budgets.json` niait — et ce que les 40+ surfaces à venir auraient copié.
+ * Le sens de la dépendance est donc inversé ICI : le possesseur s'annonce.
+ *
+ * La connexion est relue À CHAQUE APPEL (jamais capturée) : `syncConnection`
+ * la remplace sur tout changement d'identité, et un émetteur figé parlerait
+ * alors dans un socket détruit.
+ */
+setTypingEmitter((conversationId, isTyping) => connection?.emitTyping(conversationId, isTyping));
+
+/** La réaction à une PIÈCE (#6303) — même inversion que la frappe : la visionneuse appelle le port, jamais ce module. */
+setAttachmentReactionEmitter((request) => sendAttachmentReaction(connection?.socket ?? null, request));
+
+/**
+ * UN APPEL REÇU CHARGE LE MOTEUR (#6382) — le port d'appel garde en file tout
+ * `call:*` arrivé avant lui et appelle ceci ; le moteur (WebRTC, écrans) n'est
+ * donc jamais payé par qui ne reçoit ni ne passe d'appel.
+ */
+setCallEngineWake(() => void import('@/lib/calls/call-actions').then((module) => module.loadCallEngine()));

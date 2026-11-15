@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { logError } from '../../utils/logger';
-import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
+import { logError, logWarn } from '../../utils/logger';
+import { sendSuccess, sendPaginatedSuccess, sendForbidden, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
 import { permissionsService } from './services/PermissionsService';
 import { type UserRole } from './types';
 import { validatePagination } from '../../utils/pagination';
@@ -8,7 +8,15 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { authorSelect, mediaSelect, NOT_DELETED } from '../../services/posts/postIncludes';
 import { applyPostRemovalEffects } from '../../services/posts/postRemovalEffects';
+import { noticeAdminRemoval } from '../../services/moderation/adminRemovalNotices';
+import { removedPostContentType } from '../../services/moderation/contentRemoval';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
+import { announceCitedPostWithdrawal } from '../../socketio/announceCitedPostWithdrawal';
+import { requirePermission } from '../../middleware/authorize';
+import { judgeReason, sendReasonRefusal } from '../../middleware/sovereign-reason';
+import { ADMIN_POST_STATES, adminPostStateOf, type AdminPostState } from '@meeshy/shared/types/admin-publications';
+import { adminPostStateWhere } from './post-state-filter';
+import { POST_VISIBILITIES } from '@meeshy/shared/types/post';
 
 /**
  * Ligne de la liste d'administration des posts.
@@ -38,6 +46,10 @@ const adminPostRowSchema = {
     isEdited: { type: 'boolean', nullable: true },
     deletedAt: { type: 'string', format: 'date-time', nullable: true },
     expiresAt: { type: 'string', format: 'date-time', nullable: true },
+    // L'état LU (#10392) et ce qui le date : la liste dit « hors ligne » sans relire la fiche.
+    state: { type: 'string', enum: [...ADMIN_POST_STATES] },
+    moderationHiddenAt: { type: 'string', format: 'date-time', nullable: true },
+    moderationPriorVisibility: { type: 'string', nullable: true },
     likeCount: { type: 'number', nullable: true },
     commentCount: { type: 'number', nullable: true },
     repostCount: { type: 'number', nullable: true },
@@ -58,9 +70,12 @@ const adminPostRowSchema = {
     },
     media: {
       type: 'array',
-      // `mediaSelect` porte dix-neuf champs et suit le pipeline média. Un média
-      // est ici une donnée d'inspection, pas un contrat client : le laisser
-      // passer entier vaut mieux que d'en figer une copie qui dériverait.
+      // `additionalProperties: true` : un média est ici une donnée
+      // d'inspection, pas un contrat client fermé — figer une copie de sa
+      // forme la ferait dériver du pipeline média. Ce que la LISTE en charge
+      // est donc ce qu'elle en sert, et c'est `adminPostListMediaSelect`
+      // (#4392) qui le dit — pas `mediaSelect`, dont la paire lourde du Prisme
+      // n'avait aucun lecteur mesuré ici.
       items: { type: 'object', additionalProperties: true }
     },
     _count: {
@@ -75,17 +90,10 @@ const adminPostRowSchema = {
 } as const;
 
 // Middleware d'autorisation admin
-const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return sendUnauthorized(reply, 'Authentification requise');
-  }
-
-  const permissions = permissionsService.getUserPermissions(authContext.registeredUser.role as UserRole);
-  if (!permissions.canAccessAdmin) {
-    return sendForbidden(reply, 'Acces administrateur requis');
-  }
-};
+// `requireAdmin` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+const requireAdmin = requirePermission('canAccessAdmin');
 
 // Query type for listing posts
 interface PostListQuery {
@@ -98,12 +106,168 @@ interface PostListQuery {
   period?: 'today' | 'week' | 'month';
   isDeleted?: string;
   isPinned?: string;
+  state?: AdminPostState;
 }
 
 // authorSelect / mediaSelect are shared from services/posts/postIncludes.
 // Adding `language`, `variantOf`, `transcription`, `translations` here (via the
 // shared select) closes the Prisme Linguistique drift that previously affected
 // the admin views.
+
+/**
+ * Média d'une LIGNE de la LISTE d'administration — `mediaSelect` MOINS la paire
+ * lourde du Prisme (#4392).
+ *
+ * `transcription` porte le texte ET ses segments mot-à-mot ; `translations`
+ * porte la carte de TOUTES les langues, chacune avec son URL de piste. Servis
+ * pour chaque média de chaque post de chaque page, sur une vue qui n'affiche
+ * qu'une vignette et trois compteurs.
+ *
+ * Le comptage des lecteurs (critère 1 de l'issue) rend ZÉRO sur les quatre
+ * surfaces :
+ *   - web     : `apps/web/components/admin/user-detail/UserPostsSection.tsx`
+ *               est le SEUL appelant du dépôt, et son type `AdminPostMedia`
+ *               déclare quatre champs — `id`, `mimeType`, `fileUrl`,
+ *               `thumbnailUrl` ;
+ *   - iOS/SDK : `AdminEndpoint.posts` est DÉCLARÉ et jamais appelé ; le seul
+ *               cas d'`AdminEndpoint` consommé par tout iOS est
+ *               `mePermissions` (`PermissionsService.swift`) ;
+ *   - Android : aucune surface admin (`core/network/.../api/` n'a pas d'API
+ *               d'administration).
+ *
+ * La route de DÉTAIL (`GET /admin/posts/:postId`, `adminPostDetailSelect`
+ * ci-dessous) continue de les servir par `mediaSelect` : c'est elle qui
+ * inspecte un post. Même partage que #4166, qui a retiré `translatedBodies` /
+ * `translatedSubjects` de la LISTE des diffusions après avoir mesuré leur
+ * unique lecteur sur la page de DÉTAIL.
+ *
+ * Dérivé PAR OMISSION plutôt que réécrit : une colonne future de `PostMedia`
+ * ajoutée à `mediaSelect` continue d'arriver ici toute seule, et seules les
+ * deux colonnes lourdes sont nommées. Le drift que `postIncludes.ts` interdit
+ * est celui d'une COPIE, pas celui d'une soustraction déclarée.
+ */
+const { transcription: _omitTranscription, translations: _omitTranslations, ...adminPostListMediaSelect } = mediaSelect;
+
+/**
+ * Projection RACINE de `GET /admin/posts/:postId` (#4166, critère 1 —
+ * famille « include sans select à la racine »).
+ *
+ * L'ancien `include: {...}` sans `select` de tête laissait « toute colonne
+ * ajoutée au modèle `Post` part[ir] automatiquement » (texte de l'issue) —
+ * et le schéma de réponse de cette route est `additionalProperties: true`
+ * (une vue d'inspection admin, pas un contrat client fermé, cf.
+ * `mediaSelect` ci-dessus), donc RIEN ne filtrait ce qui sort. Les 42 champs
+ * scalaires ci-dessous sont la totalité de ceux que `schema.prisma` déclare
+ * aujourd'hui sur `Post` : ce n'est PAS une réduction (le champ le plus
+ * lourd, `Post.metadata`, reste servi — décision de détail, pas de liste) —
+ * c'est le même contenu, rendu EXPLICITE. Un champ futur du modèle
+ * n'apparaîtra plus ici tout seul ; il faudra l'y ajouter, comme pour tout
+ * `select` nommé du dépôt.
+ */
+const adminPostDetailSelect = {
+  id: true,
+  authorId: true,
+  type: true,
+  visibility: true,
+  visibilityUserIds: true,
+  content: true,
+  originalLanguage: true,
+  translations: true,
+  metadata: true,
+  geoPoint: true,
+  geoPrecision: true,
+  communityId: true,
+  repostOfId: true,
+  originalRepostOfId: true,
+  isQuote: true,
+  storyEffects: true,
+  allowSoundExtraction: true,
+  moodEmoji: true,
+  audioUrl: true,
+  audioDuration: true,
+  expiresAt: true,
+  reactionSummary: true,
+  reactionCount: true,
+  reactions: true,
+  storyViews: true,
+  likeCount: true,
+  commentCount: true,
+  repostCount: true,
+  viewCount: true,
+  impressionCount: true,
+  bookmarkCount: true,
+  shareCount: true,
+  postOpenCount: true,
+  qualifiedViewCount: true,
+  playCount: true,
+  downloadCount: true,
+  isPinned: true,
+  isEdited: true,
+  contentEditedAt: true,
+  deletedAt: true,
+  // Le retrait de modération (#10392) : la fiche dit « hors ligne » et propose les gestes justes.
+  moderationHiddenAt: true,
+  moderationPriorVisibility: true,
+  createdAt: true,
+  updatedAt: true,
+  author: { select: authorSelect },
+  media: {
+    select: mediaSelect,
+    orderBy: { order: 'asc' as const }
+  },
+  comments: {
+    where: { deletedAt: NOT_DELETED },
+    select: {
+      id: true,
+      content: true,
+      originalLanguage: true,
+      likeCount: true,
+      replyCount: true,
+      isEdited: true,
+      deletedAt: true,
+      createdAt: true,
+      author: { select: authorSelect },
+    },
+    orderBy: { createdAt: 'desc' as const },
+    take: 50
+  },
+  views: {
+    select: {
+      id: true,
+      userId: true,
+      viewedAt: true,
+      duration: true,
+      user: { select: authorSelect },
+    },
+    orderBy: { viewedAt: 'desc' as const },
+    take: 50
+  },
+  repostOf: {
+    select: {
+      id: true,
+      content: true,
+      type: true,
+      createdAt: true,
+      author: { select: authorSelect },
+    }
+  },
+  community: {
+    select: {
+      id: true,
+      identifier: true,
+      name: true,
+      avatar: true,
+    }
+  },
+  _count: {
+    select: {
+      comments: true,
+      views: true,
+      bookmarks: true,
+      reposts: true,
+    }
+  }
+};
 
 function buildPeriodFilter(period: string): Date {
   const startDate = new Date();
@@ -122,6 +286,9 @@ function buildPeriodFilter(period: string): Date {
 
   return startDate;
 }
+
+/** Le motif d'un retrait de post, quand il est exigé ou écrit (spec 2026-10-04 § 4). */
+const MOTIF_DE_RETRAIT_MINIMAL = 3;
 
 export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
 
@@ -180,7 +347,8 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
         totalByType,
         totalDeleted,
         topAuthors,
-        trending
+        trending,
+        live
       ] = await Promise.all([
         // Total posts (non-deleted)
         fastify.prisma.post.count({
@@ -229,6 +397,18 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
             { commentCount: 'desc' },
           ],
           take: 10
+        }),
+
+        // EN LIGNE : non supprimé ET pas expiré. `total` compte encore les
+        // stories et statuts dont l'échéance est passée, que plus personne ne
+        // voit. Une échéance absente (tout post ordinaire) est « sans
+        // échéance » — d'où les trois branches (leçon 318).
+        fastify.prisma.post.count({
+          where: {
+            deletedAt: NOT_DELETED,
+            ...dateFilter,
+            AND: [{ OR: [{ expiresAt: null }, { expiresAt: { isSet: false } }, { expiresAt: { gt: new Date() } }] }]
+          }
         })
       ]);
 
@@ -250,6 +430,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
 
       return sendSuccess(reply, {
         total: totalPosts,
+        live,
         deleted: totalDeleted,
         byType,
         topAuthors: topAuthors.map((a) => ({
@@ -268,6 +449,25 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
   // ──────────────────────────────────────────────────────────────────────
   // GET /posts — List posts with filters and pagination
   // ──────────────────────────────────────────────────────────────────────
+  /**
+   * Ce que cette LISTE sert, et pourquoi (#4392, critère 3 : « pour que le
+   * prochain lot n'ait pas à reposer la question »).
+   *
+   * GARDÉ, avec son lecteur nommé — `UserPostsSection.tsx`, seul appelant du
+   * dépôt, lit `id`, `type`, `visibility`, `content`, `moodEmoji`,
+   * `deletedAt`, `likeCount`, `commentCount`, `viewCount`, `createdAt`,
+   * `media[{ id, mimeType, fileUrl, thumbnailUrl }]` et la pagination. Les
+   * autres colonnes de `adminPostRowSchema` (compteurs de repost, de partage,
+   * de signet, `author`, `_count`) sont servies pour l'inspection admin et
+   * restent déclarées.
+   *
+   * RETIRÉ, à zéro lecteur mesuré sur les QUATRE surfaces : `transcription` et
+   * `translations` du média — voir `adminPostListMediaSelect`.
+   *
+   * PAS TRANCHÉ ICI (critère 2, décision produit) : servir la transcription
+   * sur demande (`?include=transcription`) pour modérer un contenu audio ou
+   * vidéo sans passer par la route de détail.
+   */
   fastify.get('/posts', {
     onRequest: [fastify.authenticate, requireAdmin],
     schema: {
@@ -282,11 +482,12 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
           limit: { type: 'string', description: 'Pagination limit (max 100)', default: '20' },
           search: { type: 'string', description: 'Search in post content' },
           type: { type: 'string', enum: ['POST', 'REEL', 'STORY', 'STATUS'], description: 'Filter by post type' },
-          visibility: { type: 'string', enum: ['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY'], description: 'Filter by visibility' },
+          visibility: { type: 'string', enum: [...POST_VISIBILITIES], description: 'Filter by visibility' },
           authorId: { type: 'string', description: 'Filter by author user ID' },
           period: { type: 'string', enum: ['today', 'week', 'month'], description: 'Filter by time period' },
           isDeleted: { type: 'string', enum: ['true', 'false'], description: 'Filter by deletion status (default: non-deleted only)' },
-          isPinned: { type: 'string', enum: ['true', 'false'], description: 'Filter by pinned status' }
+          isPinned: { type: 'string', enum: ['true', 'false'], description: 'Filter by pinned status' },
+          state: { type: 'string', enum: [...ADMIN_POST_STATES], description: 'Filter by read state (#10392): published, offline, private, expired, deleted — overrides isDeleted' }
         }
       },
       response: {
@@ -331,7 +532,8 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
         authorId,
         period,
         isDeleted,
-        isPinned
+        isPinned,
+        state
       } = request.query as PostListQuery;
 
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
@@ -343,7 +545,16 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       if (isDeleted === 'true') {
         where.deletedAt = { not: null };
       } else if (isDeleted === 'false' || isDeleted === undefined) {
-        where.deletedAt = null;
+        // NOT_DELETED (`isSet: false`), jamais `null` : un post vivant n'a
+        // PAS de colonne `deletedAt`, et `deletedAt: null` n'en appariait
+        // aucun — la liste par défaut était vide (leçon 318).
+        where.deletedAt = NOT_DELETED;
+      }
+
+      const now = new Date();
+      if (state !== undefined) {
+        delete where.deletedAt;
+        Object.assign(where, adminPostStateWhere(state, now));
       }
 
       if (search) {
@@ -385,6 +596,8 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
             isEdited: true,
             deletedAt: true,
             expiresAt: true,
+            moderationHiddenAt: true,
+            moderationPriorVisibility: true,
             likeCount: true,
             commentCount: true,
             repostCount: true,
@@ -395,7 +608,9 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
             updatedAt: true,
             author: { select: authorSelect },
             media: {
-              select: mediaSelect,
+              // #4392 — la LISTE, donc `adminPostListMediaSelect` : voir sa
+              // déclaration pour le comptage des lecteurs qui l'a décidé.
+              select: adminPostListMediaSelect,
               orderBy: { order: 'asc' }
             },
             _count: {
@@ -413,7 +628,15 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
         fastify.prisma.post.count({ where })
       ]);
 
-      return sendPaginatedSuccess(reply, posts, {
+      const rows = posts.map((post) => ({
+        ...post,
+        state: adminPostStateOf(
+          { visibility: post.visibility, deletedAt: post.deletedAt ?? null, expiresAt: post.expiresAt ?? null, moderationHiddenAt: post.moderationHiddenAt ?? null },
+          now
+        )
+      }));
+
+      return sendPaginatedSuccess(reply, rows, {
         total: totalCount,
         limit: limitNum,
         offset: offsetNum,
@@ -472,65 +695,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
 
       const post = await fastify.prisma.post.findUnique({
         where: { id: postId },
-        include: {
-          author: { select: authorSelect },
-          media: {
-            select: mediaSelect,
-            orderBy: { order: 'asc' }
-          },
-          comments: {
-            where: { deletedAt: NOT_DELETED },
-            select: {
-              id: true,
-              content: true,
-              originalLanguage: true,
-              likeCount: true,
-              replyCount: true,
-              isEdited: true,
-              deletedAt: true,
-              createdAt: true,
-              author: { select: authorSelect },
-            },
-            orderBy: { createdAt: 'desc' },
-            take: 50
-          },
-          views: {
-            select: {
-              id: true,
-              userId: true,
-              viewedAt: true,
-              duration: true,
-              user: { select: authorSelect },
-            },
-            orderBy: { viewedAt: 'desc' },
-            take: 50
-          },
-          repostOf: {
-            select: {
-              id: true,
-              content: true,
-              type: true,
-              createdAt: true,
-              author: { select: authorSelect },
-            }
-          },
-          community: {
-            select: {
-              id: true,
-              identifier: true,
-              name: true,
-              avatar: true,
-            }
-          },
-          _count: {
-            select: {
-              comments: true,
-              views: true,
-              bookmarks: true,
-              reposts: true,
-            }
-          }
-        }
+        select: adminPostDetailSelect
       });
 
       if (!post) {
@@ -565,7 +730,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       body: {
         type: 'object',
         properties: {
-          reason: { type: 'string', description: 'Reason for deletion (for audit trail)' }
+          reason: { type: 'string', maxLength: 500, description: 'Motif du retrait (3 caractères minimum ; obligatoire sauf pour le rang souverain), consigné dans AdminAuditLog' }
         }
       },
       response: {
@@ -577,6 +742,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
             message: { type: 'string' }
           }
         },
+        400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
@@ -594,15 +760,22 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       const { postId } = request.params;
-      const { reason } = request.body ?? {};
+      // Motif obligatoire (3 caractères) sauf pour le rang souverain, validé
+      // s'il est écrit (spec 2026-10-04 § 4).
+      const verdict = judgeReason(request, request.body?.reason, MOTIF_DE_RETRAIT_MINIMAL);
+      if (verdict.problem) {
+        return sendReasonRefusal(reply, verdict.problem, { source: 'body', min: MOTIF_DE_RETRAIT_MINIMAL });
+      }
+      const { reason } = verdict;
 
       // `type` / `visibility` / `visibilityUserIds` ne servent pas au retrait
       // lui-même mais à l'annoncer : ils choisissent l'événement et refiltrent
-      // l'audience (`broadcastPostRemoval`). Prisma `select` : ce qui n'est pas
-      // demandé ici n'existe pas plus bas.
+      // l'audience (`broadcastPostRemoval`). `createdAt` décide si les points de
+      // la publication sont repris (trente jours, #11467). Prisma `select` : ce
+      // qui n'est pas demandé ici n'existe pas plus bas.
       const post = await fastify.prisma.post.findUnique({
         where: { id: postId },
-        select: { id: true, deletedAt: true, authorId: true, type: true, visibility: true, visibilityUserIds: true }
+        select: { id: true, deletedAt: true, expiresAt: true, authorId: true, type: true, visibility: true, visibilityUserIds: true, createdAt: true }
       });
 
       if (!post) {
@@ -613,11 +786,10 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
         return sendBadRequest(reply, 'Le post est deja supprime');
       }
 
+      const deletedAt = new Date();
       await fastify.prisma.post.update({
         where: { id: postId },
-        data: {
-          deletedAt: new Date()
-        }
+        data: { deletedAt }
       });
 
       // Deuxième dette du même raccourci : écrire `deletedAt` sans passer par
@@ -634,8 +806,13 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       broadcastPostRemoval(
         fastify.socialEvents,
         post,
-        (err) => fastify.log.warn({ err }, '[DELETE /admin/posts/:postId]: broadcast deletion failed')
+        (err) => logWarn(fastify.log, '[DELETE /admin/posts/:postId]: broadcast deletion failed', err)
       );
+      announceCitedPostWithdrawal({
+        prisma: fastify.prisma,
+        io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+        post: { ...post, deletedAt },
+      }).catch((err) => logWarn(fastify.log, '[DELETE /admin/posts/:postId]: cited-post announce failed', err));
 
       // Cette route écrit `deletedAt` SANS passer par `PostService.deletePost`.
       // Tout ce qu'un retrait doit écrire en base — ligne d'audit, coupure des
@@ -643,7 +820,15 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       // `applyPostRemovalEffects`, partagé avec le service. Les trois effets
       // ont été rattrapés ici un par un, à des cycles d'intervalle, parce que
       // rien ne nommait la liste : il n'y a plus qu'un endroit à tenir.
-      await applyPostRemovalEffects(fastify.prisma, post, { id: user.id, reason });
+      await applyPostRemovalEffects(fastify.prisma, post, { id: user.id, reason, viaAdministration: true });
+      noticeAdminRemoval({ prisma: fastify.prisma }, {
+        actorUserId: user.id,
+        authorUserId: post.authorId,
+        contentType: removedPostContentType(post.type),
+        contentId: postId,
+        postId,
+        reason,
+      });
 
       fastify.log.info({
         action: 'admin_post_delete',

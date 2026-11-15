@@ -30,3 +30,20 @@ public data class OpenSourceLicenseGroup(
     val type: OpenSourceLicenseType,
     val licenses: List<OpenSourceLicense>,
 )
+
+/** Semantic colour family of a license capsule; the app maps it to a palette colour. */
+public enum class LicenseBadge { SUCCESS, WARNING, INFO, NEUTRAL }
+
+/**
+ * One tappable card of the licenses screen - one per library. [typeName] is the capsule text for
+ * the families whose name is not translatable (MIT, Apache 2.0, BSD); `null` for [OpenSourceLicenseType.OTHER],
+ * which the app labels with its localized "Other".
+ */
+public data class OpenSourceLicenseCard(
+    val name: String,
+    val author: String,
+    val type: OpenSourceLicenseType,
+    val typeName: String?,
+    val badge: LicenseBadge,
+    val url: String,
+)

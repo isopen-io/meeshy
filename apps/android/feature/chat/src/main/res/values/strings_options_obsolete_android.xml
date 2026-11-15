@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_options_obsolete">Make obsolete</string>
+    <string name="conversation_options_obsolete_title">Make this conversation obsolete?</string>
+    <string name="conversation_options_obsolete_message">It disappears at once for all its members and its content is erased within 48 hours. This cannot be undone.</string>
+    <string name="conversation_options_error_obsolete">The conversation could not be made obsolete.</string>
+</resources>

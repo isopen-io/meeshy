@@ -19,9 +19,9 @@
 | `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView.swift` | Vue principale — refactor complet |
 | `packages/MeeshySDK/Sources/MeeshyUI/Story/StorySlideManager.swift` | Manager + `StorySlideCarousel` (ne PAS modifier, juste réutiliser) |
 | `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift` | `StorySlide`, `StoryItem`, `StoryEffects` |
-| `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` | Viewer — ajouter `isPreviewMode` |
-| `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift` | Point d'entrée — adapter les callbacks |
-| `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift` | Ajouter `publishStorySingle()` |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` | Viewer — ajouter `isPreviewMode` |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift` | Point d'entrée — adapter les callbacks |
+| `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift` | Ajouter `publishStorySingle()` |
 
 ### Architecture des callbacks (CRITIQUE)
 
@@ -551,9 +551,9 @@ git commit -m "fix(composer): canvas tap-outside dismisses active panel, panel h
 
 **Files:**
 - Modify: `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift`
 
 ### Step 1: StoryModels.swift — extension toPreviewStoryItem
 
@@ -765,9 +765,9 @@ Modifier le `fullscreenCover(isPresented: $viewModel.showStoryComposer)` :
 ```bash
 ./apps/ios/meeshy.sh build
 git add packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift
-git add apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift
-git add apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift
+git add apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift
 git commit -m "feat(composer): preview mode with StoryViewerView, publishStorySingle throws"
 ```
 

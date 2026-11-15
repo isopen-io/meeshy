@@ -25,6 +25,23 @@ nonisolated struct StoryInlineEditZone: Equatable, Sendable {
     /// hauteur absurde.
     var height: CGFloat { max(0, bottom - top) }
     var midY: CGFloat { (top + bottom) / 2 }
+
+    /// Centre vertical du bloc édité. Pure et testable hors fenêtre.
+    ///
+    /// Sans zone mesurée → centre du canvas, comportement historique (canvas de
+    /// lecture, tests hors fenêtre, ouverture avant que le composer n'ait
+    /// mesuré ses contrôleurs).
+    static func centerY(of zone: StoryInlineEditZone?, canvasMidY: CGFloat) -> CGFloat {
+        zone?.midY ?? canvasMidY
+    }
+
+    /// Hauteur VISIBLE du bloc édité. Pure et testable hors fenêtre.
+    ///
+    /// Sans zone mesurée → hauteur naturelle, croissance libre d'origine.
+    static func blockHeight(natural: CGFloat, zoneHeight: CGFloat?) -> CGFloat {
+        guard let zoneHeight else { return natural }
+        return min(natural, zoneHeight)
+    }
 }
 
 extension StoryCanvasUIView: UITextViewDelegate {
@@ -54,7 +71,9 @@ extension StoryCanvasUIView: UITextViewDelegate {
             restoreLayerAfterEditing(previousLayer)
         }
 
-        let editor = inlineEditor ?? StoryInlineTextEditor()
+        let editor = inlineEditor ?? parkedInlineEditor ?? StoryInlineTextEditor()
+        parkedInlineEditor = nil
+        editor.isHidden = false
         editor.delegate = self
         if editor.superview == nil { addSubview(editor) }
         inlineEditor = editor
@@ -73,6 +92,7 @@ extension StoryCanvasUIView: UITextViewDelegate {
         anchorInlineEditing(layer: textLayer, editor: editor)
         textLayer.setGlyphsHidden(true)
         setInlineEditScrimVisible(true)
+        inlineEditInputLink?.attach(to: editor)
         editor.becomeFirstResponder()
     }
 
@@ -80,6 +100,13 @@ extension StoryCanvasUIView: UITextViewDelegate {
     /// renvoie la calque à sa position/rotation réelles (celles du modèle,
     /// jamais mutées par le recentrage d'édition).
     public func endInlineTextEdit() {
+        endInlineTextEdit(parkingEditor: false)
+    }
+
+    /// `parkingEditor` : le champ est MASQUÉ plutôt que retiré — un geste
+    /// commencé sur lui serait annulé si sa vue quittait la hiérarchie sous le
+    /// doigt. `releaseParkedInlineEditor()` le retire à la fin du geste.
+    func endInlineTextEdit(parkingEditor: Bool) {
         guard let id = inlineEditingTextId else { return }
         if let layer = textLayer(forId: id) {
             layer.setGlyphsHidden(false)
@@ -87,6 +114,7 @@ extension StoryCanvasUIView: UITextViewDelegate {
         }
         let editor = inlineEditor
         inlineEditor = nil
+        inlineEditInputLink?.detach()
         // `inlineEditingTextId` est mis à nil AVANT `resignFirstResponder()` :
         // résigner déclenche un `textViewDidEndEditing` dont la guard sur
         // `inlineEditingTextId` échoue alors — ce qui évite un second
@@ -96,7 +124,12 @@ extension StoryCanvasUIView: UITextViewDelegate {
         // calque que si aucune édition n'a repris entre-temps.
         setInlineEditScrimVisible(false)
         editor?.resignFirstResponder()
-        editor?.removeFromSuperview()
+        if parkingEditor {
+            editor?.isHidden = true
+            parkedInlineEditor = editor
+        } else {
+            editor?.removeFromSuperview()
+        }
     }
 
     /// Hook appelé en fin de `rebuildLayers()` : la calque éditée vient d'être
@@ -124,7 +157,7 @@ extension StoryCanvasUIView: UITextViewDelegate {
     }
 
     /// Pose le bloc en édition (calque + champ) au CENTRE DE LA ZONE, et borne
-    /// sa hauteur à celle de la zone (spec 2026-08-01).
+    /// sa hauteur à celle de la zone.
     ///
     /// Le centre ne dépend plus de la hauteur du bloc : un texte neuf naît là où
     /// se trouvera un texte de trois lignes, donc la première frappe ne déplace
@@ -137,8 +170,8 @@ extension StoryCanvasUIView: UITextViewDelegate {
     /// `rebuildLayers()` d'après — donc on mesure sur la PLUS HAUTE des deux.
     func anchorInlineEditing(layer: StoryTextLayer, editor: StoryInlineTextEditor) {
         let zone = inlineEditZone
-        let centerY = Self.inlineEditCenterY(zone: zone, canvasMidY: bounds.midY)
-        let visibleHeight = Self.inlineEditBlockHeight(
+        let centerY = StoryInlineEditZone.centerY(of: zone, canvasMidY: bounds.midY)
+        let visibleHeight = StoryInlineEditZone.blockHeight(
             natural: max(layer.bounds.height, editor.bounds.height),
             zoneHeight: zone?.height)
 
@@ -163,25 +196,6 @@ extension StoryCanvasUIView: UITextViewDelegate {
 
     /// Opacité de l'ombrage posé sur le canvas pendant l'édition.
     static let inlineEditScrimAlpha: CGFloat = 0.45
-
-    /// Centre vertical du bloc édité. Pure et testable hors fenêtre.
-    ///
-    /// Sans zone mesurée → centre du canvas, comportement historique (canvas de
-    /// lecture, tests hors fenêtre, ouverture avant que le composer n'ait
-    /// mesuré ses contrôleurs).
-    nonisolated static func inlineEditCenterY(zone: StoryInlineEditZone?,
-                                              canvasMidY: CGFloat) -> CGFloat {
-        zone?.midY ?? canvasMidY
-    }
-
-    /// Hauteur VISIBLE du bloc édité. Pure et testable hors fenêtre.
-    ///
-    /// Sans zone mesurée → hauteur naturelle, croissance libre d'origine.
-    nonisolated static func inlineEditBlockHeight(natural: CGFloat,
-                                                  zoneHeight: CGFloat?) -> CGFloat {
-        guard let zoneHeight else { return natural }
-        return min(natural, zoneHeight)
-    }
 
     /// Zone d'édition en repère canvas, ou `nil` tant que le composer n'a pas
     /// mesuré ses DEUX contrôleurs (ou que la vue n'est pas en fenêtre).
@@ -249,7 +263,7 @@ extension StoryCanvasUIView: UITextViewDelegate {
     /// la sortie d'édition couperait net.
     private func setInlineEditScrimVisible(_ visible: Bool) {
         inlineEditScrimLayer.frame = bounds
-        guard visible else {
+        guard visible, !backgroundLayer.isHidden else { // sans fond peint, l'hôte voile l'image entière (#18640)
             CATransaction.begin()
             CATransaction.setCompletionBlock { [weak self] in
                 guard let self, self.inlineEditingTextId == nil else { return }
@@ -273,14 +287,14 @@ extension StoryCanvasUIView: UITextViewDelegate {
     /// touché, et `rebuildLayers()` replace toujours la calque depuis le modèle
     /// (d'où le re-recentrage dans `reapplyInlineEditingIfNeeded`).
     ///
-    /// « Recentre » au sens de `inlineEditCenterY(zone:canvasMidY:)` : milieu de
+    /// « Recentre » au sens de `StoryInlineEditZone.centerY(of:canvasMidY:)` : milieu de
     /// la zone d'édition, ou centre du canvas tant qu'aucune zone n'est mesurée.
     private func centerLayerForEditing(_ layer: StoryTextLayer) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         layer.position = CGPoint(
             x: bounds.midX,
-            y: Self.inlineEditCenterY(zone: inlineEditZone, canvasMidY: bounds.midY))
+            y: StoryInlineEditZone.centerY(of: inlineEditZone, canvasMidY: bounds.midY))
         layer.transform = CATransform3DIdentity
         CATransaction.commit()
     }
@@ -298,8 +312,8 @@ extension StoryCanvasUIView: UITextViewDelegate {
         // retrouve son fond intégral.
         layer.mask = nil
         layer.position = geometry.render(CGPoint(x: designX, y: designY))
-        layer.transform = CATransform3DMakeRotation(
-            CGFloat(textObject.rotation) * .pi / 180, 0, 0, 1)
+        layer.transform = StoryTextLayer.sceneTransform(rotationDegrees: textObject.rotation,
+                                                        scale: textObject.scale)
         CATransaction.commit()
     }
 
@@ -321,7 +335,17 @@ extension StoryCanvasUIView: UITextViewDelegate {
 
     // MARK: - UITextViewDelegate
 
+    /// Les 1 000 caractères se tiennent à la frappe (#13590) : `StoryInlineTextLengthGate`.
+    public func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+        let verdict = StoryInlineTextLengthGate.admit(text, in: range, of: textView)
+        if verdict.wroteHead { textViewDidChange(textView) }
+        return verdict.accepted
+    }
+
     public func textViewDidChange(_ textView: UITextView) {
+        // A keystroke is user activity — wakes the idle-throttled edit clock
+        // (issue #3906). See `noteEditInteraction()`.
+        noteEditInteraction()
         let editor = textView as? StoryInlineTextEditor
         editor?.updatePlaceholderVisibility()
         // Croissance immédiate des bounds de l'éditeur pour englober tout
@@ -347,5 +371,13 @@ extension StoryCanvasUIView: UITextViewDelegate {
     public func textViewDidEndEditing(_ textView: UITextView) {
         guard let id = inlineEditingTextId else { return }
         onInlineTextEditEnded?(id)
+        // Clavier rangé : le texte rend sa place au doigt (hôte qui l'opte).
+        // Différé d'un tour : on ne retire pas le champ pendant son propre
+        // rappel de fin d'édition.
+        guard inlineEditYieldsToManipulation else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.inlineEditingTextId == id, !(self.inlineEditor?.isFirstResponder ?? false) else { return }
+            self.suspendInlineEditForManipulation()
+        }
     }
 }

@@ -17,7 +17,7 @@ final class ScrollTimePillSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Focal/Chrome/\(fileName)")
+            .appendingPathComponent("Meeshy/Features/Focal/Chrome/\(fileName)")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

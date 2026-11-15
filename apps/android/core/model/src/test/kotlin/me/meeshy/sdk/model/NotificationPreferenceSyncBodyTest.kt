@@ -3,9 +3,12 @@ package me.meeshy.sdk.model
 import com.google.common.truth.Truth.assertThat
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import me.meeshy.sdk.model.relation.CircleNotify
+import me.meeshy.sdk.model.relation.RelationAudienceChoice
 import org.junit.Test
 
 /**
@@ -20,15 +23,31 @@ class NotificationPreferenceSyncBodyTest {
 
     private val json = Json { encodeDefaults = true }
 
-    /** The exact field set the gateway `NotificationPreferenceSchema` accepts (30 fields). */
+    /** The wire config of `MeeshyApi.json` (outbox payload and PATCH body): defaults NOT encoded. */
+    private val wire = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        explicitNulls = false
+        coerceInputValues = true
+    }
+
+    /**
+     * The field set the gateway `NotificationPreferenceSchema` accepts and this body carries.
+     * `callsEnabled` and `friendContentEnabled` are the two per-type toggles that gate
+     * incoming-call and friend-content notifications (iOS `isTypeEnabled` parity);
+     * `contactActivityEnabled` (#8285) and `gameEnabled` (#9490) gate `contact_recently_active`
+     * and the `game_*` family; `dndUtcOffsetMinutes` (GW7) is the offset the gateway evaluates
+     * the DND window with.
+     */
     private val gatewayFields = setOf(
         "pushEnabled", "emailEnabled", "soundEnabled", "vibrationEnabled",
-        "newMessageEnabled", "missedCallEnabled", "voicemailEnabled", "systemEnabled",
+        "newMessageEnabled", "missedCallEnabled", "callsEnabled", "voicemailEnabled", "systemEnabled",
         "conversationEnabled", "replyEnabled", "mentionEnabled", "reactionEnabled",
         "contactRequestEnabled", "groupInviteEnabled", "memberJoinedEnabled", "memberLeftEnabled",
         "postLikeEnabled", "postCommentEnabled", "postRepostEnabled", "storyReactionEnabled",
-        "commentReplyEnabled", "commentLikeEnabled",
-        "dndEnabled", "dndStartTime", "dndEndTime", "dndDays",
+        "commentReplyEnabled", "commentLikeEnabled", "friendContentEnabled",
+        "contactActivityEnabled", "gameEnabled", "deviceBatteryEnabled",
+        "dndEnabled", "dndStartTime", "dndEndTime", "dndDays", "dndUtcOffsetMinutes",
         "showPreview", "showSenderName", "groupNotifications", "notificationBadgeEnabled",
     )
 
@@ -76,7 +95,7 @@ class NotificationPreferenceSyncBodyTest {
             Json.parseToJsonElement(it).jsonObject
         }
 
-        assertThat(obj.keys).isEqualTo(gatewayFields)
+        assertThat(obj.keys).isEqualTo(gatewayFields + CircleNotify.KEYS)
         assertThat(obj.keys).doesNotContain("extras")
     }
 
@@ -105,5 +124,106 @@ class NotificationPreferenceSyncBodyTest {
         // the model default that intentionally diverges from the others survives the projection
         assertThat(body.memberLeftEnabled).isFalse()
         assertThat(body.commentLikeEnabled).isFalse()
+        // the two per-type toggles default on (iOS + gateway schema parity)
+        assertThat(body.callsEnabled).isTrue()
+        assertThat(body.friendContentEnabled).isTrue()
+    }
+
+    @Test
+    fun `the calls and friend-content toggles survive the round trip both ways`() {
+        val prefs = UserNotificationPreferences(callsEnabled = false, friendContentEnabled = false)
+
+        val body = NotificationPreferenceSyncBody.from(prefs)
+        assertThat(body.callsEnabled).isFalse()
+        assertThat(body.friendContentEnabled).isFalse()
+
+        // toPreferences carries the gateway's values back onto the local block.
+        val roundTripped = body.toPreferences(UserNotificationPreferences())
+        assertThat(roundTripped.callsEnabled).isFalse()
+        assertThat(roundTripped.friendContentEnabled).isFalse()
+    }
+
+    @Test
+    fun `the contact-activity, game and utc-offset fields project and survive the round trip`() {
+        val prefs = UserNotificationPreferences(
+            contactActivityEnabled = false,
+            gameEnabled = false,
+            dndUtcOffsetMinutes = 540,
+        )
+
+        val body = NotificationPreferenceSyncBody.from(prefs)
+
+        assertThat(body.contactActivityEnabled).isFalse()
+        assertThat(body.gameEnabled).isFalse()
+        assertThat(body.dndUtcOffsetMinutes).isEqualTo(540)
+        assertThat(body.toPreferences(UserNotificationPreferences())).isEqualTo(prefs)
+    }
+
+    @Test
+    fun `the three new fields ride the wire whatever their value when defaults are not encoded`() {
+        val obj = wire.encodeToString(NotificationPreferenceSyncBody.from(UserNotificationPreferences())).let {
+            Json.parseToJsonElement(it).jsonObject
+        }
+
+        assertThat(obj.keys).isEqualTo(gatewayFields)
+        assertThat(obj["contactActivityEnabled"]!!.jsonPrimitive.content).isEqualTo("true")
+        assertThat(obj["gameEnabled"]!!.jsonPrimitive.content).isEqualTo("true")
+        assertThat(obj["dndUtcOffsetMinutes"]!!.jsonPrimitive.content).isEqualTo("0")
+    }
+
+    /**
+     * A row queued before these fields existed does not carry them. Replaying it must not stamp
+     * `true / true / 0` over what another device wrote — `0` above all, which would put an iOS
+     * user's DND window back on UTC.
+     */
+    @Test
+    fun `a row queued before the new fields replays without inventing them`() {
+        val legacy = wire.encodeToString(NotificationPreferenceSyncBody.from(UserNotificationPreferences()))
+            .let { Json.parseToJsonElement(it).jsonObject }
+            .filterKeys { it !in setOf("contactActivityEnabled", "gameEnabled", "dndUtcOffsetMinutes") }
+            .let { JsonObject(it).toString() }
+
+        val replayed = wire.decodeFromString<NotificationPreferenceSyncBody>(legacy)
+        val obj = wire.encodeToString(replayed).let { Json.parseToJsonElement(it).jsonObject }
+
+        assertThat(obj.keys).doesNotContain("contactActivityEnabled")
+        assertThat(obj.keys).doesNotContain("gameEnabled")
+        assertThat(obj.keys).doesNotContain("dndUtcOffsetMinutes")
+        val local = UserNotificationPreferences(contactActivityEnabled = false, dndUtcOffsetMinutes = 60)
+        assertThat(replayed.toPreferences(local).contactActivityEnabled).isFalse()
+        assertThat(replayed.toPreferences(local).dndUtcOffsetMinutes).isEqualTo(60)
+    }
+
+    @Test
+    fun `a circle choice made here rides the wire under its flat key`() {
+        val prefs = UserNotificationPreferences(circleAudience = mapOf("circleElsewhereMention" to RelationAudienceChoice.NOBODY))
+
+        val obj = Json.parseToJsonElement(wire.encodeToString(NotificationPreferenceSyncBody.from(prefs))).jsonObject
+
+        assertThat(obj["circleElsewhereMention"]!!.jsonPrimitive.content).isEqualTo("NOBODY")
+        assertThat(obj.keys).containsNoneIn(CircleNotify.KEYS - "circleElsewhereMention")
+    }
+
+    @Test
+    fun `a circle this device never knew is not sent, so a toggle here never overwrites another device's choice`() {
+        val obj = Json.parseToJsonElement(wire.encodeToString(NotificationPreferenceSyncBody.from(UserNotificationPreferences()))).jsonObject
+
+        assertThat(obj.keys).containsNoneIn(CircleNotify.KEYS)
+    }
+
+    @Test
+    fun `a served circle folds onto the local block, an absent or unknown one keeps the local value`() {
+        val local = UserNotificationPreferences(
+            circleAudience = mapOf("circlePublicationPost" to RelationAudienceChoice.FRIEND, "circleElsewhereComment" to RelationAudienceChoice.PUBLIC),
+        )
+        val served = wire.decodeFromString<NotificationPreferenceSyncBody>(
+            wire.encodeToString(NotificationPreferenceSyncBody.from(UserNotificationPreferences())).dropLast(1) +
+                ""","circlePublicationPost":"BLOOD","circleElsewhereComment":"EVERYONE"}""",
+        )
+
+        val next = served.toPreferences(local).circleAudience
+
+        assertThat(next["circlePublicationPost"]).isEqualTo(RelationAudienceChoice.BLOOD)
+        assertThat(next["circleElsewhereComment"]).isEqualTo(RelationAudienceChoice.PUBLIC)
     }
 }

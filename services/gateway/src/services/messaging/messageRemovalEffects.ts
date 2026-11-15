@@ -2,10 +2,19 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import {
   conversationMessageStatsService,
-  resolveAttachmentType,
   statsAuthorKey,
 } from '../ConversationMessageStatsService';
+// La table MIME → compteur vient du module du PLI, jamais du service (#17076).
+// Les témoins de cette unité DOUBLENT le service pour observer le décompte ;
+// importée de là, la table traversait ce double, et un double qui l'omet rend
+// `.map(undefined)` — une levée avalée par le `catch` du décompte, donc un
+// compteur silencieusement jamais débité.
+import { resolveAttachmentType } from '../conversations/messageStatsAggregate';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
+import {
+  getSharedDeliveryQueue,
+  type QueuedMessagePurger,
+} from '../delivery-queue-registry';
 import {
   retractMessageNotifications,
   type RetractedNotificationAnnouncer,
@@ -15,6 +24,12 @@ export type {
   RetractedNotification,
   RetractedNotificationAnnouncer,
 } from './retractMessageNotifications';
+import { withoutCaptureNotices } from './captureNoticeVisibility';
+import { boundCaptureNoticesNaming } from './captureNoticeRetention';
+import { eraseSharedTranslations } from './sharedTranslationErasure';
+import { purgeTranslationCacheFor } from '../message-translation/translationCacheRegistry';
+import { cutTogetherWhere } from '../together/togetherDeps';
+import { togetherMediaOf } from '../together/togetherGate';
 
 const log = enhancedLogger.child({ module: 'messageRemovalEffects' });
 
@@ -32,7 +47,9 @@ const log = enhancedLogger.child({ module: 'messageRemovalEffects' });
  * handler socket, si bien qu'aucune des deux moitiés ne couvrait l'autre. Le
  * retrait des notifications que le message avait produites, lui, ne vivait
  * NULLE PART : elles gardent une copie de son extrait, et le rappel les
- * laissait affichées.
+ * laissait affichées. L'effacement des traductions PARTAGÉES (#9899) n'y
+ * vivait pas davantage : la table voisine de `Message.translations` gardait la
+ * version scellée d'un message que chaque écrivain venait de vider.
  * C'est le jumeau d'`applyPostRemovalEffects`, pour la même raison et
  * après le même constat : un effet ajouté ici s'applique à tous les chemins.
  *
@@ -68,6 +85,11 @@ export interface RemovedMessageRecord {
   content?: string | null;
   /** `Json?` partagé ; seul `trackingLinks` est lu ici. */
   metadata?: unknown;
+  /**
+   * `Participant.id` de celui qui SUPPRIME, quand ce n'est pas l'auteur : ses
+   * propres avis de capture du message gardent leurs 24 h (#9629).
+   */
+  removedByParticipantId?: string | null;
 }
 
 /**
@@ -169,8 +191,8 @@ async function tokensStillReferenced(
  * ils continuaient de compter des clics vers un contenu effacé.
  *
  * Mais `TrackingLink.messageId` NE DÉSIGNE PAS le propriétaire, et c'est tout
- * l'enjeu : `findExistingTrackingLink(url, conversationId)` REND À TOUT MESSAGE
- * de la conversation le lien déjà minté pour la même URL. Une ligne est donc
+ * l'enjeu : `findExistingTrackingLink(url, { kind: 'conversation', … })` REND À
+ * TOUT MESSAGE de la conversation le lien déjà minté pour la même URL. Une ligne est donc
  * PARTAGÉE, et `messageId` n'en retient qu'un seul message — le premier à
  * l'avoir réclamée par le chemin d'envoi (`updateTrackingLinksWithMessageId`
  * filtre sur `messageId: null`), le dernier par le chemin de partage
@@ -240,8 +262,9 @@ export async function recomputeConversationLastMessageAt(
   });
   if (!conversation) return;
 
+  // #9630 — l'horloge du fil ne se pose jamais sur un avis de capture.
   const lastAlive = await prisma.message.findFirst({
-    where: { conversationId, deletedAt: null },
+    where: withoutCaptureNotices({ conversationId, deletedAt: null }),
     orderBy: { createdAt: 'desc' },
     select: { createdAt: true },
   });
@@ -252,11 +275,73 @@ export async function recomputeConversationLastMessageAt(
   });
 }
 
+/**
+ * `cause` : `deleted` (le défaut — un retrait voulu, par l'auteur, un
+ * modérateur, une suppression de compte) emporte les avis de capture qui
+ * nomment le message, sauf ceux de celui qui supprime ; `expired` (le balayage
+ * des éphémères) les borne à vingt-quatre heures (#9629,
+ * `boundCaptureNoticesNaming`).
+ */
 export async function applyMessageRemovalEffects(
   prisma: PrismaClient,
   message: RemovedMessageRecord,
-  announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService()
+  announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService(),
+  options: {
+    readonly cause?: 'deleted' | 'expired';
+    /**
+     * #16706 — la file de rejeu hors ligne à purger. Résolue depuis le registre
+     * par défaut ; le paramètre n'existe que pour les témoins, et c'est pour
+     * cela qu'il est DANS les options et non une quatrième position : aucun
+     * appelant de production ne le passe, donc aucun ne peut l'oublier.
+     */
+    readonly deliveryQueue?: QueuedMessagePurger;
+  } = {}
 ): Promise<void> {
+  // La copie EN MÉMOIRE de ses traductions (#16557). L'écrivain vient de vider
+  // `Message.translations`, mais le cache du traducteur, servi avant la base et
+  // sans TTL, gardait le texte traduit d'un message rappelé. Synchrone, ne lève
+  // jamais : elle passe avant tout `await`.
+  purgeTranslationCacheFor([message.id]);
+
+  // Les traductions PARTAGÉES du message (#9899). Chaque écrivain de retrait vide
+  // `Message.translations` ; la table voisine, elle, gardait la version scellée
+  // du message — lisible, pour qui détenait la clé, aussi longtemps que la base
+  // la gardait. Elle passe EN PREMIER parce que son retard se lit comme une
+  // fuite de contenu, au même titre que les notifications ci-dessous, et
+  // qu'elle ne lit que `message.id` : rien de ce qui suit ne peut l'invalider.
+  // BEST-EFFORT à l'intérieur de l'unité même (`eraseSharedTranslations`) :
+  // elle ne lève jamais, donc aucun `try` ici.
+  await eraseSharedTranslations(prisma, { messageIds: [message.id] });
+
+  // La QUATRIÈME copie résiduelle du texte, et la seule qui vivait hors de
+  // Mongo (#16706). Cette unité en balayait déjà trois — le cache du
+  // traducteur juste au-dessus (#16557), la table des traductions partagées
+  // (#9899), et `Message.translations` que chaque écrivain vide chez lui. La
+  // file de rejeu hors ligne est leur JUMELLE, et elle avait la pire propriété
+  // des quatre : `enqueueForOfflineParticipants` y écrit `payload: body`
+  // VERBATIM, dans Redis, avec un TTL de 48 h et une persistance AOF. Un
+  // message brûlé, rappelé ou échu laissait donc son clair sur disque alors que
+  // `_burn` revendique « le contenu est détruit ».
+  //
+  // La question qui l'a trouvée est celle du cycle 85 : *cette entité a-t-elle
+  // une jumelle ?* — posée non pas à une table voisine, mais à un SUBSTRAT
+  // voisin. Les trois balayages existants nettoient Mongo et le tas du
+  // processus ; aucun ne regardait Redis, parce qu'aucun n'y avait de chemin.
+  //
+  // Best-effort, et jamais `await`-bloquant pour l'appelant au sens du résultat :
+  // la destruction en base a déjà eu lieu, et la garde de vivacité du drain
+  // (#16685) tient la REMISE si la purge échoue. Les deux gardes sont
+  // indépendantes par construction — l'une empêche de GARDER, l'autre de
+  // REMETTRE.
+  const deliveryQueue = options.deliveryQueue ?? getSharedDeliveryQueue();
+  if (deliveryQueue) {
+    try {
+      await deliveryQueue.purgeMessage(message.id);
+    } catch (error) {
+      log.warn('offline delivery queue purge failed', { messageId: message.id, error });
+    }
+  }
+
   // Le décompte des compteurs de conversation. Il vivait recopié dans UNE
   // seule des quatre routes de suppression — celle qu'empruntent iOS et la vue
   // web — pendant que le comptage, lui, ne vivait que dans le handler socket.
@@ -302,5 +387,23 @@ export async function applyMessageRemovalEffects(
       conversationId: message.conversationId,
       err,
     });
+  }
+  try {
+    await boundCaptureNoticesNaming(prisma, {
+      conversationId: message.conversationId,
+      capturedMessageId: message.id,
+      now: new Date(),
+      cause: options.cause ?? 'deleted',
+      removedByParticipantId: message.removedByParticipantId ?? null,
+    });
+  } catch (err) {
+    log.warn('message removal: capture notices not expired', { messageId: message.id, err });
+  }
+
+  // Une séance « ensemble » qui lisait une pièce de ce message s'arrête chez les deux
+  // (#17022). Rejuger la conversation suffit : la porte refuse un message supprimé, et les
+  // séances des autres pièces continuent. Ne rejette jamais.
+  if (message.attachmentMimeTypes.some((mimeType) => togetherMediaOf(mimeType) !== null)) {
+    await cutTogetherWhere({ conversationId: message.conversationId });
   }
 }

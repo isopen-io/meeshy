@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_composer_fold">Ocultar a área de comentários</string>
+    <string name="story_composer_fold_hint">Fecha o teclado e recolhe a área de comentários em uma bolha</string>
+    <string name="story_composer_unfold">Mostrar a área de comentários</string>
+    <string name="story_composer_unfold_hint">Reabre a área de comentários sem abrir o teclado</string>
+    <string name="story_composer_unfold_recording">Gravação de voz em andamento</string>
+    <string name="story_composer_unfold_replying">Resposta em andamento</string>
+</resources>

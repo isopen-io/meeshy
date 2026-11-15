@@ -5,8 +5,8 @@ import MeeshySDK
 /// Pont entre les bitmaps édités/foreground du composer (`viewModel.loadedImages`
 /// keyés par `media.id`) et l'`ImageCacheReader` consommé par `StoryMediaLayer`.
 ///
-/// Le composer mute `loadedImages[id] = edited` dans son `MeeshyImageEditorView`
-/// onAccept. Sans ce pont, le `StoryCanvasUIView` ne voyait que `media.mediaURL`
+/// Le composer mute `loadedImages[id] = edited` quand une image est
+/// retouchée. Sans ce pont, le `StoryCanvasUIView` ne voyait que `media.mediaURL`
 /// (URL inchangée → `ImageLoader` cache servait l'ancien bitmap) et le canvas
 /// principal restait stale après édition. Le mini canvas marchait déjà car
 /// `SlideMiniPreview` lit `loadedImages` direct.
@@ -17,6 +17,14 @@ import MeeshySDK
 /// (UIImage non Equatable, dict hashable seulement via clés).
 struct ComposerImageCacheReader: ImageCacheReader {
     let images: [String: UIImage]
+    /// **Les octets ANIMÉS des stickers collés, keyés comme les bitmaps**
+    /// (#3956) — vide tant qu'aucun GIF n'a été posé.
+    ///
+    /// Ils voyagent À CÔTÉ des images, jamais à leur place : `images[key]` reste
+    /// la première image du même sticker, et c'est elle que peignent la cover,
+    /// l'export et le thumbHash. La couche essaie les octets d'abord ; leur
+    /// absence n'est pas un échec, c'est le cas nominal d'une image fixe.
+    var animations: [String: Data] = [:]
     let version: UInt64
 
     func cachedImage(for key: String) async -> UIImage? {
@@ -33,10 +41,34 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     @Binding public var slide: StorySlide
     public var onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
     public var onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
+    /// Les kinds dont CET hôte sait ouvrir un éditeur — voir
+    /// `StoryCanvasUIView.editableKinds`. Un hôte qui ne traite que le texte le
+    /// dit ici, plutôt que d'offrir « Modifier » sur un objet qu'il ignore.
+    public var editableKinds: Set<StoryCanvasUIView.CanvasItemKind> = [.text, .media]
+    /// #4046 — l'objet SORT de la scène ; l'hôte décide ce qu'il devient.
+    public var onItemLeftScene: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
+    /// « Rogner » dans l'appui long — voir `StoryCanvasUIView.onItemTrimRequested`.
+    public var onItemTrimRequested: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
+    /// Le menu d'appui long peint par l'hôte (#8717) — voir
+    /// `StoryCanvasUIView.onItemMenuRequested`.
+    public var onItemMenuRequested: ((String, StoryCanvasUIView.CanvasItemKind, CGPoint) -> Void)?
     public var onItemDuplicated: ((_ oldId: String, _ newId: String, _ kind: StoryCanvasUIView.CanvasItemKind) -> Void)?
     public var editingTextId: String?
     public var onInlineTextChanged: ((String, String) -> Void)?
     public var onInlineTextEditEnded: ((String) -> Void)?
+
+    /// **L'objet SÉLECTIONNÉ, et ce que le badge en dit** (#4073, vue `1c`).
+    ///
+    /// Le canvas n'en avait aucune notion : taper un objet remontait bien un
+    /// `onItemTapped` à l'hôte, mais RIEN ne revenait le désigner à l'écran.
+    /// L'inspecteur, les contrôleurs du rail et le menu d'appui long portaient
+    /// donc tous sur un objet invisible.
+    ///
+    /// Le libellé vient de l'HÔTE et n'est pas déduit ici : « TEXTE · PLAN FG ·
+    /// z 2 » est du vocabulaire produit, localisé, que le SDK n'a pas à
+    /// connaître. Le canvas tient la GÉOMÉTRIE, l'app tient les MOTS.
+    public var selectedItemId: String?
+    public var selectionBadge: String?
     /// Y (écran) du haut des contrôleurs de l'outil texte — le texte en cours
     /// d'édition reste au-dessus (cf. `StoryCanvasUIView.inlineEditFloorGlobalY`).
     /// `.greatestFiniteMagnitude` = pas de plafond (texte centré, comportement
@@ -50,11 +82,23 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// `.foreground`). Le composer abonne ce callback à un `@State` qui pilote
     /// le `CanvasLayerIndicator` (chip row).
     public var onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)?
+    /// Le canvas passe en veille, ou en sort (#3915) — la couche SwiftUI
+    /// posée par-dessus doit suspendre ses propres animations, que la mise
+    /// en veille d'`editDisplayLink` n'atteint pas.
+    public var onEditClockThrottleChanged: ((Bool) -> Void)?
     /// Notifié pendant un pinch à 3 doigts sur le canvas. Pilote
     /// `canvasScale` + l'overlay éphémère `viewportPinchDelta` côté
     /// composer. Le composer applique son propre clamp + commit à `.ended`.
     public var onCanvasZoomScaleChanged: ((CGFloat, UIGestureRecognizer.State) -> Void)?
     public var onBackgroundTapped: (() -> Void)?
+    /// Appui long sur une zone VIDE — inerte chez qui ne le branche pas.
+    public var onBackgroundLongPressed: (() -> Void)?
+    /// L'appui long sur un média DE FOND — voir `StoryCanvasBackgroundLongPress`.
+    public var onBackgroundMediaLongPressed: ((String) -> Void)?
+    /// La translation pendant qu'un appui long ARMÉ est tenu.
+    public var onBackgroundLongPressChanged: ((CGPoint) -> Void)?
+    /// Le relâchement — ou l'annulation — d'un appui long armé.
+    public var onBackgroundLongPressEnded: (() -> Void)?
     /// Notifié quand le drag du background se termine (.ended). Le composer
     /// l'utilise pour resynchroniser son cache `viewModel.backgroundTransform`
     /// avec la nouvelle valeur typée. Le `slide` lui-même est déjà mis à jour
@@ -68,7 +112,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     public var onViewportZoomResetRequested: (() -> Void)?
     /// Miroir de `viewModel.isDrawingActive` du composer. Quand `true`, le
     /// canvas supprime son drawingLayer persisté pour éviter le double rendu
-    /// avec le PKCanvasView SwiftUI overlay (bug "écrit en double", 2026-05-27).
+    /// avec le PKCanvasView SwiftUI overlay.
     public var isDrawingOverlayActive: Bool = false
     /// Side-cache des bitmaps édités/foreground du composer keyé par `media.id`.
     /// Wired vers `StoryCanvasUIView.readerContext.imageCache` via le pont
@@ -76,17 +120,28 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// éditions image (bug 2026-05-27 : main canvas stale après image edit).
     public var loadedImages: [String: UIImage] = [:]
     /// Cookie monotone à bumper côté composer à chaque mutation utile de
-    /// `loadedImages` (typiquement l'`onAccept` du `MeeshyImageEditorView`).
+    /// `loadedImages` (typiquement une image retouchée).
     /// Le `Coordinator` compare la valeur reçue à `lastVersionSeen` pour
     /// décider si un rebuild canvas est nécessaire (les dicts UIImage ne sont
     /// pas Equatable).
     public var loadedImagesVersion: UInt64 = 0
+    /// Octets animés des stickers collés, keyés par `sticker.id` (miroir de
+    /// `viewModel.loadedStickerAnimations`, #3956). Sans ce fil, un GIF posé sur
+    /// la scène s'y peint FIGÉ sur son image 1 pendant que la publication, elle,
+    /// l'envoie animé — l'aperçu mentirait sur ce qui va être publié (loi 6).
+    /// Le cookie ci-dessus couvre aussi ce dictionnaire :
+    /// `registerLoadedStickerAnimation` le bump.
+    public var loadedStickerAnimations: [String: Data] = [:]
     /// URLs locales (file://) des clips audio importés, keyées par `audio.id`
     /// (miroir de `viewModel.loadedAudioURLs`). Wiré vers
     /// `readerContext.localAudioURLResolver` pour que le mixer joue le son en
-    /// preview d'édition (directive user 2026-07-14). `postMediaId` étant vide
+    /// preview d'édition. `postMediaId` étant vide
     /// pour un clip non publié, le resolver par `postMediaId` échouait.
     public var loadedAudioURLs: [String: URL] = [:]
+    /// Les médias adoptés rendus à leur fichier (`StoryReaderContext.localMediaAliases`).
+    public var localMediaAliases: [String: URL] = [:]
+    /// La saisie en ligne cède au doigt (voir `StoryCanvasUIView+InlineEditYield`).
+    public var inlineEditYieldsToManipulation: Bool = false
     /// Corner radius applied to the embedded `StoryCanvasUIView`'s backing layer
     /// so the rounded « card » actually clips the CALayer story content. A
     /// SwiftUI `.clipShape` on this representable cannot round the embedded
@@ -98,45 +153,88 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// callbacks playhead du timeline VM poussent directement dans la vue
     /// (aucun body SwiftUI re-évalué à 60 Hz).
     public var timelineBridge: StoryCanvasTimelineBridge?
+    /// `false` : le canvas ne peint AUCUN fond — pas la couleur de la slide, pas son média — et
+    /// reste transparent hors de ce que la slide pose. Un hôte qui superpose les objets à un média
+    /// qu'il peint lui-même (la retouche de la caméra, pour son texte) le demande ; le défaut
+    /// garde le canvas du composer tel qu'il était.
+    public var paintsSceneBackground: Bool = true
+    /// Le canvas posé sur le viseur ne garde que les touchers qui tombent sur un objet (#17432).
+    public var passesThroughEmptyTouches: Bool = false
+    /// La barre collée au clavier et le panneau d'options de l'hôte (#13839, L4).
+    public var inlineEditInputLink: StoryInlineEditInputLink?
 
     public init(slide: Binding<StorySlide>,
                 onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
                 onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
+                editableKinds: Set<StoryCanvasUIView.CanvasItemKind> = [.text, .media],
+                onItemLeftScene: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
+                onItemTrimRequested: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
+                onItemMenuRequested: ((String, StoryCanvasUIView.CanvasItemKind, CGPoint) -> Void)? = nil,
                 onItemDuplicated: ((String, String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
                 editingTextId: String? = nil,
                 onInlineTextChanged: ((String, String) -> Void)? = nil,
                 onInlineTextEditEnded: ((String) -> Void)? = nil,
+                selectedItemId: String? = nil,
+                selectionBadge: String? = nil,
                 inlineEditFloorGlobalY: CGFloat = .greatestFiniteMagnitude,
                 inlineEditCeilingGlobalY: CGFloat = .greatestFiniteMagnitude,
                 onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)? = nil,
+                onEditClockThrottleChanged: ((Bool) -> Void)? = nil,
                 onCanvasZoomScaleChanged: ((CGFloat, UIGestureRecognizer.State) -> Void)? = nil,
                 onBackgroundTapped: (() -> Void)? = nil,
+                onBackgroundLongPressed: (() -> Void)? = nil,
+                onBackgroundMediaLongPressed: ((String) -> Void)? = nil,
+                onBackgroundLongPressChanged: ((CGPoint) -> Void)? = nil,
+                onBackgroundLongPressEnded: (() -> Void)? = nil,
                 onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)? = nil,
                 isViewportZoomed: Bool = false,
                 onViewportZoomResetRequested: (() -> Void)? = nil,
                 isDrawingOverlayActive: Bool = false,
                 loadedImages: [String: UIImage] = [:],
+                loadedStickerAnimations: [String: Data] = [:],
                 loadedImagesVersion: UInt64 = 0,
                 loadedAudioURLs: [String: URL] = [:],
                 canvasCornerRadius: CGFloat = 0,
-                timelineBridge: StoryCanvasTimelineBridge? = nil) {
+                timelineBridge: StoryCanvasTimelineBridge? = nil,
+                localMediaAliases: [String: URL] = [:],
+                inlineEditYieldsToManipulation: Bool = false,
+                paintsSceneBackground: Bool = true,
+                passesThroughEmptyTouches: Bool = false,
+                inlineEditInputLink: StoryInlineEditInputLink? = nil) {
+        self.inlineEditInputLink = inlineEditInputLink
+        self.passesThroughEmptyTouches = passesThroughEmptyTouches
+        self.paintsSceneBackground = paintsSceneBackground
+        self.localMediaAliases = localMediaAliases
+        self.inlineEditYieldsToManipulation = inlineEditYieldsToManipulation
         self._slide = slide
         self.onItemTapped = onItemTapped
         self.onItemDoubleTapped = onItemDoubleTapped
+        self.editableKinds = editableKinds
+        self.onItemLeftScene = onItemLeftScene
+        self.onItemTrimRequested = onItemTrimRequested
+        self.onItemMenuRequested = onItemMenuRequested
         self.onItemDuplicated = onItemDuplicated
         self.editingTextId = editingTextId
         self.onInlineTextChanged = onInlineTextChanged
         self.onInlineTextEditEnded = onInlineTextEditEnded
+        self.selectedItemId = selectedItemId
+        self.selectionBadge = selectionBadge
         self.inlineEditFloorGlobalY = inlineEditFloorGlobalY
         self.inlineEditCeilingGlobalY = inlineEditCeilingGlobalY
         self.onManipulationLayerChanged = onManipulationLayerChanged
+        self.onEditClockThrottleChanged = onEditClockThrottleChanged
         self.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         self.onBackgroundTapped = onBackgroundTapped
+        self.onBackgroundLongPressed = onBackgroundLongPressed
+        self.onBackgroundMediaLongPressed = onBackgroundMediaLongPressed
+        self.onBackgroundLongPressChanged = onBackgroundLongPressChanged
+        self.onBackgroundLongPressEnded = onBackgroundLongPressEnded
         self.onBackgroundTransformChanged = onBackgroundTransformChanged
         self.isViewportZoomed = isViewportZoomed
         self.onViewportZoomResetRequested = onViewportZoomResetRequested
         self.isDrawingOverlayActive = isDrawingOverlayActive
         self.loadedImages = loadedImages
+        self.loadedStickerAnimations = loadedStickerAnimations
         self.loadedImagesVersion = loadedImagesVersion
         self.loadedAudioURLs = loadedAudioURLs
         self.canvasCornerRadius = canvasCornerRadius
@@ -144,8 +242,17 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     }
 
     public final class Coordinator {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
         var lastLoadedImagesVersion: UInt64?
         var lastLoadedAudioURLs: [String: URL]?
+        var lastLocalMediaAliases: [String: URL]?
+        /// Cadence d'écriture du binding (#9874) — retenu ici pour que le
+        /// front de queue d'un geste survive aux réévaluations de la vue.
+        var slideWrites: BindingWriteThrottle<StorySlide>?
     }
 
     /// Construit le `StoryReaderContext` d'édition : pont image (bitmaps édités
@@ -153,11 +260,36 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     private func makeComposerContext() -> StoryReaderContext {
         let audioURLs = loadedAudioURLs
         let audioResolver: @Sendable (String) -> URL? = { audioURLs[$0] }
-        let reader = ComposerImageCacheReader(images: loadedImages, version: loadedImagesVersion)
-        return StoryReaderContext(imageCache: reader, localAudioURLResolver: audioResolver)
+        let reader = ComposerImageCacheReader(images: loadedImages,
+                                              animations: loadedStickerAnimations,
+                                              version: loadedImagesVersion)
+        // Un média POSÉ adopté se résout par son `postMediaId` vers son fichier
+        // local (`StoryMediaLayer.resolvedMediaURL`) ; sans alias, aucun
+        // résolveur, comme avant — la garde d'existence des `file://` reste
+        // celle du composer.
+        let aliases = localMediaAliases
+        var mediaResolver: (@Sendable (String) -> URL?)?
+        if !aliases.isEmpty {
+            mediaResolver = { (cle: String) -> URL? in
+                guard let local = aliases[cle], FileManager.default.fileExists(atPath: local.path) else { return nil }
+                return local
+            }
+        }
+        return StoryReaderContext(postMediaURLResolver: mediaResolver,
+                                  imageCache: reader,
+                                  localAudioURLResolver: audioResolver,
+                                  localMediaAliases: aliases)
     }
 
     public func makeCoordinator() -> Coordinator { Coordinator() }
+
+    /// Le fond n'est peint que si l'hôte le veut : sinon le canvas est transparent hors des objets.
+    static func applyBackgroundPolicy(to view: StoryCanvasUIView, paintsSceneBackground: Bool) {
+        view.backgroundLayer.isHidden = !paintsSceneBackground
+        guard !paintsSceneBackground else { return }
+        view.backgroundColor = .clear
+        view.isOpaque = false
+    }
 
     public func makeUIView(context: Context) -> StoryCanvasUIView {
         let view = StoryCanvasUIView(slide: slide, mode: .edit)
@@ -166,19 +298,45 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // la suivante. Le prefetcher hors-écran, lui aussi en `.edit`, ne lève
         // jamais ce drapeau et reste silencieux.
         view.playsVideoInEditMode = true
-        view.onItemModified = { modified in
+        Self.applyBackgroundPolicy(to: view, paintsSceneBackground: paintsSceneBackground)
+        view.passesThroughEmptyTouches = passesThroughEmptyTouches
+        // Troisième famille vivante sur le canvas d'édition (#4999) : une
+        // décoration qui déclare un mouvement le JOUE pendant qu'on compose,
+        // comme la vidéo et le son juste au-dessus et juste en dessous.
+        view.playsStickerMotionInEditMode = true
+        // Les curseurs de look du composer repeignent le fond HORS du fil
+        // principal (#9873). Le prefetcher du lecteur, lui aussi en `.edit`, non.
+        view.backgroundLayer.bakesLookOffMainThread = true
+        // Un fond vidéo y attend sa première image sous son affiche (#14180).
+        view.backgroundLayer.videoWaitVeil.isEnabled = true
+        // Pincer ou tourner un calque modifie la slide à la cadence du doigt :
+        // le canvas UIKit la dessine depuis sa propre copie, et le binding —
+        // dont chaque écriture réévalue le composer — suit à 30 Hz au plus.
+        // La valeur finale part toujours (front de queue du throttle).
+        let slideWrites = BindingWriteThrottle<StorySlide> { modified in
             DispatchQueue.main.async { self.slide = modified }
         }
+        context.coordinator.slideWrites = slideWrites
+        view.onItemModified = { modified in slideWrites.submit(modified) }
         view.onItemTapped = onItemTapped
         view.onItemDoubleTapped = onItemDoubleTapped
+        view.editableKinds = editableKinds
+        view.onItemLeftScene = onItemLeftScene
+        view.onItemTrimRequested = onItemTrimRequested
+        view.onItemMenuRequested = onItemMenuRequested
         view.onItemDuplicated = onItemDuplicated
         view.onInlineTextChanged = onInlineTextChanged
         view.onInlineTextEditEnded = onInlineTextEditEnded
         view.inlineEditFloorGlobalY = inlineEditFloorGlobalY
         view.inlineEditCeilingGlobalY = inlineEditCeilingGlobalY
         view.onManipulationLayerChanged = onManipulationLayerChanged
+        view.onEditClockThrottleChanged = onEditClockThrottleChanged
         view.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         view.onBackgroundTapped = onBackgroundTapped
+        view.onBackgroundLongPressed = onBackgroundLongPressed
+        view.onBackgroundMediaLongPressed = onBackgroundMediaLongPressed
+        view.onBackgroundLongPressChanged = onBackgroundLongPressChanged
+        view.onBackgroundLongPressEnded = onBackgroundLongPressEnded
         view.onBackgroundTransformChanged = onBackgroundTransformChanged
         view.isViewportZoomed = isViewportZoomed
         view.onViewportZoomResetRequested = onViewportZoomResetRequested
@@ -194,6 +352,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.playsAudioInEditMode = true
         context.coordinator.lastLoadedImagesVersion = loadedImagesVersion
         context.coordinator.lastLoadedAudioURLs = loadedAudioURLs
+        context.coordinator.lastLocalMediaAliases = localMediaAliases
         timelineBridge?.canvas = view
         // Bootstrap : la couche initiale calculée par `init` n'a pas pu être
         // poussée au callback (nil à ce moment). On force l'émission après
@@ -211,8 +370,19 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // pushing sheets, etc.). This is cheap — just a property assignment.
         uiView.onItemTapped = onItemTapped
         uiView.onItemDoubleTapped = onItemDoubleTapped
+        uiView.onItemTrimRequested = onItemTrimRequested
+        uiView.onItemMenuRequested = onItemMenuRequested
+        // **Remis à jour à CHAQUE passe**, comme `onItemDoubleTapped` juste
+        // au-dessus : une closure posée au seul `makeUIView` capture l'état de
+        // la première composition. L'hôte qui présente le menu de fond lit le
+        // modèle courant — figée, elle agirait sur une slide périmée.
+        uiView.onBackgroundMediaLongPressed = onBackgroundMediaLongPressed
+        uiView.onBackgroundLongPressChanged = onBackgroundLongPressChanged
+        uiView.onBackgroundLongPressEnded = onBackgroundLongPressEnded
+        uiView.editableKinds = editableKinds
         uiView.onItemDuplicated = onItemDuplicated
         uiView.onManipulationLayerChanged = onManipulationLayerChanged
+        uiView.onEditClockThrottleChanged = onEditClockThrottleChanged
         uiView.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         uiView.onBackgroundTapped = onBackgroundTapped
         uiView.onBackgroundTransformChanged = onBackgroundTransformChanged
@@ -220,13 +390,19 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         uiView.onViewportZoomResetRequested = onViewportZoomResetRequested
         uiView.isDrawingOverlayActive = isDrawingOverlayActive
         uiView.canvasCornerRadius = canvasCornerRadius
+        uiView.formatWording = context.environment.composerFormatWording
+        // **Le cadre de sélection** (#4073). `setSelectionMarker` se garde
+        // lui-même contre la réassignation identique : `updateUIView` est
+        // appelée à chaque évaluation du corps SwiftUI, et reposer le cadre à
+        // chaque passe le ferait clignoter sous le doigt.
+        uiView.setSelectionMarker(id: selectedItemId, badge: selectionBadge)
 
         // Bridge des bitmaps édités/foreground du composer vers
         // `StoryCanvasUIView.readerContext.imageCache`. On reconstruit le
         // reader UNIQUEMENT quand `loadedImagesVersion` change pour éviter
         // un rebuild par body eval (updateUIView est appelé fréquemment).
         // Le bump de version est piloté par le composer (cf.
-        // `MeeshyImageEditorView` onAccept → `viewModel.loadedImagesVersion &+= 1`).
+        // une retouche → `viewModel.loadedImagesVersion &+= 1`).
         //
         // `invalidateImageCache()` bump la révision pour forcer le re-stamp
         // des layers du `StoryRendererCache` — cet appel EST réservé au
@@ -239,9 +415,11 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // `reconfigureAudioForPlayback`, qui lit alors le resolver à jour.
         let imageChanged = context.coordinator.lastLoadedImagesVersion != loadedImagesVersion
         let audioChanged = context.coordinator.lastLoadedAudioURLs != loadedAudioURLs
-        if imageChanged || audioChanged {
+        let aliasesChanged = context.coordinator.lastLocalMediaAliases != localMediaAliases
+        if imageChanged || audioChanged || aliasesChanged {
             context.coordinator.lastLoadedImagesVersion = loadedImagesVersion
             context.coordinator.lastLoadedAudioURLs = loadedAudioURLs
+            context.coordinator.lastLocalMediaAliases = localMediaAliases
             uiView.setReaderContext(makeComposerContext())
             if imageChanged { uiView.invalidateImageCache() }
         }
@@ -264,12 +442,13 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // de fin de geste resync naturellement le parent.
         if uiView.isGestureActive { return }
 
-        // Push outside-driven slide changes (e.g. toolbar mutations of
-        // `slide.effects`) into the canvas. Skip pushes when the slide is
-        // semantically identical to avoid redundant `rebuildLayers()` calls.
-        if !Self.slidesEqualForCanvas(uiView.slide, slide) {
-            uiView.slide = slide
-        }
+        pushOutsideSlide(into: uiView, coordinator: context.coordinator)
+        syncInlineEdit(into: uiView)
+    }
+
+    /// La saisie en ligne : ses rappels, ses bornes, ses vues d'entrée, puis
+    /// son ouverture ou sa fermeture.
+    private func syncInlineEdit(into uiView: StoryCanvasUIView) {
         uiView.onInlineTextChanged = onInlineTextChanged
         uiView.onInlineTextEditEnded = onInlineTextEditEnded
         // Posé AVANT `beginInlineTextEdit` : l'ouverture ancre le bloc d'après
@@ -277,13 +456,36 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // sauterait à la première frappe.
         uiView.inlineEditFloorGlobalY = inlineEditFloorGlobalY
         uiView.inlineEditCeilingGlobalY = inlineEditCeilingGlobalY
+        uiView.inlineEditYieldsToManipulation = inlineEditYieldsToManipulation
+        // Posé AVANT `beginInlineTextEdit` : la barre monte avec le clavier.
+        uiView.inlineEditInputLink = inlineEditInputLink
         if uiView.inlineEditingTextId != editingTextId {
             if let id = editingTextId {
-                uiView.beginInlineTextEdit(textId: id)
+                // Une saisie SUSPENDUE par le doigt ne se rouvre pas d'elle-même :
+                // c'est le tap sur le texte qui la reprend.
+                if uiView.suspendedInlineEditId != id {
+                    uiView.suspendedInlineEditId = nil
+                    uiView.beginInlineTextEdit(textId: id)
+                }
             } else {
+                uiView.suspendedInlineEditId = nil
                 uiView.endInlineTextEdit()
             }
         }
+    }
+
+    /// Push outside-driven slide changes (e.g. toolbar mutations of
+    /// `slide.effects`) into the canvas. Skip pushes when the slide is
+    /// semantically identical to avoid redundant `rebuildLayers()` calls.
+    ///
+    /// Au lâcher, la dernière valeur du geste peut encore attendre son front
+    /// de queue (#9874) : le canvas est alors EN AVANCE sur le binding, et lui
+    /// repousser la valeur périmée le ferait reculer d'une image. On écrit la
+    /// valeur en attente et on ne pousse rien.
+    private func pushOutsideSlide(into uiView: StoryCanvasUIView, coordinator: Coordinator) {
+        let canvasIsAhead = coordinator.slideWrites?.flush() ?? false
+        guard !canvasIsAhead, !Self.slidesEqualForCanvas(uiView.slide, slide) else { return }
+        uiView.slide = slide
     }
 
     /// Semantic equality used to decide whether to forward a slide change into
@@ -313,9 +515,14 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// canvas, le thumbHash, le dessin legacy et le stylage racine — s'y fier
     /// seul rendrait le canvas aveugle à ces éditions, exactement le défaut
     /// que l'empreinte a été écrite pour fermer.
-    private static func canvasFingerprint(_ slide: StorySlide) -> Data? {
+    private static let fingerprintEncoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
+        return encoder
+    }()
+
+    private static func canvasFingerprint(_ slide: StorySlide) -> Data? {
+        let encoder = fingerprintEncoder
         guard let wire = try? encoder.encode(slide),
               let runtime = try? encoder.encode(slide.effects.runtimeSnapshot) else {
             return nil

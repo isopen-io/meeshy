@@ -34,6 +34,10 @@ public enum PostEditField: String, CaseIterable, Sendable {
     case mentions
     case allowSoundExtraction
     case mediaAlt
+    /// La LÉGENDE par média (#4055). Déclarée ICI parce que le corps la porte :
+    /// un champ d'`UpdatePostRequest` sans son case ne pourrait plus jamais
+    /// être écrit — c'est l'invariant que ce type existe pour tenir.
+    case mediaCaption
 
     /// Le chemin historique — une surcharge qui recevait déjà treize
     /// paramètres DÉCLARE les treize : ses `nil` valaient « je n'en parle
@@ -64,6 +68,7 @@ public struct PostEditDraft: Sendable {
     public let mentions: [PostMentionInput]?
     public let allowSoundExtraction: Bool?
     public let mediaAlt: [String: String]?
+    public let mediaCaption: [String: String]?
 
     public init(content: String? = nil,
                 visibility: String? = nil,
@@ -77,7 +82,8 @@ public struct PostEditDraft: Sendable {
                 location: PostLocationUpdate? = nil,
                 mentions: [PostMentionInput]? = nil,
                 allowSoundExtraction: Bool? = nil,
-                mediaAlt: [String: String]? = nil) {
+                mediaAlt: [String: String]? = nil,
+                mediaCaption: [String: String]? = nil) {
         self.content = content
         self.visibility = visibility
         self.visibilityUserIds = visibilityUserIds
@@ -91,6 +97,7 @@ public struct PostEditDraft: Sendable {
         self.mentions = mentions
         self.allowSoundExtraction = allowSoundExtraction
         self.mediaAlt = mediaAlt
+        self.mediaCaption = mediaCaption
     }
 }
 
@@ -118,7 +125,8 @@ public enum PostEditPayload {
             location: known.contains(.location) ? draft.location : nil,
             mentions: known.contains(.mentions) ? draft.mentions : nil,
             allowSoundExtraction: known.contains(.allowSoundExtraction) ? draft.allowSoundExtraction : nil,
-            mediaAlt: known.contains(.mediaAlt) ? draft.mediaAlt : nil
+            mediaAlt: known.contains(.mediaAlt) ? draft.mediaAlt : nil,
+            mediaCaption: known.contains(.mediaCaption) ? draft.mediaCaption : nil
         )
     }
 }

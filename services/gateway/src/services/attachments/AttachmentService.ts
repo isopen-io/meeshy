@@ -3,22 +3,17 @@
  * Délègue à UploadProcessor et MetadataManager
  */
 
+import { forgetAtTranslator } from '../translatorForget';
+import { forgetSealing, processAtRestFileAccess, type AtRestFileRecord } from './atRest/atRestFiles';
 import { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import { promises as fs } from 'fs';
 import path from 'path';
 import type {
   Attachment,
-  AttachmentType,
-  AttachmentWithMetadata,
-  ACCEPTED_MIME_TYPES,
+  AttachmentType
 } from '@meeshy/shared/types/attachment';
-import type { VoiceQualityAnalysis } from '@meeshy/shared/types/voice-api';
 import type { EncryptionMode } from '@meeshy/shared/types/encryption';
-import type {
-  AttachmentTranscription,
-  AttachmentTranslations,
-} from '@meeshy/shared/types/attachment-audio';
-import { toSocketIOAudios } from '@meeshy/shared/types/attachment-audio';
+import type { UploaderRole } from '@meeshy/shared/types/upload-limits';
 import {
   AttachmentEncryptionService,
   getAttachmentEncryptionService,
@@ -28,9 +23,22 @@ import {
   type FileToUpload,
   type UploadResult,
   type EncryptedUploadResult,
+  type AttachmentValidationVerdict,
 } from './UploadProcessor';
-import { MetadataManager } from './MetadataManager';
+import { attachmentServiceRowSelect } from './attachmentIncludes';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { unsetOrNull } from '../../utils/prisma-unset';
+import { carrierMessageStillServesWhere } from './carrierMessageLifecycle';
+import { conventionalDerivedPaths, derivedFileCandidates, resolveInsideUploadRoot } from './derivedAttachmentFiles';
+import { eraseMirroredCopy } from '../storage/objects/mirroredErasure';
+import { AttachmentBytesSurvivedError, eraseBytesOnlyThisRowCites } from './eraseBytesBeforeRow';
+
+/**
+ * `requireBytesGone` (#11269) : les octets que cette ligne est seule à citer
+ * partent AVANT elle, et elle ne part que s'ils ont vraiment disparu — sinon
+ * `AttachmentBytesSurvivedError`, la ligne gardant la clé pour la reprise.
+ */
+export type DeleteAttachmentOptions = { readonly requireBytesGone?: boolean };
 
 const logger = enhancedLogger.child({ module: 'AttachmentService' });
 
@@ -41,10 +49,8 @@ const logger = enhancedLogger.child({ module: 'AttachmentService' });
 export class AttachmentService {
   private prisma: PrismaClient;
   private uploadBasePath: string;
-  private publicUrl: string;
   private encryptionService: AttachmentEncryptionService;
   private uploadProcessor: UploadProcessor;
-  private metadataManager: MetadataManager;
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
@@ -52,47 +58,12 @@ export class AttachmentService {
     // UPLOAD_PATH doit être défini dans Docker, fallback sécurisé vers /app/uploads
     this.uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
     this.uploadProcessor = new UploadProcessor(prisma);
-    this.metadataManager = new MetadataManager(this.uploadBasePath);
-    this.publicUrl = this.determinePublicUrl();
-  }
-
-  /**
-   * Détermine l'URL publique selon l'environnement
-   */
-  private determinePublicUrl(): string {
-    const isProduction = process.env.NODE_ENV === 'production';
-    const isDevelopment = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'local';
-
-    if (process.env.PUBLIC_URL) {
-      return process.env.PUBLIC_URL;
-    }
-
-    if (isProduction) {
-      const domain = process.env.DOMAIN || 'meeshy.me';
-      const url = `https://gate.${domain}`;
-      logger.warn('PUBLIC_URL non définie, utilisation du domaine par défaut', { url });
-      return url;
-    }
-
-    if (isDevelopment) {
-      if (process.env.BACKEND_URL) return process.env.BACKEND_URL;
-      if (process.env.NEXT_PUBLIC_BACKEND_URL) return process.env.NEXT_PUBLIC_BACKEND_URL;
-
-      const port = process.env.PORT || '3000';
-      const url = `http://localhost:${port}`;
-      logger.warn('BACKEND_URL non définie, utilisation de localhost', { url });
-      return url;
-    }
-
-    const fallback = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
-    logger.error('Impossible de déterminer PUBLIC_URL', { fallback });
-    return fallback;
   }
 
   // ==================== DÉLÉGATION UPLOAD ====================
 
-  validateFile(file: FileToUpload): { valid: boolean; error?: string } {
-    return this.uploadProcessor.validateFile(file);
+  validateFile(file: FileToUpload, role: UploaderRole = 'registered'): AttachmentValidationVerdict {
+    return this.uploadProcessor.validateFile(file, role);
   }
 
   async uploadFile(
@@ -158,18 +129,76 @@ export class AttachmentService {
 
   // ==================== GESTION ATTACHMENTS ====================
 
+  /**
+   * Lie des pièces pré-uploadées à leur message — et leur fait porter SA
+   * protection (#7498).
+   *
+   * Les trois colonnes jumelles (`isViewOnce`, `isBlurred`, `effectFlags`)
+   * existent sur `MessageAttachment` depuis toujours et restaient à leur
+   * défaut : une photo envoyée sous « vue unique » était donc un message à vue
+   * unique portant une pièce jointe ORDINAIRE. Tout ce qui garde au niveau de
+   * la PIÈCE — `maskedAttachment` de l'éventail de notifications, le gate
+   * fail-closed de la traduction de légende — lisait `false` et laissait
+   * passer, pendant que la bulle, elle, affichait bien le voile.
+   *
+   * La protection ne se DÉDUIT pas du message à la lecture : deux niveaux la
+   * déclarent, et c'est au moment où le lien se fait qu'ils doivent être mis
+   * d'accord. Une pièce non liée n'a pas encore de protection à porter ; une
+   * pièce liée en a exactement une, celle de son message.
+   *
+   * `protection` se lit sur la LIGNE ÉCRITE (l'appelant passe son `message`),
+   * jamais sur la charge reçue : c'est la ligne qui a composé `effectFlags`
+   * depuis toutes ses sources. Une clé ABSENTE ne touche pas sa colonne —
+   * l'appelant qui ne déclare rien n'écrase rien.
+   *
+   * LE LIEN NE DÉPLACE NI NE DÉPROTÈGE (#9587). Il n'apparie que des pièces
+   * NON attachées (`messageId` nul ou absent du document) : une pièce déjà
+   * portée par un message y reste. Et il n'AJOUTE que de la protection — un
+   * `false` ou un zéro du message n'efface rien de ce que la pièce porte, les
+   * bits se composent par OU.
+   *
+   * LE LIEN FIXE LE RANG (#9776). L'ordre de `attachmentIds` est l'ordre du
+   * composeur ; chaque pièce reçoit le sien en `rank`, que toute lecture trie
+   * par `MESSAGE_ATTACHMENT_ORDER`. Un id répété garde sa première place.
+   */
   async associateAttachmentsToMessage(
     attachmentIds: readonly string[],
-    messageId: string
+    messageId: string,
+    protection?: {
+      readonly isViewOnce?: boolean;
+      readonly isBlurred?: boolean;
+      readonly effectFlags?: number;
+      readonly maxViewOnceCount?: number | null;
+    }
   ): Promise<void> {
-    await this.prisma.messageAttachment.updateMany({
-      where: {
-        id: { in: [...attachmentIds] },
-      },
-      data: {
-        messageId: messageId,
-      },
+    const orderedIds = [...new Set(attachmentIds)];
+    const added = {
+      messageId,
+      ...(protection?.isViewOnce === true ? { isViewOnce: true } : {}),
+      ...(protection?.isBlurred === true ? { isBlurred: true } : {}),
+    };
+    const addedFlags = protection?.effectFlags ?? 0;
+    const carriedFlags = addedFlags === 0
+      ? null
+      : new Map(
+          (await this.prisma.messageAttachment.findMany({
+            where: { id: { in: orderedIds }, ...unsetOrNull('messageId') },
+            select: { id: true, effectFlags: true },
+          })).map((row) => [row.id, row.effectFlags ?? 0] as const),
+        );
+    const writes = orderedIds.flatMap((id, rank) => {
+      if (carriedFlags === null) return [{ id, data: { ...added, rank } }];
+      const carried = carriedFlags.get(id);
+      return carried === undefined ? [] : [{ id, data: { ...added, rank, effectFlags: carried | addedFlags } }];
     });
+    await Promise.all(
+      writes.map(({ id, data }) =>
+        this.prisma.messageAttachment.updateMany({
+          where: { id: { in: [id] }, ...unsetOrNull('messageId') },
+          data,
+        }),
+      ),
+    );
   }
 
   private toAttachment(attachment: {
@@ -193,6 +222,7 @@ export class AttachmentService {
     createdAt: Date;
     isForwarded: boolean | null;
     capturedInApp?: boolean | null;
+    lensSlug?: string | null;
     isViewOnce: boolean | null;
     viewOnceCount: number | null;
     isBlurred: boolean | null;
@@ -222,6 +252,7 @@ export class AttachmentService {
       createdAt: attachment.createdAt.toISOString(),
       isForwarded: attachment.isForwarded ?? false,
       capturedInApp: attachment.capturedInApp ?? false,
+      lensSlug: attachment.lensSlug ?? null,
       isViewOnce: attachment.isViewOnce ?? false,
       viewOnceCount: attachment.viewOnceCount ?? 0,
       isBlurred: attachment.isBlurred ?? false,
@@ -233,8 +264,13 @@ export class AttachmentService {
   }
 
   async getAttachment(attachmentId: string): Promise<Attachment | null> {
+    // #4166, critère 1 — `findUnique` SANS `select` chargeait la ligne
+    // ENTIÈRE (transcription, translations, encryptionIv…) pour n'en garder
+    // que les 26 champs que `toAttachment` lit. `attachmentServiceRowSelect`
+    // EST ce contrat, rendu explicite à la requête.
     const attachment = await this.prisma.messageAttachment.findUnique({
       where: { id: attachmentId },
+      select: attachmentServiceRowSelect,
     });
 
     if (!attachment) {
@@ -262,8 +298,11 @@ export class AttachmentService {
       return [];
     }
 
+    // Même contrat que `getAttachment` (#4166) : `toAttachment` ne lit que
+    // `attachmentServiceRowSelect`, jamais la ligne entière.
     const rows = await this.prisma.messageAttachment.findMany({
       where: { id: { in: [...new Set(attachmentIds)] } },
+      select: attachmentServiceRowSelect,
     });
 
     const byId = new Map(rows.map((row) => [row.id, this.toAttachment(row)]));
@@ -286,6 +325,11 @@ export class AttachmentService {
         translations: true,
         metadata: true,
         createdAt: true,
+        // #4923 — requis par la garde d'appartenance de la route (le
+        // déposant d'une pièce PAS ENCORE rattachée à un message est le seul
+        // à pouvoir la lire) ; déjà déclaré par `messageAttachmentSchema`
+        // mais jamais chargé ici, donc jamais servi malgré le contrat.
+        uploadedBy: true,
       },
     });
 
@@ -342,7 +386,7 @@ export class AttachmentService {
    * éternel que rien ne ramasse — `MaintenanceService` ne balaie que les LIGNES
    * sans message, jamais les fichiers.
    */
-  async deleteAttachment(attachmentId: string): Promise<void> {
+  async deleteAttachment(attachmentId: string, options: DeleteAttachmentOptions = {}): Promise<void> {
     const attachment = await this.prisma.messageAttachment.findUnique({
       where: { id: attachmentId },
     });
@@ -350,16 +394,137 @@ export class AttachmentService {
     if (!attachment) {
       throw new Error('Attachment not found');
     }
+    // #13100 — lues AVANT les effacements, qui retirent les lignes de scellement.
+    const replacing = await this.replacingRecordsOf(attachmentId);
+
+    if (options.requireBytesGone === true) {
+      const survivors = await eraseBytesOnlyThisRowCites(this.prisma, this.uploadBasePath, attachment);
+      if (survivors.length > 0) throw new AttachmentBytesSurvivedError(survivors);
+    }
 
     await this.prisma.messageAttachment.delete({
       where: { id: attachmentId },
     });
+    // #13102 — la transcription et les pistes que le translator en avait tirées.
+    await forgetAtTranslator({ attachmentIds: [attachmentId] });
 
     await this.unlinkIfUnreferenced('filePath', attachment.filePath);
 
     if (attachment.thumbnailPath) {
       await this.unlinkIfUnreferenced('thumbnailPath', attachment.thumbnailPath);
     }
+
+    await this.unlinkDerivedFiles(attachment);
+    await this.unlinkConventionalDerivedFiles(attachment.filePath);
+    await this.unlinkReplacedClears(replacing);
+  }
+
+  private async replacingRecordsOf(attachmentId: string): Promise<readonly AtRestFileRecord[]> {
+    const access = processAtRestFileAccess();
+    if (!access) return [];
+    const records = await access.store.ofAttachment(attachmentId).catch(() => [] as readonly AtRestFileRecord[]);
+    return records.filter((record) => record.replacedKey !== null);
+  }
+
+  /**
+   * #13100 — les clairs qu'un scellement de cette pièce a remplacés et qui
+   * attendaient leur effacement (une ligne retardataire les désignait, ou la
+   * pièce est brûlée avant la fin du scellement) partent avec elle, sauf si
+   * une ligne désigne encore l'ancien original.
+   */
+  private async unlinkReplacedClears(replacing: readonly AtRestFileRecord[]): Promise<void> {
+    const oldOriginal = replacing.find((record) => record.role === 'original')?.replacedKey;
+    if (!oldOriginal) return;
+    try {
+      if ((await this.prisma.messageAttachment.count({ where: { filePath: oldOriginal } })) > 0) return;
+    } catch (error) {
+      logger.error('Erreur suppression fichiers', error as Error);
+      return;
+    }
+    const clears = [...new Set(replacing.map((record) => record.replacedKey as string))]
+      .map((key) => resolveInsideUploadRoot(this.uploadBasePath, key))
+      .filter((fullPath): fullPath is string => fullPath !== null);
+    await Promise.all(clears.map((fullPath) => fs.unlink(fullPath).catch(() => undefined).then(() => eraseMirroredCopy(fullPath, this.uploadBasePath))));
+  }
+
+  /**
+   * #11264 (contre-audit S9, N2) — les rendus que le worker de médias écrivait
+   * PENDANT cette suppression n'étaient pas encore sur la ligne lue plus haut.
+   * Une fois qu'aucune ligne ne partage plus les octets, leurs chemins
+   * conventionnels partent aussi. Un comptage qui échoue garde tout.
+   */
+  private async unlinkConventionalDerivedFiles(filePath: string): Promise<void> {
+    try {
+      if ((await this.prisma.messageAttachment.count({ where: { filePath } })) > 0) return;
+    } catch (error) {
+      logger.error('Erreur suppression fichiers', error as Error);
+      return;
+    }
+    const files = conventionalDerivedPaths(filePath)
+      .map((candidate) => resolveInsideUploadRoot(this.uploadBasePath, candidate))
+      .filter((fullPath): fullPath is string => fullPath !== null);
+    // Seuls les fichiers PRÉSENTS : la plupart de ces chemins n'existent pas
+    // (une image n'a pas de rendu H.264), et leur absence n'est pas une erreur.
+    const present = await Promise.all(files.map((fullPath) => Promise.resolve().then(() => fs.stat(fullPath)).then(() => fullPath, () => null)));
+    await Promise.all(present.filter((fullPath): fullPath is string => fullPath !== null).map((fullPath) => this.unlinkQuietly(fullPath)));
+  }
+
+  /**
+   * Les pistes TTS et les variantes WebP de la ligne supprimée (#9315), MOINS
+   * ce que citent encore les lignes qui partagent ses octets : une copie
+   * transférée reprend le `filePath` et la carte de traductions de l'original,
+   * mais peut porter des pistes à elle (`<idCopie>_<langue>`). Sans ce ménage,
+   * elles restaient servies par la route de fichiers, à une adresse dérivée de
+   * l'ObjectId, après le départ de la ligne. Une lecture qui échoue garde tout.
+   */
+  private async unlinkDerivedFiles(attachment: {
+    filePath: string;
+    thumbnailPath: string | null;
+    translations?: unknown;
+    imageVariants?: unknown;
+    avifVariants?: unknown;
+    renditions?: unknown;
+  }): Promise<void> {
+    const candidates = derivedFileCandidates(attachment);
+    if (candidates.length === 0) {
+      return;
+    }
+
+    let survivors: Array<{
+      filePath: string;
+      thumbnailPath: string | null;
+      translations: unknown;
+      imageVariants: unknown;
+      avifVariants: unknown;
+      renditions: unknown;
+    }>;
+    try {
+      survivors = await this.prisma.messageAttachment.findMany({
+        where: { filePath: attachment.filePath },
+        select: { filePath: true, thumbnailPath: true, translations: true, imageVariants: true, avifVariants: true, renditions: true },
+      });
+    } catch (error) {
+      logger.error('Erreur suppression fichiers', error as Error);
+      return;
+    }
+
+    const kept = new Set(
+      [attachment, ...survivors]
+        .flatMap((row) => [
+          row.filePath,
+          row.thumbnailPath,
+          ...(row === attachment ? [] : derivedFileCandidates(row)),
+        ])
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => resolveInsideUploadRoot(this.uploadBasePath, value))
+    );
+    const derived = new Set(
+      candidates
+        .map((candidate) => resolveInsideUploadRoot(this.uploadBasePath, candidate))
+        .filter((fullPath): fullPath is string => fullPath !== null && !kept.has(fullPath))
+    );
+
+    await Promise.all([...derived].map((fullPath) => this.unlinkQuietly(fullPath)));
   }
 
   /**
@@ -379,11 +544,22 @@ export class AttachmentService {
       if (stillReferenced > 0) {
         return;
       }
-
-      await fs.unlink(path.join(this.uploadBasePath, relativePath));
     } catch (error) {
       logger.error('Erreur suppression fichiers', error as Error);
+      return;
     }
+
+    await this.unlinkQuietly(path.join(this.uploadBasePath, relativePath));
+  }
+
+  private async unlinkQuietly(fullPath: string): Promise<void> {
+    try {
+      await fs.unlink(fullPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') logger.error('Erreur suppression fichiers', error as Error);
+    }
+    await eraseMirroredCopy(fullPath, this.uploadBasePath);
+    await forgetSealing(fullPath, this.uploadBasePath);
   }
 
   /**
@@ -396,6 +572,51 @@ export class AttachmentService {
    * dépendent de personne, et il les pose APRÈS le filtre de l'appelant pour
    * que celui-ci ne puisse qu'ajouter — sortir de la conversation demandée ou
    * ressusciter une tombstone reste inexprimable.
+   *
+   * Cette méthode lisait DEUX colonnes lourdes de plus — `transcription`
+   * (texte + segments mot-à-mot) et `translations` (toutes les langues) — pour
+   * chacune des 100 pièces d'une page, les mappait, et le sérialiseur de la
+   * route les jetait : elles ne sont déclarées par aucun schéma de LISTE.
+   * Travail mort en base, sans le moindre effet sur le fil (#4887, défaut 3 ;
+   * mesuré par #4392, au sens de #4177). Le retrait s'est fait ICI, au
+   * `select` — jamais par un élargissement du schéma servi : le DÉTAIL
+   * (`getAttachmentWithMetadata`) reste le seul chemin vers ces deux colonnes.
+   *
+   * Le `select` et le mapper qui restaient sont, à la ligne près,
+   * `attachmentServiceRowSelect` et `toAttachment` — la projection que #4166 a
+   * établie pour `getAttachment` et `getAttachmentsByIds`. Deux copies d'une
+   * même forme dérivent ; une seule ne peut pas. La méthode rend donc un
+   * `Attachment`, comme ses deux sœurs.
+   */
+  /**
+   * La galerie d'une conversation — et la seule surface de LISTE qui rende des
+   * pièces jointes à un lecteur ordinaire, y compris un participant anonyme.
+   *
+   * ## Pourquoi le cycle de vie du porteur se borne ICI (#9244)
+   *
+   * `carrierMessageStillServesBytes` répondait déjà pour le DÉTAIL
+   * (`GET /attachments/:id/metadata`, depuis #4923) ; cette liste, elle, ne
+   * bornait que `deletedAt`. Elle annonçait donc le nom d'origine, les
+   * dimensions, l'auteur et la date d'un média dont le porteur avait EXPIRÉ
+   * (`expiresAt`) ou BRÛLÉ (`viewOnceBurnAt`) — un média que l'émetteur avait
+   * voulu disparu, et que le détail refusait déjà. #4923 avait aligné le détail
+   * sur la liste et lui avait donné, du même geste, une borne de PLUS : la
+   * liste restait en retard sur ce qui s'était aligné sur elle.
+   *
+   * L'exclusion entre dans le `where`, jamais dans une boucle après coup —
+   * même forme que l'opt-out d'accusés de lecture (#3907), et pour la même
+   * raison : cette liste PAGINE (`take`/`skip`), et un filtrage post-requête
+   * ferait rétrécir la page sans corriger ce qui la borne.
+   *
+   * La forme de requête vient de la SSOT (`carrierMessageStillServesWhere`),
+   * pas d'une copie locale : deux écritures d'une seule loi dérivent au premier
+   * ajout de colonne, et c'est exactement ce défaut qui a laissé la liste
+   * derrière le détail.
+   *
+   * @param options.now L'instant qui tranche les échéances. Passé par
+   *   l'appelant comme la route du détail le fait à son site d'appel ; à défaut,
+   *   l'heure courante — une borne qui n'agirait que si on pense à l'activer
+   *   serait un demi-correctif.
    */
   async getConversationAttachments(
     conversationId: string,
@@ -404,13 +625,14 @@ export class AttachmentService {
       limit?: number;
       offset?: number;
       messageFilter?: Prisma.MessageWhereInput;
+      now?: Date;
     } = {}
-  ): Promise<AttachmentWithMetadata[]> {
+  ): Promise<Attachment[]> {
     const where: Prisma.MessageAttachmentWhereInput = {
       message: {
         ...options.messageFilter,
         conversationId: conversationId,
-        deletedAt: null,
+        ...carrierMessageStillServesWhere(options.now ?? new Date()),
       },
     };
 
@@ -427,71 +649,10 @@ export class AttachmentService {
       orderBy: { createdAt: 'desc' },
       take: options.limit || 50,
       skip: options.offset || 0,
-      select: {
-        id: true,
-        messageId: true,
-        fileName: true,
-        originalName: true,
-        mimeType: true,
-        fileSize: true,
-        fileUrl: true,
-        thumbnailUrl: true,
-        width: true,
-        height: true,
-        duration: true,
-        bitrate: true,
-        sampleRate: true,
-        codec: true,
-        channels: true,
-        uploadedBy: true,
-        isAnonymous: true,
-        createdAt: true,
-        isForwarded: true,
-        capturedInApp: true,
-        isViewOnce: true,
-        viewOnceCount: true,
-        isBlurred: true,
-        viewedCount: true,
-        downloadedCount: true,
-        consumedCount: true,
-        isEncrypted: true,
-        transcription: true,
-        translations: true,
-      }
+      select: attachmentServiceRowSelect,
     });
 
-    return attachments.map((att) => ({
-      id: att.id,
-      messageId: att.messageId,
-      fileName: att.fileName,
-      originalName: att.originalName,
-      mimeType: att.mimeType,
-      fileSize: att.fileSize,
-      fileUrl: att.fileUrl,
-      thumbnailUrl: att.thumbnailUrl || undefined,
-      width: att.width || undefined,
-      height: att.height || undefined,
-      duration: att.duration || undefined,
-      bitrate: att.bitrate || undefined,
-      sampleRate: att.sampleRate || undefined,
-      codec: att.codec || undefined,
-      channels: att.channels || undefined,
-      uploadedBy: att.uploadedBy,
-      isAnonymous: att.isAnonymous,
-      createdAt: att.createdAt.toISOString(),
-      isForwarded: att.isForwarded ?? false,
-      capturedInApp: att.capturedInApp ?? false,
-      isViewOnce: att.isViewOnce ?? false,
-      viewOnceCount: att.viewOnceCount ?? 0,
-      isBlurred: att.isBlurred ?? false,
-      viewedCount: att.viewedCount ?? 0,
-      downloadedCount: att.downloadedCount ?? 0,
-      consumedCount: att.consumedCount ?? 0,
-      isEncrypted: att.isEncrypted ?? false,
-      transcription: att.transcription as unknown as AttachmentTranscription | null,
-      translatedAudios: toSocketIOAudios(att.id, att.translations as unknown as AttachmentTranslations | undefined),
-      translations: (att.translations as unknown as AttachmentTranslations | undefined) || {}
-    }));
+    return attachments.map((att) => this.toAttachment(att));
   }
 
   // ==================== CHIFFREMENT ====================

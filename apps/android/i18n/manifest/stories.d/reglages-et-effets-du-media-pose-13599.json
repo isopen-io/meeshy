@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.adjust",
+          "androidName": "composer_column_media_adjust",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "avatar.menu.view_profile",
+          "androidName": "avatar_menu_view_profile",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "avatar.menu.view_story",
+          "androidName": "avatar_menu_view_story",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

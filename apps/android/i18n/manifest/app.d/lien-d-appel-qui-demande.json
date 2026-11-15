@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.link.confirm.video",
+          "androidName": "call_link_confirm_video",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.link.confirm.audio",
+          "androidName": "call_link_confirm_audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.link.confirm.call",
+          "androidName": "call_link_confirm_call",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.link.confirm.cancel",
+          "androidName": "call_link_confirm_cancel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.link.refused.unknown",
+          "androidName": "call_link_refused_unknown",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.link.refused.blocked",
+          "androidName": "call_link_refused_blocked",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

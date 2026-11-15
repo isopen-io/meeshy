@@ -1,0 +1,10 @@
+[Unit]
+Description=Demandes d'operations de l'administration Meeshy (%i)
+Documentation=https://github.com/isopen-io/meeshy/issues/10385
+
+[Path]
+DirectoryNotEmpty=/opt/meeshy/%i/ops/requests
+Unit=meeshy-ops@%i.service
+
+[Install]
+WantedBy=paths.target

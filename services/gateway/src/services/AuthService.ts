@@ -1,14 +1,10 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { SocketIOUser, UserRoleEnum } from '@meeshy/shared/types';
-import { normalizeEmail, normalizeUsername, capitalizeName, normalizeDisplayName, normalizePhoneWithCountry, normalizePhoneNumber } from '../utils/normalize';
-import { SecuritySanitizer } from '../utils/sanitize.js';
+import { generateNumericCode } from '../utils/verification-code';
+import { SocketIOUser } from '@meeshy/shared/types';
+import { normalizePhoneNumber } from '../utils/normalize';
 import { RequestContext } from './GeoIPService';
-import { emailSchema } from '@meeshy/shared/types/validation';
 import { EmailService } from './EmailService';
-import { smsService } from './SmsService';
 import {
   createSession,
   generateSessionToken,
@@ -17,12 +13,52 @@ import {
   invalidateSession,
   invalidateAllSessions,
   logout as logoutSession,
+  endCurrentSession,
   initSessionService,
-  SessionData
+  SessionData,
+  type CurrentSessionRef
 } from './SessionService';
-import { maskEmail, maskUsername, maskDisplayName } from './PhonePasswordResetService';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { recipientLanguage } from '../utils/recipient-language';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
+import { resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
+import {
+  isAccountLocked,
+  recordFailedLoginAttempt,
+  clearFailedLoginAttempts,
+  lockIsVisibleTo
+} from './LoginAttemptService';
+import { ActivationRequiresEmailProofError, AgeBelowMinimumError, PasswordNotSetError, UserLockedError } from '../errors/custom-errors';
+import type { GlobalMembershipSocketManager } from './conversations/ensureGlobalConversationMembership';
+import { servedUserPermissions } from './admin/served-permissions';
+import {
+  signSessionToken,
+  verifySessionToken,
+  TOKEN_TTL,
+  type SessionBoundTokenPayload,
+} from './auth/session-jwt';
+import {
+  mintPendingTwoFactorChallenge,
+  pendingTwoFactorWhere,
+  clearPendingTwoFactor,
+} from './auth/pending-two-factor';
+import { AUTH_USER_SELECT } from './auth/auth-user-projection';
+import {
+  registerAccount,
+  type RegisterData,
+  type RegisterResult,
+} from './auth/registration.service';
+import type { AfterResponse } from '../utils/after-response';
+import { verifyPassword } from '../utils/password-hash';
+import { getCacheStore, type CacheStore } from './CacheStore';
+import {
+  startAccountFromEmail,
+  type AccountFromEmailInput,
+  type AccountFromEmailOutcome,
+} from './auth/account-from-email';
+import { verifyEmailProof, type EmailProof, type EmailProofResult } from './auth/email-proof.service';
+import { emailCodeLink, mintEmailCodePair, verificationTtlMinutes } from './auth/email-code';
+import { isPhoneVerified, sendPhoneVerificationCode, verifyPhoneCode } from './auth/phone-verification';
+import { isActivationBlocked, resolveAccountActivation } from './auth/account-activation';
 
 // Logger dédié pour AuthService
 const logger = enhancedLogger.child({ module: 'AuthService' });
@@ -33,25 +69,22 @@ export interface LoginCredentials {
   password: string;
 }
 
-export interface RegisterData {
-  username: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phoneNumber?: string;
-  phoneCountryCode?: string; // ISO 3166-1 alpha-2 (e.g., "FR", "US")
-  systemLanguage?: string;
-  regionalLanguage?: string;
-  phoneTransferToken?: string; // Token proving SMS verification for phone transfer
-  skipPhoneConflictCheck?: boolean; // Set to true when transfer token is validated
-}
+/**
+ * La charge d'inscription et son résultat sont DÉFINIS avec la règle qui les
+ * consomme (`./auth/registration.service`), et ré-exportés ici pour les
+ * appelants historiques — routes, `InitService`, création par un
+ * administrateur.
+ */
+export type { RegisterData, RegisterResult } from './auth/registration.service';
 
-export interface TokenPayload {
-  userId: string;
-  username: string;
-  role: string;
-}
+/**
+ * Charge utile d'un JWT — DÉFINIE dans `./auth/session-jwt`, ré-exportée ici
+ * pour les appelants historiques. Depuis #4264 elle porte `sid`, l'identifiant
+ * de la ligne `UserSession` qui a émis le jeton : sans lui, `POST /refresh` ne
+ * pouvait que COMPTER les sessions valides d'un compte, jamais refuser celle
+ * qu'on venait de révoquer.
+ */
+export type TokenPayload = SessionBoundTokenPayload;
 
 export interface AuthResult {
   user: SocketIOUser;
@@ -59,35 +92,43 @@ export interface AuthResult {
   session: SessionData;
   requires2FA?: boolean; // True if 2FA verification is needed
   twoFactorToken?: string; // Temporary token for 2FA flow
+  usedBackupCode?: boolean; // True when completeAuthWith2FA consumed a backup code rather than a TOTP code
 }
 
-/**
- * Result of user registration
- * If phoneOwnershipConflict is true, the account was NOT created.
- * The user must choose: login, continue without phone, or transfer.
- */
-export interface RegisterResult {
-  user?: SocketIOUser; // undefined if phoneOwnershipConflict
-  phoneOwnershipConflict?: boolean; // True if phone belongs to another account (account NOT created)
-  phoneOwnerInfo?: {
-    maskedDisplayName: string;
-    maskedUsername: string;
-    maskedEmail: string;
-    avatar?: string;
-    phoneNumber: string;
-    phoneCountryCode: string;
-  };
-}
+export type AuthServiceOptions = {
+  /**
+   * Ce qu'il faut du manager Socket.IO pour annoncer une arrivée dans le
+   * salon global — voir `GlobalMembershipSocketManager`. Résolu
+   * PARESSEUSEMENT, comme `ExpiredMessagesCleanupService` : le manager
+   * n'existe pas encore quand les routes s'enregistrent, et une capture
+   * retiendrait `null` pour toujours. Absent = pas de socket, l'ajout reste
+   * persisté.
+   */
+  readonly resolveSocketManager?: () => GlobalMembershipSocketManager | null | undefined;
+  /**
+   * Le magasin qui compte les envois de code par adresse et par IP (#8033).
+   * Absent ⇒ le singleton `getCacheStore()`, résolu à l'appel.
+   */
+  readonly accountThrottle?: Pick<CacheStore, 'get' | 'set'>;
+  /** L'horloge du délai de grâce (#8238) — injectée par les témoins. Absente ⇒ l'horloge murale. */
+  readonly now?: () => Date;
+};
 
 export class AuthService {
   private prisma: PrismaClient;
   private jwtSecret: string;
   private emailService: EmailService;
   private frontendUrl: string;
+  private readonly resolveSocketManager?: () => GlobalMembershipSocketManager | null | undefined;
+  private readonly accountThrottle?: Pick<CacheStore, 'get' | 'set'>;
+  private readonly now: () => Date;
 
-  constructor(prisma: PrismaClient, jwtSecret: string) {
+  constructor(prisma: PrismaClient, jwtSecret: string, options: AuthServiceOptions = {}) {
     this.prisma = prisma;
     this.jwtSecret = jwtSecret;
+    this.resolveSocketManager = options.resolveSocketManager;
+    this.accountThrottle = options.accountThrottle;
+    this.now = options.now ?? (() => new Date());
     this.emailService = new EmailService();
     this.frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'http://localhost:3100';
 
@@ -102,13 +143,6 @@ export class AuthService {
     const rawToken = crypto.randomBytes(32).toString('hex');
     const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
     return { raw: rawToken, hash: hashedToken };
-  }
-
-  /**
-   * Hash a token for comparison
-   */
-  private hashToken(token: string): string {
-    return crypto.createHash('sha256').update(token).digest('hex');
   }
 
   /**
@@ -140,37 +174,12 @@ export class AuthService {
           ],
           isActive: true
         },
+        // La ligne d'une réponse d'authentification a UN site — `AUTH_USER_SELECT`,
+        // qui porte aussi l'état du verrou (#4138). Le mot de passe est le seul
+        // ajout de ce chemin : c'est le seul à le confronter (#4554).
         select: {
-          id: true,
-          username: true,
-          password: true,
-          email: true,
-          phoneNumber: true,
-          firstName: true,
-          lastName: true,
-          displayName: true,
-          avatar: true,
-          bio: true,
-          systemLanguage: true,
-          regionalLanguage: true,
-          customDestinationLanguage: true,
-          role: true,
-          isActive: true,
-          isOnline: true,
-          lastActiveAt: true,
-          twoFactorEnabledAt: true,
-          twoFactorSecret: true,
-          twoFactorBackupCodes: true,
-          lastLoginIp: true,
-          lastLoginLocation: true,
-          lastLoginDevice: true,
-          timezone: true,
-          emailVerifiedAt: true,
-          phoneVerifiedAt: true,
-          pendingEmail: true,
-          pendingPhoneNumber: true,
-          createdAt: true,
-          updatedAt: true
+          ...AUTH_USER_SELECT,
+          password: true
         }
       });
 
@@ -180,31 +189,77 @@ export class AuthService {
       }
 
 
+      /**
+       * UN COMPTE SANS MOT DE PASSE N'EST PAS UN COMPTE AU MOT DE PASSE FAUX
+       * (#6424).
+       *
+       * Ce refus se lit AVANT `verifyPassword` — qui rendrait `false` sur un
+       * hash `null`, donc le même verdict qu'une saisie erronée. La différence
+       * n'est pas cosmétique : la branche d'échec ci-dessous COMPTE la
+       * tentative et verrouille au seuil. Un compte dont le mot de passe
+       * n'existe pas serait ainsi fermé quinze minutes par cinq essais, alors
+       * qu'aucun essai ne peut réussir — le verrou ne protégerait personne et
+       * ne punirait que son détenteur.
+       *
+       * Rien n'est compté ici, et le refus DIT la porte à prendre.
+       */
+      if (!user.password) {
+        logger.info(`[AUTH_SERVICE] compte sans mot de passe — lien magique requis: ${user.username}`);
+        throw new PasswordNotSetError();
+      }
+
       // Vérifier le mot de passe
-      const passwordValid = await bcrypt.compare(credentials.password, user.password);
+      const passwordValid = await verifyPassword(credentials.password, user.password);
       if (!passwordValid) {
-        logger.warn(`[AUTH_SERVICE] ❌ Mot de passe invalide pour user.username=${user.username}`);
+        // L'échec se COMPTE, et le seuil ferme le compte. Sans cette ligne, les
+        // trois colonnes du verrou, l'erreur 423 et le job de déverrouillage
+        // décrivaient une protection que rien n'armait (#4138).
+        const { lockedUntil } = await recordFailedLoginAttempt(this.prisma, user.id);
+        logger.warn(
+          `[AUTH_SERVICE] ❌ Mot de passe invalide pour user.username=${user.username}` +
+          (lockedUntil ? ` — compte verrouillé jusqu'à ${lockedUntil.toISOString()}` : '')
+        );
         return null;
+      }
+
+      // Le verrou se lit APRÈS la vérification du mot de passe, et il ne se DIT
+      // qu'à qui vient de prouver qu'il connaît ce mot de passe. Le refuser plus
+      // tôt fabriquerait un oracle : cinq essais sur un compte inexistant
+      // rendent cinq « identifiants invalides », cinq essais sur un compte réel
+      // en rendraient un sixième DIFFÉRENT — de quoi énumérer les comptes.
+      if (isAccountLocked(user.lockedUntil) && lockIsVisibleTo(passwordValid)) {
+        logger.warn(`[AUTH_SERVICE] 🔒 Connexion refusée, compte verrouillé: ${user.username}`);
+        throw new UserLockedError(user.lockedUntil ?? undefined);
+      }
+
+      if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+        await clearFailedLoginAttempts(this.prisma, user.id);
       }
 
       logger.info(`[AUTH_SERVICE] ✅ Mot de passe valide pour user.username=${user.username}`);
 
+      /**
+       * LE DÉLAI DE GRÂCE DE L'ADRESSE (#8238, qui remplace le blocage
+       * immédiat de #8055) : un compte sans numéro dont l'adresse n'est pas
+       * prouvée se connecte pendant 28 jours, puis n'ouvre plus de session
+       * avant le code. Loi : `./auth/account-activation`.
+       *
+       * Lu APRÈS le mot de passe et le verrou : seul qui connaît le mot de
+       * passe apprend que le compte attend son code — un essai faux reste un
+       * `null` ordinaire, compté. Lu AVANT le second facteur et toute écriture
+       * de présence : un compte bloqué ne passe pas « en ligne ».
+       */
+      if (isActivationBlocked(user, this.now())) {
+        logger.info(`[AUTH_SERVICE] délai de grâce passé (adresse à prouver, aucun numéro): ${user.username}`);
+        throw new ActivationRequiresEmailProofError(user.email);
+      }
+
       // Check if 2FA is enabled
       if (user.twoFactorEnabledAt) {
 
-        // Generate a temporary token for 2FA verification
-        const twoFactorToken = crypto.randomBytes(32).toString('hex');
-        const twoFactorTokenHash = crypto.createHash('sha256').update(twoFactorToken).digest('hex');
-
-        // Store the temporary token (expires in 5 minutes)
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: {
-            // Store hash of the token for security
-            phoneVerificationCode: twoFactorTokenHash, // Reusing this field temporarily
-            phoneVerificationExpiry: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
-          }
-        });
+        // Le défi d'étape 2 se compose AILLEURS — `./auth/pending-two-factor`,
+        // site unique que le lien magique appelle aussi (#4542).
+        const twoFactorToken = await mintPendingTwoFactorChallenge({ prisma: this.prisma, userId: user.id });
 
         // Return partial auth result requiring 2FA
         const socketIOUser = this.userToSocketIOUser(user);
@@ -227,32 +282,10 @@ export class AuthService {
         };
       }
 
-      // No 2FA - proceed with normal login
-      // Mettre à jour la dernière connexion avec contexte
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          isOnline: true,
-          lastActiveAt: new Date(),
-          // Login tracking (updated on each login)
-          lastLoginIp: requestContext?.ip || user.lastLoginIp,
-          lastLoginLocation: requestContext?.geoData?.location || user.lastLoginLocation,
-          lastLoginDevice: requestContext?.userAgent || user.lastLoginDevice,
-          // Update timezone if detected and user hasn't set one
-          ...(requestContext?.geoData?.timezone && !user.timezone ? { timezone: requestContext.geoData.timezone } : {})
-        }
-      });
 
-      // Check email verification status
-      // If not verified, resend verification email
-      if (!user.emailVerifiedAt) {
-        logger.info(`[AUTH_SERVICE] ⚠️ Email non vérifié pour user.email=${user.email}`);
-        try {
-          await this.resendVerificationEmail(user.email);
-        } catch (emailError) {
-          logger.error('[AUTH_SERVICE] ⚠️ Échec du renvoi de l\'email de vérification:', emailError);
-        }
-      }
+      // Plus aucun code renvoyé à la connexion (#8238) : pendant le délai de
+      // grâce rien n'est demandé (`quiet`), puis les clients invitent
+      // (`invite`) et l'envoi se fait à la demande de la personne.
 
       // Convertir en SocketIOUser (with emailVerifiedAt included)
       const socketIOUser = this.userToSocketIOUser(user);
@@ -266,10 +299,32 @@ export class AuthService {
         deviceInfo: null
       };
 
+      // #9927 — la session NAÎT avant la trace de connexion : `createSession`
+      // porte le refus de l'âge minimal (403 AGE_BELOW_MINIMUM), posé ainsi
+      // APRÈS toute preuve d'identité (mot de passe, verrou, délai de grâce,
+      // second facteur), et un compte refusé ne passe jamais « en ligne ».
       const session = await createSession({
         userId: user.id,
         token: sessionToken,
-        requestContext: requestContext || defaultContext
+        requestContext: requestContext || defaultContext,
+        loginMethod: 'password'
+      });
+
+      // No 2FA - proceed with normal login
+      // Mettre à jour la dernière connexion avec contexte
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          isOnline: true,
+          lastActiveAt: new Date(),
+          // Login tracking (updated on each login)
+          lastLoginAt: new Date(),
+          lastLoginIp: requestContext?.ip || user.lastLoginIp,
+          lastLoginLocation: requestContext?.geoData?.location || user.lastLoginLocation,
+          lastLoginDevice: requestContext?.userAgent || user.lastLoginDevice,
+          // Update timezone if detected and user hasn't set one
+          ...(requestContext?.geoData?.timezone && !user.timezone ? { timezone: requestContext.geoData.timezone } : {})
+        }
       });
 
       logger.info(`[AUTH_SERVICE] ✅ Session créée pour: ${user.username} - ID session.id=${session.id}`);
@@ -282,6 +337,22 @@ export class AuthService {
       };
 
     } catch (error) {
+      // Un verrou n'est pas une PANNE : c'est une décision. L'avaler ici le
+      // rendrait indiscernable d'un mot de passe faux, et la personne
+      // légitime n'apprendrait jamais pourquoi on la refuse (#4138).
+      if (error instanceof UserLockedError) {
+        throw error;
+      }
+      // Un compte SANS mot de passe non plus (#6424) : même raison, autre
+      // décision — la porte existe, elle est ailleurs.
+      if (error instanceof PasswordNotSetError || error instanceof ActivationRequiresEmailProofError) {
+        throw error;
+      }
+      // #9927 — le refus de l'âge minimal (levé par `createSession`, porte de
+      // toutes les connexions) est une décision, pas une panne.
+      if (error instanceof AgeBelowMinimumError) {
+        throw error;
+      }
       logger.error('[AUTH_SERVICE] ❌ Erreur dans authenticate', error);
       if (error instanceof Error) {
         logger.error(`[AUTH_SERVICE] Détails`, error.message);
@@ -303,44 +374,30 @@ export class AuthService {
     requestContext?: RequestContext
   ): Promise<AuthResult | { success: false; error: string }> {
     try {
-      // Hash the token to compare with stored value
-      const tokenHash = crypto.createHash('sha256').update(twoFactorToken).digest('hex');
+      // Le défi se lit par son site unique, qui rend `null` quand aucun défi
+      // ne PEUT être valide — un jeton vide n'atteint donc jamais la base.
+      const challenge = pendingTwoFactorWhere(twoFactorToken);
+
+      if (!challenge) {
+        logger.warn('[AUTH_SERVICE] ❌ Token 2FA absent ou vide');
+        return { success: false, error: 'Token 2FA invalide ou expiré. Veuillez vous reconnecter.' };
+      }
 
       // Find user with matching token
       const user = await this.prisma.user.findFirst({
         where: {
-          phoneVerificationCode: tokenHash,
-          phoneVerificationExpiry: { gt: new Date() },
+          ...challenge,
           isActive: true
         },
+        // Le MÊME site que `authenticate` : sans lui, cette liste avait perdu
+        // `isOnline` et `lastActiveAt`, que `userToSocketIOUser` lit — la
+        // présence partait `undefined` de la seconde porte (#4554). Le secret
+        // TOTP et les codes de secours sont l'ajout de ce chemin : c'est le
+        // seul à les confronter.
         select: {
-          id: true,
-          username: true,
-          email: true,
-          phoneNumber: true,
-          firstName: true,
-          lastName: true,
-          displayName: true,
-          avatar: true,
-          bio: true,
-          systemLanguage: true,
-          regionalLanguage: true,
-          customDestinationLanguage: true,
-          role: true,
-          isActive: true,
-          twoFactorEnabledAt: true,
+          ...AUTH_USER_SELECT,
           twoFactorSecret: true,
-          twoFactorBackupCodes: true,
-          lastLoginIp: true,
-          lastLoginLocation: true,
-          lastLoginDevice: true,
-          timezone: true,
-          emailVerifiedAt: true,
-          phoneVerifiedAt: true,
-          pendingEmail: true,
-          pendingPhoneNumber: true,
-          createdAt: true,
-          updatedAt: true
+          twoFactorBackupCodes: true
         }
       });
 
@@ -349,9 +406,24 @@ export class AuthService {
         return { success: false, error: 'Token 2FA invalide ou expiré. Veuillez vous reconnecter.' };
       }
 
+      // Ici, le verrou se DIT : détenir un `twoFactorToken` valide prouve déjà
+      // qu'on a passé l'étape du mot de passe, donc l'annonce n'apprend rien
+      // qu'on ne sache — contrairement au chemin `/login` (voir `lockIsVisibleTo`).
+      if (isAccountLocked(user.lockedUntil)) {
+        logger.warn(`[AUTH_SERVICE] 🔒 Second facteur refusé, compte verrouillé: ${user.username}`);
+        return { success: false, error: 'Compte temporairement verrouillé après trop de tentatives. Réessayez plus tard.' };
+      }
+
       // Verify 2FA code
       const cleanCode = code.replace(/-/g, '').toUpperCase();
       let isValid = false;
+      // RESTAURÉ EN REVUE (2026-09-06) — le balayage `noUnusedLocals` de
+      // 158ac8beb4 a retiré cette déclaration et son affectation en les
+      // croyant mortes : le SEUL usage est la propriété ABRÉGÉE
+      // `usedBackupCode` du littéral rendu plus bas, que `tsc` a aussitôt
+      // rougie (TS18004). Le gateway ne compilait plus, et le drapeau que
+      // l'appelant lit pour dire « vous venez d'utiliser un code de secours »
+      // avait disparu du contrat.
       let usedBackupCode = false;
 
       // Try TOTP code first (6 digits)
@@ -387,26 +459,28 @@ export class AuthService {
       }
 
       if (!isValid) {
-        logger.warn(`[AUTH_SERVICE] ❌ Code 2FA invalide pour user.username=${user.username}`);
-        return { success: false, error: 'Code 2FA invalide' };
+        // Le code TOTP tourne toutes les trente secondes ; les CODES DE SECOURS,
+        // eux, ne tournent pas et n'expirent jamais. Sans ce comptage, ils
+        // étaient attaquables indéfiniment (#4138).
+        const { lockedUntil } = await recordFailedLoginAttempt(this.prisma, user.id);
+        logger.warn(
+          `[AUTH_SERVICE] ❌ Code 2FA invalide pour user.username=${user.username}` +
+          (lockedUntil ? ` — compte verrouillé jusqu'à ${lockedUntil.toISOString()}` : '')
+        );
+        return {
+          success: false,
+          error: lockedUntil
+            ? 'Compte temporairement verrouillé après trop de tentatives. Réessayez plus tard.'
+            : 'Code 2FA invalide'
+        };
+      }
+
+      if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+        await clearFailedLoginAttempts(this.prisma, user.id);
       }
 
       logger.info(`[AUTH_SERVICE] ✅ Code 2FA valide pour user.username=${user.username}`);
 
-      // Clear the temporary token and complete login
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          phoneVerificationCode: null,
-          phoneVerificationExpiry: null,
-          isOnline: true,
-          lastActiveAt: new Date(),
-          lastLoginIp: requestContext?.ip || user.lastLoginIp,
-          lastLoginLocation: requestContext?.geoData?.location || user.lastLoginLocation,
-          lastLoginDevice: requestContext?.userAgent || user.lastLoginDevice,
-          ...(requestContext?.geoData?.timezone && !user.timezone ? { timezone: requestContext.geoData.timezone } : {})
-        }
-      });
 
       // Create full session
       const socketIOUser = this.userToSocketIOUser(user);
@@ -418,10 +492,28 @@ export class AuthService {
         deviceInfo: null
       };
 
+      // #9927 — même ordre que le mot de passe : la session (et son refus de
+      // l'âge minimal) vient APRÈS un second facteur valide, la trace de
+      // connexion après la session.
       const session = await createSession({
         userId: user.id,
         token: sessionToken,
-        requestContext: requestContext || defaultContext
+        requestContext: requestContext || defaultContext,
+        loginMethod: 'two_factor'
+      });
+      // Clear the temporary token and complete login
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          ...clearPendingTwoFactor(),
+          isOnline: true,
+          lastActiveAt: new Date(),
+          lastLoginAt: new Date(),
+          lastLoginIp: requestContext?.ip || user.lastLoginIp,
+          lastLoginLocation: requestContext?.geoData?.location || user.lastLoginLocation,
+          lastLoginDevice: requestContext?.userAgent || user.lastLoginDevice,
+          ...(requestContext?.geoData?.timezone && !user.timezone ? { timezone: requestContext.geoData.timezone } : {})
+        }
       });
 
       logger.info(`[AUTH_SERVICE] ✅ Session 2FA créée pour: ${user.username} - ID: ${session.id}`);
@@ -430,254 +522,57 @@ export class AuthService {
         user: socketIOUser,
         sessionToken,
         session,
-        requires2FA: false
+        requires2FA: false,
+        usedBackupCode
       };
 
     } catch (error) {
+      if (error instanceof AgeBelowMinimumError) throw error;
       logger.error('[AUTH_SERVICE] ❌ Erreur dans completeAuthWith2FA', error);
       return { success: false, error: 'Erreur lors de la vérification 2FA' };
     }
   }
 
   /**
-   * Créer un nouveau utilisateur
+   * Créer un nouveau compte — DÉLÉGATION à `services/auth/registration.service`.
+   *
+   * La règle a quitté cette classe au #5216 : elle n'utilisait de `this` que
+   * quatre choses (Prisma, l'e-mail, l'URL du front, le résolveur de manager),
+   * elle pesait 230 lignes dans un fichier déjà hors budget (#4426), et ce lot
+   * lui en ajoutait beaucoup — identité dérivée, refus typés, travaux différés.
+   * **Un fichier hors budget est interdit d'ajout : on extrait d'abord.**
+   *
+   * La signature ne bouge pas pour les appelants historiques, à une exception
+   * assumée près : le service LÈVE désormais ses refus
+   * (`RegistrationRefusal` — pseudo pris, adresse prise, numéro illisible) au
+   * lieu de rendre `null` sur tout. Le `null` rendait un pseudo pris
+   * indiscernable d'une panne Mongo, et les branches de la route qui
+   * prétendaient les distinguer par le TEXTE de l'erreur étaient
+   * inatteignables. Le type de retour garde `| null` parce que les appelants
+   * historiques le testent ; plus rien ne le produit.
+   *
    * @param data - Données d'inscription
    * @param requestContext - Contexte de la requête (IP, user agent, géolocalisation)
-   * @returns RegisterResult with user, and optionally phoneTransferRequired info
    */
-  async register(data: RegisterData, requestContext?: RequestContext): Promise<RegisterResult | null> {
-    try {
-      // Log l'email reçu pour debug (sera retiré après)
-      logger.info(`[AUTH_SERVICE] 📧 Email reçu pour inscription: "${data.email}" (length: ${data.email?.length || 0})`);
-
-      // Valider l'email avec Zod AVANT toute opération
-      try {
-        emailSchema.parse(data.email);
-      } catch (zodError: any) {
-        // Log détaillé pour debug
-        logger.error(`[AUTH_SERVICE] ❌ Zod error details:`, {
-          email: data.email,
-          emailCharCodes: data.email?.split('').map((c: string) => c.charCodeAt(0)),
-          issues: zodError.issues,
-          message: zodError.message,
-          name: zodError.name
-        });
-        const errorMessage = zodError.issues?.[0]?.message || 'Format d\'email invalide';
-        throw new Error(`Email invalide: ${errorMessage}`);
-      }
-
-      // Normaliser les données utilisateur
-      const normalizedEmail = normalizeEmail(data.email);
-      const normalizedUsername = normalizeUsername(data.username);
-      const normalizedFirstName = SecuritySanitizer.sanitizeText(capitalizeName(data.firstName));
-      const normalizedLastName = SecuritySanitizer.sanitizeText(capitalizeName(data.lastName));
-      const normalizedDisplayName = SecuritySanitizer.sanitizeText(normalizeDisplayName(`${normalizedFirstName} ${normalizedLastName}`));
-
-      // Normaliser le phoneNumber avec libphonenumber-js
-      // Utilise le code pays fourni, ou détecte depuis le numéro, ou utilise la géoloc
-      let cleanPhoneNumber: string | null = null;
-      let phoneCountryCode: string | null = null;
-
-      if (data.phoneNumber && data.phoneNumber.trim() !== '') {
-        // Priorité: 1) Code pays explicite, 2) Pays de la géoloc, 3) Défaut FR
-        const defaultCountry = data.phoneCountryCode
-          || requestContext?.geoData?.country
-          || 'FR';
-
-        const phoneResult = normalizePhoneWithCountry(data.phoneNumber, defaultCountry);
-        if (phoneResult && phoneResult.isValid) {
-          cleanPhoneNumber = phoneResult.phoneNumber;
-          phoneCountryCode = phoneResult.countryCode;
-        } else {
-          throw new Error('Numéro de téléphone invalide');
-        }
-      }
-
-      // Vérifier si l'username ou l'email existe déjà (pas le téléphone - géré séparément)
-      const existingUserByCredentials = await this.prisma.user.findFirst({
-        where: {
-          OR: [
-            { username: { equals: normalizedUsername, mode: 'insensitive' } },
-            { email: { equals: normalizedEmail, mode: 'insensitive' } }
-          ]
-        }
-      });
-
-      if (existingUserByCredentials) {
-        if (existingUserByCredentials.username.toLowerCase() === normalizedUsername.toLowerCase()) {
-          throw new Error('Nom d\'utilisateur déjà utilisé');
-        }
-        if (existingUserByCredentials.email.toLowerCase() === normalizedEmail.toLowerCase()) {
-          throw new Error('Email déjà utilisé');
-        }
-        throw new Error('Utilisateur déjà existant');
-      }
-
-      // Vérifier si le téléphone appartient à un autre compte
-      // Si oui, on ne crée PAS le compte et on retourne les infos pour que l'utilisateur choisisse
-      // SAUF si skipPhoneConflictCheck=true (transfer token validated)
-      if (cleanPhoneNumber && !data.skipPhoneConflictCheck) {
-        const existingUserByPhone = await this.prisma.user.findFirst({
-          where: {
-            phoneNumber: cleanPhoneNumber,
-            isActive: true,
-            phoneVerifiedAt: { not: null } // Seuls les numéros vérifiés déclenchent le conflit
-          },
-          select: {
-            id: true,
-            displayName: true,
-            username: true,
-            email: true,
-            avatar: true
-          }
-        });
-
-        if (existingUserByPhone) {
-          // Le numéro appartient à quelqu'un d'autre
-          // On NE crée PAS le compte - l'utilisateur doit choisir
-          logger.info('[AUTH_SERVICE] 📱 Phone belongs to another user - returning conflict info (account NOT created)');
-          return {
-            phoneOwnershipConflict: true,
-            phoneOwnerInfo: {
-              maskedDisplayName: maskDisplayName(existingUserByPhone.displayName),
-              maskedUsername: maskUsername(existingUserByPhone.username),
-              maskedEmail: maskEmail(existingUserByPhone.email),
-              avatar: existingUserByPhone.avatar || undefined,
-              phoneNumber: cleanPhoneNumber,
-              phoneCountryCode: phoneCountryCode || 'FR'
-            }
-          };
-        }
-      } else if (cleanPhoneNumber && data.skipPhoneConflictCheck) {
-        logger.info('[AUTH_SERVICE] 📱 Skipping phone conflict check - transfer token validated');
-      }
-
-      // Hasher le mot de passe (bcrypt cost=12 for enhanced security)
-      const BCRYPT_COST = 12;
-      const hashedPassword = await bcrypt.hash(data.password, BCRYPT_COST);
-
-      // Generate email verification token + OTP code (24h expiry)
-      const { raw: verificationToken, hash: verificationTokenHash } = this.generateVerificationToken();
-      const verificationCode = this.generatePhoneCode();
-      const tokenExpiryHours = parseInt(process.env.EMAIL_VERIFICATION_TOKEN_EXPIRY || '86400') / 3600; // Default 24h
-      const verificationExpiry = new Date(Date.now() + tokenExpiryHours * 60 * 60 * 1000);
-
-      // Créer l'utilisateur avec les données normalisées et contexte d'inscription
-      // Note: Si phoneOwnershipConflict, on a déjà fait un early return plus haut
-      const user = await this.prisma.user.create({
-        data: {
-          username: normalizedUsername,
-          password: hashedPassword,
-          firstName: normalizedFirstName,
-          lastName: normalizedLastName,
-          email: normalizedEmail,
-          phoneNumber: cleanPhoneNumber,
-          phoneCountryCode: phoneCountryCode,
-          // Mark phone as verified at registration (allows phone-based password reset)
-          phoneVerifiedAt: cleanPhoneNumber ? new Date() : null,
-          systemLanguage: data.systemLanguage || 'fr',
-          regionalLanguage: data.regionalLanguage || 'fr',
-          displayName: normalizedDisplayName,
-          isOnline: true,
-          lastActiveAt: new Date(),
-          // Email verification fields
-          emailVerificationToken: verificationTokenHash,
-          emailVerificationCode: verificationCode,
-          emailVerificationExpiry: verificationExpiry,
-          // Registration context (captured once at signup)
-          registrationIp: requestContext?.ip || null,
-          registrationLocation: requestContext?.geoData?.location || null,
-          registrationDevice: requestContext?.userAgent || null,
-          registrationCountry: requestContext?.geoData?.country || null,
-          // Set timezone from geolocation if available
-          timezone: requestContext?.geoData?.timezone || null,
-          // First login tracking
-          lastLoginIp: requestContext?.ip || null,
-          lastLoginLocation: requestContext?.geoData?.location || null,
-          lastLoginDevice: requestContext?.userAgent || null
-        }
-      });
-
-      // Send email verification email (in user's preferred language)
-      try {
-        const verificationLink = `${this.frontendUrl}/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(normalizedEmail)}`;
-
-        const emailResult = await this.emailService.sendEmailVerification({
-          to: normalizedEmail,
-          name: normalizedDisplayName,
-          verificationLink,
-          verificationCode,
-          expiryHours: tokenExpiryHours,
-          language: data.systemLanguage || 'fr'
-        });
-
-        if (emailResult.success) {
-          logger.info('[AUTH_SERVICE] ✅ Email de vérification envoyé avec succès!');
-          logger.info(`[AUTH_SERVICE] ✅ Provider emailResult.provider=${emailResult.provider}`);
-          logger.info(`[AUTH_SERVICE] ✅ Message ID emailResult.messageId=${emailResult.messageId}`);
-        } else {
-          logger.error('[AUTH_SERVICE] ❌ Échec de l\'envoi:', emailResult.error);
-        }
-      } catch (emailError) {
-        logger.error('[AUTH_SERVICE] ⚠️ Exception lors de l\'envoi de l\'email de vérification:', emailError);
-        // Don't fail registration if email fails - user can request a new one
-      }
-
-      // Ajouter automatiquement l'utilisateur à la conversation globale "meeshy"
-      try {
-        const globalConversation = await this.prisma.conversation.findFirst({
-          where: { identifier: 'meeshy' }
-        });
-
-        if (globalConversation) {
-          // Vérifier si l'utilisateur n'est pas déjà membre
-          const existingMember = await this.prisma.participant.findFirst({
-            where: {
-              conversationId: globalConversation.id,
-              userId: user.id
-            }
-          });
-
-          if (!existingMember) {
-            await this.prisma.participant.create({
-              data: {
-                conversationId: globalConversation.id,
-                userId: user.id,
-                type: 'user',
-                displayName: user.displayName || user.username,
-                role: 'MEMBER',
-                permissions: {
-                  canSendMessages: true,
-                  canSendFiles: true,
-                  canSendImages: true,
-                  canSendVideos: true,
-                  canSendAudios: true,
-                  canSendLocations: true,
-                  canSendLinks: true
-                },
-                joinedAt: new Date(),
-                isActive: true
-              }
-            });
-          }
-        } else {
-          logger.warn('[AUTH] ⚠️ Conversation globale "meeshy" non trouvée - impossible d\'ajouter l\'utilisateur');
-        }
-      } catch (error) {
-        logger.error('[AUTH] ❌ Erreur lors de l\'ajout à la conversation globale:', error);
-        // Ne pas faire échouer l'inscription si l'ajout à la conversation échoue
-      }
-
-      // Retourner le résultat avec l'utilisateur créé
-      // Note: Si phoneOwnershipConflict existait, on a fait un early return plus haut
-      return {
-        user: this.userToSocketIOUser(user)
-      };
-
-    } catch (error) {
-      logger.error('Error in register', error);
-      return null;
-    }
+  async register(
+    data: RegisterData,
+    requestContext?: RequestContext,
+    options?: { readonly afterResponse?: AfterResponse },
+  ): Promise<RegisterResult | null> {
+    return registerAccount(
+      {
+        prisma: this.prisma,
+        emailService: this.emailService,
+        frontendUrl: this.frontendUrl,
+        resolveSocketManager: this.resolveSocketManager,
+        toSocketIOUser: (user) => this.userToSocketIOUser(user),
+        verificationToken: () => this.generateVerificationToken(),
+        verificationCode: () => this.generatePhoneCode(),
+        afterResponse: options?.afterResponse,
+      },
+      data,
+      requestContext,
+    );
   }
 
   /**
@@ -690,27 +585,11 @@ export class AuthService {
           id: userId,
           isActive: true
         },
-        select: {
-          id: true,
-          username: true,
-          email: true,
-          phoneNumber: true,
-          firstName: true,
-          lastName: true,
-          displayName: true,
-          avatar: true,
-          bio: true,
-          systemLanguage: true,
-          regionalLanguage: true,
-          customDestinationLanguage: true,
-          role: true,
-          isActive: true,
-          isOnline: true,
-          lastActiveAt: true,
-          twoFactorEnabledAt: true,
-          createdAt: true,
-          updatedAt: true
-        }
+        // Troisième consommateur de `userToSocketIOUser`, et le plus amputé des
+        // trois avant #4554 : la réponse du lien magique (`routes/auth/magic-link.ts`,
+        // seul appelant) ne portait ni vérification d'email ou de téléphone, ni
+        // suivi de connexion, ni changement de contact en attente.
+        select: { ...AUTH_USER_SELECT }
       });
 
       if (!user) {
@@ -726,38 +605,24 @@ export class AuthService {
   }
 
   /**
-   * Générer un token JWT
+   * Générer un token JWT, RATTACHÉ à la session qui l'émet — le lien que
+   * #4213 n'avait pas : sa garde ne pouvait que COMPTER les sessions valides
+   * du compte, si bien que révoquer UNE session laissait le jeton volé passer
+   * tant que le propriétaire restait connecté ailleurs, le cas nominal.
+   * Émission et butoir de transition : `./auth/session-jwt`.
    */
-  generateToken(user: SocketIOUser): string {
-    const payload: TokenPayload = {
-      userId: user.id,
-      username: user.username,
-      role: user.role
-    };
-
-    return jwt.sign(payload, this.jwtSecret, {
-      expiresIn: '24h'
+  generateToken(user: SocketIOUser, sessionId?: string | null): string {
+    return signSessionToken({
+      user,
+      secret: this.jwtSecret,
+      sessionId,
+      expiresIn: TOKEN_TTL,
     });
   }
 
-  /**
-   * Vérifier un token JWT.
-   * Retourne null si le token est expiré ou invalide.
-   * TokenExpiredError est un cas attendu (refresh flow) — loggé en debug, pas ERROR.
-   */
+  /** Vérifier un token JWT — `null` si expiré ou invalide. Voir `./auth/session-jwt`. */
   verifyToken(token: string): TokenPayload | null {
-    try {
-      const decoded = jwt.verify(token, this.jwtSecret) as TokenPayload;
-      return decoded;
-    } catch (error: any) {
-      if (error?.name === 'TokenExpiredError') {
-        // Expected during /auth/refresh — not an error, the client will refresh.
-        logger.debug('[AuthService] JWT expired (expected at refresh)', { exp: error.expiredAt });
-      } else {
-        logger.error('Error verifying token', error);
-      }
-      return null;
-    }
+    return verifySessionToken(token, this.jwtSecret);
   }
 
   /**
@@ -784,118 +649,48 @@ export class AuthService {
   }
 
   /**
-   * Verify email with token (from email link) or 6-digit code (from mobile app)
+   * Vérifier une adresse par son code ou son lien — la preuve qui, depuis
+   * #8033, ouvre la session. Règles et gardes : `./auth/email-proof.service`.
    */
-  async verifyEmail(tokenOrCode: string, email: string, isCode: boolean = false): Promise<{ success: boolean; error?: string; alreadyVerified?: boolean; verifiedAt?: Date }> {
-    try {
-      const normalizedEmail = email.trim().toLowerCase();
+  async verifyEmail(proof: EmailProof): Promise<EmailProofResult> {
+    return verifyEmailProof(this.prisma, proof);
+  }
 
-      // First, check if user exists with this email
-      const existingUser = await this.prisma.user.findFirst({
-        where: {
-          email: { equals: normalizedEmail, mode: 'insensitive' }
-        },
-        select: {
-          id: true,
-          email: true,
-          emailVerifiedAt: true,
-          emailVerificationToken: true,
-          emailVerificationCode: true,
-          emailVerificationExpiry: true
-        }
-      });
-
-      // If user exists and email is already verified, return success with verification date
-      if (existingUser && existingUser.emailVerifiedAt) {
-        logger.info(`[AUTH_SERVICE] ℹ️ Email déjà vérifié pour existingUser.email=${existingUser.email} le existingUser.emailVerifiedAt.toISOString()=${existingUser.emailVerifiedAt.toISOString()}`);
-        return {
-          success: true,
-          alreadyVerified: true,
-          verifiedAt: existingUser.emailVerifiedAt
-        };
-      }
-
-      if (isCode) {
-        // OTP code verification (mobile flow)
-        const user = await this.prisma.user.findFirst({
-          where: {
-            email: { equals: normalizedEmail, mode: 'insensitive' },
-            emailVerificationCode: tokenOrCode,
-            emailVerificationExpiry: { gt: new Date() }
-          }
-        });
-
-        if (!user) {
-          const expiredUser = await this.prisma.user.findFirst({
-            where: {
-              email: { equals: normalizedEmail, mode: 'insensitive' },
-              emailVerificationCode: tokenOrCode
-            }
-          });
-
-          if (expiredUser) {
-            return { success: false, error: 'Le code de vérification a expiré. Veuillez en demander un nouveau.' };
-          }
-          return { success: false, error: 'Code de vérification invalide.' };
-        }
-
-        const now = new Date();
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: {
-            emailVerifiedAt: now,
-            emailVerificationToken: null,
-            emailVerificationCode: null,
-            emailVerificationExpiry: null
-          }
-        });
-
-        logger.info(`[AUTH_SERVICE] ✅ Email vérifié par code OTP pour user.email=${user.email}`);
-        return { success: true, verifiedAt: now };
-      }
-
-      // Token verification (email link flow)
-      const hashedToken = this.hashToken(tokenOrCode);
-      const user = await this.prisma.user.findFirst({
-        where: {
-          email: { equals: normalizedEmail, mode: 'insensitive' },
-          emailVerificationToken: hashedToken,
-          emailVerificationExpiry: { gt: new Date() }
-        }
-      });
-
-      if (!user) {
-        const expiredUser = await this.prisma.user.findFirst({
-          where: {
-            email: { equals: normalizedEmail, mode: 'insensitive' },
-            emailVerificationToken: hashedToken
-          }
-        });
-
-        if (expiredUser) {
-          return { success: false, error: 'Le lien de vérification a expiré. Veuillez en demander un nouveau.' };
-        }
-        return { success: false, error: 'Lien de vérification invalide.' };
-      }
-
-      const now = new Date();
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          emailVerifiedAt: now,
-          emailVerificationToken: null,
-          emailVerificationCode: null,
-          emailVerificationExpiry: null
-        }
-      });
-
-      logger.info(`[AUTH_SERVICE] ✅ Email vérifié pour user.email=${user.email}`);
-      return { success: true, verifiedAt: now };
-
-    } catch (error) {
-      logger.error('[AUTH_SERVICE] ❌ Erreur lors de la vérification email', error);
-      return { success: false, error: 'Erreur lors de la vérification.' };
-    }
+  /**
+   * Une adresse devient un compte en un geste (#8033) — la fonction UNIQUE que
+   * partagent `POST /login` et `POST /magic-link/request`. Tableau des cas et
+   * gardes : `./auth/account-from-email`.
+   */
+  async startAccountFromEmail(
+    input: AccountFromEmailInput,
+    options?: { readonly afterResponse?: AfterResponse },
+  ): Promise<AccountFromEmailOutcome> {
+    return startAccountFromEmail(
+      {
+        prisma: this.prisma,
+        throttle: this.accountThrottle ?? getCacheStore(),
+        mailer: this.emailService,
+        frontendUrl: this.frontendUrl,
+        afterResponse: options?.afterResponse,
+        register: (data, requestContext, ttlMinutes) =>
+          registerAccount(
+            {
+              prisma: this.prisma,
+              emailService: this.emailService,
+              frontendUrl: this.frontendUrl,
+              resolveSocketManager: this.resolveSocketManager,
+              toSocketIOUser: (user) => this.userToSocketIOUser(user),
+              verificationToken: () => this.generateVerificationToken(),
+              verificationCode: () => this.generatePhoneCode(),
+              verificationTtlMinutes: ttlMinutes,
+              afterResponse: options?.afterResponse,
+            },
+            data,
+            requestContext,
+          ),
+      },
+      input,
+    );
   }
 
   /**
@@ -905,7 +700,13 @@ export class AuthService {
     try {
       const normalizedEmail = email.trim().toLowerCase();
 
-      // Find user by email (include systemLanguage for i18n)
+      // Les QUATRE rangs du Prisme, jamais `systemLanguage` seul : la
+      // projection est la seule des deux moitiés de la descente qu'aucun témoin
+      // de rang ne peut voir (#4642). Un `select` étroit rend les rangs 2 à 4
+      // `undefined` chez `recipientLanguage`, donc « non réglés », donc le
+      // repli — et l'e-mail de vérification partait en `'fr'` vers tout lecteur
+      // dont la langue applicative vit dans `regionalLanguage` ou dans la seule
+      // locale appareil.
       const user = await this.prisma.user.findFirst({
         where: {
           email: { equals: normalizedEmail, mode: 'insensitive' },
@@ -917,7 +718,7 @@ export class AuthService {
           firstName: true,
           lastName: true,
           displayName: true,
-          systemLanguage: true,
+          ...RECIPIENT_LANG_SELECT,
           emailVerifiedAt: true
         }
       });
@@ -932,24 +733,18 @@ export class AuthService {
         return { success: false, error: 'Cette adresse email est déjà vérifiée.' };
       }
 
-      // Generate new token + OTP code
-      const { raw: verificationToken, hash: verificationTokenHash } = this.generateVerificationToken();
-      const verificationCode = this.generatePhoneCode();
-      const tokenExpiryHours = parseInt(process.env.EMAIL_VERIFICATION_TOKEN_EXPIRY || '86400') / 3600;
-      const verificationExpiry = new Date(Date.now() + tokenExpiryHours * 60 * 60 * 1000);
+      // Une paire neuve — seules ses EMPREINTES sont écrites (#8033).
+      const pair = mintEmailCodePair(verificationTtlMinutes());
+      const verificationCode = pair.code;
+      const tokenExpiryHours = verificationTtlMinutes() / 60;
 
-      // Update user with new token + code
       await this.prisma.user.update({
         where: { id: user.id },
-        data: {
-          emailVerificationToken: verificationTokenHash,
-          emailVerificationCode: verificationCode,
-          emailVerificationExpiry: verificationExpiry
-        }
+        data: { ...pair.columns }
       });
 
       // Send email in user's preferred language
-      const verificationLink = `${this.frontendUrl}/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(normalizedEmail)}`;
+      const verificationLink = emailCodeLink(this.frontendUrl, pair.rawToken, normalizedEmail);
       await this.emailService.sendEmailVerification({
         to: normalizedEmail,
         name: user.displayName || `${user.firstName} ${user.lastName}`,
@@ -988,217 +783,78 @@ export class AuthService {
    * Generate a 6-digit verification code
    */
   private generatePhoneCode(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    // Cryptographically secure 6-digit code (CWE-338) — single source of truth.
+    return generateNumericCode();
   }
 
-  /**
-   * Send phone verification code via SMS
-   * NOTE: This is a placeholder - integrate Twilio/Vonage for production
-   */
+  /** Envoyer le code SMS de vérification du numéro — `./auth/phone-verification`. */
   async sendPhoneVerificationCode(phoneNumber: string): Promise<{ success: boolean; error?: string }> {
-    try {
-      const cleanPhone = phoneNumber.replace(/\s+/g, '').trim();
-
-      // Find user by phone number
-      const user = await this.prisma.user.findFirst({
-        where: {
-          phoneNumber: { contains: cleanPhone.replace(/^\+/, ''), mode: 'insensitive' },
-          isActive: true
-        }
-      });
-
-      if (!user) {
-        // Don't reveal if phone exists - but we need a user for verification
-        logger.warn(`[AUTH_SERVICE] ⚠️ Numéro non trouvé cleanPhone=${cleanPhone}`);
-        return { success: false, error: 'Numéro de téléphone non associé à un compte.' };
-      }
-
-      // Already verified?
-      if (user.phoneVerifiedAt) {
-        return { success: false, error: 'Ce numéro est déjà vérifié.' };
-      }
-
-      // Generate 6-digit code
-      const code = this.generatePhoneCode();
-      const hashedCode = this.hashToken(code);
-      const codeExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-      // Update user with code
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          phoneVerificationCode: hashedCode,
-          phoneVerificationExpiry: codeExpiry
-        }
-      });
-
-      // Send SMS via multi-provider SmsService
-      const smsResult = await smsService.sendVerificationCode(user.phoneNumber || cleanPhone, code);
-
-      if (!smsResult.success) {
-        logger.error('[AUTH_SERVICE] ❌ Échec envoi SMS', smsResult.error);
-      logger.info(`Utilisateur trouvé userId=${user.id}`);
-        return { success: false, error: 'Erreur lors de l\'envoi du SMS.' };
-      }
-
-      logger.info(`[AUTH_SERVICE] ✅ SMS envoyé via ${smsResult.provider} - messageId: ${smsResult.messageId}`);
-      return { success: true };
-
-    } catch (error) {
-      logger.error('[AUTH_SERVICE] ❌ Erreur envoi code SMS', error);
-      return { success: false, error: 'Erreur lors de l\'envoi du code.' };
-    }
+    return sendPhoneVerificationCode(this.prisma, phoneNumber);
   }
 
-  /**
-   * Verify phone with SMS code
-   */
-  async verifyPhone(phoneNumber: string, code: string): Promise<{ success: boolean; error?: string }> {
-    try {
-      const cleanPhone = phoneNumber.replace(/\s+/g, '').trim();
-      const hashedCode = this.hashToken(code);
-
-      // Find user with matching phone and code
-      const user = await this.prisma.user.findFirst({
-        where: {
-          phoneNumber: { contains: cleanPhone.replace(/^\+/, ''), mode: 'insensitive' },
-          phoneVerificationCode: hashedCode,
-          phoneVerificationExpiry: { gt: new Date() }
-        }
-      });
-
-      if (!user) {
-        // Check if code expired
-        const expiredUser = await this.prisma.user.findFirst({
-          where: {
-            phoneNumber: { contains: cleanPhone.replace(/^\+/, ''), mode: 'insensitive' },
-            phoneVerificationCode: hashedCode
-          }
-        });
-
-        if (expiredUser) {
-          return { success: false, error: 'Le code a expiré. Veuillez en demander un nouveau.' };
-        }
-        return { success: false, error: 'Code invalide.' };
-      }
-
-      // Already verified?
-      if (user.phoneVerifiedAt) {
-        return { success: true }; // Already verified
-      }
-
-      // Update user as phone verified
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          phoneVerifiedAt: new Date(),
-          phoneVerificationCode: null,
-          phoneVerificationExpiry: null
-        }
-      });
-
-      logger.info(`[AUTH_SERVICE] ✅ Téléphone vérifié pour user.phoneNumber=${user.phoneNumber}`);
-      return { success: true };
-
-    } catch (error) {
-      logger.error('[AUTH_SERVICE] ❌ Erreur vérification téléphone', error);
-      return { success: false, error: 'Erreur lors de la vérification.' };
-    }
+  /** Vérifier le numéro par son code SMS — `./auth/phone-verification`. */
+  async verifyPhone(phoneNumber: string, code: string): Promise<{ success: boolean; error?: string; verifiedUserId?: string }> {
+    return verifyPhoneCode(this.prisma, phoneNumber, code);
   }
 
-  /**
-   * Check if user phone is verified
-   */
+  /** Le numéro du compte est-il vérifié ? — `./auth/phone-verification`. */
   async isPhoneVerified(userId: string): Promise<boolean> {
-    try {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { phoneVerifiedAt: true }
-      });
-      return !!user?.phoneVerifiedAt;
-    } catch (error) {
-      logger.error('[AUTH_SERVICE] Error checking phone verification', error);
-      return false;
-    }
+    return isPhoneVerified(this.prisma, userId);
   }
 
   /**
    * Récupérer les permissions d'un utilisateur
    */
+  /**
+   * Les permissions SERVIES à la connexion — une PROJECTION, plus une copie.
+   *
+   * ## Ce que cette méthode était
+   *
+   * Une TROISIÈME définition des permissions, écrite à la main en `switch`, et
+   * c'est celle que le web et iOS lisaient : elle voyage dans la charge de
+   * `/auth/login`, `/auth/register` et `/auth/magic-link`.
+   *
+   * Elle donnait `canAccessAdmin: true` à un ANALYST, quand les deux matrices
+   * disent `false`. Conséquence pour l'utilisateur : un ANALYST se connecte, le
+   * web lui peint la console d'administration, et le serveur lui refuse la
+   * moitié des routes — deux réponses différentes à la même question, servies
+   * par le même serveur, à deux moments du même parcours (#4152).
+   *
+   * ## Ce qu'elle est
+   *
+   * La FORME du fil est conservée — neuf clés, `canManageGroups` compris, que
+   * les clients installés décodent. Chaque valeur vient de la matrice centrale.
+   * `canManageGroups` projette `canManageCommunities` : c'est le même droit
+   * sous le vocabulaire d'avant les communautés.
+   */
+  /**
+   * Les permissions SERVIES à la connexion — une PROJECTION, plus une copie.
+   *
+   * Cette méthode composait une TROISIÈME définition, en `switch`, et c'est
+   * celle que le web et iOS lisaient : elle voyage dans la charge de
+   * `/auth/login`, `/auth/register` et `/auth/magic-link`. Elle donnait
+   * `canAccessAdmin: true` à un ANALYST, quand les deux matrices disent
+   * `false` — le web lui peignait la console d'administration, et le serveur
+   * lui refusait la moitié des routes (#4152).
+   *
+   * La forme du fil est inchangée ; les valeurs viennent de la matrice.
+   */
   getUserPermissions(user: SocketIOUser) {
-    const role = user.role.toUpperCase() as keyof typeof UserRoleEnum;
-    
-    // Permissions basées sur le rôle
-    const basePermissions = {
-      canAccessAdmin: false,
-      canManageUsers: false,
-      canManageGroups: false,
-      canManageConversations: false,
-      canViewAnalytics: false,
-      canModerateContent: false,
-      canViewAuditLogs: false,
-      canManageNotifications: false,
-      canManageTranslations: false,
-    };
-
-    switch (role) {
-      case UserRoleEnum.BIGBOSS:
-        return {
-          ...basePermissions,
-          canAccessAdmin: true,
-          canManageUsers: true,
-          canManageGroups: true,
-          canManageConversations: true,
-          canViewAnalytics: true,
-          canModerateContent: true,
-          canViewAuditLogs: true,
-          canManageNotifications: true,
-          canManageTranslations: true,
-        };
-
-      case UserRoleEnum.ADMIN:
-        return {
-          ...basePermissions,
-          canAccessAdmin: true,
-          canManageUsers: true,
-          canManageGroups: true,
-          canManageConversations: true,
-          canViewAnalytics: true,
-          canModerateContent: true,
-          canManageNotifications: true,
-        };
-
-      case UserRoleEnum.MODERATOR:
-        return {
-          ...basePermissions,
-          canAccessAdmin: true,
-          canModerateContent: true,
-          canManageConversations: true,
-        };
-
-      case UserRoleEnum.AUDIT:
-        return {
-          ...basePermissions,
-          canAccessAdmin: true,
-          canViewAuditLogs: true,
-          canViewAnalytics: true,
-        };
-
-      case UserRoleEnum.ANALYST:
-        return {
-          ...basePermissions,
-          canAccessAdmin: true,
-          canViewAnalytics: true,
-        };
-
-      default:
-        return basePermissions;
-    }
+    return servedUserPermissions(user.role);
   }
 
   /**
    * Convertir un User Prisma en SocketIOUser
    * Note: user.userFeature doit être inclus dans la requête pour les champs de préférences
+   *
+   * `banner` et `timezone` y sont depuis #4641. Ils manquaient — et c'est la
+   * forme de défaut que la garde de #4554 ne peut PAS voir : elle rougit quand
+   * ce projecteur lit un champ hors de son `select`, or ici il ne le lisait
+   * pas DU TOUT. En aval, `formatUserResponse` écrivait
+   * `banner: user.banner || null` sur un `undefined` par construction : tout
+   * compte portant une bannière recevait `null` à chaque connexion. Ce que ce
+   * projecteur doit porter n'est donc pas seulement ce que ses appelants
+   * lisent, mais ce que `userSchema` PROMET à ses clients.
    */
   private userToSocketIOUser(user: any): SocketIOUser {
     return {
@@ -1211,6 +867,7 @@ export class AuthService {
       displayName: user.displayName || `${user.firstName} ${user.lastName}`,
       bio: user.bio,
       avatar: user.avatar,
+      banner: user.banner,
       role: user.role,
       permissions: this.getUserPermissions({
         ...user,
@@ -1221,8 +878,7 @@ export class AuthService {
       systemLanguage: user.systemLanguage,
       regionalLanguage: user.regionalLanguage,
       customDestinationLanguage: user.customDestinationLanguage,
-      // TODO: Load from UserPreferences.application
-      autoTranslateEnabled: true,
+      autoTranslateEnabled: resolveAutoTranslateEnabled(user),
       isActive: user.isActive,
       deactivatedAt: user.deactivatedAt,
       createdAt: user.createdAt,
@@ -1239,7 +895,11 @@ export class AuthService {
       lastLoginLocation: user.lastLoginLocation,
       lastLoginDevice: user.lastLoginDevice,
       // Profile metadata
-      profileCompletionRate: user.profileCompletionRate
+      timezone: user.timezone,
+      profileCompletionRate: user.profileCompletionRate,
+      // #8238 — le délai de grâce de l'adresse, calculé ici et nulle part
+      // ailleurs pour les portes qui passent par ce projecteur.
+      ...(user.createdAt instanceof Date ? { activation: resolveAccountActivation(user, this.now()) } : {})
     };
   }
 
@@ -1255,10 +915,10 @@ export class AuthService {
   /**
    * Get all active sessions for a user
    * @param userId - User ID
-   * @param currentToken - Current session token (to mark as current)
+   * @param current - The current session, by JWT `sid` or by raw session token (#9606)
    */
-  async getUserActiveSessions(userId: string, currentToken?: string): Promise<SessionData[]> {
-    return getUserSessions(userId, currentToken);
+  async getUserActiveSessions(userId: string, current?: string | CurrentSessionRef): Promise<SessionData[]> {
+    return getUserSessions(userId, current);
   }
 
   /**
@@ -1273,10 +933,10 @@ export class AuthService {
   /**
    * Revoke all sessions for a user except the current one
    * @param userId - User ID
-   * @param currentToken - Current session token to keep active
+   * @param current - The current session to keep active, by JWT `sid` or raw token (#9606)
    */
-  async revokeAllSessionsExceptCurrent(userId: string, currentToken?: string): Promise<number> {
-    return invalidateAllSessions(userId, currentToken, 'user_revoked_all');
+  async revokeAllSessionsExceptCurrent(userId: string, current?: string | CurrentSessionRef): Promise<number> {
+    return invalidateAllSessions(userId, current, 'user_revoked_all');
   }
 
   /**
@@ -1289,5 +949,17 @@ export class AuthService {
       logger.info('[AUTH_SERVICE] ✅ Session invalidée (logout)');
     }
     return result;
+  }
+
+  /**
+   * Logout - close the session(s) named by the request: JWT `sid` and/or the
+   * `x-session-token` header (#9606). Returns how many were closed.
+   */
+  async logoutCurrent(userId: string, current: CurrentSessionRef): Promise<number> {
+    const closed = await endCurrentSession(userId, current, 'logout');
+    if (closed > 0) {
+      logger.info('[AUTH_SERVICE] ✅ Session invalidée (logout)');
+    }
+    return closed;
   }
 }

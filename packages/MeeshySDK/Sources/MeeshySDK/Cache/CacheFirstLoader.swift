@@ -6,7 +6,7 @@ import os
 /// non-`@Sendable` : ses captures ne sont pas soumises au contrôle de
 /// concurrence, et seule la box franchit la frontière `@Sendable` du `Task`.
 private struct CacheSaveWork<Items>: @unchecked Sendable {
-    let run: (Items) async throws -> Void
+    let run: @concurrent (Items) async throws -> Void
 }
 
 // MARK: - CacheFirstLoader

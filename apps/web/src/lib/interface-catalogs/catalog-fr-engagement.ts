@@ -1,0 +1,29 @@
+/**
+ * LA PASTILLE D'ENGAGEMENT D'UNE CONVERSATION (#8906) — « 🔥 4 · 120 (12) » :
+ * son nom accessible, qui dit en mots la série et les points. Tranche du
+ * catalogue `catalog-fr.ts`, qu'il RÉPAND.
+ *
+ * Sans série en cours, le cumul seul (`engagement.pill.total.*`) ; et la
+ * phrase qu'un post dit de ce qu'il a rapporté au lecteur
+ * (`engagement.post.points.*`, #9570) — le jeu tutoie.
+ */
+const frEngagement = {
+  'engagement.pill.streak.one': '{count} jour',
+  'engagement.pill.streak.other': '{count} jours',
+  'engagement.pill.points.one': '{total} étincelle dont {today} aujourd’hui',
+  'engagement.pill.points.other': '{total} étincelles dont {today} aujourd’hui',
+  'engagement.pill.total.one': '{total} étincelle gagnée dans cette conversation',
+  'engagement.pill.total.other': '{total} étincelles gagnées dans cette conversation',
+  'engagement.pill.join': '{streak}, {points}',
+  'engagement.post.points.one': 'Ce post a fait jaillir {count} étincelle pour toi',
+  'engagement.post.points.other': 'Ce post a fait jaillir {count} étincelles pour toi',
+  'engagement.card.streak.one': 'jour de suite ici',
+  'engagement.card.streak.other': 'jours de suite ici',
+  'engagement.card.today': 'Aujourd’hui',
+  'engagement.card.total': 'Ici depuis le début',
+  'engagement.card.open': 'Voir le jeu',
+  'engagement.card.hide': 'Masquer la flamme',
+  'engagement.card.title': 'Dans cette conversation',
+} as const;
+
+export default frEngagement;

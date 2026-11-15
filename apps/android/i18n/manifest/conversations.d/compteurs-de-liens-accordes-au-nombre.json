@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "androidName": "links_count_links",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_count_groups",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_count_members",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_count_signups",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_count_clicks",
+          "status": "android-only"
+        },
+        {
+          "androidName": "links_count_joined",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

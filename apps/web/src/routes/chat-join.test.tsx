@@ -1,0 +1,1233 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+
+import { usernameMinLength } from '@meeshy/shared/types/api-schemas/auth';
+
+import type { ApiResult } from '@/lib/api/http';
+import type { GuestJoinBody, LinkGuestJoined, LinkInvitation, LinkJoined } from '@/lib/api/link-join';
+import { sessionStore, type GuestIdentity } from '@/lib/api/session';
+import { loadInviteCatalog } from '@/lib/i18n-invite-catalog';
+import { compile, match } from '@/lib/router';
+import { typeInto } from '@/test-support/act-mount';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+
+import { WORLD_ENTRY_HANDOFF_KEY, WORLD_ENTRY_HANDOFF_TTL_MS } from '@/landing/world-entry';
+
+import { ChatJoin, type ChatJoinDeps } from './chat-join';
+import { guestEntryOf, type GuestEntry } from './chat-join-guest';
+import type { HandoffStorage } from './chat-join-handoff';
+import { ROUTES } from './route-table';
+
+/**
+ * `/chat/:link` — LA JONCTION PAR LIEN (#5561), rendue.
+ *
+ * Ce que les témoins du port (`link-join.test.ts`) ne peuvent pas prouver :
+ * qui AFFICHE ce qu'ils décident, et ce que chaque geste déclenche. L'écran est
+ * monté SANS routeur, ses effets de bord injectés (`ChatJoinDeps`) — même
+ * dispositif que `MagicLinkValidation` (`validate`, `go`).
+ */
+
+const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+beforeAll(async () => {
+  await loadInviteCatalog('fr');
+  ensureHappyDomRegistered({ url: 'http://localhost/chat/mshy_equipe_7f3a' });
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+});
+
+afterAll(async () => {
+  delete globals.IS_REACT_ACT_ENVIRONMENT;
+  await releaseHappyDomIfRegistered();
+});
+
+let mounted: { readonly container: HTMLDivElement; readonly root: Root } | null = null;
+
+afterEach(() => {
+  act(() => {
+    mounted?.root.unmount();
+    sessionStore.getState().clearSession();
+  });
+  mounted?.container.remove();
+  mounted = null;
+  Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
+});
+
+const LINK = 'mshy_equipe_7f3a';
+
+const OPEN_TERMS = {
+  allowed: true,
+  nicknameRequired: true,
+  emailRequired: false,
+  birthdayRequired: false,
+  languages: [] as readonly string[],
+  mayWrite: true,
+  mayImages: true,
+  mayFiles: false,
+} as const;
+
+const INVITATION: LinkInvitation = {
+  linkId: 'mshy_equipe_7f3a',
+  title: 'Équipe déploiement',
+  kind: 'group',
+  inviter: { name: 'Awa Diallo', username: 'awa', avatar: null },
+  message: 'Viens suivre la mise en production avec nous.',
+  group: { description: 'Le fil de l’équipe qui livre Meeshy.', createdAt: '2025-09-02T09:00:00.000Z', avatar: null, banner: null },
+  stats: {
+    people: 248,
+    languages: [
+      { code: 'fr', count: 3 },
+      { code: 'es', count: 1 },
+    ],
+  },
+  limits: { expiresAt: '2026-09-30T13:00:00.000Z', maxUses: 50, currentUses: 12 },
+  readsHistory: false,
+  guest: OPEN_TERMS,
+};
+
+const NOW = new Date('2026-09-24T12:00:00.000Z');
+const ORIGIN = 'https://meeshy.me';
+
+const JOINED: ApiResult<LinkJoined> = { ok: true, data: { conversationId: 'c-deploiement', alreadyMember: false } };
+
+const never = <T,>(): Promise<T> => new Promise<T>(() => undefined);
+
+const GUEST_JOINED: ApiResult<LinkGuestJoined> = {
+  ok: true,
+  data: {
+    conversationId: 'c-deploiement',
+    participantId: 'p-invitee',
+    sessionToken: 'anon_du_temoin',
+    readsHistory: false,
+    mayWrite: true,
+  },
+};
+
+type Recorded = {
+  readonly copies: string[];
+  readonly shares: Array<{ readonly title: string; readonly text: string; readonly url: string }>;
+  readonly loads: string[];
+  readonly joins: Array<readonly [string, string | null]>;
+  readonly guestJoins: Array<readonly [string, GuestJoinBody]>;
+  readonly adopted: Array<readonly [string, GuestIdentity]>;
+  readonly interfaceLanguages: string[];
+  readonly order: string[];
+};
+
+function depsWith(overrides: Partial<ChatJoinDeps> = {}): { readonly deps: ChatJoinDeps; readonly recorded: Recorded } {
+  const recorded: Recorded = { copies: [], shares: [], loads: [], joins: [], guestJoins: [], adopted: [], interfaceLanguages: [], order: [] };
+  const deps: ChatJoinDeps = {
+    load: async (link) => {
+      recorded.loads.push(link);
+      return { ok: true, data: INVITATION };
+    },
+    join: async (link, language) => {
+      recorded.joins.push([link, language]);
+      return JOINED;
+    },
+    joinGuest: async (link, body) => {
+      recorded.guestJoins.push([link, body]);
+      return GUEST_JOINED;
+    },
+    adoptGuest: (sessionToken, guest) => {
+      recorded.adopted.push([sessionToken, guest]);
+      recorded.order.push('adopt');
+    },
+    adoptInterfaceLanguage: (language) => {
+      recorded.interfaceLanguages.push(language);
+      recorded.order.push(`interface ${language}`);
+    },
+    go: (url, replace) => {
+      recorded.order.push(`go ${url} ${replace ? 'replace' : 'push'}`);
+    },
+    joined: () => {
+      recorded.order.push('joined');
+    },
+    expireSession: () => {
+      recorded.order.push('expire');
+      sessionStore.getState().clearSession();
+    },
+    copyText: async (url) => {
+      recorded.copies.push(url);
+      return 'copied';
+    },
+    shareUrl: async (data) => {
+      recorded.shares.push(data);
+      return 'partage';
+    },
+    origin: () => ORIGIN,
+    now: () => NOW,
+    handoff: () => tabHolding(null).storage,
+    /* Un compte NON membre (#10282) — l'adhésion a ses témoins dans `chat-join-member.test.tsx`. */
+    cachedCard: () => undefined,
+    loadCard: async () => ({ ok: true, data: null }),
+    leave: async () => ({ ok: true, data: null }),
+    left: () => undefined,
+    ...overrides,
+  };
+  return { deps, recorded };
+}
+
+/**
+ * L'ONGLET (`sessionStorage`) tel que la landing l'aurait laissé (#10094) — un
+ * jeton de passage, ou rien. `removed` dit ce que la jonction a EFFACÉ.
+ */
+function tabHolding(raw: string | null): { readonly storage: HandoffStorage; readonly removed: string[] } {
+  const held = new Map<string, string>(raw === null ? [] : [[WORLD_ENTRY_HANDOFF_KEY, raw]]);
+  const removed: string[] = [];
+  return {
+    removed,
+    storage: {
+      getItem: (key) => held.get(key) ?? null,
+      removeItem: (key) => {
+        removed.push(key);
+        held.delete(key);
+      },
+    },
+  };
+}
+
+const handoffToken = (overrides: Readonly<Record<string, unknown>> = {}): string =>
+  JSON.stringify({ link: LINK, name: 'Kenji', language: 'ar', at: NOW.getTime() - 2_000, ...overrides });
+
+const settle = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+async function mount(deps: ChatJoinDeps, link = LINK, anonymousRequested = false, entry: GuestEntry | null = null): Promise<HTMLDivElement> {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  mounted = { container, root };
+  await act(async () => {
+    root.render(<ChatJoin link={link} deps={deps} anonymousRequested={anonymousRequested} entry={entry} />);
+  });
+  await settle();
+  return container;
+}
+
+const signIn = () =>
+  act(() => {
+    sessionStore.getState().establish({
+      user: { id: '0'.repeat(24), username: 'ada', displayName: 'Ada', avatar: '', systemLanguage: 'en' },
+      token: 'jeton-du-temoin',
+      sessionToken: 'session-du-temoin',
+      expiresIn: 3600,
+    });
+  });
+
+const text = (el: Element | null) => (el?.textContent ?? '').replace(/[\u2068\u2069]/gu, '').replace(/\s+/gu, ' ');
+const joinButton = (el: HTMLElement) =>
+  [...el.querySelectorAll('button')].find((button) => /Rejoindre|Entrée dans la conversation/u.test(text(button))) ?? null;
+const anchorTo = (el: HTMLElement, pathname: string) =>
+  [...el.querySelectorAll('a')].find((a) => new URL(a.getAttribute('href') ?? '', 'http://localhost').pathname === pathname) ?? null;
+const nextOf = (anchor: HTMLAnchorElement | null) => new URL(anchor?.getAttribute('href') ?? '', 'http://localhost').searchParams.get('next');
+
+async function click(button: HTMLElement | null) {
+  await act(async () => {
+    button?.click();
+  });
+  await settle();
+}
+
+/** Le lien et ses gestes sont rangés derrière « Plus » (épure #18361, règle 6) : on l'ouvre comme le ferait la personne. */
+async function openLinkRow(el: Element) {
+  await click(el.querySelector<HTMLButtonElement>('[data-invite-more]'));
+}
+
+describe('ROUTES — /chat/$link', () => {
+  test('s’apparie à /chat/<lien>, en extrait `link`, et à rien d’autre', () => {
+    const compiled = compile(ROUTES.chatJoin.pattern);
+    expect(match(compiled, '/chat/mshy_equipe_7f3a')).toEqual({ link: 'mshy_equipe_7f3a' });
+    expect(match(compiled, '/chat/')).toBeNull();
+    expect(match(compiled, '/chat')).toBeNull();
+    expect(match(compiled, '/c/mshy_equipe_7f3a')).toBeNull();
+    expect(typeof ROUTES.chatJoin.screen).toBe('function');
+  });
+});
+
+const withTerms = (terms: Partial<LinkInvitation['guest']>) => ({
+  load: async (): Promise<ApiResult<LinkInvitation>> => ({
+    ok: true,
+    data: { ...INVITATION, guest: { ...OPEN_TERMS, ...terms } },
+  }),
+});
+
+const withInvitation = (overrides: Partial<LinkInvitation>) => ({
+  load: async (): Promise<ApiResult<LinkInvitation>> => ({ ok: true, data: { ...INVITATION, ...overrides } }),
+});
+
+describe('la page d’accueil d’invitation (#7796) — dans l’ordre de la maquette', () => {
+  test('chargement : l’écran s’annonce avant que l’invitation n’arrive', async () => {
+    const { deps } = depsWith({ load: () => never() });
+    const el = await mount(deps);
+    expect(text(el)).toContain('Ouverture de l’invitation…');
+    expect(el.querySelector('[aria-busy="true"]')).not.toBeNull();
+    expect(el.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  test('a. qui invite d’abord, puis son MESSAGE dans une bulle', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    expect(recorded.loads).toEqual([LINK]);
+    const inviter = el.querySelector('[data-invite-inviter]');
+    expect(text(inviter)).toContain('Awa Diallo t’invite');
+    expect(text(inviter)).toContain('@awa');
+    expect(text(el.querySelector('[data-invite-message]'))).toBe('Viens suivre la mise en production avec nous.');
+    const order = [...el.querySelectorAll('[data-invite-inviter], [data-invite-group], [data-invite-figures], [data-invite-rights], [data-invite-join]')].map(
+      (node) => [...node.attributes].find((attribute) => attribute.name.startsWith('data-invite-'))?.name,
+    );
+    expect(order).toEqual(['data-invite-inviter', 'data-invite-group', 'data-invite-figures', 'data-invite-rights', 'data-invite-join']);
+  });
+
+  test('un message d’invitation vide n’ouvre aucune bulle', async () => {
+    const { deps } = depsWith(withInvitation({ message: null }));
+    const el = await mount(deps);
+    expect(el.querySelector('[data-invite-message]')).toBeNull();
+  });
+
+  test('b. le groupe : nom, type et date de création, description, puis son lien — jamais `/l/`', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    expect(el.querySelector('h1')?.textContent).toBe('Équipe déploiement');
+    expect(text(el.querySelector('[data-invite-meta]'))).toBe('Groupe · créé le 2 sept. 2025');
+    expect(text(el.querySelector('[data-invite-description]'))).toBe('Le fil de l’équipe qui livre Meeshy.');
+    await openLinkRow(el);
+    const url = text(el.querySelector('[data-invite-url]'));
+    expect(url).toContain('meeshy.me/chat/mshy_equipe_7f3a');
+    expect(url).not.toContain('/l/');
+  });
+
+  test('sans bannière ni logo : un dégradé et les initiales ; avec : leurs images', async () => {
+    const plain = await mount(depsWith().deps);
+    expect(plain.querySelector('[data-invite-banner]')?.getAttribute('data-invite-banner')).toBe('gradient');
+    expect(plain.querySelector('[data-invite-group] img')).toBeNull();
+    act(() => mounted?.root.unmount());
+    const rich = await mount(depsWith(withInvitation({ group: { ...INVITATION.group, avatar: 'g/logo.png', banner: 'g/banniere.jpg' } })).deps);
+    expect(rich.querySelector('[data-invite-banner]')?.getAttribute('data-invite-banner')).toBe('image');
+    expect(rich.querySelector('[data-invite-group] img[alt="Logo de Équipe déploiement"]')).not.toBeNull();
+  });
+
+  test('logo : sans image, les INITIALES du groupe ; une image qui ne charge pas retombe sur elles', async () => {
+    const plain = await mount(depsWith(withInvitation({ title: 'Nova Club' })).deps);
+    expect(text(plain.querySelector('[data-invite-logo]'))).toBe('NC');
+    act(() => mounted?.root.unmount());
+    const broken = await mount(depsWith(withInvitation({ title: 'Nova Club', group: { ...INVITATION.group, avatar: 'g/introuvable.png' } })).deps);
+    const image = broken.querySelector('[data-invite-logo] img');
+    expect(image).not.toBeNull();
+    expect(text(broken.querySelector('[data-invite-logo]'))).toBe('');
+    await act(async () => {
+      image?.dispatchEvent(new Event('error'));
+    });
+    expect(broken.querySelector('[data-invite-logo] img')).toBeNull();
+    expect(text(broken.querySelector('[data-invite-logo]'))).toBe('NC');
+  });
+
+  test('le lien affiché est celui que sert la passerelle, pas l’adresse tapée', async () => {
+    const { deps } = depsWith(withInvitation({ linkId: 'mshy_canonique' }));
+    const el = await mount(deps, 'mshy_alias-du-nom');
+    await openLinkRow(el);
+    expect(text(el.querySelector('[data-invite-url]'))).toContain('meeshy.me/chat/mshy_canonique');
+  });
+
+  test('c. les chiffres sans identité tiennent en UNE ligne ; la ventilation par langue est derrière « Plus »', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    expect(text(el.querySelector('[data-invite-figures-line]'))).toBe('248 personnes · 2 langues parlées');
+    expect(el.querySelector('[data-language-share]')).toBeNull();
+    expect(el.querySelector('[data-invite-figures] h2')).toBeNull();
+    const more = el.querySelector<HTMLButtonElement>('[data-invite-figures-more]');
+    expect(more?.getAttribute('aria-expanded')).toBe('false');
+    await click(more);
+    expect(more?.getAttribute('aria-expanded')).toBe('true');
+    expect(text(el.querySelector('[data-language-share="fr"]'))).toBe('Français 75 %');
+    expect(text(el.querySelector('[data-language-share="es"]'))).toBe('Español 25 %');
+  });
+
+  test('b. au repos, le lien et ses deux gestes ne sont pas à l’écran : « Plus » les ouvre, Copier y reste atteignable', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    expect(el.querySelector('[data-invite-url]')).toBeNull();
+    expect(el.querySelector('[data-invite-copy]')).toBeNull();
+    expect(el.querySelector('[data-invite-reshare]')).toBeNull();
+    const more = el.querySelector<HTMLButtonElement>('[data-invite-more]');
+    expect(text(more?.querySelector(':scope > :not(.sr-only)') ?? null)).toBe('Plus');
+    expect(more?.getAttribute('aria-expanded')).toBe('false');
+    await click(more);
+    expect(more?.getAttribute('aria-expanded')).toBe('true');
+    expect(el.querySelector('[data-invite-copy]')).not.toBeNull();
+    expect(el.querySelector('[data-invite-reshare]')).not.toBeNull();
+  });
+
+  test('les deux « Plus » de la page se distinguent au lecteur d’écran, chacun commençant par son libellé visible', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    const link = el.querySelector<HTMLButtonElement>('[data-invite-more]');
+    const figures = el.querySelector<HTMLButtonElement>('[data-invite-figures-more]');
+    expect(text(link)).toBe('Plus — Lien de la conversation');
+    expect(text(figures)).toBe('Plus — On y parle');
+    for (const more of [link, figures]) {
+      await click(more);
+      expect(document.getElementById(more?.getAttribute('aria-controls') ?? '')).not.toBeNull();
+    }
+  });
+
+  test('sans chiffres servis, la section ne s’affiche pas', async () => {
+    const { deps } = depsWith(withInvitation({ stats: { people: null, languages: [] } }));
+    const el = await mount(deps);
+    expect(el.querySelector('[data-invite-figures]')).toBeNull();
+  });
+
+  test('d. « En anonyme, tu pourras » : quatre droits cochés ou barrés', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    const rows = [...el.querySelectorAll('[data-invite-right]')].map((row) => [row.getAttribute('data-invite-right'), row.getAttribute('data-granted')]);
+    expect(rows).toEqual([
+      ['messages', 'true'],
+      ['images', 'true'],
+      ['files', 'false'],
+      ['history', 'false'],
+    ]);
+    expect(text(el.querySelector('[data-invite-right="files"]'))).toContain('non autorisé');
+  });
+
+  test('d. World Wide dit ce qu’un invité peut joindre : des fichiers texte (.txt) et audio (#10121)', async () => {
+    const { deps } = depsWith(withInvitation({ guest: { ...OPEN_TERMS, mayImages: false, attachmentKinds: ['text', 'audio'] } }));
+    const el = await mount(deps);
+    const files = el.querySelector('[data-invite-right="files"]');
+    expect(files?.getAttribute('data-granted')).toBe('true');
+    expect(text(files)).toContain('Envoyer des fichiers texte (.txt) et audio');
+    expect(el.querySelector('[data-invite-right="images"]')?.getAttribute('data-granted')).toBe('false');
+  });
+
+  test('d. ce qu’on demandera, les langues acceptées, la validité et les places restantes', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    const terms = text(el.querySelector('[data-invite-terms]'));
+    expect(terms).toContain('On te demandera : un prénom');
+    expect(terms).toContain('Langues acceptées : toutes');
+    expect(terms).toContain('Lien valable encore 7 jours · 38 places restantes');
+  });
+
+  test('d. sans expiration ni maximum : sans limite de durée, places illimitées ; langues nommées dans leur écriture', async () => {
+    const { deps } = depsWith(
+      withInvitation({ limits: { expiresAt: null, maxUses: null, currentUses: 3 }, guest: { ...OPEN_TERMS, languages: ['fr', 'ar'], emailRequired: true } }),
+    );
+    const el = await mount(deps);
+    const terms = text(el.querySelector('[data-invite-terms]'));
+    expect(terms).toContain('sans limite de durée · places illimitées');
+    /* `Intl.ListFormat` ISOLE chaque élément (U+2068…U+2069) : l'arabe ne retourne pas la phrase française autour de lui. */
+    expect(terms.replace(/[\u2068\u2069]/gu, '')).toContain('Langues acceptées : Français et العربية');
+    expect(terms).toContain('un prénom et une adresse e-mail');
+  });
+
+  test('d. un lien qui exige un compte ne décrit pas une porte anonyme fermée', async () => {
+    const { deps } = depsWith(withTerms({ allowed: false }));
+    const el = await mount(deps);
+    expect(el.querySelector('[data-invite-rights]')).toBeNull();
+  });
+});
+
+describe('Copier et Repartager (#7796 § 3)', () => {
+  test('« Copier » copie l’adresse ENTIÈRE, devient « Copié » et le dit', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    await openLinkRow(el);
+    await click(el.querySelector<HTMLButtonElement>('[data-invite-copy]'));
+    expect(recorded.copies).toEqual(['https://meeshy.me/chat/mshy_equipe_7f3a']);
+    expect(text(el.querySelector('[data-invite-copy]'))).toBe('Copié');
+    expect(text(el.querySelector('[data-invite-announce]'))).toBe('Lien copié.');
+  });
+
+  test('un presse-papiers refusé se DIT, en erreur', async () => {
+    const { deps } = depsWith({ copyText: async () => 'failed' });
+    const el = await mount(deps);
+    await openLinkRow(el);
+    await click(el.querySelector<HTMLButtonElement>('[data-invite-copy]'));
+    expect(text(el.querySelector('[data-invite-copy]'))).toBe('Copier');
+    expect(el.querySelector('[data-invite-announce]')?.getAttribute('data-announce-tone')).toBe('error');
+  });
+
+  test('« Repartager » ouvre la feuille de partage avec le nom du groupe et l’adresse', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    await openLinkRow(el);
+    await click(el.querySelector<HTMLButtonElement>('[data-invite-reshare]'));
+    expect(recorded.shares).toEqual([
+      { title: 'Équipe déploiement', text: 'Rejoins Équipe déploiement sur Meeshy — chacun y écrit dans sa langue.', url: 'https://meeshy.me/chat/mshy_equipe_7f3a' },
+    ]);
+  });
+
+  test('sans feuille de partage, la copie de repli se dit ; sans rien du tout, l’absence aussi', async () => {
+    const copied = await mount(depsWith({ shareUrl: async () => 'copie' }).deps);
+    await openLinkRow(copied);
+    await click(copied.querySelector<HTMLButtonElement>('[data-invite-reshare]'));
+    expect(text(copied.querySelector('[data-invite-announce]'))).toBe('Lien copié.');
+    act(() => mounted?.root.unmount());
+    const none = await mount(depsWith({ shareUrl: async () => 'indisponible' }).deps);
+    await openLinkRow(none);
+    await click(none.querySelector<HTMLButtonElement>('[data-invite-reshare]'));
+    expect(text(none.querySelector('[data-invite-announce]'))).toBe('Le partage n’est pas disponible ici.');
+  });
+});
+
+describe('un visiteur CONNECTÉ rejoint', () => {
+  test('« Rejoindre », la langue du compte part, puis /c/:id, PUIS le cache des conversations', async () => {
+    signIn();
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    await click(joinButton(el));
+    expect(recorded.joins).toEqual([[LINK, 'en']]);
+    expect(recorded.order).toEqual(['go /c/c-deploiement replace', 'joined']);
+  });
+
+  test('succès : l’écran le dit pendant que le fil arrive', async () => {
+    signIn();
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    await click(joinButton(el));
+    expect(text(el.querySelector('[role="status"]'))).toContain('Tu as rejoint');
+  });
+
+  test('un membre EXISTANT est redirigé vers son fil', async () => {
+    signIn();
+    const { deps, recorded } = depsWith({ join: async () => ({ ok: true, data: { conversationId: 'c-deja', alreadyMember: true } }) });
+    const el = await mount(deps);
+    await click(joinButton(el));
+    expect(recorded.order).toEqual(['go /c/c-deja replace', 'joined']);
+  });
+
+  test('jonction en cours : le bouton est désactivé, et un second geste ne rejoint pas deux fois', async () => {
+    signIn();
+    const joins: string[] = [];
+    const { deps } = depsWith({
+      join: (link) => {
+        joins.push(link);
+        return never();
+      },
+    });
+    const el = await mount(deps);
+    await click(joinButton(el));
+    const busy = joinButton(el);
+    expect(busy?.disabled).toBe(true);
+    expect(busy?.getAttribute('aria-busy')).toBe('true');
+    expect(text(busy)).toContain('Entrée dans la conversation…');
+    await click(busy);
+    expect(joins).toEqual([LINK]);
+  });
+
+  test('aucune sortie vers la connexion n’est proposée à un compte connecté', async () => {
+    signIn();
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    expect(anchorTo(el, '/login')).toBeNull();
+    expect(anchorTo(el, '/signup')).toBeNull();
+  });
+});
+
+describe('un visiteur SANS session', () => {
+  test('les deux sorties le ramènent ici par `next`, et aucune jonction de MEMBRE ne part', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    /* « Rejoindre » est l'action d'un COMPTE : elle n'est pas offerte ici. La
+       porte anonyme, elle, l'est — et c'est « Continuer en anonyme ». */
+    expect(joinButton(el)).toBeNull();
+    const login = anchorTo(el, '/login');
+    const signup = anchorTo(el, '/signup');
+    expect(text(login)).toBe('Se connecter');
+    expect(text(signup)).toBe('Créer un compte');
+    expect(nextOf(login)).toBe('/chat/mshy_equipe_7f3a');
+    expect(nextOf(signup)).toBe('/chat/mshy_equipe_7f3a');
+    expect(recorded.joins).toEqual([]);
+  });
+
+  test('un lien aux caractères encodés revient à la MÊME adresse', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps, 'mshy_équipe 7f3a');
+    expect(nextOf(anchorTo(el, '/login'))).toBe('/chat/mshy_%C3%A9quipe%207f3a');
+  });
+
+  test('les deux sorties sont des cibles de 44 px au moins', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    for (const anchor of [anchorTo(el, '/login'), anchorTo(el, '/signup')]) {
+      expect(Number.parseInt(anchor?.style.minHeight ?? '0', 10)).toBeGreaterThanOrEqual(44);
+    }
+  });
+});
+
+/* ========================================================================= *
+ *  REJOINDRE SANS COMPTE (#5561)
+ * ========================================================================= */
+
+/* La saisie vient du dépôt (`test-support/act-mount.ts § typeInto`), jamais
+   d'une troisième écriture de la même règle : setter natif cherché sur la
+   chaîne de prototypes DE L'ÉLÉMENT, et `act` SYNCHRONE. */
+
+const guestForm = (el: HTMLElement) => el.querySelector<HTMLFormElement>('[data-guest-form]');
+const nicknameField = (el: HTMLElement) => el.querySelector<HTMLInputElement>('[data-guest-nickname]');
+const languageField = (el: HTMLElement) => el.querySelector<HTMLSelectElement>('[data-guest-language]');
+const guestSubmit = (el: HTMLElement) => el.querySelector<HTMLButtonElement>('[data-guest-submit]');
+
+
+/**
+ * SOUMET LE FORMULAIRE, JAMAIS EN CLIQUANT SON BOUTON — même méthode que
+ * `test-support/act-mount.ts § submit`.
+ *
+ * Sous happy-dom, un clic sur un `<button type="submit">` ne déclenche PAS
+ * l'événement `submit` du formulaire : le geste part, et rien ne se passe. Un
+ * témoin qui cliquerait le bouton verdirait sur « rien n'est envoyé » en
+ * croyant mesurer l'envoi.
+ */
+async function submitGuest(el: HTMLElement) {
+  const form = guestForm(el);
+  if (form === null) throw new Error('formulaire d’invité absent');
+  await act(async () => {
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  });
+  await settle();
+}
+
+async function fillAndSubmit(el: HTMLElement, nickname: string) {
+  typeInto(nicknameField(el), nickname);
+  await settle();
+  await submitGuest(el);
+}
+
+describe('un visiteur SANS session REJOINT EN INVITÉ', () => {
+  test('le formulaire demande le pseudo et la langue, et RIEN d’autre tant que le lien ne l’exige pas', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)).not.toBeNull();
+    expect(languageField(el)).not.toBeNull();
+    expect(el.querySelector('[data-guest-email]')).toBeNull();
+    expect(el.querySelector('[data-guest-birthday]')).toBeNull();
+    expect(text(guestSubmit(el))).toBe('Continuer en anonyme');
+  });
+
+  test('un lien qui exige e-mail et date de naissance les demande, et eux seuls', async () => {
+    const { deps } = depsWith(withTerms({ emailRequired: true, birthdayRequired: true }));
+    const el = await mount(deps);
+    expect(el.querySelector('[data-guest-email]')).not.toBeNull();
+    expect(el.querySelector('[data-guest-birthday]')).not.toBeNull();
+  });
+
+  /**
+   * LA LANGUE EST SEMÉE AVEC L'INVITATION — un `<select>` qui s'ouvrirait vide
+   * ferait refuser la saisie avant qu'aucune requête ne parte, et l'écran
+   * dirait « choisissez une langue » sur un champ que personne n'a touché.
+   */
+  test('le formulaire s’ouvre avec une langue DÉJÀ choisie', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    expect(languageField(el)?.value).toBe('fr');
+  });
+
+  test('le corps part, la session d’invité est ADOPTÉE, puis le fil s’ouvre', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    /* Ce que le formulaire PORTE au moment du geste — lu AVANT de soumettre :
+       une jonction réussie démonte le formulaire, et lire ses champs ensuite
+       rendrait `undefined` en laissant croire à un champ vide. */
+    typeInto(nicknameField(el), 'Awa');
+    await settle();
+    expect(nicknameField(el)?.value).toBe('Awa');
+    expect(languageField(el)?.value).toBe('fr');
+
+    await submitGuest(el);
+
+    expect(recorded.guestJoins).toEqual([[LINK, { language: 'fr', nickname: 'Awa' }]]);
+    expect(recorded.adopted).toEqual([
+      [
+        'anon_du_temoin',
+        { participantId: 'p-invitee', nickname: 'Awa', conversationId: 'c-deploiement', link: LINK, mayWrite: true, language: 'fr' },
+      ],
+    ]);
+    /* L'ADOPTION PRÉCÈDE LA NAVIGATION : le fil doit trouver la créance déjà
+       posée quand il monte, sinon sa première requête part nue. */
+    expect(recorded.order).toEqual(['adopt', 'interface fr', 'go /c/c-deploiement replace', 'joined']);
+  });
+
+  test('la session adopte le pseudo FINAL servi par la passerelle, pas celui saisi (#10602)', async () => {
+    const { deps, recorded } = depsWith({
+      joinGuest: async () => ({ ...GUEST_JOINED, data: { ...GUEST_JOINED.data, nickname: 'ano_Awa4821' } }),
+    });
+    const el = await mount(deps);
+    typeInto(nicknameField(el), 'Awa');
+    await settle();
+
+    await submitGuest(el);
+
+    expect(recorded.adopted.map(([, guest]) => guest.nickname)).toEqual(['ano_Awa4821']);
+  });
+
+  /**
+   * #9710 — recette du 2026-10-08 : l'invitée choisit « English », rejoint, et
+   * le fil s'ouvre sous une pastille « FR » et des libellés français. La
+   * langue choisie EST sa langue : elle voyage avec son identité (rang 1 de
+   * son Prisme, donc langue de composition) ET devient la langue d'interface.
+   */
+  test('la langue CHOISIE devient celle de l’invité : son identité la porte, l’interface la prend', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    typeInto(languageField(el), 'en');
+    await settle();
+    await fillAndSubmit(el, 'Emma');
+
+    expect(recorded.guestJoins).toEqual([[LINK, { language: 'en', nickname: 'Emma' }]]);
+    expect(recorded.adopted.map(([, guest]) => guest.language)).toEqual(['en']);
+    expect(recorded.interfaceLanguages).toEqual(['en']);
+  });
+
+  test('aucune jonction de MEMBRE ne part sur ce chemin', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    await fillAndSubmit(el, 'Awa');
+    expect(recorded.joins).toEqual([]);
+  });
+
+  test('un pseudo exigé mais vide : RIEN ne part, et le refus se pose sous son champ', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    await submitGuest(el);
+
+    expect(recorded.guestJoins).toEqual([]);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.getAttribute('aria-invalid')).toBe('true');
+    const described = nicknameField(el)?.getAttribute('aria-describedby') ?? '';
+    expect(text(el.querySelector(`#${described.split(' ')[0]}`))).toContain('Choisis un prénom');
+  });
+
+  /**
+   * LE PLANCHER DU PSEUDO D'INVITÉ (#13825) — « Al » ne part pas : le refus se
+   * pose sous le champ avec le minimum, le focus y mène. « Ali » entre.
+   */
+  test('un pseudo trop court : RIEN ne part, le refus DIT le minimum sous son champ', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    await fillAndSubmit(el, 'Al');
+
+    expect(recorded.guestJoins).toEqual([]);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.getAttribute('aria-invalid')).toBe('true');
+    const described = nicknameField(el)?.getAttribute('aria-describedby') ?? '';
+    const message = text(el.querySelector(`#${described.split(' ')[0]}`));
+    expect(message).toContain(String(usernameMinLength));
+    expect(message).not.toContain('Choisis un prénom');
+    expect(document.activeElement).toBe(nicknameField(el));
+  });
+
+  test('« Ali », même entouré d’espaces, entre', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    await fillAndSubmit(el, '  Ali ');
+    expect(recorded.guestJoins).toEqual([[LINK, { language: 'fr', nickname: 'Ali' }]]);
+  });
+
+  test('pseudo PRIS : le formulaire est GARDÉ, la suggestion pré-remplie, et on peut réessayer', async () => {
+    const { deps, recorded } = depsWith({
+      joinGuest: async () => ({ ok: false, status: 409, error: 'pris', code: 'USERNAME_TAKEN_IN_CONVERSATION', suggestedNickname: 'awa2' }),
+    });
+    const el = await mount(deps);
+    await fillAndSubmit(el, 'awa');
+
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.value).toBe('awa2');
+    expect(text(el.querySelector('[role="alert"]'))).toContain('awa2');
+    expect(guestSubmit(el)?.disabled).toBe(false);
+    expect(recorded.order).toEqual([]);
+  });
+
+  test('un refus du LIEN retire le formulaire et garde les deux sorties', async () => {
+    const { deps } = depsWith({ joinGuest: async () => ({ ok: false, status: 410, error: 'mort', code: 'LINK_EXPIRED' }) });
+    const el = await mount(deps);
+    await fillAndSubmit(el, 'Awa');
+
+    expect(guestForm(el)).toBeNull();
+    expect(text(el.querySelector('[role="alert"]'))).toContain('expiré');
+    expect(nextOf(anchorTo(el, '/login'))).toBe('/chat/mshy_equipe_7f3a');
+    expect(anchorTo(el, '/signup')).not.toBeNull();
+  });
+
+  test('un lien qui EXIGE un compte n’offre aucun formulaire, et le DIT', async () => {
+    const { deps } = depsWith(withTerms({ allowed: false }));
+    const el = await mount(deps);
+    expect(guestForm(el)).toBeNull();
+    expect(text(el)).toContain('demande un compte Meeshy');
+    expect(anchorTo(el, '/login')).not.toBeNull();
+  });
+
+  test('un compte CONNECTÉ ne voit jamais le formulaire d’invité', async () => {
+    signIn();
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    expect(guestForm(el)).toBeNull();
+    expect(joinButton(el)).not.toBeNull();
+  });
+
+  test('la matrice des choix : visiteur sur un lien ouvert — le formulaire, puis se connecter ou créer un compte', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    const join: HTMLElement = el;
+    expect(join?.querySelector('[data-guest-form]')).not.toBeNull();
+    expect(join?.querySelector('[data-invite-sign-in]')).not.toBeNull();
+    expect(join?.querySelector('[data-invite-sign-up]')).not.toBeNull();
+    expect(join?.querySelector('[data-invite-join-account]')).toBeNull();
+    expect(text(join)).toContain('ou avec ton compte');
+  });
+
+  test('la barre collée ne porte QUE l’action primaire ; champs et sorties restent dans la page', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    const bar = el.querySelector('[data-invite-primary-bar]');
+    expect(bar?.querySelector('[data-guest-submit]')).not.toBeNull();
+    expect(bar?.querySelector('[data-guest-nickname], [data-guest-language], [data-invite-sign-in], [data-invite-sign-up]')).toBeNull();
+    expect(el.querySelector('[data-invite-join] [data-guest-nickname]')).not.toBeNull();
+    expect(el.querySelector('[data-invite-exits] [data-invite-sign-in]')).not.toBeNull();
+    expect(guestSubmit(el)?.getAttribute('form')).toBe(guestForm(el)?.id);
+  });
+
+  test('un formulaire incomplet MÈNE au prénom : le champ reçoit le focus, et rien ne part', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    await submitGuest(el);
+    expect(recorded.guestJoins).toEqual([]);
+    expect(document.activeElement).toBe(nicknameField(el));
+  });
+
+  test('connecté : la barre porte « Rejoindre avec mon compte » ; compte requis : « Se connecter »', async () => {
+    signIn();
+    const account = await mount(depsWith().deps);
+    expect(text(account.querySelector('[data-invite-primary-bar] [data-invite-join-account]'))).toBe('Rejoindre avec mon compte');
+    act(() => {
+      mounted?.root.unmount();
+      sessionStore.getState().clearSession();
+    });
+    const required = await mount(depsWith(withTerms({ allowed: false })).deps);
+    expect(required.querySelector('[data-invite-primary-bar] [data-invite-sign-in]')).not.toBeNull();
+    expect(required.querySelector('[data-invite-exits]')).toBeNull();
+  });
+
+  test('la matrice des choix : compte connecté — « Rejoindre avec mon compte », et aucune porte anonyme', async () => {
+    signIn();
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    const join: HTMLElement = el;
+    expect(text(join?.querySelector('[data-invite-join-account]') ?? null)).toBe('Rejoindre avec mon compte');
+    expect(join?.querySelector('[data-guest-form]')).toBeNull();
+    expect(join?.querySelector('[data-invite-sign-in]')).toBeNull();
+  });
+
+  test('la matrice des choix : visiteur, compte requis — se connecter devient l’action primaire', async () => {
+    const { deps } = depsWith(withTerms({ allowed: false }));
+    const el = await mount(deps);
+    const join: HTMLElement = el;
+    expect(join?.querySelector('[data-guest-form]')).toBeNull();
+    expect(join?.querySelector('[data-invite-account-required]')).not.toBeNull();
+    expect(join?.querySelector('[data-invite-sign-in]')?.className).toContain('text-ios-on-brand');
+  });
+});
+
+const REFUSALS: ReadonlyArray<readonly [number, string | undefined, string]> = [
+  [404, undefined, 'introuvable'],
+  [410, 'LINK_DEACTIVATED', 'désactivé'],
+  [410, 'LINK_INACTIVE', 'désactivé'],
+  [410, 'LINK_EXPIRED', 'expiré'],
+  [410, 'CONVERSATION_CLOSED', 'terminée'],
+  [409, 'LINK_EXHAUSTED', 'limite de participants'],
+  [410, 'LINK_MAX_USES', 'limite de participants'],
+  [403, 'LANGUAGE_NOT_ALLOWED', 'ta langue'],
+  [403, 'BANNED', 'ne peux plus rejoindre'],
+  [429, undefined, 'Trop de tentatives'],
+  [0, undefined, 'hors ligne'],
+];
+
+const failure = (status: number, code: string | undefined): ApiResult<never> =>
+  code === undefined ? { ok: false, status, error: 'refus' } : { ok: false, status, error: 'refus', code };
+
+describe('chaque refus est un bandeau qui dit la cause et garde une sortie', () => {
+  for (const [status, code, cause] of REFUSALS) {
+    test(`à la lecture — ${status} ${code ?? '(sans code)'}`, async () => {
+      const { deps } = depsWith({ load: async () => failure(status, code) });
+      const el = await mount(deps);
+      const alert = el.querySelector('[role="alert"]');
+      expect(text(alert)).toContain(cause);
+      const home = [...(alert?.querySelectorAll('a') ?? [])].find((a) => a.getAttribute('href') === '/chats');
+      expect(text(home ?? null)).toBe('Revenir à l’accueil');
+      expect(Number.parseInt(home?.style.minHeight ?? '0', 10)).toBeGreaterThanOrEqual(44);
+      expect(el.querySelector('h1')).toBeNull();
+    });
+  }
+
+  test('à la jonction — un refus DÉFINITIF garde l’invitation et retire « Rejoindre »', async () => {
+    signIn();
+    const { deps, recorded } = depsWith({ join: async () => failure(403, 'LANGUAGE_NOT_ALLOWED') });
+    const el = await mount(deps);
+    await click(joinButton(el));
+    expect(text(el.querySelector('[role="alert"]'))).toContain('ta langue');
+    expect(el.querySelector('h1')?.textContent).toBe('Équipe déploiement');
+    expect(joinButton(el)).toBeNull();
+    expect(recorded.order).toEqual([]);
+  });
+
+  /* #7816 — un salon d'une communauté privée refuse qui n'en est pas membre :
+     un 403 est une RÉPONSE, rejouer le lien ne la change pas. La phrase dit
+     la cause, et « Rejoindre » s'en va. */
+  test('à la jonction — un salon réservé aux membres de sa communauté le dit et retire « Rejoindre »', async () => {
+    signIn();
+    const { deps } = depsWith({ join: async () => failure(403, 'COMMUNITY_MEMBERS_ONLY') });
+    const el = await mount(deps);
+    await click(joinButton(el));
+    expect(text(el.querySelector('[role="alert"]'))).toContain('réservée aux membres de sa communauté');
+    expect(joinButton(el)).toBeNull();
+  });
+
+  test('à la jonction — un refus PASSAGER (429) laisse rejoindre à nouveau', async () => {
+    signIn();
+    const { deps } = depsWith({ join: async () => failure(429, undefined) });
+    const el = await mount(deps);
+    await click(joinButton(el));
+    expect(text(el.querySelector('[role="alert"]'))).toContain('Trop de tentatives');
+    expect(joinButton(el)?.disabled).toBe(false);
+  });
+
+  test('à la jonction — servie EN INVITÉ : la session est close, et l’on revient par la connexion', async () => {
+    signIn();
+    const { deps, recorded } = depsWith({ join: async () => failure(0, 'JOINED_AS_GUEST') });
+    const el = await mount(deps);
+    await click(joinButton(el));
+    expect(recorded.order).toEqual(['expire']);
+    expect(text(el.querySelector('[role="alert"]'))).toContain('session a expiré');
+    expect(nextOf(anchorTo(el, '/login'))).toBe('/chat/mshy_equipe_7f3a');
+    expect(joinButton(el)).toBeNull();
+  });
+});
+
+describe('hors ligne', () => {
+  test('sans réseau, aucune lecture ne part ; l’invitation arrive au retour du réseau', async () => {
+    Object.defineProperty(window.navigator, 'onLine', { value: false, configurable: true });
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    expect(recorded.loads).toEqual([]);
+    expect(text(el.querySelector('[role="alert"]'))).toContain('hors ligne');
+
+    Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
+    await act(async () => {
+      window.dispatchEvent(new Event('online'));
+    });
+    await settle();
+    expect(recorded.loads).toEqual([LINK]);
+    expect(el.querySelector('h1')?.textContent).toBe('Équipe déploiement');
+  });
+
+  test('une invitation déjà lue reste affichée, et « Rejoindre » attend le réseau', async () => {
+    signIn();
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    Object.defineProperty(window.navigator, 'onLine', { value: false, configurable: true });
+    await act(async () => {
+      window.dispatchEvent(new Event('offline'));
+    });
+    expect(el.querySelector('h1')?.textContent).toBe('Équipe déploiement');
+    expect(joinButton(el)?.disabled).toBe(true);
+    expect(text(el)).toContain('Hors ligne');
+  });
+});
+
+/* ========================================================================= *
+ *  UN COMPTE CONNECTÉ REJOINT EN ANONYME (#8816, jumelle de #8726)
+ * ========================================================================= */
+
+const modeOf = (anchor: HTMLAnchorElement | null) => new URL(anchor?.getAttribute('href') ?? '', 'http://localhost').searchParams.get('mode');
+
+describe('un compte CONNECTÉ peut rejoindre en « Anonyme » sans perdre sa session', () => {
+  test('son compte reste l’action primaire, et « Continuer en anonyme » est offert à côté', async () => {
+    signIn();
+    const el = await mount(depsWith().deps);
+    expect(joinButton(el)).not.toBeNull();
+    expect(guestForm(el)).toBeNull();
+    const anonymous = el.querySelector<HTMLAnchorElement>('[data-invite-anonymous-offer]');
+    expect(text(anonymous)).toBe('Continuer en anonyme');
+    expect(new URL(anonymous?.getAttribute('href') ?? '', 'http://localhost').pathname).toBe('/chat/mshy_equipe_7f3a');
+    expect(modeOf(anonymous)).toBe('anonymous');
+  });
+
+  test('un lien réservé aux comptes n’offre rien d’anonyme, même demandé', async () => {
+    signIn();
+    const el = await mount(depsWith(withTerms({ allowed: false })).deps, LINK, true);
+    expect(el.querySelector('[data-invite-anonymous-offer]')).toBeNull();
+    expect(guestForm(el)).toBeNull();
+    expect(joinButton(el)).not.toBeNull();
+  });
+
+  test('« Anonyme » choisi : le formulaire d’invité, VIDE de tout ce que le compte porte', async () => {
+    signIn();
+    const el = await mount(depsWith().deps, LINK, true);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.value).toBe('');
+    expect(joinButton(el)).toBeNull();
+    const back = el.querySelector<HTMLAnchorElement>('[data-invite-account-offer]');
+    expect(text(back)).toBe('Rejoindre avec mon compte');
+    expect(modeOf(back)).toBeNull();
+  });
+
+  test('la jonction anonyme ouvre l’identité à côté du compte, puis le fil — le compte reste connecté', async () => {
+    signIn();
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps, LINK, true);
+    await fillAndSubmit(el, 'Masque');
+    expect(recorded.guestJoins).toEqual([[LINK, { language: 'fr', nickname: 'Masque' }]]);
+    expect(recorded.joins).toEqual([]);
+    expect(recorded.adopted.map(([token, guest]) => [token, guest.conversationId, guest.nickname])).toEqual([
+      ['anon_du_temoin', 'c-deploiement', 'Masque'],
+    ]);
+    expect(recorded.order).toEqual(['adopt', 'go /c/c-deploiement replace', 'joined']);
+    expect(sessionStore.getState().session.status).toBe('authenticated');
+  });
+
+  /** #9710 — l'identité anonyme porte sa langue, mais l'INTERFACE reste celle
+   * du compte : le compte n'est ni remplacé ni fermé (#8816). */
+  test('la jonction anonyme d’un compte ne touche pas à sa langue d’interface', async () => {
+    signIn();
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps, LINK, true);
+    typeInto(languageField(el), 'en');
+    await settle();
+    await fillAndSubmit(el, 'Masque');
+    expect(recorded.adopted.map(([, guest]) => guest.language)).toEqual(['en']);
+    expect(recorded.interfaceLanguages).toEqual([]);
+  });
+});
+
+/* ========================================================================= *
+ *  L'ENTRÉE DE WORLD WIDE DEPUIS LA LANDING (#10003)
+ * ========================================================================= */
+
+describe('l’adresse d’entrée de la landing (#10003)', () => {
+  const entryOf = (query: string) => guestEntryOf(new URLSearchParams(query));
+
+  test('mode invité, nom et langue ⇒ une entrée ; le nom est rogné', () => {
+    expect(entryOf('mode=anonymous&name=%20Kenji%20&language=ar')).toEqual({ nickname: 'Kenji', language: 'ar' });
+    expect(entryOf('mode=anonymous&name=Kenji')).toEqual({ nickname: 'Kenji', language: null });
+  });
+
+  test('sans mode invité ou sans nom, aucune entrée', () => {
+    expect(entryOf('name=Kenji&language=ar')).toBe(null);
+    expect(entryOf('mode=anonymous&name=%20&language=ar')).toBe(null);
+    expect(entryOf('mode=anonymous')).toBe(null);
+  });
+});
+
+describe('un visiteur ENTRE depuis la landing avec son nom et sa langue (#10003)', () => {
+  const KENJI: GuestEntry = { nickname: 'Kenji', language: 'ar' };
+  const fromLanding = (overrides: Partial<ChatJoinDeps> = {}) => {
+    const tab = tabHolding(handoffToken());
+    return { ...depsWith({ handoff: () => tab.storage, ...overrides }), tab };
+  };
+
+  test('l’invité est CRÉÉ sans autre geste : le corps part, la session est adoptée, la langue prend l’interface, le fil s’ouvre', async () => {
+    const { deps, recorded, tab } = fromLanding();
+    await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([[LINK, { language: 'ar', nickname: 'Kenji' }]]);
+    expect(recorded.adopted.map(([, guest]) => [guest.nickname, guest.language])).toEqual([['Kenji', 'ar']]);
+    expect(recorded.order).toEqual(['adopt', 'interface ar', 'go /world replace', 'joined']);
+    expect(tab.removed).toEqual([WORLD_ENTRY_HANDOFF_KEY]);
+  });
+
+  /* `/world` ne lit que l'invité SANS compte (#10100) : un compte y est renvoyé
+     à la jonction par lien, qui lui reproposerait d'entrer. Entré sous son
+     identité anonyme (#8816), il rouvre le fil qu'il vient de rejoindre. */
+  test('un COMPTE entré en anonyme par une landing en cache ouvre le fil rejoint, pas /world', async () => {
+    signIn();
+    const { deps, recorded } = fromLanding();
+    await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([[LINK, { language: 'ar', nickname: 'Kenji' }]]);
+    expect(recorded.order).toEqual(['adopt', 'go /c/c-deploiement replace', 'joined']);
+  });
+
+  test('pendant l’entrée, l’invitation n’est pas peinte : l’écran attend, il ne propose rien', async () => {
+    const { deps } = fromLanding({ joinGuest: () => never() });
+    const el = await mount(deps, LINK, true, KENJI);
+    expect(el.querySelector('[data-invite-layout]')).toBeNull();
+    expect(guestForm(el)).toBeNull();
+  });
+
+  test('l’ANCIEN gabarit (nom sans langue) ouvre le formulaire, le nom pré-rempli, la langue pré-choisie du lien — rien ne part sans geste', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps, LINK, true, { nickname: 'Kenji', language: null });
+    expect(recorded.guestJoins).toEqual([]);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.value).toBe('Kenji');
+    expect(languageField(el)?.value).toBe('fr');
+  });
+
+  test('nom PRIS : le formulaire s’ouvre, la suggestion pré-remplie et dite, la langue choisie gardée', async () => {
+    const { deps, recorded } = fromLanding({
+      joinGuest: async () => ({ ok: false, status: 409, error: 'pris', code: 'USERNAME_TAKEN_IN_CONVERSATION', suggestedNickname: 'Kenji2' }),
+    });
+    const el = await mount(deps, LINK, true, KENJI);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.value).toBe('Kenji2');
+    expect(languageField(el)?.value).toBe('ar');
+    expect(text(el.querySelector('[role="alert"]'))).toContain('Kenji2');
+    expect(recorded.order).toEqual([]);
+  });
+
+  test('un lien qui exige plus que le nom et la langue ne s’en dispense pas : rien ne part, le champ manquant est demandé', async () => {
+    const { deps, recorded } = fromLanding(withTerms({ emailRequired: true }));
+    const el = await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([]);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.value).toBe('Kenji');
+    expect(el.querySelector('[data-guest-email]')?.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  test('un lien réservé aux comptes ne crée personne', async () => {
+    const { deps, recorded } = fromLanding(withTerms({ allowed: false }));
+    const el = await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([]);
+    expect(el.querySelector('[data-invite-layout]')).not.toBeNull();
+    expect(el.querySelector('[data-invite-layout]')?.className).toContain('grid-cols-[minmax(0,1fr)]');
+    expect(el.querySelector('[data-invite-account-required]')).not.toBeNull();
+  });
+
+  test('l’entrée ne part qu’UNE fois', async () => {
+    const { deps, recorded } = fromLanding({
+      joinGuest: async (link, body) => {
+        recorded.guestJoins.push([link, body]);
+        return { ok: false, status: 429, error: 'trop', code: 'RATE_LIMITED' };
+      },
+    });
+    await mount(deps, LINK, true, KENJI);
+    await settle();
+    expect(recorded.guestJoins.length).toBe(1);
+  });
+});
+
+describe('une adresse d’entrée FORGÉE ne fait entrer personne sans son geste (#10094)', () => {
+  const KENJI: GuestEntry = { nickname: 'Kenji', language: 'ar' };
+  const holding = (raw: string | null) => {
+    const tab = tabHolding(raw);
+    return { ...depsWith({ handoff: () => tab.storage }), tab };
+  };
+
+  test('sans jeton de la landing : AUCUN POST, le formulaire s’ouvre pré-rempli du nom et de la langue de l’adresse', async () => {
+    const { deps, recorded } = holding(null);
+    const el = await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([]);
+    expect(recorded.order).toEqual([]);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.value).toBe('Kenji');
+    expect(languageField(el)?.value).toBe('ar');
+  });
+
+  test('le formulaire pré-rempli part au GESTE de l’utilisateur, avec ce qu’il montre', async () => {
+    const { deps, recorded } = holding(null);
+    const el = await mount(deps, LINK, true, KENJI);
+    await submitGuest(el);
+    expect(recorded.guestJoins).toEqual([[LINK, { language: 'ar', nickname: 'Kenji' }]]);
+  });
+
+  test('un jeton PÉRIMÉ ne vaut rien, et il est effacé', async () => {
+    const { deps, recorded, tab } = holding(handoffToken({ at: NOW.getTime() - WORLD_ENTRY_HANDOFF_TTL_MS - 1 }));
+    await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([]);
+    expect(tab.removed).toEqual([WORLD_ENTRY_HANDOFF_KEY]);
+  });
+
+  test('un jeton daté du FUTUR ne vaut rien', async () => {
+    const { deps, recorded } = holding(handoffToken({ at: NOW.getTime() + 60_000 }));
+    await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([]);
+  });
+
+  test('un jeton ne sert qu’UNE fois : la seconde arrivée par la même adresse attend le geste', async () => {
+    const tab = tabHolding(handoffToken());
+    const first = depsWith({ handoff: () => tab.storage });
+    await mount(first.deps, LINK, true, KENJI);
+    expect(first.recorded.guestJoins.length).toBe(1);
+    act(() => {
+      mounted?.root.unmount();
+      sessionStore.getState().clearSession();
+    });
+    mounted?.container.remove();
+    mounted = null;
+    const second = depsWith({ handoff: () => tab.storage });
+    const el = await mount(second.deps, LINK, true, KENJI);
+    expect(second.recorded.guestJoins).toEqual([]);
+    expect(guestForm(el)).not.toBeNull();
+  });
+
+  test('un jeton posé pour un AUTRE lien ne fait pas entrer dans celui-ci', async () => {
+    const { deps, recorded } = holding(handoffToken({ link: 'mshy_autre' }));
+    await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([]);
+  });
+
+  test('un jeton posé pour un AUTRE nom ou une AUTRE langue que ceux de l’adresse ne vaut rien', async () => {
+    const renamed = holding(handoffToken({ name: 'Ada' }));
+    await mount(renamed.deps, LINK, true, KENJI);
+    expect(renamed.recorded.guestJoins).toEqual([]);
+    act(() => mounted?.root.unmount());
+    mounted?.container.remove();
+    mounted = null;
+    const relanguaged = holding(handoffToken({ language: 'es' }));
+    await mount(relanguaged.deps, LINK, true, KENJI);
+    expect(relanguaged.recorded.guestJoins).toEqual([]);
+  });
+
+  test('un jeton mal formé ne vaut rien', async () => {
+    for (const raw of ['{', '"texte"', JSON.stringify({ link: LINK, name: 'Kenji', language: 'ar' })]) {
+      const { deps, recorded } = holding(raw);
+      await mount(deps, LINK, true, KENJI);
+      expect(recorded.guestJoins).toEqual([]);
+      act(() => mounted?.root.unmount());
+      mounted?.container.remove();
+      mounted = null;
+    }
+  });
+
+  test('sessionStorage REFUSÉ (navigation privée) : fail-closed, le formulaire et aucun POST', async () => {
+    const refused = (): never => {
+      throw new DOMException('refusé', 'SecurityError');
+    };
+    const { deps, recorded } = depsWith({ handoff: refused });
+    const el = await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([]);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.value).toBe('Kenji');
+  });
+});
+
+/**
+ * UN INVITÉ N'A QUE SON FIL, EN FOCUS (#10100) — un ancien lien de jonction
+ * rouvert par l'invité qui y est déjà entré ne lui repropose pas d'entrer : il
+ * rouvre son fil. L'entrée qui vient de la landing (jeton de passage) est celle
+ * de World Wide, qui se lit désormais sur `/world`.
+ */
+describe('un invité déjà entré par ce lien rouvre son fil (#10100)', () => {
+  const held = (link: string): GuestIdentity => ({ participantId: 'p-kenji', nickname: 'Kenji', conversationId: 'c-tenue', link, mayWrite: true });
+  const asGuest = (link: string) =>
+    act(() => {
+      sessionStore.getState().establishGuest({ sessionToken: 'anon_kenji', guest: held(link) });
+    });
+
+  test('son propre lien le ramène à son fil, sans formulaire ni nouvelle jonction', async () => {
+    asGuest(LINK);
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    expect(recorded.order).toEqual(['go /c/c-tenue replace']);
+    expect(recorded.guestJoins).toEqual([]);
+    expect(guestForm(el)).toBeNull();
+  });
+
+  test('le lien d’une AUTRE conversation lui est proposé normalement', async () => {
+    asGuest('mshy_autre');
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    expect(recorded.order).toEqual([]);
+    expect(el.querySelector('[data-invite-layout]')).not.toBeNull();
+  });
+});

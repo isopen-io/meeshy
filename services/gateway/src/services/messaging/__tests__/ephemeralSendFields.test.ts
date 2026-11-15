@@ -1,0 +1,156 @@
+/**
+ * Ce qu'un ENVOI écrit d'un éphémère, et ce qu'il cesse d'écrire (#7451).
+ *
+ * Avant ce lot, `Message.ephemeralDuration` n'avait AUCUN écrivain et
+ * `Message.expiresAt` portait l'échéance que le client avait calculée chez lui.
+ * Les deux colonnes changent de main dans le même mouvement, et l'inversion
+ * doit se lire d'un témoin : la DURÉE est ce que le client dit, l'ÉCHÉANCE est
+ * ce que le serveur décide.
+ *
+ * @jest-environment node
+ */
+
+import { describe, it, expect } from '@jest/globals';
+import {
+  EPHEMERAL_UNAVAILABILITY_GRACE_MS,
+  EPHEMERAL_UNRECEIVED_RETENTION_MS,
+} from '@meeshy/shared/utils/ephemeral-countdown';
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+
+import { composeMessageEffectFlags, ephemeralSendFields } from '../ephemeralSendFields';
+
+const NOW = new Date('2026-09-22T12:00:00.000Z');
+
+describe('ephemeralSendFields', () => {
+  it("enregistre la durée d'un client à jour, et pose l'échéance au PLAFOND de rétention", () => {
+    // Le client a envoyé 30 s. Ce qui part en base n'est PAS « maintenant + 30 s » :
+    // personne n'a encore rien reçu, donc rien ne décompte. La colonne porte le
+    // plafond de rétention — le seul filet contre un message que personne ne
+    // reçoit jamais.
+    expect(ephemeralSendFields({ ephemeralDuration: 30, now: NOW })).toEqual({
+      ephemeralDuration: 30,
+      expiresAt: new Date(NOW.getTime() + EPHEMERAL_UNRECEIVED_RETENTION_MS),
+    });
+  });
+
+  it("DÉRIVE la durée d'un client déjà distribué qui n'envoie qu'une échéance", () => {
+    expect(
+      ephemeralSendFields({ expiresAt: new Date(NOW.getTime() + 300_000), now: NOW }),
+    ).toEqual({
+      ephemeralDuration: 300,
+      expiresAt: new Date(NOW.getTime() + EPHEMERAL_UNRECEIVED_RETENTION_MS),
+    });
+  });
+
+  it("ne pose aucune échéance sur un message ordinaire", () => {
+    expect(ephemeralSendFields({ now: NOW })).toEqual({
+      ephemeralDuration: null,
+      expiresAt: null,
+    });
+  });
+
+  it("pose le plafond de rétention d'une VUE UNIQUE dans sa propre colonne, jamais dans expiresAt (#7578)", () => {
+    // Une vue unique qu'un destinataire n'ouvre jamais finit quand même purgée
+    // (#7450) — mais sans devenir un éphémère : `expiresAt` resterait servi
+    // comme un décompte et supprimerait la bulle pour tous.
+    expect(ephemeralSendFields({ isViewOnce: true, now: NOW })).toEqual({
+      ephemeralDuration: null,
+      expiresAt: null,
+      viewOnceBurnAt: new Date(NOW.getTime() + EPHEMERAL_UNRECEIVED_RETENTION_MS),
+    });
+  });
+});
+
+describe('composeMessageEffectFlags', () => {
+  it("pose le bit EPHEMERAL sur la seule DURÉE — un client à jour n'envoie plus d'échéance", () => {
+    expect(composeMessageEffectFlags({ ephemeralDuration: 30 }) & MESSAGE_EFFECT_FLAGS.EPHEMERAL)
+      .toBe(MESSAGE_EFFECT_FLAGS.EPHEMERAL);
+  });
+
+  it("le pose toujours sur la seule échéance — un ancien client n'envoie que ça", () => {
+    expect(composeMessageEffectFlags({ expiresAt: NOW }) & MESSAGE_EFFECT_FLAGS.EPHEMERAL)
+      .toBe(MESSAGE_EFFECT_FLAGS.EPHEMERAL);
+  });
+
+  it('ne pose aucun bit sur un message ordinaire', () => {
+    expect(composeMessageEffectFlags({})).toBe(0);
+  });
+
+  it('conserve les bits que le client a posés lui-même', () => {
+    expect(composeMessageEffectFlags({ effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED }))
+      .toBe(MESSAGE_EFFECT_FLAGS.BLURRED);
+  });
+});
+
+describe('flamme-œil à l\'envoi (#8302)', () => {
+  const AFTER_READ = MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ;
+  const EPHEMERAL = MESSAGE_EFFECT_FLAGS.EPHEMERAL;
+
+  it('garde le bit flamme-œil et le complète du bit EPHEMERAL qui lui manque', () => {
+    expect(composeMessageEffectFlags({ effectFlags: AFTER_READ })).toBe(AFTER_READ | EPHEMERAL);
+  });
+
+  it('garde le bit flamme-œil déjà accompagné, sans rien ajouter', () => {
+    expect(composeMessageEffectFlags({ effectFlags: AFTER_READ | EPHEMERAL })).toBe(AFTER_READ | EPHEMERAL);
+  });
+
+  it('sans durée, pose le PLAFOND de rétention : un message jamais lu finit quand même détruit', () => {
+    expect(ephemeralSendFields({ effectFlags: AFTER_READ | EPHEMERAL, now: NOW })).toEqual({
+      ephemeralDuration: null,
+      expiresAt: new Date(NOW.getTime() + EPHEMERAL_UNRECEIVED_RETENTION_MS),
+    });
+  });
+
+  it('flamme-œil ET vue unique : aucune purge avant le plafond de la flamme — les deux échéances partent du même plafond (#8345)', () => {
+    const retention = new Date(NOW.getTime() + EPHEMERAL_UNRECEIVED_RETENTION_MS);
+    expect(ephemeralSendFields({ effectFlags: AFTER_READ | EPHEMERAL, isViewOnce: true, now: NOW })).toEqual({
+      ephemeralDuration: null,
+      expiresAt: retention,
+      viewOnceBurnAt: retention,
+    });
+  });
+
+  it('ignore une durée envoyée à côté : rien ne décompte à la réception d\'une flamme-œil', () => {
+    expect(ephemeralSendFields({ effectFlags: AFTER_READ | EPHEMERAL, ephemeralDuration: 30, now: NOW })).toEqual({
+      ephemeralDuration: null,
+      expiresAt: new Date(NOW.getTime() + EPHEMERAL_UNRECEIVED_RETENTION_MS),
+    });
+  });
+});
+
+describe('ephemeralSendFields — durée ET après lecture sur une copie (#9572)', () => {
+  const FLAME = MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ;
+  const retentionCap = new Date(NOW.getTime() + EPHEMERAL_UNRECEIVED_RETENTION_MS);
+
+  it('garde la durée d’une copie qui porte aussi le bit après lecture', () => {
+    // La durée BORNE (échéance par destinataire, dès la réception), la
+    // consommation après lecture retire plus tôt : le premier des deux gagne.
+    expect(
+      ephemeralSendFields({ ephemeralDuration: 30, effectFlags: FLAME, durationBoundsAfterRead: true, now: NOW }).ephemeralDuration,
+    ).toBe(30);
+  });
+
+  it('#9588 — borne la destruction d’une copie que personne n’a reçue à « envoi + durée + une heure », pas à sept jours', () => {
+    // Transférée là où personne ne lit, une flamme de trente secondes restait
+    // relisible sept jours par celui qui l'avait transférée.
+    expect(
+      ephemeralSendFields({ ephemeralDuration: 30, effectFlags: FLAME, durationBoundsAfterRead: true, now: NOW }),
+    ).toEqual({
+      ephemeralDuration: 30,
+      expiresAt: new Date(NOW.getTime() + 30_000 + EPHEMERAL_UNAVAILABILITY_GRACE_MS),
+    });
+  });
+
+  it('laisse la flamme-œil d’un envoi ordinaire SANS durée, même si le client en déclare une', () => {
+    expect(ephemeralSendFields({ ephemeralDuration: 30, effectFlags: FLAME, now: NOW })).toEqual({
+      ephemeralDuration: null,
+      expiresAt: retentionCap,
+    });
+  });
+
+  it('retombe sur la flamme-œil sans durée quand la copie n’en déclare aucune de valide', () => {
+    expect(
+      ephemeralSendFields({ ephemeralDuration: 0, effectFlags: FLAME, durationBoundsAfterRead: true, now: NOW }),
+    ).toEqual({ ephemeralDuration: null, expiresAt: retentionCap });
+  });
+});

@@ -31,6 +31,9 @@ final class SoundDetailModelTests: XCTestCase {
         func rename(soundId: String, title: String) async throws -> APISound {
             throw URLError(.badURL)
         }
+        func remove(soundId: String) async throws -> SoundRemoval {
+            throw URLError(.badURL)
+        }
     }
 
     private func post(_ id: String, views: Int = 0) -> APISoundPost {

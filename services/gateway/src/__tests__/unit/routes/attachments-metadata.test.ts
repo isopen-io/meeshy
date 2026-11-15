@@ -16,31 +16,20 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn() }) },
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  messageAttachmentSchema: {
-    type: 'object',
-    properties: {
-      id: { type: 'string' },
-      type: { type: 'string' },
-      url: { type: 'string' },
-    },
-  },
-  messageAttachmentMinimalSchema: {
-    type: 'object',
-    properties: {
-      id: { type: 'string' },
-      type: { type: 'string' },
-    },
-  },
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-      message: { type: 'string' },
-    },
-  },
-}));
+// `@meeshy/shared/types/api-schemas` n'est PAS doublé, et ne doit plus l'être.
+//
+// Ce harnais en substituait un faux `messageAttachmentSchema` (trois clés) et
+// un faux `messageAttachmentMinimalSchema` (deux clés). Le double DÉSARMAIT
+// `fast-json-stringify` — c'est-à-dire exactement la couche où vit le contrat
+// servi par ces trois routes : sous un schéma inventé, aucune des trente
+// assertions ci-dessous ne pouvait attester quoi que ce soit de ce que la
+// route rend RÉELLEMENT (#4887, défaut 4).
+//
+// C'est le patron que `services/gateway/CLAUDE.md` interdit depuis les cycles
+// 91, 93 et 104 : « un double PARTIEL d'un module perd en silence tout ce que
+// le module GAGNE ». Le remède documenté est `jest.requireActual` + surcharge
+// ciblée ; ici aucune surcharge n'est nécessaire — les vrais schémas SONT ce
+// qu'on mesure, donc la couche à traverser.
 
 const mockGetAttachmentWithMetadata = jest.fn<any>();
 const mockGetAttachment = jest.fn<any>();
@@ -113,19 +102,6 @@ async function buildApp({
 } = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
-  const authRequired = async (req: any, reply: any) => {
-    if (authMode !== 'registered') {
-      return reply.status(401).send({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } });
-    }
-    (req as any).authContext = {
-      isAuthenticated: true,
-      isAnonymous: false,
-      type: 'registered',
-      userId: USER_ID,
-      registeredUser: { id: USER_ID, role },
-    };
-  };
-
   const authOptional = async (req: any) => {
     if (authMode === 'registered') {
       (req as any).authContext = {
@@ -153,7 +129,7 @@ async function buildApp({
   };
 
   const prisma = makePrisma(prismaOverrides);
-  await registerMetadataRoutes(app, authRequired, authOptional, prisma as any);
+  await registerMetadataRoutes(app, authOptional, prisma as any);
   await app.ready();
   (app as any).__prisma = prisma;
   return app;
@@ -220,6 +196,62 @@ describe('GET /attachments/:id/metadata — success', () => {
     expect(res.json().success).toBe(true);
     expect(res.headers['cache-control']).toContain('private');
     expect(res.headers['etag']).toBeDefined();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LE HARNAIS EST ARMÉ — et voici ce qui le prouve.
+//
+// Le double supprimé en tête de fichier déclarait `messageAttachmentSchema`
+// avec trois clés inventées (`id`, `type`, `url`) et le minimal avec deux.
+// Sous ce double, une réponse portant `type` et `url` les rendait, et perdait
+// `uploadedBy` / `isAnonymous` ; sous le VRAI schéma c'est l'exact inverse.
+// Les deux témoins ci-dessous distinguent donc les deux harnais dans les DEUX
+// sens : ils ne peuvent pas être verts sur un schéma inventé.
+//
+// C'est le seul genre d'assertion que ce fichier ne pouvait pas porter avant
+// (#4887, défaut 4) — ses trente témoins n'interrogeaient que des codes de
+// statut et `success: true`, deux valeurs qu'aucun schéma ne touche. Un
+// harnais désarmé ne cache pas seulement un bug : il rend indicible la
+// question à laquelle il aurait dû répondre.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('GET /attachments/:id/metadata — contrat SERVI (harnais armé)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockGetAttachmentWithMetadata.mockResolvedValue({
+      ...MOCK_ATTACHMENT,
+      fileName: 'photo.jpg',
+      originalName: 'Photo.jpg',
+      mimeType: 'image/jpeg',
+      fileSize: 2048,
+      fileUrl: 'https://cdn.example.com/photo.jpg',
+      createdAt: '2026-09-01T10:00:00.000Z',
+    });
+    app = await buildApp();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('sert les champs du VRAI `messageAttachmentSchema`, pas ceux du double', async () => {
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}/metadata` });
+    const attachment = res.json().data.attachment;
+
+    // Déclarés par le schéma réel — le double les supprimait.
+    expect(attachment.uploadedBy).toBe(USER_ID);
+    expect(attachment.isAnonymous).toBe(false);
+    expect(attachment.originalName).toBe('Photo.jpg');
+    expect(attachment.fileSize).toBe(2048);
+  });
+
+  it("supprime `type` et `url`, que seul le double déclarait", async () => {
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}/metadata` });
+    const attachment = res.json().data.attachment;
+
+    // `fast-json-stringify` retire toute clé qu'aucun schéma ne déclare. Sous
+    // le double, ces deux-là survivaient — le harnais attestait donc d'un
+    // contrat que la route ne sert pas.
+    expect(attachment).not.toHaveProperty('type');
+    expect(attachment).not.toHaveProperty('url');
   });
 });
 
@@ -329,6 +361,21 @@ describe('DELETE /attachments/:id — BIGBOSS deletes', () => {
   });
 });
 
+// #11217 — MODERATOR de plateforme est PRIVILÉGIÉ partout : il retire le
+// message d'autrui, la pièce jointe ne lui résiste pas. AUDIT/ANALYST, non.
+describe('DELETE /attachments/:id — la table des rôles privilégiés (#11217)', () => {
+  it.each([['MODERATOR', 200], ['AUDIT', 403], ['ANALYST', 403], ['moderator', 403]])('%s ⇒ %i', async (role, status) => {
+    mockGetAttachment.mockResolvedValue({ ...MOCK_ATTACHMENT, uploadedBy: 'other-user' });
+    mockDeleteAttachment.mockReset();
+    mockDeleteAttachment.mockResolvedValue(undefined);
+    const app = await buildApp({ role: role as string });
+    const res = await app.inject({ method: 'DELETE', url: `/attachments/${ATTACHMENT_ID}` });
+    expect(res.statusCode).toBe(status);
+    expect(mockDeleteAttachment).toHaveBeenCalledTimes(status === 200 ? 1 : 0);
+    await app.close();
+  });
+});
+
 describe('DELETE /attachments/:id — anonymous owner', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
@@ -406,9 +453,10 @@ describe('GET /conversations/:id/attachments — authenticated not member', () =
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 403 when user is not a conversation member', async () => {
+  it('returns the 404 of an unknown conversation when user is not a member (#8116)', async () => {
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ success: false, error: 'Conversation not found' });
   });
 });
 
@@ -443,9 +491,13 @@ describe('GET /conversations/:id/attachments — anonymous participant not found
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 403 when anonymous participant is not found', async () => {
+  // #4856 — le `participantId` recherché est celui de la SESSION anonyme
+  // appelante (son propre jeton), jamais un tiers énuméré : son absence est
+  // un « je ne trouve pas », pas un refus d'accès. Le texte disait déjà
+  // « not found » sous un 403.
+  it('returns 404 when anonymous participant is not found', async () => {
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
   });
 });
 
@@ -467,9 +519,10 @@ describe('GET /conversations/:id/attachments — anonymous wrong conversation', 
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 403 when participant belongs to a different conversation', async () => {
+  it('returns the 404 of an unknown conversation when participant belongs to a different one (#8116)', async () => {
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ success: false, error: 'Conversation not found' });
   });
 });
 
@@ -592,7 +645,10 @@ describe('GET /conversations/:id/attachments — plancher de lien de partage', (
     await app.close();
   });
 
-  it('ne borne rien quand le lien est INTROUVABLE — posture du dépôt', async () => {
+  // #17140 — le témoin gelait « ne borne rien ». Une pièce jointe est servie
+  // par le MESSAGE qui la porte : sans plancher, la liste rendait celles de
+  // l'avant-jointure d'un invité dont le lien a été supprimé.
+  it('BORNE à l’arrivée quand le lien est INTROUVABLE — fail-CLOSED (#17140)', async () => {
     mockGetConversationAttachments.mockResolvedValue([]);
     const app = await buildApp({
       authMode: 'anonymous',
@@ -609,7 +665,7 @@ describe('GET /conversations/:id/attachments — plancher de lien de partage', (
 
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
     expect(res.statusCode).toBe(200);
-    expect(messageFilterOf(mockGetConversationAttachments.mock.calls[0])).toEqual({});
+    expect(messageFilterOf(mockGetConversationAttachments.mock.calls[0])).toEqual({ createdAt: { gte: JOINED_AT } });
     await app.close();
   });
 
@@ -711,6 +767,60 @@ describe('GET /conversations/:id/attachments — masquage personnel', () => {
   });
 });
 
+describe('GET /conversations/:id/attachments — contrat SERVI (harnais armé)', () => {
+  beforeEach(() => { mockGetConversationAttachments.mockClear(); });
+
+  it('retient toute colonne lourde, et ne sert aucune clé que le schéma ne déclare', async () => {
+    // Le service ne charge plus `transcription` ni `translations` (#4887,
+    // défaut 3) ; ce témoin garde l'autre moitié de la garantie — même si un
+    // appelant futur en remettait dans la charge, le schéma de la LISTE ne les
+    // déclare pas et le sérialiseur les retirerait. Le contrat servi ne dépend
+    // pas de la discipline du producteur.
+    //
+    // CE QUE CE TÉMOIN N'ÉPINGLE PAS, et pourquoi son intitulé ne dit plus un
+    // nombre : la fixture ci-dessous ne porte PAS `isViewOnce` / `isBlurred`,
+    // et une clé déclarée qu'un objet ne porte pas n'est pas fabriquée. Le jeu
+    // de clés observé ici est donc celui de CETTE charge, pas celui du schéma —
+    // il est resté à treize quand le schéma est passé à quinze au #9249, et ce
+    // témoin n'a pas rougi. Le jeu EXHAUSTIF d'une ligne complète est épinglé
+    // une seule fois, chez son sujet
+    // (`unit/routes/attachments/conversation-attachments-served-keys.test.ts`) :
+    // deux pins du même jeu dériveraient, et c'est celui qui ne rougit pas qui
+    // survivrait.
+    mockGetConversationAttachments.mockResolvedValue([{
+      id: 'att-1',
+      messageId: 'msg-1',
+      fileName: 'note.m4a',
+      originalName: 'Note vocale.m4a',
+      mimeType: 'audio/mp4',
+      fileSize: 84213,
+      fileUrl: 'https://cdn.example.com/note.m4a',
+      thumbnailUrl: null,
+      width: null,
+      height: null,
+      duration: 12480,
+      uploadedBy: USER_ID,
+      createdAt: '2026-09-01T10:00:00.000Z',
+      transcription: { type: 'audio', text: 'La réunion est déplacée.' },
+      translations: { en: { type: 'audio', transcription: 'The meeting moved.' } },
+    }]);
+    const app = await buildApp({
+      prismaOverrides: {
+        participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID, conversationId: CONV_ID }) },
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
+    const [attachment] = res.json().data.attachments;
+
+    expect(Object.keys(attachment).sort()).toEqual([
+      'createdAt', 'duration', 'fileName', 'fileSize', 'fileUrl', 'height', 'id',
+      'messageId', 'mimeType', 'originalName', 'thumbnailUrl', 'uploadedBy', 'width',
+    ]);
+    await app.close();
+  });
+});
+
 describe('GET /conversations/:id/attachments — with type filter', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
@@ -751,5 +861,131 @@ describe('GET /conversations/:id/attachments — service error', () => {
   it('returns 500 on service error', async () => {
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
     expect(res.statusCode).toBe(500);
+  });
+});
+
+// ─── #9249 — la galerie sert l'URL, elle doit servir aussi la protection ──────
+//
+// `conversationAttachmentListItemSchema` épand `messageAttachmentMinimalSchema`,
+// qui déclare `fileUrl` ET `thumbnailUrl`. L'URL d'un média à vue unique ou
+// flouté partait donc, et les deux drapeaux qui disent au client de poser un
+// voile ou de décompter une vue étaient SUPPRIMÉS par `fast-json-stringify` —
+// la projection les rend (`AttachmentService.toAttachment`), le schéma ne les
+// déclarait pas. La protection n'était pas contournée : elle était
+// INEXPRIMABLE.
+//
+// Le témoin traverse le VRAI sérialiseur (`app.inject` + les vrais schémas
+// partagés, ce harnais n'en double aucun) et assert sur la valeur SERVIE : un
+// témoin qui n'interrogerait que l'objet rendu par le service serait vert
+// avant comme après, puisque c'est le service qui porte déjà les drapeaux.
+
+describe('GET /conversations/:id/attachments — la protection de la pièce jointe est SERVIE (#9249)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockGetConversationAttachments.mockResolvedValue([
+      {
+        id: 'att-view-once',
+        messageId: 'msg-1',
+        fileName: 'a1b2c3d4-e5f6-4789-abcd-0123456789ab.jpg',
+        originalName: 'Reçu.jpg',
+        mimeType: 'image/jpeg',
+        fileSize: 51234,
+        fileUrl: '/api/v1/attachments/file/a1b2c3d4-e5f6-4789-abcd-0123456789ab.jpg',
+        thumbnailUrl: '/api/v1/attachments/file/a1b2c3d4-e5f6-4789-abcd-0123456789ab.thumb.jpg',
+        width: 1200,
+        height: 1600,
+        duration: undefined,
+        uploadedBy: 'u-1',
+        isAnonymous: false,
+        createdAt: '2026-09-20T08:00:00.000Z',
+        isForwarded: false,
+        capturedInApp: true,
+        isViewOnce: true,
+        viewOnceCount: 1,
+        isBlurred: true,
+        viewedCount: 0,
+        downloadedCount: 0,
+        consumedCount: 0,
+        isEncrypted: false,
+      },
+    ]);
+    app = await buildApp({
+      prismaOverrides: {
+        participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }) },
+      },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it("sert les drapeaux de protection de la pièce jointe, pas seulement son URL", async () => {
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
+
+    expect(res.statusCode).toBe(200);
+    const [served] = res.json().data.attachments;
+    expect(served).toMatchObject({ isViewOnce: true, isBlurred: true });
+  });
+
+  it("sert l'URL et la vignette — ce que le schéma épand, donc ce que la protection doit accompagner", async () => {
+    // L'autre moitié de l'affirmation, écrite pour que le témoin dise POURQUOI
+    // les drapeaux sont dus : si un lot futur retirait `fileUrl` de cette
+    // porte, ce témoin tomberait et la question se reposerait au lieu de se
+    // perdre.
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
+
+    const [served] = res.json().data.attachments;
+    expect(typeof served.fileUrl).toBe('string');
+    expect(typeof served.thumbnailUrl).toBe('string');
+  });
+});
+
+// ─── #9589 — l'échéance du LECTEUR ferme aussi le détail ─────────────────────
+describe('GET /attachments/:id/metadata — le contenu a disparu pour CE lecteur (#9589)', () => {
+  const CARRIER_ID = '507f1f77bcf86cd7994390c1';
+  const HOUR = 3_600_000;
+  const flame = {
+    id: CARRIER_ID,
+    conversationId: 'conv-flamme',
+    deletedAt: null,
+    viewOnceBurnAt: null,
+    expiresAt: new Date(Date.now() + 24 * HOUR),
+    senderId: 'participant-auteur',
+    createdAt: new Date(Date.now() - HOUR),
+    isViewOnce: false,
+    effectFlags: 1,
+    ephemeralDuration: 30,
+  };
+  const detailFor = async (ephemeralExpiresAt: Date) => {
+    mockGetAttachmentWithMetadata.mockResolvedValue({ ...MOCK_ATTACHMENT, messageId: CARRIER_ID });
+    const statusFindFirst = jest.fn<any>().mockResolvedValue({ ephemeralExpiresAt, viewedOnceAt: null });
+    const app = await buildApp({
+      prismaOverrides: {
+        message: {
+          findUnique: jest.fn<any>().mockResolvedValue(flame),
+          findFirst: jest.fn<any>().mockResolvedValue({ id: CARRIER_ID }),
+        },
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID, conversationId: flame.conversationId }),
+        },
+        messageStatusEntry: { findFirst: statusFindFirst },
+      },
+    });
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}/metadata` });
+    await app.close();
+    return { res, statusFindFirst };
+  };
+
+  it('rend 404 au destinataire dont le décompte est fini, alors que le message vit encore pour d’autres', async () => {
+    const { res, statusFindFirst } = await detailFor(new Date(Date.now() - 60_000));
+
+    expect(res.statusCode).toBe(404);
+    expect(statusFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { messageId: CARRIER_ID, participantId: PARTICIPANT_ID } }),
+    );
+  });
+
+  it('sert le détail tant que son décompte court', async () => {
+    const { res } = await detailFor(new Date(Date.now() + 60_000));
+
+    expect(res.statusCode).toBe(200);
   });
 });

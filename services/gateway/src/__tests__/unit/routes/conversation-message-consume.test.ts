@@ -85,6 +85,7 @@ const PEER_USER_ID = '507f1f77bcf86cd799439023';
 const PEER_PARTICIPANT_ID = '507f1f77bcf86cd7994390a2';
 const ANON_PARTICIPANT_ID = '507f1f77bcf86cd7994390a3';
 const ANON_SESSION_TOKEN = 'anon_session_token_xyz';
+const AUTHOR_PARTICIPANT_ID = '507f1f77bcf86cd7994390af';
 
 // ─── Double Prisma ────────────────────────────────────────────────────────────
 
@@ -108,6 +109,9 @@ function buildPrisma(options: {
   const message = {
     id: MESSAGE_ID,
     conversationId: CONV_ID,
+    // L'auteur est un TIERS actif de la conversation : aucun des spectateurs
+    // de ces témoins n'ouvre son propre message (#7578).
+    senderId: AUTHOR_PARTICIPANT_ID,
     isViewOnce: true,
     viewOnceCount: 0,
     maxViewOnceCount: options.maxViewOnceCount,
@@ -165,7 +169,17 @@ function buildPrisma(options: {
         ),
         update: messageUpdate,
       },
-      messageStatusEntry: { updateMany: statusUpdateMany, create: statusCreate },
+      messageStatusEntry: {
+        updateMany: statusUpdateMany,
+        create: statusCreate,
+        // Les ouvertures RELUES par l'audience (#7578) : seules les entrées
+        // estampillées comptent.
+        findMany: jest.fn(async (args: any) =>
+          entries
+            .filter((e) => args.where.messageId.in.includes(e.messageId) && e.viewedOnceAt instanceof Date)
+            .map((e) => ({ messageId: e.messageId, participantId: e.participantId }))
+        ),
+      },
       participant: {
         findFirst: jest.fn(async (args: any) => {
           const found = options.participants.find((p) =>
@@ -173,6 +187,12 @@ function buildPrisma(options: {
           );
           return found ? { id: found.id } : null;
         }),
+        findMany: jest.fn(async (args: any) =>
+          (args.where.id.in as string[])
+            .filter((id) => id === AUTHOR_PARTICIPANT_ID || options.participants.some((p) => p.id === id))
+            .map((id) => ({ id }))
+        ),
+        count: jest.fn(async () => options.participants.length + 1),
       },
       user: { findFirst: jest.fn().mockResolvedValue(null) },
     } as any,

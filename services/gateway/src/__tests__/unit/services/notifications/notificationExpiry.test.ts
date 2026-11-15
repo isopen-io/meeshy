@@ -161,7 +161,7 @@ describe('Lectures — une notification expirée n’est plus servie', () => {
     ]);
     const { io, emit } = makeIO();
 
-    await new NotificationService(prisma, io).markAsRead('a-lire');
+    await new NotificationService(prisma, io).markAsRead('a-lire', 'u-1');
     // `emitCountsUpdate` part en fire-and-forget derrière la lecture : laisser
     // les microtâches se vider, sinon on interroge l'émetteur avant qu'il parle.
     for (let tick = 0; tick < 5; tick += 1) await Promise.resolve();

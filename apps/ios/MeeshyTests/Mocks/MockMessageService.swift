@@ -36,6 +36,9 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
         {"id":"000000000000000000000001","conversationId":"000000000000000000000002","senderId":"000000000000000000000099","content":"","messageType":null,"createdAt":"2026-01-01T00:00:00.000Z"}
         """)
     )
+    /// Une file de réponses d'envoi, consommée avant `sendResult` (un 409 Sesame puis l'acquittement).
+    var sendResults: [Result<SendMessageResponseData, Error>] = []
+    private(set) var sentRequests: [SendMessageRequest] = []
     var editResult: Result<APIMessage, Error> = .success(
         JSONStub.decode("""
         {"id":"000000000000000000000001","conversationId":"000000000000000000000002","senderId":"000000000000000000000099","createdAt":"2026-01-01T00:00:00.000Z"}
@@ -97,6 +100,10 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
     var deleteCallCount = 0
     var lastDeleteConversationId: String?
     var lastDeleteMessageId: String?
+    var lastDeleteReason: String?
+    /// #11159 — un refus PAR message (sélection) : ces ids échouent, les autres passent.
+    var deleteFailingMessageIds: Set<String> = []
+    var deleteReasonsByMessageId: [String: String?] = [:]
 
     var pinCallCount = 0
     var lastPinConversationId: String?
@@ -139,28 +146,43 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
     /// (ex. pagination cache-first : la fenêtre GRDB doit déjà être servie
     /// quand le REST part).
     var onListBefore: (() -> Void)?
+    /// Retient la réponse tant que le test ne l'ouvre pas : un réseau LENT, rendu déterministe.
+    var listBeforeGate: (@Sendable () async -> Void)?
 
     nonisolated func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse {
-        await MainActor.run {
+        let gate = await MainActor.run {
             listBeforeCallCount += 1
             lastListBeforeConversationId = conversationId
             lastListBeforeCursor = before
             lastListBeforeLanguages = languages
             onListBefore?()
+            return listBeforeGate
         }
-        return try listBeforeResult.get()
+        await gate?()
+        return try await MainActor.run { try listBeforeResult.get() }
     }
 
+    /// Appelé PENDANT `listAfter`, avant la réponse — un témoin y lit l'état
+    /// « en vol » du modèle (#9304, `isLoadingNewer`).
+    var onListAfter: (() -> Void)?
+
+    /// Retient la réponse de `listAfter` APRÈS l'avoir tirée de la file : la
+    /// page reste « en vol » le temps qu'un témoin rejoue un saut (#9364).
+    var holdListAfter: (@MainActor @Sendable () async -> Void)?
+
     nonisolated func listAfter(conversationId: String, after: Date, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse {
-        try await MainActor.run {
+        let served: Result<MessagesAPIResponse, Error> = await MainActor.run {
             listAfterCallCount += 1
             lastListAfterConversationId = conversationId
             lastListAfterAfter = after
             lastListAfterLimit = limit
             lastListAfterLanguages = languages
-            if !listAfterResults.isEmpty { return listAfterResults.removeFirst() }
-            return try listAfterResult.get()
+            onListAfter?()
+            if !listAfterResults.isEmpty { return .success(listAfterResults.removeFirst()) }
+            return listAfterResult
         }
+        if let hold = await MainActor.run(body: { holdListAfter }) { await hold() }
+        return try served.get()
     }
 
     nonisolated func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse {
@@ -173,12 +195,52 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
         return try listAroundResult.get()
     }
 
+    // MARK: - listMedia (#8095)
+
+    var listMediaResult: Result<MessagesAPIResponse, Error> = .success(
+        JSONStub.decode("""
+        {"success":true,"data":[],"pagination":null,"cursorPagination":null,"hasNewer":null}
+        """)
+    )
+    /// File des pages, consommée avant `listMediaResult` : un test y pose une
+    /// suite de pages pour prouver que la remontée s'arrête à l'épuisement.
+    var listMediaResults: [Result<MessagesAPIResponse, Error>] = []
+    var listMediaCallCount = 0
+    var listMediaCursors: [String?] = []
+    var lastListMediaLanguages: [String]?
+    /// #8103 — les genres et la recherche de chaque appel, dans l'ordre.
+    var listMediaKinds: [[ConversationMediaKind]] = []
+    var listMediaQueries: [String?] = []
+    /// Si posé, rend la page du genre demandé (premier genre de l'appel),
+    /// avant la file et le résultat par défaut.
+    var listMediaResultsByKind: [ConversationMediaKind: [Result<MessagesAPIResponse, Error>]] = [:]
+
+    nonisolated func listMedia(conversationId: String, kinds: [ConversationMediaKind], query: String?, before: String?, limit: Int, languages: [String]?) async throws -> MessagesAPIResponse {
+        try await MainActor.run {
+            listMediaCallCount += 1
+            listMediaCursors.append(before)
+            listMediaKinds.append(kinds)
+            listMediaQueries.append(query)
+            lastListMediaLanguages = languages
+            if let kind = kinds.first, var queue = listMediaResultsByKind[kind], !queue.isEmpty {
+                let next = queue.removeFirst()
+                listMediaResultsByKind[kind] = queue
+                return try next.get()
+            }
+            if !listMediaResults.isEmpty { return try listMediaResults.removeFirst().get() }
+            return try listMediaResult.get()
+        }
+    }
+
     nonisolated func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData {
-        await MainActor.run {
+        let queued = await MainActor.run { () -> Result<SendMessageResponseData, Error>? in
             sendCallCount += 1
             lastSendConversationId = conversationId
             lastSendRequest = request
+            sentRequests.append(request)
+            return sendResults.isEmpty ? nil : sendResults.removeFirst()
         }
+        if let queued { return try queued.get() }
         return try sendResult.get()
     }
 
@@ -192,11 +254,18 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
     }
 
     nonisolated func delete(conversationId: String, messageId: String) async throws {
+        try await delete(conversationId: conversationId, messageId: messageId, reason: nil)
+    }
+
+    nonisolated func delete(conversationId: String, messageId: String, reason: String?) async throws {
         await MainActor.run {
             deleteCallCount += 1
             lastDeleteConversationId = conversationId
             lastDeleteMessageId = messageId
+            lastDeleteReason = reason
+            deleteReasonsByMessageId[messageId] = reason
         }
+        if deleteFailingMessageIds.contains(messageId) { throw APIError.serverError(403, "forbidden") }
         try deleteResult.get()
     }
 
@@ -280,6 +349,9 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
         deleteCallCount = 0
         lastDeleteConversationId = nil
         lastDeleteMessageId = nil
+        lastDeleteReason = nil
+        deleteFailingMessageIds = []
+        deleteReasonsByMessageId = [:]
         pinCallCount = 0
         lastPinConversationId = nil
         lastPinMessageId = nil

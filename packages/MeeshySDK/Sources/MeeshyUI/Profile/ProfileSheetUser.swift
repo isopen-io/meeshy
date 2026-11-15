@@ -7,7 +7,8 @@ public struct ProfileSheetUser: Identifiable, Equatable {
     public static func == (lhs: ProfileSheetUser, rhs: ProfileSheetUser) -> Bool {
         lhs.id == rhs.id &&
         lhs.avatarURL == rhs.avatarURL &&
-        lhs.bannerURL == rhs.bannerURL
+        lhs.bannerURL == rhs.bannerURL &&
+        lhs.profileDecor == rhs.profileDecor
     }
 
     public var id: String { userId ?? participantId ?? username }
@@ -38,6 +39,8 @@ public struct ProfileSheetUser: Identifiable, Equatable {
     public let voiceSampleUrl: String?
     public let voiceSampleDurationMs: Int?
     public let voiceQuality: Double?
+    /// Contour d'avatar et bannière de design équipés (#10632) ; `nil` = rendu historique.
+    public let profileDecor: ServedProfileDecor?
 
     public init(
         userId: String? = nil, username: String, displayName: String? = nil,
@@ -49,7 +52,8 @@ public struct ProfileSheetUser: Identifiable, Equatable {
         profileCompletionRate: Int? = nil, hasE2EE: Bool = false,
         voicePublic: Bool? = nil, voiceSampleUrl: String? = nil,
         voiceSampleDurationMs: Int? = nil, voiceQuality: Double? = nil,
-        participantId: String? = nil, isAnonymous: Bool = false
+        participantId: String? = nil, isAnonymous: Bool = false,
+        profileDecor: ServedProfileDecor? = nil
     ) {
         self.userId = userId
         self.participantId = participantId
@@ -73,6 +77,7 @@ public struct ProfileSheetUser: Identifiable, Equatable {
         self.voiceSampleUrl = voiceSampleUrl
         self.voiceSampleDurationMs = voiceSampleDurationMs
         self.voiceQuality = voiceQuality
+        self.profileDecor = profileDecor
     }
 
     public var resolvedDisplayName: String {
@@ -170,14 +175,12 @@ extension ProfileSheetUser {
     public static func from(user: MeeshyUser, accentColor: String = "") -> ProfileSheetUser {
         let lastActive: Date? = {
             guard let str = user.lastActiveAt else { return nil }
-            return (try? Date(str, strategy: .iso8601.time(includingFractionalSeconds: true)))
-                ?? (try? Date(str, strategy: .iso8601))
+            return WireDate.date(from: str)
         }()
 
         let createdAt: Date? = {
             guard let str = user.createdAt else { return nil }
-            return (try? Date(str, strategy: .iso8601.time(includingFractionalSeconds: true)))
-                ?? (try? Date(str, strategy: .iso8601))
+            return WireDate.date(from: str)
         }()
 
         let resolvedDisplayName: String? = user.displayName ?? {
@@ -205,7 +208,8 @@ extension ProfileSheetUser {
             voicePublic: user.voicePublic,
             voiceSampleUrl: user.voiceSampleUrl,
             voiceSampleDurationMs: user.voiceSampleDurationMs,
-            voiceQuality: user.voiceQuality
+            voiceQuality: user.voiceQuality,
+            profileDecor: user.profileDecor
         )
     }
 }

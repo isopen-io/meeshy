@@ -48,6 +48,39 @@ struct ConversationListResponseBody: Decodable {
     let error: String?
 }
 
+/// Corps de `PATCH …/rights` quand seul `historyVisibleFrom` est écrit.
+///
+/// L'encodage synthétisé de Swift pour un `String?` appelle
+/// `encodeIfPresent`, qui OMET la clé quand la valeur est `nil` — exactement
+/// l'inverse de ce qu'il faut ici : retirer l'octroi doit envoyer `null`
+/// explicite, pas absenter la clé (le gateway distingue les deux). D'où
+/// l'`encode(to:)` manuel, qui passe par `encode(_:forKey:)` — l'overload
+/// générique sur `Optional<String>: Encodable`, qui écrit `null` via
+/// `encodeNil()` quand la valeur est `nil`.
+private struct HistoryGrantBody: Encodable {
+    let historyVisibleFrom: String?
+
+    enum CodingKeys: String, CodingKey { case historyVisibleFrom }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(historyVisibleFrom, forKey: .historyVisibleFrom)
+    }
+}
+
+/// La réponse de `DELETE /conversations/:id/obsolete` (#14643) : dates ISO 8601.
+public struct ConversationObsoleteResult: Decodable, Sendable, Equatable {
+    public let conversationId: String
+    public let obsoletedAt: String
+    public let purgeAfter: String
+
+    public init(conversationId: String, obsoletedAt: String, purgeAfter: String) {
+        self.conversationId = conversationId
+        self.obsoletedAt = obsoletedAt
+        self.purgeAfter = purgeAfter
+    }
+}
+
 // MARK: - Protocol
 
 public protocol ConversationServiceProviding: Sendable {
@@ -59,8 +92,16 @@ public protocol ConversationServiceProviding: Sendable {
     /// les projette via `toConversation(currentUserId:)` quand il en a besoin.
     func search(query: String) async throws -> [APIConversation]
     func getById(_ conversationId: String) async throws -> APIConversation
+    /// `GET /conversations/:id` dont un refus 4xx garde le code de la
+    /// passerelle (`TypedRefusals`) : un 404 SERVI se distingue de celui d'un
+    /// intermédiaire (#14693). Les autres appelants gardent `getById`.
+    func getByIdTypedRefusals(_ conversationId: String) async throws -> APIConversation
     func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse
     func delete(conversationId: String) async throws
+    /// `DELETE /conversations/:id/obsolete` (#14643) — rend la conversation
+    /// OBSOLÈTE : son contenu est effacé pour tous. Idempotent ; la passerelle
+    /// refuse en 403 un lecteur qui n'en est pas administrateur.
+    func obsolete(conversationId: String) async throws -> ConversationObsoleteResult
     func markRead(conversationId: String) async throws
     func markAsReceived(conversationId: String) async throws
     func markUnread(conversationId: String) async throws
@@ -68,6 +109,9 @@ public protocol ConversationServiceProviding: Sendable {
     func deleteForMe(conversationId: String) async throws
     func listSharedWith(userId: String, limit: Int) async throws -> [APIConversation]
     func findDirectWith(userId: String) async throws -> APIConversation?
+    /// Les tête-à-tête existants avec `userId`, le plus récent d'abord : le
+    /// choix du chiffré revient à l'appelant, qui a la mémoire (#13006).
+    func findDirectsWith(userId: String) async throws -> [APIConversation]
     func removeParticipant(conversationId: String, key: String) async throws
     func updateParticipantRole(conversationId: String, userId: String, role: String) async throws
     func update(
@@ -86,7 +130,7 @@ public protocol ConversationServiceProviding: Sendable {
     func unbanParticipant(conversationId: String, key: String) async throws
 }
 
-public final class ConversationService: ConversationServiceProviding, @unchecked Sendable {
+public final class ConversationService: ConversationServiceProviding, Sendable {
     public static let shared = ConversationService()
     private let api: APIClientProviding
 
@@ -95,7 +139,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     }
 
     public func list(offset: Int = 0, limit: Int = 30) async throws -> OffsetPaginatedAPIResponse<[APIConversation]> {
-        try await api.offsetPaginatedRequest(endpoint: "/conversations", offset: offset, limit: limit)
+        try await api.offsetPaginatedRequest(ConversationsEndpoint.root, offset: offset, limit: limit)
     }
 
     /// Cursor-based pagination over the user's conversations. Pass
@@ -122,7 +166,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
             queryItems.append(URLQueryItem(name: "before", value: cursor))
         }
         let body: ConversationListResponseBody = try await api.request(
-            endpoint: "/conversations",
+            ConversationsEndpoint.root,
             queryItems: queryItems
         )
         let items = body.data.map { $0.toConversation(currentUserId: currentUserId) }
@@ -147,7 +191,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     /// `limit`/`offset` à transmettre ici.
     public func search(query: String) async throws -> [APIConversation] {
         let response: APIResponse<[APIConversation]> = try await api.request(
-            endpoint: "/conversations/search",
+            ConversationsEndpoint.search,
             queryItems: [URLQueryItem(name: "q", value: query)]
         )
         return response.data
@@ -155,19 +199,55 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
 
     public func getById(_ conversationId: String) async throws -> APIConversation {
         let response: APIResponse<APIConversation> = try await api.request(
-            endpoint: "/conversations/\(conversationId)"
+            ConversationsEndpoint.byId(id: conversationId)
+        )
+        return response.data
+    }
+
+    public func getByIdTypedRefusals(_ conversationId: String) async throws -> APIConversation {
+        let response: APIResponse<APIConversation> = try await api.request(
+            TypedRefusals(ConversationsEndpoint.byId(id: conversationId))
+        )
+        return response.data
+    }
+
+    /// `GET /conversations/:id/engagement` — « N (M) 🔥 » du lecteur dans
+    /// cette conversation (#8906). Zéros tant qu'il n'y a rien gagné.
+    public func engagement(conversationId: String) async throws -> ConversationEngagementSnapshot {
+        let response: APIResponse<ConversationEngagementSnapshot> = try await api.request(
+            ConversationsEndpoint.byIdEngagement(id: conversationId)
         )
         return response.data
     }
 
     public func create(type: String, title: String? = nil, participantIds: [String]) async throws -> CreateConversationResponse {
-        let body = CreateConversationRequest(type: type, title: title, participantIds: participantIds)
-        let response: APIResponse<CreateConversationResponse> = try await api.post(endpoint: "/conversations", body: body)
+        try await create(type: type, title: title, participantIds: participantIds, encryptionMode: nil)
+    }
+
+    /// La création qui porte le mode choisi sur l'écran de création ; `nil`
+    /// n'envoie rien et la passerelle pose `server`.
+    public func create(
+        type: String,
+        title: String? = nil,
+        participantIds: [String],
+        encryptionMode: ConversationCreationEncryption.Mode?
+    ) async throws -> CreateConversationResponse {
+        let body = CreateConversationRequest(
+            type: type, title: title, participantIds: participantIds, encryptionMode: encryptionMode
+        )
+        let response: APIResponse<CreateConversationResponse> = try await api.post(ConversationsEndpoint.root, body: body)
         return response.data
     }
 
     public func delete(conversationId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/conversations/\(conversationId)")
+        let _: APIResponse<[String: Bool]> = try await api.delete(ConversationsEndpoint.byId(id: conversationId))
+    }
+
+    public func obsolete(conversationId: String) async throws -> ConversationObsoleteResult {
+        let response: APIResponse<ConversationObsoleteResult> = try await api.request(
+            ConversationsEndpoint.byIdObsolete(id: conversationId), method: "DELETE", body: nil, queryItems: nil
+        )
+        return response.data
     }
 
     // Endpoints fire-and-forget : la reponse est ignoree (`let _`). Les trois
@@ -180,15 +260,15 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     // `data` : il tolere n'importe quelle forme de corps, quel que soit
     // l'endpoint et quelle que soit l'evolution future du gateway.
     public func markRead(conversationId: String) async throws {
-        let _: SimpleAPIResponse = try await api.request(endpoint: "/conversations/\(conversationId)/mark-read", method: "POST")
+        let _: SimpleAPIResponse = try await api.request(ConversationsEndpoint.byIdMarkRead(id: conversationId), method: "POST")
     }
 
     public func markAsReceived(conversationId: String) async throws {
-        let _: SimpleAPIResponse = try await api.request(endpoint: "/conversations/\(conversationId)/mark-as-received", method: "POST")
+        let _: SimpleAPIResponse = try await api.request(ConversationsEndpoint.byConversationIdMarkAsReceived(conversationId: conversationId), method: "POST")
     }
 
     public func markUnread(conversationId: String) async throws {
-        let _: SimpleAPIResponse = try await api.request(endpoint: "/conversations/\(conversationId)/mark-unread", method: "POST")
+        let _: SimpleAPIResponse = try await api.request(ConversationsEndpoint.byIdMarkUnread(id: conversationId), method: "POST")
     }
 
     public func getParticipants(conversationId: String, limit: Int = 100, cursor: String? = nil) async throws -> PaginatedAPIResponse<[APIParticipant]> {
@@ -197,7 +277,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
             queryItems.append(URLQueryItem(name: "cursor", value: cursor))
         }
         return try await api.request(
-            endpoint: "/conversations/\(conversationId)/participants",
+            ConversationsEndpoint.byIdParticipants(id: conversationId),
             queryItems: queryItems
         )
     }
@@ -213,7 +293,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
         participantId: String
     ) async throws -> ConversationParticipantProfile {
         let response: APIResponse<ConversationParticipantProfile> = try await api.request(
-            endpoint: "/conversations/\(conversationId)/participants/\(participantId)/profile"
+            ConversationsEndpoint.byIdParticipantsByParticipantIdProfile(id: conversationId, participantId: participantId)
         )
         return response.data
     }
@@ -236,15 +316,77 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
         rights: [String: Bool]
     ) async throws -> ParticipantEntryCapabilities {
         let response: APIResponse<ParticipantRightsUpdateResult> = try await api.patch(
-            endpoint: "/conversations/\(conversationId)/participants/\(participantId)/rights",
+            ConversationsEndpoint.byIdParticipantsByParticipantIdRights(id: conversationId, participantId: participantId),
             body: rights
         )
         return response.data.rights
     }
 
+    /// Pose ou retire l'octroi d'historique par DATE sur un participant.
+    ///
+    /// Distinct de `updateParticipantRights` : ce levier vaut pour TOUT
+    /// participant (inscrit compris), pas seulement les visiteurs sans compte,
+    /// et sa permission d'écriture est plus étroite côté gateway (admin/creator,
+    /// jamais modérateur) — le gateway le vérifie, il ne se prévient pas.
+    ///
+    /// `historyVisibleFrom: nil` retire l'octroi et DOIT voyager comme un
+    /// `null` JSON explicite, jamais comme une clé absente : le corps distingue
+    /// les deux (absente = ne touche à rien, `null` = retire), et le body
+    /// encodé ici écrit toujours la clé.
+    ///
+    /// La date posée est NORMALISÉE au jour (`historyGrantFloor`) : ce levier
+    /// est un octroi par DATE, et l'instant brut d'un sélecteur de date masque
+    /// la matinée du jour choisi. Voir le doc-comment de `historyGrantFloor`.
+    public func updateHistoryGrant(
+        conversationId: String,
+        participantId: String,
+        historyVisibleFrom: Date?
+    ) async throws -> Date? {
+        let iso = historyVisibleFrom
+            .map { Self.historyGrantFloor(for: $0) }
+            .map(WireDate.string(from:))
+        let response: APIResponse<ParticipantHistoryGrantUpdateResult> = try await api.patch(
+            ConversationsEndpoint.byIdParticipantsByParticipantIdRights(id: conversationId, participantId: participantId),
+            body: HistoryGrantBody(historyVisibleFrom: iso)
+        )
+        return response.data.historyVisibleFrom
+    }
+
+    /// L'instant que porte un octroi « voit l'historique depuis le <jour> ».
+    ///
+    /// Le gateway applique le plancher en `createdAt >= instant`. Envoyer
+    /// l'instant BRUT rendu par un sélecteur de DATE poserait donc le plancher
+    /// en MILIEU de journée : SwiftUI conserve l'heure de la valeur précédente
+    /// sous `displayedComponents: [.date]`, si bien que « depuis le 15 » choisi
+    /// à 14h32 masquait toute la matinée du 15 — un octroi qui ne tient pas la
+    /// phrase qu'il affiche.
+    ///
+    /// Le jour retenu est celui que l'utilisateur a VU (calendrier LOCAL) ;
+    /// l'instant envoyé est son minuit UTC. C'est exactement ce que le web
+    /// compose depuis `<input type="date">`
+    /// (`new Date(\`${value}T00:00:00.000Z\`)`, `ParticipantProfileCard.tsx`) —
+    /// même geste, même plancher, dimension 6. Tronquer en UTC l'instant brut
+    /// ne marcherait PAS : le soir, sur un fuseau à l'ouest, le jour UTC est
+    /// déjà le suivant, et le plancher sauterait d'un jour entier.
+    ///
+    /// Borné au présent, parce que le gateway refuse un plancher futur
+    /// (`historyVisibleFrom must not be in the future`) et que minuit UTC du
+    /// jour local est à venir sur un fuseau très à l'est.
+    public static func historyGrantFloor(
+        for selection: Date,
+        calendar: Calendar = .current,
+        now: Date = Date()
+    ) -> Date {
+        let day = calendar.dateComponents([.year, .month, .day], from: selection)
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(secondsFromGMT: 0) ?? calendar.timeZone
+        guard let midnight = utc.date(from: day) else { return min(selection, now) }
+        return min(midnight, now)
+    }
+
     public func deleteForMe(conversationId: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(
-            endpoint: "/conversations/\(conversationId)/delete-for-me"
+            ConversationsEndpoint.byIdDeleteForMe(id: conversationId)
         )
     }
 
@@ -261,8 +403,8 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     /// `update` sur la ligne résolue : une expulsion qui ne trouve pas sa cible
     /// échoue au lieu de mentir.
     public func removeParticipant(conversationId: String, key: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.request(
-            endpoint: "/conversations/\(conversationId)/participants/\(key)",
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(
+            ConversationsEndpoint.byIdParticipantsByUserId(id: conversationId, userId: key),
             method: "DELETE"
         )
     }
@@ -280,9 +422,9 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     /// promouvable : ses droits passent par `updateParticipantRights`.
     public func updateParticipantRole(conversationId: String, userId: String, role: String) async throws {
         struct RoleBody: Encodable { let role: String }
-        let _: APIResponse<[String: String]> = try await api.patch(
-            endpoint: "/conversations/\(conversationId)/participants/\(userId)/role",
-            body: RoleBody(role: role)
+        let _: APIResponse<DiscardedResponseBody> = try await api.patch(
+            ConversationsEndpoint.byIdParticipantsByUserIdRole(id: conversationId, userId: userId),
+            body: RoleBody(role: role.lowercased())
         )
     }
 
@@ -335,13 +477,13 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
             autoTranslateEnabled: autoTranslateEnabled
         )
         let response: APIResponse<UpdateConversationResponse> = try await api.put(
-            endpoint: "/conversations/\(conversationId)", body: body)
+            ConversationsEndpoint.byId(id: conversationId), body: body)
         return response.data.toAPIConversation()
     }
 
     public func leave(conversationId: String) async throws {
         let _: APIResponse<LeaveConversationResponse> = try await api.request(
-            endpoint: "/conversations/\(conversationId)/leave",
+            ConversationsEndpoint.byIdLeave(id: conversationId),
             method: "POST"
         )
     }
@@ -356,8 +498,8 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     ///
     /// `key` : `User.id` OU `Participant.id` — voir `removeParticipant`.
     public func banParticipant(conversationId: String, key: String) async throws {
-        let _: APIResponse<BanParticipantResponse> = try await api.request(
-            endpoint: "/conversations/\(conversationId)/participants/\(key)/ban",
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(
+            ConversationsEndpoint.byIdParticipantsByUserIdBan(id: conversationId, userId: key),
             method: "PATCH"
         )
     }
@@ -367,8 +509,8 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     ///
     /// `key` : `User.id` OU `Participant.id` — voir `removeParticipant`.
     public func unbanParticipant(conversationId: String, key: String) async throws {
-        let _: APIResponse<UnbanParticipantResponse> = try await api.request(
-            endpoint: "/conversations/\(conversationId)/participants/\(key)/unban",
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(
+            ConversationsEndpoint.byIdParticipantsByUserIdUnban(id: conversationId, userId: key),
             method: "PATCH"
         )
     }
@@ -376,7 +518,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     /// Récupère les conversations en commun avec un utilisateur spécifique
     public func listSharedWith(userId: String, limit: Int = 50) async throws -> [APIConversation] {
         let response: APIResponse<[APIConversation]> = try await api.request(
-            endpoint: "/conversations",
+            ConversationsEndpoint.root,
             queryItems: [
                 URLQueryItem(name: "withUserId", value: userId),
                 URLQueryItem(name: "limit", value: "\(limit)")
@@ -385,17 +527,38 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
         return response.data
     }
 
-    /// Finds the most recent existing direct conversation with a given user, or nil if none exists.
+    /// Le tête-à-tête existant avec `userId`, ou `nil` : le chiffré de bout en
+    /// bout d'abord, sinon le plus récent (#13006, même règle que
+    /// `POST /conversations`, #12966). La liste ne trie que par activité : une
+    /// page d'un seul rendait le tête-à-tête lisible dès qu'il était le plus
+    /// récent.
     public func findDirectWith(userId: String) async throws -> APIConversation? {
+        DirectPairChoice.preferred(among: try await findDirectsWith(userId: userId))
+    }
+
+    public func findDirectsWith(userId: String) async throws -> [APIConversation] {
         let response: APIResponse<[APIConversation]> = try await api.request(
-            endpoint: "/conversations",
+            ConversationsEndpoint.root,
             queryItems: [
                 URLQueryItem(name: "type", value: "direct"),
                 URLQueryItem(name: "withUserId", value: userId),
-                URLQueryItem(name: "limit", value: "1")
+                URLQueryItem(name: "limit", value: "\(DirectPairChoice.candidateLimit)")
             ]
         )
-        return response.data.first
+        return response.data
+    }
+}
+
+public extension ConversationServiceProviding {
+    /// Un service qui ne sait rendre qu'un tête-à-tête n'en rend qu'un.
+    func findDirectsWith(userId: String) async throws -> [APIConversation] {
+        try await findDirectWith(userId: userId).map { [$0] } ?? []
+    }
+
+    /// Un service qui ne type pas ses refus rend la forme opaque, qu'un
+    /// appelant prudent lit comme transitoire.
+    func getByIdTypedRefusals(_ conversationId: String) async throws -> APIConversation {
+        try await getById(conversationId)
     }
 }
 
@@ -406,11 +569,3 @@ struct LeaveConversationResponse: Decodable {
     let leftAt: String
 }
 
-struct BanParticipantResponse: Decodable {
-    let userId: String
-    let bannedAt: String
-}
-
-struct UnbanParticipantResponse: Decodable {
-    let userId: String
-}

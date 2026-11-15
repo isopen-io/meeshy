@@ -7,6 +7,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
+import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
       }),
       update: jest.fn<any>().mockResolvedValue({ id: USER_ID }),
     },
+    relationFeatureSetting: { updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     $transaction: jest.fn<any>().mockResolvedValue([]),
     ...overrides,
   } as any;
@@ -62,12 +64,14 @@ function makePrisma(overrides: Record<string, any> = {}) {
 async function buildApp(opts: {
   auth?: 'authenticated' | 'unauthenticated';
   prisma?: ReturnType<typeof makePrisma>;
+  socketIOHandler?: unknown;
 } = {}): Promise<{ app: FastifyInstance; prisma: ReturnType<typeof makePrisma> }> {
-  const { auth = 'authenticated', prisma = makePrisma() } = opts;
+  const { auth = 'authenticated', prisma = makePrisma(), socketIOHandler } = opts;
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
   app.decorate('prisma', prisma);
+  if (socketIOHandler) app.decorate('socketIOHandler', socketIOHandler as never);
 
   app.decorate('authenticate', async (req: FastifyRequest) => {
     (req as any).authContext = auth === 'authenticated'
@@ -171,6 +175,30 @@ describe('DELETE /delete-account — expired requests cleanup', () => {
   });
 });
 
+describe('DELETE /delete-account — a returning account keeps no ritual share (#14924)', () => {
+  it('withdraws every ritual share of the account before the transaction makes it active again', async () => {
+    const order: string[] = [];
+    const prisma = makePrisma({
+      relationFeatureSetting: { updateMany: jest.fn<any>(async () => { order.push('shares'); return { count: 0 }; }) },
+      $transaction: jest.fn<any>(async () => { order.push('return'); return []; }),
+    });
+    prisma.accountDeletionRequest.count = jest.fn<any>().mockResolvedValue(1);
+    const { app } = await buildApp({ prisma });
+    await app.inject({ method: 'DELETE', url: '/delete-account', payload: { confirmationPhrase: VALID_PHRASE } });
+
+    expect(order).toEqual(['shares', 'shares', 'return']);
+    expect(prisma.relationFeatureSetting.updateMany).toHaveBeenCalledWith({
+      where: { OR: [{ ownerId: USER_ID }, { otherId: USER_ID }] },
+      data: { listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false },
+    });
+    expect(prisma.relationFeatureSetting.updateMany).toHaveBeenCalledWith({
+      where: { OR: [{ ownerId: USER_ID }, { otherId: USER_ID }], batteryShared: true },
+      data: { batteryShared: null },
+    });
+    await app.close();
+  });
+});
+
 describe('DELETE /delete-account — DB error', () => {
   it('returns 500 on DB error', async () => {
     const prisma = makePrisma();
@@ -185,168 +213,15 @@ describe('DELETE /delete-account — DB error', () => {
   });
 });
 
-// ─── GET /delete-account/confirm ─────────────────────────────────────────────
-
-describe('GET /delete-account/confirm — invalid token', () => {
-  it('returns HTML with invalid page when token not found', async () => {
-    const { app } = await buildApp();
-    const res = await app.inject({
-      method: 'GET', url: `/delete-account/confirm?token=${VALID_TOKEN}`,
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.headers['content-type']).toMatch(/text\/html/);
-    expect(res.body).toContain('invalide');
-    await app.close();
-  });
-});
-
-describe('GET /delete-account/confirm — valid token', () => {
-  it('returns HTML with success page and updates request status to CONFIRMED', async () => {
-    const prisma = makePrisma();
-    prisma.accountDeletionRequest.findFirst = jest.fn<any>().mockResolvedValue({
-      id: 'req-1', userId: USER_ID, status: 'PENDING_EMAIL_CONFIRMATION',
-    });
-    const { app } = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'GET', url: `/delete-account/confirm?token=${VALID_TOKEN}`,
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.headers['content-type']).toMatch(/text\/html/);
-    expect(res.body).toContain('confirm');
-    expect(prisma.accountDeletionRequest.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: 'CONFIRMED' }) })
-    );
-    await app.close();
-  });
-});
-
-describe('GET /delete-account/confirm — DB error', () => {
-  it('returns HTML error page on DB error', async () => {
-    const prisma = makePrisma();
-    prisma.accountDeletionRequest.findFirst = jest.fn<any>().mockRejectedValue(new Error('db crash'));
-    const { app } = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'GET', url: `/delete-account/confirm?token=${VALID_TOKEN}`,
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('Erreur');
-    await app.close();
-  });
-});
-
-// ─── GET /delete-account/cancel ──────────────────────────────────────────────
-
-describe('GET /delete-account/cancel — invalid token', () => {
-  it('returns HTML with invalid page when token not found', async () => {
-    const { app } = await buildApp();
-    const res = await app.inject({
-      method: 'GET', url: `/delete-account/cancel?token=${VALID_TOKEN}`,
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.headers['content-type']).toMatch(/text\/html/);
-    expect(res.body).toContain('invalide');
-    await app.close();
-  });
-});
-
-describe('GET /delete-account/cancel — valid token, inactive user', () => {
-  it('cancels deletion and reactivates inactive user', async () => {
-    const prisma = makePrisma();
-    prisma.accountDeletionRequest.findFirst = jest.fn<any>().mockResolvedValue({
-      id: 'req-1', userId: USER_ID, status: 'CONFIRMED',
-    });
-    prisma.user.findUnique = jest.fn<any>().mockResolvedValue({ isActive: false });
-    const { app } = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'GET', url: `/delete-account/cancel?token=${VALID_TOKEN}`,
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('annul');
-    expect(prisma.user.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ isActive: true, deletedAt: null }) })
-    );
-    await app.close();
-  });
-});
-
-describe('GET /delete-account/cancel — valid token, active user', () => {
-  it('cancels deletion without calling user.update when user is already active', async () => {
-    const prisma = makePrisma();
-    prisma.accountDeletionRequest.findFirst = jest.fn<any>().mockResolvedValue({
-      id: 'req-1', userId: USER_ID, status: 'CONFIRMED',
-    });
-    prisma.user.findUnique = jest.fn<any>().mockResolvedValue({ isActive: true });
-    const { app } = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'GET', url: `/delete-account/cancel?token=${VALID_TOKEN}`,
-    });
-    expect(res.statusCode).toBe(200);
-    expect(prisma.user.update).not.toHaveBeenCalled();
-    await app.close();
-  });
-});
-
-describe('GET /delete-account/cancel — DB error', () => {
-  it('returns HTML error page on DB error', async () => {
-    const prisma = makePrisma();
-    prisma.accountDeletionRequest.findFirst = jest.fn<any>().mockRejectedValue(new Error('db crash'));
-    const { app } = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'GET', url: `/delete-account/cancel?token=${VALID_TOKEN}`,
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('Erreur');
-    await app.close();
-  });
-});
-
-// ─── GET /delete-account/delete-now ──────────────────────────────────────────
-
-describe('GET /delete-account/delete-now — invalid token', () => {
-  it('returns HTML with invalid page when token not found', async () => {
-    const { app } = await buildApp();
-    const res = await app.inject({
-      method: 'GET', url: `/delete-account/delete-now?token=${VALID_TOKEN}`,
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.headers['content-type']).toMatch(/text\/html/);
-    expect(res.body).toContain('invalide');
-    await app.close();
-  });
-});
-
-describe('GET /delete-account/delete-now — valid token', () => {
-  it('deactivates user and marks request COMPLETED', async () => {
-    const prisma = makePrisma();
-    prisma.accountDeletionRequest.findFirst = jest.fn<any>().mockResolvedValue({
-      id: 'req-1', userId: USER_ID, status: 'GRACE_PERIOD_EXPIRED',
-    });
-    const { app } = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'GET', url: `/delete-account/delete-now?token=${VALID_TOKEN}`,
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('supprim');
-    expect(prisma.user.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ isActive: false }) })
-    );
-    expect(prisma.accountDeletionRequest.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: 'COMPLETED' }) })
-    );
-    await app.close();
-  });
-});
-
-describe('GET /delete-account/delete-now — DB error', () => {
-  it('returns HTML error page on DB error', async () => {
-    const prisma = makePrisma();
-    prisma.accountDeletionRequest.findFirst = jest.fn<any>().mockRejectedValue(new Error('db crash'));
-    const { app } = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'GET', url: `/delete-account/delete-now?token=${VALID_TOKEN}`,
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('Erreur');
-    await app.close();
-  });
-});
+// ─── Les trois GET ont cessé de muter (#4183) ────────────────────────────────
+//
+// Les blocs qui vivaient ici asseyaient le comportement FAUTIF : « GET
+// /delete-account/confirm met la demande à CONFIRMED », « delete-now désactive
+// le compte ». C'était une mutation destructrice déclenchée par une requête
+// que n'importe quel pré-chargeur de lien émet — antivirus de messagerie, Safe
+// Links, prefetch du navigateur. Ces témoins la certifiaient.
+//
+// Les trois portes sont désormais des redirections INERTES vers la page qui
+// dit la conséquence, et l'effet vit derrière un `POST` :
+//   · l'inertie             → `account-deletion-get-is-inert.test.ts`
+//   · les effets et le TTL  → `account-deletion-resolve.test.ts`

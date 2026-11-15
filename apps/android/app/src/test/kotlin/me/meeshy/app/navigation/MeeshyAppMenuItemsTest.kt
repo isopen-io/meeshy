@@ -1,48 +1,135 @@
 package me.meeshy.app.navigation
 
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.game.GameAttention
 import org.junit.Test
 
 /**
- * Ce que le menu deploye doit, et ne doit plus, offrir.
+ * Ce que l'echelle deployee doit, et ne doit plus, offrir.
  *
- * La liste est extraite de `rememberRadialMenuItems` (qui est @Composable, donc
- * hors de portee d'un test JVM) pour que la regle soit verifiable.
+ * La liste est extraite de [rememberMenuLadderItems] (qui est @Composable, donc
+ * hors de portee d'un test JVM) pour que la regle soit verifiable. Parite iOS
+ * stricte : 6 barreaux, Communautes a sa place iOS (l'ecran existe), Reels retire
+ * (appui long seul). Contacts n'a plus de barreau : il reste a un geste par Decouvrir.
  */
 class MeeshyAppMenuItemsTest {
 
-    // "Feed" quitte le menu : un simple tap du bouton gauche y mene desormais.
-    // L'y laisser offrirait deux chemins pour un meme geste.
     @Test
-    fun `the deployed menu no longer offers Feed`() {
-        assertFalse(menuItemLabelKeys().contains("tab_feed"))
+    fun `the ladder offers exactly the seven rungs, in order`() {
+        assertThat(menuLadderLabelKeys())
+            .containsExactly(
+                "menu_game",
+                "menu_my_links",
+                "menu_notifications",
+                "tab_calls",
+                "menu_discover",
+                "menu_communities",
+                "menu_settings",
+            )
+            .inOrder()
     }
 
-    // "Reels" RESTE : il n'est atteignable que par appui long, un geste non
-    // decouvrable, qui ne doit pas etre le seul chemin vers une section entiere.
     @Test
-    fun `the deployed menu still offers Reels`() {
-        assertTrue(menuItemLabelKeys().contains("menu_reels"))
+    fun `settings is always the last rung`() {
+        assertThat(menuLadderLabelKeys().last()).isEqualTo("menu_settings")
     }
 
-    // L'entree reglages dit ce qu'elle FAIT : libelle "Settings", icone engrenage,
-    // route settings. L'ancien libelle "Profile" sous un engrenage menant aux
-    // reglages cumulait trois signaux contradictoires pour une meme entree.
     @Test
-    fun `the deployed menu labels the settings entry as settings, not profile`() {
-        assertTrue(menuItemLabelKeys().contains("menu_settings"))
-        assertFalse(menuItemLabelKeys().contains("tab_profile"))
+    fun `the ladder no longer offers Reels`() {
+        assertThat(menuLadderLabelKeys()).doesNotContain("menu_reels")
     }
 
-    // Le menu reste la voie d'acces aux sections sans bouton dedie.
     @Test
-    fun `the deployed menu keeps the sections that have no dedicated button`() {
-        val keys = menuItemLabelKeys()
-        assertTrue(keys.contains("tab_messages"))
-        assertTrue(keys.contains("tab_calls"))
-        assertTrue(keys.contains("tab_activity"))
-        assertTrue(keys.contains("menu_contacts"))
-        assertTrue(keys.contains("menu_new_conversation"))
+    fun `the ladder no longer offers a dedicated Messages rung`() {
+        assertThat(menuLadderLabelKeys()).doesNotContain("tab_messages")
+    }
+
+    @Test
+    fun `the ladder no longer offers New Conversation`() {
+        assertThat(menuLadderLabelKeys()).doesNotContain("menu_new_conversation")
+    }
+
+    @Test
+    fun `the ladder gives Communities the rung Contacts held while the screen did not exist`() {
+        assertThat(menuLadderLabelKeys()).doesNotContain("menu_contacts")
+        assertThat(menuLadderLabelKeys()).contains("menu_communities")
+    }
+
+    @Test
+    fun `each rung keeps the iOS colour`() {
+        assertThat(rootMenuLadderEntries(communitiesAvailable = true).map { it.colorHex })
+            .containsExactly("#F97316", "#F8B500", "#FF6B6B", "#6366F1", "#8B5CF6", "#2ECC71", "#64748B")
+            .inOrder()
+    }
+
+    @Test
+    fun `notifications carry the unread count and discover the pending friend requests`() {
+        val badges = rootMenuLadderEntries().associateWith { it.badgeCount(unreadNotifications = 4, pendingFriendRequests = 2) }
+        assertThat(badges[RootMenuLadderEntry.NOTIFICATIONS]).isEqualTo(4)
+        assertThat(badges[RootMenuLadderEntry.DISCOVER]).isEqualTo(2)
+        assertThat(badges.filterKeys { it != RootMenuLadderEntry.NOTIFICATIONS && it != RootMenuLadderEntry.DISCOVER }.values)
+            .containsExactly(0, 0, 0, 0, 0)
+    }
+
+    @Test
+    fun `a negative counter never shows a badge`() {
+        assertThat(RootMenuLadderEntry.NOTIFICATIONS.badgeCount(unreadNotifications = -3, pendingFriendRequests = 0)).isEqualTo(0)
+    }
+
+    @Test
+    fun `communities takes the contacts rung once it exists`() {
+        assertThat(rootMenuLadderEntries(communitiesAvailable = true).map { it.labelKey })
+            .containsExactly("menu_game", "menu_my_links", "menu_notifications", "tab_calls", "menu_discover", "menu_communities", "menu_settings")
+            .inOrder()
+        assertThat(rootMenuLadderEntries(communitiesAvailable = false)).contains(RootMenuLadderEntry.CONTACTS)
+        assertThat(rootMenuLadderEntries(communitiesAvailable = false)).doesNotContain(RootMenuLadderEntry.COMMUNITIES)
+    }
+
+    @Test
+    fun `the floating chrome hides on deep routes and shows on the top-level ones`() {
+        assertThat(floatingChromeVisible(Routes.CONVERSATIONS)).isTrue()
+        assertThat(floatingChromeVisible(Routes.FEED)).isTrue()
+        assertThat(floatingChromeVisible(Routes.CHAT)).isFalse()
+        assertThat(floatingChromeVisible(ProfileRoutes.OWN)).isFalse()
+        assertThat(floatingChromeVisible(Routes.REELS)).isFalse()
+        assertThat(floatingChromeVisible(null)).isFalse()
+    }
+
+    @Test
+    fun `the avatar opens my own page, never a third party route`() {
+        assertThat(floatingAvatarProfileRoute("64b7f0a1c2d3e4f5a6b7c8d9")).isEqualTo(ProfileRoutes.OWN)
+        assertThat(floatingAvatarProfileRoute(null)).isNull()
+    }
+
+    @Test
+    fun `the game opens from the first rung, closest to the button (#17769)`() {
+        assertThat(rootMenuLadderEntries().first()).isEqualTo(RootMenuLadderEntry.GAME)
+        assertThat(RootMenuLadderEntry.GAME.badge).isNull()
+    }
+
+    @Test
+    fun `hiding the game removes its rung and keeps the others in order (#17769)`() {
+        val hidden = rootMenuLadderEntries(communitiesAvailable = true, gameHidden = true)
+        assertThat(hidden).doesNotContain(RootMenuLadderEntry.GAME)
+        assertThat(hidden).isEqualTo(rootMenuLadderEntries(communitiesAvailable = true).drop(1))
+    }
+
+    @Test
+    fun `only the game rung carries the game attention dot (#18165)`() {
+        val raised = GameAttention(chestReady = true, flameAtRisk = true)
+        assertThat(RootMenuLadderEntry.GAME.showsAttentionDot(raised)).isTrue()
+        assertThat(RootMenuLadderEntry.GAME.showsAttentionDot(GameAttention.None)).isFalse()
+        assertThat(RootMenuLadderEntry.entries.filter { it != RootMenuLadderEntry.GAME }.map { it.showsAttentionDot(raised) })
+            .doesNotContain(true)
+    }
+
+    @Test
+    fun `the game rung names what the game signals, one whole sentence per case (#18165)`() {
+        val game = RootMenuLadderEntry.GAME
+        assertThat(game.attentionLabelKey(GameAttention.None)).isNull()
+        assertThat(game.attentionLabelKey(GameAttention(chestReady = true, flameAtRisk = false))).isEqualTo("a11y_floating_rung_game_chest_ready")
+        assertThat(game.attentionLabelKey(GameAttention(chestReady = false, flameAtRisk = true))).isEqualTo("a11y_floating_rung_game_flame_at_risk")
+        assertThat(game.attentionLabelKey(GameAttention(chestReady = true, flameAtRisk = true))).isEqualTo("a11y_floating_rung_game_both")
+        assertThat(RootMenuLadderEntry.NOTIFICATIONS.attentionLabelKey(GameAttention(chestReady = true, flameAtRisk = true))).isNull()
     }
 }

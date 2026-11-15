@@ -44,6 +44,18 @@ class MyShareLinksViewModelTest {
         var deleteResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit),
         var extendResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit),
     ) : LinkApi {
+        var updateResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit)
+        var lastUpdate: Pair<String, kotlinx.serialization.json.JsonObject>? = null
+        var lastExpand: String? = null
+
+        override suspend fun update(
+            linkId: String,
+            body: kotlinx.serialization.json.JsonObject,
+        ): ApiResponse<Unit> {
+            lastUpdate = linkId to body
+            return updateResponse
+        }
+
         var lastToggle: Pair<String, ToggleShareLinkRequest>? = null
         var lastDeletedLinkId: String? = null
         var lastExtend: Pair<String, ExtendShareLinkRequest>? = null
@@ -51,7 +63,7 @@ class MyShareLinksViewModelTest {
         override suspend fun create(body: CreateShareLinkRequest): ApiResponse<CreateShareLinkResponse> =
             ApiResponse(success = false)
 
-        override suspend fun listMyLinks(offset: Int, limit: Int): ApiResponse<List<MyShareLink>> =
+        override suspend fun listMyLinks(offset: Int, limit: Int, expand: String?): ApiResponse<List<MyShareLink>> =
             listResponse
 
         override suspend fun fetchMyStats(): ApiResponse<MyShareLinkStats> = statsResponse
@@ -91,7 +103,8 @@ class MyShareLinksViewModelTest {
     private fun viewModel(
         api: FakeLinkApi,
         config: MeeshyConfig = MeeshyConfig(),
-    ): MyShareLinksViewModel = MyShareLinksViewModel(ShareLinkRepository(api), config)
+        repository: ShareLinkRepository = ShareLinkRepository(api),
+    ): MyShareLinksViewModel = MyShareLinksViewModel(repository, config)
 
     @Before
     fun setUp() = Dispatchers.setMain(dispatcher)
@@ -295,5 +308,78 @@ class MyShareLinksViewModelTest {
 
         assertThat(vm.state.value.errorMessage).isNull()
         assertThat(vm.state.value.phase).isEqualTo(MyShareLinksPhase.Loaded)
+    }
+
+    @Test
+    fun visitWithFreshCache_paintsTheCacheAndMakesNoListCall() = runTest {
+        val api = FakeLinkApi(listResponse = ApiResponse(success = false, error = "must not be called"))
+        val repository = ShareLinkRepository(api)
+        repository.cache.put(listOf(link("cached")))
+
+        val vm = viewModel(api, repository = repository)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.links.map { it.linkId }).containsExactly("cached")
+        assertThat(vm.state.value.phase).isEqualTo(MyShareLinksPhase.Loaded)
+        assertThat(vm.state.value.errorMessage).isNull()
+    }
+
+    @Test
+    fun pullToRefresh_demandsTheServerEvenOnAFreshCache() = runTest {
+        val api = FakeLinkApi(listResponse = ApiResponse(success = true, data = listOf(link("server"))))
+        val repository = ShareLinkRepository(api)
+        repository.cache.put(listOf(link("cached")))
+        val vm = viewModel(api, repository = repository)
+        advanceUntilIdle()
+
+        vm.refresh()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.links.map { it.linkId }).containsExactly("server")
+        assertThat(vm.state.value.isRefreshing).isFalse()
+        assertThat(repository.cache.find("server")).isNotNull()
+    }
+
+    @Test
+    fun aFailedRefresh_keepsThePreviousListUnderABanner() = runTest {
+        val api = FakeLinkApi(listResponse = ApiResponse(success = false, error = "offline"))
+        val repository = ShareLinkRepository(api)
+        repository.cache.put(listOf(link("cached")))
+        val vm = viewModel(api, repository = repository)
+        advanceUntilIdle()
+
+        vm.refresh()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.links.map { it.linkId }).containsExactly("cached")
+        assertThat(vm.state.value.showFailureBanner).isTrue()
+        assertThat(vm.state.value.showColdSpinner).isFalse()
+    }
+
+    @Test
+    fun returningFromACreation_readsTheServerBecauseTheCacheIsNoLongerFresh() = runTest {
+        val api = FakeLinkApi(listResponse = ApiResponse(success = true, data = listOf(link("cached"), link("created"))))
+        val repository = ShareLinkRepository(api)
+        repository.cache.put(listOf(link("cached")))
+        val vm = viewModel(api, repository = repository)
+        advanceUntilIdle()
+        repository.cache.markStale()
+
+        vm.onResumed()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.links.map { it.linkId }).containsExactly("cached", "created")
+    }
+
+    @Test
+    fun anOptimisticToggle_isMirroredToTheCacheSoTheDetailAndAReturnSeeIt() = runTest {
+        val api = FakeLinkApi(listResponse = ApiResponse(success = true, data = listOf(link("a", isActive = true))))
+        val repository = ShareLinkRepository(api)
+        val vm = viewModel(api, repository = repository)
+        advanceUntilIdle()
+
+        vm.toggleActive(vm.state.value.links.first())
+
+        assertThat(repository.cache.find("a")?.isActive).isFalse()
     }
 }

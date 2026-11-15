@@ -107,10 +107,10 @@ final class BubbleQuotedReplyAttachmentKindTests: XCTestCase {
 ///    ÉCRAN (`onQuotedMediaTap`) ;
 /// 3. TOUT LE RESTE, LE NOM COMPRIS → retour au message cité.
 ///
-/// Cette peau est celle que voit TOUT LE MONDE : le programme bêta naît éteint
-/// (`BetaFeaturesPreference`, défaut OFF) ⇒ `readingModes` OFF ⇒
-/// `ReadingModeOrchestrator` rend `.bubbles` dès sa première branche. La
-/// rangée plate, où le défaut a été signalé, est derrière le drapeau.
+/// Cette peau était, lors de ce lot, celle que voyait TOUT LE MONDE (le
+/// programme bêta naissait éteint, donc les modes de lecture aussi) ; depuis
+/// la sortie de bêta (2026-09-14, #6482), Bulles est un choix parmi les modes
+/// de lecture.
 ///
 /// **Répartition des zones, et pourquoi la garde regarde DEUX niveaux.** Le
 /// composant porte les zones 1 et 2 ; la zone 3 vit chez ses TROIS hôtes, qui
@@ -166,7 +166,7 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
             .appendingPathComponent(path)
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        return AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
     }
 
     /// ANCRE POSITIVE — à passer AVANT tout comptage ou toute assertion
@@ -228,8 +228,31 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
     /// donc pas une correction : c'est le CLIQUET qui empêche la peau la plus
     /// vue de gagner un jour le défaut que l'autre vient de perdre.
     func test_loiDesZones_leNomNEstPasUneZoneTactile() throws {
+        // **La tranche part de la ligne de TITRE, pas de la première occurrence
+        // du fichier** (2026-09-06). `Text(quotedTitle)` apparaît DEUX fois :
+        // dans `quotedFlow`, qui compose le nom et l'aperçu en un paragraphe, et
+        // dans la ligne de titre. `range(of:)` sans borne prenait la première,
+        // et la tranche s'étendait alors sur 3252 caractères au lieu de 547 —
+        // elle happait un `.onTapGesture` parfaitement légitime, posé bien plus
+        // bas et sur un tout autre élément.
+        //
+        // > La garde accusait donc le NOM d'une zone tactile qu'il n'a pas, et
+        // > c'est le pire mode d'échec possible pour une garde d'UX : elle
+        // > désigne une violation dans du code sain, et le prochain lecteur
+        // > « corrige » ce qui marchait. Mesuré : la tranche bornée ne contient
+        // > aucun lexème de tap — la LOI DES ZONES est respectée.
+        //
+        // On borne d'abord la LIGNE, puis on y cherche le nom : deux ancres
+        // étroites valent mieux qu'une large, et celle de la ligne est déjà
+        // celle que la garde de la zone 1 utilise juste au-dessus.
         let code = try quotedReplySource()
-        let nameSlice = try slice(of: code, from: "Text(quotedTitle)", to: "moodDateLabel(previewColor: previewColor)")
+        let titleRow = try slice(of: code,
+                                 from: "HStack(alignment: .top, spacing: 6) {",
+                                 to: "moodDateLabel(previewColor: previewColor)")
+        guard let nameStart = titleRow.range(of: "Text(quotedTitle)") else {
+            return XCTFail("`Text(quotedTitle)` introuvable dans la ligne de titre — la garde ne mesure plus rien.")
+        }
+        let nameSlice = titleRow[nameStart.lowerBound...]
 
         var offenders: [String] = []
         for lexeme in Self.tapLexemes where nameSlice.contains(lexeme) {
@@ -250,7 +273,22 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
 
     func test_loiDesZones_lAvatarEstLaSeulePorteVersLeProfil() throws {
         let code = try quotedReplySource()
-        let titleRow = try slice(of: code, from: "HStack(spacing: 6) {", to: "Text(quotedTitle)")
+        // **L'ancre a suivi l'alignement** (2026-09-06). Elle épinglait
+        // `HStack(spacing: 6) {` ; la ligne de titre porte désormais
+        // `alignment: .top`, pour que l'avatar reste en haut quand le nom et
+        // l'aperçu coulent sur deux lignes. La garde ne trouvait plus sa
+        // tranche et rougissait en s'accusant elle-même — « garde inopérante » —
+        // alors que la LOI DES ZONES était respectée.
+        //
+        // > Une ancre qui reprend la signature COMPLÈTE d'un conteneur se périme
+        // > au premier argument de mise en page ajouté. Celle-ci est la plus
+        // > étroite qui désigne encore une seule ligne du fichier ; si un
+        // > second `HStack(alignment: .top, spacing: 6)` y apparaît, c'est le
+        // > `slice` qu'il faudra rendre positionnel, pas l'ancre qu'il faudra
+        // > élargir.
+        let titleRow = try slice(of: code,
+                                 from: "HStack(alignment: .top, spacing: 6) {",
+                                 to: "Text(quotedTitle)")
         XCTAssertTrue(
             titleRow.contains("authorGate"),
             "l'avatar doit PRÉCÉDER le nom sur la ligne de titre : c'est lui qui porte la porte vers le profil."
@@ -340,8 +378,8 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
     func test_loiDesZones_uneCapaciteUnSite_leGlypheNeDoubleJamaisLaMiniature() throws {
         let code = try quotedReplySource()
         XCTAssertTrue(
-            code.contains("thumbnailUrlString == nil && (attachmentKind?.isMedia ?? false)"),
-            "le glyphe ne peut être tactile QUE sans miniature (sinon deux zones pour une capacité) et QUE pour " +
+            code.contains("mediaFace == nil && (attachmentKind?.isMedia ?? false)"),
+            "le glyphe ne peut être tactile QUE sans face média — vignette, poster ou vocal (#8230) — (sinon deux zones pour une capacité) et QUE pour " +
             "un média réellement ouvrable (sinon il double la zone 3)."
         )
         XCTAssertTrue(
@@ -504,20 +542,28 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
             to: "\n    static func nonMediaAccessibilityParts"
         )
         XCTAssertTrue(
-            block.contains("bubble.reply.author_hint") && block.contains("bubble.reply.open_media"),
-            "les deux actions réemploient les clés que la citation porte déjà — zéro clé neuve, zéro clé morte, " +
-            "cliquet français inchangé."
+            block.contains("QuotedZoneAccessibility.actions("),
+            "les actions nommées de la citation vivent en UN site partagé par les deux rangées (#8320) — " +
+            "une jumelle qu'on modifie deux fois finit par diverger."
+        )
+        let shared = try source("Meeshy/Features/Main/Views/Bubble/QuotedZoneAccessibility.swift")
+        XCTAssertTrue(
+            shared.contains("bubble.reply.author_hint") && shared.contains("bubble.reply.open_media")
+                && shared.contains("bubble.reply.listen_quoted") && shared.contains("bubble.reply.go_to_quoted"),
+            "les actions nomment les trois zones : l'auteur, le média (« Écouter le message cité » pour un " +
+            "audio, #8320), et le saut « Aller au message cité »."
         )
         XCTAssertTrue(
-            block.contains("onQuotedAuthorTap(reference)") && block.contains("onQuotedMediaTap(reference)"),
+            shared.contains("onQuotedAuthorTap(reference)") && shared.contains("onQuotedMediaTap(reference)")
+                && shared.contains("onReplyTap(reference.messageId)"),
             "chaque action doit DÉCLENCHER sa zone : une action nommée sans effet est un contrôle qui ment, et " +
             "le rotor la récite."
         )
         XCTAssertTrue(
-            block.contains("reference.offersAuthorGate") && block.contains("reference.offersMediaGate"),
+            shared.contains("reference.offersAuthorGate") && shared.contains("reference.offersMediaGate")
+                && shared.contains("reference.opensQuotedTarget"),
             "les actions suivent l'ARMEMENT (gestionnaire câblé ET zone offerte par la donnée), jamais la seule " +
-            "présence d'une citation — sinon VoiceOver se voit proposer d'ouvrir la fiche d'une story, ou de " +
-            "lire un média que le verrou refuse."
+            "présence d'une citation — sinon VoiceOver se voit proposer d'ouvrir la fiche d'une story."
         )
         // Exécution — ce que la DONNÉE offre, indépendamment de toute peau.
         XCTAssertTrue(makeProtectedReference(false).offersAuthorGate)
@@ -548,7 +594,7 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
             "inventaire des zones tactiles de BubbleQuotedReply : \(total) au lieu de 3. Les trois SITES " +
             "attendus sont (1) l'avatar → profil, (2) la miniature → plein écran, (3) le glyphe de la ligne " +
             "d'aperçu → plein écran / lecture. Les sites 2 et 3 s'excluent par construction " +
-            "(`glyphOpensTheMedia` exige `thumbnailUrlString == nil`) : à l'exécution la citation n'offre " +
+            "(`glyphOpensTheMedia` exige `mediaFace == nil`) : à l'exécution la citation n'offre " +
             "jamais plus de DEUX cibles ici, la troisième classe (retour au message cité) étant posée par " +
             "l'hôte. Une zone de plus dans ce fichier est une QUATRIÈME classe — la directive du 2026-08-24 " +
             "n'en admet que trois."
@@ -559,32 +605,47 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
     /// cette moitié, un hôte pourrait empiler un second geste sur la citation
     /// (« ouvrir le fil », « répondre à nouveau ») sans qu'aucune garde ne
     /// bouge : le composant, lui, resterait à trois.
+    ///
+    /// Chaque zone a aussi sa face VoiceOver (#17296) : l'action nommée
+    /// « Ouvrir le message cité », qui appelle le MÊME geste. Elle n'est pas
+    /// un second point actionnable — c'est la même zone, lue autrement — et
+    /// elle se compte à part : exactement une par zone posée dans le fichier.
     func test_loiDesZones_chaqueHoteNePoseQuUneSeuleZone3() throws {
-        let hosts: [(path: String, marker: String, floor: Int, jump: String)] = [
+        let hosts: [(path: String, marker: String, floor: Int, jump: String, sites: Int, mirrors: Int)] = [
             (
                 "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift",
                 "struct BubbleStandardLayout", 20_000,
-                "onStoryReplyTap?(reply.reference.messageId)"
+                // Depuis #10628 la carte citée de la bulle et celle de l'emoji
+                // en réponse partagent UN geste (`openQuotedTarget`). Le type
+                // se lit comme son unité (#10678) : la bulle texte et l'emoji
+                // en réponse y posent chacun leur unique toucher. L'unité
+                // comprend `+Media`, d'où sa face VoiceOver en plus des deux.
+                ".onTapGesture { openQuotedTarget(reply) }", 2, 3
             ),
             (
                 "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift",
                 "func mediaWithReplyContainer", 5_000,
-                "onStoryReplyTap?(reply.reference.messageId)"
+                "onStoryReplyTap?(reply.reference.messageId)", 1, 1
             ),
             (
                 "Meeshy/Features/Main/Views/ConversationMediaViews.swift",
                 "struct AudioMediaView", 20_000,
-                "onStoryReplyTap?(ref.messageId)"
+                "onStoryReplyTap?(ref.messageId)", 1, 1
             )
         ]
 
         for host in hosts {
             let code = try anchored(host.path, host.marker, floor: host.floor)
             XCTAssertEqual(
-                code.components(separatedBy: host.jump).count - 1, 1,
-                "\(host.path) doit poser EXACTEMENT une zone 3 (retour au message cité) autour de la " +
-                "citation. \(code.components(separatedBy: host.jump).count - 1) trouvée(s) : 0 = la citation " +
-                "n'est plus suivable, 2+ = un second point actionnable pour une seule capacité."
+                code.components(separatedBy: host.jump).count - 1, host.sites,
+                "\(host.path) doit poser EXACTEMENT \(host.sites) zone(s) 3 (retour au message cité) autour de la " +
+                "citation. \(code.components(separatedBy: host.jump).count - 1) trouvée(s) : moins = la citation " +
+                "n'est plus suivable, plus = un second point actionnable pour une seule capacité."
+            )
+            XCTAssertEqual(
+                code.components(separatedBy: "a11y.main.quotedReply.open").count - 1, host.mirrors,
+                "\(host.path) : chaque zone 3 porte UNE action VoiceOver « Ouvrir le message cité » — ni zone muette " +
+                "pour VoiceOver, ni seconde action pour la même zone."
             )
             XCTAssertTrue(
                 code.contains("onQuotedAuthorTap: onQuotedAuthorTap"),
@@ -596,6 +657,19 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
                 "\(host.path) doit transmettre onQuotedMediaTap — sans ce fil, la miniature est décorative."
             )
         }
+    }
+
+    /// Le geste partagé de la zone 3 retourne bien au message cité — une seule
+    /// fois pour la story, une seule pour le message : sans lui, l'appel que
+    /// compte la garde ci-dessus n'ouvrirait rien.
+    func test_loiDesZones_leGestePartageRetourneAuMessageCite() throws {
+        let code = try anchored(
+            "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+EmojiReply.swift",
+            "func openQuotedTarget(_ reply: BubbleContent.Reply)", floor: 500
+        )
+        XCTAssertEqual(code.components(separatedBy: "onStoryReplyTap?(reply.reference.messageId)").count - 1, 1)
+        XCTAssertEqual(code.components(separatedBy: "onReplyTap?(reply.reference.messageId)").count - 1, 1)
+        XCTAssertTrue(code.contains("guard reply.reference.opensQuotedTarget else { return }"))
     }
 
     // MARK: - Le fil jusqu'à l'hôte de résolution
@@ -617,15 +691,17 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
 
         let host = try anchored(
             "Meeshy/Features/Main/Views/MessageListViewController.swift",
-            "func openQuotedMedia(_ reference: ReplyReference)", floor: 50_000
+            "let quotedMediaTapHandler: (ReplyReference) -> Void = { [weak self] ref in", floor: 50_000
         )
         XCTAssertTrue(
-            host.contains("onQuotedAuthorTap: { [weak self] ref in"),
+            host.contains("onQuotedAuthorTap: quotedAuthorTapHandler,") && host.contains("let quotedAuthorTapHandler"),
             "le contrôleur doit monter la zone 1 sur la peau BULLE — c'est la peau servie par défaut " +
             "(programme bêta OFF ⇒ `readingModes` OFF ⇒ `.bubbles`), donc celle où le câblage compte le plus."
         )
         XCTAssertTrue(
-            host.contains("onQuotedMediaTap: { [weak self] ref in"),
+            // La fermeture est sortie de la cellule (cycle contrôleur → cellule → fermeture, c97e31e6ca) : la rangée
+            // reçoit le gestionnaire faible, jamais une fermeture qui capture le contrôleur.
+            host.contains("onQuotedMediaTap: quotedMediaTapHandler,"),
             "le contrôleur doit monter la zone 2 sur la peau BULLE."
         )
     }
@@ -638,16 +714,29 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
     /// Élargir une porte sans son verrou est une régression d'exposition.
     func test_loiDesZones_lHoteRefuseUnMediaProtege_commeLaGrilleDeLaBulle() throws {
         let code = try anchored(
-            "Meeshy/Features/Main/Views/MessageListViewController.swift",
-            "func openQuotedMedia(_ reference: ReplyReference)", floor: 50_000
+            "Meeshy/Features/Main/Views/MessageListViewController+QuotedMedia.swift",
+            "func openQuotedMedia(_ reference: ReplyReference)", floor: 1_500
         )
         let body = try slice(
             of: code,
             from: "func openQuotedMedia(_ reference: ReplyReference)",
-            to: "switch attachment.type {"
+            to: "onMediaTap?(attachment)"
         )
+        // #8283 — le verrou vit dans le site partagé avec la Rivière :
+        // l'hôte n'ouvre QUE ce que `QuotedMediaOpening` lui rend.
         XCTAssertTrue(
-            body.contains("attachment.isViewOnce || attachment.isBlurred"),
+            body.contains("QuotedMediaOpening.gesture(for: reference"),
+            "l'hôte doit élire la pièce par la règle partagée, qui porte le verrou."
+        )
+        let rule = try anchored(
+            "Meeshy/Features/Main/Views/Bubble/QuotedMediaOpening.swift",
+            "static func attachment(for reference: ReplyReference", floor: 400
+        )
+        // #13109 — la protection d'une pièce se lit par son champ OU ses seuls
+        // `effectFlags` : `declaresViewOnce` / `declaresBlur`, jamais les deux
+        // champs nus, qui servaient en clair une pièce marquée par ses drapeaux.
+        XCTAssertTrue(
+            rule.contains("attachment.declaresViewOnce || attachment.declaresBlur") && rule.contains("!reference.quotedMediaIsProtected"),
             "un média cité à VUE UNIQUE ou FLOUTÉ ne doit pas s'ouvrir depuis la citation : le tap retombe sur " +
             "le saut à l'original, où le média garde son propre geste de révélation. Miroir de " +
             "`BubbleGridCell.handleTap` (`guard !attachmentIsProtected || isRevealed`)."

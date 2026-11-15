@@ -1,14 +1,37 @@
 /**
- * Rate Limiting Middleware - Protects REST endpoints from DoS attacks
+ * Les limiteurs PAR ROUTE de la surface d'appels et des invitations.
  *
- * CVE-002 Fix: Implements configurable rate limiting using @fastify/rate-limit
- * to prevent denial-of-service attacks via excessive requests
+ * ## Ce que ce fichier n'enregistre PLUS, et pourquoi (#4687)
+ *
+ * `registerRateLimiting` — un enregistrement GLOBAL du plugin (100 req/min,
+ * `ENABLE_RATE_LIMITING`, `RATE_LIMITS.DEFAULT`) — a vécu ici sans qu'AUCUN
+ * appelant de production ne l'invoque. Mesuré, et déjà relevé par
+ * `docs/product/api-simplification/securite.md`, qui demandait exactement ce
+ * geste : « supprimer le code mort `registerRateLimiting` en conservant
+ * `ROUTE_RATE_LIMITS`, qui lui est bien utilisé ».
+ *
+ * Il est SUPPRIMÉ plutôt que laissé, parce qu'un enregistreur mort n'est pas
+ * neutre : c'est un PATRON à copier. Son `keyGenerator` ANNONÇAIT une clé par
+ * compte (`if (userId) return \`user:${userId}\``) et rendait TOUJOURS
+ * l'adresse — au hook `onRequest` du plugin, `authContext` n'existe pas
+ * encore. Son propre commentaire disait que la branche morte n'était sans
+ * conséquence QUE parce que rien ne le montait, et nommait le vrai risque :
+ * « ce qui n'est PAS sans conséquence, c'est de laisser la branche
+ * `if (userId)` se lire comme un patron ». C'est elle, recopiée sous
+ * `config.rateLimit`, qui a produit #4347, #4359 et #4429.
+ *
+ * Le remonter n'était pas une option : un SECOND enregistrement global
+ * entrerait en conflit avec `registerGlobalRateLimiter`
+ * (`middleware/rate-limiter.ts`, 300 req/min, le seul monté par `server.ts`),
+ * et son plafond de 100 req/min le contredirait. `RATE_LIMITS.DEFAULT` part
+ * avec lui : il n'avait pas d'autre lecteur.
+ *
+ * Ce qui RESTE ici — `ROUTE_RATE_LIMITS`, `createRateLimitConfig`,
+ * `createInvitationRateLimitConfig`, `resolveCallerKey` — est monté, testé, et
+ * documenté ci-dessous.
  */
 
-import { FastifyInstance, FastifyRequest } from 'fastify';
-import rateLimit from '@fastify/rate-limit';
-import { logger } from '../utils/logger.js';
-import { isLocalIp } from '../utils/rate-limiter';
+import { FastifyRequest } from 'fastify';
 import { UnifiedAuthRequest } from './auth';
 
 /**
@@ -36,120 +59,147 @@ export const RATE_LIMITS = {
     description: 'Other call-related endpoints'
   },
 
-  // Default for all other endpoints
-  DEFAULT: {
-    max: parseInt(process.env.RATE_LIMIT_MAX || '100'),
-    timeWindow: parseInt(process.env.RATE_LIMIT_WINDOW || '60000')
-  }
+  // Sonde de reprise (#11462) — chaque appareil du compte la rejoue à chaque
+  // (re)connexion de socket et retour au premier plan. Lecture idempotente :
+  // son plafond se compte en appareils × reconnexions, pas en gestes.
+  ACTIVE_CALL_PROBE: {
+    max: 60,
+    timeWindow: '1 minute',
+    description: 'GET /api/calls/active'
+  },
 };
 
 /**
- * Register global rate limiting plugin
+ * `userId` SENTINELLE de `createUnauthenticatedContext()` (`middleware/auth.ts`).
  *
- * @param fastify - Fastify instance
+ * Un visiteur sans justificatif reçoit un `authContext` COMPLET dont le
+ * `userId` vaut la chaîne `'anonymous'` — une valeur VRAIE. Un générateur qui
+ * se contente de `userId ?? repli` la prend donc pour un compte et range TOUS
+ * les visiteurs de la planète dans UN seul seau : le premier arrivé refuse
+ * tous les autres. Aucune route d'appel ne peut l'atteindre aujourd'hui
+ * (`requiredAuth` y répond 401 avant de poser le contexte, cf. `resolveCallerKey`),
+ * mais cette fabrique est EXPORTÉE : le piège se refermerait sur le premier
+ * montage qui admettrait les visiteurs.
  */
-export async function registerRateLimiting(fastify: FastifyInstance): Promise<void> {
-  // Check if rate limiting is enabled
-  const isEnabled = process.env.ENABLE_RATE_LIMITING !== 'false';
+const VISITEUR_SANS_COMPTE = 'anonymous';
 
-  if (!isEnabled) {
-    logger.warn('⚠️ Rate limiting is DISABLED - not recommended for production');
-    return;
+/**
+ * Identité de débit de l'appelant, avec des préfixes DISJOINTS par population.
+ *
+ * `acct:` et `ip:` ne peuvent pas se confondre : sans préfixe côté compte, une
+ * population dont l'identifiant ressemblerait à l'autre partagerait son seau.
+ * Deux espaces de noms, deux préfixes — la règle tient quelle que soit la
+ * forme des identifiants.
+ */
+function resolveCallerKey(request: FastifyRequest): string {
+  const userId = (request as UnifiedAuthRequest).authContext?.userId;
+  if (userId && userId !== VISITEUR_SANS_COMPTE) {
+    return `acct:${userId}`;
   }
-
-  // Register rate limit plugin with Redis for distributed rate limiting
-  await fastify.register(rateLimit, {
-    global: true,
-    max: RATE_LIMITS.DEFAULT.max,
-    timeWindow: RATE_LIMITS.DEFAULT.timeWindow,
-    cache: 10000,
-    allowList: (req) => isLocalIp(req.ip),
-    redis: fastify.redis ?? undefined, // Use Redis for distributed rate limiting (if available)
-    skipOnError: true, // Don't block requests if Redis is down
-    keyGenerator: (request) => {
-      // Use user ID if authenticated, otherwise IP address
-      const userId = (request as UnifiedAuthRequest).authContext?.userId;
-      if (userId) {
-        return `user:${userId}`;
-      }
-      return request.ip || 'unknown';
-    },
-    errorResponseBuilder: (request, context) => {
-      logger.warn('Rate limit exceeded', {
-        ip: request.ip,
-        userId: (request as UnifiedAuthRequest).authContext?.userId,
-        path: request.url,
-        limit: context.max,
-        after: context.after
-      });
-
-      return {
-        success: false,
-        error: {
-          code: 'RATE_LIMIT_EXCEEDED',
-          message: `Too many requests. Please try again after ${context.after}`,
-          retryAfter: context.after
-        }
-      };
-    },
-    onExceeding: (request, key) => {
-      logger.debug('Rate limit warning', {
-        key,
-        ip: request.ip,
-        path: request.url
-      });
-    }
-  });
-
-  logger.info('✅ Rate limiting enabled', {
-    defaultMax: RATE_LIMITS.DEFAULT.max,
-    defaultWindow: RATE_LIMITS.DEFAULT.timeWindow,
-    redisEnabled: !!fastify.redis
-  });
+  return `ip:${request.ip}`;
 }
 
 /**
- * Creates a custom rate limiter for specific endpoints
+ * Sens de l'échec quand le MAGASIN de compteurs tombe (Redis indisponible).
  *
- * CVE-002 follow-up (dette keygen-calls) : sans `keyGenerator` explicite, une
- * config de route ne remplace que `max`/`timeWindow` — elle HERITE du
- * `keyGenerator` du plugin global enregistre par ailleurs (`global:${request.ip}`,
- * cf. middleware/rate-limiter.ts#registerGlobalRateLimiter). Le gateway tourne
- * sans `trustProxy` derriere Traefik : `request.ip` est l'IP du conteneur proxy,
- * IDENTIQUE pour TOUS les utilisateurs. Une limite "5/min" par route devenait
- * donc un seau plateforme unique partage par tout le monde.
+ * Mesuré sur le plugin réel : `skipOnError: false` laisse l'erreur du magasin
+ * remonter, donc un **500** — jamais un 429 lisible ; `true` laisse passer la
+ * requête. Le choix n'est donc pas « strict ou laxiste » mais « quel dommage
+ * on préfère pendant la panne ».
+ */
+type SensDeLEchec = 'ferme' | 'ouvert';
+
+/**
+ * Limiteur d'une route d'appel.
  *
- * Meme pattern que createPostRouteRateLimitConfig / createSoundRouteRateLimitConfig
- * / createSignalProtocolRateLimitConfig (middleware/rate-limiter.ts) : cle PAR
- * UTILISATEUR (authContext.userId), repli IP, namespace par label pour que
- * chaque route calls ait son propre seau.
+ * ## La clé compte le COMPTE — et il a fallu poser le hook pour ça
  *
- * @param max - Maximum requests allowed
- * @param timeWindow - Time window in ms or string (e.g., '1 minute')
- * @param label - Route namespace (evite les collisions de seau entre routes)
- * @returns Rate limit configuration
+ * `config.rateLimit` s'applique par défaut au hook `onRequest`
+ * (`defaultHook`, @fastify/rate-limit/index.js), qui court AVANT le
+ * `preValidation` où `requiredAuth` (`routes/calls.ts`) pose `authContext`.
+ * Un `keyGenerator` qui lit `authContext?.userId` y recevait donc
+ * `undefined` et retombait sur `ip:${request.ip}` — non pas dans un cas
+ * limite, mais À CHAQUE APPEL : la clé « par utilisateur » que le
+ * commentaire d'origine annonçait n'a jamais été calculée une seule fois.
+ * `hook: 'preHandler'` referme le trou. Mesuré sur le vrai plugin, pas
+ * déduit : deux comptes, même adresse, `initiate` — sans hook le second est
+ * refusé dès son premier appel parce que le premier a vidé le seau de
+ * l'ADRESSE qu'ils partagent ; avec le hook, chacun dispose de son crédit.
+ *
+ * Ce doc-comment affirmait « même pattern que
+ * `createPostRouteRateLimitConfig` / `createSoundRouteRateLimitConfig` /
+ * `createSignalProtocolRateLimitConfig` » en NOMMANT ses trois jumelles.
+ * C'était faux, et c'est ce qui a tenu ce fichier hors de #4347 : les trois
+ * jumelles posent le hook (`GARDES_DE_CLE`, `middleware/rate-limiter.ts`),
+ * celle-ci ne l'a jamais posé. Un commentaire qui énonce un invariant de
+ * PAIRE ne garde que l'exemplaire qui le porte — et rend l'autre CRÉDIBLE.
+ *
+ * ## La population servie : des comptes, rien d'autre
+ *
+ * Les neuf routes de `routes/calls.ts` montent toutes
+ * `preValidation: [requiredAuth, …]`, où `requiredAuth` vaut
+ * `createUnifiedAuthMiddleware(prisma, { requireAuth: true, allowAnonymous: false })` :
+ * un visiteur sans justificatif reçoit 401, un invité de lien partagé
+ * (`Participant`) reçoit 403. Aucune de ces routes n'admet d'anonyme, donc
+ * la clé est le COMPTE sans arbitrage — le repli `ip:` de `resolveCallerKey`
+ * n'y est jamais atteint et n'est conservé que comme défense du montage
+ * suivant.
+ *
+ * ## Ce que le déplacement du hook CÈDE, et pourquoi c'est le bon échange
+ *
+ * Au `preHandler`, le limiteur ne voit plus que les requêtes qui ont franchi
+ * `preValidation` : une rafale de jetons invalides (401) ou de corps malformés
+ * (400) ne consomme plus le plafond de `calls:*`. Ce n'est pas une perte de
+ * protection mais un DÉPLACEMENT — ces requêtes-là n'ont pas de compte à
+ * facturer, et c'est le limiteur global (`registerGlobalRateLimiter`, 300/min
+ * par adresse, resté à `onRequest` précisément pour ça) qui les freine. Le
+ * plafond par route retrouve en échange son objet : borner ce qu'un COMPTE
+ * demande, sans qu'un voisin de NAT le lui prenne.
+ *
+ * ## Le refus se lit 429, et il fallait le DIRE
+ *
+ * Le plugin `throw`e ce que rend `errorResponseBuilder`
+ * (`rateLimitRequestHandler`) ; Fastify lit `statusCode` sur l'objet lancé
+ * pour choisir le statut. Sans ce champ, chaque refus de débit des neuf
+ * routes d'appels répondait **500** : le client ne pouvait pas distinguer
+ * « ralentis » de « le serveur est cassé », et la supervision comptait des
+ * pannes serveur là où le produit se défendait normalement. Les fabriques
+ * de `middleware/rate-limiter.ts` portent toutes `statusCode: 429` ; c'est
+ * encore une parité que le commentaire revendiquait sans que le code la
+ * tienne.
+ *
+ * Le STATUT ne suffisait pas (#11462) : l'objet lancé n'est pas une `Error`,
+ * et le gestionnaire global le journalisait en ERROR puis REMPLAÇAIT son corps
+ * par « Internal Server Error ». `rateLimitRefusalResponse`
+ * (`utils/rate-limit-refusal.ts`) le reconnaît désormais, et la forme posée ici
+ * suit l'enveloppe d'erreur : `error` est une chaîne plate, `code` à côté.
+ *
+ * @param max - plafond de requêtes sur la fenêtre
+ * @param timeWindow - fenêtre, en ms ou en toutes lettres ('1 minute')
+ * @param label - espace de noms du seau (deux routes ne se mélangent jamais)
+ * @param sensDeLEchec - que faire quand le magasin de compteurs est en panne.
+ *   Défaut FERMÉ : un montage qui ne se prononce pas obtient le côté
+ *   prudent, et doit écrire son choix pour obtenir l'autre.
  */
 export function createRateLimitConfig(
   max: number,
   timeWindow: number | string,
-  label: string
+  label: string,
+  sensDeLEchec: SensDeLEchec = 'ferme'
 ) {
   return {
     config: {
       rateLimit: {
         max,
         timeWindow,
-        keyGenerator: (request: FastifyRequest) => {
-          const userId = (request as UnifiedAuthRequest).authContext?.userId;
-          const id = userId ?? `ip:${request.ip}`;
-          return `calls:${label}:${id}`;
-        },
+        hook: 'preHandler' as const,
+        skipOnError: sensDeLEchec === 'ouvert',
+        keyGenerator: (request: FastifyRequest) => `calls:${label}:${resolveCallerKey(request)}`,
         errorResponseBuilder: () => ({
           success: false,
-          error: {
-            code: 'RATE_LIMIT_EXCEEDED',
-            message: `Too many requests (calls/${label}). Please try again later.`
-          }
+          statusCode: 429,
+          error: `Too many requests (calls/${label}). Please try again later.`,
+          code: 'RATE_LIMIT_EXCEEDED'
         })
       }
     }
@@ -157,22 +207,129 @@ export function createRateLimitConfig(
 }
 
 /**
- * Route-specific rate limit configurations
+ * Limiteur de `POST /invitations/email` — dix invitations par heure, PAR COMPTE.
+ *
+ * ## Ce qu'il remplace, et pourquoi ce n'était pas un détail
+ *
+ * La route déclarait `{ max: 10, timeWindow: '1 hour' }` en toutes lettres.
+ * `mergeParams` d'@fastify/rate-limit est un `Object.assign`
+ * (`index.js:190`) : une config de route sans `keyGenerator` prend celui des
+ * paramètres GLOBAUX, soit `global:${request.ip}` (`registerGlobalRateLimiter`,
+ * `middleware/rate-limiter.ts`). Un plafond horaire manifestement pensé par
+ * compte comptait donc par ADRESSE, et se trompait dans les deux sens :
+ * plusieurs comptes derrière une même sortie (opérateur mobile, bureau, NAT)
+ * se partageaient dix invitations, un même compte disposant de plusieurs
+ * adresses en obtenait dix par adresse. Mesuré sur le vrai plugin, avec la
+ * route réelle et le vrai middleware d'authentification — deux comptes, une
+ * adresse : le second recevait 429 dès son premier appel, dix fois sur dix.
+ * Témoin : `__tests__/unit/middleware/rate-limit-key-invitations-count-the-account.test.ts`.
+ *
+ * Ce qui n'était PAS en cause : le partage du seau du limiteur global.
+ * `RedisStore.prototype.child` préfixe par `` `${method}${url}-` `` et
+ * `LocalStore.child` fabrique une LRU neuve — chaque route a le sien. Le
+ * défaut était la CLÉ, rien d'autre.
+ *
+ * ## Pourquoi cette fabrique vit ICI, et pas dans `rate-limiter.ts`
+ *
+ * Pour n'avoir qu'UNE dérivation de la clé d'appelant. `resolveCallerKey`
+ * (ci-dessus) est la seule du dépôt à préfixes DISJOINTS — `acct:` / `ip:`,
+ * deux populations qui ne peuvent pas se confondre — et à connaître la
+ * sentinelle `'anonymous'` de `createUnauthenticatedContext`. La recopier
+ * dans le fichier voisin en aurait fait une jumelle à tenir accordée ; l'y
+ * importer l'aurait rendue invisible à `account-keyed-rate-limit-sweep`, dont
+ * la résolution d'identifiants est par FICHIER.
+ *
+ * ## `hook: 'preHandler'` — même sans en avoir besoin sur cette route-ci
+ *
+ * Mesure du 2026-09-01, contre-intuitive et qu'il faut dire : sur cette route,
+ * `authContext` est présent aux TROIS placements de hook, `onRequest` par
+ * défaut compris. `addRouteRateHook` (`index.js:236`) fait
+ * `routeOptions[hook].push(hookHandler)` quand le tableau existe ; la route
+ * déclarant `onRequest: [fastify.authenticate]`, le limiteur est appendu
+ * DERRIÈRE l'authentification. La clé par compte y serait donc calculable par
+ * ACCIDENT d'ordonnancement. Le hook est posé quand même : il rend la
+ * propriété indépendante de la forme sous laquelle la route monte sa garde —
+ * la déplacer en `preValidation` suffirait, sinon, à faire retomber la clé sur
+ * l'adresse sans qu'une ligne de ce fichier bouge.
+ *
+ * ## `skipOnError: false` — la panne du gardien n'est pas l'absence de garde
+ *
+ * Ce geste fait partir un e-mail vers une adresse que l'APPELANT choisit :
+ * c'est la classe de `createContactChangeRateLimitConfig`, et son arbitrage.
+ * Sans cette ligne, la config héritait du `skipOnError: true` global, si bien
+ * qu'un Redis indisponible en faisait une primitive d'envoi sans plafond.
+ */
+export function createInvitationRateLimitConfig() {
+  return {
+    max: 10,
+    timeWindow: '1 hour',
+    hook: 'preHandler' as const,
+    skipOnError: false,
+    keyGenerator: (request: FastifyRequest) => `invitations:email:${resolveCallerKey(request)}`,
+    errorResponseBuilder: () => ({
+      success: false,
+      statusCode: 429,
+      error: {
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: 'Too many invitations (invitations/email). Please try again later.'
+      }
+    })
+  };
+}
+
+/**
+ * Les trois limiteurs de la surface d'appels, chacun avec le sens d'échec
+ * qu'il ASSUME — plus la valeur globale héritée en silence.
+ *
+ * `registerGlobalRateLimiter` (`middleware/rate-limiter.ts`, monté en
+ * `server.ts`) pose `skipOnError: true`, qu'@fastify/rate-limit fusionne par
+ * `Object.assign` (`mergeParams`) dans toute config de route qui ne le
+ * redéclare pas. Les trois entrées ci-dessous héritaient donc du côté ouvert
+ * sans que personne l'ait décidé. Elles le DÉCLARENT désormais, ce qui ne
+ * change pas le comportement mais change ce qu'on peut en dire — et fait
+ * rougir un témoin le jour où quelqu'un l'inverse sans y penser.
+ *
+ * Le domaine des appels échoue OUVERT, sur les trois labels (#4334, critère 2 :
+ * « fail-open assumé là où la disponibilité prime — sons, appels ») :
+ * `operations` couvre RACCROCHER (`DELETE /calls/:callId`), QUITTER
+ * (`DELETE /calls/:callId/participants`) et lire l'appel en cours ; `join`
+ * couvre le rejoindre. Les refuser pendant une panne Redis n'économiserait
+ * rien et ENFERMERAIT l'utilisateur dans un appel qu'il ne peut plus
+ * quitter — au prix d'un 500, en plus. Le plafond protège d'un abus ; ici
+ * l'échec fermé fabriquerait la panne qu'il prétend contenir.
+ *
+ * `initiate` est le seul des trois dont l'action porte hors du produit (elle
+ * fait SONNER l'appareil de chaque participant), donc le seul pour lequel le
+ * côté fermé se plaide. Il reste OUVERT ici, comme le critère l'écrit, parce
+ * que le fermer tuerait toute émission d'appel pendant une panne Redis — un
+ * dommage certain et total contre un abus hypothétique et borné par
+ * l'autorisation de conversation vérifiée dans le handler. Inverser ce choix
+ * est une décision produit, pas un correctif : elle se prend dans une issue,
+ * pas dans ce fichier.
  */
 export const ROUTE_RATE_LIMITS = {
   initiateCall: createRateLimitConfig(
     RATE_LIMITS.INITIATE_CALL.max,
     RATE_LIMITS.INITIATE_CALL.timeWindow,
-    'initiate'
+    'initiate',
+    'ouvert'
   ),
   joinCall: createRateLimitConfig(
     RATE_LIMITS.JOIN_CALL.max,
     RATE_LIMITS.JOIN_CALL.timeWindow,
-    'join'
+    'join',
+    'ouvert'
   ),
   callOperations: createRateLimitConfig(
     RATE_LIMITS.CALL_OPERATIONS.max,
     RATE_LIMITS.CALL_OPERATIONS.timeWindow,
-    'operations'
+    'operations',
+    'ouvert'
+  ),
+  activeCallProbe: createRateLimitConfig(
+    RATE_LIMITS.ACTIVE_CALL_PROBE.max,
+    RATE_LIMITS.ACTIVE_CALL_PROBE.timeWindow,
+    'active',
+    'ouvert'
   )
 };

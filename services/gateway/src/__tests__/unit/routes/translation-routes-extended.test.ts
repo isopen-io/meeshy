@@ -4,7 +4,7 @@
  *   - getPredictedModelType() basic/medium/premium (lines 46-48)
  *   - translationRoutes() throw when no translationService (line 271)
  *   - POST /translate-blocking message_id path: e2ee, forbidden, same-lang, polling, fallback
- *   - POST /translate-blocking text path: polling, fallback
+ *   - POST /translate-blocking text path: direct translation, never persisted
  *   - GET /test: success + failure
  *
  * IMPORTANT: fake timers must be activated AFTER buildApp() because Fastify's
@@ -15,6 +15,14 @@
  */
 
 import { describe, it, expect, jest, afterEach } from '@jest/globals';
+
+// #16557 — la loi de lecture est prouvée sur une base en mémoire par
+// `translation-read-law.test.ts` ; ce fichier juge autre chose et la tient pour
+// acquise, sauf là où il la refuse explicitement.
+const mockReaderMayTranslate = jest.fn<any>().mockResolvedValue(true);
+jest.mock('../../../services/messaging/translationReadGate', () => ({
+  readerMayTranslateMessage: (...args: unknown[]) => mockReaderMayTranslate(...args),
+}));
 import Fastify, { FastifyInstance } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -23,18 +31,6 @@ jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
 
 jest.mock('../../../services/message-translation/MessageTranslationService', () => ({
   MessageTranslationService: jest.fn().mockImplementation(() => ({})),
-}));
-
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-      message: { type: 'string' },
-      code: { type: 'string' },
-    },
-  },
 }));
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
@@ -111,6 +107,7 @@ async function buildApp(opts: BuildOpts = {}): Promise<FastifyInstance> {
   app.decorate('translationService', {
     handleNewMessage: jest.fn<any>().mockResolvedValue({ messageId: MSG_ID }),
     getTranslation: jest.fn<any>().mockResolvedValue(mockTranslationResult),
+    translateTextDirectly: jest.fn<any>().mockResolvedValue(mockTranslationResult),
     ...translationServiceOverrides,
   });
 
@@ -152,34 +149,19 @@ describe('translationRoutes — throws when translationService missing (line 271
 
 // ─── getPredictedModelType (lines 46-48) via text path with model_type=basic ─
 
-describe('getPredictedModelType via translate-blocking text path (lines 46-48)', () => {
-  it('predicts basic for short text (<20 chars)', async () => {
-    const app = await buildApp({ participantFindResult: { id: 'p-1' } });
-    const res = await injectWithFakeTimers(app, {
+describe('getPredictedModelType via translate-blocking text path', () => {
+  it.each([
+    ['basic', 'Hi'],
+    ['medium', 'A'.repeat(50)],
+    ['premium', 'A'.repeat(150)],
+  ])('predicts %s for a text of that length', async (expectedModel, text) => {
+    const app = await buildApp();
+    const res = await app.inject({
       method: 'POST', url: '/translate-blocking',
-      payload: { text: 'Hi', target_language: 'fr', conversation_id: CONV_ID, model_type: 'basic' },
+      payload: { text, target_language: 'fr', model_type: 'basic' },
     });
     expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-
-  it('predicts medium for 50-char text (20-100 chars)', async () => {
-    const app = await buildApp({ participantFindResult: { id: 'p-1' } });
-    const res = await injectWithFakeTimers(app, {
-      method: 'POST', url: '/translate-blocking',
-      payload: { text: 'A'.repeat(50), target_language: 'fr', conversation_id: CONV_ID, model_type: 'basic' },
-    });
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-
-  it('predicts premium for long text (>100 chars)', async () => {
-    const app = await buildApp({ participantFindResult: { id: 'p-1' } });
-    const res = await injectWithFakeTimers(app, {
-      method: 'POST', url: '/translate-blocking',
-      payload: { text: 'A'.repeat(150), target_language: 'fr', conversation_id: CONV_ID, model_type: 'basic' },
-    });
-    expect(res.statusCode).toBe(200);
+    expect((app as any).translationService.translateTextDirectly).toHaveBeenCalledWith(text, 'auto', 'fr', expectedModel);
     await app.close();
   });
 });
@@ -205,7 +187,8 @@ describe('POST /translate-blocking — message_id e2ee returns 400 (line 337)', 
 // ─── message_id path: access denied (lines 342-347) ─────────────────────────
 
 describe('POST /translate-blocking — message_id forbidden (line 345)', () => {
-  it('returns 403 when user is not a participant', async () => {
+  it('returns 404 — the refusal of a non-reader, indistinguishable from an unknown message (#16557)', async () => {
+    mockReaderMayTranslate.mockResolvedValueOnce(false);
     const app = await buildApp({
       messageFindResult: makeMessage({
         conversation: { participants: [{ userId: 'other-user' }] },
@@ -215,7 +198,7 @@ describe('POST /translate-blocking — message_id forbidden (line 345)', () => {
       method: 'POST', url: '/translate-blocking',
       payload: { message_id: MSG_ID, target_language: 'fr' },
     });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
     await app.close();
   });
 });
@@ -388,59 +371,35 @@ describe('POST /translate-blocking — text path — no auth (line 429)', () => 
   });
 });
 
-// ─── text path: polls and returns result (lines 449-476) ─────────────────────
+// ─── text path: translated directly, never persisted (#7740) ─────────────────
 
-describe('POST /translate-blocking — text path — translation found (lines 449-476)', () => {
-  it('returns 200 with translation on first poll', async () => {
+describe('POST /translate-blocking — text path', () => {
+  it('returns the direct translation and writes nothing', async () => {
     const app = await buildApp({ participantFindResult: { id: 'p-1' } });
-    const res = await injectWithFakeTimers(app, {
+    const res = await app.inject({
       method: 'POST', url: '/translate-blocking',
       payload: { text: 'Hello world', target_language: 'fr', conversation_id: CONV_ID },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.data.translated_text).toBe('Bonjour le monde');
+    expect(res.json().data.translated_text).toBe('Bonjour le monde');
+    expect((app as any).translationService.handleNewMessage).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it('falls back to senderId when no participant found (line 442)', async () => {
-    const app = await buildApp({ participantFindResult: null });
-    const res = await injectWithFakeTimers(app, {
-      method: 'POST', url: '/translate-blocking',
-      payload: { text: 'Hello', target_language: 'fr', conversation_id: CONV_ID },
-    });
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-
-  it('uses provided source_language in messageData (line 443)', async () => {
-    const app = await buildApp({ participantFindResult: { id: 'p-2' } });
-    const res = await injectWithFakeTimers(app, {
-      method: 'POST', url: '/translate-blocking',
-      payload: { text: 'Hallo', target_language: 'fr', conversation_id: CONV_ID, source_language: 'de' },
-    });
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-});
-
-// ─── text path: fallback when getTranslation always null (lines 465-477) ─────
-
-describe('POST /translate-blocking — text path fallback (lines 465-477)', () => {
-  it('returns 200 with [FR] prefix when translation never arrives', async () => {
+  it('relays the fallback the service returns when the translator is unavailable', async () => {
     const app = await buildApp({
-      participantFindResult: { id: 'p-3' },
       translationServiceOverrides: {
-        getTranslation: jest.fn<any>().mockResolvedValue(null),
+        translateTextDirectly: jest.fn<any>().mockResolvedValue({
+          ...mockTranslationResult, translatedText: '[FR] Hello world', confidenceScore: 0.1, modelType: 'fallback'
+        }),
       },
     });
-    const res = await injectWithFakeTimers(app, {
+    const res = await app.inject({
       method: 'POST', url: '/translate-blocking',
-      payload: { text: 'Hello world', target_language: 'fr', conversation_id: CONV_ID },
+      payload: { text: 'Hello world', target_language: 'fr' },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.data.translated_text).toContain('[FR]');
+    expect(res.json().data.translated_text).toContain('[FR]');
     await app.close();
   });
 });

@@ -37,35 +37,118 @@ struct PendingCommentMedia: Identifiable, Sendable {
     }
 }
 
-/// Upload d'un média de commentaire via le pipeline TUS partagé (même mécanisme
-/// que posts/stories), avec `uploadContext: "comment"` → le gateway crée un
-/// `PostMedia` pending (postId/commentId = null) que `addComment(mediaId:)` lie
-/// ensuite au commentaire. Renvoie l'ID du PostMedia créé.
+/// Les fichiers locaux d'un commentaire en cours d'envoi.
+///
+/// **Le téléversement et la création vivent dans `CommentPublisher`** — le seul
+/// chemin réseau d'un commentaire, qui lie chaque requête au compte de
+/// l'auteur (#9743). Le fichier local SURVIT au téléversement : il n'est
+/// retiré qu'une fois le commentaire créé, sinon un échec de création ne
+/// laisserait rien à confier à la file.
 enum CommentMediaUploader {
-    enum UploadError: Error { case missingAuth }
+    /// Le commentaire est créé : ses fichiers locaux ne servent plus.
+    static func discardLocalFiles(_ medias: [PendingCommentMedia]) {
+        for media in medias { try? FileManager.default.removeItem(at: media.fileURL) }
+    }
+}
 
-    static func upload(_ media: PendingCommentMedia) async throws -> String {
-        guard let baseURL = URL(string: MeeshyConfig.shared.serverOrigin),
-              let token = APIClient.shared.authToken else {
-            throw UploadError.missingAuth
+/// Les traces de recette du chemin d'envoi d'un commentaire (Debug) :
+/// `xcrun simctl spawn booted log stream --level debug --predicate 'eventMessage CONTAINS "CommentSend"'`.
+enum CommentSendTrace {
+    static func log(_ message: @autoclosure () -> String) {
+        #if DEBUG
+        let text = message()
+        MeeshyLog.logger(.commentSend).debug("[CommentSend] \(text, privacy: .public)")
+        #endif
+    }
+}
+
+/// **Un commentaire que l'envoi direct n'a pas pu poser rejoint la file AVEC
+/// ses pièces** (#9743) — site unique des trois hôtes de commentaire.
+enum CommentMediaDelivery {
+
+    /// La cause réelle d'un envoi direct qui a échoué.
+    static func cause(of error: Error) -> Error {
+        (error as? CommentPublisher.Interrupted)?.underlying ?? error
+    }
+
+    /// **Un refus que la file ne ferait que répéter** : la limite du jour, ou
+    /// un refus permanent du serveur (contenu invalide, accès refusé,
+    /// publication disparue). Le confier à la file ne sert à rien — le
+    /// commentaire revient au composeur, avec sa raison.
+    static func isPermanentRefusal(_ error: Error) -> Bool {
+        let cause = cause(of: error)
+        if DailyGestureLimit.from(cause) != nil { return true }
+        switch cause {
+        case MeeshyError.forbidden, MeeshyError.rejected: return true
+        case MeeshyError.server(let status, _): return [400, 403, 404, 413, 422].contains(status)
+        default: return false
         }
-        let uploader = TusUploadManager(baseURL: baseURL)
-        let result = try await uploader.uploadFile(
-            fileURL: media.fileURL,
-            mimeType: media.mimeType,
-            credential: .bearer(token),
-            uploadContext: "comment",
-            thumbHash: media.thumbHash
-        )
-        try? FileManager.default.removeItem(at: media.fileURL)
-        return result.id
+    }
+
+    /// Ce que la tentative directe avait déjà monté quand elle s'est arrêtée.
+    static func acquired(from error: Error) -> [UploadedCommentMedia] {
+        (error as? CommentPublisher.Interrupted)?.acquired ?? []
+    }
+
+    /// **Le compte courant est-il encore l'auteur ?** L'enfilement arrive après
+    /// des attentes réseau ; si le compte a changé entre-temps, la ligne ne
+    /// s'écrit pas dans la file du suivant. Rend le compte vérifié.
+    static func confirmAuthor(_ payload: CreateCommentPayload) throws -> String {
+        guard let current = CommentPublisher.currentAccountId(),
+              CommentOwnership.owns(payload, currentUserId: current) else {
+            throw CommentOwnership.Refusal.notTheAuthor
+        }
+        return current
+    }
+
+    /// Confie le commentaire à la file. Sans pièce, c'est l'enfilement
+    /// ordinaire ; avec, les fichiers sont copiés dans un dossier durable et
+    /// la ligne les rejoue. Refusé si le compte courant n'est pas l'auteur
+    /// déclaré par la charge.
+    static func entrust(_ payload: CreateCommentPayload, medias: [PendingCommentMedia],
+                        acquired: [UploadedCommentMedia]) async throws {
+        // Lu UNE fois : c'est ce compte-là qui possède la ligne ET le dossier
+        // de ses pièces. La file revérifie à l'écriture et au rejeu.
+        let owner: String
+        do {
+            owner = try confirmAuthor(payload)
+        } catch {
+            CommentSendTrace.log("file : refus — le compte du jeton n'est pas l'auteur (jeton lisible : \(CommentPublisher.currentAccountId() != nil))")
+            throw error
+        }
+        CommentSendTrace.log("file : enfilement décidé, pièces=\(medias.count), acquises=\(acquired.count)")
+        guard !medias.isEmpty else {
+            do {
+                try await OfflineQueue.shared.enqueueComment(payload, ownerId: owner)
+                CommentSendTrace.log("file : accepté (texte)")
+            } catch {
+                CommentSendTrace.log("file : refusé — \(String(describing: error))")
+                throw error
+            }
+            return
+        }
+        do {
+            try await OfflineQueue.shared.enqueueCommentMedia(
+                payload,
+                sourceMediaURLs: medias.map(\.fileURL),
+                sourceMediaMimeTypes: medias.map(\.mimeType),
+                acquired: acquired,
+                ownerId: owner
+            )
+            CommentSendTrace.log("file : accepté avec \(medias.count) pièce(s)")
+        } catch {
+            CommentSendTrace.log("file : refusé — \(String(describing: error))")
+            throw error
+        }
+        // Les fichiers d'origine restent : la ligne optimiste les affiche
+        // encore. La file tient SA copie, durable.
     }
 }
 
 /// Helpers partagés de staging d'un média de commentaire — utilisés par TOUTES les
 /// surfaces de composer commentaire (feed/reels `CommentsSheetView`, `PostDetailView`,
-/// composer stories) pour garantir un comportement identique (un seul média ;
-/// image/vidéo/audio ; voix réelle).
+/// composer stories) pour garantir un comportement identique (image/vidéo/audio ;
+/// voix réelle ; `MAX_POST_MEDIA` pièces au plus, le plafond du serveur).
 enum CommentComposerStaging {
     /// Construit un `PendingCommentMedia` depuis une pièce jointe stagée par le
     /// composer. Renvoie nil pour les types hors périmètre (file/location) ou sans
@@ -94,10 +177,30 @@ enum CommentComposerStaging {
         )
     }
 
-    /// Premier média exploitable (image/vidéo/audio) d'une liste stagée — un
-    /// commentaire ne porte qu'un seul média.
+    /// Les médias exploitables d'une zone, dans son ordre, plafonnés à ce que
+    /// le serveur accepte sur un commentaire (`attachmentIds`, `MAX_POST_MEDIA`,
+    /// #9736). La zone en montrait plusieurs et l'envoi n'en prenait qu'un.
+    static func pendingMedia(in attachments: [ComposerAttachment], limit: Int = MAX_POST_MEDIA) -> [PendingCommentMedia] {
+        Array(attachments.compactMap { pendingMedia(from: $0) }.prefix(max(0, limit)))
+    }
+
+    /// Premier média exploitable d'une zone — pour l'hôte qui n'en porte
+    /// qu'un (la réponse à une story).
     static func firstPendingMedia(in attachments: [ComposerAttachment]) -> PendingCommentMedia? {
         attachments.lazy.compactMap { pendingMedia(from: $0) }.first
+    }
+
+    /// La pièce de zone qui correspond à un média en partance — pour la rendre
+    /// au composeur quand l'envoi n'a pas pu être gardé.
+    static func attachment(from media: PendingCommentMedia) -> ComposerAttachment {
+        let type: ComposerAttachmentType
+        switch media.optimistic.type {
+        case .video: type = .video
+        case .audio: type = .voice
+        case .image, .document: type = .image
+        }
+        return ComposerAttachment(id: media.id, type: type, name: media.optimistic.fileName ?? media.fileURL.lastPathComponent,
+                                  url: media.fileURL, thumbnailColor: media.optimistic.thumbnailColor)
     }
 
     /// Pièce jointe voix portant un VRAI fichier audio (issu d'`AudioRecorderManager`).
@@ -107,27 +210,36 @@ enum CommentComposerStaging {
         return voice
     }
 
-    /// `PhotosPickerItem[]` → `ComposerAttachment[]` (image/vidéo), écrits dans des
-    /// fichiers temporaires. Un commentaire ne porte qu'un média → bornage à 1 fait
-    /// par l'appelant (maxSelectionCount: 1).
-    static func photoAttachments(from items: [PhotosPickerItem]) async -> [ComposerAttachment] {
-        var result: [ComposerAttachment] = []
-        for item in items {
-            let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
-            guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
-            let ext = isVideo ? "mov" : "jpg"
-            let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("comment_\(UUID().uuidString).\(ext)")
-            guard (try? data.write(to: url)) != nil else { continue }
-            if isVideo {
-                result.append(ComposerAttachment(
-                    id: "video-\(UUID().uuidString)", type: .video,
-                    name: "Video", url: url, size: data.count, thumbnailColor: "FF6B6B"))
-            } else {
-                result.append(ComposerAttachment.image(url: url))
-            }
+    /// **L'extension d'une image, lue dans ses OCTETS** (#4925).
+    ///
+    /// `loadTransferable(type: Data.self)` rend le fichier ORIGINAL de la
+    /// photothèque — un GIF y arrive intact. L'écrire sous un nom `.jpg` (ce que
+    /// faisait cette fonction) est une perte de données qui ne ressemble pas à
+    /// une perte de données : le `mimeType` se dérive ensuite de l'extension
+    /// (`pendingMedia`), et tout l'aval, jusqu'au serveur, ré-encode un GIF
+    /// parfaitement valide en JPEG. Mesuré : 6 448 o de GIF animé arrivés en
+    /// 4 404 o de JPEG fixe.
+    ///
+    /// La table de signatures n'est pas réécrite ici : `MediaCompressor` la
+    /// tient déjà, et c'est elle qui décide plus tard de laisser passer un GIF.
+    /// Deux tables divergeraient au premier format ajouté.
+    ///
+    /// **Seuls les trois formats que le dépôt a DÉJÀ décidé de laisser passer**
+    /// gardent leur extension. `MediaCompressor.compressImageData` rend un GIF et
+    /// un WebP tels quels, et une PNG en PNG ; il transcode en revanche le HEIC
+    /// délibérément (« most web clients cannot decode HEIC inline »). Nommer un
+    /// HEIC `.heic` ici irait donc CONTRE une décision existante, en servant au
+    /// web un format qu'il ne rend pas.
+    ///
+    /// Tout le reste — JPEG compris — reste `jpg`, le comportement d'hier : ce
+    /// lot ouvre un chemin, il ne change pas le cas nominal.
+    static func imageFileExtension(for data: Data) async -> String {
+        switch await MediaCompressor.shared.imageMimeType(of: data) {
+        case "image/gif":  return "gif"
+        case "image/png":  return "png"
+        case "image/webp": return "webp"
+        default:           return "jpg"
         }
-        return result
     }
 
     /// URLs de fichiers importés → `ComposerAttachment[]` (copie sécurisée en temp).
@@ -137,7 +249,7 @@ enum CommentComposerStaging {
             let didAccess = url.startAccessingSecurityScopedResource()
             defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
             let dest = FileManager.default.temporaryDirectory
-                .appendingPathComponent("comment_\(UUID().uuidString)_\(url.lastPathComponent)")
+                .appendingPathComponent(ImportedCopyName.copyName(of: url.lastPathComponent, through: .commentFile))
             try? FileManager.default.copyItem(at: url, to: dest)
             let size = (try? FileManager.default.attributesOfItem(atPath: dest.path))?[.size] as? Int
             result.append(ComposerAttachment.file(url: dest, name: url.lastPathComponent, size: size))
@@ -152,12 +264,11 @@ enum CommentComposerStaging {
 /// réponse à une story (`PostDetailView`, `FeedCommentsSheet`,
 /// `StoryComposerBarView`) : les `.text` d'un dépôt sont fusionnés en UNE seule
 /// insertion, les `.file` sont routés par `ComposerIngestRouter` vers les
-/// pipelines EXISTANTS de ces surfaces. Réutilisation délibérée (spec
-/// 2026-07-30, lot 1) : toute nouvelle voie d'ingestion contournerait la
+/// pipelines EXISTANTS de ces surfaces. Réutilisation délibérée (lot 1): toute nouvelle voie d'ingestion contournerait la
 /// compression, l'affichage optimiste et le nettoyage des temporaires.
 enum CommentComposerIngestion {
 
-    private static let log = Logger(subsystem: "me.meeshy.app", category: "comment-ingest")
+    private static let log = MeeshyLog.logger(.commentIngest)
 
     /// Fusionne les `.text` d'un dépôt en un seul bloc — concaténés par un saut
     /// de ligne, dans l'ordre du dépôt — pour UNE insertion : N insertions
@@ -266,7 +377,7 @@ enum CommentComposerIngestion {
 
     /// Vidéo déposée → compression partagée (`deleteSourceAfterCompression` :
     /// la source du dépôt est consommée par le service) puis pièce jointe vidéo
-    /// du staging commentaire — mêmes champs que `photoAttachments`.
+    /// du staging commentaire — mêmes champs que `CommentAttachmentIntake.placeholder`.
     private static func stageVideo(_ file: (url: URL, name: String, mime: String),
                                    accentColor: String) async -> ComposerAttachment? {
         let preparing = AttachmentPreparationService.shared.prepareVideo(

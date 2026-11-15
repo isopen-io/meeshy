@@ -3,9 +3,7 @@
  * Targets uncovered paths not reached by UploadProcessor.test.ts:
  *
  * - determinePublicUrl fallback (lines 122-124)
- * - amplifyAudio: stderr data + successful exit (lines 203, 220-230)
- * - amplifyAudio: temp-write error resolve (lines 242-244)
- * - maybeTranscodeVideo: all branches (lines 280-311)
+ * - transcodeVideoRendition (ex-maybeTranscodeVideo): all branches
  * - uploadFile video branch: generateVideoThumbnail + transcoded path (lines 421-439)
  * - uploadEncryptedFile video branch: generateVideoThumbnailFromBuffer (line 556)
  *
@@ -29,6 +27,7 @@ const mockMetadataManager = {
   extractMetadata: jest.fn() as jest.Mock<any>,
   generateThumbnail: jest.fn() as jest.Mock<any>,
   generateVideoThumbnail: jest.fn() as jest.Mock<any>,
+  probeMediaStreams: jest.fn(async () => ({ video: true, audio: true })) as jest.Mock<any>,
   generateImageVariants: jest.fn() as jest.Mock<any>,
   generateThumbnailFromBuffer: jest.fn() as jest.Mock<any>,
   generateVideoThumbnailFromBuffer: jest.fn() as jest.Mock<any>,
@@ -95,9 +94,19 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 // ─── Imports after mocks ──────────────────────────────────────────────────────
 
-import { UploadProcessor } from '../../../services/attachments/UploadProcessor';
-import type { FileToUpload } from '../../../services/attachments/UploadProcessor';
+import { UploadProcessor, type FileToUpload } from '../../../services/attachments/UploadProcessor';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { SIGNATURE_BYTES_BY_MIME_TYPE } from '../../../services/attachments/__tests__/signature-fixtures';
+import { transcodeVideoRendition } from '../../../services/attachments/media-renditions';
+import { runFfmpeg } from '../../../services/attachments/ffmpeg-run';
+
+// Le transcodage vit dans la fabrique de rendus (#11260), partagée avec le
+// chemin résumable : ces branches se jouent désormais contre elle.
+const maybeTranscodeVideo = (
+  filePath: string,
+  metadata: { width?: number; height?: number; bitrate?: number; videoCodec?: string },
+  fileSize: number
+) => transcodeVideoRendition({ uploadBasePath: '/test/uploads', runFfmpeg }, { relPath: filePath, metadata, fileSize });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -107,10 +116,11 @@ class MockProc extends EventEmitter {
 }
 
 function makeFile(overrides?: Partial<FileToUpload>): FileToUpload {
+  const mimeType = overrides?.mimeType ?? 'video/mp4';
   return {
-    buffer: Buffer.from('content'),
+    buffer: SIGNATURE_BYTES_BY_MIME_TYPE[mimeType] ?? Buffer.from('content'),
     filename: 'test.mp4',
-    mimeType: 'video/mp4',
+    mimeType,
     size: 1024 * 100,
     ...overrides,
   };
@@ -215,89 +225,18 @@ describe('UploadProcessor – extra coverage', () => {
     });
   });
 
-  // ─── amplifyAudio paths (lines 203, 220-230) ─────────────────────────────
-
-  describe('amplifyAudio', () => {
-    it('covers stderr data handler and successful exit returning amplified buffer', async () => {
-      const proc = new MockProc();
-      mockSpawnFn.mockReturnValueOnce(proc);
-
-      const p = (processor as any).amplifyAudio(Buffer.from('audio'), 'audio/mpeg');
-
-      // yield so the fs.writeFile promise resolves and spawn is called
-      await new Promise<void>(r => setImmediate(r));
-
-      proc.stderr.emit('data', Buffer.from('ffmpeg output'));   // line 203
-      proc.emit('close', 0);                                    // lines 220-230
-
-      const result = await p;
-      // fs.readFile mock returns Buffer.from('amplified')
-      expect(result).toEqual(Buffer.from('amplified'));
-    });
-
-    it('returns original buffer when ffmpeg exits with non-zero code', async () => {
-      const orig = Buffer.from('original');
-      const proc = new MockProc();
-      mockSpawnFn.mockReturnValueOnce(proc);
-
-      const p = (processor as any).amplifyAudio(orig, 'audio/mpeg');
-      await new Promise<void>(r => setImmediate(r));
-      proc.emit('close', 1);
-
-      expect(await p).toEqual(orig);
-    });
-
-    it('covers readFile error inside close handler (lines 227-230)', async () => {
-      const orig = Buffer.from('fallback');
-      const proc = new MockProc();
-      mockSpawnFn.mockReturnValueOnce(proc);
-
-      const p = (processor as any).amplifyAudio(orig, 'audio/webm');
-      await new Promise<void>(r => setImmediate(r));
-
-      // Make readFile throw so the inner catch block fires
-      mockFsReadFile.mockRejectedValueOnce(new Error('read error'));
-      proc.emit('close', 0);
-
-      // should still resolve with original buffer
-      expect(await p).toEqual(orig);
-    });
-
-    it('resolves with original buffer when temp-write throws (lines 241-244)', async () => {
-      const orig = Buffer.from('audio');
-      mockFsWriteFile.mockRejectedValueOnce(new Error('disk full'));
-
-      const result = await (processor as any).amplifyAudio(orig, 'audio/mp4');
-      expect(result).toEqual(orig);
-    });
-
-    it('resolves with original buffer when ffmpeg spawn emits error', async () => {
-      const orig = Buffer.from('audio');
-      const proc = new MockProc();
-      mockSpawnFn.mockImplementationOnce(() => {
-        process.nextTick(() => proc.emit('error', new Error('ENOENT')));
-        return proc;
-      });
-
-      const p = (processor as any).amplifyAudio(orig, 'audio/ogg');
-      await new Promise<void>(r => setImmediate(r));
-      const result = await p;
-      expect(result).toEqual(orig);
-    });
-  });
-
   // ─── maybeTranscodeVideo (lines 280-311) ─────────────────────────────────
 
   describe('maybeTranscodeVideo', () => {
     it('returns null when VIDEO_TRANSCODE is not "true"', async () => {
-      const r = await (processor as any).maybeTranscodeVideo('v.mp4', {}, 1000);
+      const r = await maybeTranscodeVideo('v.mp4', {}, 1000);
       expect(r).toBeNull();
     });
 
     it('returns null when planVideoTranscode returns null', async () => {
       process.env.VIDEO_TRANSCODE = 'true';
       mockPlanVideoTranscode.mockReturnValueOnce(null);
-      const r = await (processor as any).maybeTranscodeVideo('v.mp4', {}, 1000);
+      const r = await maybeTranscodeVideo('v.mp4', {}, 1000);
       expect(r).toBeNull();
     });
 
@@ -305,7 +244,7 @@ describe('UploadProcessor – extra coverage', () => {
       process.env.VIDEO_TRANSCODE = 'true';
       process.env.VIDEO_TRANSCODE_MAX_SYNC_BYTES = '500';
       mockPlanVideoTranscode.mockReturnValueOnce({ scale: '1280:-1' });
-      const r = await (processor as any).maybeTranscodeVideo('v.mp4', {}, 1000);
+      const r = await maybeTranscodeVideo('v.mp4', {}, 1000);
       expect(r).toBeNull();
     });
 
@@ -317,7 +256,7 @@ describe('UploadProcessor – extra coverage', () => {
         process.nextTick(() => proc.emit('error', new Error('no ffmpeg')));
         return proc;
       });
-      const r = await (processor as any).maybeTranscodeVideo('v.mp4', {}, 100);
+      const r = await maybeTranscodeVideo('v.mp4', {}, 100);
       expect(r).toBeNull();
       expect(mockFsUnlink).toHaveBeenCalled();
     });
@@ -331,7 +270,7 @@ describe('UploadProcessor – extra coverage', () => {
         return proc;
       });
       mockFsStat.mockResolvedValueOnce({ size: 0 });
-      const r = await (processor as any).maybeTranscodeVideo('v.mp4', {}, 1000);
+      const r = await maybeTranscodeVideo('v.mp4', {}, 1000);
       expect(r).toBeNull();
     });
 
@@ -344,7 +283,7 @@ describe('UploadProcessor – extra coverage', () => {
         return proc;
       });
       mockFsStat.mockResolvedValueOnce({ size: 2000 }); // >= original 1000
-      const r = await (processor as any).maybeTranscodeVideo('v.mp4', {}, 1000);
+      const r = await maybeTranscodeVideo('v.mp4', {}, 1000);
       expect(r).toBeNull();
     });
 
@@ -357,7 +296,7 @@ describe('UploadProcessor – extra coverage', () => {
         return proc;
       });
       mockFsStat.mockResolvedValueOnce({ size: 400 }); // < original 1000
-      const r = await (processor as any).maybeTranscodeVideo('test/v.mp4', {}, 1000);
+      const r = await maybeTranscodeVideo('test/v.mp4', {}, 1000);
       expect(r).not.toBeNull();
       expect(r!.mimeType).toBe('video/mp4');
       expect(r!.fileSize).toBe(400);
@@ -389,7 +328,7 @@ describe('UploadProcessor – extra coverage', () => {
         .mockResolvedValueOnce({ width: 1280, height: 720, duration: 5000, fps: 30, videoCodec: 'h264', bitrate: 3000 })
         .mockResolvedValueOnce({ width: 1280, height: 720, duration: 5000, fps: 30, videoCodec: 'h264', bitrate: 1500 });
 
-      const file = makeFile({ size: 102400 });
+      const file = makeFile({ buffer: Buffer.concat([SIGNATURE_BYTES_BY_MIME_TYPE['video/mp4'], Buffer.alloc(102400 - SIGNATURE_BYTES_BY_MIME_TYPE['video/mp4'].length, 1)]), size: 102400 });
       await processor.uploadFile(file, USER_ID, false, MSG_ID);
 
       // extractMetadata called twice: initial + re-probe after transcode
@@ -411,7 +350,7 @@ describe('UploadProcessor – extra coverage', () => {
         .mockResolvedValueOnce({ width: 1280, height: 720 })
         .mockRejectedValueOnce(new Error('re-probe failed'));
 
-      const file = makeFile({ size: 102400 });
+      const file = makeFile({ buffer: Buffer.concat([SIGNATURE_BYTES_BY_MIME_TYPE['video/mp4'], Buffer.alloc(102400 - SIGNATURE_BYTES_BY_MIME_TYPE['video/mp4'].length, 1)]), size: 102400 });
       // Should not throw even when re-probe fails
       const result = await processor.uploadFile(file, USER_ID, false, MSG_ID);
       expect(result).toBeDefined();
@@ -454,7 +393,7 @@ describe('UploadProcessor – extra coverage', () => {
       mockPlanVideoTranscode.mockReturnValueOnce({ scale: '1280:-1' });
       mockBuildVideoTranscodeArgs.mockReturnValueOnce(['-i', 'in.mp4', 'out.mp4']);
 
-      const p = (processor as any).maybeTranscodeVideo('test/v.mp4', {}, 10000);
+      const p = maybeTranscodeVideo('test/v.mp4', {}, 10000);
 
       // Advance time past the 5-minute timeout
       jest.advanceTimersByTime(5 * 60 * 1000 + 1);
@@ -474,7 +413,7 @@ describe('UploadProcessor – extra coverage', () => {
         process.nextTick(() => proc.emit('close', 1)); // non-zero exit
         return proc;
       });
-      const r = await (processor as any).maybeTranscodeVideo('v.mp4', {}, 100);
+      const r = await maybeTranscodeVideo('v.mp4', {}, 100);
       expect(r).toBeNull(); // maybeTranscodeVideo catches rejection
     });
   });
@@ -518,43 +457,6 @@ describe('UploadProcessor – extra coverage', () => {
       process.env.PORT = '4000';
       const p = new UploadProcessor(mockPrisma);
       expect(p.getAttachmentUrl('f.jpg')).toContain('localhost:4000');
-    });
-  });
-
-  // ─── amplifyAudio format branches (lines 170-171, 173) ──────────────────
-
-  describe('amplifyAudio format branches', () => {
-    it('uses wav output format for audio/wav (line 170)', async () => {
-      const proc = new MockProc();
-      mockSpawnFn.mockReturnValueOnce(proc);
-      const p = (processor as any).amplifyAudio(Buffer.from('audio'), 'audio/wav');
-      await new Promise<void>(r => setImmediate(r));
-      proc.emit('close', 0);
-      await p;
-      const spawnArgs = mockSpawnFn.mock.calls[0][1] as string[];
-      expect(spawnArgs.some((a: string) => a.includes('.wav'))).toBe(true);
-    });
-
-    it('uses mp3 output format for audio/mp3 (line 171)', async () => {
-      const proc = new MockProc();
-      mockSpawnFn.mockReturnValueOnce(proc);
-      const p = (processor as any).amplifyAudio(Buffer.from('audio'), 'audio/mp3');
-      await new Promise<void>(r => setImmediate(r));
-      proc.emit('close', 0);
-      await p;
-      const spawnArgs = mockSpawnFn.mock.calls[0][1] as string[];
-      expect(spawnArgs.some((a: string) => a.includes('.mp3'))).toBe(true);
-    });
-
-    it('uses m4a output format for audio/m4a (line 173)', async () => {
-      const proc = new MockProc();
-      mockSpawnFn.mockReturnValueOnce(proc);
-      const p = (processor as any).amplifyAudio(Buffer.from('audio'), 'audio/m4a');
-      await new Promise<void>(r => setImmediate(r));
-      proc.emit('close', 0);
-      await p;
-      const spawnArgs = mockSpawnFn.mock.calls[0][1] as string[];
-      expect(spawnArgs.some((a: string) => a.includes('.m4a'))).toBe(true);
     });
   });
 

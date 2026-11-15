@@ -176,8 +176,8 @@ Phase 2 — Implémentation (3 agents parallèles en worktrees)
   │                    services/gateway/src/routes/posts/index.ts
   │
   ├── ios-viewer     → packages/MeeshySDK/Sources/MeeshyUI/Story/StoryCanvasReaderView.swift (NEW)
-  │                    apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift
-  │                    apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift
+  │                    apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift
+  │                    apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift
   │
   └── ios-composer   → packages/MeeshySDK/Sources/MeeshyUI/Story/StoryAudioPanel.swift (NEW)
                        packages/MeeshySDK/Sources/MeeshyUI/Story/StoryVoiceRecorder.swift (NEW)

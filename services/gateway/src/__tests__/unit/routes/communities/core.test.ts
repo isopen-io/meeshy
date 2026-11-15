@@ -53,6 +53,9 @@ const mockCommunity = {
 
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
+    messageAttachment: {
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+    },
     community: {
       findUnique: jest.fn<any>().mockResolvedValue(null),
       findFirst: jest.fn<any>().mockResolvedValue(null),
@@ -72,6 +75,9 @@ function makePrisma(overrides: Record<string, any> = {}) {
     conversation: {
       findFirst: jest.fn<any>().mockResolvedValue(null),
       findMany: jest.fn<any>().mockResolvedValue([]),
+      // #4165 : `GET /communities/:id/conversations` compte le VRAI total à
+      // part de la page (`.count()`), en plus du `.findMany` déjà mocké.
+      count: jest.fn<any>().mockResolvedValue(0),
       update: jest.fn<any>().mockResolvedValue({}),
     },
     user: {
@@ -408,7 +414,9 @@ describe('POST /communities/:id/conversations/:conversationId', () => {
     });
     prisma.conversation.findFirst = jest.fn<any>().mockResolvedValue({
       id: CONVERSATION_ID, communityId: null,
-      participants: [{ userId: USER_ID, role: 'member' }],
+      // `admin` : administrer la COMMUNAUTÉ d'arrivée ne suffit plus, il faut
+      // aussi un droit sur la conversation déplacée (#4191).
+      participants: [{ userId: USER_ID, role: 'admin', isActive: true }],
     });
     prisma.conversation.update = jest.fn<any>().mockResolvedValue({
       id: CONVERSATION_ID, communityId: COMMUNITY_ID, participants: [], _count: {}
@@ -419,6 +427,74 @@ describe('POST /communities/:id/conversations/:conversationId', () => {
       url: `/communities/${COMMUNITY_ID}/conversations/${CONVERSATION_ID}`,
     });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe('POST /communities — avatar (#16788)', () => {
+  it('accepte le chemin de stockage que rend un téléversement', async () => {
+    const prisma = makePrisma();
+    prisma.community.findUnique = jest.fn<any>().mockResolvedValue(null);
+    prisma.community.create = jest.fn<any>().mockResolvedValue(mockCommunity);
+    prisma.messageAttachment.findFirst = jest.fn<any>().mockResolvedValue({ id: 'att-own' });
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST', url: '/communities',
+      payload: { name: 'My Community', isPrivate: false, avatar: '2026/11/65f0c0ffee/community_avatar.webp' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(prisma.messageAttachment.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ uploadedBy: USER_ID }) }),
+    );
+    await app.close();
+  });
+
+  it("refuse le fichier d'un autre en 400 IDENTITY_IMAGE_NOT_OWNED sans rien créer (#16811)", async () => {
+    const prisma = makePrisma();
+    prisma.community.findUnique = jest.fn<any>().mockResolvedValue(null);
+    prisma.community.create = jest.fn<any>().mockResolvedValue(mockCommunity);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST', url: '/communities',
+      payload: { name: 'My Community', isPrivate: false, avatar: '2026/11/usr-autre/photo_privee.jpg' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('IDENTITY_IMAGE_NOT_OWNED');
+    expect(prisma.community.create).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("refuse un avatar servi par un hôte tiers en 400 IDENTITY_IMAGE_NOT_OWNED sans rien créer (#16809)", async () => {
+    const prisma = makePrisma();
+    prisma.community.findUnique = jest.fn<any>().mockResolvedValue(null);
+    prisma.community.create = jest.fn<any>().mockResolvedValue(mockCommunity);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST', url: '/communities',
+      payload: { name: 'My Community', isPrivate: false, avatar: 'https://tracker.example/pixel.png' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('IDENTITY_IMAGE_NOT_OWNED');
+    expect(prisma.community.create).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it.each([
+    'javascript:alert(1)',
+    'data:image/png;base64,iVBORw0KGgo=',
+    '//evil.example/a.png',
+  ])('refuse %s en 400 INVALID_COMMUNITY sans rien créer', async (avatar) => {
+    const prisma = makePrisma();
+    prisma.community.findUnique = jest.fn<any>().mockResolvedValue(null);
+    prisma.community.create = jest.fn<any>().mockResolvedValue(mockCommunity);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST', url: '/communities',
+      payload: { name: 'My Community', isPrivate: false, avatar },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('INVALID_COMMUNITY');
+    expect(prisma.community.create).not.toHaveBeenCalled();
     await app.close();
   });
 });

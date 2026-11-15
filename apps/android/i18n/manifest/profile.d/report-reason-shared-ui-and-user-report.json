@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:profile": {
+      "resDir": "feature/profile/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "report.user.success", "status": "adopted"},
+        {"catalog": "app", "iosKey": "report.user.submit.hint", "status": "adopted"},
+        {"catalog": "app", "iosKey": "report.user.details.a11y", "status": "adopted"}
+      ]
+    }
+  }
+}

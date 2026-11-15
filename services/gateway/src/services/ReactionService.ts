@@ -13,10 +13,22 @@ import type {
   ReactionUpdateEvent
 } from '@meeshy/shared/types';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
+import { reactionTargetKey } from '@meeshy/shared/utils/conversation-list-rank';
+import {
+  resolveParticipantAvatar,
+  resolveParticipantDisplayName
+} from '@meeshy/shared/utils/participant-helpers';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { isConversationClosed } from './messaging/conversationWriteAdmission.js';
-import { ConflictError } from '../errors/custom-errors.js';
 import { assertValidObjectId } from '../utils/object-id.js';
+import { notePairInteraction } from './relations/pairInteractionRecorder.js';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
+import { EngagementService, type EngagementActivityOptions } from './engagement/EngagementService.js';
+import { recordConversationActivity } from './conversations/conversationActivity.js';
+import { conversationRefusesPlainSignal, E2eeSignalChannelRequiredError } from './e2ee/e2ee-signal-channel';
+
+const logger = enhancedLogger.child({ module: 'ReactionService' });
 
 /**
  * Le motif « le conteneur est terminé », sous forme de CONSTANTE et non de
@@ -61,12 +73,25 @@ export interface AddReactionResult {
   unchanged: boolean;
 }
 
+/** Ce qu'une réaction posée demande à l'engagement, et rien de plus. */
+export interface ReactionEngagementCredit {
+  recordActivity(userId: string, axisKey: EngagementAxisKey, options?: EngagementActivityOptions): Promise<unknown>;
+}
+
 export class ReactionService {
   private validateMessageId(messageId: string): void {
     assertValidObjectId(messageId, 'message');
   }
 
-  constructor(private readonly prisma: PrismaClient) {}
+  private readonly engagement: ReactionEngagementCredit | null;
+
+  /**
+   * `engagement` absent ⇒ le producteur partagé des compteurs ; `null` ⇒ aucun
+   * crédit (un appelant qui ne veut pas d'effet d'engagement).
+   */
+  constructor(private readonly prisma: PrismaClient, engagement?: ReactionEngagementCredit | null) {
+    this.engagement = engagement === undefined ? new EngagementService(prisma) : engagement;
+  }
 
   async addReaction(options: AddReactionOptions): Promise<AddReactionResult | null> {
     const { messageId, participantId, emoji } = options;
@@ -85,6 +110,7 @@ export class ReactionService {
     const message = await this.prisma.message.findUnique({
       where: { id: messageId },
       include: {
+        sender: { select: { userId: true } },
         conversation: {
           include: {
             participants: { where: { isActive: true } }
@@ -148,6 +174,14 @@ export class ReactionService {
       throw new Error('User is not a participant of this conversation');
     }
 
+    // #13142 — dans une conversation chiffrée de bout en bout, la réaction part en
+    // signal chiffré : la passerelle ne range jamais son emoji en clair. Les quatre
+    // transports convergent ici, le refus aussi (409, code et phrase lisibles),
+    // APRÈS le contrôle du membre : un étranger n'apprend pas le régime.
+    if (conversationRefusesPlainSignal(message.conversation)) {
+      throw new E2eeSignalChannelRequiredError();
+    }
+
     const existingReaction = await this.prisma.reaction.findFirst({
       where: { messageId, participantId, emoji: sanitized }
     });
@@ -186,8 +220,85 @@ export class ReactionService {
     });
 
     await this.updateMessageReactionSummary(messageId);
+    await this.recordLastReaction(message.conversationId, {
+      id: reaction.id,
+      createdAt: reaction.createdAt,
+      targetKey: reactionTargetKey({
+        targetSenderUserId: message.sender?.userId ?? null,
+        targetSenderId: message.senderId ?? null,
+      }),
+    });
+    // #9026 — une réaction posée est une ACTIVITÉ : la conversation remonte en
+    // tête pour TOUS ses participants, au rechargement comme en direct (le
+    // rang part avec `lastReaction`, `emitConversationActivityUpdate`).
+    await recordConversationActivity({ prisma: this.prisma, conversationId: message.conversationId, at: reaction.createdAt });
+
+    const reactorUserId = message.conversation.participants.find((p) => p.id === participantId)?.userId ?? null;
+    this.creditReactor(reactorUserId, message.conversationId);
+    // Les cercles (#13932) : réagir au message de l'autre compte pour la paire.
+    if (reactorUserId && message.sender?.userId) {
+      notePairInteraction(this.prisma, { actorId: reactorUserId, otherId: message.sender.userId, nature: 'reaction', at: reaction.createdAt });
+    }
 
     return { reaction: this.mapReactionToData(reaction), unchanged: false };
+  }
+
+  /**
+   * L'axe « réaction » (#8906) — crédité au RÉACTEUR, une fois par réaction
+   * réellement posée (jamais sur un `unchanged`, jamais au retrait), dans la
+   * conversation du message : c'est elle qui plafonne le geste par jour, contre
+   * le va-et-vient réagir / retirer / réagir. Ici plutôt qu'aux transports :
+   * les quatre (socket, deux routes REST, agent) convergent sur `addReaction`.
+   * Un participant ANONYME n'a pas de `User.id`, donc pas de compteur.
+   * Hors du chemin de la réponse : un crédit en panne ne défait pas la réaction.
+   */
+  private creditReactor(reactorUserId: string | null, conversationId: string): void {
+    const engagement = this.engagement;
+    if (!engagement || !reactorUserId) return;
+    void Promise.resolve()
+      .then(() => engagement.recordActivity(reactorUserId, 'tool.reaction', { conversationId }))
+      .catch((error: unknown) => {
+        logger.warn('tool.reaction engagement credit failed', { conversationId, error });
+      });
+  }
+
+  /**
+   * La dernière réaction de la conversation (#7545) — la ligne de liste la lit
+   * sans balayer les réactions. Son heure et la clé de l'auteur réagi voyagent
+   * avec elle (#7592). Le RANG de la ligne ne les lit plus : il vit sur
+   * `lastActivityAt` (#9026). L'écriture fait avancer `updatedAt`, donc la page
+   * delta de chaque participant la ramène.
+   * Best-effort : la réaction est déjà écrite, et une ligne de liste en retard
+   * ne vaut pas de la faire échouer.
+   */
+  private async recordLastReaction(
+    conversationId: string,
+    reaction: { readonly id: string; readonly createdAt: Date; readonly targetKey: string | null },
+  ): Promise<void> {
+    try {
+      await this.prisma.conversation.update({
+        where: { id: conversationId },
+        data: {
+          lastReactionId: reaction.id,
+          lastReactionAt: reaction.createdAt,
+          lastReactionTargetKey: reaction.targetKey,
+        },
+      });
+    } catch (error) {
+      logger.warn('lastReactionId not recorded', { conversationId, error });
+    }
+  }
+
+  /** Retirer LA dernière réaction l'efface ; en retirer une autre ne touche à rien. */
+  private async forgetLastReaction(conversationId: string, reactionId: string): Promise<void> {
+    try {
+      await this.prisma.conversation.updateMany({
+        where: { id: conversationId, lastReactionId: reactionId },
+        data: { lastReactionId: null, lastReactionAt: null, lastReactionTargetKey: null },
+      });
+    } catch (error) {
+      logger.warn('lastReactionId not cleared', { conversationId, error });
+    }
   }
 
   /**
@@ -215,6 +326,11 @@ export class ReactionService {
       throw new Error('Invalid emoji format');
     }
 
+    const target = await this.prisma.reaction.findFirst({
+      where: { messageId, participantId, emoji: sanitized },
+      select: { id: true, message: { select: { conversationId: true } } }
+    });
+
     const result = await this.prisma.reaction.deleteMany({
       where: {
         messageId,
@@ -225,6 +341,8 @@ export class ReactionService {
 
     if (result.count > 0) {
       await this.updateMessageReactionSummary(messageId);
+      const conversationId = target?.message?.conversationId;
+      if (target && conversationId) await this.forgetLastReaction(conversationId, target.id);
     }
 
     return result.count > 0;
@@ -280,7 +398,13 @@ export class ReactionService {
     const participants = allParticipantIds.size > 0
       ? await this.prisma.participant.findMany({
           where: { id: { in: Array.from(allParticipantIds) } },
-          select: { id: true, displayName: true, avatar: true, userId: true }
+          select: {
+            id: true,
+            displayName: true,
+            avatar: true,
+            userId: true,
+            user: { select: { displayName: true, avatar: true } }
+          }
         })
       : [];
 
@@ -293,8 +417,8 @@ export class ReactionService {
         const reaction = reactions.find(r => r.emoji === agg.emoji && r.participantId === pid);
         return {
           participantId: pid,
-          username: participant?.displayName ?? 'Anonymous',
-          avatar: participant?.avatar ?? null,
+          username: resolveParticipantDisplayName(participant) ?? 'Anonymous',
+          avatar: resolveParticipantAvatar(participant),
           createdAt: reaction?.createdAt?.toISOString() ?? new Date().toISOString()
         };
       })

@@ -351,7 +351,7 @@ git commit -m "feat(ios): add mood emoji to ParticipantsView avatars"
 ## Task 6: StoryTrayView — moodEmoji + onMoodTap
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift`
 
 **Contexte :** `StoryTrayView` n'a pas `statusViewModel`. `group.id` dans `storyRing` est le userId de l'auteur des stories.
 
@@ -377,7 +377,7 @@ onMoodTap: statusViewModel.moodTapHandler(for: group.id),
 
 **Step 5: Commit**
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift
 git commit -m "feat(ios): add mood emoji to StoryTrayView avatars"
 ```
 

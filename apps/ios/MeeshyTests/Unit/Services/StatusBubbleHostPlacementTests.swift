@@ -29,8 +29,9 @@ final class StatusBubbleHostPlacementTests: XCTestCase {
     /// Code source SANS les lignes de commentaire — une mention du modificateur
     /// dans une doc ne doit jamais satisfaire (ni faire échouer) le garde.
     private func strippedSource(of fileName: String) throws -> String {
-        let url = viewsDir().appendingPathComponent(fileName)
-        let raw = try String(contentsOf: url, encoding: .utf8)
+        // L'UNITÉ du fichier (`Foo.swift` + `Foo+*.swift`) : les gardes négatives de cette suite
+        // doivent balayer les types extraits d'une surface, pas seulement son fichier-tête.
+        let raw = try AppSourceGuard.unit(AppSourceGuard.featureViewPath(fileName))
         return raw
             .split(separator: "\n", omittingEmptySubsequences: false)
             .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
@@ -38,14 +39,23 @@ final class StatusBubbleHostPlacementTests: XCTestCase {
     }
 
     func test_windowRoots_hostTheBubble() throws {
+        // Depuis #5837 l'hôte est `RootStatusBubbleLayer`, la première couche
+        // nominale posée sur le `ZStack` de CHAQUE racine ; c'est elle qui
+        // appelle `.withStatusBubble()`.
         for root in ["RootView.swift", "iPadRootView.swift"] {
             let source = try strippedSource(of: root)
             XCTAssertTrue(
-                source.contains(".withStatusBubble()"),
+                source.contains(".modifier(RootStatusBubbleLayer("),
                 "\(root) est l'hôte UNIQUE de la bulle pour sa fenêtre — sans lui, " +
                 "plus aucune surface non modale n'affiche le mood."
             )
         }
+        let layer = try strippedSource(of: "RootLayers/RootSharedLayers.swift")
+        XCTAssertTrue(
+            layer.contains(".withStatusBubble()"),
+            "RootStatusBubbleLayer doit poser .withStatusBubble() — sinon les deux racines " +
+            "montent une couche qui n'héberge rien."
+        )
     }
 
     func test_siblingProneSurfaces_doNotHostTheBubble() throws {

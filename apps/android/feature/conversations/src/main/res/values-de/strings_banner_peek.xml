@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_peek_open_full">Vollständige Unterhaltung öffnen</string>
+    <string name="conversation_peek_placeholder">Nachricht</string>
+    <string name="conversation_peek_send">Senden</string>
+    <string name="conversation_peek_empty">Noch keine Nachrichten</string>
+    <string name="conversation_peek_unavailable">Nachrichten konnten nicht geladen werden</string>
+    <string name="conversation_peek_sealed">Verschlüsselte Unterhaltung</string>
+    <string name="conversation_peek_sealed_message">Verschlüsselte Nachricht</string>
+    <string name="conversation_peek_composer_locked">Verschlüsselte Unterhaltung: in der Vollansicht schreiben</string>
+</resources>

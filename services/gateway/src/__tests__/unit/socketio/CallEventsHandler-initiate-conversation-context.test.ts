@@ -26,6 +26,7 @@ const mockInitiateCall = jest.fn<any>();
 const mockGenerateIceServers = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn().mockImplementation(() => ({
     initiateCall: mockInitiateCall,
     generateIceServers: mockGenerateIceServers,
@@ -82,6 +83,7 @@ import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
 import { validateSocketEvent } from '../../../middleware/validation';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { openCallRingTables } from '../../helpers/call-ring-policy-tables';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -117,6 +119,7 @@ function makeCallSession(conversation?: { type: string; title: string | null }) 
 
 function makePrisma() {
   return {
+    ...openCallRingTables(),
     participant: {
       findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
       findMany: jest.fn<any>().mockResolvedValue([{ userId: MEMBER_ID }]),

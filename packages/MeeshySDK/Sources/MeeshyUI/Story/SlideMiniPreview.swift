@@ -54,28 +54,78 @@ private struct StoryMiniFilterModifier: ViewModifier {
 }
 
 /// Mini composite preview of a slide's canvas at t=0.
-/// Renders all layers (background, drawing, foreground media, text, stickers)
-/// preserving normalized position, scale, and rotation of each element.
-struct SlideMiniPreview: View {
+/// Rend TOUTES les couches de la slide — fond, dessin, média de premier plan,
+/// texte, stickers, **pastille de lieu et pastille audio** — en préservant la
+/// position normalisée, l'échelle et la rotation de chaque élément.
+///
+/// **Le doc-comment promettait « all layers » et il en manquait trois** (#4743) :
+/// ni `locationObjects`, ni `audioPlayerObjects`, et un sticker GABARIT y
+/// paraissait sous son repli emoji au lieu de son dessin. La vignette mentait
+/// donc sur la slide — un auteur qui avait posé un lieu ne le voyait pas dans
+/// la bande.
+/// `public` : le composer de POST (app) monte cette
+/// mini-preview dans sa rangée haute. Elle reste un ATOME au sens de la règle
+/// de pureté du SDK — elle prend des paramètres opaques (des effets, des
+/// bitmaps) et n'appelle aucun singleton nommé Meeshy.
+public struct SlideMiniPreview: View {
     let effects: StoryEffects
     let bgImage: UIImage?
     let drawingData: Data?
     let loadedImages: [String: UIImage]
     let index: Int
+    /// **Les vignettes, quand l'hôte en fournit un cache** (#6922). Sans lui,
+    /// chaque tuile peignait le bitmap ENTIER de sa scène dans quelques points.
+    /// Optionnel : un hôte qui ne monte qu'une tuile n'a rien à y gagner.
+    let thumbnails: SceneThumbnailCache?
+    /// Le rang de chaque objet de premier plan dans l'empilement de la scène
+    /// (`SceneAudioStageRule.stackedObjects`, #14181) : la vignette empile
+    /// comme le lecteur, pastille de son enfouie comprise.
+    private let rangs: [String: Double]
+    @Environment(\.displayScale) private var displayScale
 
-    var body: some View {
+    public init(effects: StoryEffects, bgImage: UIImage?, drawingData: Data?,
+                loadedImages: [String: UIImage], index: Int,
+                thumbnails: SceneThumbnailCache? = nil) {
+        self.effects = effects; self.bgImage = bgImage; self.drawingData = drawingData
+        self.loadedImages = loadedImages; self.index = index
+        self.thumbnails = thumbnails
+        self.rangs = Dictionary(SceneAudioStageRule.stackedObjects(in: effects).enumerated()
+            .map { ($0.element.id, Double($0.offset + 1)) }, uniquingKeysWith: { premier, _ in premier })
+    }
+
+    /// Le rang d'un objet ; le dessin passe au-dessus de tous, les pastilles
+    /// que rien ne recouvre au-dessus du dessin, comme la surcouche du lecteur.
+    private func rang(_ id: String) -> Double { rangs[id] ?? Double(rangs.count + 2) }
+    private var rangDuDessin: Double { Double(rangs.count + 1) }
+
+    /// L'image à peindre dans `tile` points : sa vignette si l'hôte fournit un
+    /// cache, l'image elle-même sinon.
+    private func shown(_ image: UIImage, filling tile: CGSize) -> UIImage {
+        guard let thumbnails else { return image }
+        let pixels = CGSize(width: image.size.width * image.scale,
+                            height: image.size.height * image.scale)
+        let plafond = SceneImageDownsampling.fillMaxPixelSize(source: pixels, tile: tile,
+                                                              scale: displayScale)
+        guard plafond > 0 else { return image }
+        return thumbnails.thumbnail(for: image, maxPixelSize: plafond)
+    }
+
+    public var body: some View {
         GeometryReader { geo in
             ZStack {
                 backgroundLayers(in: geo.size)
                 foregroundMediaLayer(in: geo.size)
                 textLayer(in: geo.size)
                 stickerLayer(in: geo.size)
+                locationLayer(in: geo.size)
+                audioLayer(in: geo.size)
                 // Le dessin est la couche la PLUS HAUTE — parité avec
                 // `StoryRenderer` (overlay dessin à zPosition 9999, au-dessus de
                 // texte/média/stickers) et avec le composite ThumbHash. Avant, le
                 // `drawingLayer` était rendu en 2ᵉ position (sous média/texte) →
-                // mini-preview incohérente avec le rendu réel (2026-06-01).
+                // mini-preview incohérente avec le rendu réel.
                 drawingLayer
+                    .zIndex(rangDuDessin)
             }
             // Approximation des filtres `slide.effects.filter` via les
             // modifiers SwiftUI natifs (GPU, ~0 cost à cette taille). Le main
@@ -111,7 +161,7 @@ struct SlideMiniPreview: View {
 
         // Layer 1: User-picked background image
         if let image = bgImage {
-            Image(uiImage: image)
+            Image(uiImage: shown(image, filling: size))
                 .resizable()
                 .scaledToFill()
                 .frame(width: size.width, height: size.height)
@@ -133,7 +183,8 @@ struct SlideMiniPreview: View {
         // de fond + overlays — désync avec le canvas qui joue la vidéo.
         if let bgMedia = effects.resolvedBackgroundMedia,
            let img = loadedImages[bgMedia.id] {
-            Image(uiImage: img)
+            let zoom = max(1, CGFloat(bgMedia.scale))
+            Image(uiImage: shown(img, filling: CGSize(width: size.width * zoom, height: size.height * zoom)))
                 .resizable()
                 .scaledToFill()
                 .frame(width: size.width, height: size.height)
@@ -147,7 +198,7 @@ struct SlideMiniPreview: View {
 
     @ViewBuilder
     private var drawingLayer: some View {
-        // Bridge dessin (2026-05-30) : format moderne `drawingStrokes` rendu via
+        // Bridge dessin : format moderne `drawingStrokes` rendu via
         // `MeeshyStrokeCanvas` (positionnement design-space exact dans le cadre 9:16),
         // fallback legacy `drawingData` (PKDrawing croppé) sinon.
         if let strokes = effects.drawingStrokes, !strokes.isEmpty {
@@ -170,6 +221,7 @@ struct SlideMiniPreview: View {
         // media en background via le menu contextuel.
         ForEach(effects.resolvedForegroundMediaObjects) { media in
             foregroundMediaItem(media, in: size)
+                .zIndex(rang(media.id))
         }
     }
 
@@ -181,13 +233,14 @@ struct SlideMiniPreview: View {
             // enveloppe respectant l'aspect ratio) projetée par `width / 1080`.
             // L'ancien heuristique `0,35 × width` carré + `scaledToFit` rendait le
             // média ~moitié trop petit et au mauvais ratio vs reader/preview.
-            let base = StoryMediaLayer.baseMediaDesignSize(aspectRatio: media.aspectRatio)
+            let base = StoryMediaLayer.baseMediaDesignSize(for: media)
             let factor = size.width / CanvasGeometry.designWidth
-            Image(uiImage: img)
+            let cadre = CGSize(width: base.width * factor * CGFloat(media.scale),
+                               height: base.height * factor * CGFloat(media.scale))
+            Image(uiImage: shown(MediaCropPresentation.keptPart(img, of: media), filling: cadre))
                 .resizable()
                 .scaledToFill()
-                .frame(width: base.width * factor * CGFloat(media.scale),
-                       height: base.height * factor * CGFloat(media.scale))
+                .frame(width: cadre.width, height: cadre.height)
                 .clipped()
                 .rotationEffect(.degrees(Double(media.rotation)))
                 .position(x: CGFloat(media.x) * size.width,
@@ -202,6 +255,7 @@ struct SlideMiniPreview: View {
         let texts = effects.textObjects
         ForEach(texts) { text in
             textItem(text, in: size)
+                .zIndex(rang(text.id))
         }
     }
 
@@ -216,12 +270,12 @@ struct SlideMiniPreview: View {
         let fontSize = CGFloat(max(3, text.fontSize * Double(size.width) / Double(CanvasGeometry.designWidth)))
         Text(text.text.isEmpty ? " " : text.text)
             .font(.system(size: fontSize, weight: .medium))
-            .foregroundColor(Color(hex: text.textColor ?? "FFFFFF"))
+            .foregroundStyle(Color(hex: text.textColor ?? "FFFFFF"))
             .lineLimit(1)
             // Fond du texte — parité avec le canvas (`StoryTextLayer`) et le
             // composite ThumbHash. Sans ça la mini-preview montrait les glyphes nus
             // (souvent illisibles sur un fond de slide clair) alors que le canvas
-            // affiche la boîte colorée — incohérence strip ↔ canvas (bug 2026-06-01).
+            // affiche la boîte colorée — incohérence strip ↔ canvas.
             .padding(.horizontal, max(0.5, fontSize * 0.16))
             .padding(.vertical, max(0.5, fontSize * 0.08))
             .background(miniTextBackground(for: text, fontSize: fontSize))
@@ -255,11 +309,109 @@ struct SlideMiniPreview: View {
     private func stickerLayer(in size: CGSize) -> some View {
         let stickers = effects.stickerObjects ?? []
         ForEach(stickers) { sticker in
-            Text(sticker.emoji)
-                .font(.system(size: max(3, CGFloat(sticker.scale) * 4)))
-                .rotationEffect(.degrees(Double(sticker.rotation)))
-                .position(x: CGFloat(sticker.x) * size.width,
-                          y: CGFloat(sticker.y) * size.height)
+            Group {
+                if sticker.kind == .template,
+                   let dessin = StickerTemplateRenderer.image(
+                       templateID: sticker.templateId,
+                       slots: sticker.slots,
+                       metrics: StickerTemplateMetrics.sticker(
+                           geometry: CanvasGeometry(renderSize: size),
+                           baseSize: sticker.baseSize,
+                           scale: sticker.scale),
+                       screenScale: displayScale)?.0 {
+                    // **La vignette passe par le moteur QUI DESSINE la scène.**
+                    // Peindre `Text(sticker.emoji)` y montrait le repli — 💕 pour
+                    // deux cœurs, 🕐 pour un ruban d'heure — c'est-à-dire ce que
+                    // voit un lecteur qui ne sait PAS rendre la décoration, pas ce
+                    // que l'auteur a posé.
+                    Image(uiImage: dessin)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: dessin.size.width, height: dessin.size.height)
+                        .rotationEffect(.degrees(Double(sticker.rotation)))
+                        .position(x: CGFloat(sticker.x) * size.width,
+                                  y: CGFloat(sticker.y) * size.height)
+                } else if let bitmap = StoryStickerLayer.bitmapCacheKeys(for: sticker)
+                            .lazy.compactMap({ loadedImages[$0] }).first {
+                    // **Un sticker IMAGE se peint dans la vignette** (#4852) — la
+                    // même taille, la même rotation et la même position que le
+                    // glyphe, le bitmap ajusté dans le carré du sticker comme sur
+                    // la scène (`StoryStickerLayer`, gravité `.resizeAspect`).
+                    let side = CanvasGeometry.stickerFontSize(
+                        baseSize: sticker.baseSize, scale: sticker.scale,
+                        canvasWidth: size.width)
+                    Image(uiImage: bitmap)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: side, height: side)
+                        .rotationEffect(.degrees(Double(sticker.rotation)))
+                        .position(x: CGFloat(sticker.x) * size.width,
+                                  y: CGFloat(sticker.y) * size.height)
+                } else {
+                    // La MÊME règle de taille que la scène, le composite et
+                    // l'export (`CanvasGeometry.stickerFontSize`, #4824) : la
+                    // vignette ignorait `baseSize` et la largeur de scène.
+                    Text(sticker.wireEmoji)
+                        .font(.system(size: CanvasGeometry.stickerFontSize(
+                            baseSize: sticker.baseSize, scale: sticker.scale,
+                            canvasWidth: size.width)))
+                        .rotationEffect(.degrees(Double(sticker.rotation)))
+                        .position(x: CGFloat(sticker.x) * size.width,
+                                  y: CGFloat(sticker.y) * size.height)
+                }
+            }
+            .zIndex(rang(sticker.id))
+        }
+    }
+
+    // MARK: - Location Layer (#4743)
+
+    /// La pastille de lieu passe par le MÊME moteur que la scène — la vignette
+    /// et le canvas ne peuvent donc pas diverger sur son allure.
+    @ViewBuilder
+    private func locationLayer(in size: CGSize) -> some View {
+        ForEach(effects.locationObjects) { lieu in
+            Group {
+                if let dessin = StickerTemplateRenderer.image(
+                    templateID: StoryLocationLayer.resolvedTemplateID(lieu.styleId),
+                    slots: StoryLocationLayer.templateSlots(for: lieu.place),
+                    metrics: StickerTemplateMetrics.location(
+                        geometry: CanvasGeometry(renderSize: size),
+                        scale: CGFloat(lieu.scale)),
+                    screenScale: displayScale)?.0 {
+                    Image(uiImage: dessin)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: dessin.size.width, height: dessin.size.height)
+                        .rotationEffect(.degrees(lieu.rotation))
+                        .position(x: CGFloat(lieu.x) * size.width,
+                                  y: CGFloat(lieu.y) * size.height)
+                }
+            }
+            .zIndex(rang(lieu.id))
+        }
+    }
+
+    // MARK: - Audio Layer (#4743)
+
+    /// **Une APPROXIMATION, et elle est assumée.** La pastille audio réelle est
+    /// une vue SwiftUI vivante (forme d'onde animée, état de lecture) qu'on ne
+    /// peut pas peindre à 60 × 106 points sans la rendre illisible. Ce qu'il
+    /// faut dire à cette taille, c'est « il y a du son ICI », et une capsule à
+    /// note le dit — la vignette du texte approxime déjà pour la même raison.
+    @ViewBuilder
+    private func audioLayer(in size: CGSize) -> some View {
+        let pastilles = SceneAudioStageRule.stagedAudios(in: effects.audioPlayerObjects ?? [])
+        ForEach(pastilles) { audio in
+            let côté = max(4, size.width * 0.16)
+            Image(systemName: "music.note")
+                .font(.system(size: côté * 0.62, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: côté, height: côté)
+                .background(Circle().fill(Color.black.opacity(0.55)))
+                .position(x: CGFloat(audio.x) * size.width,
+                          y: CGFloat(audio.y) * size.height)
+                .zIndex(rang(audio.id))
         }
     }
 
@@ -272,7 +424,7 @@ struct SlideMiniPreview: View {
                 Spacer()
                 Text("\(index + 1)")
                     .font(.system(size: 7, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 3)
                     .padding(.vertical, 1)
                     .background(Color.black.opacity(0.55))

@@ -187,6 +187,69 @@ describe('ZmqRequestSender', () => {
       expect(sentPayload.text).toBe('Test text');
       expect(sentPayload.targetLanguages).toEqual(['es']);
     });
+
+    // ── #5143 — canonicalisation (pas un .toLowerCase() brut) ──────────────────
+    //
+    // Avant le correctif, la ligne 85 dédupliquait par `.toLowerCase()` brut
+    // pendant que le suivi (`pendingLanguages`) et le solde
+    // (`settleTranslationLanguage`) canonicalisaient déjà via `canonicalLanguage`
+    // — deux normalisations différentes dans la même méthode. Ces témoins
+    // assertent sur la LISTE ENVOYÉE (ce que reçoit le translator), pas sur le
+    // suivi interne, qui canonicalisait déjà correctement avant ce correctif.
+
+    it('canonicalizes a region-tagged code to its primary subtag before dedup (#5143)', async () => {
+      const request = makeTranslationRequest({ targetLanguages: ['en-US', 'en'] });
+      await sender.sendTranslationRequest(request);
+
+      const sentPayload = connectionManager.send.mock.calls[0][0] as any;
+      // Un `.toLowerCase()` brut aurait envoyé DEUX cibles ('en-us' et 'en') —
+      // un travail ML dupliqué, et 'en-us' n'a pas de mapping NLLB.
+      expect(sentPayload.targetLanguages).toEqual(['en']);
+    });
+
+    it('canonicalizes a mixed-case region-tagged code (#5143)', async () => {
+      const request = makeTranslationRequest({ targetLanguages: ['EN-us', 'en', 'PT-BR'] });
+      await sender.sendTranslationRequest(request);
+
+      const sentPayload = connectionManager.send.mock.calls[0][0] as any;
+      expect(sentPayload.targetLanguages).toEqual(['en', 'pt']);
+    });
+
+    it('reduces a deprecated ISO 639-1 legacy code to its current form (#5143)', async () => {
+      const request = makeTranslationRequest({ targetLanguages: ['iw'] });
+      await sender.sendTranslationRequest(request);
+
+      const sentPayload = connectionManager.send.mock.calls[0][0] as any;
+      // 'iw' est l'ancien code hébreu (encore émis par la JVM/Android) ; verbatim
+      // il ne matcherait aucune traduction stockée sous la clé 'he'.
+      expect(sentPayload.targetLanguages).toEqual(['he']);
+    });
+
+    it('does not regress the primary mixed-case dedup case (#5143)', async () => {
+      const request = makeTranslationRequest({ targetLanguages: ['FR', 'fr', 'EN'] });
+      await sender.sendTranslationRequest(request);
+
+      const sentPayload = connectionManager.send.mock.calls[0][0] as any;
+      expect(sentPayload.targetLanguages).toEqual(['fr', 'en']);
+    });
+
+    it('the sent list never diverges from its own pendingLanguages tracking (#5143)', async () => {
+      const request = makeTranslationRequest({ targetLanguages: ['EN-US', 'en', 'iw'] });
+      const taskId = await sender.sendTranslationRequest(request);
+
+      const sentPayload = connectionManager.send.mock.calls[0][0] as any;
+      expect(sentPayload.targetLanguages).toEqual(['en', 'he']);
+
+      // Soldant exactement les langues ENVOYÉES, le jeu de suivi doit se vider
+      // complètement — s'il divergeait (comme avant le correctif), une langue
+      // enverrait viderait le jeu trop tôt (perte de deadman/retry) ou jamais
+      // (fuite mémoire de `pendingRequests`).
+      const first = sender.settleTranslationLanguage(taskId, sentPayload.targetLanguages[0]);
+      expect(first?.remaining).toEqual(['he']);
+      const second = sender.settleTranslationLanguage(taskId, sentPayload.targetLanguages[1]);
+      expect(second?.remaining).toEqual([]);
+      expect(sender.getPendingRequestsCount()).toBe(0);
+    });
   });
 
   // ── sendAudioProcessRequest ─────────────────────────────────────────────────

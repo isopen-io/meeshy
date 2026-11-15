@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import MeeshySDK
 
 public nonisolated struct CanvasGeometry: Equatable, Sendable {
     public static let designWidth: CGFloat = 1080
@@ -10,8 +11,11 @@ public nonisolated struct CanvasGeometry: Equatable, Sendable {
     /// story est **vertical 9:16 par défaut** ; l'import d'une image de fond
     /// paysage bascule le canvas en **horizontal 16:9** (directive user
     /// « l'import de l'image de fond impose le cadre et forme du Canvas »).
-    public static let portraitRatio: CGFloat = designWidth / designHeight    // 0.5625 (9:16)
-    public static let landscapeRatio: CGFloat = designHeight / designWidth   // 1.7778 (16:9)
+    /// PROJECTIONS de la loi de forme (`SceneShape.aspect`, #6904) : le
+    /// gabarit d'une scène n'a qu'un site, et `designWidth / designHeight` en
+    /// était une copie de plus.
+    public static let portraitRatio: CGFloat = SceneShape.aspect
+    public static let landscapeRatio: CGFloat = 1 / SceneShape.aspect
 
     public let renderSize: CGSize
     public let scaleFactor: CGFloat
@@ -106,8 +110,7 @@ public nonisolated struct CanvasGeometry: Equatable, Sendable {
     public static func stickerFontSize(baseSize: Double, scale: Double, canvasWidth: CGFloat) -> CGFloat {
         guard canvasWidth > 0 else { return 0 }
         let designSide = CGFloat(max(0, baseSize) * max(0, scale))
-        // Plancher à 8 pt : sous cette taille le glyphe n'est plus qu'un
-        // artefact d'anticrénelage, et la miniature s'en trouve illisible.
-        return max(8, designSide * (canvasWidth / designWidth))
+        guard designSide.isFinite else { return 0 }
+        return designSide * (canvasWidth / designWidth)
     }
 }

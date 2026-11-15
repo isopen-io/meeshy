@@ -14,25 +14,31 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
   errorResponseSchema: { type: 'object', properties: { success: { type: 'boolean' } } },
 }));
 
-const mockResolveConversationId = jest.fn<any>().mockResolvedValue('conv-resolved-id');
+const mockResolveConversationId = jest.fn<any>().mockResolvedValue('507f1f77bcf86cd799439077');
 jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...a: any[]) => mockResolveConversationId(...a),
 }));
 
 const mockCanAccessConversation = jest.fn<any>().mockResolvedValue(true);
 jest.mock('../../../routes/conversations/utils/access-control', () => ({
+  ...(jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>),
   canAccessConversation: (...a: any[]) => mockCanAccessConversation(...a),
 }));
 
+const mockGetStatsUnderFloor = jest.fn<any>();
 const mockGetStats = jest.fn<any>().mockResolvedValue({
   totalMessages: 42,
   participantStats: {},
   dailyActivity: {},
   languageDistribution: {},
 });
+// `getStatsUnderFloor` figure ici même si aucun témoin de cette suite ne le
+// déclenche (#17076) : un double qui énumère les méthodes à la main retient en
+// silence chaque méthode ajoutée en amont.
 jest.mock('../../../services/ConversationMessageStatsService', () => ({
   conversationMessageStatsService: {
     getStats: (...a: any[]) => mockGetStats(...a),
+    getStatsUnderFloor: (...a: any[]) => mockGetStatsUnderFloor(...a),
   },
 }));
 
@@ -44,9 +50,34 @@ import { registerStatsRoutes } from '../../../routes/conversations/stats';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const CONV_ID = 'conv-aabbcc';
-const CONV_RESOLVED_ID = 'conv-resolved-id';
+// Forme de PRODUCTION (#17076) : la colonne est un ObjectId, et depuis que la
+// route lit le plancher du lecteur cette valeur part dans `participant.findFirst`
+// puis, sous plancher, dans `message.findMany`. Un double qui accepte un
+// argument que le vrai client REFUSE ne se voit jamais — le test qu'il sert
+// passe (§ « un double mente aussi par ce qu'il ACCEPTE »).
+const CONV_RESOLVED_ID = '507f1f77bcf86cd799439077';
 
 // ─── Factory ─────────────────────────────────────────────────────────────────
+
+/**
+ * Le lecteur de ces témoins est un membre NOMMÉ : il n'est entré par aucun lien
+ * de partage, donc `historyFloorFor` tranche « aucun plancher » sans lire quoi
+ * que ce soit de plus, et la route sert la ligne agrégée.
+ *
+ * La ligne est posée ICI plutôt que remplacée par `findFirst: () => null`
+ * (#17076) : un `null` dirait « ce lecteur n'est pas membre », ce que ces
+ * témoins contredisent à chaque assertion. Un double qui répond faux pour
+ * obtenir le bon verdict gèle le verdict, pas la règle.
+ */
+const MEMBRE_SANS_PLANCHER = {
+  role: 'member',
+  joinedAt: new Date('2024-01-01T00:00:00.000Z'),
+  shareLinkId: null,
+  historyVisibleFrom: null,
+  permissions: null,
+  anonymousSession: null,
+  user: { role: 'USER' },
+};
 
 function makePrisma(overrides: any = {}) {
   return {
@@ -54,6 +85,8 @@ function makePrisma(overrides: any = {}) {
       findMany: jest.fn<any>().mockResolvedValue([]),
       ...overrides.user,
     },
+    participant: { findFirst: jest.fn<any>().mockResolvedValue(MEMBRE_SANS_PLANCHER) },
+    conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue(null) },
     ...overrides,
   };
 }
@@ -117,9 +150,9 @@ describe('GET /conversations/:id/stats — access denied', () => {
     await app.close();
   });
 
-  it('returns 403 when user has no access', async () => {
+  it('returns the same 404 as a missing conversation when user is not a member (#8099)', async () => {
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/stats` });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
   });
 });
 

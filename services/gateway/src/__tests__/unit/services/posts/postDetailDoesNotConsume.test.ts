@@ -22,6 +22,7 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 
 jest.mock('../../../../services/posts/communityVisibility', () => ({
   getCommunityCoMemberIds: jest.fn<any>().mockResolvedValue([]),
+  getReadableCommunityIds: jest.fn<any>().mockResolvedValue([]),
 }));
 
 jest.mock('../../../../services/ZmqSingleton', () => ({
@@ -49,6 +50,14 @@ describe('PostService.getPostById — une lecture ne dépense rien', () => {
   it('trois ouvertures d\'un contenu expiré n\'écrivent aucun expiredViewAt', async () => {
     const updateMany = jest.fn<any>().mockResolvedValue({ count: 0 });
     const prisma = {
+      /* #7184 — les deux lectures de `getBlockRelatedUserIds` : « qui m'a bloqué »
+         et « qui j'ai bloqué ». La garde de blocage traverse désormais
+         `buildVisibilityFilter`, donc tout double qui compose un `where` de post
+         doit les servir — un double muet ferait rougir la garde, pas le code. */
+      user: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn().mockResolvedValue({ blockedUserIds: [] }),
+      } as any,
       post: {
         findFirst: jest.fn<any>().mockResolvedValue(EXPIRED_STORY),
         count: jest.fn<any>().mockResolvedValue(0),

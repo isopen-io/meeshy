@@ -1,0 +1,135 @@
+package me.meeshy.app.game.progression
+
+import android.content.Context
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.isDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.test.core.app.ApplicationProvider
+import com.google.common.truth.Truth.assertThat
+import me.meeshy.feature.game.R
+import me.meeshy.sdk.model.game.rules.GameRulesBook
+import me.meeshy.ui.theme.MeeshyTheme
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+
+/** Le carnet « Comment ça marche » entier, à l'iso d'iOS `GameRulesPage` : règles, glossaire, médailles, étapes. */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
+class GameRulesScreenComposeTest {
+
+    @get:Rule val compose = createComposeRule()
+
+    private val context: Context = ApplicationProvider.getApplicationContext()
+
+    private fun show(focused: GameRulesSection?, focusedRule: Int? = null) {
+        compose.setContent { MeeshyTheme { GameRulesScreen(onBack = {}, focused = focused, focusedRule = focusedRule) } }
+        compose.waitForIdle()
+    }
+
+    @Test
+    fun `opened at the top, the book starts with Mee and Meo and the first rule`() {
+        show(focused = null)
+        compose.onNodeWithText(context.getString(R.string.game_rules_intro)).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.game_rules_1_title)).assertIsDisplayed()
+        compose.onNodeWithTag(RULES_BADGES_TAG).assertIsNotDisplayed()
+    }
+
+    @Test
+    fun `the book carries every rule, every concept, the medals and every step, in iOS order`() {
+        show(focused = null)
+        GameRulesBook.ruleIndices.forEach { compose.onNodeWithTag(rulesRuleTag(it)).assertExists() }
+        GameRulesBook.glossary.forEach { compose.onNodeWithTag(rulesConceptTag(it)).assertExists() }
+        GameRulesBook.onboardingSteps.forEach { compose.onNodeWithTag(rulesStepTag(it.key)).assertExists() }
+        compose.onNodeWithText(context.getString(R.string.game_rules_concept_chest_body)).assertExists()
+        compose.onNodeWithText(context.getString(R.string.game_guide_step_first_points_means)).assertExists()
+        compose.onNodeWithText(context.getString(R.string.game_guide_step_of, "7", "7").uppercase()).assertExists()
+        val tops = listOf(RULES_RULES_TAG, RULES_CONCEPTS_TAG, RULES_BADGES_TAG, RULES_STEPS_TAG)
+            .map { compose.onNodeWithTag(it).getUnclippedBoundsInRoot().top.value }
+        assertThat(tops).isInStrictOrder()
+    }
+
+    @Test
+    fun `opened at the medals, the book scrolls to its medals section`() {
+        show(focused = GameRulesSection.Badges)
+        val medals = compose.onNodeWithText(context.getString(R.string.game_rules_badges_ladder))
+        compose.waitUntil(timeoutMillis = 5_000) { medals.isDisplayed() }
+        medals.assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.game_rules_1_title)).assertIsNotDisplayed()
+    }
+
+    @Test
+    fun `opened at a rule, the book scrolls down to it`() {
+        show(focused = null, focusedRule = 8)
+        val rule = compose.onNodeWithTag(rulesRuleTag(8))
+        compose.waitUntil(timeoutMillis = 5_000) { rule.isDisplayed() }
+        compose.onNodeWithText(context.getString(R.string.game_rules_intro)).assertIsNotDisplayed()
+    }
+
+    @Test
+    @Config(qualifiers = "fr")
+    fun `les cartes des sept etapes ne portent plus la ligne Ensuite du guide en cours`() {
+        show(focused = null)
+        listOf("Fais ton premier geste", "Regarde ton anneau se remplir", "Immortalisons ton départ en photo").forEach { invite ->
+            compose.onNodeWithText(invite, substring = true).assertDoesNotExist()
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "fr")
+    fun `la regle des etincelles et celle de la frappe disent leur phrase au repos et rangent le calcul derriere un i nomme par sa question`() {
+        show(focused = null)
+        compose.onNodeWithText(context.getString(R.string.game_rules_1_body)).assertExists()
+        compose.onNodeWithText(context.getString(R.string.game_rules_3_body)).assertExists()
+        compose.onNodeWithText(context.getString(R.string.game_rules_3_more)).assertDoesNotExist()
+        listOf(
+            R.string.game_rules_1_question to R.string.game_rules_1_more,
+            R.string.game_rules_3_question to R.string.game_rules_3_more,
+        ).forEach { (question, more) ->
+            val info = compose.onNodeWithContentDescription(context.getString(question))
+            info.assertExists()
+            assertThat(info.fetchSemanticsNode().config[SemanticsProperties.StateDescription]).isEqualTo(context.getString(more))
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "fr")
+    fun `toucher le i de la frappe deplie le calcul de la part de lumiere`() {
+        show(focused = null)
+        compose.onNodeWithContentDescription(context.getString(R.string.game_rules_3_question)).performScrollTo().performClick()
+        compose.onNodeWithText(context.getString(R.string.game_rules_3_more)).assertExists()
+    }
+
+    @Test
+    @Config(qualifiers = "fr")
+    fun `le ruban et l email rejoignent la ligne de l echelle derriere un i nomme par sa question`() {
+        show(focused = GameRulesSection.Badges)
+        compose.onNodeWithText(context.getString(R.string.game_rules_badges_ladder)).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.game_rules_badges_imprint)).assertExists()
+        compose.onNodeWithText(context.getString(R.string.game_rules_badges_ribbon)).assertDoesNotExist()
+        val info = compose.onNodeWithContentDescription(context.getString(R.string.game_rules_badges_ribbon_question))
+        info.assertExists()
+        assertThat(info.fetchSemanticsNode().config[SemanticsProperties.StateDescription])
+            .isEqualTo(context.getString(R.string.game_rules_badges_ribbon))
+        info.performClick()
+        compose.onNodeWithText(context.getString(R.string.game_rules_badges_ribbon)).assertExists()
+    }
+
+    @Test
+    @Config(qualifiers = "fr")
+    fun `la regle huit et le vent arriere disent leur phrase courte au repos`() {
+        show(focused = null)
+        compose.onNodeWithText(context.getString(R.string.game_rules_8_body)).assertExists()
+        compose.onNodeWithText(context.getString(R.string.game_rules_concept_tailwind_body)).assertExists()
+    }
+}

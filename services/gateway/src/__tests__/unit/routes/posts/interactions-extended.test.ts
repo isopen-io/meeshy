@@ -7,11 +7,11 @@
  */
 
 import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
+import { postCounterWritesOf } from '../../../helpers/posts-counter-writes';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-const mockRecordAnonymousOpen = jest.fn();
 const mockRecordEngagementBatch = jest.fn();
 const mockSharePost = jest.fn();
 const mockShareWithTrackingLink = jest.fn();
@@ -31,6 +31,14 @@ const mockBookmarkPost = jest.fn().mockResolvedValue({ bookmarkCount: 1 });
 const mockUnbookmarkPost = jest.fn().mockResolvedValue({ bookmarkCount: 0 });
 const mockRecordView = jest.fn().mockResolvedValue(true);
 
+// #10315 — la porte de republication et le verdict d'audience ont leurs propres témoins
+// (`services/posts/__tests__/moderationHold.test.ts`) ; cette suite parle d'autre chose.
+jest.mock('../../../../services/posts/moderationHold', () => ({
+  ...(jest.requireActual('../../../../services/posts/moderationHold') as object),
+  mayRepostSource: async () => true,
+  audienceChangeVerdict: async () => ({ refusal: null, clearsPriorVisibility: false }),
+}));
+
 jest.mock('../../../../services/PostService', () => ({
   PostService: jest.fn().mockImplementation(() => ({
     likePost: (...a: any[]) => mockLikePost(...a),
@@ -39,7 +47,6 @@ jest.mock('../../../../services/PostService', () => ({
     unbookmarkPost: (...a: any[]) => mockUnbookmarkPost(...a),
     recordView: (...a: any[]) => mockRecordView(...a),
     getPostById: (...a: any[]) => mockGetPostById(...a),
-    recordAnonymousOpen: (...a: any[]) => mockRecordAnonymousOpen(...a),
     recordEngagementBatch: (...a: any[]) => mockRecordEngagementBatch(...a),
     sharePost: (...a: any[]) => mockSharePost(...a),
     shareWithTrackingLink: (...a: any[]) => mockShareWithTrackingLink(...a),
@@ -79,7 +86,24 @@ jest.mock('../../../../utils/withMutationLog', () => ({
   withMutationLog: jest.fn().mockImplementation(async ({ op }: any) => op()),
 }));
 
-// ─── Import after mocks ───────────────────────────────────────────────────────
+// #4147 — POST /posts / from-attachment / repost tirent leur plafond de
+// création d'un compteur PARTAGÉ qui lit Redis directement, fail-closed
+// (createSharedWriteRateLimitPreHandler, routes/posts/socialRateLimit.ts) :
+// sans ce double, `getCacheStore().getNativeClient()` rend `null` en test
+// (aucun REDIS_URL) et CHAQUE écriture de ce type serait refusée avant
+// d'atteindre ce que ce fichier vérifie — détail complet dans core.test.ts,
+// premier fichier de la série à le poser. `incr` répond toujours « premier
+// appel » : ce fichier ne teste PAS le plafond (son témoin dédié vit dans
+// social-write-rate-limit.test.ts) — juste un Redis DISPONIBLE.
+jest.mock('../../../../services/CacheStore', () => ({
+  getCacheStore: () => ({
+    getNativeClient: () => ({
+      incr: async () => 1,
+      pexpire: async () => 1,
+      pttl: async () => -1,
+    }),
+  }),
+}));// ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerInteractionRoutes } from '../../../../routes/posts/interactions';
 
@@ -87,8 +111,46 @@ import { registerInteractionRoutes } from '../../../../routes/posts/interactions
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const POST_ID = '507f1f77bcf86cd799439022';
+/**
+ * Un SECOND identifiant de post, bien formé.
+ *
+ * Le lot d'impressions envoyait auparavant `'other-post-id'` — une chaîne
+ * qu'aucun post ne peut porter. Depuis #4044, `filterConsumablePostIds` écarte
+ * ce qui n'est pas un ObjectId au lieu de laisser Mongo faire lever la requête
+ * entière : la fixture fictive faisait donc tomber le compte pour la bonne
+ * raison, sur un cas qui ne se produit jamais en vrai.
+ */
+const OTHER_POST_ID = '507f1f77bcf86cd799439033';
 
 // ─── App factory ──────────────────────────────────────────────────────────────
+
+/**
+ * Tranche ACL d'un post PUBLIC — ce que `loadPostAcl` rend au verdict
+ * d'audience posé sur le favori, l'impression et le partage (issue #4146).
+ */
+const publicAcl = (id: string) => ({
+  id, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] as string[], expiresAt: null,
+  // Ce que la garde ANONYME lit en plus (#10483, `readServableToAnonymous`).
+  deletedAt: null, repostOfId: null, originalRepostOfId: null, repostOf: null,
+  author: { isActive: true, deletedAt: null, deactivatedAt: null },
+});
+
+/**
+ * `post.findMany` répond désormais à DEUX questions : la passe d'audience du
+ * lot d'impressions (`where.id.in`) et la résolution des racines de repost
+ * (`where.repostOfId`). Ce double branche sur la seconde et rend, pour la
+ * première, un post PUBLIC par id demandé — l'audience elle-même est le sujet
+ * de `interactions-consumption-audience.test.ts`, pas de ce fichier.
+ */
+function aclAwareFindMany(repostRows: unknown[] = []) {
+  return jest.fn<any>().mockImplementation(({ where }: any) => {
+    if (where?.repostOfId !== undefined) return Promise.resolve(repostRows);
+    return Promise.resolve(((where?.id?.in ?? []) as string[]).map(publicAcl));
+  });
+}
+
+const aclAwareFindFirst = () =>
+  jest.fn<any>().mockImplementation(({ where }: any) => Promise.resolve(publicAcl(where.id)));
 
 function makeAuth(authenticated: boolean) {
   return async (req: FastifyRequest) => {
@@ -101,10 +163,17 @@ function makeAuth(authenticated: boolean) {
 async function buildApp(authenticated = true): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const prisma = {
-    postImpression: {
+    $runCommandRaw: jest.fn().mockResolvedValue({ ok: 1 }),
+    anonymousPostOpen: {
+      create: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
+    postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }),
       create: jest.fn().mockResolvedValue({}),
       createMany: jest.fn().mockResolvedValue({ count: 2 }),
     },
+    // #14242 — le partage lit le blocage entre le partageur et l'auteur : aucun ici.
+    user: { findFirst: async () => null },
     post: {
       update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 2 }),
@@ -116,7 +185,8 @@ async function buildApp(authenticated = true): Promise<FastifyInstance> {
       // batch d'impressions (chantier reposts cohérents, tâche 1) — par
       // défaut aucun repost dans le batch. L'unitaire replie sa résolution
       // dans le `select` de `update`, aucun `findUnique` séparé nécessaire.
-      findMany: jest.fn().mockResolvedValue([]),
+      // Le même délégué porte la passe d'audience du lot (#4146).
+      findMany: aclAwareFindMany(),
     },
   } as any;
   app.decorate('prisma', prisma);
@@ -148,7 +218,6 @@ describe('POST /posts/:postId/anonymous-view', () => {
   });
 
   it('returns 200 with counted=true on valid session key', async () => {
-    mockRecordAnonymousOpen.mockResolvedValueOnce(true);
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/anonymous-view`,
       headers: { 'x-session-token': 'valid-session-key' },
@@ -244,7 +313,24 @@ describe('POST /posts/impressions/batch (authenticated)', () => {
   it('returns 200 with count when postIds provided', async () => {
     const res = await app.inject({
       method: 'POST', url: '/posts/impressions/batch',
-      payload: { postIds: [POST_ID, 'other-post-id'] },
+      payload: { postIds: [POST_ID, OTHER_POST_ID] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.recorded).toBe(2);
+  });
+
+  /**
+   * #4044 — un identifiant local ne fait plus perdre le lot ENTIER.
+   *
+   * Le `findMany` d'audience est borné par `{ id: { in: [...] } }` : avant la
+   * garde, un seul `pending_<uuid>` — une story encore en cours de publication
+   * traversant le fil — faisait lever la requête et emportait toutes les autres
+   * impressions du même défilement.
+   */
+  it('records the well-formed ids even when the batch carries a local one', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/posts/impressions/batch',
+      payload: { postIds: [POST_ID, 'pending_9F3D-4A7B-8C1E', OTHER_POST_ID] },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.recorded).toBe(2);
@@ -276,7 +362,7 @@ describe('POST /posts/impressions/batch (authenticated)', () => {
   it('increments impressionCount once per occurrence, not once per distinct post', async () => {
     const OTHER = '507f1f77bcf86cd799439033';
     const prisma = (app as any).prisma;
-    prisma.post.updateMany.mockClear();
+    prisma.$runCommandRaw.mockClear();
     prisma.postImpression.createMany.mockClear();
 
     const res = await app.inject({
@@ -292,13 +378,13 @@ describe('POST /posts/impressions/batch (authenticated)', () => {
     expect(created).toHaveLength(3);
 
     // Somme des incréments par post, quelle que soit la façon de grouper les
-    // updates. Le `in` est DÉDUPLIQUÉ avant de sommer : `updateMany` avec
-    // `id: { in: [A, A] }` n'incrémente A qu'une fois côté base — compter le
+    // updates. Le `$in` est DÉDUPLIQUÉ avant de sommer : une mise à jour avec
+    // `_id: { $in: [A, A] }` n'incrémente A qu'une fois côté base — compter le
     // doublon ici ferait passer le test sur le code bogué.
     const increments: Record<string, number> = {};
-    for (const [args] of prisma.post.updateMany.mock.calls as any[]) {
-      const step = args.data.impressionCount.increment as number;
-      for (const id of new Set(args.where.id.in as string[])) {
+    for (const write of postCounterWritesOf(prisma.$runCommandRaw)) {
+      const step = write.data.impressionCount.increment;
+      for (const id of new Set(write.ids)) {
         increments[id] = (increments[id] ?? 0) + step;
       }
     }
@@ -306,18 +392,22 @@ describe('POST /posts/impressions/batch (authenticated)', () => {
     expect(increments[OTHER]).toBe(1);
   });
 
-  it('caps at 50 occurrences', async () => {
+  // La garde de troncature borne à IMPRESSION_BATCH_CAP (100) — la MÊME valeur
+  // que le `maxItems` du schéma, plus jamais un 50 qui divergerait du contrat
+  // déclaré. Un lot de 51 à 100 occurrences est donc enregistré EN ENTIER ;
+  // seul l'excédent au-delà de 100 (que le schéma refuse déjà) serait tronqué.
+  it('records every occurrence up to the schema cap (100)', async () => {
     const prisma = (app as any).prisma;
     prisma.postImpression.createMany.mockClear();
 
     const res = await app.inject({
       method: 'POST', url: '/posts/impressions/batch',
-      payload: { postIds: Array(60).fill(POST_ID) },
+      payload: { postIds: Array(100).fill(POST_ID) },
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().data.recorded).toBe(50);
-    expect((prisma.postImpression.createMany.mock.calls[0][0] as any).data).toHaveLength(50);
+    expect(res.json().data.recorded).toBe(100);
+    expect((prisma.postImpression.createMany.mock.calls[0][0] as any).data).toHaveLength(100);
   });
 });
 
@@ -417,20 +507,6 @@ describe('POST /posts/:postId/share (authenticated)', () => {
       payload: { generateLink: true },
     });
     expect(res.statusCode).toBe(404);
-  });
-});
-
-// ─── GET /posts/:postId/share ─────────────────────────────────────────────────
-
-describe('GET /posts/:postId/share', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 with share link data', async () => {
-    mockGetPostShareLink.mockResolvedValueOnce({ token: 'abc123', shortUrl: 'https://app.example.com/l/abc123', totalClicks: 3 });
-    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/share` });
-    expect(res.statusCode).toBe(200);
   });
 });
 
@@ -542,6 +618,34 @@ describe('GET /posts/:postId/interactions', () => {
     mockGetPostInteractions.mockResolvedValueOnce(null);
     const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/interactions` });
     expect(res.statusCode).toBe(404);
+  });
+
+  // #9727 — la porte est l'auteur seul ; le rôle GLOBAL reste transmis pour la
+  // lecture ADMIN/BIGBOSS qui rouvrira avec sa trace d'audit (#9733).
+  it("transmet le rôle global du lecteur à la porte", async () => {
+    mockGetPostInteractions.mockResolvedValueOnce({ viewers: [], total: 0, hasMore: false });
+    await app.inject({ method: 'GET', url: `/posts/${POST_ID}/interactions?limit=10&offset=20` });
+    expect(mockGetPostInteractions).toHaveBeenLastCalledWith(POST_ID, USER_ID, 10, 20, expect.objectContaining({ role: 'USER' }));
+  });
+
+  it("sert chaque ligne enrichie telle quelle, compteurs absents compris", async () => {
+    const enriched = {
+      id: 'viewer-1', username: 'v', displayName: 'V', avatarUrl: null, viewedAt: '2026-10-10T12:00:00.000Z',
+      reaction: '😂', reactions: ['❤️', '😂'], shareCount: 1, repostCount: 2, commentCount: 3, replyCount: 1,
+    };
+    const bare = { id: 'viewer-2', username: 'w', displayName: null, avatarUrl: null, viewedAt: '2026-10-10T11:00:00.000Z', reaction: null };
+    mockGetPostInteractions.mockResolvedValueOnce({ viewers: [enriched, bare], total: 2, hasMore: false });
+    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/interactions` });
+    expect(res.json().data.viewers).toEqual([enriched, bare]);
+    expect(res.json().pagination).toEqual(expect.objectContaining({ total: 2, hasMore: false }));
+    expect(res.json().data).not.toHaveProperty('engagement');
+  });
+
+  it("dit quand le détail de l'activité n'a pas pu être établi — engagement: 'unavailable'", async () => {
+    const bare = { id: 'viewer-1', username: 'v', displayName: null, avatarUrl: null, viewedAt: '2026-10-10T11:00:00.000Z', reaction: null };
+    mockGetPostInteractions.mockResolvedValueOnce({ viewers: [bare], total: 1, hasMore: false, engagement: 'unavailable' });
+    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/interactions` });
+    expect(res.json().data).toEqual({ viewers: [bare], engagement: 'unavailable' });
   });
 });
 

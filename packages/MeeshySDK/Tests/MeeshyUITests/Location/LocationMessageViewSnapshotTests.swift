@@ -7,15 +7,16 @@ import SnapshotTesting
 
 // MARK: - Snapshot record workflow
 //
-// Cadrage à la taille du COMPOSANT (`layout: .fixed(width: 260, height: 210)`,
-// les dimensions propres de `LocationMessageView`) et non au format appareil :
+// Cadrage à la taille du COMPOSANT (`layout: .fixed(width: 260, height: 194)`,
+// les dimensions propres de `LocationMessageView` — `LocationCardMetrics`, #7598) et non au format appareil :
 // un composant cadré au format device avec `precision: 0.99` ne peut jamais
 // franchir le budget de 1 % de pixels différents et le test devient incapable
 // d'échouer (cf. mémoire `reference_snapshot_gate_blind_component_share_vs_precision`).
 //
 // Comme les suites `Timeline`/`Story`, le mode par défaut `.missing` enregistre
 // la baseline PNG au premier run puis échoue une fois pour le signaler ; le
-// second run compare proprement. Commits atterrissent avec `record: false`.
+// second run compare proprement. Aucun `record:` en dur : la CI ré-enregistre
+// sur le runtime qui juge par SNAPSHOT_TESTING_RECORD (#9701).
 //
 // DÉTERMINISME : la vignette n'embarque plus de Map vivante (les tuiles Metal
 // async faisaient crasher/diverger la capture sync de swift-snapshot-testing).
@@ -46,8 +47,7 @@ final class LocationMessageViewSnapshotTests: XCTestCase {
         assertSnapshot(
             of: makeView(colorScheme: .light),
             as: .image(precision: 0.99, perceptualPrecision: 0.98,
-                       layout: .fixed(width: 260, height: 210)),
-            record: false
+                       layout: .fixed(width: 260, height: 194))
         )
     }
 
@@ -55,8 +55,7 @@ final class LocationMessageViewSnapshotTests: XCTestCase {
         assertSnapshot(
             of: makeView(colorScheme: .dark),
             as: .image(precision: 0.99, perceptualPrecision: 0.98,
-                       layout: .fixed(width: 260, height: 210)),
-            record: false
+                       layout: .fixed(width: 260, height: 194))
         )
     }
 }

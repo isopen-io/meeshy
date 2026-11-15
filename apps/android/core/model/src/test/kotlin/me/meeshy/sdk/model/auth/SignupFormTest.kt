@@ -1,0 +1,518 @@
+package me.meeshy.sdk.model.auth
+
+import com.google.common.truth.Truth.assertThat
+import org.junit.Test
+
+/**
+ * Le cœur de l'inscription en un écran : ce qu'il refuse, ce qu'il montre, et
+ * ce qu'il ENVOIE.
+ *
+ * Les témoins de charge (`toRegisterRequest`) sont les plus importants : ils
+ * fixent la seule chose que la passerelle voit, dont les trois champs que
+ * l'ancien wizard envoyait et que celui-ci n'envoie PLUS.
+ */
+class SignupFormTest {
+
+    private val supportedLanguages = setOf("fr", "en", "es", "de", "pt")
+
+    private fun valid(
+        displayName: String = "Ada Lovelace",
+        email: String = "ada@meeshy.me",
+        password: String = "secret1",
+    ) = SignupForm(displayName = displayName, email = email, password = password)
+
+    // ---- verdict local -------------------------------------------------------
+
+    @Test
+    fun nominal_nameEmailAndPassword_areEnoughToSubmit() {
+        assertThat(valid().canSubmit).isTrue()
+        assertThat(valid().validate().isValid).isTrue()
+    }
+
+    @Test
+    fun mononym_singleWordName_isAccepted() {
+        assertThat(valid(displayName = "Ada").canSubmit).isTrue()
+    }
+
+    @Test
+    fun nameWithAccentsAndApostrophe_isAccepted() {
+        assertThat(valid(displayName = "Jean-Éric d'Aubigné").canSubmit).isTrue()
+    }
+
+    @Test
+    fun nameOfASingleCharacter_isRefusedWithTheMinimumIssue() {
+        // #13825 : « A » ou « B » ne sont pas des noms ; « Al », « Li », « Sy » le sont.
+        assertThat(valid(displayName = "A").validate().displayName)
+            .isEqualTo(SignupFieldIssue.DISPLAY_NAME_TOO_SHORT)
+        assertThat(valid(displayName = "A").canSubmit).isFalse()
+        listOf("Al", "Li", "Sy").forEach { name ->
+            assertThat(valid(displayName = name).validate().displayName).isNull()
+            assertThat(valid(displayName = name).canSubmit).isTrue()
+        }
+    }
+
+    @Test
+    fun nameMinimumIsMeasuredAfterTrim() {
+        assertThat(valid(displayName = "   A   ").validate().displayName)
+            .isEqualTo(SignupFieldIssue.DISPLAY_NAME_TOO_SHORT)
+        assertThat(valid(displayName = "  Al  ").validate().displayName).isNull()
+    }
+
+    @Test
+    fun aSingleCharacterNameIsShownRefusedAsSoonAsItIsTyped() {
+        assertThat(valid(displayName = "A").visibleValidation().displayName)
+            .isEqualTo(SignupFieldIssue.DISPLAY_NAME_TOO_SHORT)
+    }
+
+    @Test
+    fun blankName_isRefused() {
+        assertThat(valid(displayName = "   ").validate().displayName)
+            .isEqualTo(SignupFieldIssue.DISPLAY_NAME_REQUIRED)
+    }
+
+    @Test
+    fun nameWithoutASingleLetter_isRefused() {
+        assertThat(valid(displayName = "1234 !").validate().displayName)
+            .isEqualTo(SignupFieldIssue.DISPLAY_NAME_REQUIRED)
+    }
+
+    @Test
+    fun nameCarryingDigitsOrSymbols_isRefusedWithTheCharacterSetIssue() {
+        // Le motif du serveur (`^(?=.*\p{L})[\p{L}\p{M}\s'’ʼ.-]+$`) refuse « R2 D2 » : le client le
+        // dit avant l'envoi, dans la langue du lecteur, au lieu de montrer le motif brut.
+        listOf("R2 D2", "Jean_Eric", "Ana@home", "Bob!").forEach { name ->
+            assertThat(valid(displayName = name).validate().displayName)
+                .isEqualTo(SignupFieldIssue.DISPLAY_NAME_INVALID_CHARACTERS)
+            assertThat(valid(displayName = name).canSubmit).isFalse()
+        }
+    }
+
+    @Test
+    fun nameMadeOfLettersMarksSpacesApostrophesDotsAndHyphens_isAccepted() {
+        listOf("Mary-Jane O’Neil", "J. R. R. Tolkien", "Ana ʼAli", "Zoë d'Été", "محمد علي", "e\u0301lise").forEach { name ->
+            assertThat(valid(displayName = name).validate().displayName).isNull()
+        }
+    }
+
+    @Test
+    fun nameWithoutLetter_staysRequiredEvenWithForbiddenCharacters() {
+        assertThat(valid(displayName = "1234 !").validate().displayName)
+            .isEqualTo(SignupFieldIssue.DISPLAY_NAME_REQUIRED)
+    }
+
+    @Test
+    fun nameLongerThanTheSharedBound_isRefused() {
+        val tooLong = "a".repeat(SignupForm.DISPLAY_NAME_MAX_LENGTH + 1)
+        assertThat(valid(displayName = tooLong).validate().displayName)
+            .isEqualTo(SignupFieldIssue.DISPLAY_NAME_TOO_LONG)
+    }
+
+    @Test
+    fun nameLengthIsMeasuredAfterTrim() {
+        val padded = " " + "a".repeat(SignupForm.DISPLAY_NAME_MAX_LENGTH) + " "
+        assertThat(valid(displayName = padded).validate().displayName).isNull()
+    }
+
+    @Test
+    fun invalidEmail_isRefused() {
+        assertThat(valid(email = "ada-at-meeshy").validate().email)
+            .isEqualTo(SignupFieldIssue.EMAIL_INVALID)
+        assertThat(valid(email = "ada-at-meeshy").canSubmit).isFalse()
+    }
+
+    @Test
+    fun passwordShorterThanSix_isRefused() {
+        assertThat(valid(password = "12345").validate().password)
+            .isEqualTo(SignupFieldIssue.PASSWORD_TOO_SHORT)
+        assertThat(valid(password = "12345").canSubmit).isFalse()
+    }
+
+    @Test
+    fun passwordOfExactlySix_isAccepted() {
+        assertThat(valid(password = "123456").validate().password).isNull()
+    }
+
+    @Test
+    fun anAbsentPhoneNeverBlocksSubmission() {
+        assertThat(valid().copy(phoneDigits = "").canSubmit).isTrue()
+        assertThat(valid().copy(phoneDigits = "0612345678").canSubmit).isTrue()
+        assertThat(valid().validate().issueFor(SignupField.PHONE)).isNull()
+    }
+
+    // ---- saisie du téléphone -------------------------------------------------
+
+    @Test
+    fun phoneEntry_nationalNumber_keepsOnlyDigitsAndLeavesTheCountryAlone() {
+        val form = SignupForm(dialCountryIso = "BE").withPhoneEntry("04 70 12-34.56")
+
+        assertThat(form.dialCountryIso).isEqualTo("BE")
+        assertThat(form.phoneDigits).isEqualTo("0470123456")
+    }
+
+    @Test
+    fun phoneEntry_internationalNumber_movesItsDialCodeOntoTheCountry() {
+        val form = SignupForm(dialCountryIso = "US").withPhoneEntry("+33 (0)6 12-34-56-78")
+
+        assertThat(form.dialCountryIso).isEqualTo("FR")
+        assertThat(form.phoneDigits).isEqualTo("0612345678")
+    }
+
+    @Test
+    fun phoneEntry_doubleZeroForm_isTreatedAsInternational() {
+        val form = SignupForm(dialCountryIso = "FR").withPhoneEntry("0049 30 123456")
+
+        assertThat(form.dialCountryIso).isEqualTo("DE")
+        assertThat(form.phoneDigits).isEqualTo("30123456")
+    }
+
+    @Test
+    fun phoneEntry_internationalNumberSurvivesTheRoundTripToThePayload() {
+        val request = valid().withPhoneEntry("+12025550143").toRegisterRequest()
+
+        assertThat(request.phoneNumber).isEqualTo("2025550143")
+        assertThat(request.phoneCountryCode).isEqualTo("US")
+    }
+
+    @Test
+    fun phoneEntry_unknownInternationalPrefix_fallsBackToPlainDigits() {
+        val form = SignupForm(dialCountryIso = "FR").withPhoneEntry("+999123456")
+
+        assertThat(form.dialCountryIso).isEqualTo("FR")
+        assertThat(form.phoneDigits).isEqualTo("999123456")
+    }
+
+    @Test
+    fun phoneEntry_emptyValue_clearsTheNumber() {
+        val form = SignupForm(dialCountryIso = "FR", phoneDigits = "0612345678").withPhoneEntry("")
+
+        assertThat(form.phoneDigits).isEmpty()
+        assertThat(form.dialCountryIso).isEqualTo("FR")
+    }
+
+    // ---- ce qu'on AFFICHE ----------------------------------------------------
+
+    @Test
+    fun visibleValidation_hidesTheIssuesOfStillEmptyFields() {
+        val untouched = SignupForm()
+        assertThat(untouched.validate().isValid).isFalse()
+        val visible = untouched.visibleValidation()
+        assertThat(visible.displayName).isNull()
+        assertThat(visible.email).isNull()
+        assertThat(visible.password).isNull()
+    }
+
+    @Test
+    fun visibleValidation_showsTheIssueOfAFilledButWrongField() {
+        val typed = SignupForm(displayName = "Ada", email = "nope", password = "12")
+        val visible = typed.visibleValidation()
+        assertThat(visible.displayName).isNull()
+        assertThat(visible.email).isEqualTo(SignupFieldIssue.EMAIL_INVALID)
+        assertThat(visible.password).isEqualTo(SignupFieldIssue.PASSWORD_TOO_SHORT)
+    }
+
+    @Test
+    fun visibleValidation_showsABlankButNonEmptyNameAsRefused() {
+        // "   " n'est pas vide au sens de la saisie : l'utilisateur a tapé quelque chose.
+        assertThat(SignupForm(displayName = "   ").visibleValidation().displayName)
+            .isEqualTo(SignupFieldIssue.DISPLAY_NAME_REQUIRED)
+    }
+
+    // ---- la charge envoyée ---------------------------------------------------
+
+    @Test
+    fun payload_carriesTheDisplayNameAndNeverTheWizardsThreeFields() {
+        val request = valid(displayName = "  Ada Lovelace  ").toRegisterRequest()
+
+        assertThat(request.displayName).isEqualTo("Ada Lovelace")
+        assertThat(request.username).isNull()
+        assertThat(request.firstName).isNull()
+        assertThat(request.lastName).isNull()
+    }
+
+    @Test
+    fun payload_normalizesTheEmailAndKeepsThePasswordVerbatim() {
+        val request = valid(email = "  Ada@Meeshy.ME ", password = " Secret1 ").toRegisterRequest()
+
+        assertThat(request.email).isEqualTo("ada@meeshy.me")
+        assertThat(request.password).isEqualTo(" Secret1 ")
+    }
+
+    @Test
+    fun payload_emptyPhone_omitsBothPhoneFields() {
+        val request = valid().copy(phoneDigits = "   ").toRegisterRequest()
+
+        assertThat(request.phoneNumber).isNull()
+        assertThat(request.phoneCountryCode).isNull()
+    }
+
+    /**
+     * Les chiffres partent tels que tapés, préfixe national compris, avec l'ISO
+     * du pays : c'est la passerelle qui les normalise (libphonenumber), comme
+     * pour le web v3. Composer `+33` + `0612345678` ici fabriquerait un E.164
+     * faux, et retirer le zéro soi-même se tromperait dès l'Italie.
+     */
+    @Test
+    fun payload_filledPhone_travelsAsTheTypedDigitsWithItsIso() {
+        val request = valid().copy(dialCountryIso = "FR", phoneDigits = "06 12 34 56 78").toRegisterRequest()
+
+        assertThat(request.phoneNumber).isEqualTo("0612345678")
+        assertThat(request.phoneCountryCode).isEqualTo("FR")
+    }
+
+    @Test
+    fun payload_phoneOfAnotherCountry_carriesThatCountrysIso() {
+        val request = valid().copy(dialCountryIso = "US", phoneDigits = "2025550143").toRegisterRequest()
+
+        assertThat(request.phoneNumber).isEqualTo("2025550143")
+        assertThat(request.phoneCountryCode).isEqualTo("US")
+    }
+
+    @Test
+    fun payload_carriesBothReadingLanguages() {
+        val request = valid().copy(systemLanguage = "es", regionalLanguage = "en").toRegisterRequest()
+
+        assertThat(request.systemLanguage).isEqualTo("es")
+        assertThat(request.regionalLanguage).isEqualTo("en")
+    }
+
+    @Test
+    fun payload_regionalEqualToSystem_isOmitted() {
+        val request = valid().copy(systemLanguage = "fr", regionalLanguage = "fr").toRegisterRequest()
+
+        assertThat(request.systemLanguage).isEqualTo("fr")
+        assertThat(request.regionalLanguage).isNull()
+    }
+
+    @Test
+    fun payload_blankSystemLanguage_fallsBackRatherThanTravellingEmpty() {
+        val request = valid().copy(systemLanguage = "  ", regionalLanguage = "  ").toRegisterRequest()
+
+        assertThat(request.systemLanguage).isEqualTo(SignupRegionInference.DEFAULT_LANGUAGE)
+        assertThat(request.regionalLanguage).isNull()
+    }
+
+    // ---- pré-remplissage depuis la locale ------------------------------------
+
+    @Test
+    fun defaults_unresolvableLocale_fallsBackToFrenchAndThePriorityCountry() {
+        val form = SignupForm.defaults(
+            deviceLanguage = null,
+            deviceRegion = null,
+            supportedLanguageCodes = supportedLanguages,
+            knownCountryCodes = CountryCatalog.dialCodes.keys,
+        )
+
+        assertThat(form.systemLanguage).isEqualTo("fr")
+        assertThat(form.regionalLanguage).isEqualTo("en")
+        assertThat(form.dialCountryIso).isEqualTo(CountryCatalog.priority.first())
+    }
+
+    @Test
+    fun defaults_supportedDeviceLanguage_becomesTheReadingLanguage() {
+        val form = SignupForm.defaults(
+            deviceLanguage = "ES",
+            deviceRegion = "MX",
+            supportedLanguageCodes = supportedLanguages,
+            knownCountryCodes = CountryCatalog.dialCodes.keys,
+        )
+
+        assertThat(form.systemLanguage).isEqualTo("es")
+        assertThat(form.dialCountryIso).isEqualTo("MX")
+    }
+
+    @Test
+    fun defaults_unknownDeviceRegion_keepsThePriorityCountry() {
+        val form = SignupForm.defaults(
+            deviceLanguage = "fr",
+            deviceRegion = "ZZ",
+            supportedLanguageCodes = supportedLanguages,
+            knownCountryCodes = CountryCatalog.dialCodes.keys,
+        )
+
+        assertThat(form.dialCountryIso).isEqualTo(CountryCatalog.priority.first())
+    }
+
+    @Test
+    fun defaults_leaveEveryTypedFieldEmpty() {
+        val form = SignupForm.defaults(
+            deviceLanguage = "fr",
+            deviceRegion = "FR",
+            supportedLanguageCodes = supportedLanguages,
+            knownCountryCodes = CountryCatalog.dialCodes.keys,
+        )
+
+        assertThat(form.displayName).isEmpty()
+        assertThat(form.email).isEmpty()
+        assertThat(form.phoneDigits).isEmpty()
+        assertThat(form.password).isEmpty()
+        assertThat(form.canSubmit).isFalse()
+    }
+
+    @Test
+    fun dialCode_resolvesFromTheSelectedCountry() {
+        assertThat(SignupForm(dialCountryIso = "DE").dialCode).isEqualTo("+49")
+        assertThat(SignupForm(dialCountryIso = "ZZ").dialCode).isEmpty()
+    }
+
+    @Test
+    fun hasPhone_ignoresFormattingThatCarriesNoDigit() {
+        assertThat(SignupForm(phoneDigits = " () - ").hasPhone).isFalse()
+        assertThat(SignupForm(phoneDigits = "0").hasPhone).isTrue()
+    }
+
+    @Test
+    fun `un telephone vide n'est jamais refuse`() {
+        val form = valid().copy(phoneDigits = "")
+        assertThat(form.validate().issueFor(SignupField.PHONE)).isNull()
+        assertThat(form.canSubmit).isTrue()
+    }
+
+    @Test
+    fun `un telephone saisi trop court bloque l'envoi avec son motif`() {
+        val form = valid().copy(phoneDigits = "12345678")
+        assertThat(form.visibleValidation().issueFor(SignupField.PHONE)).isEqualTo(SignupFieldIssue.PHONE_TOO_SHORT)
+        assertThat(form.canSubmit).isFalse()
+    }
+
+    @Test
+    fun `un telephone de remplissage bloque l'envoi avec le motif implausible`() {
+        listOf("1111100000", "4242424242", "123123123").forEach { digits ->
+            val form = valid().copy(phoneDigits = digits)
+            assertThat(form.validate().issueFor(SignupField.PHONE)).isEqualTo(SignupFieldIssue.PHONE_IMPLAUSIBLE)
+            assertThat(form.canSubmit).isFalse()
+        }
+    }
+
+    @Test
+    fun `un telephone ordinaire reste accepte`() {
+        listOf("0642424242", "06 44 44 12 30").forEach { digits ->
+            assertThat(valid().copy(phoneDigits = digits).canSubmit).isTrue()
+        }
+    }
+}
+
+class SignupFormPhasedTest {
+
+    private fun phased(
+        email: String = "ada.lovelace@meeshy.me",
+        phone: String = "0612345678",
+        password: String = "",
+        displayName: String = "",
+        username: String? = null,
+    ) = SignupForm(email = email, phoneDigits = phone, password = password, displayName = displayName, username = username)
+
+    @Test
+    fun `nom et pseudo suivent l'adresse tant qu'ils ne sont pas tapes`() {
+        val form = phased()
+        assertThat(form.effectiveDisplayName).isEqualTo("Ada Lovelace")
+        assertThat(form.effectiveUsername).isEqualTo("ada-lovelace")
+        assertThat(form.isIdentityDefined).isTrue()
+    }
+
+    @Test
+    fun `un pseudo de deux caracteres est refuse, trois sont acceptes, rognes`() {
+        assertThat(phased(username = "Al").usernameRefusal).isEqualTo(RegistrationIdentity.UsernameRefusal.TOO_SHORT)
+        assertThat(phased(username = "Al").isIdentityDefined).isFalse()
+        assertThat(phased(username = "  Al  ").isIdentityDefined).isFalse()
+        assertThat(phased(username = "Ali").usernameRefusal).isNull()
+        assertThat(phased(username = "  Ali  ").isIdentityDefined).isTrue()
+        assertThat(phased(username = "Al").canSubmitPhased).isFalse()
+    }
+
+    @Test
+    fun `un nom tape d'un caractere ne definit pas l'identite, deux oui`() {
+        assertThat(phased(displayName = "A").isIdentityDefined).isFalse()
+        assertThat(phased(displayName = "A").canSubmitPhased).isFalse()
+        assertThat(phased(displayName = "Al").isIdentityDefined).isTrue()
+    }
+
+    @Test
+    fun `un nom derive d'une adresse d'une seule lettre ne definit pas l'identite`() {
+        assertThat(phased(email = "a12@meeshy.me").effectiveDisplayName).isEqualTo("A")
+        assertThat(phased(email = "a12@meeshy.me").isIdentityDefined).isFalse()
+    }
+
+    @Test
+    fun `un pseudo tape gagne et se refuse en direct`() {
+        assertThat(phased(username = "zoe").effectiveUsername).isEqualTo("zoe")
+        assertThat(phased(username = "z").usernameRefusal).isEqualTo(RegistrationIdentity.UsernameRefusal.TOO_SHORT)
+        assertThat(phased(username = "josé").isIdentityDefined).isFalse()
+    }
+
+    @Test
+    fun `un pseudo ou un nom vide part sous la derivation que montre le filigrane`() {
+        val form = phased(username = "", displayName = "  ")
+        assertThat(form.derivedUsername).isEqualTo("ada-lovelace")
+        assertThat(form.derivedDisplayName).isEqualTo("Ada Lovelace")
+        assertThat(form.effectiveUsername).isEqualTo(form.derivedUsername)
+        assertThat(form.effectiveDisplayName).isEqualTo(form.derivedDisplayName)
+        val request = form.toPhasedRegisterRequest()
+        assertThat(request.username).isEqualTo("ada-lovelace")
+        assertThat(request.displayName).isEqualTo("Ada Lovelace")
+    }
+
+    @Test
+    fun `un pseudo et un nom saisis partent tels que saisis`() {
+        val request = phased(username = " jdupont ", displayName = "Jean D.").toPhasedRegisterRequest()
+        assertThat(request.username).isEqualTo("jdupont")
+        assertThat(request.displayName).isEqualTo("Jean D.")
+    }
+
+    @Test
+    fun `une adresse sans rien de slugifiable ne definit pas l'identite`() {
+        val form = phased(email = "a@meeshy.me")
+        assertThat(form.effectiveUsername).isEmpty()
+        assertThat(form.isIdentityDefined).isFalse()
+    }
+
+    @Test
+    fun `le mot de passe est facultatif mais tient six caracteres s'il est fourni`() {
+        assertThat(phased().canSubmitPhased).isTrue()
+        assertThat(phased(password = "abc").canSubmitPhased).isFalse()
+        assertThat(phased(password = "abcdef").canSubmitPhased).isTrue()
+    }
+
+    @Test
+    fun `la charge sans mot de passe ne l'envoie pas`() {
+        val request = phased().toPhasedRegisterRequest()
+        assertThat(request.password).isNull()
+        assertThat(request.displayName).isEqualTo("Ada Lovelace")
+        assertThat(request.username).isEqualTo("ada-lovelace")
+        assertThat(request.phoneNumber).isEqualTo("0612345678")
+        assertThat(phased(password = "secret1").toPhasedRegisterRequest().password).isEqualTo("secret1")
+    }
+
+    @Test
+    fun `le numero est requis par l'ecran mais pas par la requete`() {
+        val form = phased(phone = "")
+        assertThat(form.phoneRefusal).isEqualTo(SignupPhoneRefusal.Missing)
+        assertThat(form.canSubmitPhased).isFalse()
+        val request = form.toPhasedRegisterRequest()
+        assertThat(request.phoneNumber).isNull()
+        assertThat(request.phoneCountryCode).isNull()
+    }
+
+    @Test
+    fun `un numero implausible bloque l'envoi`() {
+        assertThat(phased(phone = "1111100000").canSubmitPhased).isFalse()
+    }
+
+    @Test
+    fun `le parrainage voyage avec sa cle de visite, jamais seule`() {
+        val request = phased().toPhasedRegisterRequest(referralCode = " aff_123 ", referralSessionKey = "v1")
+        assertThat(request.affiliateToken).isEqualTo("aff_123")
+        assertThat(request.affiliateSessionKey).isEqualTo("v1")
+        val none = phased().toPhasedRegisterRequest(referralCode = null, referralSessionKey = "v1")
+        assertThat(none.affiliateToken).isNull()
+        assertThat(none.affiliateSessionKey).isNull()
+    }
+
+    @Test
+    fun `les suggestions de pseudo accompagnent le refus pseudo pris`() {
+        val error = SignupErrorRouter.route(
+            code = "USERNAME_TAKEN",
+            suggestions = listOf("ada-1", "ada-2"),
+        ) as SignupSubmitError.Field
+        assertThat(error.suggestions).containsExactly("ada-1", "ada-2").inOrder()
+    }
+}

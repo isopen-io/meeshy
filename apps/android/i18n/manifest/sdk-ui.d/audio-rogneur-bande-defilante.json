@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "audio.trim.play",
+          "androidName": "audio_trim_play",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.trim.stop",
+          "androidName": "audio_trim_stop",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.trim.strip",
+          "androidName": "audio_trim_strip",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

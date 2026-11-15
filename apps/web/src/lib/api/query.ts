@@ -1,0 +1,638 @@
+import { useMemo } from 'react';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { conversationStore } from '@/lib/conversation-store';
+import { discardSend, type DiscardOutcome } from '@/lib/send/discard-send';
+import { performSend, retrySend, type Draft } from '@/lib/send/perform-send';
+import { outboxStore } from '@/lib/send/outbox-store';
+import { notePublicationParticipation } from '@/lib/view/publication-participation';
+import type { RowFlagActionId } from '@/lib/view/row-actions';
+import { announceRowEvent } from '@/lib/view/row-action-notice';
+
+import { cachedCardSeed } from './card-caches';
+import { ApiError, currentOwnerCredential } from './client';
+import { performCommentGesture, type CommentGestureRequest, type CommentGestureResult } from './comment-gestures';
+import { setCommentsDisabled, type CommentSettingOutcome } from './comment-settings';
+import { repliesInfiniteOptions } from './comment-replies';
+import { performRowAction } from './conversation-actions';
+import { conversationQuery, conversationsQuery, refreshConversations } from './conversations';
+import type { PendingAttachment } from '@/lib/send/attachments';
+
+import { apiDeps } from './deps';
+import { sendTransfer } from '@/lib/send/send-transfer-instance';
+import { feedQuery, refreshFeed } from './feed';
+import { forwardMessages, type ForwardResult, type ForwardSource } from './forward';
+import { performPostGesture, type PostGestureResult } from './feed-gestures';
+import type { FeedAuthor } from './feed-pages';
+import { recordPostShare } from './feed-share';
+import { commentsInfiniteOptions, flattenCommentPages, performComment, type CommentInfiniteData, type CommentResult, type CommentStickerSend, type PostComment } from './publication-comments';
+import type { PostMediaUploadResult } from './post-media-upload';
+import { postQueryOptions } from './publication-detail';
+import { performRepost, type RepostIntent, type RepostResult } from './publication-repost';
+import type { PostToggleKind } from '@/lib/feed/interactions';
+import { paginationStateOf } from '@/lib/lens/pagination';
+import type { Conversation, Message, Participant } from './types';
+import { messagesQuery } from './messages';
+import { joinThreadWindows } from './messages-window';
+import { useAnchoredThread } from './use-anchored-thread';
+import { appQueryClient } from './query-client';
+import { performReaction, type PerformReactionResult } from './reactions';
+import { deletePost, editPost, pinPost, type EditPostOutcome, type PostActionOutcome } from './publication-actions';
+import { reportComment, reportPost, type ReportOutcome, type ReportReason } from './reports';
+import {
+  STORIES_QUERY_PREFIX,
+  STORY_TRAY_QUERY_KEY,
+  markStoryViewed,
+  statusMoodsQueryOptions,
+  storyFeedQueryOptions,
+  storyPostQueryOptions,
+  storyTrayQueryOptions,
+} from './stories';
+import { performStoryReaction, viewerReactedToStory, type StoryReactionResult } from './story-reactions';
+import { storyViewedStore } from './story-viewed-store';
+
+/**
+ * `useConversations` (#6195) — `useInfiniteQuery` : la Lentille défile
+ * au-delà de la première page serveur (§0 de la spécification). `.data` est
+ * APLATI par `select` (`flattenConversationPages`) ; `.hasNextPage` /
+ * `.isFetchingNextPage` / `.isFetchNextPageError` alimentent
+ * `paginationStateOf` (`lib/lens/pagination.ts`) côté écran.
+ */
+export function useConversations() {
+  return useInfiniteQuery(conversationsQuery(apiDeps));
+}
+
+/**
+ * `useConversationsSnapshot` — LA LISTE POUR UN AUTRE ÉCRAN (#5650,
+ * revue-correction) : la MÊME fabrique, le MÊME cache, la MÊME clé — mais
+ * `enabled: false`, donc JAMAIS de requête. Un écran qui n'est pas la liste
+ * (le fil et son compteur « non lus ailleurs ») en OBSERVE le contenu et se
+ * re-rend quand il change, au lieu d'en prendre un instantané figé par
+ * `queryClient.getQueryData()` au premier rendu — un instantané pris sur un
+ * cache encore vide (lien direct vers `/c/:id`) ne se remplissait jamais, et
+ * une conversation marquée lue ailleurs gardait son compte pour toujours.
+ */
+export function useConversationsSnapshot(): readonly Conversation[] | undefined {
+  return useInfiniteQuery({ ...conversationsQuery(apiDeps), enabled: false }).data;
+}
+
+/**
+ * `refreshListAction` (#6195) — RÉFÉRENCE DE MODULE STABLE (motif
+ * `rowAction` ci-dessous) : le tirer-pour-rafraîchir de la Lentille. Les
+ * conversations (page 1 seule, `refreshConversations`) ET les stories/humeurs
+ * (`STORIES_QUERY_PREFIX`, une invalidation qui couvre les DEUX clés) partent
+ * EN PARALLÈLE — miroir des quatre travaux `async let` d'iOS (`:1638-1642`),
+ * réduits à ce que la v3.1 sert réellement (Q9/Q10, § 1.8 de la
+ * spécification). Un échec des conversations PROPAGE (c'est
+ * `usePullToRefresh` qui le traduit en `completing failed`) ; l'invalidation
+ * des stories ne rejette jamais (`invalidateQueries` ne lève pas).
+ */
+export function refreshListAction(): Promise<void> {
+  return Promise.all([
+    refreshConversations(appQueryClient, apiDeps),
+    appQueryClient.invalidateQueries({ queryKey: STORIES_QUERY_PREFIX }),
+  ]).then(() => undefined);
+}
+
+/**
+ * **LE RAIL DE STORIES** (#6080) — même adaptateur, même `apiDeps`, donc la
+ * même règle de source : fixtures ou passerelle, résolu à la CONSTRUCTION.
+ *
+ * `staleTime` de 60 s : une story vit vingt heures et le plateau n'a
+ * aucune raison d'être refetché à chaque retour sur la liste. Au-delà, c'est
+ * le socket qui doit prévenir — issue compagnon, comme pour les messages.
+ */
+export function useStoryTray(options: { readonly enabled?: boolean } = {}) {
+  return useQuery({ ...storyTrayQueryOptions(apiDeps), staleTime: 60_000, enabled: options.enabled ?? true });
+}
+
+/**
+ * **LE CORPUS DES HUMEURS** (#5652) — même `apiDeps`, même règle de source
+ * que `useStoryTray`, un corpus DISTINCT (`?scope=statuses`, jamais
+ * `stories`). Même `staleTime` : une humeur, comme une story, vit une
+ * fenêtre courte (une heure — `PostType.STATUS`, `schema.prisma`) et n'a
+ * aucune raison d'être refetchée à chaque retour sur la liste.
+ */
+export function useStatusMoods(options: { readonly enabled?: boolean } = {}) {
+  return useQuery({ ...statusMoodsQueryOptions(apiDeps), staleTime: 60_000, enabled: options.enabled ?? true });
+}
+
+/**
+ * **LE CORPUS COMPLET DU LECTEUR DE STORIES** (#5817) — même adaptateur,
+ * même `apiDeps` que `useStoryTray`. `staleTime: 0` (contrairement au
+ * plateau) : le lecteur doit voir une vue tout juste marquée par une AUTRE
+ * fenêtre/onglet dès sa prochaine ouverture — cache-first (le rendu part du
+ * cache existant sans jamais poser de spinner dessus), mais sans figer une
+ * minute de fraîcheur sur un corpus qui change à chaque `markStoryViewed`.
+ */
+export function useStoryFeed(options: { readonly enabled?: boolean } = {}) {
+  return useQuery({ ...storyFeedQueryOptions(apiDeps), staleTime: 0, enabled: options.enabled ?? true });
+}
+
+/**
+ * **LA TROISIÈME MARCHE, CÔTÉ ÉCRAN** (#5817, revue-correction, défaut 4) —
+ * `enabled` uniquement quand le corpus principal EST arrivé et n'y contient
+ * pas la story ciblée (`stories.ts#loadStoryPost`, doc-comment). `retry:
+ * false` : un 404 est un VERDICT (D-6, aucun oracle d'existence), jamais une
+ * panne réseau à réessayer.
+ */
+export function useStoryPost(postId: string, options: { readonly enabled: boolean }) {
+  return useQuery({ ...storyPostQueryOptions({ ...apiDeps, postId }), enabled: options.enabled, retry: false, staleTime: 0 });
+}
+
+/**
+ * `markStoryViewedAction` (#5817) — RÉFÉRENCE DE MODULE STABLE (motif
+ * `rowAction`), en TROIS temps dont l'ordre est la moitié du travail :
+ *
+ * 1. **L'AVANCE OPTIMISTE, tout de suite** (`storyViewedStore`) — l'anneau de
+ *    la tuile s'éteint à l'instant où la story s'affiche, pas au retour du
+ *    réseau (§ Optimistic Updates). C'est le SEUL retour visible du geste
+ *    « j'ai regardé » : sans lui, l'anneau s'éteint « tout seul », plus tard.
+ * 2. l'appel réel (`POST /posts/:postId/view`), dont l'échec est AVALÉ — un
+ *    accusé de lecture perdu n'a jamais mérité de toast, iOS le journalise
+ *    sans le montrer (`StoryViewModel+Viewing.swift:120-166`).
+ * 3. l'invalidation du **PLATEAU SEUL** (`STORY_TRAY_QUERY_KEY`), jamais du
+ *    préfixe entier.
+ *
+ * **Pourquoi pas le préfixe** (revue-correction) : `STORIES_QUERY_PREFIX`
+ * couvre AUSSI `STORY_FEED_QUERY_KEY`, le corpus que le lecteur est en train
+ * de LIRE — et il a un observateur actif, à `staleTime: 0`. L'invalider
+ * relançait donc une requête de 50 posts À CHAQUE story affichée, et surtout
+ * reclassait les groupes sous le lecteur (le rang dépend de `hasUnseen`, que
+ * la lecture fait basculer) : arrivé au bout d'un auteur, `nextPosition` ne
+ * trouvait plus de groupe suivant et FERMAIT le lecteur au lieu de passer à
+ * l'auteur d'après. Le plateau, lui, n'a aucun observateur pendant la lecture
+ * — l'invalidation le marque périmé et il repart frais au retour.
+ */
+export function markStoryViewedAction(postId: string): Promise<void> {
+  storyViewedStore.getState().markViewed(postId);
+  return markStoryViewed({ ...apiDeps, postId })
+    .catch(() => undefined)
+    .then(() => appQueryClient.invalidateQueries({ queryKey: STORY_TRAY_QUERY_KEY }))
+    .then(() => undefined);
+}
+
+/**
+ * `useFeed` (#5893) — `useInfiniteQuery` : le fil des publications défile
+ * au-delà de la première page serveur, même motif que `useConversations`.
+ * `.data` est APLATI par `select` (`flattenFeedPages`).
+ */
+export function useFeed() {
+  return useInfiniteQuery(feedQuery(apiDeps));
+}
+
+/**
+ * `refreshFeedAction` (#5893) — RÉFÉRENCE DE MODULE STABLE (motif
+ * `refreshListAction`) : le tirer-pour-rafraîchir du fil. Page 1 seule,
+ * curseur remis à zéro — jamais l'invalidation du préfixe `STORIES_QUERY_PREFIX`,
+ * un corpus DISTINCT que le fil ne montre pas.
+ */
+export function refreshFeedAction(): Promise<void> {
+  return refreshFeed(appQueryClient, apiDeps);
+}
+
+/**
+ * `postGestureAction` (#6278) — RÉFÉRENCE DE MODULE STABLE, motif
+ * `reactAction` : aimer et enregistrer une publication du fil, liés à
+ * l'instance PARTAGÉE `appQueryClient` — le cache que `useFeed` observe est
+ * celui que le geste bascule.
+ */
+export function postGestureAction(postId: string, kind: PostToggleKind): Promise<PostGestureResult> {
+  return performPostGesture({ postId, kind, deps: { ...apiDeps, queryClient: appQueryClient } });
+}
+
+/** `repostAction` (#6484) — RÉFÉRENCE DE MODULE STABLE, MÊME motif que
+ * `postGestureAction` : le repost écrit sur l'instance PARTAGÉE
+ * `appQueryClient`, donc un réel repartagé depuis le lecteur des Réels
+ * l'est aussi dans le Flux, sans relecture. */
+export function repostAction(postId: string, intent?: RepostIntent): Promise<RepostResult> {
+  return performRepost({ postId, deps: { ...apiDeps, queryClient: appQueryClient }, ...(intent === undefined ? {} : { intent }) }).then((result) => {
+    if (result.ok) notePublicationParticipation(postId, 'reposted');
+    return result;
+  });
+}
+
+/** LES GESTES DU MENU « ⋯ » (#7533) — mêmes références de module stables,
+ * sur l'instance partagée du cache : la suppression retire la carte de
+ * CHAQUE caisse qui la peint (`removeCardPost`). */
+export function deletePostAction(postId: string, reason?: string): Promise<PostActionOutcome> {
+  return deletePost({ postId, deps: { ...apiDeps, queryClient: appQueryClient }, ...(reason === undefined ? {} : { reason }) });
+}
+
+export function pinPostAction(postId: string): Promise<PostActionOutcome> {
+  return pinPost({ postId, deps: { ...apiDeps, queryClient: appQueryClient } });
+}
+
+/** FERMER OU ROUVRIR LES COMMENTAIRES (#16541) — même motif : l'optimiste écrit les caisses que les écrans observent. */
+export function commentSettingAction(postId: string, disabled: boolean): Promise<CommentSettingOutcome> {
+  return setCommentsDisabled({ postId, disabled, deps: { ...apiDeps, queryClient: appQueryClient } });
+}
+
+/** MODIFIER LE TEXTE (#7534) — RÉFÉRENCE DE MODULE STABLE, même motif : le
+ * cache que le fil observe est celui que le geste patche, optimiste ET
+ * réponse servie compris. */
+export function editPostAction(postId: string, content: string): Promise<EditPostOutcome> {
+  return editPost({ postId, content, deps: { ...apiDeps, queryClient: appQueryClient } });
+}
+
+export function reportPostAction(postId: string, reason: ReportReason): Promise<ReportOutcome> {
+  return reportPost({ postId, reason, deps: apiDeps });
+}
+
+/** Le « Signaler » du menu « … » d'un commentaire (#8734). */
+export function reportCommentAction(commentId: string, reason: ReportReason): Promise<ReportOutcome> {
+  return reportComment({ commentId, reason, deps: apiDeps });
+}
+
+/** `recordShareAction` (#6278) — RÉFÉRENCE DE MODULE STABLE : compter un
+ * partage DÉJÀ parti, sur l'instance partagée du cache du fil. */
+export function recordShareAction(postId: string): Promise<boolean> {
+  /* Le partage EST parti (c'est la condition de cet appel) : le rail le montre
+     tout de suite par l'anneau de « Envoyer », sans attendre le compteur. */
+  notePublicationParticipation(postId, 'sent');
+  return recordPostShare({ postId, deps: { ...apiDeps, queryClient: appQueryClient } });
+}
+
+/**
+ * `usePost` (#6278) — le détail d'une publication, CACHE D'ABORD : ouvert
+ * depuis N'IMPORTE QUEL écran qui montrait la carte — le Flux, un hashtag, un
+ * profil, les enregistrées, un fil de Réels (#7384) —, il se peint AVEC la
+ * carte déjà reçue (`cachedCardSeed`, datée de la caisse qui l'a fournie, que
+ * `staleTime: 0` revalide en fond) — jamais un squelette sur une publication
+ * que l'écran précédent affichait. La relecture REMPLACE la carte sans la
+ * retirer : une carte de liste qui ne porterait pas tous les champs est
+ * complétée, jamais effacée. Ouvert par un lien direct, aucune caisse ne la
+ * porte et le squelette est juste. `retry: false` : un 404 est un VERDICT
+ * (D-6), pas une panne à réessayer.
+ */
+export function usePost(postId: string) {
+  return useQuery({
+    ...postQueryOptions({ ...apiDeps, postId }),
+    ...cachedCardSeed(appQueryClient, postId),
+    staleTime: 0,
+    retry: false,
+  });
+}
+
+export function useConversation(id: string) {
+  const queryClient = useQueryClient();
+  return useQuery(conversationQuery(apiDeps, id, { queryClient }));
+}
+
+/**
+ * `useMessages` (#6972) — `useInfiniteQuery` : le fil charge les messages plus
+ * ANCIENS à l'approche du haut, par `before=<id de message>` (§ Critère de fin
+ * 1 de l'issue). Avant ce lot c'était un `useQuery` SIMPLE sur `?limit=50`,
+ * sans `initialPageParam`, sans `getNextPageParam`, et `nextCursor` — la
+ * moitié utile du curseur — était jeté : **une conversation de plus de 50
+ * messages était définitivement tronquée.** Le dépôt le savait
+ * (`decisions.md:2030` : « La sentinelle est GÉNÉRIQUE, et le fil la
+ * copiera ») ; la moitié liste (#6195 / D-44) avait été livrée, la moitié fil
+ * jamais.
+ *
+ * `.data` est APLATI par `select` (`flattenMessagePages`) ; `.hasNextPage` /
+ * `.isFetchingNextPage` / `.isFetchNextPageError` alimentent
+ * `paginationStateOf` — la MÊME loi à quatre cas que la Lentille
+ * (`lib/lens/pagination.ts`), lue côté écran.
+ *
+ * **Fraîcheur** : `staleTime: 0` est porté par la FABRIQUE `messagesQuery`
+ * (`messages.ts`, #7353), jamais reposé ici — le témoin
+ * `thread-reload-freshness.test.ts` joue la fabrique, donc ce que l'écran sert.
+ */
+export function useMessages(id: string) {
+  return useInfiniteQuery(messagesQuery(apiDeps, id));
+}
+
+/** Référence STABLE — un `[]` écrit en ligne change d'identité à chaque
+ * rendu, ce qui défait `useMemo([threadData.messages])`, `place()` et toute
+ * la mémoïsation du fil virtualisé (`routes/thread.tsx` § `placed`). */
+const NO_MESSAGES: readonly Message[] = [];
+
+export type ThreadDataStatus = 'pending' | 'success' | 'refused' | 'error';
+
+function isRefusal(error: unknown): boolean {
+  return error instanceof ApiError && (error.status === 403 || error.status === 404);
+}
+
+type ThreadQueryOutcome = {
+  readonly data: unknown;
+  readonly error: unknown;
+  readonly isError: boolean;
+  readonly isPaused: boolean;
+};
+
+const unavailable = (query: ThreadQueryOutcome): boolean => query.data === undefined && (query.isError || query.isPaused);
+
+/**
+ * L'ÉTAT DU FIL (#15112) — un refus prime ; puis DES DONNÉES EN CACHE GAGNENT,
+ * même après un échec de relecture : hors ligne après un rechargement, TanStack
+ * croit le réseau présent, la relecture échoue et la requête passe en `error`
+ * en gardant ses données. L'erreur ne se montre que là où le cache est VIDE —
+ * échec, ou requête mise en pause hors ligne (`cold-state.ts`).
+ */
+export function threadDataStatusOf(conversation: ThreadQueryOutcome, messages: ThreadQueryOutcome): ThreadDataStatus {
+  if (isRefusal(conversation.error) || isRefusal(messages.error)) return 'refused';
+  if (conversation.data !== undefined && messages.data !== undefined) return 'success';
+  if (unavailable(conversation) || unavailable(messages)) return 'error';
+  return 'pending';
+}
+
+/**
+ * `useThreadData` — compose les DEUX requêtes du fil. `status: 'refused'`
+ * (D-6) dès que L'UNE des deux porte un `ApiError` 403/404 — un id qui
+ * n'existe pas OU dont le lecteur n'est pas membre rend le MÊME refus,
+ * jamais le contenu d'une autre conversation (F8 : plus de repli sur
+ * `CONVERSATIONS[0]`).
+ *
+ * `conversationId` (revue-correction #5793, défaut MAJEUR 3) — LE paramètre
+ * de route n'est qu'un moyen de CHARGER (`GET /conversations/:id`, qui
+ * accepte « ID or identifier », `core-detail.ts:250`) : la passerelle
+ * NORMALISE tout identifiant lisible en ObjectId AVANT de diffuser quoi que
+ * ce soit (`normalizeConversationId`, `MeeshySocketIOManager.ts:2879`), donc
+ * `message:new`/`conversation:updated`/`message:translation` portent
+ * TOUJOURS l'ObjectId — jamais l'identifiant de la route. Clé le fil sur le
+ * paramètre de route AVANT que `conversation.data` n'arrive (rien à perdre,
+ * la passerelle résout aussi les deux formes pour `GET …/messages`), puis
+ * BASCULE sur `conversation.data.id` dès qu'il est connu : un lien direct
+ * `/c/<identifiant>` recevait alors ses temps réel sur une clé de cache que
+ * PERSONNE ne lisait, le fil ouvert restant muet et la Lentille ne se
+ * réordonnant jamais. Un lien déjà canonique (le cas nominal, navigation
+ * depuis la Lentille) ne change pas de clé : `conversation.data.id === id`,
+ * aucune requête de plus.
+ */
+/** #12992 — le fil montré scelle les clairs forgés après l'activation du bout en bout (`lib/view/use-sealed-thread.ts`). */
+export { useSealedThread } from '@/lib/view/use-sealed-thread';
+
+export function useThreadData(id: string) {
+  const conversation = useConversation(id);
+  const conversationId = conversation.data?.id ?? id;
+  const messages = useMessages(conversationId);
+  /**
+   * LA FENÊTRE ANCRÉE (#7420) — un message hors des pages chargées s'atteint
+   * par `?around=` (`useAnchoredThread`) ; `joinThreadWindows` dit ce que le
+   * fil MONTRE : la fenêtre seule tant qu'elle est DÉTACHÉE du présent, puis
+   * un fil continu dès qu'elle le rejoint. Tant qu'elle est engagée, la
+   * pagination des deux bords lui appartient.
+   */
+  const anchored = useAnchoredThread(conversationId);
+  const present = messages.data?.messages ?? NO_MESSAGES;
+  const shown = useMemo(() => joinThreadWindows(present, anchored.window), [present, anchored.window]);
+  const presentOlderState = paginationStateOf({
+    hasNextPage: messages.hasNextPage,
+    isFetchingNextPage: messages.isFetchingNextPage,
+    isFetchNextPageError: messages.isFetchNextPageError,
+  });
+
+  const error = conversation.error ?? messages.error ?? null;
+  const status = threadDataStatusOf(conversation, messages);
+
+  return {
+    conversationId,
+    conversation: conversation.data,
+    messages: shown.messages,
+    /**
+     * `hasOlder` — « le serveur DÉCLARE-T-IL du plus ancien ? », lu sur la
+     * page qui borde la fenêtre (`threadWindowOf`, `messages-pages.ts`).
+     * JAMAIS `hasNextPage`, qui répond à l'autre question — « peut-on en
+     * demander davantage sans boucler ? » — et qui tombe à faux dès qu'un
+     * refus anti-boucle s'applique, alors que l'historique, lui, existe
+     * toujours. Son lecteur est `windowCoversUnread` (« Sur les N derniers
+     * messages » du Résumé Vivant, `routes/thread.tsx`).
+     */
+    hasOlder: anchored.window?.hasOlder ?? messages.data?.hasOlder ?? false,
+    /** L'état de pagination du HAUT du fil, quatre cas, la MÊME loi que la
+     * Lentille (`paginationStateOf`, `lib/lens/pagination.ts`) — dérivé des
+     * drapeaux de TanStack, jamais tenu à part. */
+    olderState: anchored.engaged ? anchored.olderState : presentOlderState,
+    /** `fetchNextPage` de TanStack — référence STABLE entre deux rendus
+     * (`useInfiniteQuery` la mémoïse), ce que l'ancrage de `routes/thread.tsx`
+     * exige pour ne pas recréer sa sentinelle à chaque image. */
+    fetchOlder: anchored.engaged ? anchored.fetchOlder : messages.fetchNextPage,
+    /** Le bas du fil, vers le PRÉSENT — seulement tant que la fenêtre ancrée en est DÉTACHÉE (#7420). */
+    newerState: shown.detached ? anchored.newerState : ('exhausted' as const),
+    fetchNewer: anchored.fetchNewer,
+    /** La fenêtre montrée ne touche pas le présent : ni accusé de lecture, ni ancrage en bas (#7420, `windowIsAtTip` iOS). */
+    detached: shown.detached,
+    /** `target` non nul : le fil est ancré autour d'un message, son bas n'est plus « le présent qui arrive ». */
+    around: { target: anchored.target, settled: anchored.settled, seek: anchored.seek },
+    /** La fenêtre `?around=` est en vol, rien n'en est encore servi (#9302) — jamais sur un cache. */
+    windowLoading: anchored.loading,
+    returnToPresent: anchored.clear,
+    status,
+    error,
+    refetch: (): void => {
+      void conversation.refetch();
+      void messages.refetch();
+    },
+    /**
+     * `typing` A DISPARU D'ICI (#5793) — c'était un BOOLÉEN DE SOURCE
+     * (`apiConfig.source === 'fixtures'`), jamais une donnée : il valait
+     * `true` en fixtures quel que soit ce qui se passait, `false` en
+     * gateway quoi qu'il arrive. La frappe RÉELLE vit désormais dans
+     * `typing-store.ts`, alimenté par `api/socket.ts` (`typing:start`/
+     * `typing:stop`) et lu par `useTypists()` (`api/use-typists.ts`) —
+     * `routes/thread.tsx` la consomme directement, ce hook n'a plus à la
+     * transporter.
+     */
+  };
+}
+
+/**
+ * `rowAction` — RÉFÉRENCE DE MODULE STABLE (jamais recréée), ce que
+ * `LensRow` (`memo`) exige (`conversations.tsx:31-40`). Liée aux instances
+ * PARTAGÉES du magasin optimiste et du client de requêtes.
+ */
+export function rowAction(conversationId: string, action: RowFlagActionId): void {
+  void performRowAction({
+    conversationId,
+    action,
+    deps: { ...apiDeps, store: conversationStore, queryClient: appQueryClient, notify: announceRowEvent },
+  });
+}
+
+/**
+ * `sendAction`/`retrySendAction` (#5813, étape 6) — RÉFÉRENCES DE MODULE
+ * STABLES, motif `rowAction` ci-dessus : liées aux instances PARTAGÉES
+ * (`appQueryClient`, `outboxStore`) et à `apiDeps` (la SEULE résolution de
+ * `apiConfig.source`, `./deps.ts`). `online` est REÇU — ce module n'appelle
+ * pas `useOnline()` (un hook), c'est `use-send.ts` qui le fournit.
+ */
+export function sendAction(params: {
+  readonly conversationId: string;
+  readonly draft: Draft;
+  readonly viewerId: string;
+  readonly sender?: Participant;
+  readonly online: boolean;
+}): Promise<void> {
+  const { conversationId, draft, viewerId, sender, online } = params;
+  return performSend({
+    conversationId,
+    draft,
+    viewerId,
+    ...(sender === undefined ? {} : { sender }),
+    deps: { ...apiDeps, queryClient: appQueryClient, outbox: outboxStore, online, transfer: sendTransfer },
+  });
+}
+
+export function retrySendAction(params: {
+  readonly conversationId: string;
+  readonly clientMessageId: string;
+  readonly online: boolean;
+}): Promise<void> {
+  const { conversationId, clientMessageId, online } = params;
+  return retrySend({
+    conversationId,
+    clientMessageId,
+    deps: { ...apiDeps, queryClient: appQueryClient, outbox: outboxStore, online, transfer: sendTransfer },
+  });
+}
+
+/** `discardSendAction` (#12632) — même motif : lié à `appQueryClient` et à `outboxStore`. `null` : rien à abandonner. */
+export function discardSendAction(params: { readonly conversationId: string; readonly clientMessageId: string }): DiscardOutcome | null {
+  return discardSend({ ...params, deps: { queryClient: appQueryClient, outbox: outboxStore } });
+}
+
+/**
+ * `reactAction` (#5814) — RÉFÉRENCE DE MODULE STABLE, motif `rowAction` :
+ * liée à l'instance PARTAGÉE `appQueryClient`. Le SITE UNIQUE que le menu du
+ * message (`message-menu.tsx`) et son hôte (`routes/thread.tsx`) appellent —
+ * jamais une seconde écriture du plan optimiste.
+ */
+export function reactAction(conversationId: string, messageId: string, emoji: string): Promise<PerformReactionResult> {
+  return performReaction({ conversationId, messageId, emoji, deps: { ...apiDeps, queryClient: appQueryClient } });
+}
+
+/**
+ * `forwardAction` (#5866) — RÉFÉRENCE DE MODULE STABLE, motif `reactAction`.
+ * Le SITE UNIQUE par lequel la barre de sélection atteint le transport ; la
+ * règle (« quoi peut partir ») vit dans `view/forward.ts`, la forme du corps
+ * (« jamais d'`attachmentIds` ») dans `api/forward.ts`. Ce relais n'en porte
+ * aucune — il ne fait que brancher `apiDeps`.
+ */
+export function forwardAction(params: {
+  readonly messages: readonly ForwardSource[];
+  readonly sourceConversationId: string;
+  readonly targetConversationId: string;
+}): Promise<ForwardResult> {
+  return forwardMessages({ ...apiDeps, ...params });
+}
+
+/**
+ * `useComments` (#6278 suite) — le fil de commentaires d'UNE publication,
+ * `useInfiniteQuery` comme le Flux. `.data` reste PAGINÉ (pas de `select`) :
+ * l'insertion optimiste de `performComment` écrit dans les pages, et un
+ * `select` qui aplatit ne changerait rien pour elle mais obligerait chaque
+ * hôte à reconnaître deux formes. L'aplatissement se fait au rendu, par
+ * `flattenCommentPages` — le site unique.
+ *
+ * `enabled` : une story qui n'a pas encore ouvert son panneau ne charge pas
+ * son fil. Le compteur du rail vient du corpus, jamais d'une requête.
+ */
+export function useComments(postId: string, options?: { readonly enabled?: boolean }) {
+  return useInfiniteQuery({
+    ...commentsInfiniteOptions({ ...apiDeps, postId }),
+    ...(options?.enabled === undefined ? {} : { enabled: options.enabled }),
+  });
+}
+
+/**
+ * `useCommentReplies` (#8583) — les réponses d'UNE racine, chargées quand son
+ * fil est DÉPLIÉ seulement : un fil replié ne coûte aucune requête.
+ */
+export function useCommentReplies(postId: string, parentId: string, options: { readonly enabled: boolean }) {
+  return useInfiniteQuery({ ...repliesInfiniteOptions({ ...apiDeps, postId, parentId }), enabled: options.enabled });
+}
+
+/**
+ * LES RÉPONSES D'UNE RACINE, POUR LES JOINDRE À SA CARTE (#8734) — la caisse
+ * du fil déplié si elle existe (`ensureInfiniteQueryData`), sinon la première
+ * page lue et gardée pour le dépliage suivant. Une lecture ratée rend `[]` :
+ * la carte part sans elles, elle n'attend pas.
+ */
+export async function loadCommentRepliesAction(postId: string, parentId: string): Promise<readonly PostComment[]> {
+  try {
+    const data = await appQueryClient.ensureInfiniteQueryData(repliesInfiniteOptions({ ...apiDeps, postId, parentId }));
+    return flattenCommentPages(data as CommentInfiniteData);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * `commentAction` — RÉFÉRENCE DE MODULE STABLE (motif `reactAction`) : le
+ * SITE UNIQUE d'envoi d'un commentaire, lié à l'instance PARTAGÉE
+ * `appQueryClient`. La liste de `/post/$post` et le panneau du lecteur de
+ * story écrivent donc dans le MÊME cache — le commentaire posé depuis une
+ * story apparaît dans le détail de la publication sans relecture.
+ */
+export function commentAction(params: {
+  readonly postId: string;
+  readonly content: string;
+  readonly author: FeedAuthor;
+  readonly originalLanguage?: string | undefined;
+  /** La RACINE de la réponse (#8583) — absent ⇒ premier niveau. */
+  readonly parentId?: string | undefined;
+  /** Les photos et vidéos déjà téléversées (#9167). */
+  readonly media?: readonly PostMediaUploadResult[] | undefined;
+  /** Le sticker et son image déjà téléversée (#9080, #9318). */
+  readonly sticker?: CommentStickerSend | undefined;
+  /** Les pièces d'origine des médias (#9743) — rendues au brouillon sur un refus au rejeu. */
+  readonly pieces?: readonly PendingAttachment[] | undefined;
+}): Promise<CommentResult> {
+  return performComment({
+    postId: params.postId,
+    content: params.content,
+    author: params.author,
+    ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
+    ...(params.parentId === undefined ? {} : { parentId: params.parentId }),
+    ...(params.media === undefined || params.media.length === 0 ? {} : { media: params.media }),
+    ...(params.sticker === undefined ? {} : { sticker: params.sticker }),
+    ...(params.pieces === undefined ? {} : { pieces: params.pieces }),
+    /* L'auteur doit ÊTRE le lecteur connecté au moment où la requête part (#9743). */
+    deps: { ...apiDeps, queryClient: appQueryClient, owner: currentOwnerCredential },
+  }).then((result) => {
+    /* Un commentaire RETENU (servi, ou gardé en attente) allume l'anneau de
+       « Commentaires » ; un refus permanent, défait, ne l'allume pas. */
+    if (result.ok) notePublicationParticipation(params.postId, 'commented');
+    return result;
+  });
+}
+
+/**
+ * LE REJEU DES COMMENTAIRES NON ENVOYÉS (#9743) — ceux de CE lecteur sur
+ * CETTE publication ; le module n'est chargé que s'il y a quelque chose à
+ * rejouer (l'appelant lit `unsentComments` d'abord).
+ */
+export function replayCommentsAction(scope: string, postId: string): Promise<number> {
+  return import('./comment-replay').then(({ replayUnsentComments }) => replayUnsentComments({ ...apiDeps, queryClient: appQueryClient, owner: currentOwnerCredential }, scope, postId));
+}
+
+/**
+ * `commentGestureAction` — RÉFÉRENCE DE MODULE STABLE, MÊME motif et MÊME
+ * raison que `commentAction` juste au-dessus : les gestes d'une rangée
+ * écrivent dans le cache PARTAGÉ (`appQueryClient`), donc un commentaire aimé
+ * depuis le panneau d'une story l'est aussi dans le détail de la publication,
+ * sans relecture.
+ */
+export function commentGestureAction(request: CommentGestureRequest): Promise<CommentGestureResult> {
+  return performCommentGesture(request, { ...apiDeps, queryClient: appQueryClient });
+}
+
+/**
+ * `storyReactionAction` — RÉFÉRENCE DE MODULE STABLE (motif `reactAction`) :
+ * réagir à la story lue, sur l'instance PARTAGÉE `appQueryClient` — le corpus
+ * que `useStoryFeed` observe est celui que le geste bascule, donc le cœur du
+ * rail se remplit sans qu'aucun état local n'ait à s'en souvenir.
+ */
+export function storyReactionAction(storyId: string, emoji?: string): Promise<StoryReactionResult> {
+  return performStoryReaction({
+    storyId,
+    ...(emoji === undefined ? {} : { emoji }),
+    deps: { ...apiDeps, queryClient: appQueryClient },
+  });
+}
+
+/** Ai-je réagi à cette story ? Lu du MÊME cache que le geste bascule. */
+export function viewerReactedToStoryNow(storyId: string, emoji?: string): boolean {
+  return viewerReactedToStory(appQueryClient, storyId, emoji);
+}

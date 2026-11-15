@@ -2,12 +2,14 @@
  * Search routes for communities
  */
 import { FastifyInstance } from 'fastify';
+import { issueSearchId } from '../../services/social/searchFingerprint.js';
 import { communityMemberSchema, errorResponseSchema, userMinimalSchema } from '@meeshy/shared/types/api-schemas';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { validatePagination } from '../../utils/pagination';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendPaginatedSuccess, sendInternalError, createPaginationMeta } from '../../utils/response.js';
-import { resolveCommunityMemberPresence } from '../community-member-presence';
+import { resolveCommunityMemberPresence } from '../../services/community-member-presence';
+import { COMMUNITY_ACTIVE_COUNTS } from './serialization';
 
 const logger = enhancedLogger.child({ module: 'CommunitySearchRoutes' });
 
@@ -84,6 +86,12 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
                 offset: { type: 'number' },
                 hasMore: { type: 'boolean' }
               }
+            },
+            meta: {
+              type: 'object',
+              properties: {
+                searchId: { type: 'string', description: 'Identifiant opaque et signé de la recherche (#10506), recopié par l’événement discovery' }
+              }
             }
           }
         },
@@ -111,6 +119,8 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
       // Build where clause for public communities
       const whereClause = {
         isPrivate: false,
+        // #8876 — une communauté désactivée par l'administration ne se trouve plus.
+        isActive: true,
         OR: [
           { name: { contains: q, mode: 'insensitive' as const } },
           { identifier: { contains: q, mode: 'insensitive' as const } },
@@ -118,6 +128,7 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
           {
             members: {
               some: {
+                isActive: true,
                 user: {
                   OR: [
                     { username: { contains: q, mode: 'insensitive' as const } },
@@ -164,12 +175,7 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
                 }
               }
             },
-            _count: {
-              select: {
-                members: true,
-                Conversation: true
-              }
-            }
+            _count: { select: COMMUNITY_ACTIVE_COUNTS }
           },
           orderBy: { createdAt: 'desc' },
           skip: offsetNum,
@@ -199,7 +205,9 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
         )
       }));
 
-      return sendPaginatedSuccess(reply, communitiesWithCount, createPaginationMeta(totalCount, offsetNum, limitNum, communities.length));
+      return sendPaginatedSuccess(reply, communitiesWithCount, createPaginationMeta(totalCount, offsetNum, limitNum, communities.length), {
+        meta: { searchId: issueSearchId(q) },
+      });
     } catch (error) {
       logger.error('Error searching communities', error as Error);
       return sendInternalError(reply, 'Failed to search communities');

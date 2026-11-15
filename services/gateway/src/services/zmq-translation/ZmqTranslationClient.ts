@@ -24,9 +24,15 @@ import type {
   AudioProcessRequest,
   TranscriptionOnlyRequest,
   VoiceAPIRequest,
-  VoiceProfileRequest
+  VoiceProfileRequest,
+  CacheForgetRequest,
+  TranslationSkippedPayload,
+  TranslationErrorPayload
 } from './types';
+import { UNSUPPORTED_LANGUAGE_ERROR_CODE } from './types';
+import { isTransientPoolRefusal } from './utils/zmq-helpers';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { guardedInterval, guardedTimeout } from '../../utils/guarded-timer';
 // Logger dédié pour ZmqTranslationClient
 const logger = enhancedLogger.child({ module: 'ZmqTranslationClient' });
 
@@ -39,11 +45,25 @@ export interface TranslateTextObjectParams {
   targetLanguages: string[];
 }
 
+export type TranslationDeadline = {
+  readonly retryEnabled?: boolean;
+  readonly timeoutMs?: number;
+};
+
+type TypedTimeoutErrors = {
+  translationError: TranslationErrorPayload;
+};
+
+type TimeoutErrorEvent<E extends string> = E extends keyof TypedTimeoutErrors
+  ? TypedTimeoutErrors[E]
+  : Record<string, unknown>;
+
 export interface ZMQClientStats {
   requests_sent: number;
   results_received: number;
   errors_received: number;
   pool_full_rejections: number;
+  translation_skipped: number;
   avg_response_time: number;
   uptime_seconds: number;
   memory_usage_mb: number;
@@ -118,6 +138,7 @@ export class ZmqTranslationClient extends EventEmitter {
     results_received: 0,
     errors_received: 0,
     pool_full_rejections: 0,
+    translation_skipped: 0,
     avg_response_time: 0,
     uptime_seconds: 0,
     memory_usage_mb: 0
@@ -166,19 +187,19 @@ export class ZmqTranslationClient extends EventEmitter {
    * @param opts.retryEnabled - When false, no retry; one shot with the long deadman
    * @param opts.timeoutMs - Override timeout (defaults to ZMQ_REQUEST_TIMEOUT_MS)
    */
-  private _registerRequestTimeout(
+  private _registerRequestTimeout<E extends string>(
     taskId: string,
-    errorEventName: string,
-    errorEvent: Record<string, unknown>,
+    errorEventName: E,
+    errorEvent: TimeoutErrorEvent<E>,
     resend: (existingTaskId: string, pendingLanguages?: string[]) => Promise<string>,
-    opts: { retryEnabled?: boolean; timeoutMs?: number } = {}
+    opts: TranslationDeadline = {}
   ): void {
     const retryEnabled = opts.retryEnabled !== false;
     const timeoutMs = opts.timeoutMs ?? ZMQ_REQUEST_TIMEOUT_MS;
 
     this.requestSender.registerTimeout(taskId, timeoutMs, async (pendingLanguages) => {
       if (!retryEnabled) {
-        logger.error(`❌ ZMQ deadman timeout (${Math.round(timeoutMs / 1000)}s) for taskId=${taskId}, giving up (no retry for long voice pipelines)`);
+        logger.error(`❌ ZMQ deadman timeout (${Math.round(timeoutMs / 1000)}s) for taskId=${taskId}, giving up (retry disabled by caller)`);
         this.retryCount.delete(taskId);
         this.stats.errors_received++;
         this.emit(errorEventName, { ...errorEvent, taskId });
@@ -240,6 +261,10 @@ export class ZmqTranslationClient extends EventEmitter {
   private _cbRecordSuccess(): void {
     this.cbConsecutiveErrors = 0;
     this.cbOpenedAt = null;
+  }
+
+  private _isPendingNonTranslationRequest(taskId: string): boolean {
+    return this.requestSender.hasPendingRequest(taskId) && !this.requestSender.hasPendingTranslationRequest(taskId);
   }
 
   private _cbRecordError(): void {
@@ -317,15 +342,86 @@ export class ZmqTranslationClient extends EventEmitter {
       }
     });
 
-    this.messageHandler.on('translationError', (event) => {
-      this.stats.errors_received++;
-      if (event.error === 'translation pool full') {
-        this.stats.pool_full_rejections++;
+    this.messageHandler.on('translationError', (event: TranslationErrorPayload) => {
+      // Le translator ne publie `translation_error` que pour une traduction
+      // TEXTE. Sous le taskId d'une requête audio, transcription ou voix encore
+      // en attente, l'erreur est mal adressée (#18063) : la solder désarmait
+      // deadman et retry d'une requête qui ne revenait plus, la compter
+      // poussait le disjoncteur pour une panne qui n'en est pas une, et la
+      // relayer devenait un `translation:failed` diffusé pour le message audio —
+      // l'échec d'une traduction texte jamais demandée. Elle ne fait donc rien
+      // d'autre qu'une ligne de journal ; la requête garde son propre chemin
+      // d'échec (`audioProcessError`, `voiceAPIError`, deadman).
+      if (event.taskId && this._isPendingNonTranslationRequest(event.taskId)) {
+        logger.warn(`⚠️ translation_error ignoré : taskId=${event.taskId} vise une requête non texte encore en attente`);
+        return;
       }
-      this._cbRecordError();
-      this.retryCount.delete(event.taskId);
-      this.requestSender.removePendingRequest(event.taskId);
+
+      // Une langue sans code NLLB-200 ne se servira JAMAIS : la relancer cinq
+      // fois puis annoncer l'échec (`translation:failed`) était l'incident du
+      // 2026-11-01. Seule SA langue se solde, sans compter d'échec au disjoncteur ;
+      // son lecteur reçoit l'original.
+      if (event.errorCode === UNSUPPORTED_LANGUAGE_ERROR_CODE && event.targetLanguage) {
+        if (event.taskId) {
+          const settled = this.requestSender.settleTranslationLanguage(event.taskId, event.targetLanguage);
+          if (settled === null || settled.remaining.length === 0) this.retryCount.delete(event.taskId);
+        }
+        this.emit('translationUnsupported', event);
+        return;
+      }
+
+      this.stats.errors_received++;
+
+      // Le translator publie aussi ce libellé pour chaque tâche refusée à son
+      // ARRÊT : un arrêt chargé ouvrait le disjoncteur et bloquait TOUTES les
+      // traductions 30 s (#17004). Le refus est neutre : il ne compte pas, et
+      // ne remet pas non plus la série à zéro — ce n'est pas un succès.
+      const transientRefusal = isTransientPoolRefusal(event);
+      if (!transientRefusal) this._cbRecordError();
+
+      // « pool full » est un refus TRANSITOIRE, pas un échec : le pool de
+      // workers du translator est saturé à l'instant t, et la même requête
+      // repasse quelques secondes plus tard. Le solder ici effaçait le budget
+      // de retry ET annulait le deadman — le message n'était jamais traduit, et
+      // personne ne le réessayait. Le lecteur d'une autre langue restait sur
+      // l'original, définitivement (même dommage que le cas jumeau de
+      // `ZmqTranslationClient.multiLanguageSettle.test.ts`).
+      //
+      // La machine de renvoi existe déjà : `_registerRequestTimeout` garde la
+      // requête, la renvoie avec le MÊME taskId et ses seules langues encore
+      // manquantes, jusqu'à `ZMQ_MAX_RETRIES`, puis émet l'échec une fois. Elle
+      // ne servait qu'au translator SILENCIEUX. On la laisse simplement armée
+      // plutôt que d'ouvrir une file de réessai parallèle : rien de retenu de
+      // plus, aucun compteur en double.
+      //
+      // Un refus qui arrive pour un taskId DÉJÀ soldé (dernière langue rendue,
+      // ou deadman tombé) n'a plus rien à réarmer — il s'annonce tout de suite,
+      // sinon personne ne l'apprend jamais.
+      if (transientRefusal) {
+        this.stats.pool_full_rejections++;
+        if (event.taskId && this.requestSender.hasPendingRequest(event.taskId)) return;
+      }
+
+      if (event.taskId) {
+        this.retryCount.delete(event.taskId);
+        this.requestSender.removePendingRequest(event.taskId);
+      }
       this.emit('translationError', event);
+    });
+
+    // Un texte trop long ne sera JAMAIS traduit (#17204) : le laisser armé le
+    // faisait renvoyer jusqu'à ZMQ_MAX_RETRIES puis annoncer un échec. Il se
+    // solde sans rien compter au disjoncteur — ce n'est ni une panne ni un
+    // succès — et son lecteur garde l'original. Sans taskId (ancien
+    // translator), il n'y a rien à solder. Le refus ne vise que la traduction
+    // TEXTE : sous un taskId d'audio ou de voix, la requête reste armée (#18042).
+    this.messageHandler.on('translationSkipped', (event: TranslationSkippedPayload) => {
+      this.stats.translation_skipped++;
+      if (event.taskId && this.requestSender.hasPendingTranslationRequest(event.taskId)) {
+        this.retryCount.delete(event.taskId);
+        this.requestSender.removePendingRequest(event.taskId);
+      }
+      this.emit('translationSkipped', event);
     });
 
     // Audio events
@@ -435,6 +531,10 @@ export class ZmqTranslationClient extends EventEmitter {
     });
 
     // Story text object translation events
+    this.messageHandler.on('cacheForgetDone', (event) => {
+      this.emit('cacheForgetDone', event);
+    });
+
     this.messageHandler.on('storyTextObjectTranslationCompleted', (event) => {
       this.emit('storyTextObjectTranslationCompleted', event);
     });
@@ -453,11 +553,6 @@ export class ZmqTranslationClient extends EventEmitter {
       // Démarrer l'écoute des résultats
       logger.info(`🔧 Démarrage de l'écoute des résultats...`);
       this._startResultListener();
-
-      // Vérification de connectivité après un délai
-      setTimeout(() => {
-        // Log de vérification (optionnel)
-      }, 2000);
 
       this.running = true;
       logger.info('✅ ZmqTranslationClient initialisé avec succès');
@@ -523,12 +618,20 @@ export class ZmqTranslationClient extends EventEmitter {
 
       receiveInFlight = true;
       try {
-        const message = await this.connectionManager.receive();
+        // #16599 — on VIDE le canal : dès qu'un résultat est traité, la
+        // lecture suivante repart sans attendre le tick. Relancer au tick
+        // plafonnait la passerelle à ~10 résultats/s, et le N-ième résultat
+        // d'une rafale (sous-titres d'appel compris) attendait N × 100 ms.
+        // Toujours un seul receive() en vol ; une erreur sort de la boucle
+        // et laisse le tick relancer, sans boucle chaude.
+        while (this.running) {
+          const message = await this.connectionManager.receive();
 
-        /* istanbul ignore else -- receive() returns Buffer/Buffer[] or throws; null/undefined is structurally unreachable here */
-        if (message) {
-          lastMessageAt = Date.now();
-          await this.messageHandler.handleMessage(message);
+          /* istanbul ignore else -- `ZmqConnectionManager.receive()` LÈVE quand aucun message n'est disponible (`throw new Error('No message available')`) : il ne rend jamais null/undefined. Vérifié le 2026-09-24. */
+          if (message) {
+            lastMessageAt = Date.now();
+            await this.messageHandler.handleMessage(message);
+          }
         }
       } catch (receiveError) {
         // « No message… » est le régime normal du polling ; toute autre
@@ -544,14 +647,14 @@ export class ZmqTranslationClient extends EventEmitter {
 
     // Démarrer le polling avec setInterval
     logger.info('🔄 Démarrage polling avec setInterval...');
-    this.pollingIntervalId = setInterval(checkForMessages, 100); // 100ms entre chaque vérification
+    this.pollingIntervalId = guardedInterval({ name: 'zmq-result-polling', everyMs: 100, logger, run: checkForMessages }); // 100ms entre chaque vérification
     this.pollingIntervalId.unref?.();
   }
 
   /**
    * Envoie une requête de traduction
    */
-  async sendTranslationRequest(request: TranslationRequest): Promise<string> {
+  async sendTranslationRequest(request: TranslationRequest, deadline?: TranslationDeadline): Promise<string> {
     if (this._cbIsOpen()) {
       throw new Error('ZMQ circuit breaker OPEN: translator unavailable, request rejected');
     }
@@ -560,7 +663,7 @@ export class ZmqTranslationClient extends EventEmitter {
     this._registerRequestTimeout(
       taskId,
       'translationError',
-      { taskId, messageId: request.messageId, error: 'ZMQ timeout: no response from translator', conversationId: request.conversationId },
+      { taskId, messageId: request.messageId, error: 'ZMQ timeout: no response from translator', conversationId: request.conversationId, metadata: {} },
       async (existingTaskId: string, pendingLanguages?: string[]) => {
         // Ne redemander QUE les langues encore manquantes : re-pousser une langue
         // déjà rendue duplique le travail du worker pool ML pour rien.
@@ -570,7 +673,8 @@ export class ZmqTranslationClient extends EventEmitter {
         await this.requestSender.sendTranslationRequest(outstanding, existingTaskId);
         this.stats.requests_sent++;
         return existingTaskId;
-      }
+      },
+      deadline
     );
     return taskId;
   }
@@ -698,7 +802,8 @@ export class ZmqTranslationClient extends EventEmitter {
     targetLanguage: string,
     messageId: string,
     conversationId: string,
-    modelType: string = 'basic'
+    modelType: string = 'basic',
+    deadline?: TranslationDeadline
   ): Promise<string> {
     const request: TranslationRequest = {
       messageId: messageId,
@@ -709,7 +814,7 @@ export class ZmqTranslationClient extends EventEmitter {
       modelType: modelType
     };
 
-    return await this.sendTranslationRequest(request);
+    return await this.sendTranslationRequest(request, deadline);
   }
 
   async translateToMultipleLanguages(
@@ -730,6 +835,11 @@ export class ZmqTranslationClient extends EventEmitter {
     };
 
     return await this.sendTranslationRequest(request);
+  }
+
+  /** #13102 — demande au translator d'oublier des pièces ou des messages effacés. */
+  sendCacheForget(request: CacheForgetRequest): Promise<void> {
+    return this.requestSender.sendCacheForgetRequest(request);
   }
 
   /**
@@ -755,8 +865,13 @@ export class ZmqTranslationClient extends EventEmitter {
       return true;
 
     } catch (error) {
-      /* istanbul ignore next -- connectionManager.sendPing() catches internally; this outer catch is structurally unreachable */
-      logger.error(`❌ Health check échoué: ${error}`); /* istanbul ignore next */ return false;
+      // Chemin NOMINAL d'un ping qui échoue : `ZmqConnectionManager.sendPing`
+      // journalise puis RELANCE (`ZmqConnectionManager.ts`, `throw error;` du
+      // catch de `sendPing`). Ce bloc n'a jamais été inatteignable — il portait
+      // une annotation qui le disait, et un témoin le prouve désormais
+      // (`__tests__/unit/services/ZmqTranslationClient.healthCheck.test.ts`).
+      logger.error(`❌ Health check échoué: ${error}`);
+      return false;
     }
   }
 
@@ -806,7 +921,7 @@ export class ZmqTranslationClient extends EventEmitter {
       logger.info('✅ ZmqTranslationClient arrêté');
 
     } catch (error) {
-      /* istanbul ignore next -- connectionManager.close() has its own internal catch; this outer catch is structurally unreachable */
+      /* istanbul ignore next -- `ZmqConnectionManager.close()` attrape et n'expose rien (son catch journalise SANS relancer, contrairement à `sendPing`). Vérifié le 2026-09-24. */
       logger.error(`❌ Erreur arrêt ZmqTranslationClient: ${error}`);
     }
   }
@@ -824,11 +939,11 @@ export class ZmqTranslationClient extends EventEmitter {
       logger.info(`🧪 [ZMQ-Client] Ping envoyé pour test via port ${this.pushPort}`);
 
       // Attendre un peu pour voir si on reçoit quelque chose
-      setTimeout(() => {
+      guardedTimeout({ name: 'zmq-reception-test-report', afterMs: 3000, logger, run: () => {
         logger.info(`🧪 [ZMQ-Client] Test terminé. Messages reçus: ${this.stats.results_received}`);
         logger.info(`🧪 [ZMQ-Client] Heartbeats: ${this.stats.uptime_seconds}s`);
         logger.info(`🧪 [ZMQ-Client] Running: ${this.running}`);
-      }, 3000);
+      } });
 
     } catch (error) {
       logger.error(`❌ [ZMQ-Client] Erreur test réception: ${error}`);

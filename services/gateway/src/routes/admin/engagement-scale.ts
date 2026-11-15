@@ -1,0 +1,249 @@
+/**
+ * Le BARÈME d'engagement, réglé par l'administration (#8906).
+ *
+ * - `GET  /admin/engagement-scale` — le barème effectif (défauts tant que
+ *   personne ne l'a réglé), qui l'a réglé et quand ;
+ * - `PUT  /admin/engagement-scale` `{ scale }` — valide (`parseEngagementScale`,
+ *   fail-closed : un barème à moitié lisible est un 400, jamais un barème à
+ *   moitié appliqué), écrit la ligne singleton, invalide le cache du crédit et
+ *   rend le document écrit.
+ *
+ * Réservé à ADMIN et BIGBOSS (`requireAdminRank`) : les points distribués sont
+ * une politique de produit, pas un geste de modération. L'écriture laisse sa
+ * trace `AdminAuditLog`, avant / après.
+ */
+
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { ENGAGEMENT_OPERATIONS } from '@meeshy/shared/types/engagement-operations';
+import { mergeEngagementScaleBody, parseEngagementScale, type EngagementScale } from '@meeshy/shared/types/engagement-scale';
+import { ENGAGEMENT_STREAK_ACTS } from '@meeshy/shared/types/engagement-act-streaks';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { requireAdminRank, withAudit } from '../../middleware/authorize';
+import type { UnifiedAuthRequest } from '../../middleware/auth';
+import { sendBadRequest, sendInternalError, sendSuccess, sendUnauthorized } from '../../utils/response';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+import { flatDiff } from '../../utils/flat-diff';
+import { loadAdminPeople } from './oversight-people';
+import { personneSchema } from './oversight-schemas';
+import {
+  ENGAGEMENT_SCALE_KEY,
+  engagementScaleServiceFor,
+} from '../../services/engagement/EngagementScaleService';
+import { PUBLICATION_RECLAIM_WINDOW_DAYS } from '../../services/posts/postEngagementCredits';
+
+const logger = enhancedLogger.child({ module: 'admin/engagement-scale' });
+
+const operationRuleSchema = {
+  type: 'object',
+  properties: {
+    points: { type: 'integer' },
+    multiplied: { type: 'boolean' },
+    cap: { type: 'integer', nullable: true },
+    variantPoints: { type: 'object', additionalProperties: { type: 'integer' } },
+  },
+} as const;
+
+/** Un palier de série ou de fidélité (#10388) — le libellé est facultatif. */
+const streakTierSchema = {
+  type: 'object',
+  properties: { days: { type: 'integer' }, points: { type: 'integer' }, label: { type: 'string' } },
+} as const;
+
+const streakTiersSchema = { type: 'array', items: streakTierSchema } as const;
+
+const engagementScaleSchema = {
+  type: 'object',
+  properties: {
+    operations: {
+      type: 'object',
+      properties: Object.fromEntries(ENGAGEMENT_OPERATIONS.map((key) => [key, operationRuleSchema])),
+    },
+    multiplier: {
+      type: 'object',
+      properties: {
+        windowDays: { type: 'integer' },
+        stepPerExtraFamily: { type: 'number' },
+        standingBonus: { type: 'number' },
+        achievementsForStanding: { type: 'integer' },
+        highBadgeThreshold: { type: 'integer' },
+        highBadgesForStanding: { type: 'integer' },
+        maxFactor: { type: 'number' },
+        levelCaps: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { minLevel: { type: 'integer' }, maxFactor: { type: 'number' } },
+          },
+        },
+      },
+    },
+    // #9584 — les limites du jour par chemin (commentaire / réaction, sur un original / via une
+    // republication). Non déclarées, fast-json-stringify les retirait : l'éditeur du barème ne les
+    // voyait pas, et un barème réenregistré retombait sur les défauts.
+    pathCaps: {
+      type: 'object',
+      properties: Object.fromEntries(
+        (['comment', 'reaction'] as const).map((family) => [
+          family,
+          { type: 'object', properties: { original: { type: 'integer' }, repost: { type: 'integer' } } },
+        ]),
+      ),
+    },
+    linkVisits: {
+      type: 'object',
+      properties: {
+        basePoints: { type: 'integer' },
+        firstTier: { type: 'integer' },
+        stepPerDoubling: { type: 'integer' },
+        maxPoints: { type: 'integer' },
+        dedupHours: { type: 'integer' },
+        dailyCapPerCreator: { type: 'integer', nullable: true },
+      },
+    },
+    streakBonuses: {
+      type: 'array',
+      items: { type: 'object', properties: { days: { type: 'integer' }, points: { type: 'integer' } } },
+    },
+    abuse: {
+      type: 'object',
+      properties: {
+        heavyPoints: { type: 'integer' },
+        clawbackHours: { type: 'integer' },
+        unverifiedMaxPoints: { type: 'integer' },
+      },
+    },
+    // #10389 — les paliers de la série globale et de chaque acte. Non déclarés,
+    // fast-json-stringify les retirerait et l'écran ne les verrait jamais.
+    streaks: {
+      type: 'object',
+      properties: {
+        global: streakTiersSchema,
+        acts: {
+          type: 'object',
+          properties: Object.fromEntries(ENGAGEMENT_STREAK_ACTS.map((act) => [act, streakTiersSchema])),
+        },
+      },
+    },
+    // #10390 — les paliers de fidélité, en jours depuis la création du compte.
+    loyalty: streakTiersSchema,
+  },
+} as const;
+
+/** La forme de fil d'`EngagementScaleDocument`. */
+export const engagementScaleDocumentResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: {
+      type: 'object',
+      properties: {
+        scale: engagementScaleSchema,
+        updatedAt: { type: 'string', nullable: true },
+        updatedBy: { type: 'string', nullable: true },
+        // « Réglé par », NOMMÉ : un ObjectId nu ne dit rien à la console.
+        updatedByPerson: personneSchema,
+      },
+    },
+  },
+} as const;
+
+/**
+ * #11525 — `abuse.clawbackHours` ne se règle plus (#11491) et ne s'écrit plus,
+ * mais il reste SERVI, figé à la loi des 30 jours : une console d'avant la
+ * décision (onglet en cache, coque Android) le décode comme un entier 0–720
+ * obligatoire, et sans lui déclare le barème illisible. À retirer quand plus
+ * aucune console d'avant #11491 ne tourne.
+ */
+const LEGACY_CLAWBACK_HOURS = PUBLICATION_RECLAIM_WINDOW_DAYS * 24;
+
+type ServedDocument = { readonly scale: EngagementScale; readonly updatedBy: string | null };
+
+const withLegacyClawbackHours = (scale: EngagementScale) => ({
+  ...scale,
+  abuse: { ...scale.abuse, clawbackHours: LEGACY_CLAWBACK_HOURS },
+});
+
+const refusals = {
+  401: errorResponseSchema,
+  403: errorResponseSchema,
+  500: errorResponseSchema,
+} as const;
+
+export async function engagementScaleAdminRoutes(fastify: FastifyInstance): Promise<void> {
+  const scaleService = () => engagementScaleServiceFor(fastify.prisma);
+
+  /** Le document, avec « réglé par » résolu en personne (côté administration seulement). */
+  async function withUpdatedByPerson<D extends ServedDocument>(document: D) {
+    const served = { ...document, scale: withLegacyClawbackHours(document.scale) };
+    if (!document.updatedBy) return { ...served, updatedByPerson: null };
+    const people = await loadAdminPeople(fastify.prisma, [document.updatedBy]);
+    return { ...served, updatedByPerson: people.get(document.updatedBy) ?? null };
+  }
+
+  fastify.get('/engagement-scale', {
+    schema: {
+      description: "Le barème d'engagement effectif (#8906) — défauts tant qu'il n'a jamais été réglé.",
+      tags: ['admin', 'engagement'],
+      summary: 'Get the engagement scale',
+      response: { 200: engagementScaleDocumentResponseSchema, ...refusals },
+    },
+    onRequest: [fastify.authenticate, requireAdminRank()],
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      scaleService().invalidate();
+      return sendSuccess(reply, await withUpdatedByPerson(await scaleService().document()));
+    } catch (error) {
+      logger.error('engagement scale read failed', { error });
+      return sendInternalError(reply, 'Error retrieving engagement scale');
+    }
+  });
+
+  fastify.put<{ Body: { scale?: unknown } }>('/engagement-scale', {
+    schema: {
+      description: "Règle le barème d'engagement (#8906). Un barème invalide est refusé en entier (400).",
+      tags: ['admin', 'engagement'],
+      summary: 'Update the engagement scale',
+      body: {
+        type: 'object',
+        required: ['scale'],
+        properties: { scale: { type: 'object' } },
+      },
+      response: { 200: engagementScaleDocumentResponseSchema, 400: errorResponseSchema, ...refusals },
+    },
+    onRequest: [fastify.authenticate, requireAdminRank()],
+  }, async (request, reply) => {
+    const adminId = (request as UnifiedAuthRequest).authContext?.userId;
+    if (!adminId) {
+      return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+    }
+
+    try {
+      // #10388 — le corps se FUSIONNE avec le barème stocké : une section qu'un
+      // ancien écran n'envoie pas (séries, fidélité, limites du jour) garde sa
+      // valeur au lieu de retomber sur les défauts.
+      const stored = await fastify.prisma.engagementScaleConfig.findUnique({
+        where: { key: ENGAGEMENT_SCALE_KEY },
+        select: { config: true },
+      });
+      const scale = parseEngagementScale(mergeEngagementScaleBody(stored?.config ?? null, request.body?.scale));
+      if (!scale) {
+        return sendBadRequest(reply, 'Invalid engagement scale', { code: 'INVALID_ENGAGEMENT_SCALE' });
+      }
+      const before = await scaleService().document();
+      const document = await scaleService().write(scale, adminId);
+      await withAudit(request, {
+        action: 'UPDATE_ENGAGEMENT_SCALE',
+        entity: 'EngagementScaleConfig',
+        entityId: ENGAGEMENT_SCALE_KEY,
+        userId: adminId,
+        // Un diff À PLAT des seules valeurs changées : les deux barèmes
+        // entiers étaient illisibles dans le journal (audit 2026-10-04).
+        changes: flatDiff(before.scale, document.scale),
+      });
+      return sendSuccess(reply, await withUpdatedByPerson(document));
+    } catch (error) {
+      logger.error('engagement scale write failed', { error });
+      return sendInternalError(reply, 'Error updating engagement scale');
+    }
+  });
+}

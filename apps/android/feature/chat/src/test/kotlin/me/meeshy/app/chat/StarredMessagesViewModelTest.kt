@@ -158,4 +158,26 @@ class StarredMessagesViewModelTest {
 
         assertThat(vm.state.value.rows.map { it.message.messageId }).containsExactly("a")
     }
+
+    @Test
+    fun `clearAll empties the list and its state`() = runTest(dispatcher) {
+        val store = InMemoryStarredMessagesStore(
+            StarredMessages(listOf(snapshot("a", starredAtMillis = 1), snapshot("b", starredAtMillis = 2))),
+        )
+        val vm = StarredMessagesViewModel(store)
+
+        vm.clearAll()
+
+        assertThat(store.starred.value.items).isEmpty()
+        assertThat(vm.state.value.isEmpty).isTrue()
+    }
+
+    @Test
+    fun `a video star with no text projects to a File-like media snippet`() {
+        val state = StarredMessagesUiState.of(
+            StarredMessages(listOf(snapshot("a", preview = "", kind = StarredAttachmentKind.VIDEO))),
+        )
+
+        assertThat(state.rows.single().snippet).isEqualTo(PinnedSnippet.File)
+    }
 }

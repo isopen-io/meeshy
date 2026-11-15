@@ -2,6 +2,7 @@ import { describe, it, expect, jest } from '@jest/globals';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { broadcastMessageMutation } from '../broadcastMessageMutation';
 
+import { matchesMongoWhere, type MongoDocument } from '../../__tests__/helpers/mongo-where';
 type Emitted = { room: string; event: string; payload: any };
 
 function makeManager(
@@ -26,15 +27,50 @@ function makeManager(
   } as any;
 }
 
+const ECRIT_LE = new Date('2026-08-01T00:00:00Z');
+
+/**
+ * Le double ÉVALUE le `where` (`matchesMongoWhere`), il ne rend plus une liste
+ * fixe. C'est ce que le programme réel fait, et la différence est portante
+ * depuis que l'édition passe par le plancher d'historique : la requête des
+ * lecteurs TARDIFS (`joinedAt > createdAt OR historyVisibleFrom > createdAt`)
+ * doit pouvoir ne rien rendre, sans quoi chaque participant est tenu pour
+ * suspect et l'audience se restreint dans tous les témoins de ce fichier.
+ *
+ * Un double partiel ne se signale qu'au moment où le module grandit — c'est
+ * arrivé ici, et la réparation est de COMPLÉTER le double, jamais d'affaiblir
+ * la production.
+ */
 function makePrisma() {
+  const participant: MongoDocument = {
+    id: 'participant-B',
+    userId: 'user-B',
+    conversationId: 'conv-1',
+    isActive: true,
+    role: 'member',
+    // AVANT le message : ce participant n'est pas un lecteur tardif, donc la
+    // loi rend `{ kind: 'room' }` et rien ne change pour les témoins d'ici.
+    joinedAt: new Date('2026-07-01T00:00:00Z'),
+    shareLinkId: null,
+    historyVisibleFrom: null,
+    permissions: null,
+    anonymousSession: null,
+    user: { role: 'USER' },
+  };
   return {
-    participant: { findMany: jest.fn(async () => [{ userId: 'user-B' }]) },
+    participant: {
+      findMany: jest.fn(async (args: any) =>
+        [participant].filter((row) => matchesMongoWhere(row, args?.where ?? {})),
+      ),
+    },
+    conversationShareLink: { findMany: jest.fn(async () => []) },
     message: {
+      findUnique: jest.fn(async () => ({ createdAt: ECRIT_LE })),
       findFirst: jest.fn(async () => ({
         id: 'msg-latest',
         content: 'latest',
         senderId: 'participant-A',
-        createdAt: new Date('2026-08-01T00:00:00Z'),
+        createdAt: ECRIT_LE,
         metadata: null,
       })),
     },
@@ -320,5 +356,157 @@ describe('broadcastMessageMutation — la pastille de non-lus d\'une suppression
         onError: jest.fn(),
       }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('broadcastMessageMutation — message:edited d’une réponse dont la citation est échue pour un lecteur (#8562)', () => {
+  const CONSUMED = new Date('2026-09-29T09:00:00.000Z');
+  const payload = {
+    id: 'msg-1',
+    conversationId: 'conv-1',
+    content: 'réponse éditée',
+    replyTo: { id: 'flame-1', content: 'le code du coffre est 4271', attachments: [{ id: 'a1' }] },
+  };
+  const sealed = new Map([['user-B', CONSUMED]]);
+
+  const exceptingManager = (emitted: Array<Emitted & { excepted: string[] }>, enqueue: any) =>
+    makeManager(emitted, {
+      enqueue,
+      getIO: () => ({
+        to: (room: string) => {
+          const target = (excepted: string[]) => ({
+            except: (rooms: string[]) => target([...excepted, ...rooms]),
+            emit: (event: string, p: unknown) => {
+              emitted.push({ room, event, payload: p, excepted });
+            },
+          });
+          return target([]);
+        },
+      }),
+    });
+
+  it('la room sans le lecteur échu, et lui seul reçoit la citation SCELLÉE', async () => {
+    const emitted: Array<Emitted & { excepted: string[] }> = [];
+    const enqueue = jest.fn(async (_params: any) => {});
+
+    await broadcastMessageMutation({
+      prisma: makePrisma(),
+      manager: exceptingManager(emitted, enqueue),
+      ...base,
+      eventType: 'edited',
+      payload: payload as any,
+      sealedQuoteAudience: sealed,
+    });
+
+    const edited = emitted.filter((e) => e.event === SERVER_EVENTS.MESSAGE_EDITED);
+    const toRoom = edited.find((e) => e.room === 'conversation:conv-1');
+    expect(toRoom?.excepted).toEqual(['user:user-B']);
+    expect(toRoom?.payload.replyTo.content).toBe('le code du coffre est 4271');
+    const toB = edited.filter((e) => e.room === 'user:user-B');
+    expect(toB).toHaveLength(1);
+    expect(toB[0].payload.replyTo).toMatchObject({ content: '', deletedAt: CONSUMED, attachments: [] });
+    // #8630 — la réponse meurt avec ce qu'elle cite, pour B : l'édition ne la ressuscite pas.
+    expect(toB[0].payload.content).toBe('');
+    expect(toB[0].payload.expiresAt).toEqual(CONSUMED);
+    expect(toRoom?.payload.content).toBe('réponse éditée');
+
+    const resolve = (enqueue.mock.calls[0][0] as any).resolvePayloadForReader;
+    expect(resolve('user-B').replyTo.content).toBe('');
+    expect(resolve('user-C').replyTo.content).toBe('le code du coffre est 4271');
+  });
+
+  it('une cible qui ne sait pas exclure scelle pour TOUS — jamais le texte au lecteur échu', async () => {
+    const emitted: Emitted[] = [];
+
+    await broadcastMessageMutation({
+      prisma: makePrisma(),
+      manager: makeManager(emitted),
+      ...base,
+      eventType: 'edited',
+      payload: payload as any,
+      sealedQuoteAudience: sealed,
+    });
+
+    const edited = emitted.filter((e) => e.event === SERVER_EVENTS.MESSAGE_EDITED);
+    expect(edited).toHaveLength(1);
+    expect(JSON.stringify(edited[0].payload)).not.toContain('4271');
+  });
+});
+
+/**
+ * #16689 — l'HYGIÈNE DE CHAMP de la charge diffusée, pas son audience.
+ *
+ * `clientMessageId` est l'id OPTIMISTE de l'auteur. Les quatre chemins d'ENVOI
+ * le retirent déjà de la charge des pairs (`stripClientMessageId`), avec leur
+ * raison écrite à `routes/links/messages.ts:85` : « un rejeu portant le
+ * `clientMessageId` de l'auteur ferait fuiter son espace d'ids optimistes dans
+ * celui d'un autre utilisateur ».
+ *
+ * Les trois transports REST d'ÉDITION étalent la ligne Prisma BRUTE
+ * (`...withServedEditAttribution(updatedMessage, …)`), donc TOUS les scalaires,
+ * `clientMessageId` compris. Et le type ne pouvait pas le voir :
+ * `MessageEditedMutationPayload` déclare le NOYAU étroit, mais le contrôle des
+ * propriétés excédentaires est invisible à travers un SPREAD (§ CLAUDE.md,
+ * cycle 106) — ce que ces témoins reproduisent en passant une VARIABLE, comme
+ * la production, et non un littéral frais.
+ *
+ * Le piège est armé côté web : `realtime-apply.ts:244-246` pose comme INVARIANT
+ * qu'un écho de pair ne porte jamais de cid — « sa présence PROUVE que cet écho
+ * est le nôtre ». Un pair prend donc l'édition d'un autre pour la confirmation
+ * de son propre envoi optimiste.
+ */
+describe('broadcastMessageMutation — hygiène de champ (#16689)', () => {
+  const authored = {
+    id: 'msg-1',
+    conversationId: 'conv-1',
+    senderId: 'user-A',
+    content: 'édité',
+    messageType: 'text',
+    createdAt: new Date('2026-11-07T10:00:00Z'),
+    clientMessageId: 'cid-de-l-auteur',
+  };
+
+  it("ne diffuse PAS le clientMessageId de l'auteur à la room", async () => {
+    const emitted: Emitted[] = [];
+
+    await broadcastMessageMutation({
+      prisma: makePrisma(),
+      manager: makeManager(emitted),
+      ...base,
+      eventType: 'edited',
+      payload: authored as any,
+    });
+
+    const toRoom = emitted.find(
+      (e) => e.event === SERVER_EVENTS.MESSAGE_EDITED && e.room === 'conversation:conv-1'
+    );
+    expect(toRoom).toBeDefined();
+    expect(toRoom!.payload).not.toHaveProperty('clientMessageId');
+    // Et la charge n'est pas TRONQUÉE pour autant : le reste du noyau survit.
+    expect(toRoom!.payload).toMatchObject({
+      id: 'msg-1',
+      conversationId: 'conv-1',
+      senderId: 'user-A',
+      content: 'édité',
+      messageType: 'text',
+    });
+  });
+
+  it("ne PERSISTE PAS le clientMessageId de l'auteur dans la file hors ligne", async () => {
+    const emitted: Emitted[] = [];
+    const enqueue = jest.fn(async (_params: any) => {});
+
+    await broadcastMessageMutation({
+      prisma: makePrisma(),
+      manager: makeManager(emitted, { enqueue }),
+      ...base,
+      eventType: 'edited',
+      payload: authored as any,
+    });
+
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    const queued = (enqueue.mock.calls[0][0] as any).payload;
+    expect(queued).not.toHaveProperty('clientMessageId');
+    expect(queued).toMatchObject({ id: 'msg-1', content: 'édité' });
   });
 });

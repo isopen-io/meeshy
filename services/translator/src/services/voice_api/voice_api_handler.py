@@ -12,6 +12,12 @@ from typing import Dict, Optional
 from .request_handler import RequestHandler
 from .operation_handlers import OperationHandlers, VoiceAPIResult
 from .system_handlers import SystemHandlers
+from utils.audio_path_guard import (
+    AUDIO_PATH_REJECTED,
+    AUDIO_PATH_REJECTED_MESSAGE,
+    AudioPathRejected,
+    guard_optional_audio_path,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +106,11 @@ class VoiceAPIHandler:
         """
         Main entry point for handling Voice API requests.
         Returns response dict to be published via ZMQ.
+
+        Every `audioPath` / `audioPath_1` / `audioPath_2` comes from an
+        unauthenticated socket: it is only handed to an operation once
+        `utils.audio_path_guard` has placed it under an allowed root (#18628).
+        A refusal is published as `AUDIO_PATH_REJECTED`, path never echoed.
         """
         start_time = time.time()
         task_id = self.request_handler.generate_task_id(request_data)
@@ -127,6 +138,15 @@ class VoiceAPIHandler:
                     error=result.error or 'Unknown error',
                     error_code=result.error_code or 'INTERNAL_ERROR'
                 )
+
+        except AudioPathRejected as rejection:
+            logger.warning(f"[VoiceAPI] audioPath refusé ({rejection.reason}) pour {request_type}")
+            return self.request_handler.build_error_response(
+                task_id=task_id,
+                request_type=request_type,
+                error=AUDIO_PATH_REJECTED_MESSAGE,
+                error_code=AUDIO_PATH_REJECTED
+            )
 
         except Exception as e:
             logger.error(f"[VoiceAPI] Error handling request {request_type}: {e}")
@@ -186,10 +206,10 @@ class VoiceAPIHandler:
         # Extract parameters
         user_id = request_data.get('userId')
         audio_base64 = request_data.get('audioBase64')
-        audio_path = request_data.get('audioPath')
+        audio_path = guard_optional_audio_path(request_data.get('audioPath'))
         target_languages = request_data.get('targetLanguages', [])
         source_language = request_data.get('sourceLanguage')
-        generate_voice_clone = request_data.get('generateVoiceClone', True)
+        generate_voice_clone = request_data.get('generateVoiceClone', False)
         mobile_transcription = request_data.get('mobileTranscription')
 
         # STABILITÉ: Utiliser context manager pour nettoyage automatique
@@ -225,10 +245,10 @@ class VoiceAPIHandler:
         # Extract parameters
         user_id = request_data.get('userId')
         audio_base64 = request_data.get('audioBase64')
-        audio_path = request_data.get('audioPath')
+        audio_path = guard_optional_audio_path(request_data.get('audioPath'))
         target_languages = request_data.get('targetLanguages', [])
         source_language = request_data.get('sourceLanguage')
-        generate_voice_clone = request_data.get('generateVoiceClone', True)
+        generate_voice_clone = request_data.get('generateVoiceClone', False)
         mobile_transcription = request_data.get('mobileTranscription')
         webhook_url = request_data.get('webhookUrl')
         priority = request_data.get('priority', 1)
@@ -262,7 +282,7 @@ class VoiceAPIHandler:
 
         # Extract parameters
         audio_base64 = request_data.get('audioBase64')
-        audio_path = request_data.get('audioPath')
+        audio_path = guard_optional_audio_path(request_data.get('audioPath'))
         analysis_types = request_data.get('analysisTypes')
 
         # Convert base64 to temp file if needed
@@ -288,9 +308,9 @@ class VoiceAPIHandler:
 
         # Extract parameters
         audio_base64_1 = request_data.get('audioBase64_1')
-        audio_path_1 = request_data.get('audioPath_1')
+        audio_path_1 = guard_optional_audio_path(request_data.get('audioPath_1'))
         audio_base64_2 = request_data.get('audioBase64_2')
-        audio_path_2 = request_data.get('audioPath_2')
+        audio_path_2 = guard_optional_audio_path(request_data.get('audioPath_2'))
 
         # Convert base64 to temp files if needed
         temp_paths = []
@@ -332,7 +352,7 @@ class VoiceAPIHandler:
         user_id = request_data.get('userId')
         name = request_data.get('name')
         audio_base64 = request_data.get('audioBase64')
-        audio_path = request_data.get('audioPath')
+        audio_path = guard_optional_audio_path(request_data.get('audioPath'))
         metadata = request_data.get('metadata', {})
 
         # Convert base64 to temp file if needed
@@ -357,7 +377,7 @@ class VoiceAPIHandler:
         profile_id = request_data.get('profileId')
         name = request_data.get('name')
         audio_base64 = request_data.get('audioBase64')
-        audio_path = request_data.get('audioPath')
+        audio_path = guard_optional_audio_path(request_data.get('audioPath'))
         metadata = request_data.get('metadata')
 
         # Convert base64 to temp file if needed

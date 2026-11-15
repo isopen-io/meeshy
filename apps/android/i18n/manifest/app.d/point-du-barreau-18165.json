@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "a11y.floating.rung.game.chest-ready", "androidName": "a11y_floating_rung_game_chest_ready", "status": "adopted" },
+        { "catalog": "app", "iosKey": "a11y.floating.rung.game.flame-at-risk", "androidName": "a11y_floating_rung_game_flame_at_risk", "status": "adopted" },
+        { "catalog": "app", "iosKey": "a11y.floating.rung.game.both", "androidName": "a11y_floating_rung_game_both", "status": "adopted" }
+      ]
+    }
+  }
+}

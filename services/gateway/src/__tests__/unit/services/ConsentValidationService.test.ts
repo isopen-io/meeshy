@@ -15,13 +15,36 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 // ─── Factories ───────────────────────────────────────────────────────────────
 
 const NOW = new Date();
+const ADULT_BIRTH_DATE = new Date('1990-01-01T00:00:00.000Z');
+
+// Horloge GELÉE un 29 février (#17309) : 18 n'étant pas multiple de 4, la date
+// limite tombe le 28 février 2010 — le cas que l'horloge réelle n'atteint qu'une
+// fois tous les quatre ans. Seule la date est gelée ; les minuteries restent vraies.
+const FROZEN_NOW = new Date('2028-02-29T12:00:00.000Z');
+const EIGHTEENTH_BIRTHDAY = new Date('2010-02-28T00:00:00.000Z');
+const DAY_BEFORE_EIGHTEEN = new Date('2010-03-01T00:00:00.000Z');
+const FIFTEEN_YEARS_OLD = new Date('2013-02-28T00:00:00.000Z');
+const freezeClock = () =>
+  jest.useFakeTimers({
+    now: FROZEN_NOW,
+    doNotFake: ['nextTick', 'setImmediate', 'clearImmediate', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'queueMicrotask', 'hrtime', 'performance'],
+  });
+
+const FULL_CLONING_CHAIN = {
+  dataProcessingConsentAt: NOW,
+  voiceDataConsentAt: NOW,
+  voiceProfileConsentAt: NOW,
+  voiceCloningEnabledAt: NOW,
+};
 
 function makeUser(overrides: Record<string, any> = {}) {
   return {
     dataProcessingConsentAt: null,
+    analyticsConsentAt: null,
     voiceDataConsentAt: null,
     voiceProfileConsentAt: null,
     voiceCloningEnabledAt: null,
+    birthDate: null,
     ...overrides,
   };
 }
@@ -76,15 +99,28 @@ describe('ConsentValidationService', () => {
       await expect(makeSut(prisma).getConsentStatus('missing')).rejects.toThrow('User not found');
     });
 
-    it('returns all-true status in development mode', async () => {
+    it('NODE_ENV=development n’accorde plus rien tout seul — supprimé par #4348', async () => {
+      // Le court-circuit est retiré : une base VIDE rend `false` partout,
+      // développement compris. Les comptes de développement passent
+      // désormais la garde par une vraie graine (`packages/shared/seed.ts`),
+      // jamais par la variable d'environnement.
       process.env.NODE_ENV = 'development';
 
       const sut = makeSut();
       const status = await sut.getConsentStatus('any-user');
 
+      expect(status.hasDataProcessingConsent).toBe(false);
+      expect(status.canUseVoiceCloning).toBe(false);
+      expect(status.canGenerateTranslatedAudio).toBe(false);
+    });
+
+    it('NODE_ENV=development lit la vraie colonne quand elle est posée, comme tout autre environnement', async () => {
+      process.env.NODE_ENV = 'development';
+
+      const sut = makeSut(makePrisma({ dataProcessingConsentAt: NOW }));
+      const status = await sut.getConsentStatus('any-user');
+
       expect(status.hasDataProcessingConsent).toBe(true);
-      expect(status.canUseVoiceCloning).toBe(true);
-      expect(status.canGenerateTranslatedAudio).toBe(true);
     });
 
     it('returns all-false when user has no consents', async () => {
@@ -161,12 +197,56 @@ describe('ConsentValidationService', () => {
           voiceDataConsentAt: NOW,
           voiceProfileConsentAt: NOW,
           voiceCloningEnabledAt: NOW,
+          birthDate: ADULT_BIRTH_DATE,
         },
         { application: { voiceCloningConsentAt: NOW } }
       );
       const status = await makeSut(prisma).getConsentStatus('u1');
 
       expect(status.canUseVoiceCloning).toBe(true);
+    });
+
+    describe('#17309 — le clonage vocal exige 18 ans révolus, au jour près', () => {
+      beforeEach(freezeClock);
+      afterEach(() => jest.useRealTimers());
+
+      it('lit birthDate dans la même requête que les consentements', async () => {
+        const prisma = makePrisma({ ...FULL_CLONING_CHAIN, birthDate: ADULT_BIRTH_DATE });
+        await makeSut(prisma).getConsentStatus('u1');
+
+        const call = (prisma.user.findUnique as jest.Mock<any>).mock.calls[0][0] as { select: Record<string, true> };
+        expect(call.select.birthDate).toBe(true);
+      });
+
+      it('ouvre le clonage le jour exact des 18 ans', async () => {
+        const prisma = makePrisma({ ...FULL_CLONING_CHAIN, birthDate: EIGHTEENTH_BIRTHDAY });
+        const status = await makeSut(prisma).getConsentStatus('u1');
+
+        expect(status.canUseVoiceCloning).toBe(true);
+      });
+
+      it('ferme le clonage la veille des 18 ans, consentement accordé ou non', async () => {
+        const prisma = makePrisma({ ...FULL_CLONING_CHAIN, birthDate: DAY_BEFORE_EIGHTEEN });
+        const status = await makeSut(prisma).getConsentStatus('u1');
+
+        expect(status.canUseVoiceCloning).toBe(false);
+      });
+
+      it('ferme le clonage sans date de naissance (fail-closed)', async () => {
+        const prisma = makePrisma({ ...FULL_CLONING_CHAIN, birthDate: null });
+        const status = await makeSut(prisma).getConsentStatus('u1');
+
+        expect(status.canUseVoiceCloning).toBe(false);
+      });
+
+      it('ne touche à aucune autre capacité audio d’un mineur', async () => {
+        const prisma = makePrisma({ ...FULL_CLONING_CHAIN, birthDate: FIFTEEN_YEARS_OLD });
+        const status = await makeSut(prisma).getConsentStatus('u1');
+
+        expect(status.canTranscribeAudio).toBe(true);
+        expect(status.canTranslateAudio).toBe(true);
+        expect(status.hasVoiceProfileConsent).toBe(true);
+      });
     });
 
     it('canUseVoiceCloning is false when voiceProfileConsent is missing', async () => {
@@ -179,25 +259,55 @@ describe('ConsentValidationService', () => {
       expect(status.canUseVoiceCloning).toBe(false);
     });
 
-    it('application preferences override user-level consent fields', async () => {
-      // user has no dataProcessingConsentAt on the User record but application prefs has it
+    // #4180 — remplace l'ancien "application preferences override
+    // user-level consent fields", qui gardait le défaut que cette issue
+    // ferme : le blob JSON n'a plus AUCUNE priorité, ni aucun effet, sur les
+    // consentements de base. Seule `User.dataProcessingConsentAt` — horodatée
+    // côté serveur par `VoiceProfileService.updateConsent` — fait foi.
+    it('un blob application qui affirme dataProcessingConsentAt sans la colonne User ne l\'accorde plus', async () => {
       const prisma = makePrisma(
         { dataProcessingConsentAt: null },
         { application: { dataProcessingConsentAt: NOW } }
       );
       const status = await makeSut(prisma).getConsentStatus('u1');
 
-      expect(status.hasDataProcessingConsent).toBe(true);
+      expect(status.hasDataProcessingConsent).toBe(false);
     });
 
-    it('hasThirdPartyServicesConsent requires thirdPartyServicesConsentAt + dataProcessingConsent', async () => {
+    // Le cas qui distingue vraiment l'ancien comportement du nouveau : sur
+    // l'OCTROI seul, fallback (`applicationPrefs.xxx || user.xxx`) et lecture
+    // directe rendent le même verdict quand les deux sources s'accordent —
+    // un témoin qui ne varie que l'octroi ne tombe jamais. Ici la colonne
+    // User est RÉVOQUÉE (`null`, posée par la vraie route de retrait) pendant
+    // qu'un blob application reste daté d'AVANT la révocation : c'est le cas
+    // que l'ancien `||` masquait, en laissant le blob périmé l'emporter.
+    it('une révocation sur voiceCloningEnabledAt (User) l\'emporte sur un blob application resté daté', async () => {
+      const prisma = makePrisma(
+        {
+          dataProcessingConsentAt: NOW,
+          voiceDataConsentAt: NOW,
+          voiceProfileConsentAt: NOW,
+          voiceCloningEnabledAt: null,
+        },
+        { application: { voiceCloningConsentAt: NOW, voiceCloningEnabledAt: NOW } }
+      );
+      const status = await makeSut(prisma).getConsentStatus('u1');
+
+      expect(status.canUseVoiceCloning).toBe(false);
+    });
+
+    // #4343 — le statut ne porte plus ce champ. La fixture pose
+    // délibérément le blob que l'ancien test croyait suffisant : il ne
+    // l'était pas (Zod le strippait avant d'atteindre Mongo), et il ne
+    // produit désormais plus rien du tout.
+    it('le statut ne porte plus hasThirdPartyServicesConsent (#4343)', async () => {
       const prisma = makePrisma(
         { dataProcessingConsentAt: NOW },
         { application: { thirdPartyServicesConsentAt: NOW } }
       );
       const status = await makeSut(prisma).getConsentStatus('u1');
 
-      expect(status.hasThirdPartyServicesConsent).toBe(true);
+      expect(status).not.toHaveProperty('hasThirdPartyServicesConsent');
     });
   });
 
@@ -245,8 +355,20 @@ describe('ConsentValidationService', () => {
     });
 
     it('returns no violations when all consents are present', async () => {
-      process.env.NODE_ENV = 'development';
-      const sut = makeSut(makePrisma());
+      // #4348 — plus de court-circuit `NODE_ENV`. Le zéro-violation se
+      // prouve désormais par une VRAIE chaîne de consentements en base,
+      // jusqu'à la feuille (`voiceCloningEnabledAt`) : `voiceProfileEnabled`
+      // seul déclenche la garde `voiceCloneQuality` si `canUseVoiceCloning`
+      // est faux (cf. `ConsentValidationService.validateAudioPreferences`).
+      const sut = makeSut(
+        makePrisma({
+          dataProcessingConsentAt: NOW,
+          voiceDataConsentAt: NOW,
+          voiceProfileConsentAt: NOW,
+          voiceCloningEnabledAt: NOW,
+          birthDate: ADULT_BIRTH_DATE,
+        })
+      );
 
       const violations = await sut.validateAudioPreferences('u1', {
         transcriptionEnabled: true,
@@ -298,6 +420,18 @@ describe('ConsentValidationService', () => {
       expect(violations.some(v => v.field === 'allowAnalytics')).toBe(true);
     });
 
+    // #4709 — `analyticsConsentAt` est un consentement DÉDIÉ, enfant direct
+    // de `dataProcessingConsentAt` : l'avoir ne suffit plus.
+    it('returns violation for allowAnalytics when dataProcessingConsent is present but analyticsConsentAt is not', async () => {
+      const sut = makeSut(makePrisma({ dataProcessingConsentAt: NOW, analyticsConsentAt: null }));
+
+      const violations = await sut.validatePrivacyPreferences('u1', { allowAnalytics: true });
+
+      const violation = violations.find(v => v.field === 'allowAnalytics');
+      expect(violation).toBeDefined();
+      expect(violation?.requiredConsents).toEqual(['analyticsConsentAt']);
+    });
+
     it('returns violation for shareUsageData without dataProcessingConsent', async () => {
       const sut = makeSut(makePrisma());
 
@@ -307,8 +441,10 @@ describe('ConsentValidationService', () => {
     });
 
     it('returns no violations when dataProcessingConsent is present', async () => {
-      process.env.NODE_ENV = 'development';
-      const sut = makeSut(makePrisma());
+      // #4348 — plus de court-circuit `NODE_ENV` : le consentement vient
+      // d'une vraie colonne, pas de l'environnement d'exécution.
+      // #4709 — `allowAnalytics` exige en outre `analyticsConsentAt`.
+      const sut = makeSut(makePrisma({ dataProcessingConsentAt: NOW, analyticsConsentAt: NOW }));
 
       const violations = await sut.validatePrivacyPreferences('u1', {
         allowAnalytics: true,
@@ -322,12 +458,16 @@ describe('ConsentValidationService', () => {
   // ── validateDocumentPreferences ──────────────────────────────────────────
 
   describe('validateDocumentPreferences', () => {
-    it('returns violation for scanFilesForMalware without thirdPartyServicesConsent', async () => {
+    // #4343 — garde retirée (option b) : aucun scanner tiers n'existe, et
+    // cette préférence vaut `true` PAR DÉFAUT au schéma. La violation
+    // frappait donc tout utilisateur qui enregistrait ses préférences sans
+    // rien y changer.
+    it('scanFilesForMalware ne produit plus aucune violation (#4343)', async () => {
       const sut = makeSut(makePrisma());
 
       const violations = await sut.validateDocumentPreferences('u1', { scanFilesForMalware: true });
 
-      expect(violations.some(v => v.field === 'scanFilesForMalware')).toBe(true);
+      expect(violations).toHaveLength(0);
     });
   });
 
@@ -342,12 +482,34 @@ describe('ConsentValidationService', () => {
       expect(violations.some(v => v.field === 'telemetryEnabled')).toBe(true);
     });
 
-    it('returns violation for betaFeaturesEnabled without thirdPartyServicesConsent', async () => {
+    // #4343 — garde retirée : un drapeau de fonctionnalité n'envoie rien.
+    // Le témoin voisin (`telemetryEnabled`, juste au-dessus) reste rouge
+    // sans consentement : c'est lui qui prouve que le retrait est CIBLÉ et
+    // non un affaiblissement de toute la méthode.
+    it('betaFeaturesEnabled ne produit plus aucune violation (#4343)', async () => {
       const sut = makeSut(makePrisma());
 
       const violations = await sut.validateApplicationPreferences('u1', { betaFeaturesEnabled: true });
 
-      expect(violations.some(v => v.field === 'betaFeaturesEnabled')).toBe(true);
+      expect(violations).toHaveLength(0);
+    });
+
+    // #4180 — l'octroi "same-request" est SUPPRIMÉ : passer
+    // `dataProcessingConsentAt` DANS le corps qu'on valide ne doit plus
+    // jamais accorder `telemetryEnabled`. `ApplicationPreferenceSchema`
+    // rejette déjà cette clé en amont (z.never()), mais cette méthode reste
+    // appelable directement avec un `Record<string, any>` arbitraire — la
+    // garde doit donc tenir ICI aussi, indépendamment de ce que Zod filtre
+    // en amont.
+    it('un dataProcessingConsentAt glissé dans le corps ne grants plus telemetryEnabled (same-request grant retiré)', async () => {
+      const sut = makeSut(makePrisma({ dataProcessingConsentAt: null }));
+
+      const violations = await sut.validateApplicationPreferences('u1', {
+        telemetryEnabled: true,
+        dataProcessingConsentAt: NOW,
+      });
+
+      expect(violations.some(v => v.field === 'telemetryEnabled')).toBe(true);
     });
   });
 
@@ -389,12 +551,20 @@ describe('ConsentValidationService', () => {
       expect(Array.isArray(violations)).toBe(true);
     });
 
+    // #4343 — l'aiguillage vers `document` ne peut plus se PROUVER par une
+    // violation : `validateDocumentPreferences` n'en produit plus aucune
+    // depuis le retrait de la garde `scanFilesForMalware`. Un témoin qui
+    // attendrait un tableau vide ne distinguerait pas « aiguillé vers
+    // document » de « tombé dans le `default` », donc ne garderait rien. On
+    // observe donc l'APPEL lui-même — la seule chose que ce test a jamais
+    // voulu dire.
     it('dispatches "document" category', async () => {
       const sut = makeSut(makePrisma());
+      const spy = jest.spyOn(sut, 'validateDocumentPreferences');
 
-      const violations = await sut.validatePreferences('u1', 'document', { scanFilesForMalware: true });
+      await sut.validatePreferences('u1', 'document', { scanFilesForMalware: true });
 
-      expect(violations.some(v => v.field === 'scanFilesForMalware')).toBe(true);
+      expect(spy).toHaveBeenCalledWith('u1', { scanFilesForMalware: true });
     });
 
     it('dispatches "application" category', async () => {

@@ -93,16 +93,36 @@ final class MyStoryCardPresentationTests: XCTestCase {
 
     // MARK: - Bande de glyphes
 
-    func test_glyphs_publishedStory_hasTheFourUsualOnes() {
+    /// #16386 — le « … » a quitté la bande : il se pose SUR la vignette.
+    func test_glyphs_publishedStory_showsEngagementOnly() {
         XCTAssertEqual(
             MyStoryCardPresentation.glyphs(for: .published),
-            [.viewsAndReactions, .reactions, .comments, .more])
+            [.viewsAndReactions, .reactions, .comments])
+    }
+
+    /// #16386 — les réactions ne sont plus un indicateur muet : elles ouvrent
+    /// la liste où chaque personne porte les siennes.
+    func test_reactionsGlyph_isInteractive() {
+        XCTAssertTrue(MyStoryGlyph.reactions.isInteractive)
+    }
+
+    func test_glyphs_neverCarryTheMoreMenu() {
+        XCTAssertFalse(MyStoryCardPresentation.glyphs(for: .published).contains(.more))
+        XCTAssertFalse(MyStoryCardPresentation.glyphs(for: .draft).contains(.more))
+    }
+
+    /// #16386 — le « … » se pose sur la vignette dès qu'un menu existe, et
+    /// cède sa place à la pastille de sélection (même coin) en mode sélection.
+    func test_showsMoreOnThumbnail_whenAMenuExistsOutsideSelection() {
+        XCTAssertTrue(MyStoryCardPresentation.showsMoreOnThumbnail(hasMenu: true, isSelecting: false))
+        XCTAssertFalse(MyStoryCardPresentation.showsMoreOnThumbnail(hasMenu: true, isSelecting: true))
+        XCTAssertFalse(MyStoryCardPresentation.showsMoreOnThumbnail(hasMenu: false, isSelecting: false))
     }
 
     func test_glyphs_draft_replacesEngagementWithPublish() {
         let glyphs = MyStoryCardPresentation.glyphs(for: .draft)
 
-        XCTAssertEqual(glyphs, [.publish, .more])
+        XCTAssertEqual(glyphs, [.publish])
         XCTAssertFalse(glyphs.contains(.viewsAndReactions),
                        "Un brouillon n'a ni vues ni réactions à montrer")
         XCTAssertFalse(glyphs.contains(.comments))

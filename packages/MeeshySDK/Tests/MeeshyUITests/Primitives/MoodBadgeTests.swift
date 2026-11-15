@@ -119,6 +119,56 @@ final class MoodBadgeTests: XCTestCase {
         )
     }
 
+    /// Le contour se peint en huit copies masquées de la silhouette, sous une
+    /// échelle qui peut bouger : aplaties en UNE texture Metal, elles se
+    /// composent une fois au lieu de huit masques par image (#9868).
+    func test_theOutline_isFlattenedIntoOneTexture() throws {
+        let badge = try Self.source("Primitives/MoodBadge.swift")
+        XCTAssertTrue(
+            badge.contains(".drawingGroup()"),
+            "Les huit copies du contour doivent être rastérisées par `.drawingGroup()`."
+        )
+    }
+
+    /// L'onde « ici » tourne en `repeatForever` : quittant l'écran, elle doit
+    /// être REMPLACÉE par une valeur posée sans animation, sans quoi une vue
+    /// couverte la garde vivante (#9868).
+    func test_theHereWave_stopsWhenItLeavesTheScreen() throws {
+        let waves = try Self.source("Primitives/PresenceDotWaves.swift")
+        XCTAssertTrue(
+            waves.contains(".onDisappear"),
+            "PresenceHereWaveView doit arrêter son onde à la disparition."
+        )
+    }
+
+    // MARK: - Le toucher (#10528)
+
+    /// La pastille mesure 0,42 × l'avatar : 22 pt dans la liste, 9 pt sur une
+    /// rangée de message. Sa cible, elle, ne descend jamais sous 44 pt.
+    func test_hitDiameter_neverDropsBelowTheMinimumTarget() {
+        XCTAssertEqual(MeeshyMoodBadge.minimumHitTarget, 44)
+        XCTAssertEqual(MeeshyMoodBadge.hitDiameter(diameter: 9.24), 44)
+        XCTAssertEqual(MeeshyMoodBadge.hitDiameter(diameter: 21.84), 44)
+        XCTAssertEqual(MeeshyMoodBadge.hitDiameter(diameter: 44), 44)
+    }
+
+    /// Une pastille déjà plus grande que le minimum garde sa propre taille :
+    /// la cible ne rétrécit jamais ce que l'œil voit.
+    func test_hitDiameter_keepsALargerBadgeWhole() {
+        XCTAssertEqual(MeeshyMoodBadge.hitDiameter(diameter: 60), 60)
+    }
+
+    /// Sans gestionnaire, la pastille est un dessin : elle ne doit plus avaler
+    /// le toucher de l'avatar qu'elle recouvre (elle le prenait, vibrait, et
+    /// ne faisait rien).
+    func test_theBadge_onlyTakesTheTouchWhenItHasAHandler() throws {
+        let badge = try Self.source("Primitives/MoodBadge.swift")
+        XCTAssertTrue(
+            badge.contains("if let onTap {"),
+            "Le geste de toucher ne se monte que si `onTap` existe."
+        )
+    }
+
     private static func source(_ relativePath: String) throws -> String {
         let url = ComposerSourceGuard.packageRoot
             .appendingPathComponent("Sources/MeeshyUI")

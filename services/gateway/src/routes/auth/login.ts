@@ -3,16 +3,24 @@ import {
   userSchema,
   sessionMinimalSchema,
   loginRequestSchema,
+  loginVerificationRequiredProperties,
   errorResponseSchema
 } from '@meeshy/shared/types';
+import { emailSchema } from '@meeshy/shared/types/validation';
+import type { RequestContext } from '../../services/GeoIPService';
+import { deferAfterResponse } from '../../utils/after-response';
+import { localeDeLaRequete } from './request-locale';
 import { AuthSchemas, validateSchema } from '@meeshy/shared/utils/validation';
-import jwt from 'jsonwebtoken';
 import { getRequestContext } from '../../services/GeoIPService';
+import { logWarn } from '../../utils/logger';
+import { getJwtSecret } from '../../utils/secrets';
 import { markSessionTrusted } from '../../services/SessionService';
 import {
   createLoginRateLimiter,
-  createAuthGlobalRateLimiter
+  createAuthGlobalRateLimiter,
+  createTwoFactorLoginRateLimiter
 } from '../../utils/rate-limiter.js';
+import { ActivationRequiresEmailProofError, AgeBelowMinimumError, PasswordNotSetError, UserLockedError } from '../../errors/custom-errors.js';
 import {
   AuthRouteContext,
   TwoFactorRequestBody,
@@ -23,10 +31,21 @@ import type { AuthResult } from '../../services/AuthService';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import {
   sendSuccess,
+  sendError,
   sendUnauthorized,
   sendBadRequest,
   sendInternalError
 } from '../../utils/response.js';
+import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes.js';
+import { disconnectSession } from '../../socketio/disconnectSession';
+import { notifyIfLoginFromNewDevice } from './notify-new-device';
+import { currentSessionOf } from '../../services/auth/current-session';
+import { pendingSessionTokenFor } from '../../services/auth/email-verification-watch';
+import { sendEmailDomainNotAllowed } from '../../services/auth/email-domain-guard';
+import {
+  rememberPendingDeviceTrust,
+  consumePendingDeviceTrust
+} from './pending-device-trust';
 
 const logger = enhancedLogger.child({ module: 'AuthLoginRoute' });
 
@@ -34,10 +53,61 @@ const logger = enhancedLogger.child({ module: 'AuthLoginRoute' });
  * Register login and logout routes
  */
 export function registerLoginRoutes(context: AuthRouteContext) {
-  const { fastify, authService, redis } = context;
+  const { fastify, authService, redis, cacheStore } = context;
 
   const loginRateLimiter = createLoginRateLimiter(redis);
   const authGlobalRateLimiter = createAuthGlobalRateLimiter(redis);
+  const twoFactorRateLimiter = createTwoFactorLoginRateLimiter(redis);
+  const afterResponse = context.afterResponse ?? deferAfterResponse;
+
+  /**
+   * #8033 — UNE ADRESSE SANS COMPTE DEVIENT UN COMPTE, sans session.
+   *
+   * Consultée seulement quand la connexion a échoué (aucun compte actif, ou un
+   * compte SANS mot de passe) et que l'identifiant est une adresse VALIDE : le
+   * chemin nominal ne paie aucune lecture de plus, et un pseudo inconnu reste
+   * un 401. Le mot de passe tapé n'est PAS transmis — un tiers qui taperait
+   * votre adresse vous imposerait sinon son mot de passe.
+   *
+   * #8055 — porte `proven-password` : consultée APRÈS un mot de passe JUSTE
+   * sur un compte pas encore actif (adresse à prouver, aucun numéro), avec
+   * l'adresse du compte ; le code de vérification est renvoyé, sans session.
+   *
+   * Rend `true` quand la réponse est partie ; `false` laisse le refus
+   * d'origine (401, ou `PASSWORD_NOT_SET`) décider.
+   */
+  async function replyFromEmailAccount(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    identifier: string,
+    requestContext: RequestContext,
+    door: 'password-login' | 'proven-password' = 'password-login'
+  ): Promise<boolean> {
+    const email = identifier.trim();
+    if (!emailSchema.safeParse(email).success) return false;
+
+    const issue = await authService.startAccountFromEmail(
+      { email, door, requestContext, deviceLocale: localeDeLaRequete(request) },
+      { afterResponse }
+    );
+
+    if (issue.kind === 'verification-required') {
+      // #8083 — le jeton d'attente de CET appareil : il dira à l'écran du code
+      // que l'adresse a été prouvée ailleurs. Un état, jamais une session.
+      const attente = await pendingSessionTokenFor(context.prisma, issue.email);
+      sendSuccess(reply, { status: issue.kind, accountCreated: issue.accountCreated, email: issue.email, ...attente });
+      return true;
+    }
+    if (issue.kind === 'rate-limited') {
+      sendError(reply, 429, 'Trop de demandes pour cette adresse. Réessayez dans une heure.', { code: 'RATE_LIMITED' });
+      return true;
+    }
+    if (issue.kind === 'email-domain-not-allowed') {
+      sendEmailDomainNotAllowed(reply);
+      return true;
+    }
+    return false;
+  }
 
   // POST /login - Main login endpoint
   fastify.post('/login', {
@@ -77,11 +147,27 @@ export function registerLoginRoutes(context: AuthRouteContext) {
                 // Branche « second facteur attendu »
                 requires2FA: { type: 'boolean', description: 'True when the account carries a second factor — no access token is granted yet', example: true },
                 twoFactorToken: { type: 'string', description: 'Short-lived token identifying the pending login; present it to POST /login/2fa with the user code' },
-                rememberDevice: { type: 'boolean', description: 'Echo of the requested device-trust preference, to be replayed on POST /login/2fa' },
-                message: { type: 'string', description: 'Human-readable prompt for the second factor' }
+                // `rememberDevice` ne figure PLUS ici (#4471). Il y était servi
+                // comme un ÉCHO « to be replayed on POST /login/2fa » — un
+                // aller-retour qu'aucun client n'a jamais fait, et qui donnait
+                // au corps de la seconde étape le pouvoir de s'accorder
+                // 365 jours de confiance sans lien avec ce que la personne
+                // avait coché ici. La préférence est désormais RETENUE PAR LE
+                // SERVEUR entre les deux étapes (`pending-device-trust.ts`),
+                // comme le lien magique le fait déjà : il n'y a plus rien à
+                // rejouer, donc plus rien à écho.
+                message: { type: 'string', description: 'Human-readable prompt for the second factor' },
+
+                // Branche « vérification requise » (#8033) — adresse sans compte
+                // actif : aucun jeton, aucune session, un code est parti.
+                ...loginVerificationRequiredProperties
               }
             }
           }
+        },
+        400: {
+          description: 'Unknown address on a reserved or disposable domain (#16491): no account is created — code EMAIL_DOMAIN_NOT_ALLOWED',
+          ...errorResponseSchema
         },
         401: errorResponseSchema,
         429: {
@@ -106,11 +192,34 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       const requestContext = await getRequestContext(request);
       logger.debug('Auth context', { ip: requestContext.ip, location: requestContext.geoData?.location });
 
-      const authResult = await authService.authenticate({ username, password }, requestContext);
+      let authResult: AuthResult | null;
+      try {
+        authResult = await authService.authenticate({ username, password }, requestContext);
+      } catch (error) {
+        // Un compte SANS mot de passe (#6424) : créé par une adresse et jamais
+        // vérifié, il reçoit son code (#8033) ; sinon le refus garde sa porte.
+        if (error instanceof PasswordNotSetError && await replyFromEmailAccount(request, reply, username, requestContext)) {
+          return reply;
+        }
+        // #8238 (remplace #8055) — le BON mot de passe d'un compte dont le
+        // délai de grâce est passé (28 jours, adresse à prouver, aucun
+        // numéro) : aucune session, le code part à l'adresse DU COMPTE, quel
+        // que soit l'identifiant tapé.
+        if (error instanceof ActivationRequiresEmailProofError) {
+          if (await replyFromEmailAccount(request, reply, error.email, requestContext, 'proven-password')) {
+            return reply;
+          }
+          return sendUnauthorized(reply, 'Identifiants invalides', { code: AUTH_ERROR_CODES.INVALID_CREDENTIALS });
+        }
+        throw error;
+      }
 
       if (!authResult) {
+        if (await replyFromEmailAccount(request, reply, username, requestContext)) {
+          return reply;
+        }
         logger.warn('Échec de connexion — identifiants invalides', { username });
-        return sendUnauthorized(reply, 'Identifiants invalides');
+        return sendUnauthorized(reply, 'Identifiants invalides', { code: AUTH_ERROR_CODES.INVALID_CREDENTIALS });
       }
 
       const { user, sessionToken, session, requires2FA, twoFactorToken } = authResult;
@@ -118,10 +227,13 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       // If 2FA is required, return partial response
       if (requires2FA) {
         logger.info('2FA requis', { username: user.username });
+        // Aucune session n'existe encore : la préférence ne peut pas être
+        // APPLIQUÉE ici, seulement RETENUE, pour que `POST /login/2fa` la
+        // trouve sans que personne ait à la transporter.
+        await rememberPendingDeviceTrust({ store: cacheStore, twoFactorToken, rememberDevice });
         return sendSuccess(reply, {
           requires2FA: true,
           twoFactorToken,
-          rememberDevice,
           user: {
             id: user.id,
             username: user.username,
@@ -137,27 +249,33 @@ export function registerLoginRoutes(context: AuthRouteContext) {
 
       logger.info('Connexion réussie', { username: user.username });
 
-      // Notification login nouvel appareil (session non trustée = nouvel appareil)
-      if (!session.isTrusted) {
-        const notificationService = fastify.notificationService;
-        if (notificationService) {
-          const jwtSecret = process.env.JWT_SECRET || 'meeshy-secret-key-dev';
-          const revokeToken = jwt.sign(
-            { userId: user.id, action: 'revoke-all' },
-            jwtSecret,
-            { expiresIn: '24h' }
-          );
-          notificationService.createLoginNewDeviceNotification({
-            recipientUserId: user.id,
-            deviceInfo: requestContext.deviceInfo,
-            ipAddress: requestContext.ip,
-            geoData: requestContext.geoData,
-            revokeToken,
-          }).catch((err: unknown) => logger.error('Notification error login_new_device', err as Error));
+      // #7035 — L'ALERTE SE JUGE SUR L'APPAREIL, jamais sur la session qui
+      // vient de naître. `!session.isTrusted` était vrai à CHAQUE connexion
+      // (`markSessionTrusted` ne s'exécute qu'après, en arrière-plan) : 60
+      // notifications sur 100 du compte de recette, toutes depuis le même
+      // appareil. Une alerte qui crie tout le temps ne protège plus.
+      //
+      // Détachée à dessein — une connexion valide n'échoue pas parce qu'on n'a
+      // pas su décider d'une notification. `.catch` OBLIGATOIRE sur une promesse
+      // détachée (loi du dépôt, leçon 230).
+      void notifyIfLoginFromNewDevice(
+        fastify.prisma?.userSession,
+        fastify.notificationService,
+        getJwtSecret(),
+        {
+          userId: user.id,
+          currentSessionId: session.id,
+          deviceInfo: requestContext.deviceInfo,
+          userAgent: requestContext.userAgent,
+          ipAddress: requestContext.ip,
+          geoData: requestContext.geoData,
         }
-      }
+      ).catch((err: unknown) => logger.error('Notification error login_new_device', err as Error));
 
-      const jwtToken = authService.generateToken(user);
+      // Le jeton NOMME la session qui vient de naître (#4264) : sans ce lien,
+      // révoquer cet appareil-ci depuis un autre laissait son JWT passer
+      // `POST /refresh` tant qu'une seule session du compte restait valide.
+      const jwtToken = authService.generateToken(user, session.id);
 
       // Mark session as trusted in background (non-blocking)
       if (rememberDevice && session.id) {
@@ -186,6 +304,23 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
+      // 423 « Locked » : le handler global sait déjà rendre cette erreur, avec
+      // sa date de fin. La convertir en 500 ici priverait la personne
+      // légitime de la seule information qui l'aide (#4138).
+      if (error instanceof UserLockedError) {
+        throw error;
+      }
+      // #6424 — même raison que le verrou juste au-dessus : le refus PORTE
+      // l'information dont la personne a besoin (« prends le lien magique »).
+      // Le convertir en 500 la laisserait devant une porte dont elle ne sait
+      // pas qu'il en existe une autre.
+      if (error instanceof PasswordNotSetError) {
+        throw error;
+      }
+      // #9927 — 403 AGE_BELOW_MINIMUM, rendu par le gestionnaire global.
+      if (error instanceof AgeBelowMinimumError) {
+        throw error;
+      }
       logger.error('Erreur serveur lors de la connexion', error as Error);
       return sendInternalError(reply, 'Erreur lors de la connexion');
     }
@@ -202,8 +337,10 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         required: ['twoFactorToken', 'code'],
         properties: {
           twoFactorToken: { type: 'string', description: 'Temporary token from initial login' },
-          code: { type: 'string', minLength: 6, maxLength: 9, description: 'TOTP code (6 digits) or backup code (XXXX-XXXX)' },
-          rememberDevice: { type: 'boolean', description: 'Remember device for long session (365 days)', default: false }
+          code: { type: 'string', minLength: 6, maxLength: 9, description: 'TOTP code (6 digits) or backup code (XXXX-XXXX)' }
+          // `rememberDevice` n'est PLUS accepté ici (#4471) : la préférence est
+          // celle exprimée à `POST /login`, retenue côté serveur. Un corps qui
+          // le porterait encore est simplement ignoré — jamais honoré.
         }
       },
       response: {
@@ -219,7 +356,8 @@ export function registerLoginRoutes(context: AuthRouteContext) {
                 token: { type: 'string', description: 'JWT access token' },
                 sessionToken: { type: 'string', description: 'Session token' },
                 session: sessionMinimalSchema,
-                expiresIn: { type: 'number', example: 86400 }
+                expiresIn: { type: 'number', example: 86400 },
+                usedBackupCode: { type: 'boolean', description: 'True when a backup code was consumed instead of a TOTP code — the client should prompt the user to regenerate their backup codes', example: false }
               }
             }
           }
@@ -228,10 +366,14 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         401: errorResponseSchema
       },
       security: []
-    }
+    },
+    // Cette route n'avait AUCUN preHandler : ni limiteur, ni compteur. Elle est
+    // pourtant la seule étape de connexion d'un compte protégé, et les codes de
+    // secours qu'elle accepte ne tournent jamais (#4138).
+    preHandler: [twoFactorRateLimiter.middleware(), authGlobalRateLimiter.middleware()]
   }, async (request, reply) => {
     try {
-      const { twoFactorToken, code, rememberDevice } = request.body;
+      const { twoFactorToken, code } = request.body;
 
       if (!twoFactorToken || !code) {
         return sendBadRequest(reply, 'Token 2FA et code requis');
@@ -241,35 +383,45 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       const result = await authService.completeAuthWith2FA(twoFactorToken, code, requestContext);
 
       if ('success' in result && result.success === false) {
-        return sendUnauthorized(reply, result.error);
+        return sendUnauthorized(reply, result.error, { code: AUTH_ERROR_CODES.TWO_FACTOR_FAILED });
       }
 
+      // Après la vérification SEULEMENT : un code faux ne doit pas consommer la
+      // préférence, sans quoi la personne la perdrait à la première faute de
+      // frappe. Ce que le corps de la requête prétend n'entre pas ici.
+      const rememberDevice = await consumePendingDeviceTrust({ store: cacheStore, twoFactorToken });
+
       const authResult = result as AuthResult;
-      const { user, sessionToken, session } = authResult;
+      const { user, sessionToken, session, usedBackupCode } = authResult;
 
       logger.info('Connexion 2FA réussie', { username: user.username });
 
-      // Notification login nouvel appareil (session non trustée = nouvel appareil)
-      if (!session.isTrusted) {
-        const notificationService = fastify.notificationService;
-        if (notificationService) {
-          const jwtSecret = process.env.JWT_SECRET || 'meeshy-secret-key-dev';
-          const revokeToken = jwt.sign(
-            { userId: user.id, action: 'revoke-all' },
-            jwtSecret,
-            { expiresIn: '24h' }
-          );
-          notificationService.createLoginNewDeviceNotification({
-            recipientUserId: user.id,
-            deviceInfo: requestContext.deviceInfo,
-            ipAddress: requestContext.ip,
-            geoData: requestContext.geoData,
-            revokeToken,
-          }).catch((err: unknown) => logger.error('Notification error login_new_device 2FA', err as Error));
+      // #7035 — L'ALERTE SE JUGE SUR L'APPAREIL, jamais sur la session qui
+      // vient de naître. `!session.isTrusted` était vrai à CHAQUE connexion
+      // (`markSessionTrusted` ne s'exécute qu'après, en arrière-plan) : 60
+      // notifications sur 100 du compte de recette, toutes depuis le même
+      // appareil. Une alerte qui crie tout le temps ne protège plus.
+      //
+      // Détachée à dessein — une connexion valide n'échoue pas parce qu'on n'a
+      // pas su décider d'une notification. `.catch` OBLIGATOIRE sur une promesse
+      // détachée (loi du dépôt, leçon 230).
+      void notifyIfLoginFromNewDevice(
+        fastify.prisma?.userSession,
+        fastify.notificationService,
+        getJwtSecret(),
+        {
+          userId: user.id,
+          currentSessionId: session.id,
+          deviceInfo: requestContext.deviceInfo,
+          userAgent: requestContext.userAgent,
+          ipAddress: requestContext.ip,
+          geoData: requestContext.geoData,
         }
-      }
+      ).catch((err: unknown) => logger.error('Notification error login_new_device 2FA', err as Error));
 
-      const jwtToken = authService.generateToken(user);
+      // Même lien qu'au mot de passe : la seconde porte d'un compte protégé
+      // n'a aucune raison d'émettre un jeton plus pauvre (#4264).
+      const jwtToken = authService.generateToken(user, session.id);
 
       // Mark session as trusted in background after 2FA verification
       if (rememberDevice && session.id) {
@@ -295,10 +447,12 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         token: jwtToken,
         sessionToken,
         session: formatSessionResponse(session, rememberDevice || false),
-        expiresIn
+        expiresIn,
+        usedBackupCode: usedBackupCode || false
       });
 
     } catch (error) {
+      if (error instanceof AgeBelowMinimumError) throw error;
       logger.error('Erreur 2FA', error as Error);
       return sendInternalError(reply, 'Erreur lors de la vérification 2FA');
     }
@@ -332,19 +486,56 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         }
       }
     },
+    // #10477 — se déconnecter est aussi REFUSER une session prouvée par un
+    // lien : franchir l'authentification ici ne doit pas l'adopter.
+    config: { adoptsSession: false },
     preValidation: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const userId = request.user!.userId;
-      const sessionToken = request.headers['x-session-token'] as string | undefined;
+      // #9606 — la session à fermer est d'abord celle que NOMME le JWT (`sid`).
+      // Elle n'était lue que sur `x-session-token`, qu'aucun client inscrit
+      // n'envoie en REST : se déconnecter laissait la session valide. L'en-tête
+      // reste honoré, pour un client qui l'enverrait encore.
+      const courante = currentSessionOf(request);
+      const aCouper = new Set<string>();
 
       await authService.updateOnlineStatus(userId, false);
 
-      if (sessionToken) {
-        const loggedOut = await authService.logout(sessionToken);
-        if (loggedOut) {
-          logger.info('Session invalidée');
+      if (courante.sessionId || courante.sessionToken) {
+        // Les identifiants sont relevés AVANT l'invalidation : après, la ligne
+        // n'est plus active et la liste ne la rend plus. BEST-EFFORT : une
+        // déconnexion ne rend pas 500 parce que la comptabilité des sockets a
+        // trébuché.
+        try {
+          const nommees = await authService.getUserActiveSessions(userId, courante);
+          nommees.filter((session) => session.isCurrentSession).forEach((session) => aCouper.add(session.id));
+        } catch (error) {
+          logWarn(fastify.log, '[AUTH] session lookup failed on logout', error);
         }
+
+        // UN appel, borné au compte (audit P2) : `logout(jeton)` fermait la
+        // session de l'en-tête quel qu'en soit le propriétaire.
+        const closed = await authService.logoutCurrent(userId, courante);
+        if (closed === 0) {
+          logger.info('Aucune session courante à fermer');
+        }
+      }
+
+      // Le socket de CET appareil, et lui seul (#4213). Se déconnecter
+      // laissait jusqu'ici le socket ouvert : l'appareil continuait de
+      // recevoir tout le temps réel d'un compte dont il venait de sortir.
+      // `disconnectRevokedSessions` couperait les AUTRES appareils, qui
+      // n'ont rien demandé.
+      for (const sessionId of aCouper) {
+        await disconnectSession({
+          io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+          userId,
+          sessionId,
+          reason: 'logout',
+          message: 'Signed out.',
+          onError: (error) => logWarn(fastify.log, '[AUTH] socket cut failed on logout', error),
+        });
       }
 
       return sendSuccess(reply, { message: 'Déconnexion réussie' });

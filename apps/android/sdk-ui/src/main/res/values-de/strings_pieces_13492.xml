@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_file_download">Herunterladen</string>
+    <string name="bubble_file_downloading">Wird heruntergeladen %1$d %%</string>
+    <string name="bubble_file_downloading_unknown">Wird heruntergeladen…</string>
+    <string name="bubble_file_ready">Bereit zum Öffnen</string>
+    <string name="bubble_file_download_failed">Download fehlgeschlagen – zum Wiederholen tippen</string>
+    <string name="bubble_piece_sealed">Verschlüsselter Anhang</string>
+    <string name="bubble_piece_sealed_a11y">Ende-zu-Ende-verschlüsselter Anhang – lässt sich auf diesem Gerät nicht öffnen</string>
+    <string name="bubble_file_cancel">Download abbrechen</string>
+</resources>

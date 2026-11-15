@@ -2,7 +2,7 @@
 
 **Base** : `main` HEAD (`8aea0e4e`)
 **Branche** : `claude/upbeat-euler-f80iih`
-**Fichier** : `apps/ios/Meeshy/Features/Main/Views/AffiliateView.swift`
+**Fichier** : `apps/ios/Meeshy/Features/Links/Views/AffiliateView.swift`
 
 ## Objectif
 Supprimer le `.accessibilityElement(children: .combine)` dupliqué sur `affiliateStatCard`,

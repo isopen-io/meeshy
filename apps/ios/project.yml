@@ -78,13 +78,24 @@ settings:
   # --strategy max-build` et écrit ICI **et** dans le pbxproj — les deux, sinon
   # la prochaine régénération réécrase le correctif.
   VERSIONING_SYSTEM: apple-generic
-  # 1743 = dernier build présent sur App Store Connect, VALID (run Xcode Cloud
-  # 1743 du 2026-08-04, vérifié via `andp status me.meeshy.app 1743`). Xcode
-  # Cloud numérote avec son propre compteur (CI_BUILD_NUMBER), très au-dessus de
-  # la série locale : une valeur restée à 1271 ici ne bloquerait pas les lanes
-  # fastlane — elles prennent max(dépôt, dernier TestFlight) + 1 — mais rendrait
-  # le prochain numéro imprévisible, ce que le bloc ci-dessus proscrit.
-  CURRENT_PROJECT_VERSION: "1796"
+  # CETTE VALEUR NE GOUVERNE PLUS LES BUILDS XCODE CLOUD (2026-09-09).
+  #
+  # La phrase qui vivait ici disait que « Xcode Cloud numérote avec son propre
+  # compteur (CI_BUILD_NUMBER) ». C'était faux, et de la pire façon : Xcode
+  # Cloud EXPOSE bien `CI_BUILD_NUMBER` à ses scripts, mais ne l'injecte dans
+  # aucun réglage de build. Tous les runs archivaient donc le numéro committé
+  # ici — le MÊME —, pendant que ce commentaire faisait conclure que la
+  # question était réglée et que personne n'allait vérifier.
+  #
+  # `ci_scripts/ci_post_clone.sh` l'écrit désormais VRAIMENT, avant
+  # `xcodegen generate`, et relit ce qu'il a écrit (un `sed` qui ne trouve pas
+  # sa ligne rend 0). Garde : `XcodeCloudBuildNumberGuardTests`.
+  #
+  # La valeur ci-dessous reste utile aux chemins qui ne passent PAS par Xcode
+  # Cloud — les lanes fastlane prennent `max(dépôt, dernier TestFlight) + 1`,
+  # donc une valeur juste rend le prochain build prévisible. Maintenue par
+  # `./meeshy.sh build-number`.
+  CURRENT_PROJECT_VERSION: "1825"
   # Alignée sur la version App Store Connect. Passée à 1.0.1 le 2026-07-31 :
   # la 1.0.0 avait été rejetée (déclaration Age Rating `ageAssurance` à true
   # sans mécanisme de vérification d'âge dans l'app), et l'enregistrement ASC a
@@ -100,14 +111,49 @@ settings:
   # review et captures vidéo, PAS côté code — voir DEMO_REVIEW_NOTES dans
   # fastlane/Fastfile.
   #
-  # RAPPEL : `ci_post_clone.sh` ne lance PAS xcodegen, donc Xcode Cloud build le
-  # pbxproj COMMITTÉ. Toute modification de MARKETING_VERSION ici doit être
-  # répercutée dans les deux `MARKETING_VERSION` du pbxproj, sinon le binaire
-  # livré garde l'ancienne version pendant que ce fichier annonce la nouvelle.
+  # RAPPEL : `ci_post_clone.sh` lance `xcodegen generate` depuis le 2026-08-13
+  # (incident « Cannot find type X in scope »), donc Xcode Cloud build un
+  # pbxproj RÉGÉNÉRÉ depuis CE fichier — qui est bien la source de vérité.
+  # Le RAPPEL inverse a tenu ici jusqu'au 2026-09-07 : il décrivait l'état
+  # d'AVANT ce hook et faisait croire que le pbxproj committé décidait.
+  # Tenir malgré tout les deux `MARKETING_VERSION` du pbxproj alignées : tous
+  # les autres chemins (meeshy.sh, ouverture dans Xcode, `xcodebuild` sur le
+  # projet committé) les lisent SANS régénérer. `andp version set <bundle>
+  # <version>` réécrit les trois sites d'un coup.
   # (Ne vaut QUE pour la version commerciale : le build number, lui, est imposé
   # par le compteur CI_BUILD_NUMBER de Xcode Cloud — cf. le bloc
   # CURRENT_PROJECT_VERSION ci-dessus.)
-  MARKETING_VERSION: "1.0.5"
+  #
+  # 1.1.8 le 2026-11-13 (#17911) : la 1.1.7 est READY_FOR_DISTRIBUTION, son train est
+  # fermé (ITMS-90186) et tout build qui la porte encore est refusé (ITMS-90062).
+  #
+  # 1.1.7 le 2026-11-09 (#17143, décision porteur) : la prochaine livraison porte le
+  # réveil du talkie en arrière-plan. La passerelle n'envoie la notification de
+  # réveil MEESHY_TALKIE qu'à partir de cette version (plancher iOS 1.1.7).
+  #
+  # 1.1.1 le 2026-09-24 (#7851) : la 1.1.0 (build 1831) est READY_FOR_SALE le
+  # jour même ; son train est fermé, et le build 1833 portait encore 1.1.0.
+  # La coque Capacitor `apps/web/ios` partage le bundle id mais suit la
+  # numérotation du web (2.0.x) : `andp version set` la réécrit aussi — la
+  # restaurer après coup.
+  #
+  # 1.1.0 le 2026-09-22 (#7494) : la 1.0.9 est READY_FOR_SALE, et deux chantiers
+  # entiers attendent derrière elle — lecture et accusés (milestone #103),
+  # éphémère et vue unique (milestone #110).
+  #
+  # 1.0.9 le 2026-09-11 (#6066) : la 1.0.8 est READY_FOR_DISTRIBUTION, et 69
+  # commits d'`apps/ios` + `packages/MeeshySDK` se sont accumulés derrière elle
+  # sans atteindre personne.
+  #
+  # PIÈGE D'OUTILLAGE, mesuré ici. `andp version set` ne CRÉE une version que
+  # si la plateforme n'en a AUCUNE : dès qu'une version verrouillée existe, il
+  # rend « No editable IOS version to rename » et conseille « create the next
+  # version instead » — une commande qui n'existe pas. Sa fonction
+  # `managers.appstore.ensure_version(app_id, version, platform)` fait
+  # pourtant exactement cela ; c'est la CLI qui ne l'atteint pas. Créer la
+  # version sur ASC d'abord, puis relancer `version set` pour les fichiers :
+  # il constate alors « already reads 1.0.9 » et écrit les trois sites.
+  MARKETING_VERSION: "1.1.8"
 
   # Équipe de signature (Automatic). Indispensable pour `meeshy.sh device`
   # (déploiement sur appareil réel) : sans DEVELOPMENT_TEAM, la signature
@@ -147,17 +193,99 @@ targets:
       - path: Meeshy
         excludes:
           - "**/*.md"
+      # #7003 — la LOI qui décide ce que l'extension de notification a le droit
+      # d'attacher (famille de média + plafond mémoire) vit chez son
+      # consommateur, dans `MeeshyNotificationExtension`. Mais une extension de
+      # notification n'a pas d'hôte de test : le seul endroit d'où une règle
+      # pure est éprouvable est `MeeshyTests`, qui `@testable import Meeshy`.
+      # Le fichier est donc compilé dans les DEUX cibles — même mécanique que
+      # l’écran de partage unique (`Meeshy/Features/Share/`) pour l’extension de partage, en sens
+      # inverse. Il n'importe QUE Foundation ; garde : `NSEAttachmentPolicyTests`.
+      - path: MeeshyNotificationExtension/NSEAttachmentPolicy.swift
+      # #17442 — l'alarme d'un Bring (essai AlarmKit) : la LOI (`BringAlarmPlan`, Foundation seul) et la couture
+      # (`BringAlarmScheduler`, AlarmKit derrière `canImport` et iOS 26) sont posées par l'app vivante ET par
+      # l'extension de notification, sur la MÊME alarme. Gardes : `BringAlarmPlanTests`, `BringAlarmCoordinatorTests`.
+      - path: MeeshyNotificationExtension/BringAlarmPlan.swift
+      - path: MeeshyNotificationExtension/BringAlarmScheduler.swift
+      # #12655 — le miroir des conversations verrouillées par PIN : l'app
+      # l'ÉCRIT, l'extension le LIT. Une seule définition tient les deux bouts
+      # du fichier. Foundation seul ; garde : `NSELockedConversationMirrorTests`.
+      - path: MeeshyNotificationExtension/NSELockedConversationMirror.swift
+      # #8858 — ce que la NSE et les ACTIONS de notification tirent du détail
+      # d'un message (catégorie, vignette vidéo, corps détaillé) : une seule
+      # lecture pour l'extension qui choisit la catégorie et l'app qui exécute
+      # l'action. Foundation + MeeshySDK ; garde : `NotificationDetailPolicyTests`.
+      - path: MeeshyNotificationExtension/NotificationDetailPolicy.swift
+      # #8859 — ce que la notification DÉPLOYÉE montre (lecteur, carte, fiche)
+      # et ce qu'elle ne montre jamais (message protégé). Même mécanique que
+      # la politique ci-dessus : l'extension de contenu n'a pas d'hôte de test.
+      # Foundation + MeeshySDK ; garde : `NotificationExpandedContentTests`.
+      - path: MeeshyNotificationContentExtension/NotificationExpandedContent.swift
+      # #8063 — le CONTRAT du partage d'écran (trames, en-tête, socket Unix de
+      # l'App Group) : l'extension écrit, l'app lit. Compilé dans les DEUX
+      # cibles pour qu'une seule définition tienne les deux bouts du fil, et
+      # atteignable par `@testable import Meeshy` (`ScreenShareWireTests`).
+      # Foundation/Darwin uniquement, tout est `nonisolated`.
+      - path: MeeshyBroadcastExtension/ScreenShareWire.swift
+      - path: MeeshyBroadcastExtension/ScreenShareUnixSocket.swift
+      # #9680 — la Live Activity d'envoi : l'app la DEMANDE et la met à jour,
+      # l'extension de widgets la PEINT. Les attributs sont compilés dans les
+      # deux cibles pour qu'une seule définition tienne les deux bouts du fil
+      # (ActivityKit décode en silence un état qui ne correspond pas).
+      # Foundation + ActivityKit ; garde : `OutboxActivityLawTests`.
+      - path: MeeshyWidgets/OutboxActivityAttributes.swift
+      # #9782 · #9783 · #9784 — l'appel, le vocal en lecture et l'enregistrement
+      # dans l'îlot : mêmes raisons que ci-dessus. L'intention des boutons
+      # (`LiveActivityIntent`) est déclarée dans les DEUX cibles et s'exécute
+      # dans l'app. Gardes : `CallActivityLawTests`,
+      # `VoicePlaybackActivityLawTests`, `VoiceRecordingActivityLawTests`.
+      - path: MeeshyWidgets/CallActivityAttributes.swift
+      - path: MeeshyWidgets/VoicePlaybackActivityAttributes.swift
+      - path: MeeshyWidgets/VoiceRecordingActivityAttributes.swift
+      - path: MeeshyWidgets/LiveActivityCommandIntent.swift
+      # LOT-03 — la miniature de l'interlocuteur : l'app l'ÉCRIT dans le conteneur
+      # App Group, l'extension de widgets la LIT par `context.activityID`. Une
+      # Live Activity ne fait pas de réseau. Garde : `LiveActivityAvatarStoreTests`.
+      - path: MeeshyWidgets/LiveActivityAvatarStore.swift
+      # #14628 — l'AGPL-3.0 de libsignal : le texte officiel de la licence et
+      # les avis de libsignal publiés par Signal au tag épinglé voyagent DANS
+      # l'app (écran Réglages › À propos › Licences), jamais téléchargés. Une
+      # seule source chacun : `LICENSES/` à la racine et `packages/LibSignalClient/`.
+      - path: ../../LICENSES/AGPL-3.0.txt
+        buildPhase: resources
+      - path: ../../packages/LibSignalClient/acknowledgments-ios.plist
+        buildPhase: resources
     settings:
       INFOPLIST_FILE: Meeshy/Info.plist
+      # #14628 — le commit EXACT du build, lu par l'offre de source de l'écran
+      # Licences (`SourceOffer`, clé `MeeshySourceCommit` de l'Info.plist).
+      # Xcode Cloud pose `CI_COMMIT`, GitHub Actions `GITHUB_SHA` ; un build
+      # local n'en a aucun et l'écran renvoie au dépôt. Deux valeurs posées à la
+      # fois ne forment plus un SHA-1 et sont tenues pour absentes.
+      MEESHY_SOURCE_COMMIT: "$(CI_COMMIT)$(GITHUB_SHA)"
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
       ENABLE_PREVIEWS: YES
       CODE_SIGN_STYLE: Automatic
       CODE_SIGN_ENTITLEMENTS: Meeshy/Meeshy.entitlements
+      # #9196 — les `.metal` de l'app sont des noyaux Core Image
+      # (`Services/Shaders/CallSkinRetouch.metal`, chargé par
+      # `CallSkinRetouchKernel` depuis `default.metallib`). Sans ces deux
+      # drapeaux la bibliothèque compile mais `CIColorKernel` refuse la
+      # fonction ; garde : `CallSkinRetouchTests.test_kernel_loadsFromTheAppLibrary`.
+      # L'édition de liens prend `-fcikernel` elle aussi : Xcode 27 déclare
+      # `-cikernel` obsolète (#11568), la bibliothèque produite est la même.
+      MTL_COMPILER_FLAGS: "-fcikernel"
+      MTLLINKER_FLAGS: "-fcikernel"
     dependencies:
       - target: MeeshyWidgets
       - target: MeeshyNotificationExtension
+      # #8859 — la notification DÉPLOYÉE (lecteur de vocal, carte, fiche).
+      # App ID `me.meeshy.app.notification-content` enregistré au portail le
+      # 2026-10-01 (T75359QHNV, seed D72UK7R5RE, APP_GROUPS — #8953) et listé
+      # dans `fastlane/Matchfile` + les lanes `sync_certificates`/`force_sync`.
+      - target: MeeshyNotificationContentExtension
       # Ré-embarquée 2026-07-28. Le blocage historique de l'archive de
       # distribution ("No profiles for 'me.meeshy.app.share-extension' were
       # found") est levé : l'App ID `me.meeshy.app.share-extension` existe au
@@ -165,10 +293,17 @@ targets:
       # APP_GROUPS activée. Le provisioning profile absent est créé à la volée
       # par le signing automatique via `-allowProvisioningUpdates` (Gymfile).
       - target: MeeshyShareExtension
+      # #8063 — partage d'écran pendant un appel (ReplayKit). L'App ID
+      # `me.meeshy.app.broadcast` existe au portail (67U4MGRB8C, APP_GROUPS)
+      # et figure dans Matchfile / Fastfile depuis le 2026-10-01 (#8953).
+      - target: MeeshyBroadcastExtension
       - package: MeeshySDK
         product: MeeshySDK
       - package: MeeshySDK
         product: MeeshyUI
+      # #12536 — l'E2EE libsignal : l'app et l'extension de notification seules.
+      - package: MeeshySDK
+        product: MeeshyE2EE
       - package: Firebase
         product: FirebaseCore
       - package: Firebase
@@ -220,6 +355,13 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.widgets
       CODE_SIGN_STYLE: Automatic
       CODE_SIGN_ENTITLEMENTS: MeeshyWidgets/MeeshyWidgets.entitlements
+      # LOT-03 — le travail de fond de cette extension (réseau, disque, files
+      # d'un framework système) n'a aucune raison de hériter du MainActor du
+      # projet. Les fichiers partagés avec une cible MainActor déclarent leur
+      # isolation EXPLICITEMENT (`ExtensionIsolationGuardTests`). L'extension de
+      # partage et l'extension de contenu hébergent du SwiftUI : elles restent
+      # MainActor, et ce commentaire dit pourquoi.
+      SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
 
   MeeshyNotificationExtension:
     type: app-extension
@@ -232,14 +374,78 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.notification-service
       CODE_SIGN_STYLE: Automatic
       CODE_SIGN_ENTITLEMENTS: MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements
+      # LOT-03 — le travail de fond de cette extension (réseau, disque, files
+      # d'un framework système) n'a aucune raison de hériter du MainActor du
+      # projet. Les fichiers partagés avec une cible MainActor déclarent leur
+      # isolation EXPLICITEMENT (`ExtensionIsolationGuardTests`). L'extension de
+      # partage et l'extension de contenu hébergent du SwiftUI : elles restent
+      # MainActor, et ce commentaire dit pourquoi.
+      SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+      # #13137 — un fichier qui n'importe que MeeshyCore ne voit que les membres
+      # de MeeshyCore : sans ce réglage, les extensions de MeeshySDK, lié à côté,
+      # fuient dans tout le module et le cliquet d'import ne prouve rien.
+      SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
     dependencies:
-      # NotificationService.swift imports MeeshySDK (and GRDB transitively).
+      # #13137 — le noyau LÉGER (sans Socket.IO ni WebRTC) : la NSE n'importe
+      # plus que lui, fichier par fichier ; MeeshySDK reste lié tant que
+      # NotificationService et NSEMessagePrePersister le lisent.
+      - package: MeeshySDK
+        product: MeeshyCore
       - package: MeeshySDK
         product: MeeshySDK
+      # #12536 — la NSE déchiffrera sous le verrou du groupe d'apps (#12537).
+      - package: MeeshySDK
+        product: MeeshyE2EE
 
-  # Share Extension — "Share to Meeshy" depuis d'autres apps. ShareViewController
-  # est auto-contenu (frameworks système + container App Group group.me.meeshy.apps) ;
-  # aucune dépendance SDK. Recâblé 2026-06-24 (présent sur disque mais absent de
+  # #8859 — Notification Content Extension : la notification DÉPLOYÉE (appui
+  # long) fait écouter un vocal, explorer une position, lire une carte de
+  # visite — sans ouvrir l'app. Elle ne lit que les clés que la NSE lit déjà et
+  # passe par les MÊMES politiques (compilées ici plutôt que recopiées) : le
+  # second verrou de protection (`NSEAttachmentPolicy`), le détail
+  # (`NotificationDetailPolicy`), la résolution des URLs média
+  # (`NotificationPayloadHelpers`) contre l'origine de confiance
+  # (`NSETrustedOrigin`). Groupe d'app partagé avec l'app et la NSE.
+  MeeshyNotificationContentExtension:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: MeeshyNotificationContentExtension
+      - path: MeeshyNotificationExtension/NSEAttachmentPolicy.swift
+      - path: MeeshyNotificationExtension/NotificationDetailPolicy.swift
+      - path: MeeshyNotificationExtension/NotificationPayloadHelpers.swift
+      - path: MeeshyNotificationExtension/NSETrustedOrigin.swift
+    settings:
+      # #11568 — cette cible n'importe pas AppIntents : l'extracteur de
+      # métadonnées App Intents n'y a rien à lire et l'annonçait à chaque build
+      # (« Metadata extraction skipped »). L'app et les widgets, qui en déclarent,
+      # gardent l'extraction. Importer AppIntents ici ⇒ retirer ce réglage.
+      LM_SKIP_METADATA_EXTRACTION: YES
+      INFOPLIST_FILE: MeeshyNotificationContentExtension/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.notification-content
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_ENTITLEMENTS: MeeshyNotificationContentExtension/MeeshyNotificationContentExtension.entitlements
+      # iOS cherche la classe de contexte du point d'extension
+      # (`_UNNotificationContentExtensionVendorContext`) dans l'EXÉCUTABLE,
+      # avant tout chargement. En Debug, Xcode déplace le code et ses liens
+      # dans `….debug.dylib` (aperçus) : l'exécutable ne lie plus
+      # UserNotificationsUI, et la notification déployée restait VIDE
+      # (« Unable to find NSExtensionContextClass », mesuré au simulateur).
+      ENABLE_DEBUG_DYLIB: NO
+    dependencies:
+      # #13137 — les politiques partagées avec la NSE importent MeeshyCore.
+      - package: MeeshySDK
+        product: MeeshyCore
+      - package: MeeshySDK
+        product: MeeshySDK
+      - sdk: UserNotificationsUI.framework
+
+  # Share Extension — "Share to Meeshy" depuis d'autres apps. Depuis l'écran de
+  # partage UNIQUE (#10947), elle monte LA MÊME vue que l'app (`ShareSheetView`
+  # et ses sous-vues, compilées ici depuis `Meeshy/Features/Share/`), avec
+  # ses propres coutures (`ExtensionShareDirectory`, `ExtensionShareDispatcher`)
+  # et le catalogue de mots de l'APP (`Bundle.meeshyShare`). Elle lie donc
+  # MeeshySDK et MeeshyUI. Recâblé 2026-06-24 (présent sur disque mais absent de
   # project.yml → jamais compilé). Info.plist : NSExtensionPrincipalClass
   # (ShareViewController programmatique, pas de storyboard).
   #
@@ -257,19 +463,79 @@ targets:
     deploymentTarget: "16.0"
     sources:
       - path: MeeshyShareExtension
-      # PRÉCÉDENT NOUVEAU : un fichier de l'APP compilé dans une app-extension.
-      # `project.yml` ne connaissait que l'inverse (helpers d'extension compilés
-      # dans MeeshyTests). L'écran de partage a besoin de la MÊME machine à
-      # états que le sélecteur de transfert — la réécrire produirait deux
-      # sémantiques de sélection divergentes pour un même geste.
-      # Le fichier n'importe QUE Foundation ; garde :
-      # `ForwardPickerModelPortabilityGuardTests`.
-      - path: Meeshy/Features/Main/Components/ForwardPickerModel.swift
+      # L'écran de partage UNIQUE (#10947) : les fichiers PORTABLES de l'écran,
+      # un par un. Ni `ShareDispatcher.swift` (LiveShareDispatcher), ni
+      # `ShareRecipientDirectory.swift` (LiveShareRecipientDirectory), ni
+      # `ShareSheetHost+App.swift` : ceux-là parlent aux singletons de l'app.
+      # Garde : `ShareExtensionScreenGuardTests`.
+      - path: Meeshy/Features/Share/ShareContentZone.swift
+      - path: Meeshy/Features/Share/ShareDirectorySnapshot.swift
+      - path: Meeshy/Features/Share/ShareDurationRow.swift
+      # #12985 — le reflet de la mémoire du bout en bout que l'app dépose.
+      - path: Meeshy/Features/Share/EndToEndShareMemory.swift
+      - path: Meeshy/Features/Share/ShareIncomingStrip.swift
+      - path: Meeshy/Features/Share/ShareRecipient.swift
+      - path: Meeshy/Features/Share/ShareRecipientRow.swift
+      - path: Meeshy/Features/Share/ShareRelayHandoff.swift
+      - path: Meeshy/Features/Share/ShareSendBar.swift
+      - path: Meeshy/Features/Share/ShareSheetCopy.swift
+      - path: Meeshy/Features/Share/ShareSheetView.swift
+      - path: Meeshy/Features/Share/ShareSheetView+Actions.swift
+      - path: Meeshy/Features/Share/ShareSheetViewModel.swift
+      - path: Meeshy/Features/Share/ShareSourcing.swift
+      - path: Meeshy/Features/Share/ShareStringsBundle.swift
+      - path: Meeshy/Features/Share/ShareSubject.swift
+      # Les noms courts des modèles du SDK (`Message`, `MessageAttachment`).
+      - path: Meeshy/Features/Main/Models/MessageAliases.swift
     settings:
+      # #11568 — cette cible n'importe pas AppIntents : l'extracteur de
+      # métadonnées App Intents n'y a rien à lire et l'annonçait à chaque build
+      # (« Metadata extraction skipped »). L'app et les widgets, qui en déclarent,
+      # gardent l'extraction. Importer AppIntents ici ⇒ retirer ce réglage.
+      LM_SKIP_METADATA_EXTRACTION: YES
       INFOPLIST_FILE: MeeshyShareExtension/Info.plist
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.share-extension
       CODE_SIGN_STYLE: Automatic
+      # Les coutures de l'extension sont AUSSI compilées dans `MeeshyTests`, où
+      # l'écran vient du module de l'app : elles n'importent `Meeshy` que hors
+      # de cette cible (`#if !MEESHY_SHARE_EXTENSION`). `canImport(Meeshy)` ne
+      # suffit pas : le module de l'app est dans les mêmes produits de build.
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) MEESHY_SHARE_EXTENSION"
       CODE_SIGN_ENTITLEMENTS: MeeshyShareExtension/MeeshyShareExtension.entitlements
+    dependencies:
+      - package: MeeshySDK
+        product: MeeshySDK
+      - package: MeeshySDK
+        product: MeeshyUI
+
+  # #8063 — Broadcast Upload Extension (ReplayKit) : capte l'écran pendant un
+  # appel et en pousse les trames, en JPEG réduit, à l'app par un socket Unix
+  # dans le conteneur App Group `group.me.meeshy.apps`. Aucune dépendance SDK
+  # (50 Mo de plafond mémoire pour une extension de diffusion) : frameworks
+  # système seulement.
+  MeeshyBroadcastExtension:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: MeeshyBroadcastExtension
+    settings:
+      # #11568 — cette cible n'importe pas AppIntents : l'extracteur de
+      # métadonnées App Intents n'y a rien à lire et l'annonçait à chaque build
+      # (« Metadata extraction skipped »). L'app et les widgets, qui en déclarent,
+      # gardent l'extraction. Importer AppIntents ici ⇒ retirer ce réglage.
+      LM_SKIP_METADATA_EXTRACTION: YES
+      INFOPLIST_FILE: MeeshyBroadcastExtension/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.broadcast
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_ENTITLEMENTS: MeeshyBroadcastExtension/MeeshyBroadcastExtension.entitlements
+      # LOT-03 — le travail de fond de cette extension (réseau, disque, files
+      # d'un framework système) n'a aucune raison de hériter du MainActor du
+      # projet. Les fichiers partagés avec une cible MainActor déclarent leur
+      # isolation EXPLICITEMENT (`ExtensionIsolationGuardTests`). L'extension de
+      # partage et l'extension de contenu hébergent du SwiftUI : elles restent
+      # MainActor, et ce commentaire dit pourquoi.
+      SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
 
   # P4.3 step 1 — MeeshyTests is the unit-test bundle that previously was
   # only declared inside Meeshy.xcodeproj/project.pbxproj (via 20+ Ruby
@@ -283,6 +549,35 @@ targets:
   # the `TEST_HOST` setting that xctest needs at runtime. XcodeGen wires
   # the host-app build setting automatically when the dependency target
   # is of type `application`.
+  # ── #3950 — la mesure du FLING, sur appareil PHYSIQUE ────────────────────
+  #
+  # Le seul moyen supporté par Apple de produire un `swipe` sur un iPhone
+  # connecté est un bundle XCUITest : `devicectl` n'a aucune sous-commande
+  # d'entrée tactile, `idb` ne voit que les simulateurs, et un lien profond
+  # ouvre sans défiler. Sans cette cible, la partie GESTE de l'audit de
+  # fluidité (#3917) restait non mesurable — seule la partie idle l'était.
+  #
+  # Elle n'est PAS dans le scheme `Meeshy` : le gate reste `MeeshyTests` seul.
+  # Une mesure de fluidité au simulateur ne veut rien dire (`apps/ios/CLAUDE.md`
+  # § Pilotage), donc la faire tourner là serait pire qu'inutile — elle
+  # produirait un chiffre auquel on pourrait croire. Son scheme dédié
+  # (`MeeshyDeviceMetrics`, plus bas) s'invoque à la demande sur un appareil.
+  MeeshyUIDeviceTests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: MeeshyUIDeviceTests
+        excludes:
+          - "**/*.md"
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.uitests
+      TEST_TARGET_NAME: Meeshy
+      CODE_SIGN_STYLE: Automatic
+      GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: Meeshy
+
   MeeshyTests:
     type: bundle.unit-test
     platform: iOS
@@ -307,9 +602,29 @@ targets:
       # resurrected now that the sources are shared).
       - path: MeeshyNotificationExtension/NotificationPayloadHelpers.swift
       - path: MeeshyNotificationExtension/NSEDecryptor.swift
-      # NSEPreferencesGate importe MeeshySDK (modèle UserNotificationPreferences,
+      # NSEPreferencesGate importe MeeshyCore (modèle UserNotificationPreferences,
       # déjà lié au bundle de tests) + UserNotifications (data-only en test).
       - path: MeeshyNotificationExtension/NSEPreferencesGate.swift
+      # NSEAPIRequest importe MeeshyCore (ClientInfoProvider.identityHeaders) :
+      # c'est la requête que la NSE envoie, et ce qu'elle dépose est ce que
+      # l'app peint au tap (#7804).
+      - path: MeeshyNotificationExtension/NSEAPIRequest.swift
+      # LOT-03 — la mécanique pure de la descente d'enrichissement : porte de
+      # livraison unique, échéance, plan et repli. NSEAttachmentPolicy et
+      # NotificationDetailPolicy sont recompilés ici (la copie du module de
+      # tests prime sur celle de l'app) parce que le plan les appelle.
+      - path: MeeshyNotificationExtension/NSEDelivery.swift
+      - path: MeeshyNotificationExtension/NSEDeadline.swift
+      - path: MeeshyNotificationExtension/NSEEnrichmentPlan.swift
+      # #17255 — la remise en .m4a de la voix ADTS d'un talkie (`NSEEnrichmentPlanTests`).
+      - path: MeeshyNotificationExtension/NSEAdtsRemux.swift
+      - path: MeeshyNotificationExtension/NSEAttachmentPolicy.swift
+      - path: MeeshyNotificationExtension/NSELockedConversationMirror.swift
+      - path: MeeshyNotificationExtension/NotificationDetailPolicy.swift
+      # #8858 — l'instantané de carte d'une position partagée (MapKit + UIKit).
+      # `xcrun simctl push` n'exécute PAS la NSE : c'est le seul endroit d'où
+      # son rendu est photographiable (`NSELocationSnapshotCaptureTests`).
+      - path: MeeshyNotificationExtension/NSELocationSnapshot.swift
       # Helpers purs de l'extension de partage, compilés DANS le bundle de tests
       # pour la même raison que les helpers NSE ci-dessus : ils vivent dans une
       # cible app-extension, donc `@testable import Meeshy` ne les atteint pas.
@@ -329,9 +644,16 @@ targets:
       # tests) et n'a aucune dépendance UIKit — comme les trois helpers
       # au-dessus, il vit dans une cible app-extension que
       # `@testable import Meeshy` n'atteint pas.
-      - path: MeeshyShareExtension/ShareLimits.swift
+      - path: MeeshyShareExtension/ShareUploadBudget.swift
       - path: MeeshyShareExtension/ShareMediaStaging.swift
       - path: MeeshyShareExtension/SharePendingShare.swift
+      # #5056 — la fiche de COMPOSITION (vue `2a`). Listée ici pour la même
+      # raison que sa jumelle d'envoi juste au-dessus : c'est le seul endroit
+      # où les DEUX miroirs du contrat coexistent, donc le seul où leur dérive
+      # peut être attrapée mécaniquement (`ShareComposeContractTests`). Sans
+      # cette ligne, la suite ne compile pas — et une suite qui ne compile pas
+      # est plus honnête qu'une suite verte par omission.
+      - path: MeeshyShareExtension/ShareComposeHandoff.swift
       # Lot B-2 : client TUS de l'extension. LISTÉ ICI EXPRÈS — « le dépôt a
       # déjà vécu des suites vertes par omission » (spec, § Tests et gates).
       - path: MeeshyShareExtension/ShareTusClient.swift
@@ -339,6 +661,25 @@ targets:
       # les deux verrous purs du cycle de vie de l'écran de partage
       # (`ShareLifecycleGatesTests`). Même raison que les fichiers ci-dessus.
       - path: MeeshyShareExtension/ShareLifecycleGates.swift
+      # LOT-03 — la réduction pure de l'extraction : l'ordre des fournisseurs
+      # fait foi, jamais l'ordre d'arrivée des callbacks.
+      - path: MeeshyShareExtension/ShareExtractionReduction.swift
+      # #11134 — le média d'abord, jamais son chemin : la loi pure du choix de
+      # représentation, et le chargeur, éprouvé sur de vrais `NSItemProvider`
+      # (`ShareItemRepresentationTests`, `ShareItemLoaderTests`).
+      - path: MeeshyShareExtension/ShareItemRepresentation.swift
+      - path: MeeshyShareExtension/ShareItemLoader.swift
+      # LOT-03 — la planification et les liens profonds des widgets, purs :
+      # compilés dans le bundle de tests pour que leur contrat soit exécutable
+      # sans l'extension (WidgetKit + Foundation uniquement).
+      - path: MeeshyWidgets/WidgetRefreshSchedule.swift
+      - path: MeeshyWidgets/WidgetDeepLink.swift
+      # #10947 — les coutures de l'extension pour l'écran unique. Elles
+      # importent le module de l'app par `#if !MEESHY_SHARE_EXTENSION` (vrai ici
+      # seulement) pour y trouver l'écran.
+      - path: MeeshyShareExtension/ExtensionShareDirectory.swift
+      - path: MeeshyShareExtension/ExtensionShareDispatcher.swift
+      - path: MeeshyShareExtension/ShareExtensionIncoming.swift
       # Vecteurs partagés Lentille/Focal (contrat LWS-5, workshop
       # tasks/lentille-focal-workshop.md §2.3) : le même JSON que les suites
       # Jest (packages/shared/__tests__/vectors/) et JUnit (Android, phase 2),
@@ -390,6 +731,22 @@ targets:
 #
 # CI invoque ce scheme via `xcodebuild -scheme Meeshy -only-testing:MeeshyTests`.
 schemes:
+  # Scheme de MESURE, jamais de gate — cf. la cible `MeeshyUIDeviceTests`.
+  # `xcodebuild test -scheme MeeshyDeviceMetrics -destination "platform=iOS,id=<udid>"`
+  MeeshyDeviceMetrics:
+    build:
+      parallelizeBuild: true
+      buildImplicitDependencies: true
+      targets:
+        Meeshy: all
+        MeeshyUIDeviceTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - MeeshyUIDeviceTests
+
   Meeshy:
     build:
       parallelizeBuild: true

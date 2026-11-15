@@ -12,6 +12,7 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { SocialEventsHandler } from '../SocialEventsHandler';
 import type { Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { PostTranslationUpdatedEventData } from '@meeshy/shared/types/post';
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
@@ -78,15 +79,17 @@ function makePrisma(friendIds: string[] = [FRIEND_ID_1, FRIEND_ID_2]): PrismaCli
   }));
 
   return {
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: {
       findMany: jest.fn<any>().mockResolvedValue(friendships),
     },
+    user: { findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(null) },
   } as unknown as PrismaClient;
 }
 
 function makeIo() {
   const emit = jest.fn<any>();
-  const ioTo = jest.fn<any>().mockReturnValue({ emit });
+  const ioTo = jest.fn<any>().mockReturnValue({ emit, except: jest.fn<any>().mockReturnValue({ emit }) });
   return {
     to: ioTo,
     _emit: emit,
@@ -216,6 +219,7 @@ describe('SocialEventsHandler', () => {
 
     it('returns empty array and does not throw when DB rejects', async () => {
       const prisma = {
+        userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
         friendRequest: { findMany: jest.fn<any>().mockRejectedValue(new Error('db error')) },
       } as unknown as PrismaClient;
       const { handler } = buildHandler({ prisma });
@@ -225,12 +229,14 @@ describe('SocialEventsHandler', () => {
 
     it('resolves friend IDs in both sender and receiver direction', async () => {
       const prisma = {
+        userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
         friendRequest: {
           findMany: jest.fn<any>().mockResolvedValue([
             { senderId: FRIEND_ID_1, receiverId: AUTHOR_ID },
             { senderId: AUTHOR_ID, receiverId: FRIEND_ID_2 },
           ]),
         },
+        user: { findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(null) },
       } as unknown as PrismaClient;
       const { handler, io } = buildHandler({ prisma });
 
@@ -266,8 +272,10 @@ describe('SocialEventsHandler', () => {
 
       const emitFn = io.to.mock.results[0].value.emit;
       const [event, payload] = (emitFn as jest.Mock<any>).mock.calls[0] as [string, unknown];
+      // La première émission va à un AMI : la publication, sans sa liste d'audience (#7407).
+      const { visibilityUserIds: _auteurSeul, ...servieAuxAmis } = post;
       expect(event).toBe('post:created');
-      expect(payload).toMatchObject({ post, clientMutationId });
+      expect(payload).toEqual({ post: servieAuxAmis, clientMutationId });
     });
 
     it('filters PRIVATE visibility — emits only to author', async () => {
@@ -316,6 +324,22 @@ describe('SocialEventsHandler', () => {
       expect(roomsArg).toContain(`feed:${FRIEND_ID_2}`);
       expect(roomsArg).toContain(`feed:${AUTHOR_ID}`);
       expect(roomsArg).toContain(`post:${POST_ID}`);
+
+      // **L'ACTEUR reçoit son propre écho** (retour porteur 2026-09-13 : « le
+      // like n'est pas synchronisé entre les différentes vues »).
+      //
+      // `USER_ID` n'est NI l'auteur NI l'un des deux amis : c'est exactement le
+      // rang sur lequel ce témoin doit porter. Sur un acteur AMI, la règle
+      // fautive et la règle juste rendent le même verdict — il serait vert sans
+      // rien garder (leçon 261 du dépôt : un témoin de RANG s'écrit sur un rang
+      // AUTRE que le premier).
+      //
+      // Ce que fermait son absence : le fil sert des posts PUBLICS d'inconnus
+      // (`buildPostVisibilityOrFilter`). Aimer l'un d'eux depuis le fil
+      // n'émettait donc AUCUN événement vers l'auteur du geste — et l'écho
+      // serveur est le seul pont entre l'état optimiste de la vue et le modèle
+      // que la surface suivante lira.
+      expect(roomsArg).toContain(`feed:${USER_ID}`);
     });
 
     it('emits single event to all rooms (no duplicate delivery)', async () => {
@@ -338,6 +362,14 @@ describe('SocialEventsHandler', () => {
       const roomsArg = (io.to as jest.Mock<any>).mock.calls[0][0] as string[];
       expect(roomsArg).toContain(`post:${POST_ID}`);
       expect(roomsArg).toContain(`feed:${AUTHOR_ID}`);
+
+      // Le RETRAIT du like a la même audience que sa pose. Le témoin est écrit
+      // à part de celui du like parce que les deux passent par des appels
+      // DISTINCTS à `emitToFeedsAndPostRoom` : rendre le premier vert ne dit
+      // rien du second, et l'asymétrie qu'on corrige ici — l'un des deux
+      // appels portant l'acteur et pas l'autre — laisserait le cœur se
+      // rallumer tout seul en changeant de vue.
+      expect(roomsArg).toContain(`feed:${USER_ID}`);
     });
   });
 
@@ -629,6 +661,29 @@ describe('SocialEventsHandler', () => {
       expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
       expect(rooms).toContain(`feed:${AUTHOR_ID}`);
     });
+
+    /**
+     * #7395 — le lecteur d'une publication PUBLIQUE qui n'est pas ami de son
+     * auteur n'est dans AUCUNE feed room de l'audience : seule la post room,
+     * rejointe à l'ouverture de la fiche, le relie à la publication. Sa jumelle
+     * `broadcastMediaCaptionTranslationUpdated` l'atteignait déjà ; le TEXTE
+     * traduit ne l'atteignait jamais. Une émission UNIQUE sur l'union des rooms :
+     * l'ami qui a aussi ouvert la fiche la reçoit une fois, pas deux.
+     */
+    it('reaches the post room too, in ONE emission — the non-friend reader of a public post receives the translated text (#7395)', async () => {
+      const { handler, io } = buildHandler();
+      const data: PostTranslationUpdatedEventData = {
+        postId: POST_ID,
+        language: 'fr',
+        translation: { text: 'Bonjour', translationModel: 'nllb-200', createdAt: '2026-09-22T10:00:00.000Z' },
+      };
+
+      await handler.broadcastPostTranslationUpdated(data, AUTHOR_ID, 'PUBLIC', []);
+
+      expect(emittedRooms(io)).toContain(`post:${POST_ID}`);
+      expect(io.to).toHaveBeenCalledTimes(1);
+      expect(emitCalls(io)).toEqual([['post:translation-updated', data]]);
+    });
   });
 
   describe('broadcastCommentDeleted', () => {
@@ -667,6 +722,58 @@ describe('SocialEventsHandler', () => {
     });
   });
 
+  describe('broadcastMediaCaptionTranslationUpdated (#6280)', () => {
+    const translation = { text: 'Hello world', translationModel: 'nllb', confidenceScore: 0.9, createdAt: '2026-09-14T00:00:00.000Z' };
+
+    it('emits media:caption-translation-updated to feed rooms and post room for a POST-attached media', async () => {
+      const { handler, io } = buildHandler();
+      const data = { mediaId: 'media-1', postId: POST_ID, language: 'en', translation } as any;
+
+      await handler.broadcastMediaCaptionTranslationUpdated(data, AUTHOR_ID, 'PUBLIC', []);
+
+      const rooms = emittedRooms(io);
+      expect(rooms.some((r: string) => r.includes('post:'))).toBe(true);
+      expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
+    });
+
+    it('uses the comment broadcast rooms when the media belongs to a comment', async () => {
+      const { handler, io } = buildHandler();
+      const data = { mediaId: 'media-1', postId: POST_ID, commentId: COMMENT_ID, language: 'en', translation } as any;
+
+      await handler.broadcastMediaCaptionTranslationUpdated(data, AUTHOR_ID, 'PUBLIC', []);
+
+      const rooms = emittedRooms(io);
+      expect(rooms.some((r: string) => r.includes('post:'))).toBe(true);
+      expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
+    });
+  });
+
+  describe('broadcastMediaAltTranslationUpdated (#6737)', () => {
+    const translation = { text: 'Hello world', translationModel: 'nllb', confidenceScore: 0.9, createdAt: '2026-09-14T00:00:00.000Z' };
+
+    it('emits media:alt-translation-updated to feed rooms and post room for a POST-attached media', async () => {
+      const { handler, io } = buildHandler();
+      const data = { mediaId: 'media-1', postId: POST_ID, language: 'en', translation } as any;
+
+      await handler.broadcastMediaAltTranslationUpdated(data, AUTHOR_ID, 'PUBLIC', []);
+
+      const rooms = emittedRooms(io);
+      expect(rooms.some((r: string) => r.includes('post:'))).toBe(true);
+      expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
+    });
+
+    it('uses the comment broadcast rooms when the media belongs to a comment', async () => {
+      const { handler, io } = buildHandler();
+      const data = { mediaId: 'media-1', postId: POST_ID, commentId: COMMENT_ID, language: 'en', translation } as any;
+
+      await handler.broadcastMediaAltTranslationUpdated(data, AUTHOR_ID, 'PUBLIC', []);
+
+      const rooms = emittedRooms(io);
+      expect(rooms.some((r: string) => r.includes('post:'))).toBe(true);
+      expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
+    });
+  });
+
   describe('broadcastPostReposted', () => {
     it('emits post:reposted to visibility-filtered feed rooms', async () => {
       const { handler, io } = buildHandler();
@@ -696,6 +803,7 @@ describe('SocialEventsHandler', () => {
   describe('friends cache eviction', () => {
     it('evicts oldest entry when cache reaches 500 entries', async () => {
       const prisma = {
+        userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
         friendRequest: {
           findMany: jest.fn<any>().mockResolvedValue([]),
         },

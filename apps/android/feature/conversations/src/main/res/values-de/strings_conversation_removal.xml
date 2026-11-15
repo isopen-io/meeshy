@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_removal_refused_delete">Die Unterhaltung konnte nicht gelöscht werden. Sie ist wieder in deiner Liste.</string>
+</resources>

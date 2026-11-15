@@ -26,7 +26,7 @@ final class VideoLaneCohabitationSnapshotTests: XCTestCase {
 
         // Préchauffe le cache : la `.task` de la barre relira la même clé et
         // aboutira sans attendre un second décodage.
-        let warm = await AudioWaveform.samples(url: tone, count: 128)
+        let warm = (try? await WaveformCache.shared.samples(from: tone, count: 128)) ?? []
         XCTAssertFalse(warm.isEmpty, "Le fixture doit porter une piste audio lisible")
 
         let bar = VideoClipBar(
@@ -76,7 +76,7 @@ final class VideoLaneCohabitationSnapshotTests: XCTestCase {
     func test_snapshot_videoLane_flatCurveStaysOutOfTheTitleBand() async throws {
         let tone = try Self.makeTremoloFile(seconds: 4)
         defer { try? FileManager.default.removeItem(at: tone) }
-        _ = await AudioWaveform.samples(url: tone, count: 128)
+        _ = (try? await WaveformCache.shared.samples(from: tone, count: 128)) ?? []
 
         let bar = VideoClipBar(
             clipId: "clip-2",

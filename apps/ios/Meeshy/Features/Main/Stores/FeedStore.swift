@@ -2,12 +2,6 @@
 
 import Foundation
 import Combine
-// `@preconcurrency` relaxes Swift 6 strict concurrency interop checks for the
-// GRDB module. Without it, the runtime injects `_swift_task_checkIsolatedSwift`
-// at the invocation of @Sendable closures we pass to GRDB observation APIs,
-// which then aborts because GRDB calls the closure from its own reader/writer
-// dispatch queue (not from any actor's executor).
-@preconcurrency import GRDB
 import MeeshySDK
 
 /// Sendable weak-reference box. Used to capture a weak reference to a
@@ -22,26 +16,25 @@ import MeeshySDK
 /// `deinit` under Release `-O -whole-module-optimization` (Xcode Cloud
 /// archive). Keep typed on the concrete `FeedStore`.
 private final class FeedStoreWeakBox: @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     weak var value: FeedStore?
     init(_ value: FeedStore) { self.value = value }
 }
 
-/// Fetches the feed page synchronously on the calling actor. Declared at
-/// file scope so the closure passed to `reader.read` doesn't inherit any
-/// actor isolation context, which would trigger Swift 6 strict concurrency
-/// runtime checks at GRDB invocation (same workaround as `MessageStore`'s
-/// `fetchMessageWindow`).
-private func fetchFeedPosts(reader: any DatabaseWriter, limit: Int) throws -> [PostRecord] {
-    try reader.read { db in
-        try PostRecord.order(Column("createdAt").desc).limit(limit).fetchAll(db)
-    }
-}
-
 @MainActor
 public final class FeedStore: ObservableObject {
-    @Published private(set) var posts: [PostRecord] = []
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
+    private(set) var posts: [PostRecord] = []
     private let persistence: FeedPersistenceActor
-    private var regionCancellable: AnyDatabaseCancellable?
+    private var regionCancellable: AnyCancellable?
 
     let postsDidChange = PassthroughSubject<Void, Never>()
 
@@ -51,7 +44,7 @@ public final class FeedStore: ObservableObject {
 
     // MARK: - Observation
 
-    func startObserving(dbPool: any DatabaseWriter) {
+    func startObserving() {
         stopObserving()
 
         // GRDB `ValueObservation` / `DatabaseRegionObservation` crash under
@@ -79,10 +72,9 @@ public final class FeedStore: ObservableObject {
                 await store.refreshFromDB()
             }
         }
-        regionCancellable = AnyDatabaseCancellable {
+        regionCancellable = AnyCancellable {
             NotificationCenter.default.removeObserver(observer)
         }
-        _ = dbPool // signature parity with previous API; pool no longer needed
     }
 
     func stopObserving() {
@@ -90,22 +82,24 @@ public final class FeedStore: ObservableObject {
     }
 
     private var loadedCount = 50
+    private var refreshGeneration = 0
 
     // MARK: - Off-main DB read
 
+    /// Runs after EVERY feed commit (likes, comments, translations) and on each
+    /// pagination step, re-reading and decoding the whole loaded window — off
+    /// the main thread, so a socket burst no longer hitches the feed scroll.
+    /// Generation guard: refreshes can now interleave across the await, and
+    /// only the most recent request may publish.
     private func refreshFromDB() async {
-        let reader = persistence.reader
+        let persistence = persistence
         let limit = loadedCount
-        // Read on the calling actor (MainActor). Direct reads via GRDB are
-        // fast (a single indexed SELECT) and avoid the Swift 6 strict
-        // concurrency closure-isolation crash that hit
-        // `Task.detached + reader.read` combinations.
-        let newPosts: [PostRecord]
-        do {
-            newPosts = try fetchFeedPosts(reader: reader, limit: limit)
-        } catch {
-            return
-        }
+        refreshGeneration &+= 1
+        let generation = refreshGeneration
+        let fetched: Result<[PostRecord], any Error> = await Task.detached(priority: .userInitiated) {
+            Result { try persistence.posts(limit: limit) }
+        }.value
+        guard generation == refreshGeneration, case .success(let newPosts) = fetched else { return }
         guard newPosts != posts else { return }
         posts = newPosts
         postsDidChange.send()

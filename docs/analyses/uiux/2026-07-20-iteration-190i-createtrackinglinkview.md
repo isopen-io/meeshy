@@ -2,7 +2,7 @@
 
 **Date**: 2026-07-20
 **Scope**: iOS-only
-**Target**: `apps/ios/Meeshy/Features/Main/Views/CreateTrackingLinkView.swift`
+**Target**: `apps/ios/Meeshy/Features/Links/Views/CreateTrackingLinkView.swift`
 **Type**: Accessibility (VoiceOver) + HIG feedback
 **Statut**: ✅ Résolu — PR à venir (gate CI « iOS Tests »)
 
@@ -62,7 +62,7 @@ Réutilise `accessibility.section_expanded` / `accessibility.section_collapsed`.
 
 ## Fichiers
 
-- `apps/ios/Meeshy/Features/Main/Views/CreateTrackingLinkView.swift` (+26 / −3)
+- `apps/ios/Meeshy/Features/Links/Views/CreateTrackingLinkView.swift` (+26 / −3)
 - `apps/ios/Meeshy/Localizable.xcstrings` (+175, 5 clés)
 
 ## Vérification

@@ -1,0 +1,145 @@
+/**
+ * Poser et retirer l'étoile PERSONNELLE d'un lecteur sur un message (#7377).
+ *
+ * POSER juge le droit de lire à la participation COURANTE (règle 1) et le
+ * verdict du message (règle 2) — `starredMessageVerdict.ts`, le même que la
+ * liste. RETIRER ne juge rien : l'appelant ne touche que SA ligne, adressée
+ * par `(userId, messageId)`, et on peut toujours défaire ce qu'on a fait
+ * (même lecture que `routes/posts/bookmarks.ts`).
+ *
+ * Le verdict étant le MÊME que celui de la liste, l'horloge l'est aussi
+ * (#16604) : la pose lit l'échéance de l'éphémère POUR CE POSEUR. Corriger la
+ * seule lecture aurait créé la divergence que `starredMessageVerdict.ts`
+ * existe pour interdire — on aurait pu étoiler, avec succès, une flamme déjà
+ * morte chez soi, pour une ligne que la liste ne servirait jamais.
+ *
+ * La lecture est CIBLÉE (`readEphemeralReaderResolution`, #9579), jamais le
+ * balayage plafonné d'une page : une porte qui décide seule ne peut pas lire
+ * « ligne absente d'une tranche tronquée » comme « décompte pas démarré ». Et
+ * elle PROPAGE : une échéance illisible n'est pas une échéance absente, et la
+ * pose refuse déjà en propageant les lectures de la loi de lecture — un 404
+ * mentirait en disant « n'existe pas » là où rien n'a été prouvé.
+ */
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
+
+import { readEphemeralReaderResolution } from '../../../routes/conversations/ephemeralReaderDeadlines';
+import { readerParticipationForMessage } from '../messageReadAccess';
+import { starredMessageVerdict } from './starredMessageVerdict';
+import { refusesContentGesture } from '../captureNoticeVisibility';
+
+/** Ce que la pose rend — la route en dérive le statut, jamais l'inverse. */
+export type StarOutcome =
+  | { readonly kind: 'starred'; readonly messageId: string; readonly conversationId: string; readonly starredAt: Date }
+  | { readonly kind: 'not-found' }
+  | { readonly kind: 'not-starrable' };
+
+/** Ce que le retrait rend — `removed: null` quand il n'y avait rien à retirer. */
+export type UnstarOutcome = { readonly removed: { readonly conversationId: string } | null };
+
+const NOT_FOUND: StarOutcome = { kind: 'not-found' };
+const NOT_STARRABLE: StarOutcome = { kind: 'not-starrable' };
+
+/** Seules les colonnes du verdict et de la participation — aucun contenu. */
+const STAR_ADMISSION_MESSAGE_SELECT = {
+  id: true,
+  conversationId: true,
+  // #16604 — l'auteur ne décompte pas comme ses destinataires, et c'est la
+  // durée (avec le bit flamme-œil) qui fait l'échéance par lecteur.
+  senderId: true,
+  messageType: true,
+  metadata: true,
+  createdAt: true,
+  deletedAt: true,
+  expiresAt: true,
+  ephemeralDuration: true,
+  isViewOnce: true,
+  isBlurred: true,
+  isEncrypted: true,
+  effectFlags: true,
+} as const;
+
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: string }).code === 'P2002';
+}
+
+export class MessageStarWriter {
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly now: () => Date = () => new Date(),
+  ) {}
+
+  async star(userId: string, messageId: string): Promise<StarOutcome> {
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      select: STAR_ADMISSION_MESSAGE_SELECT,
+    });
+    if (!message) return NOT_FOUND;
+
+    // Le droit de LIRE avant le verdict : un 409 « vue unique » dirait à un
+    // non-participant qu'un tel message existe dans une conversation qui lui
+    // est fermée. Tous les refus qui précèdent sont donc un même 404. La loi
+    // de lecture — participation courante, lien de partage, plancher,
+    // masquage personnel — vit dans `messageReadAccess.ts` : c'est la même
+    // que celle d'un transfert (#9579), jamais une seconde écriture.
+    const now = this.now();
+    const participation = await readerParticipationForMessage(this.prisma, {
+      reader: { kind: 'user', userId },
+      message,
+      now,
+      // Décision #7377 : le masquage personnel est une courtoisie, illisible il sert.
+      whenHidingUnreadable: 'serve',
+    });
+    if (!participation) return NOT_FOUND;
+
+    // La ligne du poseur DANS la conversation du message est la clé de ses
+    // accusés : c'est elle, et pas son compte, qui porte `D(u)`.
+    const ephemeralReader = await readEphemeralReaderResolution(this.prisma, message, participation.id);
+    const verdict = starredMessageVerdict(message, { now, ephemeralReader });
+    if (verdict === 'gone') return NOT_FOUND;
+    if (verdict === 'view-once') return NOT_STARRABLE;
+    // #9629 — un avis de capture n'est pas un contenu : il ne rejoint pas une
+    // liste transversale de favoris, qui lui survivrait.
+    if (refusesContentGesture(message)) return NOT_STARRABLE;
+
+    const star = await this.placeStar(userId, message.id, message.conversationId);
+    return { kind: 'starred', messageId: message.id, conversationId: star.conversationId, starredAt: star.createdAt };
+  }
+
+  async unstar(userId: string, messageId: string): Promise<UnstarOutcome> {
+    const existing = await this.prisma.messageStar.findUnique({
+      where: { userId_messageId: { userId, messageId } },
+      select: { conversationId: true },
+    });
+    if (!existing) return { removed: null };
+
+    // `deleteMany`, jamais `delete` : un retrait concurrent (deux appareils)
+    // ne doit pas lever. Seul ce qui a RÉELLEMENT été retiré est annoncé.
+    const { count } = await this.prisma.messageStar.deleteMany({ where: { userId, messageId } });
+    return { removed: count > 0 ? { conversationId: existing.conversationId } : null };
+  }
+
+  /**
+   * Créer, et relire sur une violation d'unicité — jamais un `upsert` : reposer
+   * une étoile ne doit pas déplacer sa date, qui ordonne la liste.
+   */
+  private async placeStar(
+    userId: string,
+    messageId: string,
+    conversationId: string,
+  ): Promise<{ readonly conversationId: string; readonly createdAt: Date }> {
+    try {
+      return await this.prisma.messageStar.create({
+        data: { userId, messageId, conversationId },
+        select: { conversationId: true, createdAt: true },
+      });
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+      const existing = await this.prisma.messageStar.findUnique({
+        where: { userId_messageId: { userId, messageId } },
+        select: { conversationId: true, createdAt: true },
+      });
+      if (!existing) throw error;
+      return existing;
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:profile": {
+      "resDir": "feature/profile/src/main/res",
+      "entries": [
+        {"catalog": "ui", "iosKey": "profile.section.about", "status": "adopted"},
+        {"catalog": "ui", "iosKey": "profile.section.actions", "status": "adopted"},
+        {"catalog": "ui", "iosKey": "profile.e2ee.enabled", "status": "adopted"},
+        {"catalog": "ui", "iosKey": "profile.voice.title", "status": "adopted"},
+        {"catalog": "ui", "iosKey": "profile.stats.memberSince", "status": "adopted"},
+        {"catalog": "ui", "iosKey": "profile.stats.messagesShort", "status": "adopted"},
+        {"catalog": "ui", "iosKey": "profile.stats.daysShort", "status": "adopted"},
+        {"androidName": "profile_details_stats_loading", "status": "android-only"}
+      ]
+    }
+  }
+}

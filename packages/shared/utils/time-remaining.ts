@@ -17,8 +17,10 @@
  * Une borne NON FINIE (`NaN`, `±Infinity`) retombe elle aussi sur `null` — un `expiresAt` absent
  * ou malformé atteint cette loi via `new Date(x).getTime()` (`new Date(undefined) → NaN`), et sans
  * cette garde l'arithmétique fuyait un `"NaNm"`/`"Infinityh"` visible à l'écran au lieu du repli
- * « pas de compte à rebours ». Même garde `Number.isFinite` que ses jumelles `formatClock`
- * (`duration-format.ts`) et `isExpired` (`apps/web/utils/time-remaining.ts`, date invalide → `false`).
+ * « pas de compte à rebours ». Même garde `Number.isFinite` que sa jumelle `formatClock`
+ * (`duration-format.ts`). Elle en a eu une seconde, `isExpired` (`apps/web/utils/time-remaining.ts`,
+ * date invalide → `false`) : ce fichier est parti avec le tronc Next.js hérité (#7725) et aucun
+ * `isExpired` ne l'a remplacé — ni ici, ni dans `apps/web/src`. Inutile de le chercher.
  *
  * Un reste strictement positif mais sous la minute (`0 < diff < 60 s`) est arrondi à `1m` — jamais
  * `0m` : `null` (déjà "Expiré") est la seule sémantique du zéro. Une story dans sa dernière minute

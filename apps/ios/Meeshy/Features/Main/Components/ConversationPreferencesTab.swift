@@ -1,68 +1,34 @@
 import SwiftUI
 import MeeshySDK
 import MeeshyUI
-import Combine
-import os
-
-// MARK: - User Search Models (Preferences)
-
-private struct PrefsUserSearchResult: Identifiable, Decodable {
-    let id: String
-    let username: String
-    let firstName: String?
-    let lastName: String?
-    let displayName: String?
-    let avatar: String?
-    let isOnline: Bool?
-
-    var name: String {
-        displayName ?? [firstName, lastName].compactMap { $0 }.joined(separator: " ").prefsIfEmptyFallback(username)
-    }
-}
-
-private extension String {
-    func prefsIfEmptyFallback(_ fallback: String) -> String {
-        isEmpty ? fallback : self
-    }
-}
-
-private struct PrefsUserSearchResponse: Decodable {
-    let success: Bool
-    let data: [PrefsUserSearchResult]
-}
 
 // MARK: - ConversationPreferencesTab
 
 struct ConversationPreferencesTab: View {
     let conversation: Conversation
-    let participants: [PaginatedParticipant]
     let accentColor: String
 
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
-    @EnvironmentObject private var statusViewModel: StatusViewModel
     @Environment(\.dismiss) private var dismiss
+    /// La liste de la fenêtre : « Rendre obsolète » y retire la ligne d'un geste (#14645).
+    @Environment(\.meeshyConversationList) private var conversationList
 
     @StateObject private var viewModel: ConversationOptionsViewModel
 
     @State private var showArchiveConfirm: Bool = false
     @State private var showLeaveConfirm: Bool = false
     @State private var showDeleteConfirm: Bool = false
+    @State private var showObsoleteConfirm: Bool = false
+    /// Les gestes rares (archiver, quitter, supprimer, rendre obsolète) sont rangés derrière « Plus » (épure #18078, règle 6).
+    @State private var showMoreActions: Bool = false
     @State private var showEmojiPicker: Bool = false
+    @State private var showAppearanceSheet: Bool = false
     @State private var customNameLocal: String = ""
 
-    @State private var memberSearchQuery: String = ""
-    @State private var platformSearchResults: [PrefsUserSearchResult] = []
-    @State private var isSearchingPlatform: Bool = false
-    @State private var addingUserId: String? = nil
-    @State private var addedUserIds: Set<String> = []
-    @State private var memberCancellable: AnyCancellable?
-
-    private let memberSearchSubject = PassthroughSubject<String, Never>()
-
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-prefs")
-    private var presenceManager: PresenceManager { PresenceManager.shared }
+    /// Le séparateur part du texte des lignes, pas de leur icône.
+    private static let rowDividerInset: CGFloat = 54
 
     private var isDirect: Bool { conversation.type == .direct }
     private var isCreator: Bool { conversation.currentUserRole?.lowercased() == "creator" }
@@ -70,33 +36,20 @@ struct ConversationPreferencesTab: View {
 
     private var canLeave: Bool { !isDirect && !isCreator }
 
-    private var canManageMembers: Bool {
-        guard let role = conversation.currentUserRole?.lowercased() else { return false }
-        return ["creator", "admin", "moderator"].contains(role)
+    /// La porte de la passerelle (#14645), lue sur la même loi que le menu de la liste.
+    private var canMakeObsolete: Bool {
+        conversationList != nil
+            && ConversationRowMenuCapabilities.make(conversation: conversation, currentUser: AuthManager.shared.currentUser).obsolete
     }
 
-    private var filteredParticipants: [PaginatedParticipant] {
-        let trimmed = memberSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !trimmed.isEmpty else { return participants }
-        return participants.filter { p in
-            p.name.lowercased().contains(trimmed) ||
-            (p.username?.lowercased().contains(trimmed) ?? false)
-        }
-    }
-
-    private var existingMemberIds: Set<String> {
-        Set(participants.compactMap(\.userId))
-    }
-
-    init(conversation: Conversation, participants: [PaginatedParticipant], accentColor: String) {
+    init(conversation: Conversation, accentColor: String) {
         self.conversation = conversation
-        self.participants = participants
         self.accentColor = accentColor
         self._viewModel = StateObject(wrappedValue: ConversationOptionsViewModel(conversation: conversation))
     }
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             if viewModel.loadState == .loading && viewModel.prefs.tags == nil {
                 ProgressView()
                     .frame(maxWidth: .infinity, minHeight: 200)
@@ -104,79 +57,87 @@ struct ConversationPreferencesTab: View {
                 displaySection
                 organizationSection
                 notificationsSection
+                if let peer = ConversationRowListening.userId(for: conversation) {
+                    BatteryReceiveModeSection(userId: peer, accentColor: accentColor)
+                }
                 actionsSection
             }
 
             if let error = viewModel.errorMessage {
                 Text(error)
-                    .font(MeeshyFont.relative(13))
-                    .foregroundColor(MeeshyColors.error)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
+                    .foregroundStyle(MeeshyColors.error)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, MeeshySpacing.xl)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
-        .padding(.bottom, 32)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.top, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.xxxl)
         .task {
             await viewModel.load()
             customNameLocal = viewModel.prefs.customName ?? ""
         }
-        .onAppear { setupMemberSearchDebounce() }
         .adaptiveOnChange(of: viewModel.didDelete) { _, deleted in if deleted { dismiss() } }
         .adaptiveOnChange(of: viewModel.didLeave) { _, left in if left { dismiss() } }
         .alert(
-            (viewModel.prefs.isArchived ?? false) ? String(localized: "conversation.prefs.unarchive.title", defaultValue: "Unarchive conversation?", bundle: .main) : String(localized: "conversation.prefs.archive.title", defaultValue: "Archive conversation?", bundle: .main),
+            (viewModel.prefs.isArchived ?? false) ? String(localized: "conversation.prefs.unarchive.title", defaultValue: "Désarchiver la conversation ?", bundle: .main) : String(localized: "conversation.prefs.archive.title", defaultValue: "Archiver la conversation ?", bundle: .main),
             isPresented: $showArchiveConfirm
         ) {
-            Button((viewModel.prefs.isArchived ?? false) ? String(localized: "conversation.prefs.unarchive", defaultValue: "Unarchive", bundle: .main) : String(localized: "conversation.prefs.archive", defaultValue: "Archive", bundle: .main),
+            Button((viewModel.prefs.isArchived ?? false) ? String(localized: "conversation.prefs.unarchive", defaultValue: "Désarchiver", bundle: .main) : String(localized: "conversation.prefs.archive", defaultValue: "Archiver", bundle: .main),
                    role: (viewModel.prefs.isArchived ?? false) ? .none : .destructive) {
                 viewModel.toggleArchive()
             }
-            Button(String(localized: "common.cancel", defaultValue: "Cancel", bundle: .main), role: .cancel) {}
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
         }
-        .confirmationDialog(String(localized: "conversation.prefs.leave.title", defaultValue: "Leave conversation?", bundle: .main), isPresented: $showLeaveConfirm, titleVisibility: .visible) {
-            Button(String(localized: "conversation.prefs.leave", defaultValue: "Leave", bundle: .main), role: .destructive) {
+        .confirmationDialog(String(localized: "conversation.prefs.leave.title", defaultValue: "Quitter la conversation ?", bundle: .main), isPresented: $showLeaveConfirm, titleVisibility: .visible) {
+            Button(String(localized: "conversation.prefs.leave", defaultValue: "Quitter", bundle: .main), role: .destructive) {
                 Task { await viewModel.leave() }
             }
-            Button(String(localized: "common.cancel", defaultValue: "Cancel", bundle: .main), role: .cancel) {}
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
         } message: {
-            Text(String(localized: "conversation.prefs.leave.message", defaultValue: "You will no longer receive messages. Your history will remain readable.", bundle: .main))
+            Text(String(localized: "conversation.info.leave.message", defaultValue: "Vous ne recevrez plus de messages ; votre historique reste lisible.", bundle: .main))
         }
-        .confirmationDialog(String(localized: "conversation.prefs.delete.title", defaultValue: "Delete for me?", bundle: .main), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-            Button(String(localized: "common.delete", defaultValue: "Delete", bundle: .main), role: .destructive) {
+        .confirmationDialog(String(localized: "conversation.prefs.delete.title", defaultValue: "Supprimer pour moi", bundle: .main), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), role: .destructive) {
                 Task { await viewModel.deleteForMe() }
             }
-            Button(String(localized: "common.cancel", defaultValue: "Cancel", bundle: .main), role: .cancel) {}
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
         } message: {
-            Text(String(localized: "conversation.prefs.delete.message", defaultValue: "This conversation will be removed from your list. Other members will not be affected.", bundle: .main))
+            Text(String(localized: "conversation.prefs.delete.message", defaultValue: "Retirée définitivement de votre liste ; les autres membres ne sont pas affectés.", bundle: .main))
+        }
+        .confirmationDialog(ConversationObsolescence.confirmationTitle, isPresented: $showObsoleteConfirm, titleVisibility: .visible) {
+            Button(ConversationMenuEntry.obsolete.label, role: .destructive) { makeObsolete() }
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+        } message: {
+            Text(ConversationObsolescence.confirmationMessage(conversationName: conversation.name))
         }
     }
 
     // MARK: - Sections
 
     private var displaySection: some View {
-        settingsSection(title: String(localized: "conversation.prefs.section.display", defaultValue: "My display", bundle: .main), icon: "paintbrush.fill", color: accentColor) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
+        settingsSection(title: String(localized: "conversation.prefs.section.display", defaultValue: "Mon affichage", bundle: .main), icon: "paintbrush.fill", color: accentColor) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
+                HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "pencil")
                         // Decorative glyph in a fixed 28×28 badge — kept fixed (86i doctrine:
                         // a scalable glyph would overflow the fixed frame) + hidden (the label carries the meaning).
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(accent)
+                        .foregroundStyle(accent)
                         .frame(width: 28, height: 28)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(accent.opacity(0.12)))
+                        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(accent.opacity(MeeshyOpacity.light)))
                         .accessibilityHidden(true)
-                    Text(String(localized: "conversation.prefs.custom-name", defaultValue: "Custom name", bundle: .main))
-                        .font(MeeshyFont.relative(13, weight: .semibold))
-                        .foregroundColor(theme.textSecondary)
+                    Text(String(localized: "conversation.prefs.custom-name", defaultValue: "Nom personnalisé", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                        .foregroundStyle(theme.textSecondary)
                 }
 
-                HStack(spacing: 6) {
-                    TextField(String(localized: "conversation.prefs.custom-name.placeholder", defaultValue: "Give this conversation a nickname...", bundle: .main), text: $customNameLocal)
+                HStack(spacing: MeeshySpacing.xsPlus) {
+                    TextField(String(localized: "conversation.prefs.custom-name.placeholder", defaultValue: "Donnez un surnom à cette conversation…", bundle: .main), text: $customNameLocal)
                         .textFieldStyle(.plain)
-                        .font(MeeshyFont.relative(15, weight: .medium))
-                        .foregroundColor(theme.textPrimary)
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
+                        .foregroundStyle(theme.textPrimary)
                         .adaptiveOnChange(of: customNameLocal) { _, newValue in
                             viewModel.setCustomName(newValue)
                         }
@@ -186,51 +147,73 @@ struct ConversationPreferencesTab: View {
                             viewModel.setCustomName("")
                         } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(MeeshyFont.relative(14))
-                                .foregroundColor(theme.textMuted)
+                                .font(MeeshyFont.relative(MeeshyIconSize.sm))
+                                .foregroundStyle(theme.textMuted)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(String(localized: "conversation.prefs.custom-name.clear", defaultValue: "Clear custom name", bundle: .main))
+                        .accessibilityLabel(String(localized: "conversation.prefs.custom-name.clear", defaultValue: "Effacer le nom personnalisé", bundle: .main))
                     }
                 }
-                .padding(12)
+                .padding(MeeshySpacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                        .fill(MeeshyColors.surfaceFill(isDark: isDark))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(theme.textMuted.opacity(0.15), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                        .strokeBorder(theme.textMuted.opacity(MeeshyOpacity.light), lineWidth: 1)
                 )
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.smPlus)
 
-            Divider().padding(.leading, 54).opacity(0.3)
+            Divider().padding(.leading, Self.rowDividerInset).opacity(MeeshyOpacity.medium)
 
             Button {
                 showEmojiPicker = true
             } label: {
                 // Cette « réaction » EST le favori : le filtre « Favoris » de la
                 // liste lit `userState.reaction != nil` — nommée comme telle
-                // (directive 2026-08-21).
                 settingsRow(icon: "star.fill", iconColor: accentColor, title: String(localized: "action.favorite", defaultValue: "Favori", bundle: .main)) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         if let r = viewModel.prefs.reaction, !r.isEmpty {
                             Text(r).font(MeeshyFont.relative(24))
                         } else {
-                            Text(String(localized: "conversation.prefs.reaction.none", defaultValue: "None", bundle: .main))
-                                .font(MeeshyFont.relative(14))
-                                .foregroundColor(theme.textMuted)
+                            Text(String(localized: "conversation.prefs.reaction.none", defaultValue: "Aucune", bundle: .main))
+                                .font(MeeshyFont.relative(MeeshyFont.labelSize))
+                                .foregroundStyle(theme.textMuted)
                         }
                         Image(systemName: "chevron.forward")
                             .font(MeeshyFont.relative(11, weight: .semibold))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                             .accessibilityHidden(true)
                     }
                 }
             }
             .buttonStyle(.plain)
+
+            Divider().padding(.leading, Self.rowDividerInset).opacity(MeeshyOpacity.medium)
+
+            Button {
+                showAppearanceSheet = true
+            } label: {
+                settingsRow(icon: "paintpalette.fill", iconColor: accentColor, title: String(localized: "conversation.appearance.entry.title", defaultValue: "Fond de la conversation", bundle: .main)) {
+                    Image(systemName: "chevron.forward")
+                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        .foregroundStyle(theme.textMuted)
+                        .accessibilityHidden(true)
+                }
+            }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $showAppearanceSheet) {
+                ConversationAppearanceSheet(
+                    conversationId: conversation.id,
+                    initial: conversation.userState.appearance,
+                    accentColor: conversation.colorPalette.primary
+                )
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            }
         }
         .sheet(isPresented: $showEmojiPicker) {
             EmojiPickerSheet(
@@ -251,7 +234,7 @@ struct ConversationPreferencesTab: View {
             settingsToggleRow(
                 icon: "pin.fill",
                 iconColor: MeeshyColors.infoHex,
-                title: String(localized: "conversation.prefs.pin", defaultValue: "Pin", bundle: .main),
+                title: String(localized: "conversation.prefs.pin", defaultValue: "Épingler", bundle: .main),
                 tint: MeeshyColors.info,
                 isOn: Binding(
                     get: { viewModel.prefs.isPinned ?? false },
@@ -259,21 +242,21 @@ struct ConversationPreferencesTab: View {
                 )
             )
 
-            Divider().padding(.leading, 54).opacity(0.3)
+            Divider().padding(.leading, Self.rowDividerInset).opacity(MeeshyOpacity.medium)
 
             // Catégorie
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
+                HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "square.grid.2x2.fill")
                         // Decorative glyph in a fixed 28×28 badge — kept fixed + hidden (86i doctrine).
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(MeeshyColors.info)
+                        .foregroundStyle(MeeshyColors.info)
                         .frame(width: 28, height: 28)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(MeeshyColors.info.opacity(0.12)))
+                        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(MeeshyColors.info.opacity(MeeshyOpacity.light)))
                         .accessibilityHidden(true)
-                    Text(String(localized: "conversation.prefs.category", defaultValue: "Category", bundle: .main))
-                        .font(MeeshyFont.relative(13, weight: .semibold))
-                        .foregroundColor(theme.textSecondary)
+                    Text(String(localized: "conversation.prefs.category", defaultValue: "Catégorie", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                        .foregroundStyle(theme.textSecondary)
                 }
 
                 CategoryPickerField(
@@ -288,24 +271,24 @@ struct ConversationPreferencesTab: View {
                     }
                 )
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.smPlus)
 
-            Divider().padding(.leading, 54).opacity(0.3)
+            Divider().padding(.leading, Self.rowDividerInset).opacity(MeeshyOpacity.medium)
 
             // Tags
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
+                HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "tag.fill")
                         // Decorative glyph in a fixed 28×28 badge — kept fixed + hidden (86i doctrine).
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(MeeshyColors.info)
+                        .foregroundStyle(MeeshyColors.info)
                         .frame(width: 28, height: 28)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(MeeshyColors.info.opacity(0.12)))
+                        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(MeeshyColors.info.opacity(MeeshyOpacity.light)))
                         .accessibilityHidden(true)
-                    Text(String(localized: "conversation.prefs.tags", defaultValue: "Tags", bundle: .main))
-                        .font(MeeshyFont.relative(13, weight: .semibold))
-                        .foregroundColor(theme.textSecondary)
+                    Text(String(localized: "conversation.prefs.tags", defaultValue: "Étiquettes", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                        .foregroundStyle(theme.textSecondary)
                 }
 
                 TagInputField(
@@ -317,16 +300,16 @@ struct ConversationPreferencesTab: View {
                     accentColor: MeeshyColors.info
                 )
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.smPlus)
         }
     }
 
     private var notificationsSection: some View {
-        settingsSection(title: String(localized: "conversation.prefs.section.notifications", defaultValue: "Notifications", bundle: .main), icon: "bell.fill", color: "FF6B6B") {
+        settingsSection(title: String(localized: "conversation.prefs.section.notifications", defaultValue: "Notifications", bundle: .main), icon: "bell.fill", color: MeeshyColors.tileCoralHex) {
             settingsToggleRow(
                 icon: "bell.slash.fill",
-                iconColor: "FF6B6B",
+                iconColor: MeeshyColors.tileCoralHex,
                 title: String(localized: "conversation.prefs.muted", defaultValue: "Muet", bundle: .main),
                 tint: MeeshyColors.error,
                 isOn: Binding(
@@ -334,10 +317,10 @@ struct ConversationPreferencesTab: View {
                     set: { val in viewModel.setMuted(val) }
                 )
             )
-            Divider().padding(.leading, 54).opacity(0.3)
+            Divider().padding(.leading, Self.rowDividerInset).opacity(MeeshyOpacity.medium)
             settingsToggleRow(
                 icon: "at",
-                iconColor: "FF6B6B",
+                iconColor: MeeshyColors.tileCoralHex,
                 title: String(localized: "conversation.prefs.mentions-only", defaultValue: "Mentions seulement", bundle: .main),
                 tint: MeeshyColors.error,
                 isEnabled: !(viewModel.prefs.isMuted ?? false),
@@ -350,42 +333,102 @@ struct ConversationPreferencesTab: View {
     }
 
     private var actionsSection: some View {
-        settingsSection(title: String(localized: "conversation.prefs.section.actions", defaultValue: "Actions", bundle: .main), icon: "ellipsis.circle.fill", color: "6B7280") {
+        settingsCard(color: MeeshyColors.neutral500Hex) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { showMoreActions.toggle() }
+            } label: {
+                settingsRow(
+                    icon: "ellipsis.circle.fill",
+                    iconColor: MeeshyColors.neutral500Hex,
+                    title: String(localized: "conversation.prefs.more", defaultValue: "Plus", bundle: .main)
+                ) {
+                    Image(systemName: "chevron.forward")
+                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        .foregroundStyle(theme.textMuted)
+                        .rotationEffect(.degrees(showMoreActions ? 90 : 0))
+                        .accessibilityHidden(true)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(showMoreActions ? [.isButton, .isSelected] : .isButton)
+            .accessibilityIdentifier("conversation-prefs-more")
+
+            if showMoreActions {
+                Divider().padding(.leading, Self.rowDividerInset).opacity(MeeshyOpacity.medium)
+                moreActions
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var moreActions: some View {
             Button {
                 showArchiveConfirm = true
             } label: {
                 settingsRow(
                     icon: (viewModel.prefs.isArchived ?? false) ? "archivebox.fill" : "archivebox",
-                    iconColor: "F59E0B",
-                    title: (viewModel.prefs.isArchived ?? false) ? String(localized: "conversation.prefs.unarchive", defaultValue: "Unarchive", bundle: .main) : String(localized: "conversation.prefs.archive", defaultValue: "Archive", bundle: .main)
+                    iconColor: MeeshyColors.amber500Hex,
+                    title: (viewModel.prefs.isArchived ?? false) ? String(localized: "conversation.prefs.unarchive", defaultValue: "Désarchiver", bundle: .main) : String(localized: "conversation.prefs.archive", defaultValue: "Archiver", bundle: .main)
                 ) { EmptyView() }
-                .foregroundColor(MeeshyColors.warning)
+                .foregroundStyle(MeeshyColors.warning)
             }
             .buttonStyle(.plain)
 
             if canLeave {
-                Divider().padding(.leading, 54).opacity(0.3)
+                Divider().padding(.leading, Self.rowDividerInset).opacity(MeeshyOpacity.medium)
                 Button {
                     showLeaveConfirm = true
                 } label: {
-                    settingsRow(icon: "rectangle.portrait.and.arrow.right", iconColor: "F97316", title: String(localized: "conversation.prefs.leave-group", defaultValue: "Quitter le groupe", bundle: .main)) {
+                    settingsRow(icon: "rectangle.portrait.and.arrow.right", iconColor: MeeshyColors.orange500Hex, title: String(localized: "conversation.prefs.leave-group", defaultValue: "Quitter le groupe", bundle: .main)) {
                         EmptyView()
                     }
-                    .foregroundColor(MeeshyColors.warning)
+                    .foregroundStyle(MeeshyColors.warning)
                 }
                 .buttonStyle(.plain)
             }
 
-            Divider().padding(.leading, 54).opacity(0.3)
+            Divider().padding(.leading, Self.rowDividerInset).opacity(MeeshyOpacity.medium)
             Button {
                 showDeleteConfirm = true
             } label: {
-                settingsRow(icon: "trash.fill", iconColor: "F87171", title: String(localized: "conversation.prefs.delete-for-me", defaultValue: "Supprimer pour moi", bundle: .main)) {
+                settingsRow(icon: "trash.fill", iconColor: MeeshyColors.errorHex, title: String(localized: "conversation.prefs.delete-for-me", defaultValue: "Supprimer pour moi", bundle: .main)) {
                     EmptyView()
                 }
-                .foregroundColor(MeeshyColors.error)
+                .foregroundStyle(MeeshyColors.error)
             }
             .buttonStyle(.plain)
+
+            if canMakeObsolete {
+                Divider().padding(.leading, Self.rowDividerInset).opacity(MeeshyOpacity.medium)
+                Button {
+                    showObsoleteConfirm = true
+                } label: {
+                    settingsRow(icon: ConversationMenuEntry.obsolete.symbol, iconColor: MeeshyColors.errorHex, title: ConversationMenuEntry.obsolete.label) {
+                        EmptyView()
+                    }
+                    .foregroundStyle(MeeshyColors.error)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("conversation-prefs-make-obsolete")
+            }
+    }
+
+    /// Optimiste par la liste : la ligne part au geste, la feuille se referme ;
+    /// l'écran ouvert se ferme à la réception de `conversation:obsoleted`.
+    private func makeObsolete() {
+        guard let conversationList else { return }
+        HapticFeedback.heavy()
+        let conversationId = conversation.id
+        Task {
+            switch await ConversationObsolescence(list: conversationList).perform(conversationId: conversationId) {
+            case .obsoleted:
+                dismiss()
+            case .refused(let refusal):
+                HapticFeedback.error()
+                FeedbackToastManager.shared.showError(refusal.message)
+            case .absent:
+                FeedbackToastManager.shared.showError(ConversationObsolescence.failureMessage)
+            }
         }
     }
 
@@ -397,33 +440,37 @@ struct ConversationPreferencesTab: View {
         color: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: icon)
-                    .font(MeeshyFont.relative(12, weight: .semibold))
-                    .foregroundColor(Color(hex: color))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                    .foregroundStyle(Color(hex: color))
                     .accessibilityHidden(true)
                 Text(title.uppercased())
-                    .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
-                    .foregroundColor(Color(hex: color))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(hex: color))
                     .tracking(1.2)
                     .accessibilityLabel(title)
                     .accessibilityAddTraits(.isHeader)
             }
-            .padding(.leading, 4)
+            .padding(.leading, MeeshySpacing.xs)
 
-            VStack(spacing: 0) {
-                content()
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(theme.surfaceGradient(tint: color))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(theme.border(tint: color), lineWidth: 1)
-                    )
-            )
+            settingsCard(color: color, content: content)
         }
+    }
+
+    private func settingsCard<Content: View>(color: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            content()
+        }
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                .fill(theme.surfaceGradient(tint: color))
+                .overlay(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                        .stroke(theme.border(tint: color), lineWidth: 1)
+                )
+        )
     }
 
     @ViewBuilder
@@ -452,60 +499,21 @@ struct ConversationPreferencesTab: View {
         title: String,
         @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 // Decorative glyph in a fixed 28×28 badge — kept fixed + hidden (86i doctrine).
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(Color(hex: iconColor))
+                .foregroundStyle(Color(hex: iconColor))
                 .frame(width: 28, height: 28)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: iconColor).opacity(0.12)))
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(Color(hex: iconColor).opacity(MeeshyOpacity.light)))
                 .accessibilityHidden(true)
             Text(title)
-                .font(MeeshyFont.relative(15))
-                .foregroundColor(theme.textPrimary)
+                .font(MeeshyFont.relative(MeeshyFont.bodySize))
+                .foregroundStyle(theme.textPrimary)
             Spacer()
             trailing()
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-    }
-
-    // MARK: - Member Search (unchanged behavior)
-
-    private func setupMemberSearchDebounce() {
-        guard memberCancellable == nil else { return }
-        let manage = canManageMembers
-        memberCancellable = memberSearchSubject
-            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
-            .sink { query in
-                guard manage else { return }
-                let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard trimmed.count >= 3 else {
-                    platformSearchResults = []
-                    return
-                }
-                Task { await searchPlatformUsers(query: trimmed) }
-            }
-    }
-
-    private func searchPlatformUsers(query: String) async {
-        isSearchingPlatform = true
-        defer { isSearchingPlatform = false }
-
-        do {
-            let response: PrefsUserSearchResponse = try await APIClient.shared.request(
-                endpoint: "/users/search",
-                queryItems: [
-                    URLQueryItem(name: "q", value: query),
-                    URLQueryItem(name: "limit", value: "10"),
-                ]
-            )
-            if response.success {
-                platformSearchResults = response.data.filter { !existingMemberIds.contains($0.id) && !addedUserIds.contains($0.id) }
-            }
-        } catch {
-            Self.logger.error("Platform user search failed: \(error.localizedDescription)")
-            platformSearchResults = []
-        }
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
     }
 }

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Variantes nuit des surfaces de widgets. -->
+<resources>
+    <color name="widget_surface">#FF0F0D19</color>
+    <color name="widget_brand_surface">#FF4338CA</color>
+    <color name="widget_preview_bar">#FF312E81</color>
+    <color name="widget_preview_brand">#FF818CF8</color>
+    <color name="widget_preview_on_brand">#FFFFFFFF</color>
+</resources>

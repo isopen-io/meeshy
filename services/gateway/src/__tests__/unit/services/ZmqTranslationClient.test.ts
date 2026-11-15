@@ -44,13 +44,16 @@ jest.mock('zeromq', () => ({
   Context: jest.fn().mockImplementation(() => mockContext)
 }));
 
-// Mock crypto for UUID generation
+// UUID figé pour les assertions de taskId — le reste du module reste RÉEL
+// (redactPII hashe les userId loggés via createHash ; un double partiel de
+// crypto ferait tomber tout chemin qui logge un champ PII).
 jest.mock('crypto', () => ({
+  ...jest.requireActual('crypto'),
   randomUUID: jest.fn().mockReturnValue('test-uuid-1234')
 }));
 
-// Mock zmq-helpers for loadAudioAsBinary
 jest.mock('../../../services/zmq-translation/utils/zmq-helpers', () => ({
+  ...jest.requireActual<typeof import('../../../services/zmq-translation/utils/zmq-helpers')>('../../../services/zmq-translation/utils/zmq-helpers'),
   loadAudioAsBinary: jest.fn().mockResolvedValue({
     buffer: Buffer.from('fake-audio-data'),
     mimeType: 'audio/mp3',
@@ -1098,13 +1101,13 @@ describe('ZmqTranslationClient', () => {
       expect(isHealthy).toBe(false);
     });
 
-    it('should return true even when ping send fails (manager swallows ping errors)', async () => {
+    it('should return false when the ping send genuinely fails (#5611)', async () => {
       await client.initialize();
       (mockPushSocket.send as jest.Mock).mockRejectedValueOnce(new Error('Send failed'));
 
       const isHealthy = await client.healthCheck();
 
-      expect(isHealthy).toBe(true);
+      expect(isHealthy).toBe(false);
     });
   });
 
@@ -2440,7 +2443,7 @@ describe('ZmqTranslationClient', () => {
         requests_sent: 100,
         results_received: 95,
         errors_received: 5,
-        pool_full_rejections: 2,
+        pool_full_rejections: 2, translation_skipped: 0,
         avg_response_time: 150,
         uptime_seconds: 3600,
         memory_usage_mb: 128

@@ -81,14 +81,12 @@ Shell script to extract duration using `ffprobe` and update MongoDB.
 
 **Requires:** `ffprobe`, `jq`, `bc`
 
-### 006_remove_encryptionMode_from_message_attachment.js
+### 006_remove_encryptionMode_from_message_attachment.js — RETIRÉE (#12949)
 
-Removes the `encryptionMode` field from `Message` and `MessageAttachment` documents.
-
-**Reason:** `encryptionMode` should only exist at the `Conversation` level.
-The encryption mode is inherited by all messages and attachments in that conversation.
-
-**Safe:** Only removes the field, does not affect other data.
+Elle effaçait `encryptionMode` de `Message` et `MessageAttachment`. `Message.encryptionMode`
+marque aujourd'hui un message chiffré de bout en bout (#12881) : la rejouer retirerait cette
+marque à tout l'historique chiffré. Elle ne fait plus que compter, en lecture seule, et ne
+figure plus dans `run_migrations.sh`.
 
 ### 007_migrate_snake_case_to_camel_case.js
 
@@ -230,6 +228,24 @@ microphone. Nothing in a file, a MIME type or a name distinguishes a photo just
 taken from a photo imported, so any catch-up rule would manufacture a claim
 nobody made. Idempotent — it only touches documents where the field is absent,
 so a re-run never overwrites a declaration a client made in the meantime.
+
+### 014_merge_consent_blob_into_user_columns.js
+
+Merges the five legacy consent keys still living in
+`UserPreferences.application` (`dataProcessingConsentAt`, `voiceDataConsentAt`,
+`voiceProfileConsentAt`, `voiceCloningConsentAt`, `voiceCloningEnabledAt`) into
+the four `User.*ConsentAt` columns that `ConsentValidationService` now reads
+exclusively (#4180, #4348). Uses MongoDB's `$max` update operator per account
+— the larger of the existing column and the blob value wins, so an account
+that had already consented via the column can never regress. After the merge,
+the five keys are removed from `application` (backed up first, per account,
+into `ApplicationConsentBlob_backup_014`).
+
+Dry-run by default (`mongosh <uri> --file 014_…js`): prints the count of
+accounts still carrying a blob key with a `null` column — read this number
+before applying. Pass `APPLIQUER=true` to write
+(`mongosh <uri> --eval 'var APPLIQUER=true' --file 014_…js`). Idempotent: a
+re-run is a no-op once every account is merged and purged.
 
 ## Expected Results After Migration
 

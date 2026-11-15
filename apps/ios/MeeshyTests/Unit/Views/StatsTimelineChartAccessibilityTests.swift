@@ -15,7 +15,7 @@ final class StatsTimelineChartAccessibilityTests: XCTestCase {
             .deletingLastPathComponent() // Unit
             .deletingLastPathComponent() // MeeshyTests
             .deletingLastPathComponent() // apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Views/StatsTimelineChart.swift")
+            .appendingPathComponent("Meeshy/Features/Profile/Views/StatsTimelineChart.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

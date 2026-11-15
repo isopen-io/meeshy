@@ -20,18 +20,22 @@ import MeeshyUI
 /// All inputs are plain values / closures so the row re-evaluates only when
 /// its own inputs change, not on every ConversationListView body pass.
 ///
-/// Menu d'appui long — deux chemins par version d'OS :
-/// - iOS 26+ : `.contextMenu(menuItems:preview:)` NATIF (rendu Liquid Glass
-///   système, exposé automatiquement à VoiceOver). Le contenu vient du
-///   builder `conversationContextMenu(for:)` (+Overlays) via `nativeContextMenu`.
-/// - < iOS 26 : overlay custom (`RowPressBounceModifier` → `onLongPress` →
-///   `ConversationContextMenuView`), avec émergence/morph maison.
+/// Menu d'appui long — deux chemins, tranchés par `ConversationRowMenuRoute` :
+/// - iPhone, toutes versions d'iOS (#17242) : aperçu personnalisé
+///   (`RowPressBounceModifier` → `onLongPress` → `ConversationLongPressPeek`) —
+///   grande carte, menu compact qu'on tire vers le haut, émergence/morph maison.
+/// - iPad sous iOS 26 : `.contextMenu(menuItems:preview:)` NATIF (rendu Liquid
+///   Glass système, exposé automatiquement à VoiceOver), le seul qui coexiste
+///   avec le `.onDrag` système. Le contenu vient du builder
+///   `conversationContextMenu(for:)` (+Overlays) via `nativeContextMenu`.
 struct ConversationRowItem: View {
     let conversation: Conversation
     let community: MeeshyCommunity?
     let rowWidth: CGFloat
     let isDragging: Bool
     let presenceState: PresenceState
+    /// Le pair a l'écran de CETTE conversation ouvert (#8892).
+    let isPeerHere: ConversationHere
     let isDark: Bool
     let storyRingState: StoryRingState
     let moodStatus: StatusEntry?
@@ -40,34 +44,45 @@ struct ConversationRowItem: View {
     let draftSummary: DraftSummary?
     /// B1 (Prisme Linguistique) — viewer preferred languages used to
     /// resolve the last-message preview translation. Passed once from
-    /// the list (`AuthManager.currentUser?.preferredContentLanguages`)
+    /// the list (`ReaderPrism.resolve(for:)`, the reader's strict prism)
     /// instead of read per-row to keep the row equatable.
     let preferredContentLanguages: [String]
-    let cachedPreviewMessages: [Message]
+    /// Empreinte de l'aperçu (ids + `updatedAt` + `deletedAt` + langue servie) :
+    /// un message MODIFIÉ ré-évalue la rangée, le seul nombre de messages, non.
+    let previewFingerprint: ConversationPreviewFingerprint
+    /// Le chargeur de l'aperçu, PAR RÉFÉRENCE : seule la section des messages
+    /// de l'aperçu l'observe (`ConversationPreviewStateReader`), jamais la
+    /// rangée — il ne participe donc pas au `==`.
+    let previewLoader: ConversationListPreviewLoader
     let leadingActions: [SwipeAction]
     let trailingActions: [SwipeAction]
+    /// Le glisser de la ligne commence : la liste replie ses catégories et marque celle d'origine.
+    var onDragBegan: (UUID) -> Void = { _ in }
     let onViewStory: () -> Void
     let onViewProfile: () -> Void
     let onViewConversationInfo: () -> Void
     let onMoodBadgeTap: (CGPoint) -> Void
     let onCreateShareLink: (() -> Void)?
     let onTap: () -> Void
-    let onLoadPreview: () async -> Void
+    /// Charge l'aperçu (#11212) : `.prefetch` pour une rangée visible (cache
+    /// GRDB SEUL, jamais le réseau — l'aperçu natif est déjà servi à sa
+    /// présentation), `.open` quand l'aperçu s'ouvre (ce qui est servi reste,
+    /// le réseau revalide en silence : un message modifié apparaît).
+    let onLoadPreview: @MainActor (ConversationListPreviewLoader.LoadIntent) async -> Void
     /// Gates the opportunistic `.task { onLoadPreview() }` prefetch below to
     /// a bounded PREFIX of the list (`ConversationRowMetrics
     /// .autoPreviewLoadRowLimit`, computed by the caller via
     /// `ConversationListView.shouldAutoLoadPreview`). Without this, EVERY
     /// row firing `.task` on appear meant scrolling through a cold cache
-    /// issued one REST call per newly-visible conversation (audit
-    /// 2026-07-20). Rows past the limit still get their preview populated
+    /// issued one REST call per newly-visible conversation. Rows past the limit still get their preview populated
     /// on-demand via the long-press path (`onLongPress` →
     /// `loadPreviewMessages`, ConversationListView.swift).
     let enableAutoPreviewLoad: Bool
-    /// Fallback < iOS 26 : appui long → overlay de menu custom (dessine ses
-    /// icônes). Reçoit la frame GLOBALE de la ligne pressée — point de départ
+    /// Chemin personnalisé (iPhone, toutes versions d'iOS — #17242) : appui
+    /// long → aperçu `ConversationLongPressPeek`. Reçoit la frame GLOBALE de la ligne pressée — point de départ
     /// de l'émergence de l'aperçu (+Overlays). `.zero` quand la frame n'est
     /// pas connue (action de rotor accessibilité) : l'overlay retombe sur le
-    /// zoom centré 0.7 → 1.0. Jamais appelé sur iOS 26+ (menu natif).
+    /// zoom centré 0.7 → 1.0. Jamais appelé sur la route native (iPad iOS 26).
     let onLongPress: (CGRect) -> Void
     /// Chemin iOS 26+ : items du `.contextMenu` NATIF (rendu Liquid Glass
     /// système), résolus UNE fois à la construction de la row et stockés en
@@ -77,14 +92,14 @@ struct ConversationRowItem: View {
     ///    builder à CHAQUE body pass (mesures LazyVStack comprises) et
     ///    matérialisait un tuple géant (9 items + sous-menus) copié en pleine
     ///    récursion de layout → EXC_BAD_ACCESS `initializeWithCopy for
-    ///    Button` au LANCEMENT sur iOS 26 (crash 2026-07-11, PAC failure).
+    /// Button` au LANCEMENT sur iOS 26 (PAC failure).
     /// 2. Le paramètre générique regonflait le type de la row — la famille
     ///    de crash type-metadata que l'extraction en structs nominales avait
     ///    éliminée (voir l'en-tête du fichier). AnyView est ACCEPTABLE ici,
     ///    contrairement aux rows : un contenu de menu n'a pas d'identité
     ///    structurelle à préserver (reconstruit à l'ouverture du menu).
     /// `EmptyView` boxé sur le chemin fallback < iOS 26 (jamais rendu).
-    /// 2026-08-21 (audit fluidité H3) : une CLOSURE, plus une valeur. La
+    /// (audit fluidité H3): une CLOSURE, plus une valeur. La
     /// valeur était matérialisée par `ConversationListView.conversationRow`
     /// à CHAQUE passe de body de la LISTE (N menus complets par passe, dont
     /// les passes déclenchées par la présence ou la frappe d'autrui). La
@@ -92,7 +107,7 @@ struct ConversationRowItem: View {
     /// portillon `.equatable()` — et son type reste `AnyView` (aucun
     /// paramètre générique : les deux raisons ci-dessus tiennent toujours).
     let nativeContextMenu: () -> AnyView
-    /// MAGNIFICATION EN PLACE (2026-08-23) — les deux magasins d'élection et
+    /// MAGNIFICATION EN PLACE — les deux magasins d'élection et
     /// de scène, PAR RÉFÉRENCE, plus les données/actions dont la rangée élue a
     /// besoin. Ils ne sont jamais LUS ici : c'est `LentilleMagnifiableRow`,
     /// dans son propre fichier, qui s'y abonne (§H15 — ce body ne doit pas se
@@ -101,21 +116,22 @@ struct ConversationRowItem: View {
     let focusElection: LentilleFocusElection
     let sceneActivity: LentilleSceneActivity
     let magnification: LentilleMagnification
+    /// Le clair local du dernier message scellé (#12968) — une VALEUR, lue
+    /// par la liste dans `ConversationListViewModel.endToEndTexts`.
+    var deviceText: ConversationPreviewDeviceText? = nil
 
     var body: some View {
         SwipeableRow(
             leadingActions: leadingActions,
             trailingActions: trailingActions
         ) {
-            if #available(iOS 26.0, *) {
+            if #available(iOS 26.0, *), ConversationRowMenuRoute.current == .native {
                 // Menu contextuel NATIF (Liquid Glass) : le système possède le
                 // long-press, la preview et l'exposition VoiceOver ; l'avatar
-                // garde son propre `.contextMenu` (interaction la plus
-                // profonde), donc un appui maintenu dessus n'ouvre PAS le menu
-                // de la ligne (feedback user 2026-07-08). Le tap d'ouverture
-                // reste un `.onTapGesture` plein-ligne : les gestes internes
-                // de l'avatar (story/profil/mood) restent prioritaires.
-                rowCore
+                // garde son propre `.contextMenu`, donc un appui maintenu dessus
+                // n'ouvre PAS le menu de la ligne. Le
+                // tap plein-ligne laisse la priorité aux gestes de l'avatar.
+                countedRowCore
                     .contentShape(Rectangle())
                     .onTapGesture {
                         HapticFeedback.light()
@@ -123,61 +139,59 @@ struct ConversationRowItem: View {
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityAddTraits(.isButton)
-                    .accessibilityHint(String(localized: "conversation.row.hint", bundle: .main))
+                    .accessibilityHint(String(localized: "conversation.row.hint", bundle: .main)).accessibilityAction { onTap() }
                     // Drag-to-section natif : press-and-hold = menu, press-and-
                     // move = drag — la coordination est SYSTÈME avec le
                     // `.contextMenu` natif. C'est le long-press CUSTOM du
                     // fallback que `.onDrag` cassait (raison de son retrait,
                     // 135af8f2) — il ne doit donc JAMAIS être attaché sur la
-                    // branche < iOS 26. La source ne publie que l'id ; les
+                    // branche personnalisée. La source ne publie que l'id ; les
                     // headers (`SectionDropDelegate` → `handleDrop`) décident
                     // via `ChipDropResolver`, même sémantique que le drop de
                     // la chip du morph custom.
                     .onDrag {
-                        NSItemProvider(object: conversation.id as NSString)
+                        let provider = ConversationDragItemProvider(
+                            conversationId: conversation.id,
+                            title: conversation.name,
+                            opensWindow: UIApplication.shared.supportsMultipleScenes
+                                && ConversationOpenRoute.mayDetach(conversation.id)
+                        )
+                        onDragBegan(provider.token)
+                        return provider
                     }
                     .contextMenu {
                         nativeContextMenu()
                     } preview: {
-                        // Aperçu d'appui long = la carte des DERNIERS MESSAGES
-                        // (bannière, avatar/logo, titre, icônes d'en-tête, fil
-                        // récent) — drapeau Lentille ON comme OFF (décision
-                        // user 2026-08-21 : le menu des modes n'a rien à faire
-                        // dans l'aperçu ; le choix de mode garde ses deux
-                        // portes, l'encoche de la carte de focus et le
-                        // sous-menu « Mode de lecture » du menu). Preview
-                        // STATIQUE (non interactive dans un contextMenu natif)
-                        // — mêmes inputs que l'overlay custom, sans callbacks.
-                        // Largeur pilotée par le call site, comme l'overlay
-                        // (source de vérité unique). Ce closure est
-                        // long-press-only (voir le portillon `.equatable()`
-                        // plus bas), jamais évalué à chaque passe de body.
+                        // Aperçu = la carte des DERNIERS MESSAGES, drapeau Lentille
+                        // ON comme OFF, dessinés dans le mode
+                        // que le fil ouvrirait (#11213). STATIQUE dans un menu
+                        // natif : sans boutons (`isInteractive: false`), qui y
+                        // seraient inertes. Long-press-only (portillon `.equatable()`).
                         ConversationPreviewView(
                             conversation: conversation,
-                            cachedMessages: cachedPreviewMessages,
+                            previewLoader: previewLoader,
                             bannerURL: (conversation.type == .direct ? conversation.participantBanner : conversation.banner)
                                 .flatMap { MeeshyConfig.resolveMediaURL($0) },
                             avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
                             storyState: storyRingState,
                             moodEmoji: moodStatus?.moodEmoji,
                             presenceState: conversation.type == .direct ? presenceState : nil,
-                            isDirect: conversation.type == .direct
+                            isDirect: conversation.type == .direct,
+                            readingMode: LentilleReadingModeContext.listPreviewMode(for: conversation),
+                            isInteractive: false
                         )
-                        .frame(width: 340)
-                        // Les derniers messages se chargent À L'OUVERTURE de
-                        // l'aperçu (au-delà des `autoPreviewLoadRowLimit`
-                        // premières rangées, rien ne les a préchargés) : le
-                        // chargement est idempotent côté VM, et la rangée se
-                        // re-rend sur le compte de messages (`==`), ce qui
-                        // rafraîchit l'aperçu encore présenté.
-                        .task { await onLoadPreview() }
+                        .frame(width: ConversationPreviewWidthLaw.width(rowTextWidth: ConversationRowWidthLaw.textWidth(listWidth: rowWidth, windowWidth: rowWidth, isRegular: false)))
+                        // L'ouverture REVALIDE en silence (#11212) : ce qui est
+                        // servi reste à l'écran, la section des messages
+                        // observe le chargeur et suit le réseau d'elle-même.
+                        .task { await onLoadPreview(.open) }
                     }
                     .task {
                         guard enableAutoPreviewLoad else { return }
-                        await onLoadPreview()
+                        await onLoadPreview(.prefetch)
                     }
             } else {
-                rowCore
+                countedRowCore
                     .accessibilityElement(children: .combine)
                     .accessibilityAddTraits(.isButton)
                     .accessibilityHint(String(localized: "conversation.row.hint", bundle: .main))
@@ -216,17 +230,86 @@ struct ConversationRowItem: View {
                     .modifier(RowPressBounceModifier(onTap: onTap, onTrigger: onLongPress))
                     .task {
                         guard enableAutoPreviewLoad else { return }
-                        await onLoadPreview()
+                        await onLoadPreview(.prefetch)
                     }
             }
         }
+        .overlay(alignment: .leading) { avatarAccessibilityProxy }
+    }
+
+    /// « Rejoindre » depuis la ligne (#7548) — la MÊME revalidation que la
+    /// bulle vivante du fil (`LiveCallJoiner`), jamais une seconde.
+    private func joinLiveCall() {
+        guard let request = LiveCallJoinRequest(
+            conversation: conversation,
+            currentUserId: AuthManager.shared.currentUser?.id ?? ""
+        ) else { return }
+        Task { await LiveCallJoiner.live.join(request) }
+    }
+
+    /// La communauté d'une rangée : l'index de la liste d'abord, la liste
+    /// entière ensuite.
+    static func community(of conversation: Conversation, lookup: [String: MeeshyCommunity], all: [MeeshyCommunity]) -> MeeshyCommunity? {
+        guard conversation.type == .community || conversation.communityId != nil,
+              let communityId = conversation.communityId else { return nil }
+        return lookup[communityId] ?? all.first(where: { $0.id == communityId })
+    }
+
+    /// #11387 — verrouillée par PIN : la rangée ne montre rien de ce que la
+    /// conversation contient. LA décision (`ConversationLockManager
+    /// .hidesContent`) est celle que le chargeur d'aperçu lit : un verrou qui
+    /// bascule fait basculer `previewFingerprint.phase` (`.sealed`), donc le
+    /// portillon `.equatable()` ci-dessous laisse passer la rangée.
+    private var isContentLocked: Bool {
+        ConversationLockManager.shared.hidesContent(of: conversation.id)
+    }
+
+    /// #15887 — ce qu'ouvre le toucher de l'avatar, relu à chaque rendu
+    /// (verrou et blocage, comme `isContentLocked`) par la MÊME loi pour les
+    /// deux rangs ET l'élément VoiceOver : ils disent la même chose.
+    private var avatarRoute: ConversationAvatarRoute {
+        ConversationOpenRoute.avatarRoute(for: conversation)
+    }
+
+    /// L'avatar, bouton À PART pour VoiceOver : un élément frère posé sur la
+    /// RACINE de la ligne, après toute sa chaîne d'accessibilité (fusion,
+    /// indice, action par défaut « ouvrir », menu), qui sinon s'appliquerait à
+    /// lui. Le doigt le traverse jusqu'à l'avatar dessiné.
+    private var avatarAccessibilityProxy: some View {
+        let route = avatarRoute
+        let isDirect = conversation.type == .direct
+        let roles = ConversationAvatarMenu.roles(
+            type: conversation.type, opensProfile: route.opensProfile, hasShareAction: onCreateShareLink != nil
+        )
+        return ConversationRowAvatarAccessibilityProxy(
+            label: ConversationAvatarSpeech.label(
+                route: route,
+                name: conversation.name,
+                moodEmoji: moodStatus?.moodEmoji,
+                isHere: isDirect && isPeerHere.isHere
+            ),
+            actions: ConversationAvatarSpeech.actions(roles: roles, hasStory: isDirect && storyRingState != .none),
+            bandWidth: ConversationRowMetrics.avatarBandWidth(isLentille: LentilleFeatureFlag.isLentilleListEnabled),
+            onActivate: route.opensProfile ? onViewProfile : onViewConversationInfo,
+            perform: { performAvatarAction($0) }
+        )
+    }
+
+    private func performAvatarAction(_ action: ConversationAvatarA11yAction) {
+        let perform: (() -> Void)? = switch action {
+        case .menu(.conversationInfo): onViewConversationInfo
+        case .menu(.profile): onViewProfile
+        case .menu(.shareLink): onCreateShareLink
+        case .viewStory: onViewStory
+        }
+        perform?()
     }
 
     /// Coeur visuel de la ligne, commun aux deux chemins de menu.
     ///
     /// MUX de rang sous drapeau (contrat LWS-7, workshop I-067) : sous
     /// `LentilleFeatureFlag.isLentilleListEnabled` ON, `LentilleConversationRow`
-    /// (rang plat, `Lentille/Row/`) ; OFF, `ThemedConversationRow` (rang
+    /// (rang plat, `Lens/Row/`) ; OFF, `ThemedConversationRow` (rang
     /// historique) — INCHANGÉ, bit-à-bit identique à avant ce lot (mêmes
     /// arguments, même `.equatable()`). `SwipeableRow`, les deux chemins de
     /// menu contextuel OS et le portillon `.equatable()` de
@@ -256,7 +339,7 @@ struct ConversationRowItem: View {
     @ViewBuilder
     private var rowCore: some View {
         if LentilleFeatureFlag.isLentilleListEnabled {
-            // La rangée élue se rend elle-même MAGNIFIÉE (2026-08-23) : plus
+            // La rangée élue se rend elle-même MAGNIFIÉE: plus
             // aucune carte au-dessus d'elle, donc swipe, glisser-déposer et
             // appui long restent les siens, et elle hérite de toutes ses
             // features sans qu'aucune soit recopiée ailleurs. Le portillon
@@ -273,6 +356,7 @@ struct ConversationRowItem: View {
                     availableWidth: rowWidth,
                     isDragging: isDragging,
                     presenceState: presenceState,
+                    isPeerHere: isPeerHere,
                     onViewStory: onViewStory,
                     onViewProfile: onViewProfile,
                     onViewConversationInfo: onViewConversationInfo,
@@ -284,7 +368,11 @@ struct ConversationRowItem: View {
                     typingUsername: typingUsername,
                     isSelected: isSelected,
                     draftSummary: draftSummary,
+                    isContentLocked: isContentLocked,
+                    avatarRoute: avatarRoute,
                     preferredContentLanguages: preferredContentLanguages,
+                    deviceText: deviceText,
+                    onJoinLiveCall: { joinLiveCall() },
                     magnification: context
                 )
             }
@@ -295,6 +383,7 @@ struct ConversationRowItem: View {
                 availableWidth: rowWidth,
                 isDragging: isDragging,
                 presenceState: presenceState,
+                isPeerHere: isPeerHere,
                 onViewStory: onViewStory,
                 onViewProfile: onViewProfile,
                 onViewConversationInfo: onViewConversationInfo,
@@ -306,17 +395,29 @@ struct ConversationRowItem: View {
                 typingUsername: typingUsername,
                 isSelected: isSelected,
                 draftSummary: draftSummary,
-                preferredContentLanguages: preferredContentLanguages
+                isContentLocked: isContentLocked,
+                avatarRoute: avatarRoute,
+                preferredContentLanguages: preferredContentLanguages,
+                deviceText: deviceText,
+                onJoinLiveCall: { joinLiveCall() }
             )
             .equatable()
         }
+    }
+
+    /// #10483 — l'humeur peinte sur l'avatar de la rangée est un affichage de
+    /// cette humeur : une impression à chaque apparition de la rangée. Posée
+    /// AUTOUR du mux, qui reste isolé dans `rowCore`
+    /// (`LentilleRowMuxSourceGuardTests`).
+    private var countedRowCore: some View {
+        rowCore
+            .countsImpression(of: moodStatus?.id) { SharedImpressionBatchers.moodAvatar.record($0) }
     }
 }
 
 // MARK: - Contexte de passe (résolu UNE fois par passe de body de la liste)
 
-/// Ce que chaque rangée lirait sinon par elle-même à chaque passe (audit
-/// fluidité 2026-08-21, H4/H18) : les langues du lecteur (copie de tableau par
+/// Ce que chaque rangée lirait sinon par elle-même à chaque passe (H4/H18): les langues du lecteur (copie de tableau par
 /// rang) et l'éligibilité à l'auto-chargement d'aperçu (`firstIndex` O(n) par
 /// rang ⇒ O(n²) par passe). `autoPreviewIds` applique la MÊME règle que
 /// `ConversationListView.shouldAutoLoadPreview` (préfixe `limit` de l'ordre
@@ -339,10 +440,19 @@ struct ConversationRowPassContext {
 /// .ringSize`). Les gestes tap/long-press de la LIGNE n'écoutent pas cette
 /// bande — l'avatar y possède ses propres gestes (tap story/profil, badge
 /// mood, menu contextuel) et un appui maintenu dessus ne doit PAS ouvrir le
-/// menu de la ligne (feedback user 2026-07-08).
+/// menu de la ligne.
 enum ConversationRowMetrics {
     static let avatarInteractionExclusionWidth: CGFloat =
         MeeshySpacing.md + AvatarContext.conversationList.ringSize
+
+    /// La bande de l'élément VoiceOver de l'avatar (#15887) : celle de
+    /// l'avatar du rang rendu, jamais sous une cible tactile de 44 pt.
+    static func avatarBandWidth(isLentille: Bool) -> CGFloat {
+        let band = isLentille
+            ? LentilleMetrics.Row.paddingHorizontal + LentilleMetrics.Avatar.size + LentilleMetrics.Avatar.ringWidth * 2
+            : avatarInteractionExclusionWidth
+        return max(band, MeeshyControlSize.tapTarget)
+    }
 
     /// Bound for the opportunistic preview auto-load (`enableAutoPreviewLoad`
     /// above) — matches the ViewModel's own top-conversations batch prefetch
@@ -351,11 +461,15 @@ enum ConversationRowMetrics {
     /// cache-warm and rows beyond it fall back to the on-demand long-press
     /// load instead of firing a REST call just for scrolling into view.
     static let autoPreviewLoadRowLimit = 20
+
+    /// L'échelle de la rangée pressée (#11213) : elle s'ENFONCE, à la
+    /// iMessage, elle ne rétrécit pas — 0.90 se lisait comme un saut.
+    static let pressedScale: CGFloat = 0.97
 }
 
 // MARK: - Press feedback (réduction pendant l'appui + rebond au trigger)
 
-/// Feedback d'appui de la ligne : réduction à 0.90 dès le toucher (easeOut
+/// Feedback d'appui de la ligne : enfoncement à 0.97 dès le toucher (easeOut
 /// ≈ 0.2 s), puis rebond élastique visible quand le long-press aboutit à
 /// 0.4 s — le spring peu amorti (0.25) donne ≈ 1.05 à ~0.6 s, ≈ 0.98 à
 /// ~0.9 s, repos à ~1.5 s, pendant que l'overlay preview jaillit (zoom
@@ -394,10 +508,19 @@ private struct RowPressBounceModifier: ViewModifier {
     /// rebondit alors visiblement (damping 0.25). Tout autre relâchement —
     /// début de swipe d'actions, départ de scroll, tap — retombe sur un
     /// retour discret quasi sans rebond (damping 0.85) : le rebond appartient
-    /// au long-press/preview, PAS au swipe des lignes (feedback user
-    /// 2026-07-03).
+    /// au long-press/preview, PAS au swipe des lignes.
     @State private var triggered = false
+    /// La loi de l'appui (#17316) : un appui qui a montré l'aperçu n'ouvre
+    /// jamais la conversation, même quand son tap part au relâchement.
+    @State private var press = ConversationRowPress()
     @State private var frameBox = RowFrameBox()
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+
+    /// Réduire les animations : la rangée ne bouge pas sous le doigt.
+    private var pressedScale: CGFloat {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion) ? 1 : ConversationRowMetrics.pressedScale
+    }
 
     func body(content: Content) -> some View {
         content
@@ -415,7 +538,7 @@ private struct RowPressBounceModifier: ViewModifier {
                         }
                 }
             )
-            .scaleEffect(isPressing ? 0.90 : 1.0)
+            .scaleEffect(isPressing ? pressedScale : 1.0)
             // Appui : réduction nette, atteinte vers ~0.2 s (léger delay pour
             // que les débuts de scroll/swipe ne fassent pas flasher la ligne).
             // Relâchement : rebond visible UNIQUEMENT si le menu s'est ouvert ;
@@ -439,21 +562,23 @@ private struct RowPressBounceModifier: ViewModifier {
                     Color.clear
                         .contentShape(Rectangle())
                         .onTapGesture {
+                            guard press.handle(.tapped) == .openConversation else { return }
                             HapticFeedback.light()
                             onTap()
                         }
+                        .accessibilityHidden(true)
                         // Détecteur d'état d'appui PUR : minimumDuration
                         // inatteignable, seul `onPressingChanged` sert (true au
                         // touch-down, false au relâchement/échec). Sa variante
                         // `perform:` composée avec le `.onTapGesture` de la
-                        // ligne ne fire qu'au RELÂCHEMENT (vérifié frame par
-                        // frame 2026-07-03) — d'où le déclencheur séparé.
+                        // ligne ne fire qu'au RELÂCHEMENT — d'où le déclencheur séparé.
                         .onLongPressGesture(
                             minimumDuration: 3600,
                             maximumDistance: 10,
                             perform: {},
                             onPressingChanged: { pressing in
                                 if pressing { triggered = false }
+                                _ = press.handle(pressing ? .began : .released)
                                 isPressing = pressing
                             }
                         )
@@ -463,6 +588,7 @@ private struct RowPressBounceModifier: ViewModifier {
                         .simultaneousGesture(
                             LongPressGesture(minimumDuration: 0.4)
                                 .onEnded { _ in
+                                    guard press.handle(.longPressRecognized) == .showPeek else { return }
                                     triggered = true
                                     HapticFeedback.medium()
                                     onTrigger(frameBox.rect)
@@ -476,6 +602,11 @@ private struct RowPressBounceModifier: ViewModifier {
 /// Boîte mutable inerte pour la frame globale de la ligne — voir le
 /// commentaire du `background` dans `RowPressBounceModifier`.
 private final class RowFrameBox {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     var rect: CGRect = .zero
 }
 
@@ -501,6 +632,7 @@ extension ConversationRowItem: @MainActor Equatable {
         lhs.rowWidth == rhs.rowWidth &&
         lhs.isDragging == rhs.isDragging &&
         lhs.presenceState == rhs.presenceState &&
+        lhs.isPeerHere == rhs.isPeerHere &&
         lhs.isDark == rhs.isDark &&
         lhs.storyRingState == rhs.storyRingState &&
         lhs.moodStatus?.id == rhs.moodStatus?.id &&
@@ -508,6 +640,7 @@ extension ConversationRowItem: @MainActor Equatable {
         lhs.isSelected == rhs.isSelected &&
         lhs.draftSummary == rhs.draftSummary &&
         lhs.preferredContentLanguages == rhs.preferredContentLanguages &&
+        lhs.deviceText == rhs.deviceText &&
         // Compare swipe action ICONS, not just `.count`: the lock/block toggles
         // (`leadingSwipeActions`/`trailingSwipeActions`) read live state from
         // `ConversationLockManager` / `BlockService` — singletons NOT folded into
@@ -516,13 +649,14 @@ extension ConversationRowItem: @MainActor Equatable {
         // hand.raised.fill ⇄ hand.raised.slash.fill, lock.fill ⇄ lock.open.fill).
         // The list now observes both singletons (see ConversationListView) so a
         // change re-evaluates the rows and this comparison detects it. Zip avoids
-        // allocating arrays in `==`.
+        // allocating arrays in `==`. The preview is covered the same way: the
+        // loader reads the lock, so `previewFingerprint.phase` flips to `.sealed`.
         lhs.leadingActions.count == rhs.leadingActions.count &&
         lhs.trailingActions.count == rhs.trailingActions.count &&
         zip(lhs.leadingActions, rhs.leadingActions).allSatisfy { $0.icon == $1.icon } &&
         zip(lhs.trailingActions, rhs.trailingActions).allSatisfy { $0.icon == $1.icon } &&
         (lhs.onCreateShareLink == nil) == (rhs.onCreateShareLink == nil) &&
-        lhs.cachedPreviewMessages.count == rhs.cachedPreviewMessages.count &&
+        lhs.previewFingerprint == rhs.previewFingerprint &&
         lhs.enableAutoPreviewLoad == rhs.enableAutoPreviewLoad
     }
 }
@@ -531,33 +665,55 @@ extension ConversationRowItem: @MainActor Equatable {
 
 /// Cursor-based infinite-scroll footer driven by `paginationState`.
 /// Extracted from `ConversationListView.paginationFooter`. Rendered once at
-/// the tail of the list, so it reads the view model directly rather than
-/// taking a dozen primitive inputs.
+/// the tail of the list, so it reads the view model directly and hands the
+/// pure `ConversationPaginationFooterContent` its primitives.
 struct ConversationPaginationFooter: View {
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
 
     var body: some View {
-        switch conversationViewModel.paginationState {
+        ConversationPaginationFooterContent(
+            state: conversationViewModel.paginationState,
+            hasMore: conversationViewModel.hasMore,
+            conversationCount: conversationViewModel.conversations.count,
+            onLoadMore: { Task { await conversationViewModel.loadMore() } }
+        )
+    }
+}
+
+/// Le pied occupe UNE hauteur dans tous ses états (#8759). Le bloc « Et
+/// maintenant ? » est posé juste dessous : quand le pied passait de 1 pt
+/// (sentinelle) à 52 pt (spinner), 0 pt, 46 pt (« tout chargé ») ou 67 pt
+/// (erreur), le bloc descendait puis remontait à chaque page chargée.
+struct ConversationPaginationFooterContent: View {
+    let state: PaginationState
+    let hasMore: Bool
+    let conversationCount: Int
+    let onLoadMore: () -> Void
+
+    @ScaledMetric(relativeTo: .caption) private var slotHeight: CGFloat = 52
+
+    var body: some View {
+        stateContent
+            .frame(maxWidth: .infinity)
+            .frame(height: slotHeight)
+    }
+
+    @ViewBuilder
+    private var stateContent: some View {
+        switch state {
         case .loadingMore:
-            HStack {
-                Spacer()
-                ProgressView()
-                    .tint(MeeshyColors.indigo400)
-                Spacer()
-            }
-            .padding(.vertical, 16)
+            ProgressView()
+                .tint(MeeshyColors.indigo400)
         case .exhausted:
             // Show the "all loaded" hint only on lists that actually
             // had to paginate -- avoids cluttering empty/small lists.
-            if conversationViewModel.conversations.count > 30 {
+            if conversationCount > 30 {
                 Text(String(
                     localized: "conversations.pagination.allLoaded",
 
                 ))
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
             }
         case .error:
             VStack(spacing: 6) {
@@ -568,7 +724,7 @@ struct ConversationPaginationFooter: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 Button {
-                    Task { await conversationViewModel.loadMore() }
+                    onLoadMore()
                 } label: {
                     Text(String(
                         localized: "conversations.pagination.retry",
@@ -578,19 +734,31 @@ struct ConversationPaginationFooter: View {
                     .foregroundStyle(MeeshyColors.indigo400)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
         case .idle:
             // Invisible sentinel: when the user scrolls deep enough to
             // reveal this row, fire `loadMore`. The ViewModel guards
             // against re-entry and short-circuits when hasMore=false.
-            if conversationViewModel.hasMore {
+            if hasMore {
                 Color.clear
                     .frame(height: 1)
-                    .onAppear {
-                        Task { await conversationViewModel.loadMore() }
-                    }
+                    .onAppear { onLoadMore() }
             }
         }
+    }
+}
+
+// MARK: - Aperçu vivant (#11212)
+
+/// La SEULE vue qui observe `ConversationListPreviewLoader` : posée dans la
+/// section des messages de l'aperçu, elle rend l'état de SA conversation et se
+/// ré-évalue seule quand il change. La liste et les rangées tiennent le
+/// chargeur par référence sans s'y abonner.
+struct ConversationPreviewStateReader<Content: View>: View {
+    @ObservedObject var loader: ConversationListPreviewLoader
+    let conversationId: String
+    @ViewBuilder let content: (ConversationListPreviewLoader.PreviewState) -> Content
+
+    var body: some View {
+        content(loader.state(for: conversationId))
     }
 }

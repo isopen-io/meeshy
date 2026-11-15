@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_block_confirm_title">Diesen Nutzer blockieren</string>
+    <string name="profile_block_confirm_message">Du erhältst keine Nachrichten mehr von %1$s. Du kannst die Blockierung in den Einstellungen aufheben.</string>
+    <string name="profile_block_confirm_action">Blockieren</string>
+    <string name="profile_block_cancel">Abbrechen</string>
+    <string name="profile_block_fallback_name">diese Person</string>
+</resources>

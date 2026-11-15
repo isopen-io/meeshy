@@ -47,3 +47,28 @@ export function unsetOrNull<F extends string>(field: F): UnsetOrNull<F> {
     ],
   };
 }
+
+/**
+ * « Différent de `value` » quand la clé peut être ABSENTE.
+ *
+ * Sur MongoDB, Prisma écarte de toute négation — `NOT`, `not`, `notIn` — le
+ * document où la clé n'existe pas (mesuré contre `mongo:8`, #8309). Un invité
+ * par lien n'a pas de clé `userId` : `NOT: { userId }` seul le retirait de
+ * chaque audience « les autres participants » (#9106). L'absence se dit donc à
+ * part, dans une branche positive.
+ *
+ * Comme `unsetOrNull`, elle rend une clé `OR` : un `where` qui porte déjà le
+ * sien la compose par `AND`.
+ */
+export type DiffersOrUnset<F extends string, V> = {
+  OR: [{ NOT: { [K in F]: V } }, { [K in F]: { isSet: false } }];
+};
+
+export function differsOrUnset<F extends string, V>(field: F, value: V): DiffersOrUnset<F, V> {
+  return {
+    OR: [
+      { NOT: { [field]: value } as { [K in F]: V } },
+      { [field]: { isSet: false } } as { [K in F]: { isSet: false } },
+    ],
+  };
+}

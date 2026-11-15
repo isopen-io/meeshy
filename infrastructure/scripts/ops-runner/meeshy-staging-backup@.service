@@ -1,0 +1,22 @@
+[Unit]
+Description=Sauvegarde du staging Meeshy, %i (base verifiee, medias, configuration)
+# Un gabarit : l'instance dit l'origine. Le timer lance @nightly, le relais d'operations
+# @on-demand ; chaque origine a sa rotation (#11450). Toute autre instance est refusee.
+Documentation=https://github.com/isopen-io/meeshy/issues/10385 https://github.com/isopen-io/meeshy/issues/11450
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+Environment=BACKUP_ORIGIN=%i
+Environment=COMPOSE_DIR=/opt/meeshy/staging
+Environment=BACKUP_ROOT=/opt/meeshy/backups/staging-nightly
+Environment=DB_CONTAINER=meeshy-database-staging
+Environment="VOLUMES=meeshy-staging-gateway-uploads meeshy-staging-gateway-sounds meeshy-staging-web-uploads meeshy-staging-redis-data"
+Environment=STATUS_DIR=/opt/meeshy/staging/backup-status
+Environment=LOCK_FILE=/run/meeshy-staging-backup.lock
+ExecStart=/opt/meeshy/staging/ops/bin/meeshy-nightly-backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=4h

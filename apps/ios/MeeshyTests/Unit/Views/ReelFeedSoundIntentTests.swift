@@ -2,6 +2,7 @@ import XCTest
 import AVFoundation
 @testable import Meeshy
 @testable import MeeshyUI
+import MeeshySDK
 
 /// Bouton de son du fil (exigence produit 2026-08-22, S2). Couvre l'ÉTAT DU
 /// LECTEUR, pas seulement l'affichage — le défaut le plus probable de cette
@@ -226,7 +227,7 @@ final class ReelFeedSoundIntentTests: XCTestCase {
         ReelFeedSoundButtonPolicy.apply(soundOn: intent.isSoundOn, to: manager)
 
         XCTAssertFalse(manager.effectiveMuted, "L'icône affiche « son actif » : le lecteur doit vraiment l'être, même si isMuted valait true.")
-        XCTAssertTrue(SharedAVPlayerManager.shouldDuckOthersOnPlay(effectiveMuted: manager.effectiveMuted), "play() doit armer .duckOthers pour cette vidéo désormais audible.")
+        XCTAssertEqual(SharedAVPlayerManager.playbackAudibility(effectiveMuted: manager.effectiveMuted), .audible, "play() doit lancer un son pour cette vidéo désormais audible.")
     }
 
     @MainActor
@@ -252,4 +253,22 @@ final class ReelFeedSoundIntentTests: XCTestCase {
         XCTAssertTrue(manager.isForceMuted)
     }
 
+
+    // MARK: - Borne du cache de sondage
+
+    /// Un fil de réels parcouru des heures ajoutait une entrée par média, à vie : chaque sondage republiait le
+    /// dictionnaire entier, et chaque carte montée le recopiait. Le cache garde les sondages les plus récents.
+    @MainActor
+    func test_intent_probeCache_isBounded_keepingTheMostRecentProbes() {
+        let intent = ReelFeedSoundIntent.makeForTesting()
+        let capacity = ReelFeedSoundIntent.presenceCapacity
+        for index in 0..<(capacity + 50) {
+            intent.recordAudioProbe(mediaId: "media-\(index)", probedTrackCount: 1)
+        }
+
+        XCTAssertEqual(intent.audioTrackPresence.count, capacity)
+        XCTAssertFalse(intent.isProbed(mediaId: "media-0"), "les sondages les plus anciens sortent en premier")
+        XCTAssertTrue(intent.isProbed(mediaId: "media-\(capacity + 49)"))
+        XCTAssertTrue(intent.hasAudioTrack(mediaId: "media-50"), "le plus ancien survivant est intact")
+    }
 }

@@ -1,0 +1,182 @@
+[
+ {
+  "file": "tresor-bourse-a",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 141704,
+  "layout": "perches",
+  "verdict": "ok"
+ },
+ {
+  "file": "tresor-bourse-b",
+  "overlap": 112,
+  "face": 0,
+  "depth": 3,
+  "bbox": [
+   128,
+   685,
+   442,
+   707
+  ],
+  "windowPx": 134976,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "tresor-coffre-a",
+  "overlap": 11,
+  "face": 0,
+  "depth": 3,
+  "bbox": [
+   147,
+   639,
+   152,
+   643
+  ],
+  "windowPx": 104499,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "tresor-coffre-b",
+  "overlap": 38,
+  "face": 0,
+  "depth": 5,
+  "bbox": [
+   107,
+   713,
+   119,
+   718
+  ],
+  "windowPx": 147497,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "tresor-coffre-c",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 166949,
+  "layout": "perches",
+  "verdict": "ok"
+ },
+ {
+  "file": "tresor-coffret-a",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 139981,
+  "layout": "libre",
+  "verdict": "ok"
+ },
+ {
+  "file": "tresor-coffret-b",
+  "overlap": 89,
+  "face": 0,
+  "depth": 5,
+  "bbox": [
+   111,
+   379,
+   446,
+   480
+  ],
+  "windowPx": 121195,
+  "layout": "cotes",
+  "verdict": "ok"
+ },
+ {
+  "file": "tresor-escarcelle-a",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 138544,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "tresor-escarcelle-b",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 137132,
+  "layout": "libre",
+  "verdict": "ok"
+ },
+ {
+  "file": "tresor-reserve-a",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 135550,
+  "layout": "libre",
+  "verdict": "ok"
+ },
+ {
+  "file": "tresor-reserve-b",
+  "overlap": 133,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   91,
+   650,
+   448,
+   684
+  ],
+  "windowPx": 146656,
+  "layout": "libre",
+  "verdict": "ok"
+ },
+ {
+  "file": "tresor-reserve-c",
+  "overlap": 7171,
+  "face": 0,
+  "depth": 83,
+  "bbox": [
+   315,
+   594,
+   437,
+   713
+  ],
+  "windowPx": 138699,
+  "layout": "selfie",
+  "verdict": "ok"
+ },
+ {
+  "file": "tresor-tresor-a",
+  "overlap": 59,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   116,
+   334,
+   439,
+   378
+  ],
+  "windowPx": 136095,
+  "layout": "libre",
+  "verdict": "ok"
+ },
+ {
+  "file": "tresor-tresor-b",
+  "overlap": 91,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   98,
+   424,
+   443,
+   490
+  ],
+  "windowPx": 145399,
+  "layout": "cotes",
+  "verdict": "ok"
+ }
+]

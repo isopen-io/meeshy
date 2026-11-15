@@ -12,6 +12,7 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
 const mockResolveConversationId = jest.fn<any>().mockResolvedValue('conv-resolved-id');
 const mockCanAccessConversation = jest.fn<any>().mockResolvedValue(true);
+const mockGetStatsUnderFloor = jest.fn<any>();
 const mockGetStats = jest.fn<any>().mockResolvedValue({
   totalMessages: 42,
   participantStats: {},
@@ -24,12 +25,18 @@ jest.mock('../../../../utils/conversation-id-cache', () => ({
 }));
 
 jest.mock('../../../../routes/conversations/utils/access-control', () => ({
+  ...(jest.requireActual('../../../../routes/conversations/utils/access-control') as Record<string, unknown>),
   canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
 }));
 
+// `getStatsUnderFloor` figure ici même si aucun témoin de cette suite ne le
+// déclenche (#17076) : un double qui énumère les méthodes à la main retient en
+// silence chaque méthode ajoutée en amont, et le jour où un témoin décrit un
+// lecteur planchéisé, l'absence se lirait comme « la route ne la prend pas ».
 jest.mock('../../../../services/ConversationMessageStatsService', () => ({
   conversationMessageStatsService: {
     getStats: (...args: any[]) => mockGetStats(...args),
+    getStatsUnderFloor: (...args: any[]) => mockGetStatsUnderFloor(...args),
   },
 }));
 
@@ -62,11 +69,33 @@ function makePreValidationAuth(authenticated: boolean) {
   };
 }
 
+/**
+ * Le lecteur de ces témoins est un membre NOMMÉ : il n'est entré par aucun lien
+ * de partage, donc `historyFloorFor` tranche « aucun plancher » sans lire quoi
+ * que ce soit de plus, et la route sert la ligne agrégée.
+ *
+ * La ligne est posée ICI plutôt que remplacée par `findFirst: () => null`
+ * (#17076) : un `null` dirait « ce lecteur n'est pas membre », ce que ces
+ * témoins contredisent à chaque assertion. Un double qui répond faux pour
+ * obtenir le bon verdict gèle le verdict, pas la règle.
+ */
+const MEMBRE_SANS_PLANCHER = {
+  role: 'member',
+  joinedAt: new Date('2024-01-01T00:00:00.000Z'),
+  shareLinkId: null,
+  historyVisibleFrom: null,
+  permissions: null,
+  anonymousSession: null,
+  user: { role: 'USER' },
+};
+
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
     user: {
       findMany: jest.fn<any>().mockResolvedValue([]),
     },
+    participant: { findFirst: jest.fn<any>().mockResolvedValue(MEMBRE_SANS_PLANCHER) },
+    conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue(null) },
     ...overrides,
   };
 }
@@ -98,11 +127,11 @@ describe('GET /conversations/:id/stats — conversation not found', () => {
 });
 
 describe('GET /conversations/:id/stats — access denied', () => {
-  it('returns 403 when user has no access to the conversation', async () => {
+  it('returns the same 404 as a missing conversation when user is not a member (#8099)', async () => {
     mockCanAccessConversation.mockResolvedValueOnce(false);
     const app = await buildApp();
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/stats` });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
     await app.close();
   });
 });

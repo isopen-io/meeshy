@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import dagger.hilt.android.AndroidEntryPoint
+import me.meeshy.app.calls.CallDeclineMessenger
 import me.meeshy.sdk.socket.CallSignalManager
 import me.meeshy.sdk.socket.SocketManager
 import timber.log.Timber
@@ -40,6 +41,9 @@ class DeclineCallReceiver : BroadcastReceiver() {
     @Inject
     lateinit var ringStore: IncomingCallRingStore
 
+    @Inject
+    lateinit var declineMessenger: CallDeclineMessenger
+
     override fun onReceive(context: Context, intent: Intent) {
         val callId = intent.getStringExtra(MeeshyFcmService.EXTRA_CALL_ID)
             ?.takeIf { it.isNotBlank() } ?: return
@@ -54,6 +58,14 @@ class DeclineCallReceiver : BroadcastReceiver() {
         } else {
             declinedCalls.markDeclined(callId)
         }
+
+        // Le refus part d'abord ; le message ensuite, par l'outbox : il n'attend jamais l'envoi.
+        val reply = IncomingCallNotificationFactory.replyText(intent)?.takeIf { it.isNotBlank() } ?: return
+        declineMessenger.sendInBackground(
+            peerId = intent.getStringExtra(MeeshyFcmService.EXTRA_CALLER_ID).orEmpty(),
+            conversationId = intent.getStringExtra(MeeshyFcmService.EXTRA_CONVERSATION_ID).orEmpty(),
+            text = reply,
+        )
     }
 
     private companion object {

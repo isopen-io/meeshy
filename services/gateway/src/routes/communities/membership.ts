@@ -21,11 +21,22 @@ import {
   sendInternalError
 } from '../../utils/response.js';
 import { CommunityRole } from './types';
+import { communityGuardsItsSalons, exitCommunitySalons } from '../../services/conversations/communitySalonExit';
+import { isAddableUser } from './addable-user';
+import { scheduleCommunityAddedAnnouncement } from '../../services/notifications/community-added';
 import { gateCoMemberPresence } from './member-presence';
+import { viewerFromRequest } from '../users/presence-gate';
+import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
+import { EngagementService } from '../../services/engagement/EngagementService';
+import type { CommunityEngagementOptions } from './types';
 
 const logger = enhancedLogger.child({ module: 'CommunityMembershipRoutes' });
 
-export async function registerMembershipRoutes(fastify: FastifyInstance) {
+export async function registerMembershipRoutes(
+  fastify: FastifyInstance,
+  options: CommunityEngagementOptions = {}
+) {
+  const engagement = options.engagement ?? new EngagementService(fastify.prisma);
   // Route pour obtenir les communautes de l'utilisateur courant
   fastify.get('/communities/mine', {
     onRequest: [fastify.authenticate],
@@ -84,6 +95,9 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
       const memberships = await fastify.prisma.communityMember.findMany({
         where: {
           userId,
+          isActive: true,
+          // #8876 — « mes communautés » ne montre pas celles que l'administration a désactivées.
+          community: { isActive: true },
           ...(roleFilter && roleFilter.length > 0 ? { role: { in: roleFilter } } : {})
         },
         include: {
@@ -171,8 +185,9 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
       const userId = authContext.userId;
 
       const community = await fastify.prisma.community.findFirst({
-        where: { id },
-        select: { id: true, isPrivate: true }
+        // #8876 — on ne rejoint pas une communauté désactivée par l'administration.
+        where: { id, isActive: true },
+        select: { id: true, isPrivate: true, createdBy: true }
       });
 
       if (!community) {
@@ -187,28 +202,65 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
         where: { communityId: id, userId }
       });
 
-      if (existingMember) {
+      if (existingMember?.isActive) {
         return sendConflict(reply, 'You are already a member of this community');
       }
 
-      const member = await fastify.prisma.communityMember.create({
-        data: {
-          communityId: id,
-          userId,
-          role: CommunityRole.MEMBER as string
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              avatar: true,
-              isOnline: true
+      // Une ligne INACTIVE (`isActive: false`, laissée par un départ — #5760)
+      // se RÉACTIVE : créer en présence d'une ligne existante produirait une
+      // seconde ligne pour la même paire (communityId, userId), exactement le
+      // défaut que `resolveConversationEntry` existe pour éviter côté
+      // conversation. Le rôle repart de MEMBER, jamais de l'ancien rang — un
+      // rang se donne, il ne se retrouve pas dans une ligne périmée.
+      const member = existingMember
+        ? await fastify.prisma.communityMember.update({
+            where: { id: existingMember.id },
+            data: { isActive: true, leftAt: null, role: CommunityRole.MEMBER as string },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  displayName: true,
+                  avatar: true,
+                  isOnline: true
+                }
+              }
             }
-          }
-        }
-      });
+          })
+        : await fastify.prisma.communityMember.create({
+            data: {
+              communityId: id,
+              userId,
+              role: CommunityRole.MEMBER as string
+            },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  displayName: true,
+                  avatar: true,
+                  isOnline: true
+                }
+              }
+            }
+          });
+
+      // Succès « cercles » (#5759) — APRÈS l'ACK métier, jamais avant : on ne
+      // grave pas un palier pour une adhésion qui n'a pas eu lieu. Best-effort
+      // et idempotent, donc une panne ici ne coûte que le prochain geste.
+      void new CerclesAchievements(fastify.prisma).recordEvent({
+        kind: 'community.join',
+        userId,
+        communityId: id,
+      }).catch(() => undefined);
+
+      // `social.community_joined` (#8959) — une fois par communauté ; le
+      // créateur qui revient dans la sienne ne se paie pas (`targetOwnerId`).
+      engagement
+        .recordActivity(userId, 'social.community_joined', { targetId: id, targetOwnerId: community.createdBy })
+        .catch((err: unknown) => logger.warn('engagement social.community_joined failed', { err }));
 
       // Pas de gate ici : le membre rendu est l'APPELANT lui-même, et une
       // préférence de visibilité ne se cache pas à celui qui l'a posée.
@@ -281,7 +333,7 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
 
       const community = await fastify.prisma.community.findFirst({
         where: { id },
-        select: { id: true, createdBy: true }
+        select: { id: true, createdBy: true, isPrivate: true, isActive: true }
       });
 
       if (!community) {
@@ -292,12 +344,32 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Community creator cannot leave their own community. Transfer ownership or delete the community instead.');
       }
 
-      const deleted = await fastify.prisma.communityMember.deleteMany({
-        where: { communityId: id, userId }
+      // Aligné sur le départ de conversation (#5760) : `isActive: false` +
+      // `leftAt`, jamais une suppression — la ligne reste la trace du départ,
+      // et la ré-adhésion la réactive au lieu d'en ouvrir une seconde (voir
+      // POST /communities/:id/join et .../invite).
+      const activeMembership = await fastify.prisma.communityMember.findFirst({
+        where: { communityId: id, userId, isActive: true }
       });
 
-      if (deleted.count === 0) {
+      if (!activeMembership) {
         return sendNotFound(reply, 'You are not a member of this community');
+      }
+
+      const leftAt = new Date();
+      await fastify.prisma.communityMember.update({
+        where: { id: activeMembership.id },
+        data: { isActive: false, leftAt }
+      });
+
+      // #16704 — n'être plus membre d'une communauté qui garde ses salons,
+      // c'est n'en être plus occupant : sans cette sortie, l'ancien membre
+      // continuait de lire ce que la communauté réserve à ses membres.
+      if (communityGuardsItsSalons(community)) {
+        await exitCommunitySalons(
+          { prisma: fastify.prisma, socketIOHandler: fastify.socketIOHandler },
+          { communityId: community.id, userId, now: leftAt },
+        );
       }
 
       return sendSuccess(reply, { message: 'Successfully left community' });
@@ -377,14 +449,17 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
 
       const userId = authContext.userId;
 
+      // #8876 — une communauté DÉSACTIVÉE par l'administration ne reçoit plus personne ni aucun réglage :
+      // elle n'existe plus pour ce geste (404), comme pour les lecteurs publics. Quitter, changer un rôle,
+      // retirer un membre et supprimer restent ouverts : les propriétaires peuvent la clore.
       const community = await fastify.prisma.community.findFirst({
-        where: { id },
+        where: { id, isActive: true },
         select: {
           id: true,
           isPrivate: true,
           createdBy: true,
           members: {
-            where: { userId },
+            where: { userId, isActive: true },
             select: { role: true }
           }
         }
@@ -406,12 +481,9 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
         }
       }
 
-      const userToInvite = await fastify.prisma.user.findFirst({
-        where: { id: inviteeId },
-        select: { id: true }
-      });
-
-      if (!userToInvite) {
+      // #6376 — l'invitation AJOUTE la personne, sans son accord : un compte
+      // vivant, sans blocage (`isAddableUser`, partagé avec POST …/members).
+      if (!(await isAddableUser(fastify.prisma, userId, inviteeId))) {
         return sendNotFound(reply, 'User to invite not found');
       }
 
@@ -419,32 +491,63 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
         where: { communityId: id, userId: inviteeId }
       });
 
-      if (existingMember) {
+      if (existingMember?.isActive) {
         return sendConflict(reply, 'User is already a member of this community');
       }
 
-      const member = await fastify.prisma.communityMember.create({
-        data: {
-          communityId: id,
-          userId: inviteeId,
-          role: CommunityRole.MEMBER as string
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              avatar: true,
-              isOnline: true
+      // Réactivation d'une ligne laissée par un départ (#5760), même règle
+      // que POST /communities/:id/join : jamais de seconde ligne pour la
+      // même paire, et le rôle repart de MEMBER.
+      const member = existingMember
+        ? await fastify.prisma.communityMember.update({
+            where: { id: existingMember.id },
+            data: { isActive: true, leftAt: null, role: CommunityRole.MEMBER as string },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  displayName: true,
+                  avatar: true,
+                  isOnline: true,
+                  deactivatedAt: true
+                }
+              }
             }
-          }
-        }
-      });
+          })
+        : await fastify.prisma.communityMember.create({
+            data: {
+              communityId: id,
+              userId: inviteeId,
+              role: CommunityRole.MEMBER as string
+            },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  displayName: true,
+                  avatar: true,
+                  isOnline: true,
+                  deactivatedAt: true
+                }
+              }
+            }
+          });
 
-      // Le profil de l'invité repart vers l'inviteur, qui est membre de la même
-      // communauté que l'invité vient de rejoindre : préférences seules.
-      return sendSuccess(reply, await gateCoMemberPresence(fastify.prisma, member));
+      scheduleCommunityAddedAnnouncement(fastify.prisma, { communityId: id, actorId: userId, recipientIds: [inviteeId] });
+
+      // Le succès revient à l'INVITÉ, pas à celui qui invite : c'est lui qui
+      // rejoint le cercle (#5759).
+      void new CerclesAchievements(fastify.prisma).recordEvent({
+        kind: 'community.join',
+        userId: inviteeId,
+        communityId: id,
+      }).catch(() => undefined);
+
+      // Critère STRICT avec le viewer réel (l'inviteur) — être membre de la
+      // même communauté que l'invité ne vaut plus d'accès à sa présence.
+      return sendSuccess(reply, await gateCoMemberPresence(fastify.prisma, viewerFromRequest(request), member));
     } catch (error) {
       logger.error('Error inviting to community', error as Error);
       return sendInternalError(reply, 'Failed to invite user to community');

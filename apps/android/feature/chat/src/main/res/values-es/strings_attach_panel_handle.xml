@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_panel_handle_label">Asa del panel de adjuntos</string>
+    <string name="composer_panel_handle_open_library">Abrir toda la fototeca</string>
+    <string name="composer_panel_handle_close">Cerrar adjuntos</string>
+</resources>

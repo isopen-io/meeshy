@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_comments_closed_banner">Los comentarios están desactivados</string>
+    <string name="feed_action_disable_comments">Desactivar los comentarios</string>
+    <string name="feed_action_enable_comments">Reactivar los comentarios</string>
+    <string name="feed_comment_settings_failed">No se pudo cambiar la configuración de los comentarios</string>
+    <string name="feed_comments_disable_hint">Nadie podrá comentar</string>
+</resources>

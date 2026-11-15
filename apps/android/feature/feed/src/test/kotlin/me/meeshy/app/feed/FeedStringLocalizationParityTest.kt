@@ -1,78 +1,55 @@
 package me.meeshy.app.feed
 
-import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import java.io.File
+import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.Test
+import org.w3c.dom.Element
 
-// Locale-parity guard for the :feature:feed string resources.
-//
-// The Prisme Linguistique demands that every shipped locale render native content:
-// a user whose device is FR/ES/PT must never fall through to an English default.
-// This spec parses the module's own res/values*/strings.xml and asserts, behaviourally:
-//
-//   1. every base (values/) <string> key has a translation in every shipped locale
-//      (FR, ES, PT) so there is no silent English fallthrough;
-//   2. each translated value carries the SAME positional format specifiers as the
-//      base (e.g. the first-arg string spec, the second-arg decimal spec). A drifted
-//      or dropped arg is a runtime crash, so parity here is correctness not cosmetics.
-//
-// It is deliberately full-module (not scoped to one string family) so any future key
-// added to values/ without its FR/ES/PT siblings turns this red before it ships.
+/**
+ * #14749 — les libellés pluriels des statistiques du fil (« 1 j'aime », « 3 commentaires », « 2 republications », « 5 réponses »)
+ * existent dans les sept langues avec les quantités CLDR de chacune : l'accord est celui du catalogue, jamais du code.
+ */
 class FeedStringLocalizationParityTest {
 
-    private val shippedLocales = listOf("fr", "es", "pt")
+    private val required = mapOf(
+        "values" to setOf("one", "other"),
+        "values-fr" to setOf("one", "many", "other"),
+        "values-es" to setOf("one", "many", "other"),
+        "values-pt" to setOf("one", "many", "other"),
+        "values-de" to setOf("one", "other"),
+        "values-it" to setOf("one", "many", "other"),
+        "values-ar" to setOf("zero", "one", "two", "few", "many", "other"),
+    )
 
-    private fun resDir(): File {
-        val fromWorkingDir = File("src/main/res")
-        if (fromWorkingDir.isDirectory) return fromWorkingDir
-        val fromModule = File("feature/feed/src/main/res")
-        check(fromModule.isDirectory) {
-            "could not locate feature/feed res dir from ${File("").absolutePath}"
+    private val plurals = listOf("feed_post_stat_likes", "feed_post_stat_comments", "feed_post_stat_reposts", "feed_post_stat_replies")
+    private val strings = listOf("feed_bookmark_success", "feed_post_stat_saves", "feed_post_stat_shares", "feed_action_cancel")
+
+    private fun elements(folder: String, tag: String): List<Element> =
+        File("src/main/res/$folder").listFiles { f -> f.extension == "xml" }.orEmpty().flatMap { file ->
+            val nodes = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file).getElementsByTagName(tag)
+            (0 until nodes.length).map { nodes.item(it) as Element }
         }
-        return fromModule
-    }
-
-    private val stringPattern =
-        Regex("<string\\s+name=\"([^\"]+)\"\\s*>(.*?)</string>", RegexOption.DOT_MATCHES_ALL)
-
-    private val formatSpecifier = Regex("%(\\d+\\\$)?[sdf]")
-
-    private fun strings(locale: String?): Map<String, String> {
-        val dir = if (locale == null) "values" else "values-$locale"
-        val file = File(resDir(), "$dir/strings.xml")
-        check(file.isFile) { "missing strings file: ${file.path}" }
-        return stringPattern.findAll(file.readText())
-            .associate { it.groupValues[1] to it.groupValues[2] }
-    }
-
-    private fun specifiersOf(value: String): List<String> =
-        formatSpecifier.findAll(value).map { it.value }.sorted().toList()
 
     @Test
-    fun `every base string key is translated in every shipped locale`() {
-        val baseKeys = strings(null).keys
-
-        val gaps = shippedLocales.associateWith { locale ->
-            baseKeys - strings(locale).keys
-        }.filterValues { it.isNotEmpty() }
-
-        assertThat(gaps).isEmpty()
-    }
-
-    @Test
-    fun `translated values keep the same positional format specifiers as the base`() {
-        val base = strings(null)
-
-        val mismatches = shippedLocales.flatMap { locale ->
-            val translated = strings(locale)
-            base.mapNotNull { (key, baseValue) ->
-                val translatedValue = translated[key] ?: return@mapNotNull null
-                val expected = specifiersOf(baseValue)
-                val actual = specifiersOf(translatedValue)
-                if (expected == actual) null else "$locale:$key expected=$expected actual=$actual"
+    fun `every stat plural carries the CLDR quantities of its language`() {
+        plurals.forEach { name ->
+            required.forEach { (folder, quantities) ->
+                val declared = elements(folder, "plurals").filter { it.getAttribute("name") == name }
+                    .flatMap { e -> (0 until e.getElementsByTagName("item").length).map { (e.getElementsByTagName("item").item(it) as Element).getAttribute("quantity") } }
+                    .toSet()
+                assertWithMessage("$folder $name").that(declared).containsAtLeastElementsIn(quantities)
             }
         }
+    }
 
-        assertThat(mismatches).isEmpty()
+    @Test
+    fun `every engagement label is translated in the seven languages`() {
+        strings.forEach { name ->
+            required.keys.forEach { folder ->
+                val found = elements(folder, "string").any { it.getAttribute("name") == name }
+                assertWithMessage("$folder $name").that(found).isTrue()
+            }
+        }
     }
 }

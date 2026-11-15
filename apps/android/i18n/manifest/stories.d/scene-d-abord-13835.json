@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "composer_typing_font",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_typing_color",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_typing_align",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_typing_backing",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_typing_language",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_typing_done",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

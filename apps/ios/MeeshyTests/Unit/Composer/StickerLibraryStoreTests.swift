@@ -177,33 +177,6 @@ final class StickerLibraryStoreTests: XCTestCase {
 
     // MARK: - S5 — la SECONDE alimentation : un sticker REÇU
 
-    /// GARDE POSITIVE. La décision « quels stickers de ce contenu sont
-    /// enregistrables » vit dans le SDK (`StoryStickerLibrary.savable`) : sans
-    /// lecteur dans l'app, elle resterait une décision que personne ne prend,
-    /// et le geste « enregistrer ce sticker » n'existerait nulle part.
-    func test_savableStickers_hasAReaderInProduction() throws {
-        let racine = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy")
-        guard let enumerateur = FileManager.default.enumerator(at: racine, includingPropertiesForKeys: nil) else {
-            return XCTFail("Arborescence app introuvable à \(racine.path)")
-        }
-        var found = false
-        for case let url as URL in enumerateur where url.pathExtension == "swift" {
-            let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
-            if source.contains("StoryStickerLibrary.savable(") {
-                found = true
-                break
-            }
-        }
-        XCTAssertTrue(
-            found,
-            "Aucun site de PRODUCTION ne lit StoryStickerLibrary.savable(in:) — recevoir un "
-                + "sticker n'ouvre alors aucun geste d'enregistrement."
-        )
-    }
-
     private func savable(id: String = "media-1", url: String = "https://cdn/sticker.png")
         -> StoryStickerLibrary.Savable {
         StoryStickerLibrary.Savable(

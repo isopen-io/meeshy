@@ -82,8 +82,8 @@ final class AgentGrammarGateTests: XCTestCase {
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Focal/Agent/\(fileName)")
-        return try String(contentsOf: url, encoding: .utf8)
+            .appendingPathComponent("Meeshy/Features/Focal/Agent/\(fileName)")
+        return try AppSourceGuard.text(at: url)
     }
 
     // RETRAIT FOCAL iOS (2026-08-18) : FocalBridgeRow supprimé (vue morte, jamais montée).
@@ -144,7 +144,7 @@ final class AgentGrammarGateTests: XCTestCase {
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
             .appendingPathComponent("Meeshy/Features/Main/Views/MessageListViewController.swift")
-        let raw = try String(contentsOf: url, encoding: .utf8)
+        let raw = try AppSourceGuard.text(at: url)
         let stripped = AppSourceGuard.stripComments(raw)
 
         XCTAssertTrue(

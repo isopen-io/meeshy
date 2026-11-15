@@ -14,20 +14,16 @@ import XCTest
 /// précondition d'un raisonnement sur une ABSENCE qu'elles ne contrôlaient pas :
 /// « la clé `meeshy.flag.lentille_list` n'est écrite par personne ».
 ///
-/// L'élargissement du programme bêta à ce drapeau (2026-08-19,
-/// `LentilleFeatureFlag.isCoveredByBetaProgramme`) a AJOUTÉ une entrée à la
-/// cascade : `meeshy.pref.beta_features_enabled`. Sur un simulateur où l'app a
-/// réellement activé la bêta, cette clé EST présente — et quatre suites se sont
-/// mises à recevoir le sectionnement Lentille en croyant vérifier le legacy
-/// (`lentille.older` au lieu de `other`, puis un pipeline qui ne converge
-/// jamais vers le nombre de sections attendu).
+/// Depuis la sortie de bêta (2026-09-14, #6482) la liste Lentille est ACTIVE
+/// par défaut : sans épinglage, une suite legacy reçoit le sectionnement
+/// Lentille (`lentille.older` au lieu de `other`, puis un pipeline qui ne
+/// converge jamais vers le nombre de sections attendu).
 ///
 /// # Ce que fait l'épinglage
 ///
-/// Poser la clé PROPRE du drapeau à `false` : l'étage 2 de la cascade (valeur
-/// explicite du drapeau) prime sur l'étage 3 (préférence bêta), donc le
-/// résultat est OFF quoi que porte le domaine hôte. Déterministe, et sans
-/// rapport avec l'ordre d'exécution des suites.
+/// Poser la clé PROPRE du drapeau à `false` : la clé écrite prime sur le
+/// défaut ON, donc le résultat est OFF quoi que porte le domaine hôte.
+/// Déterministe, et sans rapport avec l'ordre d'exécution des suites.
 ///
 /// `unpin` retire la clé plutôt que d'écrire `true` : on rend le domaine à son
 /// état antérieur au lieu d'y laisser une opinion (résidu inter-suites, cf.

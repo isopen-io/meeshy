@@ -5,7 +5,7 @@ import MeeshySDK
 /// épaisseur / lissage / calques) + une bulle X de sortie. Mirror exact de
 /// `TextEditFloatingBubbles`.
 ///
-/// Icônes flottantes SANS arrière-plan explicite (directive user 2026-07-10) :
+/// Icônes flottantes SANS arrière-plan explicite :
 /// même langage que les actions du header — `glassControlForeground` +
 /// `adaptiveGlass` (Liquid Glass iOS 26 / material en fallback), l'outil actif
 /// et le X passant en verre proéminent teinté.
@@ -20,13 +20,15 @@ struct DrawingEditFloatingBubbles: View {
     var onRedo: () -> Void = {}
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             ForEach(DrawingEditTool.allCases, id: \.self) { tool in
-                bubble(tool: tool, isActive: expandedTool == tool)
-                    .onTapGesture { onSelectTool(tool) }
+                Button { onSelectTool(tool) } label: {
+                    bubble(tool: tool, isActive: expandedTool == tool)
+                }
+                .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .circle))
             }
             Spacer(minLength: 4)
-            // Retour arrière / avant — juste à gauche du X (spec user 2026-06-01).
+            // Retour arrière / avant — juste à gauche du X.
             actionBubble(symbol: "arrow.uturn.backward", enabled: canUndo,
                          label: String(localized: "story.drawEdit.undo", defaultValue: "Annuler le dernier trait", bundle: .module), action: onUndo)
             actionBubble(symbol: "arrow.uturn.forward", enabled: canRedo,
@@ -37,17 +39,20 @@ struct DrawingEditFloatingBubbles: View {
 
     /// Bulle d'action neutre (undo/redo), grisée + non-tappable quand désactivée.
     private func actionBubble(symbol: String, enabled: Bool, label: String, action: @escaping () -> Void) -> some View {
-        Image(systemName: symbol)
-            .font(.system(size: 13, weight: .semibold))
-            .glassControlForeground()
-            .frame(width: 36, height: 36)
-            .adaptiveGlass(in: Circle())
-            .opacity(enabled ? 1 : 0.4)
-            .contentShape(Circle())
-            .onTapGesture { if enabled { HapticFeedback.light(); action() } }
-            .accessibilityLabel(label)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint(enabled ? "" : String(localized: "story.drawEdit.unavailable", defaultValue: "Indisponible", bundle: .module))
+        Button { if enabled { HapticFeedback.light(); action() } } label: {
+            Image(systemName: symbol)
+                .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
+                .glassControlForeground()
+                .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
+                .adaptiveGlass(in: Circle())
+                .opacity(enabled ? 1 : 0.4)
+                .contentShape(Circle())
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular))
+        }
+        .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .circle))
+        .accessibilityLabel(label)
+        .accessibilityHint(enabled ? "" : String(localized: "story.drawEdit.unavailable", defaultValue: "Indisponible", bundle: .module))
     }
 
     @ViewBuilder
@@ -55,36 +60,38 @@ struct DrawingEditFloatingBubbles: View {
         Group {
             if isActive {
                 Image(systemName: tool.sfSymbol)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                     .foregroundStyle(Color.white)
-                    .frame(width: 36, height: 36)
+                    .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.brandPrimary)
             } else {
                 Image(systemName: tool.sfSymbol)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                     .glassControlForeground()
-                    .frame(width: 36, height: 36)
+                    .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     .adaptiveGlass(in: Circle())
             }
         }
         .contentShape(Circle())
         .accessibilityLabel(tool.accessibilityLabel)
-        .accessibilityAddTraits(.isButton)
     }
 
     private func dismissBubble() -> some View {
-        Image(systemName: "xmark")
-            .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(.white)
-            .frame(width: 36, height: 36)
-            .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
-            .contentShape(Circle())
-            .onTapGesture {
-                HapticFeedback.medium()
-                onDismiss()
-            }
-            .accessibilityLabel(String(localized: "story.drawEdit.finish", defaultValue: "Terminer l'édition du dessin", bundle: .module))
-            .accessibilityHint(String(localized: "story.drawEdit.finish.hint", defaultValue: "Ferme les contrôles de dessin", bundle: .module))
-            .accessibilityAddTraits(.isButton)
+        Button {
+            HapticFeedback.medium()
+            onDismiss()
+        } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: MeeshyIconSize.xs, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
+                .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
+                .contentShape(Circle())
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular))
+        }
+        .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .circle))
+        .accessibilityLabel(String(localized: "story.drawEdit.finish", defaultValue: "Terminer l'édition du dessin", bundle: .module))
+        .accessibilityHint(String(localized: "story.drawEdit.finish.hint", defaultValue: "Ferme les contrôles de dessin", bundle: .module))
     }
 }

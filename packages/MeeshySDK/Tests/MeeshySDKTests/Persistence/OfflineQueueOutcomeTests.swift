@@ -35,6 +35,36 @@ final class OfflineQueueOutcomeTests: XCTestCase {
         try await super.tearDown()
     }
 
+    // MARK: - Observateurs sans outcome possible : ils se terminent
+
+    /// Déconnexion avec une mutation encore en file : l'outcome ne viendra
+    /// jamais. L'observateur attendait à vie, sa tâche et son rollback retenus.
+    func test_clearAll_endsTheObserversOfQueuedMutations() async throws {
+        let cmid = "cid_logout_\(UUID().uuidString)"
+        let stream = await queue.outcomeStream(for: cmid)
+        let ended = Task { () -> Bool in
+            for await _ in stream { return false }
+            return true
+        }
+        await queue.clearAll()
+        let endedWithoutOutcome = await ended.value
+        XCTAssertTrue(endedWithoutOutcome, "le flux se termine, sans outcome inventé")
+        let observed = await queue.observedOutcomeCount
+        XCTAssertEqual(observed, 0)
+    }
+
+    func test_cancelPendingSend_endsTheObserversOfTheCancelledMessage() async throws {
+        let cmid = "cid_cancel_\(UUID().uuidString)"
+        let stream = await queue.outcomeStream(for: cmid)
+        let ended = Task { () -> Bool in
+            for await _ in stream { return false }
+            return true
+        }
+        await queue.cancelPendingSend(clientMessageId: cmid)
+        let endedWithoutOutcome = await ended.value
+        XCTAssertTrue(endedWithoutOutcome)
+    }
+
     // MARK: - outcomeStream — applied
 
     func test_outcomeStream_emitsAppliedWhenItemRemoved() async throws {
@@ -48,10 +78,9 @@ final class OfflineQueueOutcomeTests: XCTestCase {
 
         let stream = await queue.outcomeStream(for: cmid)
 
-        await queue.setRetrySend { @Sendable _ in
-            return "server-applied-1"
-        }
-        await queue.retryAll()
+        // Le flusher (seul émetteur depuis que `retryAll` lui laisse l'outbox)
+        // publie l'outcome de la ligne qu'il a appliquée.
+        await queue.publishOutcome(.applied(cmid: cmid))
 
         var iterator = stream.makeAsyncIterator()
         let event = await iterator.next()
@@ -214,6 +243,46 @@ final class OfflineQueueOutcomeTests: XCTestCase {
         XCTAssertNil(after?.lastError, "retryItem MUST clear lastError")
         XCTAssertLessThanOrEqual(after!.nextAttemptAt.timeIntervalSinceNow, 1.0,
             "retryItem MUST schedule nextAttemptAt for immediate retry")
+    }
+
+    func test_retryItem_replaysTheStoryAndForwardRelationOfAnOnlineFailure() async throws {
+        let relations: [MessageRelation] = [
+            .storyReply(to: StoryID("s1"), reference: nil),
+            .forward(of: MessageID("m9"), from: ConversationID("c9"))
+        ]
+        for relation in relations {
+            let item = OutgoingMessage(
+                conversationId: ConversationID("conv-relation-\(UUID().uuidString)"),
+                content: "relance",
+                relation: relation,
+                attachments: OutgoingAttachments(ids: nil, previews: nil),
+                originalLanguage: nil,
+                location: nil
+            ).retryQueueItem(context: SendAttemptContext(
+                clientMessageId: MessageID("cid_relation_\(UUID().uuidString)"),
+                startedAt: Date(),
+                intent: .none,
+                language: "fr",
+                reusesExistingRow: false
+            ))
+            let outboxId = "ofq_\(item.id)"
+            try await queue.enqueue(item)
+            try await pool.write { db in
+                try db.execute(sql: "UPDATE outbox SET status = ?, attempts = 5 WHERE id = ?",
+                               arguments: [OutboxStatus.exhausted.rawValue, outboxId])
+            }
+
+            try await queue.retryItem(outboxId)
+
+            let record = try await pool.read { db in try OutboxRecord.fetchOne(db, key: outboxId) }
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let replayed = try decoder.decode(OfflineQueueItem.self, from: try XCTUnwrap(record).payload)
+            XCTAssertEqual(replayed.storyReplyToId, relation.storyReplyToId)
+            XCTAssertEqual(replayed.forwardedFromId, relation.forwardedFromId)
+            XCTAssertEqual(replayed.forwardedFromConversationId, relation.forwardedFromConversationId)
+            XCTAssertNotNil(relation.storyReplyToId ?? relation.forwardedFromId)
+        }
     }
 
     // MARK: - retryItem — throws when missing

@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import {
   isValidEmoji,
   sanitizeEmoji,
   POPULAR_EMOJIS,
+  EMOJI_MAX_LENGTH,
 } from '../../types/reaction.js';
+import { addReactionRequestSchema } from '../../types/api-schemas.js';
 
 describe('isValidEmoji', () => {
   describe('valid single emoji (Emoji_Presentation)', () => {
@@ -43,6 +46,43 @@ describe('isValidEmoji', () => {
     });
   });
 
+  describe('valid multi-code-point emoji (RGI sequences)', () => {
+    // A reaction is any single RGI (Recommended for General Interchange) emoji
+    // grapheme — the exact set every modern messenger (WhatsApp, Slack,
+    // iMessage) lets a user pick. The former single-code-point regex rejected
+    // all of these, so users could not react with the most common modern
+    // emojis; they hit "Invalid emoji" at the gateway reaction gate.
+    it('accepts a skin-tone modified emoji (thumbs-up + Fitzpatrick modifier)', () => {
+      // 👍🏽 = U+1F44D + U+1F3FD — base emoji + skin-tone modifier
+      expect(isValidEmoji('👍🏽')).toBe(true);
+    });
+
+    it('accepts a ZWJ profession sequence', () => {
+      // 👩‍💻 = U+1F469 + U+200D + U+1F4BB — woman + ZWJ + laptop
+      expect(isValidEmoji('👩‍💻')).toBe(true);
+    });
+
+    it('accepts a regional-indicator flag sequence', () => {
+      // 🇫🇷 = U+1F1EB + U+1F1F7 — two regional indicators forming one flag
+      expect(isValidEmoji('🇫🇷')).toBe(true);
+    });
+
+    it('accepts a keycap sequence', () => {
+      // #️⃣ = U+0023 + U+FE0F + U+20E3 — the RGI keycap grapheme
+      expect(isValidEmoji('#️⃣')).toBe(true);
+    });
+
+    it('accepts a multi-person ZWJ family sequence (11 UTF-16 units)', () => {
+      // 👨‍👩‍👧‍👦 = man·ZWJ·woman·ZWJ·girl·ZWJ·boy — a single RGI grapheme
+      expect(isValidEmoji('👨‍👩‍👧‍👦')).toBe(true);
+    });
+
+    it('accepts the longest common RGI grapheme: kiss with two skin tones (15 units)', () => {
+      // 👩🏽‍❤️‍💋‍👨🏼 — the longest RGI emoji-zwj sequence in current Unicode
+      expect(isValidEmoji('👩🏽‍❤️‍💋‍👨🏼')).toBe(true);
+    });
+  });
+
   describe('trims surrounding whitespace before validation', () => {
     it('accepts emoji with leading space', () => {
       expect(isValidEmoji(' 😀')).toBe(true);
@@ -71,6 +111,20 @@ describe('isValidEmoji', () => {
       expect(isValidEmoji('1')).toBe(false);
     });
 
+    it('rejects a digit followed by a variation selector', () => {
+      // 1️ = U+0031 + U+FE0F. A bare digit is not a standalone emoji, and
+      // appending FE0F does not make it one — the keycap emoji is the full
+      // sequence 1️⃣ (digit + FE0F + U+20E3). The former regex admitted this
+      // via its `\p{Emoji}️` branch, so the gateway persisted "1️" as a
+      // reaction. RGI matching rejects it.
+      expect(isValidEmoji('1️')).toBe(false);
+    });
+
+    it('rejects a lone asterisk followed by a variation selector', () => {
+      // *️ = U+002A + U+FE0F — same false-positive class as the digit case.
+      expect(isValidEmoji('*️')).toBe(false);
+    });
+
     it('rejects an empty string', () => {
       expect(isValidEmoji('')).toBe(false);
     });
@@ -81,13 +135,9 @@ describe('isValidEmoji', () => {
     });
 
     it('rejects two emojis concatenated', () => {
-      // ^ and $ anchors allow only a single emoji unit
+      // ^ and $ anchors allow only a single RGI emoji grapheme; two smileys
+      // are two graphemes.
       expect(isValidEmoji('😀😀')).toBe(false);
-    });
-
-    it('rejects a flag sequence (two regional-indicator letters)', () => {
-      // 🇫🇷 = U+1F1EB + U+1F1F7 — two code points, cannot match single-unit regex
-      expect(isValidEmoji('🇫🇷')).toBe(false);
     });
 
     it('rejects an emoji followed by extra text', () => {
@@ -107,6 +157,14 @@ describe('sanitizeEmoji', () => {
 
   it('returns the emoji with FE0F variation selector', () => {
     expect(sanitizeEmoji('❤️')).toBe('❤️');
+  });
+
+  it('returns a skin-tone modified emoji unchanged', () => {
+    expect(sanitizeEmoji('👍🏽')).toBe('👍🏽');
+  });
+
+  it('returns a flag sequence unchanged', () => {
+    expect(sanitizeEmoji('🇫🇷')).toBe('🇫🇷');
   });
 
   it('returns null for plain text', () => {
@@ -150,5 +208,69 @@ describe('POPULAR_EMOJIS', () => {
   it('has no duplicate entries', () => {
     const unique = new Set(POPULAR_EMOJIS);
     expect(unique.size).toBe(POPULAR_EMOJIS.length);
+  });
+});
+
+describe('EMOJI_MAX_LENGTH (length bound SSOT)', () => {
+  // The Zod `.max()` length bound on reaction/sticker emoji fields counts
+  // UTF-16 code units (String.length). It MUST admit every emoji that the
+  // validity SSOT `isValidEmoji` accepts — otherwise a valid RGI grapheme is
+  // rejected by the length pre-check before the format check ever runs.
+  it('admits the longest common RGI grapheme (kiss with two skin tones, 15 units)', () => {
+    const longest = '👩🏽‍❤️‍💋‍👨🏼';
+    expect(isValidEmoji(longest)).toBe(true);
+    expect(longest.length).toBeLessThanOrEqual(EMOJI_MAX_LENGTH);
+  });
+
+  it('admits a multi-person family sequence (11 units)', () => {
+    const family = '👨‍👩‍👧‍👦';
+    expect(family.length).toBeLessThanOrEqual(EMOJI_MAX_LENGTH);
+  });
+
+  it('leaves headroom beyond the longest measured RGI grapheme', () => {
+    expect(EMOJI_MAX_LENGTH).toBeGreaterThanOrEqual(15);
+  });
+
+  // CE QUE ZOD COMPTE, MESURÉ — pas seulement ce que ce fichier SUPPOSE (#6235).
+  //
+  // Les trois témoins ci-dessus comparent `String.length` à EMOJI_MAX_LENGTH en
+  // JS pur. Ils restent donc VERTS même si `z.string().max()` cesse de compter
+  // des unités UTF-16 — et zod 4.5 a fait exactement cela : il compte des CODE
+  // POINTS. La borne emoji est alors passée EN SILENCE de 32 unités (~64 octets)
+  // à 32 code points (~128 octets), un fail-OPEN partagé par les ~242 `.max()`
+  // du dépôt, que seule une fixture en caractères ASTRAUX pouvait révéler.
+  //
+  // Le commentaire de ce `describe` énonçait déjà le contrat ; ce témoin est ce
+  // qui le TIENT. Un contrat écrit dans un commentaire et vérifié par personne
+  // se perd à la première montée de dépendance, sans qu'aucun gate ne bouge.
+  it('la borne `.max()` de zod compte des unités UTF-16, jamais des code points', () => {
+    const bound = z.string().max(EMOJI_MAX_LENGTH);
+    // 32 emojis astraux = 64 unités UTF-16 pour 32 code points : au-dessus de la
+    // borne en unités, PILE dessus en code points. C'est la seule forme d'entrée
+    // qui distingue les deux comptages.
+    const astral = '😀'.repeat(EMOJI_MAX_LENGTH);
+    expect(astral.length).toBe(EMOJI_MAX_LENGTH * 2);
+    expect([...astral].length).toBe(EMOJI_MAX_LENGTH);
+    expect(bound.safeParse(astral).success).toBe(false);
+    // Contre-épreuve : la MÊME longueur en unités, hors plan astral, passe — le
+    // témoin mesure bien le comptage, pas une borne devenue trop stricte.
+    expect(bound.safeParse('a'.repeat(EMOJI_MAX_LENGTH)).success).toBe(true);
+  });
+
+  // The REST reaction body is validated by Fastify/AJV against this shared
+  // JSON-Schema BEFORE the handler runs. Its emoji length bound must be the SSOT
+  // — not a hardcoded literal — or a family/couple/tinted RGI emoji (11–15 units)
+  // is rejected at the portillon over REST while the Socket.IO twin (which reads
+  // EMOJI_MAX_LENGTH) accepts it. This guards against the bound re-diverging.
+  it('REST addReactionRequestSchema binds the emoji bound to the SSOT, not a literal', () => {
+    expect(addReactionRequestSchema.properties.emoji.maxLength).toBe(EMOJI_MAX_LENGTH);
+  });
+
+  it('REST addReactionRequestSchema admits a multi-person family sequence (11 units)', () => {
+    const family = '👨‍👩‍👧‍👦';
+    expect(isValidEmoji(family)).toBe(true);
+    expect(family.length).toBeLessThanOrEqual(
+      addReactionRequestSchema.properties.emoji.maxLength
+    );
   });
 });

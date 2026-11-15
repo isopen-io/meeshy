@@ -54,6 +54,7 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
 }));
 
 import { ConversationHandler } from '../ConversationHandler';
+import { PresenceVisibilityService } from '../../../services/PresenceVisibilityService';
 import type { Socket } from 'socket.io';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 
@@ -101,6 +102,41 @@ function makeRetractTyping() {
   return jest.fn<any>().mockResolvedValue(undefined);
 }
 
+/**
+ * Le LECTEUR des stats tel que `MeeshySocketIOManager._presenceViewer` le
+ * rend : l'id du socket et son rôle RELU en base.
+ */
+function makePresenceViewer(role: string) {
+  return jest.fn<any>().mockImplementation(async (userId: string) => ({ userId, role }));
+}
+
+/**
+ * La loi RÉELLE (`PresenceVisibilityService.resolveForPresenceEvent`, qui s'appuie sur `resolveForTargets`) sur un prisma
+ * stubé : aucune cible désactivée, aucun blocage, préférences par défaut, et
+ * les seules amitiés acceptées sont celles passées ici. Un faux
+ * `resolveForTargets` qui réécrirait ADMIN/MODERATOR ne prouverait rien.
+ */
+function makePresenceLaw({ acceptedFriendsOfViewer = [] as string[], blockedByViewer = [] as string[] } = {}) {
+  const prisma = {
+    user: {
+      findMany: jest.fn<any>().mockImplementation(
+        async (args: { where?: { id?: { in?: string[] }; blockedUserIds?: unknown } }) =>
+          args?.where?.blockedUserIds
+            ? []
+            : (args?.where?.id?.in ?? []).map((id: string) => ({ id, deactivatedAt: null })),
+      ),
+      findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: blockedByViewer }),
+    },
+    friendRequest: {
+      findMany: jest.fn<any>().mockResolvedValue(
+        acceptedFriendsOfViewer.map((friendId) => ({ senderId: friendId, receiverId: 'viewer' })),
+      ),
+    },
+  };
+  const privacy = { getPreferencesForUsers: jest.fn<any>().mockResolvedValue(new Map()) };
+  return new PresenceVisibilityService(prisma as any, privacy as any);
+}
+
 function makeHandler({
   prisma = makePrisma(),
   connectedUsers = makeConnectedUsers(),
@@ -108,8 +144,19 @@ function makeHandler({
   readStatusService = makeReadStatusService(),
   retractTyping = undefined as undefined | ((socket: any, conversationId: string) => Promise<void>),
   replayLiveLocations = undefined as undefined | ((socket: any, conversationId: string) => void),
+  presenceViewer = makePresenceViewer('USER'),
+  presenceVisibility = makePresenceLaw() as Pick<PresenceVisibilityService, 'resolveForPresenceEvent'>,
 } = {}) {
-  return new ConversationHandler({ prisma, connectedUsers, socketToUser, readStatusService: readStatusService as any, retractTyping, replayLiveLocations });
+  return new ConversationHandler({
+    prisma,
+    connectedUsers,
+    socketToUser,
+    readStatusService: readStatusService as any,
+    retractTyping,
+    replayLiveLocations,
+    presenceViewer,
+    presenceVisibility,
+  });
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -725,7 +772,7 @@ describe('ConversationHandler', () => {
 
   describe('sendConversationStatsToSocket', () => {
     it('emits CONVERSATION_STATS when stats are returned', async () => {
-      const stats = { participantCount: 5, messageCount: 100 };
+      const stats = { participantCount: 5, messageCount: 100, onlineUsers: [] };
       mockGetOrCompute.mockResolvedValue(stats);
       const socket = makeSocket();
       const handler = makeHandler();
@@ -767,7 +814,7 @@ describe('ConversationHandler', () => {
       // messagesPerLanguage on every warm-cache call, so using it as a
       // read-only "refresh" inflated a conversation's message counts by one on
       // every join and persisted the corruption in the shared singleton cache.
-      const stats = { participantCount: 5, messagesPerLanguage: { en: 10 } };
+      const stats = { participantCount: 5, messagesPerLanguage: { en: 10 }, onlineUsers: [] };
       mockGetOrCompute.mockResolvedValue(stats);
       const socket = makeSocket();
       const handler = makeHandler();
@@ -795,4 +842,5 @@ describe('ConversationHandler', () => {
       await expect(handler.sendConversationStatsToSocket(socket, CONV_ID)).resolves.toBeUndefined();
     });
   });
+
 });

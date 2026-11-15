@@ -10,6 +10,7 @@ import Testing
 /// surfaces sans canevas (post, réel, statut) la partagent, et
 /// `UnifiedPostComposer` — qui n'existe qu'en mode repost — n'en déclare
 /// aucune.
+@MainActor
 struct ReferenceDeclarableModesTests {
 
     @Test func test_declarableModes_forAContentWithoutCanvas_excludePinned() {

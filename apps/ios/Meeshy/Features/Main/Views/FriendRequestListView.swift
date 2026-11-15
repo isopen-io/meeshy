@@ -14,8 +14,6 @@ struct FriendRequestListView: View {
     // is the route destination), mirroring `FriendRequestListViewModel`'s
     // former ownership.
     @StateObject private var viewModel = RequestsViewModel()
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.dismiss) private var dismiss
     @Environment(\.isPresented) private var isPresented
@@ -58,7 +56,7 @@ struct FriendRequestListView: View {
             } label: {
                 Image(systemName: "chevron.backward")
                     .font(.callout.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     // Seule sortie de l'écran, et la plus petite cible : le glyphe
                     // `.callout` seul fait ~17 pt. `alignment: .leading` étend la
                     // zone tactile vers la droite SANS déplacer le chevron (un
@@ -72,7 +70,7 @@ struct FriendRequestListView: View {
 
             Text(String(localized: "friends.requests.title", defaultValue: "Demandes d'amis", bundle: .main))
                 .font(.system(.body, design: .rounded, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             Spacer()
@@ -81,8 +79,8 @@ struct FriendRequestListView: View {
             // titre reste centré.
             Color.clear.frame(width: 44)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
     }
 
     // MARK: - Content
@@ -107,9 +105,10 @@ struct FriendRequestListView: View {
                 LazyVStack(spacing: 0) {
                     ForEach(viewModel.receivedRequests) { request in
                         friendRequestRow(request)
+                            .onAppear { Task { await viewModel.receivedRowAppeared(id: request.id) } }
                     }
                 }
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
             }
         }
     }
@@ -126,8 +125,7 @@ struct FriendRequestListView: View {
     private var emptyState: some View {
         AdaptiveContentUnavailableView(
             String(localized: "friends.requests.empty.title", defaultValue: "Aucune demande", bundle: .main),
-            systemImage: "person.2.slash",
-            description: Text(String(localized: "friends.requests.empty.subtitle", defaultValue: "Les demandes d'amis apparaîtront ici", bundle: .main))
+            systemImage: "person.2.slash"
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -139,45 +137,39 @@ struct FriendRequestListView: View {
         let name = sender?.name ?? "Inconnu"
         let color = DynamicColorGenerator.colorForName(name)
 
-        return HStack(spacing: 14) {
+        return HStack(spacing: MeeshySpacing.mdPlus) {
             MeeshyAvatar(
                 name: name,
                 context: .userListItem,
                 accentColor: color,
                 avatarURL: sender?.avatar,
                 moodEmoji: statusViewModel.statusForUser(userId: request.senderId)?.moodEmoji,
+                ring: sender?.avatarRing,
                 onMoodTap: statusViewModel.moodTapHandler(for: request.senderId)
             )
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
                 if let username = sender?.username {
                     Text("@\(username)")
                         .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 if let message = request.message, !message.isEmpty {
                     Text(message)
                         .font(.footnote)
-                        .foregroundColor(theme.textSecondary)
-                        .lineLimit(2)
-                } else {
-                    // Sans message personnalisé, expliciter l'intention pour que la
-                    // ligne se suffise à elle-même (parité avec le sheet profil).
-                    Text(String(localized: "contacts.requests.received.intent", defaultValue: "Souhaite entrer en contact avec vous", bundle: .main))
-                        .font(.footnote)
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .lineLimit(2)
                 }
 
-                Text(relativeTime(from: request.createdAt))
+                Text(RelativeTimeFormatter.longString(for: request.createdAt))
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             // Nom + pseudo + intention + ancienneté lus comme une seule annonce
             // VoiceOver (au lieu de 4 focus séparés) — les boutons Accepter /
@@ -195,10 +187,10 @@ struct FriendRequestListView: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(theme.textMuted.opacity(0.12)))
-                        .frame(width: 44, height: 44)
+                        .meeshyTapTarget()
                         .contentShape(Circle())
                 }
                 .accessibilityLabel(String(localized: "friends.requests.decline", defaultValue: "Refuser la demande", bundle: .main))
@@ -208,7 +200,7 @@ struct FriendRequestListView: View {
                 } label: {
                     Image(systemName: "checkmark")
                         .font(.caption.weight(.bold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .frame(width: 36, height: 36)
                         .background(
                             Circle()
@@ -220,19 +212,13 @@ struct FriendRequestListView: View {
                                     )
                                 )
                         )
-                        .frame(width: 44, height: 44)
+                        .meeshyTapTarget()
                         .contentShape(Circle())
                 }
                 .accessibilityLabel(String(localized: "friends.requests.accept", defaultValue: "Accepter la demande", bundle: .main))
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-    }
-
-    // MARK: - Helpers
-
-    private func relativeTime(from date: Date) -> String {
-        RelativeTimeFormatter.longString(for: date)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.md)
     }
 }

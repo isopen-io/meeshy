@@ -19,28 +19,31 @@ struct BubbleSecondaryContent: View, Equatable {
     /// `[rawURL: token]` outbound-link tracking map → raw URLs link to
     /// `/l/<token>`. Empty by default (no rewrite).
     var trackedLinks: [String: String] = [:]
+    /// L'auteur n'a pas de compte (#10286) : ses adresses restent du texte brut.
+    var linksAreInert: Bool = false
+    @Environment(\.bubbleSkin) private var skin
 
     var body: some View {
         let langColor = Color(hex: LanguageDisplay.colorHex(for: langCode))
         let display = LanguageDisplay.from(code: langCode)
         let secondaryTextColor: Color = isMe
-            ? .white.opacity(0.85)
-            : textPrimary.opacity(0.8)
+            ? skin.ink(MeeshyOpacity.intense)
+            : textPrimary.opacity(MeeshyOpacity.intense)
 
         VStack(spacing: 0) {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
                 Circle().fill(langColor).frame(width: 4, height: 4)
                 Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
             }
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 if let display = display {
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Text(display.flag).font(.caption)
                         Text(display.name)
                             .font(.caption2.weight(.semibold))
-                            .foregroundColor(langColor)
+                            .foregroundStyle(langColor)
                     }
                 }
                 MessageTextRenderer.render(
@@ -51,13 +54,14 @@ struct BubbleSecondaryContent: View, Equatable {
                     hashtagColor: hashtagTint,
                     accentColor: linkTint,
                     mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
-                    trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks
+                    trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks,
+                    linksAreInert: linksAreInert
                 )
                 .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, MeeshySpacing.sm)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(langColor.opacity(0.12))
+            .background(langColor.opacity(MeeshyOpacity.light))
         }
         .transition(.opacity.combined(with: .move(edge: .top)))
     }
@@ -72,5 +76,6 @@ struct BubbleSecondaryContent: View, Equatable {
             && lhs.hashtagTint == rhs.hashtagTint
             && lhs.linkTint == rhs.linkTint
             && lhs.trackedLinks == rhs.trackedLinks
+            && lhs.linksAreInert == rhs.linksAreInert
     }
 }

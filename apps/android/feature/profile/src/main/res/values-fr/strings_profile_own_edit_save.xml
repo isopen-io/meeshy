@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_own_saved_offline">Modifications enregistrées — elles seront synchronisées au retour en ligne</string>
+</resources>

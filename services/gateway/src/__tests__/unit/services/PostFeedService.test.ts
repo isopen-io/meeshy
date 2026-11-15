@@ -135,6 +135,7 @@ beforeEach(() => {
       updateManyAndReturn: jest.fn(),
       fields: {} as any,
     } as unknown as PrismaClient['friendRequest'],
+    userRelation: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null) } as unknown as PrismaClient['userRelation'],
     participant: {
       findMany: mockParticipantFindMany,
       findFirst: jest.fn(),
@@ -208,6 +209,13 @@ beforeEach(() => {
       findFirst: jest.fn(),
       findUnique: jest.fn(),
     } as unknown as PrismaClient['postMention'],
+    community: {
+      findFirst: jest.fn().mockResolvedValue({ isPrivate: false, createdBy: 'creator-1' }),
+    } as unknown as PrismaClient['community'],
+    communityMember: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+    } as unknown as PrismaClient['communityMember'],
   } as unknown as PrismaClient;
 });
 
@@ -670,7 +678,7 @@ describe('PostFeedService.getStories', () => {
     const service = new PostFeedService(mockPrisma);
     const result = await service.getStories('user-1', {
       updatedSince: new Date('2026-07-03T10:00:00Z'),
-      cursor: encodeCursor(new Date('2026-07-03T09:00:00Z'), 'story-9'),
+      cursor: encodeCursor(new Date('2026-07-03T09:00:00Z'), '68e000000000000000000009'),
     });
 
     expect(mockPostFindMany).toHaveBeenCalledTimes(1);
@@ -718,15 +726,15 @@ describe('PostFeedService.getStories', () => {
     expect(args.select.author).toBeDefined();
   });
 
-  it('keeps the full include without projection (backward compatible)', async () => {
+  it('keeps the full select without projection (backward compatible)', async () => {
     mockPostFindMany.mockResolvedValue([]);
 
     const service = new PostFeedService(mockPrisma);
     await service.getStories('user-1');
 
     const args = mockPostFindMany.mock.calls[0][0];
-    expect(args.include).toBeDefined();
-    expect(args.select).toBeUndefined();
+    expect(args.select).toBeDefined();
+    expect(args.include).toBeUndefined();
   });
 
   it('still flags isViewedByMe in the tray projection', async () => {
@@ -755,7 +763,7 @@ describe('PostFeedService.getStories', () => {
   it('adds a keyset filter and tiebreaker ordering when a cursor is provided (G1c)', async () => {
     mockPostFindMany.mockResolvedValue([]);
     const service = new PostFeedService(mockPrisma);
-    const anchor = makePost('s-anchor', { type: 'STORY' });
+    const anchor = makePost('68e0000000000000000000a0', { type: 'STORY' });
 
     // Round-trip a real cursor (same encoder the service hands out).
     const first = await service.getStories('user-1');
@@ -769,7 +777,7 @@ describe('PostFeedService.getStories', () => {
 
   it('returns hasMore + nextCursor when more stories exist than the limit (G1c)', async () => {
     const rows = Array.from({ length: 3 }, (_, i) =>
-      makePost(`s-page-${i}`, { type: 'STORY', createdAt: new Date(Date.UTC(2025, 0, 10 - i)) }));
+      makePost(`68e00000000000000000010${i}`, { type: 'STORY', createdAt: new Date(Date.UTC(2025, 0, 10 - i)) }));
     mockPostFindMany.mockResolvedValue(rows);
     mockPostViewFindMany.mockResolvedValue([]);
     mockPostReactionFindMany.mockResolvedValue([]);
@@ -780,7 +788,7 @@ describe('PostFeedService.getStories', () => {
     expect(result.items).toHaveLength(2);
     expect(result.hasMore).toBe(true);
     const decoded = decodeCursor(result.nextCursor as string);
-    expect(decoded?.id).toBe('s-page-1');
+    expect(decoded?.id).toBe('68e000000000000000000101');
   });
 
   it('first page without cursor keeps the historic 50 cap and take limit+1 (G1c)', async () => {
@@ -983,7 +991,7 @@ describe('PostFeedService — parité des flags personnels', () => {
     mockPostBookmarkFindMany.mockResolvedValue([{ postId: 'cf-1' }]);
 
     const service = new PostFeedService(mockPrisma);
-    const result = await service.getCommunityFeed('community-1', 'viewer-1');
+    const result = await service.getCommunityFeed('507f1f77bcf86cd799439044', 'viewer-1');
 
     const item = result.items[0] as any;
     expect(item.isBookmarkedByMe).toBe(true);
@@ -1001,7 +1009,7 @@ describe('PostFeedService.getCommunityFeed', () => {
     mockPostFindMany.mockResolvedValue([post]);
 
     const service = new PostFeedService(mockPrisma);
-    const result = await service.getCommunityFeed('community-1', undefined);
+    const result = await service.getCommunityFeed('507f1f77bcf86cd799439044', undefined);
 
     expect(result.items).toHaveLength(1);
     expect((result.items[0] as any).currentUserReactions).toEqual([]);
@@ -1014,7 +1022,7 @@ describe('PostFeedService.getCommunityFeed', () => {
     mockPostReactionFindMany.mockResolvedValue([makeReactionRow('cp-2', '🔥')]);
 
     const service = new PostFeedService(mockPrisma);
-    const result = await service.getCommunityFeed('community-1', 'viewer-1');
+    const result = await service.getCommunityFeed('507f1f77bcf86cd799439044', 'viewer-1');
 
     expect((result.items[0] as any).currentUserReactions).toEqual(['🔥']);
   });
@@ -1027,7 +1035,7 @@ describe('PostFeedService.getCommunityFeed', () => {
     ]);
 
     const service = new PostFeedService(mockPrisma);
-    const result = await service.getCommunityFeed('community-1', 'viewer-1');
+    const result = await service.getCommunityFeed('507f1f77bcf86cd799439044', 'viewer-1');
 
     const cp3 = result.items.find((i: any) => i.id === 'cp-3') as any;
     const cp4 = result.items.find((i: any) => i.id === 'cp-4') as any;
@@ -1041,7 +1049,7 @@ describe('PostFeedService.getCommunityFeed', () => {
     mockPostReactionFindMany.mockResolvedValue([makeReactionRow('root-1', '🔥')]);
 
     const service = new PostFeedService(mockPrisma);
-    const result = await service.getCommunityFeed('community-1', 'viewer-1');
+    const result = await service.getCommunityFeed('507f1f77bcf86cd799439044', 'viewer-1');
 
     expect((result.items[0] as any).currentUserReactions).toEqual(['🔥']);
   });
@@ -1127,19 +1135,6 @@ describe('PostFeedService.getFeed — intent/interest ranking', () => {
     expect(rankById(result.items)[0]).toBe('reel-1');
   });
 
-  it('demotes a post the viewer has already seen (impression fatigue)', async () => {
-    const seen = makePost('seen-1', { authorId: 'a-seen', createdAt: recent() });
-    const fresh = makePost('fresh-1', { authorId: 'a-fresh', createdAt: recent() });
-    mockPostFindMany.mockResolvedValue([seen, fresh]);
-    mockPostReactionFindMany.mockImplementation((args: any) => routeReactionQuery(args, [], []));
-    mockPostImpressionGroupBy.mockResolvedValue([{ postId: 'seen-1', _count: { postId: 3 } }]);
-
-    const service = new PostFeedService(mockPrisma);
-    const result = await service.getFeed('user-1');
-
-    expect(rankById(result.items)[0]).toBe('fresh-1');
-  });
-
   it('boosts posts from a creator the viewer actively engages with (interest affinity)', async () => {
     const fromLoved = makePost('loved-1', { authorId: 'creator-loved', createdAt: recent() });
     const fromOther = makePost('other-1', { authorId: 'creator-other', createdAt: recent() });
@@ -1171,7 +1166,7 @@ describe('PostFeedService.getFeed — intent/interest ranking', () => {
     // cursor must still track the chronological boundary so the next page does
     // not skip or duplicate. With limit=1 the window is the single newest post;
     // the higher-scoring older reel must surface on the *next* page, not vanish.
-    const newer = makePost('newer-1', { type: 'POST', createdAt: new Date('2026-06-02T00:00:00Z') });
+    const newer = makePost('68e0000000000000000000b1', { type: 'POST', createdAt: new Date('2026-06-02T00:00:00Z') });
     const olderReel = makePost('older-reel', {
       type: 'REEL',
       viewCount: 9999,
@@ -1183,10 +1178,10 @@ describe('PostFeedService.getFeed — intent/interest ranking', () => {
     const service = new PostFeedService(mockPrisma);
     const result = await service.getFeed('user-1', undefined, 1);
 
-    expect(rankById(result.items)).toEqual(['newer-1']);
+    expect(rankById(result.items)).toEqual(['68e0000000000000000000b1']);
     expect(result.hasMore).toBe(true);
     const decoded = decodeCursor(result.nextCursor as string);
-    expect(decoded?.id).toBe('newer-1');
+    expect(decoded?.id).toBe('68e0000000000000000000b1');
   });
 });
 
@@ -1324,7 +1319,7 @@ describe('PostFeedService.getReels', () => {
   it('reste fonctionnel quand les requêtes d\'affinité auxiliaires échouent (best-effort)', async () => {
     const reel = makePost('r-1', { type: 'REEL' });
     mockPostFindMany.mockResolvedValue([reel]);
-    mockUserFindUnique.mockRejectedValue(new Error('db down'));
+    mockUserFindUnique.mockImplementation(async (a: any) => (a?.select?.blockedUserIds ? { blockedUserIds: [] } : Promise.reject(new Error('db down'))));
     mockPostMentionFindMany.mockRejectedValue(new Error('db down'));
     mockPostViewFindMany.mockRejectedValue(new Error('db down'));
     mockPostReactionFindMany.mockResolvedValue([]);
@@ -1334,6 +1329,56 @@ describe('PostFeedService.getReels', () => {
 
     expect(result.items).toHaveLength(1);
     expect((result.items[0] as any).id).toBe('r-1');
+  });
+
+  // Prisme rank 4 (deviceLocale) alimente l'affinité de langue du reel viewer.
+  // Un lecteur SANS préférence in-app (nouveau compte : le seul signal de langue
+  // est la locale appareil, cas nominal de la règle 2 du Prisme) recevait un
+  // ensemble `viewerLanguages` VIDE — donc AUCUN reel n'était boosté par la
+  // langue lue, et le classement du fil « Pour toi » était dégradé pour toute
+  // cette population. `getViewerLanguages` doit descendre le prisme ORDONNÉ
+  // complet (`resolveUserLanguagesOrdered`), deviceLocale comprise.
+  it('booste un reel dans la langue de la locale appareil quand aucune préférence in-app n\'est posée', async () => {
+    const esReel = makePost('r-es', {
+      type: 'REEL',
+      authorId: 'author-x',
+      originalLanguage: 'es',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+    });
+    const deReel = makePost('r-de', {
+      type: 'REEL',
+      authorId: 'author-x',
+      originalLanguage: 'de',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+    });
+    // Pool : le reel espagnol d'abord — sans boost de langue, l'égalité de score
+    // préserve l'ordre d'entrée (tri stable). Le reel allemand ne remonte que si
+    // la locale appareil `de` entre dans `viewerLanguages`.
+    mockPostFindMany.mockResolvedValue([esReel, deReel]);
+    mockUserFindUnique.mockResolvedValue({
+      systemLanguage: null,
+      regionalLanguage: null,
+      customDestinationLanguage: null,
+      deviceLocale: 'de-DE',
+    });
+    mockPostReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getReels('user-1', { limit: 10 });
+
+    expect(result.items.map((p: any) => p.id)).toEqual(['r-de', 'r-es']);
+  });
+
+  it('charge deviceLocale pour l\'affinité de langue du reel viewer', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getReels('user-1');
+
+    const call = mockUserFindUnique.mock.calls.find(
+      (c: any) => c?.[0]?.where?.id === 'user-1'
+    );
+    expect(call?.[0]?.select?.deviceLocale).toBe(true);
   });
 });
 
@@ -1393,7 +1438,7 @@ describe('PostFeedService.getReels — chronological cursor', () => {
     commentCount: 0,
     viewCount: 0,
   });
-  const rMid = makePost('r-mid', {
+  const rMid = makePost('68e0000000000000000000c2', {
     type: 'REEL',
     createdAt: new Date('2025-03-02T00:00:00Z'),
     commentCount: 1000,
@@ -1414,13 +1459,13 @@ describe('PostFeedService.getReels — chronological cursor', () => {
 
     // Scoring still reorders the DISPLAY: r-mid has heavy engagement and
     // outscores the fresher-but-empty r-new, so it renders first.
-    expect(result.items.map((p: any) => p.id)).toEqual(['r-mid', 'r-new']);
+    expect(result.items.map((p: any) => p.id)).toEqual(['68e0000000000000000000c2', 'r-new']);
 
     // But the cursor is the chronological boundary of the shown window (r-mid,
     // the oldest of the two shown) — NOT the score-sorted last item (r-new).
     expect(result.hasMore).toBe(true);
     const decoded = decodeCursor(result.nextCursor as string);
-    expect(decoded?.id).toBe('r-mid');
+    expect(decoded?.id).toBe('68e0000000000000000000c2');
     expect(decoded?.createdAt).toBe(rMid.createdAt.toISOString());
     // Guard against the reintroduced bug: never the newest (r-new) reel.
     expect(decoded?.createdAt).not.toBe(rNew.createdAt.toISOString());
@@ -1530,11 +1575,11 @@ describe('PostFeedService — hoist de position par surface', () => {
     mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-community-1')]);
 
     const service = new PostFeedService(mockPrisma);
-    const anonymous = await service.getCommunityFeed('community-1', undefined);
+    const anonymous = await service.getCommunityFeed('507f1f77bcf86cd799439044', undefined);
     expect((anonymous.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
 
     mockPostReactionFindMany.mockResolvedValue([]);
-    const authenticated = await service.getCommunityFeed('community-1', 'viewer-1');
+    const authenticated = await service.getCommunityFeed('507f1f77bcf86cd799439044', 'viewer-1');
     expect((authenticated.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
   });
 

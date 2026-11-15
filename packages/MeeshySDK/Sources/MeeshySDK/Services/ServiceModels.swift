@@ -6,9 +6,23 @@ public struct CreateConversationRequest: Encodable {
     public let type: String
     public let title: String?
     public let participantIds: [String]
+    /// Un tête-à-tête que le serveur lit, à côté du chiffré de bout en bout de
+    /// la paire (#12966) ; absent du corps quand il n'est pas demandé.
+    public let plaintext: Bool?
+    /// Le mode choisi sur l'écran de création (directive porteur) ;
+    /// absent du corps quand rien n'est choisi, et la passerelle
+    /// pose alors `server` (`ConversationCreationEncryption.implicitMode`).
+    public let encryptionMode: ConversationCreationEncryption.Mode?
 
-    public init(type: String, title: String? = nil, participantIds: [String]) {
-        self.type = type; self.title = title; self.participantIds = participantIds
+    public init(
+        type: String,
+        title: String? = nil,
+        participantIds: [String],
+        plaintext: Bool? = nil,
+        encryptionMode: ConversationCreationEncryption.Mode? = nil
+    ) {
+        self.type = type; self.title = title; self.participantIds = participantIds; self.plaintext = plaintext
+        self.encryptionMode = encryptionMode
     }
 }
 
@@ -115,6 +129,15 @@ public struct CreatePostRequest: Encodable {
     /// id de `mediaIds` ci-dessus, ignoré côté gateway pour tout id qui n'y
     /// figure pas (miroir de `CreatePostSchema.mediaAlt`).
     public let mediaAlt: [String: String]?
+    /// LÉGENDE par média (`PostMedia.caption`) — même clé, même borne et même
+    /// règle d'ignorance que `mediaAlt` ci-dessus (miroir de
+    /// `CreatePostSchema.mediaCaption`, #4055).
+    ///
+    /// Champ DISTINCT et non une variante de `mediaAlt` : le texte alternatif
+    /// DÉCRIT le média pour qui ne le voit pas, la légende est ce que l'auteur
+    /// ÉCRIT et que tout le monde VOIT. Cf. `PostMediaText`, qui porte la
+    /// distinction pour les deux bouts de la chaîne.
+    public let mediaCaption: [String: String]?
     /// Grain de découvrabilité géographique DEMANDÉ — le second opt-in de la
     /// spec du 2026-08-02, INDÉPENDANT de `location` ci-dessus : afficher un
     /// lieu sur un contenu et rendre ce contenu trouvable à proximité sont
@@ -130,8 +153,13 @@ public struct CreatePostRequest: Encodable {
     /// non nul rendrait trouvable un contenu que personne n'a choisi de
     /// rendre trouvable.
     public let discoverabilityPrecision: DiscoverabilityPrecision?
+    /// L'auteur ferme les commentaires dès la publication (#16541, miroir de
+    /// `CreatePostSchema.commentsDisabled`). `nil` OMET la clé : ouvert, ce
+    /// que tout client antérieur publie.
+    public let commentsDisabled: Bool?
 
-    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, repostOfId: String? = nil, location: SharedPlace? = nil, storyEffects: StoryEffects? = nil, allowSoundExtraction: Bool? = nil, mentions: [PostMentionInput]? = nil, mediaAlt: [String: String]? = nil, discoverabilityPrecision: DiscoverabilityPrecision? = nil) {
+    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, repostOfId: String? = nil, location: SharedPlace? = nil, storyEffects: StoryEffects? = nil, allowSoundExtraction: Bool? = nil, mentions: [PostMentionInput]? = nil, mediaAlt: [String: String]? = nil, mediaCaption: [String: String]? = nil, discoverabilityPrecision: DiscoverabilityPrecision? = nil, commentsDisabled: Bool? = nil) {
+        self.commentsDisabled = commentsDisabled
         self.content = content; self.type = type; self.visibility = visibility
         self.moodEmoji = moodEmoji; self.visibilityUserIds = visibilityUserIds
         self.mediaIds = mediaIds; self.audioUrl = audioUrl; self.audioDuration = audioDuration
@@ -143,19 +171,25 @@ public struct CreatePostRequest: Encodable {
         self.allowSoundExtraction = allowSoundExtraction
         self.mentions = mentions
         self.mediaAlt = mediaAlt
+        self.mediaCaption = mediaCaption
         self.discoverabilityPrecision = discoverabilityPrecision
     }
 }
 
 /// Corps de `PATCH /posts/:postId/comments/:commentId` — édition par l'auteur.
 /// `nil` = champ inchangé ; `effectFlags: 0` retire tous les effets.
+/// `originalLanguage` DÉCLARE la langue du texte corrigé (#6600) : absent, la
+/// passerelle la remet à null et la redétecte (#6598). Un `nil` n'est jamais
+/// encodé — l'`Encodable` synthétisé omet la clé, il n'écrit pas `null`.
 public struct UpdateCommentRequest: Encodable {
     public let content: String?
     public let effectFlags: Int?
+    public let originalLanguage: String?
 
-    public init(content: String? = nil, effectFlags: Int? = nil) {
+    public init(content: String? = nil, effectFlags: Int? = nil, originalLanguage: String? = nil) {
         self.content = content
         self.effectFlags = effectFlags
+        self.originalLanguage = originalLanguage
     }
 }
 
@@ -164,9 +198,12 @@ public struct CreateCommentRequest: Encodable {
     public let parentId: String?
     public let effectFlags: Int?
     /// IDs des PostMedia déjà uploadés (uploadContext=comment) à attacher au
-    /// commentaire. Wire aligné sur le contrat message-with-attachments (tableau),
-    /// MAIS un commentaire ne porte QU'UN SEUL média : le gateway borne à 1.
-    /// Omis du payload quand vide (endpoint texte-seul inchangé).
+    /// commentaire. Wire aligné sur le contrat message-with-attachments.
+    ///
+    /// **PLUSIEURS depuis #6578** — le bornage à 1 du gateway est levé
+    /// (`MAX_POST_MEDIA`) : le bandeau du composer affichait déjà un TABLEAU de
+    /// vignettes pour n'en envoyer qu'une. Omis du payload quand vide
+    /// (endpoint texte-seul inchangé).
     public let attachmentIds: [String]?
     /// Transcription Whisper produite côté mobile pour un média audio (skip
     /// re-transcription serveur). Même structure que pour les posts.
@@ -175,12 +212,28 @@ public struct CreateCommentRequest: Encodable {
     /// Lieu partagé (picker → `SharedPlace`) — même clé `location` que pour un
     /// message ou un post, hissée par le gateway depuis `metadata.location`.
     public let location: SharedPlace?
+    /// **Le média du POST que ce commentaire CITE** (#6578) — l'ANCRE seule.
+    ///
+    /// On n'envoie QUE `postMediaId` : la NATURE est dérivée par le serveur du
+    /// MIME qu'il relit, jamais crue sur parole. Un client qui pourrait la
+    /// déclarer pourrait faire dire « un fichier » à une vidéo, pour toujours.
+    /// Le serveur REFUSE (400) un média qui n'appartient pas au post commenté.
+    public let quotedPostMedia: QuotedPostMediaAnchor?
+
+    /// L'ancre, et rien qu'elle. Un type à elle plutôt qu'une chaîne nue :
+    /// le contrat serveur est un OBJET, et une clé plate `quotedPostMediaId`
+    /// obligerait chaque nouveau client à deviner l'emballage.
+    public struct QuotedPostMediaAnchor: Encodable {
+        public let postMediaId: String
+        public init(postMediaId: String) { self.postMediaId = postMediaId }
+    }
 
     public init(content: String, parentId: String? = nil, effectFlags: Int? = nil,
                 attachmentIds: [String]? = nil,
                 mobileTranscription: MobileTranscriptionPayload? = nil,
                 originalLanguage: String? = nil,
-                location: SharedPlace? = nil) {
+                location: SharedPlace? = nil,
+                quotedPostMediaId: String? = nil) {
         self.content = content
         self.parentId = parentId
         self.effectFlags = effectFlags
@@ -188,6 +241,7 @@ public struct CreateCommentRequest: Encodable {
         self.mobileTranscription = mobileTranscription
         self.originalLanguage = originalLanguage
         self.location = location
+        self.quotedPostMedia = quotedPostMediaId.map { QuotedPostMediaAnchor(postMediaId: $0) }
     }
 }
 
@@ -257,13 +311,22 @@ public struct UpdatePostRequest: Encodable, Sendable {
     /// ignoré côté gateway pour tout id qui n'y figure pas (un média déjà
     /// attaché au post ne se réécrit pas par ce canal).
     public let mediaAlt: [String: String]?
+    /// LÉGENDE par média à l'édition (#4055) — même tri-état que `mediaAlt` :
+    /// clé absente = « n'y touche pas ».
+    public let mediaCaption: [String: String]?
+    /// Fermer / rouvrir les commentaires à l'édition (#16541) — `nil` =
+    /// inchangé (miroir de `UpdatePostSchema.commentsDisabled`).
+    public let commentsDisabled: Bool?
 
     public init(content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil,
                 moodEmoji: String? = nil, originalLanguage: String? = nil, type: String? = nil,
                 removeMediaIds: [String]? = nil, storyEffects: StoryEffects? = nil,
                 mediaIds: [String]? = nil, location: PostLocationUpdate? = nil,
                 mentions: [PostMentionInput]? = nil, allowSoundExtraction: Bool? = nil,
-                mediaAlt: [String: String]? = nil) {
+                mediaAlt: [String: String]? = nil,
+                mediaCaption: [String: String]? = nil,
+                commentsDisabled: Bool? = nil) {
+        self.commentsDisabled = commentsDisabled
         self.content = content; self.visibility = visibility
         self.visibilityUserIds = visibilityUserIds
         self.moodEmoji = moodEmoji
@@ -276,12 +339,13 @@ public struct UpdatePostRequest: Encodable, Sendable {
         self.mentions = mentions
         self.allowSoundExtraction = allowSoundExtraction
         self.mediaAlt = mediaAlt
+        self.mediaCaption = mediaCaption
     }
 
     enum CodingKeys: String, CodingKey {
         case content, visibility, visibilityUserIds, moodEmoji, originalLanguage
         case type, removeMediaIds, storyEffects, mediaIds, location, mentions
-        case allowSoundExtraction, mediaAlt
+        case allowSoundExtraction, mediaAlt, mediaCaption, commentsDisabled
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -301,6 +365,11 @@ public struct UpdatePostRequest: Encodable, Sendable {
         try c.encodeIfPresent(mentions, forKey: .mentions)
         try c.encodeIfPresent(allowSoundExtraction, forKey: .allowSoundExtraction)
         try c.encodeIfPresent(mediaAlt, forKey: .mediaAlt)
+        // Encodeur MANUEL : un champ ajouté au type et oublié ICI ne part
+        // jamais — sans erreur, sans témoin. C'est cette ligne qui fait
+        // voyager la légende à l'édition.
+        try c.encodeIfPresent(mediaCaption, forKey: .mediaCaption)
+        try c.encodeIfPresent(commentsDisabled, forKey: .commentsDisabled)
         switch location {
         case .set(let place): try c.encode(place, forKey: .location)
         case .remove: try c.encodeNil(forKey: .location)
@@ -380,6 +449,8 @@ public struct CreateStoryRequest: Encodable {
     /// l'auteur n'a rien tranché, le défaut serveur s'applique par SILENCE et
     /// non par écrasement.
     public let allowSoundExtraction: Bool?
+    /// LÉGENDE par média (miroir de `CreatePostSchema.mediaCaption`, #4055).
+    public let mediaCaption: [String: String]?
     /// Texte alternatif par média (miroir de `CreatePostSchema.mediaAlt`).
     ///
     /// La clé est un id de `mediaIds` ci-dessus, et rien d'autre :
@@ -387,8 +458,14 @@ public struct CreateStoryRequest: Encodable {
     /// une clé locale au composer serait acceptée par la requête et jetée par
     /// le serveur, sans erreur. Cf. `StoryMediaAltMapping.serverKeyed`.
     public let mediaAlt: [String: String]?
+    /// « Publier AUSSI en réel » (#9476, miroir de `CreatePostSchema.alsoAsReel`).
+    /// `true` sur une STORY : le serveur publie la story ET un réel aux médias
+    /// COPIÉS, ou rien (`REEL_NOT_QUALIFIED`). `nil` = clé absente du corps —
+    /// ce que tout client antérieur envoie.
+    public let alsoAsReel: Bool?
 
-    public init(type: String = PostType.story.rawValue, content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil, mentions: [PostMentionInput]? = nil, allowSoundExtraction: Bool? = nil, mediaAlt: [String: String]? = nil) {
+    public init(type: String = PostType.story.rawValue, content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil, mentions: [PostMentionInput]? = nil, allowSoundExtraction: Bool? = nil, mediaAlt: [String: String]? = nil, mediaCaption: [String: String]? = nil, alsoAsReel: Bool? = nil) {
+        self.alsoAsReel = alsoAsReel
         self.type = type
         self.content = content; self.storyEffects = storyEffects; self.visibility = visibility
         self.visibilityUserIds = visibilityUserIds
@@ -397,6 +474,7 @@ public struct CreateStoryRequest: Encodable {
         self.mentions = mentions
         self.allowSoundExtraction = allowSoundExtraction
         self.mediaAlt = mediaAlt
+        self.mediaCaption = mediaCaption
     }
 }
 
@@ -411,8 +489,12 @@ public struct UpdateConversationPreferencesRequest: Encodable, Sendable {
     public var reaction: String?
     public var customName: String?
     public var mentionsOnly: Bool?
+    /// Le fond et l'accent personnels (#10631). `nil` = inchangé (écriture partielle) ;
+    /// pour revenir à Signature, envoyer `ConversationAppearance.default`.
+    public var appearance: ConversationAppearance?
 
-    public init(isPinned: Bool? = nil, isMuted: Bool? = nil, isArchived: Bool? = nil, categoryId: String? = nil, tags: [String]? = nil, reaction: String? = nil, customName: String? = nil, mentionsOnly: Bool? = nil) {
+    public init(isPinned: Bool? = nil, isMuted: Bool? = nil, isArchived: Bool? = nil, categoryId: String? = nil, tags: [String]? = nil, reaction: String? = nil, customName: String? = nil, mentionsOnly: Bool? = nil, appearance: ConversationAppearance? = nil) {
+        self.appearance = appearance
         self.isPinned = isPinned; self.isMuted = isMuted; self.isArchived = isArchived
         self.categoryId = categoryId; self.tags = tags; self.reaction = reaction
         self.customName = customName; self.mentionsOnly = mentionsOnly
@@ -472,20 +554,25 @@ public struct TranslateResponse: Decodable, Sendable {
 
 // MARK: - User Search
 
-public struct UserSearchResult: Codable, CacheIdentifiable, Identifiable, Sendable, Equatable {
+public struct UserSearchResult: Codable, CacheIdentifiable, Identifiable, Sendable, Equatable, ProfileDecorWearer {
     public let id: String
     public let username: String
     public let displayName: String?
     public let avatar: String?
     public let isOnline: Bool?
+    /// Le contour d'avatar équipé (#10945), servi avec la personne. Additif et tolérant : absent
+    /// (ancien serveur, aucun contour) ⇒ `nil` ; illisible ⇒ aucun contour (`avatarRing == nil`).
+    public let profileDecor: ServedProfileDecor?
 
     public init(
         id: String,
         username: String,
         displayName: String? = nil,
         avatar: String? = nil,
-        isOnline: Bool? = nil
+        isOnline: Bool? = nil,
+        profileDecor: ServedProfileDecor? = nil
     ) {
+        self.profileDecor = profileDecor
         self.id = id
         self.username = username
         self.displayName = displayName
@@ -502,7 +589,10 @@ public struct UserSearchResult: Codable, CacheIdentifiable, Identifiable, Sendab
 /// Historically this struct used `userId`, which caused `JSONDecoder` to fail
 /// silently against the real payload, leaving the "Écouté" / "Vu" tabs empty
 /// even when stats existed in MongoDB.
-public struct AttachmentStatusUser: Decodable, Identifiable {
+/// `Sendable` : la struct n'est faite que de `let` de types valeur, et la
+/// fiche « Vu par » charge désormais les statuts de TOUTES les pièces jointes
+/// en parallèle (#7228) — les lignes franchissent donc une frontière de tâche.
+public struct AttachmentStatusUser: Decodable, Identifiable, Sendable {
     public let participantId: String
     public let username: String
     public let avatar: String?
@@ -512,6 +602,17 @@ public struct AttachmentStatusUser: Decodable, Identifiable {
     public let watchedAt: Date?
     public let listenCount: Int?
     public let watchCount: Int?
+    /// Nombre d'OUVERTURES de la pièce jointe par ce participant — l'équivalent
+    /// de `listenCount` / `watchCount` pour ce qui n'a pas de piste (image,
+    /// PDF, tableur, présentation, archive, texte).
+    ///
+    /// La passerelle le SERT depuis toujours (`MessageReadStatusService
+    /// .getAttachmentStatusDetails`, `viewCount: s.viewCount ?? 0`) ; cette
+    /// struct ne le déclarait pas, donc le décodeur le jetait en silence et la
+    /// fiche « Vu par » ne pouvait afficher aucun « Nx » pour une image (#7228).
+    /// Optionnel : une charge écrite avant ce champ décode en `nil` — « on ne
+    /// sait pas », jamais « zéro ouverture ».
+    public let viewCount: Int?
     public let listenedComplete: Bool?
     public let watchedComplete: Bool?
     public let lastPlayPositionMs: Int?

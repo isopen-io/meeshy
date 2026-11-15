@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "upload.progress.files-count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "upload.progress.a11y-label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "upload.progress.a11y-value",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

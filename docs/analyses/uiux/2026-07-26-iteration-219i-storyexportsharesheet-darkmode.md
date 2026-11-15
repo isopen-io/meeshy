@@ -2,7 +2,7 @@
 
 **Date** : 2026-07-26
 **Surfaces** :
-- `apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryExportShareSheet.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationMediaViews.swift`
 - `apps/ios/Meeshy/Features/Main/Components/MediaSaveFlowHost.swift`
 

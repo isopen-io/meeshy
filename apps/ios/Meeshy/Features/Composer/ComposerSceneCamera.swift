@@ -1,0 +1,320 @@
+import MeeshySDK
+import Foundation
+
+/// **Le viseur vit DANS la scène — il n'est pas une feuille** (#4080, vue `2b`).
+///
+/// > « La caméra est une entrée, pas un mode. Ce qu'elle rend est posé dans la
+/// > scène courante selon la même règle que la galerie : pas de fond ⇒ il
+/// > devient le fond, sinon un objet de premier plan. » — planche `2b`
+///
+/// > « Quand je touche la scène ça déclenche la caméra et ouvre la sheet caméra
+/// > au lieu de déclencher la caméra et **utiliser le fond de la scène comme
+/// > caméra** » — porteur, 2026-09-04
+///
+/// ## Ce que ce type décide, et ce qu'il ne décide PAS
+///
+/// Il porte l'ÉTAPE du viseur et les modes qu'un format sert. Il ne décide ni
+/// **si** le geste est offert (`ComposerSceneCaptureGesture.offersCapture`), ni
+/// **où** la prise se pose (`ComposerMediaPlacement.role`) : ces deux règles
+/// existent, sont testées, et les recopier ici les ferait diverger au premier
+/// format ajouté. Le §2b prescrit explicitement la seconde — « la même règle
+/// que la galerie » — donc la réutiliser est la lecture littérale de la cible,
+/// pas une commodité.
+nonisolated enum ComposerSceneCameraStage: String, Equatable, CaseIterable, Sendable {
+
+    /// La scène est une scène. Aucun flux, aucune session ouverte.
+    case off
+
+    /// Le viseur occupe le fond de la scène et attend. Rien n'est encore pris.
+    case armed
+
+    /// Le doigt tient, la piste s'écrit.
+    case recording
+}
+
+/// Les trois pastilles de la cible — `PHOTO` · `VIDÉO` · `MAINS LIBRES`.
+///
+/// **`handsFree` n'est pas un troisième média, c'est un troisième GESTE** : la
+/// même vidéo, sans tenir le doigt. La cible les range sur une seule rangée
+/// parce que l'auteur y choisit *comment il déclenche*, pas *ce qu'il capture*.
+nonisolated enum ComposerSceneCameraMode: String, Equatable, CaseIterable, Sendable {
+    case photo
+    case video
+    case handsFree
+}
+
+nonisolated enum ComposerSceneCamera {
+
+    /// **Quels modes un format SERT.**
+    ///
+    /// Un réel est une vidéo par définition : lui offrir `PHOTO` poserait une
+    /// image dans un format qui attend du mouvement — la faute que
+    /// `ComposerSceneCaptureGesture.mode` évite déjà à l'ouverture, ici rendue
+    /// visible plutôt que corrigée après coup.
+    ///
+    /// Un statut n'a pas de scène du tout, donc pas de viseur : la liste VIDE
+    /// est ce qui l'exprime, et elle est cohérente avec `offersCapture`, qui
+    /// refuse le geste sur ce format. Deux règles, un seul verdict.
+    static func modes(for format: ComposerFormat) -> [ComposerSceneCameraMode] {
+        switch format {
+        case .status: return []
+        case .reel:   return [.video, .handsFree]
+        case .story, .post: return [.photo, .video, .handsFree]
+        }
+    }
+
+    /// Le mode posé à l'armement — le premier SERVI, jamais un littéral.
+    ///
+    /// Dériver du même tableau que la rangée garantit qu'aucun format ne
+    /// s'ouvre sur une pastille que sa propre rangée ne montre pas.
+    static func initialMode(for format: ComposerFormat) -> ComposerSceneCameraMode? {
+        modes(for: format).first
+    }
+
+    /// **Ce que le RELÂCHEMENT fait, et c'est là que les trois modes diffèrent.**
+    ///
+    /// - `photo` — l'appui a déjà pris l'image ; relâcher ne fait rien de plus.
+    /// - `video` — le doigt TENAIT la prise : relâcher la clôt et pose.
+    /// - `handsFree` — le doigt ne tient rien : relâcher laisse tourner, et
+    ///   c'est un second appui qui clôt. C'est toute la raison d'être du mode ;
+    ///   le traiter comme `video` le rendrait indiscernable de lui.
+    static func stageAfterRelease(mode: ComposerSceneCameraMode,
+                                  stage: ComposerSceneCameraStage) -> ComposerSceneCameraStage {
+        guard stage == .recording else { return stage }
+        switch mode {
+        case .photo, .video: return .armed
+        case .handsFree:     return .recording
+        }
+    }
+
+    /// **La prise POSE, puis le viseur se retire** — le viseur n'est pas un
+    /// mode où l'on reste (§2b : « une entrée, pas un mode »). Rester armé
+    /// après une pose ferait de la caméra un état du composer, et l'auteur
+    /// n'aurait plus de scène à regarder pour juger ce qu'il vient de poser.
+    static let stageAfterCapture: ComposerSceneCameraStage = .off
+
+    /// **Le libellé du bas de la cible n'est pas décoratif : il DIT le geste**,
+    /// et il change avec le mode. Le figer sur « maintenir pour filmer »
+    /// mentirait en `PHOTO` et en `MAINS LIBRES`.
+    static func hintKey(mode: ComposerSceneCameraMode,
+                        stage: ComposerSceneCameraStage) -> String {
+        switch (mode, stage) {
+        case (.photo, _):            return "composer.camera.hint.photo"
+        case (.video, .recording):   return "composer.camera.hint.videoHolding"
+        case (.video, _):            return "composer.camera.hint.video"
+        case (.handsFree, .recording): return "composer.camera.hint.handsFreeStop"
+        case (.handsFree, _):        return "composer.camera.hint.handsFreeStart"
+        }
+    }
+}
+
+/// **Ce que le viseur OCCUPE, et ce qu'il laisse** (#4080).
+///
+/// Le chrome du viseur vit désormais DANS la carte (directive porteur
+/// 2026-09-04). Il y rencontre donc les meubles que la carte peint déjà —
+/// et mesuré au simulateur, le déclencheur (y 569–665) tombait exactement sur
+/// le volet de description (y 610–648).
+///
+/// ## Trois meubles, trois réponses — c'est ce qui fait de ceci une règle
+///
+/// Une fonction qui rendrait « tout cède » en ignorant son paramètre ne
+/// déciderait rien. Celle-ci décide l'APPARTENANCE : ce que le viseur occupe
+/// n'est pas « le bas de l'écran », c'est **la carte**.
+nonisolated enum ComposerSceneCameraOverlay {
+
+    enum Furniture: String, CaseIterable, Sendable {
+        /// Le volet de description, ancré au bas du DESSIN (#4993) — donc
+        /// exactement là où le déclencheur se pose.
+        case description
+        /// La trace du son de fond, ancrée AU-DESSUS du dessin (#5017). Le
+        /// viseur ne monte pas jusque-là.
+        case soundTrace
+        /// Les deux rails. Le viseur s'arme plein écran (A8, #17109) et sa
+        /// sortie est « Quitter », dans son propre en-tête : les rails cèdent
+        /// (loi 13, « pas de rail au viseur »), et reviennent avec la scène.
+        case rails
+    }
+
+    static func yieldsToViewfinder(_ furniture: Furniture) -> Bool {
+        switch furniture {
+        case .description: return true
+        case .soundTrace:  return false
+        case .rails:       return true
+        }
+    }
+
+    /// La question que les sites de montage posent — ils n'écrivent pas
+    /// `cameraStage != .off`, ils demandent si LEUR meuble est servi.
+    static func isServed(_ furniture: Furniture,
+                         stage: ComposerSceneCameraStage) -> Bool {
+        !(stage != .off && yieldsToViewfinder(furniture))
+    }
+}
+
+/// **Ce que la carte MONTRE quand le viseur est armé** (#4080).
+///
+/// Trois états, et le troisième est celui qui manquait : une permission REFUSÉE
+/// laissait la carte noire, c'est-à-dire indiscernable d'une scène vide ou
+/// d'une caméra en panne. L'auteur cherchait un défaut là où il n'y avait
+/// qu'une case à cocher.
+///
+/// `notDetermined` ne montre PAS le panneau : le système est en train de poser
+/// sa question, et un écran de refus affiché pendant qu'on demande dirait le
+/// contraire de ce qui se passe.
+nonisolated enum ComposerSceneCameraSurface {
+
+    enum Shown: String, Equatable, Sendable {
+        /// La scène est une scène.
+        case scene
+        /// L'aperçu de l'objectif.
+        case viewfinder
+        /// L'écran qui dit POURQUOI il n'y a pas d'image.
+        case permissionRefused
+    }
+
+    static func shown(stage: ComposerSceneCameraStage,
+                      permission: MediaPermissionState) -> Shown {
+        guard stage != .off else { return .scene }
+        if permission.needsSettingsRedirect { return .permissionRefused }
+        return .viewfinder
+    }
+}
+
+/// **Le viseur a DEUX tailles** (directive porteur 2026-09-04 : « à la place de
+/// (x) pour fermer, il faut mettre [ ] plutôt pour passer en full screen
+/// entièrement »).
+///
+/// ## La croix est là dans les DEUX tailles (#8653)
+///
+/// Le lot du 2026-09-04 la réservait au plein écran, au motif que la carte
+/// avait « déjà ses sorties ». Le porteur l'a révoqué le 2026-09-29 : « il faut
+/// permettre de quitter à tout moment : le (X) qui apparaît quand c'est en
+/// plein écran doit toujours être là, même dans la scène ». Une sortie qu'on
+/// doit connaître n'en est pas une ; celle qu'on VOIT, si.
+nonisolated enum ComposerSceneCameraSize: String, Equatable, CaseIterable, Sendable {
+    /// Le viseur occupe la carte 9:16, plateau visible autour.
+    case card
+    /// Il occupe l'écran entier — plus de plateau, plus de rails.
+    case fullScreen
+
+    /// **La taille d'armement : le plein écran** (A8, #17109). La carte ne
+    /// reste que pour le selfie éclairé par l'écran (#9566), qui peut s'y réduire.
+    static let armed: ComposerSceneCameraSize = .fullScreen
+
+    /// Ce qu'un appui sur le bouton de taille produit.
+    var toggled: ComposerSceneCameraSize { self == .card ? .fullScreen : .card }
+
+    /// Le glyphe de ce bouton — il annonce OÙ l'on va, jamais où l'on est.
+    /// Un chevron qui décrirait l'état laisserait deviner ce qu'un appui ferait.
+    var toggleSymbol: String {
+        self == .card
+            ? "arrow.up.left.and.arrow.down.right"
+            : "arrow.down.right.and.arrow.up.left"
+    }
+}
+
+/// **Une entrée de scène de la colonne du viseur** (#17432, directive porteur) :
+/// ce qu'on compose sans quitter la caméra.
+nonisolated enum ComposerViewfinderEntry: String, CaseIterable, Equatable, Sendable {
+    /// En PREMIER (directive porteur) : choisir dans la photothèque est le geste
+    /// qui remplace la prise.
+    case gallery
+    case text
+    case background
+    case sticker
+    /// Un son pour la scène (#18654) : sa feuille se pose sur le viseur vivant.
+    case sound
+
+    /// Ce que l'entrée fait de la caméra.
+    enum Camera: Equatable, Sendable {
+        /// La caméra reste armée, l'aperçu tourne : ce qu'on pose attend la prise, qui passera dessous.
+        case kept
+        /// La caméra s'arrête : l'élément choisi remplace ce qu'elle aurait pris.
+        case cut
+    }
+
+    /// Ce qui est arrivé à l'entrée ouverte.
+    enum Outcome: Equatable, Sendable {
+        case opened
+        case dismissed
+        case chosen
+    }
+
+    /// **Le viseur reste vivant pendant tout le processus** (directive porteur),
+    /// sauf quand un élément de la galerie est CHOISI : le viseur s'arrête et le composer de
+    /// base revient. Un fond choisi reste celui de la scène tant qu'aucune prise ne le remplace.
+    func camera(after outcome: Outcome) -> Camera {
+        guard self == .gallery, outcome == .chosen else { return .kept }
+        return .cut
+    }
+
+    /// La porte de la scène que l'entrée ouvre ; la galerie n'en a pas, elle ouvre la photothèque.
+    var door: ComposerRailDoor? {
+        switch self {
+        case .text: return .text
+        case .background: return .background
+        case .sticker: return .sticker
+        case .sound: return .sound
+        case .gallery: return nil
+        }
+    }
+
+    var symbol: String {
+        door?.symbolName ?? "photo.on.rectangle"
+    }
+
+    var accessibilityIdentifier: String { "composer.viewfinder.\(rawValue)" }
+}
+
+/// **La colonne du viseur du composer : Galerie · Texte · Fond · Stickers · Son, puis
+/// les familles de look** (#17432). Elle retourne « pas de rail au viseur »
+/// (A8, #17109) : les rails de la SCÈNE cèdent toujours, mais le viseur armé
+/// porte ses entrées de scène. La caméra de conversation n'en a aucune ; une
+/// prise en cours, une tenue ou une retouche les retirent ; des segments en
+/// attente retirent la Galerie, dont le choix couperait la caméra.
+nonisolated enum ComposerViewfinderColumn {
+    static func entries(composesScene: Bool, context: ComposerCaptureGestureContext) -> [ComposerViewfinderEntry] {
+        guard composesScene, context.stage == .armed, !context.editing, !context.holding else { return [] }
+        guard context.pendingSegments > 0 else { return ComposerViewfinderEntry.allCases }
+        return ComposerViewfinderEntry.allCases.filter { $0.camera(after: .chosen) == .kept }
+    }
+
+    /// Une feuille se pose PAR-DESSUS le viseur vivant ; un outil qui s'édite SUR la scène (la
+    /// bande du cadre) prend la scène le temps de l'outil, caméra armée.
+    /// **Le texte, lui, se saisit SUR le viseur vivant** (#18638, porteur 2026-11-15) : le clavier
+    /// monte, sa barre de style avec lui, et la saisie se pose sur l'aperçu — jamais une scène
+    /// réduite sur fond noir.
+    static func yieldsToScene(toolPresentsSheet: Bool, typesOnViewfinder: Bool = false) -> Bool {
+        !toolPresentsSheet && !typesOnViewfinder
+    }
+
+    /// Le texte s'écrit sur l'aperçu quand ses objets s'y montrent : la prise sera le fond
+    /// (`ComposerViewfinderScene.captureFoundsBackground`). Sinon il s'écrit sur la scène.
+    static func typesOnViewfinder(entry: ComposerViewfinderEntry, captureFoundsBackground: Bool) -> Bool {
+        entry == .text && captureFoundsBackground
+    }
+
+    /// L'outil auquel le viseur a cédé la scène est-il encore ouvert ? Sa fermeture rend le
+    /// viseur. La bande du cadre en est un : sans elle, fermer la bande laissait la scène figée.
+    static func entryToolIsOpen(yieldsToScene: Bool, sceneToolOwnsScreen: Bool,
+                                sheetIsPresented: Bool, bandIsOpen: Bool) -> Bool {
+        yieldsToScene && (sceneToolOwnsScreen || sheetIsPresented || bandIsOpen)
+    }
+
+    /// Un trait sépare ce qu'on pose de ce qui teinte la prise, quand le rail porte les deux.
+    static func separatesLooks(sceneEntries: [ComposerViewfinderEntry], offersLooks: Bool) -> Bool {
+        !sceneEntries.isEmpty && offersLooks
+    }
+
+    /// **Des noms simples, ceux du porteur** : Galerie · Texte · Fond · Stickers —
+    /// des noms d'objets, pas les verbes du rail de la scène.
+    static func label(_ entry: ComposerViewfinderEntry) -> String {
+        switch entry {
+        case .gallery: return String(localized: "composer.viewfinder.gallery", defaultValue: "Galerie", bundle: .main)
+        case .text: return String(localized: "composer.viewfinder.text", defaultValue: "Texte", bundle: .main)
+        case .background: return String(localized: "composer.viewfinder.background", defaultValue: "Fond", bundle: .main)
+        case .sticker: return String(localized: "composer.viewfinder.stickers", defaultValue: "Stickers", bundle: .main)
+        case .sound: return String(localized: "composer.capture.tool.sound", defaultValue: "Son", bundle: .main)
+        }
+    }
+}

@@ -8,7 +8,7 @@
 
 ### Task 3a : Mémoïsation `toRenderableSlide` dans le render path
 
-**Files:** `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift` (sites :834, :1324, :1387)
+**Files:** `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift` (sites :834, :1324, :1387)
 
 - [ ] Cache à 1 entrée (`RenderableSlideCache`, classe boxée en `@State` de `StoryCardView`) keyé par fingerprint `story.id | chaîne de langues | counts de traductions par textObject` (invalide sur merge de traductions temps réel). Les 3 sites consomment le cache. Build + tests + commit.
 
@@ -16,7 +16,7 @@
 
 **Files:**
 - Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryReaderPrefetcher.swift` (paramètre opaque `extraWarmItems`)
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` (`refreshPrefetchWindowAndTimer` passe le 1er slide non-vu du groupe suivant + le slide d'entrée du groupe précédent)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` (`refreshPrefetchWindowAndTimer` passe le 1er slide non-vu du groupe suivant + le slide d'entrée du groupe précédent)
 - Test: `packages/MeeshySDK/Tests/MeeshyUITests/Story/Canvas/StoryReader_PrefetchTests.swift`
 
 - [ ] TDD SDK : `updateWindow(items:currentIndex:context:preferredLanguages:extraWarmItems:)` — les extras sont bootstrappés en `.edit` et protégés de l'éviction tant qu'ils restent passés ; défaut `[]` non-cassant.
@@ -24,7 +24,7 @@
 
 ### Task 3c : Transition de groupe interactive réversible (deux faces)
 
-**Files:** `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift` (`unifiedDragGesture`, `groupTransition`), `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift` (face entrante), `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` (état drag)
+**Files:** `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift` (`unifiedDragGesture`, `groupTransition`), `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift` (face entrante), `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` (état drag)
 
 Principe (parité reels) : pendant le drag horizontal inter-groupes, la face ENTRANTE est un rendu statique léger du 1er slide du groupe voisin (canvas préfetché 3b via snapshot, sinon cover/thumbHash) — jamais une 2ᵉ StoryCardView interactive (états mono-slide du viewer + coût). Les deux faces tournent autour de l'arête commune (vrai cube : sortante 0→−90°, entrante +90°→0, anchor sur les bords opposés). Le geste suit le doigt en continu, seuil distance OU vélocité pour commit, sinon snap-back spring. Le swap vers la vraie StoryCardView se fait au commit (comme aujourd'hui — invisible car la face entrante affiche déjà le même contenu).
 

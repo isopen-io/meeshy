@@ -7,32 +7,41 @@ import MeeshyUI
 // MARK: - MessageOverlayMenu
 
 struct MessageOverlayMenu: View {
+    @State private var delayed = DelayedActions()
     let message: Message
     let contactColor: String
+    /// Le cadre de la cellule pressée, en coordonnées de FENÊTRE (#11208) :
+    /// l'aperçu s'ouvre À SA PLACE. `.zero` quand la cellule n'est pas
+    /// matérialisée — l'aperçu se pose alors au centre, même loi de placement.
+    /// Le corps ne le lit jamais tel quel : il le ramène d'abord dans son
+    /// propre repère (`sourceFrame(windowFrame:containerOrigin:)`) — sur iPad,
+    /// la conversation vit à droite de la colonne de gauche.
     let messageBubbleFrame: CGRect
     // `focalPreviewImage` a vécu ici : en mode Focal, l'aperçu élevé rendait
-    // les PIXELS de la cellule vivante, capturés au geste. L'intention était
-    // bonne — « aucun second chemin de rendu » — mais le résultat ne l'était
-    // pas : la cellule Focal fait tenir l'identité et la barre de méta À CHEVAL
-    // sur son cadre, si bien que la capture, bornée aux `bounds` de la cellule,
-    // les tranchait en deux. Directive produit 2026-08-23 : « le mode focal,
-    // lorsqu'on y fait long-press, doit afficher le message NORMAL ; ici on a
-    // les éléments coupés, ce n'est pas élégant. » L'aperçu élevé rend donc le
-    // même `ThemedMessageBubble` que partout ailleurs — un message entier, à
-    // sa taille naturelle, quel que soit le mode de lecture du fil.
+    // les PIXELS de la cellule vivante, capturés au geste. La capture, bornée
+    // aux `bounds` de la cellule, tranchait l'identité et la barre de méta que
+    // la rangée Focal pose À CHEVAL sur son cadre (directive 2026-08-23).
+    // L'aperçu rendit ensuite une bulle générique, quel que soit le mode.
+    // Depuis #11208 (décision #11204), il rend la cellule elle-même — la
+    // rangée plate en Script et en Focal, la bulle ailleurs — entière, sans
+    // capture (`MessageOverlayCellPreview`).
     @Binding var isPresented: Bool
-    var canDelete: Bool = false
-    var canEdit: Bool = false
+    /// Le contexte du menu, posé par la fabrique UNIQUE (`MessageMenuContext.make`,
+    /// #11214) : l'overlay ne recompose aucun verdict. `.closed` hors hôte.
+    var menuContext: MessageMenuContext = .closed
     var onCopy: (() -> Void)?
     var onEdit: (() -> Void)?
-    var onPin: (() -> Void)?
-    var onToggleStar: (() -> Void)?
-    var isStarred: Bool = false
+    /// Répondre (#11214) — l'hôte compose la citation, comme la feuille « Plus… ».
+    var onReply: (() -> Void)? = nil
+    /// Réessayer un envoi raté.
+    var onRetry: (() -> Void)? = nil
     var textTranslations: [MessageTranslation] = []
     var transcription: MessageTranscription? = nil
     var translatedAudios: [MessageTranslatedAudio] = []
+    /// Ce que le fil sert pour CE message — drapeau, pistes, mode de lecture
+    /// (#9010, #9259, #11208).
+    var threadLanguage = ThreadLanguage()
     var onReact: ((String) -> Void)?
-    var onDelete: (() -> Void)?
     /// Composant unifié « Enregistrer » : déclenché par l'action `.saveMedia`
     /// (message à exactement un attachment enregistrable).
     var onSaveMedia: (() -> Void)? = nil
@@ -41,11 +50,22 @@ struct MessageOverlayMenu: View {
     /// le même état de présentation que le second déclencheur (la feuille de
     /// transfert). Un montage ici en ferait un second contrat d'envoi.
     var onCompose: (() -> Void)? = nil
+    /// **Sélectionner** (#4005) — entre en mode
+    /// sélection multiple, sème le message qui a déclenché le longpress.
+    var onSelect: (() -> Void)? = nil
+    /// **Supprimer le message** (`.deleteMessage`) — l'hôte ouvre la confirmation
+    /// qui offre « pour tous », « retirer » ou « pour moi » selon les verdicts
+    /// de la loi. Sans rappel, l'entrée n'est pas offerte (un contrôle existe
+    /// s'il a un effet).
+    var onDelete: (() -> Void)? = nil
+    /// **Traduire sur l'appareil** (E2EE, verdict `.device`) — l'hôte passe par
+    /// `DeviceTranslationCoordinator`. Sans rappel, « Traduire » n'est pas offert
+    /// dans une conversation où le serveur ne lit pas le clair : la vue Langue
+    /// ne sait demander qu'au serveur, qui refuse.
+    var onTranslateOnDevice: (() -> Void)? = nil
 
-    // Full bubble-rendering context — when `messageBubbleFrame != .zero`, the
-    // overlay renders a REAL `ThemedMessageBubble` at the source position
-    // instead of the custom `messagePreview` (which had drifted from the
-    // in-conversation rendering). Defaults stay safe for legacy call sites.
+    // Le contexte de rendu de la cellule : l'aperçu rend la MÊME bulle ou la
+    // MÊME rangée que le fil, avec les mêmes entrées.
     var isDirect: Bool = false
     var preferredTranslation: MessageTranslation? = nil
     var mentionDisplayNames: [String: String] = [:]
@@ -62,38 +82,86 @@ struct MessageOverlayMenu: View {
     /// Ouvre la feuille de détail d'un appel — action `.callDetail`, présente
     /// uniquement pour un message qui porte un `callSummary`. Cette
     /// destination vivait sur l'appui long de la carte d'appel ; l'appui long
-    /// étant rendu au menu du message (directive 2026-08-24), elle entre dans
+    /// étant rendu au menu du message, elle entre dans
     /// le menu plutôt que de disparaître.
     var onShowCallDetail: (() -> Void)? = nil
+    /// Ouvre la carte d'export — `true` pour l'« Export rapide » (format par défaut).
+    var onExportImage: ((Bool) -> Void)? = nil
     /// Ouvre le picker d'emoji complet (bouton `+` de la barre de réactions).
     var onExpandFullPicker: (() -> Void)? = nil
+    /// Arrivé EN CLAIR dans l'ère chiffrée de la conversation (#11380) :
+    /// l'aperçu porte le marqueur que la cellule montre dans le fil.
+    var isUnencrypted: Bool = false
+    /// **Lire un vocal depuis l'aperçu** (#11339) — l'hôte le rend au
+    /// ViewModel (`ConversationViewModel.playAudio(attachmentId:continuesQueue:)`).
+    /// Sans rappel, le bouton de lecture de l'aperçu ne lance rien.
+    var onPlayAudio: ((String) -> Void)? = nil
 
-    private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.openURL) private var openURL
+    @Environment(\.layoutDirection) private var layoutDirection
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    /// « Réduire les animations » (#11208) : l'entrée et la sortie deviennent un
+    /// fondu bref, sans déplacement ni ressort.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var isDark: Bool { colorScheme == .dark }
     @State private var isVisible = false
-    @State private var isEmojiPickerOpen = false
+    /// La hauteur NATURELLE de l'aperçu, mesurée à sa largeur (#11208). La
+    /// rangée plate se pose plus étroite que sa cellule (16 pt de chaque bord) :
+    /// son retour à la ligne, donc sa hauteur, n'est pas celle du fil. `nil`
+    /// avant la première mesure — la hauteur de la cellule en tient lieu.
+    @State private var measuredPreviewHeight: CGFloat?
     /// Classement des emojis rapides figé pour la durée de la présentation —
     /// cf. `emojiQuickBar`.
     @State private var cachedTopEmojis: [String]?
-    /// Offset vertical du cluster native-lean pendant le drag (suivi du doigt,
-    /// amorti au-delà des seuils par `MessageOverlayDragLaw.displayOffset`).
-    /// `@GestureState` : reset automatique (spring) au release ET à
-    /// l'annulation système du geste (appel entrant, background) — le cluster
-    /// ne reste jamais figé hors position.
-    @GestureState(resetTransaction: Transaction(animation: .spring(response: 0.35, dampingFraction: 0.75)))
-    private var clusterDragOffset: CGFloat = 0
+    /// Parcours vertical BRUT du doigt pendant le drag. Il se partage entre la
+    /// réduction de l'aperçu (`MessageOverlayRevealLaw`, #9043) et l'offset du
+    /// cluster (`MessageOverlayDragLaw.displayOffset`). `@GestureState` : reset
+    /// automatique au release ET à l'annulation système du geste (appel
+    /// entrant, background) — le cluster ne reste jamais figé hors position ;
+    /// sans ressort sous Reduce Motion.
+    @GestureState(reset: { _, transaction in
+        transaction.animation = MainActor.assumeIsolated { UIAccessibility.isReduceMotionEnabled }
+            ? nil
+            : .spring(response: 0.35, dampingFraction: 0.75)
+    })
+    private var liveDragTranslation: CGFloat = 0
+    /// Le facteur de réduction de l'aperçu GARDÉ au relâchement (#9043).
+    /// `nil` tant qu'aucun geste n'a conclu : l'ouverture vaut alors
+    /// `MessageOverlayRevealLaw.restingFactor` (réduit d'office sous VoiceOver
+    /// et en animations réduites).
+    @State private var committedReveal: CGFloat?
     /// Haptic d'armement émis une seule fois par geste ; réarmé au release.
     @State private var dragHapticArmed = false
+    /// La rangée plate de l'aperçu, construite une fois par jeu d'entrées : le
+    /// corps se réévalue à chaque image du glissement (#11208).
+    @State private var flatRowMemo = MessageOverlayFlatRowMemo()
+    /// Le vocal que l'aperçu a lancé (#11339) : la fermeture l'arrête, et lui
+    /// seul — une lecture partie du fil avant l'appui long continue.
+    @State private var previewPlayedAttachmentId: String?
 
-    private let previewCharLimit = 500
+    /// La durée du fondu qui remplace le ressort sous « Réduire les animations ».
+    static let reducedMotionFadeDuration: TimeInterval = 0.18
+
+    /// **Le cadre de la cellule, ramené de la fenêtre au repère de l'overlay**
+    /// (#11208). La cellule le donne en coordonnées de fenêtre
+    /// (`cellFrameInWindow`) ; l'overlay pose son aperçu en `.position` dans
+    /// SON repère. Sur iPad, la conversation vit à droite de la colonne de
+    /// gauche : sans la conversion, la bulle s'ouvrait décalée de la largeur de
+    /// cette colonne, coupée au bord. Le cadre de la cellule commence au haut
+    /// de sa bulle (la cellule n'a aucune marge verticale) : aucun retrait.
+    /// `.zero` (aucune cellule) reste `.zero`.
+    static func sourceFrame(windowFrame: CGRect, containerOrigin: CGPoint) -> CGRect {
+        guard windowFrame != .zero else { return .zero }
+        return windowFrame.offsetBy(dx: -containerOrigin.x, dy: -containerOrigin.y)
+    }
+
     // Expanded emoji set — far more than fits in the viewport, so the
     // quick reaction strip becomes horizontally scrollable. The first 6
     // are the iMessage-style "popular" defaults (still visible without
     // any scroll); the tail extends with a curated selection so the
     // user always has something to discover when they swipe.
-    private let defaultEmojis = [
+    static let defaultEmojis = [
         "😂", "❤️", "👍", "😮", "😢", "🔥",
         "🎉", "💯", "🥰", "😎", "🙏", "💀",
         "🤣", "✨", "👏", "🤔", "🥺", "😍",
@@ -105,15 +173,15 @@ struct MessageOverlayMenu: View {
     // barre d'emojis). Distinct de `bubbleAccentHex` qui, lui, teinte
     // la bulle previsualisee selon l'expediteur.
     private var overlayAccent: Color { Color(hex: contactColor) }
+    /// La peau de la bulle présentée, celle que le fil a résolue (#10753).
+    private var previewSkin: BubbleSkin { BubbleSkinLedger.skin(for: message.conversationId, isDark: isDark) }
 
-    // MARK: - Bubble preview helpers (mirror BubbleStandardLayout)
-
-    /// Same blend recipe as `BubbleStandardLayout.otherBubbleColor` so
-    /// received-message bubbles keep their blended sender / brand tone
-    /// inside the overlay. Sent messages use the brand primary directly.
+    /// Same blend recipe as `BubbleStandardLayout.otherBubbleColor` so the
+    /// protected form of a received message keeps its blended sender / brand
+    /// tone inside the overlay. Sent messages use the skin fill directly.
     private var bubbleAccentHex: String {
         if message.isMe {
-            return MeeshyColors.brandPrimaryHex
+            return previewSkin.sentFillHex
         }
         let senderHex = message.senderColor ?? contactColor
         return DynamicColorGenerator.blendTwo(
@@ -124,408 +192,476 @@ struct MessageOverlayMenu: View {
         )
     }
 
-    /// Language flags for the inline meta row (original + each translated
-    /// target language, deduped). Capped at 3 to match the legacy bubble
-    /// strip. Returning an empty array suppresses the flag cluster.
-    private var previewFlags: [String] {
-        var seen: Set<String> = []
-        var ordered: [String] = []
-        let original = message.originalLanguage.lowercased()
-        if !original.isEmpty, seen.insert(original).inserted {
-            ordered.append(original)
-        }
-        for translation in textTranslations {
-            let code = translation.targetLanguage.lowercased()
-            if !code.isEmpty, seen.insert(code).inserted {
-                ordered.append(code)
-            }
-        }
-        return Array(ordered.prefix(3))
-    }
-
-    /// Aggregated reaction pills, computed from the message's raw
-    /// reactions exactly the way `BubbleContent.summarizeReactions`
-    /// does for the in-conversation bubble — same emoji order, same
-    /// "includesMe" flag — so the preview shows the identical sticker
-    /// row the user just long-pressed.
-    /// Note: `summarizeReactions` is declared as a static helper inside
-    /// the `extension BubbleContent` of `BubbleContentBuilder.swift`,
-    /// so the call site uses the value type name, not the file name.
-    private var previewReactionSummaries: [ReactionSummary] {
-        let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-        return BubbleContent.summarizeReactions(
-            message.reactions,
-            currentUserId: currentUserId
-        )
-    }
-
     // MARK: - Primary Actions (liste verticale native-lean)
 
-    private var menuContext: MessageMenuContext {
-        let hasText = !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let hasMedia = !message.attachments.isEmpty
-        let hasTimebased = message.attachments.contains {
-            AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack
-        }
-        return MessageMenuContext(
-            isMine: message.isMe,
-            canEdit: canEdit,
-            canDelete: canDelete,
-            hasText: hasText,
-            hasMedia: hasMedia,
-            hasTimebasedMedia: hasTimebased,
-            isPinned: message.pinnedAt != nil,
-            isStarred: isStarred,
-            isEdited: message.isEdited,
-            // Inerte ici : `menuContext` n'alimente que `primaryActions`, qui
-            // n'utilise PAS `hasEditRevisions`. Ce champ ne pilote que l'item
-            // `.history` de la feuille « Plus… », dont le contexte est construit
-            // séparément (ConversationView) avec la vraie valeur
-            // `!editRevisions(for:).isEmpty`.
-            hasEditRevisions: true,
-            hasCallSummary: message.callSummary != nil,
-            saveableAttachmentCount: message.attachments.filter { $0.type != .location }.count,
-            canComposeMedia: ComposableAttachment.offers(message: message),
-            showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
-            isForwardable: message.isForwardable
-        )
+    private var primaryActions: [PrimaryAction] {
+        Self.reachable(
+            MessageActionResolver.primaryActions(menuContext), context: menuContext,
+            hasDeleteHandler: onDelete != nil, hasDeviceTranslationHandler: onTranslateOnDevice != nil)
     }
 
-    private var primaryActions: [PrimaryAction] {
-        MessageActionResolver.primaryActions(menuContext)
+    /// **Un contrôle existe s'il a un effet** : on retire de la liste ce que
+    /// l'hôte n'a pas câblé, au lieu de montrer une ligne qui ne fait rien.
+    static func reachable(
+        _ actions: [PrimaryAction],
+        context: MessageMenuContext,
+        hasDeleteHandler: Bool,
+        hasDeviceTranslationHandler: Bool
+    ) -> [PrimaryAction] {
+        let translatesOnlyOnDevice = context.translatesOnDevice && !context.canTranslate
+        return actions.filter { action in
+            switch action {
+            case .deleteMessage: return hasDeleteHandler
+            case .translate: return !translatesOnlyOnDevice || hasDeviceTranslationHandler
+            default: return true
+            }
+        }
+    }
+
+    /// **La barre d'emojis suit le verdict `canReact` de la loi** : message
+    /// disparu, conversation fermée, lecteur non membre ou avis système n'ont
+    /// pas de réaction à offrir. Une barre montée pour rien serait un contrôle
+    /// que la passerelle refuse ensuite.
+    static func showsEmojiQuickBar(for context: MessageMenuContext) -> Bool {
+        context.canReact
     }
 
     private func handlePrimaryAction(_ action: PrimaryAction) {
+        guard isVisible else { return }
         switch action {
+        case .reply:
+            onReply?()
+        case .retry:
+            onRetry?()
+        case .openLink, .copyLink, .openInMaps, .copyAddress:
+            performKindAction(action)
         case .edit:
             onEdit?()
         case .translate:
-            onShowTranslate?()
+            if menuContext.translatesOnDevice && !menuContext.canTranslate {
+                onTranslateOnDevice?()
+            } else {
+                onShowTranslate?()
+            }
         case .copy:
             onCopy?()
         case .saveMedia:
             onSaveMedia?()
         case .compose:
             onCompose?()
-        case .pin, .unpin:
-            onPin?()
-        case .star, .unstar:
-            onToggleStar?()
+        case .select:
+            onSelect?()
         case .more:
             onShowMore?()
-        case .delete:
+        case .deleteMessage:
             onDelete?()
         case .callDetail:
             onShowCallDetail?()
+        case .addSticker:
+            ReceivedStickerLedger.shared.addSticker(of: message)
+        case .favoriteSticker, .unfavoriteSticker:
+            HapticFeedback.light()
+            MessageStickerFavorite.toggle(for: message.sticker)
+        case .exportImage, .exportQuick:
+            onExportImage?(action == .exportQuick)
+        case .wholeMessage, .replyToPiece, .deletePiece, .forwardPiece:
+            return
         }
         dismiss()
     }
 
+    /// Les actions du TYPE (#11214) : la cible se relit sur le message, et la
+    /// copie passe par la loi de sortie, comme « Copier ».
+    private func performKindAction(_ action: PrimaryAction) {
+        let place = message.location
+        switch action {
+        case .openLink:
+            if let link = MessageKindTarget.openableLink(of: message) { openURL(link) }
+        case .copyLink:
+            if let link = MessageKindTarget.firstRawLink(in: message.content),
+               MessageExitTransport.copy(link, of: message) { HapticFeedback.success() }
+        case .openInMaps:
+            if let url = place.flatMap({ MessageKindTarget.mapsURL(for: $0) }) { openURL(url) }
+        case .copyAddress:
+            if let place, MessageExitTransport.copy(MessageKindTarget.address(of: place), of: message) { HapticFeedback.success() }
+        default:
+            return
+        }
+    }
 
     var body: some View {
         GeometryReader { geometry in
             let safeTop = geometry.safeAreaInsets.top
             let safeBottom = geometry.safeAreaInsets.bottom
             let screenH = geometry.size.height
+            let containerW = geometry.size.width
 
-            let useSourceFrame = messageBubbleFrame != .zero
-            let bubbleRect = messageBubbleFrame
+            // ── La face de l'aperçu : la cellule du fil, dans son mode (#11208) ──
+            let touch = MessageOverlayPreviewTouch.resolve(message: message, readingMode: threadLanguage.readingMode)
+            let cellFrame = Self.sourceFrame(windowFrame: messageBubbleFrame, containerOrigin: geometry.frame(in: .global).origin)
+            let hasSourceFrame = cellFrame != .zero
+            // La rangée plate se pose sur toute la largeur (ses 16 pt de marge
+            // sont dans l'aperçu) ; la bulle, sur la largeur de sa cellule.
+            let previewW: CGFloat = touch.kind == .bubble && cellFrame.width > 0 ? cellFrame.width : containerW
+            let previewH: CGFloat = max(1, measuredPreviewHeight ?? cellFrame.height)
+            let sourceRect = hasSourceFrame
+                ? cellFrame
+                : CGRect(x: (containerW - previewW) / 2, y: (screenH - previewH) / 2, width: previewW, height: previewH)
 
-            // Bubble preview scale — proportionnel pour les bulles trop hautes
-            // (reply + grid attachement, vidéo, etc.). On cap visuellement à
-            // ~320pt de hauteur tout en préservant exactement l'aspect ratio
-            // (.scaleEffect uniforme). Scale floor à 0.55 pour rester lisible.
-            let maxPreviewHeight: CGFloat = 320
-            let bubblePreviewScale: CGFloat = bubbleRect.height > maxPreviewHeight
-                ? max(0.55, maxPreviewHeight / bubbleRect.height)
-                : 1.0
-            let scaledBubbleHeight = bubbleRect.height * bubblePreviewScale
-
-            // ── Géométrie native-lean : barre réactions (haut) + bulle + liste verticale (bas) ──
-            let nlEmojiBarHeight: CGFloat = 52
-            let nlGap: CGFloat = 12
-            // Écart bulle → liste d'actions RÉDUIT (iMessage-like) : le menu colle
-            // presque à la bulle liftée, distinct du gap barre-réactions → bulle.
+            // ── Géométrie native-lean : barre réactions (haut) + aperçu + liste verticale (bas) ──
+            let showsEmojiBar = Self.showsEmojiQuickBar(for: menuContext)
+            let nlEmojiBarHeight: CGFloat = showsEmojiBar ? 52 : 0
+            let nlGap: CGFloat = showsEmojiBar ? 12 : 0
+            // Écart aperçu → liste d'actions RÉDUIT (iMessage-like) : le menu colle
+            // presque à l'aperçu, distinct du gap barre-réactions → aperçu.
             let nlMenuGap: CGFloat = 6
-            // La frame source capturée (`messageBubbleFrame`) englobe le
-            // `.padding(.vertical, 8)` du row de la liste — MessageListView pose
-            // son `.background(GeometryReader{…frame(in:.global)})` sur `content()`
-            // QUI inclut ce padding. La bulle VISIBLE se termine donc ~8pt AVANT
-            // `nlBubbleTop + nlBubbleH`, ce qui creusait un vide sous la bulle.
-            // On soustrait cette bande transparente (scalée par `nlFitScale`) au
-            // seul calcul de `nlMenuY` — `nlBubbleH` (rendu de la bulle) reste
-            // inchangé — pour coller le menu à la bulle VISIBLE, façon iMessage.
-            // Net : gap visible ≈ nlMenuGap (~4-6pt) au lieu de ~14pt.
-            let nlRowBottomPaddingEstimate: CGFloat = 8
             let nlSidePadding: CGFloat = 16
-            let nlMenuWidth: CGFloat = MessageActionsMenu.menuWidth
+            let nlMenuWidth: CGFloat = LongPressPeekWidth.menuWidth(availableWidth: containerW)
             let nlMenuHeight: CGFloat = MessageActionsMenu.estimatedSize(actionCount: primaryActions.count).height
-            let nlEmojiWidth: CGFloat = 300
+            let nlEmojiWidth: CGFloat = Self.emojiBandWidth(available: containerW - 2 * nlSidePadding)
             let nlAvailTop = safeTop + 12
             let nlAvailBottom = screenH - safeBottom - 12
             let nlAvailable = max(160, nlAvailBottom - nlAvailTop)
             let nlChrome = nlEmojiBarHeight + nlGap + nlMenuGap + nlMenuHeight
-            let nlFitScale: CGFloat = (scaledBubbleHeight + nlChrome > nlAvailable)
-                ? max(0.4, min(bubblePreviewScale, max(60, nlAvailable - nlChrome) / max(1, bubbleRect.height)))
-                : bubblePreviewScale
-            let nlBubbleW = bubbleRect.width * nlFitScale
-            let nlBubbleH = bubbleRect.height * nlFitScale
+            // L'aperçu se rend à l'échelle 1 ; il ne se réduit que s'il ne tient
+            // pas, avec son chrome, dans la fenêtre — jamais sous 60 %
+            // (`MessageOverlayPreviewFit`) : au-delà, il défile dans son cadre.
+            let fit = MessageOverlayPreviewFit.resolve(naturalHeight: previewH, chromeHeight: nlChrome, available: nlAvailable)
+            let nlFitScale: CGFloat = fit.scale
+            let nlBubbleW = previewW * nlFitScale
+            let nlBubbleH = fit.visibleHeight
             let nlClusterH = nlEmojiBarHeight + nlGap + nlBubbleH + nlMenuGap + nlMenuHeight
-            let nlAnchorX: CGFloat = message.isMe
-                ? bubbleRect.maxX - nlBubbleW / 2
-                : bubbleRect.minX + nlBubbleW / 2
-            let nlDesiredTop = bubbleRect.minY - nlEmojiBarHeight - nlGap
+            let nlAnchorX: CGFloat = touch.kind == .flatRow
+                ? containerW / 2
+                : (message.isMe ? sourceRect.maxX - nlBubbleW / 2 : sourceRect.minX + nlBubbleW / 2)
+            // Le cluster part de la cellule et remonte quand elle est trop
+            // basse : c'est lui qui bouge, jamais la liste (#11208).
+            let nlDesiredTop = sourceRect.minY - nlEmojiBarHeight - nlGap
             let nlClusterTop = max(nlAvailTop, min(nlDesiredTop, nlAvailBottom - nlClusterH))
             let nlEmojiY = nlClusterTop + nlEmojiBarHeight / 2
             let nlBubbleTop = nlClusterTop + nlEmojiBarHeight + nlGap
             let nlBubbleMidY = nlBubbleTop + nlBubbleH / 2
-            let nlMenuY = nlBubbleTop + nlBubbleH - nlRowBottomPaddingEstimate * nlFitScale + nlMenuGap + nlMenuHeight / 2
-            let nlMenuX = max(nlSidePadding + nlMenuWidth / 2, min(geometry.size.width - nlSidePadding - nlMenuWidth / 2, nlAnchorX))
-            let nlEmojiX = max(nlSidePadding + nlEmojiWidth / 2, min(geometry.size.width - nlSidePadding - nlEmojiWidth / 2, nlAnchorX))
+            let nlSourceMidY = sourceRect.minY + nlBubbleH / 2
+            let nlMenuY = nlBubbleTop + nlBubbleH + nlMenuGap + nlMenuHeight / 2
+            let nlMenuX = max(nlSidePadding + nlMenuWidth / 2, min(containerW - nlSidePadding - nlMenuWidth / 2, nlAnchorX))
+            let nlEmojiX = max(nlSidePadding + nlEmojiWidth / 2, min(containerW - nlSidePadding - nlEmojiWidth / 2, nlAnchorX))
+            // Sous « Réduire les animations », tout est déjà à sa place : seule
+            // l'opacité s'anime (#11208).
+            let settled = isVisible || reduceMotion
+            // #9043 — glisser vers le haut réduit l'aperçu (ancré en haut) et
+            // remonte le menu coupé d'autant ; le reste du parcours va au geste
+            // existant. `shrinkable` = la hauteur de l'aperçu au repos.
+            let shrinkable = nlBubbleH
+            let revealFloor = MessageOverlayRevealLaw.floor(
+                hiddenHeight: nlMenuY + nlMenuHeight / 2 - nlAvailBottom, shrinkableHeight: shrinkable)
+            let reveal = RevealContext(
+                floor: revealFloor, shrinkable: shrinkable,
+                committed: committedReveal
+                    ?? MessageOverlayRevealLaw.restingFactor(floor: revealFloor, assistiveReveal: voiceOverEnabled || reduceMotion))
+            let revealSplit = reveal.split(liveDragTranslation)
+            let clusterDragOffset = MessageOverlayDragLaw.displayOffset(for: revealSplit.residual)
+            let menuRise = MessageOverlayRevealLaw.rise(factor: revealSplit.factor, shrinkableHeight: shrinkable)
 
             ZStack {
                 dismissBackground
 
-                VStack(spacing: 10) {
-                    // Zone tappable haute — `maxHeight: .infinity` laisse ce
-                    // spacer absorber l'espace au-dessus du cluster
-                    // bulle+emojis+panneau. Le cluster reste donc ancre vers
-                    // le bas, juste au-dessus du panneau ; le preview se
-                    // place plus haut (vers la zone des messages reels) que
-                    // l'ancien centrage plein ecran. Un tap ici ferme.
-                    Color.clear
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .contentShape(Rectangle())
-                        .onTapGesture { dismiss() }
+                // Liste d'actions verticale EN-DESSOUS de l'aperçu
+                // (native-lean). Icônes monochromes accent, destructif
+                // rouge isolé.
+                MessageActionsMenu(
+                    actions: primaryActions,
+                    accentHex: contactColor,
+                    onSelect: { handlePrimaryAction($0) }, width: nlMenuWidth
+                )
+                .position(
+                    x: nlMenuX,
+                    y: settled ? nlMenuY : (sourceRect.maxY + 8)
+                )
+                .offset(y: clusterDragOffset - menuRise)
+                .modifier(ShownAndTouchable(isShown: isVisible))
+                .scaleEffect(settled ? 1.0 : 0.85, anchor: .top)
+                // highPriorityGesture : en `.gesture` simple, les Button
+                // des rows gagnent les drags lents (vérifié simulateur —
+                // un swipe faible amorcé sur « Pin » épinglait au lieu de
+                // snap back). Le seuil minimumDistance 12 laisse les taps
+                // simples aux rows.
+                .highPriorityGesture(clusterDragGesture(reveal))
 
-                    if !useSourceFrame {
-                        // Legacy : Apercu centré dans le VStack — animation
-                        // composite (zoom-spring depuis le coin natif de la
-                        // bulle + leger glissement vertical). Conservé pour
-                        // les call sites qui ne fournissent pas encore la
-                        // source frame.
-                        HStack(spacing: 0) {
-                            if message.isMe { Spacer(minLength: 44) }
-                            messagePreview
-                            if !message.isMe { Spacer(minLength: 44) }
-                        }
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 4)
-                        .opacity(isVisible ? 1 : 0)
-                        .offset(y: isVisible ? 0 : -28)
-                        .scaleEffect(
-                            isVisible ? 1.0 : 0.86,
-                            anchor: message.isMe ? .topTrailing : .topLeading
-                        )
-                    }
+                // FIDÉLITÉ (#11208) — la cellule du fil elle-même, dans son
+                // mode de lecture, avec la peau et la largeur de colonne que
+                // la liste remet à la cellule. Mesurée à sa largeur, puis
+                // réduite d'un `.scaleEffect` uniforme seulement si elle ne
+                // tient pas dans la fenêtre. Gate Equatable (H3) + mémoire de
+                // la rangée plate : le drag 60 fps ne reconstruit rien. Seule la
+                // zone de lecture d'un vocal ou d'une vidéo s'y touche (#11339).
+                previewViewport(
+                    touch: touch, containerSize: geometry.size, previewSize: CGSize(width: previewW, height: previewH),
+                    fit: fit)
+                // #9043 — transformation de RENDU seule (aucune passe de
+                // layout par image) : le haut et le bord natif restent fixes.
+                .scaleEffect(revealSplit.factor, anchor: message.isMe ? .topTrailing : .topLeading)
+                .position(
+                    x: nlAnchorX,
+                    y: settled ? nlBubbleMidY : nlSourceMidY
+                )
+                .offset(y: clusterDragOffset)
+                .opacity(isVisible ? 1 : 0)
 
-                    if !useSourceFrame {
-                        // Legacy : la barre d'emojis vit dans le VStack juste
-                        // au-dessus du panneau (path conservé pour call sites
-                        // sans frame source).
-                        HStack(spacing: 0) {
-                            if message.isMe { Spacer(minLength: 0) }
-                            emojiQuickBar
-                            if !message.isMe { Spacer(minLength: 0) }
-                        }
-                        .padding(.horizontal, 14)
-                        .opacity(isVisible ? 1 : 0)
-                        .scaleEffect(isVisible ? 1.0 : 0.7, anchor: .center)
-                        .offset(y: isVisible ? 0 : 18)
-                    }
-
-                    if !useSourceFrame {
-                        // Legacy : la LISTE D'ACTIONS vit elle aussi dans le
-                        // VStack, sous la barre d'emojis.
-                        //
-                        // Elle n'existait que dans la branche `useSourceFrame`
-                        // jusqu'au 2026-08-23 : ce chemin n'était plus emprunté
-                        // que par des call sites sans frame source, et personne
-                        // n'avait remarqué qu'il ne présentait plus AUCUNE
-                        // action. Le retrait de la capture Focal (voir
-                        // `focalPreviewImage` plus haut) l'a rendu de nouveau
-                        // vivant — un appui long en mode Focal/Script y passe —
-                        // et le trou est devenu visible immédiatement : bulle,
-                        // emojis, puis rien.
-                        //
-                        // Positionnée par le FLUX, jamais par `.position(…)` :
-                        // toute la géométrie de l'autre branche (`nlMenuY`,
-                        // `nlBubbleMidY`…) se calcule depuis `bubbleRect`, qui
-                        // vaut précisément `.zero` ici.
-                        MessageActionsMenu(
-                            actions: primaryActions,
-                            accentHex: contactColor,
-                            onSelect: { handlePrimaryAction($0) }
-                        )
-                        .padding(.horizontal, 14)
-                        .padding(.bottom, 12)
-                        .opacity(isVisible ? 1 : 0)
-                        .scaleEffect(isVisible ? 1.0 : 0.85, anchor: .top)
-                    }
-
-                    // Panneau grille retiré (native-lean) — les détails
-                    // passent désormais par la feuille « Plus… » (MessageMoreSheet).
-                }
-
-                if useSourceFrame {
-                    // Liste d'actions verticale EN-DESSOUS de la bulle
-                    // (native-lean). Icônes monochromes accent, destructif
-                    // rouge isolé. Remplace la capsule horizontale + la grille.
-                    MessageActionsMenu(
-                        actions: primaryActions,
-                        accentHex: contactColor,
-                        onSelect: { handlePrimaryAction($0) }
-                    )
-                    .position(
-                        x: nlMenuX,
-                        y: isVisible ? nlMenuY : (bubbleRect.maxY + 8)
-                    )
-                    .offset(y: clusterDragOffset)
-                    .opacity(isVisible ? 1 : 0)
-                    .scaleEffect(isVisible ? 1.0 : 0.85, anchor: .top)
-                    // highPriorityGesture : en `.gesture` simple, les Button
-                    // des rows gagnent les drags lents (vérifié simulateur —
-                    // un swipe faible amorcé sur « Pin » épinglait au lieu de
-                    // snap back). Le seuil minimumDistance 12 laisse les taps
-                    // simples aux rows.
-                    .highPriorityGesture(clusterDragGesture)
-
-                    // FIDÉLITÉ — vrai `ThemedMessageBubble` avec les mêmes
-                    // paramètres que la cellule live de la liste : rendu
-                    // (texte, traductions, drapeaux, médias, réactions,
-                    // footer) rigoureusement identique. Wrapping HStack +
-                    // Spacer reproduit l'alignement isMe (right) / received
-                    // (left) de la cellule. Positionnement par .position()
-                    // au centre Y final calculé plus haut (clamp safeTop ↔
-                    // panel.top).
-                    // Bubble preview rendu à la largeur source (proportions
-                    // intactes du contenu) PUIS .scaleEffect uniforme pour
-                    // réduire visuellement les bulles trop grosses (vidéo,
-                    // grilles d'images, reply + grid). L'outer frame avec les
-                    // dimensions scaled informe le layout SwiftUI de la taille
-                    // visible — la position du cluster (action bar / emoji
-                    // bar) reste cohérente.
-                    Group {
-                        ThemedMessageBubble(
-                            message: message,
-                            contactColor: contactColor,
-                            isDirect: isDirect,
-                            isDark: isDark,
-                            transcription: transcription,
-                            translatedAudios: translatedAudios,
-                            textTranslations: textTranslations,
-                            preferredTranslation: preferredTranslation,
-                            showAvatar: !isDirect,
-                            isLastInGroup: true,
-                            isLastReceivedMessage: true,
-                            isLastSentMessage: true,
-                            mentionDisplayNames: mentionDisplayNames,
-                            currentUserId: currentUserId,
-                            userLanguages: (
-                                regional: userRegionalLanguage,
-                                custom: userCustomDestinationLanguage
-                            )
-                        )
-                        // Gate Equatable (H3) : pendant le drag 60 fps
-                        // (`clusterDragOffset`) le body du GeometryReader se
-                        // ré-évalue ; sans ce gate, `ThemedMessageBubble` se
-                        // re-rendrait à chaque frame. Ses inputs sont stables
-                        // pendant le drag → EquatableView saute son body.
-                        .equatable()
-                    }
-                    .frame(width: bubbleRect.width, height: bubbleRect.height, alignment: .leading)
-                    .scaleEffect(nlFitScale, anchor: .center)
-                    .frame(width: nlBubbleW, height: nlBubbleH)
-                    .position(
-                        x: nlAnchorX,
-                        y: isVisible ? nlBubbleMidY : bubbleRect.midY
-                    )
-                    .offset(y: clusterDragOffset)
-                    .opacity(isVisible ? 1 : 0)
-                    .allowsHitTesting(false)
-
-                    // Barre de réactions AU-DESSUS de la bulle (native-lean).
-                    emojiQuickBar
+                // Barre de réactions AU-DESSUS de l'aperçu (native-lean) — montée
+                // seulement si la loi ouvre la réaction (`canReact`).
+                if showsEmojiBar {
+                    emojiQuickBar(width: nlEmojiWidth)
                         .position(
                             x: nlEmojiX,
-                            y: isVisible ? nlEmojiY : bubbleRect.minY
+                            y: settled ? nlEmojiY : sourceRect.minY
                         )
                         .offset(y: clusterDragOffset)
-                        .opacity(isVisible ? 1 : 0)
-                        .scaleEffect(isVisible ? 1.0 : 0.7, anchor: .center)
-                        .allowsHitTesting(true)
+                        .modifier(ShownAndTouchable(isShown: isVisible))
+                        .scaleEffect(settled ? 1.0 : 0.7, anchor: .center)
                 }
             }
+            // #9043 — le glissement vaut sur TOUTE la vue (le voile, l'aperçu
+            // et son masque, #11339), pas seulement sur le menu : c'est
+            // l'aperçu qu'on pousse vers le haut. Un tap reste un tap (seuil
+            // 12 pt) ; le menu garde sa propre instance prioritaire.
+            .gesture(clusterDragGesture(reveal), including: .all)
         }
         .ignoresSafeArea()
         // A11y (C2) : l'overlay est MODAL — VoiceOver piège le focus dedans
         // (ignore la conversation derrière) ; le geste d'échappement (scrub
         // 2 doigts) le ferme, comme un `.contextMenu` natif.
         .accessibilityAddTraits(.isModal)
-        .accessibilityAction(.escape) { dismiss() }
-        .onAppear {
-            HapticFeedback.medium()
-            // Entree spring — courbe de reponse de qualite iMessage. La
-            // cascade d'emojis est jouee par `EmojiReactionPicker` lui-meme
-            // via `WaveTileModifier`.
-            withAnimation(.spring(response: 0.42, dampingFraction: 0.74)) {
-                isVisible = true
+        .dismissOnEscape { dismiss() }
+        .onAppear { enter() }
+        .onDisappear { stopPreviewPlayback() }
+    }
+
+    /// **L'entrée de l'overlay** (#11208). Aucune haptique : le geste
+    /// (`ConditionalBubbleLongPress`) a déjà vibré, et une seconde secousse
+    /// dans la même demi-seconde se lisait comme deux événements. Le ressort
+    /// d'entrée (courbe de réponse iMessage) devient un fondu sous « Réduire
+    /// les animations ». La cascade d'emojis est jouée par
+    /// `EmojiReactionPicker` lui-même via `WaveTileModifier`.
+    private func enter() {
+        meeshyWithAnimation(.spring(response: 0.42, dampingFraction: 0.74),
+                            reduced: .easeOut(duration: Self.reducedMotionFadeDuration),
+                            reduceMotion: reduceMotion) {
+            isVisible = true
+        }
+    }
+
+    // MARK: - Le cadre de l'aperçu (#11208)
+
+    /// L'aperçu dans son cadre réduit : la cellule du fil, mesurée à sa largeur,
+    /// posée à son bord natif, bornée à la place qui reste (`MessageOverlayPreviewFit`).
+    private func previewViewport(
+        touch: MessageOverlayPreviewTouch,
+        containerSize: CGSize,
+        previewSize: CGSize,
+        fit: MessageOverlayPreviewFit.Result
+    ) -> some View {
+        MessageOverlayPreviewViewport(
+            scale: fit.scale,
+            naturalSize: previewSize,
+            visibleHeight: fit.visibleHeight,
+            scrolls: fit.scrollsInternally,
+            isTrailing: message.isMe,
+            interactive: touch.offersPlayback
+        ) {
+            MessageOverlayCellPreview(
+                face: previewFace(kind: touch.kind, containerWidth: containerSize.width),
+                message: message,
+                isDark: isDark,
+                accentHex: bubbleAccentHex,
+                onPlayAudio: { playFromPreview($0) }
+            )
+            .equatable()
+            .modifier(UnencryptedMessageMarking(isUnencrypted: isUnencrypted, isDark: isDark))
+            .environment(\.bubbleSkin, previewSkin)
+            .environment(\.bubbleContainerWidth, containerSize.width > 0 ? containerSize.width : nil)
+            .frame(width: previewSize.width, alignment: message.isMe ? .trailing : .leading)
+            .overlayPreferenceValue(MediaPlayControlAnchorKey.self) { zones in
+                previewTouchMask(zones: zones, playable: touch.playableAttachmentIds)
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measuredPreviewHeight = $0 }
+        }
+        // Le cadre défile, ou l'aperçu porte une zone de lecture (#11339) :
+        // sinon, une image que les touchers traversent jusqu'au voile.
+        .allowsHitTesting(fit.scrollsInternally || touch.offersPlayback)
+    }
+
+    /// **Le masque de l'aperçu** (#11339) : percé aux seuls BOUTONS de lecture
+    /// (lecture / pause, `MediaPlayControlAnchorKey`, émis par les lecteurs du
+    /// SDK) des pièces que la loi laisse lire. Partout ailleurs — citation, pied
+    /// et drapeaux de langue, forme d'onde, surface de la vidéo —, un toucher
+    /// ferme le menu comme le voile, et un glissement réduit l'aperçu.
+    @ViewBuilder
+    private func previewTouchMask(zones: [MediaPlayControlAnchor], playable: Set<String>) -> some View {
+        if !playable.isEmpty {
+            GeometryReader { proxy in
+                MessageOverlayPreviewTouchMask(
+                    holes: MessageOverlayPreviewTouch.holes(
+                        zones: zones.map { (attachmentId: $0.attachmentId, frame: proxy[$0.bounds]) },
+                        playable: playable,
+                        in: CGRect(origin: .zero, size: proxy.size)),
+                    onTapOutside: { dismiss() })
             }
         }
     }
 
+    // MARK: - Lire un vocal depuis l'aperçu (#11339)
+
+    /// Le bouton du lecteur de la cellule appelle ici, comme dans le fil, et
+    /// l'hôte le rend au ViewModel (`onPlayAudio`) : la MÊME entrée de file que
+    /// le fil (`ConversationViewModel.queuedAudio`, piste servie, langue de la
+    /// transcription), le nom et l'image de la conversation — sans file à la
+    /// suite. L'overlay ne garde que la porte de la loi.
+    private func playFromPreview(_ attachmentId: String) {
+        guard let onPlayAudio,
+              MessageOverlayPreviewTouch.mayPlayVoice(attachmentId: attachmentId, in: message) else { return }
+        previewPlayedAttachmentId = attachmentId
+        onPlayAudio(attachmentId)
+    }
+
+    /// La fermeture arrête ce que l'aperçu a lancé, et seulement cela : le
+    /// coordinateur ne retient alors plus rien de l'aperçu.
+    private func stopPreviewPlayback() {
+        let coordinator = ConversationAudioCoordinator.shared
+        guard MessageOverlayPreviewTouch.stopsOnClose(
+            previewPlayedAttachmentId: previewPlayedAttachmentId,
+            activeAttachmentId: coordinator.activeContext?.attachmentId) else { return }
+        coordinator.close()
+    }
+
+    // MARK: - La face de l'aperçu (#11208)
+
+    private func previewFace(kind: MessageOverlayPreviewKind, containerWidth: CGFloat) -> MessageOverlayCellPreview.Face {
+        switch kind {
+        case .bubble:
+            return .bubble(previewBubble)
+        case .flatRow:
+            let width = max(0, containerWidth - 2 * MessageOverlayCellPreview.flatRowMargin)
+            return .flatRow(flatRowMemo.row(for: flatRowKey(availableWidth: width)) { previewRow(availableWidth: width) })
+        }
+    }
+
+    /// Ce que la rangée plate MONTRE — sa construction ne se rejoue que si
+    /// l'une de ces valeurs a changé, jamais parce que le doigt a bougé.
+    private func flatRowKey(availableWidth: CGFloat) -> MessageOverlayFlatRowMemo.Key {
+        MessageOverlayFlatRowMemo.Key(
+            messageId: message.id, updatedAt: message.updatedAt, content: message.content,
+            effects: message.effects.flags, reactionCount: message.reactions.count,
+            translations: textTranslations, served: preferredTranslation, selection: threadLanguage.selection,
+            transcription: transcription, translatedAudios: translatedAudios, readingMode: threadLanguage.readingMode,
+            senderStoryRing: threadLanguage.senderStoryRing, senderMoodEmoji: threadLanguage.senderMoodEmoji,
+            isDark: isDark, isRightToLeft: layoutDirection == .rightToLeft, availableWidth: availableWidth)
+    }
+
+    /// La rangée plate que le fil montre pour ce message, avec les entrées de
+    /// sa cellule : la traduction que le fil sert (override compris), le
+    /// drapeau basculé, la piste audio du Prisme, l'anneau et l'humeur de
+    /// l'auteur.
+    private func previewRow(availableWidth: CGFloat) -> FocalRowInput {
+        FocalRowInput.preview(
+            message: message,
+            translations: textTranslations,
+            servedTranslation: preferredTranslation,
+            accentHex: contactColor,
+            density: MessageOverlayPreviewKind.density(for: threadLanguage.readingMode),
+            context: FocalRowInput.PreviewContext(
+                selection: threadLanguage.selection,
+                translatedAudios: translatedAudios,
+                preferredAudioLangCode: AudioTrackLanguageResolver.resolve(
+                    manualOverride: nil, originalLanguage: message.originalLanguage,
+                    preferredLanguages: ConversationLanguagePreferences(user: AuthManager.shared.currentUser).resolved,
+                    translatedAudios: translatedAudios),
+                transcription: transcription?.text,
+                userLanguages: (regional: userRegionalLanguage, custom: userCustomDestinationLanguage),
+                mentionDisplayNames: mentionDisplayNames,
+                currentUserId: currentUserId,
+                senderPresence: PresenceManager.shared.presenceState(forSenderOf: message),
+                senderStoryRing: threadLanguage.senderStoryRing,
+                senderMoodEmoji: threadLanguage.senderMoodEmoji,
+                recipientCount: threadLanguage.recipientCount,
+                isDark: isDark,
+                isDirect: isDirect,
+                isRightToLeft: layoutDirection == .rightToLeft,
+                availableWidth: availableWidth
+            )
+        )
+    }
+
     // MARK: - Emoji Quick Bar (EmojiReactionPicker — shared component)
 
-    private var emojiQuickBar: some View {
+    /// La largeur de la bande AVANT l'allongement.
+    static let emojiBandReferenceWidth: CGFloat = 280
+    /// **La bande d'emojis s'allonge de ×1,4** (#9043) — la bande, pas les emojis: leur taille ne change pas, la
+    /// bande en montre davantage. Bornée à la largeur disponible. Miroir web :
+    /// `RAIL_LENGTH_FACTOR`.
+    static let emojiBandLengthFactor: CGFloat = 1.4
+
+    static func emojiBandWidth(available: CGFloat) -> CGFloat {
+        min(emojiBandReferenceWidth * emojiBandLengthFactor, max(0, available))
+    }
+
+    private func emojiQuickBar(width: CGFloat) -> some View {
         // Shared `EmojiReactionPicker` (MeeshyUI) — meme call-site que le
         // strip inline du long-press (`ConversationView+MessageRow`) pour
-        // garder les deux surfaces visuellement identiques. Le composant
-        // embarque deja son chrome (capsule glass + shadow), son padding
-        // interne et la cascade d'entree gauche→droite (`WaveTileModifier`),
-        // donc aucun wrapper supplementaire ici.
+        // garder les deux surfaces visuellement identiques (padding interne,
+        // cascade d'entree gauche→droite `WaveTileModifier`).
+        //
+        // **Sans capsule** (#9043 — « enlever le
+        // cadre comme pour les story ») : la story pose cette MÊME rangée nue
+        // sur sa scène (`FullscreenReactionStrip`, `chrome: .none`). Ici le
+        // voile est la scène. Seule la bande perd son cadre : le menu du bas
+        // garde son Liquid Glass. Le voile étant toujours sombre, le style est
+        // `.dark` quel que soit le schéma.
         //
         // Le classement (lecture UserDefaults + tri) est calculé UNE fois par
         // présentation via le cache @State — le body de l'overlay se
         // ré-évalue à chaque frame du spring d'entrée, et la table d'usage ne
         // change pas pendant que le menu est ouvert (recordUsage ⇒ dismiss).
         let topEmojis = cachedTopEmojis
-            ?? EmojiUsageTracker.topEmojis(count: 20, defaults: defaultEmojis)
+            ?? EmojiUsageTracker.topEmojis(count: 20, defaults: Self.defaultEmojis)
         return EmojiReactionPicker(
             quickEmojis: topEmojis,
-            style: isDark ? .dark : .light,
+            style: .dark,
             scrollable: true,
-            onReact: { emoji in
-                EmojiUsageTracker.recordUsage(emoji: emoji)
-                onReact?(emoji)
-                dismiss()
-            },
+            chrome: .none,
+            onReact: { reagirDepuisLaBande($0) },
             onExpandFullPicker: {
                 HapticFeedback.light()
                 onExpandFullPicker?()
                 dismiss()
             }
         )
-        .frame(maxWidth: 280)
+        .frame(maxWidth: width)
         .onAppear {
             if cachedTopEmojis == nil {
-                cachedTopEmojis = EmojiUsageTracker.topEmojis(count: 20, defaults: defaultEmojis)
+                cachedTopEmojis = EmojiUsageTracker.topEmojis(count: 20, defaults: Self.defaultEmojis)
             }
+            #if DEBUG
+            VitrineRendu.shared.menuDeReactionsAffiche { reagirDepuisLaBande($0) }
+            #endif
         }
     }
 
-    // MARK: - Dismiss Background (dim only, no full-screen blur → glass stays vibrant)
+    private func reagirDepuisLaBande(_ emoji: String) {
+        guard isVisible else { return }
+        EmojiUsageTracker.recordUsage(emoji: emoji)
+        onReact?(emoji)
+        dismiss()
+    }
+
+    // MARK: - Dismiss Background (le voile commun de l'appui long, #11222)
 
     private var dismissBackground: some View {
-        // Assombrissement NET + lueur radiale accent, SANS `.thinMaterial`
-        // plein écran. Sur iOS 26, le `glassEffect` de la pastille et du menu
-        // échantillonne le contenu RÉEL (assombri) situé derrière eux → verre
-        // VIBRANT façon iMessage. Un flou plein écran derrière le verre le
-        // faisait échantillonner du flou (flou-sur-flou) → verre plat, non
-        // natif. iMessage assombrit lui aussi sans matériau flou derrière la
-        // pastille/le menu.
+        // Le voile est le MATÉRIAU SYSTÈME (`LongPressVeil`, décision porteur
+        // #11222) : la même loi que l'aperçu d'une conversation, l'aperçu d'une
+        // pièce et le web. La lueur radiale de l'accent se pose au-dessus,
+        // sans capter le toucher — elle n'est pas le voile, elle teinte la scène.
         ZStack {
-            Color.black
-                .opacity(isVisible ? (isDark ? 0.5 : 0.4) : 0)
+            LongPressVeil(visibility: isVisible ? 1 : 0, onDismiss: dismiss)
 
             RadialGradient(
                 colors: [
@@ -538,22 +674,35 @@ struct MessageOverlayMenu: View {
             )
             .opacity(isVisible ? 1 : 0)
             .blendMode(isDark ? .screen : .multiply)
+            .allowsHitTesting(false)
         }
         .animation(.easeOut(duration: 0.26), value: isVisible)
-        .onTapGesture { dismiss() }
     }
 
-    // MARK: - Cluster Drag (swipe-up → Menu 2, swipe-down → fermeture)
+    // MARK: - Cluster Drag (réduction de l'aperçu, puis swipe-up → Menu 2, swipe-down → fermeture)
 
-    private var clusterDragGesture: some Gesture {
+    /// La géométrie de la réduction (#9043), résolue dans le `GeometryReader`
+    /// et remise au geste — il partage le MÊME parcours que le rendu.
+    struct RevealContext {
+        let floor: CGFloat
+        let shrinkable: CGFloat
+        let committed: CGFloat
+
+        func split(_ translation: CGFloat) -> MessageOverlayRevealLaw.Split {
+            MessageOverlayRevealLaw.split(translation: translation, committed: committed,
+                                          floor: floor, shrinkableHeight: shrinkable)
+        }
+    }
+
+    private func clusterDragGesture(_ reveal: RevealContext) -> some Gesture {
         DragGesture(minimumDistance: 12)
-            .updating($clusterDragOffset) { value, state, _ in
+            .updating($liveDragTranslation) { value, state, _ in
                 guard isVisible else { return }
-                state = MessageOverlayDragLaw.displayOffset(for: value.translation.height)
+                state = value.translation.height
             }
             .onChanged { value in
                 guard isVisible else { return }
-                if MessageOverlayDragLaw.isArmed(translation: value.translation.height),
+                if MessageOverlayDragLaw.isArmed(translation: reveal.split(value.translation.height).residual),
                    !dragHapticArmed {
                     dragHapticArmed = true
                     HapticFeedback.medium()
@@ -562,9 +711,12 @@ struct MessageOverlayMenu: View {
             .onEnded { value in
                 defer { dragHapticArmed = false }
                 guard isVisible else { return }
+                let reached = reveal.split(value.translation.height)
+                // L'état atteint est GARDÉ, sans aimant (cf. `MessageOverlayRevealLaw`).
+                committedReveal = reached.factor
                 switch MessageOverlayDragLaw.outcome(
-                    translation: value.translation.height,
-                    predicted: value.predictedEndTranslation.height
+                    translation: reached.residual,
+                    predicted: reveal.split(value.predictedEndTranslation.height).residual
                 ) {
                 case .openMore:
                     handlePrimaryAction(.more)
@@ -576,844 +728,106 @@ struct MessageOverlayMenu: View {
             }
     }
 
-    // MARK: - Message Preview (aligned left/right)
-
-    private var messagePreview: some View {
-        VStack(alignment: message.isMe ? .trailing : .leading, spacing: 6) {
-            previewSenderHeader
-
-            previewContent
-        }
-        // Match the in-conversation bubble cap (BubbleStandardLayout calls
-        // the same DeviceLayout helper, a share of the app's WINDOW — not of
-        // the physical display, which Split View / Slide Over / Stage Manager
-        // make far larger) so the preview reads as the SAME bubble the user
-        // just long-pressed — not a wider clone. The
-        // `alignment` parameter pins the (now-compact) content to the
-        // bubble's native edge inside the frame, working in tandem
-        // with the parent HStack's Spacer(minLength: 44).
-        .frame(
-            maxWidth: DeviceLayout.bubbleMaxWidth(sizeClass: horizontalSizeClass),
-            alignment: message.isMe ? .trailing : .leading
-        )
-        .padding(.horizontal, 8)
-        // Halo lumineux ancre a l'accent de la conversation + ombre
-        // profonde : le preview semble decolle de la liste, flottant
-        // au-dessus du flou. Les deux ombres ne s'allument qu'une fois
-        // l'overlay visible pour une apparition propre.
-        .shadow(
-            color: overlayAccent.opacity(isVisible ? 0.28 : 0),
-            radius: 22, y: 4
-        )
-        .shadow(
-            color: .black.opacity(isVisible ? 0.26 : 0),
-            radius: 16, y: 10
-        )
-    }
-
-    private var previewSenderHeader: some View {
-        let isMe = message.isMe
-        let name = isMe ? "Moi" : (message.senderName ?? "?")
-        let color = isMe ? contactColor : (message.senderColor ?? contactColor)
-
-        return HStack(spacing: 6) {
-            if !isMe {
-                MeeshyAvatar(
-                    name: name,
-                    context: .recentParticipant,
-                    accentColor: color,
-                    avatarURL: message.senderAvatarURL
-                )
-            }
-
-            Text(name)
-                .font(MeeshyFont.relative(13, weight: .semibold))
-                .foregroundColor(Color(hex: color))
-
-            Text("·")
-                .font(MeeshyFont.relative(13))
-                .foregroundColor(theme.textMuted)
-
-            Text(formatExactDate(message.createdAt))
-                .font(MeeshyFont.relative(12))
-                .foregroundColor(theme.textMuted)
-        }
-    }
-
-    private func formatExactDate(_ date: Date) -> String {
-        let calendar = Calendar.current
-        if calendar.isDateInToday(date) {
-            return date.formatted(.dateTime.hour().minute())
-        } else if calendar.isDateInYesterday(date) {
-            let timeString = date.formatted(.dateTime.hour().minute())
-            return String(format: String(localized: "date.yesterday.at", defaultValue: "Hier %@", bundle: .main), timeString)
-        } else {
-            return date.formatted(.dateTime.day().month(.abbreviated).year().hour().minute())
-        }
-    }
-
-    @ViewBuilder
-    private var previewContent: some View {
-        let hasText = !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        // Family dispatch via `AttachmentKind` — single source of truth.
-        let images = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .image }
-        let videos = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .video }
-        let audios = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .audio }
-        let files = message.attachments.filter { !AttachmentKind(mimeType: $0.mimeType).isMedia }
-
-        VStack(alignment: message.isMe ? .trailing : .leading, spacing: 8) {
-            if !images.isEmpty {
-                previewImageGrid(images)
-            }
-
-            if !videos.isEmpty {
-                ForEach(videos) { video in
-                    PreviewVideoPlayer(attachment: video, contactColor: contactColor)
-                }
-            }
-
-            if hasText {
-                previewTextBubble
-            }
-
-            if !audios.isEmpty {
-                ForEach(audios) { audio in
-                    PreviewAudioPlayer(attachment: audio, contactColor: contactColor)
-                }
-            }
-
-            if !files.isEmpty {
-                ForEach(files) { file in
-                    previewFileRow(file)
-                }
-            }
-        }
-        // Reaction stickers float at the same corner as in the live
-        // conversation (BubbleStandardLayout L300-304): bottom-trailing
-        // for sent, bottom-leading for received, with an 8pt outward
-        // padding and a +8 y-offset so they bleed below the bubble
-        // edge. The "+" smiley add-button is intentionally suppressed
-        // (`isLastReceivedMessage: false`) per the user's "no add-
-        // reaction button on the preview" rule — the React-tab CTA
-        // lives in the emojiQuickBar's trailing "+" instead.
-        // `.allowsHitTesting(false)` keeps the dismiss handler
-        // underneath responsive: tapping anywhere on the preview
-        // still closes the overlay.
-        .overlay(alignment: message.isMe ? .bottomTrailing : .bottomLeading) {
-            if !previewReactionSummaries.isEmpty {
-                BubbleReactionsOverlay(
-                    messageId: message.id,
-                    summaries: previewReactionSummaries,
-                    isMe: message.isMe,
-                    isDark: isDark,
-                    isLastReceivedMessage: false,
-                    accentHex: bubbleAccentHex,
-                    onAddReaction: nil,
-                    onToggleReaction: nil,
-                    onOpenReactPicker: nil,
-                    onShowReactions: nil
-                )
-                .padding(message.isMe ? .trailing : .leading, 8)
-                .offset(y: 8)
-                .allowsHitTesting(false)
-            }
-        }
-    }
-
-    // MARK: - Preview Text Bubble (~500 chars)
-
-    /// Mirrors `BubbleStandardLayout.textBubbleContent`: a text payload
-    /// stacked above a non-interactive `UserIdentityBar.metaRow` carrying
-    /// the language flag cluster (and delivery status for sent messages),
-    /// painted with the same `BubbleBackground` recipe so the preview
-    /// reads as the SAME bubble the user just long-pressed.
-    /// Read-only by construction — `onFlagTap` / `onTranslateTap` are
-    /// nil and the row is wrapped in `.allowsHitTesting(false)` so the
-    /// metaRow does not steal taps from the dismiss handler.
-    private var previewTextBubble: some View {
-        let truncated = message.content.count > previewCharLimit
-            ? String(message.content.prefix(previewCharLimit)) + "..."
-            : message.content
-        let hasFlags = !previewFlags.isEmpty
-        let showDelivery = message.isMe
-        let shouldRenderMeta = hasFlags || showDelivery
-
-        return VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
-            Text(truncated)
-                .font(MeeshyFont.relative(15))
-                .foregroundColor(message.isMe ? .white : theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 14)
-                .padding(.top, 10)
-                .padding(.bottom, shouldRenderMeta ? 4 : 10)
-
-            if shouldRenderMeta {
-                UserIdentityBar.metaRow(
-                    time: "",
-                    delivery: showDelivery ? message.deliveryStatus : nil,
-                    flags: previewFlags,
-                    activeFlag: nil,
-                    onFlagTap: nil,
-                    onTranslateTap: nil,
-                    isMe: message.isMe
-                )
-                .padding(.horizontal, 14)
-                .padding(.bottom, 8)
-                .allowsHitTesting(false)
-            }
-        }
-        .background(
-            BubbleBackground(
-                isMe: message.isMe,
-                accentHex: bubbleAccentHex,
-                isDark: isDark
-            )
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        // Liseré subtil a la teinte de la bulle — donne du relief au
-        // preview flottant sans alourdir la lecture.
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(
-                    Color(hex: bubbleAccentHex).opacity(message.isMe ? 0.0 : 0.18),
-                    lineWidth: 0.75
-                )
-        )
-    }
-
-    // MARK: - Preview Image Grid
-
-    @ViewBuilder
-    private func previewImageGrid(_ images: [MessageAttachment]) -> some View {
-        let maxPreview = Array(images.prefix(4))
-        let count = maxPreview.count
-
-        Group {
-            if count == 1 {
-                previewSingleImage(maxPreview[0])
-            } else if count == 2 {
-                HStack(spacing: 3) {
-                    previewSingleImage(maxPreview[0])
-                    previewSingleImage(maxPreview[1])
-                }
-            } else if count == 3 {
-                HStack(spacing: 3) {
-                    previewSingleImage(maxPreview[0])
-                        .frame(maxHeight: 160)
-                    VStack(spacing: 3) {
-                        previewSingleImage(maxPreview[1])
-                        previewSingleImage(maxPreview[2])
-                    }
-                }
-            } else {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 3), GridItem(.flexible(), spacing: 3)], spacing: 3) {
-                    ForEach(maxPreview) { img in
-                        previewSingleImage(img)
-                            .frame(height: 100)
-                    }
-                }
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-    }
-
-    private func previewSingleImage(_ attachment: MessageAttachment) -> some View {
-        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-        let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
-        return ProgressiveCachedImage(
-            thumbHash: attachment.thumbHash,
-            thumbnailUrl: thumbUrl,
-            fullUrl: fullUrl ?? thumbUrl
-        ) {
-            Color(hex: attachment.thumbnailColor).opacity(0.3)
-        }
-        .aspectRatio(contentMode: .fill)
-        .frame(maxWidth: .infinity, minHeight: 80, maxHeight: 200)
-        .clipped()
-    }
-
-    // MARK: - Preview File Row
-
-    private func previewFileRow(_ attachment: MessageAttachment) -> some View {
-        let accent = Color(hex: contactColor)
-
-        return HStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(accent.opacity(0.15))
-                    .frame(width: 36, height: 36)
-                // Decorative glyph inside a fixed 36×36 badge — kept fixed so
-                // it never overflows the badge; filename text carries the label.
-                Image(systemName: "doc.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(accent)
-                    .accessibilityHidden(true)
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName)
-                    .font(MeeshyFont.relative(13, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(1)
-                Text(formatFileSize(attachment.fileSize))
-                    .font(MeeshyFont.relative(11))
-                    .foregroundColor(theme.textMuted)
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
-        )
-    }
-
-    // MARK: - Helpers
-
-    private func formatFileSize(_ bytes: Int) -> String {
-        Int64(bytes).formatted(.byteCount(style: .file))
-    }
-
     // MARK: - Dismiss
 
     private func dismiss() {
+        guard isVisible else { return }
         HapticFeedback.light()
-        // Sortie : l'overlay se retracte vers le coin natif de la bulle.
-        // La cascade d'entree des emojis n'a pas de symetrique a la sortie
-        // (le composant partage gere son propre cycle de vie).
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+        // Sortie : l'overlay se retracte vers le coin natif de la bulle ;
+        // un fondu sous « Réduire les animations ». La cascade d'entree des
+        // emojis n'a pas de symetrique a la sortie (le composant partage gere
+        // son propre cycle de vie).
+        meeshyWithAnimation(.spring(response: 0.32, dampingFraction: 0.86),
+                            reduced: .easeOut(duration: Self.reducedMotionFadeDuration),
+                            reduceMotion: reduceMotion) {
             isVisible = false
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) {
+        delayed.run(after: .milliseconds(260)) {
             isPresented = false
         }
     }
 
 }
 
-// MARK: - Preview Audio Player (interactive)
+private struct ShownAndTouchable: ViewModifier {
+    let isShown: Bool
 
-private struct PreviewAudioPlayer: View {
-    let attachment: MessageAttachment
-    let contactColor: String
+    func body(content: Content) -> some View {
+        content.opacity(isShown ? 1 : 0).allowsHitTesting(isShown)
+    }
+}
 
-    private var theme: ThemeManager { ThemeManager.shared }
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
-    @StateObject private var player = OverlayAudioPlayer()
+// MARK: - Ce que le fil sert pour ce message
 
-    private var accent: Color { Color(hex: contactColor) }
+extension MessageOverlayMenu {
+    /// #9010 — l'aperçu joue la piste que la bulle sert ; l'original seulement
+    /// quand l'hôte n'en a élu aucune.
+    static func previewAudioTrack(for attachment: MessageAttachment, served: [String: ServedAudioTrack]) -> ServedAudioTrack {
+        served[attachment.id] ?? .original(of: attachment)
+    }
 
-    var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
-                Button { player.toggle(url: attachment.fileUrl) } label: {
-                    ZStack {
-                        Circle()
-                            .fill(accent.opacity(0.2))
-                            .frame(width: 40, height: 40)
-                        if player.isLoading {
-                            ProgressView()
-                                .tint(accent)
-                                .scaleEffect(0.6)
-                        } else {
-                            // Glyph inside a fixed 40×40 circle — kept fixed to
-                            // stay centred; the Button carries the a11y label.
-                            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(accent)
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(player.isPlaying
-                    ? String(localized: "media.pauseAudio", defaultValue: "Mettre en pause", bundle: .main)
-                    : String(localized: "media.playAudio", defaultValue: "Lire l'audio", bundle: .main))
-                .accessibilityHint(String(format: String(localized: "media.audioHint", defaultValue: "Audio de %@", bundle: .main), player.timeLabel(totalDuration: attachment.duration)))
+    /// **Ce que le fil sert pour CE message** (#9259) : la sélection du
+    /// drapeau (`ConversationViewModel.bubbleLanguageSelections`), ses
+    /// écrivains, les pistes qu'elle élit et le mode de lecture du fil — lus
+    /// dans le VM par l'hôte, jamais recopiés dans un état de l'overlay.
+    struct ThreadLanguage {
+        var selection: ConversationViewModel.BubbleLanguageSelection? = nil
+        /// Le mode de lecture du fil (#11208) : il choisit la face de l'aperçu
+        /// (`MessageOverlayPreviewKind`). Sans mode transmis, une bulle.
+        var readingMode: ConversationReadingMode = .bubbles
+        var servedAudioTracks: [String: ServedAudioTrack] = [:]
+        var onSetActiveDisplayLanguage: ((String?) -> Void)? = nil
+        var onSetSecondaryLanguage: ((String?) -> Void)? = nil
+        /// Ce que la cellule pose AUTOUR du message (#11208) — l'anneau de story
+        /// et l'humeur de l'auteur, le dénominateur des accusés : mêmes
+        /// sources que `MessageCellInputs`, pour que l'aperçu ne les perde pas.
+        var senderStoryRing: StoryRingState = .none
+        var senderMoodEmoji: String? = nil
+        var recipientCount: Int = 1
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(attachment.originalName.isEmpty ? "Audio" : attachment.originalName)
-                        .font(MeeshyFont.relative(13, weight: .medium))
-                        .foregroundColor(theme.textPrimary)
-                        .lineLimit(1)
+        /// Le fil se lit en rangées plates (Focal, Script) : sa bande de drapeaux
+        /// porte aussi la langue affichée (`FocalRow.focusFlagCodes`, #9838).
+        var usesFlatRow: Bool { readingMode.usesFlatRow }
+    }
 
-                    Text(player.timeLabel(totalDuration: attachment.duration))
-                        .font(MeeshyFont.relative(11, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                        .monospacedDigit()
-                }
-
-                Spacer()
-
-                Menu {
-                    ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
-                        Button {
-                            player.setRate(Float(rate))
-                        } label: {
-                            HStack {
-                                Text(rate == 1.0 ? "Normal" : "\(String(format: "%.2g", rate))x")
-                                if abs(Double(player.playbackRate) - rate) < 0.01 {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                    }
-                } label: {
-                    Text("\(String(format: "%.2g", player.playbackRate))x")
-                        .font(MeeshyFont.relative(11, weight: .semibold))
-                        .foregroundColor(accent)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(accent.opacity(0.12)))
-                }
-            }
-
-            HStack(spacing: 8) {
-                Button { player.skip(seconds: -5) } label: {
-                    Image(systemName: "gobackward.5")
-                        .font(MeeshyFont.relative(14, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "media.skipBack5s", defaultValue: "Skip back 5 seconds", bundle: .main))
-
-                Slider(
-                    value: Binding(
-                        get: { player.progress },
-                        set: { player.seek(to: $0) }
-                    ),
-                    in: 0...1
-                )
-                .tint(accent)
-                .accessibilityLabel(String(localized: "media.playbackPosition", defaultValue: "Playback position", bundle: .main))
-                .accessibilityValue(LocalizedNumber.percent(player.percentInt))
-
-                // Pourcentage d'avancement
-                Text(LocalizedNumber.percent(player.percentInt))
-                    .font(MeeshyFont.relative(11, weight: .heavy, design: .monospaced))
-                    .foregroundColor(player.percentInt == 0 ? theme.textMuted : accent)
-                    .frame(minWidth: 36)
-                    .contentTransition(.numericText())
-                    .animation(.easeInOut(duration: 0.15), value: player.percentInt)
-                    .accessibilityHidden(true)
-
-                Button { player.skip(seconds: 5) } label: {
-                    Image(systemName: "goforward.5")
-                        .font(MeeshyFont.relative(14, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "media.skipForward5s", defaultValue: "Skip forward 5 seconds", bundle: .main))
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
+    /// La bulle de l'aperçu, branchée sur le drapeau du fil comme la cellule
+    /// (`MessageListViewController`) : la face affichée ET la piste jouée
+    /// suivent une bascule faite dans le fil, pas le seul Prisme (#9259).
+    var previewBubble: ThemedMessageBubble {
+        var bubble = ThemedMessageBubble(
+            message: message,
+            contactColor: contactColor,
+            isDirect: isDirect,
+            isDark: isDark,
+            transcription: transcription,
+            translatedAudios: translatedAudios,
+            textTranslations: textTranslations,
+            preferredTranslation: preferredTranslation,
+            showAvatar: !isDirect,
+            activeAudioLanguage: threadLanguage.selection?.activeDisplayLangCode,
+            isLastInGroup: true,
+            isLastReceivedMessage: true,
+            isLastSentMessage: true,
+            mentionDisplayNames: mentionDisplayNames,
+            currentUserId: currentUserId,
+            userLanguages: (
+                regional: userRegionalLanguage,
+                custom: userCustomDestinationLanguage
+            ),
+            activeDisplayLangCode: threadLanguage.selection?.activeDisplayLangCode,
+            secondaryLangCode: threadLanguage.selection?.secondaryLangCode,
+            onSetActiveDisplayLanguage: threadLanguage.onSetActiveDisplayLanguage,
+            onSetSecondaryLanguage: threadLanguage.onSetSecondaryLanguage
         )
-        .onDisappear { player.stop() }
+        bubble.recipientCount = threadLanguage.recipientCount
+        bubble.senderMoodEmoji = threadLanguage.senderMoodEmoji
+        bubble.senderStoryRingState = threadLanguage.senderStoryRing
+        bubble.onPlayAudio = { playFromPreview($0) }
+        return bubble
     }
 }
 
-// MARK: - Preview Video Player (interactive)
-
-private struct PreviewVideoPlayer: View {
-    let attachment: MessageAttachment
-    let contactColor: String
-
-    private var theme: ThemeManager { ThemeManager.shared }
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
-    @StateObject private var player = OverlayAudioPlayer()
-    @State private var showThumbnail = true
-
-    private var accent: Color { Color(hex: contactColor) }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ZStack {
-                let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-                let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
-                ProgressiveCachedImage(
-                    thumbHash: attachment.thumbHash,
-                    thumbnailUrl: thumbUrl,
-                    fullUrl: fullUrl ?? thumbUrl
-                ) {
-                    Color(hex: contactColor).opacity(0.2)
-                }
-                .aspectRatio(16/9, contentMode: .fill)
-                .frame(maxWidth: .infinity, maxHeight: 200)
-                .clipped()
-
-                if showThumbnail {
-                    Button {
-                        showThumbnail = false
-                        player.toggle(url: attachment.fileUrl)
-                    } label: {
-                        Circle()
-                            .fill(.black.opacity(0.5))
-                            .frame(width: 52, height: 52)
-                            .overlay(
-                                // Glyph inside a fixed 52×52 play circle — kept
-                                // fixed; the Button carries the a11y label.
-                                Image(systemName: "play.fill")
-                                    .font(.system(size: 20))
-                                    .foregroundColor(.white)
-                                    .offset(x: 2)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "media.playVideo", defaultValue: "Play video", bundle: .main))
-                }
-            }
-            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 14, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 14))
-
-            if !showThumbnail {
-                videoControls
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .onDisappear { player.stop() }
-    }
-
-    private var videoControls: some View {
-        VStack(spacing: 4) {
-            Slider(
-                value: Binding(
-                    get: { player.progress },
-                    set: { player.seek(to: $0) }
-                ),
-                in: 0...1
-            )
-            .tint(accent)
-            .accessibilityLabel(String(localized: "media.playbackPosition", defaultValue: "Playback position", bundle: .main))
-            .accessibilityValue(LocalizedNumber.percent(player.percentInt))
-
-            HStack(spacing: 8) {
-                Button { player.toggle(url: attachment.fileUrl) } label: {
-                    if player.isLoading {
-                        ProgressView()
-                            .tint(accent)
-                            .scaleEffect(0.5)
-                            .frame(width: 14, height: 14)
-                    } else {
-                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                            .font(MeeshyFont.relative(14, weight: .semibold))
-                            .foregroundColor(accent)
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(player.isPlaying
-                    ? String(localized: "media.pauseVideo", defaultValue: "Mettre la vidéo en pause", bundle: .main)
-                    : String(localized: "media.playVideo", defaultValue: "Lire la vidéo", bundle: .main))
-
-                Button { player.skip(seconds: -5) } label: {
-                    Image(systemName: "gobackward.5")
-                        .font(MeeshyFont.relative(12, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "media.skipBack5s", defaultValue: "Skip back 5 seconds", bundle: .main))
-
-                Text(LocalizedNumber.percent(player.percentInt))
-                    .font(MeeshyFont.relative(10, weight: .heavy, design: .monospaced))
-                    .foregroundColor(player.percentInt == 0 ? theme.textMuted : accent)
-                    .frame(minWidth: 32)
-                    .contentTransition(.numericText())
-                    .animation(.easeInOut(duration: 0.15), value: player.percentInt)
-                    .accessibilityHidden(true)
-
-                Button { player.skip(seconds: 5) } label: {
-                    Image(systemName: "goforward.5")
-                        .font(MeeshyFont.relative(12, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "media.skipForward5s", defaultValue: "Skip forward 5 seconds", bundle: .main))
-
-                Spacer()
-
-                Text(player.timeLabel(totalDuration: attachment.duration))
-                    .font(MeeshyFont.relative(10, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-                    .monospacedDigit()
-
-                speedMenu
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-            UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 14, bottomTrailingRadius: 14, topTrailingRadius: 0)
-                .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
-        )
-    }
-
-    private var speedMenu: some View {
-        Menu {
-            ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
-                Button {
-                    player.setRate(Float(rate))
-                } label: {
-                    HStack {
-                        Text(rate == 1.0 ? "Normal" : "\(String(format: "%.2g", rate))x")
-                        if abs(Double(player.playbackRate) - rate) < 0.01 {
-                            Image(systemName: "checkmark")
-                        }
-                    }
-                }
-            }
-        } label: {
-            Text("\(String(format: "%.2g", player.playbackRate))x")
-                .font(MeeshyFont.relative(10, weight: .semibold))
-                .foregroundColor(accent)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(accent.opacity(0.12)))
-        }
-    }
-}
-
-// MARK: - Overlay Audio Player (AVPlayer wrapper with PlaybackCoordinator integration)
-
-@MainActor
-private class OverlayAudioPlayer: ObservableObject {
-    @Published var isPlaying = false
-    @Published var progress: Double = 0
-    @Published var currentTime: TimeInterval = 0
-    @Published var duration: TimeInterval = 0
-    @Published var playbackRate: Float = 1.0
-    @Published var isLoading = false
-
-    nonisolated(unsafe) private var avPlayer: AVPlayer?
-    nonisolated(unsafe) private var timeObserver: Any?
-    nonisolated(unsafe) private var statusObservation: NSKeyValueObservation?
-    /// Token for the `.AVPlayerItemDidPlayToEndTime` block observer. Held so
-    /// `deinit` can remove it: `removeObserver(self)` does NOT remove block-based
-    /// observers (their "observer" is this returned token, not `self`), so
-    /// without it the observer leaked once per playback / per preview.
-    nonisolated(unsafe) private var endObserver: (any NSObjectProtocol)?
-    private var currentURL: String?
-
-    var percentInt: Int { Int(progress * 100) }
-
-    func toggle(url: String) {
-        if isPlaying {
-            avPlayer?.pause()
-            isPlaying = false
-            return
-        }
-
-        if currentURL != url {
-            stop()
-            currentURL = url
-            isLoading = true
-            Task { [weak self] in
-                await self?.startPlayback(remoteURL: url)
-            }
-            return
-        }
-
-        avPlayer?.rate = playbackRate
-        isPlaying = true
-    }
-
-    /// Cache-first: consults the audio disk cache BEFORE falling back to a
-    /// network `AVPlayerItem`. The preview used to always hit the network
-    /// URL directly, ignoring whatever `AttachmentDownloader`/auto-download
-    /// already saved to disk — re-downloading the same audio and failing
-    /// outright offline even when the file was sitting in the cache the
-    /// in-conversation bubble already plays from.
-    ///
-    /// Resolution key mirrors the existing local-first pattern in
-    /// `AudioFullscreenView.runLocalTranscription`: resolve the (possibly
-    /// relative) URL to its absolute form first, THEN look that resolved
-    /// string up in the disk cache — the cache is keyed by the resolved
-    /// URL, not the raw attachment path.
-    private func startPlayback(remoteURL: String) async {
-        let resolvedString = MeeshyConfig.resolveMediaURL(remoteURL)?.absoluteString ?? remoteURL
-        let cachedLocalURL = try? await CacheCoordinator.shared.audio.localFileURLOrThrow(for: resolvedString)
-        // A rapid second tap may have already switched `currentURL` to a
-        // different attachment while this lookup was in flight — bail
-        // rather than starting playback for a track the user isn't on
-        // anymore.
-        guard currentURL == remoteURL else { return }
-        guard let playbackURL = cachedLocalURL ?? MeeshyConfig.resolveMediaURL(remoteURL) else {
-            isLoading = false
-            return
-        }
-
-        let item = AVPlayerItem(url: playbackURL)
-        avPlayer = AVPlayer(playerItem: item)
-
-        statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                if item.status == .readyToPlay {
-                    self.isLoading = false
-                    self.avPlayer?.rate = self.playbackRate
-                    self.isPlaying = true
-                } else if item.status == .failed {
-                    self.isLoading = false
-                }
-            }
-        }
-
-        setupTimeObserver()
-        observeEnd(item: item)
-    }
-
-    func stop() {
-        avPlayer?.pause()
-        if let obs = timeObserver { avPlayer?.removeTimeObserver(obs) }
-        timeObserver = nil
-        statusObservation?.invalidate()
-        statusObservation = nil
-        avPlayer = nil
-        currentURL = nil
-        isPlaying = false
-        isLoading = false
-        progress = 0
-        currentTime = 0
-        duration = 0
-    }
-
-    func seek(to fraction: Double) {
-        guard let player = avPlayer, let item = player.currentItem else { return }
-        let total = item.duration.seconds
-        guard total.isFinite && total > 0 else { return }
-        let target = CMTime(seconds: fraction * total, preferredTimescale: 600)
-        player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
-        progress = fraction
-        currentTime = fraction * total
-    }
-
-    func skip(seconds: Double) {
-        guard let player = avPlayer else { return }
-        let current = player.currentTime().seconds
-        let total = player.currentItem?.duration.seconds ?? 0
-        guard total.isFinite && total > 0 else { return }
-        let newTime = max(0, min(total, current + seconds))
-        player.seek(to: CMTime(seconds: newTime, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
-        currentTime = newTime
-        progress = newTime / total
-    }
-
-    func setRate(_ rate: Float) {
-        playbackRate = rate
-        if isPlaying {
-            avPlayer?.rate = rate
-        }
-    }
-
-    func timeLabel(totalDuration: Int?) -> String {
-        let current = formatTime(currentTime)
-        let total = formatTime(duration > 0 ? duration : Double(totalDuration ?? 0))
-        return "\(current) / \(total)"
-    }
-
-    private func formatTime(_ seconds: TimeInterval) -> String {
-        guard seconds.isFinite && seconds >= 0 else { return "0:00" }
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return String(format: "%d:%02d", mins, secs)
-    }
-
-    private func setupTimeObserver() {
-        let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
-        timeObserver = avPlayer?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            Task { @MainActor [weak self] in
-                guard let self, let item = self.avPlayer?.currentItem else { return }
-                let total = item.duration.seconds
-                guard total.isFinite && total > 0 else { return }
-                self.duration = total
-                self.currentTime = time.seconds
-                self.progress = time.seconds / total
-            }
-        }
-    }
-
-    private func observeEnd(item: AVPlayerItem) {
-        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
-        endObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: item, queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.isPlaying = false
-                self?.progress = 0
-                self?.currentTime = 0
-                self?.avPlayer?.seek(to: .zero)
-            }
-        }
-    }
-
-    deinit {
-        if let obs = timeObserver { avPlayer?.removeTimeObserver(obs) }
-        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
-        NotificationCenter.default.removeObserver(self)
-    }
-}
-
-// MARK: - Emoji Usage Tracker
-
-struct EmojiUsageTracker {
-    private static let key = "com.meeshy.emojiUsageCount"
-
-    static func recordUsage(emoji: String) {
-        var counts = getCounts()
-        counts[emoji, default: 0] += 1
-        UserDefaults.standard.set(counts, forKey: key)
-    }
-
-    static func sortedEmojis(from emojis: [String]) -> [String] {
-        let counts = getCounts()
-        if counts.isEmpty { return emojis }
-        return emojis.sorted { (counts[$0] ?? 0) > (counts[$1] ?? 0) }
-    }
-
-    static func topEmojis(count: Int, defaults: [String]) -> [String] {
-        let counts = getCounts()
-
-        // Deterministic total ordering. `Dictionary` has no specified
-        // iteration order, so `counts.sorted { $0.value > $1.value }` left
-        // equal-score emojis to the dictionary's whim — they reshuffled on
-        // every recomputation (i.e. every quick-bar re-render). We sort the
-        // keys with an explicit tie-break: usage count desc, then the emoji's
-        // canonical rank (its index in `defaults`, unknowns last), then the
-        // emoji string itself. The result is identical across calls for a
-        // given usage table, so the bar's emoji order stays fixed while the
-        // user interacts with the screen.
-        let canonicalRank: [String: Int] = Dictionary(
-            uniqueKeysWithValues: defaults.enumerated().map { ($0.element, $0.offset) }
-        )
-        func rank(_ emoji: String) -> Int { canonicalRank[emoji] ?? Int.max }
-
-        let trackedSorted = counts.keys.sorted { lhs, rhs in
-            let lhsCount = counts[lhs] ?? 0
-            let rhsCount = counts[rhs] ?? 0
-            if lhsCount != rhsCount { return lhsCount > rhsCount }
-            let lhsRank = rank(lhs)
-            let rhsRank = rank(rhs)
-            if lhsRank != rhsRank { return lhsRank < rhsRank }
-            return lhs < rhs
-        }
-
-        var result: [String] = []
-        var seen = Set<String>()
-        for emoji in trackedSorted where result.count < count {
-            if seen.insert(emoji).inserted { result.append(emoji) }
-        }
-        for emoji in defaults where result.count < count {
-            if seen.insert(emoji).inserted { result.append(emoji) }
-        }
-        return result
-    }
-
-    private static func getCounts() -> [String: Int] {
-        UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
-    }
-}
+// `OverlayAudioPlayer` vit chez lui depuis #7005 :
+// `Meeshy/Features/Main/Components/OverlayAudioPlayer.swift`. Un lecteur média
+// n'a rien à faire dans le fichier d'un menu contextuel, et cet hôte était déjà
+// hors budget — il fallait extraire avant d'ajouter la garde d'idempotence.

@@ -1,4 +1,5 @@
 import ImageIO
+import MeeshySDK
 import UIKit
 
 /// SOTA thumbnail extraction via CGImageSource.
@@ -27,17 +28,8 @@ public enum SOTAImageThumbnail {
     ///   - url: Local file URL (HEIC/JPEG/PNG supported via ImageIO).
     ///   - maxPixelSize: Cap on the longest side, in pixels (NOT points).
     public nonisolated static func thumbnail(from url: URL, maxPixelSize: CGFloat) -> UIImage? {
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceShouldCacheImmediately: false,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
-        ]
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-            return nil
-        }
-        return UIImage(cgImage: cgImage)
+        ImageDownsampler.thumbnail(fileURL: url, maxPixelSize: maxPixelSize, decodeImmediately: false)
+            .map { UIImage(cgImage: $0) }
     }
 
     /// Async variant — suspends off the main actor so the caller need not manage

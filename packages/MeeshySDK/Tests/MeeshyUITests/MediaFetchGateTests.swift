@@ -45,4 +45,39 @@ final class MediaFetchGateTests: XCTestCase {
             autoLoad: true, isLocalFileURL: true, hasLocalCacheHit: true, policyAllowsAutoLoad: true
         ))
     }
+
+    // MARK: - Relance après un report de politique
+
+    /// Une case retenue par la politique ne relançait jamais son chargement
+    /// quand son URL restait la même : le média téléchargé par un autre chemin
+    /// (bouton de la bulle) restait flou. Le jeton de l'hôte entre dans
+    /// l'identité du chargement, qui repart dès qu'il change.
+    func test_progressiveLoadID_changedReloadToken_restartsTheLoad() {
+        let before = ProgressiveImageLoadID(url: "https://x/p.jpg", reloadToken: AnyHashable(false))
+        let after = ProgressiveImageLoadID(url: "https://x/p.jpg", reloadToken: AnyHashable(true))
+
+        XCTAssertNotEqual(before, after)
+    }
+
+    func test_progressiveLoadID_sameURLAndToken_doesNotRestart() {
+        XCTAssertEqual(
+            ProgressiveImageLoadID(url: "https://x/p.jpg", reloadToken: AnyHashable(true)),
+            ProgressiveImageLoadID(url: "https://x/p.jpg", reloadToken: AnyHashable(true))
+        )
+        XCTAssertEqual(
+            ProgressiveImageLoadID(url: "https://x/p.jpg", reloadToken: nil),
+            ProgressiveImageLoadID(url: "https://x/p.jpg", reloadToken: nil)
+        )
+    }
+
+    func test_progressiveLoadID_changedURL_restartsTheLoad() {
+        XCTAssertNotEqual(
+            ProgressiveImageLoadID(url: "https://x/p_960.webp", reloadToken: nil),
+            ProgressiveImageLoadID(url: "https://x/p.jpg", reloadToken: nil)
+        )
+    }
+
+    func test_localImagePresence_unknownURL_isNotOnDevice() {
+        XCTAssertFalse(LocalImagePresence.isOnDevice(resolvedURL: "https://never.example/\(UUID().uuidString).jpg"))
+    }
 }

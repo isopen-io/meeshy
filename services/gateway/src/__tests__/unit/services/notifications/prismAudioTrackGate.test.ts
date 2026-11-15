@@ -53,6 +53,16 @@ const ORIGINAL_DURATION_MS = 12000;
 
 /** La piste TTS que le pipeline a produite pour le lecteur francophone. */
 const FR_TRACK_URL = '/api/v1/attachments/file/translated/att_fr.mp3';
+
+/**
+ * CE QUE LA CHARGE PUSH PORTE DEPUIS #7022 — l'adresse ABSOLUE, composée par
+ * la passerelle (`publicMediaUrl`). La NSE iOS n'a aucune base configurée : un
+ * chemin relatif n'y est pas téléchargeable, et une clé de stockage — la forme
+ * que `normalize-media-urls.ts` laisse en base — encore moins. La RÉFÉRENCE,
+ * elle, reste nue dans le contexte persisté ; seul le fil la compose.
+ */
+const SUR_LE_FIL = (chemin: string): string => `https://gate.meeshy.me${chemin}`;
+
 const FR_TRACK_DURATION_MS = 9400;
 
 /** Ce que la transcription dit, et ce que sa traduction en dit. */
@@ -155,7 +165,7 @@ describe('bannière d\'un vocal — la piste attachée suit la langue SERVIE', (
 
     await runVoiceNote(service);
 
-    expect(pushedData(sendToUser).attachmentUrl).toBe(FR_TRACK_URL);
+    expect(pushedData(sendToUser).attachmentUrl).toBe(SUR_LE_FIL(FR_TRACK_URL));
   });
 
   /**
@@ -174,16 +184,28 @@ describe('bannière d\'un vocal — la piste attachée suit la langue SERVIE', (
     expect(data.attachmentDurationMs).toBe(String(FR_TRACK_DURATION_MS));
   });
 
-  it('le corps AFFICHÉ compose sa durée depuis la piste servie', async () => {
-    // 9400 ms → 0:09, jamais le 0:12 de l'original. Le corps est le seul texte
-    // que les trois plateformes rendent (cycle 122).
+  /**
+   * #10641 — la coque Android JOUE cette piste depuis la notification et en
+   * rapporte l'écoute (`AttachmentStatusBodySchema.language`) : une piste
+   * traduite est l'écoute d'une AUTRE version du contenu. Sa langue voyage
+   * donc avec elle, comme son mime et sa durée.
+   */
+  it('la langue de la piste servie voyage avec elle', async () => {
+    const { service, sendToUser } = makeService('fr');
+
+    await runVoiceNote(service);
+
+    expect(pushedData(sendToUser).attachmentLanguage).toBe('fr');
+  });
+
+  it('le corps AFFICHÉ décrit le vocal sans le montrer (#14309)', async () => {
     const { service, sendToUser } = makeService('fr');
 
     await runVoiceNote(service, { messagePreview: '' });
 
     const body = pushedPayload(sendToUser).body ?? '';
-    expect(body).toContain('0:09');
-    expect(body).not.toContain('0:12');
+    expect(body).toBe('Vocal haute définition');
+    expect(body).not.toContain(TRANSCRIPT_FR);
   });
 
   /**
@@ -202,7 +224,7 @@ describe('bannière d\'un vocal — la piste attachée suit la langue SERVIE', (
       },
     });
 
-    expect(pushedData(sendToUser).attachmentUrl).toBe(FR_TRACK_URL);
+    expect(pushedData(sendToUser).attachmentUrl).toBe(SUR_LE_FIL(FR_TRACK_URL));
   });
 });
 
@@ -214,9 +236,10 @@ describe('les trois cas où l\'ORIGINAL reste le bon fichier', () => {
     await runVoiceNote(service);
 
     const data = pushedData(sendToUser);
-    expect(data.attachmentUrl).toBe(ORIGINAL_URL);
+    expect(data.attachmentUrl).toBe(SUR_LE_FIL(ORIGINAL_URL));
     expect(data.attachmentMimeType).toBe(ORIGINAL_MIME);
     expect(data.attachmentDurationMs).toBe(String(ORIGINAL_DURATION_MS));
+    expect(data.attachmentLanguage).toBe('');
   });
 
   it('langue élue SANS piste ⇒ fichier original — fail-OPEN sur le médium', async () => {
@@ -227,9 +250,10 @@ describe('les trois cas où l\'ORIGINAL reste le bon fichier', () => {
     await runVoiceNote(service, { attachmentTracks: {} });
 
     const data = pushedData(sendToUser);
-    expect(data.attachmentUrl).toBe(ORIGINAL_URL);
+    expect(data.attachmentUrl).toBe(SUR_LE_FIL(ORIGINAL_URL));
     expect(data.attachmentMimeType).toBe(ORIGINAL_MIME);
-    expect(pushedPayload(sendToUser).body ?? '').toContain(TRANSCRIPT_FR);
+    expect(data.attachmentLanguage).toBe('');
+    expect(pushedPayload(sendToUser).body ?? '').not.toContain(TRANSCRIPT_FR);
   });
 
   it('aucune carte de pistes (le cas de l\'écrasante majorité) ⇒ rien ne change', async () => {
@@ -237,7 +261,7 @@ describe('les trois cas où l\'ORIGINAL reste le bon fichier', () => {
 
     await runVoiceNote(service, { attachmentTracks: undefined });
 
-    expect(pushedData(sendToUser).attachmentUrl).toBe(ORIGINAL_URL);
+    expect(pushedData(sendToUser).attachmentUrl).toBe(SUR_LE_FIL(ORIGINAL_URL));
   });
 });
 
@@ -277,12 +301,12 @@ describe('la durée d\'un vocal est en MILLISECONDES de bout en bout', () => {
     expect(metadata?.attachments?.firstDurationMs).toBe(34000);
   });
 
-  it('le corps AFFICHÉ et le fil s\'accordent sur la même durée', async () => {
+  it('le fil porte la durée en millisecondes, le corps n\'en dit que la nature (#14309)', async () => {
     const { service, sendToUser } = makeService('en');
 
     await runVoiceNote(service, { firstAttachmentDuration: 34000, messagePreview: '' });
 
-    expect(pushedPayload(sendToUser).body ?? '').toContain('0:34');
+    expect(pushedPayload(sendToUser).body ?? '').toBe('High-definition voice message');
     expect(pushedData(sendToUser).attachmentDurationMs).toBe('34000');
   });
 });
@@ -303,6 +327,7 @@ describe('la protection reste au-dessus de l\'élection', () => {
     expect(data.attachmentUrl).toBe('');
     expect(data.attachmentMimeType).toBe('');
     expect(data.attachmentDurationMs).toBe('');
+    expect(data.attachmentLanguage).toBe('');
     expect(JSON.stringify(sendToUser.mock.calls)).not.toContain(FR_TRACK_URL);
   });
 });

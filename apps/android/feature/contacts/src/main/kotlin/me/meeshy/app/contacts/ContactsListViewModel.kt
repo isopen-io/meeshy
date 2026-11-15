@@ -3,6 +3,8 @@ package me.meeshy.app.contacts
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -10,17 +12,23 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.valueOrNull
+import me.meeshy.sdk.friend.BlockCache
+import me.meeshy.sdk.friend.BlockRepository
 import me.meeshy.sdk.friend.FriendListRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
+import me.meeshy.sdk.model.friend.repainted
+import me.meeshy.sdk.model.UserUpdatedEvent
+import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.friend.ContactFilter
 import me.meeshy.sdk.model.friend.ContactFilterCounts
 import me.meeshy.sdk.model.friend.ContactList
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.SessionRepository
-import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusFeedMode
 import me.meeshy.sdk.status.statusForUser
@@ -31,6 +39,7 @@ data class ContactsListUiState(
     val filter: ContactFilter = ContactFilter.All,
     val query: String = "",
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val errorMessage: String? = null,
     val moodStatuses: List<StatusEntry> = emptyList(),
 ) {
@@ -68,10 +77,11 @@ data class ContactsListUiState(
  * The friend graph is exactly the current user's accepted friend requests (there
  * is no dedicated `/friends` endpoint), so [load] first paints the last-persisted
  * roster from the Room-backed [FriendListRepository] for an instant cold-start
- * view (the Android analogue of iOS `CacheCoordinator.friends`), then fetches
- * received + sent requests, folds them into the online-first friend list via the
- * pure [ContactList], writes that roster back through to the cache, and keeps the
- * shared [FriendshipCache] hydrated. It then reconciles the shown list against
+ * view (the Android analogue of iOS `CacheCoordinator.friends`), then reads the
+ * friend graph ([FriendRepository.friendshipGraph]: accepted relations in both
+ * directions plus pending requests), folds its accepted rows into the online-first
+ * friend list via the pure [ContactList], writes that roster back through to the
+ * cache, and hydrates the shared [FriendshipCache] from the same graph. It then reconciles the shown list against
  * that cache whenever any other surface (the Requests tab accepting, a profile
  * sheet, a socket event) mutates the friend graph: removals apply locally (and are
  * written through so the cache stays consistent without a refetch), additions
@@ -84,17 +94,36 @@ class ContactsListViewModel @Inject constructor(
     private val friendshipCache: FriendshipCache,
     private val sessionRepository: SessionRepository,
     private val statusBarCache: StatusBarCache,
-    private val messageSocketManager: MessageSocketManager,
+    private val presenceStore: PresenceStore,
+    private val blockCache: BlockCache = BlockCache(),
+    private val blockRepository: BlockRepository? = null,
+    private val messageSocket: MessageSocketManager? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ContactsListUiState())
     val state: StateFlow<ContactsListUiState> = _state.asStateFlow()
+
+    /**
+     * Le carnet tel que le SERVEUR l'a servi (REST, ou son dernier écrit relu du cache) — jamais
+     * recouvert. C'est la seule source de [ContactsListUiState.friends] (recouverte de la carte de
+     * présence à chaque lecture) ET la seule liste écrite en base : recouvrir l'état courant
+     * ferait survivre une présence que la carte a retirée, et la repeindrait au démarrage suivant.
+     */
+    private var servedRoster: List<FriendRequestUser> = emptyList()
+
+    /**
+     * Le compte sous lequel [servedRoster] a été chargé (cache ou réseau) — pris AVANT la lecture,
+     * jamais au moment d'une écriture dérivée : un repeint ou une réconciliation qui arrive après un
+     * changement de compte écrit sous le compte du carnet, et la barrière le refuse (#13560).
+     */
+    private var servedTicket: AccountTicket? = null
 
     private var lastReconciledFriendIds: Set<String> = friendshipCache.currentFriendIds
 
     init {
         observeFriendshipCache()
         observePresence()
+        observeUserUpdates()
         load()
     }
 
@@ -137,10 +166,27 @@ class ContactsListViewModel @Inject constructor(
      */
     private suspend fun paintFromCache() {
         if (_state.value.friends.isNotEmpty()) return
+        val ticket = friendListRepository.ticket()
         val cached = friendListRepository.cachedSnapshot()
+        if (cached != null) {
+            servedRoster = BlockedExclusion.friends(cached, blockCache.currentBlockedIds)
+            servedTicket = ticket
+        }
         _state.update {
             if (cached == null) it.copy(isLoading = true)
-            else it.copy(friends = cached, isLoading = false)
+            else it.copy(friends = withPresence(servedRoster), isLoading = false)
+        }
+    }
+
+    /** Pull-to-refresh (iOS `.refreshable { loadFriends(forceNetwork: true) }`): network, never gated by the cache. */
+    fun refresh() {
+        viewModelScope.launch {
+            _state.update { it.copy(isRefreshing = true) }
+            try {
+                revalidate()
+            } finally {
+                _state.update { it.copy(isRefreshing = false) }
+            }
         }
     }
 
@@ -149,24 +195,31 @@ class ContactsListViewModel @Inject constructor(
     }
 
     private suspend fun revalidate() {
-        val received = friendRepository.receivedRequests(offset = 0, limit = FETCH_LIMIT)
-        val sent = friendRepository.sentRequests(offset = 0, limit = FETCH_LIMIT)
-
-        if (received is NetworkResult.Success && sent is NetworkResult.Success) {
-            friendshipCache.hydrate(sent = sent.data, received = received.data)
-            lastReconciledFriendIds = friendshipCache.currentFriendIds
-            val friends = ContactList.fromAcceptedRequests(
-                received = received.data,
-                sent = sent.data,
-                currentUserId = sessionRepository.currentUserId.orEmpty(),
-            )
-            _state.update { it.copy(friends = friends, isLoading = false, errorMessage = null) }
-            friendListRepository.persist(friends)
-        } else {
-            _state.update {
+        val currentUserId = sessionRepository.currentUserId.orEmpty()
+        val ticket = friendListRepository.ticket()
+        val served = coroutineScope {
+            val blocks = async { blockRepository?.listBlocked() }
+            val graphCall = async { friendRepository.friendshipGraph(currentUserId) }
+            blocks.await()
+            graphCall.await()
+        }
+        when (val graph = served) {
+            is NetworkResult.Success -> {
+                val blockedIds = blockCache.currentBlockedIds
+                val sent = BlockedExclusion.requests(graph.data.sent, blockedIds)
+                val received = BlockedExclusion.requests(graph.data.received, blockedIds)
+                friendshipCache.hydrate(sent = sent, received = received, ticket = ticket)
+                lastReconciledFriendIds = friendshipCache.currentFriendIds
+                servedRoster = ContactList.fromAcceptedRequests(received + sent, currentUserId)
+                servedTicket = ticket
+                val persisted = servedRoster
+                _state.update { it.copy(friends = withPresence(persisted), isLoading = false, errorMessage = null) }
+                friendListRepository.persist(persisted, ticket)
+            }
+            is NetworkResult.Failure -> _state.update {
                 it.copy(
                     isLoading = false,
-                    errorMessage = if (it.friends.isEmpty()) firstError(received, sent) else it.errorMessage,
+                    errorMessage = if (it.friends.isEmpty()) graph.error.message else it.errorMessage,
                 )
             }
         }
@@ -179,43 +232,67 @@ class ContactsListViewModel @Inject constructor(
     }
 
     /**
-     * Overlays live `user:status`/`presence:snapshot` frames onto the roster's
-     * `isOnline`/`lastActiveAt` fields (see [PresenceOverlay]) — without this,
-     * a friend going online/offline never paints on this screen until the user
-     * leaves and re-enters it (the socket flows are hot with no replay, so this
-     * must be collecting before an event fires to see it — started in [init]).
+     * Superpose la carte de présence UNIQUE de la session ([PresenceStore.entries] : `user:status`,
+     * `presence:snapshot`, frappe) sur le carnet — sans cela un ami qui passe en ligne ne se
+     * peindrait qu'au prochain `/friends`. La carte est gardée en état : un carnet ouvert après le
+     * snapshot la voit déjà.
      */
     private fun observePresence() {
         viewModelScope.launch {
-            messageSocketManager.userStatus.collect { event ->
-                _state.update { it.copy(friends = PresenceOverlay.applyStatus(it.friends, event)) }
-            }
-        }
-        viewModelScope.launch {
-            messageSocketManager.presenceSnapshot.collect { snapshot ->
-                _state.update { it.copy(friends = PresenceOverlay.applySnapshot(it.friends, snapshot)) }
+            presenceStore.entries.collect { entries ->
+                _state.update { it.copy(friends = PresenceOverlay.apply(servedRoster, entries)) }
             }
         }
     }
 
-    private fun onFriendshipCacheChanged() {
+    /**
+     * `user:updated` (nom, photo) repeint la ligne en place — sans relecture du carnet. Le carnet
+     * SERVI est repeint (et réécrit en base) : la carte de présence se recouvre ensuite par-dessus.
+     */
+    private fun observeUserUpdates() {
+        val updates = messageSocket?.userUpdated ?: return
+        viewModelScope.launch {
+            updates.collect { event ->
+                try {
+                    repaint(event)
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    Unit
+                }
+            }
+        }
+    }
+
+    private suspend fun repaint(event: UserUpdatedEvent) {
+        val ticket = servedTicket
+        if (ticket != friendListRepository.ticket()) return
+        var changed = false
+        val next = servedRoster.map { friend ->
+            event.repainted(friend)?.also { changed = true } ?: friend
+        }
+        if (!changed) return
+        servedRoster = next
+        _state.update { it.copy(friends = withPresence(next)) }
+        friendListRepository.persist(next, ticket)
+    }
+
+    private fun withPresence(friends: List<FriendRequestUser>): List<FriendRequestUser> =
+        PresenceOverlay.apply(friends, presenceStore.entriesNow())
+
+    private suspend fun onFriendshipCacheChanged() {
         val cacheIds = friendshipCache.currentFriendIds
         if (cacheIds == lastReconciledFriendIds) return
         lastReconciledFriendIds = cacheIds
 
-        val current = _state.value.friends
+        val current = servedRoster
         val result = ContactList.reconcile(current, cacheIds)
         if (result.friends != current) {
-            _state.update { it.copy(friends = result.friends) }
-            viewModelScope.launch { friendListRepository.persist(result.friends) }
+            servedRoster = result.friends
+            _state.update { it.copy(friends = withPresence(result.friends)) }
+            val ticket = servedTicket
+            viewModelScope.launch { friendListRepository.persist(result.friends, ticket) }
         }
         if (result.needsRefetch) refetch()
-    }
-
-    private fun firstError(vararg results: NetworkResult<*>): String? =
-        results.filterIsInstance<NetworkResult.Failure>().firstOrNull()?.error?.message
-
-    private companion object {
-        const val FETCH_LIMIT = 100
     }
 }

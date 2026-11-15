@@ -5,18 +5,64 @@
  * Pas de mapping complexe nécessaire.
  */
 
-import type { Notification } from '@meeshy/shared/types/notification';
+import type { Prisma } from '@meeshy/shared/prisma/client';
+import type {
+  Notification,
+  NotificationActor,
+  NotificationContext,
+  NotificationDelivery,
+  NotificationMetadata,
+} from '@meeshy/shared/types/notification';
 import { encodeCursor } from '../../utils/keyset-cursor.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'NotificationFormatter' });
+
+/**
+ * La forme brute que ce formateur sait lire — un sous-ensemble du modèle
+ * Prisma `Notification` généré, plutôt que le modèle entier : les tests
+ * unitaires (et certains appelants) construisent des fixtures sans `title`,
+ * `subtitle` ni `messageId`, absents plutôt que `null` — ce que le modèle
+ * généré n'autorise pas (chaque champ scalaire y est requis, même nullable).
+ */
+type RawNotificationInput = {
+  readonly id: string;
+  readonly userId: string;
+  readonly type: string;
+  readonly priority?: string | null;
+  readonly title?: string | null;
+  readonly subtitle?: string | null;
+  readonly content: string;
+  readonly actor?: Prisma.JsonValue | null;
+  readonly context?: Prisma.JsonValue | null;
+  readonly metadata?: Prisma.JsonValue | null;
+  readonly isRead?: boolean;
+  readonly readAt?: DateLike;
+  readonly createdAt?: DateLike;
+  readonly expiresAt?: DateLike;
+  readonly delivery?: Prisma.JsonValue | null;
+};
+
+/** Les formes qu'une date brute (DB, JSON désérialisé) peut effectivement prendre. */
+type DateLike = Date | string | number | null | undefined;
+
+/**
+ * La forme qu'une PAGE de notifications doit satisfaire pour être paginée :
+ * la pagination par curseur lit `createdAt`/`id` de la DERNIÈRE ligne pour
+ * offrir une suite (`nextCursorFrom` → `encodeCursor`), qui exige une date
+ * exploitable — là où `formatNotification` seul tolère l'absence
+ * (`sanitizeDate` y a un repli vers `defaultValue`).
+ */
+type RawNotificationRow = RawNotificationInput & {
+  readonly createdAt: Date | string;
+};
 
 export class NotificationFormatter {
   /**
    * Sanitize une date pour éviter "Invalid time value"
    * Retourne la date valide ou la valeur par défaut
    */
-  private static sanitizeDate(value: any, defaultValue: Date | null = null): Date | null {
+  private static sanitizeDate(value: DateLike, defaultValue: Date | null = null): Date | null {
     // Cas 1: valeur null/undefined/false/empty
     if (!value) return defaultValue;
 
@@ -60,7 +106,7 @@ export class NotificationFormatter {
    *
    * IMPORTANT: Pas de génération de title - fait côté frontend
    */
-  static formatNotification(raw: any): Notification {
+  static formatNotification(raw: RawNotificationInput): Notification {
     return {
       // CORE
       id: raw.id,
@@ -73,14 +119,16 @@ export class NotificationFormatter {
       subtitle: raw.subtitle ?? null,
       content: raw.content,
 
-      // ACTOR (cast car Prisma Json type)
-      actor: (raw.actor || undefined) as any,
+      // ACTOR — Json Prisma, forme validée en amont par le producteur (cf.
+      // doc-comment `NotificationActor`) ; passage par `unknown` requis, le
+      // type Json n'ayant structurellement aucun recouvrement avec le domaine.
+      actor: (raw.actor || undefined) as unknown as NotificationActor | undefined,
 
-      // CONTEXT (cast car Prisma Json type)
-      context: (raw.context || {}) as any,
+      // CONTEXT (Json Prisma)
+      context: (raw.context || {}) as unknown as NotificationContext,
 
-      // METADATA (cast car Prisma Json type)
-      metadata: (raw.metadata || {}) as any,
+      // METADATA (Json Prisma)
+      metadata: (raw.metadata || {}) as unknown as NotificationMetadata,
 
       // STATE - avec sanitization des dates - PAS de fallback new Date() !
       state: {
@@ -90,15 +138,15 @@ export class NotificationFormatter {
         expiresAt: this.sanitizeDate(raw.expiresAt, null) || undefined,
       },
 
-      // DELIVERY (cast car Prisma Json type)
-      delivery: (raw.delivery || { emailSent: false, pushSent: false }) as any,
-    } as any; // Cast global pour compilation avant régénération Prisma
+      // DELIVERY (Json Prisma)
+      delivery: (raw.delivery || { emailSent: false, pushSent: false }) as unknown as NotificationDelivery,
+    };
   }
 
   /**
    * Formate une liste de notifications
    */
-  static formatNotifications(rawList: any[]): Notification[] {
+  static formatNotifications(rawList: readonly RawNotificationInput[]): Notification[] {
     return rawList.map((raw) => this.formatNotification(raw));
   }
 
@@ -108,7 +156,7 @@ export class NotificationFormatter {
    * `null` dès qu'il n'y a plus de suite — un curseur rendu sur une page finale
    * invite le client à un aller-retour qui ne peut rien rapporter.
    */
-  private static nextCursorFrom(rows: any[], hasMore: boolean): string | null {
+  private static nextCursorFrom(rows: readonly RawNotificationRow[], hasMore: boolean): string | null {
     const last = rows[rows.length - 1];
     return hasMore && last ? encodeCursor(last.createdAt, last.id) : null;
   }
@@ -121,7 +169,7 @@ export class NotificationFormatter {
    * pour la suite, sans jamais avoir à demander deux fois la même page.
    */
   static formatPaginatedResponse(params: {
-    notifications: any[];
+    notifications: readonly RawNotificationRow[];
     total: number;
     offset: number;
     limit: number;
@@ -156,7 +204,7 @@ export class NotificationFormatter {
    * compte — c'est ce qui retire le `count()` du chemin de chaque page.
    */
   static formatCursorPaginatedResponse(params: {
-    notifications: any[];
+    notifications: readonly RawNotificationRow[];
     limit: number;
     hasMore: boolean;
     unreadCount: number;
@@ -176,7 +224,7 @@ export class NotificationFormatter {
   /**
    * Formate pour Socket.IO (même structure que API)
    */
-  static formatForSocket(raw: any): Notification {
+  static formatForSocket(raw: RawNotificationInput): Notification {
     return this.formatNotification(raw);
   }
 }

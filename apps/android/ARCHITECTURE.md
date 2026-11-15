@@ -178,6 +178,13 @@ stuck item never head-of-line-blocks unrelated mutations (review §4.1).
   connectivity constraint — FIFO drain, full-jitter exponential backoff,
   `Exhausted` after 5 attempts, transient-vs-permanent classification,
   404-as-success.
+- **Per-kind registry**: each `OutboxKind` is delivered — and its optimistic effect
+  rolled back once the row is exhausted — by ONE `OutboxKindHandler` bound
+  `@Binds @IntoMap @OutboxKindKey(kind)` in a domain file under
+  `sdk-core/.../outbox/senders/`. `MutationSenderRegistry` gathers the map and
+  `OutboxFlushWorker` only drains lanes: a new kind is one enum value (appended)
+  plus one handler file, never an edit of the worker. Dagger refuses a duplicate
+  key, and `SenderRegistryCompletenessTest` fails when a kind has no handler.
 - **Large-media uploads are NOT in the outbox.** TUS resumable uploads run in a
   **dedicated `WorkManager` chain** with a `setForeground` progress
   notification; the message-send outbox item carries an `uploadId` and

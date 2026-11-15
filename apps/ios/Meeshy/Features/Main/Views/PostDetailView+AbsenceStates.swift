@@ -1,0 +1,99 @@
+import SwiftUI
+import MeeshyUI
+
+/// **Les écrans du « rien à montrer », côte à côte.**
+///
+/// Ils vivent ensemble parce que c'est leur DIFFÉRENCE qui porte la règle :
+/// même silhouette, mais une disparition n'appelle pas la même action qu'un
+/// échec — et un échec serveur ne se raconte pas comme un échec réseau (#6508).
+///
+/// Le choix entre eux n'est pas ici : il est dans `PostDetailAbsenceReason`,
+/// pur et testé. Les mots, l'icône et l'offre de réessai viennent de
+/// `ContentFetchFailure+Copy`, partagé avec la cible story et le lecteur de
+/// réels. Ces vues ne décident de rien, elles rendent.
+///
+/// Extrait de `PostDetailView.swift` — le budget de fichier interdit d'ajouter
+/// à un fichier déjà hors budget, donc on extrait AVANT d'ajouter (#4903).
+extension PostDetailView {
+
+    /// L'état rendu quand il n'y a ni post ni chargement en cours. Il occupe
+    /// tout l'écran : un refus y pose le noir du lecteur de réels de bord à
+    /// bord, un échec s'y centre.
+    var absenceState: some View {
+        Group {
+            switch PostDetailAbsenceReason.resolve(hasPost: false, isLoading: false, failure: viewModel.loadFailure) {
+            case .networkFailed:
+                loadFailedState(.network)
+            case .serverFailed:
+                loadFailedState(.server)
+            case .present, .stillLoading, .unavailable:
+                unavailableState
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// **Un échec de chargement n'est pas une disparition.**
+    ///
+    /// Même silhouette que `unavailableState` — l'utilisateur reconnaît l'écran
+    /// — mais l'icône, la phrase et surtout l'ACTION changent : ici la seule
+    /// chose qui puisse aider est de refaire la requête. Le bouton « Retour »
+    /// reste en second, jamais en premier : partir est le repli, pas le geste
+    /// attendu.
+    func loadFailedState(_ cause: ContentFetchFailure) -> some View {
+        VStack(spacing: MeeshySpacing.md) {
+            Image(systemName: cause.symbolName)
+                // `MeeshyFont.relative` et non `.system(size:)` : une icône
+                // d'état vide n'a pas de cadre fixe, donc rien ne justifie
+                // qu'elle ignore Dynamic Type.
+                .font(MeeshyFont.relative(40))
+                .foregroundStyle(theme.textMuted)
+                .accessibilityHidden(true)
+            Text(cause.title)
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
+                .foregroundStyle(theme.textPrimary)
+                .multilineTextAlignment(.center)
+            ContentFetchFailureMessage(message: cause.message, tint: theme.textSecondary)
+            Button {
+                HapticFeedback.light()
+                Task { await viewModel.loadPost(postId) }
+            } label: {
+                Text(String(localized: "feed.post.detail.loadFailed.retry",
+                            defaultValue: "Réessayer", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            Button {
+                HapticFeedback.light()
+                router.closePostDetail()
+            } label: {
+                Text(String(localized: "feed.post.detail.unavailable.back",
+                            defaultValue: "Retour", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize))
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(theme.textSecondary)
+        }
+        .padding(.horizontal, MeeshySpacing.xxxl)
+        .accessibilityElement(children: .contain)
+    }
+
+    /// Contenu introuvable ou interdit : expiré, retiré, ou jamais accessible à
+    /// cette personne. On ne distingue pas — l'utilisateur n'a rien de
+    /// différent à faire, et prétendre savoir lequel serait inventer.
+    ///
+    /// **Il se présente comme un RÉEL refusé** (#10314, #10318 — décision
+    /// porteur du 2026-10-12 : « faire le même traitement que pour les
+    /// réels ») : le MÊME `ReelOpenFailureView`, sur son noir de média, avec ses
+    /// mots et « Retour », sans « Réessayer » — un refus ne s'essaie pas deux
+    /// fois. Un lien de publication et un lien de story hors audience
+    /// (`StoryDoor` retombe ici) s'ouvrent donc comme un lien de réel refusé.
+    /// La vue ne reçoit que la cause : rien du contenu ne peut y passer.
+    var unavailableState: some View {
+        ReelOpenFailureView(
+            failure: .notFound,
+            onRetry: {},
+            onClose: { router.closePostDetail() }
+        )
+    }
+}

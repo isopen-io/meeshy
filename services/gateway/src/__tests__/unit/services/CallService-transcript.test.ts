@@ -81,13 +81,19 @@ function makeTranscriptionRows() {
 function makePrisma(overrides: {
   call?: unknown;
   rows?: unknown[];
+  total?: number;
+  captures?: unknown[];
 } = {}) {
   return {
+    callCaptureEvent: {
+      findMany: jest.fn<any>().mockResolvedValue(overrides.captures ?? []),
+    },
     callSession: {
       findUnique: jest.fn<any>().mockResolvedValue(overrides.call === undefined ? makeCall() : overrides.call),
     },
     transcription: {
       findMany: jest.fn<any>().mockResolvedValue(overrides.rows ?? makeTranscriptionRows()),
+      count: jest.fn<any>().mockResolvedValue(overrides.total ?? (overrides.rows ?? makeTranscriptionRows()).length),
     },
   } as unknown as PrismaClient;
 }
@@ -126,6 +132,29 @@ describe('CallService.getCallTranscript', () => {
     );
   });
 
+  // #4165 — un appel d'une heure produit des milliers de segments, chacun avec
+  // ses traductions. La borne doit vivre DANS la requete : un temoin qui
+  // n'asserte que la longueur du retour resterait vert si le service chargeait
+  // le journal entier avant de le trancher.
+  it('borne la lecture dans la requete et rend le VRAI total', async () => {
+    prisma = makePrisma({ total: 4_200 });
+    service = new CallService(prisma);
+
+    const transcript = await service.getCallTranscript(CALL_ID, PARTICIPANT_USER, 100, 25);
+
+    expect((prisma as any).transcription.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 100, take: 25 })
+    );
+    expect(transcript.total).toBe(4_200);
+    expect(transcript.hasMore).toBe(true);
+  });
+
+  it('ne promet plus de suite quand la page epuise le journal', async () => {
+    const transcript = await service.getCallTranscript(CALL_ID, PARTICIPANT_USER);
+    expect(transcript.total).toBe(transcript.segments.length);
+    expect(transcript.hasMore).toBe(false);
+  });
+
   it('uses the wire segmentId as journal id when present, the row id otherwise', async () => {
     const transcript = await service.getCallTranscript(CALL_ID, PARTICIPANT_USER);
     const ids = transcript.segments.map((s) => s.id);
@@ -136,6 +165,31 @@ describe('CallService.getCallTranscript', () => {
   it('rejects a user who did not take part in the call, even if they could access the call session', async () => {
     await expect(service.getCallTranscript(CALL_ID, OUTSIDER_USER)).rejects.toThrow(/NOT_A_PARTICIPANT/);
     expect((prisma as any).transcription.findMany).not.toHaveBeenCalled();
+  });
+
+  // #16665 — les captures d'écran et les moments de l'enregistrement consenti
+  // voyagent à côté des segments, auteur nommé depuis les participants.
+  it('ajoute les captures à côté des segments, nommées depuis les participants', async () => {
+    prisma = makePrisma({
+      captures: [
+        { id: 'cap-1', participantId: 'participant-1', userId: PARTICIPANT_USER, kind: 'screenshot', offsetMs: 760_000, createdAt: new Date(1_765_650_760_000) },
+        { id: 'cap-2', participantId: null, userId: null, kind: 'call-recording-stopped', offsetMs: 800_000, createdAt: new Date(1_765_650_800_000) },
+      ],
+    });
+    service = new CallService(prisma);
+
+    const transcript = await service.getCallTranscript(CALL_ID, PARTICIPANT_USER);
+
+    expect(transcript.captures).toEqual([
+      { id: 'cap-1', participantId: 'participant-1', userId: PARTICIPANT_USER, displayName: 'Alice Doe', kind: 'screenshot', offsetMs: 760_000, at: new Date(1_765_650_760_000).toISOString() },
+      { id: 'cap-2', participantId: null, userId: null, displayName: null, kind: 'call-recording-stopped', offsetMs: 800_000, at: new Date(1_765_650_800_000).toISOString() },
+    ]);
+    expect((prisma as any).callCaptureEvent.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { callSessionId: CALL_ID } }));
+  });
+
+  it('ne lit aucune capture pour qui n’a pas pris part à l’appel', async () => {
+    await expect(service.getCallTranscript(CALL_ID, OUTSIDER_USER)).rejects.toThrow(/NOT_A_PARTICIPANT/);
+    expect((prisma as any).callCaptureEvent.findMany).not.toHaveBeenCalled();
   });
 
   it('throws CALL_NOT_FOUND for an unknown call', async () => {

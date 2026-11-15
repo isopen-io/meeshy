@@ -12,20 +12,24 @@ package me.meeshy.sdk.story
  *
  * @property cmid the outbox primary key — the retry/discard target.
  * @property tempId the row's `pending_<uuid>` target id (matches the optimistic ring).
- * @property content the (non-blank) story text the user tried to publish.
+ * @property content the (non-blank) story text the user tried to publish, or `null`
+ *   for a media-only (RAW background) publish that carries media but no caption.
  * @property visibility the wire visibility string (`PUBLIC` / `FRIENDS` / …).
  * @property originalLanguage the Prisme-resolved publish language, when known.
  * @property createdAtMillis when the publish was first enqueued.
  * @property failedAtMillis when the row last updated to `EXHAUSTED` (newest-first order).
+ * @property mediaIds the (non-blank) media ids the publish carries, empty for a
+ *   text-only story. A media-only publish has blank [content] and a non-empty list.
  */
 public data class FailedStoryPublish(
     val cmid: String,
     val tempId: String,
-    val content: String,
+    val content: String?,
     val visibility: String,
     val originalLanguage: String?,
     val createdAtMillis: Long,
     val failedAtMillis: Long,
+    val mediaIds: List<String> = emptyList(),
 )
 
 /**

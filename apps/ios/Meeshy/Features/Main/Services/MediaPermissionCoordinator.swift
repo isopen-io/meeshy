@@ -79,12 +79,6 @@ enum MediaPermissionCoordinator {
         await ensure(.photoLibraryRead, announcesRefusal: announcesRefusal)
     }
 
-    /// Accès en écriture seule — enregistrer une capture ou une pièce jointe.
-    @discardableResult
-    static func ensurePhotoLibraryAdd(announcesRefusal: Bool = true) async -> Bool {
-        await ensure(.photoLibraryAdd, announcesRefusal: announcesRefusal)
-    }
-
     private static func ensure(_ kind: MediaPermissionKind, announcesRefusal: Bool) async -> Bool {
         await resolve(
             kind: kind,

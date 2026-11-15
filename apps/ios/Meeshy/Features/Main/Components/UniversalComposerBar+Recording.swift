@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 import AVFoundation
 import CoreLocation
@@ -15,14 +16,16 @@ extension UniversalComposerBar {
     // MARK: - Text Input Field (shown when not recording)
 
     var textInputField: some View {
-        let accent = Color(hex: accentColor)
-        let bgFill = style == .dark
-            ? Color.white.opacity(0.08)
-            : accent.opacity(0.06)
-        let borderDefault: [Color] = style == .dark
-            ? [Color.white.opacity(0.15), Color.white.opacity(0.1)]
-            : [accent.opacity(0.2), accent.opacity(0.15)]
-        let borderFocused: [Color] = [MeeshyColors.indigo400.opacity(0.5), MeeshyColors.indigo600.opacity(0.5)]
+        let accent = servedAccent
+        // #7667 — une protection armée teinte la capsule ENTIÈRE, au repos
+        // comme au focus, et dans le style sombre aussi : c'est l'état qu'on
+        // doit lire d'un coup d'œil avant d'envoyer.
+        let protection = dominantProtection
+        let fieldTint: Color? = protection.map { $0.tint.opacity(isDark ? 0.35 : 0.25) }
+        let borderDefault: [Color] = protection.map { [$0.tint.opacity(0.55), $0.tint.opacity(0.4)] }
+            ?? [Color.clear, Color.clear]
+        let borderFocused: [Color] = protection.map { [$0.tint.opacity(0.8), $0.tint.opacity(0.6)] }
+            ?? [accent.opacity(0.55), MeeshyColors.indigo600.opacity(0.45)]
 
         return HStack(spacing: 0) {
             // Mic button inside field (left) — hidden when focused
@@ -34,34 +37,105 @@ extension UniversalComposerBar {
                 } label: {
                     Image(systemName: "mic.fill")
                         .font(.callout.weight(.medium))
-                        .foregroundColor(mutedColor)
-                        .frame(width: 36, height: 36)
+                        .foregroundColor(iconTint)
+                        .frame(width: QuickEmojiExpansion.micFloor, height: QuickEmojiExpansion.micFloor)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityLabel(String(localized: "composer.a11y.startRecording", defaultValue: "Enregistrer un message vocal", bundle: .main))
-                .padding(.leading, 4)
                 .transition(.scale.combined(with: .opacity))
             }
 
-            // Text input
             ZStack(alignment: .leading) {
                 if text.isEmpty {
                     Text(resolvedPlaceholder)
+                        .lineLimit(1)
                         .foregroundColor(placeholderColor)
                         .padding(.leading, (resolvedShowVoice && !isFocused) ? 2 : 16)
                 }
 
-                TextField("", text: $text, axis: .vertical)
+                // La sélection est lue à partir d'iOS 18 pour la barre de
+                // format (#7849, `UniversalComposerBar+Format.swift`).
+                composerTextFieldBase
+                    .background { composerPasteInterceptor }
                     .focused($isFocused)
                     .foregroundColor(textColor)
                     .padding(.leading, (resolvedShowVoice && !isFocused) ? 2 : 16)
-                    .padding(.trailing, 16)
-                    .padding(.vertical, 12)
+                    .padding(.trailing, MeeshySpacing.lg)
+                    .padding(.vertical, MeeshySpacing.md)
                     .lineLimit(1...5)
                     .font(.callout)
+                    // **La touche RETOUR ENVOIE, et elle porte l'accent**
+                    //
+                    // `.submitLabel(.send)` remplace « retour » par « envoi » et
+                    // fait peindre au système sa touche PROÉMINENTE — celle qui
+                    // prend la couleur de teinte plutôt que le gris des autres.
+                    // `.tint` la fixe à l'accent de la conversation, le MÊME que
+                    // le bouton d'envoi rond douze points plus loin : deux
+                    // chemins vers le même geste ne doivent pas avoir deux
+                    // couleurs.
+                    // AU-DELÀ DE SEPT MOTS, la touche PASSE À LA LIGNE (#6537).
+                    // Le libellé suit la fonction : annoncer « envoi » sur une
+                    // touche qui insère un retour mentirait, et c'est le genre
+                    // de mensonge qu'on ne remarque qu'après avoir perdu un
+                    // paragraphe.
+                    .submitLabel(ComposerActionSlot.exceedsTextStickerLimit(text) ? .return : .send)
+                    .tint(servedAccent)
+                    // `.onSubmit` est posé POUR les versions qui l'honorent sur
+                    // un champ à axe vertical ; il ne suffit pas, et la règle
+                    // ci-dessous dit pourquoi. Les deux chemins mènent au même
+                    // `handleSend`, qui est idempotent sur un texte vide.
+                    .onSubmit {
+                        // Rien à envoyer au-delà de la borne : la touche y est
+                        // un saut de ligne, et `onSubmit` ne doit pas la doubler.
+                        guard !ComposerActionSlot.exceedsTextStickerLimit(text) else { return }
+                        handleSend()
+                    }
+                    // Clavier MATÉRIEL (iPad) : Maj+Retour / Option+Retour passe à la ligne (iOS 17+, `onKeyPress` ;
+                    // iOS 16 garde la règle du texte seule).
+                    .modifier(HardwareReturnModifiers { literalNewlinePending = true })
+                    .modifier(PublishesComposerSend(send: handleSend))
                     .accessibilityLabel(String(localized: "a11y.composer.textField", defaultValue: "Champ de message", bundle: .main))
                     .accessibilityValue(text.isEmpty ? resolvedPlaceholder : text)
+                    .accessibilityHint(protection?.accessibilityState ?? "")
                     .accessibilityIdentifier(MeeshyA11yID.composerTextField)
-                    .adaptiveOnChange(of: text) { _, newValue in
+                    .adaptiveOnChange(of: text) { oldValue, newValue in
+                        // **Le saut de ligne qu'un doigt vient d'insérer** — sur
+                        // un `TextField(axis: .vertical)`, la touche Retour
+                        // INSÈRE au lieu de soumettre, et ce comportement varie
+                        // avec la version d'iOS sur la plage servie (16 → 26).
+                        // La règle regarde ce que le champ observe toujours :
+                        // son propre texte. Elle refuse un collage
+                        // multi-lignes, dont l'envoi serait irréversible.
+                        // La BORNE se lit sur le texte d'AVANT la frappe : celui
+                        // d'après porte déjà le saut de ligne que la touche vient
+                        // d'insérer, et un retour ne fait pas un mot de plus —
+                        // mais lire `oldValue` dit sans ambiguïté ce que l'auteur
+                        // avait sous les yeux en appuyant (#6537).
+                        let passeALaLigne = ComposerActionSlot.exceedsTextStickerLimit(oldValue)
+                        let literal = literalNewlinePending
+                        literalNewlinePending = false
+                        if !passeALaLigne, ComposerReturnKey.submits(previous: oldValue, current: newValue, literalNewline: literal) {
+                            // Le texte SANS son saut de ligne est poussé à
+                            // l'hôte AVANT l'envoi : `onCustomSend` lit la
+                            // source de l'hôte SYNCHRONEMENT, alors que la
+                            // synchro `text` → `textBinding` est différée d'un
+                            // tour de rendu — sans ça, l'hôte enverrait le
+                            // texte d'AVANT la frappe (même écart que
+                            // `sendQuickEmoji`).
+                            let sansRetour = ComposerReturnKey.stripped(newValue)
+                            text = sansRetour
+                            textBinding?.wrappedValue = sansRetour
+                            handleSend()
+                            // Et le champ vaut ensuite ce que dit CELUI QUI A
+                            // ENVOYÉ : l'hôte s'il tient l'envoi (`onCustomSend`,
+                            // vidé ou refusé — #5326), la barre sinon — la source
+                            // d'un hôte `onSendMessage:` n'est jamais vidée et
+                            // ressusciterait le texte envoyé (#9311).
+                            text = ComposerFieldAfterSend.resolve(local: text,
+                                                                  host: textBinding?.wrappedValue,
+                                                                  sender: .init(hasCustomSend: onCustomSend != nil))
+                            return
+                        }
                         if let maxLen = resolvedMaxLength, newValue.count > maxLen {
                             text = String(newValue.prefix(maxLen))
                         }
@@ -70,23 +144,20 @@ extension UniversalComposerBar {
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
         .frame(minHeight: 44)
-        .background(
-            RoundedRectangle(cornerRadius: 22)
-                .fill(bgFill)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22)
-                        .stroke(
-                            focusBounce ?
-                            LinearGradient(colors: borderFocused, startPoint: .leading, endPoint: .trailing) :
-                                LinearGradient(colors: borderDefault, startPoint: .leading, endPoint: .trailing),
-                            lineWidth: focusBounce ? 1.5 : 1
-                        )
+        .adaptiveLiquidGlass(in: Self.fieldShape, tint: fieldTint)
+        .overlay(
+            Self.fieldShape
+                .stroke(
+                    focusBounce ?
+                    LinearGradient(colors: borderFocused, startPoint: .leading, endPoint: .trailing) :
+                        LinearGradient(colors: borderDefault, startPoint: .leading, endPoint: .trailing),
+                    lineWidth: focusBounce ? 1.5 : 1
                 )
-                .shadow(color: focusBounce ? MeeshyColors.indigo400.opacity(0.2) : Color.clear, radius: 8, x: 0, y: 0)
+                .allowsHitTesting(false)
         )
-        .scaleEffect(x: typeWave ? 1.015 : 1.0, y: typeWave ? 0.97 : 1.0)
+        // La vague de frappe — une loi, deux hôtes (`TypingWave`, #8288).
+        .typingWave(typeWave, reduceMotion: reduceMotion)
         .scaleEffect(focusBounce ? 1.02 : 1.0)
-        .animation(.spring(response: 0.2, dampingFraction: 0.35), value: typeWave)
     }
 
     // MARK: - Recording Bar (full-width iMessage-style pill)
@@ -99,20 +170,14 @@ extension UniversalComposerBar {
 
     var recordingBar: some View {
         let isDark = style == .dark
-        let bgFill = isDark
-            ? Color.white.opacity(0.08)
-            : Color(hex: accentColor).opacity(0.06)
-        let borderColor: Color = isDark
-            ? Color.white.opacity(0.15)
-            : Color(hex: accentColor).opacity(0.2)
         let timerColor = isDark ? Color.white : theme.textPrimary
-        let waveformColor = isDark ? "FFFFFF" : accentColor
+        let waveformColor = isDark ? "FFFFFF" : servedAccentHex
         let canSend = effectiveDuration >= Self.minimumSendableDuration
         let dotOpacity: Double = reduceMotion
             ? 1
             : (effectiveDuration.truncatingRemainder(dividingBy: 1) < 0.5 ? 1 : 0.3)
 
-        return HStack(spacing: 10) {
+        return HStack(spacing: MeeshySpacing.smPlus) {
             // Cancel (X) button — discards the recording without sending.
             // Hit area expanded to 44x44pt per Apple HIG while keeping the
             // visible pill at 32pt.
@@ -126,13 +191,13 @@ extension UniversalComposerBar {
                         .frame(width: 32, height: 32)
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
-                        .foregroundColor(MeeshyColors.errorStrong)
+                        .foregroundStyle(MeeshyColors.errorStrong)
                 }
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
             }
-            .accessibilityLabel(String(localized: "composer.recording.cancel", defaultValue: "Cancel recording", bundle: .main))
-            .accessibilityHint(String(localized: "composer.recording.cancel.hint", defaultValue: "Deletes the current voice message", bundle: .main))
+            .accessibilityLabel(String(localized: "composer.recording.cancel", defaultValue: "Annuler l'enregistrement", bundle: .main))
+            .accessibilityHint(String(localized: "composer.recording.cancel.hint", defaultValue: "Supprime le message vocal en cours", bundle: .main))
 
             // Live waveform — fills available horizontal space.
             // Marked accessibilityHidden: purely decorative, timer conveys state.
@@ -142,7 +207,7 @@ extension UniversalComposerBar {
                 .accessibilityHidden(true)
 
             // Recording indicator + timer — grouped for VoiceOver.
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Circle()
                     .fill(MeeshyColors.error)
                     .frame(width: 6, height: 6)
@@ -154,7 +219,7 @@ extension UniversalComposerBar {
                         value: effectiveIsRecording
                     )
 
-                Text(formatDuration(effectiveDuration))
+                Text(MediaFormat.duration(effectiveDuration))
                     .font(.system(.footnote, design: .monospaced).weight(.semibold))
                     .foregroundColor(timerColor)
                     .contentTransition(.numericText())
@@ -162,7 +227,9 @@ extension UniversalComposerBar {
             }
             .frame(width: 54, alignment: .trailing)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(String(localized: "composer.recording.inProgress", defaultValue: "Recording in progress", bundle: .main) + ", \(formatDuration(effectiveDuration))")
+            .accessibilityLabel(String(localized: "composer.recording.inProgress", defaultValue: "Enregistrement en cours", bundle: .main))
+            .accessibilityValue(MediaFormat.duration(effectiveDuration, style: .spoken))
+            .accessibilityAddTraits(.updatesFrequently)
 
             // Stop → attachments button — stops recording and drops the audio
             // into the composer's attachment tray, editable before sending.
@@ -179,19 +246,19 @@ extension UniversalComposerBar {
                     Circle()
                         .fill(isDark
                             ? Color.white.opacity(0.14)
-                            : Color(hex: accentColor).opacity(0.12))
+                            : servedAccent.opacity(0.12))
                         .frame(width: 32, height: 32)
                     Image(systemName: "stop.fill")
                         .font(.caption2.weight(.bold))
-                        .foregroundColor(isDark ? .white : Color(hex: accentColor))
+                        .foregroundColor(isDark ? .white : servedAccent)
                 }
                 .opacity(canSend ? 1 : 0.4)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
             }
             .animation(.easeInOut(duration: 0.2), value: canSend)
-            .accessibilityLabel(String(localized: "composer.recording.stopAndAttach", defaultValue: "Stop and add to attachments", bundle: .main))
-            .accessibilityHint(String(localized: "composer.recording.stopAndAttach.hint", defaultValue: "Adds the voice message to attachments to edit before sending", bundle: .main))
+            .accessibilityLabel(String(localized: "composer.recording.stopAndAttach", defaultValue: "Arrêter et ajouter aux pièces jointes", bundle: .main))
+            .accessibilityHint(String(localized: "composer.recording.stopAndAttach.hint", defaultValue: "Place le message vocal dans les pièces jointes pour l'éditer avant l'envoi", bundle: .main))
 
             // Send button — stops recording and sends the message immediately
             // (raw, no preview). Disabled below the minimum duration to prevent
@@ -208,41 +275,34 @@ extension UniversalComposerBar {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
+                                colors: [servedAccent, servedSecondary],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
                         .frame(width: 32, height: 32)
                         .shadow(
-                            color: Color(hex: accentColor).opacity(canSend ? 0.4 : 0),
+                            color: servedAccent.opacity(canSend ? 0.4 : 0),
                             radius: 6, y: 2
                         )
                     Image(systemName: "arrow.up")
                         .font(.subheadline.weight(.bold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                 }
                 .opacity(canSend ? 1 : 0.4)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
             }
             .animation(.easeInOut(duration: 0.2), value: canSend)
-            .accessibilityLabel(String(localized: "composer.recording.send", defaultValue: "Send voice message", bundle: .main))
+            .accessibilityLabel(String(localized: "composer.recording.send", defaultValue: "Envoyer le message vocal", bundle: .main))
             .accessibilityHint(canSend
                 ? "Termine et envoie l'enregistrement"
                 : "Maintenez encore pour atteindre la duree minimum")
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 5)
+        .padding(.horizontal, MeeshySpacing.xsPlus)
+        .padding(.vertical, MeeshySpacing.xs)
         .frame(minHeight: 44)
-        .background(
-            RoundedRectangle(cornerRadius: 22)
-                .fill(bgFill)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22)
-                        .stroke(borderColor, lineWidth: 1)
-                )
-        )
+        .adaptiveLiquidGlass(in: Self.fieldShape, tint: MeeshyColors.error.opacity(0.12))
     }
 
     // MARK: - Waveform strip used inside the recording bar
@@ -296,132 +356,53 @@ extension UniversalComposerBar {
 
     // MARK: - Recording Logic
 
+    /// **Démarrer — la prise appartient au parent.**
+    ///
+    /// Il n'y a plus de « chemin interne ». Celui qui vivait ici n'enregistrait
+    /// rien : un `Timer` qui incrémentait un compteur, puis une pièce jointe
+    /// `voice` et une URL fabriquée depuis l'horloge. Voir le doc-comment des
+    /// quatre relais sur `UniversalComposerBar` (#4560).
     func startRecording() {
         onAnyInteraction?()
-        // Delegated recording: parent manages real AVAudioRecorder
-        if let onStartRecording {
-            onStartRecording()
-            isRecording = true
-            onRecordingChange?(true)
-            HapticFeedback.medium()
-            return
-        }
-        // Internal recording (stories, etc.)
-        isRecording = true
-        recordingDuration = 0
-        recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-            Task { @MainActor in self.recordingDuration += 0.1 }
-        }
-        onRecordingChange?(true)
+        onStartRecording()
         HapticFeedback.medium()
     }
 
-    /// Stop the recording and place the audio in the attachment tray — the
-    /// `[stop]` control. The audio becomes an editable attachment; nothing is
-    /// sent. Delegated to the parent for the message context; for internal
-    /// recording (stories, comments) it materializes a `ComposerAttachment`.
+    /// Arrêter et poser l'audio dans le tiroir — le contrôle `[stop]`. Ce qui
+    /// est posé est ce que le PARENT a enregistré ; la barre ne fabrique aucune
+    /// pièce jointe.
     func stopRecordingToAttachment() {
         onAnyInteraction?()
-        // Delegated recording: parent stops the recorder + appends to its tray
-        if let onStopRecordingToAttachment {
-            onStopRecordingToAttachment()
-            isRecording = false
-            onRecordingChange?(false)
-            HapticFeedback.light()
-            return
-        }
-        // Internal recording (stories, etc.)
-        guard recordingDuration > 0.5 else {
-            // Too short — cancel
-            isRecording = false
-            recordingTimer?.invalidate()
-            recordingTimer = nil
-            recordingDuration = 0
-            onRecordingChange?(false)
-            return
-        }
-
-        let duration = recordingDuration
-
-        isRecording = false
-        recordingTimer?.invalidate()
-        recordingTimer = nil
-
-        // Add voice attachment
-        let attachment = ComposerAttachment.voice(duration: duration)
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            attachments.append(attachment)
-        }
-
-        // Callback for parent to handle actual audio data
-        if let url = FileManager.default.temporaryDirectory.appendingPathComponent("voice_\(Int(Date().timeIntervalSince1970)).m4a") as URL? {
-            onVoiceRecord?(url, duration)
-        }
-
-        recordingDuration = 0
-        onRecordingChange?(false)
+        onStopRecordingToAttachment()
         HapticFeedback.light()
     }
 
-    /// Stop the recording and send the voice message immediately — the `[↑]`
-    /// control. No preview, no editor. Delegated to the parent for the message
-    /// context; for internal recording it materializes the voice attachment
-    /// and runs the normal send.
+    /// Arrêter et envoyer tout de suite — le contrôle `[↑]`. Ni aperçu, ni
+    /// éditeur.
     func sendRecording() {
         onAnyInteraction?()
-        // Delegated recording: parent stops the recorder + sends right away
-        if let onSendRecording {
-            onSendRecording()
-            isRecording = false
-            onRecordingChange?(false)
-            HapticFeedback.medium()
-            return
-        }
-        // Internal recording (stories, comments) — materialize the voice
-        // attachment, then run the normal send.
-        stopRecordingToAttachment()
-        handleSend()
+        onSendRecording()
+        HapticFeedback.medium()
     }
 
-    /// Cancel recording — discard audio without creating an attachment.
-    /// Delegates to parent if `onCancelRecording` is provided; otherwise resets internal state.
+    /// Annuler — l'audio est jeté, aucune pièce jointe n'est créée.
     func cancelRecording() {
         onAnyInteraction?()
-        if let onCancelRecording {
-            onCancelRecording()
-            isRecording = false
-            onRecordingChange?(false)
-            return
-        }
-        isRecording = false
-        recordingTimer?.invalidate()
-        recordingTimer = nil
-        recordingDuration = 0
-        onRecordingChange?(false)
+        onCancelRecording()
     }
 
-    /// Force-stop recording when switching stories — always saves the voice attachment regardless of duration
+    /// **Arrêt FORCÉ, au changement de story.**
+    ///
+    /// Elle ne consultait aucun relais et faisait le travail interne
+    /// elle-même — donc, sous délégation, elle jetait la prise du parent en
+    /// silence tout en croyant « toujours sauver le vocal ». Elle pose
+    /// désormais l'audio comme le contrôle `[stop]`, ce que son nom promet.
     func forceStopRecording() {
-        guard isRecording else { return }
-        let duration = recordingDuration
-
-        isRecording = false
-        recordingTimer?.invalidate()
-        recordingTimer = nil
-
-        if duration > 0.3 {
-            let attachment = ComposerAttachment.voice(duration: duration)
-            attachments.append(attachment)
-            if let url = FileManager.default.temporaryDirectory.appendingPathComponent("voice_\(Int(Date().timeIntervalSince1970)).m4a") as URL? {
-                onVoiceRecord?(url, duration)
-            }
-        }
-
-        recordingDuration = 0
-        onRecordingChange?(false)
+        guard effectiveIsRecording else { return }
+        onStopRecordingToAttachment()
     }
 
-    // MARK: - Expand & Start Recording
+    // MARK: - Déplier puis démarrer
 
     func expandAndStartRecording() {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
@@ -431,13 +412,5 @@ extension UniversalComposerBar {
             startRecording()
         }
         onExpand?()
-    }
-
-    // MARK: - Helpers
-
-    func formatDuration(_ seconds: TimeInterval) -> String {
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return String(format: "%d:%02d", mins, secs)
     }
 }

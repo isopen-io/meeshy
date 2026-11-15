@@ -1,0 +1,925 @@
+#!/usr/bin/env node
+// Cliquet de dette des couleurs en dur hors Theme, côté iOS (#3678, seconde
+// moitié de son critère de fin).
+//
+// LE DÉFAUT QU'IL FERME
+//
+// La règle produit (CLAUDE.md § « Conversation Accent Color ») est que TOUT
+// composant lié au contexte d'une conversation utilise `accentColor` /
+// `colorPalette`, jamais une couleur en dur — les couleurs sémantiques
+// (erreur, succès) restant statiques via `MeeshyColors`. #3678 mesurait
+// 583 appels `Color(hex:)` hors `Theme/` au 2026-08-26 : un contournement
+// massif de la règle, sans aucun garde pour l'empêcher de grossir.
+//
+// CE QU'IL NE FAIT PAS
+//
+// Il ne distingue pas un contournement de la règle d'accent (illégitime) d'un
+// usage de couleur sémantique statique (légitime — `MeeshyColors` elle-même
+// appelle `Color(hex:)` en interne) : cette classification reste, pour la
+// forme VARIABLE inconnue, une revue au cas par cas, hors de portée d'un
+// cliquet mécanique. Il rend seulement le VOLUME visible en continu, sur le
+// modèle des cliquets de dette déjà en place (`check-swift-catalog-dead-entries.mjs`) :
+// il échoue si un compte grossit sans qu'on l'ait décidé, et il échoue aussi
+// si un compte baisse sans que sa référence ne suive dans le MÊME commit —
+// sinon une régression future repasserait sous une référence périmée sans
+// qu'aucun garde ne la voie.
+//
+// MÉTHODOLOGIE
+//
+// 1. Recherche tous les fichiers `.swift` sous les racines client (SDK + app
+//    iOS + ses extensions), à l'exclusion des répertoires de TESTS (`Tests`,
+//    `MeeshyTests`, `MeeshyUIDeviceTests` — un usage qui n'existe que dans un
+//    test ne pèse pas sur l'app livrée) et des répertoires `Theme` eux-mêmes
+//    (`packages/MeeshySDK/Sources/{MeeshySDK,MeeshyUI}/Theme` — c'est là que
+//    `Color(hex:)` DOIT vivre, en tant qu'implémentation de la palette ; le
+//    compter là ferait rougir le garde chaque fois qu'on l'agrandit
+//    correctement).
+// 2. Pour chaque appel `Color(hex: …)` trouvé (après retrait des commentaires,
+//    §5883), lit l'ARGUMENT jusqu'à sa virgule ou parenthèse fermante de
+//    niveau zéro (`parseColorHexArgument` — un mini-analyseur, pas une regex,
+//    pour rester correct sur les appels imbriqués comme
+//    `Color(hex: LanguageDisplay.colorHex(for: code))`) et le classe en trois
+//    FORMES (#6511) :
+//      - `literal`   : `Color(hex: "#RRGGBB")` — le codage en dur que le garde
+//        annonce. C'est la SEULE forme qui compte pour le cliquet historique.
+//      - `admitted-variable` : l'argument est (ou se termine par) exactement
+//        `accentColor` ou `colorPalette.primary` / `.secondary` / `.accent` —
+//        les deux points d'accès que CLAUDE.md § Accent Color documente. Ces
+//        appels sont l'APPLICATION de la règle, jamais son contournement ; ils
+//        ne pèsent sur AUCUN cliquet, à dessein — en ajouter ne doit jamais
+//        faire rougir un garde qui prétend défendre cette règle.
+//      - `unknown-variable` : toute autre variable/expression (`color`,
+//        `contactColor`, `tag.color`, `resolvedAccent`, `MeeshyColors.foo`…).
+//        Ni prouvée conforme ni prouvée en dur : elle reste sous un second
+//        cliquet, séparé, pour rester visible sans prétendre la classer.
+// 3. Deux cliquets à DEUX SENS indépendants, même patron que
+//    `check-swift-catalog-dead-entries.mjs` : chacun échoue si son compte
+//    DÉPASSE sa référence (régression) et échoue aussi si son compte BAISSE
+//    sans que sa référence ne soit abaissée dans le même commit (amélioration
+//    non enregistrée).
+//
+// --self-test : vérifie le comptage (fonctions pures, sur un monde en
+// mémoire), la classification à trois formes et les deux cliquets à deux
+// sens, même patron que `check-swift-catalog-dead-entries.mjs` (qui ne rejoue
+// pas non plus son propre parcours de fichiers réel en self-test — seule sa
+// logique de décision l'est). Un cliquet qui n'a jamais été vu échouer sur les
+// deux formes de dérive n'est pas un garde (leçon de #5366/#4764).
+//
+// #5883 — le comptage était TEXTUEL : `Color(hex:` matchait aussi bien un
+// APPEL qu'un doc-comment qui le CITE pour expliquer un correctif voisin. Le
+// commit 27ab5d1b (#5874) a fait rougir le garde en ajoutant une phrase qui
+// justifiait sa propre correction, sans ajouter un seul usage réel — « un
+// garde qui punit la phrase qui le justifie apprend aux gens à ne plus
+// écrire la phrase ». Les commentaires sont désormais retirés AVANT comptage
+// (`stripComments`, même machine à états que `AppSourceGuard.stripComments`
+// côté Swift — quatre modes : code, littéral de chaîne, commentaire de
+// ligne, commentaire de bloc).
+//
+// 2026-09-10 (#6016) — 945 → 943. Deux usages sont partis avec le composer
+// inline du fil : les vignettes `feedAttachmentTile` et `feedPlaceTile`
+// peignaient chacune leur pastille en `Color(hex:)`.
+// 2026-09-14 (#6481, lot « Réglages en verre ») — 943 → 946 (référence
+// textuelle, avant #6511). Trois usages neufs, tous de la forme
+// `Color(hex: accentColor)` dans `VoiceProfileManageView` (5 → 7) et
+// `VoiceProfileWizardView` (9 → 10) : la flèche de retour en verre prend la
+// teinte de la conversation — l'application de la règle, pas son
+// contournement.
+//
+// 2026-09-14 (#6511) — LE CLIQUET COMPTAIT L'APPEL, PAS LE CODAGE EN DUR. Sur
+// les 946 occurrences textuelles, l'estimation manuelle de l'issue (grep sur
+// `Color(hex: "`, sans retrait des commentaires) situait le littéral à ~163 ;
+// les 836 autres passaient une variable, la plupart de la forme
+// `Color(hex: accentColor)` ci-dessus — exactement ce que la règle exige. Un
+// vrai littéral neuf ne déplaçait donc le compte que de 1 sur 946, aussi
+// discrètement qu'un usage légitime : le cliquet ne discriminait plus.
+// Corrigé en classant chaque appel (littéral / variable admise / variable
+// inconnue, §MÉTHODOLOGIE), par un ANALYSEUR conscient des commentaires
+// (§5883) et des appels imbriqués — pas une regex sur le texte brut. Le
+// relevé PRÉCIS diffère donc de l'estimation manuelle : 118 littéraux réels
+// (les autres occurrences de `Color(hex: "` que le grep de l'issue voyait
+// n'étaient que des mentions en commentaire, déjà hors compte depuis #5883),
+// 383 variables admises (hors cliquet, §MÉTHODOLOGIE) et 445 variables
+// inconnues. Le cliquet historique ne porte donc plus que sur les littéraux,
+// réancré à leur compte réel ; les variables inconnues restent sous un second
+// cliquet, séparé, sans prétendre les classer une à une — cette
+// classification reste une revue humaine, hors de portée d'un script.
+//
+// 2026-09-14 (#6482) — variables inconnues 445 → 444. La section Bêta de
+// Réglages part avec son interrupteur : `Color(hex: MeeshyColors.successHex)`
+// quitte `SettingsView`. Aucun littéral ne bouge (118).
+//
+// 2026-09-16 (#6793, relevé par #6802) — variables inconnues 444 → 445. UN
+// seul appel neuf : la pastille de réactions d'une pièce jointe arrive sur la
+// rangée focale, et `FocalAttachmentBlock` la teinte par son `accentHex`.
+// L'argument EST l'accent de la conversation : la vue le reçoit de ses
+// appelants (`BubbleStandardLayout+Media.swift` lui passe le `contactColor`
+// de la bulle) et le relaie elle-même sous le label `accentColor:` à ses
+// sous-vues. C'est l'application de la règle, pas son contournement.
+//
+// Pourquoi RELEVER plutôt que renommer, puisque le §ADMITTED refuse la
+// ressemblance : `accentHex` n'est pas un à-peu-près d'`accentColor`, c'est
+// une convention ÉTABLIE de l'app — la CHAÎNE hexadécimale, par opposition à
+// la COULEUR. `CallDetailSheet` tient les deux côte à côte, `accentHex:
+// String` puis `accentColor: Color` dérivée de la première. Renommer aurait
+// cassé ce vocabulaire ; interposer une propriété calculée aurait DÉPLACÉ
+// l'appel sans le supprimer (solde nul), c'est-à-dire contourné le garde au
+// lieu de lui répondre. Le §ADMITTED reste donc volontairement étroit, et
+// c'est bien ici — dans le registre daté qu'il exige — que l'appel se
+// justifie. Aucun littéral ne bouge (118).
+//
+// 2026-09-25 (#7977, Refs #7881) — variables inconnues 433 → 434. UN seul
+// appel neuf : `FocalQuoteRail`, le filet de citation désormais PARTAGÉ par
+// toutes les citations de Script et de Focal (porteur, 2026-09-25), carte de
+// story comprise. Sa couleur EST la règle : l'accent de la conversation
+// (`accentHex`) quand la citation est de moi, sinon la couleur d'auteur que
+// le SDK a déjà résolue (`ReplyReference.authorColor`). La propriété s'appelle
+// `colorHex` parce qu'elle porte l'un OU l'autre ; la nommer `accentColor`
+// mentirait sur la moitié des cas. Même raisonnement que #6793 ci-dessus :
+// relever plutôt que déplacer l'appel. Aucun littéral ne bouge (118).
+//
+// 2026-09-26 (#7945, lot 6) — variables inconnues 431 → 432. UN seul appel
+// neuf, et ce n'est qu'un DÉPLACEMENT : `FeedPostEmbedRow`, la ligne d'embed
+// vidéo extraite de `FeedPostCard` pour que ses deux balayages NSDataDetector
+// ne rejouent plus à chaque re-render de la carte (`.equatable()`), reçoit
+// l'accent du post sous le nom ÉTABLI `accentHex: String` — la carte, qui
+// écrivait `Color(hex: accentColor)` en place (variable admise), lui passe sa
+// propre `accentColor`. Même vocabulaire que #6793 ci-dessus (la CHAÎNE, par
+// opposition à la COULEUR) : relever plutôt que renommer. Aucun littéral ne
+// bouge (118).
+//
+// 2026-09-26 (#8099, #8101) — variables inconnues 432 → 437. CINQ appels neufs,
+// tous sous le nom ÉTABLI `accentHex` (la CHAÎNE, par opposition à la COULEUR,
+// même vocabulaire que #6793 et #7945 ci-dessus) : la carte de conversation
+// dans la bulle (`ConversationLinkCard`, `ConversationLinkCardBody` — dont
+// l'accent est CALCULÉ depuis la carte par `accentHex(for:)` —,
+// `ConversationLinkCardActionsRow`) et la carte de visite
+// (`ContactCardView`, deux appels, `ContactCardDetailSheet`). Chacun peint
+// l'accent de la carte reçu de son hôte, jamais une couleur en dur. Aucun
+// littéral ne bouge (118). Valeur MESURÉE sur `dev` le 2026-09-26.
+//
+// 2026-09-26 (#8103) — variables inconnues 437 → 439. DEUX appels neufs dans
+// `MediaHub/ConversationMediaHubCells.swift`, l'écran « Médias, liens et
+// documents » : l'icône d'une ligne de document et la capsule du segment
+// choisi, toutes deux à l'accent de la conversation reçu sous le nom ÉTABLI
+// `accentHex` (même vocabulaire que #6793, #7945, #8099). La vignette
+// `attachment.thumbnailColor` n'est qu'un DÉPLACEMENT depuis
+// `ConversationInfoSheet` (compte inchangé). Aucun littéral ne bouge (118).
+//
+// 2026-09-27 (#8067) — variables inconnues 439 → 440. UN appel neuf :
+// `UserProfileSheet+DetailsTab.callButton`, les boutons « Appel vocal » /
+// « Appel vidéo » de la fiche profil, peints à l'accent du PROFIL
+// (`resolvedAccent`) comme l'en-tête de la même fiche
+// (`UserProfileSheet+Header`, déjà compté). Ce n'est pas une conversation :
+// `accentColor` n'y aurait aucun sens. Aucun littéral ne bouge (118).
+//
+// 2026-09-27 (#8231) — variables inconnues 440 → 438. Plus aucune vidéo ne
+// se lit dans le fil : `BubbleGridVideoThumbnailView` et son badge play
+// (`contactColor`) disparaissent, remplacés par UN poster partagé
+// (`ConversationVideoPoster`, un seul appel à `accentHex`) pour la grille,
+// le carrousel et Focal. Aucun littéral ne bouge (118).
+//
+// 2026-09-27 (#8395, #8396) — variables inconnues 438 → 440. La vue d'appel
+// « C adapté » donne à chaque PERSONNE d'un appel une couleur stable
+// (`CallSpeakerColor.hex(for:)`), la même au liseré de sa vignette de groupe
+// (`GroupCallStageView`, `tile.accentHex`) et à son nom dans les sous-titres
+// (`CallCaptionsViews`, `line.speakerColorHex`). C'est l'identité d'un
+// participant, pas le contexte d'une conversation : `accentColor` n'y aurait
+// aucun sens. Aucun littéral ne bouge (118).
+//
+// 2026-09-27 (#8414) — littéraux 118 → 120, variables inconnues 440 → 443.
+// Le panneau Cadre du composer peint les bandes d'un média ajusté du FOND
+// choisi (`StoryBackdrop` : flou, noir, blanc, indigo, sable — contrat commun
+// au web) et prévisualise le fond « indigo » par son dégradé de marque
+// (`FB923C` → `4F46E5`, deux littéraux). Les trois variables sont la teinte du
+// fond choisi, relue au canvas, au lecteur et au composite. C'est le fond
+// d'une SCÈNE, pas le contexte d'une conversation : `accentColor` n'y aurait
+// aucun sens.
+//
+// 2026-09-30 (#8877) — littéraux 120 → 67. Le codemod de la charte visuelle
+// échange 53 `Color(hex: "…")` par le jeton `MeeshyColors` de MÊME valeur
+// (indigo, succès/erreur, teintes franches, tuiles, plans nommés) : aucun
+// pixel ne bouge, le codage en dur devient une référence au jeton. Les
+// variables inconnues ne bougent pas (441).
+//
+// 2026-09-30 (#8877, harmonisation vue par vue) — littéraux 67 → 65, variables
+// inconnues 441 → 438 : les plans de saisie de `ReportMessageSheet` deviennent
+// `surfaceDarkInput` / `surfaceLightInput` ; deux `Color(hex: MeeshyColors.…Hex)`
+// deviennent le jeton `Color` lui-même, et le contour « j'ai réagi » à la couleur
+// de l'auteur quitte le rail de la story avec le chrome plein écran (#8878).
+//
+// 2026-10-02 (#9069) — variables inconnues 438 → 443 : les cinq
+// `Color(hex: band.fill | band.stroke | band.ink | text.fill)` de
+// `MeeInstantView` (MeeshyUI/Story). Ce ne sont PAS des couleurs d'accent : ce
+// sont les couleurs du DESSIN d'un Instant de Mee et Meo, mesurées dans le SVG
+// du web par `apps/web/scripts/mee-ios-instants.ts` et écrites dans l'index
+// généré, pour que le bandeau et le texte redessinés en natif soient
+// identiques au web (une seule source de dessin). Les rapporter à
+// `accentColor` changerait le sticker selon la conversation.
+//
+// 2026-10-03 (#9171) — variables inconnues 442 → 443 : le fond d'attente de
+// `VisitorContentView` (`Color(hex: media.thumbnailColor)`). C'est la couleur
+// DOMINANTE du média, servie avec lui — le même fond que la bulle, la galerie
+// et l'aperçu peignent déjà sous chaque média qui charge. La rapporter à
+// `accentColor` peindrait la vignette d'un autre média que le sien.
+//
+// 2026-10-05 (#9397) — littéraux 65 → 110, variables inconnues 443 → 445 : la
+// palette des MATIÈRES DU JEU — `GameMaterial.swift` (33), `LevelRingView.swift`
+// (10), `RankBlasonView.swift` (1), `SignatureMark.swift` (1), soit 45 — et les
+// deux `Color(hex: from|to)` de `GameMaterial.pair()`. Les dégradés de la
+// planche (`<linearGradient id="gCopper">…`), transcrits stop pour stop, pour
+// que les rangs, badges et trophées rendent la MÊME matière héraldique que le
+// design ; ce ne sont PAS des couleurs d'accent (même précédent que #9069,
+// #9171) — cuivre, bronze, argent, or, platine, obsidienne, prisme et flamme
+// sont des matériaux FIXES, volontairement indépendants du thème de
+// conversation. Les autres fichiers listés par le cliquet au moment de la
+// régression (`SyntaxHighlighter.swift`, `StoryFilterGridView.swift`,
+// `TagInputView.swift`, `ConversationAnimatedBackground.swift`,
+// `CountryPicker.swift`, `LanguageSelector.swift`, `ConversationListHelpers.swift`,
+// …) sont antérieurs au lot du jeu (#9373 → #9383) et n'y contribuent pas —
+// vérifié par `git log` sur chacun.
+//
+// 2026-10-05 (#9406) — littéraux 110 → 112 : `GameSurface.swift`
+// (`GameColors.warmText` / `.goodText`), deux variantes de CONTRASTE pour des
+// couleurs SÉMANTIQUES (avertissement, réussite) — `MeeshyColors.warning` /
+// `.success`, pensées pour fond sombre, tombent sous le seuil WCAG 4,5:1 sur
+// fond clair (mesuré : 1,6:1). Rien à voir avec `accentColor`/`colorPalette` ;
+// « Semantic colors (error, success) remain static via MeeshyColors »
+// (CLAUDE.md racine, § Conversation Accent Color).
+//
+// 2026-10-05 (#9383 #9381 #9382, via dev) — littéraux 112 → 110 : le lot
+// « le jeu respecte les gardes du dépôt » retire les deux littéraux
+// `GameSurface.swift` ajoutés par #9406 ci-dessus, en passant `warmText` et
+// `goodText` par des jetons au lieu de `Color(hex:)`. Valeur MESURÉE le
+// 2026-10-05.
+//
+// 2026-10-05 (#9380) — littéraux 110 → 109 : `GameMaterial.swift` centralise
+// les matières et couleurs de palier du jeu (cadre déclaré, ruban de l'écu,
+// marges) ; `LevelRingView.swift`, `RankBlasonView.swift` et
+// `SignatureMark.swift` lisent désormais ce jeton unique au lieu de
+// `Color(hex:)` répété. Valeur MESURÉE le 2026-10-05.
+//
+// 2026-10-05 (#9471, via #9349) — variables inconnues 445 → 444 :
+// `ComposerFrameBand.swift` lit `StoryBackdrop.solidColor` directement au
+// lieu de recomposer `Color(hex: hex)` depuis `solidHex` — un appel
+// variable de moins. Le littéral `Color(hex: "FB923C")` de la même fonction
+// (dégradé de repli) est inchangé, d'où le cliquet littéral stable à 109.
+//
+// 2026-10-05 (#9503, vague 2 du jeu) — littéraux 109 → 116 : `GameMedalView.swift`
+// (5 — couleurs fixes par catégorie de médaille : content, social, conversation,
+// comment, tool) et `GameReferralBannerView.swift` (2 — encre de la carte de
+// parrainage) sont deux fichiers NOUVEAUX sous `.../MeeshyUI/Game/`, même
+// précédent que `GameMaterial.swift` (#9397, #9380) : couleurs de DESIGN du jeu
+// volontairement indépendantes du thème de conversation. Valeur MESURÉE le
+// 2026-10-05.
+//
+// 2026-10-06 (#9511, vague 2 du jeu) — littéraux 116 → 128 : `GameLeagueBricks.swift`
+// (12 — huit teintes de rareté : quartz, ambre, jade, saphir, rubis, amethyste,
+// diamant, prisme ; quatre teintes de badge de ligue : slate, blue, violet, gold)
+// est un fichier NEUF sous `.../MeeshyUI/Game/`, même précédent que
+// `GameMedalView.swift`/`GameMaterial.swift` ci-dessus. Valeur MESURÉE le
+// 2026-10-06.
+//
+// 2026-10-06 (#9540, revers gravé de la Meesh) — littéraux 128 → 129 :
+// `GameEngravedBirds.swift` (1 — `shadeColor`, l'ombre basse de la gravure) est
+// un fichier NEUF sous `.../MeeshyUI/Game/`, même précédent que
+// `GameMaterial.swift` : couleur de DESIGN du jeu, indépendante du thème de
+// conversation. Valeur MESURÉE le 2026-10-06.
+//
+// 2026-10-06 (#9540, correctif) — littéraux 129 → 128 : `shadeColor` lit le jeton
+// `MeeshyColors.indigo950` (la même teinte, `#1E1B4B`) — le littéral a disparu, la
+// garde `DesignLiteralRatchetGuardTests` n'en accepte pas un de plus. Valeur
+// MESURÉE le 2026-10-06.
+//
+// 2026-10-08 (#9636, blason des rangs) — littéraux 128 → 136 : l'encre de gravure
+// du blason, une par matière (cuivre, bronze, argent, or, platine, obsidienne, prisme,
+// flamme), dans `MeeshyUI/Game/GameMaterial.swift`, la palette FIXE du jeu qui porte
+// déjà les teintes de chaque matière — ce n'est pas une couleur de conversation, aucun
+// `accentColor` ne peut la remplacer. Valeur MESURÉE le 2026-10-08.
+//
+// 2026-10-08 (#9688, niveaux ouverts par le rang) — littéraux 136 → 145 : les neuf teintes
+// des paliers d'au-delà du niveau 100 (Nébuleuse … Infini ; Singularité reprend le prisme de
+// Galaxie), dans `LevelTierPalette` (`MeeshyUI/Game/GameMaterial.swift`), MIROIR des jetons
+// web `--game-tier-*` (`apps/web/src/styles/game.css`) — la palette fixe des paliers, pas une
+// couleur de conversation. Valeur MESURÉE le 2026-10-08.
+//
+// 2026-10-21 (#11176, #11177, l'épopée du jeu) — littéraux 145 → 178 :
+// - `GameMaterial.swift` (+13, d50c95c584) : les matières de la Meesh rejouées du web
+//   (`packages/shared/design/meesh-coin.json`, jetons `--game-coin-*`) — or pur centre compris,
+//   or mêlé de diamant, diamant, veines d'or de l'argent — dans la palette FIXE du jeu, même
+//   précédent que #9636 et #9688 ;
+// - `MintCeremonyLayers.swift` (+20, e63e8c0f72) : la palette de la cérémonie de la frappe
+//   (`MintCeremonyPalette`, que `MintStrikeScene.swift` lit aussi pour son enclume), miroir de
+//   `apps/web/src/lib/game/choreography-mint-ceremony.ts` —
+//   acier de l'enclume et du coin, bois du marteau, poussières d'argent, d'or et de diamant, nuit
+//   du prisme, halo de la lumière. Couleurs de DESSIN du jeu, indépendantes du thème de
+//   conversation : aucun `accentColor` ne peut les remplacer. Valeur MESURÉE le 2026-10-21 en local.
+const REFERENCE_LITERAL_COLOR_COUNT = 178;
+// 2026-10-06 (#9516, vague 2 du jeu, iOS) — variables inconnues 444 → 445 :
+// `GameAtlasViews.swift` calcule `Color(hex: $0.colorHex)` depuis
+// `LanguageData.info(for: code)` — la teinte ASSOCIÉE À UNE LANGUE de l'atlas
+// du jeu, indépendante du thème de conversation, même motif que les
+// variables déjà admises sous un nom différent. Valeur MESURÉE le 2026-10-06.
+//
+// 2026-10-06 (#9540, revers gravé de la Meesh) — variables inconnues 445 → 451 :
+// `GameEngravedBirds.swift` (6) peint les formes de Mee et Meo depuis leur
+// table de dessin — `Color(hex: stroke.color)`, l'aplat `hex`, et les deux
+// arrêts de chacun des deux dégradés (`first`/`second`, `inner`/`outer`) : les
+// émaux de la gravure, portés À L'IDENTIQUE du web, indépendants du thème de
+// conversation. Valeur MESURÉE le 2026-10-06.
+//
+// 2026-10-09 — variables inconnues 451 → 453 :
+// - `PublicationViewersSheet.swift` (#9727, 37654709ba) — `Color(hex: post.authorColor)`,
+//   la couleur DÉTERMINISTE de l'auteur du post servie par l'API, passée en
+//   `accentColor` à son avatar : une couleur de donnée, pas une couleur en dur ;
+// - `ReelFeedCard.swift` (#9677, 7484db6cfa) — `Color(hex: accentHex)`, l’accent reçu en
+//   paramètre de la scène d'un réel, même nature que `accentColor`.
+// Valeur MESURÉE le 2026-10-09 (CI 37911128290).
+//
+// 2026-10-10 — variables inconnues 453 → 456 (#9907, #9910) :
+// - `PieceSpotlight.swift` (2, 1a3f753acf) — `Color(hex: accentHex)` pour le
+//   trait et l'ombre de l'anneau qui allume la pièce citée ; l'hexa est REÇU
+//   en paramètre (`accentHex` du fil Focal, `contactColor` de la bulle), même
+//   nature que `accentColor` ;
+// - `MessagePieceOverlay.swift` (1, a08e6bcd61) — `Color(hex: piece.thumbnailColor)`,
+//   la teinte d'attente de la pièce servie par l'API, une couleur de donnée,
+//   même motif que les 32 `thumbnailColor` déjà comptés.
+// Valeur MESURÉE le 2026-10-10 (CI 38045575542).
+//
+// 2026-10-11 (#10220) — variables inconnues 456 → 458 :
+// - `ConversationGuestHeaderBar.swift` (1, #10206) — `Color(hex: secondaryColor)`,
+//   second membre du dégradé du bouton « Partager » d'un invité sans compte ;
+//   l'hexa est REÇU en paramètre (comme `accentColor`, juste à côté, qui lui
+//   matche déjà la liste admise), même nature que les entrées #9907 ;
+// - `PacksSettingsView.swift` (1, #10150, LP2 « Cadres de gloire ») —
+//   `Color(hex: MeeshyColors.brandPrimaryHex)`, la teinte de la flèche de
+//   retour d'un écran de réglages statique : couleur SÉMANTIQUE (brand
+//   primary) hors du contexte conversation que vise CLAUDE.md § Conversation
+//   Accent Color.
+// Valeur MESURÉE le 2026-10-11 (CI 38162549528).
+//
+// 2026-10-12 (#10358) — variables inconnues 458 → 457 :
+// - `ComposerDocumentSurface.swift` (−1, 7e7dc53b9e) — `Color(hex:
+//   MeeshyColors.brandPrimaryHex)` retiré de l'icône de palette du rail
+//   document : remplacé par `ComposerFloatingRailInk.floating(active:)`, la
+//   même loi de glyphe en relief que le rail gauche et le rail droit.
+// Valeur MESURÉE le 2026-10-12 (CI 38302041896, run ebc05cc7d5 ; confirmée
+// indépendamment par run 38320669253 sur `dev`).
+// 457 -> 458 (2026-10-13) : UserProfileSheet pose la pastille « Réessayer » sur
+// resolvedAccent, l'accent du PROFIL (déjà lu ainsi l. 494 du même fichier) —
+// une fiche de profil n'a pas de conversation, donc pas d'accentColor à reprendre.
+// 458 -> 459 (2026-10-14, #10601, #10608) : `ConversationListView.swift` surligne
+// la CATÉGORIE d'origine d'une conversation glissée avec
+// `Color(hex: MeeshyColors.brandPrimaryHex)` — une catégorie n'a pas d'accentColor
+// propre (il appartient à une conversation), même nature que l'entrée #10220
+// (`PacksSettingsView.swift`) : couleur SÉMANTIQUE hors du contexte conversation
+// que vise CLAUDE.md § Conversation Accent Color.
+// 459 -> 467 (2026-10-15, #10631, #10632) : le rendu d'APPARENCE peint les
+// palettes du CATALOGUE que l'utilisateur choisit — fond de conversation
+// (`ConversationBackgroundView`, `ConversationAppearanceSheet` : surface et
+// accent de chaque nuance, accent effectif de l'aperçu) et modèles de design
+// (`AppearanceDesignView`, `AppearancePaint`, `AppearanceTileRenderer` :
+// `palette.base`, rôles de la palette). La couleur y est la DONNÉE choisie,
+// pas une teinte d'interface : remplacer par accentColor trahirait le choix.
+// 467 -> 471 (2026-10-15, #10632) : `AvatarRingView.swift` (4) peint le CONTOUR d'avatar équipé depuis
+// `stroke.colors` du catalogue — première et seconde couleur du trait, l'arc du dégradé cyclique et la
+// couleur d'un trait d'ornement. Un contour se voit des AUTRES et garde des couleurs FIXES, identiques
+// pour tous (spec § 5.2) : la couleur est la DONNÉE du contour, l'accent de conversation la trahirait.
+// La feuille de décor (`ProfileDecorSheet.swift`) prend `MeeshyColors.indigo500`, sans `Color(hex:)`.
+// 471 -> 477 (2026-10-16, peau des bulles et page de l'humeur) : `BubbleSkin` (3) DÉRIVE ses teintes de l'accent de
+// la conversation (`receivedFillHex(accentHex:)`, `sentFillHex`, l'encre lisible d'un fond) — c'est l'accent, calculé ;
+// la bulle reçue d'un contact peint SA couleur (`contactColor`) ; la page de l'humeur (`MoodSpotlight`, 2) éclaire
+// l'avatar de l'auteur de sa couleur d'identité (`entry.avatarColor`), et la carte retombe sur la couleur de repli de
+// l'auteur (`fallbackHex`). Couleurs d'IDENTITÉ ou dérivées de l'accent : les remplacer par accentColor les trahirait.
+// Valeur MESURÉE le 2026-10-16 en local.
+// 477 -> 478 (2026-10-16, 61e92078cb, l'arc-en-ciel du mode Script) : `RainbowLetters.swift` (1) colore chaque LETTRE
+// d'un message arc-en-ciel d'une teinte tirée d'une palette FIXE de six, choisie pour la lecture (4,5:1 contre le fond
+// de chaque thème, `RainbowLettersTests`). C'est le CONTENU de l'effet que l'auteur a choisi pour son message, pas une
+// couleur d'interface : l'accent de conversation n'a qu'une teinte, il effacerait l'effet. Le thème n'a pas ces six
+// nuances (et `Color(red:green:blue:)` relèverait le cliquet RVB des littéraux de design) : la palette reste en hexa.
+// Valeur MESURÉE le 2026-10-16 en local.
+// 478 -> 483 (2026-10-19, #10935 / #10936, les cadres rendus par le GPU) : `AvatarRingView.swift` (2), `BannerFrameRenderer.swift`
+// (1) et `FrameMotionLayers.swift` (1) peignent un contour ou un cadre de bannière dans les couleurs que SON dessin déclare
+// (`design.stroke.colors`, `design.palette`, servis par le catalogue des cadres) — le CONTENU de la pièce achetée, pas une
+// couleur d'interface, même règle que `RainbowLetters.swift` ci-dessus ; l'accent de conversation l'effacerait.
+// `ProfileDecorSheet.swift` (1) teinte l'aperçu de la bannière par l'accent du PROFIL (`accentHex`, déjà remis à
+// `MeeshyAvatar(accentColor:)`), hors de tout contexte de conversation. Masqué en CI derrière le gate de poids web (#10974) ;
+// valeur MESURÉE le 2026-10-19 en CI (run 39192153480) et en local, commit par commit (c61aac2d11 : +4, c242265209 : +1).
+// 478 -> 480 (2026-10-21, #11176, #11177, l'épopée du jeu) : `GameMaterial.swift` (1, d50c95c584) teinte les éclats du
+// prisme d'une palette FIXE de cinq (`sparkles`, miroir de `gameTwinkle` du web) ; `MintCeremonyLayers.swift` (1, e63e8c0f72)
+// choisit l'encre du signe de la cérémonie selon la nuit du prisme (`night ? … : …`). Couleurs de DESSIN du jeu, pas
+// d'interface : l'accent de conversation les effacerait. Valeur MESURÉE le 2026-10-21 en local.
+// 480 -> 481 (2026-10-21, #11231, le fond de la conversation dans l'aperçu d'appui long) :
+// `ConversationRecentMessagesPreview.swift` (1) peint la couleur de fond UNIE que l'utilisateur a choisie pour la
+// conversation (`.solid(let hex)`), à l'identique de `ConversationBackgroundView` (déjà compté, 459 -> 467) : la couleur
+// est la DONNÉE choisie, l'accent de conversation la trahirait. Valeur MESURÉE en CI le 2026-10-21 (PR #11405).
+// 481 -> 483 (2026-10-21, fusion des lots appui long dans dev) : les lots #11401 et #11421 ajoutent deux `Color(hex: variable)`
+// de plus que dev ; valeur MESURÉE en local après fusion de dev, à reconfirmer par la CI.
+// 483 -> 479 (2026-10-24, le contour de l'avatar sur l'interlude et la carte de fin d'un export de story) : le dessin
+// fixe d'un contour quitte le `Canvas` de `AvatarRingView.swift` (-5) pour `AvatarRingRenderer.swift` (+1), Core Graphics,
+// partagé par la vue et l'export — ses autres couleurs passent par `FramePaint.cgColor`. Valeur MESURÉE le 2026-10-24 en local.
+// 479 -> 480 (2026-10-31, #13839, la refonte « scène d'abord » du compositeur iOS, 37520d9db0) :
+// `ComposerSharedPalette.swift` (1) peint la pastille d'une couleur de TEXTE de la palette d'édition (`TextEditPalette.colors`),
+// la DONNÉE que l'auteur pose sur son texte, à l'identique des pastilles de `TextEditToolOptions.swift` (déjà comptées) :
+// l'accent de conversation l'effacerait. Valeur MESURÉE le 2026-10-31 en local sur 37520d9db0 et 46a0f00c16.
+// 479 -> 472 (2026-11-05, #15629, l'atelier du compositeur quitte le dépôt, bef867501b) : la reprise d'un brouillon et
+// l'édition d'une story ouvrent la scène du meuble, et les sept couleurs que peignait l'atelier partent avec lui.
+// Valeur MESURÉE le 2026-11-05 en local sur ed51365e27.
+// 472 -> 473 (2026-11-06, #16268, la fiche d'un pack posé sur son support) : `PackElementStage.swift` (1) lit UNE fois
+// l'accent du PROFIL de l'essayeur (`PackStageWearer.accent`, depuis `accentHex`, déjà remis à
+// `MeeshyAvatar(accentColor:)`), pour le fond de repli de l'avatar et de la bannière et la bulle « moi » de la
+// conversation factice. Hors de tout contexte de conversation, même règle que `ProfileDecorSheet.swift` ci-dessus.
+// #16437 en posait trois ; ramenés à une. Valeur MESURÉE le 2026-11-06 en local.
+// 473 -> 475 (2026-11-07, #16662, la couleur d'AUTEUR dans un appel) : `CallCaptionsViews.swift` (1) peint la phrase
+// d'un sous-titre de la couleur de son locuteur quand elle sert une traduction (`CallCaptionLine.textColorHex`), et
+// `CallTranscriptSection.swift` (1) peint le nom du locuteur dans le fil d'après l'appel (`CallSpeakerColor.hex(for:mode:)`).
+// C'est l'identité d'une PERSONNE, dérivée de son identifiant (même graine que le liseré de sa vignette), pas la
+// couleur d'une conversation : `accentColor` n'en dit rien. Valeur MESURÉE le 2026-11-07 en local.
+// 475 -> 469 (2026-11-08, #16901) : `StorySlideRenderer.swift` (6) ne décode plus ses fonds et sa couleur de texte par
+// son `UIColor(hex:)` privé (que ce scanner compte comme `Color(hex:`) mais par `HexColor(hex:)?.uiColor`, la source
+// unique du SDK. Aucune couleur en dur n'est ajoutée ailleurs. Valeur MESURÉE le 2026-11-08 en local.
+// 469 -> 470 (2026-11-08, #16945, le liseré de la vignette d'appel) : `CallTileChrome.swift` (1) teinte le liseré
+// d'une vignette de la couleur de la personne qu'elle montre (`CallSpeakerColor.hex(for:)`), site UNIQUE partagé par
+// ma vignette d'appel entrant et la vignette du duo établi, qui portait un trait blanc (loi 4). Identité d'une
+// PERSONNE, pas d'une conversation. Valeur MESURÉE le 2026-11-08 en local.
+// 469 -> 470 (2026-11-09, #17259, contraste du menu d'appui long) : `ConversationContextMenuView.swift` (1) peint
+// chaque action de l'encre que `ConversationMenuInk.hex(base:isDark:isEnabled:)` DÉRIVE de la couleur d'accent de la
+// conversation (assombrie ou éclaircie jusqu'à 4,5:1 sur le verre). C'est l'accent lui-même, porté à AA, pas une
+// couleur en dur. Valeur MESURÉE le 2026-11-09 en local.
+// 468 -> 470 (2026-11-12, #17802, le journal d'après l'appel sous la carte du fil) :
+// `BubbleCallJournalUnderCard.swift` (2) teinte la ligne d'ouverture et la transcription dépliée par `accentHex`,
+// l'accent de la CONVERSATION que `BubbleCallNoticeView` reçoit de la bulle (`contactColor`, `colorHex`) et relaie
+// déjà à `CallRecordingPlayback`. Même convention `accentHex` que l'entrée #6793 : la chaîne, par opposition à la
+// couleur. Valeur MESURÉE le 2026-11-12 en local sur f74d006819.
+// 467 -> 466 (2026-11-14, #18209) : `BubbleCallJournalUnderCard.swift` lit l'accent de la conversation UNE fois
+// (`accent`) pour la bascule, Réessayer et le journal, au lieu de deux `Color(hex: accentHex)`. Valeur MESURÉE le
+// 2026-11-14 en local.
+// 466 -> 464 (2026-11-15, #18590, #18591) : les sections de ma fiche de profil ont quitté `ProfileView` pour leurs
+// fichiers (`ProfileSectionChrome`, `ProfileIdentitySection`…). Le titre d'une section reçoit un jeton `Color`
+// (`MeeshyColors.error`, `.warning`, `.indigo300`, `.brandPrimary`) au lieu d'un hex recomposé, et la pastille d'icône
+// relaie l'accent de la fiche sous son nom de règle (`accentColor`). Valeur MESURÉE le 2026-11-15 sur un EXPORT de la
+// tête de dev (`git archive origin/dev …`), pas sur l'arbre local : celui-ci portait la suppression non poussée de
+// `TextEditFloatingBubbles.swift` (3 appels, lot composer #18638) et mesurait 461 — ce lot abaissera la référence.
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 461;
+
+import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+const SEARCH_ROOTS = [
+  'packages/MeeshySDK/Sources',
+  'apps/ios/Meeshy',
+  'apps/ios/MeeshyNotificationExtension',
+  'apps/ios/MeeshyShareExtension',
+  'apps/ios/MeeshyWidgets',
+];
+
+const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests', 'Theme']);
+
+// `HexColor(hex:)` (SDK cœur, #10988) est le PARSEUR que les couleurs de texte de
+// story délèguent, pas une couleur posée dans une vue : le compter ferait d'une
+// consolidation une régression. `(?<!Hex)` l'écarte, et lui seul.
+const HARDCODED_COLOR_RE = /(?<!Hex)Color\(hex:/g;
+
+// Les deux points d'accès que CLAUDE.md § Conversation Accent Color documente
+// ( `conversation.accentColor`, `conversation.colorPalette` avec
+// `.primary`/`.secondary`/`.accent` ) : un argument qui EST, ou se TERMINE
+// par, l'un de ces chemins est l'application de la règle, jamais son
+// contournement. Volontairement étroit — élargir cette liste par ressemblance
+// (`accentHex`, `resolvedAccent`…) redeviendrait la revue au cas par cas que
+// ce garde ne peut pas faire.
+const ADMITTED_ACCENT_ARGUMENTS = [
+  'accentColor',
+  'colorPalette.primary',
+  'colorPalette.secondary',
+  'colorPalette.accent',
+];
+
+export const isAdmittedAccentArgument = (argumentText) => {
+  const normalized = argumentText.trim();
+  return ADMITTED_ACCENT_ARGUMENTS.some(
+    (suffix) => normalized === suffix || normalized.endsWith(`.${suffix}`),
+  );
+};
+
+// Port fidèle de `AppSourceGuard.stripComments` (apps/ios/MeeshyTests/Helpers/
+// AppSourceGuard.swift), lui-même un port de `ComposerSourceGuard.stripComments`
+// (SDK) — même machine à états, quatre modes : code, littéral de chaîne (avec
+// échappements), commentaire de ligne `//…`, commentaire de bloc `/* … */`.
+// Couper au premier `//` sans conscience des littéraux tronquerait une ligne
+// contenant une URL `"https://…"` ; un stripper naïf laisserait un commentaire
+// de bloc multi-ligne se refermer trop tôt. Fonction PURE, testée par
+// --self-test.
+export const stripComments = (source) => {
+  const MODE = Object.freeze({ CODE: 'code', STRING: 'string', LINE_COMMENT: 'line', BLOCK_COMMENT: 'block' });
+  let mode = MODE.CODE;
+  let result = '';
+  let escaped = false;
+  let pendingSlash = false;
+  let pendingStar = false;
+
+  for (const character of source) {
+    if (mode === MODE.CODE) {
+      if (pendingSlash) {
+        pendingSlash = false;
+        if (character === '/') { mode = MODE.LINE_COMMENT; continue; }
+        if (character === '*') { mode = MODE.BLOCK_COMMENT; continue; }
+        result += '/';
+      }
+      if (character === '/') { pendingSlash = true; continue; }
+      if (character === '"') { mode = MODE.STRING; }
+      result += character;
+      continue;
+    }
+    if (mode === MODE.STRING) {
+      result += character;
+      if (escaped) { escaped = false; continue; }
+      if (character === '\\') { escaped = true; continue; }
+      if (character === '"') { mode = MODE.CODE; }
+      continue;
+    }
+    if (mode === MODE.LINE_COMMENT) {
+      if (character === '\n') { mode = MODE.CODE; result += character; }
+      continue;
+    }
+    // MODE.BLOCK_COMMENT
+    if (pendingStar && character === '/') {
+      pendingStar = false;
+      mode = MODE.CODE;
+      continue;
+    }
+    pendingStar = character === '*';
+    if (character === '\n') { result += character; }
+  }
+  if (pendingSlash && mode === MODE.CODE) { result += '/'; }
+  return result;
+};
+
+export const listSwiftFiles = (absRoot, relRoot) => {
+  const out = [];
+  const walk = (absDir, relDir) => {
+    let names;
+    try {
+      names = readdirSync(absDir);
+    } catch {
+      return;
+    }
+    for (const name of names) {
+      if (EXCLUDED_DIR_NAMES.has(name)) continue;
+      const absPath = join(absDir, name);
+      const relPath = relDir ? `${relDir}/${name}` : name;
+      const st = statSync(absPath);
+      if (st.isDirectory()) {
+        walk(absPath, relPath);
+      } else if (name.endsWith('.swift')) {
+        out.push(relPath);
+      }
+    }
+  };
+  walk(absRoot, relRoot);
+  return out;
+};
+
+// Lit l'ARGUMENT d'un appel `Color(hex: …)` à partir de `start` (juste après
+// `Color(hex:`), sur du source DÉJÀ débarrassé de ses commentaires. Un
+// littéral de chaîne est reconnu par sa guillemet ouvrante et lu jusqu'à sa
+// fermeture (échappements gérés) ; toute autre forme est lue jusqu'à la
+// première virgule ou parenthèse fermante de PROFONDEUR ZÉRO — en comptant la
+// profondeur des parenthèses/crochets/accolades imbriqués (et en sautant les
+// chaînes imbriquées comme des blocs opaques) pour rester correct sur un appel
+// tel que `Color(hex: LanguageDisplay.colorHex(for: code))`, où la première
+// parenthèse fermante NE clôt PAS l'appel `Color(hex:`.
+export const parseColorHexArgument = (source, start) => {
+  let i = start;
+  while (i < source.length && /\s/.test(source[i])) i++;
+
+  if (source[i] === '"') {
+    let j = i + 1;
+    while (j < source.length) {
+      if (source[j] === '\\') { j += 2; continue; }
+      if (source[j] === '"') { j++; break; }
+      j++;
+    }
+    return { kind: 'literal', text: source.slice(i, j) };
+  }
+
+  let depth = 0;
+  let j = i;
+  while (j < source.length) {
+    const c = source[j];
+    if (c === '(' || c === '[' || c === '{') { depth++; j++; continue; }
+    if (c === ')' || c === ']' || c === '}') {
+      if (depth === 0) break;
+      depth--; j++; continue;
+    }
+    if (c === '"') {
+      j++;
+      while (j < source.length) {
+        if (source[j] === '\\') { j += 2; continue; }
+        if (source[j] === '"') { j++; break; }
+        j++;
+      }
+      continue;
+    }
+    if (c === ',' && depth === 0) break;
+    j++;
+  }
+  return { kind: 'variable', text: source.slice(i, j).trim() };
+};
+
+// Classe chaque appel `Color(hex:` d'un monde DÉJÀ LU (path → source) en
+// trois formes (littéral / variable admise / variable inconnue, §MÉTHODOLOGIE)
+// — fonction pure, indépendante du parcours de fichiers réel, exercée par
+// --self-test.
+export const classifyColorHexOccurrences = (files) => {
+  let literalTotal = 0;
+  let admittedVariableTotal = 0;
+  let unknownVariableTotal = 0;
+  const perFileLiteral = [];
+  const perFileUnknownVariable = [];
+
+  for (const { path, source } of files) {
+    const stripped = stripComments(source);
+    let literalCount = 0;
+    let unknownCount = 0;
+
+    HARDCODED_COLOR_RE.lastIndex = 0;
+    let match;
+    while ((match = HARDCODED_COLOR_RE.exec(stripped)) !== null) {
+      const argument = parseColorHexArgument(stripped, match.index + match[0].length);
+      if (argument.kind === 'literal') {
+        literalCount++;
+        continue;
+      }
+      if (isAdmittedAccentArgument(argument.text)) {
+        admittedVariableTotal++;
+        continue;
+      }
+      unknownCount++;
+    }
+
+    if (literalCount > 0) { perFileLiteral.push({ path, count: literalCount }); literalTotal += literalCount; }
+    if (unknownCount > 0) { perFileUnknownVariable.push({ path, count: unknownCount }); unknownVariableTotal += unknownCount; }
+  }
+
+  return { literalTotal, admittedVariableTotal, unknownVariableTotal, perFileLiteral, perFileUnknownVariable };
+};
+
+export const readWorld = (root, roots) =>
+  roots.flatMap((searchRoot) =>
+    listSwiftFiles(join(root, searchRoot), searchRoot).map((relPath) => ({
+      path: relPath,
+      source: readFileSync(join(root, relPath), 'utf8'),
+    })),
+  );
+
+const RESULT = Object.freeze({ OK: 'ok', REGRESSION: 'regression', UNRECORDED_IMPROVEMENT: 'unrecorded-improvement' });
+
+export const evaluateRatchet = (count, baseline) => {
+  if (count > baseline) return RESULT.REGRESSION;
+  if (count < baseline) return RESULT.UNRECORDED_IMPROVEMENT;
+  return RESULT.OK;
+};
+
+const reportRatchet = (label, count, baseline, perFile, constantName) => {
+  const verdict = evaluateRatchet(count, baseline);
+  if (verdict === RESULT.OK) {
+    console.log(`${label} : ${count} occurrence(s), conforme à la référence (${baseline}).`);
+    return true;
+  }
+  if (verdict === RESULT.REGRESSION) {
+    const added = count - baseline;
+    console.error(`RÉGRESSION — ${label} : ${count} occurrence(s), ${added} de plus que la référence (${baseline}).`);
+    console.error(
+      `Remplacez le nouvel appel par accentColor/colorPalette (CLAUDE.md § Conversation Accent Color), ` +
+        `ou documentez ici pourquoi il est légitime et relevez ${constantName} dans ce script.`,
+    );
+    if (perFile.length > 0) {
+      console.error(
+        `Fichiers les plus chargés : ${perFile
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 10)
+          .map((f) => `${f.path} (${f.count})`)
+          .join(', ')}`,
+      );
+    }
+    return false;
+  }
+  console.error(
+    `AMÉLIORATION NON ENREGISTRÉE — ${label} : ${count} occurrence(s), en dessous de la référence (${baseline}). ` +
+      `Abaissez ${constantName} à ${count} dans ce script.`,
+  );
+  return false;
+};
+
+const selfTest = () => {
+  const world = [
+    { path: 'Sdk/Theme/Palette.swift', source: 'let a = Color(hex: "#FFFFFF")\nlet b = Color(hex: "#000000")' },
+    { path: 'Sdk/Views/Card.swift', source: 'let c = Color(hex: "#123456")' },
+    { path: 'App/Screen.swift', source: 'let e = Color(hex: "#ABCDEF")\nlet f = Color(hex: "#FEDCBA")' },
+    { path: 'App/Empty.swift', source: 'struct Empty {}' },
+    // #5883 — une mention en commentaire, PAS un usage. Un doc-comment de
+    // ligne citant la fonction (comme 27ab5d1b l'a fait pour expliquer son
+    // correctif) et un commentaire de bloc multi-ligne : aucun des deux ne
+    // doit peser dans le compte.
+    {
+      path: 'App/DocOnly.swift',
+      source: [
+        '/// `Color(hex:)` n\'est PAS faillible : le `?? MeeshyColors.indigo400` qui',
+        '/// suit est mort — voir Color(hex: "#000000") cité ici en exemple.',
+        'struct DocOnly {',
+        '  /* ancien code, retiré :',
+        '     let g = Color(hex: "#111111")',
+        '  */',
+        '  let h = accentHex.isEmpty ? MeeshyColors.indigo400 : Color(hex: accentHex)', // ← seul usage RÉEL de ce fichier (variable INCONNUE)
+        '}',
+      ].join('\n'),
+    },
+    // #6511 — les trois FORMES : littéral (déjà couvert ci-dessus), variable
+    // ADMISE (l'application de la règle CLAUDE.md, ne doit peser sur AUCUN
+    // cliquet) et variable INCONNUE (ni prouvée conforme ni prouvée en dur).
+    {
+      path: 'App/AccentUsage.swift',
+      source: [
+        'struct AccentUsage: View {',
+        '  var body: some View {',
+        '    VStack {',
+        '      Rectangle().fill(Color(hex: accentColor))', // variable ADMISE (nom exact)
+        '      Rectangle().fill(Color(hex: conversation.accentColor))', // variable ADMISE (chemin se terminant par accentColor)
+        '      Rectangle().fill(Color(hex: conversation.colorPalette.primary))', // variable ADMISE (colorPalette.primary)
+        '      Rectangle().fill(Color(hex: contactColor))', // variable INCONNUE
+        '      Rectangle().fill(Color(hex: LanguageDisplay.colorHex(for: code)))', // variable INCONNUE, appel imbriqué
+        '    }',
+        '  }',
+        '}',
+      ].join('\n'),
+    },
+  ];
+  // Le monde ne contient déjà que des fichiers RETENUS par listSwiftFiles
+  // (l'exclusion Theme/Tests est un filtre de CHEMIN, testé par lecture du
+  // code — `EXCLUDED_DIR_NAMES.has(name)` est une comparaison d'ensemble
+  // triviale). Ce que ce garde doit prouver, c'est que son COMPTAGE et sa
+  // CLASSIFICATION sont justes sur ce qu'on lui donne à compter.
+  const {
+    literalTotal,
+    admittedVariableTotal,
+    unknownVariableTotal,
+    perFileLiteral,
+    perFileUnknownVariable,
+  } = classifyColorHexOccurrences(world);
+
+  // Littéraux : 2 + 1 + 2 = 5 (Palette, Card, Screen) — DocOnly et
+  // AccentUsage n'en portent aucun.
+  if (literalTotal !== 5) {
+    console.error(`AVEUGLE : total littéral attendu 5, obtenu ${literalTotal}.`);
+    return 1;
+  }
+  if (perFileLiteral.length !== 3 || perFileLiteral.some((f) => f.path === 'App/Empty.swift')) {
+    console.error(`AVEUGLE : un fichier sans littéral ne doit pas figurer dans le détail, obtenu ${JSON.stringify(perFileLiteral)}.`);
+    return 1;
+  }
+  const docOnlyLiteral = perFileLiteral.find((f) => f.path === 'App/DocOnly.swift');
+  if (docOnlyLiteral) {
+    console.error(
+      `AVEUGLE : DocOnly.swift n'a aucun littéral RÉEL (son unique usage réel est une variable) — les mentions en commentaire ne comptent pas, obtenu ${JSON.stringify(docOnlyLiteral)}.`,
+    );
+    return 1;
+  }
+
+  // Un cliquet qui ne compte QUE le texte — la régression exacte de #5883 —
+  // doit être distingué explicitement : rejouer le comptage textuel brut sur
+  // DocOnly.swift doit rendre PLUS que son unique usage réel.
+  const textualDocOnlyMatches = world.find((f) => f.path === 'App/DocOnly.swift').source.match(HARDCODED_COLOR_RE);
+  if (!textualDocOnlyMatches || textualDocOnlyMatches.length <= 1) {
+    console.error('AVEUGLE : le monde de test ne distingue pas un comptage conscient des commentaires d\'un comptage textuel.');
+    return 1;
+  }
+
+  // Variables ADMISES (#6511) : les trois formes de AccentUsage.swift —
+  // aucune ne doit peser sur un cliquet.
+  if (admittedVariableTotal !== 3) {
+    console.error(`AVEUGLE : total de variables admises attendu 3, obtenu ${admittedVariableTotal}.`);
+    return 1;
+  }
+  if (!isAdmittedAccentArgument('accentColor') || !isAdmittedAccentArgument('conversation.accentColor')) {
+    console.error('AVEUGLE : accentColor (nu ou qualifié) doit être une variable admise.');
+    return 1;
+  }
+  if (!isAdmittedAccentArgument('conversation.colorPalette.primary')) {
+    console.error('AVEUGLE : colorPalette.primary (qualifié) doit être une variable admise.');
+    return 1;
+  }
+  if (isAdmittedAccentArgument('accentHex') || isAdmittedAccentArgument('resolvedAccent')) {
+    console.error('AVEUGLE : un nom qui ne fait QUE ressembler à accentColor (accentHex, resolvedAccent) ne doit pas être admis — la ressemblance n\'est pas l\'identité.');
+    return 1;
+  }
+
+  // Variables INCONNUES (#6511) : DocOnly (1, `accentHex`) + AccentUsage (2,
+  // `contactColor` et l'appel imbriqué) = 3.
+  if (unknownVariableTotal !== 3) {
+    console.error(`AVEUGLE : total de variables inconnues attendu 3, obtenu ${unknownVariableTotal}.`);
+    return 1;
+  }
+  const docOnlyUnknown = perFileUnknownVariable.find((f) => f.path === 'App/DocOnly.swift');
+  if (!docOnlyUnknown || docOnlyUnknown.count !== 1) {
+    console.error(`AVEUGLE : DocOnly.swift doit compter 1 variable inconnue (accentHex), obtenu ${JSON.stringify(docOnlyUnknown)}.`);
+    return 1;
+  }
+  const accentUsageUnknown = perFileUnknownVariable.find((f) => f.path === 'App/AccentUsage.swift');
+  if (!accentUsageUnknown || accentUsageUnknown.count !== 2) {
+    console.error(
+      `AVEUGLE : AccentUsage.swift doit compter 2 variables inconnues (contactColor, l'appel imbriqué), obtenu ${JSON.stringify(accentUsageUnknown)}.`,
+    );
+    return 1;
+  }
+
+  // Analyseur d'argument : un appel imbriqué (`Color(hex: LanguageDisplay.colorHex(for: code))`)
+  // ne doit pas se refermer sur la première parenthèse rencontrée.
+  const nestedArgument = parseColorHexArgument('Color(hex: LanguageDisplay.colorHex(for: code))', 'Color(hex:'.length);
+  if (nestedArgument.kind !== 'variable' || nestedArgument.text !== 'LanguageDisplay.colorHex(for: code)') {
+    console.error(`AVEUGLE : l'analyseur d'argument a mal géré un appel imbriqué, obtenu ${JSON.stringify(nestedArgument)}.`);
+    return 1;
+  }
+
+  // Les deux cliquets, chacun à DEUX SENS, indépendamment.
+  if (evaluateRatchet(163, 163) !== RESULT.OK) {
+    console.error('AVEUGLE : un compte littéral égal à la référence doit être OK.');
+    return 1;
+  }
+  if (evaluateRatchet(164, 163) !== RESULT.REGRESSION) {
+    console.error('AVEUGLE : une régression littérale (+1) doit être détectée.');
+    return 1;
+  }
+  if (evaluateRatchet(162, 163) !== RESULT.UNRECORDED_IMPROVEMENT) {
+    console.error('AVEUGLE : une amélioration littérale non enregistrée (-1) doit être détectée.');
+    return 1;
+  }
+  if (evaluateRatchet(380, 380) !== RESULT.OK) {
+    console.error('AVEUGLE : un compte de variables inconnues égal à la référence doit être OK.');
+    return 1;
+  }
+  if (evaluateRatchet(381, 380) !== RESULT.REGRESSION) {
+    console.error('AVEUGLE : une régression de variables inconnues (+1) doit être détectée.');
+    return 1;
+  }
+  if (evaluateRatchet(379, 380) !== RESULT.UNRECORDED_IMPROVEMENT) {
+    console.error('AVEUGLE : une amélioration de variables inconnues non enregistrée (-1) doit être détectée.');
+    return 1;
+  }
+
+  // stripComments elle-même, isolée de classifyColorHexOccurrences : une
+  // chaîne contenant un `//` (URL) ne doit PAS être tronquée — c'est le piège
+  // que le doc-comment de `AppSourceGuard.stripComments` nomme explicitement.
+  const withUrl = stripComments('let url = "https://meeshy.me/x" // vrai commentaire\nlet n = 1');
+  if (!withUrl.includes('"https://meeshy.me/x"') || withUrl.includes('vrai commentaire')) {
+    console.error(`AVEUGLE : stripComments a tronqué un littéral contenant //, obtenu ${JSON.stringify(withUrl)}.`);
+    return 1;
+  }
+  const withBlock = stripComments('let a = 1\n/* bloc\n   multi-ligne */\nlet b = 2');
+  if (withBlock.includes('bloc') || !withBlock.includes('let a = 1') || !withBlock.includes('let b = 2')) {
+    console.error(`AVEUGLE : stripComments n'a pas fermé un bloc multi-ligne, obtenu ${JSON.stringify(withBlock)}.`);
+    return 1;
+  }
+
+  console.log('self-test : 15/15 vérifications passées (stripComments, classification à trois formes, analyseur d\'argument, deux cliquets à deux sens).');
+  return 0;
+};
+
+const main = () => {
+  if (process.argv.includes('--self-test')) return selfTest();
+
+  const {
+    literalTotal,
+    admittedVariableTotal,
+    unknownVariableTotal,
+    perFileLiteral,
+    perFileUnknownVariable,
+  } = classifyColorHexOccurrences(readWorld(REPO_ROOT, SEARCH_ROOTS));
+
+  console.log(
+    `Couleurs en dur hors Theme (iOS) : ${literalTotal} littéral(aux), ${admittedVariableTotal} variable(s) admise(s) ` +
+      `(accentColor/colorPalette — hors cliquet), ${unknownVariableTotal} variable(s) inconnue(s).`,
+  );
+
+  const literalOk = reportRatchet(
+    'Littéraux Color(hex: "…")',
+    literalTotal,
+    REFERENCE_LITERAL_COLOR_COUNT,
+    perFileLiteral,
+    'REFERENCE_LITERAL_COLOR_COUNT',
+  );
+  const unknownOk = reportRatchet(
+    'Variables inconnues Color(hex: …)',
+    unknownVariableTotal,
+    REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT,
+    perFileUnknownVariable,
+    'REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT',
+  );
+
+  return literalOk && unknownOk ? 0 : 1;
+};
+
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
+  process.exit(main());
+}

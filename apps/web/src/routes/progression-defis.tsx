@@ -1,0 +1,44 @@
+import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { gameText } from '@/lib/view/game-copy';
+import { ProgressionPage } from '@/routes/progression-page';
+import { GeneratedAchievements, STREAK_TINT } from '@/routes/progression-parts';
+
+/**
+ * LA PAGE DÉDIÉE DES DÉFIS (#5843) — les paliers produits par la grammaire.
+ *
+ * Distincte des SUCCÈS, qui sont composés et nommés un par un : l'utilisateur
+ * n'a pas à connaître cette frontière, mais elle gouverne ce qui se range où —
+ * un défi se décline par paliers, un succès se décroche d'un coup.
+ *
+ * Le compte en haut à droite est ATTEIGNABLE, jamais déclaré : promettre des
+ * paliers que le produit ne peut pas tenir est un mensonge que la loi
+ * `isAttainable` refuse déjà en amont.
+ */
+export default function ProgressionDefisScreen() {
+  /* Chaque palier se touche et dit ses précisions (#9563) : la page lit donc le catalogue du jeu, comme ses voisines. */
+  suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
+  return (
+    <ProgressionPage
+      titre={gameText('game.concept.defis.name')}
+      teinte={STREAK_TINT}
+      compte={(p) => {
+        const sections = p.achievementSections ?? [];
+        if (sections.length === 0) return null;
+        const fait = sections.reduce((n, s) => n + s.unlockedCount, 0);
+        const total = sections.reduce((n, s) => n + s.attainableCount, 0);
+        return `${fait} / ${total}`;
+      }}
+    >
+      {(progress) =>
+        progress.achievementSections === undefined ? (
+          <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+            {gameText('game.defis.unmeasured')}
+          </p>
+        ) : (
+          <GeneratedAchievements sections={progress.achievementSections} />
+        )
+      }
+    </ProgressionPage>
+  );
+}

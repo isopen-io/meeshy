@@ -4,6 +4,11 @@ import MeeshySDK
 
 @MainActor
 class BookmarksViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published var posts: [FeedPost] = []
     @Published var isLoading = false
     @Published var hasMore = true
@@ -11,13 +16,21 @@ class BookmarksViewModel: ObservableObject {
     private var nextCursor: String?
     private let postService: PostServiceProviding
     private let languageProvider: LanguageProviding
+    /// « Repartager » d'une carte (#15934) : l'écrivain unique, construit sur
+    /// le service injecté, et le retour à l'utilisateur.
+    private let reposter: ListedPostReposter
+    /// « Partager » du menu ⋯ (#15994).
+    private let sharer: ListedPostSharer
 
     init(
         postService: PostServiceProviding = PostService.shared,
-        languageProvider: LanguageProviding = AuthManagerLanguageProvider()
+        languageProvider: LanguageProviding = AuthManagerLanguageProvider(),
+        reposter: ListedPostReposter? = nil
     ) {
         self.postService = postService
         self.languageProvider = languageProvider
+        self.reposter = reposter ?? ListedPostReposter(publisher: RepostPublisher(postService: postService))
+        self.sharer = ListedPostSharer(service: postService)
     }
 
     private var preferredLanguages: [String] {
@@ -35,9 +48,14 @@ class BookmarksViewModel: ObservableObject {
                 return
             case .stale(let data, _):
                 posts = data
-                // vm-bookmarks-pagination-01 — router par loadMore : un seul
-                // point de vérité pour le guard concurrentiel isLoading.
-                Task { [weak self] in await self?.loadMore() }
+                // Revalidation SILENCIEUSE. Elle passait par `loadMore()`, qui
+                // lève `isLoading` — et `BookmarksView` rend un `ProgressView`
+                // dessus : l'utilisateur voyait ses favoris AVEC un spinner par-
+                // dessus, exactement ce que le cache-first existe pour éviter.
+                // `loadMore()` AJOUTE de surcroît, en dédoublonnant : un favori
+                // retiré depuis un autre appareil ne disparaissait jamais de
+                // cette liste.
+                Task { [weak self] in await self?.revalidateFirstPage() }
                 return
             case .expired, .empty:
                 break
@@ -49,7 +67,19 @@ class BookmarksViewModel: ObservableObject {
         await fetchBookmarksFromNetwork()
     }
 
-    private func fetchBookmarksFromNetwork() async {
+    /// Relit la PREMIÈRE page en arrière-plan, sans lever `isLoading`.
+    private func revalidateFirstPage() async {
+        guard !isLoading else { return }
+        nextCursor = nil
+        await fetchBookmarksFromNetwork(replacingExisting: true)
+    }
+
+    /// - Parameter replacingExisting: la page reçue REMPLACE la liste au lieu de
+    ///   s'y ajouter. C'est ce qu'une première page veut dire — et c'est la
+    ///   seule forme qui fait disparaître un favori retiré ailleurs. Le
+    ///   remplacement n'a lieu qu'APRÈS la réponse : une panne laisse la liste
+    ///   et le cache exactement où ils étaient.
+    private func fetchBookmarksFromNetwork(replacingExisting: Bool = false) async {
         do {
             let response = try await postService.getBookmarks(cursor: nextCursor, limit: 20)
             // Decode off the main actor — toFeedPost decodes each post's media /
@@ -62,28 +92,105 @@ class BookmarksViewModel: ObservableObject {
             }.value
             let existingIds = Set(posts.map(\.id))
             let unique = newPosts.filter { !existingIds.contains($0.id) }
-            posts.append(contentsOf: unique)
+            if replacingExisting {
+                posts = newPosts
+            } else {
+                posts.append(contentsOf: unique)
+            }
             nextCursor = response.pagination?.nextCursor
             hasMore = response.pagination?.hasMore ?? false
 
-            if nextCursor == nil || posts.count == unique.count {
-                try? await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
+            if replacingExisting || nextCursor == nil || posts.count == unique.count {
+                await saveToCache("bookmarksViewModel.feed.save")
             }
         } catch {
-            FeedbackToastManager.shared.showError(String(localized: "feed.bookmark.loadError", defaultValue: "Error loading bookmarks", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "feed.bookmark.loadError", defaultValue: "Impossible de charger les favoris", bundle: .main))
         }
     }
 
+    /// Le lien à présenter pour « Partager » (#15994) ; le compteur ne bouge
+    /// que si la passerelle a enregistré le partage.
+    func shareLink(for postId: String) async -> ShareableLink? {
+        guard let post = posts.first(where: { $0.id == postId }) else { return nil }
+        let outcome = await sharer.share(post)
+        if outcome.recorded, let index = posts.firstIndex(where: { $0.id == postId }) {
+            posts[index].shareCount += 1
+        }
+        return outcome.link
+    }
+
     func removeBookmark(_ postId: String) async {
-        let snapshot = posts
-        posts.removeAll { $0.id == postId }
+        guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+        let removed = posts.remove(at: index)
         do {
             try await postService.removeBookmark(postId: postId)
-            try? await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
+            await saveToCache("bookmarksViewModel.feed.save.2")
         } catch {
-            posts = snapshot
-            FeedbackToastManager.shared.showError(String(localized: "feed.bookmark.removeError", defaultValue: "Error removing bookmark", bundle: .main))
+            // Défaire CE retrait, pas l'écran : une page chargée ou un autre
+            // retrait réussi pendant l'attente restait effacé par l'instantané.
+            posts = OptimisticRollback.restoring(removed, at: index, into: posts)
+            FeedbackToastManager.shared.showError(String(localized: "feed.bookmark.removeError", defaultValue: "Impossible de retirer le favori", bundle: .main))
         }
+    }
+
+    /// **Le cœur des FAVORIS aimait dans le vide**.
+    ///
+    /// `BookmarksView` montait `FeedPostCard` sans `onLike`. Le paramètre étant
+    /// optionnel, rien ne rougissait — et le bouton n'était pas seulement
+    /// inerte : il jouait sa rafale ET sa haptique avant d'appeler un rappel
+    /// absent. L'utilisateur recevait la confirmation sensorielle d'un geste qui
+    /// n'avait pas lieu. Garde : `FeedPostCardLikeWiringSourceGuardTests`.
+    ///
+    /// La règle de bascule vient de `PostLikeMutation`, partagée : ce qui reste
+    /// ici est ce que ce modèle SEUL possède — son service, son instantané de
+    /// restauration, et sa clé de cache « bookmarks ».
+    ///
+    /// L'instantané est relocalisé par ID à la restauration, jamais par l'index
+    /// capturé : la liste peut avoir bougé pendant l'aller-retour réseau
+    /// (`removeBookmark` retire des lignes, `loadMore` en ajoute), et réécrire à
+    /// un index périmé restaurerait l'ancien état SUR UN AUTRE POST.
+    func toggleLike(_ postId: String) async {
+        guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+        let snapshot = posts[index]
+        let outcome = PostLikeMutation.toggled(isLiked: snapshot.isLiked, likes: snapshot.likes)
+        posts[index].isLiked = outcome.isLiked
+        posts[index].likes = outcome.likes
+        do {
+            if outcome.isLiked {
+                try await postService.like(postId: postId)
+            } else {
+                try await postService.unlike(postId: postId)
+            }
+            await saveToCache("bookmarksViewModel.feed.save.3")
+        } catch {
+            if let current = posts.firstIndex(where: { $0.id == postId }) {
+                posts[current] = snapshot
+            }
+            FeedbackToastManager.shared.showError(String(localized: "feed.like.error", defaultValue: "Impossible d'aimer la publication", bundle: .main))
+        }
+    }
+
+    /// **« Repartager » ne faisait rien depuis les favoris** (#15934) : la vue
+    /// montait la carte sans `onRepost`, et le choix appelait un rappel absent.
+    /// Même règle que le profil — bascule optimiste de l'icône et du compteur,
+    /// retour arrière à l'échec — par `PostRepostMutation`. Le cache
+    /// « bookmarks » garde l'état repartagé, comme il garde le like.
+    func toggleRepost(_ postId: String) async {
+        guard let index = posts.firstIndex(where: { $0.id == postId }),
+              let reposted = PostRepostMutation.reposted(posts[index]) else { return }
+        let shown = posts[index]
+        posts[index] = reposted
+        if await reposter.repost(shown) {
+            await saveToCache("bookmarksViewModel.feed.save.4")
+            return
+        }
+        guard let current = posts.firstIndex(where: { $0.id == postId }) else { return }
+        posts[current] = PostRepostMutation.withdrawn(posts[current])
+    }
+
+    /// Le SEUL site qui écrit la liste dans le cache « bookmarks ».
+    private func saveToCache(_ label: StaticString) async {
+        await bestEffort(label, category: .cache) { try await CacheCoordinator.shared.feed.save(posts, for: "bookmarks") }
     }
 
     /// vm-bookmarks-pagination-01 — page suivante RÉSEAU, jamais le cache :
@@ -96,11 +203,18 @@ class BookmarksViewModel: ObservableObject {
         await fetchBookmarksFromNetwork()
     }
 
+    /// Fetch-then-replace : NI l'écran NI le cache ne se vident avant que le
+    /// réseau ait répondu.
+    ///
+    /// Le geste vidait `posts` puis INVALIDAIT le cache, et ne partait chercher
+    /// qu'ensuite : un tirer-pour-rafraîchir hors ligne laissait « aucun
+    /// favori » à l'écran ET un cache détruit — l'ouverture suivante repartait
+    /// elle aussi du réseau, alors que la liste était sur le disque une seconde
+    /// plus tôt. Même loi que `ConversationListViewModel.forceRefresh`.
     func refresh() async {
-        posts = []
+        guard !isLoading else { return }
         nextCursor = nil
         hasMore = true
-        await CacheCoordinator.shared.feed.invalidate(for: "bookmarks")
-        await loadBookmarks()
+        await fetchBookmarksFromNetwork(replacingExisting: true)
     }
 }

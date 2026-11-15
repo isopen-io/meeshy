@@ -1,6 +1,31 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
-import { attachmentMediaSelect } from '../../../services/attachments/attachmentIncludes';
+import { attachmentMediaSelect, MESSAGE_ATTACHMENT_ORDER } from '../../../services/attachments/attachmentIncludes';
+import { applyHistoryFloor } from '../../../services/historyFloor';
+import { withOrphanedSenderRepair } from '../../../services/messaging/withOrphanedSenderRepair';
+
+/**
+ * Plafond d'affichage des listes membres / participants anonymes d'un lien de
+ * partage (#4165). Aligné sur le plafond de `validatePagination` (≤ 100) : au
+ * -delà, `totalMembers`/`totalAnonymousParticipants` (comptés à part, JAMAIS
+ * dérivés de la longueur du tableau affiché) disent au client qu'il y en a
+ * plus — c'est `membersHasMore`/`anonymousParticipantsHasMore` côté route.
+ */
+export const LINK_PARTICIPANT_DISPLAY_CAP = 100;
+
+/** Sous-ensemble de `ParticipantPermissions` (schema.prisma) que `retrieval.ts` lit. */
+type LinkParticipantPermissions = {
+  canSendMessages: boolean;
+  canSendFiles: boolean;
+  canSendImages: boolean;
+};
+
+/** Sous-ensemble d'`AnonymousProfile` (schema.prisma) que `retrieval.ts` lit. */
+type LinkAnonymousProfile = {
+  username: string;
+  firstName: string;
+  lastName: string;
+};
 
 const senderInclude = {
   select: {
@@ -25,9 +50,37 @@ const senderInclude = {
 };
 
 /**
- * Structure d'inclusion pour récupérer un lien de partage avec toutes ses relations
+ * Projection RACINE pour récupérer un lien de partage (#4166, critère 1).
+ *
+ * Remplace l'ancien `shareLinkIncludeStructure` : un `include` SANS `select`
+ * à la racine charge toute colonne du modèle `ConversationShareLink` — les
+ * compteurs de session (`maxUniqueSessions`, `currentUniqueSessions`),
+ * `allowedCountries`/`allowedLanguages`/`allowedIpRanges`, `createdAt`/
+ * `updatedAt` — pour n'en servir qu'une quinzaine. `findShareLinkByIdentifier`
+ * est appelée par un SEUL site (`routes/links/retrieval.ts`, vérifié) : les
+ * champs ci-dessous sont exactement ceux que ce site lit sur `shareLink`.
+ *
+ * `creator` a disparu : `retrieval.ts` ne lit jamais `shareLink.creator` — la
+ * relation était chargée (profil complet de l'auteur du lien) sans qu'aucun
+ * lecteur n'en fasse rien.
  */
-export const shareLinkIncludeStructure = {
+export const shareLinkSelectStructure = {
+  id: true,
+  linkId: true,
+  name: true,
+  description: true,
+  conversationId: true,
+  allowViewHistory: true,
+  allowAnonymousMessages: true,
+  allowAnonymousFiles: true,
+  allowAnonymousImages: true,
+  allowedAttachmentKinds: true,
+  requireAccount: true,
+  requireEmail: true,
+  requireNickname: true,
+  requireBirthday: true,
+  expiresAt: true,
+  isActive: true,
   conversation: {
     select: {
       id: true,
@@ -36,51 +89,137 @@ export const shareLinkIncludeStructure = {
       description: true,
       type: true,
       createdAt: true,
-      participants: {
-        where: { isActive: true },
-        select: {
-          id: true,
-          type: true,
-          displayName: true,
-          avatar: true,
-          language: true,
-          isOnline: true,
-          isActive: true,
-          role: true,
-          joinedAt: true,
-          userId: true,
-          permissions: true,
-          // `profile` UNIQUEMENT : `anonymousSession.session` porte le hash du
-          // jeton, l'IP et l'empreinte appareil — jamais exposables sur une
-          // route consultable sans authentification.
-          anonymousSession: { select: { profile: true } },
-          user: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true,
-              systemLanguage: true,
-              isOnline: true,
-              lastActiveAt: true
-            }
-          }
-        }
-      }
-    }
-  },
-  creator: {
-    select: {
-      id: true,
-      username: true,
-      firstName: true,
-      lastName: true,
-      displayName: true
+      // #6740 — `canPreview` (retrieval.ts) doit refuser l'aperçu public d'une
+      // conversation FERMÉE, exactement comme `isConversationClosed` (SSOT,
+      // `services/messaging/conversationWriteAdmission.ts`) le décide déjà pour
+      // l'écriture. Les deux colonnes qu'elle lit — rien de plus.
+      isActive: true,
+      closedAt: true
     }
   }
 };
+
+/**
+ * Est-ce que `userId` a une participation ACTIVE de type `user` dans cette
+ * conversation ? Requête ciblée et indexée — indépendante de l'effectif de la
+ * conversation, à l'inverse de l'ancien `participants.find(...)` sur la
+ * relation chargée en bloc (#4165). Sert à la fois la garde d'accès et le
+ * calcul de `userType` : un lecteur `hasAccess` par le cas spécial "meeshy"
+ * sans être réellement participant reste `userType: 'anonymous'`, comme avant.
+ */
+export async function findActiveUserParticipant(
+  prisma: PrismaClient,
+  conversationId: string,
+  userId: string
+): Promise<{ id: string } | null> {
+  return prisma.participant.findFirst({
+    where: { conversationId, userId, type: 'user', isActive: true },
+    select: { id: true }
+  });
+}
+
+/**
+ * Page (bornée, `LINK_PARTICIPANT_DISPLAY_CAP`) des membres inscrits affichés
+ * sur la fiche d'un lien. Ne sélectionne PAS `isOnline`/`lastActiveAt` : la
+ * route les sert toujours masqués (lien consultable sans authentification),
+ * les charger serait payer une colonne que rien ne lit.
+ */
+export async function findLinkMembers(
+  prisma: PrismaClient,
+  conversationId: string,
+  take: number = LINK_PARTICIPANT_DISPLAY_CAP
+): Promise<Array<{
+  id: string;
+  role: string;
+  joinedAt: Date;
+  user: { id: string; username: string; firstName: string | null; lastName: string | null; displayName: string | null; avatar: string | null } | null;
+}>> {
+  return prisma.participant.findMany({
+    where: { conversationId, type: 'user', isActive: true },
+    orderBy: { joinedAt: 'asc' },
+    take: take,
+    select: {
+      id: true,
+      role: true,
+      joinedAt: true,
+      user: {
+        select: {
+          id: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          displayName: true,
+          avatar: true
+        }
+      }
+    }
+  });
+}
+
+/**
+ * Page (bornée) des participants anonymes affichés. `isOnline`/`lastActiveAt`
+ * SONT sélectionnés ici (contrairement aux membres) parce que la route les
+ * gate — elle ne les tait pas — derrière `anonymousPresenceVisible`
+ * (ADMIN/BIGBOSS uniquement, directive présence du 2026-08-25).
+ */
+export async function findLinkAnonymousParticipants(
+  prisma: PrismaClient,
+  conversationId: string,
+  take: number = LINK_PARTICIPANT_DISPLAY_CAP
+): Promise<Array<{
+  id: string;
+  displayName: string | null;
+  avatar: string | null;
+  language: string;
+  isOnline: boolean;
+  lastActiveAt: Date | null;
+  joinedAt: Date;
+  permissions: LinkParticipantPermissions | null;
+  anonymousSession: { profile: LinkAnonymousProfile } | null;
+}>> {
+  return prisma.participant.findMany({
+    where: { conversationId, type: 'anonymous', isActive: true },
+    orderBy: { joinedAt: 'asc' },
+    take: take,
+    select: {
+      id: true,
+      displayName: true,
+      avatar: true,
+      language: true,
+      isOnline: true,
+      lastActiveAt: true,
+      joinedAt: true,
+      permissions: true,
+      anonymousSession: { select: { profile: true } }
+    }
+  });
+}
+
+/** Effectifs VRAIS (membres inscrits / participants anonymes actifs) — comptés
+ * à part des pages ci-dessus pour que `totalMembers`/`totalAnonymousParticipants`
+ * restent exacts même quand l'affichage est tronqué au plafond. */
+export async function countLinkParticipantsByType(
+  prisma: PrismaClient,
+  conversationId: string
+): Promise<{ totalMembers: number; totalAnonymousParticipants: number }> {
+  const [totalMembers, totalAnonymousParticipants] = await Promise.all([
+    prisma.participant.count({ where: { conversationId, type: 'user', isActive: true } }),
+    prisma.participant.count({ where: { conversationId, type: 'anonymous', isActive: true } })
+  ]);
+  return { totalMembers, totalAnonymousParticipants };
+}
+
+/** Effectif des participants anonymes actuellement en ligne — appelant
+ * uniquement quand `anonymousPresenceVisible` (sinon la route sert `0`, comme
+ * avant : la présence hors ADMIN/BIGBOSS n'a jamais été vraie sur cette route). */
+export async function countOnlineAnonymousParticipants(
+  prisma: PrismaClient,
+  conversationId: string
+): Promise<number> {
+  return prisma.participant.count({
+    where: { conversationId, type: 'anonymous', isActive: true, isOnline: true }
+  });
+}
 
 /**
  * Récupère un lien de partage par différents identifiants
@@ -94,7 +233,7 @@ export async function findShareLinkByIdentifier(
   if (isObjectId) {
     return prisma.conversationShareLink.findUnique({
       where: { id: identifier },
-      include: shareLinkIncludeStructure
+      select: shareLinkSelectStructure
     });
   }
 
@@ -104,9 +243,19 @@ export async function findShareLinkByIdentifier(
   // les deux (cohérent avec le fix join `ab22f62ac`).
   return prisma.conversationShareLink.findFirst({
     where: { OR: [{ linkId: identifier }, { identifier: identifier }] },
-    include: shareLinkIncludeStructure
+    select: shareLinkSelectStructure
   });
 }
+
+/**
+ * Ce que le LECTEUR a le droit de relire. `historyFloor` est le plancher rendu
+ * par `services/historyFloor` pour sa participation ; `null` = tout. Les trois
+ * lecteurs de ce module l'appliquent par la même fonction, jamais par une
+ * clause écrite à la main.
+ */
+export type LinkMessageReadOptions = {
+  readonly historyFloor?: Date | null;
+};
 
 /**
  * Récupère les messages d'une conversation avec pagination
@@ -119,20 +268,18 @@ export async function getConversationMessages(
   prisma: PrismaClient,
   conversationId: string,
   limit: number,
-  offset: number
+  offset: number,
+  options: LinkMessageReadOptions = {}
 ): Promise<any[]> {
-  return prisma.message.findMany({
-    where: {
-      conversationId,
-      deletedAt: null
-    },
+  return withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () => prisma.message.findMany({
+    where: applyHistoryFloor({ conversationId, deletedAt: null }, options.historyFloor ?? null),
     orderBy: { createdAt: 'desc' },
     take: limit,
     skip: offset,
     include: {
       sender: senderInclude
     }
-  });
+  }));
 }
 
 /**
@@ -158,19 +305,17 @@ export async function getConversationMessagesWithDetails(
   prisma: PrismaClient,
   conversationId: string,
   limit: number,
-  offset: number
+  offset: number,
+  options: LinkMessageReadOptions = {}
 ): Promise<any[]> {
-  return prisma.message.findMany({
-    where: {
-      conversationId,
-      deletedAt: null
-    },
+  return withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () => prisma.message.findMany({
+    where: applyHistoryFloor({ conversationId, deletedAt: null }, options.historyFloor ?? null),
     orderBy: { createdAt: 'desc' },
     take: limit,
     skip: offset,
     include: {
       sender: senderInclude,
-      attachments: { select: attachmentMediaSelect },
+      attachments: { select: attachmentMediaSelect, orderBy: MESSAGE_ATTACHMENT_ORDER },
       replyTo: {
         include: {
           sender: senderInclude
@@ -185,7 +330,7 @@ export async function getConversationMessagesWithDetails(
         }
       }
     }
-  });
+  }));
 }
 
 /**
@@ -193,12 +338,10 @@ export async function getConversationMessagesWithDetails(
  */
 export async function countConversationMessages(
   prisma: PrismaClient,
-  conversationId: string
+  conversationId: string,
+  options: LinkMessageReadOptions = {}
 ): Promise<number> {
   return prisma.message.count({
-    where: {
-      conversationId,
-      deletedAt: null
-    }
+    where: applyHistoryFloor({ conversationId, deletedAt: null }, options.historyFloor ?? null)
   });
 }

@@ -48,7 +48,7 @@ public struct ChatBubble: View {
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
                 .padding()
                 .background(bubbleBackground)
-                .foregroundColor(isMe ? .white : theme.textPrimary)
+                .foregroundStyle(isMe ? .white : theme.textPrimary)
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                 .overlay(bubbleStroke)
                 .shadow(
@@ -75,7 +75,7 @@ public struct ChatBubble: View {
             .fill(
                 isMe ?
                 LinearGradient(
-                    colors: [accent, accent.opacity(0.8)],
+                    colors: [accent, accent.opacity(MeeshyOpacity.intense)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 ) :

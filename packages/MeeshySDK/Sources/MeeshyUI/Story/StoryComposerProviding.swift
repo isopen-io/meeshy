@@ -155,7 +155,7 @@ protocol StoryComposerProviding: AnyObject {
     func setMediaURL(id: String, url: String, slideId: String?)
     func setMediaAspectRatio(id: String, aspectRatio: Double, slideId: String?)
     @discardableResult
-    func addAudioObject() -> StoryAudioPlayerObject?
+    func addAudioObject(role: ComposerAudioRole?) -> StoryAudioPlayerObject?
     func deleteElement(id: String)
     func updateElementLanguage(elementId: String, language: String)
     func duplicateElement(id: String)
@@ -193,4 +193,16 @@ protocol StoryComposerProviding: AnyObject {
 
     // MARK: Reset
     func reset()
+}
+
+/// **Le rôle de mixage est un ARGUMENT, jamais une valeur par défaut du témoin.**
+///
+/// Une valeur par défaut (`role: ComposerAudioRole? = nil`) ne satisfait PAS une
+/// exigence de protocole sans paramètre : Swift compare les signatures, pas les
+/// sites d'appel. Les deux formes coexistent donc explicitement — l'exigence
+/// porte le rôle, l'extension rend la forme historique à tous les appelants qui
+/// n'ont rien à en dire (#4483).
+extension StoryComposerProviding {
+    @discardableResult
+    func addAudioObject() -> StoryAudioPlayerObject? { addAudioObject(role: nil) }
 }

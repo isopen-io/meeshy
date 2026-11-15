@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.sdk", category: "session-snapshot")
+private let logger = MeeshyLog.logger(.sessionSnapshot, subsystem: .sdk)
 
 /// Session snapshot persisté en UserDefaults App Group pour permettre aux
 /// extensions iOS (NSE, Widget, ShareExtension) de lire l'identité courante

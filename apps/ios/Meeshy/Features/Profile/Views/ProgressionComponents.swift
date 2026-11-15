@@ -1,0 +1,400 @@
+import SwiftUI
+import UIKit
+import MeeshySDK
+import MeeshyUI
+
+// MARK: - Les briques de l'écran « Progression » (#5698)
+//
+// Des vues FEUILLES : aucun `@ObservedObject` sur un singleton, des valeurs
+// passées en `let` — la règle « Zero Unnecessary Re-render » des Instant App
+// Principles. Le thème se lit par une propriété calculée, jamais observée.
+
+/// Une carte teintée — la même surface que `UserStatsView.statCard` et les
+/// sections de `SettingsView` : dégradé du thème dans la teinte, filet 1 pt.
+struct ProgressionCard<Content: View>: View {
+    let tint: Color
+    @ViewBuilder let content: () -> Content
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        content()
+            .padding(MeeshySpacing.mdPlus)
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .fill(theme.surfaceGradient(tint: tint))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                            .stroke(theme.border(tint: tint), lineWidth: 1)
+                    )
+            )
+    }
+}
+
+/// UNE BARRE DE PALIER — la fraction parcourue entre deux paliers, dans la
+/// teinte de son échelle. C'est une information, pas un ornement : VoiceOver
+/// la lit avec sa valeur, le libellé est celui de l'échelle, jamais un
+/// pourcentage recopié.
+struct ProgressionBar: View {
+    let progress: Double
+    let tint: Color
+    let label: String
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule().fill(tint.opacity(0.18))
+                Capsule()
+                    .fill(tint)
+                    .frame(width: geometry.size.width * min(1, max(0, progress)))
+            }
+        }
+        .frame(height: 6)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        // **Le glyphe « % » et son espacement viennent de la LOCALE**, jamais
+        // d'un littéral : le français veut une espace insécable avant le signe,
+        // l'anglais n'en veut aucune, et un arabe attend ses propres chiffres.
+        // `LocalizedNumber.percent` est le site unique qui le sait — le même que
+        // `MessageOverlayMenu` sert déjà à sa barre de lecture.
+        .accessibilityValue(LocalizedNumber.percent(Int((min(1, max(0, progress)) * 100).rounded())))
+    }
+}
+
+/// Les pastilles d'un axe — une par palier, pleine quand il est atteint,
+/// datée quand il a été gravé.
+struct ProgressionTierDots: View {
+    let tiers: [EngagementTier]
+    let tint: Color
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            ForEach(tiers) { tier in
+                Circle()
+                    .strokeBorder(tier.reached ? tint : theme.textMuted.opacity(0.45), lineWidth: MeeshyBorder.emphasis)
+                    .background(Circle().fill(tier.reached ? tint : Color.clear))
+                    .frame(width: 10, height: 10)
+                    .accessibilityLabel(ProgressionCopy.tierAccessibilityLabel(tier))
+            }
+        }
+    }
+}
+
+struct ProgressionStreakCard: View {
+    let streak: EngagementStreakProgress
+
+    private var theme: ThemeManager { ThemeManager.shared }
+    private let tint = MeeshyColors.warning
+
+    var body: some View {
+        ProgressionCard(tint: tint) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                HStack(spacing: MeeshySpacing.sm) {
+                    Image(systemName: "flame.fill")
+                        .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
+                        .foregroundColor(tint)
+                        .accessibilityHidden(true)
+                    Text(ProgressionCopy.streak(streak.currentDays))
+                        .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold, design: .rounded))
+                        .foregroundStyle(theme.textPrimary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                }
+                Text(ProgressionCopy.streakRecord(streak.longestDays))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
+                    .foregroundStyle(theme.textMuted)
+                ProgressionBar(
+                    progress: streak.scale.progress,
+                    tint: tint,
+                    label: String(localized: "progression.a11y.bar.streak", defaultValue: "Ta Flamme, vers son prochain jalon", bundle: .main)
+                )
+                .padding(.top, MeeshySpacing.xs)
+                Text(ProgressionCopy.nextStep(for: streak.scale, kind: .streak))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                    .foregroundStyle(theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct ProgressionAxisRow: View {
+    let axis: EngagementAxisProgress
+
+    private var theme: ThemeManager { ThemeManager.shared }
+    private let tint = MeeshyColors.brandPrimary
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.md) {
+            Image(systemName: ProgressionCopy.symbol(for: axis.axis))
+                .font(MeeshyFont.relative(15, weight: .semibold))
+                .foregroundColor(tint)
+                .frame(width: UIFontMetrics.default.scaledValue(for: 36), height: UIFontMetrics.default.scaledValue(for: 36))
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                        .fill(tint.opacity(0.12))
+                )
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(ProgressionCopy.title(for: axis.axis))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                        .foregroundStyle(theme.textPrimary)
+                        .lineLimit(1)
+                    Spacer(minLength: MeeshySpacing.sm)
+                    Text("\(axis.scale.value)")
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold, design: .rounded))
+                        .foregroundColor(theme.textMuted)
+                        .monospacedDigit()
+                }
+                HStack {
+                    ProgressionTierDots(tiers: axis.scale.tiers, tint: tint)
+                    Spacer(minLength: MeeshySpacing.sm)
+                    Text(ProgressionCopy.nextStep(for: axis.scale, kind: .badge))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                        .foregroundStyle(theme.textMuted)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+            }
+        }
+        .padding(.vertical, MeeshySpacing.smPlus)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct ProgressionAchievementRow: View {
+    let achievement: EngagementAchievementProgress
+    /// La rareté MESURÉE de ce succès (#9390), servie par la passerelle ; `nil` — ancien serveur, ou succès jamais
+    /// mesuré — et la ligne reste celle d'avant.
+    var rarity: GameRarityEntry? = nil
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    private var tint: Color {
+        achievement.unlocked ? MeeshyColors.success : theme.textMuted
+    }
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.md) {
+            Image(systemName: achievement.unlocked ? "trophy.fill" : "lock.fill")
+                .font(MeeshyFont.relative(15, weight: .semibold))
+                .foregroundColor(tint)
+                .frame(width: UIFontMetrics.default.scaledValue(for: 36), height: UIFontMetrics.default.scaledValue(for: 36))
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                        .fill(tint.opacity(achievement.unlocked ? 0.14 : 0.10))
+                )
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                Text(ProgressionCopy.title(for: achievement.key))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                    .foregroundStyle(achievement.unlocked ? theme.textPrimary : theme.textMuted)
+                Text(
+                    achievement.unlocked
+                        ? (ProgressionCopy.obtained(achievement.reachedAt)
+                            ?? String(localized: "progression.unlocked", defaultValue: "Débloqué", bundle: .main))
+                        : ProgressionCopy.condition(for: achievement.key)
+                )
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                .foregroundColor(theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                GameRarityLine(entry: rarity)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, MeeshySpacing.smPlus)
+        .gameRarityRim(rarity?.visibleRarity.map(GameRarity.border(for:)), cornerRadius: MeeshyRadius.sm)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Les avis de l'écran : l'état vide, la coupure, l'échec — chacun DIT quoi
+/// faire, aucun ne bloque ce qui est déjà peint.
+struct ProgressionNotice: View {
+    enum Kind {
+        case empty
+        case offline(hasSnapshot: Bool)
+        case error(String)
+    }
+
+    let kind: Kind
+    var retry: (() -> Void)? = nil
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    private var symbol: String {
+        switch kind {
+        case .empty: return "sparkles"
+        case .offline: return "wifi.slash"
+        case .error: return "exclamationmark.circle.fill"
+        }
+    }
+
+    private var tint: Color {
+        switch kind {
+        case .empty: return MeeshyColors.brandPrimary
+        case .offline: return MeeshyColors.warning
+        case .error: return MeeshyColors.error
+        }
+    }
+
+    var text: String {
+        switch kind {
+        case .empty:
+            return String(
+                localized: "progression.empty",
+                defaultValue: "Aucune activité pour l’instant : ta première médaille s’allume au premier geste.",
+                bundle: .main
+            )
+        case .offline(let hasSnapshot):
+            return hasSnapshot
+                ? String(localized: "progression.offline", defaultValue: "Hors ligne — progression telle qu’à la dernière ouverture", bundle: .main)
+                : String(localized: "progression.offline.empty", defaultValue: "Hors ligne — aucune progression en mémoire", bundle: .main)
+        case .error(let message):
+            return message
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: MeeshySpacing.md) {
+            Image(systemName: symbol)
+                .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
+                .foregroundColor(tint)
+                .accessibilityHidden(true)
+            Text(text)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                .foregroundStyle(theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            if let retry {
+                Button {
+                    HapticFeedback.light()
+                    retry()
+                } label: {
+                    Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                        .foregroundColor(tint)
+                }
+                .accessibilityLabel(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .main))
+            }
+        }
+        .padding(MeeshySpacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                .fill(tint.opacity(0.10))
+        )
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Le squelette de démarrage à froid — la FORME de l'écran (deux cartes, trois
+/// sections), jamais un `ProgressView`. `SkeletonShape` + `skeletonShimmer()`,
+/// Reduce Motion géré par `ShimmerModifier`.
+struct ProgressionSkeleton: View {
+    var body: some View {
+        VStack(spacing: MeeshySpacing.xl) {
+            HStack(spacing: MeeshySpacing.md) {
+                SkeletonShape(height: 118, cornerRadius: MeeshyRadius.md)
+                SkeletonShape(height: 118, cornerRadius: MeeshyRadius.md)
+            }
+            ForEach(0..<3, id: \.self) { _ in
+                SkeletonShape(height: 150, cornerRadius: MeeshyRadius.lg)
+            }
+        }
+        .skeletonShimmer()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "progression.loading", defaultValue: "Ma Légende se charge", bundle: .main))
+    }
+}
+
+/// LES SUCCÈS GÉNÉRÉS, EN RANGÉES HORIZONTALES (#5759).
+///
+/// La vue ne TRIE rien, ne FILTRE rien, ne TRONQUE rien : l'ordre de
+/// difficulté, le retrait des paliers inatteignables et la fenêtre
+/// `max(7, acquis + 2)` sont appliqués par `AchievementResolver`, miroir de la
+/// loi partagée et gardé par `achievement-catalog-mirror-parity`. Refaire l'un
+/// des trois ici ferait diverger iOS du web — le mécanisme exact qui a produit
+/// trois familles de Prisme divergentes en trois cycles.
+struct ProgressionGeneratedAchievements: View {
+    let sections: [AchievementSectionView]
+
+    /// Autant de colonnes que la largeur en porte, 132 pt au moins chacune : deux à 320 pt, trois sur un grand écran.
+    private static let columns = [GridItem(.adaptive(minimum: 132), spacing: MeeshySpacing.sm, alignment: .topLeading)]
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        if sections.isEmpty {
+            EmptyView()
+        } else {
+            VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                ForEach(sections) { vue in
+                    VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                        HStack {
+                            Text(AchievementCopy.sectionTitle(vue.section))
+                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                                .foregroundStyle(theme.textPrimary)
+                            Spacer()
+                            Text("\(vue.unlockedCount) / \(vue.attainableCount)")
+                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                                .foregroundStyle(theme.textMuted)
+                        }
+
+                        // Une GRILLE qui passe à la ligne, plus un carrousel (#9564, amendement n° 3) : aucune rangée
+                        // de Progression ne défile de côté — un carrousel sous le pouce dispute le geste de retour
+                        // depuis le bord, et cache des paliers hors de l'écran.
+                        LazyVGrid(columns: Self.columns, alignment: .leading, spacing: MeeshySpacing.sm) {
+                            ForEach(vue.entries) { entry in
+                                // Un palier de défi SE TOUCHE (#9564) : il rebondit et ouvre ses précisions.
+                                ProgressionAchievementChip(entry: entry)
+                                    .gameElement(GameElementDetails.challenge(entry))
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+private struct ProgressionAchievementChip: View {
+    let entry: AchievementEntry
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+            Image(systemName: entry.unlocked ? "star.fill" : "medal")
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                .foregroundStyle(entry.unlocked ? MeeshyColors.success : theme.textMuted)
+                .accessibilityHidden(true)
+            // Une famille hors catalogue rend `nil` : on montre alors RIEN
+            // plutôt qu'une clé technique.
+            Text(AchievementCopy.label(entry.family, tier: entry.tier) ?? "")
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                .foregroundStyle(theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            if entry.unlocked {
+                Text(AchievementCopy.earned)
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                    .foregroundStyle(theme.textMuted)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                .fill(entry.unlocked ? MeeshyColors.success.opacity(0.14) : theme.textMuted.opacity(0.08))
+        )
+        .accessibilityElement(children: .combine)
+    }
+}

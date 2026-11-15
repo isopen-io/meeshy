@@ -10,19 +10,6 @@ import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 const TEST_USER_ID = '507f1f77bcf86cd799439011';
 const TEST_CATEGORY_ID = '507f1f77bcf86cd799439aaa';
 
-// The categories route registers `createUnifiedAuthMiddleware(prisma, ...)`
-// inside the plugin. We replace it with a no-op that injects `request.auth`.
-jest.mock('../middleware/auth', () => ({
-  createUnifiedAuthMiddleware: () => async (request: any) => {
-    request.auth = { userId: TEST_USER_ID };
-    request.authContext = {
-      isAuthenticated: true,
-      registeredUser: { id: TEST_USER_ID, role: 'USER' },
-      userId: TEST_USER_ID,
-    };
-  },
-}));
-
 type EmitCall = { event: string; payload: unknown };
 
 const buildPrismaMock = () => ({
@@ -35,13 +22,12 @@ const buildPrismaMock = () => ({
     delete: jest.fn<any>(),
     updateMany: jest.fn<any>(),
   },
-  // categories.ts uses prisma.conversationPreference.updateMany on DELETE
-  // (pre-existing) — keep the surface so the route doesn't crash.
-  conversationPreference: {
-    updateMany: jest.fn<any>(),
-  },
-  // Real model name (in case Phase 1 fixes the surface).
+  // The DELETE route detaches conversations from the category. `categoryId` is
+  // a column of `UserConversationPreferences` — the surface that used to be
+  // kept here for `conversationPreference` propped up a call the generated
+  // client rejects, and is gone with it (cycle 129).
   userConversationPreferences: {
+    findMany: jest.fn<any>().mockResolvedValue([]),
     updateMany: jest.fn<any>(),
   },
   $transaction: jest.fn<any>(),
@@ -65,7 +51,18 @@ const buildApp = async (prisma: ReturnType<typeof buildPrismaMock>) => {
   app.decorate('prisma', prisma as any);
   app.decorate('socketIOHandler', { getManager: () => ({ io: fakeIO }) } as any);
 
-  // Late require so the jest.mock above is active.
+  // Le hook d'auth vit chez le PARENT en production
+  // (routes/me/preferences/index.ts) — categoriesRoutes n'en pose plus le
+  // sien depuis #4182 critère 4. On le reproduit ici, avant le plugin.
+  app.addHook('preHandler', async (request: any) => {
+    request.auth = { userId: TEST_USER_ID };
+    request.authContext = {
+      isAuthenticated: true,
+      registeredUser: { id: TEST_USER_ID, role: 'USER' },
+      userId: TEST_USER_ID,
+    };
+  });
+
   const { categoriesRoutes } = await import('../routes/me/preferences/categories');
   await app.register(categoriesRoutes);
   await app.ready();
@@ -152,7 +149,7 @@ describe('category routes — socket emissions (Phase 1 contract)', () => {
       id: TEST_CATEGORY_ID,
       userId: TEST_USER_ID,
     });
-    prisma.$transaction.mockResolvedValue([{ count: 0 }, {}] as any);
+    prisma.userConversationCategory.delete.mockResolvedValue({ id: TEST_CATEGORY_ID } as any);
 
     const res = await env.app.inject({
       method: 'DELETE',

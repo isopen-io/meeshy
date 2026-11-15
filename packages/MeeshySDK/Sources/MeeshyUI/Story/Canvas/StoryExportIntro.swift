@@ -25,6 +25,16 @@ public struct StoryExportIntroContent: Sendable {
     public let moodMessage: String?
     /// Hex "RRGGBB" — teinte de repli quand aucune bannière n'est fournie.
     public let accentColorHex: String
+    /// Le contour équipé de l'auteur, déjà résolu (`ProfileDecorResolver.ring`) — celui que
+    /// la carte d'identité de la visionneuse pose autour de l'avatar. `nil` ⇒ l'avatar nu,
+    /// rendu historique.
+    public let avatarRing: AvatarRingDesign?
+    /// La présence de l'auteur telle que le serveur l'a SERVIE (#13997), projetée par l'app.
+    /// Un point sur le bord de l'avatar ; `nil` ⇒ aucun point (pas ami, hors ligne, non servie).
+    public let presence: StoryExportPresence?
+    /// Le logo du cercle de l'auteur (🔥 Proche, 🩸 Sang), déjà résolu par `RelationExportBadge`,
+    /// peint à droite du nom. `nil` ⇒ rien — Ami et en dessous, sa propre story.
+    public let relationLogo: String?
 
     public init(displayName: String,
                 username: String,
@@ -32,7 +42,10 @@ public struct StoryExportIntroContent: Sendable {
                 banner: CGImage? = nil,
                 moodEmoji: String? = nil,
                 moodMessage: String? = nil,
-                accentColorHex: String) {
+                accentColorHex: String,
+                avatarRing: AvatarRingDesign? = nil,
+                presence: StoryExportPresence? = nil,
+                relationLogo: String? = nil) {
         self.displayName = displayName
         self.username = username
         self.avatar = avatar
@@ -40,6 +53,9 @@ public struct StoryExportIntroContent: Sendable {
         self.moodEmoji = moodEmoji
         self.moodMessage = moodMessage
         self.accentColorHex = accentColorHex
+        self.avatarRing = avatarRing
+        self.presence = presence
+        self.relationLogo = relationLogo
     }
 }
 
@@ -68,7 +84,7 @@ public enum StoryExportIntro {
 
     /// L'interlude tient à PLEINE opacité pendant `holdDuration`, puis se fond
     /// vers la story sur `crossfadeDuration` — la story se RÉVÈLE, jamais une
-    /// coupure brutale (directive user 2026-07-26). La story démarre donc à
+    /// coupure brutale. La story démarre donc à
     /// `holdDuration`, et le fondu chevauche ses `crossfadeDuration` premières
     /// secondes sans jamais la rallonger.
     public static let holdDuration: TimeInterval = 1.2
@@ -139,8 +155,8 @@ public enum StoryExportIntro {
     /// stays legible over any banner.
     ///
     /// Package-internal (pas `private`) : `StoryExportOutro` réutilise le MÊME
-    /// voile + la MÊME carte d'identité pour la carte de fin d'auteur (Part D
-    /// 2026-07-26), garantissant qu'ouverture et fermeture montrent une identité
+    /// voile + la MÊME carte d'identité pour la carte de fin d'auteur,
+    /// garantissant qu'ouverture et fermeture montrent une identité
     /// peinte à l'identique.
     static func drawScrim(in cg: CGContext, size: CGSize) {
         let rect = CGRect(origin: .zero, size: size)
@@ -166,30 +182,42 @@ public enum StoryExportIntro {
                                 y: size.height * 0.5 - avatarSide * 0.9,
                                 width: avatarSide,
                                 height: avatarSide)
+        // Sous un contour, l'avatar se ramène au trou (rayon 42 du viewBox 100)
+        // et le contour occupe la boîte — la géométrie de `avatarRingWithin` :
+        // le nom et le pseudo ne bougent pas. Sans contour, la boîte entière.
+        let discRect = content.avatarRing == nil ? avatarRect : ringHole(of: avatarRect)
         cg.saveGState()
-        cg.addEllipse(in: avatarRect)
+        cg.addEllipse(in: discRect)
         cg.clip()
         if let avatar = content.avatar {
             // Même raison que la bannière : passer par UIKit pour respecter le
             // repère haut-gauche du renderer. Le clip circulaire posé sur `cg`
             // reste actif — `UIImage.draw` peint dans le contexte courant.
-            UIImage(cgImage: avatar).draw(in: avatarRect)
+            UIImage(cgImage: avatar).draw(in: discRect)
         } else {
             cg.setFillColor(UIColor(Color(hex: content.accentColorHex)).cgColor)
-            cg.fill(avatarRect)
+            cg.fill(discRect)
         }
         cg.restoreGState()
 
         // Fallback initials, centred in the vibrant disc when no avatar image.
         if content.avatar == nil {
             drawCentredInRect(makeInitials(content.displayName),
-                              fontSize: avatarSide * 0.38, weight: .bold,
-                              color: .white, in: avatarRect)
+                              fontSize: discRect.width * 0.38, weight: .bold,
+                              color: .white, in: discRect)
+        }
+
+        if let ring = content.avatarRing {
+            drawRing(ring, in: avatarRect)
+        }
+        if let presence = content.presence {
+            StoryExportIdentityBadges.drawPresenceDot(presence, avatarBox: avatarRect, in: cg)
         }
 
         let nameSize = size.width * 0.058
         let handleSize = size.width * 0.036
-        drawCentred(content.displayName,
+        drawCentred(StoryExportIdentityBadges.nameLine(displayName: content.displayName,
+                                                       logo: content.relationLogo),
                     fontSize: nameSize, weight: .bold,
                     color: .white, alpha: 1,
                     y: avatarRect.maxY + nameSize * 0.9, in: size)
@@ -205,11 +233,44 @@ public enum StoryExportIntro {
         }
     }
 
+    /// Le trou d'un contour posé sur `box` : le disque de l'avatar, concentrique.
+    private static func ringHole(of box: CGRect) -> CGRect {
+        let inset = box.width * (1 - AvatarRingGeometry.holeFraction) / 2
+        return box.insetBy(dx: inset, dy: inset)
+    }
+
+    /// Le dernier contour peint, en image. La carte de fin redessine l'identité
+    /// à CHAQUE image (fondu d'entrée) : sans ce tampon, chaque image relirait
+    /// tous les chemins d'ornement (jusqu'à ~20 Ko de données SVG). Une seule
+    /// place — un export ne peint qu'un auteur, à une seule taille.
+    private struct RingStamp {
+        let design: AvatarRingDesign
+        let side: Int
+        let image: CGImage
+    }
+
+    private static var ringStamp: RingStamp?
+
+    /// Le contour FIXE (`AvatarRingRenderer`, le dessin de `AvatarRingView`) sur
+    /// la boîte de l'avatar. Mouvements et couche Lottie n'ont pas d'image fixe :
+    /// un export porte le trait et l'ornement au repos.
+    private static func drawRing(_ design: AvatarRingDesign, in box: CGRect) {
+        let side = Int(box.width.rounded(.up))
+        let image: CGImage
+        if let stamp = ringStamp, stamp.side == side, stamp.design == design {
+            image = stamp.image
+        } else {
+            guard let rendered = AvatarRingRenderer.stillImage(design, side: side) else { return }
+            ringStamp = RingStamp(design: design, side: side, image: rendered)
+            image = rendered
+        }
+        // UIKit, comme l'avatar : le repère haut-gauche du renderer.
+        UIImage(cgImage: image).draw(in: box)
+    }
+
     /// First letter of up to two words, uppercased — mirrors `MeeshyAvatar`.
     static func makeInitials(_ name: String) -> String {
-        let words = name.split(separator: " ").prefix(2)
-        let letters = words.compactMap { $0.first }.map(String.init)
-        return letters.joined().uppercased()
+        NameInitials.of(name)
     }
 
     private static func drawCentredInRect(_ text: String,
@@ -319,8 +380,8 @@ public enum StoryExportIntro {
     }
 
     /// Encode l'image en un clip vidéo muet de `duration`, prêt à être inséré
-    /// en tête d'une composition. Deux images suffisent — première et dernière —
-    /// l'image étant fixe : inutile d'encoder 66 frames identiques.
+    /// en tête d'une composition. Une seule image suffit, l'image étant fixe :
+    /// inutile d'encoder 51 frames identiques.
     public static func makeClip(image: CGImage,
                                 duration: TimeInterval,
                                 size: CGSize) async throws -> URL {
@@ -334,28 +395,31 @@ public enum StoryExportIntro {
         ]
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
         input.expectsMediaDataInRealTime = false
-        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
-            assetWriterInput: input,
-            sourcePixelBufferAttributes: [
-                kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32ARGB),
-                kCVPixelBufferWidthKey as String: Int(size.width),
-                kCVPixelBufferHeightKey as String: Int(size.height)
-            ]
-        )
         guard writer.canAdd(input) else { throw IntroError.writerRejectedInput }
         writer.add(input)
-        writer.startWriting()
+        // Même règle que la jumelle `StoryExporter` : `startSession` après un
+        // `startWriting` refusé lève un `NSInternalInconsistencyException`
+        // qu'aucun `do/catch` Swift ne rattrape (#7004).
+        guard writer.startWriting() else { throw IntroError.writerCannotStart(writer.error) }
         writer.startSession(atSourceTime: .zero)
 
-        guard let buffer = pixelBuffer(from: image, size: size) else {
+        // UNE seule frame, qui DURE tout le clip dans le média lui-même. Posée
+        // par l'adaptateur, elle ne durait qu'un quinzième de seconde et seule la
+        // liste d'éditions de `endSession` annonçait `duration` : le décodeur
+        // devait servir des instants sans média, et l'export qui compose ce clip
+        // échouait par intermittence en -11821 (#14495). Une seconde frame posée
+        // à `duration` la faisait au contraire TENIR au-delà, et le clip durait
+        // le double (mesuré 4,4 s pour 2,2 s demandées).
+        let end = CMTime(seconds: duration, preferredTimescale: 600)
+        guard let buffer = pixelBuffer(from: image, size: size),
+              let frame = stillSample(buffer, lasting: end) else {
             writer.cancelWriting()
             throw IntroError.pixelBufferCreationFailed
         }
-        // UNE seule frame, et c'est `endSession` qui fixe la durée. Poser une
-        // seconde frame à `duration` la ferait au contraire TENIR à partir de
-        // là, et le clip durait le double (mesuré 4,4 s pour 2,2 s demandées).
-        let end = CMTime(seconds: duration, preferredTimescale: 600)
-        adaptor.append(buffer, withPresentationTime: .zero)
+        guard input.append(frame) else {
+            writer.cancelWriting()
+            throw IntroError.encodingFailed(writer.error)
+        }
         input.markAsFinished()
         writer.endSession(atSourceTime: end)
         await writer.finishWriting()
@@ -363,6 +427,24 @@ public enum StoryExportIntro {
             throw IntroError.encodingFailed(writer.error)
         }
         return url
+    }
+
+    /// L'échantillon de l'image fixe, présenté à zéro et qui dure `duration`.
+    private static func stillSample(_ buffer: CVPixelBuffer, lasting duration: CMTime) -> CMSampleBuffer? {
+        var format: CMVideoFormatDescription?
+        guard CMVideoFormatDescriptionCreateForImageBuffer(allocator: kCFAllocatorDefault,
+                                                           imageBuffer: buffer,
+                                                           formatDescriptionOut: &format) == noErr,
+              let format else { return nil }
+        var timing = CMSampleTimingInfo(duration: duration, presentationTimeStamp: .zero,
+                                        decodeTimeStamp: .invalid)
+        var sample: CMSampleBuffer?
+        guard CMSampleBufferCreateReadyWithImageBuffer(allocator: kCFAllocatorDefault,
+                                                       imageBuffer: buffer,
+                                                       formatDescription: format,
+                                                       sampleTiming: &timing,
+                                                       sampleBufferOut: &sample) == noErr else { return nil }
+        return sample
     }
 
     private static func pixelBuffer(from image: CGImage, size: CGSize) -> CVPixelBuffer? {
@@ -480,13 +562,13 @@ public enum StoryExportIntro {
         videoComposition.frameDuration = StoryExportFrameRate.frameDuration
         videoComposition.renderSize = renderSize
 
-        // Audio — la signature sonore s'estompe sur le fondu (pas de bascule
-        // sonore brutale) ; le son PROPRE de la story démarre plein à `holdDuration`
-        // (jamais atténué — c'est le contenu de l'auteur).
+        // Audio — la signature sonore joue EN ENTIER ; le son de la story lui
+        // fait place et monte sous sa queue (`StoryExportJingleMix`).
         let audioMix = AVMutableAudioMix()
-        let jingleParams = AVMutableAudioMixInputParameters(track: jingleAudio)
-        jingleParams.setVolumeRamp(fromStartVolume: 1, toEndVolume: 0, timeRange: fadeRange)
-        audioMix.inputParameters = [jingleParams]
+        let storyParams = AVMutableAudioMixInputParameters(track: storyAudio)
+        StoryExportBranding.applyStoryEnvelope(to: storyParams, story: CMTimeRange(start: storyStart, duration: storyDuration),
+                                               introJingleEnd: jingleDuration)
+        audioMix.inputParameters = [storyParams]
 
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("meeshy-story-\(UUID().uuidString).mp4")
@@ -495,6 +577,7 @@ public enum StoryExportIntro {
         else { throw IntroError.writerRejectedInput }
         session.outputURL = outputURL
         session.outputFileType = .mp4
+        session.shouldOptimizeForNetworkUse = true
         session.videoComposition = videoComposition
         session.audioMix = audioMix
 
@@ -512,6 +595,10 @@ public enum StoryExportIntro {
 
     public enum IntroError: Error {
         case writerRejectedInput
+        /// `startWriting()` a refusé de commencer — disque plein, chemin de
+        /// sortie occupé. Distincte d'`encodingFailed`, qui dit qu'un encodage
+        /// COMMENCÉ n'a pas abouti (#7004).
+        case writerCannotStart(Error?)
         case pixelBufferCreationFailed
         case encodingFailed(Error?)
     }

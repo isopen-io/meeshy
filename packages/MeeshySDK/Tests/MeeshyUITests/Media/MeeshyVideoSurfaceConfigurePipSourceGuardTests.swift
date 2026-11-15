@@ -4,7 +4,7 @@ import XCTest
 /// `if enablesPip` dans `MeeshyVideoSurface.swift` (mêmes deux occurrences
 /// que `ReelVideoSurface`, `ReelsPlayerView.swift:1539,1556`), et
 /// `enablesPip` doit porter un défaut `false` — sinon un call site existant
-/// (`_FlatRenderer`, `_FullscreenRenderer`) activerait silencieusement le
+/// (`_InlineRenderer`, `_FullscreenRenderer`) activerait silencieusement le
 /// PiP sans exposer le moindre bouton pour le contrôler.
 ///
 /// Ancré sur le COMPORTEMENT (l'appel n'est jamais atteignable sans le

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "focal.focus.add_reaction", "androidName": "focal_focus_add_reaction", "status": "adopted"},
+        {"catalog": "app", "iosKey": "focal.focus.translation_detail", "androidName": "focal_focus_translation_detail", "status": "adopted"}
+      ]
+    }
+  }
+}

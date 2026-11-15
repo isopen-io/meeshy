@@ -4,6 +4,25 @@
  */
 
 import { z } from 'zod';
+import {
+  CIRCLE_NOTIFY_DEFAULTS,
+  CIRCLE_NOTIFY_KEYS,
+  RELATION_AUDIENCE_CHOICES,
+  type CircleNotifyKey,
+} from '../../utils/relation-levels.js';
+
+/**
+ * Le réglage d'ENTOURAGE (#13929) : pour chaque action relayée à mon entourage,
+ * le cran minimal prévenu (`NOBODY` · `BLOOD` · `CLOSE` · `FRIEND` ·
+ * `ACQUAINTANCE` · `COMMUNITY` · `PUBLIC`). Une clé PLATE par action — un `PATCH`
+ * partiel n'écrase donc jamais les autres. Absent d'un document existant ⇒ le
+ * défaut de sa famille (`CIRCLE_NOTIFY_DEFAULTS`, dérivé de la matrice des
+ * cercles). Le shape est construit depuis la table : une action ajoutée à
+ * `CIRCLE_NOTIFY_FAMILIES` arrive ici sans ligne à recopier.
+ */
+const circleAudienceShape = Object.fromEntries(
+  CIRCLE_NOTIFY_KEYS.map((key) => [key, z.enum(RELATION_AUDIENCE_CHOICES).default(CIRCLE_NOTIFY_DEFAULTS[key])]),
+) as Record<CircleNotifyKey, z.ZodDefault<z.ZodEnum<{ [C in (typeof RELATION_AUDIENCE_CHOICES)[number]]: C }>>>;
 
 export const NotificationPreferenceSchema = z.object({
   // Canaux de notification
@@ -38,6 +57,31 @@ export const NotificationPreferenceSchema = z.object({
   commentReplyEnabled: z.boolean().default(true),
   commentLikeEnabled: z.boolean().default(true),
   friendContentEnabled: z.boolean().default(true),
+  // « Quand un contact revient sur Meeshy » (#8285) — la RÉCEPTION de
+  // `contact_recently_active`. Absent d'un document existant ⇒ reçu.
+  contactActivityEnabled: z.boolean().default(true),
+  // #14147 — « la batterie de mes Proches et de mes Sangs » (`device_battery`).
+  // Absent d'un document existant ⇒ reçu.
+  deviceBatteryEnabled: z.boolean().default(true),
+  // « Jeu » (#9490) — la RÉCEPTION des notifications du jeu (invitation et acceptation de duo,
+  // résultat de la semaine de ligue, étape de saison). Absent d'un document existant ⇒ reçu.
+  gameEnabled: z.boolean().default(true),
+  // « Moments à immortaliser » (#10175, D8) — le PUSH d'une étape du jeu franchie app fermée ; « Jeu »
+  // coupé le coupe aussi. Absent d'un document existant ⇒ reçu.
+  gamePhotoEnabled: z.boolean().default(true),
+  // « Recevoir des Bring » (#13936, #14407) — l'interrupteur GLOBAL de la préférence de
+  // réception du Bring, en plus du blocage par personne. Coupé : personne ne peut me faire
+  // sonner, et chacun lit seulement « Bring indisponible ». Absent d'un document existant ⇒ reçu.
+  bringEnabled: z.boolean().default(true),
+  // « Recevoir le talkie » (#13935, #14407) — l'interrupteur GLOBAL de la réception directe
+  // du talkie. Coupé : la voix d'un Proche arrive en message vocal. Absent ⇒ reçu.
+  talkieEnabled: z.boolean().default(true),
+  // « Recevoir les invitations à regarder ou écouter ensemble » (#17023) — l'interrupteur GLOBAL,
+  // en plus de la coupure par personne. Coupé : personne ne peut m'inviter, et l'hôte lit le refus
+  // d'un inconnu ; une séance déjà rejointe continue. Absent ⇒ reçu.
+  togetherEnabled: z.boolean().default(true),
+
+  ...circleAudienceShape,
 
   // Do Not Disturb
   dndEnabled: z.boolean().default(false),
@@ -57,7 +101,29 @@ export const NotificationPreferenceSchema = z.object({
 
   // Groupement
   groupNotifications: z.boolean().default(true),
-  notificationBadgeEnabled: z.boolean().default(true)
+  notificationBadgeEnabled: z.boolean().default(true),
+
+  /**
+   * Le canal de COMPATIBILITÉ ASCENDANTE, déclaré (#4589).
+   *
+   * Les sept blocs de préférences du SDK iOS le portent
+   * (`PreferenceModels.swift`), et iOS encode le bloc ENTIER comme corps de
+   * requête (`UserPreferencesManager`, `try encoder.encode(privacy)`). Il
+   * arrivait donc sur chaque écriture, et le mode *strip* de Zod le retirait :
+   * mesuré sur staging le 2026-08-31, un `PATCH {"extras":{"sonde":"4589"}}`
+   * rendait `success: true` et la relecture ne rendait RIEN. Le canal de
+   * compatibilité ascendante d'iOS n'a jamais fonctionné.
+   *
+   * Le déclarer a deux effets, et le second est celui qui compte : il rend au
+   * client son aller-retour, et il permet à la frontière de REFUSER tout le
+   * reste (`.strict()` dans `submittedFrom`) sans casser les trois clients.
+   * Une porte de sortie nommée est ce qui autorise à fermer les autres.
+   *
+   * Facultatif et SANS défaut : il ne doit apparaître dans un document servi
+   * que si quelque chose y a été stocké — sinon les sept catégories gagneraient
+   * un `extras: {}` que ni le web ni Android n'attendent.
+   */
+  extras: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type NotificationPreference = z.infer<typeof NotificationPreferenceSchema>;
@@ -87,6 +153,14 @@ export const NOTIFICATION_PREFERENCE_DEFAULTS: NotificationPreference = {
   commentReplyEnabled: true,
   commentLikeEnabled: true,
   friendContentEnabled: true,
+  contactActivityEnabled: true,
+  deviceBatteryEnabled: true,
+  gameEnabled: true,
+  gamePhotoEnabled: true,
+  bringEnabled: true,
+  talkieEnabled: true,
+  togetherEnabled: true,
+  ...CIRCLE_NOTIFY_DEFAULTS,
   dndEnabled: false,
   dndStartTime: '22:00',
   dndEndTime: '08:00',

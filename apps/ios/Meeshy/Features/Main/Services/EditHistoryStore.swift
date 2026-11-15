@@ -1,4 +1,6 @@
 import Foundation
+import Combine
+import MeeshySDK
 import os
 
 /// One revision in the edit history of a message. `content` is the value
@@ -27,12 +29,17 @@ struct EditRevision: Codable, Identifiable, Equatable, Sendable {
 /// `maxRevisionsPerMessage` entries per message to bound disk use on
 /// long-running chats.
 final class EditHistoryStore: @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = EditHistoryStore()
 
     private let defaults: UserDefaults
     private let storageKey = "meeshy_edit_history"
-    private let lock = NSLock()
-    private var cache: [String: [EditRevision]]
+    private let cache: Locked<[String: [EditRevision]]>
+    private var cancellables = Set<AnyCancellable>()
 
     private let maxRevisionsPerMessage = 30
     /// Borne le nombre de MESSAGES suivis — la borne par message ne suffisait
@@ -41,24 +48,36 @@ final class EditHistoryStore: @unchecked Sendable {
     /// historiques dont la dernière révision est la plus ancienne sortent.
     private let maxTrackedMessages = 200
     private let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .iso8601
+        let e = MeeshyCoders.encoder(.persistence)
         return e
-    }()
-    private let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
-        return d
     }()
 
     init(userDefaults: UserDefaults = .standard) {
         self.defaults = userDefaults
         if let data = userDefaults.data(forKey: storageKey),
            let decoded = JSONDecoder.iso8601.decodeOrLog([String: [EditRevision]].self, from: data, field: "edit history", logger: Logger.editHistory) {
-            self.cache = decoded
+            self.cache = Locked(uncheckedState: decoded)
         } else {
-            self.cache = [:]
+            self.cache = Locked(uncheckedState: [:])
         }
+        wireAuthLogoutHook()
+    }
+
+    /// cache-09 (#7146) — pattern calqué sur `ConversationLockManager` : à la
+    /// déconnexion, l'historique d'édition du compte sortant part.
+    ///
+    /// `EditRevision.content` est le TEXTE des versions précédentes d'un
+    /// message — précisément ce qu'un auteur a choisi de retirer. La clé
+    /// `UserDefaults` est commune à tous les comptes et `clearAll()` n'avait
+    /// aucun appelant : l'historique survivait à la déconnexion.
+    private func wireAuthLogoutHook() {
+        AuthManager.shared.$isAuthenticated
+            .removeDuplicates()
+            .dropFirst()
+            .filter { !$0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.clearAll() }
+            .store(in: &cancellables)
     }
 
     /// Append the previous content as a new revision for the given message.
@@ -66,50 +85,44 @@ final class EditHistoryStore: @unchecked Sendable {
     /// is preserved.
     func recordRevision(messageId: String, previousContent: String) {
         guard !previousContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        lock.lock()
-        var revisions = cache[messageId] ?? []
-        revisions.append(EditRevision(content: previousContent))
-        if revisions.count > maxRevisionsPerMessage {
-            revisions = Array(revisions.suffix(maxRevisionsPerMessage))
-        }
-        cache[messageId] = revisions
-        if cache.count > maxTrackedMessages {
-            let evictable = cache.keys.sorted {
-                (cache[$0]?.last?.editedAt ?? .distantPast) < (cache[$1]?.last?.editedAt ?? .distantPast)
+        let snapshot = cache.mutateUnchecked { entries in
+            var revisions = entries[messageId] ?? []
+            revisions.append(EditRevision(content: previousContent))
+            if revisions.count > maxRevisionsPerMessage {
+                revisions = Array(revisions.suffix(maxRevisionsPerMessage))
             }
-            for key in evictable.prefix(cache.count - maxTrackedMessages) {
-                cache.removeValue(forKey: key)
+            entries[messageId] = revisions
+            if entries.count > maxTrackedMessages {
+                let evictable = entries.keys.sorted {
+                    (entries[$0]?.last?.editedAt ?? .distantPast) < (entries[$1]?.last?.editedAt ?? .distantPast)
+                }
+                for key in evictable.prefix(entries.count - maxTrackedMessages) {
+                    entries.removeValue(forKey: key)
+                }
             }
+            return entries
         }
-        let snapshot = cache
-        lock.unlock()
         persist(snapshot: snapshot)
     }
 
     func revisions(for messageId: String) -> [EditRevision] {
-        lock.lock()
-        defer { lock.unlock() }
-        return cache[messageId] ?? []
+        cache.mutateUnchecked { $0[messageId] ?? [] }
     }
 
     func hasHistory(for messageId: String) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return !(cache[messageId]?.isEmpty ?? true)
+        cache.mutateUnchecked { !($0[messageId]?.isEmpty ?? true) }
     }
 
     func removeHistory(for messageId: String) {
-        lock.lock()
-        cache.removeValue(forKey: messageId)
-        let snapshot = cache
-        lock.unlock()
+        let snapshot = cache.mutateUnchecked { entries -> [String: [EditRevision]] in
+            entries.removeValue(forKey: messageId)
+            return entries
+        }
         persist(snapshot: snapshot)
     }
 
     func clearAll() {
-        lock.lock()
-        cache.removeAll()
-        lock.unlock()
+        cache.mutateUnchecked { $0.removeAll() }
         defaults.removeObject(forKey: storageKey)
     }
 
@@ -123,8 +136,7 @@ final class EditHistoryStore: @unchecked Sendable {
 
 private extension JSONDecoder {
     static let iso8601: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
+        let d = MeeshyCoders.decoder(.persistence)
         return d
     }()
 }
@@ -132,5 +144,5 @@ private extension JSONDecoder {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let editHistory = Logger(subsystem: "me.meeshy.app", category: "edit-history")
+    nonisolated static let editHistory = MeeshyLog.logger(.editHistory)
 }

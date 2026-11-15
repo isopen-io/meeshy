@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lot: rendu-notification-systeme — libellés génériques et substituts des messages protégés (#15182). -->
+<resources>
+    <string name="push_new_message">رسالة جديدة</string>
+    <string name="push_someone">شخص ما</string>
+    <string name="push_voice_message">رسالة صوتية</string>
+    <string name="push_sender_in_group">%1$s في %2$s</string>
+    <string name="push_placeholder_view_once">رسالة للعرض مرة واحدة</string>
+    <string name="push_placeholder_ephemeral">رسالة مؤقتة</string>
+    <string name="push_placeholder_hidden">رسالة مخفية</string>
+    <string name="push_placeholder_encrypted">رسالة مشفرة</string>
+</resources>

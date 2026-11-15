@@ -89,6 +89,7 @@ function makePrisma(opts: { post?: unknown; isFriend?: boolean; isDirectContact?
     postComment: { findFirst: jest.fn<any>().mockResolvedValue(null) },
     postImpression: { create: jest.fn<any>(), createMany: jest.fn<any>() },
     friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(opts.isFriend ? { id: 'fr-1' } : null) },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     communityMember: { findMany: jest.fn<any>().mockResolvedValue([]), findFirst: jest.fn<any>().mockResolvedValue(null) },
     participant: {
       findMany: jest.fn<any>().mockResolvedValue(opts.isDirectContact ? [{ conversationId: 'conv-1' }] : []),
@@ -246,6 +247,7 @@ function makeRedirectPrisma(byId: Record<string, unknown | null>) {
     postComment: { findFirst: jest.fn<any>().mockResolvedValue(null) },
     postImpression: { create: jest.fn<any>(), createMany: jest.fn<any>() },
     friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     communityMember: { findMany: jest.fn<any>().mockResolvedValue([]), findFirst: jest.fn<any>().mockResolvedValue(null) },
     participant: { findMany: jest.fn<any>().mockResolvedValue([]), findFirst: jest.fn<any>().mockResolvedValue(null) },
   } as any;
@@ -259,7 +261,8 @@ describe('POST /posts/:postId/like — repost simple redirige vers la racine', (
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
 
     expect(res.statusCode).toBe(200);
-    expect(mockLikePost).toHaveBeenCalledWith(ROOT_ID, USER_ID, expect.any(String));
+    // #9584 — la republication traversée descend avec le like, pour son propre crédit.
+    expect(mockLikePost).toHaveBeenCalledWith(ROOT_ID, USER_ID, expect.any(String), { through: { id: POST_ID, authorId: AUTHOR_ID } });
     await app.close();
   });
 
@@ -274,8 +277,8 @@ describe('POST /posts/:postId/like — repost simple redirige vers la racine', (
     await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
     await app.inject({ method: 'POST', url: `/posts/${OTHER_REPOST_ID}/like`, payload: {} });
 
-    expect(mockLikePost).toHaveBeenNthCalledWith(1, ROOT_ID, USER_ID, expect.any(String));
-    expect(mockLikePost).toHaveBeenNthCalledWith(2, ROOT_ID, USER_ID, expect.any(String));
+    expect(mockLikePost).toHaveBeenNthCalledWith(1, ROOT_ID, USER_ID, expect.any(String), { through: { id: POST_ID, authorId: AUTHOR_ID } });
+    expect(mockLikePost).toHaveBeenNthCalledWith(2, ROOT_ID, USER_ID, expect.any(String), { through: { id: OTHER_REPOST_ID, authorId: AUTHOR_ID } });
     await app.close();
   });
 
@@ -289,7 +292,7 @@ describe('POST /posts/:postId/like — repost simple redirige vers la racine', (
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
 
     expect(res.statusCode).toBe(200);
-    expect(mockLikePost).toHaveBeenCalledWith(POST_ID, USER_ID, expect.any(String));
+    expect(mockLikePost).toHaveBeenCalledWith(POST_ID, USER_ID, expect.any(String), {});
     await app.close();
   });
 
@@ -322,7 +325,7 @@ describe('POST /posts/:postId/like — repost simple redirige vers la racine', (
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
 
     expect(res.statusCode).toBe(200);
-    expect(mockLikePost).toHaveBeenCalledWith(POST_ID, USER_ID, expect.any(String));
+    expect(mockLikePost).toHaveBeenCalledWith(POST_ID, USER_ID, expect.any(String), {});
     await app.close();
   });
 
@@ -336,7 +339,7 @@ describe('POST /posts/:postId/like — repost simple redirige vers la racine', (
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
 
     expect(res.statusCode).toBe(200);
-    expect(mockLikePost).toHaveBeenCalledWith(POST_ID, USER_ID, expect.any(String));
+    expect(mockLikePost).toHaveBeenCalledWith(POST_ID, USER_ID, expect.any(String), {});
     await app.close();
   });
 });

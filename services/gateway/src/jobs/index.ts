@@ -9,12 +9,32 @@ import { UnlockAccountsJob } from './unlock-accounts';
 import { NotificationDigestJob } from './notification-digest';
 import { DeliveryQueueCleanupJob } from './delivery-queue-cleanup';
 import { MutationLogCleanupJob } from './mutation-log-cleanup';
+import { BanExpirySweepJob } from './ban-expiry-sweep';
+import { sweepExpiredSessions } from './session-expiry-sweep';
+import { retentionPurgeArmed, sweepRetention } from './retention-sweep';
+import { OBSOLETE_PURGE_EVERY_MS, obsoletePurgeArmed, purgeObsoleteConversations } from './obsolete-conversation-purge';
+import { AttachmentService } from '../services/attachments/AttachmentService';
+import { GameLeagueJob } from './game-league';
+import { GameNightlyJob } from './game-nightly';
+import { GameMissionWindowJob } from './game-mission-window';
+import { GamePhotoMomentsJob } from './game-photo-moments';
+import { BackupStatusCheckJob } from './backup-status-check';
+import { MediaMirrorFollowJob, processMediaMirrorFollowJob } from './media-mirror-follow';
+import { RelationWeeklyJob } from './relation-weekly';
+import { createE2EEEnvelopeRelay } from '../services/e2ee/E2EEEnvelopeRelay';
+import { sweepDevicesOfEndedSessions } from '../services/e2ee/device-retirement';
+import { purgeExpiredExternalPeers } from '../services/external-conversation/peer-retention';
+import { externalConversationsEnabled } from '../services/external-conversation/external-conversation-flag';
 import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { MagicLinkService } from '../services/MagicLinkService';
 import { getCacheStore } from '../services/CacheStore';
-import { GeoIPService } from '../services/GeoIPService';
+import { GeoIPService, cleanGeoCache, warmGeoIpDatabase } from '../services/GeoIPService';
+import { BanService } from '../services/admin/ban.service';
+import { UserAuditService } from '../services/admin/user-audit.service';
+import { UserManagementService } from '../services/admin/user-management.service';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { guardedInterval } from '../utils/guarded-timer.js';
 
 const logger = enhancedLogger.child({ module: 'BackgroundJobs' });
 
@@ -24,17 +44,65 @@ export class BackgroundJobsManager {
   private notificationDigestJob: NotificationDigestJob;
   private deliveryQueueCleanupJob: DeliveryQueueCleanupJob;
   private mutationLogCleanupJob: MutationLogCleanupJob;
+  private banExpirySweepJob: BanExpirySweepJob;
+  private gameLeagueJob: GameLeagueJob;
+  private gameNightlyJob: GameNightlyJob;
+  private gameMissionWindowJob: GameMissionWindowJob;
+  /** Les étapes franchies app fermée (#10175) : éteint tant que GAME_PHOTO_PUSH ne vaut pas « on ». */
+  private gamePhotoMomentsJob: GamePhotoMomentsJob;
+  /** Le contrôle de la sauvegarde nocturne, chaque jour à 5 h heure de Paris (#9668). */
+  private backupStatusCheckJob: BackupStatusCheckJob;
+  /** Le miroir continu des médias vers le seau S3 (#11267) : éteint sans MEDIA_S3_MIRROR_FOLLOW=on. */
+  private mediaMirrorFollowJob: MediaMirrorFollowJob;
+  private relationWeeklyJob: RelationWeeklyJob;
+  /**
+   * Le balayage des sessions expirées n'a pas de classe à lui : c'est UNE
+   * requête, sans état ni dépendance. Une classe n'ajouterait qu'un emballage
+   * à tenir (#5712).
+   */
+  private sessionSweepInterval: NodeJS.Timeout | null = null;
+  /**
+   * La purge du cache GeoIP n'a pas de classe non plus : c'est UNE boucle
+   * synchrone sur un `Map` de module, sans état ni dépendance (#9239). Un
+   * fichier de job dédié n'ajouterait qu'un emballage à tenir — même
+   * raisonnement que le balayage des sessions ci-dessus (#5712).
+   */
+  private geoCacheInterval: NodeJS.Timeout | null = null;
+  /** La conservation (#9614, #9642) : une passe par jour, sans état propre. */
+  private retentionInterval: NodeJS.Timeout | null = null;
+  /** #14643 — la purge des conversations obsolètes, toutes les heures ; désarmée sans OBSOLETE_CONVERSATION_PURGE_ENABLED=true. */
+  private obsoletePurgeInterval: NodeJS.Timeout | null = null;
+  /** Les enveloppes E2EE jamais accusées s'effacent à 30 jours (#3706) : une requête, sans état. */
+  private envelopeSweepInterval: NodeJS.Timeout | null = null;
+  /** #17120 — le filet de l'index TTL : les numéros d'amis WhatsApp échus s'effacent, une requête toutes les heures. */
+  private externalPeerSweepInterval: NodeJS.Timeout | null = null;
   private isRunning: boolean = false;
 
-  constructor(private prisma: PrismaClient, emailService: EmailService, deliveryQueue?: RedisDeliveryQueue) {
+  private prismaClient: PrismaClient;
+
+  constructor(prisma: PrismaClient, emailService: EmailService, deliveryQueue?: RedisDeliveryQueue) {
+    this.prismaClient = prisma;
     this.cleanupTokensJob = new CleanupExpiredTokens(prisma);
     this.unlockAccountsJob = new UnlockAccountsJob(prisma);
     // Reuse the existing passwordless-login mechanism for the digest CTA
     // (single source of truth — no duplicate token model/service).
     const magicLinkService = new MagicLinkService(prisma, getCacheStore(), emailService, new GeoIPService());
     this.notificationDigestJob = new NotificationDigestJob(prisma, emailService, magicLinkService);
-    this.deliveryQueueCleanupJob = new DeliveryQueueCleanupJob(deliveryQueue ?? new RedisDeliveryQueue({ getNativeClient: () => null } as any));
+    this.deliveryQueueCleanupJob = new DeliveryQueueCleanupJob(deliveryQueue);
     this.mutationLogCleanupJob = new MutationLogCleanupJob(prisma);
+    // Le balayage ne réactive jamais que via `updateStatus` — aucun besoin de
+    // `revokeSessions` (seule la désactivation en dépend, cf. `userAdminRoutes`).
+    const userManagementService = new UserManagementService(prisma);
+    const userAuditService = new UserAuditService(prisma);
+    const banService = new BanService(prisma, userManagementService);
+    this.banExpirySweepJob = new BanExpirySweepJob(banService, userAuditService);
+    this.gameLeagueJob = new GameLeagueJob(prisma);
+    this.gameNightlyJob = new GameNightlyJob(prisma);
+    this.gameMissionWindowJob = new GameMissionWindowJob(prisma);
+    this.gamePhotoMomentsJob = new GamePhotoMomentsJob(prisma);
+    this.backupStatusCheckJob = new BackupStatusCheckJob({ prisma, emailService });
+    this.mediaMirrorFollowJob = processMediaMirrorFollowJob(prisma, logger);
+    this.relationWeeklyJob = new RelationWeeklyJob(prisma);
   }
 
   /**
@@ -53,6 +121,124 @@ export class BackgroundJobsManager {
     this.notificationDigestJob.start();
     this.deliveryQueueCleanupJob.start();
     this.mutationLogCleanupJob.start();
+    this.banExpirySweepJob.start();
+    this.gameLeagueJob.start();
+    this.gameNightlyJob.start();
+    this.gameMissionWindowJob.start();
+    this.gamePhotoMomentsJob.start();
+    this.backupStatusCheckJob.start();
+    this.mediaMirrorFollowJob.start();
+    this.relationWeeklyJob.start();
+
+    // Toutes les six heures : une session dont l'échéance est passée cesse de
+    // se déclarer valide. Sans ce balayage, `isValid` ment à tout ce qui le lit
+    // — 140 lignes le faisaient en production, dont depuis mars (#5712).
+    // #12543 — puis l'appareil chiffré de toute session finie est retiré : le
+    // filet des chemins qui ne l'ont pas fait eux-mêmes (expiration, clôture).
+    const balayerLesSessions = () => {
+      sweepExpiredSessions(this.prismaClient)
+        .then((n) => { if (n > 0) logger.info(`${n} expired session(s) invalidated`); })
+        .catch((err) => logger.error('Session expiry sweep failed', err))
+        .then(() => sweepDevicesOfEndedSessions(this.prismaClient, { now: new Date() }))
+        .then((n) => { if (n > 0) logger.info(`${n} e2ee device(s) of ended sessions retired`); })
+        .catch((err) => logger.error('E2EE device retirement sweep failed', err));
+    };
+    balayerLesSessions();
+    this.sessionSweepInterval = guardedInterval({ name: 'session-sweep', everyMs: 6 * 60 * 60 * 1000, logger, run: balayerLesSessions });
+    this.sessionSweepInterval.unref();
+
+    const balayerLesEnveloppes = () => {
+      createE2EEEnvelopeRelay({ prisma: this.prismaClient }).sweep()
+        .then((n) => { if (n > 0) logger.info(`${n} unacknowledged e2ee envelope(s) swept after 30 days`); })
+        .catch((err) => logger.error('E2EE envelope sweep failed', err));
+    };
+    this.envelopeSweepInterval = guardedInterval({ name: 'e2ee-envelope-sweep', everyMs: 6 * 60 * 60 * 1000, logger, run: balayerLesEnveloppes });
+    this.envelopeSweepInterval.unref();
+
+    const balayerLesNumerosEchus = () => {
+      purgeExpiredExternalPeers(this.prismaClient, new Date())
+        .then((n) => { if (n > 0) logger.info(`${n} expired external peer address(es) erased`); })
+        .catch((err) => logger.error('External peer retention sweep failed', err instanceof Error ? err.name : 'unknown'));
+    };
+    /* Armée là seulement où une conversation externe peut exister (drapeau
+       `EXTERNAL_CONVERSATIONS`, jamais en production avant la signature) :
+       aucune purge ne tourne en production sans décision (#9223). L'index
+       TTL reste le premier mécanisme partout. */
+    if (externalConversationsEnabled(process.env)) {
+      balayerLesNumerosEchus();
+      this.externalPeerSweepInterval = guardedInterval({ name: 'external-peer-retention-sweep', everyMs: 60 * 60 * 1000, logger, run: balayerLesNumerosEchus });
+      this.externalPeerSweepInterval.unref();
+    }
+
+    /* LE CACHE GEOIP SE LIBÈRE (#9239). Ses entrées expirées n'étaient
+       qu'IGNORÉES à la lecture : la table, indexée par l'IP du client,
+       retenait une entrée par IP distincte vue depuis le démarrage.
+       `cleanGeoCache()` existait et son commentaire disait « call
+       periodically » — personne ne l'appelait. Le plafond de
+       `rememberGeo` borne désormais le pire cas ; cette purge-ci rend la
+       mémoire du cas NOMINAL, où le plafond n'est jamais atteint et où
+       seule l'expiration libère.
+       Toutes les dix minutes : le double du TTL de cinq minutes, de sorte
+       qu'aucune entrée ne survive longtemps à sa mort. */
+    /* LE RAPPEL EST GARDÉ (#9474). Il est SYNCHRONE, donc un `throw` dedans
+       n'a aucun `try/catch` englobant à invoquer : la pile d'un rappel de
+       `setInterval` part de la boucle d'événements, pas de `startAll()`. Il
+       deviendrait une exception non interceptée et terminerait le processus —
+       toute la passerelle tombée pour un entretien best-effort. Le balayage
+       des sessions ci-dessus porte la même garde sous sa forme asynchrone
+       (`.catch`) ; celle-ci est sa jumelle synchrone. L'intervalle n'est pas
+       réarmé : il continue de battre, donc la purge se rattrape d'elle-même
+       au tour suivant. */
+    const purgerLeCacheGeo = () => {
+      try {
+        const liberees = cleanGeoCache();
+        if (liberees > 0) logger.info(`${liberees} expired GeoIP cache entr(ies) freed`);
+      } catch (err) {
+        logger.error('GeoIP cache purge failed', err);
+      }
+    };
+    purgerLeCacheGeo();
+
+    /* LA BASE GÉOIP LOCALE SE CHARGE AU DÉMARRAGE (#9609), et son ABSENCE
+       se dit en ERREUR : sans elle, le pays de chaque connexion est inconnu
+       et le critère « pays » de l'alerte de nouvelle connexion s'éteint. Un
+       déploiement sans le fichier ne doit pas se dégrader en silence ; l'état
+       est aussi servi par `/health` (`services.geoip`). */
+    warmGeoIpDatabase()
+      .then((status) => {
+        if (status === 'loaded') logger.info('GeoIP database ready (DB-IP Lite, local)');
+        else logger.error(`GeoIP database ${status} — country and city of sessions stay unknown; mount the DB-IP Lite file (GEOIP_DATABASE_PATH)`);
+      })
+      .catch((err) => logger.error('GeoIP database warm-up failed', err));
+
+    this.geoCacheInterval = guardedInterval({ name: 'geo-cache-purge', everyMs: 10 * 60 * 1000, logger, run: purgerLeCacheGeo });
+    this.geoCacheInterval.unref();
+
+    /* LA CONSERVATION (#9614, #9642) — une passe par jour. ARMÉE seulement par
+       `RETENTION_PURGE_ENABLED=true` (staging) ; désarmée (production, en
+       attendant le feu vert du porteur), elle compte et journalise ce qu'elle
+       effacerait, sans rien écrire. */
+    const passerLaConservation = () => {
+      const apply = retentionPurgeArmed();
+      sweepRetention(this.prismaClient, { apply })
+        .then((report) => logger.info(apply ? 'Retention sweep applied' : 'Retention sweep (dry run — RETENTION_PURGE_ENABLED is not true): would purge', report))
+        .catch((err) => logger.error('Retention sweep failed', err));
+    };
+    passerLaConservation();
+    this.retentionInterval = guardedInterval({ name: 'retention-sweep', everyMs: 24 * 60 * 60 * 1000, logger, run: passerLaConservation });
+    this.retentionInterval.unref();
+
+    /* #14643 — LA PURGE DES CONVERSATIONS OBSOLÈTES, 48 h après leur
+       obsolescence. ARMÉE seulement par `OBSOLETE_CONVERSATION_PURGE_ENABLED=true` ;
+       désarmée, elle compte et journalise ce qu'elle effacerait. */
+    const purgerLesConversationsObsoletes = () => {
+      const apply = obsoletePurgeArmed();
+      purgeObsoleteConversations(this.prismaClient, { apply, attachmentRemover: new AttachmentService(this.prismaClient) })
+        .then((report) => logger.info(apply ? 'Obsolete conversation purge applied' : 'Obsolete conversation purge (dry run — OBSOLETE_CONVERSATION_PURGE_ENABLED is not true): would purge', report))
+        .catch((err) => logger.error('Obsolete conversation purge failed', err));
+    };
+    this.obsoletePurgeInterval = guardedInterval({ name: 'obsolete-conversation-purge', everyMs: OBSOLETE_PURGE_EVERY_MS, logger, run: purgerLesConversationsObsoletes });
+    this.obsoletePurgeInterval.unref();
 
     this.isRunning = true;
     logger.info('All background jobs started successfully');
@@ -74,6 +260,43 @@ export class BackgroundJobsManager {
     this.notificationDigestJob.stop();
     this.deliveryQueueCleanupJob.stop();
     this.mutationLogCleanupJob.stop();
+    this.banExpirySweepJob.stop();
+    this.gameLeagueJob.stop();
+    this.gameNightlyJob.stop();
+    this.gameMissionWindowJob.stop();
+    this.gamePhotoMomentsJob.stop();
+    this.backupStatusCheckJob.stop();
+    this.mediaMirrorFollowJob.stop();
+    this.relationWeeklyJob.stop();
+
+    if (this.sessionSweepInterval) {
+      clearInterval(this.sessionSweepInterval);
+      this.sessionSweepInterval = null;
+    }
+
+    if (this.externalPeerSweepInterval) {
+      clearInterval(this.externalPeerSweepInterval);
+      this.externalPeerSweepInterval = null;
+    }
+    if (this.envelopeSweepInterval) {
+      clearInterval(this.envelopeSweepInterval);
+      this.envelopeSweepInterval = null;
+    }
+
+    if (this.geoCacheInterval) {
+      clearInterval(this.geoCacheInterval);
+      this.geoCacheInterval = null;
+    }
+
+    if (this.retentionInterval) {
+      clearInterval(this.retentionInterval);
+      this.retentionInterval = null;
+    }
+
+    if (this.obsoletePurgeInterval) {
+      clearInterval(this.obsoletePurgeInterval);
+      this.obsoletePurgeInterval = null;
+    }
 
     this.isRunning = false;
     logger.info('All background jobs stopped successfully');
@@ -90,6 +313,7 @@ export class BackgroundJobsManager {
     await this.notificationDigestJob.runNow();
     await this.deliveryQueueCleanupJob.runNow();
     await this.mutationLogCleanupJob.runNow();
+    await this.banExpirySweepJob.runNow();
 
     logger.info('All jobs completed');
   }
@@ -104,6 +328,10 @@ export class BackgroundJobsManager {
       notificationDigest: this.notificationDigestJob,
       deliveryQueueCleanup: this.deliveryQueueCleanupJob,
       mutationLogCleanup: this.mutationLogCleanupJob,
+      banExpirySweep: this.banExpirySweepJob,
+      gameLeague: this.gameLeagueJob,
+      gameNightly: this.gameNightlyJob,
+      backupStatusCheck: this.backupStatusCheckJob,
     };
   }
 

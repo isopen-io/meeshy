@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lot: lecture-vocal-session — carte de lecture du système (#13393) ; libellés iOS liveActivity.playback.* (protected, back15, forward15, voiceMessage). -->
+<resources>
+    <string name="voice_playback_channel_name">Reproducción de audios</string>
+    <string name="voice_playback_voice_message">Mensaje de voz</string>
+    <string name="voice_playback_protected">Mensaje protegido</string>
+    <string name="voice_playback_back">Retroceder 15 segundos</string>
+    <string name="voice_playback_forward">Avanzar 15 segundos</string>
+    <string name="voice_playback_play">Reproducir</string>
+    <string name="voice_playback_pause">Pausa</string>
+    <string name="voice_playback_return">Toca para volver a Meeshy</string>
+</resources>

@@ -76,9 +76,24 @@ final class ReelsViewModelTests: XCTestCase {
         await sut.awaitColdStart()
 
         XCTAssertEqual(cache.lastCachedFeedKey, "main-feed")
-        // Network revalidation replaces the cache seed with the fresh page.
-        XCTAssertEqual(sut.reels.map(\.id), ["fresh-1", "fresh-2"])
-        XCTAssertEqual(sut.currentId, "fresh-1")
+        // Le réel affiché depuis le cache garde sa place ; la page servie le suit.
+        XCTAssertEqual(sut.reels.map(\.id), ["cached-1", "fresh-1", "fresh-2"])
+        XCTAssertEqual(sut.currentId, "cached-1")
+    }
+
+    /// Recette du 2026-10-09 (#9702) : ouvert sur le réel 14 depuis le cache,
+    /// le pager devenait [13 … 14] au retour de la passerelle, qui fait couler
+    /// les réels déjà vus — « suivant » n'existait plus.
+    func test_coldStart_serveurReclasseLeReelRegardeEnQueue_leReelGardeLaTeteEtSonSuivant() async {
+        let (sut, service, _) = makeSUT(cachedReels: ["r14", "r13", "r12"].map { Self.makeReel(id: $0) })
+        service.getFeedResult = .success(Self.makePaginated(reelIds: ["r13", "r12", "r11", "r14"]))
+
+        sut.seed(posts: [], startId: nil)
+        await sut.awaitColdStart()
+
+        XCTAssertEqual(sut.reels.map(\.id), ["r14", "r13", "r12", "r11"])
+        XCTAssertEqual(sut.currentId, "r14")
+        XCTAssertEqual(sut.currentIndex, 0)
     }
 
     func test_coldStart_offline_keepsCachedReels() async {
@@ -107,17 +122,50 @@ final class ReelsViewModelTests: XCTestCase {
         XCTAssertTrue(sut.hasLoadedOnce)
     }
 
-    func test_coldStart_droppedCachedReel_resetsCurrentIdToFreshHead() async {
+    // MARK: - Une panne n'est pas un vide (#7007)
+
+    /// Le défaut corrigé : le `catch` de `fetch(reset:)` ne faisait que
+    /// journaliser, si bien qu'un démarrage à froid hors ligne sur cache vide
+    /// rendait « Aucun réel pour le moment » — indiscernable d'un fil
+    /// réellement vide, et sans chemin pour réessayer.
+    func test_coldStart_reseauEnPanne_surCacheVide_publieLeMotif() async {
+        let (sut, service, _) = makeSUT(cachedReels: [])
+        service.getFeedResult = .failure(APIError.networkError(URLError(.notConnectedToInternet)))
+
+        sut.seed(posts: [], startId: nil)
+        await sut.awaitColdStart()
+
+        XCTAssertTrue(sut.reels.isEmpty)
+        XCTAssertNotNil(sut.loadFailure, "une panne doit publier son motif, pas seulement le journaliser")
+    }
+
+    func test_retryLoad_apresUnePanne_rechargeEtEffaceLeMotif() async {
+        let (sut, service, _) = makeSUT(cachedReels: [])
+        service.getFeedResult = .failure(APIError.networkError(URLError(.notConnectedToInternet)))
+        sut.seed(posts: [], startId: nil)
+        await sut.awaitColdStart()
+        XCTAssertNotNil(sut.loadFailure)
+
+        service.getFeedResult = .success(Self.makePaginated(reelIds: ["r1", "r2"]))
+        service.getReelsResult = .success(Self.makePaginated(reelIds: ["r1", "r2"]))
+
+        await sut.retryLoad()
+
+        XCTAssertEqual(sut.reels.map(\.id), ["r1", "r2"], "« Réessayer » doit recharger, pas rester inerte")
+        XCTAssertNil(sut.loadFailure, "une passe qui aboutit efface le motif précédent")
+    }
+
+    func test_coldStart_reelRegardeAbsentDeLaPageServie_resteAffiche() async {
         let (sut, service, _) = makeSUT(cachedReels: [Self.makeReel(id: "cached-only")])
         service.getFeedResult = .success(Self.makePaginated(reelIds: ["fresh-1"]))
 
         sut.seed(posts: [], startId: nil)
         await sut.awaitColdStart()
 
-        // The fresh feed no longer contains the cache-seeded reel, so currentId
-        // must not point at a reel absent from the list.
-        XCTAssertEqual(sut.reels.map(\.id), ["fresh-1"])
-        XCTAssertEqual(sut.currentId, "fresh-1")
+        // Le fil d'affinité ne sert ni la graine ni les réels du lecteur : le
+        // réel affiché ne saute pas, la page servie devient sa suite.
+        XCTAssertEqual(sut.reels.map(\.id), ["cached-only", "fresh-1"])
+        XCTAssertEqual(sut.currentId, "cached-only")
     }
 
     // MARK: - Affinity thread wiring (getReels / seedReelId)
@@ -200,6 +248,38 @@ final class ReelsViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.reels.map(\.id), ["r1"], "Reel should be restored on delete failure")
         XCTAssertEqual(sut.currentId, "r1")
+    }
+
+    // MARK: - Retrait par la modération (#11151)
+
+    func test_deletePost_withReason_removesOptimisticallyAndSendsTheReason() async {
+        let (sut, service, _) = makeSUT()
+        sut.seed(posts: [Self.makeReel(id: "r1"), Self.makeReel(id: "r2")], startId: "r1")
+
+        await sut.deletePost("r1", reason: "Contenu violent")
+
+        XCTAssertEqual(service.lastDeletePostId, "r1")
+        XCTAssertEqual(service.lastDeleteReason, "Contenu violent")
+        XCTAssertEqual(sut.reels.map(\.id), ["r2"])
+    }
+
+    func test_deletePost_withReason_whenRefused_restoresTheReel() async {
+        let (sut, service, _) = makeSUT()
+        sut.seed(posts: [Self.makeReel(id: "r1")], startId: "r1")
+        service.deleteResult = .failure(APIError.serverError(403, "forbidden"))
+
+        await sut.deletePost("r1", reason: "Contenu violent")
+
+        XCTAssertEqual(sut.reels.map(\.id), ["r1"])
+    }
+
+    func test_deletePost_byTheAuthor_sendsNoReason() async {
+        let (sut, service, _) = makeSUT()
+        sut.seed(posts: [Self.makeReel(id: "r1")], startId: "r1")
+
+        await sut.deletePost("r1")
+
+        XCTAssertNil(service.lastDeleteReason)
     }
 
     // MARK: - pinPost()

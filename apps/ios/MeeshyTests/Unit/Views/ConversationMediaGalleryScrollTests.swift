@@ -134,6 +134,45 @@ final class ConversationMediaGalleryScrollTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    /// Le corps d'une déclaration, borné par SES accolades — jamais par un
+    /// nombre de caractères (2026-09-02).
+    ///
+    /// `prefix(900)` mesurait la distance entre `bottomOverlay` et la pellicule
+    /// sur le fichier d'AVANT `9480fbaa` (dev, 2026-09-02) : le commentaire qui
+    /// explique pourquoi déplier la légende efface l'auteur a poussé la
+    /// pellicule à ~1 050 caractères de l'ancre. Le stripper retire le TEXTE des
+    /// commentaires mais garde leurs retraits, donc une fenêtre fixe se remplit
+    /// de blancs et rougit sur un code juste — la forme exacte de
+    /// `reference_source_guard_fixed_char_windows_rot`. Des accolades appariées
+    /// suivent le corps quelle que soit sa longueur, et n'attrapent jamais le
+    /// voisin : ce que la garde affirme (l'ordre auteur → pellicule DANS le bloc
+    /// bas) reste mesuré sur le bloc bas, et rien d'autre.
+    private func declarationBody(startingAt marker: String, in code: String) -> String? {
+        guard let start = code.range(of: marker),
+              let open = code[start.upperBound...].firstIndex(of: "{") else { return nil }
+        var depth = 0
+        var insideString = false
+        var escaped = false
+        var index = open
+        while index < code.endIndex {
+            let character = code[index]
+            if insideString {
+                if escaped { escaped = false }
+                else if character == "\\" { escaped = true }
+                else if character == "\"" { insideString = false }
+            } else if character == "\"" {
+                insideString = true
+            } else if character == "{" {
+                depth += 1
+            } else if character == "}" {
+                depth -= 1
+                if depth == 0 { return String(code[start.lowerBound...index]) }
+            }
+            index = code.index(after: index)
+        }
+        return nil
+    }
+
     private static let gallery = "Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift"
     private static let filmstrip = "Meeshy/Features/Main/Views/ConversationMediaFilmstrip.swift"
 
@@ -141,14 +180,25 @@ final class ConversationMediaGalleryScrollTests: XCTestCase {
     /// RACINE. Un pincement ou un glissement les réécrit à la fréquence
     /// d'affichage, donc invalidait la racine — donc le pager — donc chaque
     /// page réalisée, à chaque frame. La transformation appartient à la page.
+    /// **Cette garde-ci lit le FICHIER, pas l'unité — et c'est délibéré.**
+    ///
+    /// Ses sœurs ont été repointées sur `AppSourceGuard.unit` au #4014, parce
+    /// qu'elles cherchent la PRÉSENCE de quelque chose et qu'une découpe ne doit
+    /// pas la leur faire perdre. Celle-ci porte sur le LIEU : « la
+    /// transformation n'est pas à la racine ». L'unité concatène la racine et
+    /// les pages — donc elle EFFACE exactement la distinction que ce témoin
+    /// mesure, et le rend rouge sur un code juste.
+    ///
+    /// La découpe l'a d'ailleurs simplifié : `ConversationMediaGalleryView.swift`
+    /// ne contient plus QUE la racine, si bien que les deux ancres qui bornaient
+    /// la région (`struct … View {` → `enum GalleryRenderWindow {`, cette
+    /// seconde ayant déménagé) n'ont plus lieu d'être. Le fichier EST la région.
     func test_transformState_livesOnThePage_neverOnTheGalleryRoot() throws {
-        let code = AppSourceGuard.stripComments(try source(Self.gallery))
-        guard let rootStart = code.range(of: "struct ConversationMediaGalleryView: View {"),
-              let rootEnd = code.range(of: "enum GalleryRenderWindow {")
-        else {
-            XCTFail("structure du fichier galerie inattendue"); return
-        }
-        let root = String(code[rootStart.upperBound..<rootEnd.lowerBound])
+        let root = AppSourceGuard.stripComments(try source(Self.gallery))
+        XCTAssertTrue(root.contains("struct ConversationMediaGalleryView: View {"),
+                      "le fichier racine ne porte plus la racine — le témoin doit être repointé")
+        XCTAssertFalse(root.contains("struct GalleryImagePage"),
+                       "les pages sont revenues dans le fichier racine : la région n'est plus la racine seule")
 
         for banned in ["@State private var scale", "@State private var offset"] {
             XCTAssertFalse(
@@ -161,22 +211,79 @@ final class ConversationMediaGalleryScrollTests: XCTestCase {
     /// Une page qui n'est pas comparable est re-rendue à chaque réévaluation de
     /// la racine, fenêtre ou pas. `.equatable()` est ce qui transforme la
     /// comparaison en économie réelle.
-    func test_bothPageKinds_areEquatable_andMountedAsSuch() throws {
-        let code = AppSourceGuard.stripComments(try source(Self.gallery))
+    ///
+    /// **Les natures de page sont NOMMÉES, pas comptées** (#6709). La scène de
+    /// post est devenue une troisième page de la galerie ; un compte passé de 2 à
+    /// 3 laisserait une quatrième page non comparable, ou un quatrième montage
+    /// hors page, passer au vert dès qu'un autre site disparaîtrait. Toute
+    /// `struct Gallery…Page: View` de l'unité doit donc figurer ici, être
+    /// `Equatable` et être montée en `.equatable()` — et les montages
+    /// `.equatable()` sont ceux des pages nommées, pas un de plus.
+    private static let pageKinds = ["GalleryImagePage", "GalleryVideoPage", "GalleryScenePage"]
+    /// Les COUCHES de la galerie qui ne sont pas des pages mais partagent leur
+    /// raison d'être `Equatable` : le SOL d'une scène (#6904, tour 4) est monté
+    /// par la racine derrière le pager, et une réévaluation de la racine ne
+    /// doit pas re-rendre un flou de 60 pt pour un `thumbHash` inchangé.
+    private static let equatableLayers = ["GallerySceneFloor"]
 
-        XCTAssertTrue(code.contains("struct GalleryImagePage: View, Equatable"))
-        XCTAssertTrue(code.contains("struct GalleryVideoPage: View, Equatable"))
+    func test_everyPageKind_isEquatable_andMountedAsSuch() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
+
+        XCTAssertEqual(try Self.declaredPageKinds(in: code), Set(Self.pageKinds),
+                       "une nature de page de la galerie n'est pas nommée ici : l'inscrire, Equatable et montée en .equatable()")
+        for kind in Self.pageKinds {
+            XCTAssertTrue(code.contains("struct \(kind): View, Equatable"),
+                          "\(kind) doit être Equatable : sans quoi la racine la re-rend à chaque réévaluation")
+            XCTAssertTrue(Self.isMountedEquatable(kind, in: code),
+                          "\(kind) doit être montée en .equatable() : la comparaison seule n'économise rien")
+        }
+        for layer in Self.equatableLayers {
+            XCTAssertTrue(code.contains("struct \(layer): View, Equatable"),
+                          "\(layer) doit être Equatable : la racine la monte, et la re-rendrait à chaque réévaluation")
+            XCTAssertTrue(Self.isMountedEquatable(layer, in: code),
+                          "\(layer) doit être montée en .equatable() : la comparaison seule n'économise rien")
+        }
         XCTAssertEqual(
-            code.components(separatedBy: ".equatable()").count - 1, 2,
-            "les deux types de page doivent être montés en .equatable() — et eux seuls."
+            code.components(separatedBy: ".equatable()").count - 1, Self.pageKinds.count + Self.equatableLayers.count,
+            "les pages nommées — image, vidéo, scène — et les couches nommées — le sol — sont montées en .equatable(), et elles seules."
         )
+    }
+
+    /// Les `struct Gallery…Page: View` que l'unité de la galerie déclare.
+    private static func declaredPageKinds(in code: String) throws -> Set<String> {
+        let motif = try NSRegularExpression(pattern: "struct (Gallery[A-Za-z]*Page): View")
+        let plage = NSRange(code.startIndex..., in: code)
+        return Set(motif.matches(in: code, range: plage).compactMap { trouve in
+            Range(trouve.range(at: 1), in: code).map { String(code[$0]) }
+        })
+    }
+
+    /// Le montage `Kind(…)` — parenthèses équilibrées — est-il suivi de
+    /// `.equatable()` ?
+    private static func isMountedEquatable(_ kind: String, in code: String) -> Bool {
+        guard let appel = code.range(of: "\(kind)(") else { return false }
+        var profondeur = 0
+        var index = code.index(before: appel.upperBound)
+        while index < code.endIndex {
+            if code[index] == "(" { profondeur += 1 }
+            if code[index] == ")" {
+                profondeur -= 1
+                if profondeur == 0 {
+                    return code[code.index(after: index)...]
+                        .drop(while: { $0.isWhitespace })
+                        .hasPrefix(".equatable()")
+                }
+            }
+            index = code.index(after: index)
+        }
+        return false
     }
 
     /// Hors fenêtre, une page vidéo ne doit RIEN entreprendre : ni résolution
     /// de disponibilité, ni auto-téléchargement. Sans cette porte, traverser
     /// une conversation de vingt vidéos en lançait vingt.
     func test_videoPage_doesNoWorkOutsideTheRenderWindow() throws {
-        let code = AppSourceGuard.stripComments(try source(Self.gallery))
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
         guard let taskStart = code.range(of: ".task(id: \"\\(attachment.id)#\\(isWindowed)\")") else {
             XCTFail("la tâche de la page vidéo doit être re-jouée quand la page entre dans la fenêtre")
             return
@@ -188,27 +295,43 @@ final class ConversationMediaGalleryScrollTests: XCTestCase {
         )
     }
 
-    /// La pellicule est montée SOUS les détails de l'auteur, et seulement quand
-    /// il y a plus d'un média à parcourir.
-    func test_filmstrip_isMountedBelowTheAuthorRow_whenThereIsMoreThanOneMedium() throws {
-        let code = AppSourceGuard.stripComments(try source(Self.gallery))
-        guard let start = code.range(of: "private var bottomOverlay") else {
-            XCTFail("bottomOverlay introuvable"); return
+    /// **La pellicule a quitté le bloc du média pour le couloir bas du
+    /// plateau** (#6141, spec `2026-09-12-lecture-media-plateau-design.md` § 2.2).
+    ///
+    /// Ce témoin affirmait l'inverse jusqu'au 2026-09-12 — « montée SOUS les
+    /// détails de l'auteur, dans `bottomOverlay` » — et il avait raison tant que
+    /// la galerie était bord à bord : le bloc bas ÉTAIT le seul endroit où poser
+    /// quelque chose. La loi du plateau le supplante, et pour une raison de
+    /// comportement, pas de goût : dans cette colonne, une légende dépliée
+    /// pouvait comprimer la pellicule — le seul contrôle du bas qui sert à
+    /// NAVIGUER. Au plateau, sa hauteur est réservée AVANT que le cadre ne
+    /// prenne le reste, donc plus rien ne peut la lui reprendre.
+    ///
+    /// Ce que la garde tient reste la même chose, mesurée à sa nouvelle place :
+    /// la pellicule existe, elle est en bas, et un média seul n'en a pas.
+    func test_filmstrip_livesInThePlateauCorridor_neverOnTheCadre() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
+        guard let couloir = declarationBody(startingAt: "var railCorridor", in: code),
+              let blocBas = declarationBody(startingAt: "var bottomOverlay", in: code) else {
+            XCTFail("`railCorridor` ou `bottomOverlay` introuvable"); return
         }
-        let body = String(code[start.lowerBound...].prefix(900))
 
-        guard let author = body.range(of: "bottomMetadataOverlay(att)"),
-              let strip = body.range(of: "ConversationMediaFilmstrip(")
-        else {
-            XCTFail("la pellicule doit être montée dans le bloc bas, sous la rangée auteur"); return
-        }
         XCTAssertTrue(
-            author.upperBound < strip.lowerBound,
-            "la pellicule doit venir APRÈS les détails de l'auteur, pas au-dessus."
+            couloir.contains("ConversationMediaFilmstrip("),
+            "le couloir bas du plateau EST la pellicule."
         )
         XCTAssertTrue(
-            body.contains("if allAttachments.count > 1 {"),
+            couloir.contains("if allAttachments.count > 1,") || couloir.contains("if allAttachments.count > 1 {"),
             "un média seul n'a pas de pellicule à parcourir."
+        )
+        XCTAssertFalse(
+            blocBas.contains("ConversationMediaFilmstrip("),
+            "la pellicule ne se pose plus sur le cadre : elle y partageait la colonne "
+                + "avec la légende, qui pouvait la comprimer en se dépliant."
+        )
+        XCTAssertTrue(
+            blocBas.contains("bottomMetadataOverlay(att)"),
+            "l'auteur, lui, reste sur le cadre — il appartient au média."
         )
     }
 
@@ -217,6 +340,18 @@ final class ConversationMediaGalleryScrollTests: XCTestCase {
     func test_filmstrip_measuresTheWindow_notTheDisplay() throws {
         let code = AppSourceGuard.stripComments(try source(Self.filmstrip))
         XCTAssertFalse(code.contains("UIScreen.main"))
-        XCTAssertTrue(code.contains("DeviceLayout.windowSize"))
+        // La largeur de SA fenêtre, publiée par la racine et connue dès le premier rendu (cycle 8) : ni l'écran, ni
+        // la fenêtre clé (fausse sous Stage Manager), ni une mesure corrigée après coup (vignette décalée d'un pas).
+        XCTAssertTrue(code.contains("containerWidth ?? SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).width"),
+                      "la largeur MESURÉE de la galerie d'abord, la fenêtre seulement à défaut")
+        XCTAssertFalse(code.contains("onGeometryChange"), "une largeur mesurée après coup décale la bande déjà calée")
+    }
+
+    /// La galerie ne monte la pellicule qu'une fois son conteneur MESURÉ, et lui remet cette largeur : la bande naît
+    /// avec sa largeur définitive — une largeur corrigée après son ancrage la décalait d'un pas (cycle 8).
+    func test_theGallery_mountsTheStripOnceMeasured_withItsWidth() throws {
+        let code = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ConversationMediaGalleryView+Geometry.swift"))
+        XCTAssertTrue(code.contains("if allAttachments.count > 1, measuredViewport.width > 0 {"))
+        XCTAssertTrue(code.contains("containerWidth: measuredViewport.width"))
     }
 }

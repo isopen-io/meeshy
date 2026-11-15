@@ -6,6 +6,8 @@
  * côté disparaît silencieusement de l'autre.
  */
 
+import { participantProfileDecorSchema } from '@meeshy/shared/types/api-schemas';
+
 export const matchedUserSchema = {
   type: 'object',
   nullable: true,
@@ -17,7 +19,9 @@ export const matchedUserSchema = {
     displayName: { type: 'string', nullable: true },
     avatar: { type: 'string', nullable: true },
     isOnline: { type: 'boolean' },
-    lastActiveAt: { type: 'string', format: 'date-time', nullable: true }
+    lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
+    // #10945 — le contour équipé, absent sans contour.
+    profileDecor: participantProfileDecorSchema
   }
 } as const;
 

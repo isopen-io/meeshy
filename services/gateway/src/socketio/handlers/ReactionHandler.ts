@@ -10,7 +10,6 @@ import { notifyReactionAdded, notifyReactionRemoved } from '../../services/notif
 import { ReactionService } from '../../services/ReactionService.js';
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
 import type { AckOf, AckResponseOf, ReactionUpdateEventData } from '@meeshy/shared/types/socketio-events';
-import type { ReactionUpdateEvent } from '@meeshy/shared/types';
 import { SERVER_EVENTS, ROOMS, RATE_LIMIT_REFUSAL_MESSAGE } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketReactionAddSchema, SocketReactionRemoveSchema } from '../../validation/socket-event-schemas.js';
@@ -19,8 +18,10 @@ import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rat
 import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import { enqueueOfflineReactionEvent, type ReactionEventType } from '../reactionOfflineQueue';
 import { emitServerEvent } from '../serverEmit';
+import { emitConversationActivityUpdate } from '../emitConversationActivityUpdate';
 import { queuedVariantOf, type QueuedPayloadFor } from '../queuedEventContract';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
+import { E2eeSignalChannelRequiredError } from '../../services/e2ee/e2ee-signal-channel';
 
 const logger = enhancedLogger.child({ module: 'ReactionHandler' });
 
@@ -181,20 +182,33 @@ export class ReactionHandler {
           // emoji précédent — aucun retrait compensatoire à diffuser.
           this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED)
             .catch(err => logger.error('reaction:add broadcast failed', { error: err, conversationId: message.conversationId }));
-          void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-added', validated.messageId, validated.emoji, updateEvent);
+          // `.catch` OBLIGATOIRE, comme sur la diffusion deux lignes plus haut
+          // (leçon 230). Le `try` englobant n'attrape qu'un `throw` SYNCHRONE :
+          // ce site-ci et ses trois voisins vivaient sans garde de promesse
+          // alors que le site du dessus l'avait — la règle était appliquée à
+          // l'appel qu'on venait d'écrire, pas à la famille.
+          void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-added', validated.messageId, validated.emoji, updateEvent)
+            .catch(err => logger.error('reaction:add offline enqueue rejected', { error: err, conversationId: message.conversationId }));
+          this._emitListLastReaction(message.conversationId, userId);
         }
       } catch (sideEffectError) {
         // Reaction is persisted and the client already ACKed; the broadcast is
         // best-effort. Peers reconcile on the next reaction:sync.
         logger.error('reaction:add post-success side-effects failed', { error: sideEffectError });
       }
-      // _createReactionNotification handles errors internally; void to be explicit.
-      void this._createReactionNotification(validated.messageId, validated.emoji, participantId, isAnonymous, reaction.id);
+      // `_createReactionNotification` avale ses erreurs — mais c'est une
+      // propriété du COLLABORATEUR, jamais une garantie du site d'appel
+      // (leçon 230), et ce commentaire l'énonçait comme si c'en était une. Cet
+      // appel est HORS du try/catch ci-dessus : rien d'autre que le `.catch`
+      // ne se tient entre un rejet et l'arrêt du process sous Node 22.
+      void this._createReactionNotification(validated.messageId, validated.emoji, participantId, isAnonymous, reaction.id)
+        .catch(err => logger.error('reaction:add notification rejected', { error: err, messageId: validated.messageId }));
     } catch (error: unknown) {
       logger.error('reaction:add failed', { error });
       const errorResponse: AckResponseOf<'reaction:add'> = {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to add reaction'
+        error: error instanceof Error ? error.message : 'Failed to add reaction',
+        ...(error instanceof E2eeSignalChannelRequiredError ? { code: error.code } : {})
       };
       if (callback) callback(errorResponse);
     }
@@ -295,7 +309,9 @@ export class ReactionHandler {
           );
           this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_REMOVED)
             .catch(err => logger.error('reaction:remove broadcast failed', { error: err, conversationId: message.conversationId }));
-          void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-removed', validated.messageId, validated.emoji, updateEvent);
+          void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-removed', validated.messageId, validated.emoji, updateEvent)
+            .catch(err => logger.error('reaction:remove offline enqueue rejected', { error: err, conversationId: message.conversationId }));
+          this._emitListLastReaction(message.conversationId, userId);
         }
       } catch (sideEffectError) {
         // Removal is persisted and the client already ACKed; the broadcast is
@@ -306,7 +322,8 @@ export class ReactionHandler {
       // chemin d'ajout : la réaction défaite emporte la notification qu'elle
       // avait produite. HORS du try/catch ci-dessus, comme l'ajout — un échec
       // du broadcast ne doit pas sauter le retrait, ni l'inverse.
-      void this._retractReactionNotification(validated.messageId, validated.emoji, participantId, isAnonymous);
+      void this._retractReactionNotification(validated.messageId, validated.emoji, participantId, isAnonymous)
+        .catch(err => logger.error('reaction:remove notification retraction rejected', { error: err, messageId: validated.messageId }));
     } catch (error: unknown) {
       logger.error('reaction:remove failed', { error });
       const errorResponse: AckResponseOf<'reaction:remove'> = {
@@ -432,6 +449,20 @@ export class ReactionHandler {
       select: { id: true }
     });
     return participant?.id;
+  }
+
+  /**
+   * La ligne de LISTE apprend la dernière réaction (#7545), relue depuis la
+   * base — un ajout comme un retrait convergent sur la même valeur — et le rang
+   * de la ligne, servi à CHAQUE participant (#9026).
+   */
+  private _emitListLastReaction(conversationId: string, userId: string): void {
+    void emitConversationActivityUpdate(this.prisma, this.io, {
+      conversationId,
+      updatedByUserId: userId,
+      reaction: true,
+      onError: (error) => logger.error('conversation:updated lastReaction failed', { error, conversationId }),
+    }).catch((error: unknown) => logger.error('conversation:updated lastReaction rejected', { error, conversationId }));
   }
 
   /**

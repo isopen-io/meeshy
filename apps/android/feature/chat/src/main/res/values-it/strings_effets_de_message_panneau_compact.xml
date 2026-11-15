@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_effects_panel_shake">Scossa</string>
+    <string name="chat_effects_panel_zoom">Zoom</string>
+    <string name="chat_effects_panel_explode">Esplosione</string>
+    <string name="chat_effects_panel_confetti">Coriandoli</string>
+    <string name="chat_effects_panel_fireworks">Fuochi d\'artificio</string>
+    <string name="chat_effects_panel_waoo">Wow</string>
+    <string name="chat_effects_panel_glow">Bagliore</string>
+    <string name="chat_effects_panel_pulse">Pulsazione</string>
+    <string name="chat_effects_panel_rainbow">Arcobaleno</string>
+    <string name="chat_effects_panel_sparkle">Scintillio</string>
+    <string name="chat_effects_panel_section_entry">Animazione di ingresso</string>
+    <string name="chat_effects_panel_section_permanent">Effetto permanente</string>
+    <string name="chat_effects_panel_clear_all">Cancella tutto</string>
+</resources>

@@ -21,6 +21,7 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 
 const mockGetCallSession = jest.fn<any>();
 jest.mock('../../../services/CallService', () => ({
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn().mockImplementation(() => ({
     getCallSession: mockGetCallSession,
   })),
@@ -210,7 +211,7 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
   describe('rate limiting', () => {
     it('checks the rate limit before relaying a segment', async () => {
       const prisma = makePrisma({
-        callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null }),
+        callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null, conversation: { encryptionMode: null } }),
       });
       const { socket, handlers, roomEmit } = makeSocket();
 
@@ -248,7 +249,7 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
       // Authorization resolves via callService.getCallSession (active participant);
       // the single prisma.callSession.findUnique reports call status + metadata.
       const prisma = makePrisma({
-        callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null }),
+        callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null, conversation: { encryptionMode: null } }),
       });
       const { socket, handlers, roomEmit: r, directEmit: d } = makeSocket();
       roomEmit = r;
@@ -300,7 +301,7 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
       payload?: unknown;
     } = {}) {
       const prisma = makePrisma({
-        callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null }),
+        callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null, conversation: { encryptionMode: null } }),
       });
       const { socket, handlers, roomEmit } = makeSocket();
       const callService = makeCallService(
@@ -395,7 +396,7 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
       // crafts segment.speakerId to name VICTIM_ID (also a real participant)
       // instead of themselves.
       const prisma = makePrisma({
-        callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null }),
+        callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null, conversation: { encryptionMode: null } }),
       });
       const { socket, handlers, roomEmit: r } = makeSocket();
       roomEmit = r;
@@ -460,7 +461,7 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
         // the call ended via missed/rejected/failed (not just the literal
         // 'ended' path) must not have its segment relayed or ZMQ-translated.
         const prisma = makePrisma({
-          callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status, metadata: null }),
+          callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status, metadata: null, conversation: { encryptionMode: null } }),
         });
         const { socket, handlers, roomEmit: r, directEmit: d } = makeSocket();
         roomEmit = r;
@@ -487,7 +488,7 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
       const transcriptionCreate =
         overrides.transcriptionCreate ?? jest.fn<any>().mockResolvedValue({ id: 'transcription-row-1' });
       const prisma = makePrisma({
-        callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null }),
+        callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null, conversation: { encryptionMode: null } }),
         transcriptionCreate,
       });
       const { socket, handlers, roomEmit } = makeSocket();
@@ -542,6 +543,7 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
         callSessionFindUnique: jest.fn<any>().mockResolvedValue({
           status: overrides.status ?? 'active',
           metadata: null,
+          conversation: { encryptionMode: null },
         }),
       });
       const { socket, handlers, roomEmit, directEmit } = makeSocket();

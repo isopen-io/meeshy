@@ -1,0 +1,118 @@
+package me.meeshy.sdk.model.scene
+
+import com.google.common.truth.Truth.assertThat
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.junit.runners.JUnit4
+
+/**
+ * Behavioural spec for the pure text-outline model and its discrete tap-cycle — the
+ * Android port of the iOS `StoryTextAttributeCycle.advance(.border)` steps. No Android,
+ * no I/O: the thicken/wrap/colour-posting rules live in one unit-tested place so the
+ * canvas Composable and the toolbar tap stay glue.
+ */
+@RunWith(JUnit4::class)
+class StoryTextOutlineTest {
+
+    // --- model ---
+
+    @Test
+    fun `a fresh outline draws nothing — zero width and no colour`() {
+        val outline = StoryTextOutline()
+        assertThat(outline.width).isEqualTo(StoryTextOutline.NONE_WIDTH)
+        assertThat(outline.color).isNull()
+        assertThat(outline.isVisible).isFalse()
+    }
+
+    @Test
+    fun `an outline with a positive width and a colour is visible`() {
+        assertThat(StoryTextOutline(width = 4f, color = "FF2E63").isVisible).isTrue()
+    }
+
+    @Test
+    fun `a positive width with no colour paints nothing`() {
+        assertThat(StoryTextOutline(width = 4f, color = null).isVisible).isFalse()
+    }
+
+    @Test
+    fun `a colour with no width has nothing to paint`() {
+        assertThat(StoryTextOutline(width = 0f, color = "FF2E63").isVisible).isFalse()
+    }
+
+    // --- advance: the thickness cycle ---
+
+    @Test
+    fun `advance visits every thickness step then wraps back to no-stroke`() {
+        val seen = generateSequence(StoryTextOutline(width = 0f)) { StoryTextOutlineCycle.advance(it) }
+            .drop(1)
+            .take(5)
+            .map { it.width }
+            .toList()
+        assertThat(seen).containsExactly(2f, 4f, 8f, 12f, 0f).inOrder()
+    }
+
+    @Test
+    fun `advance from a width between steps jumps to the next higher step, never thinner`() {
+        assertThat(StoryTextOutlineCycle.advance(StoryTextOutline(width = 5.5f, color = "FF2E63")).width)
+            .isEqualTo(8f)
+    }
+
+    @Test
+    fun `advance leaving zero posts the default white when no colour was chosen yet`() {
+        val advanced = StoryTextOutlineCycle.advance(StoryTextOutline(width = 0f, color = null))
+        assertThat(advanced.width).isEqualTo(2f)
+        assertThat(advanced.color).isEqualTo(StoryTextOutlineCycle.DEFAULT_COLOR)
+    }
+
+    @Test
+    fun `advance leaving zero keeps a colour the user already chose`() {
+        assertThat(StoryTextOutlineCycle.advance(StoryTextOutline(width = 0f, color = "FF2E63")).color)
+            .isEqualTo("FF2E63")
+    }
+
+    @Test
+    fun `advance returning to zero keeps the colour so re-thickening never re-asks`() {
+        val wrapped = StoryTextOutlineCycle.advance(StoryTextOutline(width = 12f, color = "FF2E63"))
+        assertThat(wrapped.width).isEqualTo(StoryTextOutline.NONE_WIDTH)
+        assertThat(wrapped.color).isEqualTo("FF2E63")
+    }
+
+    @Test
+    fun `the offered steps are the four iOS thicknesses, thin to thick`() {
+        assertThat(StoryTextOutlineCycle.steps).containsExactly(2f, 4f, 8f, 12f).inOrder()
+    }
+}
+
+class StoryTextOutlineSliderTest {
+    @Test
+    fun `the slider bounds the width and posts white when no colour was chosen`() {
+        val outline = StoryTextOutline().widened(40f)
+        assertThat(outline.width).isEqualTo(12f)
+        assertThat(outline.color).isEqualTo("FFFFFF")
+        assertThat(outline.isVisible).isTrue()
+    }
+
+    @Test
+    fun `back to zero keeps the colour so raising it again needs no new pick`() {
+        val off = StoryTextOutline(width = 4f, color = "FF3B30").widened(0f)
+        assertThat(off.isVisible).isFalse()
+        assertThat(off.color).isEqualTo("FF3B30")
+    }
+
+    @Test
+    fun `a colour on a switched off outline wakes it at four`() {
+        val on = StoryTextOutline().colored("007AFF")
+        assertThat(on.width).isEqualTo(4f)
+        assertThat(on.isVisible).isTrue()
+        assertThat(StoryTextOutline(width = 8f, color = "000000").colored("007AFF").width).isEqualTo(8f)
+    }
+
+    @Test
+    fun `opening the border section primes a never-touched outline at white four, nothing else`() {
+        val primed = StoryTextOutline().primed()
+        assertThat(primed.width).isEqualTo(4f)
+        assertThat(primed.color).isEqualTo("FFFFFF")
+        val zeroed = StoryTextOutline(width = 0f, color = "FF3B30")
+        assertThat(zeroed.primed()).isEqualTo(zeroed)
+    }
+}

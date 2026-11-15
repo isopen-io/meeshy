@@ -1,5 +1,6 @@
 package me.meeshy.sdk.report
 
+import me.meeshy.sdk.model.report.CreateReportRequest
 import me.meeshy.sdk.model.report.ReportRequestBuilder
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.net.NetworkResult
@@ -25,57 +26,53 @@ import javax.inject.Singleton
 public class ReportRepository @Inject constructor(
     private val reportApi: ReportApi,
     private val sessionRepository: SessionRepository,
+    private val signalEmitter: ReportSignalEmitter = NoOpReportSignalEmitter,
 ) {
     /**
      * Reports [userId] for [reason] with optional free-text [details].
      *
      * @return the network outcome, or `null` when the action is inert — no active session, or a
      *   blank [userId] (nothing to report). A non-`null` [NetworkResult] carries success/failure.
+     *   A successful report of a social target also emits the negative `report_submit` signal
+     *   (reason code only, never the free text); a failed one emits nothing.
      */
-    public suspend fun reportUser(
-        userId: String,
-        reason: ReportReason,
-        details: String?,
-    ): NetworkResult<Unit>? {
-        sessionRepository.currentUserId?.takeIf { it.isNotBlank() } ?: return null
-        val request = ReportRequestBuilder.forUser(userId, reason, details) ?: return null
-        return apiCall { reportApi.create(request) }.map { }
-    }
+    public suspend fun reportUser(userId: String, reason: ReportReason, details: String?): NetworkResult<Unit>? =
+        deliver(ReportRequestBuilder.forUser(userId, reason, details), ReportedSocialKind.PROFILE)
 
     /**
      * Reports [messageId] for [reason] with optional free-text [details] — the message analogue of
-     * [reportUser]. Same session gate and inert (`null`) semantics: a signed-out caller or a blank
-     * [messageId] never fires a guaranteed-failing request.
+     * [reportUser]. Same session gate and inert (`null`) semantics; a message report emits no signal.
      */
-    public suspend fun reportMessage(
-        messageId: String,
-        reason: ReportReason,
-        details: String?,
-    ): NetworkResult<Unit>? {
-        sessionRepository.currentUserId?.takeIf { it.isNotBlank() } ?: return null
-        val request = ReportRequestBuilder.forMessage(messageId, reason, details) ?: return null
-        return apiCall { reportApi.create(request) }.map { }
-    }
+    public suspend fun reportMessage(messageId: String, reason: ReportReason, details: String?): NetworkResult<Unit>? =
+        deliver(ReportRequestBuilder.forMessage(messageId, reason, details), null)
 
     /** L'analogue post de [reportUser] — memes gardes de session et d'inertie. */
-    public suspend fun reportPost(
-        postId: String,
-        reason: ReportReason,
-        details: String?,
-    ): NetworkResult<Unit>? {
-        sessionRepository.currentUserId?.takeIf { it.isNotBlank() } ?: return null
-        val request = ReportRequestBuilder.forPost(postId, reason, details) ?: return null
-        return apiCall { reportApi.create(request) }.map { }
-    }
+    public suspend fun reportPost(postId: String, reason: ReportReason, details: String?): NetworkResult<Unit>? =
+        deliver(ReportRequestBuilder.forPost(postId, reason, details), ReportedSocialKind.POST)
 
     /** L'analogue story de [reportUser] — memes gardes de session et d'inertie. */
-    public suspend fun reportStory(
-        storyId: String,
+    public suspend fun reportStory(storyId: String, reason: ReportReason, details: String?): NetworkResult<Unit>? =
+        deliver(ReportRequestBuilder.forStory(storyId, reason, details), ReportedSocialKind.STORY)
+
+    /** Un commentaire de post, de reel ou de story — memes gardes que [reportUser], signal social. */
+    public suspend fun reportComment(commentId: String, reason: ReportReason, details: String?): NetworkResult<Unit>? =
+        deliver(ReportRequestBuilder.forComment(commentId, reason, details), ReportedSocialKind.COMMENT)
+
+    /** Une conversation — memes gardes que [reportUser] ; comme un message, elle n'emet aucun signal. */
+    public suspend fun reportConversation(
+        conversationId: String,
         reason: ReportReason,
         details: String?,
-    ): NetworkResult<Unit>? {
+    ): NetworkResult<Unit>? =
+        deliver(ReportRequestBuilder.forConversation(conversationId, reason, details), null)
+
+    private suspend fun deliver(request: CreateReportRequest?, signalKind: ReportedSocialKind?): NetworkResult<Unit>? {
         sessionRepository.currentUserId?.takeIf { it.isNotBlank() } ?: return null
-        val request = ReportRequestBuilder.forStory(storyId, reason, details) ?: return null
-        return apiCall { reportApi.create(request) }.map { }
+        request ?: return null
+        val result = apiCall { reportApi.create(request) }.map { }
+        if (signalKind != null && result.isSuccess) {
+            signalEmitter.emitReported(signalKind, request.reportedEntityId, request.reportType)
+        }
+        return result
     }
 }

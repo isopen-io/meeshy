@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_send_progress_a11y">Envoi en cours, %1$d %%</string>
+    <string name="bubble_send_progress_percent">%1$d%%</string>
+</resources>

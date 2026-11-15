@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Extracted from ConversationAnimatedBackground.swift
 
@@ -23,13 +24,11 @@ struct ConvBgPulseRing: View {
             .stroke(color.opacity(opacity), lineWidth: 3)
             .frame(width: 55, height: 55)
             .scaleEffect(scale)
-            .onAppear {
+            .onAppear(after: .seconds(delay)) {
                 guard !reduceMotion else { return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                    withAnimation(.easeOut(duration: 2.5).repeatForever(autoreverses: false)) {
-                        scale = 3.2
-                        opacity = 0.0
-                    }
+                withAnimation(.easeOut(duration: 2.5).repeatForever(autoreverses: false)) {
+                    scale = 3.2
+                    opacity = 0.0
                 }
             }
             .onDisappear {
@@ -114,16 +113,16 @@ struct ConvBgFixedAvatar: View {
                 .blur(radius: 6)
 
             Circle()
-                .fill(color.opacity(0.25))
-                .frame(width: 40, height: 40)
+                .fill(color.opacity(MeeshyOpacity.medium))
+                .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
 
             Image(systemName: "person.fill")
-                .font(.system(size: 16))
-                .foregroundColor(color.opacity(0.50))
+                .font(.system(size: MeeshyIconSize.md))
+                .foregroundStyle(color.opacity(MeeshyOpacity.strong))
 
             Circle()
-                .stroke(color.opacity(glowPulse ? 0.45 : 0.30), lineWidth: 2)
-                .frame(width: 40, height: 40)
+                .stroke(color.opacity(glowPulse ? 0.45 : 0.30), lineWidth: MeeshyBorder.strong)
+                .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
         }
     }
 }
@@ -148,13 +147,11 @@ struct ConvBgGlobePulseRing: View {
             .stroke(color.opacity(opacity), lineWidth: 3)
             .frame(width: 90, height: 90)
             .scaleEffect(scale)
-            .onAppear {
+            .onAppear(after: .seconds(delay)) {
                 guard !reduceMotion else { return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                    withAnimation(.easeOut(duration: 2.4).repeatForever(autoreverses: false)) {
-                        scale = 2.8
-                        opacity = 0.0
-                    }
+                withAnimation(.easeOut(duration: 2.4).repeatForever(autoreverses: false)) {
+                    scale = 2.8
+                    opacity = 0.0
                 }
             }
             .onDisappear {
@@ -245,7 +242,7 @@ struct ConvBgSatellite: View {
             let endY = -sin(currentAngle) * orbitRadius * 0.55
             path.addLine(to: CGPoint(x: endX, y: endY))
         }
-        .stroke(color.opacity(0.12), style: StrokeStyle(lineWidth: 2, dash: [5, 5], dashPhase: beamPhase))
+        .stroke(color.opacity(MeeshyOpacity.light), style: StrokeStyle(lineWidth: MeeshyBorder.strong, dash: [5, 5], dashPhase: beamPhase))
     }
 
     private var satelliteWithPulse: some View {
@@ -256,8 +253,8 @@ struct ConvBgSatellite: View {
                 .blur(radius: 8)
 
             Image(systemName: "antenna.radiowaves.left.and.right")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(color.opacity(0.50))
+                .font(.system(size: MeeshyIconSize.md, weight: .medium))
+                .foregroundStyle(color.opacity(MeeshyOpacity.strong))
 
             Circle()
                 .fill(color.opacity(signalPulse ? 0.60 : 0.22))
@@ -287,18 +284,16 @@ struct ConvBgSignalWave: View {
 
     var body: some View {
         Circle()
-            .stroke(color.opacity(0.22 * (1 - progress)), lineWidth: 2)
+            .stroke(color.opacity(0.22 * (1 - progress)), lineWidth: MeeshyBorder.strong)
             .frame(width: 12 + progress * 15, height: 12 + progress * 15)
             .offset(
                 x: -cos(angle) * progress * 60,
                 y: -sin(angle) * progress * 60
             )
-            .onAppear {
+            .onAppear(after: .seconds(delay)) {
                 guard !reduceMotion else { return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                    withAnimation(.easeIn(duration: 1.8).repeatForever(autoreverses: false)) {
-                        progress = 1.0
-                    }
+                withAnimation(.easeIn(duration: 1.8).repeatForever(autoreverses: false)) {
+                    progress = 1.0
                 }
             }
             .onDisappear {
@@ -311,7 +306,7 @@ struct ConvBgSignalWave: View {
 
 // MARK: - Wave Shape
 
-struct ConvBgWaveShape: Shape {
+nonisolated struct ConvBgWaveShape: Shape {
     var phase: CGFloat
     var amplitude: CGFloat
     var frequency: CGFloat

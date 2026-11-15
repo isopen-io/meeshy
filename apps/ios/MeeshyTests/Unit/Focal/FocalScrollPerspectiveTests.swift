@@ -106,14 +106,11 @@ final class FocalScrollPerspectiveTests: XCTestCase {
     /// layer à plat (cellule recyclée d'un mode à l'autre).
     func test_host_appliesThePassOnScrollDisplayAndApply_andResetsOnConfigure() throws {
         // Unit/Focal → Unit → MeeshyTests → apps/ios : QUATRE remontées.
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/MessageListViewController.swift")
-        let code = try String(contentsOf: url, encoding: .utf8)
+        let code = try controllerClusterSource()
         XCTAssertGreaterThanOrEqual(code.components(separatedBy: "applyFocalPerspectiveToVisibleCells()").count - 1, 3,
             "scrollViewDidScroll + fin d'apply + changement de mode, au minimum")
         XCTAssertTrue(code.contains("FocalScrollPerspective.reset(cell.contentView.layer)"))
-        XCTAssertTrue(code.contains("applyFocalPerspective(to: cell)"))
+        XCTAssertTrue(code.contains("applyFocalPerspectiveOnCellDisplay()"))
     }
 
     // MARK: - Compaction + focus (retours user 2026-08-21)
@@ -197,10 +194,7 @@ final class FocalScrollPerspectiveTests: XCTestCase {
     /// s'active que sur un geste utilisateur, s'aplatit après `restDelay`,
     /// et le changement de mode remet tout à plat sans animation.
     func test_host_activatesTheSceneOnUserGestureOnly_andFlattensAtRest() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/MessageListViewController.swift")
-        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        let code = AppSourceGuard.stripComments(try controllerClusterSource())
             .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
         XCTAssertTrue(code.contains("guard readingMode == .focal, scrollView.isDragging || scrollView.isDecelerating else { return }"),
                       "La scène ne s'active que sur un geste UTILISATEUR — jamais sur un défilement programmé.")
@@ -210,6 +204,60 @@ final class FocalScrollPerspectiveTests: XCTestCase {
                       "Changer de mode aplatit SEC : pas d'animation de sortie entre deux rendus.")
         XCTAssertTrue(code.contains("guard readingMode == .focal, isViewLoaded, focalSceneActive else { return }"),
                       "Scène inactive ⇒ la passe est un no-op : les cellules arrivent à plat, comme en Script.")
+    }
+
+    /// **La sur-réserve appartient à la COMPACTION** (audit 2026-08-25).
+    ///
+    /// `focalOverscan` pré-réalisait 0,3 hauteur d'écran de cellules parce que
+    /// la compaction « tire les rangées vers la ligne de focus d'autant que
+    /// les rangées rétrécies ont perdu » : des cellules encore hors écran pour
+    /// UIKit devaient déjà exister pour occuper la place libérée. Or `poses`
+    /// n'est plus APPLIQUÉE — la loi reste écrite et testée, la planche est
+    /// fixe. Tant qu'il en est ainsi, Focal payait ces cellules par frame pour
+    /// rien. Cette garde LIE les deux : si la compaction revient, la
+    /// sur-réserve doit revenir avec elle.
+    func test_focalOverscan_isZero_whileTheCompactionIsNotApplied() throws {
+        let host = AppSourceGuard.stripComments(try controllerClusterSource())
+            .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
+        if host.contains("FocalScrollPerspective.poses(") {
+            XCTAssertTrue(
+                host.contains("layout.focalOverscan = readingMode == .focal"),
+                "la compaction est de retour : la sur-réserve doit être rebranchée sur le mode"
+            )
+        } else {
+            XCTAssertTrue(host.contains("layout.focalOverscan = 0"), "aucune compaction appliquée ⇒ aucune sur-réserve")
+            XCTAssertFalse(
+                host.contains("layout.focalOverscan = readingMode == .focal"),
+                "sur-réserve conditionnée au mode alors que rien ne la consomme"
+            )
+        }
+        // La machinerie RESTE en place : c'est le point de rebranchement.
+        let perspective = try normalizedSource("Meeshy/Features/Focal/Core/FocalScrollPerspective.swift")
+        XCTAssertTrue(perspective.contains("static let overscanFraction"), "la fraction reste nommée")
+        let layout = try normalizedSource("Meeshy/Features/Main/Views/MessageListLayout.swift")
+        XCTAssertTrue(layout.contains("let extended = rect.insetBy(dx: 0, dy: -focalOverscan)"), "le layout garde son extension de rect")
+    }
+
+    /// L'hôte et ses extensions : la scène Focal vit dans
+    /// `MessageListViewController+FocalScene.swift` depuis #7624 — une garde
+    /// indexée par FICHIER rougirait à chaque extraction.
+    private func controllerClusterSource() throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        return try [
+            "Meeshy/Features/Main/Views/MessageListViewController.swift",
+            "Meeshy/Features/Main/Views/MessageListViewController+FocalScene.swift",
+        ]
+        .map { try AppSourceGuard.text(at: root.appendingPathComponent($0)) }
+        .joined(separator: "\n")
+    }
+
+    private func normalizedSource(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        return AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
+            .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
     }
 
     func test_focusedId_isTheNearestMessage_withHysteresis() {
@@ -230,5 +278,113 @@ final class FocalScrollPerspectiveTests: XCTestCase {
         let p = CGPoint(x: 0, y: 0).applying(affine)
         XCTAssertEqual(p.y, -40, accuracy: 0.001, "vers le bas visuel = −y dans le repère renversé")
         XCTAssertEqual(p.x, 0, accuracy: 0.001)
+    }
+
+    // MARK: - Loupe du message DÉPLIÉ (#8147) — hors Focal
+
+    /// Le déplié grandit ; ses voisins restent à plat. Sa loupe garde son gain
+    /// d'origine : l'agrandissement de #8506 ne vise que l'élu Focal.
+    func test_loupeScale_magnifiesOnlyTheFocusedMessage() {
+        let size = CGSize(width: 390, height: 60)
+        XCTAssertGreaterThan(FocalMetrics.Focus.expandedLoupeGain, 0)
+        XCTAssertEqual(FocalScrollPerspective.loupeScale(isFocused: true, reduceMotion: false, size: size), 1 + FocalMetrics.Focus.expandedLoupeGain, accuracy: 0.0001)
+        XCTAssertEqual(FocalScrollPerspective.loupeScale(isFocused: false, reduceMotion: false, size: size), 1)
+        XCTAssertEqual(FocalScrollPerspective.loupeScale(isFocused: true, reduceMotion: true, size: size), 1)
+    }
+
+    /// Un long message ne déborde jamais de la marge de sa carte : la loupe
+    /// se réduit pour lui plutôt que de mordre ses voisins.
+    func test_loupeScale_aTallMessageNeverOverflowsItsCardMargin() {
+        let size = CGSize(width: 390, height: 900)
+        let scale = FocalScrollPerspective.loupeScale(isFocused: true, reduceMotion: false, size: size)
+        XCTAssertGreaterThan(scale, 1)
+        XCTAssertLessThanOrEqual((scale - 1) * size.height / 2, FocalMetrics.FocusCard.marginVertical + 0.0001)
+    }
+
+    @MainActor
+    func test_magnify_posesTheLoupeOnTheFocusedLayer_andFlattensTheOthers() {
+        let layer = CALayer()
+        layer.bounds = CGRect(x: 0, y: 0, width: 390, height: 60)
+        FocalScrollPerspective.magnify(layer, isFocused: true, animated: false)
+        XCTAssertEqual(layer.transform.m11, FocalScrollPerspective.loupeScale(isFocused: true, reduceMotion: false, size: layer.bounds.size), accuracy: 0.0001)
+        XCTAssertEqual(layer.transform.m22, layer.transform.m11, accuracy: 0.0001, "une loupe, pas un étirement")
+        FocalScrollPerspective.magnify(layer, isFocused: false, animated: false)
+        XCTAssertTrue(CATransform3DIsIdentity(layer.transform))
+    }
+
+    func test_host_posesTheLoupeOnTheElectedCell_afterTheElection() throws {
+        let host = AppSourceGuard.stripComments(try controllerClusterSource())
+            .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
+        guard let election = host.range(of: "let electionChanged = focalFocusedLocalId != focused"),
+              let passage = host.range(of: "FocalScrollPerspective.poseElectionPassage(cell.contentView.layer, shift: shift, animated: electionChanged)")
+        else { return XCTFail("la passe doit élire PUIS poser le passage des voisines") }
+        XCTAssertLessThan(election.lowerBound, passage.lowerBound, "le passage suit l'élection de la même frame")
+        XCTAssertFalse(host.contains("magnifyElected"), "#8537 : plus aucune loupe sur le calque de la cellule — elle agrandissait l'identité et les contrôles")
+    }
+
+    // MARK: - Loupe de l'élu Focal (#8506 — « agrandis tout le contenu intérieur par ×1,2 encore »)
+
+    /// ×1,2 de plus que la loupe d'avant (1,05) : le gain vise 1,26.
+    func test_electedLoupe_targetsTwentyPercentMoreThanBefore() {
+        XCTAssertEqual(1 + FocalMetrics.Focus.loupeGain, (1 + FocalMetrics.Focus.expandedLoupeGain) * 1.2, accuracy: 0.001)
+    }
+
+    /// Le gain ne dépend plus de la HAUTEUR : un message de trois lignes grandit
+    /// autant qu'un message d'une ligne — l'écrêtage à la marge verticale, qui
+    /// rendait la loupe quasi nulle dès la deuxième ligne, a disparu. Seule la
+    /// largeur de l'écran la borne.
+    func test_electedScale_isFullOnANarrowScreen_andNeverDependsOnTheHeight() {
+        XCTAssertEqual(FocalScrollPerspective.electedScale(reduceMotion: false, rowWidth: 320), 1 + FocalMetrics.Focus.loupeGain, accuracy: 0.0001)
+        let phone = FocalScrollPerspective.electedScale(reduceMotion: false, rowWidth: 390)
+        XCTAssertGreaterThan(phone, 1.2, "iPhone 6,1 pouces : l'élu grandit d'au moins 20 %")
+        XCTAssertLessThanOrEqual(phone, 1 + FocalMetrics.Focus.loupeGain)
+    }
+
+    /// Le cadre agrandi ne sort JAMAIS de l'écran : il garde la gouttière du
+    /// cadre au repos de chaque côté. Depuis #8537, seul le contenu grossit,
+    /// autour du bord d'attaque de la colonne ; le cadre l'entoure à sa marge.
+    func test_electedScale_keepsTheScaledCardInsideTheScreen() {
+        let inset = FocalScrollPerspective.focusCardHorizontalInset
+        let margin = FocalScrollPerspective.electedCardMargin
+        for width: CGFloat in [320, 375, 390, 393, 430, 744, 1024] {
+            for rtl in [false, true] {
+                let scale = FocalScrollPerspective.electedScale(reduceMotion: false, rowWidth: width)
+                let card = FocalScrollPerspective.electedCardFrame(rowWidth: width, isRightToLeft: rtl)
+                let column = card.width - 2 * margin
+                let pivot = FocalScrollPerspective.electedPivotX(rowWidth: width, isRightToLeft: rtl)
+                let reach = scale * column + margin
+                let left = rtl ? pivot - reach : pivot - margin
+                let right = rtl ? pivot + margin : pivot + reach
+                XCTAssertGreaterThanOrEqual(left, inset - 0.001, "w=\(width), rtl=\(rtl) : le cadre sort à gauche")
+                XCTAssertLessThanOrEqual(right, width - inset + 0.001, "w=\(width), rtl=\(rtl) : le cadre sort à droite")
+                XCTAssertGreaterThanOrEqual(scale, 1)
+            }
+        }
+    }
+
+    /// Le cadre de l'élu épouse la colonne du MESSAGE, pas la rangée entière :
+    /// la colonne de méta (heure, coches) s'efface en focus, et c'est cette
+    /// largeur rendue au message qui lui permet de grandir sans sortir de
+    /// l'écran.
+    func test_electedCardFrame_hugsTheMessageColumn() {
+        let card = FocalScrollPerspective.electedCardFrame(rowWidth: 390, isRightToLeft: false)
+        XCTAssertEqual(card.minX, FocalScrollPerspective.focusCardHorizontalInset)
+        let column = 390 - 2 * FocalMetrics.Row.paddingHorizontal - FocalMetrics.MetaColumn.reservedWidth - FocalMetrics.MetaColumn.spacing
+        XCTAssertEqual(card.width, column + 2 * FocalScrollPerspective.electedCardMargin, accuracy: 0.001)
+        let mirrored = FocalScrollPerspective.electedCardFrame(rowWidth: 390, isRightToLeft: true)
+        XCTAssertEqual(mirrored.maxX, 390 - FocalScrollPerspective.focusCardHorizontalInset, "RTL : le cadre part du bord droit")
+    }
+
+    /// Reduce Motion : aucun agrandissement (le cadre et ses détails restent).
+    func test_electedScale_isOne_underReduceMotion() {
+        XCTAssertEqual(FocalScrollPerspective.electedScale(reduceMotion: true, rowWidth: 320), 1)
+    }
+
+    /// La loupe du contenu se pose sur le bord d'ATTAQUE de la colonne : la
+    /// première lettre reste à sa place, le message grandit vers le sens de
+    /// lecture (#8537).
+    func test_electedPivotX_isTheColumnsLeadingEdge() {
+        XCTAssertEqual(FocalScrollPerspective.electedPivotX(rowWidth: 390, isRightToLeft: false), FocalMetrics.Row.paddingHorizontal)
+        XCTAssertEqual(FocalScrollPerspective.electedPivotX(rowWidth: 390, isRightToLeft: true), 390 - FocalMetrics.Row.paddingHorizontal)
     }
 }

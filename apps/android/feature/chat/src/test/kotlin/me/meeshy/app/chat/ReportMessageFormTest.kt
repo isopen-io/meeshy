@@ -17,13 +17,45 @@ class ReportMessageFormTest {
     private fun form() = ReportMessageForm(messageId = "m1")
 
     @Test
-    fun `a fresh form defaults to the message reason list with spam selected and is submittable`() {
+    fun `a fresh form lists the seven message reasons with none chosen and cannot be submitted`() {
         val f = form()
         assertThat(f.reasons).isEqualTo(ReportReason.messageOrdered)
-        assertThat(f.selectedReason).isEqualTo(ReportReason.SPAM)
+        assertThat(f.reasons).hasSize(7)
+        assertThat(f.selectedReason).isNull()
         assertThat(f.details).isEmpty()
         assertThat(f.detailsCount).isEqualTo(0)
         assertThat(f.status).isEqualTo(ReportSubmitStatus.Idle)
+        assertThat(f.canSubmit).isFalse()
+    }
+
+    @Test
+    fun `the details field only appears once a reason is chosen`() {
+        assertThat(form().showsDetails).isFalse()
+        assertThat(form().withReason(ReportReason.SPAM).showsDetails).isTrue()
+    }
+
+    @Test
+    fun `choosing a reason enables submit`() {
+        assertThat(form().withReason(ReportReason.SPAM).canSubmit).isTrue()
+    }
+
+    @Test
+    fun `requesting confirmation without a reason is inert`() {
+        assertThat(form().requestConfirmation().status).isEqualTo(ReportSubmitStatus.Idle)
+    }
+
+    @Test
+    fun `requesting confirmation raises the dialog and blocks a second submit`() {
+        val f = form().withReason(ReportReason.SPAM).requestConfirmation()
+        assertThat(f.isConfirming).isTrue()
+        assertThat(f.canSubmit).isFalse()
+    }
+
+    @Test
+    fun `cancelling the confirmation goes back to idle with the reason kept`() {
+        val f = form().withReason(ReportReason.VIOLENCE).requestConfirmation().cancelConfirmation()
+        assertThat(f.status).isEqualTo(ReportSubmitStatus.Idle)
+        assertThat(f.selectedReason).isEqualTo(ReportReason.VIOLENCE)
         assertThat(f.canSubmit).isTrue()
     }
 
@@ -54,28 +86,28 @@ class ReportMessageFormTest {
 
     @Test
     fun `submitting blocks a second submit`() {
-        val f = form().submitting()
+        val f = form().withReason(ReportReason.SPAM).submitting()
         assertThat(f.isSubmitting).isTrue()
         assertThat(f.canSubmit).isFalse()
     }
 
     @Test
     fun `submitted latches and blocks resubmission`() {
-        val f = form().submitting().submitted()
+        val f = form().withReason(ReportReason.SPAM).submitting().submitted()
         assertThat(f.isSubmitted).isTrue()
         assertThat(f.canSubmit).isFalse()
     }
 
     @Test
     fun `failed surfaces an error and re-enables submit for a retry`() {
-        val f = form().submitting().failed()
+        val f = form().withReason(ReportReason.SPAM).submitting().failed()
         assertThat(f.hasError).isTrue()
         assertThat(f.canSubmit).isTrue()
     }
 
     @Test
     fun `selecting a reason after an error clears the error back to idle`() {
-        val f = form().submitting().failed().withReason(ReportReason.VIOLENCE)
+        val f = form().withReason(ReportReason.SPAM).submitting().failed().withReason(ReportReason.VIOLENCE)
         assertThat(f.hasError).isFalse()
         assertThat(f.status).isEqualTo(ReportSubmitStatus.Idle)
         assertThat(f.selectedReason).isEqualTo(ReportReason.VIOLENCE)
@@ -83,7 +115,7 @@ class ReportMessageFormTest {
 
     @Test
     fun `editing details after an error clears the error back to idle`() {
-        val f = form().submitting().failed().withDetails("more context")
+        val f = form().withReason(ReportReason.SPAM).submitting().failed().withDetails("more context")
         assertThat(f.hasError).isFalse()
         assertThat(f.status).isEqualTo(ReportSubmitStatus.Idle)
     }

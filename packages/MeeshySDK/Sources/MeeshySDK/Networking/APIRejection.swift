@@ -1,0 +1,199 @@
+import Foundation
+
+/// Ce qu'un refus 4xx de la passerelle DIT, au-delà de sa phrase.
+///
+/// L'enveloppe d'erreur porte, à sa RACINE, un `code` machine et — pour les
+/// refus qui visent un champ — le `field` concerné, plus les appoints propres au
+/// code (`suggestions` d'un pseudo pris, `violations` d'une validation). Le
+/// transport ne gardait que `message ?? error` : un écran de formulaire pouvait
+/// afficher la phrase, jamais la POSER sous le bon champ, faute de savoir lequel.
+///
+/// Elle n'est levée que par les adresses qui DÉCLARENT servir des refus typés
+/// (`MeeshyEndpoint.rejectionPolicy == .structured`). Partout ailleurs le
+/// transport lève `MeeshyError.server(statusCode:message:)` comme avant — c'est
+/// ce qui rend ce type additif : aucun site existant ne change de forme d'erreur.
+public struct APIRejection: Error, Sendable, Equatable {
+    /// Une erreur PAR CHAMP, telle que `sendError(..., { violations })` la sert.
+    public struct Violation: Sendable, Equatable, Decodable {
+        public let path: String
+        public let message: String
+
+        public init(path: String, message: String) {
+            self.path = path
+            self.message = message
+        }
+    }
+
+    /// Le détenteur MASQUÉ d'une adresse déjà prise (`EMAIL_TAKEN`, #8214) —
+    /// masqué comme `phoneOwnerInfo` : l'écran peut demander « Est-ce vous ? »
+    /// sans rien révéler de plus.
+    public struct EmailOwner: Sendable, Equatable, Decodable {
+        public let maskedDisplayName: String
+        public let maskedUsername: String
+        public let avatar: String?
+
+        public init(maskedDisplayName: String, maskedUsername: String, avatar: String? = nil) {
+            self.maskedDisplayName = maskedDisplayName
+            self.maskedUsername = maskedUsername
+            self.avatar = avatar
+        }
+    }
+
+    public let statusCode: Int
+    /// Le code machine (`VALIDATION_ERROR`, `EMAIL_TAKEN`, `PHONE_INVALID`,
+    /// `USERNAME_TAKEN`…). `nil` quand la route n'en a pas posé.
+    public let code: String?
+    /// Le champ visé par le refus, quand le code en vise un.
+    public let field: String?
+    /// La phrase destinée à l'utilisateur — jamais vide : à défaut de `message`
+    /// et d'`error`, le transport y met son propre libellé.
+    public let message: String
+    /// Remplacements proposés (`USERNAME_TAKEN`).
+    public let suggestions: [String]
+    /// Le détail par champ d'un `VALIDATION_ERROR`.
+    public let violations: [Violation]
+    /// Le détenteur masqué d'un `EMAIL_TAKEN` — `nil` sur une passerelle qui
+    /// ne le sert pas encore, et pour tout autre code.
+    public let emailOwner: EmailOwner?
+    /// L'instant de remise à zéro d'une limite quotidienne de gestes
+    /// (`DailyGestureLimit`) — `nil` pour tout autre refus.
+    public let resetAt: Date?
+    /// Le plafond atteint d'une limite quotidienne — `nil` pour tout autre refus.
+    public let limit: Int?
+    /// L'écart Sesame d'un 409 `E2EE_DEVICES_MISMATCH` (#3707) — `nil` pour tout autre refus.
+    public let e2eeMismatch: E2EEDevicesMismatch?
+    /// Le corps était l'enveloppe de la passerelle (`success: false`, celle de
+    /// `sendError`) : un refus qu'elle a DÉCIDÉ, et non le JSON d'un
+    /// intermédiaire qui lui ressemble (#14693, #14708).
+    public let isGatewayEnvelope: Bool
+
+    public init(
+        statusCode: Int,
+        code: String? = nil,
+        field: String? = nil,
+        message: String,
+        suggestions: [String] = [],
+        violations: [Violation] = [],
+        emailOwner: EmailOwner? = nil,
+        resetAt: Date? = nil,
+        limit: Int? = nil,
+        e2eeMismatch: E2EEDevicesMismatch? = nil,
+        isGatewayEnvelope: Bool = false
+    ) {
+        self.statusCode = statusCode
+        self.code = code
+        self.field = field
+        self.message = message
+        self.suggestions = suggestions
+        self.violations = violations
+        self.emailOwner = emailOwner
+        self.resetAt = resetAt
+        self.limit = limit
+        self.e2eeMismatch = e2eeMismatch
+        self.isGatewayEnvelope = isGatewayEnvelope
+    }
+
+    /// La phrase à poser SOUS `field`, en préférant la violation qui le nomme.
+    ///
+    /// Un `VALIDATION_ERROR` ne pose pas de `field` à la racine : il énumère ses
+    /// violations, et c'est `path` qui désigne le champ. Sans cette lecture, un
+    /// refus de validation s'afficherait en bandeau global alors qu'il vise très
+    /// précisément une saisie.
+    public func message(forField field: String) -> String? {
+        if let violation = violations.first(where: { $0.path == field }) {
+            return violation.message
+        }
+        guard self.field == field else { return nil }
+        return message
+    }
+
+    /// Les champs que ce refus vise — racine et violations réunies, dédupliquées
+    /// en préservant l'ordre de lecture.
+    public var affectedFields: [String] {
+        var seen: Set<String> = []
+        var ordered: [String] = []
+        for candidate in ([field].compactMap { $0 } + violations.map(\.path)) where !seen.contains(candidate) {
+            seen.insert(candidate)
+            ordered.append(candidate)
+        }
+        return ordered
+    }
+}
+
+// MARK: - Décodage de l'enveloppe
+
+/// L'enveloppe d'erreur de la passerelle, telle que `sendError` la compose :
+/// `{ success, error, message, code, violations?, …details }` — `code`, `field`
+/// et les appoints à la RACINE, jamais imbriqués.
+struct APIRejectionEnvelope: Decodable {
+    /// `false` dans l'enveloppe de `sendError` ; absent d'un JSON étranger.
+    let success: Bool?
+    let error: String?
+    let message: String?
+    let code: String?
+    let field: String?
+    let suggestions: [String]?
+    let violations: [APIRejection.Violation]?
+    let emailOwner: APIRejection.EmailOwner?
+    let e2eeMismatch: E2EEDevicesMismatch?
+
+    private enum CodingKeys: String, CodingKey {
+        case success, error, message, code, field, suggestions, violations, emailOwner, missing, extra, stale
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        success = try? container.decodeIfPresent(Bool.self, forKey: .success)
+        error = try container.decodeIfPresent(String.self, forKey: .error)
+        message = try container.decodeIfPresent(String.self, forKey: .message)
+        code = try container.decodeIfPresent(String.self, forKey: .code)
+        field = try container.decodeIfPresent(String.self, forKey: .field)
+        suggestions = try container.decodeIfPresent([String].self, forKey: .suggestions)
+        violations = try container.decodeIfPresent([APIRejection.Violation].self, forKey: .violations)
+        // Un détenteur mal formé ne doit pas emporter tout le refus : le
+        // transport lit l'enveloppe en `try?`, et `EMAIL_TAKEN` redeviendrait
+        // une erreur serveur générique.
+        emailOwner = try? container.decodeIfPresent(APIRejection.EmailOwner.self, forKey: .emailOwner)
+        e2eeMismatch = Self.mismatch(in: container)
+    }
+
+    /// L'écart Sesame est étalé à la RACINE par `sendError(..., { details })` :
+    /// `{ code, missing, extra, stale }`. Il n'existe que si les trois listes
+    /// se décodent — un écart partiel serait résolu à tort.
+    private static func mismatch(in container: KeyedDecodingContainer<CodingKeys>) -> E2EEDevicesMismatch? {
+        guard let missing = try? container.decode([E2EEDeviceRef].self, forKey: .missing),
+              let extra = try? container.decode([E2EEDeviceRef].self, forKey: .extra),
+              let stale = try? container.decode([E2EEDeviceRef].self, forKey: .stale) else { return nil }
+        return E2EEDevicesMismatch(missing: missing, extra: extra, stale: stale)
+    }
+
+    func rejection(statusCode: Int, fallbackMessage: String) -> APIRejection {
+        APIRejection(
+            statusCode: statusCode,
+            code: code,
+            field: field,
+            message: message ?? error ?? fallbackMessage,
+            suggestions: suggestions ?? [],
+            violations: violations ?? [],
+            emailOwner: emailOwner,
+            e2eeMismatch: e2eeMismatch,
+            isGatewayEnvelope: success == false
+        )
+    }
+}
+
+// MARK: - Le refus servi par la passerelle
+
+public extension APIRejection {
+    /// Le refus tel que la passerelle l'a SERVI : son enveloppe (`success: false`)
+    /// et un `code` machine. `nil` pour tout autre corps — page d'un proxy,
+    /// texte de Traefik, JSON étranger —, que l'appelant ne doit pas lire comme
+    /// une décision de la passerelle (#14693). Sert aux refus qui transportent
+    /// leur corps brut (`MeeshyError.forbidden(reason:body:)`).
+    static func gatewayRefusal(statusCode: Int, body: Data?) -> APIRejection? {
+        guard let body,
+              let envelope = try? JSONDecoder().decode(APIRejectionEnvelope.self, from: body),
+              envelope.success == false, envelope.code != nil else { return nil }
+        return envelope.rejection(statusCode: statusCode, fallbackMessage: "Refus de la passerelle")
+    }
+}

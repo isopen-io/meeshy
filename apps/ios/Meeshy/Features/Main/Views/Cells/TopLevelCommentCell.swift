@@ -2,6 +2,11 @@ import UIKit
 import MeeshySDK
 
 final class TopLevelCommentCell: UICollectionViewCell {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     private let avatarView = UIImageView()
     private let nameLabel = UILabel()
     private let contentLabel = UILabel()
@@ -94,7 +99,7 @@ final class TopLevelCommentCell: UICollectionViewCell {
     static func accessibilityLabel(name: String, content: String, time: String) -> String {
         String(
             localized: "comments.comment.a11yLabel",
-            defaultValue: "\(name), comment. \(content). \(time)",
+            defaultValue: "\(name), commentaire. \(content). \(time)",
             bundle: .main
         )
     }
@@ -102,7 +107,7 @@ final class TopLevelCommentCell: UICollectionViewCell {
     static var replyButtonTitle: String {
         String(
             localized: "comments.reply.button",
-            defaultValue: "Reply",
+            defaultValue: "Répondre",
             bundle: .main
         )
     }

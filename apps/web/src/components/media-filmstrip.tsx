@@ -1,0 +1,164 @@
+import { useEffect, useRef, useState } from 'react';
+
+import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
+
+import type { Attachment } from '@/lib/api/types';
+import { attachmentSrc } from '@/lib/api/media-url';
+import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
+import { kindOf } from '@/lib/view/message';
+import {
+  FILMSTRIP,
+  FILMSTRIP_RESERVED_HEIGHT,
+  filmstripIndexAtPlayhead,
+  filmstripLeadingInset,
+  filmstripMaxScrollOffset,
+  filmstripScrollOffset,
+} from '@/lib/view/media-stage';
+
+import { translate } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
+
+import { Glyph } from './glyph';
+import { MediaUnavailable } from './media-unavailable';
+import { GLYPH_SIZE } from './ui-chrome';
+
+/**
+ * `MediaFilmstrip` (#6221) — la pellicule en couloir bas de la visionneuse,
+ * miroir de `ConversationMediaFilmstrip.swift`. **ABSENTE pour un média
+ * SEUL** (`items.length <= 1`, `+Geometry.swift:88-102` : « un média seul ne
+ * réserve aucun couloir bas ») — c'est l'HÔTE (`media-viewer.tsx`) qui décide
+ * de la MONTER ou non, ce composant ne fait que rendre ce qu'on lui donne ;
+ * le garde-fou est repris ICI en plus, en défense, pour qu'un appel direct
+ * ne puisse jamais rendre une pellicule à un seul bouton.
+ *
+ * La TÊTE DE LECTURE est le bord DROIT (`scroll-padding-inline-start` posé à
+ * `filmstripLeadingInset(largeur)`, defilement vers `filmstripScrollOffset`).
+ *
+ * DEUX SENS DE SYNCHRONISATION (#6345, miroir `ConversationMediaFilmstrip`
+ * iOS 17+, `modernStrip`) : la sélection (clic, flèche) fait défiler la bande
+ * vers `filmstripScrollOffset(currentIndex)` (effet ci-dessous) — ET le
+ * défilement À LA MAIN de la bande choisit le média affiché (`onScroll`),
+ * borné par `filmstripMaxScrollOffset` (le rembours élastique de certains
+ * trackpads peut rendre un `scrollLeft` hors bornes). Round-trip stable :
+ * `filmstripIndexAtPlayhead(filmstripScrollOffset(i), n) === i`, donc l'effet
+ * ne redéclenche jamais `onSelect` en boucle.
+ *
+ * `FILMSTRIP_RESERVED_HEIGHT` (= 80, `border-box`) — la hauteur TOTALE que la
+ * bande réserve, miroir de `.frame(height: reservedHeight)` côté iOS : le
+ * plateau (`flex-1`) s'en trouve raccourci d'autant, jamais recouvert.
+ */
+export function MediaFilmstrip({
+  items,
+  currentIndex,
+  onSelect,
+  language,
+}: {
+  readonly items: readonly Attachment[];
+  readonly currentIndex: number;
+  readonly onSelect: (index: number) => void;
+  readonly language: InterfaceLanguage;
+}) {
+  const trackRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = trackRef.current;
+    if (el === null) return;
+    // `paddingInlineStart` (contenu RÉEL, pas seulement `scroll-padding-*`,
+    // sans effet tant qu'aucun `scroll-snap-type` n'est posé sur CET élément)
+    // — sans lui, `scrollWidth` d'une pellicule courte (≤ 6 vignettes) reste
+    // plus étroit que le viewport et le navigateur borne TOUT `scrollLeft` à
+    // 0 : ni le mount-effect ci-dessous ni un doigt réel ne peuvent amener un
+    // média autre que le premier sous la tête de lecture. Miroir
+    // `contentMargins(.leading, leadingInset, for: .scrollContent)` (iOS 17+).
+    const inset = `${filmstripLeadingInset(el.clientWidth)}px`;
+    el.style.paddingInlineStart = inset;
+    el.style.scrollPaddingInlineStart = inset;
+    el.scrollLeft = filmstripScrollOffset(currentIndex);
+  }, [currentIndex]);
+
+  const onScroll = (): void => {
+    const el = trackRef.current;
+    if (el === null) return;
+    const bounded = Math.min(filmstripMaxScrollOffset(items.length, el.clientWidth), Math.max(0, el.scrollLeft));
+    const next = filmstripIndexAtPlayhead(bounded, items.length);
+    if (next !== currentIndex) onSelect(next);
+  };
+
+  if (items.length <= 1) return null;
+
+  return (
+    <div
+      data-filmstrip
+      role="group"
+      aria-label={translate(language, 'media.filmstrip')}
+      ref={trackRef}
+      onScroll={onScroll}
+      className="pointer-events-auto flex overflow-x-auto box-border"
+      style={{
+        height: FILMSTRIP_RESERVED_HEIGHT,
+        gap: FILMSTRIP.spacing,
+        paddingBlockStart: FILMSTRIP.verticalPadding,
+        paddingBlockEnd: FILMSTRIP.verticalPadding + FILMSTRIP.bottomPadding,
+        paddingInlineEnd: FILMSTRIP.trailingInset,
+      }}
+    >
+      {items.map((attachment, index) => {
+        const isCurrent = index === currentIndex;
+        // `maskedAttachment` (#6189, cycle 125) — LA VIGNETTE EST UN CONTENU :
+        // sans cette garde, la pellicule rendait `attachment.thumbnailUrl` (ou
+        // son ThumbHash, dérivé de l'image) pour CHAQUE pièce, masquée ou
+        // non — la seule case que `MediaGrid` retient déjà, révélée un cran
+        // plus loin par le couloir bas de la visionneuse.
+        const isMasked = maskedAttachment(attachment);
+        const thumb = isMasked
+          ? undefined
+          : attachment.thumbnailUrl !== undefined && attachment.thumbnailUrl !== ''
+            ? attachmentSrc(attachment.thumbnailUrl)
+            : thumbHashPlaceholder(attachment.thumbHash);
+
+        return (
+          <button
+            key={`${index}:${attachment.id}`}
+            type="button"
+            data-filmstrip-item
+            data-attachment={attachment.id}
+            {...(isMasked ? { 'data-protected-attachment': 'hidden' as const } : {})}
+            aria-label={translate(language, isMasked ? 'media.filmstrip.item.protected' : 'media.filmstrip.item', { index: String(index + 1), total: String(items.length) })}
+            {...(isCurrent ? { 'aria-current': 'true' as const } : {})}
+            onClick={() => onSelect(index)}
+            className="media-filmstrip-item relative flex shrink-0 items-center justify-center overflow-hidden bg-media-backdrop"
+            style={{
+              width: FILMSTRIP.itemSide,
+              height: FILMSTRIP.itemSide,
+              opacity: isCurrent ? 1 : 0.55,
+              transform: isCurrent ? 'scale(1)' : 'scale(0.9)',
+              border: isCurrent ? '2px solid var(--color-on-media)' : '1px solid var(--color-media-hairline)',
+            }}
+          >
+            {isMasked ? (
+              <Glyph name="eyeSlash" size={GLYPH_SIZE.sm} className="text-on-media-3" />
+            ) : (
+              <>
+                {thumb !== undefined ? <FilmstripThumb src={thumb} language={language} /> : null}
+                {kindOf(attachment) === 'video' ? (
+                  <Glyph name="fillPlay" size={GLYPH_SIZE.md} className="absolute inset-0 m-auto text-on-media" />
+                ) : null}
+              </>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * UNE VIGNETTE QUI NE SE CHARGE PAS (#8141) dit la même absence que la page :
+ * l'état dessiné compact, jamais l'icône brisée du navigateur. Retenue par
+ * adresse, pour qu'une case recyclée sur une autre pièce reparte d'elle-même.
+ */
+function FilmstripThumb({ src, language }: { readonly src: string; readonly language: InterfaceLanguage }) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  if (failedSrc === src) return <MediaUnavailable language={language} compact />;
+  return <img src={src} alt="" aria-hidden loading="lazy" decoding="async" className="size-full object-cover" onError={() => setFailedSrc(src)} />;
+}

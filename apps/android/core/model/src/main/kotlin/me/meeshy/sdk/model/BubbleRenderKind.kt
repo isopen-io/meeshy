@@ -14,6 +14,15 @@ object BubbleRenderKind {
 
     /** What a bubble renders once deletion, view-once consumption and the countdown combine. */
     enum class Kind {
+        /**
+         * A conversation notice about itself (someone joined / left, a legacy call
+         * summary) rather than a turn at talk: it renders as a CENTERED notice with no
+         * avatar and no sender name, never a signed bubble (iOS `ThemedMessageBubble`
+         * `case .system`, checked BEFORE every other kind). Without this arm a join
+         * notice would render as the arriver's own first message.
+         */
+        System,
+
         /** Normal content bubble. */
         Standard,
 
@@ -21,10 +30,9 @@ object BubbleRenderKind {
         Deleted,
 
         /**
-         * A view-once message whose server view-count has been consumed: it renders
-         * the persistent "Seen and deleted" burned tombstone (iOS `BubbleBurnedView`,
-         * gated on `message.isViewOnce && message.viewOnceCount > 0`). Like deletion this
-         * is server-authoritative, so it wins over the client-side ephemeral collapse.
+         * A view-once message THIS reader has opened: it renders the persistent "Seen and
+         * deleted" burned tombstone (iOS `isViewOnceOpened`, #7579 — consumed per person,
+         * never by the global view count). It wins over the client-side ephemeral collapse.
          */
         Burned,
 
@@ -32,27 +40,42 @@ object BubbleRenderKind {
          * The ephemeral self-destruct countdown elapsed on a still-undeleted message:
          * the bubble collapses (iOS renders `EmptyView`; Android animates it away).
          */
-        EphemeralExpired;
+        EphemeralExpired,
+
+        /**
+         * A view-once message THIS reader has not opened (iOS `viewOnceSealed`): the bubble carries no text, caption
+         * or piece at all — only the "tap to show" chip. Decided per reader, never by the global view count.
+         */
+        ViewOnceSealed;
+
+        /** True only for [ViewOnceSealed]. */
+        val isViewOnceSealed: Boolean get() = this == ViewOnceSealed
 
         /** True only for [EphemeralExpired] — the arm that hides the bubble. */
         val isEphemeralExpired: Boolean get() = this == EphemeralExpired
 
         /** True only for [Burned] — the arm that shows the "Seen and deleted" tombstone. */
         val isBurned: Boolean get() = this == Burned
+
+        /** True only for [System] — the arm that shows the centered notice. */
+        val isSystem: Boolean get() = this == System
     }
 
     /**
      * Combines the server deletion flag, the view-once consume count and the ephemeral
      * countdown [ephemeral] into a single render decision. Precedence — highest first:
      *
+     * - a system message ([isSystem]) is [Kind.System] regardless of anything else —
+     *   iOS checks `messageSource == .system` FIRST, so a notice never masquerades as a
+     *   deletion tombstone, a burned view-once, or a self-destructing bubble.
      * - a deleted message is [Kind.Deleted] regardless of anything else — server
      *   authority wins, mirroring iOS checking `.deleted` BEFORE the burned/ephemeral
      *   arms, so a deleted-and-expired message still shows the deletion tombstone.
-     * - an un-deleted view-once message whose count has been consumed
-     *   ([isViewOnce] && [viewOnceCount] > 0) is [Kind.Burned] — the persistent
+     * - an un-deleted view-once message this reader opened
+     *   ([isViewOnce] && [isViewOnceOpenedByMe]) is [Kind.Burned] — the persistent
      *   "Seen and deleted" tombstone, checked BEFORE the ephemeral arm so a consumed
-     *   view-once message shows the tombstone instead of silently collapsing. A
-     *   positive [viewOnceCount] on a non-view-once message never burns.
+     *   view-once message shows the tombstone instead of silently collapsing. What other
+     *   members open never burns it for this reader.
      * - otherwise, once the countdown reaches [EphemeralLifecycle.State.Expired] the
      *   bubble is [Kind.EphemeralExpired] (collapses).
      * - [EphemeralLifecycle.State.Running] / [EphemeralLifecycle.State.None] leave a
@@ -62,10 +85,14 @@ object BubbleRenderKind {
         isDeleted: Boolean,
         ephemeral: EphemeralLifecycle.State,
         isViewOnce: Boolean = false,
-        viewOnceCount: Int = 0,
+        isViewOnceOpenedByMe: Boolean = false,
+        isSystem: Boolean = false,
+        isViewOnceSealed: Boolean = false,
     ): Kind = when {
+        isSystem -> Kind.System
         isDeleted -> Kind.Deleted
-        isViewOnce && viewOnceCount > 0 -> Kind.Burned
+        isViewOnce && isViewOnceOpenedByMe -> Kind.Burned
+        isViewOnceSealed -> Kind.ViewOnceSealed
         ephemeral is EphemeralLifecycle.State.Expired -> Kind.EphemeralExpired
         else -> Kind.Standard
     }

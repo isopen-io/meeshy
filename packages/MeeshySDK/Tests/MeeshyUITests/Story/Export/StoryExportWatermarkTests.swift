@@ -127,7 +127,8 @@ final class StoryExportWatermarkTests: XCTestCase {
 private final class NullBackdropCapture: BackdropCapturing {
     func captureCanvasBackdrop(slide: StorySlide, geometry: CanvasGeometry,
                                time: CMTime, mode: RenderMode,
-                               languages: [String]) -> MTLTexture? { nil }
+                               languages: [String],
+                               contentsScale: CGFloat) -> MTLTexture? { nil }
     func cropRegion(_ frame: CGRect) -> MTLTexture? { nil }
     func invalidate() {}
 }

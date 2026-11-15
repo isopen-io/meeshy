@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.model.CommentLikeState
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiAuthor
@@ -222,5 +223,104 @@ class CommentProjectionTest {
         assertThat(es.isTranslatable).isTrue()
         assertThat(es.isActive).isFalse()
         assertThat(es.isOriginal).isFalse()
+    }
+
+    @Test
+    fun `the media joined to a comment project in order, a video keeping only its preview still`() {
+        val withMedia = comment().copy(
+            media = listOf(
+                me.meeshy.sdk.model.ApiPostMedia(id = "v", mimeType = "video/mp4", fileUrl = "/u/v.mp4", order = 1),
+                me.meeshy.sdk.model.ApiPostMedia(id = "p", mimeType = "image/jpeg", fileUrl = "/u/p.jpg", order = 0),
+            ),
+        )
+        val media = CommentProjection.build(withMedia, Prefs(systemLanguage = "fr"), "https://gate.meeshy.me").media
+        assertThat(media.map { it.id }).containsExactly("p", "v").inOrder()
+        assertThat(media.first().thumbnailUrl).endsWith("/u/p.jpg")
+        assertThat(media.last().isVideo).isTrue()
+        assertThat(media.last().thumbnailUrl).isNull()
+    }
+
+    @Test
+    fun `a voice comment projects as audio, with its file and length and no still`() {
+        val withMedia = comment().copy(
+            media = listOf(me.meeshy.sdk.model.ApiPostMedia(id = "a", mimeType = "audio/mp4", fileUrl = "/u/a.m4a", duration = 12_000)),
+        )
+        val piece = CommentProjection.build(withMedia, Prefs(systemLanguage = "fr"), "https://gate.meeshy.me").media.single()
+        assertThat(piece.isAudio).isTrue()
+        assertThat(piece.isVideo).isFalse()
+        assertThat(piece.thumbnailUrl).isNull()
+        assertThat(piece.url).endsWith("/u/a.m4a")
+        assertThat(piece.durationMillis).isEqualTo(12_000)
+    }
+
+    @Test
+    fun `the media of a comment carry their full file, size and length for the full screen`() {
+        val withMedia = comment().copy(
+            media = listOf(
+                me.meeshy.sdk.model.ApiPostMedia(
+                    id = "v", mimeType = "video/mp4", fileUrl = "/u/v.mp4", thumbnailUrl = "/u/v.jpg",
+                    width = 720, height = 1280, duration = 12_500,
+                ),
+            ),
+        )
+        val piece = CommentProjection.build(withMedia, Prefs(systemLanguage = "fr"), "https://gate.meeshy.me").media.single()
+        assertThat(piece.url).endsWith("/u/v.mp4")
+        assertThat(piece.url).startsWith("https://")
+        assertThat(piece.width).isEqualTo(720)
+        assertThat(piece.height).isEqualTo(1280)
+        assertThat(piece.durationMillis).isEqualTo(12_500)
+    }
+
+    @Test
+    fun `a comment without text renders no body, one with text does`() {
+        val voice = comment().copy(
+            content = "",
+            media = listOf(me.meeshy.sdk.model.ApiPostMedia(id = "a", mimeType = "audio/mp4", fileUrl = "/u/a.m4a")),
+        )
+        assertThat(CommentProjection.build(voice, Prefs(systemLanguage = "fr"), "https://gate.meeshy.me").hasBody).isFalse()
+        assertThat(CommentProjection.build(comment(), Prefs(systemLanguage = "fr"), "https://gate.meeshy.me").hasBody).isTrue()
+    }
+
+    @Test
+    fun `a blurred comment with a permanent effect is projected veiled and dressed, its other bits dropped (#14385)`() {
+        val flags = (me.meeshy.sdk.model.MessageEffectFlags.BLURRED or me.meeshy.sdk.model.MessageEffectFlags.SPARKLE or me.meeshy.sdk.model.MessageEffectFlags.CONFETTI).toInt()
+        val row = CommentProjection.build(comment().copy(effectFlags = flags), Prefs(), null)
+
+        assertThat(row.isBlurred).isTrue()
+        assertThat(row.effects.flags).isEqualTo(me.meeshy.sdk.model.MessageEffectFlags.BLURRED or me.meeshy.sdk.model.MessageEffectFlags.SPARKLE)
+        assertThat(CommentProjection.build(comment(), Prefs(), null).isBlurred).isFalse()
+    }
+
+    @Test
+    fun `a joined file is projected as a file with its name and size, never as a thumbnail (#14386)`() {
+        val pdf = me.meeshy.sdk.model.ApiPostMedia(id = "f1", originalName = "devis.pdf", mimeType = "application/pdf", fileSize = 2048, fileUrl = "/u/devis.pdf")
+        val row = CommentProjection.build(comment().copy(media = listOf(pdf)), Prefs(), "https://gate.meeshy.me")
+
+        val piece = row.media.single()
+        assertThat(piece.isFile).isTrue()
+        assertThat(piece.fileName).isEqualTo("devis.pdf")
+        assertThat(piece.fileSize).isEqualTo(2048)
+        assertThat(piece.thumbnailUrl).isNull()
+        assertThat(piece.url).isNotNull()
+    }
+
+    @Test
+    fun `a photo served without a type stays a photo (#14386)`() {
+        val photo = me.meeshy.sdk.model.ApiPostMedia(id = "p1", fileUrl = "/u/p.jpg")
+        val piece = CommentProjection.build(comment().copy(media = listOf(photo)), Prefs(), "https://gate.meeshy.me").media.single()
+
+        assertThat(piece.isFile).isFalse()
+        assertThat(piece.thumbnailUrl).isNotNull()
+    }
+
+    @Test
+    fun `a joined place is projected as its map card, named or by coordinates (#14387)`() {
+        val named = me.meeshy.sdk.model.SharedPlace(latitude = 48.85, longitude = 2.35, name = "Café de Flore", address = "172 bd Saint-Germain")
+        val place = CommentProjection.build(comment().copy(location = named), Prefs(), null).place
+
+        assertThat(place).isEqualTo(FeedLocationPresentation(label = "Café de Flore", latitude = 48.85, longitude = 2.35))
+        val pin = me.meeshy.sdk.model.SharedPlace(latitude = 1.0, longitude = 2.0)
+        assertThat(CommentProjection.build(comment().copy(location = pin), Prefs(), null).place?.label).isNull()
+        assertThat(CommentProjection.build(comment(), Prefs(), null).place).isNull()
     }
 }

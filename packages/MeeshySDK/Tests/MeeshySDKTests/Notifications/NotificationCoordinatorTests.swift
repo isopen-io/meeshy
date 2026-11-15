@@ -56,13 +56,31 @@ final class NotificationCoordinatorTests: XCTestCase {
 
     // MARK: - Factory
 
+    /// Un registre NEUF par SUT (#6998). La production partage
+    /// `ConversationReadLedger.shared` entre le badge, la pastille « retour »,
+    /// le widget et le menu — c'est tout l'intérêt d'une source unique — mais
+    /// deux tests qui se le partageraient hériteraient l'un de l'état de
+    /// l'autre, et l'ordre d'exécution déciderait du verdict.
+    private func makeLedger() -> ConversationReadLedger { ConversationReadLedger() }
+
     private func makeSUT() -> (NotificationCoordinator, MockBadgeWriter, MockWidgetSink, String) {
         let suite = "group.test.meeshy.coordinator.\(UUID().uuidString)"
         createdSuiteNames.append(suite)
         let defaults = UserDefaults(suiteName: suite)
         defaults?.removePersistentDomain(forName: suite)
         let writer = MockBadgeWriter()
-        let sut = NotificationCoordinator(badgeWriter: writer, appGroupSuiteName: suite)
+        // `openConversationIdsProvider: { [] }` — EXPLICITE, pas un détail de
+        // confort. Le défaut lit `MessageSocketManager.shared.activeConversationId`,
+        // un singleton qu'une AUTRE suite du même process laisse posé
+        // (`MessageSocketReconnectLifecycleTests` y écrit « A » et ne l'efface
+        // jamais). Tant qu'un seul chemin le consultait, la collision restait
+        // improbable ; depuis que les instantanés le consultent aussi, l'ordre
+        // d'exécution déciderait du verdict. Les trois tests qui MESURENT le
+        // gate injectent leur propre valeur (`makeSUTWithOpenConversation`).
+        let sut = NotificationCoordinator(
+            badgeWriter: writer, appGroupSuiteName: suite,
+            openConversationIdsProvider: { [] }, ledger: makeLedger()
+        )
         let sink = MockWidgetSink()
         sut.widgetSink = sink
         return (sut, writer, sink, suite)
@@ -84,7 +102,8 @@ final class NotificationCoordinatorTests: XCTestCase {
         createdSuiteNames.append(suite)
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         return NotificationCoordinator(badgeWriter: MockBadgeWriter(), appGroupSuiteName: suite,
-                                       currentUserIdProvider: { userId })
+                                       currentUserIdProvider: { userId },
+                                       openConversationIdsProvider: { [] }, ledger: makeLedger())
     }
 
     private func makeSUTWithOpenConversation(_ openId: String?) -> NotificationCoordinator {
@@ -92,7 +111,7 @@ final class NotificationCoordinatorTests: XCTestCase {
         createdSuiteNames.append(suite)
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         return NotificationCoordinator(badgeWriter: MockBadgeWriter(), appGroupSuiteName: suite,
-                                       openConversationIdProvider: { openId })
+                                       openConversationIdsProvider: { Set([openId].compactMap { $0 }) }, ledger: makeLedger())
     }
 
     // MARK: - Réveil background — syncNow ne doit RIEN écraser sans snapshot autoritaire
@@ -124,7 +143,8 @@ final class NotificationCoordinatorTests: XCTestCase {
 
         await sut.syncNow()
 
-        XCTAssertEqual(writer.writes.last, 3)
+        XCTAssertEqual(writer.writes.last, 1,
+                       "D-L1 — l'icône compte UNE conversation, pas ses trois messages")
     }
 
     // MARK: - Gate conversation ouverte — le badge d'icône ne gonfle pas pendant la lecture
@@ -148,7 +168,9 @@ final class NotificationCoordinatorTests: XCTestCase {
 
         sut.applyConversationUnread(conversationId: "c2", unreadCount: 4)
 
-        XCTAssertEqual(sut.conversationUnreadTotal, 4,
+        XCTAssertEqual(sut.conversationUnreadCounts["c2"], 4,
+                       "la LIGNE garde ses quatre messages")
+        XCTAssertEqual(sut.conversationUnreadTotal, 1,
                        "Le gate ne s'applique qu'à la conversation ouverte — les autres comptent normalement")
     }
 
@@ -157,7 +179,128 @@ final class NotificationCoordinatorTests: XCTestCase {
 
         sut.applyConversationUnread(conversationId: "c1", unreadCount: 3)
 
-        XCTAssertEqual(sut.conversationUnreadTotal, 3)
+        XCTAssertEqual(sut.conversationUnreadCounts["c1"], 3,
+                       "la valeur serveur est bien appliquée à la LIGNE")
+        XCTAssertEqual(sut.conversationUnreadTotal, 1)
+    }
+
+    // MARK: - #6998 — le badge est une PROJECTION du registre de lecture
+
+    /// Le coordinateur ne tient plus de carte `conversationId → Int` : il LIT
+    /// celle du registre. Le témoin le prouve par l'extérieur — un compteur
+    /// posé DIRECTEMENT dans le registre, sans passer par aucune méthode du
+    /// coordinateur, apparaît dans sa projection.
+    func test_conversationUnreadCounts_isAProjectionOfTheLedger() {
+        let ledger = ConversationReadLedger()
+        let suite = "group.test.meeshy.coordinator.\(UUID().uuidString)"
+        createdSuiteNames.append(suite)
+        let sut = NotificationCoordinator(
+            badgeWriter: MockBadgeWriter(), appGroupSuiteName: suite,
+            openConversationIdsProvider: { [] }, ledger: ledger
+        )
+
+        ledger.apply(.serverUnread(conversationId: "c1", unreadCount: 6))
+
+        XCTAssertEqual(
+            sut.conversationUnreadCounts["c1"], 6,
+            "le coordinateur n'a plus de copie : la carte qu'il expose est celle du registre"
+        )
+    }
+
+    /// Le gate « conversation ouverte » ne s'appliquait qu'au chemin SOCKET.
+    /// Un instantané — republication de liste, resync après reconnexion —
+    /// rallumait donc le badge pour la conversation que l'utilisateur est en
+    /// train de LIRE, jusqu'au prochain événement socket. Le registre applique
+    /// la règle en rang 1, quel que soit l'événement.
+    func test_reconcileConversationUnreads_openConversation_staysZero() {
+        let sut = makeSUTWithOpenConversation("c1")
+
+        sut.reconcileConversationUnreads([
+            makeConversation(id: "c1", unread: 5),
+            makeConversation(id: "c2", unread: 2)
+        ])
+
+        XCTAssertEqual(sut.conversationUnreadCounts["c1"], 0,
+                       "la conversation OUVERTE est lue — un instantané ne la rallume pas")
+        XCTAssertEqual(sut.conversationUnreadTotal, 1)
+    }
+
+    func test_registerConversations_openConversation_staysZero() {
+        let sut = makeSUTWithOpenConversation("c1")
+
+        sut.registerConversations([
+            makeConversation(id: "c1", unread: 5),
+            makeConversation(id: "c2", unread: 2)
+        ])
+
+        XCTAssertEqual(sut.conversationUnreadCounts["c1"], 0)
+        XCTAssertEqual(sut.conversationUnreadTotal, 1)
+    }
+
+    // MARK: - #7350 — ouvrir n'est pas lire : la fermeture rend la conversation à l'icône
+
+    private final class OpenConversationBox { var id: String? }
+
+    private func makeSUT(open box: OpenConversationBox) -> NotificationCoordinator {
+        let suite = "group.test.meeshy.coordinator.\(UUID().uuidString)"
+        createdSuiteNames.append(suite)
+        UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+        return NotificationCoordinator(badgeWriter: MockBadgeWriter(), appGroupSuiteName: suite,
+                                       openConversationIdsProvider: { Set([box.id].compactMap { $0 }) }, ledger: makeLedger())
+    }
+
+    /// Recette 2026-09-21, étape 7 : l'API dit « 1 conversation non lue », le
+    /// badge affiche 0. 99 non-lus, l'écran s'ouvre, 5 sont affichés, le
+    /// serveur sert 94 PENDANT l'affichage — puis l'écran se ferme et la liste
+    /// republie sa ligne, restaurée à 94.
+    func test_closingAPartiallyReadConversation_countsItAgainOnTheIcon() {
+        let box = OpenConversationBox()
+        let sut = makeSUT(open: box)
+        sut.reconcileConversationUnreads([makeConversation(id: "c1", unread: 99)])
+        box.id = "c1"
+        sut.applyConversationUnread(conversationId: "c1", unreadCount: 94)
+        XCTAssertEqual(sut.conversationUnreadTotal, 0, "l'écran affiché ne pèse pas sur l'icône")
+
+        box.id = nil
+        sut.registerConversations([makeConversation(id: "c1", unread: 94)])
+
+        XCTAssertEqual(sut.conversationUnreadTotal, 1, "94 non-lus restent : la conversation compte à nouveau")
+        XCTAssertEqual(sut.conversationUnreadCounts["c1"], 94)
+    }
+
+    /// Ouvrir une conversation la retire de l'icône DANS LE TOUR DE BOUCLE, même
+    /// quand le serveur lui sert le compte qu'elle avait déjà : c'est le
+    /// curseur qui a bougé, pas l'entrée, et le total publié doit le voir.
+    func test_openingAConversation_takesItOffTheIcon_evenWhenItsCountIsUnchanged() {
+        let box = OpenConversationBox()
+        let sut = makeSUT(open: box)
+        sut.reconcileConversationUnreads([
+            makeConversation(id: "c1", unread: 5),
+            makeConversation(id: "c2", unread: 2)
+        ])
+        XCTAssertEqual(sut.conversationUnreadTotal, 2)
+
+        box.id = "c1"
+        sut.applyConversationUnread(conversationId: "c1", unreadCount: 5)
+
+        XCTAssertEqual(sut.conversationUnreadTotal, 1, "la conversation affichée ne pèse plus sur l'icône")
+    }
+
+    /// La lecture COMPLÈTE faite pendant l'affichage tient après la fermeture :
+    /// « marquer lu » doit s'appliquer à la conversation OUVERTE, dont la
+    /// ligne se lit déjà à zéro.
+    func test_closingAfterReadingEverything_leavesTheIconAtZero() {
+        let box = OpenConversationBox()
+        let sut = makeSUT(open: box)
+        sut.reconcileConversationUnreads([makeConversation(id: "c1", unread: 7)])
+        box.id = "c1"
+        sut.applyConversationUnread(conversationId: "c1", unreadCount: 7)
+
+        sut.markConversationRead("c1")
+        box.id = nil
+        sut.registerConversations([makeConversation(id: "c1", unread: 0)])
+
+        XCTAssertEqual(sut.conversationUnreadTotal, 0)
     }
 
     // MARK: - appgroup-01 — reset() wipes the App Group widget store
@@ -180,7 +323,7 @@ final class NotificationCoordinatorTests: XCTestCase {
     func test_handleReadStatusUpdated_currentUserReadEvent_resetsConversationBadge() {
         let sut = makeSUTWithUser("me")
         sut.applyConversationUnread(conversationId: "c1", unreadCount: 3)
-        XCTAssertEqual(sut.conversationUnreadTotal, 3)
+        XCTAssertEqual(sut.conversationUnreadTotal, 1)
 
         sut.handleReadStatusUpdated(makeReadEvent(conversationId: "c1", userId: "me", type: "read"))
 
@@ -194,8 +337,9 @@ final class NotificationCoordinatorTests: XCTestCase {
 
         sut.handleReadStatusUpdated(makeReadEvent(conversationId: "c1", userId: "me", type: "received"))
 
-        XCTAssertEqual(sut.conversationUnreadTotal, 3,
+        XCTAssertEqual(sut.conversationUnreadCounts["c1"], 3,
             "a 'received' (delivery) event must NOT reset the badge — only an actual read")
+        XCTAssertEqual(sut.conversationUnreadTotal, 1)
     }
 
     func test_handleReadStatusUpdated_otherUserRead_doesNotReset() {
@@ -204,8 +348,9 @@ final class NotificationCoordinatorTests: XCTestCase {
 
         sut.handleReadStatusUpdated(makeReadEvent(conversationId: "c1", userId: "other", type: "read"))
 
-        XCTAssertEqual(sut.conversationUnreadTotal, 3,
+        XCTAssertEqual(sut.conversationUnreadCounts["c1"], 3,
             "another participant's read receipt must NOT reset MY unread badge")
+        XCTAssertEqual(sut.conversationUnreadTotal, 1)
     }
 
     /// Wait until `condition()` returns true or the timeout expires. Unlike
@@ -250,7 +395,10 @@ final class NotificationCoordinatorTests: XCTestCase {
 
     // MARK: - registerConversations
 
-    func test_registerConversations_aggregatesUnreadTotal() async {
+    /// **D-L1 (#7236)** — le témoin DISCRIMINANT du lot : il ne peut pas
+    /// verdir sur une somme. Trois conversations dont une lue, huit messages
+    /// en tout : l'icône dit DEUX.
+    func test_registerConversations_countsUnreadConversationsNotMessages() async {
         let (sut, _, _, _) = makeSUT()
 
         sut.registerConversations([
@@ -259,11 +407,13 @@ final class NotificationCoordinatorTests: XCTestCase {
             makeConversation(id: "c3", unread: 0)
         ])
 
-        XCTAssertEqual(sut.conversationUnreadTotal, 8)
-        XCTAssertEqual(sut.conversationUnreadCounts["c1"], 3)
+        XCTAssertEqual(sut.conversationUnreadTotal, 2,
+                       "deux conversations non lues — la somme (8) n'est pas ce que l'icône montre")
+        XCTAssertEqual(sut.conversationUnreadCounts["c1"], 3,
+                       "la LIGNE garde sa somme de messages : seule l'icône compte des conversations")
         XCTAssertEqual(sut.conversationUnreadCounts["c2"], 5)
         XCTAssertEqual(sut.conversationUnreadCounts["c3"], 0)
-        XCTAssertEqual(sut.badgeTotal, 8)
+        XCTAssertEqual(sut.badgeTotal, 2)
     }
 
     // MARK: - Muted conversations excluded from the badge
@@ -279,11 +429,11 @@ final class NotificationCoordinatorTests: XCTestCase {
             makeConversation(id: "c2", unread: 5, muted: true)
         ])
 
-        XCTAssertEqual(sut.conversationUnreadTotal, 3,
-                       "muted c2's 5 unread must not count toward the badge")
+        XCTAssertEqual(sut.conversationUnreadTotal, 1,
+                       "muted c2 must not count toward the badge")
         XCTAssertEqual(sut.conversationUnreadCounts["c2"], 5,
                        "the muted conversation still tracks its real unread for its own row")
-        XCTAssertEqual(sut.badgeTotal, 3)
+        XCTAssertEqual(sut.badgeTotal, 1)
     }
 
     /// Muting a previously-unmuted conversation must drop its unread out of the
@@ -292,23 +442,24 @@ final class NotificationCoordinatorTests: XCTestCase {
         let (sut, _, _, _) = makeSUT()
 
         sut.registerConversations([makeConversation(id: "c1", unread: 4)])
-        XCTAssertEqual(sut.conversationUnreadTotal, 4)
+        XCTAssertEqual(sut.conversationUnreadTotal, 1)
 
         sut.registerConversations([makeConversation(id: "c1", unread: 4, muted: true)])
         XCTAssertEqual(sut.conversationUnreadTotal, 0,
                        "muting the conversation removes its unread from the badge")
 
         sut.registerConversations([makeConversation(id: "c1", unread: 4, muted: false)])
-        XCTAssertEqual(sut.conversationUnreadTotal, 4,
+        XCTAssertEqual(sut.conversationUnreadTotal, 1,
                        "un-muting restores it to the badge")
     }
 
-    func test_unmutedTotal_sumsOnlyUnmuted() {
-        let counts = ["a": 2, "b": 5, "c": 1]
-        XCTAssertEqual(NotificationCoordinator.unmutedTotal(counts: counts, mutedIds: []), 8)
-        XCTAssertEqual(NotificationCoordinator.unmutedTotal(counts: counts, mutedIds: ["b"]), 3)
-        XCTAssertEqual(NotificationCoordinator.unmutedTotal(counts: counts, mutedIds: ["a", "b", "c"]), 0)
-    }
+    /// `NotificationCoordinator.unmutedTotal` a DISPARU (#6998) : le
+    /// coordinateur ne calcule plus de total, il en LIT un. La règle qu'il
+    /// portait — « la somme ignore les muettes » — est mesurée là où elle vit
+    /// désormais, `ConversationReadLedgerTotalTests.totalExcludesMuted`, avec
+    /// sa jumelle qui vérifie que la LIGNE muette garde bien sa pastille.
+    /// Ce qui reste ici mesure la même règle à travers le coordinateur :
+    /// `test_registerConversations_mutedUnread_excludedFromBadgeTotal`.
 
     func test_registerConversations_pushesToWidgetSink() async {
         let (sut, _, sink, _) = makeSUT()
@@ -328,11 +479,11 @@ final class NotificationCoordinatorTests: XCTestCase {
         // Writer is debounced (~150ms) — not called synchronously.
         XCTAssertTrue(writer.writes.isEmpty)
 
-        waitFor("badge written") { writer.writes.contains(4) }
+        waitFor("badge written") { writer.writes.contains(1) }
 
-        XCTAssertEqual(writer.writes.last, 4)
-        XCTAssertEqual(sink.publishedUnread.last, 4)
-        XCTAssertEqual(UserDefaults(suiteName: suite)?.integer(forKey: "unread_count"), 4)
+        XCTAssertEqual(writer.writes.last, 1)
+        XCTAssertEqual(sink.publishedUnread.last, 1)
+        XCTAssertEqual(UserDefaults(suiteName: suite)?.integer(forKey: "unread_count"), 1)
         XCTAssertGreaterThanOrEqual(sink.reloadCount, 1)
     }
 
@@ -350,7 +501,7 @@ final class NotificationCoordinatorTests: XCTestCase {
         XCTAssertEqual(sut.conversationUnreadCounts["c1"], 3)
         XCTAssertEqual(sut.conversationUnreadCounts["c2"], 5)
         XCTAssertEqual(sut.conversationUnreadCounts["c3"], 2)
-        XCTAssertEqual(sut.conversationUnreadTotal, 10)
+        XCTAssertEqual(sut.conversationUnreadTotal, 3)
     }
 
     /// Critical for the double-path race: once the socket has set an authoritative
@@ -363,7 +514,7 @@ final class NotificationCoordinatorTests: XCTestCase {
         sut.registerConversations([makeConversation(id: "c1", unread: 3)])
 
         XCTAssertEqual(sut.conversationUnreadCounts["c1"], 7)
-        XCTAssertEqual(sut.conversationUnreadTotal, 7)
+        XCTAssertEqual(sut.conversationUnreadTotal, 1)
     }
 
     func test_replaceConversations_dropsEntriesNotInList() {
@@ -378,7 +529,7 @@ final class NotificationCoordinatorTests: XCTestCase {
         XCTAssertNil(sut.conversationUnreadCounts["c1"])
         XCTAssertNil(sut.conversationUnreadCounts["c2"])
         XCTAssertEqual(sut.conversationUnreadCounts["c3"], 2)
-        XCTAssertEqual(sut.conversationUnreadTotal, 2)
+        XCTAssertEqual(sut.conversationUnreadTotal, 1)
     }
 
     func test_reconcileConversationUnreads_overridesTrackedCounts() {
@@ -394,7 +545,8 @@ final class NotificationCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(sut.conversationUnreadCounts["c1"], 0)
         XCTAssertEqual(sut.conversationUnreadCounts["c2"], 4)
-        XCTAssertEqual(sut.conversationUnreadTotal, 4)
+        XCTAssertEqual(sut.conversationUnreadTotal, 1,
+                       "c1 est retombée à zéro : une seule conversation non lue")
     }
 
     /// Convergence: simulate both paths (socket + VM snapshot) firing for the same
@@ -413,7 +565,8 @@ final class NotificationCoordinatorTests: XCTestCase {
         sut.registerConversations([makeConversation(id: "c2", unread: 1)])
         XCTAssertEqual(sut.conversationUnreadCounts["c2"], 6)
 
-        XCTAssertEqual(sut.conversationUnreadTotal, 15)
+        XCTAssertEqual(sut.conversationUnreadTotal, 2,
+                       "deux conversations non lues — leurs compteurs de ligne portent la convergence")
     }
 
     func test_removeConversation_dropsEntryAndRecomputes() {
@@ -426,13 +579,13 @@ final class NotificationCoordinatorTests: XCTestCase {
         sut.removeConversation("c1")
 
         XCTAssertNil(sut.conversationUnreadCounts["c1"])
-        XCTAssertEqual(sut.conversationUnreadTotal, 5)
+        XCTAssertEqual(sut.conversationUnreadTotal, 1)
     }
 
     func test_removeConversation_isNoOpForUnknownId() {
         let (sut, writer, _, _) = makeSUT()
         sut.registerConversations([makeConversation(id: "c1", unread: 3)])
-        waitFor("initial sync") { writer.writes.contains(3) }
+        waitFor("initial sync") { writer.writes.contains(1) }
         let writesBefore = writer.writes.count
 
         sut.removeConversation("does-not-exist")
@@ -455,7 +608,7 @@ final class NotificationCoordinatorTests: XCTestCase {
         sut.applyConversationUnread(conversationId: "c1", unreadCount: 7)
 
         XCTAssertEqual(sut.conversationUnreadCounts["c1"], 7)
-        XCTAssertEqual(sut.conversationUnreadTotal, 7)
+        XCTAssertEqual(sut.conversationUnreadTotal, 1)
     }
 
     func test_applyConversationUnread_addsNewConversation() async {
@@ -464,7 +617,8 @@ final class NotificationCoordinatorTests: XCTestCase {
 
         sut.applyConversationUnread(conversationId: "c2", unreadCount: 4)
 
-        XCTAssertEqual(sut.conversationUnreadTotal, 6)
+        XCTAssertEqual(sut.conversationUnreadTotal, 2,
+                       "deux conversations non lues (2 + 4 messages, un seul badge par conversation)")
     }
 
     func test_applyConversationUnread_clampsNegativeCounts() async {
@@ -479,7 +633,7 @@ final class NotificationCoordinatorTests: XCTestCase {
     func test_applyConversationUnread_isIdempotentWhenSameCount() {
         let (sut, writer, _, _) = makeSUT()
         sut.registerConversations([makeConversation(id: "c1", unread: 3)])
-        waitFor("first sync") { writer.writes.contains(3) }
+        waitFor("first sync") { writer.writes.contains(1) }
         let countAfterFirstSync = writer.writes.count
 
         sut.applyConversationUnread(conversationId: "c1", unreadCount: 3)
@@ -506,7 +660,7 @@ final class NotificationCoordinatorTests: XCTestCase {
         sut.markConversationRead("c1")
 
         XCTAssertEqual(sut.conversationUnreadCounts["c1"], 0)
-        XCTAssertEqual(sut.conversationUnreadTotal, 2)
+        XCTAssertEqual(sut.conversationUnreadTotal, 1)
     }
 
     func test_markConversationRead_noOpWhenAlreadyRead() {
@@ -531,15 +685,15 @@ final class NotificationCoordinatorTests: XCTestCase {
     func test_applyInAppNotificationCounts_updatesInAppBellOnly() {
         let (sut, writer, _, _) = makeSUT()
         sut.registerConversations([makeConversation(id: "c1", unread: 5)])
-        waitFor("initial sync") { writer.writes.contains(5) }
+        waitFor("initial sync") { writer.writes.contains(1) }
         let writesBefore = writer.writes.count
 
         sut.applyInAppNotificationCounts(total: 12, unread: 7)
 
         XCTAssertEqual(sut.inAppNotificationUnread, 7)
-        // Must NOT change the badge: messages remain the source of truth.
+        // Must NOT change the badge: conversations remain the source of truth.
         XCTAssertEqual(writer.writes.count, writesBefore)
-        XCTAssertEqual(sut.conversationUnreadTotal, 5)
+        XCTAssertEqual(sut.conversationUnreadTotal, 1)
     }
 
     func test_applyInAppNotificationCounts_clampsNegatives() async {
@@ -558,9 +712,9 @@ final class NotificationCoordinatorTests: XCTestCase {
 
         await sut.syncNow()
 
-        XCTAssertEqual(writer.writes.last, 3)
-        XCTAssertEqual(sink.publishedUnread.last, 3)
-        XCTAssertEqual(UserDefaults(suiteName: suite)?.integer(forKey: "unread_count"), 3)
+        XCTAssertEqual(writer.writes.last, 1)
+        XCTAssertEqual(sink.publishedUnread.last, 1)
+        XCTAssertEqual(UserDefaults(suiteName: suite)?.integer(forKey: "unread_count"), 1)
     }
 
     func test_syncNow_whenBadgeDisabled_writesZeroBadgeButKeepsWidgetCount() async {
@@ -571,7 +725,9 @@ final class NotificationCoordinatorTests: XCTestCase {
         let sink = MockWidgetSink()
         let sut = NotificationCoordinator(
             badgeWriter: writer, appGroupSuiteName: suite,
-            badgeEnabledProvider: { false }
+            badgeEnabledProvider: { false },
+            openConversationIdsProvider: { [] },
+            ledger: makeLedger()
         )
         sut.widgetSink = sink
         sut.registerConversations([makeConversation(id: "a", unread: 3)])
@@ -580,8 +736,8 @@ final class NotificationCoordinatorTests: XCTestCase {
 
         // Pref « Badges » désactivée → l'icône d'app ne montre aucun badge…
         XCTAssertEqual(writer.writes.last, 0)
-        // …mais le widget (compteur distinct) garde le vrai total.
-        XCTAssertEqual(sink.publishedUnread.last, 3)
+        // …mais le widget (compteur distinct) garde le vrai compte.
+        XCTAssertEqual(sink.publishedUnread.last, 1)
     }
 
     // MARK: - reset
@@ -656,11 +812,13 @@ final class NotificationCoordinatorTests: XCTestCase {
             badgeWriter: writer,
             appGroupSuiteName: suite,
             badgeEnabledProvider: { badgeEnabled },
-            badgeEnabledChanges: changes.eraseToAnyPublisher()
+            badgeEnabledChanges: changes.eraseToAnyPublisher(),
+            openConversationIdsProvider: { [] },
+            ledger: makeLedger()
         )
         sut.start()
         sut.applyConversationUnread(conversationId: "c1", unreadCount: 7)
-        waitFor("initial badge write") { writer.writes.last == 7 }
+        waitFor("initial badge write") { writer.writes.last == 1 }
 
         badgeEnabled = false
         changes.send(false)
@@ -671,7 +829,7 @@ final class NotificationCoordinatorTests: XCTestCase {
         badgeEnabled = true
         changes.send(true)
 
-        waitFor("badge restored after toggle on") { writer.writes.last == 7 }
-        XCTAssertEqual(writer.writes.last, 7)
+        waitFor("badge restored after toggle on") { writer.writes.last == 1 }
+        XCTAssertEqual(writer.writes.last, 1)
     }
 }

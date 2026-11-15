@@ -38,6 +38,13 @@ const mockEncryptionService = {
 
 const mockFsReadFile = jest.fn() as jest.Mock<any>;
 const mockFsUnlink = jest.fn() as jest.Mock<any>;
+/** Un fichier « existe » pour `stat`, sauf les chemins dérivés CONVENTIONNELS : ceux-là, chaque témoin les pose (#11264). */
+const CONVENTIONAL_DERIVED = /_(thumb\.(webp|jpg)|\d+w\.(webp|avif)|h264\.mp4)$/;
+const mockConventionalPresent = new Set<string>();
+const mockFsStat = jest.fn(async (p: unknown) => {
+  if (CONVENTIONAL_DERIVED.test(String(p)) && !mockConventionalPresent.has(String(p))) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+  return { size: 1024 };
+}) as jest.Mock<any>;
 
 jest.mock('../../../services/attachments/UploadProcessor', () => ({
   UploadProcessor: jest.fn().mockImplementation(() => mockUploadProcessor),
@@ -58,7 +65,7 @@ jest.mock('fs', () => ({
     mkdir: (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined),
     writeFile: (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined),
     chmod: (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined),
-    stat: (jest.fn() as jest.Mock<any>).mockResolvedValue({ size: 1024 }),
+    stat: (...args: unknown[]) => mockFsStat(...args),
   },
 }));
 
@@ -312,15 +319,19 @@ describe('AttachmentService — direct-access methods', () => {
   // ─── associateAttachmentsToMessage ───────────────────────────────────────
 
   describe('associateAttachmentsToMessage', () => {
-    it('calls updateMany with the attachment ids and messageId', async () => {
+    it('calls updateMany for each attachment id with the messageId and its rank', async () => {
       const prisma = makePrisma();
       const svc = new AttachmentService(prisma as PrismaClient);
 
       await svc.associateAttachmentsToMessage([ATTACH_ID, 'att-2'], MSG_ID);
 
       expect(prisma.messageAttachment.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: [ATTACH_ID, 'att-2'] } },
-        data: { messageId: MSG_ID },
+        where: { id: { in: [ATTACH_ID] }, OR: [{ messageId: null }, { messageId: { isSet: false } }] },
+        data: { messageId: MSG_ID, rank: 0 },
+      });
+      expect(prisma.messageAttachment.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['att-2'] }, OR: [{ messageId: null }, { messageId: { isSet: false } }] },
+        data: { messageId: MSG_ID, rank: 1 },
       });
     });
   });
@@ -561,6 +572,35 @@ describe('AttachmentService — direct-access methods', () => {
       ]);
     });
 
+    it('les rendus que le worker posait PENDANT la suppression partent avec la dernière ligne (#11264, contre-audit N2)', async () => {
+      const SHARED = '2024/01/video.mp4';
+      const prisma = makeAttachmentStore([makeAttachmentRow({ id: 'solo', filePath: SHARED, thumbnailPath: null })]);
+      mockConventionalPresent.add('/uploads/2024/01/video_h264.mp4');
+      mockConventionalPresent.add('/uploads/2024/01/video_thumb.webp');
+      const svc = new AttachmentService(prisma as PrismaClient);
+
+      await svc.deleteAttachment('solo');
+      mockConventionalPresent.clear();
+
+      const unlinked = mockFsUnlink.mock.calls.map((call: unknown[]) => call[0]);
+      expect(unlinked).toEqual(expect.arrayContaining(['/uploads/2024/01/video_h264.mp4', '/uploads/2024/01/video_thumb.webp']));
+    });
+
+    it('une COPIE vivante garde les rendus conventionnels', async () => {
+      const SHARED = '2024/01/video.mp4';
+      const prisma = makeAttachmentStore([
+        makeAttachmentRow({ id: 'famille', filePath: SHARED }),
+        makeAttachmentRow({ id: 'collegues', filePath: SHARED }),
+      ]);
+      mockConventionalPresent.add('/uploads/2024/01/video_h264.mp4');
+      const svc = new AttachmentService(prisma as PrismaClient);
+
+      await svc.deleteAttachment('famille');
+      mockConventionalPresent.clear();
+
+      expect(mockFsUnlink).not.toHaveBeenCalled();
+    });
+
     it('une ligne seule sur son fichier : le fichier part, sans charger de collection', async () => {
       const prisma = makeAttachmentStore([
         makeAttachmentRow({ id: 'solo', filePath: '2024/01/solo.jpg' }),
@@ -601,70 +641,9 @@ describe('AttachmentService — direct-access methods', () => {
       expect(result).toEqual([]);
     });
 
-    it('exclut les messages supprimés POUR TOUS, sans qu’on ait à le demander', async () => {
-      // La galerie sert les pièces jointes des messages ; elle doit s'arrêter
-      // à la même tombstone que `GET /conversations/:id/messages`. Sans ce
-      // `deletedAt: null`, un média restait listé — URL comprise — après la
-      // suppression du message qui le portait.
-      const prisma = makePrisma();
-      (prisma.messageAttachment.findMany as jest.Mock<any>).mockResolvedValue([]);
-      const svc = new AttachmentService(prisma as PrismaClient);
-
-      await svc.getConversationAttachments(CONV_ID);
-
-      expect(prisma.messageAttachment.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ message: { conversationId: CONV_ID, deletedAt: null } }),
-        })
-      );
-    });
-
-    it('fusionne le `messageFilter` de l’appelant sous `message`', async () => {
-      const prisma = makePrisma();
-      (prisma.messageAttachment.findMany as jest.Mock<any>).mockResolvedValue([]);
-      const svc = new AttachmentService(prisma as PrismaClient);
-      const floor = new Date('2026-06-15T00:00:00Z');
-
-      await svc.getConversationAttachments(CONV_ID, {
-        messageFilter: { createdAt: { gte: floor }, id: { notIn: ['m-1'] } },
-      });
-
-      expect(prisma.messageAttachment.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            message: {
-              createdAt: { gte: floor },
-              id: { notIn: ['m-1'] },
-              conversationId: CONV_ID,
-              deletedAt: null,
-            },
-          }),
-        })
-      );
-    });
-
-    it('ne laisse PAS l’appelant desserrer les deux invariants du service', async () => {
-      // Le filtre ne peut qu'AJOUTER. Un appelant qui poserait
-      // `conversationId` ou `deletedAt` — par recopie d'une clause de message
-      // toute faite — sortirait sinon de la conversation demandée, ou
-      // ressusciterait les tombstones.
-      const prisma = makePrisma();
-      (prisma.messageAttachment.findMany as jest.Mock<any>).mockResolvedValue([]);
-      const svc = new AttachmentService(prisma as PrismaClient);
-
-      await svc.getConversationAttachments(CONV_ID, {
-        messageFilter: { conversationId: 'autre-conversation', deletedAt: { not: null } } as any,
-      });
-
-      expect(prisma.messageAttachment.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            message: { conversationId: CONV_ID, deletedAt: null },
-          }),
-        })
-      );
-    });
-
+    // Les trois témoins du `where` de la galerie (conversation, tombstone,
+    // cycle de vie du porteur #9244) vivent chez leur sujet :
+    // `unit/services/attachments/conversation-attachments-carrier-lifecycle.test.ts`.
     it('filters by mimeType when type option provided', async () => {
       const prisma = makePrisma();
       (prisma.messageAttachment.findMany as jest.Mock<any>).mockResolvedValue([]);
@@ -693,10 +672,11 @@ describe('AttachmentService — direct-access methods', () => {
       );
     });
 
-    it('maps attachment rows to AttachmentWithMetadata shape', async () => {
+    it('maps attachment rows to the Attachment shape — sans les deux colonnes lourdes', async () => {
+      // #4887 : la liste ne les charge plus — l'absence EST le contrat.
       const prisma = makePrisma();
       (prisma.messageAttachment.findMany as jest.Mock<any>).mockResolvedValue([
-        makeAttachmentRow({ thumbnailUrl: '/thumb.jpg', width: 100, translations: null, transcription: null }),
+        makeAttachmentRow({ thumbnailUrl: '/thumb.jpg', width: 100 }),
       ]);
       const svc = new AttachmentService(prisma as PrismaClient);
 
@@ -706,8 +686,9 @@ describe('AttachmentService — direct-access methods', () => {
       expect(result[0].id).toBe(ATTACH_ID);
       expect((result[0] as any).thumbnailUrl).toBe('/thumb.jpg');
       expect((result[0] as any).isEncrypted).toBe(false);
-      expect(result[0].translations).toEqual({});
       expect((result[0] as any).createdAt).toBe('2024-01-01T00:00:00.000Z');
+      (['translations', 'transcription', 'translatedAudios'] as const)
+        .forEach((lourde) => expect(result[0]).not.toHaveProperty(lourde));
     });
 
     it('handles unknown attachment type gracefully (empty mimeType filter)', async () => {
@@ -923,8 +904,6 @@ describe('AttachmentService — direct-access methods', () => {
           consumedCount: null,
           isEncrypted: null,
           thumbnailUrl: null,
-          translations: null,
-          transcription: null,
         },
       ]);
       const svc = new AttachmentService(prisma as PrismaClient);
@@ -933,7 +912,7 @@ describe('AttachmentService — direct-access methods', () => {
       const item = result[0] as any;
       expect(item.isForwarded).toBe(false);
       expect(item.isEncrypted).toBe(false);
-      expect(item.translations).toEqual({});
+      expect(item.thumbnailUrl).toBeUndefined();
     });
 
     it('constructor: uses /app/uploads fallback when UPLOAD_PATH not set', async () => {
@@ -955,7 +934,7 @@ describe('AttachmentService — direct-access methods', () => {
       const svc = new AttachmentService(makePrisma() as PrismaClient);
       const file = { buffer: Buffer.from(''), filename: 'a.jpg', mimeType: 'image/jpeg', size: 0 };
       const result = svc.validateFile(file);
-      expect(mockUploadProcessor.validateFile).toHaveBeenCalledWith(file);
+      expect(mockUploadProcessor.validateFile).toHaveBeenCalledWith(file, 'registered');
       expect(result).toEqual({ valid: true });
     });
 

@@ -45,14 +45,14 @@ private fun StarredMessage.toRow(): StarredMessageRow = StarredMessageRow(
     snippet = messageSnippetOf(
         text = contentPreview,
         hasImage = attachmentKind == StarredAttachmentKind.IMAGE,
-        hasFile = attachmentKind == StarredAttachmentKind.FILE,
+        hasFile = attachmentKind != null && attachmentKind != StarredAttachmentKind.IMAGE,
     ),
 )
 
 /**
- * Backs the starred-messages list screen. Starring is **local-only** (the gateway
- * exposes no message-star endpoint), so the durable [StarredMessagesStore] is the
- * whole source of truth — no network, no outbox. The state is cache-first: the
+ * Backs the starred-messages list screen. The durable
+ * [StarredMessagesStore] is the whole source of truth (kept in sync with the other
+ * devices by the realtime binding) — no network call, no outbox. The state is cache-first: the
  * initial value is projected synchronously from the store's hydrated snapshot, so
  * the list paints instantly, and it re-derives whenever a star is added or removed
  * anywhere in the app (mirrors iOS `StarredMessagesView`).
@@ -73,4 +73,7 @@ class StarredMessagesViewModel @Inject constructor(
 
     /** Remove a bookmark straight from the list (no-op for an unknown id). */
     fun unstar(messageId: String) = starredStore.unstar(messageId)
+
+    /** « Tout retirer » : l'écran a déjà obtenu la confirmation. */
+    fun clearAll() = starredStore.clearAll()
 }

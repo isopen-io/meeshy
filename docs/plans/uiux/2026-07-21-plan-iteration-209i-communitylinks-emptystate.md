@@ -4,7 +4,7 @@
 - **Piste** : iOS (suffixe `i`)
 - **Branche de travail** : `claude/laughing-thompson-jj2z84`
 - **Base** : `main` HEAD (resync depuis `origin/main`, PR mergées jusqu'à 207i)
-- **Fichier(s)** : `apps/ios/Meeshy/Features/Main/Views/CommunityLinksView.swift`
+- **Fichier(s)** : `apps/ios/Meeshy/Features/Links/Views/CommunityLinksView.swift`
 
 ## Contexte
 

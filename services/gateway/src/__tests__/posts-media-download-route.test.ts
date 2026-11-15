@@ -62,7 +62,24 @@ const buildAuthMiddleware = (userId?: string) =>
 
 async function buildApp(authenticated: boolean): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
-  const prisma = {} as unknown as PrismaClient;
+  // #4150 — la route DÉLÈGUE au point d'ingestion, qui réduit les ids par
+  // AUDIENCE avant toute écriture. Ce double n'était qu'un `{}` : la route
+  // n'avait alors aucune ACL à consulter, ce qui est exactement le défaut que
+  // ce lot ferme. Il rend un post PUBLIC par id demandé — l'audience elle-même
+  // a ses témoins dédiés (`unit/routes/social/events.test.ts`).
+  const prisma = {
+    post: {
+      findMany: jest.fn<any>().mockImplementation(({ where }: any) =>
+        Promise.resolve(where?.repostOfId !== undefined
+          ? []
+          : ((where?.id?.in ?? []) as string[]).map((id) => ({
+              id, authorId: 'author-1', visibility: 'PUBLIC',
+              visibilityUserIds: [] as string[], expiresAt: null,
+            })))),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+    },
+    postImpression: { createMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
+  } as unknown as PrismaClient;
   const requiredAuth = buildAuthMiddleware(authenticated ? 'u1' : undefined);
   const { registerInteractionRoutes } = await import('../routes/posts/interactions');
   app.register(async (instance) => {

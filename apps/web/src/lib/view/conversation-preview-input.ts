@@ -1,0 +1,191 @@
+import type { LastMessageAttachmentSummary, PreviewAttachmentKind } from '@meeshy/shared/types/conversation-preview';
+import type {
+  ConversationPreviewAttachment,
+  ConversationPreviewInput,
+  ConversationPreviewMessage,
+} from '@meeshy/shared/utils/conversation-preview';
+
+import type { ListConversation, ListLastMessage } from '@/lib/api/list-preview';
+import type { Attachment, Conversation } from '@/lib/api/types';
+
+import { endToEndRegimeOf, isForgedPlaintext, isVerifiedPlaintext, SEALED_CONTENT, shownForm, type EndToEndRegimeView } from './end-to-end-sealed';
+
+/**
+ * CE QUE LA LIGNE SAIT EN PLUS DE LA CONVERSATION — le lecteur, ses langues,
+ * l'instant, et les trois sources locales que le cache de liste ne porte pas :
+ * la réception d'un éphémère (#7451), la frappe, le brouillon.
+ */
+export type PreviewContext = {
+  readonly viewerId: string;
+  /** Langue de CADRAGE (celle de l'interface) : celle des libellés. */
+  readonly language: string;
+  readonly preferredLanguages: readonly string[];
+  readonly now: number;
+  readonly receivedAt?: number | null;
+  /** L'échéance servie par `message:countdown-started`, quand elle est connue. */
+  readonly servedDeadline?: number | null;
+  readonly typing?: readonly string[] | null;
+  readonly draft?: string | null;
+  /** Le régime vu de la conversation (#12992) ; absent : lu dans le registre du compte. */
+  readonly regime?: EndToEndRegimeView;
+};
+
+type Hoisted = {
+  readonly forwardedFromId?: string;
+  readonly maxViewOnceCount?: number;
+  readonly location?: { readonly name?: string | null; readonly address?: string | null } | null;
+  readonly sticker?: { readonly templateId?: string | null; readonly emoji?: string | null } | null;
+};
+
+type ProtectedAttachment = Attachment & {
+  readonly isViewOnce?: boolean;
+  readonly isBlurred?: boolean;
+  readonly effectFlags?: number;
+  readonly alt?: string | null;
+};
+
+const nonEmpty = (value: string | null | undefined): string | null =>
+  typeof value === 'string' && value.trim() !== '' ? value : null;
+
+const kindOfMime = (mimeType: string): PreviewAttachmentKind => {
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
+  if (mimeType.startsWith('audio/')) return 'audio';
+  return 'file';
+};
+
+/**
+ * LE RÉSUMÉ DES PIÈCES, QUAND LE SERVEUR NE L'A PAS SERVI — un message reçu
+ * par `message:new` ou mon envoi portent leurs pièces ENTIÈRES, pas le résumé
+ * que `GET /conversations` joint à `lastMessage`. La même projection que le
+ * contrat (#7545) : familles par `mimeType`, somme des tailles connues.
+ */
+function summaryOf(attachments: readonly Attachment[]): LastMessageAttachmentSummary | null {
+  if (attachments.length === 0) return null;
+  const kinds = attachments.reduce<Partial<Record<PreviewAttachmentKind, number>>>((acc, a) => {
+    const kind = kindOfMime(a.mimeType ?? '');
+    return { ...acc, [kind]: (acc[kind] ?? 0) + 1 };
+  }, {});
+  const sizes = attachments.map((a) => a.fileSize).filter((s): s is number => typeof s === 'number' && Number.isFinite(s));
+  return { count: attachments.length, kinds, totalSize: sizes.length === 0 ? null : sizes.reduce((a, b) => a + b, 0) };
+}
+
+function attachmentOf(attachment: ProtectedAttachment): ConversationPreviewAttachment {
+  return {
+    mimeType: attachment.mimeType,
+    originalName: nonEmpty(attachment.originalName) ?? nonEmpty(attachment.fileName),
+    fileSize: attachment.fileSize ?? null,
+    duration: attachment.duration ?? null,
+    width: attachment.width ?? null,
+    height: attachment.height ?? null,
+    pageCount: attachment.pageCount ?? null,
+    alt: attachment.alt ?? null,
+    ...(attachment.isViewOnce === undefined ? {} : { isViewOnce: attachment.isViewOnce }),
+    ...(attachment.isBlurred === undefined ? {} : { isBlurred: attachment.isBlurred }),
+    ...(attachment.effectFlags === undefined ? {} : { effectFlags: attachment.effectFlags }),
+  };
+}
+
+/**
+ * #12992 — un clair forgé après l'activation du bout en bout se dit comme un
+ * message chiffré : la loi unique (`isForgedPlaintext`) que le fil applique.
+ */
+function sealedPreviewOf(message: ConversationPreviewMessage): ConversationPreviewMessage {
+  return { ...message, content: SEALED_CONTENT, isEncrypted: true, translations: null, location: null, sticker: null, attachment: null, attachmentSummary: null };
+}
+
+function messageOf(conversation: Conversation, context: PreviewContext, regime: EndToEndRegimeView): ConversationPreviewMessage | null {
+  const message = conversation.lastMessage as (ListLastMessage & Hoisted) | undefined | null;
+  if (message === undefined || message === null) return null;
+  if (isForgedPlaintext(message, regime)) return sealedPreviewOf(projectedMessageOf(conversation, message, context));
+  if (!isVerifiedPlaintext(message, regime)) return projectedMessageOf(conversation, message, context);
+  /* #12992 (revues) — un clair d'avant l'activation reconnu par son empreinte
+     se dit depuis sa forme VÉRIFIÉE (`shownForm`), comme dans le fil : ni les
+     traductions ni la langue servies À CÔTÉ du message, ni le résumé de
+     pièces, l'appel ou l'avis système servis par la liste. */
+  const verified = shownForm(message, regime) as ListLastMessage & Hoisted;
+  return projectedMessageOf(conversation, verified, context, { trustServed: false });
+}
+
+type LastReaction = NonNullable<ConversationPreviewInput['lastReaction']>;
+
+/**
+ * #12992 (audit) — l'extrait du message réagi est un texte que la passerelle
+ * sert à côté du dernier message : dans une conversation scellée, il se dit
+ * chiffré, jamais lu (ni dans la ligne, ni dans le widget de la coque).
+ */
+const sealedReactionOf = (reaction: LastReaction | null, regime: EndToEndRegimeView): LastReaction | null =>
+  reaction === null || !regime.sealed || (reaction.excerptProtection !== null && reaction.excerptProtection !== 'ephemeral')
+    ? reaction
+    : { ...reaction, excerpt: null, excerptTranslations: null, excerptProtection: 'encrypted' };
+
+function projectedMessageOf(
+  conversation: Conversation,
+  message: ListLastMessage & Hoisted,
+  context: PreviewContext,
+  options: { readonly trustServed: boolean } = { trustServed: true },
+): ConversationPreviewMessage {
+  const sender = message.sender;
+  const attachments = (message.attachments ?? []) as readonly ProtectedAttachment[];
+  const first = attachments[0];
+  const summary = (options.trustServed ? message.attachmentSummary : undefined) ?? summaryOf(attachments);
+  const served = context.servedDeadline ?? null;
+  const expiresAt = served ?? message.expiresAt ?? null;
+
+  return {
+    id: message.id,
+    senderId: message.senderId ?? null,
+    senderUserId: sender?.userId ?? null,
+    senderName: nonEmpty(sender?.displayName) ?? nonEmpty(sender?.user?.displayName) ?? nonEmpty(sender?.user?.username),
+    content: message.content ?? null,
+    originalLanguage: (options.trustServed ? conversation.lastMessageOriginalLanguage : undefined) ?? message.originalLanguage ?? null,
+    translations: options.trustServed ? (conversation.lastMessageTranslations ?? null) : null,
+    createdAt: message.createdAt,
+    deletedAt: message.deletedAt ?? null,
+    messageType: message.messageType ?? null,
+    effectFlags: message.effectFlags ?? null,
+    ephemeralDuration: message.ephemeralDuration ?? null,
+    expiresAt,
+    isEncrypted: message.isEncrypted ?? null,
+    isViewOnce: message.isViewOnce ?? null,
+    isBlurred: message.isBlurred ?? null,
+    /* PAR LECTEUR (#7594, #7671) — `lastMessage.viewOnceConsumed` REST,
+       `lastMessageViewOnceConsumed` socket. L'ancien compteur GLOBAL
+       (`viewOnceCount >= maxViewOnceCount`) disait « ouvert » dès qu'un AUTRE
+       l'ouvrait, et la liste ne le sert plus : il ne décide plus rien. */
+    viewOnceConsumed: typeof message.viewOnceConsumed === 'boolean' ? message.viewOnceConsumed : null,
+    isForwarded: message.isForwarded ?? (typeof message.forwardedFromId === 'string' && message.forwardedFromId !== ''),
+    systemEvent: message.systemEvent ?? null,
+    callSummary: message.callSummary ?? null,
+    location: message.location ?? null,
+    sticker: message.sticker ?? null,
+    attachment: first === undefined ? null : attachmentOf(first),
+    attachmentSummary: summary,
+  };
+}
+
+/**
+ * `previewInputOf` — la conversation du cache de liste projetée sur l'ENTRÉE
+ * de `composeConversationPreview` (#7546). Une PROJECTION, jamais une
+ * composition : aucun libellé, aucune priorité, aucune règle de protection
+ * n'est tranchée ici — tout cela appartient au composeur partagé, que le SDK
+ * iOS rejoue sur le même fichier de cas.
+ */
+export function previewInputOf(conversation: Conversation, context: PreviewContext): ConversationPreviewInput {
+  const row = conversation as ListConversation;
+  const regime =
+    context.regime ?? endToEndRegimeOf({ conversationId: conversation.id, servedMode: conversation.encryptionMode, servedSince: conversation.encryptionEnabledAt });
+  return {
+    viewerId: context.viewerId,
+    language: context.language,
+    preferredLanguages: context.preferredLanguages,
+    now: context.now,
+    receivedAt: context.receivedAt ?? null,
+    activeCall: row.activeCall ?? null,
+    typing: context.typing ?? null,
+    draft: context.draft ?? null,
+    lastReaction: sealedReactionOf(row.lastReaction ?? null, regime),
+    lastMessage: messageOf(conversation, context, regime),
+    isDirect: conversation.type === 'direct',
+  };
+}

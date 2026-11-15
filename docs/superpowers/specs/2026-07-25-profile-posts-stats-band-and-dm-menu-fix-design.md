@@ -155,7 +155,7 @@ fixe (« Postes / Réels / Stories »), la valeur seule variant.
 
 ### B.2 Insertion
 
-Fichier : `apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift`.
+Fichier : `apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift`.
 
 Insérer `ProfilePostsStatsBand` dans `body` **juste avant** le `LazyVStack`
 (actuellement ligne 65), à l'intérieur du conteneur existant (pas de ScrollView
@@ -221,7 +221,7 @@ production.
 |---|---|---|
 | `apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift` | A | édition (nil onViewProfile DM, clé détails) |
 | `apps/ios/Meeshy/Localizable.xcstrings` | A + B | clés `conversation.info` + labels bandeau |
-| `apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift` | B | insertion bandeau + propriétés compteurs |
+| `apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift` | B | insertion bandeau + propriétés compteurs |
 | `apps/ios/Meeshy/Features/Main/Views/ProfilePostsStatsBand.swift` | B | nouveau composant |
 | `apps/ios/MeeshyTests/...` | A + B | nouveaux tests |
 

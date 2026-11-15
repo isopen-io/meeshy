@@ -1,0 +1,413 @@
+import { describe, expect, test } from 'bun:test';
+
+import type { NotificationRecord } from './record';
+import { notificationTarget, pushTapTarget, resolveTarget } from './target';
+
+/**
+ * OÙ MÈNE UNE NOTIFICATION (#6288) — miroir de `NotificationContentRouter`
+ * (`apps/ios/Meeshy/Features/Navigation/NotificationContentRouter.swift`).
+ *
+ * La règle d'iOS tient en une phrase, et c'est elle que ces témoins gardent :
+ * **le TYPE n'est pas un discriminant d'entité.** `story_thread_reply` est émis
+ * pour un commentaire sur N'IMPORTE quel contenu — seul `metadata.postType`
+ * (ou `contentType`) dit la vérité. Router sur le type seul ouvrait le lecteur
+ * de story sur un réel commenté.
+ *
+ * Une destination que le web n'a pas encore rend `null` — la ligne se marque
+ * lue sans prétendre ouvrir quoi que ce soit (loi 4).
+ */
+
+const record = (partial: Partial<NotificationRecord>): NotificationRecord => ({
+  id: 'n1',
+  type: 'new_message',
+  title: null,
+  content: '',
+  actor: null,
+  context: {},
+  metadata: {},
+  state: { isRead: false, createdAt: '2026-09-13T08:00:00.000Z' },
+  ...partial,
+});
+
+describe('les contenus sociaux ouvrent l’entité que la métadonnée NOMME', () => {
+  test('un commentaire de publication ouvre le détail de la publication', () => {
+    expect(notificationTarget(record({ type: 'post_comment', context: { postId: 'p1' }, metadata: { postType: 'POST' } }))).toEqual({
+      route: 'post',
+      params: { post: 'p1' },
+    });
+  });
+
+  test('`story_thread_reply` sur un RÉEL ouvre la publication, pas le lecteur de story', () => {
+    expect(
+      notificationTarget(record({ type: 'story_thread_reply', context: { postId: 'r1' }, metadata: { postType: 'REEL' } })),
+    ).toEqual({ route: 'post', params: { post: 'r1' } });
+  });
+
+  test('une story, un statut ou une humeur ouvrent le lecteur plein écran', () => {
+    for (const postType of ['STORY', 'STATUS', 'MOOD']) {
+      expect(notificationTarget(record({ type: 'post_like', context: { postId: 's1' }, metadata: { postType } }))).toEqual({
+        route: 'story',
+        params: { post: 's1' },
+      });
+    }
+  });
+
+  /* LA NOUVELLE HUMEUR D'UN CONTACT A SA PAGE (#10813) — plein écran, la
+     bannière de l'auteur, son avatar, la pluie de son emoji et la réponse en
+     privé. Elle ne passe plus par le lecteur de story, qui ne sait pas lire
+     une humeur sans scène. */
+  test('`friend_new_mood` ouvre la page de l’humeur, que la passerelle dise STATUS ou MOOD', () => {
+    for (const contentType of ['STATUS', 'MOOD', undefined]) {
+      expect(
+        notificationTarget(
+          record({ type: 'friend_new_mood', context: { postId: 'st1' }, metadata: contentType === undefined ? {} : { contentType, postType: contentType } }),
+        ),
+      ).toEqual({ route: 'mood', params: { post: 'st1' } });
+    }
+    expect(pushTapTarget({ type: 'friend_new_mood', postId: 'st1', postType: 'STATUS', contentType: 'STATUS' })).toEqual({
+      route: 'mood',
+      params: { post: 'st1' },
+    });
+  });
+
+  test('une RÉACTION à mon humeur garde le lecteur : seule la nouvelle humeur d’un autre a sa page', () => {
+    expect(resolveTarget({ type: 'status_reaction', postId: 'st1', postType: 'STATUS' })).toEqual({ route: 'story', params: { post: 'st1' } });
+  });
+
+  test('sans identifiant d’humeur, la nouvelle humeur retombe sur la liste — aucune page vide', () => {
+    expect(pushTapTarget({ type: 'friend_new_mood' })).toEqual({ route: 'notifications' });
+  });
+
+  test('la famille `friend_new_*` se discrimine par `contentType`', () => {
+    expect(
+      notificationTarget(record({ type: 'friend_new_post', context: { postId: 's2' }, metadata: { contentType: 'STORY' } })),
+    ).toEqual({ route: 'story', params: { post: 's2' } });
+  });
+
+  test('sans discriminant, un type éphémère PAR CONSTRUCTION ouvre la story, tout autre la publication', () => {
+    expect(notificationTarget(record({ type: 'story_reaction', context: { postId: 's3' } }))).toEqual({
+      route: 'story',
+      params: { post: 's3' },
+    });
+    expect(notificationTarget(record({ type: 'post_like', context: { postId: 'p4' } }))).toEqual({
+      route: 'post',
+      params: { post: 'p4' },
+    });
+  });
+});
+
+describe('les autres familles', () => {
+  test('un message, une mention ou une réaction à un message ouvrent la conversation', () => {
+    for (const type of ['new_message', 'user_mentioned', 'message_reaction', 'member_joined']) {
+      expect(notificationTarget(record({ type, context: { conversationId: 'c-deploiement' } }))).toEqual({
+        route: 'thread',
+        params: { conversation: 'c-deploiement' },
+      });
+    }
+  });
+
+  /* Carte de navigation (#9563, amendement n° 4) : jamais la racine — la fiche du concept annoncé, même devant l'indice `route: 'progression'`. */
+  test('un succès, un badge, une série ou un niveau ouvrent la fiche de leur concept', () => {
+    for (const [type, section] of [
+      ['achievement_unlocked', 'succes'],
+      ['badge_earned', 'badges'],
+      ['streak_milestone', 'flame'],
+      ['level_up', 'level'],
+    ] as const) {
+      expect(notificationTarget(record({ type }))).toEqual({ route: 'progression', search: { section } });
+      expect(resolveTarget({ type, route: 'progression' })).toEqual({ route: 'progression', search: { section } });
+    }
+  });
+
+  /* LE JEU (#9490) — le serveur pose l'indice `route: 'progression'` sur les quatre notifications du jeu ;
+     il mène à la Progression, qui n'est pas l'écran de la chose annoncée. Le TYPE, plus précis, prime sur
+     l'indice : l'invitation de duo vit dans la page Ligue (la mission en duo), le résultat de ligue y
+     est, l'étape de saison a sa page. */
+  test('une invitation ou une acceptation de duo, et un résultat de ligue, ouvrent la page Ligue', () => {
+    for (const type of ['game_duo_invited', 'game_duo_accepted', 'game_league_result']) {
+      expect(notificationTarget(record({ type }))).toEqual({ route: 'progressionLigue' });
+      expect(resolveTarget({ type, route: 'progression' })).toEqual({ route: 'progressionLigue' });
+    }
+  });
+
+  test('une étape de saison ouvre la page Saison', () => {
+    expect(notificationTarget(record({ type: 'game_season_step' }))).toEqual({ route: 'progressionSaison' });
+    expect(resolveTarget({ type: 'game_season_step', route: 'progression' })).toEqual({ route: 'progressionSaison' });
+  });
+
+  /* LA MISSION PERSONNELLE (#9539) — l'annonce du début de plage ouvre la Progression À LA section des
+     missions : le toucher mène à la carte qui décompte, pas au haut de la page. */
+  test('l’annonce d’une mission personnelle ouvre la section des missions de la Progression', () => {
+    const expected = { route: 'progression', search: { section: 'missions' } };
+    expect(notificationTarget(record({ type: 'game_mission_window' }))).toEqual(expected);
+    expect(resolveTarget({ type: 'game_mission_window', route: 'progression' })).toEqual(expected);
+    expect(pushTapTarget({ type: 'game_mission_window', route: 'progression' })).toEqual(expected);
+  });
+
+  /* LES MOMENTS À IMMORTALISER (#10175, § 5.16.4) — une étape franchie app fermée s'annonce par UNE notification
+     groupée ; son toucher ouvre le CARNET, là où l'étape se photographie, jamais le hub que nomme l'indice. */
+  test('une notification « moments à immortaliser » ouvre le carnet, malgré l’indice `progression` du serveur', () => {
+    expect(notificationTarget(record({ type: 'game_photo_moment' }))).toEqual({ route: 'progressionCarnet' });
+    expect(resolveTarget({ type: 'game_photo_moment', route: 'progression' })).toEqual({ route: 'progressionCarnet' });
+    expect(pushTapTarget({ type: 'game_photo_moment', route: 'progression' })).toEqual({ route: 'progressionCarnet' });
+  });
+
+  test('un tap de bannière du jeu atterrit sur la même page', () => {
+    expect(pushTapTarget({ type: 'game_league_result', route: 'progression' })).toEqual({ route: 'progressionLigue' });
+  });
+
+  test('une alerte de sécurité ouvre les réglages', () => {
+    expect(notificationTarget(record({ type: 'login_new_device' }))).toEqual({ route: 'settings' });
+  });
+
+  /* Ce témoin disait « ne mène NULLE PART tant que le web n’a pas d’écran de
+     contacts » — une exemption dont la CONDITION est devenue fausse : #6363 a
+     livré `/discover` et son onglet « Demandes », qui porte les boutons
+     Accepter et Refuser. Sans cette destination, apprendre qu’on a reçu une
+     demande et pouvoir y répondre étaient deux écrans sans chemin entre eux
+     (#7173). */
+  test('une demande de contact ouvre l’onglet « Demandes » de la découverte, filtre « Reçues »', () => {
+    for (const type of ['friend_request', 'contact_request']) {
+      expect(notificationTarget(record({ type, context: { friendRequestId: 'fr1' } }))).toEqual({
+        route: 'discover',
+        search: { onglet: 'requests', demandes: 'received' },
+      });
+    }
+  });
+
+  test('une demande ACCEPTÉE ouvre le fil, pas la découverte — on peut désormais écrire', () => {
+    expect(notificationTarget(record({ type: 'friend_accepted', context: { conversationId: 'c-neuve' } }))).toEqual({
+      route: 'thread',
+      params: { conversation: 'c-neuve' },
+    });
+  });
+
+  test('un type sans destination rend toujours null — la table ne se remplit pas en silence', () => {
+    expect(notificationTarget(record({ type: 'un_type_sans_ecran' }))).toBeNull();
+  });
+});
+
+/**
+ * LE NOYAU PUR, ET LA DESTINATION D'UN TAP DE BANNIÈRE (#7305).
+ *
+ * `notificationTarget()` lit une LIGNE de la cloche ; la charge d'un push
+ * porte les MÊMES clés, mais en chaînes plates dont `''` vaut absence
+ * (`NotificationService`, carte `data`). Le lot extrait donc le noyau plutôt
+ * que d'écrire une seconde table — c'est exactement le défaut que portait
+ * `firebase-messaging-sw.js`, dérivé sur trois routes sur trois.
+ *
+ * **Deux sorties, une seule loi.** La cloche rend `null` quand le web n'a pas
+ * la destination (loi 4 : un contrôle qui ment est pire qu'un contrôle
+ * absent). Un TAP, lui, doit toujours atterrir : `pushTapTarget()` replie sur
+ * `notifications`. La divergence est délibérée, et c'est la SEULE.
+ */
+describe('resolveTarget — le noyau que la charge du push consomme', () => {
+  test('une chaîne VIDE vaut absence, jamais un identifiant', () => {
+    expect(resolveTarget({ type: 'un_type_sans_ecran', conversationId: '', postId: '', friendRequestId: '', route: '' })).toBeNull();
+  });
+
+  test('la conversation ouvre le fil', () => {
+    expect(resolveTarget({ type: 'new_message', conversationId: 'abc' })).toEqual({
+      route: 'thread',
+      params: { conversation: 'abc' },
+    });
+  });
+
+  test('`postType` décide de la surface, le type ne décide de rien', () => {
+    expect(resolveTarget({ type: 'story_thread_reply', postId: 'p1', postType: 'REEL' })).toEqual({
+      route: 'post',
+      params: { post: 'p1' },
+    });
+    expect(resolveTarget({ type: 'story_thread_reply', postId: 'p1', postType: 'STORY' })).toEqual({
+      route: 'story',
+      params: { post: 'p1' },
+    });
+  });
+
+  test('`contentType` sert de repli au discriminant, comme pour la cloche', () => {
+    expect(resolveTarget({ type: 'friend_new_story', postId: 'p1', contentType: 'MOOD' })).toEqual({
+      route: 'story',
+      params: { post: 'p1' },
+    });
+  });
+
+  /* Le web n'a AUCUNE route de demandes d'ami : elles vivent dans l'onglet
+     « Demandes » de `/discover`. La cloche y allait déjà PAR LE TYPE ; un push
+     porte l'identifiant, et une famille de types qui s'élargit côté serveur ne
+     doit pas faire retomber le tap dans le repli. */
+  test('un `friendRequestId` ouvre la découverte, même sur un type que la table ne connaît pas', () => {
+    expect(resolveTarget({ type: 'un_type_de_demande_inconnu', friendRequestId: 'fr1' })).toEqual({
+      route: 'discover',
+      search: { onglet: 'requests', demandes: 'received' },
+    });
+  });
+
+  /* L'indice de route est posé par la passerelle pour les notifications de
+     réengagement, qui ne portent NI conversation NI contenu social — son
+     commentaire le dit. Il prime donc sur toute DÉDUCTION par type, et cède
+     devant une entité, qui est le contenu lui-même. */
+  test('l’indice `route` du serveur prime sur la déduction par type', () => {
+    expect(resolveTarget({ type: 'login_new_device', route: 'progression' })).toEqual({ route: 'progression' });
+  });
+
+  test('une entité prime sur l’indice `route` — le serveur ne le pose que faute d’entité', () => {
+    expect(resolveTarget({ type: 'new_message', conversationId: 'abc', route: 'progression' })).toEqual({
+      route: 'thread',
+      params: { conversation: 'abc' },
+    });
+  });
+
+  test('un indice de route INCONNU ne fabrique pas d’adresse', () => {
+    expect(resolveTarget({ type: 'un_type_sans_ecran', route: '/mood' })).toBeNull();
+  });
+});
+
+describe('pushTapTarget — un tap atterrit toujours', () => {
+  test('sans destination, le tap ouvre la liste des notifications', () => {
+    expect(pushTapTarget({ type: 'un_type_sans_ecran' })).toEqual({ route: 'notifications' });
+  });
+
+  test('avec destination, c’est la même que celle de la cloche', () => {
+    expect(pushTapTarget({ type: 'new_message', conversationId: 'abc' })).toEqual({
+      route: 'thread',
+      params: { conversation: 'abc' },
+    });
+  });
+});
+
+/**
+ * « X A REJOINT MEESHY » (#8105) — la notification annonce une PERSONNE, et
+ * c'est son profil qui s'ouvre : on y trouve « Se connecter » et « Écrire ».
+ * L'acteur est l'arrivant ; son pseudonyme compose l'adresse `/u/$username`,
+ * sur la cloche (`actor.username`) comme au tap d'un push (`senderUsername`,
+ * la clé que la passerelle pose sur la carte `data`).
+ */
+describe('contact_joined ouvre le profil de l’arrivant', () => {
+  const arrivant = { id: 'u-awa', username: 'awa', displayName: 'Maman', avatar: null };
+
+  test('la cloche ouvre `/u/<pseudo>` de l’acteur', () => {
+    expect(notificationTarget(record({ type: 'contact_joined', actor: arrivant }))).toEqual({
+      route: 'userProfile',
+      params: { username: 'awa' },
+    });
+  });
+
+  test('le tap d’une bannière suit le pseudonyme porté par la charge', () => {
+    expect(pushTapTarget({ type: 'contact_joined', senderUsername: 'awa' })).toEqual({
+      route: 'userProfile',
+      params: { username: 'awa' },
+    });
+  });
+
+  test('sans pseudonyme, aucune adresse n’est inventée : le tap retombe sur la liste', () => {
+    expect(pushTapTarget({ type: 'contact_joined' })).toEqual({ route: 'notifications' });
+    expect(notificationTarget(record({ type: 'contact_joined' }))).toBeNull();
+  });
+
+  test('le pseudonyme d’un AUTRE type n’ouvre pas de profil — seul contact_joined annonce une personne', () => {
+    expect(pushTapTarget({ type: 'post_like', senderUsername: 'awa' })).toEqual({ route: 'notifications' });
+  });
+});
+
+/**
+ * « X ÉTAIT SUR MEESHY RÉCEMMENT » (#8285) — la notification annonce, elle
+ * aussi, une PERSONNE : son toucher ouvre le profil de X, là où l'on trouve
+ * « Écrire ». Même adresse que `contact_joined`, sur la cloche comme au tap.
+ */
+describe('contact_recently_active ouvre le profil du contact revenu', () => {
+  const revenu = { id: 'u-marie', username: 'marie', displayName: 'Marie', avatar: null };
+
+  test('la cloche ouvre `/u/<pseudo>` de l’acteur', () => {
+    expect(notificationTarget(record({ type: 'contact_recently_active', actor: revenu }))).toEqual({
+      route: 'userProfile',
+      params: { username: 'marie' },
+    });
+  });
+
+  test('le tap d’une bannière suit le pseudonyme porté par la charge', () => {
+    expect(pushTapTarget({ type: 'contact_recently_active', senderUsername: 'marie' })).toEqual({
+      route: 'userProfile',
+      params: { username: 'marie' },
+    });
+  });
+
+  test('sans pseudonyme, le tap retombe sur la liste plutôt que d’inventer une adresse', () => {
+    expect(pushTapTarget({ type: 'contact_recently_active' })).toEqual({ route: 'notifications' });
+  });
+});
+
+describe('device_battery ouvre la fiche du Proche dont la batterie faiblit (#14147)', () => {
+  const proche = { id: 'u-ada', username: 'ada', displayName: 'Ada', avatar: null };
+
+  test('la cloche et le tap ouvrent `/u/<pseudo>`, où se lit le détail', () => {
+    expect(notificationTarget(record({ type: 'device_battery', actor: proche }))).toEqual({ route: 'userProfile', params: { username: 'ada' } });
+    expect(pushTapTarget({ type: 'device_battery', senderUsername: 'ada' })).toEqual({ route: 'userProfile', params: { username: 'ada' } });
+  });
+});
+
+/**
+ * UN APPEL MANQUÉ SANS CONVERSATION NOMMÉE (#9177) — une invitée non membre,
+ * sans DM avec l'inviteur : la passerelle ne pose aucun `conversationId`, et
+ * sans ce repli le tap n'ouvrait rien (loi 4 enfreinte : un geste posé, aucun
+ * effet). Le cas nominal (conversationId présent) reste inchangé.
+ */
+describe('un appel manqué sans conversation ouvre le profil de l’appelant (#9177)', () => {
+  const appelant = { id: 'u-kwame', username: 'kwame', displayName: 'Kwame', avatar: null };
+
+  test('avec conversation, le fil reste la destination — inchangé', () => {
+    expect(notificationTarget(record({ type: 'missed_call', actor: appelant, context: { conversationId: 'c-9' } }))).toEqual({
+      route: 'thread',
+      params: { conversation: 'c-9' },
+    });
+  });
+
+  test('sans conversation, la cloche ouvre le profil de l’appelant plutôt que rien', () => {
+    expect(notificationTarget(record({ type: 'missed_call', actor: appelant }))).toEqual({
+      route: 'userProfile',
+      params: { username: 'kwame' },
+    });
+  });
+
+  test('le tap d’une bannière suit le même repli', () => {
+    expect(pushTapTarget({ type: 'missed_call', senderUsername: 'kwame' })).toEqual({
+      route: 'userProfile',
+      params: { username: 'kwame' },
+    });
+  });
+
+  test('un appel refusé (call_declined) suit le même repli', () => {
+    expect(pushTapTarget({ type: 'call_declined', senderUsername: 'kwame' })).toEqual({
+      route: 'userProfile',
+      params: { username: 'kwame' },
+    });
+  });
+
+  test('sans pseudonyme, aucune adresse n’est inventée : le tap retombe sur la liste', () => {
+    expect(pushTapTarget({ type: 'missed_call' })).toEqual({ route: 'notifications' });
+    expect(notificationTarget(record({ type: 'missed_call' }))).toBeNull();
+  });
+});
+
+/**
+ * « AJOUTÉ À LA COMMUNAUTÉ Y » (#18052) — la notification nomme la communauté
+ * (`context.communityId` sur la cloche, `communityId` sur la carte `data` du
+ * push) : le tap ouvre son détail, `/communities/$community`.
+ */
+describe('community_invite ouvre la communauté où l’on vient d’entrer', () => {
+  const communityId = '507f1f77bcf86cd799439aaa';
+
+  test('la cloche ouvre `/communities/<id>`', () => {
+    expect(notificationTarget(record({ type: 'community_invite', context: { communityId, communityName: 'Jardins' } }))).toEqual({
+      route: 'community',
+      params: { community: communityId },
+    });
+  });
+
+  test('le tap d’une bannière suit le `communityId` de la charge', () => {
+    expect(pushTapTarget({ type: 'community_invite', communityId })).toEqual({ route: 'community', params: { community: communityId } });
+  });
+
+  test('une charge sans communauté (ancienne passerelle) retombe sur la liste', () => {
+    expect(pushTapTarget({ type: 'community_invite', communityId: '' })).toEqual({ route: 'notifications' });
+  });
+});

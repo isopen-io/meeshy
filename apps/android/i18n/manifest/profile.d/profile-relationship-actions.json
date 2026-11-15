@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:profile": {
+      "resDir": "feature/profile/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "report.reason.spam",
+          "androidName": "profile_report_quick_reason_spam",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "report.reason.inappropriate",
+          "androidName": "profile_report_quick_reason_inappropriate",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "report.reason.harassment",
+          "androidName": "profile_report_quick_reason_harassment",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "report.reason.violence",
+          "androidName": "profile_report_quick_reason_violence",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "report.reason.hate_speech",
+          "androidName": "profile_report_quick_reason_hate_speech",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "report.reason.fake_profile",
+          "androidName": "profile_report_quick_reason_fake_profile",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "report.reason.impersonation",
+          "androidName": "profile_report_quick_reason_impersonation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "report.reason.other",
+          "androidName": "profile_report_quick_reason_other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.toast.reportSent",
+          "androidName": "profile_toast_report_sent",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.toast.reportFailed",
+          "androidName": "profile_toast_report_failed",
+          "status": "adopted"
+        },
+        {
+          "androidName": "profile_report_quick_more_details",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -155,4 +155,20 @@ class DynamicShortcutsPresentationTest {
 
         assertThat(presentation.rows.single().id).isEqualTo("c1")
     }
+
+    @Test
+    fun `the entry shortcuts open the recent and unread elections`() {
+        assertThat(EntryShortcut.all.map { it.address }).containsExactly(
+            "meeshy://conversations/recent",
+            "meeshy://conversations/unread",
+        ).inOrder()
+        assertThat(EntryShortcut.all.map { it.shortcutId }).containsNoDuplicates()
+    }
+
+    @Test
+    fun `conversations keep the places the entry shortcuts leave`() {
+        assertThat(EntryShortcut.conversationSlots(maxCount = 5)).isEqualTo(3)
+        assertThat(EntryShortcut.conversationSlots(maxCount = 1)).isEqualTo(0)
+        assertThat(EntryShortcut.conversationSlots(maxCount = 0)).isEqualTo(0)
+    }
 }

@@ -1,0 +1,373 @@
+import { clampStoryText, STORY_LIMITS } from '@meeshy/shared/utils/story-limits';
+import { clampMediaCrop, isFullMediaCrop, type MediaCropRect } from '@meeshy/shared/utils/media-crop';
+
+import type { ApiFailure } from '@/lib/api/http';
+import type { StoryFilterId } from '@/lib/canvas/media-filter';
+import type { SceneTransition } from '@/lib/canvas/scene-transition';
+
+import { MEDIA_CAPTION_MAX } from './media-caption';
+import type { StoryFrame, StudioMediaKind, StudioPlane } from './story-document';
+import { clampPose, type StudioPose } from './studio-pose';
+import { newTextLayer, type StudioTextLayer, type StudioTiming } from './studio-text';
+
+/**
+ * **UNE PAGE DU STUDIO** (#7684) — ce que #6900/#6943/#6944 posaient sur UN
+ * seul plateau devient l'unité qui se répète : « une PAGE est une slide, une
+ * slide est une SCÈNE du canvas » (`ComposerMediaPlacement.swift:16-21`,
+ * spécification §1.1). Une page porte SES objets texte, SON fond, SON calque
+ * d'avant-plan et SON son — exactement ce que `StudioDraft` portait seul
+ * avant ce lot.
+ *
+ * Poser un second fichier dans une porte REMPLACE le précédent sur la page
+ * COURANTE (question 9.1 de #6900, inchangée) — créer une page est un geste
+ * DISTINCT (`withAddedPage`, `studio.ts`), jamais un effet de bord d'un dépôt
+ * de fichier.
+ *
+ * `StudioUploadState` miroir de la pré-montée iOS
+ * (`MeeshyComposerHost+PreUpload.swift:1-128`) : `uploading` pendant le
+ * transport, `ready` porte l'identité SERVEUR (adoptée), `failed` porte la
+ * CLÉ de sa cause — traduite au RENDU, jamais figée dans la langue du moment
+ * de l'échec.
+ */
+export type StudioFailureKey =
+  | 'story.studio.failure.network'
+  | 'story.studio.failure.timeout'
+  | 'story.studio.failure.session'
+  | 'story.studio.failure.account'
+  | 'story.studio.failure.forbidden'
+  | 'story.studio.failure.tooLarge'
+  | 'story.studio.failure.fileRefused'
+  | 'story.studio.failure.rateLimited'
+  | 'story.studio.failure.onlyUnlinked'
+  | 'story.studio.failure.refused'
+  | 'story.studio.failure.unavailable';
+
+export type StudioUploadState =
+  | { readonly phase: 'uploading'; readonly progress: number }
+  | { readonly phase: 'ready'; readonly postMediaId: string; readonly fileUrl: string; readonly thumbHash?: string }
+  | { readonly phase: 'failed'; readonly reasonKey: StudioFailureKey };
+
+export type StudioVisualAsset = {
+  readonly file?: File;
+  readonly previewUrl: string;
+  readonly mediaType: StudioMediaKind;
+  readonly upload: StudioUploadState;
+  /** Largeur / hauteur du FICHIER LOCAL — mesurée dès la sélection. */
+  readonly aspectRatio?: number;
+  /** La DURÉE du fichier local (vidéo). */
+  readonly durationMs?: number;
+  /** LA LÉGENDE de CE média (#6944) — `PostMedia.caption`. */
+  readonly caption: string;
+  /** LE TEXTE ALTERNATIF de CE média (#8518) — `PostMedia.alt`, ce qu'un
+   * lecteur d'écran dit de lui ; jamais affiché. Absent ⇒ aucun. */
+  readonly alt?: string;
+  /** La pose du CALQUE. Le FOND n'en a pas d'utile (il remplit la scène). */
+  readonly pose: StudioPose;
+  /** LE CADRE du FOND (#8414) — Ajuster/Remplir et ce qui se peint autour.
+   * Absent ⇒ ajusté, flou (`lib/canvas/backdrop.ts`). */
+  readonly frame?: StoryFrame;
+  /** La fenêtre d'apparition du CALQUE en mode Animé (#8415). */
+  readonly timing?: StudioTiming;
+  /** LE FILTRE de CE média (lot 7, `payload.filter`) — il ne peint que lui.
+   * Absent ⇒ aucun filtre. */
+  readonly filter?: StoryFilterId;
+  /** LA COUPE d'une vidéo (#9136, `sourceStart`/`sourceEnd`) — en secondes du
+   * fichier. Absente ⇒ le fichier entier. */
+  readonly trim?: StudioMediaTrim;
+  /** LE SON COUPÉ d'une vidéo (#9136). Absent ⇒ elle garde son son. */
+  readonly muted?: true;
+  /** LE RECADRAGE d'une image (#9136, `MediaCropRect` normalisé sur la
+   * source). Absent ⇒ le cadre entier. */
+  readonly crop?: MediaCropRect;
+  /** LE QUART DE TOUR du fond (#9160, `StoryMediaRotation` iOS) — en degrés
+   * de [0, 360), appliqué APRÈS le recadrage. Absent ⇒ droit. */
+  readonly rotation?: StudioQuarterTurn;
+};
+
+export type StudioQuarterTurn = 90 | 180 | 270;
+
+export type StudioMediaTrim = { readonly start: number; readonly end: number };
+
+export type StudioSoundAsset = {
+  readonly file?: File;
+  readonly previewUrl: string;
+  readonly upload: StudioUploadState;
+  readonly plane: StudioPlane;
+  readonly durationMs?: number;
+};
+
+/** Les trois PORTES du couloir gauche — le fond, le calque, le son. Elles
+ * agissent sur la page COURANTE. */
+export type StudioDoor = 'visual' | 'overlay' | 'sound';
+
+/**
+ * **UNE PAGE** — un fond (éventuel) + ses objets (calque, textes, son). Elle
+ * porte son propre identifiant (`page-1`, `page-2`…), sa propre sélection
+ * (l'objet que les gestes et le couloir droit règlent) et sa propre langue de
+ * composition graine.
+ */
+export type StudioPage = {
+  readonly id: string;
+  readonly texts: readonly StudioTextLayer[];
+  readonly selected: string | null;
+  readonly background: StudioVisualAsset | null;
+  readonly overlay: StudioVisualAsset | null;
+  readonly sound: StudioSoundAsset | null;
+  /** LA DURÉE de la scène animée (#8415), en secondes — `timelineDuration`
+   * du document. Absente : une scène statique. */
+  readonly duration?: number;
+  /** L'ENTRÉE et la SORTIE de la scène (#8792) — `scene.opening` /
+   * `scene.closing` de CanvasV3. Absentes : aucune transition. */
+  readonly opening?: SceneTransition;
+  readonly closing?: SceneTransition;
+};
+
+/** Une page NEUVE, avec UN texte vide sélectionné — même loi que
+ * `emptyStudioDraft` avant ce lot. `textId` est calculé par l'appelant
+ * (`studio.ts`) CONTRE TOUTES LES PAGES du brouillon : deux pages ne
+ * partagent jamais un `id` de texte (`translationSetPath`,
+ * `storyEffectsV3.ts:635-643`, prend le PREMIER objet d'un `id` donné, toutes
+ * scènes confondues). */
+export function emptyStudioPage(id: string, textId: string, language: string): StudioPage {
+  const seed = newTextLayer({ id: textId, language });
+  return { id, texts: [seed], selected: seed.id, background: null, overlay: null, sound: null };
+}
+
+export function isStudioPageEmpty(page: StudioPage): boolean {
+  return page.texts.every((layer) => layer.text.trim() === '') && page.background === null && page.overlay === null && page.sound === null;
+}
+
+/** La VIDÉO de la page (#9124) — le fond d'abord, sinon le calque. */
+export function studioPageVideo(page: StudioPage): StudioVisualAsset | null {
+  if (page.background?.mediaType === 'video') return page.background;
+  return page.overlay?.mediaType === 'video' ? page.overlay : null;
+}
+
+/** Une page ne peut pas partir si un de ses trois assets a ÉCHOUÉ — l'auteur
+ * le retire ou réessaie d'abord (loi 4). */
+export function isStudioPagePublishable(page: StudioPage): boolean {
+  if (page.background?.upload.phase === 'failed') return false;
+  if (page.overlay?.upload.phase === 'failed') return false;
+  if (page.sound?.upload.phase === 'failed') return false;
+  return true;
+}
+
+/** Le nombre d'assets (fond/calque/son) que CETTE page porte — prêts OU en
+ * vol, comptés pour le plafond du DOCUMENT (`studioMediaCount`, `studio.ts`). */
+export function pageMediaCount(page: StudioPage): number {
+  return [page.background, page.overlay, page.sound].filter((asset) => asset !== null).length;
+}
+
+/* ── LES OBJETS TEXTE, sur une page ──────────────────────────────────────── */
+
+export const selectedTextLayerOf = (page: StudioPage): StudioTextLayer | null =>
+  page.texts.find((layer) => layer.id === page.selected) ?? null;
+
+/** `textId` est calculé par l'appelant contre TOUTES les pages (même raison
+ * que `emptyStudioPage`). */
+export function pageWithAddedText(page: StudioPage, textId: string, language: string): StudioPage {
+  if (page.texts.length >= STORY_LIMITS.maxTextsPerScene) return page;
+  const layer = newTextLayer({ id: textId, language });
+  return { ...page, texts: [...page.texts, layer], selected: layer.id };
+}
+
+export function pageWithSelected(page: StudioPage, id: string | null): StudioPage {
+  return { ...page, selected: id };
+}
+
+/** RETIRER un objet texte. Le dernier ne se retire pas en laissant la page
+ * sans cible de frappe : il se VIDE, et la sélection reste sur lui. */
+export function pageWithoutText(page: StudioPage, id: string): StudioPage {
+  if (page.texts.length <= 1) {
+    const cleared = page.texts.map((layer) => (layer.id === id ? { ...layer, text: '' } : layer));
+    return { ...page, texts: cleared };
+  }
+  const texts = page.texts.filter((layer) => layer.id !== id);
+  return { ...page, texts, selected: page.selected === id ? (texts[texts.length - 1]?.id ?? null) : page.selected };
+}
+
+/** LE site unique de mutation d'un objet texte d'UNE page. */
+export function pageWithTextLayer(page: StudioPage, id: string, change: (layer: StudioTextLayer) => StudioTextLayer): StudioPage {
+  return { ...page, texts: page.texts.map((layer) => (layer.id === id ? change(layer) : layer)) };
+}
+
+export function pageWithText(page: StudioPage, id: string, text: string): StudioPage {
+  return pageWithTextLayer(page, id, (layer) => ({ ...layer, text: clampStoryText(text) }));
+}
+
+/* ── LES TROIS PORTES, sur une page ──────────────────────────────────────── */
+
+const visualSlot = (door: Extract<StudioDoor, 'visual' | 'overlay'>): 'background' | 'overlay' =>
+  door === 'visual' ? 'background' : 'overlay';
+
+export function pageWithVisual(page: StudioPage, door: 'visual' | 'overlay', asset: StudioVisualAsset): StudioPage {
+  return { ...page, [visualSlot(door)]: asset };
+}
+
+export function pageWithoutVisual(page: StudioPage, door: 'visual' | 'overlay'): StudioPage {
+  const slot = visualSlot(door);
+  return { ...page, [slot]: null, ...(slot === 'overlay' && page.selected === 'overlay' ? { selected: null } : {}) };
+}
+
+export function pageWithVisualUpload(page: StudioPage, door: 'visual' | 'overlay', upload: StudioUploadState): StudioPage {
+  const slot = visualSlot(door);
+  const asset = page[slot];
+  return asset === null ? page : { ...page, [slot]: { ...asset, upload } };
+}
+
+export function pageWithVisualAspectRatio(page: StudioPage, door: 'visual' | 'overlay', previewUrl: string, aspectRatio: number): StudioPage {
+  const slot = visualSlot(door);
+  const asset = page[slot];
+  if (asset === null || asset.previewUrl !== previewUrl) return page;
+  return { ...page, [slot]: { ...asset, aspectRatio } };
+}
+
+export function pageWithMediaDuration(page: StudioPage, door: StudioDoor, previewUrl: string, durationMs: number): StudioPage {
+  if (door === 'sound') {
+    const sound = page.sound;
+    if (sound === null || sound.previewUrl !== previewUrl) return page;
+    return { ...page, sound: { ...sound, durationMs } };
+  }
+  const slot = visualSlot(door);
+  const asset = page[slot];
+  if (asset === null || asset.previewUrl !== previewUrl) return page;
+  return { ...page, [slot]: { ...asset, durationMs } };
+}
+
+export function pageWithVisualCaption(page: StudioPage, door: 'visual' | 'overlay', caption: string): StudioPage {
+  const slot = visualSlot(door);
+  const asset = page[slot];
+  return asset === null ? page : { ...page, [slot]: { ...asset, caption: caption.slice(0, MEDIA_CAPTION_MAX) } };
+}
+
+/** LE CADRE du fond de CETTE page (#8414) — sans fond, rien ne change. */
+export function pageWithBackgroundFrame(page: StudioPage, frame: StoryFrame): StudioPage {
+  return page.background === null ? page : { ...page, background: { ...page.background, frame } };
+}
+
+/** LES ÉDITIONS DE BASE du fond (#9136) — une coupe vide, un son rendu ou un
+ * cadre entier s'écrivent par leur ABSENCE : une pièce ramenée à son état
+ * d'origine repart intacte. */
+export function pageWithBackgroundTrim(page: StudioPage, trim: StudioMediaTrim | null): StudioPage {
+  if (page.background === null) return page;
+  const { trim: _previous, ...rest } = page.background;
+  return { ...page, background: trim === null || trim.end <= trim.start ? rest : { ...rest, trim } };
+}
+
+export function pageWithBackgroundMuted(page: StudioPage, muted: boolean): StudioPage {
+  if (page.background === null) return page;
+  const { muted: _previous, ...rest } = page.background;
+  return { ...page, background: muted ? { ...rest, muted: true } : rest };
+}
+
+export function pageWithBackgroundCrop(page: StudioPage, crop: MediaCropRect | null): StudioPage {
+  if (page.background === null) return page;
+  const { crop: _previous, ...rest } = page.background;
+  return { ...page, background: crop === null || isFullMediaCrop(crop) ? rest : { ...rest, crop: clampMediaCrop(crop) } };
+}
+
+/** « Pivoter » (#9160, `StoryMediaRotation.turned` iOS) — un quart de tour
+ * dans le sens du glyphe ⟲ (antihoraire, −90° ramené dans [0, 360)) ; le
+ * quatrième rend la pièce droite, écrite par son ABSENCE. */
+export function pageWithBackgroundTurned(page: StudioPage): StudioPage {
+  if (page.background === null) return page;
+  const { rotation: previous, ...rest } = page.background;
+  const next = ((previous ?? 0) + 270) % 360;
+  return { ...page, background: next === 0 ? rest : { ...rest, rotation: next as StudioQuarterTurn } };
+}
+
+/** LE TEXTE ALTERNATIF de CE média (#8518) — même borne que la légende
+ * (`CreatePostSchema.mediaAlt`, 1000 caractères). */
+export function pageWithVisualAlt(page: StudioPage, door: 'visual' | 'overlay', alt: string): StudioPage {
+  const slot = visualSlot(door);
+  const asset = page[slot];
+  return asset === null ? page : { ...page, [slot]: { ...asset, alt: alt.slice(0, MEDIA_CAPTION_MAX) } };
+}
+
+/** LE FILTRE de CE média (lot 7) — `null` le retire ; sans média, rien ne
+ * change. Le filtre d'un média ne touche jamais les autres. */
+export function pageWithVisualFilter(page: StudioPage, door: 'visual' | 'overlay', filter: StoryFilterId | null): StudioPage {
+  const slot = visualSlot(door);
+  const asset = page[slot];
+  if (asset === null || (asset.filter ?? null) === filter) return page;
+  const { filter: _previous, ...rest } = asset;
+  return { ...page, [slot]: filter === null ? rest : { ...rest, filter } };
+}
+
+export function pageWithVisualPose(page: StudioPage, door: 'visual' | 'overlay', pose: StudioPose): StudioPage {
+  const slot = visualSlot(door);
+  const asset = page[slot];
+  return asset === null ? page : { ...page, [slot]: { ...asset, pose: clampPose(pose) } };
+}
+
+export function pageWithSound(page: StudioPage, asset: StudioSoundAsset): StudioPage {
+  return { ...page, sound: asset };
+}
+
+export function pageWithoutSound(page: StudioPage): StudioPage {
+  return { ...page, sound: null };
+}
+
+export function pageWithSoundUpload(page: StudioPage, upload: StudioUploadState): StudioPage {
+  if (page.sound === null) return page;
+  return { ...page, sound: { ...page.sound, upload } };
+}
+
+export function pageWithSoundPlane(page: StudioPage, plane: StudioPlane): StudioPage {
+  if (page.sound === null) return page;
+  return { ...page, sound: { ...page.sound, plane } };
+}
+
+/** La porte décide du rôle ; `accept` n'est qu'un CONSEIL au sélecteur natif
+ * — ce prédicat est la garde. Un MIME vide (inconnu du navigateur) passe : la
+ * passerelle juge les octets (`tus-handler.ts:384-400`). */
+/** Un `.mp4` n'a qu'un type système, `video/mp4`, qu'il porte une image ou
+ * non : la porte SONORE le prend pour un son (#9693). */
+const SOUND_CONTAINER_NAMED_VIDEO = 'video/mp4';
+
+/** Le fichier posé à la porte SONORE part comme un son : un `.mp4` y est
+ * déclaré `audio/mp4` — mêmes octets, que `<audio>` lit et que la passerelle
+ * vérifie par leur boîte `ftyp` (#9693). */
+export function studioSoundFileOf(file: File): File {
+  return file.type === SOUND_CONTAINER_NAMED_VIDEO ? new File([file], file.name, { type: 'audio/mp4', lastModified: file.lastModified }) : file;
+}
+
+export function studioDoorAccepts(door: StudioDoor, mimeType: string): boolean {
+  if (mimeType === '') return true;
+  if (door === 'sound') return mimeType.startsWith('audio/') || mimeType === SOUND_CONTAINER_NAMED_VIDEO;
+  return mimeType.startsWith('image/') || mimeType.startsWith('video/');
+}
+
+export function readyAssetOf(
+  upload: StudioUploadState,
+): { readonly postMediaId: string; readonly fileUrl: string; readonly thumbHash?: string } | null {
+  if (upload.phase !== 'ready') return null;
+  return { postMediaId: upload.postMediaId, fileUrl: upload.fileUrl, ...(upload.thumbHash !== undefined ? { thumbHash: upload.thumbHash } : {}) };
+}
+
+/**
+ * LA CAUSE D'UN ÉCHEC, dans le vocabulaire d'une STORY — `null` ⇒ rien à
+ * dire : une annulation vient de l'auteur lui-même (retrait, remplacement).
+ */
+/**
+ * LE PLAFOND DES PERSONNES CHOISIES SANS LIEN (#14105, #14169) — un 429 qui
+ * n'est pas une cadence : attendre une minute n'y change rien, l'auteur doit
+ * retirer ces personnes ou revenir demain. Le studio ne rejoue jamais un
+ * échec ; ce refus-là se dit avec sa cause, pas « réessayez dans un instant ».
+ */
+const ONLY_UNLINKED_RECIPIENTS_LIMIT = 'ONLY_UNLINKED_RECIPIENTS_LIMIT';
+
+export function studioFailureKey(failure: ApiFailure, stage: 'upload' | 'publish'): StudioFailureKey | null {
+  if (failure.code === 'ABORTED') return null;
+  if (failure.code === 'CANVAS_INVALID' || failure.code === 'MEDIA_NOT_CLAIMED') return 'story.studio.failure.refused';
+  if (failure.code === 'POST_MEDIA_REQUIRES_ACCOUNT') return 'story.studio.failure.account';
+  if (failure.status === 0) return failure.code === 'TIMEOUT' ? 'story.studio.failure.timeout' : 'story.studio.failure.network';
+  if (failure.status === 401) return 'story.studio.failure.session';
+  if (failure.status === 403) return 'story.studio.failure.forbidden';
+  if (failure.status === 413) return 'story.studio.failure.tooLarge';
+  if (failure.code === ONLY_UNLINKED_RECIPIENTS_LIMIT) return 'story.studio.failure.onlyUnlinked';
+  if (failure.status === 429) return 'story.studio.failure.rateLimited';
+  if (failure.status === 400 && stage === 'upload') return 'story.studio.failure.fileRefused';
+  if (failure.status >= 400 && failure.status < 500) return 'story.studio.failure.refused';
+  return 'story.studio.failure.unavailable';
+}

@@ -1,5 +1,306 @@
 # @meeshy/agent
 
+## 1.0.75
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.46.0
+
+## 1.0.74
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.45.0
+
+## 1.0.73
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.44.0
+
+## 1.0.72
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.43.0
+
+## 1.0.71
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.42.1
+
+## 1.0.70
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.42.0
+
+## 1.0.69
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.41.0
+
+## 1.0.68
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.40.0
+
+## 1.0.67
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.39.0
+
+## 1.0.66
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.38.0
+
+## 1.0.65
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.37.0
+
+## 1.0.64
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.36.0
+
+## 1.0.63
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.35.0
+
+## 1.0.62
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.34.0
+
+## 1.0.61
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.33.0
+
+## 1.0.60
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.32.0
+
+## 1.0.59
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.31.0
+
+## 1.0.58
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.30.0
+
+## 1.0.57
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.29.0
+
+## 1.0.56
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.28.0
+
+## 1.0.55
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.27.0
+
+## 1.0.54
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.26.0
+
+## 1.0.53
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.25.0
+
+## 1.0.52
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.24.0
+
+## 1.0.51
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.23.0
+
+## 1.0.50
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.22.0
+
+## 1.0.49
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.21.4
+
+## 1.0.48
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.21.3
+
+## 1.0.47
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.21.2
+
+## 1.0.46
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.21.1
+
+## 1.0.45
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.21.0
+
+## 1.0.44
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.20.0
+
+## 1.0.43
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.19.5
+
+## 1.0.42
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.19.4
+
+## 1.0.41
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.19.3
+
+## 1.0.40
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.19.2
+
+## 1.0.39
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.19.1
+
+## 1.0.38
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.19.0
+
+## 1.0.37
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.18.0
+
+## 1.0.36
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.17.0
+
+## 1.0.35
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.16.1
+
+## 1.0.34
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.16.0
+
+## 1.0.33
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.15.0
+
 ## 1.0.32
 
 ### Patch Changes

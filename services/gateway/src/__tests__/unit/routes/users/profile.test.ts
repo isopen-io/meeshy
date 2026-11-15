@@ -1,6 +1,6 @@
 /**
  * Unit tests for users profile routes (profile.ts)
- * Tests GET /users/me/test, PATCH /users/me, PATCH /users/me/avatar,
+ * Tests PATCH /users/me, PATCH /users/me/avatar,
  * PATCH /users/me/banner, PATCH /users/me/password, PATCH /users/me/username,
  * GET /u/:username, GET /users/:id, GET /users/email/:email,
  * GET /users/id/:id, GET /users/phone/:phone.
@@ -32,7 +32,14 @@ jest.mock('../../../../middleware/auth', () => ({
   // getOptionalAuth (presence-gate.ts) calls this at route-registration time
   // for the dedicated email/id/phone lookups — a no-op preValidation hook is
   // enough since these tests don't exercise presence-gating itself.
-  createUnifiedAuthMiddleware: jest.fn(() => async () => {}),
+  // Un lecteur INSCRIT (lui-même) : un lecteur sans compte ne lit plus aucun
+  // profil (#10205), et sa propre fiche ne pose pas la question du blocage.
+  createUnifiedAuthMiddleware: jest.fn(() => async (req: any) => {
+    req.authContext ??= {
+      type: 'user', isAuthenticated: true, isAnonymous: false,
+      userId: '507f1f77bcf86cd799439011', registeredUser: { id: '507f1f77bcf86cd799439011', role: 'USER' },
+    };
+  }),
 }));
 
 jest.mock('../../../../services/CacheStore', () => ({
@@ -68,19 +75,26 @@ jest.mock('../../../../utils/normalize', () => ({
 const mockBcryptCompare = jest.fn<any>();
 const mockBcryptHash = jest.fn<any>().mockResolvedValue('hashed_new_password');
 
-jest.mock('bcryptjs', () => ({
-  default: {
-    compare: (...args: any[]) => mockBcryptCompare(...args),
-    hash: (...args: any[]) => mockBcryptHash(...args),
-  },
-  compare: (...args: any[]) => mockBcryptCompare(...args),
-  hash: (...args: any[]) => mockBcryptHash(...args),
+// Le hachage vit dans `utils/password-hash` — SITE UNIQUE depuis #5216. Doubler
+// `bcryptjs` ne suffirait plus : le module charge d'abord le binaire NATIF, et
+// le repli JavaScript n'est atteint que s'il manque.
+jest.mock('../../../../utils/password-hash', () => ({
+  ...(jest.requireActual('../../../../utils/password-hash') as Record<string, unknown>),
+  verifyPassword: (...args: any[]) => mockBcryptCompare(...args),
+  hashPassword: (...args: any[]) => mockBcryptHash(...args),
 }));
 
+// `updateUserProfileSchema` est le SCHÉMA RÉEL (#4184), pas un passe-plat.
+//
+// Un `parse: jest.fn((b) => b)` rend VERT n'importe quel témoin qui envoie
+// `email`/`phoneNumber` à `PATCH /users/me` : la validation n'existe plus, le
+// témoin ne peut jamais tomber quel que soit l'état du défaut qu'il prétend
+// garder — c'est l'anti-témoin signalé sur #4184 (commentaire du 2026-08-29).
+// Les quatre AUTRES schémas (avatar/banner/password/username) restent des
+// passe-plats : cette issue ne touche ni leur forme ni leur comportement, et
+// les remplacer par le réel élargirait le lot bien au-delà de son territoire.
 jest.mock('@meeshy/shared/utils/validation', () => ({
-  updateUserProfileSchema: {
-    parse: jest.fn((b: any) => b),
-  },
+  updateUserProfileSchema: (jest.requireActual('@meeshy/shared/utils/validation') as any).updateUserProfileSchema,
   updateAvatarSchema: {
     parse: jest.fn((b: any) => b),
   },
@@ -95,12 +109,15 @@ jest.mock('@meeshy/shared/utils/validation', () => ({
   },
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  userSchema: {},
-  userMinimalSchema: {},
-  updateUserRequestSchema: { type: 'object', additionalProperties: true },
-  errorResponseSchema: { type: 'object' },
-}));
+// `updateUserRequestSchema` (AJV) doit etre le SCHEMA REEL : sous
+// `additionalProperties: true`, Fastify ne rejette jamais rien au niveau AJV,
+// et le lot #4184 depend justement de ce que ce schema ne DECLARE plus
+// `email`/`phoneNumber`/`avatar`/`timezone` pour que la couche Zod voie encore
+// la cle interdite et la refuse. Les trois autres cles etaient restees des
+// bouchons : #4649 les rend reelles a leur tour — un `errorResponseSchema` de
+// substitution remplace le contrat que les huit assertions de corps d'erreur
+// de ce fichier pretendent mesurer. Plus aucune cle n'est reecrite, donc plus
+// de double du tout.
 
 jest.mock('../../../../routes/auth/types', () => ({
   formatUserResponse: jest.fn((u: any) => ({ ...u, formatted: true })),
@@ -117,11 +134,9 @@ jest.mock('../../../../utils/pagination', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import {
-  getUserTest,
   updateUserProfile,
   updateUserAvatar,
   updateUserBanner,
-  updateUserPassword,
   updateUsername,
   getUserByUsername,
   getUserById,
@@ -133,6 +148,8 @@ import {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const USER_ID = '507f1f77bcf86cd799439011';
+const OWN_AVATAR_URL = `https://gate.meeshy.me/api/v1/attachments/file/${encodeURIComponent(`2026/11/${USER_ID}/avatar.jpg`)}`;
+const OWN_BANNER_URL = `https://gate.meeshy.me/api/v1/attachments/file/${encodeURIComponent(`2026/11/${USER_ID}/banner.jpg`)}`;
 const OTHER_USER_ID = '507f1f77bcf86cd799439099';
 
 const mockUser = {
@@ -163,21 +180,65 @@ const mockUser = {
   autoTranslateEnabled: true,
 };
 
+// ─── Select-aware update mock ──────────────────────────────────────────────────
+//
+// The default `update: jest.fn().mockResolvedValue(mockUser)` ignores whatever
+// `select` the route passes — it always returns the full fixture, so it can't
+// catch a route whose manual `select` silently drops columns (the real Prisma
+// client DOES restrict its return shape to `select`). This factory mimics that
+// restriction so a truncating `select` shows up as missing keys in the response.
+function makeSelectAwareUserUpdate(fullUser: Record<string, any>) {
+  return jest.fn<any>().mockImplementation((args: any) => {
+    if (!args?.select) {
+      return Promise.resolve(fullUser);
+    }
+    const selected: Record<string, any> = {};
+    for (const key of Object.keys(args.select)) {
+      if (args.select[key]) selected[key] = fullUser[key];
+    }
+    return Promise.resolve(selected);
+  });
+}
+
 // ─── Prisma Mock Factory ───────────────────────────────────────────────────────
 
+/**
+ * Les surcharges FUSIONNENT au niveau du modèle, elles ne le remplacent pas.
+ *
+ * Un `{ user: { findFirst } }` écrasait tout le bloc `user`, faisant
+ * disparaître `findUnique` — que la lecture de la liste de blocage exige depuis
+ * #4160. Le témoin tombait alors en 500, et le défaut ressemblait à un défaut
+ * de la route plutôt qu'à un défaut du double. Fusionner ferme la classe entière
+ * plutôt que ses deux instances du jour.
+ */
 function makePrisma(overrides: Record<string, any> = {}) {
-  return {
+  const base: Record<string, any> = {
+    // « Ne pas être trouvé » (#8104) : la loi de découvrabilité lit les
+    // préférences de confidentialité ; aucun document ⇒ personne ne se cache.
+    userPreferences: { findMany: jest.fn<any>(async () => []) },
+    userPreference: { findMany: jest.fn<any>(async () => []) },
     user: {
       findFirst: jest.fn<any>().mockResolvedValue(mockUser),
       findUnique: jest.fn<any>().mockResolvedValue(mockUser),
+      // « qui m'a bloqué ? » — la requête POSITIVE de `blockedIdsAroundViewer`.
+      findMany: jest.fn<any>().mockResolvedValue([]),
       update: jest.fn<any>().mockResolvedValue(mockUser),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },
     userVoiceModel: {
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
-    ...overrides,
+    messageAttachment: { findFirst: jest.fn<any>().mockResolvedValue({ id: 'att-own' }) },
   };
+
+  const fusionne: Record<string, any> = { ...base };
+  for (const [modele, methodes] of Object.entries(overrides)) {
+    fusionne[modele] =
+      base[modele] && methodes && typeof methodes === 'object'
+        ? { ...base[modele], ...methodes }
+        : methodes;
+  }
+  return fusionne;
 }
 
 // ─── App Builder ─────────────────────────────────────────────────────────────
@@ -192,7 +253,7 @@ async function buildApp(opts: {
   const {
     authenticated = true,
     prisma = makePrisma(),
-    routes = [getUserTest, updateUserProfile, updateUserAvatar, updateUserBanner, updateUserPassword, updateUsername, getUserByUsername, getUserById, getUserByEmail, getUserByIdDedicated, getUserByPhone],
+    routes = [updateUserProfile, updateUserAvatar, updateUserBanner, updateUsername, getUserByUsername, getUserById, getUserByEmail, getUserByIdDedicated, getUserByPhone],
     withNotificationService = false,
     withSocketIOHandler = false,
   } = opts;
@@ -245,29 +306,10 @@ async function buildApp(opts: {
   return app;
 }
 
-// ─── GET /users/me/test ───────────────────────────────────────────────────────
-
-describe('GET /users/me/test — unauthenticated', () => {
-  it('returns 401 when no auth context', async () => {
-    const app = await buildApp({ authenticated: false, routes: [getUserTest] });
-    const res = await app.inject({ method: 'GET', url: '/users/me/test' });
-    expect(res.statusCode).toBe(401);
-    await app.close();
-  });
-});
-
-describe('GET /users/me/test — success', () => {
-  it('returns 200 with userId and message', async () => {
-    const app = await buildApp({ routes: [getUserTest] });
-    const res = await app.inject({ method: 'GET', url: '/users/me/test' });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.success).toBe(true);
-    expect(body.data.userId).toBe(USER_ID);
-    expect(body.data.message).toBe('Test endpoint working');
-    await app.close();
-  });
-});
+// `GET /users/me/test` a été RETIRÉE (#4185) : point de terminaison de test
+// d'authentification, consommé par personne sur les trois clients. Une route
+// de test exposée en production est une surface à garder pour un usage qui
+// n'existe pas. Garde négative : `route-auth-coverage.test.ts`.
 
 // ─── PATCH /users/me ──────────────────────────────────────────────────────────
 
@@ -295,40 +337,76 @@ describe('PATCH /users/me — success', () => {
   });
 });
 
-describe('PATCH /users/me — email already in use', () => {
-  it('returns 400 when email is taken by another user', async () => {
+// #4184 — `email`/`phoneNumber` ne sont plus des champs de cette route, POINT.
+//
+// Ces deux describe portaient autrefois « déjà utilisé par un autre compte » :
+// la route acceptait le champ, le VÉRIFIAIT contre les autres utilisateurs, et
+// refusait sur conflit — mais l'ACCEPTAIT et l'ÉCRIVAIT sans aucune preuve de
+// possession dès qu'il n'y avait pas conflit. Ce n'est pas un défaut d'unicité,
+// c'est une absence totale de vérification : n'importe quelle session peut
+// poser N'IMPORTE QUELLE adresse libre, puis déclencher une réinitialisation
+// de mot de passe dessus. Le témoin ci-dessous prouve le VRAI invariant :
+// `findFirst` renvoie `null` (aucun conflit, donc — sous l'ancien code — la
+// requête aurait ABOUTI) et l'écriture n'a malgré tout jamais lieu.
+//
+// Rouge sous la mutation qu'il nomme : réintroduire `email`/`phoneNumber` dans
+// `updateUserProfileSchema` (packages/shared/utils/validation.ts) fait
+// repasser ce test au VERT — c'est-à-dire repasse `prisma.user.update` à
+// « appelé », ce que l'assertion `not.toHaveBeenCalled()` détecte aussitôt.
+describe('PATCH /users/me — email/phoneNumber are not writable via this route (#4184)', () => {
+  it('rejects a request carrying email with an explicit 400 — never reaches prisma.update', async () => {
+    const update = jest.fn<any>().mockResolvedValue(mockUser);
     const prisma = makePrisma({
       user: {
-        findFirst: jest.fn<any>().mockResolvedValue({ id: OTHER_USER_ID }),
-        update: jest.fn<any>().mockResolvedValue(mockUser),
+        findFirst: jest.fn<any>().mockResolvedValue(null), // aucun conflit — l'ancien code aurait écrit
+        update,
       },
     });
     const app = await buildApp({ routes: [updateUserProfile], prisma });
     const res = await app.inject({
       method: 'PATCH',
       url: '/users/me',
-      payload: { email: 'taken@example.com' },
+      payload: { firstName: 'Bob', email: 'attacker@evil.com' },
     });
     expect(res.statusCode).toBe(400);
+    expect(update).not.toHaveBeenCalled();
     await app.close();
   });
-});
 
-describe('PATCH /users/me — phone already in use', () => {
-  it('returns 400 when phone is taken by another user', async () => {
+  it('rejects a request carrying phoneNumber with an explicit 400 — never reaches prisma.update', async () => {
+    const update = jest.fn<any>().mockResolvedValue(mockUser);
     const prisma = makePrisma({
       user: {
-        findFirst: jest.fn<any>().mockResolvedValue({ id: OTHER_USER_ID }),
-        update: jest.fn<any>().mockResolvedValue(mockUser),
+        findFirst: jest.fn<any>().mockResolvedValue(null),
+        update,
       },
     });
     const app = await buildApp({ routes: [updateUserProfile], prisma });
     const res = await app.inject({
       method: 'PATCH',
       url: '/users/me',
-      payload: { phoneNumber: '+33611111111' },
+      payload: { firstName: 'Bob', phoneNumber: '+33611111111' },
     });
     expect(res.statusCode).toBe(400);
+    expect(update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('rejects avatar/timezone the same way — AJV and Zod now describe the same field set', async () => {
+    // Deux champs qu'AJV déclarait autrefois sans que Zod les reconnaisse :
+    // le contrat MENTAIT (accepté à la lecture du schéma, refusé à
+    // l'exécution). Ils sont désormais retirés des DEUX côtés, donc rejetés
+    // par le même mécanisme que email/phoneNumber — cohérence du contrat.
+    const update = jest.fn<any>().mockResolvedValue(mockUser);
+    const prisma = makePrisma({ user: { findFirst: jest.fn<any>().mockResolvedValue(null), update } });
+    const app = await buildApp({ routes: [updateUserProfile], prisma });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { firstName: 'Bob', avatar: 'https://example.com/a.jpg', timezone: 'Europe/Paris' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(update).not.toHaveBeenCalled();
     await app.close();
   });
 });
@@ -478,7 +556,7 @@ describe('PATCH /users/me — realtime propagation to conversation partners', ()
 describe('PATCH /users/me/avatar — unauthenticated', () => {
   it('returns 401 when no auth context', async () => {
     const app = await buildApp({ authenticated: false, routes: [updateUserAvatar] });
-    const res = await app.inject({ method: 'PATCH', url: '/users/me/avatar', payload: { avatar: 'https://example.com/avatar.jpg' } });
+    const res = await app.inject({ method: 'PATCH', url: '/users/me/avatar', payload: { avatar: OWN_AVATAR_URL } });
     expect(res.statusCode).toBe(401);
     await app.close();
   });
@@ -491,10 +569,31 @@ describe('PATCH /users/me/avatar — success', () => {
     const res = await app.inject({
       method: 'PATCH',
       url: '/users/me/avatar',
-      payload: { avatar: 'https://example.com/avatar.jpg' },
+      payload: { avatar: OWN_AVATAR_URL },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+    await app.close();
+  });
+
+  it('serialized body carries emailVerifiedAt and autoTranslateEnabled — not truncated by a narrow select', async () => {
+    const fullUser = {
+      ...mockUser,
+      avatar: OWN_AVATAR_URL,
+      emailVerifiedAt: new Date('2024-02-01'),
+      autoTranslateEnabled: true,
+    };
+    const prisma = makePrisma({ user: { update: makeSelectAwareUserUpdate(fullUser) } });
+    const app = await buildApp({ routes: [updateUserAvatar], prisma });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me/avatar',
+      payload: { avatar: OWN_AVATAR_URL },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data.user).toHaveProperty('emailVerifiedAt');
+    expect(body.data.user.autoTranslateEnabled).toBe(true);
     await app.close();
   });
 });
@@ -503,19 +602,19 @@ describe('PATCH /users/me/avatar — realtime propagation to conversation partne
   it('emits USER_UPDATED with the new avatar URL', async () => {
     const prisma = makePrisma({
       user: {
-        update: jest.fn<any>().mockResolvedValue({ ...mockUser, avatar: 'https://example.com/avatar.jpg' }),
+        update: jest.fn<any>().mockResolvedValue({ ...mockUser, avatar: OWN_AVATAR_URL }),
       },
     });
     const app = await buildApp({ routes: [updateUserAvatar], prisma, withNotificationService: true });
     const res = await app.inject({
       method: 'PATCH',
       url: '/users/me/avatar',
-      payload: { avatar: 'https://example.com/avatar.jpg' },
+      payload: { avatar: OWN_AVATAR_URL },
     });
     expect(res.statusCode).toBe(200);
     expect((app as any).notificationService.emitUserUpdated).toHaveBeenCalledWith({
       userId: USER_ID,
-      changes: { avatar: 'https://example.com/avatar.jpg' },
+      changes: { avatar: OWN_AVATAR_URL },
     });
     await app.close();
   });
@@ -545,7 +644,7 @@ describe('PATCH /users/me/avatar — service error', () => {
     const res = await app.inject({
       method: 'PATCH',
       url: '/users/me/avatar',
-      payload: { avatar: 'https://example.com/avatar.jpg' },
+      payload: { avatar: OWN_AVATAR_URL },
     });
     expect(res.statusCode).toBe(500);
     await app.close();
@@ -557,7 +656,7 @@ describe('PATCH /users/me/avatar — service error', () => {
 describe('PATCH /users/me/banner — unauthenticated', () => {
   it('returns 401 when no auth context', async () => {
     const app = await buildApp({ authenticated: false, routes: [updateUserBanner] });
-    const res = await app.inject({ method: 'PATCH', url: '/users/me/banner', payload: { banner: 'https://example.com/banner.jpg' } });
+    const res = await app.inject({ method: 'PATCH', url: '/users/me/banner', payload: { banner: OWN_BANNER_URL } });
     expect(res.statusCode).toBe(401);
     await app.close();
   });
@@ -570,10 +669,31 @@ describe('PATCH /users/me/banner — success', () => {
     const res = await app.inject({
       method: 'PATCH',
       url: '/users/me/banner',
-      payload: { banner: 'https://example.com/banner.jpg' },
+      payload: { banner: OWN_BANNER_URL },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+    await app.close();
+  });
+
+  it('serialized body carries emailVerifiedAt and autoTranslateEnabled — not truncated by a narrow select', async () => {
+    const fullUser = {
+      ...mockUser,
+      banner: OWN_BANNER_URL,
+      emailVerifiedAt: new Date('2024-02-01'),
+      autoTranslateEnabled: true,
+    };
+    const prisma = makePrisma({ user: { update: makeSelectAwareUserUpdate(fullUser) } });
+    const app = await buildApp({ routes: [updateUserBanner], prisma });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me/banner',
+      payload: { banner: OWN_BANNER_URL },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data.user).toHaveProperty('emailVerifiedAt');
+    expect(body.data.user.autoTranslateEnabled).toBe(true);
     await app.close();
   });
 });
@@ -582,19 +702,19 @@ describe('PATCH /users/me/banner — realtime propagation to conversation partne
   it('emits USER_UPDATED with the new banner URL', async () => {
     const prisma = makePrisma({
       user: {
-        update: jest.fn<any>().mockResolvedValue({ ...mockUser, banner: 'https://example.com/banner.jpg' }),
+        update: jest.fn<any>().mockResolvedValue({ ...mockUser, banner: OWN_BANNER_URL }),
       },
     });
     const app = await buildApp({ routes: [updateUserBanner], prisma, withNotificationService: true });
     const res = await app.inject({
       method: 'PATCH',
       url: '/users/me/banner',
-      payload: { banner: 'https://example.com/banner.jpg' },
+      payload: { banner: OWN_BANNER_URL },
     });
     expect(res.statusCode).toBe(200);
     expect((app as any).notificationService.emitUserUpdated).toHaveBeenCalledWith({
       userId: USER_ID,
-      changes: { banner: 'https://example.com/banner.jpg' },
+      changes: { banner: OWN_BANNER_URL },
     });
     await app.close();
   });
@@ -611,103 +731,21 @@ describe('PATCH /users/me/banner — service error', () => {
     const res = await app.inject({
       method: 'PATCH',
       url: '/users/me/banner',
-      payload: { banner: 'https://example.com/banner.jpg' },
+      payload: { banner: OWN_BANNER_URL },
     });
     expect(res.statusCode).toBe(500);
     await app.close();
   });
 });
 
-// ─── PATCH /users/me/password ─────────────────────────────────────────────────
-
-describe('PATCH /users/me/password — unauthenticated', () => {
-  it('returns 401 when no auth context', async () => {
-    const app = await buildApp({ authenticated: false, routes: [updateUserPassword] });
-    const res = await app.inject({
-      method: 'PATCH', url: '/users/me/password',
-      payload: { currentPassword: 'oldpassword', newPassword: 'new12345678' },
-    });
-    expect(res.statusCode).toBe(401);
-    await app.close();
-  });
-});
-
-describe('PATCH /users/me/password — user not found', () => {
-  it('returns 404 when user does not exist', async () => {
-    const prisma = makePrisma({
-      user: {
-        findUnique: jest.fn<any>().mockResolvedValue(null),
-        update: jest.fn<any>().mockResolvedValue(mockUser),
-      },
-    });
-    const app = await buildApp({ routes: [updateUserPassword], prisma });
-    const res = await app.inject({
-      method: 'PATCH', url: '/users/me/password',
-      payload: { currentPassword: 'oldpassword', newPassword: 'new12345678' },
-    });
-    expect(res.statusCode).toBe(404);
-    await app.close();
-  });
-});
-
-describe('PATCH /users/me/password — wrong current password', () => {
-  it('returns 400 when current password is incorrect', async () => {
-    mockBcryptCompare.mockResolvedValueOnce(false);
-    const app = await buildApp({ routes: [updateUserPassword] });
-    const res = await app.inject({
-      method: 'PATCH', url: '/users/me/password',
-      payload: { currentPassword: 'wrongpassword', newPassword: 'new12345678' },
-    });
-    expect(res.statusCode).toBe(400);
-    await app.close();
-  });
-});
-
-describe('PATCH /users/me/password — success', () => {
-  it('returns 200 when password is updated', async () => {
-    mockBcryptCompare.mockResolvedValueOnce(true);
-    const app = await buildApp({ routes: [updateUserPassword] });
-    const res = await app.inject({
-      method: 'PATCH', url: '/users/me/password',
-      payload: { currentPassword: 'correctpassword', newPassword: 'new12345678' },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
-    await app.close();
-  });
-});
-
-describe('PATCH /users/me/password — success with notification', () => {
-  it('returns 200 and fires notification', async () => {
-    mockBcryptCompare.mockResolvedValueOnce(true);
-    const app = await buildApp({ routes: [updateUserPassword], withNotificationService: true });
-    const res = await app.inject({
-      method: 'PATCH', url: '/users/me/password',
-      payload: { currentPassword: 'correctpassword', newPassword: 'new12345678' },
-    });
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-});
-
-describe('PATCH /users/me/password — service error', () => {
-  it('returns 500 when update throws', async () => {
-    mockBcryptCompare.mockResolvedValueOnce(true);
-    const prisma = makePrisma({
-      user: {
-        findUnique: jest.fn<any>().mockResolvedValue({ id: USER_ID, password: '$2b$12$hashed' }),
-        update: jest.fn<any>().mockRejectedValue(new Error('DB error')),
-      },
-    });
-    const app = await buildApp({ routes: [updateUserPassword], prisma });
-    const res = await app.inject({
-      method: 'PATCH', url: '/users/me/password',
-      payload: { currentPassword: 'correctpassword', newPassword: 'new12345678' },
-    });
-    expect(res.statusCode).toBe(500);
-    await app.close();
-  });
-});
+// `PATCH /users/me/password` a son propre fichier —
+// `profile-password-change.test.ts` (comportement général),
+// `profile-password-strength.test.ts` (force du mot de passe) et
+// `profile-password-session-revocation.test.ts` (révocation des autres
+// sessions, #6435). Ce fichier était déjà hors budget de taille (#4426) ;
+// les y laisser aurait exigé d'y AJOUTER les mocks de session que #6435
+// requiert, ce que la règle interdit tant qu'un fichier hors budget n'a pas
+// été découpé.
 
 // ─── PATCH /users/me/username ─────────────────────────────────────────────────
 
@@ -796,9 +834,11 @@ describe('PATCH /users/me/username — username taken', () => {
 });
 
 describe('PATCH /users/me/username — rate limited', () => {
-  it('returns 429 when changed within 30 days', async () => {
+  // #4859 — `nextChangeAllowedAt` était calculé puis jamais transmis à `sendError`.
+  it('returns 429 with nextChangeAllowedAt when changed within 30 days', async () => {
     mockBcryptCompare.mockResolvedValueOnce(true);
-    const recentHistory = [{ newUsername: 'alice', changedAt: new Date().toISOString() }];
+    const changedAt = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    const recentHistory = [{ newUsername: 'alice', changedAt: changedAt.toISOString() }];
     const prisma = makePrisma({
       user: {
         findUnique: jest.fn<any>().mockResolvedValue({ ...mockUser, username: 'alice', usernameHistory: recentHistory }),
@@ -812,6 +852,8 @@ describe('PATCH /users/me/username — rate limited', () => {
       payload: { newUsername: 'bob', currentPassword: 'correctpass' },
     });
     expect(res.statusCode).toBe(429);
+    const expected = new Date(changedAt.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    expect(res.json().nextChangeAllowedAt).toBe(expected);
     await app.close();
   });
 });

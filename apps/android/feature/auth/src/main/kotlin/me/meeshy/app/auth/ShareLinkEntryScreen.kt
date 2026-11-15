@@ -5,8 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -27,12 +25,19 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.app.auth.invite.InviteLandingError
+import me.meeshy.app.auth.invite.InviteLandingPage
+import me.meeshy.app.auth.invite.InviteLandingSkeleton
 import me.meeshy.feature.auth.R
+import me.meeshy.sdk.model.InviteLandingChoice
 import me.meeshy.ui.component.MeeshyPrimaryButton
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.formColumnWidth
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 /**
  * The share-link deep-link route. Instead of always presenting the anonymous join
@@ -55,6 +60,7 @@ fun ShareLinkEntryScreen(
     viewModel: ShareLinkEntryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val landingInfo by viewModel.landingInfo.collectAsStateWithLifecycle()
 
     when (val current = state) {
         ShareLinkEntryUiState.GuestForm ->
@@ -67,10 +73,31 @@ fun ShareLinkEntryScreen(
             }
 
         ShareLinkEntryUiState.RequiresAccount ->
-            EntryScaffold(onBack = onBack) { RequiresAccountBody(onSignIn = onSignIn) }
+            landingInfo?.let { info ->
+                InviteLandingPage(
+                    info = info,
+                    isSignedIn = false,
+                    onClose = onBack,
+                    onChoice = { choice -> if (choice == InviteLandingChoice.SIGN_IN || choice == InviteLandingChoice.SIGN_UP) onSignIn() },
+                )
+            } ?: EntryScaffold(onBack = onBack) { RequiresAccountBody(onSignIn = onSignIn) }
 
         is ShareLinkEntryUiState.ChooseIdentity ->
-            EntryScaffold(onBack = onBack) {
+            landingInfo?.let { info ->
+                InviteLandingPage(
+                    info = info,
+                    isSignedIn = true,
+                    resumesGuestSession = current.resumesGuestSession,
+                    onClose = onBack,
+                    onChoice = { choice ->
+                        when (choice) {
+                            InviteLandingChoice.JOIN_WITH_ACCOUNT -> viewModel.chooseAccount()
+                            InviteLandingChoice.JOIN_ANONYMOUSLY -> viewModel.chooseAnonymous()
+                            InviteLandingChoice.SIGN_IN, InviteLandingChoice.SIGN_UP -> Unit
+                        }
+                    },
+                )
+            } ?: EntryScaffold(onBack = onBack) {
                 ChooseIdentityBody(
                     state = current,
                     onContinueWithAccount = viewModel::chooseAccount,
@@ -79,12 +106,10 @@ fun ShareLinkEntryScreen(
             }
 
         is ShareLinkEntryUiState.Failed ->
-            EntryScaffold(onBack = onBack) {
-                FailedBody(message = current.message, onRetry = viewModel::resolve)
-            }
+            InviteLandingError(onRetry = viewModel::resolve, onClose = onBack)
 
         ShareLinkEntryUiState.Resolving ->
-            EntryScaffold(onBack = onBack) { ResolvingBody() }
+            InviteLandingSkeleton(onClose = onBack)
     }
 }
 
@@ -106,8 +131,8 @@ private fun EntryScaffold(onBack: () -> Unit, content: @Composable () -> Unit) {
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.guest_join_back),
+                                leadingNavigationIcon(),
+                                contentDescription = leadingNavigationLabel(stringResource(R.string.guest_join_back)),
                             )
                         }
                     },
@@ -118,6 +143,7 @@ private fun EntryScaffold(onBack: () -> Unit, content: @Composable () -> Unit) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
+                    .formColumnWidth()
                     .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             ) {
@@ -181,14 +207,6 @@ private fun ChooseIdentityBody(
             color = MeeshyTheme.tokens.textPrimary,
             textAlign = TextAlign.Center,
         )
-        Text(
-            text = state.conversationTitle?.takeIf { it.isNotBlank() }?.let {
-                stringResource(R.string.share_link_choose_subtitle, it)
-            } ?: stringResource(R.string.share_link_choose_subtitle_generic),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MeeshyTheme.tokens.textSecondary,
-            textAlign = TextAlign.Center,
-        )
         MeeshyPrimaryButton(
             text = stringResource(R.string.share_link_continue_with_account),
             onClick = onContinueWithAccount,
@@ -208,30 +226,5 @@ private fun ChooseIdentityBody(
                 ),
             )
         }
-    }
-}
-
-@Composable
-private fun FailedBody(message: String?, onRetry: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.xl),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
-    ) {
-        Text(
-            text = stringResource(R.string.guest_join_preview_error),
-            style = MaterialTheme.typography.titleMedium,
-            color = MeeshyTheme.tokens.textPrimary,
-            textAlign = TextAlign.Center,
-        )
-        message?.takeIf { it.isNotBlank() }?.let {
-            Text(
-                text = it,
-                style = MaterialTheme.typography.bodySmall,
-                color = MeeshyTheme.tokens.textSecondary,
-                textAlign = TextAlign.Center,
-            )
-        }
-        OutlinedButton(onClick = onRetry) { Text(stringResource(R.string.guest_join_retry)) }
     }
 }

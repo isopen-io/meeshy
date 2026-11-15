@@ -1,10 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="reels_close">Fechar</string>
-    <string name="reels_unmute">Ativar som</string>
-    <string name="reels_mute">Silenciar</string>
-    <string name="reels_like">Curtir</string>
-    <string name="reels_comments">Comentários</string>
-    <string name="reels_repost">Repostar</string>
-    <string name="reels_share">Compartilhar</string>
+    <string name="reels_bookmark">Salvar</string>
+    <string name="reels_unbookmark">Remover salvo</string>
+    <string name="reels_comments_view_post">Ver publicação</string>
 </resources>

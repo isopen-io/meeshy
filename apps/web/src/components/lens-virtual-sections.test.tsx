@@ -1,0 +1,366 @@
+import { act, useRef } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+
+import type { Conversation } from '@/lib/api/types';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadRowMenuCatalog } from '@/lib/i18n-row-menu-catalog';
+import { resolveLensSections, type LensSection as LensSectionData } from '@/lib/lens/sections';
+import { LONG_PRESS_MS } from '@/lib/view/long-press';
+import { rowRoving } from '@/lib/view/row-roving';
+import { ScrollportKeyScope, useScrollportMemory } from '@/lib/view/use-scrollport-memory';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+
+import { LensRow, ROW_HEIGHT, sameRowProps, type LensRowProps } from './lens-row';
+import { carriedRowCount, LensVirtualSections } from './lens-virtual-sections';
+
+/**
+ * LA LISTE DES CONVERSATIONS NE MONTE QUE CE QUI SE VOIT (#11228) — sur cinq
+ * cents conversations, pas sur sept. Les témoins passent par les VRAIES
+ * rangées (`LensRow`) et les VRAIES sections (`resolveLensSections`) : le
+ * clavier, l'appui long et les épingles qu'on vérifie ici sont ceux que
+ * l'utilisateur touche.
+ */
+
+const NOW = new Date('2026-10-20T12:00:00Z');
+const DAY = 86_400_000;
+
+const conversationAt = (index: number): Conversation =>
+  ({
+    id: `c-${String(index).padStart(3, '0')}`,
+    type: 'group',
+    title: `Groupe ${index}`,
+    status: 'active',
+    visibility: 'private',
+    isActive: true,
+    memberCount: 3,
+    participants: [],
+    createdAt: new Date('2025-01-01'),
+    updatedAt: new Date(NOW.getTime() - (30 + index) * DAY),
+    lastMessageAt: new Date(NOW.getTime() - (30 + index) * DAY),
+    unreadCount: 0,
+    currentUserRole: 'member',
+    isMember: true,
+  }) as unknown as Conversation;
+
+const CORPUS: readonly Conversation[] = Array.from({ length: 500 }, (_, index) => conversationAt(index));
+const PINNED = ['c-250', 'c-480'];
+
+const sectionsOf = (conversations: readonly Conversation[], pinned: readonly string[] = []): readonly LensSectionData[] =>
+  resolveLensSections({
+    conversations,
+    overrides: Object.fromEntries(pinned.map((id) => [id, { flags: { isPinned: true } }])),
+    now: NOW,
+    timeZone: 'UTC',
+  });
+
+const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+let container: HTMLDivElement;
+let root: Root;
+
+beforeAll(async () => {
+  ensureHappyDomRegistered({ url: 'http://localhost/chats' });
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+  await loadInterfaceCatalog('fr');
+  await loadRowMenuCatalog('fr');
+});
+afterAll(async () => {
+  await act(async () => {});
+  delete globals.IS_REACT_ACT_ENVIRONMENT;
+  await releaseHappyDomIfRegistered();
+});
+beforeEach(() => {
+  window.history.replaceState(null, '', '/chats');
+});
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+});
+
+type Exits = { readonly scope: string; readonly rowMayExit: (id: string) => boolean; readonly sectionMayExit: (id: string) => boolean };
+
+function List({ sections, exits }: { readonly sections: readonly LensSectionData[]; readonly exits?: Exits }) {
+  const frame = useRef<HTMLUListElement | null>(null);
+  return (
+    <ul ref={frame} id="contenu">
+      <LensVirtualSections
+        frame={frame}
+        sections={sections}
+        folds={sections.map(() => undefined)}
+        {...(exits === undefined ? {} : { exits })}
+        rowOf={(c, place) => (
+          <LensRow
+            key={c.id}
+            conversation={c}
+            {...(place === undefined ? {} : { place })}
+            languages={['fr']}
+            viewerId="u-moi"
+            flags={{ isPinned: PINNED.includes(c.id), isMuted: false, isArchived: false }}
+            unreadCount={0}
+            onRowAction={() => {}}
+          />
+        )}
+      />
+    </ul>
+  );
+}
+
+function RememberedList({ sections }: { readonly sections: readonly LensSectionData[] }) {
+  const frame = useRef<HTMLUListElement | null>(null);
+  useScrollportMemory(frame);
+  return (
+    <ul ref={frame} id="contenu">
+      <LensVirtualSections
+        frame={frame}
+        sections={sections}
+        folds={sections.map(() => undefined)}
+        rowOf={(c) => (
+          <LensRow
+            key={c.id}
+            conversation={c}
+            languages={['fr']}
+            viewerId="u-moi"
+            flags={{ isPinned: false, isMuted: false, isArchived: false }}
+            unreadCount={0}
+            onRowAction={() => {}}
+          />
+        )}
+      />
+    </ul>
+  );
+}
+
+function mountRemembered(sections: readonly LensSectionData[]) {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+  act(() => {
+    root.render(
+      <ScrollportKeyScope.Provider value="/chats#retour">
+        <RememberedList sections={sections} />
+      </ScrollportKeyScope.Provider>,
+    );
+  });
+}
+
+const oneFrame = () =>
+  act(async () => {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  });
+
+function mount(sections: readonly LensSectionData[], exits?: Exits) {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+  act(() => {
+    root.render(<List sections={sections} {...(exits === undefined ? {} : { exits })} />);
+  });
+}
+
+function rerender(sections: readonly LensSectionData[], exits?: Exits) {
+  act(() => {
+    root.render(<List sections={sections} {...(exits === undefined ? {} : { exits })} />);
+  });
+}
+
+const frame = (): HTMLElement => {
+  const node = container.querySelector<HTMLElement>('#contenu');
+  if (node === null) throw new Error('défileur introuvable');
+  return node;
+};
+const mountedRows = (scope: ParentNode = container): readonly string[] =>
+  [...scope.querySelectorAll<HTMLElement>('[data-row]')].map((row) => row.dataset.row ?? '');
+const section = (id: string): HTMLElement => {
+  const node = container.querySelector<HTMLElement>(`[data-section="${id}"]`);
+  if (node === null) throw new Error(`section ${id} introuvable`);
+  return node;
+};
+const primaryOf = (id: string): HTMLElement => {
+  const node = container.querySelector<HTMLElement>(`[data-row="${id}"] [data-row-primary]`);
+  if (node === null) throw new Error(`lien de ${id} introuvable`);
+  return node;
+};
+
+const wait = (ms: number) =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  });
+
+/**
+ * DÉFILER UNE SECTION — happy-dom ne met rien en page : la tête de la
+ * section (sa cale d'ancrage) est posée à `-rows × 84` sous le haut du
+ * défileur, comme après un défilement réel, puis l'événement part.
+ */
+async function scrollSectionTo(id: string, rows: number) {
+  const anchor = section(id).querySelector<HTMLElement>('[data-row-gap]');
+  if (anchor === null) throw new Error(`ancre de ${id} introuvable`);
+  const top = -rows * ROW_HEIGHT;
+  anchor.getBoundingClientRect = () => ({ top, bottom: top, left: 0, right: 0, width: 0, height: 0, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+  act(() => {
+    frame().dispatchEvent(new Event('scroll'));
+  });
+  await wait(40);
+}
+
+describe('LensVirtualSections — la liste ne monte que les rangées visibles', () => {
+  test('cinq cents conversations ⇒ moins de quarante rangées montées, et la hauteur de toutes réservée', () => {
+    mount(sectionsOf(CORPUS));
+    expect(mountedRows().length).toBeLessThan(40);
+    const reserved = [...container.querySelectorAll<HTMLElement>('[data-row-gap]')].reduce((sum, gap) => sum + Number.parseFloat(gap.style.height || '0'), 0);
+    expect(reserved + mountedRows().length * ROW_HEIGHT).toBe(500 * ROW_HEIGHT);
+  });
+
+  test('chaque rangée montée dit sa place dans SA section, cales comprises (aria-posinset / aria-setsize)', async () => {
+    const sections = sectionsOf(CORPUS, PINNED);
+    mount(sections);
+    const placesOf = (id: string) =>
+      [...section(id).querySelectorAll<HTMLElement>('[data-row]')].map((row) => [row.dataset.row, row.getAttribute('aria-posinset'), row.getAttribute('aria-setsize')]);
+    expect(placesOf('pinned')).toEqual([
+      ['c-250', '1', '2'],
+      ['c-480', '2', '2'],
+    ]);
+    const older = sections.find((s) => s.id === 'lentille.older');
+    if (older === undefined) throw new Error('section lentille.older introuvable');
+    await scrollSectionTo('lentille.older', 200);
+    const expected = older.conversations.flatMap((c, index) => (mountedRows(section('lentille.older')).includes(c.id) ? [[c.id, String(index + 1), String(older.conversations.length)]] : []));
+    expect(placesOf('lentille.older')).toEqual(expected);
+    expect(expected.length).toBeGreaterThan(10);
+  });
+
+  test('une rangée qui change de place se re-rend ; à la même place, dans un objet neuf, non', () => {
+    const onRowAction = () => {};
+    const languages = ['fr'];
+    const rowAt = (position: number, size: number): LensRowProps => ({
+      conversation: CORPUS[0] as Conversation,
+      place: { position, size },
+      languages,
+      viewerId: 'u-moi',
+      flags: { isPinned: false, isMuted: false, isArchived: false },
+      unreadCount: 0,
+      onRowAction,
+    });
+    expect(sameRowProps(rowAt(3, 18), rowAt(3, 18))).toBe(true);
+    expect(sameRowProps(rowAt(3, 18), rowAt(4, 18))).toBe(false);
+    expect(sameRowProps(rowAt(3, 18), rowAt(3, 19))).toBe(false);
+  });
+
+  test('une conversation archivée se replie à SA place, et aucune cale ne la suit en sortie (#11574)', () => {
+    const remaining = CORPUS.filter((c) => c.id !== 'c-003');
+    const exitsOf = (alive: readonly Conversation[]): Exits => {
+      const ids = new Set(alive.map((c) => c.id));
+      return { scope: 'all', rowMayExit: (id) => !ids.has(id), sectionMayExit: () => false };
+    };
+    mount(sectionsOf(CORPUS), exitsOf(CORPUS));
+    rerender(sectionsOf(remaining), exitsOf(remaining));
+    const leaving = container.querySelector<HTMLElement>('[data-row="c-003"]');
+    expect(leaving?.hasAttribute('data-row-exiting')).toBe(true);
+    expect(container.querySelector('[data-row="c-002"]')?.hasAttribute('data-row-exiting')).toBe(false);
+    const staying = [...container.querySelectorAll<HTMLElement>('[data-row]')].filter((row) => !row.hasAttribute('data-row-exiting'));
+    const reserved = [...container.querySelectorAll<HTMLElement>('[data-row-gap]')].reduce((sum, gap) => sum + Number.parseFloat(gap.style.height || '0'), 0);
+    expect(reserved + staying.length * ROW_HEIGHT).toBe(499 * ROW_HEIGHT);
+  });
+
+  test('défiler sous ExitPresence ne laisse ni cale ni rangée en sortie : seule une conversation PARTIE sort', async () => {
+    const ids = new Set(CORPUS.map((c) => c.id));
+    mount(sectionsOf(CORPUS), { scope: 'all', rowMayExit: (id) => !ids.has(id), sectionMayExit: () => false });
+    await scrollSectionTo('lentille.older', 200);
+    expect(container.querySelectorAll('[data-row-exiting]').length).toBe(0);
+    const reserved = [...container.querySelectorAll<HTMLElement>('[data-row-gap]')].reduce((sum, gap) => sum + Number.parseFloat(gap.style.height || '0'), 0);
+    expect(reserved + mountedRows().length * ROW_HEIGHT).toBe(500 * ROW_HEIGHT);
+  });
+
+  test('le total des rangées que la liste PORTE compte les cales, jamais les sections repliées', () => {
+    const sections = sectionsOf(CORPUS, PINNED);
+    const [world] = CORPUS;
+    const folded = sections.map((s) => (s.id === 'pinned' ? { folded: true, unread: 0, onToggle: () => {} } : undefined));
+    expect(carriedRowCount({ sections, folds: sections.map(() => undefined) })).toBe(500);
+    expect(carriedRowCount({ world, sections, folds: sections.map(() => undefined) })).toBe(501);
+    expect(carriedRowCount({ sections, folds: folded })).toBe(498);
+  });
+
+  test('défiler ⇒ la fenêtre suit : les rangées du milieu se montent, celles du haut se démontent', async () => {
+    mount(sectionsOf(CORPUS));
+    expect(mountedRows()).toContain('c-005');
+    await scrollSectionTo('lentille.older', 200);
+    expect(mountedRows()).toContain('c-200');
+    expect(mountedRows()).toContain('c-205');
+    expect(mountedRows()).not.toContain('c-005');
+    expect(mountedRows().length).toBeLessThan(40);
+  });
+
+  test('les deux bouts de la liste restent montés : Début et Fin y mènent', async () => {
+    mount(sectionsOf(CORPUS));
+    await scrollSectionTo('lentille.older', 200);
+    expect(mountedRows()).toContain('c-000');
+    expect(mountedRows()).toContain('c-499');
+  });
+
+  test('l’épinglée reste dans SA section, montée ou pas', async () => {
+    mount(sectionsOf(CORPUS, PINNED));
+    expect(mountedRows(section('pinned'))).toEqual(['c-250', 'c-480']);
+    await scrollSectionTo('lentille.older', 240);
+    expect(mountedRows(section('lentille.older'))).not.toContain('c-250');
+    expect(section('pinned').querySelector('[data-sticker="pinned"]')).not.toBeNull();
+    expect(mountedRows(section('pinned'))).toEqual(['c-250', 'c-480']);
+  });
+
+  test('le focus clavier survit au défilement : la rangée qui tient l’arrêt reste montée', async () => {
+    mount(sectionsOf(CORPUS));
+    act(() => primaryOf('c-004').focus());
+    expect(rowRoving.snapshot()).toBe('c-004');
+    await scrollSectionTo('lentille.older', 300);
+    expect(mountedRows()).toContain('c-004');
+    expect(document.activeElement).toBe(primaryOf('c-004'));
+    act(() => {
+      primaryOf('c-004').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+    });
+    expect(document.activeElement).toBe(primaryOf('c-005'));
+    act(() => primaryOf('c-005').blur());
+    act(() => rowRoving.release('c-005'));
+  });
+
+  test('Fin mène à la dernière conversation, même hors fenêtre', async () => {
+    mount(sectionsOf(CORPUS));
+    act(() => primaryOf('c-002').focus());
+    act(() => {
+      primaryOf('c-002').dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+    });
+    expect(document.activeElement).toBe(primaryOf('c-499'));
+    act(() => primaryOf('c-499').blur());
+    act(() => rowRoving.release('c-499'));
+  });
+
+  test('au retour, la position restaurée est peuplée dès la première image, sans attendre un défilement', async () => {
+    const restored = 200 * ROW_HEIGHT;
+    mountRemembered(sectionsOf(CORPUS));
+    act(() => {
+      frame().scrollTop = restored;
+    });
+    act(() => root.unmount());
+    container.remove();
+
+    mountRemembered(sectionsOf(CORPUS));
+    expect(frame().scrollTop).toBe(restored);
+    const anchor = section('lentille.older').querySelector<HTMLElement>('[data-row-anchor]');
+    if (anchor === null) throw new Error('ancre de lentille.older introuvable');
+    anchor.getBoundingClientRect = () => {
+      const top = -frame().scrollTop;
+      return { top, bottom: top, left: 0, right: 0, width: 0, height: 0, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
+    };
+    await oneFrame();
+    expect(mountedRows()).toContain('c-200');
+    expect(mountedRows()).toContain('c-205');
+  });
+
+  test('l’appui long ouvre l’aperçu sur une rangée virtualisée', async () => {
+    mount(sectionsOf(CORPUS));
+    await scrollSectionTo('lentille.older', 300);
+    const link = container.querySelector<HTMLElement>('[data-row="c-302"] a[href="/c/c-302"]:not([aria-hidden])');
+    if (link === null) throw new Error('rangée c-302 non montée');
+    act(() => {
+      link.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, isPrimary: true, pointerType: 'touch', pointerId: 9, clientX: 40, clientY: 40 }));
+    });
+    await wait(LONG_PRESS_MS + 40);
+    expect(document.body.querySelector('[data-conversation-peek]')).not.toBeNull();
+  });
+});

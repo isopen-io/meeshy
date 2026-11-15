@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_unsent_media_row">Medium %1$d</string>
+    <string name="feed_unsent_media_uploaded">Gesendet</string>
+    <string name="feed_unsent_media_waiting">Wartet</string>
+    <string name="feed_unsent_media_refused">Abgelehnt, muss erneut gesendet werden</string>
+    <string name="feed_unsent_media_lost">Auf diesem Gerät nicht gefunden</string>
+    <string name="feed_unsent_rupture_counts">Fehlt: %1$d. Intakt: %2$d.</string>
+    <string name="feed_unsent_gesture_replace">Öffne sie erneut, um das fehlende Medium zu ersetzen.</string>
+    <string name="feed_unsent_gesture_replace_story">Lösche sie und erstelle sie neu.</string>
+    <string name="feed_unsent_gesture_wait">Sie wird gesendet, sobald die Verbindung zurück ist.</string>
+    <string name="feed_unsent_gesture_retry">Versuche es erneut: nichts ist verloren.</string>
+</resources>

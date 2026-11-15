@@ -30,7 +30,7 @@ class MessageEffectsEditorTest {
     fun ephemeralDuration_entriesAreOrderedShortestToLongest() {
         // The picker renders the chips in this order — parity with iOS allCases.
         assertThat(EphemeralDuration.entries.map { it.seconds })
-            .containsExactly(30, 60, 300, 3600, 86400)
+            .containsExactly(15, 30, 60, 300, 3600, 86400)
             .inOrder()
     }
 
@@ -180,5 +180,40 @@ class MessageEffectsEditorTest {
         )
         val result = MessageEffectsEditor.withEphemeralDuration(start, EphemeralDuration.FIVE_MINUTES)
         assertThat(result.ephemeralDuration).isEqualTo(300)
+    }
+
+    // MARK: - clearPanelFlags: "Tout effacer" du petit panneau
+
+    @Test
+    fun clearPanelFlags_removesEntryAndPermanentEffects() {
+        val start = MessageEffects(
+            flags = MessageEffectFlags.SHAKE or MessageEffectFlags.WAOO or MessageEffectFlags.GLOW or MessageEffectFlags.SPARKLE,
+        )
+
+        val result = MessageEffectsEditor.clearPanelFlags(start)
+
+        assertThat(result.flags).isEqualTo(0L)
+        assertThat(MessageEffectsEditor.hasPanelEffect(result)).isFalse()
+    }
+
+    @Test
+    fun clearPanelFlags_keepsProtectionsAndTheEphemeralDuration() {
+        val protections = MessageEffectFlags.EPHEMERAL or MessageEffectFlags.BLURRED or MessageEffectFlags.VIEW_ONCE
+        val start = MessageEffects(
+            flags = protections or MessageEffectFlags.CONFETTI or MessageEffectFlags.RAINBOW,
+            ephemeralDuration = EphemeralDuration.ONE_MINUTE.seconds,
+        )
+
+        val result = MessageEffectsEditor.clearPanelFlags(start)
+
+        assertThat(result.flags).isEqualTo(protections)
+        assertThat(result.ephemeralDuration).isEqualTo(60)
+    }
+
+    @Test
+    fun hasPanelEffect_isFalseWithOnlyProtections() {
+        val protections = MessageEffects(flags = MessageEffectFlags.BLURRED or MessageEffectFlags.VIEW_ONCE)
+        assertThat(MessageEffectsEditor.hasPanelEffect(protections)).isFalse()
+        assertThat(MessageEffectsEditor.hasPanelEffect(protections.copy(flags = protections.flags or MessageEffectFlags.PULSE))).isTrue()
     }
 }

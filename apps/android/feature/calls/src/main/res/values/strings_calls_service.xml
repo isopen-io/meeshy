@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_service_channel_name">Calls in progress</string>
+    <string name="call_service_on_hold">On hold</string>
+    <string name="call_service_reconnecting">Reconnecting…</string>
+    <string name="call_service_unmute">Unmute</string>
+</resources>

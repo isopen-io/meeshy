@@ -83,6 +83,21 @@ final class ConversationServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "GET")
     }
 
+    /// #14708 — la relecture du régime d'une réponse rapide ne distingue un
+    /// 404 SERVI par la passerelle d'un 404 de Traefik que si elle demande
+    /// les refus typés : perdre l'enveloppe `TypedRefusals` doit rougir.
+    func testGetByIdTypedRefusalsAsksTheSameAddressForStructuredRefusals() async throws {
+        let response = APIResponse(success: true, data: makeConversation(id: "abc456"), error: nil)
+        mock.stub("/conversations/abc456", result: response)
+
+        _ = try await service.getByIdTypedRefusals("abc456")
+        _ = try await service.getById("abc456")
+
+        XCTAssertEqual(mock.requests.map(\.endpoint), ["/conversations/abc456", "/conversations/abc456"])
+        XCTAssertEqual(mock.requests.map(\.rejectionPolicy), [.structured, .opaque],
+                       "seule la relecture typée change la forme des refus ; les autres appelants gardent la leur")
+    }
+
     // MARK: - create
 
     func testCreateReturnsNewConversation() async throws {
@@ -100,6 +115,16 @@ final class ConversationServiceTests: XCTestCase {
         XCTAssertEqual(mock.requestCount, 1)
         XCTAssertEqual(mock.lastRequest?.endpoint, "/conversations")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
+        XCTAssertNil(mock.lastRequest?.bodyJSON?["encryptionMode"], "sans choix, la passerelle pose Serveur")
+    }
+
+    func test_create_withEncryptionMode_sendsTheChosenMode() async throws {
+        let createResponse = CreateConversationResponse(id: "new123", type: "direct", title: nil, createdAt: Date())
+        mock.stub("/conversations", result: APIResponse(success: true, data: createResponse, error: nil))
+
+        _ = try await service.create(type: "direct", participantIds: ["u1"], encryptionMode: .hybrid)
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["encryptionMode"] as? String, "hybrid")
     }
 
     // MARK: - delete
@@ -113,6 +138,31 @@ final class ConversationServiceTests: XCTestCase {
         XCTAssertEqual(mock.requestCount, 1)
         XCTAssertEqual(mock.lastRequest?.endpoint, "/conversations/conv789")
         XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+    }
+
+    // MARK: - obsolete (#14645)
+
+    func test_obsolete_validId_callsDeleteObsoleteAndReturnsTheDates() async throws {
+        let expected = ConversationObsoleteResult(
+            conversationId: "conv789", obsoletedAt: "2026-11-02T10:00:00.000Z", purgeAfter: "2026-11-04T10:00:00.000Z"
+        )
+        mock.stub("/conversations/conv789/obsolete", result: APIResponse(success: true, data: expected, error: nil))
+
+        let result = try await service.obsolete(conversationId: "conv789")
+
+        XCTAssertEqual(result, expected)
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/conversations/conv789/obsolete")
+        XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+    }
+
+    func test_obsolete_forbidden_throws() async {
+        mock.stubError("/conversations/conv789/obsolete", error: MeeshyError.forbidden(reason: nil, body: nil))
+
+        do {
+            _ = try await service.obsolete(conversationId: "conv789")
+            XCTFail("un refus de la passerelle doit remonter")
+        } catch {}
     }
 
     // MARK: - markRead
@@ -349,6 +399,120 @@ final class ConversationServiceTests: XCTestCase {
         XCTAssertTrue(page.hasMore, "Falls back to offset pagination's hasMore when cursorPagination is absent")
     }
 
+    // MARK: - updateHistoryGrant (#3877)
+
+    /// Distinct de `updateParticipantRights` : ce levier vaut pour TOUT
+    /// participant, et sa réponse ne porte que `historyVisibleFrom`.
+    func test_updateHistoryGrant_posesTheGrant_sendsISODateAndReturnsIt() async throws {
+        let granted = Date(timeIntervalSince1970: 1_768_435_200) // 2026-01-15T00:00:00Z
+        let response = APIResponse(
+            success: true,
+            data: ParticipantHistoryGrantUpdateResult(participantId: "p1", conversationId: "c1", historyVisibleFrom: granted),
+            error: nil
+        )
+        mock.stub("/conversations/c1/participants/p1/rights", result: response)
+
+        let result = try await service.updateHistoryGrant(conversationId: "c1", participantId: "p1", historyVisibleFrom: granted)
+
+        XCTAssertEqual(result, granted)
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/conversations/c1/participants/p1/rights")
+        XCTAssertEqual(mock.lastRequest?.method, "PATCH")
+        XCTAssertNotNil(mock.lastRequest?.bodyJSON?["historyVisibleFrom"] as? String)
+    }
+
+    /// Retirer l'octroi doit envoyer `null` EXPLICITE, jamais une clé absente
+    /// — le gateway distingue les deux (absente = ne touche à rien, `null` =
+    /// retire). `NSNull` est ce que `JSONSerialization` rend pour un `null`
+    /// JSON une fois réinterprété en `[String: Any]`.
+    func test_updateHistoryGrant_revokesWithExplicitNull_notAnAbsentKey() async throws {
+        let response = APIResponse(
+            success: true,
+            data: ParticipantHistoryGrantUpdateResult(participantId: "p1", conversationId: "c1", historyVisibleFrom: nil),
+            error: nil
+        )
+        mock.stub("/conversations/c1/participants/p1/rights", result: response)
+
+        let result = try await service.updateHistoryGrant(conversationId: "c1", participantId: "p1", historyVisibleFrom: nil)
+
+        XCTAssertNil(result)
+        let body = mock.lastRequest?.bodyJSON
+        XCTAssertNotNil(body, "the body must be present")
+        XCTAssertTrue(body?.keys.contains("historyVisibleFrom") ?? false, "the key must be present, not omitted")
+        XCTAssertTrue(body?["historyVisibleFrom"] is NSNull, "the value must be explicit JSON null")
+    }
+
+    // MARK: - historyGrantFloor — un octroi par DATE se pose au JOUR
+
+    /// Le témoin qui tombe sur l'instant BRUT. Un sélecteur `[.date]` rend le
+    /// jour choisi À L'HEURE de la valeur précédente ; le plancher gateway étant
+    /// `createdAt >= instant`, « voit l'historique depuis le 15 » posé à 14h32
+    /// masquait toute la matinée du 15.
+    func test_updateHistoryGrant_sendsTheDayFloor_notTheRawPickerInstant() async throws {
+        // 2026-01-15T14:32:11Z — le jour choisi, à l'heure qui traînait.
+        let picked = Date(timeIntervalSince1970: 1_768_487_531)
+        let response = APIResponse(
+            success: true,
+            data: ParticipantHistoryGrantUpdateResult(participantId: "p1", conversationId: "c1", historyVisibleFrom: picked),
+            error: nil
+        )
+        mock.stub("/conversations/c1/participants/p1/rights", result: response)
+
+        _ = try await service.updateHistoryGrant(conversationId: "c1", participantId: "p1", historyVisibleFrom: picked)
+
+        let sent = mock.lastRequest?.bodyJSON?["historyVisibleFrom"] as? String
+        XCTAssertNotNil(sent)
+        XCTAssertTrue(
+            sent?.hasSuffix("T00:00:00.000Z") ?? false,
+            "the grant must floor to midnight, got \(sent ?? "nil") — a mid-day floor hides the morning of the chosen day"
+        )
+    }
+
+    /// Le jour retenu est celui que l'utilisateur a VU (calendrier local), et
+    /// l'instant envoyé son minuit UTC — la composition exacte du web depuis
+    /// `<input type="date">`. Tronquer en UTC l'instant brut sauterait d'un jour
+    /// le soir sur un fuseau à l'ouest : c'est ce que ce témoin interdit.
+    func test_historyGrantFloor_keepsTheDayTheUserSaw_acrossTheUTCBoundary() {
+        var local = Calendar(identifier: .gregorian)
+        local.timeZone = TimeZone(secondsFromGMT: -5 * 3600) ?? .current
+
+        // 15 janvier 20h00 heure locale (UTC−5) = 16 janvier 01h00 UTC.
+        var parts = DateComponents()
+        parts.year = 2026; parts.month = 1; parts.day = 15; parts.hour = 20
+        let selection = local.date(from: parts)!
+
+        let floor = ConversationService.historyGrantFloor(
+            for: selection,
+            calendar: local,
+            now: Date(timeIntervalSince1970: 4_000_000_000)
+        )
+
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(secondsFromGMT: 0)!
+        let day = utc.dateComponents([.year, .month, .day, .hour], from: floor)
+        XCTAssertEqual(day.day, 15, "the floor must stay on the day the user saw, not roll to the UTC day")
+        XCTAssertEqual(day.month, 1)
+        XCTAssertEqual(day.hour, 0)
+    }
+
+    /// Le gateway refuse un plancher FUTUR (`historyVisibleFrom must not be in
+    /// the future`), et minuit UTC du jour local est à venir sur un fuseau très
+    /// à l'est : la borne évite un 400 sur un geste parfaitement légitime.
+    func test_historyGrantFloor_neverReturnsAFutureInstant() {
+        var farEast = Calendar(identifier: .gregorian)
+        farEast.timeZone = TimeZone(secondsFromGMT: 13 * 3600) ?? .current
+
+        let now = Date(timeIntervalSince1970: 1_768_435_800) // 2026-01-15T00:10:00Z
+        // Il est déjà le 15 à 13h10 pour ce lecteur : son « aujourd'hui » a un
+        // minuit UTC (15 janvier 00h00Z) situé… avant maintenant. On vise donc
+        // le lendemain local, dont le minuit UTC est franchement à venir.
+        let tomorrowLocal = now.addingTimeInterval(24 * 3600)
+
+        let floor = ConversationService.historyGrantFloor(for: tomorrowLocal, calendar: farEast, now: now)
+
+        XCTAssertLessThanOrEqual(floor, now, "a future floor hides every message, including the participant's own")
+    }
+
     func test_listPage_missingAllMeta_inferHasMoreFromPageFill() async throws {
         let body = ConversationListResponseBody(
             success: true,
@@ -362,5 +526,24 @@ final class ConversationServiceTests: XCTestCase {
         let page = try await service.listPage(limit: 30)
 
         XCTAssertTrue(page.hasMore, "Full page implies more might follow when both meta blocks are missing")
+    }
+
+    func test_updateParticipantRole_uppercaseRole_sendsLowercaseWireValue() async throws {
+        let response = APIResponse(success: true, data: DiscardedResponseBody(), error: nil)
+        mock.stub("/conversations/conv1/participants/user1/role", result: response)
+
+        try await service.updateParticipantRole(conversationId: "conv1", userId: "user1", role: "MODERATOR")
+
+        XCTAssertEqual(mock.lastRequest?.method, "PATCH")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["role"] as? String, "moderator")
+    }
+
+    func test_updateParticipantRole_lowercaseRole_leftUnchanged() async throws {
+        let response = APIResponse(success: true, data: DiscardedResponseBody(), error: nil)
+        mock.stub("/conversations/conv1/participants/user1/role", result: response)
+
+        try await service.updateParticipantRole(conversationId: "conv1", userId: "user1", role: "admin")
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["role"] as? String, "admin")
     }
 }

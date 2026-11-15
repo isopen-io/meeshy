@@ -1,0 +1,155 @@
+import { hasPerReaderEphemeralDeadline, inheritedEphemeralExpiresAt } from '@meeshy/shared/utils/ephemeral-countdown';
+import type {
+  LastMessageAttachmentSummary,
+  LastMessageCallSummary,
+  LastMessageSticker,
+  LastMessageSystemEvent,
+} from '@meeshy/shared/types/conversation-preview';
+import { previewStickerOf, servedAttachmentSummary } from '../../routes/conversations/utils/last-message-media';
+import { sharedPlaceFromMetadata, type SharedPlace } from '../../services/location/sharedPlace';
+import {
+  PREVIEW_ATTACHMENT_SUMMARY_LIMIT,
+  isPreviewWithheld,
+  resolveLastMessageNature,
+  resolvePreviewProtection,
+} from '../../routes/conversations/utils/last-message-nature';
+import {
+  toIsoOrNull,
+  resolveLastMessagePreviewPrism,
+  resolvePreviewMediaFields,
+  type LastMessagePreviewPrism,
+  type PreviewMediaFields,
+  type PreviewMediaMessage,
+  type PreviewPrismMessage,
+  type PreviewPrismParticipant,
+} from './lastMessagePreviewPrism';
+
+/**
+ * Le message d'entrée du groupe d'aperçu — l'union de ce que le Prisme, le
+ * sous-groupe MÉDIA et la NATURE lisent. Chaque champ est optionnel : les
+ * trois émetteurs chargent des formes différentes (le `Message` partagé
+ * complet, ou un `select` borné), et c'est ici — pas chez eux — qu'une
+ * absence se normalise.
+ */
+export interface PreviewGroupMessage extends PreviewPrismMessage, PreviewMediaMessage {
+  readonly messageType?: string | null;
+  readonly messageSource?: string | null;
+  readonly metadata?: unknown;
+  readonly effectFlags?: number | null;
+  readonly ephemeralDuration?: number | null;
+  readonly isEncrypted?: boolean | null;
+  readonly forwardedFromId?: string | null;
+}
+
+export { PREVIEW_ATTACHMENT_SUMMARY_LIMIT };
+
+export interface LastMessageNatureFields {
+  readonly lastMessageType: string | null;
+  readonly lastMessageEffectFlags: number | null;
+  readonly lastMessageEphemeralDuration: number | null;
+  readonly lastMessageIsEncrypted: boolean;
+  readonly lastMessageIsForwarded: boolean;
+  readonly lastMessageSystemEvent: LastMessageSystemEvent | null;
+  readonly lastMessageCallSummary: LastMessageCallSummary | null;
+  readonly lastMessageAttachmentSummary: LastMessageAttachmentSummary | null;
+}
+
+/**
+ * #7594 — le sticker (retenu sous protection du message ou de la pièce) et la
+ * vue unique déjà ouverte par CE lecteur. Les émetteurs d'un message NEUF ne
+ * passent aucune consommation : personne ne peut avoir ouvert un message avant
+ * sa diffusion, et `false` est alors exact.
+ */
+export interface LastMessageStickerFields {
+  readonly lastMessageSticker: LastMessageSticker | null;
+  readonly lastMessageViewOnceConsumed: boolean;
+}
+
+export interface PreviewGroupReaderContext {
+  /** Ce lecteur a déjà ouvert ce message (`loadViewOnceConsumptions`). */
+  readonly viewOnceConsumed?: boolean;
+  /**
+   * #8686 — la mort, pour CE lecteur, de la chaîne que le message cite (#8630,
+   * `loadSealedQuoteAudience`). Présente ⇒ la ligne part « expirée », comme
+   * `GET /conversations` la sert : aucun texte, l'échéance de cette mort.
+   */
+  readonly quotedDeathAt?: Date | null;
+}
+
+export type LastMessagePreviewGroup = LastMessagePreviewPrism &
+  PreviewMediaFields &
+  LastMessageNatureFields &
+  LastMessageStickerFields & { readonly location?: SharedPlace };
+
+const WITHHELD_PRISM: LastMessagePreviewPrism = {
+  lastMessagePreview: '',
+  lastMessageTranslations: null,
+  lastMessageOriginalLanguage: null,
+};
+
+function isEphemeral(message: PreviewGroupMessage | null | undefined): boolean {
+  return message != null && hasPerReaderEphemeralDeadline(message);
+}
+
+/** L'échéance servie à une réponse morte avec ce qu'elle cite : la plus proche des deux, comme le REST. */
+function diedWithItsQuoteAt(message: PreviewGroupMessage | null | undefined, quotedDeathAt: Date): string | null {
+  const own = isEphemeral(message) || message?.expiresAt == null ? null : new Date(message.expiresAt);
+  return toIsoOrNull(inheritedEphemeralExpiresAt([own, quotedDeathAt]));
+}
+
+/**
+ * LE groupe d'aperçu que `conversation:updated` porte pour un destinataire
+ * (#7545) : Prisme, sous-groupe MÉDIA, NATURE et lieu, sous UNE protection.
+ *
+ * Les trois émetteurs (`MessageHandler`, `postMessageSyncFanOut`,
+ * `emitConversationPreviewUpdate`) composaient ces morceaux chacun de son
+ * côté, et aucun ne regardait la protection : un message à vue unique ou
+ * flouté partait sur le socket avec son TEXTE, ses TRADUCTIONS et sa pièce
+ * jointe pendant que `GET /conversations` les masquait — et le texte finissait
+ * dans le cache disque de la liste. Le prédicat est désormais celui du REST
+ * (`resolvePreviewProtection`, `ephemeralDuration` compris) et il est appliqué
+ * ICI, une fois, pour les trois.
+ *
+ * Protégé ⇒ `lastMessagePreview: ''` (comme `lastMessage.content` en REST),
+ * carte et langue d'origine `null`, aucune pièce jointe, compte 0, résumé
+ * `null`, aucun lieu. Les drapeaux, l'auteur, le type et les effets partent :
+ * ce sont eux qui qualifient le placeholder que le client dessine.
+ */
+export function resolveLastMessagePreviewGroup(
+  participant: PreviewPrismParticipant,
+  message: PreviewGroupMessage | null | undefined,
+  now: Date = new Date(),
+  reader: PreviewGroupReaderContext = {},
+): LastMessagePreviewGroup {
+  const quotedDeathAt = reader.quotedDeathAt ?? null;
+  const protection = message != null ? resolvePreviewProtection({ ...message, quotedDeathAt }, now) : null;
+  const withheld = isPreviewWithheld(protection);
+  const media = resolvePreviewMediaFields(message, protection);
+  const place = withheld ? null : sharedPlaceFromMetadata(message?.metadata);
+  const nature = message ? resolveLastMessageNature(message) : null;
+  return {
+    ...(withheld ? WITHHELD_PRISM : resolveLastMessagePreviewPrism(participant, message)),
+    ...media,
+    ...(withheld ? { lastMessageAttachments: [], lastMessageAttachmentCount: 0 } : {}),
+    // #7451 — pour un éphémère, `expiresAt` est l'heure INTERNE de destruction,
+    // jamais l'échéance d'un lecteur : une diffusion de room ne peut pas la
+    // servir (même règle que `message:new`). Le client décompte depuis SA
+    // réception, et `message:countdown-started` lui porte l'échéance serveur.
+    ...(isEphemeral(message) ? { lastMessageExpiresAt: null } : {}),
+    ...(quotedDeathAt ? { lastMessageExpiresAt: diedWithItsQuoteAt(message, quotedDeathAt) } : {}),
+    lastMessageType: message?.messageType ?? null,
+    lastMessageEffectFlags: message?.effectFlags ?? null,
+    lastMessageEphemeralDuration: message?.ephemeralDuration ?? null,
+    lastMessageIsEncrypted: nature?.isEncrypted ?? false,
+    lastMessageIsForwarded: nature?.isForwarded ?? false,
+    lastMessageSystemEvent: nature?.systemEvent ?? null,
+    lastMessageCallSummary: nature?.callSummary ?? null,
+    lastMessageAttachmentSummary: servedAttachmentSummary(message?.attachments ?? [], message?._count?.attachments, protection),
+    lastMessageSticker: previewStickerOf(message?.metadata, {
+      messageWithheld: withheld,
+      attachments: message?.attachments ?? [],
+    }),
+    lastMessageViewOnceConsumed: message?.isViewOnce === true && reader.viewOnceConsumed === true,
+    ...(place ? { location: place } : {}),
+  };
+}

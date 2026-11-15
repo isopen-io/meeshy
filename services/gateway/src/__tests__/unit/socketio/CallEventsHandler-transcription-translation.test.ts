@@ -18,6 +18,7 @@ import { EventEmitter } from 'events';
 
 const mockGetCallSession = jest.fn<any>();
 jest.mock('../../../services/CallService', () => ({
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn().mockImplementation(() => ({
     getCallSession: mockGetCallSession,
   })),
@@ -72,7 +73,7 @@ import type { ZmqTranslationClient } from '../../../services/zmq-translation';
 const VALID_CALL_ID = '507f1f77bcf86cd799439011';
 const SPEAKER_ID = 'user-speaker-abc';
 const LISTENER_ID = 'user-listener-def';
-const MESSAGE_ID = `call-${VALID_CALL_ID}-0`;
+const MESSAGE_ID = `call-caption:${VALID_CALL_ID}:0`;
 
 const VALID_SEGMENT = {
   callId: VALID_CALL_ID,
@@ -108,6 +109,7 @@ function makePrisma() {
       findUnique: jest.fn<any>().mockResolvedValue({
         status: 'active',
         metadata: { translationEnabled: true },
+        conversation: { encryptionMode: null },
       }),
     },
     participant: {
@@ -256,8 +258,10 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
 
     await segmentPromise;
 
-    expect(roomEmit).toHaveBeenCalledTimes(1);
-    const [eventName, payload] = roomEmit.mock.calls[0];
+    // #16613 — l'original part d'abord, la traduction le rejoint ensuite.
+    expect(roomEmit).toHaveBeenCalledTimes(2);
+    expect(roomEmit.mock.calls[0][1].segment.translatedText).toBeUndefined();
+    const [eventName, payload] = roomEmit.mock.calls[1];
     expect(eventName).toBe(CALL_EVENTS.TRANSLATED_SEGMENT);
     expect(payload.segment.translatedText).toBe('Hello world');
     expect(payload.segment.targetLanguage).toBe('en');
@@ -292,8 +296,9 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
     });
     await segmentPromise;
 
-    expect(roomEmit).toHaveBeenCalledTimes(1);
-    const [, payload] = roomEmit.mock.calls[0];
+    expect(roomEmit).toHaveBeenCalledTimes(2);
+    expect(roomEmit.mock.calls[0][1].segment.speakerId).toBe(SPEAKER_ID);
+    const [, payload] = roomEmit.mock.calls[1];
     expect(payload.segment.speakerId).toBe(SPEAKER_ID);
     expect(payload.segment.speakerId).not.toBe(LISTENER_ID);
   });
@@ -305,6 +310,7 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
     (prisma.callSession.findUnique as jest.Mock).mockResolvedValue({
       status: 'active',
       metadata: {},
+      conversation: { encryptionMode: null },
     });
     const { socket, handlers, roomEmit } = makeSocket();
     const taskId = 'task-no-gate';
@@ -328,8 +334,10 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
     });
     await segmentPromise;
 
-    expect(roomEmit).toHaveBeenCalledTimes(1);
-    const [eventName, payload] = roomEmit.mock.calls[0];
+    // #16613 — l'original part d'abord, la traduction le rejoint ensuite.
+    expect(roomEmit).toHaveBeenCalledTimes(2);
+    expect(roomEmit.mock.calls[0][1].segment.translatedText).toBeUndefined();
+    const [eventName, payload] = roomEmit.mock.calls[1];
     expect(eventName).toBe(CALL_EVENTS.TRANSLATED_SEGMENT);
     expect(payload.segment.translatedText).toBe('Hello world');
   });
@@ -380,8 +388,9 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
     });
     await segmentPromise;
 
-    expect(roomEmit).toHaveBeenCalledTimes(1);
-    const [, payload] = roomEmit.mock.calls[0];
+    expect(roomEmit).toHaveBeenCalledTimes(2);
+    expect(roomEmit.mock.calls[0][1].segment.speakerId).toBe(SPEAKER_ID);
+    const [, payload] = roomEmit.mock.calls[1];
     expect(payload.segment.id).toBe('f81d4fae-7dec-4b57-b93a-2c675ddac001');
     expect(payload.segment.speakerDisplayName).toBe('Alice Doe');
     expect(payload.segment.capturedAtMs).toBe(1765650000000);
@@ -462,7 +471,9 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
       VALID_SEGMENT.segment.language,
       'es',
       MESSAGE_ID,
-      VALID_CALL_ID
+      VALID_CALL_ID,
+      'basic',
+      { timeoutMs: 10_000, retryEnabled: false }
     );
     expect(zmqClient.translateText).not.toHaveBeenCalledWith(
       expect.anything(),
@@ -546,12 +557,16 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
       expect(spanishEmission!.rooms).not.toContain(ROOMS.user(EN_LISTENER_ID));
     });
 
-    it('emits exactly two segments total — one per distinct target language, never a call-room broadcast', async () => {
+    it('emits the ORIGINAL once to the call room, then one translation per distinct target language — never a translation to the call room (#16613)', async () => {
       const { emitter, emissions, segmentPromise } = setupThreeWayCall();
       await resolveBothLanguages(emitter, segmentPromise);
 
-      expect(emissions).toHaveLength(2);
-      expect(emissions.every((e) => !e.rooms.includes(ROOMS.call(VALID_CALL_ID)))).toBe(true);
+      expect(emissions).toHaveLength(3);
+      expect(emissions[0].rooms).toEqual([ROOMS.call(VALID_CALL_ID)]);
+      expect(emissions[0].payload.segment.translatedText).toBeUndefined();
+      const translations = emissions.slice(1);
+      expect(translations.every((e) => e.payload.segment.translatedText !== undefined)).toBe(true);
+      expect(translations.every((e) => !e.rooms.includes(ROOMS.call(VALID_CALL_ID)))).toBe(true);
     });
   });
   describe('group call, listener sharing the SPEAKER\'s language (same-language starvation guard)', () => {
@@ -597,24 +612,23 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
       await segmentPromise;
     }
 
-    it('still delivers the ORIGINAL segment to the listener who shares the speaker\'s language', async () => {
+    it('still delivers the ORIGINAL segment to the listener who shares the speaker\'s language — through the call room, at once (#16613)', async () => {
       const { emitter, emissions, segmentPromise } = setupMixedCall();
       await resolveEnglish(emitter, segmentPromise);
 
-      const frEmission = emissions.find((e) => e.rooms.includes(ROOMS.user(FR_LISTENER_ID)));
-      expect(frEmission).toBeDefined();
-      expect(frEmission!.payload.segment.text).toBe('Bonjour le monde');
-      expect(frEmission!.payload.segment.translatedText).toBeUndefined();
-      expect(frEmission!.payload.segment.targetLanguage).toBe('fr');
+      const original = emissions.find((e) => e.rooms.includes(ROOMS.call(VALID_CALL_ID)));
+      expect(original).toBeDefined();
+      expect(original!.payload.segment.text).toBe('Bonjour le monde');
+      expect(original!.payload.segment.translatedText).toBeUndefined();
+      expect(original!.payload.segment.targetLanguage).toBe('fr');
     });
 
-    it('does not leak the same-language original into the English listener\'s room', async () => {
+    it('serves the same-language listener the original exactly once — no second copy to their personal room', async () => {
       const { emitter, emissions, segmentPromise } = setupMixedCall();
       await resolveEnglish(emitter, segmentPromise);
 
-      const frEmission = emissions.find((e) => e.rooms.includes(ROOMS.user(FR_LISTENER_ID)));
-      expect(frEmission!.rooms).not.toContain(ROOMS.user(EN_LISTENER_ID));
-      expect(frEmission!.rooms).not.toContain(ROOMS.call(VALID_CALL_ID));
+      expect(emissions.filter((e) => e.rooms.includes(ROOMS.user(FR_LISTENER_ID)))).toHaveLength(0);
+      expect(emissions.filter((e) => e.payload.segment.translatedText === undefined)).toHaveLength(1);
     });
 
     it('still translates for the English listener', async () => {
@@ -624,6 +638,101 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
       const enEmission = emissions.find((e) => e.payload.segment.translatedText === 'Hello world');
       expect(enEmission).toBeDefined();
       expect(enEmission!.rooms).toEqual([ROOMS.user(EN_LISTENER_ID)]);
+    });
+  });
+
+  /**
+   * The client-declared segment language reaches the handler VERBATIM
+   * (`socketTranscriptionSegmentSchema` accepts `z.string().min(2).max(10)`, so
+   * `'fr-FR'`, `'en-US'`, mixed case all pass — speech recognizers emit locale
+   * identifiers). The listener languages, by contrast, are canonical
+   * (`resolveUserLanguage` → 2-letter lowercase). The chat twin
+   * (`MessageTranslationService._normalizeSourceLanguage`) already canonicalises
+   * its ZMQ source (`fr-FR` → `fr`); this path must match it, else the ZMQ
+   * SOURCE is an invalid NLLB code for the whole segment, and the same-language
+   * check misfires.
+   */
+  describe('canonicalises the client-declared segment language (twin of chat _normalizeSourceLanguage)', () => {
+    const EN_LISTENER_ID = 'user-en-listener';
+
+    function regionTaggedSegment(language: string) {
+      return {
+        callId: VALID_CALL_ID,
+        segment: {
+          text: 'Bonjour le monde',
+          speakerId: SPEAKER_ID,
+          startMs: 0,
+          endMs: 1500,
+          isFinal: true,
+          confidence: 0.95,
+          language,
+        },
+      };
+    }
+
+    it('passes a CANONICAL source language (fr) to ZMQ when the client declares a region-tagged code (fr-FR)', async () => {
+      const prisma = makePrisma();
+      (prisma.callParticipant.findMany as jest.Mock).mockResolvedValue([
+        { participant: { userId: SPEAKER_ID, user: { systemLanguage: 'fr' } } },
+        { participant: { userId: EN_LISTENER_ID, user: { systemLanguage: 'en' } } },
+      ]);
+      const { socket, handlers } = makeRoomAwareSocket();
+      const zmqClient = makeMultiLanguageFakeZmqClient();
+      const translateText = (zmqClient as unknown as { translateText: jest.Mock }).translateText;
+      const emitter = zmqClient as unknown as EventEmitter;
+
+      const handler = new CallEventsHandler(prisma, makeCallService());
+      handler.setZmqClient(zmqClient);
+      handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+
+      const segmentPromise = handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](regionTaggedSegment('fr-FR'));
+      for (let i = 0; i < 20; i++) {
+        await Promise.resolve();
+      }
+      await new Promise((resolve) => setImmediate(resolve));
+      emitter.emit(`translationCompleted:${MESSAGE_ID}`, {
+        taskId: 'task-en',
+        result: { translatedText: 'Hello world', messageId: MESSAGE_ID },
+        targetLanguage: 'en',
+      });
+      await segmentPromise;
+
+      expect(translateText).toHaveBeenCalledTimes(1);
+      const sourceLanguageArg = translateText.mock.calls[0][1];
+      expect(sourceLanguageArg).toBe('fr');
+    });
+
+    it('serves the ORIGINAL (no ZMQ request) to a listener whose canonical language matches a region-tagged speaker code (en-US)', async () => {
+      const prisma = makePrisma();
+      (prisma.callParticipant.findMany as jest.Mock).mockResolvedValue([
+        { participant: { userId: SPEAKER_ID, user: { systemLanguage: 'en' } } },
+        { participant: { userId: EN_LISTENER_ID, user: { systemLanguage: 'en' } } },
+      ]);
+      const { socket, handlers, emissions } = makeRoomAwareSocket();
+      const zmqClient = makeMultiLanguageFakeZmqClient();
+      const translateText = (zmqClient as unknown as { translateText: jest.Mock }).translateText;
+
+      const handler = new CallEventsHandler(prisma, makeCallService());
+      handler.setZmqClient(zmqClient);
+      handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+
+      const segmentPromise = handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](regionTaggedSegment('en-US'));
+      for (let i = 0; i < 20; i++) {
+        await Promise.resolve();
+      }
+      await new Promise((resolve) => setImmediate(resolve));
+      await segmentPromise;
+
+      // The English listener speaks the (canonical) speaker language — no
+      // translation must be requested. With NO listener needing a translation
+      // the original broadcasts to the whole call room (targetLanguages empty).
+      expect(translateText).not.toHaveBeenCalled();
+      const original = emissions.find((e) => e.rooms.includes(ROOMS.call(VALID_CALL_ID)));
+      expect(original).toBeDefined();
+      expect(original!.payload.segment.text).toBe('Bonjour le monde');
+      expect(original!.payload.segment.translatedText).toBeUndefined();
+      // And the source label the client receives is canonical, not `en-US`.
+      expect(original!.payload.segment.sourceLanguage).toBe('en');
     });
   });
 });

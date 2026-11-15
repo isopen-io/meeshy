@@ -51,6 +51,48 @@ class OutboxRepositoryTest {
         assertThat(repository.observeAll().first().map { it.cmid }).containsExactly("m1")
     }
 
+    /**
+     * End to end through the real enqueue: a queued write answers `true` for its own kind
+     * and `false` for its lane-mate. `PreferencesSyncCoordinator` reads this to decide
+     * whether folding the server's block would revert a change the user already made here,
+     * so a kind that did not round-trip through the column would silently veto nothing.
+     */
+    @Test
+    fun `hasDeliverable answers for the queued kind only`() = runTest {
+        repository.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.UPDATE_SETTINGS,
+                lane = OutboxLanes.SETTINGS,
+                targetId = "u1",
+                payload = "{}",
+                cmid = "s1",
+            ),
+        )
+
+        assertThat(repository.hasDeliverable(OutboxLanes.SETTINGS, OutboxKind.UPDATE_SETTINGS)).isTrue()
+        assertThat(
+            repository.hasDeliverable(OutboxLanes.SETTINGS, OutboxKind.UPDATE_PRIVACY_SETTINGS),
+        ).isFalse()
+    }
+
+    /** A delivered row is deleted, so nothing is owed any more. */
+    @Test
+    fun `hasDeliverable clears once the row is delivered`() = runTest {
+        repository.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.UPDATE_SETTINGS,
+                lane = OutboxLanes.SETTINGS,
+                targetId = "u1",
+                payload = "{}",
+                cmid = "s1",
+            ),
+        )
+
+        repository.markSucceeded("s1")
+
+        assertThat(repository.hasDeliverable(OutboxLanes.SETTINGS, OutboxKind.UPDATE_SETTINGS)).isFalse()
+    }
+
     @Test
     fun `enqueue annihilates a reaction toggle and emits Cancelled`() = runTest {
         repository.enqueue(reaction(OutboxKind.ADD_REACTION, "add"))
@@ -140,6 +182,41 @@ class OutboxRepositoryTest {
         repository.discard("missing")
 
         assertThat(repository.observeAll().first().map { it.cmid }).containsExactly("m1")
+    }
+
+    @Test
+    fun `retrying a publication revives the exhausted uploads it waits on, so it can run again`() = runTest {
+        repository.enqueue(OutboxMutation(OutboxKind.UPLOAD_MEDIA, OutboxLanes.MEDIA, "u1", "", cmid = "u1"))
+        repository.enqueue(OutboxMutation(OutboxKind.UPLOAD_MEDIA, OutboxLanes.MEDIA, "u2", "", cmid = "u2"))
+        repository.enqueue(
+            OutboxMutation(OutboxKind.CREATE_POST, OutboxLanes.POST, "p", "{}", dependsOn = setOf("u1", "u2"), cmid = "p"),
+        )
+        repository.markExhausted("u1", "HTTP 415")
+        repository.markExhausted("p", "Prerequisite(s) failed: u1")
+
+        assertThat(repository.retryWithPrerequisites("p")).isTrue()
+
+        assertThat(repository.stateOf("p")).isEqualTo(OutboxState.PENDING)
+        assertThat(repository.stateOf("u1")).isEqualTo(OutboxState.PENDING)
+        assertThat(repository.stateOf("u2")).isEqualTo(OutboxState.PENDING)
+        assertThat(repository.row("u1")?.attempts).isEqualTo(0)
+    }
+
+    @Test
+    fun `retrying a publication that is gone revives nothing`() = runTest {
+        assertThat(repository.retryWithPrerequisites("missing")).isFalse()
+        assertThat(repository.row("missing")).isNull()
+    }
+
+    @Test
+    fun `an upload landing after its publication gave up still grafts the real id into it`() = runTest {
+        repository.enqueue(rowDependingOn("p1", "u", "old1"))
+        repository.markExhausted("p1", "no author")
+
+        val changed = repository.rewriteDependents("u") { "new:$it" }
+
+        assertThat(changed).isEqualTo(1)
+        assertThat(repository.row("p1")?.payload).isEqualTo("new:old1")
     }
 
     private fun rowDependingOn(cmid: String, prereq: String, payload: String) = OutboxMutation(
@@ -300,4 +377,151 @@ class OutboxRepositoryTest {
 
         assertThat(repository.deliverable(OutboxLanes.forMessage(""))).isEmpty()
     }
+
+    // region id local retenu (#11609)
+
+    private val localStory = "pending_550e8400-e29b-41d4-a716-446655440000"
+    private val serverStory = "507f1f77bcf86cd799439011"
+
+    private fun like(cmid: String, targetId: String, kind: OutboxKind = OutboxKind.LIKE_POST) = OutboxMutation(
+        kind = kind,
+        lane = OutboxLanes.SOCIAL,
+        targetId = targetId,
+        payload = "{}",
+        cmid = cmid,
+    )
+
+    @Test
+    fun `a mutation addressed to a local id is held out of the drainer's reach`() = runTest {
+        repository.enqueue(like("l1", localStory))
+
+        assertThat(repository.deliverable(OutboxLanes.SOCIAL)).isEmpty()
+    }
+
+    @Test
+    fun `a held mutation keeps its full attempt budget and stays pending`() = runTest {
+        repository.enqueue(like("l1", localStory))
+
+        val row = repository.observeAll().first().single()
+
+        assertThat(row.attempts).isEqualTo(0)
+        assertThat(row.stateEnum).isEqualTo(OutboxState.PENDING)
+    }
+
+    @Test
+    fun `a held mutation is still owed to the server`() = runTest {
+        repository.enqueue(like("l1", localStory))
+
+        assertThat(repository.hasDeliverable(OutboxLanes.SOCIAL, OutboxKind.LIKE_POST)).isTrue()
+    }
+
+    @Test
+    fun `a mutation addressed to a server id is deliverable at once`() = runTest {
+        repository.enqueue(like("l1", serverStory))
+
+        assertThat(repository.deliverable(OutboxLanes.SOCIAL).map { it.cmid }).containsExactly("l1")
+    }
+
+    @Test
+    fun `a held mutation does not hide its deliverable lane-mates`() = runTest {
+        repository.enqueue(like("held", localStory))
+        repository.enqueue(like("ready", serverStory, OutboxKind.BOOKMARK_POST))
+
+        assertThat(repository.deliverable(OutboxLanes.SOCIAL).map { it.cmid }).containsExactly("ready")
+    }
+
+    @Test
+    fun `a story publish keeps draining although its target is a pending id`() = runTest {
+        repository.enqueue(
+            OutboxMutation(OutboxKind.PUBLISH_STORY, OutboxLanes.STORY, localStory, "{}", cmid = "p1"),
+        )
+
+        assertThat(repository.deliverable(OutboxLanes.STORY).map { it.cmid }).containsExactly("p1")
+    }
+
+    @Test
+    fun `a held like and unlike of the same pending story still annihilate`() = runTest {
+        repository.enqueue(like("l1", localStory))
+
+        val cmid = repository.enqueue(like("l2", localStory, OutboxKind.UNLIKE_POST))
+
+        assertThat(cmid).isNull()
+        assertThat(repository.observeAll().first()).isEmpty()
+    }
+
+    @Test
+    fun `resolveLocalId re-addresses the waiting rows to the server id`() = runTest {
+        repository.enqueue(like("l1", localStory))
+
+        val changed = repository.resolveLocalId(localStory, serverStory)
+
+        assertThat(changed).isEqualTo(1)
+        val ready = repository.deliverable(OutboxLanes.SOCIAL).single()
+        assertThat(ready.cmid).isEqualTo("l1")
+        assertThat(ready.targetId).isEqualTo(serverStory)
+        assertThat(ready.attempts).isEqualTo(0)
+    }
+
+    @Test
+    fun `resolveLocalId leaves the rows of another local id waiting`() = runTest {
+        repository.enqueue(like("l1", localStory))
+        repository.enqueue(like("l2", "pending_other", OutboxKind.BOOKMARK_POST))
+
+        repository.resolveLocalId(localStory, serverStory)
+
+        assertThat(repository.deliverable(OutboxLanes.SOCIAL).map { it.cmid }).containsExactly("l1")
+    }
+
+    @Test
+    fun `resolveLocalId refuses a server id that is not an object id`() = runTest {
+        repository.enqueue(like("l1", localStory))
+
+        assertThat(repository.resolveLocalId(localStory, "pending_elsewhere")).isEqualTo(0)
+        assertThat(repository.resolveLocalId(localStory, "")).isEqualTo(0)
+        assertThat(repository.deliverable(OutboxLanes.SOCIAL)).isEmpty()
+    }
+
+    @Test
+    fun `resolveLocalId refuses an id that was never local`() = runTest {
+        repository.enqueue(like("l1", serverStory))
+
+        assertThat(repository.resolveLocalId(serverStory, "507f1f77bcf86cd799439022")).isEqualTo(0)
+        assertThat(repository.deliverable(OutboxLanes.SOCIAL).single().targetId).isEqualTo(serverStory)
+    }
+
+    @Test
+    fun `resolveLocalId does not revive an exhausted row`() = runTest {
+        repository.enqueue(like("l1", localStory))
+        repository.markExhausted("l1", "gave up")
+
+        assertThat(repository.resolveLocalId(localStory, serverStory)).isEqualTo(0)
+        assertThat(repository.deliverable(OutboxLanes.SOCIAL)).isEmpty()
+    }
+
+    @Test
+    fun `cancelHeldFor drops the waiting rows and signals Cancelled`() = runTest {
+        repository.enqueue(like("l1", localStory))
+        repository.enqueue(like("l2", serverStory, OutboxKind.BOOKMARK_POST))
+
+        repository.outcomes.test {
+            val cancelled = repository.cancelHeldFor(localStory)
+
+            assertThat(cancelled).isEqualTo(1)
+            assertThat(awaitItem()).isEqualTo(OutboxOutcome.Cancelled("l1"))
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertThat(repository.observeAll().first().map { it.cmid }).containsExactly("l2")
+    }
+
+    @Test
+    fun `cancelHeldFor leaves a story publish that shares the pending id`() = runTest {
+        repository.enqueue(
+            OutboxMutation(OutboxKind.PUBLISH_STORY, OutboxLanes.STORY, localStory, "{}", cmid = "p1"),
+        )
+
+        assertThat(repository.cancelHeldFor(localStory)).isEqualTo(0)
+        assertThat(repository.observeAll().first().map { it.cmid }).containsExactly("p1")
+    }
+
+    // endregion
 }

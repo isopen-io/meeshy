@@ -1,0 +1,240 @@
+import AVFoundation
+import CoreImage
+import MeeshySDK
+import MeeshyUI
+import SwiftUI
+
+/// **La rangée haute du viseur reste lisible sur un cadre clair** (#9777) — la croix, le flash
+/// et la bascule sont BLANCS : posés sur un Photomaton, une Carte postale ou un Faire-part, ils
+/// disparaissaient. Sous un cadre, un voile sombre passe derrière la rangée haute, juste assez
+/// dense pour que le blanc garde 4,5:1 (WCAG AA) sur la bande du cadre qu'il couvre, mesurée :
+/// nul sur un cadre sombre, 55 % au plus sur un fond blanc pur. Sans cadre, rien ne change.
+/// **Le bas n'a plus de voile** (#18639, porteur : « plus de fond gris derrière les
+/// outils de sélection ») : le rail, la bande et ses noms se tiennent par leur ombre portée.
+nonisolated enum ComposerCaptureChromeLegibility {
+    static let minimumContrast: Double = 4.5
+    static let veilOpacity: Double = 0.55
+    /// Le fondu du voile, AU-DELÀ des contrôles : ils restent posés sur sa partie pleine.
+    static let feather: CGFloat = 28
+
+    static func veilOpacity(framed: Bool) -> Double {
+        framed ? veilOpacity : 0
+    }
+
+    /// Luminance relative WCAG d'une composante sRGB (0…1).
+    static func linear(_ channel: Double) -> Double {
+        channel <= 0.04045 ? channel / 12.92 : pow((channel + 0.055) / 1.055, 2.4)
+    }
+
+    /// Le contraste de l'encre BLANCHE sur un fond gris `background` (0…1) recouvert d'un voile noir d'opacité `veil`.
+    static func whiteInkContrast(background: Double, veil: Double) -> Double {
+        let seen = background * (1 - veil)
+        return (1.0 + 0.05) / (linear(seen) + 0.05)
+    }
+
+    // MARK: - Le voile mesuré sur la bande (#9777, recette #9755)
+
+    /// La part de la hauteur que la rangée haute couvre.
+    static let topBand: CGFloat = 0.16
+    /// La moyenne LOCALE qu'on mesure : une étincelle isolée ne noircit pas le viseur.
+    static let sampleRadius: Double = 12
+    private static let margin = 0.01
+
+    /// Composante sRGB d'une luminance relative (0…1).
+    static func encoded(_ luminance: Double) -> Double {
+        luminance <= 0.0031308 ? luminance * 12.92 : 1.055 * pow(luminance, 1 / 2.4) - 0.055
+    }
+
+    /// Le voile le plus LÉGER qui garde 4,5:1 à l'encre blanche sur une bande de
+    /// luminance relative `bandLuminance` : nul sur un cadre sombre, jamais plus
+    /// dense que le voile fixe d'avant.
+    static func veilOpacity(bandLuminance: Double) -> Double {
+        let plafond = encoded(1.05 / minimumContrast - 0.05)
+        let fond = encoded(min(max(bandLuminance, 0), 1))
+        guard fond > plafond else { return 0 }
+        return min(veilOpacity, 1 - plafond / fond + margin)
+    }
+
+    /// Sans cadre, aucun voile ; sous un cadre que la mesure n'a pas encore lu,
+    /// le voile plein.
+    static func veilOpacity(framed: Bool, bandLuminance: Double?) -> Double {
+        guard framed else { return 0 }
+        return bandLuminance.map(veilOpacity(bandLuminance:)) ?? veilOpacity
+    }
+
+    /// La luminance relative des zones les plus claires de la bande haute du cadre
+    /// peint (moyennes locales). Une case vide (la caméra) compte pour du noir :
+    /// sans cadre, le viseur n'a jamais eu de voile. À appeler HORS du fil principal.
+    static func bands(of scene: CallLiveFrameScene, context: CIContext = ComposerLookGPU.context) -> ComposerCaptureChromeBands? {
+        let hauteur = scene.size.height
+        let largeur = scene.size.width
+        let peint = scene.overlay.composited(over: scene.backdrop)
+        let haut = CGRect(x: 0, y: hauteur * (1 - topBand), width: largeur, height: hauteur * topBand)
+        guard let clairHaut = brightest(peint, in: haut, context: context) else { return nil }
+        return ComposerCaptureChromeBands(top: clairHaut)
+    }
+
+    private static func brightest(_ image: CIImage, in band: CGRect, context: CIContext) -> Double? {
+        guard band.width >= 1, band.height >= 1 else { return nil }
+        let luma = CIVector(x: 0.2126, y: 0.7152, z: 0.0722, w: 0)
+        let maximum = image.cropped(to: band).clampedToExtent()
+            .applyingFilter("CIColorMatrix", parameters: ["inputRVector": luma, "inputGVector": luma,
+                                                          "inputBVector": luma])
+            .applyingFilter("CIBoxBlur", parameters: [kCIInputRadiusKey: sampleRadius])
+            .cropped(to: band)
+            .applyingFilter("CIAreaMaximum", parameters: [kCIInputExtentKey: CIVector(cgRect: band)])
+        var pixel = [Float](repeating: 0, count: 4)
+        context.render(maximum, toBitmap: &pixel, rowBytes: 16, bounds: CGRect(origin: maximum.extent.origin, size: CGSize(width: 1, height: 1)),
+                       format: .RGBAf, colorSpace: nil)
+        return pixel[0].isFinite ? min(max(Double(pixel[0]), 0), 1) : nil
+    }
+}
+
+/// La luminance relative (0…1) de la bande du cadre que la rangée haute couvre,
+/// et le cadre qu'elle mesure : une mesure ne règle jamais le voile d'un AUTRE cadre.
+nonisolated struct ComposerCaptureChromeBands: Equatable, Sendable {
+    let top: Double
+    var frame: String = ""
+
+    func measuring(_ frame: ComposerPhotoFrame) -> ComposerCaptureChromeBands? {
+        self.frame == ComposerLookSceneKey.token(frame) ? self : nil
+    }
+}
+
+/// Le voile derrière la rangée haute : plein sous les contrôles, fondu au-delà.
+struct ComposerCaptureChromeVeil: View {
+    let opacity: Double
+
+    var body: some View {
+        let dense = Color.black.opacity(opacity)
+        VStack(spacing: 0) {
+            dense
+            LinearGradient(colors: [dense, .clear], startPoint: .top, endPoint: .bottom)
+                .frame(height: ComposerCaptureChromeLegibility.feather)
+        }
+        .padding(.bottom, -ComposerCaptureChromeLegibility.feather)
+        .ignoresSafeArea(edges: .top)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+// MARK: - La mesure, à côté du viseur
+
+extension ComposerCaptureChromeLegibility {
+    /// La scène que l'aperçu peint ou va peindre : le cache la cuit une fois pour les deux.
+    static func scene(for key: ComposerLookSceneKey,
+                      cache: any ComposerLookSceneProviding = ComposerLookSceneCache.shared) async -> CallLiveFrameScene? {
+        if let scene = cache.cached(key) { return scene }
+        await withCheckedContinuation { (fin: CheckedContinuation<Void, Never>) in
+            cache.prepare(key) { fin.resume() }
+        }
+        return cache.cached(key)
+    }
+
+    @concurrent
+    static func measuredBands(of scene: CallLiveFrameScene) async -> ComposerCaptureChromeBands? {
+        bands(of: scene)
+    }
+}
+
+/// Mesure le cadre sous le chrome à chaque changement de look, puis anime le voile.
+/// Un filtre changé garde la mesure du même cadre ; un autre cadre attend la sienne
+/// sous le voile plein (`ComposerCaptureChromeBands.measuring`).
+struct ComposerCaptureChromeBandWatch: ViewModifier {
+    let key: ComposerLookSceneKey?
+    @Binding var bands: ComposerCaptureChromeBands?
+    let veils: [Double]
+    let animation: Animation?
+
+    func body(content: Content) -> some View {
+        content
+            .animation(animation, value: veils)
+            .task(id: key) {
+                guard let key else { return }
+                guard let scene = await ComposerCaptureChromeLegibility.scene(for: key),
+                      let mesure = await ComposerCaptureChromeLegibility.measuredBands(of: scene),
+                      !Task.isCancelled else { return }
+                bands = ComposerCaptureChromeBands(top: mesure.top, frame: ComposerLookSceneKey.token(key.look.frame))
+            }
+    }
+}
+
+// MARK: - Le chrome respire (CAM-8)
+
+/// **Le chrome respire** (CAM-8) : viseur armé, sans prise, sans retardateur ni bande
+/// ouverte, la rangée haute et le rail retombent à 35 % après 3 s sans rien — jamais à 0,
+/// le déclencheur reste plein. Le moindre toucher ou changement les rend à 100 %.
+/// VoiceOver garde le chrome plein : il ne voit pas l'image qu'on dégage.
+nonisolated enum ComposerCaptureChromeRest {
+    static let idleDelay: Double = 3
+    static let restingOpacity: Double = 0.35
+
+    static func mayRest(stage: ComposerSceneCameraStage, editing: Bool, counting: Bool,
+                        familyOpen: Bool, voiceOver: Bool) -> Bool {
+        stage == .armed && !editing && !counting && !familyOpen && !voiceOver
+    }
+
+    static func opacity(mayRest: Bool, idle: Double) -> Double {
+        mayRest && idle >= idleDelay ? restingOpacity : 1
+    }
+}
+
+/// Ce qui réveille le chrome sans toucher : l'étape, l'objectif, le zoom, le flash,
+/// le retardateur, la bande, le look, l'obturateur.
+nonisolated struct ComposerCaptureChromeWake: Hashable, Sendable {
+    let stage: ComposerSceneCameraStage
+    let editing: Bool
+    let counting: Bool
+    let family: ComposerLookFamily?
+    let zoom: Double
+    let flipping: Bool
+    let flash: Int
+    let look: ComposerPhotoLook
+    let shutter: Int
+}
+
+/// Pose l'opacité du chrome au repos : relancée à chaque réveil, elle attend 3 s puis
+/// demande à la règle. Au repos, un toucher n'importe où réveille ; sans fondu sous
+/// Reduce Motion.
+struct ComposerCaptureChromeRestWatch: ViewModifier {
+    @ObservedObject var session: ComposerCaptureSession
+    @ObservedObject var timer: ComposerCaptureSelfTimer
+    @Binding var opacity: Double
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+    @State private var ticket = 0
+
+    private var wake: ComposerCaptureChromeWake {
+        ComposerCaptureChromeWake(
+            stage: session.stage, editing: session.phase.isEditing, counting: timer.remaining != nil,
+            family: session.openFamily, zoom: Double(session.camera.zoomFactor),
+            flipping: session.barCapture.flipping, flash: session.flash.rawValue,
+            look: session.look, shutter: session.camera.shutterPresses)
+    }
+
+    private var mayRest: Bool {
+        ComposerCaptureChromeRest.mayRest(stage: session.stage, editing: session.phase.isEditing,
+                                          counting: timer.remaining != nil,
+                                          familyOpen: session.openFamily != nil, voiceOver: voiceOver)
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in rouse() },
+                                 including: opacity < 1 ? .all : .subviews)
+            .adaptiveOnChange(of: wake) { _, _ in rouse() }
+            .adaptiveOnChange(of: voiceOver) { _, _ in rouse() }
+            .task(id: ticket) { @MainActor in
+                guard await cancellableSleep(for: .seconds(ComposerCaptureChromeRest.idleDelay)) else { return }
+                let repos = ComposerCaptureChromeRest.opacity(mayRest: mayRest, idle: ComposerCaptureChromeRest.idleDelay)
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.6)) { opacity = repos }
+            }
+    }
+
+    private func rouse() {
+        ticket += 1
+        guard opacity < 1 else { return }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { opacity = 1 }
+    }
+}

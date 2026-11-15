@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { threadCollectionCalls } from './thread-collection-calls';
 
 // ─── Module mocks (must come before all imports — jest hoisting) ──────────────
-
 // Mocked fn refs declared at module scope (hoisted correctly)
 const mockGenerateDefaultConversationTitle = jest.fn<any>();
 const mockGetUnreadCountsForUser = jest.fn<any>();
@@ -25,10 +25,10 @@ const mockCanAccessConversation = jest.fn<any>();
 const mockResolveConversationId = jest.fn<any>();
 
 jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
+  ...(jest.requireActual('@meeshy/shared/utils/conversation-helpers') as object),
   generateDefaultConversationTitle: (...args: any[]) => mockGenerateDefaultConversationTitle(...args),
-  // Résolu dès que l'appelant porte un `registeredUser` : sans le double, tout
-  // test qui donne un rôle plateforme au lecteur tombe dans le `catch` de la
-  // route et se lit comme un échec de la règle testée, pas du harnais.
+  // Sans ce double, un lecteur à rôle plateforme (`registeredUser`) tombe dans
+  // le `catch` de la route : un échec du harnais, pas de la règle testée.
   resolveUserLanguagesOrdered: () => ['fr'],
 }));
 
@@ -60,9 +60,9 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-jest.mock('../../../routes/conversations/utils/access-control', () => ({
-  canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
-}));
+jest.mock('../../../routes/conversations/utils/access-control', () => (jest.requireActual('../../helpers/acces-conversation-double') as any)
+  .doubleAccesConversation(jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>,
+    (...args: any[]) => mockCanAccessConversation(...args)));
 
 jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
@@ -72,8 +72,24 @@ jest.mock('../../../services/attachments/attachmentIncludes', () => ({
   attachmentMediaSelect: {},
 }));
 
+// Gate de présence — régime STRICT (2026-08-25) : la co-participation n'ouvre
+// rien, seul le viewer (soi / ADMIN+ / ami accepté) voit `isOnline` de
+// l'expéditeur du dernier message. Le service n'est doublé que sur son I/O :
+// `lawFaithfulResolver` applique la VRAIE loi partagée
+// (`resolvePresenceVisibility`) à un ensemble d'amis piloté par le test. Chaque
+// témoin dit donc la directive en clair — et rougit si la route cesse de
+// transmettre le viewer, ou revient à un régime aveugle à lui.
+const mockResolveForTargets = jest.fn<any>();
+jest.mock('../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({
+    resolveForTargets: (...args: unknown[]) => mockResolveForTargets(...args),
+  }),
+}));
+
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
 
+import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
+import type { PresenceViewer } from '../../../services/PresenceVisibilityService';
 import { registerSearchRoutes } from '../../../routes/conversations/search';
 import { registerThreadsRoutes } from '../../../routes/conversations/threads';
 
@@ -111,7 +127,7 @@ function getRoute(fastify: ReturnType<typeof createMockFastify>, method: string,
 }
 
 function createMockReply() {
-  return { _body: undefined as any };
+  return { _body: undefined as any, header: jest.fn() };
 }
 
 function createMockPrisma() {
@@ -125,7 +141,11 @@ function createMockPrisma() {
       findMany: jest.fn<any>().mockImplementation(async (args: any) =>
         (args?.where?.conversationId?.in ?? []).map((conversationId: string) => ({ conversationId }))
       ),
+      // La ligne du LECTEUR, lue par le fil pour son plancher d'historique :
+      // `null` = aucune ligne, rien ne borne.
+      findFirst: jest.fn<any>().mockResolvedValue(null),
     },
+    conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue(null) },
     message: {
       findFirst: jest.fn<any>(),
       findMany: jest.fn<any>(),
@@ -135,7 +155,7 @@ function createMockPrisma() {
 
 function makeSearchRequest(q: string, userId = VALID_USER_ID) {
   return {
-    query: { q },
+    query: { q }, headers: {},
     authContext: { userId, isAuthenticated: true },
   };
 }
@@ -145,6 +165,49 @@ function makeThreadRequest(id: string, messageId: string, userId = VALID_USER_ID
     params: { id, messageId },
     authContext: { userId, isAuthenticated: true },
   };
+}
+
+const PRESENCE_HIDDEN = { showOnline: false, showLastSeenTimestamp: false } as const;
+
+const lawFaithfulResolver =
+  (friendsOfViewer: ReadonlySet<string> = new Set()) =>
+  async (viewer: PresenceViewer, ids: readonly string[]) =>
+    new Map(
+      ids.map((id) => [
+        id,
+        viewer
+          ? resolvePresenceVisibility({
+              isSelf: viewer.userId === id,
+              viewerRole: viewer.role,
+              relationLevel: friendsOfViewer.has(id) ? 'FRIEND' : 'PUBLIC',
+              targetShowOnlineStatus: true,
+              targetShowLastSeen: true,
+              targetIsDeactivated: false,
+              isBlockedEitherWay: false,
+            })
+          : PRESENCE_HIDDEN,
+      ]),
+    );
+
+// `type: 'user'` est la forme RÉELLE que pose `createUnifiedAuthMiddleware`
+// pour un inscrit : c'est sur elle que `viewerFromRequest` construit le viewer
+// de présence. Un visiteur de lien partagé porte `type: 'anonymous'` et un
+// `Participant.id` — jamais de rôle plateforme.
+function makeViewerRequest(q: string, viewer: { role: string } | 'anonymous') {
+  return viewer === 'anonymous'
+    ? {
+        query: { q }, headers: {},
+        authContext: { type: 'anonymous', userId: VALID_PARTICIPANT_ID, isAuthenticated: true, isAnonymous: true },
+      }
+    : {
+        query: { q }, headers: {},
+        authContext: {
+          type: 'user',
+          userId: VALID_USER_ID,
+          isAuthenticated: true,
+          registeredUser: { id: VALID_USER_ID, role: viewer.role },
+        },
+      };
 }
 
 function makeSender(overrides: Record<string, any> = {}) {
@@ -245,6 +308,7 @@ describe('registerSearchRoutes — GET /conversations/search', () => {
     jest.clearAllMocks();
     mockGenerateDefaultConversationTitle.mockReturnValue('Default Title');
     mockGetUnreadCountsForUser.mockResolvedValue(new Map());
+    mockResolveForTargets.mockImplementation(lawFaithfulResolver());
   });
 
   function setup() {
@@ -640,21 +704,111 @@ describe('registerSearchRoutes — GET /conversations/search', () => {
     expect(result[0].lastMessage.sender.isOnline).toBe(false);
   });
 
-  it('propagates isOnline true from sender.user', async () => {
-    const { prisma, route, reply } = setup();
-    prisma.user.findMany.mockResolvedValue([]);
-    const sender = makeSender({
-      user: { id: VALID_USER_ID, username: 'alice', displayName: 'Alice', avatar: null, isOnline: true },
+  // ── Présence de l'expéditeur — régime STRICT (2026-08-25) ─────────────────
+  // Même règle que `GET /conversations` (core.ts) : hors soi-même, ADMIN+ et
+  // amitié acceptée, `isOnline` de l'expéditeur du dernier message est servi
+  // `false`. Un rang inférieur au premier est le seul qui distingue la règle
+  // juste du court-circuit — d'où un expéditeur AUTRE que le lecteur.
+
+  describe('présence de l\'expéditeur du dernier message (régime strict)', () => {
+    const otherSender = () =>
+      makeSender({
+        id: 'participant-other',
+        userId: VALID_USER_ID_2,
+        user: { id: VALID_USER_ID_2, username: 'bob', displayName: 'Bob', avatar: null, isOnline: true },
+      });
+
+    async function search(request: Record<string, unknown>, sender = otherSender()) {
+      const { prisma, route, reply } = setup();
+      prisma.user.findMany.mockResolvedValue([]);
+      prisma.conversation.findMany.mockResolvedValue([
+        makeConversation({ messages: [makeMessage({ sender })] }),
+      ]);
+      await route.handler(request, reply);
+      return (mockSendSuccess.mock.calls[0] as any[])[1][0].lastMessage.sender;
+    }
+
+    it('transmet le viewer demandeur (identité + rôle) et les userId des expéditeurs', async () => {
+      await search(makeViewerRequest('test', { role: 'USER' }));
+
+      expect(mockResolveForTargets).toHaveBeenCalledWith(
+        { userId: VALID_USER_ID, role: 'USER' },
+        [VALID_USER_ID_2],
+      );
     });
-    prisma.conversation.findMany.mockResolvedValue([
-      makeConversation({ messages: [makeMessage({ sender })] }),
-    ]);
-    mockGetUnreadCountsForUser.mockResolvedValue(new Map());
 
-    await route.handler(makeSearchRequest('test'), reply);
+    it('soi-même ⇒ isOnline servi', async () => {
+      const sender = await search(makeViewerRequest('test', { role: 'USER' }), makeSender());
 
-    const result = (mockSendSuccess.mock.calls[0] as any[])[1];
-    expect(result[0].lastMessage.sender.isOnline).toBe(true);
+      expect(sender.isOnline).toBe(true);
+    });
+
+    it('ami accepté ⇒ isOnline servi', async () => {
+      mockResolveForTargets.mockImplementation(lawFaithfulResolver(new Set([VALID_USER_ID_2])));
+
+      const sender = await search(makeViewerRequest('test', { role: 'USER' }));
+
+      expect(sender.isOnline).toBe(true);
+    });
+
+    it('co-participant NON ami ⇒ isOnline false, même en ligne', async () => {
+      const sender = await search(makeViewerRequest('test', { role: 'USER' }));
+
+      expect(sender.isOnline).toBe(false);
+    });
+
+    it('ADMIN non ami ⇒ isOnline servi', async () => {
+      const sender = await search(makeViewerRequest('test', { role: 'ADMIN' }));
+
+      expect(sender.isOnline).toBe(true);
+    });
+
+    it('MODERATOR non ami ⇒ caché, comme un utilisateur ordinaire', async () => {
+      const sender = await search(makeViewerRequest('test', { role: 'MODERATOR' }));
+
+      expect(sender.isOnline).toBe(false);
+    });
+
+    it('viewer anonyme ⇒ caché, et le service reçoit un viewer nul', async () => {
+      const sender = await search(makeViewerRequest('test', 'anonymous'));
+
+      expect(sender.isOnline).toBe(false);
+      expect(mockResolveForTargets).toHaveBeenCalledWith(null, [VALID_USER_ID_2]);
+    });
+
+    // Un expéditeur sans compte n'a ni `User.id` ni `user.isOnline` : aucune
+    // présence n'est chargée pour lui sur cette projection, donc rien à
+    // servir — à personne, ADMIN compris — et rien n'est résolu pour lui.
+    it('expéditeur sans compte ⇒ isOnline false même pour un ADMIN, et rien n\'est résolu pour lui', async () => {
+      const sender = await search(
+        makeViewerRequest('test', { role: 'ADMIN' }),
+        makeSender({ id: 'participant-anon', userId: null, user: null }),
+      );
+
+      expect(sender.isOnline).toBe(false);
+      expect(mockResolveForTargets).toHaveBeenCalledWith({ userId: VALID_USER_ID, role: 'ADMIN' }, []);
+    });
+
+    // Cas (b) : un id INSCRIT que la carte ne porte pas (anomalie — le
+    // résolveur rend une entrée par id passé). Le repli vit sur UN site
+    // (`presenceFor`, presence-gate) et dit la même chose partout : masqué,
+    // sauf ADMIN+. Cette route masquait strictement — un ADMIN y perdait la
+    // présence que la liste (core.ts) lui servait pour la même anomalie.
+    it('inscrit ABSENT de la carte ⇒ isOnline false pour un USER', async () => {
+      mockResolveForTargets.mockResolvedValue(new Map());
+
+      const sender = await search(makeViewerRequest('test', { role: 'USER' }));
+
+      expect(sender.isOnline).toBe(false);
+    });
+
+    it('inscrit ABSENT de la carte ⇒ isOnline servi à un ADMIN', async () => {
+      mockResolveForTargets.mockResolvedValue(new Map());
+
+      const sender = await search(makeViewerRequest('test', { role: 'ADMIN' }));
+
+      expect(sender.isOnline).toBe(true);
+    });
   });
 
   // ── attachments fallback ─────────────────────────────────────────────────
@@ -755,7 +909,7 @@ describe('registerSearchRoutes — GET /conversations/search', () => {
 
     await route.handler(
       {
-        query: { q: 'test' },
+        query: { q: 'test' }, headers: {},
         authContext: {
           userId: VALID_PARTICIPANT_ID,
           type: 'anonymous',
@@ -784,7 +938,7 @@ describe('registerSearchRoutes — GET /conversations/search', () => {
 
     await route.handler(
       {
-        query: { q: 'test' },
+        query: { q: 'test' }, headers: {},
         authContext: {
           userId: VALID_USER_ID,
           isAuthenticated: true,
@@ -968,19 +1122,19 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
-    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     expect(mockCanAccessConversation).not.toHaveBeenCalled();
   });
 
-  // ── canAccessConversation returns false → 403 ────────────────────────────
+  // ── non-membre → le MÊME 404 qu'une conversation inexistante (#8116) ─────
 
-  it('returns 403 when user does not have access', async () => {
+  it('returns the same 404 as an unknown conversation when user does not have access', async () => {
     const { prisma, route, reply } = setup();
     mockCanAccessConversation.mockResolvedValue(false);
 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
-    expect(mockSendForbidden).toHaveBeenCalledWith(reply, 'You do not have access to this conversation');
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     expect(prisma.message.findFirst).not.toHaveBeenCalled();
   });
 
@@ -1071,7 +1225,7 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
     // findMany called twice: depth 0 + depth 1 (empty)
-    expect(prisma.message.findMany).toHaveBeenCalledTimes(2);
+    expect(threadCollectionCalls(prisma)).toBe(2);
     const result = (mockSendSuccess.mock.calls[0] as any[])[1];
     expect(result.replies).toHaveLength(1);
   });
@@ -1115,7 +1269,7 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
     // Only one findMany call (first batch saturates limit)
-    expect(prisma.message.findMany).toHaveBeenCalledTimes(1);
+    expect(threadCollectionCalls(prisma)).toBe(1);
     const result = (mockSendSuccess.mock.calls[0] as any[])[1];
     expect(result.replies).toHaveLength(200);
     expect(result.totalCount).toBe(200);
@@ -1168,7 +1322,7 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
     // MAX_DEPTH = 10, so findMany is called exactly 10 times
-    expect(prisma.message.findMany).toHaveBeenCalledTimes(10);
+    expect(threadCollectionCalls(prisma)).toBe(10);
     const result = (mockSendSuccess.mock.calls[0] as any[])[1];
     expect(result.replies).toHaveLength(10);
   });
@@ -1334,8 +1488,87 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
-    expect(prisma.message.findMany).toHaveBeenCalledTimes(2);
+    expect(threadCollectionCalls(prisma)).toBe(2);
     const result = (mockSendSuccess.mock.calls[0] as any[])[1];
     expect(result.replies).toHaveLength(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEARCH — plancher d'historique de l'aperçu
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// La recherche rend la MÊME ligne que la liste, donc le même aperçu : le
+// dernier message global peut précéder l'arrivée du lecteur, et la lecture de
+// son appartenance (déjà faite pour l'effectif) porte désormais tout ce qui
+// décide de son plancher.
+
+describe('registerSearchRoutes — plancher d’historique de l’aperçu', () => {
+  const JOINED = new Date('2026-06-15T00:00:00Z');
+  const BEFORE_JOIN = new Date('2026-06-01T00:00:00Z');
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGenerateDefaultConversationTitle.mockReturnValue('Default Title');
+    mockGetUnreadCountsForUser.mockResolvedValue(new Map());
+    mockResolveForTargets.mockImplementation(lawFaithfulResolver());
+  });
+
+  function setupBounded(membership: Record<string, unknown>, replacement: unknown) {
+    const fastify = createMockFastify();
+    const prisma = createMockPrisma();
+    prisma.user.findMany.mockResolvedValue([]);
+    prisma.conversation.findMany.mockResolvedValue([
+      makeConversation({ messages: [makeMessage({ id: 'm-old', createdAt: BEFORE_JOIN })] }),
+    ]);
+    prisma.participant.findMany.mockResolvedValue([{ conversationId: VALID_CONV_ID, ...membership }]);
+    prisma.message.findFirst.mockResolvedValue(replacement);
+    prisma.userMessageDeletion = { findMany: jest.fn<any>().mockResolvedValue([]) };
+    prisma.userConversationPreferences = { findMany: jest.fn<any>().mockResolvedValue([]) };
+    prisma.conversationShareLink.findMany = jest.fn<any>().mockResolvedValue([]);
+    registerSearchRoutes(fastify, prisma, jest.fn());
+    const route = getRoute(fastify, 'GET', 'search');
+    const reply = createMockReply();
+    return { prisma, route, reply };
+  }
+
+  it('lit la ligne du lecteur avec la projection du plancher', async () => {
+    const { prisma, route, reply } = setupBounded({ role: 'admin', joinedAt: JOINED }, null);
+    await route.handler(makeSearchRequest('My'), reply);
+
+    expect(prisma.participant.findMany.mock.calls[0][0].select).toMatchObject({
+      conversationId: true, role: true, joinedAt: true, shareLinkId: true, historyVisibleFrom: true, permissions: true,
+    });
+  });
+
+  it('remplace un aperçu d’AVANT l’arrivée d’un membre au droit figé fermé', async () => {
+    const since = makeMessage({ id: 'm-since', createdAt: new Date('2026-07-01T00:00:00Z') });
+    const { prisma, route, reply } = setupBounded(
+      { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false } },
+      since,
+    );
+    await route.handler(makeSearchRequest('My'), reply);
+
+    expect(prisma.message.findFirst.mock.calls[0][0].where).toMatchObject({ conversationId: VALID_CONV_ID, createdAt: { gte: JOINED } });
+    const result = (mockSendSuccess.mock.calls[0] as any[])[1];
+    expect(result[0].lastMessage.id).toBe('m-since');
+  });
+
+  it('sert l’aperçu global à un administrateur', async () => {
+    const { prisma, route, reply } = setupBounded({ role: 'admin', joinedAt: JOINED, permissions: { canViewHistory: false } }, null);
+    await route.handler(makeSearchRequest('My'), reply);
+
+    expect(prisma.message.findFirst).not.toHaveBeenCalled();
+    const result = (mockSendSuccess.mock.calls[0] as any[])[1];
+    expect(result[0].lastMessage.id).toBe('m-old');
+  });
+
+  it('retire l’aperçu quand le plancher est ILLISIBLE', async () => {
+    const { prisma, route, reply } = setupBounded({ role: 'member', joinedAt: JOINED, shareLinkId: 'sl-1', permissions: {} }, null);
+    prisma.conversationShareLink.findMany.mockRejectedValue(new Error('mongo down'));
+    await route.handler(makeSearchRequest('My'), reply);
+
+    const result = (mockSendSuccess.mock.calls[0] as any[])[1];
+    expect(result[0].lastMessage).toBeNull();
   });
 });

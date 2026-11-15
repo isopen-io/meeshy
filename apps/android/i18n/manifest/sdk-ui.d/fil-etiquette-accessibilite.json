@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {"androidName": "a11y_delivery_slow", "status": "android-only"},
+        {"androidName": "a11y_message_blurred", "status": "android-only"},
+        {"androidName": "a11y_message_contact_card", "status": "android-only"},
+        {"androidName": "a11y_message_contact_card_account", "status": "android-only"},
+        {"androidName": "a11y_message_reply_to_you", "status": "android-only"},
+        {"androidName": "a11y_message_videos", "status": "android-only"},
+        {"androidName": "a11y_message_view_once", "status": "android-only"},
+        {"androidName": "a11y_message_view_once_sealed", "status": "android-only"}
+      ]
+    }
+  }
+}

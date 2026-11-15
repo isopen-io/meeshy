@@ -7,9 +7,29 @@ import XCTest
 /// 1. **Tout callback destructif passe par une confirmation système** : la
 ///    suppression d'une conversation (menu natif, menu custom ET swipe
 ///    « hide ») ne doit JAMAIS appeler `deleteConversation` directement —
-///    elle arme `deleteTargetConversation`, consommé par l'unique
+///    elle arme `sheetTargets.deleteTarget`, consommé par l'unique
 ///    `confirmationDialog` de `ConversationListView` (rendu natif de l'OS
 ///    courant, Liquid Glass sur iOS 26).
+///
+/// **La cible s'appelait `deleteTargetConversation` jusqu'au 2026-09-13.** Le
+/// lot #6221 (« la Lentille maigrit de 10 Ko à 3 ») a déplacé sept cibles de
+/// feuille sur le tas, dans `ConversationListSheetTargets`, pour réduire la
+/// LARGEUR de la valeur `ConversationListView` — un débordement de pile au
+/// montage. Le comportement n'a pas bougé d'un pouce : trois sites arment la
+/// cible (menu natif, menu custom, swipe « hide »), le dialog la consomme, et
+/// l'unique appel à `deleteConversation` vit dans son bouton destructif.
+///
+/// > Un RENOMMAGE n'éteint pas les gardes qui reconnaissent par le nom : il les
+/// > INVERSE. Ces trois témoins ont viré au rouge en annonçant « suppression
+/// > sans confirmation » alors que la confirmation était intacte — un rouge qui
+/// > DÉCRIT l'inverse de la réalité coûte plus cher qu'un silence, parce qu'on
+/// > le range dans la dette et qu'on cesse de le lire. Ils ont d'ailleurs été
+/// > attribués à tort à #5599 (dette héritée) avant d'être datés par
+/// > `git log -S`.
+///
+/// Les assertions ancrent donc sur `sheetTargets.deleteTarget` ET tolèrent
+/// l'ancien nom : ce qui compte est qu'un chemin destructif ARME une cible de
+/// confirmation, jamais lequel des deux noms elle porte.
 /// 2. **Le menu custom rend le design système de la version d'iOS courante**
 ///    via les wrappers `Compatibility/` du SDK : conteneur `adaptiveGlass`
 ///    (vrai `glassEffect` iOS 26, fallback material avant), rows avec
@@ -28,22 +48,42 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.text(at: url)
     }
+
+    /// L'UNITÉ du type (`Foo.swift` + `Foo+*.swift`) : la liste est découpée par
+    /// responsabilité, et un balayage du seul fichier-tête lirait la moitié.
+    private func unit(_ relativePath: String) throws -> String {
+        try AppSourceGuard.unit(relativePath)
+    }
+
+    /// Un chemin destructif est conforme s'il ARME une cible de confirmation,
+    /// quel que soit le nom que cette cible porte. Les deux orthographes sont
+    /// acceptées pour que la garde survive au prochain déplacement — c'est
+    /// l'INVARIANT qui est gardé, pas l'identifiant.
+    private func armsAConfirmationTarget(_ block: String) -> Bool {
+        block.contains("sheetTargets.deleteTarget = conversation")
+            || block.contains("deleteTargetConversation = conversation")
+    }
+
+    private static let confirmationTargetNames =
+        "`sheetTargets.deleteTarget` (ou son ancien nom `deleteTargetConversation`)"
 
     // MARK: - Destructive confirmation
 
     /// Le SEUL call site de `deleteConversation(conversationId:` dans la liste
     /// doit vivre dans le `confirmationDialog` de suppression.
     func test_deleteConversation_onlyCallSite_isInsideConfirmationDialog() throws {
-        let listSource = try source("Meeshy/Features/Main/Views/ConversationListView.swift")
+        // La confirmation vit dans l'extension qui l'ancre sur un point (iPad) : l'unité de la liste
+        // balaie tous ses fichiers, nouveaux types compris.
+        let listSource = try unit("Meeshy/Features/Main/Views/ConversationListView.swift")
 
         let callSites = listSource.components(separatedBy: "conversationViewModel.deleteConversation(conversationId:").count - 1
         XCTAssertEqual(
             callSites, 1,
             "ConversationListView doit contenir exactement UN appel à " +
             "deleteConversation — celui du confirmationDialog. Tout nouveau " +
-            "chemin de suppression doit armer `deleteTargetConversation` à la place."
+            "chemin de suppression doit armer \(Self.confirmationTargetNames) à la place."
         )
 
         guard let dialogRange = listSource.range(of: "conversation.delete.confirm.title") else {
@@ -70,7 +110,7 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         XCTAssertFalse(
             overlaysSource.contains("conversationViewModel.deleteConversation("),
             "ConversationListView+Overlays ne doit contenir AUCUN appel direct à " +
-            "deleteConversation — le menu custom route par deleteTargetConversation " +
+            "deleteConversation — le menu custom route par la cible de confirmation " +
             "vers le confirmationDialog système."
         )
 
@@ -81,39 +121,54 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         let end = overlaysSource.index(onDeleteRange.lowerBound, offsetBy: 400, limitedBy: overlaysSource.endIndex) ?? overlaysSource.endIndex
         let block = String(overlaysSource[onDeleteRange.lowerBound ..< end])
         XCTAssertTrue(
-            block.contains("deleteTargetConversation = conversation"),
-            "onDelete doit armer deleteTargetConversation (confirmation système) au lieu de supprimer."
+            armsAConfirmationTarget(block),
+            "onDelete doit armer \(Self.confirmationTargetNames) — confirmation système — au lieu de supprimer."
         )
     }
 
-    /// Le swipe « hide » (masquer/supprimer) passe lui aussi par la confirmation.
-    func test_swipeHideAction_requestsConfirmation() throws {
-        let listSource = try source("Meeshy/Features/Main/Views/ConversationListView.swift")
+    /// Retournée le 2026-11-09 (#17242) : le swipe « hide » armait la
+    /// confirmation de suppression. Le porteur l'a retiré du bord de fin — la
+    /// suppression ne vit plus qu'au menu d'appui long, dont `onDelete` arme la
+    /// même confirmation (`test_contextMenuOverlay_onDelete_requestsConfirmation…`).
+    /// La garde tient le nouveau contrat : aucun balayage ne supprime.
+    func test_swipeActions_neverDelete_theDeletionLivesInTheMenuOnly() throws {
+        let swipeSource = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ConversationListView+SwipeActions.swift"))
+        XCTAssertFalse(swipeSource.contains("SwipeLabels.hide"), "Le bord de fin ne masque / supprime plus.")
+        XCTAssertFalse(swipeSource.contains("onHide"), "Aucun balayage n'arme la suppression.")
+        XCTAssertFalse(swipeSource.contains("deleteConversation"), "Aucun balayage ne supprime.")
+        XCTAssertFalse(swipeSource.contains("onObsolete"), "Rendre obsolète ne se balaie plus : le menu seul l'offre.")
+        let listSource = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ConversationListView.swift"))
+        XCTAssertFalse(listSource.contains("onHide:"), "La liste ne câble plus de suppression au balayage.")
+        let catalog = try source(Self.catalogPath)
+        XCTAssertTrue(catalog.contains("(law.removal == .hide ? .hide : .delete, law.removal != nil)"),
+                      "Supprimer / Masquer restent offerts au menu d'appui long.")
+    }
 
-        guard let hideRange = listSource.range(of: "SwipeLabels.hide") else {
-            XCTFail("La liste doit exposer l'action de swipe « hide »")
-            return
-        }
-        let end = listSource.index(hideRange.lowerBound, offsetBy: 300, limitedBy: listSource.endIndex) ?? listSource.endIndex
-        let block = String(listSource[hideRange.lowerBound ..< end])
-        XCTAssertTrue(
-            block.contains("deleteTargetConversation = conversation"),
-            "Le swipe « hide » doit armer deleteTargetConversation — jamais de suppression directe."
-        )
+    /// Le bord de TÊTE ne garde qu'Épingler : Sourdine et Verrouiller restent
+    /// au menu d'appui long (directive porteur 2026-11-09, #17242).
+    func test_leadingSwipe_offersOnlyThePin() throws {
+        let swipeSource = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ConversationListView+SwipeActions.swift"))
+        XCTAssertFalse(swipeSource.contains("toggleMute"), "Sourdine ne se balaie plus.")
+        XCTAssertFalse(swipeSource.contains("onLockRequest"), "Verrouiller ne se balaie plus.")
+        XCTAssertTrue(swipeSource.contains("viewModel.togglePin(for: conversation.id)"))
     }
 
     // MARK: - System design (Liquid Glass via Compatibility)
 
     /// Le conteneur du menu custom doit rester sur le wrapper Compatibility
     /// `adaptiveGlass` — vrai Liquid Glass iOS 26, fallback material avant —
-    /// jamais un fond opaque maison.
+    /// jamais un fond opaque maison. Depuis #17242, ce conteneur est celui de
+    /// l'aperçu d'appui long, qui découpe le contenu du menu à son cran.
     func test_conversationContextMenu_usesAdaptiveGlassContainer() throws {
-        let menuSource = try source("Meeshy/Features/Main/Views/ConversationContextMenuView.swift")
+        let peekSource = try source("Meeshy/Features/Main/Views/ConversationLongPressPeek.swift")
         XCTAssertTrue(
-            menuSource.contains(".adaptiveGlass(in: RoundedRectangle"),
-            "ConversationContextMenuView doit appliquer .adaptiveGlass sur son conteneur " +
+            peekSource.contains(".adaptiveGlass(in: RoundedRectangle"),
+            "Le conteneur du menu de l'aperçu doit appliquer .adaptiveGlass " +
             "(gate iOS 26 réel + fallback, propriété des wrappers Compatibility du SDK)."
         )
+        let menuSource = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ConversationContextMenuView.swift"))
+        XCTAssertFalse(menuSource.contains(".frame(width: 260)"), "Le menu prend la largeur de la carte, jamais 260 pt.")
+        XCTAssertFalse(menuSource.contains(".background(.ultraThinMaterial)"), "Aucun fond maison sous le verre du conteneur.")
     }
 
     /// Les rows du menu doivent garder la parité système : highlight au press
@@ -132,29 +187,60 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - Menu natif Liquid Glass (iOS 26) + fallback custom
+    // MARK: - Aperçu personnalisé sur iPhone, menu natif sur iPad iOS 26 (#17242)
 
-    /// La ligne doit préférer le `.contextMenu` NATIF (rendu Liquid Glass
-    /// système) quand l'OS le fournit, et garder l'overlay custom
-    /// (`RowPressBounceModifier` → `onLongPress`) comme fallback < iOS 26.
-    func test_conversationRow_prefersNativeMenu_oniOS26_withCustomFallback() throws {
+    /// Retournée le 2026-11-09 (#17242) : la ligne préférait le `.contextMenu`
+    /// NATIF dès iOS 26. Le menu natif ne laisse ni agrandir la carte, ni
+    /// réduire le menu, ni le tirer vers le haut : l'aperçu personnalisé sert
+    /// désormais l'iPhone sur TOUTES les versions d'iOS. Le natif ne reste que
+    /// pour l'iPad sous iOS 26, où il coexiste avec le glisser système qui
+    /// détache une conversation en fenêtre. La garde tient le nouveau contrat :
+    /// la route est UNE loi, et les deux chemins restent montés.
+    func test_conversationRow_routesThePress_customOnIPhone_nativeOnlyOnIPadIOS26() throws {
         let rowsSource = try source("Meeshy/Features/Main/Views/ConversationListView+Rows.swift")
 
         XCTAssertTrue(
-            rowsSource.contains("if #available(iOS 26.0, *)"),
-            "ConversationRowItem doit gater le menu natif Liquid Glass derrière " +
-            "#available(iOS 26.0, *) — jamais de détection runtime maison."
+            rowsSource.contains("if #available(iOS 26.0, *), ConversationRowMenuRoute.current == .native {"),
+            "Le menu natif est gaté par l'OS ET par la route (iPad), jamais par l'OS seul."
         )
-        XCTAssertTrue(
-            rowsSource.contains(".contextMenu {"),
-            "Le chemin iOS 26 doit attacher le .contextMenu NATIF " +
-            "(rendu Liquid Glass système, preview comprise)."
+        XCTAssertFalse(
+            rowsSource.contains("if #available(iOS 26.0, *) {"),
+            "Plus aucun menu natif choisi par la seule version d'iOS : l'iPhone sous iOS 26 " +
+            "ouvrirait le petit aperçu natif au lieu de la grande carte."
         )
+        XCTAssertTrue(rowsSource.contains(".contextMenu {"), "La route native (iPad iOS 26) garde son .contextMenu.")
         XCTAssertTrue(
             rowsSource.contains("RowPressBounceModifier(onTap:"),
-            "Le fallback < iOS 26 doit rester l'overlay custom " +
-            "(RowPressBounceModifier → ConversationContextMenuView)."
+            "La route personnalisée garde l'appui long maison (RowPressBounceModifier → aperçu)."
         )
+        XCTAssertEqual(ConversationRowMenuRoute.resolve(supportsMultipleWindows: false, nativeMenuAvailable: true), .custom)
+    }
+
+    /// L'aperçu personnalisé monte la carte et le menu dans `ConversationLongPressPeek`,
+    /// dont la progression pilote les deux cadres (#17242).
+    func test_customOverlay_mountsThePeek_withTheSharedMenu() throws {
+        let overlays = try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
+        XCTAssertTrue(overlays.contains("ConversationLongPressPeek("))
+        XCTAssertTrue(overlays.contains("func peekMenu(for conversation: Conversation) -> ConversationContextMenuView {"))
+        let peek = try source("Meeshy/Features/Main/Views/ConversationLongPressPeek.swift")
+        XCTAssertTrue(peek.contains("progress = layout.progress(from: start, translation: translation)"),
+                      "Le geste suit le doigt : onChanged pilote la progression rendue.")
+        XCTAssertTrue(peek.contains("settle(to: layout.settle(from: start, predictedEndTranslation:"),
+                      "onEnded ne fait que conclure, vers le cran projeté.")
+        XCTAssertTrue(peek.contains(".accessibilityIdentifier(\"conversation.peek.handle\")"))
+    }
+
+    /// « Inutile d'afficher le header, on sait déjà ce qu'on presse » (directive
+    /// porteur 2026-11-09, #17242) : la carte de l'aperçu ne montre que le
+    /// CONTENU ; seul VoiceOver nomme la conversation.
+    func test_peekCard_showsOnlyTheContent_andNamesTheConversationForVoiceOver() throws {
+        let helpers = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ConversationListHelpers.swift"))
+        XCTAssertTrue(helpers.contains("if peekHeights == nil {\n                header"),
+                      "L'en-tête n'est rendu que par la carte du menu natif, jamais par l'aperçu.")
+        XCTAssertTrue(helpers.contains(".accessibilityLabel(Text(conversation.displayName))"),
+                      "Le contenu de l'aperçu porte le nom de la conversation pour VoiceOver.")
+        let overlays = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift"))
+        XCTAssertTrue(overlays.contains("peekHeights: heights"), "L'aperçu passe en mode contenu seul.")
     }
 
     /// CAUSE RACINE des « icônes absentes sur iOS 26 » (élucidée 2026-07-11) :
@@ -201,84 +287,216 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
             XCTFail("ConversationListView doit garder handleDrop (cible du SectionDropDelegate)")
             return
         }
-        let end = listSource.index(dropRange.lowerBound, offsetBy: 1600, limitedBy: listSource.endIndex) ?? listSource.endIndex
-        let dropBlock = String(listSource[dropRange.lowerBound ..< end])
+        let end = listSource.index(dropRange.lowerBound, offsetBy: 600, limitedBy: listSource.endIndex) ?? listSource.endIndex
         XCTAssertTrue(
-            dropBlock.contains("ChipDropResolver.action("),
-            "handleDrop doit décider via ChipDropResolver — même sémantique que " +
+            String(listSource[dropRange.lowerBound ..< end]).contains("ConversationSectionDropHandler.resolve("),
+            "handleDrop doit déléguer le dépôt à ConversationSectionDropHandler."
+        )
+
+        let handlerSource = try source("Meeshy/Features/Main/Views/ConversationListView+DragDrop.swift")
+        guard let handlerRange = handlerSource.range(of: "enum ConversationSectionDropHandler") else {
+            XCTFail("ConversationSectionDropHandler doit exister (décision du drop natif)")
+            return
+        }
+        XCTAssertTrue(
+            String(handlerSource[handlerRange.lowerBound...]).contains("ChipDropResolver.action("),
+            "Le drop natif doit décider via ChipDropResolver — même sémantique que " +
             "le drop de la chip (pin par drop, other→\"\", no-op même section)."
         )
     }
 
-    /// Le builder du menu natif doit exister et garder la parité d'actions
-    /// avec le menu custom — dont Renommer, la divergence historique qui
-    /// avait justifié la suppression du premier builder (#1811).
+    /// Le builder du menu natif doit exister et parcourir le catalogue partagé
+    /// avec le menu custom — Renommer compris, la divergence historique qui
+    /// avait justifié la suppression du premier builder (#1811). Depuis #11230,
+    /// la parité ne se lit plus en comparant deux listes : il n'y en a qu'une.
     func test_nativeContextMenuBuilder_exists_withRenameParity() throws {
-        let overlaysSource = try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
-
-        guard let builderRange = overlaysSource.range(of: "func conversationContextMenu(for") else {
-            XCTFail(
-                "ConversationListView+Overlays doit exposer le builder natif " +
-                "conversationContextMenu(for:) — chemin iOS 26 du long-press."
-            )
-            return
-        }
-        // Fenêtre large : le builder fait ~10 500 caractères (le Delete est
-        // tout en bas) — borné par le MARK de l'overlay custom qui le suit.
-        let blockEnd = overlaysSource.range(
-            of: "// MARK: - Custom Context Menu Overlay",
-            range: builderRange.lowerBound ..< overlaysSource.endIndex
-        )?.lowerBound ?? overlaysSource.endIndex
-        let builderBlock = String(overlaysSource[builderRange.lowerBound ..< blockEnd])
+        let builderBlock = try nativeBuilderBlock()
         XCTAssertTrue(
-            builderBlock.contains("context.rename"),
-            "Le builder natif doit offrir Renommer (parité menu custom)."
+            builderBlock.contains("let catalog = rowMenuCatalog(for: conversation)"),
+            "Le builder natif lit le catalogue de la rangée (parité menu custom)."
         )
         XCTAssertTrue(
-            builderBlock.contains("deleteTargetConversation = conversation"),
-            "Le Delete du builder natif doit armer deleteTargetConversation " +
-            "(confirmation système) — jamais de suppression directe."
+            builderBlock.contains("actions.perform(entry)"),
+            "Les entrées agissantes du menu natif passent par les gestes partagés."
+        )
+        let catalog = try source(Self.catalogPath)
+        XCTAssertTrue(catalog.contains("context.rename"), "Le catalogue nomme Renommer.")
+        XCTAssertTrue(
+            catalog.contains("case .delete, .hide: onDelete()"),
+            "Supprimer et Masquer passent par `onDelete`, qui arme " +
+            "\(Self.confirmationTargetNames) — jamais de suppression directe."
         )
     }
 
-    /// iOS 26+ : le builder natif doit exposer « Rechercher » et « Appeler »
-    /// (décision 2026-07-14) — l'aperçu natif étant statique, ces actions
-    /// vivent dans le menu, câblées sur les MÊMES chemins que les boutons de
-    /// l'aperçu du fallback custom : Rechercher arme `pendingOpenSearch` puis
-    /// ouvre la conversation, Appeler passe par `CallManager.shared.startCall`.
-    func test_nativeContextMenuBuilder_offersSearchAndCall() throws {
-        let overlaysSource = try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
+    /// Retournée le 2026-11-09 (#17242) : le menu exposait « Rechercher »,
+    /// « Appeler » et « Appel vidéo » (décisions 2026-07-14 et #11230). Le
+    /// porteur les a retirés du menu d'une rangée — le fil les porte — et a mis
+    /// « Détails » en première entrée, juste sous la tête compacte. La garde
+    /// tient le nouveau contrat à la SOURCE, le catalogue, que les deux chemins
+    /// lisent.
+    func test_catalog_offersDetailsFirst_andNeitherSearchNorCalls() throws {
+        let catalog = AppSourceGuard.stripComments(try source(Self.catalogPath))
+        guard let make = catalog.range(of: "static func make(_ input: Input) -> ConversationMenuCatalog {") else {
+            return XCTFail("ConversationMenuCatalog.make doit exister.")
+        }
+        let body = String(catalog[make.lowerBound...].prefix(1_400))
+        XCTAssertFalse(body.contains("(.search,"), "Rechercher n'est plus au menu de rangée.")
+        XCTAssertFalse(body.contains("(.call,"), "Appeler n'est plus au menu de rangée.")
+        XCTAssertFalse(body.contains("(.videoCall,"), "Appel vidéo n'est plus au menu de rangée.")
+        let reach = try XCTUnwrap(body.range(of: "reach: offered(["))
+        XCTAssertTrue(String(body[reach.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("(.details, true)"),
+                      "Détails ouvre la liste, juste sous la tête compacte.")
+    }
 
+    // MARK: - Menu de conversation gouverné par la loi partagée (#11215)
+
+    /// Le corps du builder natif : de `func conversationContextMenu(for` au MARK
+    /// de l'overlay custom (ses sous-fonctions y vivent aussi).
+    private func nativeBuilderBlock() throws -> String {
+        let overlaysSource = try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
         guard let builderRange = overlaysSource.range(of: "func conversationContextMenu(for") else {
             XCTFail("Le builder natif conversationContextMenu(for:) doit exister.")
-            return
+            return ""
         }
         let blockEnd = overlaysSource.range(
-            of: "// MARK: - Custom Context Menu Overlay",
+            of: "// MARK: - Aperçu d'appui long personnalisé",
             range: builderRange.lowerBound ..< overlaysSource.endIndex
         )?.lowerBound ?? overlaysSource.endIndex
-        let builderBlock = String(overlaysSource[builderRange.lowerBound ..< blockEnd])
+        return String(overlaysSource[builderRange.lowerBound ..< blockEnd])
+    }
 
-        XCTAssertTrue(
-            builderBlock.contains("context.search") && builderBlock.contains("magnifyingglass"),
-            "Le builder natif doit offrir « Rechercher » (icône magnifyingglass)."
-        )
-        XCTAssertTrue(
-            builderBlock.contains("router.pendingOpenSearch = true"),
-            "« Rechercher » doit armer router.pendingOpenSearch — même chemin que " +
-            "le bouton onSearch de l'aperçu custom (SSOT)."
-        )
-        XCTAssertTrue(
-            builderBlock.contains("context.call") && builderBlock.contains("phone.fill"),
-            "Le builder natif doit offrir « Appeler » (icône phone.fill, DM)."
-        )
-        XCTAssertTrue(
-            builderBlock.contains("CallManager.shared.requestPermissionsThenStartCall("),
-            "« Appeler » doit passer par CallManager.shared.requestPermissionsThenStartCall — " +
-            "même chemin que le bouton onCall de l'aperçu custom (SSOT). Depuis " +
-            "2026-07-23 ce point d'entrée tranche micro/caméra AVANT de composer ; " +
-            "`startCall` brut ne demande rien et connecterait un appel muet."
-        )
+    static let catalogPath = "Meeshy/Features/Main/Views/ConversationMenuCatalog.swift"
+
+    /// Les DEUX chemins d'OS lisent le MÊME catalogue (#11230), qui lit les
+    /// verdicts de `ConversationActionPolicy` par `rowMenuCapabilities(for:)`,
+    /// et partagent les mêmes gestes.
+    func test_bothOSPaths_readConversationActionPolicy() throws {
+        let builder = try nativeBuilderBlock()
+        XCTAssertTrue(builder.contains("rowMenuCatalog(for: conversation)"), "Le menu natif lit le catalogue de la rangée.")
+        XCTAssertTrue(builder.contains("ConversationRowMenuActions.make(for: conversation, in: self)"), "Le menu natif appelle les gestes partagés.")
+        XCTAssertFalse(builder.contains("if conversation.type != .direct {"), "Renommer ne se déduit plus du seul type.")
+
+        let overlays = try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
+        XCTAssertTrue(overlays.contains("capabilities: rowMenuCapabilities(for: conversation),"), "Le catalogue lit la loi partagée.")
+        XCTAssertTrue(overlays.contains("catalog: rowMenuCatalog(for: conversation),"), "Le menu custom lit le MÊME catalogue.")
+        XCTAssertTrue(overlays.contains("actions: ConversationRowMenuActions.make(for: conversation, in: self),"), "Le menu custom appelle les MÊMES gestes.")
+
+        let catalog = try source(Self.catalogPath)
+        XCTAssertTrue(catalog.contains("(.rename, law.rename)"), "Renommer suit le verdict de la loi.")
+        XCTAssertTrue(catalog.contains("(.groupSettings, law.groupSettings)"), "Paramètres du groupe suit le verdict de la loi.")
+        XCTAssertTrue(catalog.contains("(.manageMembers, law.manageMembers)"), "Gérer les membres suit le verdict de la loi (#12631).")
+
+        let rules = try source("Meeshy/Features/Main/Views/ConversationListView+ListRules.swift")
+        XCTAssertTrue(rules.contains("ConversationActionPolicy.actions(for:"), "Les verdicts de la rangée projettent ConversationActionPolicy.")
+    }
+
+    /// « Gérer les membres » (#12631) ouvre la fiche de la conversation derrière
+    /// la porte du verrou, et la fiche s'ouvre sur son onglet Membres — là où
+    /// elle porte, au modérateur, sa propre entrée « Gérer les membres ».
+    func test_manageMembers_opensTheInfoSheet_onItsMembersTab() throws {
+        let overlays = try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
+        XCTAssertTrue(overlays.contains("onManageMembers: { list.presentInfo(of: conversation) }"),
+                      "Le geste passe par `presentInfo(of:)`, la porte du verrou de « Détails ».")
+        let sheet = try source("Meeshy/Features/Main/Components/ConversationInfoSheet.swift")
+        XCTAssertTrue(sheet.contains("@State private var selectedTab: InfoTab = .members"),
+                      "La fiche s'ouvre sur ses membres : sinon « Gérer les membres » mènerait ailleurs.")
+    }
+
+    /// La tête compacte : un `ControlGroup` sur le menu natif, trois tuiles sur
+    /// le menu custom — les deux parcourent `catalog.header` (#11230).
+    func test_bothOSPaths_openWithTheCompactHeader() throws {
+        let builder = try nativeBuilderBlock()
+        XCTAssertTrue(builder.contains("ControlGroup {"), "Le menu natif ouvre sur un ControlGroup compact.")
+        XCTAssertTrue(builder.contains("case .header:"), "Le ControlGroup porte la section de tête du catalogue.")
+
+        let menu = try source("Meeshy/Features/Main/Views/ConversationContextMenuView.swift")
+        XCTAssertTrue(menu.contains("case .header: headerTiles(group.entries)"), "Le menu custom dessine la même tête.")
+    }
+
+    /// Les DEUX chemins parcourent la MÊME séquence de groupes
+    /// (`catalog.groups`) : un builder qui oublierait un groupe (le départ, par
+    /// exemple) ne peut plus le faire en silence, il n'en énumère aucun.
+    func test_bothOSPaths_walkTheSameGroupSequence() throws {
+        let builder = try nativeBuilderBlock()
+        XCTAssertTrue(builder.contains("ForEach(catalog.groups)"), "Le menu natif parcourt les groupes du catalogue.")
+        XCTAssertFalse(builder.contains("nativeMenuItems(catalog."), "Le menu natif n'énumère plus ses groupes un par un.")
+
+        let menu = try source("Meeshy/Features/Main/Views/ConversationContextMenuView.swift")
+        XCTAssertTrue(menu.contains("ForEach(catalog.groups)"), "Le menu custom parcourt la MÊME séquence.")
+        XCTAssertFalse(menu.contains("entryRows(catalog."), "Le menu custom n'énumère plus ses groupes un par un.")
+    }
+
+    /// « Plus d'options » porte le même symbole sur les deux chemins : celui du catalogue.
+    func test_moreOptions_hasOneSymbol_onBothPaths() throws {
+        let menu = try source("Meeshy/Features/Main/Views/ConversationContextMenuView.swift")
+        XCTAssertTrue(menu.contains("ConversationMenuCatalog.moreSymbol"), "Le menu custom lit le symbole du catalogue.")
+        XCTAssertFalse(menu.contains("icon: \"ellipsis\""), "Aucun symbole « Plus d'options » écrit à la main.")
+        XCTAssertTrue(try nativeBuilderBlock().contains("ConversationMenuCatalog.moreSymbol"))
+    }
+
+    /// Retournée le 2026-11-09 (#17242) : le bouton d'appel de l'en-tête de
+    /// l'aperçu suivait l'entrée « Appeler » ; l'en-tête et l'entrée sont partis.
+    func test_peekCard_offersNoCallButton_likeTheMenu() throws {
+        let overlays = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift"))
+        XCTAssertFalse(overlays.contains("func previewCallAction(for"), "L'aperçu n'a plus d'en-tête, donc plus de bouton d'appel (#17242).")
+        XCTAssertFalse(overlays.contains("onCall: previewCallAction"))
+    }
+
+    /// La feuille des réglages s'ouvre au rang EFFECTIF qui a fait offrir l'entrée.
+    func test_settingsSheet_opensAtTheEffectiveRank() throws {
+        let presentations = try source("Meeshy/Features/Main/Views/ConversationListView+Presentations.swift")
+        XCTAssertTrue(presentations.contains("ConversationRowMenuCapabilities.settingsRole(of: conversation, currentUser: AuthManager.shared.currentUser)"))
+        XCTAssertFalse(presentations.contains("MemberRole(rawValue: conversation.currentUserRole"), "Plus de rang SERVI pour une entrée gardée par le rang effectif.")
+    }
+
+    /// Aucune règle de rôle écrite en chaînes ne reste dans les règles de la liste.
+    func test_listRules_holdNoStringRoleRule() throws {
+        let rules = try source("Meeshy/Features/Main/Views/ConversationListView+ListRules.swift")
+        for literal in ["\"admin\"", "\"moderator\"", "\"owner\"", "\"co-owner\"", "\"bigboss\"", "\"creator\"", "\"member\"", "currentUserRole?.lowercased()"] {
+            XCTAssertFalse(rules.contains(literal), "ListRules ne doit plus comparer de rôle en chaîne : \(literal)")
+        }
+    }
+
+    /// Quitter, Signaler et l'administration existent sur les deux chemins —
+    /// le catalogue les relie à leurs gestes —, et Quitter passe par une
+    /// confirmation, jamais par un départ direct.
+    func test_leaveReportAndAdmin_existOnBothPaths_leaveIsConfirmed() throws {
+        let catalog = try source(Self.catalogPath)
+        XCTAssertTrue(catalog.contains("case .leave: onLeave()"))
+        XCTAssertTrue(catalog.contains("case .report: onReport()"))
+        XCTAssertTrue(catalog.contains("case .adminOpen: onOpenAdmin()"))
+
+        XCTAssertTrue(try nativeBuilderBlock().contains("actions.perform(entry)"))
+        let menu = try source("Meeshy/Features/Main/Views/ConversationContextMenuView.swift")
+        XCTAssertTrue(menu.contains("actions.perform(entry)"))
+
+        let overlays = try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
+        XCTAssertTrue(overlays.contains("onLeave: { list.sheetTargets.leaveTarget = conversation }"), "Quitter arme la confirmation de départ.")
+        XCTAssertFalse(overlays.contains(".apply(.leave"), "Le menu ne quitte jamais sans confirmation.")
+
+        let presentations = try source("Meeshy/Features/Main/Views/ConversationListView+Presentations.swift")
+        XCTAssertTrue(presentations.contains("presenting: sheetTargets.leaveTarget"), "La confirmation de départ est présentée.")
+        XCTAssertTrue(presentations.contains("ReportService.shared.reportConversation("), "Signaler passe par le service de signalement.")
+    }
+
+    /// VoiceOver : les entrées du menu custom sont des actions NOMMÉES, en
+    /// complément de « Ouvrir le menu » sur la rangée.
+    func test_customMenu_exposesEntriesAsNamedAccessibilityActions() throws {
+        let menu = try source("Meeshy/Features/Main/Views/ConversationContextMenuView.swift")
+        XCTAssertTrue(menu.contains(".accessibilityActions {"), "Le menu custom expose ses entrées à VoiceOver.")
+        XCTAssertTrue(menu.contains("ForEach(accessibilityEntries.map"), "Les actions nommées viennent de la même liste d'entrées.")
+
+        let rows = try source("Meeshy/Features/Main/Views/ConversationListView+Rows.swift")
+        XCTAssertTrue(rows.contains("localized: \"conversation.row.menu_action\""), "L'action « Ouvrir le menu » de la rangée reste en place.")
+    }
+
+    /// Quitter dit le MÊME mot dans le menu et dans sa confirmation, quel que
+    /// soit le type : « groupe » mentait pour une conversation publique ou une
+    /// chaîne (#11215).
+    func test_leaveLabel_isTheConfirmationTitle_forEveryType() throws {
+        let menu = try source(Self.catalogPath)
+        XCTAssertTrue(menu.contains("localized: \"conversation.info.leave.title\""), "Le menu reprend le titre de la confirmation de départ.")
+        XCTAssertFalse(menu.contains("context.leave_group"), "« Quitter le groupe » ne s'offre plus à une chaîne.")
     }
 
     // MARK: - Menu d'appui long des MESSAGES (design système par version)
@@ -293,13 +511,16 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
     /// `adaptiveGlass` (Liquid Glass iOS 26 / fallback material), rows avec
     /// highlight au press (`MenuRowHighlightButtonStyle`, partagé avec le menu
     /// conversation) et métriques Dynamic Type — jamais `.buttonStyle(.plain)`.
+    /// #9043 ne retire le cadre qu'à la BANDE d'emojis : le menu du bas garde
+    /// son verre (directive porteur 2026-10-01), le glissement vers le haut le
+    /// remonte pour en atteindre toutes les entrées.
     func test_messageActionsMenu_rendersSystemDesign_likeConversationMenu() throws {
         let menuSource = try source("Meeshy/Features/Main/Components/MessageActionsMenu.swift")
 
         XCTAssertTrue(
             menuSource.contains(".adaptiveGlass(in: RoundedRectangle"),
-            "MessageActionsMenu doit appliquer .adaptiveGlass sur son conteneur " +
-            "(Liquid Glass iOS 26 réel + fallback), comme le menu conversation."
+            "MessageActionsMenu garde son conteneur .adaptiveGlass (Liquid Glass " +
+            "iOS 26 + fallback) — #9043 ne retire le cadre qu'à la bande d'emojis."
         )
         XCTAssertTrue(
             menuSource.contains("MenuRowHighlightButtonStyle"),
@@ -339,87 +560,136 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
             overlaySource.contains("MessageActionsMenu("),
             "MessageOverlayMenu doit composer la liste d'actions restylée MessageActionsMenu."
         )
+        XCTAssertTrue(
+            overlaySource.contains("chrome: .none"),
+            "La barre d'émojis de l'appui long se pose nue sur le voile, comme " +
+            "celle d'une story (#9043) — aucune capsule autour."
+        )
     }
 
-    // MARK: - Menu message NATIF (iOS 26 Liquid Glass) + fallback overlay
+    // MARK: - Menu message : la PRESSION est au menu Meeshy, le DOUBLE TAP au système
     //
-    // Pivot 2026-07-14 : sur iOS 26 la bulle attache un `.contextMenu` NATIF
-    // (Liquid Glass, comme les lignes de conversation) avec aperçu de la bulle
-    // d'origine ; < iOS 26 garde l'overlay custom (`MessageOverlayMenu`). Deux
-    // chemins par version d'OS, exactement comme `ConversationRowItem`.
+    // **Le pivot du 2026-07-14 est SUPPLANTÉ par la directive porteur du
+    // 2026-09-12 (#6117).**
+    //
+    // Il disait : « sur iOS 26 la bulle attache un `.contextMenu` NATIF avec
+    // aperçu ; < iOS 26 garde l'overlay custom — deux chemins par version
+    // d'OS ». Il tenait, et il a produit exactement ce que deux chemins par
+    // version produisent : **le même appui long rendait deux menus différents
+    // selon le téléphone**, le menu Meeshy disparaissant sur les récents.
+    //
+    // La directive du 2026-09-12 rend à chaque geste une identité stable de
+    // iOS 16 à iOS 26 — appui long = menu MEESHY partout, double tap = menu
+    // SYSTÈME, présenté PAR CODE (`UIEditMenuInteraction`), ce qu'un
+    // `.contextMenu` ne sait pas faire.
+    //
+    // Cette loi-là est gardée par `ThreadRowGestureParityTests`, et ce fichier
+    // ne la redouble pas : deux gardes qui affirment la même règle divergent au
+    // premier changement, et c'est déjà arrivé ici — le témoin retiré ci-dessous
+    // exigeait `enableLongPress: nativeMenu == nil` pendant que
+    // `ThreadRowGestureParityTests` l'INTERDISAIT. Deux gardes opposées sur une
+    // même chaîne : l'une des deux était forcément rouge.
 
-    /// iOS 26+ : `.contextMenu` natif + aperçu, long-press custom coupé ;
-    /// < iOS 26 : overlay custom conservé (ConditionalBubbleLongPress).
-    func test_messageRow_prefersNativeMenu_oniOS26_withCustomFallback() throws {
-        let listSource = try source("Meeshy/Features/Main/Views/MessageListView.swift")
-        XCTAssertTrue(
-            listSource.contains("if #available(iOS 26.0, *), let menu"),
-            "Le .contextMenu natif des bulles doit être gaté #available(iOS 26.0, *)."
-        )
-        XCTAssertTrue(
-            listSource.contains(".contextMenu { menu() } preview: { preview() }"),
-            "Le chemin iOS 26 doit attacher le .contextMenu NATIF AVEC preview " +
-            "(la vraie bulle d'origine)."
-        )
-        XCTAssertTrue(
-            listSource.contains("ConditionalBubbleLongPress"),
-            "Le long-press custom de la bulle doit être conditionnel (coupé quand " +
-            "le menu natif est actif, gardé < iOS 26)."
-        )
-
+    /// **La machinerie du menu natif reste en place, alimentée à `nil` — et ce
+    /// `nil` n'est pas un reste.**
+    ///
+    /// C'est lui qui commande le RETRAIT de l'`UIContextMenuInteraction` que le
+    /// système pose sur la cellule. Supprimer la déclaration au motif qu'elle ne
+    /// sert plus laisserait cette interaction en place et **rouvrirait la
+    /// pression système que #6117 vient de fermer** — le menu Meeshy
+    /// redisparaîtrait sous iOS 26, sans qu'aucune ligne de geste n'ait bougé.
+    ///
+    /// C'est donc l'invariant que ce fichier garde, et le seul : il n'est dit
+    /// nulle part ailleurs.
+    func test_messageRow_nativeMenuStaysDeclaredNil_soTheSystemPressIsRemoved() throws {
         let vcSource = try source("Meeshy/Features/Main/Views/MessageListViewController.swift")
+
         XCTAssertTrue(
-            vcSource.contains(".nativeMessageContextMenu(menu: nativeMenu)"),
-            "La cellule doit attacher le menu natif via .nativeMessageContextMenu(menu:)."
+            vcSource.contains("let nativeMenu: (() -> AnyView)? = nil"),
+            "`nativeMenu` doit rester DÉCLARÉ à nil : c'est ce qui commande le " +
+            "retrait de l'UIContextMenuInteraction posée par le système."
         )
         XCTAssertTrue(
-            vcSource.contains("enableLongPress: nativeMenu == nil"),
-            "La cellule doit couper le long-press custom quand le menu natif est actif."
+            vcSource.contains("if nativeMenu == nil"),
+            "Le retrait de l'interaction système doit rester CONDITIONNÉ à " +
+            "`nativeMenu == nil` — sans quoi il ne se produirait plus si le " +
+            "chemin natif revenait."
+        )
+        XCTAssertTrue(
+            vcSource.contains("$0 is UIContextMenuInteraction"),
+            "La cellule doit retirer l'UIContextMenuInteraction du système : " +
+            "laissée en place, elle reprendrait la pression longue à iOS 26 et " +
+            "le menu Meeshy disparaîtrait de nouveau sur les téléphones récents."
         )
     }
 
-    /// Le builder du menu natif (ConversationView) : rangée d'emojis en
-    /// `.controlGroupStyle(.compactMenu)` (4 plus utilisés — plafond 1 ligne),
-    /// actions via `MessageActionResolver` (SSOT avec l'overlay), et Supprimer
-    /// qui ARME la confirmation — jamais de suppression directe.
-    func test_buildNativeMessageMenu_compactRow_resolver_confirmedDelete() throws {
-        let vSource = try source("Meeshy/Features/Main/Views/ConversationView.swift")
-
-        guard let range = vSource.range(of: "func buildNativeMessageMenu(for msg: Message)") else {
-            XCTFail("ConversationView doit exposer buildNativeMessageMenu(for:).")
-            return
+    /// #11214 — le builder du menu natif (`buildNativeMessageMenu`) était mort :
+    /// `private`, sans appelant, tenu vert par cette seule garde. Il a quitté le
+    /// dépôt ; la garde lit désormais le chemin VIVANT — l'overlay compose sa
+    /// liste par `MessageActionResolver`, sur le contexte que la fabrique UNIQUE
+    /// lui remet, et la feuille « Plus… » lit la même fabrique.
+    func test_liveMenus_composeFromTheResolver_onTheFactoryContext() throws {
+        let overlay = try source("Meeshy/Features/Main/Components/MessageOverlayMenu.swift")
+        XCTAssertTrue(
+            overlay.contains("MessageActionResolver.primaryActions(menuContext)"),
+            "L'overlay doit composer sa liste par MessageActionResolver (SSOT)."
+        )
+        for host in ["Meeshy/Features/Main/Views/ConversationView+OverlayMenu.swift",
+                     "Meeshy/Features/Main/Views/ConversationView+MessageSheets.swift"] {
+            XCTAssertTrue(
+                try source(host).contains("MessageMenuContext.make(message: msg, viewModel: viewModel, authority: authority)"),
+                "\(host) doit lire le contexte de la fabrique unique, jamais le composer lui-même."
+            )
         }
-        let end = vSource.index(range.lowerBound, offsetBy: 4000, limitedBy: vSource.endIndex) ?? vSource.endIndex
-        let block = String(vSource[range.lowerBound ..< end])
-        XCTAssertTrue(
-            block.contains(".controlGroupStyle(.compactMenu)"),
-            "La rangée d'emojis rapides doit utiliser .controlGroupStyle(.compactMenu) " +
-            "(rangée horizontale système — sans ce style le ControlGroup empile)."
-        )
-        XCTAssertTrue(
-            block.contains("EmojiUsageTracker.topEmojis(count: 4"),
-            "La rangée rapide doit afficher 4 emojis (plafond : au-delà, " +
-            ".compactMenu passe à la ligne)."
-        )
-        XCTAssertTrue(
-            block.contains("MessageActionResolver.primaryActions(ctx)"),
-            "Les actions du menu natif doivent venir de MessageActionResolver (SSOT overlay)."
-        )
+    }
 
-        guard let btnRange = vSource.range(of: "func nativeMenuButton(") else {
-            XCTFail("ConversationView doit exposer nativeMenuButton(_:msg:).")
-            return
+    /// **Aucun `MessageOverlayMenu` de production ne se monte sans `onDelete`**
+    /// (#12625). L'overlay retire `.deleteMessage` quand le rappel manque (un
+    /// contrôle existe s'il a un effet) : un hôte qui l'oublie renvoie la
+    /// suppression à deux gestes par « Plus… », en silence, pendant que les
+    /// témoins de l'overlay — montés avec `hasDeleteHandler: true` — restent verts.
+    func test_everyProductionOverlayMount_wiresDelete() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy")
+        let files = (FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)?.allObjects as? [URL] ?? [])
+            .filter { $0.pathExtension == "swift" }
+        XCTAssertGreaterThan(files.count, 500, "la garde ne lirait RIEN : le dossier Meeshy est introuvable")
+
+        let mounts: [(file: String, arguments: String)] = try files.flatMap { url -> [(file: String, arguments: String)] in
+            let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            return Self.overlayMounts(in: code).map { (file: url.lastPathComponent, arguments: $0) }
         }
-        // Fenêtre large : `nativeMenuButton` est un switch de 10 cas (~6 k
-        // caractères) ; `.delete` est le DERNIER — la borne doit l'atteindre.
-        let btnEnd = vSource.index(btnRange.lowerBound, offsetBy: 6500, limitedBy: vSource.endIndex) ?? vSource.endIndex
-        let btnBlock = String(vSource[btnRange.lowerBound ..< btnEnd])
-        XCTAssertTrue(
-            btnBlock.contains("Button(role: .destructive)") &&
-            btnBlock.contains("overlayState.deleteConfirmMessageId = msg.id"),
-            "La suppression du menu natif doit être destructive ET armer " +
-            "deleteConfirmMessageId (confirmation) — jamais de suppression directe."
-        )
+        XCTAssertFalse(mounts.isEmpty, "témoin : l'hôte de conversation monte l'overlay")
+        for mount in mounts {
+            XCTAssertTrue(mount.arguments.contains("onDelete:"),
+                          "\(mount.file) monte MessageOverlayMenu sans onDelete : « Supprimer » disparaît du menu")
+        }
+    }
+
+    /// Les arguments de chaque appel `MessageOverlayMenu(` — l'identifiant seul,
+    /// jamais un nom qui le prolonge — jusqu'à sa parenthèse fermante.
+    private static func overlayMounts(in code: String) -> [String] {
+        let call = "MessageOverlayMenu("
+        var mounts: [String] = []
+        var cursor = code.startIndex
+        while let range = code.range(of: call, range: cursor..<code.endIndex) {
+            cursor = range.upperBound
+            let before = range.lowerBound == code.startIndex ? nil : code[code.index(before: range.lowerBound)]
+            if let before, before.isLetter || before.isNumber || before == "_" || before == "." { continue }
+            var depth = 1
+            var end = range.upperBound
+            while end < code.endIndex, depth > 0 {
+                if code[end] == "(" { depth += 1 }
+                if code[end] == ")" { depth -= 1 }
+                end = code.index(after: end)
+            }
+            mounts.append(String(code[range.upperBound..<end]))
+        }
+        return mounts
     }
 
     // MARK: - Aperçu du menu natif = la bulle « prise de sa position »
@@ -565,5 +835,64 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
             calls, 1,
             "onReport ne doit être appelé qu'une fois — depuis le bouton destructif de la modale."
         )
+    }
+
+    // MARK: - #18297 — chaque feuille a sa sortie visible, chaque bouton répond au doigt
+
+    private func flat(_ relativePath: String) throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.unit(relativePath))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    /// Les boutons ronds Appeler, Rechercher et Infos de l'aperçu d'une
+    /// conversation passent par le verre INTERACTIF du kit, sous le style qui
+    /// lui remet l'état pressé : un disque `adaptiveGlass` posé à la main dans un
+    /// bouton `.plain` ne répondait pas au doigt.
+    func test_previewHeaderButtons_answerThePressThroughTheKitGlass() throws {
+        let code = try flat("Meeshy/Features/Main/Views/ConversationListHelpers.swift")
+        XCTAssertFalse(code.contains(".adaptiveGlass(in:Circle()"),
+                       "un disque de verre posé à la main ne répond pas à l'appui")
+        XCTAssertTrue(code.contains(".meeshyGlass(in:Circle(),tint:Color(hex:accentColor).opacity(MeeshyOpacity.medium),isInteractive:true)"),
+                      "le disque des boutons de l'aperçu est le verre interactif du kit, teinté de l'accent")
+        XCTAssertTrue(code.contains(".buttonStyle(MeeshyGlassPressStyle())"),
+                      "le bouton remet l'état pressé au verre du kit")
+    }
+
+    /// Le sélecteur d'émojis par catégories offre un ✕ visible (défaut de #18542) ;
+    /// le glissement vers le bas reste.
+    func test_categorizedEmojiPicker_offersAVisibleClose() throws {
+        let code = try flat("Meeshy/Features/Main/Views/ConversationView+MessageSheets.swift")
+        XCTAssertTrue(code.contains(".sheet(item:$overlayState.fullReactionPickerMessage){msginfullReactionPicker(for:msg)}"),
+                      "le « + » de la barre de réactions présente la feuille d'émojis par catégories")
+        guard let start = code.range(of: "privatefuncfullReactionPicker(for"),
+              let end = code.range(of: ".presentationDragIndicator(.visible)", range: start.upperBound..<code.endIndex) else {
+            return XCTFail("la feuille d'émojis par catégories est introuvable")
+        }
+        let sheet = String(code[start.lowerBound..<end.lowerBound])
+        XCTAssertTrue(sheet.contains("CategorizedEmojiPickerSheet("), "la feuille est le sélecteur par catégories")
+        XCTAssertNotNil(sheet.range(of: #"MeeshyGlassButton\(systemImage:"xmark",[^{]*\)\{overlayState\.fullReactionPickerMessage=nil\}"#,
+                                    options: .regularExpression),
+                        "la feuille d'émojis ne se quitte qu'en devinant le glissement")
+    }
+
+    /// Le fil de réponses est une FEUILLE : il se ferme par ✕, jamais par un
+    /// chevron de retour qui le fait passer pour un écran poussé.
+    func test_threadSheet_closesWithAGlassCross_notABackChevron() throws {
+        let code = try flat("Meeshy/Features/Main/Views/ThreadView.swift")
+        XCTAssertFalse(code.contains("chevron.backward"), "une feuille ne se ferme pas par « < »")
+        XCTAssertNotNil(code.range(of: #"MeeshyGlassButton\(systemImage:"xmark",[^{]*\)\{dismiss\(\)\}"#, options: .regularExpression),
+                        "la feuille du fil se ferme par un ✕ de verre du kit")
+    }
+
+    /// Toucher un message favori donne un retour sous le doigt avant
+    /// d'ouvrir la conversation : la rangée est un bouton à l'état pressé.
+    func test_starredRow_answersThePress() throws {
+        let code = try flat("Meeshy/Features/Main/Views/StarredMessagesView.swift")
+        XCTAssertFalse(code.contains(".onTapGesture{navigate(to:snapshot)}"),
+                       "un toucher sur la carte n'a aucun état pressé")
+        XCTAssertTrue(code.contains("Button{navigate(to:snapshot)}label:{StarredRow("),
+                      "la rangée favorite est un bouton")
+        XCTAssertTrue(code.contains(".buttonStyle(PressableButtonStyle())"),
+                      "la rangée favorite répond à l'appui")
     }
 }

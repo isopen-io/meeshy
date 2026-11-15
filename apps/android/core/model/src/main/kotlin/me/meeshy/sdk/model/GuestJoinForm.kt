@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model
 
+import me.meeshy.sdk.model.auth.RegistrationIdentity
+
 /**
  * The guest (anonymous shared-link) join form — the pure, immutable SSOT for what
  * a visitor must supply before joining a conversation via a share link, and how
@@ -15,7 +17,8 @@ package me.meeshy.sdk.model
  *    [canSubmit] stays false — the caller steers such a visitor to sign in
  *    instead of firing a request the gateway will reject.
  * 2. [toRequest] is the single builder: it trims every field, omits an empty
- *    optional (username / email / birthday travel as `null`, never `""`), and
+ *    optional (username / email travel as `null`, never `""`), sends the birthday
+ *    only when the link requires it, and
  *    falls back to [DEFAULT_LANGUAGE] for a blank language — so a malformed body
  *    can never leave this type.
  */
@@ -31,10 +34,22 @@ data class GuestJoinForm(
     val requireBirthday: Boolean = false,
     val requireAccount: Boolean = false,
 ) {
-    val isFirstNameValid: Boolean get() = firstName.isNotBlank()
-    val isLastNameValid: Boolean get() = lastName.isNotBlank()
-    val isUsernameValid: Boolean get() = !requireNickname || username.isNotBlank()
-    val isEmailValid: Boolean get() = !requireEmail || email.isNotBlank()
+    val isFirstNameValid: Boolean get() = RegistrationIdentity.isNameLongEnough(firstName)
+    val isLastNameValid: Boolean get() = RegistrationIdentity.isNameLongEnough(lastName)
+
+    /**
+     * Un pseudo d'invité, exigé ou facultatif, atteint [RegistrationIdentity.PSEUDO_MIN] dès qu'il est tapé,
+     * compté sur ce que la passerelle en garde ([RegistrationIdentity.isGuestNicknameLongEnough]).
+     */
+    val isUsernameValid: Boolean
+        get() = if (username.isBlank()) !requireNickname else RegistrationIdentity.isGuestNicknameLongEnough(username)
+
+    /** Une saisie NON vide en deçà du minimum : le minimum se dit sous le champ, un champ encore vide ne reçoit aucun reproche. */
+    val isFirstNameTooShort: Boolean get() = RegistrationIdentity.isNameTooShort(firstName)
+    val isLastNameTooShort: Boolean get() = RegistrationIdentity.isNameTooShort(lastName)
+    val isUsernameTooShort: Boolean
+        get() = username.isNotBlank() && !RegistrationIdentity.isGuestNicknameLongEnough(username)
+    val isEmailValid: Boolean get() = !requireEmail || isPlausibleEmail(email)
     val isBirthdayValid: Boolean get() = !requireBirthday || birthday.isNotBlank()
 
     /** An account-required link cannot be joined anonymously — steer to sign-in. */
@@ -80,13 +95,19 @@ data class GuestJoinForm(
             lastName = lastName.trim(),
             username = username.trim().ifBlank { null },
             email = email.trim().ifBlank { null },
-            birthday = birthday.trim().ifBlank { null },
+            birthday = birthday.trim().takeIf { requireBirthday }?.ifBlank { null },
             language = language.trim().ifBlank { DEFAULT_LANGUAGE },
         )
     }
 
     companion object {
         const val DEFAULT_LANGUAGE: String = "fr"
+
+        /** Same bar as iOS: an `@` and a `.` in the trimmed text. */
+        fun isPlausibleEmail(value: String): Boolean {
+            val trimmed = value.trim()
+            return '@' in trimmed && '.' in trimmed
+        }
 
         /** Seed a fresh form from a link's requirement flags. */
         fun from(info: ShareLinkInfo, language: String = DEFAULT_LANGUAGE): GuestJoinForm =

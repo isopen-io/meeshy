@@ -117,6 +117,21 @@ final class PushNotificationManagerTests: XCTestCase {
         XCTAssertNil(received.first?.messageId)
     }
 
+    /// #7615 — une réaction porte le `messageId` du message RÉAGI. La lire comme
+    /// l'arrivée d'un message avançait la date de la ligne à l'heure de la
+    /// réaction et vidait son aperçu : la réaction n'était alors plus « plus
+    /// récente que le dernier message », et ne s'affichait plus.
+    @MainActor
+    func test_noteMessageActivity_reactionCarryingAMessageId_emitsNothing() {
+        let sut = PushNotificationManager.shared
+        var received: [MessageActivitySignal] = []
+        let c = sut.messageNotificationReceived.sink { received.append($0) }
+        sut.noteMessageActivity(userInfo: ["type": "message_reaction", "conversationId": "conv-1", "messageId": "msg-9"])
+        sut.noteMessageActivity(userInfo: ["type": "reaction", "conversationId": "conv-1", "messageId": "msg-9"])
+        c.cancel()
+        XCTAssertTrue(received.isEmpty)
+    }
+
     @MainActor
     func test_noteMessageActivity_friendRequest_emitsNothing() {
         let sut = PushNotificationManager.shared
@@ -221,6 +236,42 @@ final class PushNotificationManagerTests: XCTestCase {
         XCTAssertEqual(sut.pendingNotificationPayload?.postId, "post-1")
         XCTAssertEqual(sut.pendingNotificationPayload?.commentId, "reply-9")
         XCTAssertEqual(sut.pendingNotificationPayload?.parentCommentId, "parent-3")
+    }
+
+    /// #6999 — **l'identité de la ligne de cloche que le push annonce.**
+    ///
+    /// Le gateway pose `notificationId` depuis toujours ; le décodeur ne la
+    /// lisait pas. C'est la SEULE clé qui couvre les types sans
+    /// `conversationId` ni `postId` — alerte de sécurité, nouvelle connexion,
+    /// mot de passe changé, double facteur, demande d'ami : sans elle, ils
+    /// restaient non lus À VIE après un tap.
+    @MainActor
+    func test_handleNotification_carriesTheNotificationIdentity() {
+        let (sut, defaults, _, suite) = makePushManagerSUT()
+        defer { tearDownDefaults(defaults, suiteName: suite) }
+
+        sut.handleNotification(userInfo: [
+            "type": "security_alert",
+            "notificationId": "notif-42"
+        ])
+
+        XCTAssertEqual(sut.pendingNotificationPayload?.notificationId, "notif-42")
+    }
+
+    @MainActor
+    func test_handleNotification_emptyNotificationId_resolvesToNil() {
+        let (sut, defaults, _, suite) = makePushManagerSUT()
+        defer { tearDownDefaults(defaults, suiteName: suite) }
+
+        sut.handleNotification(userInfo: [
+            "type": "security_alert",
+            "notificationId": ""
+        ])
+
+        XCTAssertNil(
+            sut.pendingNotificationPayload?.notificationId,
+            "une chaîne vide partirait en `POST /notifications//read` — mieux vaut ne rien consommer"
+        )
     }
 
     /// Empty/absent comment ids resolve to nil (not the empty string) so the

@@ -347,7 +347,9 @@ PUT /privacy-preferences
 │  │                                                              │   │
 │  │  // Route globale                                            │   │
 │  │  GET    /me/preferences         → Toutes les préférences     │   │
-│  │  DELETE /me/preferences         → Reset toutes               │   │
+│  │  (DELETE /me/preferences retirée — #4186, sans appelant ;    │   │
+│  │   la remise à zéro passe par la CATÉGORIE, et le lot L3      │   │
+│  │   rouvrira l'adresse sous `?categories=`)                    │   │
 │  │                                                              │   │
 │  │  // Enregistrement des catégories via factory (1 ligne each)│   │
 │  │                                                              │   │

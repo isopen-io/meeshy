@@ -1,0 +1,816 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+/// **L'éditeur d'OBJET, plein écran — un mélange de `1c` et de `2e`**
+///
+/// > « L'édition `2e` doit être bien appliquée, plein écran avec toutes les
+/// > options affichées lors de l'édition. […] Pour l'édition de texte il faut un
+/// > mélange de `1c` — Éditeur de scène, objet sélectionné — et de `2e`. […]
+/// > Puisque la sélection d'un élément, on doit pouvoir indiquer d'où à où il
+/// > apparaît, son style, taille, alignement si nécessaire, et position
+/// > temporelle avec la vision dans le plan 2D, le tout dans un espace assez
+/// > large en 2D pour bien positionner. »
+///
+/// ## Le défaut que cet écran ferme
+///
+/// Des styles en BANDE basse, servie par `bandTextStylesContent`, seraient
+/// inatteignables : `ComposerLowZone.resolve` donne le bas à `.toolOptions`
+/// dès qu'un outil est ouvert — et éditer un texte OUVRE un outil. **Le
+/// spécimen ne serait atteignable qu'après avoir refermé l'éditeur**, par un
+/// jeton, c'est-à-dire pas au seul moment où l'on choisit un style.
+///
+/// Pire, `MeeshyToolOptionsPanel` ne rend quelque chose que si un outil est
+/// DÉPLIÉ. Tant qu'aucune bulle du rail n'est tapée, la zone basse d'une
+/// édition de texte serait **vide**. « Toutes les options » n'existerait
+/// nulle part.
+///
+/// ## Ce que « toutes affichées » veut dire ici
+///
+/// Les huit outils de `TextEditTool` sont EMPILÉS, chacun sous son titre,
+/// sans bulle à déplier — plus un choix à faire avant de pouvoir choisir. Le style
+/// prend la forme du spécimen `2e` (le vrai texte sur son vrai fond, la grille
+/// des dix-huit) parce que c'est celle que la planche donne, et le TEMPS ferme
+/// la liste avec le plan 2D, qui montre la fenêtre au lieu de la décrire.
+///
+/// ## Pourquoi la scène occupe la moitié haute
+///
+/// « Un espace assez large en 2D pour bien positionner » : l'objet se déplace,
+/// se pince et se tourne DANS cet écran. Une vignette suffirait à montrer le
+/// résultat d'un style ; elle ne suffit pas à poser un objet au pixel près.
+struct ComposerObjectEditorView: View {
+
+    @ObservedObject var viewModel: StoryComposerViewModel
+
+    /// **La boîte de mentions du MEUBLE, pas une nouvelle.**
+    ///
+    /// Cet écran est un `fullScreenCover` : sa vue est reconstruite à chaque
+    /// rendu, donc un contrôleur né ici perdrait sa requête et ses candidats à
+    /// la première frappe. Le meuble le tient (`@StateObject sceneMentionBox`)
+    /// et charge ses candidats une fois, au montage du portail.
+    ///
+    /// C'est la BOÎTE qui est observée, jamais le contrôleur directement :
+    /// `MentionComposerController` est un `ObservableObject` imbriqué, et
+    /// Combine ne traverse pas l'imbrication tout seul — sans le relais
+    /// `objectWillChange` de la boîte, lire `showsSuggestions` dans ce `body`
+    /// ne le ré-évaluerait à aucune frappe.
+    @ObservedObject var mentionBox: ComposerMentionControllerBox
+
+    let objectId: String
+    let aspectRatio: CGFloat
+    let plateauTint: Color
+    let sceneImages: [String: UIImage]
+    /// Octets animés des stickers collés, keyés par `sticker.id`.
+    var sceneStickerAnimations: [String: Data] = [:]
+    let sceneImagesVersion: UInt64
+    let onClose: () -> Void
+    /// Remonte au meuble l'objet que le plan 2D vient de désigner — c'est lui
+    /// qui possède `editedObject`, et deux sources pour « quel objet est ouvert »
+    /// divergeraient au premier tap.
+    let onSelectObject: (String) -> Void
+    /// **Le texte alternatif du média ouvert** — porté par le MEUBLE,
+    /// jamais par cet écran : c'est lui qui remet la charge d'accessibilité au
+    /// publieur, et un magasin local ici mourrait à la fermeture de l'éditeur,
+    /// exactement comme la légende.
+    ///
+    /// Optionnel parce que l'écran s'ouvre aussi sur un TEXTE, un sticker ou une
+    /// pastille de lieu — familles qui n'ont pas d'alternative textuelle. `nil`
+    /// n'affiche pas la section : un champ inerte serait un contrôle sans effet.
+    var mediaAltText: Binding<String>? = nil
+
+    /// **Ce qui est DÉPLIÉ, une section à la fois.** L'état est LOCAL
+    /// à l'écran, et jamais celui que le ViewModel porte pour la rangée
+    /// d'outils : c'est ce dernier qui rendait la zone basse d'une édition de
+    /// texte vide tant qu'aucune bulle n'avait été tapée, et cet écran ne le
+    /// ramène pas. (Son identifiant n'est pas cité ici : une garde de source
+    /// l'interdit dans ce fichier, et un doc-comment qui le nomme la fait
+    /// rougir aussi sûrement qu'un appel — mesuré.)
+    /// **L'outil dont le bas montre les options — NON optionnel.**
+    ///
+    /// Un type optionnel dirait « tout replié », un état qu'une liste dépliante
+    /// rendrait UTILE (la hauteur reviendrait à la scène). Dans un rail,
+    /// refermer ne rend rien — le
+    /// rail occupe le couloir, pas le bas — et un `nil` y viderait la zone
+    /// basse, c'est-à-dire rejouerait le défaut que cet écran existe pour
+    /// fermer. Le type porte donc l'invariant : le vide est irreprésentable.
+    @State private var selectedTool: ComposerObjectEditorSection =
+        ComposerObjectEditorRail.initiallySelected
+
+    /// **La section demandée par la PORTE D'ENTRÉE** — `nil` ⇒
+    /// l'écran s'ouvre sur ce que la famille sert en premier.
+    ///
+    /// Elle ne peut pas initialiser `selectedTool` directement : un `@State`
+    /// alimenté par un paramètre exige un `init` écrit à la main, que cette vue
+    /// n'a pas et dont l'ajout obligerait à recopier ses onze propriétés. Elle
+    /// est donc CONSOMMÉE à la première résolution de famille, ci-dessous.
+    var initialSection: ComposerObjectEditorSection?
+
+    /// **La demande n'a lieu qu'une fois.** Sans ce drapeau, changer d'objet
+    /// depuis le plan 2D ramènerait l'auteur à la section par laquelle il est
+    /// entré, en effaçant l'outil qu'il réglait — le contraire exact de ce que
+    /// `selection(forFamily:keeping:)` existe pour préserver.
+    @State private var initialSectionPending = true
+
+    /// **Le panneau de l'outil est-il REPLIÉ ?**
+    ///
+    /// Un fait d'AFFICHAGE, posé à côté de `selectedTool` et jamais à sa
+    /// place : l'outil reste sélectionné, donc rouvrir ramène celui qu'on
+    /// réglait. Le rendre optionnel casserait l'invariant du type non optionnel pour
+    /// exprimer un état que ce booléen dit sans y toucher.
+    @State private var panel = ComposerObjectEditorPanelState.open
+    /// Lu partout, ÉCRIT nulle part : le panneau change par la règle —
+    /// `panelState(explicitlyCollapsed:)` pour un geste de l'auteur,
+    /// `panelState(keyboardRises:…)` pour le clavier.
+    private var optionsAreCollapsed: Bool { panel.optionsAreCollapsed }
+    /// Ce que le clavier vient d'annoncer — lu par l'exclusion clavier/panneau.
+    @State private var keyboardTransition: KeyboardTransition?
+
+    /// La hauteur du CONTENU du panneau d'options, remontée par
+    /// `ComposerObjectEditorOptionsHeightKey`. Le panneau s'y ajuste
+    /// plutôt que de prendre tout ce qu'on l'autorise à prendre.
+    @State var optionsContentHeight: CGFloat = 0
+
+
+    /// **Le plan TIENT le geste, donc le scroller doit lâcher.** Sans ce
+    /// verrou, le contenu panne sous le doigt pendant que la barre se rogne —
+    /// les deux se disputent le même doigt, et `Plan2DView` documente
+    /// explicitement le signal qu'il émet pour l'éviter.
+    @State private var planHoldsGesture = false
+
+    /// **L'objet courant, TOUTES familles** — lu du modèle à chaque
+    /// rendu, jamais recopié : le plan 2D permet d'en désigner un autre sans
+    /// quitter l'écran, et une copie divergerait au premier tap.
+    private var sceneObject: MeeshySceneObject? {
+        viewModel.currentSlide.sceneObject(id: objectId)
+    }
+
+    /// La famille de l'objet ouvert. Le repli sur `.text` n'est pas un défaut
+    /// masqué : il ne survient que si l'objet vient d'être supprimé pendant que
+    /// l'écran le tenait — un état NOMINAL que `sceneObject(id:)` documente — et
+    /// l'écran se referme alors de lui-même.
+    private var family: MeeshySceneObject.Kind {
+        sceneObject?.kind ?? .text
+    }
+
+    /// **L'anatomie du PLATEAU, ici aussi** — et les outils dans le
+    /// couloir de TÊTE.
+    ///
+    /// > « Cette vue plein écran, la rangée canonique doit être rangée à
+    /// > gauche, scrollable. »
+    ///
+    /// ## Pourquoi le couloir de tête, et pas une rangée basse
+    ///
+    /// Une rangée basse libérerait de la place au canvas : le couloir coûte 52 pt
+    /// de LARGEUR de carte, donc ≈ 92 pt de hauteur, le ratio 9:16 les liant.
+    /// Mais **cette mesure ne vaut que sans le clavier.** Le cas nominal de cet
+    /// écran est l'édition d'un texte — donc clavier LEVÉ — et le bas n'existe
+    /// alors plus : la rangée s'y trouverait écrasée entre les options et le
+    /// clavier, tronquée à droite, pendant que le couloir de tête resterait vide
+    /// sur toute la hauteur.
+    ///
+    /// > **Une place justifiée par une mesure prise dans un seul état cesse de
+    /// > l'être dans l'autre.** La question à poser n'est pas « le couloir
+    /// > coûte-t-il de la largeur ? » — il en coûte — mais « que vaut le bas
+    /// > quand le clavier l'occupe ? ».
+    ///
+    /// Ce qui ne bouge pas : le sujet reste en haut et ne défile jamais hors
+    /// de l'écran, l'historique garde son couloir droit — les outils et
+    /// l'historique sont « au même endroit » — et le bas montre
+    /// les options de l'outil ouvert.
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            HStack(alignment: .center, spacing: 0) {
+                toolRail
+                scene
+                historyRail
+            }
+        }
+        // **Le clavier du canvas et le panneau s'excluent.**
+        .excludingOptionsWhileTyping(keyboardTransition: $keyboardTransition,
+                                     panel: $panel,
+                                     section: selectedTool)
+        // **Les options s'ANCRENT au bas, elles ne suivent pas la pile** : dans
+        // la page plein écran d'ajout de texte, les options sont en bas et non en
+        // milieu de l'écran.
+        //
+        // Sans ancrage, la grille des polices finirait à 756 sur un écran de
+        // 874 — **cent-dix-huit points vides sous elle**, et le clavier levé la
+        // pincerait entre la carte et lui, loin des deux.
+        //
+        // Empilées en TROISIÈME enfant d'un `VStack`, les options prenaient la
+        // hauteur de leur contenu là où la pile les posait ; ce qui restait
+        // dessous n'appartenait à personne. `safeAreaInset` renverse la
+        // question : la barre est POSÉE sur le bord, et c'est la scène qui
+        // reçoit ce qui reste — exactement l'inverse, et exactement ce que la
+        // directive demande.
+        //
+        // C'est aussi ce que fait tout le reste du produit : le socle est ancré
+        // en bas, les options de l'outil DESSIN aussi. L'éditeur plein écran
+        // n'est pas une exception.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            options
+                // **Le glissement BAS rend l'écran à la scène** — posé sur le PANNEAU
+                // seulement : sur tout l'écran, déplacer un texte vers le bas au doigt
+                // replierait aussi le panneau.
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 24)
+                        .onEnded { valeur in
+                            guard ComposerObjectEditorDismissGesture.completes(
+                                translation: valeur.translation) else { return }
+                            yieldScreenToScene()
+                        }
+                )
+        }
+        .background(plateauTint.ignoresSafeArea())
+        .preferredColorScheme(.dark)
+        // **Le glissement du bord de tête RAMÈNE à la scène.**
+        //
+        // `fullScreenCover` ne donne pas le geste que le système offre à une
+        // pile de navigation : l'écran n'avait qu'une sortie, le chrome haut.
+        // La zone est une lisière ÉTROITE posée sur le bord, jamais le geste
+        // posé sur toute la vue — le canvas y déplace des objets, et un
+        // glissement horizontal capté partout lui volerait chaque translation.
+        .overlay(alignment: .leading) { edgeBackStrip }
+        // **Changer d'objet peut changer de FAMILLE**, et l'outil
+        // courant peut ne plus exister pour elle : passer d'un texte réglé sur
+        // POLICE à un sticker laisserait le bas vide.
+        //
+        // Le type non optionnel garantit qu'une valeur EXISTE ; il ne garantit
+        // pas qu'elle soit SERVIE par la famille courante. Deux propriétés
+        // distinctes, et la seconde demande sa règle.
+        .adaptiveOnChange(of: family, initial: true) { _, nouvelle in
+            let demandee = initialSectionPending ? (initialSection ?? selectedTool) : selectedTool
+            initialSectionPending = false
+            selectedTool = ComposerObjectEditorRail.selection(forFamily: nouvelle,
+                                                              keeping: demandee,
+                                                              hasTrimmableSource: objectHasTrimmableSource,
+                                                              offersFilter: objectOffersFilter, offersAdjust: objectOffersAdjust)
+        }
+    }
+
+    // MARK: - L'en-tête
+
+    /// Le nombre d'objets POSÉS sur la slide — lu du modèle à chaque rendu, donc
+    /// il suit l'ajout et le retrait sans qu'on quitte l'écran.
+    private var objectCount: Int {
+        ComposerSceneObjectCount.posed(on: viewModel.currentSlide)
+    }
+
+    private var header: some View {
+        HStack {
+            // **`< N` à la place du titre.** Un titre nommerait l'écran ; il ne dirait
+            // ni d'où l'on vient, ni que cet écran édite UN objet parmi N — alors que le
+            // plan 2D permet justement d'en désigner un autre sans sortir.
+            //
+            // Le chiffre est peint SANS le mot : le glyphe et le nombre tiennent
+            // dans le pouce, et c'est VoiceOver qui reçoit la phrase entière
+            // (`spokenLabel`) — une chaîne pour l'œil, une pour l'oreille, parce
+            // qu'un « 4 » annoncé seul ne dit pas ce qu'il compte.
+            Button(action: onClose) {
+                HStack(spacing: MeeshySpacing.xxs) {
+                    // `chevron.backward`, jamais `chevron.left` : le second nomme
+                    // un côté PHYSIQUE et ne se retourne pas en arabe, où le
+                    // retour est à droite. `RightToLeftLayoutGuardTests` le garde : la
+                    // flèche pointerait vers l'avant du fil pour la
+                    // moitié RTL de nos sept langues.
+                    Image(systemName: "chevron.backward")
+                        .font(MeeshyFont.relative(15, weight: .semibold))
+                    Text(LocalizedNumber.exact(objectCount))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold).monospacedDigit())
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, MeeshySpacing.md)
+                .frame(minWidth: 44, minHeight: 40)
+                // **Verre ADAPTATIF, jamais `glassEffect` en direct** :
+                // l'enrobage du SDK rend le vrai Liquid Glass sur iOS 26 et un
+                // matériau translucide en dessous — le plancher du projet est
+                // iOS 16, et un appel direct ne compilerait pas sans une garde
+                // de version que ce site n'a pas à porter.
+                .adaptiveGlass(in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(ComposerSceneObjectCount.spokenLabel(count: objectCount))
+            .accessibilityAddTraits(.isButton)
+            Spacer()
+            Button(action: onClose) {
+                Text(ComposerObjectEditorCopy.done)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    // Blanc sur la capsule PROÉMINENTE, comme « Publier » : les
+                    // deux sont l'action terminale de leur écran, et le même
+                    // geste doit avoir partout le même relief.
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .frame(minHeight: 40)
+                    .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - La scène, en grand
+
+    /// L'objet reste SÉLECTIONNÉ tout du long : c'est la doctrine de `1c` — « un
+    /// seul objet à la fois ».
+    ///
+    /// **Mais il n'est pas ENCADRÉ** :
+    ///
+    /// > « En plein ecran pourquoi mettre un cadre violet autour du texte, je
+    /// > trouve inutile... »
+    ///
+    /// Cette ligne portait la justification inverse — « le cadre qui l'encadre
+    /// est ce qui rend le réglage lisible pendant qu'on le change ». Elle était
+    /// vraie SUR LA SCÈNE, où le cadre désigne, parmi plusieurs objets, celui
+    /// que le doigt saisit. Ici l'objet EST le sujet de l'écran : le titre le
+    /// nomme, les dix sections le règlent, il n'y a rien dont le distinguer.
+    /// Un signe qui n'apprend rien occupe la place de ce qui apprend.
+    ///
+    /// `selectedItemId` ne gouverne QUE le marqueur
+    /// (`StoryCanvasRepresentable` → `setSelectionMarker`). Il ne décide ni de
+    /// ce qui répond au doigt, ni de ce qui s'édite en ligne — le passer à
+    /// `nil` n'enlève donc aucun geste.
+    private var scene: some View {
+        EmbeddedSceneCanvas(
+            slide: Binding(
+                get: { viewModel.currentSlide },
+                set: { viewModel.currentSlide = $0 }
+            ),
+            aspectRatio: aspectRatio,
+            cornerRadius: MeeshyRadius.xl,
+            // **Taper un autre texte l'OUVRE** — le même geste que sur une barre
+            // du plan 2D, et la même raison : sur un écran dont le sujet EST
+            // l'objet sélectionné, un tap qui ne sélectionne rien est un
+            // contrôle inerte. Les autres kinds n'ont pas d'éditeur ici,
+            // donc ils ne répondent pas plutôt que de répondre à moitié.
+            onItemTapped: { id, _ in
+                // **Toutes les familles.** Une garde `kind == .text` ferait de taper un
+                // sticker un geste qui ne fait RIEN, ce qui se lit comme une scène morte
+                // plutôt que comme une limite.
+                //
+                // **Et le SUJET n'est pas muet pour autant.** Ce refus a l'air d'être ce
+                // qui empêche de rappeler le clavier en touchant le texte — il ne
+                // l'est pas. La cause vit une couche plus bas : le canvas capte le tap posé sur
+                // son propre champ de saisie et, `cancelsTouchesInView` valant
+                // `true`, l'annule pour le `UITextView`. Ce rappel est
+                // servi par `StoryCanvasInlineEditTouchPolicy`, donc
+                // ce closure n'est même pas ATTEINT quand le doigt tombe sur le
+                // champ, placeholder compris.
+                //
+                // > Retirer la garde n'aurait rien réparé et aurait rouvert
+                // > l'écran sur lui-même. **Un refus qui se trouve sur le chemin
+                // > d'un geste absent n'en est pas forcément la cause** — la
+                // > question n'est pas « qui refuse ce geste ? » mais « qui le
+                // > reçoit avant lui ? ».
+                guard id != objectId else { return }
+                openEditor(id)
+            },
+            loadedImages: sceneImages,
+            loadedStickerAnimations: sceneStickerAnimations,
+            loadedImagesVersion: sceneImagesVersion,
+            editingTextId: viewModel.textEditingMode.activeTextId,
+            onInlineTextChanged: { id, texte in
+                viewModel.updateTextContent(id: id, text: texte)
+                // **C'est ICI que la frappe a lieu, et nulle part ailleurs.**
+                // `MeeshyComposerHost+Surfaces` nourrit la même
+                // requête depuis le canvas de la PREMIÈRE VUE — mais
+                // `openObjectEditor` présente cet écran modal EN MÊME
+                // TEMPS qu'il entre en édition de texte, et les deux seuls
+                // appelants d'`enterTextEditingMode` du dépôt passent par lui.
+                // Le canvas du dessous est donc couvert : sa bande de mentions
+                // interprétait une frappe qui n'a pas lieu là.
+                //
+                // > Une vue montée sous un écran modal n'a aucun site où
+                // > rougir : elle compile, elle se construit, ses conditions
+                // > s'évaluent — et aucun œil ne la voit jamais.
+                mentionBox.controller.handleQuery(in: texte)
+            },
+            // **Vide, et c'est le comportement voulu.** Sur la scène incrustée,
+            // fermer la saisie SORT du mode d'édition ; ici l'écran EST
+            // l'édition, et en sortir au premier « retour » du clavier
+            // refermerait tout pendant qu'on règle un style. La sortie a son
+            // geste : « Terminé », qui appelle `closeObjectEditor`.
+            onInlineTextEditEnded: { _ in },
+            // `nil` — voir le doc-comment : pas de cadre en plein écran.
+            selectedItemId: nil,
+            // **Le texte se manipule AU DOIGT pendant qu'on l'édite** : un glisser, un pincer ou une
+            // rotation suspend la saisie et rend le texte à sa place ; le
+            // toucher la reprend. Sans quitter cet écran.
+            inlineEditYieldsToManipulation: true
+        )
+        // **Le sujet RÉCLAME la hauteur libre** : la carte est figée à
+        // son ratio et se centre dans ce qu'on lui donne, donc sans
+        // `maxHeight` elle se contente de sa taille idéale et laisse le reste
+        // en bande vide. C'est la moitié du correctif qui ne se voit pas — le
+        // plafond posé sur les options ne rend la place à personne si le sujet
+        // ne la demande pas.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .layoutPriority(1)
+        // Les DEUX couloirs sont occupés — les outils à
+        // gauche, l'historique à droite — et la carte s'encastre entre eux,
+        // comme sur la surface de scène.
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.smPlus)
+    }
+
+    // MARK: - Les deux rails, dans les couloirs
+
+    /// **Le rail d'OUTILS, dans le couloir de tête** — glyphes plats,
+    /// SANS nom, sans barre de défilement.
+    ///
+    /// ## La place : le couloir, parce que le bas appartient au clavier
+    ///
+    /// Voir la doctrine du `body`. Ce que le rail gagne à être ici n'est pas
+    /// de la surface, c'est de la DISPONIBILITÉ : clavier levé, le bas est
+    /// occupé et le couloir ne l'est pas.
+    ///
+    /// ## Pas de nom sous le glyphe
+    ///
+    /// Les dix glyphes sont une iconographie provisoire, et `rectangle.dashed`
+    /// (CADRE) contre `square.on.square.dashed` (BORDURE) se distinguent mal.
+    /// Dix libellés empilés dans un couloir de 56 pt déborderaient des deux côtés
+    /// et viendraient toucher la carte.
+    ///
+    /// > Directive porteur : « Supprime les noms des tool, ça gâche
+    /// > tout ; de toute façon les options apparaissent en bas du titre de
+    /// > l'outil. »
+    ///
+    /// Et la raison est juste, pas seulement esthétique : **le nom est DÉJÀ
+    /// servi**, par le titre de la section d'options que `section(_:_:content:)`
+    /// peint sous la carte. Le mettre aussi dans le rail le dirait deux fois
+    /// pour un glyphe à la fois — et une seule ligne d'écran peut le dire, celle
+    /// de l'outil OUVERT, qui est la seule dont on a besoin.
+    ///
+    /// L'iconographie reste provisoire et relève de la planche.
+    ///
+    /// ## Aucun indicateur de défilement
+    ///
+    /// Deux entrées sur dix tombent hors du rail visible, et rien ne dit qu'il
+    /// faut défiler — mais « lorsqu'on scrolle sur la liste des
+    /// outils à gauche on ne doit pas montrer la barre de défilement ».
+    ///
+    /// > La mesure qui justifierait la barre n'a pas disparu : ce qui la remplace
+    /// > est le DÉBORDEMENT VISIBLE — la dernière entrée est coupée au bord du
+    /// > couloir, ce qui dit « ça continue » sans peindre de chrome. Une barre
+    /// > qui n'apparaît qu'au geste ne le dirait de toute façon pas avant le
+    /// > geste.
+    private var toolRail: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: MeeshySpacing.sm) {
+                ForEach(ComposerObjectEditorRail.entries(
+                    for: family,
+                    hasTrimmableSource: objectHasTrimmableSource,
+                    offersFilter: objectOffersFilter, offersAdjust: objectOffersAdjust), id: \.self) { entree in
+                    Button {
+                        // **La bascule vit dans la RÈGLE** : retaper
+                        // l'entrée OUVERTE range son panneau, taper une autre
+                        // le rend. La condition est lue avant que la sélection
+                        // ne change — c'est la PAIRE (tapé, sélectionné) qui
+                        // décide, et l'écrire après aurait comparé l'entrée à
+                        // elle-même à chaque tap.
+                        let range = ComposerObjectEditorRail.collapsed(
+                            afterTapping: entree,
+                            selected: selectedTool,
+                            wasCollapsed: optionsAreCollapsed)
+                        // **Choisir un outil rend le clavier** : le
+                        // panneau qu'on ouvre et le clavier du canvas se
+                        // disputent le même bas d'écran. Le prédicat vit sur la
+                        // SECTION — DÉCRIRE porte son propre champ et garde donc
+                        // le sien.
+                        if ComposerObjectEditorRail.dismissesKeyboard(afterTapping: entree) {
+                            yieldKeyboard()
+                        }
+                        selectedTool = entree
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+                            panel = ComposerObjectEditorRail.panelState(explicitlyCollapsed: range)
+                        }
+                    } label: {
+                        // **Un petit bouton SÉPARÉ, sans disque de verre**
+                        // (#10364, comme les rails de la scène) : glyphe BLANC
+                        // en relief par son ombre, JAUNE pour l'outil ouvert.
+                        Image(systemName: ComposerObjectEditorRail.symbolName(entree))
+                            .font(.title3.weight(.semibold))
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(ComposerFloatingRailInk.floating(
+                                active: ComposerObjectEditorRail.isSelected(entree, selected: selectedTool)))
+                            .modifier(ComposerRailGlyphRelief(active: true))
+                            // 44 pt de CIBLE quel que soit le glyphe
+                            // (dimension 5) : dessiné à sa taille naturelle, un
+                            // `clock` donnerait 17 pt que personne n'atteint du
+                            // pouce.
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(ComposerObjectEditorCopy.entry(entree))
+                    .accessibilityAddTraits(ComposerObjectEditorRail.isSelected(entree, selected: selectedTool)
+                                            ? [.isButton, .isSelected] : .isButton)
+                }
+            }
+            .padding(.vertical, MeeshySpacing.xs)
+        }
+        .frame(width: ComposerObjectEditorRail.railWidth)
+        // **Pas de CARTE** : elle ne servirait qu'à ne pas confondre le rail
+        // avec les options, clavier levé. Chaque
+        // bouton est désormais un glyphe blanc en relief (#10364) — la
+        // frontière est tenue bouton par bouton, sans la bande que le porteur a
+        // retirée.
+        .padding(.vertical, 8)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(ComposerObjectEditorCopy.toolRow)
+    }
+
+    /// **La lisière du bord de tête** — la zone où le geste de retour
+    /// se prend, et rien d'autre.
+    ///
+    /// `leading` et non « gauche » : en arabe le retour est à droite, et une
+    /// lisière codée sur un côté PHYSIQUE y refuserait le geste que
+    /// l'utilisateur vient d'apprendre.
+    ///
+    /// Elle est TRANSPARENTE mais pas vide : `Color.clear` seule ne reçoit
+    /// aucun toucher — `contentShape` est ce qui lui en donne, et c'est
+    /// l'oubli classique qui rendrait ce geste silencieusement inerte.
+    private var edgeBackStrip: some View {
+        Color.clear
+            .frame(width: ComposerEdgeBackGesture.stripWidth)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 12, coordinateSpace: .global)
+                    .onEnded { valeur in
+                        guard ComposerEdgeBackGesture.completes(
+                            startX: valeur.startLocation.x,
+                            translation: valeur.translation
+                        ) else { return }
+                        HapticFeedback.light()
+                        onClose()
+                    }
+            )
+            .accessibilityHidden(true)
+    }
+
+    /// **L'historique, à DROITE** — et c'est `ComposerTrailingRail`, le composant
+    /// même que la surface de scène monte.
+    ///
+    /// Le réemployer n'est pas une économie : c'est ce qui rend la promesse
+    /// « au même endroit » VÉRIFIABLE. Deux rails écrits séparément auraient
+    /// dérivé sur le glyphe, la taille ou l'ordre, et personne n'aurait rougi —
+    /// ce sont des jetons, pas des signatures.
+    ///
+    /// `actions: []` et pas de `onAddSlide` : cet écran règle UN objet, il ne
+    /// crée pas de slide et n'empile rien. Le rail se réduit donc à ce que
+    /// l'auteur peut vraiment défaire ici, et disparaît si rien ne l'est.
+    private var historyRail: some View {
+        ComposerTrailingRail(
+            actions: [],
+            plateauTint: plateauTint,
+            onUndo: viewModel.canUndoGlobal ? { viewModel.undoGlobal() } : nil,
+            onRedo: viewModel.canRedoGlobal ? { viewModel.redoGlobal() } : nil,
+            // **Pas de colonne vide** : « pas de barre d'action qui se prolonge sans
+            // action ». Un ressort étirerait le verre sur toute la hauteur au-dessus
+            // d'un seul bouton ; des
+            // boutons SÉPARÉS, posés au bas, n'occupent que ce qu'ils portent.
+            pushesToThumb: false,
+            separateButtons: true
+        )
+        .frame(width: ComposerRailGeometry.railWidth)
+        .frame(maxHeight: .infinity, alignment: .bottom)
+    }
+
+    // MARK: - Toutes les options, empilées
+
+    /// **Rendre l'écran à la scène** — dans cet ORDRE, et il compte.
+    ///
+    /// Le clavier part d'abord : c'est lui qui occupe le plus de place, et le
+    /// voir descendre pendant que le panneau se replie donne au geste un seul
+    /// mouvement plutôt que deux. L'inverse — replier puis lâcher le clavier —
+    /// fait sauter la scène deux fois.
+    ///
+    /// La dismission passe par le responder GLOBAL parce que le champ n'est pas
+    /// à nous : le texte s'édite EN LIGNE dans le canvas UIKit, et l'éditeur
+    /// n'en tient que l'identifiant. `exitTextEditingMode()` ferait plus que
+    /// demandé — il sortirait de l'édition, alors que le geste ne demande que
+    /// de la place.
+    private func yieldScreenToScene() {
+        yieldKeyboard()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+            panel = ComposerObjectEditorRail.panelState(explicitlyCollapsed: true)
+        }
+        HapticFeedback.light()
+    }
+
+    /// **Rendre le clavier, sans rien décider d'autre.** Le champ n'est pas à
+    /// nous — le texte s'édite EN LIGNE dans le canvas UIKit — donc la
+    /// dismission passe par le responder GLOBAL. Deux appelants :
+    /// le geste qui rend l'écran à la scène, et le choix d'un outil.
+    private func yieldKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil)
+    }
+
+    /// **Le panneau bas — UNE boîte, quelle que soit la famille qu'elle montre**
+    ///
+    /// ## Ce que la boîte mesure
+    ///
+    /// La boîte se DIMENSIONNE sur une préférence que son contenu publie. Une
+    /// branche qui monterait la boîte et lirait la préférence sans la publier
+    /// ferait rendre à `height(content:cap:)` son PLANCHER, **1 point**, et les
+    /// options se peindraient sous le bord de l'écran : section « Décrire »
+    /// ouverte, son titre tomberait à y=839 et son champ de saisie à **y=884 sur
+    /// un écran de 874 points**. L'arbre d'accessibilité le décrirait ; aucun
+    /// doigt ne pourrait l'atteindre.
+    ///
+    /// Les trois autres outils du média — filtre, rognage, actions — vivent
+    /// sous la même règle. « Décrire » rendrait le défaut VISIBLE en étant le
+    /// premier de la famille à porter un champ de SAISIE, donc le premier dont
+    /// l'inaccessibilité se constate au doigt plutôt qu'à l'œil.
+    ///
+    /// > **Deux branches qui montent la même boîte en partagent la TAILLE, pas
+    /// > la MESURE** — celle-ci se recopie, donc elle s'oublie. Une boîte qui
+    /// > mesure ce qu'on lui DONNE ferme la question pour la troisième famille
+    /// > comme pour les deux premières.
+    @ViewBuilder
+    private var options: some View {
+        VStack(spacing: 0) {
+            mentionStrip
+            toolOptions
+        }
+    }
+
+    @ViewBuilder
+    private var toolOptions: some View {
+        if !optionsAreCollapsed, family == .media {
+            optionsBand(scrollDisabled: false) { mediaOptions }
+        } else if !optionsAreCollapsed, family == .audio {
+            // **La puce de son a une zone basse.** Elle n'a ni `mediaObject`, ni
+            // binding de texte : les deux autres branches la laisseraient tomber et
+            // l'écran s'ouvrirait sur un bas VIDE. Son rognage vit ici et non dans la
+            // bande `timeline` du bas de scène — sans cette branche, la capacité
+            // serait perdue.
+            optionsBand(scrollDisabled: false) { audioOptions }
+        } else if !optionsAreCollapsed, let binding = viewModel.textObjectBinding(for: objectId) {
+            optionsBand(scrollDisabled: planHoldsGesture) { textOptions(binding) }
+        }
+    }
+
+    /// **Le bas prend ce qu'il LUI faut, jamais tout ce qui reste.**
+    ///
+    /// Un `ScrollView` est glouton : posé en `maxHeight: .infinity`, il
+    /// réclamerait toute la hauteur libre et laisserait une bande VIDE de ≈ 250 pt
+    /// sous la grille des polices — mesurée au simulateur —, pendant que la
+    /// carte 9:16 resterait à 247 pt là où sa largeur lui en permet 594.
+    ///
+    /// **`maxHeight:` seul ne suffit pas**, et c'est la vraie cause :
+    /// le `ScrollView` prend les 260 points qu'on l'autorise à prendre même
+    /// quand son contenu en occupe 168, et le contenu se cale en HAUT de la
+    /// boîte. Les quatre-vingt-douze points restants n'appartenaient à personne
+    /// et ressemblaient à une marge voulue. L'ancrage au bord (`safeAreaInset`)
+    /// déplace la BOÎTE sans rien changer à ce qu'elle contient : les deux
+    /// réglages sont nécessaires, aucun ne suffit seul.
+    ///
+    /// La mesure se prend en FOND et non en overlay — un `GeometryReader` posé
+    /// en overlay imposerait sa propre taille au contenu qu'il mesure — et elle
+    /// est bornée par le bas à 1 : une hauteur nulle à la première passe ferait
+    /// disparaître le panneau une frame, ce qui se voit comme un clignotement à
+    /// chaque ouverture d'outil.
+    private func optionsBand<Content: View>(
+        scrollDisabled: Bool,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        ScrollView {
+            content()
+                .background {
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: ComposerObjectEditorOptionsHeightKey.self,
+                            value: geo.size.height)
+                    }
+                }
+        }
+        .frame(height: ComposerObjectEditorOptions.height(
+            content: optionsContentHeight,
+            cap: ComposerObjectEditorRail.optionsMaxHeight))
+        .onPreferenceChange(ComposerObjectEditorOptionsHeightKey.self) {
+            optionsContentHeight = $0
+        }
+        .scrollDisabled(scrollDisabled)
+        // **La plaque de VERRE du bas** : en bas une plaque de verre dans laquelle
+        // apparaissent les options des différents outils d'édition, le tout en
+        // adaptive glass.
+        .padding(.vertical, MeeshySpacing.smPlus)
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous),
+                       tint: plateauTint.opacity(0.55))
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.bottom, MeeshySpacing.xs)
+    }
+
+    /// Les options d'un objet TEXTE, dans l'ordre que la rangée du SDK a fixé —
+    /// le même que les bulles du rail, pour que passer de l'un à l'autre ne
+    /// demande pas de réapprendre.
+    @ViewBuilder
+    private func textOptions(_ binding: Binding<StoryTextObject>) -> some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
+            // **POLICE n'est pas un cas particulier** : les éléments Effets et Polices
+            // sont alignés correctement, et tout entre bien dans le viewport.
+            //
+            // Servie par `TextStyleSpecimenBand` — le spécimen `2e`, le vrai texte sur
+            // son vrai fond —, une bande HORIZONTALE à deux rangs verrait ses dix-huit
+            // vignettes s'étendre de x=16 à **x=512 sur un écran de 402 points** : neuf
+            // polices sur dix-huit hors du champ, atteignables par un défilement latéral
+            // que rien n'annonce, à l'endroit exact où les sept autres outils
+            // s'enroulent proprement.
+            //
+            // > Le spécimen sur le VRAI texte est plus riche qu'un « Aa », et
+            // > c'est ce qui l'a fait garder. Mais une richesse qu'on ne peut
+            // > pas PARCOURIR ne se compare pas : le choix d'une police se
+            // > fait en balayant les dix-huit du regard, pas en en révélant
+            // > neuf au doigt.
+            //
+            // La grille rend le « Aa » dans l'encre CHOISIE et sous l'effet
+            // COURANT (`styleGridCell`) — donc elle montre bien ce que la
+            // police donnera, sur la seule chose que la vignette ne peut pas
+            // porter : la longueur du texte réel.
+            ForEach(TextEditTool.all, id: \.self) { tool in
+                section(ComposerObjectEditorCopy.tool(tool), .tool(tool)) {
+                    // **L'écran plein demande la GRILLE.**
+                    // Les deux hôtes SDK gardent la rangée : au-dessus
+                    // du clavier et dans la zone basse de la scène, la
+                    // hauteur d'une grille n'existe pas.
+                    TextEditToolOptions(tool: tool,
+                                        textObject: binding,
+                                        layout: .grid)
+                }
+            }
+            timingSection
+            planSection
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, 28)
+    }
+
+    // Pas de `styleSection` : elle monterait `TextStyleSpecimenBand` pour la
+    // seule POLICE, et c'est ce cas particulier qui laisserait neuf polices hors
+    // du champ. Le spécimen sur le vrai texte reste disponible dans le SDK ; il
+    // n'a simplement pas d'hôte ici.
+
+
+    // MARK: - D'où à où, et le plan 2D
+
+    /// **Les MÊMES contrôles que l'édition en place** : extraits dans
+    /// `ComposerObjectTimingControls.swift`, ils servent cet écran et le
+    /// panneau qui s'ouvre à droite de la scène — deux copies divergeraient au
+    /// premier réglage.
+    private var timingSection: some View {
+        section(ComposerObjectEditorCopy.timing, .timing) {
+            ComposerObjectTimingControls(viewModel: viewModel, objectId: objectId)
+        }
+    }
+
+    private var planSection: some View {
+        section(ComposerObjectEditorCopy.plan, .plan) {
+            ComposerObjectPlanControls(viewModel: viewModel,
+                                       objectId: objectId,
+                                       onSelectObject: { openEditor($0) },
+                                       holdsGesture: $planHoldsGesture)
+        }
+    }
+
+    // MARK: - Le gabarit d'une section
+
+    /// **Ce que le BAS montre — l'outil sélectionné, et lui seul.**
+    ///
+    /// Un `DisclosureGroup` porterait le titre ET la bascule, et ouvrir la
+    /// dernière section pousserait la scène hors de l'écran. Le rail porte la
+    /// bascule ; il ne reste ici que le titre et le contenu.
+    ///
+    /// Chaque appelant passe son `content()` ; ce qui compte est QUI décide de
+    /// l'afficher.
+    @ViewBuilder
+    // `internal` : la branche MÉDIA vit dans
+    // `ComposerObjectEditorView+Media.swift` — le fichier dépasserait 1000
+    // lignes, seuil au-delà duquel un découpage se justifie sans se discuter.
+    func section<Content: View>(_ titre: String,
+                                        _ id: ComposerObjectEditorSection,
+                                        @ViewBuilder content: () -> Content) -> some View {
+        if ComposerObjectEditorRail.isSelected(id, selected: selectedTool) {
+            // **Aucune légende visible** (« enlève les captions partout ») : le
+            // bouton allumé du rail dit
+            // déjà quel outil est ouvert. Le titre reste celui que VoiceOver
+            // annonce pour le groupe (dimension 5).
+            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
+                content()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(titre)
+        }
+    }
+
+    private func openEditor(_ id: String) {
+        viewModel.exitTextEditingMode()
+        viewModel.enterTextEditingMode(textId: id)
+        onSelectObject(id)
+    }
+}

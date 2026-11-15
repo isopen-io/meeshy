@@ -1,0 +1,44 @@
+/**
+ * LES SOUS-TITRES D'UN APPEL ET SA TRANSCRIPTION (#8048) — tranche du catalogue,
+ * RÉPANDUE par `catalog-fr.ts` comme `catalog-fr-call-quality.ts` : le bouton
+ * Sous-titres de l'écran d'appel, le panneau et son journal
+ * (`call-captions-panel.tsx`), la transcription d'après l'appel dans la bulle
+ * du fil (`call-transcript-panel.tsx`).
+ */
+const frCallCaptions = {
+  'call.captions.original': 'Afficher les sous-titres originaux',
+  'call.captions.invited': 'Afficher les sous-titres — votre interlocuteur les lit déjà',
+  'callCaptions.footer.touchForOriginal': '{pair} · toucher = original',
+  'callCaptions.footer.translating': '{language} · traduction en cours',
+  'callCaptions.footer.translatedLanguages.one': 'Traduit · {count} langue',
+  'callCaptions.footer.translatedLanguages.two': 'Traduit · deux langues',
+  'callCaptions.footer.translatedLanguages.few': 'Traduit · {count} langues',
+  'callCaptions.footer.translatedLanguages.many': 'Traduit · {count} de langues',
+  'callCaptions.footer.translatedLanguages.other': 'Traduit · {count} langues',
+  'callCaptions.self': 'Moi',
+  'callCaptions.regionLabel': 'Sous-titres de l’appel',
+  'callCaptions.translating': 'Traduction en cours',
+  'callCaptions.region': 'Sous-titres',
+  'callCaptions.waiting': 'Les sous-titres s’affichent ici dès que quelqu’un parle',
+  'callCaptions.listening': 'Votre voix est transcrite',
+  'callCaptions.unsupported': 'Votre voix n’est pas transcrite sur cet appareil : vous lisez les autres',
+  'callCaptions.denied': 'Reconnaissance vocale refusée : vous lisez les autres',
+  'callCaptions.sealed': 'Sous-titres indisponibles : cette conversation est chiffrée de bout en bout, ou son chiffrement n’a pas pu être vérifié',
+  'callCaptions.journal.title': 'Journal de l’appel',
+  'callCaptions.participant': 'Participant',
+  'callTranscript.show': 'Afficher la transcription',
+  'callTranscript.hide': 'Masquer la transcription',
+  'callTranscript.title': 'Transcription de l’appel',
+  'callTranscript.loading': 'Chargement de la transcription…',
+  'callTranscript.empty': 'Aucune transcription',
+  'callTranscript.error': 'Transcription indisponible',
+  'callTranscript.retry': 'Réessayer',
+  'callTranscript.showOriginal': 'Voir l’original',
+  'callTranscript.showTranslated': 'Voir la traduction',
+  'callJournal.capture.screenshot': 'a capturé l’écran',
+  'callJournal.capture.recording': 'enregistre l’écran',
+  'callJournal.recording.started': 'L’enregistrement de l’appel a commencé',
+  'callJournal.recording.stopped': 'L’enregistrement de l’appel s’est arrêté',
+} as const;
+
+export default frCallCaptions;

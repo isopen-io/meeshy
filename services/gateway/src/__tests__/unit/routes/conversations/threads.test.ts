@@ -17,9 +17,10 @@ jest.mock('../../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
 }));
 
-jest.mock('../../../../routes/conversations/utils/access-control', () => ({
-  canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
-}));
+jest.mock('../../../../routes/conversations/utils/access-control', () =>
+  (jest.requireActual('../../../helpers/acces-conversation-double') as any).doubleAccesConversation(
+    jest.requireActual('../../../../routes/conversations/utils/access-control') as Record<string, unknown>,
+    (...args: any[]) => mockCanAccessConversation(...args)));
 
 jest.mock('../../../../services/attachments/attachmentIncludes', () => ({
   attachmentMediaSelect: {
@@ -109,6 +110,20 @@ function makePrisma(overrides: Record<string, any> = {}) {
       findFirst: jest.fn<any>().mockResolvedValue(mockParentMessage),
       findMany: jest.fn<any>().mockResolvedValue([]),
     },
+    // La ligne du LECTEUR, lue pour son plancher d'historique
+    // (`loadReaderHistoryFloor`). `null` = aucune ligne, donc aucun plancher :
+    // ce fichier-ci porte sur la MISE EN FORME du fil, et la règle du plancher
+    // a son propre témoin dans `conversations-threads.test.ts`.
+    //
+    // Sans ce double, `prisma.participant` valait `undefined` et la lecture du
+    // plancher levait — fail-closed, donc 500 sur CHAQUE requête : les huit
+    // témoins de format n'atteignaient plus une seule ligne du sérialiseur.
+    participant: {
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+    },
+    conversationShareLink: {
+      findUnique: jest.fn<any>().mockResolvedValue(null),
+    },
     ...overrides,
   };
 }
@@ -140,11 +155,11 @@ describe('GET threads — conversation not found', () => {
 });
 
 describe('GET threads — access denied', () => {
-  it('returns 403 when user cannot access conversation', async () => {
+  it('returns the 404 of an unknown conversation when user cannot access it (#8116)', async () => {
     mockCanAccessConversation.mockResolvedValueOnce(false);
     const app = await buildApp();
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
     await app.close();
   });
 });
@@ -264,6 +279,121 @@ describe('GET threads — position hoist', () => {
   });
 });
 
+// ─── #4952 : la citation applique la protection du message CITÉ ──────────────
+// `threadMessageSelect.replyTo` charge la ligne citée en entier (content,
+// pièces jointes) sans filtre ; sans masquage, un message à vue unique /
+// flouté ouvert par son fil de réponses servait son texte et ses pièces
+// jointes en clair dans la citation — alors que le message RACINE porte déjà
+// ses drapeaux depuis #4885.
+
+describe('GET threads — la citation masque un message CITÉ protégé', () => {
+  it('remplace le texte du replyTo par un placeholder quand le message cité est à vue unique', async () => {
+    const protectedParent = {
+      ...mockParentMessage,
+      replyTo: {
+        id: 'quoted-secret',
+        content: 'Le secret à ne jamais répéter',
+        originalLanguage: 'en',
+        createdAt: new Date(),
+        senderId: 'part-2',
+        validatedMentions: [],
+        metadata: null,
+        isViewOnce: true,
+        isBlurred: false,
+        isEncrypted: false,
+        effectFlags: 0,
+        sender: null,
+        attachments: [],
+      },
+    };
+    const prisma = makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue(protectedParent),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    const body = res.json();
+
+    expect(body.data.parent.replyTo.content).not.toBe('Le secret à ne jamais répéter');
+    expect(JSON.stringify(body)).not.toContain('Le secret à ne jamais répéter');
+    expect(body.data.parent.replyTo.isViewOnce).toBe(true);
+    await app.close();
+  });
+
+  it('masque les pièces jointes du message cité quand il est flouté', async () => {
+    const protectedParent = {
+      ...mockParentMessage,
+      replyTo: {
+        id: 'quoted-blurred',
+        content: 'Un contenu flouté',
+        originalLanguage: 'en',
+        createdAt: new Date(),
+        senderId: 'part-2',
+        validatedMentions: [],
+        metadata: null,
+        isViewOnce: false,
+        isBlurred: true,
+        isEncrypted: false,
+        effectFlags: 0,
+        sender: null,
+        attachments: [
+          { id: 'att-1', fileUrl: '/uploads/secret.png', thumbnailUrl: '/uploads/secret-thumb.png', thumbHash: 'hash', mimeType: 'image/png' },
+        ],
+      },
+    };
+    const prisma = makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue(protectedParent),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    const body = res.json();
+
+    expect(body.data.parent.replyTo.content).not.toBe('Un contenu flouté');
+    expect(body.data.parent.replyTo.attachments[0]).not.toHaveProperty('fileUrl');
+    expect(body.data.parent.replyTo.attachments[0]).not.toHaveProperty('thumbnailUrl');
+    expect(body.data.parent.replyTo.attachments[0]).not.toHaveProperty('thumbHash');
+    await app.close();
+  });
+
+  it("laisse passer le texte d'une citation ordinaire, non protégée", async () => {
+    const parentWithQuote = {
+      ...mockParentMessage,
+      replyTo: {
+        id: 'quoted-plain',
+        content: 'Un message tout à fait ordinaire',
+        originalLanguage: 'en',
+        createdAt: new Date(),
+        senderId: 'part-2',
+        validatedMentions: [],
+        metadata: null,
+        isViewOnce: false,
+        isBlurred: false,
+        isEncrypted: false,
+        effectFlags: 0,
+        sender: null,
+        attachments: [],
+      },
+    };
+    const prisma = makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue(parentWithQuote),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    const body = res.json();
+
+    expect(body.data.parent.replyTo.content).toBe('Un message tout à fait ordinaire');
+    await app.close();
+  });
+});
+
 // ─── Cycle 67 : le fil sert le MÊME format de traductions que les autres routes ─
 //
 // `threadMessageSelect` sélectionne `translations` et la route renvoyait le
@@ -314,6 +444,247 @@ describe('GET threads — format des traductions', () => {
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
     expect(res.json().data.parent.translations).toEqual([]);
+    await app.close();
+  });
+});
+
+// ─── #4885 — le fil sert les drapeaux de PROTECTION du message ────────────────
+//
+// `threadMessageSelect` ne demandait ni `isViewOnce`, ni `isBlurred`, ni
+// `effectFlags`, ni `expiresAt` : un message à vue unique ouvert par son fil
+// de réponses arrivait sans le dire, donc restait FORWARDABLE côté client
+// (`BubbleMessageNormalView.tsx` / `FocalRow.tsx` lisent `isViewOnce` pour
+// interdire le transfert). Le fix source unique avec la liste et la
+// recherche : `MESSAGE_PROTECTION_SELECT` (`messages-list-query.ts`).
+
+describe('GET threads — drapeaux de protection (#4885)', () => {
+  it('sert `isViewOnce`/`isBlurred`/`effectFlags`/`expiresAt` sur le message racine', async () => {
+    const prisma = makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue({
+          ...mockParentMessage,
+          isViewOnce: true,
+          maxViewOnceCount: 1,
+          viewOnceCount: 0,
+          isBlurred: true,
+          effectFlags: 3,
+          expiresAt: new Date('2026-09-05T00:00:00Z'),
+        }),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    const { parent } = res.json().data;
+    // La CONSÉQUENCE, pas seulement la présence : un client lit `isViewOnce`
+    // pour refuser le transfert, et il doit lire la vraie valeur, pas `undefined`.
+    expect(parent.isViewOnce).toBe(true);
+    expect(parent.isBlurred).toBe(true);
+    expect(parent.effectFlags).toBe(3);
+    expect(parent.expiresAt).toBe('2026-09-05T00:00:00.000Z');
+    await app.close();
+  });
+
+  it('sert les mêmes drapeaux sur une réponse du fil', async () => {
+    const prisma = makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue(mockParentMessage),
+        findMany: jest.fn<any>()
+          .mockResolvedValueOnce([{ ...mockReplyMessage, isViewOnce: true, isBlurred: false, effectFlags: 1, expiresAt: null }])
+          .mockResolvedValueOnce([]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    const reply = res.json().data.replies[0];
+    expect(reply.isViewOnce).toBe(true);
+    expect(reply.effectFlags).toBe(1);
+    await app.close();
+  });
+});
+
+// ─── #6164 — le fil sert la PIÈCE NOMMÉE de la citation ───────────────────────
+//
+// `maskThreadMessageQuote` appelait `servedQuotedMessage(quotedRow, { … })`
+// sans passer l'instantané, alors que `threadMessageSelect` charge `metadata`
+// sur la RACINE depuis le lot 1. L'aperçu du parent d'un fil désignait donc le
+// média REPRÉSENTATIF quand la liste du même fil désignait la pièce NOMMÉE :
+// ouvrir un fil faisait SAUTER la citation d'une vignette à l'autre.
+//
+// Le RANG est load-bearing (leçon 261) : la citation vise la TROISIÈME pièce
+// d'un message qui en porte cinq. Au rang 1, le court-circuit « la première »
+// et la règle juste « celle qu'on a nommée » rendraient le même verdict.
+
+describe('GET threads — la pièce NOMMÉE de la citation (#6164)', () => {
+  const MESSAGE_CITE = '507f1f77bcf86cd799439900';
+  const photo = (rang: number) => ({
+    id: `507f1f77bcf86cd79943990${rang}`,
+    messageId: MESSAGE_CITE,
+    mimeType: 'image/jpeg',
+    fileUrl: `/uploads/piece-${rang}.jpg`,
+    thumbnailUrl: `/uploads/piece-${rang}-thumb.jpg`,
+  });
+  const CINQ = [photo(1), photo(2), photo(3), photo(4), photo(5)];
+  const TROISIEME = CINQ[2].id;
+
+  const citation = (overrides: Record<string, unknown> = {}) => ({
+    id: MESSAGE_CITE,
+    content: 'regarde ces cinq photos',
+    originalLanguage: 'fr',
+    createdAt: new Date(),
+    senderId: 'part-2',
+    validatedMentions: [],
+    metadata: null,
+    isViewOnce: false,
+    isBlurred: false,
+    isEncrypted: false,
+    effectFlags: 0,
+    sender: null,
+    attachments: CINQ,
+    ...overrides,
+  });
+
+  const servedParent = async (root: Record<string, unknown>) => {
+    const prisma = makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue({ ...mockParentMessage, ...root }),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    const { parent } = res.json().data;
+    await app.close();
+    return parent;
+  };
+
+  it('sert l’ancre de la TROISIÈME pièce, jamais celle de la première', async () => {
+    const parent = await servedParent({
+      metadata: { attachmentReplyTo: { attachmentId: TROISIEME, kind: 'image' } },
+      replyTo: citation(),
+    });
+
+    expect(parent.replyTo.attachmentReplyTo).toEqual({ attachmentId: TROISIEME, kind: 'image' });
+    expect(parent.replyTo.attachmentReplyTo.attachmentId).not.toBe(CINQ[0].id);
+  });
+
+  it('lit l’instantané sur le message QUI CITE, jamais sur le message CITÉ', async () => {
+    const parent = await servedParent({
+      metadata: { attachmentReplyTo: { attachmentId: TROISIEME, kind: 'image' } },
+      // Le message CITÉ visait lui-même une autre pièce, un cran plus haut dans
+      // le fil : son `metadata` ne doit gouverner AUCUNE citation d'ici.
+      replyTo: citation({
+        metadata: { attachmentReplyTo: { attachmentId: CINQ[0].id, kind: 'image' } },
+      }),
+    });
+
+    expect(parent.replyTo.attachmentReplyTo.attachmentId).toBe(TROISIEME);
+  });
+
+  it('sans instantané, la citation retombe sur le représentatif — aucun fil existant ne change', async () => {
+    const parent = await servedParent({ metadata: null, replyTo: citation() });
+
+    expect(parent.replyTo.attachmentReplyTo).toBeUndefined();
+    expect(parent.replyTo.attachments[0].thumbnailUrl).toBe('/uploads/piece-1-thumb.jpg');
+  });
+
+  it('un message cité PROTÉGÉ garde son ancre et sa nature, et perd tout ce qui DÉCRIT la pièce', async () => {
+    const parent = await servedParent({
+      metadata: { attachmentReplyTo: { attachmentId: TROISIEME, kind: 'image' } },
+      replyTo: citation({ isViewOnce: true, effectFlags: 1 }),
+    });
+
+    expect(parent.replyTo.attachmentReplyTo).toEqual({ attachmentId: TROISIEME, kind: 'image' });
+    const elue = parent.replyTo.attachments.find((a: any) => a.id === TROISIEME);
+    expect(elue).not.toHaveProperty('fileUrl');
+    expect(elue).not.toHaveProperty('thumbnailUrl');
+  });
+});
+
+describe('GET threads — la citation d’un éphémère échu POUR CE LECTEUR est scellée (#8562)', () => {
+  const READER_PARTICIPANT = '507f1f77bcf86cd799439055';
+  const CONSUMED = new Date(Date.now() - 60_000);
+  const flamme = {
+    id: '507f1f77bcf86cd799439066',
+    senderId: 'part-author',
+    content: 'le code du coffre est 4271',
+    messageType: 'text',
+    effectFlags: 8,
+    ephemeralDuration: null,
+    expiresAt: new Date(Date.now() + 7 * 24 * 3600_000),
+    deletedAt: null,
+    sender: null,
+  };
+  const reponse = { ...mockReplyMessage, replyToId: flamme.id, replyTo: flamme };
+
+  const prismaFor = (entries: Array<{ messageId: string; participantId: string; ephemeralExpiresAt: Date }>) =>
+    makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue(mockParentMessage),
+        findMany: jest.fn<any>().mockResolvedValueOnce([reponse]).mockResolvedValueOnce([]),
+      },
+      participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: READER_PARTICIPANT }) },
+      messageStatusEntry: { findMany: jest.fn<any>().mockResolvedValue(entries) },
+    });
+
+  it('flamme-œil consommée par ce lecteur ⇒ citation scellée, datée de SON échéance', async () => {
+    const app = await buildApp({
+      prisma: prismaFor([{ messageId: flamme.id, participantId: READER_PARTICIPANT, ephemeralExpiresAt: CONSUMED }]),
+    });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    const quote = res.json().data.replies[0].replyTo;
+    expect(quote.content).toBe('');
+    expect(quote.deletedAt).toBe(CONSUMED.toISOString());
+    expect(quote.expiresAt).toBe(CONSUMED.toISOString());
+    expect(res.body).not.toContain('4271');
+    await app.close();
+  });
+
+  it('pas encore lue par ce lecteur ⇒ lisible, sans l’heure interne de destruction', async () => {
+    const app = await buildApp({ prisma: prismaFor([]) });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    const quote = res.json().data.replies[0].replyTo;
+    expect(quote.content).toBe('le code du coffre est 4271');
+    expect(quote.expiresAt).toBeUndefined();
+    await app.close();
+  });
+
+  /**
+   * #8630 — la réponse MEURT avec ce qu'elle cite, pour ce lecteur : servie
+   * dans la grâce avec l'échéance du cité, retirée au-delà. Le double répond
+   * à la remontée de la chaîne citée (`where.id.in`) comme une vraie base.
+   */
+  const cascadePrisma = (consumedAt: Date) =>
+    makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue(mockParentMessage),
+        findMany: jest.fn<any>().mockImplementation(async ({ where }: any) => {
+          if (where?.id?.in) return where.id.in.includes(flamme.id) ? [{ ...flamme, replyToId: null }] : [];
+          if (where?.replyToId?.in?.includes(MSG_ID)) return [reponse];
+          return [];
+        }),
+      },
+      participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: READER_PARTICIPANT }) },
+      messageStatusEntry: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          { messageId: flamme.id, participantId: READER_PARTICIPANT, ephemeralExpiresAt: consumedAt },
+        ]),
+      },
+    });
+
+  it('#8630 — la réponse part avec la flamme-œil consommée, une fois la grâce passée', async () => {
+    const app = await buildApp({ prisma: cascadePrisma(new Date(Date.now() - 2 * 3600_000)) });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.replies).toEqual([]);
+    expect(res.json().data.totalCount).toBe(0);
+    await app.close();
+  });
+
+  it('#8630 — dans la grâce, la réponse porte l’échéance du message cité', async () => {
+    const app = await buildApp({ prisma: cascadePrisma(CONSUMED) });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    expect(res.json().data.replies[0].expiresAt).toBe(CONSUMED.toISOString());
     await app.close();
   });
 });

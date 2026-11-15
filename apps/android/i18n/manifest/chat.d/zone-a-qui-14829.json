@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "share.sheet.group.create", "androidName": "share_group_create", "status": "adopted" },
+        { "catalog": "app", "iosKey": "share.sheet.community.channels", "androidName": "share_community_channels", "status": "adopted" },
+        { "catalog": "app", "iosKey": "share.sheet.community.no-channel", "androidName": "share_community_no_channel", "status": "adopted" },
+        { "catalog": "app", "iosKey": "share.sheet.section.communities", "androidName": "share_section_communities", "status": "adopted" },
+        { "catalog": "app", "iosKey": "share.sheet.a11y.online", "androidName": "share_a11y_online", "status": "adopted" },
+        { "catalog": "app", "iosKey": "share.sheet.a11y.selected", "androidName": "share_a11y_selected", "status": "adopted" },
+        { "catalog": "app", "iosKey": "share.sheet.detail.channel", "androidName": "share_detail_channel", "status": "adopted" }
+      ]
+    }
+  }
+}

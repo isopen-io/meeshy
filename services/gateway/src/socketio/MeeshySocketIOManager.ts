@@ -3,6 +3,7 @@
  * Gestion des connexions, conversations et traductions en temps réel
  */
 
+import { presenceSnapshotContactsWhere } from './presence-snapshot-contacts';
 import { Server as SocketIOServer } from 'socket.io';
 // Cycle 107 — le `Socket` vient du contrat, pas de `socket.io`. Ce module
 // CONSTRUIT le serveur (d'où l'import de `Server` ci-dessus, immédiatement
@@ -11,13 +12,12 @@ import { Server as SocketIOServer } from 'socket.io';
 // des six handlers qui dérivent déjà les leurs.
 import type { MeeshySocket as Socket } from './typed-socket';
 import { Server as HTTPServer } from 'http';
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PrismaClient, UserRole } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService, MessageData } from '../services/message-translation/MessageTranslationService';
-import { isMessageTranslationTarget } from '../services/zmq-translation/utils/zmq-helpers';
 import { transformTranslationsToArray } from '../utils/translation-transformer';
-import { filterMessagePayloadForLanguages, groupSocketsByLanguage } from './utils/message-payload-filter';
 import { applyResolvedLanguagesRefresh } from './utils/resolved-languages-refresh';
 import { MaintenanceService } from '../services/MaintenanceService';
+import { disconnectRevokedSessions } from './disconnectRevokedSessions';
 import { StatusService } from '../services/StatusService';
 import { MessagingService } from '../services/MessagingService';
 import { CallEventsHandler } from './CallEventsHandler';
@@ -27,6 +27,10 @@ import { sharedPlaceFromMetadata, hoistLocationOnto } from '../services/location
 import { AuthHandler } from './handlers/AuthHandler';
 import { MessageHandler } from './handlers/MessageHandler';
 import { StatusHandler } from './handlers/StatusHandler';
+import { ConversationViewingHandler } from './handlers/ConversationViewingHandler';
+import { captureNoticeDelivery, listenContentCapture } from './handlers/ContentCaptureHandler';
+import { e2eeSignalHandlerDeps, listenE2EESignals } from './handlers/E2EESignalHandler';
+import { listenCircleLive } from './handlers/circleLiveHandlers';
 import { ReactionHandler } from './handlers/ReactionHandler';
 import { AttachmentReactionHandler } from './handlers/AttachmentReactionHandler';
 import { AttachmentReactionService } from '../services/AttachmentReactionService';
@@ -34,29 +38,35 @@ import { CommentReactionHandler } from './handlers/CommentReactionHandler';
 import { PostReactionHandler } from './handlers/PostReactionHandler';
 import { ConversationHandler } from './handlers/ConversationHandler';
 import { AdminAgentHandler } from './handlers/AdminAgentHandler';
+import { AdminMetricsHandler } from './handlers/AdminMetricsHandler';
+import { hostMetricsProbe } from '../services/admin/host-metrics-probe';
 import { AgentAdminRelay } from './AgentAdminRelay';
 import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
-import { attachmentMediaSelect } from '../services/attachments/attachmentIncludes';
+import { attachmentSocketSelect } from '../services/attachments/attachmentIncludes';
+import { serializeMessageAttachmentsForSocket } from './serializeAttachmentForSocket';
+import { emitMessageNewBestEffort } from './messageNewEmission';
+import { emitMessageNewByLanguage } from './messageNewByLanguage';
+import { readerSignedPlanBestEffort } from './readerSignedDelivery';
+import { offlineSignedPayload } from './offlineSignedPayload';
+import { flooredAudience, targetWithout } from './flooredAudience';
 import { emitAttachmentUpdated } from './emitAttachmentUpdated';
 import { buildTranslationEvent } from './buildTranslationEvent';
+import { deliverTextTranslation, type TextTranslationReady } from './deliverTextTranslation';
+import { validateSocketEvent, isValidationFailure } from '../middleware/validation.js';
+import { SocketTranslationRequestSchema } from '../validation/socket-event-schemas.js';
 import { enqueueOfflineReactionEvent, type ReactionOfflineQueueParams } from './reactionOfflineQueue';
 import { enqueueForOfflineParticipants, type OfflineParticipantQueueParams } from './offlineParticipantQueue';
+import { loadSealedQuoteAudience, sealedQuoteVariant } from './quotedEphemeralAudience';
 import { emitUnreadCountsToRecipients } from './emitUnreadCountsToRecipients';
 import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
 import { stripClientMessageId } from './utils/message-ack-shaping.js';
+import type { ReachabilityView } from './offlineParticipantQueue.js';
 import {
   emitToConversationParticipants,
-  participantUserRooms,
-  participantUserRoomTargets,
   type ParticipantRoomTarget,
 } from './emitToConversationParticipants';
-import {
-  PREVIEW_PRISM_PARTICIPANT_SELECT,
-  resolveLastMessagePreviewPrism,
-  toIsoOrNull,
-  type PreviewPrismParticipant,
-} from './utils/lastMessagePreviewPrism';
+import { presenceStatusEmissions, TEAM_COLLEAGUES_WHERE } from './presence-audience';
 import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
 import { PostReactionService } from '../services/PostReactionService';
@@ -68,20 +78,26 @@ import { PushNotificationService } from '../services/PushNotificationService';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { setSharedNotificationService } from '../services/notifications/notification-service-registry';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService';
-import { getBlockedUserIdsAmong, getBlockRelatedUserIds } from '../utils/blocking';
+import { getBlockRelatedUserIds } from '../utils/blocking';
+import { PresenceVisibilityService, type PresenceViewer } from '../services/PresenceVisibilityService';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import { isGlobalAdmin, isPlatformTeam } from '@meeshy/shared/types/role-types';
+import { declaredAgeClass } from '@meeshy/shared/utils/age';
 import { PostAudioService } from '../services/posts/PostAudioService';
 import { PostTranslationService } from '../services/posts/PostTranslationService';
+import { MediaCaptionTranslationService } from '../services/posts/MediaCaptionTranslationService';
+import { MediaAltTranslationService } from '../services/posts/MediaAltTranslationService';
 import { StoryTextObjectTranslationService } from '../services/posts/StoryTextObjectTranslationService';
 import type {
   ServerToClientEvents,
   ClientToServerEvents,
   SocketIOResponse,
-  TranslationEvent,
   MessageType,
   TranslationFailedEventData,
   AudioTranslationFailedEventData,
   TranscriptionFailedEventData,
   AudioTranslationEventData,
+  SocketIOMessage,
 } from '@meeshy/shared/types/socketio-events';
 import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../services/ConversationStatsService';
@@ -89,21 +105,38 @@ import type { Message } from '@meeshy/shared/types/index';
 import { buildMessageNewPayload } from './messageNewPayload';
 import { buildMessageEditedCore, resolveWireSenderId } from './messageEditedPayload';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { socketIoCorsOrigin } from '../config/cors-origins';
 import { BoundedTtlCache } from '../utils/bounded-cache';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
-import { MentionService, resolveUsernamesToIds } from '../services/MentionService';
+import { handleAgentResponse, type AgentResponsePayload } from './agent-response-bridge';
+import { MentionService, resolveUsernamesToIds, withoutPendingMessageRequests } from '../services/MentionService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { emitConversationPreviewUpdate } from './emitConversationPreviewUpdate';
 import { linkMessageEmissions, type SocketEmission } from './linkMessageEmissions';
-import { emitServerEvent, type ServerEventName } from './serverEmit';
+import { emitServerEvent, safeBroadcast } from './serverEmit';
+import { broadcastReactionMutation } from './broadcastReactionMutation';
 import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
-import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
+import type { QueuedPayloadFor } from './queuedEventContract';
+import type { MessageMutationQueueParams } from './broadcastMessageMutation';
+import { isServerAtRestMode } from '../services/messaging/serverAtRest';
 import { drainedEventName, isAddressableConversationId, isDeliverableQueuedPayload } from './queuedEventContract';
+import { dropQueuedEntriesWhoseMessageDied } from './queuedMessageLiveness';
+import { authorizeDrainedEntries } from './drainAuthorization';
+import { floorRefusalIsProven } from './drainHistoryFloor';
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
+import { syncConversationListOnNewMessage } from './postMessageSyncFanOut';
+import { wireCallMessageBroadcasters } from './callMessageBroadcasters';
+import { attachSocketIORedisAdapter, type SocketIORedisAdapterHandle } from './redis-adapter';
+import { creditTranslationRequest, lazyTranslationRequestEngagement } from '../services/messaging/translationRequestCredit';
+import { loadTranslatableMessage } from '../services/messaging/atRestTranslationSource';
+import { historyReaderFromAuthContext } from '../services/historyFloor';
+import { readerMayTranslateMessage } from '../services/messaging/translationReadGate';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
+
 
 /**
  * Combien de conversations au plus reçoivent leur pont ✦ dans l'instantané de
@@ -116,6 +149,19 @@ const logger = enhancedLogger.child({ module: 'SocketIOManager' });
  * les conversations du lecteur, comme avant.
  */
 const BRIDGE_SNAPSHOT_LIMIT = 30;
+
+/**
+ * Les rôles que la directive du 2026-08-25 tient pour privilégiés sur la
+ * présence (« ADMIN et supérieur »), ÉNUMÉRÉS en croisant les rôles du SCHÉMA
+ * avec la loi partagée, au lieu d'être recopiés à la main.
+ *
+ * `['ADMIN', 'BIGBOSS']` écrit en dur serait juste aujourd'hui et faux le jour
+ * où `isGlobalAdmin` change d'avis — sans qu'aucun témoin ne rougisse, puisque
+ * les deux listes vivraient dans des fichiers différents. Ici la liste ne peut
+ * pas diverger : elle EST le filtre, appliqué aux valeurs que la colonne
+ * `User.role` peut réellement porter.
+ */
+const PRESENCE_PRIVILEGED_ROLES = Object.values(UserRole).filter(isGlobalAdmin);
 
 
 // What one queued entry actually puts on the wire. Every eventType replays as a
@@ -155,27 +201,24 @@ function _drainedEmissions(entry: QueuedMessagePayload): SocketEmission[] {
   return [{ event, payload: entry.payload } as SocketEmission];
 }
 
-export interface SocketUser {
-  id: string;
-  socketId: string;
-  isAnonymous: boolean;
-  language: string;
-  /**
-   * Ordered list of languages this socket can consume, derived from
-   * resolveUserLanguagesOrdered() at connection time.
-   * Priority: systemLanguage → regionalLanguage → customDestinationLanguage → deviceLocale.
-   * Empty for anonymous users (they use `language` only).
-   */
-  resolvedLanguages: string[];
-  /** For anonymous participants: the participant.id */
-  participantId?: string;
-  /** For registered users: the user.id */
-  userId?: string;
-  /** Display name resolved at connection time */
-  displayName?: string;
-  /** @deprecated kept for backward compat — raw session token */
-  sessionToken?: string;
-}
+/**
+ * #16687 — JUMELLE SUPPRIMÉE. Ce fichier DÉCLARAIT son propre `SocketUser`,
+ * copie verbatim (à un mot de commentaire près) de celui de
+ * `utils/socket-helpers.ts`, que les handlers importent déjà.
+ *
+ * La divergence n'était pas théorique : `connectedUsers` est typé par CELUI-CI,
+ * et ajouter `unreachableConversations` à l'autre a fait tomber la compilation
+ * ici même — c'est le compilateur qui a nommé la jumelle. Deux déclarations du
+ * même concept, et seule celle que le gate lit comptait.
+ *
+ * Re-export de TYPE : les importateurs de `SocketUser` depuis ce module
+ * continuent de compiler, et il n'y a plus qu'une seule déclaration à faire
+ * évoluer. Aucun cycle — `socket-helpers.ts` n'importe pas ce fichier, et un
+ * re-export de type s'efface à l'exécution.
+ */
+import type { SocketUser } from './utils/socket-helpers.js';
+import { admitUserToConversationRoom } from './midSessionRoomAdmission.js';
+export type { SocketUser };
 
 export interface TranslationNotification {
   messageId: string;
@@ -186,6 +229,12 @@ export interface TranslationNotification {
 
 export class MeeshySocketIOManager {
   private io: SocketIOServer<ClientToServerEvents, ServerToClientEvents>;
+
+  // Fan-out des broadcasts entre instances gateway quand REDIS_URL est posée
+  // (#3723) — `null` tant qu'aucune instance Redis n'est configurée, auquel
+  // cas Socket.IO garde son adapter en mémoire (comportement mono-instance
+  // actuel, inchangé).
+  private redisAdapterHandle: SocketIORedisAdapterHandle | null = null;
 
   /// Exposes the underlying Socket.IO server. Used by background services
   /// (e.g. CallCleanupService) that need to broadcast events without going
@@ -210,6 +259,7 @@ export class MeeshySocketIOManager {
   }
 
   private prisma: PrismaClient;
+  private readonly translationRequestEngagement = lazyTranslationRequestEngagement(() => this.prisma);
   private translationService: MessageTranslationService;
   private maintenanceService: MaintenanceService;
   private statusService: StatusService;
@@ -220,7 +270,9 @@ export class MeeshySocketIOManager {
   private socialEventsHandler: SocialEventsHandler;
   private locationHandler: LocationHandler;
   private privacyPreferencesService: PrivacyPreferencesService;
+  private presenceVisibilityService: PresenceVisibilityService;
   private agentClient: ZmqAgentClient | null = null;
+  private agentAttachmentService?: AttachmentService;
   private mentionService: MentionService;
   private deliveryQueue: RedisDeliveryQueue | null = null;
   private readStatusService!: MessageReadStatusService;
@@ -231,12 +283,14 @@ export class MeeshySocketIOManager {
   private authHandler!: AuthHandler;
   private messageHandler!: MessageHandler;
   private statusHandler!: StatusHandler;
+  private conversationViewingHandler!: ConversationViewingHandler;
   private reactionHandler!: ReactionHandler;
   private attachmentReactionHandler!: AttachmentReactionHandler;
   private commentReactionHandler!: CommentReactionHandler;
   private postReactionHandler!: PostReactionHandler;
   private conversationHandler!: ConversationHandler;
   private adminAgentHandler!: AdminAgentHandler;
+  private adminMetricsHandler!: AdminMetricsHandler;
   private agentAdminRelay: AgentAdminRelay | null = null;
 
   // Mapping des utilisateurs connectés
@@ -254,6 +308,16 @@ export class MeeshySocketIOManager {
   // Cache presence snapshot par userId — évite 2 queries Prisma par reconnexion (TTL 60s)
   private presenceSnapshotCache = new Map<string, { users: Array<{ userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }>; cachedAt: number }>();
   private readonly PRESENCE_SNAPSHOT_CACHE_TTL_MS = 60_000;
+
+  // Les `User.id` des ADMIN/BIGBOSS — l'audience PRIVILÉGIÉE de chaque
+  // transition de présence (directive 2026-08-25). Mise en cache pour la même
+  // raison que l'instantané ci-dessus : `_broadcastUserStatus` s'exécute à
+  // CHAQUE connexion, chaque déconnexion, et pour chaque compte que le balayage
+  // de maintenance passe hors ligne d'un coup. La requête est bornée par le
+  // nombre d'administrateurs (une poignée), jamais par la population connectée.
+  private globalAdminIdsCache: { ids: string[]; cachedAt: number } | null = null;
+  private moderatorIdsCache: { ids: string[]; cachedAt: number } | null = null;
+  private readonly GLOBAL_ADMIN_IDS_CACHE_TTL_MS = 60_000;
 
   // Statistiques
   private stats = {
@@ -283,6 +347,12 @@ export class MeeshySocketIOManager {
     // Initialiser PrivacyPreferencesService pour vérifier les préférences de confidentialité
     this.privacyPreferencesService = new PrivacyPreferencesService(prisma);
 
+    // La loi de visibilité de la présence (amitié acceptée / ADMIN+ / blocage /
+    // préférences) vit dans UN service, partagé avec les routes REST. Il reçoit
+    // l'instance de préférences du gestionnaire pour que le cache de prefs soit
+    // le MÊME des deux côtés du transport.
+    this.presenceVisibilityService = new PresenceVisibilityService(prisma, this.privacyPreferencesService);
+
     // CORRECTION: Créer NotificationService AVANT MessagingService pour que les mentions génèrent des notifications
     this.notificationService = new NotificationService(prisma);
     // Cette instance est LA vivante du processus (elle recevra `io` via
@@ -291,7 +361,7 @@ export class MeeshySocketIOManager {
     // d'instancier un doublon muet sans io.
     setSharedNotificationService(this.notificationService);
     this.mentionService = new MentionService(prisma);
-    this.messagingService = new MessagingService(prisma, this.translationService, this.notificationService);
+    this.messagingService = new MessagingService(prisma, this.translationService, this.notificationService, () => ({ io: this.io, prisma, readStatusService: this.readStatusService, privacyPreferencesService: this.privacyPreferencesService, bridgeService: this.bridgeService }));
     // RC-4 — construct the shared CallService BEFORE CallEventsHandler so both
     // it and AuthHandler observe the same in-memory ringingTimeouts/heartbeats/
     // backgroundedParticipants maps (previously two independent instances,
@@ -299,16 +369,14 @@ export class MeeshySocketIOManager {
     // state actually being written by the socket handlers).
     this.callService = new CallService(prisma);
     this.callEventsHandler = new CallEventsHandler(prisma, this.callService);
-    // P3 — let the call handler post the call-summary system message through
-    // the canonical message broadcast path when a call ends.
-    this.callEventsHandler.setMessageBroadcaster(
-      (message, conversationId) => this.broadcastMessage(message as Message, conversationId)
-    );
-    // Live-call message — let the terminal upsert EDIT the live message
-    // in-place (message:edited full payload + preview + offline enqueue).
-    this.callEventsHandler.setMessageUpdateBroadcaster(
-      (message, conversationId) => this.broadcastMessageEdited(message as Message, conversationId)
-    );
+    // P3 + live-call message + #9026 (un appel remonte la conversation pour tous).
+    wireCallMessageBroadcasters({
+      handler: this.callEventsHandler,
+      prisma,
+      getIO: () => this.io,
+      broadcastMessage: (message, conversationId) => this.broadcastMessage(message as Message, conversationId),
+      broadcastMessageEdited: (message, conversationId) => this.broadcastMessageEdited(message as Message, conversationId)
+    });
 
     // CORRECTION: Configurer le callback de broadcast pour le MaintenanceService
     this.maintenanceService.setStatusBroadcastCallback(
@@ -316,6 +384,13 @@ export class MeeshySocketIOManager {
         this._broadcastUserStatus(userId, isOnline, isAnonymous);
       }
     );
+    // #10575 — le battement d'un connecté passif rediffuse sa présence : sans ce
+    // câblage, il s'éteignait chez ses amis au bout de la garde anti-stale de 5 min.
+    // Un battement fini APRÈS le départ en arrière-plan ne rallume rien.
+    this.statusService.setPresenceCallback((userId, isOnline, isAnonymous) => {
+      if (isOnline && !this.authHandler.isPresent(userId)) return;
+      this._broadcastUserStatus(userId, isOnline, isAnonymous);
+    });
 
     // PRÉSENCE FIX: protéger les sockets vivants du cleanup périodique.
     // Sans ça, un client passif (pas de heartbeat depuis 30min) se voit marqué
@@ -324,21 +399,44 @@ export class MeeshySocketIOManager {
       (userId: string, _isAnonymous: boolean) => this.connectedUsers.has(userId)
     );
 
+    // Le balayage journalier des demandes de suppression (`processAccountDeletionRequests`)
+    // met des comptes HORS SERVICE (`isActive: false`) : leurs sockets encore vivants
+    // recevraient leurs fils et émettraient `typing:start` (= « en ligne » chez les
+    // clients). Seul le manager tient `io` : il fournit le révocateur, résolu à
+    // l'appel (`this.io` naît quelques lignes plus bas). Même mécanisme que
+    // `revoke-all-sessions` et que la désactivation par un admin (`routes/admin`).
+    //
+    // #10264 — la fin de grâce n'est PAS une suppression : l'annulation rend
+    // encore le compte. Ses sockets tombent sans nommer de compte supprimé
+    // (`deletedAccountId`), que seule la purge confirmée (`COMPLETED`) émet.
+    this.maintenanceService.setSessionRevoker((userId: string) =>
+      disconnectRevokedSessions({
+        io: this.io,
+        userId,
+        reason: 'logout_all_devices',
+        message: 'Your account deletion grace period ended — every session was signed out.',
+        onError: (err: unknown) => logger.warn('[MAINTENANCE] socket fanout failed on grace-period expiry', { err, userId }),
+      })
+    );
+
+    // #10440 — le balayage journalier révoque les invités d'un lien expiré par
+    // `revokeShareLinkGuests` : départ annoncé, appel et position éteints,
+    // sockets coupés. Résolus à l'appel, comme ci-dessus.
+    this.maintenanceService.setShareLinkRevocationLive({
+      resolveIO: () => this.io,
+      resolveManager: () => this,
+    });
+
     // Initialiser Socket.IO avec les types shared
     this.io = new SocketIOServer<ClientToServerEvents, ServerToClientEvents>(httpServer, {
       path: "/socket.io/",
       transports: ["websocket", "polling"],
       cors: {
-        origin: process.env.NODE_ENV === 'development' ? true : (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-          const allowedOrigins = process.env.CORS_ORIGINS?.split(',').map(o => o.trim()) || 
-                                 process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || 
-                                 ['https://meeshy.me', 'https://www.meeshy.me', 'https://gate.meeshy.me', 'https://ml.meeshy.me'];
-          if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
-          } else {
-            callback(new Error('Not allowed by CORS'));
-          }
-        },
+        // La MÊME règle que la porte HTTP de `server.ts` (#4480) — les deux
+        // littéraux jumeaux d'avant divergeaient sur trois points.
+        origin: socketIoCorsOrigin({
+          onRejected: (origin) => logger.warn(`CORS rejected origin: "${origin}"`)
+        }),
         methods: ["GET", "POST"],
         allowedHeaders: ['authorization', 'content-type', 'x-session-token', 'websocket', 'polling'],
         credentials: true
@@ -366,6 +464,10 @@ export class MeeshySocketIOManager {
       },
     });
 
+    // Adapter Redis (#3723) — additif : sans REDIS_URL, `io` garde son
+    // adapter en mémoire par défaut, comportement mono-instance inchangé.
+    this.redisAdapterHandle = attachSocketIORedisAdapter(this.io);
+
     // Initialiser le SocialEventsHandler pour les broadcasts feed
     this.socialEventsHandler = new SocialEventsHandler({
       io: this.io,
@@ -378,6 +480,10 @@ export class MeeshySocketIOManager {
       prisma: this.prisma,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
+      // La liste d'exclusion d'un blocage (#16745) : un ensemble d'ids de
+      // comptes s'y traduit en ids de sockets, comme chez `StatusHandler` et
+      // `ConversationViewingHandler`, les deux autres signaux de ce salon.
+      userSockets: this.userSockets,
       normalizeConversationId: (id: string) => this.normalizeConversationId(id),
     });
 
@@ -397,6 +503,7 @@ export class MeeshySocketIOManager {
       userSockets: this.userSockets,
       emitPresenceSnapshot: (socket, userId, isAnonymous) =>
         this._emitPresenceSnapshot(socket, userId, isAnonymous),
+      emitViewingSnapshots: (socket) => this.conversationViewingHandler.afterAuthentication(socket),
       // CALL-RESILIENCE (Vague 44) — lets AuthHandler's anonymous-guest
       // disconnect leave reuse CallEventsHandler's PARTICIPANT_LEFT/
       // call:ended fanout instead of leaving the other party's UI "in call".
@@ -404,11 +511,25 @@ export class MeeshySocketIOManager {
         this.callEventsHandler.broadcastParticipantLeftResult({ io: this.io, ...opts }),
       forceCleanupCallParticipant: (opts) =>
         this.callEventsHandler.forceCleanupParticipationAfterLeaveFailure({ io: this.io, ...opts }),
+      // Vague 182 — idempotent no-op counterpart to the fallback above, for
+      // when leaveCall() lost the race to a concurrent terminal write
+      // instead of genuinely failing (see absorbAlreadyEndedLeave's doc
+      // comment).
+      absorbAlreadyEndedCallLeave: (opts) =>
+        this.callEventsHandler.absorbAlreadyEndedLeave(this.io, opts.callId, opts.error),
     });
 
     this.adminAgentHandler = new AdminAgentHandler({
       prisma: this.prisma,
       socketToUser: this.socketToUser,
+    });
+
+    this.adminMetricsHandler = new AdminMetricsHandler({
+      io: this.io,
+      probe: hostMetricsProbe(),
+      socketToUser: this.socketToUser,
+      roleOf: (userId) => this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } }).then((user) => user?.role ?? null),
+      roomSize: (room) => this.io.sockets.adapter.rooms.get(room)?.size ?? 0,
     });
 
     const reactionService = new ReactionService(prisma);
@@ -436,6 +557,15 @@ export class MeeshySocketIOManager {
     this.statusHandler = new StatusHandler({
       prisma: this.prisma,
       statusService: this.statusService,
+      privacyPreferencesService: this.privacyPreferencesService,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+      userSockets: this.userSockets,
+    });
+
+    this.conversationViewingHandler = new ConversationViewingHandler({
+      io: this.io,
+      prisma: this.prisma,
       privacyPreferencesService: this.privacyPreferencesService,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
@@ -499,8 +629,18 @@ export class MeeshySocketIOManager {
       // du départ : sans ce rejeu, l'épingle d'un pair qui partage déjà reste
       // invisible pour toute la session de l'arrivant. `locationHandler` est
       // construit plus haut dans ce même constructeur.
+      // Asynchrone depuis #16745 : le rattrapage lit le blocage du côté de
+      // l'ARRIVANT avant de lui servir la position d'un partageur.
       replayLiveLocations: (socket, conversationId) =>
         this.locationHandler.replayLiveLocationsTo(socket, conversationId),
+      // La liste nominative `onlineUsers` de `conversation:stats` est projetée
+      // par LECTEUR à l'émission (directive produit du 2026-08-25) : le handler
+      // reçoit le lecteur avec son VRAI rôle et la loi unique — la même paire
+      // que `_emitPresenceSnapshot` consomme. Les stats ne partent qu'aux
+      // inscrits, et le handler ne demande un lecteur que pour un `User.id`
+      // résolu, d'où `isAnonymous: false`.
+      presenceViewer: (userId) => this._presenceViewer(userId, false),
+      presenceVisibility: this.presenceVisibilityService,
     });
   }
 
@@ -518,90 +658,6 @@ export class MeeshySocketIOManager {
     this.attachmentReactionHandler.setDeliveryQueue(queue);
   }
 
-  /**
-   * Retire du rejeu les entrées des conversations dont l'appartenance a pris
-   * fin PENDANT l'absence.
-   *
-   * L'audience de la file est décidée à la MISE EN FILE, par
-   * `enqueueForOfflineParticipants`, sur l'appartenance de cet instant-là.
-   * Entre cet instant et la LIVRAISON il y a précisément l'absence — c'est-à-dire
-   * la fenêtre pendant laquelle on quitte un groupe, s'en fait retirer, s'y fait
-   * bannir, ou le supprime pour soi. Les quatre routes qui écrivent ces
-   * transitions (`leave.ts`, `participants.ts`, `ban.ts`, `delete-for-me.ts`)
-   * sortent toutes les sockets de la cible de `conversation:<id>` : le canal
-   * VIVANT est fermé à l'instant même. Aucune ne touche cette file, qui garde
-   * jusqu'à `DELIVERY_QUEUE_TTL_SECONDS` (48 h) d'événements de cette même
-   * conversation — messages, éditions, réactions, traductions — et les rejouait
-   * intégralement à la reconnexion suivante : du contenu livré APRÈS la fin de
-   * l'autorisation qui le justifiait, et une conversation ressuscitée dans une
-   * liste dont ces mêmes routes viennent de la retirer.
-   *
-   * Une autorisation se lit donc contre l'autorité au dernier instant possible,
-   * jamais contre une copie prise à l'enfilement. C'est ce qui rend cette garde
-   * unique et non quadruple : elle vaut pour les quatre routes et pour toute
-   * transition future, sans qu'aucune ait à s'en souvenir.
-   *
-   * Échec OUVERT sur une PANNE, FERMÉ sur une RÉPONSE. Le drain est destructif —
-   * les entrées ont déjà quitté la file quand cette garde s'exécute. Une réponse
-   * « plus membre » fait autorité et l'entrée est jetée. Une absence de réponse
-   * n'autorise rien à conclure : jeter l'arriéré parce que la base n'a pas
-   * répondu échangerait une fuite rare (panne ET retrait ET arriéré simultanés)
-   * contre une perte de données probable, une tempête de reconnexions étant
-   * exactement le moment où la base est sous pression.
-   *
-   * `bannedAt` est filtré en JS, pas dans le `where` : sous MongoDB un
-   * `bannedAt: null` ne matche pas les documents où le champ est ABSENT (jamais
-   * écrit), et exclurait donc les lignes historiques — le piège que `ban.ts`
-   * documente déjà pour `leftAt` (audit C5).
-   *
-   * **PRÉCONDITION, tenue par l'appelant** : chaque entrée porte un
-   * `conversationId` de forme ObjectId (`isAddressableConversationId`). Elle
-   * n'est pas cosmétique — les ids sont AGRÉGÉS en un seul `in`, donc une seule
-   * entrée illisible fait lever la requête pour le lot ENTIER, et l'échec
-   * atterrit dans le `catch` ci-dessous, qui rejoue tout SANS FILTRE. Le
-   * fail-open y est délibéré et juste pour ce qu'il vise (une base qui ne répond
-   * pas) ; il ne peut simplement pas distinguer ce cas de « nous n'avons jamais
-   * posé de question valide », et sur ce second cas il transforme une entrée
-   * corrompue en désactivation du gate d'autorisation. La garde vit donc chez
-   * l'appelant, AVANT la requête : c'est le seul endroit où l'entrée fautive est
-   * encore nommable une par une.
-   */
-  private async _dropEndedMemberships(
-    userId: string,
-    isAnonymous: boolean,
-    drained: QueuedMessagePayload[]
-  ): Promise<QueuedMessagePayload[]> {
-    const conversationIds = [...new Set(drained.map(entry => entry.conversationId))];
-    try {
-      // Clé de file = `userId` pour un inscrit, `Participant.id` pour un invité
-      // de lien partagé — la convention exacte que `enqueueForOfflineParticipants`
-      // applique en enfilant (`p.userId ?? p.id`).
-      const rows = await this.prisma.participant.findMany({
-        where: isAnonymous
-          ? { id: userId, conversationId: { in: conversationIds }, isActive: true }
-          : { userId, conversationId: { in: conversationIds }, isActive: true },
-        select: { conversationId: true, bannedAt: true },
-      });
-      const live = new Set(
-        rows.filter(row => row.bannedAt == null).map(row => row.conversationId)
-      );
-      if (live.size === conversationIds.length) return drained;
-
-      const kept = drained.filter(entry => live.has(entry.conversationId));
-      logger.info('Dropped queued events for conversations the reader has left', {
-        userId,
-        dropped: drained.length - kept.length,
-        conversationIds: conversationIds.filter(id => !live.has(id)),
-      });
-      return kept;
-    } catch (error) {
-      logger.warn('Membership re-read failed on drain — replaying the backlog unfiltered', {
-        userId,
-        error,
-      });
-      return drained;
-    }
-  }
 
   private async _drainPendingMessages(userId: string, isAnonymous: boolean): Promise<void> {
     if (!this.deliveryQueue) return;
@@ -641,7 +697,7 @@ export class MeeshySocketIOManager {
       };
 
       // PREMIER refus, et il est en amont du gate d'autorisation par nécessité,
-      // pas par goût de l'ordre : `_dropEndedMemberships` AGRÈGE les
+      // pas par goût de l'ordre : `authorizeDrainedEntries` AGRÈGE les
       // `conversationId` du lot en un seul `conversationId: { in: [...] }`. Une
       // entrée dont l'id n'est pas interrogeable ne se contente donc pas de se
       // perdre elle-même — elle fait lever la requête pour TOUT le lot, et
@@ -668,12 +724,117 @@ export class MeeshySocketIOManager {
       if (addressable.length === 0) return;
 
       // Gate d'autorisation, avant toute émission : une entrée dont
-      // l'appartenance a pris fin n'est pas rejouée, et ne compte donc dans
-      // aucun des trois signaux ci-dessous (émission, `pending-messages:delivered`,
-      // accusé de réception). Un accusé affirme « ce message est arrivé chez son
-      // destinataire » — l'affirmer d'un message qu'on vient de refuser de livrer
-      // mentirait à son auteur.
-      const pending = await this._dropEndedMemberships(userId, isAnonymous, addressable);
+      // l'appartenance a pris fin — ou dont le message est passé sous le
+      // PLANCHER D'HISTOIRE du lecteur — n'est pas rejouée, et ne compte donc
+      // pas dans l'ÉMISSION ni dans l'accusé de réception. Un accusé affirme
+      // « ce message est arrivé chez son destinataire » — l'affirmer d'un
+      // message qu'on vient de refuser de livrer mentirait à son auteur.
+      //
+      // ⚠ Cette phrase décrit ce que CE chemin passe à l'accusé, et ce que
+      // l'accusé ÉCRIT — plus ce qu'un lecteur en VOIT. Le gel par message est
+      // désormais borné aux ids réellement livrés (#18614) ; mais le statut
+      // SERVI retombe, en l'absence d'entrée figée, sur
+      // `ConversationReadCursor.lastDeliveredAt` — l'horloge MURALE — par le
+      // dernier repli de `resolveReceivedAt`. Un message refusé ici est donc
+      // encore RENDU « remis » à son auteur, pour une raison qui n'est plus le
+      // gel mais le repli. C'est #18701, et c'est la moitié de la chaîne que ce
+      // lot ne ferme pas.
+      //
+      // Les DEUX questions se lisent sur la même ligne `Participant`, et
+      // `authorizeDrainedEntries` existe pour qu'elle ne soit lue qu'une fois.
+      // Il rend aussi les faits de message, que la garde de vivacité consomme
+      // plus bas sans relire la ligne.
+      const authorization = await authorizeDrainedEntries({
+        prisma: this.prisma,
+        reader: { key: userId, isAnonymous },
+        entries: addressable,
+        onParticipationReadFailure: (error) =>
+          logger.warn('Membership re-read failed on drain — replaying the backlog unfiltered', {
+            userId,
+            error,
+          }),
+      });
+      const facts = authorization.facts;
+      if (authorization.endedConversationIds.length > 0) {
+        logger.info('Dropped queued events for conversations the reader has left', {
+          userId,
+          dropped: authorization.endedEntryCount,
+          conversationIds: authorization.endedConversationIds,
+        });
+      }
+      // Les trois raisons ne sont PAS de même nature, et les confondre coûtait
+      // l'arriéré d'un lecteur borné sur une panne transitoire (#18615, audit
+      // adversarial) :
+      //
+      //  - un refus PROUVÉ (`below-history-floor`) ne nomme rien : aucune porte
+      //    REST ne sert ce message à ce lecteur, et un signal de récupération
+      //    qui ne désigne rien vaut moins que le silence ;
+      //  - une IGNORANCE (`floor-unreadable`, `message-date-unreadable`) est une
+      //    PERTE — le drain est destructif, l'entrée a déjà quitté Redis — et sa
+      //    conversation rejoint `undelivered`, donc `conversationIds`, pour que
+      //    le client la relise. La relecture passe par `historyFloorClause` :
+      //    elle ne peut pas servir ce que la garde vient de refuser.
+      for (const { entry, reason } of authorization.flooredRefusals) {
+        if (floorRefusalIsProven(reason)) {
+          logger.info('Dropped a queued entry the reader may no longer read', {
+            userId,
+            reason,
+            conversationId: entry.conversationId,
+            messageId: entry.messageId,
+            eventType: entry.eventType ?? 'new',
+          });
+          continue;
+        }
+        undelivered.push(entry);
+        logger.warn('Queued entry dropped without delivery — the reader floor could not be resolved', {
+          userId,
+          reason,
+          conversationId: entry.conversationId,
+          messageId: entry.messageId,
+          eventType: entry.eventType ?? 'new',
+        });
+      }
+      const authorized = authorization.kept;
+      if (authorized.length === 0) return;
+
+      // QUATRIÈME refus, et il vient APRÈS l'autorisation pour deux raisons qui
+      // vont dans le même sens : l'autorisation précède le contenu, et le gate
+      // d'appartenance a déjà retiré des entrées — celles-ci ne coûtent donc
+      // aucun id dans la question de celui-ci.
+      //
+      // Les trois refus au-dessus interrogent ce que l'ENTRÉE dit. Celui-ci
+      // interroge le MONDE : une charge bien formée, nommée, adressable et
+      // autorisée peut porter le texte d'un message que le serveur a DÉTRUIT
+      // entre l'enfilage et le drain — jusqu'à 48 h plus tard
+      // (`DELIVERY_QUEUE_TTL_SECONDS`). `_burn` revendique l'invariant « le
+      // contenu est détruit » ; il ne tenait pas sur ce chemin, qui remet le
+      // message ENTIER là où `NotificationService` ne remettait qu'une
+      // bannière — et qui portait pourtant, lui, la garde depuis le cycle 127.
+      //
+      // Le refus est DÉLIBÉRÉ, pas un accident : il ne passe donc pas par
+      // `dropEntry`, qui journalise en ERROR une perte à rattraper et nomme sa
+      // conversation dans `pending-messages:delivered` pour y envoyer le client
+      // relire. Ici il n'y a RIEN à relire — le serveur a détruit le contenu, et
+      // le client n'en a jamais rien reçu : la convergence est déjà atteinte.
+      // C'est la forme du gate d'appartenance, pas celle d'un échec d'émission.
+      const { kept: pending, refused } = dropQueuedEntriesWhoseMessageDied({
+        entries: authorized,
+        facts,
+        onReadFailure: (error) =>
+          logger.warn('Message liveness re-read failed on drain — replaying the backlog unfiltered', {
+            userId,
+            error,
+          }),
+      });
+      for (const { entry, cause } of refused) {
+        logger.info('Dropped a queued entry whose message no longer exists', {
+          userId,
+          cause,
+          conversationId: entry.conversationId,
+          messageId: entry.messageId,
+          eventType: entry.eventType ?? 'new',
+        });
+      }
       if (pending.length === 0) return;
 
       logger.info(`Delivering ${pending.length} queued messages to ${userId}`);
@@ -837,7 +998,7 @@ export class MeeshySocketIOManager {
    * `readerKey` porte la CLÉ DE FILE, pas un `User.id` : c'est `userId` pour un
    * inscrit et `Participant.id` pour un invité de lien partagé — la convention
    * exacte qu'`enqueueForOfflineParticipants` applique en enfilant
-   * (`p.userId ?? p.id`), et que `_dropEndedMemberships` lit déjà sous les deux
+   * (`p.userId ?? p.id`), et que `authorizeDrainedEntries` lit déjà sous les deux
    * colonnes. Le paramètre porte ce nom-là parce que le supposer utilisateur
    * est PRÉCISÉMENT ce qui a fait sauter l'accusé pour la moitié anonyme.
    */
@@ -884,9 +1045,45 @@ export class MeeshySocketIOManager {
 
     // Group by conversationId, keeping the last (newest) messageId per conv
     // so we call markMessagesAsReceived once per conversation.
+    //
+    // #18614 — et la LISTE de ce qui est parti, à côté du plus récent. Les deux
+    // disent deux choses : le dernier id avance le CURSEUR (monotone, par
+    // conversation), la liste borne le GEL par message. Ne garder que le
+    // premier laissait `freezeMessageStatus` résoudre une PLAGE `createdAt`,
+    // c'est-à-dire estampiller `deliveredAt` sur tout message créé depuis le
+    // curseur précédent — y compris ceux que ce drain vient de REFUSER, et ceux
+    // que le plafond de 500 de la file a évincés sans qu'ils soient jamais
+    // drainés. L'écriture est write-once : rien ne la défait.
+    //
+    // `arrivals` est déjà le bon ensemble : il descend de `delivered`, qui ne
+    // retient que ce qui est RÉELLEMENT parti, et il est cadré par
+    // `announcesMessageArrival` — une mutation rejouée n'attendait aucune coche.
     const convLatest = new Map<string, string>();
+    const convDelivered = new Map<string, string[]>();
     for (const entry of arrivals) {
+      // `messageId` sort d'un `JSON.parse(…) as QueuedMessagePayload` NON
+      // validé, sur des octets vieux de 48 h — et rien ne le garde sur ce
+      // chemin, à la différence de `conversationId`
+      // (`isAddressableConversationId`). Une entrée sans id ferait partir
+      // `id: { in: [undefined, …] }` à Prisma, dont la levée est avalée par le
+      // `catch` de `freezeMessageStatus` qui rend 0 : **plus aucun gel pour
+      // tout le lot**, y compris les entrées saines.
+      //
+      // C'est l'isolation que `parseRawEntries` PROMET (« so one corrupt entry
+      // can never poison a whole drain/peek ») reprise d'une main et rendue de
+      // l'autre, une couche plus haut — le défaut que le drain documente déjà
+      // sur son tri d'adressabilité. L'id non conforme ne prive que LUI-MÊME
+      // de son gel.
+      if (typeof entry.messageId !== 'string' || entry.messageId.length === 0) continue;
+      // La garde est en TÊTE de boucle, avant `convLatest` : posée après, une
+      // entrée corrompue arrivée en DERNIER devenait le « plus récent » id de
+      // sa conversation, `latestMessageId` sortait `undefined`, et le `return`
+      // qui suit privait d'accusé TOUTES les entrées saines du lot. L'ordre
+      // n'est pas cosmétique — mesuré par le témoin de ce fichier.
       convLatest.set(entry.conversationId, entry.messageId);
+      const named = convDelivered.get(entry.conversationId) ?? [];
+      named.push(entry.messageId);
+      convDelivered.set(entry.conversationId, named);
     }
 
     // Batch-resolve ALL active participants for the affected conversations in a
@@ -896,7 +1093,7 @@ export class MeeshySocketIOManager {
     // a sender who left the conversation view (socket dropped `conversation:<id>`
     // but stays in `user:<id>`) must still see their checkmark advance.
     const participantRows = await this.prisma.participant.findMany({
-      where: { conversationId: { in: [...convLatest.keys()] }, isActive: true },
+      where: { conversationId: { in: [...convLatest.keys()] }, ...PARTICIPATION_VIVANTE },
       select: { id: true, userId: true, conversationId: true },
     });
 
@@ -927,7 +1124,9 @@ export class MeeshySocketIOManager {
         const latestMessageId = convLatest.get(conversationId);
         if (!latestMessageId) return;
 
-        await this.readStatusService.markMessagesAsReceived(own.id, conversationId, latestMessageId);
+        await this.readStatusService.markMessagesAsReceived(own.id, conversationId, latestMessageId, {
+          messageIds: convDelivered.get(conversationId) ?? [],
+        });
         if (!mayBroadcastReceipt) return;
 
         const summary = await this.readStatusService.getLatestMessageSummary(conversationId);
@@ -989,11 +1188,14 @@ export class MeeshySocketIOManager {
    * keeps only the entries `announcesMessageArrival` admits, and a pin is a
    * mutation of a message already arrived).
    */
-  async enqueueOfflineMessageMutation(params: {
-    conversationId: string;
-    actorUserId: string | null | undefined;
-    messageId: string;
-  } & QueuedVariantFor<'pinned' | 'unpinned' | 'edited' | 'deleted'>): Promise<void> {
+  // Le type NOMMÉ, pas une recopie : c'est toute la raison de l'avoir créé
+  // (#16964 suite). Cette signature portait son propre littéral inline et ne
+  // déclarait PAS `excludedQueueKeys` — elle marchait par deux accidents
+  // (l'objet est relayé en bloc, et `strictFunctionTypes: false` rend un
+  // paramètre plus étroit assignable), donc elle MENTAIT sur un champ de
+  // confidentialité, et le premier refactor qui l'aurait destructurée perdait
+  // l'exclusion sans qu'un témoin tombe ni que `tsc` bronche.
+  async enqueueOfflineMessageMutation(params: MessageMutationQueueParams): Promise<void> {
     await this._enqueueForOfflineParticipants(params);
   }
 
@@ -1023,6 +1225,8 @@ export class MeeshySocketIOManager {
     actorParticipantId: string | null | undefined;
     messageId: string;
     payload: QueuedPayloadFor<'link-message'>;
+    /** #12822 — la conversation est chiffrée au repos : l'entrée part scellée. */
+    atRest: boolean;
   }): Promise<void> {
     await this._enqueueForOfflineParticipants({ ...params, eventType: 'link-message' });
   }
@@ -1203,6 +1407,25 @@ export class MeeshySocketIOManager {
   }
 
   /**
+   * Éteint « ici » pour un membre qui vient de perdre l'appartenance au fil
+   * (#16654).
+   *
+   * Unique appelant : `endConversationMembership`, le point de convergence des
+   * chemins de fin d'appartenance — c'est là qu'est écrit POURQUOI l'extinction
+   * précède l'éviction des rooms. Le raisonnement propre au regard (un registre
+   * en mémoire dont la surface était clavetée par socket, donc inatteignable
+   * depuis une route) vit dans
+   * `ConversationViewingHandler.retractViewingForDepartedMember` ; le
+   * gestionnaire n'en est que le porteur, comme pour la position vive et
+   * l'appel.
+   *
+   * Ne rejette jamais : le handler absorbe ses propres échecs.
+   */
+  public async retractViewingForDepartedMember(conversationId: string, userId: string): Promise<void> {
+    await this.conversationViewingHandler?.retractViewingForDepartedMember(conversationId, userId);
+  }
+
+  /**
    * Expose SocialEventsHandler for use in routes (broadcast social events)
    */
   public getSocialEventsHandler(): SocialEventsHandler {
@@ -1221,53 +1444,103 @@ export class MeeshySocketIOManager {
 
   /**
    * Source de vérité runtime pour la présence : true si l'id (userId pour registered,
-   * participantId pour anonyme) est actuellement dans `connectedUsers` Map. Utilisé par
-   * les routes REST pour overrider le `isOnline` de la DB (potentiellement obsolète).
+   * participantId pour anonyme) a une socket AU PREMIER PLAN (#10575 — un onglet caché
+   * n'est pas « en ligne »). Utilisé par les routes REST pour overrider le `isOnline`
+   * de la DB (potentiellement obsolète).
    */
   public isPresenceOnline(idOrUserId: string): boolean {
-    return this.connectedUsers.has(idOrUserId);
+    return this.authHandler.isPresent(idOrUserId);
   }
 
   /**
-   * Émet `presence:snapshot` au socket fraîchement authentifié : liste les userIds
-   * (ou participantIds anonymes) actuellement online parmi les contacts du nouvel
-   * arrivant — c'est-à-dire les autres participants des conversations qu'il rejoint.
-   * Permet au client de seed son store sans attendre qu'un changement d'état arrive
-   * (closes la faille "ne se met jamais à jour" sur les contacts déjà connectés).
+   * Le LECTEUR de l'instantané, avec son VRAI rôle — la seule donnée qui
+   * autorise un ADMIN/BIGBOSS à voir la présence de qui il regarde.
+   *
+   * Ni `SocketUser`, ni `socket.data`, ni le contexte du handshake ne portent
+   * `User.role` (mesuré : le `select` de `AuthHandler._authenticateJWTUser` ne
+   * lit que les langues). Il est donc relu UNE fois par connexion, sur un
+   * chemin qui fait déjà plusieurs lectures — jamais par contact filtré.
+   *
+   * Un lecteur ANONYME n'est pas un lecteur de rang bas : il n'a AUCUNE
+   * relation, donc la loi partagée lui rend `null` et tout est masqué. C'est
+   * `PresenceVisibilityService` qui le dit — ici on ne fait que ne pas
+   * fabriquer d'identité pour lui.
    */
+  private async _presenceViewer(userId: string, isAnonymous: boolean): Promise<PresenceViewer> {
+    if (isAnonymous) return null;
+    const row = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    // Pas de ligne — socket périmé, compte supprimé — ⇒ AUCUN lecteur, donc
+    // tout masqué. Même refus fermé que la porte REST jumelle
+    // (`viewerFromAuthContext`, `routes/users/presence-gate.ts`), qui rend
+    // `null` pour un contexte inscrit sans rôle : une identité qu'on ne sait
+    // pas qualifier ne se voit accorder aucune relation.
+    if (!row) return null;
+    // Une ligne SANS rôle lisible reste un lecteur ordinaire : elle garde ses
+    // amitiés et ne gagne aucun privilège.
+    return { userId, role: row.role ?? 'USER' };
+  }
+
   /**
-   * Masque la présence des contacts selon leurs préférences privacy (cascade
-   * showOnlineStatus maître + showLastSeen) ET le blocage bidirectionnel avec
-   * `viewerId` — même règle que `GET /users/presence` (`PresenceVisibilityService`).
-   * Anonymes → défaut (montrés, non-bloquables). Appliqué à l'émission (pas au
-   * cache) pour couvrir aussi le cache-hit.
+   * Applique la visibilité de présence de CHAQUE contact pour CE lecteur —
+   * amitié acceptée, rôle du lecteur, blocage bidirectionnel et préférences,
+   * tenus ensemble par `PresenceVisibilityService.resolveForPresenceEvent` (porte
+   * de `GET /users/presence` + blocage plus fort que le privilège ADMIN, #13298).
+   *
+   * Directive produit (2026-08-25) : partager une conversation n'autorise plus
+   * rien. Le prédécesseur (`_applyPresencePrefs`) n'appliquait que les
+   * préférences et le blocage, donc un co-participant INCONNU recevait la
+   * pastille et la dernière connexion de tout le monde à chaque reconnexion.
+   *
+   * Masqué se présente ici comme HORS LIGNE (`isOnline: false`,
+   * `lastActiveAt: null`) et non comme une absence : le contact reste dans la
+   * liste — les clients typent `isOnline` non nullable sur ce canal — mais il
+   * n'en apprend rien. `lastActiveAt` voyage À CÔTÉ d'`isOnline` et tombe avec
+   * lui : un gate posé sur le seul drapeau laisserait partir l'horodatage, qui
+   * est précisément ce que la directive interdit de révéler.
+   *
+   * Le filtre est appliqué à l'ÉMISSION, jamais au cache : `presenceSnapshotCache`
+   * stocke l'état BRUT, partagé par tous les lecteurs, et la visibilité est par
+   * lecteur.
    */
-  private async _applyPresencePrefs(
-    viewerId: string,
+  private async _applyPresenceVisibility(
+    viewer: PresenceViewer,
     users: { userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[],
   ): Promise<{ userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[]> {
     if (users.length === 0) return users;
-    const [prefsMap, blockedUserIds] = await Promise.all([
-      this.privacyPreferencesService.getPreferencesForUsers(
-        users.map(u => ({ id: u.userId, isAnonymous: false })),
-      ),
-      getBlockedUserIdsAmong(this.prisma, viewerId, users.map(u => u.userId)),
-    ]);
-    return users.map(u => {
-      if (blockedUserIds.has(u.userId)) return { ...u, isOnline: false, lastActiveAt: null };
-      const p = prefsMap.get(u.userId);
-      if (p && !p.showOnlineStatus) return { ...u, isOnline: false, lastActiveAt: null };
-      return { ...u, lastActiveAt: p && !p.showLastSeen ? null : u.lastActiveAt };
-    });
+    const visibility = await this.presenceVisibilityService.resolveForPresenceEvent(
+      viewer,
+      users.map(u => u.userId),
+    );
+    // Les ids ANONYMES (des `Participant.id`) n'ont pas de compte : le
+    // résolveur ne leur trouve ni amitié ni préférence, donc il rend HIDDEN —
+    // sauf à un ADMIN+, à qui il rend FULL pour tout id qu'on lui présente.
+    return users.map(u => applyPresenceVisibilityAsOffline(u, visibility.get(u.userId)));
   }
 
+  /**
+   * Émet `presence:snapshot` au socket fraîchement authentifié : l'état de
+   * présence des contacts du nouvel arrivant, pour que le client amorce son
+   * store sans attendre la prochaine transition.
+   *
+   * La LISTE des contacts reste dérivée des conversations — c'est la façon la
+   * moins chère de nommer « les gens que ce client va afficher ». Ce n'est PAS
+   * une autorisation : chaque entrée traverse ensuite
+   * `_applyPresenceVisibility`, où un co-participant qui n'est ni ami accepté
+   * ni ADMIN+ ressort HORS LIGNE, sans dernière connexion (directive produit du
+   * 2026-08-25). Ce qui gouverne l'audience est la RELATION ; la conversation
+   * ne fait que fournir des candidats.
+   */
   private async _emitPresenceSnapshot(socket: Socket, userId: string, isAnonymous: boolean): Promise<void> {
     try {
+      const viewer = await this._presenceViewer(userId, isAnonymous);
       const cached = this.presenceSnapshotCache.get(userId);
       if (cached && Date.now() - cached.cachedAt < this.PRESENCE_SNAPSHOT_CACHE_TTL_MS) {
-        const users = await this._applyPresencePrefs(
-          userId,
-          cached.users.map(u => ({ ...u, isOnline: this.connectedUsers.has(u.userId) })),
+        const users = await this._applyPresenceVisibility(
+          viewer,
+          cached.users.map(u => ({ ...u, isOnline: this.authHandler.isPresent(u.userId) })),
         );
         socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
         logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts (cache) sent to ${userId}`);
@@ -1288,13 +1561,7 @@ export class MeeshySocketIOManager {
 
           // Lister tous les autres participants (registered + anonymes) de ces conversations
           const contacts = await this.prisma.participant.findMany({
-            where: {
-              conversationId: { in: conversationIds },
-              isActive: true,
-              NOT: isAnonymous
-                ? { id: userId }
-                : { userId: userId }
-            },
+            where: presenceSnapshotContactsWhere({ conversationIds, viewerId: userId, isAnonymous }),
             select: {
               id: true,
               userId: true,
@@ -1314,7 +1581,7 @@ export class MeeshySocketIOManager {
             if (seen.has(presenceKey)) continue;
             seen.add(presenceKey);
 
-            const isOnline = this.connectedUsers.has(presenceKey);
+            const isOnline = this.authHandler.isPresent(presenceKey);
             const username = c.user?.username ?? c.user?.displayName ?? c.displayName ?? presenceKey;
             const lastActiveAt = c.user?.lastActiveAt ?? c.lastActiveAt ?? null;
 
@@ -1322,7 +1589,9 @@ export class MeeshySocketIOManager {
           }
 
           this.presenceSnapshotCache.set(userId, { users, cachedAt: Date.now() });
-          socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users: await this._applyPresencePrefs(userId, users) });
+          socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, {
+            users: await this._applyPresenceVisibility(viewer, users),
+          });
           logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts sent to ${userId} (${users.filter(u => u.isOnline).length} online)`);
         }
       }
@@ -1364,7 +1633,7 @@ export class MeeshySocketIOManager {
    * `readerKey` porte la CLÉ DE CONNEXION, pas un `User.id` : c'est `userId`
    * pour un inscrit et `Participant.id` pour un invité de lien partagé — même
    * convention que la file (`enqueueForOfflineParticipants` enfile sous
-   * `p.userId ?? p.id`), que `_dropEndedMemberships` et que
+   * `p.userId ?? p.id`), que `authorizeDrainedEntries` et que
    * `_emitDeliveryForDrainedMessages`. La résolution lisait auparavant la seule
    * colonne `userId`, donc rendait ZÉRO ligne pour un invité, donc sortait en
    * silence ; le site d'appel enterrait le trou sous un `if (!isAnonymous)` qui
@@ -1385,13 +1654,37 @@ export class MeeshySocketIOManager {
         where: isAnonymous
           ? { id: readerKey, isActive: true }
           : { userId: readerKey, isActive: true },
-        // `lastMessageAt` ne sert PAS au compteur — il sert à borner la passe
-        // de ponts ci-dessous sur les conversations que le lecteur va
-        // réellement voir. Cf. `BRIDGE_SNAPSHOT_LIMIT`.
-        select: { conversationId: true, conversation: { select: { lastMessageAt: true } } },
+        select: { conversationId: true },
       });
       if (participantRows.length === 0) return;
-      const conversationIds = participantRows.map(p => p.conversationId);
+
+      // `lastMessageAt` ne sert PAS au compteur — il sert à borner la passe
+      // de ponts ci-dessous sur les conversations que le lecteur va
+      // réellement voir (cf. `BRIDGE_SNAPSHOT_LIMIT`). Il est lu À PART, et
+      // jamais par la relation requise `participant.conversation` : une
+      // adhésion dont la conversation a été supprimée (orpheline) faisait
+      // lever Prisma (« Inconsistent query result: Field conversation is
+      // required ») et perdait l'instantané ENTIER — 118 compteurs pour une
+      // ligne de 2025, à chaque reconnexion, mesuré en prod le 2026-08-26.
+      // L'orpheline est ignorée ici et signalée, pour le balayage de
+      // maintenance qui la retirera.
+      const liveConversations = await this.prisma.conversation.findMany({
+        where: { id: { in: participantRows.map(p => p.conversationId) } },
+        select: { id: true, lastMessageAt: true },
+      });
+      const liveConversationIds = new Set(liveConversations.map(c => c.id));
+      const orphanConversationIds = participantRows
+        .map(p => p.conversationId)
+        .filter(id => !liveConversationIds.has(id));
+      if (orphanConversationIds.length > 0) {
+        logger.warn('unread snapshot: participations pointing to a missing conversation were skipped', {
+          readerKey,
+          isAnonymous,
+          orphanConversationIds,
+        });
+      }
+      const conversationIds = liveConversations.map(c => c.id);
+      if (conversationIds.length === 0) return;
       // `getUnreadCountsForUser` résout DÉJÀ les deux identités en interne
       // (`OR: [{ id: userId }, { userId }]`) — c'est la lecture de participants
       // au-dessus qui ne connaissait qu'une colonne.
@@ -1429,10 +1722,7 @@ export class MeeshySocketIOManager {
       // gardent leur compteur exact — seul leur pont attend le prochain
       // `GET /conversations`, qui le rendra en même temps que leur ligne.
       const lastMessageAtByConversation = new Map(
-        participantRows.map(row => [
-          row.conversationId,
-          (row as { conversation?: { lastMessageAt?: Date } }).conversation?.lastMessageAt ?? null,
-        ])
+        liveConversations.map(c => [c.id, c.lastMessageAt ?? null])
       );
       const bridgeCandidates = [...unreadCounts]
         .map(([conversationId, unreadCount]) => ({ conversationId, unreadCount }))
@@ -1506,7 +1796,7 @@ export class MeeshySocketIOManager {
   public getPresenceForIds(ids: readonly string[]): Map<string, boolean> {
     const out = new Map<string, boolean>();
     for (const id of ids) {
-      out.set(id, this.connectedUsers.has(id));
+      out.set(id, this.authHandler.isPresent(id));
     }
     return out;
   }
@@ -1517,7 +1807,7 @@ export class MeeshySocketIOManager {
    * construire le snapshot `presence:snapshot` émis à l'auth.
    */
   public listOnlineAmong(candidateIds: readonly string[]): string[] {
-    return candidateIds.filter(id => this.connectedUsers.has(id));
+    return candidateIds.filter(id => this.authHandler.isPresent(id));
   }
 
   async initialize(): Promise<void> {
@@ -1529,6 +1819,12 @@ export class MeeshySocketIOManager {
       const zmqClient = this.translationService.getZmqClient();
       if (zmqClient) {
         PostTranslationService.init(this.prisma, zmqClient, this.socialEventsHandler);
+        // Traduction de la LÉGENDE d'un média (#6280) — même pipeline, même
+        // discipline d'init, namespace ZMQ distinct (`media-caption:`).
+        MediaCaptionTranslationService.init(this.prisma, zmqClient, this.socialEventsHandler);
+        // Traduction du texte ALTERNATIF d'accessibilité d'un média (#6737) —
+        // jumelle exacte, namespace ZMQ distinct (`media-alt:`).
+        MediaAltTranslationService.init(this.prisma, zmqClient, this.socialEventsHandler);
       }
 
       // Initialiser le service de notifications avec Socket.IO
@@ -1576,6 +1872,7 @@ export class MeeshySocketIOManager {
       this.agentAdminRelay.start().catch((error) => {
         logger.error('❌ Erreur démarrage AgentAdminRelay', error);
       });
+      this.adminMetricsHandler.start();
       // ✅ FIX BUG #3: SUPPRIMER le polling périodique
       // Le système utilise maintenant uniquement les événements Socket.IO (connect/disconnect)
       // et le broadcast de statut lors de ces événements
@@ -1626,7 +1923,7 @@ export class MeeshySocketIOManager {
         try { await this.messageHandler.handleMessageDelete(socket, data, callback); } catch (error) { logger.error('[MESSAGE_DELETE] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
-      socket.on(CLIENT_EVENTS.REQUEST_TRANSLATION, async (data: { messageId: string; targetLanguage: string }) => {
+      socket.on(CLIENT_EVENTS.REQUEST_TRANSLATION, async (data) => {
         // Rate limit: 10 requêtes/min par userId (multi-device inclus) pour éviter la saturation ZMQ
         const translationUserId = this.socketToUser.get(socket.id);
         if (!translationUserId) {
@@ -1653,7 +1950,17 @@ export class MeeshySocketIOManager {
 
       socket.on(CLIENT_EVENTS.CONVERSATION_LEAVE, async (data) => {
         try { await this.conversationHandler.handleConversationLeave(socket, data); } catch (error) { logger.error('[CONVERSATION_LEAVE] Error:', error); }
+        try { await this.conversationViewingHandler.handleStop(socket, data); } catch (error) { logger.error('[CONVERSATION_LEAVE] viewing Error:', error); }
       });
+
+      // « Est dans la conversation » (#8892) — l'écran ouvert au premier plan, et l'arrière-plan.
+      this.conversationViewingHandler.listen(socket);
+      // #9617 — une capture d'écran d'un contenu qui disparaît, annoncée au fil.
+      listenContentCapture(socket, { prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers, deliver: captureNoticeDelivery({ io: this.io, prisma: this.prisma, readStatusService: this.readStatusService, bridgeService: this.bridgeService }) });
+      // #13142 — la porte unique des signaux chiffrés d'une conversation e2ee.
+      listenE2EESignals(socket, e2eeSignalHandlerDeps({ prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers }));
+      // #13935, #13934 — le talkie et l'écoute partagée, tronquée lecteur par lecteur.
+      listenCircleLive(socket, { prisma: this.prisma, io: this.io, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers });
 
       this.callEventsHandler.setupCallEvents(
         socket,
@@ -1706,6 +2013,11 @@ export class MeeshySocketIOManager {
         this.statusHandler.handleTypingStop(socket, data).catch((error) => logger.error('[TYPING_STOP] Error:', error));
       });
 
+      // #10575 — un onglet caché ou une app en arrière-plan n'est plus « en ligne ».
+      socket.on(CLIENT_EVENTS.PRESENCE_APP_STATE, (data?: { foreground?: unknown }) => {
+        this.authHandler.handleAppState(socket, data).catch((error) => logger.error('[PRESENCE_APP_STATE] Error:', error));
+      });
+
       socket.on(CLIENT_EVENTS.HEARTBEAT, (data?: { clientTime?: number }) => {
         this.authHandler.handleHeartbeat(socket, data).catch((error) => logger.error('[HEARTBEAT] Error:', error));
       });
@@ -1728,6 +2040,14 @@ export class MeeshySocketIOManager {
           logger.error('[ADMIN_AGENT_UNSUBSCRIBE] Error:', error);
           callback?.({ success: false, error: 'Internal server error' });
         }
+      });
+
+      socket.on(CLIENT_EVENTS.ADMIN_METRICS_SUBSCRIBE, (data, ack) => {
+        this.adminMetricsHandler.handleSubscribe(socket, data, ack).catch((error) => logger.error('[ADMIN_METRICS_SUBSCRIBE] Error:', error));
+      });
+
+      socket.on(CLIENT_EVENTS.ADMIN_METRICS_UNSUBSCRIBE, () => {
+        try { this.adminMetricsHandler.handleUnsubscribe(socket); } catch (error) { logger.error('[ADMIN_METRICS_UNSUBSCRIBE] Error:', error); }
       });
 
       socket.on(CLIENT_EVENTS.REACTION_ADD, async (data, callback) => {
@@ -1802,6 +2122,11 @@ export class MeeshySocketIOManager {
         // partageur, il n'a pas besoin d'une table qui, elle, peut déjà avoir
         // été vidée.
         this.locationHandler.handleSocketDisconnecting(socket.id);
+        // Ici et pas dans `disconnect` pour la même raison : `viewing:stop`
+        // part dans la room de la conversation.
+        void this.conversationViewingHandler.handleSocketDisconnecting(socket.id).catch((error) => {
+          logger.error('viewing handleSocketDisconnecting failed', { error, socketId: socket.id });
+        });
 
         const disconnectingUserId = this.socketToUser.get(socket.id);
         if (disconnectingUserId) {
@@ -1815,11 +2140,16 @@ export class MeeshySocketIOManager {
           void this.statusHandler.handleSocketDisconnecting(
             socket.id,
             (room, event, data, exceptSocketIds) => {
-              // event is always SERVER_EVENTS.TYPING_STOP — cast bypasses union exhaustiveness check
+              // `broadcastFn` DÉCLARE son seul canal (`typing:stop`) et la charge
+              // qui lui correspond : le couple arrive ici CORRÉLÉ, et part par la
+              // porte sans qu'aucun cast ne le décorrèle. La version d'avant
+              // portait `event as keyof ServerToClientEvents, data as any` sous
+              // un commentaire qui AFFIRMAIT la même contrainte — une affirmation
+              // que seul le type peut tenir (#18649).
               const emitter = exceptSocketIds && exceptSocketIds.length > 0
                 ? this.io.to(room).except(exceptSocketIds)
                 : this.io.to(room);
-              emitter.emit(event as keyof ServerToClientEvents, data as any);
+              emitServerEvent(emitter, event, data);
             },
             otherSocketIds.size > 0 ? otherSocketIds : undefined
           ).catch((error) => {
@@ -1862,25 +2192,48 @@ export class MeeshySocketIOManager {
   }
 
 
-  private async _handleTranslationRequest(socket: Socket, data: { messageId: string; targetLanguage: string }) {
+  private async _handleTranslationRequest(socket: Socket, data: unknown) {
     try {
+      // Frontière Zod partagée — même garde que les douze familles de handlers
+      // délégués. `messageId` filait jusqu'ici en clair dans `findUnique` sur une
+      // colonne ObjectId : une valeur non-ObjectId (chaîne lisible, `undefined`,
+      // objet) y jetait `Malformed ObjectID` / `PrismaClientValidationError`,
+      // avalé par le `catch` du site d'appel en une erreur opaque. Valider ici
+      // rejette la charge malformée AVANT toute requête, comme le fait déjà
+      // `SocketMessageSendSchema` pour les références de transfert.
+      const validation = validateSocketEvent(SocketTranslationRequestSchema, data);
+      if (isValidationFailure(validation)) {
+        socket.emit(SERVER_EVENTS.ERROR, { message: validation.error });
+        return;
+      }
+      const { messageId, targetLanguage } = validation.data;
+
       const userId = this.socketToUser.get(socket.id);
       if (!userId) {
         socket.emit(SERVER_EVENTS.ERROR, { message: 'User not authenticated' });
         return;
       }
-      
-      
-      // Charger le message pour connaître sa conversation, PUIS vérifier
-      // l'appartenance AVANT de servir toute traduction (cache OU on-demand).
-      // Sans cette garde en amont, la branche cache divulguait le contenu
-      // traduit à un non-participant : le contrôle n'existait que côté on-demand,
-      // donc un message déjà mis en cache fuitait vers n'importe quel socket
-      // connaissant son id (IDOR / message-content disclosure).
-      const message = await this.prisma.message.findUnique({
-        where: { id: data.messageId },
-        select: { id: true, conversationId: true, content: true, originalLanguage: true, senderId: true, encryptionMode: true }
+
+
+      // #16557 — la loi de lecture, AVANT toute traduction, en cache comme à la
+      // demande. Un refus ne dit ni que le message existe, ni qu'il est rappelé :
+      // inconnu, rappelé et « pas pour toi » rendent le même `Access denied`.
+      const connectedUser = this.connectedUsers.get(userId);
+      const mayTranslate = await readerMayTranslateMessage(this.prisma, {
+        reader: historyReaderFromAuthContext({
+          isAnonymous: connectedUser?.isAnonymous,
+          userId: connectedUser?.isAnonymous ? connectedUser.participantId : userId,
+        }),
+        messageId,
+        now: new Date(),
       });
+      if (!mayTranslate) {
+        socket.emit(SERVER_EVENTS.ERROR, { message: 'Access denied' });
+        return;
+      }
+
+      // #11381 — le texte d'un message `server`/`hybrid` est ouvert par la passerelle ; scellé, il reste vide.
+      const message = await loadTranslatableMessage(this.prisma, messageId);
 
       if (!message || !message.content) {
         socket.emit(SERVER_EVENTS.ERROR, {
@@ -1889,25 +2242,15 @@ export class MeeshySocketIOManager {
         return;
       }
 
-      // Verify requesting user is a participant of the message's conversation
-      const connectedUser = this.connectedUsers.get(userId);
-      const membershipCheck = connectedUser?.isAnonymous
-        ? await this.prisma.participant.findFirst({
-            where: { id: connectedUser.participantId, conversationId: message.conversationId, isActive: true },
-            select: { id: true },
-          })
-        : await this.prisma.participant.findFirst({
-            where: { userId, conversationId: message.conversationId, isActive: true },
-            select: { id: true },
-          });
-
-      if (!membershipCheck) {
-        socket.emit(SERVER_EVENTS.ERROR, { message: 'Access denied' });
-        return;
-      }
+      const creditRequest = () => creditTranslationRequest({
+        engagement: this.translationRequestEngagement,
+        requester: { userId, isAnonymous: connectedUser?.isAnonymous ?? false },
+        conversationId: message.conversationId,
+        onError: (error) => logger.warn('[REQUEST_TRANSLATION] tool.translation_request credit failed', { error }),
+      });
 
       // Récupérer la traduction (depuis le cache ou la base de données)
-      const translation = await this.translationService.getTranslation(data.messageId, data.targetLanguage);
+      const translation = await this.translationService.getTranslation(messageId, targetLanguage);
 
       if (translation) {
         // MÊME constructeur que le retour ZMQ (`_handleTextTranslationReady`).
@@ -1919,8 +2262,8 @@ export class MeeshySocketIOManager {
         // était en cache, c'est-à-dire sur le chemin instantané ; elle ne
         // « marchait » que sur cache MISS, servie par l'autre constructeur.
         socket.emit(SERVER_EVENTS.MESSAGE_TRANSLATION, buildTranslationEvent({
-          messageId: data.messageId,
-          targetLanguage: data.targetLanguage,
+          messageId,
+          targetLanguage,
           translatedText: translation.translatedText,
           sourceLanguage: translation.sourceLanguage,
           translationModel: translation.translatorModel || translation.modelType,
@@ -1929,6 +2272,7 @@ export class MeeshySocketIOManager {
         }));
 
         this.stats.translations_sent++;
+        creditRequest();
 
       } else {
         // No cached translation — trigger on-demand translation via ZMQ
@@ -1939,11 +2283,12 @@ export class MeeshySocketIOManager {
             senderId: message.senderId ?? undefined,
             content: message.content,
             originalLanguage: message.originalLanguage ?? 'auto',
-            targetLanguage: data.targetLanguage,
+            targetLanguage,
             encryptionMode: message.encryptionMode as MessageData['encryptionMode'],
           });
 
-          logger.info(`🔄 On-demand translation requested for message ${data.messageId} -> ${data.targetLanguage}`);
+          logger.info(`🔄 On-demand translation requested for message ${messageId} -> ${targetLanguage}`);
+          creditRequest();
         } catch (translationError) {
           logger.error(`❌ On-demand translation failed: ${translationError}`);
           socket.emit(SERVER_EVENTS.ERROR, {
@@ -2043,133 +2388,17 @@ export class MeeshySocketIOManager {
    * @deprecated Cette fonction gère les anciennes traductions de texte (non audio).
    * Les nouvelles traductions audio utilisent _handleAudioTranslationReady et variants.
    */
-  private async _handleTextTranslationReady(data: { taskId: string; result: any; targetLanguage: string; translationId?: string; id?: string }) {
-    try {
-      const { result, targetLanguage} = data;
-
-      // Une traduction de post/commentaire/story emprunte le même bus que celle
-      // d'un message, sous un identifiant namespacé (`post:<id>`) : elle n'a ni
-      // ligne `Message`, ni room de conversation. La chercher ici envoyait
-      // `post:<24-hex>` à Prisma comme ObjectId (P2023) puis loggait un « No
-      // conversation found » alarmant pour un cas parfaitement normal — le
-      // broadcast social est fait par `SocialEventsHandler`.
-      if (!isMessageTranslationTarget(result?.messageId ?? '')) {
-        return;
-      }
-
-      // Récupérer la conversation du message pour broadcast
-      let conversationIdForBroadcast: string | null = null;
-      // `senderId` ne sert qu'à remplir `updatedBy`, OBLIGATOIRE dans
-      // ConversationUpdatedEventData, sur le rafraîchissement d'aperçu ci-dessous.
-      // Une traduction n'a pas d'acteur humain : l'auteur du message traduit est
-      // la seule identité honnête à porter là, et c'est déjà le repli que le
-      // chemin d'envoi utilise (`senderUserId ?? message.senderId`). La colonne
-      // est non-nullable et la ligne a forcément été lue quand on arrive au
-      // rafraîchissement — `conversationIdForBroadcast` sort du MÊME `msg`.
-      let senderIdForPreview = '';
-      try {
-        const msg = await this.prisma.message.findUnique({
-          where: { id: result.messageId },
-          select: { conversationId: true, senderId: true }
-        });
-        conversationIdForBroadcast = msg?.conversationId || null;
-        senderIdForPreview = msg?.senderId ?? '';
-      } catch (error) {
-        logger.error(`❌ [SocketIOManager] Erreur récupération conversation:`, error);
-      }
-      
-      // Préparer les données de traduction au format correct pour le frontend
-      // FORMAT: TranslationEvent avec un tableau de traductions
-      const translationData: TranslationEvent = buildTranslationEvent({
-        messageId: result.messageId,
-        targetLanguage,
-        translatedText: result.translatedText,
-        sourceLanguage: result.sourceLanguage,
-        translationModel: result.translationModel || result.modelType,
-        confidenceScore: result.confidenceScore,
-        cached: false,
-        translationId: data.translationId || data.id,
-      });
-      
-      
-      // Diffuser dans la room de conversation (méthode principale et UNIQUE)
-      if (conversationIdForBroadcast) {
-        // Normaliser l'ID de conversation
-        const normalizedId = await this.normalizeConversationId(conversationIdForBroadcast);
-        const roomName = ROOMS.conversation(normalizedId);
-        const roomClients = this.io.sockets.adapter.rooms.get(roomName);
-        const clientCount = roomClients ? roomClients.size : 0;
-        
-        
-        this.io.to(roomName).emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
-        this.stats.translations_sent += clientCount;
-
-        // Troisième audience, la seule que rien ne servait : les participants
-        // HORS LIGNE à l'instant où NLLB répond. La room ne contient que des
-        // sockets connectées, et le `message:new` mis en file à l'ENVOI porte
-        // `translations: []` — la traduction atterrit une seconde plus tard, par
-        // ZMQ. Sans cette entrée, le message rejoué au reconnect reste
-        // définitivement dans la langue de l'expéditeur : aucun client ne
-        // refetch spontanément. Le Prisme devenait fonction de la CONNECTIVITÉ
-        // du lecteur — exactement le défaut que `emitAttachmentUpdated` ferme
-        // pour la transcription d'une note vocale, ici pour le texte.
-        //
-        // Aucun acteur à exclure : NLLB n'est pas une personne, et l'auteur du
-        // message est précisément un participant dont la copie ne porte aucune
-        // traduction à l'envoi.
-        //
-        // `dedupKey` scopé à la LANGUE CIBLE : un message se traduit vers autant
-        // de langues que la conversation compte de langues de lecture, et
-        // l'identité de dédup par défaut (messageId, eventType) les écraserait
-        // l'une après l'autre — le lecteur hors ligne ne convergerait que sur la
-        // dernière arrivée.
-        // Borné aux lecteurs dont le Prisme porte CETTE langue — la même règle
-        // que `emitConversationPreviewUpdate` applique juste en dessous avec
-        // `onlyIfPreviewCarriesLanguage`. Sans ce bornage, un message d'une
-        // conversation à L langues déposait L entrées chez CHAQUE absent, dont
-        // L−1 dans des langues qu'il ne peut pas afficher : la file qui porte
-        // les vrais messages était diluée d'autant, et le repli mémoire
-        // (plafonné à 50 entrées par utilisateur) évinçait des messages réels
-        // au profit de traductions illisibles.
-        await this._enqueueForOfflineParticipants({
-          conversationId: normalizedId,
-          eventType: 'translation',
-          messageId: result.messageId,
-          payload: translationData,
-          dedupKey: `${result.messageId}:${targetLanguage}`,
-          restrictToReadersOfLanguage: targetLanguage,
-        });
-
-        // `message:translation` ne porte QUE la room de conversation. Un lecteur
-        // resté sur l'écran de liste n'y apprend rien : sa ligne garde l'aperçu
-        // servi à l'ENVOI, quand aucune traduction n'existait encore, et rien ne
-        // repasse jamais. Le Prisme devenait donc fonction de l'ordre d'arrivée —
-        // ouvrir la conversation traduisait la ligne, ne pas l'ouvrir la laissait
-        // dans la langue de l'expéditeur, indéfiniment.
-        //
-        // Borné aux deux seuls cas où la ligne change VRAIMENT : le message
-        // traduit est encore le dernier de la conversation, et le destinataire
-        // lit la langue qui vient d'atterrir (cf. `PreviewUpdateScope`).
-        await emitConversationPreviewUpdate(
-          this.prisma,
-          this.io,
-          normalizedId,
-          senderIdForPreview,
-          (error) => logger.warn('preview refresh after translation failed (best-effort)', {
-            messageId: result.messageId,
-            targetLanguage,
-            error,
-          }),
-          { onlyIfLatestIs: result.messageId, onlyIfPreviewCarriesLanguage: targetLanguage },
-        );
-      } else {
-        logger.warn(`⚠️ [SocketIOManager] No conversation found for message ${result.messageId} — translation dropped (no room to broadcast to)`);
-      }
-
-    } catch (error) {
-      logger.error(`❌ Erreur envoi traduction: ${error}`);
-      this.stats.errors++;
-    }
+  private async _handleTextTranslationReady(data: TextTranslationReady) {
+    await deliverTextTranslation(
+      {
+        prisma: this.prisma,
+        io: this.io,
+        normalizeConversationId: (id) => this.normalizeConversationId(id),
+        enqueueForOfflineParticipants: (params) => this._enqueueForOfflineParticipants(params),
+        stats: this.stats,
+      },
+      data,
+    );
   }
 
   /**
@@ -2261,9 +2490,22 @@ export class MeeshySocketIOManager {
         processingTimeMs: data.processingTimeMs
       };
 
-      // Diffuser dans la room de conversation
-      this.io.to(roomName).emit(SERVER_EVENTS.TRANSCRIPTION_READY, transcriptionData);
-      logger.info('transcription:ready broadcast', { messageId: data.messageId, attachmentId: data.attachmentId, conversationId: normalizedId, lang: data.transcription.language });
+      // #18623 — la transcription est le TEXTE du message : elle ne part qu'à
+      // qui a le droit de LIRE ce message. `_broadcastAttachmentUpdated`, sept
+      // lignes plus bas, applique déjà cette loi (#17025) ; ce canal-ci partait
+      // nu à toute la room, donc une milliseconde AVANT elle.
+      const audience = await flooredAudience(this.prisma, normalizedId, data.messageId, (error) =>
+        logger.error('transcription:ready readership unresolvable — not broadcast', error, { messageId: data.messageId, conversationId: normalizedId }),
+      );
+      const target = audience.kind === 'unknown' ? null : targetWithout(this.io.to(roomName), audience.exceptRooms);
+      if (target) {
+        target.emit(SERVER_EVENTS.TRANSCRIPTION_READY, transcriptionData);
+        logger.info('transcription:ready broadcast', { messageId: data.messageId, attachmentId: data.attachmentId, conversationId: normalizedId, lang: data.transcription.language });
+      } else {
+        // La pièce enrichie reste servie par la relecture du fil, qui applique
+        // le plancher côté serveur : on perd une remise, jamais la vérité.
+        logger.warn('transcription:ready withheld — floored audience unresolved', { messageId: data.messageId, conversationId: normalizedId });
+      }
 
       // Generic attachment-updated delta : clients atomically replace the
       // attachment in their store and refresh derived metadata
@@ -2293,7 +2535,13 @@ export class MeeshySocketIOManager {
     try {
       const fresh = await this.prisma.messageAttachment.findUnique({
         where: { id: attachmentId },
-        select: attachmentMediaSelect,
+        // #7014 — la forme du canal socket, protection comprise : cette ligne
+        // repart telle quelle par `serializeAttachmentForSocket` sur
+        // `message:attachment-updated`, l'événement qui REMPLACE la pièce dans
+        // le cache des clients. Chargée par `attachmentMediaSelect` nu, elle
+        // effaçait la protection d'une pièce déjà correctement masquée dès que
+        // Whisper ou le TTS finissait de l'enrichir.
+        select: attachmentSocketSelect,
       });
       if (!fresh) {
         logger.warn(`⚠️ [SocketIOManager] Cannot broadcast attachment-updated: attachment ${attachmentId} not found`);
@@ -2306,7 +2554,11 @@ export class MeeshySocketIOManager {
         connectedUsers: this.connectedUsers,
         conversationId: normalizedConversationId,
         messageId,
-        attachment: fresh as Record<string, unknown>,
+        // #7028 — `fresh` porte déjà la forme exacte de `attachmentSocketSelect`
+        // (protection comprise) : le caster vers `Record<string, unknown>`
+        // l'appauvrissait au point de ne plus satisfaire `SocketAttachmentRow`,
+        // le paramètre de `emitAttachmentUpdated` depuis ce lot.
+        attachment: fresh,
       });
     } catch (err) {
       logger.error(`❌ [SocketIOManager] Failed to broadcast attachment-updated for ${attachmentId}:`, err);
@@ -2324,7 +2576,6 @@ export class MeeshySocketIOManager {
    */
   private async _broadcastTranslationEvent(
     data: AudioTranslationEventData & { taskId?: string; phase?: string; transcription?: unknown },
-    eventName: string,
     eventConstant:
       | typeof SERVER_EVENTS.AUDIO_TRANSLATION_READY
       | typeof SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE
@@ -2393,14 +2644,34 @@ export class MeeshySocketIOManager {
         logger.debug(`audio-translation:ready no segments lang=${data.language} msg=${data.messageId}`);
       }
 
+      // #16340 — une traduction TEXTE SEULE (TTS en échec) n'a pas de piste :
+      // les clients publiés jouent `url` sans le tester. Elle voyage par la
+      // pièce re-sérialisée, où une entrée sans `url` est déjà ignorée.
+      if (!translationData.translatedAudio.url) {
+        logger.info('audio-translation:text-only', { messageId: data.messageId, attachmentId: data.attachmentId, lang: data.language });
+        await this._broadcastAttachmentUpdated(data.attachmentId, data.messageId, normalizedId);
+        return;
+      }
+
       // Diffuser dans la room de conversation
       // Nom d'événement CALCULÉ : socket.io ne le vérifie PAS (mesure du
       // cycle 104 — sur un `Ev` union, `EventParams` s'effondre en union de
       // tuples et n'importe quelle charge de la famille passe sous n'importe
       // quel membre). Ce site AVAIT l'air gardé — il émet sur un `Server`
       // paramétré par `ServerToClientEvents` — et ne l'était pas.
-      emitServerEvent(this.io.to(roomName), eventConstant, translationData);
-      logger.info('audio-translation:ready broadcast', { messageId: data.messageId, attachmentId: data.attachmentId, conversationId: normalizedId, lang: data.language });
+      // #18623 — la jumelle de `transcription:ready` : la charge porte le TEXTE
+      // traduit, ses `segments`, ET l'URL de la piste TTS. Même loi, même
+      // arbitrage.
+      const audience = await flooredAudience(this.prisma, normalizedId, data.messageId, (error) =>
+        logger.error('audio-translation readership unresolvable — not broadcast', error, { messageId: data.messageId, conversationId: normalizedId }),
+      );
+      const target = audience.kind === 'unknown' ? null : targetWithout(this.io.to(roomName), audience.exceptRooms);
+      if (target) {
+        emitServerEvent(target, eventConstant, translationData);
+        logger.info('audio-translation:ready broadcast', { messageId: data.messageId, attachmentId: data.attachmentId, conversationId: normalizedId, lang: data.language });
+      } else {
+        logger.warn('audio-translation withheld — floored audience unresolved', { messageId: data.messageId, conversationId: normalizedId });
+      }
 
       // Generic attachment-updated delta : same rationale as the
       // transcription-ready branch. Clients receive the FULL re-serialized
@@ -2429,7 +2700,6 @@ export class MeeshySocketIOManager {
 
     await this._broadcastTranslationEvent(
       data,
-      'audioTranslationReady',
       SERVER_EVENTS.AUDIO_TRANSLATION_READY,
       '🎯'
     );
@@ -2442,7 +2712,6 @@ export class MeeshySocketIOManager {
   private async _handleAudioTranslationsProgressive(data: AudioTranslationEventData & { taskId?: string; phase?: string }) {
     await this._broadcastTranslationEvent(
       data,
-      'audioTranslationsProgressive',
       SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE,
       '🔄'
     );
@@ -2455,137 +2724,146 @@ export class MeeshySocketIOManager {
   private async _handleAudioTranslationsCompleted(data: AudioTranslationEventData & { taskId?: string; phase?: string }) {
     await this._broadcastTranslationEvent(
       data,
-      'audioTranslationsCompleted',
       SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED,
       '✅'
     );
   }
 
   /**
-   * Phase B1 — emit `message:new` to a conversation room grouped by each
-   * recipient's preferred language, sending a translation-trimmed payload once
-   * per distinct language. Recipients whose language is unknown fall back to the
-   * message's original language. Opt-in via `SOCKET_LANG_FILTER=true` (OFF by
-   * default). Pure trimming is
-   * delegated to `filterMessagePayloadForLanguages` (unit-tested).
+   * Phase B1 — `message:new` groupé PAR LANGUE, délégué au site unique
+   * `messageNewByLanguage.ts` (#17086). La doctrine multi-nœud, l'ordre des
+   * deux étapes et l'enrobage PAR AUDIENCE y sont écrits une fois ; cette
+   * méthode ne fournit que ce que SEUL ce porteur sait — ses cartes de sockets.
+   * Opt-in par `SOCKET_LANG_FILTER=true` (OFF par défaut).
    */
   private _emitMessageNewByLanguage(
     room: string,
-    payload: Record<string, any>,
-    opts: { excludeUserId?: string } = {}
+    payload: SocketIOMessage,
+    opts: { excludeUserId?: string; excludeSocketId?: string } = {},
+    onEmissionError?: (error: unknown, label: string) => void
   ): void {
-    // `adapter.rooms` + `connectedUsers`/`socketToUser` only see THIS node's
-    // sockets. On a multi-node deployment (the 100k+ msg/s topology runs the
-    // Socket.IO Redis adapter) a recipient on another gateway node is never
-    // enumerated here, so the per-language loop below — which can only resolve
-    // locally-connected sockets — would silently never deliver `message:new` to
-    // them. Broadcast the FULL payload to the room across the cluster first (the
-    // Redis adapter propagates `io.to(room)`), excepting every LOCAL room socket
-    // (each served a trimmed copy by the loop). Remote sockets get exactly one
-    // (unfiltered) message:new; local sockets get exactly one trimmed copy. On a
-    // single node every room socket is local, so the except-set covers the whole
-    // room and this broadcast reaches nobody — behavior unchanged.
-    //
-    // `excludeUserId` retire en plus la room personnelle de l'expéditeur : elle
-    // reçoit le payload cid-aware par une émission séparée, et une copie
-    // cid-strippée ici lui en ferait recevoir deux (miroir exact de
-    // `MessageHandler._emitMessageNewByLanguage`).
-    const localSocketIds = this.io.sockets.adapter.rooms.get(room);
-    const exceptForRemote: string[] = localSocketIds ? [...localSocketIds] : [];
-    if (opts.excludeUserId) exceptForRemote.push(ROOMS.user(opts.excludeUserId));
-    const remoteEmitter: ReturnType<SocketIOServer['to']> = this.io
-      .to(room)
-      .except(exceptForRemote);
-    remoteEmitter.emit(SERVER_EVENTS.MESSAGE_NEW, payload);
-
-    if (!localSocketIds || localSocketIds.size === 0) return;
-
-    // Delegate the per-recipient language grouping to the shared, unit-tested
-    // `groupSocketsByLanguage` helper — exactly like `MessageHandler`'s twin
-    // path. The helper normalizes every recipient language AND the original via
-    // the shared `normalizeLanguageCode` SSOT (`'pt-BR' → 'pt'`), so a stored
-    // translation keyed on the 2-letter code is never pruned for an anonymous
-    // recipient carrying a raw BCP-47 `language` (Prisme Linguistique). The
-    // previous inline grouping only `.toLowerCase()`d the language, leaving
-    // `'pt-br'` un-matched against the `'pt'` translation key — a silent Prisme
-    // regression on this REST/ZMQ broadcast path that the socket `message:send`
-    // path (already delegating) never had.
-    const originalLanguage = String(payload.originalLanguage || 'fr');
-    const groups = groupSocketsByLanguage({
-      socketIds: localSocketIds,
-      originalLanguage,
-      excludeUserId: opts.excludeUserId,
+    emitMessageNewByLanguage({
+      io: this.io,
+      room,
+      payload,
+      exclusion: opts,
       socketToUser: (sid) => this.socketToUser.get(sid),
       resolveLanguages: (uid) => this.connectedUsers.get(uid)?.resolvedLanguages,
       userLanguage: (uid) => this.connectedUsers.get(uid)?.language,
+      onEmissionError,
     });
-
-    for (const group of groups) {
-      if (group.socketIds.length === 0) continue;
-      const filtered = filterMessagePayloadForLanguages(payload, group.languages);
-      const [firstSid, ...restSids] = group.socketIds;
-      let emitter: ReturnType<SocketIOServer['to']> = this.io.to(firstSid);
-      for (const socketId of restSids) emitter = emitter.to(socketId);
-      emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
-    }
   }
 
   /**
-   * Diffuse une transition de présence (connexion / déconnexion) aux pairs qui
-   * AFFICHENT la pastille de cette personne.
+   * Les `User.id` des ADMIN/BIGBOSS, derrière un cache mémoire à TTL.
    *
-   * PRIVACY: Respecte les préférences showOnlineStatus et showLastSeen, et le
-   * blocage bidirectionnel — même règle que `GET /users/presence`.
+   * La requête est bornée par le nombre d'administrateurs — jamais par la
+   * population connectée de la passerelle, la contrainte de coût que ce chemin
+   * porte depuis qu'il a cessé d'énumérer `connectedUsers`. Le cache évite de
+   * la rejouer à chaque connexion et déconnexion ; sa TTL est celle de
+   * l'instantané de présence, pour la même raison : le retard maximal d'une
+   * promotion de rôle sur ce canal est de 60 s, et la porte REST
+   * (`PresenceVisibilityService`) n'a, elle, aucun retard.
    *
-   * **L'audience est faite de PERSONNES, pas de fils ouverts.** La pastille de
-   * présence se regarde très majoritairement HORS du fil : liste de
-   * conversations, écrans de contacts, en-têtes (`PRESENCE_DOT_CLASS` web,
-   * `PresenceState.dotColor` iOS). `conversation:<id>` ne pouvait donc pas être
-   * la seule adresse de l'événement, parce qu'un client la QUITTE en refermant
-   * le fil tout en restant connecté — `conversation:leave` →
-   * `ConversationHandler.handleConversationLeave` → `socket.leave(...)`, émis par
-   * `ConversationSocketHandler.deinit` (iOS) dès qu'une vue de conversation
-   * disparaît. La room que `AuthHandler` avait jointe à la connexion pour
-   * ATTEINDRE ce participant était démontée par un geste qui ne voulait dire que
-   * « je ne regarde plus ce fil ».
+   * Une room `user:<id>` sans socket vivant ne coûte rien à `.to()` : un
+   * administrateur déconnecté n'est pas un destinataire à filtrer.
+   */
+  private async _globalAdminUserIds(): Promise<string[]> {
+    const cached = this.globalAdminIdsCache;
+    if (cached && Date.now() - cached.cachedAt < this.GLOBAL_ADMIN_IDS_CACHE_TTL_MS) {
+      return cached.ids;
+    }
+    const rows = await this.prisma.user.findMany({
+      where: { role: { in: PRESENCE_PRIVILEGED_ROLES } },
+      select: { id: true },
+    });
+    const ids = rows.map(row => row.id);
+    this.globalAdminIdsCache = { ids, cachedAt: Date.now() };
+    return ids;
+  }
+
+  /**
+   * Les `User.id` des MODERATOR : les collègues d'un sujet de l'équipe (#16623). Même
+   * mémoire de 60 s que la liste des administrateurs, et elle n'est lue que pour un
+   * sujet de l'équipe : une transition ordinaire n'en paie rien.
+   */
+  private async _moderatorUserIds(): Promise<string[]> {
+    const cached = this.moderatorIdsCache;
+    if (cached && Date.now() - cached.cachedAt < this.GLOBAL_ADMIN_IDS_CACHE_TTL_MS) {
+      return cached.ids;
+    }
+    const rows = await this.prisma.user.findMany({
+      where: TEAM_COLLEAGUES_WHERE,
+      select: { id: true },
+    });
+    const ids = rows.map(row => row.id);
+    this.moderatorIdsCache = { ids, cachedAt: Date.now() };
+    return ids;
+  }
+
+  /**
+   * Diffuse une transition de présence (connexion / déconnexion) aux personnes
+   * AUTORISÉES à la connaître.
    *
-   * Ce que ça coûtait, et pourquoi rien ne le rattrapait : `user:status` ne se
-   * répète pas, il ne marque que des TRANSITIONS. Un pair qui se connecte
-   * pendant que je suis ailleurs n'émettra plus rien tant qu'il reste en ligne,
-   * et `presence:snapshot` — le seul autre porteur de cette information — n'est
-   * envoyé qu'à l'authentification. Côté iOS, `PresenceManager` ne sonde jamais
-   * le réseau : son minuteur de 30 s ne fait que recalculer la DÉCROISSANCE
-   * 1/3/5 min depuis `lastActiveAt`. Une transition manquée ne se rattrapait
-   * donc pas d'elle-même : le pair restait éteint sur ma liste jusqu'à la
-   * prochaine reconnexion de socket — et ce, précisément pour les conversations
-   * que j'avais ouvertes, c'est-à-dire les miennes.
+   * Directive produit (2026-08-25), gravée dans
+   * `packages/shared/utils/presence-visibility.ts` : « Lorsqu'on n'est pas ami
+   * (aucune connexion) : je veux supprimer ma présence en ligne […] et personne
+   * ne doit savoir ma dernière connexion sur l'application si on n'est pas ami.
+   * Les utilisateurs avec le rôle ADMIN et supérieur peuvent constamment avoir
+   * l'état de présence. »
    *
-   * Le remède suit la doctrine déjà écrite dans `emitToConversationParticipants` :
-   * un participant s'adresse par `userId ?? id`, dans une room personnelle que
-   * `AuthHandler` joint à la connexion et que RIEN ne fait quitter. Les rooms de
-   * conversation restent en tête de chaîne — l'élargissement n'est qu'ADDITIF,
-   * il ne retire aucun destinataire d'aujourd'hui — et le chaînage `.to()`
-   * garantit au plus une copie par socket, y compris pour celui qui siège dans
-   * les deux.
+   * L'audience est donc faite de RELATIONS, et d'elles seules :
    *
-   * Le prix est une requête `participant` de plus par transition, sur un chemin
-   * de connexion / déconnexion (jamais par message). C'est la MÊME requête que
-   * `_emitPresenceSnapshot` fait déjà à la connexion ; elle n'est délibérément
-   * pas mutualisée avec son cache, dont le TTL rendrait la LIVRAISON de la
-   * présence tributaire de la fraîcheur d'un cache cosmétique.
+   *  - **inscrit** — les rooms personnelles (`ROOMS.user`) de ses AMIS acceptés,
+   *    des ADMIN/BIGBOSS, et la sienne (ses autres appareils). **Aucune room de
+   *    conversation.** Partager un fil n'est pas une relation : c'était pourtant
+   *    l'adresse qui, jusqu'à ce lot, livrait chaque transition à tout
+   *    co-participant inconnu — la fuite exacte que la directive nomme.
+   *  - **invité de lien (anonyme)** — il n'a pas de compte, donc pas d'ami :
+   *    ADMIN/BIGBOSS seulement. Son nom d'affichage ne part plus dans le fil.
+   *
+   * Deux charges au plus, jamais une seule aplatie : `showOnlineStatus = false`
+   * doit taire la présence pour les AMIS sans la taire pour les administrateurs
+   * ni pour les autres appareils du sujet, que la loi partagée met en FULL. Le
+   * `return` précoce sur cette préférence coupait les trois d'un coup. La
+   * décision « quelle charge pour quel sous-ensemble » vit dans
+   * `presenceStatusEmissions` (`./presence-audience`), pure et testée à part —
+   * `lastActiveAt` y est nul pour les AMIS (binaires, #13928) et tombe avec
+   * `showLastSeen` pour les proches : il voyage À CÔTÉ d'`isOnline`.
+   *
+   * Un sujet DÉSACTIVÉ n'émet AUCUNE charge — pas même la privilégiée. La loi
+   * partagée (`resolvePresenceVisibility`) tranche `targetIsDeactivated` AVANT
+   * le privilège, et `resolveForTargets` l'applique déjà à l'instantané comme à
+   * la porte REST ; ce canal la rejoint (revue F6, 2026-08-26). Le point
+   * compte parce que la désactivation (`user-management.service.updateStatus`)
+   * pose `deactivatedAt` SANS révoquer les sockets : un compte désactivé encore
+   * connecté continuait d'annoncer chacune de ses transitions à son éventail.
+   * `Participant` n'a pas de `deactivatedAt` — l'invité de lien n'est pas
+   * concerné.
+   *
+   * Le blocage bidirectionnel reste appliqué à TOUTES les charges, y compris
+   * celle des administrateurs : `.except(socketIds)` — un socket.id est aussi
+   * une room Socket.IO. C'est un cran plus strict que
+   * `PresenceVisibilityService.resolveForTargets`, qui rend FULL à un admin
+   * bloqué ; sur un canal de DIFFUSION, la décision de l'utilisateur de couper
+   * le lien l'emporte, et c'est le comportement qui existait déjà ici.
+   *
+   * Coût par transition, la contrainte de ce chemin : une lecture de
+   * préférences (cachée), une lecture d'utilisateur, UNE requête `FriendRequest`
+   * bornée par le nombre d'amis, la liste d'administrateurs (cachée 60 s) et la
+   * relation de blocage (bornée par elle-même). Rien n'y est dimensionné par la
+   * population connectée. Les deux requêtes `participant` qu'exigeait
+   * l'adressage par conversation ont disparu avec lui.
    */
   private async _broadcastUserStatus(userId: string, isOnline: boolean, isAnonymous: boolean): Promise<void> {
     try {
-      // PRIVACY: Vérifier les préférences de confidentialité de l'utilisateur
-      const privacyPrefs = await this.privacyPreferencesService.getPreferences(userId, isAnonymous);
+      const adminIds = await this._globalAdminUserIds();
 
-      // Si l'utilisateur a désactivé showOnlineStatus, ne pas broadcaster son statut
-      if (!privacyPrefs.showOnlineStatus) {
-        return;
-      }
-
-      // Récupérer les informations de l'utilisateur pour le broadcast
       if (isAnonymous) {
+        // Aucun ami possible, donc aucune audience hors administrateurs : sans
+        // eux, la lecture du participant elle-même n'a plus de destinataire.
+        if (adminIds.length === 0) return;
+
         // userId is participantId for anonymous
         const participant = await this.prisma.participant.findUnique({
           where: { id: userId },
@@ -2593,117 +2871,113 @@ export class MeeshySocketIOManager {
             id: true,
             displayName: true,
             nickname: true,
-            lastActiveAt: true,
-            conversationId: true
-          }
-        });
-
-        if (participant) {
-          const displayName = participant.nickname || participant.displayName;
-
-          // PRIVACY: Ne pas envoyer lastActiveAt si showLastSeen est désactivé
-          const lastActiveAt = privacyPrefs.showLastSeen ? participant.lastActiveAt : null;
-
-          // L'invité de lien partagé n'a QU'UNE conversation : « la room
-          // refermée » y vaut la totalité de sa présence, là où un inscrit n'en
-          // perdrait qu'une sur N. Le chemin à 1 objet n'est pas le cas facile,
-          // c'est celui qu'aucune redondance n'absorbe — d'où le même
-          // élargissement qu'à la porte inscrite, et non un raccourci.
-          const peers = await this.prisma.participant.findMany({
-            where: { conversationId: participant.conversationId, isActive: true },
-            select: { id: true, userId: true },
-          });
-          emitToConversationParticipants({
-            io: this.io,
-            conversationId: participant.conversationId,
-            participants: peers,
-            event: SERVER_EVENTS.USER_STATUS,
-            payload: {
-              userId: participant.id,
-              username: displayName,
-              isOnline,
-              lastActiveAt
-            },
-          });
-
-        }
-      } else {
-        const user = await this.prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            id: true,
-            username: true,
-            displayName: true,
-            firstName: true,
-            lastName: true,
             lastActiveAt: true
           }
         });
+        if (!participant) return;
 
-        if (user) {
-          const displayName = user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username;
-
-          // PRIVACY: Ne pas envoyer lastActiveAt si showLastSeen est désactivé
-          const lastActiveAt = privacyPrefs.showLastSeen ? user.lastActiveAt : null;
-
-          // Find all conversations this user participates in
-          const participantRows = await this.prisma.participant.findMany({
-            where: { userId: user.id, isActive: true },
-            select: { conversationId: true }
+        // Les préférences ne sont pas lues : le seul sous-ensemble servi est
+        // celui que la loi partagée met en FULL, où elles ne s'appliquent pas.
+        for (const emission of presenceStatusEmissions({
+          subjectId: participant.id,
+          isAnonymous: true,
+          friendLevels: new Map(),
+          adminIds,
+          lastActiveAt: participant.lastActiveAt,
+          showOnlineStatus: true,
+          showLastSeen: true,
+        })) {
+          this.io.to(emission.rooms).emit(SERVER_EVENTS.USER_STATUS, {
+            userId: participant.id,
+            username: participant.nickname || participant.displayName,
+            isOnline,
+            lastActiveAt: emission.lastActiveAt
           });
-
-          // Un seul emit pour toute l'audience (chaînage `.to()`), et une
-          // audience faite de personnes : les rooms de conversation amorcent la
-          // chaîne — aucun destinataire d'aujourd'hui n'est retiré — puis
-          // `participantUserRooms` y ajoute la room personnelle de chaque
-          // participant, seule adresse qui survive à la fermeture d'un fil.
-          const conversationIds = participantRows.map(p => p.conversationId);
-          const conversationRooms = conversationIds.map(id => ROOMS.conversation(id));
-          const peers = conversationIds.length > 0
-            ? await this.prisma.participant.findMany({
-                where: { conversationId: { in: conversationIds }, isActive: true },
-                select: { id: true, userId: true },
-              })
-            : [];
-          const rooms = participantUserRooms(peers, conversationRooms);
-          if (rooms.length > 0) {
-            // PRIVACY: exclure les sockets des viewers en relation de blocage
-            // bidirectionnel avec ce user — même règle que GET /users/presence
-            // (PresenceVisibilityService). Un socket.id est aussi une room
-            // Socket.IO (auto-join), donc .except(socketId) l'exclut du
-            // broadcast même s'il est par ailleurs membre de `rooms`.
-            //
-            // La relation de blocage est résolue SANS liste de candidats. La
-            // version précédente passait `connectedUsers.keys()` — toute la
-            // population connectée de la gateway — en candidats, si bien qu'une
-            // seule transition de présence portait un `$in` dimensionné par le
-            // serveur entier. Or ce chemin s'exécute à CHAQUE connexion, chaque
-            // déconnexion, et pour chaque user que le balayage de maintenance
-            // passe hors ligne d'un coup : le coût d'une connexion croissait
-            // avec le nombre de personnes déjà connectées.
-            //
-            // Le résultat est le MÊME : un id en relation de blocage qui n'a
-            // aucun socket vivant n'apporte rien à `.except()`, exactement ce
-            // que le pré-filtre par `connectedUsers` retirait. `userSockets` est
-            // vidé à la déconnexion (`AuthHandler.handleDisconnection`), donc
-            // l'intersection se fait ici, en mémoire, au lieu d'en base.
-            const blockedUserIds = await getBlockRelatedUserIds(this.prisma, user.id);
-            const blockedSocketIds = [...blockedUserIds].flatMap(
-              id => [...(this.userSockets.get(id) ?? [])],
-            );
-
-            const emitter = blockedSocketIds.length > 0
-              ? this.io.to(rooms).except(blockedSocketIds)
-              : this.io.to(rooms);
-            emitter.emit(SERVER_EVENTS.USER_STATUS, {
-              userId: user.id,
-              username: displayName,
-              isOnline,
-              lastActiveAt
-            });
-          }
-
         }
+        return;
+      }
+
+      // PRIVACY: les préférences gouvernent le sous-ensemble AMIS, pas la
+      // totalité de l'éventail — d'où l'absence de `return` précoce ici.
+      const privacyPrefs = await this.privacyPreferencesService.getPreferences(userId, false);
+
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          firstName: true,
+          lastName: true,
+          lastActiveAt: true,
+          deactivatedAt: true,
+          role: true,
+          birthDate: true
+        }
+      });
+      if (!user) return;
+      // Un compte DÉSACTIVÉ n'a de présence pour personne : la loi partagée
+      // rend HIDDEN sur `targetIsDeactivated` AVANT le privilège, donc ni les
+      // amis, ni les ADMIN, ni ses autres appareils ne reçoivent la transition.
+      if (user.deactivatedAt) return;
+
+      // La relation de blocage est lue UNE fois (#13350) : elle retire les
+      // bloqués de l'audience AMIS et, plus bas, leurs sockets par `.except()`.
+      const blockedUserIds = await getBlockRelatedUserIds(this.prisma, user.id);
+
+      // La requête d'amitiés n'est même pas lancée quand elle ne peut servir
+      // personne : `showOnlineStatus = false` retire tout le sous-ensemble AMIS.
+      const friendLevels = privacyPrefs.showOnlineStatus
+        ? await this.presenceVisibilityService.acceptedFriendLevels(user.id, { blockRelated: blockedUserIds })
+        : new Map();
+      const moderatorIds = privacyPrefs.showOnlineStatus && isPlatformTeam(user.role)
+        ? (await this._moderatorUserIds()).filter(id => !blockedUserIds.has(id))
+        : [];
+
+      const emissions = presenceStatusEmissions({
+        subjectId: user.id,
+        subjectRole: user.role,
+        subjectMinor: declaredAgeClass(user.birthDate ?? null, new Date()),
+        isAnonymous: false,
+        friendLevels,
+        adminIds,
+        moderatorIds,
+        lastActiveAt: user.lastActiveAt,
+        showOnlineStatus: privacyPrefs.showOnlineStatus,
+        showLastSeen: privacyPrefs.showLastSeen,
+      });
+      if (emissions.length === 0) return;
+
+      const displayName = user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username;
+
+      // PRIVACY: exclure les sockets des viewers en relation de blocage
+      // bidirectionnel avec ce user. Un socket.id est aussi une room Socket.IO
+      // (auto-join), donc .except(socketId) l'exclut du broadcast même s'il est
+      // par ailleurs membre de `rooms`.
+      //
+      // La relation de blocage est résolue SANS liste de candidats. La version
+      // d'avant passait `connectedUsers.keys()` — toute la population connectée
+      // de la gateway — en candidats, si bien qu'une seule transition de
+      // présence portait un `$in` dimensionné par le serveur entier.
+      //
+      // Le résultat est le MÊME : un id en relation de blocage qui n'a aucun
+      // socket vivant n'apporte rien à `.except()`. `userSockets` est vidé à la
+      // déconnexion (`AuthHandler.handleDisconnection`), donc l'intersection se
+      // fait ici, en mémoire, au lieu d'en base.
+      const blockedSocketIds = [...blockedUserIds].flatMap(
+        id => [...(this.userSockets.get(id) ?? [])],
+      );
+
+      for (const emission of emissions) {
+        const emitter = blockedSocketIds.length > 0
+          ? this.io.to(emission.rooms).except(blockedSocketIds)
+          : this.io.to(emission.rooms);
+        emitter.emit(SERVER_EVENTS.USER_STATUS, {
+          userId: user.id,
+          username: displayName,
+          isOnline,
+          lastActiveAt: emission.lastActiveAt
+        });
       }
     } catch (error) {
       logger.error('❌ [STATUS] Erreur lors du broadcast du statut', error);
@@ -2778,9 +3052,14 @@ export class MeeshySocketIOManager {
         ...buildMessageNewPayload(message, {
           conversationId: normalizedId,
           translations: messageTranslations,
-          // Le `select` du chemin REST livre déjà les pièces jointes à la forme
-          // rendue ; le chemin socket, lui, les normalise (cf. la note jumelle).
-          attachments: message.attachments ?? [],
+          // #7070 — les DEUX chemins normalisent désormais par la MÊME
+          // fonction. Ce chemin-ci diffusait tel quel le tableau brut du
+          // message : la ligne Prisma COMPLÈTE que `MessageProcessor.saveMessage`
+          // relit SANS `select` — filePath, IV et tag d'authentification
+          // compris — pendant que le chemin socket (`MessageHandler._buildMessagePayload`)
+          // servait déjà la forme curatée. `serializeMessageAttachmentsForSocket`
+          // est le site unique des deux transports.
+          attachments: serializeMessageAttachmentsForSocket(message.attachments),
           // DUPLICATION ASSUMÉE avec MessageHandler._buildMessagePayload : ce
           // bloc RECONSTRUIT et APLATIT le sender (username/firstName/lastName
           // remontés depuis `sender.user`), alors que le chemin socket fait un
@@ -2825,8 +3104,6 @@ export class MeeshySocketIOManager {
       }
 
       if (message.attachments && message.attachments.length > 0) {
-        const first = message.attachments[0] as unknown as Record<string, unknown>;
-        const firstMeta = typeof first['metadata'] === 'object' && first['metadata'] ? first['metadata'] as Record<string, unknown> : null;
         logger.debug(`message:new broadcast messageId=${message.id} attachments=${message.attachments.length}`);
       }
 
@@ -2869,23 +3146,59 @@ export class MeeshySocketIOManager {
       // and sends a trimmed payload once per distinct language. Original content preserved.
       // Opt-in (OFF by default): enable explicitly with SOCKET_LANG_FILTER=true once
       // validated in staging (measured savings + multi-device + Prisme fallback check).
-      const langFilterOn = process.env.SOCKET_LANG_FILTER === 'true';
-
-      if (senderUserId) {
-        if (langFilterOn) {
-          this._emitMessageNewByLanguage(room, broadcastPayload, { excludeUserId: senderUserId });
-        } else {
-          this.io
-            .to(room)
-            .except(ROOMS.user(senderUserId))
-            .emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
-        }
-        this.io.to(ROOMS.user(senderUserId)).emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
-      } else if (langFilterOn) {
-        this._emitMessageNewByLanguage(room, broadcastPayload);
-      } else {
-        this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
-      }
+      //
+      // #8562 — les lecteurs pour qui le message CITÉ est un éphémère déjà échu
+      // reçoivent la citation SCELLÉE sur leur room personnelle, et sont exclus
+      // de la room : une diffusion commune ne peut pas porter leur échéance.
+      // Leur exclusion désactive le filtre de langue, qui ne sait pas exclure
+      // de room utilisateur (même règle que le chemin WS).
+      const sealedQuote = await loadSealedQuoteAudience(this.prisma, message.replyTo);
+      const sealedKeys = [...sealedQuote.keys()].filter((key) => key !== senderUserId && key !== message.senderId);
+      // L'émission — la même cascade que le chemin socket, et la remise par
+      // destinataire avec adresses signées pour un message dont une pièce se
+      // lit par lecteur (#9646) : `messageNewEmission.ts`. Aucun socket
+      // d'expéditeur ici : il est rejoué plus bas, pour les appelants de test.
+      // Émission et lecture de plan BEST-EFFORT : raison au site unique,
+      // `safeBroadcast` (#17026). L'enfilage est délégué plus bas à
+      // `syncConversationListOnNewMessage`, dans ce même `try`.
+      // UN seul rapporteur de panne pour les deux chemins (constat C3) : la
+      // délégation par langue posait le SIEN, qui ne connaît que la `room`.
+      const onLiveEmissionError = (error: unknown, audience: string) =>
+        logger.error('message:new live emission failed — offline replay unaffected', { conversationId: normalizedId, messageId: message.id, audience, error });
+      // #18619 — le plan est HISSÉ hors de l'appel d'émission : les DEUX canaux
+      // de ce message en dépendent, et le laisser en argument faisait que seul
+      // le direct l'interrogeait. L'enfilage, délégué plus bas à
+      // `syncConversationListOnNewMessage`, remettait l'adresse NUE d'une pièce
+      // liée au lecteur — y compris dans le cas exact où le direct décide
+      // délibérément de ne rien émettre.
+      const readerPlan = await readerSignedPlanBestEffort(
+        this.prisma,
+        { conversationId: normalizedId, message, attachments: broadcastPayload.attachments },
+        (error) => logger.error('reader-signed plan failed (REST/ZMQ send) — no live per-reader delivery', { conversationId: normalizedId, messageId: message.id, error }),
+      );
+      // La charge de CE lecteur avant signature : le scellement d'une citation
+      // d'éphémère échu d'abord, signature ensuite — l'ordre inverse signerait
+      // ce que le lecteur n'a pas le droit de voir.
+      const offlineSigned = offlineSignedPayload({
+        plan: readerPlan,
+        base: (key) => sealedQuoteVariant(sealedQuote, key, broadcastPayload) as Record<string, unknown>,
+        basePerReader: sealedKeys.length > 0,
+      });
+      emitMessageNewBestEffort({
+        io: this.io,
+        room,
+        senderPayload,
+        peerPayload: broadcastPayload,
+        senderUserId,
+        senderParticipantId: message.senderId,
+        senderSocket: null,
+        hiddenKeys: sealedKeys,
+        payloadForKey: (key) => sealedQuoteVariant(sealedQuote, key, broadcastPayload),
+        emitByLanguage: process.env.SOCKET_LANG_FILTER === 'true'
+          ? (payload, exclusion) => this._emitMessageNewByLanguage(room, payload, exclusion, onLiveEmissionError)
+          : null,
+        readerSigned: readerPlan,
+      }, onLiveEmissionError);
 
       // 2. S'assurer que l'auteur reçoit aussi (au cas où il ne serait pas dans la room encore).
       // Il reçoit le payload cid-aware : c'est SON socket, et c'est lui qui doit
@@ -2893,7 +3206,15 @@ export class MeeshySocketIOManager {
       // aujourd'hui (les deux sites, `broadcastMessage` et le retour ZMQ, l'omettent) —
       // la branche reste pour les appelants de test et une éventuelle réutilisation.
       if (senderSocket) {
-        senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
+        // 9e site #17026 — PIÈGE ARMÉ, pas panne : aucun appelant de production
+        // ne passe `senderSocket`, donc cette émission ne tourne jamais. On ne
+        // laisse pas un piège armé au motif que personne n'a marché dessus
+        // (cycle 84).
+        safeBroadcast(
+          'message:new (sender socket)',
+          () => senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload),
+          (error) => logger.error('message:new sender-socket emission failed — offline replay unaffected', { conversationId: normalizedId, messageId: message.id, error }),
+        );
       }
 
       // 2b. Emit mention:created to each mentioned user's personal room.
@@ -2905,7 +3226,7 @@ export class MeeshySocketIOManager {
       const mentionUsernames = (message.validatedMentions ?? []) as unknown as string[];
       if (mentionUsernames.length > 0) {
         try {
-          const mentionedUserIds = await resolveUsernamesToIds(this.prisma, mentionUsernames);
+          const mentionedUserIds = await withoutPendingMessageRequests(this.prisma, normalizedId, await resolveUsernamesToIds(this.prisma, mentionUsernames));
           for (const targetUserId of mentionedUserIds) {
             if (targetUserId && targetUserId !== resolvedSenderId) {
               this.io.to(ROOMS.user(targetUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {
@@ -2923,151 +3244,34 @@ export class MeeshySocketIOManager {
         }
       }
 
-      const roomClients = this.io.sockets.adapter.rooms.get(room);
-
-      // 3. Synchronisation temps réel de la liste des conversations. Deux signaux
-      //    par destinataire, partageant une SEULE requête participants :
-      //    - CONVERSATION_UPDATED (bump lastMessageAt) → liste se re-trie et les
-      //      conversations toutes neuves apparaissent même quand MESSAGE_NEW
-      //      n'atteint aucun socket hors de ROOMS.conversation(id). Émis à TOUS
-      //      les participants (expéditeur inclus — sa propre liste remonte aussi).
-      //    - CONVERSATION_UNREAD_UPDATED (badge) → destinataires uniquement
-      //      (l'expéditeur n'a pas de non-lu sur son propre message).
-      //    Parité avec MessageHandler.broadcastNewMessage (chemin socket).
+      // 3. Synchronisation temps réel de la liste des conversations — les
+      //    trois portes de sortie du message (enfilage hors ligne,
+      //    CONVERSATION_UPDATED, badge non-lu). Extrait dans
+      //    `postMessageSyncFanOut.ts` (issue #5263, cliquet de taille) ; le
+      //    doc-comment de `syncConversationListOnNewMessage` porte le détail
+      //    verbatim de ce que ce bloc fait et pourquoi. Ce `try/catch` reste
+      //    ICI, inchangé : un accroc de synchro ne doit jamais faire échouer
+      //    la diffusion du message lui-même.
       try {
-        const senderId = message.senderId;
-        if (senderId) {
-          // Une seule requête : superset (id + userId + joinedAt) pour les deux signaux
-          //
-          // Dans son PROPRE `try`, et rendue `undefined` — jamais `[]` — quand
-          // elle tombe. Les deux formes se lisent pareil au site d'appel et ne
-          // disent pas la même chose : `[]` affirme « la conversation n'a aucun
-          // participant », `undefined` avoue « je ne sais pas ». La file hors
-          // ligne ci-dessous traite les deux différemment, et c'est la seule des
-          // trois consommatrices dont l'abandon soit DESTRUCTIF (cf. son bloc).
-          let allParticipants: Array<PreviewPrismParticipant & { joinedAt: Date }> | undefined;
-          try {
-            allParticipants = await this.prisma.participant.findMany({
-              where: {
-                conversationId: normalizedId,
-                isActive: true
-              },
-              // `user` (préférences de langue) : le Prisme de la ligne de liste,
-              // résolu par destinataire ci-dessous. `joinedAt` reste requis par
-              // `emitUnreadCountsToRecipients`, qui partage cette requête.
-              select: { ...PREVIEW_PRISM_PARTICIPANT_SELECT, joinedAt: true }
-            });
-          } catch (err) {
-            logger.warn('participant fetch failed — la file hors ligne fera sa propre requête', { error: err });
+        await syncConversationListOnNewMessage(
+          {
+            prisma: this.prisma,
+            io: this.io,
+            readStatusService: this.readStatusService,
+            bridgeService: this.bridgeService,
+            deliveryQueue: this.deliveryQueue,
+            connectedUsers: this.connectedUsers,
+          },
+          {
+            normalizedId,
+            message,
+            broadcastPayload,
+            resolvedSenderId, quotedDeaths: sealedQuote,
+            // UN seul hook par lecteur : la décision a composé le scellement et
+            // la signature, dans l'ordre qui les rend justes (#18619).
+            offlineSigned,
           }
-
-          // File hors ligne — la TROISIÈME porte de sortie de ce message, et la
-          // seule DURABLE. `message:new` ci-dessus ne sert que les sockets du
-          // salon ; un destinataire déconnecté n'apprend jamais l'existence de
-          // ce message autrement que par le rejeu de `_drainPendingMessages`.
-          //
-          // Elle passe AVANT les deux signaux cosmétiques qui suivent, et c'est
-          // tout l'objet de sa place : elle en était l'AVAL, dans le même `try`,
-          // sous un `catch` qui journalise « non-bloquant ». Un `emit` qui lève
-          // (adaptateur ou encodeur en défaut) annulait alors le rejeu pour TOUS
-          // les absents, en annonçant une perte cosmétique. Même règle qu'à
-          // l'instantané de reconnexion, où le drain est placé HORS du `try`
-          // pour qu'un accroc Mongo cosmétique n'échoue jamais le rejeu.
-          //
-          // `participants` reçoit `undefined` quand le superset est tombé :
-          // l'unité partagée refait alors SA requête, qui ne demande que
-          // `{id, userId}`. Lui passer `[]` la ferait enfiler pour personne —
-          // perdre le message parce qu'une préférence de langue est illisible.
-          //
-          // Délègue à l'unité partagée (comme les trois autres transports) : la
-          // copie inline qui vivait ici était le dernier appelant direct de
-          // `deliveryQueue.enqueue` du dépôt, et son `payload as Record<string,
-          // unknown>` le dernier endroit où une charge pouvait être ENFILÉE sous
-          // une forme que le fil ne diffuse pas.
-          await this._enqueueForOfflineParticipants({
-            conversationId: normalizedId,
-            // Les DEUX identités, comme le chemin WS : `message.senderId` porte
-            // un `Participant.id` ici, un `User.id` ailleurs, et les deux
-            // espaces d'ids ne se croisent jamais.
-            actorParticipantId: senderId,
-            actorUserId: senderId,
-            eventType: 'new',
-            messageId: message.id,
-            // Le corps DESTINATAIRE (cid-strippé), identique à l'émission live :
-            // un rejeu portant le `clientMessageId` de l'auteur ferait fuiter son
-            // espace d'ids optimistes dans celui d'un autre utilisateur.
-            payload: broadcastPayload,
-            participants: allParticipants,
-          });
-
-          if (allParticipants) {
-            // CONVERSATION_UPDATED → room user de CHAQUE participant (re-tri liste).
-            // `updatedBy` est requis par ConversationUpdatedEventData (this.io est typé,
-            // contrairement à MessageHandler) : c'est l'auteur du message qui déclenche
-            // le bump (resolvedSenderId = User.id du sender, fallback participant id).
-            const updatePayload = {
-              conversationId: normalizedId,
-              updatedBy: { id: resolvedSenderId ?? message.senderId ?? '' },
-              // Chaîne ISO — voir `toIsoOrNull`. `|| new Date()` conservé : ce
-              // chemin sert aussi des messages fabriqués (agent, traducteur) dont
-              // le `createdAt` peut manquer, et la ligne de liste a besoin d'un
-              // rang pour se trier.
-              lastMessageAt: toIsoOrNull(message.createdAt || new Date()),
-              lastMessageId: message.id,
-              // `lastMessagePreview` sort de `resolveLastMessagePreviewPrism`
-              // avec le reste de la paire, sous le même plafond qu'elle.
-              // Un message position-seule a un `content` vide, donc un aperçu
-              // vide : `location` est alors la SEULE chose dont la ligne de liste
-              // dispose pour composer son libellé. Hissée ici comme les deux
-              // autres émetteurs de ce payload le font déjà (`MessageHandler.ts`,
-              // `emitConversationPreviewUpdate.ts`) — sans elle, ce chemin-ci
-              // (REST/ZMQ, celui par lequel passe justement l'envoi d'un lieu)
-              // laissait la ligne littéralement blanche.
-              //
-              // Clé ABSENTE quand le message n'a pas de position, jamais présente
-              // à `null` : les clients écrivent `location` AVEC l'identité du
-              // message, donc une clé nulle sur le chemin le plus fréquenté du
-              // service effacerait une épingle correcte à chaque message texte.
-              ...((): Record<string, unknown> => {
-                const place = sharedPlaceFromMetadata((message as { metadata?: unknown }).metadata);
-                return place ? { location: place } : {};
-              })(),
-              senderId: message.senderId,
-              updatedAt: new Date().toISOString()
-            };
-            // `userId ?? id` (participantUserRoomTargets) : parité avec le chemin
-            // socket de MessageHandler. Un participant sans compte a une room
-            // personnelle nommée d'après son `Participant.id` — la sauter privait un
-            // invité de lien partagé de tout re-tri de sa liste de conversations.
-            //
-            // Le Prisme est résolu PAR destinataire, depuis le MÊME `message` qui
-            // alimente `message:new` ci-dessus : les deux événements portent donc
-            // toujours la même carte, et le `conversation:updated` jumeau ne peut pas
-            // arriver derrière pour effacer ce que `message:new` vient d'installer.
-            for (const { room, participant } of participantUserRoomTargets(allParticipants)) {
-              this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
-                ...updatePayload,
-                ...resolveLastMessagePreviewPrism(participant, message)
-              });
-            }
-
-            // Badge non-lu → destinataires uniquement (exclure l'expéditeur in-process).
-            // Délégué à l'unité partagée par les trois transports d'envoi : la copie
-            // inline qui vivait ici n'excluait l'expéditeur que par `Participant.id`,
-            // correct sur CE chemin mais faux pour tout appelant portant un `User.id`.
-            // La liste déjà chargée lui est passée — pas de seconde requête.
-            await emitUnreadCountsToRecipients({
-              io: this.io,
-              prisma: this.prisma,
-              readStatusService: this.readStatusService,
-              bridgeService: this.bridgeService,
-              conversationId: normalizedId,
-              senderId,
-              participants: allParticipants,
-              onError: (error) => logger.warn('unread count update failed', { error }),
-            });
-          }
-        }
+        );
       } catch (syncError) {
         logger.warn('⚠️ [CONV_SYNC] Erreur sync liste conversations (non-bloquant):', syncError);
       }
@@ -3203,10 +3407,14 @@ export class MeeshySocketIOManager {
           firstName: senderParticipant.user?.firstName || '',
           lastName: senderParticipant.user?.lastName || '',
         } : undefined,
-        attachments: message.attachments ?? [],
+        // #7070 — même unification que `_broadcastNewMessage` : la ligne
+        // brute ne repart plus telle quelle sur `message:edited`.
+        attachments: serializeMessageAttachmentsForSocket(message.attachments),
       };
 
-      this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
+      // 6e site #17026, trouvé par le CLIQUET. Raison : `safeBroadcast`.
+      safeBroadcast('message:edited (call summary)', () => this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload),
+        (error) => logger.error('message:edited (call summary) live emission failed — offline replay unaffected', { conversationId: normalizedId, messageId: message.id, error }));
 
       await emitConversationPreviewUpdate(
         this.prisma, this.io, normalizedId, resolvedSenderId ?? '',
@@ -3219,6 +3427,7 @@ export class MeeshySocketIOManager {
         eventType: 'edited',
         messageId: message.id,
         payload: editedPayload,
+        atRest: isServerAtRestMode(message.encryptionMode),
       });
     } catch (error) {
       logger.error('broadcast message:edited (call) failed', error);
@@ -3243,79 +3452,58 @@ export class MeeshySocketIOManager {
   }
 
 
-  /**
-   * Vérifie si un utilisateur est dans une salle de conversation.
-   *
-   * Multi-device : un utilisateur peut avoir plusieurs sockets (téléphone + web).
-   * On considère qu'il est dans la salle si N'IMPORTE LAQUELLE de ses sessions
-   * y est — `connectedUsers[...].socketId` ne pointe que sur la dernière session
-   * promue et donnerait un faux négatif quand la conversation est ouverte sur un
-   * autre appareil (ex. suppression de push mal déclenchée). `userSockets` est la
-   * source de vérité multi-device.
-   */
-  isUserInConversationRoom(userId: string, conversationId: string): boolean {
-    const socketIds = this.userSockets.get(userId);
-    if (!socketIds) return false;
-    const room = `conversation:${conversationId}`;
-    for (const socketId of socketIds) {
-      if (this.io.sockets.sockets.get(socketId)?.rooms.has(room)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
 
   /**
-   * Déconnecte un utilisateur spécifique.
+   * Déconnecte un utilisateur spécifique — le geste d'ADMINISTRATION, celui
+   * d'un force-logout ou d'une exclusion.
    *
    * Multi-device : ferme TOUTES les sessions de l'utilisateur (téléphone + web).
    * L'ancienne implémentation ne fermait que `connectedUsers[...].socketId` (la
    * dernière session promue) ; la déconnexion de ce socket promouvait alors une
    * autre session dans `connectedUsers`, laissant l'utilisateur en ligne — un
    * force-logout / bannissement était contournable pour toute session multiple.
-   * On itère sur un snapshot car `disconnect(true)` déclenche `handleDisconnection`
-   * qui mute `userSockets` pendant l'itération.
+   *
+   * **Multi-NŒUD (#18381 suite)** : `userSockets` et `io.sockets.sockets` ne
+   * voient que le nœud courant. Sous l'adaptateur Redis — posé dès que
+   * `REDIS_URL` l'est, ce qui est le cas en production — une session vivant sur
+   * un autre nœud n'était pas coupée, et la route d'administration répondait
+   * `404 « non trouvé ou non connecté »` : un faux négatif qui dit à l'admin
+   * que le compte n'a pas de session alors qu'il en a une, vivante.
+   * `fetchSockets()` traverse l'adaptateur (le même idiome que
+   * `disconnectSession` et `endConversationMembership`).
+   *
+   * Les deux sources sont UNIES, et ce n'est pas une ceinture-bretelles : la
+   * room personnelle peut n'avoir jamais été rejointe (son échec n'est que
+   * journalisé, `_authenticateJWTUser`), auquel cas seule la carte locale
+   * connaît la socket. Un geste de sécurité coupe tout ce qu'il peut nommer.
+   *
+   * On itère sur des snapshots car `disconnect(true)` déclenche
+   * `handleDisconnection`, qui mute `userSockets` pendant l'itération.
    */
-  disconnectUser(userId: string): boolean {
-    const socketIds = this.userSockets.get(userId);
-    if (!socketIds || socketIds.size === 0) return false;
-    let disconnected = false;
-    for (const socketId of [...socketIds]) {
-      const socket = this.io.sockets.sockets.get(socketId);
-      if (socket) {
+  async disconnectUser(userId: string): Promise<boolean> {
+    const closed = new Set<string>();
+
+    try {
+      const remote = await this.io.in(ROOMS.user(userId)).fetchSockets();
+      for (const socket of remote) {
         socket.disconnect(true);
-        disconnected = true;
+        closed.add(socket.id);
       }
+    } catch (error) {
+      logger.error(`❌ Déconnexion par adaptateur échouée pour ${userId}: ${error}`);
     }
-    return disconnected;
+
+    for (const socketId of [...(this.userSockets.get(userId) ?? [])]) {
+      if (closed.has(socketId)) continue;
+      const socket = this.io.sockets.sockets.get(socketId);
+      if (!socket) continue;
+      socket.disconnect(true);
+      closed.add(socketId);
+    }
+
+    return closed.size > 0;
   }
 
-  /**
-   * Envoie une notification à un utilisateur spécifique.
-   *
-   * Multi-device : émet sur TOUTES les sessions de l'utilisateur. L'ancienne
-   * implémentation n'émettait que sur `connectedUsers[...].socketId`, perdant
-   * silencieusement l'événement sur les autres appareils. Retourne `true` dès
-   * qu'au moins un socket a reçu l'événement.
-   */
-  sendToUser<K extends keyof ServerToClientEvents>(
-    userId: string,
-    event: K,
-    ...args: Parameters<ServerToClientEvents[K]>
-  ): boolean {
-    const socketIds = this.userSockets.get(userId);
-    if (!socketIds || socketIds.size === 0) return false;
-    let sent = false;
-    for (const socketId of socketIds) {
-      const socket = this.io.sockets.sockets.get(socketId);
-      if (socket) {
-        socket.emit(event, ...args);
-        sent = true;
-      }
-    }
-    return sent;
-  }
 
   /**
    * Broadcast un message à tous les utilisateurs connectés
@@ -3335,25 +3523,41 @@ export class MeeshySocketIOManager {
   }
 
   /**
+   * #16687 — la carte VIVANTE, pour qui doit demander « joignable pour CETTE
+   * conversation ? » et non seulement « connecté ? ».
+   *
+   * `getConnectedUsers()` rend des CLÉS : enveloppées dans un `Set`, elles
+   * répondent `has` et perdent le marqueur de joignabilité. C'est ce que les
+   * quatre chemins média passaient à la file, et la porte y était morte en
+   * silence. Rendre la carte évite aussi une copie par appel.
+   */
+  getReachability(): ReachabilityView {
+    return this.connectedUsers;
+  }
+
+  /**
    * Joins all active sockets of a user to a conversation room.
    * Called when a user is added to a conversation while already connected
    * (e.g. group invite mid-session) so they immediately receive message:new
    * events without requiring a reconnect.
+   *
+   * La loi vit dans `midSessionRoomAdmission.ts` (#18381) : réessais, marqueur
+   * d'injoignabilité et jonction par adaptateur. Ce site n'est plus qu'un
+   * cablâge de dépendances — tout ce qu'il ferait ici serait hors de portée de
+   * la jumelle d'authentification, qui porte les trois depuis #16687.
    */
   async joinUserToConversationRoom(userId: string, conversationId: string): Promise<void> {
-    const socketIds = this.userSockets.get(userId);
-    if (!socketIds || socketIds.size === 0) return;
-    const room = ROOMS.conversation(conversationId);
-    await Promise.all(
-      Array.from(socketIds).map(async (socketId) => {
-        const socket = this.io.sockets.sockets.get(socketId);
-        if (!socket) return;
-        await socket.join(room);
-      })
+    await admitUserToConversationRoom(
+      {
+        io: this.io,
+        userSockets: this.userSockets,
+        socketById: (socketId: string) => this.io.sockets.sockets.get(socketId),
+        connectedUsers: this.connectedUsers,
+      },
+      userId,
+      conversationId,
     );
   }
-
-
 
   async healthCheck(): Promise<boolean> {
     try {
@@ -3366,19 +3570,22 @@ export class MeeshySocketIOManager {
   }
 
   async close(): Promise<void> {
-    try {
-      // ✅ FIX BUG #3: Ticker supprimé, plus besoin de le nettoyer
-      // Le système n'utilise plus de polling périodique
-
-      await this.agentAdminRelay?.stop();
-      await this.translationService.close();
-      // Les minuteries d'expiration des partages de position sont les seules
-      // que ce manager possède encore ; non désarmées, elles retiendraient la
-      // boucle d'événements jusqu'à 8 heures après l'arrêt.
-      this.locationHandler.dispose();
-      this.io.close();
-    } catch (error) {
-      logger.error(`❌ Erreur fermeture MeeshySocketIOManager: ${error}`);
+    // Les sockets d'abord, quoi qu'il arrive ensuite (#8297) ; `engine.close()` coupe
+    // les transports sans attendre les adaptateurs, que Redis peut retenir.
+    void this.io.close().catch((error: unknown) => logger.error(`❌ Fermeture des sockets échouée: ${error}`));
+    this.io.engine?.close();
+    const steps: ReadonlyArray<() => unknown> = [
+      () => this.agentAdminRelay?.stop(),
+      () => this.adminMetricsHandler?.stop(),
+      () => this.translationService.close(),
+      // Minuteries des partages de position : sinon la boucle vit 8 h de plus.
+      () => this.locationHandler.dispose(),
+      () => this.redisAdapterHandle?.close(),
+    ];
+    for (const step of steps) {
+      await Promise.resolve()
+        .then(step)
+        .catch((error: unknown) => logger.error(`❌ Erreur fermeture MeeshySocketIOManager: ${error}`));
     }
   }
 
@@ -3391,112 +3598,23 @@ export class MeeshySocketIOManager {
     logger.info('[Agent] ZmqAgentClient wired to SocketIOManager');
   }
 
-  async handleAgentResponse(response: {
-    type: 'agent:response';
-    conversationId: string;
-    asUserId: string;
-    content: string;
-    originalLanguage: string;
-    replyToId?: string;
-    mentionedUsernames?: string[];
-    messageSource: 'agent';
-    metadata: { agentType: 'impersonator' | 'animator' | 'orchestrator'; roleConfidence: number; archetypeId?: string };
-  }): Promise<void> {
-    try {
-      // Resolve mentionedUsernames to mentionedUserIds for the full mention pipeline
-      let mentionedUserIds: string[] | undefined;
-      if (response.mentionedUsernames && response.mentionedUsernames.length > 0) {
-        const ids = await resolveUsernamesToIds(this.prisma, response.mentionedUsernames);
-        if (ids.length > 0) {
-          mentionedUserIds = ids;
-        }
-      } else if (response.content?.includes('@')) {
-        // Résolution @DisplayName depuis les participants de la conversation
-        const participants = await this.getConversationParticipantsForMention(response.conversationId);
-        if (participants.length > 0) {
-          const usernames = this.mentionService.extractMentionsWithParticipants(response.content, participants);
-          if (usernames.length > 0) {
-            const userMap = await this.mentionService.resolveUsernames(usernames);
-            const resolved = [...userMap.values()].map((u) => u.id);
-            if (resolved.length > 0) {
-              mentionedUserIds = resolved;
-            }
-          }
-        }
-      }
-
-      // Use MessagingService full pipeline: DB save + mention extraction + translation + broadcast
-      const messageRequest = {
-        conversationId: response.conversationId,
-        content: response.content,
-        originalLanguage: response.originalLanguage,
-        messageType: 'text' as const,
-        messageSource: 'agent' as const,
-        replyToId: response.replyToId,
-        mentionedUserIds,
-        isAnonymous: false,
-        metadata: { source: 'api' as const },
-      };
-
-      // Résout le Participant.id du sender AVANT d'appeler handleMessage — mirroring
-      // handleAgentReaction just below. MessagingService attend un Participant.id ;
-      // lui passer asUserId (un User.id) ne fonctionnait que via son fallback
-      // DEPRECATED (query supplémentaire + log d'erreur à chaque réponse d'agent).
-      const senderParticipant = await this.prisma.participant.findFirst({
-        where: { userId: response.asUserId, conversationId: response.conversationId, isActive: true },
-        select: { id: true },
-      });
-      if (!senderParticipant) {
-        logger.warn(`[Agent] No active participant for userId=${response.asUserId} in conv=${response.conversationId}`);
-        return;
-      }
-
-      const result = await this.messagingService.handleMessage(
-        messageRequest,
-        senderParticipant.id
-      );
-
-      if (!result.success || !result.data) {
-        logger.error(`[Agent] handleMessage failed — conv=${response.conversationId}`, result.error);
-        return;
-      }
-
-      // Broadcast to all members (translation arrives asynchronously via translationReady event)
-      // Note: Notifications are already triggered inside messagingService.handleMessage -> processor.triggerAllNotifications
-      const messageWithTimestamp = { ...result.data, timestamp: result.data.createdAt } as Message;
-      await this._broadcastNewMessage(messageWithTimestamp, response.conversationId);
-
-      logger.info(`[Agent] Response sent — conv=${response.conversationId} user=${response.asUserId} type=${response.metadata.agentType} msgId=${result.data.id}`);
-    } catch (error) {
-      logger.error('[Agent] handleAgentResponse error:', error);
-    }
-  }
-
-  private async getConversationParticipantsForMention(
-    conversationId: string
-  ): Promise<import('@meeshy/shared/utils/mention-parser').MentionParticipant[]> {
-    try {
-      const participants = await this.prisma.participant.findMany({
-        where: { conversationId, isActive: true, userId: { not: null } },
-        select: {
-          userId: true,
-          displayName: true,
-          user: {
-            select: { id: true, username: true, displayName: true }
-          }
-        }
-      });
-
-      return participants
-        .filter((p): p is typeof p & { user: NonNullable<typeof p.user> } => p.user !== null)
-        .map((p) => ({
-          userId: p.user.id,
-          username: p.user.username,
-          displayName: p.user.displayName ?? p.user.username,
-        }));
-    } catch {
-      return [];
-    }
+  /**
+   * Réponse de l'agent (ZMQ). Le pont vit dans `agent-response-bridge.ts`
+   * (#6192) : mentions, participant émetteur, image de l'article jointe.
+   */
+  async handleAgentResponse(response: AgentResponsePayload): Promise<void> {
+    this.agentAttachmentService ??= new AttachmentService(this.prisma);
+    await handleAgentResponse(
+      {
+        prisma: this.prisma,
+        messagingService: this.messagingService,
+        mentionService: this.mentionService,
+        resolveUsernamesToIds: (usernames) => resolveUsernamesToIds(this.prisma, usernames),
+        attachmentService: this.agentAttachmentService,
+        broadcastNewMessage: (message, conversationId) => this._broadcastNewMessage(message, conversationId),
+      },
+      response,
+    );
   }
 
   async handleAgentReaction(reaction: {
@@ -3556,17 +3674,20 @@ export class MeeshySocketIOManager {
         const normalizedConversationId = message.conversationId;
         // Multi-réactions (2026-08-18) : un add n'évince plus jamais un
         // emoji précédent — aucun retrait compensatoire à diffuser.
-        this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
-        // An agent's reaction is a reaction like any other: without this the
-        // room emit is its only audience and the toggle is lost for every
-        // participant offline at that instant.
-        void this.enqueueOfflineReactionMutation({
+        // Une réaction d'agent est une réaction comme une autre : ses TROIS
+        // audiences (room, file hors ligne, liste — #7545) passent par la
+        // source unique des transports REST.
+        await broadcastReactionMutation({
+          manager: this,
           conversationId: normalizedConversationId,
           actorParticipantId: participant.id,
           eventType: 'reaction-added',
           messageId: reaction.targetMessageId,
           emoji: reaction.emoji,
           payload: updateEvent,
+          prisma: this.prisma,
+          updatedByUserId: reaction.asUserId,
+          onError: (error) => logger.warn('[AGENT] reaction broadcast failed', { conversationId: normalizedConversationId, error }),
         });
 
         const authorParticipant = message.senderId
@@ -3597,42 +3718,4 @@ export class MeeshySocketIOManager {
     }
   }
 
-  private async _resolveMentionUserIds(usernames: string[]): Promise<string[]> {
-    if (usernames.length === 0) return [];
-    try {
-      return await resolveUsernamesToIds(this.prisma, usernames);
-    } catch {
-      return [];
-    }
-  }
-
-  private _notifyAgent(message: {
-    id: string;
-    conversationId: string;
-    senderId: string | null;
-    senderDisplayName?: string;
-    senderUsername?: string;
-    content: string | null;
-    originalLanguage: string | null;
-    replyToId?: string | null;
-    mentionedUserIds?: string[];
-    createdAt: Date;
-  }): void {
-    if (!this.agentClient || !message.senderId || !message.content) return;
-    this.agentClient.sendEvent({
-      type: 'agent:new-message',
-      conversationId: message.conversationId,
-      messageId: message.id,
-      senderId: message.senderId,
-      senderDisplayName: message.senderDisplayName,
-      senderUsername: message.senderUsername,
-      content: message.content,
-      originalLanguage: message.originalLanguage ?? 'fr',
-      replyToId: message.replyToId ?? undefined,
-      mentionedUserIds: message.mentionedUserIds ?? [],
-      timestamp: message.createdAt.getTime(),
-    }).catch((err: unknown) => {
-      logger.warn('[Agent] sendEvent error (non-blocking):', err);
-    });
-  }
 }

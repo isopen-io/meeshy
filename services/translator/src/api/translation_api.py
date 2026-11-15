@@ -13,6 +13,10 @@ import asyncio
 # Import du health router
 from api.health import health_router, set_services
 from config.message_limits import can_translate_message, MessageLimits
+from config.settings import get_settings
+from services.language_capabilities import LanguageCapabilitiesService
+from utils.audio_pipeline_metrics import metrics_router
+from services.task_privacy import shown
 
 # Import du audio router (lazy loading)
 try:
@@ -113,6 +117,9 @@ class TranslationAPI:
         # Inclure le routeur de santé principal
         self.app.include_router(health_router)
 
+        # #11257 — les mesures de l'audio (whisper, nllb, tts), au format Prometheus ; ce port n'est pas routé par Traefik.
+        self.app.include_router(metrics_router())
+
         # Inclure le routeur audio si disponible
         if AUDIO_API_AVAILABLE:
             audio_router = create_audio_router(
@@ -170,7 +177,7 @@ class TranslationAPI:
                 import time
                 start_time = time.time()
                 
-                logger.info(f"🌐 [TRANSLATOR-API] Requête REST reçue: texte='{request.text[:50]}...', source={request.source_language}, target={request.target_language}, modèle={request.model_type}")
+                logger.info(f"🌐 [TRANSLATOR-API] Requête REST reçue: texte='{shown(request.text, 50)}...', source={request.source_language}, target={request.target_language}, modèle={request.model_type}")
                 
                 # Validation des paramètres
                 if not request.text.strip():
@@ -218,7 +225,7 @@ class TranslationAPI:
                 
                 processing_time = int((time.time() - start_time) * 1000)
                 
-                logger.info(f"✅ [TRANSLATOR-API] Traduction REST terminée: '{request.text[:30]}...' → '{result.get('translated_text', '')[:30]}...' ({processing_time}ms)")
+                logger.info(f"✅ [TRANSLATOR-API] Traduction REST terminée: '{shown(request.text, 30)}...' → '{shown(result.get('translated_text', ''), 30)}...' ({processing_time}ms)")
                 
                 return TranslationResponse(
                     original_text=request.text,
@@ -264,17 +271,22 @@ class TranslationAPI:
         
         @self.app.get("/languages")
         async def get_supported_languages():
-            """Retourne les langues supportées"""
-            languages = {
-                "fr": "Français",
-                "en": "English", 
-                "es": "Español",
-                "de": "Deutsch",
-                "pt": "Português",
-                "zh": "中文",
-                "ja": "日本語",
-                "ar": "العربية"
-            }
+            """Retourne les langues supportées.
+
+            #5709 — reflète SUPPORTED_LANGUAGES (Settings.supported_languages_list),
+            jamais une copie codée en dur qui diverge dès qu'une langue est
+            ajoutée à la configuration sans toucher cet endpoint. Le nom natif
+            vient de LanguageCapabilitiesService, seule source de vérité pour
+            cette information dans ce service — jamais réinventé ici.
+            """
+            capabilities = LanguageCapabilitiesService()
+            languages = {}
+            for code in get_settings().supported_languages_list:
+                capability = capabilities.get_capability(code)
+                # Repli sur le code lui-même si une langue configurée manque au
+                # registre : mieux vaut l'annoncer sous une forme dégradée que
+                # la faire disparaître silencieusement de la réponse.
+                languages[code] = capability.native_name if capability else code
             return {"supported_languages": languages}
         
         @self.app.get("/models")

@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "a11y_message_source_ads",
+          "status": "android-only"
+        },
+        {
+          "androidName": "a11y_message_source_agent",
+          "status": "android-only"
+        },
+        {
+          "androidName": "a11y_message_source_app",
+          "status": "android-only"
+        },
+        {
+          "androidName": "a11y_message_source_authority",
+          "status": "android-only"
+        },
+        {
+          "androidName": "a11y_message_source_system",
+          "status": "android-only"
+        },
+        {
+          "androidName": "audio_player_delete",
+          "status": "android-only"
+        },
+        {
+          "androidName": "audio_player_edit",
+          "status": "android-only"
+        },
+        {
+          "androidName": "audio_player_error",
+          "status": "android-only"
+        },
+        {
+          "androidName": "audio_player_retry",
+          "status": "android-only"
+        },
+        {
+          "androidName": "audio_player_waveform",
+          "status": "android-only"
+        },
+        {
+          "androidName": "brand_logo_description",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_tap_to_download",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

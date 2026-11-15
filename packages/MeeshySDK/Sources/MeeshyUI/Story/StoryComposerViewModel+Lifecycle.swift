@@ -26,33 +26,22 @@ extension StoryComposerViewModel {
         }
     }
 
-    /// Evict cached media for slides not currently visible. Triggered by
-    /// `UIApplication.didReceiveMemoryWarningNotification` via `startMemoryObserver`.
-    /// Previously only `slideImages` (background thumbnails) and the global thumbnail
-    /// cache were purged — `loadedImages` / `loadedVideoURLs` / `loadedAudioURLs` /
-    /// `mediaAspectRatios` of foreground media on non-visible slides leaked, which
-    /// could keep ~50 MB of UIImages around with 10 slides × 5 photos.
-    /// Active-slide caches are preserved; the user is currently editing them and
-    /// their re-decoding cost would be visible.
+    /// **Une alerte mémoire purge des CACHES, jamais la composition** (#6922).
+    ///
+    /// Cette fonction retirait de `loadedImages`, `slideImages`,
+    /// `loadedVideoURLs` et `loadedAudioURLs` tout ce qui n'était pas sur la
+    /// scène courante. Or ces dictionnaires ne sont pas des caches : ce sont les
+    /// SEULES références de ce que l'auteur a posé, et la publication les lit
+    /// telles quelles (`onPublishAllInBackground`). Une alerte mémoire pendant
+    /// la troisième scène d'un post faisait donc partir les deux premières
+    /// sans leur photo ni leur vidéo — en silence, sans retour possible.
+    ///
+    /// Ce qui borne la mémoire désormais, c'est la TAILLE de chaque photo
+    /// (`SceneImageDownsampling.workingMaxPixelSize`, la taille publiée). Sous
+    /// pression, on ne lâche que ce qui se recalcule : vignettes de scène et
+    /// vignettes vidéo.
     func evictNonVisibleSlideMedia() {
-        let currentSlideId = slides[safe: currentSlideIndex]?.id
-        var keepIds = Set<String>()
-        if currentSlideId != nil {
-            for obj in (currentEffects.mediaObjects ?? []) { keepIds.insert(obj.id) }
-            for obj in (currentEffects.audioPlayerObjects ?? []) { keepIds.insert(obj.id) }
-        }
-
-        for (index, slide) in slides.enumerated() where index != currentSlideIndex {
-            slideImages.removeValue(forKey: slide.id)
-            for obj in (slide.effects.mediaObjects ?? []) where !keepIds.contains(obj.id) {
-                loadedImages.removeValue(forKey: obj.id)
-                loadedVideoURLs.removeValue(forKey: obj.id)
-                mediaAspectRatios.removeValue(forKey: obj.id)
-            }
-            for obj in (slide.effects.audioPlayerObjects ?? []) where !keepIds.contains(obj.id) {
-                loadedAudioURLs.removeValue(forKey: obj.id)
-            }
-        }
+        SceneThumbnailCache.shared.removeAll()
         StoryMediaLoader.shared.clearThumbnailCache()
     }
 
@@ -66,7 +55,27 @@ extension StoryComposerViewModel {
         }
     }
 
-    func reset() {
+    /// **`public` depuis le 2026-08-27** : un meuble app qui incruste la scène
+    /// doit pouvoir offrir « tout effacer » sans monter l'atelier. Point
+    /// d'entrée de BUILDING BLOCK — il remet la composition à zéro et rien
+    /// d'autre ; quand l'effacer et ce qu'il faut effacer À CÔTÉ (le média du
+    /// document, le lieu, la transcription) reste une décision app.
+    public func reset() {
+        // **`carriedContentSources` DOIT tomber ici, et ne tombait pas.**
+        // C'est le cache d'idempotence d'`applyContentMedia` : « cette URL a
+        // déjà été portée dans CETTE composition ». Une composition remise à
+        // zéro n'a plus rien porté — le garder faisait qu'après un reset, la
+        // MÊME photo re-choisie était silencieusement sautée et n'atteignait
+        // jamais la scène. Défaut latent depuis B1 : personne ne l'avait vu
+        // parce que le seul appelant de `reset()` était « supprimer tous les
+        // slides » dans l'atelier, dont le chemin de reprise passe par le
+        // picker de l'atelier et non par `applyContentMedia`.
+        carriedContentSources = []
+        // La teinte de l'outil se tire AVANT la slide neuve : son `didSet`
+        // l'écrit sur la slide courante, et l'écrire après posait une couleur
+        // au hasard sur la scène effacée (#13839, défaut 28b — une scène rose
+        // au lieu de la scène neutre de l'ouverture).
+        backgroundColor = "#\(StoryBackgroundPalette.randomBackgroundColor())"
         slides = [StorySlide()]
         currentSlideIndex = 0
         slideImages = [:]
@@ -79,11 +88,11 @@ extension StoryComposerViewModel {
         activeBrushSmoothing = .raw
         drawingEditingMode = .inactive
         isDrawingImmersive = false
-        backgroundColor = "#\(StoryBackgroundPalette.randomBackgroundColor())"
         openingEffect = nil
         closingEffect = nil
         retiredImages = [:]
         retiredVideoURLs = [:]
+        retiredStickerAnimations = [:]
         retiredAudioURLs = [:]
         retiredSlideImages = [:]
         loadedImages = [:]

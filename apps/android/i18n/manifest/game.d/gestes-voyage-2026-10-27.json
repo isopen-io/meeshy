@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.claim",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.seal.buy",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.spend.missing.seal",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

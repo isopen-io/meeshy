@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Libellés courts des glissements de rangée, repris des clés iOS swipe.* (marquées « stale » dans le catalogue, donc ignorées par le générateur). -->
+<resources>
+    <string name="swipe_pin">تثبيت</string>
+    <string name="swipe_unpin">إلغاء التثبيت</string>
+    <string name="swipe_archive">أرشفة</string>
+    <string name="swipe_unarchive">إلغاء الأرشفة</string>
+    <string name="swipe_mark_read">مقروءة</string>
+    <string name="swipe_mark_unread">غير مقروءة</string>
+</resources>

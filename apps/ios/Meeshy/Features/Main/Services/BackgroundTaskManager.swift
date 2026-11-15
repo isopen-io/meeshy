@@ -2,7 +2,7 @@ import BackgroundTasks
 import MeeshySDK
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.app", category: "background")
+private let logger = MeeshyLog.logger(.background)
 
 /// startup-08 — enveloppe `BGTaskScheduler.cancel` pour rendre le chemin de
 /// logout testable : l'API réelle n'offre aucun moyen d'observer un cancel
@@ -14,6 +14,11 @@ extension BGTaskScheduler: BGTaskCancelling {}
 
 @MainActor
 final class BackgroundTaskManager {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = BackgroundTaskManager()
 
     static let conversationSyncTaskId = "me.meeshy.app.conversation-sync"
@@ -57,16 +62,17 @@ final class BackgroundTaskManager {
             return Self.normalSyncInterval
         }
         syncFailureCount += 1
-        let exp = pow(2.0, Double(min(syncFailureCount, 8)))
-        return min(Self.baseRetryInterval * exp, Self.maxRetryInterval)
+        return RetryPolicy(maxAttempts: nil, firstDelay: Self.baseRetryInterval, maxDelay: Self.maxRetryInterval)
+            .delay(afterFailure: min(syncFailureCount, 8) + 1, jitterSample: 0)
     }
 
     func registerTasks() {
+        BatteryBackgroundRefresh.register()
         // `using: .main` is load-bearing: these launch-handler closures are
         // inferred @MainActor (class isolation + SWIFT_DEFAULT_ACTOR_ISOLATION),
         // so the Swift 6 runtime asserts the main queue when they run. With
         // `using: nil` BGTaskScheduler invoked them on its own serial queue —
-        // dispatch_assert_queue_fail, 4 device crashes 2026-06-10 (builds
+        // dispatch_assert_queue_fail, 4 device crashes (builds
         // 471/474, queues me.meeshy.app.conversation-sync/message-prefetch).
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: Self.conversationSyncTaskId,
@@ -95,6 +101,13 @@ final class BackgroundTaskManager {
         }
 
         logger.info("Background tasks registered")
+    }
+
+    /// Au passage en arrière-plan : la synchronisation, le préchargement et le relevé de batterie (#14147).
+    func scheduleBackgroundWork() {
+        scheduleConversationSync()
+        scheduleMessagePrefetch()
+        BatteryBackgroundRefresh.schedule()
     }
 
     func scheduleConversationSync(after delay: TimeInterval? = nil) {
@@ -143,6 +156,15 @@ final class BackgroundTaskManager {
         authTokenProvider() != nil
     }
 
+    /// Décision PURE : le préchargement d'arrière-plan doit-il tourner dans cet
+    /// état réseau ? Wi-Fi SEULEMENT — il tire jusqu'à 10 conversations × 30
+    /// messages (traductions et réponses incluses) toutes les ~30 min, pour du
+    /// contenu que l'utilisateur n'a pas demandé. Le videur d'outbox, lui, garde
+    /// son propre gate : ce qu'il envoie a été demandé.
+    nonisolated static func shouldRunBackgroundPrefetch(condition: NetworkCondition) -> Bool {
+        condition == .wifi
+    }
+
     /// Annule les deux BGTask requests en attente (chemin logout MeeshyApp).
     /// Ne touche PAS `me.meeshy.cache.background-flush` (filet de flush cache
     /// SDK, identifiant distinct) — volontairement absent d'ici.
@@ -159,22 +181,39 @@ final class BackgroundTaskManager {
             return
         }
         let syncTask = Task<Bool, Never> {
-            // Pull : récupère les nouveautés depuis le dernier checkpoint.
-            let synced = await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
-            // Push : draine l'outbox. Le BGAppRefreshTask est le seul moment où
-            // les messages/réactions mis en file hors-ligne peuvent partir sans
-            // que l'utilisateur ait à rouvrir l'app — sans ça, un envoi fait
-            // hors-ligne attend le prochain passage au premier plan.
-            await OutboxFlushTrigger.flushNow()
-            return synced
+            // #7160 — LE RÉVEIL LÈVE LA SUSPENSION DE LA BASE, le temps du
+            // travail. `DatabaseSuspension.suspend()` est posé à la fin de
+            // l'entrée en arrière-plan ; ce réveil se produit APRÈS, alors que
+            // tout ce qui suit écrit. Sans la parenthèse, la synchronisation et
+            // le drainage de l'outbox lèvent `SQLITE_INTERRUPT` et le journal
+            // annonce quand même un succès — rien ne plante, rien n'arrive.
+            await DatabaseSuspension.duringBackgroundWake {
+                // Pull : récupère les nouveautés depuis le dernier checkpoint.
+                let synced = await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
+                // Le système a repris son temps : ne pas entamer le drainage.
+                guard !Task.isCancelled else { return synced }
+                // Push : draine l'outbox. Le BGAppRefreshTask est le seul moment où
+                // les messages/réactions mis en file hors-ligne peuvent partir sans
+                // que l'utilisateur ait à rouvrir l'app — sans ça, un envoi fait
+                // hors-ligne attend le prochain passage au premier plan.
+                await OutboxFlushTrigger.flushNow()
+                return synced
+            }
         }
         activeSyncTask = Task { _ = await syncTask.value }
 
         // @Sendable: the system may invoke the expiration handler off the
         // registration queue; a @Sendable closure carries no actor isolation,
         // so there is no runtime queue assertion to trip.
+        // L'expiration REND la tâche tout de suite : attendre que le travail
+        // annulé s'arrête de lui-même laissait le système tuer l'app pour une
+        // tâche non rendue. Une seule complétion, quel que soit le premier.
+        // `setTaskCompleted` est sûr depuis n'importe quel fil (BackgroundTasks).
+        nonisolated(unsafe) let systemTask = task
+        let completion = BackgroundTaskCompletion { systemTask.setTaskCompleted(success: $0) }
         task.expirationHandler = { @Sendable in
             syncTask.cancel()
+            completion.complete(success: false)
         }
 
         let succeeded = await syncTask.value && !syncTask.isCancelled
@@ -185,7 +224,7 @@ final class BackgroundTaskManager {
         let delay = nextSyncDelay(succeeded: succeeded)
         scheduleConversationSync(after: delay)
 
-        task.setTaskCompleted(success: succeeded)
+        completion.complete(success: succeeded)
         logger.info("Background conversation sync completed: success=\(succeeded), nextIn=\(Int(delay))s")
     }
 
@@ -196,29 +235,68 @@ final class BackgroundTaskManager {
         }
         scheduleMessagePrefetch()
 
-        let prefetchTask = Task {
-            // Background prefetch: read whatever the cache currently has
-            // (snapshot semantics). We are running in a `BGProcessingTask`
-            // with a budget deadline, so we cannot meaningfully act on a
-            // staleness signal here.
-            let conversations = await CacheCoordinator.shared.conversations.load(for: "list")
-            guard let items = conversations.snapshot() else { return }
+        // Le rendez-vous suivant vient d'etre replanifie : sortir ici ne perd
+        // rien. `success: true` — un `setTaskCompleted(success: false)` ferait
+        // baisser le budget que le systeme accorde a cette tache, alors que ne
+        // PAS consommer de donnees cellulaires est le comportement attendu.
+        guard Self.shouldRunBackgroundPrefetch(condition: NetworkConditionMonitor.shared.condition) else {
+            task.setTaskCompleted(success: true)
+            logger.info("Background message prefetch skipped: not on Wi-Fi")
+            return
+        }
 
-            let unreadConversations = items.filter { $0.userState.unreadCount > 0 }
-            for conversation in unreadConversations.prefix(10) {
-                guard !Task.isCancelled else { break }
-                await ConversationSyncEngine.shared.ensureMessages(for: conversation.id)
+        let prefetchTask = Task {
+            // #7160 — même parenthèse que la synchronisation : `ensureMessages`
+            // GRAVE les messages qu'il rapporte. Préfetcher dans une base
+            // suspendue coûte le réseau et ne laisse rien derrière.
+            await DatabaseSuspension.duringBackgroundWake {
+                // Background prefetch: read whatever the cache currently has
+                // (snapshot semantics). We are running in a `BGProcessingTask`
+                // with a budget deadline, so we cannot meaningfully act on a
+                // staleness signal here.
+                let conversations = await CacheCoordinator.shared.conversations.load(for: "list")
+                guard let items = conversations.snapshot() else { return }
+
+                let unreadConversations = items.filter { $0.userState.unreadCount > 0 }
+                for conversation in unreadConversations.prefix(10) {
+                    guard !Task.isCancelled else { break }
+                    await ConversationSyncEngine.shared.ensureMessages(for: conversation.id)
+                }
             }
         }
         activePrefetchTask = prefetchTask
 
+        // `setTaskCompleted` est sûr depuis n'importe quel fil (BackgroundTasks).
+        nonisolated(unsafe) let systemTask = task
+        let completion = BackgroundTaskCompletion { systemTask.setTaskCompleted(success: $0) }
         task.expirationHandler = { @Sendable in
             prefetchTask.cancel()
+            completion.complete(success: false)
         }
 
         await prefetchTask.value
         activePrefetchTask = nil
-        task.setTaskCompleted(success: !prefetchTask.isCancelled)
+        completion.complete(success: !prefetchTask.isCancelled)
         logger.info("Background message prefetch completed")
     }
 }
+
+/// `setTaskCompleted` rendu UNE fois : par l'expiration (tout de suite) ou par
+/// la fin du travail, le premier des deux. Le second appel ne fait rien.
+nonisolated final class BackgroundTaskCompletion: @unchecked Sendable {
+    private let done = Locked(false)
+    private let deliver: @Sendable (Bool) -> Void
+
+    init(_ deliver: @escaping @Sendable (Bool) -> Void) {
+        self.deliver = deliver
+    }
+
+    func complete(success: Bool) {
+        let first = done.mutate { finished -> Bool in
+            defer { finished = true }
+            return !finished
+        }
+        if first { deliver(success) }
+    }
+}
+

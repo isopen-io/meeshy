@@ -10,22 +10,57 @@ import MeeshySDK
 /// Une seule UI, une seule source de vérité : `viewModel.openingEffect` —
 /// la persistance passe par la chaîne `granularCanvasSync` (pas de callback
 /// de sync à câbler par surface).
-struct OpeningEffectChips: View {
+/// **`public` parce que le composer unifié monte la MÊME vue** (#4403).
+///
+/// Le panneau « Fond » de l'atelier porte deux choses — les couleurs ET cette
+/// rangée. La bande de fond du plateau ne portait que les couleurs : l'effet
+/// d'ouverture d'une scène y était inatteignable, et le manque ne se voyait
+/// pas en composant, puisque cet effet ne se joue qu'à la LECTURE.
+///
+/// L'emprunt se fait par EXTRACTION, jamais par copie — règle du #4035 : un
+/// corps, deux montages. Cette vue s'y prêtait déjà sans rien changer, ses
+/// deux entrées étant opaques (`selection`, `onSelect`) : elle ne connaît ni
+/// le ViewModel, ni la surface qui la monte.
+public struct OpeningEffectChips: View {
     let selection: StoryTransitionEffect?
     let onSelect: (StoryTransitionEffect?) -> Void
+
+    /// **La surface qui PORTE les puces est-elle sombre en permanence ?**
+    ///
+    /// Sans ce drapeau, les puces suivent `colorScheme` — le thème de
+    /// l'APPAREIL. C'est juste sous l'atelier, dont le band est opaque et suit
+    /// le thème ; c'est faux sur le plateau du composer, **sombre en
+    /// permanence**. Un appareil en thème CLAIR y peignait alors un texte
+    /// `indigo950` sur un fond sombre : les puces non sélectionnées existaient
+    /// dans l'arbre d'accessibilité, avec leur libellé et leur cadre, et
+    /// n'étaient PAS VISIBLES. Défaut mesuré au simulateur.
+    ///
+    /// C'est la même règle que `ComposerTopBar` documente pour sa croix de
+    /// fermeture : sur une surface qui ne suit pas le thème, une couleur
+    /// adaptative peint du sombre sur du sombre dès que l'appareil quitte la
+    /// nuit.
+    public var onDarkSurface: Bool = false
+
+    public init(selection: StoryTransitionEffect?,
+                onDarkSurface: Bool = false,
+                onSelect: @escaping (StoryTransitionEffect?) -> Void) {
+        self.selection = selection
+        self.onDarkSurface = onDarkSurface
+        self.onSelect = onSelect
+    }
     // Les chips s'affichent sur le band opaque (blanc@92% en clair) : sans
     // adaptation, un label blanc y était invisible en light mode.
     @Environment(\.colorScheme) private var colorScheme
 
-    var body: some View {
+    public var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 chip(nil)
                 ForEach(StoryTransitionEffect.allCases, id: \.self) { effect in
                     chip(effect)
                 }
             }
-            .padding(.horizontal, 2)
+            .padding(.horizontal, MeeshySpacing.xxs)
         }
     }
 
@@ -36,25 +71,25 @@ struct OpeningEffectChips: View {
             defaultValue: "Aucune",
             bundle: .module
         )
-        let isDark = colorScheme == .dark
+        let isDark = onDarkSurface || colorScheme == .dark
         // Sélectionné : blanc sur brand (contrasté dans les deux thèmes).
         // Non sélectionné : texte adaptatif sur remplissage subtil adaptatif.
         let textColor: Color = isSelected ? .white : (isDark ? .white : MeeshyColors.indigo950)
         let fillColor: Color = isSelected
-            ? MeeshyColors.brandPrimary.opacity(0.85)
-            : (isDark ? Color.white.opacity(0.10) : MeeshyColors.indigo950.opacity(0.06))
+            ? MeeshyColors.brandPrimary.opacity(MeeshyOpacity.intense)
+            : (isDark ? Color.white.opacity(MeeshyOpacity.subtle) : MeeshyColors.indigo950.opacity(MeeshyOpacity.faint))
         let strokeColor: Color = isSelected
-            ? MeeshyColors.brandPrimary.opacity(0.35)
-            : (isDark ? Color.white.opacity(0.12) : MeeshyColors.indigo950.opacity(0.14))
+            ? MeeshyColors.brandPrimary.opacity(MeeshyOpacity.medium)
+            : (isDark ? Color.white.opacity(MeeshyOpacity.light) : MeeshyColors.indigo950.opacity(MeeshyOpacity.light))
         return Button {
             onSelect(effect)
             HapticFeedback.light()
         } label: {
             Text(title)
-                .font(.system(size: 13, weight: isSelected ? .bold : .medium))
-                .foregroundColor(textColor)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isSelected ? .bold : .medium))
+                .foregroundStyle(textColor)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.sm)
                 .background(Capsule().fill(fillColor))
                 .overlay(Capsule().strokeBorder(strokeColor, lineWidth: 1))
         }

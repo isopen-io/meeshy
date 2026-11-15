@@ -181,19 +181,10 @@ final class StoryViewerReactionFlowTests: XCTestCase {
         var storyCurrentUserReactions: [String] = []
         var storyReactionCount = 0
 
-        let priorReactions = storyCurrentUserReactions
-        let priorCount = storyReactionCount
-
         let emoji = "🔥"
         if !storyCurrentUserReactions.contains(emoji) {
             storyCurrentUserReactions.append(emoji)
             storyReactionCount += 1
-        }
-
-        let networkCallDidThrow = false
-        if networkCallDidThrow {
-            storyCurrentUserReactions = priorReactions
-            storyReactionCount = priorCount
         }
 
         XCTAssertEqual(storyCurrentUserReactions, ["🔥"], "Successful reaction keeps the optimistic emoji")
@@ -217,7 +208,7 @@ final class StoryViewerReactionFlowTests: XCTestCase {
             .deletingLastPathComponent()  // Features
             .deletingLastPathComponent()  // MeeshyTests
             .deletingLastPathComponent()  // ios
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
+            .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -227,7 +218,7 @@ final class StoryViewerReactionFlowTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
+            .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+ActionButton.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -274,9 +265,9 @@ final class StoryViewerReactionFlowTests: XCTestCase {
             "toggleReactionBar doit ouvrir/fermer la barre (showEmojiStrip.toggle())"
         )
 
-        guard let iconPos = source.range(of: "icon: \"heart.fill\""),
-              let overlayPos = source.range(of: "EmojiReactionPicker(", range: iconPos.upperBound..<source.endIndex) else {
-            return XCTFail("site heart.fill ou son overlay EmojiReactionPicker introuvable")
+        guard let iconPos = source.range(of: "FullscreenActionButton.react("),
+              let overlayPos = source.range(of: "FullscreenReactionStrip(", range: iconPos.upperBound..<source.endIndex) else {
+            return XCTFail("site FullscreenActionButton.react ou son overlay FullscreenReactionStrip introuvable")
         }
         let siteBlock = String(source[iconPos.lowerBound..<overlayPos.lowerBound])
         XCTAssertTrue(
@@ -320,16 +311,26 @@ final class StoryViewerReactionFlowTests: XCTestCase {
         }
         let body = String(source[structPos.lowerBound...])
         XCTAssertTrue(
-            body.contains("handlesTapViaGesture"),
-            "StoryActionButton doit exposer le mode handlesTapViaGesture (chemin sans Button pour les sites scrub)"
+            body.contains("handlesTapViaGesture: handlesTapViaGesture"),
+            "StoryActionButton doit transmettre le mode handlesTapViaGesture à l'atome (chemin sans Button pour les sites scrub)"
+        )
+
+        let atom = try String(contentsOf: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshyUI/Fullscreen/FullscreenActionRail.swift"),
+            encoding: .utf8)
+        XCTAssertTrue(
+            atom.contains(".accessibilityAction"),
+            "le chemin gesture-world de l'atome doit garder une accessibilityAction explicite — VoiceOver ne synthétise pas de TapGesture (leçon bouton Sound)"
         )
         XCTAssertTrue(
-            body.contains(".accessibilityAction"),
-            "le chemin gesture-world doit garder une accessibilityAction explicite — VoiceOver ne synthétise pas de TapGesture (leçon bouton Sound)"
-        )
-        XCTAssertTrue(
-            body.contains(".accessibilityAddTraits(.isButton)"),
-            "le chemin gesture-world doit annoncer le trait bouton à VoiceOver"
+            atom.contains(".accessibilityAddTraits(.isButton)"),
+            "le chemin gesture-world de l'atome doit annoncer le trait bouton à VoiceOver"
         )
     }
 }

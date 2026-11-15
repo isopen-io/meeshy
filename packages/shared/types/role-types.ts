@@ -318,6 +318,20 @@ export function isGlobalModerator(role: GlobalUserRole | GlobalUserRoleType): bo
 }
 
 /**
+ * L'ÉQUIPE de la plateforme (ANALYST et au-dessus : ANALYST, AUDIT, MODERATOR,
+ * ADMIN, BIGBOSS) : ceux qui ont entre eux toutes les features de cercle (sonnerie,
+ * talkie, Bring, présence), sans lien à construire (#16623, directive porteur du
+ * 2026-11-10). Face à un utilisateur ordinaire, rien ne change : il respecte les cercles.
+ *
+ * C'est une lecture de DROIT : elle échoue fermé (`globalRoleLevel`), et rien
+ * n'y entre d'une valeur absente ou inconnue. USER et AGENT n'en sont pas.
+ * La casse est repliée comme chez `isGlobalAdmin`, sa voisine.
+ */
+export function isPlatformTeam(role: string | null | undefined): boolean {
+  return typeof role === 'string' && globalRoleLevel(role) >= GLOBAL_ROLE_HIERARCHY[GlobalUserRole.ANALYST];
+}
+
+/**
  * Vérifie si un membre est admin
  */
 export function isMemberAdmin(role: MemberRole | MemberRoleType | string): boolean {
@@ -336,6 +350,35 @@ export function isMemberModerator(role: MemberRole | MemberRoleType | string): b
 /**
  * Vérifie si un membre est créateur
  */
+/**
+ * Les deux casses d'un rang de participant, pour un filtre Prisma `in`.
+ *
+ * `hasMinimumMemberRole` et ses sœurs replient la casse en JavaScript — un
+ * `where` Prisma, lui, part tel quel vers la base et ne peut appeler aucune
+ * fonction. Tant que la migration des lignes historiques
+ * (`normalize-participant-role-casing.ts`, #3875) n'est pas passée en
+ * production, une requête `role: { in: ['admin', 'creator'] }` ne ramène AUCUNE
+ * des lignes que l'ancien `InitService` a écrites en majuscules — et le défaut
+ * ne se voit pas : il rend un ensemble plus PETIT, jamais une erreur (#4008).
+ */
+/**
+ * Le NIVEAU d'un rang de participant, casse repliée — la primitive dont
+ * `hasMinimumMemberRole` n'est qu'une comparaison.
+ *
+ * Existe pour les sites qui doivent COMPARER DEUX rangs entre eux (bannir
+ * exige un rang strictement supérieur à celui de la cible) et qu'un prédicat
+ * « au moins X » ne sait pas dire. Ils redéclaraient la hiérarchie en local,
+ * en minuscules strictes : sur une ligne écrite `CREATOR`, le repli `?? 0`
+ * faisait du créateur le rang le plus BAS de la conversation (#4008).
+ */
+export function memberRoleLevel(role: MemberRole | MemberRoleType | string): number {
+  return MEMBER_ROLE_HIERARCHY[role.toLowerCase() as MemberRole] || 0;
+}
+
+export function memberRoleCasings(roles: readonly MemberRoleType[]): string[] {
+  return roles.flatMap(role => [role.toLowerCase(), role.toUpperCase()]);
+}
+
 export function isMemberCreator(role: MemberRole | MemberRoleType | string): boolean {
   /* v8 ignore next -- string enum values are always typeof 'string' at runtime; else branch unreachable */
   const normalized = typeof role === 'string' ? role.toLowerCase() : role;

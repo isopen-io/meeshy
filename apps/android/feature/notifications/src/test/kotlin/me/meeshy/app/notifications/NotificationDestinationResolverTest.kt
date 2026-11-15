@@ -1,0 +1,427 @@
+package me.meeshy.app.notifications
+
+import me.meeshy.sdk.model.StoryViewerInitialAction
+import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.NotificationActor
+import me.meeshy.sdk.model.NotificationContext
+import me.meeshy.sdk.model.NotificationMetadata
+import me.meeshy.sdk.model.NotificationState
+import me.meeshy.sdk.model.game.GameTarget
+import me.meeshy.sdk.model.game.pages.GamePage
+import me.meeshy.sdk.model.game.progression.ProgressionConcept
+import org.junit.Test
+
+/**
+ * `type × entities → destination` — the pure resolver a tap dispatches through (issue #4793).
+ * Mirrors iOS `NotificationContentRouterTests` in shape (a table of type/context/metadata
+ * combinations against the resolved surface), scoped to what Android's own routes can reach.
+ */
+class NotificationDestinationResolverTest {
+
+    private fun notification(
+        type: String,
+        conversationId: String? = null,
+        postId: String? = null,
+        actorId: String? = null,
+        postType: String? = null,
+        contentType: String? = null,
+        conversationType: String? = null,
+        metadataPostId: String? = null,
+    ) = ApiNotification(
+        id = "n1",
+        type = type,
+        actor = actorId?.let { NotificationActor(id = it) },
+        context = NotificationContext(
+            conversationId = conversationId,
+            conversationType = conversationType,
+            postId = postId,
+        ),
+        metadata = NotificationMetadata(postType = postType, contentType = contentType, postId = metadataPostId),
+        state = NotificationState(createdAt = "2026-01-01"),
+    )
+
+    // --- Relation family (iOS RootNotificationNavigator : profil de l'expéditeur) ---
+
+    @Test
+    fun `every contact lifecycle type opens the actor profile like iOS`() {
+        listOf(
+            "friend_request", "contact_request", "friend_accepted", "contact_accepted",
+            "contact_joined", "contact_recently_active", "STATUS_UPDATE", "FRIEND_REQUEST",
+        ).forEach { type ->
+            val dest = NotificationDestinationResolver.resolve(notification(type, actorId = "u9"))
+
+            assertThat(dest).isEqualTo(NotificationDestination.Profile("u9"))
+        }
+    }
+
+    @Test
+    fun `a contact notification without an actor is a dead end rather than a wrong screen`() {
+        val dest = NotificationDestinationResolver.resolve(notification("contact_recently_active"))
+
+        assertThat(dest).isEqualTo(NotificationDestination.None)
+    }
+
+    // --- Conversation family ---
+
+    @Test
+    fun `a message notification with a conversationId opens that conversation`() {
+        val dest = NotificationDestinationResolver.resolve(
+            notification("new_message", conversationId = "c1"),
+        )
+
+        assertThat(dest).isEqualTo(NotificationDestination.Conversation("c1"))
+    }
+
+    @Test
+    fun `the legacy uppercase wire type resolves the same as its lowercase form`() {
+        val dest = NotificationDestinationResolver.resolve(
+            notification("NEW_MESSAGE", conversationId = "c1"),
+        )
+
+        assertThat(dest).isEqualTo(NotificationDestination.Conversation("c1"))
+    }
+
+    @Test
+    fun `a missed call opens the conversation it happened in`() {
+        val dest = NotificationDestinationResolver.resolve(
+            notification("missed_call", conversationId = "c1"),
+        )
+
+        assertThat(dest).isEqualTo(NotificationDestination.Conversation("c1"))
+    }
+
+    @Test
+    fun `a mention without a conversationId falls back to the post it mentions`() {
+        val dest = NotificationDestinationResolver.resolve(
+            notification("user_mentioned", conversationId = null, postId = "p1"),
+        )
+
+        assertThat(dest).isEqualTo(NotificationDestination.Post("p1"))
+    }
+
+    @Test
+    fun `a message notification with neither conversation nor post is a dead end`() {
+        val dest = NotificationDestinationResolver.resolve(notification("message_reply"))
+
+        assertThat(dest).isEqualTo(NotificationDestination.None)
+    }
+
+    @Test
+    fun `a blank conversationId is treated as absent`() {
+        val dest = NotificationDestinationResolver.resolve(
+            notification("new_message", conversationId = " ", postId = "p1"),
+        )
+
+        assertThat(dest).isEqualTo(NotificationDestination.Post("p1"))
+    }
+
+    // --- Relation family ---
+
+    @Test
+    fun `a friend request opens the requester's profile`() {
+        val dest = NotificationDestinationResolver.resolve(
+            notification("friend_request", actorId = "u1"),
+        )
+
+        assertThat(dest).isEqualTo(NotificationDestination.Profile("u1"))
+    }
+
+    @Test
+    fun `a contact accepted notification opens the actor's profile`() {
+        val dest = NotificationDestinationResolver.resolve(
+            notification("contact_accepted", actorId = "u1"),
+        )
+
+        assertThat(dest).isEqualTo(NotificationDestination.Profile("u1"))
+    }
+
+    @Test
+    fun `a friend request without an actor is a dead end`() {
+        val dest = NotificationDestinationResolver.resolve(notification("friend_request"))
+
+        assertThat(dest).isEqualTo(NotificationDestination.None)
+    }
+
+    // --- Social content family ---
+
+    @Test
+    fun `a post like opens the post detail`() {
+        val dest = NotificationDestinationResolver.resolve(
+            notification("post_like", postId = "p1"),
+        )
+
+        assertThat(dest).isEqualTo(NotificationDestination.Post("p1"))
+    }
+
+    @Test
+    fun `the post id is read from metadata when the context omits it`() {
+        val dest = NotificationDestinationResolver.resolve(
+            notification("post_like", postId = null, metadataPostId = "p1"),
+        )
+
+        assertThat(dest).isEqualTo(NotificationDestination.Post("p1"))
+    }
+
+    @Test
+    fun `a reel-tagged notification opens the reel player, never the post detail`() {
+        val dest = NotificationDestinationResolver.resolve(
+            notification("post_comment", postId = "p1", postType = "REEL"),
+        )
+
+        assertThat(dest).isEqualTo(NotificationDestination.Reel("p1"))
+    }
+
+    @Test
+    fun `a fresh story publication opens its author's story tray`() {
+        val dest = NotificationDestinationResolver.resolve(
+            notification("friend_new_story", postId = "p1", actorId = "author1", postType = "STORY"),
+        )
+
+        assertThat(dest).isEqualTo(NotificationDestination.Story("author1"))
+    }
+
+    // A mood/status has no tray to land in — the story tray endpoint serves
+    // `type: PostType.STORY` exclusively — so it falls back to the post detail rather
+    // than opening the author's (STORY-only) tray, which the mood is never actually in.
+    @Test
+    fun `a fresh mood publication opens its own mood page, not its author's story tray`() {
+        val dest = NotificationDestinationResolver.resolve(
+            notification("friend_new_mood", postId = "p1", actorId = "author1", postType = "MOOD"),
+        )
+
+        assertThat(dest).isEqualTo(NotificationDestination.Mood("p1"))
+    }
+
+    @Test
+    fun `a reaction on a story opens the viewer on that story by id with the views sheet`() {
+        val dest = NotificationDestinationResolver.resolve(
+            notification("story_reaction", postId = "p1", actorId = "reactor1", postType = "STORY"),
+        )
+
+        assertThat(dest).isEqualTo(NotificationDestination.StoryContent("p1", StoryViewerInitialAction.VIEWS, null, null))
+    }
+
+    @Test
+    fun `a comment on a story opens the viewer on its comments`() {
+        val dest = NotificationDestinationResolver.resolve(
+            notification("story_new_comment", postId = "p1", actorId = "commenter1", postType = "STORY"),
+        )
+
+        assertThat(dest).isEqualTo(NotificationDestination.StoryContent("p1", StoryViewerInitialAction.COMMENTS, null, null))
+    }
+
+    @Test
+    fun `a story destination without a dedicated opener falls back to the post detail`() {
+        val opened = mutableListOf<String>()
+        NotificationDestination.StoryContent("p1", null, null, null).dispatch(
+            onOpenConversation = {}, onOpenPost = { opened += it }, onOpenReel = {}, onOpenStory = {}, onOpenProfile = {},
+        )
+
+        assertThat(opened).containsExactly("p1")
+    }
+
+    @Test
+    fun `a comment on a status falls back to the post detail`() {
+        val dest = NotificationDestinationResolver.resolve(
+            notification("story_new_comment", postId = "p1", actorId = "commenter1", postType = "STATUS"),
+        )
+
+        assertThat(dest).isEqualTo(NotificationDestination.Post("p1"))
+    }
+
+    @Test
+    fun `the friend_new_story without an actor id opens the viewer by the story id`() {
+        val dest = NotificationDestinationResolver.resolve(
+            notification("friend_new_story", postId = "p1", postType = "STORY"),
+        )
+
+        assertThat(dest).isEqualTo(NotificationDestination.StoryContent("p1", null, null, null))
+    }
+
+    @Test
+    fun `the contentType discriminant is read when postType is absent`() {
+        val dest = NotificationDestinationResolver.resolve(
+            notification("story_reaction", postId = "p1", actorId = "author1", contentType = "MOOD"),
+        )
+
+        assertThat(dest).isEqualTo(NotificationDestination.Post("p1"))
+    }
+
+    @Test
+    fun `an unknown discriminant falls back to the post detail`() {
+        val dest = NotificationDestinationResolver.resolve(
+            notification("post_repost", postId = "p1"),
+        )
+
+        assertThat(dest).isEqualTo(NotificationDestination.Post("p1"))
+    }
+
+    // --- No destination ---
+
+    @Test
+    fun `a system notification has no navigable destination`() {
+        val dest = NotificationDestinationResolver.resolve(notification("security_alert"))
+
+        assertThat(dest).isEqualTo(NotificationDestination.None)
+    }
+
+    // --- dispatch() ---
+
+    @Test
+    fun `dispatch fans a conversation destination to onOpenConversation only`() {
+        val opened = mutableMapOf<String, String?>()
+        NotificationDestination.Conversation("c1").dispatch(
+            onOpenConversation = { opened["conversation"] = it },
+            onOpenPost = { opened["post"] = it },
+            onOpenReel = { opened["reel"] = it },
+            onOpenStory = { opened["story"] = it },
+            onOpenProfile = { opened["profile"] = it },
+        )
+
+        assertThat(opened).containsExactly("conversation", "c1")
+    }
+
+    @Test
+    fun `dispatch fans a reel destination to onOpenReel only`() {
+        val opened = mutableMapOf<String, String?>()
+        NotificationDestination.Reel("p1").dispatch(
+            onOpenConversation = { opened["conversation"] = it },
+            onOpenPost = { opened["post"] = it },
+            onOpenReel = { opened["reel"] = it },
+            onOpenStory = { opened["story"] = it },
+            onOpenProfile = { opened["profile"] = it },
+        )
+
+        assertThat(opened).containsExactly("reel", "p1")
+    }
+
+    @Test
+    fun `dispatch fans a mood destination to onOpenMood only`() {
+        val opened = mutableMapOf<String, String?>()
+        NotificationDestination.Mood("m1").dispatch(
+            onOpenConversation = { opened["conversation"] = it },
+            onOpenPost = { opened["post"] = it },
+            onOpenReel = { opened["reel"] = it },
+            onOpenStory = { opened["story"] = it },
+            onOpenProfile = { opened["profile"] = it },
+            onOpenMood = { opened["mood"] = it },
+        )
+
+        assertThat(opened).containsExactly("mood", "m1")
+    }
+
+    @Test
+    fun `une notification de jeu ou de palier ouvre l ecran que la carte du jeu nomme`() {
+        mapOf(
+            "level_up" to GameTarget.Concept(ProgressionConcept.Level),
+            "streak_milestone" to GameTarget.Concept(ProgressionConcept.Flame),
+            "badge_earned" to GameTarget.Concept(ProgressionConcept.Badges),
+            "achievement_unlocked" to GameTarget.Concept(ProgressionConcept.Succes),
+            "game_mission_window" to GameTarget.Concept(ProgressionConcept.Missions),
+            "game_duo_invited" to GameTarget.Page(GamePage.League),
+            "game_duo_accepted" to GameTarget.Page(GamePage.League),
+            "game_league_result" to GameTarget.Page(GamePage.League),
+            "game_season_step" to GameTarget.Page(GamePage.Season),
+        ).forEach { (type, target) ->
+            assertThat(NotificationDestinationResolver.resolve(notification(type)))
+                .isEqualTo(NotificationDestination.Game(target))
+        }
+    }
+
+    @Test
+    fun `dispatch fans a game destination to onOpenGame only`() {
+        val opened = mutableListOf<GameTarget>()
+        NotificationDestination.Game(GameTarget.Page(GamePage.Season)).dispatch(
+            onOpenConversation = { error("no") },
+            onOpenPost = { error("no") },
+            onOpenReel = { error("no") },
+            onOpenStory = { error("no") },
+            onOpenProfile = { error("no") },
+            onOpenGame = { opened += it },
+        )
+
+        assertThat(opened).containsExactly(GameTarget.Page(GamePage.Season))
+    }
+
+    @Test
+    fun `dispatch is a no-op for None`() {
+        val opened = mutableMapOf<String, String?>()
+        NotificationDestination.None.dispatch(
+            onOpenConversation = { opened["conversation"] = it },
+            onOpenPost = { opened["post"] = it },
+            onOpenReel = { opened["reel"] = it },
+            onOpenStory = { opened["story"] = it },
+            onOpenProfile = { opened["profile"] = it },
+        )
+
+        assertThat(opened).isEmpty()
+    }
+
+    @Test
+    fun `a voice clone ready notice is an account notice like iOS, never a conversation`() {
+        assertThat(NotificationDestinationResolver.resolve(notification("voice_clone_ready", conversationId = "c1")))
+            .isEqualTo(NotificationDestination.None)
+    }
+
+    @Test
+    fun `the row and the system banner of one notification open the same place`() {
+        val row = NotificationDestinationResolver.resolve(notification("post_comment", postId = "p1", postType = "REEL"))
+        val banner = me.meeshy.sdk.model.push.PushTapDestination.resolve(
+            me.meeshy.sdk.model.push.PushPayload(type = "post_comment", postId = "p1", postType = "REEL"),
+        )
+
+        assertThat(row).isEqualTo(NotificationDestination.Reel("p1"))
+        assertThat(banner).isEqualTo(me.meeshy.sdk.model.push.PushTapDestination.Reel("p1"))
+    }
+
+    @Test
+    fun `une charge push et la notification de l API menent a la meme destination`() {
+        val fromApi = NotificationDestinationResolver.resolve(
+            notification(type = "post_comment", postId = "p1", postType = "STORY", actorId = "u2"),
+        )
+        val fromPush = NotificationDestinationResolver.resolve(
+            me.meeshy.sdk.model.push.PushPayload(type = "post_comment", postId = "p1", postType = "STORY", senderId = "u2"),
+        )
+        assertThat(fromPush).isEqualTo(fromApi)
+    }
+
+    @Test
+    fun `une charge push sans destination ne mene nulle part`() {
+        assertThat(NotificationDestinationResolver.resolve(me.meeshy.sdk.model.push.PushPayload(type = "login_new_device")))
+            .isEqualTo(NotificationDestination.None)
+    }
+
+    // --- Communauté (#18061, iOS RootNotificationNavigator : `.communityDetail`) ---
+
+    @Test
+    fun `an added-to-community row opens the community it names`() {
+        val row = notification("community_invite", conversationId = "c1").let {
+            it.copy(context = it.context?.copy(communityId = "k1"))
+        }
+
+        assertThat(NotificationDestinationResolver.resolve(row)).isEqualTo(NotificationDestination.Community("k1"))
+    }
+
+    @Test
+    fun `a community row without a community keeps its former destination`() {
+        assertThat(NotificationDestinationResolver.resolve(notification("community_invite", conversationId = "c1")))
+            .isEqualTo(NotificationDestination.Conversation("c1"))
+    }
+
+    @Test
+    fun `the community destination dispatches to the community opener only`() {
+        val opened = mutableListOf<String>()
+
+        NotificationDestination.Community("k1").dispatch(
+            onOpenConversation = { opened += "conversation:$it" },
+            onOpenPost = { opened += "post:$it" },
+            onOpenReel = { opened += "reel:$it" },
+            onOpenStory = { opened += "story:$it" },
+            onOpenProfile = { opened += "profile:$it" },
+            onOpenCommunity = { opened += "community:$it" },
+        )
+
+        assertThat(opened).containsExactly("community:k1")
+    }
+}

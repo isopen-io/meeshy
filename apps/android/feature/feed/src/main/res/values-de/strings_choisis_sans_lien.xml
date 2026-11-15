@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_unsent_only_unlinked">Zu viele ausgewählte Personen haben heute noch keine Verbindung zu dir. Entferne sie aus der Liste oder versuche es morgen erneut.</string>
+    <string name="feed_unsent_only_unlinked_counted">Ausgewählte Personen ohne Verbindung zu dir: %1$d, bei einem Limit von %2$d pro Tag. Entferne sie aus der Liste oder versuche es morgen erneut.</string>
+</resources>

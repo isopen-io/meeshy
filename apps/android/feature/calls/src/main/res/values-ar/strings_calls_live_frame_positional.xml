@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_live_frame_answer_accepted">طبّق %1$s إطارك</string>
+    <string name="call_live_frame_answer_declined">يحتفظ %1$s بعرضه</string>
+    <string name="call_live_frame_proposal_anonymous">يقترح الطرف الآخر الإطار «%1$s»</string>
+    <string name="call_live_frame_surface">إطار %1$s حول الفيديوهين</string>
+    <string name="call_zoom_lens">تكبير %1$s</string>
+</resources>

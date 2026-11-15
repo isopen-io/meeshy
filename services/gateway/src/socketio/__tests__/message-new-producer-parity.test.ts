@@ -27,489 +27,36 @@
  * @jest-environment node
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { EventEmitter } from 'events';
 
 // ---------------------------------------------------------------------------
-// socket.io mock — __state closure (works around ts-jest hoisting limits)
+// Doubles `jest.mock` — sortis dans `helpers/message-new-parity-mocks.ts`
+// (issue #5263, cliquet de taille) pour ramener ce fichier sous #4531. Le
+// SEUL effet attendu de cet import est l'enregistrement des mocks côté
+// socket.io / services / handlers : il doit rester TEXTUELLEMENT avant
+// l'import de `MeeshySocketIOManager` ci-dessous, sans quoi le manager
+// importerait les VRAIS modules avant que leurs doubles n'existent.
 // ---------------------------------------------------------------------------
-
-jest.mock('socket.io', () => {
-  const toEmit = jest.fn();
-  const toChain: Record<string, unknown> = { emit: toEmit };
-  const to = jest.fn().mockReturnValue(toChain);
-  // Allow chaining: io.to(a).to(b).emit(...)
-  toChain.to = to;
-  const except = jest.fn().mockReturnValue(toChain);
-  // Allow chaining: io.to(a).except(socketIds).emit(...)
-  toChain.except = except;
-
-  const on = jest.fn();
-  const emit = jest.fn();
-  const close = jest.fn();
-  const sockets = {
-    sockets: new Map<string, unknown>(),
-    adapter: { rooms: new Map<string, Set<string>>() },
-  };
-
-  const state = { on, emit, to, toEmit, toChain, except, close, sockets, connectionHandler: null as any };
-  on.mockImplementation((event: string, handler: unknown) => {
-    if (event === 'connection') state.connectionHandler = handler as any;
-  });
-
-  return {
-    Server: jest.fn().mockImplementation(() => ({
-      on: (...a: unknown[]) => (state.on as any)(...a),
-      emit: (...a: unknown[]) => (state.emit as any)(...a),
-      to: (...a: unknown[]) => (state.to as any)(...a),
-      close: (...a: unknown[]) => (state.close as any)(...a),
-      get sockets() { return state.sockets; },
-    })),
-    __state: state,
-  };
-});
-
-// ---------------------------------------------------------------------------
-// Service / handler mocks
-// ---------------------------------------------------------------------------
-
-let mockAttachmentServiceInstance: any;
-jest.mock('../../services/attachments', () => ({
-  AttachmentService: jest.fn().mockImplementation(() => {
-    mockAttachmentServiceInstance = { processAttachments: jest.fn().mockResolvedValue([]) };
-    return mockAttachmentServiceInstance;
-  }),
-}));
-
-jest.mock('../../services/attachments/attachmentIncludes', () => ({
-  attachmentMediaSelect: {},
-}));
-
-jest.mock('../../services/EmailService', () => ({
-  EmailService: jest.fn().mockImplementation(() => ({
-    sendEmail: jest.fn().mockResolvedValue(undefined),
-  })),
-}));
-
-let mockMaintenanceServiceInstance: any;
-jest.mock('../../services/MaintenanceService', () => ({
-  MaintenanceService: jest.fn().mockImplementation(() => {
-    mockMaintenanceServiceInstance = {
-      startMaintenanceTasks: jest.fn().mockResolvedValue(undefined),
-      setStatusBroadcastCallback: jest.fn(),
-      setIsCurrentlyConnected: jest.fn(),
-    };
-    return mockMaintenanceServiceInstance;
-  }),
-}));
-
-let mockStatusServiceInstance: any;
-jest.mock('../../services/StatusService', () => ({
-  StatusService: jest.fn().mockImplementation(() => {
-    mockStatusServiceInstance = {
-      updateUserOnline: jest.fn().mockResolvedValue(undefined),
-      updateUserOffline: jest.fn().mockResolvedValue(undefined),
-    };
-    return mockStatusServiceInstance;
-  }),
-}));
-
-let mockPrivacyPrefsServiceInstance: any;
-jest.mock('../../services/PrivacyPreferencesService', () => ({
-  PrivacyPreferencesService: jest.fn().mockImplementation(() => {
-    mockPrivacyPrefsServiceInstance = {
-      getPreferences: jest.fn().mockResolvedValue({
-        showOnlineStatus: true,
-        showLastSeen: true,
-      }),
-      // Returns an empty Map by default → showReadReceipts falsy → drain delivery skipped
-      getPreferencesForUsers: jest.fn().mockResolvedValue(new Map()),
-    };
-    return mockPrivacyPrefsServiceInstance;
-  }),
-}));
-
-let mockNotificationServiceInstance: any;
-jest.mock('../../services/notifications/NotificationService', () => ({
-  NotificationService: jest.fn().mockImplementation(() => {
-    mockNotificationServiceInstance = {
-      setSocketIO: jest.fn(),
-      setPushNotificationService: jest.fn(),
-      setEmailService: jest.fn(),
-      createReactionNotification: jest.fn().mockResolvedValue(undefined),
-    };
-    return mockNotificationServiceInstance;
-  }),
-}));
-
-let mockMentionServiceInstance: any;
-const mockResolveUsernamesToIds = jest.fn().mockResolvedValue([]);
-const mockResolveMentionedUsers = jest.fn().mockResolvedValue([]);
-jest.mock('../../services/MentionService', () => ({
-  MentionService: jest.fn().mockImplementation(() => {
-    mockMentionServiceInstance = {
-      extractMentionsWithParticipants: jest.fn().mockReturnValue([]),
-      resolveUsernames: jest.fn().mockResolvedValue(new Map()),
-    };
-    return mockMentionServiceInstance;
-  }),
-  resolveUsernamesToIds: (...a: any[]) => mockResolveUsernamesToIds(...a),
-  // `MessageHandler.broadcastNewMessage` importe AUSSI `resolveMentionedUsers`.
-  // Un double PARTIEL le laisserait `undefined` : l'appel lèverait un TypeError
-  // SYNCHRONE que le `try` du broadcast avale, et aucune charge utile ne serait
-  // émise — le témoin verrait « le producteur socket n'émet rien » au lieu du
-  // désaccord qu'il instruit (cf. CLAUDE.md § « un double PARTIEL »).
-  resolveMentionedUsers: (...a: any[]) => mockResolveMentionedUsers(...a),
-}));
-
-let mockMessagingServiceInstance: any;
-jest.mock('../../services/MessagingService', () => ({
-  MessagingService: jest.fn().mockImplementation(() => {
-    mockMessagingServiceInstance = {
-      handleMessage: jest.fn().mockResolvedValue({
-        success: true,
-        data: {
-          id: 'msg-agent-1',
-          conversationId: 'conv-123456789012',
-          senderId: 'sender-1',
-          content: 'Hello',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      }),
-    };
-    return mockMessagingServiceInstance;
-  }),
-}));
-
-let mockCallEventsHandlerInstance: any;
-jest.mock('../CallEventsHandler', () => ({
-  CallEventsHandler: jest.fn().mockImplementation(() => {
-    mockCallEventsHandlerInstance = {
-      setMessageBroadcaster: jest.fn(),
-      setMessageUpdateBroadcaster: jest.fn(),
-      setNotificationService: jest.fn(),
-      setPushNotificationService: jest.fn(),
-      setZmqClient: jest.fn(),
-      setupCallEvents: jest.fn(),
-    };
-    return mockCallEventsHandlerInstance;
-  }),
-}));
-
-jest.mock('../../services/CallService', () => ({
-  CallService: jest.fn().mockImplementation(() => ({})),
-}));
-
-let mockSocialEventsHandlerInstance: any;
-jest.mock('../handlers/SocialEventsHandler', () => ({
-  SocialEventsHandler: jest.fn().mockImplementation(() => {
-    mockSocialEventsHandlerInstance = {
-      handleFeedSubscribe: jest.fn(),
-      handleFeedUnsubscribe: jest.fn(),
-    };
-    return mockSocialEventsHandlerInstance;
-  }),
-}));
-
-jest.mock('../handlers/LocationHandler', () => ({
-  LocationHandler: jest.fn().mockImplementation(() => ({
-    handleLiveLocationStart: jest.fn().mockResolvedValue(undefined),
-    handleLiveLocationUpdate: jest.fn().mockResolvedValue(undefined),
-    handleLiveLocationStop: jest.fn().mockResolvedValue(undefined),
-    handleSocketDisconnecting: jest.fn(),
-    replayLiveLocationsTo: jest.fn(),
-    dispose: jest.fn(),
-  })),
-}));
-
-let mockAuthHandlerInstance: any;
-jest.mock('../handlers/AuthHandler', () => ({
-  AuthHandler: jest.fn().mockImplementation(() => {
-    mockAuthHandlerInstance = {
-      handleTokenAuthentication: jest.fn(),
-      handleManualAuthentication: jest.fn().mockResolvedValue(undefined),
-      handleHeartbeat: jest.fn().mockResolvedValue(undefined),
-      handleEnginePong: jest.fn(),
-      handleDisconnection: jest.fn().mockResolvedValue(undefined),
-    };
-    return mockAuthHandlerInstance;
-  }),
-}));
-
-let mockStatusHandlerInstance: any;
-jest.mock('../handlers/StatusHandler', () => ({
-  StatusHandler: jest.fn().mockImplementation(() => {
-    mockStatusHandlerInstance = {
-      handleTypingStart: jest.fn().mockResolvedValue(undefined),
-      handleTypingStop: jest.fn().mockResolvedValue(undefined),
-      invalidateIdentityCache: jest.fn(),
-      clearTypingThrottle: jest.fn(),
-      handleSocketDisconnecting: jest.fn().mockResolvedValue(undefined),
-    };
-    return mockStatusHandlerInstance;
-  }),
-}));
-
-let mockReactionHandlerInstance: any;
-jest.mock('../handlers/ReactionHandler', () => ({
-  ReactionHandler: jest.fn().mockImplementation(() => {
-    mockReactionHandlerInstance = {
-      handleReactionAdd: jest.fn().mockResolvedValue(undefined),
-      handleReactionRemove: jest.fn().mockResolvedValue(undefined),
-      handleReactionSync: jest.fn().mockResolvedValue(undefined),
-      setDeliveryQueue: jest.fn(),
-    };
-    return mockReactionHandlerInstance;
-  }),
-}));
-
-let mockAttachmentReactionHandlerInstance: any;
-jest.mock('../handlers/AttachmentReactionHandler', () => ({
-  AttachmentReactionHandler: jest.fn().mockImplementation(() => {
-    mockAttachmentReactionHandlerInstance = {
-      handleAdd: jest.fn().mockResolvedValue(undefined),
-      handleRemove: jest.fn().mockResolvedValue(undefined),
-      setDeliveryQueue: jest.fn(),
-    };
-    return mockAttachmentReactionHandlerInstance;
-  }),
-}));
-
-jest.mock('../../services/AttachmentReactionService', () => ({
-  AttachmentReactionService: jest.fn().mockImplementation(() => ({})),
-}));
-
-jest.mock('../handlers/CommentReactionHandler', () => ({
-  CommentReactionHandler: jest.fn().mockImplementation(() => ({
-    handleAddReaction: jest.fn().mockResolvedValue(undefined),
-    handleRemoveReaction: jest.fn().mockResolvedValue(undefined),
-    handleRequestSync: jest.fn().mockResolvedValue(undefined),
-  })),
-}));
-
-jest.mock('../../services/CommentReactionService', () => ({
-  CommentReactionService: jest.fn().mockImplementation(() => ({})),
-}));
-
-jest.mock('../handlers/PostReactionHandler', () => ({
-  PostReactionHandler: jest.fn().mockImplementation(() => ({
-    handleJoinPost: jest.fn().mockResolvedValue(undefined),
-    handleLeavePost: jest.fn().mockResolvedValue(undefined),
-    handleAddReaction: jest.fn().mockResolvedValue(undefined),
-    handleRemoveReaction: jest.fn().mockResolvedValue(undefined),
-    handleRequestSync: jest.fn().mockResolvedValue(undefined),
-  })),
-}));
-
-jest.mock('../../services/PostReactionService', () => ({
-  PostReactionService: jest.fn().mockImplementation(() => ({})),
-}));
-
-jest.mock('../handlers/ConversationHandler', () => ({
-  ConversationHandler: jest.fn().mockImplementation(() => ({
-    handleConversationJoin: jest.fn().mockResolvedValue(undefined),
-    handleConversationLeave: jest.fn().mockResolvedValue(undefined),
-  })),
-}));
-
-jest.mock('../handlers/AdminAgentHandler', () => ({
-  AdminAgentHandler: jest.fn().mockImplementation(() => ({
-    handleSubscribe: jest.fn().mockResolvedValue(undefined),
-    handleUnsubscribe: jest.fn(),
-  })),
-}));
-
-let mockAgentAdminRelayInstance: any;
-jest.mock('../AgentAdminRelay', () => ({
-  AgentAdminRelay: jest.fn().mockImplementation(() => {
-    mockAgentAdminRelayInstance = {
-      start: jest.fn().mockResolvedValue(undefined),
-      stop: jest.fn().mockResolvedValue(undefined),
-    };
-    return mockAgentAdminRelayInstance;
-  }),
-}));
-
-jest.mock('../../services/ReactionService.js', () => ({
-  ReactionService: jest.fn().mockImplementation(() => ({
-    addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' } }),
-    createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'reaction-1' }),
-  })),
-}));
-
-jest.mock('../../services/MessageReadStatusService.js', () => ({
-  MessageReadStatusService: jest.fn().mockImplementation(() => ({
-    getUnreadCountsForParticipants: jest.fn().mockResolvedValue(new Map()),
-    getUnreadCountsForUser: jest.fn().mockResolvedValue(new Map()),
-    markMessagesAsReceived: jest.fn().mockResolvedValue(undefined),
-    getLatestMessageSummary: jest.fn().mockResolvedValue({
-      totalMembers: 2, deliveredCount: 1, readCount: 0,
-    }),
-  })),
-}));
-
-jest.mock('../../services/PushNotificationService', () => ({
-  PushNotificationService: jest.fn().mockImplementation(() => ({
-    sendPushNotification: jest.fn().mockResolvedValue(undefined),
-  })),
-}));
-
-jest.mock('../../services/posts/PostAudioService', () => ({
-  PostAudioService: {
-    init: jest.fn(),
-    shared: {
-      handleTranscriptionReady: jest.fn().mockResolvedValue(undefined),
-    },
-  },
-}));
-
-jest.mock('../../services/posts/PostTranslationService', () => ({
-  PostTranslationService: {
-    init: jest.fn(),
-  },
-}));
-
-jest.mock('../../services/posts/StoryTextObjectTranslationService', () => ({
-  StoryTextObjectTranslationService: {
-    init: jest.fn(),
-    shared: {
-      handleTranslationCompleted: jest.fn().mockResolvedValue(undefined),
-    },
-  },
-}));
-
-jest.mock('../../services/ConversationStatsService', () => ({
-  conversationStatsService: {
-    updateOnNewMessage: jest.fn().mockResolvedValue(null),
-  },
-}));
-
-jest.mock('../emitAttachmentUpdated', () => ({
-  emitAttachmentUpdated: jest.fn(),
-}));
-
-jest.mock('../utils/message-payload-filter', () => ({
-  // Keep the REAL `groupSocketsByLanguage` (which normalizes BCP-47 recipient
-  // languages via the shared source of truth) so the manager's per-language
-  // grouping is exercised against real normalization; only the pure trimming is
-  // spied on so tests can assert exactly which languages were requested.
-  ...(jest.requireActual('../utils/message-payload-filter') as Record<string, unknown>),
-  filterMessagePayloadForLanguages: jest.fn().mockImplementation((payload: unknown) => payload),
-}));
-
-jest.mock('../utils/resolved-languages-refresh', () => ({
-  applyResolvedLanguagesRefresh: jest.fn(),
-}));
-
-jest.mock('../../utils/translation-transformer', () => ({
-  transformTranslationsToArray: jest.fn().mockReturnValue([]),
-}));
-
-jest.mock('../../utils/logger-enhanced', () => ({
-  enhancedLogger: {
-    child: jest.fn().mockReturnValue({
-      info: jest.fn(),
-      debug: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn(),
-    }),
-  },
-}));
+import { getIoState } from './helpers/message-new-parity-mocks';
 
 // ---------------------------------------------------------------------------
 // Import under test (after all mocks are set up)
 // ---------------------------------------------------------------------------
 import { MeeshySocketIOManager } from '../MeeshySocketIOManager';
+import {
+  makeTranslationService,
+  makePrisma,
+  makeContractMessage,
+  makeAttachmentRow,
+  seedParticipantsAlways,
+  seedParticipantsBySelect,
+  CONVERSATION_ID,
+} from './helpers/message-new-parity-fixtures';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { attachmentSocketSelect } from '../../services/attachments/attachmentIncludes';
 import {
   declaredConversationUpdatedFields,
   contractKeepsIndexSignature,
 } from './conversation-updated-declared-fields';
-
-// ---------------------------------------------------------------------------
-// Harnais
-// ---------------------------------------------------------------------------
-
-function makeTranslationService() {
-  return Object.assign(new EventEmitter(), {
-    initialize: jest.fn().mockResolvedValue(undefined),
-    healthCheck: jest.fn().mockResolvedValue(true),
-    close: jest.fn().mockResolvedValue(undefined),
-    getStats: jest.fn().mockReturnValue({ messages: 0, translationRequests: 0 }),
-    getZmqClient: jest.fn().mockReturnValue(null),
-    getTranslation: jest.fn().mockResolvedValue(null),
-    handleNewMessage: jest.fn().mockResolvedValue(undefined),
-  });
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function makePrisma(): any {
-  const fn = () => jest.fn() as any;
-  return {
-    conversation: { findUnique: fn().mockResolvedValue(null) },
-    message: { findUnique: fn().mockResolvedValue(null), findFirst: fn().mockResolvedValue(null) },
-    // `broadcastNewMessage` consulte le post cité quand `storyReplyToId` est
-    // posé sans snapshot. Sans cette table le double lèverait un TypeError
-    // avalé par le `try` du broadcast — donc aucune émission, donc un témoin
-    // qui tombe pour la mauvaise raison.
-    post: { findUnique: fn().mockResolvedValue(null) },
-    messageAttachment: { findUnique: fn().mockResolvedValue(null) },
-    participant: {
-      findMany: fn().mockResolvedValue([]),
-      findFirst: fn().mockResolvedValue(null),
-      findUnique: fn().mockResolvedValue(null),
-    },
-    user: { findUnique: fn().mockResolvedValue(null), findMany: fn().mockResolvedValue([]) },
-  };
-}
-
-function getIoState() {
-  return (jest.requireMock('socket.io') as any).__state;
-}
-
-const CONVERSATION_ID = 'conv-123456789012';
-
-/**
- * Message de référence : il porte UNE valeur de chaque famille du contrat de
- * fil, pour qu'aucun producteur ne puisse rester vert en omettant une famille
- * entière. `content` est VIDE parce que c'est ce que `MessageProcessor` écrit
- * pour un message chiffré (`content: isEncrypted ? '' : …`) — le texte vit
- * dans `encryptedContent`, et un destinataire qui ne reçoit pas l'enveloppe
- * E2EE reçoit donc une bulle VIDE, pas un message dégradé.
- */
-function makeContractMessage(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 'msg-123456789012',
-    conversationId: CONVERSATION_ID,
-    senderId: 'sender-participantId',
-    content: '',
-    originalLanguage: 'fr',
-    messageType: 'text',
-    createdAt: new Date('2026-08-22T10:00:00.000Z'),
-    updatedAt: new Date('2026-08-22T10:00:00.000Z'),
-    translations: [],
-    attachments: [],
-    validatedMentions: [],
-    sender: {
-      id: 'sender-participantId',
-      userId: 'sender-userId',
-      displayName: 'Alice',
-      avatar: null,
-      type: 'member',
-      user: { id: 'sender-userId', username: 'alice', firstName: 'Ali', lastName: 'Ce', avatar: null },
-    },
-    isEncrypted: true,
-    encryptionMode: 'e2ee',
-    encryptedContent: 'Y2lwaGVydGV4dA==',
-    encryptionMetadata: { iv: 'aXY=', authTag: 'dGFn' },
-    isViewOnce: true,
-    maxViewOnceCount: 3,
-    forwardedFromId: 'msg-forwarded-source',
-    forwardedFromConversationId: 'conv-forwarded-source',
-    storyReplyToId: 'post-999999999999',
-    ...overrides,
-  } as any;
-}
 
 describe('message:new — les DEUX producteurs disent la même chose du même message', () => {
   let manager: any;
@@ -642,6 +189,108 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
     expect((socketPayload.sender as Record<string, unknown>).username).toBe('Invité');
   });
 
+  it('le sticker (#4823) voyage par les DEUX transports, hissé depuis `metadata.sticker`', async () => {
+    // Le hoist vit dans `buildMessageNewPayload`, pas chez les producteurs :
+    // `location` a montré ce que coûte un hoist recopié par transport. iOS
+    // rend la décoration animée depuis ce champ ; sans lui sur l'un des deux
+    // chemins, la moitié des destinataires ne verrait que le PNG de repli.
+    const sticker = { templateId: 'love.heart', slots: { caption: 'Toi' }, animation: 'heartbeat', emoji: '❤️' };
+    const message = makeContractMessage({ metadata: { sticker } });
+
+    const socketPayload = await payloadFromSocketPath(message);
+    const restPayload = await payloadFromRestPath(message);
+
+    expect(socketPayload.sticker).toEqual(sticker);
+    expect(restPayload.sticker).toEqual(sticker);
+  });
+
+  /**
+   * #7070 — les pièces jointes voyagent désormais par la MÊME forme, quel que
+   * soit le transport. Avant ce lot, le producteur REST/ZMQ posait
+   * `attachments: message.attachments ?? []` : la ligne Prisma BRUTE (65
+   * colonnes, secrets de serveur compris) — pendant que le producteur socket
+   * servait déjà `serializeAttachmentForSocket`.
+   */
+  const SOCKET_ATTACHMENT_WIRE_KEYS = [
+    // `message` : la protection du porteur, chargée pour `servedDescription`, jamais servie (#12333).
+    ...Object.keys(attachmentSocketSelect).filter((k) => k !== 'reactions' && k !== 'message'),
+    // L'agrégat PARTAGÉ voyage : c'est un compte, pas une appartenance.
+    'reactionSummary',
+    // `currentUserReactions` N'EST PAS dans cet inventaire, et son absence est
+    // la garde (#18622) : c'est le seul champ PAR LECTEUR de la forme, et ces
+    // deux transports diffusent vers une room entière. Servi `[]`, il disait
+    // « il n'y en a pas » — le client qui fusionne effaçait alors les réactions
+    // du lecteur sur sa propre pièce. Le voir réapparaître ici est exactement
+    // le défaut à rattraper.
+  ].sort();
+
+  it('les pièces jointes voyagent à l’IDENTIQUE par les DEUX transports', async () => {
+    const message = makeContractMessage({ attachments: [makeAttachmentRow()] });
+
+    const socketPayload = await payloadFromSocketPath(message);
+    const restPayload = await payloadFromRestPath(message);
+
+    expect(restPayload.attachments).toEqual(socketPayload.attachments);
+  });
+
+  it("aucun transport n'émet une clé hors de l'inventaire du canal socket", async () => {
+    const message = makeContractMessage({ attachments: [makeAttachmentRow()] });
+
+    for (const [transport, payload] of [
+      ['socket', await payloadFromSocketPath(message)],
+      ['REST/ZMQ', await payloadFromRestPath(message)],
+    ] as const) {
+      const attachments = payload.attachments as ReadonlyArray<Record<string, unknown>>;
+      expect(attachments).toHaveLength(1);
+      const servedKeys = Object.keys(attachments[0]).sort();
+
+      // Egalité d'ENSEMBLE — le message d'échec nomme la clé en trop plutôt
+      // que de laisser un `toEqual` partiel la laisser passer en silence.
+      expect({ transport, servedKeys }).toEqual({ transport, servedKeys: SOCKET_ATTACHMENT_WIRE_KEYS });
+
+      // Le champ PAR LECTEUR, nommé à part de l'inventaire : une égalité
+      // d'ensemble le signalerait, mais sans dire POURQUOI il n'a rien à faire
+      // dans une charge que toute une room reçoit (#18622).
+      expect('currentUserReactions' in attachments[0]).toBe(false);
+
+      // Nommées explicitement : ce sont les secrets de serveur que #7070 ferme.
+      expect(attachments[0]).toEqual(
+        expect.not.objectContaining({
+          filePath: expect.anything(),
+          encryptionIv: expect.anything(),
+          encryptionAuthTag: expect.anything(),
+          serverKeyId: expect.anything(),
+          encryptionHmac: expect.anything(),
+          thumbnailPath: expect.anything(),
+        })
+      );
+    }
+  });
+
+  it("message:edited (résumé d'appel, REST/ZMQ) ne porte ni filePath ni IV sur sa pièce", async () => {
+    ioState.toEmit.mockClear();
+    await manager.broadcastMessageEdited(
+      makeContractMessage({ attachments: [makeAttachmentRow()] }) as any,
+      CONVERSATION_ID
+    );
+    const call = (ioState.toEmit.mock.calls as any[]).find(
+      (c) => c[0] === SERVER_EVENTS.MESSAGE_EDITED
+    );
+    expect(call).toBeDefined();
+    const payload = call?.[1] as Record<string, unknown>;
+    const attachments = payload.attachments as ReadonlyArray<Record<string, unknown>>;
+
+    expect(attachments).toHaveLength(1);
+    expect(Object.keys(attachments[0]).sort()).toEqual(SOCKET_ATTACHMENT_WIRE_KEYS);
+    expect(attachments[0]).toEqual(
+      expect.not.objectContaining({
+        filePath: expect.anything(),
+        encryptionIv: expect.anything(),
+        encryptionAuthTag: expect.anything(),
+      })
+    );
+  });
+
   it('les DEUX producteurs déclarent le MÊME jeu de clés de contrat', async () => {
     // Le cliquet de la famille : il tombe le jour où un producteur gagne un
     // champ que l'autre n'a pas, quelle que soit la famille — y compris une
@@ -677,6 +326,48 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
     expect(contractOf(restKeys)).toEqual(contractOf(socketKeys));
   });
 
+  /**
+   * La citation d'un message PROTÉGÉ, sur les DEUX producteurs.
+   *
+   * `replyTo` est HORS du contrat de parité ci-dessus — les deux transports lui
+   * donnent délibérément deux formes — et c'est exactement ce qui a laissé le
+   * producteur REST/ZMQ reconstruire sa citation champ par champ SANS un seul
+   * champ de protection : répondre à un message à vue unique republiait son
+   * texte EN CLAIR dans la bulle temps réel, pendant que le même fil rechargé
+   * par REST affichait « 👁️ 💬 ». La FORME diverge ; ce que la charge a le
+   * DROIT de transporter, non.
+   */
+  const messageCitantUnSecret = () => makeContractMessage({
+    replyTo: {
+      id: 'msg-cite-000000000',
+      senderId: 'sender-participantId',
+      content: 'le code du coffre est 4271',
+      originalLanguage: 'fr',
+      messageType: 'text',
+      createdAt: new Date('2026-08-22T09:59:00.000Z'),
+      isViewOnce: true,
+      translations: { en: { text: 'the vault code is 4271', translationModel: 'basic', createdAt: new Date() } },
+    },
+  });
+
+  const attendCitationMasquee = (payload: Record<string, unknown>) => {
+    const citation = payload.replyTo as Record<string, unknown>;
+    expect(citation).toBeDefined();
+    expect(String(citation['content'])).not.toContain('4271');
+    expect(citation['translations']).toBeUndefined();
+    // La protection VOYAGE : sans elle, un client ne peut pas SAVOIR qu'il rend
+    // le placeholder d'un secret plutôt qu'un texte.
+    expect(citation['isViewOnce']).toBe(true);
+  };
+
+  it('ne republie pas le texte d’un message cité à vue unique — producteur socket', async () => {
+    attendCitationMasquee(await payloadFromSocketPath(messageCitantUnSecret()));
+  });
+
+  it('ne republie pas le texte d’un message cité à vue unique — producteur REST/ZMQ', async () => {
+    attendCitationMasquee(await payloadFromRestPath(messageCitantUnSecret()));
+  });
+
   // -------------------------------------------------------------------------
   // `conversation:updated` — le JUMEAU que les deux mêmes producteurs émettent
   // -------------------------------------------------------------------------
@@ -695,42 +386,9 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
     return call?.[1] as Record<string, unknown> | undefined;
   }
 
-  /**
-   * Le `conversation:updated` n'est émis qu'AUX PARTICIPANTS : les deux
-   * producteurs abandonnent sur une liste vide (`sharedParticipants.length > 0`
-   * côté socket, `senderId` + `findMany` côté REST). Le double partagé de ce
-   * fichier en rend une VIDE — c'est ce qu'il faut aux témoins `message:new`,
-   * qui ne veulent aucun enrichissement. On la peuple donc ICI, pour les seuls
-   * témoins du jumeau, plutôt que de changer le double sous les autres.
-   *
-   * Forme : `PREVIEW_PRISM_PARTICIPANT_SELECT` + `joinedAt`, ce que les deux
-   * producteurs sélectionnent réellement.
-   */
+  /** Fabrique unique : `helpers/message-new-parity-fixtures.ts`. */
   function seedParticipants(): void {
-    (prisma.participant.findMany as any).mockResolvedValue([
-      {
-        id: 'sender-participantId',
-        userId: 'sender-userId',
-        joinedAt: new Date('2026-01-01T00:00:00.000Z'),
-        user: {
-          systemLanguage: 'fr',
-          regionalLanguage: null,
-          customDestinationLanguage: null,
-          deviceLocale: null,
-        },
-      },
-      {
-        id: 'peer-participantId',
-        userId: 'peer-userId',
-        joinedAt: new Date('2026-01-01T00:00:00.000Z'),
-        user: {
-          systemLanguage: 'en',
-          regionalLanguage: null,
-          customDestinationLanguage: null,
-          deviceLocale: null,
-        },
-      },
-    ]);
+    seedParticipantsAlways(prisma);
   }
 
   async function updatedFromSocketPath(message: unknown): Promise<Record<string, unknown>> {
@@ -751,6 +409,15 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
     return payload as Record<string, unknown>;
   }
 
+  it("#7978 — les DEUX producteurs nomment l'auteur par son User.id (`lastMessageSenderUserId`)", async () => {
+    const message = makeContractMessage();
+
+    for (const payload of [await updatedFromSocketPath(message), await updatedFromRestPath(message)]) {
+      expect(payload.senderId).toBe('sender-participantId');
+      expect(payload.lastMessageSenderUserId).toBe('sender-userId');
+    }
+  });
+
   it('les DEUX producteurs émettent `lastMessageAt` comme une CHAÎNE ISO', async () => {
     const message = makeContractMessage();
 
@@ -767,6 +434,137 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
     for (const payload of [socketPayload, restPayload]) {
       expect(typeof payload.lastMessageAt).toBe('string');
       expect(payload.lastMessageAt).toBe('2026-08-22T10:00:00.000Z');
+    }
+  });
+
+  it('les DEUX producteurs émettent le sous-groupe MÉDIA de #3737 (auteur, pièce jointe, drapeaux)', async () => {
+    // Suivi n°2 de la PR #3096, jamais pris : même classe de défaut que
+    // `location` (#3122) — un émetteur qui omet un membre du groupe d'aperçu
+    // laisse la ligne de liste mélanger deux messages jusqu'à une relecture
+    // complète. Ce témoin fait la preuve pour les DEUX producteurs
+    // message-driven ; le troisième (`emitConversationPreviewUpdate`) a le
+    // sien dans `emitConversationPreviewUpdate.test.ts`.
+    //
+    // #7545 — le message est NON protégé : ce témoin portait un vue unique
+    // flouté, et attestait donc que sa pièce jointe PARTAIT sur le socket —
+    // la fuite que le témoin suivant ferme.
+    const message = makeContractMessage({
+      isViewOnce: false,
+      isBlurred: false,
+      isEncrypted: false,
+      // Ordinaire : une échéance future ferait un éphémère actif, dont la pièce
+      // ne sert plus aucun détail (#15701) — témoin ci-dessous.
+      expiresAt: null,
+      attachments: [
+        {
+          id: 'att-1',
+          mimeType: 'image/jpeg',
+          thumbnailUrl: 'https://cdn.example/att-1-thumb.jpg',
+          originalName: 'photo.jpg',
+          fileSize: 12345,
+          duration: null,
+          width: 800,
+          height: 600,
+        },
+        { id: 'att-2', mimeType: 'image/png', originalName: 'second.png', fileSize: 999 },
+      ],
+    });
+
+    const socketPayload = await updatedFromSocketPath(message);
+    const restPayload = await updatedFromRestPath(message);
+
+    for (const payload of [socketPayload, restPayload]) {
+      expect(payload.lastMessageSenderName).toBe('Alice');
+      expect(payload.lastMessageIsBlurred).toBe(false);
+      expect(payload.lastMessageIsViewOnce).toBe(false);
+      expect(payload.lastMessageExpiresAt).toBeNull();
+      // Plafonnée à la première pièce jointe, comptée et résumée sur les DEUX.
+      expect(payload.lastMessageAttachmentCount).toBe(2);
+      expect(payload.lastMessageAttachmentSummary).toEqual({ count: 2, kinds: { image: 2 }, totalSize: 13344 });
+      expect(payload.lastMessageAttachments).toEqual([
+        {
+          id: 'att-1',
+          mimeType: 'image/jpeg',
+          thumbnailUrl: 'https://cdn.example/att-1-thumb.jpg',
+          originalName: 'photo.jpg',
+          fileSize: 12345,
+          duration: null,
+          width: 800,
+          height: 600,
+          pageCount: null,
+          // #7594 — texte alternatif (aucun ici) et protection propre de la pièce.
+          alt: null,
+          isViewOnce: false,
+          isBlurred: false,
+          effectFlags: 0,
+        },
+      ]);
+    }
+  });
+
+  it('les DEUX producteurs : un éphémère actif garde son échéance, sa pièce ne sert aucun détail (#15701)', async () => {
+    const message = makeContractMessage({
+      isViewOnce: false,
+      isBlurred: false,
+      isEncrypted: false,
+      expiresAt: new Date('2099-08-22T11:00:00.000Z'),
+      attachments: [
+        {
+          id: 'att-1',
+          mimeType: 'image/jpeg',
+          thumbnailUrl: 'https://cdn.example/att-1-thumb.jpg',
+          originalName: 'photo.jpg',
+          fileSize: 12345,
+          duration: null,
+          width: 800,
+          height: 600,
+        },
+        { id: 'att-2', mimeType: 'image/png', originalName: 'second.png', fileSize: 999 },
+      ],
+    });
+
+    for (const payload of [await updatedFromSocketPath(message), await updatedFromRestPath(message)]) {
+      expect(payload.lastMessageExpiresAt).toBe('2099-08-22T11:00:00.000Z');
+      expect(payload.lastMessageAttachmentCount).toBe(2);
+      expect(payload.lastMessageAttachmentSummary).toEqual({ count: 2, kinds: { image: 2 }, totalSize: null });
+      expect(payload.lastMessageAttachments).toEqual([
+        {
+          id: 'att-1',
+          mimeType: 'image/jpeg',
+          thumbnailUrl: null,
+          originalName: null,
+          fileSize: null,
+          duration: null,
+          width: null,
+          height: null,
+          pageCount: null,
+          alt: null,
+          isViewOnce: false,
+          isBlurred: false,
+          effectFlags: 0,
+        },
+      ]);
+      expect(JSON.stringify(payload)).not.toContain('att-1-thumb');
+    }
+  });
+
+  it('les DEUX producteurs retiennent le contenu d’un vue unique flouté (#7545)', async () => {
+    const message = makeContractMessage({
+      isViewOnce: true,
+      isBlurred: true,
+      attachments: [
+        { id: 'att-1', mimeType: 'image/jpeg', thumbnailUrl: 'https://cdn.example/secret-thumb.jpg', originalName: 'photo.jpg', fileSize: 12345 },
+      ],
+    });
+
+    for (const payload of [await updatedFromSocketPath(message), await updatedFromRestPath(message)]) {
+      expect(payload.lastMessageIsViewOnce).toBe(true);
+      expect(payload.lastMessagePreview).toBe('');
+      expect(payload.lastMessageTranslations).toBeNull();
+      expect(payload.lastMessageAttachments).toEqual([]);
+      expect(payload.lastMessageAttachmentCount).toBe(0);
+      expect(payload.lastMessageAttachmentSummary).toBeNull();
+      expect(JSON.stringify(payload)).not.toContain('secret-thumb');
     }
   });
 
@@ -828,47 +626,25 @@ describe('message:new — la file hors ligne ne dépend pas de la synchro de lis
   let ioState: ReturnType<typeof getIoState>;
   let queue: { enqueue: jest.Mock };
 
-  /**
-   * Deux participants ACTIFS : l'expéditeur (exclu de la file — il a déjà son
-   * message) et un pair hors ligne (la carte `connectedUsers` du manager reste
-   * vide dans ce harnais, donc tout le monde est absent).
-   *
-   * La forme rendue est celle du SUPERSET que les deux producteurs demandent
-   * pour la ligne de liste ; `select` est inspecté pour que le témoin de panne
-   * puisse ne faire tomber QUE cette requête-là.
-   */
+  /** Fabrique unique : `helpers/message-new-parity-fixtures.ts`. */
   function seedParticipants(): void {
-    (prisma.participant.findMany as any).mockImplementation(async (args: any) => {
-      const wantsSuperset = Boolean(args?.select?.joinedAt);
-      return [
-        {
-          id: 'sender-participantId',
-          userId: 'sender-userId',
-          ...(wantsSuperset
-            ? {
-                joinedAt: new Date('2026-01-01T00:00:00.000Z'),
-                user: { systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
-              }
-            : {}),
-        },
-        {
-          id: 'peer-participantId',
-          userId: 'peer-userId',
-          ...(wantsSuperset
-            ? {
-                joinedAt: new Date('2026-01-01T00:00:00.000Z'),
-                user: { systemLanguage: 'en', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
-              }
-            : {}),
-        },
-      ];
-    });
+    seedParticipantsBySelect(prisma);
   }
 
   /** L'entrée réellement déposée pour ce destinataire, si elle existe. */
   function queuedFor(queueKey: string): Record<string, unknown> | undefined {
     const call = (queue.enqueue.mock.calls as any[]).find((c) => c[0] === queueKey);
     return call?.[1] as Record<string, unknown> | undefined;
+  }
+
+  /**
+   * La synchro de liste part APRÈS l'enfilage, dans le même passage, et ne
+   * porte aucune adresse de fichier : c'est elle qui atteste qu'une méthode est
+   * allée au bout, là où l'enfilage le faisait avant #18619 — au prix de ce
+   * qu'il écrivait.
+   */
+  function syncEmitted(): boolean {
+    return (ioState.toEmit.mock.calls as any[]).some((c) => c[0] === SERVER_EVENTS.CONVERSATION_UPDATED);
   }
 
   beforeEach(async () => {
@@ -929,6 +705,53 @@ describe('message:new — la file hors ligne ne dépend pas de la synchro de lis
     );
   });
 
+  /**
+   * #18380 — une ÉTAPE de l'éventail qui lève ne doit pas emporter LES
+   * SUIVANTES.
+   *
+   * Les quatre témoins ci-dessus gardent la place de l'enfilage : il est
+   * PREMIER, donc rien de ce qui vient après ne peut l'annuler. Ils ne disent
+   * rien de ce que l'enfilage, lui, ne protège pas — et c'est la totalité de
+   * l'éventail d'aval, qui vit dans UN seul `try` sous le `catch` de fin de
+   * méthode du producteur WS : mentions, `conversation:updated` PAR
+   * destinataire, badge de non-lus, et l'accusé de remise automatique.
+   *
+   * Son jumeau REST/ZMQ garde chacun de ces blocs SÉPARÉMENT
+   * (`MeeshySocketIOManager._broadcastNewMessage`, deux `try/catch` nommés).
+   * Le producteur WS — **le transport PRIMAIRE de `message:send`** — n'en avait
+   * aucun : une seule levée coûtait le re-tri de la liste, la pastille de
+   * non-lus ET le passage de ✓ à ✓✓ pour tout le monde, jusqu'au prochain
+   * rechargement complet.
+   *
+   * C'est la forme du cycle 127 vue sous un autre angle : une garde posée sur
+   * le chemin le plus FRÉQUENTÉ se lit comme posée sur le SUJET. Ici l'auteur
+   * du jumeau avait raison deux fois, et la leçon n'avait pas traversé.
+   */
+  it('#18380 — WS : `conversation:updated` qui lève ne retire pas la pastille de non-lus', async () => {
+    ioState.toEmit.mockImplementation((event: string) => {
+      if (event === SERVER_EVENTS.CONVERSATION_UPDATED) throw new Error('adapter down');
+      return undefined;
+    });
+
+    await messageHandler.broadcastNewMessage(makeContractMessage() as any, CONVERSATION_ID);
+
+    expect((ioState.toEmit.mock.calls as any[]).map((c) => c[0]))
+      .toContain(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED);
+  });
+
+  /* Le jumeau REST/ZMQ le fait déjà — le témoin le dit, pour que la parité soit LUE et non supposée. */
+  it('#18380 — REST/ZMQ : même propriété, déjà tenue par ses deux `try/catch` nommés', async () => {
+    ioState.toEmit.mockImplementation((event: string) => {
+      if (event === SERVER_EVENTS.CONVERSATION_UPDATED) throw new Error('adapter down');
+      return undefined;
+    });
+
+    await manager.broadcastMessage(makeContractMessage() as any, CONVERSATION_ID);
+
+    expect((ioState.toEmit.mock.calls as any[]).map((c) => c[0]))
+      .toContain(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED);
+  });
+
   it("le producteur REST/ZMQ enfile même quand la requête SUPERSET tombe", async () => {
     // La requête qui échoue est celle du PRISME de la ligne de liste
     // (`user` + `joinedAt`) ; la file, elle, n'a besoin que de `{id, userId}`
@@ -965,6 +788,151 @@ describe('message:new — la file hors ligne ne dépend pas de la synchro de lis
     );
   });
 
+  /**
+   * #17026 — l'émission vivante de `message:new` elle-même.
+   *
+   * Les deux témoins ci-dessus font lever `conversation:updated`, la synchro
+   * COSMÉTIQUE qui SUIT l'enfilage : ils prouvent que la place de l'enfilage le
+   * protège de ce qui vient après. Ils ne pouvaient rien dire de ce qui vient
+   * AVANT — et l'émission vivante vient avant, dans le même `try`, sous le même
+   * `catch` de fin de méthode. Le commentaire « Sa PLACE fait partie de la
+   * garantie » nommait les deux synchros d'aval et pas la diffusion d'amont.
+   */
+  it('#17026 — le producteur REST/ZMQ enfile même quand `message:new` LÈVE', async () => {
+    ioState.toEmit.mockImplementation((event: string) => {
+      if (event === SERVER_EVENTS.MESSAGE_NEW) throw new Error('adapter down');
+      return undefined;
+    });
+
+    await manager.broadcastMessage(makeContractMessage() as any, CONVERSATION_ID);
+
+    // Le pair EN LIGNE a perdu sa remise directe — il n'y a rien à y faire, la
+    // diffusion est le seul canal vivant. L'ABSENT, lui, a sa file, et c'est la
+    // SEULE voie par laquelle il apprendra jamais ce message.
+    expect(queuedFor('peer-userId')).toEqual(
+      expect.objectContaining({ messageId: 'msg-123456789012' })
+    );
+  });
+
+  it('#17026 — le producteur WS enfile même quand `message:new` LÈVE', async () => {
+    ioState.toEmit.mockImplementation((event: string) => {
+      if (event === SERVER_EVENTS.MESSAGE_NEW) throw new Error('adapter down');
+      return undefined;
+    });
+
+    await messageHandler.broadcastNewMessage(makeContractMessage() as any, CONVERSATION_ID);
+
+    expect(queuedFor('peer-userId')).toEqual(
+      expect.objectContaining({ messageId: 'msg-123456789012' })
+    );
+  });
+
+  /**
+   * Et la LECTURE du plan signé, l'autre moitié du même site.
+   *
+   * `readerSignedPlan` n'ouvre ses requêtes que s'il y a une clé de signature
+   * ET une pièce liée au lecteur : sans l'une des deux, il rend `null` sans
+   * rien demander, et la panne est inatteignable. Les deux témoins ci-dessous
+   * posent donc la clé et un message à VUE UNIQUE portant une pièce — la
+   * précondition exacte que l'issue nomme : « piège armé devenant panne dès
+   * qu'une clé de signature existe », sur la population dont la perte coûte le
+   * plus cher.
+   */
+  describe('#17026 — la lecture du plan par lecteur, sur les deux producteurs', () => {
+    const SIGNED_KEY = Buffer.alloc(32, 7).toString('base64');
+
+    /** Un message protégé portant une pièce : le chemin du plan signé. */
+    function protectedMessage(): unknown {
+      return makeContractMessage({
+        isViewOnce: true,
+        attachments: [makeAttachmentRow()],
+      });
+    }
+
+    beforeEach(() => {
+      process.env.ATTACHMENT_URL_SIGNING_KEY = SIGNED_KEY;
+      // La requête du plan est celle du prédicat d'ADMISSION (`isActive`,
+      // jamais banni, lien non échu) : elle demande `shareLinkId`, que ni la
+      // requête SUPERSET de la ligne de liste ni celle de la file ne demandent.
+      // C'est ce discriminant qui permet de ne faire tomber QUE le plan.
+      (prisma.participant.findMany as any).mockImplementation(async (args: any) => {
+        if (args?.select?.shareLinkId) throw new Error('admitted-reader select unavailable');
+        return [
+          { id: 'sender-participantId', userId: 'sender-userId' },
+          { id: 'peer-participantId', userId: 'peer-userId' },
+        ];
+      });
+    });
+
+    afterEach(() => {
+      delete process.env.ATTACHMENT_URL_SIGNING_KEY;
+    });
+
+    /**
+     * Ces deux témoins disaient « le producteur enfile même quand la lecture du
+     * plan TOMBE », pour une BONNE raison : `PLAN_UNAVAILABLE` ne doit pas être
+     * un `throw`, sans quoi « un `catch` de fin de méthode chez l'appelant
+     * emporterait l'enfilage durable qui SUIT l'émission » (`planOutcome.ts`).
+     * L'enfilage servait de PREUVE que la méthode était allée au bout.
+     *
+     * #18619 a montré que cette preuve coûtait ce qu'elle mesurait : la charge
+     * enfilée porte l'adresse NUE d'une pièce liée au lecteur, pour 48 h, dans
+     * le cas EXACT où le direct refuse de l'émettre. La preuve change donc de
+     * porteur sans disparaître — `CONVERSATION_UPDATED` part APRÈS l'enfilage
+     * dans le même passage et ne porte aucune adresse de fichier.
+     */
+    it('le producteur REST/ZMQ VA AU BOUT quand la lecture du plan tombe, sans enfiler d’adresse nue', async () => {
+      await manager.broadcastMessage(protectedMessage() as any, CONVERSATION_ID);
+
+      // La méthode est allée au bout : le silence est CHOISI, pas une panne.
+      expect(syncEmitted()).toBe(true);
+      // Et rien de durable ne porte l'adresse nue de la pièce protégée.
+      expect(queuedFor('peer-userId')).toBeUndefined();
+    });
+
+    it('le producteur WS VA AU BOUT quand la lecture du plan tombe, sans enfiler d’adresse nue', async () => {
+      await messageHandler.broadcastNewMessage(protectedMessage() as any, CONVERSATION_ID);
+
+      expect(syncEmitted()).toBe(true);
+      expect(queuedFor('peer-userId')).toBeUndefined();
+    });
+
+    /**
+     * L'autre moitié, et sans elle le lot serait un correctif trop large : un
+     * message ORDINAIRE — aucune pièce liée au lecteur, donc plan `null` — doit
+     * continuer d'être enfilé. Retenir sur `null` casserait le rattrapage hors
+     * ligne de tout le produit, et aucun des deux témoins ci-dessus ne pourrait
+     * le voir.
+     */
+    it('un message SANS pièce liée au lecteur est toujours enfilé, plan ou pas', async () => {
+      await manager.broadcastMessage(makeContractMessage() as any, CONVERSATION_ID);
+
+      expect(queuedFor('peer-userId')).toEqual(
+        expect.objectContaining({ messageId: 'msg-123456789012' })
+      );
+    });
+
+    /**
+     * Les DEUX moitiés dans le MÊME témoin, et c'est délibéré : séparées, la
+     * moitié « rien en direct » passe au vert dès que la méthode EXPLOSE, donc
+     * sous la régression même qu'elle prétend garder. Un témoin qui ne peut
+     * tomber que du bon côté n'atteste rien.
+     */
+    it("rien en direct ET l'absent servi : `'unavailable'` n'est pas `null`", async () => {
+      await manager.broadcastMessage(protectedMessage() as any, CONVERSATION_ID);
+
+      // Collapser `'unavailable'` sur `null` rendrait la diffusion de room sur
+      // une pièce établie comme liée au lecteur — l'adresse nue d'un secret.
+      const live = (ioState.toEmit.mock.calls as any[]).filter((c) => c[0] === SERVER_EVENTS.MESSAGE_NEW);
+      expect(live).toEqual([]);
+      // Et c'est bien le SILENCE choisi, pas la méthode tombée : la synchro de
+      // liste part dans le même passage. Elle a remplacé l'enfilage comme
+      // porteur de cette preuve (#18619) — l'enfilage, lui, écrivait l'adresse
+      // nue de la pièce protégée dans Redis pour 48 h.
+      expect(syncEmitted()).toBe(true);
+    });
+  });
+
   it("aucun producteur n'enfile pour l'EXPÉDITEUR", async () => {
     await manager.broadcastMessage(makeContractMessage() as any, CONVERSATION_ID);
     expect(queuedFor('sender-userId')).toBeUndefined();
@@ -995,5 +963,33 @@ describe('message:new — la file hors ligne ne dépend pas de la synchro de lis
 
     expect(rest).toEqual(socket);
     expect(socket.eventType).toBe('new');
+  });
+
+  it("#3614 — le producteur REST/ZMQ enfile un message SANS expéditeur (agent, système)", async () => {
+    // `Message.senderId` est requis en base (`schema.prisma`), mais l'objet
+    // JS reçu par ce transport peut en manquer — un message d'agent ou
+    // système construit sans identité de sender. `if (senderId)` englobait
+    // TOUT le bloc — participants, enfilage durable, cosmétique — donc un tel
+    // message n'était JAMAIS rejoué aux absents : la seule voie par laquelle
+    // un destinataire déconnecté apprend son existence disparaissait
+    // silencieusement. Le chemin WS (`MessageHandler.broadcastNewMessage`,
+    // ci-dessous) n'a jamais posé cette garde.
+    const messageSansExpediteur = makeContractMessage({ senderId: undefined, sender: undefined });
+
+    await manager.broadcastMessage(messageSansExpediteur as any, CONVERSATION_ID);
+
+    expect(queuedFor('peer-userId')).toEqual(
+      expect.objectContaining({ messageId: 'msg-123456789012' })
+    );
+  });
+
+  it('le producteur WS enfile aussi un message SANS expéditeur (parité)', async () => {
+    const messageSansExpediteur = makeContractMessage({ senderId: undefined, sender: undefined });
+
+    await messageHandler.broadcastNewMessage(messageSansExpediteur as any, CONVERSATION_ID);
+
+    expect(queuedFor('peer-userId')).toEqual(
+      expect.objectContaining({ messageId: 'msg-123456789012' })
+    );
   });
 });

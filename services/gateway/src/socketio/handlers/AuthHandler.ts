@@ -1,18 +1,42 @@
 import type { MeeshySocket as Socket } from '../typed-socket';
+import { joinE2EEDeviceRoom } from '../../services/e2ee/device-room';
+import { joinUserConversations, joinConversationRoomsWithRetry } from './join-user-conversations';
 import { PrismaClient, CallEndReason } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../services/StatusService';
 import { MaintenanceService } from '../../services/MaintenanceService';
-import { CallService } from '../../services/CallService';
+import { CallService, CallAlreadyEndedError } from '../../services/CallService';
 import type { DisconnectParticipation } from '../CallEventsHandler';
 import { hashSessionToken } from '../../utils/session-token';
+import { SOCKET_SESSION_ID } from '../disconnectSession';
 import { extractJWTToken, extractSessionToken, type SocketUser } from '../utils/socket-helpers';
+import { recordSocketReachability, liveSocketsOf, withCombinedReachability } from '../socketReachability';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import jwt from 'jsonwebtoken';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketAuthenticateSchema } from '../../validation/socket-event-schemas.js';
+import type { SessionBoundTokenPayload } from '../../services/auth/session-jwt';
+import { sessionAdmissionRefusal } from '../../services/auth/session-admission';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { liveSessionFilter, requiresLiveSession } from './live-session-gate';
+import { readClientSessionAuth } from '@meeshy/shared/utils/client-session';
+import { recordSessionClientInfo } from '../../services/auth/session-client-info';
+import { ACTIVATION_SELECT, isActivationBlocked } from '../../services/auth/account-activation';
+import { scheduleContactRecentlyActiveAnnouncement } from '../../services/notifications/contact-recently-active';
+import { guardedTimeout } from '../../utils/guarded-timer.js';
+import { scheduleTokenExpiry } from './tokenExpiryWatch';
+import { attestedSocketAddress } from '../utils/attested-address';
+import { resolveTrustProxy } from '../../config/trust-proxy';
+import { loadGuestShareLinkGate } from '../../services/shareLinkReadGate';
+import { guestAccessEnd } from '../../services/guestAccessEnd';
+import { GuestLinkWatch, refuseExpiredGuestLink, refuseRevokedGuest } from './guestLinkWatch';
+import { accountIsDeleted, type DeletedAccountReader } from '../../services/auth/account-deleted';
+import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
+import { LIVE_CALL_PARTICIPATION } from '../../services/calls/liveCallParticipations';
+import { PresenceForeground } from '../presence-foreground';
+import { refuseSocketBelowAppVersionFloor } from '../../middleware/app-version-floor';
+import { noteBatteryAlive, sessionIdOfSocket } from './BatteryHandler';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -31,6 +55,11 @@ export interface AuthHandlerDependencies {
    * (rétrocompat).
    */
   emitPresenceSnapshot?: (socket: Socket, userId: string, isAnonymous: boolean) => Promise<void>;
+  /**
+   * « Est dans la conversation » (#8892) : redit à l'arrivant, une fois ses
+   * rooms jointes, qui a déjà l'écran de chacune de ses conversations ouvert.
+   */
+  emitViewingSnapshots?: (socket: Socket) => Promise<void>;
   /**
    * CALL-RESILIENCE (Vague 44) — broadcasts PARTICIPANT_LEFT/call:ended for the
    * anonymous-guest auto-leave below. Injected by MeeshySocketIOManager (owns
@@ -59,6 +88,18 @@ export interface AuthHandlerDependencies {
     userId: string;
     leaveError: unknown;
   }) => Promise<void>;
+  /**
+   * Vague 182 (#4202/Vague 181 follow-up) — idempotent no-op counterpart to
+   * `forceCleanupCallParticipant` above, curried down to
+   * `CallEventsHandler.absorbAlreadyEndedLeave`. `leaveCall()` throws
+   * `CallAlreadyEndedError` when this leave lost the race to a concurrent
+   * terminal write, not when it genuinely failed — the call is already
+   * correctly closed by whichever path won. Optional, same rationale as the
+   * callbacks above.
+   */
+  absorbAlreadyEndedCallLeave?: (opts: { callId: string; error: CallAlreadyEndedError }) => Promise<void>;
+  /** L'horloge du délai de grâce de l'adresse (#8238) — injectée par les témoins. */
+  now?: () => Date;
 }
 
 export class AuthHandler {
@@ -70,11 +111,21 @@ export class AuthHandler {
   private socketToUser: Map<string, string>;
   private userSockets: Map<string, Set<string>>;
   private emitPresenceSnapshot?: (socket: Socket, userId: string, isAnonymous: boolean) => Promise<void>;
+  private emitViewingSnapshots?: (socket: Socket) => Promise<void>;
   private broadcastCallParticipantLeft?: AuthHandlerDependencies['broadcastCallParticipantLeft'];
   private forceCleanupCallParticipant?: AuthHandlerDependencies['forceCleanupCallParticipant'];
+  private absorbAlreadyEndedCallLeave?: AuthHandlerDependencies['absorbAlreadyEndedCallLeave'];
+  private readonly now: () => Date;
+
+  /** #10437, #10440, #10443 — la relecture du lien et de la participation de chaque socket invité. */
+  private readonly guestLinkWatch: GuestLinkWatch;
+
+  /** #10575 — présent tant qu'une socket est au premier plan (`presence-foreground.ts`). */
+  private readonly foreground: PresenceForeground;
 
   constructor(deps: AuthHandlerDependencies) {
     this.prisma = deps.prisma;
+    this.guestLinkWatch = new GuestLinkWatch(deps.prisma);
     this.statusService = deps.statusService;
     this.maintenanceService = deps.maintenanceService;
     this.callService = deps.callService;
@@ -82,8 +133,35 @@ export class AuthHandler {
     this.socketToUser = deps.socketToUser;
     this.userSockets = deps.userSockets;
     this.emitPresenceSnapshot = deps.emitPresenceSnapshot;
+    this.emitViewingSnapshots = deps.emitViewingSnapshots;
     this.broadcastCallParticipantLeft = deps.broadcastCallParticipantLeft;
     this.forceCleanupCallParticipant = deps.forceCleanupCallParticipant;
+    this.absorbAlreadyEndedCallLeave = deps.absorbAlreadyEndedCallLeave;
+    this.now = deps.now ?? (() => new Date());
+    this.foreground = new PresenceForeground({
+      socketsOf: (userKey) => this.userSockets.get(userKey),
+      announceAway: (userKey) => this.announcePresence(userKey, false),
+      announceBack: (userKey) => this.announcePresence(userKey, true),
+      logger,
+    });
+  }
+
+  /** La présence RUNTIME d'un id (userId, ou participantId d'un invité) : une socket au premier plan. */
+  isPresent(userKey: string): boolean {
+    return this.foreground.isPresent(userKey);
+  }
+
+  /** `presence:app-state` (#10575) — une charge sans booléen ne déclare rien. */
+  async handleAppState(socket: Socket, data?: { foreground?: unknown }): Promise<void> {
+    if (typeof data?.foreground !== 'boolean') return;
+    this.foreground.noteAppState(socket.id, this.socketToUser.get(socket.id), data.foreground);
+  }
+
+  private announcePresence(userKey: string, isOnline: boolean): void {
+    const announce = this.connectedUsers.get(userKey)?.isAnonymous
+      ? this.maintenanceService.updateAnonymousOnlineStatus(userKey, isOnline, true)
+      : this.maintenanceService.updateUserOnlineStatus(userKey, isOnline, true);
+    announce.catch((error) => logger.error('presence foreground announce failed', { userId: userKey, isOnline, error }));
   }
 
   async handleTokenAuthentication(socket: Socket): Promise<void> {
@@ -93,12 +171,12 @@ export class AuthHandler {
 
       if (!token && !sessionToken) {
         logger.warn('socket sans token — déconnexion dans 10s si non authentifié', { socketId: socket.id });
-        const authTimeout = setTimeout(() => {
+        const authTimeout = guardedTimeout({ name: 'socket-auth-timeout', afterMs: 10_000, logger, run: () => {
           if (!this.socketToUser.has(socket.id)) {
             logger.warn('socket toujours non authentifié après 10s — déconnexion', { socketId: socket.id });
             socket.disconnect(true);
           }
-        }, 10_000);
+        } });
         socket.on('disconnect', () => clearTimeout(authTimeout));
         return;
       }
@@ -138,8 +216,9 @@ export class AuthHandler {
       const validated = schemaValidation.data;
 
       // Rate-limit auth attempts by IP to prevent credential stuffing.
-      // Key: socket IP so the limit spans multiple socket connections from the same host.
-      const clientIp = socket.handshake.address ?? socket.id;
+      // Key: the ATTESTED client address (audit #9608, P3) — the same value as
+      // REST's `request.ip`. `handshake.address` is Traefik's, one bucket for all.
+      const clientIp = attestedSocketAddress(socket.handshake, resolveTrustProxy()) ?? socket.id;
       const rateLimiter = getSocketRateLimiter();
       const allowed = await rateLimiter.checkLimit(clientIp, SOCKET_RATE_LIMITS.SOCKET_AUTH);
       if (!allowed) {
@@ -184,8 +263,44 @@ export class AuthHandler {
       throw new Error('JWT_SECRET non configuré');
     }
 
-    const decoded = jwt.verify(token, jwtSecret) as { userId: string };
+    const decoded = jwt.verify(token, jwtSecret) as Pick<SessionBoundTokenPayload, 'userId' | 'exp' | 'sid'>;
     const userId = decoded.userId;
+
+    if (refuseSocketBelowAppVersionFloor(socket)) return;
+
+    // #10493 — la loi du REST (#10328) : la session NOMMÉE par le jeton doit
+    // vivre. Inconnue, révoquée, échue ⇒ refus ; jeton sans `sid` ⇒ butoir
+    // daté de #4264, fermé ; charge d'usage (`action`, `aud`) ⇒ refus. Posée
+    // avant la lecture du profil. Une lecture qui lève remonte au `catch` de
+    // l'appelant : socket fermé, sans annoncer une révocation non prouvée.
+    //
+    // La purge d'un compte SUPPRIME ses sessions : son jeton nomme donc une
+    // session absente. La signature étant vérifiée, le refus garde alors le
+    // code de #10264, qui fait purger ce compte à l'appareil.
+    const refus = await sessionAdmissionRefusal(this.prisma, {
+      claims: decoded,
+      userId,
+      now: this.now(),
+    });
+    if (refus && (await accountIsDeleted(this.prisma as unknown as DeletedAccountReader, userId))) {
+      socket.emit(SERVER_EVENTS.ERROR, { message: 'Account disabled', code: AUTH_ERROR_CODES.ACCOUNT_DELETED, accountId: userId });
+      socket.disconnect(true);
+      return;
+    }
+    if (refus) {
+      logger.info('socket refusé — la session nommée par le jeton ne vit plus', {
+        socketId: socket.id,
+        userId,
+        motif: refus,
+      });
+      socket.emit(SERVER_EVENTS.AUTH_SESSION_REVOKED, {
+        code: 'session_revoked',
+        message: 'Session expired — please sign in again.',
+        reason: 'session_expired',
+      });
+      socket.disconnect(true);
+      return;
+    }
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -195,6 +310,8 @@ export class AuthHandler {
         regionalLanguage: true,
         customDestinationLanguage: true,
         deviceLocale: true,
+        isActive: true,
+        ...ACTIVATION_SELECT,
       }
     });
 
@@ -203,6 +320,49 @@ export class AuthHandler {
       socket.disconnect(true);
       return;
     }
+
+    // #3625 — un JWT valide n'atteste que de la signature, jamais de l'état du
+    // compte au moment de la connexion : un compte banni/désactivé après avoir
+    // émis son token gardait un accès temps réel complet jusqu'à l'expiration
+    // du JWT. `disconnectRevokedSessions` coupe déjà les sockets VIVANTS au
+    // moment de la désactivation (`UserManagementService.updateStatus` /
+    // `.deleteUser`) — cette porte couvre le cas qu'il ne peut pas voir : une
+    // reconnexion ultérieure avec le même JWT, encore valide.
+    //
+    // #10264 — un compte SUPPRIMÉ reçoit le même refus, plus le code qui permet
+    // à l'appareil de purger les données de CE compte. La signature vient
+    // d'être vérifiée : seul le porteur d'un jeton du compte l'apprend.
+    if (user.isActive === false) {
+      socket.emit(
+        SERVER_EVENTS.ERROR,
+        (await accountIsDeleted(this.prisma as unknown as DeletedAccountReader, user.id))
+          ? { message: 'Account disabled', code: AUTH_ERROR_CODES.ACCOUNT_DELETED, accountId: user.id }
+          : { message: 'Account disabled' },
+      );
+      socket.disconnect(true);
+      return;
+    }
+
+    // #8238 — le délai de grâce de l'adresse est passé : un JWT encore valide
+    // n'ouvre plus de canal temps réel, et la connexion mènera au code.
+    if (user.createdAt instanceof Date && isActivationBlocked(user, this.now())) {
+      logger.info('socket refusé — délai de grâce de l\'adresse passé', { socketId: socket.id, userId: user.id });
+      socket.emit(SERVER_EVENTS.AUTH_SESSION_REVOKED, {
+        code: 'session_revoked',
+        message: 'Confirm your email address to continue — please sign in again.',
+        reason: 'activation_required',
+      });
+      socket.disconnect(true);
+      return;
+    }
+
+    // #9610 — la socket remet sous `auth.client` ce qu'une requête porte en
+    // en-têtes ; la session nommée le retient. Détaché, ne lève jamais.
+    void recordSessionClientInfo(this.prisma, {
+      sessionId: decoded.sid,
+      userId: user.id,
+      declared: readClientSessionAuth(socket.handshake.auth),
+    }).catch(() => undefined);
 
     const resolvedLanguages = resolveUserLanguagesOrdered(user, {
       deviceLocale: user.deviceLocale ?? undefined,
@@ -239,12 +399,73 @@ export class AuthHandler {
       logger.error('failed to join personal rooms (JWT auth)', { userId: user.id, error });
     }
 
-    await this._joinUserConversations(socket, user.id, false);
+    // La cartographie SESSION → SOCKET (#4213).
+    //
+    // Un socket inscrit s'authentifie au JWT SEUL. `UserSession.sessionToken`
+    // stocke le hash d'un jeton opaque que rien n'obligeait le client à
+    // transmettre au handshake — il n'existait donc AUCUN moyen de dire quel
+    // socket appartient à quelle session, et révoquer une session laissait
+    // l'appareil recevoir tout le temps réel indéfiniment, un socket n'étant
+    // authentifié qu'une fois, au connect, et jamais revérifié.
+    //
+    // On range l'IDENTIFIANT, jamais le jeton : le clair n'a aucune raison de
+    // survivre à cette ligne.
+    await this._attachSessionId(socket, user.id, decoded.sid);
+    // #3706 — la room de l'appareil E2EE lié à CETTE session : ses seules enveloppes y arrivent.
+    await joinE2EEDeviceRoom(socket, this.prisma, { userId: user.id, sessionId: decoded.sid });
 
-    this._registerUser(user.id, socketUser, socket);
+    const failedRooms = await joinUserConversations(this.prisma, socket, user.id, false);
+    // `undefined` ⇒ la lecture est tombée : aucune room rejointe, et aucune
+    // liste à nommer. Un ensemble ne peut pas dire « toutes, dont j'ignore la
+    // liste » — ce drapeau le dit, et la file le lit comme injoignable pour
+    // n'importe quelle conversation.
+    if (failedRooms === undefined) socketUser.allConversationRoomsUnreachable = true;
+    else if (failedRooms.length > 0) socketUser.unreachableConversations = new Set(failedRooms);
+    const isFirstSocket = this._registerUser(user.id, socketUser, socket);
+    scheduleTokenExpiry(socket, decoded.exp);
+    // #10440 — le socket n'est plus celui d'un invité : le minuteur de lien
+    // d'une session invitée antérieure sur ce socket ne le coupera pas.
+    this.guestLinkWatch.dispose(socket);
 
     this.statusService.markConnected(user.id, false);
-    await this.maintenanceService.updateUserOnlineStatus(user.id, true, true);
+    // Le write DB + broadcast « en ligne » n'appartiennent qu'à la transition
+    // 0→1 : un appareil supplémentaire, ou une ré-auth du même socket
+    // (handshake puis `authenticate` manuel), n'a rien de neuf à annoncer aux
+    // contacts — chaque écriture ici part en broadcast vers chacun d'eux.
+    if (isFirstSocket) {
+      // Le REFUS de connexion sur session morte, derrière son drapeau (#5712).
+      //
+      // Il se pose ICI, avant la seule écriture d'activité du chemin : c'est
+      // elle qui fait paraître présente une personne absente depuis des mois.
+      // Tant que le drapeau dort, le comportement est strictement inchangé.
+      //
+      // Mesuré avant livraison : 53 utilisateurs avec session vivante, ZÉRO
+      // connecté sans — mais sur un seul connecté à l'heure du relevé, ce qui
+      // ne suffit pas pour armer. La décision d'armer appartient au porteur,
+      // sur une mesure en heure pleine.
+      if (requiresLiveSession()) {
+        const sessionToken = extractSessionToken(socket);
+        const vivante = sessionToken
+          ? await this.prisma.userSession.findFirst({
+              where: liveSessionFilter(user.id, hashSessionToken(sessionToken)),
+              select: { id: true },
+            })
+          : null;
+
+        if (!vivante) {
+          logger.warn('socket refused: no live session', { userId: user.id });
+          socket.disconnect(true);
+          return;
+        }
+      }
+
+      await this.maintenanceService.updateUserOnlineStatus(user.id, true, true);
+      // « X était sur Meeshy récemment » (#8285) : APRÈS l'écriture d'activité,
+      // jamais en ligne — la tâche porte son verrou de 3 h et ses erreurs.
+      scheduleContactRecentlyActiveAnnouncement(this.prisma, user.id);
+    }
+    // #14147 — le téléphone suivi présumé éteint qui revient est « rallumé », premier socket ou non.
+    noteBatteryAlive({ userId: user.id, sessionId: sessionIdOfSocket(socket) });
 
     socket.emit(SERVER_EVENTS.AUTHENTICATED, {
       success: true,
@@ -261,6 +482,54 @@ export class AuthHandler {
         logger.error('failed to emit presence snapshot (JWT auth)', { userId: user.id, error });
       });
     }
+    this.emitViewingSnapshots?.(socket).catch(error => {
+      logger.error('failed to emit viewing snapshots (JWT auth)', { userId: user.id, error });
+    });
+  }
+
+  /**
+   * Range `UserSession.id` sur le socket — d'abord le `sid` du JWT, VÉRIFIÉ
+   * plus haut (session nommée, valide, non expirée, de cet utilisateur) ; à
+   * défaut, la session du jeton transmis au handshake (audit #9608, P3 : seul
+   * le jeton était lu, et un client qui ne l'envoie pas gardait son socket
+   * ouvert après la révocation de sa session — `disconnectSession` filtre sur
+   * cette étiquette).
+   *
+   * Best-effort et SILENCIEUX en cas d'absence : un client sans `sid` ni jeton
+   * garde un socket sans identifiant. C'est le repli assumé de
+   * `disconnectSession` — la révocation en base, elle, est déjà effective.
+   *
+   * La lecture est bornée à l'utilisateur AUTHENTIFIÉ : un jeton de session
+   * appartenant à quelqu'un d'autre ne peut pas étiqueter ce socket, faute de
+   * quoi une personne pourrait faire couper le socket d'une autre en présentant
+   * un jeton qu'elle aurait intercepté.
+   */
+  private async _attachSessionId(socket: Socket, userId: string, verifiedSid?: string): Promise<void> {
+    try {
+      if (verifiedSid) {
+        (socket.data as Record<string, unknown>)[SOCKET_SESSION_ID] = verifiedSid;
+        return;
+      }
+
+      const sessionToken = extractSessionToken(socket);
+      if (!sessionToken) return;
+
+      const session = await this.prisma.userSession.findFirst({
+        // `isValid` seul ne suffit pas : 140 sessions EXPIRÉES le portaient en
+        // production (#5712). Étiqueter un socket avec une session morte ferait
+        // croire à une traçabilité qui n'existe plus.
+        where: liveSessionFilter(userId, hashSessionToken(sessionToken)),
+        select: { id: true },
+      });
+
+      if (session) {
+        (socket.data as Record<string, unknown>)[SOCKET_SESSION_ID] = session.id;
+      }
+    } catch (error) {
+      // Une session non résolue ne doit jamais empêcher une connexion : le
+      // temps réel n'est pas conditionné à la traçabilité de l'appareil.
+      logger.warn('failed to attach sessionId to socket', { userId, error });
+    }
   }
 
   private async _authenticateAnonymousUser(
@@ -270,23 +539,52 @@ export class AuthHandler {
   ): Promise<void> {
     const tokenHash = hashSessionToken(sessionToken);
 
+    // #10457 — UNE lecture de la ligne du jeton, vivante ou non, puis l'ordre
+    // unique des causes (`guestAccessEnd`) : lien expiré d'abord, puis
+    // participation morte (désactivée, bannie). Un jeton sans ligne garde la
+    // réponse nue, rien n'est confirmé à qui ne détient rien (#10449).
     const participant = await this.prisma.participant.findFirst({
-      where: {
-        sessionTokenHash: tokenHash,
-        type: 'anonymous',
-        isActive: true
-      },
+      where: { sessionTokenHash: tokenHash, type: 'anonymous' },
       select: {
         id: true,
         displayName: true,
         language: true,
-        conversationId: true
+        conversationId: true,
+        shareLinkId: true,
+        anonymousSession: true,
+        isActive: true,
+        bannedAt: true,
+        joinedAt: true
       }
     });
 
     if (!participant) {
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Anonymous session not found' });
       socket.disconnect(true);
+      return;
+    }
+
+    // #10437 — la garde commune du lien échu, AVANT toute room : c'est cette
+    // porte (et non `_joinUserConversations`) qui joint la room d'un invité, à
+    // la connexion comme à chaque reconnexion. Un lien illisible lève, et
+    // `handleTokenAuthentication` coupe le socket SANS code (fail-closed).
+    // #10470 — et la révocation DIFFÉRÉE d'un gros lien fermé.
+    const linkGate = await loadGuestShareLinkGate(this.prisma, participant);
+    const linkExpiresAt = linkGate.expiresAt;
+    const end = guestAccessEnd({
+      linkExpiresAt,
+      linkRevocationPendingAt: linkGate.revocationPendingAt,
+      linkIsActive: linkGate.isActive,
+      linkMissing: linkGate.missing,
+      participation: participant,
+      now: new Date(),
+    });
+    if (end === 'link-expired') {
+      refuseExpiredGuestLink(socket);
+      return;
+    }
+    if (end === 'revoked') {
+      refuseRevokedGuest(socket);
       return;
     }
 
@@ -334,7 +632,7 @@ export class AuthHandler {
     // échouée » vaut la TOTALITÉ de sa livraison temps réel, là où un inscrit
     // qui en perd une sur trente perd une fraction. La porte qui avait le plus
     // besoin du réessai était la seule à ne pas l'avoir.
-    const guestJoinFailed = await this._joinConversationRoomsWithRetry(socket, [participant.conversationId]);
+    const guestJoinFailed = await joinConversationRoomsWithRetry(socket, [participant.conversationId]);
     if (guestJoinFailed.length > 0) {
       logger.error('conversation room join failed after retries for anonymous user — no live message can reach this session', {
         anonymousId: socketUser.id,
@@ -342,9 +640,18 @@ export class AuthHandler {
       });
     }
 
-    this._registerUser(participant.id, socketUser, socket);
+    // Pas de branche `undefined` ici, et ce n'est pas un oubli : la porte
+    // invitée n'a AUCUNE lecture à faire tomber — son `conversationId` vient du
+    // participant déjà chargé — et `joinConversationRoomsWithRetry` rend
+    // toujours une liste (`Promise.allSettled` ne rejette pas).
+    if (guestJoinFailed.length > 0) socketUser.unreachableConversations = new Set(guestJoinFailed);
+    const isFirstSocket = this._registerUser(participant.id, socketUser, socket);
+    this.guestLinkWatch.schedule(socket, participant, linkExpiresAt);
 
-    await this.maintenanceService.updateAnonymousOnlineStatus(socketUser.id, true, true);
+    // Même garde 0→1 que la porte inscrite — voir `_authenticateJWTUser`.
+    if (isFirstSocket) {
+      await this.maintenanceService.updateAnonymousOnlineStatus(socketUser.id, true, true);
+    }
 
     socket.emit(SERVER_EVENTS.AUTHENTICATED, {
       success: true,
@@ -358,32 +665,66 @@ export class AuthHandler {
         logger.error('failed to emit presence snapshot for anonymous', { anonymousId: socketUser.id, error });
       });
     }
+    this.emitViewingSnapshots?.(socket).catch(error => {
+      logger.error('failed to emit viewing snapshots for anonymous', { anonymousId: socketUser.id, error });
+    });
   }
 
-  private _registerUser(key: string, user: SocketUser, socket: Socket): void {
-    this.connectedUsers.set(key, user);
+  /**
+   * Rend `true` UNIQUEMENT sur la transition 0→1 du compteur de sockets — le
+   * signal dont dérivent le write DB et le broadcast « en ligne ». La capture
+   * du compteur et l'ajout du socket forment un bloc synchrone : la décision
+   * est prise sur la map QUE ce socket vient de rejoindre, si bien qu'un
+   * disconnect concurrent (qui, lui, RETIRE de la map avant de décider
+   * l'offline — voir `handleDisconnection`) ne peut jamais lire un état où ce
+   * socket manque. C'est cet ordre, ajout-avant-décision d'un côté et
+   * retrait-avant-décision de l'autre, qui rend la course last-write-wins
+   * impossible.
+   */
+  private _registerUser(key: string, user: SocketUser, socket: Socket): boolean {
+    const existingSockets = this.userSockets.get(user.id);
+    const isFirstSocket = (existingSockets?.size ?? 0) === 0;
+    const wasPresent = this.foreground.isPresent(user.id);
+
+    // #16726 — la joignabilité est un fait de SOCKET : on la RANGE sur la
+    // socket, et l'entrée du compte en est DÉRIVÉE. Sans cela, ce `set`
+    // écrasait les marqueurs d'un appareil malade dès qu'un second appareil
+    // s'authentifiait, et l'écrasement ne se voyait qu'au départ du sain.
+    recordSocketReachability(socket, {
+      unreachableConversations: user.unreachableConversations,
+      allConversationRoomsUnreachable: user.allConversationRoomsUnreachable,
+    });
+    const liveSockets = liveSocketsOf(socket, existingSockets);
+    this.connectedUsers.set(key, liveSockets ? withCombinedReachability(user, [socket, ...liveSockets]) : user);
     this.socketToUser.set(socket.id, key);
 
-    const userSocketsSet = this.userSockets.get(user.id) || new Set();
+    const userSocketsSet = existingSockets ?? new Set<string>();
     userSocketsSet.add(socket.id);
     this.userSockets.set(user.id, userSocketsSet);
+    this.foreground.noteSocketAdded(user.id, wasPresent);
 
     logger.info('user authenticated', { userId: user.id, isAnonymous: user.isAnonymous });
+    return isFirstSocket;
   }
 
   async handleDisconnection(socket: Socket): Promise<void> {
     const userIdOrToken = this.socketToUser.get(socket.id);
-    if (!userIdOrToken) return;
+    if (!userIdOrToken) {
+      this.foreground.forgetSocket(socket.id);
+      return;
+    }
     logger.debug('socket disconnected', { socketId: socket.id, userId: userIdOrToken });
 
     const user = this.connectedUsers.get(userIdOrToken);
     const isAnonymous = user?.isAnonymous || false;
 
+    const wasPresent = this.foreground.isPresent(userIdOrToken);
     const socketSet = this.userSockets.get(userIdOrToken);
     if (socketSet) {
       socketSet.delete(socket.id);
     }
     this.socketToUser.delete(socket.id);
+    this.foreground.noteSocketRemoved(socket.id, userIdOrToken, wasPresent);
 
     const remainingSockets = this.userSockets.get(userIdOrToken);
     const hasRemainingSockets = remainingSockets && remainingSockets.size > 0;
@@ -392,7 +733,15 @@ export class AuthHandler {
       const nextSocketId = remainingSockets.values().next().value;
       const currentUser = this.connectedUsers.get(userIdOrToken);
       if (currentUser && nextSocketId) {
-        this.connectedUsers.set(userIdOrToken, { ...currentUser, socketId: nextSocketId });
+        // #16726 — l'entrée ne se RECOPIE pas : elle se RECALCULE sur les
+        // sockets qui restent. La recopie faisait hériter au survivant les
+        // marqueurs de celui qui part — dans un sens elle enfilait pour un
+        // compte joignable (doublon), dans l'autre elle laissait une socket
+        // ABSENTE de la room passer pour joignable : ni diffusion, ni file,
+        // ni rien à rejouer.
+        const base: SocketUser = { ...currentUser, socketId: nextSocketId };
+        const liveSockets = liveSocketsOf(socket, remainingSockets);
+        this.connectedUsers.set(userIdOrToken, liveSockets ? withCombinedReachability(base, liveSockets) : base);
       }
       return;
     }
@@ -439,12 +788,7 @@ export class AuthHandler {
     if (isAnonymous) {
       try {
         const activeParticipations = await this.prisma.callParticipant.findMany({
-          where: {
-            // Audit C5 (2026-07-02) — `{leftAt: null}` alone misses Mongo docs
-            // whose leftAt field was never written (pre-C5 participants).
-            OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
-            participant: { id: userIdOrToken }
-          },
+          where: { ...LIVE_CALL_PARTICIPATION, participantId: userIdOrToken },
           include: {
             callSession: true
           }
@@ -485,6 +829,25 @@ export class AuthHandler {
               userId: userIdOrToken
             });
           } catch (error) {
+            // Vague 182 (#4202/Vague 181 follow-up) — leaveCall() throws
+            // CallAlreadyEndedError when this leave lost the race to a
+            // concurrent terminal write, not when it genuinely failed: the
+            // call is already correctly closed by whichever path won, which
+            // already ran the full call:ended broadcast/summary/missed-call
+            // fanout. Absorb it as the idempotent no-op it is instead of
+            // falling into the generic force-cleanup fallback below, which
+            // would force-end an already-ended call a second time.
+            if (error instanceof CallAlreadyEndedError) {
+              await this.absorbAlreadyEndedCallLeave?.({ callId: participation.callSessionId, error })
+                .catch((absorbError) => {
+                  logger.error('absorb-already-ended-leave failed on disconnect', {
+                    callId: participation.callSessionId,
+                    error: absorbError
+                  });
+                });
+              continue;
+            }
+
             logger.error('error auto-leaving call on disconnect', { callId: participation.callSessionId, error });
             // Parity with the registered-user path: a rejected leaveCall used
             // to leave this participation open until the ~120s GC. The
@@ -549,7 +912,7 @@ export class AuthHandler {
 
     try {
       const user = this.connectedUsers.get(userIdOrToken);
-      if (!user) return;
+      if (!user || this.foreground.isHidden(socket.id)) return;
 
       // Throttled 60s inside StatusService — a passive-connected socket keeps
       // lastActiveAt fresh (at most one DB write per minute) so it stays
@@ -579,7 +942,8 @@ export class AuthHandler {
     if (!userIdOrToken) return;
 
     const user = this.connectedUsers.get(userIdOrToken);
-    if (!user) return;
+    // Une socket CACHÉE (#10575) ne prouve pas qu'on est là : son pong ne rafraîchit rien.
+    if (!user || this.foreground.isHidden(socket.id)) return;
 
     try {
       this.statusService.noteHeartbeat(userIdOrToken, user.isAnonymous);
@@ -587,12 +951,6 @@ export class AuthHandler {
       logger.debug('engine pong presence refresh failed (best-effort)', { userId: userIdOrToken, error });
     }
   }
-
-  // Retries beyond the initial attempt for a rejected conversation room join.
-  // Total attempts per room = 1 + JOIN_RETRY_ATTEMPTS. Bounded so a permanently
-  // broken adapter can never spin forever; each retry re-attempts only the rooms
-  // that STILL failed, so a room that joined on the first try is never re-joined.
-  private static readonly JOIN_RETRY_ATTEMPTS = 2;
 
   /**
    * Joins the socket to each conversation room, retrying only the rooms whose
@@ -610,50 +968,4 @@ export class AuthHandler {
    * `AuthHandler.test.ts` compare désormais le nombre de tentatives des deux
    * portes, pour qu'un réessai ajouté d'un seul côté ne puisse plus tenir.
    */
-  private async _joinConversationRoomsWithRetry(socket: Socket, conversationIds: string[]): Promise<string[]> {
-    const maxAttempts = 1 + AuthHandler.JOIN_RETRY_ATTEMPTS;
-    let pending = conversationIds;
-    for (let attempt = 1; attempt <= maxAttempts && pending.length > 0; attempt++) {
-      const results = await Promise.allSettled(pending.map(id => socket.join(ROOMS.conversation(id))));
-      pending = pending.filter((_, i) => results[i].status === 'rejected');
-    }
-    return pending;
-  }
-
-  private async _joinUserConversations(socket: Socket, userId: string, isAnonymous: boolean): Promise<void> {
-    try {
-      let conversations: { conversationId: string }[] = [];
-
-      if (isAnonymous) {
-        conversations = await this.prisma.participant.findMany({
-          where: { id: userId, isActive: true },
-          select: { conversationId: true }
-        });
-      } else {
-        conversations = await this.prisma.participant.findMany({
-          where: { userId: userId, isActive: true },
-          select: { conversationId: true }
-        });
-      }
-
-      const conversationIds = conversations.map(conv => conv.conversationId);
-      const stillFailed = await this._joinConversationRoomsWithRetry(socket, conversationIds);
-      if (stillFailed.length > 0) {
-        // Escalated to error: after retries, these room joins are genuinely
-        // broken. Because delivery gates the offline queue purely on
-        // `connectedUsers.has(userId)`, this recipient now looks online but is
-        // absent from these rooms — a message sent to them lands nowhere (no
-        // live emit, no offline enqueue) until a later reconnect re-joins them.
-        logger.error('conversation room joins failed after retries — recipient may miss live messages until reconnect', {
-          userId,
-          failed: stillFailed.length,
-          total: conversationIds.length,
-          conversationIds: stillFailed,
-        });
-      }
-      logger.debug('user joined conversation rooms', { userId, count: conversationIds.length - stillFailed.length });
-    } catch (error) {
-      logger.error('error joining conversations for user', { userId, error });
-    }
-  }
 }

@@ -9,11 +9,22 @@ import PencilKit
 @MainActor
 public final class StoryComposerViewModel: StoryComposerProviding, ObservableObject {
 
+    /// Appelé à CHAQUE refus d'un plafond (`StoryComposerLimits`, #13590) : l'hôte y branche haptique et message.
+    public var onLimitReached: ((StoryComposerLimit) -> Void)?
+
     // MARK: - Slides
 
-    @Published var slides: [StorySlide] = [StorySlide()]
-    @Published var currentSlideIndex: Int = 0
-    @Published var slideImages: [String: UIImage] = [:]
+    // `public internal(set)` (#4038) : le meuble app-side LIT les slides pour
+    // dériver le rail et savoir laquelle porte quel média — il n'en MUTE jamais
+    // le tableau, les mutations passant par `addSlide` / `removeSlide` /
+    // `selectSlide`. Déjà exposées par le protocole `StoryComposerProviding`.
+    @Published public internal(set) var slides: [StorySlide] = [StorySlide()]
+    @Published public internal(set) var currentSlideIndex: Int = 0
+    /// `public internal(set)` comme ses voisines (`loadedImages`, `loadedVideoURLs`,
+    /// `loadedAudioURLs`) : un hôte app doit pouvoir composer l'APERÇU sans monter
+    /// l'atelier — `snapshotAllSlides()` vit sur la VUE, donc hors de portée d'un
+    /// meuble qui incruste la scène. En écriture, le ViewModel reste seul maître.
+    @Published public internal(set) var slideImages: [String: UIImage] = [:]
 
     // MARK: - Repost source (Patch B.6 — exposed publicly so the iOS caller in Phase C
     // can read them before invoking PostService.create / createStory with repostOfId).
@@ -55,10 +66,15 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// coup l'accès au contenu.
     public internal(set) var editingKnowsDeclaredReferences = false
 
-    // Cancellable preload Task started by `init(reposting:authorHandle:)`.
-    // Marked `nonisolated(unsafe)` so the `nonisolated deinit` below can cancel it
-    // without requiring a MainActor hop (cancellation is Sendable / thread-safe).
-    nonisolated(unsafe) var preloadTask: Task<Void, Never>?
+    private nonisolated struct ComposerTasks: Sendable {
+        var preload: Task<Void, Never>?
+        var videoMeasure: [String: Task<Void, Never>] = [:]
+    }
+    private nonisolated let tasks = Locked(ComposerTasks())
+    var preloadTask: Task<Void, Never>? {
+        get { tasks.read { $0.preload } }
+        set { tasks.mutate { $0.preload = newValue } }
+    }
 
     // MARK: - Références
 
@@ -119,24 +135,22 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// changement réel (sinon la boucle flags → objectWillChange → trigger →
     /// push ne se poserait jamais ; la dédup du store ferme le cycle).
     /// Setter interne (pas `private(set)`) : muté par l'extension `+History`.
-    @Published var canUndoGlobal = false
-    @Published var canRedoGlobal = false
+    @Published public internal(set) var canUndoGlobal = false
+    @Published public internal(set) var canRedoGlobal = false
 
     /// Intervalle du debounce de capture. `var` pour les tests uniquement
     /// (à poser AVANT le premier accès à `historyTrigger`, lazy figé).
     var historyDebounceInterval: TimeInterval = 0.5
 
-    /// Publisher STABLE (lazy stored — même piège que `autosaveTrigger` :
-    /// un debounce inline dans `body` serait re-souscrit à chaque render et
-    /// ne tirerait jamais) : émet ~0,5 s après la DERNIÈRE mutation du VM —
-    /// « l'édition s'est posée, capture une étape d'annulation ». Couverture
-    /// TOTALE par construction (toute mutation passe par objectWillChange) ;
-    /// la dédup du HistoryStore absorbe les émissions sans changement de
-    /// `slides` (sélections, états d'UI…).
-    private(set) lazy var historyTrigger: AnyPublisher<Void, Never> = objectWillChange
-        .debounce(for: .seconds(historyDebounceInterval), scheduler: DispatchQueue.main)
-        .map { _ in () }
-        .eraseToAnyPublisher()
+    /// Publisher STABLE (lazy stored — même piège que `autosaveTrigger`) :
+    /// « l'édition s'est posée, capture une étape d'annulation », au rythme
+    /// de `StoryComposerHistoryPace` (#14208).
+    public private(set) lazy var historyTrigger: AnyPublisher<Void, Never> = historyPace.trigger(
+        document: $slides.map { _ in () }.eraseToAnyPublisher(),
+        drawing: $drawingEditingMode.map { _ in () }.eraseToAnyPublisher(),
+        interval: historyDebounceInterval)
+
+    let historyPace = StoryComposerHistoryPace()
 
     /// C9 Inc.3 — purge PARESSEUSE : les bitmaps/URLs des médias supprimés
     /// sont mis de côté (au lieu d'être jetés) tant que l'historique peut les
@@ -146,6 +160,10 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     var retiredVideoURLs: [String: URL] = [:]
     var retiredAudioURLs: [String: URL] = [:]
     var retiredSlideImages: [String: UIImage] = [:]
+    /// Les octets animés d'un sticker supprimé — même purge paresseuse que les
+    /// bitmaps : un undo qui ramène le sticker doit le ramener ANIMÉ, pas figé
+    /// sur son image 1.
+    var retiredStickerAnimations: [String: Data] = [:]
 
     // MARK: - Floating Text Edit Mode
 
@@ -154,7 +172,13 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// transitions. La géométrie du texte (`x/y/scale/rotation/zIndex/fontSize`)
     /// n'est JAMAIS mutée pour l'édition : le texte est édité dans un overlay
     /// centré, le modèle reste la source de vérité pour le rendu et l'export.
-    @Published var textEditingMode: TextEditingMode = .inactive
+    /// `public` en LECTURE (#4401) : le meuble monte le contrôleur de texte et
+    /// relaie l'édition en ligne quand un texte est actif. L'ÉCRITURE reste au
+    /// module — elle passe par `enterTextEditingMode` / `exitTextEditingMode`,
+    /// qui gardent le verrou du badge de republication et suppriment les
+    /// coquilles vides. Un site d'appel qui poserait le mode à la main
+    /// contournerait les deux.
+    @Published public internal(set) var textEditingMode: TextEditingMode = .inactive
 
     // MARK: - Active Tool
 
@@ -184,15 +208,20 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     @Published var drawingWidth: CGFloat = 5
     /// Pinceau actif pour la capture en mode dessin flottant (`StrokeCaptureLayer`).
     /// La couleur et la largeur du pinceau réutilisent `drawingColor`/`drawingWidth`.
-    @Published var activeBrushTool: StrokeTool = .pen
+    @Published public var activeBrushTool: StrokeTool = .pen
     @Published var activeBrushSmoothing: StrokeSmoothing = .raw
     /// Mode d'édition de dessin flottant — contrôleurs posés sur `.ultraThinMaterial`
     /// au-dessus du canvas. Orthogonal à `BandStateMachine`, mirror de `textEditingMode`.
     /// Les traits éditables sont `drawingStrokes` (calculé sur `currentEffects`, cf.
     /// `StoryComposerViewModel+DrawingEditing.swift`).
-    @Published var drawingEditingMode: DrawingEditingMode = .inactive
+    /// `public` en LECTURE : le rail *leading* montre les contrôleurs de
+    /// l'outil ouvert et TEINTE celui dont le panneau est déplié.
+    /// L'écriture reste au module — elle passe par
+    /// `beginDrawing` / `endDrawing` / `setExpandedDrawingTool`, qui posent les
+    /// drapeaux par paires.
+    @Published public internal(set) var drawingEditingMode: DrawingEditingMode = .inactive
 
-    /// Plein écran de TRACÉ (user 2026-07-11 v2) : l'outil dessin s'ouvre en
+    /// Plein écran de TRACÉ : l'outil dessin s'ouvre en
     /// mode LISTE (band avec les traits, rien d'activé) ; la sélection d'un
     /// pinceau bascule ce flag — canvas plein écran dessinable jusqu'aux
     /// angles, bulles seules, pinch-zoom. Retombe à `false` à la sortie du
@@ -218,7 +247,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// Couleur/dégradé de fond sélectionné au Background tool. Appliqué EN
     /// DIRECT à `currentSlide.effects.background` — avant, la valeur ne
     /// rejoignait la slide qu'au prochain sync (publish/autosave) et le
-    /// canvas ne re-rendait pas à la sélection (retour user 2026-07-11).
+    /// canvas ne re-rendait pas à la sélection.
     @Published var backgroundColor: String = "#\(StoryBackgroundPalette.randomBackgroundColor())" {
         didSet {
             guard oldValue != backgroundColor else { return }
@@ -232,17 +261,32 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// (selectedImage) ET les `mediaObjects` modernes `isBackground == true`
     /// (chip Background) — ce dernier échappait au calcul et laissait le
     /// chrome en `.light` (pastel aléatoire) sur un letterbox blur sombre,
-    /// boutons inexploitables (captures user 2026-07-20). Un média de fond
+    /// boutons inexploitables. Un média de fond
     /// suit la luminance RÉELLE de son bitmap (2e vague de captures : capture
     /// d'écran BLANCHE en Background → chrome blanc invisible avec un `.dark`
     /// forfaitaire) ; sans bitmap mesurable, convention viewer → `.dark`.
-    var canvasChromeScheme: ColorScheme {
+    /// **`public` depuis le #6127** : le meuble de l'app (`MeeshyComposerHost`)
+    /// monte ses propres surfaces PAR-DESSUS le canvas — la légende de scène en
+    /// tête — et doit donc lire le même scheme que le chrome interne. Le laisser
+    /// `internal` obligeait l'app à re-résoudre la luminance depuis ses propres
+    /// lectures du fond : une seconde descente, à faire diverger de celle-ci au
+    /// premier ajustement de seuil.
+    ///
+    /// **Le fond LU est celui de la scène, pas celui de l'outil** (#5008) :
+    /// `backgroundColor` garde la dernière teinte choisie, alors qu'une scène
+    /// neuve n'a pas de fond et que le canvas la peint noire. Lire l'outil
+    /// posait une encre claire sur ce noir.
+    public var canvasChromeScheme: ColorScheme {
         CanvasChromeScheme.scheme(
-            background: backgroundColor,
+            background: currentEffects.background ?? Self.unpaintedSlideBackground,
             hasMediaBackground: hasBackgroundImage || currentEffects.hasVisualBackgroundMedia,
             mediaLuminance: backgroundMediaLuminance
         )
     }
+
+    /// Ce que le canvas peint sous une scène sans `effects.background` : noir
+    /// opaque (`StoryComposerView+Canvas`, repli documenté).
+    static let unpaintedSlideBackground = "000000"
 
     /// Luminance WCAG moyenne du bitmap de fond effectivement affiché
     /// (`currentSlideBackgroundImage` : média moderne d'abord, legacy
@@ -279,8 +323,14 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     // `reset()` — l'ancien @State View survivait à `viewModel.reset()` et la
     // chaîne de sync ré-injectait l'effet dans le slide vierge (la classe de
     // bug que `resetLocalState()` documente).
-    @Published var openingEffect: StoryTransitionEffect?
-    @Published var closingEffect: StoryTransitionEffect?
+    /// `public` en LECTURE ET EN ÉCRITURE (#4403) : la bande de fond du
+    /// plateau choisit l'effet comme le fait le panneau de l'atelier, et la
+    /// persistance passe par la même chaîne `granularCanvasSync` — aucun
+    /// callback de synchro à câbler par surface.
+    @Published public var openingEffect: StoryTransitionEffect?
+    /// `public` en LECTURE (#8792) : le carrousel d'effets de la scène la
+    /// montre ; l'écriture passe par `setSlideTransitions`.
+    @Published public internal(set) var closingEffect: StoryTransitionEffect?
 
     // Per-slide background image transforms (persisted across slide changes)
     struct BackgroundTransform {
@@ -298,21 +348,55 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// slide ID survives any reorder/insert/remove operation.
     var backgroundTransformCache: [String: BackgroundTransform] = [:]
 
+    /// **Une tâche de mesure PAR objet vidéo** (#5418) : plusieurs vidéos ingérées
+    /// ensemble ne se volent pas leur poignée. Annulées au `deinit`, comme `preloadTask`.
+    var videoMeasureTasks: [String: Task<Void, Never>] {
+        get { tasks.read { $0.videoMeasure } }
+        set { tasks.mutate { $0.videoMeasure = newValue } }
+    }
+
     // MARK: - Media Storage (pre-publication)
 
-    @Published var loadedImages: [String: UIImage] = [:]
-    @Published var loadedVideoURLs: [String: URL] = [:]
-    @Published var loadedAudioURLs: [String: URL] = [:]
+    // `public internal(set)` (#4038) : `EmbeddedSceneCanvas` doit RECEVOIR ces
+    // bitmaps, sinon un fond MÉDIA ne se stampe pas — l'app les lit pour les lui
+    // passer, elle ne les écrit jamais.
+    @Published public internal(set) var loadedImages: [String: UIImage] = [:]
+    @Published public internal(set) var loadedVideoURLs: [String: URL] = [:]
+    @Published public internal(set) var loadedAudioURLs: [String: URL] = [:]
+
+    /// **Les octets ANIMÉS d'un sticker collé, keyés par id d'élément** (#3956)
+    /// — vide pour tout sticker fixe, qui ne paie donc rien.
+    ///
+    /// Jumelle de `loadedVideoURLs` : le composer tient à part ce qu'une
+    /// `UIImage` ne sait pas porter. `loadedImages[id]` garde la PREMIÈRE image
+    /// du même sticker — la cover, l'export, le thumbHash et la vignette de
+    /// grille continuent de la lire sans rien connaître de l'animation.
+    ///
+    /// Les octets, et non des images décodées : un GIF de trente images décodé
+    /// en mémoire pour chaque sticker posé coûterait des dizaines de mégaoctets
+    /// que rien ne borne. Le site qui PEINT décode au budget de sa surface.
+    @Published public internal(set) var loadedStickerAnimations: [String: Data] = [:]
+
+    /// **Les sources déjà PORTÉES dans la scène (B1, #3924).** Clé
+    /// d'idempotence d'`applyContentMedia` : les closures de bascule de mode
+    /// refirent à chaque changement (Post↔Story↔Réel), et sans cette mémoire un
+    /// simple aller-retour dupliquerait chaque média du document. La source est
+    /// l'URL LOCALE que l'hôte passe — jamais l'`obj.id` généré, qui change à
+    /// chaque pose.
+    var carriedContentSources: Set<URL> = []
 
     /// Cookie monotone bumpé à chaque édition d'un bitmap déjà présent dans
-    /// `loadedImages` (typiquement `MeeshyImageEditorView` onAccept qui
-    /// remplace la valeur sous une clé inchangée). Le `Coordinator` du
+    /// `loadedImages` (typiquement une retouche qui remplace la valeur sous
+    /// une clé inchangée). Le `Coordinator` du
     /// `StoryComposerCanvasView` compare ce cookie à `lastLoadedImagesVersion`
     /// pour déclencher un rebuild des media layers — sans ça le canvas
     /// principal restait stale après image edit (les dicts UIImage ne sont
     /// pas Equatable et SwiftUI ne peut donc pas détecter une mutation
     /// de valeur intra-clé). Cf. `ComposerImageCacheReader.version`.
-    @Published var loadedImagesVersion: UInt64 = 0
+    @Published public internal(set) var loadedImagesVersion: UInt64 = 0
+    /// Les médias adoptés, rendus à leur fichier local pour le canvas du
+    /// composer (`StoryReaderContext.localMediaAliases`).
+    @Published public internal(set) var adoptedLocalMedia: [String: URL] = [:]
 
     /// Enregistre (ou retire, si `image == nil`) le bitmap importé/édité d'un
     /// média sous sa clé ET **bump `loadedImagesVersion`** dans la foulée.
@@ -320,13 +404,27 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// — donc ne stampe le bitmap sur le canvas — QUE lorsque cette version
     /// change (cf. `StoryCanvasRepresentable.updateUIView`). Muter `loadedImages`
     /// directement sans ce bump laisse le reader périmé : un média fraîchement
-    /// ajouté ne s'affiche jamais et le canvas reste noir (bug user 2026-07-20).
+    /// ajouté ne s'affiche jamais et le canvas reste noir.
     /// Toute *nouvelle* écriture dans `loadedImages` DOIT passer par ici.
     func registerLoadedImage(_ image: UIImage?, for id: String) {
         if let image {
             loadedImages[id] = image
         } else {
             loadedImages.removeValue(forKey: id)
+        }
+        loadedImagesVersion &+= 1
+    }
+
+    /// Enregistre (ou retire, si `data == nil`) les octets ANIMÉS d'un sticker
+    /// sous sa clé, **et bump `loadedImagesVersion`** pour la même raison que
+    /// `registerLoadedImage` : sans ce bump, le `ComposerImageCacheReader` du
+    /// canvas reste périmé et le sticker collé s'affiche figé sur son image 1
+    /// — un défaut MUET, puisque quelque chose s'affiche.
+    func registerLoadedStickerAnimation(_ data: Data?, for id: String) {
+        if let data {
+            loadedStickerAnimations[id] = data
+        } else {
+            loadedStickerAnimations.removeValue(forKey: id)
         }
         loadedImagesVersion &+= 1
     }
@@ -425,7 +523,6 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// Le store était mono-brouillon : commencer une deuxième story écrasait
     /// silencieusement la première. Chaque session porte désormais son id —
     /// neuf pour une ardoise vierge, celui du brouillon repris sinon
-    /// (spec 2026-08-01).
     public private(set) var draftId: String = UUID().uuidString
 
     /// Vrai quand la session a été rattachée à un brouillon CHOISI par
@@ -469,6 +566,59 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         isAdoptedDraftSession = false
     }
 
+    /// **Semer une couleur de fond depuis un hôte app (F2, #3885).** Point
+    /// d'entrée PUBLIC : le composer POST fait naître la scène 9:16 en posant un
+    /// fond (« un post sans visuel devient une toile »), et cette couleur doit
+    /// apparaître sur la scène montée. `backgroundColor` reste `internal` —
+    /// l'atelier l'écrit lui-même par son picker ; l'hôte passe par cette porte,
+    /// qui normalise le préfixe `#`. Le `didSet` propage à la slide courante.
+    public func applyBackground(hex: String) {
+        backgroundColor = hex.hasPrefix("#") ? hex : "#\(hex)"
+        // Phase 2 (#3939) — poser aussi le fond SUR la slide courante, pour que
+        // la scène incrustée dans l'écran document l'AFFICHE immédiatement (sans
+        // dépendre de la chaîne de sync de l'atelier plein écran, qui ne tourne
+        // pas sous la surface document). Idempotent (garde d'égalité interne).
+        applyBackgroundColorToCurrentSlide()
+    }
+
+    /// **Retirer le fond de couleur (#4047).** Jumelle d'`applyBackground` —
+    /// sans elle, poser une couleur est une porte à SENS UNIQUE : l'hôte peut
+    /// l'écrire et jamais l'effacer, si bien qu'un post devenu toile ne pouvait
+    /// plus redevenir un post sans toile.
+    ///
+    /// Le fond RETOMBE sur une couleur de palette tirée au sort, comme à la
+    /// naissance du composer (`reset()`), plutôt que sur du vide : `background`
+    /// n'est pas optionnel dans `StoryEffects`, et y poser une chaîne vide
+    /// donnerait un canvas NOIR — le défaut de 2026-07-20, dans l'autre sens.
+    /// Ce qui disparaît est l'INTENTION de l'auteur, portée côté hôte
+    /// (`documentBackground`), qui cesse alors de faire naître la scène.
+    public func clearBackground() {
+        applyBackground(hex: StoryBackgroundPalette.randomBackgroundColor())
+    }
+
+    /// **Semer le CONTENU depuis un hôte app (B1, #3924).** Point d'entrée
+    /// PUBLIC : le composer garde UN seul contenu (`documentText`) quand il
+    /// change de mode — la scène qui naît le reçoit sur la slide courante
+    /// (`StorySlide.content`), d'où il partira à la publication et où B2 le
+    /// rendra dans une section description repliable. Idempotent : re-semer le
+    /// même texte ne dirty pas la slide.
+    public func applyContentText(_ text: String) {
+        let value = text.isEmpty ? nil : text
+        var slide = currentSlide
+        guard slide.content != value else { return }
+        slide.content = value
+        currentSlide = slide
+    }
+
+    /// **E1/E3 (#3886/#3888) — la langue DÉCLARÉE au bas du composer, défaut de
+    /// TOUT objet posé sur la scène.** La capsule du composer (`documentLanguage`)
+    /// la sème ; chaque `MeeshySceneObject` créé (texte, média, audio, sticker, lieu)
+    /// naît avec elle comme `sourceLanguage`, et l'auteur peut la surcharger par
+    /// objet (E3, `updateElementLanguage`). Défaut de repli `defaultSourceLanguage`
+    /// (« fr ») tant qu'aucun hôte ne l'a semée — jamais un « fr » codé en dur
+    /// sur l'objet.
+    public var declaredContentLanguage: String = StoryComposerViewModel.defaultSourceLanguage
+
     /// Absorbe les médias d'un brouillon restauré en UNE passe et bump
     /// `loadedImagesVersion` quand des bitmaps sont arrivés : le canvas ne
     /// reconstruit son `ComposerImageCacheReader` que sur ce cookie — merger
@@ -484,11 +634,11 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         loadedImagesVersion &+= 1
     }
 
-    /// Default initializer (kept explicit so the convenience init below has a designated
-    /// init to delegate to). All stored properties default-initialise, so the body is empty.
     public init() {}
 
     nonisolated deinit {
-        preloadTask?.cancel()
+        let held = tasks.read { $0 }
+        held.preload?.cancel()
+        for tache in held.videoMeasure.values { tache.cancel() }
     }
 }

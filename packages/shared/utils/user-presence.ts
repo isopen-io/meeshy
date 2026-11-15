@@ -17,8 +17,10 @@
  *
  * Le gateway gèle lastActiveAt à la déconnexion, donc la décroissance
  * vert -> orange -> gris démarre au dernier instant d'activité réelle.
- * Un typing:start reçu vaut activité immédiate : les clients doivent forcer
- * localement isOnline=true + lastActiveAt=now pour l'émetteur.
+ * Un typing:start reçu vaut activité immédiate : les clients rafraîchissent
+ * localement lastActiveAt=now pour l'émetteur, SANS forcer isOnline (#11412) —
+ * un émetteur non connecté décroît alors vert -> orange -> gris comme tout
+ * autre, au lieu de rester vert cinq minutes puis de disparaître.
  */
 
 export type UserPresenceStatus = 'online' | 'away' | 'idle' | 'offline';
@@ -92,4 +94,26 @@ export function isPresenceActive(status: UserPresenceStatus): boolean {
 /** Seul 'online' (connecté ou actif <= 60s) pulse. */
 export function isPresencePulsing(status: UserPresenceStatus): boolean {
   return status === 'online';
+}
+
+/**
+ * Couleur primaire Meeshy (indigo-500) — le point d'un pair qui a la
+ * conversation OUVERTE (#8892). Miroir iOS : `MeeshyColors.brandPrimaryHex`.
+ */
+export const PRESENCE_HERE_HEX = '#6366F1';
+
+/**
+ * Couleur du point d'avatar dans le contexte d'une conversation.
+ *
+ * Être dans la conversation prime sur la présence globale, et se rend même
+ * quand celle-ci est masquée : c'est un signal d'ACTIVITÉ servi par la room,
+ * comme la frappe. `null` = aucun point.
+ */
+export function presenceDotHex(
+  status: UserPresenceStatus,
+  context: { readonly here: boolean },
+): string | null {
+  if (context.here) return PRESENCE_HERE_HEX;
+  if (!isPresenceActive(status)) return null;
+  return PRESENCE_HEX[presenceTone(status)];
 }

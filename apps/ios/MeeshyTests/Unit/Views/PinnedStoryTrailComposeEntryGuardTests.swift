@@ -31,7 +31,7 @@ final class PinnedStoryTrailComposeEntryGuardTests: XCTestCase {
     }
 
     private func traySource() throws -> String {
-        try source("Features/Main/Views/StoryTrayView.swift")
+        try source("Features/Stories/Views/StoryTrayView.swift")
     }
 
     private func occurrences(of needle: String, in haystack: String) -> Int {

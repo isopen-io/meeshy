@@ -5,4 +5,4 @@
  * Ce fichier reste pour la rétrocompatibilité et redirige vers le nouveau module.
  */
 
-export { attachmentRoutes } from './attachments/index';
+export { attachmentRoutes, attachmentLegacyFileRoutes } from './attachments/index';

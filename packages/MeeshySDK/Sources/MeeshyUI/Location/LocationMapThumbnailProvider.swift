@@ -1,6 +1,7 @@
 import MapKit
 import UIKit
 import os
+import MeeshySDK
 
 /// Fournit l'image statique de la vignette carte d'un message de lieu.
 ///
@@ -25,7 +26,7 @@ public struct LocationMapThumbnailProvider: LocationMapThumbnailProviding {
         return cache
     }()
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "location-thumbnail")
+    private static let logger = MeeshyLog.logger(.locationThumbnail)
 
     public init() {}
 

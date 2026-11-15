@@ -60,10 +60,14 @@ final class CompactCountConsolidationSourceGuardTests: XCTestCase {
     /// ci-dessus, lui, n'a pas bougé et couvre toujours tout le dépôt.
     private static let consolidatedHosts = [
         "ReachMetricLabel.swift",
-        "ReelsPlayerView.swift",
+        // #6693 — le rail d'actions, et le badge de compteur qu'il appelle, a quitté
+        // `ReelsPlayerView.swift` pour son fichier : l'appel direct l'a suivi.
+        "ReelsPlayerView+ActionRail.swift",
         "ConversationDashboardView.swift",
-        "ConversationListHelpers.swift",
-        "CommunityListView.swift",
+        // ConversationListHelpers.swift en est sorti (#10841) : la carte de communauté, réduite de moitié, n'affiche
+        // plus aucun compteur abrégé — il ne vit plus que dans le libellé VoiceOver, en toutes lettres. La garde
+        // « aucun abrégé fait main » continue de couvrir le fichier.
+        "CommunityListScreen.swift",
     ]
 
     private func repoRoot() -> URL {
@@ -86,7 +90,6 @@ final class CompactCountConsolidationSourceGuardTests: XCTestCase {
             "apps/ios/MeeshyShareExtension",
             "apps/ios/MeeshyNotificationExtension",
             "apps/ios/MeeshyWidgets",
-            "apps/ios/MeeshyContextMenu",
             "packages/MeeshySDK/Sources",
         ].map { root.appendingPathComponent($0) }
 

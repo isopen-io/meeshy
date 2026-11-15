@@ -1,5 +1,6 @@
 import XCTest
 import Combine
+import MeeshySDK
 @testable import Meeshy
 
 @MainActor
@@ -9,13 +10,25 @@ final class ReelFeedAutoplayCoordinatorTests: XCTestCase {
         ReelFrame(id: id, midY: midY, height: 400, kind: .video)
     }
 
+    /// Une surface de SCÈNE (canvas v3 d'un post, story repartagée) rapportée
+    /// au coordinateur. Même forme qu'un réel : c'est le point de la directive
+    /// porteur du 2026-09-05 — le fil n'a qu'UNE règle de lecture.
+    private func scene(_ id: String, midY: CGFloat) -> ReelFrame {
+        ReelFrame(id: id, midY: midY, height: 400, kind: .scene)
+    }
+
     /// SUT without the default `CallManager` publisher (deterministic tests must
     /// not touch the singleton). Pass an explicit publisher where needed.
     private func makeSUT(
         isCallActive: @escaping () -> Bool = { false },
-        callStatePublisher: AnyPublisher<Bool, Never>? = nil
+        callStatePublisher: AnyPublisher<Bool, Never>? = nil,
+        prewarmsNeighbours: @escaping () -> Bool = { true }
     ) -> ReelFeedAutoplayCoordinator {
-        ReelFeedAutoplayCoordinator(isCallActive: isCallActive, callStatePublisher: callStatePublisher)
+        ReelFeedAutoplayCoordinator(
+            isCallActive: isCallActive,
+            callStatePublisher: callStatePublisher,
+            prewarmsNeighbours: prewarmsNeighbours
+        )
     }
 
     /// `update()` coalesces via a ~100 ms debounce (I2), so settling requires
@@ -141,6 +154,261 @@ final class ReelFeedAutoplayCoordinatorTests: XCTestCase {
         XCTAssertFalse(nativeActive && repostActive,
                        "Two surfaces must never both bind the single shared player")
     }
+
+    // MARK: - Les SCÈNES entrent dans l'élection (directive porteur 2026-09-05)
+
+    /// **« Repartage ou non, les scènes sont comme les vidéos. »** Une scène
+    /// (canvas v3 d'un post, ou story repartagée) concourt à l'élection du
+    /// viewport au MÊME titre qu'un réel vidéo : `mostCenteredReel` n'a jamais
+    /// regardé `kind`, mais aucune surface de scène ne RAPPORTAIT sa frame —
+    /// la carte de post restait figée par `isPlaying: .constant(false)` et
+    /// l'embed de story jouait en permanence, sans élection ni call-awareness.
+    /// Deux politiques opposées pour le MÊME objet dans le MÊME fil.
+    func test_election_admitsScenes_likeVideos() async {
+        let sut = makeSUT()
+        sut.update(frames: [scene("story-repost", midY: 100),
+                            frame("reel", midY: 700)],
+                   viewportMinY: 0, viewportMaxY: 800)
+        await waitForActiveReel(sut, toEqual: "story-repost")
+        XCTAssertEqual(sut.activeReelId, "story-repost",
+                       "Une scène plus centrée qu'un réel doit gagner l'élection — le kind " +
+                       "ne hiérarchise rien, seule la distance au centre du viewport décide.")
+    }
+
+    /// **Une seule surface joue, scènes et réels confondus.** C'est la raison
+    /// d'être de l'élection unique : le moteur partagé (`SharedAVPlayerManager`)
+    /// n'a qu'un porteur, et deux scènes qui jouent ensemble se disputeraient la
+    /// session audio exactement comme deux réels.
+    func test_election_scenesAndReels_exactlyOneSurfaceActive() async {
+        let sut = makeSUT()
+        sut.update(frames: [scene("scene-a", midY: 300),
+                            scene("scene-b", midY: 420),
+                            frame("reel-c", midY: 900)],
+                   viewportMinY: 0, viewportMaxY: 800)
+        await waitForActiveReel(sut, toEqual: "scene-b")
+        XCTAssertEqual(sut.activeReelId, "scene-b",
+                       "Le centre du viewport est 400 : `scene-b` (420) est la plus proche.")
+    }
+
+    /// **Une scène quittée par le viewport se PAUSE.** Le pendant de l'élection :
+    /// sans cette libération, une scène élue resterait active en mémoire après
+    /// être sortie de l'écran — la rétention que la dimension 3 interdit.
+    func test_election_sceneScrolledOut_releasesTheSurface() async {
+        let sut = makeSUT()
+        sut.update(frames: [scene("s", midY: 400)], viewportMinY: 0, viewportMaxY: 800)
+        await waitForActiveReel(sut, toEqual: "s")
+        XCTAssertEqual(sut.activeReelId, "s")
+
+        sut.update(frames: [scene("s", midY: 3_000)], viewportMinY: 0, viewportMaxY: 800)
+        await waitForActiveReel(sut, toEqual: nil)
+        XCTAssertNil(sut.activeReelId,
+                     "Hors du viewport, la scène n'est plus élue — donc plus jouée.")
+    }
+
+    /// **Une scène se tait pendant un appel, comme un réel.** La session audio
+    /// appartient à l'appel ; une scène qui continuerait de jouer serait
+    /// exactement le défaut que la call-awareness (C1) corrige côté réels.
+    func test_election_sceneDuringCall_isSuspended() async {
+        var callActive = false
+        let sut = makeSUT(isCallActive: { callActive })
+        sut.update(frames: [scene("s", midY: 400)], viewportMinY: 0, viewportMaxY: 800)
+        await waitForActiveReel(sut, toEqual: "s")
+
+        callActive = true
+        sut.update(frames: [scene("s", midY: 400)], viewportMinY: 0, viewportMaxY: 800)
+        XCTAssertNil(sut.activeReelId,
+                     "Un appel actif vide l'élection sans débounce — une scène n'y échappe pas.")
+    }
+
+    // MARK: - #7009 — le voisin est DÉSIGNÉ pendant que N joue
+
+    func test_update_designeLeVoisinSuivantDuReelActif() async {
+        let sut = makeSUT()
+        sut.update(
+            frames: [frame("a", midY: 100), frame("b", midY: 400), frame("c", midY: 800)],
+            viewportMinY: 0, viewportMaxY: 800
+        )
+        await waitForActiveReel(sut, toEqual: "b")
+
+        XCTAssertEqual(sut.activeReelId, "b")
+        XCTAssertEqual(sut.prewarmReelId, "c", "N+1 doit être désigné dès que N est élu")
+    }
+
+    /// Le DERNIER réel de la fenêtre n'a pas de suivant : désigner quoi que ce
+    /// soit y réserverait une place du pool (borné à trois) pour rien.
+    func test_update_surLeDernierReel_neDesigneAucunVoisin() async {
+        let sut = makeSUT()
+        sut.update(
+            frames: [frame("a", midY: 100), frame("b", midY: 600)],
+            viewportMinY: 0, viewportMaxY: 800
+        )
+        await waitForActiveReel(sut, toEqual: "b")
+
+        XCTAssertEqual(sut.activeReelId, "b")
+        XCTAssertNil(sut.prewarmReelId)
+    }
+
+    /// #9880 — l'économie d'énergie (ou une chaleur sérieuse) coupe l'autoplay
+    /// voisin : le réel affiché joue, le suivant n'est plus préparé d'avance.
+    func test_update_quandLaPolitiqueCoupeLesVoisins_neDesigneAucunVoisin() async {
+        var neighbours = true
+        let sut = makeSUT(prewarmsNeighbours: { neighbours })
+        let frames = [frame("a", midY: 100), frame("b", midY: 400), frame("c", midY: 800)]
+        sut.update(frames: frames, viewportMinY: 0, viewportMaxY: 800)
+        await waitForActiveReel(sut, toEqual: "b")
+        XCTAssertEqual(sut.prewarmReelId, "c")
+
+        neighbours = false
+        sut.update(frames: frames, viewportMinY: 0, viewportMaxY: 800)
+        await waitForDebounce()
+
+        XCTAssertEqual(sut.activeReelId, "b", "le réel affiché joue toujours")
+        XCTAssertNil(sut.prewarmReelId)
+    }
+
+    func test_clear_libereAussiLeVoisinDesigne() async {
+        let sut = makeSUT()
+        sut.update(
+            frames: [frame("a", midY: 100), frame("b", midY: 400), frame("c", midY: 800)],
+            viewportMinY: 0, viewportMaxY: 800
+        )
+        await waitForActiveReel(sut, toEqual: "b")
+        XCTAssertEqual(sut.prewarmReelId, "c")
+
+        sut.clear()
+
+        XCTAssertNil(sut.activeReelId)
+        XCTAssertNil(sut.prewarmReelId, "quitter le fil doit relâcher le voisin, pas le garder préparé")
+    }
+
+    // MARK: - #7009 — la règle de fenêtre, pure
+
+    func test_prewarmWindow_prendLeMidYImmediatementSuperieur() {
+        let frames = [frame("a", midY: 100), frame("b", midY: 400), frame("c", midY: 800)]
+        XCTAssertEqual(ReelPrewarmWindow.next(after: "a", in: frames), "b")
+        XCTAssertEqual(ReelPrewarmWindow.next(after: "b", in: frames), "c")
+        XCTAssertNil(ReelPrewarmWindow.next(after: "c", in: frames))
+    }
+
+    /// L'ordre du TABLEAU n'est pas l'ordre du FIL : `onPreferenceChange`
+    /// agrège les frames dans l'ordre où les cartes se sont annoncées. La
+    /// règle doit donc trancher sur la géométrie, jamais sur l'index.
+    func test_prewarmWindow_ignoreLOrdreDuTableau() {
+        let frames = [frame("c", midY: 800), frame("a", midY: 100), frame("b", midY: 400)]
+        XCTAssertEqual(ReelPrewarmWindow.next(after: "a", in: frames), "b")
+    }
+
+    func test_prewarmWindow_sansActif_neDesigneRien() {
+        XCTAssertNil(ReelPrewarmWindow.next(after: nil, in: [frame("a", midY: 100)]))
+        XCTAssertNil(ReelPrewarmWindow.next(after: "absent", in: [frame("a", midY: 100)]))
+    }
+
+    // MARK: - #9702 — la fenêtre du lecteur plein écran
+
+    /// Le pager plein écran ne gardait chauds que ses deux voisins (#7625),
+    /// en dur. La fenêtre suit désormais l'usage (`ReelPreloadWindow`, N±2 à
+    /// N±10) ; ce qui en SORT rend son téléchargement automatique — en
+    /// silence : l'utilisateur n'a rien demandé, rien ne doit vibrer.
+    func test_retire_cancelsSilentlyTheDownloadOfAReelThatLeftTheWindow() {
+        var haptics: [AttachmentDownloadCenter.Haptic] = []
+        let center = AttachmentDownloadCenter(haptics: { haptics.append($0) })
+        let urls = (0..<6).map { "https://cdn.example.invalid/reel-\($0)-\(UUID().uuidString).mp4" }
+        let reels = urls.map { makeVideoReel(url: $0) }
+        center.prefetch(urlString: urls[5], expectedSize: 1000, cacheStore: .video)
+        center.prefetch(urlString: urls[2], expectedSize: 1000, cacheStore: .video)
+
+        ReelPagerPreloader(center: center)
+            .retire(reels: reels, activeIndex: 0, window: ReelPreloadWindow.Window(ahead: 2, behind: 2))
+
+        XCTAssertNil(center.progress(for: AttachmentDownloadCenter.key(for: urls[5])),
+                     "N+5 est hors de la fenêtre N±2 : son téléchargement doit s'arrêter")
+        XCTAssertNotNil(center.progress(for: AttachmentDownloadCenter.key(for: urls[2])),
+                        "N+2 est dans la fenêtre : il continue")
+        XCTAssertEqual(haptics, [], "un préchargement annulé ne vibre pas")
+        center.cancel(key: AttachmentDownloadCenter.key(for: urls[2]))
+    }
+
+    /// Un téléchargement lancé d'un TAP appartient à l'utilisateur : la
+    /// fenêtre ne l'annule jamais.
+    func test_cancelPrefetch_neverCancelsAManualDownload() {
+        let center = AttachmentDownloadCenter(haptics: { _ in })
+        let url = "https://cdn.example.invalid/manual-\(UUID().uuidString).mp4"
+        center.start(urlString: url, expectedSize: 1000, cacheStore: .video, origin: .manual)
+
+        center.cancelPrefetch(urlString: url)
+
+        XCTAssertNotNil(center.progress(for: AttachmentDownloadCenter.key(for: url)))
+        center.cancel(key: AttachmentDownloadCenter.key(for: url))
+    }
+
+    /// **Préchauffer, c'est aussi TÉLÉCHARGER** (#7625). La surface vidéo d'un
+    /// réel attend `availability == .ready` — le fichier SUR DISQUE — avant
+    /// de charger le moteur : un lecteur préparé en streaming ne suffisait
+    /// pas, le swipe montrait le poster et un indicateur le temps du
+    /// téléchargement. Le préchauffage pose donc le fichier dans le registre
+    /// partagé, là où la surface le rejoindra.
+    func test_prepare_reelVideo_startsItsDiskDownloadInTheSharedRegistry() async {
+        let center = AttachmentDownloadCenter(haptics: { _ in })
+        let url = "https://cdn.example.invalid/reel-\(UUID().uuidString).mp4"
+        let post = makeVideoReel(url: url)
+
+        await ReelPrewarm.prepare(post, preroll: false, center: center)
+
+        XCTAssertNotNil(center.progress(for: AttachmentDownloadCenter.key(for: url)),
+                        "le fichier du voisin doit être en cours de téléchargement avant le swipe")
+        center.cancel(key: AttachmentDownloadCenter.key(for: url))
+    }
+
+    func test_prepare_reelWithoutVideo_downloadsNothing() async {
+        let center = AttachmentDownloadCenter(haptics: { _ in })
+        let url = "https://cdn.example.invalid/photo-\(UUID().uuidString).jpg"
+        let post = makeVideoReel(url: url, mime: "image/jpeg")
+
+        await ReelPrewarm.prepare(post, preroll: false, center: center)
+
+        XCTAssertNil(center.progress(for: AttachmentDownloadCenter.key(for: url)))
+    }
+
+    private func makeVideoReel(url: String, mime: String = "video/mp4") -> FeedPost {
+        let post: APIPost = JSONStub.decode("""
+        {"id":"reel-\(UUID().uuidString)","type":"REEL","content":"","createdAt":"2026-09-23T10:00:00.000Z",
+         "author":{"id":"a1","username":"alice"},
+         "media":[{"id":"m1","fileUrl":"\(url)","mimeType":"\(mime)","fileSize":1000}]}
+        """)
+        return post.toFeedPost(preferredLanguages: [])
+    }
+
+    // MARK: - #7010 — `FeedView` n'OBSERVE pas le coordinateur
+
+    /// `@StateObject` / `@ObservedObject` abonnent la vue à `objectWillChange`
+    /// **que son body lise l'objet ou non**. `FeedView` ne lit aucun champ du
+    /// coordinateur — il le PASSE à ses conteneurs — mais l'abonnement suffisait
+    /// à re-differ 1 450 lignes de vue à chaque élection, c'est-à-dire en
+    /// continu pendant le scroll. `@State` possède sans observer.
+    ///
+    /// Garde de SOURCE parce que la régression est invisible à tout témoin de
+    /// comportement : les deux formes rendent exactement le même écran, l'une
+    /// simplement en perdant des images.
+    func test_feedViewPossedeLeCoordinateurSansLObserver() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Views/FeedView.swift")
+        let code = AppSourceGuard.stripComments(source)
+
+        XCTAssertTrue(
+            code.contains("@State private var reelAutoplay"),
+            "FeedView doit POSSÉDER le coordinateur en `@State`"
+        )
+        for abonnement in ["@StateObject private var reelAutoplay", "@ObservedObject var reelAutoplay"] {
+            XCTAssertFalse(
+                code.contains(abonnement),
+                """
+                `FeedView` s'abonne de nouveau au coordinateur (`\(abonnement)`) : \
+                chaque élection de réel re-diffe la vue entière pendant le scroll. \
+                Les conteneurs (`ReelFeedCardContainer`, `PostSceneCardContainer`) \
+                sont les seuls à devoir l'observer.
+                """
+            )
+        }
+    }
 }
 
 /// WS3.1 — the single open-autostart gate shared by a reel's audio and video
@@ -199,4 +467,5 @@ final class ReelMediaAutostartGateTests: XCTestCase {
             ReelMediaAutostart.shouldLoadAudio(currentUrl: nil, url: "https://cdn/a.mp3"),
             "A fresh engine (no url) must load on open")
     }
+
 }

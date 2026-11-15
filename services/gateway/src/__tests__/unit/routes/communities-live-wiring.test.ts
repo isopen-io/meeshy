@@ -35,13 +35,13 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-const mockResolvePrefsOnly = jest.fn<any>().mockResolvedValue(new Map());
 const mockResolveForTargets = jest.fn<any>().mockResolvedValue(new Map());
+const mockResolveForTarget = jest.fn<any>().mockResolvedValue({ showOnline: false, showLastSeenTimestamp: false });
 
 jest.mock('../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({
-    resolvePrefsOnly: mockResolvePrefsOnly,
     resolveForTargets: mockResolveForTargets,
+    resolveForTarget: mockResolveForTarget,
   }),
 }));
 
@@ -152,12 +152,21 @@ describe('surface de routes servie sous /communities', () => {
   it('expose toujours POST /communities/:id/leave', async () => {
     const prisma = makePrisma();
     prisma.community.findFirst = jest.fn<any>().mockResolvedValue({ id: COMM_ID, createdBy: OTHER_ID });
-    prisma.communityMember.deleteMany = jest.fn<any>().mockResolvedValue({ count: 1 });
+    prisma.communityMember.findFirst = jest.fn<any>().mockResolvedValue({
+      id: 'mem-leave', communityId: COMM_ID, userId: USER_ID, isActive: true,
+    });
+    prisma.communityMember.update = jest.fn<any>().mockResolvedValue({
+      id: 'mem-leave', communityId: COMM_ID, userId: USER_ID, isActive: false, leftAt: new Date(),
+    });
 
     const { app } = await buildApp(prisma);
     const res = await app.inject({ method: 'POST', url: `/communities/${COMM_ID}/leave` });
 
     expect(res.statusCode).toBe(200);
+    expect(prisma.communityMember.update).toHaveBeenCalledWith({
+      where: { id: 'mem-leave' },
+      data: expect.objectContaining({ isActive: false, leftAt: expect.any(Date) }),
+    });
     await app.close();
   });
 
@@ -166,7 +175,7 @@ describe('surface de routes servie sous /communities', () => {
     prisma.community.findFirst = jest.fn<any>().mockResolvedValue({
       id: COMM_ID, isPrivate: false, createdBy: USER_ID, members: [{ role: 'admin' }],
     });
-    prisma.user.findFirst = jest.fn<any>().mockResolvedValue({ id: OTHER_ID });
+    prisma.user.findFirst = jest.fn<any>(async ({ where }: any) => (where?.OR ? null : { id: OTHER_ID }));
     prisma.communityMember.create = jest.fn<any>().mockResolvedValue({
       id: 'mem-2', communityId: COMM_ID, userId: OTHER_ID, role: 'member',
       user: { id: OTHER_ID, username: 'bob', displayName: 'Bob', avatar: null, isOnline: true },
@@ -258,7 +267,7 @@ describe('GET /communities/:id/members — la présence des co-membres est filtr
       },
     ]);
     prisma.communityMember.count = jest.fn<any>().mockResolvedValue(1);
-    mockResolvePrefsOnly.mockResolvedValue(
+    mockResolveForTargets.mockResolvedValue(
       new Map([[OTHER_ID, { showOnline: false, showLastSeenTimestamp: false }]]),
     );
 
@@ -277,14 +286,12 @@ describe('les écritures qui rendent un TIERS filtrent sa présence', () => {
     prisma.community.findFirst = jest.fn<any>().mockResolvedValue({
       id: COMM_ID, isPrivate: false, createdBy: USER_ID, members: [{ role: 'admin' }],
     });
-    prisma.user.findFirst = jest.fn<any>().mockResolvedValue({ id: OTHER_ID });
+    prisma.user.findFirst = jest.fn<any>(async ({ where }: any) => (where?.OR ? null : { id: OTHER_ID }));
     prisma.communityMember.create = jest.fn<any>().mockResolvedValue({
       id: 'mem-2', communityId: COMM_ID, userId: OTHER_ID, role: 'member',
       user: { id: OTHER_ID, username: 'bob', displayName: 'Bob', avatar: null, isOnline: true },
     });
-    mockResolvePrefsOnly.mockResolvedValue(
-      new Map([[OTHER_ID, { showOnline: false, showLastSeenTimestamp: false }]]),
-    );
+    mockResolveForTarget.mockResolvedValue({ showOnline: false, showLastSeenTimestamp: false });
 
     const { app } = await buildApp(prisma);
     const res = await app.inject({
@@ -301,15 +308,13 @@ describe('les écritures qui rendent un TIERS filtrent sa présence', () => {
     prisma.community.findFirst = jest.fn<any>().mockResolvedValue({
       createdBy: USER_ID, members: [{ role: 'admin' }],
     });
-    prisma.user.findFirst = jest.fn<any>().mockResolvedValue({ id: OTHER_ID });
+    prisma.user.findFirst = jest.fn<any>(async ({ where }: any) => (where?.OR ? null : { id: OTHER_ID }));
     prisma.communityMember.findFirst = jest.fn<any>().mockResolvedValue(null);
     prisma.communityMember.create = jest.fn<any>().mockResolvedValue({
       id: 'mem-3', communityId: COMM_ID, userId: OTHER_ID, role: 'member',
       user: { id: OTHER_ID, username: 'bob', displayName: 'Bob', avatar: null, isOnline: true },
     });
-    mockResolvePrefsOnly.mockResolvedValue(
-      new Map([[OTHER_ID, { showOnline: false, showLastSeenTimestamp: false }]]),
-    );
+    mockResolveForTarget.mockResolvedValue({ showOnline: false, showLastSeenTimestamp: false });
 
     const { app } = await buildApp(prisma);
     const res = await app.inject({
@@ -321,17 +326,17 @@ describe('les écritures qui rendent un TIERS filtrent sa présence', () => {
     await app.close();
   });
 
-  it('laisse isOnline intact quand aucune préférence négative n\'est posée — une carte vide ne masque pas', async () => {
+  it('laisse isOnline intact quand le critère strict autorise la présence', async () => {
     const prisma = makePrisma();
     prisma.community.findFirst = jest.fn<any>().mockResolvedValue({
       id: COMM_ID, isPrivate: false, createdBy: USER_ID, members: [{ role: 'admin' }],
     });
-    prisma.user.findFirst = jest.fn<any>().mockResolvedValue({ id: OTHER_ID });
+    prisma.user.findFirst = jest.fn<any>(async ({ where }: any) => (where?.OR ? null : { id: OTHER_ID }));
     prisma.communityMember.create = jest.fn<any>().mockResolvedValue({
       id: 'mem-4', communityId: COMM_ID, userId: OTHER_ID, role: 'member',
       user: { id: OTHER_ID, username: 'bob', displayName: 'Bob', avatar: null, isOnline: true },
     });
-    mockResolvePrefsOnly.mockResolvedValue(new Map());
+    mockResolveForTarget.mockResolvedValue({ showOnline: true, showLastSeenTimestamp: true });
 
     const { app } = await buildApp(prisma);
     const res = await app.inject({

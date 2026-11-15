@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversations_action_make_obsolete">Rendi obsoleta</string>
+    <string name="conversations_obsolete_confirm_title">Rendere obsoleta questa conversazione?</string>
+    <string name="conversations_obsolete_confirm_message">«%1$s» scompare subito per tutti i membri e il contenuto viene cancellato entro 48 ore. L\'azione è irreversibile.</string>
+    <string name="conversations_obsolete_confirm_button">Rendi obsoleta</string>
+    <string name="conversations_obsolete_refused_pending_request">Solo il destinatario di una richiesta di messaggio non accettata può rendere obsoleta questa conversazione.</string>
+</resources>

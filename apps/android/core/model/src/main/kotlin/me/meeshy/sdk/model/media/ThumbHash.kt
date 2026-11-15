@@ -30,6 +30,20 @@ class ThumbHashImage(
 )
 
 /**
+ * The dimensions a source raster must be downscaled to before [ThumbHash.encode], whose
+ * contract rejects any side outside `1..100`. Preserves aspect ratio, never upscales a
+ * source that already fits, and clamps each side to at least 1 so an extreme banner ratio
+ * (whose short edge would otherwise round to 0) still yields a legal encode input.
+ * [downscaled] is `false` exactly when the source was already within budget and returned
+ * verbatim — the caller can then skip the resize entirely.
+ */
+data class ThumbHashSourcePlan(
+    val width: Int,
+    val height: Int,
+    val downscaled: Boolean,
+)
+
+/**
  * Pure decoder for the [ThumbHash](https://evanw.github.io/thumbhash/) compact image
  * placeholder format (feature-parity §P — "ThumbHash blur placeholders for all media").
  *
@@ -95,6 +109,29 @@ object ThumbHash {
     }
 
     private const val MAX_SIDE = 100
+
+    /**
+     * Plans the downscale a source raster needs before [encode], whose contract caps each
+     * side at [MAX_SIDE]. A source already within budget is returned verbatim
+     * (`downscaled = false`) so the caller skips the resize; otherwise the long edge is
+     * scaled exactly to [MAX_SIDE], the short edge is derived by the source aspect ratio
+     * (round-half-up), and each side is clamped to at least 1 so an extreme banner ratio
+     * whose short edge would round to 0 still produces a legal encode input.
+     *
+     * Pure planning only — the app-side glue owns the actual `Bitmap` scale to these
+     * dimensions and the RGBA read-back.
+     */
+    fun sourcePlan(width: Int, height: Int): ThumbHashSourcePlan {
+        require(width >= 1 && height >= 1) { "ThumbHash source must be ≥1px per side, got ${width}x$height" }
+        val longEdge = max(width, height)
+        if (longEdge <= MAX_SIDE) return ThumbHashSourcePlan(width, height, downscaled = false)
+        val scale = MAX_SIDE.toDouble() / longEdge
+        return ThumbHashSourcePlan(
+            width = max(1, roundHalfUp(width * scale)),
+            height = max(1, roundHalfUp(height * scale)),
+            downscaled = true,
+        )
+    }
 
     /**
      * Encodes a small RGBA raster into a ThumbHash placeholder — the inverse of [decode],

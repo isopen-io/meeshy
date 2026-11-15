@@ -23,6 +23,8 @@ public struct HapticFeedback {
     @MainActor private static let lightGenerator = UIImpactFeedbackGenerator(style: .light)
     @MainActor private static let mediumGenerator = UIImpactFeedbackGenerator(style: .medium)
     @MainActor private static let heavyGenerator = UIImpactFeedbackGenerator(style: .heavy)
+    @MainActor private static let rigidGenerator = UIImpactFeedbackGenerator(style: .rigid)
+    @MainActor private static let softGenerator = UIImpactFeedbackGenerator(style: .soft)
     @MainActor private static let notificationGenerator = UINotificationFeedbackGenerator()
     #endif
 
@@ -51,10 +53,58 @@ public struct HapticFeedback {
     }
 
     @MainActor
+    public static func rigid() {
+        #if canImport(UIKit) && os(iOS)
+        rigidGenerator.prepare()
+        rigidGenerator.impactOccurred()
+        #endif
+    }
+
+    @MainActor
+    public static func soft() {
+        #if canImport(UIKit) && os(iOS)
+        softGenerator.prepare()
+        softGenerator.impactOccurred()
+        #endif
+    }
+
+    #if canImport(UIKit) && os(iOS)
+    @MainActor
+    public static func impact(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
+        switch style {
+        case .light: light()
+        case .medium: medium()
+        case .heavy: heavy()
+        case .rigid: rigid()
+        case .soft: soft()
+        @unknown default: medium()
+        }
+    }
+
+    @MainActor
+    public static func notification(_ type: UINotificationFeedbackGenerator.FeedbackType) {
+        switch type {
+        case .success: success()
+        case .warning: warning()
+        case .error: error()
+        @unknown default: warning()
+        }
+    }
+    #endif
+
+    @MainActor
     public static func success() {
         #if canImport(UIKit) && os(iOS)
         notificationGenerator.prepare()
         notificationGenerator.notificationOccurred(.success)
+        #endif
+    }
+
+    @MainActor
+    public static func warning() {
+        #if canImport(UIKit) && os(iOS)
+        notificationGenerator.prepare()
+        notificationGenerator.notificationOccurred(.warning)
         #endif
     }
 

@@ -48,6 +48,7 @@ jest.mock('../../../routes/conversations/leave', () => ({
 }));
 
 jest.mock('../../../routes/conversations/delete-for-me', () => ({
+  ...(jest.requireActual('../../../routes/conversations/delete-for-me') as object),
   registerDeleteForMeRoutes: (...args: any[]) => mockRegisterDeleteForMe(...args),
 }));
 
@@ -61,6 +62,10 @@ jest.mock('../../../routes/conversations/stats', () => ({
 
 jest.mock('../../../routes/conversations/threads', () => ({
   registerThreadsRoutes: (...args: any[]) => mockRegisterThreads(...args),
+}));
+
+jest.mock('../../../routes/conversations/external-compliance', () => ({
+  registerExternalComplianceRoutes: jest.fn(),
 }));
 
 jest.mock('../../../services/message-translation/MessageTranslationService', () => ({
@@ -139,7 +144,7 @@ describe('conversationRoutes (index.ts)', () => {
 
     expect(mockRegisterCore).toHaveBeenCalledWith(fastify, MOCK_PRISMA, optionalAuth, requiredAuth);
     expect(mockRegisterParticipants).toHaveBeenCalledWith(fastify, MOCK_PRISMA, optionalAuth, requiredAuth);
-    expect(mockRegisterSharing).toHaveBeenCalledWith(fastify, MOCK_PRISMA, optionalAuth, requiredAuth);
+    expect(mockRegisterSharing).toHaveBeenCalledWith(fastify, MOCK_PRISMA, requiredAuth);
     expect(mockRegisterLeave).toHaveBeenCalledWith(fastify, MOCK_PRISMA, optionalAuth, requiredAuth);
     expect(mockRegisterDeleteForMe).toHaveBeenCalledWith(fastify, MOCK_PRISMA, optionalAuth, requiredAuth);
     expect(mockRegisterBan).toHaveBeenCalledWith(fastify, MOCK_PRISMA, optionalAuth, requiredAuth);
@@ -160,7 +165,7 @@ describe('conversationRoutes (index.ts)', () => {
       fastify, MOCK_PRISMA, MOCK_TRANSLATION_SERVICE, optionalAuth, requiredAuth
     );
     expect(mockRegisterMessagesAdvanced).toHaveBeenCalledWith(
-      fastify, MOCK_PRISMA, MOCK_TRANSLATION_SERVICE, optionalAuth, requiredAuth
+      fastify, MOCK_PRISMA, requiredAuth
     );
   });
 });

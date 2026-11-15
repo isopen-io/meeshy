@@ -203,6 +203,74 @@ describe('GET /links/:identifier/messages — ce que le schéma laisse passer', 
       expect(served.replyTo.sender.isMeeshyer).toBe(false);
     });
 
+    // #4952 — `getConversationMessagesWithDetails` charge la ligne CITÉE en
+    // entier (`include`) : sans masquage, un message à vue unique / flouté /
+    // chiffré ouvert par un lien de partage servait son texte en clair à la
+    // population la plus exposée (visiteurs sans compte).
+    it('masque le texte du message cité quand il est protégé (vue unique)', async () => {
+      const raw = makeRawMessage(anonymousParticipant);
+      raw.replyTo = {
+        ...raw.replyTo,
+        content: 'Le secret à ne jamais répéter',
+        isViewOnce: true,
+      } as typeof raw.replyTo;
+
+      const [served] = await serveMessages([formatLinkMessageWithDetails(raw)]);
+
+      expect(served.replyTo.content).not.toBe('Le secret à ne jamais répéter');
+      expect(JSON.stringify(served)).not.toContain('Le secret à ne jamais répéter');
+      expect(served.replyTo.isViewOnce).toBe(true);
+    });
+
+    // #8562 — un éphémère échu POUR CE LECTEUR (flamme-œil consommée) sort
+    // scellé dans la citation, même s'il vit encore pour les autres.
+    it('scelle la citation d’une flamme-œil consommée par ce lecteur', async () => {
+      const consumed = new Date(Date.now() - 60_000);
+      const raw = makeRawMessage(anonymousParticipant);
+      raw.replyTo = {
+        ...raw.replyTo,
+        content: 'Le secret brûlé après lecture',
+        effectFlags: 8,
+        senderId: 'p_user_1',
+      } as typeof raw.replyTo;
+      const readers = {
+        deadlines: new Map([['m0', { isSender: false, readerDeadline: consumed, latestRecipientDeadline: consumed }]]),
+        now: new Date(),
+      };
+
+      const [served] = await serveMessages([formatLinkMessageWithDetails(raw, readers)]);
+
+      expect(served.replyTo.content).toBe('');
+      expect(served.replyTo.deletedAt).toBe(consumed.toISOString());
+      expect(JSON.stringify(served)).not.toContain('Le secret brûlé après lecture');
+    });
+
+    it('masque le texte du message cité quand il est flouté', async () => {
+      const raw = makeRawMessage(anonymousParticipant);
+      raw.replyTo = {
+        ...raw.replyTo,
+        content: 'Un contenu sensible flouté',
+        isBlurred: true,
+      } as typeof raw.replyTo;
+
+      const [served] = await serveMessages([formatLinkMessageWithDetails(raw)]);
+
+      expect(served.replyTo.content).not.toBe('Un contenu sensible flouté');
+      expect(served.replyTo.isBlurred).toBe(true);
+    });
+
+    it('sert les drapeaux de protection à `false` pour une citation ordinaire', async () => {
+      const [served] = await serveMessages([
+        formatLinkMessageWithDetails(makeRawMessage(anonymousParticipant)),
+      ]);
+
+      expect(served.replyTo.content).toBe('Salut');
+      expect(served.replyTo.isViewOnce).toBe(false);
+      expect(served.replyTo.isBlurred).toBe(false);
+      expect(served.replyTo.isEncrypted).toBe(false);
+      expect(served.replyTo.effectFlags).toBe(0);
+    });
+
     it("sert l'état d'édition", async () => {
       const [served] = await serveMessages([
         formatLinkMessageWithDetails(makeRawMessage(anonymousParticipant)),
@@ -328,6 +396,107 @@ describe('GET /links/:identifier/messages — ce que le schéma laisse passer', 
       ]);
 
       expect(served).not.toHaveProperty('deletedAt');
+    });
+  });
+
+  // #4885 — `getConversationMessagesWithDetails` charge la ligne `Message`
+  // ENTIÈRE (`include` sans `select` racine) : `isViewOnce`/`isBlurred`/
+  // `effectFlags`/`expiresAt` étaient déjà dans l'objet Prisma, mais ni ce
+  // formateur ni `messageSchema` ne les recopiaient/déclaraient. Un visiteur
+  // SANS COMPTE lisant un lien de partage — la population la plus exposée —
+  // recevait un message à vue unique / flouté / éphémère sans aucun moyen de
+  // le savoir.
+  describe('drapeaux de protection du message (#4885)', () => {
+    it('sert `isViewOnce`/`isBlurred`/`effectFlags`/`expiresAt` d’un message protégé', async () => {
+      const raw = {
+        ...makeRawMessage(anonymousParticipant),
+        isViewOnce: true,
+        maxViewOnceCount: 1,
+        viewOnceCount: 0,
+        isBlurred: true,
+        effectFlags: 5,
+        expiresAt: new Date('2026-09-05T00:00:00.000Z'),
+      };
+
+      const [served] = await serveMessages([formatLinkMessageWithDetails(raw)]);
+
+      expect(served.isViewOnce).toBe(true);
+      expect(served.isBlurred).toBe(true);
+      expect(served.effectFlags).toBe(5);
+      expect(served.expiresAt).toBe('2026-09-05T00:00:00.000Z');
+    });
+
+    it("sert `isViewOnce: false` sur un message ordinaire — pas d'omission ambiguë", async () => {
+      const raw = {
+        ...makeRawMessage(anonymousParticipant),
+        isViewOnce: false,
+        maxViewOnceCount: null,
+        viewOnceCount: 0,
+        isBlurred: false,
+        effectFlags: 0,
+        expiresAt: null,
+      };
+
+      const [served] = await serveMessages([formatLinkMessageWithDetails(raw)]);
+
+      expect(served.isViewOnce).toBe(false);
+      expect(served.isBlurred).toBe(false);
+      expect(served.expiresAt).toBeNull();
+    });
+  });
+
+  // #6164 — la PIÈCE NOMMÉE de la citation, sur le transport le plus exposé.
+  //
+  // `formatReplyToMessage` appelait `servedQuotedMessage(replyTo, { … })` sans
+  // l'instantané, alors que `formatLinkMessageWithDetails` tient le `metadata`
+  // du message QUI CITE (il le recopie deux lignes plus haut). Un visiteur de
+  // lien voyait donc une citation qui ne dit pas quelle pièce elle vise, et le
+  // même fil ouvert dans l'application en désignait une autre.
+  //
+  // Le témoin traverse le VRAI `messageSchema` : sans la déclaration ajoutée à
+  // `replyToMessageSchema`, fast-json-stringify strippe le champ EN SILENCE —
+  // la forme exacte du défaut qu'a portée `replyTo.translations` (#4945).
+  describe('pièce NOMMÉE de la citation (#6164)', () => {
+    const CITEE = '507f1f77bcf86cd799439003';
+
+    const withQuote = (metadata: unknown) => ({
+      ...makeRawMessage(anonymousParticipant),
+      metadata,
+    });
+
+    it('sert l’ancre et la NATURE de la pièce citée, à travers le schéma réel', async () => {
+      const [served] = await serveMessages([
+        formatLinkMessageWithDetails(
+          withQuote({ attachmentReplyTo: { attachmentId: CITEE, kind: 'image' } })
+        ),
+      ]);
+
+      expect(served.replyTo.attachmentReplyTo).toEqual({ attachmentId: CITEE, kind: 'image' });
+    });
+
+    it('ne fige RIEN de ce qui DÉCRIT la pièce — la vignette, le nom et la taille se relisent', async () => {
+      const [served] = await serveMessages([
+        formatLinkMessageWithDetails(
+          withQuote({
+            attachmentReplyTo: {
+              attachmentId: CITEE,
+              kind: 'image',
+              thumbnailUrl: 'https://cdn/secret-thumb.jpg',
+              fileSize: 2048,
+              duration: 126,
+            },
+          })
+        ),
+      ]);
+
+      expect(Object.keys(served.replyTo.attachmentReplyTo).sort()).toEqual(['attachmentId', 'kind']);
+    });
+
+    it('sans instantané, la clé est ABSENTE — aucune citation existante ne change de rendu', async () => {
+      const [served] = await serveMessages([formatLinkMessageWithDetails(withQuote(null))]);
+
+      expect(served.replyTo).not.toBeNull();
+      expect(served.replyTo).not.toHaveProperty('attachmentReplyTo');
     });
   });
 });

@@ -84,6 +84,26 @@ final class StoryExportShareViewModelTests: XCTestCase {
         sut.finishSharing(success: true)
     }
 
+    /// #4852 — un sticker IMAGE ne porte que le `postMediaId` de son média ;
+    /// c'est le VM, seul à tenir la slide ET `story.media`, qui apparie les
+    /// deux et remet l'index au bake. Sans lui, l'export peignait 🖼️.
+    func test_startExport_pairsStickerImagesWithStoryMedia_andThreadsThemToExporter() async {
+        let (sut, exporter) = makeSUT(behavior: .success)
+        let sticker = StorySticker(emoji: "", postMediaId: "pm-sticker")
+        let effects = StoryEffects(stickerObjects: [sticker, StorySticker(emoji: "🔥")])
+        let story = StoryItem(id: "story-\(UUID().uuidString)",
+                              content: "Hello",
+                              media: [FeedMedia(id: "pm-sticker", type: .image,
+                                                url: "https://cdn.meeshy.test/sticker.png")],
+                              storyEffects: effects)
+
+        await sut.startExport(story: story)
+
+        XCTAssertEqual(exporter.lastStickerImageSources,
+                       ["pm-sticker": "https://cdn.meeshy.test/sticker.png"])
+        sut.finishSharing(success: true)
+    }
+
     func test_startExport_staticStory_callsExporterAndStoresURL() async {
         // Universal export contract : static stories (texte/sticker/image
         // sans animation) doivent aussi être bakables. Le compositor
@@ -184,6 +204,13 @@ final class MockShareExporter: StoryVideoExportServiceProviding {
     private(set) var lastLanguages: [String] = []
     /// Identité transmise au préambule de marque — `nil` = export sans intro.
     private(set) var lastIntro: StoryExportIntroContent?
+    /// Index `postMediaId → adresse` des stickers image reçu par le bake (#4852).
+    private(set) var lastStickerImageSources: [String: String] = [:]
+    private(set) var lastInputs: StoryExportInputs?
+    /// Le drapeau de marque REÇU (#7052) — retenu, jamais ignoré : un double
+    /// qui laisse tomber un paramètre laisse passer l'appelant qui cesse de le
+    /// poser, et une scène ressortirait marquée sans qu'aucun témoin ne tombe.
+    private(set) var lastAppendsBrandOutro: Bool?
     private(set) var lastCleanupURL: URL? = nil
     private(set) var lastBakedURL: URL? = nil
     let behavior: Behavior
@@ -195,12 +222,17 @@ final class MockShareExporter: StoryVideoExportServiceProviding {
         languages: [String],
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
+        inputs: StoryExportInputs,
+        appendsBrandOutro: Bool,
         onProgress: ((Double) -> Void)?,
         onPhaseChange: ((StoryExportPhase) -> Void)?
     ) async -> URL? {
         prepareCallCount += 1
+        lastAppendsBrandOutro = appendsBrandOutro
         lastLanguages = languages
         lastIntro = intro
+        lastStickerImageSources = inputs.stickerImageSources
+        lastInputs = inputs
 
         switch behavior {
         case .success:
@@ -333,6 +365,30 @@ final class StoryExportBrandIntroTests: XCTestCase {
         await sut.startExport(story: makeStoryItem())
 
         XCTAssertEqual(mock.lastIntro?.username, "ada")
+    }
+
+    // MARK: - La story d'un AUTRE (#9953, #10536)
+
+    /// « Exporter en vidéo » est offert à tout lecteur. La story d'un autre
+    /// garde son prélude — c'est une STORY (#10536) — mais il présente son
+    /// AUTEUR : le lecteur ne la signe pas de son visage (#9953).
+    func test_startExport_storyOfSomeoneElse_paintsTheAuthor_neverTheViewer() async {
+        let mock = MockShareExporter(behavior: .success)
+        let grace = StoryExportIntroContent(displayName: "Grace Hopper", username: "grace",
+                                            accentColorHex: "#6366F1")
+        let sut = StoryExportShareViewModel(
+            exporter: mock,
+            brandIntro: { XCTFail("aucun interlude du lecteur devant la story d'un autre"); return nil },
+            authorIntro: { _ in grace })
+
+        await sut.startExport(story: makeStoryItem(),
+                              author: StoryExportAuthor(userId: "someone-else-\(UUID().uuidString)",
+                                                        name: "Grace Hopper"))
+
+        XCTAssertEqual(mock.prepareCallCount, 1, "l'export d'une story d'autrui démarre")
+        XCTAssertEqual(mock.lastIntro?.username, "grace", "l'interlude présente l'auteur de la story")
+        XCTAssertEqual(mock.lastAppendsBrandOutro, true)
+        sut.finishSharing(success: true)
     }
 
     private func makeStoryItem() -> StoryItem {

@@ -26,8 +26,8 @@ public extension DatabaseEncryptionProviding {
 public final class DatabaseEncryption: DatabaseEncryptionProviding, @unchecked Sendable {
     public static let shared = DatabaseEncryption()
 
-    private static let keychainKey = "meeshy_db_encryption_key"
-    fileprivate static let logger = Logger(subsystem: "com.meeshy.sdk", category: "db-encryption")
+    static let keychainKey = "meeshy_db_encryption_key"
+    fileprivate static let logger = MeeshyLog.logger(.dbEncryption, subsystem: .legacySDK)
     private var logger: Logger { Self.logger }
     private let key: SymmetricKey
     /// SHA-256 des octets de la clé, tronqué — identité de clé, pas un secret
@@ -106,8 +106,7 @@ public final class DatabaseEncryption: DatabaseEncryptionProviding, @unchecked S
     // MARK: - Codable convenience
 
     public func encryptCodable<T: Encodable>(_ value: T) -> Data? {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         let json: Data
         do {
             json = try encoder.encode(value)
@@ -122,8 +121,7 @@ public final class DatabaseEncryption: DatabaseEncryptionProviding, @unchecked S
 
     public func decryptCodable<T: Decodable>(_ type: T.Type, from ciphertext: Data) -> T? {
         guard let json = decrypt(ciphertext) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
         do {
             return try decoder.decode(type, from: json)
         } catch {

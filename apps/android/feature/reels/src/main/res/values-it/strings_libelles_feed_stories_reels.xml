@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reels_bookmark">Salva</string>
+    <string name="reels_unbookmark">Rimuovi dai salvati</string>
+    <string name="reels_comments_view_post">Vedi il post</string>
+</resources>

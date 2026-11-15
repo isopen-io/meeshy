@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_options_section_actions">الإجراءات</string>
+    <string name="encryption_fact_not_yet_decrypted_notifications">فكّ تشفير الإشعارات على الجهاز لعرض نصها غير متاح بعد.</string>
+    <string name="participant_profile_allowed_can_send_audios">إرسال رسائل صوتية</string>
+    <string name="participant_profile_allowed_can_send_files">إرسال ملفات</string>
+    <string name="participant_profile_allowed_can_send_images">إرسال صور</string>
+    <string name="participant_profile_allowed_can_send_links">إرسال روابط</string>
+    <string name="participant_profile_allowed_can_send_locations">مشاركة الموقع</string>
+    <string name="participant_profile_allowed_can_send_messages">كتابة رسائل</string>
+    <string name="participant_profile_allowed_can_send_videos">إرسال مقاطع فيديو</string>
+    <string name="participant_profile_allowed_can_view_history">رؤية الرسائل السابقة</string>
+    <string name="participant_profile_denied_can_send_audios">لا يمكنه إرسال رسائل صوتية</string>
+    <string name="participant_profile_denied_can_send_files">لا يمكنه إرسال ملفات</string>
+    <string name="participant_profile_denied_can_send_images">لا يمكنه إرسال صور</string>
+    <string name="participant_profile_denied_can_send_links">لا يمكنه إرسال روابط</string>
+    <string name="participant_profile_denied_can_send_locations">لا يمكنه مشاركة موقعه</string>
+    <string name="participant_profile_denied_can_send_messages">لا يمكنه كتابة رسائل</string>
+    <string name="participant_profile_denied_can_send_videos">لا يمكنه إرسال مقاطع فيديو</string>
+</resources>

@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import WidgetKit
 import UIKit
 import MeeshySDK
@@ -74,6 +75,11 @@ struct ConversationSnapshotPayload: Codable {
 /// No direct socket subscription, no direct badge write: this class only knows about widgets.
 @MainActor
 final class WidgetDataManager: NotificationWidgetSink {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = WidgetDataManager()
 
     /// Toute écriture App Group passe par ici.
@@ -130,9 +136,24 @@ final class WidgetDataManager: NotificationWidgetSink {
         UserDefaults(suiteName: suiteName)
     }()
 
+    /// Miroir en mémoire du dernier `publishConversationSnapshots` — évite de
+    /// redécoder le blob App Group pour une donnée que ce manager vient tout
+    /// juste d'écrire (`conversationToastPresentation`).
+    private var lastPublishedSnapshots: [String: ConversationSnapshotPayload] = [:]
+
+    /// Les dernières conversations publiées : verrouiller ou déverrouiller ne
+    /// touche pas la liste, et ce qui est sorti doit pourtant suivre le verrou
+    /// (#11387, `republishForContentLocks`). Vidé par le wipe de logout.
+    private var lastPublishedConversations: [MeeshyConversation] = []
+
+    /// #11387 — le verrou PIN protège le CONTENU : une conversation verrouillée
+    /// ne sort ni son dernier message sur l'écran d'accueil, ni en clair dans
+    /// le cliché que lit l'extension de notification. Seam de test.
+    private let contentLocksProvider: @MainActor () -> Set<String>
+    private var contentLockObservation: AnyCancellable?
+
     private let encoder: JSONEncoder = {
-        let enc = JSONEncoder()
-        enc.dateEncodingStrategy = .iso8601
+        let enc = MeeshyCoders.encoder(.persistence)
         return enc
     }()
 
@@ -156,31 +177,85 @@ final class WidgetDataManager: NotificationWidgetSink {
     /// horodatage REST reste la meilleure donnée disponible.
     private let presenceStateProvider: @MainActor (String) -> PresenceState?
 
-    private init() {
-        self.suiteName = "group.me.meeshy.apps"
-        self.stagingDirectoriesOverride = nil
-        self.preferredContentLanguagesProvider = {
-            AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-        }
-        self.presenceStateProvider = { PresenceManager.shared.knownPresenceState(for: $0) }
+    /// Le compte au nom duquel le cliché de partage est déposé (#10947) — un
+    /// cliché sans propriétaire ne s'écrit pas.
+    private let shareDirectoryOwner: @MainActor () -> String?
+    /// Les personnes à qui écrire, depuis LEURS caches (amis acceptés, carnet
+    /// apparié) — la même lecture que l'écran de partage de l'app.
+    private let shareDirectoryPeople: @MainActor (String) async -> [ShareRecipient]
+
+    private convenience init() {
+        self.init(suiteName: UserPreferencesManager.appGroupSuiteName)
     }
 
     /// Init de test (fiche appgroup-01) — suite UserDefaults et dossiers de
     /// staging injectés pour vérifier `wipeAll()` sans toucher l'App Group réel.
     init(
         suiteName: String,
-        stagingDirectories: [URL],
+        stagingDirectories: [URL]? = nil,
         preferredContentLanguages: @escaping @MainActor () -> [String] = {
-            AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         },
         presenceState: @escaping @MainActor (String) -> PresenceState? = {
             PresenceManager.shared.knownPresenceState(for: $0)
-        }
+        },
+        shareDirectoryOwner: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
+        shareDirectoryPeople: @escaping @MainActor (String) async -> [ShareRecipient] = {
+            await LiveShareRecipientDirectory().cachedPeople(currentUserId: $0)
+        },
+        contentLocks: @escaping @MainActor () -> Set<String> = {
+            ConversationLockManager.shared.contentLockedConversationIds
+        },
+        contentLockChanges: NotificationCenter = .default
     ) {
+        self.contentLocksProvider = contentLocks
         self.preferredContentLanguagesProvider = preferredContentLanguages
         self.presenceStateProvider = presenceState
+        self.shareDirectoryOwner = shareDirectoryOwner
+        self.shareDirectoryPeople = shareDirectoryPeople
         self.suiteName = suiteName
         self.stagingDirectoriesOverride = stagingDirectories
+        contentLockObservation = contentLockChanges
+            .publisher(for: .conversationContentLocksDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.republishForContentLocks() }
+    }
+
+    private func hidesContent(of conversationId: String, lockedIds: Set<String>) -> Bool {
+        ConversationLockManager.hidesContent(of: conversationId, lockedConversationIds: lockedIds)
+    }
+
+    /// Republie ce qui est déjà sorti avec le verrou du moment (#11387). Rien
+    /// après le wipe de logout, ni sans compte connecté (la déconnexion lève
+    /// aussi tous les verrous) : les conversations du compte sortant ne
+    /// ressortent jamais.
+    func republishForContentLocks() {
+        guard !lastPublishedConversations.isEmpty,
+              let owner = shareDirectoryOwner(), !owner.isEmpty else { return }
+        publishConversations(lastPublishedConversations)
+        reloadTimelines()
+    }
+
+    /// Les dossiers App Group qui portent du contenu du compte connecté.
+    nonisolated static func accountStagingDirectories() -> [URL] {
+        [
+            SharePendingSendConsumer.directoryURL(),
+            SharePendingSendConsumer.mediaDirectoryURL(),
+            NSEPendingMessageConsumer.directoryURL(),
+            NSEPendingPostConsumer.directoryURL(),
+            ShareRelayHandoff.directoryURL(),
+            ShareComposeHandoffConsumer.directoryURL(),
+        ].compactMap { $0 }
+    }
+
+    /// Ce que l'app tient EN MÉMOIRE des fiches de l'extension — un relais servi,
+    /// un studio armé — part avec le compte sortant (#10978, #10986).
+    static func forgetHeldShares(
+        relay: ShareRelayConsumer = .shared,
+        compose: ShareComposeHandoffConsumer = .shared
+    ) {
+        relay.forget()
+        compose.forget()
     }
 
     /// appgroup-01 — wipe de logout (exigence `NotificationWidgetSink`).
@@ -196,17 +271,16 @@ final class WidgetDataManager: NotificationWidgetSink {
             let accountKeys = [
                 conversationsKey, snapshotsKey, favoritesKey, lastUpdatedKey,
                 unreadCountKey, WidgetActionFlusher.pendingMarkReadKey,
+                ShareDirectorySnapshot.defaultsKey,
             ]
             for key in accountKeys {
                 defaults.removeObject(forKey: key)
             }
+            lastPublishedSnapshots = [:]
         }
-        let stagingDirs = stagingDirectoriesOverride ?? [
-            SharePendingSendConsumer.directoryURL(),
-            SharePendingSendConsumer.mediaDirectoryURL(),
-            NSEPendingMessageConsumer.directoryURL(),
-            NSEPendingPostConsumer.directoryURL(),
-        ].compactMap { $0 }
+        lastPublishedConversations = []
+        Self.forgetHeldShares()
+        let stagingDirs = stagingDirectoriesOverride ?? Self.accountStagingDirectories()
         for dir in stagingDirs {
             do {
                 try FileManager.default.removeItem(at: dir)
@@ -235,17 +309,34 @@ final class WidgetDataManager: NotificationWidgetSink {
     /// Les lecteurs valident la valeur contre une allowlist et retombent sur la
     /// production si elle en sort — un environnement inattendu ne peut donc pas
     /// détourner un partage vers un hôte arbitraire.
-    func publishAPIBaseURL(_ origin: String = MeeshyConfig.shared.serverOrigin) {
-        writingToSharedContainer { sharedDefaults?.set(origin, forKey: apiBaseURLKey) }
+    ///
+    /// Au démarrage à froid, publiée par `finishLaunch` une fois l'écran de
+    /// lancement levé, la liste rendue (#11558) : l'assertion d'arrière-plan
+    /// (`beginBackgroundTask`) est un XPC synchrone sur le fil principal, et
+    /// seules les extensions lisent la valeur, déjà écrite au lancement
+    /// précédent. L'ouverture du groupe d'app et l'écriture partent sur la file
+    /// `AppGroupIO` ; l'assertion court jusqu'à l'écriture faite.
+    func publishAPIBaseURL(_ origin: String = MeeshyConfig.shared.serverOrigin, io: AppGroupIO = .shared) {
+        let suiteName = suiteName
+        let key = apiBaseURLKey
+        let taskId = UIApplication.shared.beginBackgroundTask(withName: "meeshy.widget.publish")
+        io.enqueue {
+            UserDefaults(suiteName: suiteName)?.set(origin, forKey: key)
+            Task { @MainActor in
+                if taskId != .invalid { UIApplication.shared.endBackgroundTask(taskId) }
+            }
+        }
     }
 
     // MARK: - NotificationWidgetSink
 
     func publishConversations(_ conversations: [MeeshyConversation]) {
+        lastPublishedConversations = conversations
         // Résolu UNE fois par publication : le prisme est une propriété du
         // lecteur, pas de la conversation, et le relire par ligne ferait 50
         // reconstructions de tableau pour un résultat identique.
         let preferredLanguages = preferredContentLanguagesProvider()
+        let lockedIds = contentLocksProvider()
         let widgetConversations = conversations
             .sorted { ($0.userState.isPinned ? 0 : 1, $0.lastMessageAt) < ($1.userState.isPinned ? 0 : 1, $1.lastMessageAt) }
             .reversed()
@@ -260,7 +351,9 @@ final class WidgetDataManager: NotificationWidgetSink {
                     id: conv.id,
                     contactName: conv.displayName,
                     contactAvatar: conv.type == .group ? "person.3.fill" : "person.circle.fill",
-                    lastMessage: formatLastMessage(conv, preferredLanguages: preferredLanguages),
+                    lastMessage: hidesContent(of: conv.id, lockedIds: lockedIds)
+                        ? ConversationLockedPreviewLine.label
+                        : formatLastMessage(conv, preferredLanguages: preferredLanguages),
                     timestamp: conv.lastMessageAt,
                     isUnread: conv.userState.unreadCount > 0,
                     isPinned: conv.userState.isPinned,
@@ -269,7 +362,7 @@ final class WidgetDataManager: NotificationWidgetSink {
             }
 
         guard let defaults = sharedDefaults,
-              let data = encoder.encodeOrLog(Array(widgetConversations), field: "widget conversations", logger: Logger.widgetData) else { return }
+              let data = encoder.encodeOrLog(widgetConversations, field: "widget conversations", logger: Logger.widgetData) else { return }
 
         writingToSharedContainer {
             defaults.set(data, forKey: conversationsKey)
@@ -284,7 +377,26 @@ final class WidgetDataManager: NotificationWidgetSink {
         Task { [conversations] in
             let userCategoryNamesById = await Self.resolveUserCategoryNames()
             self.publishConversationSnapshots(conversations, categoryNamesById: userCategoryNamesById)
+            await self.publishShareDirectory(conversations)
         }
+    }
+
+    /// **Les destinataires de l'extension de partage** (#10947) — ce que l'app
+    /// sait déjà, déposé dans l'App Group pour que la feuille « Envoyer avec
+    /// Meeshy » s'ouvre sur une liste (cache d'abord) : les conversations de la
+    /// liste, dans son ordre, et les personnes de ses caches. Au nom du compte
+    /// connecté — l'extension n'en montre rien sous un autre compte.
+    func publishShareDirectory(_ conversations: [MeeshyConversation]) async {
+        guard let owner = shareDirectoryOwner(), !owner.isEmpty else { return }
+        let people = await shareDirectoryPeople(owner)
+        let snapshot = ShareDirectorySnapshot.make(
+            ownerUserId: owner,
+            savedAt: Date(),
+            conversations: conversations.filter(\.isActive).map { ShareRecipient(conversation: $0) },
+            people: people
+        )
+        guard let defaults = sharedDefaults, let data = snapshot.encoded() else { return }
+        writingToSharedContainer { defaults.set(data, forKey: ShareDirectorySnapshot.defaultsKey) }
     }
 
     /// `[sectionId: nom]` des catégories CRÉÉES PAR L'UTILISATEUR uniquement
@@ -303,6 +415,7 @@ final class WidgetDataManager: NotificationWidgetSink {
         categoryNamesById: [String: String]
     ) {
         guard let defaults = sharedDefaults else { return }
+        let lockedIds = contentLocksProvider()
         let snapshots: [String: ConversationSnapshotPayload] = conversations
             .prefix(snapshotsCap)
             .reduce(into: [:]) { acc, conv in
@@ -315,13 +428,14 @@ final class WidgetDataManager: NotificationWidgetSink {
                     isPinned: conv.userState.isPinned,
                     isMuted: conv.userState.isMuted,
                     isArchived: conv.userState.isArchived,
-                    isLocked: conv.userState.isLocked,
+                    isLocked: conv.userState.isLocked || hidesContent(of: conv.id, lockedIds: lockedIds),
                     favoriteEmoji: conv.userState.reaction,
                     categoryName: categoryName,
                     accentColor: conv.accentColor,
                     unreadCount: conv.userState.unreadCount
                 )
             }
+        lastPublishedSnapshots = snapshots
         guard let data = encoder.encodeOrLog(snapshots, field: "widget snapshots", logger: Logger.widgetData) else { return }
         writingToSharedContainer { defaults.set(data, forKey: snapshotsKey) }
     }
@@ -335,13 +449,20 @@ final class WidgetDataManager: NotificationWidgetSink {
     func conversationToastPresentation(
         forId id: String
     ) -> NotificationToastManager.ConversationPresentation? {
-        guard let defaults = sharedDefaults,
-              let data = defaults.data(forKey: snapshotsKey),
-              let snapshots = JSONDecoder().decodeOrLog(
-                  [String: ConversationSnapshotPayload].self, from: data,
-                  field: "widget snapshots", logger: Logger.widgetData
-              ),
-              let payload = snapshots[id] else { return nil }
+        let payload: ConversationSnapshotPayload?
+        if let cached = lastPublishedSnapshots[id] {
+            payload = cached
+        } else {
+            guard let defaults = sharedDefaults,
+                  let data = defaults.data(forKey: snapshotsKey),
+                  let snapshots = JSONDecoder().decodeOrLog(
+                      [String: ConversationSnapshotPayload].self, from: data,
+                      field: "widget snapshots", logger: Logger.widgetData
+                  ) else { return nil }
+            lastPublishedSnapshots = snapshots
+            payload = snapshots[id]
+        }
+        guard let payload else { return nil }
 
         let custom = payload.customName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let canonical = payload.title?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -384,7 +505,7 @@ final class WidgetDataManager: NotificationWidgetSink {
             }
 
         guard let defaults = sharedDefaults,
-              let data = encoder.encodeOrLog(Array(favorites), field: "widget favorites", logger: Logger.widgetData) else { return }
+              let data = encoder.encodeOrLog(favorites, field: "widget favorites", logger: Logger.widgetData) else { return }
 
         writingToSharedContainer { defaults.set(data, forKey: favoritesKey) }
     }
@@ -395,25 +516,6 @@ final class WidgetDataManager: NotificationWidgetSink {
 
     func reloadTimelines() {
         WidgetCenter.shared.reloadAllTimelines()
-    }
-
-    // MARK: - Legacy shim (kept for callers still using the old API)
-
-    func updateConversations(_ conversations: [MeeshyConversation]) {
-        publishConversations(conversations)
-        publishFavoriteContacts(conversations)
-        let totalUnread = conversations.reduce(0) { $0 + $1.userState.unreadCount }
-        publishUnreadCount(totalUnread)
-        reloadTimelines()
-    }
-
-    func updateFavoriteContacts(_ conversations: [MeeshyConversation]) {
-        publishFavoriteContacts(conversations)
-    }
-
-    func updateUnreadCount(_ count: Int) {
-        publishUnreadCount(count)
-        reloadTimelines()
     }
 
     // MARK: - Private
@@ -438,11 +540,16 @@ final class WidgetDataManager: NotificationWidgetSink {
     /// portée de toute résolution ultérieure. Le publier brut montrait le
     /// dernier message dans la langue de l'EXPÉDITEUR pendant que la même
     /// conversation, ouverte dans l'app, affichait sa traduction.
+    ///
+    /// Et pour la même raison, un message qui disparaît n'y laisse que son
+    /// libellé de protection (#9622, `OutsidePreview`) : l'écran d'accueil n'a
+    /// aucune couche sécurisée, et garde le texte jusqu'au prochain
+    /// rafraîchissement — après la destruction du message.
     private func formatLastMessage(
         _ conv: MeeshyConversation,
         preferredLanguages: [String]
     ) -> String {
-        if let preview = conv.resolvedLastMessagePreview(preferredLanguages: preferredLanguages),
+        if let preview = OutsidePreview.lastMessage(of: conv, preferredLanguages: preferredLanguages),
            !preview.isEmpty {
             if let sender = conv.lastMessageSenderName, conv.type != .direct {
                 return "\(sender): \(preview)"
@@ -467,5 +574,5 @@ final class WidgetDataManager: NotificationWidgetSink {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let widgetData = Logger(subsystem: "me.meeshy.app", category: "widget-data")
+    nonisolated static let widgetData = MeeshyLog.logger(.widgetData)
 }

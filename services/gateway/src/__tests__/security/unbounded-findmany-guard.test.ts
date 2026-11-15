@@ -1,0 +1,558 @@
+/**
+ * #4165 — « Aucune liste ne rend plus une collection entière ».
+ *
+ * Critère 4 : une garde de SOURCE qui rougit si un `findMany` réapparaît
+ * SANS `take` ni `skip` dans `services/gateway/src/routes/`. L'issue nomme
+ * elle-même la subtilité : une garde NÉGATIVE meurt en silence le jour où son
+ * balayage ne matche plus rien — elle s'accompagne donc d'un cas POSITIF
+ * (§ « Ce que le balayage sait discriminer ») prouvant qu'elle rougit bien
+ * quand on réintroduit un `findMany` nu, et d'une garde de PÉRIMÈTRE (§ « Le
+ * balayage LIT bien le répertoire ») prouvant qu'elle ne s'est pas vidée en
+ * cessant de trouver des fichiers.
+ *
+ * Patron repris de `response-schema-closure-guard.test.ts` (#4168, livré le
+ * matin de ce lot) : accolades/parenthèses appariées et insensibles aux
+ * commentaires (`stripComments`, importé — pas redéfini, une même fonction ne
+ * se recopie pas), inventaire GELÉ des sites hors territoire de CE lot, clé
+ * par FICHIER + NOMBRE — jamais par numéro de ligne. C'est une loi écrite du
+ * dépôt (`services/gateway/CLAUDE.md`, § « Le balayage est OUTILLÉ ») : « une
+ * clé de ligne dérive à la première édition et transforme le cliquet en
+ * bruit » — commise et corrigée dans CE MÊME dépôt le jour même où ce lot
+ * tourne (voir l'historique de `response-schema-closure-guard.test.ts`).
+ *
+ * Ce que ce témoin GARDE, et ce qu'il ne corrige pas : il balaie TOUT
+ * `services/gateway/src/routes/` (comme l'issue le demande), pas seulement
+ * le territoire de ce lot. Les dix routes nommées par #4165 et bornées par ce
+ * lot (`conversations/messages-advanced.ts`, `communities/core.ts`,
+ * `links/utils/prisma-queries.ts`, `anonymous.ts`, `admin/agent.ts`,
+ * `admin/users.ts`) sortent de l'inventaire gelé avec preuve (second `it` de
+ * chaque bloc ci-dessous). Les sites restants — hors territoire de ce lot
+ * (fichiers-carrefour interdits, ou simplement non couverts par les dix
+ * routes nommées) — sont GELÉS : geler documente qu'ils sont VUS, pas qu'ils
+ * sont bons. Le détail route par route vit dans le commentaire de clôture de
+ * l'issue #4165 (inventaire des 27), pas ici.
+ *
+ * @jest-environment node
+ */
+
+import { describe, it, expect } from '@jest/globals';
+import { readFileSync, readdirSync, statSync } from 'fs';
+import { join, relative } from 'path';
+
+import { stripComments } from '../../routes/__tests__/response-schema-sweep';
+
+const ROUTES_DIR = join(__dirname, '../../routes');
+
+// =============================================================================
+// Mécanique de balayage — parenthèses appariées, insensible aux commentaires.
+// Un `grep 'findMany('` seul ne sait pas dire si l'appel porte `take`/`skip`
+// QUELQUE PART dans ses arguments, qui peuvent s'étendre sur des dizaines de
+// lignes et contenir des objets imbriqués (`where`, `select`, `include`, eux
+// -mêmes pleins de parenthèses de fonctions). Il faut apparier la parenthèse
+// D'OUVERTURE de l'appel à sa FERMETURE, puis chercher `take`/`skip` dans
+// exactement cette plage — ni avant (l'appel précédent), ni après (le suivant).
+// =============================================================================
+
+/** Fin (inclusive) de l'appel ouvert par la parenthèse à `openIndex`. */
+function matchParen(source: string, openIndex: number): number {
+  let depth = 0;
+  for (let i = openIndex; i < source.length; i++) {
+    if (source[i] === '(') depth++;
+    else if (source[i] === ')') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return source.length - 1;
+}
+
+function lineOf(source: string, index: number): number {
+  return source.slice(0, index).split('\n').length;
+}
+
+/**
+ * La profondeur d'accolades en `position`, comptée depuis `start` (exclusif).
+ * Sert à distinguer une clé au premier niveau de l'objet d'argument d'une clé
+ * de MÊME NOM enfouie dans une relation imbriquée — voir le commentaire de
+ * `hasTopLevelKey` : c'est la distinction que ce témoin a RATÉE en première
+ * version (mesuré : un `take` posé UNIQUEMENT sur `include.participants`
+ * masquait l'absence de `take` sur le `findMany` lui-même).
+ */
+function braceDepthAt(source: string, start: number, position: number): number {
+  let depth = 0;
+  for (let i = start; i < position; i++) {
+    if (source[i] === '{') depth++;
+    else if (source[i] === '}') depth--;
+  }
+  return depth;
+}
+
+/**
+ * `key` apparaît-il comme propriété DIRECTE de l'objet d'argument ouvert à
+ * `objectStart` — jamais comme propriété d'une relation imbriquée
+ * (`include: { x: { take: … } }`) ? Une clé directe est à la profondeur 1
+ * juste après l'accolade ouvrante de l'objet lui-même.
+ *
+ * Reconnaît AUSSI la forme raccourcie (`{ take }`, propriété = variable de
+ * même nom) — pas seulement `take: expr`. Mesuré en faux positif réel sur
+ * `conversations/utils/delta-tombstones.ts` (#4165) : `const take = LIMIT +
+ * 1; prisma.x.findMany({ where, select, take })` est BORNÉ (le `take` du
+ * paramètre nommé), et la forme `\btake\s*:/` seule le manquait — le
+ * signalant à tort comme un `findMany` nu. Une clé raccourcie se termine par
+ * une virgule ou l'accolade fermante, jamais par autre chose.
+ */
+function hasTopLevelKey(args: string, objectStart: number, key: string): boolean {
+  if (objectStart < 0) return false;
+  const re = new RegExp(`\\b${key}\\s*(:|[,}])`, 'g');
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(args)) !== null) {
+    if (braceDepthAt(args, objectStart, m.index) === 1) return true;
+  }
+  return false;
+}
+
+export type UnboundedFindManySite = {
+  readonly file: string;
+  readonly line: number;
+};
+
+/**
+ * Les `.findMany(...)` dont l'objet d'argument ne porte, à son PREMIER
+ * NIVEAU, NI `take:` NI `skip:` — la formulation exacte du critère 4 de
+ * #4165. Un `findMany` qui ne porte que `skip` (sans `take`) n'est pas
+ * signalé par cette garde : ce n'est pas un oubli, c'est le périmètre que
+ * l'issue elle-même trace (« sans take ni skip » — la conjonction, pas chaque
+ * terme séparément). Un tel appel resterait en pratique dangereux (rien ne
+ * borne le nombre de lignes rendues après le décalage) mais aucun des dix
+ * sites nommés par #4165 n'est dans ce cas, et l'élargir est un chantier à
+ * part, pas une extension silencieuse de ce témoin.
+ *
+ * Le premier niveau SEUL, et c'est une correction, pas une nuance : un
+ * `take` posé sur une relation imbriquée (`include: { participants: { take:
+ * 100 } } }`, le patron même de `communities/core.ts` sur
+ * `/communities/:id/conversations`) matchait `\btake\s*:/` sur la plage
+ * ENTIÈRE des arguments dans la première version de ce témoin — masquant
+ * l'absence de `take` sur le `findMany` LUI-MÊME. Mesuré en le prouvant rouge
+ * puis vert avec et sans le `skip`/`take` de tête de cette route précise.
+ */
+export function scanUnboundedFindMany(source: string, file: string): ReadonlyArray<UnboundedFindManySite> {
+  const code = stripComments(source);
+  const sites: UnboundedFindManySite[] = [];
+  const re = /\.findMany\s*\(/g;
+  let m: RegExpExecArray | null;
+
+  while ((m = re.exec(code)) !== null) {
+    const openParen = code.indexOf('(', m.index);
+    const close = matchParen(code, openParen);
+    const args = code.slice(openParen, close + 1);
+    const objectStart = args.indexOf('{');
+    const hasTake = hasTopLevelKey(args, objectStart, 'take');
+    const hasSkip = hasTopLevelKey(args, objectStart, 'skip');
+    if (!hasTake && !hasSkip) {
+      sites.push({ file, line: lineOf(code, m.index) });
+    }
+  }
+
+  return sites;
+}
+
+function walk(dir: string, acc: string[] = []): string[] {
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      if (entry !== '__tests__' && entry !== 'node_modules') walk(full, acc);
+    } else if (entry.endsWith('.ts') && !entry.endsWith('.d.ts')) {
+      acc.push(full);
+    }
+  }
+  return acc;
+}
+
+export function sweepUnboundedFindMany(routesDir: string): ReadonlyArray<UnboundedFindManySite> {
+  return walk(routesDir).flatMap((full) =>
+    scanUnboundedFindMany(readFileSync(full, 'utf8'), relative(routesDir, full))
+  );
+}
+
+/** Compte les sites par FICHIER — la clé stable (§ header). */
+function compterParFichier(sites: ReadonlyArray<UnboundedFindManySite>): Record<string, number> {
+  return sites.reduce<Record<string, number>>((acc, s) => {
+    return { ...acc, [s.file]: (acc[s.file] ?? 0) + 1 };
+  }, {});
+}
+
+// =============================================================================
+// Inventaire GELÉ — hors territoire de CE lot de #4165 (les dix routes
+// nommées par l'issue, et elles seules, ont été bornées ici). Chaque famille
+// est expliquée dans le commentaire de clôture de l'issue #4165 (inventaire
+// des 27, route par route) plutôt que d'être répétée fichier par fichier ici.
+// Geler documente que ces sites sont VUS, pas qu'ils sont bons — un prochain
+// lot les instruit un par un, exactement comme #4165 vient de le faire pour
+// les dix siens.
+// =============================================================================
+const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
+  // #4284 a découpé admin/agent.ts en fichiers frères ; les huit sites
+  // vivent désormais dans agent-configs.ts (4) et agent-observability.ts
+  // (4). Le compte total est inchangé.
+  'admin/agent-configs.ts': 4,
+  // #7999 — le retrait souverain d'un membre relit les participants RESTANTS
+  // pour nommer leurs rooms et annoncer l'effectif ABSOLU : même fanout, même
+  // raison que `conversations/participant-removal.ts` (gelé plus bas). Borner
+  // la lecture tronquerait l'audience ET fausserait le compte annoncé.
+  'admin/conversation-settings-sovereign.ts': 1,
+  // 4 -> 2 : #4465 a retiré les deux `findMany` nus de `GET /stats`
+  // (`agentUserRole.findMany({distinct:['userId']})`, remplacé par un
+  // `$group`+`$count`) et de `GET /scan-logs/stats` (`agentScanLog.findMany`
+  // sur toute la fenêtre, remplacé par un `$facet` à deux grains — voir les
+  // doc-comments de `distinctControlledUsersPipeline` et
+  // `scanLogsStatsPipeline`). Les DEUX qui restent vivent dans
+  // `GET /recent-activity`, hors périmètre de #4465 (`agentConfig.findMany`
+  // et `agentUserRole.findMany` bornés transitivement par le `take` de
+  // l'`agentAnalytic.findMany` qui alimente leur `conversationIds` — une
+  // borne transitive reste une borne, ce cliquet ne sait juste pas la lire).
+  'admin/agent-observability.ts': 2,
+  'admin/agent-topics.ts': 1,
+  // `admin/invitations.ts` avait 1 (`GET /timeline/daily`) : #4465 l'a RETIRE.
+  // La ligne ne devient pas 0, elle DISPARAIT (`compterParFichier` n'accumule
+  // que les fichiers qui ont au moins un site) — meme mecanique que
+  // `conversations/messages-list-query.ts` deux cycles plus tot (1 -> 0 sur
+  // `/users/me/stats/timeline`, voir plus bas).
+  //
+  // 3 -> 2 -> 1 : #4391 avait deja retire le `findMany` de `GET
+  // /admin/messages/stats` (histogramme quotidien + longueur moyenne, remplaces
+  // par UN `aggregateRaw` + `$facet` — patron de `admin/languages.ts`). #4465
+  // retire le second : `GET /trends` ramenait `select: { createdAt }` sur 7
+  // jours pour un histogramme heure/jour-de-semaine — deux repliements MODULO,
+  // donc un second `$facet` (`$hour`/`$dayOfWeek`), pas un `count` par tranche
+  // contigue. Le SEUL restant est la relecture des participants expediteurs de
+  // `/stats` : depuis l'audit du 2026-10-04 le top 10 se prend APRES le repli
+  // par compte, la relecture est donc bornee par les expediteurs de la periode
+  // (un par participant ayant ecrit), plus par un `take: 10`.
+  'admin/messages.ts': 1,
+  'admin/posts.ts': 1,
+  // 13 → 11 + 3 (audit 2026-10-04) : les résolutions de personnes d'un
+  // classement (comptes, invités, repli participant → compte) vivent dans
+  // `ranking-people.ts` ; l'unique site neuf est la lecture des INVITÉS,
+  // bornée par les identifiants déjà classés.
+  'admin/ranking-people.ts': 3,
+  'admin/system-rankings.ts': 11,
+  'auth/register.ts': 1,
+  'communities/membership.ts': 1,
+  'community-preferences.ts': 1,
+  // #4713 a extrait les NOYAUX des quatre gestes de gestion d'un participant
+  // (`rights`, `role`, `ban`, `unban`) hors de leurs gestionnaires Fastify ;
+  // les deux sites de `conversations/ban.ts` vivent desormais dans
+  // `participant-ban-core.ts`, inchanges. Le compte total est le meme —
+  // seule la CLE change, ce cliquet etant indexe par FICHIER (meme mecanique
+  // que #4284 sur `core.ts`/`participants.ts`, et que #4169 sur
+  // `links/utils/share-link-mint.ts`). Ne pas lire ces lignes comme une
+  // dette neuve.
+  'conversations/participant-ban-core.ts': 2,
+  // #4284 a découpé conversations/core.ts en fichiers frères ; les huit
+  // sites vivent désormais dans core-detail.ts (3), core-lifecycle.ts (2
+  // à l'origine, 1 depuis #5760 — la reconciliation d'appartenance de
+  // communauté est passée dans `services/conversations/communityMembershipSync.ts`,
+  // hors du périmètre balayé ici) et core-list.ts (3 à l'origine, 2 depuis
+  // #7198 — voir ci-dessous).
+  'conversations/core-detail.ts': 3,
+  'conversations/core-lifecycle.ts': 1,
+  // 3 -> 2 : le troisieme n'a pas ete SUPPRIME, il a ete DEPLACE puis BORNE.
+  // #7198/#7216 (G1) a extrait la lecture du curseur de lecture de la page
+  // vers `conversations/read-cursor-projection.ts`
+  // (`loadReadCursorBoundaries`, site UNIQUE partage par la liste et le
+  // detail). Une garde indexee par FICHIER rougit sur une EXTRACTION meme a
+  // dette constante — la reponse retenue n'est pas de deplacer l'entree
+  // (2 + 1), c'est de poser la borne que la forme de la requete rendait
+  // disponible : `take: participantIds.length`, exact parce que
+  // `ConversationReadCursor` est unique par `[conversationId, participantId]`
+  // et qu'un `Participant.id` n'appartient qu'a UNE conversation. Le fichier
+  // extrait n'entre donc PAS dans cet inventaire, et la dette du depot
+  // descend d'un site. Temoin de la borne :
+  // `__tests__/routes/conversations.read-boundary.test.ts`.
+  'conversations/core-list.ts': 2,
+  // #16948 — la sortie d'un INVITÉ de lien, CINQUIÈME porte de fin
+  // d'appartenance, relit les participants RESTANTS pour nommer leurs rooms et
+  // annoncer l'effectif ABSOLU : même éventail, même raison que
+  // `conversations/leave.ts`, `participant-removal.ts` et
+  // `participant-ban-core.ts`, déjà gelés ici pour cette forme. La borne n'est
+  // pas « disponible mais omise » : un `take` rendrait l'effectif FAUX, et
+  // c'est l'effectif absolu qui fait converger un client — celui qui soustrait
+  // ne se rattrape jamais d'un événement manqué. La borne de fait est
+  // l'appartenance à une conversation, la même que celle des trois jumelles.
+  'conversations/guest-sessions.ts': 1,
+  'conversations/leave.ts': 1,
+  // 5 -> 3 : #4177 a retire du travail MORT, pas ajoute une borne. Trois lectures
+  // (currentUserReactions au niveau du message, currentUserConsumption par piece
+  // jointe, et le bloc reactions brut sous include_reactions) etaient calculees
+  // puis jetees a la serialisation -- aucun schema ne les declarait, donc elles
+  // n'atteignaient AUCUN client. Deux d'entre elles etaient des findMany nus.
+  // Un cliquet qui descend parce que le travail a disparu est la seule facon
+  // agreable de le voir descendre.
+  // #4284 a ensuite découpé conversations/messages.ts en fichiers frères :
+  // les trois sites vivent désormais dans messages-list-query.ts, seul
+  // compte inchangé.
+  'conversations/messages-list-query.ts': 3,
+  // Cinq, et non sept : deux sites ont suivi le geste de retrait d'un
+  // participant dans son propre fichier (#4176). Le compte total est inchangé.
+  // #4284 a ensuite découpé conversations/participants.ts en fichiers
+  // frères ; les cinq sites vivent désormais dans participants-presence.ts
+  // (1) et participants-writes.ts (4). Le compte total reste inchangé.
+  'conversations/participants-presence.ts': 1,
+  // 4 -> 3 + 1 : #4713 a emporte dans `participant-rights-core.ts` la lecture
+  // des HOTES de la conversation (l'eventail de `PATCH …/rights`) ; les trois
+  // qui restent sont celles de l'admission (`POST …/participants`), qui n'a
+  // pas bouge. Total inchange.
+  'conversations/participant-rights-core.ts': 1,
+  // 3 -> 2 + 1 : #16837 a emporté dans `memberArrivalFanOut.ts` la lecture de
+  // l'AUDIENCE de l'éventail d'arrivée, parce que les TROIS portes d'arrivée
+  // doivent la partager et qu'une seule l'émettait. Le compte total est
+  // inchangé — c'est une MIGRATION, comme celles de #4176, #4284 et #4713
+  // au-dessus.
+  //
+  // Elle reste non bornée pour la même raison que les lectures de participants
+  // déjà gelées ici : un éventail qui s'arrête à N destinataires ne prévient
+  // pas les autres, et un `take` y serait un défaut de livraison, pas une
+  // protection. La borne qui compte est l'appartenance à UNE conversation.
+  //
+  // 2 -> 1 + 1 : #17032 a emporté dans `membershipAdmissionFanOut.ts` la
+  // lecture des `userId` ACTIFS que `conversation:new` sert à l'arrivant, parce
+  // que les deux portes dont l'arrivant est un TIERS doivent la partager et
+  // qu'une seule l'émettait. Le compte total est inchangé — MIGRATION, comme
+  // celles de #4176, #4284, #4713 et #16837 au-dessus, et pour la même raison
+  // qu'elle reste non bornée : une ligne de liste qui ne nomme que N membres
+  // sur N+1 est fausse, pas plus sûre.
+  'conversations/participants-writes.ts': 1,
+  'conversations/memberArrivalFanOut.ts': 1,
+  'conversations/membershipAdmissionFanOut.ts': 1,
+  'conversations/participant-removal.ts': 2,
+  'conversations/search.ts': 1,
+  'conversations/sharing.ts': 2,
+  'conversations/stats.ts': 1,
+  'conversations/threads.ts': 1,
+  'directory/availability.ts': 1,
+  'directory/blocks.ts': 1,
+  'directory/presence.ts': 2,
+  // DEPLACE, pas ajoute : #4169 a fait converger les deux portes de creation de
+  // lien de partage vers un ecrivain unique (mintConversationShareLink), et les
+  // deux sites non bornes l'ont suivi tels quels depuis links/creation.ts. Le
+  // total du depot est inchange ; seule la CLE change, parce que ce cliquet est
+  // indexe par FICHIER. Ne pas lire cette ligne comme une nouvelle dette.
+  'links/utils/share-link-mint.ts': 2,
+  'me/export.ts': 2,
+  'posts/hashtag.ts': 1,
+  // `posts/interactions.ts` a perdu le sien en meme temps que ses routes : il
+  // vit desormais dans `posts/impressions.ts`, inchange. `postConsumptionGate`
+  // en ajoute UN, et c'est un ajout assume : il remplace N `findFirst`
+  // sequentiels par UNE passe. Il n'a ni take ni skip parce que sa borne est
+  // AILLEURS — la clause `id: { in: distinctIds }` sur un lot que le schema de
+  // `/posts/impressions/batch` plafonne a 100. Une borne transitive reste une
+  // borne ; ce cliquet compte les take/skip, il ne sait pas les lire.
+  'posts/postConsumptionGate.ts': 1,
+  'posts/nearby.ts': 1,
+  'push-tokens.ts': 1,
+  'sync/membership.ts': 1,
+  'user-deletions.ts': 2,
+  // #10643 — les statistiques d'un profil lisent les identités du compte
+  // (`Participant.id`, une par conversation rejointe, index `[userId]`,
+  // `select: { id }` seul) pour compter ses messages par `senderId` indexé au
+  // lieu d'un `$lookup` par message (1 265 ms → 9 ms mesurés). Borner cette
+  // lecture fausserait les comptes au-delà de la borne, sans le moindre signal.
+  'user-stats.ts': 1,
+  // 1 -> 0, donc la CLE disparait : #4391 a retire le dernier `findMany` nu du
+  // fichier — `GET /users/me/stats/timeline` ramenait UNE LIGNE PAR MESSAGE des
+  // 90 derniers jours (`select: { createdAt }`, sans `take`) pour en faire un
+  // histogramme de 90 entiers. Un COUNT par tranche, en parallele, le remplace
+  // (patron de `admin/analytics.ts`). Le budget de lignes lues est garde par
+  // `__tests__/security/stats-routes-row-budget.test.ts`.
+};
+
+describe('Aucun findMany sans take ni skip hors inventaire figé (#4165 critère 4)', () => {
+  it("n'introduit aucun site neuf sous services/gateway/src/routes/", () => {
+    expect(compterParFichier(sweepUnboundedFindMany(ROUTES_DIR)))
+      .toEqual(FROZEN_UNBOUNDED_FINDMANY);
+  });
+
+  it('les dix routes nommées par #4165, bornées par CE lot, ne portent plus un seul findMany nu dans leur handler', () => {
+    // `admin/agent.ts` garde HUIT findMany nus ailleurs dans le fichier (voir
+    // l'inventaire gelé ci-dessus) : ce sont des routes AUTRES que les deux
+    // que ce lot borne (`/configs`, `/configs/:conversationId/roles`) — le
+    // témoin ci-dessous isole chaque route par SLICE de fonction, jamais par
+    // fichier entier, pour ne prouver que ce que CE lot a réellement corrigé.
+    // Les cinq autres fichiers touchés par ce lot (`messages-advanced.ts`,
+    // `communities/core.ts`, `links/utils/prisma-queries.ts`, `anonymous.ts`,
+    // `admin/users.ts`) sont désormais ENTIÈREMENT propres — absents de
+    // l'inventaire gelé — et le sont donc DEUX fois : ici, route par route, et
+    // dans le compte GLOBAL du premier `it` ci-dessus.
+    //
+    // #4284 a découpé conversations/messages-advanced.ts et admin/agent.ts en
+    // fichiers frères, et les deux slices ci-dessous suivent leurs routes :
+    // sans ce déplacement, `messagesAdvanced.indexOf(...)`/`agent.indexOf(...)`
+    // rendent -1 des deux côtés, la slice résultante est la chaîne VIDE, et
+    // `scanUnboundedFindMany('', …)` rend `[]` sans avoir rien lu — un témoin
+    // vert qui ne prouve plus rien (mesuré : c'était le cas avant ce correctif).
+    const messagesAdvancedReads = readFileSync(join(ROUTES_DIR, 'conversations/messages-advanced-reads.ts'), 'utf8');
+    const reactionsHandler = messagesAdvancedReads.slice(
+      messagesAdvancedReads.indexOf("'/conversations/:id/reactions'"),
+      messagesAdvancedReads.indexOf("'/conversations/:id/status'")
+    );
+    expect(scanUnboundedFindMany(reactionsHandler, 'conversations/messages-advanced-reads.ts#reactions')).toEqual([]);
+
+    const communitiesCore = readFileSync(join(ROUTES_DIR, 'communities/core.ts'), 'utf8');
+    const conversationsHandler = communitiesCore.slice(
+      communitiesCore.indexOf("'/communities/:id/conversations'"),
+      communitiesCore.indexOf("post('/communities/:id/conversations/:conversationId'")
+    );
+    expect(scanUnboundedFindMany(conversationsHandler, 'communities/core.ts#conversations')).toEqual([]);
+
+    const linkQueries = readFileSync(join(ROUTES_DIR, 'links/utils/prisma-queries.ts'), 'utf8');
+    expect(scanUnboundedFindMany(linkQueries, 'links/utils/prisma-queries.ts')).toEqual([]);
+
+    const anonymous = readFileSync(join(ROUTES_DIR, 'anonymous.ts'), 'utf8');
+    const linkPreviewHandler = anonymous.slice(anonymous.indexOf("'/anonymous/link/:identifier'"));
+    expect(scanUnboundedFindMany(linkPreviewHandler, 'anonymous.ts#link-preview')).toEqual([]);
+
+    // `/configs` et `/configs/:conversationId/roles` vivent toutes deux
+    // désormais dans agent-configs.ts (#4284), dans le même ordre qu'avant le
+    // découpage ; la borne de fin de `rolesHandler` devient la route suivante
+    // DANS CE FICHIER (`/configs/:conversationId/summary`) puisque
+    // `/roles/:conversationId/:userId/assign` a migré vers agent-roles.ts.
+    const agentConfigs = readFileSync(join(ROUTES_DIR, 'admin/agent-configs.ts'), 'utf8');
+    const configsHandler = agentConfigs.slice(agentConfigs.indexOf("'/configs'"), agentConfigs.indexOf("'/configs/:conversationId'"));
+    const rolesHandler = agentConfigs.slice(agentConfigs.indexOf("'/configs/:conversationId/roles'"), agentConfigs.indexOf("'/configs/:conversationId/summary'"));
+    expect(scanUnboundedFindMany(configsHandler, 'admin/agent-configs.ts#configs')).toEqual([]);
+    expect(scanUnboundedFindMany(rolesHandler, 'admin/agent-configs.ts#roles')).toEqual([]);
+
+    const users = readFileSync(join(ROUTES_DIR, 'admin/users.ts'), 'utf8');
+    const reportedMessagesHandler = users.slice(
+      users.indexOf("'/admin/users/:userId/reported-messages'"),
+      users.indexOf("'/admin/conversations/:conversationId/participants'")
+    );
+    expect(scanUnboundedFindMany(reportedMessagesHandler, 'admin/users.ts#reported-messages')).toEqual([]);
+  });
+});
+
+describe('Ce que le balayage sait discriminer', () => {
+  it('signale un findMany sans take ni skip', () => {
+    const source = `
+      const rows = await prisma.reaction.findMany({
+        where: { conversationId },
+        orderBy: { createdAt: 'desc' }
+      });`;
+
+    expect(scanUnboundedFindMany(source, 'x.ts')).toMatchObject([{ file: 'x.ts' }]);
+  });
+
+  it("signale un findMany dont le SEUL take vit sur une relation imbriquée (include.x.take) — pas au premier niveau", () => {
+    // Le patron exact de `communities/core.ts` AVANT que `skip`/`take` ne
+    // soient posés sur `conversation.findMany` lui-même : la relation
+    // `participants` porte son propre plafond d'affichage, ce qui a fait
+    // passer la première version de ce témoin au VERT sur une liste de
+    // conversations pourtant totalement non bornée.
+    const source = `
+      const rows = await prisma.conversation.findMany({
+        where: { communityId: id },
+        include: {
+          participants: {
+            take: 100,
+            include: { user: { select: { id: true } } }
+          }
+        },
+        orderBy: { updatedAt: 'desc' }
+      });`;
+
+    expect(scanUnboundedFindMany(source, 'x.ts')).toMatchObject([{ file: 'x.ts' }]);
+  });
+
+  it('ne signale RIEN quand le findMany porte SON PROPRE take, même en présence du même patron imbriqué', () => {
+    const source = `
+      const rows = await prisma.conversation.findMany({
+        where: { communityId: id },
+        include: {
+          participants: {
+            take: 100,
+            include: { user: { select: { id: true } } }
+          }
+        },
+        orderBy: { updatedAt: 'desc' },
+        skip: offsetNum,
+        take: limitNum
+      });`;
+
+    expect(scanUnboundedFindMany(source, 'x.ts')).toEqual([]);
+  });
+
+  it("ne signale RIEN pour un findMany dont `take` est une propriété RACCOURCIE ({ take }, pas { take: take })", () => {
+    // Patron réel de `conversations/utils/delta-tombstones.ts` — faux
+    // positif mesuré de la première version de ce témoin.
+    const source = `
+      const take = LIMIT + 1;
+      const rows = await prisma.conversation.findMany({
+        where: { closedAt: { gt: since } },
+        select: { id: true },
+        take,
+      });`;
+
+    expect(scanUnboundedFindMany(source, 'x.ts')).toEqual([]);
+  });
+
+  it('ne signale RIEN pour un findMany avec take', () => {
+    const source = `
+      const rows = await prisma.reaction.findMany({
+        where: { conversationId },
+        orderBy: { createdAt: 'desc' },
+        take: 100
+      });`;
+
+    expect(scanUnboundedFindMany(source, 'x.ts')).toEqual([]);
+  });
+
+  it('ne signale RIEN pour un findMany avec skip + take, même avec des parenthèses imbriquées dans where', () => {
+    const source = `
+      const rows = await prisma.message.findMany({
+        where: { conversationId, createdAt: { lt: new Date(Date.now() - 1000) } },
+        skip: offset,
+        take: limit
+      });`;
+
+    expect(scanUnboundedFindMany(source, 'x.ts')).toEqual([]);
+  });
+
+  it("ne rapporte pas un findMany cité en commentaire", () => {
+    const source = `
+      // ancien code : const rows = await prisma.reaction.findMany({ where: { conversationId } });
+      const rows = await prisma.reaction.findMany({ where: { conversationId }, take: 50 });`;
+
+    expect(scanUnboundedFindMany(source, 'x.ts')).toEqual([]);
+  });
+
+  it('distingue deux findMany voisins : un nu, un borné — sans confondre leurs arguments', () => {
+    const source = `
+      const a = await prisma.participant.findMany({ where: { conversationId } });
+      const b = await prisma.message.findMany({ where: { conversationId }, take: 20 });`;
+
+    const sites = scanUnboundedFindMany(source, 'x.ts');
+    expect(sites).toHaveLength(1);
+    expect(sites[0].line).toBe(2);
+  });
+});
+
+describe('Le balayage LIT bien le répertoire — sans quoi il passerait au vert à vide', () => {
+  it('trouve des fichiers de routes, et les six fichiers que ce lot a bornés existent toujours', () => {
+    // Une garde négative meurt en silence quand son terrain disparaît (même
+    // leçon que `response-schema-closure-guard.test.ts`) : un répertoire
+    // renommé rendrait `[]` des deux côtés et ce témoin serait vert en ne
+    // mesurant plus rien.
+    expect(walk(ROUTES_DIR).length).toBeGreaterThan(50);
+
+    for (const rel of [
+      'conversations/messages-advanced.ts',
+      'communities/core.ts',
+      'links/utils/prisma-queries.ts',
+      'anonymous.ts',
+      'admin/agent.ts',
+      'admin/users.ts',
+    ]) {
+      expect(readFileSync(join(ROUTES_DIR, rel), 'utf8').length).toBeGreaterThan(500);
+    }
+  });
+});

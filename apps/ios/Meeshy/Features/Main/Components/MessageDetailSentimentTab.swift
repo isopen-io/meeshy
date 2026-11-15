@@ -1,5 +1,6 @@
 import SwiftUI
 import NaturalLanguage
+import MeeshyUI
 
 // MARK: - Sentiment Tab
 
@@ -20,21 +21,21 @@ struct MessageDetailSentimentTab: View, Equatable {
         let score = Self.analyzeSentiment(content)
         let label = Self.sentimentLabel(score)
 
-        return VStack(spacing: 16) {
+        return VStack(spacing: MeeshySpacing.lg) {
             // Hero emoji — figé (doctrine 84i/86i : glyphe hero à taille fixe, un
             // scaling XXXL déborderait la carte) et décoratif : le sentiment est déjà
             // porté par le libellé + la valeur VoiceOver groupée ci-dessous.
             Text(Self.sentimentEmoji(score))
-                .font(.system(size: 56))
+                .font(MeeshyFont.emoji(56))
                 .accessibilityHidden(true)
 
             Text(label)
                 .font(.callout.weight(.semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                         .fill(
                             LinearGradient(
                                 colors: [MeeshyColors.error, MeeshyColors.warning, MeeshyColors.warning, MeeshyColors.success],
@@ -55,17 +56,17 @@ struct MessageDetailSentimentTab: View, Equatable {
                 }
             }
             .frame(height: 18)
-            .padding(.horizontal, 20)
+            .padding(.horizontal, MeeshySpacing.xl)
             // Jauge décorative custom (GeometryReader) : illisible par VoiceOver, sa
             // valeur est exposée sur l'élément groupé.
             .accessibilityHidden(true)
 
             Text(String(format: String(localized: "message-detail.sentiment.score", defaultValue: "Score : %.2f", bundle: .main), score))
                 .font(.footnote.weight(.medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
+        .padding(.vertical, MeeshySpacing.sm)
         // Regroupe emoji + libellé + jauge + score en un seul élément VoiceOver
         // cohérent : « Sentiment » (label) → « Positif, score 0,42 » (value).
         .accessibilityElement(children: .ignore)
@@ -105,10 +106,10 @@ struct MessageDetailSentimentTab: View, Equatable {
     }
 
     private static func sentimentLabel(_ score: Double) -> String {
-        if score < -0.6 { return String(localized: "sentiment.very-negative", defaultValue: "Very negative", bundle: .main) }
-        if score < -0.2 { return String(localized: "dashboard.sentiment.negative", defaultValue: "Negative", bundle: .main) }
-        if score < 0.2 { return String(localized: "dashboard.sentiment.neutral", defaultValue: "Neutral", bundle: .main) }
-        if score < 0.6 { return String(localized: "dashboard.sentiment.positive", defaultValue: "Positive", bundle: .main) }
-        return String(localized: "sentiment.very-positive", defaultValue: "Very positive", bundle: .main)
+        if score < -0.6 { return String(localized: "sentiment.very-negative", defaultValue: "Très négatif", bundle: .main) }
+        if score < -0.2 { return String(localized: "dashboard.sentiment.negative", defaultValue: "Négatif", bundle: .main) }
+        if score < 0.2 { return String(localized: "dashboard.sentiment.neutral", defaultValue: "Neutre", bundle: .main) }
+        if score < 0.6 { return String(localized: "dashboard.sentiment.positive", defaultValue: "Positif", bundle: .main) }
+        return String(localized: "sentiment.very-positive", defaultValue: "Très positif", bundle: .main)
     }
 }

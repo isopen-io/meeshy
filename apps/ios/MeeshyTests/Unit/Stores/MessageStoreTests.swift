@@ -1,6 +1,7 @@
 // apps/ios/MeeshyTests/Unit/Stores/MessageStoreTests.swift
 
 import XCTest
+import Combine
 import GRDB
 @testable import Meeshy
 @testable import MeeshySDK
@@ -17,9 +18,10 @@ final class MessageStoreTests: XCTestCase {
             conversationId: "conv-1",
             persistence: persistence
         )
-        store?.startObserving(dbPool: db)
+        store?.startObserving()
 
-        weak var weakStore = store
+        weak var weakStore: MessageStore?
+        weakStore = store
         XCTAssertNotNil(weakStore, "Store should be alive before release")
 
         store = nil
@@ -34,7 +36,7 @@ final class MessageStoreTests: XCTestCase {
         let db = try makeInMemoryDatabase()
         let persistence = MessagePersistenceActor(dbWriter: db)
         let store = MessageStore(conversationId: "conv-2", persistence: persistence)
-        store.startObserving(dbPool: db)
+        store.startObserving()
         store.stopObserving()
         // After stopObserving(), no crash or hang should occur — the store is idle.
         // This is a smoke-test: the assertions live in the lack of test failure.
@@ -281,6 +283,24 @@ final class MessageStoreTests: XCTestCase {
         )
     }
 
+    // MARK: - Recherche filtrée : un id ne tombe que dans un paquet
+
+    func test_searchIdChunks_overlappingPages_neverRepeatAnId() {
+        // 905 résultats dont un recouvrement de pages : « S0 » revient au-delà
+        // du premier paquet de 900.
+        let ids = (0..<905).map { "S\($0)" } + ["S0", "S3"]
+        let chunks = MessageRepository.searchIdChunks(ids)
+        let flat = chunks.flatMap { $0 }
+        XCTAssertEqual(flat.count, Set(flat).count, "un même id dans deux paquets ramène la même ligne deux fois")
+        XCTAssertEqual(flat.count, 905)
+        XCTAssertTrue(chunks.allSatisfy { $0.count <= 900 }, "plafond SQLite des IN")
+    }
+
+    func test_searchIdChunks_emptyOrTinySize_staysWellFormed() {
+        XCTAssertEqual(MessageRepository.searchIdChunks([]), [])
+        XCTAssertEqual(MessageRepository.searchIdChunks(["a", "b", "a"], size: 0), [["a"], ["b"]])
+    }
+
     // MARK: - Duplicate server-id collapse (publish-boundary guard)
 
     func test_collapsingDuplicateServerIds_noCollision_returnsInputUnchanged() {
@@ -447,6 +467,253 @@ final class MessageStoreTests: XCTestCase {
             store.messages.map(\.localId), ["msg-match"],
             "search mode must NOT inject a non-matching real-time message"
         )
+    }
+
+    // MARK: - Coalescence des refreshes temps réel
+
+    /// Une rafale de notifications d'écriture (lot d'accusés de lecture,
+    /// burst de livraisons) ne doit pas déclencher une lecture de fenêtre
+    /// complète PAR écriture : la première part immédiatement, celles qui
+    /// tombent pendant la lecture en vol fusionnent en UNE lecture de queue.
+    /// Le contrat observable : après la rafale, la fenêtre publiée est
+    /// FRAÎCHE (rien n'est perdu par la fusion).
+    func test_requestRealtimeRefresh_burst_servesFreshWindow() async throws {
+        let db = try makeInMemoryDatabase()
+        let persistence = MessagePersistenceActor(dbWriter: db)
+        let store = MessageStore(conversationId: "conv-coalesce", persistence: persistence)
+
+        let r0 = MessageStoreObservationHelper.makeRecord(
+            localId: "m0", conversationId: "conv-coalesce",
+            content: "premier", createdAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        try await MessageStoreObservationHelper.insertRecord(r0, into: persistence)
+
+        // Rafale synchrone — simule huit écritures GRDB coup sur coup.
+        for _ in 0..<8 { store.requestRealtimeRefresh() }
+
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertEqual(
+            store.messages.map(\.localId), ["m0"],
+            "la fusion des refreshes ne doit jamais perdre l'état le plus frais"
+        )
+    }
+
+    /// Un événement arrivé PENDANT la lecture en vol n'est pas perdu : la
+    /// lecture de queue relit l'état postérieur à l'écriture tardive.
+    func test_requestRealtimeRefresh_writeDuringInFlightRefresh_isPickedUpByTrailingRefresh() async throws {
+        let db = try makeInMemoryDatabase()
+        let persistence = MessagePersistenceActor(dbWriter: db)
+        let store = MessageStore(conversationId: "conv-trail", persistence: persistence)
+
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let r0 = MessageStoreObservationHelper.makeRecord(
+            localId: "m0", conversationId: "conv-trail",
+            content: "premier", createdAt: base
+        )
+        try await MessageStoreObservationHelper.insertRecord(r0, into: persistence)
+
+        store.requestRealtimeRefresh()
+        // Seconde écriture + refresh demandé pendant que le premier est
+        // (probablement) encore en vol — le trailing doit la ramasser.
+        let r1 = MessageStoreObservationHelper.makeRecord(
+            localId: "m1", conversationId: "conv-trail",
+            content: "second", createdAt: base.addingTimeInterval(10)
+        )
+        try await MessageStoreObservationHelper.insertRecord(r1, into: persistence)
+        store.requestRealtimeRefresh()
+
+        try await Task.sleep(for: .milliseconds(500))
+        XCTAssertEqual(
+            store.messages.map(\.localId), ["m0", "m1"],
+            "une écriture pendant la lecture en vol doit être servie par la lecture de queue"
+        )
+    }
+
+    // MARK: - Idempotence de la publication (#4943, D-OPEN-01)
+
+    /// Ouvrir une conversation déjà en cache lisait la MÊME fenêtre deux fois
+    /// (le `loadInitial()` de `start()` et le `loadInitialSnapshot()` de
+    /// `loadMessages()`) et republiait à chaque fois : la liste se re-disposait
+    /// deux à trois fois dans la seconde qui suivait le tap, pour un contenu
+    /// IDENTIQUE. `refreshFromDB` s'en gardait déjà (`newRecords != messages`),
+    /// `apply` pas du tout. Contrat : appliquer deux fois la même fenêtre
+    /// n'émet qu'UNE fois — et ce qui suit n'est pas une optimisation
+    /// invisible, c'est ce que voit l'utilisateur (chaque émission réveille le
+    /// sink du ViewModel ET un `applySnapshot()` O(n) de la liste).
+    func test_apply_twiceWithTheSameRecords_publishesOnce() async throws {
+        let db = try makeInMemoryDatabase()
+        let persistence = MessagePersistenceActor(dbWriter: db)
+        let store = MessageStore(conversationId: "conv-idem", persistence: persistence)
+
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let records = (0..<3).map { i in
+            MessageStoreObservationHelper.makeRecord(
+                localId: "msg-\(i)", conversationId: "conv-idem",
+                content: "hello \(i)", createdAt: base.addingTimeInterval(TimeInterval(i))
+            )
+        }
+
+        var publications = 0
+        let token = store.messagesDidChange.sink { publications += 1 }
+        defer { token.cancel() }
+
+        store.apply(records: records)
+        XCTAssertEqual(publications, 1, "la première fenêtre doit être publiée")
+
+        store.apply(records: records)
+
+        XCTAssertEqual(
+            publications, 1,
+            "appliquer la MÊME fenêtre ne doit rien republier — sinon la liste se re-dispose pour un contenu identique"
+        )
+        XCTAssertEqual(store.messages.map(\.localId), ["msg-0", "msg-1", "msg-2"])
+    }
+
+    /// La moitié négative, et elle porte la garde : une fenêtre qui a CHANGÉ
+    /// doit toujours passer. Un `changeVersion` qui bouge (accusé de lecture,
+    /// réaction, édition) est le cas nominal du temps réel — le rater
+    /// figerait la bulle.
+    func test_apply_withABumpedRecord_publishesAgain() async throws {
+        let db = try makeInMemoryDatabase()
+        let persistence = MessagePersistenceActor(dbWriter: db)
+        let store = MessageStore(conversationId: "conv-idem-2", persistence: persistence)
+
+        var record = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-a", conversationId: "conv-idem-2",
+            content: "hello", createdAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+
+        var publications = 0
+        let token = store.messagesDidChange.sink { publications += 1 }
+        defer { token.cancel() }
+
+        store.apply(records: [record])
+        record.changeVersion += 1
+        store.apply(records: [record])
+
+        XCTAssertEqual(
+            publications, 2,
+            "une fenêtre dont une ligne a bougé doit être republiée"
+        )
+    }
+
+    // MARK: - Borne de la relecture ancrée (#4943, D-RT-02)
+
+    /// Après une remontée PROFONDE, la fenêtre `.latest` ancrée n'avait aucune
+    /// borne haute : chaque écriture GRDB (message entrant, accusé, réaction,
+    /// tick de retry) rematérialisait toute la profondeur paginée. Contrat :
+    /// la relecture TEMPS RÉEL s'arrête au plafond, et la fusion protectrice
+    /// garde le reste à l'écran — la borne ne doit RIEN faire disparaître.
+    func test_refreshFromDB_realtime_afterDeepPagination_readsAtMostTheCap() async throws {
+        let db = try makeInMemoryDatabase()
+        let persistence = MessagePersistenceActor(dbWriter: db)
+        let store = MessageStore(conversationId: "conv-deep", persistence: persistence)
+
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let seeded = (0..<1_500).map { i in
+            MessageStoreObservationHelper.makeRecord(
+                localId: "m-\(i)", conversationId: "conv-deep",
+                content: "msg \(i)", createdAt: base.addingTimeInterval(TimeInterval(i))
+            )
+        }
+        try await db.write { db in
+            for record in seeded { try record.insert(db) }
+        }
+
+        // Remontée profonde : l'ancre recule jusqu'au tout premier message, la
+        // fenêtre couvre alors les 1 500 lignes.
+        let paginated = await store.loadOlder(before: base.addingTimeInterval(50))
+        XCTAssertTrue(paginated, "précondition : la pagination doit ramener une page")
+        XCTAssertEqual(store.messages.count, 1_500,
+                       "précondition : la fenêtre ancrée couvre toute la profondeur")
+
+        var publications = 0
+        let token = store.messagesDidChange.sink { publications += 1 }
+        defer { token.cancel() }
+
+        // Un refresh temps réel (le chemin de `requestRealtimeRefresh`).
+        await store.refreshFromDB(mergeInMemory: true, skipRunLoopYield: true)
+
+        XCTAssertEqual(
+            store.lastWindowRowsReadForTesting, MessageStore.realtimeAnchoredWindowCap,
+            "la relecture temps réel doit s'arrêter au plafond, pas suivre la profondeur paginée"
+        )
+        XCTAssertEqual(
+            store.messages.count, 1_500,
+            "la fusion protectrice garde à l'écran ce que la lecture plafonnée n'a pas relu"
+        )
+        XCTAssertEqual(store.messages.first?.localId, "m-0")
+        XCTAssertEqual(store.messages.last?.localId, "m-1499")
+        XCTAssertEqual(
+            publications, 0,
+            "rien n'a changé : une lecture plafonnée égale à la queue de la fenêtre ne doit pas republier"
+        )
+    }
+
+    /// Et la borne ne coûte AUCUN message entrant : la ligne neuve tombe dans
+    /// les lignes les plus récentes, donc dans la lecture plafonnée.
+    func test_refreshFromDB_realtime_cappedRead_stillSurfacesANewMessage() async throws {
+        let db = try makeInMemoryDatabase()
+        let persistence = MessagePersistenceActor(dbWriter: db)
+        let store = MessageStore(conversationId: "conv-deep-new", persistence: persistence)
+
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let seeded = (0..<1_500).map { i in
+            MessageStoreObservationHelper.makeRecord(
+                localId: "m-\(i)", conversationId: "conv-deep-new",
+                content: "msg \(i)", createdAt: base.addingTimeInterval(TimeInterval(i))
+            )
+        }
+        try await db.write { db in
+            for record in seeded { try record.insert(db) }
+        }
+        _ = await store.loadOlder(before: base.addingTimeInterval(50))
+        XCTAssertEqual(store.messages.count, 1_500)
+
+        let incoming = MessageStoreObservationHelper.makeRecord(
+            localId: "m-new", conversationId: "conv-deep-new",
+            content: "arrivé en direct", createdAt: base.addingTimeInterval(2_000)
+        )
+        try await db.write { db in try incoming.insert(db) }
+
+        await store.refreshFromDB(mergeInMemory: true, skipRunLoopYield: true)
+
+        XCTAssertEqual(store.lastWindowRowsReadForTesting,
+                       MessageStore.realtimeAnchoredWindowCap)
+        XCTAssertEqual(store.messages.count, 1_501)
+        XCTAssertEqual(store.messages.last?.localId, "m-new",
+                       "le message entrant doit apparaître malgré la lecture plafonnée")
+        XCTAssertEqual(store.messages.first?.localId, "m-0",
+                       "et rien ne doit être amputé en haut de la fenêtre")
+    }
+
+    /// La transition de fenêtre REMPLACE (aucune fusion ne rattraperait une
+    /// troncature) : elle relit donc sans plafond, sinon remonter le fil
+    /// amputerait le fil au lieu de l'étendre.
+    func test_refreshFromDB_windowTransition_afterDeepPagination_readsTheWholeWindow() async throws {
+        let db = try makeInMemoryDatabase()
+        let persistence = MessagePersistenceActor(dbWriter: db)
+        let store = MessageStore(conversationId: "conv-deep-replace", persistence: persistence)
+
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let seeded = (0..<1_500).map { i in
+            MessageStoreObservationHelper.makeRecord(
+                localId: "m-\(i)", conversationId: "conv-deep-replace",
+                content: "msg \(i)", createdAt: base.addingTimeInterval(TimeInterval(i))
+            )
+        }
+        try await db.write { db in
+            for record in seeded { try record.insert(db) }
+        }
+        _ = await store.loadOlder(before: base.addingTimeInterval(50))
+
+        await store.refreshFromDB()
+
+        XCTAssertEqual(
+            store.lastWindowRowsReadForTesting, 1_500,
+            "un remplacement sec doit relire la fenêtre entière — le plafond ne vaut que pour la fusion"
+        )
+        XCTAssertEqual(store.messages.count, 1_500)
     }
 
     // MARK: - Helpers

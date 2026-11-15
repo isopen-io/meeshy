@@ -25,9 +25,10 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
 
 const mockCanAccess = jest.fn<any>();
-jest.mock('../../../routes/conversations/utils/access-control', () => ({
-  canAccessConversation: (...args: unknown[]) => mockCanAccess(...args),
-}));
+jest.mock('../../../routes/conversations/utils/access-control', () =>
+  (jest.requireActual('../../helpers/acces-conversation-double') as any).doubleAccesConversation(
+    jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>,
+    (...args: unknown[]) => mockCanAccess(...args)));
 
 const mockResolveConversationId = jest.fn<any>();
 jest.mock('../../../utils/conversation-id-cache', () => ({
@@ -35,6 +36,22 @@ jest.mock('../../../utils/conversation-id-cache', () => ({
   invalidateConversationIdCache: jest.fn(),
 }));
 
+// Gate de présence — régime STRICT (2026-08-25). La fiche servait `isOnline`
+// et `lastActiveAt` BRUTS, sans aucune gate : un co-membre qui n'est ni ami ni
+// ADMIN+ apprenait la dernière connexion de n'importe quel membre inscrit rien
+// qu'en ouvrant sa fiche. Le service n'est doublé que sur son I/O :
+// `lawFaithfulTargetResolver` applique la VRAIE loi partagée à un ensemble
+// d'amis piloté par le test — chaque témoin rougit si la route cesse de
+// transmettre le viewer, ou sert de nouveau le rang brut.
+const mockResolveForTarget = jest.fn<any>();
+jest.mock('../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({
+    resolveForTarget: (...args: unknown[]) => mockResolveForTarget(...args),
+  }),
+}));
+
+import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
+import type { PresenceViewer, PresenceTarget } from '../../../services/PresenceVisibilityService';
 import { registerParticipantsRoutes } from '../../../routes/conversations/participants';
 
 const CONV_ID = '507f1f77bcf86cd799439022';
@@ -128,6 +145,23 @@ const registeredRow = {
   user: { id: '507f1f77bcf86cd799439055', username: 'alice', displayName: 'Alice' },
 };
 
+const PRESENCE_HIDDEN = { showOnline: false, showLastSeenTimestamp: false } as const;
+
+const lawFaithfulTargetResolver =
+  (friendsOfViewer: ReadonlySet<string> = new Set()) =>
+  async (viewer: PresenceViewer, target: PresenceTarget) =>
+    viewer
+      ? resolvePresenceVisibility({
+          isSelf: viewer.userId === target.id,
+          viewerRole: viewer.role,
+          relationLevel: friendsOfViewer.has(target.id) ? 'CLOSE' : 'PUBLIC',
+          targetShowOnlineStatus: true,
+          targetShowLastSeen: true,
+          targetIsDeactivated: false,
+          isBlockedEitherWay: false,
+        })
+      : PRESENCE_HIDDEN;
+
 type Ctx = ReturnType<typeof setup>;
 
 function setup(viewerRole: string = 'member', targetRow: any = anonymousRow) {
@@ -182,12 +216,23 @@ function routeFor(ctx: Ctx, fragment: string) {
   return found;
 }
 
-async function fetchProfile(ctx: Ctx, participantId: string = ANON_ID) {
+// `type: 'user'` est la forme RÉELLE que pose `createUnifiedAuthMiddleware`
+// pour un inscrit : c'est sur elle que `viewerFromRequest` construit le viewer
+// de présence. Un visiteur de lien partagé porte `type: 'anonymous'` et un
+// `Participant.id` — jamais de rôle plateforme.
+type PresenceViewerShape = { role: string } | 'anonymous';
+
+const viewerAuthContext = (viewer: PresenceViewerShape) =>
+  viewer === 'anonymous'
+    ? { type: 'anonymous', isAuthenticated: true, isAnonymous: true, userId: 'viewer-anon-part', participantId: 'viewer-anon-part', registeredUser: null }
+    : { type: 'user', isAuthenticated: true, isAnonymous: false, userId: VIEWER_ID, registeredUser: { id: VIEWER_ID, role: viewer.role } };
+
+async function fetchProfile(ctx: Ctx, participantId: string = ANON_ID, viewer: PresenceViewerShape = { role: 'USER' }) {
   const route = routeFor(ctx, 'participants/:participantId/profile');
   await route.handler(
     {
       params: { id: CONV_ID, participantId },
-      authContext: { userId: VIEWER_ID, isAuthenticated: true, registeredUser: { id: VIEWER_ID } },
+      authContext: viewerAuthContext(viewer),
     },
     ctx.reply
   );
@@ -198,6 +243,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockCanAccess.mockResolvedValue(true);
   mockResolveConversationId.mockResolvedValue(CONV_ID);
+  mockResolveForTarget.mockImplementation(lawFaithfulTargetResolver());
 });
 
 describe('GET /conversations/:id/participants/:participantId/profile — identité', () => {
@@ -221,13 +267,13 @@ describe('GET /conversations/:id/participants/:participantId/profile — identit
     expect(data.shareLinkName).toBe('Invitation publique');
   });
 
-  it('refuse à qui n’est pas membre de la conversation', async () => {
+  it('répond à qui n’est pas membre comme à une conversation inexistante (#8099)', async () => {
     mockCanAccess.mockResolvedValue(false);
     const ctx = setup('member');
 
     await fetchProfile(ctx);
 
-    expect(ctx.reply._status).toBe(403);
+    expect(ctx.reply._status).toBe(404);
   });
 });
 
@@ -293,10 +339,58 @@ describe('GET …/profile — ce que le visiteur peut faire', () => {
     expect(data.entryCapabilities.canSendImages).toBe(true);
   });
 
-  it('énonce l’accès à l’historique', async () => {
+  /**
+   * **RETOURNÉ au #4056.** La fiche énonçait l'accès à l'historique à TOUT
+   * membre. Le porteur a tranché le 2026-08-27 que « qui a le droit de voir
+   * l'historique » est un fait de MODÉRATION ; #4009 l'a retiré de l'événement
+   * diffusé à la room, et cette route continuait de le servir — tant qu'un
+   * chemin sert le fait, le retrait de l'autre ne protège rien.
+   *
+   * La clé est ABSENTE, jamais `false` : un `false` affirmerait « ce visiteur
+   * ne voit pas l'historique », ce qui est exactement le fait qu'on refuse de
+   * divulguer. Le contrat de fil l'admet depuis #4009.
+   */
+  it('ne dit PAS l’accès à l’historique à un membre ordinaire', async () => {
     const data = await fetchProfile(setup('member'));
 
+    expect(data.entryCapabilities).not.toHaveProperty('canViewHistory');
+    // Le reste du premier cercle survit : c'est UN droit qui sort, pas l'objet.
+    expect(data.entryCapabilities.canSendMessages).toBe(true);
+  });
+
+  it('l’énonce à un hôte, qui est le seul à pouvoir le poser', async () => {
+    for (const role of ['moderator', 'admin'] as const) {
+      const data = await fetchProfile(setup(role));
+
+      expect(data.entryCapabilities.canViewHistory).toBe(false);
+    }
+  });
+
+  /**
+   * #17140 — la fiche ANNONCE ce que `historyFloorFor` APPLIQUE, et le repli
+   * `shareLink?.allowViewHistory ?? true` confondait deux raisons d'avoir
+   * `null` en face : « ce visiteur n'a emprunté aucun lien » (accorde) et
+   * « son lien a disparu » (refuse). La seconde est FABRIQUÉE en production —
+   * le balayage horaire supprime les liens ÉCHUS après n'avoir révoqué que
+   * leurs invités anonymes — et elle annonçait donc « voit l'historique » au
+   * modérateur pendant que la lecture le lui refusait.
+   */
+  it('refuse l’historique quand la ligne du lien a DISPARU — la fiche dit ce que la lecture fait (#17140)', async () => {
+    const ctx = setup('admin');
+    (ctx.prisma.conversationShareLink.findUnique as any).mockResolvedValue(null);
+
+    const data = await fetchProfile(ctx);
+
     expect(data.entryCapabilities.canViewHistory).toBe(false);
+  });
+
+  it('et l’accorde toujours à un visiteur qu’AUCUN lien n’a fait entrer', async () => {
+    const ctx = setup('admin', { ...anonymousRow, anonymousSession: { ...anonymousRow.anonymousSession, shareLinkId: null } });
+
+    const data = await fetchProfile(ctx);
+
+    expect(data.entryCapabilities.canViewHistory).toBe(true);
+    expect(ctx.prisma.conversationShareLink.findUnique).not.toHaveBeenCalled();
   });
 
   it('n’en énonce aucune pour un participant qui a un compte', async () => {
@@ -391,5 +485,192 @@ describe('GET …/profile — la personne a quitté la conversation', () => {
 
     expect(ctx.reply._status).toBe(404);
     expect(ctx.reply._body?.code).not.toBe('PARTICIPANT_LEFT');
+  });
+});
+
+// ── Régime STRICT (2026-08-25) — la présence sur la fiche ────────────────────
+// Hors soi-même, ADMIN+ et amitié acceptée, ni `isOnline` ni `lastActiveAt`
+// d'un autre membre ne sortent — la co-participation n'est pas une relation.
+// Un rang inférieur au premier est le seul qui distingue la règle juste du
+// court-circuit : la cible est donc un membre AUTRE que le lecteur.
+describe('GET …/profile — présence (régime strict)', () => {
+  const LAST_SEEN = registeredRow.lastActiveAt;
+
+  it('transmet le viewer demandeur (identité + rôle) et la cible inscrite', async () => {
+    await fetchProfile(setup('member', registeredRow), REGISTERED_ID, { role: 'USER' });
+
+    expect(mockResolveForTarget).toHaveBeenCalledWith(
+      { userId: VIEWER_ID, role: 'USER' },
+      { id: registeredRow.userId, deactivatedAt: null },
+    );
+  });
+
+  it('Proche ⇒ présence détaillée servie', async () => {
+    mockResolveForTarget.mockImplementation(lawFaithfulTargetResolver(new Set([registeredRow.userId])));
+
+    const data = await fetchProfile(setup('member', registeredRow), REGISTERED_ID, { role: 'USER' });
+
+    expect(data.isOnline).toBe(true);
+    expect(data.lastActiveAt).toEqual(LAST_SEEN);
+  });
+
+  it('co-membre NON ami ⇒ isOnline false et lastActiveAt null', async () => {
+    const data = await fetchProfile(setup('member', registeredRow), REGISTERED_ID, { role: 'USER' });
+
+    expect(data.isOnline).toBe(false);
+    expect(data.lastActiveAt).toBeNull();
+  });
+
+  it('ADMIN non ami ⇒ présence servie', async () => {
+    const data = await fetchProfile(setup('member', registeredRow), REGISTERED_ID, { role: 'ADMIN' });
+
+    expect(data.isOnline).toBe(true);
+    expect(data.lastActiveAt).toEqual(LAST_SEEN);
+  });
+
+  it('MODERATOR non ami ⇒ cachée, comme un utilisateur ordinaire', async () => {
+    const data = await fetchProfile(setup('member', registeredRow), REGISTERED_ID, { role: 'MODERATOR' });
+
+    expect(data.isOnline).toBe(false);
+    expect(data.lastActiveAt).toBeNull();
+  });
+
+  it('viewer anonyme ⇒ la fiche d’un autre est refusée (403 ACCOUNT_REQUIRED, #10205), sans résoudre de présence', async () => {
+    const ctx = setup('member', registeredRow);
+    const data = await fetchProfile(ctx, REGISTERED_ID, 'anonymous');
+
+    expect(data).toBeUndefined();
+    expect(ctx.reply._body).toMatchObject({ success: false, code: 'ACCOUNT_REQUIRED' });
+    expect(mockResolveForTarget).not.toHaveBeenCalled();
+  });
+
+  // Un visiteur sans compte n'a pas de `User.id` : le service ne peut pas le
+  // résoudre. Régime strict : entrée absente ⇒ masqué, sauf ADMIN+ — et le
+  // MODERATOR, qui n'est ni ami ni administrateur, reste du côté masqué.
+  it('visiteur sans compte ⇒ caché pour un USER, et rien n\'est résolu pour lui', async () => {
+    const data = await fetchProfile(setup('member'), ANON_ID, { role: 'USER' });
+
+    expect(data.isOnline).toBe(false);
+    expect(data.lastActiveAt).toBeNull();
+    expect(mockResolveForTarget).not.toHaveBeenCalled();
+  });
+
+  it('visiteur sans compte ⇒ caché pour un MODERATOR', async () => {
+    const data = await fetchProfile(setup('member'), ANON_ID, { role: 'MODERATOR' });
+
+    expect(data.isOnline).toBe(false);
+    expect(data.lastActiveAt).toBeNull();
+  });
+
+  it('visiteur sans compte ⇒ servi à un ADMIN', async () => {
+    const data = await fetchProfile(setup('member'), ANON_ID, { role: 'ADMIN' });
+
+    expect(data.isOnline).toBe(true);
+    expect(data.lastActiveAt).toEqual(anonymousRow.lastActiveAt);
+  });
+});
+
+// ─── L'octroi d'historique par date, sur la fiche ────────────────────────────
+
+/**
+ * SECOND CERCLE, pour la raison qui vaut déjà pour l'email et pour les réglages
+ * du lien dans ce même fichier : `historyVisibleFrom` n'est pas un attribut de
+ * la personne, c'est un FAIT DE MODÉRATION — « l'hôte a rouvert l'avant-jointure
+ * à celle-ci depuis le 3 mars ». Le servir à toute la salle publiait la décision
+ * d'un hôte à ceux qu'elle ne concerne pas, et laissait chaque membre comparer
+ * les fiches pour savoir qui a été favorisé.
+ *
+ * Il n'a PAS de jumeau `hasHistoryGrant` : là où `hasEmail` sert à l'hôte à
+ * distinguer « pas fourni » de « caché », l'existence de l'octroi EST le fait à
+ * taire. Un membre ordinaire lit donc `null` dans les deux cas — c'est voulu.
+ */
+describe('GET …/profile — l’octroi d’historique par date', () => {
+  const granted = new Date('2026-01-01T00:00:00Z');
+  const grantedRow = { ...anonymousRow, historyVisibleFrom: granted };
+
+  it('le cache à un membre ordinaire — une décision de modération n’est pas publique', async () => {
+    const data = await fetchProfile(setup('member', grantedRow));
+
+    expect(data.historyVisibleFrom).toBeNull();
+  });
+
+  it('le cache aussi à un membre ordinaire regardant un participant INSCRIT', async () => {
+    const ctx = setup('member', { ...registeredRow, historyVisibleFrom: granted });
+
+    const data = await fetchProfile(ctx, REGISTERED_ID);
+
+    expect(data.historyVisibleFrom).toBeNull();
+  });
+
+  it('le rend à un modérateur', async () => {
+    const data = await fetchProfile(setup('moderator', grantedRow));
+
+    expect(data.historyVisibleFrom).toEqual(granted);
+  });
+
+  it('le rend à un administrateur de la conversation', async () => {
+    const data = await fetchProfile(setup('admin', grantedRow));
+
+    expect(data.historyVisibleFrom).toEqual(granted);
+  });
+
+  it('le rend à un creator', async () => {
+    const data = await fetchProfile(setup('creator', grantedRow));
+
+    expect(data.historyVisibleFrom).toEqual(granted);
+  });
+
+  it('sert `null` sans octroi — jamais une clé absente, que le client lirait comme « inconnu »', async () => {
+    const data = await fetchProfile(setup('admin'));
+
+    expect(data).toHaveProperty('historyVisibleFrom', null);
+  });
+
+  it('sert la clé, à `null`, même à un membre ordinaire — le masquage ne retire pas le champ', async () => {
+    const data = await fetchProfile(setup('member', grantedRow));
+
+    expect(data).toHaveProperty('historyVisibleFrom', null);
+  });
+});
+
+/**
+ * `canGrantHistory` répond à une question DIFFÉRENTE de `historyVisibleFrom` :
+ * pas « quel est l'octroi ? » (fait de modération, second cercle) mais « CE
+ * LECTEUR peut-il en poser un ? ». Sans elle, un client ne peut pas distinguer
+ * « je ne suis pas hôte » de « je suis hôte, aucun octroi posé » — les deux
+ * rendent `historyVisibleFrom: null`. Un modérateur LIT l'octroi (ligne
+ * au-dessus) mais ne peut pas l'ÉCRIRE : `PATCH …/rights` réserve ce champ à
+ * `admin`/`creator` (`HISTORY_GRANT_REQUIRES_ADMIN`) — la garde ici doit donc
+ * matcher exactement cette même liste, jamais `viewerHostsTheRoom`.
+ */
+describe('GET …/profile — qui peut poser l’octroi d’historique', () => {
+  it('refuse à un membre ordinaire', async () => {
+    const data = await fetchProfile(setup('member'));
+
+    expect(data.canGrantHistory).toBe(false);
+  });
+
+  it('refuse à un modérateur — il LIT l’octroi mais ne peut pas l’écrire', async () => {
+    const data = await fetchProfile(setup('moderator'));
+
+    expect(data.canGrantHistory).toBe(false);
+  });
+
+  it('autorise un administrateur de la conversation', async () => {
+    const data = await fetchProfile(setup('admin'));
+
+    expect(data.canGrantHistory).toBe(true);
+  });
+
+  it('autorise un creator', async () => {
+    const data = await fetchProfile(setup('creator'));
+
+    expect(data.canGrantHistory).toBe(true);
+  });
+
+  it('vaut pour un participant CIBLE inscrit, pas seulement anonyme', async () => {
+    const data = await fetchProfile(setup('admin', registeredRow), REGISTERED_ID);
+
+    expect(data.canGrantHistory).toBe(true);
   });
 });

@@ -24,10 +24,6 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: { type: 'object', properties: { success: { type: 'boolean' } } },
-}));
-
 jest.mock('../../../services/attachments', () => ({
   AttachmentService: jest.fn().mockImplementation(() => ({
     getAttachment: (...a: any[]) => mockGetAttachment(...a),
@@ -54,6 +50,7 @@ jest.mock('fs', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerDownloadRoutes } from '../../../routes/attachments/download';
+import { storedFileETag } from '../../../utils/etag';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -81,9 +78,33 @@ const DEFAULT_STAT = {
 // ─── App factory ─────────────────────────────────────────────────────────────
 
 /** Prisma minimal : le contrôle d'accès remonte du message à la participation. */
+/**
+ * La route PAR CHEMIN remonte aussi aux lignes `MessageAttachment` (#9315) :
+ * ici aucune ne porte les clés servies, donc ces fichiers gardent le régime
+ * d'un fichier qui n'est pas une pièce jointe. Le cycle de vie par chemin a
+ * ses témoins dans `attachments-file-route-verdict.test.ts`.
+ */
+/**
+ * Les routes PAR IDENTIFIANT lisent le cache de la pièce jointe dans la même
+ * loi (#9478) : sa ligne porte `STORED_KEY`, son message `msg-1` est vivant et
+ * ordinaire. Aucune ligne ne porte les clés servies par chemin.
+ */
+const STORED_KEY = '2026/10/stored/file.jpg';
+
 function makeAccessPrisma(granted: boolean, message: unknown = { conversationId: 'conv-1' }) {
   return {
-    message: { findUnique: jest.fn<any>().mockResolvedValue(message) },
+    message: {
+      findUnique: jest.fn<any>().mockResolvedValue(message),
+      findMany: jest.fn<any>().mockResolvedValue([{ id: 'msg-1' }]),
+    },
+    messageAttachment: {
+      findMany: jest.fn<any>().mockImplementation(async ({ where }: { where: { filePath?: string } }) =>
+        where.filePath === STORED_KEY ? [{ messageId: 'msg-1', isViewOnce: false }] : []
+      ),
+      findUnique: jest.fn<any>().mockImplementation(async ({ where }: { where: { id: string } }) =>
+        where.id === ATTACHMENT_ID ? { filePath: STORED_KEY } : null
+      ),
+    },
     participant: { findFirst: jest.fn<any>().mockResolvedValue(granted ? { id: 'part-1' } : null) },
   } as any;
 }
@@ -413,9 +434,9 @@ describe('GET /attachments/file/*', () => {
 
   describe('ETag / conditional GET', () => {
     let app: FastifyInstance;
-    const fileStats = { size: 2048, mtimeMs: 1700000000000 };
+    const fileStats = { size: 2048, mtimeMs: 1700000000000, ino: 4242 };
     // precompute the etag the route will generate
-    const expectedEtag = `W/"${fileStats.size}-${Math.floor(fileStats.mtimeMs)}"`;
+    const expectedEtag = storedFileETag(fileStats);
 
     beforeAll(async () => {
       mockStat.mockResolvedValue(fileStats);
@@ -455,7 +476,7 @@ describe('GET /attachments/file/*', () => {
 
   describe('Range requests on media files', () => {
     let app: FastifyInstance;
-    const fileStats = { size: 10000, mtimeMs: 1700000001000 };
+    const fileStats = { size: 10000, mtimeMs: 1700000001000, ino: 4242 };
 
     beforeAll(async () => {
       mockStat.mockResolvedValue(fileStats);
@@ -518,11 +539,22 @@ describe('GET /attachments/file/*', () => {
       });
       expect(res.headers['accept-ranges']).toBe('bytes');
     });
+
+    it.each([
+      ['voix.aac', 'audio/aac'],
+      ['note.wav', 'audio/wav'],
+      ['clip.m4v', 'video/mp4'],
+      ['son.opus', 'audio/ogg'],
+    ])('#9693 — sert %s en %s et répond 206 à une requête Range (Safari et la WebView Android l’exigent)', async (name, type) => {
+      const res = await app.inject({ method: 'GET', url: `/attachments/file/uploads/${name}`, headers: { range: 'bytes=0-1' } });
+      expect(res.statusCode).toBe(206);
+      expect(res.headers['content-type']).toContain(type);
+    });
   });
 
   describe('regular file (non-media)', () => {
     let app: FastifyInstance;
-    const fileStats = { size: 512, mtimeMs: 1700000002000 };
+    const fileStats = { size: 512, mtimeMs: 1700000002000, ino: 4242 };
 
     beforeAll(async () => {
       mockStat.mockResolvedValue(fileStats);
@@ -559,7 +591,7 @@ describe('GET /attachments/file/*', () => {
         method: 'GET',
         url: '/attachments/file/uploads/photo.jpg',
       });
-      const expectedEtag = `W/"${fileStats.size}-${Math.floor(fileStats.mtimeMs)}"`;
+      const expectedEtag = storedFileETag(fileStats);
       expect(res.headers['etag']).toBe(expectedEtag);
     });
 
@@ -604,6 +636,57 @@ describe('GET /attachments/file/*', () => {
       });
       expect(res.statusCode).toBe(200);
       expect(res.headers['content-type']).toContain('application/octet-stream');
+    });
+  });
+
+  describe('SVG served via the legacy path route forces download (#3627)', () => {
+    let app: FastifyInstance;
+    beforeAll(async () => {
+      mockStat.mockResolvedValue({ size: 128, mtimeMs: 1700000004000 });
+      app = await buildApp();
+    });
+    afterAll(async () => { await app.close(); });
+
+    it('forces download disposition instead of inline, mirroring GET /attachments/:attachmentId', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/attachments/file/uploads/image.svg',
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-disposition']).toContain('attachment');
+      expect(res.headers['content-disposition']).not.toContain('inline');
+    });
+
+    it('sets a sandboxed Content-Security-Policy', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/attachments/file/uploads/image.svg',
+      });
+      expect(res.headers['content-security-policy']).toContain('sandbox');
+    });
+
+    it('sets X-Content-Type-Options: nosniff', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/attachments/file/uploads/image.svg',
+      });
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+    });
+
+    it('still sets Content-Disposition: inline for a non-SVG file', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/attachments/file/uploads/photo.jpg',
+      });
+      expect(res.headers['content-disposition']).toBe('inline');
+    });
+
+    it('sets X-Content-Type-Options: nosniff on non-SVG files too', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/attachments/file/uploads/photo.jpg',
+      });
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
     });
   });
 
@@ -748,12 +831,12 @@ describe('cycle de vie du message porteur', () => {
   });
 
   /**
-   * `scheduleViewOnceBurn` écrit le budget de vue unique épuisé sous forme
-   * d'`expiresAt`. La garde couvre donc la brûlure sans rien connaître de la
-   * vue unique — l'échéance EST la brûlure.
+   * `scheduleViewOnceBurn` écrit « tous les destinataires ont ouvert » sous
+   * forme de `viewOnceBurnAt` (#7578, jamais `expiresAt`). La garde couvre donc
+   * la purge sans rien connaître de l'audience — l'échéance EST la purge.
    */
-  it('refuse le fichier d\'un message à vue unique dont le sursis de brûlure est écoulé', async () => {
-    const app = await buildApp({ message: { conversationId: 'conv-1', expiresAt: PAST } });
+  it('refuse le fichier d\'un message à vue unique dont le sursis de purge est écoulé', async () => {
+    const app = await buildApp({ message: { conversationId: 'conv-1', viewOnceBurnAt: PAST } });
     const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}` });
     expect(res.statusCode).toBe(404);
     await app.close();
@@ -814,5 +897,95 @@ describe('cycle de vie du message porteur', () => {
     const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}` });
     expect(res.statusCode).toBe(200);
     await app.close();
+  });
+});
+
+/**
+ * #9315 — un média privé ne part plus en cache PARTAGÉ. `public` autorisait
+ * tout proxy ou CDN intermédiaire à garder les octets d'une conversation et à
+ * les resservir à un autre demandeur ; `private` garde le cache du seul
+ * appareil qui les a reçus, avec la même durée (aucun client ne recharge plus).
+ * Les avatars, publics par nature, gardent leur régime.
+ */
+describe('#9315 — aucun média de conversation en cache partagé', () => {
+  let app: FastifyInstance;
+  const fileStats = { size: 2048, mtimeMs: 1700000003000, ino: 4242 };
+
+  beforeAll(async () => {
+    mockGetAttachment.mockResolvedValue(DEFAULT_ATTACHMENT);
+    mockGetFilePath.mockResolvedValue(FILE_PATH);
+    mockGetThumbnailPath.mockResolvedValue(THUMBNAIL_PATH);
+    mockStat.mockResolvedValue(fileStats);
+    app = await buildApp();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('sert un fichier par chemin en cache privé, de même durée', async () => {
+    const res = await app.inject({ method: 'GET', url: '/attachments/file/2024%2F01%2Fuser%2Fphoto.jpg' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['cache-control']).toBe('private, max-age=31536000');
+  });
+
+  it('ne rend pas public un chemin qui ne fait que transiter par avatars/', async () => {
+    const res = await app.inject({ method: 'GET', url: '/attachments/file/avatars%2F..%2F2024%2F01%2Fuser%2Fphoto.jpg' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['cache-control']).toBe('private, max-age=31536000');
+  });
+
+  it('garde le cache privé sur la revalidation 304', async () => {
+    const etag = storedFileETag(fileStats);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/attachments/file/2024%2F01%2Fuser%2Fphoto.jpg',
+      headers: { 'if-none-match': etag },
+    });
+    expect(res.statusCode).toBe(304);
+    expect(res.headers['cache-control']).toBe('private, max-age=31536000');
+  });
+
+  it('garde le cache privé sur une plage 206', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/attachments/file/translated%2Fpiste_en.mp3',
+      headers: { range: 'bytes=0-99' },
+    });
+    expect(res.statusCode).toBe(206);
+    expect(res.headers['cache-control']).toBe('private, max-age=31536000');
+  });
+
+  it('sert la pièce jointe et sa miniature par identifiant en cache privé', async () => {
+    const original = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}` });
+    const thumbnail = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}/thumbnail` });
+    expect(original.headers['cache-control']).toBe('private, max-age=31536000, immutable');
+    expect(thumbnail.headers['cache-control']).toBe('private, max-age=31536000, immutable');
+  });
+});
+
+/**
+ * #9315 — les dossiers cachés de la racine des dépôts ne sont pas des médias.
+ * `.tus-resumable/` porte les envois EN COURS (octets d'un fichier pas encore
+ * rattaché à un message, et ses métadonnées) ; la route de fichiers les
+ * servait à qui devinait leur nom. Un segment caché, où qu'il soit, rend 404
+ * sans toucher au disque : sa simple existence n'a pas à se lire de dehors.
+ */
+describe('#9315 — aucun segment caché servi par la route de fichiers', () => {
+  let app: FastifyInstance;
+
+  beforeAll(async () => {
+    mockStat.mockResolvedValue({ size: 10, mtimeMs: 1700000004000 });
+    app = await buildApp();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it.each([
+    ['un envoi tus en cours', '.tus-resumable%2F0123456789abcdef'],
+    ['ses métadonnées', '.tus-resumable%2F0123456789abcdef.json'],
+    ['un fichier caché dans l’arborescence datée', '2024%2F01%2Fuser%2F.secret.jpg'],
+    ['un dossier caché atteint par remontée', 'translated%2F..%2F.tus-resumable%2Fabc'],
+  ])('rend 404 pour %s', async (_label, key) => {
+    mockStat.mockClear();
+    const res = await app.inject({ method: 'GET', url: `/attachments/file/${key}` });
+    expect(res.statusCode).toBe(404);
+    expect(mockStat).not.toHaveBeenCalled();
   });
 });

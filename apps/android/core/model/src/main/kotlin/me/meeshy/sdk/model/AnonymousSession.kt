@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model
 
 import kotlinx.serialization.Serializable
+import me.meeshy.sdk.model.guest.GuestAttachmentAllowance
 
 /**
  * The client-side anonymous (shared-link guest) session — port of iOS
@@ -21,7 +22,10 @@ data class AnonymousSessionContext(
     val permissions: ParticipantPermissions,
     val linkId: String,
     val conversationId: String,
-)
+) {
+    /** Ce que CET invite peut joindre (iOS `attachmentAllowance`) : les termes du lien, portes par ses droits durcis. */
+    val attachmentAllowance: GuestAttachmentAllowance get() = permissions.attachmentAllowance
+}
 
 /**
  * Derive the guest session context from a join response, hardening the guest's
@@ -45,7 +49,7 @@ fun AnonymousJoinResponse.toSessionContext(): AnonymousSessionContext? {
             canSendMessages = participant.canSendMessages,
             canSendFiles = participant.canSendFiles,
             canSendImages = participant.canSendImages,
-        ),
+        ).copy(allowedAttachmentKinds = conversation.allowedAttachmentKinds),
         linkId = linkId,
         conversationId = conversation.id,
     )

@@ -1,0 +1,253 @@
+import SwiftUI
+import PhotosUI
+import MeeshySDK
+
+// Extrait de `ConversationView.swift` (3 029 lignes, qui interdit d'AJOUTER à un fichier hors budget).
+// Le lot #4823 ajoute une porte de présentation à cet état : on extrait
+// d'abord, on ajoute ensuite. Responsabilité tenue ici : l'ÉTAT du composer
+// de conversation — pièces en attente, pickers, lieu, langue, réponse et
+// édition — et rien d'autre. Les vues qui le lisent restent chez elles.
+
+struct ConversationComposerState {
+    /// Plafond de sélection média du composer de conversation.
+    ///
+    /// Relevé de 10 à 199. Le planner ne découpe PAS par lot:
+    /// `MultiAttachmentSendPlanner` produit UNE bulle par type (audio /
+    /// visuel), donc 199 photos restent un seul message — la montée de plafond
+    /// ne multiplie pas les bulles, elle lève juste la contrainte de saisie.
+    /// L'envoi lui-même est borné par la concurrence d'upload, pas par ce
+    /// nombre (cf. `TusUploadManager.maxConcurrent`).
+    ///
+    /// Cette dernière phrase n'est vraie que: la boucle
+    /// d'upload attendait chaque fichier avant de lancer le suivant, donc le
+    /// pool de l'acteur ne dépassait jamais un actif et 199 photos partaient
+    /// l'une après l'autre. `sendMessageWithAttachments` confie désormais le
+    /// groupe entier au manager, qui borne réellement.
+    static let maxMediaSelection = 199
+
+    var showOptions = false
+    var actionAlert: String? = nil
+    @Indirect var forwardMessage: Message? = nil
+    /// **Transfert groupé (#4005).** Vide pour les DEUX sites d'ouverture
+    /// historiques (longpress simple, swipe) — `forwardMessage` seul porte
+    /// alors tout. Non vide UNIQUEMENT depuis le mode sélection multiple :
+    /// `endSelectionMode()`-adjacent, posée puis effacée avec
+    /// `forwardMessage` par le MÊME `onDismiss` de la feuille.
+    var forwardAdditionalMessages: [Message] = []
+    /// **La PIÈCE transférée seule** (#9914, #10947, V2) — posée par le menu
+    /// d'une pièce avec `forwardMessage` ; `nil` = tout le message. Effacée par
+    /// la fermeture de l'écran de partage.
+    var forwardPieceId: String? = nil
+    /// **Le transfert demandé depuis le plein écran** (#12420), RETENU le temps
+    /// que la galerie se referme — même course que `pendingComposeTarget`.
+    @Indirect var pendingForward: (message: Message, pieceId: String)? = nil
+    /// La cible de « Composer » — le média reçu que la porte va semer.
+    /// Non-nil = la porte est présentée.
+    @Indirect var composeMediaTarget: ComposerSeedTarget? = nil
+    /// La même cible, RETENUE le temps qu'une feuille se referme.
+    ///
+    /// Le second déclencheur de « Composer » vit dans la feuille de transfert,
+    /// et présenter un plein écran pendant qu'une feuille se démonte est la
+    /// course que ce dépôt a déjà payée (« Attempt to present … which is
+    /// already presenting »). La promotion se fait donc dans l'`onDismiss` de
+    /// la feuille — la primitive SwiftUI prévue pour ce cas exact, là où un
+    /// délai n'est qu'un pari.
+    @Indirect var pendingComposeTarget: ComposerSeedTarget? = nil
+    var showConversationInfo = false
+
+    // Popup consentement vocal à l'envoi d'audio: proposé UNE
+    // fois par session de conversation ; quelle que soit la décision, l'envoi
+    // repart — le refus envoie l'audio sans transcription/traduction.
+    var showVoiceAutoTranslateConsent = false
+    var voiceConsentPromptedThisSession = false
+    
+    // Attachment state
+    var pendingAttachments: [MessageAttachment] = []
+    var pendingMediaFiles: [String: URL] = [:]
+    var pendingThumbnails: [String: UIImage] = [:]
+    var isLoadingMedia = false
+
+    /// In-flight attachment preparations (decompression → compression →
+    /// thumbnailing → ThumbHash). Each entry renders an `AttachmentLoadingTile`
+    /// in the composer tray until it transitions to `.ready`, at which point
+    /// the result is moved into `pendingAttachments`/`pendingMediaFiles`/
+    /// `pendingThumbnails` and the handle is dropped from this array.
+    var preparingAttachments: [PreparingAttachment] = []
+    
+    // Pickers
+    var showPhotoPicker = false
+    var showCamera = false
+    var showFilePicker = false
+    /// #10006 — la feuille « Partager dans … » d'un invité dont le lien
+    /// restreint les familles : elle remplace le sélecteur de fichiers libre.
+    var showGuestAttachmentSheet = false
+    var selectedPhotoItems: [PhotosPickerItem] = []
+    /// True while `selectedPhotoItems` is being primed with the recent-media
+    /// strip's multi-selection before presenting the PhotosPicker. Priming
+    /// fires the selection onChange once — this flag swallows that echo so
+    /// items are only ingested when the user actually confirms in the picker.
+    var photoPickerPriming = false
+    /// Pièce de la zone → `PHAsset.localIdentifier` dont elle vient (#9683),
+    /// pour les médias venus de la grille ou du sélecteur système. Ne fait
+    /// foi que pour les pièces VIVANTES : lire `attachedLibraryAssetIds`.
+    var libraryAssetLinks: [String: String] = [:]
+    /// Les assets JOINTS que le sélecteur système a reçus cochés à son
+    /// ouverture (#9697) : ceux qui n'en reviennent pas ont été décochés.
+    var pickerPreselectedAttached: [String] = []
+    
+    // Location & Upload
+    var isLoadingLocation = false
+    /// Les lots de pièces jointes en vol — plusieurs à la fois (#14696).
+    var uploads = ComposerUploadLedger()
+    var isUploading: Bool { uploads.isUploading }
+    var showLocationPicker = false
+    /// Lieu choisi via le picker, en attente d'envoi. `SharedPlace` porte le
+    /// nom et l'adresse — `MessageAttachment.location` ne les portait pas et
+    /// n'est plus le véhicule (Task 11/12).
+    var pendingPlace: SharedPlace? = nil
+    
+    // Language (source language for outgoing messages).
+    // Resolved via DefaultComposerLanguage: keyboard layout > "fr" fallback.
+    // TextAnalyzer overrides this once the user types enough characters.
+    var selectedLanguage: String = DefaultComposerLanguage.resolve()
+
+    // Reply & Edit
+    var pendingReplyReference: ReplyReference? = nil
+    /// **La pièce que la réponse en attente cite** (#9908) — posée par
+    /// « Répondre » du menu d'une pièce. Elle ne voyage que tant que la citation
+    /// la NOMME encore (`MessagePieceTarget.replyAnchor`).
+    var pendingReplyPieceId: String? = nil
+    /// **La porte de focus du composer** (#6003), liée à
+    /// `UniversalComposerBar.focusTrigger`. Levée par `requestReplyFocus`,
+    /// remise à `false` par la barre dès qu'elle a pris le focus.
+    var focusRequested = false
+    var editingMessageId: String? = nil
+    var editingOriginalContent: String? = nil
+    /// **Le brouillon en cours au moment d'entrer en édition (#4003).** Sans
+    /// lui, `beginEdit` écrase silencieusement ce que l'auteur était en train
+    /// de composer, et `cancelEdit`/`submitEdit` ne pouvaient rien restituer.
+    /// Posé UNE fois par `beginEdit` (jamais réécrit tant qu'une édition est
+    /// en cours), consommé et effacé par `cancelEdit`.
+    var draftBeforeEdit: String? = nil
+
+    // Reply attachment preview
+    var previewMedia: PreviewMedia? = nil
+
+    // Misc Pickers
+    var showContactPicker = false
+    var showTextEmojiPicker = false
+    var emojiToInject = ""
+    /// Palette de stickers (#4823) — présentée en feuille depuis la tuile
+    /// « Sticker » du carrousel ; ce qu'elle rend part comme un MESSAGE (voir
+    /// `ConversationView+Sticker.swift`), jamais dans le champ de texte.
+    var showStickerPicker = false
+}
+
+extension ConversationComposerState {
+    /// Délai avant de lever le clavier pour une réponse (#6003). Nul pour un
+    /// geste sur la conversation déjà à l'écran ; à l'ouverture d'une
+    /// conversation poussée pour répondre, il laisse la transition de
+    /// navigation se terminer — un focus posé pendant la poussée est perdu.
+    static func replyFocusDelay(openingConversation: Bool) -> TimeInterval {
+        openingConversation ? 0.45 : 0
+    }
+
+    /// **Ce que la conversation garde comme brouillon** (#10807). En édition, le
+    /// champ porte le message MODIFIÉ, qui n'est pas un brouillon : le persister
+    /// affichait « Brouillon : … » dans la liste. Ce qui se garde alors est ce
+    /// que l'auteur composait avant d'entrer en édition — rien s'il n'avait rien.
+    func persistedDraftText(composing text: String) -> String {
+        editingMessageId == nil ? text : (draftBeforeEdit ?? "")
+    }
+
+    /// Les pièces de la zone d'attachement, prêtes puis en préparation.
+    var liveAttachmentIds: [String] {
+        pendingAttachments.map(\.id) + preparingAttachments.map(\.id)
+    }
+
+    /// Les assets de la photothèque déjà dans la zone (#9683), DÉRIVÉS d'elle :
+    /// retirer une pièce, la voir échouer ou l'envoyer libère sa tuile.
+    var attachedLibraryAssetIds: [String] {
+        RecentMediaAttachmentLink.attachedAssetIds(links: libraryAssetLinks, liveAttachmentIds: liveAttachmentIds)
+    }
+
+    mutating func linkLibraryAsset(_ assetId: String, to attachmentId: String) {
+        libraryAssetLinks = RecentMediaAttachmentLink.linking(
+            assetId, to: attachmentId, in: libraryAssetLinks, liveAttachmentIds: liveAttachmentIds
+        )
+    }
+
+    /// Arme le retour du sélecteur système (#9697) et rend ce qu'il doit
+    /// montrer coché : les assets joints d'abord, puis la sélection de la
+    /// grille.
+    mutating func primePickerPreselection(selection: [String]) -> [String] {
+        let preselection = RecentMediaAttachmentLink.pickerPreselection(
+            attached: attachedLibraryAssetIds, selection: selection, limit: Self.maxMediaSelection
+        )
+        pickerPreselectedAttached = RecentMediaAttachmentLink.preselectedAttached(
+            attached: attachedLibraryAssetIds, preselection: preselection
+        )
+        return preselection
+    }
+
+    /// Les pièces que le sélecteur système vient de décocher (#9697). Désarme
+    /// le retour : l'écho de la remise à zéro de la sélection ne retire rien.
+    mutating func consumePickerDeselection(returned: [String?]) -> [String] {
+        let preselected = pickerPreselectedAttached
+        pickerPreselectedAttached = []
+        return RecentMediaAttachmentLink.deselectedAttachmentIds(
+            links: libraryAssetLinks, liveAttachmentIds: liveAttachmentIds,
+            preselected: preselected, returned: returned
+        )
+    }
+
+    /// Un brouillon restauré retrouve ses pièces ET la carte pièce → asset
+    /// (#9697) : la grille les marque encore, et ne les reprend pas.
+    mutating func adoptRestoredDraft(attachments: [MessageAttachment], files: [String: URL], assetLinks: [String: String]) {
+        pendingAttachments = attachments
+        pendingMediaFiles = files
+        libraryAssetLinks = assetLinks
+    }
+
+    /// Replaces the audio attachment `attachmentId` in place with the freshly
+    /// edited recording. Editing a media attachment must never spawn a second
+    /// tray chip — this mirrors the image editor's replace-by-id contract
+    /// (`pendingAttachments[idx] = …`). Returns the now-stale audio file URL so
+    /// the caller can delete it from disk.
+    @discardableResult
+    mutating func applyEditedAudio(attachmentId: String, editedURL: URL, durationMs: Int) -> URL? {
+        let staleURL = pendingMediaFiles[attachmentId]
+        let duration = max(durationMs, 500)
+        pendingMediaFiles[attachmentId] = editedURL
+        if let index = pendingAttachments.firstIndex(where: { $0.id == attachmentId }) {
+            pendingAttachments[index] = MessageAttachment(
+                id: attachmentId,
+                mimeType: "audio/mp4",
+                duration: duration,
+                channels: 2,
+                thumbnailColor: pendingAttachments[index].thumbnailColor
+            )
+        } else {
+            pendingAttachments.append(
+                MessageAttachment(id: attachmentId, mimeType: "audio/mp4", duration: duration, channels: 2)
+            )
+        }
+        return staleURL == editedURL ? nil : staleURL
+    }
+
+    /// **La vidéo éditée REMPLACE la pièce jointe en attente** (#8443) — même
+    /// contrat que l'audio : remplacement par id, jamais un second chip. Le
+    /// résultat de l'éditeur était jeté et la vidéo d'origine partait.
+    ///
+    /// `didEdit == false` ⇒ rien ne change : l'éditeur rend alors la source
+    /// elle-même. Rend l'URL devenue orpheline pour que l'appelant la supprime.
+    @discardableResult
+    mutating func applyEditedVideo(attachmentId: String, result: VideoEditResult) -> URL? {
+        let issue = PendingVideoEditReplacement.apply(result, to: attachmentId,
+                                                      files: pendingMediaFiles,
+                                                      attachments: pendingAttachments)
+        pendingMediaFiles = issue.files
+        pendingAttachments = issue.attachments
+        return issue.staleURL
+    }
+}

@@ -6,6 +6,7 @@
  * - Server: Server-encrypted with translation support
  * - Hybrid: Double encryption (E2EE + server layer) - translation supported
  */
+import type { E2EERelayRequest } from './e2ee-directory.js';
 
 export type EncryptionMode = 'e2ee' | 'server' | 'hybrid' | null;
 export type EncryptionProtocol = 'signal_v3' | 'aes-256-gcm';
@@ -46,6 +47,11 @@ export type EncryptionMetadata = {
 export interface EncryptedPayload {
   ciphertext: string;      // Base64 encoded encrypted content
   metadata: EncryptionMetadata;
+  /**
+   * Envoi libsignal (#3706) : enveloppes par appareil et appareil émetteur.
+   * Retiré par la passerelle AVANT toute persistance de la charge.
+   */
+  relay?: E2EERelayRequest;
 }
 
 /**
@@ -85,6 +91,11 @@ export interface SignalKeyBundle {
  * This allows:
  * - Full E2EE protection (only sender/recipient can decrypt the E2EE layer)
  * - Server-side translation (server can decrypt the server layer)
+ *
+ * @deprecated Modèle à destinataire UNIQUE qui ne correspond pas au relais
+ * libsignal par appareil : aucun envoi ne le produit. Le mode hybride réel
+ * (#14369) pose un `content` en clair (scellé au repos par la passerelle) et
+ * une couche appareil `MessageRequest.deviceLayer` (`E2EEDeviceLayerRequest`).
  */
 export interface HybridEncryptedPayload {
   /** E2EE layer - only sender/recipient can decrypt (client-side Signal Protocol) */

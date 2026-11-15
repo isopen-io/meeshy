@@ -20,24 +20,43 @@ enum MyStoriesSourceCorpus {
     /// en silence : la liste anticipe la décomposition à venir, et une garde ne
     /// doit pas échouer parce qu'un fichier n'existe pas ENCORE.
     static let relativePaths = [
-        "Meeshy/Features/Main/Views/MyStoriesView.swift",
-        "Meeshy/Features/Main/Views/MyStoriesPublishedTab.swift",
-        "Meeshy/Features/Main/Views/MyStoriesDraftsTab.swift",
-        "Meeshy/Features/Main/Views/MyStoryCard.swift",
-        "Meeshy/Features/Main/Views/MyStoryActionBar.swift",
-        "Meeshy/Features/Main/Views/MyStoryThumbnail.swift",
-        "Meeshy/Features/Main/Views/MyStoryCardPresentation.swift",
-        "Meeshy/Features/Main/Views/MyStoriesDeleteConfirmation.swift",
+        "Meeshy/Features/Stories/Views/MyStoriesView.swift",
+        "Meeshy/Features/Stories/Views/MyStoriesPublishedTab.swift",
+        "Meeshy/Features/Stories/Views/MyStoriesDraftsTab.swift",
+        "Meeshy/Features/Stories/Views/MyStoryCard.swift",
+        "Meeshy/Features/Stories/Views/MyStoryActionBar.swift",
+        "Meeshy/Features/Stories/Views/MyStoryThumbnail.swift",
+        "Meeshy/Features/Stories/Views/MyStoryCardPresentation.swift",
+        "Meeshy/Features/Stories/Views/MyStoriesDeleteConfirmation.swift",
+        "Meeshy/Features/Stories/Views/MyStoriesDeleteAlerts.swift",
+        "Meeshy/Features/Stories/Views/MyStoriesQueueRows.swift",
+        "Meeshy/Features/Stories/Views/MyStoriesSheetTargets.swift",
+        "Meeshy/Features/Stories/Views/MyStoryActionMenu.swift",
+        "Meeshy/Features/Stories/Views/MyStoryCardModelRules.swift",
+        "Meeshy/Features/Stories/Views/StoryVisibilityMenuResolver.swift",
     ]
 
-    /// Racine `apps/ios/`, dérivée du chemin de ce fichier
-    /// (`apps/ios/MeeshyTests/Unit/Views/…`).
+    /// Racine `apps/ios/`, dérivée du chemin du fichier APPELANT.
+    ///
+    /// **Elle REMONTE jusqu'à `MeeshyTests`, elle ne compte plus les crans.**
+    /// La forme d'origine retirait quatre composants, ce qui suppose que tout
+    /// appelant vit exactement à `MeeshyTests/Unit/Views/`. `file` valant
+    /// `#filePath` par DÉFAUT, c'est le chemin de l'appelant qui décide — et
+    /// la première garde rangée un cran plus profond
+    /// (`Unit/Views/Bubble/`, #4098) a obtenu `apps/ios/MeeshyTests` pour
+    /// racine, puis dix erreurs « no such file » sur des fichiers bien
+    /// présents.
+    ///
+    /// Le mode de panne bruyant est le CAS HEUREUX : si la mauvaise racine
+    /// avait contenu un fichier de même nom, la garde aurait lu le MAUVAIS
+    /// fichier et serait passée au vert. Une racine se REMONTE jusqu'à un
+    /// repère nommé ; elle ne se compte pas.
     static func appRoot(file: StaticString = #filePath) -> URL {
-        URL(fileURLWithPath: String(describing: file))
-            .deletingLastPathComponent()   // Views
-            .deletingLastPathComponent()   // Unit
-            .deletingLastPathComponent()   // MeeshyTests
-            .deletingLastPathComponent()   // ios
+        var url = URL(fileURLWithPath: String(describing: file)).deletingLastPathComponent()
+        while url.lastPathComponent != "MeeshyTests", url.pathComponents.count > 1 {
+            url = url.deletingLastPathComponent()
+        }
+        return url.deletingLastPathComponent()   // ios
     }
 
     /// Le corpus concaténé, commentaires RETIRÉS.
@@ -57,7 +76,7 @@ enum MyStoriesSourceCorpus {
     /// gardes qui doivent vraiment viser un fichier précis.
     static func text(of relativePath: String, file: StaticString = #filePath) throws -> String {
         let url = appRoot(file: file).appendingPathComponent(relativePath)
-        return strippingComments(try String(contentsOf: url, encoding: .utf8))
+        return strippingComments(try AppSourceGuard.text(at: url))
     }
 
     // MARK: - Retrait des commentaires
@@ -112,5 +131,55 @@ enum MyStoriesSourceCorpus {
             index = line.index(after: index)
         }
         return nil
+    }
+}
+
+/// **L'unité de source du lecteur de story, après la découpe par cohésion.**
+///
+/// `StoryViewerView.swift`, `StoryViewerView+Canvas.swift` et `StoryViewerView+Content.swift`
+/// ont cédé leurs responsabilités à de VRAIS types (le geste, ses décisions, la liste des
+/// commentaires, l'interstitiel, les feuilles, les règles de contenu…) rangés sous leur propre
+/// nom. Le glob `AppSourceGuard.unit` ne suit que les fichiers `StoryViewerView+…` : une garde
+/// NÉGATIVE (« ce code n'apparaît nulle part ») qui lirait seulement l'unité verdirait donc
+/// en silence sur la moitié qui a changé de nom. Cette liste est l'adresse de cette moitié.
+enum StoryViewerSources {
+
+    static let views = "Meeshy/Features/Stories/Views/"
+
+    /// Les types sortis des trois fichiers, par nom de fichier.
+    static let companionFiles = [
+        "PrefetcherHostView.swift",
+        "RenderableSlideCache.swift",
+        "RevealCircleShape.swift",
+        "StoryCommentSession.swift",
+        "StoryCommentThread.swift",
+        "StoryCommentsOverlayView.swift",
+        "StoryDraft.swift",
+        "StoryGestureDecisions.swift",
+        "StoryGestureOverlayView.swift",
+        "StoryGroupIntroOverlay.swift",
+        "StoryGroupIntroPolicy.swift",
+        "StoryOpeningEntrance.swift",
+        "StoryPlaybackStallIndicator.swift",
+        "StoryPostMediaResolver.swift",
+        "StoryReactionRecovery.swift",
+        "StoryReaderBackground.swift",
+        "StoryReaderCanvasLayout.swift",
+        "StoryReaderContentRules.swift",
+        "StoryReaderSurfaceRules.swift",
+        "StoryVerticalGestureDecisions.swift",
+        "StoryVideoAudioProbe.swift",
+        "StoryViewerCardTransform.swift",
+        "StoryViewerEngagement.swift",
+        "StoryViewerSheetItems.swift",
+        "StoryViewerSheets.swift",
+        "View+StoryOverlayLegible.swift",
+    ]
+
+    static let companions = companionFiles.map { views + $0 }
+
+    /// Le lecteur tout entier : les trois fichiers, leurs extensions et leurs types.
+    static func unit() throws -> String {
+        try AppSourceGuard.unit(views + "StoryViewerView.swift", alsoIncluding: companions)
     }
 }

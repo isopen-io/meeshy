@@ -1,0 +1,793 @@
+/**
+ * **La consommation d'un MÉDIA par un participant** — extraite de
+ * `MessageReadStatusService` (#4605), qui pesait 3204 lignes pour un budget de
+ * 800–1100 et tenait la CI de `dev` en rouge sur son cliquet de taille.
+ *
+ * Le découpage suit une RESPONSABILITÉ, pas une tranche : ce module répond à
+ * une seule question — « qu'est-ce que CE participant a fait de CETTE pièce
+ * jointe ? » (écoutée, visionnée, ouverte, téléchargée, et dans quelle version
+ * linguistique). Les accusés de lecture d'un MESSAGE, les compteurs de non-lus
+ * et les curseurs de conversation restent chez le service d'origine.
+ *
+ * La frontière n'a pas été choisie : elle a été MESURÉE. Le bloc déplacé
+ * n'employait que `this.prisma` et un seul helper privé
+ * (`updateAttachmentComputedStatus`), lui-même sans autre dépendance que
+ * `prisma` et appelé de nulle part ailleurs. C'est ce qui rend l'extraction
+ * mécanique plutôt que risquée.
+ *
+ * `MessageReadStatusService` DÉLÈGUE : les six méthodes publiques gardent leur
+ * signature et leur place dans son API, parce que deux routes
+ * (`messages-writes.ts`, `messages-reads.ts`) et les suites de tests les
+ * appellent par ce nom. Le découpage est interne ; aucun appelant ne change.
+ *
+ * Le module de journal reste `MessageReadStatusService` À DESSEIN — les lignes
+ * émises ici portent déjà le préfixe `[MessageReadStatus]`, et un tableau de
+ * bord qui filtre dessus ne doit pas perdre la moitié de ses lignes le jour
+ * d'un découpage interne. Le nom du module de log décrit ce qu'on OBSERVE, pas
+ * l'arborescence des fichiers.
+ */
+
+import { PrismaClient } from "@meeshy/shared/prisma/client";
+import { enhancedLogger } from '../utils/logger-enhanced';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { appendPlaybackStretches, newStretchesDurationMs, parsePlaybackTrace } from '../utils/playback-trace';
+import { mergeViewedLanguages, MAX_VIEWED_LANGUAGES } from '../utils/viewed-languages';
+import { EngagementService } from './engagement/EngagementService';
+
+const logger = enhancedLogger.child({ module: 'MessageReadStatusService' });
+
+/**
+ * Ce qu'une écoute/un visionnage SERT après un rapport — la position la plus
+ * avancée et le « complet » une fois atteint, jamais les valeurs brutes du
+ * rapport qui vient d'arriver. L'appelant (la route qui diffuse
+ * `attachment-status:updated`, #7359) en a besoin pour ne pas faire régresser
+ * en direct ce que le calcul vient de protéger en base.
+ */
+export type MediaConsumptionServed = {
+  readonly position: number | null;
+  readonly complete: boolean;
+};
+
+type FieldServed<T> = { readonly value: T; readonly changed: boolean };
+
+/**
+ * La position SERVIE ne régresse jamais : un seek arrière ou une réécoute
+ * partielle après un rapport plus avancé ne doivent pas faire redescendre ce
+ * que l'écran affiche. `next` absent (`undefined`) laisse le champ inchangé —
+ * même règle que le upsert Prisma d'origine, qu'aucun rapport ne force à
+ * écrire une valeur qu'il ne porte pas.
+ */
+function servePosition(previous: number | null, next: number | undefined): FieldServed<number | null> {
+  if (next === undefined) return { value: previous, changed: false };
+  return { value: previous === null ? next : Math.max(previous, next), changed: true };
+}
+
+/**
+ * Le « complet » SERVI est COLLANT : une fois vrai, il le reste — une
+ * réécoute partielle après un premier passage complet ne doit jamais
+ * l'effacer. `next` absent laisse le champ inchangé.
+ */
+function serveComplete(previous: boolean, next: boolean | undefined): FieldServed<boolean> {
+  if (next === undefined) return { value: previous, changed: false };
+  return { value: previous || next, changed: true };
+}
+
+// Helper pour retry des transactions en cas de deadlock (P2034)
+export async function withRetry<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelayMs: number = 50
+): Promise<T> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+
+      // P2034 = Transaction deadlock/write conflict
+      if (error?.code === "P2034" && attempt < maxRetries - 1) {
+        // Exponential backoff avec jitter
+        const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 50;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw lastError;
+}
+
+/** Ce que l'écoute d'un vocal demande au moteur d'engagement (#8959). */
+export type MediaConsumptionEngagement = Pick<EngagementService, 'recordActivity'>;
+
+export class MessageMediaConsumptionService {
+  private readonly engagement: MediaConsumptionEngagement | null;
+
+  /** `engagement` absent ⇒ le moteur réel ; `null` ⇒ aucun crédit. */
+  constructor(
+    private readonly prisma: PrismaClient,
+    engagement?: MediaConsumptionEngagement | null,
+  ) {
+    this.engagement = engagement === undefined ? new EngagementService(prisma) : engagement;
+  }
+
+  /**
+   * Enregistre qu'un message précis a été consulté dans une version linguistique
+   * donnée — la bascule sur une bulle, sans changer la langue de la conversation.
+   *
+   * N'écrit que sur une entrée EXISTANTE : la lecture elle-même est établie par
+   * `markMessagesAsRead`, appelé juste avant sur le même chemin. Créer ici
+   * reviendrait à déclarer lu un message sur la seule foi d'un choix de langue.
+   *
+   * Résilient : une bascule perdue ne doit pas faire échouer la requête.
+   */
+  async recordMessageLanguageView(
+    participantId: string,
+    messageId: string,
+    language: string | null | undefined
+  ): Promise<void> {
+    const code = normalizeLanguageCode(language);
+    if (!code) return;
+
+    try {
+      const entry = await this.prisma.messageStatusEntry.findFirst({
+        where: { messageId, participantId },
+        select: { id: true, viewedLanguages: true },
+      });
+
+      if (!entry) return;
+      if (entry.viewedLanguages?.includes(code)) return;
+      if ((entry.viewedLanguages?.length ?? 0) >= MAX_VIEWED_LANGUAGES) return;
+
+      await this.prisma.messageStatusEntry.update({
+        where: { id: entry.id },
+        data: { viewedLanguages: { push: code } },
+      });
+    } catch (error) {
+      logger.error(
+        `[MessageReadStatus] recordMessageLanguageView failed for message ${messageId}:`,
+        error
+      );
+    }
+  }
+
+  async markAudioAsListened(
+    participantId: string,
+    attachmentId: string,
+    options?: {
+      playPositionMs?: number;
+      complete?: boolean;
+      /** Écoutes réellement continues depuis le dernier rapport. */
+      stretches?: readonly unknown[];
+      /** Version linguistique consommée (piste traduite, transcription). */
+      language?: string | null;
+    }
+  ): Promise<MediaConsumptionServed> {
+    try {
+      const attachment = await this.prisma.messageAttachment.findUnique({
+        where: { id: attachmentId },
+        select: {
+          id: true,
+          messageId: true,
+          message: { select: { conversationId: true, sender: { select: { userId: true } } } },
+        },
+      });
+
+      if (!attachment) {
+        throw new Error(`Attachment ${attachmentId} not found`);
+      }
+
+      const now = new Date();
+
+      const { becameComplete, ...served } = await withRetry(() =>
+        this.prisma.$transaction(async (tx) => {
+          // La trace et l'ensemble des langues s'ACCUMULENT : il faut connaître
+          // l'état courant pour y ajouter, ce qu'un upsert seul ne permet pas.
+          // Lu dans la transaction, et le conflit d'unicité (attachment,
+          // participant) fait rejouer l'ensemble via `withRetry`.
+          const previous = await tx.attachmentStatusEntry.findUnique({
+            where: {
+              attachment_participant_status: { attachmentId, participantId },
+            },
+            select: {
+              listenSegments: true,
+              viewedLanguages: true,
+              lastPlayPositionMs: true,
+              listenedComplete: true,
+            },
+          });
+
+          const existingTrace = parsePlaybackTrace(previous?.listenSegments);
+          const trace = appendPlaybackStretches(existingTrace, options?.stretches ?? []);
+          // Durée AJOUTÉE par CE rapport — jamais la durée de la piste (voir
+          // `newStretchesDurationMs`) : c'est elle, pas un paramètre distinct,
+          // qui incrémente `totalListenDurationMs` (#7359).
+          const addedListenMs = newStretchesDurationMs(existingTrace, options?.stretches ?? []);
+          const viewedLanguages = mergeViewedLanguages(
+            previous?.viewedLanguages,
+            options?.language
+          );
+
+          // La position et le « complet » SERVIS ne régressent jamais : un
+          // seek arrière ou une réécoute partielle après un premier passage
+          // complet ne doivent pas faire redescendre ce que les autres
+          // participants — et l'appelant, pour la diffusion Socket.IO —
+          // lisent comme progression. `undefined` (rapport sans position)
+          // laisse le champ inchangé, exactement comme avant #7359.
+          const servedPosition = servePosition(
+            previous?.lastPlayPositionMs ?? null,
+            options?.playPositionMs
+          );
+          const servedComplete = serveComplete(
+            previous?.listenedComplete ?? false,
+            options?.complete
+          );
+
+          await tx.attachmentStatusEntry.upsert({
+            where: {
+              attachment_participant_status: { attachmentId, participantId },
+            },
+            create: {
+              attachmentId,
+              messageId: attachment.messageId,
+              conversationId: attachment.message.conversationId,
+              participantId,
+              listenedAt: now,
+              listenCount: 1,
+              lastPlayPositionMs: servedPosition.value ?? undefined,
+              totalListenDurationMs: addedListenMs || 0,
+              listenedComplete: servedComplete.value,
+              listenSegments: trace,
+              viewedLanguages,
+            },
+            update: {
+              listenedAt: now,
+              listenCount: { increment: 1 },
+              lastPlayPositionMs: servedPosition.changed ? servedPosition.value : undefined,
+              totalListenDurationMs: addedListenMs > 0 ? { increment: addedListenMs } : undefined,
+              listenedComplete: servedComplete.changed ? servedComplete.value : undefined,
+              listenSegments: trace,
+              viewedLanguages,
+            },
+          });
+
+          return {
+            position: servedPosition.value,
+            complete: servedComplete.value,
+            becameComplete: !(previous?.listenedComplete ?? false) && servedComplete.value,
+          };
+        })
+      );
+
+      await this.updateAttachmentComputedStatus(attachmentId);
+
+      if (becameComplete) {
+        this.creditVoiceListened({
+          participantId,
+          attachmentId,
+          conversationId: attachment.message.conversationId,
+          authorUserId: attachment.message.sender?.userId ?? null,
+        });
+      }
+
+      return served;
+    } catch (error) {
+      logger.error(
+        "[MessageReadStatus] Error marking audio as listened:",
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * `tool.voice_listened` (#8959) — au SEUL premier passage à « écouté en
+   * entier » (le « complet » est collant : une réécoute ne le refait jamais
+   * basculer). L'auditeur est un `Participant` : sans `userId` (anonyme), il
+   * n'a pas de compteur. L'auteur du vocal est nommé pour que s'écouter soi-même
+   * ne rapporte rien. Hors du chemin de la réponse.
+   */
+  private creditVoiceListened(params: {
+    participantId: string;
+    attachmentId: string;
+    conversationId: string;
+    authorUserId: string | null;
+  }): void {
+    const engagement = this.engagement;
+    if (!engagement) return;
+    const { participantId, attachmentId, conversationId, authorUserId } = params;
+    void Promise.resolve()
+      .then(async () => {
+        const listener = await this.prisma.participant.findUnique({
+          where: { id: participantId },
+          select: { userId: true },
+        });
+        if (!listener?.userId) return;
+        await engagement.recordActivity(listener.userId, 'tool.voice_listened', {
+          conversationId,
+          targetId: attachmentId,
+          targetOwnerId: authorUserId,
+        });
+      })
+      .catch((error: unknown) =>
+        logger.warn('[MessageReadStatus] tool.voice_listened engagement credit failed', { attachmentId, error })
+      );
+  }
+
+  async markVideoAsWatched(
+    participantId: string,
+    attachmentId: string,
+    options?: {
+      watchPositionMs?: number;
+      complete?: boolean;
+      /** Visionnages réellement continus depuis le dernier rapport. */
+      stretches?: readonly unknown[];
+      /** Version linguistique consommée (sous-titres, piste doublée). */
+      language?: string | null;
+    }
+  ): Promise<MediaConsumptionServed> {
+    try {
+      const attachment = await this.prisma.messageAttachment.findUnique({
+        where: { id: attachmentId },
+        select: {
+          id: true,
+          messageId: true,
+          message: { select: { conversationId: true } },
+        },
+      });
+
+      if (!attachment) {
+        throw new Error(`Attachment ${attachmentId} not found`);
+      }
+
+      const now = new Date();
+
+      const served = await withRetry(() =>
+        this.prisma.$transaction(async (tx) => {
+          // Même raison que pour l'audio : la trace s'accumule, donc se lit
+          // avant de s'écrire. Voir `markAudioAsListened`.
+          const previous = await tx.attachmentStatusEntry.findUnique({
+            where: {
+              attachment_participant_status: { attachmentId, participantId },
+            },
+            select: {
+              watchSegments: true,
+              viewedLanguages: true,
+              lastWatchPositionMs: true,
+              watchedComplete: true,
+            },
+          });
+
+          const existingTrace = parsePlaybackTrace(previous?.watchSegments);
+          const trace = appendPlaybackStretches(existingTrace, options?.stretches ?? []);
+          // Même raison que pour l'audio : la durée AJOUTÉE par ce rapport,
+          // jamais la durée de la piste. Voir `markAudioAsListened`.
+          const addedWatchMs = newStretchesDurationMs(existingTrace, options?.stretches ?? []);
+          const viewedLanguages = mergeViewedLanguages(
+            previous?.viewedLanguages,
+            options?.language
+          );
+
+          // Même anti-régression que l'audio : la position et le complet
+          // SERVIS ne redescendent jamais. Voir `markAudioAsListened`.
+          const servedPosition = servePosition(
+            previous?.lastWatchPositionMs ?? null,
+            options?.watchPositionMs
+          );
+          const servedComplete = serveComplete(
+            previous?.watchedComplete ?? false,
+            options?.complete
+          );
+
+          await tx.attachmentStatusEntry.upsert({
+            where: {
+              attachment_participant_status: { attachmentId, participantId },
+            },
+            create: {
+              attachmentId,
+              messageId: attachment.messageId,
+              conversationId: attachment.message.conversationId,
+              participantId,
+              watchedAt: now,
+              watchCount: 1,
+              lastWatchPositionMs: servedPosition.value ?? undefined,
+              totalWatchDurationMs: addedWatchMs || 0,
+              watchedComplete: servedComplete.value,
+              watchSegments: trace,
+              viewedLanguages,
+            },
+            update: {
+              watchedAt: now,
+              watchCount: { increment: 1 },
+              lastWatchPositionMs: servedPosition.changed ? servedPosition.value : undefined,
+              totalWatchDurationMs: addedWatchMs > 0 ? { increment: addedWatchMs } : undefined,
+              watchedComplete: servedComplete.changed ? servedComplete.value : undefined,
+              watchSegments: trace,
+              viewedLanguages,
+            },
+          });
+
+          return { position: servedPosition.value, complete: servedComplete.value };
+        })
+      );
+
+      await this.updateAttachmentComputedStatus(attachmentId);
+
+      return served;
+    } catch (error) {
+      logger.error(
+        "[MessageReadStatus] Error marking video as watched:",
+        error
+      );
+      throw error;
+    }
+  }
+
+  async markImageAsViewed(
+    participantId: string,
+    attachmentId: string,
+    options?: {
+      viewDurationMs?: number;
+      wasZoomed?: boolean;
+      /** Version linguistique de la légende ou du texte incrusté consulté. */
+      language?: string | null;
+    }
+  ): Promise<void> {
+    try {
+      const attachment = await this.prisma.messageAttachment.findUnique({
+        where: { id: attachmentId },
+        select: {
+          id: true,
+          messageId: true,
+          message: { select: { conversationId: true } },
+        },
+      });
+
+      if (!attachment) {
+        throw new Error(`Attachment ${attachmentId} not found`);
+      }
+
+      const now = new Date();
+
+      await withRetry(() =>
+        this.prisma.$transaction(async (tx) => {
+          const previous = await tx.attachmentStatusEntry.findUnique({
+            where: {
+              attachment_participant_status: { attachmentId, participantId },
+            },
+            select: { viewedLanguages: true },
+          });
+
+          const viewedLanguages = mergeViewedLanguages(
+            previous?.viewedLanguages,
+            options?.language
+          );
+
+          await tx.attachmentStatusEntry.upsert({
+            where: {
+              attachment_participant_status: { attachmentId, participantId },
+            },
+            create: {
+              attachmentId,
+              messageId: attachment.messageId,
+              conversationId: attachment.message.conversationId,
+              participantId,
+              viewedAt: now,
+              viewCount: 1,
+              viewDurationMs: options?.viewDurationMs,
+              wasZoomed: options?.wasZoomed || false,
+              viewedLanguages,
+            },
+            update: {
+              viewedAt: now,
+              // `viewedAt` était écrasé sans rien compter : une image regardée
+              // dix fois se lisait comme une image entrevue une seule.
+              viewCount: { increment: 1 },
+              viewDurationMs: options?.viewDurationMs,
+              wasZoomed: options?.wasZoomed,
+              viewedLanguages,
+            },
+          });
+        })
+      );
+
+      await this.updateAttachmentComputedStatus(attachmentId);
+    } catch (error) {
+      logger.error(
+        "[MessageReadStatus] Error marking image as viewed:",
+        error
+      );
+      throw error;
+    }
+  }
+
+  async markAttachmentAsDownloaded(
+    participantId: string,
+    attachmentId: string
+  ): Promise<void> {
+    try {
+      const attachment = await this.prisma.messageAttachment.findUnique({
+        where: { id: attachmentId },
+        select: {
+          id: true,
+          messageId: true,
+          message: { select: { conversationId: true } },
+        },
+      });
+
+      if (!attachment) {
+        throw new Error(`Attachment ${attachmentId} not found`);
+      }
+
+      const now = new Date();
+
+      await withRetry(() =>
+        this.prisma.$transaction(async (tx) => {
+          await tx.attachmentStatusEntry.upsert({
+            where: {
+              attachment_participant_status: { attachmentId, participantId },
+            },
+            create: {
+              attachmentId,
+              messageId: attachment.messageId,
+              conversationId: attachment.message.conversationId,
+              participantId,
+              downloadedAt: now,
+            },
+            update: {
+              downloadedAt: now,
+            },
+          });
+        })
+      );
+
+      await this.updateAttachmentComputedStatus(attachmentId);
+    } catch (error) {
+      logger.error(
+        "[MessageReadStatus] Error marking attachment as downloaded:",
+        error
+      );
+      throw error;
+    }
+  }
+
+  async getAttachmentStatus(
+    attachmentId: string,
+    participantId: string
+  ): Promise<{
+    viewed: boolean;
+    downloaded: boolean;
+    listened: boolean;
+    watched: boolean;
+    listenCount: number;
+    watchCount: number;
+    listenedComplete: boolean;
+    watchedComplete: boolean;
+    lastPlayPositionMs: number | null;
+    lastWatchPositionMs: number | null;
+  } | null> {
+    try {
+      const status = await this.prisma.attachmentStatusEntry.findUnique({
+        where: {
+          attachment_participant_status: { attachmentId, participantId },
+        },
+      });
+
+      if (!status) {
+        return null;
+      }
+
+      return {
+        viewed: !!status.viewedAt,
+        downloaded: !!status.downloadedAt,
+        listened: !!status.listenedAt,
+        watched: !!status.watchedAt,
+        listenCount: status.listenCount,
+        watchCount: status.watchCount,
+        listenedComplete: status.listenedComplete,
+        watchedComplete: status.watchedComplete,
+        lastPlayPositionMs: status.lastPlayPositionMs,
+        lastWatchPositionMs: status.lastWatchPositionMs,
+      };
+    } catch (error) {
+      logger.error(
+        "[MessageReadStatus] Error getting attachment status:",
+        error
+      );
+      return null;
+    }
+  }
+  private async updateAttachmentComputedStatus(
+    attachmentId: string
+  ): Promise<void> {
+    try {
+      const attachment = await this.prisma.messageAttachment.findUnique({
+        where: { id: attachmentId },
+        select: {
+          id: true,
+          messageId: true,
+          mimeType: true,
+          message: {
+            select: {
+              conversationId: true,
+              senderId: true,
+            },
+          },
+        },
+      });
+
+      if (!attachment) return;
+
+      const authorId = attachment.message.senderId;
+      const conversationId = attachment.message.conversationId;
+
+      const totalParticipants = await this.prisma.participant.count({
+        where: {
+          conversationId,
+          isActive: true,
+          id: { not: authorId },
+        },
+      });
+
+      // Deux jeux de compteurs (user 2026-08-18 : « remonter les lectures
+      // de l'audio même si c'est l'auteur qui le lit ») :
+      // - AFFICHÉS (`viewedCount`/`downloadedCount`/`consumedCount`) :
+      //   auteur INCLUS — sa lecture compte comme celle de n'importe qui ;
+      // - COMPLÉTUDE (`…ByAllAt`) : auteur EXCLU des deux côtés de la
+      //   comparaison — sinon sa propre écoute allumerait « écouté par
+      //   tous » avant qu'un seul destinataire n'ait ouvert le vocal.
+      //
+      // `participant: { conversationId }` sur CHAQUE requête : les lignes
+      // HÉRITÉES du bug d'identifiant (participantId = User.id, écrites
+      // avant le correctif de la route) ne référencent aucun Participant —
+      // sans ce filtre elles comptaient double (l'upsert post-correctif crée
+      // une seconde ligne pour le même humain) et passaient TOUJOURS
+      // l'exclusion auteur (User.id ≠ Participant.id de l'auteur), allumant
+      // des « écouté par tous » fantômes. Même règle d'orphelines que les
+      // lectures (`if (!participant) return null`).
+      const [
+        viewedCount, downloadedCount, listenedCount, watchedCount,
+        viewedCountOthers, downloadedCountOthers, listenedCountOthers, watchedCountOthers,
+      ] =
+        await Promise.all([
+          this.prisma.attachmentStatusEntry.count({
+            where: { attachmentId, viewedAt: { not: null }, participant: { conversationId } },
+          }),
+          this.prisma.attachmentStatusEntry.count({
+            where: { attachmentId, downloadedAt: { not: null }, participant: { conversationId } },
+          }),
+          this.prisma.attachmentStatusEntry.count({
+            where: { attachmentId, listenedAt: { not: null }, participant: { conversationId } },
+          }),
+          this.prisma.attachmentStatusEntry.count({
+            where: { attachmentId, watchedAt: { not: null }, participant: { conversationId } },
+          }),
+          this.prisma.attachmentStatusEntry.count({
+            where: {
+              attachmentId,
+              viewedAt: { not: null },
+              participantId: { not: authorId },
+              participant: { conversationId },
+            },
+          }),
+          this.prisma.attachmentStatusEntry.count({
+            where: {
+              attachmentId,
+              downloadedAt: { not: null },
+              participantId: { not: authorId },
+              participant: { conversationId },
+            },
+          }),
+          this.prisma.attachmentStatusEntry.count({
+            where: {
+              attachmentId,
+              listenedAt: { not: null },
+              participantId: { not: authorId },
+              participant: { conversationId },
+            },
+          }),
+          this.prisma.attachmentStatusEntry.count({
+            where: {
+              attachmentId,
+              watchedAt: { not: null },
+              participantId: { not: authorId },
+              participant: { conversationId },
+            },
+          }),
+        ]);
+
+      const isAudio = attachment.mimeType.startsWith("audio/");
+      const isVideo = attachment.mimeType.startsWith("video/");
+      const consumedCount = isAudio
+        ? listenedCount
+        : isVideo
+        ? watchedCount
+        : viewedCount;
+
+      let viewedByAllAt: Date | null = null;
+      let downloadedByAllAt: Date | null = null;
+      let listenedByAllAt: Date | null = null;
+      let watchedByAllAt: Date | null = null;
+
+      if (totalParticipants > 0) {
+        if (viewedCountOthers >= totalParticipants) {
+          const last = await this.prisma.attachmentStatusEntry.findFirst({
+            where: {
+              attachmentId,
+              viewedAt: { not: null },
+              participantId: { not: authorId },
+              participant: { conversationId },
+            },
+            orderBy: { viewedAt: "desc" },
+            select: { viewedAt: true },
+          });
+          viewedByAllAt = last?.viewedAt || null;
+        }
+
+        if (downloadedCountOthers >= totalParticipants) {
+          const last = await this.prisma.attachmentStatusEntry.findFirst({
+            where: {
+              attachmentId,
+              downloadedAt: { not: null },
+              participantId: { not: authorId },
+              participant: { conversationId },
+            },
+            orderBy: { downloadedAt: "desc" },
+            select: { downloadedAt: true },
+          });
+          downloadedByAllAt = last?.downloadedAt || null;
+        }
+
+        if (listenedCountOthers >= totalParticipants && isAudio) {
+          const last = await this.prisma.attachmentStatusEntry.findFirst({
+            where: {
+              attachmentId,
+              listenedAt: { not: null },
+              participantId: { not: authorId },
+              participant: { conversationId },
+            },
+            orderBy: { listenedAt: "desc" },
+            select: { listenedAt: true },
+          });
+          listenedByAllAt = last?.listenedAt || null;
+        }
+
+        if (watchedCountOthers >= totalParticipants && isVideo) {
+          const last = await this.prisma.attachmentStatusEntry.findFirst({
+            where: {
+              attachmentId,
+              watchedAt: { not: null },
+              participantId: { not: authorId },
+              participant: { conversationId },
+            },
+            orderBy: { watchedAt: "desc" },
+            select: { watchedAt: true },
+          });
+          watchedByAllAt = last?.watchedAt || null;
+        }
+      }
+
+      await this.prisma.messageAttachment.update({
+        where: { id: attachmentId },
+        data: {
+          viewedCount,
+          downloadedCount,
+          consumedCount,
+          viewedByAllAt,
+          downloadedByAllAt,
+          listenedByAllAt,
+          watchedByAllAt,
+        },
+      });
+    } catch (error) {
+      logger.error(
+        "[MessageReadStatus] Error updating attachment computed status:",
+        error
+      );
+    }
+  }
+}

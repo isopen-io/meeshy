@@ -1,0 +1,238 @@
+@import './longpress-veil.css';
+
+/*
+ * L'APERÇU D'UNE CONVERSATION TENUE (#11211) — le voile, la grappe et la carte.
+ *
+ * Même voile que le menu d'un message (`thread-menu.css`) : le MATÉRIAU
+ * SYSTÈME de l'appui long (#11222), lu dans les jetons de `longpress-veil.css`,
+ * et une entrée en fondu. Le flou est celui du VOILE, posé sur la liste
+ * derrière : la carte, au-dessus de lui, reste nette — ni `transform`, ni
+ * `filter` sur elle, et l'animation ne joue que l'opacité, pour qu'aucune
+ * échelle ne reste en fin d'entrée.
+ *
+ * La grappe est une couche MODALE : elle passe au-dessus du chrome fixe de la
+ * coquille (`top-band.tsx`, bandeau du joueur, z-40), qui ne la recouvre ni ne
+ * capte ses touchers (#17260). Même étage que le panneau ⋮ (`row-actions.tsx`).
+ */
+.conversation-peek-cluster {
+  position: fixed;
+  inset: 0;
+  z-index: 41;
+}
+
+.conversation-peek-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background-color: var(--longpress-veil-tint);
+  backdrop-filter: var(--longpress-veil-backdrop);
+  animation: conversationPeekIn 220ms ease-out;
+}
+
+.conversation-peek {
+  position: fixed;
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: conversationPeekIn 220ms ease-out;
+}
+
+/*
+ * LA CARTE GRANDE, LE MENU QU'ON TIRE (#17243) — par TRANSFORMATIONS
+ * seulement (`peek-sheet.ts`, `peekSheetOffsets`) : la carte garde sa hauteur
+ * de repos, le menu sa hauteur étendue, et le geste glisse le menu vers le
+ * haut en remontant d'autant le contenu de la carte (`--peek-shift`). La
+ * grappe coupe ce qui dépasse en BAS (le menu compact y cache ses dernières
+ * actions), jamais l'ombre des côtés ni du haut. Les translations ne glissent
+ * que vers un cran (relâcher, poignée, clavier) ; pendant le tirage, elles
+ * suivent le doigt sans retard.
+ */
+.conversation-peek {
+  clip-path: inset(-48px -48px 0 -48px);
+}
+
+.conversation-peek-card-slot,
+.conversation-peek-sheet {
+  flex: none;
+}
+
+.conversation-peek-sheet,
+.conversation-peek-card-slot .conversation-peek-body {
+  transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.conversation-peek-card-slot .conversation-peek-body {
+  transform: translateY(calc(-1 * var(--peek-shift, 0px)));
+}
+
+.conversation-peek-sheet[data-peek-dragging],
+.conversation-peek:has([data-peek-dragging]) .conversation-peek-body {
+  transition: none;
+}
+
+.conversation-peek-sheet {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 20px;
+  background-color: var(--color-ios-card);
+  border: 1px solid var(--color-edge);
+  box-shadow: var(--shadow-cast);
+  user-select: none;
+  -webkit-user-select: none;
+  will-change: transform;
+}
+
+/* La poignée : une cible de 44 de haut, la capsule au centre, au focus visible. */
+.conversation-peek-handle {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 100%;
+  min-height: 44px;
+  touch-action: none;
+  cursor: grab;
+}
+
+.conversation-peek-sheet[data-peek-dragging] .conversation-peek-handle {
+  cursor: grabbing;
+}
+
+.conversation-peek-handle:focus-visible {
+  outline: 2px solid var(--color-ios-brand);
+  outline-offset: -4px;
+  border-radius: 12px;
+}
+
+.conversation-peek-capsule {
+  width: 36px;
+  height: 5px;
+  border-radius: 3px;
+  background-color: var(--color-ios-ink-3);
+  opacity: 0.6;
+}
+
+.conversation-peek-menu {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 4px 0;
+  overscroll-behavior: contain;
+}
+
+.conversation-peek-card {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  min-height: 120px;
+  overflow: hidden;
+  border-radius: 20px;
+  background-color: var(--color-ios-card);
+  border: 1px solid var(--color-edge);
+  box-shadow: var(--shadow-cast);
+}
+
+/* LE FOND DE LA CONVERSATION (#12633) — la couche du fil
+   (`ConversationBackdrop`), posée sous le contenu de la carte. `isolation`
+   garde son `z-index: -1` DANS la carte : devant sa surface, derrière ses
+   rangées. Ces règles ne dépendent pas de `thread-scene.css`, que seul le
+   chunk du fil charge : la liste peut tenir une conversation sans jamais en
+   avoir ouvert une. */
+.conversation-peek-card > .thread-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* Tant que le fond choisi n'est pas prêt (photo en route, modèle chargé à la
+   demande), la couche rend Signature : la carte garde alors SA surface, comme
+   iOS (#11231), plutôt que de montrer un dégradé que le fil ne montrera pas. */
+.conversation-peek-card > .thread-backdrop:not([data-appearance]) {
+  display: none;
+}
+
+.conversation-peek-card > .thread-backdrop .thread-backdrop-photo,
+.conversation-peek-card > .thread-backdrop .thread-backdrop-veil {
+  position: absolute;
+  inset: 0;
+}
+
+.conversation-peek-card > .thread-backdrop .thread-backdrop-photo {
+  inset: -32px;
+  background-size: cover;
+  background-position: center;
+}
+
+[dir='rtl'] .conversation-peek-card > .thread-backdrop[data-flip-rtl] {
+  transform: scaleX(-1);
+}
+
+/* Les derniers messages tiennent par le BAS, comme le fil, et prennent toute
+   la carte : sans en-tête (#17243), on sait déjà ce qu'on tient. Un message
+   plus ancien que la carte ne peut montrer se fond par le haut. */
+.conversation-peek-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+  overflow: hidden;
+  padding: 12px;
+}
+
+/* Le fondu ne se pose que si un message est réellement coupé par le haut, et
+   reste court : le plus ancien des cinq, quand ils tiennent, est net. */
+.conversation-peek-body[data-peek-overflowing] {
+  mask-image: linear-gradient(to bottom, transparent 0, black 12px);
+}
+
+.conversation-peek-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-ios-ink-3);
+}
+
+.conversation-peek-skeleton {
+  height: 14px;
+  border-radius: 7px;
+  background-color: var(--color-ios-fill);
+}
+
+.conversation-peek-open {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+
+.conversation-peek-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+@keyframes conversationPeekIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-peek-veil,
+  .conversation-peek {
+    animation: none;
+  }
+
+  .conversation-peek-sheet,
+  .conversation-peek-card-slot .conversation-peek-body {
+    transition: none;
+  }
+}

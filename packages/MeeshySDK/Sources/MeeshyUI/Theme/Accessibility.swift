@@ -23,6 +23,11 @@ public struct MeeshyAccessibilitySettings: Codable, Equatable, Sendable {
 /// changes. Pattern mirrors `MediaDownloadPreferencesStore` (debounced save).
 @MainActor
 public final class MeeshyAccessibilityPreferences: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public static let shared = MeeshyAccessibilityPreferences()
 
     @Published public var settings: MeeshyAccessibilitySettings
@@ -67,6 +72,71 @@ public enum MeeshyMotion {
     public nonisolated static func shouldReduce(system: Bool, userForced: Bool) -> Bool {
         system || userForced
     }
+
+    public nonisolated static func animation(_ animation: Animation?, reduce: Bool) -> Animation? {
+        reduce ? nil : animation
+    }
+}
+
+public func meeshyWithAnimation<Result>(
+    _ animation: Animation? = .default,
+    reduceMotion: Bool,
+    _ body: () throws -> Result
+) rethrows -> Result {
+    try withAnimation(MeeshyMotion.animation(animation, reduce: reduceMotion), body)
+}
+
+public extension MeeshyMotion {
+    /// Ce que la racine laisse passer d'une animation explicite : rien sous
+    /// « Réduire les animations », sauf le fondu court qu'un site a demandé
+    /// pour ce mode (`meeshyWithAnimation(_:reduced:reduceMotion:_:)`).
+    nonisolated static func rootAnimation(_ animation: Animation?, reduce: Bool, preserved: Bool) -> Animation? {
+        reduce && !preserved ? nil : animation
+    }
+
+    /// Le fondu court du mode réduit : la valeur réduite des pilules du kit
+    /// (K10, K16), sans nouveau littéral.
+    nonisolated static var reducedFade: Animation {
+        .easeOut(duration: MeeshyGlassPillRecipe.reducedStowDuration)
+    }
+
+    static func transition(_ full: AnyTransition, reduced: AnyTransition = .opacity, reduce: Bool) -> AnyTransition {
+        reduce ? reduced : full
+    }
+}
+
+nonisolated private struct MeeshyPreservedMotionKey: TransactionKey {
+    static let defaultValue = false
+}
+
+extension Transaction {
+    /// Marque une transaction dont l'animation est déjà la variante réduite :
+    /// la racine la laisse passer. iOS 16 n'a pas de clé de transaction ; le
+    /// fondu réduit y devient un changement immédiat.
+    var meeshyPreservesMotion: Bool {
+        get {
+            guard #available(iOS 17, *) else { return false }
+            return self[MeeshyPreservedMotionKey.self]
+        }
+        set {
+            guard #available(iOS 17, *) else { return }
+            self[MeeshyPreservedMotionKey.self] = newValue
+        }
+    }
+}
+
+/// `full` hors réduction ; sous réduction, `reduced`, marqué pour traverser
+/// la racine (`View.meeshyMotionRoot()`).
+public func meeshyWithAnimation<Result>(
+    _ full: Animation?,
+    reduced: Animation?,
+    reduceMotion: Bool,
+    _ body: () throws -> Result
+) rethrows -> Result {
+    guard reduceMotion else { return try withAnimation(full, body) }
+    var transaction = Transaction(animation: reduced)
+    transaction.meeshyPreservesMotion = true
+    return try withTransaction(transaction, body)
 }
 
 /// App-level Reduce Motion override, injected at the root from
@@ -93,7 +163,73 @@ private struct MeeshyAnimationModifier<V: Equatable>: ViewModifier {
 
     func body(content: Content) -> some View {
         let reduce = MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced)
-        return content.animation(reduce ? nil : animation, value: value)
+        return content.animation(MeeshyMotion.animation(animation, reduce: reduce), value: value)
+    }
+}
+
+private struct MeeshyMotionRootModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var systemReduce
+    @Environment(\.meeshyForceReduceMotion) private var userForced
+
+    func body(content: Content) -> some View {
+        let reduce = MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced)
+        return content.transaction { transaction in
+            transaction.animation = MeeshyMotion.rootAnimation(
+                transaction.animation,
+                reduce: reduce,
+                preserved: transaction.meeshyPreservesMotion
+            )
+        }
+    }
+}
+
+private struct MeeshyReducedAnimationModifier<V: Equatable>: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var systemReduce
+    @Environment(\.meeshyForceReduceMotion) private var userForced
+    let full: Animation?
+    let reduced: Animation?
+    let value: V
+
+    func body(content: Content) -> some View {
+        let reduce = MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced)
+        return content.animation(reduce ? reduced : full, value: value)
+    }
+}
+
+private struct MeeshyTransitionModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var systemReduce
+    @Environment(\.meeshyForceReduceMotion) private var userForced
+    let full: AnyTransition
+    let reduced: AnyTransition
+
+    func body(content: Content) -> some View {
+        let reduce = MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced)
+        return content.transition(MeeshyMotion.transition(full, reduced: reduced, reduce: reduce))
+    }
+}
+
+public extension View {
+    /// La racine du mouvement d'une fenêtre ou d'une surface présentée : sous
+    /// « Réduire les animations » (système OU préférence de l'app), toute
+    /// animation explicite qui la traverse devient un changement immédiat,
+    /// sauf la variante réduite marquée par
+    /// `meeshyWithAnimation(_:reduced:reduceMotion:_:)`. Elle ne touche jamais
+    /// `disablesAnimations`. À poser AVANT l'injection de
+    /// `meeshyForceReduceMotion`, pour la lire.
+    func meeshyMotionRoot() -> some View {
+        modifier(MeeshyMotionRootModifier())
+    }
+
+    /// `.animation(_:value:)` à deux variantes : `full` hors réduction,
+    /// `reduced` (un fondu court, ou `nil`) sous réduction.
+    func meeshyAnimation<V: Equatable>(_ full: Animation?, reduced: Animation?, value: V) -> some View {
+        modifier(MeeshyReducedAnimationModifier(full: full, reduced: reduced, value: value))
+    }
+
+    /// `.transition(_:)` à deux variantes, qui lit les deux moitiés de la
+    /// préférence.
+    func meeshyTransition(_ full: AnyTransition, reduced: AnyTransition = .opacity) -> some View {
+        modifier(MeeshyTransitionModifier(full: full, reduced: reduced))
     }
 }
 
@@ -114,9 +250,21 @@ public extension View {
 
     /// Guarantee a ≥ `minSize` square hit region (Apple HIG minimum is 44pt)
     /// while keeping the visible glyph at its design size.
-    func meeshyTapTarget(_ minSize: CGFloat = 44) -> some View {
+    func meeshyTapTarget(_ minSize: CGFloat = MeeshyControlSize.tapTarget) -> some View {
         frame(minWidth: minSize, minHeight: minSize)
             .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Tap target geometry
+
+public nonisolated enum MeeshyTapTarget {
+    public static func inset(forVisualSide side: CGFloat) -> CGFloat {
+        max(0, (MeeshyControlSize.tapTarget - side) / 2)
+    }
+
+    public static func overlaps(visualA: CGFloat, visualB: CGFloat, gap: CGFloat) -> Bool {
+        gap < inset(forVisualSide: visualA) + inset(forVisualSide: visualB)
     }
 }
 
@@ -158,6 +306,18 @@ public extension MeeshyFont {
     }
 }
 
+public extension MeeshyFont {
+    /// **Un emoji seul, à la taille EXACTE demandée** (#9054).
+    ///
+    /// `relative(_:)` range toute taille ≥ 31 pt sous `.largeTitle` (34 pt) :
+    /// les 90 / 60 / 45 d'un message d'emojis sortaient donc tous à 34, et
+    /// leurs multiples aussi. L'emoji seul est déjà un affichage géant ; il ne
+    /// suit pas Dynamic Type au-delà de ce que sa taille porte.
+    nonisolated static func emoji(_ size: CGFloat) -> Font {
+        Font.system(size: size)
+    }
+}
+
 // MARK: - Accessibility identifiers (UI / E2E test hooks)
 
 /// Stable accessibility identifiers shared by the app and UI tests — the single
@@ -169,6 +329,12 @@ public enum MeeshyA11yID {
 
     // Conversation / composer
     public static let composerSend = "composer.send"
+    public static let composerQuickEmoji = "composer.quickEmoji"
+    /// La pastille du cadre à mots, qui prend la place du bouton d'envoi quand
+    /// il n'y a que du texte (#5326).
+    public static let composerTextSticker = "composer.textSticker"
+    /// La feuille des dix cadres, ouverte par un appui long sur la pastille.
+    public static let composerTextStickerSheet = "composer.textSticker.sheet"
     public static let composerTextField = "composer.textField"
     public static let conversationMessageList = "conversation.messageList"
     public static let conversationScrollToBottom = "conversation.scrollToBottom"

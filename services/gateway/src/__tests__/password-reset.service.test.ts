@@ -9,6 +9,8 @@ import { PasswordResetService } from '../services/PasswordResetService';
 import type { CacheStore } from '../services/CacheStore';
 import { EmailService } from '../services/EmailService';
 import { GeoIPService } from '../services/GeoIPService';
+import { validatePasswordStrength } from '../utils/password-strength';
+import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
 
 // Mock Prisma Client
 const mockPrisma = {
@@ -280,42 +282,44 @@ describe('PasswordResetService', () => {
       ];
 
       strongPasswords.forEach(password => {
-        const validation = (service as any).validatePasswordStrength(password);
+        const validation = validatePasswordStrength(password);
         expect(validation.isValid).toBe(true);
       });
     });
 
-    it('should reject passwords without uppercase', () => {
-      const validation = (service as any).validatePasswordStrength('weakpassword123!');
-      expect(validation.isValid).toBe(false);
-      expect(validation.errors).toContain('one uppercase letter');
+    it('accepts a password with no uppercase letter, as long as its zxcvbn score clears the bar (#6436)', () => {
+      // NIST SP 800-63B : aucune classe de caractères n'est plus exigée —
+      // seule la robustesse mesurée par zxcvbn compte.
+      const validation = validatePasswordStrength('weakpassword123!');
+      expect(validation.isValid).toBe(true);
     });
 
-    it('should reject passwords without lowercase', () => {
-      const validation = (service as any).validatePasswordStrength('WEAKPASSWORD123!');
-      expect(validation.isValid).toBe(false);
-      expect(validation.errors).toContain('one lowercase letter');
+    it('accepts a password with no lowercase letter, as long as its zxcvbn score clears the bar (#6436)', () => {
+      const validation = validatePasswordStrength('WEAKPASSWORD123!');
+      expect(validation.isValid).toBe(true);
     });
 
-    it('should reject passwords without digits', () => {
-      const validation = (service as any).validatePasswordStrength('WeakPassword!');
-      expect(validation.isValid).toBe(false);
-      expect(validation.errors).toContain('one digit');
+    it('accepts a password with no digit, as long as its zxcvbn score clears the bar (#6436)', () => {
+      const validation = validatePasswordStrength('WeakPassword!');
+      expect(validation.isValid).toBe(true);
     });
 
     it('should reject weak passwords based on zxcvbn score', () => {
-      const validation = (service as any).validatePasswordStrength('WeakPassword123');
+      // 'Password12345' réunit longueur et diversité de caractères, et reste
+      // un motif trop devinable (score 1) pour sa tranche de longueur
+      // (13 caractères ⇒ minimum 2, cf. minPasswordScoreForLength).
+      const validation = validatePasswordStrength('Password12345');
       expect(validation.isValid).toBe(false);
       // Check that the password is rejected due to low strength score (uses zxcvbn)
       const scoreError = validation.errors.find((err: string) => err.includes('password strength score'));
       expect(scoreError).toBeDefined();
-      expect(scoreError).toContain('minimum: 3/4');
+      expect(scoreError).toContain('minimum: 2/4');
     });
 
-    it('should reject passwords shorter than 8 characters', () => {
-      const validation = (service as any).validatePasswordStrength('Sh1!');
+    it('should reject passwords shorter than PASSWORD_MIN_LENGTH', () => {
+      const validation = validatePasswordStrength('Sh1!');
       expect(validation.isValid).toBe(false);
-      expect(validation.errors).toContain('minimum 8 characters');
+      expect(validation.errors).toContain(`minimum ${PASSWORD_MIN_LENGTH} characters`);
     });
   });
 });

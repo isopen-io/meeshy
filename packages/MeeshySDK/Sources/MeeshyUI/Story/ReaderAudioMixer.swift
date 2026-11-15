@@ -29,8 +29,13 @@ public final class ReaderAudioMixer {
     /// Number of foreground audio clips currently configured.
     public var activeClipCount: Int { entries.count }
 
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "media")
-    private let engine = AVAudioEngine()
+    private let logger = MeeshyLog.logger(.media)
+    /// Le moteur sur lequel ce mixer attache ses nodes — celui de son HÔTE,
+    /// partagé par toutes les surfaces de lecture (#9878). `internal` :
+    /// l'extension du FOND (`ReaderAudioMixer+Background.swift`) y attache le
+    /// sien, et une réinitialisation des services média le remplace.
+    var engine: AVAudioEngine { engineHost.engine }
+    let engineHost: ReaderAudioEngineHost
 
     /// Format canonique de mixage — 48 kHz stereo Float32 (standard broadcast,
     /// natif AAC LC, natif iPhone speaker + AirPods). Avant ce fix, chaque
@@ -48,7 +53,7 @@ public final class ReaderAudioMixer {
     /// AirPlay, simulator with audio disabled). We fall back through three
     /// safer constructors before giving up to the engine's natural mixer format
     /// (which is guaranteed non-nil because the engine is live).
-    private static func resolveCanonicalFormat(mixer: AVAudioMixerNode) -> AVAudioFormat {
+    static func resolveCanonicalFormat(mixer: AVAudioMixerNode) -> AVAudioFormat {
         if let std = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2) {
             return std
         }
@@ -63,14 +68,26 @@ public final class ReaderAudioMixer {
         // but the format is guaranteed coherent across all attached nodes.
         return mixer.outputFormat(forBus: 0)
     }
-    /// One entry per configured clip, keyed by audio object id.
-    private var entries: [String: Entry] = [:]
+    /// One entry per configured clip, keyed by audio object id. `internal` :
+    /// le rattachement à un moteur neuf (`ReaderAudioMixer+SharedEngine.swift`)
+    /// remplace leurs nodes.
+    var entries: [String: Entry] = [:]
+    /// Avancé par chaque configuration : une ouverture de fichiers HORS du fil
+    /// principal qui revient après une configuration plus récente se tait
+    /// (`ReaderAudioMixer+FileLoading.swift`).
+    var configurationTicket: UInt64 = 0
     /// Wall-clock origin for the current playback pass — set on `play()` and
     /// used to derive the sample-accurate host-time targets for each clip.
     private var playbackStartHostTime: UInt64?
+    /// Instant `mach_absolute_time()` du dernier `pause()`, tant qu'aucune
+    /// reprise ne l'a soldé. `slideElapsedSeconds` se mesure contre
+    /// `playbackStartHostTime`, une horloge MURALE : sans ce jalon, une pause
+    /// de N secondes faisait avancer le chip audio de N secondes pendant que
+    /// rien ne jouait, et la reprise servait un écoulé faux de N (#6580).
+    private var pausedAtHostTime: UInt64?
     private var didShutdown: Bool = false
     /// Stored background audio entry (at most one per slide).
-    private var backgroundEntry: BackgroundEntry?
+    var backgroundEntry: BackgroundEntry?
     private var _duckingEnabled: Bool = false
     private var _duckedBackgroundVolume: Float = 0.5
 
@@ -78,7 +95,7 @@ public final class ReaderAudioMixer {
     /// background entry should begin. Filled by `configureBackground` from the
     /// resolved `StoryAudioPlayerObject.startTime` (which already folds in the
     /// legacy `StoryEffects.backgroundAudioStart`). Defaults to `0`.
-    public private(set) var backgroundStartOffset: Double = 0
+    public internal(set) var backgroundStartOffset: Double = 0
 
     /// Identifies the slide content the engine was last scheduled against.
     /// A repeated `play(originHost:slideKey:)` carrying the same key resumes
@@ -87,7 +104,15 @@ public final class ReaderAudioMixer {
     /// from stacking duplicate buffers on the same node (RC4.6, no echo).
     /// Reset by `teardown()` / `configureBackground(...)` / `stop()` so the
     /// next configure pass always re-schedules cleanly.
-    private var startedSlideKey: String?
+    var startedSlideKey: String?
+
+    /// Époque de la passe de lecture : avancée par chaque passe planifiée à
+    /// neuf, chaque `stop()` et chaque `teardown()`. Un handler de boucle ou un
+    /// fondu qui la voit changer sait qu'il ne parle plus à SA passe (#9867).
+    var playbackEpoch: UInt64 = 0
+
+    /// L'arrêt des nœuds en cours sur sa file (`ReaderAudioMixer+NodeRetirement`).
+    var nodeRetirement = ReaderAudioNodeRetirement()
 
     // MARK: Default background envelope (RC4.7)
 
@@ -101,52 +126,111 @@ public final class ReaderAudioMixer {
     /// Default fade-out duration (seconds).
     public static let defaultEnvelopeFadeOutSeconds: Double = 0.5
 
-    public init() {}
+    /// Le poseur de buffers. Injecté pour qu'un témoin puisse LIRE ce que le
+    /// mixer remet au moteur — la frame de départ ET l'heure — sans faire
+    /// tourner d'`AVAudioEngine` (cf. `ReaderAudioSchedulerProviding`).
+    private let scheduler: any ReaderAudioSchedulerProviding
+
+    /// Un mixer AUTONOME, sur un moteur à lui (témoins). Tout canevas passe
+    /// `ReaderAudioEngineHost.reader` (#9878).
+    public convenience init() {
+        self.init(engineHost: ReaderAudioEngineHost(), scheduler: ReaderAudioNodeScheduler())
+    }
+
+    /// Seam de test : `internal`, donc invisible hors du module.
+    convenience init(scheduler: any ReaderAudioSchedulerProviding) {
+        self.init(engineHost: ReaderAudioEngineHost(), scheduler: scheduler)
+    }
+
+    init(engineHost: ReaderAudioEngineHost,
+         scheduler: any ReaderAudioSchedulerProviding = ReaderAudioNodeScheduler()) {
+        self.engineHost = engineHost
+        self.scheduler = scheduler
+        engineHost.register(self)
+    }
 
     // MARK: - Configure
 
     /// Configure the mixer for a slide. Call before `play()`. Replaces any
     /// previous configuration and tears down dangling nodes.
-    public func configure(audios: [StoryAudioPlayerObject], urls: [String: URL]) throws {
+    ///
+    /// `loopsEveryClip` : l'aperçu d'édition du composer, qui n'a pas de durée
+    /// de slide, fait boucler chaque clip quoi que dise `loop`
+    /// (`ReaderAudioLoopPolicy`, #10362). Le lecteur garde la déclaration.
+    public func configure(audios: [StoryAudioPlayerObject],
+                          urls: [String: URL],
+                          loopsEveryClip: Bool = false) throws {
+        let files = ReaderAudioFileReader.readAudioFiles(Self.urls(urls, for: audios))
+        configure(audios: audios, files: files, loopsEveryClip: loopsEveryClip)
+    }
+
+    /// Le corps de la configuration, sur des fichiers DÉJÀ ouverts — par le
+    /// chemin synchrone ci-dessus, ou hors du fil principal par
+    /// `loadAndConfigure` (#9878).
+    func configure(audios: [StoryAudioPlayerObject],
+                   files: [String: AVAudioFile],
+                   loopsEveryClip: Bool) {
+        configurationTicket &+= 1
         teardown()
-        logger.info("ReaderAudioMixer.configure audios=\(audios.count) urls=\(urls.count)")
+        logger.info("ReaderAudioMixer.configure audios=\(audios.count) files=\(files.count)")
         for audio in audios {
-            guard let url = urls[audio.id] else {
-                logger.error("ReaderAudioMixer.configure skipping \(audio.id, privacy: .public) — no URL in dict")
+            guard let file = files[audio.id] else {
+                logger.error("ReaderAudioMixer.configure skipping \(audio.id, privacy: .public) — no readable file")
                 continue
             }
-            // AVAudioFile(forReading:) rejects HTTPS URLs with OSStatus 2003334207
-            // ("not a file"). Log explicitly so a silent skip becomes diagnosable.
-            if !url.isFileURL {
-                logger.error("ReaderAudioMixer.configure \(audio.id, privacy: .public) URL is not file:// scheme=\(url.scheme ?? "nil", privacy: .public) — AVAudioFile will reject")
-            }
-            do {
-                let file = try AVAudioFile(forReading: url)
-                let node = AVAudioPlayerNode()
-                engine.attach(node)
-                // Connect via canonical format — AVAudioEngine inserts a
-                // high-quality `AVAudioConverter` between this node and the
-                // mainMixer when `file.processingFormat` differs (samplerate or
-                // channel count). Cf. `canonicalFormat` docstring.
-                engine.connect(node,
-                               to: engine.mainMixerNode,
-                               format: Self.resolveCanonicalFormat(mixer: engine.mainMixerNode))
-                let initialVolume = audio.fadeIn ?? 0 > 0 ? 0 : audio.volume
-                node.volume = isMuted ? 0 : initialVolume
-                entries[audio.id] = Entry(
-                    audioId: audio.id,
-                    file: file,
-                    node: node,
-                    startTime: audio.startTime ?? 0,
-                    targetVolume: audio.volume,
-                    fadeIn: audio.fadeIn ?? 0,
-                    fadeOut: audio.fadeOut ?? 0,
-                    duration: audio.duration ?? Float(file.length) / Float(file.processingFormat.sampleRate),
-                    loop: audio.loop ?? false
-                )
-            } catch {
-                logger.error("ReaderAudioMixer failed to load \(audio.id): \(error.localizedDescription)")
-            }
+            let node = AVAudioPlayerNode()
+            engine.attach(node)
+            // Connect via canonical format — AVAudioEngine inserts a
+            // high-quality `AVAudioConverter` between this node and the
+            // mainMixer when `file.processingFormat` differs (samplerate or
+            // channel count). Cf. `canonicalFormat` docstring.
+            engine.connect(node,
+                           to: engine.mainMixerNode,
+                           format: Self.resolveCanonicalFormat(mixer: engine.mainMixerNode))
+            let initialVolume = audio.fadeIn ?? 0 > 0 ? 0 : audio.volume
+            node.volume = isMuted ? 0 : initialVolume
+            let sourceDuration = Double(file.length) / max(file.processingFormat.sampleRate, 1)
+            let duration = audio.duration ?? Float(file.length) / Float(file.processingFormat.sampleRate)
+            let trimBounds: MediaTrimBounds? = (audio.sourceStart == nil && audio.sourceEnd == nil)
+                ? nil
+                : audio.trimBounds(sourceDuration: sourceDuration)
+            entries[audio.id] = Entry(
+                audioId: audio.id,
+                file: file,
+                node: node,
+                startTime: audio.startTime ?? 0,
+                targetVolume: audio.volume,
+                fadeIn: audio.fadeIn ?? 0,
+                fadeOut: audio.fadeOut ?? 0,
+                duration: duration,
+                loop: ReaderAudioLoopPolicy.loops(declared: audio.loop,
+                                                  isBackground: false,
+                                                  isEditPreview: loopsEveryClip),
+                // Fenêtre de rognage NON destructive (bornes seules, aucun
+                // ré-encodage). Résolue une fois ici — jamais recalculée à
+                // chaque schedule — via `StoryAudioPlayerObject.trimBounds`,
+                // le résolveur UNIQUE qui tolère les bornes vieillies. Le
+                // fichier porte sa PROPRE durée source (`file.length` /
+                // `processingFormat.sampleRate`, jamais `audio.duration` qui,
+                // une fois rogné, est la durée OCCUPÉE sur la timeline — pas
+                // celle de la source). Sans intention de rognage déclarée
+                // (les deux bornes `nil`), on ne résout rien : `nil` fait
+                // retomber `scheduleEntry` sur `scheduleFile`, le chemin
+                // d'aujourd'hui, à coût nul pour l'immense majorité des clips.
+                trimBounds: trimBounds,
+                // Une boucle d'aperçu rejoue ses fondus à chaque tour
+                // (#10367) ; `nil` garde les fondus posés une fois.
+                envelopeCycle: ReaderLoopEnvelope.repeatsEveryPass(
+                    loopsEveryClip: loopsEveryClip,
+                    fadeIn: Double(audio.fadeIn ?? 0),
+                    fadeOut: Double(audio.fadeOut ?? 0))
+                    ? ReaderLoopEnvelope.cycle(
+                        declaredLoop: audio.loop,
+                        occupiedDuration: Double(duration),
+                        passLength: ReaderLoopLaw.passLength(sourceDuration: sourceDuration,
+                                                             trimBounds: trimBounds))
+                    : nil
+            )
         }
         logger.info("ReaderAudioMixer.configure done entries=\(self.entries.count)")
     }
@@ -169,31 +253,48 @@ public final class ReaderAudioMixer {
     /// Returns `true` when it scheduled a fresh pass, `false` when it merely
     /// resumed an existing one — the caller uses this to apply the default
     /// fade envelope exactly once per scheduled pass.
+    ///
+    /// `slideElapsed` est la position (secondes) de la SLIDE au moment de
+    /// l'appel — `0` à l'ouverture nominale, `t > 0` quand le détail s'ouvre
+    /// sur la position que la carte publiait déjà (#6580). Chaque clip en
+    /// déduit son propre écoulé et entre EN COURS de piste plutôt que de
+    /// rejouer son fichier depuis zéro.
     @discardableResult
-    public func play(originHost: UInt64, slideKey: String) throws -> Bool {
+    public func play(originHost: UInt64, slideKey: String, slideElapsed: Double = 0) throws -> Bool {
+        nodeRetirement.settle()
         logger.info("ReaderAudioMixer.play slideKey=\(slideKey, privacy: .public) entries=\(self.entries.count) bg=\(self.backgroundEntry == nil ? "nil" : "set") resume=\(self.startedSlideKey == slideKey)")
         if startedSlideKey == slideKey {
+            // HORS de toute correction #6580 : une reprise à clé identique reste
+            // un `resume`, jamais une replanification — replanifier ici
+            // ressusciterait l'ÉCHO que cette garde ferme (RC4.6).
+            // La reprise reprend la session que la pause a pu rendre (#11040, j).
+            if isSounding { MediaSessionCoordinator.shared.activateContentPlayback(.audible) }
             try resumeWithoutRescheduling()
             return false
         }
+        if StoryAudioActivationPolicy.shouldHoldEngine(hasClips: !entries.isEmpty || backgroundEntry != nil,
+                                                       isMuted: isMuted) {
+            logger.info("ReaderAudioMixer.play held while muted — engine left idle slideKey=\(slideKey, privacy: .public)")
+            return false
+        }
         playbackStartHostTime = originHost
+        pausedAtHostTime = nil
+        playbackEpoch &+= 1
         guard !entries.isEmpty || backgroundEntry != nil else {
             logger.error("ReaderAudioMixer.play nothing scheduled (entries empty + no bg) — silent slide slideKey=\(slideKey, privacy: .public)")
             startedSlideKey = slideKey
             isPlaying = true
             return true
         }
-        if !engine.isRunning {
-            try engine.start()
-        }
+        try engineHost.startEngine()
         for entry in entries.values {
-            scheduleEntry(entry, originHost: originHost)
+            scheduleEntry(entry, originHost: originHost, slideElapsed: slideElapsed)
             entry.node.play()
             // Schedule volume fades on the main runloop. node.volume is read
             // by the audio thread per render slice, so the reads are safe.
-            scheduleFades(for: entry, originHost: originHost)
+            scheduleFades(for: entry, originHost: originHost, slideElapsed: slideElapsed)
         }
-        startBackground(originHost: originHost)
+        startBackground(originHost: originHost, slideElapsed: slideElapsed)
         startedSlideKey = slideKey
         isPlaying = true
         return true
@@ -203,13 +304,15 @@ public final class ReaderAudioMixer {
     /// `.play` bounce) — restarts the engine and any paused nodes WITHOUT
     /// touching the buffer schedule, so no clip is heard twice.
     private func resumeWithoutRescheduling() throws {
+        // L'origine GLISSE de la durée pendant laquelle rien n'a joué, sinon
+        // `slideElapsedSeconds` — et le chip audio qui le publie — compterait
+        // la pause comme du temps de lecture.
+        advancePlaybackOriginPastPause()
         guard !entries.isEmpty || backgroundEntry != nil else {
             isPlaying = true
             return
         }
-        if !engine.isRunning {
-            try engine.start()
-        }
+        try engineHost.startEngine()
         for entry in entries.values where !entry.node.isPlaying {
             entry.node.play()
         }
@@ -219,20 +322,77 @@ public final class ReaderAudioMixer {
         isPlaying = true
     }
 
+    /// Origine `t = 0` de la passe en cours (après glissement des pauses
+    /// soldées), `nil` hors lecture planifiée. Les canevas d'édition s'y
+    /// recalent pour se passer le son sans le faire repartir (#10362).
+    var currentPassOriginHost: UInt64? { playbackStartHostTime }
+
+    /// Décale `playbackStartHostTime` de la durée de la pause en cours, et
+    /// solde le jalon. Sans effet si aucune pause n'est en attente.
+    private func advancePlaybackOriginPastPause() {
+        guard let pausedAt = pausedAtHostTime else { return }
+        pausedAtHostTime = nil
+        guard let origin = playbackStartHostTime else { return }
+        playbackStartHostTime = ReaderAudioMixer.originAfterResume(
+            origin: origin, pausedAt: pausedAt, resumedAt: mach_absolute_time())
+    }
+
+    /// Nouvelle origine d'un transport repris après une pause : l'ancienne
+    /// origine glissée de `resumedAt - pausedAt`. Pure et statique — la seule
+    /// forme de cette règle qui s'éprouve sans horloge réelle.
+    ///
+    /// Une reprise ANTÉRIEURE à la pause (horloge non monotone, jalon périmé)
+    /// rend l'origine inchangée plutôt qu'une valeur reculée : un écoulé trop
+    /// grand est un défaut d'affichage, un écoulé NÉGATIF est un crash de
+    /// soustraction non signée.
+    static func originAfterResume(origin: UInt64, pausedAt: UInt64, resumedAt: UInt64) -> UInt64 {
+        guard resumedAt > pausedAt else { return origin }
+        let pausedTicks = resumedAt - pausedAt
+        let (shifted, overflow) = origin.addingReportingOverflow(pausedTicks)
+        return overflow ? origin : shifted
+    }
+
     public func pause() {
+        // Une story qui sonnait rend la main au bout de ≈ 3 s de pause ; sa
+        // reprise réactive la session et annule la libération (#11040, j).
+        if isPlaying, isSounding { MediaSessionCoordinator.shared.releaseAfterUserPause() }
+        nodeRetirement.settle()
         for entry in entries.values { entry.node.pause() }
         backgroundEntry?.player.pause()
-        if engine.isRunning { engine.pause() }
+        // Jalon posé AVANT la remise à `false` : `slideElapsedSeconds` se gèle
+        // sur la valeur de cet instant, et la reprise repart d'ici.
+        if pausedAtHostTime == nil, playbackStartHostTime != nil {
+            pausedAtHostTime = mach_absolute_time()
+        }
         isPlaying = false
+        engineHost.clientDidGoIdle()
+    }
+
+    /// **Prépare le moteur dès que ses clips sont chargés** (#9837).
+    ///
+    /// Un canevas voisin naît en pause : sans préparation, `engine.start()`
+    /// alloue ses ressources au moment où la page devient active — sur le fil
+    /// principal, pendant le geste. `prepare()` les prend hors de ce moment.
+    public func prepareForPlayback() {
+        guard Self.shouldPrepareEngine(isRunning: engine.isRunning,
+                                       hasClips: !entries.isEmpty || backgroundEntry != nil) else { return }
+        engine.prepare()
+    }
+
+    /// Un moteur qui tourne déjà n'a rien à préparer ; un moteur sans clip non
+    /// plus — le préparer allouerait une sortie qui ne jouera rien.
+    nonisolated static func shouldPrepareEngine(isRunning: Bool, hasClips: Bool) -> Bool {
+        !isRunning && hasClips
     }
 
     public func stop() {
-        for entry in entries.values { entry.node.stop() }
-        backgroundEntry?.player.stop()
-        if engine.isRunning { engine.stop() }
+        retireScheduledNodes()
         playbackStartHostTime = nil
+        pausedAtHostTime = nil
         startedSlideKey = nil
+        playbackEpoch &+= 1
         isPlaying = false
+        engineHost.clientDidGoIdle()
     }
 
     // MARK: - Volume / mute
@@ -299,7 +459,15 @@ public final class ReaderAudioMixer {
         backgroundEntry?.targetVolume
     }
 
-    private func effectiveVolume(for entry: Entry) -> Float {
+    /// Volume RÉELLEMENT porté par le node d'un clip — distinct de
+    /// `intendedVolume(for:)`, qui rend la CIBLE. Seam d'observation de
+    /// l'enveloppe : c'est lui qui prouve qu'un clip entré en cours de piste
+    /// n'est pas rendu muet par une montée rejouée depuis zéro.
+    func appliedVolume(for audioId: String) -> Float? {
+        entries[audioId]?.node.volume
+    }
+
+    func effectiveVolume(for entry: Entry) -> Float {
         (isMuted || entry.isUserMuted) ? 0 : entry.targetVolume
     }
 
@@ -344,6 +512,7 @@ public final class ReaderAudioMixer {
     }
 
     private func teardown() {
+        nodeRetirement.settle()
         for entry in entries.values {
             entry.node.stop()
             engine.detach(entry.node)
@@ -358,13 +527,13 @@ public final class ReaderAudioMixer {
             bg.fadeTasks.forEach { $0.cancel() }
             backgroundEntry = nil
         }
-        if engine.isRunning {
-            engine.stop()
-        }
         playbackStartHostTime = nil
+        pausedAtHostTime = nil
         startedSlideKey = nil
+        playbackEpoch &+= 1
         backgroundStartOffset = 0
         isPlaying = false
+        engineHost.clientDidGoIdle()
     }
 
     // `nonisolated` : ne lit que `didShutdown` (Bool, Sendable) + log. Sans ce
@@ -374,7 +543,7 @@ public final class ReaderAudioMixer {
     // via le teardown de StoryCanvasUIView qui possède toujours un audioMixer.
     nonisolated deinit {
         if !didShutdown {
-            os.Logger(subsystem: "me.meeshy.app", category: "media").warning(
+            MeeshyLog.logger(.media).warning(
                 "ReaderAudioMixer deinit without shutdown() — owner should call shutdown() before drop to release AVAudioEngine + nodes deterministically."
             )
         }
@@ -382,36 +551,115 @@ public final class ReaderAudioMixer {
 
     // MARK: - Scheduling
 
-    private func scheduleEntry(_ entry: Entry, originHost: UInt64) {
+    /// `slideElapsed` est le playhead de la SLIDE (secondes) au moment où la
+    /// passe est planifiée — zéro à l'ouverture nominale, `t > 0` quand le
+    /// détail s'ouvre sur la position d'une carte déjà en lecture (#6580).
+    /// L'écoulé DANS le clip s'en déduit : `max(0, slideElapsed - startTime)`.
+    private func scheduleEntry(_ entry: Entry, originHost: UInt64, slideElapsed: Double) {
+        let elapsedInClip = max(0, slideElapsed - Double(entry.startTime))
         let delaySeconds = Double(entry.startTime)
         let hostDelta = ReaderAudioMixer.hostTime(forDelaySeconds: delaySeconds)
         let scheduleAt = AVAudioTime(hostTime: originHost + hostDelta)
 
-        let completion: (@Sendable () -> Void)? = entry.loop ? { @Sendable [weak self, audioId = entry.audioId] in
-            // Re-schedule the same file at the next "now" host-time so the
-            // loop has no audible gap. Using nil scheduleAt ensures playback
-            // continues immediately upon completion.
-            // `_ =` : discarde le handle du `Task` (fire-and-forget) pour que la
-            // closure retourne `Void` — sans ça l'expression `Task` unique est
-            // inférée comme valeur de retour (`() -> Task`), incompatible avec
-            // le type `@Sendable () -> Void` attendu par `scheduleFile`.
-            _ = Task { @MainActor [weak self] in
-                self?.rescheduleLoopedEntry(audioId)
-            }
-        } : nil
-
-        entry.node.scheduleFile(entry.file, at: scheduleAt, completionHandler: completion)
+        // Une boucle suit la loi partagée avec le fond (`ReaderAudioLoop.swift`,
+        // #9867) : le premier plan ne se taisait plus après deux passes.
+        guard !entry.loop else {
+            scheduleLoop(.foreground(entry.audioId), elapsedInClip: elapsedInClip, at: scheduleAt)
+            return
+        }
+        scheduleAudio(node: entry.node, file: entry.file, trimBounds: entry.trimBounds,
+                      elapsedInClip: elapsedInClip,
+                      at: scheduleAt, completionHandler: nil)
     }
 
-    /// Ré-arme la lecture d'un node loopé depuis le completion handler de la
-    /// passe précédente. **Synchrone à dessein** (et non `async`) : appeler
-    /// `scheduleFile(_:at:completionHandler:)` hors d'un contexte `async` évite
-    /// le diagnostic « consider using asynchronous alternative ». L'overload
-    /// `async` suspendrait jusqu'à la FIN de lecture du segment — incompatible
-    /// avec le ré-armement fire-and-forget requis pour boucler sans gap audible.
-    private func rescheduleLoopedEntry(_ audioId: String) {
-        guard let entry = entries[audioId], entry.node.isPlaying else { return }
-        entry.node.scheduleFile(entry.file, at: nil, completionHandler: nil)
+    /// Ce qu'une passe de boucle remet au node, lu sur le slot VIVANT — `nil`
+    /// quand le slot a été vidé ou reconfiguré depuis.
+    func loopSource(for slot: ReaderLoopSlot) -> ReaderLoopSource? {
+        switch slot {
+        case .foreground(let audioId):
+            return entries[audioId].map {
+                ReaderLoopSource(node: $0.node, file: $0.file, trimBounds: $0.trimBounds)
+            }
+        case .background:
+            return backgroundEntry.map {
+                ReaderLoopSource(node: $0.player, file: $0.file, trimBounds: $0.trimBounds)
+            }
+        }
+    }
+
+    /// Convertit une fenêtre de rognage ET l'écoulé DANS le clip en
+    /// position/longueur de FRAMES pour `AVAudioPlayerNode.scheduleSegment`.
+    ///
+    /// Projection du site partagé `TimelineAudioWindow.segment` — la MÊME loi
+    /// que celle qu'applique `AudioMixer.scheduleNodeFromTimelineTime` côté
+    /// composition. Elle n'est pas recopiée ici : les deux moteurs avaient déjà
+    /// divergé sur `hostTime(forDelaySeconds:)`, et c'est cette divergence-là
+    /// qui laissait le LECTEUR incapable d'entrer en cours de piste (#6580).
+    ///
+    /// `nil` en sortie et `elapsedInClip == 0` ⇒ l'appelant retombe sur
+    /// `scheduleFile` (source entière, comportement d'aujourd'hui) ; `nil` avec
+    /// `elapsedInClip > 0` ⇒ l'ouverture est au-delà de la fin du clip et il ne
+    /// faut RIEN planifier — cf. `scheduleAudio`.
+    ///
+    /// Pure et statique : éprouvable sans `AVAudioEngine` ni fichier réel.
+    static func segment(forBounds bounds: MediaTrimBounds?,
+                        elapsedInClip: Double,
+                        sampleRate: Double,
+                        fileLength: AVAudioFramePosition) -> (startingFrame: AVAudioFramePosition, frameCount: AVAudioFrameCount)? {
+        TimelineAudioWindow.segment(bounds: bounds,
+                                    elapsedInClip: elapsedInClip,
+                                    sampleRate: sampleRate,
+                                    fileLength: fileLength)
+    }
+
+    /// Site UNIQUE d'appel à `scheduleFile`/`scheduleSegment` — foreground ET
+    /// fond passent tous deux par ici (cf. `scheduleEntry`, `startBackground`,
+    /// `scheduleLoop`), pour qu'une seule règle décide quand la
+    /// fenêtre s'applique. `trimBounds == nil` ET `elapsedInClip == 0` (pas de
+    /// rognage déclaré, pas d'entrée en cours de piste) prend le chemin
+    /// d'aujourd'hui sans même consulter `segment(...)`.
+    ///
+    /// `elapsedInClip > 0` change DEUX choses à la fois, et les deux sont
+    /// nécessaires (#6580) :
+    /// 1. la position — l'origine glisse de `elapsedInClip` dans la source ;
+    /// 2. **l'heure** — on planifie en `at: nil` (immédiat) au lieu de l'heure
+    ///    future calculée pour un départ à zéro, qui est déjà PASSÉE. C'est
+    ///    littéralement la branche `AudioMixer.swift:141-152` du composer.
+    ///
+    /// Et si la fenêtre ne rend rien alors que l'ouverture est en cours de
+    /// piste, on ne planifie RIEN : le repli `scheduleFile` rejouerait le
+    /// fichier depuis zéro sous une vidéo déjà à `t`, un défaut PIRE que le
+    /// silence parce qu'il a l'air d'une lecture désynchronisée.
+    ///
+    /// `internal` et non `private` : l'extension du FOND vit dans son propre
+    /// fichier (budget de taille) et doit atteindre ce site unique — la
+    /// visibilité reste celle du MODULE.
+    ///
+    /// Rend `true` quand une passe a été remise au node — la boucle ne démarre
+    /// pas sur une ouverture qui n'a rien planifié.
+    @discardableResult
+    func scheduleAudio(node: AVAudioPlayerNode,
+                       file: AVAudioFile,
+                       trimBounds: MediaTrimBounds?,
+                       elapsedInClip: Double,
+                       at scheduleAt: AVAudioTime?,
+                       completionHandler: (@Sendable () -> Void)?) -> Bool {
+        let entersMidClip = elapsedInClip.isFinite && elapsedInClip > 0
+        let at: AVAudioTime? = entersMidClip ? nil : scheduleAt
+        guard let segment = ReaderAudioMixer.segment(forBounds: trimBounds,
+                                                     elapsedInClip: elapsedInClip,
+                                                     sampleRate: file.processingFormat.sampleRate,
+                                                     fileLength: file.length) else {
+            guard !entersMidClip else { return false }
+            scheduler.schedule(node: node, file: file, window: .wholeFile,
+                               at: at, completionHandler: completionHandler)
+            return true
+        }
+        scheduler.schedule(node: node, file: file,
+                           window: .segment(startingFrame: segment.startingFrame,
+                                            frameCount: segment.frameCount),
+                           at: at, completionHandler: completionHandler)
+        return true
     }
 
     /// Schedule fade-in and fade-out volume ramps. node.volume is sampled by
@@ -420,24 +668,33 @@ public final class ReaderAudioMixer {
     /// fades. Sample-accurate fades would require AVAudioMixerNode +
     /// AVAudioUnitEQ scheduled parameter automation — overkill for the
     /// 0.1-0.5s fade durations the composer typically authors.
-    private func scheduleFades(for entry: Entry, originHost: UInt64) {
-        if entry.fadeIn > 0 {
-            scheduleVolumeFade(
-                entry: entry,
-                from: 0,
-                to: entry.targetVolume,
-                duration: TimeInterval(entry.fadeIn),
-                triggerAt: originHost + ReaderAudioMixer.hostTime(forDelaySeconds: Double(entry.startTime))
-            )
+    ///
+    /// `slideElapsed` est ce qui sépare « ce clip COMMENCE » de « ce clip est
+    /// déjà commencé ». Sans elle, un clip entré à mi-fade rejouait sa montée
+    /// DEPUIS LE SILENCE, et un clip entré passé son fade-out posait DEUX
+    /// rampes qui tiraient à la même milliseconde sur le même `node.volume`
+    /// (#6580) — la position avait suivi l'ouverture, l'amplitude non.
+    /// `AudioEnvelope` est le site unique de cette règle ; le fond la partage.
+    private func scheduleFades(for entry: Entry, originHost: UInt64, slideElapsed: Double) {
+        if let cycle = entry.envelopeCycle {
+            runLoopEnvelope(for: entry, cycle: cycle)
+            return
         }
-        if entry.fadeOut > 0 {
-            let fadeOutTrigger = Double(entry.startTime + entry.duration - entry.fadeOut)
+        let envelope = AudioEnvelope.plan(
+            elapsedInClip: slideElapsed - Double(entry.startTime),
+            fadeIn: Double(entry.fadeIn),
+            fadeOut: Double(entry.fadeOut),
+            clipDuration: Double(entry.duration),
+            target: entry.targetVolume)
+        entry.node.volume = (isMuted || entry.isUserMuted) ? 0 : envelope.initialVolume
+        [envelope.fadeIn, envelope.fadeOut].compactMap { $0 }.forEach { ramp in
             scheduleVolumeFade(
                 entry: entry,
-                from: entry.targetVolume,
-                to: 0,
-                duration: TimeInterval(entry.fadeOut),
-                triggerAt: originHost + ReaderAudioMixer.hostTime(forDelaySeconds: fadeOutTrigger)
+                from: ramp.from,
+                to: ramp.to,
+                duration: ramp.duration,
+                triggerAt: originHost + ReaderAudioMixer.hostTime(
+                    forDelaySeconds: Double(entry.startTime) + ramp.startOffset)
             )
         }
     }
@@ -452,7 +709,8 @@ public final class ReaderAudioMixer {
         // Swift 6 @Sendable closure annotation without an actor hop.
         let timer = Timer.scheduledTimer(withTimeInterval: delaySeconds, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.runVolumeRamp(entry: entry, from: start, to: end, duration: duration)
+                self?.runVolumeRamp(entry: entry, from: start, to: end,
+                                    duration: duration, startHost: hostTrigger)
             }
         }
         if var stored = entries[entry.audioId] {
@@ -461,30 +719,27 @@ public final class ReaderAudioMixer {
         }
     }
 
-    private func runVolumeRamp(entry: Entry, from start: Float, to end: Float, duration: TimeInterval) {
+    /// Le volume suit le temps RÉEL écoulé depuis `startHost` (l'instant prévu
+    /// du fondu), pas le nombre de réveils : un réveil tardif n'étire plus la
+    /// rampe, un déclenchement tardif ne la décale plus (#9702).
+    private func runVolumeRamp(entry: Entry, from start: Float, to end: Float,
+                               duration: TimeInterval, startHost: UInt64) {
         guard duration > 0 else {
             entry.node.volume = (isMuted || entry.isUserMuted) ? 0 : end
             return
         }
-        // Async ramp instead of Timer because Swift 6 won't let us capture
-        // the Timer parameter inside the closure across the @Sendable
-        // boundary. Task.sleep on @MainActor is equally smooth at 30 fps and
-        // cooperates with structured cancellation if the mixer tears down.
         let audioId = entry.audioId
-        let stepInterval: TimeInterval = 1.0 / 30.0
-        let steps = max(1, Int(duration / stepInterval))
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
-            for i in 1...steps {
-                try? await Task.sleep(nanoseconds: UInt64(stepInterval * 1_000_000_000))
-                if Task.isCancelled { return }
+            while !Task.isCancelled {
                 guard let live = self.entries[audioId] else { return }
-                let progress = Float(i) / Float(steps)
-                let v = start + (end - start) * progress
-                live.node.volume = (self.isMuted || live.isUserMuted) ? 0 : v
-            }
-            if let live = self.entries[audioId] {
-                live.node.volume = (self.isMuted || live.isUserMuted) ? 0 : end
+                let elapsed = ReaderAudioMixer.delaySeconds(forHostTime: mach_absolute_time(),
+                                                            relativeTo: startHost)
+                let volume = ReaderVolumeRamp.volume(from: start, to: end,
+                                                     duration: duration, elapsed: elapsed)
+                live.node.volume = (self.isMuted || live.isUserMuted) ? 0 : volume
+                if ReaderVolumeRamp.isComplete(duration: duration, elapsed: elapsed) { return }
+                guard await cancellableSleep(for: ReaderVolumeRamp.step) else { return }
             }
         }
         if var stored = entries[entry.audioId] {
@@ -493,49 +748,58 @@ public final class ReaderAudioMixer {
         }
     }
 
-    // MARK: - host-time helpers
-
-    private static let hostTimebase: mach_timebase_info_data_t = {
-        var info = mach_timebase_info_data_t()
-        mach_timebase_info(&info)
-        return info
-    }()
-
-    /// Forward to `AudioMixer.hostTime(forDelaySeconds:)` so a single, hardened
-    /// implementation (Double-based, clamped to `UInt64.max`, validates timebase
-    /// and finiteness — see P3-#5 in commit `841a528a`) is the source of truth
-    /// for the entire MeeshyUI audio pipeline. The previous local implementation
-    /// silently overflowed on non-Apple-Silicon timebases (numer=1, denom=3 on
-    /// Intel) for delays > 9.22s, which is well within the realistic envelope
-    /// of a 30s slide. Production callers keep the same call shape; the dedicated
-    /// `timebase:` overload below exists for tests that need to exercise the
-    /// overflow path explicitly.
-    static func hostTime(forDelaySeconds seconds: Double) -> UInt64 {
-        return AudioMixer.hostTime(forDelaySeconds: seconds)
+    /// **L'enveloppe d'une boucle d'aperçu suit l'horloge de la passe (#10367).**
+    ///
+    /// Une minuterie par fondu ne vaut que pour le premier tour : le volume se
+    /// relit donc à 60 Hz sur l'origine VIVANTE (`playbackStartHostTime`, que
+    /// la reprise après pause fait glisser) et la phase du tour
+    /// (`ReaderLoopEnvelope`). La tâche s'efface avec SA passe — `stop()`,
+    /// `play()` à neuf et `teardown()` avancent l'époque — et tombe avec les
+    /// autres rampes sous `fadeOutAndStop`.
+    private func runLoopEnvelope(for entry: Entry, cycle: Double) {
+        let audioId = entry.audioId
+        let epoch = playbackEpoch
+        _ = applyLoopEnvelope(audioId: audioId, epoch: epoch, cycle: cycle)
+        let task = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard self?.applyLoopEnvelope(audioId: audioId, epoch: epoch, cycle: cycle) == true else { return }
+                guard await cancellableSleep(for: ReaderVolumeRamp.step) else { return }
+            }
+        }
+        if var stored = entries[audioId] {
+            stored.fadeTasks.append(task)
+            entries[audioId] = stored
+        }
     }
 
-    /// Testable overload that injects an explicit timebase. Delegates to the
-    /// hardened `AudioMixer` helper so the two mixers stay bit-identical.
-    static func hostTime(
-        forDelaySeconds seconds: Double,
-        timebase: mach_timebase_info_data_t
-    ) -> UInt64 {
-        return AudioMixer.hostTime(forDelaySeconds: seconds, timebase: timebase)
+    /// Pose le volume que dicte la phase du tour. `false` quand la passe n'est
+    /// plus la sienne : la tâche s'arrête.
+    private func applyLoopEnvelope(audioId: String, epoch: UInt64, cycle: Double) -> Bool {
+        guard playbackEpoch == epoch, let live = entries[audioId] else { return false }
+        guard let slideElapsed = loopEnvelopeSlideElapsed else { return true }
+        let volume = ReaderLoopEnvelope.volume(elapsedInClip: slideElapsed - Double(live.startTime),
+                                               cycle: cycle,
+                                               fadeIn: Double(live.fadeIn),
+                                               fadeOut: Double(live.fadeOut),
+                                               target: live.targetVolume)
+        live.node.volume = (isMuted || live.isUserMuted) ? 0 : volume
+        return true
     }
 
-    fileprivate static func delaySeconds(forHostTime target: UInt64, relativeTo now: UInt64) -> TimeInterval {
-        guard target > now else { return 0 }
-        let deltaTicks = target - now
-        let nanos = deltaTicks * UInt64(hostTimebase.numer) / UInt64(hostTimebase.denom)
-        return TimeInterval(nanos) / 1_000_000_000
+    /// Écoulé de la passe que lit une enveloppe de boucle — premier plan et
+    /// fond (#10369). `nil` hors passe ou en pause : une pause gèle la phase,
+    /// l'origine ne glisse qu'à la reprise.
+    var loopEnvelopeSlideElapsed: Double? {
+        guard pausedAtHostTime == nil, let origin = playbackStartHostTime else { return nil }
+        return ReaderAudioMixer.delaySeconds(forHostTime: mach_absolute_time(), relativeTo: origin)
     }
 
     // MARK: - Internal
 
-    private struct Entry {
+    struct Entry {
         let audioId: String
         let file: AVAudioFile
-        let node: AVAudioPlayerNode
+        var node: AVAudioPlayerNode
         let startTime: Float
         var targetVolume: Float
         let fadeIn: Float
@@ -547,11 +811,19 @@ public final class ReaderAudioMixer {
         /// Mute per-piste déclenché par le tap utilisateur sur le chip du
         /// reader. Indépendant du mute global (`ReaderAudioMixer.isMuted`).
         var isUserMuted: Bool = false
+        /// Fenêtre de rognage résolue à `configure(...)`, ou `nil` quand ce
+        /// clip n'a jamais été rogné. `scheduleAudio` (MARK: Scheduling) la
+        /// consulte à chaque `scheduleSegment` — départ ET rebouclage.
+        let trimBounds: MediaTrimBounds?
+        /// Durée d'un tour d'enveloppe quand la boucle d'aperçu rejoue ses
+        /// fondus à chaque tour (`ReaderLoopEnvelope`, #10367) ; `nil` pour
+        /// les fondus posés une fois — le lecteur, et toute piste sans fondu.
+        let envelopeCycle: Double?
     }
 
     /// Internal helper for the single background audio slot.
-    private struct BackgroundEntry {
-        let player: AVAudioPlayerNode
+    struct BackgroundEntry {
+        var player: AVAudioPlayerNode
         let file: AVAudioFile
         let looping: Bool
         let audioId: String
@@ -564,234 +836,15 @@ public final class ReaderAudioMixer {
         let duration: Float
         var fadeTimers: [Timer] = []
         var fadeTasks: [Task<Void, Never>] = []
+        /// Jumelle de `Entry.trimBounds` — même règle, même résolveur.
+        let trimBounds: MediaTrimBounds?
+        /// Jumelle de `Entry.envelopeCycle` (#10369) : le tour d'enveloppe du
+        /// fond bouclé par l'aperçu, `nil` pour les fondus posés une fois.
+        var envelopeCycle: Double? = nil
 
         /// `true` when the composer authored an explicit fade — the default
         /// envelope must then defer to the configured values (RC4.7).
         var hasExplicitFade: Bool { fadeIn > 0 || fadeOut > 0 }
-    }
-}
-
-// MARK: - Background audio
-
-extension ReaderAudioMixer {
-    /// Number of configured background entries (0 or 1).
-    public var backgroundClipCount: Int { backgroundEntry == nil ? 0 : 1 }
-
-    /// `true` once `play(originHost:slideKey:)` has scheduled the engine for a
-    /// slide. Reset on `teardown()` / `configureBackground(...)` / `stop()`.
-    public var hasStartedPlayback: Bool { startedSlideKey != nil }
-
-    /// `true` once `play(originHost:slideKey:)` has scheduled the engine for
-    /// THIS specific slide key. The unkeyed `hasStartedPlayback` cannot tell a
-    /// fresh slide (audio still caching) apart from the previous slide's pass
-    /// that has not been torn down yet — the timeline audio gate (R1) needs the
-    /// keyed answer.
-    public func hasStartedPlayback(slideKey: String) -> Bool {
-        startedSlideKey == slideKey
-    }
-
-    /// Configures a single background audio source. Replaces any prior bg entry.
-    /// `looping=true` schedules the buffer to repeat sample-accurately.
-    ///
-    /// `backgroundStartOffset` is derived from `audio.startTime` — the resolved
-    /// `StoryAudioPlayerObject` already folds the legacy
-    /// `StoryEffects.backgroundAudioStart` into `startTime`, so it is the single
-    /// source of truth. Re-configuring drops the idempotence key so the next
-    /// `play(...)` re-schedules against the fresh entry.
-    public func configureBackground(audio: StoryAudioPlayerObject,
-                                    url: URL,
-                                    looping: Bool) throws {
-        // Tear down any prior background node before re-attaching.
-        if let prior = backgroundEntry {
-            prior.player.stop()
-            prior.fadeTimers.forEach { $0.invalidate() }
-            prior.fadeTasks.forEach { $0.cancel() }
-            engine.detach(prior.player)
-        }
-        let file = try AVAudioFile(forReading: url)
-        let player = AVAudioPlayerNode()
-        engine.attach(player)
-        // Connect via canonical format — cf. foreground branch above.
-        engine.connect(player,
-                       to: engine.mainMixerNode,
-                       format: Self.resolveCanonicalFormat(mixer: engine.mainMixerNode))
-
-        let startOffset = Double(audio.startTime ?? 0)
-        let resolvedDuration = audio.duration
-            ?? Float(file.length) / Float(file.processingFormat.sampleRate)
-        backgroundEntry = BackgroundEntry(
-            player: player,
-            file: file,
-            looping: looping,
-            audioId: audio.id,
-            targetVolume: audio.volume,
-            fadeIn: audio.fadeIn ?? 0,
-            fadeOut: audio.fadeOut ?? 0,
-            startOffset: startOffset,
-            duration: resolvedDuration
-        )
-        backgroundStartOffset = startOffset
-        player.volume = isMuted ? 0 : audio.volume
-        // A fresh background entry invalidates the last schedule key — the
-        // next play() must re-schedule rather than treat it as a re-render.
-        startedSlideKey = nil
-    }
-
-    // MARK: - Background transport (RC4.2)
-
-    /// Schedules the background entry against a real timeline origin and starts
-    /// its node. The background was previously configured-but-muted: this is
-    /// the call that actually makes the slide's background music audible.
-    /// Invoked from `play(originHost:slideKey:)` after the foreground loop.
-    public func startBackground(originHost: UInt64) {
-        guard let bg = backgroundEntry else { return }
-        let scheduleAt = AVAudioTime(
-            hostTime: originHost
-                + ReaderAudioMixer.hostTime(forDelaySeconds: bg.startOffset)
-        )
-        scheduleBackgroundFile(at: scheduleAt)
-        // Start silent when a fade-in (explicit or default) will ramp the
-        // volume up; otherwise play straight at the target volume.
-        bg.player.volume = isMuted ? 0 : (bg.fadeIn > 0 ? 0 : bg.targetVolume)
-        bg.player.play()
-        scheduleExplicitBackgroundFades(originHost: originHost)
-    }
-
-    /// Schedules the background file and, when `looping`, recursively re-arms
-    /// the buffer on completion so the loop has no audible gap.
-    private func scheduleBackgroundFile(at scheduleAt: AVAudioTime?) {
-        guard let bg = backgroundEntry else { return }
-        let completion: (@Sendable () -> Void)? = bg.looping ? { @Sendable [weak self] in
-            // `_ =` : voir `scheduleFile(originHost:)` — discarde le handle du
-            // `Task` pour que la closure retourne `Void`.
-            _ = Task { @MainActor [weak self] in
-                guard let self,
-                      let live = self.backgroundEntry,
-                      live.player.isPlaying else { return }
-                self.scheduleBackgroundFile(at: nil)
-            }
-        } : nil
-        bg.player.scheduleFile(bg.file, at: scheduleAt, completionHandler: completion)
-    }
-
-    /// Honours a composer-authored fade on the background entry. When an
-    /// explicit fade exists the default envelope (`applyDefaultBackgroundEnvelope`)
-    /// stays out of the way — the configuration prevails (RC4.7).
-    private func scheduleExplicitBackgroundFades(originHost: UInt64) {
-        guard let bg = backgroundEntry, bg.hasExplicitFade else { return }
-        if bg.fadeIn > 0 {
-            scheduleBackgroundVolumeFade(
-                from: 0,
-                to: bg.targetVolume,
-                duration: TimeInterval(bg.fadeIn),
-                triggerAt: originHost
-                    + ReaderAudioMixer.hostTime(forDelaySeconds: bg.startOffset)
-            )
-        }
-        if bg.fadeOut > 0 {
-            let trigger = max(bg.startOffset,
-                              bg.startOffset + Double(bg.duration) - Double(bg.fadeOut))
-            scheduleBackgroundVolumeFade(
-                from: bg.targetVolume,
-                to: 0,
-                duration: TimeInterval(bg.fadeOut),
-                triggerAt: originHost
-                    + ReaderAudioMixer.hostTime(forDelaySeconds: trigger)
-            )
-        }
-    }
-
-    // MARK: - Default background envelope (RC4.7)
-
-    /// Applies the product default envelope to the background entry — a gentle
-    /// 30 %→100 % fade-in over 1.2 s and a 100 %→5 % fade-out over the last
-    /// 0.5 s of the slide.
-    ///
-    /// Applied ONLY when the slide carries no explicit `fadeIn`/`fadeOut` sound
-    /// effect: an authored fade always prevails (`scheduleExplicitBackgroundFades`
-    /// already handled it). Safe to call unconditionally — it self-guards.
-    public func applyDefaultBackgroundEnvelope(originHost: UInt64,
-                                               slideDuration: Double) {
-        guard let bg = backgroundEntry, !bg.hasExplicitFade else { return }
-
-        let target = bg.targetVolume
-        let floor = target * ReaderAudioMixer.defaultEnvelopeFloorFraction
-        let tail = target * ReaderAudioMixer.defaultEnvelopeTailFraction
-        let fadeIn = ReaderAudioMixer.defaultEnvelopeFadeInSeconds
-        let fadeOut = ReaderAudioMixer.defaultEnvelopeFadeOutSeconds
-
-        // Fade-in 30 % → 100 % over 1.2 s, anchored at the background start.
-        bg.player.volume = isMuted ? 0 : floor
-        scheduleBackgroundVolumeFade(
-            from: floor,
-            to: target,
-            duration: fadeIn,
-            triggerAt: originHost
-                + ReaderAudioMixer.hostTime(forDelaySeconds: bg.startOffset)
-        )
-
-        // Fade-out 100 % → 5 % finishing exactly at the end of the slide.
-        let fadeOutStart = max(bg.startOffset, slideDuration - fadeOut)
-        scheduleBackgroundVolumeFade(
-            from: target,
-            to: tail,
-            duration: fadeOut,
-            triggerAt: originHost
-                + ReaderAudioMixer.hostTime(forDelaySeconds: fadeOutStart)
-        )
-    }
-
-    /// Schedules a background volume ramp to fire at `hostTrigger`. Mirrors the
-    /// foreground `scheduleVolumeFade` but targets the single background node.
-    private func scheduleBackgroundVolumeFade(from start: Float,
-                                              to end: Float,
-                                              duration: TimeInterval,
-                                              triggerAt hostTrigger: UInt64) {
-        let delaySeconds = ReaderAudioMixer.delaySeconds(forHostTime: hostTrigger,
-                                                         relativeTo: mach_absolute_time())
-        guard delaySeconds >= 0 else { return }
-        let timer = Timer.scheduledTimer(withTimeInterval: delaySeconds, repeats: false) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.runBackgroundVolumeRamp(from: start, to: end, duration: duration)
-            }
-        }
-        if var bg = backgroundEntry {
-            bg.fadeTimers.append(timer)
-            backgroundEntry = bg
-        }
-    }
-
-    /// Interpolates the background node volume between `start` and `end` over
-    /// `duration`. A 60 Hz step (aligned on the render clock) is imperceptible
-    /// because `AVAudioPlayerNode.volume` is sampled per audio render slice.
-    private func runBackgroundVolumeRamp(from start: Float,
-                                         to end: Float,
-                                         duration: TimeInterval) {
-        guard let bg = backgroundEntry else { return }
-        guard duration > 0 else {
-            bg.player.volume = isMuted ? 0 : end
-            return
-        }
-        let stepInterval: TimeInterval = 1.0 / 60.0
-        let steps = max(1, Int(duration / stepInterval))
-        let task = Task { @MainActor [weak self] in
-            guard let self else { return }
-            for i in 1...steps {
-                try? await Task.sleep(nanoseconds: UInt64(stepInterval * 1_000_000_000))
-                if Task.isCancelled { return }
-                guard let live = self.backgroundEntry else { return }
-                let progress = Float(i) / Float(steps)
-                let value = start + (end - start) * progress
-                live.player.volume = self.isMuted ? 0 : value
-            }
-            if let live = self.backgroundEntry {
-                live.player.volume = self.isMuted ? 0 : end
-            }
-        }
-        if var bg = backgroundEntry {
-            bg.fadeTasks.append(task)
-            backgroundEntry = bg
-        }
     }
 }
 
@@ -801,7 +854,13 @@ extension ReaderAudioMixer {
 /// `PlaybackCoordinator` lets a second reader surface (viewer + composer preview
 /// mounted together) stop the previous engine before starting its own, so the
 /// same background track is never heard from two engines at once (RC4.6).
-extension ReaderAudioMixer: StoppablePlayer {}
+extension ReaderAudioMixer: AudiblyPlayingPlayer {
+    public var isPlayingAudibly: Bool { isPlaying && isSounding }
+
+    /// Des clips chargés et le son ouvert : le mixer tient (ou reprend) une
+    /// session `.playback`. Une slide silencieuse n'en prend jamais.
+    var isSounding: Bool { !isMuted && (!entries.isEmpty || backgroundEntry != nil) }
+}
 
 // MARK: - Ducking + fade-out
 
@@ -819,22 +878,61 @@ extension ReaderAudioMixer {
         set { _duckedBackgroundVolume = newValue }
     }
 
-    /// Globally fades all entries (foreground + background) to silence
-    /// over `duration` seconds, then stops the engine. Idempotent.
+    /// Fond enchaîné vers le silence de TOUTES les entrées (premier plan et
+    /// fond) en `duration` secondes, puis arrêt du moteur. Appelé à la fermeture
+    /// du lecteur par `PlaybackCoordinator.fadeOutAllExternal` (#9867).
+    ///
+    /// Le gain suit le temps RÉEL écoulé (`ReaderVolumeRamp`, comme les rampes
+    /// d'enveloppe), pas un nombre de réveils ; les rampes d'auteur en cours
+    /// sont annulées pour ne pas remonter le volume sous le fondu. Un fondu
+    /// dépassé par une autre passe (`stop()`, `play()` à neuf) s'efface sans
+    /// arrêter celle-ci.
     public func fadeOutAndStop(duration: TimeInterval = 0.5) async {
         guard isPlaying else { stop(); return }
-        let steps = max(1, Int(duration * 50))   // 50 Hz ramp
-        let stepDuration = duration / Double(steps)
-        for s in 0..<steps {
-            let factor = 1.0 - (Float(s + 1) / Float(steps))
-            for (_, entry) in entries {
-                entry.node.volume = entry.targetVolume * factor
-            }
-            if let bg = backgroundEntry {
-                bg.player.volume = bg.player.volume * factor
-            }
-            try? await Task.sleep(nanoseconds: UInt64(stepDuration * 1_000_000_000))
+        cancelVolumeAutomation()
+        let epoch = playbackEpoch
+        let startHost = mach_absolute_time()
+        while playbackEpoch == epoch, !Task.isCancelled {
+            let elapsed = Self.delaySeconds(forHostTime: mach_absolute_time(), relativeTo: startHost)
+            applyFadeGain(ReaderVolumeRamp.volume(from: 1, to: 0, duration: duration, elapsed: elapsed))
+            if ReaderVolumeRamp.isComplete(duration: duration, elapsed: elapsed) { break }
+            guard await cancellableSleep(for: ReaderVolumeRamp.step) else { break }
         }
+        guard playbackEpoch == epoch else { return }
         stop()
     }
+
+    /// Les rampes d'enveloppe (minuteries d'attente, tâches de rampe) des deux
+    /// slots tombent : elles tireraient le volume vers le haut sous un fondu.
+    func cancelVolumeAutomation() {
+        entries = entries.mapValues { entry in
+            entry.fadeTimers.forEach { $0.invalidate() }
+            entry.fadeTasks.forEach { $0.cancel() }
+            var cleared = entry
+            cleared.fadeTimers = []
+            cleared.fadeTasks = []
+            return cleared
+        }
+        guard var bg = backgroundEntry else { return }
+        bg.fadeTimers.forEach { $0.invalidate() }
+        bg.fadeTasks.forEach { $0.cancel() }
+        bg.fadeTimers = []
+        bg.fadeTasks = []
+        backgroundEntry = bg
+    }
+
+    /// `gain` ∈ [0, 1] appliqué au volume EFFECTIF de chaque slot — mute global
+    /// et mute par piste compris —, jamais au volume courant : multiplier le
+    /// courant à chaque pas ferait une descente exponentielle.
+    private func applyFadeGain(_ gain: Float) {
+        for entry in entries.values {
+            entry.node.volume = effectiveVolume(for: entry) * gain
+        }
+        if let bg = backgroundEntry {
+            bg.player.volume = (isMuted ? 0 : bg.targetVolume) * gain
+        }
+    }
 }
+
+/// Le mixer s'éteint en fondu quand le lecteur se ferme (#9867).
+extension ReaderAudioMixer: FadingStoppablePlayer {}

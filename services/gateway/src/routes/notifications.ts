@@ -12,7 +12,31 @@ import {
   errorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
 import { sendSuccess, sendNotFound, sendForbidden, sendInternalError } from '../utils/response';
-import { decodeCursor, keysetBeforeClause } from '../utils/keyset-cursor';
+import { logWarn } from '../utils/logger';
+import {
+  cursorPage,
+  cursorPaginationSchema,
+  cursorQuery,
+  cursorQueryProperty,
+  encodePageCursor,
+  type CursorSort,
+} from '../utils/cursor-pagination';
+import { logError } from '../utils/logger.js';
+
+/**
+ * L'ordre TOTAL de l'inbox, DÉCLARÉ une fois — et ce que le curseur encode.
+ *
+ * Sans `id` en second rang, deux notifications nées dans la même milliseconde
+ * s'échangent leur place d'une lecture à l'autre : la pagination en saute une et
+ * re-sert l'autre. La loi partagée dérive de CETTE déclaration l'`orderBy`, la
+ * clause de reprise ET la signature inscrite dans le jeton — un jeton frappé
+ * sous un autre ordre est donc refusé plutôt que servi sous une clause de
+ * reprise que son ordre ne gouverne pas.
+ */
+const ORDRE_INBOX: CursorSort = [
+  { field: 'createdAt', direction: 'desc', kind: 'date' },
+  { field: 'id', direction: 'desc', kind: 'string' },
+];
 
 /**
  * L'onglet choisi par le lecteur, traduit en clause — ou rien du tout.
@@ -37,6 +61,25 @@ function notificationTypesClause(types: string | undefined): { type?: { in: stri
   return wanted.length === 0 ? {} : { type: { in: wanted } };
 }
 
+/**
+ * Les types dont une ligne LUE quitte la cloche (#8958) — un message, une
+ * réaction, un commentaire déjà ouverts n'ont plus rien à dire, et les garder
+ * faisait s'accumuler l'inbox. Comme `types`, la liste appartient au client :
+ * il sait quelles familles se consomment en les ouvrant.
+ *
+ * Le filtre se joue EN BASE, jamais chez le client : masquer après coup
+ * laisserait la pagination servir des pages entières de lignes invisibles.
+ * Une liste vide ou illisible ne retire rien.
+ */
+function hideReadTypesClause(types: string | undefined): { NOT?: { isRead: true; type: { in: string[] } } } {
+  const hidden = (types ?? '')
+    .split(',')
+    .map((type) => type.trim())
+    .filter((type) => type.length > 0);
+
+  return hidden.length === 0 ? {} : { NOT: { isRead: true, type: { in: hidden } } };
+}
+
 export async function notificationRoutes(fastify: FastifyInstance) {
   const notificationService = fastify.notificationService;
 
@@ -55,10 +98,17 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         querystring: {
           type: 'object',
           properties: {
+            // AUCUN `default` (#4175) : Fastify active `useDefaults` d'AJV, donc
+            // un `default` ici ÉCRIT `offset: 0` dans `request.query` avant le
+            // handler, qui ne peut alors plus distinguer « rang non demandé » de
+            // « rang zéro » — c'est-à-dire plus choisir la forme de pagination.
+            // Le `default: 0` qui vivait ici forçait chaque première page à
+            // repayer un `count()` complet, y compris pour un client qui n'a
+            // jamais demandé de rang.
             offset: {
               type: 'number',
-              description: 'Pagination offset',
-              default: 0,
+              description:
+                'DEPRECATED — rank-based pagination. A rank skips rows when the inbox moves between two pages; use cursor. Absent = the page is served by cursor.',
               minimum: 0,
             },
             limit: {
@@ -73,15 +123,16 @@ export async function notificationRoutes(fastify: FastifyInstance) {
               description: 'Filter only unread notifications',
               default: false,
             },
-            cursor: {
-              type: 'string',
-              description:
-                'Opaque keyset cursor (createdAt, id) returned as pagination.nextCursor. Takes precedence over offset.',
-            },
+            cursor: cursorQueryProperty,
             types: {
               type: 'string',
               description:
                 'Comma-separated raw notification types to keep (e.g. user_mentioned,mention). Empty or absent = whole inbox.',
+            },
+            hideReadTypes: {
+              type: 'string',
+              description:
+                'Comma-separated raw notification types whose READ rows are left out (consumed content). Empty or absent = nothing hidden.',
             },
           },
         },
@@ -95,19 +146,11 @@ export async function notificationRoutes(fastify: FastifyInstance) {
                 type: 'array',
                 items: notificationSchema,
               },
-              pagination: {
-                type: 'object',
-                properties: {
-                  total: { type: 'number', description: 'Offset mode only — not counted under a cursor' },
-                  offset: { type: 'number', description: 'Offset mode only' },
-                  limit: { type: 'number' },
-                  hasMore: { type: 'boolean' },
-                  nextCursor: {
-                    type: ['string', 'null'],
-                    description: 'Cursor mode only — pass back as ?cursor= for the next page',
-                  },
-                },
-              },
+              // Le fragment PARTAGÉ (#4175) : `fast-json-stringify` retire toute
+              // clé qu'aucun schéma ne déclare, donc un `nextCursor` ou un
+              // `form` calculés mais non déclarés seraient jetés au dernier
+              // mètre, sans que rien ne rougisse.
+              pagination: cursorPaginationSchema,
               unreadCount: { type: 'number' },
             },
           },
@@ -119,7 +162,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const userId = request.user!.userId;
-        const { offset = 0, limit = 20, unreadOnly = false, cursor, types } = request.query as { offset?: number; limit?: number; unreadOnly?: boolean; cursor?: string; types?: string };
+        const { offset, limit = 20, unreadOnly = false, cursor, types, hideReadTypes } = request.query as { offset?: number; limit?: number; unreadOnly?: boolean; cursor?: string; types?: string; hideReadTypes?: string };
 
         // Récupérer les notifications BRUTES de Prisma (pas encore formatées).
         // Même prédicat que le compte non-lus rendu à côté (`getUnreadCount`) :
@@ -128,56 +171,78 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         const visibleWhere = {
           ...visibleNotificationsWhere({ userId, unreadOnly }),
           ...notificationTypesClause(types),
+          ...hideReadTypesClause(hideReadTypes),
         };
 
-        // Un curseur illisible vaut « pas de curseur » — le repli du reste du
-        // dépôt (`PostFeedService`). Refuser la requête couperait le défilement
-        // sur une erreur que le lecteur ne peut pas réparer ; re-servir la
-        // première page lui laisse une liste cohérente.
-        const cursorData = cursor ? decodeCursor(cursor) : null;
-        const isCursorMode = cursorData !== null;
+        // Qui gagne quand les deux arrivent — et pourquoi c'est la PRÉSENCE de
+        // `cursor` qui décide, jamais sa lisibilité (#4175).
+        //
+        // Un rang et une ancre ne décrivent pas la même fenêtre : arbitrer entre
+        // les deux dans une seule réponse servirait un rang que l'appelant
+        // n'entendait pas comme un point de reprise. La forme est donc choisie
+        // par la présence de `cursor` — et un curseur ILLISIBLE reste une page
+        // au curseur, la première. C'est le repli du reste du dépôt
+        // (`PostFeedService`) : refuser couperait le défilement sur une erreur
+        // que le lecteur ne peut pas réparer.
+        //
+        // `offset` ABSENT vaut donc « sers-moi au curseur », ce qui retire le
+        // `count()` du chemin nominal dès la PREMIÈRE page. Les trois clients
+        // envoient aujourd'hui `offset=0` explicitement (web
+        // `notification.service.ts`, iOS `NotificationService.list`, Android
+        // `NotificationRepository`) : ils restent servis exactement comme avant,
+        // et le jour où l'un d'eux cesse de l'envoyer il gagne la forme keyset
+        // sans changement de serveur.
+        const servirParRang = cursor === undefined && offset !== undefined;
 
-        const where = cursorData
-          ? { AND: [visibleWhere, keysetBeforeClause(cursorData)] }
-          : visibleWhere;
+        const page = cursorQuery({ sort: ORDRE_INBOX, cursor, limit, where: visibleWhere });
 
         const [rawNotifications, total, unreadCount] = await Promise.all([
           fastify.prisma.notification.findMany({
-            where,
-            // L'ordre TOTAL de l'inbox, et la clé exacte que le curseur
-            // transporte. Sans `id` en second rang, deux notifications nées
-            // dans la même milliseconde s'échangent leur place d'une lecture à
-            // l'autre : la pagination en saute une et re-sert l'autre.
-            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-            // Une ligne SONDE en mode curseur : elle dit `hasMore` sans
-            // compter la table.
-            take: isCursorMode ? limit + 1 : limit,
-            ...(isCursorMode ? {} : { skip: offset }),
+            where: servirParRang ? visibleWhere : page.where,
+            orderBy: page.orderBy,
+            // Une ligne SONDE au curseur : elle dit `hasMore` sans compter la
+            // table. Sous un rang, `hasMore` se déduit du total, donc la sonde
+            // n'a rien à dire.
+            take: servirParRang ? limit : page.take,
+            ...(servirParRang ? { skip: offset } : {}),
           }),
-          isCursorMode ? Promise.resolve(0) : fastify.prisma.notification.count({ where }),
+          servirParRang
+            ? fastify.prisma.notification.count({ where: visibleWhere })
+            : Promise.resolve(0),
           notificationService.getUnreadCount(userId),
         ]);
 
-        // Formatter UNE SEULE FOIS avec NotificationFormatter
-        if (isCursorMode) {
-          const hasMore = rawNotifications.length > limit;
-          return NotificationFormatter.formatCursorPaginatedResponse({
-            notifications: hasMore ? rawNotifications.slice(0, limit) : rawNotifications,
-            limit,
-            hasMore,
+        if (servirParRang) {
+          const hasMore = offset + rawNotifications.length < total;
+          const derniere = rawNotifications[rawNotifications.length - 1];
+          return {
+            success: true,
+            data: NotificationFormatter.formatNotifications(rawNotifications),
+            pagination: {
+              total,
+              offset,
+              limit,
+              hasMore,
+              // Le rang rend MALGRÉ TOUT un curseur : c'est la rampe de
+              // migration. Un client démarre sur la page 1 (dont il veut le
+              // total pour son en-tête) et passe au curseur pour la suite, sans
+              // jamais redemander la même page.
+              nextCursor: hasMore && derniere ? encodePageCursor(ORDRE_INBOX, derniere) : null,
+              form: 'offset' as const,
+            },
             unreadCount,
-          });
+          };
         }
 
-        return NotificationFormatter.formatPaginatedResponse({
-          notifications: rawNotifications,
-          total,
-          offset,
-          limit,
+        const servie = cursorPage({ sort: ORDRE_INBOX, rows: rawNotifications, limit });
+        return {
+          success: true,
+          data: NotificationFormatter.formatNotifications(servie.page),
+          pagination: servie.pagination,
           unreadCount,
-        });
+        };
       } catch (error) {
-        fastify.log.error({ error }, 'Error fetching notifications');
+        logError(fastify.log, 'Error fetching notifications', error);
         return sendInternalError(reply, 'Failed to fetch notifications');
       }
     }
@@ -248,7 +313,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
         return sendSuccess(reply, { total, unread, byType });
       } catch (error) {
-        fastify.log.error({ error }, 'Error fetching notification counts');
+        logError(fastify.log, 'Error fetching notification counts', error);
         return sendInternalError(reply, 'Failed to fetch notification counts');
       }
     }
@@ -289,7 +354,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           count,
         };
       } catch (error) {
-        fastify.log.error({ error }, 'Error fetching unread count');
+        logError(fastify.log, 'Error fetching unread count', error);
         return sendInternalError(reply, 'Failed to fetch unread count');
       }
     }
@@ -346,11 +411,11 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           return sendForbidden(reply, 'Access denied');
         }
 
-        const updated = await notificationService.markAsRead(id);
+        const updated = await notificationService.markAsRead(id, userId);
 
         return sendSuccess(reply, updated);
       } catch (error) {
-        fastify.log.error({ error }, 'Error marking notification as read');
+        logError(fastify.log, 'Error marking notification as read', error);
         return sendInternalError(reply, 'Failed to mark notification as read');
       }
     }
@@ -394,7 +459,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           count,
         };
       } catch (error) {
-        fastify.log.error({ error }, 'Error marking all notifications as read');
+        logError(fastify.log, 'Error marking all notifications as read', error);
         return sendInternalError(reply, 'Failed to mark all notifications as read');
       }
     }
@@ -453,7 +518,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           count,
         };
       } catch (error) {
-        fastify.log.error({ error }, 'Error marking conversation notifications as read');
+        logError(fastify.log, 'Error marking conversation notifications as read', error);
         return sendInternalError(reply, 'Failed to mark conversation notifications as read');
       }
     }
@@ -514,7 +579,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           count,
         };
       } catch (error) {
-        fastify.log.error({ error }, 'Error marking post notifications as read');
+        logError(fastify.log, 'Error marking post notifications as read', error);
         return sendInternalError(reply, 'Failed to mark post notifications as read');
       }
     }
@@ -573,7 +638,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           count,
         };
       } catch (error) {
-        fastify.log.error({ error }, 'Error marking notifications by types as read');
+        logError(fastify.log, 'Error marking notifications by types as read', error);
         return sendInternalError(reply, 'Failed to mark notifications as read');
       }
     }
@@ -619,7 +684,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           count,
         };
       } catch (error) {
-        fastify.log.error({ error }, 'Error deleting read notifications');
+        logError(fastify.log, 'Error deleting read notifications', error);
         return sendInternalError(reply, 'Failed to delete read notifications');
       }
     }
@@ -675,7 +740,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           return sendForbidden(reply, 'Access denied');
         }
 
-        const deleted = await notificationService.deleteNotification(id);
+        const deleted = await notificationService.deleteNotification(id, userId);
 
         if (!deleted) {
           return sendInternalError(reply, 'Failed to delete notification');
@@ -683,7 +748,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
         return sendSuccess(reply, undefined);
       } catch (error) {
-        fastify.log.error({ error }, 'Error deleting notification');
+        logError(fastify.log, 'Error deleting notification', error);
         return sendInternalError(reply, 'Failed to delete notification');
       }
     }
@@ -706,7 +771,17 @@ export async function notificationRoutes(fastify: FastifyInstance) {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
-              deletedCount: { type: 'number' },
+              // `deletedCount` était déclaré à la RACINE alors que `sendSuccess`
+              // l'enveloppe sous `data` (#4192) : la clé ne figurant pas dans
+              // `data`, le sérialiseur vidait l'objet. L'administrateur voyait
+              // « succès » sans jamais savoir combien de lignes il venait de
+              // supprimer — sur un geste irréversible.
+              data: {
+                type: 'object',
+                properties: {
+                  deletedCount: { type: 'number' },
+                },
+              },
             },
           },
           403: errorResponseSchema,
@@ -723,13 +798,13 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           return sendForbidden(reply, 'Admin access required');
         }
 
-        fastify.log.warn({ user }, 'Admin clearing all notifications');
+        logWarn(fastify.log, `Admin clearing all notifications (userId=${user.userId})`);
 
         const result = await fastify.prisma.notification.deleteMany({});
 
         return sendSuccess(reply, { deletedCount: result.count });
       } catch (error) {
-        fastify.log.error({ error }, 'Error clearing notifications');
+        logError(fastify.log, 'Error clearing notifications', error);
         return sendInternalError(reply, 'Failed to clear notifications');
       }
     }

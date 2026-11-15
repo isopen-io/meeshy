@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_reply_encrypted">Risposta non disponibile in una conversazione cifrata</string>
+</resources>

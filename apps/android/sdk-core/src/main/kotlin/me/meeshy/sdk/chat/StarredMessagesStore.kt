@@ -33,6 +33,19 @@ interface StarredMessagesStore {
 
     /** Drop every star belonging to [conversationId] (no-op when none match). */
     fun removeConversation(conversationId: String)
+
+    /**
+     * Une étoile posée depuis un AUTRE appareil (`message:starred`). Idempotente : un
+     * message déjà étoilé garde son instantané — jamais de bascule, contrairement à
+     * [toggle], puisque le même événement revient aussi à l'appareil qui l'a posé.
+     */
+    fun placeRemote(snapshot: StarredMessage)
+
+    /** Rafraîchit l'aperçu d'un message étoilé édité ailleurs (inerte s'il ne l'est pas). */
+    fun updatePreview(messageId: String, contentPreview: String)
+
+    /** Retire toutes les étoiles (menu « Tout retirer », déconnexion). */
+    fun clearAll()
 }
 
 /** Volatile [StarredMessagesStore] — for tests and previews. */
@@ -45,6 +58,10 @@ class InMemoryStarredMessagesStore(
     override fun toggle(snapshot: StarredMessage) = mutate { it.toggle(snapshot) }
     override fun unstar(messageId: String) = mutate { it.unstar(messageId) }
     override fun removeConversation(conversationId: String) = mutate { it.removeConversation(conversationId) }
+    override fun placeRemote(snapshot: StarredMessage) = mutate { it.star(snapshot) }
+    override fun updatePreview(messageId: String, contentPreview: String) =
+        mutate { it.updatePreview(messageId, contentPreview) }
+    override fun clearAll() = mutate { it.clear() }
 
     private fun mutate(op: (StarredMessages) -> StarredMessages) {
         val next = op(_starred.value)
@@ -73,6 +90,10 @@ class SharedPrefsStarredMessagesStore(
     override fun toggle(snapshot: StarredMessage) = mutate { it.toggle(snapshot) }
     override fun unstar(messageId: String) = mutate { it.unstar(messageId) }
     override fun removeConversation(conversationId: String) = mutate { it.removeConversation(conversationId) }
+    override fun placeRemote(snapshot: StarredMessage) = mutate { it.star(snapshot) }
+    override fun updatePreview(messageId: String, contentPreview: String) =
+        mutate { it.updatePreview(messageId, contentPreview) }
+    override fun clearAll() = mutate { it.clear() }
 
     private fun mutate(op: (StarredMessages) -> StarredMessages) {
         val next = op(_starred.value)

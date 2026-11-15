@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "story.language.detail.title", "androidName": "story_language_title", "status": "adopted" },
+        { "catalog": "app", "iosKey": "story.language.detail.original", "androidName": "story_language_original", "status": "adopted" },
+        { "catalog": "app", "iosKey": "story.language.detail.original.hint", "androidName": "story_language_original_hint", "status": "adopted" },
+        { "catalog": "app", "iosKey": "story.language.detail.translate", "androidName": "story_language_translate", "status": "adopted" },
+        { "catalog": "app", "iosKey": "story.language.detail.retranslate", "androidName": "story_language_retranslate", "status": "adopted" },
+        { "catalog": "app", "iosKey": "common.close", "androidName": "story_language_close", "status": "adopted" }
+      ]
+    }
+  }
+}

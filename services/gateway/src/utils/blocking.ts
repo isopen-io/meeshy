@@ -11,6 +11,7 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { enhancedLogger } from './logger-enhanced';
 
 /**
  * Returns true when either user has blocked the other.
@@ -19,7 +20,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
  * short-circuits at the database. Equal ids return false without a query.
  */
 export async function isBlockedBetween(
-  prisma: PrismaClient,
+  prisma: Pick<PrismaClient, 'user'>,
   userIdA: string,
   userIdB: string
 ): Promise<boolean> {
@@ -41,6 +42,35 @@ export async function isBlockedBetween(
 }
 
 /**
+ * Returns true when `viewerId` has blocked `targetId` — DIRECTIONAL.
+ *
+ * Deliberately not {@link isBlockedBetween}, which is bidirectional because it
+ * serves messaging enforcement. A profile screen asks a different question:
+ * "Unblock" is only offered to the side that blocked, and nobody unblocks on
+ * someone else's behalf. Answering it with the bidirectional law would offer
+ * "Unblock" to a user who was blocked — a button that cannot work.
+ *
+ * Answers BY SUBJECT, in one indexed lookup (`@@index([blockedUserIds])`), so
+ * the verdict never depends on a page or a rank (#7125).
+ */
+export async function hasBlocked(
+  prisma: PrismaClient,
+  viewerId: string,
+  targetId: string
+): Promise<boolean> {
+  if (viewerId === targetId) {
+    return false;
+  }
+
+  const match = await prisma.user.findFirst({
+    where: { id: viewerId, blockedUserIds: { has: targetId } },
+    select: { id: true },
+  });
+
+  return match !== null;
+}
+
+/**
  * Batched version of {@link isBlockedBetween} for filtering many candidates
  * against one user in a single round-trip (2 queries instead of N).
  *
@@ -48,7 +78,7 @@ export async function isBlockedBetween(
  * relationship with `userId` (either side blocked the other).
  */
 export async function getBlockedUserIdsAmong(
-  prisma: PrismaClient,
+  prisma: Pick<PrismaClient, 'user'>,
   userId: string,
   candidateIds: string[]
 ): Promise<Set<string>> {
@@ -80,6 +110,28 @@ export async function getBlockedUserIdsAmong(
 }
 
 /**
+ * The recipients of a broadcast by `authorId`, minus every account in a block
+ * relationship with them (either side). One filter for every live broadcast of
+ * a publication (#13350, #17209). A block lookup that fails closes the audience:
+ * only `authorId` survives, if it was a recipient.
+ */
+export async function withoutBlockedRecipients(
+  prisma: Pick<PrismaClient, 'user'>,
+  authorId: string,
+  recipientIds: readonly string[]
+): Promise<string[]> {
+  try {
+    const blocked = await getBlockedUserIdsAmong(prisma, authorId, [...recipientIds]);
+    return recipientIds.filter((id) => !blocked.has(id));
+  } catch (error) {
+    enhancedLogger
+      .child({ module: 'blocking' })
+      .error('broadcast — block resolution failed, audience closed', { authorId, error });
+    return recipientIds.filter((id) => id === authorId);
+  }
+}
+
+/**
  * The FULL bidirectional block set for one user — every id that blocked them or
  * that they blocked — resolved without a candidate list.
  *
@@ -99,7 +151,7 @@ export async function getBlockedUserIdsAmong(
  * have dropped it.
  */
 export async function getBlockRelatedUserIds(
-  prisma: PrismaClient,
+  prisma: Pick<PrismaClient, 'user'>,
   userId: string
 ): Promise<Set<string>> {
   const [blockers, userRow] = await Promise.all([
@@ -115,4 +167,24 @@ export async function getBlockRelatedUserIds(
   for (const bid of (userRow?.blockedUserIds ?? []) as string[]) related.add(bid);
   related.delete(userId);
   return related;
+}
+
+/**
+ * Un blocage, dans un sens ou dans l'autre, sépare-t-il `actorId` de l'un de
+ * ces auteurs ? FERMÉ sur l'échec : une lecture qui ne conclut pas répond
+ * « bloqué » — commenter ou réagir se refuse, jamais ne s'ouvre, sur une panne.
+ */
+export async function isBlockedWithAny(
+  prisma: Pick<PrismaClient, 'user'>,
+  actorId: string,
+  authorIds: readonly (string | null | undefined)[]
+): Promise<boolean> {
+  const others = [...new Set(authorIds.filter((id): id is string => typeof id === 'string' && id.length > 0))].filter((id) => id !== actorId);
+  if (others.length === 0) return false;
+  try {
+    const verdicts = await Promise.all(others.map((authorId) => isBlockedBetween(prisma, actorId, authorId)));
+    return verdicts.some(Boolean);
+  } catch {
+    return true;
+  }
 }

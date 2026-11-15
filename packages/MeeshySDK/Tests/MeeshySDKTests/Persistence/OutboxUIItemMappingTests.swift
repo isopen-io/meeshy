@@ -43,7 +43,8 @@ struct OutboxUIItemMappingTests {
         kind: OutboxKind,
         payload: Data,
         status: OutboxStatus = .pending,
-        createdAt: Date = Date(timeIntervalSince1970: 1_750_000_000)
+        createdAt: Date = Date(timeIntervalSince1970: 1_750_000_000),
+        updatedAt: Date? = nil
     ) -> OutboxRecord {
         OutboxRecord(
             id: UUID().uuidString,
@@ -55,7 +56,7 @@ struct OutboxUIItemMappingTests {
             attempts: 0,
             lastError: nil,
             createdAt: createdAt,
-            updatedAt: createdAt,
+            updatedAt: updatedAt ?? createdAt,
             nextAttemptAt: createdAt
         )
     }
@@ -69,7 +70,7 @@ struct OutboxUIItemMappingTests {
         #expect(item.iconKind == .text)
         #expect(item.titlePreview == "Bonjour Marie")
         #expect(item.attachmentCount == 0)
-        #expect(item.source == .conversation(id: "conv-1"))
+        #expect(item.source == .conversation(id: "conv-1", messageId: "client-1"))
     }
 
     @Test func test_from_longContent_truncatesAt61CharsWithEllipsis() {
@@ -162,7 +163,7 @@ struct OutboxUIItemMappingTests {
 
     @Test func test_from_record_mapsConversationIdToSource() {
         let r = record(kind: .sendMessage, payload: sendMessagePayload(content: "x"))
-        #expect(OutboxUIItem.from(record: r).source == .conversation(id: "conv-1"))
+        #expect(OutboxUIItem.from(record: r).source == .conversation(id: "conv-1", messageId: "client-1"))
     }
 
     @Test func test_from_textWithAttachment_keepsTextIcon() {
@@ -370,6 +371,20 @@ struct OutboxUIItemMappingTests {
         #expect(item.titlePreview == "🎉")
     }
 
+    /// #10331 — une publication en file désigne sa carte optimiste, dont l'id
+    /// est le cmid de sa ligne : c'est ce que l'annulation de la pastille vise.
+    @Test func test_from_createPost_pointsAtItsPendingCardByCmid() {
+        let r = record(kind: .createPost, payload: createPostPayload(content: "Hello"))
+        let item = OutboxUIItem.from(record: r)
+        #expect(item.source == .post(id: "cmid_post"))
+    }
+
+    @Test func test_from_createPost_corruptPayload_fallsBackToUnknownSource() {
+        let r = record(kind: .createPost, payload: Data("not json".utf8))
+        let item = OutboxUIItem.from(record: r)
+        #expect(item.source == .unknown)
+    }
+
     // MARK: - repostPost (fil rouge du repost, lot 7 tâche 7.5)
 
     private func repostPostPayload(
@@ -390,8 +405,9 @@ struct OutboxUIItemMappingTests {
         return try! JSONEncoder().encode(payload)
     }
 
-    /// Contrairement à `.createPost` (`source: .unknown` — l'id serveur
-    /// n'existe pas encore), l'id SOURCE d'un repost est connu à l'enfilage :
+    /// Contrairement à `.createPost` (qui vise sa carte optimiste par son cmid —
+    /// l'id serveur n'existe pas encore), l'id SOURCE d'un repost est un id
+    /// SERVEUR connu à l'enfilage :
     /// la pastille doit rester navigable vers le post reposté, jamais tomber
     /// sur `.unknown` (le repli de `mapOther`, qui perd la destination —
     /// défaut mesuré en prod sur `markStoryViewed`).
@@ -421,5 +437,105 @@ struct OutboxUIItemMappingTests {
         let r = record(kind: .repostPost, payload: Data("not json".utf8))
         let item = OutboxUIItem.from(record: r)
         #expect(item.source == .unknown)
+    }
+
+    // MARK: - #4027 — l'entrée mène à sa CIBLE EXACTE, pas seulement à sa conversation
+
+    /// **Le défaut.** Taper « Message non envoyé » ouvrait la conversation et
+    /// s'arrêtait là : dans un fil de trois cents messages, l'utilisateur
+    /// devait retrouver lui-même celui qui n'était pas parti.
+    ///
+    /// L'ancre voyage AVEC la destination, dans `Source`, et non à côté d'elle
+    /// sur l'item : « où cette entrée mène-t-elle » est UNE question, et une
+    /// ancre rangée ailleurs pourrait être appliquée à une autre conversation
+    /// que celle qu'on ouvre.
+    ///
+    /// Pour un envoi, l'ancre est le `clientMessageId` du record — l'id LOCAL
+    /// que la bulle optimiste porte dans la liste (`ConversationViewModel`
+    /// insère la ligne GRDB sous ce même `tempId`). C'est donc exactement la
+    /// clé que `ConversationView` sait retrouver.
+    @Test func test_sendMessage_carriesTheOptimisticMessageAsItsAnchor() {
+        let r = record(kind: .sendMessage, payload: sendMessagePayload(content: "Bonjour Marie"))
+        let item = OutboxUIItem.from(record: r)
+        #expect(item.source == .conversation(id: "conv-1", messageId: "client-1"))
+    }
+
+    /// Une édition en attente vise le message ÉDITÉ, dont l'id SERVEUR vit
+    /// dans la charge — pas le `clientMessageId` du record, qui identifie la
+    /// mutation.
+    @Test func test_editMessage_anchorsOnTheEditedMessage() {
+        let payload = try! JSONEncoder().encode(
+            OfflineEditPayload(messageId: "srv-42", clientMessageId: "client-1",
+                               content: "corrigé", conversationId: "conv-1"))
+        let item = OutboxUIItem.from(record: record(kind: .editMessage, payload: payload))
+        #expect(item.source == .conversation(id: "conv-1", messageId: "srv-42"))
+    }
+
+    @Test func test_deleteMessage_anchorsOnTheMessageBeingDeleted() {
+        let payload = try! JSONEncoder().encode(
+            OfflineDeletePayload(messageId: "srv-43", clientMessageId: "client-1",
+                                 conversationId: "conv-1"))
+        let item = OutboxUIItem.from(record: record(kind: .deleteMessage, payload: payload))
+        #expect(item.source == .conversation(id: "conv-1", messageId: "srv-43"))
+    }
+
+    @Test func test_sendReaction_anchorsOnTheReactedMessage() {
+        let payload = try! JSONEncoder().encode(
+            ReactionOutboxPayload(messageId: "srv-44", emoji: "🔥", action: .add,
+                                  conversationId: "conv-1", clientMessageId: "client-1"))
+        let item = OutboxUIItem.from(record: record(kind: .sendReaction, payload: payload))
+        #expect(item.source == .conversation(id: "conv-1", messageId: "srv-44"))
+    }
+
+    /// **Le contre-témoin, et il compte autant.** Une charge illisible ne doit
+    /// pas fabriquer d'ancre : mieux vaut ouvrir la conversation sans viser que
+    /// viser un message qui n'existe pas — un scroll vers un id introuvable
+    /// laisserait le fil à un endroit arbitraire, ce qui se lit comme un bug.
+    @Test func test_anUndecodablePayload_yieldsNoAnchor_butStillOpensTheConversation() {
+        let item = OutboxUIItem.from(record: record(kind: .editMessage,
+                                                    payload: Data("pas du JSON".utf8)))
+        #expect(item.source == .conversation(id: "conv-1", messageId: nil))
+    }
+
+    // MARK: - L'horloge de la ligne (#4660)
+
+    /// **L'instant où la ligne a RENONCÉ, pas celui où elle est née.** La
+    /// pastille de synchronisation borne l'affichage d'une entrée terminale à
+    /// une courte fenêtre : sans cette horloge, elle ne pourrait la mesurer que
+    /// sur `createdAt`, et un message mis en file il y a une heure qui échoue
+    /// MAINTENANT naîtrait déjà périmé — l'utilisateur ne saurait jamais que
+    /// son envoi vient d'échouer.
+    @Test func test_updatedAt_carriesTheRowClock_notItsCreation() {
+        let born = Date(timeIntervalSince1970: 1_750_000_000)
+        let gaveUp = born.addingTimeInterval(3_600)
+        let item = OutboxUIItem.from(record: record(
+            kind: .sendMessage,
+            payload: sendMessagePayload(content: "coucou"),
+            status: .exhausted,
+            createdAt: born,
+            updatedAt: gaveUp
+        ))
+        #expect(item.createdAt == born)
+        #expect(item.updatedAt == gaveUp)
+    }
+
+    /// **L'horloge voyage pour TOUS les genres, pas seulement le message.** Les
+    /// dix mappeurs composent l'APPARENCE d'une entrée (icône, aperçu, ancre) ;
+    /// l'horloge de la ligne ne les regarde pas. Ce témoin interdit qu'un
+    /// onzième mappeur l'oublie en silence — le blocage était précisément le
+    /// genre resté figé sept jours dans la pastille.
+    @Test func test_updatedAt_travelsForEveryKind_includingTheOtherFamily() {
+        let born = Date(timeIntervalSince1970: 1_750_000_000)
+        let gaveUp = born.addingTimeInterval(120)
+        for kind in [OutboxKind.blockUser, .unblockUser, .markAsRead, .sendReaction] {
+            let item = OutboxUIItem.from(record: record(
+                kind: kind,
+                payload: Data("{}".utf8),
+                status: .exhausted,
+                createdAt: born,
+                updatedAt: gaveUp
+            ))
+            #expect(item.updatedAt == gaveUp, "\(kind.rawValue) a perdu l'horloge de sa ligne")
+        }
     }
 }

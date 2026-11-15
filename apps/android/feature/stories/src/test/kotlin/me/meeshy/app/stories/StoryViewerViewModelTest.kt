@@ -19,7 +19,9 @@ import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
+import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.SocketStoryDeletedData
 import me.meeshy.sdk.model.SocketStoryReactedData
@@ -33,8 +35,12 @@ import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.StoryTextObject
 import me.meeshy.sdk.model.StoryTransitionKind
+import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.privacy.InMemoryPrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.story.StoryRepository
@@ -55,8 +61,15 @@ class StoryViewerViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     private val storyRepository: StoryRepository = mockk(relaxed = true)
+    private val postRepository: PostRepository = mockk(relaxed = true)
     private val reportRepository: me.meeshy.sdk.report.ReportRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
+
+    private class FakeClock(var now: Long = 0L) : CacheClock {
+        override fun nowMillis(): Long = now
+    }
+
+    private val dwellClock = FakeClock()
     private val reactedFlow = MutableSharedFlow<SocketStoryReactedData>(extraBufferCapacity = 8)
     private val unreactedFlow = MutableSharedFlow<SocketStoryUnreactedData>(extraBufferCapacity = 8)
     private val translationUpdatedFlow =
@@ -98,6 +111,7 @@ class StoryViewerViewModelTest {
         startUserId: String,
         posts: List<ApiPost>,
         user: MeeshyUser? = null,
+        allowAnalytics: Boolean = true,
     ): StoryViewerViewModel {
         every { session.currentUser } returns MutableStateFlow(user)
         every { session.currentUserId } returns null
@@ -105,7 +119,13 @@ class StoryViewerViewModelTest {
         coEvery { storyRepository.markViewed(any()) } returns NetworkResult.Success(Unit)
         coEvery { storyRepository.react(any(), any()) } returns NetworkResult.Success(Unit)
         val handle = SavedStateHandle(mapOf(StoryViewerViewModel.USER_ID_ARG to startUserId))
-        return StoryViewerViewModel(storyRepository, session, socialSocket, config, reportRepository, handle)
+        val privacyStore = InMemoryPrivacyPreferencesStore(
+            PrivacyPreferences(allowAnalytics = allowAnalytics),
+        )
+        return StoryViewerViewModel(
+            storyRepository, postRepository, session, socialSocket, config, reportRepository, dwellClock,
+            privacyStore, handle,
+        )
     }
 
     // Group "a"'s latest story is the newest overall so it sorts first; "b" follows.
@@ -160,6 +180,25 @@ class StoryViewerViewModelTest {
     }
 
     @Test
+    fun `a reposted slide projects the locked repost attribution onto the current slide`() = runTest {
+        val reposted = storyPost("a1", "a", hoursAgo = 1).copy(
+            repostOf = ApiRepostOf(
+                id = "src-story",
+                author = ApiAuthor(id = "orig", username = "alice", displayName = "Alice W."),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(reposted))
+        assertThat(vm.state.value.current?.repostAttribution)
+            .isEqualTo(StoryRepostAttribution(handle = "alice"))
+    }
+
+    @Test
+    fun `a non-repost slide carries no repost attribution`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = listOf(storyPost("a1", "a", hoursAgo = 1)))
+        assertThat(vm.state.value.current?.repostAttribution).isNull()
+    }
+
+    @Test
     fun `a solid hex background string projects onto the slide as a solid colour`() = runTest {
         val vm = viewModel(
             startUserId = "a",
@@ -175,6 +214,24 @@ class StoryViewerViewModelTest {
     fun `a slide with no background string leaves the projected background null`() = runTest {
         val vm = viewModel(startUserId = "a", posts = twoAuthors())
         assertThat(vm.state.value.current?.background).isNull()
+    }
+
+    @Test
+    fun `a drawn stroke on the story projects onto the slide so a drawing-only story is not shown blank`() = runTest {
+        val stroke = me.meeshy.sdk.model.StoryDrawingStroke(id = "st1", colorHex = "FFFFFF", width = 6.0)
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(
+                storyPost("a1", "a", hoursAgo = 1, storyEffects = StoryEffects(drawingStrokes = listOf(stroke))),
+            ),
+        )
+        assertThat(vm.state.value.current?.strokes).containsExactly(stroke)
+    }
+
+    @Test
+    fun `a slide with no drawing carries no strokes`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = twoAuthors())
+        assertThat(vm.state.value.current?.strokes).isEmpty()
     }
 
     @Test
@@ -257,6 +314,143 @@ class StoryViewerViewModelTest {
         val vm = viewModel(startUserId = "b", posts = twoAuthors())
         vm.markCurrentViewed()
         coVerify { storyRepository.markViewed("b1") }
+    }
+
+    // --- Dwell enrichment (the 4th single-focus surface, mirror of iOS
+    // `StoryViewerView` begin(surface: .storyViewer) on slide present / end on slide-change &
+    // dismiss). A story slide id IS a post id, so the measured dwell rides the same
+    // `posts/{id}/view` endpoint the impression already uses, carrying `duration`. ---
+
+    @Test
+    fun `clearing the viewer leaves the post room and closes the dwell`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(startUserId = "a", posts = twoAuthors())
+        dwellClock.now = 1000
+
+        StoryViewerViewModel::class.java.getDeclaredMethod("onCleared").apply { isAccessible = true }.invoke(vm)
+
+        coVerify(exactly = 1) { socialSocket.leavePostRoom("a1") }
+        coVerify(exactly = 1) { postRepository.viewPost("a1", 1000) }
+    }
+
+    @Test
+    fun `advancing past the dwell floor records the left slide's measured watch-time`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(startUserId = "a", posts = twoAuthors()) // begins a1's dwell at 0
+        dwellClock.now = 1000
+
+        vm.advance() // a1 (a's only slide) → b1: leaves a1 after 1000ms
+
+        coVerify(exactly = 1) { postRepository.viewPost("a1", 1000) }
+    }
+
+    @Test
+    fun `a sub-floor glance before advancing records no watch-time`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(startUserId = "a", posts = twoAuthors())
+        dwellClock.now = 999
+
+        vm.advance() // leaves a1 after only 999ms — below the 1000ms floor
+
+        coVerify(exactly = 0) { postRepository.viewPost("a1", any()) }
+    }
+
+    @Test
+    fun `each advance records the slide it leaves, re-arming the clock on the one landed on`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(startUserId = "b", posts = twoAuthors()) // begins b1 at 0
+        dwellClock.now = 1000
+        vm.advance() // b1 → b2: leaves b1 after 1000ms, begins b2 at 1000
+        dwellClock.now = 3000
+
+        vm.advance() // b2 → past last (dismissed): leaves b2 after 3000-1000=2000ms
+
+        coVerify(exactly = 1) { postRepository.viewPost("b1", 1000) }
+        coVerify(exactly = 1) { postRepository.viewPost("b2", 2000) }
+    }
+
+    @Test
+    fun `stepping back records the slide left and re-arms on the previous`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(startUserId = "b", posts = twoAuthors()) // begins b1 at 0
+        dwellClock.now = 1000
+        vm.advance() // b1 → b2: records b1(1000), begins b2 at 1000
+        dwellClock.now = 2500
+
+        vm.back() // b2 → b1: leaves b2 after 2500-1000=1500ms
+
+        coVerify(exactly = 1) { postRepository.viewPost("b1", 1000) }
+        coVerify(exactly = 1) { postRepository.viewPost("b2", 1500) }
+    }
+
+    @Test
+    fun `endCurrentDwell records the current slide then a second end is inert`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(startUserId = "a", posts = twoAuthors()) // begins a1 at 0
+        dwellClock.now = 1200
+
+        vm.endCurrentDwell()
+        dwellClock.now = 5000
+        vm.endCurrentDwell() // nothing open — idempotent
+
+        coVerify(exactly = 1) { postRepository.viewPost("a1", 1200) }
+        coVerify(exactly = 0) { postRepository.viewPost("a1", 5000) }
+    }
+
+    @Test
+    fun `a same-slide re-emit does not restart the dwell clock`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(storyPost("a1", "a", hoursAgo = 1, reactionSummary = mapOf("❤️" to 2))),
+        ) // begins a1 at 0
+        dwellClock.now = 500
+        vm.react("🔥") // re-emits WITHOUT changing the current slide
+        dwellClock.now = 1000
+
+        vm.endCurrentDwell() // dwell must measure from 0 (begin), not 500 (the re-emit)
+
+        coVerify(exactly = 1) { postRepository.viewPost("a1", 1000) }
+        coVerify(exactly = 0) { postRepository.viewPost("a1", 500) }
+    }
+
+    @Test
+    fun `dismissing the viewer ends the current dwell`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(startUserId = "a", posts = twoAuthors()) // begins a1 at 0
+        dwellClock.now = 1500
+
+        vm.onSwipe(StorySwipeAction.Dismiss) // dismisses without changing the slide
+
+        coVerify(exactly = 1) { postRepository.viewPost("a1", 1500) }
+    }
+
+    @Test
+    fun `a failed dwell record does not crash or disturb the viewer`() = runTest {
+        coEvery { postRepository.viewPost(any(), any()) } throws RuntimeException("offline")
+        dwellClock.now = 0
+        val vm = viewModel(startUserId = "a", posts = twoAuthors())
+        dwellClock.now = 1000
+
+        vm.advance() // records a1(1000) — the sink throws, swallowed as best-effort
+
+        assertThat(vm.state.value.current?.id).isEqualTo("b1")
+        assertThat(vm.state.value.isDismissed).isFalse()
+    }
+
+    // --- Analytics-consent gate (mirror of iOS `EngagementTracker.begin` `guard consentProvider()`) ---
+
+    @Test
+    fun `with analytics consent withheld a qualifying slide dwell records no watch-time`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(startUserId = "a", posts = twoAuthors(), allowAnalytics = false)
+        dwellClock.now = 1000
+
+        vm.advance() // a1 → b1: a 1000ms dwell WOULD qualify, but consent was withheld
+
+        // No dwell session opened, so the enrichment (the only postRepository.viewPost the story
+        // surface makes) never fires; 1000 is the exact duration this scenario could have recorded.
+        coVerify(exactly = 0) { postRepository.viewPost("a1", 1000) }
     }
 
     @Test
@@ -444,7 +638,7 @@ class StoryViewerViewModelTest {
         coEvery { storyRepository.list(any(), any()) } returns
             NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "boom"))
         val handle = SavedStateHandle(mapOf(StoryViewerViewModel.USER_ID_ARG to "a"))
-        val vm = StoryViewerViewModel(storyRepository, session, socialSocket, config, reportRepository, handle)
+        val vm = StoryViewerViewModel(storyRepository, postRepository, session, socialSocket, config, reportRepository, dwellClock, InMemoryPrivacyPreferencesStore(), handle)
 
         assertThat(vm.state.value.isLoading).isFalse()
         assertThat(vm.state.value.isDismissed).isFalse()
@@ -461,6 +655,25 @@ class StoryViewerViewModelTest {
         assertThat(vm.state.value.currentStoryId).isEqualTo("b1")
     }
 
+    /** #13849, iOS `composableSlide` : « Composer » n'existe que sur une story que le composeur saura reprendre. */
+    @Test
+    fun `Compose is offered on a story the composer can take back, never on one carrying an image sticker`() = runTest {
+        val vm = viewModel(
+            startUserId = "b",
+            posts = listOf(
+                storyPost("b1", "b", hoursAgo = 3),
+                storyPost("b2", "b", hoursAgo = 2, storyEffects = StoryEffects(stickerObjects = listOf(me.meeshy.sdk.model.StorySticker(id = "k", postMediaId = "img")))),
+            ),
+        )
+
+        assertThat(vm.state.value.canCompose).isTrue()
+
+        vm.advance()
+
+        assertThat(vm.state.value.currentStoryId).isEqualTo("b2")
+        assertThat(vm.state.value.canCompose).isFalse()
+    }
+
     @Test
     fun `isOwnStory is true only on the current user's own group`() = runTest {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
@@ -468,13 +681,37 @@ class StoryViewerViewModelTest {
         coEvery { storyRepository.list(any(), any()) } returns NetworkResult.Success(twoAuthors())
         coEvery { storyRepository.markViewed(any()) } returns NetworkResult.Success(Unit)
         val handle = SavedStateHandle(mapOf(StoryViewerViewModel.USER_ID_ARG to "a"))
-        val vm = StoryViewerViewModel(storyRepository, session, socialSocket, config, reportRepository, handle)
+        val vm = StoryViewerViewModel(storyRepository, postRepository, session, socialSocket, config, reportRepository, dwellClock, InMemoryPrivacyPreferencesStore(), handle)
 
         assertThat(vm.state.value.isOwnStory).isTrue() // group a, author == current user
 
         vm.advance() // → group b (someone else's story)
 
         assertThat(vm.state.value.isOwnStory).isFalse()
+    }
+
+    @Test
+    fun `the header carries the author's served presence, never one's own`() = runTest {
+        every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
+        every { session.currentUserId } returns "a"
+        val online = { post: ApiPost -> post.copy(author = post.author?.copy(isOnline = true, lastActiveAt = isoAgo(0))) }
+        coEvery { storyRepository.list(any(), any()) } returns NetworkResult.Success(twoAuthors().map(online))
+        coEvery { storyRepository.markViewed(any()) } returns NetworkResult.Success(Unit)
+        val handle = SavedStateHandle(mapOf(StoryViewerViewModel.USER_ID_ARG to "a"))
+        val vm = StoryViewerViewModel(storyRepository, postRepository, session, socialSocket, config, reportRepository, dwellClock, InMemoryPrivacyPreferencesStore(), handle)
+
+        assertThat(vm.state.value.authorPresence).isNull()
+
+        vm.advance()
+
+        assertThat(vm.state.value.authorPresence?.isOnline).isTrue()
+    }
+
+    @Test
+    fun `an author served without presence gives the header nothing to fabricate`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors())
+
+        assertThat(vm.state.value.authorPresence).isNull()
     }
 
     private fun imagePost(id: String, authorId: String, hoursAgo: Long, imageUrl: String) =
@@ -550,6 +787,210 @@ class StoryViewerViewModelTest {
 
         assertThat(vm.state.value.current?.imageUrl).isEqualTo("http://cdn/photo.jpg")
         assertThat(vm.state.value.current?.backgroundVideoUrl).isNull()
+    }
+
+    @Test
+    fun `un fond sans adresse lit la piece que son identifiant designe, jamais la premiere de la story`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(
+                ApiPostMedia(id = "m1", fileUrl = "http://cdn/first.jpg", mimeType = "image/jpeg"),
+                ApiPostMedia(id = "m2", fileUrl = "http://cdn/designated.jpg", mimeType = "image/jpeg"),
+            ),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(id = "up-1", postMediaId = "m2", mediaURL = null, mediaType = "image", isBackground = true, x = 0.7, scale = 1.5),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.imageUrl).isEqualTo("http://cdn/designated.jpg")
+        assertThat(vm.state.value.current?.backgroundTransform?.scaleX).isWithin(1e-6f).of(1.5f)
+    }
+
+    @Test
+    fun `un fond video sans adresse lit sa piece et garde le cadrage de l auteur`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(
+                ApiPostMedia(id = "m1", fileUrl = "http://cdn/other.mp4", mimeType = "video/mp4"),
+                ApiPostMedia(id = "m2", fileUrl = "http://cdn/bg.mp4", mimeType = "video/mp4"),
+            ),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(id = "up-1", postMediaId = "m2", mediaURL = null, mediaType = "video", isBackground = true, loop = false, x = 0.7, scale = 2.0),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/bg.mp4")
+        assertThat(vm.state.value.current?.backgroundLoop).isFalse()
+        assertThat(vm.state.value.current?.backgroundTransform?.scaleX).isWithin(1e-6f).of(2.0f)
+    }
+
+    @Test
+    fun `un fond qui ne designe aucune piece de la story ne prete pas son cadrage a une autre`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/first.jpg", mimeType = "image/jpeg")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(id = "up-1", postMediaId = "up-1", mediaURL = null, mediaType = "image", isBackground = true, x = 0.7, scale = 1.5),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundTransform?.isIdentity).isTrue()
+    }
+
+    @Test
+    fun `a background image with author framing projects that transform onto the slide`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/photo.jpg", mimeType = "image/jpeg")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "obj1",
+                        postMediaId = "m1",
+                        mediaURL = "http://cdn/photo.jpg",
+                        mediaType = "image",
+                        isBackground = true,
+                        x = 0.7,
+                        y = 0.5,
+                        scale = 1.5,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        val transform = vm.state.value.current?.backgroundTransform
+        assertThat(transform?.scaleX).isWithin(1e-6f).of(1.5f)
+        assertThat(transform?.offsetXFraction).isWithin(1e-6f).of(0.2f)
+        assertThat(transform?.offsetYFraction).isEqualTo(0f)
+        assertThat(transform?.isIdentity).isFalse()
+    }
+
+    @Test
+    fun `a background image with default framing leaves the transform at identity`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/photo.jpg", mimeType = "image/jpeg")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "obj1",
+                        postMediaId = "m1",
+                        mediaURL = "http://cdn/photo.jpg",
+                        mediaType = "image",
+                        isBackground = true,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundTransform)
+            .isEqualTo(StoryBackgroundObjectTransform.IDENTITY)
+    }
+
+    @Test
+    fun `a background VIDEO with author framing projects that transform onto the slide`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/bg.mp4", mimeType = "video/mp4")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "obj1",
+                        postMediaId = "m1",
+                        mediaURL = "http://cdn/bg.mp4",
+                        mediaType = "video",
+                        isBackground = true,
+                        x = 0.8,
+                        scale = 2.0,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        val transform = vm.state.value.current?.backgroundTransform
+        assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/bg.mp4")
+        assertThat(transform?.scaleX).isWithin(1e-6f).of(2.0f)
+        assertThat(transform?.offsetXFraction).isWithin(1e-6f).of(0.3f)
+        assertThat(transform?.offsetYFraction).isEqualTo(0f)
+        assertThat(transform?.isIdentity).isFalse()
+    }
+
+    @Test
+    fun `a background VIDEO with default framing leaves the transform at identity`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/bg.mp4", mimeType = "video/mp4")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "obj1",
+                        postMediaId = "m1",
+                        mediaURL = "http://cdn/bg.mp4",
+                        mediaType = "video",
+                        isBackground = true,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/bg.mp4")
+        assertThat(vm.state.value.current?.backgroundTransform)
+            .isEqualTo(StoryBackgroundObjectTransform.IDENTITY)
+    }
+
+    @Test
+    fun `a legacy video-only story carries no framing (identity), never the object's transform`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/legacy.mp4", mimeType = "video/mp4")),
+            storyEffects = null,
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/legacy.mp4")
+        assertThat(vm.state.value.current?.backgroundTransform)
+            .isEqualTo(StoryBackgroundObjectTransform.IDENTITY)
+    }
+
+    @Test
+    fun `a background VIDEO object without its own url does not project framing from a fallback video`() = runTest {
+        // The framing rides only on the object's OWN address — its mediaURL or the piece
+        // its postMediaId names. An object naming a piece the story does not carry must
+        // NOT reframe the fallback video with an unrelated object's transform.
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/fallback.mp4", mimeType = "video/mp4")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "obj1",
+                        postMediaId = "unrelated",
+                        mediaURL = null,
+                        mediaType = "video",
+                        isBackground = true,
+                        x = 0.9,
+                        scale = 3.0,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/fallback.mp4")
+        assertThat(vm.state.value.current?.backgroundTransform)
+            .isEqualTo(StoryBackgroundObjectTransform.IDENTITY)
+    }
+
+    @Test
+    fun `a slide with no background media leaves the transform at identity`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = listOf(storyPost("a1", "a", hoursAgo = 1)))
+
+        assertThat(vm.state.value.current?.backgroundTransform)
+            .isEqualTo(StoryBackgroundObjectTransform.IDENTITY)
     }
 
     @Test
@@ -759,6 +1200,42 @@ class StoryViewerViewModelTest {
     }
 
     @Test
+    fun `a sound borrowed from the library plays from its mediaURL, resolved against the gateway origin`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                audioPlayerObjects = listOf(
+                    StoryAudioPlayerObject(
+                        id = "borrowed-s1",
+                        postMediaId = "",
+                        isBackground = true,
+                        mediaURL = "/api/v1/static/s1.m4a",
+                        soundId = "s1",
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundAudioUrl).isEqualTo("https://gate.meeshy.me/api/v1/static/s1.m4a")
+    }
+
+    @Test
+    fun `an author-written mediaURL outside the library route never plays, so the reader's identity never follows it`() = runTest {
+        listOf("/api/v1/users/me", "/api/v1/static/../conversations", "https://evil.example/api/v1/static/s.m4a").forEach { hostile ->
+            val post = storyPost("a1", "a", hoursAgo = 1).copy(
+                storyEffects = StoryEffects(
+                    audioPlayerObjects = listOf(
+                        StoryAudioPlayerObject(id = "b", postMediaId = "", isBackground = true, mediaURL = hostile, soundId = "s1"),
+                    ),
+                ),
+            )
+            val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+            assertThat(vm.state.value.current?.backgroundAudioUrl).isNull()
+        }
+    }
+
+    @Test
     fun `a non-background audioPlayerObject is exposed as foregroundAudioUrl`() = runTest {
         val post = storyPost("a1", "a", hoursAgo = 1).copy(
             media = listOf(ApiPostMedia(id = "voice", fileUrl = "http://cdn/voice.mp3", mimeType = "audio/mp4")),
@@ -936,6 +1413,69 @@ class StoryViewerViewModelTest {
         vm.toggleLanguageOverride("es")
         assertThat(vm.state.value.current?.text).isEqualTo("hola")
         assertThat(vm.state.value.languageOverride).isEqualTo("es")
+    }
+
+    @Test
+    fun `selecting the Original entry shows the source text and never announces the sentinel as a language`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            user = viewer(systemLanguage = "es"),
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+            ),
+        )
+        assertThat(vm.state.value.current?.text).isEqualTo("hola")
+
+        vm.selectLanguage(StoryLanguageOverride.ORIGINAL)
+
+        assertThat(vm.state.value.current?.text).isEqualTo("text-s1")
+        assertThat(vm.state.value.current?.languageCode).isNull()
+        assertThat(vm.state.value.activeLanguageCode).isNull()
+    }
+
+    @Test
+    fun `selecting a language twice keeps it - the explorer never toggles back`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+            ),
+        )
+        vm.selectLanguage("es")
+        vm.selectLanguage("es")
+
+        assertThat(vm.state.value.current?.text).isEqualTo("hola")
+        assertThat(vm.state.value.activeLanguageCode).isEqualTo("es")
+    }
+
+    @Test
+    fun `the explorer is built only while it is open and follows the served language`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+            ),
+        )
+        assertThat(vm.state.value.languageExplorer).isNull()
+
+        vm.openLanguageExplorer()
+        vm.selectLanguage("es")
+
+        val explorer = vm.state.value.languageExplorer!!
+        assertThat(explorer.current?.text).isEqualTo("hola")
+        assertThat(explorer.rows.first { it.isSelected }.code).isEqualTo("es")
+
+        vm.closeLanguageExplorer()
+        assertThat(vm.state.value.languageExplorer).isNull()
     }
 
     @Test
@@ -1451,5 +1991,51 @@ class StoryViewerViewModelTest {
 
         // …and it is actionable: the overlay repaints in the tapped language.
         assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Hallo")
+    }
+
+    // --- Suppression optimiste et retrait par la modération ---
+
+    @Test
+    fun `deleting the current story drops it at once and keeps the viewer on the surviving slide`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors()) // at b1, group b = [b1, b2]
+        coEvery { storyRepository.delete("b1") } returns NetworkResult.Success(Unit)
+
+        vm.deleteCurrentStory()
+
+        assertThat(vm.state.value.slides.map { it.id }).containsExactly("b2")
+        assertThat(vm.state.value.isDismissed).isFalse()
+        coVerify(exactly = 1) { storyRepository.delete("b1") }
+    }
+
+    @Test
+    fun `a refused deletion puts the story back where it was`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors())
+        coEvery { storyRepository.delete("b1") } returns NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "nope"))
+
+        vm.deleteCurrentStory()
+
+        assertThat(vm.state.value.slides.map { it.id }).containsExactly("b1", "b2").inOrder()
+        assertThat(vm.state.value.current?.id).isEqualTo("b1")
+    }
+
+    @Test
+    fun `a removal without a valid reason sends nothing`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors())
+
+        vm.removeCurrentStory("  ab ")
+
+        coVerify(exactly = 0) { storyRepository.delete(any(), any()) }
+        assertThat(vm.state.value.slides).hasSize(2)
+    }
+
+    @Test
+    fun `a removal carries its trimmed reason`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors())
+        coEvery { storyRepository.delete("b1", "contenu illicite") } returns NetworkResult.Success(Unit)
+
+        vm.removeCurrentStory("  contenu illicite ")
+
+        coVerify(exactly = 1) { storyRepository.delete("b1", "contenu illicite") }
+        assertThat(vm.state.value.slides.map { it.id }).containsExactly("b2")
     }
 }

@@ -1,0 +1,162 @@
+{
+ "domain": "wallpaper",
+ "designs": [
+  {
+   "key": "brume-vivante",
+   "style": "gradient",
+   "palettes": {
+    "light": {
+     "base": "#F5F4FB",
+     "ink": "#A5B4FC",
+     "soft": "#DDD6FE"
+    },
+    "dark": {
+     "base": "#0C0B1A",
+     "ink": "#4F46E5",
+     "soft": "#312E81"
+    }
+   },
+   "gradient": {
+    "angle": 180,
+    "stops": [
+     {
+      "role": "base",
+      "at": 0
+     },
+     {
+      "role": "soft",
+      "at": 1
+     }
+    ],
+    "blobs": [
+     {
+      "x": 0.25,
+      "y": 0.15,
+      "r": 0.7,
+      "role": "ink",
+      "opacity": 0.35
+     },
+     {
+      "x": 0.8,
+      "y": 0.85,
+      "r": 0.6,
+      "role": "accent",
+      "opacity": 0.25
+     }
+    ]
+   },
+   "fit": "fill",
+   "lottie": {
+    "src": "b19ebab0f4cfeed8.json",
+    "bytes": 1842,
+    "sha256": "b19ebab0f4cfeed8715e0264fab552c11fcce89f71ba78b2f01feb0b78ab634e"
+   }
+  },
+  {
+   "key": "bulles-legeres",
+   "style": "gradient",
+   "palettes": {
+    "light": {
+     "base": "#F0F7FF",
+     "ink": "#93C5FD",
+     "soft": "#C7D2FE"
+    },
+    "dark": {
+     "base": "#071226",
+     "ink": "#1D4ED8",
+     "soft": "#312E81"
+    }
+   },
+   "gradient": {
+    "angle": 180,
+    "stops": [
+     {
+      "role": "soft",
+      "at": 0
+     },
+     {
+      "role": "base",
+      "at": 0.55
+     },
+     {
+      "role": "base",
+      "at": 1
+     }
+    ],
+    "blobs": [
+     {
+      "x": 0.15,
+      "y": 0.9,
+      "r": 0.55,
+      "role": "ink",
+      "opacity": 0.22
+     },
+     {
+      "x": 0.85,
+      "y": 0.35,
+      "r": 0.45,
+      "role": "accent",
+      "opacity": 0.14
+     }
+    ]
+   },
+   "fit": "fill",
+   "lottie": {
+    "src": "3e282f6c9c6c6064.json",
+    "bytes": 6155,
+    "sha256": "3e282f6c9c6c60642c63ec560088f7bea1609fefe3206e1fee9597b875032e7c"
+   }
+  },
+  {
+   "key": "pluie-de-petales",
+   "style": "gradient",
+   "palettes": {
+    "light": {
+     "base": "#FFF5F8",
+     "ink": "#F9A8D4",
+     "soft": "#FCE7F3"
+    },
+    "dark": {
+     "base": "#1A0B14",
+     "ink": "#9D174D",
+     "soft": "#3B0A24"
+    }
+   },
+   "gradient": {
+    "angle": 160,
+    "stops": [
+     {
+      "role": "base",
+      "at": 0
+     },
+     {
+      "role": "soft",
+      "at": 1
+     }
+    ],
+    "blobs": [
+     {
+      "x": 0.8,
+      "y": 0.1,
+      "r": 0.6,
+      "role": "ink",
+      "opacity": 0.2
+     },
+     {
+      "x": 0.2,
+      "y": 0.75,
+      "r": 0.5,
+      "role": "soft",
+      "opacity": 0.35
+     }
+    ]
+   },
+   "fit": "fill",
+   "lottie": {
+    "src": "57404ed57c27976e.json",
+    "bytes": 7469,
+    "sha256": "57404ed57c27976e25aa9bb98e105dd81005ee330e7e422a332016c45bcdfe25"
+   }
+  }
+ ]
+}

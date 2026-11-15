@@ -1,14 +1,16 @@
 package me.meeshy.sdk.user
 
+import me.meeshy.sdk.model.AccountDeletionStatus
+import me.meeshy.sdk.model.Achievement
 import me.meeshy.sdk.model.ChangeEmailRequest
 import me.meeshy.sdk.model.ChangeEmailResponse
 import me.meeshy.sdk.model.ChangePasswordRequest
 import me.meeshy.sdk.model.ChangePasswordResponse
 import me.meeshy.sdk.model.ChangePhoneRequest
 import me.meeshy.sdk.model.ChangePhoneResponse
-import me.meeshy.sdk.model.DeleteAccountRequest
-import me.meeshy.sdk.model.DeleteAccountResponse
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.ProfileExpansion
+import me.meeshy.sdk.model.PublicProfile
 import me.meeshy.sdk.model.TimelinePoint
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.model.UserStats
@@ -28,8 +30,13 @@ import me.meeshy.sdk.net.pagedApiCall
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
+import me.meeshy.sdk.outbox.OutboxOutcome
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.outbox.OutboxState
+import me.meeshy.sdk.model.profile.ProfileEditDiff
+import me.meeshy.sdk.session.PendingProfileEdits
 import me.meeshy.sdk.session.SessionRepository
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.encodeToString
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -75,7 +82,10 @@ class UserRepository @Inject constructor(
      * lane — surviving offline and process death instead of an online-first REST
      * call a dropped connection would silently lose. The [OutboxFlushWorker]
      * delivers it (reconciling with the server-returned user, or reverting on a hard
-     * exhaust) and the coalescer keeps only the latest edit. Inert with no session
+     * exhaust) and the coalescer keeps only the latest row — so the edits still
+     * PENDING are folded into the new one first ([ProfileEditDiff.combine]): a
+     * request carries only the changed fields, and replacing an older one must
+     * never drop a field it was the only one to carry. Inert with no session
      * (returns `null`, no optimistic flip). Surpasses iOS, whose edit is online-only.
      *
      * @return the queued row's `cmid`, or `null` when there is no active session or
@@ -85,15 +95,31 @@ class UserRepository @Inject constructor(
     suspend fun enqueueProfileEdit(request: UpdateProfileRequest): String? {
         val userId = sessionRepository.currentUserId?.takeIf { it.isNotBlank() } ?: return null
         sessionRepository.applyProfileEdit(request)
+        val queued = PendingProfileEdits.decode(
+            rows = outboxRepository.deliverable(OutboxLanes.PROFILE),
+            userId = userId,
+            json = MeeshyApi.json,
+            states = setOf(OutboxState.PENDING),
+        )
+        val merged = (queued + request).reduce(ProfileEditDiff::combine)
         return outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.UPDATE_PROFILE,
                 lane = OutboxLanes.PROFILE,
                 targetId = userId,
-                payload = MeeshyApi.json.encodeToString(request),
+                payload = MeeshyApi.json.encodeToString(merged),
             ),
         )
     }
+
+    /**
+     * Suspends until the queued profile edit [cmid] reaches a terminal outcome and tells whether the
+     * outbox ABANDONED it (exhausted: retries spent or refused) — the screen then restores its snapshot
+     * and reopens the editor. Delivered, superseded by a newer edit or cancelled answers `false`.
+     * Call it before waking the flush worker: the outcome stream does not replay.
+     */
+    suspend fun awaitProfileEditAbandoned(cmid: String): Boolean =
+        outboxRepository.outcomes.first { it.cmid == cmid } is OutboxOutcome.Exhausted
 
     suspend fun updateAvatar(url: String): NetworkResult<MeeshyUser> =
         apiCall { userApi.updateAvatar(UpdateAvatarRequest(url)) }.map { it.user }
@@ -101,17 +127,47 @@ class UserRepository @Inject constructor(
     suspend fun updateBanner(url: String): NetworkResult<MeeshyUser> =
         apiCall { userApi.updateBanner(UpdateBannerRequest(url)) }.map { it.user }
 
+    /**
+     * Lit UN profil public — identifiant ou pseudo, indifferemment (#4250).
+     *
+     * Trois methodes visaient ici trois ALIAS de la meme route de passerelle :
+     * celle-ci (`users/{idOrUsername}`), `getPublicProfile` (`u/{username}`) et
+     * `getProfileById` (`users/id/{id}`). Les deux dernieres n'avaient AUCUN
+     * appelant dans l'application — ni ecran, ni cas d'usage — et repointer
+     * trois noms sur `directory/people/{handle}` les aurait rendues
+     * rigoureusement identiques : trois jumelles pour une seule regle, que la
+     * prochaine main aurait fait diverger. Elles sont supprimees ; le nom qui
+     * reste est celui que `ProfileViewModel.loadProfile` appelle deja.
+     *
+     * Le parametre s'appelle toujours `idOrUsername` parce que c'est ce que
+     * l'appelant en sait : un lien de partage `meeshy://u/<pseudo>` et un
+     * identifiant de navigation arrivent tous deux ici sans etre distingues.
+     */
     suspend fun getProfile(idOrUsername: String): NetworkResult<MeeshyUser> =
-        apiCall { userApi.getProfile(idOrUsername) }
+        getPublicProfile(idOrUsername).map { it.user }
 
-    suspend fun getPublicProfile(username: String): NetworkResult<MeeshyUser> =
-        apiCall { userApi.getPublicProfile(username) }
+    /**
+     * LA lecture d'un profil public en UN aller-retour : profil, statistiques et presence
+     * (et la relation seulement si [expand] la demande). [getProfile] n'en est que la
+     * projection. L'ordre de `expand` est stable pour que deux appels equivalents produisent
+     * la meme requete.
+     */
+    suspend fun getPublicProfile(
+        handle: String,
+        expand: Set<ProfileExpansion> = ProfileExpansion.DEFAULT,
+    ): NetworkResult<PublicProfile> =
+        apiCall { userApi.getPublicProfile(handle, ProfileExpansion.query(expand)) }
+
+    suspend fun getMyStats(): NetworkResult<UserStats> = apiCall { userApi.getMyStats() }
+
+    suspend fun getMyAchievements(): NetworkResult<List<Achievement>> =
+        apiCall { userApi.getMyAchievements() }
+
+    suspend fun getAccountDeletionStatus(): NetworkResult<AccountDeletionStatus> =
+        apiCall { userApi.getAccountDeletionStatus() }
 
     suspend fun getProfileByEmail(email: String): NetworkResult<MeeshyUser> =
         apiCall { userApi.getProfileByEmail(email) }
-
-    suspend fun getProfileById(id: String): NetworkResult<MeeshyUser> =
-        apiCall { userApi.getProfileById(id) }
 
     suspend fun getProfileByPhone(phone: String): NetworkResult<MeeshyUser> =
         apiCall { userApi.getProfileByPhone(phone.replace("+", "")) }
@@ -132,9 +188,10 @@ class UserRepository @Inject constructor(
      * edit). A wrong current password comes back as an HTTP 400 in the folded
      * [NetworkResult.Failure] (`httpStatus == 400`), which the caller maps to a targeted
      * "incorrect current password" message; transport failures surface as `code == "NETWORK"`.
+     * `currentPassword` is null to SET a first password on an account that has none (#9186).
      */
     suspend fun changePassword(
-        currentPassword: String,
+        currentPassword: String?,
         newPassword: String,
     ): NetworkResult<ChangePasswordResponse> =
         apiCall { userApi.changePassword(ChangePasswordRequest(currentPassword, newPassword)) }
@@ -142,22 +199,16 @@ class UserRepository @Inject constructor(
     suspend fun changePhone(newPhoneNumber: String): NetworkResult<ChangePhoneResponse> =
         apiCall { userApi.changePhone(ChangePhoneRequest(newPhoneNumber)) }
 
-    /**
-     * Initiates permanent account deletion (`DELETE /me/delete-account`). Like
-     * [changePassword] this is inherently *online* — the gateway starts a 90-day grace
-     * period and mails a confirmation link, so it cannot be optimistic or offline-queued.
-     * The caller passes the canonical [me.meeshy.sdk.model.AccountDeletionConfirmation.REQUIRED_PHRASE]
-     * (never a raw buffer) — the gateway validates it against `z.literal('SUPPRIMER MON COMPTE')`.
-     * An already-pending request folds to `httpStatus == 409`; transport failures to `code == "NETWORK"`.
-     */
-    suspend fun deleteAccount(confirmationPhrase: String): NetworkResult<DeleteAccountResponse> =
-        apiCall { userApi.deleteAccount(DeleteAccountRequest(confirmationPhrase)) }
-
     suspend fun verifyPhoneChange(code: String): NetworkResult<VerifyPhoneChangeResponse> =
         apiCall { userApi.verifyPhoneChange(VerifyPhoneChangeRequest(code)) }
 
+    /**
+     * Les statistiques de [userId]. Les siennes passent par `users/me/stats` — jamais
+     * `users/{monId}/stats` ; un profil tiers lit les siennes dans [getPublicProfile]
+     * (`expand=stats`), cette route n'etant gardee que pour les appelants non migres.
+     */
     suspend fun getUserStats(userId: String): NetworkResult<UserStats> =
-        apiCall { userApi.getUserStats(userId) }
+        if (userId == sessionRepository.currentUserId) getMyStats() else apiCall { userApi.getUserStats(userId) }
 
     /**
      * The signed-in user's daily message-activity timeline. This is a `me`-only

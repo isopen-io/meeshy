@@ -3,50 +3,15 @@ import Combine
 
 // MARK: - Shimmer Modifier
 
+/// Tenue « squelette » du reflet de chargement. Délègue à `LoadingSheen`,
+/// l'unique reflet animé du SDK (#9869).
 public struct ShimmerModifier: ViewModifier {
-    @State private var offset: CGFloat = -200
-    @Environment(\.accessibilityReduceMotion) private var systemReduce
-    @Environment(\.meeshyForceReduceMotion) private var userForced
     private let theme = ThemeManager.shared
 
     public init() {}
 
-    private var reduceMotion: Bool {
-        MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced)
-    }
-
     public func body(content: Content) -> some View {
-        content
-            .overlay(
-                LinearGradient(
-                    colors: [
-                        Color.clear,
-                        theme.textMuted.opacity(0.3),
-                        Color.clear
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(width: 120)
-                .offset(x: offset)
-                .onAppear {
-                    // Reduce Motion (system or in-app): keep a static placeholder
-                    // instead of a perpetual sweeping highlight.
-                    guard !reduceMotion else { return }
-                    withAnimation(
-                        .linear(duration: 1.5)
-                        .repeatForever(autoreverses: false)
-                    ) {
-                        offset = 400
-                    }
-                }
-                .onDisappear {
-                    withTransaction(Transaction(animation: nil)) {
-                        offset = -200
-                    }
-                }
-            )
-            .clipped()
+        content.modifier(LoadingSheen(style: .skeleton(tint: theme.textMuted.opacity(MeeshyOpacity.medium))))
     }
 }
 
@@ -73,7 +38,7 @@ public struct SkeletonShape: View {
 
     public var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius)
-            .fill(theme.textMuted.opacity(0.12))
+            .fill(theme.textMuted.opacity(MeeshyOpacity.light))
             .frame(width: width, height: height)
             .skeletonShimmer()
             .accessibilityHidden(true)
@@ -83,25 +48,28 @@ public struct SkeletonShape: View {
 // MARK: - Skeleton Conversation Row
 
 public struct SkeletonConversationRow: View {
+    /// La fenêtre qui porte la vue (Stage Manager, Split View) — la fenêtre clé en repli.
+    @Environment(\.sceneWindowSize) var sceneWindowSize
+    private var hostWidth: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: WindowMetrics.windowSize).width }
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
 
     public init() {}
 
     public var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: MeeshySpacing.mdPlus) {
             // Avatar placeholder
             Circle()
-                .fill(theme.textMuted.opacity(0.12))
+                .fill(theme.textMuted.opacity(MeeshyOpacity.light))
                 .frame(width: 48, height: 48)
                 .skeletonShimmer()
 
             // Text lines
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
                 HStack {
                     SkeletonShape(height: 14, cornerRadius: MeeshyRadius.sm)
                         .frame(maxWidth: .infinity)
-                        .frame(width: min(WindowMetrics.windowSize.width * 0.3, 180))
+                        .frame(width: min(hostWidth * 0.3, 180))
 
                     Spacer()
 
@@ -111,16 +79,16 @@ public struct SkeletonConversationRow: View {
 
                 SkeletonShape(height: 12, cornerRadius: MeeshyRadius.sm)
                     .frame(maxWidth: .infinity)
-                    .frame(width: min(WindowMetrics.windowSize.width * 0.5, 280))
+                    .frame(width: min(hostWidth * 0.5, 280))
             }
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(theme.textMuted.opacity(0.04))
+            RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus)
+                .fill(theme.textMuted.opacity(MeeshyOpacity.faint))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(theme.textMuted.opacity(0.06), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus)
+                        .stroke(theme.textMuted.opacity(MeeshyOpacity.faint), lineWidth: 1)
                 )
         )
         .accessibilityHidden(true)
@@ -130,6 +98,9 @@ public struct SkeletonConversationRow: View {
 // MARK: - Skeleton Message Bubble
 
 public struct SkeletonMessageBubble: View {
+    /// La fenêtre qui porte la vue (Stage Manager, Split View) — la fenêtre clé en repli.
+    @Environment(\.sceneWindowSize) var sceneWindowSize
+    private var hostWidth: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: WindowMetrics.windowSize).width }
     private let index: Int
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
@@ -141,7 +112,7 @@ public struct SkeletonMessageBubble: View {
     private var isLeft: Bool { index % 2 == 0 }
 
     private var bubbleWidth: CGFloat {
-        let screenWidth = WindowMetrics.windowSize.width
+        let screenWidth = hostWidth
         let widths: [CGFloat] = [0.55, 0.72, 0.4, 0.65, 0.48, 0.78]
         let fraction = widths[index % widths.count]
         // Cap skeleton bubble width on iPad — the iPhone fractions
@@ -159,7 +130,7 @@ public struct SkeletonMessageBubble: View {
             if !isLeft { Spacer(minLength: 50) }
 
             RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                .fill(theme.textMuted.opacity(0.12))
+                .fill(theme.textMuted.opacity(MeeshyOpacity.light))
                 .frame(width: bubbleWidth, height: bubbleHeight)
                 .skeletonShimmer()
 

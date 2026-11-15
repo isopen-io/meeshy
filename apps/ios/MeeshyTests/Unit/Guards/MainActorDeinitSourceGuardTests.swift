@@ -1,0 +1,394 @@
+import XCTest
+@testable import Meeshy
+
+/// Garde de source — famille « deinit isolée iOS 26.1 » (SE-0466).
+///
+/// La cible `Meeshy` compile sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`
+/// (`apps/ios/project.yml`) : toute `class` non marquée `nonisolated` est donc
+/// implicitement `@MainActor`, et Swift 6.2 lui synthétise une **deinit
+/// isolée**. Sur le runtime **iOS 26.1**, cette deinit exécutée SANS tâche
+/// courante — un test `XCTestCase` synchrone, une vue SwiftUI démontée —
+/// double-libère le scope task-local :
+/// `malloc: *** error for object 0x…: pointer being freed was not allocated`
+/// (abrt), qui tue le processus de test entier et redémarre le runner.
+///
+/// Mesuré sur simulateur iOS 26.1 dédié (`Meeshy-Composer`,
+/// `5583E7B1-DF1C-46A6-BADF-06EA7717D3F4`) : la suite unitaire s'arrête, entre
+/// autres, sur `AudioRecorderManagerTests` (14 crashs), `AudioBubbleRouterTests`
+/// (3), `ActiveSessionsViewModelTests` (1) et `ReelFeedSoundIntentTests` (11) —
+/// chacune détruit une classe `@MainActor ObservableObject` de l'app. Le
+/// simulateur de référence partagé était resté en iOS 18.2, où cette famille
+/// n'apparaît pas : tous les gates « verts » du dépôt l'ont manquée.
+/// Précédents fixés à la main avant cette garde : `UpgradeGateController`
+/// (`872151e55e`), `MessageStore`, `ConversationListViewModel`.
+/// Réf. `reference_se0466_implicit_isolated_deinit_double_frees_on_ios18`.
+///
+/// **Le correctif préservateur de comportement** est `nonisolated deinit {}` —
+/// un corps vide n'a aucun état isolé à toucher, donc rien à faire sur le main
+/// actor, et la deinit cesse d'être isolée. Cette garde exige donc que TOUTE
+/// classe in-scope — `@MainActor` (explicite ou par défaut de cible) ET
+/// conforme à `ObservableObject` — déclare un `deinit` dans son corps (le
+/// sweep les pose toutes `nonisolated`). Un `deinit` ÉCRIT d'une classe à acteur
+/// global est déjà non isolé (SE-0371) : le binaire `check-ios-isolated-deinits.sh`
+/// fait foi, et le source se borne à rendre explicite ce qui est vrai — la seconde
+/// garde exige `nonisolated` devant tout `deinit` écrit, sauf les exceptions gelées
+/// de `pendingBareDeinits`, qui ne peuvent que rétrécir. `AudioRecorderManager`
+/// crashe ENCORE avec `nonisolated deinit` (cause AVFoundation mesurée, pas
+/// l'isolation).
+///
+/// **L'in-scope N'EST PAS restreint à `ObservableObject`** — il l'a été, et le
+/// critère a été ÉLARGI à « toute classe non `nonisolated` » (constat 4 de la
+/// revue Opus, `inScope` ci-dessous) : la cible app compile sous
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, donc une classe sans
+/// annotation ni conformité — `BubbleHeightCache`, une cellule de collection —
+/// porte la même deinit isolée. Le pendant SDK
+/// (`MeeshyUIDeinitSourceGuardTests`) applique le même critère large.
+///
+/// Le NOM de la garde principale et celui de ses méta-tests gardent leur
+/// formulation d'origine (« MainActorObservableObject ») ; ils DATENT du
+/// critère étroit et ne le décrivent plus. Lire `inScope`, jamais le nom :
+/// l'écart a coûté une enquête entière (#7685), où l'absence de conformité
+/// `ObservableObject` au site de déclaration de `MessageListCell` a été prise
+/// pour la preuve d'un faux positif du parseur.
+final class MainActorDeinitSourceGuardTests: XCTestCase {
+
+    // MARK: - Arborescence
+
+    private func meeshyRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Unit/Guards
+            .deletingLastPathComponent()   // .../Unit
+            .deletingLastPathComponent()   // .../MeeshyTests
+            .deletingLastPathComponent()   // .../apps/ios
+            .appendingPathComponent("Meeshy")
+    }
+
+    private struct ClassDecl {
+        let relativePath: String
+        let name: String
+        let isNonisolated: Bool
+        let isMainActor: Bool
+        let conformsObservableObject: Bool
+        let hasDeinit: Bool
+        let hasBareDeinit: Bool
+    }
+
+    static let pendingBareDeinits: Set<String> = []
+
+    /// Toutes les déclarations `class` de `apps/ios/Meeshy/**`, commentaires et
+    /// littéraux ET chaînes neutralisés (`DeclarationBodyScanner.mask`), avec les faits
+    /// nécessaires au verdict : isolation déclarée, conformité `ObservableObject`
+    /// (au site de déclaration), présence d'un `deinit` dans le corps équilibré.
+    private func classDecls() throws -> [ClassDecl] {
+        let root = meeshyRoot()
+        let enumerator = try XCTUnwrap(
+            FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil),
+            "impossible d'énumérer \(root.path) — apps/ios/Meeshy a-t-il bougé ?"
+        )
+        var out: [ClassDecl] = []
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            let relative = url.path.replacingOccurrences(of: root.path + "/", with: "")
+            let stripped = DeclarationBodyScanner.mask(Self.preprocessIOS(try String(contentsOf: url, encoding: .utf8)))
+            out.append(contentsOf: Self.parse(stripped, relativePath: relative))
+        }
+        return out.sorted { ($0.relativePath, $0.name) < ($1.relativePath, $1.name) }
+    }
+
+    /// Analyse SANS SourceKit : repère chaque `class Nom`, lit les modificateurs
+    /// qui la précèdent (`nonisolated`, `@MainActor`), la clause d'héritage
+    /// jusqu'à `{`, et cherche un `deinit` dans le corps équilibré. Exclut les
+    /// membres statiques `class var`/`class func`/`class let`/`class subscript`.
+    /// Garde uniquement les branches actives pour une compilation iOS et
+    /// remplace les lignes des branches inactives (macOS/watchOS/tvOS/Catalyst)
+    /// par des lignes vides. Sans ça, une classe déclarée dans DEUX branches
+    /// d'un `#if os(iOS)/#else` (ex. `P2PWebRTCClient`) déséquilibre le
+    /// comptage d'accolades et masque sa propre `deinit`, produisant un faux
+    /// positif. Condition inconnue → branche gardée (conservateur).
+    static func preprocessIOS(_ source: String) -> String {
+        func condTrue(_ raw: String) -> Bool {
+            let c = raw.trimmingCharacters(in: .whitespaces)
+            if c.contains("os(macOS)") || c.contains("os(watchOS)")
+                || c.contains("os(tvOS)") || c.contains("os(visionOS)")
+                || c.contains("targetEnvironment(macCatalyst)") { return false }
+            return true
+        }
+        var out: [String] = []
+        var stack: [(active: Bool, taken: Bool)] = []
+        for line in source.components(separatedBy: "\n") {
+            let st = line.trimmingCharacters(in: .whitespaces)
+            if st.hasPrefix("#if ") {
+                let parent = stack.allSatisfy { $0.active }
+                let c = condTrue(String(st.dropFirst(4)))
+                stack.append((parent && c, c))
+                out.append(""); continue
+            }
+            if st.hasPrefix("#elseif ") {
+                if !stack.isEmpty {
+                    let parent = stack.dropLast().allSatisfy { $0.active }
+                    let taken = stack[stack.count - 1].taken
+                    let c = condTrue(String(st.dropFirst(8)))
+                    stack[stack.count - 1] = (parent && !taken && c, taken || c)
+                }
+                out.append(""); continue
+            }
+            if st.hasPrefix("#else") {
+                if !stack.isEmpty {
+                    let parent = stack.dropLast().allSatisfy { $0.active }
+                    let taken = stack[stack.count - 1].taken
+                    stack[stack.count - 1] = (parent && !taken, true)
+                }
+                out.append(""); continue
+            }
+            if st.hasPrefix("#endif") {
+                if !stack.isEmpty { stack.removeLast() }
+                out.append(""); continue
+            }
+            out.append(stack.allSatisfy { $0.active } ? line : "")
+        }
+        return out.joined(separator: "\n")
+    }
+
+    private static func parse(_ code: String, relativePath: String) -> [ClassDecl] {
+        let chars = Array(code)
+        var out: [ClassDecl] = []
+        var i = code.startIndex
+        while let range = code.range(of: "class ", range: i..<code.endIndex) {
+            i = range.upperBound
+            // le token précédent est-il un mot qui ferait de `class` un membre ?
+            let afterKeyword = code[range.upperBound...]
+            // nom de la classe
+            guard let nameMatch = afterKeyword.range(
+                of: "^\\s*([A-Za-z_][A-Za-z0-9_]*)", options: .regularExpression) else { continue }
+            let rawName = afterKeyword[nameMatch].trimmingCharacters(in: .whitespacesAndNewlines)
+            if ["var", "func", "let", "subscript"].contains(rawName) { continue }
+            // modificateurs précédant `class` (fenêtre courte)
+            let preStart = code.index(range.lowerBound, offsetBy: -200, limitedBy: code.startIndex) ?? code.startIndex
+            let pre = String(code[preStart..<range.lowerBound])
+            // Un modificateur appartient à CETTE classe s'il n'y a aucune
+            // accolade entre lui et le mot-clé `class` (les attributs/modifieurs
+            // précèdent la déclaration sans corps intermédiaire) — le lookahead
+            // `[^{}]*$` rejette donc un `nonisolated` hérité d'un membre voisin.
+            let isNonisolated = pre.range(of: "\\bnonisolated\\b(?=[^{}]*$)", options: .regularExpression) != nil
+            let isMainActor = pre.range(of: "@MainActor\\b(?=[^{}]*$)", options: .regularExpression) != nil
+            // clause d'héritage : de la fin du nom jusqu'au `{`
+            let afterName = afterKeyword[nameMatch.upperBound...]
+            let inherit: String
+            if let brace = afterName.firstIndex(of: "{") {
+                inherit = String(afterName[..<brace])
+            } else { inherit = "" }
+            let conforms = inherit.contains("ObservableObject")
+            // corps équilibré
+            let members = Self.topLevelMembers(chars: chars,
+                                               startOffset: code.distance(from: code.startIndex, to: afterName.startIndex))
+            let hasDeinit = members.range(of: "\\bdeinit\\b", options: .regularExpression) != nil
+            let hasIsolationKeyword = members.range(of: "\\bnonisolated\\s+deinit\\b", options: .regularExpression) != nil
+            out.append(ClassDecl(relativePath: relativePath, name: rawName,
+                                 isNonisolated: isNonisolated, isMainActor: isMainActor,
+                                 conformsObservableObject: conforms, hasDeinit: hasDeinit,
+                                 hasBareDeinit: hasDeinit && !hasIsolationKeyword))
+        }
+        return out
+    }
+
+    /// Texte des membres DIRECTS du corps `{ … }` de la déclaration commençant à
+    /// `startOffset` (le contenu des accolades internes est écarté). Le corps est balayé par
+    /// équilibrage d'accolades sur le texte déjà masqué (commentaires ET
+    /// contenu des chaînes neutralisés en amont via `DeclarationBodyScanner.mask`),
+    /// et SEULS les caractères de profondeur 1 — les membres DIRECTS de la classe —
+    /// sont retenus : un `deinit` appartenant à un TYPE IMBRIQUÉ (profondeur ≥ 2)
+    /// ne blanchit donc pas la classe hôte (constat 2 de la revue Opus).
+    private static func topLevelMembers(chars: [Character], startOffset: Int) -> String {
+        guard let open = (startOffset..<chars.count).first(where: { chars[$0] == "{" }) else { return "" }
+        var depth = 0
+        var topLevel = ""
+        var idx = open
+        while idx < chars.count {
+            let c = chars[idx]
+            if c == "{" { depth += 1 }
+            if c == "}" {
+                depth -= 1
+                if depth == 0 { break }
+            }
+            if depth == 1 { topLevel.append(c) }
+            idx += 1
+        }
+        return topLevel
+    }
+
+    private func inScope(_ d: ClassDecl) -> Bool {
+        // Critère LARGE, aligné sur MeeshyUI : la cible app compile sous
+        // SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor, donc TOUTE classe non
+        // marquée `nonisolated` est @MainActor et porte une deinit isolée —
+        // pas seulement les ObservableObject (constat 4 de la revue Opus,
+        // confirmé par le re-gate complet : BubbleHeightCache, une classe
+        // @MainActor NON-OO, crashait). `isMainActor`/`conformsObservableObject`
+        // restent calculés pour le diagnostic mais ne restreignent plus le scope.
+        !d.isNonisolated
+    }
+
+    // MARK: - Garde principale
+
+    /// Toute classe in-scope déclare un `deinit` (le sweep les pose
+    /// `nonisolated deinit {}`). Sans lui, la deinit synthétisée est isolée et
+    /// tue les suites sur iOS 26.1.
+    func test_everyMainActorObservableObject_declaresADeinit() throws {
+        let decls = try classDecls()
+        XCTAssertGreaterThan(
+            decls.count, 150,
+            "le balayage de apps/ios/Meeshy/** ne trouve presque aucune classe — la garde " +
+            "passerait au vert par omission (leçon 257), pas parce que la famille est traitée."
+        )
+        let offenders = decls.filter { inScope($0) && !$0.hasDeinit }
+            .map { "\($0.relativePath): \($0.name)" }
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "Ces classes ne sont PAS marquées `nonisolated` et n'écrivent aucune `deinit` : " +
+            "sous SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor, leur deinit synthétisée est " +
+            "ISOLÉE et double-libère sur iOS 26.1 (abrt). Le critère est l'ISOLATION seule — " +
+            "ni `@MainActor` écrit, ni conformité `ObservableObject` ne sont requis pour être " +
+            "in-scope. Ajouter `nonisolated deinit {}`.\n" + offenders.joined(separator: "\n")
+        )
+    }
+
+    /// Le binaire `check-ios-isolated-deinits.sh` fait foi sur l'isolation ; cette
+    /// garde exige que le source la rende explicite : tout `deinit` écrit porte
+    /// `nonisolated`.
+    func test_everyInScopeClass_writtenDeinit_isNonisolated() throws {
+        let offenders = Set(try classDecls().filter { inScope($0) && $0.hasBareDeinit }
+            .map { "\($0.relativePath): \($0.name)" })
+            .subtracting(Self.pendingBareDeinits)
+            .sorted()
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "Ces classes écrivent un `deinit` sans `nonisolated`. Écrire `nonisolated deinit`.\n" +
+            offenders.joined(separator: "\n")
+        )
+    }
+
+    func test_pendingBareDeinits_onlyShrinks() throws {
+        let bare = Set(try classDecls().filter { inScope($0) && $0.hasBareDeinit }
+            .map { "\($0.relativePath): \($0.name)" })
+        let stale = Self.pendingBareDeinits.subtracting(bare).sorted()
+        XCTAssertTrue(
+            stale.isEmpty,
+            "Ces exceptions gelées sont corrigées ou disparues : les retirer de `pendingBareDeinits`.\n" +
+            stale.joined(separator: "\n")
+        )
+    }
+
+    // MARK: - Méta-tests du parseur (la garde se garde elle-même)
+
+    func test_parser_flagsMissingDeinit_onMainActorObservableObject() {
+        let sample = """
+        @MainActor
+        final class Foo: ObservableObject {
+            @Published var x = 0
+        }
+        """
+        let decls = Self.parse(DeclarationBodyScanner.mask(sample), relativePath: "S.swift")
+        let foo = decls.first { $0.name == "Foo" }
+        XCTAssertNotNil(foo)
+        XCTAssertTrue(foo!.isMainActor && foo!.conformsObservableObject && !foo!.hasDeinit,
+                      "une classe @MainActor ObservableObject sans deinit doit être détectée fautive")
+    }
+
+    func test_parser_acceptsWrittenDeinit() {
+        let sample = """
+        @MainActor
+        final class Bar: ObservableObject {
+            deinit { timer?.invalidate() }
+        }
+        """
+        let bar = Self.parse(DeclarationBodyScanner.mask(sample), relativePath: "S.swift").first { $0.name == "Bar" }
+        XCTAssertNotNil(bar)
+        XCTAssertTrue(bar!.hasDeinit, "une deinit écrite doit satisfaire la garde")
+    }
+
+    func test_parser_acceptsNonisolatedType() {
+        let sample = """
+        nonisolated final class Baz: ObservableObject {
+            @Published var y = 0
+        }
+        """
+        let baz = Self.parse(DeclarationBodyScanner.mask(sample), relativePath: "S.swift").first { $0.name == "Baz" }
+        XCTAssertNotNil(baz)
+        XCTAssertTrue(baz!.isNonisolated, "une classe nonisolated est hors scope — pas de deinit isolée")
+    }
+
+    /// La forme qui a produit #7685 : une sous-classe UIKit SANS `@MainActor`
+    /// écrit et SANS `ObservableObject`. Aucun méta-test ne faisait VARIER ces
+    /// deux dimensions — tous leurs échantillons portaient les deux — si bien
+    /// que `inScope` n'était couvert par rien et que le nom de la garde a pu
+    /// passer pour son critère. Un `inScope` re-restreint à
+    /// `isMainActor && conformsObservableObject` rougirait ICI, et nulle part
+    /// ailleurs tant que l'arbre reste propre.
+    func test_inScope_coversPlainClass_withNeitherMainActorNorObservableObject() {
+        let sample = """
+        class Cell: UICollectionViewCell {
+            override var safeAreaInsets: UIEdgeInsets { .zero }
+        }
+        """
+        let cell = Self.parse(DeclarationBodyScanner.mask(sample), relativePath: "S.swift").first { $0.name == "Cell" }
+        XCTAssertNotNil(cell)
+        XCTAssertFalse(cell!.isMainActor, "aucun @MainActor écrit — l'isolation vient de la cible")
+        XCTAssertFalse(cell!.conformsObservableObject, "aucune conformité ObservableObject au site de déclaration")
+        XCTAssertFalse(cell!.hasDeinit)
+        XCTAssertTrue(inScope(cell!),
+                      "le critère est l'ISOLATION (classe non `nonisolated`), pas @MainActor + ObservableObject")
+    }
+
+    func test_parser_ignoresClassMemberDeclarations() {
+        let sample = """
+        @MainActor
+        final class Widget: ObservableObject {
+            override class var layerClass: AnyClass { CALayer.self }
+            deinit {}
+        }
+        """
+        let names = Self.parse(DeclarationBodyScanner.mask(sample), relativePath: "S.swift").map(\.name)
+        XCTAssertEqual(names, ["Widget"], "`class var` ne doit pas être pris pour une déclaration de classe")
+    }
+
+    private func parseSample(_ sample: String, named name: String) -> ClassDecl? {
+        Self.parse(DeclarationBodyScanner.mask(sample), relativePath: "S.swift").first { $0.name == name }
+    }
+
+    func test_parser_flagsBareWrittenDeinit() {
+        let bar = parseSample("""
+        @MainActor final class Bar: ObservableObject { deinit { t?.cancel() } }
+        """, named: "Bar")
+        XCTAssertEqual(bar?.hasDeinit, true)
+        XCTAssertEqual(bar?.hasBareDeinit, true)
+    }
+
+    func test_parser_acceptsNonisolatedWrittenDeinit() {
+        let same = parseSample("""
+        @MainActor final class Bar: ObservableObject { nonisolated deinit {} }
+        """, named: "Bar")
+        let split = parseSample("""
+        @MainActor final class Baz: ObservableObject {
+            nonisolated
+            deinit {}
+        }
+        """, named: "Baz")
+        XCTAssertEqual(same?.hasBareDeinit, false)
+        XCTAssertEqual(split?.hasBareDeinit, false)
+    }
+
+    func test_parser_ignoresNestedTypeBareDeinit() {
+        let host = parseSample("""
+        final class Host {
+            nonisolated deinit {}
+            final class Inner { deinit {} }
+        }
+        """, named: "Host")
+        XCTAssertEqual(host?.hasBareDeinit, false)
+    }
+
+    func test_parser_ignoresBareDeinitInsideStringLiteral() {
+        let host = parseSample("""
+        final class Q { let s = "deinit { }"; nonisolated deinit {} }
+        """, named: "Q")
+        XCTAssertEqual(host?.hasBareDeinit, false)
+    }
+}

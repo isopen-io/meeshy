@@ -13,6 +13,8 @@ public enum StoryStaticSnapshot {
     /// - Parameters:
     ///   - loadedImages: already-decoded bitmaps keyed by media object id (background
     ///     AND foreground) — the same dictionary shape as `StoryComposerViewModel.loadedImages`.
+    ///     Un sticker IMAGE y range son bitmap sous son propre id (ou sous son
+    ///     `postMediaId` une fois publié) — voir `StoryStickerLayer.bitmapCacheKeys`.
     ///   - bgImage: legacy flat background (no `mediaObjects` entry yet), the same value
     ///     `StorySlideRenderer.renderComposite`'s `bgImage:` parameter accepted.
     ///
@@ -30,11 +32,7 @@ public enum StoryStaticSnapshot {
                               bgImage: UIImage? = nil,
                               size: CGSize) -> UIImage? {
         let geometry = CanvasGeometry(renderSize: size)
-        let layer = StoryRenderer.render(slide: slide,
-                                         into: geometry,
-                                         at: .zero,
-                                         mode: .edit,
-                                         contentsScale: 1.0)
+        let layer = foregroundLayer(slide: slide, loadedImages: loadedImages, geometry: geometry)
         let renderer = UIGraphicsImageRenderer(size: size)
         return renderer.image { ctx in
             let cg = ctx.cgContext
@@ -42,7 +40,81 @@ public enum StoryStaticSnapshot {
             paintBackground(slide: slide, loadedImages: loadedImages, bgImage: bgImage,
                             in: rect, ctx: cg)
             layer.render(in: cg)
+            // Les puces des sons de premier plan (#8610) : une surcouche
+            // SwiftUI à l'écran, que `render(in:)` ne voit pas. Toutes, comme
+            // le composer les montre — la couverture n'a pas d'horloge.
+            StoryAudioChipPainter().paint(slide: slide, into: geometry, at: .zero,
+                                          in: cg, respectingWindow: false)
         }
+    }
+
+    /// **Les seuls objets de la slide, sur fond transparent** (#12591) : le même pipeline que
+    /// `render` — `StoryRenderer` + `render(in:)`, échelle de contenu 1 — sans fond ni puces
+    /// audio. C'est ce que la retouche de la caméra pose AU-DESSUS d'un média qu'elle peint
+    /// elle-même. `size` est en PIXELS : l'image rendue a exactement cette taille.
+    public static func foreground(slide: StorySlide, size: CGSize) -> CGImage? {
+        guard size.width >= 1, size.height >= 1 else { return nil }
+        // Sans puce : même une pastille enfouie, que l'arbre peint à son rang
+        // depuis le #13901, reste hors de ce calque d'objets.
+        var objets = slide
+        objets.effects.audioPlayerObjects = nil
+        let layer = foregroundLayer(slide: objets, loadedImages: [:], geometry: CanvasGeometry(renderSize: size))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: size, format: format).image { ctx in
+            layer.render(in: ctx.cgContext)
+        }.cgImage
+    }
+
+    /// **Les vitres des textes à fond Verre** (#12602) : pour chacun, la découpe exacte de son
+    /// fond (blanc opaque sur transparent, même pipeline que `foreground`), la boîte qui l'englobe
+    /// et le flou demandé, en pixels de `size`. Un peintre qui pose `foreground` sur un média
+    /// floute ce média sous chaque vitre : `render(in:)` ne voit pas le flou d'une couche.
+    public static func glassPanes(slide: StorySlide, size: CGSize) -> [StoryGlassPane] {
+        guard size.width >= 1, size.height >= 1 else { return [] }
+        let geometry = CanvasGeometry(renderSize: size)
+        return slide.effects.textObjects.compactMap { texte in
+            guard case .glass(let radius) = texte.resolvedBackgroundStyle else { return nil }
+            return glassPane(of: texte, sigma: geometry.render(CGFloat(radius)), geometry: geometry)
+        }
+    }
+
+    /// La vitre d'UN texte : la slide réduite à lui, son calque réduit à son fond.
+    private static func glassPane(of texte: StoryTextObject, sigma: CGFloat, geometry: CanvasGeometry) -> StoryGlassPane? {
+        let seul = StorySlide(effects: StoryEffects(textObjects: [texte]))
+        let racine = foregroundLayer(slide: seul, loadedImages: [:], geometry: geometry)
+        guard let calque = textLayers(in: racine).first(where: { $0.textObject?.id == texte.id }),
+              calque.isolateGlassPane() else { return nil }
+        let boite = calque.convert(calque.bounds, to: racine).intersection(racine.bounds)
+        guard !boite.isNull, !boite.isEmpty else { return nil }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        let masque = UIGraphicsImageRenderer(size: geometry.renderSize, format: format).image { ctx in
+            racine.render(in: ctx.cgContext)
+        }.cgImage
+        return masque.map { StoryGlassPane(mask: $0, bounds: boite, sigma: sigma) }
+    }
+
+    private static func textLayers(in layer: CALayer) -> [StoryTextLayer] {
+        let enfants = (layer.sublayers ?? []).flatMap { textLayers(in: $0) }
+        guard let texte = layer as? StoryTextLayer else { return enfants }
+        return [texte] + enfants
+    }
+
+    /// Le rendu est UN COUP : un bitmap qu'une tâche poserait une frame plus tard n'atteindrait
+    /// jamais l'image. `ComposerImageCacheReader` est le seul lecteur que les couches lisent de
+    /// façon SYNCHRONE — c'est par lui que le bitmap d'un sticker collé et celui d'un média de
+    /// premier plan entrent dans la cover.
+    private static func foregroundLayer(slide: StorySlide, loadedImages: [String: UIImage],
+                                        geometry: CanvasGeometry) -> CALayer {
+        StoryRenderer.render(slide: slide,
+                             into: geometry,
+                             at: .zero,
+                             mode: .edit,
+                             imageCache: ComposerImageCacheReader(images: loadedImages, version: 0),
+                             contentsScale: 1.0)
     }
 
     private static func paintBackground(slide: StorySlide,
@@ -52,10 +124,10 @@ public enum StoryStaticSnapshot {
                                         ctx: CGContext) {
         switch StoryBackgroundValue.parse(slide.effects.background ?? "1E1B4B") {
         case .hex(let hex):
-            Self.parseHexColor(hex).setFill()
+            (HexColor(hex: hex)?.uiColor ?? .black).setFill()
             ctx.fill(rect)
         case .gradient(let a, let b):
-            let colors = [Self.parseHexColor(a).cgColor, Self.parseHexColor(b).cgColor]
+            let colors = [(HexColor(hex: a)?.uiColor ?? .black).cgColor, (HexColor(hex: b)?.uiColor ?? .black).cgColor]
             if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
                                          colors: colors as CFArray, locations: [0, 1]) {
                 ctx.drawLinearGradient(gradient, start: rect.origin,
@@ -77,17 +149,6 @@ public enum StoryStaticSnapshot {
         }
     }
 
-    /// `UIColor(hex:)` is `private` to `StorySlideRenderer.swift` — not visible here.
-    private static func parseHexColor(_ hex: String) -> UIColor {
-        let sanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "#", with: "")
-        guard sanitized.count == 6, let rgb = UInt64(sanitized, radix: 16) else { return .black }
-        return UIColor(red: CGFloat((rgb >> 16) & 0xFF) / 255.0,
-                       green: CGFloat((rgb >> 8) & 0xFF) / 255.0,
-                       blue: CGFloat(rgb & 0xFF) / 255.0,
-                       alpha: 1.0)
-    }
-
     private static func drawAspectFill(_ image: UIImage, in rect: CGRect, ctx: CGContext) {
         let imageSize = image.size
         guard imageSize.width > 0, imageSize.height > 0 else { return }
@@ -98,5 +159,20 @@ public enum StoryStaticSnapshot {
         ctx.clip(to: rect)
         image.draw(in: CGRect(origin: origin, size: scaledSize))
         ctx.restoreGState()
+    }
+}
+
+/// **Une vitre** (#12602) : là où un texte à fond Verre floute ce qu'il y a dessous.
+/// `mask` : la découpe (alpha), à la taille demandée ; `bounds` : sa boîte englobante, en
+/// pixels, origine en HAUT à gauche ; `sigma` : le flou, en pixels de la même taille.
+public nonisolated struct StoryGlassPane: Sendable {
+    public let mask: CGImage
+    public let bounds: CGRect
+    public let sigma: CGFloat
+
+    public init(mask: CGImage, bounds: CGRect, sigma: CGFloat) {
+        self.mask = mask
+        self.bounds = bounds
+        self.sigma = sigma
     }
 }

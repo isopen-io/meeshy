@@ -195,6 +195,10 @@ restart_services() {
         set -e
         cd /opt/meeshy
         
+        echo "🧹 Purge non interactive des images obsolètes (#6556)..."
+        docker image prune -f || true
+        docker image prune -af --filter "until=168h" || true
+
         echo "🔄 Pull des dernières images..."
         docker-compose pull frontend static-files 2>/dev/null || true
         

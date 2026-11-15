@@ -46,19 +46,21 @@ final class PostServiceHashtagTests: XCTestCase {
     }
 
     func test_getTrendingHashtags_decodesArray() async throws {
-        mock.stub("/hashtags/trending?limit=10", result: [APIHashtag(tag: "paris", usageCount: 42)])
+        mock.stub("/hashtags/trending", result: [APIHashtag(tag: "paris", usageCount: 42)])
 
         let result = try await service.getTrendingHashtags(limit: 10)
 
         XCTAssertEqual(result, [APIHashtag(tag: "paris", usageCount: 42)])
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/hashtags/trending?limit=10")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/hashtags/trending")
+        XCTAssertEqual(mock.lastRequest?.queryItems, [URLQueryItem(name: "limit", value: "10")])
     }
 
     func test_getTrendingHashtags_defaultsLimitTo20() async throws {
-        mock.stub("/hashtags/trending?limit=20", result: [APIHashtag]())
+        mock.stub("/hashtags/trending", result: [APIHashtag]())
 
         _ = try await service.getTrendingHashtags()
 
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/hashtags/trending?limit=20")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/hashtags/trending")
+        XCTAssertEqual(mock.lastRequest?.queryItems, [URLQueryItem(name: "limit", value: "20")])
     }
 }

@@ -121,4 +121,108 @@ extension FocalMediaGridLayoutTests {
         let expected = attachment.videoHeight(forWidth: FocalMediaGridLayout.gridMaxWidth, maxRatio: FocalMediaGridLayout.soloVideoMaxHeightRatio).rounded()
         XCTAssertEqual(FocalMediaGridLayout.soloVideoSlot(aspectRatio: attachment.videoAspectRatio).height, expected)
     }
+
+    // MARK: - La grille tient dans la colonne de contenu (#7881)
+
+    /// iPhone 16 Pro : 402 − 2 × 12 de section = 378 pour la rangée ;
+    /// − 2 × 16 de marge − 29 de colonne du nom (le média part de la colonne
+    /// du nom, #7995) − 62 de colonne d'heure − 6 d'espacement = 249.
+    func test_gridWidth_onAnIPhone16ProRow_fitsTheContentColumn() {
+        XCTAssertEqual(FocalMediaGridLayout.gridWidth(rowWidth: 378), 249)
+    }
+
+    /// 300 + 2 × 16 + 29 + 62 + 6 = 429 : la première rangée où le gabarit tient.
+    func test_gridWidth_onAWideRow_keepsTheNominalWidth() {
+        XCTAssertEqual(FocalMediaGridLayout.gridWidth(rowWidth: 429), gridMaxWidth)
+        XCTAssertEqual(FocalMediaGridLayout.gridWidth(rowWidth: 428), gridMaxWidth - 1)
+    }
+
+    func test_gridWidth_withoutAKnownRowWidth_keepsTheNominalWidth() {
+        XCTAssertEqual(FocalMediaGridLayout.gridWidth(rowWidth: nil), gridMaxWidth)
+        XCTAssertEqual(FocalMediaGridLayout.gridWidth(rowWidth: 0), gridMaxWidth)
+    }
+
+    func test_slots_followTheGivenWidth() {
+        let width: CGFloat = 278
+        XCTAssertEqual(FocalMediaGridLayout.slots(for: 1, maxWidth: width), [FocalMediaSlot(width: width, height: 240)])
+        let half = (width - gridSpacing) / 2
+        XCTAssertEqual(FocalMediaGridLayout.slots(for: 2, maxWidth: width).map(\.width), [half, half])
+        XCTAssertLessThanOrEqual(FocalMediaGridLayout.soloVideoSlot(aspectRatio: 16.0 / 9.0, maxWidth: width).width, width)
+    }
+}
+
+// MARK: - Une image seule s'affiche entière, à ses proportions (#18678)
+
+/// Retour porteur : la miniature d'une image seule était recadrée dans un
+/// 300 × 240 fixe. Sa case suit désormais le ratio réel, bornée en largeur et
+/// en hauteur ; l'image s'y pose en `.fit`, donc jamais coupée.
+extension FocalMediaGridLayoutTests {
+
+    func test_soloImageFrame_portrait9by16_isBoundedByTheHeightAndKeepsTheRatio() {
+        let size = BubbleSoloImageFrame.size(width: 1080, height: 1920, maxWidth: 300)
+        XCTAssertEqual(size, CGSize(width: 270, height: 480))
+    }
+
+    func test_soloImageFrame_landscape16by9_keepsTheFullWidth() {
+        let size = BubbleSoloImageFrame.size(width: 1920, height: 1080, maxWidth: 300)
+        XCTAssertEqual(size, CGSize(width: 300, height: 169))
+    }
+
+    func test_soloImageFrame_square_isASquareOfTheGridWidth() {
+        XCTAssertEqual(BubbleSoloImageFrame.size(width: 1000, height: 1000, maxWidth: 300),
+                       CGSize(width: 300, height: 300))
+        XCTAssertEqual(BubbleSoloImageFrame.size(width: 1000, height: 1000, maxWidth: 249),
+                       CGSize(width: 249, height: 249))
+    }
+
+    /// Un panorama 8:1 ne tombe pas sous la hauteur minimale : la case garde
+    /// un plancher, l'image y est posée entière (bandes, jamais de coupe).
+    func test_soloImageFrame_extremePanorama_keepsAMinimumHeight() {
+        let size = BubbleSoloImageFrame.size(width: 4000, height: 500, maxWidth: 300)
+        XCTAssertEqual(size, CGSize(width: 300, height: BubbleSoloImageFrame.minSide))
+    }
+
+    func test_soloImageFrame_extremeTallImage_keepsAMinimumWidth() {
+        let size = BubbleSoloImageFrame.size(width: 100, height: 2000, maxWidth: 300)
+        XCTAssertEqual(size, CGSize(width: BubbleSoloImageFrame.minSide, height: 480))
+    }
+
+    func test_soloImageFrame_withoutDimensions_fallsBackToTheHistoricFrame() {
+        let fallback = CGSize(width: 300, height: BubbleSoloImageFrame.fallbackHeight)
+        XCTAssertEqual(BubbleSoloImageFrame.size(width: nil, height: nil, maxWidth: 300), fallback)
+        XCTAssertEqual(BubbleSoloImageFrame.size(width: 0, height: 1080, maxWidth: 300), fallback)
+        XCTAssertEqual(BubbleSoloImageFrame.size(width: 1920, height: -1, maxWidth: 300), fallback)
+    }
+
+    /// Même plafond de hauteur que la vidéo seule : une image et une vidéo
+    /// portrait de même format occupent la même case.
+    func test_soloImageFrame_sharesTheSoloVideoHeightCap() {
+        XCTAssertEqual(BubbleSoloImageFrame.maxHeightRatio, FocalMediaGridLayout.soloVideoMaxHeightRatio)
+    }
+
+    func test_focalSoloImageSlot_followsTheBubbleLaw() {
+        let slot = FocalMediaGridLayout.soloImageSlot(width: 1080, height: 1920, maxWidth: 249)
+        let expected = BubbleSoloImageFrame.size(width: 1080, height: 1920, maxWidth: 249)
+        XCTAssertEqual(slot, FocalMediaSlot(width: expected.width, height: expected.height))
+    }
+
+    /// La bulle et le Fil posent la case seule par cette loi et l'image en
+    /// `.fit` ; la grille à 2, 3 et 4+ pièces reste en remplissage.
+    func test_bothSurfaces_drawTheSoloImageWholeAndKeepTheGridFilled() throws {
+        let iosRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let bubble = AppSourceGuard.stripComments(try String(
+            contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift"),
+            encoding: .utf8))
+        let focal = AppSourceGuard.stripComments(try String(
+            contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Focal/Row/FocalAttachmentBlock.swift"),
+            encoding: .utf8))
+        XCTAssertTrue(bubble.contains("BubbleSoloImageFrame.size("), "la bulle doit dimensionner l'image seule par la loi")
+        XCTAssertFalse(bubble.contains("solo: true)\n                    .frame(width: gridMaxWidth, height: 240)"),
+                       "l'image seule ne se recadre plus dans un 300 × 240 fixe")
+        XCTAssertTrue(focal.contains("FocalMediaGridLayout.soloImageSlot("), "le Fil doit dimensionner l'image seule par la loi")
+        XCTAssertTrue(bubble.contains("solo ? .fit : .fill"), "la case seule de la bulle pose l'image entière")
+        XCTAssertTrue(focal.contains(".fit : .fill"), "la case seule du Fil pose l'image entière")
+    }
 }

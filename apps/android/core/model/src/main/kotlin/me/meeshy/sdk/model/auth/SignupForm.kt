@@ -1,0 +1,344 @@
+package me.meeshy.sdk.model.auth
+
+import me.meeshy.sdk.model.RegisterRequest
+
+/** Un champ de l'écran d'inscription — l'adresse sous laquelle un refus se pose. */
+public enum class SignupField { DISPLAY_NAME, EMAIL, PHONE, PASSWORD }
+
+/**
+ * Un refus que le CLIENT prononce seul, sans demander la passerelle.
+ *
+ * Volontairement court : l'inscription n'appelle plus rien avant l'envoi (ni
+ * debounce, ni sonde de disponibilité), donc tout ce qui demande le serveur —
+ * adresse déjà prise, numéro déjà rattaché, nom déjà pris — arrive en réponse à
+ * la soumission et vit dans [SignupRefusal], pas ici.
+ */
+public enum class SignupFieldIssue {
+    /** Vide, ou sans une seule lettre — le miroir de `(?=.*\p{L})`. */
+    DISPLAY_NAME_REQUIRED,
+
+    /** Une saisie de moins de [RegistrationIdentity.NAME_MIN] caractères rognés : « A » n'est pas un nom, « Al » en est un. */
+    DISPLAY_NAME_TOO_SHORT,
+    DISPLAY_NAME_TOO_LONG,
+
+    /** Un caractère hors du jeu de la passerelle : lettres, marques, espaces, apostrophes, point, tiret. */
+    DISPLAY_NAME_INVALID_CHARACTERS,
+    EMAIL_INVALID,
+    PASSWORD_TOO_SHORT,
+
+    /** Un numéro SAISI de moins de [PhonePlausibility.MIN_DIGITS] chiffres. */
+    PHONE_TOO_SHORT,
+
+    /** Cinq chiffres identiques d'affilée ou répétition intégrale d'un motif court : un remplissage. */
+    PHONE_IMPLAUSIBLE,
+}
+
+/** Le verdict local, un champ à la fois — rendu par [SignupForm.validate]. */
+public data class SignupValidation(
+    val displayName: SignupFieldIssue? = null,
+    val email: SignupFieldIssue? = null,
+    val password: SignupFieldIssue? = null,
+    val phone: SignupFieldIssue? = null,
+) {
+    public val isValid: Boolean
+        get() = displayName == null && email == null && password == null && phone == null
+
+    /**
+     * Le refus local porté par [field]. [SignupField.PHONE] n'en porte un que pour un numéro
+     * SAISI mais implausible : un champ vide part simplement absent de la charge, il ne peut
+     * donc pas bloquer l'envoi.
+     */
+    public fun issueFor(field: SignupField): SignupFieldIssue? = when (field) {
+        SignupField.DISPLAY_NAME -> displayName
+        SignupField.EMAIL -> email
+        SignupField.PASSWORD -> password
+        SignupField.PHONE -> phone
+    }
+}
+
+/**
+ * Le cœur pur de l'inscription en UN écran : l'état immuable de la saisie, son
+ * verdict local, et la charge qu'elle envoie.
+ *
+ * Il remplace les huit `RegistrationFields` du wizard et leurs cinq cœurs de
+ * navigation. Ce qui disparaît avec eux n'est pas seulement du code : c'est
+ * l'attente. Il n'y a plus de sonde de disponibilité, donc plus de bouton qui
+ * reste gris une seconde après la dernière frappe, plus de verdict serveur à
+ * franchir pour atteindre le champ suivant, et plus de refus découvert trois
+ * écrans après le champ fautif — chaque refus se pose sous SON champ, à
+ * l'envoi.
+ *
+ * Toute la normalisation est déléguée à [SignupFieldValidation] (le SSOT déjà
+ * livré, partagé avec la récupération de compte et les réglages) et toute
+ * l'inférence de région/langue à [SignupRegionInference] : ce type n'en
+ * réimplémente aucune règle.
+ *
+ * @param displayName le nom affiché — la seule identité saisie.
+ * @param dialCountryIso ISO 3166-1 alpha-2 du pays de l'indicatif choisi.
+ * @param phoneDigits les chiffres nationaux, sans indicatif.
+ * @param systemLanguage la langue de lecture (Prisme, rang 1).
+ * @param regionalLanguage la langue de lecture secondaire (Prisme, rang 2) —
+ *   déduite de la région, jamais montrée à la saisie.
+ */
+public data class SignupForm(
+    val displayName: String = "",
+    val email: String = "",
+    val dialCountryIso: String = CountryCatalog.priority.first(),
+    val phoneDigits: String = "",
+    val password: String = "",
+    val systemLanguage: String = SignupRegionInference.DEFAULT_LANGUAGE,
+    val regionalLanguage: String = SignupRegionInference.SECONDARY_LANGUAGE,
+    /**
+     * Le pseudo TAPÉ (inscription par phases). `null` = jamais touché : il SUIT l'adresse en
+     * direct. Une chaîne = la saisie, qui gagne ; vidée, la dérivation repart — et l'écran la montre
+     * en filigrane (iOS `SignupForm.username`, #15322).
+     */
+    val username: String? = null,
+) {
+
+    /** L'indicatif E.164 du pays choisi (`"+33"`), ou `""` s'il est inconnu. */
+    public val dialCode: String get() = CountryCatalog.dialCode(dialCountryIso).orEmpty()
+
+    /** Les seuls chiffres de [phoneDigits] — la valeur qui part sur le fil. */
+    public val normalizedPhoneDigits: String get() = SignupFieldValidation.phoneDigits(phoneDigits)
+
+    /** Un numéro a été saisi — donc il voyage. Vide ⇒ absent de la charge. */
+    public val hasPhone: Boolean get() = normalizedPhoneDigits.isNotEmpty()
+
+    // ---- inscription par phases : identité dérivée, numéro requis, mot de passe facultatif ----
+
+    /** Le pseudo tiré de l'adresse — le filigrane d'un champ vide ; `""` si la dérivation retombe sur le recours. */
+    public val derivedUsername: String
+        get() {
+            val derived = RegistrationIdentity.pseudoRacine(displayName = null, email = email)
+            return if (derived == RegistrationIdentity.PSEUDO_DE_SECOURS) "" else derived
+        }
+
+    /** Le nom affiché tiré de l'adresse — le filigrane d'un champ vide. */
+    public val derivedDisplayName: String
+        get() = RegistrationIdentity.displayNameDepuisEmail(email)
+
+    /**
+     * Le pseudo MONTRÉ (saisie, ou filigrane quand elle est blanche), JUGÉ et qui PARTIRA :
+     * l'unique fonction des trois (iOS `effectiveUsername`).
+     */
+    public val effectiveUsername: String
+        get() = username.orEmpty().trim().ifEmpty { derivedUsername }
+
+    /** Le nom affiché MONTRÉ (saisie, ou filigrane quand elle est blanche), JUGÉ et qui PARTIRA (iOS `effectiveDisplayName`). */
+    public val effectiveDisplayName: String
+        get() = displayName.trim().ifEmpty { derivedDisplayName }
+
+    /** Le refus EN DIRECT du pseudo qui partira (`null` s'il est recevable ou absent). */
+    public val usernameRefusal: RegistrationIdentity.UsernameRefusal?
+        get() = effectiveUsername.takeIf { it.isNotEmpty() }?.let(RegistrationIdentity::usernameRefusal)
+
+    /** Nom affiché ET pseudo existent et tiennent leurs bornes : c'est alors que paraît le mot de passe. */
+    public val isIdentityDefined: Boolean
+        get() = SignupFieldValidation.isEmailValidLocally(email.trim()) &&
+            effectiveDisplayName.let {
+                RegistrationIdentity.isNameLongEnough(it) && it.length <= DISPLAY_NAME_MAX_LENGTH && it.any(Char::isLetter)
+            } &&
+            effectiveUsername.isNotEmpty() && usernameRefusal == null
+
+    /** Le numéro est REQUIS par l'écran (#9343) alors que la requête reste valide sans lui côté serveur. */
+    public val phoneRefusal: SignupPhoneRefusal? get() = SignupPhoneRefusal.of(phoneDigits)
+
+    public val isPhoneValid: Boolean get() = phoneRefusal == null
+
+    /** Le mot de passe est facultatif : vide est valide, fourni il atteint [PASSWORD_MIN_LENGTH]. */
+    public val isPasswordOptionalValid: Boolean get() = password.isEmpty() || password.length >= PASSWORD_MIN_LENGTH
+
+    public val hasPassword: Boolean get() = password.isNotEmpty()
+
+    /** Le bouton de l'inscription par phases : adresse valide, numéro plausible, pseudo recevable, mot de passe éventuel tenu. */
+    public val canSubmitPhased: Boolean
+        get() = isIdentityDefined && isPhoneValid && isPasswordOptionalValid
+
+    /**
+     * La charge de l'inscription par phases : nom et pseudo montrés sont ceux envoyés ; sans mot
+     * de passe la clé est ABSENTE ; le code de parrainage (jamais seul avec sa clé de visite)
+     * voyage tel que mémorisé par `PendingReferralStore`.
+     */
+    public fun toPhasedRegisterRequest(referralCode: String? = null, referralSessionKey: String? = null): RegisterRequest {
+        val base = toRegisterRequest()
+        return base.copy(
+            displayName = effectiveDisplayName.ifEmpty { null },
+            username = effectiveUsername.ifEmpty { null },
+            password = password.takeIf { it.isNotEmpty() },
+        ).referred(referralCode, referralSessionKey)
+    }
+
+    /**
+     * Applique une saisie de téléphone, d'où qu'elle vienne — frappe, collage ou
+     * remplissage automatique.
+     *
+     * Un numéro INTERNATIONAL (`+33…`, `0033…`) porte déjà son pays : le garder
+     * tel quel dans le champ national le ferait partir avec l'indicatif EN
+     * DOUBLE (`+33` + `33612…`). On en déduit donc le pays ([CountryCatalog.isoForPhoneNumber],
+     * qui élit le plus long indicatif correspondant) et on ne garde que les
+     * chiffres nationaux. C'est la complexité payée dans le CODE pour que le
+     * collage d'un numéro complet — le geste le plus naturel — fonctionne sans
+     * que l'utilisateur ait rien à comprendre.
+     *
+     * Tout le reste ne garde que ses chiffres et laisse le pays choisi
+     * intact : un numéro national ne dit rien de son pays.
+     */
+    public fun withPhoneEntry(raw: String): SignupForm {
+        val trimmed = raw.trim()
+        val international = when {
+            trimmed.startsWith("+") -> trimmed
+            trimmed.startsWith("00") -> "+" + trimmed.substring(2)
+            else -> null
+        }
+        val iso = international?.let { CountryCatalog.isoForPhoneNumber(it) }
+            ?: return copy(phoneDigits = SignupFieldValidation.phoneDigits(raw))
+        val dialDigits = SignupFieldValidation.phoneDigits(CountryCatalog.dialCode(iso).orEmpty())
+        val national = SignupFieldValidation.phoneDigits(international).removePrefix(dialDigits)
+        return copy(dialCountryIso = iso, phoneDigits = national)
+    }
+
+    /**
+     * Le verdict local COMPLET — celui qui commande le bouton. Un champ vide y
+     * porte déjà son refus : c'est ce qui garde « Créer mon compte » inactif
+     * tant que le nom, l'e-mail et le mot de passe ne sont pas valides.
+     */
+    public fun validate(): SignupValidation = SignupValidation(
+        displayName = displayNameIssue(),
+        email = if (SignupFieldValidation.isEmailValidLocally(email.trim())) null else SignupFieldIssue.EMAIL_INVALID,
+        password = if (password.length >= PASSWORD_MIN_LENGTH) null else SignupFieldIssue.PASSWORD_TOO_SHORT,
+        phone = phoneIssue(),
+    )
+
+    /** Le numéro est facultatif : vide ne se refuse jamais, saisi il doit être plausible. */
+    private fun phoneIssue(): SignupFieldIssue? = when (PhonePlausibility.refusal(phoneDigits)) {
+        null -> null
+        PhonePlausibility.Refusal.TOO_SHORT -> SignupFieldIssue.PHONE_TOO_SHORT
+        PhonePlausibility.Refusal.IDENTICAL_RUN,
+        PhonePlausibility.Refusal.REPEATED_PATTERN,
+        -> SignupFieldIssue.PHONE_IMPLAUSIBLE
+    }
+
+    /** Le bouton est actif dès que nom, e-mail et mot de passe sont valides. */
+    public val canSubmit: Boolean get() = validate().isValid
+
+    /**
+     * Le sous-ensemble de [validate] qu'on AFFICHE : un champ encore vide n'est
+     * pas une faute, c'est un champ qu'on n'a pas rempli. Le bouton inactif le
+     * dit déjà, et écrire « obligatoire » sous quatre champs vierges à
+     * l'ouverture accueille l'utilisateur par quatre reproches.
+     *
+     * « Vide » au sens de la SAISIE, pas du contenu : des espaces sont quelque
+     * chose que l'utilisateur a tapé, et le refus qu'ils valent doit se voir.
+     */
+    public fun visibleValidation(): SignupValidation {
+        val all = validate()
+        return SignupValidation(
+            displayName = all.displayName?.takeIf { displayName.isNotEmpty() },
+            email = all.email?.takeIf { email.isNotEmpty() },
+            password = all.password?.takeIf { password.isNotEmpty() },
+            phone = all.phone,
+        )
+    }
+
+    /**
+     * La charge exacte de `POST /auth/register` :
+     * `{ displayName, email, password, systemLanguage, regionalLanguage?,
+     * phoneNumber?, phoneCountryCode? }`.
+     *
+     * Le téléphone est OMIS quand aucun chiffre n'a été saisi — les deux champs
+     * partent ensemble ou pas du tout, jamais un numéro sans son pays. La langue
+     * régionale est omise quand elle est vide OU égale à la principale : servir
+     * deux fois le même rang au Prisme ne lui apprend rien.
+     *
+     * Les chiffres partent TELS QUE TAPÉS, avec leur pays — jamais préfixés de
+     * l'indicatif. Un « 06 12 34 56 78 » français composé en `+33` +
+     * `0612345678` porte un préfixe national que l'E.164 ne connaît pas, et le
+     * retirer soi-même se trompe dès l'Italie, dont les fixes GARDENT leur zéro.
+     * La passerelle normalise avec `phoneCountryCode` (libphonenumber,
+     * `normalizePhoneWithCountry`) : c'est son site unique, et c'est exactement
+     * ce que le web v3 lui remet — le champ tel quel et l'ISO du sélecteur.
+     */
+    public fun toRegisterRequest(): RegisterRequest {
+        val digits = normalizedPhoneDigits
+        val system = systemLanguage.trim().ifBlank { SignupRegionInference.DEFAULT_LANGUAGE }
+        val regional = regionalLanguage.trim().takeIf { it.isNotEmpty() && it != system }
+        return RegisterRequest(
+            displayName = displayName.trim(),
+            email = SignupFieldValidation.normalizedEmail(email),
+            password = password,
+            systemLanguage = system,
+            regionalLanguage = regional,
+            phoneNumber = if (digits.isEmpty()) null else digits,
+            phoneCountryCode = if (digits.isEmpty()) null else dialCountryIso,
+        )
+    }
+
+    /**
+     * Miroir de `personNamePatternSource`
+     * (`^(?=.*\p{L})[\p{L}\p{M}\s'’ʼ.-]+$`, packages/shared/types/api-schemas/auth.ts) : au moins
+     * une lettre, et rien d'autre que lettres, marques, espaces, apostrophes, point et tiret.
+     * La passerelle dérive `firstName` / `lastName` du nom affiché et applique ce motif ; le dire
+     * ici avant l'envoi évite d'avoir à montrer son refus.
+     */
+    private fun displayNameIssue(): SignupFieldIssue? {
+        val trimmed = displayName.trim()
+        return when {
+            trimmed.length > DISPLAY_NAME_MAX_LENGTH -> SignupFieldIssue.DISPLAY_NAME_TOO_LONG
+            trimmed.none(Char::isLetter) -> SignupFieldIssue.DISPLAY_NAME_REQUIRED
+            !RegistrationIdentity.isNameLongEnough(trimmed) -> SignupFieldIssue.DISPLAY_NAME_TOO_SHORT
+            !PERSON_NAME_CHARACTERS.matches(trimmed) -> SignupFieldIssue.DISPLAY_NAME_INVALID_CHARACTERS
+            else -> null
+        }
+    }
+
+    public companion object {
+        private val PERSON_NAME_CHARACTERS: Regex = Regex("""[\p{L}\p{M}\s'’ʼ.-]+""")
+
+        /**
+         * `PASSWORD_MIN_LENGTH` (packages/shared/utils/validation.ts) et le
+         * `minLength: 6` du schéma Ajv de `registerRequestSchema` — la même
+         * borne, pour que la saisie ne franchisse jamais un écran qu'un
+         * message Ajv brut refuserait à l'envoi.
+         */
+        public const val PASSWORD_MIN_LENGTH: Int = 6
+
+        /** `displayName` du schéma partagé (`api-schemas/user.ts`, `maxLength: 100`). */
+        public const val DISPLAY_NAME_MAX_LENGTH: Int = 100
+
+        /**
+         * Le formulaire pré-rempli depuis la locale de l'appareil : la langue de
+         * lecture (rangs 1 et 2 du Prisme) et le pays de l'indicatif.
+         *
+         * Aucune de ces trois entrées n'est lue ici — le cœur reste sans
+         * `Locale` : l'appelant fournit la langue et la région brutes
+         * (`DeviceLocaleProvider` côté app), l'ensemble des codes de langue
+         * servis ([LanguageStepSelection.pickerLanguages]) et celui des pays
+         * connus ([CountryCatalog.dialCodes]).
+         *
+         * Une région inconnue laisse le pays au premier de [CountryCatalog.priority],
+         * jamais vide : un bouton d'indicatif sans indicatif n'ouvre rien.
+         */
+        public fun defaults(
+            deviceLanguage: String?,
+            deviceRegion: String?,
+            supportedLanguageCodes: Set<String>,
+            knownCountryCodes: Set<String>,
+        ): SignupForm {
+            val languages = SignupRegionInference.inferLanguages(
+                deviceLanguage = deviceLanguage,
+                deviceRegion = deviceRegion,
+                supportedLanguageCodes = supportedLanguageCodes,
+            )
+            val countryIso = SignupRegionInference.inferCountryIso(
+                deviceRegion = deviceRegion,
+                knownCountryCodes = knownCountryCodes,
+            )
+            return SignupForm(
+                dialCountryIso = countryIso ?: CountryCatalog.priority.first(),
+                systemLanguage = languages.systemLanguage,
+                regionalLanguage = languages.regionalLanguage,
+            )
+        }
+    }
+}

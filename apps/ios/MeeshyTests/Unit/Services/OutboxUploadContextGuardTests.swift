@@ -33,7 +33,7 @@ import XCTest
 /// `MessageAttachment`. La session suivante la « corrigerait » en posant
 /// `uploadContext: "post"` sur un envoi de message, qui créerait alors un
 /// `PostMedia` orphelin que plus aucun message ne réclamerait. La garde énumère
-/// donc, et exige que la liste SANS contexte soit **exactement** les trois sites
+/// donc, et exige que la liste SANS contexte soit **exactement** les sites
 /// de message, nommés par fichier + déclaration englobante — jamais par numéro
 /// de ligne, qui bouge à chaque édition du voisinage.
 final class OutboxUploadContextGuardTests: XCTestCase {
@@ -192,14 +192,25 @@ final class OutboxUploadContextGuardTests: XCTestCase {
 
     /// La file durable dit désormais POUR QUI elle téléverse.
     func test_laFileDurable_declareLeContexteDeSonTeleversement() throws {
-        let dispatcher = try sourcesDeProduction()
-            .first { $0.fichier == "OutboxDispatcher.swift" }
-        let code = try XCTUnwrap(dispatcher?.code, "OutboxDispatcher.swift est introuvable")
+        // **#5599 — la méthode a changé de FICHIER et perdu son `private`.**
+        // `OutboxDispatcher.swift` a été découpé ; `dispatchCreatePost` vit
+        // désormais dans `OutboxDispatcher+Publications.swift`, et n'est plus
+        // `private` pour une raison de langage, pas de style : Swift ne rend un
+        // `private` visible qu'aux extensions du MÊME fichier.
+        //
+        // Cette garde lisait UN fichier par son nom ; elle lit maintenant
+        // l'UNITÉ — le type et ses extensions —, ce qui la rend insensible au
+        // prochain découpage. Chercher le fichier plutôt que la déclaration,
+        // c'est faire dépendre une garde de comportement d'un choix de rangement.
+        let unite = try sourcesDeProduction()
+            .filter { $0.fichier.hasPrefix("OutboxDispatcher") }
+        XCTAssertFalse(unite.isEmpty, "l'unité OutboxDispatcher est introuvable")
+        let code = unite.map(\.code).joined(separator: "\n")
 
         guard let corps = corpsDeDeclaration(
-            commencantPar: "private func dispatchCreatePost(", dans: code
+            commencantPar: "func dispatchCreatePost(", dans: code
         ) else {
-            throw AncreIntrouvable(ancre: "private func dispatchCreatePost(")
+            throw AncreIntrouvable(ancre: "func dispatchCreatePost(")
         }
 
         XCTAssertTrue(
@@ -230,17 +241,83 @@ final class OutboxUploadContextGuardTests: XCTestCase {
         XCTAssertEqual(
             sansContexte,
             [
-                "ConversationView+AttachmentHandlers.swift:sendMessageWithAttachments",
-                "OutboxDispatcher.swift:dispatchSendMessage",
-                "OutboxDispatcher.swift:dispatchSendMessage"
+                // **L'enregistrement d'un appel (#8064, #8327, 2026-09-27)** : le
+                // fichier capté devient la pièce jointe de la BULLE de l'appel, qui
+                // est un message. `callRecordingLink` (gateway) ne rattache qu'un
+                // `messageAttachment` libre, audio, déposé par l'enregistreur —
+                // un contexte `post` le rendrait introuvable (404
+                // `ATTACHMENT_NOT_FOUND`). Le web dépose le sien par le même
+                // chemin sans contexte (`uploadAttachments`, `call-recording-runtime.ts`).
+                "CallRecordingController.swift:upload",
+                // **Le sticker de conversation (#4823, 2026-09-02)** : le PNG rendu
+                // d'un sticker est une pièce jointe de MESSAGE ordinaire — c'est
+                // le repli que lisent le web et Android — donc il téléverse SANS
+                // contexte, exactement comme une photo envoyée en conversation.
+                "ConversationView+Sticker.swift:uploadAndSendSticker",
+                // **Le repli HEIC (#11291)** : les deux envois de pièces de MESSAGE
+                // (envoi en ligne, rejeu hors ligne des visuels) passent par
+                // `uploadMessageAttachment`, qui rend un HEIC refusé en JPEG q 0,92.
+                // Le site `uploadFile(` est donc ICI, plus dans `upload` ni dans le
+                // rejeu — toujours une pièce de message, toujours sans contexte.
+                "MediaGroupUploader.swift:uploadMessageAttachment",
+                // **Le découpage du 2026-08-31 (`ec6591a296`) a déplacé ces deux
+                // sites** de `OutboxDispatcher.swift` vers son extension
+                // `+Messages.swift`. L'inventaire nommait l'ANCIEN fichier et la
+                // garde rougissait — bruyamment, ce qui est la bonne direction :
+                // une garde qui nomme un fichier et le perd doit tomber, jamais
+                // passer sur une chaîne vide.
+                "OutboxDispatcher+Messages.swift:dispatchSendMessage"
             ],
             "Un téléversement sans contexte crée un `MessageAttachment` ; si ce site alimente le `mediaIds` "
                 + "d'un post, le post naîtra VIDE (`PostService.createPost` ne réclame que des `PostMedia`, "
-                + "et un manque n'y produit qu'un `logger.warn`). Les trois seuls sites qui en ont le DROIT "
-                + "sont les pièces jointes de MESSAGE, qui veulent précisément un `MessageAttachment`. "
+                + "et un manque n'y produit qu'un `logger.warn`). Les seuls sites qui en ont le DROIT "
+                + "sont les pièces jointes de MESSAGE (bulle d'appel comprise), qui veulent précisément un `MessageAttachment`. "
                 + "NE PAS lever cette garde en ajoutant `uploadContext:` à un envoi de message : cela "
                 + "créerait un `PostMedia` orphelin que plus aucun message ne réclamerait. "
                 + "Trouvés — \(sansContexte)."
         )
+    }
+
+    // MARK: - Le nom choisi suit le fichier jusqu'au serveur (#11166)
+
+    private func argumentsDesAppels(de ancre: String, dans code: String) throws -> [String] {
+        var appels: [String] = []
+        var curseur = code.startIndex
+        while let trouve = code.range(of: ancre, range: curseur..<code.endIndex) {
+            let ouvrante = code.index(before: trouve.upperBound)
+            appels.append(try XCTUnwrap(argumentsDeLAppel(dans: code, ouvranteA: ouvrante)))
+            curseur = trouve.upperBound
+        }
+        return appels
+    }
+
+    /// En file, un fichier s'appelle `pending-media/<cmid>/0.pdf`. Le rejeu qui
+    /// ne remet pas le nom choisi au téléverseur grave ce nom en `originalName`.
+    /// Même raison que plus haut pour une garde de source : le maillon est un
+    /// argument d'appel, et le dispatcher n'a pas de téléverseur injecté.
+    func test_chaqueRejeuDeLaFile_remetLeNomChoisiAuTeleverseur() throws {
+        let sources = try sourcesDeProduction()
+        let dispatchers = ["OutboxDispatcher+Messages.swift", "OutboxDispatcher+Publications.swift"]
+
+        for fichier in dispatchers {
+            let code = try XCTUnwrap(sources.first { $0.fichier == fichier }?.code, "\(fichier) introuvable")
+            let appels = try ["uploadFile(", "uploadMessageAttachment("].flatMap { ancre in
+                try argumentsDesAppels(de: ancre, dans: code)
+            }
+            XCTAssertFalse(appels.isEmpty, "\(fichier) ne téléverse plus rien : la garde ne mesurerait RIEN")
+            for appel in appels {
+                XCTAssertTrue(appel.contains("fileName:"), "\(fichier) téléverse sans le nom choisi : \(appel)")
+            }
+        }
+    }
+
+    /// Le nom d'une copie temporaire s'écrit à UN endroit, celui qui sait le
+    /// relire : un préfixe écrit à la main repartirait en `originalName`.
+    func test_aucuneCopieImporteeNeFabriqueSonNomALaMain() throws {
+        let fautifs = try sourcesDeProduction()
+            .filter { $0.code.contains(#"_\(UUID().uuidString)_\("#) }
+            .map(\.fichier)
+
+        XCTAssertEqual(fautifs, [], "Passer par ImportedCopyName.copyName(of:through:)")
     }
 }

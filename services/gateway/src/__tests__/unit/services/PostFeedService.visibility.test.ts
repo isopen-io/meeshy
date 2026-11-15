@@ -1,11 +1,24 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { PostFeedService } from '../../../services/PostFeedService';
 
+/**
+ * `user.findMany` / `user.findUnique` sont les DEUX lectures de
+ * `getBlockRelatedUserIds` (#7184) : « qui m'a bloqué » et « qui j'ai
+ * bloqué ». Un double qui les omettait faisait tomber tout ce fichier dès que
+ * la garde est entrée dans `buildVisibilityFilter` — et c'est un bon signal :
+ * une garde qui n'apparaît dans aucun double est une garde que personne
+ * n'exerce.
+ */
 function makeMockPrisma(overrides: Record<string, any> = {}) {
   return {
+    user: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue({ blockedUserIds: [] }),
+    },
     post: { findMany: jest.fn().mockResolvedValue([]) },
     postView: { findMany: jest.fn().mockResolvedValue([]) },
     postReaction: { findMany: jest.fn().mockResolvedValue([]) },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: { findMany: jest.fn().mockResolvedValue([]) },
     participant: { findMany: jest.fn().mockResolvedValue([]) },
     communityMember: { findMany: jest.fn() },
@@ -28,7 +41,11 @@ describe('PostFeedService COMMUNITY visibility', () => {
     await service.getStories('viewer-1');
     const whereArg = prisma.post.findMany.mock.calls[0][0].where;
     const orClauses = whereArg.AND[0].OR;
-    expect(orClauses).toContainEqual({ visibility: 'COMMUNITY', authorId: { in: ['co-1'] } });
+    expect(orClauses).toContainEqual({
+      visibility: 'COMMUNITY',
+      authorId: { in: ['co-1'] },
+      OR: [{ communityId: null }, { communityId: { isSet: false } }],
+    });
   });
 
   it('getStatuses filters COMMUNITY posts to community co-members', async () => {
@@ -36,7 +53,11 @@ describe('PostFeedService COMMUNITY visibility', () => {
     await service.getStatuses('viewer-1');
     const whereArg = prisma.post.findMany.mock.calls[0][0].where;
     const orClauses = whereArg.AND[0].OR;
-    expect(orClauses).toContainEqual({ visibility: 'COMMUNITY', authorId: { in: ['co-1'] } });
+    expect(orClauses).toContainEqual({
+      visibility: 'COMMUNITY',
+      authorId: { in: ['co-1'] },
+      OR: [{ communityId: null }, { communityId: { isSet: false } }],
+    });
   });
 });
 
@@ -53,6 +74,7 @@ describe('PostFeedService.getFeed visibility gating', () => {
   function feedPrisma() {
     return makeMockPrisma({
       // Viewer 'viewer-1' is friends with 'friend-1' (accepted request).
+      userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
       friendRequest: {
         findMany: jest.fn().mockResolvedValue([{ senderId: 'viewer-1', receiverId: 'friend-1' }]),
       },
@@ -89,7 +111,11 @@ describe('PostFeedService.getFeed visibility gating', () => {
     const orClauses = prisma.post.findMany.mock.calls[0][0].where.AND[0].OR;
     expect(orClauses).toContainEqual({ visibility: 'PUBLIC' });
     expect(orClauses).toContainEqual({ authorId: 'viewer-1' });
-    expect(orClauses).toContainEqual({ visibility: 'COMMUNITY', authorId: { in: ['co-1'] } });
+    expect(orClauses).toContainEqual({
+      visibility: 'COMMUNITY',
+      authorId: { in: ['co-1'] },
+      OR: [{ communityId: null }, { communityId: { isSet: false } }],
+    });
   });
 });
 
@@ -105,6 +131,7 @@ describe('PostFeedService.getUserPosts visibility gating', () => {
   it('lets an accepted friend see the author\'s FRIENDS-only posts', async () => {
     const prisma = makeMockPrisma({
       // Viewer is friends with the profile author 'author-1'.
+      userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
       friendRequest: {
         findMany: jest.fn().mockResolvedValue([{ senderId: 'viewer-1', receiverId: 'author-1' }]),
       },
@@ -141,5 +168,90 @@ describe('PostFeedService.getUserPosts visibility gating', () => {
     const where = prisma.post.findMany.mock.calls[0][0].where;
     expect(where.visibility).toBeUndefined();
     expect(where.AND).toBeUndefined();
+  });
+});
+
+/**
+ * **LE BLOCAGE FERME LE CONTENU, ET IL EST BRANCHÉ** (#7184).
+ *
+ * `postVisibilityBlocking.test.ts` prouve que la RÈGLE est juste ;
+ * il ne prouve pas qu'elle est APPELÉE. La distance entre les deux est ce que
+ * ce dépôt a payé cinq fois cette semaine — un mécanisme écrit, testé, et que
+ * personne n'invoque. Ces témoins-ci partent donc du SERVICE et lisent le
+ * `where` réellement soumis à Prisma.
+ *
+ * L'épreuve n'est pas leur vert mais leur MUTATION : retirer le quatrième
+ * argument de `buildPostVisibilityOrFilter` dans `buildVisibilityFilter` doit
+ * les faire tomber.
+ */
+describe('PostFeedService — aucun contenu ne traverse un blocage (#7184)', () => {
+  const avecBlocage = () => {
+    const prisma = makeMockPrisma();
+    prisma.communityMember.findMany.mockResolvedValue([]);
+    // « m'a bloqué » : u-bloquant ; « j'ai bloqué » : u-bloque.
+    prisma.user.findMany.mockResolvedValue([{ id: 'u-bloquant' }]);
+    prisma.user.findUnique.mockResolvedValue({ blockedUserIds: ['u-bloque'] });
+    return prisma;
+  };
+
+  const exclusionDe = (prisma: any): unknown => {
+    const where = prisma.post.findMany.mock.calls[0][0].where;
+    return where.AND[0].AND?.[1];
+  };
+
+  it('getStories écarte les DEUX directions du blocage', async () => {
+    const prisma = avecBlocage();
+
+    await new PostFeedService(prisma).getStories('viewer-1');
+
+    const exclusion = exclusionDe(prisma) as { authorId?: { notIn?: string[] } } | undefined;
+    expect(exclusion?.authorId?.notIn).toEqual(expect.arrayContaining(['u-bloquant', 'u-bloque']));
+  });
+
+  it('getStatuses aussi — le mood d’un bloquant ne se pose sur aucun avatar', async () => {
+    const prisma = avecBlocage();
+
+    await new PostFeedService(prisma).getStatuses('viewer-1');
+
+    const exclusion = exclusionDe(prisma) as { authorId?: { notIn?: string[] } } | undefined;
+    expect(exclusion?.authorId?.notIn).toEqual(expect.arrayContaining(['u-bloquant', 'u-bloque']));
+  });
+
+  /**
+   * LE CONTRE-TÉMOIN DE FORME : sans blocage, le `where` ne gagne AUCUN niveau
+   * d'imbrication. Sans lui, on pourrait « corriger » en enveloppant toutes les
+   * requêtes du fil dans un `AND` inutile, pour tous les lecteurs du service.
+   */
+  it('sans blocage, la forme du `where` ne bouge pas', async () => {
+    const prisma = makeMockPrisma();
+    prisma.communityMember.findMany.mockResolvedValue([]);
+
+    await new PostFeedService(prisma).getStories('viewer-1');
+
+    const where = prisma.post.findMany.mock.calls[0][0].where;
+    expect(where.AND[0].OR).toBeDefined();
+    expect(where.AND[0].AND).toBeUndefined();
+  });
+});
+
+/**
+ * **LE SENS DE LA GARDE DÉCIDE DU SENS DE LA PANNE** (#7184).
+ *
+ * `user.findUnique` sert DEUX choses depuis ce lot : les langues du lecteur
+ * (auxiliaire — son absence dégrade un classement, et le fil s'affiche quand
+ * même) et le blocage (une GARDE). Une garde qui se traverse en silence quand
+ * sa lecture échoue est fail-OPEN : elle servirait le contenu d'un bloquant au
+ * moment précis où elle ne peut plus le reconnaître.
+ *
+ * Le témoin jumeau — celui du best-effort, dans `PostFeedService.test.ts` —
+ * mesure l'autre moitié : les auxiliaires tombent, le fil tient.
+ */
+describe('PostFeedService — la panne de la lecture de BLOCAGE ferme le fil', () => {
+  it('ne sert rien plutôt que de servir sans garde', async () => {
+    const prisma = makeMockPrisma();
+    prisma.communityMember.findMany.mockResolvedValue([]);
+    prisma.user.findUnique.mockRejectedValue(new Error('db down'));
+
+    await expect(new PostFeedService(prisma).getStories('viewer-1')).rejects.toThrow('db down');
   });
 });

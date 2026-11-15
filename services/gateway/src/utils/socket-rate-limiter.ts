@@ -5,11 +5,14 @@
  * or Redis-backed token bucket algorithm
  */
 
-import { Socket } from 'socket.io';
-import { REACTION_SYNC_BUDGET } from '@meeshy/shared/types/socketio-events';
+import type { MeeshySocket as Socket } from '../socketio/typed-socket';
+import { REACTION_SYNC_BUDGET, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { CALL_ERROR_CODES } from '@meeshy/shared/types/call-error-codes';
+import type { CallError } from '@meeshy/shared/types/video-call';
 import { logger } from './logger.js';
+import { guardedInterval } from './guarded-timer.js';
 
-interface RateLimitConfig {
+export interface RateLimitConfig {
   maxRequests: number;
   windowMs: number;
   keyPrefix?: string;
@@ -53,6 +56,13 @@ export const SOCKET_RATE_LIMITS = {
     maxRequests: 100,
     windowMs: 10000, // 10 seconds
     keyPrefix: 'socket:call:signal'
+  },
+  // #17952 — the ringing preview link has its own budget: a preview burst
+  // from one device must never starve the real call's offer/answer.
+  CALL_PREVIEW_SIGNAL: {
+    maxRequests: 100,
+    windowMs: 10000,
+    keyPrefix: 'socket:call:preview-signal'
   },
   // Audit gateway prod 2026-07-02 (C2) — 50/5s was tuned for a single steady
   // trickle, but real clients flush a full ICE gathering pass (15-25
@@ -98,6 +108,48 @@ export const SOCKET_RATE_LIMITS = {
     maxRequests: 10,
     windowMs: 60000, // 1 minute
     keyPrefix: 'socket:call:analytics'
+  },
+  // La note d'après-appel (#8072) : une par appel terminé, quelques-unes
+  // par minute laissent la marge d'une correction.
+  CALL_QUALITY_FEEDBACK: {
+    maxRequests: 10,
+    windowMs: 60000, // 1 minute
+    keyPrefix: 'socket:call:quality-feedback'
+  },
+  CALL_RECORDING: {
+    maxRequests: 20,
+    windowMs: 60000,
+    keyPrefix: 'socket:call:recording'
+  },
+  /** #8433 — inviter quelqu'un dans un appel en cours fait sonner un tiers : rare par nature. */
+  CALL_INVITE: {
+    maxRequests: 10,
+    windowMs: 60000,
+    keyPrefix: 'socket:call:invite'
+  },
+  /** #8438 — couper le micro d'un participant. */
+  CALL_MODERATION: {
+    maxRequests: 20,
+    windowMs: 60000,
+    keyPrefix: 'socket:call:moderation'
+  },
+  /** #8439 — réactions d'appel : cinq par seconde et par personne. */
+  CALL_REACTION: {
+    maxRequests: 5,
+    windowMs: 1000,
+    keyPrefix: 'socket:call:reaction'
+  },
+  /** #9214 — choisir le cadre en direct d'un appel à deux : dix choix par dix secondes et par personne. */
+  CALL_FRAME_SELECT: {
+    maxRequests: 10,
+    windowMs: 10000,
+    keyPrefix: 'socket:call:frame-select'
+  },
+  /** #8480 — demander l'aperçu d'un appel qui sonne : une fois par sonnerie, plus les reprises de socket. */
+  CALL_PREVIEW_REQUEST: {
+    maxRequests: 10,
+    windowMs: 60000,
+    keyPrefix: 'socket:call:preview-request'
   },
   CALL_SCREEN_CAPTURE: {
     maxRequests: 20,
@@ -154,6 +206,16 @@ export const SOCKET_RATE_LIMITS = {
     maxRequests: 20,
     windowMs: 60000, // 1 minute — mirrors CALL_RECONNECTING/CALL_RECONNECTED
     keyPrefix: 'socket:call:check-active'
+  },
+  /**
+   * #10459 point 1 — `admin-metrics:subscribe` lit le rang en base à chaque appel.
+   * Un écran s'abonne une fois par ouverture et une fois par reconnexion : dix par
+   * minute et par compte laissent la marge d'une page qui bégaie, pas d'un martèlement.
+   */
+  ADMIN_METRICS_SUBSCRIBE: {
+    maxRequests: 10,
+    windowMs: 60000,
+    keyPrefix: 'socket:admin-metrics:subscribe'
   },
   // Gateway calling-stack audit 2026-07-08 — `presence:app-state` was the one
   // remaining call-adjacent handler with zero throttling (no getUserId check
@@ -218,6 +280,38 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 60000, // 1 minute
     keyPrefix: 'socket:message:delete'
   },
+  // #9617 — `message:capture-detected` et son jumeau REST : une déclaration de
+  // capture d'écran ou d'enregistrement, par acteur ET par conversation (clé
+  // composée par `captureRateLimitKey`). Une personne prend rarement plus de
+  // six captures par minute ; le budget arrête l'inondation d'avis système.
+  MESSAGE_CAPTURE: {
+    maxRequests: 6,
+    windowMs: 60000,
+    keyPrefix: 'socket:message:capture'
+  },
+  // #9617 (audit A1) — les AVIS écrits, par acteur et conversation : au plus
+  // trente par heure, quel que soit le nombre de déclarations. Chaque avis
+  // compte comme non lu pour tous et fait remonter la conversation.
+  MESSAGE_CAPTURE_NOTICES_HOURLY: {
+    maxRequests: 30,
+    windowMs: 3600000,
+    keyPrefix: 'capture:notices:hourly'
+  },
+  // #8892 — `viewing:start` : une ouverture de conversation. Le geste est
+  // rare (naviguer d'un fil à l'autre) ; le budget n'arrête que le script.
+  CONVERSATION_VIEWING: {
+    maxRequests: 60,
+    windowMs: 60000,
+    keyPrefix: 'socket:viewing'
+  },
+  // #9061 — `viewing:activity` : le client émet au plus une fois toutes les
+  // deux secondes pendant qu'on défile, écoute ou agit (30/min) ; le budget
+  // laisse deux appareils actifs et n'arrête que le script.
+  CONVERSATION_ACTIVITY: {
+    maxRequests: 90,
+    windowMs: 60000,
+    keyPrefix: 'socket:viewing-activity'
+  },
   TYPING_INDICATOR: {
     maxRequests: 60,
     windowMs: 60000, // 1 minute — global guard; per-conversation 2s throttle is the primary gate
@@ -256,9 +350,9 @@ export class SocketRateLimiter {
     // Clean up expired entries every minute. unref: ce timer d'hygiène ne
     // doit jamais maintenir le process en vie (jest/outillage) — même
     // pattern que les intervals de CallEventsHandler/NotificationService.
-    this.cleanupInterval = setInterval(() => {
+    this.cleanupInterval = guardedInterval({ name: 'socket-rate-limiter-cleanup', everyMs: 60000, logger, run: () => {
       this.cleanup();
-    }, 60000);
+    } });
     this.cleanupInterval.unref?.();
   }
 
@@ -387,6 +481,14 @@ export class SocketRateLimiter {
 }
 
 /**
+ * #17952 — le budget `call:signal` est tenu PAR SOCKET : un appareil du compte
+ * qui inonde de signaux ne fait jamais refuser la réponse SDP d'un autre.
+ */
+export function callSignalBudgetId(userId: string, socketId: string): string {
+  return `${userId}:${socketId}`;
+}
+
+/**
  * Helper function to check rate limit and emit error if exceeded
  *
  * @param socket - Socket.IO socket
@@ -395,23 +497,41 @@ export class SocketRateLimiter {
  * @param rateLimiter - Rate limiter instance
  * @param errorEvent - Event to emit on rate limit exceeded
  * @returns True if allowed, false if rate limited
+ *
+ * ## Le canal et la charge sont tenus au CONTRAT (#18655)
+ *
+ * Ce site a longtemps pris le `Socket` NU de socket.io (`DefaultEventsMap`,
+ * donc `emit(ev: string, ...args: any[])`) avec `errorEvent: string` — c'est
+ * exactement la famille que `typed-socket.ts` existe pour fermer, et que
+ * `sweepRawServerEmitters` ne voyait pas : son discriminant ne cherche que
+ * `Server`.
+ *
+ * Ce que l'absence de porte laissait passer : un `retryAfter` à la RACINE de la
+ * charge, qu'aucun contrat ne déclare et qu'aucun des trois clients ne lit. Il
+ * vit désormais dans `details`, le champ que `CallError` porte pour cela —
+ * rétrocompatible, puisque personne ne le lisait d'un côté comme de l'autre.
+ *
+ * Les sept appelants passent tous `CALL_EVENTS.ERROR` : le paramètre nomme donc
+ * ce seul canal plutôt qu'une union, et le couple est vérifié au site d'appel.
  */
 export async function checkSocketRateLimit(
   socket: Socket,
   userId: string,
   config: RateLimitConfig,
   rateLimiter: SocketRateLimiter,
-  errorEvent: string = 'call:error'
+  errorEvent: typeof SERVER_EVENTS.CALL_ERROR = SERVER_EVENTS.CALL_ERROR
 ): Promise<boolean> {
   const allowed = await rateLimiter.checkLimit(userId, config);
 
   if (!allowed) {
     const info = rateLimiter.getRateLimitInfo(userId, config);
-    socket.emit(errorEvent, {
-      code: 'RATE_LIMIT_EXCEEDED',
-      message: `Too many requests. Please try again in ${Math.ceil(info.resetIn / 1000)} seconds`,
-      retryAfter: Math.ceil(info.resetIn / 1000)
-    });
+    const retryAfterSeconds = Math.ceil(info.resetIn / 1000);
+    const refusal: CallError = {
+      code: CALL_ERROR_CODES.RATE_LIMIT_EXCEEDED,
+      message: `Too many requests. Please try again in ${retryAfterSeconds} seconds`,
+      details: { retryAfter: retryAfterSeconds },
+    };
+    socket.emit(errorEvent, refusal);
   }
 
   return allowed;

@@ -3,6 +3,17 @@ import UIKit
 import SwiftUI
 import MeeshyUI
 
+/// Valeur de requête d'un lien `meeshy://` construit par un intent. `.urlQueryAllowed`
+/// laisse passer `&`, `=`, `+` et `#` : une dictée « Tom & Jerry ce soir » arrivait
+/// tronquée à « Tom », le reste lu comme un autre paramètre.
+nonisolated enum IntentURLQuery {
+    static let valueAllowed: CharacterSet = CharacterSet.urlQueryAllowed.subtracting(CharacterSet(charactersIn: "&=+?#"))
+
+    static func encode(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: valueAllowed) ?? ""
+    }
+}
+
 // MARK: - App Shortcuts
 /// App Shortcuts are available on iOS 16+
 /// These appear in Spotlight, Siri, and Shortcuts app
@@ -103,7 +114,7 @@ struct SendMessageIntent: AppIntent {
         }
 
         // Build deep link
-        let urlString = "meeshy://send?contactId=\(selectedContact.id)&message=\(messageText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
+        let urlString = "meeshy://send?contactId=\(selectedContact.id)&message=\(IntentURLQuery.encode(messageText))"
         guard let url = URL(string: urlString) else {
             throw NSError(domain: "me.meeshy.intents", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid deep link URL"])
         }
@@ -113,14 +124,10 @@ struct SendMessageIntent: AppIntent {
 
 // MARK: - Call Contact Intent
 
-/// Raccourci « Appeler un contact sur Meeshy ».
-///
-/// STATUT : NON ROUTÉ (délibéré). Le deep link émis (`meeshy://call?contactId=…&type=…`)
-/// n'a pas de case dans `DeepLinkParser` → `.external` : l'app s'ouvre sans
-/// effet. Amorcer un appel depuis un lien demande une surface produit qui
-/// n'existe pas encore. Le brancher = ajouter le case au parseur ET retirer
-/// `call` de `deliberatelyUnroutedHosts` (`DeepLinkSurfaceRoutingGuardTests`),
-/// qui rougit sinon.
+/// Raccourci « Appeler un contact sur Meeshy ». `contactId` est l'identifiant
+/// de la conversation directe épinglée (`favorite_contacts`) :
+/// `DeepLinkParser` le lit en `.call`, et `CallBackDialer` résout le
+/// correspondant puis compose par `CallStarter` (#8067).
 @available(iOS 18.0, *)
 struct CallContactIntent: AppIntent {
     static let title: LocalizedStringResource = "Call Contact"
@@ -228,7 +235,7 @@ struct TranslateTextIntent: AppIntent {
             textToTranslate = try await $text.requestValue("What would you like to translate?")
         }
 
-        let urlString = "meeshy://translate?text=\(textToTranslate.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&target=\(targetLanguage.rawValue)"
+        let urlString = "meeshy://translate?text=\(IntentURLQuery.encode(textToTranslate))&target=\(targetLanguage.rawValue)"
         guard let url = URL(string: urlString) else {
             throw NSError(domain: "me.meeshy.intents", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid deep link URL"])
         }
@@ -250,7 +257,6 @@ struct OpenRecentConversationIntent: AppIntent {
 }
 
 // MARK: - Check Notifications Intent
-@available(iOS 16.0, *)
 struct CheckNotificationsIntent: AppIntent {
     static let title: LocalizedStringResource = "Check Notifications"
     static let description = IntentDescription("Check for unread messages")
@@ -258,19 +264,22 @@ struct CheckNotificationsIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
-        // Load unread count from shared container
-        let unreadCount = getUnreadCount()
+        // Ce que porte `unread_count` de l'App Group est un compte de
+        // CONVERSATIONS non lues, hors muettes (D-L1, #7236) — le même nombre
+        // que l'`aps.badge` du serveur et que l'icône d'app. Le dire
+        // « messages » ferait mentir le seul chiffre que Siri prononce.
+        let unreadConversations = getUnreadCount()
 
-        if unreadCount == 0 {
+        if unreadConversations == 0 {
             return .result(
-                dialog: "You have no unread messages",
+                dialog: "You have no unread conversations",
                 view: NotificationCheckView(unreadCount: 0, recentMessages: [])
             )
         } else {
             let recentMessages = getRecentUnreadMessages()
             return .result(
-                dialog: "You have \(unreadCount) unread message\(unreadCount == 1 ? "" : "s")",
-                view: NotificationCheckView(unreadCount: unreadCount, recentMessages: recentMessages)
+                dialog: "You have \(unreadConversations) unread conversation\(unreadConversations == 1 ? "" : "s")",
+                view: NotificationCheckView(unreadCount: unreadConversations, recentMessages: recentMessages)
             )
         }
     }
@@ -291,7 +300,6 @@ struct CheckNotificationsIntent: AppIntent {
     }
 }
 
-@available(iOS 16.0, *)
 struct NotificationCheckView: View {
     let unreadCount: Int
     let recentMessages: [String]
@@ -300,8 +308,8 @@ struct NotificationCheckView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "bell.fill")
-                    .foregroundColor(MeeshyColors.info)
-                Text(String(localized: "siri.notifications.unreadCount", defaultValue: "\(unreadCount) Unread", bundle: .main))
+                    .foregroundStyle(MeeshyColors.info)
+                Text(String(localized: "siri.notifications.unreadCount", defaultValue: "\(unreadCount) non lus", bundle: .main))
                     .font(.headline)
             }
             .accessibilityElement(children: .combine)
@@ -312,7 +320,7 @@ struct NotificationCheckView: View {
                         HStack {
                             Image(systemName: "message.fill")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(Color.secondary)
                             Text(message)
                                 .font(.caption)
                                 .lineLimit(1)
@@ -326,13 +334,11 @@ struct NotificationCheckView: View {
 }
 
 // MARK: - Contact Entity
-@available(iOS 16.0, *)
 struct ContactEntity: AppEntity {
     static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Contact")
     static let defaultQuery = ContactQuery()
 
     var id: String
-    var displayString: String
     var name: String
     var avatar: String?
 
@@ -345,7 +351,6 @@ struct ContactEntity: AppEntity {
     }
 }
 
-@available(iOS 16.0, *)
 struct ContactQuery: EntityQuery {
     /// Ré-hydratation d'un contact déjà choisi (raccourci Siri enregistré,
     /// relance Siri).
@@ -374,7 +379,7 @@ struct ContactQuery: EntityQuery {
 
         return contacts
             .filter { identifiers.contains($0.id) }
-            .map { ContactEntity(id: $0.id, displayString: $0.name, name: $0.name, avatar: $0.avatar) }
+            .map { ContactEntity(id: $0.id, name: $0.name, avatar: $0.avatar) }
     }
 
     func suggestedEntities() async throws -> [ContactEntity] {
@@ -386,7 +391,7 @@ struct ContactQuery: EntityQuery {
         }
 
         return contacts.map {
-            ContactEntity(id: $0.id, displayString: $0.name, name: $0.name, avatar: $0.avatar)
+            ContactEntity(id: $0.id, name: $0.name, avatar: $0.avatar)
         }
     }
 }
@@ -395,73 +400,4 @@ struct ContactData: Codable {
     let id: String
     let name: String
     let avatar: String?
-}
-
-// MARK: - Legacy Intent Handler (for iOS 14-15 compatibility)
-class IntentHandler: NSObject {
-    // This will be extended for specific intent types if needed
-}
-
-// MARK: - Siri Tip Provider
-/// Shows helpful tips in the app about available Siri shortcuts
-@available(iOS 16.0, *)
-struct SiriTipsView: View {
-    let tips = [
-        SiriTip(
-            phrase: String(localized: "siri.tip.sendMessage", defaultValue: "Send message to John on Meeshy", bundle: .main),
-            icon: "message.fill",
-            color: MeeshyColors.info
-        ),
-        SiriTip(
-            phrase: String(localized: "siri.tip.call", defaultValue: "Call Sarah on Meeshy", bundle: .main),
-            icon: "phone.fill",
-            color: MeeshyColors.success
-        ),
-        SiriTip(
-            phrase: String(localized: "siri.tip.translate", defaultValue: "Translate this to Spanish on Meeshy", bundle: .main),
-            icon: "translate",
-            color: MeeshyColors.purple600
-        ),
-        SiriTip(
-            phrase: String(localized: "siri.tip.checkNotifications", defaultValue: "Check notifications on Meeshy", bundle: .main),
-            icon: "bell.fill",
-            color: MeeshyColors.warning
-        )
-    ]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(String(localized: "siri.tips.header", defaultValue: "Try asking Siri:", bundle: .main))
-                .font(.headline)
-
-            ForEach(tips) { tip in
-                HStack(spacing: 12) {
-                    Image(systemName: tip.icon)
-                        .foregroundColor(tip.color)
-                        .frame(width: 30)
-                        .accessibilityHidden(true)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\"\(tip.phrase)\"")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                    }
-
-                    Spacer()
-                }
-                .padding()
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(12)
-                .accessibilityElement(children: .combine)
-            }
-        }
-        .padding()
-    }
-}
-
-struct SiriTip: Identifiable {
-    let id = UUID()
-    let phrase: String
-    let icon: String
-    let color: Color
 }

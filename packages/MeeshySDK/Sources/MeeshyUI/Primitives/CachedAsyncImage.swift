@@ -29,12 +29,19 @@ public struct CachedAsyncImage<Placeholder: View>: View {
     /// resolves in Low Data Mode / data-saver conditions. Defaults to `false`
     /// (existing gated behaviour for inline bubble thumbnails).
     public let autoLoad: Bool
+    /// La taille CONNUE du média : sous `MediaDownloadPolicyEngine.smallMediaAutoDownloadBytes`,
+    /// il se charge quel que soit le réseau (#14639). `nil` = inconnue.
+    public let byteSize: Int?
+    let imageLoader: any MediaImageLoading
     public let placeholder: () -> Placeholder
 
     @State private var image: UIImage?
     @State private var thumbHashImage: UIImage?
     @State private var isLoading = false
     @State private var hasFailed = false
+    /// La politique de téléchargement a retenu la requête : rien ne charge
+    /// tant qu'un geste ne la demande pas (#9869).
+    @State private var isDeferred = false
     @State private var retryCount = 0
 
     public init(
@@ -43,28 +50,30 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         thumbHash: String? = nil,
         showsStatusOverlays: Bool = true,
         autoLoad: Bool = false,
+        byteSize: Int? = nil,
+        imageLoader: any MediaImageLoading = CoordinatorImageLoader.images,
         @ViewBuilder placeholder: @escaping () -> Placeholder
     ) {
         self.urlString = urlString
+        self.byteSize = byteSize
         self.targetSize = targetSize
         self.thumbHash = thumbHash
         self.showsStatusOverlays = showsStatusOverlays
         self.autoLoad = autoLoad
+        self.imageLoader = imageLoader
         self.placeholder = placeholder
         let cachedFull: UIImage?
         if let urlString, !urlString.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
             // Variante dimensionnée d'abord : le slot rempli par un chargement
-            // `targetSize` précédent (clé par bucket de pixels), sinon
-            // `warmedImage` — NSCache hit plein format s'il existe, sinon
-            // decode synchrone depuis le disque (zero IO reseau). C'est la cle
-            // pour que le cold start d'une conversation affiche les images
-            // directement, sans transitionner via le thumbHash.
+            // `targetSize` précédent (clé par bucket de pixels), sinon le slot
+            // plein format. MÉMOIRE seule (#10354) : l'init n'est pas le lieu
+            // d'un décodage disque — le `.task` le fait hors du fil principal.
             if let targetSize,
-               let sized = DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: targetSize)) {
+               let sized = DiskCacheStore.cachedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting(targetSize))) {
                 cachedFull = sized
             } else {
-                cachedFull = CacheCoordinator.warmedImage(for: resolved)
+                cachedFull = WarmImageProbe.residentImage(for: resolved)
             }
         } else {
             cachedFull = nil
@@ -86,13 +95,13 @@ public struct CachedAsyncImage<Placeholder: View>: View {
                             hasFailed = false
                             retryCount += 1
                         } label: {
-                            VStack(spacing: 4) {
+                            VStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: "arrow.clockwise.circle.fill")
-                                    .font(.system(size: 22, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.7))
-                                Text(String(localized: "common.retry", defaultValue: "Retry", bundle: .module))
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.5))
+                                    .font(.system(size: MeeshyIconSize.xxl, weight: .medium))
+                                    .foregroundStyle(.white.opacity(MeeshyOpacity.heavy))
+                                Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .module))
+                                    .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(MeeshyOpacity.strong))
                             }
                         }
                     }
@@ -106,6 +115,7 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         .task(id: "\(urlString ?? "")_\(retryCount)") { await loadImage(for: urlString) }
         .adaptiveOnChange(of: urlString) { _, newUrl in
             hasFailed = false
+            isDeferred = false
             guard let newUrl, !newUrl.isEmpty else {
                 image = nil
                 thumbHashImage = nil
@@ -116,9 +126,7 @@ public struct CachedAsyncImage<Placeholder: View>: View {
             // (NSCache puis disque) pour que les cellules reutilisees au scroll
             // ne flashent pas leur thumbHash quand la nouvelle URL est deja sur
             // disque.
-            let cached = targetSize.flatMap {
-                DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: $0))
-            } ?? CacheCoordinator.warmedImage(for: resolved)
+            let cached = WarmImageProbe.warmedImage(for: resolved, maxPixelSize: targetSize.map { DecodeBudget.maxPixelWidth(for: .fitting($0)) })
             image = cached
             // Refresh the ThumbHash blur for the new url — cells are reused, so
             // stale @State from the previous message must not bleed through.
@@ -140,12 +148,19 @@ public struct CachedAsyncImage<Placeholder: View>: View {
                 .overlay { overlay() }
         } else {
             placeholder()
+                .loadingSheenPhase(placeholderPhase)
                 .overlay { overlay() }
         }
     }
 
-    @MainActor private static func pixelSize(for points: CGSize) -> CGFloat {
-        max(points.width, points.height) * UIScreen.main.scale
+    /// Ce que le placeholder doit dire : seul un chargement réel fait balayer
+    /// son reflet (#9869).
+    private var placeholderPhase: LoadingSheenPhase {
+        LoadingSheenLaw.phase(
+            hasURL: !(urlString ?? "").isEmpty,
+            fetchDeferredByPolicy: isDeferred,
+            fetchFailed: hasFailed
+        )
     }
 
     /// Returns `true` for `file://` URLs — local sandbox media that must never
@@ -161,7 +176,7 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         let resolved = MeeshyConfig.resolveMediaURL(currentUrlString)?.absoluteString ?? currentUrlString
         if image != nil {
             let sizedResident = targetSize.map {
-                DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: $0)) != nil
+                DiskCacheStore.cachedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting($0))) != nil
             } ?? false
             if sizedResident || DiskCacheStore.cachedImage(for: resolved) != nil { return }
         }
@@ -185,19 +200,15 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         if MediaFetchGate.shouldSkipNetworkFetch(
             autoLoad: autoLoad,
             isLocalFileURL: Self.isLocalFileURL(resolved),
-            hasLocalCacheHit: CacheCoordinator.imageLocalFileURL(for: resolved) != nil
-                || DiskCacheStore.cachedImage(for: resolved) != nil,
-            policyAllowsAutoLoad: MediaDownloadPolicy.shouldAutoLoadImage()
-        ) { return }
-
-        isLoading = true; hasFailed = false
-        let loaded: UIImage?
-        if let targetSize {
-            let maxPixel = Self.pixelSize(for: targetSize)
-            loaded = await CacheCoordinator.shared.images.image(for: resolved, maxPixelSize: maxPixel)
-        } else {
-            loaded = await CacheCoordinator.shared.images.image(for: resolved)
+            hasLocalCacheHit: LocalImagePresence.isOnDevice(resolvedURL: resolved),
+            policyAllowsAutoLoad: MediaDownloadPolicy.shouldAutoLoadImage(byteSize: byteSize)
+        ) {
+            isDeferred = true
+            return
         }
+
+        isLoading = true; hasFailed = false; isDeferred = false
+        let loaded = await CachedImageFetch.load(resolved, targetSize: targetSize, using: imageLoader)
         if !Task.isCancelled {
             if let loaded, self.urlString == currentUrlString {
                 withAnimation(.easeIn(duration: 0.15)) { self.image = loaded }
@@ -215,11 +226,12 @@ public struct CachedAsyncImage<Placeholder: View>: View {
 /// on the thumbHash / thumbnail / placeholder and the bytes are saved.
 @MainActor
 enum MediaDownloadPolicy {
-    static func shouldAutoLoadImage() -> Bool {
+    static func shouldAutoLoadImage(byteSize: Int? = nil) -> Bool {
         MediaDownloadPolicyEngine.shouldAutoDownload(
             kind: .image,
             condition: NetworkConditionMonitor.shared.condition,
-            prefs: MediaDownloadPreferencesStore.shared.preferences
+            prefs: MediaDownloadPreferencesStore.shared.preferences,
+            byteSize: byteSize
         )
     }
 }
@@ -233,6 +245,27 @@ enum MediaDownloadPolicy {
 /// still resolve `policyAllowsAutoLoad` via `MediaDownloadPolicy`, an already
 /// SDK-legitimate composition of `MediaDownloadPolicyEngine` +
 /// `NetworkConditionMonitor` + `MediaDownloadPreferencesStore`).
+/// **Une image est sur l'appareil quand la lire ne coûte aucun octet réseau** :
+/// fichier dans le cache image, ou plein format décodé en mémoire. C'est le
+/// critère exact qui lève la politique de téléchargement des vues d'image —
+/// un hôte qui choisit une URL « déjà là » la lit ici pour être sûr que la
+/// vue la chargera sans attendre un geste.
+public enum LocalImagePresence {
+    nonisolated public static func isOnDevice(resolvedURL: String) -> Bool {
+        CacheCoordinator.imageLocalFileURL(for: resolvedURL) != nil
+            || DiskCacheStore.cachedImage(for: resolvedURL) != nil
+    }
+}
+
+/// L'identité d'un chargement de `ProgressiveCachedImage` : son URL ET le
+/// jeton de relance de l'hôte. Un chargement retenu par la politique ne
+/// repartait que si l'URL changeait ; un média arrivé par un autre chemin
+/// sous la MÊME URL laissait la vue sur son aperçu flou.
+nonisolated struct ProgressiveImageLoadID: Hashable {
+    let url: String?
+    let reloadToken: AnyHashable?
+}
+
 enum MediaFetchGate {
     nonisolated static func shouldSkipNetworkFetch(
         autoLoad: Bool,
@@ -245,8 +278,13 @@ enum MediaFetchGate {
 }
 
 extension CachedAsyncImage where Placeholder == Color {
-    public init(url urlString: String?, targetSize: CGSize? = nil, thumbHash: String? = nil) {
-        self.init(url: urlString, targetSize: targetSize, thumbHash: thumbHash) { Color.gray.opacity(0.2) }
+    public init(
+        url urlString: String?,
+        targetSize: CGSize? = nil,
+        thumbHash: String? = nil,
+        imageLoader: any MediaImageLoading = CoordinatorImageLoader.images
+    ) {
+        self.init(url: urlString, targetSize: targetSize, thumbHash: thumbHash, imageLoader: imageLoader) { Color.gray.opacity(0.2) }
     }
 }
 
@@ -256,26 +294,26 @@ public struct CachedAvatarImage: View {
     public let name: String
     public let size: CGFloat
     public let accentColor: String
+    public let secondaryColor: String?
+    let imageLoader: any MediaImageLoading
 
     @State private var image: UIImage?
     @State private var thumbHashImage: UIImage?
 
-    public init(urlString: String?, thumbHash: String? = nil, name: String, size: CGFloat, accentColor: String) {
+    public init(urlString: String?, thumbHash: String? = nil, name: String, size: CGFloat, accentColor: String, secondaryColor: String? = nil, imageLoader: any MediaImageLoading = CoordinatorImageLoader.images) {
         self.urlString = urlString; self.thumbHash = thumbHash; self.name = name; self.size = size; self.accentColor = accentColor
+        self.secondaryColor = secondaryColor
+        self.imageLoader = imageLoader
 
         let cachedFull: UIImage?
         if let urlString, !urlString.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-            cachedFull = DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: size))
-                ?? CacheCoordinator.warmedImage(for: resolved)
+            cachedFull = WarmImageProbe.warmedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting(CGSize(width: size, height: size))))
         } else {
             cachedFull = nil
         }
         _image = State(initialValue: cachedFull)
-
-        if cachedFull == nil, let thumbHash, !thumbHash.isEmpty {
-            _thumbHashImage = State(initialValue: UIImage.fromThumbHash(thumbHash))
-        }
+        _thumbHashImage = State(initialValue: cachedFull == nil ? Self.waitingBlur(urlString: urlString, thumbHash: thumbHash) : nil)
     }
 
     public var body: some View {
@@ -289,36 +327,46 @@ public struct CachedAvatarImage: View {
         .frame(width: size, height: size).clipShape(Circle())
         .task(id: urlString) { await loadAvatar(for: urlString) }
         .adaptiveOnChange(of: urlString) { _, newUrl in
-            guard let newUrl, !newUrl.isEmpty else { image = nil; return }
+            guard let newUrl, !newUrl.isEmpty else {
+                image = nil
+                thumbHashImage = nil
+                return
+            }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
-            image = DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: size))
-                ?? CacheCoordinator.warmedImage(for: resolved)
+            image = WarmImageProbe.warmedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting(CGSize(width: size, height: size))))
+            thumbHashImage = image == nil ? Self.waitingBlur(urlString: newUrl, thumbHash: thumbHash) : nil
         }
+    }
+
+    /// Le flou d'attente n'annonce qu'une photo À VENIR : sans URL, la personne
+    /// n'a pas de photo et le cercle montre ses initiales (#12568).
+    static func waitingBlur(urlString: String?, thumbHash: String?) -> UIImage? {
+        guard let urlString, !urlString.isEmpty, let thumbHash, !thumbHash.isEmpty else { return nil }
+        return UIImage.fromThumbHash(thumbHash)
+    }
+
+    /// Les initiales d'attente ET d'échec sont celles d'un avatar sans photo :
+    /// une seule dérivation, `MeeshyAvatar.initials(for:)`.
+    nonisolated public static func fallbackInitials(for name: String) -> String {
+        MeeshyAvatar.initials(for: name)
     }
 
     private var initialsFallback: some View {
-        let initials = name.components(separatedBy: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
-        let color = Color(hex: accentColor)
-        return ZStack {
-            LinearGradient(colors: [color, color.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
-            Text(initials.isEmpty ? "?" : initials)
-                .font(.system(size: size * 0.38, weight: .semibold, design: .rounded))
-                .foregroundColor(.white)
-        }
-    }
-
-    @MainActor private static func pixelSize(for points: CGFloat) -> CGFloat {
-        points * UIScreen.main.scale
+        AvatarInitialsFace(
+            initials: Self.fallbackInitials(for: name),
+            accent: accentColor, secondary: secondaryColor,
+            size: size, fontSize: size * 0.38
+        )
     }
 
     private func loadAvatar(for currentUrlString: String?) async {
         guard let currentUrlString, !currentUrlString.isEmpty else { return }
         let resolved = MeeshyConfig.resolveMediaURL(currentUrlString)?.absoluteString ?? currentUrlString
         if image != nil,
-           DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: size)) != nil
+           DiskCacheStore.cachedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting(CGSize(width: size, height: size)))) != nil
             || DiskCacheStore.cachedImage(for: resolved) != nil { return }
-        let maxPixel = Self.pixelSize(for: size)
-        if let loaded = await CacheCoordinator.shared.images.image(for: resolved, maxPixelSize: maxPixel) {
+        let maxPixel = DecodeBudget.maxPixelWidth(for: .fitting(CGSize(width: size, height: size)))
+        if let loaded = await imageLoader.image(for: resolved, maxPixelSize: maxPixel) {
             if self.urlString == currentUrlString {
                 withAnimation(.easeIn(duration: 0.15)) { self.image = loaded }
             }
@@ -331,17 +379,19 @@ public struct CachedBannerImage: View {
     public let thumbHash: String?
     public let fallbackColor: String
     public let height: CGFloat
+    let imageLoader: any MediaImageLoading
 
     @State private var image: UIImage?
     @State private var thumbHashImage: UIImage?
 
-    public init(urlString: String?, thumbHash: String? = nil, fallbackColor: String, height: CGFloat) {
+    public init(urlString: String?, thumbHash: String? = nil, fallbackColor: String, height: CGFloat, imageLoader: any MediaImageLoading = CoordinatorImageLoader.images) {
         self.urlString = urlString; self.thumbHash = thumbHash; self.fallbackColor = fallbackColor; self.height = height
+        self.imageLoader = imageLoader
         
         let cachedFull: UIImage?
         if let urlString, !urlString.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-            cachedFull = CacheCoordinator.warmedImage(for: resolved)
+            cachedFull = WarmImageProbe.warmedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fullBleed(height: height)))
         } else {
             cachedFull = nil
         }
@@ -360,7 +410,7 @@ public struct CachedBannerImage: View {
                 Image(uiImage: thumbHashImage).resizable().aspectRatio(contentMode: .fill)
             } else {
                 let color = Color(hex: fallbackColor)
-                LinearGradient(colors: [color.opacity(0.8), color.opacity(0.4)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                LinearGradient(colors: [color.opacity(MeeshyOpacity.intense), color.opacity(0.4)], startPoint: .topLeading, endPoint: .bottomTrailing)
             }
         }
         .frame(height: height).clipped()
@@ -371,7 +421,7 @@ public struct CachedBannerImage: View {
                 return
             }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
-            if let cached = CacheCoordinator.warmedImage(for: resolved) {
+            if let cached = WarmImageProbe.warmedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fullBleed(height: height))) {
                 image = cached
             } else {
                 image = nil
@@ -379,29 +429,12 @@ public struct CachedBannerImage: View {
         }
     }
 
-    /// Banners are laid out with a fixed `height` via `.frame(height:).clipped()`
-    /// but NO width constraint — every known call site (`ProfileView`,
-    /// `CommunityListView`, `CommunityDetailView`,
-    /// `ConversationListHelpers.ThemedCommunityCard`) stretches the view to
-    /// fill its container's width, which is at minimum comparable to, and
-    /// often much larger than, `height`. `kCGImageSourceThumbnailMaxPixelSize`
-    /// (used by `DiskCacheStore.downsampledImage`) bounds the LARGER of the
-    /// two rendered dimensions, so deriving the cap from `height` alone
-    /// starves the image on its actually-dominant width axis, producing a
-    /// visibly blurrier upscale than the pipeline's prior flat 1200px cap.
-    /// Anchoring on the device's screen width (this file has no visibility
-    /// into any per-call-site container width) restores parity with that
-    /// baseline for full-bleed banners.
-    @MainActor private static func pixelSize(for height: CGFloat) -> CGFloat {
-        max(UIScreen.main.bounds.width, height) * UIScreen.main.scale
-    }
-
     private func loadBanner(for currentUrlString: String?) async {
         guard let currentUrlString, !currentUrlString.isEmpty else { return }
         let resolved = MeeshyConfig.resolveMediaURL(currentUrlString)?.absoluteString ?? currentUrlString
         if image != nil && DiskCacheStore.cachedImage(for: resolved) != nil { return }
-        let maxPixel = Self.pixelSize(for: height)
-        if let loaded = await CacheCoordinator.shared.images.image(for: resolved, maxPixelSize: maxPixel) {
+        let maxPixel = DecodeBudget.maxPixelWidth(for: .fullBleed(height: height))
+        if let loaded = await imageLoader.image(for: resolved, maxPixelSize: maxPixel) {
             if self.urlString == currentUrlString {
                 withAnimation(.easeIn(duration: 0.15)) {
                     self.image = loaded
@@ -429,6 +462,26 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
     /// Le vrai gain octets+pixels vient toujours de la sélection de variante
     /// en amont (URL plus petite passée en `fullUrl`).
     public let targetSize: CGSize?
+    /// Appelé quand le plein format a été DEMANDÉ au réseau et n'est pas
+    /// arrivé (404, 410, refus, panne) — jamais quand la politique de
+    /// téléchargement a retenu la requête. Sans lui, un hôte n'a aucun moyen
+    /// de distinguer « encore en chargement » de « n'arrivera pas » : le
+    /// placeholder tournait pour toujours (#8141).
+    public let onFullImageFailure: (@MainActor () -> Void)?
+    /// Appelé quand le plein format est RÉSIDENT après sa résolution —
+    /// téléchargé à l'instant ou déjà en cache. Ce composant télécharge par
+    /// son propre chemin (le cache image), qu'aucun téléchargeur de l'hôte
+    /// n'observe : sans ce signal, un hôte qui affiche « télécharger » tant que
+    /// le média n'est pas sur l'appareil ne saurait jamais qu'il l'est
+    /// devenu (#10370).
+    public let onFullImageLoaded: (@MainActor () -> Void)?
+    /// Jeton opaque de l'hôte : quand il change, les chargements repartent
+    /// même si les URL n'ont pas changé — un média que la politique retenait
+    /// et qu'un autre chemin vient de poser sur l'appareil.
+    public let reloadToken: AnyHashable?
+    /// La taille CONNUE du plein format (#14639) — voir `CachedAsyncImage.byteSize`.
+    public let byteSize: Int?
+    let imageLoader: any MediaImageLoading
     public let placeholder: () -> Placeholder
 
     @State private var thumbHashImage: UIImage?
@@ -439,31 +492,53 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
     /// avant ce délai, donc le placeholder — souvent un `ProgressView` — ne
     /// flashe jamais pour un média déjà vu.
     @State private var showPlaceholder = false
+    /// Ce que fait réellement le plein format : le placeholder ne balaie que
+    /// pendant un vrai chargement, jamais sur un échec ni sur une image que la
+    /// politique de téléchargement retient en attendant un geste (#9869).
+    @State private var fetchDeferredByPolicy = false
+    @State private var fetchFailed = false
+    /// Même état pour la vignette, qui ne décide que lorsqu'aucun plein
+    /// format n'est demandé.
+    @State private var thumbnailDeferredByPolicy = false
+    @State private var thumbnailFailed = false
     public init(
         thumbHash: String? = nil,
         thumbnailUrl: String?,
         fullUrl: String?,
         autoLoad: Bool = false,
         targetSize: CGSize? = nil,
+        onFullImageFailure: (@MainActor () -> Void)? = nil,
+        onFullImageLoaded: (@MainActor () -> Void)? = nil,
+        reloadToken: AnyHashable? = nil,
+        byteSize: Int? = nil,
+        imageLoader: any MediaImageLoading = CoordinatorImageLoader.images,
         @ViewBuilder placeholder: @escaping () -> Placeholder
     ) {
+        self.reloadToken = reloadToken
+        self.byteSize = byteSize
+        self.imageLoader = imageLoader
         self.thumbHash = thumbHash
         self.thumbnailUrl = thumbnailUrl
         self.fullUrl = fullUrl
         self.autoLoad = autoLoad
         self.targetSize = targetSize
+        self.onFullImageFailure = onFullImageFailure
+        self.onFullImageLoaded = onFullImageLoaded
         self.placeholder = placeholder
 
-        // Tier 2: warm le full image depuis le disque vers la NSCache puis
-        // peuple l'etat sync — pas de transition thumbnail→full visible.
-        // Variante dimensionnée (slot par bucket de pixels) d'abord quand un
-        // `targetSize` est fourni, sinon le slot plein format.
+        // Tier 2: le full image déjà en MÉMOIRE peuple l'état sync — pas de
+        // transition thumbnail→full visible. Variante dimensionnée (slot par
+        // bucket de pixels) d'abord quand un `targetSize` est fourni, sinon le
+        // slot plein format. Jamais le disque (#10354) : le décodage d'un
+        // fichier dans l'init figeait le geste des réels ; le `.task` le lit
+        // hors du fil principal, et le préchargement des posters le met en
+        // mémoire avant que la page ne monte.
         let cachedFull: UIImage?
         if let fullUrl, !fullUrl.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(fullUrl)?.absoluteString ?? fullUrl
             cachedFull = targetSize.flatMap {
-                DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: $0))
-            } ?? CacheCoordinator.warmedImage(for: resolved)
+                DiskCacheStore.cachedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting($0)))
+            } ?? WarmImageProbe.residentImage(for: resolved)
         } else {
             cachedFull = nil
         }
@@ -472,7 +547,7 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         // Tier 1: idem pour le thumbnail si le full n'est pas encore disponible.
         if cachedFull == nil, let thumbnailUrl, !thumbnailUrl.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(thumbnailUrl)?.absoluteString ?? thumbnailUrl
-            _thumbnailImage = State(initialValue: CacheCoordinator.warmedImage(for: resolved))
+            _thumbnailImage = State(initialValue: WarmImageProbe.residentImage(for: resolved))
         }
 
         // Tier 0: decode ThumbHash instantly (< 0.1ms, always available if provided)
@@ -498,6 +573,7 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
                     .transition(.opacity)
             } else if showPlaceholder {
                 placeholder()
+                    .loadingSheenPhase(placeholderPhase)
             } else {
                 // Délai de grâce : pendant ~200 ms on n'affiche rien (transparent)
                 // plutôt que le placeholder. Une image en cache disque charge
@@ -507,36 +583,49 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         }
         .animation(.easeInOut(duration: 0.25), value: fullImage != nil)
         .animation(.easeInOut(duration: 0.15), value: thumbnailImage != nil)
-        .task(id: thumbnailUrl) {
+        .task(id: ProgressiveImageLoadID(url: thumbnailUrl, reloadToken: reloadToken)) {
             guard fullImage == nil else { return }
             await loadThumbnail()
         }
-        .task(id: fullUrl) {
+        .task(id: ProgressiveImageLoadID(url: fullUrl, reloadToken: reloadToken)) {
             await loadFullImage()
         }
         .task(id: fullUrl) {
             showPlaceholder = false
-            try? await Task.sleep(for: .milliseconds(200))
-            if !Task.isCancelled { showPlaceholder = true }
+            guard await cancellableSleep(for: .milliseconds(200)) else { return }
+            showPlaceholder = true
         }
         .adaptiveOnChange(of: thumbnailUrl) { _, newUrl in
             guard fullImage == nil else { return }
             guard let newUrl, !newUrl.isEmpty else { thumbnailImage = nil; return }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
-            thumbnailImage = CacheCoordinator.warmedImage(for: resolved)
+            thumbnailImage = WarmImageProbe.warmedImage(for: resolved)
         }
         .adaptiveOnChange(of: fullUrl) { _, newUrl in
             guard let newUrl, !newUrl.isEmpty else { fullImage = nil; return }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
-            let cached = targetSize.flatMap {
-                DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: $0))
-            } ?? CacheCoordinator.warmedImage(for: resolved)
+            let cached = WarmImageProbe.warmedImage(for: resolved, maxPixelSize: targetSize.map { DecodeBudget.maxPixelWidth(for: .fitting($0)) })
             if let cached {
                 fullImage = cached
             } else {
                 fullImage = nil
             }
         }
+    }
+
+    private var placeholderPhase: LoadingSheenPhase {
+        guard (fullUrl ?? "").isEmpty else {
+            return LoadingSheenLaw.phase(
+                hasURL: true,
+                fetchDeferredByPolicy: fetchDeferredByPolicy,
+                fetchFailed: fetchFailed
+            )
+        }
+        return LoadingSheenLaw.phase(
+            hasURL: !(thumbnailUrl ?? "").isEmpty,
+            fetchDeferredByPolicy: thumbnailDeferredByPolicy,
+            fetchFailed: thumbnailFailed
+        )
     }
 
     /// Returns `true` for `file://` URLs — local sandbox media that must never
@@ -546,11 +635,9 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         urlString.hasPrefix("file://")
     }
 
-    @MainActor private static func pixelSize(for points: CGSize) -> CGFloat {
-        max(points.width, points.height) * UIScreen.main.scale
-    }
-
     private func loadThumbnail() async {
+        thumbnailDeferredByPolicy = false
+        thumbnailFailed = false
         guard let thumbnailUrl, !thumbnailUrl.isEmpty, thumbnailImage == nil else { return }
         let resolved = MeeshyConfig.resolveMediaURL(thumbnailUrl)?.absoluteString ?? thumbnailUrl
         // Policy gate: skip network fetch when auto-download is disallowed
@@ -563,27 +650,36 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         if MediaFetchGate.shouldSkipNetworkFetch(
             autoLoad: autoLoad,
             isLocalFileURL: ProgressiveCachedImage.isLocalFileURL(resolved),
-            hasLocalCacheHit: CacheCoordinator.imageLocalFileURL(for: resolved) != nil
-                || DiskCacheStore.cachedImage(for: resolved) != nil,
-            policyAllowsAutoLoad: MediaDownloadPolicy.shouldAutoLoadImage()
+            hasLocalCacheHit: LocalImagePresence.isOnDevice(resolvedURL: resolved),
+            policyAllowsAutoLoad: MediaDownloadPolicy.shouldAutoLoadImage(byteSize: byteSize)
         ) {
+            thumbnailDeferredByPolicy = true
             return
         }
-        if let loaded = await CacheCoordinator.shared.images.image(for: resolved) {
-            if !Task.isCancelled, fullImage == nil {
-                withAnimation(.easeIn(duration: 0.15)) { thumbnailImage = loaded }
-            }
+        let loaded = await imageLoader.image(for: resolved)
+        guard !Task.isCancelled else { return }
+        guard let loaded else {
+            thumbnailFailed = true
+            return
+        }
+        if fullImage == nil {
+            withAnimation(.easeIn(duration: 0.15)) { thumbnailImage = loaded }
         }
     }
 
     private func loadFullImage() async {
+        fetchDeferredByPolicy = false
+        fetchFailed = false
         guard let fullUrl, !fullUrl.isEmpty else { return }
         let resolved = MeeshyConfig.resolveMediaURL(fullUrl)?.absoluteString ?? fullUrl
         if fullImage != nil {
             let sizedResident = targetSize.map {
-                DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: $0)) != nil
+                DiskCacheStore.cachedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting($0))) != nil
             } ?? false
-            if sizedResident || DiskCacheStore.cachedImage(for: resolved) != nil { return }
+            if sizedResident || DiskCacheStore.cachedImage(for: resolved) != nil {
+                onFullImageLoaded?()
+                return
+            }
         }
         // Policy gate (full image): skip network fetch when auto-download is
         // disallowed. ThumbHash + thumbnail (if cached) keep the bubble
@@ -594,23 +690,20 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         if MediaFetchGate.shouldSkipNetworkFetch(
             autoLoad: autoLoad,
             isLocalFileURL: ProgressiveCachedImage.isLocalFileURL(resolved),
-            hasLocalCacheHit: CacheCoordinator.imageLocalFileURL(for: resolved) != nil
-                || DiskCacheStore.cachedImage(for: resolved) != nil,
-            policyAllowsAutoLoad: MediaDownloadPolicy.shouldAutoLoadImage()
+            hasLocalCacheHit: LocalImagePresence.isOnDevice(resolvedURL: resolved),
+            policyAllowsAutoLoad: MediaDownloadPolicy.shouldAutoLoadImage(byteSize: byteSize)
         ) {
+            fetchDeferredByPolicy = true
             return
         }
-        let loaded: UIImage?
-        if let targetSize {
-            let maxPixel = Self.pixelSize(for: targetSize)
-            loaded = await CacheCoordinator.shared.images.image(for: resolved, maxPixelSize: maxPixel)
-        } else {
-            loaded = await CacheCoordinator.shared.images.image(for: resolved)
+        let loaded = await CachedImageFetch.load(resolved, targetSize: targetSize, using: imageLoader)
+        guard !Task.isCancelled else { return }
+        guard let loaded else {
+            fetchFailed = true
+            onFullImageFailure?()
+            return
         }
-        if let loaded {
-            if !Task.isCancelled {
-                withAnimation(.easeIn(duration: 0.25)) { fullImage = loaded }
-            }
-        }
+        withAnimation(.easeIn(duration: 0.25)) { fullImage = loaded }
+        onFullImageLoaded?()
     }
 }

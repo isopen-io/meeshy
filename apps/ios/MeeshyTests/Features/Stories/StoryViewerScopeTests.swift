@@ -62,6 +62,73 @@ final class StoryViewerScopeTests: XCTestCase {
     }
 }
 
+// MARK: - Mes stories : seules les barres des stories EN COURS (#7887)
+
+/// Directive porteur 2026-09-25 : « dans les barres de stories, il ne faut
+/// indiquer que les stories en cours ». `StoryViewModel` garde exprès TOUTES
+/// les stories de l'auteur dans son propre groupe (ouvrir une archive depuis
+/// « Mes stories ») ; le lecteur traçait donc une barre par archive.
+final class StoryViewerLiveStoriesTests: XCTestCase {
+
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    private func story(_ id: String, expiresIn seconds: TimeInterval) -> StoryItem {
+        StoryItem(id: id, createdAt: now.addingTimeInterval(-3600),
+                  expiresAt: now.addingTimeInterval(seconds))
+    }
+
+    private func group(_ id: String, _ stories: [StoryItem]) -> StoryGroup {
+        StoryGroup(id: id, username: "u-\(id)", avatarColor: "#6366F1",
+                   avatarURL: nil, stories: stories)
+    }
+
+    func test_myGroup_keepsOnlyTheLiveStories() {
+        let mine = group("me", [story("old1", expiresIn: -7200), story("live1", expiresIn: 600),
+                                story("old2", expiresIn: -60), story("live2", expiresIn: 3600)])
+
+        let scoped = StoryViewerScope.liveOnly([mine], authorId: "me", keeping: nil, now: now)
+
+        XCTAssertEqual(scoped.first?.stories.map(\.id), ["live1", "live2"],
+                       "une barre par story EN COURS, jamais une par archive")
+    }
+
+    func test_myGroup_keepsTheArchiveIOpenedExplicitly() {
+        let mine = group("me", [story("old1", expiresIn: -7200), story("live1", expiresIn: 600)])
+
+        let scoped = StoryViewerScope.liveOnly([mine], authorId: "me", keeping: "old1", now: now)
+
+        XCTAssertEqual(scoped.first?.stories.map(\.id), ["old1", "live1"],
+                       "ouvrir une archive depuis « Mes stories » la montre — et elle seule parmi les archives")
+    }
+
+    func test_otherAuthors_areLeftUntouched() {
+        let theirs = group("them", [story("ref", expiresIn: -60), story("live", expiresIn: 600)])
+
+        let scoped = StoryViewerScope.liveOnly([theirs], authorId: "me", keeping: nil, now: now)
+
+        XCTAssertEqual(scoped.first?.stories.map(\.id), ["ref", "live"],
+                       "les autres auteurs sont déjà filtrés par le modèle (droit de référence compris)")
+    }
+
+    func test_myGroup_withNothingLive_isKeptWhole_soTheViewerNeverOpensEmpty() {
+        let mine = group("me", [story("old1", expiresIn: -7200)])
+
+        let scoped = StoryViewerScope.liveOnly([mine], authorId: "me", keeping: nil, now: now)
+
+        XCTAssertEqual(scoped.first?.stories.map(\.id), ["old1"])
+    }
+
+    func test_storyIndex_followsTheSameStoryIntoTheScopedGroup() {
+        let original = group("me", [story("old1", expiresIn: -7200), story("live1", expiresIn: 600),
+                                    story("live2", expiresIn: 900)])
+        let scoped = StoryViewerScope.liveOnly([original], authorId: "me", keeping: nil, now: now)[0]
+
+        XCTAssertEqual(StoryViewerScope.storyIndex(2, from: original, into: scoped), 1)
+        XCTAssertEqual(StoryViewerScope.storyIndex(0, from: original, into: scoped), 0,
+                       "une archive écartée retombe sur la première story en cours")
+    }
+}
+
 // MARK: - StoryViewerContainer.isGroupReadyToPresent (Fix A — bouton commentaires manquant sur entrée notification)
 
 /// `StoryViewerContainer.body` bascule sur `StoryViewerView` dès que

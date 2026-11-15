@@ -6834,7 +6834,7 @@ the documentation output the routine has been asking for across ~10+ runs on thi
 > `upsertSavedAccount` (replace in place by id, else insert at front), `removeFromSavedAccounts`
 > (`removeAll { $0.id == userId }`) — plus `SavedAccount` (`shortName == displayName ?? username`,
 > `AuthModels.swift`) and `LoginView.showPicker` (`!savedAccounts.isEmpty && !showNormalLogin`,
-> `apps/ios/Meeshy/Features/Main/Views/LoginView.swift`). Two pure `:core:model/auth/` types.
+> `apps/ios/Meeshy/Features/Auth/Views/LoginView.swift`). Two pure `:core:model/auth/` types.
 > **`SavedAccount`** (data class: `id`/`username`/`displayName?`/`avatarUrl?`/`lastActiveAtMillis`) with
 > `shortName` = display name else username — **hardened** over iOS's null-only fallback so a blank/
 > whitespace-only display name also falls back to the username (a row never renders empty).
@@ -6977,7 +6977,7 @@ the documentation output the routine has been asking for across ~10+ runs on thi
 > `auth-magic-link-countdown`, feature-parity §A → advances "Passwordless magic-link login (email +
 > countdown + resend) via deep link" `[ ]` → `[~]`). This is the pure waiting-step logic behind the
 > passwordless flow. Parity source: iOS `MagicLinkView`
-> (`apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift`) — the `isValidEmail` regex, the
+> (`apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift`) — the `isValidEmail` regex, the
 > `startCountdown` per-second `Task` loop that flips `linkExpired` at zero, `formattedCountdown`
 > (`"m:ss"`), and the resend `.disabled(countdownRemaining > 0 || isLoading)` gate. Two pure
 > `:core:model/auth/` cores. **`MagicLinkCountdown`** is an immutable value (`remaining`, `expired`)

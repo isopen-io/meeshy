@@ -6,6 +6,9 @@ import MeeshySDK
 // MARK: - Image Viewer View
 
 public struct ImageViewerView: View {
+    /// La fenêtre qui porte la vue (Stage Manager, Split View) — la fenêtre clé en repli.
+    @Environment(\.sceneWindowSize) var sceneWindowSize
+    private var hostHeight: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: WindowMetrics.windowSize).height }
     public let attachment: MeeshyMessageAttachment
     public let context: MediaPlayerContext
     public var accentColor: String = MeeshyColors.brandPrimaryHex
@@ -23,10 +26,13 @@ public struct ImageViewerView: View {
     // in the scroll list). Dark/light comes reactively from the environment
     // instead (cf. ChatBubble.swift precedent).
     @Environment(\.colorScheme) private var colorScheme
+    /// Le portillon de sortie posé par l'hôte (#9573), reposé sur ce que cette vue présente.
+    @Environment(\.contentExitGate) private var exitGate
+    /// Le bouclier de capture de l'hôte (#9574), reposé sur ce que cette vue présente.
+    @Environment(\.isCaptureShielded) private var isCaptureShielded
     @State private var showFullscreen = false
 
     private var isDark: Bool { colorScheme == .dark || context.isImmersive }
-    private var accent: Color { Color(hex: accentColor) }
 
     private var imageURL: URL? {
         let urlStr = attachment.fileUrl.isEmpty
@@ -48,18 +54,21 @@ public struct ImageViewerView: View {
         case .messageBubble: return 200
         case .composerAttachment: return 80
         case .feedPost: return 350
-        case .storyOverlay, .fullscreen: return WindowMetrics.windowSize.height
+        case .storyOverlay, .fullscreen: return hostHeight
         }
     }
 
     public var isOwnMessage: Bool = false
+    let imageLoader: any MediaImageLoading
 
     public init(attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
                 accentColor: String = MeeshyColors.brandPrimaryHex, isOwnMessage: Bool = false,
+                imageLoader: any MediaImageLoading = CoordinatorImageLoader.images,
                 onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil,
                 onSaveRequested: (() -> Void)? = nil) {
         self.attachment = attachment; self.context = context; self.accentColor = accentColor
         self.isOwnMessage = isOwnMessage
+        self.imageLoader = imageLoader
         self.onDelete = onDelete; self.onEdit = onEdit
         self.onSaveRequested = onSaveRequested
     }
@@ -73,20 +82,26 @@ public struct ImageViewerView: View {
         .frame(maxWidth: maxWidth, maxHeight: maxHeight)
         .clipShape(RoundedRectangle(cornerRadius: context.cornerRadius))
         .contentShape(RoundedRectangle(cornerRadius: context.cornerRadius))
-        .onTapGesture {
-            if !context.isEditable {
-                showFullscreen = true
-                HapticFeedback.light()
-            }
-        }
+        .onTapGesture { openFullscreen() }
+        .accessibilityAddTraits(context.isEditable ? [] : .isButton)
+        .accessibilityAction(named: Text(String(localized: "media.image.open.a11y", bundle: .module))) { openFullscreen() }
         .fullScreenCover(isPresented: $showFullscreen) {
             ImageFullscreen(
                 imageUrl: imageURL,
                 accentColor: accentColor,
                 attachmentId: isOwnMessage ? nil : attachment.id,
+                imageLoader: imageLoader,
                 onSaveRequested: onSaveRequested
             )
+            .contentExitGate(exitGate)
+            .captureShield(isCaptureShielded)
         }
+    }
+
+    private func openFullscreen() {
+        guard !context.isEditable else { return }
+        showFullscreen = true
+        HapticFeedback.light()
     }
 
     // MARK: - Image Content
@@ -103,7 +118,8 @@ public struct ImageViewerView: View {
             CachedAsyncImage(
                 url: urlStr,
                 targetSize: CGSize(width: 280, height: 280),
-                thumbHash: attachment.thumbHash
+                thumbHash: attachment.thumbHash,
+                imageLoader: imageLoader
             ) {
                 placeholder(icon: "photo")
                     .shimmer()
@@ -123,11 +139,12 @@ public struct ImageViewerView: View {
                     Spacer()
                     Button { onDelete(); HapticFeedback.light() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 18))
-                            .foregroundColor(MeeshyColors.error)
+                            .font(.system(size: MeeshyIconSize.lg))
+                            .foregroundStyle(MeeshyColors.error)
                             .background(Circle().fill(.ultraThinMaterial).frame(width: 14, height: 14))
                     }
-                    .padding(6)
+                    .accessibilityLabel(String(localized: "common.delete", bundle: .module))
+                    .padding(MeeshySpacing.xsPlus)
                 }
                 Spacer()
             }
@@ -138,18 +155,18 @@ public struct ImageViewerView: View {
                 Spacer()
                 HStack {
                     Button { onEdit(); HapticFeedback.light() } label: {
-                        HStack(spacing: 3) {
+                        HStack(spacing: MeeshySpacing.xxs) {
                             Image(systemName: "pencil")
-                                .font(.system(size: 10, weight: .bold))
+                                .meeshyScaledFont(MeeshyIconSize.xxs, weight: .bold)
                             Text(String(localized: "media.image.edit", defaultValue: "\u{00C9}diter", bundle: .module))
-                                .font(.system(size: 10, weight: .semibold))
+                                .meeshyScaledFont(MeeshyFont.captionSize, weight: .semibold)
                         }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(.black.opacity(0.5)))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, MeeshySpacing.sm)
+                        .padding(.vertical, MeeshySpacing.xs)
+                        .background(Capsule().fill(MeeshyColors.mediaScrim))
                     }
-                    .padding(6)
+                    .padding(MeeshySpacing.xsPlus)
                     Spacer()
                 }
             }
@@ -161,12 +178,12 @@ public struct ImageViewerView: View {
                 HStack {
                     Spacer()
                     Text(attachment.fileSizeFormatted)
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(.black.opacity(0.5)))
-                        .padding(6)
+                        .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, MeeshySpacing.xs)
+                        .padding(.vertical, MeeshySpacing.xxs)
+                        .background(Capsule().fill(MeeshyColors.mediaScrim))
+                        .padding(MeeshySpacing.xsPlus)
                 }
             }
         }
@@ -175,7 +192,7 @@ public struct ImageViewerView: View {
     // MARK: - Placeholder
     private func placeholder(icon: String) -> some View {
         Rectangle()
-            .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+            .fill(MeeshyColors.surfaceFill(isDark: isDark))
             .overlay(
                 Image(systemName: icon)
                     .font(.system(size: context.isCompact ? 22 : 28))
@@ -193,46 +210,51 @@ public struct ImageFullscreen: View {
     public var caption: String? = nil
     public var mentionDisplayNames: [String: String]? = nil
     public var attachmentId: String? = nil
+    let imageLoader: any MediaImageLoading
     /// Hook paramétrique « Enregistrer » — délègue au composant unifié de
     /// l'app quand fourni ; nil = save Photos direct legacy.
     public var onSaveRequested: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
+    /// Le portillon de sortie posé par l'hôte (#9573) : fermé, l'enregistrement ne fait rien.
+    @Environment(\.contentExitGate) private var exitGate
     @State private var scale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
-    @State private var showControls = true
+    // #10930 : on entre sans chrome ; tout toucher le pose par-dessus l'image.
+    @State private var showControls = false
     @State private var saveState: SaveState = .idle
     @State private var viewStartTime: Date?
 
-    private enum SaveState {
+    private nonisolated enum SaveState: Equatable, Sendable {
         case idle, saving, saved, failed
     }
 
     public init(imageUrl: URL?, accentColor: String, caption: String? = nil,
                 mentionDisplayNames: [String: String]? = nil, attachmentId: String? = nil,
+                imageLoader: any MediaImageLoading = CoordinatorImageLoader.images,
                 onSaveRequested: (() -> Void)? = nil) {
         self.imageUrl = imageUrl; self.accentColor = accentColor
         self.caption = caption; self.mentionDisplayNames = mentionDisplayNames
         self.attachmentId = attachmentId
+        self.imageLoader = imageLoader
         self.onSaveRequested = onSaveRequested
+    }
+
+    private func toggleControls() {
+        withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
     }
 
     public var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-                .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showControls.toggle()
-                    }
-                }
+                .meeshyTapAction(label: String(localized: "media.controls.toggle.a11y", bundle: .module)) { toggleControls() }
 
             if let url = imageUrl {
-                // autoLoad: true — a manual tap to open fullscreen is
-                // explicit user intent and must override the ambient network
-                // policy gate (contract §14.1). Without this, Low Data Mode /
-                // Wi-Fi-only leaves the viewer on an infinite spinner even
-                // though the user just asked to see the image.
-                CachedAsyncImage(url: url.absoluteString, autoLoad: true) {
+                // autoLoad: true — l'ouverture en plein écran est une intention
+                // explicite qui prime sur la politique réseau ambiante (contrat
+                // §14.1) : sans cela, Low Data Mode / Wi-Fi seul laisse un
+                // spinner infini alors que l'utilisateur a demandé l'image.
+                CachedAsyncImage(url: url.absoluteString, autoLoad: true, imageLoader: imageLoader) {
                     ProgressView().tint(.white)
                 }
                 .aspectRatio(contentMode: .fit)
@@ -268,52 +290,19 @@ public struct ImageFullscreen: View {
                             }
                         }
                 )
-                .onTapGesture(count: 2) {
+                .meeshyNamedTapAction(String(localized: "media.image.zoom.toggle.a11y", bundle: .module), count: 2) {
                     withAnimation(.spring()) {
                         scale = scale > 1 ? 1 : 2.5
                         offset = .zero
                     }
                 }
+                .meeshyNamedTapAction(String(localized: "media.controls.toggle.a11y", bundle: .module)) { toggleControls() }
             }
 
             if showControls {
                 VStack {
-                    HStack {
-                        Button { dismiss() } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 28))
-                                .foregroundColor(.white.opacity(0.8))
-                                .padding()
-                        }
-                        Spacer()
-
-                        Button {
-                            if let onSaveRequested {
-                                onSaveRequested()
-                            } else {
-                                saveToPhotos()
-                            }
-                        } label: {
-                            Group {
-                                switch saveState {
-                                case .idle:
-                                    Image(systemName: "arrow.down.to.line")
-                                case .saving:
-                                    ProgressView().tint(.white)
-                                case .saved:
-                                    Image(systemName: "checkmark")
-                                case .failed:
-                                    Image(systemName: "xmark")
-                                }
-                            }
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.9))
-                            .frame(width: 40, height: 40)
-                            .background(Circle().fill(Color.white.opacity(0.2)))
-                            .padding(.trailing, 12)
-                            .padding(.top, 8)
-                        }
-                        .disabled(saveState == .saving || saveState == .saved)
+                    FullscreenTopBar(onClose: { dismiss() }) {
+                        ContentExitGated { saveButton }
                     }
                     Spacer()
 
@@ -330,8 +319,8 @@ public struct ImageFullscreen: View {
                         )
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.vertical, MeeshySpacing.md)
                         .background(.ultraThinMaterial)
                         .tint(Color(hex: accentColor))
                     }
@@ -339,9 +328,50 @@ public struct ImageFullscreen: View {
                 .transition(.opacity)
             }
         }
-        .statusBar(hidden: true)
+        .statusBarHidden(true)
         .onAppear { viewStartTime = Date() }
         .onDisappear { reportImageViewed() }
+        .settling($saveState, to: .idle, after: .seconds(2), animation: .default, when: { $0 == .saved || $0 == .failed })
+    }
+
+    @ViewBuilder
+    private var saveButton: some View {
+        if saveState == .saving {
+            ProgressView()
+                .tint(MeeshyColors.mediaChromeForeground)
+                .frame(width: FullscreenChromeMetrics.tapTarget,
+                       height: FullscreenChromeMetrics.tapTarget)
+        } else {
+            FullscreenChromeButton(
+                systemImage: saveGlyph,
+                label: isInAlbum && saveState == .idle
+                    ? PhotoAlbumSaveFeedback.alreadyInAlbumMessage
+                    : String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module)
+            ) {
+                exitGate.perform {
+                    if let onSaveRequested {
+                        onSaveRequested()
+                    } else {
+                        saveToPhotos()
+                    }
+                }
+            }
+            .disabled(saveState == .saved)
+        }
+    }
+
+    private var saveGlyph: String {
+        switch saveState {
+        case .idle: return isInAlbum ? FullscreenChromeSymbol.saved : FullscreenChromeSymbol.save
+        case .saving: return FullscreenChromeSymbol.save
+        case .saved: return FullscreenChromeSymbol.saved
+        case .failed: return FullscreenChromeSymbol.close
+        }
+    }
+
+    /// Déjà dans l'album Meeshy (#10370) : lu au registre, dès le premier rendu.
+    private var isInAlbum: Bool {
+        PhotoAlbumSaveFeedback.isInAlbum(attachmentId: attachmentId)
     }
 
     private func reportImageViewed() {
@@ -356,12 +386,14 @@ public struct ImageFullscreen: View {
     }
 
     private func saveToPhotos() {
-        guard let url = imageUrl else { return }
+        guard exitGate.mayLeave(), let url = imageUrl else { return }
         saveState = .saving
         HapticFeedback.light()
         Task {
-            let saved = await saveStamped(url)
-            if saved, let attId = attachmentId {
+            let outcome = await saveAsReceived(url)
+            let saved = outcome.isInAlbum
+            if outcome == .alreadyPresent { PhotoAlbumSaveFeedback.announceAlreadyInAlbum() }
+            if outcome == .saved, let attId = attachmentId {
                 let body = AttachmentStatusBody(action: "downloaded", playPositionMs: 0, durationMs: 0, complete: true)
                 AttachmentStatusReporter.report(attachmentId: attId, body: body)
             }
@@ -370,14 +402,11 @@ public struct ImageFullscreen: View {
                     saveState = saved ? .saved : .failed
                 }
                 if saved { HapticFeedback.success() } else { HapticFeedback.error() }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    withAnimation { saveState = .idle }
-                }
             }
         }
     }
 
-    /// Enregistre l'image MARQUÉE dans la photothèque.
+    /// Enregistre l'image TELLE QU'ELLE A ÉTÉ REÇUE, sans marque.
     ///
     /// Les octets viennent du cache partagé : ils sont presque toujours déjà
     /// résidents (la bulle vient de les afficher), donc pas d'aller-retour
@@ -385,22 +414,33 @@ public struct ImageFullscreen: View {
     /// sur l'autorisation add-only (l'app porte `NSPhotoLibraryAddUsageDescription`),
     /// donc un refus se résout en `false` plutôt qu'en crash.
     ///
-    /// La marque suit la MÊME règle que le flux unifié de l'app
-    /// (`MediaSaveBranding`) : filigrane fixe sur les images, jamais sur un
-    /// format animé, et un marquage impossible n'empêche jamais
-    /// l'enregistrement — on écrit alors les octets d'origine.
+    /// **Aucun filigrane ici, et ce n'est pas un oubli.** Ce chemin direct n'est
+    /// emprunté que lorsque l'hôte ne fournit PAS `onSaveRequested` — c'est-à-dire
+    /// depuis les deux surfaces de CONVERSATION (la bulle, l'aperçu plein écran
+    /// d'un média de fil). Or la directive porteur du 2026-09-12, qui supplante
+    /// celle du 2026-08-12 (« un média qui quitte Meeshy porte sa marque »),
+    /// réserve la marque aux œuvres COMPOSÉES — story enregistrée ou exportée,
+    /// scène de post, scène de réel — et l'interdit sur les originaux d'une
+    /// conversation. Marquer ici, c'était appliquer l'ancienne règle sous la
+    /// nouvelle, à l'endroit exact qu'elle vise.
+    ///
+    /// La règle elle-même reste app-side (`MediaSaveBranding`, `MediaOrigin`) :
+    /// cette vue ne décide rien, elle sert des octets déjà qualifiés par le seul
+    /// chemin qui puisse l'atteindre.
     @MainActor
-    private func saveStamped(_ url: URL) async -> Bool {
-        guard let data = try? await CacheCoordinator.shared.images.data(for: url.absoluteString) else {
-            return false
+    private func saveAsReceived(_ url: URL) async -> PhotoLibrarySaveOutcome {
+        // Le fichier du cache part PAR RÉFÉRENCE : rien n'est relu ni décodé (#9685).
+        // Dédoublonné par l'empreinte du contenu (#10370).
+        if let onDisk = CacheCoordinator.imageLocalFileURL(for: url.absoluteString) {
+            return await PhotoLibraryManager.shared.addImageFile(at: onDisk, alias: attachmentId)
         }
-        guard MeeshyImageWatermark.supports(pathExtension: url.pathExtension),
-              let image = UIImage(data: data),
-              let stamped = MeeshyImageWatermark.stamped(
-                image, username: AuthManager.shared.currentUser?.username)
-        else {
-            return await PhotoLibraryManager.shared.saveImage(data)
+        guard let data = await Self.receivedBytes(for: url, using: imageLoader) else {
+            return .failed
         }
-        return await PhotoLibraryManager.shared.saveImage(stamped)
+        return await PhotoLibraryManager.shared.addImage(data, alias: attachmentId)
+    }
+
+    static func receivedBytes(for url: URL, using loader: any MediaImageLoading) async -> Data? {
+        try? await loader.data(for: url.absoluteString)
     }
 }

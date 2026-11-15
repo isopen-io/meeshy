@@ -3,12 +3,6 @@
 import Foundation
 import Combine
 import os
-// `@preconcurrency` relaxes Swift 6 strict concurrency interop checks for the
-// GRDB module. Without it, the runtime injects `_swift_task_checkIsolatedSwift`
-// at the invocation of @Sendable closures we pass to GRDB observation APIs,
-// which then aborts because GRDB calls the closure from its own reader/writer
-// dispatch queue (not from any actor's executor).
-@preconcurrency import GRDB
 import MeeshySDK
 
 /// Sendable weak-reference box. Used to capture a weak reference to the
@@ -28,117 +22,37 @@ import MeeshySDK
 /// type, copy the pattern with that type rather than re-introducing the
 /// generic.
 private final class WeakBox: @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     weak var value: MessageStore?
     init(_ value: MessageStore) { self.value = value }
 }
 
 // Notification.Name `messageStoreShouldRefresh` is defined in
-// `packages/MeeshySDK/Sources/MeeshySDK/Persistence/MessagePersistenceActor.swift`
+// `packages/MeeshySDK/Sources/MeeshySDK/Persistence/PersistenceNotifications.swift`
 // so both MessageStore (iOS app) and MessagePersistenceActor (SDK) can use it.
-
-/// Fetches the message window from GRDB based on `WindowMode`. Declared at
-/// file scope so the closure(s) passed to `reader.read` don't inherit any
-/// actor isolation context (which would trigger Swift 6 strict concurrency
-/// runtime checks at GRDB invocation).
-private func fetchMessageWindow(
-    reader: any DatabaseWriter,
-    convId: String,
-    mode: WindowMode,
-    anchor: Date?,
-    initialWindowSize: Int
-) throws -> [MessageRecord] {
-    switch mode {
-    case .search(let ids):
-        // Filtered-conversation search: show ONLY the matched messages
-        // (chronological), regardless of how far back they are. Matches are
-        // identified by their SERVER id (the search API works server-side);
-        // offline messages without a serverId are intentionally excluded.
-        guard !ids.isEmpty else { return [] }
-        return try reader.read { db in
-            // SQLite caps `IN (…)` at ~999 bound variables. Chunk to stay safe
-            // on very large match sets (deep search pagination), then re-sort
-            // the union chronologically. The common case (≤ a page of results)
-            // is a single query + a trivial sort.
-            let chunks = stride(from: 0, to: ids.count, by: 900).map {
-                Array(ids[$0 ..< min($0 + 900, ids.count)])
-            }
-            var collected: [MessageRecord] = []
-            for chunk in chunks {
-                let rows = try MessageRecord
-                    .filter(Column("conversationId") == convId)
-                    .filter(chunk.contains(Column("serverId")))
-                    .fetchAll(db)
-                collected.append(contentsOf: rows)
-            }
-            return collected.sorted { $0.createdAt < $1.createdAt }
-        }
-    case .around(let centerDate):
-        return try reader.read { db in
-        let half = initialWindowSize / 2
-            let before = try MessageRecord
-                .filter(Column("conversationId") == convId)
-                .filter(Column("createdAt") <= centerDate)
-                .order(Column("createdAt").desc)
-                .limit(half)
-                .fetchAll(db)
-            let after = try MessageRecord
-                .filter(Column("conversationId") == convId)
-                .filter(Column("createdAt") > centerDate)
-                .order(Column("createdAt").asc)
-                .limit(half)
-                .fetchAll(db)
-            return Array(before.reversed()) + after
-        }
-    case .latest:
-        if let anchor {
-            // Dynamic window: when the user has scrolled up, load ALL
-            // messages from the anchor to the newest. No cap — the window
-            // grows as the user paginates deeper into history.
-            return try reader.read { db in
-                try MessageRecord
-                    .filter(Column("conversationId") == convId)
-                    .filter(Column("createdAt") >= anchor)
-                    .order(Column("createdAt").asc)
-                    .fetchAll(db)
-            }
-        } else {
-            // Initial load: fetch the most recent N messages.
-            return try reader.read { db in
-                try Array(MessageRecord
-                    .filter(Column("conversationId") == convId)
-                    .order(Column("createdAt").desc)
-                    .limit(initialWindowSize)
-                    .fetchAll(db)
-                    .reversed())
-            }
-        }
-    }
-}
 
 /// Holds cancellation tokens that must be accessible from `nonisolated deinit`.
 /// Explicitly non-isolated so its methods can be called from any context.
-private final class ObservationTokens: @unchecked Sendable {
-    nonisolated(unsafe) var regionCancellable: AnyDatabaseCancellable?
-    nonisolated(unsafe) var refreshTask: Task<Void, Never>?
+private nonisolated final class ObservationTokens: @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
+    private let region = Locked<AnyCancellable?>(uncheckedState: nil)
+
+    var regionCancellable: AnyCancellable? {
+        get { region.mutateUnchecked { $0 } }
+        set { region.mutateUnchecked { $0 = newValue } }
+    }
 
     nonisolated func cancelAll() {
         regionCancellable?.cancel()
-        refreshTask?.cancel()
     }
-}
-
-/// Describes which slice of the conversation the store is currently displaying.
-public enum WindowMode: Equatable, Sendable {
-    /// Latest window — show the most recent N messages.
-    case latest
-    /// Jumped window — show messages centered around a specific date.
-    case around(date: Date)
-    /// Search filter — show ONLY the messages whose `serverId` is in `ids`,
-    /// in chronological order, independent of any time window. Drives the
-    /// in-situ filtered-conversation search UX. `ids` are server message IDs;
-    /// the caller must have persisted the matches in GRDB beforehand (e.g.
-    /// via `upsertFromAPIMessages`).
-    case search(ids: [String])
 }
 
 @MainActor
@@ -146,14 +60,43 @@ public final class MessageStore: ObservableObject {
     /// Number of messages fetched on initial load (no anchor). Once the user
     /// scrolls and an anchor is set, the window grows dynamically without cap.
     static let initialWindowSize = 200
-    static let prefetchThreshold = 30
+
+    /// Plafond de la relecture ANCRÉE en temps réel (#4943, D-RT-02). Après
+    /// une remontée profonde du fil, la fenêtre `.latest` ancrée n'avait
+    /// AUCUNE borne haute : chaque écriture GRDB — message entrant, accusé de
+    /// livraison, réaction, tick de retry — rematérialisait des milliers de
+    /// lignes SQLite, une E/S proportionnelle à ce que l'utilisateur avait
+    /// remonté et non à ce qui avait changé. La relecture temps réel s'arrête
+    /// donc aux 500 lignes les plus récentes de la fenêtre ; le reste est
+    /// PRÉSERVÉ par la fusion protectrice de `publish` (`.latest` +
+    /// `mergeInMemory`), si bien qu'aucune bulle ne quitte l'écran. Les
+    /// transitions de fenêtre (jump / restore / pagination), qui REMPLACENT,
+    /// relisent toujours sans plafond.
+    ///
+    /// CE QUE LA BORNE COÛTE, dit franchement : au-delà de 500 lignes remontées,
+    /// une modification d'une bulle PLUS ANCIENNE que la borne (édition,
+    /// suppression, réaction) n'est plus reflétée par le refresh temps réel —
+    /// la fusion préserve alors la version en mémoire. Elle revient à la
+    /// prochaine transition de fenêtre ou à la réouverture. Le compromis est
+    /// assumé : ces lignes sont hors écran de plusieurs centaines de rangées,
+    /// alors que la lecture non bornée coûtait des milliers de lignes SQLite à
+    /// CHAQUE accusé de lecture émis pendant le défilement. Une lecture
+    /// réellement DELTA (par `changeVersion`) est la suite naturelle.
+    static let realtimeAnchoredWindowCap = 500
+
+    /// Plafond de la fenêtre `.latest` JAMAIS REMONTÉE (aucune ancre). La fusion protectrice de `publish`
+    /// préserve tout ce qui sort des 200 dernières lignes relues : sur un fil laissé ouvert — un iPad posé
+    /// sur un groupe actif — la fenêtre gagnait chaque message reçu et ne rendait rien, et chaque accusé
+    /// re-triait le tout sur la boucle principale. Sans ancre, la personne n'a jamais paginé vers le passé :
+    /// les lignes retirées sont à plus de mille rangées du présent, et `loadOlder` les relit depuis GRDB.
+    /// Une fenêtre ANCRÉE (historique remonté) n'est pas touchée — on ne retire rien sous les yeux de qui lit.
+    static let unanchoredWindowCap = 1_000
 
     // MARK: - Public State
 
-    @Published private(set) var messages: [MessageRecord] = []
-    @Published private(set) var sections: [MessageSection] = []
-    @Published private(set) var unreadBelowCount: Int = 0
-    var currentVisibleMessageIds: Set<String> = []
+    private(set) var messages: [MessageRecord] = []
+    /// « Supprimer pour moi » en vol (#11221) : filtré de TOUTE publication, la base intacte.
+    private(set) var personalConcealment = PersonalConcealment()
     var isUserScrolling = false
 
     // MARK: - Window Mode
@@ -161,6 +104,15 @@ public final class MessageStore: ObservableObject {
     /// The current display window. `.latest` shows the most recent messages;
     /// `.around(date:)` shows a centered slice used during jump-to-message UX.
     private(set) var windowMode: WindowMode = .latest
+
+    /// Bord récent de la fenêtre `.around` (#9304) — sans effet hors d'elle.
+    private(set) var jumpedNewerEdge: JumpedWindowNewerEdge = .halfWindow
+
+    /// Jeton de la fenêtre affichée (#9364) : avance à chaque fenêtre
+    /// REMPLACÉE (saut, retour au présent, recherche), jamais quand une page
+    /// plus récente l'ÉTEND. Une page partie pour une génération précédente
+    /// ne touche plus à la fenêtre courante.
+    private(set) var windowGeneration: UInt64 = 0
 
     // MARK: - Internal
 
@@ -183,10 +135,23 @@ public final class MessageStore: ObservableObject {
     // Change signal for UICollectionView observation
     let messagesDidChange = PassthroughSubject<Void, Never>()
 
-    struct MessageSection: Sendable {
-        let date: DateComponents
-        let messageIds: [String]
-    }
+    /// Points d'accès de test (#4943) — `internal`, lus par `@testable import
+    /// Meeshy`, jamais par une autre cible app.
+    ///
+    /// `lastWindowRowsReadForTesting` — nombre de LIGNES rendues par la
+    /// dernière lecture : le seul témoin qui distingue « la relecture temps
+    /// réel est bornée » de « elle relit toute la profondeur paginée ».
+    /// `windowReadsForTesting` — nombre de lectures de fenêtre effectuées :
+    /// le seul témoin qui distingue « la conversation s'ouvre en UNE lecture »
+    /// de « deux chemins lisent la même fenêtre ».
+    ///
+    /// Compilés en DEBUG seulement — la règle que le diagnostic BUG1 plus bas
+    /// applique déjà : un témoin que personne ne consomme en production ne s'y
+    /// paie pas, fût-ce deux entiers sur le chemin chaud.
+    #if DEBUG
+    private(set) var lastWindowRowsReadForTesting: Int = 0
+    private(set) var windowReadsForTesting: Int = 0
+    #endif
 
     init(conversationId: String, persistence: MessagePersistenceActor) {
         self.conversationId = conversationId
@@ -195,7 +160,7 @@ public final class MessageStore: ObservableObject {
 
     // MARK: - Observation
 
-    func startObserving(dbPool: any DatabaseWriter) {
+    func startObserving() {
         stopObserving()
         let convId = conversationId
 
@@ -227,20 +192,23 @@ public final class MessageStore: ObservableObject {
                 // REST-refresh path. Window transitions (jump / restore /
                 // paginate) bypass this notification and call refreshFromDB()
                 // directly with a straight replace.
-                await store.refreshFromDB(mergeInMemory: true, skipRunLoopYield: true)
+                //
+                // COALESCÉ (`requestRealtimeRefresh`) : une rafale d'écritures
+                // (lot d'accusés de lecture, burst de livraisons) déclenche au
+                // plus une lecture en vol + une lecture de queue — plus jamais
+                // une lecture de fenêtre complète PAR écriture.
+                store.requestRealtimeRefresh()
             }
         }
-        // Wrap the NotificationCenter observer in an AnyDatabaseCancellable so
+        // Wrap the NotificationCenter observer in an AnyCancellable so
         // stopObserving() cleans it up via the same `regionCancellable` slot.
-        tokens.regionCancellable = AnyDatabaseCancellable {
+        tokens.regionCancellable = AnyCancellable {
             NotificationCenter.default.removeObserver(observer)
         }
     }
 
     func stopObserving() {
         tokens.regionCancellable = nil
-        tokens.refreshTask?.cancel()
-        tokens.refreshTask = nil
     }
 
     // MARK: - Lifecycle
@@ -260,24 +228,57 @@ public final class MessageStore: ObservableObject {
         let mode = windowMode
         let anchor = windowAnchor
         let initialWindowSize = Self.initialWindowSize
-        let reader = persistence.reader
+        let repository = MessageRepository(persistence: persistence)
 
-        // Read on the calling actor (MainActor). Direct reads via GRDB are
-        // fast (a single SELECT) and avoid the Swift 6 strict concurrency
-        // closure-isolation crash that hit Task.detached + reader.read
-        // combinations.
-        let newRecords: [MessageRecord]?
-        do {
-            newRecords = try fetchMessageWindow(
-                reader: reader, convId: convId, mode: mode,
-                anchor: anchor, initialWindowSize: initialWindowSize
-            )
-        } catch {
+        // La lecture de fenêtre part HORS du MainActor. En `.latest` ancré elle était SANS PLAFOND — après une
+        // remontée profonde du fil, chaque notification d'écriture GRDB
+        // (message entrant, accusé de livraison/lecture, réaction, tick de
+        // retry) rematérialisait des MILLIERS de lignes SQLite sur la boucle
+        // principale, en plein défilement : les accusés de lecture émis par
+        // le suivi de lecture pendant le scroll refermaient la boucle sur
+        // elle-même. Elle est désormais BORNÉE sur le chemin temps réel
+        // (`realtimeAnchoredWindowCap`, #4943). Même patron détaché éprouvé
+        // que `loadOlder(before:)` —
+        // `messageWindow` (SDK) est nonisolated, aucun état
+        // isolé ne traverse la fermeture (le crash historique Task.detached +
+        // reader.read venait de fermetures HÉRITANT une isolation d'acteur).
+        //
+        // Garde de génération : deux refreshes peuvent désormais
+        // s'entrelacer pendant l'await — seule la demande la PLUS RÉCENTE
+        // publie, sinon une fenêtre périmée réordonnerait l'affichage.
+        //
+        // Plafond de la lecture ANCRÉE : seul l'appelant qui FUSIONNE (le
+        // temps réel) peut se contenter de la queue de la fenêtre, puisque
+        // `publish` y préserve ce qui manque. Cf. `realtimeAnchoredWindowCap`.
+        let anchoredRowCap = mergeInMemory ? Self.realtimeAnchoredWindowCap : nil
+        let newerEdge = jumpedNewerEdge
+        refreshGeneration &+= 1
+        let generation = refreshGeneration
+        let fetched: Result<[MessageRecord], any Error> = await Task.detached(priority: .userInitiated) {
+            Result {
+                try repository.messageWindow(
+                    conversationId: convId, mode: mode,
+                    anchor: anchor, initialWindowSize: initialWindowSize,
+                    anchoredRowCap: anchoredRowCap, newerEdge: newerEdge
+                )
+            }
+        }.value
+
+        let newRecords: [MessageRecord]
+        switch fetched {
+        case .success(let records):
+            newRecords = records
+        case .failure(let error):
             Logger.messages.error("[MessageStore] refreshFromDB failed: \(error.localizedDescription)")
             return
         }
+        #if DEBUG
+        lastWindowRowsReadForTesting = newRecords.count
+        windowReadsForTesting += 1
+        #endif
 
-        guard let newRecords, newRecords != messages else { return }
+        guard generation == refreshGeneration else { return }
+        guard !publishWouldBeNoOp(records: newRecords, mergeInMemory: mergeInMemory) else { return }
 
         // Yield to a fresh runloop iteration before publishing the @Published
         // mutation. When refreshFromDB is invoked from a view's .task /
@@ -295,16 +296,51 @@ public final class MessageStore: ObservableObject {
             await yieldToRunLoop()
             // Re-check: state could have changed during the runloop yield (e.g.,
             // a socket message arrived and another refresh wrote first).
-            guard newRecords != messages else { return }
+            guard generation == refreshGeneration else { return }
+            guard !publishWouldBeNoOp(records: newRecords, mergeInMemory: mergeInMemory) else { return }
         }
 
-        publish(records: newRecords, mergeInMemory: mergeInMemory)
+        publishUnchecked(records: newRecords, mergeInMemory: mergeInMemory)
     }
 
-    /// Publishes a freshly-read window into `@Published messages` and fires the
-    /// downstream side-effects (id index reset, section recompute, change
-    /// signal). Shared by `refreshFromDB` (real-time) and `apply` (REST/cold
-    /// load) so both paths agree on the protective-merge rule.
+    /// Génération monotone des lectures de fenêtre — depuis que la lecture
+    /// part hors du MainActor, deux refreshes peuvent s'entrelacer pendant
+    /// l'await ; seule la demande la plus récente a le droit de publier.
+    private var refreshGeneration: UInt64 = 0
+
+    // MARK: - Coalescence des refreshes temps réel
+
+    /// Un refresh notification-driven par RAFALE, pas par écriture. Le chemin
+    /// socket poste `.messageStoreShouldRefresh` à CHAQUE écriture GRDB —
+    /// livraison, lecture, réaction, retry — et chacune relançait une lecture
+    /// de fenêtre complète + une repasse de snapshot O(n). Premier événement
+    /// servi IMMÉDIATEMENT (zéro latence ajoutée pour `message:new`) ; ceux
+    /// qui tombent pendant la lecture en vol sont fusionnés en UNE lecture
+    /// de queue, qui relit l'état le plus frais de toute façon.
+    private var realtimeRefreshInFlight = false
+    private var realtimeRefreshQueued = false
+
+    func requestRealtimeRefresh() {
+        if realtimeRefreshInFlight {
+            realtimeRefreshQueued = true
+            return
+        }
+        realtimeRefreshInFlight = true
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.refreshFromDB(mergeInMemory: true, skipRunLoopYield: true)
+            self.realtimeRefreshInFlight = false
+            if self.realtimeRefreshQueued {
+                self.realtimeRefreshQueued = false
+                self.requestRealtimeRefresh()
+            }
+        }
+    }
+
+    /// Publishes a freshly-read window into `messages` and fires the
+    /// downstream side-effects (id index reset, change signal). Shared by
+    /// `refreshFromDB` (real-time) and `apply` (REST/cold load) so both paths
+    /// agree on the protective-merge rule.
     ///
     /// Protective merge (`mergeInMemory == true` AND `.latest` window only):
     /// any in-memory record whose `localId` is absent from `records` is
@@ -313,22 +349,45 @@ public final class MessageStore: ObservableObject {
     /// erased by a later window read that races the commit ordering. Disabled
     /// in `.around(date:)` mode (jump-to-message) and on explicit straight
     /// replaces (window transitions) so a stale slice never pollutes the view.
+    ///
+    /// Une publication qui rendrait EXACTEMENT le tableau déjà affiché n'est
+    /// pas gratuite : elle réveille le sink du ViewModel, la cartographie de
+    /// la fenêtre et un `applySnapshot()` O(n) de la liste. `refreshFromDB`
+    /// s'en gardait depuis toujours (`newRecords != messages`), `apply` pas
+    /// du tout — d'où les deux à trois re-dispositions de la liste dans la
+    /// seconde qui suivait l'ouverture d'une conversation déjà en cache
+    /// (#4943, D-OPEN-01). La règle vit ici, au seul point de publication,
+    /// pour que les deux chemins ne puissent plus diverger.
     private func publish(records: [MessageRecord], mergeInMemory: Bool) {
-        // BUG1 diagnostics — capture the pre-state to detect any publish that
-        // DROPS currently-displayed messages (the suspected "all sent messages
-        // vanish while one is pending" path). Le chemin nominal ne paie que
-        // deux Sets d'ids ; le dictionnaire de classification (copie des
-        // records) n'est construit QUE sur drop détecté.
-        let beforeCount = messages.count
-        let beforeIds = Set(messages.map(\.localId))
+        guard !publishWouldBeNoOp(records: records, mergeInMemory: mergeInMemory) else { return }
+        publishUnchecked(records: records, mergeInMemory: mergeInMemory)
+    }
 
-        let next: [MessageRecord]
+    /// Phase de mutation de `publish`, SANS la garde `publishWouldBeNoOp` —
+    /// réservée aux appelants qui l'ont déjà évaluée. `refreshFromDB` vérifie
+    /// `publishWouldBeNoOp` avant le yield de runloop et de nouveau après (le
+    /// temps réel, `skipRunLoopYield: true`, ne l'évalue qu'une fois) ; appeler
+    /// `publish` depuis là rejouerait cette même comparaison O(n) une seconde
+    /// fois, sur le chemin chaud. `apply(records:)` n'a pas cette garantie et
+    /// continue d'appeler `publish`.
+    private func publishUnchecked(records: [MessageRecord], mergeInMemory: Bool) {
+        var next: [MessageRecord]
+        #if DEBUG
+        var cappedIds: Set<String> = []
+        #endif
         if mergeInMemory, windowMode == .latest {
             let snapshotIds = Set(records.map(\.localId))
             let preserved = messages.filter { !snapshotIds.contains($0.localId) }
             next = preserved.isEmpty
                 ? records
                 : (records + preserved).sorted { $0.createdAt < $1.createdAt }
+            if windowAnchor == nil, next.count > Self.unanchoredWindowCap {
+                let overflow = next.count - Self.unanchoredWindowCap
+                #if DEBUG
+                cappedIds = Set(next.prefix(overflow).map(\.localId))
+                #endif
+                next.removeFirst(overflow)
+            }
         } else {
             next = records
         }
@@ -340,10 +399,21 @@ public final class MessageStore: ObservableObject {
         // render as a "message en double" the moment a later event re-snapshots.
         // Applied before the drop diagnostic so a collapsed mirror is never
         // mistaken for an unintended drop (the prior publish was deduped too).
-        let published = Self.collapsingDuplicateServerIds(next)
+        let published = keptThroughBurning(Self.collapsingDuplicateServerIds(next)).filter { !personalConcealment.conceals($0) }
 
+        #if DEBUG
+        // BUG1 diagnostics — detect any publish that DROPS currently-displayed
+        // messages (the suspected "all sent messages vanish while one is
+        // pending" path). Compilé en DEBUG SEULEMENT (#4943) : les deux `Set`
+        // d'ids sont O(n) et se payaient à CHAQUE publication, donc à chaque
+        // événement temps réel, sur la boucle principale — pour alimenter un
+        // journal qu'aucun lecteur du dépôt ne consomme. Le diagnostic garde
+        // toute sa valeur là où on l'utilise : sur un build de développement.
+        let beforeCount = messages.count
+        let beforeIds = Set(messages.map(\.localId))
         let afterIds = Set(published.map(\.localId))
-        let droppedIds = beforeIds.subtracting(afterIds)
+        // Plafond (`unanchoredWindowCap`) et masquage « pour moi » : des retraits VOULUS, pas des pertes.
+        let droppedIds = beforeIds.subtracting(afterIds).subtracting(cappedIds).subtracting(personalConcealment.ids)
         if !droppedIds.isEmpty {
             let beforeById = Dictionary(messages.map { ($0.localId, $0) }, uniquingKeysWith: { a, _ in a })
             // Classify each dropped row: when its serverId survives in the
@@ -382,6 +452,7 @@ public final class MessageStore: ObservableObject {
         } else if next.count != beforeCount {
             Logger.messages.debug("[MessageStore] publish before=\(beforeCount) -> after=\(next.count) records=\(records.count) merge=\(mergeInMemory) window=\(String(describing: self.windowMode))")
         }
+        #endif
 
         messages = published
         _idIndex = nil
@@ -394,8 +465,127 @@ public final class MessageStore: ObservableObject {
                 _domainCache = _domainCache.filter { liveIds.contains($0.key) }
             }
         }
-        recomputeSections()
         messagesDidChange.send()
+    }
+
+    /// **« Supprimer pour moi » : le message quitte le fil AVANT la réponse du
+    /// serveur, sans quitter la base** (#11221). Toute publication le filtre
+    /// tant que le masquage tient ; la purge n'a lieu qu'après l'accord.
+    func conceal(_ ids: [String]) {
+        personalConcealment.conceal(ids)
+        publishUnchecked(records: messages, mergeInMemory: false)
+    }
+
+    /// Refus du serveur, ou retour en vue venu d'un autre appareil : le filtre
+    /// se lève et la base, intacte, rend le message — sans aucun appel réseau.
+    func reveal(_ ids: [String]) async {
+        personalConcealment.reveal(ids)
+        await refreshFromDB(mergeInMemory: true)
+    }
+
+    /// **Retire les éphémères morts DEPUIS la dernière publication** (#8382).
+    ///
+    /// `publishUnchecked` ne pose la question qu'à une écriture : un éphémère
+    /// qui échoit à l'écran n'en provoque aucune. L'hôte appelle ce point à la
+    /// fin de la combustion ; sans mort, rien n'est publié.
+    func dropGoneEphemerals() {
+        let kept = Self.keepingBurning(
+            { ExpiredEphemeralRow.living($0) }, of: messages, burning: burning, shown: [],
+            freshlyDead: { _ in false }
+        ).kept
+        guard kept.count != messages.count else { return }
+        publishUnchecked(records: kept, mergeInMemory: false)
+    }
+
+    /// Les lignes vivantes, plus celles qui brûlent ou viennent de mourir à
+    /// l'écran ; ces dernières sont rendues à l'hôte HORS de la publication —
+    /// il mute son propre état, et une mutation réentrante pendant une
+    /// publication est le défaut que `EphemeralExpiryCoordinator` documente.
+    private func keptThroughBurning(_ records: [MessageRecord]) -> [MessageRecord] {
+        let outcome = Self.keepingBurning(
+            { ExpiredEphemeralRow.living($0) }, of: records, burning: burning, shown: messages,
+            freshlyDead: { ExpiredEphemeralRow.deathInstant($0).map { EphemeralBurn.isFreshDeath(at: $0, now: Date()) } ?? false }
+        )
+        if !outcome.ignite.isEmpty {
+            let ignite = outcome.ignite
+            Task { @MainActor [weak self] in self?.onFreshlyDead?(ignite) }
+        }
+        return outcome.kept
+    }
+
+    /// **Les éphémères EN COMBUSTION, que l'hôte déclare** (#17938). Une ligne
+    /// qui brûle est, pour `ExpiredEphemeralRow`, déjà morte : son échéance est
+    /// passée, et le registre peut déjà porter sa destruction (annonce du
+    /// serveur). Toute publication pendant la combustion — l'arrivée d'un
+    /// autre message, une écriture quelconque — la retirait alors au milieu de
+    /// son feu. L'hôte pose ici ce qui brûle avant d'allumer, et le retire
+    /// avant d'appeler `dropGoneEphemerals()` à la fin.
+    var burning: Set<String> = []
+
+    /// **Une ligne affichée qui VIENT de mourir est rendue à l'hôte pour qu'il
+    /// l'allume** (#17938) — la mort peut arriver par le moteur de
+    /// synchronisation (annonce du serveur gravée avant que l'écran ne
+    /// réagisse) : sans ce retour, la publication qui la relit morte la
+    /// retirait sans aucune combustion. Appelé hors de la publication.
+    var onFreshlyDead: (([String]) -> Void)?
+
+    struct BurnOutcome: Equatable {
+        let kept: [MessageRecord]
+        /// Les lignes gardées parce qu'elles viennent de mourir sous les yeux
+        /// du lecteur, et que l'hôte doit allumer.
+        let ignite: [String]
+    }
+
+    /// Les lignes vivantes, PLUS celles qui brûlent, PLUS celles qui étaient
+    /// affichées (`shown`) et viennent de mourir — dans l'ordre d'origine. Une
+    /// ligne qui vient de mourir est rendue dans sa forme AFFICHÉE (celle de
+    /// `shown`), pas dans sa forme relue : la base porte déjà `deletedAt` et
+    /// un contenu vidé, et c'est le texte qu'on voit brûler, pas une pierre
+    /// tombale.
+    static func keepingBurning(_ living: ([MessageRecord]) -> [MessageRecord],
+                               of records: [MessageRecord], burning: Set<String>,
+                               shown: [MessageRecord], freshlyDead: (MessageRecord) -> Bool) -> BurnOutcome {
+        let alive = Set(living(records).map(\.localId))
+        guard alive.count != records.count || !burning.isEmpty else { return BurnOutcome(kept: records, ignite: []) }
+        let shownById = Dictionary(shown.map { ($0.localId, $0) }, uniquingKeysWith: { a, _ in a })
+        var ignite: [String] = []
+        let kept = records.compactMap { record -> MessageRecord? in
+            if alive.contains(record.localId) { return record }
+            let id = record.serverId ?? record.localId
+            if burning.contains(record.localId) || burning.contains(id) { return shownById[record.localId] ?? record }
+            guard let previous = shownById[record.localId], freshlyDead(record) else { return nil }
+            ignite.append(id)
+            return previous
+        }
+        return BurnOutcome(kept: kept, ignite: ignite)
+    }
+
+    /// `true` quand publier `records` rendrait EXACTEMENT le tableau déjà
+    /// affiché — auquel cas la publication n'a rien à dire et tout à coûter.
+    ///
+    /// Deux formes, et la seconde n'est pas une commodité :
+    /// 1. lecture ÉGALE au tableau affiché — le cas de l'ouverture, où deux
+    ///    chemins lisaient la même fenêtre ;
+    /// 2. lecture PLAFONNÉE (temps réel ancré) égale à la QUEUE du tableau
+    ///    affiché. La fusion protectrice y préserve le préfixe manquant, donc
+    ///    le résultat serait `messages` à l'identique. Sans cette forme, une
+    ///    fenêtre profonde republierait à chaque événement — le plafond aurait
+    ///    économisé l'E/S SQLite pour redonner le O(n) au rendu.
+    ///
+    /// Sous-ensemble strict SANS fusion (remplacement sec) : la troncature est
+    /// réelle et DOIT être publiée — d'où la garde `mergeInMemory` + `.latest`.
+    private func publishWouldBeNoOp(records: [MessageRecord], mergeInMemory: Bool) -> Bool {
+        if records == messages { return true }
+        guard mergeInMemory, windowMode == .latest, records.count < messages.count
+        else { return false }
+        // `elementsEqual` sur la TRANCHE, jamais `Array(...)` : matérialiser la
+        // queue allouait — et détruisait — un tableau de jusqu'à 500 structs à
+        // chaque appel, sur le MainActor, au moment précis du défilement. La
+        // forme 2 étant le chemin NOMINAL d'une fenêtre ancrée profonde, ce
+        // coût se payait à chaque accusé de lecture, chaque réaction, chaque
+        // tick d'outbox. La comparaison est paresseuse et s'arrête au premier
+        // écart.
+        return records.elementsEqual(messages.suffix(records.count))
     }
 
     /// Collapses physical rows that share a server id down to a single survivor.
@@ -449,12 +639,6 @@ public final class MessageStore: ObservableObject {
         }
     }
 
-    // MARK: - Load Initial
-
-    func loadInitial() async {
-        await refreshFromDB()
-    }
-
     // MARK: - Atomic Snapshot Hydration
     //
     // Splits the legacy `loadInitial()` flow into two phases so the caller
@@ -473,18 +657,35 @@ public final class MessageStore: ObservableObject {
         let mode = windowMode
         let anchor = windowAnchor
         let initialWindow = Self.initialWindowSize
-        let reader = persistence.reader
+        let newerEdge = jumpedNewerEdge
+        let repository = MessageRepository(persistence: persistence)
+
+        // Même lecture détachée que `refreshFromDB` : l'ouverture d'une
+        // conversation ne matérialise plus sa fenêtre SQLite sur la boucle
+        // principale (elle est bornée à `initialWindowSize` ici, mais une
+        // réouverture ancrée relit toute la profondeur déjà paginée).
+        let fetched: Result<[MessageRecord], any Error> = await Task.detached(priority: .userInitiated) {
+            Result {
+                try repository.messageWindow(
+                    conversationId: convId, mode: mode,
+                    anchor: anchor, initialWindowSize: initialWindow,
+                    newerEdge: newerEdge
+                )
+            }
+        }.value
 
         let records: [MessageRecord]
-        do {
-            records = try fetchMessageWindow(
-                reader: reader, convId: convId, mode: mode,
-                anchor: anchor, initialWindowSize: initialWindow
-            )
-        } catch {
+        switch fetched {
+        case .success(let fetchedRecords):
+            records = fetchedRecords
+        case .failure(let error):
             Logger.messages.error("[MessageStore] loadInitialSnapshot failed: \(error.localizedDescription)")
             return []
         }
+        #if DEBUG
+        lastWindowRowsReadForTesting = records.count
+        windowReadsForTesting += 1
+        #endif
 
         // Yield off the current SwiftUI view update cycle so the caller's
         // subsequent `apply` (which mutates @Published) lands on a fresh
@@ -494,8 +695,8 @@ public final class MessageStore: ObservableObject {
     }
 
     /// Synchronously publishes previously-fetched records into the store.
-    /// Recomputes sections, clears the id index, fires `messagesDidChange` —
-    /// the same side-effects as `refreshFromDB`'s publish phase. Safe to
+    /// Clears the id index, fires `messagesDidChange` — the same
+    /// side-effects as `refreshFromDB`'s publish phase. Safe to
     /// call inside a single `Task { @MainActor }` block after `await`-ing
     /// `loadInitialSnapshot()`, with no other `await` in between.
     ///
@@ -511,6 +712,11 @@ public final class MessageStore: ObservableObject {
     /// disabled : preserving messages from a previous `.latest` view would
     /// pollute the jumped window with messages from a different time slice,
     /// breaking the search-result navigation. Replace strictly instead.
+    ///
+    /// IDEMPOTENT depuis #4943 : appliquer deux fois la MÊME fenêtre ne
+    /// publie qu'une fois (`publishWouldBeNoOp`). L'appelant n'a donc pas à
+    /// savoir si quelqu'un d'autre a déjà lu cette fenêtre — c'est ce qui
+    /// permet à la revalidation REST de rappliquer sans re-disposer la liste.
     public func apply(records: [MessageRecord]) {
         publish(records: records, mergeInMemory: true)
     }
@@ -522,17 +728,10 @@ public final class MessageStore: ObservableObject {
         // an explicit set of matched IDs, not an extensible chronological slice.
         if case .search = windowMode { return false }
         let convId = conversationId
-        let reader = persistence.reader
+        let persistence = persistence
 
         let older = await Task.detached(priority: .userInitiated) {
-            try? reader.read { db in
-                try MessageRecord
-                    .filter(Column("conversationId") == convId)
-                    .filter(Column("createdAt") < before)
-                    .order(Column("createdAt").desc)
-                    .limit(50)
-                    .fetchAll(db)
-            }
+            try? persistence.messages(for: convId, before: before, limit: 50)
         }.value
 
         guard let older, !older.isEmpty else { return false }
@@ -545,16 +744,28 @@ public final class MessageStore: ObservableObject {
 
     /// Switches the window to be centered around `date`, then refreshes from DB.
     /// Used by jump-to-message UX. Returns when the new window has been loaded.
-    public func loadWindow(around date: Date) async {
+    func loadWindow(around date: Date, newerEdge: JumpedWindowNewerEdge = .halfWindow) async {
+        windowGeneration &+= 1
         windowMode = .around(date: date)
         windowAnchor = nil
+        jumpedNewerEdge = newerEdge
+        await refreshFromDB()
+    }
+
+    /// Recule le bord récent d'une fenêtre sautée jusqu'à la page plus
+    /// récente que le serveur vient de servir (#9304). Hors `.around`, rien.
+    func extendJumpedWindow(to edge: JumpedWindowNewerEdge) async {
+        guard case .around = windowMode else { return }
+        jumpedNewerEdge = edge
         await refreshFromDB()
     }
 
     /// Restores the latest window. Used when returning from a jumped state.
     public func restoreLatestWindow() async {
+        windowGeneration &+= 1
         windowMode = .latest
         windowAnchor = nil
+        jumpedNewerEdge = .halfWindow
         await refreshFromDB()
     }
 
@@ -564,8 +775,10 @@ public final class MessageStore: ObservableObject {
     /// `upsertFromAPIMessages`) so they are fetchable. Exit via
     /// `restoreLatestWindow()`.
     public func enterSearchMode(ids: [String]) async {
+        windowGeneration &+= 1
         windowMode = .search(ids: ids)
         windowAnchor = nil
+        jumpedNewerEdge = .halfWindow
         await refreshFromDB()
     }
 
@@ -608,36 +821,5 @@ public final class MessageStore: ObservableObject {
         let msg = record.toMessage(currentUserId: currentUserId)
         _domainCache[record.localId] = (record.changeVersion, msg)
         return msg
-    }
-
-    func post(for id: String) -> MessageRecord? {
-        message(for: id)
-    }
-
-    // MARK: - Sections
-
-    private func recomputeSections() {
-        let calendar = Calendar.current
-        var grouped: [(DateComponents, [String])] = []
-        var currentDate: DateComponents?
-        var currentIds: [String] = []
-
-        for msg in messages {
-            let components = calendar.dateComponents([.year, .month, .day], from: msg.createdAt)
-            if components == currentDate {
-                currentIds.append(msg.localId)
-            } else {
-                if let date = currentDate {
-                    grouped.append((date, currentIds))
-                }
-                currentDate = components
-                currentIds = [msg.localId]
-            }
-        }
-        if let date = currentDate {
-            grouped.append((date, currentIds))
-        }
-
-        sections = grouped.map { MessageSection(date: $0.0, messageIds: $0.1) }
     }
 }

@@ -1,0 +1,20 @@
+{
+ "domain": "avatar-ring",
+ "rings": [
+  {
+   "key": "halo-or",
+   "stroke": {
+    "style": "solid",
+    "width": 0.03,
+    "colors": [
+     "#C9A86A"
+    ]
+   },
+   "lottie": {
+    "src": "ec52a7f12af8a193.json",
+    "bytes": 867,
+    "sha256": "ec52a7f12af8a193ac26a882cbd360a657da52a19d5d98a58c74a7fc1f45d902"
+   }
+  }
+ ]
+}

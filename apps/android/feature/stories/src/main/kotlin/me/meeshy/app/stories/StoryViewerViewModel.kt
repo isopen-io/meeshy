@@ -1,244 +1,139 @@
 package me.meeshy.app.stories
 
-import androidx.compose.runtime.Immutable
+import me.meeshy.sdk.lang.ReaderPrism
+import me.meeshy.sdk.model.FeedMedia
+import me.meeshy.sdk.model.scene.ForegroundMediaFrame
+import me.meeshy.sdk.game.GameMomentPresence
+import me.meeshy.sdk.model.net.MediaRequestCredential
+import me.meeshy.sdk.util.resolveMediaUrl
+import me.meeshy.sdk.util.resolveServedImageUrl
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.lang.LanguageResolver
-import me.meeshy.sdk.model.EmojiCatalog
+import me.meeshy.sdk.model.StorySourceWindow
+import me.meeshy.sdk.model.StoryViewerInitialAction
+import me.meeshy.sdk.model.StoryViewerScope
+import me.meeshy.sdk.story.isExpired
+import me.meeshy.sdk.model.StorySourceWindowMs
+import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.EngagementSessions
+import me.meeshy.sdk.model.isoToEpochMillis
+import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.FeedMediaType
+import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.StoryClipTransition
 import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.StoryItem
-import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.StoryTextObjectTranslationMerge
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.post.PostCommentSettingsRepository
+import me.meeshy.sdk.model.PostCommentSettings
+import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.sdk.model.scene.SceneObjectNumbers
+import me.meeshy.sdk.model.scene.SceneLookRecipe
+import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
+import me.meeshy.sdk.model.story.StoryRepostDestination
+import me.meeshy.sdk.model.story.StoryViewerContentRules
+import me.meeshy.sdk.model.story.StoryRepostFailure
+import me.meeshy.sdk.story.StoryDirectRepostOutcome
 import me.meeshy.sdk.story.StoryRepository
+import me.meeshy.sdk.story.StoryReactionDelivery
+import me.meeshy.sdk.story.StoryReactionPublisher
+import me.meeshy.sdk.story.StoryRepostPublisher
+import me.meeshy.sdk.story.InMemoryStoryViewedLedger
+import me.meeshy.sdk.story.StorySlideImpressions
+import me.meeshy.sdk.story.StoryViewReporting
+import me.meeshy.sdk.story.StoryViewedLedger
+import me.meeshy.sdk.story.purgingDeadStories
 import me.meeshy.sdk.story.toStoryGroups
 import me.meeshy.sdk.story.toStoryItem
+import me.meeshy.feature.stories.R
+import me.meeshy.feature.feed.R as FeedR
+import me.meeshy.sdk.model.ContentRemovalPolicy
+import me.meeshy.sdk.model.ContentRemovalReason
+import me.meeshy.ui.component.FeedbackKind
+import me.meeshy.ui.component.FeedbackToastRequest
 import javax.inject.Inject
-
-/**
- * A foreground media layer on a slide — a non-background [StoryMediaObject]
- * (video or image) composited on top of the background. Position/scale are
- * normalised canvas fractions (0..1), matching the wire model. [x]/[y]/[scale]/
- * [opacity] are the layer's *static* base transform; when the clip carries
- * [keyframes] or participates in a slide [clipTransitions] entry, call [animated]
- * with the playhead to obtain the transform for that instant. [id] matches the
- * clip against transitions; [duration] bounds its own timing window. Rotation is
- * still not applied in this projection.
- */
-@Immutable
-data class StoryForegroundMediaView(
-    val id: String,
-    val url: String,
-    val isVideo: Boolean,
-    val x: Double,
-    val y: Double,
-    val scale: Double,
-    val aspectRatio: Double,
-    val opacity: Double = 1.0,
-    val startTime: Double = 0.0,
-    val duration: Double = 0.0,
-    val fadeIn: Double = 0.0,
-    val fadeOut: Double = 0.0,
-    val keyframes: List<StoryKeyframe> = emptyList(),
-    val clipTransitions: List<StoryClipTransition> = emptyList(),
-) {
-    /**
-     * The layer's transform at [atSeconds] (absolute playhead). Returns `this`
-     * unchanged when nothing animates — no keyframes that key a channel, no clip
-     * transition this layer takes part in, AND no fadeIn/fadeOut envelope active at
-     * this instant. Otherwise a copy whose [x]/[y]/[scale] follow the interpolated
-     * keyframe animation (un-keyed channels holding their static base) and whose
-     * [opacity] folds together, in iOS render order, the clip's own fade envelope,
-     * its keyframe opacity, and any clip-transition ramp.
-     *
-     * Opacity precedence mirrors iOS `StoryRenderer` (`fade ?? keyframeOpacity ??
-     * base`): a live [fadeIn]/[fadeOut] envelope value OVERRIDES the keyframe/static
-     * opacity, and the result is then multiplied by the crossfade/dissolve ramp of
-     * any transition naming this clip. Keyframe and fade times are offsets from
-     * [startTime], per the timeline spec.
-     *
-     * A layer that participates in a transition but carries no [duration] is left
-     * untouched for the transition ramp: window-clipping on a zero-length window
-     * (`end == start`) would hide the clip at almost every instant. Pure — the
-     * Compose canvas ticks a clock in and renders the result.
-     */
-    /**
-     * Whether this foreground layer is drawn at [atSeconds] (absolute playhead) —
-     * the sharp play-mode timing-window gate the Compose canvas consults before
-     * compositing the layer. Delegates to [StoryElementVisibility]: an untimed clip
-     * (duration `0`) is always visible; a timed one only inside
-     * `[startTime, startTime + duration)`. Pure.
-     */
-    fun isVisible(atSeconds: Float): Boolean =
-        StoryElementVisibility.isVisible(startTime, duration, atSeconds.toDouble())
-
-    fun animated(atSeconds: Float): StoryForegroundMediaView {
-        val resolved = StoryKeyframeResolver.resolve(
-            keyframes = keyframes,
-            currentTime = atSeconds,
-            startTime = startTime.toFloat(),
-            baseX = x,
-            baseY = y,
-            baseScale = scale,
-            baseOpacity = opacity,
-        )
-        val transitions = if (duration > 0.0) {
-            clipTransitions.filter { it.fromClipId == id || it.toClipId == id }
-        } else {
-            emptyList()
-        }
-        val fadeEnvelope = StoryMediaFadeResolver.fadeOpacity(
-            fadeIn = fadeIn.takeIf { it > 0.0 },
-            fadeOut = fadeOut.takeIf { it > 0.0 },
-            startTime = startTime,
-            duration = duration.takeIf { it > 0.0 },
-            currentTime = atSeconds.toDouble(),
-        )
-        if (resolved == null && transitions.isEmpty() && fadeEnvelope == null) return this
-
-        val base = resolved ?: ResolvedKeyframeTransform(x = x, y = y, scale = scale, opacity = opacity)
-        val transitionOpacity = if (transitions.isEmpty()) {
-            1.0
-        } else {
-            StoryClipTransitionResolver.opacity(
-                mediaId = id,
-                startTime = startTime,
-                duration = duration,
-                transitions = transitions,
-                currentTime = atSeconds.toDouble(),
-            )
-        }
-        val opacityBase = fadeEnvelope ?: base.opacity
-        return copy(
-            x = base.x,
-            y = base.y,
-            scale = base.scale,
-            opacity = opacityBase * transitionOpacity,
-        )
-    }
-}
-
-/**
- * A single slide projected for the viewer. Pure data.
- *
- * Background media is EITHER [imageUrl] (static) OR [backgroundVideoUrl]
- * (looping video) — never both; a video background never populates [imageUrl]
- * so the viewer's `AsyncImage` branch (Coil, image-only) is never handed a
- * video URL it cannot decode. [foregroundMedia] layers extra video/image
- * objects on top; [backgroundAudioUrl]/[foregroundAudioUrl] are the resolved
- * playback URLs for the slide's background and foreground/voice audio tracks.
- */
-@Immutable
-data class StorySlideView(
-    val id: String,
-    val text: String,
-    val isTranslated: Boolean,
-    val imageUrl: String?,
-    val accentHex: String,
-    val reactionCount: Int = 0,
-    val backgroundVideoUrl: String? = null,
-    val backgroundLoop: Boolean = true,
-    val foregroundMedia: List<StoryForegroundMediaView> = emptyList(),
-    val textObjects: List<StoryTextObjectView> = emptyList(),
-    val backgroundAudioUrl: String? = null,
-    val foregroundAudioUrl: String? = null,
-    val languageCode: String? = null,
-    /**
-     * How long this slide stays on screen before auto-advancing, in milliseconds.
-     * Resolved once at projection time from the slide's effects via the shared
-     * [StorySlideDuration] rule (author-pinned timeline duration → content-derived
-     * → 6s default), so the viewer countdown honours per-slide timing instead of a
-     * flat constant. Defaults to the 6s static baseline.
-     */
-    val autoAdvanceMillis: Int = StorySlideDuration.DEFAULT_STATIC_MS,
-    /**
-     * The author's colour backdrop (`StoryEffects.background`), parsed once at
-     * projection time via the shared [StoryBackgroundValue] rule: a solid colour or
-     * a two-colour gradient. `null` when the slide carries no background string — the
-     * viewer then keeps its accent→black fallback. Painted only as the base layer when
-     * the slide has no background media (media covers it), mirroring iOS's
-     * `renderBackground` priority.
-     */
-    val background: StoryBackgroundValue? = null,
-)
-
-/**
- * One language chip of the story language bar. Pure data.
- *
- * [isTranslatable] marks a language the viewer has configured but which the story
- * has no content for yet — tapping it requests an on-demand translation rather than
- * switching the display. [isTranslating] is true while that request is in flight.
- * A present (content) chip is neither.
- */
-@Immutable
-data class StoryLanguageOption(
-    val code: String,
-    val flag: String,
-    val label: String,
-    val isTranslatable: Boolean = false,
-    val isTranslating: Boolean = false,
-)
-
-/**
- * Viewer state, derived from the cross-group [StoryPlayback] engine. The screen
- * reads the CURRENT group's slides plus the index so its segmented progress and
- * auto-advance stay simple; group roll-over and dismissal are decided by the
- * pure engine.
- */
-data class StoryViewerUiState(
-    val authorName: String = "",
-    val slides: List<StorySlideView> = emptyList(),
-    val index: Int = 0,
-    val groupIndex: Int = 0,
-    val isLoading: Boolean = true,
-    val isDismissed: Boolean = false,
-    val reactionCount: Int = 0,
-    val myReactions: Set<String> = emptySet(),
-    val quickReactions: List<String> = EmojiCatalog.defaultQuickReactions,
-    val isOwnStory: Boolean = false,
-    val currentStoryId: String? = null,
-    val prefetchUrls: List<String> = emptyList(),
-    val canAutoAdvance: Boolean = false,
-    val availableLanguages: List<StoryLanguageOption> = emptyList(),
-    val languageOverride: String? = null,
-) {
-    val current: StorySlideView? get() = slides.getOrNull(index)
-    val hasNext: Boolean get() = index < slides.lastIndex
-    val hasPrevious: Boolean get() = index > 0
-}
 
 @HiltViewModel
 class StoryViewerViewModel @Inject constructor(
     private val storyRepository: StoryRepository,
+    private val postRepository: PostRepository,
     private val sessionRepository: SessionRepository,
     private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
     private val reportRepository: ReportRepository,
+    private val clock: CacheClock,
+    private val privacyPreferencesStore: PrivacyPreferencesStore,
     savedStateHandle: SavedStateHandle,
+    private val gameMoment: GameMomentPresence = GameMomentPresence(),
+    private val repostPublisher: StoryRepostPublisher = storyRepository.asRepostPublisher(),
+    private val reactionPublisher: StoryReactionPublisher = storyRepository.asReactionPublisher(),
+    private val viewReporter: StoryViewReporting = StoryViewReporting { storyRepository.markViewed(it) },
+    private val slideImpressions: StorySlideImpressions = StorySlideImpressions.None,
+    private val viewedLedger: StoryViewedLedger = InMemoryStoryViewedLedger(),
+    private val commentSettings: PostCommentSettingsRepository? = null,
 ) : ViewModel() {
 
     private val userId: String = savedStateHandle.get<String>(USER_ID_ARG).orEmpty()
 
+    /** La story précise à ouvrir (une story republiée) ; `null` : le lecteur démarre à la première non vue de l'auteur. */
+    private val requestedStoryId: String? = savedStateHandle.get<String>(STORY_ID_ARG)?.takeIf { it.isNotBlank() }
+
+    /**
+     * L'intention d'entrée (feuille à ouvrir d'office, commentaire ciblé), posée par la route ; consommée une fois par
+     * [consumeEntryIntent]. Sans auteur nommé (ouverture par l'id de la story), la lecture reste sur son groupe.
+     */
+    private var entryIntent: StoryEntryIntent? = StoryEntryIntent(
+        action = StoryViewerInitialAction.fromWire(savedStateHandle.get<String>(ACTION_ARG)),
+        targetCommentId = savedStateHandle.get<String>(COMMENT_ID_ARG)?.takeIf { it.isNotBlank() },
+        targetParentCommentId = savedStateHandle.get<String>(PARENT_COMMENT_ID_ARG)?.takeIf { it.isNotBlank() },
+    ).takeIf { it.action != null || it.targetCommentId != null }
+    private val singleGroup: Boolean = userId.isBlank()
+
+    private val projector = StorySlideProjector(config.apiBaseUrl)
+
     private var playback: StoryPlayback = StoryPlayback(groups = emptyList())
+
+    /** Pause de l'appui long — portée par [emit] tant que la story n'a pas repris. */
+    private var isHoldPaused = false
+
+    /** Une célébration du jeu recouvre l'écran : la story se fige dessous (iOS `isGameMomentShown`). */
+    private var isGameMomentShown = false
+
+    /** Son coupé pour toute la session de lecture — porté par [emit]. */
+    private var isMuted = false
+
+    /** Les republications de ce lecteur, au geste puis confirmées ou rendues (#14443). */
+    private var reposts = StoryRepostMarks()
+
+    private val toastChannel = Channel<FeedbackToastRequest>(Channel.BUFFERED)
+
+    /** Ce que le lecteur dit d'une action locale aboutie ou refusée (iOS `FeedbackToastManager`). */
+    val toasts: Flow<FeedbackToastRequest> = toastChannel.receiveAsFlow()
 
     /** Optimistic reaction state per slide id, seeded lazily from the slide's count. */
     private val reactionStates = mutableMapOf<String, StoryReactionState>()
@@ -247,10 +142,8 @@ class StoryViewerViewModel @Inject constructor(
     private val rawItems = mutableMapOf<String, StoryItem>()
 
     /** Ephemeral "Exploration" override, keyed to the slide it was chosen on. */
-    private var languageOverride: Pair<String, String>? = null
-
-    /** In-flight on-demand translation requests, keyed `storyId|lang` (lowercased). */
-    private val translatingLanguages = mutableSetOf<String>()
+    private val languageController = StoryLanguageController { clock.nowMillis() }
+    private var explorerOpen = false
 
     /**
      * Image URLs whose load has resolved (succeeded or failed) on screen. Feeds
@@ -260,8 +153,15 @@ class StoryViewerViewModel @Inject constructor(
      */
     private val resolvedImageUrls = mutableSetOf<String>()
 
+    /** Focus audio et état des médias de la slide (lot story-playback-hold-and-stall) : lus par l'horloge du lecteur. */
+    internal val interruption = StorySessionInterruptionController()
+    internal val mediaSignal = StoryMediaReadinessSignal()
+
     private val _state = MutableStateFlow(StoryViewerUiState())
     val state: StateFlow<StoryViewerUiState> = _state.asStateFlow()
+    private val prefetchDirection = StoryPrefetchDirectionTracker()
+    private val _prefetch = MutableStateFlow(StoryPrefetchPlan())
+    val prefetch: StateFlow<StoryPrefetchPlan> = _prefetch.asStateFlow()
 
     /**
      * The slide currently on screen — owns membership of the post room (`ROOMS.post`). Held
@@ -270,12 +170,41 @@ class StoryViewerViewModel @Inject constructor(
      */
     private var currentRoomStoryId: String? = null
 
+    /**
+     * Dwell bookkeeping for the story-viewer surface — the 4th single-focus surface, joining
+     * reels/detail/status. Held outside [_state] since it is an analytics cursor, not something
+     * the UI renders (the same placement as [currentRoomStoryId], and as the feed ViewModels'
+     * dwell sessions). The pure [EngagementSessions] machine owns the *how* (monotonic dwell,
+     * qualification); this ViewModel owns the *when* — the session moves WITH the slide on screen
+     * (begun on the one landed on, ended on the one left) via [transitionDwell] in [emit], mirroring
+     * iOS `StoryViewerView` re-arming `EngagementTracker` on each slide. [currentDwellStoryId]
+     * guards the transition so a same-slide re-emit (a reaction, a translation merge) neither ends
+     * nor restarts the running session.
+     *
+     * A qualified dwell records `viewPost(id, dwellMs)` — a story slide id IS a post id, so the
+     * measured watch-time rides the very `posts/{id}/view` endpoint the impression already uses,
+     * carrying its optional `duration`. The gateway dedups: the impression increments `viewCount`
+     * once, the dwell only raises the stored `duration` to its max — purely additive, no double-count.
+     */
+    private var sessions = EngagementSessions()
+    private var currentDwellStoryId: String? = null
+
     init {
         load()
         observeReactionDeltas()
         observeTranslationUpdates()
         observeStoryDeletions()
         observeStoryUpdates()
+        observeGameMoment()
+    }
+
+    private fun observeGameMoment() {
+        viewModelScope.launch {
+            gameMoment.isPresented.collect {
+                isGameMomentShown = it
+                _state.update { state -> state.copy(isPaused = isHoldPaused || it) }
+            }
+        }
     }
 
     /**
@@ -292,13 +221,13 @@ class StoryViewerViewModel @Inject constructor(
      */
     private fun observeStoryUpdates() {
         viewModelScope.launch {
-            socialSocket.storyUpdated.collect { event ->
+            socialSocket.storyUpdated.collectEachSafely { event ->
                 val storyId = event.story.id
                 val existingSlide = playback.groups.firstNotNullOfOrNull { group ->
                     group.slides.firstOrNull { it.id == storyId }
-                } ?: return@collect
+                } ?: return@collectEachSafely
                 val prefs = sessionRepository.currentUser.value ?: EmptyContentPreferences
-                val newSlide = event.story.toStoryItem().toSlideView(existingSlide.accentHex, prefs)
+                val newSlide = event.story.toStoryItem().let { item -> rawItems[item.id] = item; projector.project(item, existingSlide.accentHex, prefs) }
                 playback = playback.replacingSlide(newSlide)
                 if (event.engagementReset == true) reactionStates.remove(storyId)
                 emit()
@@ -317,9 +246,9 @@ class StoryViewerViewModel @Inject constructor(
      */
     private fun observeStoryDeletions() {
         viewModelScope.launch {
-            socialSocket.storyDeleted.collect { event ->
+            socialSocket.storyDeleted.collectEachSafely { event ->
                 val next = playback.removingSlide(event.storyId)
-                if (next == playback) return@collect
+                if (next == playback) return@collectEachSafely
                 playback = next
                 rawItems.remove(event.storyId)
                 reactionStates.remove(event.storyId)
@@ -339,10 +268,10 @@ class StoryViewerViewModel @Inject constructor(
      */
     private fun observeTranslationUpdates() {
         viewModelScope.launch {
-            socialSocket.storyTranslationUpdated.collect { event ->
-                val item = rawItems[event.postId] ?: return@collect
+            socialSocket.storyTranslationUpdated.collectEachSafely { event ->
+                val item = rawItems[event.postId] ?: return@collectEachSafely
                 val merged = StoryTextObjectTranslationMerge.merge(item, event.textObjectIndex, event.translations)
-                if (merged == item) return@collect
+                if (merged == item) return@collectEachSafely
                 rawItems[event.postId] = merged
                 emit()
             }
@@ -357,12 +286,12 @@ class StoryViewerViewModel @Inject constructor(
      */
     private fun observeReactionDeltas() {
         viewModelScope.launch {
-            socialSocket.storyReacted.collect {
+            socialSocket.storyReacted.collectEachSafely {
                 onReactionDelta(it.storyId, it.emoji, delta = 1, actorId = it.userId)
             }
         }
         viewModelScope.launch {
-            socialSocket.storyUnreacted.collect {
+            socialSocket.storyUnreacted.collectEachSafely {
                 onReactionDelta(it.storyId, it.emoji, delta = -1, actorId = it.userId)
             }
         }
@@ -385,32 +314,145 @@ class StoryViewerViewModel @Inject constructor(
         return StoryReactionState(count = slide.reactionCount)
     }
 
+    /**
+     * Ouvre la lecture sur l'auteur demandé, cache d'abord (iOS
+     * `StoryViewerContainer.ensureGroupAvailable`) : les stories déjà en main dans la barre
+     * s'affichent sans réseau, hors ligne compris ; le réseau n'est interrogé que si
+     * l'auteur y manque. Introuvable des deux côtés ⇒ [StoryViewerUiState.loadFailed]
+     * (Réessayer / Fermer), jamais la story d'un autre auteur, jamais une fermeture seule.
+     *
+     * Une story PRÉCISE demandée ([requestedStoryId], une story republiée) que ni le cache ni le réseau ne portent vivante
+     * (expirée, supprimée, auteur absent) n'est pas un échec de chargement : [StoryViewerUiState.missingStoryId] laisse
+     * l'écran ouvrir la fiche du post, comme avant.
+     */
     private fun load() {
         viewModelScope.launch {
-            try {
-                when (val result = storyRepository.list()) {
-                    is NetworkResult.Success -> {
-                        val groups = result.data
-                            .toStoryGroups(currentUserId = sessionRepository.currentUserId)
-                            .map { it.toGroupSlides() }
-                        playback = StoryPlayback.startingAt(groups, userId)
-                        emit()
-                    }
-                    is NetworkResult.Failure -> _state.update { it.copy(isLoading = false) }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                _state.update { it.copy(isLoading = false) }
+            _state.update { it.copy(isLoading = true, loadFailed = false) }
+            val selfId = sessionRepository.currentUserId
+            if (startFrom(viewedLedger.reinjected(attempt { storyRepository.cachedStories() }, selfId))) return@launch
+            val network = attempt { (storyRepository.list() as? NetworkResult.Success)?.data }
+            if (startFrom(viewedLedger.reinjected(network, selfId))) return@launch
+            if (startFrom(attempt { fetchRequestedStory() })) return@launch
+            _state.update {
+                if (requestedStoryId != null) it.copy(isLoading = false, missingStoryId = requestedStoryId)
+                else it.copy(isLoading = false, loadFailed = true)
             }
         }
     }
 
+    /**
+     * Le plateau ignore ce groupe : on ne retélécharge pas tout le plateau, on demande la story nommée seule (iOS
+     * `fetchStoryPost`). Sans story nommée, ou si la passerelle la refuse, rien — le lecteur dit « introuvable ».
+     */
+    private suspend fun fetchRequestedStory(): List<ApiPost>? {
+        val id = requestedStoryId ?: return null
+        return (postRepository.getPost(id) as? NetworkResult.Success)?.data?.let(::listOf)
+    }
+
+    /** Relance l'ouverture après un échec (bouton Réessayer du repli). */
+    fun retry() {
+        if (!_state.value.loadFailed) return
+        load()
+    }
+
+    /** Une lecture qui échoue (cache illisible, réseau, projection) vaut « rien en main ». */
+    private inline fun <T> attempt(block: () -> T?): T? =
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+
+    /**
+     * Les stories expirées d'un AUTRE auteur ne se rejouent pas (la barre les a déjà
+     * retirées) ; l'auteur garde les siennes, comme dans la barre
+     * ([purgingDeadStories]).
+     */
+    private fun startFrom(posts: List<ApiPost>?): Boolean {
+        if (posts.isNullOrEmpty()) return false
+        val authorId = userId.ifBlank { posts.firstOrNull { it.id == requestedStoryId }?.author?.id.orEmpty() }
+        val currentUserId = sessionRepository.currentUserId
+        val now = clock.nowMillis()
+        val groups = attempt {
+            posts.toStoryGroups(currentUserId = currentUserId, nowMillis = now)
+                .purgingDeadStories(currentUserId = currentUserId, nowMillis = now)
+                .let { StoryViewerScope.liveOnly(it, currentUserId, requestedStoryId) { story -> story.isExpired(now) } }
+                .map { it.toGroupSlides() }
+        } ?: return false
+        val opened = StoryPlayback.forAuthor(groups, authorId, requestedStoryId) ?: return false
+        playback = if (singleGroup) opened.restrictedToCurrentGroup() else opened
+        emit()
+        return true
+    }
+
     /** Leaves the post room the viewer was sitting in, so a closed viewer stops receiving its events. */
     override fun onCleared() {
+        endCurrentDwell()
         currentRoomStoryId?.let { socialSocket.leavePostRoom(it) }
         currentRoomStoryId = null
         super.onCleared()
+    }
+
+    /** La story telle que la passerelle l'a servie — ce que l'export vidéo lit (objets sonores, fenêtres, pièces). */
+    fun rawItem(id: String): StoryItem? = rawItems[id]
+
+    /** Le groupe d'auteur à [index] (l'interlude d'identité annonce le voisin), `null` hors bornes. */
+    fun groupAt(index: Int): StoryGroupSlides? = playback.groups.getOrNull(index)
+
+    /** Appui long : la story se fige (iOS `explicitPause`). */
+    fun pauseByHold() {
+        if (playback.currentSlide == null || _state.value.isPaused) return
+        isHoldPaused = true
+        _state.update { it.copy(isPaused = true) }
+    }
+
+    /**
+     * Appui long sur la scène (iOS `StoryGestureOverlayView`, spec 2026-07-25) : un TOGGLE.
+     * Le premier fige la story, un second, tenu pendant qu'elle est figée, la reprend — le
+     * relâchement, lui, ne reprend jamais (c'est le toucher suivant qui le fait, sans naviguer).
+     */
+    fun toggleByHold() {
+        if (isHoldPaused) resume() else pauseByHold()
+    }
+
+    /**
+     * Toucher simple sur la scène (iOS `StoryGestureDecisions`) : un BORD reprend une story
+     * figée sans naviguer, sinon il navigue ; la bande CENTRALE ne fait rien — elle appartient
+     * au double toucher.
+     */
+    fun onCanvasTap(zone: StoryTapZone) {
+        if (zone == StoryTapZone.Center) return
+        if (isHoldPaused) {
+            resume()
+            return
+        }
+        if (zone == StoryTapZone.Previous) back() else advance()
+    }
+
+    /** Double toucher dans la bande centrale : bascule pause / lecture, sans naviguer. */
+    fun onCanvasDoubleTap() {
+        if (isHoldPaused) resume() else pauseByHold()
+    }
+
+    /** Vrai tant qu'un appui long a figé la story (iOS `isLongPressPaused`). */
+    val isHeldPaused: Boolean get() = isHoldPaused
+
+    /** Le toucher de reprise : relance une story figée par un appui long, sans naviguer. */
+    fun resumeFromTouch() {
+        if (isHoldPaused) resume()
+    }
+
+    private fun resume() {
+        isHoldPaused = false
+        _state.update { it.copy(isPaused = false) }
+    }
+
+    /** Coupe ou rétablit le son de toutes les pistes de la session (iOS `StoryGlobalMute`). */
+    fun toggleMute() {
+        isMuted = !isMuted
+        _state.update { it.copy(isMuted = isMuted) }
     }
 
     fun advance() {
@@ -435,6 +477,7 @@ class StoryViewerViewModel @Inject constructor(
             StorySwipeAction.Dismiss -> playback.dismissed()
             StorySwipeAction.None -> return
         }
+        isHoldPaused = false
         emit()
     }
 
@@ -456,21 +499,94 @@ class StoryViewerViewModel @Inject constructor(
      */
     fun toggleLanguageOverride(code: String) {
         val storyId = playback.currentSlide?.id ?: return
-        languageOverride = if (languageOverride == storyId to code) null else storyId to code
+        languageController.tap(storyId, code)
+        emit()
+    }
+
+    /** Choix dans l'explorateur de langues : la langue s'AFFICHE et se rechoisit sans basculer (≠ puce). */
+    fun selectLanguage(code: String) {
+        val storyId = playback.currentSlide?.id ?: return
+        languageController.select(storyId, code)
+        emit()
+    }
+
+    fun openLanguageExplorer() {
+        if (playback.currentSlide == null) return
+        explorerOpen = true
+        emit()
+    }
+
+    fun closeLanguageExplorer() {
+        explorerOpen = false
         emit()
     }
 
     fun markCurrentViewed() {
         val slideId = playback.currentSlide?.id ?: return
+        slideImpressions.record(slideId)
         viewModelScope.launch {
-            runCatching { storyRepository.markViewed(slideId) }
+            runCatching { viewReporter.report(slideId) }
         }
     }
 
     /**
-     * Quick-strip reaction on the current slide. The count moves optimistically;
-     * a repeat of the same emoji is inert (no network); a network failure rolls
-     * back to the snapshot so the UI never shows a phantom reaction.
+     * Closes the story-viewer dwell session and, when it qualified, records the measured watch-time.
+     * Public so the composition can end the last slide's dwell when the viewer leaves (the analogue
+     * of iOS `StoryViewerView.onDisappear` → `EngagementTracker.end(.storyViewer)`); also called on
+     * teardown ([onCleared]) as the reliable net. Idempotent — a second call, with no session open,
+     * records nothing.
+     */
+    fun endCurrentDwell() {
+        transitionDwell(null)
+    }
+
+    /**
+     * Moves the dwell session with the slide on screen: ends the one left (recording it when it
+     * passed the dwell floor) and begins the one landed on. Idempotent — re-passing the current id
+     * (including `null`) is a no-op, so a same-slide re-emit neither closes nor restarts the running
+     * session. A `null` [nextId] ends without re-arming (viewer dismissed/torn down). The port of
+     * iOS `StoryViewerView` re-arming `EngagementTracker` per slide, and the dwell twin of
+     * [transitionPostRoom].
+     */
+    private fun transitionDwell(nextId: String?) {
+        if (nextId == currentDwellStoryId) return
+        val (afterEnd, view) = sessions.end(EngagementSurface.STORY_VIEWER, clock.nowMillis())
+        sessions = afterEnd
+        view?.let { recordDwellView(it) }
+        currentDwellStoryId = nextId
+        nextId?.let {
+            sessions = sessions.begin(
+                EngagementSurface.STORY_VIEWER,
+                it,
+                clock.nowMillis(),
+                consentGranted = privacyPreferencesStore.preferences.value.allowAnalytics,
+            )
+        }
+    }
+
+    /**
+     * Best-effort dwell enrichment for a slide's existing view: `posts/{id}/view` with the measured
+     * [QualifiedView.dwellMs]. The gateway's view credit is a `(postId, userId)` singleton, so this
+     * never re-increments the view count already booked by the impression ([markCurrentViewed]) — it
+     * only raises the stored dwell `duration` (the reco/monetisation watch-time signal) to its max.
+     * Fire-and-forget, matching the impression: a failure is analytics the viewer should never see fail.
+     */
+    private fun recordDwellView(view: QualifiedView) {
+        viewModelScope.launch {
+            try {
+                postRepository.viewPost(view.postId, view.dwellMs.toInt())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // best-effort — matches the impression view record
+            }
+        }
+    }
+
+    /**
+     * Quick-strip reaction on the current slide. The count moves optimistically; a repeat of the same emoji is inert
+     * (no network). A transport failure keeps the heart lit (the reaction waits in the outbox); a server refusal takes
+     * back exactly this tap on the story it was made on, and says why.
      */
     fun react(emoji: String) {
         val slide = playback.currentSlide ?: return
@@ -481,20 +597,53 @@ class StoryViewerViewModel @Inject constructor(
         reactionStates[slideId] = optimistic
         emit()
         viewModelScope.launch {
-            try {
-                if (storyRepository.react(slideId, emoji) is NetworkResult.Failure) {
-                    rollback(slideId, snapshot)
-                }
+            val delivery = try {
+                reactionPublisher.publish(slideId, emoji)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                rollback(slideId, snapshot)
+                StoryReactionDelivery.Refused(httpStatus = null, limitReached = false)
+            }
+            val recovery = StoryReactionRecovery.decide(delivery) as? StoryReactionRecovery.Rollback ?: return@launch
+            withdrawReaction(slideId, emoji)
+            if (playback.currentSlide?.id == slideId) {
+                toastChannel.trySend(FeedbackToastRequest(recovery.messageRes, FeedbackKind.Error))
             }
         }
     }
 
-    private fun rollback(slideId: String, snapshot: StoryReactionState) {
-        reactionStates[slideId] = snapshot
+    /**
+     * « Republier » (#14443, #15067, iOS `StoryDirectRepost`) : la story à l'écran repart d'un seul geste, chez autrui
+     * seulement — en story depuis le rail, en post ou en réel depuis le menu. En story, le compteur et la marque bougent
+     * aussitôt ; un refus les rend et dit pourquoi, hors ligne la republication part au retour du réseau.
+     */
+    fun repostCurrentStory(destination: StoryRepostDestination = StoryRepostDestination.STORY) {
+        val storyId = playback.currentSlide?.id ?: return
+        if (playback.currentGroup?.userId == sessionRepository.currentUserId) return
+        val marked = destination == StoryRepostDestination.STORY
+        if (marked) {
+            reposts = reposts.begun(storyId) ?: return
+            emit()
+        }
+        viewModelScope.launch {
+            val outcome = try {
+                repostPublisher.publish(storyId, destination)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                StoryDirectRepostOutcome.Refused(StoryRepostFailure.OTHER)
+            }
+            if (marked) {
+                reposts = if (outcome.isDone) reposts.confirmed(storyId) else reposts.refused(storyId)
+                emit()
+            }
+            outcome.toast(destination)?.let { toastChannel.trySend(it) }
+        }
+    }
+
+    private fun withdrawReaction(slideId: String, emoji: String) {
+        val current = reactionStates[slideId] ?: return
+        reactionStates[slideId] = current.withdrawnLocally(emoji)
         emit()
     }
 
@@ -514,11 +663,24 @@ class StoryViewerViewModel @Inject constructor(
         nextId?.let { socialSocket.joinPostRoom(it) }
     }
 
+    /** La chaîne du Prisme pour la transcription : l'exploration en tête, puis les rangs stricts du lecteur. */
+    fun transcriptLanguageChain(): List<String> = StoryViewerContentRules.viewerLanguageChain(
+        base = StoryContentResolver.readerLanguages(sessionRepository.currentUser.value ?: EmptyContentPreferences),
+        override = languageController.overrideFor(playback.currentSlide?.id),
+    )
+
     private fun emit() {
+        val now = clock.nowMillis()
+        playback = playback.skippingUnplayable(sessionRepository.currentUserId, { rawItems[it] }) { it.isExpired(now) }
         val currentId = playback.currentSlide?.id
         transitionPostRoom(currentId)
-        if (languageOverride != null && languageOverride?.first != currentId) languageOverride = null
-        val override = languageOverride?.second
+        // Dwell follows the slide on screen; a dismissed viewer is treated as no slide, so the
+        // running session ends the moment the viewer is swiped away rather than lingering to teardown.
+        transitionDwell(if (playback.isDismissed) null else currentId)
+        val override = languageController.overrideFor(currentId)
+        val prefsNow = sessionRepository.currentUser.value ?: EmptyContentPreferences
+        val currentItem = currentId?.let { rawItems[it] }
+        val currentResolved = currentItem?.let { StoryContentResolver.resolve(it, prefsNow, override) }
         val reaction = playback.currentSlide?.let { reactionStateFor(it) } ?: StoryReactionState()
         // The current slide is always re-projected from its raw item: [rawItems] is the
         // single source of truth for translated content and can change at runtime (a
@@ -531,7 +693,7 @@ class StoryViewerViewModel @Inject constructor(
             val item = rawItems[slideView.id] ?: return@map slideView
             val prefs = sessionRepository.currentUser.value ?: EmptyContentPreferences
             val resolved = StoryContentResolver.resolve(item, prefs, override)
-            val preferredLanguages = LanguageResolver.preferredContentLanguages(prefs)
+            val preferredLanguages = StoryContentResolver.readerLanguages(prefs)
             val textObjects = item.storyEffects?.textObjects.orEmpty()
                 .map { StoryTextObjectProjection.project(it, preferredLanguages, override) }
             slideView.copy(
@@ -541,6 +703,7 @@ class StoryViewerViewModel @Inject constructor(
                 textObjects = textObjects,
             )
         }
+        _prefetch.value = StoryPrefetchPlanner.planWindow(playback, prefetchDirection.observe(playback))
         _state.value = StoryViewerUiState(
             authorName = playback.authorName,
             slides = slides,
@@ -550,12 +713,36 @@ class StoryViewerViewModel @Inject constructor(
             isDismissed = playback.isDismissed,
             reactionCount = reaction.count,
             myReactions = reaction.mine,
+            repostCount = reposts.count(currentId, currentItem?.repostCount ?: 0),
+            hasReposted = reposts.has(currentId),
             isOwnStory = playback.currentGroup?.userId == sessionRepository.currentUserId,
             currentStoryId = currentId,
+            canCompose = rawItems[currentId]?.let { StoryRecomposition.offered(it.storyEffects, it.content, it.media.size) } == true,
             prefetchUrls = StoryPrefetchPlanner.plan(playback),
             canAutoAdvance = StoryAutoAdvanceGate.shouldCountdown(playback.currentSlide, resolvedImageUrls),
             availableLanguages = availableLanguagesFor(currentId),
             languageOverride = override,
+            activeLanguageCode = currentResolved?.languageCode
+                ?: override?.takeUnless(StoryLanguageOverride::isOriginal),
+            languageExplorer = if (explorerOpen && currentItem != null && currentResolved != null) {
+                StoryLanguageExplorerBuilder.build(
+                    item = currentItem,
+                    preferences = prefsNow,
+                    resolved = currentResolved,
+                    override = override,
+                    translatingCodes = translatingCodesOf(currentId, currentItem),
+                )
+            } else {
+                null
+            },
+            isPaused = isHoldPaused || isGameMomentShown,
+            isMuted = isMuted,
+            authorAvatarUrl = playback.currentGroup?.avatarUrl,
+            groupCount = playback.groups.size,
+            authorUserId = playback.currentGroup?.userId,
+            authorPresence = playback.currentGroup?.authorPresence?.takeUnless { playback.currentGroup?.userId == sessionRepository.currentUserId },
+            commentsDisabled = currentItem?.commentsDisabled == true,
+            commentsClosed = currentItem?.commentsClosed == true,
         )
     }
 
@@ -590,7 +777,7 @@ class StoryViewerViewModel @Inject constructor(
 
         val user = sessionRepository.currentUser.value ?: return present
         val presentLower = presentCodes.mapTo(mutableSetOf()) { it.lowercase() }
-        val translatable = LanguageResolver.preferredContentLanguages(user)
+        val translatable = ReaderPrism.resolve(user)
             .distinctBy { it.lowercase() }
             .filter { it.lowercase() !in presentLower }
             .map { languageOption(it, storyId, isTranslatable = true) }
@@ -608,12 +795,33 @@ class StoryViewerViewModel @Inject constructor(
             flag = info?.flag ?: "🌐",
             label = info?.nativeName ?: code,
             isTranslatable = isTranslatable,
-            isTranslating = translationKey(storyId, code) in translatingLanguages,
+            isTranslating = languageController.isTranslating(storyId, code),
         )
     }
 
-    private fun translationKey(storyId: String, code: String): String =
-        "$storyId|${code.trim().lowercase()}"
+    /** Les langues qui tournent : première traduction demandée, ou retraduction dont le texte n'a pas bougé. */
+    private fun translatingCodesOf(storyId: String, item: StoryItem): Set<String> =
+        languageController.translatingCodes(storyId) +
+            languageController.retranslatingCodes(storyId) { code -> item.translatedText(code) }
+
+    private fun StoryItem.translatedText(code: String): String? =
+        translations.orEmpty().firstOrNull { it.language.equals(code, ignoreCase = true) }?.content
+
+    /**
+     * « Retraduire » : la base du texte servi est mémorisée, le spinner tient jusqu'à ce qu'il change (traduction
+     * arrivée par socket ou tirée ici) ou 20 s, puis l'écran se rafraîchit seul (iOS `retranslateTimeout`).
+     */
+    fun retranslateStory(code: String) {
+        val storyId = playback.currentSlide?.id ?: return
+        val baseline = rawItems[storyId]?.translatedText(code) ?: return
+        languageController.beginRetranslation(storyId, code, baseline)
+        emit()
+        viewModelScope.launch {
+            delay(StoryViewerContentRules.RETRANSLATE_TIMEOUT_MILLIS)
+            emit()
+        }
+        requestStoryTranslation(code)
+    }
 
     /**
      * On-demand translation request (Prisme pull side): the viewer tapped a configured
@@ -629,22 +837,21 @@ class StoryViewerViewModel @Inject constructor(
         val item = rawItems[storyId] ?: return
         val target = code.trim()
         if (target.isEmpty()) return
-        val key = translationKey(storyId, target)
-        if (!translatingLanguages.add(key)) return
+        if (!languageController.beginTranslation(storyId, target)) return
         emit()
         viewModelScope.launch {
             try {
                 val merged = storyRepository.translateStory(item, target)
                 if (merged != null) {
                     rawItems[storyId] = merged
-                    languageOverride = storyId to target
+                    languageController.select(storyId, target)
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 // Inert — a failed request leaves the strip untouched to retry.
             } finally {
-                translatingLanguages.remove(key)
+                languageController.endTranslation(storyId, target)
                 emit()
             }
         }
@@ -655,117 +862,12 @@ class StoryViewerViewModel @Inject constructor(
         return StoryGroupSlides(
             userId = id,
             authorName = username,
-            slides = stories.map { it.toSlideView(avatarColor, prefs) },
+            slides = stories.map { projector.project(it.also { item -> rawItems[item.id] = item }, avatarColor, prefs) },
+            avatarUrl = resolveServedImageUrl(avatarURL, config.apiBaseUrl),
+            authorPresence = authorPresence,
         )
     }
 
-    private fun StoryItem.toSlideView(
-        accentHex: String,
-        prefs: LanguageResolver.ContentLanguagePreferences,
-    ): StorySlideView {
-        rawItems[id] = this
-        val resolved = StoryContentResolver.resolve(this, prefs)
-        val background = resolveBackgroundMedia()
-        val clipTransitions = storyEffects?.clipTransitions.orEmpty()
-        val foreground = storyEffects?.mediaObjects.orEmpty()
-            .filterNot { it.isBackground }
-            .mapNotNull { it.toForegroundMediaView(clipTransitions) }
-        val preferredLanguages = LanguageResolver.preferredContentLanguages(prefs)
-        val textObjects = storyEffects?.textObjects.orEmpty()
-            .map { StoryTextObjectProjection.project(it, preferredLanguages) }
-        return StorySlideView(
-            id = id,
-            text = resolved.content,
-            isTranslated = resolved.isTranslated,
-            imageUrl = background.imageUrl,
-            accentHex = accentHex,
-            reactionCount = reactionCount,
-            languageCode = resolved.languageCode,
-            backgroundVideoUrl = background.videoUrl,
-            backgroundLoop = background.loop,
-            foregroundMedia = foreground,
-            textObjects = textObjects,
-            backgroundAudioUrl = resolveAudioUrl(preferBackground = true),
-            foregroundAudioUrl = resolveAudioUrl(preferBackground = false),
-            autoAdvanceMillis = StorySlideDuration.computeMillis(storyEffects),
-            background = storyEffects?.background
-                ?.takeIf { it.isNotBlank() }
-                ?.let { StoryBackgroundValue.parse(it) },
-        )
-    }
-
-    private data class BackgroundMedia(val imageUrl: String?, val videoUrl: String?, val loop: Boolean)
-
-    /**
-     * Resolves the slide's single background layer. `storyEffects.mediaObjects`
-     * (the modern, RAW-publish wire shape) is authoritative when present: the
-     * object flagged `isBackground` carries its own `mediaURL` + kind, so no
-     * cross-referencing against the flat `media[]` list is needed. Legacy
-     * stories without `storyEffects.mediaObjects` fall back to the flat list,
-     * preferring a VIDEO item over an IMAGE one — critically, a video's own
-     * `.url` is only ever assigned to [BackgroundMedia.videoUrl], never to
-     * [BackgroundMedia.imageUrl] (the historical bug: Coil can't decode a video
-     * file as an image, so the slide painted nothing and no video ever played).
-     */
-    private fun StoryItem.resolveBackgroundMedia(): BackgroundMedia {
-        val backgroundObject = storyEffects?.mediaObjects?.firstOrNull { it.isBackground }
-        val fallbackMedia = media.firstOrNull { it.type == FeedMediaType.VIDEO }
-            ?: media.firstOrNull { it.type == FeedMediaType.IMAGE && it.url != null }
-
-        val isVideo = backgroundObject?.mediaType == "video" ||
-            (backgroundObject == null && fallbackMedia?.type == FeedMediaType.VIDEO)
-        val resolvedUrl = (backgroundObject?.mediaURL ?: fallbackMedia?.url)
-            ?.let { resolveMediaUrl(it, config.socketUrl) }
-
-        if (isVideo) {
-            return BackgroundMedia(imageUrl = null, videoUrl = resolvedUrl, loop = backgroundObject?.loop ?: true)
-        }
-        val imageUrl = resolvedUrl
-            ?: media.firstOrNull { it.thumbnailUrl != null }?.thumbnailUrl?.let { resolveMediaUrl(it, config.socketUrl) }
-        return BackgroundMedia(imageUrl = imageUrl, videoUrl = null, loop = true)
-    }
-
-    private fun StoryMediaObject.toForegroundMediaView(
-        clipTransitions: List<StoryClipTransition>,
-    ): StoryForegroundMediaView? {
-        val url = mediaURL?.let { resolveMediaUrl(it, config.socketUrl) } ?: return null
-        return StoryForegroundMediaView(
-            id = id,
-            url = url,
-            isVideo = mediaType == "video",
-            x = x,
-            y = y,
-            scale = scale,
-            aspectRatio = aspectRatio,
-            startTime = startTime ?: 0.0,
-            duration = duration ?: 0.0,
-            fadeIn = fadeIn ?: 0.0,
-            fadeOut = fadeOut ?: 0.0,
-            keyframes = keyframes.orEmpty(),
-            clipTransitions = clipTransitions,
-        )
-    }
-
-    /**
-     * Resolves the URL of the slide's background (voice/library/effects track)
-     * or foreground (non-background) audio, per [preferBackground].
-     * `storyEffects.audioPlayerObjects` only carry a `postMediaId`, so the
-     * playable URL is cross-referenced from the flat `media[]` list by id. When
-     * no `audioPlayerObjects` exist at all, the background slot falls back to
-     * the story's direct `audioUrl` (voice attachment) then its library
-     * `backgroundAudio` entry — both already resolved URLs, no lookup needed.
-     */
-    private fun StoryItem.resolveAudioUrl(preferBackground: Boolean): String? {
-        val match = storyEffects?.audioPlayerObjects.orEmpty()
-            .firstOrNull { (it.isBackground == true) == preferBackground }
-        val fromObject = match?.postMediaId
-            ?.let { mediaId -> media.firstOrNull { it.id == mediaId }?.url }
-            ?.let { resolveMediaUrl(it, config.socketUrl) }
-        if (fromObject != null) return fromObject
-        if (!preferBackground) return null
-        return audioUrl?.let { resolveMediaUrl(it, config.socketUrl) }
-            ?: backgroundAudio?.fileUrl?.takeIf { it.isNotBlank() }?.let { resolveMediaUrl(it, config.socketUrl) }
-    }
 
     private object EmptyContentPreferences : LanguageResolver.ContentLanguagePreferences {
         override val systemLanguage: String? = null
@@ -773,29 +875,117 @@ class StoryViewerViewModel @Inject constructor(
         override val customDestinationLanguage: String? = null
     }
 
+    /**
+     * L'intention d'entrée, rendue UNE fois et seulement quand une story est à l'écran : la feuille de commentaires ou
+     * de vues que la notification désignait. Les appels suivants rendent `null`.
+     */
+    fun consumeEntryIntent(): StoryEntryIntent? {
+        if (playback.currentSlide == null) return null
+        return entryIntent.also { entryIntent = null }
+    }
+
     companion object {
         const val USER_ID_ARG: String = "userId"
+        const val STORY_ID_ARG: String = "storyId"
+        const val ACTION_ARG: String = "action"
+        const val COMMENT_ID_ARG: String = "commentId"
+        const val PARENT_COMMENT_ID_ARG: String = "parentCommentId"
     }
 
     /**
-     * Supprime la story COURANTE (la sienne uniquement — l'UI gate sur
-     * [StoryViewerUiState.isOwnStory]) puis avance ou ferme : rester sur un slide
-     * supprime rejouerait un fantome.
+     * Supprime la story COURANTE (la sienne uniquement — l'UI gate sur [StoryViewerUiState.isOwnStory]).
+     * Optimiste : la slide quitte le plateau tout de suite, le lecteur reste sur le contenu survivant, et le
+     * refus du serveur la rétablit avec un toast. La toute dernière slide ferme le lecteur à la confirmation.
      */
-    fun deleteCurrentStory(onEmpty: () -> Unit) {
+    fun deleteCurrentStory() = retireCurrentStory(reason = null)
+
+    /** Retrait par la modération, avec son motif (#11151) : sans motif valide (3 à 500 caractères), rien ne part. */
+    fun removeCurrentStory(reason: String) {
+        val normalized = ContentRemovalReason.normalized(reason) ?: return
+        retireCurrentStory(reason = normalized)
+    }
+
+    /** « Retirer » s'offre à la modération de la plateforme sur la story d'un autre, jamais sur la sienne. */
+    fun mayRemoveCurrentStory(): Boolean =
+        ContentRemovalPolicy.mayRemovePublication(_state.value.isOwnStory, sessionRepository.currentUser.value?.role)
+
+    /** « Désactiver / Réactiver les commentaires » s'offre à l'auteur et à la modération de la plateforme (#16541). */
+    fun mayToggleCurrentStoryComments(): Boolean =
+        commentSettings != null && _state.value.currentStoryId != null &&
+            PostCommentSettings.mayToggle(_state.value.isOwnStory, sessionRepository.currentUser.value?.role)
+
+    /**
+     * #16541 — ferme ou rouvre les commentaires de la story courante : la story bascule avant le réseau (le menu, le
+     * composeur épinglé), la passerelle dit l'état appliqué, un refus le remet — sauf si `story:updated` a dit autre chose.
+     */
+    fun toggleCurrentStoryComments() {
+        val settings = commentSettings ?: return
         val storyId = _state.value.currentStoryId ?: return
+        val before = rawItems[storyId]?.commentsDisabled ?: return
+        val target = !before
+        setStoryCommentsDisabled(storyId) { target }
         viewModelScope.launch {
-            if (storyRepository.delete(storyId) is NetworkResult.Success) {
-                if (_state.value.hasNext) advance() else onEmpty()
+            val result = try {
+                settings.setCommentsDisabled(storyId, target)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            if (result is NetworkResult.Success) {
+                setStoryCommentsDisabled(storyId) { result.data }
+            } else {
+                setStoryCommentsDisabled(storyId) { current -> PostCommentSettings.rolledBack(current, target, before) }
+                toastChannel.trySend(FeedbackToastRequest(FeedR.string.feed_comment_settings_failed, FeedbackKind.Error))
             }
         }
     }
 
-    /** Signale la story courante — best effort, meme semantique que le report de post. */
-    fun reportCurrentStory(reason: ReportReason) {
+    private fun setStoryCommentsDisabled(storyId: String, next: (Boolean) -> Boolean) {
+        val item = rawItems[storyId] ?: return
+        rawItems[storyId] = item.copy(commentsDisabled = next(item.commentsDisabled))
+        emit()
+    }
+
+    private fun retireCurrentStory(reason: String?) {
+        val storyId = _state.value.currentStoryId ?: return
+        val snapshot = playback
+        val rawSnapshot = rawItems[storyId]
+        val next = snapshot.removingSlide(storyId)
+        val lastOne = next.isDismissed
+        if (!lastOne) {
+            playback = next
+            rawItems.remove(storyId)
+            reactionStates.remove(storyId)
+            emit()
+        }
+        viewModelScope.launch {
+            val result = if (reason == null) storyRepository.delete(storyId) else storyRepository.delete(storyId, reason)
+            if (result is NetworkResult.Success) {
+                if (lastOne) {
+                    playback = next
+                    emit()
+                }
+                return@launch
+            }
+            if (!lastOne) {
+                playback = snapshot
+                rawSnapshot?.let { rawItems[storyId] = it }
+                emit()
+            }
+            toastChannel.trySend(FeedbackToastRequest(R.string.my_stories_delete_error, FeedbackKind.Error))
+        }
+    }
+
+    /**
+     * Signale la story courante : motif plus détail libre. [onDone] reçoit l'issue (vrai = envoyé) pour l'haptique
+     * succès ou erreur ; hors session, l'appel est inerte et compte comme un échec.
+     */
+    fun reportCurrentStory(reason: ReportReason, details: String? = null, onDone: (Boolean) -> Unit = {}) {
         val storyId = _state.value.currentStoryId ?: return
         viewModelScope.launch {
-            reportRepository.reportStory(storyId, reason, details = null)
+            val result = reportRepository.reportStory(storyId, reason, details?.trim()?.takeIf { it.isNotEmpty() })
+            onDone(result is NetworkResult.Success)
         }
     }
 }

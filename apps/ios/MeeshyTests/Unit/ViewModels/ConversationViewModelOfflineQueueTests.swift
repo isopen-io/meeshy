@@ -90,7 +90,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
             systemLanguage: userSystemLanguage
         )
         auth.simulateLoggedIn(user: user)
-        let deps = ConversationDependencies(dbPool: pool, persistence: persistence)
+        let deps = ConversationDependencies(persistence: persistence)
         let sut = ConversationViewModel(
             conversationId: conversationId,
             authManager: auth,
@@ -129,7 +129,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_single_offline_send_enqueues_one_item_and_inserts_one_bubble() async throws {
         let fx = try await makeFixture()
 
-        let ok = await fx.sut.sendMessage(content: "Hello world")
+        let ok = await fx.sut.send(outgoingMessage(content: "Hello world", conversationId: fx.sut.conversationId)).isAccepted
 
         XCTAssertTrue(ok)
         let enqueueCount = await fx.offlineQueue.enqueueCount
@@ -152,7 +152,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_offline_send_persistsCallerOriginalLanguage_notHardcodedFr() async throws {
         let fx = try await makeFixture()
 
-        let ok = await fx.sut.sendMessage(content: "Hello world", originalLanguage: "es")
+        let ok = await fx.sut.send(outgoingMessage(content: "Hello world", conversationId: fx.sut.conversationId, originalLanguage: "es")).isAccepted
 
         XCTAssertTrue(ok)
         let enqueuedIds = await fx.offlineQueue.enqueuedClientMessageIds
@@ -172,7 +172,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_offline_send_withNoOriginalLanguage_fallsBackToUserSystemLanguage_notHardcodedFr() async throws {
         let fx = try await makeFixture(userSystemLanguage: "es")
 
-        let ok = await fx.sut.sendMessage(content: "Hola", originalLanguage: nil)
+        let ok = await fx.sut.send(outgoingMessage(content: "Hola", conversationId: fx.sut.conversationId, originalLanguage: nil)).isAccepted
 
         XCTAssertTrue(ok)
         let enqueuedIds = await fx.offlineQueue.enqueuedClientMessageIds
@@ -188,8 +188,8 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_two_offline_sends_back_to_back_enqueue_two_items() async throws {
         let fx = try await makeFixture()
 
-        let firstOk = await fx.sut.sendMessage(content: "First")
-        let secondOk = await fx.sut.sendMessage(content: "Second")
+        let firstOk = await fx.sut.send(outgoingMessage(content: "First", conversationId: fx.sut.conversationId)).isAccepted
+        let secondOk = await fx.sut.send(outgoingMessage(content: "Second", conversationId: fx.sut.conversationId)).isAccepted
 
         XCTAssertTrue(firstOk)
         XCTAssertTrue(secondOk)
@@ -207,8 +207,8 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_concurrent_distinct_sends_both_proceed() async throws {
         let fx = try await makeFixture(offlineQueueDelay: .milliseconds(150))
 
-        async let a = fx.sut.sendMessage(content: "Tap A")
-        async let b = fx.sut.sendMessage(content: "Tap B")
+        async let a = fx.sut.send(outgoingMessage(content: "Tap A", conversationId: fx.sut.conversationId)).isAccepted
+        async let b = fx.sut.send(outgoingMessage(content: "Tap B", conversationId: fx.sut.conversationId)).isAccepted
         let results = await [a, b]
 
         let succeeded = results.filter { $0 }.count
@@ -219,24 +219,23 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
         XCTAssertEqual(Set(contents), ["Tap A", "Tap B"])
     }
 
-    /// Double-tap protection survives the mutex removal: the SAME logical
-    /// message fired twice within the debounce window dedups to a single send
-    /// (no duplicate optimistic row, no duplicate outbox item). The check-and-set
-    /// runs before the first `await`, so the @MainActor serialization of the
-    /// synchronous prefix makes it atomic against the concurrent burst.
-    func test_duplicate_rapid_tap_is_deduped() async throws {
+    /// **Identical content fired twice is TWO messages** (#7985, directive
+    /// porteur 2026-09-25 : « la déduplication d'envoi des emojis doit être
+    /// enlevée pour permettre d'envoyer des emojis en séries »). The old
+    /// content debounce collapsed 😂😂 into one send; now both reach the outbox,
+    /// each under its own `clientMessageId` — the only dedup key left.
+    func test_identical_rapid_sends_both_enqueue() async throws {
         let fx = try await makeFixture(offlineQueueDelay: .milliseconds(150))
 
-        async let a = fx.sut.sendMessage(content: "Same text")
-        async let b = fx.sut.sendMessage(content: "Same text")
+        async let a = fx.sut.send(outgoingMessage(content: "😂", conversationId: fx.sut.conversationId)).isAccepted
+        async let b = fx.sut.send(outgoingMessage(content: "😂", conversationId: fx.sut.conversationId)).isAccepted
         let results = await [a, b]
 
-        let succeeded = results.filter { $0 }.count
-        let rejected = results.filter { !$0 }.count
-        XCTAssertEqual(succeeded, 1, "A rapid double-tap of identical content sends once")
-        XCTAssertEqual(rejected, 1, "The duplicate tap is deduped")
+        XCTAssertEqual(results.filter { $0 }.count, 2, "Two identical taps in a row send twice")
         let enqueueCount = await fx.offlineQueue.enqueueCount
-        XCTAssertEqual(enqueueCount, 1)
+        XCTAssertEqual(enqueueCount, 2, "Both identical messages must reach the outbox")
+        let ids = await fx.offlineQueue.enqueuedClientMessageIds
+        XCTAssertEqual(Set(ids).count, 2, "Each send carries its own clientMessageId")
     }
 
     /// Three DISTINCT sends — concurrent burst then a sequential one — all reach
@@ -244,10 +243,10 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_three_distinct_sends_all_enqueue() async throws {
         let fx = try await makeFixture(offlineQueueDelay: .milliseconds(80))
 
-        async let a = fx.sut.sendMessage(content: "Tap A")
-        async let b = fx.sut.sendMessage(content: "Tap B")
+        async let a = fx.sut.send(outgoingMessage(content: "Tap A", conversationId: fx.sut.conversationId)).isAccepted
+        async let b = fx.sut.send(outgoingMessage(content: "Tap B", conversationId: fx.sut.conversationId)).isAccepted
         _ = await [a, b]
-        let later = await fx.sut.sendMessage(content: "Tap C")
+        let later = await fx.sut.send(outgoingMessage(content: "Tap C", conversationId: fx.sut.conversationId)).isAccepted
 
         XCTAssertTrue(later)
         let enqueueCount = await fx.offlineQueue.enqueueCount
@@ -262,7 +261,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_enqueue_throws_marks_bubble_failed() async throws {
         let fx = try await makeFixture(offlineQueueThrows: true)
 
-        let ok = await fx.sut.sendMessage(content: "Doomed")
+        let ok = await fx.sut.send(outgoingMessage(content: "Doomed", conversationId: fx.sut.conversationId)).isAccepted
 
         XCTAssertFalse(ok)
         let convId = fx.conversationId
@@ -283,10 +282,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_attachment_ids_are_preserved_through_offline_enqueue() async throws {
         let fx = try await makeFixture()
 
-        let ok = await fx.sut.sendMessage(
-            content: "Photo caption",
-            attachmentIds: ["att-1", "att-2", "att-3"]
-        )
+        let ok = await fx.sut.send(outgoingMessage(content: "Photo caption", conversationId: fx.sut.conversationId, attachmentIds: ["att-1", "att-2", "att-3"])).isAccepted
 
         XCTAssertTrue(ok)
         let attachmentIds = await fx.offlineQueue.enqueuedAttachmentIds
@@ -298,10 +294,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_reply_to_id_is_preserved_through_offline_enqueue() async throws {
         let fx = try await makeFixture()
 
-        let ok = await fx.sut.sendMessage(
-            content: "Replying",
-            replyToId: "parent-message-id"
-        )
+        let ok = await fx.sut.send(outgoingMessage(content: "Replying", conversationId: fx.sut.conversationId, relation: .reply(to: MessageID("parent-message-id"), citing: nil))).isAccepted
 
         XCTAssertTrue(ok)
         let replyToIds = await fx.offlineQueue.enqueuedReplyToIds
@@ -314,11 +307,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_forwarded_metadata_is_preserved_through_offline_enqueue() async throws {
         let fx = try await makeFixture()
 
-        let ok = await fx.sut.sendMessage(
-            content: "Forwarded",
-            forwardedFromId: "orig-msg-id",
-            forwardedFromConversationId: "orig-conv-id"
-        )
+        let ok = await fx.sut.send(outgoingMessage(content: "Forwarded", conversationId: fx.sut.conversationId, relation: .forward(of: MessageID("orig-msg-id"), from: ConversationID("orig-conv-id")))).isAccepted
 
         XCTAssertTrue(ok)
         let forwardedFromIds = await fx.offlineQueue.enqueuedForwardedFromIds
@@ -349,7 +338,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
         // Default MockMessageSocket.sendViaSocketFallbackResult is nil → the
         // catch block skips the socket-recovery early-return and falls
         // through to the retry-enqueue path under test.
-        let ok = await fx.sut.sendMessage(content: "online-then-retry")
+        let ok = await fx.sut.send(outgoingMessage(content: "online-then-retry", conversationId: fx.sut.conversationId)).isAccepted
 
         XCTAssertFalse(ok, "Online send with REST failure + no socket ack returns false")
         let enqueueCount = await fx.offlineQueue.enqueueCount
@@ -372,7 +361,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
             )
         )
 
-        let ok = await fx.sut.sendMessage(content: "hola", originalLanguage: "es")
+        let ok = await fx.sut.send(outgoingMessage(content: "hola", conversationId: fx.sut.conversationId, originalLanguage: "es")).isAccepted
 
         XCTAssertFalse(ok)
         let enqueuedItems = await fx.offlineQueue.enqueuedItems
@@ -386,6 +375,76 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     /// Editing a message while offline must enqueue a durable `.editMessage`
     /// outbox row (flushed on reconnect via T10), NOT hit the REST edit
     /// directly and lose the change on failure.
+    // MARK: - Étapes de l'envoi : stageOffline et item de relance
+
+    private func makeOutgoing(
+        conversationId: String,
+        relation: MessageRelation = .none
+    ) -> OutgoingMessage {
+        OutgoingMessage(
+            conversationId: ConversationID(conversationId),
+            content: "Hors ligne",
+            relation: relation,
+            attachments: OutgoingAttachments(ids: nil, previews: nil)
+        )
+    }
+
+    func test_stageOffline_enqueuesItemAndReturnsQueuedOfflineReceipt() async throws {
+        let fx = try await makeFixture()
+        let outgoing = makeOutgoing(conversationId: fx.conversationId, relation: .storyReply(to: StoryID("s1"), reference: nil))
+
+        let result = await fx.sut.stageOffline(outgoing, intent: .none)
+
+        guard case .success(let receipt) = result else { return XCTFail("la mise en file doit réussir") }
+        XCTAssertEqual(receipt.delivery, .queuedOffline)
+        let items = await fx.offlineQueue.enqueuedItems
+        XCTAssertEqual(items.map(\.clientMessageId), [receipt.clientMessageId.rawValue])
+        XCTAssertEqual(items.first?.storyReplyToId, "s1")
+        let record = try await fx.fetchRecord(localId: receipt.clientMessageId.rawValue)
+        XCTAssertEqual(record?.state, .sending)
+    }
+
+    func test_stageOffline_enqueueThrows_marksRowFailed_returnsOfflineEnqueueFailed() async throws {
+        let fx = try await makeFixture(offlineQueueThrows: true)
+
+        let result = await fx.sut.stageOffline(makeOutgoing(conversationId: fx.conversationId), intent: .none)
+
+        guard case .failure(let failure) = result, case .offlineEnqueueFailed = failure else {
+            return XCTFail("l'échec de l'outbox doit remonter en offlineEnqueueFailed")
+        }
+        let cmid = try await fx.persistencePool.read { db in try String.fetchOne(db, sql: "SELECT localId FROM messages") }
+        let record = try await fx.fetchRecord(localId: try XCTUnwrap(cmid))
+        XCTAssertEqual(record?.state, .failed)
+    }
+
+    func test_onlineFailure_retryItem_carriesStoryReplyLink() async throws {
+        let fx = try await makeFixture(
+            isOnline: true,
+            restSendFailure: NSError(domain: "ConversationViewModelOfflineQueueTests", code: 500)
+        )
+
+        _ = await fx.sut.send(outgoingMessage(content: "réponse à une story", conversationId: fx.sut.conversationId, relation: .storyReply(to: StoryID("s1"), reference: nil))).isAccepted
+
+        let items = await fx.offlineQueue.enqueuedItems
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items.first?.storyReplyToId, "s1")
+    }
+
+    func test_onlineFailure_retryItem_carriesForward_andNeverOffersItToTheSocket() async throws {
+        let fx = try await makeFixture(
+            isOnline: true,
+            restSendFailure: NSError(domain: "ConversationViewModelOfflineQueueTests", code: 500)
+        )
+
+        _ = await fx.sut.send(outgoingMessage(content: "transfert", conversationId: fx.sut.conversationId, relation: .forward(of: MessageID("m9"), from: ConversationID("c9")))).isAccepted
+
+        let items = await fx.offlineQueue.enqueuedItems
+        let socketCalls = fx.messageSocket.sendViaSocketFallbackCallCount
+        XCTAssertEqual(items.first?.forwardedFromId, "m9")
+        XCTAssertEqual(items.first?.forwardedFromConversationId, "c9")
+        XCTAssertEqual(socketCalls, 0)
+    }
+
     func test_editMessage_offline_enqueuesEditThroughOutbox() async throws {
         let fx = try await makeFixture(isOnline: false)
 
@@ -439,6 +498,28 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
             "must cancel any pending outbox resend before purging locally, or a prior retry's reset row can still reach the server")
         XCTAssertEqual(fx.messageService.deleteCallCount, 0,
             "a .failed message never reached the server — must never hit REST delete")
+    }
+
+    /// #4043 — `cancelPendingSend` only ever reaches a `.pending` row (the
+    /// narrow "retry just reset it" window covered by the test above). The
+    /// COMMON case for a `.failed` bubble is a row already `.failed`/
+    /// `.exhausted` — the original send simply never succeeded (e.g. a
+    /// location-only message, #4039) — which `cancelPendingSend` is a no-op
+    /// for. `deleteMessage` must ALSO reach it via `clearSendMessageRow`, or
+    /// the row (and its SyncPill entry) survives the message's own deletion.
+    func test_deleteMessage_failedMessage_alsoClearsAnExhaustedOutboxRow() async throws {
+        let fx = try await makeFixture()
+        try await seedFailedMediaMessage(localId: "m_del_exhausted", fixture: fx)
+        let seeded = await MessageStoreObservationHelper.awaitMessageProperty(
+            id: "m_del_exhausted", in: fx.sut
+        ) { $0.deliveryStatus == .failed }
+        XCTAssertTrue(seeded, "precondition: the failed message must be visible")
+
+        await fx.sut.deleteMessage(messageId: "m_del_exhausted", mode: .everyone)
+
+        let cleared = await fx.offlineQueue.clearedSendMessageRowClientMessageIds
+        XCTAssertEqual(cleared, ["m_del_exhausted"],
+            "deleting a .failed message must clear its outbox row regardless of status (except .inflight)")
     }
 
     // MARK: - S3 — rollback exhausted offline edit/delete
@@ -593,6 +674,30 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
 
         XCTAssertEqual(fx.messageService.lastSendRequest?.originalLanguage, "es",
             "retrying must resend with the message's ORIGINAL language, not fall back to a hardcoded 'fr'")
+    }
+
+    /// #4042 — a manual retry that SUCCEEDS must clear the ORIGINAL outbox
+    /// row (same `clientMessageId`, reused by `sendMessage`, Phase 4 §6.2):
+    /// without this, `SyncPillViewModel`/`OfflineQueue.refreshPendingUIItems()`
+    /// keeps surfacing a `.failed`/`.exhausted` row forever even though the
+    /// message it describes has actually been sent — the exact bug reported
+    /// live (a location-only message retried successfully, its SyncPill
+    /// entry never disappearing).
+    func test_retryMessage_failedTextOnlyMessage_success_clearsTheOriginalOutboxRow() async throws {
+        let fx = try await makeFixture(isOnline: true)
+        try await seedFailedTextMessage(
+            localId: "m_retry_clears_outbox", content: "hello", originalLanguage: "fr", fixture: fx
+        )
+        let seeded = await MessageStoreObservationHelper.awaitMessageProperty(
+            id: "m_retry_clears_outbox", in: fx.sut
+        ) { $0.deliveryStatus == .failed }
+        XCTAssertTrue(seeded, "precondition: the failed text message must be visible")
+
+        await fx.sut.retryMessage(messageId: "m_retry_clears_outbox")
+
+        let cleared = await fx.offlineQueue.clearedSendMessageRowClientMessageIds
+        XCTAssertEqual(cleared, ["m_retry_clears_outbox"],
+            "a successful retry must clear the original outbox row by clientMessageId")
     }
 
     private func seedFailedTextMessage(

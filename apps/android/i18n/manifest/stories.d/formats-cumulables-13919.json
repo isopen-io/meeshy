@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "composer.publish.as.storyAndPost",
+          "androidName": "composer_publish_as_storyAndPost",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.publish.as.postAndReel",
+          "androidName": "composer_publish_as_postAndReel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.publish.as.storyPostAndReel",
+          "androidName": "composer_publish_as_storyPostAndReel",
+          "status": "adopted"
+        },
+        {
+          "androidName": "composer_publish_failed_story",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_publish_failed_post",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_publish_failed_reel",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

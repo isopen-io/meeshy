@@ -83,15 +83,6 @@ public enum AvatarContext: Sendable {
         }
     }
 
-    public var showsOnlineDot: Bool {
-        switch self {
-        case .storyViewer, .postComment, .postReaction, .typingIndicator,
-             .profileEdit, .notification:
-            return false
-        default: return true
-        }
-    }
-
     public var isTappable: Bool {
         switch self {
         case .postReaction, .typingIndicator:
@@ -128,7 +119,7 @@ public enum AvatarContext: Sendable {
     /// pendant le scroll.
     /// Contextes où le badge de mood « respire » (`repeatForever`). Les
     /// contextes de LISTE et d'EN-TÊTE de conversation en sont sortis le
-    /// 2026-08-21 : `.conversationHeaderCollapsed` est aussi l'avatar de la
+    /// `.conversationHeaderCollapsed` est aussi l'avatar de la
     /// rangée plate Lentille — un ressort infini PAR RANGÉE pendant tout le
     /// défilement (précédent « hog device 2026-07-03 », plus bas), pour une
     /// animation qui n'informe de rien (directive user : moins d'animations
@@ -144,7 +135,14 @@ public enum AvatarContext: Sendable {
 
     public var shadowRadius: CGFloat {
         switch self {
-        case .postReaction, .typingIndicator, .recentParticipant: return 0
+        // `.conversationList` est PORTÉ PAR UNE LISTE, et une ombre portée
+        // sur un cercle force une passe hors écran PAR RANGÉE : sur un fil de
+        // conversations qui défile, c'est une composition supplémentaire par
+        // avatar visible, à chaque image. Les autres contextes de liste
+        // (`.postReaction`, `.typingIndicator`, `.recentParticipant`) étaient
+        // déjà à zéro ; celui-ci tombait dans `default` et payait le plus gros
+        // rayon de la table (8) — pas par décision de design, par omission.
+        case .postReaction, .typingIndicator, .recentParticipant, .conversationList: return 0
         case .postComment: return 2
         case .messageBubble, .storyViewer, .storyViewerRow, .feedComposer, .userListItem, .notification,
              .conversationHeaderStacked: return 4
@@ -155,7 +153,10 @@ public enum AvatarContext: Sendable {
 
     public var shadowY: CGFloat {
         switch self {
-        case .postReaction, .typingIndicator, .recentParticipant: return 0
+        // Un décalage sans rayon ne dessine rien : les deux tables se tiennent
+        // par les mêmes cas, sans quoi `.conversationList` garderait un `y`
+        // pour une ombre qui n'existe plus.
+        case .postReaction, .typingIndicator, .recentParticipant, .conversationList: return 0
         case .postComment: return 1
         case .messageBubble, .conversationHeaderStacked: return 2
         default: return 4
@@ -184,7 +185,7 @@ public enum AvatarContext: Sendable {
         default: return size * 0.42
         }
     }
-    public var onlineDotSize: CGFloat { size * 0.26 }
+    public var onlineDotSize: CGFloat { AvatarPresenceDot.presence(.online).diameter(avatarSize: size) }
 }
 
 // MARK: - Story Ring State
@@ -238,6 +239,14 @@ public struct MeeshyAvatar: View {
     /// (hors ligne > 30min) ne rend PAS de dot non plus — seuls online/recent
     /// (vert) et away (orange) affichent une pastille.
     public var presenceState: PresenceState? = nil
+    /// Le pair a l'écran de CETTE conversation ouvert (#8892) : point à la
+    /// couleur primaire, même quand `presenceState` est masqué ; `.active`
+    /// quand il y regarde, écoute ou agit (#9061) — le point pulse.
+    public var isHere: ConversationHere = .absent
+    /// Le contour d'avatar ÉQUIPÉ, tel que la passerelle le sert avec la
+    /// personne (`profileDecor.avatarRing`, #10945) — la RÉFÉRENCE, que
+    /// l'avatar résout lui-même par le catalogue (#10946). `nil` ⇒ aucun contour.
+    public let ring: ServedProfileDecorItem?
     public var onTap: (() -> Void)? = nil
     public var onViewProfile: (() -> Void)? = nil
     public var onViewStory: (() -> Void)? = nil
@@ -246,12 +255,19 @@ public struct MeeshyAvatar: View {
     public var contextMenuItems: [AvatarContextMenuItem]? = nil
     public var enablePulse: Bool = true
     public var kind: AvatarKind = .user
+    /// La place libre (pt) que l'hôte garantit autour de l'empreinte : le cadre illustré s'y montre
+    /// sans réduire l'avatar (#15157). `0` ⇒ le cadre tient dans l'empreinte.
+    public private(set) var ringDecorRoom: CGFloat = 0
+    /// `false` : le contour sans ses films illustrés, l'anneau fixe seul — la SEULE surface qui le
+    /// retire est la bulle de frappe (#16114) ; partout ailleurs, le décor s'affiche entier.
+    public private(set) var ringShowsDecor: Bool = true
 
     // Primary init (AvatarContext)
     public init(name: String, context: AvatarContext, kind: AvatarKind = .user, accentColor: String = "",
                 secondaryColor: String? = nil, avatarURL: String? = nil, thumbHash: String? = nil,
                 storyState: StoryRingState = .none, moodEmoji: String? = nil,
-                presenceState: PresenceState? = nil, enablePulse: Bool? = nil,
+                presenceState: PresenceState? = nil, isHere: ConversationHere = .absent,
+                ring: ServedProfileDecorItem? = nil, enablePulse: Bool? = nil,
                 isDark: Bool = ThemeManager.shared.mode.isDark,
                 onTap: (() -> Void)? = nil, onViewProfile: (() -> Void)? = nil,
                 onViewStory: (() -> Void)? = nil, onMoodTap: ((CGPoint) -> Void)? = nil,
@@ -259,6 +275,9 @@ public struct MeeshyAvatar: View {
         self.name = name; self.context = context; self.kind = kind; self.accentColor = accentColor
         self.secondaryColor = secondaryColor; self.avatarURL = avatarURL; self.thumbHash = thumbHash
         self.storyState = storyState; self.moodEmoji = moodEmoji; self.presenceState = presenceState
+        self.isHere = isHere
+        self.ring = ring
+        self.ringDesign = kind == .user ? ProfileDecorResolver.ring(ring) : nil
         self.enablePulse = enablePulse ?? context.defaultPulse; self.isDark = isDark
         self.onTap = onTap; self.onViewProfile = onViewProfile; self.onViewStory = onViewStory
         self.onMoodTap = onMoodTap; self.onOnlineTap = onOnlineTap; self.contextMenuItems = contextMenuItems
@@ -269,20 +288,35 @@ public struct MeeshyAvatar: View {
         // every subsequent render allocation- and hash-free.
         let accent = accentColor.isEmpty ? DynamicColorGenerator.colorForName(name) : accentColor
         self.resolvedAccent = accent
-        self.resolvedSecondary = secondaryColor ?? accent
         self.initials = Self.makeInitials(from: name)
     }
 
     @State private var tapScale: CGFloat = 1.0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Le point a changé depuis l'apparition de l'avatar : seul un VRAI
+    /// changement fait onduler « ici » — une liste qui s'affiche ne pulse pas.
+    @State private var presenceChanged = false
+
+    /// Le point sortant DIMINUE ; l'entrant apparaît en REBONDISSANT, un temps
+    /// après, pour qu'on voie l'un céder la place à l'autre (#9047).
+    private var presenceTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return .asymmetric(
+            insertion: AnyTransition.scale(scale: 0.2).combined(with: .opacity)
+                .animation(.spring(response: 0.42, dampingFraction: 0.45).delay(0.12)),
+            removal: AnyTransition.scale(scale: 0.1).combined(with: .opacity)
+                .animation(.easeIn(duration: 0.18))
+        )
+    }
     private let isDark: Bool
     private let resolvedAccent: String
-    private let resolvedSecondary: String
     private let initials: String
+    /// Le dessin du contour, résolu UNE fois à l'init (le catalogue embarqué
+    /// est en mémoire) : le défilement d'une liste ne relit rien.
+    let ringDesign: AvatarRingDesign?
+    /// Le contour d'un pack NON embarqué dont le contrat est arrivé après l'init (#16264).
+    @State private var servedRing: AvatarRingDesign?
     private var theme: ThemeManager { ThemeManager.shared }
-
-    private var secondaryGradientColor: Color {
-        secondaryColor != nil ? Color(hex: resolvedSecondary) : Color(hex: resolvedAccent).opacity(0.6)
-    }
 
     private var effectiveStoryState: StoryRingState {
         guard kind == .user else { return .none }
@@ -294,25 +328,64 @@ public struct MeeshyAvatar: View {
         return context.showsMoodBadge ? moodEmoji : nil
     }
 
-    private var effectivePresence: PresenceState? {
-        guard kind == .user, context.showsOnlineDot else { return nil }
+    /// La présence SERVIE se peint dans TOUS les contextes (#10955) : aucun
+    /// contexte ne la retire plus — absente ou hors ligne ⇒ aucun point.
+    var shownPresence: AvatarPresenceDot? {
+        guard kind == .user else { return nil }
         // Offline (>30min) : aucun dot. Le gris reste défini dans
         // PresenceState.dotColor pour les affichages labellisés, pas ici.
-        guard presenceState != .offline else { return nil }
-        return presenceState
+        // « Ici » (#8892) prime et se rend même sans présence servie.
+        return AvatarPresenceDot.resolve(presence: presenceState, isHere: isHere.isHere)
+    }
+
+    /// VoiceOver : le nom, son humeur (#10528), et « dans la conversation »
+    /// quand le pair y est.
+    private var accessibilityName: String {
+        Self.spokenName(name: name, moodEmoji: effectiveMoodEmoji, isHere: shownPresence == .here)
+    }
+
+    /// La pastille d'humeur masque le point et n'est lue par personne : sans
+    /// ce libellé, l'humeur n'existait que pour l'œil.
+    public static func spokenName(name: String, moodEmoji: String?, isHere: Bool) -> String {
+        let mood = moodEmoji.flatMap { emoji -> String? in
+            guard !emoji.isEmpty else { return nil }
+            return String(localized: "avatar.a11y.mood", defaultValue: "humeur \(emoji)", bundle: .module)
+        }
+        let here = isHere ? AvatarPresenceDot.here.localizedLabel : nil
+        return ([name] + [mood, here].compactMap { $0 }).joined(separator: ", ")
     }
 
     private var hasTapHandler: Bool {
         context.isTappable && (onTap != nil || onViewProfile != nil || onViewStory != nil)
     }
 
+    /// La déduplication ci-dessous compare des LIBELLÉS RENDUS. Un même geste
+    /// logique doit donc porter UNE seule clé, dans UN seul bundle : deux clés
+    /// (ou deux bundles) pour « Voir le profil » rendent deux chaînes qui ne
+    /// coïncident plus dans les six autres langues, et le menu affiche l'entrée
+    /// en double. Les hôtes qui passent un item « profil » custom réutilisent
+    /// donc `avatar.menu.view_profile` de `Bundle.module`.
+    ///
+    /// Hôtes concernés (passent à la fois `onViewProfile` ET un `contextMenuItems`
+    /// custom « profil ») — la dédup n'a d'effet que si les DEUX clés rendent la
+    /// même chaîne dans les sept langues : `PostDetailView.swift` (~1259/1261),
+    /// `FeedPostCard.swift` (~731/734 et ~1345/1347), `FeedCommentsSheet.swift`
+    /// (~1389/1391 et ~2261/2262), `StoryViewerView+Sidebar.swift` (~972/975).
     private var effectiveContextMenuItems: [AvatarContextMenuItem] {
         var items: [AvatarContextMenuItem] = []
         if let onViewProfile {
-            items.append(.init(label: "Voir le profil", icon: "person.fill", action: onViewProfile))
+            items.append(.init(
+                label: String(localized: "avatar.menu.view_profile", defaultValue: "Voir le profil", bundle: .module),
+                icon: "person.fill",
+                action: onViewProfile
+            ))
         }
         if let onViewStory, kind == .user, storyState != .none {
-            items.append(.init(label: "Voir la story", icon: "play.circle.fill", action: onViewStory))
+            items.append(.init(
+                label: String(localized: "avatar.menu.view_story", defaultValue: "Voir la story", bundle: .module),
+                icon: "play.circle.fill",
+                action: onViewStory
+            ))
         }
         if let custom = contextMenuItems {
             for item in custom {
@@ -326,6 +399,11 @@ public struct MeeshyAvatar: View {
 
     private func hasContextMenu(resolvedItems: [AvatarContextMenuItem]) -> Bool {
         context.isTappable && !resolvedItems.isEmpty
+    }
+
+    private func performTap() {
+        withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { tapScale = 0.9 }
+        handleTap()
     }
 
     private func handleTap() {
@@ -347,37 +425,44 @@ public struct MeeshyAvatar: View {
         let resolvedMenuItems = effectiveContextMenuItems
         let showContextMenu = hasContextMenu(resolvedItems: resolvedMenuItems)
 
+        // LE CONTOUR ÉQUIPÉ (#10946) — dans l'empreinte de l'avatar : rien ne
+        // grandit ni ne se décale, l'anneau de story reste concentrique dedans
+        // (#10714), et le point de présence se pose PAR-DESSUS, au bord.
         let visual = ZStack {
             storyRing
             avatarBody
         }
-        .overlay(alignment: .bottomTrailing) {
-            if let emoji = effectiveMoodEmoji, !emoji.isEmpty {
-                moodBadge(emoji: emoji)
-                    .offset(badgeOffset(badgeHalfSize: context.badgeSize / 2))
-            } else if let presence = effectivePresence {
-                onlineDot(for: presence)
-                    .offset(badgeOffset(badgeHalfSize: context.onlineDotSize / 2))
-            }
-        }
+        .avatarRingWithin(
+            ringDesign ?? servedRing,
+            footprint: context.size,
+            storyRingSize: effectiveStoryState == .none ? nil : context.ringSize, decorRoom: ringDecorRoom,
+            decor: ringShowsDecor
+        )
+        .overlay(alignment: .bottomTrailing) { presenceBadge }
+        .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.42, dampingFraction: 0.5),
+                   value: shownPresence?.transitionKey)
+        .adaptiveOnChange(of: shownPresence?.transitionKey) { _, _ in presenceChanged = true }
         .scaleEffect(tapScale)
+        .settling($tapScale, to: 1.0, after: .milliseconds(100), animation: .spring(response: 0.2, dampingFraction: 0.6))
 
         let tappable = Group {
             if hasTapHandler {
                 visual
                     .contentShape(Circle())
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { tapScale = 0.9 }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { tapScale = 1.0 }
-                        }
-                        handleTap()
-                    }
+                    .onTapGesture(perform: performTap)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { performTap() }
             } else { visual }
         }
 
+        let loaded = Group {
+            if let src = pendingRingContract {
+                tappable.task(id: src) { await loadServedRing(src) }
+            } else { tappable }
+        }
+
         if showContextMenu {
-            tappable
+            loaded
                 .contextMenu {
                     ForEach(resolvedMenuItems) { item in
                         Button(role: item.role) {
@@ -387,11 +472,76 @@ public struct MeeshyAvatar: View {
                         }
                     }
                 }
-                .accessibilityLabel(name)
+                .accessibilityLabel(accessibilityName)
+                .accessibilityActions { presenceAction }
         } else {
-            tappable
-                .accessibilityLabel(name)
+            loaded
+                .accessibilityLabel(accessibilityName)
+                .accessibilityActions { presenceAction }
         }
+    }
+
+    /// Le contrat du contour équipé que l'appareil n'a pas encore : seul l'avatar qui en a besoin
+    /// se charge, une fois ; tous les autres ne portent aucune tâche.
+    private var pendingRingContract: String? {
+        guard kind == .user, ringDesign == nil, servedRing == nil, let ring, ring.origin != .builtin else { return nil }
+        return ring.contract
+    }
+
+    private func loadServedRing(_ src: String) async {
+        guard await ServedAppearanceStore.shared.load(src: src) != nil else { return }
+        servedRing = ProfileDecorResolver.ring(ring)
+    }
+
+    @ViewBuilder
+    private var presenceBadge: some View {
+        if let emoji = effectiveMoodEmoji, !emoji.isEmpty {
+            // Le mood vit les transitions du point (#9065) : il grossit en
+            // ressort à l'arrivée « ici » avec son gros pulse, se rétracte
+            // au départ puis revient cerné de vert.
+            moodBadge(emoji: emoji)
+                .overlay {
+                    if shownPresence == .here && presenceChanged && !reduceMotion {
+                        PresenceArrivalRipple(color: PresenceStyle.hereDotColor, diameter: context.badgeSize)
+                    }
+                }
+                .id("mood.\(shownPresence?.transitionKey ?? "none")")
+                .transition(presenceTransition)
+                .offset(badgeOffset(badgeHalfSize: context.badgeSize / 2))
+        } else if let presence = shownPresence {
+            let diameter = presence.diameter(avatarSize: context.size)
+            onlineDot(for: presence, diameter: diameter)
+                .overlay {
+                    if presence == .here, !reduceMotion, let wave = PresenceHereWave.for(isHere) {
+                        PresenceHereWaveView(color: presence.color, diameter: diameter, wave: wave)
+                            .id(wave.duration)
+                    }
+                    if presence.arrivesWithRipple && presenceChanged && !reduceMotion {
+                        PresenceArrivalRipple(color: presence.color, diameter: diameter)
+                    }
+                }
+                .id(presence.transitionKey)
+                .transition(presenceTransition)
+                .offset(AvatarPresenceDot.centerOffset(
+                    avatarSize: context.size,
+                    frameSize: effectiveStoryState == .none ? context.size : context.ringSize,
+                    dotDiameter: diameter
+                ))
+        }
+    }
+
+    /// Déclare la place libre autour de l'empreinte (#15157) : l'hôte l'a réservée, aucun texte ni avatar voisin n'y vit.
+    public func ringDecorRoom(_ room: CGFloat) -> MeeshyAvatar {
+        var copy = self
+        copy.ringDecorRoom = room
+        return copy
+    }
+
+    /// Retire les films illustrés du contour : l'anneau fixe seul (#16114, la bulle de frappe).
+    public func ringWithoutDecor() -> MeeshyAvatar {
+        var copy = self
+        copy.ringShowsDecor = false
+        return copy
     }
 
     // MARK: - Avatar Body
@@ -399,20 +549,13 @@ public struct MeeshyAvatar: View {
     @ViewBuilder
     private var avatarBody: some View {
         if let url = avatarURL, !url.isEmpty {
-            CachedAvatarImage(urlString: url, thumbHash: thumbHash, name: name, size: context.size, accentColor: resolvedAccent)
+            CachedAvatarImage(urlString: url, thumbHash: thumbHash, name: name, size: context.size, accentColor: resolvedAccent, secondaryColor: secondaryColor)
                 .shadow(color: Color(hex: resolvedAccent).opacity(0.4), radius: context.shadowRadius, y: context.shadowY)
         } else {
-            ZStack {
-                Circle()
-                    .fill(LinearGradient(
-                        colors: [Color(hex: resolvedAccent), secondaryGradientColor],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    ))
-                    .frame(width: context.size, height: context.size)
-                Text(initials)
-                    .font(.system(size: context.initialFont, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-            }
+            AvatarInitialsFace(
+                initials: initials, accent: resolvedAccent, secondary: secondaryColor,
+                size: context.size, fontSize: context.initialFont
+            )
             .shadow(color: Color(hex: resolvedAccent).opacity(0.4), radius: context.shadowRadius, y: context.shadowY)
         }
     }
@@ -424,14 +567,14 @@ public struct MeeshyAvatar: View {
         switch effectiveStoryState {
         case .unread:
             // Unread-story affordance: solid brand-primary ring at double the
-            // resting width (product decision 2026-06-21). Replaces the former
+            // resting width. Replaces the former
             // Instagram-style multi-colour rotating gradient.
             Circle()
                 .stroke(MeeshyColors.brandPrimary, lineWidth: context.ringWidth * 2)
                 .frame(width: context.ringSize, height: context.ringSize)
         case .read:
             Circle()
-                .stroke(Color(hex: resolvedAccent).opacity(0.3), lineWidth: context.ringWidth)
+                .stroke(Color(hex: resolvedAccent).opacity(MeeshyOpacity.medium), lineWidth: context.ringWidth)
                 .frame(width: context.ringSize, height: context.ringSize)
         case .none:
             EmptyView()
@@ -455,28 +598,52 @@ public struct MeeshyAvatar: View {
     /// `repeatForever` et sa garde anti-double-animation y vivent une seule
     /// fois — et, depuis l'extraction, derrière le portillon Reduce Motion
     /// que cette écriture-ci n'a jamais consulté.
+    ///
+    /// L'amplitude du pulse suit ce que fait le pair (#9065) — UNE branche :
+    /// changer d'amplitude ne doit pas recréer le badge, qui rejouerait son
+    /// arrivée.
     private func moodBadge(emoji: String) -> some View {
         MeeshyMoodBadge(
             emoji: emoji,
             diameter: context.badgeSize,
             animates: context.animatesMoodBadge,
+            outline: shownPresence?.moodOutline,
+            hushed: isHere.isFocused,
             onTap: onMoodTap
         )
-        .ifTrue(enablePulse) { $0.pulse(intensity: 0.12) }
+        .ifTrue(enablePulse) { $0.pulse(intensity: Self.moodPulseIntensity(isHere)) }
+    }
+
+    /// L'échelle du point, portée par le mood (#9065) : imperceptible en plein
+    /// écran, habituelle au repos, à peine plus ample à l'activité.
+    public nonisolated static func moodPulseIntensity(_ here: ConversationHere) -> CGFloat {
+        switch here {
+        case .focused: return MeeshyMoodBadge.hushedScale - 1
+        case .active: return 0.16
+        case .here, .absent: return 0.12
+        }
     }
 
     @ViewBuilder
-    private func onlineDot(for presence: PresenceState) -> some View {
-        // Couleur via le mapping central PresenceState.dotColor (PresenceStyle) :
-        // vert online/recent, orange away, gris offline.
+    private var presenceAction: some View {
+        if let onOnlineTap {
+            Button(String(localized: "avatar.presence.details.a11y", bundle: .module)) { onOnlineTap() }
+        }
+    }
+
+    @ViewBuilder
+    private func onlineDot(for presence: AvatarPresenceDot, diameter: CGFloat) -> some View {
+        // Couleur via le mapping central AvatarPresenceDot.color (PresenceStyle) :
+        // primaire « ici », vert online/recent, orange away, gris idle.
         let dot = Circle()
-            .fill(presence.dotColor)
-            .frame(width: context.onlineDotSize, height: context.onlineDotSize)
-            .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
+            .fill(presence.color)
+            .frame(width: diameter, height: diameter)
+            .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: MeeshyBorder.strong))
             .onTapGesture {
                 HapticFeedback.light()
                 onOnlineTap?()
             }
+            .accessibilityHidden(true)
 
         // Pulse actif uniquement quand en ligne ET story ring visible ET enablePulse
         if enablePulse && presence.pulses && effectiveStoryState != .none {
@@ -491,15 +658,15 @@ public struct MeeshyAvatar: View {
     /// Pure initials derivation (first letter of up to two words, uppercased,
     /// falling back to the first character). `nonisolated` so it is reachable
     /// from the `nonisolated`-friendly path and unit-testable off the MainActor.
+    /// Les initiales qu'un avatar sans image affiche — pour les surfaces qui
+    /// montrent une identité sans monter d'avatar (pastille d'un bouton).
+    public nonisolated static func initials(for name: String) -> String {
+        makeInitials(from: name)
+    }
+
+    /// La règle vit dans `NameInitials` (seules les LETTRES comptent, #8143).
     nonisolated static func makeInitials(from name: String) -> String {
-        let parts = name.components(separatedBy: " ")
-            .prefix(2)
-            .compactMap(\.first)
-            .map(String.init)
-            .joined()
-            .uppercased()
-        return parts.isEmpty ? String(name.prefix(1)).uppercased() : parts
+        NameInitials.of(name)
     }
 
 }
-

@@ -1,0 +1,390 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+/// **La LIGNE d'un commentaire** — extraite de `FeedCommentsSheet.swift`
+/// (#6578).
+///
+/// Elle y vivait à la fin d'un fichier de 2 519 lignes, très au-delà du plafond
+/// dur de 1 200 : le lot qui devait lui ajouter la citation d'un média ne
+/// pouvait pas y écrire une ligne de plus sans extraire d'abord. Un type par
+/// fichier — c'est le découpage que la directive du 2026-09-02 prescrit, et
+/// `CommentRowView` est une responsabilité entière, pas une tranche.
+///
+/// Le corps ci-dessous est repris MOT POUR MOT, à deux additions près : la
+/// citation rendue au-dessus du texte, et la ligne d'`Equatable` sans laquelle
+/// elle ne se repeindrait jamais.
+
+struct CommentRowView: View, Equatable {
+    let comment: FeedComment
+    let accentColor: String
+    var isReply: Bool = false
+    var isLiked: Bool = false
+    var likeCount: Int = 0
+    var isInFlight: Bool = false
+    let onReply: () -> Void
+    var onLikeComment: (() -> Void)? = nil
+    /// Supprime ce commentaire. Fourni (non-nil) UNIQUEMENT quand l'utilisateur
+    /// courant est l'auteur — le parent décide de l'éligibilité. `nil` ⇒ l'item
+    /// « Supprimer » n'apparaît pas dans le menu « … ».
+    var onDeleteComment: (() -> Void)? = nil
+    /// #11151 — retire le commentaire d'un AUTRE (modération) : fourni par le
+    /// parent quand la loi l'autorise, reçoit le motif.
+    var onRemoveComment: ((String) -> Void)? = nil
+    /// Édite ce commentaire (contenu + effets). Fourni UNIQUEMENT quand
+    /// l'utilisateur courant est l'auteur — même règle que la suppression.
+    var onEditComment: (() -> Void)? = nil
+    /// Les commentaires de la publication sont fermés : « Modifier » quitte le
+    /// menu, le like et le signalement restent (#16930).
+    var commentsClosed: Bool = false
+    /// Demande la traduction du commentaire vers la langue préférée du
+    /// lecteur (Prisme « Exploration ») — affiché quand AUCUNE traduction
+    /// n'est disponible et que la langue d'origine diffère. Le résultat
+    /// arrive via `comment:translation-updated`.
+    var onRequestTranslation: (() -> Void)? = nil
+    /// Affiche le bouton « Voir » (charger/afficher les réponses) à côté de
+    /// « Répondre ». Calculé par le parent (`ThreadedCommentSection`) : vrai
+    /// seulement s'il reste des réponses non révélées. Ignoré pour une réponse.
+    var showSeeReplies: Bool = false
+    /// Déclenché par « Voir » : déplie le thread (charge + affiche les réponses)
+    /// sans avoir à répondre. Sans repli (le bouton disparaît une fois déplié).
+    var onSeeReplies: (() -> Void)? = nil
+    var moodEmoji: String? = nil
+    var storyState: StoryRingState = .none
+    var presenceState: PresenceState? = nil
+    /// La racine d'une réponse — « Imager » l'emporte en citation (#8709).
+    var threadRoot: FeedComment? = nil
+    /// Les réponses chargées d'une racine — « Imager » peut en emporter une.
+    var threadReplies: [FeedComment] = []
+    /// Le post commenté — « Imager » le met en tête de la carte (#9686).
+    var post: FeedPost? = nil
+
+    /// Le menu « … » — le MÊME que celui d'un commentaire de story (#8709) :
+    /// Copier, Modifier, Signaler, Supprimer, Retirer (#11151), selon
+    /// `CommentMenuPolicy`. « Imager » est l'icône de la rangée (#16541).
+    private var moreMenu: some View {
+        CommentMoreMenu(
+            comment: comment,
+            servedText: effectiveCommentContent,
+            showOriginal: showOriginal,
+            accentColor: accentColor,
+            onEdit: onEditComment,
+            onDelete: onDeleteComment,
+            onRemove: onRemoveComment,
+            commentsClosed: commentsClosed,
+            glyphSize: isReply ? 12 : 14,
+            glyphColor: theme.textMuted
+        )
+    }
+
+    private var imagerButton: CommentImagerButton {
+        CommentImagerButton(
+            target: CommentImagerTarget(comment: comment, showOriginal: showOriginal, accentColor: accentColor,
+                                        root: threadRoot, loadedReplies: threadReplies, post: post),
+            glyphSize: isReply ? 12 : 14,
+            tint: theme.textMuted
+        )
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.comment.id == rhs.comment.id &&
+        lhs.isLiked == rhs.isLiked &&
+        lhs.likeCount == rhs.likeCount &&
+        lhs.isInFlight == rhs.isInFlight &&
+        lhs.showSeeReplies == rhs.showSeeReplies &&
+        // Re-render si l'éligibilité à la suppression change (ex: changement de
+        // compte avec la feuille ouverte) — sinon l'item « Supprimer » reste figé.
+        (lhs.onDeleteComment == nil) == (rhs.onDeleteComment == nil) &&
+        (lhs.onRemoveComment == nil) == (rhs.onRemoveComment == nil) &&
+        (lhs.onEditComment == nil) == (rhs.onEditComment == nil) &&
+        lhs.commentsClosed == rhs.commentsClosed &&
+        lhs.comment.effectFlags == rhs.comment.effectFlags &&
+        lhs.comment.replies == rhs.comment.replies &&
+        lhs.comment.content == rhs.comment.content &&
+        lhs.comment.trackedLinkMap == rhs.comment.trackedLinkMap &&
+        lhs.comment.translatedContent == rhs.comment.translatedContent &&
+        // Re-render quand le média (ou son enrichissement audio : transcription /
+        // variantes TTS via comment:media-updated) change.
+        lhs.comment.media.map(\.id) == rhs.comment.media.map(\.id) &&
+        lhs.comment.media.first?.transcription?.text == rhs.comment.media.first?.transcription?.text &&
+        lhs.comment.media.first?.translatedAudios.count == rhs.comment.media.first?.translatedAudios.count &&
+        // #6578 — sans cette ligne, une citation dont le média vient d'être
+        // relu (vignette recadrée, légende corrigée) ne repeint JAMAIS : la
+        // ligne se déclare égale à elle-même. `Equatable` sur une vue de liste
+        // est une DÉCLARATION de ce qui la fait changer, pas une optimisation.
+        lhs.comment.quotedMedia == rhs.comment.quotedMedia &&
+        // #8709 — l'arbre qu'« Imager » emporte : sans ces lignes, une racine
+        // éditée ou une réponse arrivée laisserait le menu sur l'ancien fil.
+        lhs.threadRoot?.id == rhs.threadRoot?.id &&
+        lhs.threadRoot?.displayContent == rhs.threadRoot?.displayContent &&
+        lhs.threadReplies.map(\.id) == rhs.threadReplies.map(\.id) &&
+        lhs.post?.id == rhs.post?.id && lhs.post?.displayContent == rhs.post?.displayContent
+    }
+
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.meeshyMoodEmojiResolver) private var moodEmojiResolver
+    @Environment(\.meeshyMoodTapResolver) private var moodTapResolver
+    @State private var selectedProfileUser: ProfileSheetUser?
+    @State private var showOriginal = false
+    /// Lieu du commentaire ouvert plein écran (tap sur le sticker).
+    @State private var rowFullscreenPlace: BubbleFullscreenPlace?
+    /// Demande de traduction envoyée pour cette ligne (feedback immédiat,
+    /// l'icône passe en sablier jusqu'à l'arrivée du résultat).
+    @State private var translationRequested = false
+
+    private var avatarContext: AvatarContext { .postComment }
+    private var readerLanguages: [String] { ReaderPrism.resolve(for: AuthManager.shared.currentUser) }
+    private var contentFont: CGFloat { isReply ? 14 : 15 }
+    private var authorFont: CGFloat { isReply ? 13 : 14 }
+
+    private var effectiveCommentContent: String { comment.shownText(showOriginal: showOriginal) }
+
+    private var likeLook: CommentLikeButton.Look {
+        let heartColor: Color = isLiked ? MeeshyColors.error : (likeCount > 0 ? Color(hex: accentColor) : theme.textMuted)
+        return CommentLikeButton.Look(
+            accentHex: accentColor, inactiveTint: heartColor, countColor: heartColor,
+            countFont: MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium),
+            glyphSize: isReply ? 12 : 14, likedScale: 1.1, spacing: MeeshySpacing.xs,
+            filledWhenInactive: likeCount > 0)
+    }
+
+    /// Pas encore de traduction vers la langue préférée : « Traduire » à la
+    /// demande (langues hors des 5 pré-générées comprises) — le résultat
+    /// remplit la ligne via `comment:translation-updated`.
+    @ViewBuilder private var translationRequestButton: some View {
+        if let onRequestTranslation, comment.offersTranslationRequest(readerLanguages: readerLanguages) {
+            Button {
+                guard !translationRequested else { return }
+                translationRequested = true
+                onRequestTranslation()
+                HapticFeedback.light()
+            } label: {
+                Image(systemName: translationRequested ? "hourglass" : "translate")
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .medium))
+                    .foregroundStyle(MeeshyColors.indigo400.opacity(translationRequested ? 0.5 : 1))
+            }
+            .accessibilityLabel(String(localized: "feed.comments.translate", defaultValue: "Traduire", bundle: .main))
+            .meeshyTapTarget(MeeshyControlSize.tapTarget)
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: isReply ? 10 : 12) {
+            MeeshyAvatar(
+                name: comment.author,
+                context: avatarContext,
+                accentColor: comment.authorColor,
+                avatarURL: comment.authorAvatarURL,
+                storyState: storyState,
+                moodEmoji: moodEmoji,
+                presenceState: presenceState,
+                ring: comment.authorRing,
+                onViewProfile: { selectedProfileUser = .from(feedComment: comment) },
+                contextMenuItems: [
+                    AvatarContextMenuItem(label: String(localized: "feed.comments.view_profile", defaultValue: "Voir le profil", bundle: .main), icon: "person.fill") {
+                        selectedProfileUser = .from(feedComment: comment)
+                    }
+                ]
+            )
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: isReply ? 4 : 6) {
+                CommentAuthorHeader(
+                    comment: comment, readerLanguages: readerLanguages, showOriginal: $showOriginal,
+                    metrics: .standard, spacing: MeeshySpacing.xs,
+                    separatorFont: MeeshyFont.relative(MeeshyFont.smallSize), separatorColor: theme.textMuted,
+                    time: Text(RelativeTimeFormatter.shortString(for: comment.timestamp))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                        .foregroundColor(theme.textMuted)
+                        .accessibilityHidden(true)
+                ) {
+                    Text(comment.author)
+                        .font(MeeshyFont.relative(authorFont, weight: .semibold))
+                        .foregroundColor(Color(hex: comment.authorColor))
+                        .onTapGesture {
+                            HapticFeedback.light()
+                            selectedProfileUser = .from(feedComment: comment)
+                        }
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel(String(format: String(localized: "a11y.comment.author_profile", defaultValue: "Profil de %@", bundle: .main), comment.author))
+                        .accessibilityHint(String(localized: "a11y.comment.author_profile.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
+                        .accessibilityAction { selectedProfileUser = .from(feedComment: comment) }
+                } translationOffer: {
+                    translationRequestButton
+                }
+
+                // **Le CORPS du commentaire** — texte, citation, média — porte ses
+                // effets d'un seul tenant (#8582) : le voile d'un commentaire
+                // flouté le couvre en entier, et un effet persistant (lueur,
+                // arc-en-ciel) épouse ce qu'on lit, pas la rangée d'actions.
+                VStack(alignment: .leading, spacing: isReply ? 4 : 6) {
+                    // `MessageTextRenderer` (et non `Text`) pour que `@mention` /
+                    // `#hashtag` soient teintés comme partout ailleurs.
+                    // `usesRelativeFont` conserve le scaling Dynamic Type du
+                    // `MeeshyFont.relative(contentFont)` d'origine.
+                    MessageTextRenderer.render(
+                        effectiveCommentContent,
+                        fontSize: contentFont,
+                        color: theme.textPrimary,
+                        mentionColor: MeeshyColors.mentionColor(isDark: theme.mode.isDark),
+                        hashtagColor: MeeshyColors.hashtagColor(isDark: theme.mode.isDark),
+                        accentColor: Color(hex: accentColor),
+                        usesRelativeFont: true,
+                        trackedLinks: comment.trackedLinkMap
+                    )
+                        .tint(Color(hex: accentColor))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .animation(.easeInOut(duration: 0.2), value: showOriginal)
+                        .accessibilityLabel(String(format: String(localized: "a11y.comment.body", defaultValue: "%1$@ : %2$@", bundle: .main), RelativeTimeFormatter.shortString(for: comment.timestamp), effectiveCommentContent))
+
+                    // Média unique du commentaire (image/vidéo/audio) — inline + plein
+                    // écran « comme dans une conversation ». Le commentaire ne porte
+                    // qu'un seul média (cf. backend commentId FK sur PostMedia).
+                    // **CE DONT LE COMMENTAIRE PARLE**, au-dessus de ce qu'il APPORTE
+                    // (#6578). L'ordre n'est pas cosmétique : la citation est le
+                    // CONTEXTE de la phrase qu'on lit, les pièces jointes en sont
+                    // la suite. L'inverse ferait lire la réponse avant la question.
+                    if let citation = comment.quotedMedia {
+                        CommentQuotedMediaBanner(citation: citation, accentColor: accentColor)
+                            .padding(.bottom, MeeshySpacing.xsPlus)
+                    }
+
+                    // Un commentaire porte jusqu'à `MAX_POST_MEDIA` pièces
+                    // (#9736) : toutes se rendent, plus la seule première.
+                    ForEach(comment.media) { media in
+                        CommentMediaView(
+                            media: media,
+                            accentColor: accentColor,
+                            commentId: comment.id,
+                            carrierText: comment.displayContent,
+                            carrierOriginalLanguage: comment.originalLanguage,
+                            authorName: comment.author,
+                            authorAvatarURL: comment.authorAvatarURL,
+                            authorColor: comment.authorColor,
+                            sentAt: comment.timestamp,
+                            trackedLinks: comment.trackedLinkMap
+                        )
+                        .padding(.top, MeeshySpacing.xxs)
+                    }
+                }
+                .commentBody(effects: comment.effects)
+
+                // Lieu attaché au commentaire (`FeedComment.location`, hissé du
+                // gateway) — sticker cliquable → carte plein écran. Couvre la
+                // sheet ET la page détail (les deux passent par cette row).
+                if let place = comment.location {
+                    FeedPostLocationSticker(place: place) {
+                        rowFullscreenPlace = BubbleFullscreenPlace(place: place)
+                    }
+                    .padding(.top, MeeshySpacing.xxs)
+                }
+
+                // #9743 — un commentaire que la file a abandonné reste à
+                // l'écran, relançable. Monté sur les seules lignes locales.
+                if CommentUnsent.isLocal(comment.id) {
+                    CommentUnsentBadge(commentId: comment.id, accentColor: accentColor)
+                }
+
+                HStack(spacing: MeeshySpacing.xl) {
+                    CommentLikeButton(isLiked: isLiked, likeCount: likeCount, isInFlight: isInFlight, look: likeLook) {
+                        onLikeComment?()
+                        HapticFeedback.light()
+                    }
+
+                    // Réponses plates à 2 niveaux : on peut répondre à un commentaire
+                    // racine OU à une réponse, mais une réponse-de-réponse reste affichée
+                    // au niveau 2 (rattachée au même parent racine, cf. submitComment).
+                    // Répondre à une réponse @mentionne son auteur → il est notifié.
+                    // Le compteur `↰ N` et « Voir » ne concernent que la racine.
+                    HStack(spacing: MeeshySpacing.sm) {
+                            Button {
+                                onReply()
+                                HapticFeedback.light()
+                            } label: {
+                                HStack(spacing: MeeshySpacing.xs) {
+                                    Image(systemName: "arrowshape.turn.up.left")
+                                        .font(MeeshyFont.relative(MeeshyIconSize.xs))
+                                    if !isReply && comment.replies > 0 {
+                                        Text("\(comment.replies)")
+                                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                                    }
+                                    Text(String(localized: "feed.comments.reply", defaultValue: "Répondre", bundle: .main))
+                                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
+                                }
+                                .foregroundColor(theme.textMuted)
+                            }
+                            .frame(minHeight: 44)
+                            .accessibilityLabel(String(localized: "a11y.comment.reply", defaultValue: "Répondre", bundle: .main))
+                            .accessibilityValue(comment.replies > 0 ? PostStatAccessibility.repliesLabel(comment.replies) : "")
+                            .accessibilityHint(String(format: String(localized: "a11y.comment.reply.hint", defaultValue: "Répondre à %@", bundle: .main), comment.author))
+
+                            if showSeeReplies {
+                                MetaSeparator()
+                                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                                    .foregroundStyle(theme.textMuted)
+
+                                Button {
+                                    onSeeReplies?()
+                                    HapticFeedback.light()
+                                } label: {
+                                    Text(String(localized: "feed.comments.see_replies", defaultValue: "Voir", bundle: .main))
+                                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                                        .foregroundStyle(Color(hex: accentColor))
+                                }
+                                .frame(minHeight: 44)
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityAddTraits(.isButton)
+                                .accessibilityLabel(comment.replies > 0
+                                    ? String(localized: "a11y.comment.show_replies", defaultValue: "Voir \(comment.replies) réponses", bundle: .main)
+                                    : String(localized: "feed.comments.see_replies", defaultValue: "Voir", bundle: .main))
+                            }
+                        }
+
+                    Spacer()
+                    imagerButton
+                    moreMenu
+                }
+                .padding(.top, isReply ? 2 : 4)
+            }
+        }
+        // Glisser à droite répond à CE commentaire (#8582) — racine ou réponse,
+        // dans la feuille comme dans la page détail. Posé avant le padding : le
+        // séparateur du bas reste en place pendant que la ligne glisse.
+        .commentSwipeToReply(onReply: onReply)
+        .padding(.vertical, isReply ? 8 : 12)
+        .overlay(
+            Group {
+                if !isReply {
+                    Rectangle()
+                        .fill(theme.inputBorder.opacity(MeeshyOpacity.medium))
+                        .frame(height: 1)
+                }
+            },
+            alignment: .bottom
+        )
+        .sheet(item: $selectedProfileUser) { user in
+            UserProfileSheet(
+                user: user,
+                moodEmoji: moodEmojiResolver?(user.userId ?? ""),
+                onMoodTap: moodTapResolver?(user.userId ?? ""),
+                presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
+                postsContent: ProfilePostsOpener.postsContent { selectedProfileUser = nil }, dependencies: .live
+            )
+            .presentationDetents([.large, .medium])
+            .presentationDragIndicator(.visible)
+        }
+        .fullScreenCover(item: $rowFullscreenPlace) { item in
+            // Même surface plein écran que la bulle et la card feed :
+            // carte + « Ouvrir dans Plans » / « Itinéraire ».
+            LocationFullscreenView(
+                latitude: item.place.latitude,
+                longitude: item.place.longitude,
+                placeName: item.place.name,
+                address: item.place.address,
+                accentColor: accentColor,
+                senderName: comment.author
+            ).closesForConversationOpening(.place)
+        }
+        .withStatusBubble()
+    }
+}

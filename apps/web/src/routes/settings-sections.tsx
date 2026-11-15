@@ -1,0 +1,881 @@
+import { useEffect, useId, useState, type ReactNode } from 'react';
+
+import { getLanguageInfo } from '@meeshy/shared/utils/languages';
+
+import { Avatar } from '@/components/avatar';
+import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
+import { Glyph, GlyphSvg } from '@/components/glyph';
+import type { GlyphName } from '@/components/glyphs';
+import { SETTINGS_GLYPHS, type SettingsGlyphName } from '@/components/glyphs-settings';
+import { InfoHintScope, InfoNoted, type InfoHint } from '@/components/info-hint';
+import { IosSwitch } from '@/components/ios-switch';
+import {
+  GroupedSection,
+  RowIcon,
+  SECTION_BRAND_INK,
+  SECTION_CARD_STYLE,
+  SECTION_INK,
+  SECTION_INK_2,
+} from '@/components/grouped-section';
+import type { AppPreferences } from '@/lib/api/app-preferences';
+import type { DeviceTranslationSetting } from '@/lib/device-translation/use-device-translation-setting';
+import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { isDeviceTranslationCatalogLoaded, loadDeviceTranslationCatalog, translateDeviceTranslation } from '@/lib/i18n-device-translation-catalog';
+import { isLicencesCatalogLoaded, loadLicencesCatalog, translateLicences } from '@/lib/i18n-licences-catalog';
+import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
+import { appInstitutionalHref } from '@/lib/institutional-href';
+import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { ThemePreference } from '@/lib/scheme';
+import { initialsOf } from '@/lib/view/conversation';
+import type { DevicePushRow } from '@/lib/push/use-device-push';
+import { Link } from '@/routes/route-table';
+import { MediaDownloadRows } from '@/routes/settings-media-download';
+import { useMyRing } from '@/lib/profile-decor/my-ring';
+
+/**
+ * **LES SECTIONS DES RÉGLAGES** (#5563) — miroir de `SettingsView.swift`, dans
+ * son ordre : carte de profil, compte, apparence, notifications, données,
+ * outils, à propos, déconnexion. Chaque section est un composant PUR
+ * (primitives en props) : `routes/settings.test.tsx` les rend sans DOM ni
+ * TanStack Query, et l'écran (`routes/settings.tsx`) ne fait que les composer.
+ *
+ * **Rien n'est offert qui n'ait un effet** (loi 4). Une bascule n'existe que si
+ * la passerelle l'obéit (`lib/api/app-preferences.ts`). Ce que la v2.0 ne
+ * porte pas encore menait au legacy ; il est décommissionné (#6702), et ces
+ * rangées sont MASQUÉES jusqu'à leur portage — sécurité, options fines de
+ * confidentialité et de notification, et deux rangées de la section
+ * « Données » (médias #6723, messages #6724). La suppression de compte mène à
+ * sa page de la v2 (`routes/account-deletion.tsx`, #6715) et l'export de
+ * données à la sienne (`routes/data-export.tsx`, #6725) : aucun contrôle des
+ * réglages ne vise plus une autre origine.
+ *
+ * **Divergence assumée : la confidentialité est une SECTION, pas une feuille.**
+ * iOS la range derrière une rangée de « Compte » (`PrivacySettingsView`) parce
+ * que sa feuille porte cinq sections ; la v2.0 n'en porte que les quatre
+ * bascules que la passerelle obéit, et une feuille pour quatre bascules
+ * coûterait un geste de plus à chaque visite (dimension 7).
+ */
+
+export const SETTINGS_HEADER_HEIGHT = 64;
+
+/** Le volet Sécurité des réglages (#6720) — `/settings?volet=securite`. */
+export const SECURITY_PANEL_PARAM = 'volet';
+export const SECURITY_PANEL = 'securite';
+/** « Mes appareils chiffrés » (#13013), poussé depuis la Sécurité — `/settings?volet=appareils-chiffres`. */
+export const E2EE_DEVICES_PANEL = 'appareils-chiffres';
+/** Le volet des packs (#10149) — `/settings?volet=packs`, sans route neuve. */
+export const PACKS_PANEL = 'packs';
+/** Le volet des licences (#14628) — `/settings?volet=licences`, chargé à la demande. */
+export const LICENCES_PANEL = 'licences';
+
+type IconSpec = { readonly set: 'socle'; readonly name: GlyphName } | { readonly set: 'ecran'; readonly name: SettingsGlyphName };
+
+function IconOf({ icon, size }: { readonly icon: IconSpec; readonly size: number }) {
+  return icon.set === 'socle' ? <Glyph name={icon.name} size={size} /> : <GlyphSvg glyph={SETTINGS_GLYPHS[icon.name]} size={size} />;
+}
+
+const SECTION_ICON = (icon: IconSpec) => <IconOf icon={icon} size={12} />;
+
+/** Les clés de l'écran — aucune ne prend de paramètre, ce qui rend `translate` appelable sur leur union. */
+type SettingsKey = Extract<InterfaceCatalogKey, `settings.${string}`>;
+
+const upper = (language: InterfaceLanguage, key: SettingsKey): string => translate(language, key).toLocaleUpperCase(language);
+
+const ROW_CLASS = 'flex items-center gap-3 px-3.5 py-2.5 text-start focus-visible:outline-2';
+const ROW_STYLE = { minHeight: 52, outlineColor: 'var(--color-ios-brand)' } as const;
+
+/** La note d'une rangée (#17587) : la QUESTION que le (i) nomme et la réponse, deux clés du catalogue. */
+type RowNoteKeys = { readonly question: SettingsKey; readonly text: SettingsKey };
+
+const rowNote = (language: InterfaceLanguage, keys: RowNoteKeys | undefined): InfoHint | undefined =>
+  keys === undefined ? undefined : { label: translate(language, keys.question), text: translate(language, keys.text), glyph: SETTINGS_GLYPHS.info };
+
+/** `note` ne se pose que sur une rangée qui n'est PAS un lien : le (i) est un bouton (#17587). */
+function RowText({
+  label,
+  caption,
+  captionId,
+  note,
+  noteId,
+}: {
+  readonly label: string;
+  /** La phrase LUE AU REPOS (règle 7 de l'épure, #17594) : ce que fait un réglage propre à Meeshy. `note` ne porte alors que le détail secondaire. */
+  readonly caption?: string;
+  readonly captionId?: string;
+  readonly note?: InfoHint;
+  readonly noteId?: string;
+}) {
+  return (
+    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <InfoNoted note={note} inline {...(noteId === undefined ? {} : { noteId })}>
+        <span className="block break-words text-body font-medium" style={{ color: SECTION_INK }}>
+          {label}
+        </span>
+      </InfoNoted>
+      {caption === undefined ? null : (
+        <span id={captionId} data-row-caption className="text-caption" style={{ color: SECTION_INK_2 }}>
+          {caption}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function Chevron() {
+  return (
+    <span aria-hidden="true" className="shrink-0" style={{ color: SECTION_INK_2 }}>
+      <GlyphSvg glyph={SETTINGS_GLYPHS.caretRight} size={12} className="rtl:-scale-x-100" />
+    </span>
+  );
+}
+
+export function SettingsHeaderBar({ language }: { readonly language: InterfaceLanguage }) {
+  return (
+    <header className="flex shrink-0 items-center gap-1 px-2" style={{ height: SETTINGS_HEADER_HEIGHT }}>
+      <Link
+        to="list"
+        aria-label={translate(language, 'pending.back')}
+        className={`${CHROME_ACTION_HIT_CLASS} focus-visible:outline-2 focus-visible:outline-offset-2`}
+        style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
+      >
+        <ChromeActionDisc>
+          <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
+        </ChromeActionDisc>
+      </Link>
+      <h1 className="min-w-0 flex-1 truncate text-body font-semibold" style={{ color: SECTION_INK }}>
+        {translate(language, 'settings.title')}
+      </h1>
+    </header>
+  );
+}
+
+export type SettingsUser = { readonly username: string; readonly displayName: string | null; readonly avatar: string | null };
+
+export function ProfileCard({ language, user }: { readonly language: InterfaceLanguage; readonly user: SettingsUser | null }) {
+  /* MON CONTOUR ÉQUIPÉ (#10946) — le même que sur mon profil. */
+  const myRing = useMyRing();
+  const title = translate(language, 'settings.my_profile');
+  const name = user === null ? title : user.displayName ?? user.username;
+  return (
+    <Link
+      to="profile"
+      data-settings-profile
+      aria-label={title}
+      className="flex items-center gap-3.5 rounded-card p-4 focus-visible:outline-2"
+      style={{ ...SECTION_CARD_STYLE, minHeight: 72, outlineColor: 'var(--color-ios-brand)' }}
+    >
+      <Avatar initials={initialsOf(name)} color="var(--color-ios-brand)" size={48} {...(user?.avatar ? { src: user.avatar } : {})} {...(myRing === null ? {} : { ring: myRing })} />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="truncate text-body font-semibold" style={{ color: SECTION_INK }}>
+          {name}
+        </span>
+        {user === null ? null : <span className={`truncate text-caption font-medium ${SECTION_BRAND_INK}`}>{`@${user.username}`}</span>}
+      </span>
+      <Chevron />
+    </Link>
+  );
+}
+
+/* La SÉCURITÉ revient (#6720) — `?volet=securite` sur les réglages eux-mêmes,
+   miroir de `SecurityView` poussé depuis `SettingsView` : l'écran des sessions
+   se charge à la demande, et aucune route neuve n'entre dans la table du socle
+   (première peinture). Elle ne vise plus aucune adresse legacy.
+
+   La SUPPRESSION DE COMPTE mène à sa page de la v2 (`/account/deletion`,
+   #6715) — même onglet, même origine, sans légende. Elle y ouvre la demande
+   sous phrase et mot de passe, comme `DeleteAccountView.swift`. Hors
+   production, la rangée n'est plus inerte : #6354 (D-67) la désactivait parce
+   qu'elle visait la production réelle depuis staging ; une adresse RELATIVE
+   mène chaque environnement à sa propre page. */
+export function AccountSection({ language }: { readonly language: InterfaceLanguage }) {
+  return (
+    <GroupedSection id="settings-account" title={upper(language, 'settings.section.account')} icon={SECTION_ICON({ set: 'ecran', name: 'userCircle' })}>
+      <Link to="settings" search={{ [SECURITY_PANEL_PARAM]: SECURITY_PANEL }} data-settings-security className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon>
+          <IconOf icon={{ set: 'ecran', name: 'shieldCheck' }} size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.security.title')} />
+        <Chevron />
+      </Link>
+      <Link to="accountDeletion" data-settings-account-deletion className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon tint="var(--color-error)">
+          <IconOf icon={{ set: 'ecran', name: 'userMinus' }} size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.delete_account')} />
+        <Chevron />
+      </Link>
+    </GroupedSection>
+  );
+}
+
+/* La section « Données » (#6335) — MESSAGES reste MASQUÉ derrière son issue
+   de portage (#6724) : une rangée n'entre ici que le jour où sa destination
+   existe (loi 4). Le téléchargement automatique des MÉDIAS y vit (#6333) : le
+   fil l'entend. L'EXPORT (#6725) a une adresse propre à la v2 —
+   `/settings/data-export`, jamais l'ancienne `meeshy.me/settings#privacy`. */
+export function DataSection({
+  language,
+  deviceTranslation,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly deviceTranslation?: DeviceTranslationSetting;
+}) {
+  return (
+    <GroupedSection id="settings-data" title={upper(language, 'settings.section.data')} icon={SECTION_ICON({ set: 'ecran', name: 'export' })}>
+      {deviceTranslation === undefined ? null : <DeviceTranslationRow language={language} toggle={deviceTranslation} />}
+      <MediaDownloadRows language={language} />
+      <Link to="dataExport" data-settings-export className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon tint="var(--color-warning)">
+          <IconOf icon={{ set: 'ecran', name: 'export' }} size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.export_data')} />
+        <Chevron />
+      </Link>
+    </GroupedSection>
+  );
+}
+
+/* UNE BASCULE LOCALE À L'APPAREIL — la traduction sur l'appareil (#9898) : un réglage qui n'attend aucune passerelle,
+   donc jamais grisé hors ligne. `disabled` ne sert qu'à poser une bascule dont
+   l'état n'est pas encore lu. */
+function LocalToggleRow({
+  setting,
+  name,
+  caption,
+  note,
+  icon,
+  tint,
+  enabled,
+  disabled = false,
+  onToggle,
+}: {
+  readonly setting: string;
+  readonly name: string;
+  readonly caption: string;
+  readonly note: InfoHint;
+  readonly icon: IconSpec;
+  readonly tint?: string;
+  readonly enabled: boolean;
+  readonly disabled?: boolean;
+  readonly onToggle: (enabled: boolean) => void;
+}) {
+  const captionId = useId();
+  const noteId = useId();
+  return (
+    <div className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
+      <RowIcon {...(tint === undefined ? {} : { tint })}>
+        <IconOf icon={icon} size={15} />
+      </RowIcon>
+      <RowText label={name} caption={caption} captionId={captionId} note={note} noteId={noteId} />
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label={name}
+        aria-describedby={`${captionId} ${noteId}`}
+        data-setting={setting}
+        {...(disabled ? { disabled: true } : {})}
+        onClick={() => onToggle(!enabled)}
+        className="grid shrink-0 place-items-center rounded-chip focus-visible:outline-2"
+        style={{ minWidth: 56, minHeight: 44, outlineColor: 'var(--color-ios-brand)', ...(disabled ? { opacity: 0.5 } : {}) }}
+      >
+        <IosSwitch checked={enabled} />
+      </button>
+    </div>
+  );
+}
+
+/* LES PACKS ET TÉLÉCHARGEMENTS (#10149, demande porteur 2026-10-11) — la
+   Boutique des stickers et celle des cadres du jeu, dans un volet des réglages
+   (`?volet=packs`) chargé à la demande : aucune route neuve, rien dans la
+   première peinture. La Boutique des stickers reste AUSSI le dernier onglet de
+   la feuille de stickers, là où on la cherche en écrivant. */
+export function PacksSection({ language }: { readonly language: InterfaceLanguage }) {
+  return (
+    <GroupedSection id="settings-packs" title={upper(language, 'settings.section.packs')} icon={SECTION_ICON({ set: 'ecran', name: 'hardDrives' })}>
+      <Link to="settings" search={{ [SECURITY_PANEL_PARAM]: PACKS_PANEL }} data-settings-packs className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon tint="var(--ios-indigo-400)">
+          <IconOf icon={{ set: 'ecran', name: 'sparkle' }} size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.packs.shop')} />
+        <Chevron />
+      </Link>
+    </GroupedSection>
+  );
+}
+
+/* LA TRADUCTION SUR L'APPAREIL (#9898) — offerte partout : tout navigateur a un Worker, et le consentement est local.
+   Ses libellés vivent hors du catalogue d'interface (`i18n-device-translation-catalog.ts`) : la rangée les attend. */
+function DeviceTranslationRow({ language, toggle }: { readonly language: InterfaceLanguage; readonly toggle: DeviceTranslationSetting }) {
+  const [, setLoadedLanguage] = useState<InterfaceLanguage | null>(null);
+  useEffect(() => {
+    if (isDeviceTranslationCatalogLoaded(language)) return undefined;
+    let live = true;
+    loadDeviceTranslationCatalog(language).then(
+      () => {
+        if (live) setLoadedLanguage(language);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [language]);
+  if (!isDeviceTranslationCatalogLoaded(language)) return null;
+  return (
+    <LocalToggleRow
+      setting="deviceTranslation"
+      name={translateDeviceTranslation(language, 'settings.device_translation')}
+      caption={translateDeviceTranslation(language, 'settings.device_translation.summary')}
+      note={{
+        label: translateDeviceTranslation(language, 'settings.device_translation.question'),
+        text: translateDeviceTranslation(language, 'settings.device_translation.info'),
+        glyph: SETTINGS_GLYPHS.info,
+      }}
+      icon={{ set: 'socle', name: 'translate' }}
+      enabled={toggle.enabled}
+      disabled={!toggle.ready}
+      onToggle={toggle.onToggle}
+    />
+  );
+}
+
+export type PreferencesView =
+  | { readonly kind: 'ready'; readonly preferences: AppPreferences }
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'error' };
+
+/** `allowAnalytics` est LU (#10502), jamais basculé d'ici : le web n'a pas d'interrupteur « Analytique ». */
+export type BooleanPreference = Exclude<keyof AppPreferences, 'theme' | 'allowAnalytics'>;
+
+type ToggleSpec = {
+  readonly key: BooleanPreference;
+  readonly label: SettingsKey;
+  readonly caption?: SettingsKey;
+  readonly note?: RowNoteKeys;
+  readonly icon: IconSpec;
+  readonly tint: string;
+};
+
+
+function ToggleRow({
+  language,
+  spec,
+  checked,
+  disabled,
+  onToggle,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly spec: ToggleSpec;
+  readonly checked: boolean;
+  readonly disabled: boolean;
+  readonly onToggle: (key: BooleanPreference, value: boolean) => void;
+}) {
+  const captionId = useId();
+  const noteId = useId();
+  const label = translate(language, spec.label);
+  const note = rowNote(language, spec.note);
+  const describedBy = [spec.caption === undefined ? undefined : captionId, note === undefined ? undefined : noteId].filter((id) => id !== undefined).join(' ');
+  return (
+    <div className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
+      <RowIcon tint={spec.tint}>
+        <IconOf icon={spec.icon} size={15} />
+      </RowIcon>
+      <RowText label={label} {...(spec.caption === undefined ? {} : { caption: translate(language, spec.caption), captionId })} {...(note === undefined ? {} : { note, noteId })} />
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        {...(describedBy === '' ? {} : { 'aria-describedby': describedBy })}
+        data-setting={spec.key}
+        disabled={disabled}
+        onClick={() => onToggle(spec.key, !checked)}
+        className="grid shrink-0 place-items-center rounded-chip focus-visible:outline-2"
+        style={{ minWidth: 56, minHeight: 44, outlineColor: 'var(--color-ios-brand)', opacity: disabled ? 0.5 : 1 }}
+      >
+        <IosSwitch checked={checked} />
+      </button>
+    </div>
+  );
+}
+
+function Toggles({
+  language,
+  view,
+  specs,
+  disabled,
+  onToggle,
+  onRetry,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly view: PreferencesView;
+  readonly specs: readonly ToggleSpec[];
+  readonly disabled: boolean;
+  readonly onToggle: (key: BooleanPreference, value: boolean) => void;
+  readonly onRetry: () => void;
+}) {
+  if (view.kind === 'loading') {
+    return (
+      <div aria-busy="true" data-settings-loading className="grid">
+        <span className="sr-only">{translate(language, 'settings.loading')}</span>
+        {specs.map((spec) => (
+          <span key={spec.key} aria-hidden="true" className="mx-3.5 my-2.5 block rounded-chip" style={{ height: 32, ...SECTION_CARD_STYLE }} />
+        ))}
+      </div>
+    );
+  }
+  if (view.kind === 'error') {
+    return (
+      <div data-settings-error className="flex flex-wrap items-center gap-3 px-3.5 py-3">
+        <span aria-hidden="true" style={{ color: 'var(--color-error)' }}>
+          <Glyph name="warningCircle" size={18} />
+        </span>
+        <span className="min-w-0 flex-1 text-body font-medium" style={{ color: SECTION_INK }}>
+          {translate(language, 'settings.error.title')}
+        </span>
+        <button
+          type="button"
+          data-settings-retry
+          onClick={onRetry}
+          className={`grid place-items-center rounded-chip px-3 text-caption font-semibold focus-visible:outline-2 ${SECTION_BRAND_INK}`}
+          style={{ minHeight: 44, outlineColor: 'var(--color-ios-brand)' }}
+        >
+          {translate(language, 'settings.retry')}
+        </button>
+      </div>
+    );
+  }
+  return (
+    <>
+      {specs.map((spec) => (
+        <ToggleRow key={spec.key} language={language} spec={spec} checked={view.preferences[spec.key]} disabled={disabled} onToggle={onToggle} />
+      ))}
+    </>
+  );
+}
+
+const PRIVACY_TOGGLES = [
+  {
+    key: 'showOnlineStatus',
+    label: 'settings.privacy.online_status',
+    caption: 'settings.privacy.online_status.info',
+    note: { question: 'settings.privacy.online_status.question', text: 'settings.privacy.online_status.more' },
+    icon: { set: 'ecran', name: 'circle' },
+    tint: 'var(--color-success)',
+  },
+  { key: 'showLastSeen', label: 'settings.privacy.last_seen', icon: { set: 'socle', name: 'clock' }, tint: 'var(--ios-indigo-400)' },
+  {
+    key: 'showReadReceipts',
+    label: 'settings.privacy.read_receipts',
+    caption: 'settings.privacy.read_receipts.info',
+    icon: { set: 'socle', name: 'checks' },
+    tint: 'var(--color-ios-brand)',
+  },
+  { key: 'showTypingIndicator', label: 'settings.privacy.typing_indicator', icon: { set: 'ecran', name: 'keyboard' }, tint: 'var(--ios-indigo-300)' },
+  {
+    key: 'hideProfileFromSearch',
+    label: 'settings.privacy.hide_from_search',
+    caption: 'settings.privacy.hide_from_search.info',
+    icon: { set: 'ecran', name: 'shieldCheck' },
+    tint: 'var(--ios-indigo-500)',
+  },
+  {
+    key: 'acceptCallsFromNonContacts',
+    label: 'settings.privacy.calls_non_contacts',
+    caption: 'settings.privacy.calls_non_contacts.info',
+    icon: { set: 'socle', name: 'phone' },
+    tint: 'var(--color-error)',
+  },
+  {
+    key: 'notifyContactsOnReturn',
+    label: 'settings.privacy.notify_contacts_on_return',
+    caption: 'settings.privacy.notify_contacts_on_return.info',
+    icon: { set: 'socle', name: 'users' },
+    tint: 'var(--color-success)',
+  },
+  /* « Sauvegarder média » (#14641) — même place et même nom qu'iOS
+     (`PrivacySettingsView.mediaSection`), synchronisé par `/me/preferences` :
+     la porte de l'enregistrement des médias reçus dans la galerie. */
+  { key: 'saveMediaToGallery', label: 'settings.privacy.save_media', icon: { set: 'socle', name: 'image' }, tint: 'var(--color-success)' },
+] as const satisfies readonly ToggleSpec[];
+
+const NOTIFICATION_TOGGLES = [
+  { key: 'pushEnabled', label: 'settings.notifications.title', icon: { set: 'ecran', name: 'bellRinging' }, tint: 'var(--color-error)' },
+  { key: 'soundEnabled', label: 'settings.notif.sounds', icon: { set: 'ecran', name: 'speakerHigh' }, tint: 'var(--ios-indigo-300)' },
+  { key: 'contactActivityEnabled', label: 'settings.notif.contact_activity', caption: 'settings.notif.contact_activity.info', icon: { set: 'ecran', name: 'handPalm' }, tint: 'var(--color-ios-brand)' },
+  /* « Recevoir des Bring » (#16588) — l'interrupteur GLOBAL que la passerelle lit
+     avant de faire sonner ; le blocage par personne reste sur la fiche d'un lien. */
+  { key: 'bringEnabled', label: 'settings.notif.bring', caption: 'settings.notif.bring.info', icon: { set: 'socle', name: 'phone' }, tint: 'var(--color-error)' },
+] as const satisfies readonly ToggleSpec[];
+
+type PreferenceSectionProps = {
+  readonly language: InterfaceLanguage;
+  readonly view: PreferencesView;
+  readonly disabled: boolean;
+  readonly onToggle: (key: BooleanPreference, value: boolean) => void;
+  readonly onRetry: () => void;
+};
+
+/* Les options FINES de confidentialité et de notification n'ont plus
+   d'adresse depuis le décommissionnement du legacy (#6702) : leur rangée
+   « Plus d'options » est MASQUÉE jusqu'à leur portage — jamais une rangée qui
+   ne mène nulle part (loi 4). */
+export function PrivacySection({ language, view, disabled, onToggle, onRetry }: PreferenceSectionProps) {
+  return (
+    <GroupedSection id="settings-privacy" title={upper(language, 'settings.privacy.title')} icon={SECTION_ICON({ set: 'socle', name: 'lock' })}>
+      <Toggles language={language} view={view} specs={PRIVACY_TOGGLES} disabled={disabled} onToggle={onToggle} onRetry={onRetry} />
+    </GroupedSection>
+  );
+}
+
+/**
+ * LA PERMISSION DE L'APPAREIL (#7307) — la coque seule la porte. Refusée,
+ * la bascule `pushEnabled` ne gouverne plus rien sur CET appareil : la rangée
+ * le dit, et donne le seul chemin de retour qu'Android laisse.
+ */
+function DevicePushRowView({ language, device }: { readonly language: InterfaceLanguage; readonly device: DevicePushRow }) {
+  const denied = device.permission === 'denied';
+  const label = translate(language, denied ? 'settings.notif.device.blocked' : 'settings.notif.device.prompt');
+  return (
+    <div data-device-push={device.permission} className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
+      <RowIcon tint={denied ? 'var(--color-error)' : 'var(--color-ios-brand)'}>
+        <IconOf icon={{ set: 'ecran', name: 'bellRinging' }} size={15} />
+      </RowIcon>
+      <RowText label={label} />
+      <button
+        type="button"
+        data-device-push-action
+        onClick={denied ? device.openSettings : device.enable}
+        className={`grid shrink-0 place-items-center rounded-chip px-3 text-caption font-semibold focus-visible:outline-2 ${SECTION_BRAND_INK}`}
+        style={{ minHeight: 44, outlineColor: 'var(--color-ios-brand)' }}
+      >
+        {translate(language, denied ? 'settings.notif.device.open_settings' : 'settings.notif.device.enable')}
+      </button>
+    </div>
+  );
+}
+
+export function NotificationsSection({
+  language,
+  view,
+  disabled,
+  onToggle,
+  onRetry,
+  device = null,
+}: PreferenceSectionProps & { readonly device?: DevicePushRow | null }) {
+  return (
+    <GroupedSection id="settings-notifications" title={upper(language, 'settings.section.notifications')} icon={SECTION_ICON({ set: 'socle', name: 'bell' })}>
+      {device !== null && device.permission !== 'granted' ? <DevicePushRowView language={language} device={device} /> : null}
+      <Toggles language={language} view={view} specs={NOTIFICATION_TOGGLES} disabled={disabled} onToggle={onToggle} onRetry={onRetry} />
+    </GroupedSection>
+  );
+}
+
+const THEME_CHOICES = [
+  { preference: 'system', label: 'settings.theme.auto', glyph: 'circleHalf' },
+  { preference: 'light', label: 'settings.theme.light', glyph: 'sun' },
+  { preference: 'dark', label: 'settings.theme.dark', glyph: 'moon' },
+] as const satisfies ReadonlyArray<{ readonly preference: ThemePreference; readonly label: SettingsKey; readonly glyph: SettingsGlyphName }>;
+
+const endonym = (code: string): string => {
+  const info = getLanguageInfo(code);
+  return info.nativeName ?? info.name;
+};
+
+const interfaceChoiceOf = (value: string): InterfaceLanguage | null => SUPPORTED_INTERFACE_LANGUAGES.find((code) => code === value) ?? null;
+
+export function AppearanceSection({
+  language,
+  theme,
+  onTheme,
+  interfaceChoice,
+  onInterfaceLanguage,
+  primaryLanguage,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly theme: ThemePreference;
+  readonly onTheme: (preference: ThemePreference) => void;
+  readonly interfaceChoice: InterfaceLanguage | null;
+  readonly onInterfaceLanguage: (choice: InterfaceLanguage | null) => void;
+  readonly primaryLanguage: string | null;
+}) {
+  const themeLabel = translate(language, 'settings.theme');
+  const current = THEME_CHOICES.find((choice) => choice.preference === theme) ?? THEME_CHOICES[0];
+  const interfaceLabel = translate(language, 'settings.interface_language');
+  return (
+    <GroupedSection id="settings-appearance" title={upper(language, 'settings.section.appearance')} icon={SECTION_ICON({ set: 'ecran', name: 'paintBrush' })}>
+      <div className="grid gap-2.5 px-3.5 py-2.5">
+        <div className="flex items-center gap-3">
+          <RowIcon tint="var(--color-warning)">
+            <GlyphSvg glyph={SETTINGS_GLYPHS[current.glyph]} size={15} />
+          </RowIcon>
+          <RowText label={themeLabel} />
+        </div>
+        <div role="group" aria-label={themeLabel} className="grid grid-cols-3 gap-1.5">
+          {THEME_CHOICES.map(({ preference, label, glyph }) => {
+            const pressed = preference === theme;
+            return (
+              <button
+                key={preference}
+                type="button"
+                aria-pressed={pressed}
+                data-theme-choice={preference}
+                onClick={() => onTheme(preference)}
+                className="flex items-center justify-center gap-1.5 rounded-chip px-2 text-caption font-semibold focus-visible:outline-2"
+                style={{
+                  minHeight: 44,
+                  outlineColor: 'var(--color-ios-brand)',
+                  color: pressed ? 'var(--color-ios-on-brand)' : SECTION_INK,
+                  backgroundColor: pressed ? 'var(--ios-indigo-600)' : 'color-mix(in srgb, var(--color-ios-ink-3) 14%, transparent)',
+                }}
+              >
+                <span aria-hidden="true">
+                  <GlyphSvg glyph={SETTINGS_GLYPHS[glyph]} size={14} />
+                </span>
+                {translate(language, label)}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3.5 py-2.5" style={{ minHeight: 52 }}>
+        <RowIcon tint="var(--ios-indigo-600)">
+          <GlyphSvg glyph={SETTINGS_GLYPHS.globe} size={15} />
+        </RowIcon>
+        <RowText label={interfaceLabel} />
+        <select
+          aria-label={interfaceLabel}
+          data-interface-language
+          value={interfaceChoice ?? ''}
+          onChange={(event) => onInterfaceLanguage(interfaceChoiceOf(event.currentTarget.value))}
+          className={`ms-auto rounded-chip px-3 text-input font-semibold focus-visible:outline-2 ${SECTION_BRAND_INK}`}
+          style={{
+            minHeight: 44,
+            outlineColor: 'var(--color-ios-brand)',
+            backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 14%, transparent)',
+          }}
+        >
+          <option value="">{translate(language, 'settings.interface_language.automatic')}</option>
+          {SUPPORTED_INTERFACE_LANGUAGES.map((code) => (
+            <option key={code} value={code} lang={code}>
+              {endonym(code)}
+            </option>
+          ))}
+        </select>
+      </div>
+      <Link to="profile" data-settings-content-languages className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon tint="var(--ios-indigo-400)">
+          <Glyph name="translate" size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.content_languages')} caption={translate(language, 'settings.content_languages.info')} />
+        {primaryLanguage === null ? null : (
+          <span lang={primaryLanguage} className="shrink-0 text-caption font-medium" style={{ color: SECTION_INK_2 }}>
+            {endonym(primaryLanguage)}
+          </span>
+        )}
+        <Chevron />
+      </Link>
+    </GroupedSection>
+  );
+}
+
+/**
+ * `showAdmin` — l'ENTRÉE de l'espace d'administration (#6432).
+ *
+ * Elle n'apparaît que pour qui y a droit, et le droit vient du SERVEUR
+ * (`GET /me/permissions`, résolu par l'écran hôte) : `SessionUser` ne projette
+ * pas `role`, donc rien ici ne peut le déduire.
+ *
+ * **Cacher la rangée n'est PAS la garde.** L'écran `/admin` refait la lecture
+ * pour lui-même — on y entre aussi par un lien profond, et une porte gardée
+ * seulement par l'absence de son bouton n'est pas gardée. Cette rangée ne fait
+ * que la DÉCOUVERTE ; c'est la raison pour laquelle son absence, en cas
+ * d'erreur réseau, ne coûte qu'un chemin d'accès et jamais une fuite.
+ */
+export function ToolsSection({ language, showAdmin = false }: { readonly language: InterfaceLanguage; readonly showAdmin?: boolean }) {
+  return (
+    <GroupedSection id="settings-tools" title={upper(language, 'settings.section.tools')} icon={SECTION_ICON({ set: 'ecran', name: 'wrench' })}>
+      {/* LES MESSAGES FAVORIS (#7286) — la PREMIÈRE rangée « Outils » d'iOS
+          (`SettingsView.swift`, `meeshyToolsSection` : `star.fill`, teinte
+          `warning`, `settings.tools.starred`), avant les publications
+          enregistrées. Le favori se pose depuis « Plus… » dans le fil
+          (#7378) ; sans cette porte, son effet resterait invisible. */}
+      <Link to="starredMessages" data-settings-starred-messages className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon tint="var(--color-warning)">
+          <GlyphSvg glyph={SETTINGS_GLYPHS.starFill} size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.tools.starred')} />
+        <Chevron />
+      </Link>
+      {/* LES PUBLICATIONS ENREGISTRÉES (#7286) — iOS pose cette rangée dans
+          « Outils » (`SettingsView.swift`, `meeshyToolsSection`, `bookmark.fill`,
+          teinte indigo), AVANT les statistiques. Le web n'avait aucune porte :
+          on enregistrait, et l'effet du geste restait invisible pour toujours à
+          celui qui le faisait. Elle arrive donc en tête de la section, à la
+          place qu'iOS lui donne — pas à la fin, par ordre d'arrivée. */}
+      <Link to="bookmarks" data-settings-bookmarks className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon tint="var(--ios-indigo-400)">
+          <GlyphSvg glyph={SETTINGS_GLYPHS.bookmarkFill} size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.tools.bookmarks')} />
+        <Chevron />
+      </Link>
+      {/* « MES SONS » (#9848) — la bibliothèque de sons de l'auteur, et le
+          seul endroit du web où l'on retire un son. Rangée d'archive, comme les
+          enregistrées : à leur suite, avant le jeu. */}
+      <Link to="soundsMine" data-settings-sounds className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon tint="var(--ios-indigo-400)">
+          <GlyphSvg glyph={SETTINGS_GLYPHS.speakerHigh} size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.tools.sounds')} />
+        <Chevron />
+      </Link>
+      <Link to="progression" data-settings-progression className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon tint="var(--color-warning)">
+          <Glyph name="trophy" size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.tools.progression')} />
+        <Chevron />
+      </Link>
+      {/* LES RÉGLAGES DU JEU (#9481) — la porte des réglages « Jeu » : célébrations,
+          « Jeu masqué », qui voit quoi, ligue publique. Juste sous Progression :
+          c'est le même univers, et c'est là qu'on la cherche. */}
+      <Link to="progressionReglages" data-settings-game className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon tint="var(--ios-indigo-400)">
+          <Glyph name="trophy" size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.tools.game')} />
+        <Chevron />
+      </Link>
+      {showAdmin ? (
+        <Link to="admin" data-settings-admin className={ROW_CLASS} style={ROW_STYLE}>
+          <RowIcon tint="var(--color-ios-brand)">
+            <Glyph name="key" size={15} />
+          </RowIcon>
+          <RowText label={translate(language, 'admin.title')} />
+          <Chevron />
+        </Link>
+      ) : null}
+    </GroupedSection>
+  );
+}
+
+function DocumentRow({ href, label, glyph }: { readonly href: string; readonly label: string; readonly glyph: SettingsGlyphName }) {
+  return (
+    <a href={href} className={ROW_CLASS} style={ROW_STYLE}>
+      <RowIcon tint="var(--ios-indigo-400)">
+        <GlyphSvg glyph={SETTINGS_GLYPHS[glyph]} size={15} />
+      </RowIcon>
+      <RowText label={label} />
+      <Chevron />
+    </a>
+  );
+}
+
+/* LES LICENCES (#14628) — l'AGPL-3.0 de libsignal demande que l'app dise sa
+   licence et offre sa source : la ligne mène au volet `?volet=licences`. Son
+   libellé vit dans le catalogue paresseux de l'écran (le catalogue d'interface
+   est à son plafond) : la ligne paraît quand il est chargé. */
+function LicencesRow({ language }: { readonly language: InterfaceLanguage }) {
+  const [, setLoadedLanguage] = useState<InterfaceLanguage | null>(null);
+  useEffect(() => {
+    if (isLicencesCatalogLoaded(language)) return undefined;
+    let live = true;
+    loadLicencesCatalog(language).then(
+      () => {
+        if (live) setLoadedLanguage(language);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [language]);
+  if (!isLicencesCatalogLoaded(language)) return null;
+  return (
+    <Link to="settings" search={{ [SECURITY_PANEL_PARAM]: LICENCES_PANEL }} data-settings-licences className={ROW_CLASS} style={ROW_STYLE}>
+      <RowIcon tint="var(--ios-indigo-400)">
+        <GlyphSvg glyph={SETTINGS_GLYPHS.fileText} size={15} />
+      </RowIcon>
+      <RowText label={translateLicences(language, 'licences.row')} />
+      <Chevron />
+    </Link>
+  );
+}
+
+export function AboutSection({ language, version }: { readonly language: InterfaceLanguage; readonly version: string }) {
+  return (
+    <GroupedSection id="settings-about" title={upper(language, 'settings.section.about')} icon={SECTION_ICON({ set: 'ecran', name: 'info' })}>
+      <DocumentRow href={appInstitutionalHref('terms')} label={translate(language, 'settings.terms')} glyph="fileText" />
+      <DocumentRow href={appInstitutionalHref('privacy')} label={translate(language, 'settings.privacy_policy')} glyph="handPalm" />
+      <LicencesRow language={language} />
+      <div className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
+        <RowIcon tint="var(--color-warning)">
+          <GlyphSvg glyph={SETTINGS_GLYPHS.sparkle} size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.version')} />
+        <span dir="ltr" data-settings-version className="shrink-0 text-caption font-medium" style={{ color: SECTION_INK_2 }}>
+          {version}
+        </span>
+      </div>
+    </GroupedSection>
+  );
+}
+
+export function LogoutButton({ language, busy, onPress }: { readonly language: InterfaceLanguage; readonly busy: boolean; readonly onPress: () => void }) {
+  return (
+    <button
+      type="button"
+      data-settings-logout
+      disabled={busy}
+      aria-busy={busy}
+      onClick={onPress}
+      className="flex w-full items-center justify-center gap-2 rounded-card px-4 text-body font-semibold focus-visible:outline-2"
+      style={{
+        minHeight: 52,
+        color: 'var(--color-danger)',
+        outlineColor: 'var(--color-danger)',
+        backgroundColor: 'color-mix(in srgb, var(--color-danger) 10%, transparent)',
+        border: '1px solid color-mix(in srgb, var(--color-danger) 30%, transparent)',
+        opacity: busy ? 0.7 : 1,
+      }}
+    >
+      <span aria-hidden="true">
+        <GlyphSvg glyph={SETTINGS_GLYPHS.signOut} size={18} />
+      </span>
+      {translate(language, busy ? 'settings.logout.inprogress' : 'settings.logout.title')}
+    </button>
+  );
+}
+
+export function SettingsOfflineNotice({ language }: { readonly language: InterfaceLanguage }) {
+  return (
+    <div role="status" data-settings-offline className="flex items-start gap-3 rounded-card px-3.5 py-3" style={SECTION_CARD_STYLE}>
+      <span aria-hidden="true" className="pt-0.5" style={{ color: 'var(--color-warning)' }}>
+        <Glyph name="warningCircle" size={18} />
+      </span>
+      <span className="text-caption" style={{ color: SECTION_INK }}>
+        {translate(language, 'settings.offline.body')}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Le contenu défilant, ses sections espacées comme `SettingsView`.
+ *
+ * IL COMMENCE SOUS L'EN-TÊTE (#10634) — comme `SettingsView` d'iOS
+ * (`.padding(.top, MeeshySpacing.sm)`) et le profil : les disques flottants se
+ * posent par-dessus, au lieu de laisser sous l'en-tête la hauteur vide de leur
+ * couloir (122 px).
+ */
+export function SettingsContent({ children }: { readonly children: ReactNode }) {
+  return (
+    <InfoHintScope>
+      <div className="mx-auto grid max-w-xl gap-6 pb-24 pt-2">
+        {children}
+      </div>
+    </InfoHintScope>
+  );
+}

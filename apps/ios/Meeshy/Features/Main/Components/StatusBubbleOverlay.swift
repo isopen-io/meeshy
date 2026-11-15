@@ -4,18 +4,20 @@ import MeeshySDK
 import MeeshyUI
 
 struct StatusBubbleOverlay: View {
+    @State private var delayed = DelayedActions()
     let status: StatusEntry
     let anchorPoint: CGPoint
     @Binding var isPresented: Bool
     var onRepublish: ((StatusEntry) -> Void)? = nil
     /// Touché du CONTENU du mood (pas la zone extérieure) → amorce la réponse.
     var onReplyTapped: (() -> Void)? = nil
+    /// Réagir à l'humeur (#18110) — `nil` sur sa propre humeur.
+    var reactionHandler: MoodReactionHandler? = nil
 
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var audioPlayer = AudioPlaybackManager()
     @State private var appearAnimation = false
+    @State private var reactions = MoodReactionSelection()
 
     /// Décisions de layout pures — extraites pour être directement testables
     /// (`StatusBubbleOverlayLayoutTests`) sans construire de vue vivante.
@@ -65,22 +67,22 @@ struct StatusBubbleOverlay: View {
                             .onChanged { _ in dismiss() }
                     )
                     .allowsHitTesting(appearAnimation)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(String(localized: "common.close", bundle: .main))
+                    .accessibilityAction { dismiss() }
 
                 thoughtCircle(size: 4)
                     .position(x: anchor.x + dx * 0.08, y: anchor.y + dir * 7)
                     .opacity(appearAnimation ? 1 : 0)
                     .animation(.spring(response: 0.22, dampingFraction: 0.7), value: appearAnimation)
-
                 thoughtCircle(size: 7)
                     .position(x: anchor.x + dx * 0.22, y: anchor.y + dir * 15)
                     .opacity(appearAnimation ? 1 : 0)
                     .animation(.spring(response: 0.22, dampingFraction: 0.7).delay(0.03), value: appearAnimation)
-
                 thoughtCircle(size: 10)
                     .position(x: anchor.x + dx * 0.42, y: anchor.y + dir * 24)
                     .opacity(appearAnimation ? 1 : 0)
                     .animation(.spring(response: 0.22, dampingFraction: 0.7).delay(0.06), value: appearAnimation)
-
                 bubbleContent
                     .frame(width: bubbleW)
                     .fixedSize(horizontal: false, vertical: true)
@@ -108,7 +110,7 @@ struct StatusBubbleOverlay: View {
             // Geste d'échappement VoiceOver (scrub à deux doigts) : la bulle est un overlay ZStack,
             // pas une sheet système — sans ceci, un utilisateur VoiceOver n'a aucun moyen standard
             // de la fermer (le tap-to-dismiss extérieur est un `Color.clear` non focalisable).
-            .accessibilityAction(.escape) { dismiss() }
+            .dismissOnEscape { dismiss() }
         }
         .onAppear {
             appearAnimation = true
@@ -123,12 +125,14 @@ struct StatusBubbleOverlay: View {
 
     // MARK: - Thought Circle
 
+    private var avatarTint: Color { Color(hex: status.avatarColor) }
+
     private func thoughtCircle(size: CGFloat) -> some View {
         Circle()
             .fill(.ultraThinMaterial)
             .frame(width: size, height: size)
             .overlay(
-                Circle().stroke(Color(hex: status.avatarColor).opacity(0.3), lineWidth: 0.5)
+                Circle().stroke(avatarTint.opacity(0.3), lineWidth: MeeshyBorder.hairline)
             )
             .shadow(color: Color.black.opacity(0.06), radius: 2, y: 1)
     }
@@ -136,13 +140,13 @@ struct StatusBubbleOverlay: View {
     // MARK: - Bubble Content
 
     private var bubbleContent: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             if let audioUrl = status.audioUrl, !audioUrl.isEmpty {
                 audioPlayerRow(urlString: audioUrl)
             } else if let content = status.content, !content.isEmpty {
                 Text(content)
-                    .font(MeeshyFont.relative(13))
-                    .foregroundColor(theme.textPrimary)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -150,9 +154,11 @@ struct StatusBubbleOverlay: View {
             // "via @username" for republished statuses
             if let via = status.viaUsername {
                 Text(String(localized: "status.bubble.via", defaultValue: "via @\(via)", bundle: .main))
-                    .font(MeeshyFont.relative(11))
-                    .foregroundColor(theme.textMuted)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                    .foregroundStyle(theme.textMuted)
             }
+
+            reactionRow
 
             if onRepublish != nil {
                 Divider().opacity(0.3)
@@ -161,44 +167,44 @@ struct StatusBubbleOverlay: View {
             // Ancienneté + « Republier » (autres statuts uniquement) sur une seule ligne
             // basse séparée par un point médian — libère toute la largeur de la bulle
             // pour le texte de l'humeur au lieu de le partager avec le timestamp.
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Text(status.timeAgo)
-                    .font(MeeshyFont.relative(10, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                    .foregroundStyle(theme.textMuted)
 
                 if onRepublish != nil {
-                    Text("·")
-                        .font(MeeshyFont.relative(10, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                    MetaSeparator()
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                        .foregroundStyle(theme.textMuted)
 
                     Button {
                         dismiss()
                         onRepublish?(status)
                     } label: {
-                        HStack(spacing: 4) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Image(systemName: "arrow.2.squarepath")
                                 .font(MeeshyFont.relative(11))
                             Text(String(localized: "status.bubble.republish", defaultValue: "Republier", bundle: .main))
-                                .font(MeeshyFont.relative(12, weight: .medium))
+                                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                         }
                         .foregroundColor(MeeshyColors.indigo400)
                     }
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         // iOS 26 Liquid Glass — floating mood bubble. The SDK Compatibility wrapper
         // owns the gating + the .ultraThinMaterial fallback. The avatar-tinted
         // gradient hairline + elevation shadow stay as overlays ON the glass
         // (same idiom as FloatingCallPillView: adaptiveGlass + stroke overlay + shadow).
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
                 .stroke(
                     LinearGradient(
-                        colors: [Color(hex: status.avatarColor).opacity(0.3), Color.white.opacity(0.1)],
+                        colors: [avatarTint.opacity(0.3), Color.white.opacity(0.1)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -211,24 +217,22 @@ struct StatusBubbleOverlay: View {
     // MARK: - Audio Player
 
     private func audioPlayerRow(urlString: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Button {
                 audioPlayer.togglePlayPause()
             } label: {
                 // Glyphe dans un cercle de dimension fixe 18×18 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
                 Image(systemName: audioPlayer.isPlaying ? "stop.fill" : "play.fill")
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .frame(width: 18, height: 18)
-                    .background(Circle().fill(Color(hex: status.avatarColor)))
+                    .background(Circle().fill(avatarTint))
             }
-            // VoiceOver : cette rangée est agrégée par le conteneur `bubbleContent`
-            // (`children: .ignore`) ; l'étiquette lecture/arrêt vit dans l'action nommée
-            // du conteneur (`bubbleAccessibilityActions`). Pas de label ici (inerte).
+            .accessibilityLabel(audioToggleLabel)
 
             ProgressView(value: audioPlayer.progress)
                 .progressViewStyle(.linear)
-                .tint(Color(hex: status.avatarColor))
+                .tint(avatarTint)
                 .frame(maxWidth: .infinity)
                 .scaleEffect(y: 0.6, anchor: .center)
         }
@@ -267,14 +271,25 @@ struct StatusBubbleOverlay: View {
         return audioPlayer.progress.formatted(.percent.precision(.fractionLength(0)))
     }
 
+    private var audioToggleLabel: String {
+        audioPlayer.isPlaying
+            ? String(localized: "status.bubble.audio.stop", defaultValue: "Arrêter l'écoute", bundle: .main)
+            : String(localized: "status.bubble.audio.play", defaultValue: "Écouter l'humeur", bundle: .main)
+    }
+
     /// Actions secondaires exposées via le rotor VoiceOver (l'action par défaut = répondre).
     @ViewBuilder private var bubbleAccessibilityActions: some View {
         if hasAudio {
-            Button(audioPlayer.isPlaying
-                ? String(localized: "status.bubble.audio.stop", defaultValue: "Arrêter l'écoute", bundle: .main)
-                : String(localized: "status.bubble.audio.play", defaultValue: "Écouter l'humeur", bundle: .main)
-            ) {
+            Button(audioToggleLabel) {
                 audioPlayer.togglePlayPause()
+            }
+        }
+        if reactionHandler != nil {
+            ForEach(MoodReactionSelection.emojis.filter { !reactions.placed.contains($0) }, id: \.self) { emoji in
+                Button(MoodQuickReactionRow.accessibilityLabel(for: emoji)) {
+                    HapticFeedback.light()
+                    react(with: emoji)
+                }
             }
         }
         if onRepublish != nil {
@@ -282,6 +297,29 @@ struct StatusBubbleOverlay: View {
                 dismiss()
                 onRepublish?(status)
             }
+        }
+    }
+
+    // MARK: - React
+
+    @ViewBuilder private var reactionRow: some View {
+        if let reactionHandler {
+            MoodQuickReactionRow(
+                placed: reactions.placed,
+                tint: avatarTint,
+                onReact: react(with:)
+            )
+            .padding(.horizontal, -MeeshySpacing.xs)
+            .onAppear { reactions = reactions.merging(reactionHandler.placed(status.id)) }
+        }
+    }
+
+    private func react(with emoji: String) {
+        guard let reactionHandler, reactions.begin(emoji) else { return }
+        let statusId = status.id
+        Task {
+            let outcome = await reactionHandler.react(statusId, emoji)
+            reactions.settle(emoji, outcome: outcome)
         }
     }
 
@@ -299,7 +337,7 @@ struct StatusBubbleOverlay: View {
     private func dismiss() {
         audioPlayer.stop()
         appearAnimation = false
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        delayed.run(after: .milliseconds(300)) {
             isPresented = false
         }
     }

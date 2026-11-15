@@ -38,6 +38,17 @@ public enum CollapsibleHeaderMetrics {
         roundChromeEdgeGutter - barHorizontalPadding
     }
 
+    /// Diamètre des chromes RONDS du header — le retour à gauche, les actions à
+    /// droite (#6480). Un seul chiffre pour les deux bords d'une même barre.
+    nonisolated public static var roundChromeDiameter: CGFloat { 40 }
+
+    /// Marge SUPPLÉMENTAIRE du retour, à gauche : le MIROIR de
+    /// `trailingActionsInset` (#6480, directive porteur 2026-09-14 : « (<) en
+    /// Liquid Glass, bien aligné »). Devenu un disque de verre, le retour a les
+    /// mêmes raisons que les actions de ne pas affleurer le bord ; une gouttière
+    /// posée d'un seul côté se voit.
+    nonisolated public static var leadingBackInset: CGFloat { trailingActionsInset }
+
     /// Écart entre la fente du titre (ou la trail qui l'occupe) et la grappe
     /// d'actions. Porté par les ACTIONS, JAMAIS par un `Spacer` frère : la
     /// fente réclame `maxWidth: .infinity` avec `layoutPriority(1)` et se sert
@@ -148,13 +159,18 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
     /// content scrolls (e.g. a compact story trail). It cross-fades with the
     /// title over `CollapsibleHeaderMetrics.inlineAccessoryReveal`, so a
     /// scrolled header shows the trail — not a shrunken « Meeshy Feed » —
-    /// immediately left of the trailing actions (directive user 2026-08-13).
+    /// immediately left of the trailing actions.
     ///
     /// Deliberately NOT the same slot as `accessory`: one EXCHANGES with the
     /// title and only exists once scrolled, the other is a permanent second
     /// row. Folding them together would have made the discovery sub-tabs fade
     /// away with the scroll and land on top of their own title.
     let titleAccessory: (() -> AnyView)?
+
+    /// Ce que le disque de tête DIT : revenir dans une pile, ou fermer une
+    /// feuille (#16676). Un écran présenté en feuille ne remonte nulle part ;
+    /// un chevron « Retour » y promettrait une pile qui n'existe pas.
+    var leadingGlyph: CollapsibleHeaderBackGlyph = .back
 
     public static var expandedHeight: CGFloat { 64 }
     public static var collapsedHeight: CGFloat { 44 }
@@ -248,7 +264,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
     }
 
     private var backArrowSize: CGFloat {
-        lerp(20, 16, progress)
+        lerp(18, 16, progress)
     }
 
     private var showExpandedSubtitle: Bool {
@@ -286,21 +302,25 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                 // fondu croisé qu'avant) — mais la trail ne vit plus DANS la
                 // fente : une piste horizontale posée entre le titre et les
                 // actions s'arrête à leur bord, alors que le défilement doit
-                // aller d'un bout à l'autre de l'écran (retour user 2026-08-18).
+                // aller d'un bout à l'autre de l'écran.
                 // Elle est désormais une couche PLEINE LARGEUR posée SOUS la
                 // rangée (`.background` plus bas), et le chrome droit flotte
                 // dessus.
                 ZStack(alignment: .leading) {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         if let titleView {
                             titleView()
                                 .scaleEffect(lerp(1.0, 0.65, progress), anchor: .leading)
                         } else {
                             Text(title)
                                 .font(.system(size: titleSize, weight: titleWeight, design: .rounded))
-                                .foregroundColor(titleColor)
+                                .foregroundStyle(titleColor)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
+                                // Un EN-TÊTE pour le rotor de VoiceOver (#6481) : les pages
+                                // de Réglages le posaient sur leur titre fait main, et le
+                                // perdaient en montant ce composant.
+                                .accessibilityAddTraits(.isHeader)
                         }
 
                         if showExpandedSubtitle {
@@ -326,7 +346,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                 if showCollapsedSubtitle {
                     makeSubtitleText(subtitle ?? "", size: 12, opacity: 0.5)
                         .lineLimit(1)
-                        .padding(.leading, 8)
+                        .padding(.leading, MeeshySpacing.sm)
                         .opacity(max(0, (progress - 0.7) / 0.3))
                         // Même raison que le titre : purement informatif, il ne
                         // prend jamais le geste destiné à la trail derrière lui.
@@ -347,7 +367,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                 // (retour user 2026-08-14, trois signalements), et rien ne dit
                 // qu'un futur occupant élastique de la fente ne reviendra pas.
                 trailing()
-                    .frame(minWidth: 44, minHeight: 44)
+                    .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                     .layoutPriority(2)
                     // L'écart avec le titre (ou la trail qui l'occupe) appartient
                     // aux ACTIONS, pas au `Spacer` : réservé avec elles au titre
@@ -425,15 +445,15 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
     /// 5 s, amplitude 1,2 de luminance ; `.compositingGroup()` divise l'amplitude
     /// par deux sans supprimer les bascules). Ce dégradé est CONSERVÉ tel quel
     /// par choix produit — clignotement assumé, ne pas « corriger » en peignant
-    /// le fondu : cela alourdit le bas du header (arbitrage 2026-07-27).
+    /// le fondu : cela alourdit le bas du header.
     private var headerBackground: some View {
         Rectangle()
             .fill(.ultraThinMaterial)
             .overlay(
                 LinearGradient(
                     stops: [
-                        .init(color: backgroundColor.opacity(0.75), location: 0),
-                        .init(color: backgroundColor.opacity(0.45), location: 0.5),
+                        .init(color: backgroundColor.opacity(MeeshyOpacity.heavy), location: 0),
+                        .init(color: backgroundColor.opacity(MeeshyOpacity.strong), location: 0.5),
                         .init(color: backgroundColor.opacity(0.0), location: 1.0),
                     ],
                     startPoint: .top,
@@ -457,18 +477,55 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
             .allowsHitTesting(false)
     }
 
+    /// Le retour est un DISQUE DE VERRE (#6480), du diamètre des actions de
+    /// droite et sur leur gouttière miroir. Il était un chevron nu : les deux
+    /// bords d'une même barre ne se ressemblaient pas. La cible reste de 44 pt.
     private var backButton: some View {
         Button {
             HapticFeedback.light()
             onBack?()
         } label: {
-            Image(systemName: "chevron.backward")
+            Image(systemName: leadingGlyph.systemImage)
                 .font(.system(size: backArrowSize, weight: .semibold))
-                .foregroundColor(backArrowColor)
-                .frame(minWidth: 44, minHeight: 44)
-                .contentShape(Rectangle())
+                .foregroundStyle(backArrowColor)
+                .frame(width: CollapsibleHeaderMetrics.roundChromeDiameter, height: CollapsibleHeaderMetrics.roundChromeDiameter)
+                .adaptiveGlass(in: Circle(), interactive: true)
+                .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
+                .contentShape(Circle())
         }
-        .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .module))
+        .buttonStyle(.plain)
+        .padding(.leading, CollapsibleHeaderMetrics.leadingBackInset)
+        .padding(.trailing, CollapsibleHeaderMetrics.titleActionsGap)
+        .accessibilityLabel(leadingGlyph.accessibilityLabel)
+    }
+
+    /// Le même en-tête, dont le disque de tête FERME au lieu de revenir.
+    public func backGlyph(_ glyph: CollapsibleHeaderBackGlyph) -> Self {
+        var header = self
+        header.leadingGlyph = glyph
+        return header
+    }
+}
+
+/// Le geste que porte le disque de tête d'un `CollapsibleHeader`.
+public enum CollapsibleHeaderBackGlyph: Equatable {
+    /// Revenir à l'écran d'en dessous, dans une pile de navigation.
+    case back
+    /// Fermer la feuille que l'écran occupe.
+    case close
+
+    public var systemImage: String {
+        switch self {
+        case .back: return "chevron.backward"
+        case .close: return "xmark"
+        }
+    }
+
+    public var accessibilityLabel: String {
+        switch self {
+        case .back: return String(localized: "common.back", defaultValue: "Retour", bundle: .module)
+        case .close: return String(localized: "common.close", defaultValue: "Fermer", bundle: .module)
+        }
     }
 }
 

@@ -1,0 +1,330 @@
+/**
+ * Témoin de la TABLE de routes (#4278) — `routes/index.ts`.
+ *
+ * Ce fichier ne rejoue PAS ce que `route-manifest-ratchet.test.ts` et
+ * `route-auth-coverage.test.ts` couvrent déjà (le graphe de routes RÉELLEMENT
+ * assemblé) : ce sont les filets de CE lot, lancés à chaque étape, et ils
+ * restent la preuve qu'aucun montage n'a été perdu ou déplacé. Ici, on garde
+ * ce qui est NOUVEAU et qu'eux ne peuvent pas voir : la FORME de la table
+ * elle-même — critère 2 (préfixe obligatoire) et critère 3 (le `name` de la
+ * table porte l'identité, l'alias d'import n'y est plus pour rien).
+ */
+
+import { describe, expect, it } from '@jest/globals';
+import type { RouteRegistrationEntry } from '../../../routes/index';
+import { ROUTE_TABLE } from '../../../routes/index';
+
+describe('ROUTE_TABLE (#4278)', () => {
+  it('ne contient aucune entrée sans module, préfixe ou nom', () => {
+    for (const entry of ROUTE_TABLE) {
+      expect(typeof entry.module).toBe('function');
+      expect(typeof entry.prefix).toBe('string');
+      expect(typeof entry.name).toBe('string');
+      expect(entry.name.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("porte un `name` UNIQUE par entrée — c'est lui, pas l'alias d'import, qui identifie une route", () => {
+    const names = ROUTE_TABLE.map((entry) => entry.name);
+    const doublons = names.filter((name, index) => names.indexOf(name) !== index);
+    expect(doublons).toEqual([]);
+  });
+
+  /**
+   * Critère 3 — les DEUX vraies collisions d'import (`invitationRoutes`
+   * déclaré identiquement dans `routes/admin/invitations.ts` ET
+   * `routes/invitations.ts` ; `messagesRoutes`/`messageRoutes`, plus proches
+   * en LECTURE qu'en syntaxe) n'obligent plus personne à choisir un alias
+   * pour compiler : la table les importe par NAMESPACE et leur donne un
+   * `name` distinct, qui est désormais la SEULE identité qu'un lecteur doit
+   * retenir. La fonction JS sous-jacente peut rester homonyme (c'est un fait
+   * du code source, pas un défaut) — ce que ce témoin exige, c'est que le
+   * `name` de la TABLE, lui, ne le soit jamais.
+   */
+  it('distingue admin/invitations de invitations (public) par le name, pas par le nom JS', () => {
+    const adminInvitations = ROUTE_TABLE.find((e) => e.name === 'admin-invitations');
+    const publicInvitations = ROUTE_TABLE.find((e) => e.name === 'invitations');
+
+    expect(adminInvitations).toBeDefined();
+    expect(publicInvitations).toBeDefined();
+    expect(adminInvitations?.name).not.toBe(publicInvitations?.name);
+
+    // Les DEUX modules sont bien la même fonction homonyme à la source — la
+    // preuve même que la collision existe et que seul `name` la résout.
+    expect(adminInvitations?.module.name).toBe('invitationRoutes');
+    expect(publicInvitations?.module.name).toBe('invitationRoutes');
+
+    // Admin doit rester enregistré AVANT public : c'est cet ordre, préservé
+    // dans la table, qui fait que le manifeste désambiguïse ces deux montages
+    // en `invitationRoutes` (1er) / `invitationRoutes~2` (2nd) — un ordre
+    // inversé romprait #4276 sans qu'aucune route n'ait bougé.
+    expect(ROUTE_TABLE.indexOf(adminInvitations!)).toBeLessThan(ROUTE_TABLE.indexOf(publicInvitations!));
+  });
+
+  it('distingue admin/messages de messages par le name', () => {
+    const adminMessages = ROUTE_TABLE.find((e) => e.name === 'admin-messages');
+    const messages = ROUTE_TABLE.find((e) => e.name === 'messages');
+
+    expect(adminMessages).toBeDefined();
+    expect(messages).toBeDefined();
+    expect(adminMessages?.module.name).toBe('messagesRoutes');
+    expect(messages?.module.name).toBe('messageRoutes');
+  });
+
+  it("chaque préfixe dérivé de l'API est bâti depuis apiBasePath(), jamais recopié en dur", () => {
+    // Un seul littéral toléré : le montage LEGACY non versionné n'existe pas
+    // dans cette table (il reste explicite dans route-registration.ts, sous
+    // témoin de régression dédié — attachments-unversioned-mount.test.ts).
+    // Tout préfixe non vide de CETTE table doit donc commencer par le
+    // préfixe versionné courant.
+    const API_PREFIX_MARKER = ROUTE_TABLE.find((e) => e.name === 'auth')?.prefix.split('/auth')[0];
+    expect(API_PREFIX_MARKER).toBeTruthy();
+
+    for (const entry of ROUTE_TABLE) {
+      if (entry.prefix === '') continue; // alias racine explicite (voice-analysis-legacy-alias) — voir son commentaire dans routes/index.ts
+      expect(entry.prefix.startsWith(API_PREFIX_MARKER as string)).toBe(true);
+    }
+  });
+
+  it('a exactement 63 entrées — un canary : une entrée en moins est une route perdue en silence', () => {
+    // Compte ancré au 2026-08-30 sur les 65 actes d'enregistrement de
+    // `route-registration.ts` moins les 8 montages qui exigent PLUS qu'un
+    // {module, prefix} (traduction, userDeletions, conversationRoutes,
+    // attachments × 2, tus, voiceRoutesPlugin, postRoutes) — voir le
+    // commentaire de module de `routes/index.ts` pour l'énumération. Si ce
+    // compte change, c'est qu'une route a rejoint ou quitté la table : la
+    // prochaine étape est de vérifier `route-manifest-ratchet`, pas
+    // d'ajuster ce chiffre en aveugle.
+    //
+    // 57 → 58 le 2026-08-30 (#4350) : entrée `me-permissions`, l'adresse
+    // CANONIQUE `GET /api/v1/me/permissions`. Le chiffre n'a pas été ajusté
+    // en aveugle — la vérification prescrite ci-dessus a été faite, et le
+    // manifeste régénéré est passé de 533 à 534 routes, soit exactement la
+    // route ajoutée et aucune autre. L'alias `admin/me/permissions` garde son
+    // entrée `admin-me-permissions` : il reste SERVI, il n'est pas déplacé —
+    // c'est ce qui rend l'écart de +1 (et non 0) attendu.
+    //
+    // 58 → 59 le 2026-08-30 (#4359) : entrée `me-categories`, les CINQ adresses
+    // canoniques `/api/v1/me/categories` (list, create, update, delete,
+    // reorder). Le chiffre n'est pas ajusté en aveugle — la vérification que
+    // le commentaire ci-dessus prescrit a été faite : le manifeste régénéré
+    // passe de 534 à 539 routes, soit exactement ces cinq-là et aucune autre,
+    // et le diff du cliquet ne portait que des ajouts (aucune route retirée ni
+    // renommée). Les six adresses `/me/preferences/categories` gardent leur
+    // entrée : elles restent SERVIES en alias annoncé, ce qui rend l'écart de
+    // +1 sur la table (et non 0) attendu.
+    //
+    // 59 → 60 le 2026-08-30 (#4349) : entrée `conversation-receipts`, les DEUX
+    // adresses de la COLLECTION d'accusés (`POST` et `GET
+    // /api/v1/conversations/:conversationId/receipts`). Les six portes
+    // historiques gardent leurs entrées — elles restent SERVIES, devenues des
+    // adaptateurs de ce module, ce qui rend l'écart de +1 sur la table (et +2
+    // sur le manifeste) attendu. Le manifeste et
+    // `packages/shared/api/endpoints.ts` sont DÉRIVÉS et régénérés par
+    // l'intégrateur, hors territoire de l'issue.
+    //
+    // 60 → 61 le 2026-08-30 (#4348) : entrée `me-consents`, les DEUX adresses
+    // NEUVES `GET`/`PUT /api/v1/me/consents{,/:purpose}` — pas un alias :
+    // `/voice/profile/consent` reste montée séparément (`voice-profile`,
+    // inchangée), retirer/fusionner les deux écrivains étant un suivi
+    // explicitement hors périmètre de #4348 (voir doc-comment de
+    // `routes/me/consents.ts`). L'écart de +1 sur la table (et +2 sur le
+    // manifeste) est donc attendu, sans aucune route retirée ni renommée.
+    //
+    // 61 → 62 le 2026-08-31 (#3734) : entrée `admin-share-links`, l'adresse
+    // NEUVE `DELETE /api/v1/admin/share-links/:id` — la console
+    // d'administration ne pouvait FERMER aucun lien (`DELETE /links/:linkId`
+    // exige le `mshy_*` public, que `GET /admin/share-links` retire
+    // délibérément de son `select` depuis #4157 : la console n'a que
+    // l'ObjectId). Aucun alias, aucune route retirée ni renommée. Le chiffre
+    // n'est pas ajusté en aveugle — la vérification que le commentaire
+    // ci-dessus prescrit a été faite : le manifeste régénéré passe de 547 à
+    // 548 routes, et le cliquet `route-manifest-ratchet` ne rapportait
+    // AVANT régénération qu'une seule différence, `+ DELETE
+    // /api/v1/admin/share-links/:id (module=registerAdminShareLinkRoutes)`,
+    // soit exactement celle-là et aucune autre.
+    //
+    // 63 → 64 le 2026-09-08 (#5547) : entrée `me-engagement`, l'adresse NEUVE
+    // `GET /api/v1/me/engagement` (écran « Progression » — compteurs, paliers
+    // et streak/niveau de l'utilisateur authentifié). Aucun alias, aucune
+    // route retirée ni renommée. Vérifié : le manifeste régénéré passe de 553
+    // à 554 routes, et le diff ne porte QUE cette entrée-là.
+    //
+    // 64 → 65 le 2026-09-08 (#3635) : entrée `me-terms`, les DEUX adresses
+    // NEUVES `GET`/`PUT /api/v1/me/terms` (re-consentement CGU versionné,
+    // même patron que `me-consents` : signal `upToDate` + action de
+    // ré-acceptation citant la version en vigueur). Aucun alias, aucune route
+    // retirée ni renommée. Vérifié : le manifeste régénéré passe de 554 à
+    // 556 routes, soit exactement ces deux-là et aucune autre.
+    //
+    // 65 → 66 le 2026-09-09 (#5743) : entrée `me-meesh`, l'adresse NEUVE
+    // `POST /api/v1/me/meesh/mint` (la frappe d'une Meesh contre 1221 points
+    // débitables — action MANUELLE, atomique, idempotente par `requestId`).
+    // Aucun alias, aucune route retirée ni renommée. Vérifié : le manifeste
+    // régénéré passe de 556 à 557 routes, soit exactement celle-là.
+    //
+    // 66 → 67 le 2026-09-21 (#7377) : entrée `me-starred-messages`, les
+    // adresses NEUVES du favori de message (`PUT`/`DELETE
+    // /api/v1/me/starred-messages/:messageId`, puis `GET
+    // /api/v1/me/starred-messages` dans le même module). Aucun alias, aucune
+    // route retirée ni renommée. Vérifié : le manifeste régénéré passe de 572
+    // à 574 routes au lot de l'écriture, soit exactement ces deux-là, puis de
+    // 574 à 575 au lot de la liste, soit exactement le `GET`.
+    //
+    // 67 → 68 le 2026-09-24 (#7729) : entrée `me-onboarding`, les adresses
+    // NEUVES `GET`/`PATCH /api/v1/me/onboarding` (l'état du parcours
+    // d'accueil). Aucun alias, aucune route retirée ni renommée.
+    // 69 : #7938 ajoute `me-stickers` — quatre routes NEUVES sous
+    // `/api/v1/me/stickers` (la bibliothèque « Mes stickers »). Aucun alias.
+    // 70 : #8101 ajoute `contacts-resolve` — l'adresse NEUVE `POST
+    // /api/v1/contacts/resolve` (la carte de visite partagée), montage
+    // autonome. Aucun alias, aucune route retirée ni renommée.
+    // 71 : #8876 ajoute `admin-oversight` — le montage AUTONOME des surfaces de
+    // supervision de la « vue de dieu » de l'administration (journal d'audit,
+    // liens de suivi, fiche de communauté, supervision). Une seule entrée sous
+    // `/api/v1/admin`, qui enregistre ses quatre modules elle-même ; aucun
+    // alias, aucune route retirée ni renommée.
+    // 72 : #8906 ajoute `admin-engagement-scale` — les adresses NEUVES
+    // `GET`/`PUT /api/v1/admin/engagement-scale` (le barème d'engagement).
+    // Aucun alias, aucune route retirée ni renommée.
+    // 73 : #9141 ajoute `sticker-packs` — le montage AUTONOME des packs de
+    // stickers sous `/api/v1/sticker-packs` (boutique, installation,
+    // proposition par des tiers, modération). Aucun alias, aucune route
+    // retirée ni renommée.
+    // 74 : #9378 ajoute `me-game` — les cinq écritures NEUVES du jeu sous
+    // `/api/v1/me/game` (changer une mission, ouvrir le coffre, acheter un gel,
+    // rallumer la Flamme, mémoriser les clés de guide), montage autonome. Aucun
+    // alias, aucune route retirée ni renommée ; `POST /me/meesh/mint` garde son
+    // adresse et sa forme (sa réponse s'étend, additivement).
+    // 75 : #9387 ajoute `users-game-showcase` — `GET /api/v1/users/:userId/game/showcase`,
+    // la vitrine d'un autre membre selon son réglage, montage autonome sous
+    // `/api/v1/users`. Les douze autres routes de la vague 2 du jeu rejoignent
+    // `me-game` (même préfixe) : aucune entrée de plus pour elles. Aucun alias,
+    // aucune route retirée ni renommée.
+    // 76 : #9927 ajoute `me-birth-date` — l'adresse NEUVE `PUT
+    // /api/v1/me/birth-date` (la date de naissance, déclarée une fois),
+    // montage autonome. Aucun alias, aucune route retirée ni renommée.
+    // 77 : #10000 ajoute `world` — l'adresse NEUVE et PUBLIQUE `GET
+    // /api/v1/world` (l'entrée de World Wide que lit la landing de
+    // meeshy.me), montage autonome. Aucun alias, aucune route retirée ni
+    // renommée.
+    // 78 : #10102 ajoute `world-participant-card` — l'adresse NEUVE `GET
+    // /api/v1/world/participants/:participantId` (la fiche de modération d'un
+    // participant de World Wide, réservée aux rôles au-delà de USER), montage
+    // autonome. Aucun alias, aucune route retirée ni renommée. Vérifié : le
+    // manifeste passe de 656 à 657 routes, soit exactement celle-là.
+    // 79 : #10148 (LP0) ajoute `packs-glory-frame` — le montage AUTONOME des
+    // packs de cadres de gloire sous `/api/v1/packs/glory-frame`, servi par le
+    // MÊME moteur que `sticker-packs` (un montage par domaine, jamais un
+    // `:domain`). Aucun alias, aucune route retirée ni renommée : les routes de
+    // `/api/v1/sticker-packs` gardent chemins, méthodes et réponses à l'octet.
+    // Vérifié : le manifeste passe de 657 à 662 routes, soit exactement les
+    // cinq neuves (GET /, GET /installed, GET /:slug, PUT et DELETE
+    // /:slug/install).
+    // 80 : #10157 (L5) ajoute `pack-assets` — le magasin PUBLIC adressé par
+    // contenu des packs officiels sous `/api/v1/pack-assets/:file`. Aucun
+    // alias, aucune route retirée ni renommée. Vérifié : le manifeste gagne
+    // exactement cette route.
+    // 81 : #10233 ajoute `admin-game-seasons` — l'administration du calendrier
+    // des saisons du Jeu sous `/api/v1/admin/game` (canManageGame). Aucun
+    // alias, aucune route retirée ni renommée. Vérifié : le manifeste passe de
+    // 667 à 676 routes, soit exactement les huit routes d'admin et
+    // `GET /me/game/seasons/calendar` (montée par `me-game`, déjà dans la table).
+    // 84 : #10384 ajoute `admin-ops` (l'hôte en direct, la sauvegarde et la purge
+    // sous `/api/v1/admin/ops`), #10392 `admin-post-gestures` (les gestes de
+    // publication sous `/api/v1/admin/posts/…/gestures`) et #10394
+    // `admin-moderation-acts` (`/api/v1/admin/reports/:reportId/act`,
+    // `/api/v1/admin/comments/:commentId/remove`). Aucun alias, aucune route
+    // retirée ni renommée ; le manifeste gagne exactement ces sept routes.
+    // 88 : #10632 ajoute `packs-wallpaper`, `packs-avatar-ring`, `packs-banner`
+    // (les trois domaines d'apparence de la boutique unifiée, sous
+    // `/api/v1/packs/<domaine>`) et `packs-shop` (`GET /api/v1/packs/shop`,
+    // la vitrine qui les agrège). Aucun alias, aucune route retirée ni
+    // renommée.
+    // 89 : #10936 ajoute `packs-banner-frame` (le domaine des cadres posés sur
+    // la bannière, vendu en boutique sous `/api/v1/packs/banner-frame`, monté
+    // par le même `appearancePacksPlugin`). Aucun alias, aucune route retirée
+    // ni renommée.
+    // 90 : #11271 ajoute `packs-lens` (les lens des partenaires sous
+    // `/api/v1/packs/lens` : proposer, modérer, installer). Aucun alias, aucune
+    // route retirée ni renommée.
+    // 91 : #11275 ajoute `admin-packs-registry` (`/api/v1/admin/packs/registry`,
+    // les surcharges du registre des packs sans déploiement). Aucun alias.
+    // 92 : #3706 ajoute `e2ee` (l'annuaire E2EE par appareil et le relais
+    // d'enveloppes sous `/api/v1/e2ee`). `/signal/*` reste monté, inchangé.
+    // 93 : #10169 (LC) ajoute `packs-capture-frame` — les douze ambiances de
+    // cadres de capture sous `/api/v1/packs/capture-frame`, sur le MÊME moteur
+    // (un montage par domaine). Aucun alias, aucune route retirée ni renommée ;
+    // le manifeste gagne exactement les cinq routes de la fabrique (GET /,
+    // GET /installed, GET /:slug, PUT et DELETE /:slug/install).
+    // 94 : #13142 ajoute `e2ee-signals` — la route unique des signaux chiffrés
+    // d'une conversation e2ee (`POST /api/v1/e2ee/conversations/:id/signals`).
+    // Aucun alias, aucune route retirée ni renommée ; le manifeste gagne
+    // exactement cette route.
+    // 96 : #13998 ajoute `relations-level` — le niveau EFFECTIF du lien avec une
+    // personne (`GET /api/v1/relations/:userId`). Aucun alias, aucune route
+    // retirée ni renommée ; le manifeste gagne exactement cette route.
+    //     #13933 ajoute `relations` — les cercles (`/api/v1/relations` : lecture, baisse
+    // silencieuse, rituel du Sang). Aucun alias, aucune route retirée ni renommée ; le
+    // manifeste gagne exactement les quatre routes de ce montage (le GET /:userId reste celui de #13998).
+    // 97 : #11327 ajoute `lens` — les partenaires des lens, leurs crédits et
+    // l'usage k-anonyme sous `/api/v1/lens` (distinct de `/packs/lens`, dont les
+    // chemins statiques masqueraient des slugs). Aucun alias, aucune route
+    // retirée ni renommée ; le manifeste gagne exactement ses neuf routes.
+    // 98 : #13936 ajoute `bring` — le Bring (`/api/v1/bring` : disponibilité, envoi,
+    // arrêt). Aucun alias, aucune route retirée ni renommée ; le manifeste gagne ses trois
+    // routes, et le montage `relations` les deux du réglage par personne (`/:userId/settings`).
+    // 99 : #16274 ajoute `pack-publishers` — les éditeurs de packs (`/api/v1/publishers` : le sien,
+    // la fiche en boutique, la liste avec propriétaire pour BIGBOSS/ADMIN). Aucun alias, aucune
+    // route retirée ni renommée ; le manifeste gagne exactement ses trois routes.
+    // 100 : #17142 ajoute `talkie` — la voix gardée d'un talkie réveillé (`GET /api/v1/talkie/:talkieId/audio`)
+    // et le jeton PushToTalk (`POST`/`DELETE /api/v1/users/me/push-to-talk-token`). Aucun alias, aucune
+    // route retirée ni renommée ; le manifeste gagne exactement ses trois routes.
+    expect(ROUTE_TABLE.length).toBe(100);
+  });
+});
+
+/**
+ * Critère 2, PREUVE DE COMPILATION — « le préfixe est obligatoire par
+ * entrée : un module sans préfixe explicite ne compile pas ».
+ *
+ * `tsc --noEmit` n'atteint jamais ce fichier (le bloc `exclude` de
+ * tsconfig.json retire tout le dossier `__tests__` — voir la note de
+ * `services/gateway/CLAUDE.md` § « Un cliquet doit être ATTEIGNABLE par le
+ * compilateur »). `tsconfig.test.json`, lui, INCLUT `__tests__` sans
+ * exclusion — et depuis #10203 (ts-jest transpile en modules isolés, sans
+ * types), c'est `tsc -p tsconfig.test.json`, mesuré par
+ * `tsc-never-loaded-tests-ratchet.test.ts`, qui type-vérifie les trois blocs
+ * `@ts-expect-error` ci-dessous. Le code TS2578 (directive `@ts-expect-error`
+ * inutilisée) n'est PAS l'un des quatre codes muets de ce cliquet — si un
+ * champ redevenait optionnel, la ligne se mettrait à COMPILER, la directive
+ * deviendrait inutile, et le compte du cliquet dépasserait son plafond SERRÉ.
+ * Avant #10203, c'était ts-jest qui faisait ROUGIR ce fichier au chargement,
+ * PROUVÉ rouge sous chacune des trois
+ * mutations qu'elle nomme (voir le rapport de la session : mutation
+ * `prefix?: string`, `module?: RoutePlugin`, `name?: string` — chacune fait
+ * tomber CE fichier avec `TS2578: Unused '@ts-expect-error' directive`).
+ */
+function neCompilePasSansChampObligatoire(): void {
+  // @ts-expect-error — `prefix` est REQUIS : cette entrée ne le porte pas.
+  const sansPrefix: RouteRegistrationEntry = {
+    name: 'x',
+    module: async () => {},
+  };
+  void sansPrefix;
+
+  // @ts-expect-error — `module` est REQUIS : cette entrée ne le porte pas.
+  const sansModule: RouteRegistrationEntry = {
+    name: 'x',
+    prefix: '/x',
+  };
+  void sansModule;
+
+  // @ts-expect-error — `name` est REQUIS : cette entrée ne le porte pas.
+  const sansName: RouteRegistrationEntry = {
+    prefix: '/x',
+    module: async () => {},
+  };
+  void sansName;
+}
+void neCompilePasSansChampObligatoire;

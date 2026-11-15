@@ -86,6 +86,7 @@ export interface TrackingLinkClick {
  */
 export interface CreateTrackingLinkRequest {
   readonly originalUrl: string;
+  readonly customToken?: string;
   readonly name?: string;
   readonly campaign?: string;
   readonly source?: string;
@@ -99,7 +100,8 @@ export interface CreateTrackingLinkRequest {
  * Données de réponse pour la création d'un lien de tracking
  */
 export interface CreateTrackingLinkResponseData {
-  readonly trackingLink: TrackingLink;
+  readonly trackingLink: TrackingLink & { readonly fullUrl?: string };
+  readonly existed?: boolean;
 }
 
 /**

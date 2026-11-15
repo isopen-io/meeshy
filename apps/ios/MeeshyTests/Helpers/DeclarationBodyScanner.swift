@@ -13,7 +13,8 @@ import Foundation
 /// Constaté le 2026-08-09 sur six gardes de la voie « appels » :
 /// `holdPendingAnswerAction(action)` était à 2 778 caractères pour une fenêtre
 /// de 1 600, le garde `callUUID` de `CXEndCallAction` à 2 399 pour 2 000, et
-/// `callToggleAccessibility` à **1 001 pour une fenêtre de 1 000** — un
+/// `callToggleAccessibility` (renommé `toggleStateAccessibility` au 253i) à
+/// **1 001 pour une fenêtre de 1 000** — un
 /// caractère d'écart. Dans les trois cas le code de production était correct.
 ///
 /// Un corps équilibré n'a pas de longueur à deviner : il finit là où la

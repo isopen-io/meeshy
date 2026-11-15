@@ -10,10 +10,6 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-jest.mock('../../../../../middleware/auth', () => ({
-  createUnifiedAuthMiddleware: jest.fn(),
-}));
-
 jest.mock('../../../../../utils/logger', () => ({
   logError: jest.fn(),
 }));
@@ -40,21 +36,14 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
   },
 }));
 
-jest.mock('@meeshy/shared/types/socketio-events', () => ({
-  SERVER_EVENTS: {
-    CATEGORY_CREATED: 'category:created',
-    CATEGORY_UPDATED: 'category:updated',
-    CATEGORY_DELETED: 'category:deleted',
-    CATEGORIES_REORDERED: 'categories:reordered',
-  },
-}));
+// Pas de double de `@meeshy/shared/types/socketio-events` : le module n'expose
+// que des CONSTANTES pures, et une liste recopiée à la main rend `undefined`
+// tout nom d'événement qu'elle a oublié — dont `USER_PREFERENCES_UPDATED`, que
+// le détachement diffuse depuis le cycle 129.
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
-import { createUnifiedAuthMiddleware } from '../../../../../middleware/auth';
 import { categoriesRoutes } from '../../../../../routes/me/preferences/categories';
-
-const mockCreateAuth = createUnifiedAuthMiddleware as jest.MockedFunction<any>;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -86,7 +75,11 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
       delete: jest.fn<any>().mockResolvedValue({}),
     },
-    conversationPreference: {
+    // `categoryId` est une colonne de `UserConversationPreferences` — le
+    // magasin clé/valeur `ConversationPreference` ne la porte pas, et le double
+    // qui l'acceptait cachait une route morte (cycle 129).
+    userConversationPreferences: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     $transaction: jest.fn<any>().mockResolvedValue([]),
@@ -102,16 +95,20 @@ async function buildApp(opts: {
 } = {}): Promise<FastifyInstance> {
   const { prisma = makePrisma(), auth = 'authenticated' } = opts;
 
-  mockCreateAuth.mockImplementation(() => async (req: FastifyRequest) => {
+  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+  app.decorate('prisma', prisma);
+
+  // Le hook d'auth vit chez le PARENT en production
+  // (routes/me/preferences/index.ts) — categoriesRoutes n'en pose plus le
+  // sien depuis #4182 critère 4 (il tournait deux fois par requête). On le
+  // reproduit ici, au même niveau, avant l'enregistrement du plugin.
+  app.addHook('preHandler', async (req: FastifyRequest) => {
     if (auth === 'authenticated') {
       (req as any).auth = { userId: USER_ID, isAuthenticated: true };
     } else {
       (req as any).auth = { isAuthenticated: false };
     }
   });
-
-  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  app.decorate('prisma', prisma);
 
   await app.register(categoriesRoutes);
   await app.ready();
@@ -370,9 +367,12 @@ describe('DELETE /:categoryId — delete category', () => {
     await notFoundApp.close();
   });
 
+  // Le témoin d'erreur vise la méthode que le handler appelle VRAIMENT : celui
+  // qui rejetait `$transaction` passait par le chemin nominal en croyant tenir
+  // le chemin d'erreur depuis que le détachement ne s'y fait plus.
   it('returns 500 on DB error', async () => {
     const prisma = makePrisma();
-    prisma.$transaction = jest.fn<any>().mockRejectedValue(new Error('tx error'));
+    prisma.userConversationCategory.delete = jest.fn<any>().mockRejectedValue(new Error('delete error'));
     const errApp = await buildApp({ prisma });
     const res = await errApp.inject({ method: 'DELETE', url: '/cat-1' });
     expect(res.statusCode).toBe(500);
@@ -434,7 +434,6 @@ describe('POST /reorder — reorder categories', () => {
 
 describe('categoriesRoutes — missing prisma guard', () => {
   it('returns early without crashing when prisma is not decorated', async () => {
-    mockCreateAuth.mockImplementation(() => async () => {});
     const app = Fastify({ logger: false });
     await app.register(categoriesRoutes);
     await app.ready();

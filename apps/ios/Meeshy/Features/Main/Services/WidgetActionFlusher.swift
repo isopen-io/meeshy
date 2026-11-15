@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 import os
 
-nonisolated private let logger = Logger(subsystem: "me.meeshy.app", category: "widget-flusher")
+nonisolated private let logger = MeeshyLog.logger(.widgetFlusher)
 
 /// Drains actions queued by the widget extension (e.g. mark-as-read) once the
 /// main app foregrounds, because the widget process can't hold the auth token
@@ -14,13 +14,17 @@ nonisolated private let logger = Logger(subsystem: "me.meeshy.app", category: "w
 /// `ConversationService.shared.markRead(...)` for each, and clears the queue.
 @MainActor
 final class WidgetActionFlusher {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = WidgetActionFlusher()
 
-    private let suiteName = "group.me.meeshy.apps"
+    private let suiteName = UserPreferencesManager.appGroupSuiteName
     /// Exposée pour le wipe de logout (appgroup-01) — une seule définition de
     /// la clé, pas de duplication de littéral.
     nonisolated static let pendingMarkReadKey = "pending_mark_read"
-    private var pendingMarkReadKey: String { Self.pendingMarkReadKey }
 
     private lazy var sharedDefaults: UserDefaults? = {
         UserDefaults(suiteName: suiteName)
@@ -34,7 +38,7 @@ final class WidgetActionFlusher {
     /// retries — idempotent on the server side.
     func flush() async {
         guard let defaults = sharedDefaults else { return }
-        let queued = defaults.stringArray(forKey: pendingMarkReadKey) ?? []
+        let queued = defaults.stringArray(forKey: Self.pendingMarkReadKey) ?? []
         guard !queued.isEmpty else { return }
 
         logger.info("Flushing \(queued.count) pending widget mark-as-read")
@@ -56,6 +60,6 @@ final class WidgetActionFlusher {
         }
 
         // Keep failures for a retry; drop the successes.
-        defaults.set(failed, forKey: pendingMarkReadKey)
+        defaults.set(failed, forKey: Self.pendingMarkReadKey)
     }
 }

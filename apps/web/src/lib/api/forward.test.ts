@@ -1,0 +1,177 @@
+import { describe, expect, test } from 'bun:test';
+
+import { forwardBodyOf, forwardMessages } from './forward';
+import { createHttpTransport } from './http';
+
+/**
+ * LE TRANSPORT DU TRANSFERT (#5866) — le corps qui part, et rien d'autre.
+ *
+ * LE PIÈGE QUE CES TÉMOINS GARDENT : `MessageProcessor.handleAttachments`
+ * (`services/gateway/src/services/messaging/MessageProcessor.ts:726-727`) est
+ * un `else if` — poser `attachmentIds` DÉSACTIVE la copie serveur des pièces
+ * jointes. Un transfert qui « renvoie bien les pièces » ne transfère donc
+ * AUCUNE pièce. Le serveur copie la ligne et réutilise le même blob : aucun
+ * ré-upload, jamais. iOS le déclare en invariant
+ * (`MessageForwardService.swift:42-44`).
+ */
+
+function fakeFetch(response: { readonly status: number; readonly body?: unknown }) {
+  const calls: { readonly url: string; readonly init: RequestInit }[] = [];
+  const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({ url: String(input), init: init ?? {} });
+    return new Response(response.body === undefined ? null : JSON.stringify(response.body), { status: response.status });
+  }) as typeof fetch;
+  return { impl, calls };
+}
+
+const ACK = {
+  success: true,
+  data: { id: 'm9', conversationId: 'c-cible', createdAt: '2026-09-23T10:00:00.000Z' },
+};
+
+describe('forwardBodyOf — ce qui part, et ce qui NE part JAMAIS', () => {
+  test('le corps porte `forwardedFromId` et la conversation d’origine', () => {
+    const body = forwardBodyOf({
+      message: { id: 'm1', content: 'bonjour', originalLanguage: 'fr' },
+      sourceConversationId: 'c-source',
+      clientMessageId: 'cid_1',
+    });
+    expect(body).toEqual({
+      content: 'bonjour',
+      originalLanguage: 'fr',
+      clientMessageId: 'cid_1',
+      forwardedFromId: 'm1',
+      forwardedFromConversationId: 'c-source',
+    });
+  });
+
+  test('un STICKER garde son sticker : la passerelle ne recopie que les pièces, le client redit le sticker (#10630)', () => {
+    const body = forwardBodyOf({
+      message: { id: 'm4', content: '', originalLanguage: 'fr', sticker: { templateId: 'pack.chats.dodo', emoji: '😴' } },
+      clientMessageId: 'cid_4',
+    });
+    expect(body.sticker).toEqual({ templateId: 'pack.chats.dodo', emoji: '😴' });
+    expect('attachmentIds' in body).toBe(false);
+  });
+
+  test('AUCUN `attachmentIds`, même sur un message qui n’a QUE des pièces jointes', () => {
+    const body = forwardBodyOf({
+      message: { id: 'm2', content: '', originalLanguage: 'fr' },
+      sourceConversationId: 'c-source',
+      clientMessageId: 'cid_2',
+    });
+    expect('attachmentIds' in body).toBe(false);
+    expect('content' in body).toBe(false);
+    expect(body.forwardedFromId).toBe('m2');
+  });
+
+  /** La passerelle DÉRIVE le type des pièces jointes FINALES, après la copie
+   * (`MessageProcessor.ts:617-643`) : un `messageType` déclaré ici serait la
+   * seconde écriture d'une règle qui a son site unique — et faux sur un lot
+   * hétérogène, que cette règle dit `'file'`. */
+  test('AUCUN `messageType` déclaré — c’est la passerelle qui le dérive après la copie', () => {
+    const body = forwardBodyOf({
+      message: { id: 'm4', content: '', originalLanguage: 'fr' },
+      clientMessageId: 'cid_4',
+    });
+    expect('messageType' in body).toBe(false);
+  });
+
+  test('une conversation d’origine ABSENTE s’OMET — `""` casse l’écriture Prisma `@db.ObjectId`', () => {
+    const body = forwardBodyOf({
+      message: { id: 'm3', content: 'x', originalLanguage: 'fr' },
+      clientMessageId: 'cid_3',
+    });
+    expect('forwardedFromConversationId' in body).toBe(false);
+  });
+});
+
+describe('forwardMessages — N messages sélectionnés ⇒ N envois', () => {
+  test('trois messages partent vers la cible, dans l’ordre du fil, avec des cid DISTINCTS', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: ACK });
+    const result = await forwardMessages({
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      messages: [
+        { id: 'a', content: 'un', originalLanguage: 'fr' },
+        { id: 'b', content: 'deux', originalLanguage: 'fr' },
+        { id: 'c', content: '', originalLanguage: 'fr' },
+      ],
+      sourceConversationId: 'c-source',
+      targetConversationId: 'c-cible',
+    });
+
+    expect(result).toEqual({ ok: true, count: 3 });
+    expect(calls.length).toBe(3);
+    expect(calls.map((c) => c.url)).toEqual([
+      '/api/v1/conversations/c-cible/messages',
+      '/api/v1/conversations/c-cible/messages',
+      '/api/v1/conversations/c-cible/messages',
+    ]);
+    const bodies = calls.map((c) => JSON.parse(String(c.init.body)) as Record<string, unknown>);
+    expect(bodies.map((b) => b.forwardedFromId)).toEqual(['a', 'b', 'c']);
+    expect(bodies.every((b) => !('attachmentIds' in b))).toBe(true);
+    expect(new Set(bodies.map((b) => String(b.clientMessageId))).size).toBe(3);
+  });
+
+  test('un refus serveur rend l’échec, avec le message du serveur', async () => {
+    const { impl } = fakeFetch({
+      status: 403,
+      body: { success: false, error: 'Un message à vue unique ne peut pas être transféré' },
+    });
+    const result = await forwardMessages({
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      messages: [{ id: 'a', content: 'un', originalLanguage: 'fr' }],
+      targetConversationId: 'c-cible',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe('Un message à vue unique ne peut pas être transféré');
+  });
+});
+
+/**
+ * LA DURÉE D'UNE FLAMME TRANSFÉRÉE (#9573) — la valeur choisie dans la feuille
+ * part dans `ephemeralDuration`, pour les flammes à durée SEULEMENT, et jamais
+ * au-delà de la durée de chaque source.
+ */
+describe('forwardMessages — la durée choisie part dans `ephemeralDuration`', () => {
+  const sent = (calls: readonly { readonly init: RequestInit }[]) => calls.map((call) => JSON.parse(String(call.init.body)) as Record<string, unknown>);
+
+  test('la flamme reçoit la durée choisie ; le message ordinaire du même lot n’en reçoit aucune', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: ACK });
+    await forwardMessages({
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      messages: [
+        { id: 'a', content: 'ordinaire', originalLanguage: 'fr' },
+        { id: 'b', content: 'flamme', originalLanguage: 'fr', maxDurationSeconds: 300 },
+      ],
+      targetConversationId: 'c-cible',
+      ephemeralDuration: 60,
+    });
+    const [ordinary, flame] = sent(calls);
+    expect(ordinary !== undefined && 'ephemeralDuration' in ordinary).toBe(false);
+    expect(flame?.['ephemeralDuration']).toBe(60);
+    expect(flame !== undefined && 'maxDurationSeconds' in flame).toBe(false);
+  });
+
+  test('sans choix, la flamme part avec SA durée ; un choix plus long est rabattu sur elle', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: ACK });
+    const deps = { source: 'gateway' as const, transport: createHttpTransport({ base: '', fetchImpl: impl }), targetConversationId: 'c-cible' };
+    await forwardMessages({ ...deps, messages: [{ id: 'b', content: '', originalLanguage: 'fr', maxDurationSeconds: 300 }] });
+    await forwardMessages({ ...deps, messages: [{ id: 'b', content: '', originalLanguage: 'fr', maxDurationSeconds: 300 }], ephemeralDuration: 86400 });
+    expect(sent(calls).map((body) => body['ephemeralDuration'])).toEqual([300, 300]);
+  });
+
+  test('un refus porte le statut et le code du serveur, pas seulement sa phrase', async () => {
+    const { impl } = fakeFetch({ status: 400, body: { success: false, error: 'Un message qui disparaît après lecture ne peut pas être transféré', code: 'ephemeral-not-forwardable' } });
+    const result = await forwardMessages({
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      messages: [{ id: 'a', content: 'un', originalLanguage: 'fr' }],
+      targetConversationId: 'c-cible',
+    });
+    expect(result).toEqual({ ok: false, error: 'Un message qui disparaît après lecture ne peut pas être transféré', status: 400, code: 'ephemeral-not-forwardable' });
+  });
+});

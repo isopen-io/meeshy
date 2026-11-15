@@ -7,11 +7,23 @@ import path from 'path';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { servableExtension, staticFileUrl } from './soundFormats';
+import { pcm16ToWaveform } from './waveformSamples';
+import { guardedTimeout } from '../../utils/guarded-timer';
 
 const log = enhancedLogger.child({ module: 'SoundCaptureService' });
 
 const AUDIO_MIME_PREFIX = 'audio/';
 const VIDEO_MIME_PREFIX = 'video/';
+
+/**
+ * Le feature-flag qui active la bibliothèque de sons — LECTURE UNIQUE, partagée
+ * avec `soundCaptureVerdict` (#6603) : sans elle, le verdict synchrone dirait
+ * une piste « soumise » alors que `captureSounds` ci-dessous l'aurait ignorée
+ * au tout premier `if`.
+ */
+export function soundLibraryEnabled(): boolean {
+  return process.env.SOUND_LIBRARY_ENABLED === 'true';
+}
 
 /**
  * Démuxe la piste audio d'une vidéo vers un `.m4a` AAC.
@@ -34,15 +46,54 @@ function spawnFfmpegExtract(inputPath: string, outputPath: string): Promise<void
       outputPath,
     ]);
     let stderr = '';
-    const timer = setTimeout(() => {
+    const timer = guardedTimeout({ name: 'sound-capture-extraction-timeout', afterMs: 5 * 60_000, logger: log, run: () => {
       proc.kill('SIGKILL');
       reject(new Error('ffmpeg extraction timeout'));
-    }, 5 * 60_000);
+    } });
     proc.stderr.on('data', (d) => { stderr += String(d); });
     proc.on('error', (err) => { clearTimeout(timer); reject(err); });
     proc.on('close', (code) => {
       clearTimeout(timer);
       if (code === 0) resolve();
+      else reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(-400)}`));
+    });
+  });
+}
+
+/**
+ * Calcule des échantillons de forme d'onde depuis un fichier audio SUR DISQUE
+ * — le repli SERVEUR (#6602) quand `CaptureTrack.waveform` (calculé côté
+ * client) est absent, ce qui est le cas NOMINAL d'un post vocal ou d'une
+ * bande-son démuxée : aucune UI de composer n'a jamais tourné pour ces deux
+ * chemins, donc aucun client n'a jamais eu de forme d'onde à envoyer.
+ *
+ * Injectable (tests), même patron que `VideoAudioExtractor`. Rejette sur
+ * échec : c'est l'appelant qui décide qu'un pic de forme d'onde manquant
+ * n'est jamais bloquant (`captureSounds` ne rejette JAMAIS).
+ */
+export type WaveformExtractor = (filePath: string) => Promise<number[]>;
+
+function spawnFfmpegWaveform(inputPath: string): Promise<number[]> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('ffmpeg', [
+      '-i', inputPath,
+      '-f', 's16le',
+      '-ac', '1',
+      '-ar', '8000',
+      'pipe:1',
+    ]);
+    const chunks: Buffer[] = [];
+    let stderr = '';
+    const timer = guardedTimeout({ name: 'sound-capture-waveform-timeout', afterMs: 60_000, logger: log, run: () => {
+      proc.kill('SIGKILL');
+      reject(new Error('ffmpeg waveform timeout'));
+    } });
+    proc.stdout.on('data', (d: Buffer) => chunks.push(d));
+    proc.stderr.on('data', (d) => { stderr += String(d); });
+    proc.on('error', (err) => { clearTimeout(timer); reject(err); });
+    proc.on('close', (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve(pcm16ToWaveform(Buffer.concat(chunks)));
       else reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(-400)}`));
     });
   });
@@ -100,7 +151,27 @@ export class SoundCaptureService {
     /** `PostMedia.filePath` est RELATIF à cette racine (tus-handler.ts:129). */
     private uploadsRoot: string = process.env.UPLOAD_PATH ?? '/app/uploads',
     private extractVideoAudio: VideoAudioExtractor = spawnFfmpegExtract,
+    private computeWaveform: WaveformExtractor = spawnFfmpegWaveform,
   ) {}
+
+  /**
+   * La forme d'onde du CLIENT prime quand elle existe (composer, aujourd'hui
+   * seulement l'upload manuel) ; sinon elle est CALCULÉE depuis le fichier
+   * réellement stocké (#6602). Ne rejette jamais : un échec de calcul rend
+   * `[]`, exactement le comportement historique — jamais une cause d'échec de
+   * la capture, qui elle-même ne doit jamais affecter la publication.
+   */
+  private async resolveWaveform(track: CaptureTrack, sourcePath: string): Promise<number[]> {
+    if (track.waveform && track.waveform.length > 0) return track.waveform;
+    try {
+      return await this.computeWaveform(sourcePath);
+    } catch (error) {
+      log.warn('Calcul de la forme d\'onde impossible — Sound.waveform restera vide', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
 
   /** SHA-256 lu EN FLUX : la durée est illimitée, charger en mémoire ferait tomber le gateway. */
   static hashFile(filePath: string): Promise<string> {
@@ -115,7 +186,7 @@ export class SoundCaptureService {
 
   async captureSounds(ctx: CaptureContext): Promise<void> {
     try {
-      if (process.env.SOUND_LIBRARY_ENABLED !== 'true') return;
+      if (!soundLibraryEnabled()) return;
       // Repasser un contenu public en privé doit LIBÉRER ses usages, pas les
       // figer : sinon publier puis restreindre laisse le compteur gonflé pour
       // toujours, et c'est lui qui trie la découverte.
@@ -337,18 +408,23 @@ export class SoundCaptureService {
 
     const sounds = await this.prisma.sound.findMany({
       where: { id: { in: borrowed.map((t) => t.soundId!) } },
-      select: { id: true, isPublic: true, uploaderId: true, mutedAt: true, durationMs: true },
+      select: { id: true, isPublic: true, uploaderId: true, mutedAt: true, deletedAt: true, durationMs: true },
     });
     const byId = new Map(sounds.map((s) => [s.id, s]));
     const allowed = new Set(
       sounds
-        .filter((s) => !s.mutedAt && (s.isPublic || s.uploaderId === ctx.authorId))
+        .filter((s) => !s.mutedAt && !s.deletedAt && (s.isPublic || s.uploaderId === ctx.authorId))
         .map((s) => s.id),
     );
+    // Un son RETIRÉ de la bibliothèque (#9848) ne s'emprunte plus dans un
+    // NOUVEAU post — mais une republication d'un post qui l'utilisait déjà
+    // garde son usage : retirer un son ne casse rien sous les pieds d'un
+    // lecteur. Lu seulement s'il y a un son retiré dans le lot.
+    const alreadyLinked = await this.alreadyLinkedRemovedSounds(ctx, sounds);
 
     for (const track of borrowed) {
-      if (!allowed.has(track.soundId!)) {
-        log.warn('soundId refusé (privé, coupé ou inexistant)', { postId: ctx.postId, soundId: track.soundId });
+      if (!allowed.has(track.soundId!) && !alreadyLinked.has(`${track.soundId}:${track.trackId}`)) {
+        log.warn('soundId refusé (privé, coupé, retiré ou inexistant)', { postId: ctx.postId, soundId: track.soundId });
         continue;
       }
       // La part réellement utilisée ne peut pas dépasser la durée réelle du
@@ -361,6 +437,27 @@ export class SoundCaptureService {
         : track;
       await this.recordUsage(ctx, track.soundId!, clamped);
     }
+  }
+
+  /**
+   * Couples `soundId:trackId` de CE post déjà liés à un son retiré — seuls
+   * autorisés à traverser `recordBorrowed` malgré `deletedAt`. Un son coupé
+   * (`mutedAt`) ou devenu privé n'en profite pas : seul le retrait par
+   * l'auteur épargne les posts existants.
+   */
+  private async alreadyLinkedRemovedSounds(
+    ctx: CaptureContext,
+    sounds: ReadonlyArray<{ id: string; isPublic: boolean; uploaderId: string; mutedAt: Date | null; deletedAt: Date | null }>,
+  ): Promise<Set<string>> {
+    const removed = sounds
+      .filter((s) => s.deletedAt && !s.mutedAt && (s.isPublic || s.uploaderId === ctx.authorId))
+      .map((s) => s.id);
+    if (removed.length === 0) return new Set();
+    const linked = await this.prisma.soundUsage.findMany({
+      where: { postId: ctx.postId, soundId: { in: removed } },
+      select: { soundId: true, trackId: true },
+    });
+    return new Set(linked.map((u) => `${u.soundId}:${u.trackId}`));
   }
 
   /**
@@ -462,12 +559,23 @@ export class SoundCaptureService {
       const hash = await SoundCaptureService.hashFile(extracted);
       const existing = await this.prisma.sound.findFirst({
         where: { uploaderId: ctx.authorId, contentHash: hash },
-        select: { id: true },
+        select: { id: true, deletedAt: true },
       });
+      if (existing?.deletedAt) {
+        // Retiré par son auteur (#9848) : ni recréé (la ligne occupe encore
+        // `@@unique([uploaderId, contentHash])`), ni ressuscité, ni relié.
+        log.info('contenu d\'un son retiré de la bibliothèque — capture ignorée',
+          { postId: ctx.postId, trackId: track.trackId, soundId: existing.id });
+        return;
+      }
       if (existing) {
         await this.recordUsage(ctx, existing.id, track);
         return;
       }
+
+      // Sur le flux EXTRAIT, pas la vidéo source — c'est lui qui vit en
+      // bibliothèque (cf. doc-comment de la méthode, dédoublonnage compris).
+      const waveform = await this.resolveWaveform(track, extracted);
 
       // Même règle que `captureOne` : nom OPAQUE, jamais le hash (oracle de
       // possession — cf. commentaire de `captureOne`).
@@ -485,7 +593,7 @@ export class SoundCaptureService {
           isAutoGenerated: true,
           duration: Math.round((media.duration ?? 0) / 1000),
           durationMs: media.duration ?? 0,
-          waveform: track.waveform ?? [],
+          waveform,
           contentHash: hash,
           sourcePostId: ctx.postId,
           canonicalPostMediaId: media.id,
@@ -534,12 +642,21 @@ export class SoundCaptureService {
 
       const existing = await this.prisma.sound.findFirst({
         where: { uploaderId: ctx.authorId, contentHash: hash },
-        select: { id: true },
+        select: { id: true, deletedAt: true },
       });
+      if (existing?.deletedAt) {
+        // Retiré par son auteur (#9848) : ni recréé (la ligne occupe encore
+        // `@@unique([uploaderId, contentHash])`), ni ressuscité, ni relié.
+        log.info('contenu d\'un son retiré de la bibliothèque — capture ignorée',
+          { postId: ctx.postId, trackId: track.trackId, soundId: existing.id });
+        return;
+      }
       if (existing) {
         await this.recordUsage(ctx, existing.id, track);
         return;
       }
+
+      const waveform = await this.resolveWaveform(track, absolute);
 
       // Nom OPAQUE, surtout pas le hash. `fileUrl` est dans le DTO public : le
       // nommer `<sha256>.<ext>` publiait le `contentHash` que `toDTO` retire
@@ -565,11 +682,10 @@ export class SoundCaptureService {
           isAutoGenerated: true,
           duration: Math.round((media.duration ?? 0) / 1000),
           durationMs: media.duration ?? 0,
-          // `Float[]` n'est pas nullable en Prisma : l'absence s'écrit `[]`,
-          // qui est exactement ce que sert déjà toute la bibliothèque
-          // existante — donc aucun changement pour une piste sans échantillons.
-          // Sans cette ligne, `Sound.waveform` n'avait AUCUN écrivain.
-          waveform: track.waveform ?? [],
+          // Client si fourni (composer), sinon CALCULÉ depuis le fichier
+          // stocké (#6602) — `[]` seulement si les deux échouent. `Float[]`
+          // n'est pas nullable en Prisma : l'absence s'écrit `[]`.
+          waveform,
           contentHash: hash,
           sourcePostId: ctx.postId,
           canonicalPostMediaId: media.id,

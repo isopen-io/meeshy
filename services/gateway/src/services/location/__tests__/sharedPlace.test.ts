@@ -1,4 +1,4 @@
-import { parseSharedPlace, sharedPlaceFromMetadata, hoistLocationOnto, hoistLocationDeep } from '../sharedPlace';
+import { parseSharedPlace, sharedPlaceFromMetadata, hoistLocationOnto, hoistLocationDeep, admitSharedPlace } from '../sharedPlace';
 
 describe('parseSharedPlace', () => {
   it('accepte un lieu complet', () => {
@@ -132,5 +132,38 @@ describe('hoistLocationDeep', () => {
     expect(hoistLocationDeep({ id: 'p1', metadata: {}, repostOf: null })).toEqual({ id: 'p1', metadata: {}, repostOf: null });
     const noPlace = { id: 'p1', metadata: {}, repostOf: { id: 'o1', metadata: {} } };
     expect(hoistLocationDeep(noPlace)).toEqual(noPlace);
+  });
+});
+
+describe('hoistLocationDeep — le sticker d’un commentaire embarqué (#9080)', () => {
+  it('hisse metadata.sticker sur chaque commentaire de l’aperçu, comme la liste complète', () => {
+    const post = {
+      id: 'p1',
+      metadata: {},
+      comments: [
+        { id: 'c1', metadata: {} },
+        { id: 'c2', metadata: { sticker: { templateId: 'mee.mee-coucou', animation: 'wobble' } } },
+      ],
+    };
+    const hoisted = hoistLocationDeep(post) as typeof post & { comments: Array<{ sticker?: unknown }> };
+    expect(hoisted.comments[0].sticker).toBeUndefined();
+    expect(hoisted.comments[1].sticker).toEqual({ templateId: 'mee.mee-coucou', animation: 'wobble' });
+  });
+});
+
+describe('admitSharedPlace — le régime de la conversation décide (#12526)', () => {
+  const place = { latitude: 48.85837, longitude: 2.29448, name: 'Chez Marcel', address: '12 rue Cler', category: 'restaurant' };
+
+  it('hors bout en bout, le lieu valide est admis tel que parseSharedPlace le rend', () => {
+    expect(admitSharedPlace(place, { endToEnd: false })).toEqual({ place: parseSharedPlace(place), withheld: false });
+  });
+
+  it('en bout en bout, un lieu valide est RETENU et le retrait se dit', () => {
+    expect(admitSharedPlace(place, { endToEnd: true })).toEqual({ place: null, withheld: true });
+  });
+
+  it('en bout en bout, un lieu absent ou malformé n’est pas « retenu » : il n’existait pas', () => {
+    expect(admitSharedPlace(undefined, { endToEnd: true })).toEqual({ place: null, withheld: false });
+    expect(admitSharedPlace({ latitude: 'x' }, { endToEnd: true })).toEqual({ place: null, withheld: false });
   });
 });

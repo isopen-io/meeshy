@@ -28,7 +28,7 @@
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/Controls/{BandStateMachine,ComposerControlsLayer,ComposerBottomBand,ComposerToolPanelHost}.swift` — universal resize + collapse.
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/Drawing/{StrokeCaptureLayer,MeeshyStrokeCanvas,StoryStrokeRasterizer}.swift` + `StrokeSmoothing.swift`, `StrokePathBuilder.swift` (core) — pressure capture + variable-width render.
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryDrawingStroke.swift` — `captureVersion`.
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift`, `StoryViewerView+Canvas.swift`, `StoryViewerView+Sidebar.swift` — reader carding + immersive.
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift`, `StoryViewerView+Canvas.swift`, `StoryViewerView+Sidebar.swift` — reader carding + immersive.
 
 ---
 
@@ -384,9 +384,9 @@ withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) { chromeVisible = 
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/StoryCanvasFraming.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Story/StoryCanvasFramingTests.swift \
         packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView.swift \
-        apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift \
-        apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift \
-        apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift
+        apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift \
+        apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift \
+        apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift
 git commit -m "feat(story): canvas card framing + reader immersive fullscreen (Lot A)"
 ```
 

@@ -2,6 +2,9 @@ package me.meeshy.app.conversations
 
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CategoryOption
+import me.meeshy.sdk.model.ConversationReorder
+import me.meeshy.sdk.model.ConversationReorderItem
+import me.meeshy.sdk.model.conversationlist.ConversationListSectionDefaults
 
 /**
  * The kind of a conversation-list section (parity §B): Épingles first, then the
@@ -21,7 +24,17 @@ public data class ConversationSection(
     val items: List<ApiConversation>,
     val categoryId: String? = null,
     val title: String? = null,
-)
+    val color: String? = null,
+    val icon: String? = null,
+) {
+    /** The id the fold state is keyed by (iOS section id): `pinned`, `other`, or the category id. */
+    val sectionId: String
+        get() = when (kind) {
+            ConversationSectionKind.PINNED -> ConversationListSectionDefaults.PINNED_ID
+            ConversationSectionKind.ALL -> ConversationListSectionDefaults.OTHER_ID
+            ConversationSectionKind.CATEGORY -> categoryId.orEmpty()
+        }
+}
 
 /**
  * Splits the already filtered/ordered conversation list into display sections
@@ -79,6 +92,8 @@ public object ConversationSections {
                             items = it,
                             categoryId = category.id,
                             title = category.name,
+                            color = category.color,
+                            icon = category.icon,
                         ),
                     )
                 }
@@ -86,4 +101,23 @@ public object ConversationSections {
             grouped[OTHER_KEY]?.let { add(ConversationSection(ConversationSectionKind.ALL, it)) }
         }
     }
+
+    /**
+     * Whether the list names its sections (iOS `showsSectionHeader`): the flat list — nothing
+     * but the « My conversations » catch-all — shows its rows without any header.
+     */
+    public fun showsHeaders(sections: List<ConversationSection>): Boolean =
+        sections.any { it.kind != ConversationSectionKind.ALL }
+
+    /**
+     * The `orderInCategory` updates for dragging the row at [from] onto slot [to] inside
+     * [section] (iOS `reorderConversations`). Only a user-category section reorders: the
+     * pinned and catch-all sections are ordered by recency, so a drag there sends nothing.
+     */
+    public fun reorderUpdates(section: ConversationSection, from: Int, to: Int): List<ConversationReorderItem> =
+        if (section.kind != ConversationSectionKind.CATEGORY) {
+            emptyList()
+        } else {
+            ConversationReorder.move(section.items.map { it.id }, from, to)
+        }
 }

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="piece_delete_confirm_title">This item</string>
+    <string name="piece_delete_confirm_action">Delete item</string>
+    <string name="piece_remove_failed">Couldn\'t delete this item.</string>
+</resources>

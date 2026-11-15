@@ -14,7 +14,7 @@ public protocol PreferenceServiceProviding: Sendable {
     func createCategory(name: String, color: String?, icon: String?) async throws -> ConversationCategory
     func getMyConversationTags() async throws -> [String]
 
-    // MARK: - Cache-first accessors (added 2026-05-11)
+    // MARK: - Cache-first accessors
     //
     // Each `loadCached…` returns the L2-cached snapshot synchronously (well,
     // through the GRDB actor hop) so the caller can paint UI immediately.
@@ -67,7 +67,7 @@ public extension PreferenceServiceProviding {
     func persistConversationPreferences(conversationId: String, prefs: APIConversationPreferences) async {}
 }
 
-public final class PreferenceService: PreferenceServiceProviding, @unchecked Sendable {
+public final class PreferenceService: PreferenceServiceProviding, Sendable {
     public static let shared = PreferenceService()
     private let api: APIClientProviding
 
@@ -76,20 +76,22 @@ public final class PreferenceService: PreferenceServiceProviding, @unchecked Sen
     }
 
     public func getCategories() async throws -> [ConversationCategory] {
-        let response: APIResponse<[ConversationCategory]> = try await api.request(endpoint: "/me/preferences/categories")
+        let response: APIResponse<[ConversationCategory]> = try await api.request(MeEndpoint.preferencesCategories)
         return response.data
     }
 
     public func getConversationPreferences(conversationId: String) async throws -> APIConversationPreferences {
         let response: APIResponse<APIConversationPreferences> = try await api.request(
-            endpoint: "/user-preferences/conversations/\(conversationId)"
+            UserPreferencesEndpoint.conversationsByConversationId(conversationId: conversationId)
         )
         return response.data
     }
 
     public func updateConversationPreferences(conversationId: String, request: UpdateConversationPreferencesRequest) async throws {
-        let _: APIResponse<[String: String]> = try await api.put(
-            endpoint: "/user-preferences/conversations/\(conversationId)", body: request
+        // #10716 — la route rend la LIGNE entière (`data.isPinned`, `data.tags`…), pas un
+        // dictionnaire de chaînes : on n'attend de la réponse que son accusé.
+        let _: APIResponse<EmptySuccess> = try await api.put(
+            UserPreferencesEndpoint.conversationsByConversationId(conversationId: conversationId), body: request
         )
     }
 
@@ -103,34 +105,36 @@ public final class PreferenceService: PreferenceServiceProviding, @unchecked Sen
         }
         struct Body: Encodable { let updates: [Item] }
         let body = Body(updates: updates.map { Item(conversationId: $0.conversationId, orderInCategory: $0.orderInCategory) })
-        let _: APIResponse<[String: String]> = try await api.post(
-            endpoint: "/user-preferences/reorder", body: body
+        let _: APIResponse<DiscardedResponseBody> = try await api.post(
+            UserPreferencesEndpoint.reorder, body: body
         )
     }
 
     public func patchCategory(id: String, isExpanded: Bool) async throws {
         let body = ["isExpanded": isExpanded]
-        let _: APIResponse<[String: String]> = try await api.patch(
-            endpoint: "/me/preferences/categories/\(id)", body: body
+        // #10716 — la route rend la LIGNE de catégorie (`isExpanded`, `order`) : seul l'accusé compte.
+        let _: APIResponse<EmptySuccess> = try await api.patch(
+            MeEndpoint.preferencesCategoriesByCategoryId(categoryId: id), body: body
         )
     }
 
     // MARK: - User Preferences (all categories)
 
     public func getAllPreferences() async throws -> UserPreferences {
-        let response: APIResponse<UserPreferences> = try await api.request(endpoint: "/me/preferences")
+        let response: APIResponse<UserPreferences> = try await api.request(MeEndpoint.preferences)
         return response.data
     }
 
     public func patchPreferences<T: Encodable>(category: PreferenceCategory, body: T) async throws {
-        let _: APIResponse<[String: String]> = try await api.patch(
-            endpoint: "/me/preferences/\(category.rawValue)", body: body
+        // #10716 — la route rend la catégorie entière (booléens, nombres) : seul l'accusé compte.
+        let _: APIResponse<EmptySuccess> = try await api.patch(
+            category.endpoint, body: body
         )
     }
 
     public func resetPreferences(category: PreferenceCategory) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(
-            endpoint: "/me/preferences/\(category.rawValue)"
+            category.endpoint
         )
     }
 
@@ -143,7 +147,7 @@ public final class PreferenceService: PreferenceServiceProviding, @unchecked Sen
             let icon: String?
         }
         let response: APIResponse<ConversationCategory> = try await api.post(
-            endpoint: "/me/preferences/categories",
+            MeEndpoint.preferencesCategories,
             body: Body(name: name, color: color, icon: icon)
         )
         return response.data
@@ -157,7 +161,7 @@ public final class PreferenceService: PreferenceServiceProviding, @unchecked Sen
     // for UX-driven autocomplete) and extract the distinct, sorted tags.
     public func getMyConversationTags() async throws -> [String] {
         let response: APIResponse<[APIConversationPreferences]> = try await api.request(
-            endpoint: "/user-preferences/conversations",
+            UserPreferencesEndpoint.conversations,
             queryItems: [
                 URLQueryItem(name: "offset", value: "0"),
                 URLQueryItem(name: "limit", value: "200")

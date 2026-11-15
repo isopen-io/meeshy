@@ -15,19 +15,54 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddParticipantRequest
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.ConversationPreferencesUpdate
+import me.meeshy.sdk.net.api.MarkReadBody
 import me.meeshy.sdk.net.api.ParticipantRoleUpdate
 import java.io.IOException
 import org.junit.Test
 
 /** Every unrelated endpoint answers "not wired" so a stray call fails loudly. */
 private abstract class StubJoinApi : ConversationApi {
-    override suspend fun list(offset: Int?, limit: Int?) = ApiResponse<List<ApiConversation>>(success = false)
+    // #3943 — la fiche d'un participant. Ces quatre stubs implémentent
+    // `ConversationApi` À LA MAIN : chaque route ajoutée à l'interface est donc
+    // un inventaire à tenir dans quatre fichiers, et le compilateur est le seul
+    // à s'en souvenir. Refusent par défaut — un test qui a besoin de la route
+    // la redéfinit.
+    override suspend fun participantProfile(id: String, participantId: String) =
+        me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.model.ApiParticipantProfile>(success = false)
+
+    override suspend fun updateHistoryGrant(
+        id: String,
+        participantId: String,
+        body: me.meeshy.sdk.model.HistoryGrantUpdate,
+    ) = me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.ParticipantRightsUpdateResult>(success = false)
+
+    override suspend fun updateParticipantRight(
+        id: String,
+        participantId: String,
+        body: me.meeshy.sdk.model.ParticipantRightsUpdate,
+    ) = me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.ParticipantRightsUpdateResult>(success = false)
+
+    override suspend fun list(offset: Int?, limit: Int?, updatedSince: String?) = ApiResponse<List<ApiConversation>>(success = false)
+    override suspend fun directWith(type: String, withUserId: String, limit: Int) =
+        ApiResponse<List<ApiConversation>>(success = false)
+    override suspend fun sharedWith(withUserId: String, limit: Int) =
+        ApiResponse<List<ApiConversation>>(success = false)
+    override suspend fun listConditional(
+        offset: Int?,
+        limit: Int?,
+        updatedSince: String?,
+        ifNoneMatch: String?,
+    ): retrofit2.Response<ApiResponse<List<ApiConversation>>> =
+        retrofit2.Response.success(ApiResponse(success = false))
     override suspend fun search(query: String) = ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun getById(id: String) = ApiResponse<ApiConversation>(success = false)
     override suspend fun stats(id: String) = ApiResponse<ConversationMessageStatsResponse>(success = false)
     override suspend fun analysis(id: String) = ApiResponse<ConversationAnalysis>(success = false)
     override suspend fun create(body: CreateConversationRequest) = ApiResponse<ApiConversation>(success = false)
     override suspend fun markRead(id: String) = ApiResponse<Unit>(success = false)
+    override suspend fun markReadDeclaring(id: String, body: MarkReadBody) = ApiResponse<Unit>(success = false)
+    override suspend fun markReceived(id: String) =
+        ApiResponse<me.meeshy.sdk.model.MarkedCountResult>(success = false)
     override suspend fun markUnread(id: String) = ApiResponse<Unit>(success = false)
     override suspend fun updatePreferences(id: String, body: ConversationPreferencesUpdate) =
         ApiResponse<Unit>(success = false)

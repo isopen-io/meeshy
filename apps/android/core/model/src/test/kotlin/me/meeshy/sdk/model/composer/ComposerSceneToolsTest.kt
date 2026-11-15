@@ -1,0 +1,176 @@
+package me.meeshy.sdk.model.composer
+
+import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.composer.scene.ComposerOverflowEntry
+import me.meeshy.sdk.model.composer.scene.ComposerSceneEffect
+import org.junit.Test
+
+/** La scène d'abord (#13834) : six outils posés sur la scène, un « ⋯ » qui range le reste, rien d'inerte. */
+class ComposerSceneToolsTest {
+    private fun more(
+        editsSlides: Boolean = true,
+        animated: Boolean = false,
+        sceneEffects: List<ComposerSceneEffect> = emptyList(),
+        exports: List<ComposerOverflowEntry> = emptyList(),
+        hasContent: Boolean = false,
+        hasBackground: Boolean = false,
+        canPickBackground: Boolean = false,
+        hasSomethingToErase: Boolean = false,
+    ) = ComposerSceneTools.moreEntries(
+        ComposerSceneTools.MoreInput(
+            editsSlides = editsSlides,
+            animated = animated,
+            sceneEffects = sceneEffects,
+            exports = exports,
+            hasContent = hasContent,
+            hasBackground = hasBackground,
+            canPickBackground = canPickBackground,
+            hasSomethingToErase = hasSomethingToErase,
+        ),
+    )
+
+    @Test
+    fun `the column carries the background, the mention and the place as direct tools, the more button last`() {
+        assertThat(ComposerSceneTools.column).containsExactly(
+            ComposerSceneTool.TEXT, ComposerSceneTool.MEDIA, ComposerSceneTool.STICKER,
+            ComposerSceneTool.SOUND, ComposerSceneTool.DRAWING,
+            ComposerSceneTool.BACKGROUND, ComposerSceneTool.MENTION, ComposerSceneTool.PLACE,
+            ComposerSceneTool.MORE,
+        ).inOrder()
+    }
+
+    @Test
+    fun `a post or a reel keeps the story's column and adds the post text just before the more button`() {
+        assertThat(ComposerSceneTools.column(writesPostText = false)).isEqualTo(ComposerSceneTools.column)
+        val post = ComposerSceneTools.column(writesPostText = true)
+        assertThat(post - ComposerSceneTool.POST_TEXT).isEqualTo(ComposerSceneTools.column)
+        assertThat(post.takeLast(2)).containsExactly(ComposerSceneTool.POST_TEXT, ComposerSceneTool.MORE).inOrder()
+    }
+
+    @Test
+    fun `a bare scene's more menu holds what every scene can do, then nothing to export`() {
+        assertThat(more()).containsExactly(
+            ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.SLIDE_DURATION,
+            ComposerMoreEntry.ANIMATION, ComposerMoreEntry.CAPTION, ComposerMoreEntry.HASHTAGS,
+        ).inOrder()
+    }
+
+    @Test
+    fun `every entry is served in the order of the spec when it has an effect`() {
+        val all = more(
+            animated = true,
+            sceneEffects = listOf(ComposerSceneEffect.OPENING, ComposerSceneEffect.VISUAL),
+            exports = listOf(ComposerOverflowEntry.SAVE_TO_PHOTOS, ComposerOverflowEntry.SHARE),
+            hasContent = true,
+            hasBackground = true,
+            canPickBackground = true,
+            hasSomethingToErase = true,
+        )
+        assertThat(all).containsExactly(
+            ComposerMoreEntry.PREVIEW, ComposerMoreEntry.ADD_SLIDE,
+            ComposerMoreEntry.PICK_BACKGROUND, ComposerMoreEntry.REMOVE_BACKGROUND, ComposerMoreEntry.SLIDE_DURATION,
+            ComposerMoreEntry.ANIMATION, ComposerMoreEntry.TIMING,
+            ComposerMoreEntry.OPENING_EFFECT, ComposerMoreEntry.VISUAL_EFFECT, ComposerMoreEntry.CAPTION,
+            ComposerMoreEntry.HASHTAGS,
+            ComposerMoreEntry.SAVE_TO_PHOTOS, ComposerMoreEntry.SHARE, ComposerMoreEntry.CLEAR_ALL,
+        ).inOrder()
+    }
+
+    @Test
+    fun `the preview opens the menu, and only over a scene that has something to show`() {
+        assertThat(more(hasContent = false)).doesNotContain(ComposerMoreEntry.PREVIEW)
+        assertThat(more(hasContent = true).first()).isEqualTo(ComposerMoreEntry.PREVIEW)
+    }
+
+    @Test
+    fun `choosing a background media is only offered where the media door no longer reaches the background`() {
+        assertThat(more(canPickBackground = false)).doesNotContain(ComposerMoreEntry.PICK_BACKGROUND)
+        assertThat(more(canPickBackground = true)).contains(ComposerMoreEntry.PICK_BACKGROUND)
+    }
+
+    @Test
+    fun `removing the background is only offered over a background colour or media`() {
+        assertThat(more(hasBackground = false)).doesNotContain(ComposerMoreEntry.REMOVE_BACKGROUND)
+        assertThat(more(hasBackground = true)).contains(ComposerMoreEntry.REMOVE_BACKGROUND)
+    }
+
+    @Test
+    fun `clear all is never offered on a blank composer and always closes the menu, the only destructive entry`() {
+        assertThat(more(hasSomethingToErase = false)).doesNotContain(ComposerMoreEntry.CLEAR_ALL)
+        val served = more(hasSomethingToErase = true, exports = listOf(ComposerOverflowEntry.SHARE))
+        assertThat(served.last()).isEqualTo(ComposerMoreEntry.CLEAR_ALL)
+        assertThat(ComposerMoreEntry.entries.filter { it.isDestructive }).containsExactly(ComposerMoreEntry.CLEAR_ALL)
+    }
+
+    @Test
+    fun `a long press on the media tool offers the photo library or the files, and no other tool has one`() {
+        assertThat(ComposerSceneTools.longPressSources(ComposerSceneTool.MEDIA))
+            .containsExactly(ComposerMediaSource.PHOTO_LIBRARY, ComposerMediaSource.FILES).inOrder()
+        ComposerSceneTools.column.filterNot { it == ComposerSceneTool.MEDIA }.forEach { tool ->
+            assertThat(ComposerSceneTools.longPressSources(tool)).isEmpty()
+        }
+    }
+
+    @Test
+    fun `the long press on media offers the scene camera first, only while the viewfinder can be armed`() {
+        assertThat(ComposerSceneTools.longPressSources(ComposerSceneTool.MEDIA, cameraServed = true))
+            .containsExactly(ComposerMediaSource.CAMERA, ComposerMediaSource.PHOTO_LIBRARY, ComposerMediaSource.FILES).inOrder()
+        assertThat(ComposerSceneTools.longPressSources(ComposerSceneTool.MEDIA, cameraServed = false))
+            .doesNotContain(ComposerMediaSource.CAMERA)
+        assertThat(ComposerSceneTools.longPressSources(ComposerSceneTool.TEXT, cameraServed = true)).isEmpty()
+    }
+
+    @Test
+    fun `the frame has left the overflow for Fond, Edit, Framing, and the timing is only for an animated scene`() {
+        assertThat(ComposerMoreEntry.entries.map { it.name }).doesNotContain("FRAME")
+        assertThat(more(animated = false)).doesNotContain(ComposerMoreEntry.TIMING)
+        assertThat(more(animated = true)).contains(ComposerMoreEntry.TIMING)
+    }
+
+    @Test
+    fun `a published story being edited cannot gain a slide, so the entry is not offered`() {
+        assertThat(more(editsSlides = false)).doesNotContain(ComposerMoreEntry.ADD_SLIDE)
+    }
+
+    @Test
+    fun `the export entries follow the scene export law one for one`() {
+        assertThat(more(exports = listOf(ComposerOverflowEntry.SHARE))).contains(ComposerMoreEntry.SHARE)
+        assertThat(more(exports = listOf(ComposerOverflowEntry.SHARE))).doesNotContain(ComposerMoreEntry.SAVE_TO_PHOTOS)
+        assertThat(ComposerMoreEntry.SAVE_TO_PHOTOS.export).isEqualTo(ComposerOverflowEntry.SAVE_TO_PHOTOS)
+        assertThat(ComposerMoreEntry.SHARE.export).isEqualTo(ComposerOverflowEntry.SHARE)
+        assertThat(ComposerMoreEntry.CAPTION.export).isNull()
+    }
+
+    @Test
+    fun `the slide strip only exists from two slides`() {
+        assertThat(ComposerSceneTools.showsSlideStrip(slideCount = 0)).isFalse()
+        assertThat(ComposerSceneTools.showsSlideStrip(slideCount = 1)).isFalse()
+        assertThat(ComposerSceneTools.showsSlideStrip(slideCount = 2)).isTrue()
+        assertThat(ComposerSceneTools.showsSlideStrip(slideCount = 10)).isTrue()
+    }
+
+    @Test
+    fun `undo and redo only appear with a history`() {
+        assertThat(ComposerSceneTools.showsHistory(canUndo = false, canRedo = false)).isFalse()
+        assertThat(ComposerSceneTools.showsHistory(canUndo = true, canRedo = false)).isTrue()
+        assertThat(ComposerSceneTools.showsHistory(canUndo = false, canRedo = true)).isTrue()
+    }
+
+    @Test
+    fun `the publish chevron only exists when there is another format or a layout to choose`() {
+        assertThat(ComposerSceneTools.showsFormatChevron(formats = 0, layouts = 0)).isFalse()
+        assertThat(ComposerSceneTools.showsFormatChevron(formats = 1, layouts = 0)).isFalse()
+        assertThat(ComposerSceneTools.showsFormatChevron(formats = 3, layouts = 0)).isTrue()
+        assertThat(ComposerSceneTools.showsFormatChevron(formats = 1, layouts = 5)).isTrue()
+    }
+
+    @Test
+    fun `a post or a reel writes one text beside the scene, so its slides offer no caption of their own`() {
+        val base = ComposerSceneTools.MoreInput(
+            editsSlides = true, animated = false, sceneEffects = emptyList(), exports = emptyList(),
+        )
+
+        assertThat(ComposerSceneTools.moreEntries(base)).contains(ComposerMoreEntry.CAPTION)
+        assertThat(ComposerSceneTools.moreEntries(base.copy(captionsSlides = false))).doesNotContain(ComposerMoreEntry.CAPTION)
+    }
+}

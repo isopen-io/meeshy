@@ -67,15 +67,36 @@ function passwordLengthLiterals(source: string): readonly number[] {
  */
 const SITES: readonly string[] = [
   'packages/shared/utils/validation.ts',
-  'packages/shared/types/api-schemas.ts',
+  // #5216 — `utils/validation.ts` (2700 lignes) a été découpé pour que
+  // `AuthSchemas` puisse grandir : la CONSTANTE vit désormais dans
+  // `validation-primitives.ts` et les schémas qui l'appliquent dans
+  // `auth-schemas.ts`. Recenser la seule façade ferait tomber la contre-épreuve
+  // « gouverné, pas muet » par DISPARITION — même geste qu'aux deux découpages
+  // recensés plus bas.
+  'packages/shared/utils/validation-primitives.ts',
+  'packages/shared/utils/auth-schemas.ts',
+  // #4635 — `types/api-schemas.ts` (3995 lignes) a été découpé ; il n'est plus
+  // qu'une façade de ré-export, et la règle de longueur vit avec les schémas
+  // d'authentification qui l'appliquent (`registerRequestSchema`,
+  // `changePasswordRequestSchema`, `resetPasswordRequestSchema`). Même geste
+  // qu'au découpage de `users/profile.ts` ci-dessous : recenser la façade
+  // ferait tomber la contre-épreuve « gouverné, pas muet » par DISPARITION.
+  'packages/shared/types/api-schemas/auth.ts',
   'packages/shared/types/validation/admin-user.ts',
   'services/gateway/src/routes/password-reset.ts',
-  'services/gateway/src/routes/users/profile.ts',
-  'apps/web/components/auth/register-form-wizard.tsx',
-  'apps/web/components/auth/wizard-steps/SecurityStep.tsx',
-  'apps/web/components/auth/PasswordRequirementsChecklist.tsx',
-  'apps/web/components/settings/ProfileSettings.tsx',
+  // #4284 — `users/profile.ts` (1093 lignes) a été découpé ; il n'est plus
+  // qu'une façade de ré-export, et la règle de longueur vit avec la route qui
+  // l'applique (`PATCH /users/me/password`). Recenser la façade faisait tomber
+  // la contre-épreuve « gouverné, pas muet » — exactement ce qu'elle existe
+  // pour attraper : un site qui devient conforme PAR DISPARITION.
+  'services/gateway/src/routes/users/profile-credentials.ts',
+  // Les trois sites du legacy `apps/web` (assistant d'inscription, étape de
+  // sécurité, liste d'exigences) sont partis avec lui (#7668). L'application
+  // qui a pris son chemin ne porte AUCUN littéral : elle LIT la borne dans le
+  // schéma partagé — gardé par le dernier bloc de ce fichier.
 ];
+
+const WEB_SIGNUP_FORM = 'apps/web/src/lib/signup-form.ts';
 
 describe('longueur minimale du mot de passe — une règle, pas onze', () => {
   it.each(SITES)('%s n’impose aucune autre longueur que la constante', (path) => {
@@ -96,6 +117,17 @@ describe('longueur minimale du mot de passe — une règle, pas onze', () => {
       source.includes('PASSWORD_MIN_LENGTH') || passwordLengthLiterals(source).length > 0;
 
     expect(governed).toBe(true);
+  });
+});
+
+describe('le web lit la borne dans le schéma partagé, sans la recopier', () => {
+  it(`${WEB_SIGNUP_FORM} dérive sa borne de registerRequestSchema`, () => {
+    const source = read(WEB_SIGNUP_FORM);
+
+    expect(source).toMatch(
+      /PASSWORD_MIN\s*=\s*registerRequestSchema\.properties\.password\.minLength/
+    );
+    expect(passwordLengthLiterals(source)).toEqual([]);
   });
 });
 

@@ -6,6 +6,7 @@
  */
 
 import type { MessageTranslation } from '@meeshy/shared/types';
+import { makeLanguageFilter } from '@meeshy/shared/utils/language-normalize';
 
 /**
  * Structure interne du champ Message.translations (JSON)
@@ -30,8 +31,9 @@ export interface MessageTranslationJSON {
  * @param translationsJson - Objet JSON des traductions depuis MongoDB
  * @param options.languages - Si fourni, ne sérialise que ces langues (filtrage
  *   bandwidth opt-in : un client ne demande que ses langues du Prisme au lieu de
- *   recevoir les N traductions). Comparaison insensible à la casse. Absent =
- *   toutes les langues (comportement historique).
+ *   recevoir les N traductions). Comparaison canonicalisée des DEUX côtés via
+ *   `makeLanguageFilter` (une clé stockée `'pt-BR'` matche une demande `'pt'`).
+ *   Absent = toutes les langues (comportement historique).
  * @returns Array de MessageTranslation pour rétrocompatibilité frontend
  *
  * @example
@@ -45,17 +47,39 @@ export function transformTranslationsToArray(
 ): MessageTranslation[] {
   if (!translationsJson) return [];
 
-  const langFilter = options?.languages && options.languages.length > 0
-    ? new Set(options.languages.map((l) => l.toLowerCase()))
-    : null;
+  // SSOT `makeLanguageFilter` : canonicalise les DEUX côtés (code demandé ET clé
+  // stockée) — une clé legacy régionale (`'pt-BR'`) matche une demande canonique
+  // `'pt'` au lieu d'être prunée (#5234, moitié symétrique de #5108).
+  const matchesLanguage = makeLanguageFilter(options?.languages);
 
   return Object.entries(translationsJson)
-    .filter(([lang]) => !langFilter || langFilter.has(lang.toLowerCase()))
+    .filter(([lang]) => !matchesLanguage || matchesLanguage(lang))
+    // **UNE ENTRÉE SANS TEXTE N'EST PAS UNE TRADUCTION** (audit de cohérence
+    // iOS ↔ passerelle, 2026-09-11). `translationsJson` est un document Mongo
+    // lu SANS validation : le type ci-dessus décrit ce que les écrivains
+    // d'aujourd'hui posent, pas ce que la base contient — écritures partielles,
+    // versions antérieures, panne du translator à mi-chemin.
+    //
+    // Le coût de laisser passer une entrée creuse n'est PAS local : le schéma
+    // wire ne déclare pas ces champs `nullable`, donc fast-json-stringify les
+    // OMET, et `APITextTranslation.translatedContent` (non optionnel) fait
+    // alors échouer le décodage du message — puis, le tableau `data` étant
+    // décodé d'un bloc, **de la page entière de messages**. Une ligne
+    // malformée vidait une conversation.
+    .filter(([, data]) => typeof data?.text === 'string' && data.text.length > 0)
+    // #12822 — UNE ENTRÉE ENCORE CHIFFRÉE N'EST PAS UN TEXTE. Seul le chiffrement
+    // au repos (`server`/`hybrid`) en écrit ; une surface qui l'ouvre
+    // (`revealAtRest`) la rend `isEncrypted: false`. Celle qui l'a oubliée ne
+    // sert plus du base64 comme traduction : elle n'en sert aucune.
+    .filter(([, data]) => data.isEncrypted !== true)
     .map(([lang, data]) => ({
       id: `${messageId}-${lang}`, // ID synthétique pour compatibilité
       messageId,
       targetLanguage: lang,
       translatedContent: data.text,
+      // Métadonnée, pas contenu : son absence ne justifie pas de retirer une
+      // traduction lisible. On ne SERT que ce qui est connu — inventer
+      // « basic » ferait dire au serveur une chose qu'il ignore.
       translationModel: data.translationModel,
       confidenceScore: data.confidenceScore,
       isEncrypted: data.isEncrypted || false,

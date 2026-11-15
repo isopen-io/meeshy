@@ -98,7 +98,7 @@ final class FeedbackToastManagerTests: XCTestCase {
 
         XCTAssertNotNil(sut.currentToast)
 
-        try? await Task.sleep(nanoseconds: 3_500_000_000)
+        try? await Task.sleep(for: .milliseconds(3500))
 
         XCTAssertNil(sut.currentToast)
     }
@@ -108,7 +108,7 @@ final class FeedbackToastManagerTests: XCTestCase {
     func test_showToastNotification_nameIsCorrect() {
         XCTAssertEqual(
             FeedbackToastManager.showToastNotification,
-            Notification.Name("meeshy.showToast")
+            FeedbackToastCenter.notificationName
         )
     }
 

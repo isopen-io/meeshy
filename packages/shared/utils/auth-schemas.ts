@@ -1,0 +1,181 @@
+/**
+ * Les schémas Zod d'AUTHENTIFICATION — extraits de `utils/validation.ts` par
+ * #5216.
+ *
+ * ## Pourquoi ils partent
+ *
+ * `utils/validation.ts` porte 2700 lignes pour un plafond de 1000, et le dépôt
+ * INTERDIT d'ajouter à un fichier hors budget : on extrait d'abord, on ajoute
+ * ensuite (directive 2026-09-02). Le lot qui ouvre l'inscription à un écran de
+ * trois champs devait faire grossir `AuthSchemas` — c'est donc `AuthSchemas`
+ * qui sort, avec sa responsabilité entière plutôt qu'une tranche.
+ *
+ * `validation.ts` le ré-exporte : aucune adresse d'import n'a bougé, et
+ * `AuthSchemas` reste joignable par `@meeshy/shared/utils/validation` comme
+ * par ce module.
+ *
+ * ## Ce que ces schémas gardent, et ce qu'ils ne gardent pas
+ *
+ * Ils sont la couche Zod, appliquée DANS le handler. La couche Ajv
+ * (`types/api-schemas/auth.ts`) est appliquée par Fastify AVANT lui, et les
+ * deux doivent rendre le MÊME verdict : une couche plus stricte que l'autre
+ * produit un refus que la seconde n'explique pas. Le témoin de cette parité
+ * est `__tests__/register-single-screen-contract.test.ts`.
+ *
+ * @module @meeshy/shared/utils/auth-schemas
+ */
+
+import { z } from 'zod';
+
+import { nameMinLength, usernameMaxLength, usernameMinLength } from '../types/api-schemas/auth.js';
+import {
+  PASSWORD_MIN_LENGTH,
+  PERSON_NAME_PATTERN,
+  USERNAME_PATTERN,
+  atLeastVisible,
+  nameTooShort,
+  passwordTooShort,
+  supportedLanguageCode,
+  usernameTooLong,
+  usernameTooShort,
+} from './validation-primitives.js';
+
+/**
+ * Schémas pour l'authentification
+ */
+export const AuthSchemas = {
+  // Login request
+  login: z.object({
+    username: z.string().min(2).max(50),
+    password: z.string().min(1),
+    rememberDevice: z.boolean().optional().default(false), // Trust this device for longer sessions (365 days)
+  }),
+
+  /**
+   * L'inscription à TROIS champs — nom affiché, e-mail, mot de passe (#5216) —
+   * qui accepte encore la charge HÉRITÉE (`username` + `firstName` + `lastName`).
+   *
+   * Miroir Zod de `registerRequestSchema` (types/api-schemas/auth.ts) : la même
+   * disjonction d'identité, exprimée ici par `superRefine` là où Ajv l'exprime
+   * par `anyOf`. Les deux couches doivent rendre le même verdict — c'est ce que
+   * garde `__tests__/register-single-screen-contract.test.ts`, et c'est la forme
+   * la plus exposée à la dérive : chaque couche est relue seule.
+   *
+   * **Aucun `.default('fr')` sur les langues.** Un défaut posé ici ÉCRIT le rang
+   * 1 avant que le serveur ne descende le Prisme, ce qui rend inatteignable la
+   * locale appareil (rang 4) — même défaut que les `default` d'Ajv, une couche
+   * plus haut, et même remède.
+   */
+  register: z.object({
+    displayName: z.string().max(100)
+      .refine(atLeastVisible(nameMinLength), nameTooShort)
+      .regex(PERSON_NAME_PATTERN, 'Le nom affiché doit contenir au moins une lettre')
+      .optional(),
+    username: z.string()
+      .min(usernameMinLength, usernameTooShort)
+      .max(usernameMaxLength, usernameTooLong)
+      .regex(USERNAME_PATTERN, 'Username invalide (lettres, chiffres, - et _ uniquement)')
+      .optional(),
+    /**
+     * OPTIONNEL depuis #6424 — un compte peut naître sans mot de passe, sa
+     * seule porte étant alors le lien magique. La borne ne s'applique donc
+     * qu'à une valeur FOURNIE : `.optional()` après `.min()`, jamais un
+     * `.min(0)` qui accepterait la chaîne vide comme un secret.
+     */
+    password: z.string()
+      .min(PASSWORD_MIN_LENGTH, passwordTooShort)
+      .optional(),
+    firstName: z.string().max(50)
+      .refine(atLeastVisible(nameMinLength), nameTooShort)
+      .regex(PERSON_NAME_PATTERN, 'Le prénom doit contenir au moins une lettre')
+      .optional(),
+    lastName: z.string().max(50)
+      .refine(atLeastVisible(nameMinLength), nameTooShort)
+      .regex(PERSON_NAME_PATTERN, 'Le nom doit contenir au moins une lettre')
+      .optional(),
+    email: z.email('Email invalide'),
+    phoneNumber: z.string().optional(),
+    phoneCountryCode: z.string().length(2).optional(),
+    systemLanguage: supportedLanguageCode.optional(),
+    regionalLanguage: supportedLanguageCode.optional(),
+    phoneTransferToken: z.string().optional(), // Token proving SMS verification for phone transfer
+    // #8058 — le parrainage voyage avec l'inscription (même valeur que `POST /affiliate/register`).
+    affiliateToken: z.string().min(1).optional(),
+    affiliateSessionKey: z.string().min(1).optional(),
+    // #8214 — « ce n'est pas moi » : revendiquer une adresse détenue par un autre compte.
+    claimEmail: z.boolean().optional(),
+  }),
+  // La disjonction d'identité (`displayName`, ou `firstName` + `lastName`) a
+  // été RETIRÉE par #6424, en même temps que l'`anyOf` de sa jumelle Ajv : le
+  // serveur nomme le compte depuis l'adresse, qui est requise. Un `superRefine`
+  // laissé ici aurait refusé une inscription pour l'absence d'une donnée que le
+  // handler juste en dessous fabrique — et la parité des deux couches, que
+  // `register-single-screen-contract.test.ts` mesure, serait tombée du mauvais
+  // côté : la plus stricte refuse ce que l'autre accepte, sans l'expliquer.
+
+  // Refresh token
+  refreshToken: z.object({
+    token: z.string().min(1),
+    sessionToken: z.string().optional(),
+  }),
+
+  /**
+   * Vérifier l'adresse — par le lien (`token`) OU par le code à six chiffres —
+   * et, depuis #8033, OUVRIR la session.
+   *
+   * `password` est admis avec le CODE seulement : c'est l'écran de saisie du
+   * code qui peut le demander, jamais un lien cliqué depuis une boîte mail. Le
+   * serveur ne l'applique qu'à un compte qui n'en a pas encore — un mot de
+   * passe existant ne se remplace pas par cette porte.
+   */
+  verifyEmail: z.object({
+    token: z.string().min(1).optional(),
+    code: z.string().length(6).regex(/^[0-9]{6}$/).optional(),
+    email: z.email(),
+    password: z.string().min(PASSWORD_MIN_LENGTH, passwordTooShort).optional(),
+    /** #10872 — avec le LIEN seulement : le secret de l'appareil demandeur, et le oui de l'utilisateur. */
+    linkDeviceSecret: z.string().regex(/^[A-Za-z0-9_-]{22,256}$/).optional(),
+    confirm: z.boolean().optional(),
+  }).refine(
+    (data) => !!data.token || !!data.code,
+    { message: 'Either token or code must be provided' }
+  ).refine(
+    (data) => data.password === undefined || !!data.code,
+    { message: 'A password can only be set together with the code', path: ['password'] }
+  ).refine(
+    (data) => (data.linkDeviceSecret === undefined && data.confirm === undefined) || !!data.token,
+    { message: 'A device secret or a confirmation goes with the link token only', path: ['linkDeviceSecret'] }
+  ),
+
+  // Resend verification
+  resendVerification: z.object({
+    email: z.email(),
+  }),
+
+  // Phone verification
+  sendPhoneCode: z.object({
+    phoneNumber: z.string().min(8),
+  }),
+
+  verifyPhone: z.object({
+    phoneNumber: z.string().min(8),
+    code: z.string().length(6).regex(/^[0-9]{6}$/),
+  }),
+
+  // Password reset
+  requestPasswordReset: z.object({
+    email: z.email(),
+  }),
+
+  resetPassword: z.object({
+    token: z.string().min(1),
+    newPassword: z.string().min(PASSWORD_MIN_LENGTH, passwordTooShort),
+  }),
+
+  // Change password (authenticated)
+  changePassword: z.object({
+    currentPassword: z.string().min(1),
+    newPassword: z.string().min(PASSWORD_MIN_LENGTH, passwordTooShort),
+  }),
+};
+

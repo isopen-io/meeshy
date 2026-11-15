@@ -5,8 +5,6 @@ import MeeshyUI
 
 struct ReportUserView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
     let userId: String
@@ -35,9 +33,9 @@ struct ReportUserView: View {
         HStack {
             Spacer()
 
-            Text("\(String(localized: "report.user.title", defaultValue: "Report", bundle: .main)) @\(username)")
-                .font(MeeshyFont.relative(17, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+            Text("\(String(localized: "report.user.title", defaultValue: "Signaler", bundle: .main)) @\(username)")
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             Spacer()
@@ -47,43 +45,43 @@ struct ReportUserView: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(MeeshyFont.relative(24))
-                    .foregroundColor(theme.textMuted)
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxl))
+                    .foregroundStyle(theme.textMuted)
             }
-            .accessibilityLabel(String(localized: "common.close", defaultValue: "Close", bundle: .main))
+            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
     }
 
     // MARK: - Scroll Content
 
     private var scrollContent: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 20) {
+            VStack(spacing: MeeshySpacing.xl) {
                 reasonSection
                 detailsSection
                 submitSection
 
                 if let errorMessage {
                     Text(errorMessage)
-                        .font(MeeshyFont.relative(13, weight: .medium))
-                        .foregroundColor(MeeshyColors.error)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                        .foregroundStyle(MeeshyColors.error)
                         .frame(maxWidth: .infinity, alignment: .center)
                 }
 
                 Spacer().frame(height: 40)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.sm)
         }
     }
 
     // MARK: - Reason Section
 
     private var reasonSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "report.user.reason", defaultValue: "Report reason", bundle: .main), icon: "exclamationmark.triangle.fill", color: MeeshyColors.warningHex)
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            sectionHeader(title: String(localized: "report.user.reason", defaultValue: "Motif du signalement", bundle: .main), icon: "exclamationmark.triangle.fill", color: MeeshyColors.warningHex)
 
             VStack(spacing: 0) {
                 ForEach(ReportReason.allCases, id: \.self) { reason in
@@ -93,53 +91,53 @@ struct ReportUserView: View {
                             selectedReason = reason
                         }
                     } label: {
-                        HStack(spacing: 12) {
+                        HStack(spacing: MeeshySpacing.md) {
                             Image(systemName: reason.icon)
-                                .font(MeeshyFont.relative(14, weight: .medium))
-                                .foregroundColor(selectedReason == reason ? MeeshyColors.error : MeeshyColors.neutral500)
-                                .frame(width: 28, height: 28)
+                                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
+                                .foregroundStyle(selectedReason == reason ? MeeshyColors.error : MeeshyColors.neutral500)
+                                .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill((selectedReason == reason ? MeeshyColors.error : MeeshyColors.neutral500).opacity(0.12))
+                                    RoundedRectangle(cornerRadius: MeeshyRadius.xs)
+                                        .fill((selectedReason == reason ? MeeshyColors.error : MeeshyColors.neutral500).opacity(MeeshyOpacity.light))
                                 )
 
                             Text(reason.label)
-                                .font(MeeshyFont.relative(14, weight: .medium))
-                                .foregroundColor(theme.textPrimary)
+                                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                                .foregroundStyle(theme.textPrimary)
 
                             Spacer()
 
                             if selectedReason == reason {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(MeeshyFont.relative(18))
-                                    .foregroundColor(MeeshyColors.error)
+                                    .font(MeeshyFont.relative(MeeshyIconSize.lg))
+                                    .foregroundStyle(MeeshyColors.error)
                             }
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
+                        .padding(.vertical, MeeshySpacing.smPlus)
                     }
                     .accessibilityLabel(reason.label)
-                    .accessibilityValue(selectedReason == reason ? String(localized: "common.selected", defaultValue: "Selected", bundle: .main) : "")
+                    .accessibilityValue(selectedReason == reason ? String(localized: "common.selected", defaultValue: "Sélectionné", bundle: .main) : "")
                     .accessibilityAddTraits(selectedReason == reason ? .isSelected : [])
                 }
             }
-            .background(sectionBackground(tint: MeeshyColors.warningHex))
+            .background(SettingsSectionBackground(tint: MeeshyColors.warningHex))
         }
     }
 
     // MARK: - Details Section
 
     private var detailsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "report.user.details", defaultValue: "Details (optional)", bundle: .main), icon: "text.alignleft", color: MeeshyColors.infoHex)
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            sectionHeader(title: String(localized: "report.user.details", defaultValue: "Détails (facultatif)", bundle: .main), icon: "text.alignleft", color: MeeshyColors.infoHex)
 
-            VStack(spacing: 8) {
+            VStack(spacing: MeeshySpacing.sm) {
                 TextEditor(text: $details)
-                    .font(MeeshyFont.relative(14, weight: .regular))
-                    .foregroundColor(theme.textPrimary)
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .regular))
+                    .foregroundStyle(theme.textPrimary)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 100, maxHeight: 150)
-                    .padding(10)
+                    .padding(MeeshySpacing.smPlus)
                     .background(
                         RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .fill(theme.surfaceGradient(tint: MeeshyColors.infoHex))
@@ -153,7 +151,7 @@ struct ReportUserView: View {
                             details = String(newValue.prefix(500))
                         }
                     }
-                    .accessibilityLabel(String(localized: "report.user.details.a11y", defaultValue: "Report details", bundle: .main))
+                    .accessibilityLabel(String(localized: "report.user.details.a11y", defaultValue: "Détails du signalement", bundle: .main))
 
                 CharacterCountLabel(count: details.count, limit: 500, warningThreshold: 450)
                     .frame(maxWidth: .infinity, alignment: .trailing)
@@ -168,26 +166,26 @@ struct ReportUserView: View {
             HapticFeedback.heavy()
             submitReport()
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 if isSubmitting {
                     ProgressView()
                         .scaleEffect(0.8)
                         .tint(.white)
                 }
-                Text(String(localized: "report.user.submit", defaultValue: "Send report", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .bold))
+                Text(String(localized: "report.user.submit", defaultValue: "Envoyer le signalement", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
             }
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .fill(isSubmitting ? MeeshyColors.error.opacity(0.5) : MeeshyColors.error)
+                    .fill(isSubmitting ? MeeshyColors.error.opacity(MeeshyOpacity.strong) : MeeshyColors.error)
             )
         }
         .disabled(isSubmitting)
-        .accessibilityLabel(String(localized: "report.user.submit", defaultValue: "Send report", bundle: .main))
-        .accessibilityHint("\(String(localized: "report.user.submit.hint", defaultValue: "Send report for", bundle: .main)) \(username)")
+        .accessibilityLabel(String(localized: "report.user.submit", defaultValue: "Envoyer le signalement", bundle: .main))
+        .accessibilityHint("\(String(localized: "report.user.submit.hint", defaultValue: "Envoyer le signalement pour", bundle: .main)) \(username)")
     }
 
     // MARK: - Actions
@@ -203,11 +201,11 @@ struct ReportUserView: View {
                     reason: details.isEmpty ? nil : details
                 )
                 HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess(String(localized: "report.user.success", defaultValue: "Report sent", bundle: .main))
+                FeedbackToastManager.shared.showSuccess(String(localized: "report.user.success", defaultValue: "Signalement envoyé", bundle: .main))
                 dismiss()
             } catch {
                 HapticFeedback.error()
-                errorMessage = String(localized: "report.user.error", defaultValue: "Error sending report", bundle: .main)
+                errorMessage = String(localized: "report.user.error", defaultValue: "Impossible d'envoyer le signalement", bundle: .main)
             }
             isSubmitting = false
         }
@@ -216,25 +214,16 @@ struct ReportUserView: View {
     // MARK: - Helpers
 
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(12, weight: .semibold))
-                .foregroundColor(Color(hex: color))
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                .foregroundStyle(Color(hex: color))
             Text(title.uppercased())
-                .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
                 .tracking(1.2)
         }
-        .padding(.leading, 4)
-    }
-
-    private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-            .fill(theme.surfaceGradient(tint: tint))
-            .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .stroke(theme.border(tint: tint), lineWidth: 1)
-            )
+        .padding(.leading, MeeshySpacing.xs)
     }
 }
 
@@ -250,10 +239,10 @@ private enum ReportReason: String, CaseIterable {
     var label: String {
         switch self {
         case .spam: return String(localized: "report.user.reason.spam", defaultValue: "Spam", bundle: .main)
-        case .harassment: return String(localized: "report.user.reason.harassment", defaultValue: "Harassment", bundle: .main)
-        case .inappropriate: return String(localized: "report.user.reason.inappropriate", defaultValue: "Inappropriate content", bundle: .main)
-        case .impersonation: return String(localized: "report.user.reason.impersonation", defaultValue: "Impersonation", bundle: .main)
-        case .other: return String(localized: "report.user.reason.other", defaultValue: "Other", bundle: .main)
+        case .harassment: return String(localized: "report.user.reason.harassment", defaultValue: "Harcèlement", bundle: .main)
+        case .inappropriate: return String(localized: "report.user.reason.inappropriate", defaultValue: "Contenu inapproprié", bundle: .main)
+        case .impersonation: return String(localized: "report.user.reason.impersonation", defaultValue: "Usurpation d'identité", bundle: .main)
+        case .other: return String(localized: "report.user.reason.other", defaultValue: "Autre", bundle: .main)
         }
     }
 

@@ -3,7 +3,7 @@ import MeeshySDK
 import os
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }
 
 /// Starts a 1:1 call from anywhere that has a user but not necessarily a
@@ -44,7 +44,7 @@ enum CallStarter {
     ) {
         if let conversationId, !conversationId.isEmpty {
             Task { @MainActor in
-                await CallManager.shared.requestPermissionsThenStartCall(
+                await CallManager.shared.outgoingDial.requestPermissionsThenStartCall(
                     conversationId: conversationId,
                     userId: userId,
                     displayName: displayName,
@@ -56,8 +56,8 @@ enum CallStarter {
 
         Task { @MainActor in
             do {
-                if let conversation = try await ConversationService.shared.findDirectWith(userId: userId) {
-                    await CallManager.shared.requestPermissionsThenStartCall(
+                if let conversation = try await DirectConversationResolver.existing(with: userId) {
+                    await CallManager.shared.outgoingDial.requestPermissionsThenStartCall(
                         conversationId: conversation.id,
                         userId: userId,
                         displayName: displayName,

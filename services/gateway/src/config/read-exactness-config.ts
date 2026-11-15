@@ -11,6 +11,11 @@
  * variable d'environnement `EXACT_READ_TRACKING_SINCE`, ce qui permet de
  * choisir le moment — et de revenir en arrière sans redéployer.
  *
+ * Staging et production l'arment par leur composition (#7356,
+ * `infrastructure/docker/compose/docker-compose.{staging,prod}.yml`) : l'hôte
+ * déplace la date ou désarme en posant la variable vide, sans nouvelle image.
+ * Gardé par `exact-read-tracking-armed-on-deploy.test.ts`.
+ *
  * @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
  */
 

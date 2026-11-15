@@ -6,7 +6,7 @@ import MeeshyUI
 
 // MARK: - User Search Result
 
-private struct UserSearchResult: Identifiable, Decodable {
+private struct UserSearchResult: Identifiable, Decodable, ProfileDecorWearer {
     let id: String
     let username: String
     let firstName: String?
@@ -15,6 +15,8 @@ private struct UserSearchResult: Identifiable, Decodable {
     let avatar: String?
     let isOnline: Bool?
     let lastActiveAt: Date?
+    /// Le décor servi avec la personne — son contour équipé (#10945, #10946).
+    let profileDecor: ServedProfileDecor?
 
     var name: String {
         displayName ?? [firstName, lastName].compactMap { $0 }.joined(separator: " ").ifEmptyFallback(username)
@@ -43,8 +45,6 @@ struct AddParticipantSheet: View {
     let onAdded: () -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
     @State private var searchQuery = ""
@@ -75,8 +75,8 @@ struct AddParticipantSheet: View {
     private var headerBar: some View {
         HStack {
             Text(String(localized: "participants.add.title", defaultValue: "Ajouter un membre", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .semibold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold, design: .rounded))
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             Spacer()
@@ -89,29 +89,33 @@ struct AddParticipantSheet: View {
                 // figé (doctrine 82i/87i : le chrome ne suit pas Dynamic Type).
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .frame(width: 28, height: 28)
-                    .background(Circle().fill(theme.textMuted.opacity(0.12)))
+                    .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
+                    .meeshyTapTarget()
             }
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
-        .padding(.bottom, 8)
+        .padding(EdgeInsets(
+            top: MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: 28),
+            leading: MeeshySpacing.xl,
+            bottom: MeeshySpacing.sm - MeeshyTapTarget.inset(forVisualSide: 28),
+            trailing: MeeshySpacing.xl - MeeshyTapTarget.inset(forVisualSide: 28)
+        ))
     }
 
     // MARK: - Search Field
 
     private var searchField: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "magnifyingglass")
-                .font(MeeshyFont.relative(14, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
+                .foregroundStyle(theme.textMuted)
                 .accessibilityHidden(true)
 
-            TextField(String(localized: "participants.add.search-placeholder", defaultValue: "Rechercher un utilisateur...", bundle: .main), text: $searchQuery)
-                .font(MeeshyFont.relative(15))
-                .foregroundColor(theme.textPrimary)
+            TextField(String(localized: "participants.add.search-placeholder", defaultValue: "Rechercher un utilisateur…", bundle: .main), text: $searchQuery)
+                .font(MeeshyFont.relative(MeeshyFont.bodySize))
+                .foregroundStyle(theme.textPrimary)
                 .focused($isSearchFocused)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -125,20 +129,22 @@ struct AddParticipantSheet: View {
                     searchResults = []
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(MeeshyFont.relative(16))
-                        .foregroundColor(theme.textMuted)
+                        .font(MeeshyFont.relative(MeeshyIconSize.md))
+                        .foregroundStyle(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
+                .transition(.opacity)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .meeshyAnimation(MeeshyAnimation.springFast, value: searchQuery.isEmpty)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(theme.textMuted.opacity(0.08))
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                .fill(theme.textMuted.opacity(MeeshyOpacity.subtle))
         )
-        .padding(.horizontal, 20)
-        .padding(.bottom, 12)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.bottom, MeeshySpacing.md)
     }
 
     // MARK: - Results List
@@ -147,37 +153,46 @@ struct AddParticipantSheet: View {
     private var resultsList: some View {
         ScrollView(.vertical, showsIndicators: false) {
             if isSearching {
-                VStack(spacing: 12) {
+                VStack(spacing: MeeshySpacing.md) {
                     ForEach(0..<3, id: \.self) { _ in
                         searchSkeletonRow
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
+                .padding(.horizontal, MeeshySpacing.xl)
+                .padding(.top, MeeshySpacing.sm)
                 // Collapse the shimmer placeholders into one spoken element so VoiceOver
                 // announces the loading state once instead of stopping on 3 empty rows.
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(String(localized: "participants.add.searching", defaultValue: "Recherche en cours", bundle: .main))
+                .transition(.opacity)
             } else if searchQuery.count < 2 {
                 searchPrompt
+                    .transition(.opacity)
             } else if searchResults.isEmpty {
                 emptyResults
+                    .transition(.opacity)
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(searchResults) { user in
                         userRow(user)
                     }
                 }
+                .transition(.opacity)
             }
 
             if let error = errorMessage {
                 Text(error)
-                    .font(MeeshyFont.relative(12, weight: .medium))
-                    .foregroundColor(MeeshyColors.error)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
+                    .foregroundStyle(MeeshyColors.error)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.top, MeeshySpacing.sm)
+                    .transition(.opacity)
             }
         }
+        .meeshyAnimation(MeeshyAnimation.springFast, value: isSearching)
+        .meeshyAnimation(MeeshyAnimation.springFast, value: searchQuery.count < 2)
+        .meeshyAnimation(MeeshyAnimation.springFast, value: searchResults.isEmpty)
+        .meeshyAnimation(MeeshyAnimation.springFast, value: errorMessage)
     }
 
     // MARK: - User Row
@@ -187,29 +202,30 @@ struct AddParticipantSheet: View {
         let isAdding = addingUserId == user.id
         let color = DynamicColorGenerator.colorForName(user.name)
 
-        return HStack(spacing: 12) {
-            MeeshyAvatar(
+        return HStack(spacing: MeeshySpacing.md) {
+            LivePresence { MeeshyAvatar(
                 name: user.name,
                 context: .userListItem,
                 accentColor: color,
                 avatarURL: user.avatar,
-                presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt)
-            )
+                presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt),
+                ring: user.avatarRing
+            ) }
             // Presentational avatar — MeeshyAvatar carries its own .accessibilityLabel(name),
             // which the adjacent name/username block already reads. Hide it so VoiceOver
             // announces the name once, not twice (doctrine 143i). Safe: this avatar has no
             // mood tap / context menu, so hiding removes no action.
             .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(user.name)
-                    .font(MeeshyFont.relative(14, weight: .semibold))
-                    .foregroundColor(isMember ? theme.textMuted : theme.textPrimary)
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                    .foregroundStyle(isMember ? theme.textMuted : theme.textPrimary)
                     .lineLimit(1)
 
                 Text("@\(user.username)")
-                    .font(MeeshyFont.relative(11, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                    .foregroundStyle(theme.textMuted)
                     .lineLimit(1)
             }
             .accessibilityElement(children: .combine)
@@ -218,31 +234,36 @@ struct AddParticipantSheet: View {
 
             if isMember {
                 Text(String(localized: "participants.add.member", defaultValue: "Membre", bundle: .main))
-                    .font(MeeshyFont.relative(11, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Capsule().fill(theme.textMuted.opacity(0.1)))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                    .foregroundStyle(theme.textMuted)
+                    .padding(.horizontal, MeeshySpacing.smPlus)
+                    .padding(.vertical, MeeshySpacing.xs)
+                    .background(Capsule().fill(theme.textMuted.opacity(MeeshyOpacity.subtle)))
+                    .transition(.opacity)
             } else if isAdding {
                 ProgressView()
                     .scaleEffect(0.8)
                     .tint(accent)
+                    .transition(.opacity)
             } else {
                 Button {
                     Task { await addParticipant(userId: user.id) }
                 } label: {
                     Text(String(localized: "common.add", defaultValue: "Ajouter", bundle: .main))
-                        .font(MeeshyFont.relative(12, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold))
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(Capsule().fill(accent))
                 }
                 .accessibilityLabel(String(format: String(localized: "participants.add.add-a11y", defaultValue: "Ajouter %@", bundle: .main), user.name))
+                .transition(.opacity)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
+        .meeshyAnimation(MeeshyAnimation.springFast, value: isMember)
+        .meeshyAnimation(MeeshyAnimation.springFast, value: isAdding)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .opacity(isMember ? 0.5 : 1)
         .contentShape(Rectangle())
     }
@@ -267,7 +288,7 @@ struct AddParticipantSheet: View {
     // canonique d'un état « contenu indisponible » (HIG), clé i18n réutilisée.
     private var emptyResults: some View {
         AdaptiveContentUnavailableView(
-            String(localized: "participants.add.no-results", defaultValue: "Aucun utilisateur trouve", bundle: .main),
+            String(localized: "participants.add.no-results", defaultValue: "Aucun utilisateur trouvé", bundle: .main),
             systemImage: "person.slash"
         )
         .padding(.top, 40)
@@ -276,16 +297,16 @@ struct AddParticipantSheet: View {
     // MARK: - Skeleton Row
 
     private var searchSkeletonRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Circle()
-                .fill(theme.textMuted.opacity(0.12))
+                .fill(theme.textMuted.opacity(MeeshyOpacity.light))
                 .frame(width: 36, height: 36)
-            VStack(alignment: .leading, spacing: 4) {
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(theme.textMuted.opacity(0.12))
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
+                    .fill(theme.textMuted.opacity(MeeshyOpacity.light))
                     .frame(width: 100, height: 12)
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(theme.textMuted.opacity(0.08))
+                    .fill(theme.textMuted.opacity(MeeshyOpacity.subtle))
                     .frame(width: 70, height: 10)
             }
             Spacer()
@@ -308,7 +329,7 @@ struct AddParticipantSheet: View {
 
         do {
             let response: UserSearchResponse = try await APIClient.shared.request(
-                endpoint: "/users/search",
+                UsersEndpoint.search,
                 queryItems: [
                     URLQueryItem(name: "q", value: trimmed),
                     URLQueryItem(name: "limit", value: "20"),
@@ -332,8 +353,8 @@ struct AddParticipantSheet: View {
         struct AddBody: Encodable { let userId: String }
 
         do {
-            let _: APIResponse<[String: String]> = try await APIClient.shared.post(
-                endpoint: "/conversations/\(conversationId)/participants",
+            let _: APIResponse<DiscardedResponseBody> = try await APIClient.shared.post(
+                ConversationsEndpoint.byIdParticipants(id: conversationId),
                 body: AddBody(userId: userId)
             )
             HapticFeedback.success()
@@ -352,5 +373,5 @@ struct AddParticipantSheet: View {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let participants = Logger(subsystem: "me.meeshy.app", category: "participants")
+    nonisolated static let participants = MeeshyLog.logger(.participants)
 }

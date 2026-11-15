@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_draft_resume_title">Riprendi la tua bozza</string>
+    <string name="feed_draft_resume_action">Riprendi</string>
+    <string name="feed_draft_resume_discard_title">Eliminare questa bozza?</string>
+    <string name="feed_draft_resume_discard_body">Verrà cancellata da questo dispositivo.</string>
+</resources>

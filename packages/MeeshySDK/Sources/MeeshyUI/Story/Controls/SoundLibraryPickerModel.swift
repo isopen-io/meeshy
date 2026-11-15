@@ -6,6 +6,11 @@ import MeeshySDK
 /// État du sélecteur de sons. Séparé de la vue pour être testable sans SwiftUI.
 @MainActor
 public final class SoundLibraryPickerModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published public var tab: SoundLibraryPicker.Tab = .mine
     @Published public var query: String = ""
     @Published public private(set) var sounds: [APISound] = []
@@ -15,6 +20,10 @@ public final class SoundLibraryPickerModel: ObservableObject {
     /// la ligne montre une attente, pas un bouton stop qui n'arrête rien encore.
     @Published public private(set) var preparingId: String?
     @Published public var renaming: APISound?
+    /// Son dont le retrait attend confirmation (#9848). `nil` = rien à confirmer.
+    @Published public var removing: APISound?
+    /// Le dernier retrait a échoué et la ligne est revenue à sa place.
+    @Published public private(set) var removalFailed = false
 
     private let service: SoundLibraryServiceProviding
     private let preview: SoundPreviewing
@@ -22,6 +31,7 @@ public final class SoundLibraryPickerModel: ObservableObject {
     private var nextCursor: Date?
     private var loadedOnce = false
     private var cancellables = Set<AnyCancellable>()
+    private let reloadLane = OrderedEventLane()
 
     public init(service: SoundLibraryServiceProviding,
                 preview: SoundPreviewing = SoundPreviewPlayer()) {
@@ -42,7 +52,8 @@ public final class SoundLibraryPickerModel: ObservableObject {
             .dropFirst()
             .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
             .removeDuplicates()
-            .sink { [weak self] _ in Task { @MainActor in await self?.reload() } }
+            .map { _ in () }
+            .relay(through: reloadLane) { [weak self] _ in await self?.reload() }
             .store(in: &cancellables)
 
         // Pas de débounce sur l'onglet : c'est un geste discret, la latence s'y
@@ -50,7 +61,8 @@ public final class SoundLibraryPickerModel: ObservableObject {
         $tab
             .dropFirst()
             .removeDuplicates()
-            .sink { [weak self] _ in Task { @MainActor in await self?.reload() } }
+            .map { _ in () }
+            .relay(through: reloadLane) { [weak self] _ in await self?.reload() }
             .store(in: &cancellables)
 
         // Fin naturelle de piste : la ligne doit repasser en « play » toute
@@ -60,17 +72,21 @@ public final class SoundLibraryPickerModel: ObservableObject {
             .store(in: &cancellables)
     }
 
+    /// On ne retire que ses PROPRES sons : seul « Mes sons » propose le geste.
+    public var canRemove: Bool { tab == .mine }
+
     public var canLoadMore: Bool { tab == .mine && nextCursor != nil && !isLoading }
 
-    public var emptyMessage: String {
+    public var emptyMessage: String { emptyMessage(for: .story) }
+
+    /// « Mes sons » vide nomme le format composé (#13913).
+    public func emptyMessage(for wording: ComposerFormatWording) -> String {
         if !query.isEmpty {
             return String(localized: "story.sound.library.emptySearch",
                           defaultValue: "Aucun son ne correspond à cette recherche.", bundle: .module)
         }
         return tab == .mine
-            ? String(localized: "story.sound.library.emptyMine",
-                     defaultValue: "Vos sons apparaîtront ici dès que vous publierez une story avec un audio original.",
-                     bundle: .module)
+            ? wording.soundLibraryEmptyMine
             : String(localized: "story.sound.library.emptyTrending",
                      defaultValue: "Aucun son public pour le moment.", bundle: .module)
     }
@@ -182,6 +198,43 @@ public final class SoundLibraryPickerModel: ObservableObject {
         preparingId = nil
         previewingId = nil
         preview.stop()
+    }
+
+    /// Texte de la confirmation : il dit, AVANT le geste, combien de
+    /// publications jouent encore ce son — elles continueront de le jouer.
+    public static func removalMessage(for sound: APISound) -> String {
+        guard sound.postCount > 0 else {
+            return String(localized: "story.sound.library.removeMessageUnused",
+                          defaultValue: "Ce son disparaîtra de votre bibliothèque et ne pourra plus être ajouté à une publication.",
+                          bundle: .module)
+        }
+        return String(localized: "story.sound.library.removeMessageUsed",
+                      defaultValue: "\(sound.postCount) publications l'utilisent encore : elles continueront de le jouer. Il disparaîtra de votre bibliothèque et ne pourra plus être ajouté à une nouvelle publication.",
+                      bundle: .module)
+    }
+
+    public func beginRemove(_ sound: APISound) {
+        removalFailed = false
+        removing = sound
+    }
+
+    /// Retrait OPTIMISTE : la ligne part au geste, le réseau confirme ensuite.
+    /// Un refus la remet à SA place — pas en tête, pas en fin — pour que
+    /// l'utilisateur la retrouve là où il l'a laissée.
+    public func confirmRemove(_ sound: APISound) async {
+        removing = nil
+        guard let index = sounds.firstIndex(where: { $0.id == sound.id }) else { return }
+        if previewingId == sound.id || preparingId == sound.id { stopPreview() }
+        let snapshot = sounds[index]
+        sounds.remove(at: index)
+        removalFailed = false
+        do {
+            _ = try await service.remove(soundId: sound.id)
+        } catch {
+            guard !sounds.contains(where: { $0.id == snapshot.id }) else { return }
+            sounds.insert(snapshot, at: min(index, sounds.count))
+            removalFailed = true
+        }
     }
 
     public func beginRename(_ sound: APISound) {

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_clear_all_message">تبدأ كل الشرائح من جديد فارغة على الخلفية المحايدة. التراجع يعيد الشرائح.</string>
+    <string name="composer_media_sources">اختيار مصدر</string>
+    <string name="composer_preview_close">إغلاق المعاينة</string>
+    <string name="composer_preview_previous">الشريحة السابقة</string>
+    <string name="composer_preview_next">الشريحة التالية</string>
+</resources>

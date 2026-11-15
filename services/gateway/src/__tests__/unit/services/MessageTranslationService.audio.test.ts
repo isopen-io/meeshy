@@ -46,6 +46,12 @@ jest.mock('../../../services/posts/PostAudioService', () => ({
   }
 }));
 
+// Directive porteur du 2026-11-01 : une conversation naît chiffrée au repos,
+// sous une clé obtenue avant sa création.
+jest.mock('../../../services/EncryptionService', () => ({
+  getEncryptionService: jest.fn(async () => ({ activationKeyId: async () => 'server-key' })),
+}));
+
 // ConsentValidationService — instantiated inline
 jest.mock('../../../services/ConsentValidationService', () => ({
   ConsentValidationService: jest.fn().mockImplementation(() => ({
@@ -908,29 +914,6 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
   });
 
   // =========================================================================
-  // _getMessageSourceLanguage
-  // =========================================================================
-  describe('_getMessageSourceLanguage', () => {
-    it('returns originalLanguage of the last message', async () => {
-      prisma.message.findFirst.mockResolvedValue({ originalLanguage: 'de' });
-      const lang = await (svc as any)._getMessageSourceLanguage('conv-1');
-      expect(lang).toBe('de');
-    });
-
-    it('returns "fr" when no message found', async () => {
-      prisma.message.findFirst.mockResolvedValue(null);
-      const lang = await (svc as any)._getMessageSourceLanguage('conv-empty');
-      expect(lang).toBe('fr');
-    });
-
-    it('returns "fr" on DB error', async () => {
-      prisma.message.findFirst.mockRejectedValue(new Error('fail'));
-      const lang = await (svc as any)._getMessageSourceLanguage('conv-err');
-      expect(lang).toBe('fr');
-    });
-  });
-
-  // =========================================================================
   // _handleTranslationCompleted — dedup, error handling
   // =========================================================================
   describe('_handleTranslationCompleted', () => {
@@ -1218,6 +1201,19 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
       await flushAsync(5);
 
       expect(fsMock.promises.writeFile).toHaveBeenCalled();
+    });
+
+    it('#16340 — a text-only translation keeps its text and announces no track', async () => {
+      const events: Array<{ translatedAudio: { url: string; translatedText: string } }> = [];
+      svc.on('audioTranslationReady', (e) => events.push(e as (typeof events)[number]));
+      mockZmqClient.emit('audioProcessCompleted', makeAudioProcessCompletedData({
+        translatedAudios: [makeTranslatedAudio({ targetLanguage: 'en', translatedText: 'Hello there', textOnly: true })]
+      }));
+      await flushAsync(5);
+      const saved = (prisma.messageAttachment.update.mock.calls.at(-1)?.[0] as { data: { translations: Record<string, { url?: string; transcription: string }> } }).data.translations.en;
+      expect(saved).toMatchObject({ transcription: 'Hello there' });
+      expect(saved.url).toBeUndefined();
+      expect(events.map((e) => e.translatedAudio.url)).toEqual(['']);
     });
 
     it('saves base64 audio file when audioDataBase64 is present (legacy)', async () => {
@@ -2200,19 +2196,33 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
       expect(result).toBeNull();
     });
 
-    it('handles BYPASS_VOICE_CONSENT_CHECK env var', async () => {
+    /**
+     * #4348 — la variable d'environnement n'accorde PLUS aucun consentement.
+     *
+     * Ce témoin figeait l'inverse : il posait `BYPASS_VOICE_CONSENT_CHECK` et
+     * attestait que le traitement aboutissait. Il gardait donc la dérogation,
+     * pas la garde — et il serait resté vert si quelqu'un avait élargi le
+     * bypass, tout en tombant le jour où on le retire. Retourné : la présence
+     * de la variable ne doit RIEN changer, et c'est ce qui se vérifie.
+     */
+    it("ne laisse aucune variable d'environnement accorder un consentement", async () => {
+      const appel = {
+        messageId: 'msg-bypass',
+        attachmentId: 'att-bypass',
+        conversationId: 'conv-bypass',
+        senderId: 'user-bypass',
+        audioUrl: '/url/audio.mp3',
+        audioPath: '/app/uploads/audio.mp3',
+        audioDurationMs: 2000
+      };
+
+      const sansVariable = await svc.processAudioAttachment(appel);
+
       process.env.BYPASS_VOICE_CONSENT_CHECK = 'true';
       try {
-        const result = await svc.processAudioAttachment({
-          messageId: 'msg-bypass',
-          attachmentId: 'att-bypass',
-          conversationId: 'conv-bypass',
-          senderId: 'user-bypass',
-          audioUrl: '/url/audio.mp3',
-          audioPath: '/app/uploads/audio.mp3',
-          audioDurationMs: 2000
-        });
-        expect(result).not.toBeNull();
+        const avecVariable = await svc.processAudioAttachment(appel);
+        // Le MÊME verdict des deux côtés : poser la variable n'ouvre rien.
+        expect(avecVariable === null).toBe(sansVariable === null);
       } finally {
         delete process.env.BYPASS_VOICE_CONSENT_CHECK;
       }

@@ -121,9 +121,16 @@ final class MeeshyConversationUserStateIntegrationTests: XCTestCase {
     // MARK: - Round-trip new fields
 
     func test_codable_roundtripWithExplicitUserState() throws {
+        // La frontière de lecture VARIE ici (#7222) : laissée à `nil`, elle
+        // serait égale des deux côtés et ce round-trip la déclarerait
+        // « testée » sans jamais l'avoir traversée — or c'est elle que le
+        // cache GRDB doit rendre au démarrage à FROID pour que le séparateur
+        // de non-lus existe encore.
         let state = ConversationUserState(
             unreadCount: 5,
             lastReadAt: Date(timeIntervalSince1970: 1_700_000_000),
+            lastReadMessageId: "6501f0000000000000000abc",
+            lastReadMessageCreatedAt: Date(timeIntervalSince1970: 1_699_999_000),
             isPinned: true,
             customName: "VIP",
             tags: ["alpha", "beta"],

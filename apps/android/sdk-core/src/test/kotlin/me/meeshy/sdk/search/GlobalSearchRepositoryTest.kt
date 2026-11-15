@@ -1,0 +1,339 @@
+package me.meeshy.sdk.search
+
+import com.google.common.truth.Truth.assertThat
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.mockk
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.search.SearchPaneFailure
+import me.meeshy.sdk.model.search.SearchPaneKind
+import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.net.api.ConversationApi
+import me.meeshy.sdk.net.api.MessageApi
+import me.meeshy.sdk.net.api.UserApi
+import me.meeshy.sdk.net.api.UserSearchResult
+import me.meeshy.sdk.network.InMemoryNetworkMonitor
+import org.junit.Test
+import me.meeshy.sdk.lock.ConversationLockStore
+import me.meeshy.sdk.lock.InMemoryConversationLockStore
+import me.meeshy.sdk.model.search.GlobalMessageSearchConversation
+import me.meeshy.sdk.model.search.GlobalMessageSearchHit
+import me.meeshy.sdk.model.search.GlobalMessageSearchSender
+import me.meeshy.sdk.model.search.GlobalMessageSearchTranscript
+import me.meeshy.sdk.model.search.SearchExcerpt
+import me.meeshy.sdk.model.search.SearchMediaKind
+import okhttp3.ResponseBody.Companion.toResponseBody
+import retrofit2.HttpException
+import retrofit2.Response
+import java.io.IOException
+
+class GlobalSearchRepositoryTest {
+
+    private class FakeLocal(
+        val conversations: List<ApiConversation> = emptyList(),
+        val users: List<UserSearchResult> = emptyList(),
+        val messages: List<MessageSearchHit> = emptyList(),
+        val cached: List<ApiConversation> = emptyList(),
+    ) : LocalSearchSource {
+        override suspend fun conversations(query: String) = conversations
+        override suspend fun users(query: String) = users
+        override suspend fun messages(query: String) = messages
+        override suspend fun cachedConversations(ids: Collection<String>) = cached.filter { it.id in ids }
+    }
+
+    private fun hit(id: String, conversationId: String = "c1", createdAt: String = "2026-01-01T00:00:00Z") =
+        MessageSearchHit(ApiMessage(id = id, conversationId = conversationId, createdAt = createdAt), "t")
+
+    private fun conversation(id: String) = ApiConversation(id = id, title = id)
+
+    private class Remote {
+        val conversationApi = mockk<ConversationApi>()
+        val userApi = mockk<UserApi>()
+        val messageApi = mockk<MessageApi>()
+    }
+
+    private fun repository(
+        remote: Remote,
+        local: LocalSearchSource = FakeLocal(),
+        monitor: InMemoryNetworkMonitor = InMemoryNetworkMonitor(initialOnline = true),
+        locks: ConversationLockStore? = null,
+    ) = GlobalSearchRepository(remote.conversationApi, remote.userApi, remote.messageApi, local, monitor, locks = locks)
+
+    private fun Remote.serving(
+        conversations: List<ApiConversation> = emptyList(),
+        users: List<UserSearchResult> = emptyList(),
+        messages: List<ApiMessage> = emptyList(),
+    ) {
+        coEvery { conversationApi.search(any()) } returns ApiResponse(success = true, data = conversations)
+        coEvery { userApi.search(any(), any(), any()) } returns ApiResponse(success = true, data = users)
+        coEvery { messageApi.search(any(), any(), any(), any()) } returns ApiResponse(success = true, data = messages)
+        coEvery { messageApi.searchAll(any(), any(), any()) } throws refusal(404)
+    }
+
+    private fun refusal(status: Int) = HttpException(Response.error<Unit>(status, "{}".toResponseBody()))
+
+    private fun Remote.servingUnified(vararg hits: GlobalMessageSearchHit) {
+        coEvery { messageApi.searchAll(any(), any(), any()) } returns ApiResponse(success = true, data = hits.toList())
+    }
+
+    @Test
+    fun `local results are emitted before the network answer`() = runTest {
+        val remote = Remote().apply { serving(conversations = listOf(conversation("net"))) }
+        val emissions = repository(remote, FakeLocal(conversations = listOf(conversation("loc")))).search("bel").toList()
+
+        assertThat(emissions).hasSize(2)
+        assertThat(emissions[0].remoteSettled).isFalse()
+        assertThat(emissions[0].conversations.items.map { it.id }).containsExactly("loc")
+        assertThat(emissions[1].remoteSettled).isTrue()
+        assertThat(emissions[1].conversations.items.map { it.id }).containsExactly("net", "loc")
+    }
+
+    @Test
+    fun `offline the search answers from the local index alone without any failure`() = runTest {
+        val remote = Remote()
+        val monitor = InMemoryNetworkMonitor(initialOnline = false)
+        val emissions = repository(remote, FakeLocal(messages = listOf(hit("m1"))), monitor).search("bel").toList()
+
+        assertThat(emissions).hasSize(1)
+        assertThat(emissions.single().offline).isTrue()
+        assertThat(emissions.single().messages.items.map { it.message.id }).containsExactly("m1")
+        assertThat(emissions.single().firstFailure).isNull()
+        coVerify(exactly = 0) { remote.conversationApi.search(any()) }
+    }
+
+    @Test
+    fun `a failed network pane is reported with its failure instead of an empty list`() = runTest {
+        val remote = Remote().apply {
+            serving()
+            coEvery { userApi.search(any(), any(), any()) } throws IOException("down")
+        }
+        val settled = repository(remote).search("bel").toList().last()
+
+        assertThat(settled.users.failure).isEqualTo(SearchPaneFailure.Unreachable)
+        assertThat(settled.conversations.failure).isNull()
+        assertThat(settled.firstFailure).isEqualTo(SearchPaneKind.PEOPLE)
+    }
+
+    @Test
+    fun `a pane failure does not erase the local results of that pane`() = runTest {
+        val remote = Remote().apply {
+            serving()
+            coEvery { conversationApi.search(any()) } throws IOException("down")
+        }
+        val settled = repository(remote, FakeLocal(conversations = listOf(conversation("loc")))).search("bel").toList().last()
+
+        assertThat(settled.conversations.items.map { it.id }).containsExactly("loc")
+        assertThat(settled.conversations.failure).isEqualTo(SearchPaneFailure.Unreachable)
+    }
+
+    @Test
+    fun `messages merge the local index with the per-conversation network fan-out newest first`() = runTest {
+        val remote = Remote().apply {
+            serving(conversations = listOf(conversation("c1")))
+            coEvery { messageApi.search("c1", any(), any(), any()) } returns ApiResponse(
+                success = true,
+                data = listOf(
+                    ApiMessage(id = "m1", conversationId = "c1", createdAt = "2026-01-01T00:00:00Z"),
+                    ApiMessage(id = "m3", conversationId = "c1", createdAt = "2026-03-01T00:00:00Z"),
+                ),
+            )
+        }
+        val settled = repository(
+            remote,
+            FakeLocal(messages = listOf(hit("m1"), hit("m2", createdAt = "2026-02-01T00:00:00Z"))),
+        ).search("bel").toList().last()
+
+        assertThat(settled.messages.items.map { it.message.id }).containsExactly("m3", "m2", "m1").inOrder()
+    }
+
+    @Test
+    fun `a message found on the network carries the conversation it was found in`() = runTest {
+        val found = conversation("c1").copy(avatar = "2026/09/c1/photo.png")
+        val remote = Remote().apply {
+            serving(conversations = listOf(found))
+            coEvery { messageApi.search("c1", any(), any(), any()) } returns ApiResponse(
+                success = true,
+                data = listOf(ApiMessage(id = "m1", conversationId = "c1")),
+            )
+        }
+        val settled = repository(remote).search("bel").toList().last()
+
+        assertThat(settled.messages.items.single().conversation).isEqualTo(found)
+    }
+
+    @Test
+    fun `when every message leg fails and nothing is local the messages pane reports the failure`() = runTest {
+        val remote = Remote().apply {
+            serving(conversations = listOf(conversation("c1")))
+            coEvery { messageApi.search(any(), any(), any(), any()) } throws IOException("down")
+        }
+        val settled = repository(remote).search("bel").toList().last()
+
+        assertThat(settled.messages.failure).isEqualTo(SearchPaneFailure.Unreachable)
+    }
+
+    @Test
+    fun `the fan-out is capped to the configured number of conversations`() = runTest {
+        val remote = Remote().apply { serving(conversations = (1..4).map { conversation("c$it") }) }
+        repository(remote).search("bel", maxMessageConversations = 2, messagesPerConversation = 5).toList()
+
+        coVerify(exactly = 2) { remote.messageApi.search(any(), any(), 5, any()) }
+    }
+
+    @Test
+    fun `messages are searched across every conversation by the unified route, not only those whose name matches`() = runTest {
+        val remote = Remote().apply {
+            serving()
+            servingUnified(
+                GlobalMessageSearchHit(
+                    id = "m9",
+                    conversationId = "c9",
+                    createdAt = "2026-11-02T10:00:00Z",
+                    content = "Bonjour",
+                    originalContent = "Hello",
+                    sender = GlobalMessageSearchSender(displayName = "Ada", avatar = "ada.png"),
+                    conversation = GlobalMessageSearchConversation(id = "c9", title = "Ada", avatar = "2026/11/ada.png"),
+                ),
+            )
+        }
+        val settled = repository(remote).search("bonjour").toList().last()
+
+        val found = settled.messages.items.single()
+        assertThat(found.message.id).isEqualTo("m9")
+        assertThat(found.message.content).isEqualTo("Bonjour")
+        assertThat(found.message.sender?.displayName).isEqualTo("Ada")
+        assertThat(found.conversationTitle).isEqualTo("Ada")
+        assertThat(found.conversationAvatar).isEqualTo("2026/11/ada.png")
+        assertThat(settled.messages.failure).isNull()
+        coVerify(exactly = 0) { remote.messageApi.search(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `a unified hit in a conversation already found carries that conversation`() = runTest {
+        val known = conversation("c1").copy(avatar = "2026/09/c1/photo.png")
+        val remote = Remote().apply {
+            serving(conversations = listOf(known))
+            servingUnified(GlobalMessageSearchHit(id = "m1", conversationId = "c1", content = "Bonjour"))
+        }
+        val settled = repository(remote).search("bonjour").toList().last()
+
+        assertThat(settled.messages.items.single().conversation).isEqualTo(known)
+    }
+
+    @Test
+    fun `a unified hit with a blank served text is not a result`() = runTest {
+        val remote = Remote().apply {
+            serving()
+            servingUnified(GlobalMessageSearchHit(id = "m1", conversationId = "c1", content = " ", originalContent = ""))
+        }
+        val settled = repository(remote).search("bonjour").toList().last()
+
+        assertThat(settled.messages.items).isEmpty()
+    }
+
+    @Test
+    fun `a unified search that fails with nothing local reports the failure without falling back`() = runTest {
+        val remote = Remote().apply {
+            serving(conversations = listOf(conversation("c1")))
+            coEvery { messageApi.searchAll(any(), any(), any()) } throws IOException("down")
+        }
+        val settled = repository(remote).search("bonjour").toList().last()
+
+        assertThat(settled.messages.failure).isEqualTo(SearchPaneFailure.Unreachable)
+        coVerify(exactly = 0) { remote.messageApi.search(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `a locked conversation lets none of its messages appear, from the device or the server, like the list`() = runTest {
+        val locks = InMemoryConversationLockStore().apply { setLock("c-locked", "1234") }
+        val remote = Remote().apply {
+            serving()
+            servingUnified(
+                GlobalMessageSearchHit(id = "m-locked", conversationId = "c-locked", content = "Bonjour"),
+                GlobalMessageSearchHit(id = "m-open", conversationId = "c-open", content = "Bonjour"),
+            )
+        }
+        val local = FakeLocal(messages = listOf(hit("l-locked", conversationId = "c-locked"), hit("l-open", conversationId = "c-open")))
+
+        val emissions = repository(remote, local, locks = locks).search("bonjour").toList()
+
+        assertThat(emissions.first().messages.items.map { it.message.id }).containsExactly("l-open")
+        assertThat(emissions.last().messages.items.map { it.message.id }).containsExactly("m-open", "l-open")
+    }
+
+    @Test
+    fun `a unified hit for a message the device already found keeps the conversation the device knows`() = runTest {
+        val cachedDirect = conversation("c5").copy(title = "Ada Lovelace", avatar = "2026/09/ada.png")
+        val remote = Remote().apply {
+            serving()
+            servingUnified(
+                GlobalMessageSearchHit(
+                    id = "m5",
+                    conversationId = "c5",
+                    content = "Bonjour",
+                    conversation = GlobalMessageSearchConversation(id = "c5", title = "legacy", avatar = null),
+                ),
+            )
+        }
+        val local = FakeLocal(messages = listOf(MessageSearchHit(ApiMessage(id = "m5", conversationId = "c5"), "Ada Lovelace", cachedDirect)))
+
+        val found = repository(remote, local).search("bonjour").toList().last().messages.items.single()
+
+        assertThat(found.conversation).isEqualTo(cachedDirect)
+    }
+
+    @Test
+    fun `a unified hit in a conversation cached on the device carries it even when its name does not match`() = runTest {
+        val cachedGroup = conversation("c7").copy(title = "Famille", avatar = "2026/09/famille.png")
+        val remote = Remote().apply {
+            serving()
+            servingUnified(GlobalMessageSearchHit(id = "m7", conversationId = "c7", content = "Bonjour"))
+        }
+
+        val found = repository(remote, FakeLocal(cached = listOf(cachedGroup))).search("bonjour").toList().last().messages.items.single()
+
+        assertThat(found.conversation).isEqualTo(cachedGroup)
+    }
+
+    @Test
+    fun `a blurred unified hit is veiled and a transcript hit carries its media`() = runTest {
+        val remote = Remote().apply {
+            serving()
+            servingUnified(
+                GlobalMessageSearchHit(id = "blur", conversationId = "c1", createdAt = "2026-01-02T00:00:00Z", content = "secret plan", isBlurred = true),
+                GlobalMessageSearchHit(
+                    id = "voice",
+                    conversationId = "c1",
+                    createdAt = "2026-01-01T00:00:00Z",
+                    match = "transcript",
+                    transcript = GlobalMessageSearchTranscript(attachmentId = "a1", mediaKind = "audio", text = "on se voit demain"),
+                ),
+            )
+        }
+
+        val hits = repository(remote).search("se").toList().last().messages.items
+
+        assertThat(hits.map { it.message.id }).containsExactly("blur", "voice").inOrder()
+        assertThat(hits[0].excerpt).isEqualTo(SearchExcerpt.Veiled(media = null))
+        assertThat(hits[0].message.content).isEmpty()
+        assertThat(hits[1].excerpt).isEqualTo(SearchExcerpt.Shown(text = "on se voit demain", media = SearchMediaKind.AUDIO))
+    }
+
+    @Test
+    fun `a blurred message from the per-conversation search is veiled by default`() = runTest {
+        val remote = Remote().apply {
+            serving(
+                conversations = listOf(conversation("c1")),
+                messages = listOf(ApiMessage(id = "blur", conversationId = "c1", content = "secret plan", isBlurred = true)),
+            )
+        }
+
+        val hits = repository(remote).search("secret").toList().last().messages.items
+
+        assertThat(hits.single().isVeiled).isTrue()
+        assertThat(hits.single().excerpt).isEqualTo(SearchExcerpt.Veiled(media = null))
+    }
+}

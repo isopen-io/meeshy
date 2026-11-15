@@ -73,4 +73,70 @@ class UserRelationshipResolverTest {
         val sut = resolver(currentUserId = null)
         assertThat(sut.resolve("me")).isEqualTo(UserRelationshipState.None)
     }
+
+    // --- Le cablage de production : un seul resolveur pour toutes les surfaces ----
+
+    private fun wired(
+        friendships: FriendshipCache = FriendshipCache(),
+        blocks: BlockCache = BlockCache(),
+        currentUserId: String? = "me",
+    ) = UserRelationshipResolver.wiredTo(friendships, blocks) { currentUserId }
+
+    @Test
+    fun `the production wiring reads the block state from the live BlockCache`() {
+        val blocks = BlockCache()
+        val sut = wired(blocks = blocks)
+
+        assertThat(sut.resolve("other")).isEqualTo(UserRelationshipState.None)
+        blocks.setBlocked("other", blocked = true)
+        assertThat(sut.resolve("other")).isEqualTo(UserRelationshipState.Blocked)
+        blocks.setBlocked("other", blocked = false)
+        assertThat(sut.resolve("other")).isEqualTo(UserRelationshipState.None)
+    }
+
+    @Test
+    fun `two surfaces wired to the same caches never disagree on the six cases`() {
+        val friendships = FriendshipCache().apply {
+            didAcceptRequest("friend")
+            didSendRequest("sent-to", "req-1")
+            didReceiveRequest("received-from", "req-2")
+            didAcceptRequest("blocked-friend")
+        }
+        val blocks = BlockCache().apply { setBlocked("blocked-friend", blocked = true) }
+        val discover = wired(friendships, blocks)
+        val profile = wired(friendships, blocks)
+
+        val expected = mapOf(
+            "me" to UserRelationshipState.Current,
+            "blocked-friend" to UserRelationshipState.Blocked,
+            "friend" to UserRelationshipState.Connected,
+            "sent-to" to UserRelationshipState.PendingSent("req-1"),
+            "received-from" to UserRelationshipState.PendingReceived("req-2"),
+            "stranger" to UserRelationshipState.None,
+        )
+
+        expected.forEach { (userId, state) ->
+            assertThat(discover.resolve(userId)).isEqualTo(state)
+            assertThat(profile.resolve(userId)).isEqualTo(state)
+        }
+    }
+
+    @Test
+    fun `a pending request from a user the current user later blocked resolves to Blocked`() {
+        val friendships = FriendshipCache().apply { didReceiveRequest("other", "req-9") }
+        val blocks = BlockCache().apply { setBlocked("other", blocked = true) }
+
+        assertThat(wired(friendships, blocks).resolve("other")).isEqualTo(UserRelationshipState.Blocked)
+    }
+
+    @Test
+    fun `unblocking restores the friendship the block had hidden`() {
+        val friendships = FriendshipCache().apply { didAcceptRequest("pal") }
+        val blocks = BlockCache().apply { setBlocked("pal", blocked = true) }
+        val sut = wired(friendships, blocks)
+
+        assertThat(sut.resolve("pal")).isEqualTo(UserRelationshipState.Blocked)
+        blocks.setBlocked("pal", blocked = false)
+        assertThat(sut.resolve("pal")).isEqualTo(UserRelationshipState.Connected)
+    }
 }

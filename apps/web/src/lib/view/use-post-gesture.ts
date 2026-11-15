@@ -1,0 +1,254 @@
+import { createElement, useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useStore } from 'zustand/react';
+
+import type { PostMenuHost } from '@/components/feed-post-menu';
+import { PostRepostConfirm } from '@/components/post-repost-confirm';
+import { commentSettingAction, deletePostAction, editPostAction, pinPostAction, postGestureAction, repostAction, reportPostAction } from '@/lib/api/query';
+import type { EditPostOutcome } from '@/lib/api/publication-actions';
+import { sessionStore } from '@/lib/api/session';
+import { draftStore } from '@/lib/send/draft-store';
+import type { PostToggleKind } from '@/lib/feed/interactions';
+import { findCardPost } from '@/lib/api/card-caches';
+import { gestureIsOn } from '@/lib/api/feed-gestures';
+import { appQueryClient } from '@/lib/api/query-client';
+import type { InteractionAction } from '@/lib/api/social-events-v2-types';
+import { interactionOf, negativeOf } from '@/lib/telemetry/card-context';
+import { readingTelemetry } from './reading-telemetry';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { href, navigate } from '@/routes/route-table';
+
+import { withCommentsAnchor } from './comments-anchor';
+import { copyPlainText } from './copy-text';
+import { openPublicationShare } from './publication-share';
+import { moderatesPlatformContent } from './content-removal';
+import { useAdministrationRank, useServedGlobalRole } from './use-admin-access';
+import { useLiveAnnouncer } from './use-live-announcer';
+
+/**
+ * `usePostGesture` (#6278) — le SEUL hôte des gestes d'une publication, que
+ * le fil et le détail montent tous deux : l'intention part vers
+ * `postGestureAction` (aimer, enregistrer) ou la feuille de partage, et
+ * l'issue s'ANNONCE, exactement comme une réaction du fil de messages
+ * (`use-message-menu.ts`). Sans annonce, un échec défait l'optimiste en
+ * silence pour l'œil qui regarde ailleurs, et un geste hors ligne ressemble à
+ * un geste confirmé. L'écran pose `announcement` dans une région
+ * `role="status"`.
+ *
+ * PARTAGER (#8884) — ouvre la FEUILLE D'ENVOI commune (une ou plusieurs
+ * personnes, un groupe, ou publier en post, story ou réel, avec un message
+ * joint) via `openPublicationShare` ; le partage du système (D-48,
+ * `partagerLien`) vit derrière son « Plus d'options… ». Ouvrir la feuille est
+ * synchrone et sans réseau : rien n'est à annoncer ici, elle parle seule.
+ *
+ * COMMENTER (#7113) — le TROISIÈME geste de la rangée d'actions, et il vit
+ * ici pour la même raison que les deux autres. Il était recopié chez DEUX
+ * hôtes (`feed.tsx`, `user-profile.tsx`), chacun réécrivant la même adresse,
+ * pendant que les deux autres écrans montant la carte n'en avaient aucune :
+ * leur compteur restait un `<span>` inerte, ce que la loi 4 rend correct et
+ * ce qui fait qu'aucun témoin ne rougissait. Une intention recopiée chez ses
+ * appelants est une intention qu'un appelant oublie — c'est arrivé deux fois.
+ * Désormais tout écran qui monte la carte le reçoit en le DÉSTRUCTURANT.
+ *
+ * Il NAVIGUE plutôt qu'il n'ouvre une couche : iOS présente
+ * `FeedCommentsSheet`, le web a déjà une adresse pour ce fil, et y mener garde
+ * un lien PARTAGEABLE — jamais un état modal sans URL.
+ *
+ * REPARTAGER (#6484) — le QUATRIÈME geste, même raison que les trois autres :
+ * `ReelRail` (`components/reel-page.tsx`) en avait besoin, et le rail iOS
+ * (`ReelActionRail`) le porte à côté de « J'aime » et « Commenter ». `onRepost`
+ * ANNONCE son issue exactement comme `onGesture` — succès, refus ou geste déjà
+ * posé (`feed.post.repost.already`, append-only, iOS `ReelsViewModel.repost`).
+ *
+ * **`onRepost` DEMANDE, IL N'ENVOIE PAS** (revue-correction #6278 — le repost
+ * est APPEND-ONLY, sans « annuler » nulle part dans l'interface : iOS ne
+ * l'envoie jamais depuis le seul tap du bouton, il ouvre une alerte
+ * Repartager / Citer / Annuler, `FeedPostCard.swift:1049-1053`). Ce hook pose
+ * `pendingRepostId` et attend `confirmRepost()` — le SEUL chemin vers
+ * `repostAction` — ou `cancelRepost()`, qui referme sans effet. Site UNIQUE :
+ * `repostConfirm` est l'ÉLÉMENT déjà construit (`createElement`, ce fichier
+ * reste `.ts`) — les six hôtes qui déstructurent `onRepost` (Flux, détail,
+ * signets, hashtag, profil, Réels) n'ont plus qu'à le PEINDRE (`{repostConfirm}`),
+ * jamais réassembler `<PostRepostConfirm pendingRepostId=… onConfirm=… …>`
+ * chacun de son côté. Deux raisons, pas une seule esthétique : la divergence
+ * qui a coûté trois cycles au Prisme (§ CLAUDE.md) est le même risque ici
+ * avec six appelants, ET Rollup regroupe déjà ce hook et `PostRepostConfirm`
+ * dans le MÊME chunk partagé (même six importeurs) — leur assemblage y coûte
+ * une fois ; le répéter dans chaque route (trois props nommées + la
+ * référence au composant) le payait SIX fois, jusqu'à faire déborder le
+ * chunk `reels`, dont le plafond est VERROUILLÉ par le porteur (#6484,
+ * `budgets.json`).
+ */
+/** Le geste à bascule tel que la télémétrie le nomme (#10502). */
+const toggleActionOf = (kind: PostToggleKind, on: boolean): InteractionAction =>
+  kind === 'like' ? (on ? 'react' : 'unreact') : on ? 'save' : 'unsave';
+
+/** Une UNION LITTÉRALE, jamais le catalogue entier — voir `PostGestureMessageKey`. */
+type MenuNotice =
+  | 'feed.post.copied'
+  | 'feed.post.copy_failed'
+  | 'feed.post.pinned'
+  | 'feed.post.pin_failed'
+  | 'feed.post.edited'
+  | 'feed.post.edit_failed'
+  | 'feed.post.edit_busy'
+  | 'feed.post.deleted'
+  | 'feed.post.delete_failed'
+  | 'feed.post.comments_off.done'
+  | 'feed.post.comments_on.done'
+  | 'feed.post.comments_toggle.failed'
+  | 'moderation.remove.done'
+  | 'moderation.remove.failed'
+  | 'report.done'
+  | 'report.throttled'
+  | 'report.failed';
+
+export function usePostGesture(options?: {
+  /**
+   * APRÈS UNE SUPPRESSION CONFIRMÉE (revue-correction #7534) — l'écran qui
+   * N'EXISTE que par cette publication (la fiche `/post/$post`) la quitte,
+   * miroir `PostDetailView.swift` (`if await viewModel.deletePost(postId) {
+   * router.pop() }`). Les listes n'en ont pas besoin : la carte les quitte
+   * déjà par le registre des caisses.
+   */
+  readonly onDeleted?: (postId: string) => void;
+  /**
+   * LE RETRAIT PART (#11156) — l'écran qui tient sa PROPRE pile (les Réels)
+   * en ôte la publication sur-le-champ et rend la fonction qui la remet,
+   * appelée seulement si la passerelle refuse.
+   */
+  readonly onDeleting?: (postId: string) => () => void;
+}): {
+  readonly announcement: string;
+  readonly onGesture: (postId: string, kind: PostToggleKind) => void;
+  readonly onShare: (postId: string) => void;
+  readonly onComment: (postId: string) => void;
+  readonly onRepost: (postId: string) => void;
+  /** L'identifiant en attente de confirmation, `null` si aucune demande n'est ouverte. */
+  readonly pendingRepostId: string | null;
+  /** Le SEUL chemin vers `repostAction` — jamais `onRepost` seul. */
+  readonly confirmRepost: () => void;
+  /** Referme la demande sans effet : ni réseau, ni cache, ni annonce. */
+  readonly cancelRepost: () => void;
+  /** La modale déjà assemblée — l'hôte la peint (`{repostConfirm}`), jamais ne la reconstruit. */
+  readonly repostConfirm: ReactElement;
+  readonly menu: PostMenuHost;
+} {
+  const { text: announcement, announce } = useLiveAnnouncer();
+  /* Une RÉFÉRENCE, pas une dépendance du `menu` mémoïsé : un hôte qui passe
+     une flèche en ligne ne doit pas refabriquer le menu à chaque rendu. */
+  const onDeletedRef = useRef(options?.onDeleted);
+  const onDeletingRef = useRef(options?.onDeleting);
+  useEffect(() => {
+    onDeletedRef.current = options?.onDeleted;
+    onDeletingRef.current = options?.onDeleting;
+  });
+  const viewerId = useStore(sessionStore, (s) => (s.session.status === 'authenticated' ? s.session.user.id : null));
+  const viewerIsAdministrator = useAdministrationRank();
+  const viewerModerates = moderatesPlatformContent(useServedGlobalRole());
+
+  const onGesture = useCallback(
+    (postId: string, kind: PostToggleKind) => {
+      const turningOn = !gestureIsOn(findCardPost(appQueryClient, postId), kind);
+      void postGestureAction(postId, kind).then((result) => {
+        if (!result.ok) announce(translate(currentInterfaceLanguage(), result.message));
+        else if (result.notice !== undefined) announce(translate(currentInterfaceLanguage(), result.notice));
+        if (result.ok && result.notice === undefined) readingTelemetry.recordV2(interactionOf(postId, toggleActionOf(kind, turningOn)));
+      });
+    },
+    [announce],
+  );
+
+  /* Le geste vit dans `publication-share.ts` (#8884) : il OUVRE la feuille
+     d'envoi commune, dont « Plus d'options… » garde le partage du système. */
+  const onShare = useCallback(
+    (postId: string) =>
+      openPublicationShare({ postId, onShared: (destination) => readingTelemetry.recordV2(interactionOf(postId, 'share', { destination })) }),
+    [],
+  );
+
+  const onComment = useCallback((postId: string) => {
+    readingTelemetry.recordV2(interactionOf(postId, 'comment_open'));
+    navigate(withCommentsAnchor(href('post', { post: postId })));
+  }, []);
+
+  const [pendingRepostId, setPendingRepostId] = useState<string | null>(null);
+
+  /* OUVRE LA DEMANDE, N'ENVOIE RIEN — voir le doc-comment ci-dessus. */
+  const onRepost = useCallback((postId: string) => {
+    setPendingRepostId(postId);
+  }, []);
+
+  const cancelRepost = useCallback(() => setPendingRepostId(null), []);
+
+  const confirmRepost = useCallback(() => {
+    const postId = pendingRepostId;
+    setPendingRepostId(null);
+    if (postId === null) return;
+    void repostAction(postId).then((result) => {
+      if (!result.ok) announce(translate(currentInterfaceLanguage(), result.message));
+      else if (result.notice !== undefined) announce(translate(currentInterfaceLanguage(), result.notice));
+      if (result.ok) readingTelemetry.recordV2(interactionOf(postId, 'repost'));
+    });
+  }, [pendingRepostId, announce]);
+
+  /* ASSEMBLÉ ICI, PEINT LÀ-BAS — voir le doc-comment du fichier : ni JSX
+     (fichier `.ts`) ni props reconstruites par chacun des six hôtes. */
+  const repostConfirm = createElement(PostRepostConfirm, { pendingRepostId, onConfirm: confirmRepost, onCancel: cancelRepost });
+
+  /**
+   * LE MENU « ⋯ » (#7533) — ses gestes vivent ICI pour la raison même des
+   * trois autres : c'est l'hôte qui tient la région d'annonce, et chaque issue
+   * s'annonce (miroir des toasts de `FeedViewModel.swift` : « Publication
+   * supprimée », « Publication signalée »…). `viewerId` décide seulement de ce
+   * que le menu MONTRE ; la passerelle reste l'autorité.
+   */
+  const menu = useMemo<PostMenuHost>(() => {
+    const say = (key: MenuNotice) => announce(translate(currentInterfaceLanguage(), key));
+    const removeOptimistically = (postId: string, reason: string | undefined, [done, failed]: readonly [MenuNotice, MenuNotice]): void => {
+      const undo = onDeletingRef.current?.(postId);
+      void deletePostAction(postId, reason).then((outcome) => {
+        say(outcome === 'done' ? done : failed);
+        if (outcome === 'done') onDeletedRef.current?.(postId);
+        else undo?.();
+      });
+    };
+    return {
+      viewerId,
+      viewerIsAdministrator,
+      viewerModerates,
+      editDrafts: draftStore,
+      onCopyText: (text: string) => {
+        void copyPlainText(text).then((outcome) => say(outcome === 'copied' ? 'feed.post.copied' : 'feed.post.copy_failed'));
+      },
+      onPin: (postId: string) => {
+        void pinPostAction(postId).then((outcome) => say(outcome === 'done' ? 'feed.post.pinned' : 'feed.post.pin_failed'));
+      },
+      onEdit: (postId: string, content: string): Promise<EditPostOutcome> =>
+        /* `'busy'` (revue-correction #7534, défaut majeur 1) N'ANNONCE PAS
+           `'feed.post.edited'` : un second texte pendant le vol du premier
+           n'est jamais parti, et « Publication modifiée » mentirait sur ce
+           qu'il vient de se passer. */
+        editPostAction(postId, content).then((outcome) => {
+          say(outcome === 'done' ? 'feed.post.edited' : outcome === 'busy' ? 'feed.post.edit_busy' : 'feed.post.edit_failed');
+          return outcome;
+        }),
+      onDelete: (postId: string) => removeOptimistically(postId, undefined, ['feed.post.deleted', 'feed.post.delete_failed']),
+      onRemove: (postId: string, reason: string) => removeOptimistically(postId, reason, ['moderation.remove.done', 'moderation.remove.failed']),
+      onToggleComments: (postId: string, disable: boolean) => {
+        void commentSettingAction(postId, disable).then((outcome) =>
+          say(outcome !== 'done' ? 'feed.post.comments_toggle.failed' : disable ? 'feed.post.comments_off.done' : 'feed.post.comments_on.done'),
+        );
+      },
+      onReportOpen: (postId: string) => readingTelemetry.recordV2(negativeOf(postId, 'report_open')),
+      onReport: (postId, reason) => {
+        void reportPostAction(postId, reason).then((outcome) => {
+          say(outcome === 'done' ? 'report.done' : outcome === 'throttled' ? 'report.throttled' : 'report.failed');
+          if (outcome === 'done') readingTelemetry.recordV2(negativeOf(postId, 'report_submit', { reasonCode: reason }));
+        });
+      },
+    };
+  }, [viewerId, viewerIsAdministrator, viewerModerates, announce]);
+
+  return { announcement, onGesture, onShare, onComment, onRepost, pendingRepostId, confirmRepost, cancelRepost, repostConfirm, menu };
+}

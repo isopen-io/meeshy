@@ -1,0 +1,682 @@
+import { useCallback, useRef, useState } from 'react';
+
+import { reportAttachmentStatus, type PlaybackStretch } from '@/lib/api/attachments';
+import type { ConversationsDeps } from '@/lib/api/conversations';
+import { apiDeps } from '@/lib/api/deps';
+
+import { mediaCoordinator, type MediaCoordinator } from './media-coordinator';
+import { shellVideoFloat } from './shell-video-float';
+
+/**
+ * LA LECTURE D'UN MÉDIA, DERRIÈRE UN `<audio>` OU UN `<video>` RÉEL (#5805,
+ * renommé #6221 étape 0) — miroir `AudioBubbleRouter.swift`/
+ * `CoordinatedAudioPlayer.swift` : un widget REÇOIT `bind` comme `ref` de son
+ * élément, et le hook écoute les événements NATIFS plutôt que de gérer un
+ * minuteur à lui — c'est le navigateur qui sait quand la lecture avance, se
+ * termine ou échoue.
+ *
+ * `HTMLMediaElement` — la classe COMMUNE à `<audio>` et `<video>`, jamais
+ * `HTMLAudioElement` (#6221) : ce hook ne sait rien du TYPE de média qu'il
+ * pilote, seulement qu'il expose `play`/`pause`/`load` et les événements que
+ * les deux éléments partagent. L'image dans l'image est la seule capacité
+ * propre à `<video>`, et elle se déclare `unsupported` partout ailleurs.
+ *
+ * `idle` (rien ne joue, ou vient de se terminer) → `playing` → `paused` (tap
+ * pendant la lecture, OU un AUTRE média vient de réclamer l'exclusivité via
+ * le coordinateur, qui appelle `pause()` sur CET élément) → `error` (le
+ * fichier ne se décode pas) ; `toggle()` depuis `error` REESSAIE (`load()`
+ * puis `play()`) plutôt que de rester bloqué.
+ */
+export type MediaPlaybackStatus = 'idle' | 'playing' | 'paused' | 'error';
+
+/** L'image dans l'image : absente (`<audio>`, navigateur qui ne l'offre pas), offerte, ou en cours. */
+export type PictureInPictureState = 'unsupported' | 'inactive' | 'active';
+
+export type MediaPlayback = {
+  readonly status: MediaPlaybackStatus;
+  /** [0..1] — la fraction déjà écoutée/regardée de la lecture EN COURS. */
+  readonly progress: number;
+  /** La position, en secondes ENTIÈRES — suivie seulement avec `tracksTime`, `0` sinon. */
+  readonly position: number;
+  /** La durée de l'élément, en secondes — suivie seulement avec `tracksTime`, `0` tant qu'elle est inconnue. */
+  readonly duration: number;
+  readonly muted: boolean;
+  readonly rate: number;
+  readonly pictureInPicture: PictureInPictureState;
+  /** La fraction consommée la plus haute RAPPORTÉE cette session (max
+   * monotone — jamais décroissante, même règle que `MediaConsumptionStore`
+   * iOS) ; `0` sans `report`. Combinée par l'hôte à la consommation SERVIE
+   * (`attachment.currentUserConsumption`) pour que la barre au repos
+   * n'attende pas un aller-retour serveur (optimistic update). */
+  readonly reportedFraction: number;
+  /** `true` dès qu'un rapport « complet » est parti — collant, comme `reportedFraction`. */
+  readonly reportedComplete: boolean;
+  readonly toggle: () => void;
+  /** Déplace RÉELLEMENT la lecture, bornée à `[0, durée]`. */
+  readonly seek: (seconds: number) => void;
+  readonly setMuted: (muted: boolean) => void;
+  readonly setRate: (rate: number) => void;
+  readonly togglePictureInPicture: () => void;
+  /** Le `ref` de l'élément (`<audio>` ou `<video>`) que ce hook pilote. */
+  readonly bind: (element: HTMLMediaElement | null) => void;
+};
+
+/**
+ * `timeupdate` peut tirer plusieurs fois par seconde — mettre à jour l'état
+ * React à cette cadence re-rendrait la rangée hôte pour rien (dimension 4,
+ * « Zero Unnecessary Re-render »). L'onde d'un vocal ne porte que 22 barres
+ * (`waveformOf`, `view/message.ts`) : un pas de 1/50 (2 %) reste bien plus
+ * fin qu'une barre (1/22 ≈ 4,5 %) sans jamais re-rendre à chaque frame.
+ */
+const PROGRESS_UPDATE_STEP = 1 / 50;
+
+/**
+ * LE RAPPORT DE CONSOMMATION (#7225, W6) — OPT-IN, même patron que
+ * `tracksTime` : seul un widget qui DOIT reprendre/rapporter (vocal, vidéo)
+ * le fournit. `kind` est le verbe EXACT du body
+ * (`AttachmentStatusBodySchema.action`,
+ * `services/gateway/src/validation/messages-schemas.ts:212-251` —
+ * 'listened' pour un vocal, 'watched' pour une vidéo).
+ */
+export type MediaPlaybackReport = {
+  readonly kind: 'listened' | 'watched';
+  /** La durée CONNUE côté serveur (ms) — repli quand l'élément n'a pas
+   * encore chargé ses métadonnées (`preload="none"`) ; l'élément gagne dès
+   * qu'il la connaît. */
+  readonly durationMs?: number;
+  /** La consommation SERVIE — pour la reprise. Absent/`positionMs: null` :
+   * rien à reprendre, `complete: true` : on repart de zéro (rien à rejouer). */
+  readonly resume?: {
+    readonly positionMs: number | null;
+    readonly complete: boolean;
+    /** Une lecture VIVANTE passée d'un lecteur à l'autre (#9279 — plein écran ⇄ mini-lecteur) : reprise à la seconde près, même sous la première seconde. */
+    readonly handedOff?: boolean;
+  };
+  /** La langue de la PISTE consommée — une piste traduite est une écoute
+   * d'une AUTRE version du contenu, et le serveur la stocke comme telle
+   * (`AttachmentStatusBodySchema.language`). Omise si vide : le wire exige
+   * deux caractères, et un `language: ''` ferait rejeter le rapport ENTIER. */
+  readonly language?: string;
+  /** INJECTABLE pour les témoins — `apiDeps` (singleton réel) par défaut,
+   * même patron que `coordinator ?? mediaCoordinator`. */
+  readonly deps?: ConversationsDeps;
+};
+
+/** Jamais plus d'un rapport toutes les 5 s (critère de fin #7225) — sauf les
+ * DEUX signaux TERMINAUX (fin, démontage), qui doivent toujours atteindre le
+ * serveur : un vocal de 3 s ne finirait sinon jamais `complete`. */
+const REPORT_THROTTLE_MS = 5_000;
+
+/**
+ * LE PLAFOND DU WIRE, TENU CÔTÉ CLIENT (revue #7225).
+ *
+ * `AttachmentStatusBodySchema.stretches` est `.max(50)` : un corps de 51
+ * segments est rejeté ENTIER en `400`, `complete` compris. Et le parcours au
+ * doigt en produit des dizaines par seconde — `onPointerMove`
+ * (`attachment-blocks.tsx`) appelle `seek` à chaque image du geste, et la
+ * lecture ayant avancé entre deux images, chaque saut clôt un segment réel.
+ * Un geste d'une seconde suffisait donc à faire perdre le rapport FINAL,
+ * celui qui porte `complete`.
+ *
+ * Le plafond vaut celui du serveur (`MAX_TRACE_STRETCHES`,
+ * `services/gateway/src/utils/playback-trace.ts`) et se réduit de la MÊME
+ * façon : on sacrifie les écoutes les plus COURTES, l'ordre chronologique des
+ * rescapées est préservé. Une trace plafonnée sous-estime ce qui a été
+ * écouté ; elle n'invente jamais une écoute.
+ */
+const MAX_REPORT_STRETCHES = 50;
+
+function capStretches(stretches: readonly PlaybackStretch[]): readonly PlaybackStretch[] {
+  if (stretches.length <= MAX_REPORT_STRETCHES) return stretches;
+  const kept = new Set(
+    stretches
+      .map((stretch, index) => ({ index, duration: stretch.endMs - stretch.startMs }))
+      .sort((a, b) => b.duration - a.duration || a.index - b.index)
+      .slice(0, MAX_REPORT_STRETCHES)
+      .map((entry) => entry.index),
+  );
+  return stretches.filter((_, index) => kept.has(index));
+}
+
+/**
+ * Sous une seconde, reprendre et repartir de zéro sont indiscernables — et
+ * « reprendre » coûte alors une surprise pour rien. MÊME règle de PRODUIT que
+ * `resumePositionSeconds` (`apps/web/hooks/use-media-consumption-reporter.ts`,
+ * exportée là-bas pour être éprouvée seule) et que la reprise iOS.
+ */
+const MIN_RESUME_MS = 1_000;
+
+function resumeSeconds(resume: MediaPlaybackReport['resume']): number | null {
+  if (resume === undefined || resume.complete) return null;
+  const positionMs = resume.positionMs;
+  if (positionMs === null || !Number.isFinite(positionMs) || positionMs <= 0) return null;
+  if (positionMs < MIN_RESUME_MS && resume.handedOff !== true) return null;
+  return positionMs / 1000;
+}
+
+/** Le wire exige deux caractères (`wireLanguageCode`) : une piste sans langue
+ * déclarée n'en envoie aucune plutôt que de faire rejeter tout le rapport. */
+const reportableLanguage = (language: string | undefined): string | undefined =>
+  language !== undefined && language.trim().length >= 2 ? language : undefined;
+
+/**
+ * LA TRACE DES ÉCOUTES CONTINUES (miroir `PlaybackStretchTracker.swift`,
+ * `packages/MeeshySDK/Sources/MeeshySDK/Models/PlaybackStretchTracker.swift` —
+ * mêmes cas, même sémantique). Pas d'échantillonnage périodique : le lecteur
+ * connaît les frontières EXACTES (lecture, pause, saut, fin, démontage), et
+ * chaque intervalle entre deux frontières est un segment exact.
+ */
+class PlaybackStretchTracker {
+  private openedAtMs: number | null = null;
+  private lastObservedMs = 0;
+  private readonly stretches: PlaybackStretch[] = [];
+
+  get hasOpenStretch(): boolean {
+    return this.openedAtMs !== null;
+  }
+
+  begin(positionMs: number): void {
+    if (this.openedAtMs !== null) this.close(positionMs, 'superseded');
+    this.openedAtMs = positionMs;
+    this.lastObservedMs = positionMs;
+  }
+
+  pause(positionMs?: number): void {
+    this.close(positionMs ?? this.lastObservedMs, 'pause');
+  }
+
+  completed(positionMs?: number): void {
+    this.close(positionMs ?? this.lastObservedMs, 'completed');
+  }
+
+  dismissed(positionMs?: number): void {
+    this.close(positionMs ?? this.lastObservedMs, 'dismissed');
+  }
+
+  /** Déplacer le curseur d'un média EN PAUSE n'ouvre rien : rien n'est
+   * écouté tant que la lecture n'a pas repris. */
+  seek(fromPositionMs: number, toPositionMs: number): void {
+    const wasPlaying = this.openedAtMs !== null;
+    this.close(fromPositionMs, 'seek');
+    if (wasPlaying) this.openedAtMs = toPositionMs;
+    this.lastObservedMs = toPositionMs;
+  }
+
+  /** Rend les écoutes terminées et les retire, ordre CHRONOLOGIQUE préservé. */
+  drain(): PlaybackStretch[] {
+    return this.stretches.splice(0, this.stretches.length);
+  }
+
+  private close(positionMs: number, endedBy: PlaybackStretch['endedBy']): void {
+    const openedAt = this.openedAtMs;
+    this.openedAtMs = null;
+    this.lastObservedMs = positionMs;
+    if (openedAt === null) return;
+    // Durée nulle ou négative : le lecteur se contredit — mieux vaut perdre
+    // une observation que fabriquer un segment absurde.
+    if (positionMs <= openedAt) return;
+    this.stretches.push({ startMs: openedAt, endMs: positionMs, endedBy });
+  }
+}
+
+type PictureInPictureDocument = Document & {
+  readonly pictureInPictureEnabled?: boolean;
+  readonly pictureInPictureElement?: Element | null;
+  readonly exitPictureInPicture?: () => Promise<void>;
+};
+
+type PictureInPictureVideo = HTMLVideoElement & {
+  readonly requestPictureInPicture?: () => Promise<unknown>;
+  readonly disablePictureInPicture?: boolean;
+};
+
+function pictureInPictureSupport(element: HTMLMediaElement): PictureInPictureState {
+  if (!(element instanceof HTMLVideoElement)) return 'unsupported';
+  const video = element as PictureInPictureVideo;
+  const doc = document as PictureInPictureDocument;
+  if (video.disablePictureInPicture === true) return 'unsupported';
+  if (!browserPictureInPicture(video)) return shellVideoFloat() === null ? 'unsupported' : 'inactive';
+  return doc.pictureInPictureElement === element ? 'active' : 'inactive';
+}
+
+const browserPictureInPicture = (video: PictureInPictureVideo): boolean =>
+  (document as PictureInPictureDocument).pictureInPictureEnabled === true && typeof video.requestPictureInPicture === 'function';
+
+const knownDuration = (element: HTMLMediaElement): number =>
+  Number.isFinite(element.duration) && element.duration > 0 ? element.duration : 0;
+
+/**
+ * POURQUOI `play()` A REJETÉ — `interrupted` : un `pause()` ou un `load()` a
+ * devancé la lecture (balayage rapide), les événements natifs disent déjà
+ * l'état ; `refused` : la politique de lecture automatique (son sans geste,
+ * économie d'énergie iOS), le média reste lisible au prochain tap ; `broken` :
+ * le média ne se lit pas.
+ */
+function playRefusalOf(reason: unknown): 'interrupted' | 'refused' | 'broken' {
+  const name = typeof reason === 'object' && reason !== null && 'name' in reason ? String(reason.name) : '';
+  if (name === 'AbortError') return 'interrupted';
+  return name === 'NotAllowedError' ? 'refused' : 'broken';
+}
+
+type Listeners = Readonly<Record<string, () => void>>;
+
+/**
+ * UN LECTEUR, UNE CLÉ (#9575). La clé d'exclusivité désigne le LECTEUR, jamais
+ * la pièce : la tuile du fil, la visionneuse et un réel lisent la MÊME pièce
+ * sur des éléments différents. Sous la clé de la pièce, le second `claim`
+ * était un no-op (les deux jouaient ensemble) et la pause du premier relâchait
+ * l'exclusivité du second (un troisième média ne l'arrêtait plus).
+ */
+const playerKeys = { next: 0 };
+
+const nextPlayerKey = (attachmentId: string): string => {
+  playerKeys.next += 1;
+  return `${attachmentId}#${playerKeys.next}`;
+};
+
+const floatingElement = (): Element | null => (document as PictureInPictureDocument).pictureInPictureElement ?? null;
+
+export function useMediaPlayback(params: {
+  readonly attachmentId: string;
+  readonly coordinator?: MediaCoordinator;
+  /**
+   * Suivre la position à la seconde et la durée (#6359). OPT-IN : seule la
+   * barre de lecture de la visionneuse les affiche ; une tuile du fil qui les
+   * suivrait se re-rendrait chaque seconde pour un chiffre qu'elle ne montre pas.
+   */
+  readonly tracksTime?: boolean;
+  readonly report?: MediaPlaybackReport;
+  /**
+   * LA CLÉ D'EXCLUSIVITÉ auprès du coordinateur (#9256) — propre à CE lecteur
+   * par défaut (#9575, `nextPlayerKey`) : deux surfaces de la même pièce sont
+   * deux lecteurs, et le coordinateur arbitre entre elles.
+   */
+  readonly claimKey?: string;
+  /**
+   * LE SON REFUSÉ NE FIGE PAS LA LECTURE — une lecture que la politique du
+   * navigateur refuse PARCE QU'ELLE EST SONORE (iOS : un réel atteint d'un
+   * balayage, sans tap) repart MUETTE, et l'hôte apprend que son préférence
+   * « son ouvert » n'a pas tenu. Sans ce rappel, un refus laisse le média en
+   * pause, prêt pour le tap du lecteur.
+   */
+  readonly onSoundBlocked?: () => void;
+}): MediaPlayback {
+  const { attachmentId, tracksTime = false } = params;
+  const [playerKey] = useState(() => nextPlayerKey(attachmentId));
+  const claimId = params.claimKey ?? playerKey;
+  const coordinator = params.coordinator ?? mediaCoordinator;
+
+  const [status, setStatus] = useState<MediaPlaybackStatus>('idle');
+  const [progress, setProgress] = useState(0);
+  const [position, setPosition] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [muted, setMutedState] = useState(false);
+  const [rate, setRateState] = useState(1);
+  const [pictureInPicture, setPictureInPicture] = useState<PictureInPictureState>('unsupported');
+  const [reportedFraction, setReportedFraction] = useState(0);
+  const [reportedComplete, setReportedComplete] = useState(false);
+  const elementRef = useRef<HTMLMediaElement | null>(null);
+  const lastEmittedProgressRef = useRef(0);
+  const lastEmittedPositionRef = useRef(0);
+  const listenersRef = useRef<Listeners | null>(null);
+  // Toujours la dernière valeur de `params.report`, sans entrer dans les
+  // dépendances des `useCallback` ci-dessous — le même besoin que
+  // `use-floating-drag.ts` (`onLongPressRef`) : un objet reconstruit à
+  // chaque rendu par l'appelant ne doit pas réarmer les écouteurs natifs.
+  const reportRef = useRef(params.report);
+  reportRef.current = params.report;
+  const soundBlockedRef = useRef(params.onSoundBlocked);
+  soundBlockedRef.current = params.onSoundBlocked;
+  const trackerRef = useRef<PlaybackStretchTracker | null>(null);
+  if (trackerRef.current === null) trackerRef.current = new PlaybackStretchTracker();
+  const lastReportAtRef = useRef(0);
+  const appliedResumeRef = useRef(false);
+  // LE CLAMP DE FIN (#9265) — la reprise ci-dessous est posée AVANT que la
+  // durée réelle soit connue ; si cette durée s'avère plus COURTE que la
+  // position de reprise (traduction jouée différente de celle qui a produit
+  // la position enregistrée), le navigateur clampe le seek en attente à la
+  // fin exacte. Un `play()` sur un élément déjà en butée déclenche `ended`
+  // quasi instantanément — on s'en souvient jusqu'à `loadedmetadata` pour
+  // repartir de zéro plutôt que de laisser l'utilisateur rejouer une fin
+  // déjà atteinte.
+  const pendingResumeSecondsRef = useRef<number | null>(null);
+
+  const recordConsumption = useCallback((fraction: number, complete: boolean): void => {
+    const clamped = complete ? 1 : Math.max(0, Math.min(1, fraction));
+    setReportedFraction((previous) => Math.max(previous, clamped));
+    setReportedComplete((previous) => previous || complete);
+  }, []);
+
+  /**
+   * TENTE un envoi — appelée aux QUATRE frontières du critère de fin (pause,
+   * saut, fin, démontage). `force` bypass le throttle (fin/démontage —
+   * signaux TERMINAUX qui ne doivent jamais se perdre) ; sans lui, un rapport
+   * à moins de 5 s du précédent est ABANDONNÉ (les segments restent dans le
+   * tracker, ils partiront au prochain rapport qui aboutit).
+   */
+  const attemptReport = useCallback(
+    (options: { readonly element: HTMLMediaElement; readonly positionMs: number; readonly complete: boolean; readonly force: boolean }): void => {
+      const reportConfig = reportRef.current;
+      if (reportConfig === undefined) return;
+      const tracker = trackerRef.current;
+      if (tracker === null) return;
+      const now = Date.now();
+      if (!options.force && now - lastReportAtRef.current < REPORT_THROTTLE_MS) return;
+      const stretches = capStretches(tracker.drain());
+      if (stretches.length === 0 && !options.complete) return;
+      lastReportAtRef.current = now;
+      const known = knownDuration(options.element);
+      const durationMs = known > 0 ? Math.round(known * 1000) : reportConfig.durationMs;
+      const fraction = durationMs !== undefined && durationMs > 0 ? options.positionMs / durationMs : 0;
+      recordConsumption(fraction, options.complete);
+      const deps = reportConfig.deps ?? apiDeps;
+      const language = reportableLanguage(reportConfig.language);
+      void reportAttachmentStatus({
+        ...deps,
+        attachmentId,
+        report: {
+          action: reportConfig.kind,
+          playPositionMs: options.positionMs,
+          complete: options.complete,
+          ...(durationMs !== undefined ? { durationMs } : {}),
+          ...(stretches.length > 0 ? { stretches } : {}),
+          ...(language !== undefined ? { language } : {}),
+        },
+      }).catch(() => {
+        // Best effort — une trame perdue rejoint la suivante (le tracker
+        // continue d'accumuler ; seul CE segment drainé est perdu, comme un
+        // `timeupdate` manqué). Aucune file de rattrapage dans ce lot.
+      });
+    },
+    [attachmentId, recordConsumption],
+  );
+
+  const detach = useCallback((element: HTMLMediaElement): void => {
+    const listeners = listenersRef.current;
+    if (listeners === null) return;
+    for (const [type, listener] of Object.entries(listeners)) element.removeEventListener(type, listener);
+    listenersRef.current = null;
+  }, []);
+
+  const emitPosition = useCallback(
+    (seconds: number): void => {
+      if (!tracksTime) return;
+      const whole = Math.floor(seconds);
+      if (whole === lastEmittedPositionRef.current) return;
+      lastEmittedPositionRef.current = whole;
+      setPosition(whole);
+    },
+    [tracksTime],
+  );
+
+  const bind = useCallback(
+    (element: HTMLMediaElement | null) => {
+      const previous = elementRef.current;
+      if (previous !== null) detach(previous);
+      elementRef.current = element;
+
+      if (element === null) {
+        // DÉMONTAGE — ou CHANGEMENT DE PISTE (revue #5805) : le widget donne
+        // une `key` à son élément (`attachment-blocks.tsx`, `video-tile.tsx`),
+        // donc changer de langue ou de source REMONTE l'élément et passe ici.
+        //
+        // Aucun son orphelin : on relâche le coordinateur ET on coupe la
+        // lecture de l'élément qu'on quitte. Et on REVIENT à `idle` : sans
+        // ça, l'état restait `playing` sur un élément que le navigateur
+        // venait d'arrêter (le changement de `src` relance l'algorithme de
+        // chargement, qui met `paused` à true SANS émettre d'événement
+        // `pause`). Le bouton affichait alors « Mettre en pause » pour de
+        // bon, et `toggle()` appelait `pause()` sur un élément DÉJÀ en
+        // pause — sans effet, sans événement : un contrôle INERTE jusqu'au
+        // prochain démontage de la rangée (mesuré au navigateur).
+        coordinator.release(claimId);
+        if (previous !== null) previous.pause();
+        // UNE VIDÉO QUI FLOTTE NE SURVIT PAS À SA SURFACE (#9575) : la fenêtre
+        // resterait ouverte sur un élément que plus rien ne commande.
+        if (previous !== null && floatingElement() === previous) {
+          void (document as PictureInPictureDocument).exitPictureInPicture?.().catch(() => {});
+        }
+        // LE DÉMONTAGE EST UN SIGNAL TERMINAL (#7225) — au même titre que
+        // `ended` : l'écran quitté ne rejouera plus cet élément, donc
+        // c'est ICI ou jamais que le dernier segment ouvert (le cas
+        // échéant) part au serveur. `force: true` bypass le throttle des
+        // 5 s ; `attemptReport` n'envoie de toute façon RIEN si le tracker
+        // n'a aucun segment à dire (jamais joué).
+        if (reportRef.current !== undefined && previous !== null) {
+          const tracker = trackerRef.current;
+          const positionMs = Math.round(previous.currentTime * 1000);
+          tracker?.dismissed(positionMs);
+          attemptReport({ element: previous, positionMs, complete: false, force: true });
+        }
+        lastEmittedProgressRef.current = 0;
+        lastEmittedPositionRef.current = 0;
+        setProgress(0);
+        setPosition(0);
+        setDuration(0);
+        setPictureInPicture('unsupported');
+        setStatus('idle');
+        return;
+      }
+
+      // LA REPRISE (#7225) — une seule fois par montage : `preload="none"`
+      // (VoiceAttachment) n'a encore rien chargé, mais poser `currentTime`
+      // avant tout chargement fait retenir la position au navigateur pour
+      // quand les métadonnées arrivent (mesuré Chrome/Firefox/Safari — c'est
+      // le comportement que HTML5 décrit pour un `seek` avant `HAVE_METADATA`).
+      const resumeAt = resumeSeconds(reportRef.current?.resume);
+      if (!appliedResumeRef.current && resumeAt !== null) {
+        appliedResumeRef.current = true;
+        pendingResumeSecondsRef.current = resumeAt;
+        try {
+          element.currentTime = resumeAt;
+        } catch {
+          // best effort — un navigateur qui refuse le seek pré-chargement
+          // rejouera depuis 0, dégradation gracieuse plutôt que crash.
+        }
+      }
+
+      const onPlay = (): void => {
+        setStatus('playing');
+        trackerRef.current?.begin(Math.round(element.currentTime * 1000));
+      };
+      /**
+       * Un `play()` qui échoue déclenche, DANS CET ORDRE, `play` (optimiste)
+       * → `error` → `pause` (le navigateur revient seul à l'arrêt) — mesuré
+       * sur un `data:` cassé. `onPause` NE DOIT PAS écraser un `error` que
+       * `onError` vient de poser dans le MÊME tour : la forme fonctionnelle
+       * de `setStatus` lit l'état déjà mis à jour, jamais la valeur figée
+       * dans cette fermeture.
+       */
+      const onPause = (): void => {
+        coordinator.release(claimId);
+        setStatus((current) => (current === 'error' ? current : 'paused'));
+        const positionMs = Math.round(element.currentTime * 1000);
+        trackerRef.current?.pause(positionMs);
+        attemptReport({ element, positionMs, complete: false, force: false });
+      };
+      const onEnded = (): void => {
+        coordinator.release(claimId);
+        lastEmittedProgressRef.current = 1;
+        setProgress(1);
+        setStatus('idle');
+        // SIGNAL TERMINAL — le média est allé jusqu'au bout SEUL, `force`
+        // bypass le throttle : un vocal de moins de 5 s ne marquerait sinon
+        // jamais `complete` si une pause vient de partir juste avant.
+        const positionMs = Math.round(knownDuration(element) * 1000);
+        trackerRef.current?.completed(positionMs);
+        attemptReport({ element, positionMs, complete: true, force: true });
+      };
+      const onError = (): void => {
+        coordinator.release(claimId);
+        setStatus('error');
+      };
+      const onTimeUpdate = (): void => {
+        const el = elementRef.current;
+        if (el === null) return;
+        emitPosition(el.currentTime);
+        const total = knownDuration(el);
+        if (total === 0) return;
+        const raw = el.currentTime / total;
+        if (Math.abs(raw - lastEmittedProgressRef.current) < PROGRESS_UPDATE_STEP) return;
+        lastEmittedProgressRef.current = raw;
+        setProgress(raw);
+      };
+      const onMetadata = (): void => {
+        const pendingResumeSeconds = pendingResumeSecondsRef.current;
+        if (pendingResumeSeconds !== null) {
+          pendingResumeSecondsRef.current = null;
+          const total = knownDuration(element);
+          // La reprise visait une position que la durée RÉELLE, connue
+          // seulement maintenant, ne couvre pas : le navigateur l'a clampée
+          // à la fin exacte. Repartir de zéro plutôt que de laisser
+          // l'élément en butée.
+          if (total > 0 && pendingResumeSeconds >= total) {
+            try {
+              element.currentTime = 0;
+            } catch {
+              // best effort, même raison que ci-dessus.
+            }
+          }
+        }
+        if (tracksTime) setDuration(knownDuration(element));
+        setPictureInPicture(pictureInPictureSupport(element));
+      };
+      const onVolumeChange = (): void => setMutedState(element.muted);
+      const onRateChange = (): void => setRateState(element.playbackRate);
+      // FLOTTER, C'EST PRENDRE LA LECTURE (#9575) : la surface qui jouait la
+      // même pièce dans la page se met en pause, comme devant tout autre média.
+      const onEnterPictureInPicture = (): void => {
+        coordinator.claim(claimId, () => element.pause());
+        setPictureInPicture('active');
+      };
+      const onLeavePictureInPicture = (): void => {
+        if (element.paused) coordinator.release(claimId);
+        setPictureInPicture(pictureInPictureSupport(element) === 'unsupported' ? 'unsupported' : 'inactive');
+      };
+
+      const listeners: Listeners = {
+        play: onPlay,
+        pause: onPause,
+        ended: onEnded,
+        error: onError,
+        timeupdate: onTimeUpdate,
+        loadedmetadata: onMetadata,
+        durationchange: onMetadata,
+        volumechange: onVolumeChange,
+        ratechange: onRateChange,
+        enterpictureinpicture: onEnterPictureInPicture,
+        leavepictureinpicture: onLeavePictureInPicture,
+      };
+      listenersRef.current = listeners;
+      for (const [type, listener] of Object.entries(listeners)) element.addEventListener(type, listener);
+      setMutedState(element.muted);
+      setPictureInPicture(pictureInPictureSupport(element));
+    },
+    [attemptReport, claimId, coordinator, detach, emitPosition, tracksTime],
+  );
+
+  const toggle = useCallback((): void => {
+    const element = elementRef.current;
+    if (element === null) return;
+
+    if (status === 'playing') {
+      element.pause();
+      return;
+    }
+
+    // Une reprise depuis `error` REESSAIE (`load()` avant `play()`) plutôt
+    // que de rejouer un décodeur déjà en échec — miroir du bouton
+    // « Réessayer » des autres surfaces du fil.
+    if (status === 'error') element.load();
+
+    const attempt = (): void => {
+      coordinator.claim(claimId, () => element.pause());
+      void element.play().catch((reason: unknown) => {
+        const refusal = playRefusalOf(reason);
+        if (refusal === 'interrupted') return;
+        coordinator.release(claimId);
+        if (refusal === 'broken') {
+          setStatus('error');
+          return;
+        }
+        const onSoundBlocked = soundBlockedRef.current;
+        if (onSoundBlocked !== undefined && !element.muted) {
+          element.muted = true;
+          setMutedState(true);
+          onSoundBlocked();
+          attempt();
+          return;
+        }
+        setStatus((current) => (current === 'error' ? current : 'paused'));
+      });
+    };
+    attempt();
+  }, [claimId, coordinator, status]);
+
+  const seek = useCallback(
+    (seconds: number): void => {
+      const element = elementRef.current;
+      if (element === null || !Number.isFinite(seconds)) return;
+      const total = knownDuration(element);
+      const target = total > 0 ? Math.min(total, Math.max(0, seconds)) : Math.max(0, seconds);
+      const fromMs = Math.round(element.currentTime * 1000);
+      element.currentTime = target;
+      emitPosition(target);
+      if (total > 0) {
+        lastEmittedProgressRef.current = target / total;
+        setProgress(target / total);
+      }
+      const toMs = Math.round(target * 1000);
+      trackerRef.current?.seek(fromMs, toMs);
+      attemptReport({ element, positionMs: toMs, complete: false, force: false });
+    },
+    [attemptReport, emitPosition],
+  );
+
+  const setMuted = useCallback((next: boolean): void => {
+    const element = elementRef.current;
+    if (element === null) return;
+    element.muted = next;
+    setMutedState(next);
+  }, []);
+
+  const setRate = useCallback((next: number): void => {
+    const element = elementRef.current;
+    if (element === null) return;
+    element.playbackRate = next;
+    setRateState(next);
+  }, []);
+
+  const togglePictureInPicture = useCallback((): void => {
+    const element = elementRef.current;
+    if (element === null || pictureInPicture === 'unsupported') return;
+    if (pictureInPicture === 'active') {
+      void (document as PictureInPictureDocument).exitPictureInPicture?.().catch(() => {});
+      return;
+    }
+    const video = element as PictureInPictureVideo;
+    if (!browserPictureInPicture(video)) {
+      shellVideoFloat()?.(video);
+      return;
+    }
+    void video.requestPictureInPicture?.().catch(() => {});
+  }, [pictureInPicture]);
+
+  return {
+    status,
+    progress,
+    position,
+    duration,
+    muted,
+    rate,
+    pictureInPicture,
+    reportedFraction,
+    reportedComplete,
+    toggle,
+    seek,
+    setMuted,
+    setRate,
+    togglePictureInPicture,
+    bind,
+  };
+}

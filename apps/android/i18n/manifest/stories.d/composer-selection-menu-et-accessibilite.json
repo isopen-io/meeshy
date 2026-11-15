@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "story.canvas.action.trim",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.canvas.action.replaceBackground",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.canvas.a11y.drawing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.canvas.a11y.sticker",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.canvas.a11y.location",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.canvas.a11y.textPrefix",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.canvas.a11y.backgroundVideo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.canvas.a11y.backgroundPhoto",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.media.video",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.media.image",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.text.empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.a11y.compositionCount.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.a11y.compositionCount.many",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.canvas.a11y.sendToBack",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.a11y.composition",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.a11y.composition.post",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.composer.a11y.composition.reel",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

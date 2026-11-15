@@ -32,8 +32,11 @@ import {
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
 import { resolveInteractionTarget, resolveConsumptionTarget } from '../../services/posts/postVisibility.js';
+import { DailyGestureLimitReached } from '../../services/engagement/DailyGestureGate.js';
+import { dailyGestureAck } from '../../utils/daily-gesture-refusal.js';
 import { SocialEventsHandler } from './SocialEventsHandler';
 import { emitServerEvent } from '../serverEmit';
+import { creditEngagedReaderView } from '../../services/posts/postViewCredit';
 
 /** Emoji canonique du "like" — aligné REST (`interactions.ts`) + web (`HEART_EMOJI`). */
 const HEART_EMOJI = '❤️';
@@ -47,6 +50,17 @@ const POST_REACTION_RATE_LIMIT = {
   keyPrefix: 'socket:post:reaction',
 } as const;
 
+/**
+ * Suivre un post (rejoindre, quitter, resynchroniser) a son propre seau : un
+ * défilement émet trois de ces gestes par post visible, une reconnexion un par
+ * salle suivie. Partagé avec les réactions, il refusait le like suivant (#18100).
+ */
+const POST_ROOM_RATE_LIMIT = {
+  maxRequests: 600,
+  windowMs: 60_000,
+  keyPrefix: 'socket:post:room',
+} as const;
+
 const reactionRateLimiter = new SocketRateLimiter();
 
 export interface PostReactionHandlerDependencies {
@@ -58,6 +72,12 @@ export interface PostReactionHandlerDependencies {
   socketToUser: Map<string, string>;
   socialEvents: SocialEventsHandler;
 }
+
+/** Les rooms d'un post résolu : la sienne, et celle de la republication simple traversée (#9584). */
+const postRoomsOf = (target: { readonly id: string; readonly redirectedFrom?: { readonly id: string } }): string[] => [
+  ROOMS.post(target.id),
+  ...(target.redirectedFrom ? [ROOMS.post(target.redirectedFrom.id)] : []),
+];
 
 export class PostReactionHandler {
   private io: SocketIOServer;
@@ -194,10 +214,13 @@ export class PostReactionHandler {
       }
       const targetPostId = target.id;
 
+      // #9584 — venue d'une republication simple, la réaction la crédite
+      // AUSSI, pour de vrai : la résolution ci-dessus l'a traversée et la rend.
       const reaction = await this.postReactionService.addReaction({
         postId: targetPostId,
         userId,
         emoji: validated.emoji,
+        ...(target.redirectedFrom ? { through: target.redirectedFrom } : {}),
       });
 
       if (!reaction) {
@@ -239,6 +262,10 @@ export class PostReactionHandler {
         return;
       }
 
+      // #10404 — réagir, c'est avoir vu : même crédit que le chemin REST
+      // (`PostService.likePost`). Il ne lève jamais.
+      await creditEngagedReaderView(this.prisma, { postId: targetPostId, userId });
+
       this.broadcastReactionChange(targetPostId, validated.emoji, 'add', userId, updateEvent)
         .catch(err => this.logger.error('post reaction:add broadcast failed', err, { postId: targetPostId }));
       // Le `.catch` est OBLIGATOIRE, exactement comme sur le broadcast juste
@@ -254,6 +281,11 @@ export class PostReactionHandler {
       this._createPostReactionNotification(targetPostId, validated.emoji, userId)
         .catch(err => this.logger.error('post reaction notification failed', err, { postId: targetPostId }));
     } catch (error: unknown) {
+      // #9584 — la limite quotidienne : un refus stable, avec sa remise à zéro.
+      if (error instanceof DailyGestureLimitReached) {
+        if (callback) callback(dailyGestureAck(error));
+        return;
+      }
       this.logger.error('Failed to add post reaction', error, { userId: this.socketToUser.get(socket.id) });
       const errorResponse: AckResponseOf<'post:reaction-add'> = {
         success: false,
@@ -420,7 +452,7 @@ export class PostReactionHandler {
       const userResult = getConnectedUser(userIdOrToken, this.connectedUsers);
       const userId = userResult?.realUserId || userIdOrToken;
 
-      const syncAllowed = await reactionRateLimiter.checkLimit(userId, POST_REACTION_RATE_LIMIT);
+      const syncAllowed = await reactionRateLimiter.checkLimit(userId, POST_ROOM_RATE_LIMIT);
       if (!syncAllowed) {
         if (callback) callback({ success: false, error: 'Rate limit exceeded' });
         return;
@@ -491,7 +523,7 @@ export class PostReactionHandler {
       const userResult = getConnectedUser(userIdOrToken, this.connectedUsers);
       const userId = userResult?.realUserId || userIdOrToken;
 
-      const joinAllowed = await reactionRateLimiter.checkLimit(userId, POST_REACTION_RATE_LIMIT);
+      const joinAllowed = await reactionRateLimiter.checkLimit(userId, POST_ROOM_RATE_LIMIT);
       if (!joinAllowed) {
         if (callback) callback({ success: false, error: 'Rate limit exceeded' });
         return;
@@ -516,7 +548,10 @@ export class PostReactionHandler {
         return callback?.({ success: false, error: 'Post not found' });
       }
 
-      await socket.join(ROOMS.post(target.id));
+      // #9584 — une republication simple a désormais SON fil : ses
+      // `comment:*` partent vers SA room, ses réactions vers celle de
+      // l'original. Le lecteur rejoint les deux.
+      await Promise.all(postRoomsOf(target).map((room) => socket.join(room)));
       callback?.({ success: true });
     } catch (error: unknown) {
       this.logger.error('Failed to join post room', error, { postId: (data as { postId?: string }).postId });
@@ -551,7 +586,7 @@ export class PostReactionHandler {
         return;
       }
 
-      const leaveAllowed = await reactionRateLimiter.checkLimit(userIdOrToken, POST_REACTION_RATE_LIMIT);
+      const leaveAllowed = await reactionRateLimiter.checkLimit(userIdOrToken, POST_ROOM_RATE_LIMIT);
       if (!leaveAllowed) {
         if (callback) callback({ success: false, error: 'Rate limit exceeded' });
         return;
@@ -570,7 +605,8 @@ export class PostReactionHandler {
       // sur une room absente est un no-op, jamais une erreur visible pour
       // l'appelant.
       const target = await resolveConsumptionTarget(this.prisma, validated.postId, userId);
-      await socket.leave(ROOMS.post(target?.id ?? validated.postId));
+      const rooms = target ? postRoomsOf(target) : [ROOMS.post(validated.postId)];
+      await Promise.all(rooms.map((room) => socket.leave(room)));
       if (callback) callback({ success: true });
     } catch (error: unknown) {
       this.logger.error('Failed to leave post room', error, { postId: (data as { postId?: string }).postId });
@@ -592,7 +628,7 @@ export class PostReactionHandler {
   ): Promise<void> {
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
-      select: { authorId: true, type: true, content: true, createdAt: true, expiresAt: true },
+      select: { authorId: true, type: true, createdAt: true, expiresAt: true },
     });
 
     if (!post?.authorId) return;
@@ -609,7 +645,6 @@ export class PostReactionHandler {
         postAuthorId: post.authorId,
         emoji,
         postType: post.type,
-        postPreview: post.content?.slice(0, 80) ?? undefined,
         postCreatedAt: post.createdAt ?? undefined,
         postExpiresAt: post.expiresAt ?? undefined,
       })

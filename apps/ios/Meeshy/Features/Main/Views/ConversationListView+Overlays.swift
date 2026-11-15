@@ -4,68 +4,65 @@ import MeeshyUI
 
 // MARK: - Extracted from ConversationListView.swift
 
-/// Le catalogue « Déplacer vers… », écrit UNE fois.
-///
-/// Deux `Menu` natifs le consomment : le sous-menu du menu contextuel de la
-/// rangée (ci-dessous) et l'encoche de catégorie de la carte de focus
-/// (`LentilleFocusCard`, réintroduite le 2026-08-22). Un second catalogue
-/// divergerait sur les deux conventions qui ne se voient pas : `""` signifie
-/// « aucune catégorie » (= « Mes conversations ») côté view model, et toucher
-/// la catégorie COURANTE l'en retire au lieu de la ré-appliquer.
-///
-/// Le retour haptique appartient au point d'appel, pas au catalogue : la
-/// carte de focus le déclenche déjà dans la fermeture que la liste lui câble,
-/// et un second appel ici doublerait la vibration.
-///
-/// Hors périmètre : le panneau custom < iOS 26 (`ConversationContextMenuView
-/// .movePanel`) dessine des `actionRow` maison, pas des items de `Menu` — une
-/// autre primitive de rendu pour la même action de view model.
-struct ConversationMoveToSectionMenuItems: View {
-
-    let categories: [ConversationSection]
-    let currentSectionId: String?
-    let onMove: (String) -> Void
-
-    var body: some View {
-        ForEach(categories) { category in
-            let isCurrentCategory = currentSectionId == category.id
-            Button {
-                onMove(isCurrentCategory ? "" : category.id)
-            } label: {
-                if isCurrentCategory {
-                    Label("\(category.name) \u{2713}", systemImage: category.icon)
-                } else {
-                    Label(category.name, systemImage: category.icon)
-                }
-            }
-        }
-        if !categories.isEmpty {
-            Divider()
-        }
-        Button {
-            onMove("")
-        } label: {
-            Label(
-                String(localized: "context.my_conversations", defaultValue: "Mes conversations", bundle: .main),
-                systemImage: "tray.fill"
-            )
-        }
-    }
-}
-
 extension ConversationListView {
 
-    // MARK: - Menu d'appui long — deux chemins par version d'OS
+    // MARK: - Menu d'appui long — deux chemins
     //
-    // iOS 26+ : menu contextuel NATIF `.contextMenu(menuItems:preview:)`
-    // (rendu Liquid Glass système) — builder ci-dessous, attaché par
-    // `ConversationRowItem`. < iOS 26 : overlay custom
-    // (`ConversationContextMenuView`, déclenché par `RowPressBounceModifier`
-    // → `onLongPress`). Les DEUX chemins doivent rester en parité d'actions ;
-    // la suppression arme toujours `deleteTargetConversation` (confirmation
+    // iPhone, toutes versions d'iOS (#17242) : l'aperçu personnalisé
+    // `ConversationLongPressPeek` — grande carte, menu compact qu'on tire vers
+    // le haut — déclenché par `RowPressBounceModifier` → `onLongPress`. iPad
+    // sous iOS 26 : le menu contextuel NATIF `.contextMenu(menuItems:preview:)`
+    // (builder ci-dessous), le seul qui coexiste avec le glisser système.
+    // `ConversationRowMenuRoute` tranche. Les DEUX chemins parcourent le MÊME
+    // catalogue (`rowMenuCatalog(for:)`, #11230) et appellent les MÊMES gestes ;
+    // la suppression arme toujours `sheetTargets.deleteTarget` (confirmation
     // système — invariants `ConversationMenuSystemDesignGuardTests`).
 
-    // MARK: - Native Context Menu (iOS 26 Liquid Glass)
+    // MARK: - Le catalogue de la rangée (#11230)
+
+    /// Ce que le menu de CETTE rangée offre, dans quel ordre et sous quel mot :
+    /// les verdicts de la loi partagée (`rowMenuCapabilities`, #11215) et
+    /// l'état de la rangée, lus UNE fois pour les deux chemins d'OS.
+    func rowMenuCatalog(for conversation: Conversation) -> ConversationMenuCatalog {
+        ConversationMenuCatalog.make(ConversationMenuCatalog.Input(
+            capabilities: rowMenuCapabilities(for: conversation),
+            isPinned: conversation.userState.isPinned,
+            isMuted: conversation.userState.isMuted,
+            hasUnread: conversation.userState.unreadCount > 0,
+            isLocked: ConversationLockManager.shared.isLocked(conversation.id),
+            isArchived: conversation.userState.isArchived,
+            // Global d'un mineur reste aux archives : aucune bascule (#9929).
+            canToggleArchive: !conversation.isArchiveImposed,
+            isPeerBlocked: conversation.type == .direct
+                ? conversation.participantUserId.map { BlockService.shared.isBlocked(userId: $0) }
+                : nil,
+            windowsAvailable: DetachedWindowOpener.shared.isAvailable,
+            // Drapeau OFF ou modes de lecture coupés (#6482) ⇒ pas de
+            // sous-menu : un mode choisi ici serait ignoré à l'ouverture.
+            offersReadingModes: LentilleFeatureFlag.isLentilleListEnabled && LentilleFeatureFlag.isReadingModesEnabled
+        ))
+    }
+
+    /// Le sous-menu « Mode de lecture » (LWS-8/I-072), l'une des DEUX portes d'UNE
+    /// préférence avec l'encoche I-071 ; `onSelected` ferme le menu custom.
+    func readingModeSubmenu(for conversation: Conversation, onSelected: @escaping () -> Void = {}) -> LentilleReadingModeSubmenu {
+        LentilleReadingModeSubmenu(
+            conversation: conversation,
+            isAnonymous: ConversationListReaderAnonymity.isAnonymous(currentUser: AuthManager.shared.currentUser),
+            onSelected: onSelected
+        )
+    }
+
+    /// « Paramètres du groupe » : les réglages de la conversation, derrière la
+    /// même porte que la fiche — une conversation verrouillée passe le PIN.
+    func presentSettings(of conversation: Conversation) {
+        guard ConversationOpenRoute.mayShowInfo(conversation.id) else {
+            return openConversation(conversation)
+        }
+        sheetTargets.settings = conversation
+    }
+
+    // MARK: - Native Context Menu (iPad sous iOS 26, Liquid Glass)
 
     /// Box stable pour `ConversationRowItem.nativeContextMenu` : le menu est
     /// construit UNE fois par évaluation de `conversationRow` (pas à chaque
@@ -77,303 +74,116 @@ extension ConversationListView {
 
     @ViewBuilder
     func conversationContextMenu(for conversation: Conversation) -> some View {
-        // Pin/Unpin
-        Button {
-            HapticFeedback.medium()
-            Task { await conversationViewModel.togglePin(for: conversation.id) }
-        } label: {
-            Label(
-                conversation.userState.isPinned
-                    ? String(localized: "context.unpin", defaultValue: "Désépingler", bundle: .main)
-                    : String(localized: "context.pin", defaultValue: "Épingler", bundle: .main),
-                systemImage: conversation.userState.isPinned ? "pin.slash.fill" : "pin.fill"
-            )
-        }
+        let catalog = rowMenuCatalog(for: conversation)
+        let actions = ConversationRowMenuActions.make(for: conversation, in: self)
 
-        // Mute/Unmute
-        Button {
-            HapticFeedback.light()
-            Task { await conversationViewModel.toggleMute(for: conversation.id) }
-        } label: {
-            Label(
-                conversation.userState.isMuted
-                    ? String(localized: "context.unmute", defaultValue: "Réactiver les notifications", bundle: .main)
-                    : String(localized: "context.mute", defaultValue: "Mettre en silence", bundle: .main),
-                systemImage: conversation.userState.isMuted ? "bell.fill" : "bell.slash.fill"
-            )
-        }
-
-        // Rechercher dans la conversation — MÊME chemin que le bouton
-        // « Rechercher » de l'aperçu du fallback custom (`onSearch`, SSOT) :
-        // arme `pendingOpenSearch` puis ouvre la conversation, qui consomme le
-        // flag et présente la recherche. Sur iOS 26+ l'aperçu natif est statique
-        // (non cliquable) — l'action vit donc dans le menu (décision 2026-07-14).
-        Button {
-            HapticFeedback.light()
-            router.pendingOpenSearch = true
-            onSelect(conversation)
-        } label: {
-            Label(
-                String(localized: "context.search", defaultValue: "Rechercher", bundle: .main),
-                systemImage: "magnifyingglass"
-            )
-        }
-
-        // Appeler — DM uniquement (participant résolu). MÊME chemin que le
-        // bouton « Appeler » de l'aperçu custom (`onCall` → CallManager, audio).
-        if conversation.type == .direct, let calleeId = conversation.participantUserId {
-            Button {
-                HapticFeedback.medium()
-                Task {
-                    await CallManager.shared.requestPermissionsThenStartCall(
-                        conversationId: conversation.id,
-                        userId: calleeId,
-                        displayName: conversation.name,
-                        isVideo: false
-                    )
-                }
-            } label: {
-                Label(
-                    String(localized: "context.call", defaultValue: "Appeler", bundle: .main),
-                    systemImage: "phone.fill"
-                )
-            }
-        }
-
-        Divider()
-
-        // Marquer lu / non lu
-        if conversation.userState.unreadCount > 0 {
-            Button {
-                HapticFeedback.light()
-                Task { await conversationViewModel.markAsRead(conversationId: conversation.id) }
-            } label: {
-                Label(
-                    String(localized: "context.mark_read", defaultValue: "Marquer comme lu", bundle: .main),
-                    systemImage: "envelope.open.fill"
-                )
-            }
-        } else {
-            Button {
-                HapticFeedback.light()
-                Task { await conversationViewModel.markAsUnread(conversationId: conversation.id) }
-            } label: {
-                Label(
-                    String(localized: "context.mark_unread", defaultValue: "Marquer comme non lu", bundle: .main),
-                    systemImage: "envelope.badge.fill"
-                )
-            }
-        }
-
-        // Mode de lecture (contrat LWS-8/I-072) — sous-menu APRÈS « Marquer
-        // lu », l'une des DEUX portes d'UNE préférence (encoche de la focus
-        // card I-071, ce sous-menu — l'aperçu-menu `LentillePeekView` a été
-        // supprimé le 2026-08-21 : l'aperçu montre les derniers messages).
-        // Drapeau OFF ⇒ rien de plus ici : bit-à-bit identique au menu
-        // d'aujourd'hui, comme partout ailleurs dans la Lentille.
-        if LentilleFeatureFlag.isLentilleListEnabled {
-            LentilleReadingModeSubmenu(
-                conversation: conversation,
-                isAnonymous: AuthManager.shared.currentUser?.isAnonymous ?? true
-            )
-        }
-
-        // Détails
-        Button {
-            HapticFeedback.light()
-            conversationInfoConversation = conversation
-        } label: {
-            Label(
-                String(localized: "context.details", defaultValue: "Détails", bundle: .main),
-                systemImage: "info.circle.fill"
-            )
-        }
-
-        // Renommer — groupes/communautés uniquement (parité menu custom)
-        if conversation.type != .direct {
-            Button {
-                HapticFeedback.light()
-                renameText = conversation.name
-                renameTarget = conversation
-            } label: {
-                Label(
-                    String(localized: "context.rename", defaultValue: "Renommer", bundle: .main),
-                    systemImage: "pencil"
-                )
-            }
-        }
-
-        // Favori (emoji)
-        Menu {
-            ForEach(["⭐️", "❤️", "🔥", "💎", "🎯", "✨", "🏆", "💡"], id: \.self) { emoji in
-                Button {
-                    HapticFeedback.light()
-                    Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: emoji) }
-                } label: {
-                    Text(emoji)
-                }
-            }
-            if conversation.userState.reaction != nil {
-                Divider()
-                Button(role: .destructive) {
-                    HapticFeedback.light()
-                    Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: nil) }
-                } label: {
-                    Label(
-                        String(localized: "context.remove_favorite", defaultValue: "Retirer le favori", bundle: .main),
-                        systemImage: "star.slash"
-                    )
-                }
-            }
-        } label: {
-            Label(
-                String(localized: "context.favorite", defaultValue: "Favori", bundle: .main),
-                systemImage: conversation.userState.reaction != nil ? "star.fill" : "star"
-            )
-        }
-
-        // Déplacer vers une catégorie — catalogue PARTAGÉ avec l'encoche de
-        // la carte de focus (voir `ConversationMoveToSectionMenuItems`).
-        Menu {
-            ConversationMoveToSectionMenuItems(
-                categories: conversationViewModel.userCategories,
-                currentSectionId: conversation.userState.sectionId,
-                onMove: { sectionId in
-                    HapticFeedback.light()
-                    conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: sectionId)
-                }
-            )
-        } label: {
-            Label(
-                String(localized: "context.move_to", defaultValue: "Déplacer vers...", bundle: .main),
-                systemImage: "folder.fill"
-            )
-        }
-
-        Divider()
-
-        // Actions secondaires — groupées pour garder ≤8 items top-level
-        // (au-delà, iOS bascule sur le style liste où les icônes disparaissent).
-        Menu {
-            if canCreateShareLink(for: conversation) {
-                Button {
-                    HapticFeedback.medium()
-                    inviteSheetConversation = conversation
-                } label: {
-                    Label(
-                        String(localized: "context.invite_friends", defaultValue: "Inviter mes amis", bundle: .main),
-                        systemImage: "person.badge.plus"
-                    )
-                }
-            }
-
-            // Verrouiller / Déverrouiller
-            let isLockedCtx = ConversationLockManager.shared.isLocked(conversation.id)
-            Button {
-                HapticFeedback.medium()
-                if isLockedCtx {
-                    lockSheetMode = .unlockConversation
-                    lockSheetConversation = conversation
-                } else if ConversationLockManager.shared.masterPinConfigured {
-                    lockSheetMode = .lockConversation
-                    lockSheetConversation = conversation
-                } else {
-                    showNoMasterPinAlert = true
-                }
-            } label: {
-                Label(
-                    isLockedCtx
-                        ? String(localized: "context.unlock", defaultValue: "Déverrouiller", bundle: .main)
-                        : String(localized: "context.lock", defaultValue: "Verrouiller", bundle: .main),
-                    systemImage: isLockedCtx ? "lock.open.fill" : "lock.fill"
-                )
-            }
-
-            // Archiver / Désarchiver — état PAR UTILISATEUR (userState), même
-            // source que le filtre `.archived` ; jamais `conversation.isActive`
-            // (flag de cycle de vie serveur, indépendant de l'archivage).
-            let isArchivedConv = conversation.userState.isArchived
-            Button {
-                HapticFeedback.medium()
-                if isArchivedConv {
-                    Task { await conversationViewModel.unarchiveConversation(conversationId: conversation.id) }
-                } else {
-                    Task { await conversationViewModel.archiveConversation(conversationId: conversation.id) }
-                }
-            } label: {
-                Label(
-                    isArchivedConv
-                        ? String(localized: "context.unarchive", defaultValue: "Désarchiver", bundle: .main)
-                        : String(localized: "context.archive", defaultValue: "Archiver", bundle: .main),
-                    systemImage: isArchivedConv ? "tray.and.arrow.up.fill" : "archivebox.fill"
-                )
-            }
-
-            // Focal (bêta) — I-075, amendement produit 2026-08-16. Publication
-            // bêta publique (plus un outil de dev) : force le mode Focal pour
-            // CETTE ouverture SEULE, sans écrire NI la préférence de mode NI
-            // aucun drapeau (jamais `select()`, jamais `LentilleFeatureFlag
-            // .setForDebug`, jamais `BetaFeaturesPreference.setEnabled`).
-            // Gardé par `BetaFeaturesPreference.isEnabled` (préférence
-            // utilisateur « Activer les bêta » — réglages, SettingsView)
-            // — indépendant de `reading_modes` : allumer ce
-            // dernier globalement re-déciderait la vue de TOUTES LES AUTRES
-            // conversations (mode AUTO), ce que ce chantier interdit.
-            // RETRAIT FOCAL iOS (2026-08-18) : l'item « Focal (bêta) »
-            // (I-075) est retiré avec le mode — Script est le mode nominal.
-
-            // Bloquer / Débloquer (DM uniquement)
-            if conversation.type == .direct, let userId = conversation.participantUserId {
-                let isBlockedCtx = BlockService.shared.isBlocked(userId: userId)
-                Divider()
-                if isBlockedCtx {
-                    Button {
-                        HapticFeedback.heavy()
-                        Task {
-                            await BlockActionCoordinator.shared.unblock(userId: userId)
-                            await MainActor.run { HapticFeedback.success() }
-                        }
-                    } label: {
-                        Label(
-                            String(localized: "context.unblock", defaultValue: "Débloquer", bundle: .main),
-                            systemImage: "hand.raised.slash.fill"
-                        )
-                    }
-                } else {
-                    Button(role: .destructive) {
-                        HapticFeedback.heavy()
-                        blockTargetConversation = conversation
-                        showBlockConfirmation = true
-                    } label: {
-                        Label(
-                            String(localized: "context.block", defaultValue: "Bloquer", bundle: .main),
-                            systemImage: "hand.raised.fill"
-                        )
-                    }
-                }
-            }
-        } label: {
-            Label(
-                String(localized: "context.more_options", defaultValue: "Plus d'options", bundle: .main),
-                systemImage: "ellipsis.circle.fill"
-            )
-        }
-
-        Divider()
-
-        // Supprimer — arme la confirmation système (jamais de delete direct).
-        Button(role: .destructive) {
-            HapticFeedback.heavy()
-            deleteTargetConversation = conversation
-        } label: {
-            Label(
-                String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main),
-                systemImage: "trash"
-            )
+        // LA séquence de groupes que le menu custom parcourt aussi.
+        ForEach(catalog.groups) { group in
+            if group.section.opensWithDivider { Divider() }
+            nativeGroup(group, of: conversation, actions: actions)
         }
     }
 
-    // MARK: - Custom Context Menu Overlay (fallback < iOS 26)
+    /// Une section du catalogue en menu natif : la tête en `ControlGroup` (rangée
+    /// compacte dès iOS 26, seul OS de ce chemin), « Plus d'options » en sous-menu.
+    @ViewBuilder
+    private func nativeGroup(_ group: ConversationMenuGroup, of conversation: Conversation, actions: ConversationRowMenuActions) -> some View {
+        switch group.section {
+        case .header:
+            ControlGroup {
+                nativeMenuItems(group.entries, of: conversation, actions: actions)
+            }
+        case .more:
+            Menu {
+                nativeMenuItems(group.entries, of: conversation, actions: actions)
+            } label: {
+                Label(ConversationMenuCatalog.moreLabel, systemImage: ConversationMenuCatalog.moreSymbol)
+            }
+        case .reach, .organize, .departure:
+            // Le départ arme une confirmation, jamais l'effet.
+            nativeMenuItems(group.entries, of: conversation, actions: actions)
+        }
+    }
+
+    @ViewBuilder
+    private func nativeMenuItems(
+        _ entries: [ConversationMenuEntry],
+        of conversation: Conversation,
+        actions: ConversationRowMenuActions
+    ) -> some View {
+        ForEach(entries, id: \.self) { entry in
+            nativeMenuItem(entry, of: conversation, actions: actions)
+        }
+    }
+
+    /// Une entrée du catalogue en menu natif : les sous-menus portent leur
+    /// liste, les autres entrées agissent par `actions.perform(_:)`.
+    @ViewBuilder
+    private func nativeMenuItem(
+        _ entry: ConversationMenuEntry,
+        of conversation: Conversation,
+        actions: ConversationRowMenuActions
+    ) -> some View {
+        switch entry {
+        case .readingMode:
+            readingModeSubmenu(for: conversation)
+        case .favorite:
+            Menu {
+                nativeFavoriteItems(of: conversation, actions: actions)
+            } label: {
+                Label(entry.label, systemImage: entry.displayedSymbol(hasFavorite: conversation.userState.reaction != nil))
+            }
+        case .move:
+            // Catalogue PARTAGÉ avec l'encoche de la carte de focus
+            // (voir `ConversationMoveToSectionMenuItems`).
+            Menu {
+                ConversationMoveToSectionMenuItems(
+                    categories: conversationViewModel.userCategories,
+                    currentSectionId: conversation.userState.sectionId,
+                    onMove: { sectionId in
+                        HapticFeedback.light()
+                        actions.onMove(sectionId)
+                    }
+                )
+            } label: {
+                Label(entry.label, systemImage: entry.symbol)
+            }
+        default:
+            Button(role: entry.isDestructive ? .destructive : nil) {
+                ConversationRowMenuActions.feel(entry)
+                actions.perform(entry)
+            } label: {
+                Label(entry.label, systemImage: entry.symbol)
+            }
+        }
+    }
+
+    /// Le sous-menu « Favori » : huit emojis, puis le retrait du favori posé.
+    @ViewBuilder
+    private func nativeFavoriteItems(of conversation: Conversation, actions: ConversationRowMenuActions) -> some View {
+        ForEach(["⭐️", "❤️", "🔥", "💎", "🎯", "✨", "🏆", "💡"], id: \.self) { emoji in
+            Button {
+                HapticFeedback.light()
+                actions.onSetFavorite(emoji)
+            } label: {
+                Text(emoji)
+            }
+        }
+        if conversation.userState.reaction != nil {
+            Divider()
+            Button(role: .destructive) {
+                HapticFeedback.light()
+                actions.onRemoveFavorite()
+            } label: {
+                Label(
+                    String(localized: "context.remove_favorite", defaultValue: "Retirer le favori", bundle: .main),
+                    systemImage: "star.slash"
+                )
+            }
+        }
+    }
+
+    // MARK: - Aperçu d'appui long personnalisé (iPhone, toutes versions — #17242)
 
     func dismissContextMenu() {
         // Zoom-out : anime la sortie (aperçu rétrécit, menu redescend) puis
@@ -381,15 +191,16 @@ extension ConversationListView {
         // si l'utilisateur rouvre un menu avant la fin du zoom-out, `onLongPress`
         // annule ce work item, sinon il effacerait le menu fraîchement rouvert.
         chipAutoScrollDriver.stop()
-        contextMenuDismissWork?.cancel()
+        contextMenuDismissSettle.cancel()
         // min() : ne jamais RE-déplier une carte repliée par le drag vers le
         // haut (0.0 → 0.7 ferait flasher l'aperçu pendant le fondu de sortie).
         // Le shrink est ANIMÉ dans la même transaction que le fondu : la carte
         // se résorbe (zoom-out + blur progressif lié au scale) pendant que le
         // menu redescend et se dissout — miroir du zoom d'ouverture.
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
-            previewScale = min(previewScale, 0.7)
-            if !chipModeLatched && dragOffsetY <= 110 {
+        let reduceMotion = ConversationPreviewEntranceMotion.isReducedNow
+        ConversationPreviewEntranceMotion.animateExit(reduceMotion: reduceMotion) {
+            previewScale = reduceMotion ? previewScale : min(previewScale, 0.7)
+            if !chipModeLatched && dragOffsetY <= ConversationPeekPullDown.dismissDistance {
                 // Fermeture normale : la carte revient en place en fondant.
                 // Fermeture depuis le morph drag (chip relâchée) : la carte
                 // fond SUR PLACE sous le doigt — la faire remonter au centre
@@ -399,8 +210,8 @@ extension ConversationListView {
             }
             contextMenuAppeared = false
         }
-        let work = DispatchWorkItem {
-            contextMenuConversation = nil
+        contextMenuDismissSettle.arm(after: 0.26) {
+            sheetTargets.contextMenu = nil
             previewScale = 1.0
             previewEmergeOffset = 0
             dragOffsetY = 0
@@ -408,8 +219,6 @@ extension ConversationListView {
             chipModeLatched = false
             contextMenuSourceFrame = nil
         }
-        contextMenuDismissWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.26, execute: work)
     }
 
     /// Progression du morph drag-n-drop pendant le drag vers le bas sur la
@@ -419,39 +228,25 @@ extension ConversationListView {
     /// Une fois LATCHÉE (`chipModeLatched`), la chip reste chip même si le
     /// doigt remonte (pour viser un header de section au-dessus).
     var dragMorphProgress: CGFloat {
-        chipModeLatched ? 1 : min(1, max(0, dragOffsetY / 140))
+        chipModeLatched ? 1 : ConversationPeekPullDown.progress(translation: dragOffsetY)
     }
 
-    /// Émergence de l'aperçu depuis la ligne pressée. Tick 1 : la frame de
-    /// repos de la carte vient d'être mesurée (layout au repos, overlay
-    /// invisible) — placer la carte SUR la ligne source, sans animation.
-    /// Tick 2 : animer vers la position/taille finales avec un départ LENT,
-    /// une accélération à mi-course et un léger rebond (timingCurve à
-    /// overshoot) ; le menu remonte et le fond se floute dans la même
-    /// transaction (coordonné).
-    func runContextMenuEmergence() {
+    /// Émergence de l'aperçu depuis la ligne pressée — tick 1 : la carte se
+    /// pose, invisible, d'où elle part ; tick 2 : elle rejoint sa place, menu
+    /// et flou du fond dans la même transaction (`ConversationPreviewEntranceMotion`).
+    func runContextMenuEmergence(reduceMotion: Bool = ConversationPreviewEntranceMotion.isReducedNow) {
         DispatchQueue.main.async {
             var placement = Transaction()
             placement.disablesAnimations = true
             withTransaction(placement) {
-                if let source = contextMenuSourceFrame, previewRestFrame.height > 0 {
-                    let scale = max(0.22, min(0.7, source.height / previewRestFrame.height))
-                    previewScale = scale
-                    // scaleEffect est ancré .bottom : le centre visuel de la
-                    // carte réduite est à maxY - scale·H/2 — l'offset aligne
-                    // ce centre sur celui de la ligne pressée.
-                    previewEmergeOffset = source.midY
-                        - (previewRestFrame.maxY - scale * previewRestFrame.height / 2)
-                } else {
-                    previewScale = 0.7
-                    previewEmergeOffset = 0
-                }
+                let start = ConversationPreviewEntranceMotion.placement(
+                    source: contextMenuSourceFrame, rest: previewRestFrame, reduceMotion: reduceMotion
+                )
+                previewScale = start.scale
+                previewEmergeOffset = start.offset
             }
             DispatchQueue.main.async {
-                // Overshoot 1.3 : rebond nettement perceptible à l'arrivée de
-                // la carte (le rebond appartient au long-press/preview, pas
-                // au swipe des lignes — feedback user 2026-07-03).
-                withAnimation(.timingCurve(0.5, 0.0, 0.15, 1.3, duration: 0.55)) {
+                ConversationPreviewEntranceMotion.animateEntrance(reduceMotion: reduceMotion) {
                     contextMenuAppeared = true
                     previewScale = 1.0
                     previewEmergeOffset = 0
@@ -474,279 +269,157 @@ extension ConversationListView {
 
     @ViewBuilder
     var conversationContextMenuOverlay: some View {
-        if let conversation = contextMenuConversation {
-            ZStack {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .ignoresSafeArea()
-                    .overlay(Color.black.opacity(0.12).ignoresSafeArea())
-                    .contentShape(Rectangle())
-                    .onTapGesture { dismissContextMenu() }
-                    // Le blur du fond s'EFFACE pendant le morph drag : la
-                    // liste réapparaît sous la carte devenue chip draggable.
-                    .opacity(contextMenuAppeared ? Double(1 - dragMorphProgress) : 0)
-
-                VStack(spacing: 16) {
-                    // Aperçu d'appui long = la carte des DERNIERS MESSAGES
-                    // (bannière, avatar/logo, titre, icônes d'en-tête, fil
-                    // récent) — drapeau Lentille ON comme OFF (décision user
-                    // 2026-08-21 : le menu des modes n'a rien à faire dans
-                    // l'aperçu ; le choix de mode garde ses deux portes,
-                    // l'encoche de la carte de focus et le sous-menu « Mode
-                    // de lecture », monté plus haut dans ce fichier).
-                    ConversationPreviewView(
-                        conversation: conversation,
-                        cachedMessages: conversationViewModel.previewMessages[conversation.id] ?? [],
-                        bannerURL: (conversation.type == .direct ? conversation.participantBanner : conversation.banner).flatMap { MeeshyConfig.resolveMediaURL($0) },
-                        avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
-                        storyState: storyRingState(for: conversation),
-                        moodEmoji: conversationMoodStatus(for: conversation)?.moodEmoji,
-                        presenceState: conversation.type == .direct
-                            ? PresenceManager.shared.presenceState(for: conversation.participantUserId ?? "")
-                            : nil,
-                        isDirect: conversation.type == .direct,
-                        onCall: (conversation.type == .direct && conversation.participantUserId != nil) ? {
-                            dismissContextMenu()
-                            if let uid = conversation.participantUserId {
-                                Task {
-                                    await CallManager.shared.requestPermissionsThenStartCall(
-                                        conversationId: conversation.id,
-                                        userId: uid,
-                                        displayName: conversation.name,
-                                        isVideo: false
-                                    )
-                                }
-                            }
-                        } : nil,
-                        onSearch: {
-                            dismissContextMenu()
-                            router.pendingOpenSearch = true
-                            onSelect(conversation)
-                        },
-                        onInfo: { dismissContextMenu(); conversationInfoConversation = conversation },
-                        onProfileInfo: { dismissContextMenu(); handleProfileView(conversation) }
-                    )
-                    // Preview STATIQUE (parité `.contextMenu` natif) : le
-                    // ScrollView interne des messages interceptait le pan et
-                    // volait le drag du geste de repli/morph ci-dessous — le
-                    // contenu défilait dans la carte au lieu de la déplacer
-                    // (vérifié frame par frame 2026-07-03).
-                    .scrollDisabled(true)
-                    .frame(width: 340)
-                    // Frame de repos de la carte (mesurée overlay invisible,
-                    // hors transformation) — point d'arrivée de l'émergence.
-                    .background(
-                        GeometryReader { geo in
-                            Color.clear
-                                .onAppear { capturePreviewRestFrameIfIdle(geo.frame(in: .global)) }
-                                .adaptiveOnChange(of: geo.frame(in: .global)) { _, frame in
-                                    capturePreviewRestFrameIfIdle(frame)
-                                }
-                        }
-                    )
-                    // Aperçu : émerge DEPUIS la ligne pressée (placement par
-                    // `runContextMenuEmergence` : scale ≈ hauteur ligne /
-                    // hauteur carte + offset vers la ligne) puis rejoint sa
-                    // position finale — départ lent, accélération, rebond.
-                    // Pendant le morph drag vers le bas, la carte rétrécit en
-                    // chip (multiplicateur dragMorphProgress) et suit le doigt.
-                    // Glisser vers le haut replie la carte (previewScale → 0,
-                    // ancre .bottom : elle se résorbe vers le menu) pour donner
-                    // toute la place au menu ; glisser vers le bas au-delà du
-                    // seuil ferme l'overlay (parité contextMenu natif). Ce
-                    // geste vit ICI et jamais sur les lignes de la liste : un
-                    // DragGesture plein-ligne entrait en contention avec le pan
-                    // du ScrollView et figeait le scroll (régression ff5d5649).
-                    .scaleEffect(previewScale * (1 - 0.45 * dragMorphProgress), anchor: .bottom)
-                    .offset(x: dragOffsetX, y: dragOffsetY + previewEmergeOffset)
-                    .opacity(contextMenuAppeared ? 1 : 0)
-                    // Blur PROGRESSIF lié au scale (continu, sans saut au
-                    // franchissement d'un seuil) : net à 1.0, flouté au départ
-                    // de l'émergence, jusqu'à 3.0 carte repliée — la carte se
-                    // matérialise à l'ouverture et se dissout au repli/
-                    // fermeture. max(0,…) : l'overshoot du rebond dépasse 1.0,
-                    // le radius ne doit jamais être négatif.
-                    .blur(radius: 3.0 * max(0, 1.0 - previewScale))
-                    .gesture(previewCollapseGesture)
-
-                    ConversationContextMenuView(
-                        accentHex: conversation.accentColor,
-                        isPinned: conversation.userState.isPinned,
-                        isMuted: conversation.userState.isMuted,
-                        hasUnread: conversation.userState.unreadCount > 0,
-                        currentReaction: conversation.userState.reaction,
-                        categories: conversationViewModel.userCategories.map {
-                            ConversationMenuCategory(id: $0.id, name: $0.name, icon: $0.icon)
-                        },
-                        currentSectionId: conversation.userState.sectionId,
-                        canInvite: canCreateShareLink(for: conversation),
-                        isLocked: ConversationLockManager.shared.isLocked(conversation.id),
-                        isArchived: conversation.userState.isArchived,
-                        isBlockableDM: conversation.type == .direct && conversation.participantUserId != nil,
-                        isBlocked: conversation.participantUserId.map { BlockService.shared.isBlocked(userId: $0) } ?? false,
-                        canRename: conversation.type != .direct,
-                        onPin: { Task { await conversationViewModel.togglePin(for: conversation.id) } },
-                        onMute: { Task { await conversationViewModel.toggleMute(for: conversation.id) } },
-                        onMarkReadToggle: {
-                            Task {
-                                if conversation.userState.unreadCount > 0 {
-                                    await conversationViewModel.markAsRead(conversationId: conversation.id)
-                                } else {
-                                    await conversationViewModel.markAsUnread(conversationId: conversation.id)
-                                }
-                            }
-                        },
-                        onDetails: { conversationInfoConversation = conversation },
-                        onRename: {
-                            renameText = conversation.name
-                            renameTarget = conversation
-                        },
-                        onSetFavorite: { emoji in
-                            Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: emoji) }
-                        },
-                        onRemoveFavorite: {
-                            Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: nil) }
-                        },
-                        onMove: { sectionId in
-                            conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: sectionId)
-                        },
-                        onInvite: { inviteSheetConversation = conversation },
-                        onLock: {
-                            if ConversationLockManager.shared.isLocked(conversation.id) {
-                                lockSheetMode = .unlockConversation
-                                lockSheetConversation = conversation
-                            } else if ConversationLockManager.shared.masterPinConfigured {
-                                lockSheetMode = .lockConversation
-                                lockSheetConversation = conversation
-                            } else {
-                                showNoMasterPinAlert = true
-                            }
-                        },
-                        onArchive: {
-                            Task {
-                                if conversation.userState.isArchived {
-                                    await conversationViewModel.unarchiveConversation(conversationId: conversation.id)
-                                } else {
-                                    await conversationViewModel.archiveConversation(conversationId: conversation.id)
-                                }
-                            }
-                        },
-                        onBlock: {
-                            if let uid = conversation.participantUserId, BlockService.shared.isBlocked(userId: uid) {
-                                Task {
-                                    await BlockActionCoordinator.shared.unblock(userId: uid)
-                                    await MainActor.run { HapticFeedback.success() }
-                                }
-                            } else {
-                                blockTargetConversation = conversation
-                                showBlockConfirmation = true
-                            }
-                        },
-                        onDelete: {
-                            // Destructif → confirmation système obligatoire
-                            // (dialog attaché dans ConversationListView.body).
-                            deleteTargetConversation = conversation
-                        },
-                        onOpenFocalBetaPreview: {
-                            // RETRAIT FOCAL iOS (2026-08-18) : l'item n'est
-                            // plus monté par ConversationContextMenuView —
-                            // closure conservée pour l'API, inerte.
-                        },
+        if let conversation = sheetTargets.contextMenu {
+            ConversationPreviewMotionReader { reduceMotion in
+                ZStack {
+                    // Le voile commun de l'appui long (#11222) : il s'EFFACE
+                    // pendant le morph drag, la liste réapparaît sous la carte
+                    // devenue chip draggable.
+                    LongPressVeil(visibility: contextMenuAppeared ? Double(1 - dragMorphProgress) : 0, weight: ConversationPeekVeil.weight,
+                                  onDismiss: { handlePeekTouch(.veil, on: conversation) })
+                    // L'aperçu d'appui long (#17242) : grande carte, menu
+                    // COMPACT qu'on tire vers le haut. La progression vit dans
+                    // `ConversationLongPressPeek` : le geste ne ré-évalue pas
+                    // la liste.
+                    ConversationLongPressPeek(
+                        isVisible: contextMenuAppeared,
+                        reduceMotion: reduceMotion,
+                        menuChrome: peekMenuChrome(reduceMotion: reduceMotion),
+                        card: { heights in peekCard(for: conversation, heights: heights, reduceMotion: reduceMotion) },
+                        menu: peekMenu(for: conversation),
+                        onChipDragChanged: { handleCardChipDrag($0) },
+                        onChipDragEnded: { endCardChipDrag($0) },
                         onDismiss: { dismissContextMenu() }
                     )
-                    // Menu : slide-up 70 pt + fondu + dé-blur, dans la MÊME
-                    // transaction que l'émergence de l'aperçu — le menu
-                    // remonte pendant que la carte rejoint sa place
-                    // (coordonné), et redescend en se dissolvant (blur) à la
-                    // fermeture. Pendant le morph drag, il glisse vers le bas
-                    // et se dissout (opacité + blur ∝ dragMorphProgress).
-                    // L'ancienne formule `70 * (1 - previewScale)` valait 0
-                    // au montage (previewScale démarrait à 1.0) : le slide-up
-                    // était inerte.
-                    .offset(y: contextMenuAppeared ? 40 * dragMorphProgress : 70)
-                    .opacity(contextMenuAppeared ? Double(1 - dragMorphProgress) : 0)
-                    .blur(radius: contextMenuAppeared ? 6 * dragMorphProgress : 6)
                 }
-                .padding(.horizontal, 20)
+                .onAppear {
+                    // Émergence depuis la ligne pressée : placement invisible sur
+                    // la ligne (tick 1, frame de repos mesurée) puis départ lent,
+                    // accélération et rebond vers la position finale (tick 2).
+                    dragOffsetY = 0
+                    dragOffsetX = 0
+                    runContextMenuEmergence(reduceMotion: reduceMotion)
+                }
             }
             .zIndex(300)
-            .onAppear {
-                // Émergence depuis la ligne pressée : placement invisible sur
-                // la ligne (tick 1, frame de repos mesurée) puis départ lent,
-                // accélération et rebond vers la position finale (tick 2).
-                dragOffsetY = 0
-                dragOffsetX = 0
-                runContextMenuEmergence()
-            }
         }
     }
 
-    /// Geste de repli / morph de l'aperçu (feature « shrink preview » de
-    /// a98b93a7, rebranchée au bon étage).
-    /// Vers le HAUT : repli progressif (100 pt = replié) qui donne toute la
-    /// place au menu ; au lâcher sous 0.45 la carte reste repliée jusqu'à la
-    /// fermeture (`dismissContextMenu` restaure 1.0).
-    /// Vers le BAS : morph drag-n-drop — la carte suit le doigt 1:1 (x et y),
-    /// rétrécit en chip, le blur du fond s'efface et le menu se dissout
-    /// (`dragMorphProgress`). Au lâcher au-delà de 110 pt le menu se ferme
-    /// (la chip fond sur place) ; en deçà, snap-back complet en 0.30 s.
-    /// Drop de la chip sur une section (déplacement) : Phase 2 — le
-    /// `SectionDropDelegate` dormant sera rebranché à ce geste.
-    /// Les lignes de la liste ne portent AUCUN DragGesture : ici le
-    /// ScrollView est masqué par l'overlay, zéro contention de scroll
-    /// possible.
-    private var previewCollapseGesture: some Gesture {
-        DragGesture(coordinateSpace: .global)
-            .onChanged { value in
-                let translation = value.translation.height
-                if chipModeLatched {
-                    // Chip libre : suit le doigt sur les deux axes, y compris
-                    // vers le haut pour viser un header de section.
-                    dragOffsetY = translation
-                    dragOffsetX = value.translation.width
-                    updateChipDropTarget(at: value.location)
-                    chipAutoScrollDriver.update(fingerLocation: value.location)
-                } else if translation < 0 {
-                    previewScale = max(0, 1.0 + translation / 100)
-                    dragOffsetY = 0
-                    dragOffsetX = 0
-                } else {
-                    dragOffsetY = translation
-                    dragOffsetX = value.translation.width * dragMorphProgress
-                    if dragMorphProgress >= 1 {
-                        // Morph complet → verrouille le mode chip (drag n drop
-                        // engagé tant que le doigt reste posé). L'auto-scroll
-                        // de bord s'arme ici : stationner près d'un bord fait
-                        // défiler la liste vers les headers hors écran.
-                        chipModeLatched = true
-                        HapticFeedback.light()
-                        updateChipDropTarget(at: value.location)
-                        chipAutoScrollDriver.onScrollTick = { location in
-                            updateChipDropTarget(at: location)
-                        }
-                        chipAutoScrollDriver.update(fingerLocation: value.location)
+    /// La carte de l'aperçu d'appui long = la carte des DERNIERS MESSAGES
+    /// (bannière, avatar/logo, titre, icônes d'en-tête, fil récent) — drapeau
+    /// Lentille ON comme OFF (le choix de mode garde ses deux portes, l'encoche de la carte de focus et le sous-menu « Mode de lecture »).
+    func peekCard(for conversation: Conversation, heights: ConversationPeekCardHeights, reduceMotion: Bool) -> some View {
+        ConversationPreviewView(
+            conversation: conversation,
+            previewLoader: conversationViewModel.previewLoader,
+            bannerURL: (conversation.type == .direct ? conversation.participantBanner : conversation.banner).flatMap { MeeshyConfig.resolveMediaURL($0) },
+            avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
+            storyState: storyRingState(for: conversation),
+            moodEmoji: conversationMoodStatus(for: conversation)?.moodEmoji,
+            presenceState: conversation.type == .direct
+                ? PresenceManager.shared.presenceState(for: conversation.participantUserId ?? "")
+                : nil,
+            isDirect: conversation.type == .direct,
+            readingMode: LentilleReadingModeContext.listPreviewMode(for: conversation),
+            peekHeights: heights
+        )
+        // Preview STATIQUE : le ScrollView interne des messages volerait le
+        // glissement qui tire le menu ou morphe la carte en pastille.
+        .scrollDisabled(true)
+        // Toucher la carte ouvre la conversation, par la porte du verrou.
+        .contentShape(Rectangle())
+        .onTapGesture { handlePeekTouch(.card, on: conversation) }
+        .accessibilityAction(named: Text(String(localized: "conversation.preview.openFull", bundle: .main))) { handlePeekTouch(.card, on: conversation) }
+        // Frame de repos de la carte (mesurée overlay invisible, hors
+        // transformation) — point d'arrivée de l'émergence.
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { capturePreviewRestFrameIfIdle(geo.frame(in: .global)) }
+                    .adaptiveOnChange(of: geo.frame(in: .global)) { _, frame in
+                        capturePreviewRestFrameIfIdle(frame)
                     }
-                }
             }
-            .onEnded { value in
-                if chipModeLatched {
-                    chipAutoScrollDriver.stop()
-                    handleChipDrop(at: value.location)
-                    return
-                }
-                if value.translation.height > 110 {
-                    dismissContextMenu()
-                    return
-                }
-                let collapsed = previewScale < 0.45
-                // Faster, bouncier snap-back: (0.35, 0.8) → (0.30, 0.72)
-                // Creates snappier feel when preview collapses or re-expands
-                withAnimation(.spring(response: 0.30, dampingFraction: 0.72)) {
-                    previewScale = collapsed ? 0 : 1.0
-                    dragOffsetY = 0
-                    dragOffsetX = 0
-                }
-            }
+        )
+        // Émerge DEPUIS la ligne pressée (`runContextMenuEmergence`) puis
+        // rejoint sa place ; pendant le morph vers le bas, elle rétrécit en
+        // pastille et suit le doigt (`dragMorphProgress`).
+        .scaleEffect(previewScale * (1 - 0.45 * dragMorphProgress), anchor: .bottom)
+        .offset(x: dragOffsetX, y: dragOffsetY + previewEmergeOffset)
+        .opacity(contextMenuAppeared ? 1 : 0)
+        .blur(radius: ConversationPreviewEntranceMotion.blurRadius(previewScale: previewScale, reduceMotion: reduceMotion))
+    }
+
+    func handlePeekTouch(_ touch: ConversationPeekTouch, on conversation: Conversation) { dismissContextMenu(); if touch.effect == .dismissAndOpen { openConversation(conversation) } }
+    /// Le contenu du menu : le MÊME catalogue et les MÊMES gestes que le menu
+    /// natif de l'iPad sous iOS 26.
+    func peekMenu(for conversation: Conversation) -> ConversationContextMenuView {
+        ConversationContextMenuView(
+            accentHex: conversation.accentColor,
+            catalog: rowMenuCatalog(for: conversation),
+            currentReaction: conversation.userState.reaction,
+            categories: conversationViewModel.userCategories.map {
+                ConversationMenuCategory(id: $0.id, name: $0.name, icon: $0.icon)
+            },
+            currentSectionId: conversation.userState.sectionId,
+            actions: ConversationRowMenuActions.make(for: conversation, in: self),
+            readingModeMenu: readingModeSubmenu(for: conversation, onSelected: { dismissContextMenu() }),
+            onDismiss: { dismissContextMenu() }
+        )
+    }
+
+    /// Le menu remonte en se dé-floutant avec l'émergence de la carte, et
+    /// redescend en se dissolvant pendant le morph en pastille.
+    func peekMenuChrome(reduceMotion: Bool) -> ConversationPeekMenuChrome {
+        guard contextMenuAppeared else {
+            return ConversationPeekMenuChrome(
+                offset: ConversationPreviewEntranceMotion.menuRestOffset(reduceMotion: reduceMotion),
+                opacity: 0,
+                blur: ConversationPreviewEntranceMotion.menuRestBlur(reduceMotion: reduceMotion)
+            )
+        }
+        return ConversationPeekMenuChrome(offset: 40 * dragMorphProgress, opacity: Double(1 - dragMorphProgress), blur: 6 * dragMorphProgress)
+    }
+
+    /// Glisser la carte vers le BAS depuis le cran compact : morph drag-n-drop
+    /// — la carte suit le doigt (x et y), rétrécit en pastille, le voile
+    /// s'efface et le menu se dissout (`dragMorphProgress`). Une fois LATCHÉE,
+    /// la pastille suit le doigt partout pour viser un en-tête de section.
+    /// Les lignes de la liste ne portent AUCUN DragGesture : ici le ScrollView
+    /// est masqué par l'overlay, zéro contention de scroll possible.
+    func handleCardChipDrag(_ value: DragGesture.Value) {
+        if chipModeLatched {
+            dragOffsetY = value.translation.height
+            dragOffsetX = value.translation.width
+            updateChipDropTarget(at: value.location)
+            chipAutoScrollDriver.update(fingerLocation: value.location)
+            return
+        }
+        dragOffsetY = max(0, value.translation.height)
+        dragOffsetX = value.translation.width * dragMorphProgress
+        guard dragMorphProgress >= 1 else { return }
+        // Morph complet → verrouille le mode pastille ; l'auto-scroll de bord
+        // s'arme ici pour viser les en-têtes hors écran.
+        chipModeLatched = true
+        HapticFeedback.light()
+        updateChipDropTarget(at: value.location)
+        chipAutoScrollDriver.onScrollTick = { location in
+            updateChipDropTarget(at: location)
+        }
+        chipAutoScrollDriver.update(fingerLocation: value.location)
+    }
+
+    /// Lâcher : la pastille se dépose, ou `ConversationPeekPullDown` ferme / remet en place (#17258).
+    func endCardChipDrag(_ value: DragGesture.Value) {
+        switch ConversationPeekPullDown.release(predictedEndTranslation: value.predictedEndTranslation.height, isLatched: chipModeLatched) {
+        case .drop:
+            chipAutoScrollDriver.stop()
+            handleChipDrop(at: value.location)
+        case .dismiss:
+            dismissContextMenu()
+        case .restore:
+            withAnimation(.spring(response: 0.30, dampingFraction: 0.72)) { dragOffsetY = 0; dragOffsetX = 0 }
+        }
     }
 
     /// Surligne le header de section sous le doigt pendant le drag de la chip
@@ -760,7 +433,7 @@ extension ConversationListView {
         let hovered = sectionFrameRegistry.frames
             .first(where: { $0.value.contains(location) })?
             .key
-        let pinnedIsLive = contextMenuConversation?.userState.isPinned == false
+        let pinnedIsLive = sheetTargets.contextMenu?.userState.isPinned == false
         let target = (hovered == "pinned" && !pinnedIsLive) ? nil : hovered
         if dropTargetSection != target {
             withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
@@ -782,7 +455,7 @@ extension ConversationListView {
             }
             dismissContextMenu()
         }
-        guard let conversation = contextMenuConversation else { return }
+        guard let conversation = sheetTargets.contextMenu else { return }
         let hovered = sectionFrameRegistry.frames
             .first(where: { $0.value.contains(location) })?
             .key
@@ -804,601 +477,196 @@ extension ConversationListView {
     }
 }
 
-// MARK: - Chip Drop Resolver
+// MARK: - L'entrée de l'aperçu sous Réduire les animations (#11213)
 
-/// Décision du drop de la chip : « Épingles » épingle la conversation si
-/// elle ne l'est pas déjà — jamais de dés-épinglage par drop, l'action
-/// dédiée Pin/Unpin du menu reste le seul chemin de retrait ; une section
-/// la déplace sauf no-op (même section) ; hors cible = annulation. Fonction
-/// pure — testée dans `ConversationChipDropResolverTests`.
-enum ChipDropAction: Equatable {
-    case pin
-    case move(sectionId: String)
-    case none
-}
+/// Le mouvement de l'aperçu < iOS 26 : la carte ÉMERGE de la ligne pressée —
+/// départ lent, accélération à mi-course, rebond (overshoot 1.3, le rebond
+/// appartient au long-press) et
+/// flou progressif. Sous Réduire les animations, un FONDU sur place, sans
+/// overshoot ni flou. Les deux moitiés du réglage (système et app) se lisent
+/// par `MeeshyMotion.shouldReduce`.
+enum ConversationPreviewEntranceMotion {
+    static let fadeDuration: Double = 0.18
 
-enum ChipDropResolver {
-    /// `isAutoScrolling` : un header qui DÉFILE sous le doigt stationnaire
-    /// (auto-scroll de bord en mouvement à l'instant du relâchement) ne doit
-    /// pas capter le drop — à 415-900 pt/s la cible attrapée est une loterie
-    /// et le relâchement en plein défilement est une intention d'abandon
-    /// (épinglage/déplacement accidentels vécus en test 2026-07-05). Au
-    /// CLAMP (liste en butée, headers au repos), le flag retombe et les
-    /// drops en zone de bord restent légitimes.
-    static func action(
-        droppedOn sectionId: String?,
-        isPinned: Bool,
-        currentSectionId: String,
-        isAutoScrolling: Bool = false
-    ) -> ChipDropAction {
-        guard !isAutoScrolling else { return .none }
-        guard let sectionId else { return .none }
-        if sectionId == "pinned" { return isPinned ? .none : .pin }
-        let targetId = sectionId == "other" ? "" : sectionId
-        return targetId == currentSectionId ? .none : .move(sectionId: targetId)
-    }
-}
-
-// MARK: - Chip Auto-Scroll (Phase 3 du morph drag-n-drop)
-
-/// Loi de vitesse de l'auto-scroll pendant le drag de la chip : le doigt qui
-/// stationne dans une zone de bord du viewport fait défiler la liste pour
-/// rendre atteignables les headers de section hors écran. Rampe linéaire
-/// (bord = pleine vitesse, sortie de zone = 0) et clamp de l'offset aux
-/// bornes réelles du contenu. Fonctions pures — testées dans
-/// `ConversationChipAutoScrollTests`.
-enum ChipAutoScroll {
-    /// Profondeur (pt) des zones de déclenchement en haut/bas du viewport.
-    static let zoneHeight: CGFloat = 130
-    /// Vitesse de défilement (pt/s) au bord même du viewport.
-    static let maxSpeed: CGFloat = 900
-
-    /// Vitesse signée pour une position de doigt donnée (coordonnées fenêtre) :
-    /// négative = défile vers le haut (révèle les sections au-dessus),
-    /// positive = vers le bas, 0 hors des zones de bord.
-    static func speed(fingerY: CGFloat, viewportMinY: CGFloat, viewportMaxY: CGFloat) -> CGFloat {
-        let topDepth = (viewportMinY + zoneHeight - fingerY) / zoneHeight
-        if topDepth > 0 { return -min(1, topDepth) * maxSpeed }
-        let bottomDepth = (fingerY - (viewportMaxY - zoneHeight)) / zoneHeight
-        if bottomDepth > 0 { return min(1, bottomDepth) * maxSpeed }
-        return 0
-    }
-
-    /// Offset proposé, ramené dans [-topInset, fin de contenu] — l'auto-scroll
-    /// ne doit jamais produire d'overscroll (qui armerait visuellement le
-    /// pull-to-refresh ou ferait rebondir la liste sous la chip).
-    static func clampedOffset(
-        _ proposed: CGFloat,
-        contentHeight: CGFloat,
-        viewportHeight: CGFloat,
-        topInset: CGFloat,
-        bottomInset: CGFloat
-    ) -> CGFloat {
-        let minOffset = -topInset
-        let maxOffset = max(minOffset, contentHeight + bottomInset - viewportHeight)
-        return min(max(proposed, minOffset), maxOffset)
-    }
-}
-
-/// Pilote l'auto-scroll : boîte de référence VOLONTAIREMENT hors du graphe
-/// SwiftUI (même famille que `SectionFrameRegistry`) — le tick écrit
-/// `contentOffset` directement sur l'UIScrollView hôte, donc aucune
-/// invalidation de la liste ; les GeometryReader des headers republient leurs
-/// frames dans le registre inerte à chaque frame défilée, et `onScrollTick`
-/// re-hit-teste la cible sous le doigt STATIONNAIRE (le DragGesture ne
-/// re-fire pas sans mouvement du doigt).
-@MainActor
-final class ChipAutoScrollDriver {
-    weak var scrollView: UIScrollView?
-    /// Rebranché à chaque verrouillage de la chip, relâché par `stop()` (le
-    /// closure capture la View : le garder à demeure lierait le cycle
-    /// State-box → driver → closure → View → State-box).
-    var onScrollTick: ((CGPoint) -> Void)?
-    /// true tant que le dernier tick a RÉELLEMENT déplacé l'offset — lu par
-    /// `handleChipDrop` pour rendre le drop inerte pendant le défilement
-    /// (voir `ChipDropResolver.action(isAutoScrolling:)`). Retombe à false
-    /// dès que la liste est en butée ou le doigt hors zone.
-    private(set) var isActivelyScrolling = false
-
-    private var timer: Timer?
-    private var fingerLocation: CGPoint = .zero
-
-    func update(fingerLocation location: CGPoint) {
-        fingerLocation = location
-        guard timer == nil else { return }
-        let tick = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
-            // Timer main-runloop → déjà sur le main thread.
-            MainActor.assumeIsolated { self?.tick() }
-        }
-        RunLoop.main.add(tick, forMode: .common)
-        timer = tick
-    }
-
-    func stop() {
-        timer?.invalidate()
-        timer = nil
-        onScrollTick = nil
-        isActivelyScrolling = false
-    }
-
-    private func tick() {
-        guard let scrollView else { return }
-        let viewport = scrollView.convert(scrollView.bounds, to: nil)
-        let speed = ChipAutoScroll.speed(
-            fingerY: fingerLocation.y,
-            viewportMinY: viewport.minY,
-            viewportMaxY: viewport.maxY
+    /// Lecture ponctuelle, hors d'une vue (réouverture rapide, fermeture) : le
+    /// corps de l'overlay, lui, lit l'environnement (`ConversationPreviewMotionReader`).
+    static var isReducedNow: Bool {
+        MeeshyMotion.shouldReduce(
+            system: UIAccessibility.isReduceMotionEnabled,
+            userForced: MeeshyAccessibilityPreferences.shared.reduceMotion
         )
-        guard speed != 0 else {
-            isActivelyScrolling = false
-            return
-        }
-        let clamped = ChipAutoScroll.clampedOffset(
-            scrollView.contentOffset.y + speed / 60.0,
-            contentHeight: scrollView.contentSize.height,
-            viewportHeight: scrollView.bounds.height,
-            topInset: scrollView.adjustedContentInset.top,
-            bottomInset: scrollView.adjustedContentInset.bottom
-        )
-        guard clamped != scrollView.contentOffset.y else {
-            isActivelyScrolling = false
-            return
-        }
-        isActivelyScrolling = true
-        scrollView.contentOffset.y = clamped
-        onScrollTick?(fingerLocation)
+    }
+
+    static func emergesFromRow(reduceMotion: Bool) -> Bool {
+        !reduceMotion
+    }
+
+    /// D'où la carte part : SUR la ligne pressée (scale ≈ hauteur ligne /
+    /// hauteur carte, ancre `.bottom` — l'offset aligne le centre visuel de la
+    /// carte réduite, à maxY - scale·H/2, sur celui de la ligne), zoom centré
+    /// 0.7 quand la ligne n'est pas connue (rotor), à sa place sous Réduire les
+    /// animations.
+    static func placement(source: CGRect?, rest: CGRect, reduceMotion: Bool) -> (scale: CGFloat, offset: CGFloat) {
+        guard emergesFromRow(reduceMotion: reduceMotion) else { return (1.0, 0) }
+        guard let source, rest.height > 0 else { return (0.7, 0) }
+        let scale = max(0.22, min(0.7, source.height / rest.height))
+        return (scale, source.midY - (rest.maxY - scale * rest.height / 2))
+    }
+
+    static func entrance(reduceMotion: Bool) -> Animation {
+        reduceMotion ? .easeOut(duration: fadeDuration) : .timingCurve(0.5, 0.0, 0.15, 1.3, duration: 0.55)
+    }
+
+    static func exit(reduceMotion: Bool) -> Animation {
+        reduceMotion ? .easeOut(duration: fadeDuration) : .spring(response: 0.32, dampingFraction: 0.78)
+    }
+
+    /// L'entrée et la sortie passent la variante réduite à la racine du
+    /// mouvement, qui couperait sinon le fondu voulu (#18354).
+    static func animateEntrance(reduceMotion: Bool, _ body: () -> Void) {
+        meeshyWithAnimation(entrance(reduceMotion: false), reduced: entrance(reduceMotion: true),
+                            reduceMotion: reduceMotion, body)
+    }
+
+    static func animateExit(reduceMotion: Bool, _ body: () -> Void) {
+        meeshyWithAnimation(exit(reduceMotion: false), reduced: exit(reduceMotion: true),
+                            reduceMotion: reduceMotion, body)
+    }
+
+    /// Le flou suit l'échelle de la carte — net à 1.0, jusqu'à 3 repliée ;
+    /// jamais négatif quand le rebond dépasse 1.0 ; nul sous Réduire les
+    /// animations.
+    static func blurRadius(previewScale: CGFloat, reduceMotion: Bool) -> CGFloat {
+        reduceMotion ? 0 : 3.0 * max(0, 1.0 - previewScale)
+    }
+
+    /// Le menu remonte de 70 pt à l'ouverture ; sous Réduire les animations,
+    /// il apparaît à sa place.
+    static func menuRestOffset(reduceMotion: Bool) -> CGFloat {
+        reduceMotion ? 0 : 70
+    }
+
+    static func menuRestBlur(reduceMotion: Bool) -> CGFloat {
+        reduceMotion ? 0 : 6
     }
 }
 
-/// UIView invisible plantée dans le contenu du scroll : remonte la hiérarchie
-/// jusqu'à l'UIScrollView hôte et le confie au driver. Seul moyen sous
-/// iOS 16 de piloter l'offset en continu — `ScrollViewReader.scrollTo` ne
-/// sait pas défiler proportionnellement (et rate les ids non instanciés du
-/// LazyVStack), `scrollPosition(y:)` est iOS 17+.
-struct ChipAutoScrollGrabber: UIViewRepresentable {
-    let driver: ChipAutoScrollDriver
-
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView()
-        view.isUserInteractionEnabled = false
-        return view
-    }
-
-    func updateUIView(_ uiView: UIView, context: Context) {
-        // La chaîne de superviews n'est attachée qu'après le montage — hop
-        // asynchrone pour marcher jusqu'au scroll hôte une fois en place.
-        DispatchQueue.main.async { [weak driver] in
-            var candidate: UIView? = uiView.superview
-            while let current = candidate, !(current is UIScrollView) {
-                candidate = current.superview
-            }
-            driver?.scrollView = candidate as? UIScrollView
-        }
-    }
-}
-
-// MARK: - Header Overlay
-// Extracted into a dedicated View struct so the deeply-nested collapsible
-// header no longer composes into ConversationListView.body's type. That
-// monolithic type was the root cause of a Swift type-metadata instantiation
-// crash at launch on low-memory devices (iPhone XR / iOS 17.6).
-struct ConversationListHeaderOverlay: View {
-    /// SEUL abonné au relay d'offset : chaque tick de scroll re-rend ce
-    /// header (voulu — il collapse en suivant le doigt) et RIEN d'autre.
-    /// L'ancien `let scrollOffset: CGFloat` forçait le parent à porter
-    /// l'offset dans un @State et ré-exécutait tout son body (~99 rows
-    /// reconstruites + diff Equatable) à ~120 Hz pendant le scroll.
-    @ObservedObject var scrollRelay: ScrollOffsetRelay
-    let iPadFeedAction: (() -> Void)?
-    let iPadNotificationCount: Int
-    let onNotificationsTap: (() -> Void)?
-    let onSettingsTap: (() -> Void)?
-    let onNewConversation: (() -> Void)?
-    @Binding var showShareLinkSheet: Bool
-    /// Compact story trail injected into the header's TITLE slot: une fois la
-    /// liste scrollée, on ne lit plus « Meeshy Chats » mais la trail, à gauche
-    /// des boutons d'actions (directive user 2026-08-13). Reçoit l'offset de
-    /// scroll vivant depuis la passe de rendu de ce header.
-    var titleAccessory: ((CGFloat) -> AnyView)? = nil
-
-    private var theme: ThemeManager { ThemeManager.shared }
+/// Lit Réduire les animations dans l'environnement — ses deux moitiés — pour
+/// l'overlay de `ConversationListView`, une extension qui ne peut pas déclarer
+/// de propriété `@Environment`.
+struct ConversationPreviewMotionReader<Content: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    @ViewBuilder let content: (Bool) -> Content
 
     var body: some View {
-        CollapsibleHeader(
-            title: "Meeshy Chats",
-            scrollOffset: scrollRelay.offset,
-            showBackButton: false,
-            titleColor: theme.textPrimary,
-            backArrowColor: MeeshyColors.indigo500,
-            backgroundColor: theme.backgroundPrimary,
-            leading: {
-                if let iPadFeedAction {
-                    Button {
-                        HapticFeedback.light()
-                        iPadFeedAction()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "square.stack.fill")
-                                .font(MeeshyFont.relative(13, weight: .semibold))
-                                .accessibilityHidden(true)
-                            Text(String(localized: "conversation.list.feed", defaultValue: "Feed", bundle: .main))
-                                .font(MeeshyFont.relative(13, weight: .semibold))
-                        }
-                        .foregroundStyle(
-                            LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
-                        )
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(
-                            Capsule()
-                                .fill(MeeshyColors.indigo100.opacity(theme.mode.isDark ? 0.15 : 1))
-                        )
-                    }
-                }
-            },
-            titleView: {
-                Text("Meeshy Chats")
-                    .font(MeeshyFont.relative(28, weight: .bold, design: .rounded))
-                    .foregroundStyle(
-                        LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
-                    )
-                    // Volet latéral iPad : chip Feed + 4 actions laissent ~110 pt
-                    // au titre, qui tronquait en « Mee. » — rétrécir plutôt.
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.55)
-                    .accessibilityAddTraits(.isHeader)
-            },
-            trailing: {
-                // Header action glyphs (link/plus/bell/gear + notification badge) keep
-                // fixed point sizes: two sit inside 40x40 glass circles and the row reads
-                // as chrome — scaling them with Dynamic Type would break the toolbar grid.
-                HStack(spacing: 12) {
-                    // iOS 26 Liquid Glass for the two primary actions (share link +
-                    // new conversation), grouped so the glass circles blend. Gating/
-                    // fallback owned by the SDK Compatibility wrappers.
-                    AdaptiveGlassContainer(spacing: 10) {
-                        HStack(spacing: 12) {
-                            Button {
-                                showShareLinkSheet = true
-                            } label: {
-                                Image(systemName: "link.badge.plus")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(MeeshyColors.indigo500)
-                                    .frame(width: 40, height: 40)
-                                    .adaptiveGlass(in: Circle(), interactive: true)
-                            }
-                            .accessibilityLabel(String(localized: "conversation.list.create_share_link", defaultValue: "Creer un lien de partage", bundle: .main))
-
-                            Button {
-                                onNewConversation?()
-                            } label: {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 18, weight: .bold))
-                                    .foregroundColor(MeeshyColors.indigo500)
-                                    .frame(width: 40, height: 40)
-                                    .adaptiveGlass(in: Circle(), interactive: true)
-                            }
-                            .accessibilityLabel(String(localized: "conversation.list.new_conversation", defaultValue: "Nouvelle conversation", bundle: .main))
-                        }
-                    }
-
-                    if let onNotificationsTap {
-                        // Le compteur d'alertes non lues (pastille rouge) portait
-                        // l'information par la seule couleur/badge — muet pour
-                        // VoiceOver. Exposé en `accessibilityValue` (pluriel géré).
-                        let unreadA11yValue: String = iPadNotificationCount <= 0
-                            ? ""
-                            : (iPadNotificationCount == 1
-                                ? String(localized: "conversation.list.notifications.unread.one.a11y", defaultValue: "1 non lue", bundle: .main)
-                                : String(format: String(localized: "conversation.list.notifications.unread.other.a11y", defaultValue: "%d non lues", bundle: .main), iPadNotificationCount))
-                        Button {
-                            HapticFeedback.light()
-                            onNotificationsTap()
-                        } label: {
-                            ZStack(alignment: .topTrailing) {
-                                Image(systemName: "bell.fill")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(MeeshyColors.indigo500)
-
-                                if iPadNotificationCount > 0 {
-                                    Text(NotificationBadge.displayed(iPadNotificationCount))
-                                        .font(.system(size: 9, weight: NotificationBadge.fontWeight))
-                                        .foregroundColor(.white)
-                                        .lineLimit(1)
-                                        // Capsule et non cercle figé : « 99+ » doit
-                                        // s'afficher entier, pas être rogné.
-                                        .padding(.horizontal, 5)
-                                        .frame(minWidth: 16, minHeight: 16)
-                                        .background(Capsule().fill(MeeshyColors.error))
-                                        .offset(x: 6, y: -6)
-                                }
-                            }
-                        }
-                        .accessibilityLabel(String(localized: "conversation.list.notifications", defaultValue: "Notifications", bundle: .main))
-                        .accessibilityValue(unreadA11yValue)
-                    }
-
-                    if let onSettingsTap {
-                        Button {
-                            HapticFeedback.light()
-                            onSettingsTap()
-                        } label: {
-                            Image(systemName: "gearshape.fill")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(MeeshyColors.indigo500)
-                        }
-                        .accessibilityLabel(String(localized: "conversation.list.settings", defaultValue: "Reglages", bundle: .main))
-                    }
-                }
-                // Loi commune `ScrollMotion` : une vue en mouvement ne montre
-                // pas ses boutons d'action. Le titre, la trail compacte et le
-                // verre du header restent — seuls les glyphes d'action
-                // s'effacent le temps du défilement.
-                .hiddenWhileScrolling()
-            },
-            // Adapte la closure paramétrée à la slot sans-argument du
-            // CollapsibleHeader : l'offset capturé ici est celui du render
-            // courant du header (seul abonné au relay), donc toujours frais.
-            titleAccessory: titleAccessory.map { build in
-                let offset = scrollRelay.offset
-                return { build(offset) }
-            }
-        )
-        // Ce header est le SEUL abonné au relay : il se re-rend à chaque tick
-        // de scroll, donc l'offset qu'il publie ici est vivant. Le
-        // `ScrollView` SwiftUI n'expose pas de phase de défilement avant
-        // iOS 17 — l'apaisement se déduit du silence de l'offset.
-        .scrollMotionActive(offset: scrollRelay.offset)
+        content(MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion))
     }
 }
 
-// MARK: - Bottom Bar Overlay
-// Search bar + communities carousel + category filters. Extracted into its
-// own View struct for the same type-complexity reason as the header. Owns
-// its `searchBounce` animation state locally.
-struct ConversationListBottomBar: View {
-    @Binding var showSearchOverlay: Bool
-    var isSearching: FocusState<Bool>.Binding
-    @Binding var showWidgetPreview: Bool
-    @Binding var showGlobalSearch: Bool
-    let userCommunities: [MeeshyCommunity]
+// MARK: - Les gestes du menu d'une rangée, construits par la liste (#11215)
 
-    @EnvironmentObject var conversationViewModel: ConversationListViewModel
-    @EnvironmentObject var router: Router
+extension ConversationRowMenuActions {
 
-    @State private var searchBounce = false
-
-    private var theme: ThemeManager { ThemeManager.shared }
-    private var isActive: Bool { isSearching.wrappedValue || showSearchOverlay }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Spacer()
-
-            // Communities carousel + category filters — shown together inside
-            // a glass panel when the search overlay is open (loupe tap). The
-            // `.ultraThinMaterial` fill adapts to dark/light automatically and
-            // keeps the conversation list behind it legible; the theme-aware
-            // `inputBorder` stroke defines the panel edge in both modes.
-            if showSearchOverlay {
-                VStack(spacing: 0) {
-                    communitiesSection
-                        .padding(.vertical, 10)
-                    categoryFilters
+    /// Les gestes que la liste offre pour `conversation` — le MÊME jeu pour le
+    /// menu natif et le menu custom. Supprimer, Quitter et Bloquer arment une
+    /// confirmation (dialog attaché dans ConversationListView.body), jamais l'effet.
+    static func make(for conversation: Conversation, in list: ConversationListView) -> ConversationRowMenuActions {
+        let viewModel = list.conversationViewModel
+        let id = conversation.id
+        return ConversationRowMenuActions(
+            onPin: { Task { await viewModel.togglePin(for: id) } },
+            onMute: { Task { await viewModel.toggleMute(for: id) } },
+            onMarkReadToggle: {
+                let unread = conversation.userState.unreadCount > 0
+                Task {
+                    if unread { await viewModel.markAsRead(conversationId: id) } else { await viewModel.markAsUnread(conversationId: id) }
                 }
-                .padding(.top, 6)
-                .padding(.bottom, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 24)
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 24)
-                                .stroke(theme.inputBorder, lineWidth: 1)
-                        )
-                        .shadow(color: Color.black.opacity(0.12), radius: 14, y: 6)
-                )
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
-
-            // Search bar - always visible (unless scrolled away)
-            themedSearchBar
-        }
-    }
-
-    // MARK: - Communities Section
-    private var communitiesSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(String(localized: "communities.title", defaultValue: "Communaut\u{00e9}s"))
-                    .font(MeeshyFont.relative(16, weight: .bold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [MeeshyColors.error, MeeshyColors.indigo300],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .accessibilityAddTraits(.isHeader)
-                Spacer()
-
-                HStack(spacing: 12) {
-                    Button {
-                        router.push(.communityList)
-                    } label: {
-                        Text(String(localized: "action.see_all", defaultValue: "Voir tout"))
-                            .font(MeeshyFont.relative(12, weight: .semibold))
-                            .foregroundColor(MeeshyColors.indigo300)
-                    }
-                    .accessibilityLabel(String(localized: "accessibility.see_all_communities", defaultValue: "Voir toutes les communautes"))
-
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            showSearchOverlay = false
-                        }
-                        HapticFeedback.light()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(MeeshyFont.relative(18))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [MeeshyColors.error, MeeshyColors.error.opacity(0.7)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                    }
-                    .accessibilityLabel(String(localized: "accessibility.close_communities", defaultValue: "Fermer les communautes"))
+            },
+            onDetails: { list.presentInfo(of: conversation) },
+            onRename: {
+                list.renameText = conversation.name
+                list.sheetTargets.rename = conversation
+            },
+            onSetFavorite: { emoji in Task { await viewModel.setFavoriteReaction(conversationId: id, emoji: emoji) } },
+            onRemoveFavorite: { Task { await viewModel.setFavoriteReaction(conversationId: id, emoji: nil) } },
+            onMove: { sectionId in viewModel.moveToSection(conversationId: id, sectionId: sectionId) },
+            onInvite: { list.sheetTargets.inviteSheet = conversation },
+            onLock: { requestLockToggle(for: conversation, in: list) },
+            onArchive: {
+                let archived = conversation.userState.isArchived
+                Task {
+                    if archived { await viewModel.unarchiveConversation(conversationId: id) } else { await viewModel.archiveConversation(conversationId: id) }
                 }
-            }
-            .padding(.horizontal, 16)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(userCommunities, id: \.id) { community in
-                        ThemedCommunityCard(community: community) {
-                            HapticFeedback.light()
-                            router.push(.communityDetail(community.id))
-                        }
-                        .equatable()
-                    }
-                }
-                .padding(.horizontal, 16)
-            }
-        }
-    }
-
-    // MARK: - Category Filters
-    private var categoryFilters: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(ConversationFilter.allCases) { filter in
-                    ThemedFilterChip(
-                        title: filter.rawValue,
-                        color: filter.color,
-                        isSelected: conversationViewModel.selectedFilter == filter
-                    ) {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            conversationViewModel.selectedFilter = filter
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-        }
-    }
-
-    // MARK: - Themed Search Bar
-    private var themedSearchBar: some View {
-        HStack(spacing: 12) {
-            // Magnifying glass: tappable to toggle search overlay (communities + filters)
-            Button {
-                HapticFeedback.light()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showSearchOverlay.toggle()
-                    if showSearchOverlay {
-                        isSearching.wrappedValue = true
-                    }
-                }
-            } label: {
-                Image(systemName: "magnifyingglass")
-                    .font(MeeshyFont.relative(16, weight: .medium))
-                    .foregroundStyle(
-                        isActive ?
-                        AnyShapeStyle(LinearGradient(colors: [MeeshyColors.error, MeeshyColors.indigo300], startPoint: .leading, endPoint: .trailing)) :
-                        AnyShapeStyle(theme.textMuted)
-                    )
-                    .scaleEffect(isActive ? 1.15 : 1.0)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isActive)
-            }
-            .accessibilityLabel(String(localized: "accessibility.search", defaultValue: "Rechercher"))
-            .accessibilityHint(String(localized: "accessibility.search.hint", defaultValue: "Ouvre les filtres et la recherche de conversations"))
-
-            TextField(String(localized: "search.placeholder", defaultValue: "Rechercher..."), text: $conversationViewModel.searchText)
-                .focused(isSearching)
-                .foregroundColor(theme.textPrimary)
-                .font(MeeshyFont.relative(15))
-                .accessibilityLabel(String(localized: "conversation.list.search_conversations", defaultValue: "Rechercher des conversations", bundle: .main))
-
-            if !conversationViewModel.searchText.isEmpty {
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { conversationViewModel.searchText = "" }
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(MeeshyColors.error)
-                        .scaleEffect(1.0)
-                }
-                .accessibilityLabel(String(localized: "accessibility.clear_search", defaultValue: "Effacer la recherche"))
-                .transition(.scale.combined(with: .opacity))
-            }
-
-            // Dashboard / widget button
-            Button {
-                HapticFeedback.medium()
-                showWidgetPreview = true
-            } label: {
-                Image(systemName: "square.grid.2x2")
-                    .font(MeeshyFont.relative(16, weight: .medium))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [MeeshyColors.warning, MeeshyColors.indigo500],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
-            .accessibilityLabel(String(localized: "accessibility.dashboard", defaultValue: "Tableau de bord"))
-            .accessibilityHint(String(localized: "accessibility.dashboard.hint", defaultValue: "Ouvre le tableau de bord avec les widgets"))
-
-            // Global search button
-            Button {
-                HapticFeedback.medium()
-                showGlobalSearch = true
-            } label: {
-                Image(systemName: "text.magnifyingglass")
-                    .font(MeeshyFont.relative(16, weight: .medium))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [MeeshyColors.indigo600, MeeshyColors.indigo300],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
-            .accessibilityLabel(String(localized: "accessibility.global_search", defaultValue: "Recherche globale"))
-            .accessibilityHint(String(localized: "accessibility.global_search.hint", defaultValue: "Rechercher dans tous les messages, conversations et utilisateurs"))
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 22)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22)
-                        .stroke(
-                            isActive ?
-                            AnyShapeStyle(LinearGradient(colors: [MeeshyColors.error, MeeshyColors.indigo300], startPoint: .leading, endPoint: .trailing)) :
-                            AnyShapeStyle(theme.inputBorder),
-                            lineWidth: isActive ? 2 : 1
-                        )
-                )
-                .shadow(color: isActive ? MeeshyColors.indigo300.opacity(0.25) : .clear, radius: 12, y: 5)
+            },
+            onBlock: { requestBlockToggle(for: conversation, in: list) },
+            onDelete: {
+                list.sheetTargets.deleteTarget = conversation
+            },
+            onObsolete: { list.sheetTargets.obsoleteTarget = conversation },
+            onLeave: { list.sheetTargets.leaveTarget = conversation },
+            onReport: { list.sheetTargets.reportTarget = conversation },
+            onOpenAdmin: { openAdminConsole(for: conversation) },
+            onDetach: { DetachedWindowOpener.shared.open(.conversation(id: conversation.id)) },
+            // MÊME chemin que la loupe de l'aperçu : la porte du verrou
+            // (`openConversation`, après le PIN) arme `pendingOpenSearch`.
+            onSearch: { list.openConversation(conversation, searching: true) },
+            onCall: { startCall(to: conversation, isVideo: false) },
+            onVideoCall: { startCall(to: conversation, isVideo: true) },
+            onGroupSettings: { list.presentSettings(of: conversation) },
+            // La fiche s'ouvre sur son onglet Membres (`ConversationInfoSheet.InfoTab`),
+            // derrière la même porte du verrou que « Détails ».
+            onManageMembers: { list.presentInfo(of: conversation) }
         )
-        .scaleEffect(searchBounce ? 1.02 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: conversationViewModel.searchText.isEmpty)
-        .adaptiveOnChange(of: isSearching.wrappedValue) { _, newValue in
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
-                searchBounce = newValue
-            }
-            if newValue && !showSearchOverlay {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showSearchOverlay = true
-                }
-            }
+    }
+
+    /// Appeler le pair d'un direct : `requestPermissionsThenStartCall` tranche
+    /// micro et caméra AVANT de composer — `startCall` brut connecterait un
+    /// appel muet.
+    static func startCall(to conversation: Conversation, isVideo: Bool) {
+        guard let calleeId = conversation.participantUserId else { return }
+        Task {
+            await CallManager.shared.outgoingDial.requestPermissionsThenStartCall(
+                conversationId: conversation.id,
+                userId: calleeId,
+                displayName: conversation.name,
+                isVideo: isVideo
+            )
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 16)
+    }
+
+    /// La fiche de la conversation dans la console d'administration web.
+    static func openAdminConsole(for conversation: Conversation) {
+        guard let url = ConversationRowMenuCapabilities.adminConsoleURL(
+            conversationId: conversation.id,
+            webOrigin: MeeshyConfig.shared.webOrigin
+        ) else { return }
+        UIApplication.shared.open(url)
+    }
+
+    /// Verrouiller passe par le PIN maître ; sans lui, l'alerte qui l'explique.
+    private static func requestLockToggle(for conversation: Conversation, in list: ConversationListView) {
+        if ConversationLockManager.shared.isLocked(conversation.id) {
+            list.lockSheetMode = .unlockConversation
+            list.sheetTargets.lockSheet = conversation
+        } else if ConversationLockManager.shared.masterPinConfigured {
+            list.lockSheetMode = .lockConversation
+            list.sheetTargets.lockSheet = conversation
+        } else {
+            list.showNoMasterPinAlert = true
+        }
+    }
+
+    /// Débloquer est immédiat ; bloquer demande confirmation.
+    private static func requestBlockToggle(for conversation: Conversation, in list: ConversationListView) {
+        guard let uid = conversation.participantUserId, BlockService.shared.isBlocked(userId: uid) else {
+            list.sheetTargets.blockTarget = conversation
+            list.showBlockConfirmation = true
+            return
+        }
+        Task {
+            await BlockActionCoordinator.shared.unblock(userId: uid)
+            await MainActor.run { HapticFeedback.success() }
+        }
     }
 }

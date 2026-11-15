@@ -5,6 +5,7 @@ import { buildBroadcastRecipientFilter, localizedBroadcastText, type BroadcastTa
 import {
   RECIPIENT_LANG_SELECT,
   recipientLanguage,
+  recipientLanguages,
   type RecipientLanguagePrefs,
 } from '../utils/recipient-language';
 
@@ -42,25 +43,29 @@ export class BroadcastInAppSenderJob {
         return;
       }
 
-      const filter = buildBroadcastRecipientFilter((broadcast.targeting ?? {}) as BroadcastTargeting);
+      const filter = await buildBroadcastRecipientFilter(this.prisma, (broadcast.targeting ?? {}) as BroadcastTargeting);
       const totalRecipients = await this.prisma.user.count({ where: filter });
       const translatedSubjects = broadcast.translatedSubjects as Record<string, string> | null;
       const translatedBodies = broadcast.translatedBodies as Record<string, string> | null;
 
       const deliverTo = async (user: { id: string } & RecipientLanguagePrefs): Promise<boolean | null> => {
-        // La langue sert ici de CLÉ dans `translatedSubjects`/`translatedBodies` :
-        // non normalisée, un `'pt-BR'` persisté verbatim ne matche aucune entrée
-        // et la diffusion retombe sur la langue de l'AUTEUR malgré une
-        // traduction `pt` disponible.
-        const lang = recipientLanguage(user, 'en');
+        // Deux rôles distincts pour la langue :
+        //  - CADRAGE (`lang` de la notification) = le rang le plus haut RENSEIGNÉ ;
+        //  - CONTENU (titre/corps) = la DESCENTE ORDONNÉE du Prisme, servie par
+        //    `localizedBroadcastText` (SSOT `resolvePrismTranslation`). Les clés
+        //    de `translatedSubjects`/`translatedBodies` et les rangs du lecteur y
+        //    sont canonicalisées ensemble : un `'pt-BR'` atteint la traduction
+        //    `pt`, et un rang 1 sans traduction laisse gagner un rang inférieur.
+        const framingLang = recipientLanguage(user, 'en');
+        const preferredLanguages = recipientLanguages(user);
         try {
           const created = await this.notifications.createSystemNotification({
             recipientUserId: user.id,
-            title: localizedBroadcastText({ translated: translatedSubjects, sourceLanguage: broadcast.sourceLanguage, original: broadcast.subject, lang }),
-            content: localizedBroadcastText({ translated: translatedBodies, sourceLanguage: broadcast.sourceLanguage, original: broadcast.body, lang }),
+            title: localizedBroadcastText({ translated: translatedSubjects, sourceLanguage: broadcast.sourceLanguage, original: broadcast.subject, preferredLanguages }),
+            content: localizedBroadcastText({ translated: translatedBodies, sourceLanguage: broadcast.sourceLanguage, original: broadcast.body, preferredLanguages }),
             systemType: 'announcement',
             priority: 'normal',
-            lang,
+            lang: framingLang,
           });
           return created === null ? null : true;
         } catch (error) {
@@ -92,9 +97,18 @@ export class BroadcastInAppSenderJob {
         });
       }
 
+      // Aucune livraison réussie sur au moins un échec : la diffusion a ÉCHOUÉ,
+      // et son statut le dit (même règle que `BroadcastSenderJob`, audit
+      // 2026-10-04). Sinon le statut e-mail n'est pas touché.
+      const toutEchoue = tally.failed > 0 && tally.sent === 0;
       await this.prisma.adminBroadcast.update({
         where: { id: broadcastId },
-        data: { inAppSentCount: tally.sent, inAppFailedCount: tally.failed, inAppCompletedAt: new Date() },
+        data: {
+          inAppSentCount: tally.sent,
+          inAppFailedCount: tally.failed,
+          inAppCompletedAt: new Date(),
+          ...(toutEchoue ? { status: 'FAILED', errorMessage: `All ${tally.failed} in-app deliveries failed` } : {}),
+        },
       });
       logger.info(`In-app broadcast ${broadcastId} completed: ${tally.sent} delivered, ${tally.failed} failed, ${totalRecipients} targeted`);
     } catch (error) {
@@ -102,7 +116,8 @@ export class BroadcastInAppSenderJob {
       logger.error(`In-app broadcast job ${broadcastId} crashed: ${msg}`);
       await this.prisma.adminBroadcast.update({
         where: { id: broadcastId },
-        data: { inAppCompletedAt: new Date(), errorMessage: msg },
+        // Une panne du job est un ÉCHEC de la diffusion : le statut le dit.
+        data: { inAppCompletedAt: new Date(), errorMessage: msg, status: 'FAILED' },
       }).catch(() => {});
     }
   }

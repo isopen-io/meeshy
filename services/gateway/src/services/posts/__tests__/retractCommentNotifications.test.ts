@@ -87,7 +87,11 @@ function seed(seeded: NotificationRow[]): void {
     const batch = matched.slice(0, command?.batchSize ?? matched.length);
     return {
       cursor: {
-        firstBatch: batch.map((row) => ({ _id: { $oid: row.id }, userId: { $oid: row.userId } })),
+        firstBatch: batch.map((row) => ({
+          _id: { $oid: row.id },
+          userId: { $oid: row.userId },
+          delivery: { pushSent: true },
+        })),
         id: 0,
         ns: 'meeshy.Notification',
       },
@@ -138,7 +142,7 @@ describe('retractCommentNotifications', () => {
             { 'metadata.commentId': { $in: [COMMENT_ID] } },
           ],
         },
-        projection: { _id: 1, userId: 1 },
+        projection: { _id: 1, userId: 1, 'delivery.pushSent': 1 },
       })
     );
   });
@@ -184,9 +188,9 @@ describe('retractCommentNotifications', () => {
       where: { id: { in: ['n-auteur-post', 'n-reaction', 'n-reponse'] } },
     });
     expect(announceNotificationsRetracted).toHaveBeenCalledWith([
-      { id: 'n-auteur-post', userId: POST_AUTHOR_ID },
-      { id: 'n-reaction', userId: COMMENT_AUTHOR_ID },
-      { id: 'n-reponse', userId: MENTIONED_ID },
+      { id: 'n-auteur-post', userId: POST_AUTHOR_ID, pushSent: true },
+      { id: 'n-reaction', userId: COMMENT_AUTHOR_ID, pushSent: true },
+      { id: 'n-reponse', userId: MENTIONED_ID, pushSent: true },
     ]);
   });
 

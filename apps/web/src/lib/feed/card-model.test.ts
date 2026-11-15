@@ -1,0 +1,764 @@
+import { describe, expect, test } from 'bun:test';
+
+import type { FeedPost } from '@/lib/api/feed-pages';
+import { REEL_SCENE_LOOP, REEL_STUDIO } from '@/lib/api/fixtures-reels';
+
+import { resolveFeedCardModel } from './card-model';
+
+const NOW = new Date('2026-09-13T12:00:00.000Z');
+
+const basePost = (partial: Partial<FeedPost>): FeedPost => ({
+  id: 'p1',
+  type: 'POST',
+  createdAt: '2026-09-13T11:55:00.000Z',
+  ...partial,
+});
+
+describe('resolveFeedCardModel — le SITE UNIQUE qui compose type, Prisme, accent et heure', () => {
+  test('un post sans média ni texte ⇒ `text` absent, `media` vide', () => {
+    const model = resolveFeedCardModel(basePost({ author: { id: 'u1', displayName: 'Léa' } }), {
+      preferredLanguages: ['fr'],
+      now: NOW,
+    });
+    expect(model.text).toBeUndefined();
+    expect(model.media).toEqual([]);
+    expect(model.relativeTime).toBe('5 min');
+  });
+
+  test('l’auteur absent retombe sur un nom de repli, jamais une chaîne vide', () => {
+    const model = resolveFeedCardModel(basePost({}), { preferredLanguages: ['fr'], now: NOW });
+    expect(model.author.name).toBe('Quelqu’un');
+    expect(model.author.initials).not.toBe('');
+  });
+
+  test('username sert de repli quand displayName manque', () => {
+    const model = resolveFeedCardModel(basePost({ author: { id: 'u1', username: 'lea.dupont' } }), {
+      preferredLanguages: ['fr'],
+      now: NOW,
+    });
+    expect(model.author.name).toBe('lea.dupont');
+  });
+
+  /** TÉMOIN DE RANG ≠ 1 (leçon 261) — voir `lib/feed/text.test.ts` pour le
+   * témoin de la loi elle-même ; celui-ci prouve que `resolveFeedCardModel`
+   * l’APPELLE bel et bien plutôt que de réécrire sa propre descente. */
+  test('descend le Prisme jusqu’au rang 2 — jamais un repli sur l’original', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        content: 'Buenos días a todos',
+        originalLanguage: 'es',
+        translations: { en: { text: 'Good morning everyone' } },
+        author: { id: 'u1', displayName: 'Sofia' },
+      }),
+      { preferredLanguages: ['fr', 'en'], now: NOW },
+    );
+    /* `original` / `originalLanguage` (#7141) — le modèle porte désormais ce que
+       le GESTE ouvre, sans quoi la carte annoncerait une traduction sans offrir
+       de chemin vers l'original (loi 4). Ils sont portés MÊME quand rien n'est
+       traduit : c'est `translated` qui décide de l'annonce. */
+    expect(model.text).toEqual({
+      full: 'Good morning everyone',
+      language: 'en',
+      translated: true,
+      original: 'Buenos días a todos',
+      originalLanguage: 'es',
+    });
+  });
+
+  /** `repostOfHandle` a été RETIRÉ (#6278 c, Q3) : la carte citée
+   * (`repostOf`, ci-dessous) remplace désormais la ligne « ↻ @handle » —
+   * ce témoin mesure `repostOf.author`, le SEUL porteur du pseudo depuis. */
+  test('l’attribution de republication porte l’auteur, jamais un objet vide', () => {
+    const model = resolveFeedCardModel(
+      basePost({ content: 'Bien vu.', originalLanguage: 'fr', repostOf: { author: { username: 'yann.petit' } } }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.repostOf?.author.username).toBe('yann.petit');
+  });
+
+  /** LA CARTE CITÉE (#6278 c) — `repostOf` porte l'auteur, le corps déjà
+   * résolu par le Prisme (rang ≠ 1, comme le témoin de rang de la carte
+   * elle-même) et la vignette du premier média de l'ORIGINAL. */
+  test('la carte citée descend le Prisme jusqu’au rang 2, distinct du texte de la republication', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        content: 'Regardez ça',
+        originalLanguage: 'fr',
+        repostOf: {
+          id: 'orig-1',
+          type: 'POST',
+          content: 'Good morning',
+          originalLanguage: 'en',
+          translations: { es: { text: 'Buenos días' } },
+          author: { id: 'u9', displayName: 'Yann Petit', username: 'yann.petit' },
+          media: [{ id: 'm9', fileUrl: 'orig.jpg', thumbnailUrl: 'orig-thumb.jpg' }],
+          likeCount: 12,
+          createdAt: '2026-09-13T10:00:00.000Z',
+        },
+      }),
+      { preferredLanguages: ['fr', 'es'], now: NOW },
+    );
+    expect(model.repostOf?.text).toEqual({
+      full: 'Buenos días',
+      language: 'es',
+      translated: true,
+      original: 'Good morning',
+      originalLanguage: 'en',
+    });
+    expect(model.repostOf?.author.name).toBe('Yann Petit');
+    expect(model.repostOf?.likeCount).toBe(12);
+    expect(model.repostOf?.thumbnailSrc).toBeDefined();
+    expect(model.repostOf?.isStory).toBe(false);
+    expect(model.repostOf?.isReel).toBe(false);
+    expect(model.repostOf?.id).toBe('orig-1');
+  });
+
+  test('la carte citée marque STORY et REEL par le type de l’original', () => {
+    const story = resolveFeedCardModel(basePost({ repostOf: { id: 'o1', type: 'STORY', author: { id: 'u1' } } }), {
+      preferredLanguages: ['fr'],
+      now: NOW,
+    });
+    expect(story.repostOf?.isStory).toBe(true);
+    expect(story.repostOf?.isReel).toBe(false);
+
+    const reel = resolveFeedCardModel(basePost({ repostOf: { id: 'o2', type: 'REEL', author: { id: 'u1' } } }), {
+      preferredLanguages: ['fr'],
+      now: NOW,
+    });
+    expect(reel.repostOf?.isReel).toBe(true);
+  });
+
+  test('sans republication, aucune clé `repostOf` (pas `undefined` posé)', () => {
+    const model = resolveFeedCardModel(basePost({ content: 'x', originalLanguage: 'fr' }), {
+      preferredLanguages: ['fr'],
+      now: NOW,
+    });
+    expect('repostOf' in model).toBe(false);
+  });
+
+  /** LA VIGNETTE DE LA CARTE CITÉE (#6278 c, G10) — `FeedPostCard.swift:131-134` :
+   * une vignette DÉDIÉE gagne toujours ; à défaut, une IMAGE peut servir SA
+   * PROPRE source, jamais une vidéo ; « +N » compte ce qui ne tient pas dans
+   * la vignette. */
+  test('la vignette citée vient de `thumbnailUrl` en priorité, et « +N » compte le reste', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        repostOf: {
+          id: 'orig-3',
+          type: 'POST',
+          author: { id: 'u9' },
+          media: [
+            { id: 'm1', fileUrl: 'a.jpg', thumbnailUrl: 'a-thumb.jpg', mimeType: 'image/jpeg' },
+            { id: 'm2', fileUrl: 'b.jpg', mimeType: 'image/jpeg' },
+            { id: 'm3', fileUrl: 'c.jpg', mimeType: 'image/jpeg' },
+          ],
+        },
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.repostOf?.thumbnailSrc).toBeDefined();
+    expect(model.repostOf?.moreCount).toBe(2);
+  });
+
+  test('sans vignette dédiée, une IMAGE sert sa propre source — jamais une vidéo', () => {
+    const withImage = resolveFeedCardModel(
+      basePost({ repostOf: { id: 'orig-4', type: 'POST', author: { id: 'u9' }, media: [{ id: 'm1', fileUrl: 'a.jpg', mimeType: 'image/jpeg' }] } }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(withImage.repostOf?.thumbnailSrc).toBeDefined();
+    expect(withImage.repostOf?.moreCount).toBeUndefined();
+
+    const withVideo = resolveFeedCardModel(
+      basePost({ repostOf: { id: 'orig-5', type: 'POST', author: { id: 'u9' }, media: [{ id: 'm1', fileUrl: 'v.mp4', mimeType: 'video/mp4' }] } }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(withVideo.repostOf?.thumbnailSrc).toBeUndefined();
+  });
+
+  test('type REEL ⇒ isReel vrai et le ratio du média suit reelCardRatio, pas postMediaRatio', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        type: 'REEL',
+        media: [{ id: 'm1', mimeType: 'video/mp4', fileUrl: 'reel.mp4', width: 1080, height: 1920 }],
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.isReel).toBe(true);
+    expect(model.media[0]?.ratio).toBe(1.25); // borné, jamais 1920/1080 brut
+    expect(model.media[0]?.kind).toBe('video');
+  });
+
+  test('les médias sont ORDONNÉS par `order`, même servis dans le désordre', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        media: [
+          { id: 'm-2', fileUrl: 'b.jpg', order: 1, mimeType: 'image/jpeg' },
+          { id: 'm-1', fileUrl: 'a.jpg', order: 0, mimeType: 'image/jpeg' },
+        ],
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.media.map((m) => m.id)).toEqual(['m-1', 'm-2']);
+  });
+
+  test('les compteurs absents retombent sur zéro, jamais `undefined`', () => {
+    const model = resolveFeedCardModel(basePost({}), { preferredLanguages: ['fr'], now: NOW });
+    expect(model.stats).toEqual({ likeCount: 0, commentCount: 0, repostCount: 0, bookmarkCount: 0, shareCount: 0 });
+  });
+
+  test('un avatar d’auteur SERVI passe par le résolveur d’URL de pièce jointe', () => {
+    const model = resolveFeedCardModel(basePost({ author: { id: 'u1', displayName: 'Léa', avatar: '2026/09/lea.png' } }), {
+      preferredLanguages: ['fr'],
+      now: NOW,
+    });
+    expect(model.author.avatarSrc).toContain('2026%2F09%2Flea.png');
+  });
+
+  /**
+   * LA CHARGE RÉELLE DE LA PASSERELLE (défaut BLOQUANT, revue-correction
+   * #5893) — relevée le 2026-09-13 sur `gate.staging.meeshy.me`,
+   * `GET /api/v1/social/posts?scope=home` : le compte `demo-test-stagin` sert
+   * `author.avatar: null`, et chaque média sans vignette sert
+   * `thumbnailUrl/thumbHash/caption/alt/width/height/duration: null`. Prisma
+   * sérialise une colonne optionnelle en `null`, jamais en clé ABSENTE.
+   *
+   * Avant ce témoin, `resolveAuthorSrc` testait `avatar === undefined` puis
+   * appelait `avatar.trim()` : l'écran levait `TypeError: Cannot read
+   * properties of null (reading 'trim')` PENDANT LE RENDU et restait figé sur
+   * son squelette — aucun état d'erreur, aucun message. Le corpus de fixtures
+   * ne portant aucun `null`, aucun témoin ne pouvait rougir.
+   */
+  test('la charge RÉELLE — `null` partout où la passerelle sert une colonne optionnelle — se résout sans lever', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        type: 'REEL',
+        content: null,
+        originalLanguage: 'fr',
+        translations: null,
+        author: { id: 'u-null', username: 'demo-test-stagin', displayName: 'Demo Test Staging Loop', avatar: null },
+        repostOf: null,
+        media: [
+          {
+            id: 'm-null',
+            mimeType: 'image/jpeg',
+            fileUrl: '2026/09/u/0_photo.jpeg',
+            thumbnailUrl: null,
+            thumbHash: null,
+            width: null,
+            height: null,
+            duration: null,
+            caption: null,
+            alt: null,
+            order: null,
+          },
+        ],
+        likeCount: null,
+        commentCount: null,
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+
+    expect(model.author.name).toBe('Demo Test Staging Loop');
+    expect('avatarSrc' in model.author).toBe(false);
+    expect(model.media[0]?.kind).toBe('image');
+    // Une LÉGENDE `null` ne doit pas devenir une légende VIDE : la carte
+    // peindrait sinon son voile dégradé sur chaque média sans texte.
+    expect('caption' in (model.media[0] ?? {})).toBe(false);
+    expect('thumbnailSrc' in (model.media[0] ?? {})).toBe(false);
+    expect('placeholder' in (model.media[0] ?? {})).toBe(false);
+    expect('durationMs' in (model.media[0] ?? {})).toBe(false);
+    expect(model.media[0]?.ratio).toBe(1.25); // le repli d'un RÉEL sans cotes
+    expect(model.stats.likeCount).toBe(0);
+    expect(model.text).toBeUndefined();
+  });
+
+  /** `PostMedia.alt` est le texte d'ACCESSIBILITÉ que la passerelle sert
+   * (`schema.prisma:3618`) ; il était déclaré sur le wire et jeté par le
+   * modèle — chaque image partait `alt=""` (revue-correction #5893). */
+  test('le texte d’accessibilité servi (`alt`) atteint le modèle, et la légende ne le remplace pas', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', alt: 'Un marché couvert au petit matin', caption: 'Le marché' }],
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.media[0]?.altText).toBe('Un marché couvert au petit matin');
+    expect(model.media[0]?.caption).toBe('Le marché');
+  });
+
+  /** LA LÉGENDE DESCEND SON PROPRE PRISME (#6280) — `captionLanguage` /
+   * `captionTranslations`, DISTINCTS de `originalLanguage` / `translations`
+   * du post (§ Prisme, trois contenus jamais confondus). TÉMOIN DE RANG ≠ 1
+   * (leçon 261), comme pour le corps du post ci-dessus. */
+  test('la légende d’un média descend le Prisme jusqu’au rang 2, avec la langue servie', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        media: [
+          {
+            id: 'm1',
+            mimeType: 'image/jpeg',
+            fileUrl: 'a.jpg',
+            caption: 'The morning market',
+            captionLanguage: 'en',
+            captionTranslations: {
+              fr: { text: 'Le marché du matin', translationModel: 'nllb-200', createdAt: '2026-09-14T00:00:00.000Z' },
+            },
+          },
+        ],
+      }),
+      { preferredLanguages: ['de', 'fr'], now: NOW },
+    );
+    expect(model.media[0]?.caption).toBe('Le marché du matin');
+    expect(model.media[0]?.captionLanguage).toBe('fr');
+    expect(model.media[0]?.captionTranslated).toBe(true);
+  });
+
+  test('sans traduction vers une langue du lecteur, la légende ORIGINALE est servie à sa langue', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        media: [
+          { id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', caption: 'The morning market', captionLanguage: 'en' },
+        ],
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.media[0]?.caption).toBe('The morning market');
+    expect(model.media[0]?.captionLanguage).toBe('en');
+    expect(model.media[0]?.captionTranslated).toBe(false);
+  });
+
+  /**
+   * LE TEXTE ALTERNATIF DESCEND SON PROPRE PRISME (#7392) — `altLanguage` /
+   * `altTranslations`, le TROISIÈME couple, distinct de celui de la légende et
+   * de celui du corps du post. C'est la seule chaîne qu'un lecteur d'écran
+   * PRONONCE, et c'était la seule que le fil servait brute.
+   * TÉMOIN DE RANG ≠ 1 (leçon 261).
+   */
+  test('le texte alternatif d’un média descend le Prisme jusqu’au rang 2, avec la langue servie', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        media: [
+          {
+            id: 'm1',
+            mimeType: 'image/jpeg',
+            fileUrl: 'a.jpg',
+            alt: 'A covered market at dawn',
+            altLanguage: 'en',
+            altTranslations: {
+              fr: { text: 'Un marché couvert au petit matin', translationModel: 'nllb-200', createdAt: '2026-11-07T00:00:00.000Z' },
+            },
+          },
+        ],
+      }),
+      { preferredLanguages: ['de', 'fr'], now: NOW },
+    );
+    expect(model.media[0]?.altText).toBe('Un marché couvert au petit matin');
+    expect(model.media[0]?.altTextLanguage).toBe('fr');
+    expect(model.media[0]?.altTextTranslated).toBe(true);
+  });
+
+  test('sans traduction vers une langue du lecteur, le texte alternatif ORIGINAL est servi à sa langue', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', alt: 'A covered market at dawn', altLanguage: 'en' }],
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.media[0]?.altText).toBe('A covered market at dawn');
+    expect(model.media[0]?.altTextLanguage).toBe('en');
+    expect(model.media[0]?.altTextTranslated).toBe(false);
+  });
+
+  /**
+   * LES TROIS CARTES NE SE MÉLANGENT PAS. Le corps du post et la légende ont
+   * tous deux une traduction française ; le texte alternatif n'en a pas. Il
+   * reste donc EN ANGLAIS — servir l'une des deux autres serait exactement ce
+   * que #4904 a coûté, en pire : le lecteur d'écran prononcerait la légende que
+   * l'écran montre déjà.
+   */
+  test('ni la carte de la légende ni celle du post ne traduisent le texte alternatif', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        content: 'The morning market',
+        originalLanguage: 'en',
+        translations: { fr: { text: 'Le marché du matin', translationModel: 'nllb-200', createdAt: '2026-11-07T00:00:00.000Z' } },
+        media: [
+          {
+            id: 'm1',
+            mimeType: 'image/jpeg',
+            fileUrl: 'a.jpg',
+            caption: 'The market',
+            captionLanguage: 'en',
+            captionTranslations: { fr: { text: 'Le marché', translationModel: 'nllb-200', createdAt: '2026-11-07T00:00:00.000Z' } },
+            alt: 'A covered market at dawn',
+            altLanguage: 'en',
+          },
+        ],
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.media[0]?.caption).toBe('Le marché');
+    expect(model.media[0]?.altText).toBe('A covered market at dawn');
+    expect(model.media[0]?.altTextLanguage).toBe('en');
+    expect(model.media[0]?.altTextTranslated).toBe(false);
+  });
+
+  test('un média sans texte alternatif ne porte aucune clé `altTextLanguage`', () => {
+    const model = resolveFeedCardModel(
+      basePost({ media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }] }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect('altText' in (model.media[0] ?? {})).toBe(false);
+    expect('altTextLanguage' in (model.media[0] ?? {})).toBe(false);
+    expect('altTextTranslated' in (model.media[0] ?? {})).toBe(false);
+  });
+
+  test('un média sans légende ne porte aucune clé `captionLanguage`', () => {
+    const model = resolveFeedCardModel(
+      basePost({ media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }] }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect('caption' in (model.media[0] ?? {})).toBe(false);
+    expect('captionLanguage' in (model.media[0] ?? {})).toBe(false);
+  });
+
+  /**
+   * LE REPLI SUR LE CONTENU DU POST (#6864, directive porteur 2026-09-16) —
+   * quatre vecteurs, chacun distinguable des autres :
+   * 1. un seul média AVEC légende propre ⇒ sa légende propre ;
+   * 2. un seul média SANS légende propre ⇒ le contenu du post ;
+   * 3. plusieurs médias, l'un AVEC légende propre ⇒ sa légende, et RIEN sur
+   *    les autres (jamais le contenu du post) ;
+   * 4. plusieurs médias, AUCUNE légende propre ⇒ AUCUNE légende nulle part.
+   */
+  describe('le repli sur le contenu du post — un média SEUL sans légende propre (#6864)', () => {
+    test('vecteur 1 — un média seul AVEC légende propre garde SA légende, jamais le contenu du post', () => {
+      const model = resolveFeedCardModel(
+        basePost({
+          content: 'Contenu du post',
+          originalLanguage: 'fr',
+          media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', caption: 'Légende propre' }],
+        }),
+        { preferredLanguages: ['fr'], now: NOW },
+      );
+      expect(model.media[0]?.caption).toBe('Légende propre');
+    });
+
+    test('vecteur 2 — un média seul SANS légende propre reçoit le contenu du post', () => {
+      const model = resolveFeedCardModel(
+        basePost({
+          content: 'Contenu du post',
+          originalLanguage: 'fr',
+          media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }],
+        }),
+        { preferredLanguages: ['fr'], now: NOW },
+      );
+      expect(model.media[0]?.caption).toBe('Contenu du post');
+      expect(model.media[0]?.captionLanguage).toBe('fr');
+      expect(model.media[0]?.captionTranslated).toBe(false);
+    });
+
+    test('vecteur 2 bis — le repli descend le MÊME Prisme que le corps du post (rang ≠ 1)', () => {
+      const model = resolveFeedCardModel(
+        basePost({
+          content: 'Buenos días',
+          originalLanguage: 'es',
+          translations: { en: { text: 'Good morning' } },
+          media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }],
+        }),
+        { preferredLanguages: ['fr', 'en'], now: NOW },
+      );
+      expect(model.media[0]?.caption).toBe('Good morning');
+      expect(model.media[0]?.captionLanguage).toBe('en');
+      expect(model.media[0]?.captionTranslated).toBe(true);
+    });
+
+    test('vecteur 3 — à plusieurs médias, la légende propre d’UN média ne se propage jamais aux autres via le contenu du post', () => {
+      const model = resolveFeedCardModel(
+        basePost({
+          content: 'Contenu du post',
+          originalLanguage: 'fr',
+          media: [
+            { id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', order: 0, caption: 'Légende propre' },
+            { id: 'm2', mimeType: 'image/jpeg', fileUrl: 'b.jpg', order: 1 },
+          ],
+        }),
+        { preferredLanguages: ['fr'], now: NOW },
+      );
+      expect(model.media[0]?.caption).toBe('Légende propre');
+      expect('caption' in (model.media[1] ?? {})).toBe(false);
+    });
+
+    test('vecteur 4 — à plusieurs médias sans AUCUNE légende propre, aucune légende nulle part', () => {
+      const model = resolveFeedCardModel(
+        basePost({
+          content: 'Contenu du post',
+          originalLanguage: 'fr',
+          media: [
+            { id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', order: 0 },
+            { id: 'm2', mimeType: 'image/jpeg', fileUrl: 'b.jpg', order: 1 },
+          ],
+        }),
+        { preferredLanguages: ['fr'], now: NOW },
+      );
+      expect('caption' in (model.media[0] ?? {})).toBe(false);
+      expect('caption' in (model.media[1] ?? {})).toBe(false);
+    });
+
+    test('un média seul SANS légende propre et un post SANS contenu ⇒ toujours aucune légende', () => {
+      const model = resolveFeedCardModel(
+        basePost({ media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }] }),
+        { preferredLanguages: ['fr'], now: NOW },
+      );
+      expect('caption' in (model.media[0] ?? {})).toBe(false);
+    });
+  });
+
+  test('une durée servie voyage en MILLISECONDES, sous un nom qui le dit (PostMedia.duration // ms)', () => {
+    const model = resolveFeedCardModel(
+      basePost({ media: [{ id: 'm1', mimeType: 'video/mp4', fileUrl: 'v.mp4', duration: 28_000 }] }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.media[0]?.durationMs).toBe(28_000);
+  });
+
+  test('deux auteurs de MÊME nom mais d’id différent reçoivent des accents DIFFÉRENTS (D-1, FeedModels.swift:255)', () => {
+    const a = resolveFeedCardModel(basePost({ author: { id: 'u1', displayName: 'Alex' } }), {
+      preferredLanguages: ['fr'],
+      now: NOW,
+    });
+    const b = resolveFeedCardModel(basePost({ author: { id: 'u2', displayName: 'Alex' } }), {
+      preferredLanguages: ['fr'],
+      now: NOW,
+    });
+    expect(a.author.accentColor).not.toBe(b.author.accentColor);
+  });
+
+  /**
+   * **L'ORIGINE DE LA LÉGENDE EST PORTÉE, PAS DEVINÉE** (#6864, complément de
+   * `709e35b51e` qui a livré la règle elle-même).
+   *
+   * Les vecteurs de la règle sont déjà couverts ci-dessus ; ce témoin garde la
+   * seule chose qu'ils ne disent pas : D'OÙ vient le texte servi.
+   *
+   * `captionTranslated` est documenté « vrai quand `caption` est une traduction
+   * de sa source ». Dès qu'une légende peut venir du média OU du post, ce
+   * drapeau ne dit plus DE QUELLE source — et les deux provenances n'ont pas
+   * les mêmes traductions : `PostMedia.captionTranslations` d'un côté,
+   * `Post.translations` de l'autre. Servir les unes sur l'autre est exactement
+   * ce que #4904 a coûté, et une chaîne nue ne permet pas de les distinguer en
+   * aval (puce de traduction, `lang`, recette).
+   */
+  test('la légende porte son ORIGINE — `media` pour la propre, `post` pour le repli (#6864)', () => {
+    const propre = resolveFeedCardModel(
+      basePost({
+        content: 'Le marché de ce matin.',
+        originalLanguage: 'fr',
+        media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', caption: 'Sept heures du matin.' }],
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(propre.media[0]?.captionOrigin).toBe('media');
+
+    const repli = resolveFeedCardModel(
+      basePost({
+        content: 'Le marché de ce matin.',
+        originalLanguage: 'fr',
+        media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }],
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(repli.media[0]?.captionOrigin).toBe('post');
+
+    /* Aucune légende ⇒ aucune origine : la clé est ABSENTE, jamais posée à
+       `undefined` (`exactOptionalPropertyTypes`). */
+    const nue = resolveFeedCardModel(
+      basePost({
+        content: 'Deux vues du même sentier.',
+        originalLanguage: 'fr',
+        media: [
+          { id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', order: 0 },
+          { id: 'm2', mimeType: 'image/jpeg', fileUrl: 'b.jpg', order: 1 },
+        ],
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect('captionOrigin' in (nue.media[0] ?? {})).toBe(false);
+    expect('captionOrigin' in (nue.media[1] ?? {})).toBe(false);
+  });
+});
+
+/** T1 (#6898) — `model.scene` : le document canvas v3 déjà PARSÉ, ou absent
+ * (repli média, D-78). */
+describe('resolveFeedCardModel — la scène (D-78)', () => {
+  test('storyEffects v3 avec scenes ⇒ model.scene.document.scenes.length', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        storyEffects: {
+          v: 3,
+          scenes: [
+            { id: 's1', objects: [] },
+            { id: 's2', objects: [] },
+          ],
+        },
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.scene?.document.scenes.length).toBe(2);
+    expect(model.scene?.carrier.postId).toBe('p1');
+  });
+
+  test('v: 3 SANS scenes (POST_HERO) ⇒ scene absent (repli média, D-78)', () => {
+    const model = resolveFeedCardModel(basePost({ storyEffects: { v: 3, layout: 'hero' } }), {
+      preferredLanguages: ['fr'],
+      now: NOW,
+    });
+    expect(model.scene).toBeUndefined();
+  });
+
+  test('transform: {} (copie de 6a9d0ad5) ⇒ parsé, scene présent', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        storyEffects: {
+          v: 3,
+          scenes: [
+            {
+              id: 's1',
+              objects: [
+                {
+                  id: 'bg1',
+                  kind: 'media',
+                  anchor: { t: 'free', x: 0.5, y: 0.5 },
+                  plane: 'bg',
+                  z: 0,
+                  transform: {},
+                  payload: { background: '#4338CA' },
+                },
+              ],
+            },
+          ],
+        },
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.scene).toBeDefined();
+    expect(model.scene?.document.scenes[0]?.objects[0]?.transform).toEqual({ scale: 1, rotation: 0, opacity: 1 });
+  });
+
+  test('v: 1 ⇒ scene absent', () => {
+    const model = resolveFeedCardModel(basePost({ storyEffects: { v: 1, background: '#fff' } }), {
+      preferredLanguages: ['fr'],
+      now: NOW,
+    });
+    expect(model.scene).toBeUndefined();
+  });
+
+  test('le porteur reprend les médias DÉJÀ résolus par le Prisme — jamais une seconde descente', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        media: [{ id: 'media-a', mimeType: 'image/jpeg', fileUrl: 'a.jpg', caption: 'Bonjour', order: 0 }],
+        storyEffects: { v: 3, scenes: [{ id: 's1', objects: [] }] },
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.scene?.carrier.media).toEqual([
+      {
+        id: 'media-a',
+        mimeType: 'image/jpeg',
+        src: 'https://gate.meeshy.me/api/v1/attachments/file/a.jpg',
+        caption: 'Bonjour',
+        captionOrigin: 'media',
+      },
+    ]);
+  });
+
+  /** T4 (#6903) — le porteur reporte le MIME : `electBackgroundTrack`
+   * (`document.sound: { source: 'original' }`) élit le premier média AUDIO
+   * du porteur PAR le MIME (`background-sound.ts:80`) — sans lui, aucun
+   * réel ni post composé du fil n'a jamais de son de fond. */
+  test('le porteur reporte le MIME de chaque média (#6903) — le son de fond en dépend', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        media: [
+          { id: 'media-video', mimeType: 'video/webm', fileUrl: 'clip.webm', order: 0 },
+          { id: 'media-audio', mimeType: 'audio/webm', fileUrl: 'son.webm', order: 1 },
+        ],
+        storyEffects: { v: 3, scenes: [{ id: 's1', objects: [] }] },
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.scene?.carrier.media.map((m) => m.mimeType)).toEqual(['video/webm', 'audio/webm']);
+  });
+
+  /** T9 (#6903) — un réel COMPOSÉ (fixture `REEL_SCENE_LOOP`) a bien
+   * `isReel: true` ET `scene` défini ; un réel de MÉDIAS (`REEL_STUDIO`) ne
+   * change PAS de comportement. */
+  test('un réel composé (REEL_SCENE_LOOP) a isReel ET scene ; un réel de médias (REEL_STUDIO) n’a pas de scène', () => {
+    const composed = resolveFeedCardModel(REEL_SCENE_LOOP, { preferredLanguages: ['fr'], now: NOW });
+    expect(composed.isReel).toBe(true);
+    expect(composed.scene).toBeDefined();
+
+    const media = resolveFeedCardModel(REEL_STUDIO, { preferredLanguages: ['fr'], now: NOW });
+    expect(media.isReel).toBe(true);
+    expect(media.scene).toBeUndefined();
+  });
+
+  /**
+   * LA CARTE D'UNE STORY NE MONTRE PAS DEUX FOIS LE MÊME TEXTE (#6944) — le
+   * repli de `709e35b51e` fait retomber la légende d'un média UNIQUE sur le
+   * `content` du post. Une story n'ayant PAS de `content` (son texte vit dans
+   * les objets de scène, `StoryViewModel+PublicationUpload.swift:378-391`),
+   * ce repli ne doit RIEN rendre — sans quoi le texte de la scène, peint par
+   * le moteur, serait redit en légende sous la carte.
+   *
+   * Le témoin porte sur le CAS RÉEL que le studio produit : des objets texte
+   * dans `storyEffects`, aucune légende de média, aucun `content`.
+   */
+  test('une story à texte de scène et SANS légende de média n’affiche aucune légende — jamais le texte redit', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        type: 'STORY',
+        content: '',
+        media: [{ id: 'media-a', mimeType: 'image/jpeg', fileUrl: 'a.jpg', order: 0 }],
+        storyEffects: {
+          v: 3,
+          scenes: [
+            {
+              id: 's1',
+              objects: [
+                {
+                  id: 'text-1',
+                  kind: 'text',
+                  anchor: { t: 'free', x: 0.5, y: 0.5 },
+                  plane: 'fg',
+                  z: 2,
+                  transform: { scale: 1, rotation: 0, opacity: 1 },
+                  payload: { text: 'Bonjour' },
+                },
+              ],
+            },
+          ],
+        },
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.media[0]?.caption).toBeUndefined();
+    expect(model.media[0]?.captionOrigin).toBeUndefined();
+    expect(model.scene?.carrier.media[0]?.caption).toBeUndefined();
+  });
+
+  /** La légende PROPRE du média, elle, voyage — et s'annonce `media`, jamais
+   * `post` : les deux provenances n'ont pas les mêmes traductions. */
+  test('une story dont le média PORTE une légende la sert, à l’origine `media`', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        type: 'STORY',
+        content: '',
+        media: [{ id: 'media-a', mimeType: 'image/jpeg', fileUrl: 'a.jpg', caption: 'Au lever du jour', captionLanguage: 'fr', order: 0 }],
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.media[0]?.caption).toBe('Au lever du jour');
+    expect(model.media[0]?.captionOrigin).toBe('media');
+  });
+});

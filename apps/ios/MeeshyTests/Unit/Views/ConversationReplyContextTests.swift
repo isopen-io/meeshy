@@ -78,9 +78,23 @@ final class ConversationReplyContextTests: XCTestCase {
             code.contains("func triggerReply(for msg: Message)"),
             "Ancrage perdu : ni fichier tronqué ni fonction renommée ne doit laisser cette garde passer à vide."
         )
+        // #4945 : le geste ne compose plus sa citation à la main — il passe par la
+        // fabrique UNIQUE du ViewModel, la même que la bulle optimiste, qui grave
+        // l'avatar (et désormais les faits du média, le Prisme et la protection).
+        // Garder l'ancrage sur le littéral `authorAvatarUrl:` aurait figé la
+        // divergence que la fabrique vient de supprimer.
         XCTAssertTrue(
-            code.contains("authorAvatarUrl: msg.senderAvatarURL"),
-            "Le geste « Répondre » doit graver l'avatar du message cité dans la citation — sinon l'avatar devrait être re-résolu au rendu, ce qu'aucun `==` manuel ne verrait."
+            code.contains("viewModel.optimisticReplyReference(quoting: msg)"),
+            "Le geste « Répondre » doit passer par la fabrique unique de citation (`optimisticReplyReference`) — sinon la bannière et la bulle divergent à nouveau."
+        )
+        // `= ReplyReference(` et non `ReplyReference(` : le second est un
+        // SOUS-MOT de `optimisticReplyReference(`, l'appel même que l'assertion
+        // précédente EXIGE — la garde interdisait donc ce qu'elle prescrit deux
+        // lignes plus haut. Une garde négative s'ancre sur ce qui distingue la
+        // composition manuelle (l'affectation) de l'appel à la fabrique.
+        XCTAssertFalse(
+            code.contains("= ReplyReference("),
+            "Aucune citation ne se compose à la main dans ce fichier : la fabrique est le seul producteur."
         )
     }
 

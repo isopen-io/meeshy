@@ -111,6 +111,29 @@ final class MessageSocketReconnectLifecycleTests: XCTestCase {
         XCTAssertEqual(Set(rooms), ["A", "B"], "all joined rooms must survive a background suspend")
     }
 
+    /// iPad multi-fenêtre : toutes les salles affichées passent en tête, la plus récente d'abord.
+    func test_roomsToRejoin_everyOpenWindowConversationFirst() {
+        let sut = MessageSocketManager.shared
+        sut.disconnect()
+        defer { sut.disconnect() }
+
+        for room in ["X", "A", "B", "Y"] { sut.joinConversation(room) }
+        sut.openConversationIds = ["A", "B"]
+        sut.activeConversationId = "B"
+
+        let rooms = sut.roomsToRejoinOnConnect()
+        XCTAssertEqual(Array(rooms.prefix(2)), ["B", "A"])
+        XCTAssertEqual(Set(rooms), ["X", "A", "B", "Y"])
+        XCTAssertEqual(rooms.count, 4, "aucune salle rejointe deux fois")
+    }
+
+    func test_logout_forgetsTheOpenWindows() {
+        let sut = MessageSocketManager.shared
+        sut.openConversationIds = ["A"]
+        sut.disconnect()
+        XCTAssertTrue(sut.openConversationIds.isEmpty)
+    }
+
     func test_roomsToRejoin_activeConversationFirst() {
         let sut = MessageSocketManager.shared
         sut.disconnect()

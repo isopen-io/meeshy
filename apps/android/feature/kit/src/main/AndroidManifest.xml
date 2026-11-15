@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- K00 : le catalogue du kit. Aucun filtre d'intention, donc aucune icône de lanceur : on l'ouvre par
+         adb shell am start -n me.meeshy.app.debug/me.meeshy.feature.kit.KitCatalogActivity (extra de chaîne « kit » pour la clé)
+         Ce module n'est lié à :app qu'en debugImplementation, ce manifeste n'entre pas dans l'APK de production. -->
+    <application>
+        <activity
+            android:name="me.meeshy.feature.kit.KitCatalogActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+    </application>
+</manifest>

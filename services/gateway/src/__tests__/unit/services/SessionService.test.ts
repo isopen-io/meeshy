@@ -12,7 +12,7 @@
  * - Trust and expiry extension
  * - Configuration retrieval
  *
- * Run with: pnpm test -- --testPathPattern="SessionService"
+ * Run with: bun run test -- --testPathPatterns="SessionService"
  *
  * @jest-environment node
  */
@@ -44,7 +44,6 @@ import {
   cleanupExpiredSessions,
   markSessionTrusted,
   extendSessionExpiry,
-  rotateRefreshToken,
   getSessionConfig,
   SessionData,
   CreateSessionInput,
@@ -54,6 +53,7 @@ import { RequestContext } from '../../../services/GeoIPService';
 
 // Mock Prisma Client
 const mockPrisma: any = {
+  user: { findUnique: jest.fn(async () => ({ birthDate: null })) },
   userSession: {
     create: jest.fn() as jest.Mock<any>,
     findFirst: jest.fn() as jest.Mock<any>,
@@ -441,7 +441,7 @@ describe('SessionService', () => {
 
       mockPrisma.userSession.create.mockResolvedValueOnce(mockSession);
       mockPrisma.userSession.findMany.mockResolvedValueOnce(existingSessions);
-      mockPrisma.userSession.update.mockResolvedValue({ count: 1 });
+      mockPrisma.userSession.updateMany.mockResolvedValue({ count: 1 });
 
       const input: CreateSessionInput = {
         userId: mockUserId,
@@ -466,9 +466,10 @@ describe('SessionService', () => {
 
       // Should have invalidated the oldest session (first one in sorted array)
       // session-0 is the oldest because it has the smallest lastActivityAt
-      expect(mockPrisma.userSession.update).toHaveBeenCalled();
-      const updateCall = mockPrisma.userSession.update.mock.calls[0][0];
-      expect(updateCall.where.id).toBe('session-0');
+      // Audit A2-5 — l'invalidation ne vise qu'une session encore VIVANTE.
+      expect(mockPrisma.userSession.updateMany).toHaveBeenCalled();
+      const updateCall = mockPrisma.userSession.updateMany.mock.calls[0][0];
+      expect(updateCall.where).toEqual({ id: 'session-0', isValid: true });
       expect(updateCall.data.isValid).toBe(false);
       expect(updateCall.data.invalidatedAt).toBeInstanceOf(Date);
       expect(updateCall.data.invalidatedReason).toBe('session_limit_exceeded');
@@ -662,18 +663,13 @@ describe('SessionService', () => {
   describe('Session Management', () => {
     describe('invalidateSession', () => {
       it('should invalidate a specific session by ID', async () => {
-        mockPrisma.userSession.update.mockResolvedValueOnce({
-          ...mockSession,
-          isValid: false,
-          invalidatedAt: new Date(),
-          invalidatedReason: 'user_revoked'
-        });
+        mockPrisma.userSession.updateMany.mockResolvedValueOnce({ count: 1 });
 
         const result = await invalidateSession(mockSessionId);
 
         expect(result).toBe(true);
-        expect(mockPrisma.userSession.update).toHaveBeenCalledWith({
-          where: { id: mockSessionId },
+        expect(mockPrisma.userSession.updateMany).toHaveBeenCalledWith({
+          where: { id: mockSessionId, isValid: true },
           data: {
             isValid: false,
             invalidatedAt: expect.any(Date),
@@ -683,16 +679,12 @@ describe('SessionService', () => {
       });
 
       it('should use custom reason when provided', async () => {
-        mockPrisma.userSession.update.mockResolvedValueOnce({
-          ...mockSession,
-          isValid: false,
-          invalidatedReason: 'security_concern'
-        });
+        mockPrisma.userSession.updateMany.mockResolvedValueOnce({ count: 1 });
 
         await invalidateSession(mockSessionId, 'security_concern');
 
-        expect(mockPrisma.userSession.update).toHaveBeenCalledWith({
-          where: { id: mockSessionId },
+        expect(mockPrisma.userSession.updateMany).toHaveBeenCalledWith({
+          where: { id: mockSessionId, isValid: true },
           data: {
             isValid: false,
             invalidatedAt: expect.any(Date),
@@ -702,7 +694,7 @@ describe('SessionService', () => {
       });
 
       it('should return false when session not found', async () => {
-        mockPrisma.userSession.update.mockRejectedValueOnce(new Error('Not found'));
+        mockPrisma.userSession.updateMany.mockRejectedValueOnce(new Error('Not found'));
 
         const result = await invalidateSession('non-existent-session');
 
@@ -721,7 +713,7 @@ describe('SessionService', () => {
           where: {
             userId: mockUserId,
             isValid: true,
-            sessionToken: { not: expect.any(String) }
+            NOT: [{ sessionToken: mockTokenHash }]
           },
           data: {
             isValid: false,
@@ -772,10 +764,7 @@ describe('SessionService', () => {
     describe('revokeSession', () => {
       it('should verify session belongs to user before revocation', async () => {
         mockPrisma.userSession.findFirst.mockResolvedValueOnce(mockSession);
-        mockPrisma.userSession.update.mockResolvedValueOnce({
-          ...mockSession,
-          isValid: false
-        });
+        mockPrisma.userSession.updateMany.mockResolvedValueOnce({ count: 1 });
 
         const result = await revokeSession(mockUserId, mockSessionId);
 
@@ -795,7 +784,7 @@ describe('SessionService', () => {
         const result = await revokeSession(mockUserId, 'other-user-session');
 
         expect(result).toBe(false);
-        expect(mockPrisma.userSession.update).not.toHaveBeenCalled();
+        expect(mockPrisma.userSession.updateMany).not.toHaveBeenCalled();
       });
 
       it('should return false if session is already invalid', async () => {
@@ -1030,6 +1019,28 @@ describe('SessionService', () => {
     });
 
     describe('extendSessionExpiry', () => {
+      it('refuse de prolonger une session déjà expirée', async () => {
+        // Le filtre porte désormais `expiresAt` : une session morte n'est plus
+        // trouvée, donc plus jamais ressuscitée (#5712).
+        mockPrisma.userSession.findFirst.mockResolvedValueOnce(null);
+
+        const result = await extendSessionExpiry('token-dune-session-morte', 30);
+
+        expect(result).toBe(false);
+        expect(mockPrisma.userSession.update).not.toHaveBeenCalled();
+      });
+
+      it('passe expiresAt au filtre de lecture', async () => {
+        mockPrisma.userSession.findFirst.mockResolvedValueOnce(null);
+        const avant = Date.now();
+
+        await extendSessionExpiry('un-token');
+
+        const where = mockPrisma.userSession.findFirst.mock.calls[0][0].where;
+        expect(where.expiresAt.gt).toBeInstanceOf(Date);
+        expect(where.expiresAt.gt.getTime()).toBeGreaterThanOrEqual(avant - 5_000);
+      });
+
       it('should extend session expiry by specified days', async () => {
         mockPrisma.userSession.findFirst.mockResolvedValueOnce(mockSession);
         mockPrisma.userSession.update.mockResolvedValueOnce({
@@ -1088,6 +1099,25 @@ describe('SessionService', () => {
         expect(result).toBe(false);
       });
 
+      // #5712 — mesuré en production : 140 `UserSession` expirées depuis
+      // jusqu'à six mois restaient `isValid: true` (rien ne les invalidait),
+      // et cette méthode ne filtrait que sur `isValid` — une session morte
+      // depuis des mois se voyait donc PROLONGÉE et redevenait active. La
+      // fonction est aujourd'hui sans appelant de production (latent), mais
+      // exportée : le premier « remember me »/keep-alive qui l'appelle doit
+      // la trouver déjà fermée.
+      it('refuse de prolonger une session dont `expiresAt` est déjà dépassé', async () => {
+        mockPrisma.userSession.findFirst.mockResolvedValueOnce(null);
+
+        const result = await extendSessionExpiry(mockToken);
+
+        expect(result).toBe(false);
+        expect(mockPrisma.userSession.findFirst).toHaveBeenCalledWith({
+          where: { sessionToken: mockTokenHash, isValid: true, expiresAt: { gt: expect.any(Date) } },
+        });
+        expect(mockPrisma.userSession.update).not.toHaveBeenCalled();
+      });
+
       it('should update lastActivityAt when extending', async () => {
         mockPrisma.userSession.findFirst.mockResolvedValueOnce(mockSession);
         mockPrisma.userSession.update.mockResolvedValueOnce(mockSession);
@@ -1104,98 +1134,9 @@ describe('SessionService', () => {
       });
     });
 
-    describe('rotateRefreshToken', () => {
-      it('should generate a new refresh token', async () => {
-        const sessionWithRefresh = {
-          ...mockSession,
-          refreshToken: 'old-refresh-hash'
-        };
-        mockPrisma.userSession.findFirst.mockResolvedValueOnce(sessionWithRefresh);
-        mockPrisma.userSession.update.mockResolvedValueOnce(sessionWithRefresh);
-
-        const result = await rotateRefreshToken('old-refresh-token');
-
-        expect(result).not.toBeNull();
-        expect(result?.newRefreshToken).toBeDefined();
-        expect(result?.expiresAt).toBeInstanceOf(Date);
-      });
-
-      it('should return null if refresh token not found', async () => {
-        mockPrisma.userSession.findFirst.mockResolvedValueOnce(null);
-
-        const result = await rotateRefreshToken('invalid-refresh-token');
-
-        expect(result).toBeNull();
-      });
-
-      it('should update session with new refresh token hash', async () => {
-        const sessionWithRefresh = {
-          ...mockSession,
-          refreshToken: 'old-refresh-hash',
-          isMobile: false
-        };
-        mockPrisma.userSession.findFirst.mockResolvedValueOnce(sessionWithRefresh);
-        mockPrisma.userSession.update.mockResolvedValueOnce(sessionWithRefresh);
-
-        await rotateRefreshToken('old-refresh-token');
-
-        expect(mockPrisma.userSession.update).toHaveBeenCalledWith({
-          where: { id: mockSessionId },
-          data: {
-            refreshToken: expect.any(String),
-            expiresAt: expect.any(Date),
-            lastActivityAt: expect.any(Date)
-          }
-        });
-      });
-
-      it('should extend expiry based on device type (mobile: 365 days)', async () => {
-        const mobileSessionWithRefresh = {
-          ...mockSession,
-          refreshToken: 'old-refresh-hash',
-          isMobile: true
-        };
-        mockPrisma.userSession.findFirst.mockResolvedValueOnce(mobileSessionWithRefresh);
-        mockPrisma.userSession.update.mockResolvedValueOnce(mobileSessionWithRefresh);
-
-        const result = await rotateRefreshToken('old-refresh-token');
-
-        const expectedDate = new Date('2025-01-15T10:00:00Z');
-        expectedDate.setDate(expectedDate.getDate() + 365);
-
-        expect(result?.expiresAt.getTime()).toBe(expectedDate.getTime());
-      });
-
-      it('should extend expiry based on device type (desktop: 30 days)', async () => {
-        const desktopSessionWithRefresh = {
-          ...mockSession,
-          refreshToken: 'old-refresh-hash',
-          isMobile: false
-        };
-        mockPrisma.userSession.findFirst.mockResolvedValueOnce(desktopSessionWithRefresh);
-        mockPrisma.userSession.update.mockResolvedValueOnce(desktopSessionWithRefresh);
-
-        const result = await rotateRefreshToken('old-refresh-token');
-
-        const expectedDate = new Date('2025-01-15T10:00:00Z');
-        expectedDate.setDate(expectedDate.getDate() + 30);
-
-        expect(result?.expiresAt.getTime()).toBe(expectedDate.getTime());
-      });
-
-      it('should handle database errors gracefully', async () => {
-        const sessionWithRefresh = {
-          ...mockSession,
-          refreshToken: 'old-refresh-hash'
-        };
-        mockPrisma.userSession.findFirst.mockResolvedValueOnce(sessionWithRefresh);
-        mockPrisma.userSession.update.mockRejectedValueOnce(new Error('DB error'));
-
-        const result = await rotateRefreshToken('old-refresh-token');
-
-        expect(result).toBeNull();
-      });
-    });
+    // `rotateRefreshToken` a été retiré (#3621) : dead code, jamais appelé par
+    // aucune route, et son `where: { refreshToken }` ne pouvait matcher aucune
+    // ligne réelle puisque `createSession` ne pose jamais cette colonne.
   });
 
   // ============================================================
@@ -1461,7 +1402,7 @@ describe('SessionService', () => {
 
       mockPrisma.userSession.create.mockResolvedValueOnce(mockSession);
       mockPrisma.userSession.findMany.mockResolvedValueOnce(existingSessions);
-      mockPrisma.userSession.update.mockResolvedValue({ count: 1 });
+      mockPrisma.userSession.updateMany.mockResolvedValue({ count: 1 });
 
       const input: CreateSessionInput = {
         userId: mockUserId,
@@ -1485,7 +1426,7 @@ describe('SessionService', () => {
       });
 
       // Should have invalidated the oldest session
-      expect(mockPrisma.userSession.update).toHaveBeenCalled();
+      expect(mockPrisma.userSession.updateMany).toHaveBeenCalled();
     });
 
     it('should correctly distinguish between explicitly invalidated and new sessions in cleanupExpiredSessions', async () => {

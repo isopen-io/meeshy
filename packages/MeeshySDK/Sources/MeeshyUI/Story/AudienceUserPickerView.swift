@@ -15,13 +15,26 @@ extension UserService: AudienceUserSearching {}
 /// and key as the contacts list. Injectable to keep the VM unit-testable.
 public protocol AudienceContactsProviding: Sendable {
     func cachedContacts() async -> [UserSearchResult]
+
+    /// **Le réchauffement** (#7847) : les contacts relus au réseau quand le
+    /// cache est vide ou périmé, `nil` quand rien de plus frais n'est venu.
+    /// Le SDK n'en décide pas — c'est l'app qui orchestre le cache et injecte
+    /// son fournisseur (`EnvironmentValues.mentionContactsProvider`).
+    func refreshedContacts() async -> [UserSearchResult]?
+}
+
+public extension AudienceContactsProviding {
+    func refreshedContacts() async -> [UserSearchResult]? { nil }
 }
 
 /// Default: reads the shared friends GRDB cache (the same store/key the
 /// contacts list uses) and maps `FriendRequestUser` to the picker's
 /// `UserSearchResult`. Read-only, never hits the network.
-struct FriendsCacheAudienceContacts: AudienceContactsProviding {
-    func cachedContacts() async -> [UserSearchResult] {
+public struct FriendsCacheAudienceContacts: AudienceContactsProviding {
+
+    public init() {}
+
+    public func cachedContacts() async -> [UserSearchResult] {
         let cached = await CacheCoordinator.shared.friends.load(
             for: FriendshipCache.PersistenceKeys.friendsList
         )
@@ -46,6 +59,11 @@ struct FriendsCacheAudienceContacts: AudienceContactsProviding {
 
 @MainActor
 final class AudienceUserPickerViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published var query: String = ""
     @Published var results: [UserSearchResult] = []
     @Published var selectedIds: [String]
@@ -129,6 +147,7 @@ public struct AudienceUserPickerView: View {
     private let onDone: ([String]) -> Void
     @StateObject private var vm: AudienceUserPickerViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.meeshyPresenceResolver) private var presenceResolver
     @State private var searchTask: Task<Void, Never>?
 
     public init(mode: PostVisibility,
@@ -176,9 +195,9 @@ public struct AudienceUserPickerView: View {
                 .font(MeeshyFont.relative(16, weight: .semibold))
                 .lineLimit(1)
             HStack {
-                Button(String(localized: "common.cancel", defaultValue: "Annuler")) { dismiss() }
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module)) { dismiss() }
                 Spacer()
-                Button(String(localized: "common.done", defaultValue: "OK")) {
+                Button(String(localized: "common.done", defaultValue: "OK", bundle: .module)) {
                     onDone(vm.selectedIds)
                     dismiss()
                 }
@@ -202,6 +221,7 @@ public struct AudienceUserPickerView: View {
                 Button { vm.query = ""; vm.resetToContacts() } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                 }
+                .accessibilityLabel(String(localized: "common.clear_input", bundle: .module))
             }
         }
         .padding(.horizontal, MeeshySpacing.md)
@@ -213,8 +233,7 @@ public struct AudienceUserPickerView: View {
         .adaptiveOnChange(of: vm.query) { _, _ in
             searchTask?.cancel()
             searchTask = Task {
-                try? await Task.sleep(for: .milliseconds(350))
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: .milliseconds(350)) else { return }
                 await vm.performSearch()
             }
         }
@@ -231,6 +250,7 @@ public struct AudienceUserPickerView: View {
                         Button { vm.toggle(user) } label: {
                             Image(systemName: "xmark.circle.fill").font(MeeshyFont.relative(MeeshyFont.subheadSize))
                         }
+                        .accessibilityLabel(String(localized: "community.members.remove", bundle: .module))
                         .buttonStyle(.plain)
                     }
                     .padding(.horizontal, MeeshySpacing.sm)
@@ -257,7 +277,9 @@ public struct AudienceUserPickerView: View {
 
     private func row(_ user: UserSearchResult) -> some View {
         HStack(spacing: MeeshySpacing.md) {
-            MeeshyAvatar(name: user.displayName ?? user.username, context: .userListItem)
+            MeeshyLivePresence {
+                MeeshyAvatar(name: user.displayName ?? user.username, context: .userListItem, avatarURL: user.avatar, presenceState: presenceResolver?(user.id) ?? user.servedPresence, ring: user.avatarRing)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(user.displayName ?? user.username)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))

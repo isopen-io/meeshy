@@ -53,6 +53,8 @@ function makePersistence(overrides: Record<string, jest.Mock> = {}) {
     getRecentMessageCount: jest.fn().mockResolvedValue(1),
     getRecentUniqueAuthors: jest.fn().mockResolvedValue(1),
     evictRecentlyActiveUsers: jest.fn().mockResolvedValue(0),
+    evictStaleRoles: jest.fn().mockResolvedValue(0),
+    touchUserRoles: jest.fn().mockResolvedValue(undefined),
     getControlledUsers: jest.fn().mockResolvedValue([makeControlledUser()]),
     getAgentConfig: jest.fn().mockResolvedValue({
       autoPickupEnabled: true,
@@ -116,6 +118,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
         canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
         recordScannedConversation: jest.fn().mockResolvedValue(undefined),
         getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
+        canSpendLlm: jest.fn().mockResolvedValue({ allowed: true, spentUsd: 0, budgetUsd: 10 }),
       } as any
     );
 
@@ -150,6 +153,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
         canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
         recordScannedConversation: jest.fn().mockResolvedValue(undefined),
         getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
+        canSpendLlm: jest.fn().mockResolvedValue({ allowed: true, spentUsd: 0, budgetUsd: 10 }),
       } as any,
     );
 
@@ -184,6 +188,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
         canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
         recordScannedConversation: jest.fn().mockResolvedValue(undefined),
         getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
+        canSpendLlm: jest.fn().mockResolvedValue({ allowed: true, spentUsd: 0, budgetUsd: 10 }),
       } as any,
     );
 
@@ -222,6 +227,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
         canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
         recordScannedConversation: jest.fn().mockResolvedValue(undefined),
         getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
+        canSpendLlm: jest.fn().mockResolvedValue({ allowed: true, spentUsd: 0, budgetUsd: 10 }),
       } as any,
     );
 
@@ -261,6 +267,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
         canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
         recordScannedConversation: jest.fn().mockResolvedValue(undefined),
         getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
+        canSpendLlm: jest.fn().mockResolvedValue({ allowed: true, spentUsd: 0, budgetUsd: 10 }),
       } as any,
     );
 
@@ -285,6 +292,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
       canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
       recordScannedConversation: jest.fn().mockResolvedValue(undefined),
       getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
+      canSpendLlm: jest.fn().mockResolvedValue({ allowed: true, spentUsd: 0, budgetUsd: 10 }),
     } as any);
 
     await scanner.scanConversation('conv-1');
@@ -298,6 +306,8 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
     const graph = { invoke: jest.fn().mockResolvedValue({ pendingActions: [] }) };
     const persistence = makePersistence({
       evictRecentlyActiveUsers: jest.fn().mockResolvedValue(2),
+      evictStaleRoles: jest.fn().mockResolvedValue(0),
+      touchUserRoles: jest.fn().mockResolvedValue(undefined),
     });
 
     const scanner = new ConversationScanner(
@@ -313,6 +323,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
         canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
         recordScannedConversation: jest.fn().mockResolvedValue(undefined),
         getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
+        canSpendLlm: jest.fn().mockResolvedValue({ allowed: true, spentUsd: 0, budgetUsd: 10 }),
       } as any,
     );
 

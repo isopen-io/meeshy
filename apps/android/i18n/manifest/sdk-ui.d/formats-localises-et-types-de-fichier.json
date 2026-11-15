@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "attachment_kind_pdf",
+          "status": "android-only"
+        },
+        {
+          "androidName": "attachment_kind_excel",
+          "status": "android-only"
+        },
+        {
+          "androidName": "attachment_kind_word",
+          "status": "android-only"
+        },
+        {
+          "androidName": "attachment_kind_powerpoint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "attachment_kind_archive",
+          "status": "android-only"
+        },
+        {
+          "androidName": "attachment_kind_code",
+          "status": "android-only"
+        },
+        {
+          "androidName": "attachment_kind_text",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "notification.date.now",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "notification.date.minutes",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "notification.date.hours",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "notification.date.ago",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "notification.date.yesterdayAt",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "time.lastSeen.online",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "time.lastSeen.seen",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "time.lastSeen.yesterdayAt",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "time.lastSeen.beforeYesterdayAt",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "time.lastSeen.dateAt",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

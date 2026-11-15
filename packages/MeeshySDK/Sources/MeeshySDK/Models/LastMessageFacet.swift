@@ -22,6 +22,11 @@ public struct LastMessageFacet: Sendable {
     public let id: String?
     public let preview: String?
     public let senderName: String?
+    /// Le `User.id` du pair que `senderName` nomme (#9359) : ce sur quoi
+    /// `user:updated` repeint l'auteur de la ligne. Toujours écrit AVEC le nom,
+    /// et `nil` dès que le nom ne désigne pas un pair (« Vous », inconnu) —
+    /// sinon le portrait d'un autre se poserait sur ce message.
+    public let senderUserId: String?
     public let at: Date
     public let attachments: [MeeshyMessageAttachment]
     public let attachmentCount: Int
@@ -34,11 +39,15 @@ public struct LastMessageFacet: Sendable {
     /// même raison que les autres : écrite à part, une pastille du message
     /// PRÉCÉDENT survivrait au texte tout neuf qui la remplace.
     public let location: SharedPlace?
+    /// Nature du message (#7545) — type, effets, chiffrement, transfert,
+    /// appel, événement système, résumé des pièces jointes.
+    public let nature: LastMessageNature?
 
     public init(
         id: String?,
         preview: String?,
         senderName: String?,
+        senderUserId: String? = nil,
         at: Date,
         attachments: [MeeshyMessageAttachment] = [],
         attachmentCount: Int = 0,
@@ -47,11 +56,13 @@ public struct LastMessageFacet: Sendable {
         expiresAt: Date? = nil,
         translations: [String: String]? = nil,
         originalLanguage: String? = nil,
-        location: SharedPlace? = nil
+        location: SharedPlace? = nil,
+        nature: LastMessageNature? = nil
     ) {
         self.id = id
         self.preview = preview
         self.senderName = senderName
+        self.senderUserId = senderName == nil ? nil : senderUserId
         self.at = at
         self.attachments = attachments
         self.attachmentCount = max(attachmentCount, attachments.count)
@@ -61,6 +72,7 @@ public struct LastMessageFacet: Sendable {
         self.translations = (translations?.isEmpty ?? true) ? nil : translations
         self.originalLanguage = originalLanguage
         self.location = location
+        self.nature = (nature?.isEmpty ?? true) ? nil : nature
     }
 
     /// Facette complète dérivée d'un message reçu ou envoyé — le chemin normal.
@@ -78,17 +90,23 @@ public struct LastMessageFacet: Sendable {
     /// - Parameters id, at: identité SERVEUR, quand elle diffère de celle de la
     ///   ligne locale — à l'accusé d'envoi, le message optimiste porte encore son
     ///   `cid_…` et l'horodatage de l'appareil.
+    /// - Parameter youLabel: le mot qui désigne le LECTEUR quand le message est
+    ///   le sien. « Vous » vaut sur TOUS les chemins (#7548) : REST,
+    ///   `conversation:updated`, `message:new`, envoi optimiste et accusé —
+    ///   jamais le nom d'affichage du lecteur sur l'un et « Vous » sur l'autre.
     public init(
         message: MeeshyMessage,
         preview: String,
         id: String? = nil,
         at: Date? = nil,
-        translations: [String: String]? = nil
+        translations: [String: String]? = nil,
+        youLabel: String = ConversationListAuthor.readerLabel
     ) {
         self.init(
             id: id ?? message.id,
             preview: preview.meeshyPreviewTruncated,
-            senderName: message.senderName ?? message.senderUsername,
+            senderName: message.isMe ? youLabel : (message.senderName ?? message.senderUsername),
+            senderUserId: message.isMe ? nil : message.senderUserId,
             at: at ?? message.createdAt,
             attachments: message.attachments,
             attachmentCount: message.attachments.count,
@@ -97,7 +115,106 @@ public struct LastMessageFacet: Sendable {
             expiresAt: message.expiresAt,
             translations: translations,
             originalLanguage: message.originalLanguage,
-            location: message.location
+            location: message.location,
+            nature: LastMessageNature(message: message)
+        )
+    }
+
+    /// Facette de MON envoi, avant tout écho serveur (#7548).
+    ///
+    /// L'aperçu ne porte que la LÉGENDE : un média sans texte n'y écrit plus
+    /// de libellé (« 📷 Photo ») figé dans la langue de l'expéditeur au moment
+    /// de l'envoi. La ligne rend ce libellé depuis la NATURE du message — les
+    /// pièces jointes et la position voyagent dans la facette —, donc dans la
+    /// langue du lecteur, et de la même façon que pour un média reçu.
+    ///
+    /// Un éphémère y porte sa DURÉE, jamais une échéance (#8905) : l'envoi
+    /// n'est pas une réception, la ligne lit « en attente de réception ».
+    public static func sent(
+        id: String,
+        text: String,
+        at date: Date,
+        attachments: [MeeshyMessageAttachment] = [],
+        isBlurred: Bool = false,
+        isViewOnce: Bool = false,
+        expiresAt: Date? = nil,
+        ephemeralDuration: Int? = nil,
+        originalLanguage: String? = nil,
+        location: SharedPlace? = nil,
+        youLabel: String = ConversationListAuthor.readerLabel
+    ) -> LastMessageFacet {
+        LastMessageFacet(
+            id: id,
+            preview: text.meeshyPreviewTruncated,
+            senderName: youLabel,
+            at: date,
+            attachments: attachments,
+            attachmentCount: attachments.count,
+            isBlurred: isBlurred,
+            isViewOnce: isViewOnce,
+            expiresAt: expiresAt,
+            originalLanguage: originalLanguage,
+            location: location,
+            nature: LastMessageNature(
+                ephemeralDuration: ephemeralDuration,
+                attachmentSummary: LastMessageAttachmentSummary(attachments: attachments)
+            )
+        )
+    }
+
+    /// La facette d'un message chiffré de bout en bout, telle qu'elle s'écrit
+    /// dans le cache des conversations (#12999) : ni texte ni traduction, une
+    /// nature scellée. La ligne de liste lit le clair dans le coffre
+    /// (`ConversationListEndToEndTextStore`), jamais ici. `applies == false`
+    /// rend la facette telle quelle.
+    public func sealedForEndToEnd(_ applies: Bool) -> LastMessageFacet {
+        guard applies else { return self }
+        return LastMessageFacet(
+            id: id, preview: nil, senderName: senderName, senderUserId: senderUserId, at: at,
+            attachments: attachments, attachmentCount: attachmentCount,
+            isBlurred: isBlurred, isViewOnce: isViewOnce, expiresAt: expiresAt,
+            translations: nil, originalLanguage: originalLanguage, location: location,
+            nature: (nature ?? LastMessageNature()).sealedEndToEnd
+        )
+    }
+
+    /// La facette de mon envoi à l'accusé, relue sur la ligne optimiste quand
+    /// elle est là (pièces jointes et effets réellement envoyés), scellée s'il
+    /// était chiffré de bout en bout.
+    public static func acknowledged(
+        _ optimistic: MeeshyMessage?, text: String, id: String, at date: Date, sealed: Bool
+    ) -> LastMessageFacet {
+        let facet = optimistic.map { LastMessageFacet(message: $0, preview: text, id: id, at: date) }
+            ?? .sent(id: id, text: text, at: date)
+        return facet.sealedForEndToEnd(sealed)
+    }
+
+    /// Scellée si la conversation que la liste tient sous `conversationId` est
+    /// chiffrée de bout en bout : tout envoi de cet appareil l'y est.
+    public func sealedForEndToEnd(in conversations: [MeeshyConversation], conversationId: String) -> LastMessageFacet {
+        sealedForEndToEnd(conversations.first { $0.id == conversationId }
+            .map { EndToEndPlaintextLaw.isEndToEndConversation($0.encryptionMode) } ?? false)
+    }
+
+    /// Le groupe « dernier message » d'une ligne, tel qu'elle le porte — pour
+    /// le recopier EN BLOC sur une autre ligne (retour au message précédent
+    /// après une suppression, écriture qui ne possède pas ce groupe).
+    public init(conversation: MeeshyConversation) {
+        self.init(
+            id: conversation.lastMessageId,
+            preview: conversation.lastMessagePreview,
+            senderName: conversation.lastMessageSenderName,
+            senderUserId: conversation.lastMessageSenderUserId,
+            at: conversation.lastMessageAt,
+            attachments: conversation.lastMessageAttachments,
+            attachmentCount: conversation.lastMessageAttachmentCount,
+            isBlurred: conversation.lastMessageIsBlurred,
+            isViewOnce: conversation.lastMessageIsViewOnce,
+            expiresAt: conversation.lastMessageExpiresAt,
+            translations: conversation.lastMessageTranslations,
+            originalLanguage: conversation.lastMessageOriginalLanguage,
+            location: conversation.lastMessageLocation,
+            nature: conversation.lastMessageNature
         )
     }
 
@@ -128,6 +245,7 @@ public extension MeeshyConversation {
         lastMessageId = facet.id
         lastMessagePreview = facet.preview
         lastMessageSenderName = facet.senderName
+        lastMessageSenderUserId = facet.senderUserId
         lastMessageAt = facet.at
         lastMessageAttachments = facet.attachments
         lastMessageAttachmentCount = facet.attachmentCount
@@ -137,6 +255,28 @@ public extension MeeshyConversation {
         lastMessageTranslations = facet.translations
         lastMessageOriginalLanguage = facet.originalLanguage
         lastMessageLocation = facet.location
+        lastMessageNature = facet.nature
+    }
+
+    /// **La garde d'ordre du groupe « dernier message »** (#7548) — la même
+    /// sur `message:new` et sur l'accusé d'envoi.
+    ///
+    /// Un événement plus ANCIEN que l'aperçu en place ne le remplace jamais.
+    /// Mais un événement sur le MÊME message n'est pas plus ancien : il le
+    /// complète. C'est la course `conversation:updated` puis `message:new` —
+    /// le premier pose l'identité, le texte et l'horodatage et remet à neutre
+    /// le reste (`adoptLastMessage`) ; le second, qui porte les pièces
+    /// jointes et les drapeaux, tombait sur un `>` strict contre son propre
+    /// horodatage et était jeté. La ligne perdait son icône et ses effets
+    /// jusqu'à la synchronisation complète suivante.
+    ///
+    /// - Parameter aliases: les autres noms du message en place — l'identifiant
+    ///   `cid_…` d'un envoi optimiste, que l'accusé remplace par l'identifiant
+    ///   serveur sous une horloge serveur qui peut précéder celle de l'appareil.
+    func admitsLastMessage(id: String?, at date: Date, aliases: [String] = []) -> Bool {
+        if let id, id == lastMessageId { return true }
+        if let current = lastMessageId, aliases.contains(current) { return true }
+        return date > lastMessageAt
     }
 
     /// Fait décrire à la ligne un AUTRE message que celui qu'elle décrivait.
@@ -176,10 +316,12 @@ public extension MeeshyConversation {
         lastMessageAttachments = []
         lastMessageAttachmentCount = 0
         lastMessageSenderName = nil
+        lastMessageSenderUserId = nil
         lastMessageIsBlurred = false
         lastMessageIsViewOnce = false
         lastMessageExpiresAt = nil
         lastMessageLocation = nil
+        lastMessageNature = nil
         return true
     }
 }

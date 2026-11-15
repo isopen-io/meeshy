@@ -41,9 +41,6 @@ jest.mock('../../../services/VoiceProfileService', () => ({
   })),
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: { type: 'object', properties: {} },
-}));
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
@@ -107,6 +104,20 @@ describe('POST /consent', () => {
       payload: { voiceRecordingConsent: false },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 403 with its code when voice cloning is refused for age (#17309)', async () => {
+    mockUpdateConsent.mockResolvedValueOnce({
+      success: false,
+      error: 'Voice cloning requires being at least 18 years old',
+      errorCode: 'VOICE_CLONING_AGE_REQUIRED',
+    });
+    const res = await app.inject({
+      method: 'POST', url: '/consent',
+      payload: { voiceRecordingConsent: true, voiceCloningConsent: true },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('VOICE_CLONING_AGE_REQUIRED');
   });
 
   it('returns 400 when voiceRecordingConsent missing from body (schema required)', async () => {

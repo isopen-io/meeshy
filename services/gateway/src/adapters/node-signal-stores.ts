@@ -92,10 +92,15 @@ export class NodeIdentityKeyStore extends IdentityKeyStore {
     }
   }
 
+  // `direction` fait partie du contrat `IdentityKeyStore` (libsignal) mais
+  // n'est pas lu : la confiance ici est symétrique TOFU — même verdict qu'on
+  // envoie ou qu'on reçoive. Un régime asymétrique (méfiance accrue à la
+  // réception) est une décision de protocole distincte, pas un paramètre mort
+  // à instruire au passage.
   async isTrustedIdentity(
     address: ProtocolAddress,
     identityKey: PublicKey,
-    direction: Direction
+    _direction: Direction
   ): Promise<boolean> {
     const key = this.getAddressKey(address);
     const trusted = this.trustedIdentities.get(key);

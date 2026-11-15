@@ -98,11 +98,10 @@ const TRANSPORT_EVENT_NAMES: ReadonlySet<string> = new Set<string>([
 /**
  * Les sites où chaque client épelle un nom de canal en clair.
  *
- * Android fait transiter TOUS ses abonnements par des aides `listen("…", flow)`
- * par gestionnaire (`MessageSocketManager`, `CallSignalManager`,
- * `SocialSocketManager`, `CategorySocketManager`), qui appellent ensuite
- * `socketManager.on(event)` avec la variable — c'est donc le littéral passé à
- * `listen(` qui porte le nom, et lui seul.
+ * Android faisait transiter ses abonnements par des aides `listen("…", flow)`
+ * par gestionnaire : le motif `listen(` attrape un littéral qui y reviendrait.
+ * Ses noms vivent désormais dans `SocketEventNames`, lue avec la table iOS
+ * (`SOCKET_EVENT_TABLES`).
  */
 const LITERAL_PATTERNS: ReadonlyArray<{ readonly label: string; readonly regex: RegExp }> = [
   { label: 'socket.on', regex: /\bsocket\.on\(\s*"([^"]+)"/g },
@@ -116,6 +115,36 @@ const SCANNED_ROOTS: ReadonlyArray<{ readonly platform: string; readonly path: s
   { platform: 'iOS (SDK)', path: 'packages/MeeshySDK/Sources' },
   { platform: 'iOS (app)', path: 'apps/ios/Meeshy' },
   { platform: 'Android', path: 'apps/android' },
+];
+
+/**
+ * iOS n'épelle plus ses canaux au site d'appel : ils vivent tous comme valeurs
+ * brutes de `SocketEvent` (`case messageNew = "message:new"`), et les sites
+ * d'abonnement et d'émission passent le cas, jamais la chaîne. La recopie à la
+ * main que cette garde surveille s'est donc DÉPLACÉE dans cette table — c'est
+ * elle qu'on lit. Android a pris le même chemin : `SocketEventNames`
+ * (`const val MESSAGE_NEW = "message:new"`), que `SocketEventRouter` consomme.
+ * Chaque motif ne s'applique QU'À sa table : une autre énumération à valeurs
+ * brutes, ou une autre constante, n'est pas une table de canaux.
+ */
+const SOCKET_EVENT_TABLES: ReadonlyArray<{
+  readonly platform: string;
+  readonly path: string;
+  readonly site: string;
+  readonly entry: RegExp;
+}> = [
+  {
+    platform: 'iOS (SDK)',
+    path: 'packages/MeeshySDK/Sources/MeeshySDK/Sockets/SocketEvent.swift',
+    site: 'SocketEvent',
+    entry: /\bcase\s+`?\w+`?\s*=\s*"([^"]+)"/g,
+  },
+  {
+    platform: 'Android',
+    path: 'apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/socket/SocketEventNames.kt',
+    site: 'SocketEventNames',
+    entry: /\bconst\s+val\s+\w+\s*=\s*"([^"]+)"/g,
+  },
 ];
 
 const SCANNED_EXTENSIONS: ReadonlySet<string> = new Set(['.swift', '.kt']);
@@ -185,7 +214,29 @@ type Occurrence = {
   readonly eventName: string;
 };
 
+function collectTableOccurrences(): ReadonlyArray<Occurrence> {
+  return SOCKET_EVENT_TABLES.flatMap(({ platform, path, site, entry }) => {
+    let raw: string;
+    try {
+      raw = readFileSync(join(REPO_ROOT, path), 'utf8');
+    } catch {
+      return [];
+    }
+    const source = stripComments(raw);
+    return [...source.matchAll(new RegExp(entry.source, entry.flags))].map((match) => ({
+      platform,
+      file: path,
+      site,
+      eventName: match[1],
+    }));
+  });
+}
+
 function collectOccurrences(): ReadonlyArray<Occurrence> {
+  return [...collectLiteralOccurrences(), ...collectTableOccurrences()];
+}
+
+function collectLiteralOccurrences(): ReadonlyArray<Occurrence> {
   return SCANNED_ROOTS.flatMap(({ platform, path }) =>
     collectSourceFiles(join(REPO_ROOT, path)).flatMap((absolute) => {
       const source = stripComments(readFileSync(absolute, 'utf8'));
@@ -226,6 +277,12 @@ describe('socket event names spelled out by native clients', () => {
   ])('still finds the literal event names spelled out by %s', (platform, floor) => {
     const found = occurrences.filter((o) => o.platform.startsWith(platform));
     expect(found.length).toBeGreaterThanOrEqual(floor);
+  });
+
+  it('reads every raw value of the iOS SocketEvent table as a product channel name', () => {
+    const tableNames = occurrences.filter((o) => o.site === 'SocketEvent');
+    expect(tableNames.length).toBeGreaterThanOrEqual(60);
+    expect(tableNames.filter((o) => !PRODUCT_EVENT_SHAPE.test(o.eventName)).map((o) => o.eventName)).toEqual([]);
   });
 
   it('only ever names a channel the shared contract declares', () => {

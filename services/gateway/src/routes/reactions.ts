@@ -8,8 +8,9 @@
  * - GET /api/reactions/user/:userId - Récupérer les réactions d'un utilisateur
  */
 
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth.js';
+import { logError } from '../utils/logger.js';
 import {
   sendSuccess,
   sendBadRequest,
@@ -23,17 +24,15 @@ import { ReactionService, CLOSED_CONVERSATION_REACTION_ERROR } from '../services
 import { ConflictError } from '../errors/custom-errors.js';
 import { CONVERSATION_CLOSED_EDIT_MESSAGE } from '../services/messaging/messageEditAdmission.js';
 import { notifyReactionAdded, notifyReactionRemoved } from '../services/notifications/reactionNotify.js';
-import type {
-  ReactionAddData,
-  ReactionRemoveData,
-  ReactionUpdateEventData,
-  ReactionSyncEventData,
-} from '@meeshy/shared/types';
 import { broadcastReactionMutation } from '../socketio/broadcastReactionMutation.js';
+import { captureNoticeWithheldFrom } from '../services/messaging/captureNoticeVisibility.js';
+import { historyReaderFromAuthContext } from '../services/historyFloor.js';
+import { ADMITTED_FILE_READER_WHERE } from '../services/attachments/fileReaderAdmission.js';
+import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
+import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
 import {
   reactionSchema,
   reactionSummarySchema,
-  addReactionRequestSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 
@@ -86,11 +85,11 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         type: 'object',
         required: ['messageId', 'emoji'],
         properties: {
-          messageId: { type: 'string', description: 'Message ID to react to' },
+          messageId: { type: 'string', pattern: OBJECT_ID_PATTERN, description: 'Message ID to react to (ObjectId)' },
           emoji: {
             type: 'string',
             minLength: 1,
-            maxLength: 10,
+            maxLength: EMOJI_MAX_LENGTH,
             description: 'Emoji character to add as reaction'
           }
         }
@@ -139,7 +138,6 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       const { messageId, emoji } = request.body;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
-      const anonymousUserId = authRequest.authContext.sessionToken;
       const isAnonymous = authRequest.authContext.isAnonymous;
 
       // Validation
@@ -148,9 +146,6 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       }
 
       // Déterminer l'ID utilisateur (authentifié ou anonyme)
-      const actualUserId = !isAnonymous ? userId : undefined;
-      const actualAnonymousUserId = isAnonymous ? anonymousUserId : undefined;
-
       // Résoudre le participantId
       let participantId = authRequest.authContext.participantId;
 
@@ -225,7 +220,9 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
           messageId,
           emoji,
           payload: updateEvent,
-          onError: (error) => fastify.log.error({ error }, 'REST reaction broadcast failed'),
+          prisma,
+          updatedByUserId: userId,
+          onError: (error) => logError(fastify.log, 'REST reaction broadcast failed', error),
         });
       }
 
@@ -238,12 +235,12 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         { prisma, notificationService: fastify.notificationService },
         { messageId, reactorParticipantId: participantId, emoji, isAnonymous }
       ).catch((error: unknown) => {
-        fastify.log.error({ error }, 'REST reaction notification creation failed');
+        logError(fastify.log, 'REST reaction notification creation failed', error);
       });
 
       return sendSuccess(reply, reaction, { statusCode: 201 });
     } catch (error) {
-      fastify.log.error({ error }, 'Error adding reaction');
+      logError(fastify.log, 'Error adding reaction', error);
 
       // Plafond des cinq réactions par personne et par objet
       // (`packages/shared/utils/reaction-limit.ts`) : `ReactionService`
@@ -298,7 +295,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         type: 'object',
         required: ['messageId', 'emoji'],
         properties: {
-          messageId: { type: 'string', description: 'Message ID' },
+          messageId: { type: 'string', pattern: OBJECT_ID_PATTERN, description: 'Message ID (ObjectId)' },
           emoji: { type: 'string', description: 'URL-encoded emoji character to remove' }
         }
       },
@@ -339,16 +336,12 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       const { messageId, emoji } = request.params;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
-      const anonymousUserId = authRequest.authContext.sessionToken;
       const isAnonymous = authRequest.authContext.isAnonymous;
 
       // Décoder l'emoji (URL encoded)
       const decodedEmoji = decodeURIComponent(emoji);
 
       // Déterminer l'ID utilisateur (authentifié ou anonyme)
-      const actualUserId = !isAnonymous ? userId : undefined;
-      const actualAnonymousUserId = isAnonymous ? anonymousUserId : undefined;
-
       // Résoudre le participantId
       let removeParticipantId = authRequest.authContext.participantId;
 
@@ -411,7 +404,9 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
           messageId,
           emoji: decodedEmoji,
           payload: updateEvent,
-          onError: (error) => fastify.log.error({ error }, 'REST reaction removal broadcast failed'),
+          prisma,
+          updatedByUserId: userId,
+          onError: (error) => logError(fastify.log, 'REST reaction removal broadcast failed', error),
         });
       }
 
@@ -424,12 +419,12 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         { prisma, notificationService: fastify.notificationService },
         { messageId, reactorParticipantId: removeParticipantId, emoji: decodedEmoji, isAnonymous }
       ).catch((error: unknown) => {
-        fastify.log.error({ error }, 'REST reaction notification retraction failed');
+        logError(fastify.log, 'REST reaction notification retraction failed', error);
       });
 
       return sendSuccess(reply, { message: 'Reaction removed successfully' });
     } catch (error) {
-      fastify.log.error({ error }, 'Error removing reaction');
+      logError(fastify.log, 'Error removing reaction', error);
 
       if (error.message === 'Invalid emoji format') {
         return sendBadRequest(reply, 'Invalid emoji format');
@@ -454,7 +449,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         type: 'object',
         required: ['messageId'],
         properties: {
-          messageId: { type: 'string', description: 'Message ID' }
+          messageId: { type: 'string', pattern: OBJECT_ID_PATTERN, description: 'Message ID (ObjectId)' }
         }
       },
       response: {
@@ -512,7 +507,21 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         include: {
           conversation: {
             include: {
-              participants: true
+              // #16561 — la LECTURE n'admet que des participations ADMISES, comme
+              // les deux ÉCRITURES de ce fichier (`isActive: true`, l. 158 et 354).
+              // Elle décidait sur la liste NON filtrée : quitter, être retiré,
+              // être banni et la suppression pour soi posent tous
+              // `isActive: false` et GARDENT la ligne, si bien qu'un membre banni
+              // gardait l'accès au trombinoscope des réactions — compte,
+              // `participantIds`, et le `displayName`/`avatar`/`userId` de chaque
+              // réacteur — et apprenait que le message existe toujours.
+              //
+              // La loi est PARTAGÉE (actif ET jamais banni) et son doc-comment la
+              // destine à cet usage : « À répandre dans le `where` d'une lecture
+              // `Participant` ». Filtrer ici plutôt que de rejouer le prédicat en
+              // mémoire évite la jumelle divergente ; la liste ne sert qu'aux deux
+              // contrôles d'admission ci-dessous.
+              participants: { where: ADMITTED_FILE_READER_WHERE }
             }
           }
         }
@@ -541,6 +550,11 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         }
       }
 
+      // #9629 — un avis de capture ne se lit par son identifiant que dans son audience.
+      if (await captureNoticeWithheldFrom(prisma, { row: message, reader: historyReaderFromAuthContext(authRequest.authContext) })) {
+        return sendNotFound(reply, 'Message not found');
+      }
+
       // Résoudre le participantId courant
       let currentParticipantId = authRequest.authContext.participantId;
       if (!currentParticipantId && !isAnonymous && userId) {
@@ -559,7 +573,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
 
       return sendSuccess(reply, reactions);
     } catch (error) {
-      fastify.log.error({ error }, 'Error getting reactions');
+      logError(fastify.log, 'Error getting reactions', error);
 
       return sendInternalError(reply, 'Failed to get reactions');
     }
@@ -633,7 +647,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
 
       return sendSuccess(reply, reactions);
     } catch (error) {
-      fastify.log.error({ error }, 'Error getting user reactions');
+      logError(fastify.log, 'Error getting user reactions', error);
 
       return sendInternalError(reply, 'Failed to get user reactions');
     }

@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "common.cancel",
+          "androidName": "composer_clear_all_cancel",
+          "status": "adopted"
+        },
+        {
+          "androidName": "composer_clear_all_message",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.more.clearAll.confirm",
+          "androidName": "composer_clear_all_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.rail.media.fromFiles",
+          "androidName": "composer_media_from_files",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.edit.source.library",
+          "androidName": "composer_media_from_library",
+          "status": "adopted"
+        },
+        {
+          "androidName": "composer_media_sources",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.overflow.clearAll",
+          "androidName": "composer_more_clear_all",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.more.pickBackground",
+          "androidName": "composer_more_pick_background",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.a11y.preview",
+          "androidName": "composer_more_preview",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.more.removeBackground",
+          "androidName": "composer_more_remove_background",
+          "status": "adopted"
+        },
+        {
+          "androidName": "composer_preview_close",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_preview_next",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_preview_previous",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

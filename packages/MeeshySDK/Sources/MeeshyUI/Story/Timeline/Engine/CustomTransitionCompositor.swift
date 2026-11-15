@@ -14,6 +14,11 @@ import MetalKit
 /// Adding a new transition kind = adding a new case in `startRequest` + a Metal
 /// compute kernel. NO refactor of `VideoCompositor` is required.
 @objc public final class CustomTransitionCompositor: NSObject, AVVideoCompositing, @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     public var sourcePixelBufferAttributes: [String: any Sendable]? = [
         kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA),

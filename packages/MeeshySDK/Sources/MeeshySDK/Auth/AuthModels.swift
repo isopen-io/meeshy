@@ -21,42 +21,280 @@ public struct LoginResponseData: Decodable, Sendable {
     public let expiresIn: Int?
     public let requires2FA: Bool?
     public let twoFactorToken: String?
+
+    /// `POST /auth/register` sert DEUX charges sous le même 200 : le compte
+    /// créé, ou — quand le numéro appartient déjà à un compte vérifié — un
+    /// refus qui ne crée RIEN et se signale par ce seul drapeau
+    /// (`services/gateway/src/routes/auth/register.ts`). Sans ce champ, la
+    /// branche du conflit se décodait en `user: nil, token: nil` et remontait
+    /// en « Response missing token/user data » : un refus MOTIVÉ rendu comme
+    /// une panne, donc irrattrapable par l'écran.
+    public let phoneOwnershipConflict: Bool?
+
+    /// #8035 — `POST /auth/login` sur une adresse inconnue sert un 200 SANS
+    /// session : `status == "verification-required"`, l'adresse, et si le
+    /// compte vient d'être créé. Lu par `pendingEmailVerification(typedIdentifier:)`.
+    /// #8055 — `POST /auth/register` sans numéro de téléphone sert la même
+    /// branche (`accountCreated: true`) : le compte n'est pas encore actif.
+    public let status: String?
+    public let accountCreated: Bool?
+    public let email: String?
+    /// #8083 — servi avec `verification-required` : le jeton d'attente de cet
+    /// appareil, pour `POST /auth/verification/status`.
+    public let pendingSessionToken: String?
+
+    /// #10518 — servi par `POST /auth/verify-email` et
+    /// `POST /auth/magic-link/validate`, avec la session comme avec le défi de
+    /// second facteur : les secondes qui restent, à l'instant de la réponse,
+    /// pour adopter ce que la preuve a rendu. Lu par `ProvenAdoptionWindow`.
+    /// Une valeur qui n'est pas un entier se lit ABSENTE : elle ne fait jamais
+    /// échouer le décodage d'une réponse dont la preuve est déjà consommée.
+    public let adoptWithinSeconds: Int?
+
+    /// #10872 — le lien n'a pas été demandé par cet appareil : AUCUNE session
+    /// n'est servie, seulement l'identité du compte qu'il ouvrirait. Lus en
+    /// tolérance : un champ illisible se lit absent.
+    public let requiresConfirmation: Bool?
+    public let account: LinkSignInAccount?
+    /// #10883 — ce que fera le oui (`intent` du fil) et l'adresse en jeu,
+    /// masquée par la passerelle. Lus en tolérance, comme les deux ci-dessus.
+    public let linkIntent: LinkSignInIntent
+    public let maskedEmail: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case user, token, sessionToken, expiresIn, requires2FA, twoFactorToken
+        case phoneOwnershipConflict, status, accountCreated, email, pendingSessionToken
+        case adoptWithinSeconds, requiresConfirmation, account
+        case linkIntent = "intent", maskedEmail
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        user = try container.decodeIfPresent(MeeshyUser.self, forKey: .user)
+        token = try container.decodeIfPresent(String.self, forKey: .token)
+        sessionToken = try container.decodeIfPresent(String.self, forKey: .sessionToken)
+        expiresIn = try container.decodeIfPresent(Int.self, forKey: .expiresIn)
+        requires2FA = try container.decodeIfPresent(Bool.self, forKey: .requires2FA)
+        twoFactorToken = try container.decodeIfPresent(String.self, forKey: .twoFactorToken)
+        phoneOwnershipConflict = try container.decodeIfPresent(Bool.self, forKey: .phoneOwnershipConflict)
+        status = try container.decodeIfPresent(String.self, forKey: .status)
+        accountCreated = try container.decodeIfPresent(Bool.self, forKey: .accountCreated)
+        email = try container.decodeIfPresent(String.self, forKey: .email)
+        pendingSessionToken = try container.decodeIfPresent(String.self, forKey: .pendingSessionToken)
+        adoptWithinSeconds = try? container.decodeIfPresent(Int.self, forKey: .adoptWithinSeconds)
+        requiresConfirmation = (try? container.decodeIfPresent(Bool.self, forKey: .requiresConfirmation)) ?? nil
+        account = (try? container.decodeIfPresent(LinkSignInAccount.self, forKey: .account)) ?? nil
+        linkIntent = LinkSignInIntent(served: (try? container.decodeIfPresent(String.self, forKey: .linkIntent)) ?? nil)
+        maskedEmail = (try? container.decodeIfPresent(String.self, forKey: .maskedEmail)) ?? nil
+    }
+
+    public init(
+        user: MeeshyUser?,
+        token: String?,
+        sessionToken: String?,
+        expiresIn: Int?,
+        requires2FA: Bool?,
+        twoFactorToken: String?,
+        phoneOwnershipConflict: Bool? = nil,
+        status: String? = nil,
+        accountCreated: Bool? = nil,
+        email: String? = nil,
+        pendingSessionToken: String? = nil,
+        adoptWithinSeconds: Int? = nil,
+        requiresConfirmation: Bool? = nil,
+        account: LinkSignInAccount? = nil,
+        linkIntent: LinkSignInIntent = .signIn,
+        maskedEmail: String? = nil
+    ) {
+        self.user = user
+        self.token = token
+        self.sessionToken = sessionToken
+        self.expiresIn = expiresIn
+        self.requires2FA = requires2FA
+        self.twoFactorToken = twoFactorToken
+        self.phoneOwnershipConflict = phoneOwnershipConflict
+        self.status = status
+        self.accountCreated = accountCreated
+        self.email = email
+        self.pendingSessionToken = pendingSessionToken
+        self.adoptWithinSeconds = adoptWithinSeconds
+        self.requiresConfirmation = requiresConfirmation
+        self.account = account
+        self.linkIntent = linkIntent
+        self.maskedEmail = maskedEmail
+    }
 }
 
 // MARK: - Register
 
+/// La charge de `POST /auth/register`.
+///
+/// **#5218 — `firstName` et `lastName` ne partent plus.** La passerelle les
+/// DÉRIVE de `displayName` ; les envoyer depuis le client obligeait
+/// l'utilisateur à découper son nom en deux, soit des écrans de wizard pour des
+/// valeurs que le serveur sait fabriquer.
+///
+/// **#6479 — `username`, LUI, repart.** Non pas comme au wizard d'avant, où il
+/// fallait l'inventer, mais parce que l'écran le MONTRE : il affiche le pseudo
+/// dérivé de l'adresse et laisse le modifier. Dès lors la valeur existe, et la
+/// directive porteur est sans ambiguïté — « ici on a des données et la
+/// passerelle doit utiliser ces données ». `resoudreUsername` l'emploie tel
+/// quel et ne génère plus rien.
+///
+/// Un champ `nil` est ABSENT du JSON (l'`Encodable` synthétisé encode un
+/// `Optional` avec `encodeIfPresent`), donc ne rien passer ne pose rien — et
+/// c'est ce qui reste vrai quand l'adresse ne donne rien de slugifiable.
 public struct RegisterRequest: Encodable, Sendable {
-    public let username: String
-    public let password: String
-    public let firstName: String
-    public let lastName: String
+    /// Le nom que l'utilisateur se donne. Unique champ d'identité de
+    /// l'inscription : la passerelle en dérive `username`, `firstName` et
+    /// `lastName`.
+    ///
+    /// `nil` ⇒ **absent de la charge**, et la passerelle DÉRIVE alors le nom
+    /// affiché de la partie locale de l'adresse (#6441,
+    /// `displayNameDepuisEmail`) — l'adresse seule suffit à ouvrir un compte.
+    ///
+    /// `nil`, jamais `""`, pour la même raison que `password` ci-dessous :
+    /// `displayNameProperty` porte `minLength: 1`, donc une chaîne vide serait
+    /// une VALEUR refusée, et l'inscription échouerait là où elle devait passer.
+    /// Le type était optionnel bien avant que ce sens le soit — c'est
+    /// exactement ce silence qui a laissé `canSubmit` exiger un nom pendant un
+    /// cycle entier après l'ouverture de #6424.
+    public let displayName: String?
     public let email: String
+    /// `nil` ⇒ **absent de la charge**, et le compte naît SANS mot de passe
+    /// (#6424) : sa seule porte est le lien magique, jusqu'à ce qu'il en pose
+    /// un depuis son profil.
+    ///
+    /// `nil`, jamais `""`. La passerelle lit l'ABSENCE de la clé ; une chaîne
+    /// vide serait une valeur — refusée par la borne de longueur — et
+    /// l'inscription échouerait là où elle devait passer. `Encodable` omet une
+    /// propriété optionnelle `nil` par défaut, ce qui rend l'absence gratuite
+    /// ici et payante nulle part.
+    public let password: String?
+    /// Les chiffres tels que tapés (forme nationale admise, `0612345678`) ;
+    /// la passerelle les normalise en E.164 avec `phoneCountryCode`. `nil` ⇒
+    /// absent de la charge — le téléphone n'est jamais obligatoire.
     public let phoneNumber: String?
+    /// ISO 3166-1 alpha-2 du pays choisi. Voyage avec `phoneNumber` ou pas du tout.
     public let phoneCountryCode: String?
     public let systemLanguage: String
-    public let regionalLanguage: String
+    public let regionalLanguage: String?
+    /// Le pseudo que l'écran MONTRE et donc ENVOIE (#6479).
+    ///
+    /// Déclaré depuis #5218 pour la reprise après transfert de numéro, il
+    /// restait toujours `nil`. Il PART désormais : l'écran affiche le pseudo
+    /// dérivé de l'adresse et laisse le modifier, donc la valeur existe.
+    /// `resoudreUsername` l'emploie tel quel et ne génère plus rien.
+    ///
+    /// `nil` ⇒ absent de la charge, et la passerelle en cherche un LIBRE — le
+    /// seul cas restant est une adresse dont rien n'est slugifiable. Fourni,
+    /// une collision devient un refus `USERNAME_TAKEN` servi avec trois pseudos
+    /// libres : on ne renomme pas quelqu'un après lui avoir montré son pseudo.
+    public let username: String?
+    public let firstName: String?
+    public let lastName: String?
+    /// Le code du lien d'invitation (#8058, #8075). La passerelle rattache le
+    /// compte créé à son parrain, activé ou non, et un code invalide ne bloque
+    /// jamais l'inscription. `nil` ⇒ absent de la charge.
+    public let affiliateToken: String?
+    /// La clé de visite de `/affiliate/track-visit`, quand le client en tient
+    /// une. Ne voyage qu'avec `affiliateToken`.
+    public let affiliateSessionKey: String?
+    /// « Ce n'est pas moi » (#8214 × #8216) : l'adresse est détenue par un
+    /// autre compte, celui-ci la REVENDIQUE. La passerelle crée le compte sans
+    /// session et envoie un code à l'adresse ; seule sa preuve la lui donne.
+    /// `nil` ⇒ absent de la charge, jamais `false`.
+    public let claimEmail: Bool?
 
     public init(
-        username: String,
-        password: String,
-        firstName: String,
-        lastName: String,
+        displayName: String? = nil,
         email: String,
+        password: String? = nil,
         phoneNumber: String? = nil,
         phoneCountryCode: String? = nil,
         systemLanguage: String = "fr",
-        regionalLanguage: String = "fr"
+        regionalLanguage: String? = nil,
+        username: String? = nil,
+        firstName: String? = nil,
+        lastName: String? = nil,
+        affiliateToken: String? = nil,
+        affiliateSessionKey: String? = nil,
+        claimEmail: Bool? = nil
     ) {
-        self.username = username
-        self.password = password
-        self.firstName = firstName
-        self.lastName = lastName
+        self.claimEmail = claimEmail == true ? true : nil
+        self.affiliateToken = affiliateToken
+        self.affiliateSessionKey = affiliateToken == nil ? nil : affiliateSessionKey
+        self.displayName = displayName
         self.email = email
+        self.password = password
         self.phoneNumber = phoneNumber
         self.phoneCountryCode = phoneCountryCode
         self.systemLanguage = systemLanguage
         self.regionalLanguage = regionalLanguage
+        self.username = username
+        self.firstName = firstName
+        self.lastName = lastName
     }
+
+    /// La même charge, portant le code d'invitation s'il a la forme d'un code
+    /// (`ReferralCode.normalized`). Sans code, la charge part sans aucune des
+    /// deux clés : une clé de session seule n'a rien à rattacher.
+    public func referred(byCode code: String?, sessionKey: String? = nil) -> RegisterRequest {
+        let token = code.flatMap(ReferralCode.normalized)
+        let key = sessionKey?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return RegisterRequest(
+            displayName: displayName, email: email, password: password,
+            phoneNumber: phoneNumber, phoneCountryCode: phoneCountryCode,
+            systemLanguage: systemLanguage, regionalLanguage: regionalLanguage,
+            username: username, firstName: firstName, lastName: lastName,
+            affiliateToken: token,
+            affiliateSessionKey: (key?.isEmpty ?? true) ? nil : key,
+            claimEmail: claimEmail
+        )
+    }
+
+    /// La même charge, qui REVENDIQUE l'adresse (#8214 × #8216).
+    public func claimingEmail() -> RegisterRequest {
+        RegisterRequest(
+            displayName: displayName, email: email, password: password,
+            phoneNumber: phoneNumber, phoneCountryCode: phoneCountryCode,
+            systemLanguage: systemLanguage, regionalLanguage: regionalLanguage,
+            username: username, firstName: firstName, lastName: lastName,
+            affiliateToken: affiliateToken, affiliateSessionKey: affiliateSessionKey,
+            claimEmail: true
+        )
+    }
+}
+
+/// Le refus « ce numéro appartient déjà à un compte vérifié ».
+///
+/// Servi en **200**, avec `phoneOwnershipConflict: true` et AUCUN compte créé
+/// (`services/gateway/src/routes/auth/register.ts`). C'est donc un succès HTTP
+/// qui n'a rien créé : sans type dédié, il ne pouvait se distinguer d'une
+/// réponse tronquée, et l'écran rendait « erreur inconnue » pour un refus dont
+/// il connaît pourtant le remède exact (laisser le numéro vide).
+public struct PhoneOwnershipConflict: Error, Sendable, Equatable {
+    public init() {}
+}
+
+// MARK: - Origine d'une session
+
+/// D'OÙ vient la session courante — et non « y a-t-il une session », que
+/// `isAuthenticated` dit déjà.
+///
+/// Une inscription et une connexion posent le même booléen, et pourtant elles
+/// n'autorisent pas la même chose : demander la permission de notification à
+/// quelqu'un qui vient de créer son compte, c'est une alerte système avant le
+/// premier message. Sans ce type, le seul moyen de les distinguer était de
+/// deviner — et un `isAuthenticated` ne se laisse pas interroger sur son passé.
+public enum SessionOrigin: String, Sendable, Equatable {
+    /// L'utilisateur s'est connecté à un compte existant (mot de passe, 2FA,
+    /// lien magique).
+    case login
+    /// Le compte vient d'être CRÉÉ sur cet appareil.
+    case registration
+    /// Session relue du trousseau au démarrage, ou jeton renouvelé.
+    case restored
 }
 
 // MARK: - Magic Link
@@ -64,10 +302,13 @@ public struct RegisterRequest: Encodable, Sendable {
 public struct MagicLinkRequest: Encodable {
     public let email: String
     public let deviceFingerprint: String?
+    /// #10872 — l'empreinte du secret que cet appareil garde ; omise si `nil`.
+    public let linkDeviceHash: String?
 
-    public init(email: String, deviceFingerprint: String? = nil) {
+    public init(email: String, deviceFingerprint: String? = nil, linkDeviceHash: String? = nil) {
         self.email = email
         self.deviceFingerprint = deviceFingerprint
+        self.linkDeviceHash = linkDeviceHash
     }
 }
 
@@ -80,9 +321,15 @@ public struct MagicLinkResponse: Decodable {
 
 public struct MagicLinkValidateRequest: Encodable {
     public let token: String
+    /// #10872 — le secret gardé à la demande, et le « oui » explicite de
+    /// l'utilisateur ; tous deux omis du corps quand `nil`.
+    public let linkDeviceSecret: String?
+    public let confirm: Bool?
 
-    public init(token: String) {
+    public init(token: String, linkDeviceSecret: String? = nil, confirm: Bool? = nil) {
         self.token = token
+        self.linkDeviceSecret = linkDeviceSecret
+        self.confirm = confirm
     }
 }
 
@@ -99,10 +346,17 @@ public struct ForgotPasswordRequest: Encodable {
 public struct ResetPasswordRequest: Encodable {
     public let token: String
     public let newPassword: String
+    /// Exigé par la passerelle (`resetPasswordSchema`) — sans lui, l'envoi
+    /// partait en 400 `Invalid request data`.
+    public let confirmPassword: String
+    /// Le code 2FA d'un compte protégé (#10867) — omis du corps quand `nil`.
+    public let twoFactorCode: String?
 
-    public init(token: String, newPassword: String) {
+    public init(token: String, newPassword: String, confirmPassword: String? = nil, twoFactorCode: String? = nil) {
         self.token = token
         self.newPassword = newPassword
+        self.confirmPassword = confirmPassword ?? newPassword
+        self.twoFactorCode = twoFactorCode
     }
 }
 
@@ -162,15 +416,40 @@ public struct ResendVerificationRequest: Encodable {
 
 // MARK: - Availability Check
 
+/// La réponse de `GET /auth/check-availability`.
+///
+/// **Le contrat a changé (#4158).** L'adresse et le numéro ne disent plus si un
+/// compte existe : les confirmer sans authentification faisait de cette route
+/// un oracle, alors que `/forgot-password` et `/magic-link/request` répondent
+/// délibérément « succès » dans tous les cas pour ne rien révéler. Ils rendent
+/// désormais un verdict de FORME.
+///
+/// Le PSEUDO, lui, répond toujours sur l'existence — c'est une clé publique,
+/// déjà énumérable par `GET /u/:username`.
 public struct AvailabilityResponse: Decodable {
     public let usernameAvailable: Bool?
-    public let emailAvailable: Bool?
-    public let phoneNumberAvailable: Bool?
-    public let phoneNumberValid: Bool?
     public let suggestions: [String]?
 
+    /// Forme seulement. `nil` quand l'adresse n'a pas été soumise.
+    public let emailValid: Bool?
+    /// Forme seulement. `nil` quand le numéro n'a pas été soumis.
+    public let phoneNumberValid: Bool?
+    /// Le numéro normalisé, quand il est bien formé.
+    public let phoneNumberE164: String?
+
+    /// Ne parle QUE du pseudo.
+    ///
+    /// Elle retombait auparavant sur `emailAvailable ?? phoneNumberAvailable`,
+    /// des champs que le serveur ne sert plus : la laisser ainsi ferait rendre
+    /// `false` à chaque adresse, et l'écran d'inscription dirait « déjà
+    /// utilisée » à tout le monde.
     public var available: Bool {
-        usernameAvailable ?? emailAvailable ?? phoneNumberAvailable ?? false
+        usernameAvailable ?? false
+    }
+
+    /// L'identifiant de contact soumis est-il BIEN FORMÉ ? (jamais « libre »)
+    public var wellFormed: Bool {
+        emailValid ?? phoneNumberValid ?? true
     }
 }
 
@@ -186,13 +465,19 @@ public struct PhoneOwnerMaskedInfo: Decodable, Sendable, Equatable {
 /// le numéro appartient à un compte dormant dont l'identité déclarée matche —
 /// le client oriente alors vers la récupération de compte plutôt que la
 /// création d'un doublon.
+/// La réponse de `POST /auth/phone-transfer/check`.
+///
+/// **`exists` a été RETIRÉ du fil (#4239).** Il confirmait, sans compte, qu'un
+/// numéro appartient à un utilisateur Meeshy — le même oracle que #4158 ferme
+/// sur la porte voisine. `maskedInfo` ne vient plus que lorsque la récupération
+/// est suggérée, c'est-à-dire lorsque l'appelant a déjà prouvé qu'il connaît le
+/// vrai nom du titulaire.
+///
+/// `dormant`, `dormantSince` et `nameSimilarity` n'ont jamais été servis par
+/// cette route — elle les tait délibérément. Les déclarer ici les laissait
+/// paraître disponibles ; ils sont retirés avec `exists`.
 public struct PhoneOwnershipResponse: Decodable, Sendable, Equatable {
-    public let exists: Bool
     public let maskedInfo: PhoneOwnerMaskedInfo?
-    public let dormant: Bool?
-    public let dormantSince: String?
-    /// "exact" | "similar" | "different" | nil
-    public let nameSimilarity: String?
     public let recoverySuggested: Bool?
 }
 
@@ -266,6 +551,14 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     public let voiceSampleDurationMs: Int?
     public let voiceQuality: Double?
 
+    /// L'état d'activation du compte (#8239, loi #8238) — servi pour SOI
+    /// seulement (connexion, `/auth/me`) ; `nil` sur une passerelle antérieure.
+    public let activation: UserActivation?
+
+    /// Le contour d'avatar et la bannière de design équipés (#10632), visibles des
+    /// autres. `nil` = un ancien serveur ne le sert pas : le profil se rend comme avant.
+    public let profileDecor: ServedProfileDecor?
+
     public init(
         id: String, username: String, email: String? = nil,
         firstName: String? = nil, lastName: String? = nil,
@@ -289,7 +582,9 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         voicePublic: Bool? = nil,
         voiceSampleUrl: String? = nil,
         voiceSampleDurationMs: Int? = nil,
-        voiceQuality: Double? = nil
+        voiceQuality: Double? = nil,
+        activation: UserActivation? = nil,
+        profileDecor: ServedProfileDecor? = nil
     ) {
         self.id = id
         self.username = username
@@ -328,6 +623,41 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.voiceSampleUrl = voiceSampleUrl
         self.voiceSampleDurationMs = voiceSampleDurationMs
         self.voiceQuality = voiceQuality
+        self.activation = activation
+        self.profileDecor = profileDecor
+    }
+
+    /// Le même compte avec un autre décor de profil (équipement optimiste, événement socket).
+    public func withProfileDecor(_ decor: ServedProfileDecor?) -> MeeshyUser {
+        MeeshyUser(
+            id: id, username: username, email: email,
+            firstName: firstName, lastName: lastName,
+            displayName: displayName, bio: bio,
+            avatar: avatar, avatarThumbHash: avatarThumbHash,
+            banner: banner, bannerThumbHash: bannerThumbHash,
+            role: role,
+            systemLanguage: systemLanguage, regionalLanguage: regionalLanguage,
+            isOnline: isOnline, lastActiveAt: lastActiveAt,
+            createdAt: createdAt, updatedAt: updatedAt,
+            blockedUserIds: blockedUserIds,
+            isActive: isActive, deactivatedAt: deactivatedAt,
+            isAnonymous: isAnonymous, isMeeshyer: isMeeshyer,
+            phoneNumber: phoneNumber,
+            emailVerifiedAt: emailVerifiedAt, phoneVerifiedAt: phoneVerifiedAt,
+            customDestinationLanguage: customDestinationLanguage,
+            autoTranslateEnabled: autoTranslateEnabled,
+            deviceLocale: deviceLocale,
+            timezone: timezone,
+            registrationCountry: registrationCountry,
+            profileCompletionRate: profileCompletionRate,
+            signalIdentityKeyPublic: signalIdentityKeyPublic,
+            voicePublic: voicePublic,
+            voiceSampleUrl: voiceSampleUrl,
+            voiceSampleDurationMs: voiceSampleDurationMs,
+            voiceQuality: voiceQuality,
+            activation: activation,
+            profileDecor: decor
+        )
     }
 
     /// Returns a new MeeshyUser with the specified profile fields replaced.
@@ -371,12 +701,14 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             voicePublic: voicePublic ?? self.voicePublic,
             voiceSampleUrl: voiceSampleUrl,
             voiceSampleDurationMs: voiceSampleDurationMs,
-            voiceQuality: voiceQuality
+            voiceQuality: voiceQuality,
+            activation: activation,
+            profileDecor: profileDecor
         )
     }
 
     /// Ordered list of preferred content languages for the Prisme Linguistique.
-    /// Resolution order (extended 2026-05-26):
+    /// Resolution order:
     /// 1. `systemLanguage`             — primary in-app preference
     /// 2. `regionalLanguage`           — secondary in-app preference
     /// 3. `customDestinationLanguage`  — per-conversation override
@@ -466,6 +798,38 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         return primary
     }
 
+    /// La clé canonique sous laquelle deux identifiants de langue sont considérés
+    /// comme LA MÊME — pour la déduplication et le rapprochement de clés du Prisme.
+    ///
+    /// Miroir FIDÈLE de `normalizeLanguageForDedup`
+    /// (`packages/shared/utils/language-normalize.ts`, SSOT TS) et de
+    /// `LanguageCodeNormalizer.normalizeForDedup`
+    /// (`apps/android/core/model/.../lang/LanguageCodeNormalizer.kt`) :
+    /// `normalizeLanguageCode` d'abord, sinon le SOUS-TAG PRIMAIRE lowercased
+    /// (région strippée), sinon la chaîne entière lowercased. TOTALE — ne rend
+    /// jamais `nil`, parce qu'une comparaison doit produire une clé pour CHAQUE
+    /// jeton qu'on lui donne, même ceux que `normalizeLanguageCode` rejette.
+    ///
+    /// Le REPLI strippe la région pour TOUT code, pas seulement ceux que
+    /// `normalizeLanguageCode` sait réduire. Sans lui, un code HORS CATALOGUE
+    /// tagué région (`"yue-HK"`, Cantonais absent du catalogue Meeshy)
+    /// canoniserait vers `"yue-hk"` avec un `.lowercased()` brut et ne
+    /// matcherait pas un `"yue"` — comptant pour deux langues distinctes et
+    /// rétrogradant la langue PRIMAIRE du lecteur : la violation exacte du
+    /// Prisme (#3) que le rapprochement de clés combat. Les miroirs TS/Kotlin
+    /// strippent déjà la région au repli ; ce site alignait un `.lowercased()`
+    /// verbatim, seul divergent des trois.
+    ///
+    /// Toute évolution DOIT toucher les TROIS sites (TS + Kotlin + Swift).
+    public static func normalizeLanguageForDedup(_ code: String) -> String {
+        if let normalized = normalizeLanguageCode(code) { return normalized }
+        let primary = code
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(omittingEmptySubsequences: false, whereSeparator: { $0 == "-" || $0 == "_" })
+            .first.map { $0.lowercased() } ?? ""
+        return primary.isEmpty ? code.lowercased() : primary
+    }
+
     /// Table de réduction des codes ISO 639-1 DÉPRÉCIÉS vers leur code canonique
     /// courant (miroir de `LEGACY_ISO_639_1` dans
     /// `packages/shared/utils/language-normalize.ts`). `iw`/`in`/`ji` sont les
@@ -512,15 +876,40 @@ public struct SavedAccount: Codable, Identifiable, Sendable {
     public let displayName: String?
     public let avatarURL: String?
     public let lastActiveAt: Date
+    /// #8286 — la session de ce compte survit-elle quand on le QUITTE ?
+    /// `true` pour le premier compte de l'appareil ; au-delà, la case
+    /// « Rester connecté sur cet appareil » de la connexion.
+    public let keepsSession: Bool
 
-    public var shortName: String { displayName ?? username }
+    /// Un nom d'affichage vide ou blanc n'en est pas un : le pseudo le remplace.
+    public var shortName: String {
+        guard let name = displayName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else { return username }
+        return name
+    }
 
-    public init(id: String, username: String, displayName: String?, avatarURL: String?, lastActiveAt: Date) {
+    public init(id: String, username: String, displayName: String?, avatarURL: String?, lastActiveAt: Date, keepsSession: Bool = true) {
         self.id = id
         self.username = username
         self.displayName = displayName
         self.avatarURL = avatarURL
         self.lastActiveAt = lastActiveAt
+        self.keepsSession = keepsSession
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, username, displayName, avatarURL, lastActiveAt, keepsSession
+    }
+
+    /// Une entrée écrite avant #8286 n'a pas `keepsSession` : tout compte
+    /// gardait alors sa session, l'absence vaut donc `true`.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        username = try container.decode(String.self, forKey: .username)
+        displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
+        avatarURL = try container.decodeIfPresent(String.self, forKey: .avatarURL)
+        lastActiveAt = try container.decode(Date.self, forKey: .lastActiveAt)
+        keepsSession = try container.decodeIfPresent(Bool.self, forKey: .keepsSession) ?? true
     }
 }
 

@@ -10,14 +10,34 @@ import XCTest
 /// Linux (R5).
 final class FocalScrollTimePillMountGuardTests: XCTestCase {
 
+    /// **L'UNITÉ du type, jamais son fichier.**
+    ///
+    /// Les invariants ci-dessous portent sur `MessageListViewController` —
+    /// « son timer de suivi de lecture porte le tick de la pilule », « il n'en
+    /// construit pas un troisième ». Une EXTRACTION les fait franchir une
+    /// frontière que la loi ne connaît pas : sortir le cluster de suivi vers
+    /// `MessageListViewController+SeenTracking.swift` (#3947) a fait tomber
+    /// `startSeenTracking` d'un côté et laissé la garde de l'autre, qui
+    /// rougissait en annonçant la disparition d'une méthode toujours là.
+    ///
+    /// La source lue est donc la CONCATÉNATION des fichiers du type. Ajouter
+    /// une extension à cette liste est le geste attendu ; l'oublier fait
+    /// rougir la garde, ce qui est exactement le bon sens de panne.
+    /// Depuis #10758, `AppSourceGuard.text(at:)` lit l'hôte avec TOUTES ses
+    /// extensions (`+SeenTracking` comprise) : la liste n'en nomme plus qu'un.
+    private static let unitFiles = [
+        "Meeshy/Features/Main/Views/MessageListViewController.swift",
+    ]
+
     private func source() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
+        let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // .../Unit/Focal
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Views/MessageListViewController.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try Self.unitFiles
+            .map { try AppSourceGuard.text(at: root.appendingPathComponent($0)) }
+            .joined(separator: "\n")
     }
 
     private func strippedSource() throws -> String {
@@ -57,7 +77,7 @@ final class FocalScrollTimePillMountGuardTests: XCTestCase {
         // 1. Le démontage est INCONDITIONNEL — décision de `85cf1ec4`, gelée
         //    ici pour qu'un remontage accidentel se signale.
         XCTAssertTrue(
-            code.contains("private func updateScrollTimePillMounting() {\n        teardownScrollTimePillOverlay()\n    }"),
+            code.contains("func updateScrollTimePillMounting() {\n        teardownScrollTimePillOverlay()\n    }"),
             "`updateScrollTimePillMounting` doit se réduire au démontage INCONDITIONNEL — la pilule flottante n'est plus montée nulle part (`85cf1ec4`), et un contrôleur recyclé depuis un mode antérieur ne doit pas en garder une à l'écran."
         )
 
@@ -131,7 +151,7 @@ final class FocalScrollTimePillMountGuardTests: XCTestCase {
     func test_noteScrollTimePillActivity_isGuardedByReadingMode() throws {
         let code = try strippedSource()
         XCTAssertTrue(
-            code.contains("private func noteScrollTimePillActivity() {\n        guard readingMode != .bubbles else { return }"),
+            code.contains("func noteScrollTimePillActivity() {\n        guard readingMode != .bubbles else { return }"),
             "noteScrollTimePillActivity doit garder `readingMode != .bubbles` en tête — sinon la pilule recevrait des événements même drapeau OFF."
         )
     }
@@ -154,16 +174,17 @@ final class FocalScrollTimePillMountGuardTests: XCTestCase {
     }
 
     /// Égalité de compte, pas seulement présence (leçon 257) : exactement
-    /// DEUX constructions `Timer(` dans tout le fichier — les DEUX
-    /// préexistantes (`reconfigureDebounceTimer`, `seenTimer`). Un TROISIÈME
-    /// `Timer(` ferait échouer ce test, signalant qu'un observateur neuf a
-    /// été introduit pour la pilule, contrairement à l'arbitrage.
+    /// DEUX constructions `Timer(` dans tout le TYPE — les DEUX préexistantes
+    /// (`reconfigureDebounceTimer` dans l'hôte, `seenTimer` dans l'extension
+    /// de suivi depuis #3947). Un TROISIÈME `Timer(` ferait échouer ce test,
+    /// signalant qu'un observateur neuf a été introduit pour la pilule,
+    /// contrairement à l'arbitrage.
     func test_noNewTimerIntroduced_forThePill() throws {
         let code = try strippedSource()
         let occurrences = code.components(separatedBy: "Timer(").count - 1
         XCTAssertEqual(
             occurrences, 2,
-            "MessageListViewController.swift construit \(occurrences) `Timer(...)` — exactement DEUX sont attendus (le debounce de reconfigure, et le suivi de lecture RÉUTILISÉ par la pilule). Un troisième signalerait un observateur neuf pour la pilule, contraire à l'arbitrage F-086bis."
+            "MessageListViewController (hôte + extensions) construit \(occurrences) `Timer(...)` — exactement DEUX sont attendus (le debounce de reconfigure, et le suivi de lecture RÉUTILISÉ par la pilule). Un troisième signalerait un observateur neuf pour la pilule, contraire à l'arbitrage F-086bis."
         )
     }
 
@@ -172,11 +193,11 @@ final class FocalScrollTimePillMountGuardTests: XCTestCase {
     func test_pillAnchor_usesFocalMetricsPillTop_neverALiteral() throws {
         let code = try strippedSource()
         XCTAssertTrue(
-            code.contains("constant: topInset + FocalMetrics.Pill.top"),
-            "L'ancre verticale de la pilule doit venir de `FocalMetrics.Pill.top` (miroir du token `thread.pill.top`, 72) — jamais un littéral en dur (garde R15)."
+            code.contains("constant: topInset + MessageDayStickyPlacement.scrollTimePillTop(headerBandHeight: headerBandHeight)"),
+            "L'ancre verticale de la pilule doit venir de `FocalMetrics.Pill.top` (miroir du token `thread.pill.top`, 72), décalée de ce que l'en-tête mesuré gagne en Dynamic Type (#7998) — jamais un littéral en dur (garde R15)."
         )
         XCTAssertTrue(
-            code.contains("scrollTimePillTopConstraint?.constant = topInset + FocalMetrics.Pill.top"),
+            code.contains("scrollTimePillTopConstraint?.constant = topInset + MessageDayStickyPlacement.scrollTimePillTop(headerBandHeight: headerBandHeight)"),
             "applyTopInsetToViews doit recomposer l'ancre de la pilule quand `topInset` change — même discipline que la pill sticky de jour."
         )
     }

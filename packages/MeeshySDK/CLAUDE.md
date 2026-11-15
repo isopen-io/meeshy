@@ -1,5 +1,8 @@
 # packages/MeeshySDK - Swift SDK pour iOS
 
+> ## ⛔ Aucune feature sans issue — règle de démarrage (directive 2026-08-26)
+> **Avant d'écrire la première ligne d'une feature, d'une amélioration ou d'un correctif non trivial**, ouvrir (ou retrouver) son **issue** dans `isopen-io/meeshy`, la placer dans un **milestone précis** (nommé par le résultat attendu, avec échéance) et l'inscrire au projet « Meeshy — pilotage » (https://github.com/orgs/isopen-io/projects/1) avec `Status = In Progress`. Le commit qui livre la ferme (`Closes #n`) avec sa preuve (gate, mesure, PR). **Une tâche sans issue n'existe pas ; un travail sans milestone n'est pas planifié.** Ce qu'on découvre en chemin (dette, dimension non mûre, suivi) devient une issue à son tour — jamais une ligne dans un fichier ou une page. Détail : § « Pilotage du développement » du `CLAUDE.md` racine.
+
 ## Purpose
 SDK Swift modulaire fournissant les services core (auth, networking, sockets, cache, notifications) et les composants UI rutilisables pour l'app iOS Meeshy. Spar en deux targets pour permettre l'utilisation du SDK sans la couche UI.
 
@@ -19,7 +22,7 @@ Ce code va dans `apps/ios/Meeshy/Features/Main/Views/` (ou ViewModels selon le c
 
 | Type | Placement | Exemples |
 |---|---|---|
-| Atomes purs (UIViewRepresentable, CALayer subclass) | SDK | `MeeshyVideoSurface`, `MeeshyVideoCanvasLayer`, `MeeshyVideoThumbnail` |
+| Atomes purs (UIViewRepresentable, CALayer subclass) | SDK | `MeeshyVideoSurface`, `MeeshyVideoThumbnail` |
 | Composants View polymorphes paramétrés opaques | SDK | `MeeshyVideoPlayer(style:controls:frame:performance:)` |
 | Models, types, schemas | SDK (`MeeshySDK/Models/`) | `MeeshyMessageAttachment`, `VideoAvailability` |
 | Rule engines stateless (pures functions) | SDK | `MediaDownloadPolicyEngine.shouldAutoDownload` |
@@ -67,14 +70,14 @@ MeeshySDK/                      -> Target core (logique mtier)
     MessageSocketManager.swift -> WebSocket messages temps rel
     SocialSocketManager.swift  -> WebSocket feed social (posts, stories)
   Models/
-    CoreModels.swift           -> Types de base (User, enums)
+    MeeshyConversation.swift   -> MeeshyConversation (accentColor, resolvedLastMessagePreview)
     ConversationModels.swift   -> Conversation, ConversationMember
-    MessageModels.swift        -> Message, MessageTranslation
+    MeeshyMessage.swift        -> MeeshyMessage ; APIMessage.swift, APITextTranslation.swift -> modeles API
     PostModels.swift           -> Post, PostComment
-    FeedModels.swift           -> Feed, FeedItem
-    StoryModels.swift          -> Story, StorySlide
-    UserModels.swift           -> UserProfile, UserPreferences
-    NotificationModels.swift   -> Notification types
+    FeedPost.swift             -> FeedPost, FeedComment.swift, FeedMedia.swift
+    StoryItem.swift            -> StoryItem, StorySlide.swift, StoryGroup.swift, StoryEffects.swift
+    UserModels.swift           -> UpdateProfileRequest/Response, changement e-mail/telephone
+    APINotification.swift      -> APINotification ; NotificationContext.swift, MeeshyNotificationType.swift
     SampleData.swift           -> Donnes de dmo
   Cache/
     CachePolicy.swift          -> TTL, staleTTL, maxItemCount, StorageLocation, predefined policies
@@ -168,7 +171,7 @@ accentHex    = hueShift(primary, −30°)
 saturationBoost = min(1.0, memberCount / 100) × 0.2
 ```
 
-**Acces** (`Models/CoreModels.swift` → `MeeshyConversation`) :
+**Acces** (`Sources/MeeshySDK/Models/MeeshyConversation.swift` → `MeeshyConversation`) :
 - `conversation.accentColor` → `String` (hex primary, propriete calculee)
 - `conversation.colorPalette` → `ConversationColorPalette { primary, secondary, accent, saturationBoost }`
 - `conversation.colorContext` → `ConversationContext { name, type, language, theme, memberCount }`
@@ -185,7 +188,7 @@ saturationBoost = min(1.0, memberCount / 100) × 0.2
 
 Le SDK fournit les types API et la communication temps reel pour le prisme linguistique :
 
-**Models SDK** (`Models/MessageModels.swift`) :
+**Models SDK** (`Sources/MeeshySDK/Models/APITextTranslation.swift`, `Sources/MeeshySDK/Models/APIMessage.swift`) :
 - `APITextTranslation` : Traduction brute depuis l'API (id, messageId, sourceLanguage, targetLanguage, translatedContent, translationModel, confidenceScore)
 - `APIMessage.translations: [APITextTranslation]?` : Traductions pre-chargees avec le message via REST
 
@@ -260,6 +263,14 @@ Semantic: success=#34D399  error=#F87171  warning=#FBBF24  info=#60A5FA
 5. Ambient orbs use Indigo family colors (indigo500, indigo700, indigo400, indigo300)
 
 ## Conventions
+> **Cohésion d'abord (directive porteur 2026-10-19, #10988) — PRIORITAIRE sur le budget de lignes.** Garde : `apps/ios/scripts/check_cohesion_budget.sh` (cliquet CI, référence `apps/ios/scripts/cohesion-budget.json`).
+> 1. Un type a UNE responsabilité.
+> 2. Une fonction tient sur un écran : <= 80 lignes (cliquet).
+> 3. Une vue SwiftUI se compose de sous-vues qui reçoivent des valeurs, des `Binding` et des closures.
+> 4. L'état privé reste `private` ; l'élargir pour une extension sœur est une exception justifiée.
+> 5. `Type+X.swift` n'est PAS une décomposition : un type se mesure en UNITÉ (déclaration + extensions du module, cliquet <= 1 500 lignes). Extraire un vrai type cohésif, pas un fichier.
+> 6. Le budget de lignes par fichier (1000–1200) n'est plus qu'un indicateur secondaire.
+
 
 ### Nommage
 ```swift
@@ -389,6 +400,11 @@ swift test --filter MeeshySDKTests   # Tests SDK uniquement
 5. **Modles Decodable** avec CodingKeys explicites
 6. **Conversion API -> Domain** via extensions `toDomain()`
 7. **Consulter `decisions.md`** pour les choix architecturaux et leurs justifications
+
+## Pilotage & maturité (règle transverse — détail dans le `CLAUDE.md` racine)
+- **Le pilotage se fait EXCLUSIVEMENT sur GitHub** (projet « Meeshy — pilotage », milestones, issues) : toute tâche de ce répertoire est une issue au titre sémantique, passée `In Progress` au démarrage et fermée par le commit qui la livre (`Closes #n`). Pas de `todo.md`, pas de page « progress » ; les artifacts servent aux brouillons, au design et aux comptes rendus — jamais à l'état.
+- **Chaque feature est portée à maturité sur les treize dimensions** (sécurité, performance, mémoire, fluidité, accessibilité, cohérence de positionnement, facilité d'usage, UX, compatibilité, utilité, maintenabilité, simplicité d'usage, complétude). Ici, les témoins qui comptent d'abord : atomes sans orchestration produit (maintenabilité — SDK Purity), zéro re-render inutile et `Equatable` sur les cellules (fluidité), caches bornés avec éviction (mémoire), `CacheResult` `.fresh/.stale/.expired/.empty` distingués (performance), API stable pour l'app (compatibilité).
+- **La complexité se paie dans le code, jamais chez l'utilisateur.** Une lenteur, une saccade, une action sans feedback immédiat sont des bugs, pas de la dette : ils ont au moins la priorité de la feature qu'ils dégradent. Le commentaire de clôture d'une issue dit quelles dimensions sont mûres et ouvre une issue par dimension restante.
 
 ## Quality Gate
 Codex will review your output once you are done. Self-evaluate and ensure consistent, coherent code before marking any task as complete.

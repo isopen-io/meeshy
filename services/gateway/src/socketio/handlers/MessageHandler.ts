@@ -6,7 +6,6 @@
  * No more anonymousSenderId / anonymousSender dual path.
  */
 
-import * as path from 'path';
 // Cycle 101 (bis) — ce handler est le ONZIÈME et DERNIER basculé sur
 // `MeeshySocket` : ses émissions sont désormais vérifiées à la compilation
 // contre `ServerToClientEvents`, comme celles des dix autres (cycles 99, 100).
@@ -30,84 +29,86 @@ import * as path from 'path';
 // (`@meeshy/shared/types/index`), donc `message.messageType || 'text'` la rend.
 // Une fois le sac de clés retiré, il ne restait AUCUN blocage : ni cast, ni
 // validateur au producteur.
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 import type { MeeshySocket, MeeshyIOServer } from '../typed-socket';
+import { clientDeclaredProtection } from './messageProtectionInput';
+import { forwardReferencesOf } from '../../validation/forwarded-attachments';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../../services/CacheStore';
 import { isBlockedBetween } from '../../utils/blocking';
 import { blockCacheKey, BLOCK_CACHE_TTL_SECONDS } from '../../utils/block-cache';
 import { MessagingService } from '../../services/MessagingService';
-import {
-  buildPostReplyTo,
-  postReplyToFromMetadata,
-  POST_REPLY_SNAPSHOT_SELECT,
-} from '../../services/messaging/postReplySnapshot';
+import { serveNewMessagePostReply } from '../../services/messaging/servedPostReply';
 import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
+import { carriesNonTextBody } from '../../services/messaging/nonTextBody';
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
-import { attachmentForwardPreviewSelect, attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
-import { serializeAttachmentForSocket } from '../serializeAttachmentForSocket';
+import { attachmentForwardPreviewSelect, attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
+import { serializeAttachmentForSocket, serializeMessageAttachmentsForSocket } from '../serializeAttachmentForSocket';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
+import { offlineSignedPayload } from '../offlineSignedPayload';
 import { emitUnreadCountsToRecipients } from '../emitUnreadCountsToRecipients';
 import { ConversationBridgeService } from '../../services/ConversationBridgeService';
 import { emitToConversationParticipants, participantUserRoomTargets } from '../emitToConversationParticipants';
-import {
-  PREVIEW_PRISM_PARTICIPANT_SELECT,
-  resolveLastMessagePreviewPrism,
-  toIsoOrNull,
-  type PreviewPrismParticipant,
-} from '../utils/lastMessagePreviewPrism';
+import { fetchParticipantSuperset } from '../participant-superset';
+import { toIsoOrNull } from '../utils/lastMessagePreviewPrism';
+import { resolveLastMessagePreviewGroup } from '../utils/lastMessagePreviewGroup';
 import { validateMessageLength } from '../../config/message-limits';
 import {
   getConnectedUser,
-  extractJWTToken,
-  extractSessionToken,
   normalizeConversationId,
   type SocketUser
 } from '../utils/socket-helpers';
-import {
-  filterMessagePayloadForLanguages,
-  groupSocketsByLanguage,
-} from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
-import { resolveForwardSourceForBroadcast } from '../../services/preferences/forward-source-visibility.js';
-import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
-import {
-  carriesForwardSource,
-  withoutForwardSource,
-} from '@meeshy/shared/utils/forward-source-visibility';
-import { buildMessageAckData, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
+import { agentSenderIdentity } from './agentSenderIdentity.js';
+import { agentMayReadMessage, agentReadableMessage, notifyAgentOfMessage } from './agentMessageNotification.js';
+import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
+import { isServerAtRestMode, isServerAtRestUnavailable, queuedEventSealsAtRest } from '../../services/messaging/serverAtRest';
+import { resolvePeerBroadcastSplit } from '../peerBroadcastSplit.js';
+import { safeBroadcast } from '../serverEmit';
+import { emitMessageNewBestEffort } from '../messageNewEmission';
+import { emitMessageNewByLanguage } from '../messageNewByLanguage';
+import { readerSignedPlanBestEffort, readerSignedPlanForMessageIdBestEffort } from '../readerSignedDelivery';
+import { messageReadership, blockedReaderKeys, emitEditedToReaders } from '../editedAudience';
+import { buildMessageAckData, buildMessageFailureAck, messageRefusalEvent, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
 import { messageTypeFromMimeTypes } from '../../services/messaging/attachmentMessageType.js';
+import { admitLoadedMessageAttachments } from '../../services/messaging/attachmentSendAdmission';
 import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 import type {
   MessageRequest,
   MessageResponse
 } from '@meeshy/shared/types/messaging';
-import type { SocketIOMessage, SocketIOResponse } from '@meeshy/shared/types/socketio-events';
+import type {
+  SocketIOMessage,
+  SocketIOResponse,
+  MessageSendData,
+  MessageSendWithAttachmentsData,
+} from '@meeshy/shared/types/socketio-events';
 import type { Message } from '@meeshy/shared/types/index';
 import { buildMessageNewPayload } from '../messageNewPayload';
 import { buildMessageEditedCore } from '../messageEditedPayload';
 import { ErrorCode, ErrorMessages } from '@meeshy/shared/types';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
-import { conversationMessageStatsService } from '../../services/ConversationMessageStatsService';
-import { resolveMentionedUsers, resolveUsernamesToIds } from '../../services/MentionService';
+import { resolveMentionedUsers, resolveUsernamesToIds, withoutPendingMessageRequests } from '../../services/MentionService';
 import { reconcileEditedMentions, type MentionResolver } from '../../services/messaging/messageMentions';
-import {
-  reconcileEditedLinks,
-  mergeTrackingLinksIntoMetadata,
-  type LinkReconciler,
-} from '../../services/messaging/messageLinks';
+import { mergeTrackingLinksIntoMetadata, type LinkReconciler } from '../../services/messaging/messageLinks';
+import { editedLinksFor, editSealsAtRest } from '../../services/messaging/atRestEdit';
 import {
   admitMessageEdit,
+  editRefusalCode,
   isEditRefused,
-  CONVERSATION_CLOSED_EDIT_MESSAGE,
+  describeEditRefusalForSocket,
 } from '../../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
+import { writeGuardedMessageEdit } from '../../services/messaging/messageEditWrite';
+import { completeModeratedMessageRemoval, moderationReasonOf, MODERATION_REASON_MESSAGE, MODERATION_REASON_REQUIRED } from '../../services/moderation/contentRemoval';
 import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
-import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
+import { softDeleteMessage } from '../../services/messaging/softDeleteMessage';
+import { emitConversationUpdatedPerReader } from '../conversationUpdatedPerReader';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -127,10 +128,15 @@ import {
   SocketMessageEditSchema,
   SocketMessageDeleteSchema,
 } from '../../validation/socket-event-schemas.js';
-import { toEncryptedPayload } from '../../validation/encryption-envelope.js';
+import { toDeviceLayer, toEncryptedPayload } from '../../validation/encryption-envelope.js';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import type { QueuedVariantFor } from '../queuedEventContract';
+import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import { messageRefusesPlainErasure, SIGNAL_CHANNEL_REFUSAL } from '../../services/e2ee/e2ee-signal-channel';
+
+/** Ce transport ne résout aucune audience de citation scellée (#8562). */
+const NO_SEALED_EDIT: ReadonlyMap<string, Date> = new Map();
 
 const handlerLogger = enhancedLogger.child({ module: 'MessageHandler' });
 
@@ -166,29 +172,6 @@ export interface MessageHandlerDependencies {
    */
   trackingLinkService?: LinkReconciler | null;
 }
-
-/**
- * Le retrait COMPLET d'une source de transfert : le nom ET le chemin.
- *
- * `withoutForwardSource` (shared, pur) retire `forwardedFrom` et
- * `forwardedFromConversation`. Il ne peut pas faire plus : la seconde fuite ne
- * vit pas dans ces champs mais dans `attachments[].fileUrl`, où le chemin de
- * stockage de la copie porte le `User.id` de l'auteur d'origine — un transfert
- * réutilise le fichier plutôt que de le recopier.
- *
- * Les trois émissions qui masquent une source passent par ici, et non par le
- * seul `withoutForwardSource` : masquer sur un canal en laissant l'autre ouvert
- * ne masque rien. La porte REST ferme la même fuite avec le même helper.
- */
-const withoutForwardSourceOrItsPath = <T extends object>(payload: T): T => {
-  const stripped = withoutForwardSource(payload) as T & { attachments?: unknown };
-  if (!Array.isArray(stripped.attachments)) return stripped;
-
-  return {
-    ...stripped,
-    attachments: redactForwardedAttachmentUrlsIn(stripped.attachments as never[]),
-  } as T;
-};
 
 export class MessageHandler {
   private io: MeeshyIOServer;
@@ -268,16 +251,10 @@ export class MessageHandler {
    */
   async handleMessageSend(
     socket: MeeshySocket,
-    data: {
-      conversationId: string;
-      content: string;
-      originalLanguage?: string;
-      messageType?: string;
-      replyToId?: string;
-      forwardedFromId?: string;
-      forwardedFromConversationId?: string;
-      location?: unknown;
-    },
+    // Le contrat de fil PARTAGÉ, pas une transcription locale : une forme
+    // recopiée ici retenait chaque champ ajouté au contrat (`sticker`, #4823)
+    // sans qu'aucun témoin rougisse — la validation réelle est Zod, ci-dessous.
+    data: MessageSendData,
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
   ): Promise<void> {
     try {
@@ -333,33 +310,21 @@ export class MessageHandler {
       // était lue sur le `data` BRUT, sous un nom — `encryptedPayload` —
       // qu'aucun client n'émet et qu'aucun schéma ne produit : seul champ de
       // tout ce chemin à échapper au schéma, donc toujours `undefined`.
-      const encryptedPayload = toEncryptedPayload(validated);
+      const encryptedPayload = toEncryptedPayload(validated, { sessionId: (socket.data as { sessionId?: string } | undefined)?.sessionId ?? null });
 
-      // RÈGLE JUMELLE de `MessageValidator.validateRequest` : un transfert rend
-      // le corps non-vide autrement — ses pièces jointes sont copiées CÔTÉ
-      // SERVEUR (`MessageProcessor.copyForwardedAttachments`), le client
-      // n'envoie donc ni texte ni `attachmentIds` pour un transfert de média.
-      // L'exemption vivait dans le validateur mais pas ici : ce transport —
-      // celui que la modale de transfert web emprunte en PRIMAIRE — refusait
-      // tout transfert de média sans légende. Toute évolution de l'une des deux
-      // exemptions touche l'autre.
-      //
-      // `copyAttachmentsFromMessageId` porte la MÊME exemption pour la MÊME
-      // raison (diffusion à plusieurs destinataires : les pièces jointes sont
-      // copiées côté serveur par `copyAttachments.ts`, le client n'envoie ni
-      // texte ni `attachmentIds`). Cette troisième porte est restée fermée
-      // pendant que les deux autres s'ouvraient.
-      //
-      // QUATRIÈME porteur de la même exemption : un corps chiffré. Le
-      // déclencheur est désormais l'enveloppe VALIDÉE ci-dessus, non plus un
-      // champ brut que le fil ne portait jamais.
+      // RÈGLE JUMELLE de `MessageValidator.validateRequest` — une seule loi
+      // (`carriesNonTextBody`, qui dit chaque porteur et pourquoi) : ce
+      // transport est le repli documenté quand le POST REST échoue (#4039),
+      // une porte restée fermée ici refuse à coup sûr sur chaque tentative.
       const validation = validateMessageLength(validated.content);
-      if (
-        !validation.isValid &&
-        !encryptedPayload &&
-        !validated.forwardedFromId &&
-        !validated.copyAttachmentsFromMessageId
-      ) {
+      const bodyWithoutText = carriesNonTextBody({
+        encryptedPayload,
+        forwardedFromId: validated.forwardedFromId,
+        copyAttachmentsFromMessageId: validated.copyAttachmentsFromMessageId,
+        location: validated.location,
+        sticker: validated.sticker,
+      });
+      if (!validation.isValid && !bodyWithoutText) {
         this._sendError(callback, validation.error || 'Message invalide', socket);
         return;
       }
@@ -411,27 +376,29 @@ export class MessageHandler {
         originalLanguage: validated.originalLanguage,
         messageType: validated.messageType || 'text',
         replyToId: validated.replyToId,
+        attachmentReplyTo: validated.attachmentReplyTo,
         storyReplyToId: validated.storyReplyToId,
-        forwardedFromId: validated.forwardedFromId,
-        forwardedFromConversationId: validated.forwardedFromConversationId,
+        ...forwardReferencesOf(validated),
         // Diffusion : les pièces jointes du message source sont copiées côté
         // serveur (`MessageProcessor.saveMessage` → `copyAttachments`). Franchir
         // la garde sans transmettre le champ laisserait la copie muette.
         copyAttachmentsFromMessageId: validated.copyAttachmentsFromMessageId,
         encryptedPayload,
-        // Effets de message — parité avec POST /messages. Le bitfield final
-        // `effectFlags` est recomposé par `MessageProcessor.saveMessage`
-        // depuis `isBlurred` / `expiresAt` / `isViewOnce`, donc on transmet
-        // les champs bruts.
-        isBlurred: validated.isBlurred,
-        expiresAt: validated.expiresAt ? new Date(validated.expiresAt) : undefined,
-        effectFlags: validated.effectFlags,
-        isViewOnce: validated.isViewOnce,
-        maxViewOnceCount: validated.maxViewOnceCount,
+        // #14369 — la couche appareil d'un envoi hybride, à côté du clair (même unité que REST).
+        deviceLayer: toDeviceLayer(validated, { sessionId: (socket.data as { sessionId?: string } | undefined)?.sessionId ?? null }),
+        // Effets de protection déclarés par le client — parité avec
+        // POST /messages, déclarés UNE fois (`messageProtectionInput.ts`) pour
+        // les deux chemins socket. Sans cette propagation, une photo view-once
+        // / floutée / éphémère envoyée sur le path des pièces jointes — le
+        // PRINCIPAL — serait persistée comme un média normal, rouvrable
+        // indéfiniment.
+        ...clientDeclaredProtection(validated),
         isAnonymous,
-        // Lieu partagé — champ dédié transmis tel quel ; validé et écrit
-        // dans `metadata.location` par `MessageProcessor.saveMessage`.
+        // Lieu partagé et sticker (#4823) — champs dédiés transmis tels quels ;
+        // validés et écrits dans `metadata.location` / `metadata.sticker` par
+        // `MessageProcessor.saveMessage`.
         location: validated.location,
+        sticker: validated.sticker,
         // Mentionnés nommés par l'ÉMETTEUR — parité avec POST /messages, qui
         // les honore depuis toujours. Sans cette propagation, la résolution
         // retombe sur l'extraction des `@` du CONTENU : un repli suffisant tant
@@ -453,8 +420,9 @@ export class MessageHandler {
         resolvedParticipantId
       );
 
-      // Répondre au client
-      this._sendResponse(callback, response);
+      // Répondre au client. Le cid SOUMIS voyage explicitement : celui de la
+      // ligne relue nomme un AUTRE message sur un hit de dédup (#17058).
+      this._sendResponse(callback, response, socket, validated.clientMessageId);
 
       // Broadcaster le message si succès — SAUF sur un dedup idempotent
       // (même clientMessageId renvoyé). Le message existe déjà et a déjà été
@@ -469,20 +437,7 @@ export class MessageHandler {
           { ...corr, messageId: message.id }
         );
 
-        this._notifyAgent({
-          id: message.id,
-          conversationId: message.conversationId,
-          senderId: message.senderId,
-          senderDisplayName: message.sender?.displayName ?? message.sender?.user?.username,
-          senderUsername: message.sender?.user?.username,
-          content: message.content,
-          originalLanguage: message.originalLanguage,
-          replyToId: message.replyToId,
-          mentionedUserIds: await this._resolveMentionUserIds(
-            (message.validatedMentions as string[] | undefined) ?? []
-          ),
-          createdAt: message.createdAt,
-        });
+        await this._notifyAgent(message);
 
         // Le comptage du message n'est plus fait ici : il vit avec les trois
         // autres obligations post-commit, dans `runMessagePostSaveEffects`, que
@@ -512,16 +467,8 @@ export class MessageHandler {
    */
   async handleMessageSendWithAttachments(
     socket: MeeshySocket,
-    data: {
-      conversationId: string;
-      content: string;
-      originalLanguage?: string;
-      attachmentIds: readonly string[];
-      replyToId?: string;
-      forwardedFromId?: string;
-      forwardedFromConversationId?: string;
-      location?: unknown;
-    },
+    // Même contrat partagé que `handleMessageSend` — même raison.
+    data: MessageSendWithAttachmentsData,
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
   ): Promise<void> {
     try {
@@ -611,11 +558,12 @@ export class MessageHandler {
       // Le tableau reste aligné sur `attachmentIds`, donc `invalidIndex`
       // ci-dessous continue de nommer la pièce fautive.
       const attachments = await attachmentService.getAttachmentsByIds(validated.attachmentIds);
-      const invalidIndex = attachments.findIndex(
-        (attachment) => !attachment || attachment.uploadedBy !== (userId || participantId)
-      );
-      if (invalidIndex !== -1) {
-        this._sendError(callback, `Attachment ${validated.attachmentIds[invalidIndex]} invalid`, socket);
+      const admission = await admitLoadedMessageAttachments(this.prisma, {
+        attachments, attachmentIds: validated.attachmentIds, ownerId: userId || participantId,
+        conversationId: validated.conversationId, clientMessageId: validated.clientMessageId,
+      });
+      if (!admission.ok) {
+        this._sendError(callback, `Attachment ${admission.invalidAttachmentId} invalid`, socket);
         return;
       }
 
@@ -649,26 +597,23 @@ export class MessageHandler {
         // lieu de l'icône média dans `protectedPreview`/`contentTypeIcon`.
         messageType: messageTypeFromMimeTypes(attachments.map((a) => a?.mimeType)) ?? 'text',
         replyToId: validated.replyToId,
+        attachmentReplyTo: validated.attachmentReplyTo,
         storyReplyToId: validated.storyReplyToId,
-        forwardedFromId: validated.forwardedFromId,
-        forwardedFromConversationId: validated.forwardedFromConversationId,
-        // Effets de message — parité avec `handleMessageSend` (path texte) et
-        // POST /messages. Le bitfield final `effectFlags` est recomposé par
-        // `MessageProcessor.saveMessage` depuis `isBlurred` / `expiresAt` /
-        // `isViewOnce`, donc on transmet les champs bruts. Sans cette
-        // propagation, une photo view-once / floutée / éphémère envoyée sur ce
-        // path (le PRINCIPAL pour les pièces jointes) serait persistée comme un
-        // média normal, rouvrable indéfiniment.
-        isBlurred: validated.isBlurred,
-        expiresAt: validated.expiresAt ? new Date(validated.expiresAt) : undefined,
-        effectFlags: validated.effectFlags,
-        isViewOnce: validated.isViewOnce,
-        maxViewOnceCount: validated.maxViewOnceCount,
+        ...forwardReferencesOf(validated),
+        // Effets de protection déclarés par le client — parité avec
+        // POST /messages, déclarés UNE fois (`messageProtectionInput.ts`) pour
+        // les deux chemins socket. Sans cette propagation, une photo view-once
+        // / floutée / éphémère envoyée sur le path des pièces jointes — le
+        // PRINCIPAL — serait persistée comme un média normal, rouvrable
+        // indéfiniment.
+        ...clientDeclaredProtection(validated),
         isAnonymous,
         // Aligner avec GatewayMessage: attachments are passed as IDs for linking
         attachmentIds: validated.attachmentIds,
-        // Lieu partagé — même contrat que handleMessageSend ci-dessus.
+        // Lieu partagé et sticker — même contrat que handleMessageSend ci-dessus.
+        // Ce chemin est le NOMINAL du sticker : PNG rendu joint + descripteur.
         location: validated.location,
+        sticker: validated.sticker,
         // Mentionnés nommés par l'émetteur — même contrat que handleMessageSend.
         // Ce path porte TOUT l'audio : la légende d'un média y est souvent le
         // seul texte, et c'est là qu'un `@` a le plus de chances de manquer.
@@ -696,7 +641,7 @@ export class MessageHandler {
       // (Prisma read failure, connection drop) would silently skip the
       // callback and leave iOS / web waiting indefinitely → spurious
       // retry. Mirror the order used by `handleMessageSend` above.
-      this._sendResponse(callback, response);
+      this._sendResponse(callback, response, socket, validated.clientMessageId);
 
       if (response.success && response.data && !(response.data as { isDuplicate?: boolean }).isDuplicate) {
         const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
@@ -706,20 +651,7 @@ export class MessageHandler {
           { ...corr, messageId: message.id }
         );
 
-        this._notifyAgent({
-          id: message.id,
-          conversationId: message.conversationId,
-          senderId: message.senderId,
-          senderDisplayName: message.sender?.displayName ?? message.sender?.user?.username,
-          senderUsername: message.sender?.user?.username,
-          content: message.content,
-          originalLanguage: message.originalLanguage,
-          replyToId: message.replyToId,
-          mentionedUserIds: await this._resolveMentionUserIds(
-            (message.validatedMentions as string[] | undefined) ?? []
-          ),
-          createdAt: message.createdAt,
-        });
+        await this._notifyAgent(message);
 
         // Idem : le comptage — pièces jointes comprises — vit dans
         // `runMessagePostSaveEffects`, qui lit les MIME du message committé au
@@ -787,51 +719,62 @@ export class MessageHandler {
       // admis ici, alors que l'UI web lui propose le geste et que la route
       // conversation-scopée l'admet. Une politique cachée dans un `where` est
       // une politique qu'on ne peut ni lire ni unifier.
-      const message = await this.prisma.message.findFirst({
-        where: {
-          id: validated.messageId,
-          deletedAt: null,
-        },
-        select: {
-          id: true,
-          conversationId: true,
-          // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
-          // colonnes ajoutées à un `select` déjà là : aucun aller-retour de plus.
-          conversation: { select: { isActive: true, closedAt: true } },
-          senderId: true,
-          content: true,
-          originalLanguage: true,
-          // `messageType` et `createdAt` ne sont pas lus par la décision
-          // d'admission : ils sont REQUIS par le contrat de fil
-          // (`SocketIOMessage`) que la diffusion doit servir. Deux colonnes de
-          // plus sur un `select` déjà là — aucun aller-retour supplémentaire.
-          messageType: true,
-          createdAt: true,
-          // Lu pour la réconciliation des mentions : une mention ajoutée en
-          // éditant un message éphémère ne doit pas survivre à ce message.
-          expiresAt: true,
-          // Lu pour la réconciliation des liens : `metadata` est un blob
-          // PARTAGÉ, et le recomposer sans le lire écraserait `postReplyTo` et
-          // `location`.
-          metadata: true,
-          sender: { select: { id: true, userId: true, displayName: true, avatar: true, role: true } },
-          attachments: { select: attachmentMediaSelect },
-        },
-      });
+      const message = await withOrphanedSenderRepair(
+        { prisma: this.prisma, conversationIds: discoverConversationIdsByMessageIds(this.prisma, [validated.messageId]) },
+        () =>
+          this.prisma.message.findFirst({
+            where: {
+              id: validated.messageId,
+              deletedAt: null,
+            },
+            select: {
+              id: true,
+              conversationId: true,
+              // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
+              // colonnes ajoutées à un `select` déjà là : aucun aller-retour de plus.
+              conversation: { select: { isActive: true, closedAt: true, type: true, encryptionMode: true, serverEncryptionKeyId: true } },
+              senderId: true,
+              content: true,
+              originalLanguage: true,
+              // `messageType` et `createdAt` ne sont pas lus par la décision
+              // d'admission : ils sont REQUIS par le contrat de fil
+              // (`SocketIOMessage`) que la diffusion doit servir. Deux colonnes de
+              // plus sur un `select` déjà là — aucun aller-retour supplémentaire.
+              messageType: true,
+              createdAt: true,
+              // #12881 — ce que la LIGNE porte : un message scellé sous e2ee ne
+              // s'édite pas en clair après une désactivation.
+              isEncrypted: true, encryptionMode: true, encryptedContent: true, encryptionMetadata: true,
+              // Lu pour la réconciliation des mentions : une mention ajoutée en
+              // éditant un message éphémère ne doit pas survivre à ce message.
+              expiresAt: true,
+              // Lu pour la réconciliation des liens : `metadata` est un blob
+              // PARTAGÉ, et le recomposer sans le lire écraserait `postReplyTo` et
+              // `location`.
+              metadata: true,
+              // #12792 — lus par `admitMessageEdit` (vue unique) ; le chiffré ci-dessus (#12881), les pièces par `attachmentSocketSelect`.
+              isViewOnce: true, effectFlags: true,
+              sender: { select: { id: true, userId: true, displayName: true, avatar: true, role: true } },
+              // #7014 — `attachmentSocketSelect`, jamais `attachmentMediaSelect`
+              // nu : ce que cette requête charge repart par
+              // `serializeAttachmentForSocket` sur `message:edited`, et
+              // `attachmentMediaSelect` est délibérément SANS drapeau de
+              // protection. Sans les trois colonnes, l'édition d'un message
+              // rediffusait une pièce MUETTE sur sa propre protection.
+              attachments: { select: attachmentSocketSelect, orderBy: MESSAGE_ATTACHMENT_ORDER },
+            },
+          })
+      );
 
       if (!message) {
         this._sendGenericError(callback, 'Message not found or you are not authorized to edit it', socket);
         return;
       }
 
-      // L'unique énoncé de « qui peut éditer, et jusqu'à quand »
-      // (`services/messaging/messageEditAdmission`). Cette garde vivait ici
-      // dépliée, et les trois entrées REST en portaient chacune une variante
-      // différente. Le privilège de contournement est un rôle GLOBAL
-      // (`User.role`), JAMAIS le `Participant.role` minuscule qu'expose
-      // `message.sender.role` — confondre les deux avait déjà produit un bypass
-      // mort. L'unité garde ses lectures paresseuses : l'auteur dans sa fenêtre
-      // n'en déclenche aucune.
+      // L'unique énoncé de « qui peut éditer, et jusqu'à quand » (`messageEditAdmission`), jadis déplié ici
+      // et varié sur les trois entrées REST. Le privilège est un rôle GLOBAL (`User.role`), JAMAIS le
+      // `Participant.role` minuscule de `message.sender.role` — leur confusion avait produit un bypass mort.
+      // Lectures paresseuses : l'auteur dans sa fenêtre n'en déclenche aucune.
       const admission = await admitMessageEdit({
         prisma: this.prisma,
         editorUserId: userId,
@@ -839,7 +782,9 @@ export class MessageHandler {
           authorUserId: message.sender?.userId,
           conversationId: message.conversationId,
           conversation: message.conversation,
-          createdAt: message.createdAt,
+          createdAt: message.createdAt, messageType: message.messageType, metadata: message.metadata,
+          isViewOnce: message.isViewOnce, effectFlags: message.effectFlags, isEncrypted: message.isEncrypted,
+          encryptionMode: message.encryptionMode, attachments: message.attachments,
         },
         onError: (err) => console.error('[MESSAGE_HANDLER] Edit admission lookup failed:', err),
       });
@@ -849,15 +794,7 @@ export class MessageHandler {
         // `else` et s'annoncerait « vous n'êtes pas autorisé » — un refus
         // d'autorisation pour un état qui n'en est pas un, et que l'éditeur
         // corrigerait indéfiniment sans comprendre.
-        this._sendGenericError(
-          callback,
-          admission.reason === 'conversation-closed'
-            ? CONVERSATION_CLOSED_EDIT_MESSAGE
-            : admission.reason === 'edit-window-expired'
-              ? 'You can no longer edit this message (24-hour limit exceeded)'
-              : 'Message not found or you are not authorized to edit it',
-          socket
-        );
+        this._sendGenericError(callback, describeEditRefusalForSocket(admission.reason), socket, editRefusalCode(admission.reason));
         return;
       }
 
@@ -882,9 +819,9 @@ export class MessageHandler {
       // La seconde moitié — le mapping des URLs BRUTES (`metadata.trackingLinks`)
       // — n'était recomposée par aucun transport d'édition : une URL brute
       // ajoutée par édition restait intraçable pour toujours.
-      const editedLinks = await reconcileEditedLinks({
+      const editedLinks = await editedLinksFor(editSealsAtRest(message), {
         linkService: this.trackingLinkService,
-        message: { id: validated.messageId, conversationId: message.conversationId },
+        message: { id: validated.messageId, conversationId: message.conversationId, sender: message.sender },
         content: contentAdmission.content,
         editorUserId: userId,
         onError: (err) => handlerLogger.warn('tracking link processing failed on socket edit', { messageId: validated.messageId, error: err }),
@@ -898,43 +835,26 @@ export class MessageHandler {
         ? { metadata: mergeTrackingLinksIntoMetadata(message.metadata, editedLinks.trackingLinks) }
         : {};
 
-      // Optimistic-concurrency guard: only write while the message is still
-      // non-deleted. A `message:delete` landing between the read above and
-      // this write would otherwise resurrect the row with edited content
-      // (unconditional `update` by id succeeds regardless of `deletedAt`),
-      // and the gateway would broadcast MESSAGE_EDITED for a message clients
-      // already removed. Mirrors the guarded `updateMany` used by
-      // handleMessageDelete's lastMessageAt recompute.
-      const editedAt = new Date();
-      const editResult = await this.prisma.message.updateMany({
-        where: { id: validated.messageId, deletedAt: null },
-        data: {
-          content: editedContent,
-          isEdited: true,
-          editedAt,
-          translations: null,
-          ...nextMetadata,
+      const { written, editedAt, editedBy } = await writeGuardedMessageEdit({
+        prisma: this.prisma,
+        messageId: validated.messageId,
+        content: editedContent,
+        row: message,
+        admission,
+        editorUserId: userId,
+        nextMetadata,
+        previous: {
+          id: message.id,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          senderUserId: message.sender?.userId ?? null,
         },
       });
 
-      if (editResult.count === 0) {
+      if (!written) {
         this._sendGenericError(callback, 'Message not found or you are not authorized to edit it', socket);
         return;
       }
-
-      // Les effets DURABLES de l'édition — l'écart de mots et de caractères sur
-      // les compteurs de la conversation. Ce transport, pourtant PRIMAIRE, ne
-      // les ajustait pas : ils restaient sur les longueurs du texte d'origine,
-      // définitivement. La liste vit dans `applyMessageEditEffects`, une fois
-      // pour les quatre transports.
-      await applyMessageEditEffects(this.prisma, {
-        id: message.id,
-        conversationId: message.conversationId,
-        senderId: message.senderId,
-        senderUserId: message.sender?.userId ?? null,
-        previousContent: message.content,
-        content: editedContent,
-      });
 
       // Ce que ce message doit à ceux qu'il NOMME, après édition. Ce chemin
       // n'écrivait AUCUNE mention : ni ligne `Mention`, ni `validatedMentions`,
@@ -976,6 +896,7 @@ export class MessageHandler {
           content: editedContent,
           isEdited: true,
           editedAt,
+          editedBy,
         }),
         sender: message.sender,
       };
@@ -991,14 +912,24 @@ export class MessageHandler {
       this.translationService.retranslateMessageAsync(validated.messageId, retranslationPayload)
         .catch((err: unknown) => handlerLogger.warn('retranslation failed after socket edit', { messageId: validated.messageId, error: err }));
 
+      // QUI a le droit de LIRE ce message — résolu UNE fois, et partagé par les
+      // deux sorties qui portent le texte édité : la mention ci-dessous et
+      // `message:edited` plus bas. Les résoudre séparément serait deux lectures
+      // pour la même question, et surtout deux occasions de n'en garder qu'une.
+      const editReaders = await messageReadership(this.prisma, message.conversationId, validated.messageId, (err) =>
+        handlerLogger.error('edit readership unresolvable — edit not delivered live nor queued', { messageId: validated.messageId, error: err }),
+      );
+      const editBlocked = blockedReaderKeys(editReaders);
+
       // `mention:created` aux ENTRANTS, dans leur salon PERSONNEL : quelqu'un
       // que l'édition vient de nommer n'est pas forcément dans
       // ROOMS.conversation(id), et `message:edited` ne fan que là. Parité avec
       // le chemin d'envoi (`broadcastNewMessage`), à ceci près qu'ici les
       // `User.id` sont déjà résolus — inutile de repasser par les usernames.
       emitMentionCreated({
+        readership: editReaders,
         io: this.io,
-        newlyMentionedUserIds: editedMentions.newlyMentionedUserIds,
+        newlyMentionedUserIds: await withoutPendingMessageRequests(this.prisma, message.conversationId, editedMentions.newlyMentionedUserIds),
         messageId: message.id,
         conversationId: message.conversationId,
         editorUserId: userId,
@@ -1022,11 +953,42 @@ export class MessageHandler {
         conversationId: message.conversationId,
         translations: [],
         ...(editedMentions.reconciled ? { validatedMentions: [...editedMentions.validatedUsernames] } : {}),
-        attachments: this._serializeAttachmentsField(message as unknown as Message),
+        // #7028 — sérialisé DIRECTEMENT (type Prisma exact du `select`
+        // ci-dessus), jamais via `serializeMessageAttachmentsForSocket`, dont
+        // le paramètre `unknown` érode vers `any` et rendrait un
+        // `attachmentMediaSelect` nu invisible (TS2345). Le cliquet de type
+        // est ici la seule garde — ce chemin ne passe par aucune source qui le
+        // pose en amont, contrairement à `_buildMessagePayload` (#7070).
+        attachments: message.attachments.map((att) => serializeAttachmentForSocket(att)),
       };
 
-      const room = ROOMS.conversation(message.conversationId);
-      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
+      // #9646 — un message protégé : par destinataire, adresses signées. Et
+      // depuis le cycle 147, sous le PLANCHER D'HISTORIQUE : ce transport est le
+      // SECOND de l'édition, et la garde posée sur `broadcastMessageMutation` ne
+      // le couvrait pas — toute socket authentifiée pouvait donc servir le texte
+      // édité d'un message écrit avant l'arrivée d'un invité sans historique.
+      // Le site de la loi est UNIQUE (`editedAudience.ts`), partagé avec l'autre
+      // transport : une règle retapée à chaque site est une règle qu'un site
+      // finira par ne pas avoir.
+      // 5e site #17026 : l'édition est déjà PERSISTÉE ici, et le `catch` de fin
+      // de méthode rend en plus « échec » au client. Raison : `safeBroadcast`.
+      const editPlan = await readerSignedPlanForMessageIdBestEffort(
+        this.prisma,
+        { conversationId: message.conversationId, messageId: validated.messageId, attachments: editedPayload.attachments },
+        (error) => handlerLogger.error('reader-signed plan failed (socket edit) — no live per-reader delivery', { conversationId: message.conversationId, messageId: validated.messageId, error }),
+      );
+      if (editReaders.kind !== 'unknown') {
+        safeBroadcast('message:edited', () => emitEditedToReaders({
+          io: this.io,
+          conversationId: message.conversationId,
+          payload: editedPayload,
+          plan: editPlan,
+          sealed: NO_SEALED_EDIT,
+          blocked: editBlocked,
+          sealedVariant: (payload) => payload,
+          sealedForAll: (payload) => payload,
+        }), (error) => handlerLogger.error('message:edited live emission failed — offline replay unaffected', { conversationId: message.conversationId, messageId: validated.messageId, error }));
+      }
 
       // Fan a conversation:updated preview refresh to participants sitting on
       // the conversation list (in user:<id> but not conversation:<id>) so an
@@ -1048,19 +1010,27 @@ export class MessageHandler {
       // seul exclu. `userId` est l'éditeur, et c'est un `User.id` réel :
       // l'anonyme est refusé en tête de ce handler. Jumeau du même correctif
       // dans `handleMessageDelete`.
-      this._enqueueOfflineEventForParticipants({
-        conversationId: message.conversationId,
-        actorUserId: userId,
-        eventType: 'edited',
-        messageId: validated.messageId,
-        payload: editedPayload,
-      }).catch((err) => handlerLogger.warn('offline enqueue (edit) failed', { error: err }));
+      // La file est la TROISIÈME sortie de la même charge, et elle PERSISTE
+      // 48 h : sans cette exclusion, le texte d'un message hors du plancher d'un
+      // invité l'attendait dans Redis sous sa clé. Sur `'unknown'` rien n'entre
+      // — on ne sait NI qui est bloqué, NI qui est autorisé.
+      if (editReaders.kind !== 'unknown') {
+        this._enqueueOfflineEventForParticipants({
+          conversationId: message.conversationId,
+          actorUserId: userId,
+          eventType: 'edited',
+          messageId: validated.messageId,
+          payload: editedPayload,
+          atRest: queuedEventSealsAtRest(message),
+          ...(editBlocked.size > 0 ? { excludedQueueKeys: editBlocked } : {}),
+        }).catch((err) => handlerLogger.warn('offline enqueue (edit) failed', { error: err }));
+      }
 
       callback?.({ success: true, data: { messageId: validated.messageId } });
       handlerLogger.debug('message:edit processed', { messageId: validated.messageId, userId, conversationId: message.conversationId });
     } catch (error: unknown) {
       handlerLogger.error('message:edit failed', { error });
-      this._sendGenericError(callback, 'Failed to edit message', socket);
+      this._sendGenericError(callback, isServerAtRestUnavailable(error) ? error.message : 'Failed to edit message', socket, isServerAtRestUnavailable(error) ? error.code : undefined);
     }
   }
 
@@ -1068,11 +1038,8 @@ export class MessageHandler {
    * Handles real-time message deletion (soft delete) via WebSocket.
    * Mirrors the REST DELETE /messages/:messageId logic.
    *
-   * Permissions: `admitMessageDelete` — l'auteur sans limite de temps, sinon un
-   * rôle privilégié de CONVERSATION (`admin`/`moderator`) ou GLOBAL
-   * (`MODERATOR`/`ADMIN`/`BIGBOSS`). La règle vit dans l'unité partagée, pas
-   * ici : les trois transports de suppression y répondent désormais la même
-   * chose. Les utilisateurs anonymes ne peuvent pas supprimer.
+   * Permissions : `admitMessageDelete`, partagée par les trois transports. Un
+   * tiers (#11149) doit un motif ; les utilisateurs anonymes ne suppriment pas.
    */
   async handleMessageDelete(
     socket: MeeshySocket,
@@ -1102,53 +1069,65 @@ export class MessageHandler {
         return;
       }
 
-      const message = await this.prisma.message.findFirst({
-        where: { id: validated.messageId, deletedAt: null },
-        select: {
-          id: true,
-          conversationId: true,
-          senderId: true,
-          sender: { select: { id: true, userId: true } },
-          // L'appartenance n'est plus jointe : `admitMessageDelete` la lit
-          // lui-même, et seulement quand l'acteur n'est PAS l'auteur. La
-          // conversation ne l'est plus non plus : `applyMessageRemovalEffects`
-          // relit `lastMessageAt` lui-même, au plus près de son écriture
-          // conditionnelle. Restent le contenu et les métadonnées, qui portent
-          // les deux représentations des `/l/<token>` du message. Et, depuis que
-          // le décompte des compteurs vit dans la même unité, `messageType` et
-          // les MIME des pièces jointes — capturés ICI parce qu'ils ne sont plus
-          // lisibles une fois les attachements supprimés, quelques lignes plus
-          // bas.
-          content: true,
-          metadata: true,
-          messageType: true,
-          attachments: { select: { id: true, mimeType: true } },
-        },
-      });
+      const message = await withOrphanedSenderRepair(
+        { prisma: this.prisma, conversationIds: discoverConversationIdsByMessageIds(this.prisma, [validated.messageId]) },
+        () =>
+          this.prisma.message.findFirst({
+            where: { id: validated.messageId, deletedAt: null },
+            select: {
+              id: true,
+              conversationId: true,
+              senderId: true,
+              sender: { select: { id: true, userId: true } },
+              // L'appartenance n'est plus jointe : `admitMessageDelete` la lit
+              // lui-même, et seulement quand l'acteur n'est PAS l'auteur. La
+              // conversation ne l'est plus non plus : `applyMessageRemovalEffects`
+              // relit `lastMessageAt` lui-même, au plus près de son écriture
+              // conditionnelle. Restent le contenu et les métadonnées, qui portent
+              // les deux représentations des `/l/<token>` du message. Et, depuis que
+              // le décompte des compteurs vit dans la même unité, `messageType` et
+              // les MIME des pièces jointes — capturés ICI parce qu'ils ne sont plus
+              // lisibles une fois les attachements supprimés, quelques lignes plus
+              // bas.
+              content: true,
+              metadata: true,
+              messageType: true,
+              isEncrypted: true,
+              encryptionMode: true,
+              attachments: { select: { id: true, mimeType: true } },
+            },
+          })
+      );
 
       if (!message) {
         this._sendGenericError(callback, 'Message not found', socket);
         return;
       }
 
-      // Qui peut supprimer : `admitMessageDelete`, l'unique énoncé de la règle,
-      // jumeau d'`admitMessageEdit`. Cette copie-ci était la plus juste des
-      // trois, et c'est précisément pour ça qu'elle n'était pas suffisante :
-      // rien ne la reliait aux deux autres, qui avaient dérivé chacune de son
-      // côté. Sa forme est conservée à l'identique — auteur, rôle de
-      // conversation, puis rôle global en lecture paresseuse.
+      // Qui peut supprimer : `admitMessageDelete`, l'unique énoncé de la règle.
       const admission = await admitMessageDelete({
         prisma: this.prisma,
         deleterUserId: userId,
         message: {
           authorUserId: message.sender?.userId,
-          conversationId: message.conversationId,
+          conversationId: message.conversationId, messageType: message.messageType, metadata: message.metadata,
         },
         onError: (err) => handlerLogger.warn('delete admission read failed', { messageId: validated.messageId, error: err }),
       });
 
       if (!admission.admitted) {
         this._sendGenericError(callback, 'You are not authorized to delete this message', socket);
+        return;
+      }
+      // #13142 — un message scellé au serveur se supprime pour tous par signal
+      // chiffré signé de l'auteur ; un message d'avant l'activation, en clair, ici.
+      if (await messageRefusesPlainErasure(this.prisma, message)) {
+        callback?.({ success: false, ...SIGNAL_CHANNEL_REFUSAL });
+        return;
+      }
+      const moderationReason = admission.byModeration ? moderationReasonOf(validated) : null;
+      if (admission.byModeration && moderationReason === null) {
+        this._sendGenericError(callback, MODERATION_REASON_MESSAGE, socket, MODERATION_REASON_REQUIRED);
         return;
       }
 
@@ -1159,11 +1138,22 @@ export class MessageHandler {
         );
       }
 
-      // Soft delete: atomically clear translations and set deletedAt in one write
-      await this.prisma.message.update({
-        where: { id: validated.messageId },
-        data: { translations: null, deletedAt: new Date() },
-      });
+      // #17079 — le retrait et sa garde OPTIMISTE, par leur site unique.
+      // L'audit ne nommait que le transport REST ; celui-ci portait le même
+      // trou, et c'est le transport que le dépôt appelle « primaire ». Deux
+      // suppressions CONCURRENTES franchissaient toutes deux la lecture
+      // d'amont et appliquaient toutes deux les effets du retrait, dont un
+      // décompte NON idempotent.
+      // L'heure du retrait est prise UNE fois, et c'est elle qui part sur le
+      // fil : la valeur écrite en base et celle que les clients gravent sont
+      // alors la MÊME. Recomposer un `new Date()` à l'émission rendrait deux
+      // instants pour un seul retrait — l'écart est petit ici, et il n'existe
+      // pas du tout une fois la valeur passée.
+      const deletedAt = new Date();
+      if (await softDeleteMessage(this.prisma, validated.messageId, { translations: null, deletedAt }) === 'already-deleted') {
+        this._sendGenericError(callback, 'Message not found', socket);
+        return;
+      }
 
       // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et
       // désactivation des `/l/<token>` que ce message emporte. La liste vit
@@ -1176,15 +1166,19 @@ export class MessageHandler {
         messageType: message.messageType,
         attachmentMimeTypes: (message.attachments ?? []).map((att) => att.mimeType ?? ''),
         content: message.content,
-        metadata: message.metadata,
+        metadata: message.metadata, removedByParticipantId: admission.actorParticipantId ?? null,
       });
+      if (moderationReason !== null) await completeModeratedMessageRemoval({ prisma: this.prisma }, { actorUserId: userId, authorUserId: message.sender?.userId, messageId: message.id, conversationId: message.conversationId, reason: moderationReason });
 
       const room = ROOMS.conversation(message.conversationId);
       const deletedPayload = {
         messageId: validated.messageId,
         conversationId: message.conversationId,
+        deletedAt: deletedAt.toISOString(),
       };
-      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload);
+      // 7e site #17026, trouvé par le CLIQUET. Raison : `safeBroadcast`.
+      safeBroadcast('message:deleted', () => this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload),
+        (error) => handlerLogger.error('message:deleted live emission failed — offline replay unaffected', { messageId: validated.messageId, error }));
 
       // Fan a conversation:updated preview refresh to list-screen participants
       // (in user:<id> but not conversation:<id>): deleting the latest message
@@ -1297,7 +1291,7 @@ export class MessageHandler {
               // position sur le chemin socket (parité avec le chemin REST).
               metadata: true,
               sender: { select: { id: true, userId: true, displayName: true, avatar: true, type: true } },
-              attachments: { select: attachmentForwardPreviewSelect, take: 1 }
+              attachments: { select: attachmentForwardPreviewSelect, orderBy: MESSAGE_ATTACHMENT_ORDER, take: 1 }
             }
           }),
           message.forwardedFromConversationId
@@ -1318,19 +1312,9 @@ export class MessageHandler {
       // Réponse à un post (status/story/reel/post) : servir le SNAPSHOT figé
       // (rangé dans `metadata.postReplyTo` à la création) pour que le
       // destinataire voie la citation immédiatement et qu'elle survive à
-      // l'expiration du post. Hissé en `postReplyTo` top-level. Fallback live
-      // legacy via lookup du post.
-      const postReplyParts = await (async () => {
-        if (!message.storyReplyToId) return {};
-        const fromSnapshot = postReplyToFromMetadata(message.metadata);
-        if (fromSnapshot) return { postReplyTo: fromSnapshot };
-        // Best-effort : le fallback live ne doit pas gater la délivrance.
-        const post = await this.prisma.post.findUnique({
-          where: { id: message.storyReplyToId },
-          select: POST_REPLY_SNAPSHOT_SELECT,
-        }).catch(() => null);
-        return post ? { postReplyTo: buildPostReplyTo(post) } : {};
-      })();
+      // l'expiration du post, pas à son retrait (#7950). Hissé en `postReplyTo`
+      // top-level. Même loi que la liste : `serveNewMessagePostReply`.
+      const postReplyParts = await serveNewMessagePostReply(this.prisma, message);
 
       const mentionParts = await (async () => {
         if (!message.content) return {};
@@ -1376,35 +1360,12 @@ export class MessageHandler {
         ...locationParts,
       };
 
-      // Single participant query shared between the `message:new` fan-out,
-      // CONVERSATION_UPDATED and CONVERSATION_UNREAD_UPDATED to avoid
-      // duplicate DB round-trips. Lue AVANT la diffusion : la réciprocité
-      // des sources de transfert a besoin des lecteurs du salon pour
-      // décider qui a droit à la provenance — une liste, un lecteur.
-      // The superset select (PREVIEW_PRISM_PARTICIPANT_SELECT + joinedAt)
-      // satisfies both callers — `user` (préférences de langue) est le Prisme
-      // de la ligne de liste, résolu par destinataire ci-dessous ; `joinedAt`
-      // reste requis par `enqueueForOfflineParticipants` / `_updateUnreadCounts`.
-      // Parité avec le chemin REST/ZMQ (`MeeshySocketIOManager._broadcastNewMessage`),
-      // qui charge le même superset pour la même raison.
-      //
-      // `undefined` — jamais `[]` — quand la requête tombe. Les deux formes se
-      // lisent pareil au site d'appel et ne disent pas la même chose : `[]`
-      // AFFIRME que la conversation n'a aucun participant, `undefined` avoue
-      // qu'on ne sait pas. `enqueueForOfflineParticipants` distingue les deux
-      // (`params.participants ?? sa propre requête`), et c'est la seule des
-      // trois consommatrices dont l'abandon soit DESTRUCTIF : un `[]` lui
-      // faisait enfiler pour PERSONNE, donc perdre le message pour tous les
-      // absents, pendant que ce journal n'annonçait que deux pertes cosmétiques.
-      let sharedParticipants: Array<PreviewPrismParticipant & { joinedAt: Date }> | undefined;
-      try {
-        sharedParticipants = await this.prisma.participant.findMany({
-          where: { conversationId: normalizedId, isActive: true },
-          select: { ...PREVIEW_PRISM_PARTICIPANT_SELECT, joinedAt: true }
-        });
-      } catch (err) {
-        handlerLogger.warn('participant fetch failed — CONVERSATION_UPDATED + unread sautés, la file hors ligne refait sa propre requête', { error: err });
-      }
+      // Site UNIQUE, partagé avec le chemin REST/ZMQ : `participant-superset.ts`
+      // (le `select`, la sémantique `undefined` ≠ `[]`, et pourquoi). Lue AVANT
+      // la diffusion : la réciprocité des sources de transfert a besoin des
+      // lecteurs du salon pour décider qui a droit à la provenance — une
+      // liste, un lecteur.
+      const sharedParticipants = await fetchParticipantSuperset(this.prisma, normalizedId, 'socket');
 
       const room = ROOMS.conversation(normalizedId);
 
@@ -1440,101 +1401,64 @@ export class MessageHandler {
       // original language is always kept (Prisme source fallback). The sender's
       // own devices still receive the full, cid-aware `senderPayload`.
 
-      // Réciprocité de la SOURCE d'un transfert (directive produit 2026-08-23).
-      //
-      // `visible ⇔ auteur ET lecteur`. L'auteur du transfert est FIXE pour ce
-      // message : son refus tranche pour tout le salon d'un coup. Son accord ne
-      // laisse que la moitié « lecteur », qui partage les destinataires en
-      // exactement DEUX groupes — jamais plus. C'est ce qui rend la règle
-      // finançable sur une diffusion de salon.
-      //
-      // Le découpage passe par les SALONS UTILISATEUR : l'adaptateur Redis les
-      // propage, donc un destinataire connecté à un AUTRE nœud est exclu comme
-      // il faut. Surtout PAS le motif de `_emitMessageNewByLanguage`, qui
-      // énumère des socket ids locaux et dont le repli multi-nœud rediffuse le
-      // payload COMPLET au salon : reproduire ce motif ici ferait fuiter le nom
-      // sur tout déploiement multi-nœud, en silence.
-      //
-      // Rien n'est payé quand le message ne nomme aucune source — c'est
-      // l'immense majorité des envois.
-      let peerPayload = broadcastPayload;
-      let forwardSourceHiddenRooms: string[] = [];
-      let forwardSourceHiddenUserIds: ReadonlySet<string> = new Set<string>();
-      if (carriesForwardSource(broadcastPayload)) {
-        const verdict = await resolveForwardSourceForBroadcast(
-          this.prisma,
+      // Réciprocité de la SOURCE d'un transfert (directive produit 2026-08-23) —
+      // `visible ⇔ auteur ET lecteur`, fail-CLOSED si la liste des lecteurs est
+      // inconnue — composée avec le scellement de la citation d'un éphémère
+      // déjà échu pour un lecteur (#8562) dans `resolvePeerBroadcastSplit`.
+      const { peerPayload, hiddenKeys, payloadForKey, quotedDeathOf } =
+        await resolvePeerBroadcastSplit(this.prisma, {
           senderUserId,
-          (sharedParticipants ?? []).map((participant) => participant.userId)
-        );
-        if (!verdict.forwarderAllows) {
-          // L'auteur s'est retiré : plus personne n'apprend la provenance —
-          // sauf lui-même, servi par `senderPayload` (se cacher des autres
-          // n'est pas s'aveugler).
-          peerPayload = withoutForwardSourceOrItsPath(broadcastPayload);
-        } else {
-          forwardSourceHiddenUserIds = verdict.refusingReaderIds;
-          forwardSourceHiddenRooms = [...verdict.refusingReaderIds].map((userId) => ROOMS.user(userId));
-        }
-      }
+          sharedParticipants,
+          broadcastPayload,
+          userRoom: (key) => ROOMS.user(key),
+          quoted: message.replyTo,
+          senderKeys: [senderUserId, message.senderId],
+        });
 
-      // Opt-in (OFF by default) — flip per-deploy after staging measurement.
-      //
-      // Désactivé d'office dès qu'un lecteur doit être masqué : une règle de
-      // confidentialité ne se subordonne pas à un drapeau d'optimisation de
-      // bande passante, et `_emitMessageNewByLanguage` ne sait pas exclure de
-      // salon utilisateur.
-      const langFilterOn =
-        process.env.SOCKET_LANG_FILTER === 'true' && forwardSourceHiddenRooms.length === 0;
-
-      if (senderUserId) {
-        // Multi-device : send the cid-aware payload to the sender's
-        // user room (catches every iOS / web session of this user)
-        // and the cid-stripped payload to the conversation room
-        // EXCEPT the sender's user room so peers do not receive a
-        // duplicate.
-        if (langFilterOn) {
-          this._emitMessageNewByLanguage(room, peerPayload, { excludeUserId: senderUserId });
-        } else {
-          this.io
-            .to(room)
-            .except([ROOMS.user(senderUserId), ...forwardSourceHiddenRooms])
-            .emit(SERVER_EVENTS.MESSAGE_NEW, peerPayload);
-        }
-        this.io.to(ROOMS.user(senderUserId)).emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
-      } else if (senderSocket) {
-        // Anonymous sender with an active socket : same single-session
-        // split as before. Multi-device anonymous is undefined.
-        if (langFilterOn) {
-          this._emitMessageNewByLanguage(room, peerPayload, { excludeSocketId: senderSocket.id });
-        } else {
-          const peers = senderSocket.broadcast.to(room);
-          (forwardSourceHiddenRooms.length > 0 ? peers.except(forwardSourceHiddenRooms) : peers)
-            .emit(SERVER_EVENTS.MESSAGE_NEW, peerPayload);
-        }
-        senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
-      } else {
-        // No senderSocket context (REST path or background flush) and
-        // no resolvable user id : fall back to the cid-stripped payload
-        // for the whole room. The sender's other sessions still
-        // reconcile via the REST / socket ACK path which carries the cid.
-        if (langFilterOn) {
-          this._emitMessageNewByLanguage(room, peerPayload, {});
-        } else {
-          const peers = this.io.to(room);
-          (forwardSourceHiddenRooms.length > 0 ? peers.except(forwardSourceHiddenRooms) : peers)
-            .emit(SERVER_EVENTS.MESSAGE_NEW, peerPayload);
-        }
-      }
-
-      // Les lecteurs qui se sont retirés : le MÊME message, sans sa provenance.
-      // Émis après l'exclusion ci-dessus, jamais en plus d'elle — un
-      // destinataire reçoit exactement UN `message:new`, sinon le client
-      // insère la bulle deux fois.
-      if (forwardSourceHiddenRooms.length > 0) {
-        this.io
-          .to(forwardSourceHiddenRooms)
-          .emit(SERVER_EVENTS.MESSAGE_NEW, withoutForwardSourceOrItsPath(peerPayload));
-      }
+      // L'émission — diffusion de room, masqués, filtre de langue opt-in
+      // (`SOCKET_LANG_FILTER`) ou, pour un message dont une pièce se lit par
+      // lecteur, remise par destinataire avec ses adresses signées (#9646) —
+      // vit dans `messageNewEmission.ts`, partagée avec le chemin REST/ZMQ.
+      // Émission et lecture de plan BEST-EFFORT : raison au site unique,
+      // `safeBroadcast` (#17026).
+      // UN seul rapporteur de panne pour les deux chemins, et c'est le point
+      // (constat C3 de l'audit) : la délégation par langue posait le SIEN, qui
+      // ne connaît que la `room`. Le `messageId` ne vit qu'ici.
+      const onLiveEmissionError = (error: unknown, audience: string) =>
+        handlerLogger.error('message:new live emission failed — offline replay unaffected', { conversationId: normalizedId, messageId: message.id, audience, error });
+      // #18619 — le plan est HISSÉ hors de l'appel d'émission : les deux canaux
+      // de ce message en dépendent, et le laisser en argument faisait que seul
+      // le direct l'interrogeait. L'enfilement durable, lui, remettait l'adresse
+      // NUE d'une pièce liée au lecteur — y compris dans le cas exact où le
+      // direct décide délibérément de ne rien émettre.
+      const readerPlan = await readerSignedPlanBestEffort(
+        this.prisma,
+        { conversationId: normalizedId, message, attachments: peerPayload.attachments },
+        (error) => handlerLogger.error('reader-signed plan failed (socket send) — no live per-reader delivery', { conversationId: normalizedId, messageId: message.id, error }),
+      );
+      // La charge de CE lecteur avant signature : masquages de transfert et
+      // scellement d'une citation d'éphémère échu d'abord, signature ensuite.
+      // L'ordre inverse signerait ce que le lecteur n'a pas le droit de voir.
+      const offlineSigned = offlineSignedPayload({
+        plan: readerPlan,
+        base: (key) => (hiddenKeys.has(key) ? payloadForKey(key) : peerPayload) as Record<string, unknown>,
+        basePerReader: hiddenKeys.size > 0,
+      });
+      emitMessageNewBestEffort({
+        io: this.io,
+        room,
+        senderPayload,
+        peerPayload,
+        senderUserId,
+        senderParticipantId: message.senderId,
+        senderSocket,
+        hiddenKeys,
+        payloadForKey,
+        emitByLanguage: process.env.SOCKET_LANG_FILTER === 'true'
+          ? (payload, exclusion) => this._emitMessageNewByLanguage(room, payload, exclusion, onLiveEmissionError)
+          : null,
+        readerSigned: readerPlan,
+      }, onLiveEmissionError);
       handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
 
       // Offline delivery queue — parity with the REST send path
@@ -1564,7 +1488,12 @@ export class MessageHandler {
       // SA requête, qui ne demande que `{id, userId}`. C'est précisément ce que
       // la requête SUPERSET tombée ci-dessus lui aurait interdit en lui passant
       // une liste VIDE.
-      await enqueueForOfflineParticipants(
+      // #18619 — `PLAN_UNAVAILABLE` gouverne les DEUX canaux. Ne pas savoir
+      // adresser une pièce peut-être protégée n'autorise pas à l'écrire en
+      // clair dans Redis pour 48 h : ce qu'on perd est une REMISE que la
+      // relecture du fil sert de toute façon, sous les mêmes lois et avec des
+      // adresses signées pour ce lecteur.
+      if (offlineSigned.kind !== 'withhold') await enqueueForOfflineParticipants(
         { deliveryQueue: this.deliveryQueue, prisma: this.prisma, connectedUsers: this.connectedUsers },
         {
           conversationId: normalizedId,
@@ -1572,6 +1501,7 @@ export class MessageHandler {
           actorUserId: message.senderId,
           eventType: 'new',
           messageId: message.id,
+          atRest: isServerAtRestMode(message.encryptionMode),
           payload: peerPayload,
           // La file est la TROISIÈME porte de sortie de ce message. Sans cette
           // ligne, un destinataire hors ligne qui a refusé les sources de
@@ -1580,14 +1510,9 @@ export class MessageHandler {
           // retrait quand c'est l'AUTEUR qui s'est retiré ; ceci ajoute le
           // retrait par LECTEUR, que seule la boucle par participant peut
           // faire.
-          ...(forwardSourceHiddenUserIds.size > 0
-            ? {
-                resolvePayloadForReader: (queueKey: string) =>
-                  forwardSourceHiddenUserIds.has(queueKey)
-                    ? withoutForwardSourceOrItsPath(peerPayload)
-                    : peerPayload,
-              }
-            : {}),
+          // UN seul hook par lecteur : la décision a déjà composé le masquage
+          // et la signature, dans l'ordre qui les rend justes.
+          ...(offlineSigned.kind === 'per-reader' ? { resolvePayloadForReader: offlineSigned.resolve } : {}),
           participants: sharedParticipants,
         }
       );
@@ -1606,7 +1531,7 @@ export class MessageHandler {
       // mention miss never blocks the message broadcast.
       const mentionUsernames = (message.validatedMentions as string[] | undefined) ?? [];
       if (mentionUsernames.length > 0) {
-        const mentionedUserIds = await this._resolveMentionUserIds(mentionUsernames);
+        const mentionedUserIds = await withoutPendingMessageRequests(this.prisma, normalizedId, await this._resolveMentionUserIds(mentionUsernames));
         for (const targetUserId of mentionedUserIds) {
           if (targetUserId && targetUserId !== senderUserId) {
             this.io.to(ROOMS.user(targetUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {
@@ -1657,16 +1582,9 @@ export class MessageHandler {
           // le type se décider chez l'encodeur.
           lastMessageAt: toIsoOrNull(message.createdAt),
           lastMessageId: message.id,
-          // `lastMessagePreview` sort de `resolveLastMessagePreviewPrism` avec
-          // le reste de la paire, sous le même plafond qu'elle.
-          // Un message position-seule a un `content` vide : hisser
-          // `metadata.location` (même règle que la liste REST et
-          // emitConversationPreviewUpdate) pour que la ligne d'aperçu du
-          // client compose son libellé — aucun texte de repli côté serveur.
-          ...((): Record<string, unknown> => {
-            const place = sharedPlaceFromMetadata((message as { metadata?: unknown }).metadata);
-            return place ? { location: place } : {};
-          })(),
+          // `lastMessagePreview`, le lieu, le sous-groupe MÉDIA et la NATURE
+          // sortent de `resolveLastMessagePreviewGroup`, sous la protection du
+          // message (#7545) — aucun texte de repli côté serveur.
           senderId: message.senderId,
           updatedAt: new Date().toISOString()
         };
@@ -1684,13 +1602,23 @@ export class MessageHandler {
         // Prisme sur CE chemin (le PRIMARY WS `message:send`), un destinataire
         // sur l'écran de liste gardait la carte du message PRÉCÉDENT jusqu'à un
         // rechargement manuel.
+        //
+        // #18380 — un lecteur qui LÈVE ne coûte que ce lecteur. Cette boucle
+        // vivait dans le `try` de fin de méthode, qui attrapait bien la levée
+        // sans la CONFINER : les lecteurs suivants, la pastille de non-lus et
+        // l'accusé de remise automatique (✓ → ✓✓) partaient avec elle, sur le
+        // transport PRIMAIRE d'envoi. Le site unique porte la règle et sa
+        // raison (`conversationUpdatedPerReader.ts`).
         const targets = participantUserRoomTargets(sharedParticipants);
-        for (const { room, participant } of targets) {
-          this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+        emitConversationUpdatedPerReader(
+          this.io,
+          targets,
+          (participant) => ({
             ...updatePayload,
-            ...resolveLastMessagePreviewPrism(participant, message)
-          });
-        }
+            ...resolveLastMessagePreviewGroup(participant, message, new Date(), { quotedDeathAt: quotedDeathOf(participant) })
+          }),
+          (error, room) => handlerLogger.warn('conversation:updated fanout failed for one reader', { conversationId: normalizedId, room, error }),
+        );
         handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: targets.length });
       }
 
@@ -1713,74 +1641,28 @@ export class MessageHandler {
   }
 
   /**
-   * Phase B1 — emit `message:new` to a conversation room grouped by each peer's
-   * preferred language, sending a translation-trimmed payload once per distinct
-   * language set (delegating the pure grouping/trimming to unit-tested helpers).
-   * The sender's own sockets are excluded here; their cid-aware payload is sent
-   * separately by the caller.
+   * Phase B1 — `message:new` groupé PAR LANGUE, délégué au site unique
+   * `messageNewByLanguage.ts` (#17086). La doctrine multi-nœud, l'ordre des
+   * deux étapes et l'enrobage PAR AUDIENCE y sont écrits une fois ; cette
+   * méthode ne fournit que ce que SEUL ce porteur sait — ses cartes de sockets.
+   * Opt-in par `SOCKET_LANG_FILTER=true` (OFF par défaut).
    */
-  private _emitMessageNewByLanguage<P extends SocketIOMessage>(
+  private _emitMessageNewByLanguage(
     room: string,
-    payload: P,
-    opts: { excludeUserId?: string; excludeSocketId?: string }
+    payload: SocketIOMessage,
+    opts: { excludeUserId?: string; excludeSocketId?: string },
+    onEmissionError?: (error: unknown, label: string) => void
   ): void {
-    // `adapter.rooms` and the `connectedUsers`/`socketToUser` maps only ever see
-    // THIS node's sockets. On a multi-node deployment (the documented 100k+
-    // msg/s horizontal-scale topology runs the Socket.IO Redis adapter) a
-    // recipient connected to another gateway node is never enumerated here — so
-    // the per-language loop below, which can only resolve locally-connected
-    // sockets, would silently never deliver `message:new` to them. Broadcast the
-    // FULL, untrimmed payload to the room across the cluster FIRST (the Redis
-    // adapter propagates `io.to(room)`), excepting every LOCAL room socket —
-    // each of which the loop below serves with a language-trimmed copy — plus
-    // the sender. Remote sockets thus receive exactly one (unfiltered)
-    // `message:new`; local sockets receive exactly one trimmed copy. On a single
-    // node every room socket is local, so the except-set covers the whole room
-    // and this cross-node broadcast reaches nobody — behavior is unchanged. The
-    // bandwidth trim still applies to every socket whose language IS resolvable
-    // locally (the common co-located case).
-    const localSocketIds = this.io.sockets.adapter.rooms.get(room);
-    const exceptForRemote: string[] = localSocketIds ? [...localSocketIds] : [];
-    if (opts.excludeUserId) exceptForRemote.push(ROOMS.user(opts.excludeUserId));
-    if (opts.excludeSocketId) exceptForRemote.push(opts.excludeSocketId);
-    this.io.to(room).except(exceptForRemote).emit(SERVER_EVENTS.MESSAGE_NEW, payload);
-
-    if (!localSocketIds || localSocketIds.size === 0) return;
-
-    const originalLanguage = payload.originalLanguage || 'fr';
-    const groups = groupSocketsByLanguage({
-      socketIds: localSocketIds,
-      originalLanguage,
-      excludeUserId: opts.excludeUserId,
-      excludeSocketIds: opts.excludeSocketId ? new Set([opts.excludeSocketId]) : undefined,
+    emitMessageNewByLanguage({
+      io: this.io,
+      room,
+      payload,
+      exclusion: opts,
       socketToUser: (sid) => this.socketToUser.get(sid),
       resolveLanguages: (uid) => this.connectedUsers.get(uid)?.resolvedLanguages,
       userLanguage: (uid) => this.connectedUsers.get(uid)?.language,
+      onEmissionError,
     });
-
-    for (const group of groups) {
-      if (group.socketIds.length === 0) continue;
-      const filtered = filterMessagePayloadForLanguages(payload, group.languages);
-      // 5.3 — mesure du gain bande passante (debug, gaté). Permet de prouver la
-      // réduction en staging avant un flip prod. Coût nul quand le flag est OFF.
-      if (process.env.SOCKET_LANG_FILTER === 'true') {
-        const fullBytes = JSON.stringify(payload).length;
-        const filteredBytes = JSON.stringify(filtered).length;
-        handlerLogger.debug('[lang-filter] payload reduced', {
-          fullBytes,
-          filteredBytes,
-          savedPct: fullBytes > 0 ? Math.round((1 - filteredBytes / fullBytes) * 100) : 0,
-          languages: group.languages,
-          originalLanguage,
-        });
-      }
-      // Chain `.to(socketId)` so a single emit fans out to exactly this group's
-      // sockets (mirrors the manager's per-language emit).
-      const [firstSid, ...restSids] = group.socketIds;
-      let emitter: ReturnType<MeeshyIOServer['to']> = this.io.to(firstSid);
-      for (const sid of restSids) emitter = emitter.to(sid);
-      emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
-    }
   }
 
   /**
@@ -1810,6 +1692,8 @@ export class MessageHandler {
     /** `User.id` de l'acteur. Les deux espaces d'id ne se croisent jamais. */
     actorUserId?: string | null;
     messageId: string;
+    /** Les clés que le plancher d'historique écarte (`editedAudience.ts`). */
+    excludedQueueKeys?: ReadonlySet<string>;
   } & QueuedVariantFor<'edited' | 'deleted'>): Promise<void> {
     await enqueueForOfflineParticipants(
       { deliveryQueue: this.deliveryQueue, prisma: this.prisma, connectedUsers: this.connectedUsers },
@@ -1885,7 +1769,7 @@ export class MessageHandler {
     if (!senderId) return;
 
     const participants = await this.prisma.participant.findMany({
-      where: { conversationId, isActive: true },
+      where: { conversationId, ...PARTICIPATION_VIVANTE },
       select: { id: true, userId: true }
     });
 
@@ -2162,7 +2046,13 @@ export class MessageHandler {
     return buildMessageNewPayload(message, {
       conversationId,
       translations,
-      attachments: this._serializeAttachmentsField(message),
+      // #7070 — le site UNIQUE des DEUX producteurs de `message:new`. Ce
+      // handler portait ici sa propre boucle privée (`_serializeAttachmentsField`),
+      // jumelle exacte du helper partagé : c'est cette duplication qui a laissé
+      // le producteur REST/ZMQ servir la ligne BRUTE pendant que celui-ci
+      // servait la forme curatée. Un champ ajouté au helper atteint désormais
+      // les deux transports sans qu'aucun site n'ait à s'en souvenir.
+      attachments: serializeMessageAttachmentsForSocket(message.attachments),
       // Lot 2 : `MessageProcessor.saveMessage` récupère déjà `metadata` du
       // message CITÉ (include, pas select restrictif), donc la donnée brute
       // voyageait déjà — mais sans ce hoist elle restait invisible sous
@@ -2171,22 +2061,6 @@ export class MessageHandler {
         ? hoistLocationOnto(message.replyTo as unknown as Record<string, unknown>)
         : message.replyTo,
     });
-  }
-
-  /**
-   * Normalize the attachments field on a broadcast message via the
-   * centralized `serializeAttachmentForSocket` helper. Tolerates the
-   * legacy `as any` access pattern and guarantees `transcription` +
-   * `translations` always travel through the socket payload (parity with
-   * the REST `attachmentMediaSelect` shape). Replaces the previous
-   * `(message as never)['attachments'] || []` cast that silently dropped
-   * both Prisme Linguistique JSON fields when the upstream query did not
-   * explicitly select them.
-   */
-  private _serializeAttachmentsField(message: Message): unknown[] {
-    const raw = message.attachments;
-    if (!Array.isArray(raw)) return [];
-    return raw.map((att) => serializeAttachmentForSocket(att as Record<string, unknown>));
   }
 
   /**
@@ -2234,32 +2108,26 @@ export class MessageHandler {
     }
   }
 
-  private _notifyAgent(message: {
-    id: string;
-    conversationId: string;
-    senderId: string | null;
-    senderDisplayName?: string;
-    senderUsername?: string;
-    content: string | null;
-    originalLanguage: string | null;
-    replyToId?: string | null;
-    mentionedUserIds?: string[];
-    createdAt: Date;
-  }): void {
-    if (!this.agentClient || !message.senderId || !message.content) return;
-    this.agentClient.sendEvent({
-      type: 'agent:new-message',
-      conversationId: message.conversationId,
-      messageId: message.id,
-      senderId: message.senderId,
-      senderDisplayName: message.senderDisplayName,
-      senderUsername: message.senderUsername,
-      content: message.content,
-      originalLanguage: message.originalLanguage ?? 'fr',
-      replyToId: message.replyToId ?? undefined,
-      mentionedUserIds: message.mentionedUserIds ?? [],
-      timestamp: message.createdAt.getTime(),
-    }).catch(err => handlerLogger.warn('agent event delivery failed (non-blocking)', { messageId: message.id, error: err }));
+  /** Décision 2026-11-01 — l'agent lit le repos DÉCHIFFRÉ, jamais le bout en bout (`agentMessageNotification`). */
+  private async _notifyAgent(served: Message): Promise<void> {
+    if (!this.agentClient || !agentMayReadMessage(served)) return;
+    const message = await agentReadableMessage(served, gatewayKeyring(this.prisma));
+    notifyAgentOfMessage({
+      agent: this.agentClient,
+      message: {
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        ...agentSenderIdentity(message.sender),
+        content: message.content,
+        originalLanguage: message.originalLanguage,
+        encryptionMode: message.encryptionMode, isEncrypted: message.isEncrypted,
+        replyToId: message.replyToId,
+        mentionedUserIds: await this._resolveMentionUserIds((message.validatedMentions as string[] | undefined) ?? []),
+        createdAt: message.createdAt,
+      },
+      onError: (err) => handlerLogger.warn('agent event delivery failed (non-blocking)', { messageId: message.id, error: err }),
+    });
   }
 
   private _sendError(
@@ -2352,8 +2220,12 @@ export class MessageHandler {
    */
   private _sendResponse(
     callback: ((response: SocketIOResponse<{ messageId: string; clientMessageId?: string; createdAt?: string }>) => void) | undefined,
-    response: MessageResponse
+    response: MessageResponse, socket?: MeeshySocket,
+    /** Le cid SOUMIS — #17058. Jamais celui de la ligne relue. */
+    submittedClientMessageId?: string,
   ): void {
+    const refusal = response.success ? null : messageRefusalEvent(response);
+    if (refusal) socket?.emit(SERVER_EVENTS.ERROR, refusal);
     if (!callback) return;
 
     try {
@@ -2365,17 +2237,14 @@ export class MessageHandler {
         // `createdAt` is echoed too so the WS-first send path can stamp the
         // optimistic row with the authoritative server time without waiting
         // for the `message:new` broadcast.
-        const data = response.data as MessageAckSource;
         callback({
           success: true,
-          data: buildMessageAckData(data)
+          data: buildMessageAckData({
+            row: response.data as MessageAckSource,
+            ...(submittedClientMessageId ? { submittedClientMessageId } : {}),
+          }),
         });
-      } else {
-        callback({
-          success: false,
-          error: response.error || 'Failed to send message'
-        });
-      }
+      } else callback(buildMessageFailureAck(response));
     } catch (error) {
       handlerLogger.error('ACK callback threw — socket connection preserved', { error });
     }

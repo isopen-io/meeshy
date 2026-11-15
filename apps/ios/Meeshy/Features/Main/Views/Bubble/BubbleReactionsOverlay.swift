@@ -23,6 +23,31 @@ struct BubbleReactionsOverlay: View, Equatable {
         hasReactions || (!isMe && isLastReceivedMessage)
     }
 
+    // MARK: - Pose sous la bulle (#7620)
+
+    /// Hauteur de mise en page du strip (pills et bouton d'ajout).
+    nonisolated static let stripHeight: CGFloat = 22
+    /// Diamètre visible du bouton d'ajout ; sa cible de toucher fait 40 pt.
+    nonisolated static let chipDiameter: CGFloat = 24
+    nonisolated static let hitDiameter: CGFloat = 40
+    /// Marge basse du pied de bulle : la ligne heure + coche finit là.
+    nonisolated static let footerBottomInset: CGFloat = 8
+    /// Descente du strip, aligné sur le BAS de la bulle. À 8 pt, le disque du
+    /// bouton d'ajout montait de 15 pt dans la bulle et couvrait l'heure ;
+    /// à 18 pt il commence sous la ligne de méta et chevauche encore le bord.
+    nonisolated static let restingOffset: CGFloat = 18
+
+    /// Haut du disque visible, relatif au bord bas de la bulle (négatif =
+    /// dans la bulle).
+    nonisolated static func chipTop(offset: CGFloat) -> CGFloat {
+        offset - stripHeight / 2 - chipDiameter / 2
+    }
+
+    /// Bas de la cible de toucher, relatif au bord bas de la bulle.
+    nonisolated static func hitBottom(offset: CGFloat) -> CGFloat {
+        offset - stripHeight / 2 + hitDiameter / 2
+    }
+
     let messageId: String
     let summaries: [ReactionSummary]
     let isMe: Bool
@@ -73,7 +98,7 @@ struct BubbleReactionsOverlay: View, Equatable {
                 // l'alignement de l'overlay externe (BubbleStandardLayout)
                 // qui decide de quel cote le strip flotte par rapport a
                 // la bulle.
-                HStack(spacing: 3) {
+                HStack(spacing: MeeshySpacing.xxs) {
                     ForEach(visible, id: \.emoji) { reaction in
                         pill(reaction: reaction, accent: accent)
                     }
@@ -99,23 +124,25 @@ struct BubbleReactionsOverlay: View, Equatable {
         // the pill almost invisible against the bubble's tail strip.
         Image(systemName: "face.smiling")
             .font(.caption2.weight(.semibold))
-            .foregroundColor(isDark ? accent.opacity(0.85) : accent.opacity(0.75))
+            .foregroundColor(isDark ? accent.opacity(MeeshyOpacity.intense) : accent.opacity(MeeshyOpacity.heavy))
             .frame(width: 24, height: 24)
             .background(
                 Circle()
-                    .fill(isDark ? accent.opacity(0.18) : accent.opacity(0.14))
+                    .fill(isDark ? accent.opacity(MeeshyOpacity.light) : accent.opacity(0.14))
                     .overlay(
                         Circle()
-                            .stroke(accent.opacity(isDark ? 0.4 : 0.28), lineWidth: 0.7)
+                            .stroke(accent.opacity(isDark ? 0.4 : 0.28), lineWidth: MeeshyBorder.hairline)
                     )
-                    .shadow(color: accent.opacity(0.18), radius: 3, y: 1)
+                    .shadow(color: accent.opacity(MeeshyOpacity.light), radius: 3, y: 1)
             )
             // Extended hit area so the smiley is easy to tap even when
             // it sits flush against the bubble's bottom edge. The Circle
             // here is purely a hit-testing surface — only the chip above
             // is rendered, so visually nothing changes.
-            .frame(width: 40, height: 40)
+            .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
             .contentShape(Circle())
+            .meeshyTapTarget()
+            .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.large))
             .onTapGesture {
                 HapticFeedback.light()
                 onAddReaction?(messageId)
@@ -132,8 +159,10 @@ struct BubbleReactionsOverlay: View, Equatable {
             // recu. Le cercle de hit 40pt deborde toujours de +/-9pt et
             // reste entierement tappable (l'overlay de bulle n'est pas clippe).
             .frame(height: 22)
-            .accessibilityLabel(String(localized: "bubble.reactions.add", defaultValue: "Add reaction", bundle: .main))
+            .accessibilityLabel(String(localized: "bubble.reactions.add", defaultValue: "Ajouter une réaction", bundle: .main))
             .accessibilityHint(String(localized: "bubble.reactions.add.hint", defaultValue: "Appuyer pour réagir rapidement, maintenir pour choisir un emoji", bundle: .main))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { onAddReaction?(messageId) }
     }
 
     // MARK: - Overflow pill (was: overflowPill)
@@ -148,23 +177,23 @@ struct BubbleReactionsOverlay: View, Equatable {
                 .foregroundColor(accent)
         }
         .frame(height: 22)
-        .padding(.horizontal, 6)
+        .padding(.horizontal, MeeshySpacing.xsPlus)
         .background(
             Capsule()
-                .fill(isDark ? accent.opacity(0.12) : accent.opacity(0.08))
+                .fill(isDark ? accent.opacity(MeeshyOpacity.light) : accent.opacity(MeeshyOpacity.subtle))
                 .overlay(
                     Capsule()
-                        .stroke(accent.opacity(isDark ? 0.25 : 0.15), lineWidth: 0.5)
+                        .stroke(accent.opacity(isDark ? 0.25 : 0.15), lineWidth: MeeshyBorder.hairline)
                 )
         )
-        .accessibilityLabel(String(format: String(localized: "bubble.reactions.moreCount", defaultValue: "%d more reactions", bundle: .main), count))
+        .accessibilityLabel(String(format: String(localized: "bubble.reactions.moreCount", defaultValue: "%d réactions de plus", bundle: .main), count))
         .accessibilityHint(String(localized: "bubble.reactions.viewAll.hint", defaultValue: "Voir toutes les réactions", bundle: .main))
     }
 
     // MARK: - Reaction pill (was: reactionPill)
 
     private func pill(reaction: ReactionSummary, accent: Color) -> some View {
-        let pillContent = HStack(spacing: 2) {
+        let pillContent = HStack(spacing: MeeshySpacing.xxs) {
             Text(reaction.emoji)
                 .font(.caption2)
             if reaction.count > 1 {
@@ -173,7 +202,7 @@ struct BubbleReactionsOverlay: View, Equatable {
                     .foregroundColor(
                         reaction.includesMe
                             ? (isDark ? .white : .white)
-                            : (isDark ? .white.opacity(0.7) : accent)
+                            : (isDark ? .white.opacity(MeeshyOpacity.heavy) : accent)
                     )
             }
         }
@@ -186,8 +215,8 @@ struct BubbleReactionsOverlay: View, Equatable {
         //  - stroke 2.5pt vs 0.5pt → 5× plus épais, immédiatement repérable
         //  - shadow plus marquée pour donner un léger relief
         let fillColor: Color = reaction.includesMe
-            ? (isDark ? accent.opacity(0.65) : accent.opacity(0.50))
-            : (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
+            ? (isDark ? accent.opacity(MeeshyOpacity.heavy) : accent.opacity(MeeshyOpacity.strong))
+            : MeeshyColors.surfaceFill(isDark: isDark)
 
         let strokeColor: Color = reaction.includesMe
             ? accent.opacity(isDark ? 0.95 : 0.80)
@@ -226,6 +255,8 @@ struct BubbleReactionsOverlay: View, Equatable {
             }
             .accessibilityLabel(Self.pillAccessibilityLabel(reaction))
             .accessibilityHint(String(localized: "bubble.reactions.toggle.hint", defaultValue: "Appuyer pour basculer la réaction, maintenir pour voir toutes les réactions", bundle: .main))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { onToggleReaction?(reaction.emoji) }
     }
 
     // MARK: - Accessibility helper (was: reactionPillAccessibilityLabel)
@@ -250,6 +281,7 @@ struct BubbleReactionsOverlay: View, Equatable {
 /// Une pill deja presente (`isNew == false`) est rendue a son etat final
 /// sans aucune animation : pas de re-jeu sur un simple re-render de liste.
 private struct CometPillModifier: ViewModifier {
+    @State private var delayed = DelayedActions()
     let isNew: Bool
 
     /// `progress` pilote zoom + offset (0 = comete lointaine, 1 = posee).
@@ -259,6 +291,16 @@ private struct CometPillModifier: ViewModifier {
     /// Phase angulaire des oscillations — avance pendant le tremblement.
     @State private var wobblePhase: CGFloat = 0
     @State private var didStart = false
+
+    /// Reduce Motion a deux interrupteurs — systeme ET override in-app — et
+    /// se composent par un OU (`MeeshyMotion.shouldReduce`, la regle du SDK).
+    /// Voir l'idiome documente dans `ReduceMotion.swift`.
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
 
     init(isNew: Bool) {
         self.isNew = isNew
@@ -296,6 +338,16 @@ private struct CometPillModifier: ViewModifier {
             .onAppear {
                 guard isNew, !didStart else { return }
                 didStart = true
+                // Regle 6 des effets (apps/ios/CLAUDE.md) : sous Reduce
+                // Motion l'INTENTION reste (la reaction est bien la, avec
+                // son haptique), mais le MOUVEMENT part — pas de comete, pas
+                // de tremblement. La pill se pose directement a son etat
+                // final.
+                guard !reduceMotion else {
+                    progress = 1
+                    HapticFeedback.light()
+                    return
+                }
                 startCometLanding()
             }
     }
@@ -311,7 +363,7 @@ private struct CometPillModifier: ViewModifier {
         // Phase 3 — shake : declenche a l'impact (~0.18s apres le lancement).
         // On amorce `shake` a 1, on fait avancer `wobblePhase` lineairement
         // pour generer les oscillations, puis on amortit `shake` vers 0.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+        delayed.run(after: .milliseconds(180)) {
             shake = 1
             wobblePhase = 0
             withAnimation(.linear(duration: 0.42)) {

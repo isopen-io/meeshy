@@ -36,7 +36,6 @@ final class ConversationViewModelCacheTests: XCTestCase {
             reportService: MockReportService(),
             messageSocket: MockMessageSocket(),
             dependencies: ConversationDependencies(
-                dbPool: pool,
                 persistence: MessagePersistenceActor(dbWriter: pool)
             )
         )
@@ -260,7 +259,6 @@ final class ConversationViewModelCacheTests: XCTestCase {
             reportService: MockReportService(),
             messageSocket: MockMessageSocket(),
             dependencies: ConversationDependencies(
-                dbPool: pool,
                 persistence: MessagePersistenceActor(dbWriter: pool)
             )
         )
@@ -332,8 +330,11 @@ final class ConversationViewModelCacheTests: XCTestCase {
             sut.messageTranscriptions["m-audio-1"]?.text, "bonjour",
             "offline (réseau KO), la transcription persistée en GRDB doit être hydratée — l'ancienne branche .expired/.empty n'hydratait jamais"
         )
-        XCTAssertTrue(sut.messages.contains(where: { $0.id == "m-audio-1" }),
-                      "le message GRDB est peint même sans réseau")
+        // La peinture traverse `subscribeToMessageStore`, qui attend un tick de
+        // runloop (`DispatchQueue.main.async`) pour ne jamais publier pendant
+        // une passe de rendu : on l'ATTEND, on ne la suppose pas synchrone.
+        let painted = await MessageStoreObservationHelper.awaitMessage(in: sut) { $0.id == "m-audio-1" }
+        XCTAssertNotNil(painted, "le message GRDB est peint même sans réseau")
     }
 
 }

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="game2_duo_no_friends">Você precisa de um amigo aceito para fazer aliança.</string>
+    <string name="game2_league_locked">O torneio se abre no nível %1$s · você está no nível %2$s</string>
+    <string name="game2_settings_hidden_card">O jogo está oculto neste aparelho.</string>
+    <string name="game_atlas_tiers_prestige">O renascimento se oferece no nível %1$s: é opcional, sua luz também pode continuar crescendo.</string>
+    <string name="game_concept_atlas_tip_2">Espere a resposta: é preciso uma mensagem em cada sentido.</string>
+    <string name="game_frappe_refused_shadow">Uma sombra cobre sua luz. Suas próximas faíscas vão dissipá-la, e a gente cunha.</string>
+    <string name="game_rules_concept_showcase_body">A prateleira dos seus troféus: taças de torneio e de viagem, troféus de renascimento e de Chama.</string>
+    <string name="game_rules_intro">Oito regras, e o jogo inteiro cabe nelas. O Meo as explica, a Mee mostra a ação.</string>
+    <string name="game_state_points_missing">Sua luz tem %1$s, ou seja, %2$s. A Meesh n.º %3$s vai cristalizar %4$s: faltam %5$s.</string>
+    <string name="game_state_points_ready">Sua luz tem %1$s, ou seja, %2$s: o bastante para cunhar a Meesh n.º %3$s, que vai cristalizar %4$s.</string>
+    <string name="game_state_points_missing_plain">Sua luz tem %1$s. A Meesh n.º %2$s vai cristalizar %3$s: faltam %4$s.</string>
+    <string name="game_state_season_progress">Viagem %1$s, semana %2$s de %3$s: parada %4$s de %5$s, e %6$s até a seguinte.</string>
+</resources>

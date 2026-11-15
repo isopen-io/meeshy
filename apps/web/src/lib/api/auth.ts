@@ -1,0 +1,565 @@
+import * as authEndpoints from '@meeshy/shared/api/endpoints/auth';
+
+import { httpTransport } from './client';
+import type { ApiResult, HttpRequest, HttpTransport } from './http';
+import { linkDeviceSecrets as browserLinkDeviceSecrets, type LinkDeviceSecrets } from '../links/link-device-secret';
+import { linkConfirmationOf, type LinkConfirmationRequired } from './link-confirmation';
+import { accountReplacementOf, admitProvenSession, provenSessionOf } from './proven-session';
+import type { PendingUser, SessionStoreApi, SessionUser } from './session';
+import { sessionStore } from './session';
+import {
+  verifyEmailBody,
+  type VerificationStatusData,
+  type VerifyEmailData,
+  type VerifyEmailRequest,
+} from './verify-email';
+
+export { verificationOpensSession, type VerificationStatusData, type VerifyEmailData, type VerifyEmailRequest } from './verify-email';
+
+/**
+ * LE FLUX DE CONNEXION (#5605, T4) — compose les requêtes EXACTES de
+ * `routes/auth/login.ts` (§3.1-3.3 de la spécification), écrit dans le
+ * magasin de session, rend l'`ApiResult` à l'appelant SANS l'avaler.
+ *
+ * `createAuthClient` est une FABRIQUE plutôt que trois fonctions figées : les
+ * témoins injectent un transport bouchonné ET un magasin RÉEL (jamais un
+ * mock) sans dépendre du singleton de production. `auth`/`login`/
+ * `completeTwoFactor`/`logout`, en bas, sont l'UNIQUE instance que
+ * `dev-harness.ts` — et demain tout écran d'authentification — consomment.
+ */
+
+export type LoginRequest = {
+  readonly username: string;
+  readonly password: string;
+  readonly rememberDevice?: boolean;
+};
+
+type LoginSuccessData = {
+  readonly user: SessionUser;
+  readonly token: string;
+  readonly sessionToken: string;
+  readonly expiresIn: number;
+};
+
+/** La branche exclusive de `login.ts:145-158` : NI `token` NI `sessionToken`
+ * — aucun accès n'est accordé avant la vérification du second facteur. */
+type LoginTwoFactorData = {
+  readonly requires2FA: true;
+  readonly twoFactorToken: string;
+  readonly user: PendingUser;
+  readonly message: string;
+};
+
+/**
+ * UN E-MAIL INCONNU À LA CONNEXION DEVIENT UN COMPTE (#8034, contrat #8033) —
+ * la passerelle crée le compte SANS mot de passe ni session et envoie un code
+ * et un lien. `accountCreated:false` : le compte existait, jamais vérifié, et
+ * le code vient d'être renvoyé. AUCUN jeton de session : la reprise est à
+ * l'écran du code, jamais au magasin.
+ *
+ * `pendingSessionToken` (#8083) : le jeton d'ATTENTE de CET appareil — il ne
+ * lit que l'état `pending` / `proven` (`verificationStatus`), jamais une
+ * session. Tenu en mémoire vive (`pending-verification.ts`), jamais stocké,
+ * jamais dans l'adresse, jamais journalisé.
+ */
+export type LoginVerificationRequiredData = {
+  readonly status: 'verification-required';
+  readonly accountCreated: boolean;
+  readonly email: string;
+  readonly pendingSessionToken?: string;
+};
+
+export type LoginResponseData = LoginSuccessData | LoginTwoFactorData | LoginVerificationRequiredData;
+
+/** La MÊME forme, rendue par la connexion d'un e-mail inconnu (#8033) et par
+ * une inscription SANS numéro (#8055) : un compte qui attend son code. */
+export type VerificationRequiredData = LoginVerificationRequiredData;
+
+function isTwoFactorResponse(data: LoginResponseData): data is LoginTwoFactorData {
+  return (data as LoginTwoFactorData).requires2FA === true;
+}
+
+export function isVerificationRequired(
+  data: LoginResponseData | RegisterResponseData,
+): data is VerificationRequiredData {
+  return (data as VerificationRequiredData).status === 'verification-required';
+}
+
+/**
+ * LA CHARGE EXACTE de `POST /auth/register` (`register.ts:133`,
+ * `registerRequestSchema`) — sept clés au plus, jamais `username` /
+ * `firstName` / `lastName` : la passerelle les DÉRIVE de `displayName`
+ * (#5218). Composée par `composeRegisterBody()` (`signup-form.ts`).
+ */
+export type RegisterBody = {
+  /**
+   * ABSENT ⇒ la passerelle le DÉRIVE de la partie locale de l'adresse (#6441,
+   * `displayNameDepuisEmail`). La clé est OMISE, jamais posée à `''` : même
+   * raison que `password` ci-dessous — `displayNameProperty` porte
+   * `minLength: 1`, une chaîne vide serait refusée.
+   */
+  /**
+   * Le pseudo que l'écran MONTRE et donc ENVOIE (#6479). `resoudreUsername`
+   * (`registration.service.ts`) l'emploie tel quel — la passerelle ne génère
+   * que si la clé est ABSENTE. Une collision devient alors un refus
+   * `USERNAME_TAKEN` servi avec trois pseudos libres, jamais un renommage
+   * silencieux.
+   */
+  readonly username?: string;
+  readonly displayName?: string;
+  readonly email: string;
+  /**
+   * ABSENT ⇒ le compte naît sans mot de passe (#6424), et sa seule porte est
+   * le lien magique. La clé est OMISE, jamais posée à `''` : la passerelle lit
+   * l'absence ; une chaîne vide serait une valeur, refusée par la borne de
+   * longueur — l'inscription échouerait dans le cas même qu'elle ouvre.
+   */
+  readonly password?: string;
+  readonly phoneNumber?: string;
+  readonly phoneCountryCode?: string;
+  readonly systemLanguage?: string;
+  readonly regionalLanguage?: string;
+  /** Le code de parrainage (#8058) — la même valeur que `token` de
+   * `POST /affiliate/register`. La passerelle noue la relation au parrain à la
+   * CRÉATION du compte ; un jeton invalide ne bloque jamais l'inscription. */
+  readonly affiliateToken?: string;
+  /** La clé de session d'affiliation (`sessionKey` de `/affiliate/register`),
+   * seulement quand elle est connue. */
+  readonly affiliateSessionKey?: string;
+  /**
+   * « CE N'EST PAS MOI » (#8214 × #8216) — l'adresse est détenue par un autre
+   * compte ; celui-ci la REVENDIQUE. La passerelle crée le compte sans
+   * session et envoie un code à l'adresse : seule sa preuve la lui donne.
+   * OMISE sinon, jamais `false`.
+   */
+  readonly claimEmail?: true;
+};
+
+/** La branche « compte créé » (`register.ts:383-388`) — l'inscription CRÉE une
+ * session (#4264), à la même forme qu'un login réussi. */
+type RegisterSuccessData = {
+  readonly user: SessionUser;
+  readonly token: string;
+  readonly sessionToken: string;
+  readonly expiresIn: number;
+  /** #8288 — le jeton d'attente (#8083) : la carte de l'inscription apprend
+   * que le lien a été ouvert ailleurs. Absent d'une passerelle antérieure. */
+  readonly pendingSessionToken?: string;
+};
+
+/** La branche « conflit de numéro » (`register.ts:301-331`) — AUCUN compte
+ * créé, ni token ni sessionToken : la reprise appartient à l'écran, jamais à
+ * ce client. */
+export type PhoneOwnerInfo = {
+  readonly maskedDisplayName: string;
+  readonly maskedUsername: string;
+  readonly maskedEmail: string;
+  readonly avatar: string | null;
+  readonly phoneNumber: string;
+  readonly phoneCountryCode: string;
+};
+
+export type PhoneConflictData = {
+  readonly phoneOwnershipConflict: true;
+  readonly phoneOwnerInfo: PhoneOwnerInfo;
+  readonly pendingRegistration: Record<string, unknown>;
+};
+
+/**
+ * Trois branches de succès : la session (AVEC numéro), le conflit de numéro,
+ * et — SANS numéro (#8055, règle porteur 2026-09-26) — le compte qui attend
+ * son code, à la forme de la connexion d'un e-mail inconnu (#8033). Une
+ * passerelle qui n'a pas encore adopté #8055 rend toujours la session : les
+ * deux formes sont décodées.
+ */
+export type RegisterResponseData = RegisterSuccessData | PhoneConflictData | VerificationRequiredData;
+
+/** Le discriminant entre les deux branches de succès de `register()` — exporté
+ * pour que l'écran d'inscription (`routes/signup.tsx`) n'ait pas à connaître
+ * la forme interne de `RegisterResponseData` pour la distinguer. */
+export function isPhoneConflict(data: RegisterResponseData): data is PhoneConflictData {
+  return (data as PhoneConflictData).phoneOwnershipConflict === true;
+}
+
+export type TwoFactorCompleteData = {
+  readonly user: SessionUser;
+  readonly token: string;
+  readonly sessionToken: string;
+  readonly expiresIn: number;
+  readonly usedBackupCode: boolean;
+};
+
+export type AuthTransport = Pick<HttpTransport, 'request'>;
+
+export type AuthDeps = {
+  readonly transport: AuthTransport;
+  readonly store: SessionStoreApi;
+  /** #10872 — le secret qui lie un lien de connexion à ce navigateur. */
+  readonly linkSecrets?: LinkDeviceSecrets;
+};
+
+/**
+ * LE CLIENT SE DÉCLARE EN OUVRANT UNE SESSION (#9611) — chaque requête de ce
+ * flux porte les en-têtes `X-Meeshy-*`, que la passerelle ne lit qu'à
+ * `createSession`. Un en-tête nommé par l'appelant l'emporte ; une
+ * déclaration absente laisse partir la requête sans elle — se connecter ne
+ * dépend jamais d'elle.
+ */
+export function declaringClient(transport: AuthTransport, declaration: () => Readonly<Record<string, string>>): AuthTransport {
+  return {
+    request: <T>(req: HttpRequest) => transport.request<T>({ ...req, headers: { ...declaration(), ...req.headers } }),
+  };
+}
+
+/**
+ * OÙ LA DÉCLARATION EST LUE — publiée sur `globalThis` par
+ * `lib/net/client-session.ts` (`publishClientDeclaration`, appelé par
+ * `api/realtime.ts` après la première peinture). Ni import statique ni
+ * `import()` d'ici : le premier ajouterait le module à chaque route qui
+ * importe ce flux, le second y ajouterait l'aide de préchargement — octets
+ * tous deux portés par la table de l'entrée (première peinture mesurée,
+ * 2026-10-08). Le nom est épinglé des deux côtés par
+ * `auth-client-declaration.test.ts`.
+ */
+export const CLIENT_DECLARATION_GLOBAL = '__meeshyClientDeclaration';
+
+export function publishedClientDeclaration(host: object = globalThis): Readonly<Record<string, string>> {
+  const value: unknown = (host as Record<string, unknown>)[CLIENT_DECLARATION_GLOBAL];
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
+}
+
+/**
+ * LA BRANCHE « connexion réussie » (`LoginResponseData`) de `login()`. Le lien
+ * magique rend la MÊME union (`routes/magic-link.ts:166-206`), mais la pose
+ * par `admitProvenSession` (`proven-session.ts`), après la question qu'un lien
+ * pour un AUTRE compte exige (#10451).
+ */
+function applyLoginResponse(store: SessionStoreApi, data: LoginResponseData): void {
+  if (isVerificationRequired(data)) return;
+  if (isTwoFactorResponse(data)) {
+    store.getState().beginTwoFactor({ user: data.user, twoFactorToken: data.twoFactorToken });
+    return;
+  }
+  store.getState().establish({
+    user: data.user,
+    token: data.token,
+    sessionToken: data.sessionToken,
+    expiresIn: data.expiresIn,
+  });
+}
+
+/** `POST /auth/magic-link/request` (`routes/magic-link.ts:45-118`) —
+ * `expiresInSeconds` optionnel : ABSENT sur un refus de débit dépassé
+ * emballé en 200 (§ 3.1 de la spécification, § `view/magic-link.ts`). */
+export type MagicLinkRequestData = { readonly expiresInSeconds?: number; readonly pendingSessionToken?: string };
+
+/** `POST /auth/forgot-password` (`password-reset.ts:110-215`) — nominal SANS
+ * `data`, erreur interne `{ message }` : aucun champ que ce client consulte. */
+export type ForgotPasswordData = { readonly message?: string } | undefined;
+
+/** `POST /auth/resend-verification` (`magic-link.ts:377-416`) — toujours 200
+ * générique, même garde de non-révélation que `forgotPassword`. */
+export type ResendVerificationData = { readonly message: string };
+
+/** `POST /auth/reset-password/verify-token` (`password-reset.ts`, #10859) —
+ * un jeton invalide/expiré rend `valid:false` en 200, PAS une erreur HTTP :
+ * la route existe pour que l'écran distingue ce cas AVANT de montrer le
+ * formulaire (§ description de la route). */
+export type VerifyResetTokenData = {
+  readonly valid: boolean;
+  readonly requires2FA?: boolean;
+  readonly expiresAt?: string;
+};
+
+/** `POST /auth/reset-password` (`password-reset.ts:221-...`) — AUCUNE
+ * écriture de magasin : un reset invalide toutes les sessions SERVEUR
+ * (`disconnectRevokedSessions`), il n'en établit aucune côté client. */
+export type ResetPasswordData = { readonly message: string };
+
+export function createAuthClient({ transport, store, linkSecrets = browserLinkDeviceSecrets }: AuthDeps) {
+  /** #10872 — le secret ne sert plus dès que l'issue du lien est DÉFINITIVE :
+   * une session (ou un défi) rendue, ou un refus du jeton. La question, elle,
+   * rejoue la requête : le secret reste. */
+  function settleLinkSecret(result: ApiResult<object>): void {
+    if (result.ok && linkConfirmationOf(result.data) === null) linkSecrets.forget();
+  }
+
+  async function login(request: LoginRequest): Promise<ApiResult<LoginResponseData>> {
+    // Corps composé d'un seul tenant — `rememberDevice` est OPTIONNEL au
+    // schéma (`AuthSchemas.login`), et l'omettre n'est pas la même chose que
+    // l'envoyer à `false` : le serveur applique alors son propre défaut.
+    const body = {
+      username: request.username,
+      password: request.password,
+      ...(request.rememberDevice !== undefined ? { rememberDevice: request.rememberDevice } : {}),
+    };
+
+    const result = await transport.request<LoginResponseData>({
+      method: 'POST',
+      path: authEndpoints.login,
+      body,
+    });
+    if (!result.ok) return result;
+
+    applyLoginResponse(store, result.data);
+    return result;
+  }
+
+  /**
+   * `POST /auth/magic-link/request` (T3a) — AUCUNE écriture de magasin : une
+   * demande de lien n'authentifie personne, elle envoie un e-mail.
+   * `rememberDevice` suit la même règle que `login()` — omis si non fourni,
+   * jamais envoyé à `false` par défaut (iOS ne l'envoie pas du tout,
+   * `AuthService.swift:89` — § 9 Q7 de la spécification).
+   *
+   * `returnUrl` — OÙ REVENIR une fois connecté (#6742), déjà clampé par
+   * l'appelant (`MagicLinkPanel`, `safeNextPath`) — omis si absent, jamais
+   * envoyé vide : la gateway l'embarque dans le lien envoyé par e-mail
+   * (`MagicLinkService.sendMagicLinkEmail`), que `/auth/magic-link` relit en
+   * `returnUrl` à l'arrivée.
+   */
+  async function requestMagicLink(request: {
+    readonly email: string;
+    readonly rememberDevice?: boolean;
+    readonly returnUrl?: string;
+  }): Promise<ApiResult<MagicLinkRequestData>> {
+    const linkDeviceHash = await linkSecrets.issue();
+    const body = {
+      email: request.email,
+      ...(request.rememberDevice !== undefined ? { rememberDevice: request.rememberDevice } : {}),
+      ...(request.returnUrl !== undefined ? { returnUrl: request.returnUrl } : {}),
+      ...(linkDeviceHash !== null ? { linkDeviceHash } : {}),
+    };
+    return transport.request<MagicLinkRequestData>({ method: 'POST', path: authEndpoints.magicLinkRequest, body });
+  }
+
+  /**
+   * UN LIEN SE PROUVE AVANT DE DÉCIDER (#10451) — rien n'est purgé avant la
+   * preuve : un lien bidon laisse la session ouverte intacte, et la requête
+   * ne présente aucun jeton (`credential: null`), si bien que son refus ne
+   * ferme rien. Une session prouvée pour le compte ouvert le fait tourner ;
+   * pour un AUTRE compte, elle n'est PAS posée — l'écran pose la question
+   * (`accountReplacementOf`, `proven-session.ts`).
+   */
+  function admitUnlessReplacing(data: object): void {
+    const proven = provenSessionOf(data);
+    if (proven === null || accountReplacementOf(store.getState().session, proven) !== null) return;
+    admitProvenSession(store, proven);
+  }
+
+  /** `POST /auth/magic-link/validate` (T3b) — la MÊME union que `login()`,
+   * plus la question d'un lien ouvert ailleurs (#10872) : rien n'est posé
+   * avant le « oui », que l'écran rejoue avec `confirm`. */
+  async function validateMagicLink(
+    token: string,
+    options: { readonly confirm?: boolean } = {},
+  ): Promise<ApiResult<LoginResponseData | LinkConfirmationRequired>> {
+    const linkDeviceSecret = linkSecrets.presented();
+    const result = await transport.request<LoginResponseData | LinkConfirmationRequired>({
+      method: 'POST',
+      path: authEndpoints.magicLinkValidate,
+      body: {
+        token,
+        ...(linkDeviceSecret !== null ? { linkDeviceSecret } : {}),
+        ...(options.confirm === true ? { confirm: true } : {}),
+      },
+      credential: null,
+    });
+    settleLinkSecret(result);
+    if (!result.ok || linkConfirmationOf(result.data) !== null) return result;
+
+    admitUnlessReplacing(result.data);
+    return result;
+  }
+
+  /** `POST /auth/forgot-password` (T3c) — AUCUNE écriture de magasin :
+   * demander un lien de réinitialisation n'authentifie personne non plus. */
+  async function forgotPassword(email: string): Promise<ApiResult<ForgotPasswordData>> {
+    return transport.request<ForgotPasswordData>({ method: 'POST', path: authEndpoints.forgotPassword, body: { email } });
+  }
+
+  /**
+   * `POST /auth/register` (T2) — la seule des deux branches de succès qui
+   * ÉTABLIT une session est `RegisterSuccessData` (#4264). Le conflit de
+   * numéro (#5555, hors périmètre : la modale de transfert) laisse le
+   * magasin `anonymous` et rend son résultat TEL QUEL à l'appelant, qui porte
+   * seul la décision de reprise (continuer sans le numéro, transférer).
+   */
+  async function register(body: RegisterBody): Promise<ApiResult<RegisterResponseData>> {
+    const result = await transport.request<RegisterResponseData>({
+      method: 'POST',
+      path: authEndpoints.register,
+      body,
+    });
+    if (!result.ok) return result;
+
+    if (isPhoneConflict(result.data) || isVerificationRequired(result.data)) return result;
+
+    store.getState().establish({
+      user: result.data.user,
+      token: result.data.token,
+      sessionToken: result.data.sessionToken,
+      expiresIn: result.data.expiresIn,
+    });
+    return result;
+  }
+
+  async function completeTwoFactor(code: string): Promise<ApiResult<TwoFactorCompleteData>> {
+    const pending = store.getState().session;
+    if (pending.status !== 'pending2fa') {
+      return { ok: false, status: 0, error: 'Aucune connexion à deux facteurs en attente' };
+    }
+
+    // Le corps ne porte QUE ces deux champs (login.ts:232-241) — `rememberDevice`
+    // n'y est plus accepté depuis #4471, retenu côté serveur depuis `login()`.
+    const result = await transport.request<TwoFactorCompleteData>({
+      method: 'POST',
+      path: authEndpoints.loginN2Fa,
+      body: { twoFactorToken: pending.twoFactorToken, code },
+    });
+    if (!result.ok) return result;
+
+    store.getState().establish({
+      user: result.data.user,
+      token: result.data.token,
+      sessionToken: result.data.sessionToken,
+      expiresIn: result.data.expiresIn,
+    });
+    return result;
+  }
+
+  /** `POST /auth/verify-email` — une réponse qui porte une session l'ÉTABLIT
+   * (#8034), par le même `establish` que la connexion ; sans session (ancienne
+   * passerelle), le magasin reste tel quel. Le lien comme le code suivent la
+   * règle du lien magique (#10451) : la session d'un AUTRE compte que le
+   * compte ouvert n'est pas posée sans la question, et un défi de second
+   * facteur ouvre la saisie du code (#10474), comme au lien magique. */
+  async function verifyEmail(request: VerifyEmailRequest): Promise<ApiResult<VerifyEmailData>> {
+    const byLink = 'token' in request;
+    const result = await transport.request<VerifyEmailData>({
+      method: 'POST',
+      path: authEndpoints.verifyEmail,
+      body: verifyEmailBody(request, byLink ? linkSecrets.presented() : null),
+      credential: null,
+    });
+    if (byLink) settleLinkSecret(result);
+    if (!result.ok || linkConfirmationOf(result.data) !== null) return result;
+
+    admitUnlessReplacing(result.data);
+    return result;
+  }
+
+  /** `POST /auth/verification/status` (#8083) — un ÉTAT, AUCUNE écriture de
+   * magasin : l'appareil ne se connecte que par le code ou le lien. */
+  async function verificationStatus(pendingSessionToken: string): Promise<ApiResult<VerificationStatusData>> {
+    return transport.request<VerificationStatusData>({
+      method: 'POST',
+      path: authEndpoints.verificationStatus,
+      body: { pendingSessionToken },
+    });
+  }
+
+  /** `POST /auth/resend-verification` (T-verify) — même garde de non-révélation
+   * que `forgotPassword` : la passerelle répond 200 que le compte existe ou non. */
+  async function resendVerification(email: string): Promise<ApiResult<ResendVerificationData>> {
+    return transport.request<ResendVerificationData>({ method: 'POST', path: authEndpoints.resendVerification, body: { email } });
+  }
+
+  /** `POST /auth/reset-password/verify-token` (T-reset, #10859) — le jeton
+   * voyage dans le CORPS, jamais dans une adresse qu'un journal d'accès garde.
+   * Une passerelle d'avant #10859 ne connaît que le `GET` : sur son 404, et
+   * sur lui seul, l'ancien appel reprend — rétrocompatibilité (#9223) tant que
+   * l'application web peut être promue avant la passerelle. */
+  async function verifyResetToken(token: string): Promise<ApiResult<VerifyResetTokenData>> {
+    const result = await transport.request<VerifyResetTokenData>({
+      method: 'POST',
+      path: authEndpoints.resetPasswordVerifyToken,
+      body: { token },
+    });
+    if (result.ok || result.status !== 404) return result;
+    return transport.request<VerifyResetTokenData>({
+      method: 'GET',
+      path: `${authEndpoints.resetPasswordVerifyToken}?token=${encodeURIComponent(token)}`,
+    });
+  }
+
+  /** `POST /auth/reset-password` (T-reset) — `twoFactorCode` suit la même
+   * discipline que `rememberDevice` de `login()` : omis si non fourni, jamais
+   * envoyé `undefined`. */
+  async function resetPassword(request: {
+    readonly token: string;
+    readonly newPassword: string;
+    readonly confirmPassword: string;
+    readonly twoFactorCode?: string;
+  }): Promise<ApiResult<ResetPasswordData>> {
+    const body = {
+      token: request.token,
+      newPassword: request.newPassword,
+      confirmPassword: request.confirmPassword,
+      ...(request.twoFactorCode !== undefined ? { twoFactorCode: request.twoFactorCode } : {}),
+    };
+    return transport.request<ResetPasswordData>({ method: 'POST', path: authEndpoints.resetPassword, body });
+  }
+
+  async function logout(): Promise<ApiResult<{ message: string }>> {
+    // Les jetons sont capturés AVANT le wipe : `SessionSnapshotStore.wipe()`
+    // (Swift) est la PREMIÈRE opération d'un logout, et le rester ici oblige
+    // à porter l'identité de CET appel en EN-TÊTES EXPLICITES plutôt que de
+    // la relire depuis un `credential()` qui, interrogé après le wipe,
+    // rendrait `null` — l'appel resterait authentifié malgré le wipe local.
+    const current = store.getState().session;
+    const headers: Record<string, string> =
+      current.status === 'authenticated'
+        ? { Authorization: `Bearer ${current.token}`, 'X-Session-Token': current.sessionToken }
+        : {};
+
+    store.getState().clearSession();
+
+    // Un transport qui rejette NE réauthentifie PAS (§ doctrine ci-dessus) :
+    // le wipe local a déjà eu lieu, et c'est la direction d'erreur qui ne
+    // COÛTE rien — un « déconnecté localement, session serveur survivante »
+    // se répare tout seul au prochain appel authentifié qui échoue en 401 ;
+    // l'inverse serait une session fantôme.
+    return transport.request<{ message: string }>({ method: 'POST', path: authEndpoints.logout, headers });
+  }
+
+  return {
+    login,
+    register,
+    completeTwoFactor,
+    logout,
+    requestMagicLink,
+    validateMagicLink,
+    forgotPassword,
+    verifyEmail,
+    verificationStatus,
+    resendVerification,
+    verifyResetToken,
+    resetPassword,
+  };
+}
+
+/**
+ * L'UNIQUE flux de connexion de l'application, branché sur le transport
+ * PARTAGÉ (`client.ts`) et le magasin PARTAGÉ (`session.ts`) — jamais une
+ * seconde instance de l'un ou de l'autre.
+ */
+export const auth = createAuthClient({ transport: declaringClient(httpTransport, publishedClientDeclaration), store: sessionStore });
+export const {
+  login,
+  register,
+  completeTwoFactor,
+  logout,
+  requestMagicLink,
+  validateMagicLink,
+  forgotPassword,
+  verifyEmail,
+  resendVerification,
+  verifyResetToken,
+  resetPassword,
+} = auth;
+
+// Réexport pour un appelant qui a seulement besoin de composer une requête
+// bas niveau (recette manuelle § 7 de la spécification).
+export type { HttpRequest };

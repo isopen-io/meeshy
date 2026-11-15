@@ -22,25 +22,71 @@ import MeeshySDK
 /// `AudioMediaView.resolvedPreferredTranscriptionLanguage` (qui délègue ici).
 nonisolated enum AudioTrackLanguageResolver {
 
+    /// #10691 — la langue d'origine d'UNE piste : celle de SA transcription
+    /// quand elle est connue, sinon celle du message. Un message à plusieurs
+    /// vocaux porte une transcription par pièce jointe, chacune dans sa langue :
+    /// résoudre depuis le message prenait une piste en anglais pour « déjà dans
+    /// la langue du lecteur » et la servait en original, traduction française à
+    /// côté.
+    static func originLanguage(transcriptionLanguage: String?, messageOriginal: String) -> String {
+        let own = transcriptionLanguage?.trimmingCharacters(in: .whitespaces) ?? ""
+        return own.isEmpty ? messageOriginal : own
+    }
+
     static func resolve(
         manualOverride: String?,
         originalLanguage: String,
         preferredLanguages: [String],
         translatedAudios: [MessageTranslatedAudio]
     ) -> String? {
-        guard !translatedAudios.isEmpty else { return nil }
+        resolve(
+            manualOverride: manualOverride,
+            originalLanguage: originalLanguage,
+            preferredLanguages: preferredLanguages,
+            availableLanguages: translatedAudios.map(\.targetLanguage)
+        )
+    }
+
+    /// **La MÊME loi, exprimée sur des CODES de langue** (#4926).
+    ///
+    /// Elle existe parce qu'une seconde loi existait déjà :
+    /// `ReelAudioLanguageResolver.preferredAudioLanguage`, dans
+    /// `ReelsPlayerView.swift`, réécrivait ce parcours de rang mot pour mot —
+    /// même règle, même exactitude, autre signature (le réel connaît les codes
+    /// de ses pistes TTS, pas les objets). Deux lois JUSTES qui disent la même
+    /// chose ne se signalent nulle part le jour où l'une évolue : c'est
+    /// exactement le motif que le § Prisme du `CLAUDE.md` racine décrit — « la
+    /// réécriture, pas l'appel manquant, a produit trois familles divergentes en
+    /// trois cycles ».
+    ///
+    /// La variante par objets ci-dessus n'est plus qu'une projection de
+    /// celle-ci. `ReelAudioLanguageResolverTests` et
+    /// `AudioTrackLanguageResolverTests` gardent les deux entrées, inchangées :
+    /// leur passage EST la preuve que la convergence ne change aucun verdict.
+    ///
+    /// Le filtre sur les codes VIDES vient du réel, et il est nécessaire depuis
+    /// que `SocialAudioTrack.originalLanguage` peut rendre `""` pour « langue
+    /// d'origine inconnue » : sans lui, une chaîne vide dans le prisme
+    /// s'égalerait à cette origine inconnue et rendrait `nil` au rang où elle
+    /// apparaît. Les deux producteurs de prisme du dépôt écartent déjà les
+    /// vides — le filtre garde la loi juste même si un troisième naissait.
+    static func resolve(
+        manualOverride: String? = nil,
+        originalLanguage: String,
+        preferredLanguages: [String],
+        availableLanguages: [String]
+    ) -> String? {
+        let available = Set(availableLanguages.map { $0.lowercased() })
+        guard !available.isEmpty else { return nil }
         let original = originalLanguage.lowercased()
-        func hasTrack(_ code: String) -> Bool {
-            translatedAudios.contains { $0.targetLanguage.lowercased() == code }
-        }
         if let manual = manualOverride?.lowercased() {
             if manual == original { return nil }
-            return hasTrack(manual) ? manual : nil
+            return available.contains(manual) ? manual : nil
         }
-        for lang in preferredLanguages {
+        for lang in preferredLanguages where !lang.isEmpty {
             let lower = lang.lowercased()
             if lower == original { return nil }
-            if hasTrack(lower) { return lower }
+            if available.contains(lower) { return lower }
         }
         return nil
     }
@@ -57,5 +103,52 @@ nonisolated enum AudioTrackLanguageResolver {
         return translatedAudios.first {
             $0.targetLanguage.lowercased() == language.lowercased()
         }?.url ?? originalUrl
+    }
+}
+
+/// **La piste SERVIE d'un vocal** — ce que la bulle joue, avec ce qui voyage
+/// avec elle : son URL, sa durée, son texte (#9010). `language == nil` ⇒
+/// l'original. Une surface qui montre un vocal reçoit CETTE valeur, jamais
+/// `attachment.fileUrl` : l'aperçu d'appui long jouait l'original coréen
+/// pendant que la bulle servait la piste française.
+nonisolated struct ServedAudioTrack: Equatable, Sendable {
+    let language: String?
+    let url: String
+    let durationMs: Int?
+    let transcript: String?
+
+    static func original(of attachment: MessageAttachment, transcript: String? = nil) -> ServedAudioTrack {
+        ServedAudioTrack(language: nil, url: attachment.fileUrl, durationMs: attachment.duration, transcript: transcript)
+    }
+}
+
+nonisolated extension AudioTrackLanguageResolver {
+
+    /// La piste servie, par la MÊME descente que `resolve` — la langue élue
+    /// désigne une piste traduite, dont l'URL, la durée et le texte partent
+    /// ENSEMBLE. Aucune seconde descente : la piste suit la langue servie.
+    static func servedTrack(
+        of attachment: MessageAttachment,
+        manualOverride: String?,
+        originalLanguage: String,
+        preferredLanguages: [String],
+        translatedAudios: [MessageTranslatedAudio],
+        originalTranscript: String?
+    ) -> ServedAudioTrack {
+        let language = resolve(
+            manualOverride: manualOverride,
+            originalLanguage: originalLanguage,
+            preferredLanguages: preferredLanguages,
+            translatedAudios: translatedAudios
+        )
+        guard let language,
+              let track = translatedAudios.first(where: { $0.targetLanguage.lowercased() == language })
+        else { return .original(of: attachment, transcript: originalTranscript) }
+        return ServedAudioTrack(
+            language: language,
+            url: track.url,
+            durationMs: track.durationMs > 0 ? track.durationMs : attachment.duration,
+            transcript: track.transcription.isEmpty ? nil : track.transcription
+        )
     }
 }

@@ -75,6 +75,12 @@ final class CacheBackgroundFlushTests: XCTestCase {
     /// Confirm the static task identifier matches the value declared in
     /// `Info.plist` under `BGTaskSchedulerPermittedIdentifiers`. If this
     /// drifts, `BGTaskScheduler.shared.submit(_:)` throws at runtime.
+    func test_claimRegistration_isGrantedOnlyOncePerProcess() {
+        _ = CacheBackgroundFlushTask.claimRegistration()
+        XCTAssertFalse(CacheBackgroundFlushTask.claimRegistration(), "un second enregistrement ferait lever BGTaskScheduler")
+        XCTAssertFalse(CacheBackgroundFlushTask.claimRegistration())
+    }
+
     func test_taskIdentifier_matchesInfoPlistConvention() {
         XCTAssertEqual(CacheBackgroundFlushTask.identifier, "me.meeshy.cache.background-flush")
     }

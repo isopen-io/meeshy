@@ -20,6 +20,9 @@ jest.mock('../../utils/sanitize', () => ({
   SecuritySanitizer: {
     sanitizeText: jest.fn((s: string) => s),
     sanitizeURL: jest.fn((s: string) => s),
+    // #7157 — un double PARTIEL de `SecuritySanitizer` rend `undefined` et fait
+    // échouer l'APPEL, pas l'assertion : le service avale l'erreur et rend null.
+    sanitizeURLOrPath: jest.fn((s: string) => s),
     sanitizeJSON: jest.fn((obj: any) => obj),
     isValidNotificationType: jest.fn(() => true),
     isValidPriority: jest.fn(() => true),
@@ -41,6 +44,16 @@ jest.mock('../../utils/logger-enhanced', () => ({
 }));
 
 import { NotificationService } from '../../services/notifications/NotificationService';
+import { aliveAndUnblocked } from '../helpers/linked-to-everyone';
+
+/** Le post que le bâtisseur RELIT pour servir son extrait (#8731) — vivant, sans traduction. */
+const liveExcerptSource = (content: string) => ({
+  content,
+  originalLanguage: null,
+  translations: null,
+  deletedAt: null,
+  expiresAt: null,
+});
 
 // ---------------------------------------------------------------------------
 // Shared mock factories
@@ -73,7 +86,7 @@ function createMockPrisma() {
       groupBy: jest.fn(),
       createMany: jest.fn(),
     },
-    user: { findUnique: jest.fn() },
+    user: { findUnique: jest.fn(), findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn(aliveAndUnblocked()) as any, },
     // Audience du post declaree PUBLIC : les notifications a destinataire unique du
     // fil (reponse, like, reaction sur commentaire) verifient desormais que le
     // destinataire peut encore voir le post. Ces fichiers portent sur le wording,
@@ -346,7 +359,7 @@ describe('Social Notification Methods', () => {
       expect(result).toBeNull();
     });
 
-    it('should create post_comment notification with commentPreview in content', async () => {
+    it('should create post_comment notification with the comment synthesis in content (#14318)', async () => {
       setupSuccessMocks(mockPrisma, { type: 'post_comment' });
 
       const result = await service.createPostCommentNotification({
@@ -362,8 +375,8 @@ describe('Social Notification Methods', () => {
       const createArg = mockPrisma.notification.create.mock.calls[0][0];
       expect(createArg.data.type).toBe('post_comment');
       expect(createArg.data.priority).toBe('normal');
-      // Content should contain the comment preview (possibly truncated)
-      expect(createArg.data.content).toContain('This is really insightful!');
+      // #14318 — le corps dit la longueur du commentaire, jamais son texte.
+      expect(createArg.data.content).toBe('Petit message texte');
     });
 
     it('should include commentId in metadata', async () => {
@@ -398,7 +411,7 @@ describe('Social Notification Methods', () => {
       expect(createArg.data.metadata.commentPreview).toBeDefined();
     });
 
-    it('should truncate long comment previews', async () => {
+    it('counts a long comment entire (#14318)', async () => {
       setupSuccessMocks(mockPrisma, { type: 'post_comment' });
 
       // Build a comment with more than 25 words
@@ -413,8 +426,8 @@ describe('Social Notification Methods', () => {
       });
 
       const createArg = mockPrisma.notification.create.mock.calls[0][0];
-      // The content is passed through truncateMessage (max 25 words)
-      expect(createArg.data.content.endsWith('...')).toBe(true);
+      // #14318 — 30 mots : le palier « Long message texte », compté sur le texte entier.
+      expect(createArg.data.content).toBe('Long message texte');
     });
   });
 
@@ -464,31 +477,31 @@ describe('Social Notification Methods', () => {
       expect(createArg.data.type).toBe('post_repost');
       expect(createArg.data.priority).toBe('normal');
       // Le corps montre la CIBLE, pas le geste : la phrase d'action
-      // (« a partagé ») est portée par le titre et la bannière depuis
+      // (« a republié ») est portée par le titre et la bannière depuis
       // `targetPreviewBody` — l'y répéter dupliquait corps et sous-titre. Sans
       // extrait ni média, le corps nomme l'entité partagée.
       expect(createArg.data.content).toContain('publication');
-      expect(createArg.data.content).not.toContain('partagé');
+      expect(createArg.data.content).not.toContain('republié');
       // Complément : leur `not.toContain` prouve que le corps ne porte plus la
       // phrase, pas qu'elle existe encore. Sans cette ligne, la retirer de
       // PARTOUT garderait ce témoin vert. On asserte donc les deux extrémités.
-      expect(createArg.data.title).toContain('partagé');
+      expect(createArg.data.title).toContain('republié');
     });
 
-    it('montre l\'extrait du contenu partagé dans le corps quand il y en a un', async () => {
+    it('décrit le contenu partagé par sa synthèse dans le corps (#14318)', async () => {
       const repostPrefs = { repostEnabled: true };
       setupSuccessMocks(mockPrisma, { type: 'post_repost', priority: 'normal' }, repostPrefs);
 
+      mockPrisma.post = { ...mockPrisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('Le texte du post repris')) };
       await service.createPostRepostNotification({
         actorId: ACTOR_ID,
         originalPostId: POST_ID,
         postAuthorId: AUTHOR_ID,
         repostId: REPOST_ID,
-        postPreview: 'Le texte du post repris',
       });
 
       const createArg = mockPrisma.notification.create.mock.calls[0][0];
-      expect(createArg.data.content).toContain('Le texte du post repris');
+      expect(createArg.data.content).toBe('Message texte');
     });
 
     it('should include repostId and originalPostId in metadata', async () => {
@@ -605,7 +618,7 @@ describe('Social Notification Methods', () => {
       expect(createArg.data.context.postId).toBe(POST_ID);
     });
 
-    it('should use truncated replyPreview as content', async () => {
+    it('uses the reply synthesis as content (#14318)', async () => {
       setupSuccessMocks(mockPrisma, { type: 'comment_reply' });
 
       const longReply = Array.from({ length: 30 }, (_, i) => `reply${i}`).join(' ');
@@ -619,7 +632,7 @@ describe('Social Notification Methods', () => {
       });
 
       const createArg = mockPrisma.notification.create.mock.calls[0][0];
-      expect(createArg.data.content.endsWith('...')).toBe(true);
+      expect(createArg.data.content).toBe('Long message texte');
     });
   });
 
@@ -821,7 +834,7 @@ describe('Social Notification Methods', () => {
       expect(createArg.data.content).not.toContain('🎉');
     });
 
-    it('montre l\'extrait du commentaire aimé dans le corps', async () => {
+    it('décrit le commentaire aimé par sa synthèse dans le corps (#14318)', async () => {
       const commentLikePrefs = { commentLikeEnabled: true };
       setupSuccessMocks(mockPrisma, { type: 'comment_like', priority: 'low' }, commentLikePrefs);
 
@@ -835,7 +848,7 @@ describe('Social Notification Methods', () => {
       });
 
       const createArg = mockPrisma.notification.create.mock.calls[0][0];
-      expect(createArg.data.content).toContain('Bien vu pour la migration');
+      expect(createArg.data.content).toBe('Message texte');
     });
   });
 });

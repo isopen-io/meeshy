@@ -33,7 +33,10 @@ extension StoryEffects {
     /// préservées : elles sont sémantiquement portables d'un device à
     /// l'autre et utiles aux tests / mode preview.
     public func sanitizedForServerPublish() -> StoryEffects {
-        var copy = self
+        // **Le look d'un média ne part jamais au fil** (#13840) : la publication
+        // l'a cuit dans les octets ; un chemin qui l'oublierait le ferait
+        // peindre une seconde fois chez le lecteur iOS, et jamais ailleurs.
+        var copy = withoutMediaLooks
         if let medias = copy.mediaObjects {
             copy.mediaObjects = medias.map { media in
                 guard let raw = media.mediaURL, Self.isLocalFileURL(raw) else { return media }
@@ -41,6 +44,29 @@ extension StoryEffects {
                     "Sanitizer caught local file:// mediaURL on StoryMediaObject id=\(media.id, privacy: .public) postMediaId=\(media.postMediaId, privacy: .public) — call-site forgot to flip to CDN URL after upload. Nullifying."
                 )
                 var stripped = media
+                stripped.mediaURL = nil
+                return stripped
+            }
+        }
+        // **L'AUDIO passe par le même filet**.
+        //
+        // Le sanitizer gardait une famille et laissait l'autre : un son dont la
+        // pré-montée n'avait pas abouti partait avec son `file:///Users/…`,
+        // c'est-à-dire un chemin de disque qu'aucun lecteur ne peut résoudre —
+        // et qui porte au passage le nom de compte de l'auteur.
+        //
+        // > **Une garde se mesure sur tout ce que la charge TRANSPORTE**, pas
+        // > sur la famille pour laquelle elle a été écrite. C'est la leçon 275
+        // > du dépôt, ici dans sa forme la plus littérale : le champ voisin
+        // > porte le même nom, le même type et le même risque, et n'était pas
+        // > gardé.
+        if let audios = copy.audioPlayerObjects {
+            copy.audioPlayerObjects = audios.map { audio in
+                guard let raw = audio.mediaURL, Self.isLocalFileURL(raw) else { return audio }
+                Self.logger.error(
+                    "Sanitizer caught local file:// mediaURL on StoryAudioPlayerObject id=\(audio.id, privacy: .public) postMediaId=\(audio.postMediaId, privacy: .public) — call-site forgot to flip to CDN URL after upload. Nullifying."
+                )
+                var stripped = audio
                 stripped.mediaURL = nil
                 return stripped
             }
@@ -55,5 +81,5 @@ extension StoryEffects {
         raw.lowercased().hasPrefix("file:")
     }
 
-    private static let logger = Logger(subsystem: "com.meeshy.sdk", category: "story-publish-sanitizer")
+    private static let logger = MeeshyLog.logger(.storyPublishSanitizer, subsystem: .legacySDK)
 }

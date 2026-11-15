@@ -15,6 +15,36 @@ public protocol SoundLibraryServiceProviding: Sendable {
     func rename(soundId: String, title: String) async throws -> APISound
     /// « Page du son » — les publications qui l'utilisent.
     func posts(soundId: String, cursor: Date?, limit: Int) async throws -> SoundPostPage
+    /// Retire un son de SA bibliothèque (#9848). Les publications qui
+    /// l'utilisent déjà continuent de le jouer ; il ne s'ajoute plus à une
+    /// nouvelle.
+    func remove(soundId: String) async throws -> SoundRemoval
+}
+
+/// Réponse de `DELETE /sounds/:id` — le son retiré et le nombre de
+/// publications qui le jouent encore. Rien d'autre ne sort : `contentHash`
+/// reste côté serveur.
+public struct SoundRemoval: Decodable, Sendable, Equatable {
+    public let id: String
+    /// ISO 8601, tel que servi. Gardé en chaîne : le client ne s'en sert que
+    /// pour savoir que le retrait a eu lieu.
+    public let deletedAt: String?
+    public let postCount: Int
+
+    public init(id: String, deletedAt: String?, postCount: Int) {
+        self.id = id
+        self.deletedAt = deletedAt
+        self.postCount = postCount
+    }
+
+    enum CodingKeys: String, CodingKey { case id, deletedAt, postCount }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        deletedAt = try c.decodeIfPresent(String.self, forKey: .deletedAt)
+        postCount = try c.decodeIfPresent(Int.self, forKey: .postCount) ?? 0
+    }
 }
 
 public struct SoundPostPage: Sendable {
@@ -39,7 +69,7 @@ public struct SoundPage: Sendable {
     }
 }
 
-public final class SoundLibraryService: SoundLibraryServiceProviding, @unchecked Sendable {
+public final class SoundLibraryService: SoundLibraryServiceProviding, Sendable {
     public static let shared = SoundLibraryService()
     private let api: APIClientProviding
 
@@ -53,10 +83,10 @@ public final class SoundLibraryService: SoundLibraryServiceProviding, @unchecked
     public func mySounds(query: String? = nil, cursor: Date? = nil, limit: Int = 30) async throws -> SoundPage {
         var items = [URLQueryItem(name: "limit", value: String(limit))]
         if let cursor {
-            items.append(URLQueryItem(name: "cursor", value: soundCursorFormatter().string(from: cursor)))
+            items.append(URLQueryItem(name: "cursor", value: WireDate.string(from: cursor)))
         }
         let response: PaginatedSoundResponse = try await api.request(
-            endpoint: "/sounds/mine", method: "GET", body: nil, queryItems: items
+            SoundsEndpoint.mine, method: "GET", body: nil, queryItems: items
         )
         let filtered = Self.filterLocally(response.data, query: query)
         return SoundPage(sounds: filtered, nextCursor: response.pagination?.nextCursorDate)
@@ -69,7 +99,7 @@ public final class SoundLibraryService: SoundLibraryServiceProviding, @unchecked
             items.append(URLQueryItem(name: "q", value: query))
         }
         let response: APIResponse<[APISound]> = try await api.request(
-            endpoint: "/stories/audio", method: "GET", body: nil, queryItems: items
+            StoriesEndpoint.audio, method: "GET", body: nil, queryItems: items
         )
         return response.data
     }
@@ -81,7 +111,7 @@ public final class SoundLibraryService: SoundLibraryServiceProviding, @unchecked
     /// administrateur coupe le son entier.
     public func rename(soundId: String, title: String) async throws -> APISound {
         let response: APIResponse<APISound> = try await api.patch(
-            endpoint: "/sounds/\(soundId)",
+            SoundsEndpoint.byId(id: soundId),
             body: ["title": title]
         )
         return response.data
@@ -97,12 +127,21 @@ public final class SoundLibraryService: SoundLibraryServiceProviding, @unchecked
     public func posts(soundId: String, cursor: Date? = nil, limit: Int = 24) async throws -> SoundPostPage {
         var items = [URLQueryItem(name: "limit", value: String(limit))]
         if let cursor {
-            items.append(URLQueryItem(name: "cursor", value: soundCursorFormatter().string(from: cursor)))
+            items.append(URLQueryItem(name: "cursor", value: WireDate.string(from: cursor)))
         }
         let response: PaginatedSoundPostResponse = try await api.request(
-            endpoint: "/sounds/\(soundId)/posts", method: "GET", body: nil, queryItems: items
+            SoundsEndpoint.byIdPosts(id: soundId), method: "GET", body: nil, queryItems: items
         )
         return SoundPostPage(posts: response.data, nextCursor: response.pagination?.nextCursorDate)
+    }
+
+    /// Retirer un son de sa bibliothèque. Idempotent côté serveur : un second
+    /// appel (rejeu, double geste) rend la même réponse.
+    public func remove(soundId: String) async throws -> SoundRemoval {
+        let response: APIResponse<SoundRemoval> = try await api.request(
+            SoundsEndpoint.byId(id: soundId), method: "DELETE", body: nil, queryItems: nil
+        )
+        return response.data
     }
 
     /// Filtre local sur le titre ET le pseudo — même règle que la recherche
@@ -141,19 +180,6 @@ struct SoundPagination: Decodable {
 
     var nextCursorDate: Date? {
         guard let nextCursor else { return nil }
-        return soundCursorFormatter().date(from: nextCursor)
+        return WireDate.date(from: nextCursor)
     }
-}
-
-/// Le gateway sérialise avec les millisecondes (`toISOString`) : sans
-/// `.withFractionalSeconds`, le curseur ne se décode pas et la pagination
-/// s'arrête silencieusement à la première page.
-///
-/// Construit à CHAQUE appel plutôt que mis en cache dans un `static let` :
-/// `ISO8601DateFormatter` n'est pas `Sendable`, et Swift 6 refuse un état
-/// global mutable partagé. Le coût est négligeable — un curseur par page.
-func soundCursorFormatter() -> ISO8601DateFormatter {
-    let f = ISO8601DateFormatter()
-    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return f
 }

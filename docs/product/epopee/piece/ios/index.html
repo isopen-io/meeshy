@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>La Meesh — iOS et web</title>
+<style>
+  :root { --bg: #f6f5f2; --ink: #1e1b4b; --muted: #5b5a73; --card: #ffffff; --line: #e4e2ec; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0d0c14; --ink: #eef2ff; --muted: #a5a8c4; --card: #16142a; --line: #2a2748; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, system-ui, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 32px 0 8px; }
+  p.lead { color: var(--muted); margin: 0 0 24px; }
+  figure { margin: 0 0 20px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+  .row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .row img { width: 100%; height: auto; display: block; }
+  .row span { font-size: 12px; color: var(--muted); text-align: center; }
+  figcaption { margin-top: 10px; font-size: 14px; color: var(--muted); }
+  .strip img { width: 100%; height: auto; border-radius: 12px; display: block; margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>La Meesh, iOS face au web</h1>
+  <p class="lead">Épopée § 6, #11176. iOS (<code>MeeshCoinView</code>, rendu par <code>ImageRenderer</code>, simulateur iOS 27) et web (<code>meesh-coin.tsx</code>) dessinent la même pièce depuis <code>packages/shared/design/meesh-coin.json</code>. Pour chaque édition : avers iOS, avers web, revers iOS, revers web.</p>
+  <figure>
+    <div class="row"><img src="silver-obverse.png" alt="Avers argent, iOS"><img src="../silver-obverse.png" alt="Avers argent, web"><img src="silver-reverse.png" alt="Revers argent, iOS"><img src="../silver-reverse.png" alt="Revers argent, web"></div>
+    <figcaption><b>Argent</b> · sobre · Mee · Nº 92</figcaption>
+  </figure>
+  <figure>
+    <div class="row"><img src="gold-obverse.png" alt="Avers or, iOS"><img src="../gold-obverse.png" alt="Avers or, web"><img src="gold-reverse.png" alt="Revers or, iOS"><img src="../gold-reverse.png" alt="Revers or, web"></div>
+    <figcaption><b>Or</b> · raffiné · Meo · Nº 100</figcaption>
+  </figure>
+  <figure>
+    <div class="row"><img src="prism-obverse.png" alt="Avers prisme, iOS"><img src="../prism-obverse.png" alt="Avers prisme, web"><img src="prism-reverse.png" alt="Revers prisme, iOS"><img src="../prism-reverse.png" alt="Revers prisme, web"></div>
+    <figcaption><b>Prisme</b> · royal · Mee et Meo couronnés · Nº 1000</figcaption>
+  </figure>
+  <h2>À 44 pt, sur iOS</h2>
+  <div class="strip"><img src="a-44pt-clair.png" alt="Les six faces à 44 points, fond clair"><img src="a-44pt-sombre.png" alt="Les six faces à 44 points, fond sombre"></div>
+</main>
+</body>
+</html>

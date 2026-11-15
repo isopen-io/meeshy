@@ -1,30 +1,18 @@
 package me.meeshy.app.feed
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -38,27 +26,21 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
-import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.chrome.MeeshyBackground
-import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -67,8 +49,9 @@ import me.meeshy.ui.theme.MeeshyTheme
 /**
  * Saved-posts (bookmarked) feed — parity with iOS `BookmarksView`. Cache-less for
  * now (skeleton on cold open), cursor-paginated, with an optimistic un-bookmark that
- * pops the post out of the list instantly. Reuses the feed's [FeedPostPresentation]
- * projection so the Prisme language rendering matches the main feed.
+ * pops the post out of the list instantly. Each saved post is the feed's own card
+ * ([ListedPostCard], #13244) — like, comment, repost, save, send and the « ⋯ » menu,
+ * every one wired — and the Prisme language rendering matches the main feed.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,6 +59,8 @@ fun BookmarksScreen(
     onBack: () -> Unit = {},
     onPostClick: (String) -> Unit = {},
     onOpenPost: (String) -> Unit = {},
+    onOpenProfile: ((String) -> Unit)? = null,
+    onOpenHashtag: (String) -> Unit = {},
     viewModel: BookmarksViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -85,6 +70,17 @@ fun BookmarksScreen(
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let { snackbar.showSnackbar(it) }
     }
+    val sheets = rememberListedPostSheets()
+    val share = rememberListedPostShare(snackbar)
+    ListedPostOverlays(
+        sheets = sheets,
+        actions = viewModel.cards,
+        quoteComposer = state.quoteComposer,
+        notice = state.notice,
+        commentCount = { id -> state.posts.firstOrNull { it.id == id }?.commentCount ?: 0 },
+        commentsClosed = { id -> state.posts.firstOrNull { it.id == id }?.commentsClosed },
+        snackbar = snackbar,
+    )
 
     MeeshyBackground {
         Scaffold(
@@ -101,7 +97,7 @@ fun BookmarksScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                imageVector = MeeshyIcons.Back,
                                 contentDescription = stringResource(R.string.bookmarks_back),
                                 tint = MeeshyTheme.tokens.textPrimary,
                             )
@@ -140,11 +136,16 @@ fun BookmarksScreen(
                             LaunchedEffect(post.id, state.posts.size) {
                                 viewModel.loadMoreIfNeeded(post.id)
                             }
-                            SavedPostCard(
+                            ListedPostCard(
                                 post = post,
-                                onRemove = { viewModel.removeBookmark(post.id) },
-                                onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
+                                actions = viewModel.cards,
+                                sheets = sheets,
+                                share = share,
                                 onOpenPost = onOpenPost,
+                                onOpenReel = onPostClick,
+                                onOpenProfile = onOpenProfile,
+                                onOpenHashtag = onOpenHashtag,
+                                modifier = Modifier.animateItem(),
                             )
                         }
                         if (state.isLoadingMore) {
@@ -164,108 +165,6 @@ fun BookmarksScreen(
                             }
                         }
                     }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SavedPostCard(
-    post: FeedPostPresentation,
-    onRemove: () -> Unit,
-    onClick: () -> Unit,
-    onOpenPost: (String) -> Unit,
-) {
-    val unknownAuthor = stringResource(R.string.feed_unknown_author)
-    MeeshyGlassSurface(
-        shape = RoundedCornerShape(MeeshyRadius.xl),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-    ) {
-        Column(Modifier.padding(MeeshySpacing.lg)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(contentAlignment = Alignment.Center) {
-                    MeeshyAvatar(name = post.authorName ?: unknownAuthor, size = 40.dp)
-                    if (!post.authorAvatarUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = post.authorAvatarUrl,
-                            contentDescription = post.authorName ?: unknownAuthor,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape),
-                        )
-                    }
-                }
-                Spacer(Modifier.width(MeeshySpacing.md))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = post.authorName ?: unknownAuthor,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MeeshyTheme.tokens.textPrimary,
-                    )
-                }
-                IconButton(onClick = onRemove) {
-                    Icon(
-                        imageVector = Icons.Filled.Bookmark,
-                        contentDescription = stringResource(R.string.bookmarks_remove),
-                        tint = MeeshyPalette.Indigo500,
-                    )
-                }
-            }
-
-            if (post.content.isNotBlank()) {
-                Spacer(Modifier.height(MeeshySpacing.sm))
-                SelectionContainer {
-                    Text(
-                        text = post.content,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MeeshyTheme.tokens.textPrimary,
-                    )
-                }
-            }
-
-            post.images.firstOrNull()?.let { image ->
-                Spacer(Modifier.height(MeeshySpacing.md))
-                AsyncImage(
-                    model = image.url,
-                    contentDescription = stringResource(R.string.feed_image_description),
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1.4f)
-                        .clip(RoundedCornerShape(MeeshyRadius.md))
-                        .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f)),
-                )
-            }
-
-            post.repostEmbed?.let { embed ->
-                Spacer(Modifier.height(MeeshySpacing.md))
-                RepostEmbedCell(embed = embed, onOpen = onOpenPost)
-            }
-
-            if (post.isReel) {
-                Spacer(Modifier.height(MeeshySpacing.md))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.semantics {
-                        contentDescription = post.authorName ?: unknownAuthor
-                    },
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.PlayCircle,
-                        contentDescription = null,
-                        tint = MeeshyPalette.Indigo500,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(Modifier.width(MeeshySpacing.xs))
-                    Text(
-                        text = stringResource(R.string.feed_reel),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MeeshyTheme.tokens.textSecondary,
-                    )
                 }
             }
         }

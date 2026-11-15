@@ -45,10 +45,6 @@ const mockGetOrCompute = jest.fn<any>().mockResolvedValue([]);
 const mockOnMessageEdited = jest.fn<any>().mockResolvedValue(undefined);
 const mockOnMessageDeleted = jest.fn<any>().mockResolvedValue(undefined);
 
-const mockAddReaction = jest.fn().mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' } });
-const mockRemoveReaction = jest.fn().mockResolvedValue(true);
-const mockCreateUpdateEvent = jest.fn().mockResolvedValue({ messageId: 'msg-id', emoji: '👍' });
-
 const mockCollectContentTrackingLinks = jest.fn<any>().mockResolvedValue([]);
 jest.mock('../../../services/TrackingLinkService', () => ({
   TrackingLinkService: jest.fn().mockImplementation(() => ({
@@ -90,9 +86,9 @@ jest.mock('../../../middleware/rate-limiter', () => ({
   messageValidationHook: (...args: any[]) => mockMessageValidationHook(...args),
 }));
 
-jest.mock('../../../routes/conversations/utils/access-control', () => ({
-  canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
-}));
+jest.mock('../../../routes/conversations/utils/access-control', () => (jest.requireActual('../../helpers/acces-conversation-double') as any)
+  .doubleAccesConversation(jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>,
+    (...args: any[]) => mockCanAccessConversation(...args)));
 
 jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
@@ -119,13 +115,14 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-jest.mock('../../../services/ReactionService', () => ({
-  ReactionService: jest.fn().mockImplementation(() => ({
-    addReaction: (...args: any[]) => mockAddReaction(...args),
-    removeReaction: (...args: any[]) => mockRemoveReaction(...args),
-    createUpdateEvent: (...args: any[]) => mockCreateUpdateEvent(...args),
-  })),
-}));
+// #4188/#4190 — le double de `ReactionService` a été RETIRÉ avec les deux
+// portes imbriquées : `messages-advanced.ts` n'importe plus ce service (seule
+// une mention en prose subsiste, au-dessus du GET). Un double PARTIEL d'un
+// module que le sujet n'importe pas n'est pas neutre — c'est un piège armé : le
+// jour où quelqu'un réintroduit l'import, ce triplet de méthodes le servirait à
+// la place du vrai, sans qu'aucun témoin ne rougisse. La couverture des
+// réactions vit dans `reactions-routes.test.ts`, `reactions-flat-door-policy.test.ts`
+// et `unit/services/ReactionService.test.ts`.
 
 jest.mock('@meeshy/shared/utils/errors', () => ({
   createError: jest.fn((code: string, msg?: string) => {
@@ -212,6 +209,8 @@ const makePrisma = (): any => ({
   participant: {
     findFirst: jest.fn().mockResolvedValue(null),
     findMany: jest.fn().mockResolvedValue([]),
+    // #14066 — l'auteur de l'édition est un membre ACTIF : sinon il ne cite personne.
+    findUnique: jest.fn().mockResolvedValue({ userId: USER_ID, isActive: true, conversationId: CONV_ID }),
   },
   // Lues par `MessageReadStatusService`, à qui `GET /conversations/:id/status`
   // délègue désormais son résumé d'accusés et son filtre d'opt-out.
@@ -233,6 +232,10 @@ const makePrisma = (): any => ({
   },
   reaction: {
     findMany: jest.fn().mockResolvedValue([]),
+    // #4165 : `GET /conversations/:id/reactions` compte le VRAI total à part
+    // de la page (`.count()`), en plus du `.findMany` déjà mocké — sans ce
+    // double, un test Prisma réel appellerait une méthode inexistante.
+    count: jest.fn().mockResolvedValue(0),
   },
   user: {
     findUnique: jest.fn().mockResolvedValue(null),
@@ -371,11 +374,8 @@ describe('registerMessagesAdvancedRoutes', () => {
       trackingLinks: [],
     });
     mockCollectContentTrackingLinks.mockResolvedValue([]);
-    mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' } });
-    mockRemoveReaction.mockResolvedValue(true);
-    mockCreateUpdateEvent.mockResolvedValue({ messageId: MSG_ID, emoji: '👍' });
 
-    registerMessagesAdvancedRoutes(fastify, prisma, translationService, optionalAuth, requiredAuth);
+    registerMessagesAdvancedRoutes(fastify, prisma, requiredAuth);
   });
 
   // ─── PUT /conversations/:id/messages/:messageId ────────────────────────────
@@ -393,7 +393,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getEditHandler(fastify)(req, reply);
 
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
     it('returns 404 when message not found', async () => {
@@ -633,7 +633,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       // donc un texte réellement réécrit ; le cas de l'URL brute seule est
       // couvert par le test suivant.
       await getEditHandler(fastify)(
-        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { content: 'voir [[https://b.com]]' } }),
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { content: 'voir <https://b.com>' } }),
         makeReply()
       );
 
@@ -724,12 +724,12 @@ describe('registerMessagesAdvancedRoutes', () => {
         metadata: { trackingLinks: [{ url: 'https://a.com', token: 'tokA' }] },
       }));
       mockProcessExplicitLinksInContent.mockRejectedValue(new Error('link error'));
-      prisma.message.update.mockResolvedValue({ id: MSG_ID, content: 'voir [[https://a.com]]', validatedMentions: [], translations: null });
+      prisma.message.update.mockResolvedValue({ id: MSG_ID, content: 'voir <https://a.com>', validatedMentions: [], translations: null });
 
       // Syntaxe explicite : c'est elle qui fait appeler le service, donc la
       // seule façon d'atteindre la panne qu'on veut éprouver.
       await getEditHandler(fastify)(
-        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { content: 'voir [[https://a.com]]' } }),
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { content: 'voir <https://a.com>' } }),
         makeReply()
       );
 
@@ -737,7 +737,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(updateArg.data).not.toHaveProperty('metadata');
       // Le texte de l'utilisateur, lui, est persisté : son édition n'est pas
       // annulée par une panne de tracking.
-      expect(updateArg.data.content).toBe('voir [[https://a.com]]');
+      expect(updateArg.data.content).toBe('voir <https://a.com>');
     });
 
     it('processes mentions when mentionService is available', async () => {
@@ -1373,458 +1373,6 @@ describe('registerMessagesAdvancedRoutes', () => {
 
         expect(mockTransformTranslationsToArray).toHaveBeenCalledWith(MSG_ID, null);
       });
-    });
-  });
-
-  // ─── DELETE /conversations/:id/messages/:messageId ────────────────────────
-
-  describe('DELETE /conversations/:id/messages/:messageId', () => {
-    const getDeleteMsgHandler = (f: any) =>
-      getHandler(f, 'DELETE', '/conversations/:id/messages/:messageId');
-
-    it('returns 404 when conversation not found', async () => {
-      mockResolveConversationId.mockResolvedValue(null);
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
-    });
-
-    it('returns 404 when message not found', async () => {
-      prisma.message.findFirst.mockResolvedValue(null);
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Message not found');
-    });
-
-    it('returns 403 when non-author has no elevated role', async () => {
-      prisma.message.findFirst.mockResolvedValue({
-        ...makeExistingMessage(),
-        sender: { id: PART_ID, userId: OTHER_USER_ID },
-        attachments: [],
-      });
-      prisma.participant.findFirst.mockResolvedValue(null);
-
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockSendForbidden).toHaveBeenCalled();
-    });
-
-    it('allows delete when non-author has ADMIN role', async () => {
-      prisma.message.findFirst.mockResolvedValue({
-        ...makeExistingMessage(),
-        sender: { id: PART_ID, userId: OTHER_USER_ID },
-        attachments: [],
-      });
-      prisma.participant.findFirst.mockResolvedValue({
-        user: { role: 'ADMIN' },
-      });
-      prisma.message.update.mockResolvedValue({});
-
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockSendSuccess).toHaveBeenCalled();
-    });
-
-    // La QUATRIÈME audience d'une suppression. Le cycle 89 l'a câblée sur le
-    // transport WS ; les deux transports REST — dont celui-ci, celui du SDK iOS
-    // — laissaient la pastille compter un message que le lecteur voyait
-    // pourtant disparaître, indéfiniment (`staleTime: Infinity` côté web).
-    //
-    // L'exclusion porte sur l'AUTEUR (`senderId`, ici `PART_ID`) et jamais sur
-    // l'acteur (`USER_ID`) : un modérateur qui retire le message d'un autre est
-    // lui-même un destinataire dont la pastille doit bouger. Le type de
-    // `broadcastMessageMutation` impose de passer UNE identité ; seul ce test
-    // dit LAQUELLE.
-    it('repousse la pastille de non-lus, en excluant l\'auteur et non l\'acteur', async () => {
-      const emitUnread = jest.fn().mockResolvedValue(undefined);
-      fastify.socketIOHandler.getManager.mockReturnValue({
-        getIO: jest.fn().mockReturnValue({ to: jest.fn().mockReturnValue({ emit: jest.fn() }) }),
-        enqueueOfflineMessageMutation: jest.fn().mockResolvedValue(undefined),
-        emitUnreadCountsToRecipients: emitUnread,
-      });
-      prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
-      prisma.message.update.mockResolvedValue({});
-
-      await getDeleteMsgHandler(fastify)(
-        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }),
-        makeReply()
-      );
-
-      expect(emitUnread).toHaveBeenCalledWith({
-        conversationId: CONV_ID,
-        senderId: PART_ID,
-      });
-    });
-
-    // Cette route ne recalculait PAS `lastMessageAt`, alors que les deux autres
-    // chemins de suppression le faisaient mot pour mot. C'est justement la
-    // route d'iOS et de la vue web : supprimer le dernier message y laissait la
-    // liste des conversations triée sur un message devenu invisible.
-    it('recalcule lastMessageAt sur le dernier message vivant, sous garde CAS', async () => {
-      const convLastMessageAt = new Date('2026-08-01T00:00:00Z');
-      const survivorCreatedAt = new Date('2026-07-30T00:00:00Z');
-      prisma.message.findFirst
-        .mockResolvedValueOnce(makeExistingMessage())
-        .mockResolvedValueOnce({ createdAt: survivorCreatedAt });
-      prisma.conversation.findUnique.mockResolvedValue({
-        lastMessageAt: convLastMessageAt,
-        createdAt: new Date('2026-01-01T00:00:00Z'),
-      });
-      prisma.message.update.mockResolvedValue({});
-
-      await getDeleteMsgHandler(fastify)(
-        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }),
-        makeReply()
-      );
-
-      expect(prisma.conversation.updateMany).toHaveBeenCalledWith({
-        where: { id: CONV_ID, lastMessageAt: convLastMessageAt },
-        data: { lastMessageAt: survivorCreatedAt },
-      });
-    });
-
-    it('désactive le /l/<token> que plus aucun message vivant ne porte', async () => {
-      prisma.message.findRaw = jest.fn().mockResolvedValue([]);
-      prisma.message.findFirst.mockResolvedValueOnce(
-        makeExistingMessage({ content: 'regarde ça m+aB3xY9', metadata: null })
-      );
-      prisma.message.update.mockResolvedValue({});
-
-      await getDeleteMsgHandler(fastify)(
-        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }),
-        makeReply()
-      );
-
-      expect(prisma.trackingLink.updateMany).toHaveBeenCalledWith({
-        where: {
-          token: { in: ['aB3xY9'] },
-          targetType: 'EXTERNAL',
-          conversationId: CONV_ID,
-          isActive: true,
-        },
-        data: { isActive: false },
-      });
-    });
-
-    it("ne coupe PAS le lien qu'un autre message de la conversation affiche encore", async () => {
-      // Une ligne `TrackingLink` est PARTAGÉE entre messages d'une même
-      // conversation (`findExistingTrackingLink` la réutilise) : couper sur la
-      // seule foi de `messageId` casserait un message vivant.
-      prisma.message.findRaw = jest.fn().mockResolvedValue([
-        { content: 'je remets le lien m+aB3xY9', metadata: null },
-      ]);
-      prisma.message.findFirst.mockResolvedValueOnce(
-        makeExistingMessage({ content: 'regarde ça m+aB3xY9', metadata: null })
-      );
-      prisma.message.update.mockResolvedValue({});
-
-      await getDeleteMsgHandler(fastify)(
-        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }),
-        makeReply()
-      );
-
-      expect(prisma.trackingLink.updateMany).not.toHaveBeenCalled();
-    });
-
-    // C'est la route qu'iOS (`MeeshySDK/Services/MessageService.swift:138`) et
-    // le web (`services/message.service.ts:75`) emploient pour supprimer. Sa
-    // copie de la règle lisait `membership.user.role` — le rôle GLOBAL — alors
-    // que son commentaire annonçait « modérateurs/admins de CETTE
-    // conversation ». Un admin de conversation qui n'est qu'un `USER` global
-    // supprimait donc depuis Android et depuis le composer web, et recevait 403
-    // depuis son iPhone : même personne, même message, trois réponses.
-    it('admet l\'admin de CONVERSATION qui n\'est qu\'un USER global', async () => {
-      prisma.message.findFirst.mockResolvedValue({
-        ...makeExistingMessage(),
-        sender: { id: PART_ID, userId: OTHER_USER_ID },
-        attachments: [],
-      });
-      prisma.participant.findFirst.mockResolvedValue({ role: 'admin', user: { role: 'USER' } });
-      prisma.message.update.mockResolvedValue({});
-
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockSendSuccess).toHaveBeenCalled();
-      expect(mockSendForbidden).not.toHaveBeenCalled();
-    });
-
-    it('admet le modérateur de CONVERSATION qui n\'est qu\'un USER global', async () => {
-      prisma.message.findFirst.mockResolvedValue({
-        ...makeExistingMessage(),
-        sender: { id: PART_ID, userId: OTHER_USER_ID },
-        attachments: [],
-      });
-      prisma.participant.findFirst.mockResolvedValue({ role: 'moderator', user: { role: 'USER' } });
-      prisma.message.update.mockResolvedValue({});
-
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockSendSuccess).toHaveBeenCalled();
-    });
-
-    it('admet le BIGBOSS global qui n\'est PAS participant — parité avec le socket et Android', async () => {
-      prisma.message.findFirst.mockResolvedValue({
-        ...makeExistingMessage(),
-        sender: { id: PART_ID, userId: OTHER_USER_ID },
-        attachments: [],
-      });
-      prisma.participant.findFirst.mockResolvedValue(null);
-      prisma.user.findUnique.mockResolvedValue({ role: 'BIGBOSS' });
-      prisma.message.update.mockResolvedValue({});
-
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockSendSuccess).toHaveBeenCalled();
-    });
-
-    it('refuse le simple membre', async () => {
-      prisma.message.findFirst.mockResolvedValue({
-        ...makeExistingMessage(),
-        sender: { id: PART_ID, userId: OTHER_USER_ID },
-        attachments: [],
-      });
-      prisma.participant.findFirst.mockResolvedValue({ role: 'member', user: { role: 'USER' } });
-
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockSendForbidden).toHaveBeenCalled();
-    });
-
-    it('allows delete when user is author', async () => {
-      prisma.message.findFirst.mockResolvedValue({
-        ...makeExistingMessage(),
-        sender: { id: PART_ID, userId: USER_ID },
-        attachments: [],
-      });
-      prisma.message.update.mockResolvedValue({});
-
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockSendSuccess).toHaveBeenCalled();
-    });
-
-    it('deletes attachments before soft-deleting message', async () => {
-      prisma.message.findFirst.mockResolvedValue({
-        ...makeExistingMessage(),
-        sender: { id: PART_ID, userId: USER_ID },
-        attachments: [
-          { id: 'attach-1', mimeType: 'image/jpeg' },
-          { id: 'attach-2', mimeType: 'audio/mp3' },
-        ],
-      });
-      prisma.message.update.mockResolvedValue({});
-
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockDeleteAttachment).toHaveBeenCalledTimes(2);
-      expect(mockDeleteAttachment).toHaveBeenCalledWith('attach-1');
-      expect(mockDeleteAttachment).toHaveBeenCalledWith('attach-2');
-    });
-
-    // Jumelle exacte de la garde de `DELETE /messages/:messageId`
-    // (`messages.test.ts`), et c'est le point : les deux routes REST portaient
-    // la MÊME suppression en deux écritures, quand le handler socket la porte
-    // en une seule et l'annonce (« atomically clear translations and set
-    // deletedAt in one write »).
-    //
-    // Séparées, elles laissaient la ligne VIVANTE et sans traductions entre les
-    // deux. Le prix n'est pas la fenêtre mais son échec : la seconde écriture
-    // ratée fige cet état DÉFINITIVEMENT — « aucun chemin ne retente une
-    // traduction absente » (`MessageTranslationService`).
-    it('committe la suppression en UNE écriture, traductions comprises', async () => {
-      prisma.message.findFirst.mockResolvedValue({
-        ...makeExistingMessage(),
-        sender: { id: PART_ID, userId: USER_ID },
-        attachments: [],
-      });
-      prisma.message.update.mockResolvedValue({});
-      prisma.message.update.mockClear();
-
-      await getDeleteMsgHandler(fastify)(
-        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }),
-        makeReply()
-      );
-
-      const writes = prisma.message.update.mock.calls;
-      expect(writes).toHaveLength(1);
-      expect(writes[0][0].data).toEqual(
-        expect.objectContaining({ translations: null, deletedAt: expect.any(Date) })
-      );
-    });
-
-    // Le même fait énoncé comme une INTERDICTION d'état plutôt qu'un compte
-    // d'écritures : aucun état committé ne porte « vivante ET sans traductions ».
-    // Un refactor qui repasserait à deux écritures dans l'ordre inverse
-    // satisferait encore la garde ci-dessus sur sa première écriture.
-    it('ne committe jamais un état « vivante et sans traductions »', async () => {
-      prisma.message.findFirst.mockResolvedValue({
-        ...makeExistingMessage(),
-        sender: { id: PART_ID, userId: USER_ID },
-        attachments: [],
-      });
-      prisma.message.update.mockResolvedValue({});
-      prisma.message.update.mockClear();
-
-      await getDeleteMsgHandler(fastify)(
-        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }),
-        makeReply()
-      );
-
-      const row: Record<string, unknown> = { ...makeExistingMessage() };
-      const forbidden = prisma.message.update.mock.calls.filter((call: any[]) => {
-        Object.assign(row, call[0].data);
-        return row.translations === null && row.deletedAt == null;
-      });
-      expect(forbidden).toHaveLength(0);
-    });
-
-    it('continues deleting other attachments when one fails', async () => {
-      mockDeleteAttachment
-        .mockRejectedValueOnce(new Error('delete error'))
-        .mockResolvedValueOnce(undefined);
-
-      prisma.message.findFirst.mockResolvedValue({
-        ...makeExistingMessage(),
-        sender: { id: PART_ID, userId: USER_ID },
-        attachments: [
-          { id: 'attach-1', mimeType: 'image/jpeg' },
-          { id: 'attach-2', mimeType: 'audio/mp3' },
-        ],
-      });
-      prisma.message.update.mockResolvedValue({});
-
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockDeleteAttachment).toHaveBeenCalledTimes(2);
-      expect(mockSendSuccess).toHaveBeenCalled();
-    });
-
-    it('broadcasts MESSAGE_DELETED via Socket.IO', async () => {
-      prisma.message.findFirst.mockResolvedValue({
-        ...makeExistingMessage(),
-        sender: { id: PART_ID, userId: USER_ID },
-        attachments: [],
-      });
-      prisma.message.update.mockResolvedValue({});
-
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(fastify._mockTo).toHaveBeenCalledWith(`conversation:${CONV_ID}`);
-      expect(fastify._mockEmit).toHaveBeenCalledWith('message:deleted', expect.objectContaining({ messageId: MSG_ID }));
-    });
-
-    // This is the route the iOS SDK deletes through (`MessageService.swift`).
-    // Same offline-replay guarantee the socket delete path gives: without it a
-    // deleted message stays visible forever on any participant offline at the
-    // moment of deletion.
-    it('enqueues the deletion for offline participants', async () => {
-      prisma.message.findFirst.mockResolvedValue({
-        ...makeExistingMessage(),
-        sender: { id: PART_ID, userId: USER_ID },
-        attachments: [],
-      });
-      prisma.message.update.mockResolvedValue({});
-
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(fastify._mockEnqueueOfflineMutation).toHaveBeenCalledWith(
-        expect.objectContaining({
-          conversationId: CONV_ID,
-          actorUserId: USER_ID,
-          eventType: 'deleted',
-          messageId: MSG_ID,
-          payload: { messageId: MSG_ID, conversationId: CONV_ID },
-        })
-      );
-    });
-
-    it('keys onMessageDeleted by the message sender (registered author)', async () => {
-      prisma.message.findFirst.mockResolvedValue({
-        ...makeExistingMessage(),
-        sender: { id: PART_ID, userId: USER_ID },
-        attachments: [],
-      });
-      prisma.message.update.mockResolvedValue({});
-
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockOnMessageDeleted).toHaveBeenCalled();
-      expect(mockOnMessageDeleted.mock.calls[0][2]).toBe(USER_ID);
-    });
-
-    it('keys onMessageDeleted by the Participant.id when an admin deletes an anonymous message', async () => {
-      // Anonymous senders have sender.userId === null; the participantStats map is
-      // keyed by Participant.id for them (matching the create/recompute contract).
-      // A moderator/admin can delete such a message, so the sender key must fall
-      // back to senderId, not '' (which would leave the participant breakdown stale).
-      prisma.message.findFirst.mockResolvedValue({
-        ...makeExistingMessage(),
-        senderId: PART_ID,
-        sender: { id: PART_ID, userId: null },
-        attachments: [],
-      });
-      prisma.participant.findFirst.mockResolvedValue({ user: { role: 'ADMIN' } });
-      prisma.message.update.mockResolvedValue({});
-
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockOnMessageDeleted).toHaveBeenCalled();
-      expect(mockOnMessageDeleted.mock.calls[0][2]).toBe(PART_ID);
-    });
-
-    it('calls sendInternalError on outer error', async () => {
-      prisma.message.findFirst.mockRejectedValue(new Error('DB fail'));
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockSendInternalError).toHaveBeenCalled();
     });
   });
 
@@ -2470,7 +2018,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
         expect(prisma.message.findFirst).toHaveBeenCalledWith(
           expect.objectContaining({
-            include: expect.objectContaining({ attachments: { select: { id: true } } }),
+            include: expect.objectContaining({ attachments: { select: expect.objectContaining({ id: true }) } }),
           })
         );
       });
@@ -2482,24 +2030,24 @@ describe('registerMessagesAdvancedRoutes', () => {
   describe('GET /conversations/:id/reactions', () => {
     const getReactionsHandler = (f: any) => getHandler(f, 'GET', '/conversations/:id/reactions');
 
-    it('returns 403 when conversation not found', async () => {
+    it('returns 404 when conversation not found', async () => {
       mockResolveConversationId.mockResolvedValue(null);
       const req = makeRequest({ params: { id: CONV_ID } });
       const reply = makeReply();
 
       await getReactionsHandler(fastify)(req, reply);
 
-      expect(mockSendForbidden).toHaveBeenCalled();
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
-    it('returns 403 when access denied', async () => {
+    it('returns the same 404 when access denied — a non-member learns nothing (#8116)', async () => {
       mockCanAccessConversation.mockResolvedValue(false);
       const req = makeRequest({ params: { id: CONV_ID } });
       const reply = makeReply();
 
       await getReactionsHandler(fastify)(req, reply);
 
-      expect(mockSendForbidden).toHaveBeenCalled();
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
     it('returns empty reactions array when no reactions', async () => {
@@ -2509,13 +2057,24 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getReactionsHandler(fastify)(req, reply);
 
+      // #4165 — `hasMore` est un champ NEUF (critère 2 : de quoi demander la
+      // suite maintenant que la route rend une PAGE). `total` reste le vrai
+      // compte de la conversation, servi par `.count()` — mocké à 0 ci-dessus
+      // dans le double global (`prisma.reaction.count`), cohérent avec la
+      // page vide.
       expect(mockSendSuccess).toHaveBeenCalledWith(reply, {
         reactions: [],
         total: 0,
+        hasMore: false,
       });
     });
 
     it('groups reactions by messageId and emoji', async () => {
+      // #4165 — `total` est désormais le VRAI compte de la conversation
+      // (`.count()`), plus le `.findMany` borné : les trois lignes ci-dessous
+      // sont une PAGE, le total peut différer de sa longueur. Ici les deux
+      // coïncident (3 lignes, 3 au total) pour garder ce test simple.
+      prisma.reaction.count.mockResolvedValue(3);
       prisma.reaction.findMany.mockResolvedValue([
         {
           messageId: MSG_ID,
@@ -2580,455 +2139,113 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       expect(mockSendInternalError).toHaveBeenCalled();
     });
-  });
 
-  // ─── POST /conversations/:id/messages/:messageId/reactions ───────────────
+    /**
+     * Une réaction NOMME un message et l'identité de celui qui l'a posée. Sur un
+     * message d'AVANT l'arrivée du lecteur, elle révèle donc l'existence du
+     * message, son id, et qui était là — trois métadonnées que le plancher
+     * d'historique doit borner au même titre que le contenu (§ Sécurité :
+     * « qu'est-ce qui part À CÔTÉ ? »).
+     */
+    describe('plancher d’historique', () => {
+      const FLOOR = new Date('2026-06-15T00:00:00.000Z');
 
-  describe('POST /conversations/:id/messages/:messageId/reactions', () => {
-    const getAddReactionHandler = (f: any) =>
-      getHandler(f, 'POST', '/conversations/:id/messages/:messageId/reactions');
+      it('borne le prédicat de sélection au plancher du lecteur', async () => {
+        prisma.participant.findFirst.mockResolvedValue({
+          role: 'member', joinedAt: FLOOR, shareLinkId: null, permissions: { canViewHistory: false },
+        });
+        prisma.reaction.findMany.mockResolvedValue([]);
 
-    it('returns 400 when emoji is missing', async () => {
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: {},
+        await getReactionsHandler(fastify)(makeRequest({ params: { id: CONV_ID } }), makeReply());
+
+        expect(prisma.reaction.findMany.mock.calls[0][0].where.message).toMatchObject({
+          conversationId: CONV_ID,
+          deletedAt: null,
+          createdAt: { gte: FLOOR },
+        });
       });
-      const reply = makeReply();
 
-      await getAddReactionHandler(fastify)(req, reply);
+      it('ne borne rien pour un lecteur sans plancher — la requête reste identique', async () => {
+        prisma.participant.findFirst.mockResolvedValue(null);
+        prisma.reaction.findMany.mockResolvedValue([]);
 
-      expect(mockSendBadRequest).toHaveBeenCalledWith(reply, 'emoji is required');
-    });
+        await getReactionsHandler(fastify)(makeRequest({ params: { id: CONV_ID } }), makeReply());
 
-    it('returns 404 when conversation not found', async () => {
-      mockResolveConversationId.mockResolvedValue(null);
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
+        expect(prisma.reaction.findMany.mock.calls[0][0].where.message).toEqual({
+          conversationId: CONV_ID,
+          deletedAt: null,
+        });
       });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
-    });
-
-    it('returns 403 when access denied', async () => {
-      mockCanAccessConversation.mockResolvedValue(false);
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendForbidden).toHaveBeenCalled();
-    });
-
-    it('returns 404 when message not found', async () => {
-      prisma.message.findFirst.mockResolvedValue(null);
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Message not found in this conversation');
-    });
-
-    it('returns 403 when registered user has no participant record', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue(null);
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-        authContext: {
-          isAuthenticated: true,
-          userId: USER_ID,
-          isAnonymous: false,
-          sessionToken: null,
-          participantId: null,
-        },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendForbidden).toHaveBeenCalledWith(reply, 'You are not a participant of this conversation');
-    });
-
-    it('uses participantId for anonymous user', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-        authContext: {
-          isAuthenticated: true,
-          userId: null,
-          isAnonymous: true,
-          sessionToken: 'sess-token',
-          participantId: PART_ID,
-        },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockAddReaction).toHaveBeenCalledWith(
-        expect.objectContaining({ participantId: PART_ID })
-      );
-    });
-
-    it('returns 500 when reactionService.addReaction returns null', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockResolvedValue(null);
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendInternalError).toHaveBeenCalled();
-    });
-
-    it('returns 409 with the reaction-limit message when addReaction rejects with ConflictError (cap reached)', async () => {
-      // Plafond des cinq réactions par personne et par message
-      // (`ReactionService.reactionLimit.test.ts`) : un refus légitime, pas
-      // une panne — cette route est un second chemin REST vers le même
-      // service que `routes/reactions.ts` (la primaire pour iOS).
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockRejectedValue(
-        new ConflictError(REACTION_LIMIT_REACHED_MESSAGE, 'REACTION_LIMIT_REACHED')
-      );
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '🎉' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendConflict).toHaveBeenCalledWith(
-        reply,
-        REACTION_LIMIT_REACHED_MESSAGE,
-        { code: 'REACTION_LIMIT_REACHED' }
-      );
-    });
-
-    it('returns success and broadcasts reaction on happy path', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' } });
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendSuccess).toHaveBeenCalledWith(reply, { added: true, emoji: '👍' });
-      expect(fastify._mockEmit).toHaveBeenCalledWith('reaction:added', expect.any(Object));
-    });
-
-    it('returns success but skips the broadcast when addReaction reports unchanged (idempotent re-react)', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      // Duplicate add for an emoji the participant already has — a DB no-op.
-      // The route must still report success but must NOT re-broadcast
-      // REACTION_ADDED (nothing changed). Parity with the socket handler.
-      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, unchanged: true });
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendSuccess).toHaveBeenCalledWith(reply, { added: true, emoji: '👍' });
-      expect(fastify._mockEmit).not.toHaveBeenCalledWith('reaction:added', expect.any(Object));
-    });
-
-    it('returns 400 on Invalid emoji format error', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockRejectedValue(new Error('Invalid emoji format'));
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: 'bad' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendBadRequest).toHaveBeenCalledWith(reply, 'Invalid emoji format');
-    });
-
-    it('returns 404 on Message not found error from service', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockRejectedValue(new Error('Message not found'));
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Message not found');
-    });
-
-    it('returns 403 on not a member error from service', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockRejectedValue(new Error('User is not a member of this conversation'));
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendForbidden).toHaveBeenCalled();
-    });
-
-    it('returns 400 when reacting to a system message', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockRejectedValue(new Error('Cannot react to a system message'));
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendBadRequest).toHaveBeenCalledWith(reply, 'Cannot react to a system message');
-    });
-
-    it('returns 500 on generic error', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockRejectedValue(new Error('Unknown error'));
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendInternalError).toHaveBeenCalled();
-    });
-
-    it('continues when socket broadcast throws', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockCreateUpdateEvent.mockRejectedValue(new Error('socket error'));
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendSuccess).toHaveBeenCalled();
     });
   });
 
-  // ─── DELETE /conversations/:id/messages/:messageId/reactions ─────────────
-
-  describe('DELETE /conversations/:id/messages/:messageId/reactions', () => {
-    const getRemoveReactionHandler = (f: any) =>
-      getHandler(f, 'DELETE', '/conversations/:id/messages/:messageId/reactions');
-
-    it('returns 400 when emoji is missing', async () => {
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: {},
-      });
-      const reply = makeReply();
-
-      await getRemoveReactionHandler(fastify)(req, reply);
-
-      expect(mockSendBadRequest).toHaveBeenCalledWith(reply, 'emoji is required');
-    });
-
-    it('returns 404 when conversation not found', async () => {
-      mockResolveConversationId.mockResolvedValue(null);
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getRemoveReactionHandler(fastify)(req, reply);
-
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
-    });
-
-    it('returns 403 when access denied', async () => {
-      mockCanAccessConversation.mockResolvedValue(false);
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getRemoveReactionHandler(fastify)(req, reply);
-
-      expect(mockSendForbidden).toHaveBeenCalled();
-    });
-
-    it('returns 403 when user has no participant record', async () => {
-      prisma.participant.findFirst.mockResolvedValue(null);
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-        authContext: {
-          isAuthenticated: true,
-          userId: USER_ID,
-          isAnonymous: false,
-          sessionToken: null,
-          participantId: null,
-        },
-      });
-      const reply = makeReply();
-
-      await getRemoveReactionHandler(fastify)(req, reply);
-
-      expect(mockSendForbidden).toHaveBeenCalledWith(reply, 'You are not a participant of this conversation');
-    });
-
-    it('uses participantId for anonymous user', async () => {
-      mockRemoveReaction.mockResolvedValue(true);
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-        authContext: {
-          isAuthenticated: true,
-          userId: null,
-          isAnonymous: true,
-          sessionToken: 'sess-token',
-          participantId: PART_ID,
-        },
-      });
-      const reply = makeReply();
-
-      await getRemoveReactionHandler(fastify)(req, reply);
-
-      expect(mockRemoveReaction).toHaveBeenCalledWith(
-        expect.objectContaining({ participantId: PART_ID })
-      );
-    });
-
-    it('returns 404 when reaction not found (removeReaction returns false)', async () => {
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockRemoveReaction.mockResolvedValue(false);
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getRemoveReactionHandler(fastify)(req, reply);
-
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Reaction not found');
-    });
-
-    it('returns success and broadcasts removal on happy path', async () => {
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockRemoveReaction.mockResolvedValue(true);
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getRemoveReactionHandler(fastify)(req, reply);
-
-      expect(mockSendSuccess).toHaveBeenCalledWith(reply, { removed: true });
-      expect(fastify._mockEmit).toHaveBeenCalledWith('reaction:removed', expect.any(Object));
-    });
-
-    it('returns 400 on Invalid emoji format error', async () => {
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockRemoveReaction.mockRejectedValue(new Error('Invalid emoji format'));
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: 'bad' },
-      });
-      const reply = makeReply();
-
-      await getRemoveReactionHandler(fastify)(req, reply);
-
-      expect(mockSendBadRequest).toHaveBeenCalledWith(reply, 'Invalid emoji format');
-    });
-
-    it('returns 500 on generic error', async () => {
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockRemoveReaction.mockRejectedValue(new Error('Unknown error'));
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getRemoveReactionHandler(fastify)(req, reply);
-
-      expect(mockSendInternalError).toHaveBeenCalled();
-    });
-  });
+  // ─── Réactions IMBRIQUÉES : REPOINTÉES sur la porte PLATE (#4188/#4190) ──
+  //
+  // `POST` et `DELETE /conversations/:id/messages/:messageId/reactions` ont été
+  // RETIRÉES : aucun client ne les appelait, et elles portaient une politique
+  // strictement PLUS PAUVRE que leur jumelle plate (`POST /reactions`,
+  // `DELETE /reactions/:messageId/:emoji`, dans `routes/reactions.ts`) — garde
+  // montée `allowAnonymous: false`, donc un invité de lien de partage ne pouvait
+  // pas réagir, et un fil CLOS y retombait sur un 500 au lieu d'un 410.
+  //
+  // Les vingt-neuf témoins qui vivaient ici ne sont PAS perdus : la CAPACITÉ
+  // qu'ils gardaient est toujours servie, par la porte plate, et sa couverture
+  // vit désormais en trois endroits —
+  //
+  //   `__tests__/unit/routes/reactions-routes.test.ts`
+  //       les branches de refus et le chemin nominal des deux verbes : emoji
+  //       manquant, participant introuvable (403), `addReaction` qui rend null
+  //       (500), plafond de cinq réactions (409), emoji invalide (400), message
+  //       introuvable (404), non-membre (403), message SYSTÈME (400 — celui-là
+  //       a été repointé DEPUIS ce fichier, il n'existait nulle part ailleurs),
+  //       erreur générique (500), diffusion et son absence quand
+  //       `socketIOHandler` manque, re-réaction idempotente sans diffusion.
+  //
+  //   `__tests__/unit/routes/reactions-flat-door-policy.test.ts`
+  //       les DEUX propriétés que la forme imbriquée n'avait pas — l'invité
+  //       anonyme admis avec son seul `Participant.id`, et le 410 du fil clos.
+  //
+  //   `__tests__/unit/routes/dead-doors-are-not-mounted.test.ts`
+  //       la garde NÉGATIVE : les deux portes imbriquées ne sont plus déclarées,
+  //       et la plate l'est toujours. C'est elle qui empêche une « refusion »
+  //       silencieuse de les réintroduire.
+  //
+  // TROIS témoins n'ont pas été repointés, et c'est délibéré : leur capacité est
+  // structurellement absente de la porte plate, pas seulement non testée.
+  //   - « 404 quand la conversation est introuvable » et « 403 accès refusé » :
+  //     la porte plate n'a PAS de `:id` dans son URL — elle dérive la
+  //     conversation DU MESSAGE, et le refus s'exprime alors par le 403 de
+  //     résolution du participant, déjà couvert.
+  //   - « DELETE 400 quand l'emoji manque » : sur la porte plate l'emoji est un
+  //     paramètre de CHEMIN, donc une requête sans emoji ne matche aucune route.
+  //     Il n'y a plus de branche à garder.
+  //
+  // Ce qui subsiste ici est `GET /conversations/:id/reactions` ci-dessus, la
+  // LECTURE conversation-scopée — elle n'a pas de jumelle plate et reste vivante.
 
   // ─── GET /conversations/:id/status ───────────────────────────────────────
 
   describe('GET /conversations/:id/status', () => {
     const getStatusHandler = (f: any) => getHandler(f, 'GET', '/conversations/:id/status');
 
-    it('returns 403 when conversation not found', async () => {
+    it('returns 404 when conversation not found', async () => {
       mockResolveConversationId.mockResolvedValue(null);
       const req = makeRequest({ params: { id: CONV_ID } });
       const reply = makeReply();
 
       await getStatusHandler(fastify)(req, reply);
 
-      expect(mockSendForbidden).toHaveBeenCalled();
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
-    it('returns 403 when access denied', async () => {
+    it('returns the same 404 when access denied — a non-member learns nothing (#8116)', async () => {
       mockCanAccessConversation.mockResolvedValue(false);
       const req = makeRequest({ params: { id: CONV_ID } });
       const reply = makeReply();
 
       await getStatusHandler(fastify)(req, reply);
 
-      expect(mockSendForbidden).toHaveBeenCalled();
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
     it('returns empty statuses when no messages', async () => {
@@ -3092,6 +2309,42 @@ describe('registerMessagesAdvancedRoutes', () => {
       await getStatusHandler(fastify)(req, reply);
 
       expect(mockSendInternalError).toHaveBeenCalled();
+    });
+
+    /**
+     * `id`, `senderId`, `createdAt` et les accusés NOMINATIFS d'un message
+     * d'avant l'arrivée sont l'historique lui-même, moins le texte. Cette route
+     * les servait sans aucun plancher.
+     */
+    describe('plancher d’historique', () => {
+      const FLOOR = new Date('2026-06-15T00:00:00.000Z');
+
+      it('borne la page de messages au plancher du lecteur', async () => {
+        prisma.participant.findFirst.mockResolvedValue({
+          role: 'member', joinedAt: FLOOR, shareLinkId: null, permissions: { canViewHistory: false },
+        });
+        prisma.message.findMany.mockResolvedValue([]);
+
+        await getStatusHandler(fastify)(makeRequest({ params: { id: CONV_ID } }), makeReply());
+
+        expect(prisma.message.findMany.mock.calls[0][0].where).toMatchObject({
+          conversationId: CONV_ID,
+          deletedAt: null,
+          createdAt: { gte: FLOOR },
+        });
+      });
+
+      it('ne borne rien pour un lecteur sans plancher', async () => {
+        prisma.participant.findFirst.mockResolvedValue(null);
+        prisma.message.findMany.mockResolvedValue([]);
+
+        await getStatusHandler(fastify)(makeRequest({ params: { id: CONV_ID } }), makeReply());
+
+        expect(prisma.message.findMany.mock.calls[0][0].where).toEqual({
+          conversationId: CONV_ID,
+          deletedAt: null,
+        });
+      });
     });
 
     it('deliveredCount=0 and readCount=0 use fallback 0', async () => {
@@ -3337,7 +2590,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       localPrisma.message.update.mockResolvedValue({
         id: MSG_ID, content: 'hello', validatedMentions: [], translations: null,
       });
-      registerMessagesAdvancedRoutes(fastifyNullSocket, localPrisma, makeTranslationService(), jest.fn(), jest.fn());
+      registerMessagesAdvancedRoutes(fastifyNullSocket, localPrisma, jest.fn());
 
       const req = makeRequest({
         params: { id: CONV_ID, messageId: MSG_ID },
@@ -3436,186 +2689,6 @@ describe('registerMessagesAdvancedRoutes', () => {
     });
   });
 
-  describe('DELETE message - additional branch coverage', () => {
-    const getDeleteMsgHandler = (f: any) =>
-      getHandler(f, 'DELETE', '/conversations/:id/messages/:messageId');
-
-    it('allows delete by BIGBOSS role', async () => {
-      prisma.message.findFirst.mockResolvedValue({
-        ...makeExistingMessage(),
-        sender: { id: PART_ID, userId: OTHER_USER_ID },
-        attachments: [],
-      });
-      prisma.participant.findFirst.mockResolvedValue({
-        user: { role: 'BIGBOSS' },
-      });
-      prisma.message.update.mockResolvedValue({});
-
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockSendSuccess).toHaveBeenCalled();
-    });
-
-    it('falls back to senderId (participant key) when sender.userId is absent', async () => {
-      prisma.message.findFirst.mockResolvedValue({
-        id: MSG_ID,
-        conversationId: CONV_ID,
-        content: 'hello',
-        createdAt: new Date(),
-        senderId: PART_ID,
-        deletedAt: null,
-        sender: null, // null sender → isAuthor = false → check participant
-        attachments: [],
-      });
-      // Let the participant lookup succeed so canDelete=true
-      prisma.participant.findFirst.mockResolvedValue({ user: { role: 'BIGBOSS' } });
-      prisma.message.update.mockResolvedValue({});
-
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockOnMessageDeleted).toHaveBeenCalledWith(
-        expect.anything(),
-        CONV_ID,
-        PART_ID, // sender?.userId undefined → ?? senderId (the participantStats key)
-        expect.any(String),
-        [],
-        expect.anything()
-      );
-    });
-
-    it('handles null content using ?? empty string', async () => {
-      prisma.message.findFirst.mockResolvedValue({
-        id: MSG_ID,
-        conversationId: CONV_ID,
-        content: null,
-        createdAt: new Date(),
-        senderId: PART_ID,
-        deletedAt: null,
-        sender: { id: PART_ID, userId: USER_ID },
-        attachments: [],
-      });
-      prisma.message.update.mockResolvedValue({});
-
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockOnMessageDeleted).toHaveBeenCalledWith(
-        expect.anything(),
-        CONV_ID,
-        USER_ID,
-        '', // null ?? '' = ''
-        [],
-        expect.anything()
-      );
-    });
-
-    it('handles null attachments using ?? []', async () => {
-      prisma.message.findFirst.mockResolvedValue({
-        id: MSG_ID,
-        conversationId: CONV_ID,
-        content: 'hello',
-        createdAt: new Date(),
-        senderId: PART_ID,
-        deletedAt: null,
-        sender: { id: PART_ID, userId: USER_ID },
-        attachments: null, // null attachments
-      });
-      prisma.message.update.mockResolvedValue({});
-
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockOnMessageDeleted).toHaveBeenCalledWith(
-        expect.anything(),
-        CONV_ID,
-        USER_ID,
-        'hello',
-        [], // null ?? [] = []
-        expect.anything()
-      );
-    });
-
-    it('handles null mimeType in attachment using ?? empty string', async () => {
-      prisma.message.findFirst.mockResolvedValue({
-        id: MSG_ID,
-        conversationId: CONV_ID,
-        content: 'hello',
-        createdAt: new Date(),
-        senderId: PART_ID,
-        deletedAt: null,
-        sender: { id: PART_ID, userId: USER_ID },
-        attachments: [{ id: 'a1', mimeType: null }], // null mimeType → ''
-      });
-      prisma.message.update.mockResolvedValue({});
-
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockOnMessageDeleted).toHaveBeenCalledWith(
-        expect.anything(), CONV_ID, USER_ID, 'hello',
-        ['file'], // '' doesn't start with any prefix → 'file'
-        expect.anything()
-      );
-    });
-
-    it('video mimeType categorized as video', async () => {
-      prisma.message.findFirst.mockResolvedValue({
-        id: MSG_ID,
-        conversationId: CONV_ID,
-        content: 'hello',
-        createdAt: new Date(),
-        senderId: PART_ID,
-        deletedAt: null,
-        sender: { id: PART_ID, userId: USER_ID },
-        attachments: [
-          { id: 'a1', mimeType: 'video/mp4' },
-          { id: 'a2', mimeType: 'application/pdf' }, // → 'file'
-        ],
-      });
-      prisma.message.update.mockResolvedValue({});
-
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockOnMessageDeleted).toHaveBeenCalledWith(
-        expect.anything(), CONV_ID, USER_ID, 'hello',
-        ['video', 'file'],
-        expect.anything()
-      );
-    });
-
-    it('socketIOManager null in delete - no broadcast but success', async () => {
-      prisma.message.findFirst.mockResolvedValue({
-        ...makeExistingMessage(),
-        sender: { id: PART_ID, userId: USER_ID },
-        attachments: [],
-      });
-      prisma.message.update.mockResolvedValue({});
-      fastify.socketIOHandler = { getManager: jest.fn().mockReturnValue(null) };
-
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-      const reply = makeReply();
-
-      await getDeleteMsgHandler(fastify)(req, reply);
-
-      expect(mockSendSuccess).toHaveBeenCalled();
-    });
-  });
-
   describe('socket null branches - re-registered with null socketIOHandler', () => {
     // socketIOHandler is captured at registration time in registerMessagesAdvancedRoutes
     // We must create a fresh fastify with socketIOHandler=null and re-register
@@ -3652,7 +2725,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       const p = makePrisma();
       p.message.findFirst.mockResolvedValue(makeExistingMessage());
       p.message.update.mockResolvedValue({ id: MSG_ID, content: 'hello', validatedMentions: [], translations: null });
-      registerMessagesAdvancedRoutes(f, p, makeTranslationService(), jest.fn(), jest.fn());
+      registerMessagesAdvancedRoutes(f, p, jest.fn());
 
       const handler = getHandler(f, 'PUT', ':messageId');
       const reply = makeReply();
@@ -3671,7 +2744,7 @@ describe('registerMessagesAdvancedRoutes', () => {
         attachments: [],
       });
       p.message.update.mockResolvedValue({});
-      registerMessagesAdvancedRoutes(f, p, makeTranslationService(), jest.fn(), jest.fn());
+      registerMessagesAdvancedRoutes(f, p, jest.fn());
 
       const handler = getHandler(f, 'DELETE', ':messageId');
       const reply = makeReply();
@@ -3680,91 +2753,19 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(mockSendSuccess).toHaveBeenCalled();
     });
 
-    it('add reaction: socketIOHandler null at registration - no broadcast but success', async () => {
-      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' } });
-      const f = createNullSocketFastify();
-      const p = makePrisma();
-      p.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      p.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      registerMessagesAdvancedRoutes(f, p, makeTranslationService(), jest.fn(), jest.fn());
-
-      const handler = getHandler(f, 'POST', ':messageId/reactions');
-      const reply = makeReply();
-      await handler(makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      }), reply);
-
-      expect(mockSendSuccess).toHaveBeenCalledWith(reply, { added: true, emoji: '👍' });
-    });
-
-    it('remove reaction: socketIOHandler null at registration - no broadcast but success', async () => {
-      mockRemoveReaction.mockResolvedValue(true);
-      const f = createNullSocketFastify();
-      const p = makePrisma();
-      p.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      registerMessagesAdvancedRoutes(f, p, makeTranslationService(), jest.fn(), jest.fn());
-
-      const handler = getHandler(f, 'DELETE', ':messageId/reactions');
-      const reply = makeReply();
-      await handler(makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      }), reply);
-
-      expect(mockSendSuccess).toHaveBeenCalledWith(reply, { removed: true });
-    });
-
     it('edit: socketIOManager getIO returns null - no broadcast but success', async () => {
       const f = createNullSocketFastify();
       f.socketIOHandler = { getManager: jest.fn().mockReturnValue({ getIO: jest.fn().mockReturnValue(null) }) };
       const p = makePrisma();
       p.message.findFirst.mockResolvedValue(makeExistingMessage());
       p.message.update.mockResolvedValue({ id: MSG_ID, content: 'hello', validatedMentions: [], translations: null });
-      registerMessagesAdvancedRoutes(f, p, makeTranslationService(), jest.fn(), jest.fn());
+      registerMessagesAdvancedRoutes(f, p, jest.fn());
 
       const handler = getHandler(f, 'PUT', ':messageId');
       const reply = makeReply();
       await handler(makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { content: 'hello' } }), reply);
 
       expect(mockSendSuccess).toHaveBeenCalled();
-    });
-
-    it('add reaction: socketIOHandler getIO returns null - no broadcast but success', async () => {
-      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' } });
-      const f = createNullSocketFastify();
-      f.socketIOHandler = { getManager: jest.fn().mockReturnValue({ getIO: jest.fn().mockReturnValue(null) }) };
-      const p = makePrisma();
-      p.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      p.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      registerMessagesAdvancedRoutes(f, p, makeTranslationService(), jest.fn(), jest.fn());
-
-      const handler = getHandler(f, 'POST', ':messageId/reactions');
-      const reply = makeReply();
-      await handler(makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      }), reply);
-
-      expect(mockSendSuccess).toHaveBeenCalledWith(reply, { added: true, emoji: '👍' });
-    });
-
-    it('remove reaction: socketIOHandler getIO returns null - no broadcast but success', async () => {
-      mockRemoveReaction.mockResolvedValue(true);
-      const f = createNullSocketFastify();
-      f.socketIOHandler = { getManager: jest.fn().mockReturnValue({ getIO: jest.fn().mockReturnValue(null) }) };
-      const p = makePrisma();
-      p.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      registerMessagesAdvancedRoutes(f, p, makeTranslationService(), jest.fn(), jest.fn());
-
-      const handler = getHandler(f, 'DELETE', ':messageId/reactions');
-      const reply = makeReply();
-      await handler(makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      }), reply);
-
-      expect(mockSendSuccess).toHaveBeenCalledWith(reply, { removed: true });
     });
   });
 

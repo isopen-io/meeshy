@@ -65,13 +65,45 @@ final class OutboxKindCodableTests: XCTestCase {
     /// pour la même raison : c'est de la télémétrie de consommation, pas un
     /// contenu que l'utilisateur attend de voir partir.
     func test_allKindsExceptAcknowledgements_countTowardSyncIndicator() {
-        let acquittements: Set<OutboxKind> = [.markAsRead, .reportAttachmentStatus, .markStoryViewed]
+        let acquittements: Set<OutboxKind> = [.markAsRead, .reportAttachmentStatus, .markStoryViewed, .consumeAfterRead, .reportContentCapture]
         for kind in OutboxKind.allCases where !acquittements.contains(kind) {
             XCTAssertTrue(
                 kind.countsTowardSyncIndicator,
                 "\(kind) devrait compter pour l'indicateur de synchronisation"
             )
         }
+    }
+
+    /// #8303 — la consommation flamme-œil est un accusé : une ligne coincée
+    /// ne doit ni tenir la pastille de synchronisation, ni être gardée à vie.
+    func test_consumeAfterRead_isAnAcknowledgement_discardableWhenTerminal() {
+        XCTAssertEqual(OutboxKind.consumeAfterRead.rawValue, "consumeAfterRead")
+        XCTAssertFalse(OutboxKind.consumeAfterRead.countsTowardSyncIndicator)
+        XCTAssertTrue(OutboxKind.consumeAfterRead.isDiscardableWhenTerminal)
+    }
+
+    /// #9617 — la déclaration d'une capture est durable mais n'est pas un
+    /// contenu de l'utilisateur : ni pastille, ni ligne gardée à vie.
+    func test_reportContentCapture_isAnAcknowledgement_discardableWhenTerminal() {
+        XCTAssertEqual(OutboxKind.reportContentCapture.rawValue, "reportContentCapture")
+        XCTAssertFalse(OutboxKind.reportContentCapture.countsTowardSyncIndicator)
+        XCTAssertTrue(OutboxKind.reportContentCapture.isDiscardableWhenTerminal)
+    }
+
+    func test_reportContentCapturePayload_roundTrips() throws {
+        let report = ContentCaptureReport(
+            conversationId: "c1", messageIds: [String(repeating: "a", count: 24)], kind: .recording, captureId: "rec_0123456789"
+        )
+        let payload = ReportContentCapturePayload(clientMutationId: "cmid_1", report: report)
+        let decoded = try JSONDecoder().decode(ReportContentCapturePayload.self, from: JSONEncoder().encode(payload))
+        XCTAssertEqual(decoded, payload)
+        XCTAssertEqual(decoded.report, report)
+    }
+
+    func test_consumeAfterReadPayload_roundTrips() throws {
+        let payload = ConsumeAfterReadPayload(clientMutationId: "cmid_1", conversationId: "c1", messageIds: ["m1", "m2"])
+        let decoded = try JSONDecoder().decode(ConsumeAfterReadPayload.self, from: JSONEncoder().encode(payload))
+        XCTAssertEqual(decoded, payload)
     }
 
     // MARK: - Payload round-trips
@@ -262,11 +294,13 @@ final class OutboxKindCodableTests: XCTestCase {
             clientMutationId: "cmid_cm",
             postId: "p1",
             parentCommentId: nil,
-            content: "first!"
+            content: "first!",
+            originalLanguage: "en", authorId: "user-1"
         )
         let d = try roundTrip(p)
         XCTAssertEqual(d.content, "first!")
         XCTAssertNil(d.parentCommentId)
+        XCTAssertEqual(d.originalLanguage, "en")
     }
 
     func test_deleteComment_roundTrips() throws {

@@ -68,7 +68,14 @@ export interface Report {
   createdAt: Date;
   updatedAt: Date;
   resolvedAt: Date | null;
+  /** #14110 (MIN-04) — 1 = en tête de la file de modération ; absent d'un document antérieur = 0. */
+  priority?: number;
+  /** Pourquoi : un mineur déclaré, une position, un lien Sang. */
+  priorityReasons?: ReportPriorityReason[];
 }
+
+export const REPORT_PRIORITY_REASONS = ['minor', 'location', 'blood'] as const;
+export type ReportPriorityReason = (typeof REPORT_PRIORITY_REASONS)[number];
 
 /**
  * DTO pour creer un signalement
@@ -78,6 +85,9 @@ export interface CreateReportDTO {
   reportedEntityId: string;
   reporterId?: string;
   reporterName?: string;
+  /** #14110 — calculés par la passerelle à la création (`assessReportPriority`), jamais lus du corps. */
+  priority?: number;
+  priorityReasons?: ReportPriorityReason[];
   reportType: ReportType | string;
   reason?: string;
 }
@@ -100,6 +110,10 @@ export interface ReportFilters {
   status?: ReportStatus | string;
   reporterId?: string;
   moderatorId?: string;
+  /** Les signalements visant CETTE entité (quel que soit son genre). */
+  reportedEntityId?: string;
+  /** `true` : seulement les signalements sans modérateur assigné. */
+  unassigned?: boolean;
   createdAfter?: Date;
   createdBefore?: Date;
   sortBy?: 'createdAt' | 'updatedAt' | 'resolvedAt';

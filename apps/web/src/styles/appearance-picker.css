@@ -1,0 +1,28 @@
+/* LA VIGNETTE « SIGNATURE » DU SÉLECTEUR D'APPARENCE (75w).
+
+   Elle montre, en petit, le fond Signature réel — le DÉFAUT du fil
+   (`.thread-backdrop`, `thread-scene.css`). Elle se peignait d'un dégradé
+   recopié en ligne qui AVAIT DÉRIVÉ : teinte d'accent à 30 % (le fond réel :
+   12 %), deux arrêts au lieu de trois, aucune variante claire (la vignette
+   restait sombre même en thème clair), et des hexadécimaux en dur. Elle
+   DÉRIVE désormais des mêmes cotes canoniques (`lib/view/thread-backdrop.ts`,
+   posées sur l'élément par `backdropStyleVars()`), et suit le thème comme le
+   fond réel. On ne garde que la COUCHE DE BASE (le dégradé 135°) : une
+   vignette de 52×68 n'a pas besoin des lueurs d'accent de l'en-tête. */
+.appearance-signature-thumb {
+  color: var(--color-ios-ink);
+  background: linear-gradient(
+    135deg,
+    var(--backdrop-dark-start) 0%,
+    color-mix(in srgb, var(--accent) calc(var(--backdrop-dark-tint) * 100%), var(--backdrop-dark-start)) 50%,
+    var(--backdrop-dark-end) 100%
+  );
+}
+:root.light .appearance-signature-thumb {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) calc(var(--backdrop-light-tint-start) * 100%), var(--backdrop-light-base)) 0%,
+    var(--backdrop-light-base) 50%,
+    color-mix(in srgb, var(--accent) calc(var(--backdrop-light-tint-end) * 100%), var(--backdrop-light-base)) 100%
+  );
+}

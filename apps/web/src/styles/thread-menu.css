@@ -1,0 +1,291 @@
+@import './longpress-veil.css';
+
+/*
+ * LE MENU DU MESSAGE (#5814) — feuille propre à l'écran du fil, importée UNE
+ * fois par `routes/thread.tsx` comme `thread-scene.css`/`thread-protection.css` :
+ * Vite la scinde dans le CHUNK du fil, jamais dans la feuille globale.
+ *
+ * `--safe-top`/`--safe-bottom` — la SEULE porte par laquelle une loi PURE
+ * (`placeMessageMenuCluster`, `lib/view/popover.ts`) reçoit l'encoche de
+ * l'appareil : lues par `getComputedStyle(document.documentElement)`
+ * (`lib/view/safe-area.ts::safeAreaInsets`), jamais un second calcul d'`env()`
+ * en JavaScript.
+ *
+ * **Elles ne sont PLUS déclarées ici** (#6213). Cette feuille ne vit que dans
+ * le CHUNK du fil : les variables manquaient donc partout ailleurs, alors même
+ * que leur commentaire d'origine affirmait « elles s'appliquent au document
+ * entier ». Elles sont posées sur `:root` par `app.css`, la feuille critique,
+ * et ce sont désormais `pt-safe`/`pb-safe` qui en DÉRIVENT — `env()` n'est plus
+ * écrit qu'à un seul endroit du dépôt.
+ */
+
+/* LE CLUSTER — enveloppe plein écran (rail + aperçu + liste), positionnée
+   par `placeMessageMenuCluster` (`lib/view/popover.ts`) en style INLINE ;
+   cette règle ne porte que ce qu'AUCUN style inline ne peut exprimer : la
+   couche d'empilement au-dessus du voile. */
+.message-menu-cluster {
+  z-index: 41;
+}
+
+/* LE VOILE — le MATÉRIAU SYSTÈME de l'appui long (#11222), lu dans ses deux
+   jetons (`longpress-veil.css`, importée en tête de cette feuille) : la même
+   loi que l'aperçu d'une conversation et qu'iOS (`LongPressVeil`). Aucun
+   schéma ne la surcharge.
+   `backdrop-filter` UNE SEULE FOIS, NON PRÉFIXÉ (revue #5814) — écrite avec
+   sa jumelle `-webkit-`, la minification (Lightning CSS) FUSIONNAIT les deux
+   en ne gardant QUE la forme préfixée : mesuré sur le dist,
+   `getComputedStyle(.message-menu-backdrop).backdropFilter === 'none'` et le
+   fond du fil restait NET sous le voile. Le préfixe est le travail du build,
+   jamais de la feuille. Gardé par `check-thread-states.mjs` § 6. */
+.message-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background-color: var(--longpress-veil-tint);
+  backdrop-filter: var(--longpress-veil-backdrop);
+  animation: messageMenuBackdropIn 260ms ease-out;
+}
+
+@keyframes messageMenuBackdropIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* LE RAIL — SANS CAPSULE (directive porteur 2026-10-01, #9043 — « enlever le
+   cadre comme pour les story ») : la story pose la même rangée NUE sur sa
+   scène (`FullscreenReactionStrip`, `chrome: .none`) ; ici le voile est la
+   scène. Entrée en vague ATTENUÉE (`scale` seul, jamais un décalage de
+   position — les seules propriétés qui n'invalident PAS le layout). */
+.message-menu-rail {
+  display: flex;
+  align-items: center;
+  /* La bande s'allonge de ×1,4 (#9043, `RAIL_LENGTH_FACTOR`) sans grossir ses
+     tuiles : l'espace gagné se répartit entre elles. */
+  justify-content: space-between;
+  /* `gap` posé en STYLE INLINE par `message-menu.tsx` (`RAIL_TILE_GAP`,
+     `message-menu-metrics.ts`) — jamais un second `10px` écrit ici. */
+  padding: 9px 8px;
+  color: var(--color-on-media);
+  animation: messageMenuRailIn 260ms cubic-bezier(0.32, 1.4, 0.55, 1);
+}
+
+@keyframes messageMenuRailIn {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* LA LISTE D'ACTIONS — même chrome que `RowActions`/`ReadingModeChip`
+   (`app.css`, `rounded-card`+`shadow-cast`), ancrée en HAUT (les nouvelles
+   lignes qui apparaissent en changeant de panneau — le sous-menu Traduire —
+   poussent vers le BAS, jamais vers le haut). #9043 ne retire le cadre qu'au
+   RAIL : la liste garde sa carte, et le glissement vers le haut la remonte. */
+.message-menu-list {
+  border-radius: var(--radius-card, 14px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background-color: var(--color-ios-card);
+  border: 1px solid var(--color-edge);
+  box-shadow: var(--shadow-cast, 0 8px 24px rgba(0, 0, 0, 0.24));
+  transform-origin: top;
+  animation: messageMenuListIn 260ms cubic-bezier(0.32, 1.4, 0.55, 1);
+}
+.message-menu-list > button + button {
+  border-top: 1px solid var(--color-edge);
+}
+
+/* LES GROUPES DU MENU (#11210) — principal, organiser, plus, modération,
+   destructif : un trait plus franc les sépare (9 px avec ses marges,
+   `SEPARATOR_HEIGHT` de `message-menu.tsx`), et la mention du bout en bout se
+   lit en retrait, sans être un geste. */
+.message-menu-separator {
+  height: 1px;
+  margin-block: 4px;
+  background-color: var(--color-edge);
+}
+.message-menu-notice {
+  margin: 0;
+  color: var(--color-ios-ink-3);
+  border-top: 1px solid var(--color-edge);
+}
+
+/* LA SURFACE DU GLISSEMENT (#9043) — tout le voile : glisser vers le haut y
+   réduit l'aperçu, un toucher y ferme. `touch-action: none` : le doigt pilote
+   la réduction, jamais un défilement du document. */
+.message-menu-drag-surface {
+  touch-action: none;
+}
+
+@keyframes messageMenuListIn {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* LA BARRE RAPIDE DE LA CAPSULE « + » (#10583) — le MÊME rail (`.message-menu-rail`,
+   posé à côté sur le même nœud : tuiles, pas, entrée), mais hors du voile : elle
+   porte donc sa propre matière (`glass glass-card`, celle du cadre d'emojis
+   rapides du composeur) et l'encre du fil, jamais le blanc d'une scène sombre. */
+.reaction-quick-bar {
+  z-index: 40;
+  border-radius: 9999px;
+  color: var(--color-ios-ink);
+  box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+/* LA CAPSULE « + » — 24 px dessinés (miroir `BubbleReactionsOverlay.addButton`),
+   44 px touchés : le débord étend la cible sans grandir le dessin. */
+.reaction-add-capsule {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  color: var(--accent);
+  background-color: color-mix(in srgb, var(--accent) 16%, var(--color-ios-card));
+}
+
+.reaction-add-capsule::after {
+  content: '';
+  position: absolute;
+  inset: -10px;
+}
+
+/* L'APERÇU SE SOULÈVE DEPUIS SA RANGÉE (#11206, `lib/view/message-menu-lift.ts`)
+   — un FLIP joué par l'API d'animation, sur `transform` et `opacity` seuls.
+   Le calque composité ne vit QUE le temps du geste (`data-lifting`, posé puis
+   retiré par `playLift`) : un calque gardé au repos floute le texte posé. Le
+   fantôme du retour (`data-message-menu-return`) ne reçoit aucun geste. Sous
+   `prefers-reduced-motion`, le même module joue un fondu de 150 ms. */
+[data-message-menu-preview-host][data-lifting],
+[data-message-menu-return] {
+  will-change: transform, opacity;
+}
+[data-message-menu-return] {
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-menu-backdrop,
+  .message-menu-rail,
+  .message-menu-list {
+    animation: none;
+  }
+}
+
+/*
+ * LA SÉLECTION DE TEXTE NATIVE NE DOIT PAS DÉMARRER SOUS UN DOIGT (#5814,
+ * critère 5) — `-webkit-touch-callout` retire le menu « Copier/Partager »
+ * iOS/Android au relâchement d'un appui long ; `user-select: none` (SOUS
+ * `any-hover: none` seulement — une souris garde la sélection de texte
+ * ordinaire, le geste `LONG_PRESS_MS` n'existe pas pour elle) empêche l'appui long au
+ * doigt de sélectionner le texte de la rangée AU LIEU d'ouvrir le menu.
+ *
+ * `[data-row]` NE SUFFIT PAS (revue #5814, défaut majeur 7, mesuré sur l'AVD
+ * `Meeshy_Poc_Web-v31`, `AND-2-menu.png`) — le CLUSTER (`.message-menu-*`)
+ * vit dans un PORTAIL sur `document.body`, HORS de cette portée. Au
+ * relâchement d'un appui long dont le doigt se trouve à l'endroit où la
+ * liste d'actions vient d'apparaître (cas NOMINAL pour tout message de la
+ * moitié basse du fil, le rail montant AU-DESSUS de l'aperçu), la WebView
+ * Android démarre une sélection de texte SUR un libellé du menu (« Copier »
+ * surligné, barre système « Copy | Share | Select all | Read aloud »
+ * par-dessus, masquant « Traduire ») : WebKit tranche au `touchstart`
+ * (jamais reproduit sur la coque iOS), la WebView Android plus tard, une
+ * fois le menu déjà monté. La garde doit donc couvrir le cluster ENTIER, pas
+ * seulement son ancre.
+ */
+[data-row],
+.message-menu-cluster {
+  -webkit-touch-callout: none;
+}
+@media (any-hover: none) {
+  [data-row],
+  .message-menu-cluster {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+/*
+ * LE DOUBLE TOUCHER D'UNE RANGÉE OUVRE LA BARRE DE RÉACTION, IL NE ZOOME PAS (#10599) —
+ * `manipulation` garde le défilement et le pincement, et retire le zoom au
+ * double toucher que Safari iOS applique encore à une page `width=device-width`.
+ */
+[role='article'][data-row] {
+  touch-action: manipulation;
+}
+
+/*
+ * L'ICÔNE « RÉPONDRE » DU POINTEUR FIN (#8899, `message-swipe.tsx`) — là où
+ * le glissé n'existe pas. ABSENTE sans pointeur fin (doigt, coque Android) :
+ * `display: none` retire aussi la halte de tabulation. Au pointeur fin, elle
+ * reste dans l'ordre du clavier et ne se MONTRE qu'au survol de la rangée ou
+ * au focus — une cible de 44 px, un disque de 32 px, au bord LIBRE
+ * (`data-edge`) : après le contenu d'un message reçu, avant celui d'un envoyé.
+ */
+.message-swipe-reply {
+  display: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .message-swipe-reply {
+    position: absolute;
+    top: 50%;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin-top: -22px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 120ms ease-out;
+  }
+  .message-swipe-reply[data-edge='end'] {
+    inset-inline-end: 4px;
+  }
+  .message-swipe-reply[data-edge='start'] {
+    inset-inline-start: 4px;
+  }
+  .message-swipe:hover > .message-swipe-reply,
+  .message-swipe:focus-within > .message-swipe-reply,
+  [data-row]:focus-visible .message-swipe-reply {
+    opacity: 1;
+  }
+  .message-swipe-reply-disc {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 9999px;
+    color: var(--color-ios-ink-2);
+    background: var(--color-ios-card);
+    border: 0.5px solid var(--color-ios-separator);
+  }
+  .message-swipe-reply:hover .message-swipe-reply-disc,
+  .message-swipe-reply:focus-visible .message-swipe-reply-disc {
+    color: var(--color-ios-brand);
+  }
+  .message-swipe-reply:focus-visible {
+    outline: none;
+  }
+  .message-swipe-reply:focus-visible .message-swipe-reply-disc {
+    outline: 2px solid var(--color-ios-brand);
+    outline-offset: 2px;
+  }
+}

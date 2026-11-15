@@ -1,0 +1,566 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import type { ApiResult } from '@/lib/api/http';
+import { createIntervalClock, type IntervalClockScheduler } from '@/lib/view/interval-clock';
+import type { MagicLinkRequestData } from '@/lib/view/magic-link';
+import type { VerifyEmailData, VerifyEmailRequest } from '@/lib/api/verify-email';
+
+import { MagicLinkFlow, type MagicLinkFlowDeps } from '@/components/magic-link-flow';
+import { MagicLinkValidation } from '@/components/magic-link-validation';
+import { authColumnIn, strayFromAuthColumn } from '@/test-support/auth-column';
+import { arriveByEmailLink, leaveEmailLink, tokenInHistory } from '@/test-support/email-link-arrival';
+import type { auth } from '@/lib/api/auth';
+import { perceivableText } from '@/test-support/perceivable-text';
+
+/**
+ * T9 (#5816) — « MagicLinkFlow », les cinq états (vide, saisie, envoi,
+ * attente + compte à rebours, erreur, hors-ligne) et le renvoi. Patron
+ * `use-back-dismiss.test.tsx`.
+ */
+const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+beforeAll(() => {
+  ensureHappyDomRegistered({ url: 'http://localhost/' });
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+});
+
+afterAll(async () => {
+  delete globals.IS_REACT_ACT_ENVIRONMENT;
+  await releaseHappyDomIfRegistered();
+});
+
+let container: HTMLDivElement;
+let root: Root;
+
+afterEach(() => {
+  act(() => {
+    root.unmount();
+  });
+  container.remove();
+  Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
+});
+
+/** Une horloge à la seconde ENTIÈREMENT contrôlée : `advanceSeconds` avance
+ * le temps virtuel PAR PAS D'UNE SECONDE et rejoue le tick à chaque pas — le
+ * même dispositif que `interval-clock.test.ts`, mais exposé en horloge
+ * RÉELLE (`IntervalClock`) pour nourrir `useCountdown`. */
+function fakeClock() {
+  let current = 0;
+  let tick: (() => void) | null = null;
+  let activeTimer: unknown = null;
+  const scheduler: IntervalClockScheduler = {
+    setInterval: (callback) => {
+      tick = callback;
+      activeTimer = {};
+      return activeTimer;
+    },
+    clearInterval: (id) => {
+      if (id === activeTimer) {
+        tick = null;
+        activeTimer = null;
+      }
+    },
+    now: () => current,
+  };
+  return {
+    clock: createIntervalClock(1_000, scheduler),
+    now: () => current,
+    advanceSeconds(seconds: number) {
+      for (let i = 0; i < seconds; i += 1) {
+        current += 1_000;
+        act(() => {
+          tick?.();
+        });
+      }
+    },
+    hasActiveTimer: () => activeTimer !== null,
+  };
+}
+
+function requestStub(responses: ReadonlyArray<ApiResult<MagicLinkRequestData>>) {
+  const calls: ReadonlyArray<{ email: string; rememberDevice?: boolean; returnUrl?: string }>[] = [];
+  let i = 0;
+  const request = async (
+    body: { email: string; rememberDevice?: boolean; returnUrl?: string },
+  ): Promise<ApiResult<MagicLinkRequestData>> => {
+    (calls as unknown as { email: string; rememberDevice?: boolean; returnUrl?: string }[]).push(body);
+    const r = responses[Math.min(i, responses.length - 1)];
+    i += 1;
+    return r ?? { ok: false, status: 0, error: 'aucune réponse programmée' };
+  };
+  return { calls: calls as unknown as { email: string; rememberDevice?: boolean; returnUrl?: string }[], request };
+}
+
+function mount(deps: MagicLinkFlowDeps, next: string | null = null): HTMLDivElement {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+  act(() => {
+    root.render(<MagicLinkFlow deps={deps} next={next} />);
+  });
+  return container;
+}
+
+function fill(el: HTMLDivElement, value: string) {
+  const input = el.querySelector('#magic-link-email') as HTMLInputElement;
+  act(() => {
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+function submit(el: HTMLDivElement) {
+  const form = el.querySelector('form') as HTMLFormElement;
+  act(() => {
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  });
+}
+
+describe('MagicLinkFlow — (a) vide', () => {
+  test('bouton disabled, champ autofocus (le champ reçoit le focus au montage)', () => {
+    const { clock, now } = fakeClock();
+    const el = mount({ request: requestStub([]).request, clock, now });
+    const button = el.querySelector('button[type="submit"]') as HTMLButtonElement;
+    const input = el.querySelector('#magic-link-email') as HTMLInputElement;
+    expect(button.disabled).toBe(true);
+    expect(document.activeElement).toBe(input);
+  });
+});
+
+describe('MagicLinkFlow — (b) saisie', () => {
+  test('e-mail invalide ⇒ toujours disabled ; valide ⇒ actif', () => {
+    const { clock, now } = fakeClock();
+    const el = mount({ request: requestStub([]).request, clock, now });
+    const button = el.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+    fill(el, 'a@b');
+    expect(button.disabled).toBe(true);
+
+    fill(el, 'ada@meeshy.example');
+    expect(button.disabled).toBe(false);
+  });
+});
+
+describe('MagicLinkFlow — (c) envoi', () => {
+  test('clic ⇒ aria-busy puis "Envoi…", UN appel avec { email }', async () => {
+    const { clock, now } = fakeClock();
+    const stub = requestStub([{ ok: true, data: { expiresInSeconds: 600 }, status: 200 }]);
+    const el = mount({ request: stub.request, clock, now });
+    fill(el, 'ada@meeshy.example');
+
+    // Un appel async ne se résout pas SYNCHRONEMENT avec `act()` seul :
+    // on l'attend explicitement avant de lire l'état "après" l'envoi.
+    await act(async () => {
+      submit(el);
+      await Promise.resolve();
+    });
+
+    expect(stub.calls).toEqual([{ email: 'ada@meeshy.example' }]);
+  });
+});
+
+/**
+ * LE RETOUR APRÈS CONNEXION (#6742) — `/auth/magic-link?next=` (la SAISIE)
+ * porte le même paramètre que `/login` et `/signup` ; la demande l'envoie en
+ * `returnUrl`, clampé (`safeNextPath`), jamais cru.
+ */
+describe('MagicLinkFlow — retour après connexion (#6742)', () => {
+  test('un `next` sûr voyage en `returnUrl` dans la demande', async () => {
+    const { clock, now } = fakeClock();
+    const stub = requestStub([{ ok: true, data: { expiresInSeconds: 600 }, status: 200 }]);
+    const el = mount({ request: stub.request, clock, now }, '/chat/mshy_equipe_7f3a');
+    fill(el, 'ada@meeshy.example');
+
+    await act(async () => {
+      submit(el);
+      await Promise.resolve();
+    });
+
+    expect(stub.calls).toEqual([{ email: 'ada@meeshy.example', returnUrl: '/chat/mshy_equipe_7f3a' }]);
+  });
+
+  for (const hostile of ['//evil.com', 'https://evil.com/chat/x', '/\\evil.com']) {
+    test(`un \`next\` hors même-origine (${hostile}) ne voyage pas`, async () => {
+      const { clock, now } = fakeClock();
+      const stub = requestStub([{ ok: true, data: { expiresInSeconds: 600 }, status: 200 }]);
+      const el = mount({ request: stub.request, clock, now }, hostile);
+      fill(el, 'ada@meeshy.example');
+
+      await act(async () => {
+        submit(el);
+        await Promise.resolve();
+      });
+
+      expect(stub.calls).toEqual([{ email: 'ada@meeshy.example' }]);
+    });
+  }
+});
+
+/**
+ * LES INDÉSIRABLES, NOMMÉS PENDANT L'ATTENTE — EN CLAIR depuis #16452
+ * (directive porteur 2026-11-06), après un passage derrière un (i) « Rien
+ * reçu ? » (#6626).
+ *
+ * La passerelle rend 200 même pour une adresse inconnue
+ * (`MagicLinkService.ts:133-137`, anti-énumération) : l'écran ne peut donc ni
+ * promettre l'envoi ni le démentir, mais il dit où regarder, à tous.
+ */
+describe('MagicLinkFlow — la note sur les indésirables', () => {
+  test('absente à la saisie ; à l’attente, dite EN CLAIR (#16452)', async () => {
+    const { clock, now } = fakeClock();
+    const stub = requestStub([{ ok: true, data: { expiresInSeconds: 600 }, status: 200 }]);
+    const el = mount({ request: stub.request, clock, now });
+    expect(el.querySelector('[data-spam-hint]')).toBeNull();
+
+    fill(el, 'ada@meeshy.example');
+    await act(async () => {
+      submit(el);
+      await Promise.resolve();
+    });
+
+    const note = el.querySelector('[data-spam-hint]');
+    expect(note?.textContent).toBe('Rien reçu ? Regardez aussi dans vos spams ou courriers indésirables.');
+    expect(note?.closest('.sr-only')).toBeNull();
+  });
+});
+
+describe('MagicLinkFlow — le vocabulaire dit « e-mail », jamais « magique » (#6626)', () => {
+  test('l’en-tête de l’écran plein est « Connexion par e-mail »', () => {
+    const { clock, now } = fakeClock();
+    const el = mount({ request: requestStub([]).request, clock, now });
+    expect(el.querySelector('h1')?.textContent).toBe('Connexion par e-mail');
+    expect(perceivableText(el)).not.toMatch(/magi(que|c)/iu);
+  });
+
+  test('l’écran d’un lien invalide ne le dit pas davantage', () => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<MagicLinkValidation token={null} returnUrl={null} />);
+    });
+    expect(container.textContent).toContain('Lien invalide ou expiré');
+    expect(perceivableText(container)).not.toMatch(/magi(que|c)/iu);
+  });
+});
+
+describe('MagicLinkFlow — (d) attente + compte à rebours', () => {
+  test('« Lien envoyé ! », timer 10:00 → 0:00, expiration, renvoi relance à 10:00', async () => {
+    const { clock, now, advanceSeconds, hasActiveTimer } = fakeClock();
+    const stub = requestStub([
+      { ok: true, data: { expiresInSeconds: 600 }, status: 200 },
+      { ok: true, data: { expiresInSeconds: 600 }, status: 200 },
+    ]);
+    const el = mount({ request: stub.request, clock, now });
+    fill(el, 'ada@meeshy.example');
+    await act(async () => {
+      submit(el);
+      await Promise.resolve();
+    });
+
+    expect(el.textContent).toContain('E-mail envoyé');
+    expect((el.textContent ?? '').replace(/\s+/gu, ' ')).toContain('Entrez le code à 6 chiffres reçu à ada@meeshy.example, ou ouvrez le lien du même e-mail.');
+    expect(perceivableText(el)).not.toMatch(/magi(que|c)/iu);
+    const timer = () => el.querySelector('[role="timer"]');
+    expect(timer()?.textContent).toBe('10:00');
+    const resend = () => el.querySelector('[aria-label="Renvoyer le lien"]') as HTMLButtonElement;
+    expect(resend().disabled).toBe(true);
+
+    advanceSeconds(599);
+    expect(timer()?.textContent).toBe('0:01');
+
+    advanceSeconds(1);
+    expect(el.textContent).toContain('Lien expiré, renvoyez-en un nouveau');
+    expect(resend().disabled).toBe(false);
+    // Désabonnement à 0 : le planificateur n'a plus de minuteur actif.
+    expect(hasActiveTimer()).toBe(false);
+
+    await act(async () => {
+      resend().click();
+      await Promise.resolve();
+    });
+    expect(stub.calls.length).toBe(2);
+    expect(el.querySelectorAll('[role="timer"]').length).toBe(1);
+    expect(timer()?.textContent).toBe('10:00');
+  });
+});
+
+describe('MagicLinkFlow — (e) Annuler', () => {
+  test('retour à la saisie, e-mail CONSERVÉ, erreur effacée', async () => {
+    const { clock, now } = fakeClock();
+    const stub = requestStub([{ ok: false, status: 400, error: 'Invalid email address' }]);
+    const el = mount({ request: stub.request, clock, now });
+    fill(el, 'ada@meeshy.example');
+    await act(async () => {
+      submit(el);
+      await Promise.resolve();
+    });
+    expect(el.textContent).toContain('Adresse e-mail invalide');
+
+    // Cet échec (400) ne fait PAS passer à l'étape attente — on reste en
+    // saisie ; « Annuler » n'est donc pas exercé ici, mais l'email doit
+    // rester dans le champ et l'erreur doit pouvoir être effacée par une
+    // nouvelle saisie valide.
+    const input = el.querySelector('#magic-link-email') as HTMLInputElement;
+    expect(input.value).toBe('ada@meeshy.example');
+  });
+});
+
+describe('MagicLinkFlow — (f) erreurs', () => {
+  test('rate-limited ⇒ bandeau role=alert, reste en saisie', async () => {
+    const { clock, now } = fakeClock();
+    const stub = requestStub([{ ok: true, data: {}, status: 200 }]);
+    const el = mount({ request: stub.request, clock, now });
+    fill(el, 'ada@meeshy.example');
+    await act(async () => {
+      submit(el);
+      await Promise.resolve();
+    });
+    const alert = el.querySelector('[role="alert"]');
+    expect(alert?.textContent ?? '').toContain('Trop de demandes');
+    expect(el.querySelector('[role="timer"]')).toBeNull();
+  });
+
+  /**
+   * #6666 — depuis #6658, la passerelle rend un VRAI 429
+   * (`code: 'RATE_LIMITED'`) plutôt que le 200 `data:{}` ci-dessus. Le même
+   * bandeau doit apparaître, jamais le message de succès générique — et
+   * l'étape doit rester « saisie », jamais « attente ».
+   */
+  test('429 (code RATE_LIMITED) ⇒ même bandeau, jamais l’étape « attente » (#6666)', async () => {
+    const { clock, now } = fakeClock();
+    const stub = requestStub([{ ok: false, status: 429, error: 'Too many requests', code: 'RATE_LIMITED' }]);
+    const el = mount({ request: stub.request, clock, now });
+    fill(el, 'ada@meeshy.example');
+    await act(async () => {
+      submit(el);
+      await Promise.resolve();
+    });
+    const alert = el.querySelector('[role="alert"]');
+    expect(alert?.textContent ?? '').toContain('Trop de demandes');
+    expect(el.textContent).not.toContain('E-mail envoyé');
+    expect(el.querySelector('[role="timer"]')).toBeNull();
+  });
+
+  test('invalid-email ⇒ sous le champ', async () => {
+    const { clock, now } = fakeClock();
+    const stub = requestStub([{ ok: false, status: 400, error: 'Invalid email address' }]);
+    const el = mount({ request: stub.request, clock, now });
+    fill(el, 'ada@meeshy.example');
+    await act(async () => {
+      submit(el);
+      await Promise.resolve();
+    });
+    expect(el.querySelector('#magic-link-email-error')?.textContent).toBe('Adresse e-mail invalide');
+  });
+});
+
+/**
+ * LA COLONNE DE LA CONNEXION (#6643) — l'écran plein du lien par e-mail portait
+ * sa propre géométrie, pleine largeur : sur ordinateur, le champ s'étalait sur
+ * tout l'écran pendant que `/login`, qui monte LE MÊME panneau, le rangeait au
+ * centre. La largeur se mesure en navigateur (`check-access-column.mjs`) ; ici,
+ * que tout vive dans UNE colonne.
+ */
+describe('MagicLinkFlow — tout tient dans UNE colonne, le retour « < » compris (#6643)', () => {
+  test('saisie : l’en-tête « Connexion par e-mail » et son retour « < » vivent dans la colonne', () => {
+    const { clock, now } = fakeClock();
+    const el = mount({ request: requestStub([]).request, clock, now });
+    const column = authColumnIn(el);
+    expect(column?.querySelector('a[aria-label="Retour"]')).not.toBeNull();
+    expect(column?.querySelector('#magic-link-email')).not.toBeNull();
+    expect(strayFromAuthColumn(el)).toEqual([]);
+  });
+
+  test('attente : le compte à rebours et « Rien reçu ? » aussi', async () => {
+    const { clock, now } = fakeClock();
+    const stub = requestStub([{ ok: true, data: { expiresInSeconds: 600 }, status: 200 }]);
+    const el = mount({ request: stub.request, clock, now });
+    fill(el, 'ada@meeshy.example');
+    await act(async () => {
+      submit(el);
+      await Promise.resolve();
+    });
+    expect(authColumnIn(el)?.querySelector('[role="timer"]')).not.toBeNull();
+    expect(strayFromAuthColumn(el)).toEqual([]);
+  });
+
+  test('validation : l’écran d’un lien invalide aussi', () => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<MagicLinkValidation token={null} returnUrl={null} />);
+    });
+    expect(authColumnIn(container)?.querySelector('a[href="/auth/magic-link"]')).not.toBeNull();
+    expect(strayFromAuthColumn(container)).toEqual([]);
+  });
+});
+
+describe('MagicLinkFlow — (g) hors-ligne', () => {
+  test('bandeau + bouton disabled', () => {
+    Object.defineProperty(window.navigator, 'onLine', { value: false, configurable: true });
+    const { clock, now } = fakeClock();
+    const el = mount({ request: requestStub([]).request, clock, now });
+    act(() => {
+      window.dispatchEvent(new Event('offline'));
+    });
+    fill(el, 'ada@meeshy.example');
+    const button = el.querySelector('button[type="submit"]') as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+  });
+});
+
+/**
+ * « E-MAIL SEUL → CODE + LIEN » (#8034, arbitrage porteur 2026-09-26) — la
+ * connexion par e-mail envoie, compte existant OU nouveau, un e-mail portant
+ * un code à 6 chiffres ET un lien. L'étape « e-mail envoyé » propose donc la
+ * saisie du code SUR PLACE ; le code rend une session, et l'écran mène là où
+ * une connexion mène.
+ */
+describe('MagicLinkFlow — (h) le code reçu se saisit sur place (#8034)', () => {
+  const SESSION: VerifyEmailData = {
+    verified: true,
+    token: 'jwt',
+    sessionToken: 'sess',
+    user: { id: 'u-1', username: 'ada', displayName: 'Ada' },
+  };
+
+  async function sentTo(email: string, verifyEmail: (r: VerifyEmailRequest) => Promise<ApiResult<VerifyEmailData>>, next: string | null = null) {
+    const { clock, now } = fakeClock();
+    const stub = requestStub([{ ok: true, data: { expiresInSeconds: 600 }, status: 200 }]);
+    const el = mount({ request: stub.request, clock, now, verifyEmail }, next);
+    fill(el, email);
+    await act(async () => {
+      submit(el);
+      await Promise.resolve();
+    });
+    return el;
+  }
+
+  function enterCode(el: HTMLDivElement, value: string) {
+    const input = el.querySelector('#verify-email-code') as HTMLInputElement;
+    act(() => {
+      input.value = value;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+
+  afterEach(() => window.history.replaceState({}, '', '/'));
+
+  test('le champ du code est là, dès l’étape « e-mail envoyé »', async () => {
+    const el = await sentTo('ada@meeshy.example', async () => ({ ok: true, data: SESSION, status: 200 }));
+    expect(el.textContent).toContain('E-mail envoyé');
+    expect(el.querySelector('#verify-email-code')).not.toBeNull();
+  });
+
+  test('code juste ⇒ UN appel { email, code }, puis `next` (ou l’accueil)', async () => {
+    const calls: VerifyEmailRequest[] = [];
+    window.history.replaceState({}, '', '/login');
+    const el = await sentTo(
+      'ada@meeshy.example',
+      async (r) => {
+        calls.push(r);
+        return { ok: true, data: SESSION, status: 200 };
+      },
+      '/chat/mshy_x',
+    );
+    enterCode(el, '123456');
+    await act(async () => {
+      (el.querySelector('#verify-email-code')?.closest('form') as HTMLFormElement).dispatchEvent(
+        new Event('submit', { bubbles: true, cancelable: true }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(calls).toEqual([{ email: 'ada@meeshy.example', code: '123456' }]);
+    expect(window.location.pathname).toBe('/chat/mshy_x');
+  });
+
+  test('code faux ⇒ le refus SOUS le champ, on reste sur l’étape', async () => {
+    const el = await sentTo('ada@meeshy.example', async () => ({ ok: false, status: 400, error: 'bad' }));
+    enterCode(el, '000000');
+    await act(async () => {
+      (el.querySelector('#verify-email-code')?.closest('form') as HTMLFormElement).dispatchEvent(
+        new Event('submit', { bubbles: true, cancelable: true }),
+      );
+      await Promise.resolve();
+    });
+    expect(el.querySelector('#verify-email-code-error')?.textContent).toBe('Code invalide ou expiré');
+    expect(el.textContent).toContain('E-mail envoyé');
+  });
+});
+
+describe('MagicLinkValidation — le jeton quitte l’historique une fois servi (#10864)', () => {
+  afterEach(leaveEmailLink);
+
+  const answering = (reply: Awaited<ReturnType<typeof auth.validateMagicLink>>): typeof auth.validateMagicLink => async () => reply;
+
+  async function validateFrom(token: string, reply: Awaited<ReturnType<typeof auth.validateMagicLink>>) {
+    arriveByEmailLink('/auth/magic-link', token);
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root.render(<MagicLinkValidation token={token} returnUrl={null} validate={answering(reply)} go={() => undefined} />);
+      for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    });
+  }
+
+  test('connexion ouverte : l’entrée ne porte plus le jeton', async () => {
+    await validateFrom('m-ok', { ok: true, status: 200, data: { user: { id: 'u-1', username: 'ada', displayName: 'Ada' }, token: 'jwt', sessionToken: 'sess', expiresIn: 3_600 } });
+    expect(tokenInHistory()).toBeNull();
+  });
+
+  test('lien refusé : l’entrée ne porte plus le jeton', async () => {
+    await validateFrom('m-dead', { ok: false, status: 400, error: 'Invalid or expired token' });
+    expect(tokenInHistory()).toBeNull();
+  });
+
+  for (const status of [429, 500]) {
+    test(`refus en ${status} (débit, panne) : le lien n’est pas prouvé mort, l’entrée le garde`, async () => {
+      await validateFrom(`m-${status}`, { ok: false, status, error: 'Too many requests' });
+      expect(tokenInHistory()).toBe(`m-${status}`);
+    });
+  }
+
+  test('hors ligne : l’entrée le garde, « Réessayer » en a besoin', async () => {
+    await validateFrom('m-offline', { ok: false, status: 0, error: 'Failed to fetch' });
+    expect(tokenInHistory()).toBe('m-offline');
+  });
+});
+
+describe('MagicLinkValidation — « Réessayer » relance la validation (#18322)', () => {
+  afterEach(leaveEmailLink);
+
+  test('hors ligne puis Réessayer : la validation repart, et le lien revenu en ligne est servi', async () => {
+    const offline: Awaited<ReturnType<typeof auth.validateMagicLink>> = { ok: false, status: 0, error: 'Failed to fetch' };
+    const dead: Awaited<ReturnType<typeof auth.validateMagicLink>> = { ok: false, status: 400, error: 'Invalid or expired token' };
+    const tokens: string[] = [];
+    const validate: typeof auth.validateMagicLink = async (token) => {
+      tokens.push(token);
+      return tokens.length === 1 ? offline : dead;
+    };
+    arriveByEmailLink('/auth/magic-link', 'm-retry');
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root.render(<MagicLinkValidation token="m-retry" returnUrl={null} validate={validate} go={() => undefined} />);
+      for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    });
+    const retry = container.querySelector('button') as HTMLButtonElement;
+    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+
+    await act(async () => {
+      retry.click();
+      for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    });
+
+    expect(tokens).toEqual(['m-retry', 'm-retry']);
+    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+  });
+});

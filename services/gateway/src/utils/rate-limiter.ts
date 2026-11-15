@@ -17,13 +17,25 @@
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { Redis } from 'ioredis';
+import { createHash } from 'crypto';
 import { enhancedLogger } from './logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'RateLimiter' });
 
 /**
- * Check if an IP address is local (loopback or private network).
- * Local IPs are exempt from rate limiting in dev environments.
+ * Vrai si l'adresse appartient au loopback ou à une plage privée.
+ *
+ * ATTENTION — cette fonction est juste ; c'est son USAGE comme exemption de
+ * limitation qui ne l'était pas. Le gateway tourne derrière Traefik sur un
+ * réseau Docker bridge : `request.ip` vaut une adresse `172.16.0.0/12` pour
+ * TOUS les appelants, un attaquant compris. Exempter « les adresses locales »
+ * y désactive donc la limitation pour tout le monde — c'est exactement ce qui
+ * s'était produit (cf. `middleware()` ci-dessous et #4137).
+ *
+ * Ne JAMAIS s'en servir pour accorder une faveur de sécurité. Une exemption
+ * de développement se déclare explicitement (`RATE_LIMIT_DISABLED`), jamais
+ * par la forme d'une adresse — sinon la production hérite en silence d'une
+ * commodité de poste de travail.
  */
 export function isLocalIp(ip: string): boolean {
   if (!ip) return false;
@@ -36,6 +48,27 @@ export function isLocalIp(ip: string): boolean {
     normalized.startsWith('10.') ||
     /^172\.(1[6-9]|2\d|3[01])\./.test(normalized)
   );
+}
+
+/**
+ * Unique échappatoire à la limitation de débit : une DÉCLARATION explicite,
+ * lue à chaque appel (et non figée au chargement du module, pour rester
+ * pilotable en test sans réimporter).
+ *
+ * Elle est volontairement pénible à activer par accident : il faut poser
+ * `RATE_LIMIT_DISABLED=true`, et jamais en production — le témoin ci-dessous
+ * refuse la combinaison. Aucune adresse IP, aucun en-tête, aucune forme de
+ * requête ne doit plus ouvrir cette porte.
+ */
+export function rateLimitDisabled(): boolean {
+  if (process.env.RATE_LIMIT_DISABLED !== 'true') return false;
+  if (process.env.NODE_ENV === 'production') {
+    logger.error(
+      'RATE_LIMIT_DISABLED est posé en production — ignoré. La limitation reste active.'
+    );
+    return false;
+  }
+  return true;
 }
 
 export interface RateLimiterConfig {
@@ -83,25 +116,25 @@ export interface RateLimitInfo {
 class MemoryStore {
   private store = new Map<string, { count: number; resetAt: number }>();
 
-  async increment(key: string, windowMs: number): Promise<{ count: number; resetAt: number }> {
+  async increment(key: string, windowMs: number, amount = 1): Promise<{ count: number; resetAt: number }> {
     const now = Date.now();
     const existing = this.store.get(key);
 
+    // Un INSTANTANÉ, comme le rend Redis : rendre l'objet vivant laissait un
+    // appelant lire le compte d'un débit concurrent posé après le sien (#14105).
     if (existing && existing.resetAt > now) {
-      // Within window, increment count
-      existing.count++;
-      return existing;
+      existing.count += amount;
+      return { ...existing };
     }
 
-    // New window
     const resetAt = now + windowMs;
-    const record = { count: 1, resetAt };
+    const record = { count: amount, resetAt };
     this.store.set(key, record);
 
     // Cleanup old entries periodically (prevent memory leak)
     this.cleanup();
 
-    return record;
+    return { ...record };
   }
 
   private cleanup() {
@@ -116,6 +149,19 @@ class MemoryStore {
   async reset(key: string): Promise<void> {
     this.store.delete(key);
   }
+
+  /**
+   * Rend une tentative — jamais sous zéro, et jamais sur une fenêtre EXPIRÉE.
+   *
+   * Rembourser une fenêtre morte reviendrait à en ouvrir une neuve à -1, donc
+   * à offrir une tentative de plus au tour suivant : un remboursement doit
+   * annuler un décompte, pas en créditer un.
+   */
+  async decrement(key: string, amount = 1): Promise<void> {
+    const existing = this.store.get(key);
+    if (!existing || existing.resetAt <= Date.now()) return;
+    existing.count = Math.max(0, existing.count - amount);
+  }
 }
 
 /**
@@ -124,13 +170,13 @@ class MemoryStore {
 class RedisStore {
   constructor(private redis: Redis) {}
 
-  async increment(key: string, windowMs: number): Promise<{ count: number; resetAt: number }> {
+  async increment(key: string, windowMs: number, amount = 1): Promise<{ count: number; resetAt: number }> {
     const now = Date.now();
     const windowKey = `ratelimit:${key}`;
 
-    // Use Redis transaction for atomic increment
     const pipeline = this.redis.pipeline();
-    pipeline.incr(windowKey);
+    if (amount === 1) pipeline.incr(windowKey);
+    else pipeline.incrby(windowKey, amount);
     pipeline.pttl(windowKey);
 
     const results = await pipeline.exec();
@@ -142,8 +188,7 @@ class RedisStore {
     const count = results[0]?.[1] as number;
     const ttl = results[1]?.[1] as number;
 
-    // Set expiry if this is first request in window
-    if (count === 1 || ttl === -1) {
+    if (count === amount || ttl === -1) {
       await this.redis.pexpire(windowKey, windowMs);
     }
 
@@ -154,6 +199,23 @@ class RedisStore {
 
   async reset(key: string): Promise<void> {
     await this.redis.del(`ratelimit:${key}`);
+  }
+
+  /**
+   * Rend une tentative — jamais sous zéro.
+   *
+   * `DECR` sur une clé ABSENTE la crée à -1 avec une durée de vie infinie :
+   * la fenêtre suivante démarrerait sous zéro et n'expirerait jamais. On ne
+   * décrémente donc que si la clé existe, et on remonte à zéro si un
+   * remboursement en trop l'a fait passer sous la barre.
+   */
+  async decrement(key: string, amount = 1): Promise<void> {
+    const windowKey = `ratelimit:${key}`;
+    const existe = await this.redis.exists(windowKey);
+    if (!existe) return;
+
+    const restant = amount === 1 ? await this.redis.decr(windowKey) : await this.redis.decrby(windowKey, amount);
+    if (restant < 0) await this.redis.set(windowKey, '0', 'KEEPTTL');
   }
 }
 
@@ -194,9 +256,9 @@ export class RateLimiter {
   /**
    * Get rate limit info for a key
    */
-  private async getRateLimitInfo(key: string): Promise<RateLimitInfo> {
+  private async getRateLimitInfo(key: string, cost = 1): Promise<RateLimitInfo> {
     const fullKey = `${this.config.keyPrefix}:${key}`;
-    const result = await this.store.increment(fullKey, this.config.windowMs);
+    const result = await this.store.increment(fullKey, this.config.windowMs, cost);
 
     const remaining = Math.max(0, this.config.max - result.count);
     const reset = Math.ceil(result.resetAt / 1000); // Convert to seconds
@@ -220,7 +282,7 @@ export class RateLimiter {
   middleware() {
     return async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        if (isLocalIp(request.ip)) return;
+        if (rateLimitDisabled()) return;
 
         const shouldSkip = await this.config.skip(request);
         if (shouldSkip) {
@@ -257,11 +319,86 @@ export class RateLimiter {
   }
 
   /**
+   * Décompte PONDÉRÉ, hors middleware (#8104).
+   *
+   * Le middleware compte des REQUÊTES ; certaines portes doivent compter ce
+   * qu'une requête TRANSPORTE. Une recherche de contacts par lot porte jusqu'à
+   * des dizaines de milliers d'identifiants : la compter pour « une requête »
+   * laissait un oracle d'énumération à grande échelle derrière un plafond
+   * nominalement bas. L'appelant, qui seul connaît le coût après avoir lu le
+   * corps, le passe ici.
+   *
+   * `null` quand la limitation est désactivée ou que le magasin est en panne —
+   * même repli que `middleware()`, qui laisse passer sur une panne du magasin.
+   */
+  async consume(key: string, cost: number): Promise<RateLimitInfo | null> {
+    if (rateLimitDisabled()) return null;
+    try {
+      return await this.getRateLimitInfo(key, Math.max(0, Math.floor(cost)));
+    } catch (error) {
+      logger.error('Rate limiter consume error', error as Error);
+      return null;
+    }
+  }
+
+  /**
    * Reset rate limit for a specific key (admin use)
    */
   async reset(key: string): Promise<void> {
     const fullKey = `${this.config.keyPrefix}:${key}`;
     await this.store.reset(fullKey);
+  }
+
+  /**
+   * REND la tentative que `middleware()` vient de compter (#5216).
+   *
+   * ## Ce qu'un limiteur compte, et ce qu'il devrait compter
+   *
+   * `POST /auth/register` tolère trois tentatives par cinq minutes. Le
+   * `preHandler` compte AVANT de savoir ce qu'il compte : une faute de frappe
+   * dans une adresse consomme donc le même quota qu'une création de compte, et
+   * trois corrections successives ferment la porte pendant cinq minutes à
+   * quelqu'un qui n'a encore rien créé. C'est un limiteur qui punit l'hésitation
+   * plutôt que l'abus.
+   *
+   * La règle retenue : **un 400 rend la tentative ; un 409, un 200 et un 429 la
+   * gardent.** Un 400 dit « ta saisie est mal formée » — aucun état n'a été
+   * touché, aucune information sur autrui n'a été rendue. Un 409, lui, apprend
+   * qu'un pseudo ou une adresse EXISTE : c'est un oracle, et un oracle
+   * remboursable est un oracle gratuit.
+   *
+   * Le remboursement est BEST-EFFORT : une panne du magasin ne doit jamais
+   * empêcher une réponse de partir. Il se contente de journaliser, comme
+   * `middleware()` le fait déjà de ses propres pannes.
+   */
+  async refund(key: string): Promise<void> {
+    if (rateLimitDisabled()) return;
+
+    try {
+      await this.store.decrement(`${this.config.keyPrefix}:${key}`);
+    } catch (error) {
+      logger.error('Rate limiter refund error', error as Error);
+    }
+  }
+
+  /**
+   * REND un décompte PONDÉRÉ que `consume` vient de prendre (#14105) : un lot
+   * refusé ou une écriture échouée en aval ne doit rien coûter. Même garde que
+   * `refund` — jamais sous zéro, jamais sur une fenêtre expirée, best-effort.
+   */
+  async release(key: string, cost: number): Promise<void> {
+    const amount = Math.max(0, Math.floor(cost));
+    if (rateLimitDisabled() || amount === 0) return;
+    try {
+      await this.store.decrement(`${this.config.keyPrefix}:${key}`, amount);
+    } catch (error) {
+      logger.error('Rate limiter release error', error as Error);
+    }
+  }
+
+  /** La clé que `middleware()` a comptée pour cette requête — celle à rembourser. */
+  keyFor(request: FastifyRequest): string {
+    return this.config.keyGenerator(request);
   }
 }
 
@@ -514,6 +651,55 @@ export function createPhoneResetIdentityRateLimiter(redis?: Redis): RateLimiter 
 }
 
 /**
+ * Le second facteur à la connexion — clé par COMPTE CIBLE, pas par IP.
+ *
+ * `twoFactorToken` est le jeton temporaire émis à ce compte-là par l'étape
+ * précédente : le prendre pour clé fait converger toutes les tentatives d'une
+ * attaque DISTRIBUÉE dans un seul seau. Une clé par IP les répartirait au
+ * contraire dans autant de seaux qu'il y a de machines, ce qui ne protège
+ * personne (#4138).
+ *
+ * Ce limiteur ne remplace PAS le compteur en base : rejouer `/login` rend un
+ * jeton neuf, donc une clé neuve. C'est `LoginAttemptService` qui borne
+ * réellement, en comptant sur le compte lui-même.
+ */
+export function createTwoFactorLoginRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 5,
+      windowMs: 10 * 60 * 1000,
+      keyPrefix: 'auth:2fa-login',
+      message: 'Trop de tentatives de code à deux facteurs. Veuillez réessayer dans 10 minutes.',
+      keyGenerator: (request) => {
+        const body = request.body as { twoFactorToken?: string } | undefined;
+        return `token:${body?.twoFactorToken ?? ''}`;
+      }
+    },
+    redis
+  );
+}
+
+/**
+ * Le second facteur sur une route AUTHENTIFIÉE (`/2fa/verify`,
+ * `/2fa/backup-codes`) — clé par compte connecté.
+ */
+export function createTwoFactorAccountRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 10,
+      windowMs: 10 * 60 * 1000,
+      keyPrefix: 'auth:2fa-account',
+      message: 'Trop de tentatives de code à deux facteurs. Veuillez réessayer dans 10 minutes.',
+      keyGenerator: (request) => {
+        const user = (request as { user?: { userId?: string } }).user;
+        return `user:${user?.userId ?? request.ip}`;
+      }
+    },
+    redis
+  );
+}
+
+/**
  * Rate limiter for phone reset code verification
  * 5 attempts per 10 minutes per token
  */
@@ -602,6 +788,95 @@ export function createPhoneTransferResendRateLimiter(redis?: Redis): RateLimiter
       windowMs: 60 * 1000, // 1 minute
       keyPrefix: 'auth:phone-transfer-resend',
       message: 'Veuillez attendre avant de renvoyer un nouveau code.'
+    },
+    redis
+  );
+}
+
+/**
+ * `POST /auth/verify-email` par ADRESSE IP (#8033) — depuis que la preuve y
+ * ouvre une session, cette route est une porte de connexion. 20 essais par
+ * quart d'heure et par IP.
+ */
+export function createVerifyEmailIpRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 20,
+      windowMs: 15 * 60 * 1000,
+      keyPrefix: 'auth:verify-email:ip',
+      message: 'Trop de tentatives de vérification. Veuillez réessayer dans 15 minutes.',
+      keyGenerator: (request) => `ip:${request.ip || 'unknown'}`
+    },
+    redis
+  );
+}
+
+/**
+ * `POST /auth/verify-email` par ADRESSE E-MAIL (#8033) — la borne qui compte
+ * contre un code à six chiffres : 5 essais par quart d'heure et par adresse,
+ * quelle que soit l'IP. Même sur la durée de vie la plus longue d'un code
+ * (24 h), cela laisse moins d'une chance sur deux mille de le deviner.
+ */
+export function createVerifyEmailAddressRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 5,
+      windowMs: 15 * 60 * 1000,
+      keyPrefix: 'auth:verify-email:email',
+      message: 'Trop de tentatives de vérification pour cette adresse. Veuillez réessayer dans 15 minutes.',
+      keyGenerator: (request) => {
+        const body = request.body as { email?: unknown } | undefined;
+        const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : 'none';
+        return `email:${email}`;
+      }
+    },
+    redis
+  );
+}
+
+/**
+ * `GET|POST /auth/reset-password/verify-token` par ADRESSE IP (#10864) — la
+ * route dit d'un jeton s'il est valide sans le consommer : c'est un oracle, et
+ * une machine qui y énumère des jetons se borne ici. 20 essais par quart
+ * d'heure et par IP, GET et POST dans le même seau.
+ */
+export function createResetTokenVerifyIpRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 20,
+      windowMs: 15 * 60 * 1000,
+      keyPrefix: 'auth:reset-verify:ip',
+      message: 'Trop de vérifications de lien de réinitialisation. Veuillez réessayer dans 15 minutes.',
+      keyGenerator: (request) => `ip:${request.ip || 'unknown'}`
+    },
+    redis
+  );
+}
+
+function resetTokenOf(request: FastifyRequest): string {
+  const body = request.body as { token?: unknown } | undefined;
+  const query = request.query as { token?: unknown } | undefined;
+  const token = typeof body?.token === 'string' ? body.token : query?.token;
+  return typeof token === 'string' ? token : '';
+}
+
+/**
+ * `GET|POST /auth/reset-password/verify-token` par JETON (#10864) — un même
+ * jeton sondé depuis une flotte d'adresses converge dans un seul seau : 10
+ * vérifications par quart d'heure, largement assez pour la personne qui
+ * recharge sa page. La clé est une EMPREINTE séparée par domaine, jamais le
+ * jeton ni le `tokenHash` que la base indexe : le magasin de compteurs ne
+ * garde rien qui ouvre un compte.
+ */
+export function createResetTokenVerifyTokenRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 10,
+      windowMs: 15 * 60 * 1000,
+      keyPrefix: 'auth:reset-verify:token',
+      message: 'Trop de vérifications de ce lien de réinitialisation. Veuillez réessayer dans 15 minutes.',
+      keyGenerator: (request) =>
+        `token:${createHash('sha256').update(`reset-verify-rate:${resetTokenOf(request)}`).digest('hex')}`
     },
     redis
   );

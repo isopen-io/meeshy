@@ -55,13 +55,20 @@ internal fun LinkPreviewCard(
     accentColor: Color,
     onOpenUrl: (String) -> Unit,
     modifier: Modifier = Modifier,
+    inBubble: Boolean = false,
+    ink: Color? = null,
 ) {
     if (state is LinkPreviewState.None) return
 
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+        // Dans la bulle (iOS `BubbleLinkEmbed`), la carte suit le texte à 8 dp sans gouttière.
+        modifier = if (inBubble) {
+            modifier.padding(top = MeeshySpacing.sm)
+        } else {
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs)
+        },
         contentAlignment = if (isOutgoing) Alignment.CenterEnd else Alignment.CenterStart,
     ) {
         when (state) {
@@ -71,6 +78,7 @@ internal fun LinkPreviewCard(
                 host = LinkPreviewParser.hostOf(state.url) ?: state.url,
                 subtitle = state.url,
                 dim = true,
+                ink = ink,
                 onClick = { onOpenUrl(state.url) },
             )
             is LinkPreviewState.BareLink -> LinkChip(
@@ -78,11 +86,13 @@ internal fun LinkPreviewCard(
                 host = LinkPreviewParser.hostOf(state.url) ?: state.url,
                 subtitle = state.url,
                 dim = false,
+                ink = ink,
                 onClick = { onOpenUrl(state.url) },
             )
             is LinkPreviewState.Card -> RichLinkCard(
                 metadata = state.metadata,
                 accentColor = accentColor,
+                ink = ink,
                 onClick = { onOpenUrl(state.metadata.id) },
             )
         }
@@ -95,6 +105,7 @@ private fun LinkChip(
     host: String,
     subtitle: String,
     dim: Boolean,
+    ink: Color?,
     onClick: () -> Unit,
 ) {
     val tokens = MeeshyTheme.tokens
@@ -128,7 +139,7 @@ private fun LinkChip(
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.labelSmall,
-                color = tokens.textSecondary,
+                color = ink?.copy(alpha = 0.75f) ?: tokens.textSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -140,6 +151,7 @@ private fun LinkChip(
 private fun RichLinkCard(
     metadata: LinkMetadata,
     accentColor: Color,
+    ink: Color?,
     onClick: () -> Unit,
 ) {
     val tokens = MeeshyTheme.tokens
@@ -164,7 +176,7 @@ private fun RichLinkCard(
                     .background(accentColor.copy(alpha = 0.08f)),
             )
         }
-        RichLinkBody(metadata = metadata, accentColor = accentColor, tokens = tokens)
+        RichLinkBody(metadata = metadata, accentColor = accentColor, tokens = tokens, ink = ink)
     }
 }
 
@@ -173,6 +185,7 @@ private fun RichLinkBody(
     metadata: LinkMetadata,
     accentColor: Color,
     tokens: MeeshyThemeTokens,
+    ink: Color?,
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
@@ -193,7 +206,7 @@ private fun RichLinkBody(
                 text = title,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = tokens.textPrimary,
+                color = ink ?: tokens.textPrimary,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -202,7 +215,7 @@ private fun RichLinkBody(
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
-                color = tokens.textSecondary,
+                color = ink?.copy(alpha = 0.75f) ?: tokens.textSecondary,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )

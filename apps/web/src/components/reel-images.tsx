@@ -1,0 +1,57 @@
+import { useState } from 'react';
+import type { UIEvent } from 'react';
+
+import type { FeedCardMedia } from '@/lib/feed/card-model';
+import { translate } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
+
+import { ServedPicture } from './served-picture';
+
+/**
+ * LA GALERIE D'UN RÉEL D'IMAGES (#6457) — chargée À LA DEMANDE par
+ * `components/reel-page.tsx` (revue-correction #6484, motif D-54, comme
+ * `reel-scene-stage.tsx`) : un lecteur qui ne croise que des réels vidéo ne la
+ * télécharge jamais, et son affiche — la première image — tient la page le
+ * temps du chunk.
+ *
+ * Les images se parcourent d'un balayage HORIZONTAL — le vertical reste au
+ * fil. Les points disent la page lue, jamais une page supposée.
+ */
+export default function ReelImages({ images, language }: { readonly images: readonly FeedCardMedia[]; readonly language: InterfaceLanguage }) {
+  const [page, setPage] = useState(0);
+  const onScroll = (event: UIEvent<HTMLDivElement>) => {
+    const el = event.currentTarget;
+    if (el.clientWidth > 0) setPage(Math.round(Math.abs(el.scrollLeft) / el.clientWidth));
+  };
+
+  return (
+    <>
+      <div data-reel-images onScroll={onScroll} className="scrollbar-none absolute inset-0 flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain">
+        {images.map((image, i) => (
+          <ServedPicture key={image.id} avifSrcSet={image.avifSrcSet} sizes="100vw" className="contents">
+            <img
+              src={image.src}
+              {...(image.srcSet !== undefined ? { srcSet: image.srcSet, sizes: '100vw' } : {})}
+              alt={image.altText ?? translate(language, 'reels.image', { index: String(i + 1), count: String(images.length) })}
+              /* `lang` SEULEMENT sur le texte servi par le Prisme (#7392) : le
+                 repli « Image 1 sur 3 » est composé dans la langue de
+                 l'INTERFACE, donc déjà prononcé par la bonne voix — l'étiqueter
+                 avec la langue d'un texte alternatif absent serait faux. */
+              {...(image.altText !== undefined && image.altTextLanguage !== undefined ? { lang: image.altTextLanguage } : {})}
+              draggable={false}
+              decoding="async"
+              className="h-full w-full shrink-0 snap-start object-contain"
+            />
+          </ServedPicture>
+        ))}
+      </div>
+      {images.length > 1 ? (
+        <div aria-hidden="true" data-reel-image-dots className="pointer-events-none absolute inset-x-0 flex justify-center gap-1.5" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 28px)' }}>
+          {images.map((image, i) => (
+            <span key={image.id} className="rounded-full" style={{ width: 6, height: 6, backgroundColor: i === page ? 'var(--color-on-media)' : 'color-mix(in srgb, var(--color-on-media) 45%, transparent)' }} />
+          ))}
+        </div>
+      ) : null}
+    </>
+  );
+}

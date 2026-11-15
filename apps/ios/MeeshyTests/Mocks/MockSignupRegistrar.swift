@@ -1,0 +1,121 @@
+import Foundation
+@testable import Meeshy
+@testable import MeeshySDK
+
+/// Test double pour `SignupRegistering`.
+///
+/// Il existe pour une raison précise : `AuthManagerSignupRegistrar` appelle
+/// `AuthManager.shared.registerThrowing`, qui écrit dans le trousseau RÉEL et
+/// bascule la session de tout le processus de test. Une suite qui exercerait le
+/// vrai chemin déconnecterait `ZZEndStateConnectedSessionTests` — la phase 3 du
+/// gate, dont l'app relancée hérite.
+///
+/// Convention `apps/ios/CLAUDE.md` : `Result<T, Error>` + compteur d'appels +
+/// dernier paramètre reçu, plus un `reset()`.
+@MainActor
+final class MockSignupRegistrar: SignupRegistering {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466) → double-free au démontage
+    // hors d'une tâche. Garde : MainActorDeinitSourceGuardTests.
+    nonisolated deinit {}
+
+    var registerResult: Result<RegistrationOutcome, Error> = .success(.authenticated)
+    private(set) var registerCallCount = 0
+    /// La charge EXACTE que le ViewModel a composée — c'est elle que les
+    /// témoins de contrat inspectent, pas un état interne.
+    private(set) var lastRegisterRequest: RegisterRequest?
+
+    func register(_ request: RegisterRequest) async throws -> RegistrationOutcome {
+        registerCallCount += 1
+        lastRegisterRequest = request
+        return try registerResult.get()
+    }
+
+    /// #8288 — « Valider mon compte maintenant » : la session est TENUE.
+    var holdResult: Result<RegistrationHold, Error> = .success(.verificationRequired(
+        PendingEmailVerification(email: "awa@example.com", accountCreated: true)
+    ))
+    private(set) var holdCallCount = 0
+
+    func registerHoldingSession(_ request: RegisterRequest) async throws -> RegistrationHold {
+        holdCallCount += 1
+        lastRegisterRequest = request
+        return try holdResult.get()
+    }
+
+    func reset() {
+        registerResult = .success(.authenticated)
+        registerCallCount = 0
+        holdCallCount = 0
+        lastRegisterRequest = nil
+    }
+}
+
+/// Test double pour `PushPermissionDeferring` — un marqueur EN MÉMOIRE.
+///
+/// Le vrai report écrit dans `UserDefaults.standard`, où il survivrait d'un test
+/// à l'autre et ferait dépendre le verdict de l'ORDRE d'exécution.
+@MainActor
+final class MockPushPermissionDeferral: PushPermissionDeferring {
+    nonisolated deinit {}
+
+    var isPending: Bool = false
+    private(set) var postponeCallCount = 0
+    private(set) var resolveCallCount = 0
+
+    func postpone() {
+        postponeCallCount += 1
+        isPending = true
+    }
+
+    func resolve() {
+        resolveCallCount += 1
+        isPending = false
+    }
+
+    func reset() {
+        isPending = false
+        postponeCallCount = 0
+        resolveCallCount = 0
+    }
+}
+
+/// Test double pour `PendingReferralStoreProviding` (#8075) — le code
+/// d'invitation EN MÉMOIRE, sans toucher aux `UserDefaults` du simulateur.
+final class MockPendingReferralStore: PendingReferralStoreProviding {
+    private(set) var code: String?
+    private(set) var forgetCallCount = 0
+
+    init(code: String? = nil) { self.code = code }
+
+    func remember(_ code: String) { self.code = code }
+    func recall() -> String? { code }
+    func forget() {
+        forgetCallCount += 1
+        code = nil
+    }
+}
+
+/// Test double pour `SignInLinkRequesting` (#8216) — la demande du lien de
+/// connexion d'une adresse déjà utilisée, sans parler à la passerelle.
+@MainActor
+final class MockSignInLinkRequester: SignInLinkRequesting {
+    nonisolated deinit {}
+
+    var requestResult: Result<EmailCodeDispatch, Error> = .success(
+        EmailCodeDispatch(expiresInSeconds: 600, pendingSessionToken: "attente-8216")
+    )
+    private(set) var requestCallCount = 0
+    private(set) var lastRequestedEmail: String?
+
+    func requestEmailCode(email: String) async throws -> EmailCodeDispatch {
+        requestCallCount += 1
+        lastRequestedEmail = email
+        return try requestResult.get()
+    }
+
+    func reset() {
+        requestResult = .success(EmailCodeDispatch(expiresInSeconds: 600, pendingSessionToken: "attente-8216"))
+        requestCallCount = 0
+        lastRequestedEmail = nil
+    }
+}

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_offline_banner">Offline</string>
+    <string name="feed_offline_empty_title">Offline</string>
+    <string name="feed_offline_empty_detail">Il feed apparirà al ritorno della rete.</string>
+</resources>

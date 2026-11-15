@@ -2,6 +2,24 @@ import Foundation
 import MeeshySDK
 import XCTest
 
+/// Une adresse FICTIVE, pour les témoins qui doivent en désigner une que le
+/// serveur ne sert pas — « aucun stub », « échec », « /a puis /b ».
+///
+/// Le protocole ne prend plus que des adresses typées (#4282), et c'est
+/// voulu : un site de PRODUCTION ne doit pas pouvoir écrire un chemin. Un
+/// témoin, lui, a besoin d'exprimer l'inexistant — c'est la moitié de son
+/// travail. Ce type le lui permet sans rouvrir la porte au code de production,
+/// puisqu'il vit dans la cible de test.
+/// (Nommée `FictionalEndpoint` et non `TestEndpoint` : le serveur sert bien une
+/// route `/api/v1/test`, gardée pour ce nom au moment de l'écriture. Depuis
+/// #5424, cette route est une route d'EXPLOITATION filtrée du catalogue
+/// généré — `TestEndpoint` n'existe donc plus — mais le nom `FictionalEndpoint`
+/// reste le bon : il dit ce que ce type EST, pas ce qu'il évite.)
+struct FictionalEndpoint: MeeshyEndpoint {
+    let path: String
+    init(_ path: String) { self.path = path }
+}
+
 final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
 
     // MARK: - State
@@ -13,13 +31,27 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
     // MARK: - Stubbing
 
     private var stubs: [String: Any] = [:]
+    /// Réponses rendues UNE par appel, dans l'ordre, avant la table `stubs` :
+    /// une route à curseur rend une page différente à chaque aller. Un
+    /// `Error` posé dans la file est levé à son tour.
+    private var stubQueues: [String: [Any]] = [:]
     var errorToThrow: Error?
+    /// Suspend un `paginatedRequest` APRÈS qu'il a lu son stub : le témoin
+    /// change le stub, laisse passer un autre appel, puis libère le premier —
+    /// une réponse lente qui revient après une plus récente.
+    var paginatedGate: (@Sendable (_ cursor: String?) async -> Void)?
+    /// Les curseurs demandés, dans l'ordre.
+    var paginatedCursors: [String?] = []
 
     // MARK: - Call Tracking
 
     var requestCount = 0
     var requestEndpoints: [String] = []
     var requestMethods: [String] = []
+    /// Les paramètres d'URL de chaque `request`, dans l'ordre d'appel.
+    var requestQueryItems: [[URLQueryItem]] = []
+    /// Les en-têtes de la dernière `requestWithHeaders`.
+    var lastRequestHeaders: [String: String]?
     var postCount = 0
     var putCount = 0
     var patchCount = 0
@@ -34,49 +66,87 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
         stubs[endpoint] = result
     }
 
+    func stubSequence(_ endpoint: String, results: [Any]) {
+        stubQueues[endpoint] = results
+    }
+
     // MARK: - Protocol Methods
 
     func request<T: Decodable>(
-        endpoint: String,
+        _ typedEndpoint: any MeeshyEndpoint,
         method: String,
         body: Data?,
         queryItems: [URLQueryItem]?
     ) async throws -> T {
+        // La table de stubs reste indexée par CHEMIN : un double n'a pas de
+        // réseau, il a une table, et le chemin est la clé que les témoins
+        // écrivent déjà. `legacyPath(for:)` la donne (#4282).
+        let endpoint = legacyPath(for: typedEndpoint)
         requestCount += 1
         requestEndpoints.append(endpoint)
         requestMethods.append(method)
+        requestQueryItems.append(queryItems ?? [])
         // Corps déjà encodé par l'appelant (`FeedViewModel.createBorrowedSoundPost`
         // passe par ce chemin brut plutôt que par `post<T,U>`) — même point de
         // capture, même ordre : AVANT le throw, pour que le corps reste
         // observable même quand le test court-circuite la réponse.
         if let body { lastPostBodies.append(body) }
         if let error = errorToThrow { throw error }
+        if let next = stubQueues[endpoint]?.first {
+            stubQueues[endpoint]?.removeFirst()
+            if let error = next as? Error { throw error }
+            if let queued = next as? T { return queued }
+        }
         guard let result = stubs[endpoint] as? T else {
             throw NSError(domain: "MockAPIClientForApp", code: -1, userInfo: [NSLocalizedDescriptionKey: "No stub for endpoint '\(endpoint)' returning \(T.self)"])
         }
         return result
     }
 
+    /// Le repli par défaut du protocole a été retiré (#4282) : un double doit
+    /// désormais implémenter aussi la variante à en-têtes. Elle délègue à
+    /// `request` après avoir noté les en-têtes posés.
+    func requestWithHeaders<T: Decodable>(
+        _ typedEndpoint: any MeeshyEndpoint,
+        method: String,
+        body: Data?,
+        queryItems: [URLQueryItem]?,
+        headers: [String: String]?
+    ) async throws -> T {
+        lastRequestHeaders = headers
+        return try await request(typedEndpoint, method: method, body: body, queryItems: queryItems)
+    }
+
     func paginatedRequest<T: Decodable>(
-        endpoint: String,
+        _ typedEndpoint: any MeeshyEndpoint,
         cursor: String?,
         limit: Int
     ) async throws -> PaginatedAPIResponse<[T]> {
+        // La table de stubs reste indexée par CHEMIN : un double n'a pas de
+        // réseau, il a une table, et le chemin est la clé que les témoins
+        // écrivent déjà. `legacyPath(for:)` la donne (#4282).
+        let endpoint = legacyPath(for: typedEndpoint)
         requestCount += 1
         requestEndpoints.append(endpoint)
         requestMethods.append("GET")
+        paginatedCursors.append(cursor)
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? PaginatedAPIResponse<[T]> else {
             throw NSError(domain: "MockAPIClientForApp", code: -1, userInfo: [NSLocalizedDescriptionKey: "No stub for paginated endpoint '\(endpoint)'"])
         }
+        if let paginatedGate { await paginatedGate(cursor) }
         return result
     }
 
     func offsetPaginatedRequest<T: Decodable>(
-        endpoint: String,
+        _ typedEndpoint: any MeeshyEndpoint,
         offset: Int,
         limit: Int
     ) async throws -> OffsetPaginatedAPIResponse<[T]> {
+        // La table de stubs reste indexée par CHEMIN : un double n'a pas de
+        // réseau, il a une table, et le chemin est la clé que les témoins
+        // écrivent déjà. `legacyPath(for:)` la donne (#4282).
+        let endpoint = legacyPath(for: typedEndpoint)
         requestCount += 1
         requestEndpoints.append(endpoint)
         requestMethods.append("GET")
@@ -88,9 +158,13 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
     }
 
     func post<T: Decodable, U: Encodable>(
-        endpoint: String,
+        _ typedEndpoint: any MeeshyEndpoint,
         body: U
     ) async throws -> APIResponse<T> {
+        // La table de stubs reste indexée par CHEMIN : un double n'a pas de
+        // réseau, il a une table, et le chemin est la clé que les témoins
+        // écrivent déjà. `legacyPath(for:)` la donne (#4282).
+        let endpoint = legacyPath(for: typedEndpoint)
         postCount += 1
         requestCount += 1
         requestEndpoints.append(endpoint)
@@ -104,9 +178,13 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
     }
 
     func put<T: Decodable, U: Encodable>(
-        endpoint: String,
+        _ typedEndpoint: any MeeshyEndpoint,
         body: U
     ) async throws -> APIResponse<T> {
+        // La table de stubs reste indexée par CHEMIN : un double n'a pas de
+        // réseau, il a une table, et le chemin est la clé que les témoins
+        // écrivent déjà. `legacyPath(for:)` la donne (#4282).
+        let endpoint = legacyPath(for: typedEndpoint)
         putCount += 1
         requestCount += 1
         requestEndpoints.append(endpoint)
@@ -119,9 +197,13 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
     }
 
     func patch<T: Decodable, U: Encodable>(
-        endpoint: String,
+        _ typedEndpoint: any MeeshyEndpoint,
         body: U
     ) async throws -> APIResponse<T> {
+        // La table de stubs reste indexée par CHEMIN : un double n'a pas de
+        // réseau, il a une table, et le chemin est la clé que les témoins
+        // écrivent déjà. `legacyPath(for:)` la donne (#4282).
+        let endpoint = legacyPath(for: typedEndpoint)
         patchCount += 1
         requestCount += 1
         requestEndpoints.append(endpoint)
@@ -133,7 +215,11 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
         return result
     }
 
-    func delete(endpoint: String) async throws -> APIResponse<[String: Bool]> {
+    func delete(_ typedEndpoint: any MeeshyEndpoint) async throws -> APIResponse<[String: Bool]> {
+        // La table de stubs reste indexée par CHEMIN : un double n'a pas de
+        // réseau, il a une table, et le chemin est la clé que les témoins
+        // écrivent déjà. `legacyPath(for:)` la donne (#4282).
+        let endpoint = legacyPath(for: typedEndpoint)
         deleteCount += 1
         requestCount += 1
         requestEndpoints.append(endpoint)
@@ -146,9 +232,13 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
     }
 
     func delete<T: Decodable, U: Encodable>(
-        endpoint: String,
+        _ typedEndpoint: any MeeshyEndpoint,
         body: U
     ) async throws -> APIResponse<T> {
+        // La table de stubs reste indexée par CHEMIN : un double n'a pas de
+        // réseau, il a une table, et le chemin est la clé que les témoins
+        // écrivent déjà. `legacyPath(for:)` la donne (#4282).
+        let endpoint = legacyPath(for: typedEndpoint)
         deleteCount += 1
         requestCount += 1
         requestEndpoints.append(endpoint)
@@ -171,6 +261,7 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
         requestCount = 0
         requestEndpoints.removeAll()
         requestMethods.removeAll()
+        lastRequestHeaders = nil
         postCount = 0
         putCount = 0
         patchCount = 0

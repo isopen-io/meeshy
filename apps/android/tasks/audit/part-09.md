@@ -6,7 +6,7 @@ All paths absolute. Files read in full.
 
 ---
 
-## /home/user/meeshy/apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift
+## /home/user/meeshy/apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift
 
 **Purpose**: Form to create a public share/invite link for a group/community conversation, controlling guest access requirements, anonymous-user permissions, and usage/expiration limits.
 
@@ -29,7 +29,7 @@ All paths absolute. Files read in full.
 
 ---
 
-## /home/user/meeshy/apps/ios/Meeshy/Features/Main/Views/CreateTrackingLinkView.swift
+## /home/user/meeshy/apps/ios/Meeshy/Features/Links/Views/CreateTrackingLinkView.swift
 
 **Purpose**: Form to create a marketing tracking link (short URL with UTM params + optional custom token).
 
@@ -47,7 +47,7 @@ All paths absolute. Files read in full.
 
 ---
 
-## /home/user/meeshy/apps/ios/Meeshy/Features/Main/Views/DataExportView.swift
+## /home/user/meeshy/apps/ios/Meeshy/Features/Settings/Views/DataExportView.swift
 
 **Purpose**: GDPR data-export screen — choose format (JSON/CSV) and content scope (messages/media/contacts), request export, share resulting file.
 
@@ -67,7 +67,7 @@ All paths absolute. Files read in full.
 
 ---
 
-## /home/user/meeshy/apps/ios/Meeshy/Features/Main/Views/DataStorageView.swift
+## /home/user/meeshy/apps/ios/Meeshy/Features/Settings/Views/DataStorageView.swift
 
 **Purpose**: Storage management screen — explains media cache, lets user clear it.
 
@@ -84,7 +84,7 @@ All paths absolute. Files read in full.
 
 ---
 
-## /home/user/meeshy/apps/ios/Meeshy/Features/Main/Views/DeleteAccountView.swift
+## /home/user/meeshy/apps/ios/Meeshy/Features/Settings/Views/DeleteAccountView.swift
 
 **Purpose**: Account deletion screen — typed-phrase confirmation + final alert, then shows email-confirmation success state.
 
@@ -405,7 +405,7 @@ All paths absolute. Files read in full.
 
 ---
 
-## /home/user/meeshy/apps/ios/Meeshy/Features/Main/Views/LicensesView.swift
+## /home/user/meeshy/apps/ios/Meeshy/Features/Settings/Views/LicensesView.swift
 
 **Purpose**: Open-source licenses screen — static list of third-party libraries with license badges and repo links.
 

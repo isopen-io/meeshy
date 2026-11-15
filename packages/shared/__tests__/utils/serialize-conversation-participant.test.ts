@@ -117,7 +117,7 @@ describe('serializeConversationParticipant — la forme de fil', () => {
 });
 
 describe('serializeConversationParticipant — la présence ne sort pas toute seule', () => {
-  it('sert la présence quand aucune préférence ne s\'y oppose (régime prefs-only)', () => {
+  it('sert la présence quand la visibilité fournie l\'autorise', () => {
     const wire = serializeConversationParticipant(registeredRow(), {
       presence: { showOnline: true, showLastSeenTimestamp: true },
     });
@@ -144,20 +144,37 @@ describe('serializeConversationParticipant — la présence ne sort pas toute se
     expect(wire.lastActiveAt).toBeNull();
   });
 
-  // Régime PREFS-ONLY : une entrée absente est la situation NORMALE (un anonyme
-  // n'a pas de userId, donc pas de préférences). Elle révèle, elle ne masque pas
-  // — même loi que `applyPresenceVisibilityAsOffline({onMissingEntry:'reveal'})`.
-  it('révèle quand aucune entrée de visibilité ne concerne la cible', () => {
+  // Le défaut FERME. La fabrique ne sait rien du viewer : c'est l'appelant qui
+  // résout la visibilité (`resolveForTarget(s)` + `presenceFor`, qui traite
+  // l'entrée absente — cible sans compte — comme masquée sauf ADMIN+). Sans
+  // visibilité fournie, elle ne peut donc que masquer : révéler ici, ce serait
+  // révéler à l'appelant qui a OUBLIÉ l'option, jamais à celui qui a établi un
+  // droit.
+  it('masque quand aucune visibilité n\'est fournie', () => {
     const wire = serializeConversationParticipant(anonymousRow());
 
-    expect(wire.isOnline).toBe(true);
-    expect(wire.lastActiveAt).toBe(SEEN);
+    expect(wire.isOnline).toBe(false);
+    expect(wire.lastActiveAt).toBeNull();
+  });
+
+  it('masque aussi un rang inscrit, colonne « en ligne » comprise, sans visibilité', () => {
+    const wire = serializeConversationParticipant(registeredRow());
+
+    expect(wire.isOnline).toBe(false);
+    expect(wire.lastActiveAt).toBeNull();
   });
 
   it('préfère la présence VIVE du socket au champ de base, quand elle est fournie', () => {
-    const stale = { ...registeredRow(), isOnline: true };
+    const reveal = { showOnline: true, showLastSeenTimestamp: true };
+    const staleOnline = { ...registeredRow(), isOnline: true };
+    const staleOffline = { ...registeredRow(), isOnline: false };
 
-    const wire = serializeConversationParticipant(stale, { liveOnline: false });
+    expect(serializeConversationParticipant(staleOnline, { liveOnline: false, presence: reveal }).isOnline).toBe(false);
+    expect(serializeConversationParticipant(staleOffline, { liveOnline: true, presence: reveal }).isOnline).toBe(true);
+  });
+
+  it('ne laisse pas la présence VIVE sortir sans visibilité', () => {
+    const wire = serializeConversationParticipant(registeredRow(), { liveOnline: true });
 
     expect(wire.isOnline).toBe(false);
   });
@@ -198,5 +215,43 @@ describe('serializeConversationParticipant — ce qui ne doit PAS sortir', () =>
     };
 
     expect(serializeConversationParticipant(row)).not.toHaveProperty(field);
+  });
+
+  // #4643 — `autoTranslateEnabled: true` était un littéral, jamais lu depuis
+  // aucun magasin (`User` ne porte pas cette colonne ; le magasin réel est
+  // `UserPreferences.application`, jamais chargé ici). Même défaut, même
+  // correctif que #4161 sur le profil public : retiré plutôt que servi, la
+  // co-participation à une conversation ne donnant accès à aucune préférence
+  // personnelle d'un tiers. Un retour du littéral doit faire tomber ce témoin.
+  it('ne sert jamais autoTranslateEnabled — plus de littéral fabriqué', () => {
+    expect(serializeConversationParticipant(registeredRow())).not.toHaveProperty('autoTranslateEnabled');
+    expect(serializeConversationParticipant(anonymousRow())).not.toHaveProperty('autoTranslateEnabled');
+  });
+});
+
+/**
+ * `permissions.canModerateContent` est un champ de CONTRAT : il dit si le
+ * participant modère le contenu. Depuis la décision porteur du 2026-10-24
+ * (#11217), MODERATOR de plateforme modère partout, d'UNE table ; le champ la
+ * lit, faute de quoi il annoncerait `false` à côté d'une passerelle qui admet.
+ * Les autres champs (console, analytics, journaux) restent au rang
+ * d'administration — d'autres décisions.
+ */
+describe('serializeConversationParticipant — canModerateContent lit la table des rôles privilégiés (#11217)', () => {
+  const withRole = (role: string) => {
+    const row = registeredRow();
+    return serializeConversationParticipant({ ...row, user: { ...row.user, role } });
+  };
+
+  it.each(['MODERATOR', 'ADMIN', 'BIGBOSS'])('%s de la plateforme modère le contenu', (role) => {
+    expect(withRole(role).permissions.canModerateContent).toBe(true);
+  });
+
+  it.each(['USER', 'AUDIT', 'ANALYST', 'moderator'])('%s ne modère pas', (role) => {
+    expect(withRole(role).permissions.canModerateContent).toBe(false);
+  });
+
+  it('MODERATOR n’obtient pas pour autant la console', () => {
+    expect(withRole('MODERATOR').permissions.canAccessAdmin).toBe(false);
   });
 });

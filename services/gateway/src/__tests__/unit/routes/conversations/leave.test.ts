@@ -5,6 +5,7 @@
  * @jest-environment node
  */
 
+import { roomDeliveries } from '../../../helpers/room-deliveries';
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
@@ -88,8 +89,21 @@ function makePrisma(overrides: Record<string, any> = {}) {
       findMany: jest.fn<any>().mockResolvedValue(remainingParticipants),
       update: jest.fn<any>().mockResolvedValue({ ...mockParticipant, isActive: false }),
     },
+    notification: {
+      // La trace des promotions, lue par la succession du créateur (#4058).
+      // Vide : la règle replie alors sur `joinedAt`, et reste totale.
+      findMany: jest.fn<any>().mockResolvedValue([]),
+    },
     conversation: {
       update: jest.fn<any>().mockResolvedValue({ id: CONV_ID, isActive: false }),
+      // La loi de succession écarte d'abord le DM JAMAIS UTILISÉ, qui se ferme
+      // au lieu de se transmettre — 0 ici : ces scénarios ne sont pas ce DM.
+      count: jest.fn<any>().mockResolvedValue(0),
+    },
+    // #3740 — la clôture désactive aussi les liens de partage encore actifs du
+    // fil, dans la MÊME transaction.
+    conversationShareLink: {
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     // La clôture et le départ committent ensemble (cycle 69).
     $transaction: jest.fn<any>((ops: any) => Promise.all(ops)),
@@ -111,6 +125,9 @@ function makeRecordingIO(emitted: EmittedEvent[]) {
   const chain = (rooms: string[]) => ({
     to(room: string) {
       return chain([...rooms, room]);
+    },
+    except() {
+      return chain(rooms);
     },
     emit(event: string, payload: any) {
       emitted.push({ rooms, event, payload });
@@ -182,17 +199,23 @@ describe('POST /conversations/:id/leave — success as member', () => {
 });
 
 describe('POST /conversations/:id/leave — creator with other members', () => {
-  it('returns 400 when creator tries to leave without transferring ownership', async () => {
+  it("part en transférant le fil, au lieu de rendre 400 (#4058)", async () => {
+    const HERITIER = 'p-heritier';
     const prisma = makePrisma({
       participant: {
         findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'creator' }),
-        count: jest.fn<any>().mockResolvedValue(3), // other active members
+        findMany: jest.fn<any>().mockResolvedValue([
+          { id: HERITIER, userId: REMAINING_USER_ID, role: 'admin', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
+        ]),
         update: jest.fn<any>().mockResolvedValue({}),
       },
     });
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(200);
+    expect(prisma.participant.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: HERITIER }, data: { role: 'creator' } })
+    );
     await app.close();
   });
 });
@@ -202,13 +225,31 @@ describe('POST /conversations/:id/leave — creator alone in conversation', () =
     const prisma = makePrisma({
       participant: {
         findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'creator' }),
-        count: jest.fn<any>().mockResolvedValue(0), // no other members
+        findMany: jest.fn<any>().mockResolvedValue([]), // no other members
         update: jest.fn<any>().mockResolvedValue({}),
       },
     });
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('#3740 — désactive les liens de partage encore actifs du fil, dans la MÊME transaction', async () => {
+    const prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'creator' }),
+        findMany: jest.fn<any>().mockResolvedValue([]), // no other members
+        update: jest.fn<any>().mockResolvedValue({}),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.conversationShareLink.updateMany).toHaveBeenCalledWith({
+      where: { conversationId: RESOLVED_CONV_ID, isActive: true },
+      data: { isActive: false },
+    });
     await app.close();
   });
 });
@@ -224,10 +265,9 @@ describe('POST /conversations/:id/leave — audience du départ', () => {
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
     expect(res.statusCode).toBe(200);
 
-    const left = emitted.filter(e => e.event === 'conversation:participant-left');
-    expect(left).toHaveLength(1);
-    expect(left[0].rooms).toEqual([
-      // La room de conversation reste en TÊTE de chaîne.
+    const delivered = roomDeliveries(emitted.filter(e => e.event === 'conversation:participant-left'));
+    expect([...delivered.keys()].sort()).toEqual([
+      // La room de conversation reste servie — SANS effectif (#10205).
       `conversation:${RESOLVED_CONV_ID}`,
       `user:${REMAINING_USER_ID}`,
       // Le participant sans compte est nommé par son `Participant.id` : l'omettre
@@ -242,8 +282,11 @@ describe('POST /conversations/:id/leave — audience du départ', () => {
       // n'avait été appliqué qu'à ceux dont le COMPTEUR bouge, jamais à celui
       // dont l'APPARTENANCE s'arrête.
       `user:${USER_ID}`,
-    ]);
-    expect(left[0].payload).toMatchObject({ conversationId: RESOLVED_CONV_ID, userId: USER_ID, displayName: 'Alice' });
+    ].sort());
+    expect(delivered.get(`user:${REMAINING_USER_ID}`)).toMatchObject({ conversationId: RESOLVED_CONV_ID, userId: USER_ID, displayName: 'Alice', memberCount: 2 });
+    for (const room of [`conversation:${RESOLVED_CONV_ID}`, `user:${REMAINING_ANON_PARTICIPANT_ID}`, `user:${USER_ID}`]) {
+      expect(delivered.get(room)).not.toHaveProperty('memberCount');
+    }
     await app.close();
   });
 
@@ -280,6 +323,71 @@ describe('POST /conversations/:id/leave — participant lookup cache invalidatio
     const app = await buildApp();
     await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
     expect(mockInvalidateParticipantLookup).toHaveBeenCalledWith(PART_ID, 'conv-resolved-id');
+    await app.close();
+  });
+});
+
+/**
+ * **Le rang du créateur se lit quelle que soit sa casse** (issue #4008).
+ *
+ * `Participant.role` s'écrit en minuscules depuis #3875, mais la migration des
+ * lignes historiques (`normalize-participant-role-casing.ts`) n'a pas encore
+ * été passée en production. Les seules lignes privilégiées écrites en
+ * MAJUSCULES sont celles des comptes `meeshy`/`admin` du salon global, que
+ * l'ancien `InitService` posait en `CREATOR`/`ADMIN`.
+ *
+ * #4008 range ces lecteurs parmi les défauts « fail-closed » — un droit refusé,
+ * jamais accordé à tort. **Ce site-ci est l'inverse** : la comparaison ne sert
+ * pas à ACCORDER un pouvoir, elle décide d'une CONSÉQUENCE. Sur une ligne
+ * `CREATOR`, l'égalité stricte ne tire pas, et le créateur du salon global
+ * quitte en y laissant tous ses membres — sans transfert d'ownership ni
+ * clôture.
+ *
+ * > Une comparaison de rôle qui échoue « fermé » quand elle autorise échoue
+ * > « ouvert » quand elle interdit. Le sens de la garde décide du sens de la
+ * > panne : ranger une famille entière d'un seul côté rate exactement les sites
+ * > où elle est dangereuse.
+ *
+ * Depuis #4058, la conséquence n'est plus un refus mais un TRANSFERT — et la
+ * propriété testée est la même : sur une ligne écrite `CREATOR`, la
+ * conversation ne reste jamais sans créateur.
+ */
+describe('POST /conversations/:id/leave — le créateur reste protégé quelle que soit la casse (#4008)', () => {
+  it("transmet le fil quand la ligne est écrite CREATOR, au lieu de le laisser sans créateur", async () => {
+    const HERITIER = 'p-heritier-casse';
+    const prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'CREATOR' }),
+        findMany: jest.fn<any>().mockResolvedValue([
+          { id: HERITIER, userId: REMAINING_USER_ID, role: 'member', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
+        ]),
+        update: jest.fn<any>().mockResolvedValue({}),
+      },
+    });
+    const app = await buildApp({ prisma });
+
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
+
+    expect(res.statusCode).toBe(200);
+    expect(prisma.participant.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: HERITIER }, data: { role: 'creator' } })
+    );
+    await app.close();
+  });
+
+  it('laisse partir un créateur écrit CREATOR resté seul, en fermant le fil', async () => {
+    const prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'CREATOR' }),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+        update: jest.fn<any>().mockResolvedValue({}),
+      },
+    });
+    const app = await buildApp({ prisma });
+
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
+
+    expect(res.statusCode).toBe(200);
     await app.close();
   });
 });

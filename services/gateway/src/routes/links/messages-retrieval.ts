@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
-import { sendSuccess, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { validatePagination } from '../../utils/pagination';
 import {
   createUnifiedAuthMiddleware,
@@ -10,6 +10,20 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { createLegacyHybridRequest } from './utils/link-helpers';
 import { getConversationMessagesWithDetails, countConversationMessages } from './utils/prisma-queries';
 import { formatLinkMessageWithDetails } from './utils/message-formatters';
+import { revealAtRestRows } from '../../services/messaging/serverAtRest';
+import { withNoticeUsernames } from '../../services/messaging/noticeUsernames';
+import { withCallSummaryParticipantNames } from '../../services/calls/callSummaryParticipantNames';
+import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
+import { loadQuotedEphemeralReaders } from '../conversations/ephemeralReaderDeadlines';
+import { mapMessageProtectionFields } from '../conversations/messageProtectionProjection';
+import { keepAliveForReader, withInheritedExpiry } from '../../services/messaging/quoteCascade';
+import {
+  HISTORY_FLOOR_PARTICIPANT_SELECT,
+  historyReaderFromAuthContext,
+  loadHistoryFloor,
+  loadReaderHistoryFloor,
+  type HistoryFloorJoin
+} from '../../services/historyFloor';
 import {
   conversationSummarySchema,
   messageSchema
@@ -63,6 +77,10 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
             }
           }
         },
+        401: {
+          description: 'No identity at all (neither account nor guest session) — #4808',
+          ...errorResponseSchema
+        },
         403: {
           description: 'Access denied to this conversation',
           ...errorResponseSchema
@@ -85,24 +103,31 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
 
       const isLinkId = identifier.startsWith('mshy_');
 
+      // #4166, critère 1 — `include` sans `select` à la racine chargeait la
+      // ligne `ConversationShareLink` ENTIÈRE (compteurs de session,
+      // `allowedCountries`/`allowedLanguages`/`allowedIpRanges`, `createdAt`/
+      // `updatedAt`…) pour n'en lire que `id` (garde anonyme, `link.id` passé
+      // à `loadHistoryFloor`), `conversationId` et `allowViewHistory` (le
+      // plancher d'historique, `loadHistoryFloor`/`loadReaderHistoryFloor`).
+      const shareLinkSelect = {
+        id: true,
+        conversationId: true,
+        allowViewHistory: true,
+        conversation: {
+          select: { id: true, title: true, type: true }
+        }
+      };
+
       let shareLink;
       if (isLinkId) {
         shareLink = await fastify.prisma.conversationShareLink.findUnique({
           where: { linkId: identifier },
-          include: {
-            conversation: {
-              select: { id: true, title: true, type: true }
-            }
-          }
+          select: shareLinkSelect
         });
       } else {
         shareLink = await fastify.prisma.conversationShareLink.findUnique({
           where: { id: identifier },
-          include: {
-            conversation: {
-              select: { id: true, title: true, type: true }
-            }
-          }
+          select: shareLinkSelect
         });
       }
 
@@ -110,15 +135,36 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
         return sendNotFound(reply, 'Lien de partage non trouvé');
       }
 
+      // #4808 — deux refus structurellement différents, deux statuts.
+      // `hybridRequest.isAuthenticated` est vrai pour un compte ET (nommage
+      // legacy, cf. `createLegacyHybridRequest`) pour un invité de lien ; on
+      // teste donc les deux drapeaux pour couvrir aussi bien cette convention
+      // que celle, plus lisible, où l'invité porte `isAuthenticated: false`.
+      // Ni l'un ni l'autre ⇒ aucune identité — ni compte, ni session invitée
+      // — n'accompagne la requête. Cette route sert un parcours SANS compte
+      // (rejoindre en anonyme), donc un 401 sec ne route personne vers
+      // `/login` : il donne au client de quoi proposer « anonyme ou compte »
+      // plutôt qu'un 403, qui affirmerait à tort connaître ce visiteur.
+      if (!hybridRequest.isAuthenticated && !hybridRequest.isAnonymous) {
+        return sendUnauthorized(reply, 'Session requise pour lire ce lien', { code: 'LINK_SESSION_REQUIRED' });
+      }
+
       let hasAccess = false;
+      // Annotation alignée sur le `select` RÉEL (`{ id: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }`
+      // ci-dessous) — #3893 point 2. L'ancienne annotation, plus étroite,
+      // fonctionnait au runtime (typage structurel) mais affirmait faussement
+      // que `role`/`historyVisibleFrom`/`permissions`/`anonymousSession` ne
+      // sont pas servis ici, alors que `loadHistoryFloor` en dépend.
+      let member: ({ id: string } & HistoryFloorJoin) | null = null;
 
       if (hybridRequest.isAuthenticated && hybridRequest.user) {
-        const member = await fastify.prisma.participant.findFirst({
+        member = await fastify.prisma.participant.findFirst({
           where: {
             conversationId: shareLink.conversationId,
             userId: hybridRequest.user.id,
             isActive: true
-          }
+          },
+          select: { id: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
         });
         hasAccess = !!member;
       }
@@ -131,6 +177,19 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
         return sendForbidden(reply, 'Accès non autorisé à cette conversation');
       }
 
+      // Le plancher du LECTEUR — la même loi que `GET /conversations/:id/messages`,
+      // rendue par le même module. Cette route est la porte de lecture d'un
+      // visiteur entré par lien : sans borne, un lien `allowViewHistory: false`
+      // n'interdisait l'avant-jointure qu'aux lecteurs qui n'empruntaient pas
+      // cette URL. Le lien déjà chargé est réutilisé quand c'est le sien.
+      const historyFloor = member
+        ? await loadHistoryFloor(fastify.prisma, member, { link: shareLink })
+        : await loadReaderHistoryFloor(fastify.prisma, {
+            conversationId: shareLink.conversationId,
+            reader: historyReaderFromAuthContext(request.authContext),
+            link: shareLink
+          });
+
       // SSOT guard: string-schema pagination (AJV useDefaults fills '50'/'0'
       // but does not coerce or bound). Raw parseInt yielded `NaN`/negative
       // skip/take on malformed input, with no upper cap.
@@ -140,15 +199,38 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
         fastify.prisma,
         shareLink.conversationId,
         pageLimit,
-        pageOffset
+        pageOffset,
+        { historyFloor }
       );
 
-      const totalMessages = await countConversationMessages(fastify.prisma, shareLink.conversationId);
+      const totalMessages = await countConversationMessages(fastify.prisma, shareLink.conversationId, { historyFloor });
 
-      const formattedMessages = messages.map(formatLinkMessageWithDetails);
+      // #7451 × #8630 — ce qui est mort pour CE lecteur ne se sert pas : un
+      // éphémère échu, et toute réponse à ce qui l'est.
+      const readerParticipantId = member?.id ?? hybridRequest.anonymousParticipant?.id ?? undefined;
+      const now = new Date();
+      const readerPage = await keepAliveForReader(fastify.prisma, messages, readerParticipantId, now);
+
+      // #8562 — la citation d'un éphémère échu pour CE lecteur sort scellée.
+      const readers = {
+        deadlines: await loadQuotedEphemeralReaders(fastify.prisma, readerPage.alive, async () => readerParticipantId),
+        now
+      };
+      // #12822 — le participant du lien lit le clair d'un message `server`/`hybrid` et de ses traductions.
+      const openedPage = await revealAtRestRows(readerPage.alive, gatewayKeyring(fastify.prisma));
+      const formattedMessages = openedPage.map((message) => withInheritedExpiry(
+        {
+          ...formatLinkMessageWithDetails(message, readers),
+          expiresAt: mapMessageProtectionFields(message, readerPage.deadlines.get(message.id)).expiresAt
+        },
+        readerPage.inherited
+      ));
+
+      // #16421 — le pseudo d'un avis d'arrivée écrit avant qu'il y voyage.
+      const servedMessages = await withCallSummaryParticipantNames(fastify.prisma, await withNoticeUsernames(fastify.prisma, formattedMessages), { conversationId: shareLink.conversationId });
 
       return sendSuccess(reply, {
-          messages: formattedMessages.reverse(),
+          messages: servedMessages.reverse(),
           conversation: shareLink.conversation,
           hasMore: totalMessages > pageOffset + messages.length,
           total: totalMessages

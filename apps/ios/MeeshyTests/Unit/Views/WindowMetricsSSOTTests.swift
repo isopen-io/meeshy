@@ -24,15 +24,13 @@ import UIKit
 @MainActor
 final class WindowMetricsSSOTTests: XCTestCase {
 
-    /// `apps/ios/` — four levels up from `MeeshyTests/Unit/Views/<this file>`.
+    /// L'UNITÉ (`Foo.swift` + `Foo+*.swift`) : un type découpé garde une adresse, sinon
+    /// les gardes négatives de ce fichier lisent la moitié qui ne contient pas l'interdit.
     private func source(_ relativePath: String) throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
+        // Le lecteur de story a des types sortis sous leur propre nom (`StoryViewerSources`).
+        try AppSourceGuard.unit(
+            relativePath,
+            alsoIncluding: relativePath.hasSuffix("/StoryViewerView.swift") ? StoryViewerSources.companions : [])
     }
 
     /// Comment lines are stripped before matching: the doc-comments deliberately
@@ -49,15 +47,16 @@ final class WindowMetricsSSOTTests: XCTestCase {
     private static let convergedFiles = [
         "Meeshy/Features/Main/Views/ConversationView.swift",
         "Meeshy/Features/Main/Views/ConversationListView.swift",
-        "Meeshy/Features/Main/Views/StoryViewerView.swift",
-        "Meeshy/Features/Main/Views/StoryViewerView+Content.swift",
+        "Meeshy/Features/Stories/Views/StoryViewerView.swift",
+        "Meeshy/Features/Stories/Views/StoryViewerView+Content.swift",
         "Meeshy/Features/Main/Views/ReelFeedCard.swift",
         "Meeshy/Features/Main/Views/AudioFullscreenView.swift",
         "Meeshy/Features/Main/Views/RootView.swift",
         "Meeshy/Features/Main/Views/VideoLegacySupport.swift",
         "Meeshy/Features/Main/Components/ComposerModels.swift",
-        "Meeshy/Features/Main/Components/IslandEmergingBanner.swift",
-        "Meeshy/Features/Main/Components/RecentMediaStrip.swift"
+        "Meeshy/Features/Main/Components/RecentMediaStrip.swift",
+        "Meeshy/Features/Main/Components/RecentMediaCell.swift",
+        "Meeshy/Features/Main/Components/RecentMediaPreview.swift"
     ]
 
     // MARK: - L'ancrage du bouton « redescendre en bas »
@@ -66,7 +65,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
     /// chaque ligne tapée le faisait remonter — pendant que l'utilisateur
     /// relisait son historique.
     func test_scrollButtonAnchor_whileComposing_doesNotFollowTheGrowingComposer() {
-        let anchor = ConversationView.resolvedScrollButtonAnchor(
+        let anchor = ConversationViewRules.resolvedScrollButtonAnchor(
             current: 130,
             composerHeight: 186,
             isComposing: true
@@ -77,7 +76,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
     }
 
     func test_scrollButtonAnchor_withAnEmptyComposer_realignsOnIt() {
-        let anchor = ConversationView.resolvedScrollButtonAnchor(
+        let anchor = ConversationViewRules.resolvedScrollButtonAnchor(
             current: 130,
             composerHeight: 164,
             isComposing: false
@@ -92,7 +91,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
     /// bouton : elles passent par `isComposing == false`.
     func test_scrollButtonAnchor_shrinkingComposer_isFollowedWhenNotComposing() {
         XCTAssertEqual(
-            ConversationView.resolvedScrollButtonAnchor(current: 186, composerHeight: 130, isComposing: false),
+            ConversationViewRules.resolvedScrollButtonAnchor(current: 186, composerHeight: 130, isComposing: false),
             130
         )
     }
@@ -104,7 +103,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
     /// default, which would collapse the composer on every keyboard frame.
     func test_composerHeight_whileKeyboardIsUp_declinesToUpdate() {
         XCTAssertNil(
-            ConversationView.resolvedComposerHeight(contentHeight: 130, keyboardHeight: 336, safeAreaBottom: 34),
+            ConversationViewRules.resolvedComposerHeight(contentHeight: 130, keyboardHeight: 336, safeAreaBottom: 34),
             "With the keyboard up the bottom inset is already 0 and the GeometryReader fires on " +
             "every animation frame — recomputing there loops the height against itself."
         )
@@ -112,7 +111,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
 
     func test_composerHeight_withKeyboardDown_addsTheWindowInset() {
         XCTAssertEqual(
-            ConversationView.resolvedComposerHeight(contentHeight: 130, keyboardHeight: 0, safeAreaBottom: 34),
+            ConversationViewRules.resolvedComposerHeight(contentHeight: 130, keyboardHeight: 0, safeAreaBottom: 34),
             164 as CGFloat?
         )
     }
@@ -122,7 +121,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
     /// screen-derived guess padded onto the bottom.
     func test_composerHeight_withoutAnInset_isTheContentHeight() {
         XCTAssertEqual(
-            ConversationView.resolvedComposerHeight(contentHeight: 130, keyboardHeight: 0, safeAreaBottom: 0),
+            ConversationViewRules.resolvedComposerHeight(contentHeight: 130, keyboardHeight: 0, safeAreaBottom: 0),
             130 as CGFloat?
         )
     }
@@ -132,10 +131,10 @@ final class WindowMetricsSSOTTests: XCTestCase {
     /// iPad Split View pane (0 pt) shifts the composer by a full 34 pt — enough
     /// to float it clear of the bar it is supposed to sit against.
     func test_composerHeight_isSensitiveToWhichWindowTheInsetCameFrom() {
-        let fromTheActiveWindow = ConversationView.resolvedComposerHeight(
+        let fromTheActiveWindow = ConversationViewRules.resolvedComposerHeight(
             contentHeight: 130, keyboardHeight: 0, safeAreaBottom: 0
         )
-        let fromABackgroundWindow = ConversationView.resolvedComposerHeight(
+        let fromABackgroundWindow = ConversationViewRules.resolvedComposerHeight(
             contentHeight: 130, keyboardHeight: 0, safeAreaBottom: 34
         )
 
@@ -152,7 +151,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
         let code = codeLines(try source(Self.deviceLayout))
 
         XCTAssertTrue(
-            code.contains("windowScene.activationState == .foregroundActive"),
+            code.contains("isForeground: { $0.activationState == .foregroundActive }"),
             "The scene must be picked by activation state, never by position in an unordered Set."
         )
         XCTAssertTrue(
@@ -172,12 +171,12 @@ final class WindowMetricsSSOTTests: XCTestCase {
     func test_windowMetrics_areReadersOverTheSingleResolution() throws {
         let code = codeLines(try source(Self.deviceLayout))
 
-        for metric in ["activeWindow?.bounds.size",
-                       "activeWindow?.safeAreaInsets.bottom",
-                       "activeWindow?.safeAreaInsets.top"] {
+        for metric in ["measurementWindow?.bounds.size",
+                       "measurementWindow?.safeAreaInsets.bottom",
+                       "measurementWindow?.safeAreaInsets.top"] {
             XCTAssertTrue(
                 code.contains(metric),
-                "\(metric) must be derived from activeWindow, not from its own scene walk."
+                "\(metric) must be derived from measurementWindow, not from its own scene walk."
             )
         }
 
@@ -185,6 +184,21 @@ final class WindowMetricsSSOTTests: XCTestCase {
             code.components(separatedBy: "connectedScenes").count - 1, 1,
             "DeviceLayout must touch connectedScenes exactly once — in activeWindowScene."
         )
+    }
+
+    /// 2026-09-30 — the call screen lives in its own key `UIWindow` (#8725).
+    /// Measured off the KEY window, the call view read the insets of the very
+    /// window SwiftUI was laying out: an AttributeGraph cycle, after which the
+    /// call screen never updated again (stuck on « Appel entrant » /
+    /// « Appel en cours… » while the call was connected). Metrics are taken
+    /// on the app's normal-level window, never on an overlay above it.
+    func test_windowMetrics_measureTheAppWindow_neverAnOverlay() throws {
+        let code = codeLines(try source(Self.deviceLayout))
+        XCTAssertTrue(code.contains("static var measurementWindow: UIWindow?"))
+        XCTAssertTrue(code.contains("for window in scene.windows where window.windowLevel == .normal"),
+                      "the measured window is filtered on the NORMAL level — an overlay window (call, alerts) is never measured")
+        XCTAssertTrue(code.contains("guard let scene = activeWindowScene else { return nil }"),
+                      "measurementWindow reuses the single scene resolution")
     }
 
     // MARK: - No call site keeps its own walk
@@ -209,15 +223,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
         }
     }
 
-    /// `UIScreen.main` survives in exactly three places, all deliberate:
-    /// `DeviceLayout`'s own last resort, and two image-decode sites that want
-    /// the largest width an image could ever need (sizing those to the current
-    /// window would under-decode and blur the moment the window grows).
-    ///
-    /// Asserted as an equality, not an inclusion: an inclusion would stay green
-    /// if a new screen-derived measurement appeared, which is the only thing
-    /// this is here to catch.
-    func test_displayMeasurements_areConfinedToTheDeliberateSites() throws {
+    func test_appSources_neverReadTheMainScreen() throws {
         let appRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -225,28 +231,22 @@ final class WindowMetricsSSOTTests: XCTestCase {
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy")
 
-        let deliberate: Set<String> = [
-            "DeviceLayout.swift",              // the last resort when no scene exists
-            "BubbleStandardLayout.swift",      // decode target: widest the image may need
-            "ConversationMediaGalleryView.swift" // decode target: widest the image may need
-        ]
-
         var found: Set<String> = []
         let walker = try XCTUnwrap(FileManager.default.enumerator(atPath: appRoot.path))
 
         for case let relativePath as String in walker where relativePath.hasSuffix(".swift") {
             let code = codeLines(
-                try String(contentsOf: appRoot.appendingPathComponent(relativePath), encoding: .utf8)
+                try AppSourceGuard.text(at: appRoot.appendingPathComponent(relativePath))
             )
-            if code.contains("UIScreen.main.bounds") {
+            if code.contains("UIScreen.main") {
                 found.insert((relativePath as NSString).lastPathComponent)
             }
         }
 
         XCTAssertEqual(
-            found, deliberate,
-            "New display-derived measurement, or a deliberate site removed without updating this " +
-            "guard. Layout reads DeviceLayout.windowSize; only image-decode targets read the screen."
+            found, [],
+            "Lecture de l'écran principal dans l'app : le layout lit DeviceLayout.windowSize, le " +
+            "décodage DecodeBudget, et WindowMetrics tient la seule lecture."
         )
     }
 
@@ -263,7 +263,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
 
         let deliberate: Set<String> = [
             "DeviceLayout.swift",  // the single resolution
-            "CallManager.swift"    // screen-capture probe: genuinely about every scene
+            "CallAppStateObserver.swift"    // screen-capture probe: genuinely about every scene
         ]
 
         var found: Set<String> = []
@@ -271,7 +271,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
 
         for case let relativePath as String in walker where relativePath.hasSuffix(".swift") {
             let code = codeLines(
-                try String(contentsOf: appRoot.appendingPathComponent(relativePath), encoding: .utf8)
+                try AppSourceGuard.text(at: appRoot.appendingPathComponent(relativePath))
             )
             if code.contains("connectedScenes") {
                 found.insert((relativePath as NSString).lastPathComponent)
@@ -294,7 +294,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
     /// scene picked out of an unordered Set, and set a popover `sourceView` with
     /// no `sourceRect` — so it would have anchored at the view's corner on iPad.
     func test_storyViewer_hasNoOrphanedActivitySheet() throws {
-        let code = codeLines(try source("Meeshy/Features/Main/Views/StoryViewerView+Content.swift"))
+        let code = codeLines(try source("Meeshy/Features/Stories/Views/StoryViewerView+Content.swift"))
 
         XCTAssertFalse(
             code.contains("func shareStory()"),
@@ -309,5 +309,33 @@ final class WindowMetricsSSOTTests: XCTestCase {
             code.contains("meeshy.me/story/"),
             "The shared URL must be the minted trackable link, not a hardcoded story path."
         )
+    }
+
+    // MARK: - Story viewer bottom inset (#10566)
+
+    /// Reading the window's `safeAreaInsets` during a `body` pass re-enters the
+    /// graph update in progress: the story viewer crashed there on 2026-10-10
+    /// (« Thread stack size exceeded »). The whole unit — the type and its
+    /// extensions — measures the inset by layout instead.
+    func test_storyViewer_neverReadsWindowSafeAreaDuringBody() throws {
+        let code = codeLines(try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView.swift"))
+
+        XCTAssertFalse(
+            code.contains("DeviceLayout.safeArea"),
+            "The story viewer measures its bottom inset by layout (measuringBottomSafeArea), " +
+            "never off the window while SwiftUI is evaluating a body."
+        )
+        XCTAssertTrue(
+            code.contains(".measuringBottomSafeArea(into: $windowBottomInset)"),
+            "The measured inset must feed the composer and the comments zone."
+        )
+    }
+
+    func test_bottomSafeAreaInsetKey_keepsTheLargestMeasuredInset() {
+        var value = BottomSafeAreaInsetKey.defaultValue
+        BottomSafeAreaInsetKey.reduce(value: &value) { 34 }
+        BottomSafeAreaInsetKey.reduce(value: &value) { 0 }
+
+        XCTAssertEqual(value, 34)
     }
 }

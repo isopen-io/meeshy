@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "action.share",
+          "androidName": "chat_action_share",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media.save.title",
+          "androidName": "chat_action_save_media",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message.action.openLink",
+          "androidName": "chat_action_open_link",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.copyLink",
+          "androidName": "chat_action_copy_link",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "action.thread",
+          "androidName": "chat_action_thread",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "action.translate",
+          "androidName": "chat_action_translate",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.tab.reactions",
+          "androidName": "chat_action_reactions",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.tab.transcription",
+          "androidName": "chat_action_transcription",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-more.e2ee.notice",
+          "androidName": "chat_menu_e2ee_notice",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.transcription.empty",
+          "androidName": "transcription_fiche_empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.transcription.transcribe",
+          "androidName": "transcription_fiche_transcribe",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.transcription.speakers",
+          "androidName": "transcription_fiche_speakers",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.audio-translations",
+          "androidName": "transcription_fiche_translations",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.audio.cloned",
+          "androidName": "transcription_fiche_cloned",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.transcription.in-progress",
+          "androidName": "transcription_fiche_a11y_in_progress",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.transcription.in-language",
+          "androidName": "transcription_fiche_a11y_in_language",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.transcription.confidence",
+          "androidName": "transcription_fiche_a11y_confidence",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.audio.cloned-voice",
+          "androidName": "transcription_fiche_a11y_cloned_voice",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

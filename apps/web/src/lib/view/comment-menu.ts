@@ -1,0 +1,77 @@
+import type { PostComment } from '@/lib/api/publication-comments';
+import { commentCardSubjectOf } from '@/lib/export/comment-card-subject';
+import { maskedByEffects } from '@/lib/export/message-card-subject';
+
+/**
+ * **LE MENU « … » D'UN COMMENTAIRE — LOI PURE** (#8734, jumelle web de #8709)
+ * — miroir de `CommentRowView.swift` (`hasMoreOptions`, le `Menu` de la
+ * rangée) : la MÊME rangée sert le détail d'une publication, la feuille des
+ * stories et celle des Réels, donc le même menu, décidé ici une seule fois.
+ *
+ * - **Copier** : le texte que la rangée AFFICHE (le Prisme, ou l'original
+ *   demandé) — jamais un commentaire flouté ou à vue unique : ce qui est
+ *   masqué à l'écran ne part pas en clair dans le presse-papiers.
+ * - **Imager** vit dans le RAIL de la rangée, en icône (#16541,
+ *   `commentImageable`) : le menu ne le répète pas. La garde est celle de la
+ *   carte (`commentCardSubjectOf`) — une seule loi dit ce qui se peint. Une
+ *   RACINE qui a des réponses offre au menu « Imager avec les réponses » ;
+ *   une RÉPONSE emporte déjà sa racine en citation. Un commentaire de POST
+ *   (#9687, `postComposition`) n'a que l'icône : l'atelier compose la carte
+ *   (post en tête, fil, réponses choisies), et la composition dit s'il s'offre.
+ * - **Modifier / Supprimer** : à l'AUTEUR seul, reflet de la passerelle
+ *   (`PATCH`/`DELETE` gardés par le contrôle d'auteur). **Modifier exige un
+ *   fil OUVERT** (#16930) : sur une publication aux commentaires fermés, la
+ *   passerelle refuse le `PATCH` (`403 COMMENTS_DISABLED`) — Supprimer, lui,
+ *   reste (retirer ce qu'on a publié ne dépend pas du réglage d'un autre).
+ * - **Retirer** (#11150) : aux AUTRES seuls, pour la modération de plateforme
+ *   (l'hôte n'en remet la capacité qu'à MODERATOR/ADMIN/BIGBOSS) — motif
+ *   demandé, l'auteur en est prévenu.
+ * - **Signaler** : aux AUTRES seuls — se signaler soi-même n'a aucun sens.
+ *
+ * Une rangée EN VOL n'a pas d'adresse chez la passerelle : aucune entrée.
+ */
+export type CommentMenuEntry = 'copy' | 'imageWithReplies' | 'edit' | 'delete' | 'remove' | 'report';
+
+/** « IMAGER » (#8693, #16541) — l'icône du rail : la garde de la carte, ou la composition d'un post. */
+export function commentImageable(params: {
+  readonly comment: PostComment;
+  readonly servedText: string;
+  readonly canImage: boolean;
+  readonly postComposition?: { readonly imageable: boolean };
+}): boolean {
+  const { comment, servedText, canImage, postComposition } = params;
+  if (comment.pending === true || !canImage) return false;
+  return postComposition?.imageable ?? commentCardSubjectOf({ comment, servedText, parent: null }) !== null;
+}
+
+export function commentMenuEntries(params: {
+  readonly comment: PostComment;
+  readonly viewerId: string;
+  /** Le texte que la rangée affiche en ce moment. */
+  readonly servedText: string;
+  readonly canCopy: boolean;
+  readonly canImage: boolean;
+  readonly canReport: boolean;
+  /** La modération de plateforme peut retirer le commentaire d'un autre (#11150). Absent ⇒ non. */
+  readonly canRemove?: boolean;
+  /** LES COMMENTAIRES SONT FERMÉS (#16930, `commentsClosed`) : « Modifier » ne s'offre plus. Absent ⇒ ouverts. */
+  readonly commentsClosed?: boolean;
+  /** Le commentaire d'un POST (#9687) : la composition a-t-elle un mode ? Absent : story, la carte du commentaire. */
+  readonly postComposition?: { readonly imageable: boolean };
+}): readonly CommentMenuEntry[] {
+  const { comment, viewerId, servedText, canCopy, canImage, canReport, postComposition } = params;
+  if (comment.pending === true) return [];
+  const isMine = viewerId !== '' && comment.author.id === viewerId;
+  const copyable = canCopy && !maskedByEffects(comment.effectFlags) && servedText.trim() !== '';
+  const imageable = commentImageable({ comment, servedText, canImage, ...(postComposition === undefined ? {} : { postComposition }) });
+  const isRoot = typeof comment.parentId !== 'string' || comment.parentId === '';
+  const hasReplies = typeof comment.replyCount === 'number' && comment.replyCount > 0;
+  return [
+    ...(copyable ? (['copy'] as const) : []),
+    ...(imageable && isRoot && hasReplies && postComposition === undefined ? (['imageWithReplies'] as const) : []),
+    ...(isMine && params.commentsClosed !== true ? (['edit'] as const) : []),
+    ...(isMine ? (['delete'] as const) : []),
+    ...(!isMine && params.canRemove === true ? (['remove'] as const) : []),
+    ...(!isMine && canReport ? (['report'] as const) : []),
+  ];
+}

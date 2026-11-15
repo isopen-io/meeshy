@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_clear_all_message">Every slide starts over, blank, on the neutral background. Undo brings the slides back.</string>
+    <string name="composer_media_sources">Choose a source</string>
+    <string name="composer_preview_close">Close the preview</string>
+    <string name="composer_preview_previous">Previous slide</string>
+    <string name="composer_preview_next">Next slide</string>
+</resources>

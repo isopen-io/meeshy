@@ -4,7 +4,7 @@
  * Tests metadata extraction for:
  * - Images: dimensions, thumbnails (sharp)
  * - Audio: duration, bitrate, codec (music-metadata)
- * - Video: dimensions, duration, fps, codec (fluent-ffmpeg)
+ * - Video: inside extractMetadata (extractVideoMetadata itself: MetadataManager.video.test.ts)
  * - PDF: page count (pdf-parse)
  * - Text: line count
  *
@@ -98,7 +98,6 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 import { MetadataManager, musicMetadataLoader } from '../../../services/attachments/MetadataManager';
 import type {
   AudioMetadata,
-  VideoMetadata,
   ImageMetadata,
   PdfMetadata,
   TextMetadata,
@@ -432,143 +431,6 @@ describe('MetadataManager', () => {
         codec: 'unknown',
         channels: 1,
       });
-    });
-  });
-
-  describe('extractVideoMetadata', () => {
-    it('should extract video metadata with ffprobe', async () => {
-      const mockFfprobeData: Partial<FfprobeData> = {
-        streams: [
-          {
-            codec_type: 'video',
-            codec_name: 'h264',
-            width: 1920,
-            height: 1080,
-            r_frame_rate: '30/1',
-          } as FfprobeStream,
-        ],
-        format: {
-          duration: 120.5, // In seconds from frontend
-          bit_rate: '5000000',
-        } as any,
-      };
-
-      mockFfprobe.mockImplementation((path: string, callback: Function) => {
-        callback(null, mockFfprobeData);
-      });
-
-      const result = await metadataManager.extractVideoMetadata('test/video.mp4');
-
-      expect(mockFfprobe).toHaveBeenCalledWith(
-        '/test/uploads/test/video.mp4',
-        expect.any(Function)
-      );
-      expect(result).toEqual({
-        duration: 120500, // Milliseconds (Math.round(120.5 * 1000)) (120.5 * 1000)
-        width: 1920,
-        height: 1080,
-        fps: 30,
-        videoCodec: 'h264',
-        bitrate: 5000000,
-      });
-    });
-
-    it('should calculate fps from frame rate fraction', async () => {
-      const mockFfprobeData: Partial<FfprobeData> = {
-        streams: [
-          {
-            codec_type: 'video',
-            r_frame_rate: '24000/1001', // 23.976 fps
-          } as FfprobeStream,
-        ],
-        format: {} as any,
-      };
-
-      mockFfprobe.mockImplementation((path: string, callback: Function) => {
-        callback(null, mockFfprobeData);
-      });
-
-      const result = await metadataManager.extractVideoMetadata('test/video.mp4');
-
-      expect(result.fps).toBeCloseTo(23.98, 1);
-    });
-
-    it('should handle video without video stream', async () => {
-      const mockFfprobeData: Partial<FfprobeData> = {
-        streams: [
-          {
-            codec_type: 'audio', // No video stream
-          } as FfprobeStream,
-        ],
-        format: {} as any,
-      };
-
-      mockFfprobe.mockImplementation((path: string, callback: Function) => {
-        callback(null, mockFfprobeData);
-      });
-
-      const result = await metadataManager.extractVideoMetadata('test/audio-only.mp4');
-
-      expect(result).toEqual({
-        duration: 0,
-        width: 0,
-        height: 0,
-        fps: 0,
-        videoCodec: 'unknown',
-        bitrate: 0,
-      });
-    });
-
-    it('should handle ffprobe errors', async () => {
-      mockFfprobe.mockImplementation((path: string, callback: Function) => {
-        callback(new Error('ffprobe error'));
-      });
-
-      await expect(
-        metadataManager.extractVideoMetadata('test/corrupted.mp4')
-      ).rejects.toThrow('ffprobe error');
-    });
-
-    it('should timeout after 30 seconds', async () => {
-      jest.useFakeTimers();
-
-      mockFfprobe.mockImplementation((path: string, callback: Function) => {
-        // Never call callback - simulate hang
-      });
-
-      const promise = metadataManager.extractVideoMetadata('test/hanging.mp4');
-
-      // Fast-forward time
-      jest.advanceTimersByTime(30000);
-
-      await expect(promise).rejects.toThrow('ffprobe timeout after 30 seconds');
-      jest.useRealTimers();
-    });
-
-    it('should extract metadata from different video codecs', async () => {
-      const codecs = ['h264', 'vp8', 'vp9', 'av1'];
-
-      for (const codec of codecs) {
-        const mockFfprobeData: Partial<FfprobeData> = {
-          streams: [
-            {
-              codec_type: 'video',
-              codec_name: codec,
-              width: 1280,
-              height: 720,
-            } as FfprobeStream,
-          ],
-          format: {} as any,
-        };
-
-        mockFfprobe.mockImplementation((path: string, callback: Function) => {
-          callback(null, mockFfprobeData);
-        });
-
-        const result = await metadataManager.extractVideoMetadata(`test/video.${codec}`);
-
-        expect(result.videoCodec).toBe(codec);
-      }
     });
   });
 

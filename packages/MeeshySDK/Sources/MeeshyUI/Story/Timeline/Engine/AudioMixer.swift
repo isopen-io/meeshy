@@ -8,7 +8,9 @@ public protocol AudioMixerProviding: AnyObject {
     var isMuted: Bool { get set }
     var maxActiveNodes: Int { get }
     func configure(audios: [StoryAudioPlayerObject], urls: [String: URL]) throws
-    func play() throws
+    /// Joue depuis `timelineTime`, la position timeline atteinte À `hostTime`
+    /// (l'ancre partagée avec la vidéo, cf. `TimelinePlaybackSync`).
+    func play(from timelineTime: Float, atHostTime hostTime: UInt64) throws
     func pause()
     func seek(to time: Float)
     func setVolume(_ volume: Float, for audioId: String)
@@ -28,7 +30,7 @@ public final class AudioMixer: AudioMixerProviding {
     public var activeNodeCount: Int { nodes.count }
     public func intendedVolume(for audioId: String) -> Float? { volumes[audioId] }
 
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "media")
+    private let logger = MeeshyLog.logger(.media)
     private let engine = AVAudioEngine()
     private var nodes: [String: AVAudioPlayerNode] = [:]
     private var files: [String: AVAudioFile] = [:]
@@ -86,6 +88,16 @@ public final class AudioMixer: AudioMixerProviding {
     }
 
     public func play() throws {
+        try play(from: lastSeekTime, atHostTime: mach_absolute_time())
+    }
+
+    /// Repart TOUJOURS d'un état propre : les nœuds sont arrêtés puis
+    /// replanifiés depuis `timelineTime`, et démarrent tous à la MÊME ancre
+    /// hôte. Replanifier sans arrêter doublait le segment après une pause
+    /// (la fin de l'ancienne file rejouait, puis la nouvelle).
+    public func play(from timelineTime: Float, atHostTime hostTime: UInt64) throws {
+        let timelineStart = max(0, timelineTime)
+        lastSeekTime = timelineStart
         guard !nodes.isEmpty else {
             _isPlayingStorage = true
             return
@@ -101,11 +113,13 @@ public final class AudioMixer: AudioMixerProviding {
                 throw error
             }
         }
-        let timelineStart = lastSeekTime
+        for node in nodes.values { node.stop() }
+        let anchor = AVAudioTime(hostTime: hostTime)
         for (id, node) in nodes {
             guard let file = files[id] else { continue }
-            scheduleNodeFromTimelineTime(audioId: id, node: node, file: file, time: timelineStart)
-            node.play()
+            scheduleNodeFromTimelineTime(audioId: id, node: node, file: file,
+                                         time: timelineStart, anchorHostTime: hostTime)
+            node.play(at: anchor)
         }
         _isPlayingStorage = true
     }
@@ -125,7 +139,8 @@ public final class AudioMixer: AudioMixerProviding {
         audioId: String,
         node: AVAudioPlayerNode,
         file: AVAudioFile,
-        time timelineTime: Float
+        time timelineTime: Float,
+        anchorHostTime: UInt64
     ) {
         let startTime = startTimes[audioId] ?? 0
         let sampleRate = file.processingFormat.sampleRate
@@ -133,21 +148,37 @@ public final class AudioMixer: AudioMixerProviding {
 
         if timelineTime < startTime {
             // Future schedule. Translate the (startTime - timelineTime)
-            // delay into mach host ticks and pin the file at that hostTime.
-            let delaySeconds = Double(startTime - timelineTime)
-            let hostDelay = AudioMixer.hostTime(forDelaySeconds: delaySeconds)
-            let scheduleAt = AVAudioTime(hostTime: mach_absolute_time() + hostDelay)
+            // delay into mach host ticks COUNTED FROM THE SHARED ANCHOR — the
+            // instant the video resumes too — never from "now".
+            let scheduleAt = AVAudioTime(hostTime: TimelinePlaybackSync.clipStartHostTime(
+                anchor: anchorHostTime,
+                clipStartSeconds: Double(startTime),
+                playheadSeconds: Double(timelineTime)))
             node.scheduleFile(file, at: scheduleAt, completionHandler: nil)
         } else {
             // Already past startTime — schedule immediate playback from a
             // file offset so the audio is positionally correct.
+            //
+            // La fenêtre vient du site PARTAGÉ : c'est la même loi que celle
+            // que `ReaderAudioMixer.segment` projette côté lecture. Elle vivait
+            // ici seule, et c'est exactement ce qui laissait le lecteur
+            // incapable d'entrer en cours de piste (#6580) — même forme que la
+            // divergence de `hostTime(forDelaySeconds:)`, centralisée depuis.
+            // `nil` ⇒ l'ouverture est au-delà de la fin : on ne planifie rien.
             let offset = Double(timelineTime - startTime)
-            let startFrame = AVAudioFramePosition(offset * sampleRate)
-            guard startFrame < totalFrames else { return }
-            let remaining = AVAudioFrameCount(totalFrames - startFrame)
+            guard offset > 0 else {
+                // Pile sur `startTime` : rien à fenêtrer, la source entière
+                // part immédiatement — le chemin d'aujourd'hui, bit à bit.
+                node.scheduleFile(file, at: nil, completionHandler: nil)
+                return
+            }
+            guard let segment = TimelineAudioWindow.segment(bounds: nil,
+                                                            elapsedInClip: offset,
+                                                            sampleRate: sampleRate,
+                                                            fileLength: totalFrames) else { return }
             node.scheduleSegment(file,
-                                 startingFrame: startFrame,
-                                 frameCount: remaining,
+                                 startingFrame: segment.startingFrame,
+                                 frameCount: segment.frameCount,
                                  at: nil,
                                  completionHandler: nil)
         }
@@ -211,7 +242,8 @@ public final class AudioMixer: AudioMixerProviding {
         for node in nodes.values { node.stop() }
         for (id, node) in nodes {
             guard let file = files[id] else { continue }
-            scheduleNodeFromTimelineTime(audioId: id, node: node, file: file, time: clamped)
+            scheduleNodeFromTimelineTime(audioId: id, node: node, file: file,
+                                         time: clamped, anchorHostTime: mach_absolute_time())
         }
         if wasPlaying {
             for node in nodes.values { node.play() }
@@ -229,7 +261,12 @@ public final class AudioMixer: AudioMixerProviding {
     }
 
     public func teardown() {
-        nodes.values.forEach { $0.stop() }
+        // Arrêtés PUIS détachés : `configure` repasse ici à chaque commande de la timeline, et un nœud
+        // seulement oublié restait branché au mixeur — un de plus par clip et par édition.
+        nodes.values.forEach {
+            $0.stop()
+            engine.detach($0)
+        }
         nodes.removeAll()
         files.removeAll()
         volumes.removeAll()
@@ -252,14 +289,14 @@ public final class AudioMixer: AudioMixerProviding {
         }
     }
 
-    deinit {
+    nonisolated deinit {
         // We CANNOT call MainActor-isolated teardown() from deinit safely —
         // ARC may release AudioMixer from any thread. The owner should call
         // shutdown() explicitly. We log a warning when forgotten; ARC will
         // still release AVAudioEngine + nodes (Foundation classes have their
         // own teardown), so this is a leak hint, not a crash.
         if !didShutdown {
-            os.Logger(subsystem: "me.meeshy.app", category: "media").warning(
+            MeeshyLog.logger(.media).warning(
                 "AudioMixer deinit without shutdown() — owner should call shutdown() before drop to release AVAudioEngine + nodes deterministically."
             )
         }

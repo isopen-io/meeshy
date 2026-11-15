@@ -1,0 +1,31 @@
+/** LA FEUILLE D'EMOJIS, FRANÇAIS — la source des clés (#10531). */
+const fr = {
+  'emojiPicker.search': 'Rechercher un emoji',
+  'emojiPicker.search.empty': 'Aucun emoji trouvé',
+  'emojiPicker.search.unavailable': 'La recherche d’emojis est indisponible pour le moment.',
+  'emojiPicker.loading': 'Chargement des emojis…',
+  'emojiPicker.failed': 'Les emojis n’ont pas pu être chargés.',
+  'emojiPicker.retry': 'Réessayer',
+  'emojiPicker.categories': 'Catégories d’emojis',
+  'emojiPicker.section.suggested': 'Suggestions',
+  'emojiPicker.section.recent': 'Utilisés récemment',
+  'emojiPicker.category.recent': 'Récents',
+  'emojiPicker.category.smileys': 'Smileys et émotions',
+  'emojiPicker.category.people': 'Personnes et gestes',
+  'emojiPicker.category.animals': 'Animaux et nature',
+  'emojiPicker.category.food': 'Nourriture et boissons',
+  'emojiPicker.category.activities': 'Activités',
+  'emojiPicker.category.travel': 'Voyages et lieux',
+  'emojiPicker.category.objects': 'Objets',
+  'emojiPicker.category.symbols': 'Symboles',
+  'emojiPicker.category.flags': 'Drapeaux',
+  'emojiPicker.tones': 'Teintes de peau',
+  'emojiPicker.tone.default': 'Par défaut',
+  'emojiPicker.tone.light': 'Claire',
+  'emojiPicker.tone.medium-light': 'Moyennement claire',
+  'emojiPicker.tone.medium': 'Moyenne',
+  'emojiPicker.tone.medium-dark': 'Moyennement foncée',
+  'emojiPicker.tone.dark': 'Foncée',
+} as const;
+
+export default fr;

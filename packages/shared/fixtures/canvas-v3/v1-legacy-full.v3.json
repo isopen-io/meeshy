@@ -152,7 +152,12 @@
           "payload": {
             "postMediaId": "64b0000000000000000000aa",
             "mediaURL": null,
-            "placement": "canvas"
+            "placement": "canvas",
+            "waveformSamples": [
+              0.2,
+              0.5,
+              0.3
+            ]
           }
         }
       ],

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "composer.selection.selected.text",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.selection.selected.image",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.selection.selected.video",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.selection.selected.audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.selection.selected.sticker",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.selection.selected.place",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.selection.selected.background",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.selection.deselected",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.rest.column",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

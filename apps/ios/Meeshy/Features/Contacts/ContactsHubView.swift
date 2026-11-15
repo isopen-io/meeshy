@@ -5,18 +5,17 @@ import MeeshyUI
 
 /// The People hub — the redesigned contact view.
 ///
-/// Three primary tabs sit under a collapsing header and swipe horizontally:
+/// Four primary tabs sit under a collapsing header and swipe horizontally:
 /// **Appels** (call journal), **Clavier** (dial pad), **Contacts** (the
-/// directory — an annuaire filtered by `ContactFilter`).
+/// directory — an annuaire filtered by `ContactFilter`), **Cercles** (my links
+/// by level, #13938).
 ///
 /// Connection management and user discovery (Demandes / Decouvrir / Bloques)
 /// no longer clutter the Contacts tab — they live in `PeopleDiscoveryView`,
 /// reachable from the floating menu ladder.
 struct ContactsHubView: View {
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
     @State private var scrollRelay = ScrollOffsetRelay()
     @State private var selectedTab: PeopleTab
 
@@ -25,6 +24,7 @@ struct ContactsHubView: View {
     @StateObject private var contactsListVM = ContactsListViewModel()
     @StateObject private var phonebookVM = PhonebookViewModel()
     @StateObject private var affiliatesVM = AffiliatesViewModel()
+    @StateObject private var circlesVM = CirclesViewModel()
 
     /// - Parameter initialTab: tab shown on open. The floating menu ladder
     ///   lands on `.calls` (call journal); everything else keeps the directory.
@@ -68,56 +68,19 @@ struct ContactsHubView: View {
                 tabButton(tab)
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, MeeshySpacing.sm)
         .overlay(alignment: .bottom) {
-            Divider().opacity(0.3)
+            Divider().opacity(MeeshyOpacity.medium)
         }
     }
 
     private func tabButton(_ tab: PeopleTab) -> some View {
         let isSelected = selectedTab == tab
-        let badge = badgeCount(for: tab)
-
-        return Button {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                selectedTab = tab
-            }
-        } label: {
-            VStack(spacing: 6) {
-                HStack(spacing: 4) {
-                    Image(systemName: tab.icon)
-                        .font(.footnote.weight(.medium))
-
-                    Text(tab.title)
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-
-                    if badge > 0 {
-                        Text("\(badge)")
-                            .font(.caption2.weight(.bold))
-                            .foregroundColor(.white)
-                            .frame(minWidth: 16, minHeight: 16)
-                            .background(Circle().fill(MeeshyColors.indigo500))
-                    }
-                }
-                .foregroundColor(isSelected ? MeeshyColors.indigo500 : theme.textMuted)
-
-                Rectangle()
-                    .fill(isSelected ? MeeshyColors.indigo500 : Color.clear)
-                    .frame(height: 2)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedTab)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.top, 10)
+        return HubTabButton(icon: tab.icon, title: tab.title, badge: 0, isSelected: isSelected, selection: selectedTab) {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { selectedTab = tab }
         }
-        .accessibilityLabel("\(String(localized: "contacts.tab.prefix", defaultValue: "Tab", bundle: .main)) \(tab.title)\(badge > 0 ? ", \(badge) \(String(localized: "contacts.tab.items", defaultValue: "items", bundle: .main))" : "")")
+        .accessibilityLabel("\(String(localized: "contacts.tab.prefix", defaultValue: "Onglet", bundle: .main)) \(tab.title)")
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-    }
-
-    private func badgeCount(for tab: PeopleTab) -> Int {
-        switch tab {
-        case .contacts, .calls, .keypad: return 0
-        }
     }
 
     // MARK: - Tab Content
@@ -146,6 +109,14 @@ struct ContactsHubView: View {
                 onScrollOffsetChange: { scrollRelay.offset = $0 }
             )
             .tag(PeopleTab.contacts)
+
+            CirclesTab(
+                viewModel: circlesVM,
+                isActive: selectedTab == .circles,
+                onScrollOffsetChange: { scrollRelay.offset = $0 },
+                onFindContacts: { selectedTab = .contacts }
+            )
+            .tag(PeopleTab.circles)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)

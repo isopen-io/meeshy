@@ -7,6 +7,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
+import { matchesMongoWhere } from '../../../helpers/mongo-where';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -355,7 +356,12 @@ describe('GET /conversations/search — last-message preview excludes soft-delet
     expect(res.statusCode).toBe(200);
 
     const queryArg = findMany.mock.calls[0][0];
-    expect(queryArg.include.messages.where).toEqual({ deletedAt: null });
+    const where = queryArg.include.messages.where;
+    expect(where).toMatchObject({ deletedAt: null });
+    // #9630 — un avis de capture n'est jamais l'aperçu d'une ligne de recherche.
+    const row = { deletedAt: null, messageSource: 'system', messageType: 'system' };
+    expect(matchesMongoWhere({ ...row, expiresAt: new Date() }, where)).toBe(false);
+    expect(matchesMongoWhere(row, where)).toBe(true);
     await app.close();
   });
 });

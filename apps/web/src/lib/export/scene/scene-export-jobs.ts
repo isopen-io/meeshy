@@ -1,0 +1,142 @@
+import type { SceneDelivery } from './scene-export-run';
+
+/**
+ * **LES EXPORTS EN COURS, HORS DE REACT** (#13873) — l'état que le bandeau
+ * global (`SceneExportTray`, monté une fois dans le chrome différé) lit : un
+ * export tourne pendant que l'utilisateur continue d'utiliser l'app, il se
+ * suit et s'annule de n'importe quel écran, et son issue se dit une fois.
+ *
+ * Miroir du store des stories (`lib/stories/save-store.ts`) : une poignée par
+ * job, dont l'`AbortController` est l'identité ; un second départ sur la même
+ * publication est refusé tant que le premier tourne.
+ *
+ * « Partager » (#13881) peut attendre lui aussi : le rendu dure au moins la
+ * longueur de la composition, et l'activation du geste qui l'a lancé a expiré
+ * bien avant — le navigateur refuse alors `navigator.share`. Le fichier est
+ * PRÊT, le bandeau offre « Partager », et c'est CE toucher, neuf, qui ouvre la
+ * feuille du système : `deliverNow` appelle la livraison sans rien attendre.
+ */
+
+export type SceneExportNotice = 'saved' | 'shared' | 'cancelled' | 'failed' | 'retry' | 'unsupported' | 'offline' | 'busy';
+
+export type SceneExportJobView = {
+  readonly key: string;
+  /** 0..1 ; `null` tant que rien ne s'est mesuré (préparation). */
+  readonly progress: number | null;
+  readonly cancellable: boolean;
+  /** Le fichier est rendu et attend le toucher « Partager » du bandeau. */
+  readonly ready: boolean;
+};
+
+export type SceneExportJobsState = {
+  readonly jobs: readonly SceneExportJobView[];
+  readonly notice: { readonly id: number; readonly notice: SceneExportNotice } | null;
+};
+
+export type SceneExportJobHandle = {
+  readonly signal: AbortSignal;
+  readonly report: (progress: number | null) => void;
+  readonly lockDelivery: () => void;
+  /** Le fichier attend un toucher neuf : `deliver` part DANS ce toucher (`deliverNow`). */
+  readonly awaitDeliveryTap: (deliver: () => Promise<SceneDelivery>) => Promise<SceneDelivery>;
+  readonly finish: () => void;
+};
+
+type PendingTap = { readonly deliver: () => Promise<SceneDelivery>; readonly resolve: (delivery: SceneDelivery) => void };
+
+type Job = {
+  readonly view: SceneExportJobView;
+  readonly controller: AbortController;
+  readonly tap: PendingTap | null;
+};
+
+const jobs = new Map<string, Job>();
+const listeners = new Set<() => void>();
+let snapshot: SceneExportJobsState = { jobs: [], notice: null };
+let noticeId = 0;
+
+function publish(notice: SceneExportJobsState['notice'] = snapshot.notice): void {
+  snapshot = { jobs: [...jobs.values()].map((job) => job.view), notice };
+  for (const listener of listeners) listener();
+}
+
+export function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+export const getSnapshot = (): SceneExportJobsState => snapshot;
+
+const percent = (progress: number | null): number | null => (progress === null ? null : Math.round(Math.min(1, Math.max(0, progress)) * 100));
+
+function update(key: string, controller: AbortController, next: (job: Job) => Job): void {
+  const job = jobs.get(key);
+  if (job === undefined || job.controller !== controller) return;
+  const updated = next(job);
+  const same =
+    updated.view.cancellable === job.view.cancellable &&
+    updated.view.ready === job.view.ready &&
+    percent(updated.view.progress) === percent(job.view.progress);
+  jobs.set(key, updated);
+  if (!same) publish();
+}
+
+export function start(key: string): SceneExportJobHandle | null {
+  if (jobs.has(key)) return null;
+  const controller = new AbortController();
+  jobs.set(key, { view: { key, progress: null, cancellable: true, ready: false }, controller, tap: null });
+  publish();
+  return {
+    signal: controller.signal,
+    report: (progress) => update(key, controller, (job) => ({ ...job, view: { ...job.view, progress } })),
+    lockDelivery: () => update(key, controller, (job) => ({ ...job, view: { ...job.view, progress: 1, cancellable: false } })),
+    awaitDeliveryTap: (deliver) =>
+      new Promise((resolve) => {
+        if (controller.signal.aborted || jobs.get(key)?.controller !== controller) {
+          resolve('cancelled');
+          return;
+        }
+        update(key, controller, (job) => ({ ...job, view: { ...job.view, ready: true, cancellable: true }, tap: { deliver, resolve } }));
+      }),
+    finish: () => {
+      if (jobs.get(key)?.controller !== controller) return;
+      jobs.delete(key);
+      publish();
+    },
+  };
+}
+
+/**
+ * Le toucher « Partager » du bandeau : la livraison part SANS rien attendre,
+ * dans l'activation de ce geste — un `await` avant elle la perdrait.
+ */
+export function deliverNow(key: string): void {
+  const job = jobs.get(key);
+  if (job === undefined || job.tap === null) return;
+  const { deliver, resolve } = job.tap;
+  jobs.set(key, { ...job, view: { ...job.view, ready: false, cancellable: false }, tap: null });
+  const delivery = deliver();
+  publish();
+  void delivery.then(resolve, () => resolve('failed'));
+}
+
+/** Annule — sans effet une fois la livraison commencée. */
+export function cancel(key: string): void {
+  const job = jobs.get(key);
+  if (job === undefined || !job.view.cancellable) return;
+  job.controller.abort();
+  job.tap?.resolve('cancelled');
+  jobs.delete(key);
+  publish();
+}
+
+export function announce(notice: SceneExportNotice): void {
+  noticeId += 1;
+  publish({ id: noticeId, notice });
+}
+
+export function dismissNotice(id: number): void {
+  if (snapshot.notice?.id === id) publish(null);
+}

@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "composer.recent.accessDenied",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.recent.accessDenied.hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.recent.add",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.recent.addSelected",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.recent.alreadyAttached",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.recent.cancelSelection",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.recent.edit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.recent.grantAccess",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.recent.grantAccess.hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.recent.select",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.a11y.recentPhoto",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.a11y.recentVideo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.a11y.selectedState",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.a11y.openFullLibrary",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.a11y.cancelSelection",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.a11y.addSelection",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "recentMedia.resolveFailed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "recentMedia.resolveFailed.multiple",
+          "status": "adopted"
+        },
+        {
+          "androidName": "recent_media_limited_access",
+          "status": "android-only"
+        },
+        {
+          "androidName": "recent_media_limited_access_hint",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

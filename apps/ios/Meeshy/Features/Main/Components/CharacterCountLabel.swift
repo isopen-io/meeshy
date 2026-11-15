@@ -5,7 +5,8 @@ import MeeshyUI
 ///
 /// Consolidates the hand-rolled `"\(text.count)/LIMIT"` labels that were
 /// duplicated — with divergent styling, ad-hoc warning thresholds and zero
-/// accessibility — in `ReportUserView` and `StatusComposerView`.
+/// accessibility — in `ReportUserView` and the mood composer, dont la surface
+/// actuelle est `ComposerMoodSurface.characterCount`.
 ///
 /// - Numbers are rendered with `Int.formatted()` so they respect the user's
 ///   locale (grouping separators, Eastern-Arabic digits, …) instead of raw
@@ -27,7 +28,7 @@ struct CharacterCountLabel: View {
     /// mieux que le thème de l'app. `nil` ⇒ `theme.textMuted`, le comportement
     /// de tous les appelants existants.
     ///
-    /// **Pourquoi ce paramètre existe, mesuré le 2026-08-24** : le compteur est
+    /// **Pourquoi ce paramètre existe**: le compteur est
     /// monté par le composer sur le PLATEAU, sombre par construction quel que
     /// soit le thème. `theme.textMuted` y mesure **1,68:1** en thème clair
     /// (`indigo700@0.8` sur `violet950`) et **4,41:1** même en thème sombre —
@@ -75,7 +76,7 @@ struct CharacterCountLabel: View {
         String(
             format: String(
                 localized: "components.characterCount.a11y",
-                defaultValue: "%1$lld of %2$lld characters",
+                defaultValue: "%1$lld caractères sur %2$lld",
                 bundle: .main
             ),
             count,

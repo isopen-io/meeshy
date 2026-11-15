@@ -1,0 +1,307 @@
+import type { RemovedContentType } from '@meeshy/shared/types/notification';
+
+import { DISCOVER_TAB_PARAM, REQUEST_FILTER_PARAM } from '@/lib/discover/view';
+
+import type { NotificationRecord } from './record';
+
+/**
+ * **OÙ MÈNE UNE NOTIFICATION** (#6288) — miroir de `NotificationContentRouter`
+ * (`apps/ios/Meeshy/Features/Navigation/NotificationContentRouter.swift`).
+ *
+ * **Le TYPE n'est pas un discriminant d'entité.** La passerelle émet
+ * `story_thread_reply` / `friend_story_comment` / `story_new_comment` pour un
+ * commentaire posé sur N'IMPORTE quel contenu — publication, réel, humeur ou
+ * story. Seul `metadata.postType` (ou `contentType` pour la famille
+ * `friend_new_*`) dit la vérité ; le type ne sert qu'en repli, quand une ligne
+ * ancienne ne porte aucun discriminant.
+ *
+ * **Une destination absente du web rend `null`.** La ligne se marque alors lue
+ * sans prétendre ouvrir quoi que ce soit — un contrôle qui ment est pire qu'un
+ * contrôle absent (loi 4). Le réel n'a pas de lecteur immersif sur le web : il
+ * ouvre le détail de la publication, qui le lit.
+ *
+ * **Refuser la mauvaise destination n'est que la moitié du travail** (#7173).
+ * Une demande de contact a longtemps rendu `null` « tant que le web n'a pas
+ * d'écran de contacts » — une exemption dont la condition est devenue fausse
+ * quand #6363 a livré `/discover` et son onglet « Demandes ». Apprendre qu'on
+ * a reçu une demande et pouvoir y répondre restaient deux écrans sans chemin
+ * entre eux. La destination porte donc son onglet et son filtre en `search`,
+ * lus des constantes de `lib/discover/view` — jamais recopiés ici.
+ *
+ * ---
+ *
+ * **CE MODULE EST LA LOI, ET LE PUSH LA CONSOMME** (#7305). La carte `data`
+ * d'une notification poussée porte EXACTEMENT les mêmes clés
+ * (`NotificationService`, § carte `data`), à ceci près qu'elles y sont des
+ * chaînes plates dont `''` vaut absence. Le lot du service worker a donc
+ * EXTRAIT le noyau pur `resolveTarget()` au lieu d'écrire un second mappage :
+ * c'est précisément le défaut que portait `public/firebase-messaging-sw.js`,
+ * supprimé par le même lot, qui composait `/conversations/<id>`, `/mood` et
+ * `/reel` — trois routes dont AUCUNE n'existe dans cette application.
+ *
+ * Le service worker, lui, est un script CLASSIQUE chargé par `importScripts` :
+ * il ne peut importer aucun module TypeScript. Sa table vit donc en JUMEAU
+ * dans `public/sw-push.js` (même arbitrage que `LEGACY_CACHE_NAMESPACE`,
+ * `src/lib/sw-caches.ts`), et `scripts/check-push-target-parity.mjs` interdit
+ * la dérive. **Toute évolution de ce fichier touche les DEUX**, et le gate le
+ * dit avant la CI.
+ */
+export type NotificationTarget =
+  | { readonly route: 'thread'; readonly params: { readonly conversation: string } }
+  | { readonly route: 'story' | 'post' | 'mood'; readonly params: { readonly post: string } }
+  | { readonly route: 'discover'; readonly search: Readonly<Record<string, string>> }
+  | { readonly route: 'userProfile'; readonly params: { readonly username: string } }
+  | { readonly route: 'community'; readonly params: { readonly community: string } }
+  | { readonly route: 'progression'; readonly search?: Readonly<Record<string, string>> }
+  | { readonly route: 'progressionLigue' | 'progressionSaison' | 'progressionCarnet' | 'settings' };
+
+/**
+ * **LA DESTINATION D'UN TAP DE BANNIÈRE — elle n'est JAMAIS nulle** (#7305).
+ *
+ * Divergence délibérée, et la SEULE, avec la cloche in-app : une ligne de
+ * liste sans destination se marque lue sans rien ouvrir (loi 4), mais un doigt
+ * posé sur une bannière système a demandé quelque chose. Il atterrit donc au
+ * pire sur la liste des notifications, d'où la ligne reste atteignable.
+ *
+ * `notifications` n'entre pas dans `NotificationTarget` : la cloche ne peut
+ * pas l'émettre, et son rendu (`components/notification-row.tsx`) énumère la
+ * bijection de l'union. Un membre qu'elle n'émet jamais y serait un cas mort.
+ */
+export type PushTapTarget = NotificationTarget | { readonly route: 'notifications' };
+
+/**
+ * **CE QU'UNE CHARGE DE PUSH REMET AU RÉSOLVEUR.** Les mêmes noms que
+ * `NotificationRecord`, aplatis — parce que c'est sous cette forme que le fil
+ * push les porte, et qu'une adaptation qui RENOMME est une jumelle de plus.
+ */
+export type NotificationTargetInput = {
+  readonly type?: string | undefined;
+  readonly conversationId?: string | undefined;
+  readonly postId?: string | undefined;
+  readonly postType?: string | undefined;
+  readonly contentType?: string | undefined;
+  readonly friendRequestId?: string | undefined;
+  /** #18052 — la communauté où le destinataire vient d'être ajouté : son détail s'ouvre. */
+  readonly communityId?: string | undefined;
+  /**
+   * Le pseudonyme de l'ACTEUR — `senderUsername` est la clé que la passerelle
+   * pose sur la carte `data` (`NotificationService.createNotification`) ; la
+   * cloche le lit sur `actor.username`. Il ne route que les types qui
+   * annoncent une PERSONNE (`PROFILE_TYPES`).
+   */
+  readonly senderUsername?: string | undefined;
+  /**
+   * L'indice de ROUTE posé par la passerelle pour les notifications de
+   * réengagement. Son propre commentaire dit QUAND il le pose : « quand la
+   * notification ne porte ni conversation ni contenu social ». Il prime donc
+   * sur toute déduction par TYPE, et cède devant une entité.
+   */
+  readonly route?: string | undefined;
+};
+
+const EPHEMERAL_ENTITIES: ReadonlySet<string> = new Set(['STORY', 'STATUS', 'MOOD']);
+
+/** Types éphémères PAR CONSTRUCTION — consultés seulement sans discriminant. */
+const EPHEMERAL_ONLY_TYPES: ReadonlySet<string> = new Set([
+  'story_reaction',
+  'status_reaction',
+  'story_new_comment',
+  'friend_story_comment',
+  'story_thread_reply',
+  'friend_new_story',
+  'friend_new_mood',
+]);
+
+/**
+ * LA NOUVELLE HUMEUR D'UN CONTACT (#10813) — sa page plein écran (`/mood/$post`) :
+ * bannière, avatar, pluie de l'emoji, réponse en privé. Le TYPE suffit ici, et
+ * c'est l'exception à « le type n'est pas un discriminant d'entité » : la
+ * passerelle n'émet `friend_new_mood` que pour une humeur PUBLIÉE (STATUS ou
+ * MOOD), jamais pour un commentaire ou une réaction sur elle.
+ */
+const MOOD_TYPES: ReadonlySet<string> = new Set(['friend_new_mood']);
+
+/**
+ * Les types qui ANNONCENT une demande en attente — donc ceux dont la réponse
+ * se donne dans l'onglet « Demandes ». `friend_accepted` / `contact_accepted`
+ * n'en sont PAS : ils portent `conversationId` et ouvrent le fil, ce qui est
+ * la bonne destination — on peut désormais écrire.
+ */
+const REQUEST_TYPES: ReadonlySet<string> = new Set(['friend_request', 'contact_request']);
+
+/**
+ * Les types qui annoncent une PERSONNE : « X a rejoint Meeshy » (#8105) et
+ * « X était sur Meeshy récemment » (#8285) ouvrent le profil de X, où l'on
+ * trouve « Se connecter » et « Écrire » ; la batterie d'un Proche ou d'un Sang
+ * (`device_battery`, #14147) ouvre sa fiche, où se lit le détail de l'épisode.
+ */
+const PROFILE_TYPES: ReadonlySet<string> = new Set(['contact_joined', 'contact_recently_active', 'device_battery']);
+
+/**
+ * UN APPEL MANQUÉ SANS CONVERSATION NOMMÉE (#9177, suite de #9115) — une
+ * invitée non membre, sans DM avec l'inviteur (amitié acceptée sans
+ * conversation directe, ou DM quittée/supprimée). La passerelle ne pose alors
+ * AUCUN `conversationId` (`call-invite-lifecycle.ts`, `missedCallConversationId`)
+ * plutôt que de nommer la conversation de l'appel, injoignable pour elle.
+ * Repli SEULEMENT quand la branche `conversationId` ci-dessus n'a rien rendu —
+ * le cas nominal (membre, ou amitié avec DM) ouvre déjà le fil.
+ */
+const MISSED_CALL_TYPES: ReadonlySet<string> = new Set(['missed_call', 'CALL_MISSED', 'call_declined']);
+
+const PROGRESSION_TYPES: ReadonlySet<string> = new Set([
+  'achievement_unlocked',
+  'ACHIEVEMENT_UNLOCKED',
+  'badge_earned',
+  'streak_milestone',
+  'level_up',
+]);
+
+/**
+ * LA FICHE QUE CHACUNE OUVRE (#9563, carte de navigation) — jamais la racine :
+ * un niveau gagné ouvre la fiche du Niveau, une série la fiche de la Flamme, un
+ * badge celle des Badges, un succès celle des Succès. Le type est plus précis que
+ * l'indice `route: 'progression'` que le serveur pose : il passe AVANT lui.
+ * `?section=<concept>` est l'adresse que Progression redirige vers la fiche
+ * (`redirectOf`, `lib/game/progression-nav.ts`).
+ */
+const PROGRESSION_TYPE_SECTIONS: Readonly<Record<string, string>> = {
+  achievement_unlocked: 'succes',
+  ACHIEVEMENT_UNLOCKED: 'succes',
+  badge_earned: 'badges',
+  streak_milestone: 'flame',
+  level_up: 'level',
+};
+
+/**
+ * Les notifications du JEU (#9490) : le serveur leur pose l'indice `route: 'progression'`, qui mène au hub —
+ * pas à la chose annoncée. Le type est plus précis. Un duo se joue dans la page Ligue (la mission en duo y
+ * est), le résultat d'une ligue aussi ; une étape de saison a sa page.
+ */
+const GAME_LEAGUE_TYPES: ReadonlySet<string> = new Set(['game_duo_invited', 'game_duo_accepted', 'game_league_result']);
+const GAME_SEASON_TYPES: ReadonlySet<string> = new Set(['game_season_step']);
+
+/**
+ * Les étapes franchies app fermée (#10175, § 5.16.4) : le résumé groupé ouvre le CARNET, où l'étape se
+ * photographie. L'ancre de l'étape (`metadata.focusStepId`) ne voyage pas sur le fil push : le carnet sait
+ * lui-même ce qui reste à immortaliser.
+ */
+const GAME_PHOTO_TYPES: ReadonlySet<string> = new Set(['game_photo_moment']);
+
+/**
+ * La mission personnelle du jour (#9539) : l'annonce du début de plage ouvre la Progression À la section des
+ * missions (`?section=missions`), là où la carte décompte — pas au haut de la page.
+ */
+export const PROGRESSION_SECTION_PARAM = 'section';
+const GAME_MISSION_TYPES: ReadonlySet<string> = new Set(['game_mission_window']);
+const MISSIONS_SECTION: NotificationTarget = { route: 'progression', search: { [PROGRESSION_SECTION_PARAM]: 'missions' } };
+
+/**
+ * UNE PUBLICATION RETIRÉE PAR LA MODÉRATION (#11150) n'existe plus : sa
+ * notification n'ouvre rien (le push atterrit sur la cloche). Un MESSAGE
+ * retiré ouvre sa conversation, un COMMENTAIRE la publication qui le portait.
+ * Le push n'a pas `contentType` : la passerelle le recopie dans `postType`.
+ */
+const REMOVED_PUBLICATIONS: ReadonlySet<string> = new Set<RemovedContentType>(['post', 'reel', 'story']);
+
+const SECURITY_TYPES: ReadonlySet<string> = new Set([
+  'security_alert',
+  'login_new_device',
+  'SYSTEM_ALERT',
+  'password_changed',
+  'two_factor_enabled',
+  'two_factor_disabled',
+]);
+
+/**
+ * Les routes qu'un indice SERVEUR peut nommer — celles qui s'ouvrent SANS
+ * paramètre. Un indice hors de cette liste ne fabrique aucune adresse : une
+ * route inventée côté client vaudrait le `/mood` du fichier supprimé.
+ */
+const HINTED_ROUTES: ReadonlySet<string> = new Set(['discover', 'progression', 'settings', 'notifications']);
+
+const DISCOVER_REQUESTS: NotificationTarget = {
+  route: 'discover',
+  search: { [DISCOVER_TAB_PARAM]: 'requests', [REQUEST_FILTER_PARAM]: 'received' },
+};
+
+/** `''` vaut absence — c'est la convention de la carte `data` du fil push. */
+function present(value: string | undefined): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function socialSurface(input: NotificationTargetInput): 'story' | 'post' {
+  const discriminant = present(input.postType ?? input.contentType).toUpperCase();
+  if (discriminant !== '') return EPHEMERAL_ENTITIES.has(discriminant) ? 'story' : 'post';
+  return EPHEMERAL_ONLY_TYPES.has(present(input.type)) ? 'story' : 'post';
+}
+
+function hinted(route: string): PushTapTarget | null {
+  if (!HINTED_ROUTES.has(route)) return null;
+  if (route === 'discover') return DISCOVER_REQUESTS;
+  if (route === 'notifications') return { route: 'notifications' };
+  return { route: route as 'progression' | 'settings' };
+}
+
+/**
+ * **LE NOYAU, dans l'ordre des signaux du plus FORT au plus faible** : l'entité
+ * que la notification porte, puis le type du JEU (plus précis que l'indice
+ * `progression` que le serveur lui pose), puis l'indice explicite du serveur,
+ * puis la déduction par type — la seule qui devine.
+ */
+export function resolveTarget(input: NotificationTargetInput): PushTapTarget | null {
+  if (present(input.type) === 'content_removed' && REMOVED_PUBLICATIONS.has(present(input.contentType ?? input.postType).toLowerCase())) return null;
+  const postId = present(input.postId);
+  if (postId !== '' && MOOD_TYPES.has(present(input.type))) return { route: 'mood', params: { post: postId } };
+  if (postId !== '') return { route: socialSurface(input), params: { post: postId } };
+
+  const conversationId = present(input.conversationId);
+  if (conversationId !== '') return { route: 'thread', params: { conversation: conversationId } };
+
+  const communityId = present(input.communityId);
+  if (communityId !== '') return { route: 'community', params: { community: communityId } };
+
+  const type = present(input.type);
+  if (present(input.friendRequestId) !== '' || REQUEST_TYPES.has(type)) return DISCOVER_REQUESTS;
+
+  const username = present(input.senderUsername);
+  if (PROFILE_TYPES.has(type) && username !== '') return { route: 'userProfile', params: { username } };
+  if (MISSED_CALL_TYPES.has(type) && username !== '') return { route: 'userProfile', params: { username } };
+
+  if (GAME_LEAGUE_TYPES.has(type)) return { route: 'progressionLigue' };
+  if (GAME_SEASON_TYPES.has(type)) return { route: 'progressionSaison' };
+  if (GAME_PHOTO_TYPES.has(type)) return { route: 'progressionCarnet' };
+  if (GAME_MISSION_TYPES.has(type)) return MISSIONS_SECTION;
+  if (PROGRESSION_TYPES.has(type) && Object.hasOwn(PROGRESSION_TYPE_SECTIONS, type)) {
+    return { route: 'progression', search: { [PROGRESSION_SECTION_PARAM]: PROGRESSION_TYPE_SECTIONS[type] ?? '' } };
+  }
+
+  const indice = hinted(present(input.route));
+  if (indice !== null) return indice;
+
+  if (PROGRESSION_TYPES.has(type)) return { route: 'progression' };
+  if (SECURITY_TYPES.has(type)) return { route: 'settings' };
+  return null;
+}
+
+/** LA CLOCHE : une destination absente du web n'ouvre rien (loi 4). */
+export function notificationTarget(notification: NotificationRecord): NotificationTarget | null {
+  const resolved = resolveTarget({
+    type: notification.type,
+    conversationId: notification.context.conversationId,
+    postId: notification.context.postId,
+    postType: notification.metadata.postType,
+    contentType: notification.metadata.contentType,
+    friendRequestId: notification.context.friendRequestId,
+    communityId: notification.context.communityId,
+    senderUsername: notification.actor?.username,
+  });
+  /* La cloche ne construit jamais l'indice `route` (`NotificationRecord` ne le
+     décode pas) : `notifications` est donc hors d'atteinte ici, et le repli de
+     tap ne s'applique pas à elle. */
+  return resolved === null || resolved.route === 'notifications' ? null : resolved;
+}
+
+/** LE TAP : il atterrit toujours quelque part (#7305). */
+export function pushTapTarget(input: NotificationTargetInput): PushTapTarget {
+  return resolveTarget(input) ?? { route: 'notifications' };
+}

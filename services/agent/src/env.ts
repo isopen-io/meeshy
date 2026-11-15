@@ -8,7 +8,7 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4o-mini'),
   ANTHROPIC_API_KEY: z.string().optional(),
-  ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-20250514'),
+  ANTHROPIC_MODEL: z.string().default('claude-sonnet-5-5'),
 
   ZMQ_PULL_PORT: z.coerce.number().int().positive().default(5560),
   ZMQ_PUB_PORT: z.coerce.number().int().positive().default(5561),
@@ -16,6 +16,9 @@ const envSchema = z.object({
 
   DATABASE_URL: z.string(),
   REDIS_URL: z.string().default('redis://localhost:6379'),
+
+  /** Secret partagé passerelle → agent des routes internes coûteuses (#10234). Absent : ces routes refusent tout. */
+  AGENT_INTERNAL_TOKEN: z.string().optional(),
 
   AGENT_SLIDING_WINDOW_SIZE: z.coerce.number().int().min(5).max(500).default(50),
   AGENT_ROLE_LOCK_THRESHOLD: z.coerce.number().min(0).max(1).default(0.8),

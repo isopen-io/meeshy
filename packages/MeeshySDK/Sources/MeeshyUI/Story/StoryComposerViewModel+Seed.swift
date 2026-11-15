@@ -38,12 +38,163 @@ public struct StoryComposerSeed {
         /// (`cleanupTempFiles` n'a aucun appelant de production ; `deinit`
         /// n'annule que `preloadTask`).
         case video(fileURL: URL, objectId: String)
+        /// Un son LOCAL déjà copié sous la convention du composer (#4461).
+        ///
+        /// Il n'y a pas d'`objectId` ici, contrairement à la vidéo : le son
+        /// n'est pas posé comme un objet de canvas mais confié à
+        /// `attachPastedAudio`, qui crée le sien. Lui en imposer un d'avance
+        /// obligerait à réécrire la pose plutôt qu'à l'emprunter.
+        case audio(fileURL: URL)
+        /// **Une story publiée ENTIÈRE** (#9994) — objets, positions, timeline
+        /// et sons, chaque média déjà rapatrié en local et détaché de son post
+        /// d'origine (`StoryRecomposition`). Seule `scene(_:images:files:)` la
+        /// fabrique.
+        case scene(StoryComposerRecomposedScene)
     }
 
-    public let payload: Payload
+    /// Ce qui se pose sur le CANVAS. **Optionnel depuis #4025** : une graine de
+    /// TEXTE seul n'a rien à poser, et forcer un payload l'aurait obligée à
+    /// inventer une image vide — un objet qu'`runStoryUpload` aurait sauté en
+    /// journalisant « layer will be invisible to viewers ».
+    public let payload: Payload?
 
-    public init(payload: Payload) {
+    /// Ce qui pré-remplit la DESCRIPTION de la slide.
+    ///
+    /// **Pas un troisième cas de `Payload`**, et la distinction est le fond de
+    /// l'affaire : ce qu'on pose sur le canvas et ce qui décrit la slide sont
+    /// deux choses de nature différente, et un message porte souvent les DEUX —
+    /// une photo avec sa légende. Les ranger dans le même `enum` aurait forcé
+    /// à choisir entre les deux au moment précis où l'on veut les garder.
+    public let description: String?
+
+    /// **Ce que la graine doit faire PARTIR quand la publication passe par la
+    /// voie DOCUMENT** (#5409) — le FICHIER, pas le pixel.
+    ///
+    /// `payload` dit ce qui se pose sur le canvas ; `origin` dit ce qui se
+    /// téléverse. Les deux ne sont pas le même objet, et le cas de l'IMAGE le
+    /// prouve : le canvas reçoit un bitmap DÉCODÉ et redimensionné à 1080 px,
+    /// pendant que la publication doit emporter le fichier d'ORIGINE. Les
+    /// confondre publierait une vignette à la place de la photo.
+    ///
+    /// Pourquoi il fallait ce champ : `documentLocalMedia` — la liste que la
+    /// voie document téléverse — n'a qu'un écrivain, l'INTAKE. La graine, elle,
+    /// va directement au canvas et saute l'intake ; sans son fichier, une
+    /// publication par la voie document emportait un canvas qui référence un
+    /// chemin local, et le média n'arrivait nulle part.
+    public struct Origin: Equatable, Sendable {
+        /// Le fichier tel qu'il doit être téléversé — déjà copié sous la
+        /// convention du composer pour la vidéo et le son, le fichier source
+        /// pour une image (dont le bitmap du canvas n'est qu'une réduction).
+        public let fileURL: URL
+        /// Le mime DÉCLARÉ à la source, jamais re-dérivé de l'extension : c'est
+        /// la règle de `ComposerDocumentMediaFactory`, et la graine ne fait pas
+        /// exception.
+        public let mimeType: String
+        /// L'objet de canvas que la graine a posé pour ce fichier, quand elle
+        /// en connaît l'identité (`.video` la porte). `nil` pour une image de
+        /// fond, dont l'identité naît dans `init(seeding:)` — l'hôte la relit
+        /// alors sur la slide plutôt que de l'inventer.
+        public let objectId: String?
+
+        public init(fileURL: URL, mimeType: String, objectId: String? = nil) {
+            self.fileURL = fileURL
+            self.mimeType = mimeType
+            self.objectId = objectId
+        }
+    }
+
+    /// `nil` pour une graine de TEXTE — elle n'a aucun fichier, donc rien à
+    /// téléverser. Le distinguer d'un fichier absent par erreur est le rôle des
+    /// fabriques, qui refusent plutôt que de rendre une origine vide.
+    public let origin: Origin?
+
+    public init(payload: Payload?, description: String? = nil, origin: Origin? = nil) {
         self.payload = payload
+        self.description = description
+        self.origin = origin
+    }
+
+    /// **La fabrique de la graine de TEXTE.**
+    ///
+    /// `nil` quand le texte est vide ou fait d'espaces : un atelier ouvert sur
+    /// une description vide n'aurait rien semé, et la porte doit pouvoir le
+    /// DIRE plutôt que d'ouvrir sur rien. Même contrat que
+    /// `video(copying:)` — une fabrique qui refuse est une fabrique qui parle.
+    /// **La fabrique de la graine SONORE** (#4461).
+    ///
+    /// Elle copie, pour la raison exacte de `video(copying:)` : la source vient
+    /// du `DiskCacheStore`, soumis à ÉVICTION par mtime, et une éviction entre
+    /// l'ouverture de l'atelier et l'envoi ferait échouer la publication d'un
+    /// son déjà composé, sans un mot.
+    ///
+    /// `nil` quand la source n'existe pas ou que la copie échoue — l'appelant
+    /// n'ouvre alors RIEN, et le DIT.
+    public static func audio(copying source: URL,
+                            declaredMimeType: String = "audio/m4a") -> StoryComposerSeed? {
+        guard let copied = StoryComposerSeedFile.copyForComposer(
+            source: source, objectId: UUID().uuidString,
+            declaredMimeType: declaredMimeType) else { return nil }
+        return StoryComposerSeed(
+            payload: .audio(fileURL: copied),
+            origin: Origin(fileURL: copied, mimeType: declaredMimeType)
+        )
+    }
+
+    /// **La fabrique de la graine de SCÈNE** (#9994).
+    ///
+    /// `images` porte les bitmaps DÉCODÉS (fond sous l'id de slide, médias et
+    /// stickers sous leur id d'objet), `files` les fichiers locaux des vidéos et
+    /// des sons. Chaque fichier est COPIÉ sous `{objectId}.{ext}`, pour la raison
+    /// de `video(copying:)` : la source vient d'un cache soumis à éviction.
+    ///
+    /// `nil` dès qu'un fond, un média ou un son manque — la scène ne se reprend
+    /// qu'entière. Une image de STICKER absente ne refuse rien : le sticker se
+    /// peint par son emoji, comme chez tout lecteur à qui l'image manque.
+    public static func scene(_ recomposition: StoryRecomposition,
+                             images: [String: UIImage],
+                             files: [String: URL]) -> StoryComposerSeed? {
+        var background: UIImage?
+        var bitmaps: [String: UIImage] = [:]
+        var videos: [String: URL] = [:]
+        var audios: [String: URL] = [:]
+        let abandon: () -> StoryComposerSeed? = {
+            for copie in Array(videos.values) + Array(audios.values) {
+                try? FileManager.default.removeItem(at: copie)
+            }
+            return nil
+        }
+        for asset in recomposition.assets {
+            switch asset.kind {
+            case .backgroundImage:
+                guard let image = images[asset.objectId] else { return abandon() }
+                background = image
+            case .image:
+                guard let image = images[asset.objectId] else { return abandon() }
+                bitmaps[asset.objectId] = image
+            case .stickerImage:
+                if let image = images[asset.objectId] { bitmaps[asset.objectId] = image }
+            case .video, .audio:
+                guard let source = files[asset.objectId],
+                      let copied = StoryComposerSeedFile.copyForComposer(
+                          source: source,
+                          objectId: asset.objectId,
+                          declaredMimeType: asset.kind == .audio ? "audio/mp4" : nil)
+                else { return abandon() }
+                if asset.kind == .video { videos[asset.objectId] = copied } else { audios[asset.objectId] = copied }
+            }
+        }
+        let scene = StoryComposerRecomposedScene(slide: recomposition.slide,
+                                                 backgroundImage: background,
+                                                 images: bitmaps,
+                                                 videoURLs: videos,
+                                                 audioURLs: audios)
+        return StoryComposerSeed(payload: .scene(scene), description: recomposition.description)
+    }
+
+    public static func text(_ raw: String) -> StoryComposerSeed? {
+        let taille = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !taille.isEmpty else { return nil }
+        return StoryComposerSeed(payload: nil, description: taille)
     }
 
     /// **La fabrique de la graine VIDÉO — le SEUL site qui copie.**
@@ -60,12 +211,36 @@ public struct StoryComposerSeed {
     ///
     /// À appeler depuis un contexte qui ne s'exécute QU'UNE FOIS par ouverture —
     /// la matérialisation de la porte, jamais un `init` de `View`.
-    public static func video(copying source: URL) -> StoryComposerSeed? {
+    /// `declaredMimeType` sert DEUX choses, et la seconde est neuve (#5409) :
+    /// l'extension du fichier copié — que tout l'aval relit pour étiqueter le
+    /// téléversement — et le mime de l'origine, que la voie document remet tel
+    /// quel. Son défaut `nil` garde le repli historique des appelants qui ne le
+    /// connaissent pas ; les deux portes de production le connaissent.
+    public static func video(copying source: URL,
+                            declaredMimeType: String? = nil) -> StoryComposerSeed? {
         let objectId = UUID().uuidString
         guard let copied = StoryComposerSeedFile.copyForComposer(
-            source: source, objectId: objectId) else { return nil }
-        return StoryComposerSeed(payload: .video(fileURL: copied, objectId: objectId))
+            source: source, objectId: objectId,
+            declaredMimeType: declaredMimeType) else { return nil }
+        return StoryComposerSeed(
+            payload: .video(fileURL: copied, objectId: objectId),
+            origin: Origin(fileURL: copied,
+                           mimeType: declaredMimeType ?? "video/quicktime",
+                           objectId: objectId)
+        )
     }
+}
+
+/// **La scène d'une story publiée, prête à poser** (#9994) — la slide détachée
+/// de son post d'origine et ses actifs locaux, sous les identifiants que la
+/// slide leur donne.
+public struct StoryComposerRecomposedScene {
+    public let slide: StorySlide
+    /// Le fond IMAGE hérité de la slide, que `runStoryUpload` lit dans `slideImages`.
+    public let backgroundImage: UIImage?
+    public let images: [String: UIImage]
+    public let videoURLs: [String: URL]
+    public let audioURLs: [String: URL]
 }
 
 /// La copie sous la convention de nom du composer, isolée pour être lisible
@@ -77,9 +252,19 @@ enum StoryComposerSeedFile {
     /// ne pose alors AUCUN objet. Un objet sans actif chargé serait sauté par
     /// `runStoryUpload` avec son log « layer will be invisible to viewers » :
     /// une couche déclarée que personne ne verrait jamais.
-    static func copyForComposer(source: URL, objectId: String) -> URL? {
+    /// `declaredMimeType` — le mime que la SOURCE a annoncé (#4038). Il décide
+    /// de l'extension quand l'URL n'en porte aucune : le nom du fichier copié
+    /// est ce que tout l'aval relit pour étiqueter le téléversement
+    /// (`MimeTypeResolver.mimeType(forURL:)`), si bien qu'un repli codé en dur
+    /// baptisait « mov » une vidéo qui ne l'était pas. `nil` ⇒ repli historique.
+    static func copyForComposer(source: URL, objectId: String,
+                                declaredMimeType: String? = nil) -> URL? {
         guard FileManager.default.fileExists(atPath: source.path) else { return nil }
-        let ext = source.pathExtension.isEmpty ? "mov" : source.pathExtension
+        let ext = ComposerContentMediaFile.fileExtension(
+            sourceURL: source,
+            declaredMimeType: declaredMimeType,
+            fallback: "mov"
+        )
         let destination = FileManager.default.temporaryDirectory
             .appendingPathComponent("\(objectId).\(ext)")
         try? FileManager.default.removeItem(at: destination)
@@ -119,8 +304,55 @@ public extension StoryComposerViewModel {
     convenience init(seeding seed: StoryComposerSeed) {
         self.init()
 
+        // La DESCRIPTION d'abord, et sans condition : elle n'a besoin d'aucun
+        // actif chargé, donc elle survit même si la pose du média échoue
+        // ci-dessous (fichier balayé, plafond d'objets atteint). Un atelier qui
+        // s'ouvre avec la légende mais sans la photo reste utilisable ; l'inverse
+        // ferait perdre en silence ce que l'auteur avait écrit.
+        if let description = seed.description {
+            applyContentText(description)
+            isSeededSession = true
+        }
+
         switch seed.payload {
-        case .image(let bitmap):
+        case .none:
+            // Graine de texte seul : la description ci-dessus EST le semis.
+            break
+
+        case .scene(let scene)?:
+            // La scène REMPLACE l'ardoise : une story reprise se pose comme
+            // elle a été publiée, et sa description y est déjà — résolue par le
+            // Prisme du lecteur. Les médias arrivent en UNE passe (un seul bump
+            // du canvas), et une vidéo ne reçoit que sa VIGNETTE : la mesurer
+            // réécrirait la durée que l'auteur d'origine avait rognée.
+            slides = [scene.slide]
+            currentSlideIndex = 0
+            if let background = scene.backgroundImage {
+                setImage(background, for: scene.slide.id)
+                hasBackgroundImage = true
+            }
+            mergeRestoredMedia(images: scene.images,
+                               videoURLs: scene.videoURLs,
+                               audioURLs: scene.audioURLs)
+            for (objectId, fileURL) in scene.videoURLs {
+                loadVideoThumbnail(objectId: objectId, fileURL: fileURL)
+            }
+            isSeededSession = true
+
+        case .audio(let copied)?:
+            // **Le son devient le SON de la scène** (#4461), par le chemin que
+            // le collage emprunte déjà (`attachPastedAudio`) — analyse de la
+            // forme d'onde, lecture de la durée, pose de l'objet, extension de
+            // la slide. Un second chemin de pose divergerait du premier au
+            // premier ajustement de l'un, en silence.
+            //
+            // La vérification d'existence est refaite ici comme pour la vidéo :
+            // le fichier a pu être balayé entre la fabrique et l'ouverture.
+            guard FileManager.default.fileExists(atPath: copied.path) else { return }
+            attachPastedAudio(url: copied)
+            isSeededSession = true
+
+        case .image(let bitmap)?:
             // `slideImages`, et pas `loadedImages` : `runStoryUpload` n'envoie
             // un FOND que depuis `upload.slideImages[slide.id]`. Posé ailleurs,
             // le média s'afficherait sans jamais partir.
@@ -128,7 +360,7 @@ public extension StoryComposerViewModel {
             hasBackgroundImage = true
             isSeededSession = true
 
-        case .video(let copied, let objectId):
+        case .video(let copied, let objectId)?:
             // AUCUNE écriture disque ici : la copie a été faite UNE fois, à la
             // fabrique de la graine. Ce qui reste est une vérification —
             // le fichier a pu être balayé entre la fabrique et l'ouverture —,
@@ -155,34 +387,14 @@ public extension StoryComposerViewModel {
             // écrivains que le chemin caméra — donc par le bump de version que
             // le canvas attend. `preloadTask` est la poignée que le `deinit`
             // annule : une session refermée ne finit pas de décoder.
-            let resolvedId = object.id
-            preloadTask = Task { [weak self] in
-                let thumbnail = await StoryMediaLoader.shared.videoThumbnail(url: copied, maxDimension: 400)
-                let asset = AVURLAsset(url: copied)
-                var mediaDuration: Float?
-                if let cmDur = try? await asset.load(.duration) {
-                    let secs = CMTimeGetSeconds(cmDur)
-                    if secs > 0, secs.isFinite { mediaDuration = Float(secs) }
-                }
-                var videoAspectRatio: Double?
-                if let track = try? await asset.loadTracks(withMediaType: .video).first,
-                   let natural = try? await track.load(.naturalSize),
-                   let transform = try? await track.load(.preferredTransform) {
-                    let effective = natural.applying(transform)
-                    let w = abs(effective.width)
-                    let h = abs(effective.height)
-                    if w > 0, h > 0 { videoAspectRatio = Double(w / h) }
-                }
-                guard !Task.isCancelled, let self else { return }
-                if let thumbnail { self.registerLoadedImage(thumbnail, for: resolvedId) }
-                if let videoAspectRatio {
-                    self.setMediaAspectRatio(id: resolvedId, aspectRatio: videoAspectRatio, slideId: slideId)
-                }
-                if let mediaDuration {
-                    self.setMediaDuration(id: resolvedId, duration: mediaDuration, slideId: slideId)
-                    self.autoExtendDuration(forElementEnd: mediaDuration, slideId: slideId)
-                }
-            }
+            // **La mesure vit dans UN site** (#5418) — `measureVideo`. Ce bloc
+            // en portait l'unique exemplaire, et son jumeau du pont
+            // document → canvas ne l'avait pas : deux chemins posaient une
+            // vidéo, un seul la mesurait, et les stories du composer v3
+            // partaient sans ratio ni vignette. Les fondre est ce qui empêche
+            // l'écart de revenir — il n'était pas visible dans les APPELS, il
+            // vivait dans deux `nil` d'arguments.
+            measureVideo(objectId: object.id, fileURL: copied, slideId: slideId)
         }
     }
 }

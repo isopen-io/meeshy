@@ -1,0 +1,388 @@
+import { describe, expect, test } from 'bun:test';
+
+import { postCommentCardHeadMedia, postCommentCardModes, postCommentCardWithheldByAudience } from '@meeshy/shared/utils/comment-card-composition';
+
+import type { FeedPost } from '@/lib/api/feed-pages';
+import type { PostComment } from '@/lib/api/publication-comments';
+
+import {
+  NO_POST_COMMENT_PICK,
+  composingPostOf,
+  storyCommentSupportOf,
+  postCommentCardSourceOf,
+  postCommentChoiceOf,
+  postCommentImageable,
+  postCommentImagingOf,
+  postCommentMessageCardSubjectOf,
+  postCommentPickAfter,
+  type PostCommentCardLabels,
+} from './composed-comment-card';
+
+/**
+ * **IMAGER UN COMMENTAIRE DE POST, CÔTÉ WEB** (#9687) — l'adaptateur entre le
+ * fil (`PostComment`, `FeedPost`) et la composition partagée
+ * (`@meeshy/shared/utils/comment-card-composition`), puis la carte
+ * qu'« Imagine » peint. Les règles sont éprouvées dans `packages/shared` ;
+ * ici, ce que le web y met : les textes servis, la puce de langue, les
+ * médias peignables, et la projection sur `MessageCardSubject`.
+ */
+
+const labels: PostCommentCardLabels = { folded: (count) => `+${count} réponses`, thread: 'Fil de commentaires' };
+const viewer = { id: 'me', displayName: 'Moi' };
+/** L'instant où une story publiée le 2026-10-08 à 10 h est encore à l'affiche. */
+const FRESH = Date.parse('2026-10-08T12:00:00.000Z');
+
+const post = (overrides: Partial<FeedPost> = {}): FeedPost => ({
+  id: 'p-1',
+  type: 'POST',
+  createdAt: '2026-10-08T10:00:00.000Z',
+  content: 'Sunset in Dakar',
+  originalLanguage: 'en',
+  translations: { fr: { text: 'Coucher de soleil à Dakar' } },
+  author: { id: 'u-awa', username: '@awa', displayName: 'Awa' },
+  media: [],
+  visibility: 'PUBLIC',
+  ...overrides,
+});
+
+const comment = (id: string, overrides: Partial<PostComment> = {}): PostComment => ({
+  id,
+  content: `texte ${id}`,
+  createdAt: '2026-10-08T10:01:00.000Z',
+  author: { id: `u-${id}`, username: id, displayName: id.toUpperCase() },
+  ...overrides,
+});
+
+const root = comment('root', { createdAt: '2026-10-08T10:01:00.000Z' });
+const reply = comment('r1', { parentId: 'root', createdAt: '2026-10-08T10:02:00.000Z' });
+
+describe('la source que le web remet à la composition', () => {
+  test('le post en tête parle la langue du lecteur (le Prisme), et la cible dit ce que sa rangée affiche', () => {
+    const source = postCommentCardSourceOf({ post: post(), target: root, targetText: 'ce que la rangée affiche', thread: [], readerLanguages: ['fr'], viewer });
+    const subject = postCommentMessageCardSubjectOf(source, { mode: 'postAndComment', showsPost: true }, labels);
+    expect(subject?.quoted).toEqual({ author: 'Awa', text: 'Coucher de soleil à Dakar', handle: 'awa' });
+    expect(subject?.reply).toEqual({ author: 'ROOT', text: 'ce que la rangée affiche', handle: 'root' });
+    expect(subject?.sentAt).toEqual(new Date('2026-10-08T10:01:00.000Z'));
+    expect(subject?.quotedAt).toEqual(new Date('2026-10-08T10:00:00.000Z'));
+  });
+
+  test('un fil : la tête en citation, puis le bloc « Fil de commentaires » d’iOS — une ligne par commentaire, à son niveau, dans le texte servi', () => {
+    const translated = comment('r0', { parentId: 'root', createdAt: '2026-10-08T10:01:30.000Z', content: 'Where?', originalLanguage: 'en', translations: { fr: { text: 'Où ?' } } });
+    const source = postCommentCardSourceOf({ post: post(), target: reply, targetText: 'texte r1', thread: [root, translated, reply], readerLanguages: ['fr'], viewer });
+    const subject = postCommentMessageCardSubjectOf(source, { mode: 'threadToHere', showsPost: false }, labels);
+    expect(subject?.quoted?.text).toBe('texte root');
+    expect(subject?.reply).toEqual({
+      author: 'Fil de commentaires',
+      text: 'R0 : Où ?\nR1 : texte r1',
+      handle: null,
+      thread: [
+        { author: 'R0', handle: 'r0', text: 'Où ?', level: 1, isReply: false },
+        { author: 'R1', handle: 'r1', text: 'texte r1', level: 1, isReply: true },
+      ],
+    });
+  });
+
+  test('deux blocs restent une citation et une réponse, sans bloc de fil', () => {
+    const source = postCommentCardSourceOf({ post: post(), target: reply, targetText: 'texte r1', thread: [root, reply], readerLanguages: ['fr'], viewer });
+    const subject = postCommentMessageCardSubjectOf(source, { mode: 'threadToHere', showsPost: false }, labels);
+    expect(subject?.reply).toEqual({ author: 'R1', text: 'texte r1', handle: 'r1' });
+  });
+
+  test('le pli « +N réponses » est une ligne sans auteur, au niveau 1', () => {
+    const replies = Array.from({ length: 7 }, (_, index) => comment(`m${index}`, { parentId: 'root', createdAt: `2026-10-08T10:1${index}:00.000Z` }));
+    const target = replies[6]!;
+    const source = postCommentCardSourceOf({ post: post(), target, targetText: target.content, thread: [root, ...replies], readerLanguages: ['fr'], viewer });
+    const lines = postCommentMessageCardSubjectOf(source, { mode: 'threadToHere', showsPost: false }, labels)?.reply.thread ?? [];
+    expect(lines.find((line) => line.author === null)).toEqual({ author: null, handle: null, text: '+3 réponses', level: 1, isReply: false });
+  });
+
+  test('un commentaire en vol ou à vue unique n’a aucun mode ; un éphémère non plus', () => {
+    for (const flags of [{ pending: true }, { effectFlags: 4 }, { effectFlags: 1 }]) {
+      const source = postCommentCardSourceOf({ post: post(), target: comment('x', flags), targetText: 'x', thread: [], readerLanguages: ['fr'], viewer });
+      expect(postCommentMessageCardSubjectOf(source, { mode: 'commentAlone', showsPost: false }, labels)).toBeNull();
+    }
+  });
+
+  test('les médias peignables viennent signés de leur bloc ; la vignette du post d’abord', () => {
+    const withPhoto = post({ media: [{ id: 'pm', fileUrl: '/p.jpg', mimeType: 'image/jpeg', width: 800, height: 600 }] });
+    const target = comment('root', { media: [{ id: 'cm', fileUrl: '/c.jpg', mimeType: 'image/jpeg' }, { id: 'doc', fileUrl: '/d.pdf', mimeType: 'application/pdf' }] });
+    const source = postCommentCardSourceOf({ post: withPhoto, target, targetText: 'Regarde', thread: [], readerLanguages: ['fr'], viewer });
+    const subject = postCommentMessageCardSubjectOf(source, { mode: 'postAndComment', showsPost: true }, labels);
+    expect(subject?.media.map((item) => item.id)).toEqual(['pm', 'cm']);
+    expect(subject?.media[0]?.author).toEqual({ name: 'Awa', handle: 'awa', quoted: true });
+    expect(subject?.media[1]?.author).toEqual({ name: 'ROOT', handle: 'root', quoted: false });
+  });
+
+  test('une story ou un statut AVEC média se met en tête : son média est le héros de la carte', () => {
+    const photo = [{ id: 'sm', fileUrl: '/s.jpg', mimeType: 'image/jpeg', width: 1080, height: 1920 }];
+    for (const overrides of [{ type: 'STORY' }, { type: 'STATUS' }, { storyEffects: { layers: [] } }] as const) {
+      const source = postCommentCardSourceOf({ post: post({ ...overrides, media: photo }), target: root, targetText: 'x', thread: [], readerLanguages: ['fr'], viewer });
+      const subject = postCommentMessageCardSubjectOf(source, { mode: 'postAndComment', showsPost: true }, labels);
+      expect(subject?.media.map((item) => [item.id, item.hero])).toEqual([['sm', true]]);
+    }
+  });
+
+  test('le héros d’une story reste soumis aux gardes : une pièce à vue unique ou floutée ne se peint jamais', () => {
+    for (const piece of [{ isViewOnce: true }, { isBlurred: true }, { effectFlags: 4 }, { isEncrypted: true }]) {
+      const media = [{ id: 'sm', fileUrl: '/s.jpg', mimeType: 'image/jpeg', ...piece }];
+      const storyPost = post({ type: 'STORY', media });
+      expect(postCommentCardHeadMedia(postCommentCardSourceOf({ post: composingPostOf(storyPost, FRESH), target: root, targetText: 'x', thread: [], readerLanguages: ['fr'], viewer }))).toEqual([]);
+      const source = postCommentCardSourceOf({ post: storyPost, target: root, targetText: 'x', thread: [], readerLanguages: ['fr'], viewer });
+      expect(postCommentMessageCardSubjectOf(source, { mode: 'postAndComment', showsPost: true }, labels)).toBeNull();
+    }
+  });
+
+  test('un commentaire-sticker déclare son image sticker : elle se peindra ajustée, jamais coupée', () => {
+    const target = comment('root', { media: [{ id: 'st', fileUrl: '/st.png', mimeType: 'image/png', width: 512, height: 512 }], sticker: { emoji: '🔥' } });
+    const source = postCommentCardSourceOf({ post: post(), target, targetText: 'x', thread: [], readerLanguages: ['fr'], viewer });
+    const [item] = postCommentMessageCardSubjectOf(source, { mode: 'commentAlone', showsPost: false }, labels)?.media ?? [];
+    expect(item?.card.kind === 'image' && item.card.sticker).toBe(true);
+  });
+
+  test('un canvas de story sans média ne se met pas en tête', () => {
+    for (const overrides of [{ type: 'STORY' }, { type: 'STATUS' }, { storyEffects: { layers: [] } }] as const) {
+      const source = postCommentCardSourceOf({ post: post(overrides), target: root, targetText: 'x', thread: [], readerLanguages: ['fr'], viewer });
+      expect(postCommentMessageCardSubjectOf(source, { mode: 'postAndComment', showsPost: true }, labels)).toBeNull();
+      expect(postCommentMessageCardSubjectOf(source, { mode: 'commentAlone', showsPost: true }, labels)?.quoted).toBeNull();
+    }
+  });
+});
+
+describe('qui compose, et quand « Imager » s’offre', () => {
+  const sourceOf = (support: FeedPost | null, target: PostComment = root, thread: readonly PostComment[] = []) =>
+    postCommentCardSourceOf({ post: support, target, targetText: 'x', thread, readerLanguages: ['fr'], viewer });
+  const headOf = (support: FeedPost | null) => postCommentCardHeadMedia(sourceOf(support)).map((entry) => entry.item.id);
+
+  test('un support CONNU compose toujours, comme iOS : seul un support inconnu laisse la carte du commentaire', () => {
+    expect(composingPostOf(post())?.id).toBe('p-1');
+    expect(composingPostOf(post({ type: 'REEL' }))?.id).toBe('p-1');
+    expect(composingPostOf(post({ type: 'STORY' }), FRESH)?.id).toBe('p-1');
+    expect(composingPostOf(post({ type: 'status' }), FRESH)?.id).toBe('p-1');
+    expect(composingPostOf(undefined)).toBeNull();
+    expect(composingPostOf(null)).toBeNull();
+  });
+
+  test('une story ou un statut ne se met en tête que par son visuel — un son, un texte seul ne suffisent pas', () => {
+    const media = [{ id: 'sm', fileUrl: '/s.jpg', mimeType: 'image/jpeg' }];
+    expect(headOf(composingPostOf(post({ type: 'STORY', media }), FRESH))).toEqual(['sm']);
+    expect(headOf(composingPostOf(post({ type: 'status', media }), FRESH))).toEqual(['sm']);
+    expect(headOf(composingPostOf(post({ type: 'STORY', media: [{ id: 'v', fileUrl: '/v.m4a', mimeType: 'audio/mp4' }] }), FRESH))).toEqual([]);
+    expect(postCommentCardModes(sourceOf(composingPostOf(post({ type: 'STORY' }), FRESH)))).toEqual(['commentAlone']);
+  });
+
+  test('une story ou un post dont l’audience n’est pas PUBLIQUE n’est jamais support ni héros — l’atelier le DIT, comme iOS', () => {
+    const media = [{ id: 'sm', fileUrl: '/s.jpg', mimeType: 'image/jpeg' }];
+    const { visibility: _public, ...unknownAudience } = post({ media });
+    for (const visibility of ['FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY', null, 'absent'] as const) {
+      const audience = visibility === 'absent' ? {} : { visibility };
+      for (const type of ['POST', 'STORY'] as const) {
+        const restricted = composingPostOf({ ...unknownAudience, type, ...audience }, FRESH);
+        expect(restricted?.id).toBe('p-1');
+        const source = sourceOf(restricted);
+        expect(postCommentChoiceOf(source, NO_POST_COMMENT_PICK)?.mode).toBe('commentAlone');
+        expect(postCommentCardWithheldByAudience(source)).toBe(true);
+        expect(postCommentMessageCardSubjectOf(source, { mode: 'postAndComment', showsPost: true }, labels)).toBeNull();
+        const alone = postCommentMessageCardSubjectOf(source, { mode: 'commentAlone', showsPost: true }, labels);
+        expect([alone?.quoted, alone?.media]).toEqual([null, []]);
+      }
+    }
+  });
+
+  test('une story échue compose sans tête et sans avis — par son échéance, à défaut 20 h après sa publication', () => {
+    const media = [{ id: 'sm', fileUrl: '/s.jpg', mimeType: 'image/jpeg' }];
+    const published = Date.parse('2026-10-08T10:00:00.000Z');
+    for (const [story, now] of [
+      [post({ type: 'STORY', media, expiresAt: '2026-10-08T12:00:00.000Z' }), published + 3 * 3_600_000],
+      [post({ type: 'STORY', media }), published + 21 * 3_600_000],
+      [post({ type: 'STORY', media, visibility: 'FRIENDS' }), published + 21 * 3_600_000],
+    ] as const) {
+      const expired = composingPostOf(story, now);
+      expect(expired?.id).toBe('p-1');
+      expect(headOf(expired)).toEqual([]);
+      expect(postCommentCardWithheldByAudience(sourceOf(expired))).toBe(false);
+    }
+    expect(headOf(composingPostOf(post({ type: 'STORY', media, expiresAt: '2999-01-01T00:00:00.000Z' }), published + 21 * 3_600_000))).toEqual(['sm']);
+  });
+
+  test('une story à canvas ne montre que sa vignette — sans elle, ni tête ni avis', () => {
+    expect(headOf(composingPostOf(post({ type: 'STORY', media: [{ id: 'sm', fileUrl: '/s.jpg', mimeType: 'image/jpeg' }], storyEffects: { layers: [] } }), FRESH))).toEqual([]);
+    const withThumb = composingPostOf(
+      post({ type: 'STORY', storyEffects: { layers: [] }, media: [{ id: 'sm', fileUrl: '/s.mp4', mimeType: 'video/mp4', thumbnailUrl: '/t.jpg', width: 1080, height: 1920 }] }),
+      FRESH,
+    );
+    expect(withThumb?.media?.map((piece) => [piece.fileUrl, piece.mimeType, piece.width, piece.height])).toEqual([['/t.jpg', 'image/jpeg', 1080, 1920]]);
+    const audioThumb = [{ id: 'a', fileUrl: '/a.m4a', mimeType: 'audio/mp4', thumbnailUrl: '/cover.jpg' }];
+    const silent = composingPostOf(post({ type: 'STORY', storyEffects: { layers: [] }, media: audioThumb, visibility: 'FRIENDS' }), FRESH);
+    expect(headOf(silent)).toEqual([]);
+    expect(postCommentCardWithheldByAudience(sourceOf(silent))).toBe(false);
+  });
+
+  test('la story que le lecteur JOUE devient le support d’« Imager » : son visuel, son texte, son auteur, son audience', () => {
+    const support = storyCommentSupportOf({
+      id: 'st-1',
+      createdAt: '2026-10-08T10:00:00.000Z',
+      expiresAt: '2999-01-01T00:00:00.000Z',
+      content: 'Sunset',
+      originalLanguage: 'en',
+      translations: { fr: { text: 'Coucher de soleil' } },
+      author: { id: 'u-awa', username: 'awa', displayName: 'Awa' },
+      media: [{ id: 'sm', url: '/legacy.jpg', mimeType: 'image/jpeg', width: 1080, height: 1920 }],
+      visibility: 'PUBLIC',
+    });
+    expect([support.type, support.visibility, support.media?.map((piece) => piece.fileUrl)]).toEqual(['STORY', 'PUBLIC', ['/legacy.jpg']]);
+    const source = sourceOf(composingPostOf(support));
+    const subject = postCommentMessageCardSubjectOf(source, postCommentChoiceOf(source, NO_POST_COMMENT_PICK)!, labels);
+    expect(subject?.quoted).toEqual({ author: 'Awa', text: 'Coucher de soleil', handle: 'awa' });
+    expect(subject?.media.map((item) => [item.id, item.hero === true])).toEqual([['sm', true]]);
+    expect(storyCommentSupportOf({ id: 'st-2', createdAt: '2026-10-08T10:00:00.000Z' }).visibility).toBeNull();
+  });
+
+  test('« Imager » s’offre dès qu’un mode compose — jamais sous un ancêtre protégé ni sans racine chargée', () => {
+    const input = (target: PostComment, thread: readonly PostComment[]) => ({ post: post(), target, targetText: 'x', thread, readerLanguages: ['fr'], viewer });
+    expect(postCommentImageable(input(root, []))).toBe(true);
+    expect(postCommentImageable(input(reply, [root]))).toBe(true);
+    expect(postCommentImageable(input(reply, []))).toBe(false);
+    expect(postCommentImageable(input(reply, [{ ...root, effectFlags: 2 }]))).toBe(false);
+  });
+
+  test('une réponse sans racine chargée retombe sur la carte du commentaire seul — jamais sous un ancêtre protégé connu', () => {
+    const input = (target: PostComment, thread: readonly PostComment[]) => ({ post: post(), target, targetText: 'x', thread, readerLanguages: ['fr'], viewer });
+    expect(postCommentImagingOf(input(reply, [root]))).toBe('composed');
+    expect(postCommentImagingOf(input(reply, []))).toBe('alone');
+    expect(postCommentImagingOf(input(reply, [{ ...root, effectFlags: 2 }]))).toBeNull();
+    expect(postCommentImagingOf(input({ ...reply, effectFlags: 2 }, []))).toBeNull();
+  });
+});
+
+describe('le choix de composition dans l’atelier', () => {
+  const r2 = comment('r2', { parentId: 'root', createdAt: '2026-10-08T10:03:00.000Z' });
+  const r3 = comment('r3', { parentId: 'root', createdAt: '2026-10-08T10:04:00.000Z' });
+  const source = postCommentCardSourceOf({ post: post(), target: r2, targetText: 'texte r2', thread: [root, reply, r2, r3], readerLanguages: ['fr'], viewer });
+
+  test('à l’ouverture : le mode par défaut, son post en tête par défaut, les cases du fil jusqu’ici', () => {
+    const choice = postCommentChoiceOf(source, NO_POST_COMMENT_PICK);
+    expect(choice?.mode).toBe('threadToHere');
+    expect(choice?.showsPost).toBe(false);
+    expect([...(choice?.chosen ?? [])].sort()).toEqual(['r1', 'root']);
+  });
+
+  test('choisir un mode remet « Post en tête » à son défaut ; la bascule se garde dans le mode', () => {
+    const toggled = postCommentPickAfter(source, NO_POST_COMMENT_PICK, { kind: 'togglePost' });
+    expect(postCommentChoiceOf(source, toggled)?.showsPost).toBe(true);
+    const postRoot = postCommentPickAfter(source, toggled, { kind: 'mode', mode: 'postRootAndReply' });
+    expect(postCommentChoiceOf(source, postRoot)).toMatchObject({ mode: 'postRootAndReply', showsPost: true });
+    const withoutPost = postCommentPickAfter(source, postRoot, { kind: 'togglePost' });
+    expect(postCommentChoiceOf(source, withoutPost)).toMatchObject({ mode: 'postRootAndReply', showsPost: false });
+    expect(postCommentChoiceOf(source, postCommentPickAfter(source, withoutPost, { kind: 'mode', mode: 'threadToHere' }))?.showsPost).toBe(false);
+  });
+
+  test('« Choisir les réponses » ouvre sur le fil jusqu’ici, puis chaque case se coche et se décoche', () => {
+    const choosing = postCommentPickAfter(source, NO_POST_COMMENT_PICK, { kind: 'mode', mode: 'chosenReplies' });
+    const plusR3 = postCommentPickAfter(source, choosing, { kind: 'reply', id: 'r3' });
+    const minusRoot = postCommentPickAfter(source, plusR3, { kind: 'reply', id: 'root' });
+    expect([...(postCommentChoiceOf(source, minusRoot)?.chosen ?? [])].sort()).toEqual(['r1', 'r3']);
+    const subject = postCommentMessageCardSubjectOf(source, postCommentChoiceOf(source, minusRoot)!, labels);
+    expect(subject?.quoted?.text).toBe('texte r1');
+    expect(subject?.reply.thread?.map((line) => line.text)).toEqual(['texte r3', 'texte r2']);
+  });
+
+  test('un mode qui ne s’offre plus retombe sur le défaut ; rien ne s’image ⇒ aucun choix', () => {
+    expect(postCommentChoiceOf(source, { ...NO_POST_COMMENT_PICK, mode: 'postAndComment' })?.mode).toBe('threadToHere');
+    const lone = postCommentCardSourceOf({ post: post(), target: comment('x', { effectFlags: 4 }), targetText: 'x', thread: [], readerLanguages: ['fr'], viewer });
+    expect(postCommentChoiceOf(lone, NO_POST_COMMENT_PICK)).toBeNull();
+  });
+});
+
+describe('le son d’un vocal part dans la piste du texte servi (#9687, famille audio du Prisme)', () => {
+  const voice = (overrides: Partial<PostComment> = {}) =>
+    comment('v', {
+      content: '',
+      originalLanguage: 'es',
+      media: [
+        {
+          id: 'a-1',
+          fileUrl: '/voz.m4a',
+          mimeType: 'audio/mp4',
+          duration: 9000,
+          transcription: { text: 'Hola a todos', language: 'es' },
+          translations: { en: { type: 'audio', transcription: 'Hello everyone', url: '/voice-en.m4a', durationMs: 8000 } },
+        } as never,
+      ],
+      ...overrides,
+    });
+  const audioOf = (input: Parameters<typeof postCommentCardSourceOf>[0]) =>
+    postCommentMessageCardSubjectOf(postCommentCardSourceOf(input), { mode: 'commentAlone', showsPost: false }, labels)?.media.find((item) => item.card.kind === 'audio');
+
+  test('prisme [fr, en] sans traduction française : au RANG 2, la piste anglaise — sa durée avec elle', () => {
+    const audio = audioOf({ post: post(), target: voice(), targetText: '', thread: [], readerLanguages: ['fr', 'en'], viewer });
+    expect(audio?.url).toBe('/voice-en.m4a');
+    expect(audio?.card).toMatchObject({ kind: 'audio', durationMs: 8000 });
+  });
+
+  test('aucune langue du prisme n’a de piste : l’original', () => {
+    expect(audioOf({ post: post(), target: voice(), targetText: '', thread: [], readerLanguages: ['fr', 'de'], viewer })?.url).toBe('/voz.m4a');
+  });
+
+  test('la rangée visée montre son original : son vocal original, comme iOS', () => {
+    expect(audioOf({ post: post(), target: voice(), targetText: '', targetShowsOriginal: true, thread: [], readerLanguages: ['fr', 'en'], viewer })?.url).toBe('/voz.m4a');
+  });
+
+  test('un vocal VOISIN du fil suit le même prisme', () => {
+    const rootVoice = voice({ id: 'root' });
+    const source = postCommentCardSourceOf({ post: post(), target: reply, targetText: 'texte r1', thread: [rootVoice], readerLanguages: ['fr', 'en'], viewer });
+    const subject = postCommentMessageCardSubjectOf(source, { mode: 'threadToHere', showsPost: false }, labels);
+    expect(subject?.media.map((item) => item.url)).toEqual(['/voice-en.m4a']);
+  });
+});
+
+
+describe('la carte peint le texte LU, jamais la syntaxe des liens (#9687, jumelle de bdae65102a)', () => {
+  const raw = 'puis [notre page](https://meeshy.me/about) et enfin [[https://meeshy.me/brut]]';
+  const plain = 'puis notre page et enfin https://meeshy.me/brut';
+
+  test('le post en tête, le commentaire visé et ses voisins du fil', () => {
+    const linked = comment('r0', { parentId: 'root', createdAt: '2026-10-08T10:01:30.000Z', content: raw });
+    const source = postCommentCardSourceOf({ post: post({ content: raw, translations: undefined }), target: reply, targetText: raw, thread: [root, linked, reply], readerLanguages: ['fr'], viewer });
+    const withPost = postCommentMessageCardSubjectOf(source, { mode: 'threadToHere', showsPost: true }, labels);
+    expect(withPost?.quoted?.text).toBe(plain);
+    expect(withPost?.reply.text).toBe(`ROOT : texte root\nR0 : ${plain}\nR1 : ${plain}`);
+    expect(source.thread.find((entry) => entry.id === 'r0')?.text).toBe(plain);
+  });
+});
+
+describe('le média de tête se CHOISIT parmi ceux du post (#11783)', () => {
+  const three = post({
+    media: [
+      { id: 'pm', fileUrl: '/p.jpg', mimeType: 'image/jpeg', width: 800, height: 600 },
+      { id: 'vm', fileUrl: '/v.mp4', mimeType: 'video/mp4', thumbnailUrl: '/v.jpg', width: 1080, height: 1920 },
+      { id: 'am', fileUrl: '/a.m4a', mimeType: 'audio/mp4', duration: 5000 },
+    ],
+  });
+  const source = postCommentCardSourceOf({ post: three, target: root, targetText: 'Regarde', thread: [], readerLanguages: ['fr'], viewer });
+
+  test('à l’ouverture : la photo, premier visuel, est le héros', () => {
+    const choice = postCommentChoiceOf(source, NO_POST_COMMENT_PICK)!;
+    expect(postCommentMessageCardSubjectOf(source, choice, labels)?.media.map((item) => [item.id, item.hero === true])).toEqual([['pm', true]]);
+  });
+
+  test('choisir la vidéo la met en héros ; choisir le son le met en tête comme un son', () => {
+    const video = postCommentChoiceOf(source, postCommentPickAfter(source, NO_POST_COMMENT_PICK, { kind: 'head', index: 1 }))!;
+    expect(postCommentMessageCardSubjectOf(source, video, labels)?.media.map((item) => [item.id, item.hero === true])).toEqual([['vm', true]]);
+    const sound = postCommentChoiceOf(source, postCommentPickAfter(source, NO_POST_COMMENT_PICK, { kind: 'head', index: 2 }))!;
+    expect(postCommentMessageCardSubjectOf(source, sound, labels)?.media.map((item) => [item.id, item.hero === true])).toEqual([['am', false]]);
+  });
+
+  test('le choix du média survit au changement de mode', () => {
+    const picked = postCommentPickAfter(source, NO_POST_COMMENT_PICK, { kind: 'head', index: 1 });
+    const alone = postCommentPickAfter(source, picked, { kind: 'mode', mode: 'commentAlone' });
+    const back = postCommentPickAfter(source, alone, { kind: 'mode', mode: 'postAndComment' });
+    expect(postCommentChoiceOf(source, back)?.headMediaIndex).toBe(1);
+  });
+
+  test('un réel de SCÈNE (storyEffects) ancien se met en tête par son média, sans échéance de story', () => {
+    const scene = post({ type: 'REEL', createdAt: '2026-01-01T10:00:00.000Z', storyEffects: { v: 3, scenes: [] }, media: [{ id: 'vm', fileUrl: '/v.mp4', mimeType: 'video/mp4', thumbnailUrl: '/v.jpg' }] });
+    expect(composingPostOf(scene)).toBe(scene);
+    const from = postCommentCardSourceOf({ post: scene, target: root, targetText: 'x', thread: [], readerLanguages: ['fr'], viewer });
+    expect(postCommentMessageCardSubjectOf(from, { mode: 'postAndComment', showsPost: true }, labels)?.media.map((item) => item.id)).toEqual(['vm']);
+  });
+});

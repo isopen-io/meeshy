@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_sticker_save">In Meinen Stickern sichern</string>
+    <string name="story_sticker_save_done">Zu Meinen Stickern hinzugefügt</string>
+    <string name="story_sticker_save_already">Bereits in Meinen Stickern</string>
+    <string name="story_sticker_save_failed">Sticker konnte nicht gesichert werden</string>
+</resources>

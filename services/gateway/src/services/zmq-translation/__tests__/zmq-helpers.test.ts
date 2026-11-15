@@ -219,14 +219,12 @@ describe('zmq-helpers', () => {
       expect(result!.buffer).toEqual(fakeContent);
     });
 
-    it('reports size from statSync (not buffer.length)', async () => {
-      // statSync reports 512; readFile returns a buffer of different length
-      const statSize = 512;
+    it('reports the size of the bytes it sends, not the stored file size (#13100: a sealed file is larger than its plaintext)', async () => {
       mockExistsSync.mockReturnValue(true);
-      mockStatSync.mockReturnValue({ size: statSize });
-      mockReadFile.mockResolvedValue(Buffer.alloc(100)); // mismatch is irrelevant
+      mockStatSync.mockReturnValue({ size: 512 });
+      mockReadFile.mockResolvedValue(Buffer.alloc(100));
       const result = await loadAudioAsBinary('/tmp/size-check.wav');
-      expect(result!.size).toBe(statSize);
+      expect(result!.size).toBe(100);
     });
   });
 
@@ -290,16 +288,25 @@ describe('zmq-helpers', () => {
       expect(translationTargetId('post', OBJECT_ID)).toBe(`post:${OBJECT_ID}`);
       expect(translationTargetId('comment', 'c1')).toBe('comment:c1');
       expect(translationTargetId('story', 's1')).toBe('story:s1');
+      // #6280 — la légende d'un média (PostMedia.caption) partage le même bus
+      // que les autres familles sociales, sous son propre préfixe.
+      expect(translationTargetId('media-caption', 'm1')).toBe('media-caption:m1');
+      // #6533 — la légende d'un attachement de CONVERSATION (MessageAttachment.caption),
+      // sous garde fail-closed (vue unique/flou/chiffrement) — voir
+      // MessageAttachmentCaptionTranslationService.
+      expect(translationTargetId('message-attachment-caption', 'a1')).toBe('message-attachment-caption:a1');
     });
 
     it('exposes the namespaces the social pipelines claim', () => {
-      expect([...TRANSLATION_TARGET_NAMESPACES]).toEqual(['post', 'comment', 'story']);
+      expect([...TRANSLATION_TARGET_NAMESPACES]).toEqual(['post', 'comment', 'story', 'media-caption', 'media-alt', 'message-attachment-caption', 'message-attachment-alt', 'direct-text', 'call-caption']);
     });
 
     it('extracts the namespace of a social target, null for a bare message id', () => {
       expect(translationTargetNamespace(`post:${OBJECT_ID}`)).toBe('post');
       expect(translationTargetNamespace('comment:abc')).toBe('comment');
       expect(translationTargetNamespace('story:abc')).toBe('story');
+      expect(translationTargetNamespace(`media-caption:${OBJECT_ID}`)).toBe('media-caption');
+      expect(translationTargetNamespace(`message-attachment-caption:${OBJECT_ID}`)).toBe('message-attachment-caption');
       expect(translationTargetNamespace(OBJECT_ID)).toBeNull();
     });
 
@@ -313,6 +320,7 @@ describe('zmq-helpers', () => {
       expect(isMessageTranslationTarget(translationTargetId('post', OBJECT_ID))).toBe(false);
       expect(isMessageTranslationTarget(`comment:${OBJECT_ID}`)).toBe(false);
       expect(isMessageTranslationTarget(`story:${OBJECT_ID}`)).toBe(false);
+      expect(isMessageTranslationTarget(`media-caption:${OBJECT_ID}`)).toBe(false);
       expect(isMessageTranslationTarget(`text-object:${OBJECT_ID}`)).toBe(false);
     });
   });

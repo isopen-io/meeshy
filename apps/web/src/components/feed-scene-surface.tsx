@@ -1,0 +1,223 @@
+import { Suspense, useRef } from 'react';
+
+import { fitScene } from '@/lib/canvas/fit';
+import type { SceneCarrier } from '@/lib/canvas/carrier';
+import type { CanvasDocument, CanvasScene } from '@/lib/canvas/document';
+import { SCENE_ASPECT, cardFocus, pageAspect } from '@/lib/feed/scene-framing';
+import { isSceneCinematic, isVideoObject } from '@/lib/feed/scene-motion';
+import { resolveSceneCaption } from '@/lib/feed/scene-caption';
+import { FEED_TEXT_TRUNCATION_LIMIT, truncateWords } from '@/lib/feed/text';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { sceneItemId } from '@/lib/feed/gallery-lot';
+import { handOffSceneOpening, type SceneOpeningOrigin } from '@/lib/view/scene-opening';
+import { useElementSize } from '@/lib/view/use-element-size';
+
+import { Glyph } from './glyph';
+import type { SceneClockHandle } from './scene-clock';
+import { preloadSceneViewer } from './scene-fullscreen-gallery';
+import { lazyScenePlayer } from './scene-player-lazy';
+import { SceneWaitingSurface } from './scene-waiting-surface';
+
+/**
+ * `FeedSceneSurface` — LA VIGNETTE D'UNE SCÈNE, `page` ou `tile` (#6898, §
+ * 1.2 et § 5.4 de la spécification, miroir `PostSceneCard`/`vignette` de
+ * `FeedSceneAutoplay.swift` et `PostSceneMosaic.swift`).
+ *
+ * **LA LECTURE EST UNE VALEUR REÇUE, JAMAIS UN ÉTAT LOCAL** (`active`,
+ * miroir `PostSceneCard.isActive`) : ce composant ne décide RIEN de
+ * l'élection, il la REND — `playing = active && isSceneCinematic(scene)`
+ * (une scène FIXE ne joue jamais, même élue). `frame="tile"` ne joue JAMAIS
+ * (« une tuile est une scène ARRÊTÉE, pas une vignette », `PostSceneMosaic.
+ * swift:29-40`) : seul le carrousel (`frame="page"`) élit une lecture.
+ *
+ * Le moteur (`ScenePlayer`) est chargé À LA DEMANDE (`lazy`, motif D-54) —
+ * la première peinture du fil ne grossit pas tant qu'aucune carte à scène
+ * n'est visible ; en attendant, la boîte se peint de l'EMPREINTE de la scène
+ * sur la couleur de son FOND (`SceneWaitingSurface`, #5047), jamais d'un aplat
+ * neutre qui clignerait vers elle (§ 6).
+ *
+ * **LE TAP CONFIE L'OUVERTURE** (#8598) — avant `onOpen`, la carte remet à la
+ * visionneuse son CADRE visible (d'où la scène plein écran grandira), le rayon
+ * de ses coins et le TEMPS de son horloge (où la lecture reprendra)
+ * (`lib/view/scene-opening.ts`). Le doigt POSÉ (ou le focus clavier) précharge
+ * la visionneuse : au relâcher, son chunk est déjà là.
+ */
+const ScenePlayer = lazyScenePlayer.Component;
+
+/** Le rayon des coins qui ROGNENT la carte — porté par un ancêtre (la carte
+ * du fil), jamais par la surface elle-même. */
+function clippingRadius(element: Element): number {
+  let node: Element | null = element;
+  for (let depth = 0; node !== null && depth < 8; depth += 1) {
+    const radius = Number.parseFloat(getComputedStyle(node).borderTopLeftRadius);
+    if (Number.isFinite(radius) && radius > 0) return radius;
+    node = node.parentElement;
+  }
+  return 0;
+}
+
+function openingOriginOf(frame: Element, focusY: number | undefined): SceneOpeningOrigin {
+  const rect = frame.getBoundingClientRect();
+  return {
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+    height: rect.height,
+    radius: clippingRadius(frame),
+    ...(focusY !== undefined ? { focusY } : {}),
+  };
+}
+
+export type FeedSceneSurfaceFrame = 'page' | 'tile';
+
+export type FeedSceneSurfaceProps = {
+  readonly document: CanvasDocument;
+  readonly sceneIndex: number;
+  readonly carrier: SceneCarrier;
+  readonly preferredLanguages: readonly string[];
+  readonly active: boolean;
+  readonly frame: FeedSceneSurfaceFrame;
+  readonly authorName?: string;
+  readonly onOpen?: (sceneIndex: number) => void;
+  /** `MosaicLayout.tileCarriesCaption` (#6898 § 5.2) — la PLACE décide, pas
+   * la scène : une mosaïque `wave`/`sine` ne porte de légende sur AUCUNE
+   * tuile, `hero` seulement sur la première. Défaut `true` (page de
+   * carrousel, carte mono-scène). */
+  readonly showCaption?: boolean;
+  /** `MosaicLayout.captionWordLimit` pour une tuile ; 20 mots ailleurs
+   * (`FeedCaptionOverlay.swift:35-50`). */
+  readonly captionWordLimit?: number;
+  /** Le report « +N » que la mosaïque pose sur SA dernière tuile — la tuile
+   * l'ANNONCE dans son nom (`vignette`, `PostSceneMosaic.swift:392-478`). */
+  readonly overflow?: number;
+};
+
+/** « Scène N », « Scène N, et M de plus », « Scène N, vidéo » pour une
+ * tuile ; « Scène partagée par … » pour une page ou une carte mono-scène. */
+function surfaceLabel(params: {
+  readonly language: InterfaceLanguage;
+  readonly document: CanvasDocument;
+  readonly scene: CanvasScene;
+  readonly sceneIndex: number;
+  readonly frame: FeedSceneSurfaceFrame;
+  readonly authorName: string;
+  readonly overflow: number;
+}): string {
+  const { language, document, scene, sceneIndex, frame, authorName, overflow } = params;
+  if (frame === 'page' || document.scenes.length <= 1) return translate(language, 'feed.scene.shared_by', { author: authorName });
+  const index = String(sceneIndex + 1);
+  if (overflow > 0) return translate(language, 'feed.scene.mosaic.more', { index, count: String(overflow) });
+  if (scene.objects.some(isVideoObject)) return translate(language, 'feed.scene.mosaic.video', { index });
+  return translate(language, 'feed.scene.mosaic.tile', { index });
+}
+
+export function FeedSceneSurface({
+  document,
+  sceneIndex,
+  carrier,
+  preferredLanguages,
+  active,
+  frame,
+  authorName,
+  onOpen,
+  showCaption = true,
+  captionWordLimit = FEED_TEXT_TRUNCATION_LIMIT,
+  overflow = 0,
+}: FeedSceneSurfaceProps) {
+  const scene = document.scenes[sceneIndex];
+  const language = currentInterfaceLanguage();
+  // La boîte de contenu est mesurée (`ResizeObserver`), jamais dérivée d'une
+  // astuce CSS `aspect-ratio` + flex : un enfant flex SANS largeur/hauteur
+  // explicite et sans taille de contenu propre s'y résout en 0×0 dans
+  // Chromium — mesuré au gate (§ 5.7). Appelé AVANT tout retour anticipé
+  // (règle des Hooks).
+  const [observeOuter, outer] = useElementSize();
+  const frameRef = useRef<HTMLSpanElement | null>(null);
+  const clockRef = useRef<SceneClockHandle | null>(null);
+  if (scene === undefined) return null;
+
+  const cinematic = isSceneCinematic(scene);
+  // `frame="tile"` ne joue JAMAIS — seule une PAGE de carrousel, élue, lit.
+  const playing = frame === 'page' && active && cinematic;
+  const focus = frame === 'page' ? (cardFocus(scene) ?? undefined) : undefined;
+  const ratio = frame === 'page' ? (pageAspect(scene) ?? SCENE_ASPECT) : SCENE_ASPECT;
+  const caption = showCaption ? resolveSceneCaption({ sceneIndex, document, carrier }) : undefined;
+  const content = fitScene({ viewport: outer, ratio });
+  const label = surfaceLabel({ language, document, scene, sceneIndex, frame, authorName: authorName ?? '', overflow });
+
+  const body = (
+    <span ref={observeOuter} className="relative flex size-full items-center justify-center overflow-hidden">
+      <span
+        ref={frameRef}
+        data-feed-scene-frame
+        className="relative block"
+        style={content.width > 0 && content.height > 0 ? { width: content.width, height: content.height } : { width: '100%', height: '100%' }}
+      >
+        <Suspense fallback={<SceneWaitingSurface scene={scene} />}>
+          <ScenePlayer
+            document={document}
+            sceneIndex={sceneIndex}
+            mode="card"
+            playing={playing}
+            carrier={carrier}
+            preferredLanguages={preferredLanguages}
+            onClock={(clock) => {
+              clockRef.current = clock;
+            }}
+            {...(focus !== undefined ? { focus } : {})}
+          />
+        </Suspense>
+        {/* Le glyphe de lecture EST un indicateur, sur une scène ARRÊTÉE
+            qui BOUGE — jamais un bouton (le tap ouvre la scène, pas la lecture). */}
+        {!active && cinematic ? (
+          <span
+            data-feed-scene-paused-glyph=""
+            className="pointer-events-none absolute end-2.5 bottom-2.5 grid place-items-center rounded-full"
+            style={{ width: 26, height: 26, backgroundColor: 'var(--color-scrim)' }}
+          >
+            <Glyph name="fillPlay" size={13} style={{ color: 'var(--color-on-media)' }} />
+          </span>
+        ) : null}
+        {caption !== undefined ? (
+          <span
+            data-feed-scene-caption
+            className="pointer-events-none absolute inset-x-0 bottom-0 block px-2 py-1.5 text-start text-check text-on-media"
+            style={{ background: 'linear-gradient(to top, var(--color-scrim-strong), transparent)' }}
+            {...(caption.language !== undefined ? { lang: caption.language } : {})}
+          >
+            {truncateWords(caption.text, captionWordLimit).text}
+          </span>
+        ) : null}
+      </span>
+    </span>
+  );
+
+  return (
+    <div data-feed-scene="" data-feed-scene-index={sceneIndex} className="relative size-full">
+      {onOpen !== undefined ? (
+        <button
+          type="button"
+          onPointerDown={() => void preloadSceneViewer()}
+          onFocus={() => void preloadSceneViewer()}
+          onClick={() => {
+            const frame = frameRef.current;
+            handOffSceneOpening({
+              itemId: sceneItemId(carrier.postId, sceneIndex),
+              seconds: clockRef.current?.now() ?? 0,
+              origin: frame === null ? null : openingOriginOf(frame, focus?.y),
+            });
+            onOpen(sceneIndex);
+          }}
+          aria-label={label}
+          className="relative block size-full focus-visible:outline-2 focus-visible:-outline-offset-4"
+          style={{ outlineColor: 'var(--color-on-media)' }}
+        >
+          {body}
+        </button>
+      ) : (
+        body
+      )}
+    </div>
+  );
+}

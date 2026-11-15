@@ -53,4 +53,78 @@ final class AppSourceGuardTests: XCTestCase {
         XCTAssertEqual(lines.count, 5, "Les sauts de ligne survivent — les gardes ligne à ligne comptent dessus")
         XCTAssertTrue(lines[4].contains("let c = 3"))
     }
+
+    // MARK: - Compter un IDENTIFIANT, jamais une sous-chaîne
+
+    /// **LE témoin central de `occurrences(ofIdentifier:in:)`** — celui qui
+    /// distingue un nom de son PRÉFIXE. C'est le cas réel qui a inversé la garde
+    /// du rail des slides : `slideRailSlot` contient `slideRail`, et un comptage
+    /// par sous-chaîne en trouvait cinq là où l'identifiant n'apparaît que deux
+    /// fois.
+    func test_unNomVoisin_neCompteJamaisPourLeNomGarde() {
+        let source = """
+        let slideRailSlot: AnyView?
+        private var slideRail: some View { slideRailSlot }
+        var body: some View { slideRail }
+        """
+        XCTAssertEqual(
+            AppSourceGuard.occurrences(ofIdentifier: "slideRail", in: source), 2,
+            "`slideRailSlot` n'est pas `slideRail` — trois occurrences de trop feraient rougir une garde juste."
+        )
+        XCTAssertEqual(
+            AppSourceGuard.occurrences(ofIdentifier: "slideRailSlot", in: source), 2,
+            "…et le nom voisin se compte pour LUI-MÊME, sur ses deux sites."
+        )
+    }
+
+    /// Les deux BORNES du mot, séparément — un identifiant ne se poursuit ni à
+    /// gauche ni à droite, et se tromper d'un seul côté rendrait la garde à
+    /// moitié aveugle.
+    func test_lesDeuxBornesDuMot_sontGardees() {
+        XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: "rail", in: "rail railSuffixe"), 1,
+            "Un suffixe prolonge le mot à DROITE.")
+        XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: "rail", in: "rail prefixeRail_rail"), 1,
+            "Un préfixe le prolonge à GAUCHE — et `_` prolonge comme une lettre.")
+        XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: "rail", in: "rail2 rail"), 1,
+            "Un chiffre prolonge aussi.")
+    }
+
+    /// La PONCTUATION, elle, ne prolonge pas : c'est ce qui fait qu'un
+    /// identifiant se compte dans du code réel, où il est toujours collé à un
+    /// point, une parenthèse ou deux-points.
+    func test_laPonctuation_neProlongePasUnIdentifiant() {
+        let source = "viewModel.slideRail(at: slideRail), [slideRail]"
+        XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: "slideRail", in: source), 3)
+    }
+
+    /// Aux DEUX EXTRÊMES de la source — la boucle lit le caractère d'avant et
+    /// celui d'après, et il faut qu'elle survive à leur absence.
+    func test_leMotSeul_auxDeuxBoutsDeLaSource() {
+        XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: "rail", in: "rail"), 1)
+        XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: "rail", in: "rail rail"), 2)
+        XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: "rail", in: ""), 0)
+    }
+
+    // MARK: - #10678 — un fichier découpé se lit comme son UNITÉ
+
+    /// `BubbleStandardLayout.swift` s'est scindé en extensions frères : une
+    /// garde qui le lit par son chemin doit voir tout le type, exactement comme
+    /// `unit(_:)` le lit — sinon chaque garde négative passe au vert en lisant
+    /// la moitié qui ne contient pas l'interdit.
+    func test_textAt_leTypeDecoupe_seLitCommeSonUnite() throws {
+        let path = "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift"
+        let url = try XCTUnwrap(AppSourceGuard.unitURLs(path).first)
+        let text = try AppSourceGuard.text(at: url)
+        XCTAssertEqual(text, try AppSourceGuard.unit(path))
+        XCTAssertTrue(text.contains("struct BubbleStandardLayout: View"))
+        XCTAssertTrue(text.contains("func revealBlurredContent()"), "+Reveal fait partie de l'unité")
+        XCTAssertTrue(text.contains("var emojiOnlyContent"), "+TextBubble fait partie de l'unité")
+    }
+
+    /// Tout autre fichier se lit SEUL : l'élargissement ne vaut que pour le
+    /// type découpé, il ne change rien aux gardes des autres fichiers.
+    func test_textAt_unFichierOrdinaire_seLitSeul() throws {
+        let url = try XCTUnwrap(AppSourceGuard.unitURLs("Meeshy/Features/Main/Views/ThemedMessageBubble.swift").first)
+        XCTAssertEqual(try AppSourceGuard.text(at: url), try String(contentsOf: url, encoding: .utf8))
+    }
 }

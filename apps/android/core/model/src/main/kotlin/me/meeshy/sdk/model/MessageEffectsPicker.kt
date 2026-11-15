@@ -92,6 +92,10 @@ data class MessageEffectsPickerPresentation(
  *   `flags.rawValue.nonzeroBitCount`), so a set bit with no catalog chip still counts.
  */
 object MessageEffectsPickerPresenter {
+    /** Les deux rangées du petit panneau compact (Animation d'entrée, Effet permanent). */
+    fun panel(effects: MessageEffects): List<EffectSectionState> =
+        build(effects).sections.filter { it.section != MessageEffectSection.BEHAVIOR }
+
     fun build(effects: MessageEffects): MessageEffectsPickerPresentation {
         val sections = MessageEffectSection.entries.map { section ->
             EffectSectionState(

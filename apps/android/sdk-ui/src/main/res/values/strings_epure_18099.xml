@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure des composants partagés (#18099, #17584) : écrit à la main — les clés quittent le catalogue iOS (manifeste android-only), l'épure de iOS suit son propre lot. -->
+<resources>
+    <string name="post_daily_limit_comment">Daily comment limit reached: resumes at %1$s</string>
+    <string name="post_daily_limit_comment_untimed">Daily comment limit reached</string>
+    <string name="post_daily_limit_reaction">Daily reaction limit reached: resumes at %1$s</string>
+    <string name="post_daily_limit_reaction_untimed">Daily reaction limit reached</string>
+    <string name="post_daily_limit_note_question">Does this limit affect my sparks?</string>
+    <string name="post_daily_limit_note">It counts your actions, never your sparks.</string>
+    <string name="bubble_failed_attachment_right">This attachment type isn’t allowed here yet.</string>
+    <string name="bring_explain">For an extreme emergency: their phone rings, even when locked.</string>
+    <string name="bring_silent_question">What if their phone is on silent?</string>
+    <string name="bring_silent_note">Depending on settings, an iPhone on silent may only show a priority alert.</string>
+    <string name="talkie_info_note">Only for your very closest people, in an extreme emergency: your voice plays on their side even when Meeshy is in the background. It isn’t end-to-end encrypted, so it stays closed in an encrypted conversation. If it can’t get through, a voice message goes to your latest conversation with them.</string>
+    <string name="talkie_send_voice_copy">Sent as a voice message instead.</string>
+    <string name="voiceProfile_processing_description">Processing, a few minutes.</string>
+    <string name="voiceProfile_recording_description">Read the text aloud: at least 3 samples of 10 seconds.</string>
+    <string name="audio_consent_notice_message">Enable voice consent to transcribe and translate your audio.</string>
+    <string name="sticker_sheet_intent_humour_noir_hint">To laugh at everything, even the worst</string>
+    <string name="sticker_sheet_intent_quotidien_hint">To say what you’re up to: coffee, meals, work, the road</string>
+    <string name="sticker_sheet_intent_bonjour_hint">To greet, thank, apologize</string>
+</resources>

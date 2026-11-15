@@ -15,6 +15,7 @@ class CommentPrismeTest {
         override val systemLanguage: String? = null,
         override val regionalLanguage: String? = null,
         override val customDestinationLanguage: String? = null,
+        override val deviceLocale: String? = null,
     ) : LanguageResolver.ContentLanguagePreferences
 
     private fun comment(
@@ -71,5 +72,19 @@ class CommentPrismeTest {
         val c = comment(translations = mapOf("es" to ApiPostTranslationEntry(text = "Hola")))
         val prefs = Prefs(systemLanguage = "de", regionalLanguage = "es")
         assertThat(c.displayContent(prefs)).isEqualTo("Hola")
+    }
+
+    @Test
+    fun displayContent_commentWrittenInThePrimaryLanguageStaysOriginal() {
+        val c = comment(translations = mapOf("en" to ApiPostTranslationEntry(text = "Hello")))
+        val prefs = Prefs(systemLanguage = "fr", regionalLanguage = "en")
+        assertThat(c.displayContent(prefs)).isEqualTo("Bonjour")
+        assertThat(c.isTranslated(prefs)).isFalse()
+    }
+
+    @Test
+    fun displayContent_noLanguageConfiguredKeepsTheOriginal() {
+        val c = comment(translations = mapOf("fr" to ApiPostTranslationEntry(text = "Salut")))
+        assertThat(c.displayContent(Prefs())).isEqualTo("Bonjour")
     }
 }

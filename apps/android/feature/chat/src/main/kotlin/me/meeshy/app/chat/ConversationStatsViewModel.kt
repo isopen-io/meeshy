@@ -3,14 +3,20 @@ package me.meeshy.app.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import me.meeshy.core.common.DefaultDispatcher
 import me.meeshy.sdk.conversation.ConversationStatsRepository
 import me.meeshy.sdk.model.ActivityPeriod
 import me.meeshy.sdk.model.ActivityPoint
+import me.meeshy.sdk.model.ClientStatMessage
+import me.meeshy.sdk.model.ContentTypeCounts
 import me.meeshy.sdk.model.ContentTypeShare
 import me.meeshy.sdk.model.ConversationMessageStatsResponse
 import me.meeshy.sdk.model.ConversationStatsProjection
@@ -39,6 +45,7 @@ data class ConversationStatsUiState(
     val totalMessages: Int = 0,
     val totalWords: Int = 0,
     val totalCharacters: Int = 0,
+    val contentCounts: ContentTypeCounts = ContentTypeCounts(),
     val contentTypes: List<ContentTypeShare> = emptyList(),
     val participants: List<ParticipantShare> = emptyList(),
     val languages: List<LanguageShare> = emptyList(),
@@ -70,27 +77,66 @@ data class ConversationStatsUiState(
 @HiltViewModel
 class ConversationStatsViewModel @Inject constructor(
     private val repository: ConversationStatsRepository,
+    @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationStatsUiState())
     val state: StateFlow<ConversationStatsUiState> = _state.asStateFlow()
 
     /**
-     * Bind to a conversation and load its stats. [messageContents] are the loaded
-     * message texts, scored on-device into the sentiment split (a pure, fast pass —
-     * no network). Idempotent for an id already loaded (or in flight); a prior
-     * [StatsPhase.Error] for the same id re-tries and re-scores.
+     * Bind to a conversation and load its stats. [clientMessages] are the messages
+     * already on screen: they seed the sheet with a locally-computed snapshot
+     * INSTANTLY (cache-first — no spinner) and are scored on-device into the
+     * sentiment split, both pure fast passes with no network. The server aggregation
+     * then refines them; if it fails, the locally-computed snapshot STAYS instead of
+     * collapsing to an error (offline graceful degradation, parity iOS's
+     * server-first/client-fallback dashboard). With no local messages the sheet
+     * shows a spinner then, on a failed fetch, the error state.
+     *
+     * Idempotent for an id already loaded (or in flight); a prior [StatsPhase.Error]
+     * for the same id re-tries and re-seeds.
      */
-    fun load(conversationId: String, messageContents: List<String> = emptyList()) {
+    fun load(conversationId: String, clientMessages: List<ClientStatMessage> = emptyList()) {
         val current = _state.value
         if (current.conversationId == conversationId && current.phase != StatsPhase.Error) return
-        fetch(conversationId, SentimentBreakdownProjection.breakdown(messageContents).takeIf { it.hasContent })
+        _state.value = ConversationStatsUiState(
+            conversationId = conversationId,
+            phase = StatsPhase.Loading,
+            period = current.period,
+        )
+        viewModelScope.launch {
+            // Le calcul message par message (mots, sentiment) quitte le fil principal.
+            val (sentiment, fallback) = withContext(defaultDispatcher) { clientSnapshot(conversationId, clientMessages) }
+            if (_state.value.conversationId != conversationId) return@launch
+            if (fallback != null) {
+                _state.update { project(it.copy(sentiment = sentiment), fallback) }
+            } else {
+                _state.update { it.copy(sentiment = sentiment) }
+            }
+            fetch(conversationId, hasFallback = fallback != null)
+        }
+    }
+
+    private fun clientSnapshot(
+        conversationId: String,
+        clientMessages: List<ClientStatMessage>,
+    ): Pair<SentimentBreakdown?, ConversationMessageStatsResponse?> {
+        val sentiment = SentimentBreakdownProjection
+            .breakdown(clientMessages.map { it.content })
+            .takeIf { it.hasContent }
+        val fallback = clientMessages
+            .takeIf { it.isNotEmpty() }
+            ?.let { ConversationStatsProjection.clientComputed(conversationId, it) }
+        return sentiment to fallback
     }
 
     /** Re-fetch the current conversation after a failure, keeping the already-scored sentiment. */
     fun retry() {
         val current = _state.value
-        current.conversationId?.let { fetch(it, current.sentiment) }
+        current.conversationId?.let {
+            _state.value = current.copy(phase = StatsPhase.Loading)
+            viewModelScope.launch { fetch(it, hasFallback = false) }
+        }
     }
 
     /** Switch the activity window. Pure — no refetch, the [ConversationStatsUiState.activity] getter reflects it. */
@@ -99,17 +145,12 @@ class ConversationStatsViewModel @Inject constructor(
         _state.update { it.copy(period = period) }
     }
 
-    private fun fetch(conversationId: String, sentiment: SentimentBreakdown?) {
-        _state.value = ConversationStatsUiState(
-            conversationId = conversationId,
-            phase = StatsPhase.Loading,
-            period = _state.value.period,
-            sentiment = sentiment,
-        )
-        viewModelScope.launch {
-            when (val result = repository.fetchStats(conversationId)) {
-                is NetworkResult.Success -> _state.update { project(it, result.data) }
-                is NetworkResult.Failure -> _state.update { it.copy(phase = StatsPhase.Error) }
+    private suspend fun fetch(conversationId: String, hasFallback: Boolean) {
+        when (val result = repository.fetchStats(conversationId)) {
+            is NetworkResult.Success -> _state.update { project(it, result.data) }
+            is NetworkResult.Failure -> _state.update { state ->
+                // Un affinage raté laisse l'instantané local en place ; seule une panne sans rien d'affichable est une erreur.
+                if (hasFallback) state else state.copy(phase = StatsPhase.Error)
             }
         }
     }
@@ -122,6 +163,7 @@ class ConversationStatsViewModel @Inject constructor(
         totalMessages = data.totalMessages,
         totalWords = data.totalWords,
         totalCharacters = data.totalCharacters,
+        contentCounts = data.contentTypes,
         contentTypes = ConversationStatsProjection.contentTypeBreakdown(data.contentTypes),
         participants = ConversationStatsProjection.participantShares(data.participantStats, data.totalMessages),
         languages = ConversationStatsProjection.languageShares(data.languageDistribution),

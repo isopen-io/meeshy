@@ -1,0 +1,9 @@
+Meeshy 1.1.8 – schönere, klarere Anrufe, in deiner Sprache.
+
+• Neu gestaltete Anrufe: Jede Taste ist aus Glas (Liquid Glass ab iOS 26), wer spricht, leuchtet in seiner Farbe, und im Querformat passen bis zu vier Personen in eine Reihe.
+• Untertitel: Jeder Satz zeigt seine Sprache und klappt mit einem Tippen sein Original auf. Nach dem Anruf klappt das Protokoll unter seiner Blase im Chat auf.
+• Aufnahme und Bildschirmfreigabe: Alle sehen, wer fragt und wer zustimmt, die Aufnahme startet als Audio oder Video, und „Freigabe beenden" ist immer erreichbar.
+• Gestalten: Füge ein Bild ein, um den Szenenhintergrund zu setzen, oder einen Text für die Bildunterschrift; der Sucher bietet zuerst Text, Hintergrund, Galerie und Sticker.
+• Überall einfacher: Registrierung, Einstellungen und das Spiel sagen alles nur einmal, die Details warten hinter einem (i).
+
+Und natürlich Fehlerbehebungen und mehr Flüssigkeit überall.

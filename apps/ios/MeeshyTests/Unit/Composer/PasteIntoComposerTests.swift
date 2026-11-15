@@ -310,15 +310,33 @@ final class PasteIntoComposerTests: XCTestCase {
         )
     }
 
-    /// Le texte n'a pas de nom de fichier ; son annonce se vérifie donc sur le
-    /// CAS, pas sur une liste. Sans elle, coller du texte sur le canvas ne
-    /// ferait rien du tout, sans un mot.
-    func test_pastedText_isAnnounced_soItNeverVanishesSilently() {
+    /// **RETOURNÉ au #4378 : le texte n'est plus annoncé, il est POSÉ.**
+    ///
+    /// La garde exigeait qu'il soit annoncé — « le texte appartient à l'outil
+    /// texte » — et elle avait raison sur son époque : sans annonce, coller du
+    /// texte n'aurait rien fait, sans un mot. Elle protégeait la loi « posé OU
+    /// annoncé, jamais avalé ».
+    ///
+    /// La loi ne change pas ; c'est la branche qui change. Le texte est
+    /// désormais POSÉ — en description au-delà de dix mots, en objet de scène en
+    /// deçà (`StoryPastePolicy`). Continuer à l'annoncer refuserait poliment une
+    /// matière que la scène sait héberger, ce qui est pire qu'un rejet muet :
+    /// c'est un rejet qui se croit poli.
+    ///
+    /// Garde NÉGATIVE désormais, et c'est ce qui la rend utile : elle rougit si
+    /// quelqu'un remet l'annonce, ce qui est la façon la plus naturelle de
+    /// « réparer » un collage de texte qu'on croirait perdu.
+    func test_pastedText_isNoLongerAnnounced_becauseItIsNowPosed() {
         let batch = PasteIntoComposer.batch(ingests: [.text("bonjour")], surface: .scene)
 
-        XCTAssertTrue(
+        XCTAssertFalse(
             PasteIntoComposer.exclusions(in: batch).contains(.textBelongsToTheTextTool),
-            "Le texte collé n'est plus annoncé : le canvas resterait muet devant lui."
+            "Le texte est POSÉ depuis #4378 : l'annoncer le refuserait poliment alors que la "
+                + "scène sait l'héberger."
+        )
+        XCTAssertTrue(
+            batch.text.contains("bonjour"),
+            "… et il doit bien arriver dans son bac : c'est de là que `storyScene` le transporte."
         )
     }
 

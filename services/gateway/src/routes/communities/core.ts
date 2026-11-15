@@ -5,29 +5,49 @@ import { FastifyInstance } from 'fastify';
 import {
   communitySchema,
   createCommunityRequestSchema,
-  updateCommunityRequestSchema,
-  errorResponseSchema,
-  userMinimalSchema
+  errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
-import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
-import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { viewerFromRequest } from '../users/presence-gate';
+import { gateConversationParticipantsPresence } from './member-presence';
 import {
   CreateCommunitySchema,
-  UpdateCommunitySchema,
   CommunityRole,
   generateIdentifier
 } from './types';
 import { validatePagination } from '../../utils/pagination';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendConflict, sendPaginatedSuccess } from '../../utils/response';
+import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
-import { flattenCommunityCounts } from './serialization';
+import { identityImageIsCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../services/attachments/identityImageOwnership';
+import { countOnlineMembers } from '../../services/community-online-count';
+import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
+import { activeMembershipOf, COMMUNITY_ACTIVE_COUNTS, communityConversationSchema, communityDetailInclude, communityForViewer, flattenCommunityCounts } from './serialization';
+import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
+import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
+import { EngagementService } from '../../services/engagement/EngagementService';
+import type { CommunityEngagementOptions } from './types';
+import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
+import {
+  conversationAdmitsNewMembers,
+  EXTERNAL_CONVERSATION_ERROR_CODES,
+  EXTERNAL_SINGLE_MEMBER_MESSAGE,
+} from '@meeshy/shared/types/external-conversation';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesCoreRoutes' });
 
-export async function registerCoreRoutes(fastify: FastifyInstance) {
+// #4165 — plafond de la relation `participants` chargée PAR conversation sur
+// `GET /communities/:id/conversations`. Aligné sur le plafond de
+// `validatePagination` (≤ 100) : au-delà, `GET /conversations/:id/participants`
+// (déjà paginée) reste le chemin pour la liste exhaustive d'UNE conversation.
+const COMMUNITY_CONVERSATION_PARTICIPANTS_DISPLAY_CAP = 100;
+
+export async function registerCoreRoutes(
+  fastify: FastifyInstance,
+  options: CommunityEngagementOptions = {}
+) {
+  const engagement = options.engagement ?? new EngagementService(fastify.prisma);
   // Route pour verifier la disponibilite d'un identifiant de communaute
   fastify.get('/communities/check-identifier/:identifier', {
     onRequest: [fastify.authenticate],
@@ -164,57 +184,32 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       // Build where clause with optional search
+      //
+      // #8876 — une communauté DÉSACTIVÉE par l'administration (`isActive:
+      // false`) n'est plus listée : sans cette clause le geste d'administration
+      // écrirait une colonne que personne ne lit.
       const whereClause: any = {
         OR: [
           { createdBy: userId },
-          { members: { some: { userId: userId } } }
-        ]
+          { members: { some: activeMembershipOf(userId) } }
+        ],
+        AND: [{ isActive: true }]
       };
 
       // Add search filter if provided (search by name or identifier)
       if (search && search.length >= 2) {
-        whereClause.AND = [
-          {
-            OR: [
-              { name: { contains: search, mode: 'insensitive' } },
-              { identifier: { contains: search, mode: 'insensitive' } }
-            ]
-          }
-        ];
+        whereClause.AND.push({
+          OR: [
+            { name: { contains: search, mode: 'insensitive' } },
+            { identifier: { contains: search, mode: 'insensitive' } }
+          ]
+        });
       }
 
       const [communities, totalCount] = await Promise.all([
         fastify.prisma.community.findMany({
           where: whereClause,
-          include: {
-            creator: {
-              select: {
-                id: true,
-                username: true,
-                displayName: true,
-                avatar: true
-              }
-            },
-            members: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    username: true,
-                    displayName: true,
-                    avatar: true,
-                    isOnline: true
-                  }
-                }
-              }
-            },
-            _count: {
-              select: {
-                members: true,
-                Conversation: true
-              }
-            }
-          },
+          include: communityDetailInclude(userId),
           orderBy: { createdAt: 'desc' },
           skip: offsetNum,
           take: limitNum
@@ -222,7 +217,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         fastify.prisma.community.count({ where: whereClause })
       ]);
 
-      sendPaginatedSuccess(reply, communities.map(flattenCommunityCounts), {
+      sendPaginatedSuccess(reply, communities.map((community) => communityForViewer(community, userId)), {
         total: totalCount,
         limit: limitNum,
         offset: offsetNum,
@@ -289,90 +284,34 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
       }
 
       const userId = authContext.userId;
+      const include = communityDetailInclude(userId);
 
-      // Chercher d'abord par ID, puis par identifier si pas trouve
-      let community = await fastify.prisma.community.findFirst({
-        where: { id },
-        include: {
-          creator: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              avatar: true
-            }
-          },
-          members: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  displayName: true,
-                  avatar: true,
-                  isOnline: true
-                }
-              }
-            }
-          },
-          _count: {
-            select: {
-              members: true,
-              Conversation: true
-            }
-          }
-        }
-      });
-
-      // Si pas trouve par ID, essayer par identifier
-      if (!community) {
-        community = await fastify.prisma.community.findFirst({
-          where: { identifier: id },
-          include: {
-            creator: {
-              select: {
-                id: true,
-                username: true,
-                displayName: true,
-                avatar: true
-              }
-            },
-            members: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    username: true,
-                    displayName: true,
-                    avatar: true,
-                    isOnline: true
-                  }
-                }
-              }
-            },
-            _count: {
-              select: {
-                members: true,
-                Conversation: true
-              }
-            }
-          }
-        });
-      }
+      // #8876 — une communauté désactivée n'existe plus pour un lecteur public.
+      const community =
+        (await fastify.prisma.community.findFirst({ where: { id, isActive: true }, include })) ??
+        (await fastify.prisma.community.findFirst({ where: { identifier: id, isActive: true }, include }));
 
       if (!community) {
         return sendNotFound(reply, 'Community not found');
       }
 
-      // Verifier l'acces (createur ou membre)
-      const hasAccess = community.createdBy === userId ||
-                       community.members.some(member => member.userId === userId);
+      const served = communityForViewer(community, userId);
 
-      if (!hasAccess && community.isPrivate) {
+      if (served.currentUserRole === null && community.isPrivate) {
         return sendForbidden(reply, 'Access denied to this community');
       }
 
-      sendSuccess(reply, flattenCommunityCounts(community));
+      const onlineMemberCount = await countOnlineMembers({
+        prisma: fastify.prisma,
+        privacy: new PrivacyPreferencesService(fastify.prisma),
+        communityId: community.id,
+        viewerId: userId,
+      }).catch((error: unknown) => {
+        logger.warn('Online member count unavailable', { communityId: community.id, error: String(error) });
+        return null;
+      });
+
+      sendSuccess(reply, { ...served, onlineMemberCount });
     } catch (error) {
       logger.error('Error fetching community', error as Error);
       sendInternalError(reply, 'Failed to fetch community');
@@ -396,6 +335,10 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
             data: communitySchema
           }
         },
+        400: {
+          description: 'Invalid community (INVALID_COMMUNITY) — e.g. an avatar that is not an identity image reference',
+          ...errorResponseSchema
+        },
         401: {
           description: 'User not authenticated',
           ...errorResponseSchema
@@ -412,7 +355,11 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
     }
   }, async (request, reply) => {
     try {
-      const validatedData = CreateCommunitySchema.parse(request.body);
+      const parsed = CreateCommunitySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendBadRequest(reply, 'Invalid community', { code: 'INVALID_COMMUNITY' });
+      }
+      const validatedData = parsed.data;
 
       // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
@@ -421,6 +368,10 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
       }
 
       const userId = authContext.userId;
+
+      if (validatedData.avatar !== undefined && !(await identityImageIsCallers(fastify.prisma, { userId, reference: validatedData.avatar }))) {
+        return sendBadRequest(reply, 'Invalid community', { code: IDENTITY_IMAGE_NOT_OWNED });
+      }
 
       // Generer l'identifier
       const identifier = generateIdentifier(validatedData.name, validatedData.identifier);
@@ -472,14 +423,23 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
               }
             }
           },
-          _count: {
-            select: {
-              members: true,
-              Conversation: true
-            }
-          }
+          _count: { select: COMMUNITY_ACTIVE_COUNTS }
         }
       });
+
+      // Succès « cercles » (#5759) — APRÈS l'ACK métier. Le créateur rejoint
+      // aussi son cercle : les deux familles (`create.count`, `create.size`)
+      // sont évaluées d'un seul événement.
+      void new CerclesAchievements(fastify.prisma).recordEvent({
+        kind: 'community.create',
+        userId,
+        communityId: community.id,
+      }).catch(() => undefined);
+
+      // `social.community_created` (#8959) — la communauté est écrite.
+      engagement
+        .recordActivity(userId, 'social.community_created', { targetId: community.id })
+        .catch((err: unknown) => logger.warn('engagement social.community_created failed', { err }));
 
       return sendSuccess(reply, flattenCommunityCounts(community), { statusCode: 201 });
     } catch (error) {
@@ -492,9 +452,9 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
   fastify.get('/communities/:id/conversations', {
     onRequest: [fastify.authenticate],
     schema: {
-      description: 'Retrieve all conversations within a community. Only returns conversations where the authenticated user is a member. Results are sorted by most recently updated.',
+      description: 'Retrieve conversations within a community, one page at a time. Only returns conversations where the authenticated user is a member. Results are sorted by most recently updated.',
       tags: ['communities'],
-      summary: 'Get community conversations',
+      summary: 'Get community conversations (paginated)',
       params: {
         type: 'object',
         required: ['id'],
@@ -502,6 +462,23 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
           id: {
             type: 'string',
             description: 'Community unique ID'
+          }
+        }
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          offset: {
+            type: 'string',
+            description: 'Number of conversations to skip for pagination',
+            default: '0',
+            pattern: '^[0-9]+$'
+          },
+          limit: {
+            type: 'string',
+            description: 'Maximum number of conversations to return (max 100)',
+            default: '20',
+            pattern: '^[0-9]+$'
           }
         }
       },
@@ -513,55 +490,15 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
             success: { type: 'boolean', example: true },
             data: {
               type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  // Le web type cette réponse `Conversation[]` et n'en recevait
-                  // que l'id et deux dates : titre, type et identifiant sont
-                  // produits par le handler (`findMany` sans `select`) et
-                  // n'étaient pas déclarés, donc supprimés à la sérialisation.
-                  id: { type: 'string' },
-                  identifier: { type: 'string', nullable: true },
-                  title: { type: 'string', nullable: true },
-                  type: { type: 'string', nullable: true },
-                  description: { type: 'string', nullable: true },
-                  avatar: { type: 'string', nullable: true },
-                  banner: { type: 'string', nullable: true },
-                  isActive: { type: 'boolean', nullable: true },
-                  memberCount: { type: 'number', nullable: true },
-                  lastMessageAt: { type: 'string', format: 'date-time', nullable: true },
-                  communityId: { type: 'string' },
-                  createdAt: { type: 'string', format: 'date-time' },
-                  updatedAt: { type: 'string', format: 'date-time' },
-                  // Le handler produit `participants`, jamais `members` — ce
-                  // schéma déclarait donc un champ que rien ne pose, pendant
-                  // qu'il supprimait celui qui existe. Et son `user` était
-                  // `{ type: 'object' }` nu : vidé en `{}` par
-                  // fast-json-stringify. Renommer ne casse aucun client —
-                  // `members` n'a jamais atteint le fil.
-                  participants: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      properties: {
-                        id: { type: 'string' },
-                        userId: { type: 'string', nullable: true },
-                        displayName: { type: 'string', nullable: true },
-                        role: { type: 'string', nullable: true },
-                        isActive: { type: 'boolean', nullable: true },
-                        user: { ...userMinimalSchema, nullable: true }
-                      }
-                    }
-                  },
-                  _count: {
-                    type: 'object',
-                    properties: {
-                      messages: { type: 'number' },
-                      // Idem : le handler compte `participants`.
-                      participants: { type: 'number' }
-                    }
-                  }
-                }
+              items: communityConversationSchema
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number', description: 'Total number of conversations matching the query' },
+                limit: { type: 'number', description: 'Number of items per page' },
+                offset: { type: 'number', description: 'Number of items skipped' },
+                hasMore: { type: 'boolean', description: 'Whether there are more items to fetch' }
               }
             }
           }
@@ -595,14 +532,17 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
       }
 
       const userId = authContext.userId;
+      const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       // Verifier l'acces a la communaute
-      const community = await fastify.prisma.community.findFirst({
-        where: { id },
+      // #8876 — communauté désactivée par l'administration : 404, comme pour les lecteurs publics.
+const community = await fastify.prisma.community.findFirst({
+        where: { id, isActive: true },
         select: {
           createdBy: true,
           isPrivate: true,
-          members: { select: { userId: true } }
+          members: { where: activeMembershipOf(userId), select: { userId: true }, take: 1 }
         }
       });
 
@@ -610,88 +550,86 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         return sendNotFound(reply, 'Community not found');
       }
 
-      const hasAccess = community.createdBy === userId ||
-                       community.members.some(member => member.userId === userId);
+      const hasAccess = community.createdBy === userId || community.members.length > 0;
 
       if (!hasAccess && community.isPrivate) {
         return sendForbidden(reply, 'Access denied to this community');
       }
 
-      // Recuperer les conversations de la communaute
-      const conversations = await fastify.prisma.conversation.findMany({
-        where: {
-          communityId: id,
-          participants: {
-            some: { userId: userId }
-          }
-        },
-        include: {
-          participants: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  displayName: true,
-                  avatar: true,
-                  isOnline: true
+      // BORNÉ (#4165). Ni pagination ni `take` : TOUTES les conversations de
+      // la communauté sortaient d'un coup, chacune avec la LISTE COMPLÈTE de
+      // ses participants et leur profil — sur une communauté à des centaines
+      // de salons et de membres, une charge proportionnelle à l'un ET
+      // l'autre à CHAQUE ouverture de l'onglet. Deux bornes distinctes,
+      // posées dans la requête elle-même :
+      // - `skip`/`take` sur la liste des CONVERSATIONS (comme le fait déjà
+      //   `GET /communities` juste au-dessus, même convention) ;
+      // - `take` sur la relation `participants` DE CHAQUE conversation —
+      //   Prisma l'accepte comme option de relation, au même titre que
+      //   `where`/`include` ; au-delà du plafond, un client qui a besoin de
+      //   la liste exhaustive des membres d'UNE conversation appelle déjà
+      //   `GET /conversations/:id/participants` (paginée séparément).
+      const whereClause = {
+        communityId: id,
+        participants: {
+          some: { userId: userId }
+        }
+      };
+
+      const [conversations, totalCount] = await Promise.all([
+        fastify.prisma.conversation.findMany({
+          where: whereClause,
+          include: {
+            participants: {
+              take: COMMUNITY_CONVERSATION_PARTICIPANTS_DISPLAY_CAP,
+              orderBy: { joinedAt: 'asc' },
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    displayName: true,
+                    avatar: true,
+                    isOnline: true
+                  }
                 }
+              }
+            },
+            _count: {
+              select: {
+                messages: true,
+                participants: true
               }
             }
           },
-          _count: {
-            select: {
-              messages: true,
-              participants: true
-            }
-          }
-        },
-        orderBy: {
-          updatedAt: 'desc'
-        }
-      });
+          orderBy: {
+            updatedAt: 'desc'
+          },
+          skip: offsetNum,
+          take: limitNum
+        }),
+        fastify.prisma.conversation.count({ where: whereClause })
+      ]);
 
-      // Présence des co-participants. Le régime est tranché par le `where` de
-      // la requête ci-dessus, pas par le contrôle d'accès : elle ne rend que
-      // les conversations dont l'appelant est lui-même participant
-      // (`participants: { some: { userId } }`). Toute personne listée est donc
-      // un CO-PARTICIPANT — contexte d'accès garanti des deux côtés — et seules
-      // les préférences s'appliquent. Le contrôle d'accès, lui, ne referme que
-      // les communautés PRIVÉES : s'y fier aurait conduit au critère strict, et
-      // retiré des pastilles légitimes.
+      // Présence des co-participants — critère STRICT avec le viewer réel.
+      // Être co-participant de la même conversation (ni même co-membre de la
+      // communauté) ne vaut plus d'accès à la présence de l'autre (directive
+      // produit 2026-08-25) : seuls soi-même, un admin global, ou un ami
+      // accepté (selon SES préférences) voient `isOnline`/`lastActiveAt`. Le
+      // contrôle d'accès ci-dessus, lui, ne referme que les communautés
+      // PRIVÉES — il ne gouverne pas la présence des lignes rendues.
       //
       // Gate posé dans le MÊME lot que la déclaration du schéma : `user`
       // portait `isOnline` brut, et seul le `{ type: 'object' }` nu l'empêchait
       // de sortir. Déclarer sans gater aurait publié la fuite.
-      const participantUserIds = [
-        ...new Set(
-          conversations.flatMap((c: { participants?: Array<{ userId?: string | null }> }) =>
-            (c.participants ?? []).map(p => p.userId).filter((uid): uid is string => !!uid),
-          ),
-        ),
-      ];
-      const participantPresence = participantUserIds.length > 0
-        ? await getPresenceVisibilityService(fastify.prisma).resolvePrefsOnly(participantUserIds)
-        : new Map<string, PresenceVisibility>();
+      const gated = await gateConversationParticipantsPresence(fastify.prisma, viewerFromRequest(request), conversations);
 
-      return sendSuccess(
-        reply,
-        conversations.map((conversation: { participants?: Array<Record<string, unknown>> }) => ({
-          ...conversation,
-          participants: (conversation.participants ?? []).map(participant => {
-            const nested = participant.user as { id: string; isOnline: boolean | null } | null | undefined;
-            if (!nested?.id) return participant;
-            return {
-              ...participant,
-              // `onMissingEntry: 'reveal'` — sous prefs-only, une entrée absente
-              // est normale (participant anonyme, sans `userId`), pas suspecte.
-              user: applyPresenceVisibilityAsOffline(nested, participantPresence.get(nested.id), {
-                onMissingEntry: 'reveal',
-              }),
-            };
-          }),
-        })),
-      );
+      return sendPaginatedSuccess(reply, gated, {
+        total: totalCount,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + conversations.length < totalCount
+      });
     } catch (error) {
       logger.error('Error fetching community conversations', error as Error);
       return sendInternalError(reply, 'Failed to fetch community conversations');
@@ -725,7 +663,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'object', additionalProperties: true }
+            data: communityConversationSchema
           }
         },
         401: { description: 'User not authenticated', ...errorResponseSchema },
@@ -746,12 +684,14 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
       const userId = authContext.userId;
 
       // Verify community exists and user is admin/creator
-      const community = await fastify.prisma.community.findFirst({
-        where: { id },
+      // #8876 — communauté désactivée par l'administration : 404, comme pour les lecteurs publics.
+const community = await fastify.prisma.community.findFirst({
+        where: { id, isActive: true },
         select: {
           id: true,
           createdBy: true,
-          members: { select: { userId: true, role: true } }
+          isPrivate: true,
+          members: { where: activeMembershipOf(userId), select: { role: true }, take: 1 }
         }
       });
 
@@ -760,8 +700,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
       }
 
       const isCreator = community.createdBy === userId;
-      const memberRecord = community.members.find(m => m.userId === userId);
-      const isAdmin = memberRecord?.role === CommunityRole.ADMIN;
+      const isAdmin = community.members[0]?.role === CommunityRole.ADMIN;
 
       if (!isCreator && !isAdmin) {
         return sendForbidden(reply, 'Only community admins can add conversations');
@@ -772,13 +711,96 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         where: { id: conversationId },
         select: {
           id: true,
+          type: true,
           communityId: true,
-          participants: { select: { userId: true, role: true } }
+          participants: { select: { userId: true, role: true, isActive: true } }
         }
       });
 
       if (!conversation) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
+      }
+
+      // Le Swagger de cette route promet « admin/creator of BOTH the community
+      // and the conversation ». La moitié « conversation » n'était appliquée
+      // nulle part : `participants` était chargé et jamais lu, `communityId`
+      // sélectionné et jamais vérifié — ce qui donnait à la lecture l'apparence
+      // d'un contrôle. N'importe quel administrateur de communauté pouvait donc
+      // rattacher à la sienne n'importe quelle conversation du système dont il
+      // connaissait l'identifiant, et en recevoir la liste des participants
+      // dans la réponse (#4191).
+      const participantAppelant = conversation.participants.find(
+        (p: { userId: string | null; isActive?: boolean }) => p.userId === userId && p.isActive !== false
+      );
+      const administreLaConversation = Boolean(
+        participantAppelant &&
+        hasMinimumMemberRole(participantAppelant.role ?? MemberRole.MEMBER, MemberRole.ADMIN)
+      );
+
+      if (!administreLaConversation) {
+        // 404 et non 403 : distinguer « elle existe mais tu n'y as pas droit »
+        // de « elle n'existe pas » ferait de cette route un oracle d'existence
+        // sur tout identifiant de conversation.
+        return refuserCommeIntrouvable(reply);
+      }
+
+      // #17117 — une conversation externe n'a qu'un membre Meeshy : un salon
+      // donnerait des droits sur elle aux administrateurs de la communauté.
+      if (!conversationAdmitsNewMembers(conversation.type)) {
+        return sendConflict(reply, EXTERNAL_SINGLE_MEMBER_MESSAGE, { code: EXTERNAL_CONVERSATION_ERROR_CODES.SINGLE_MEMBER });
+      }
+
+      // Administrer la conversation ne donne pas le droit de la SOUSTRAIRE à
+      // une communauté tierce : celle-ci la perdrait sans que personne y
+      // consente. Le déplacement exige donc aussi un droit à la SOURCE.
+      if (conversation.communityId && conversation.communityId !== id) {
+        const source = await fastify.prisma.community.findFirst({
+          where: { id: conversation.communityId },
+          select: {
+            createdBy: true,
+            members: { where: activeMembershipOf(userId), select: { role: true }, take: 1 }
+          }
+        });
+
+        const peutDetacher = Boolean(
+          source && (source.createdBy === userId || source.members[0]?.role === CommunityRole.ADMIN)
+        );
+
+        if (!peutDetacher) {
+          // 403 ici, et non 404 : l'appelant administre la conversation, donc
+          // il en connaît déjà l'existence — lui dire pourquoi on refuse ne
+          // divulgue rien qu'il ne sache.
+          return sendForbidden(reply, 'You must administer the community this conversation currently belongs to');
+        }
+      }
+
+      // #16703 — rattacher à une communauté PRIVÉE fait de ses participants
+      // les occupants d'un salon qu'elle réserve à ses membres : ils y entrent
+      // sous la loi d'une invitation (`planCommunityAdmission`), ou rien ne
+      // se rattache.
+      const admission = community.isPrivate
+        ? await planCommunityAdmission(fastify.prisma, {
+            communityId: id,
+            actorId: userId,
+            createdBy: community.createdBy,
+            isPrivate: true,
+            actorRole: community.members[0]?.role ?? null,
+            participantIds: conversation.participants
+              .filter((p: { userId: string | null; isActive?: boolean }) => p.isActive !== false)
+              .flatMap((p: { userId: string | null }) => (p.userId ? [p.userId] : [])),
+            admitActor: false,
+          })
+        : null;
+      if (admission?.kind === 'refused') {
+        return admission.reason === 'invite-forbidden'
+          ? sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' })
+          : sendForbidden(reply, 'Some participants cannot join this private community', { code: 'COMMUNITY_PARTICIPANT_NOT_ADDABLE' });
+      }
+
+      // L'admission s'écrit AVANT le rattachement : si elle échoue, rien n'est
+      // rattaché (au pire des membres en plus, jamais un salon ouvert).
+      if (admission?.kind === 'admitted') {
+        await applyCommunityAdmission(fastify.prisma, id, admission);
       }
 
       // Update conversation to belong to this community (allows moving between communities)
@@ -805,7 +827,13 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         }
       });
 
-      return sendSuccess(reply, updated);
+      // Même gate que `GET /communities/:id/conversations` : la réponse porte
+      // les MÊMES participants, par le même `include`, sous le MÊME schéma
+      // fermé (`communityConversationSchema`). Le gate masque la présence de
+      // `user` ET celle de la ligne `Participant` ; le schéma retient le reste
+      // de la ligne que l'`include` rend (jeton de session, session anonyme).
+      const [gated] = await gateConversationParticipantsPresence(fastify.prisma, viewerFromRequest(request), [updated]);
+      return sendSuccess(reply, gated);
     } catch (error) {
       logger.error('Error adding conversation to community', error as Error);
       return sendInternalError(reply, 'Failed to add conversation to community');

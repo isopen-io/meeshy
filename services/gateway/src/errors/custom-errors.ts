@@ -3,10 +3,6 @@
  * Fournit des codes d'erreur spécifiques et des messages clairs
  */
 
-import { enhancedLogger } from '../utils/logger-enhanced.js';
-
-const logger = enhancedLogger.child({ module: 'CustomErrors' });
-
 export class BaseAppError extends Error {
   public readonly statusCode: number;
   public readonly code: string;
@@ -136,6 +132,37 @@ export class UserLockedError extends BaseAppError {
   }
 }
 
+/**
+ * Le compte existe, mais il n'a PAS de mot de passe (#6424).
+ *
+ * Un compte né d'une inscription par e-mail seul n'en a aucun : `null` dans la
+ * colonne. Sans cette classe, `verifyPassword(saisie, null)` rendait `false` —
+ * juste, mais indistinguable d'un mot de passe FAUX. Deux conséquences, et la
+ * seconde est un vrai défaut :
+ *
+ * 1. la personne lisait « Identifiants invalides » sans jamais apprendre que sa
+ *    porte est le lien magique — un cul-de-sac dont rien ne sort ;
+ * 2. surtout, chaque tentative COMPTAIT : cinq essais verrouillaient pour
+ *    quinze minutes un compte dont le mot de passe n'existe pas, donc un compte
+ *    que personne ne peut deviner. Le verrou punissait la seule victime possible.
+ *
+ * ## Ce que ce refus APPREND, et pourquoi c'est assumé
+ *
+ * Il dit « cette adresse a un compte, sans mot de passe ». L'existence d'un
+ * compte est déjà apprenable par `POST /register` (`EMAIL_TAKEN`, oracle
+ * documenté et payant, #4158) ; ce qui s'y ajoute est qu'il n'y a AUCUN secret
+ * à deviner — une information qui décourage l'attaque plutôt que de l'armer.
+ * Le limiteur de `POST /login` la borne comme il borne tout le reste.
+ *
+ * 401, et non 403 : c'est un refus d'AUTHENTIFICATION dont le remède est de se
+ * présenter autrement, pas une permission manquante.
+ */
+export class PasswordNotSetError extends BaseAppError {
+  constructor(message = "Ce compte n'a pas encore de mot de passe — connectez-vous par lien magique") {
+    super(message, 401, 'PASSWORD_NOT_SET');
+  }
+}
+
 export class UserInactiveError extends BaseAppError {
   constructor(message = 'Compte inactif ou désactivé') {
     super(message, 403, 'USER_INACTIVE');
@@ -154,6 +181,31 @@ export class EmailNotVerifiedError extends BaseAppError {
   }
 }
 
+/**
+ * Le BON mot de passe d'un compte dont le délai de grâce de l'adresse est
+ * passé (#8238, qui remplace le blocage immédiat de #8055) : 28 jours sans
+ * preuve d'adresse et aucun numéro de téléphone. Aucune session ne s'ouvre ; le
+ * refus porte l'adresse du compte, pour que la route y renvoie le code — quel
+ * que soit l'identifiant tapé (pseudo ou adresse).
+ */
+export class ActivationRequiresEmailProofError extends EmailNotVerifiedError {
+  constructor(readonly email: string) {
+    super("Ce compte n'est pas encore actif — saisissez le code reçu par e-mail");
+  }
+}
+
+/**
+ * #9927 — la date de naissance déclarée donne moins de 13 ans révolus : le
+ * compte n'ouvre ni ne rafraîchit aucune session tant qu'il n'a pas 13 ans
+ * (calculé, la porte se rouvre seule). 403, code `AGE_BELOW_MINIMUM` ; le
+ * gestionnaire global le rend tel quel.
+ */
+export class AgeBelowMinimumError extends BaseAppError {
+  constructor() {
+    super('Meeshy est réservé aux personnes de 13 ans et plus.', 403, 'AGE_BELOW_MINIMUM');
+  }
+}
+
 // ========== RATE LIMITING ==========
 
 export class RateLimitError extends BaseAppError {
@@ -168,6 +220,29 @@ export class RateLimitError extends BaseAppError {
 export class TooManyLoginAttemptsError extends RateLimitError {
   constructor(retryAfter: number) {
     super(retryAfter, `Trop de tentatives de connexion échouées. Réessayez dans ${retryAfter} secondes`, 'TOO_MANY_LOGIN_ATTEMPTS');
+  }
+}
+
+// ========== TÉLÉVERSEMENT (#6604) ==========
+//
+// Un fichier refusé (type ou taille) est une erreur de DEMANDE, jamais de
+// SERVEUR — même famille que #6557 (`postId` malformé → 404, jamais 500).
+// `UploadProcessor.validateFile` rendait un verdict `{valid:false, error}`
+// sans code HTTP ; `uploadFile`/`uploadEncryptedFile` le traduisaient en
+// `throw new Error(...)` NU. Tout appelant qui n'avale pas cette exception
+// (contrairement à `uploadMultiple`, qui l'avale PAR FICHIER pour rester
+// résilient à un échec de traitement isolé) la laissait dégénérer en 500
+// générique au gestionnaire global, faute de `err.statusCode`.
+
+export class UnsupportedMediaTypeError extends BaseAppError {
+  constructor(message: string) {
+    super(message, 415, 'UNSUPPORTED_MEDIA_TYPE');
+  }
+}
+
+export class PayloadTooLargeError extends BaseAppError {
+  constructor(message: string) {
+    super(message, 413, 'FILE_TOO_LARGE');
   }
 }
 
@@ -234,52 +309,79 @@ export function handlePrismaError(error: any): BaseAppError {
 }
 
 /**
- * Handler d'erreur global pour Fastify
+ * `errorHandler` a été SUPPRIMÉ (#4212).
+ *
+ * Il rendait correctement toute la hiérarchie — code, message, champs propres —
+ * et n'était **enregistré nulle part**. Le seul `setErrorHandler` du dépôt vit
+ * dans `server.ts`, et il ne connaissait que trois sous-classes sur dix-neuf.
+ *
+ * Deux handlers dont un mort n'est pas un état tenable : le mort donne
+ * l'illusion que la question est traitée, et c'est exactement ce qui a laissé
+ * seize sous-classes tomber dans le repli générique pendant toute leur vie.
+ *
+ * La logique qu'il portait vit désormais dans l'unique handler enregistré,
+ * sous une seule branche `instanceof BaseAppError`. Il n'y a plus de forme à
+ * recopier : il y a un handler.
  */
-export function errorHandler(error: Error, request: any, reply: any) {
-  // Si c'est déjà une erreur personnalisée
-  if (error instanceof BaseAppError) {
-    return reply.status(error.statusCode).send({
-      success: false,
-      error: {
-        code: error.code,
-        message: error.message,
-        ...(error instanceof ValidationError && { errors: error.errors }),
-        ...(error instanceof RateLimitError && { retryAfter: error.retryAfter }),
-        ...(error instanceof UserLockedError && error.lockedUntil && {
-          lockedUntil: error.lockedUntil.toISOString()
-        })
-      }
-    });
-  }
 
-  // Erreur Prisma
-  if (error.name === 'PrismaClientKnownRequestError') {
-    const customError = handlePrismaError(error);
-    return errorHandler(customError, request, reply);
-  }
+/** Le libellé lisible d'une classe d'erreur — `UserLockedError` → `User Locked`. */
+export function humanizeErrorName(name: string): string {
+  return name
+    .replace(/Error$/, '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .trim() || 'Error';
+}
 
-  // Erreur Zod
-  if (error.name === 'ZodError') {
-    const zodError = error as any;
-    const errors: Record<string, string> = {};
-    zodError.errors?.forEach((err: any) => {
-      const path = err.path.join('.');
-      errors[path] = err.message;
-    });
-    const validationError = new ValidationError('Données invalides', errors);
-    return errorHandler(validationError, request, reply);
-  }
+/** La forme SERVIE d'une erreur typée. */
+export type TypedErrorBody = {
+  readonly success: false;
+  readonly error: string;
+  readonly code: string;
+  readonly message: string;
+  readonly statusCode: number;
+  readonly errors?: Record<string, string>;
+  readonly retryAfter?: number;
+  readonly lockedUntil?: string;
+};
 
-  // Erreur non gérée - log et retour 500
-  logger.error('Unhandled error', error as Error);
-  return reply.status(500).send({
+/**
+ * Ce qu'une erreur TYPÉE doit rendre — ou `null` si elle ne l'est pas.
+ *
+ * ## Pourquoi une fonction PURE, et pas une branche dans le handler
+ *
+ * Le handler enregistré vit dans une méthode de `MeeshyServer` : on ne peut
+ * l'exercer qu'en montant un serveur. Cette décision-ci — quel corps pour
+ * quelle classe — se teste classe par classe sans rien monter, et c'est ce que
+ * demande le critère : **un témoin par sous-classe**.
+ *
+ * ## Les messages sortent en PRODUCTION
+ *
+ * C'est le cœur du correctif. Le repli générique les remplaçait par « An
+ * unexpected error occurred » hors développement, et jetait les champs propres
+ * à la classe. Ces messages sont RÉDIGÉS pour l'utilisateur — relus classe par
+ * classe : aucun ne cite un chemin, une requête, un identifiant interne ni une
+ * trace. Les servir est tout l'objet du lot ; ne les servir qu'en
+ * développement, c'est n'avoir corrigé personne.
+ */
+export function typedErrorResponse(error: unknown): TypedErrorBody | null {
+  if (!(error instanceof BaseAppError)) return null;
+
+  return {
     success: false,
-    error: {
-      code: 'INTERNAL_SERVER_ERROR',
-      message: process.env.NODE_ENV === 'production'
-        ? 'Une erreur interne est survenue'
-        : error.message
-    }
-  });
+    // Dérivé du NOM de la classe : trois branches manuscrites portaient ce
+    // libellé, et les seize autres classes n'en avaient aucun. Dérivé, il ne
+    // peut plus manquer à une classe neuve.
+    error: humanizeErrorName(error.name),
+    code: error.code,
+    message: error.message,
+    statusCode: error.statusCode,
+    // Les champs PROPRES à la sous-classe — ceux que le repli jetait, et ceux
+    // qui portent l'action que l'utilisateur peut entreprendre : quand
+    // revenir, combien de temps attendre, quel champ corriger.
+    ...(error instanceof ValidationError && { errors: error.errors }),
+    ...(error instanceof RateLimitError && { retryAfter: error.retryAfter }),
+    ...(error instanceof UserLockedError && error.lockedUntil && {
+      lockedUntil: error.lockedUntil.toISOString(),
+    }),
+  };
 }

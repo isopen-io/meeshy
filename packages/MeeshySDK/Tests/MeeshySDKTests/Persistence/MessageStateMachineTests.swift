@@ -87,6 +87,29 @@ final class MessageStateMachineTests: XCTestCase {
         XCTAssertEqual(sm.retryCount, MessageStateMachine.maxRetries)
     }
 
+    func test_apply_replayFailed_fromSending_requeuesWithoutSpendingTheBudget() {
+        var sm = MessageStateMachine(state: .sending, retryCount: MessageStateMachine.maxRetries)
+        XCTAssertEqual(sm.apply(.replayFailed(TestError.network)), .queued)
+        XCTAssertEqual(sm.retryCount, MessageStateMachine.maxRetries)
+        XCTAssertNotNil(sm.lastError)
+    }
+
+    func test_apply_replayFailed_fromQueued_isRejected() {
+        var sm = MessageStateMachine(state: .queued)
+        XCTAssertNil(sm.apply(.replayFailed(TestError.network)))
+    }
+
+    func test_apply_retryExhausted_fromSending_transitionsToFailed() {
+        // Un envoi hors ligne naît `.sending` : l'épuisement doit l'en sortir, sinon la bulle reste sur l'horloge.
+        var sm = MessageStateMachine(state: .sending)
+        XCTAssertEqual(sm.apply(.retryExhausted), .failed)
+    }
+
+    func test_apply_retryExhausted_fromQueued_transitionsToFailed() {
+        var sm = MessageStateMachine(state: .queued)
+        XCTAssertEqual(sm.apply(.retryExhausted), .failed)
+    }
+
     func test_apply_retry_fromFailed_resetsAndRequeues() {
         var sm = MessageStateMachine(state: .failed, retryCount: 3)
         let result = sm.apply(.retry)

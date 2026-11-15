@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
 import { MAX_ATTACHMENTS_PER_MESSAGE } from '@meeshy/shared/types/attachment';
+import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
+import { utf16Bounded } from '@meeshy/shared/utils/validation-primitives';
 import type {
   MessageSendData,
   MessageSendWithAttachmentsData,
@@ -8,15 +10,26 @@ import type {
 import {
   ENCRYPTION_ENVELOPE_SHAPE,
   noSilentDowngrade,
+  libsignalSendComplete,
+  LIBSIGNAL_SEND_ISSUE,
   NO_SILENT_DOWNGRADE_ISSUE,
 } from './encryption-envelope.js';
 import { MENTIONED_USER_IDS_SHAPE } from './mention-list.js';
+import { EPHEMERAL_DURATION_SHAPE } from './ephemeral-duration';
 import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 import { MAX_CONTENT_BYTES } from './content-limits.js';
+import { FORWARDED_ATTACHMENT_IDS_SHAPE } from './forwarded-attachments.js';
+import { clientMessageTypeSchema } from './client-message-type.js';
 
 const mongoId = z
   .string()
   .regex(OBJECT_ID_REGEX, 'Invalid MongoDB ObjectId format');
+
+// #9909 — la pièce NOMMÉE d'une citation, la même que `POST /messages`.
+// Déclarée ici sans quoi `z.object` la strippe en silence ; son lien au
+// message cité est ADMIS au point de convergence des trois transports
+// (`MessagingService.handleMessage` → `admitAttachmentReply`), jamais ici.
+const attachmentReplyToSchema = z.object({ attachmentId: mongoId });
 
 const clientMessageIdSchema = z
   .string()
@@ -36,8 +49,9 @@ export const SocketMessageSendSchema = z.object({
   conversationId: z.string().min(1).max(255),
   content: z.string().max(MAX_CONTENT_BYTES),
   originalLanguage: z.string().optional(),
-  messageType: z.string().optional(),
+  messageType: clientMessageTypeSchema.optional(),
   replyToId: mongoId.optional(),
+  attachmentReplyTo: attachmentReplyToSchema.optional(),
   storyReplyToId: mongoId.optional(),
   clientMessageId: clientMessageIdSchema,
   // Forward references — validated as ObjectIds so malformed strings are
@@ -45,6 +59,8 @@ export const SocketMessageSendSchema = z.object({
   // broadcastNewMessage (which would otherwise throw P2023 on a bad id).
   forwardedFromId: mongoId.optional(),
   forwardedFromConversationId: mongoId.optional(),
+  // #9914 — la pièce (ou le sous-ensemble) de la source à recopier.
+  ...FORWARDED_ATTACHMENT_IDS_SHAPE,
   // TROISIÈME PORTE de l'exemption de contenu vide (`MessageValidator`
   // :55-69) : une diffusion à plusieurs destinataires copie ses pièces jointes
   // CÔTÉ SERVEUR (`copyAttachments.ts`) et n'envoie donc ni texte ni
@@ -60,6 +76,7 @@ export const SocketMessageSendSchema = z.object({
   // depuis `isBlurred` / `expiresAt` / `isViewOnce`.
   isBlurred: z.boolean().optional(),
   expiresAt: z.string().optional(),
+  ...EPHEMERAL_DURATION_SHAPE,
   effectFlags: z.number().int().optional(),
   isViewOnce: z.boolean().optional(),
   maxViewOnceCount: z.number().int().optional(),
@@ -68,6 +85,11 @@ export const SocketMessageSendSchema = z.object({
   // validation stricte des coordonnées / longueurs vit dans
   // `parseSharedPlace`, appelé côté `MessageProcessor.saveMessage`.
   location: z.unknown().optional(),
+  // Sticker (#4823) — même doctrine que `location` : champ dédié, forme
+  // validée par `parseMessageSticker` côté `MessageProcessor.saveMessage`.
+  // Non déclaré ici, `z.object` le stripperait en silence — et iOS ne verrait
+  // jamais la décoration animée, seulement le PNG de repli.
+  sticker: z.unknown().optional(),
   // Liste EXPLICITE de mentionnés — déclarée dans `mention-list.ts`, la MÊME
   // que celle de `POST /messages`. Elle était strippée ici, et le repli par
   // extraction des `@` du contenu ne la remplace que tant que le contenu porte
@@ -79,7 +101,7 @@ export const SocketMessageSendSchema = z.object({
   // jamais la base sur le chemin d'envoi PRIMAIRE. Voir l'unité pour le récit
   // complet du défaut.
   ...ENCRYPTION_ENVELOPE_SHAPE,
-}).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE);
+}).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE).refine(libsignalSendComplete, LIBSIGNAL_SEND_ISSUE);
 
 export type SocketMessageSendData = z.infer<typeof SocketMessageSendSchema>;
 
@@ -89,11 +111,14 @@ export const SocketMessageSendWithAttachmentsSchema = z.object({
   originalLanguage: z.string().optional(),
   attachmentIds: z.array(mongoId).min(1).max(MAX_ATTACHMENTS_PER_MESSAGE),
   replyToId: mongoId.optional(),
+  attachmentReplyTo: attachmentReplyToSchema.optional(),
   storyReplyToId: mongoId.optional(),
   clientMessageId: clientMessageIdSchema,
   // Forward references — validated as ObjectIds (mirrors SocketMessageSendSchema).
   forwardedFromId: mongoId.optional(),
   forwardedFromConversationId: mongoId.optional(),
+  // #9914 — la pièce (ou le sous-ensemble) de la source à recopier.
+  ...FORWARDED_ATTACHMENT_IDS_SHAPE,
   // Effets de message — parité avec SocketMessageSendSchema (path texte) et la
   // route REST POST /messages. Sans ces champs, `z.object` strip un
   // `isViewOnce` / `isBlurred` / `expiresAt` envoyé avec une photo sur le path
@@ -103,11 +128,15 @@ export const SocketMessageSendWithAttachmentsSchema = z.object({
   // `effectFlags` depuis ces champs bruts.
   isBlurred: z.boolean().optional(),
   expiresAt: z.string().optional(),
+  ...EPHEMERAL_DURATION_SHAPE,
   effectFlags: z.number().int().optional(),
   isViewOnce: z.boolean().optional(),
   maxViewOnceCount: z.number().int().optional(),
   // Lieu partagé — même contrat que SocketMessageSendSchema ci-dessus.
   location: z.unknown().optional(),
+  // Sticker — même contrat que SocketMessageSendSchema ci-dessus. C'est CE
+  // chemin qui porte le sticker nominal (PNG rendu + descripteur).
+  sticker: z.unknown().optional(),
   // Liste explicite de mentionnés — même unité que le path texte ci-dessus. Un
   // message porteur d'une pièce jointe nomme quelqu'un exactement comme un
   // message de texte, et ce path-ci est celui de TOUT l'audio : sa légende est
@@ -117,7 +146,7 @@ export const SocketMessageSendWithAttachmentsSchema = z.object({
   // schéma-ci ne la portait pas davantage : une pièce jointe envoyée dans une
   // conversation chiffrée perdait son chiffré exactement de la même façon.
   ...ENCRYPTION_ENVELOPE_SHAPE,
-}).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE);
+}).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE).refine(libsignalSendComplete, LIBSIGNAL_SEND_ISSUE);
 
 export type SocketMessageSendWithAttachmentsData = z.infer<typeof SocketMessageSendWithAttachmentsSchema>;
 
@@ -143,6 +172,59 @@ export const SocketConversationLeaveSchema = z.object({
 
 export type SocketConversationLeaveData = z.infer<typeof SocketConversationLeaveSchema>;
 
+// ─── Live location sharing (location:live-start / …-update / …-stop) ─────────
+// La douzième et dernière famille socket portée sur la frontière Zod partagée.
+// Les bornes de coordonnées et de durée expriment en Zod PUR ce que gardaient
+// `_validateCoordinates` + la garde manuscrite de durée ; les messages métier
+// remontent via `validateSocketEvent` sous le préfixe unifié `'Validation
+// failed: …'`, donc le détail sémantique se préserve.
+const LOCATION_COORD_MSG = 'Invalid coordinates';
+const LOCATION_DURATION_MSG = 'Invalid duration (must be 1-480 minutes)';
+
+const latitudeSchema = z
+  .number({ error: LOCATION_COORD_MSG })
+  .min(-90, LOCATION_COORD_MSG)
+  .max(90, LOCATION_COORD_MSG);
+
+const longitudeSchema = z
+  .number({ error: LOCATION_COORD_MSG })
+  .min(-180, LOCATION_COORD_MSG)
+  .max(180, LOCATION_COORD_MSG);
+
+export const SocketLocationLiveStartSchema = z.object({
+  conversationId: z.string().min(1).max(255),
+  latitude: latitudeSchema,
+  longitude: longitudeSchema,
+  // `.gt(0)` (et non `.min(1)`) préserve la plage EXACTE de la garde manuscrite
+  // (`durationMinutes <= 0` rejeté, une durée non entière acceptée), max 8 h.
+  durationMinutes: z
+    .number({ error: LOCATION_DURATION_MSG })
+    .gt(0, LOCATION_DURATION_MSG)
+    .max(480, LOCATION_DURATION_MSG),
+});
+
+export type SocketLocationLiveStartData = z.infer<typeof SocketLocationLiveStartSchema>;
+
+export const SocketLocationLiveUpdateSchema = z.object({
+  conversationId: z.string().min(1).max(255),
+  latitude: latitudeSchema,
+  longitude: longitudeSchema,
+  // Télémétrie optionnelle relayée telle quelle (comme avant la frontière) ;
+  // gardée seulement comme nombre, sans borne — c'est ce que faisait le handler.
+  altitude: z.number().optional(),
+  accuracy: z.number().optional(),
+  speed: z.number().optional(),
+  heading: z.number().optional(),
+});
+
+export type SocketLocationLiveUpdateData = z.infer<typeof SocketLocationLiveUpdateSchema>;
+
+export const SocketLocationLiveStopSchema = z.object({
+  conversationId: z.string().min(1).max(255),
+});
+
+export type SocketLocationLiveStopData = z.infer<typeof SocketLocationLiveStopSchema>;
+
 export const SocketTypingSchema = z.object({
   conversationId: z.string(),
   userId: z.string().optional(),
@@ -150,9 +232,19 @@ export const SocketTypingSchema = z.object({
 
 export type SocketTypingData = z.infer<typeof SocketTypingSchema>;
 
+export const SocketViewingSchema = z.object({
+  conversationId: z.string().min(1).max(128),
+});
+
+export type SocketViewingData = z.infer<typeof SocketViewingSchema>;
+
+export const SocketViewingActivitySchema = SocketViewingSchema.extend({
+  focus: z.boolean().optional(),
+});
+
 export const SocketReactionAddSchema = z.object({
   messageId: mongoId,
-  emoji: z.string().min(1).max(10),
+  emoji: utf16Bounded(z.string(), { min: 1, max: EMOJI_MAX_LENGTH }),
   conversationId: z.string().optional(),
 });
 
@@ -160,7 +252,7 @@ export type SocketReactionAddData = z.infer<typeof SocketReactionAddSchema>;
 
 export const SocketReactionRemoveSchema = z.object({
   messageId: mongoId,
-  emoji: z.string().min(1).max(10),
+  emoji: utf16Bounded(z.string(), { min: 1, max: EMOJI_MAX_LENGTH }),
   conversationId: z.string().optional(),
 });
 
@@ -169,7 +261,7 @@ export type SocketReactionRemoveData = z.infer<typeof SocketReactionRemoveSchema
 export const SocketCommentReactionAddSchema = z.object({
   commentId: mongoId,
   postId: mongoId,
-  emoji: z.string().min(1).max(10),
+  emoji: utf16Bounded(z.string(), { min: 1, max: EMOJI_MAX_LENGTH }),
 });
 
 export type SocketCommentReactionAddData = z.infer<typeof SocketCommentReactionAddSchema>;
@@ -177,7 +269,7 @@ export type SocketCommentReactionAddData = z.infer<typeof SocketCommentReactionA
 export const SocketCommentReactionRemoveSchema = z.object({
   commentId: mongoId,
   postId: mongoId,
-  emoji: z.string().min(1).max(10),
+  emoji: utf16Bounded(z.string(), { min: 1, max: EMOJI_MAX_LENGTH }),
 });
 
 export type SocketCommentReactionRemoveData = z.infer<typeof SocketCommentReactionRemoveSchema>;
@@ -198,14 +290,14 @@ export type SocketPostRoomActionData = z.infer<typeof SocketPostRoomActionSchema
 
 export const SocketPostReactionAddSchema = z.object({
   postId: mongoId,
-  emoji: z.string().min(1).max(10),
+  emoji: utf16Bounded(z.string(), { min: 1, max: EMOJI_MAX_LENGTH }),
 });
 
 export type SocketPostReactionAddData = z.infer<typeof SocketPostReactionAddSchema>;
 
 export const SocketPostReactionRemoveSchema = z.object({
   postId: mongoId,
-  emoji: z.string().min(1).max(10),
+  emoji: utf16Bounded(z.string(), { min: 1, max: EMOJI_MAX_LENGTH }),
 });
 
 export type SocketPostReactionRemoveData = z.infer<typeof SocketPostReactionRemoveSchema>;
@@ -215,6 +307,22 @@ export const SocketPostReactionRequestSyncSchema = z.object({
 });
 
 export type SocketPostReactionRequestSyncData = z.infer<typeof SocketPostReactionRequestSyncSchema>;
+
+export const SocketAttachmentReactionAddSchema = z.object({
+  attachmentId: mongoId,
+  messageId: mongoId,
+  emoji: utf16Bounded(z.string(), { min: 1, max: EMOJI_MAX_LENGTH }),
+});
+
+export type SocketAttachmentReactionAddData = z.infer<typeof SocketAttachmentReactionAddSchema>;
+
+export const SocketAttachmentReactionRemoveSchema = z.object({
+  attachmentId: mongoId,
+  messageId: mongoId,
+  emoji: utf16Bounded(z.string(), { min: 1, max: EMOJI_MAX_LENGTH }),
+});
+
+export type SocketAttachmentReactionRemoveData = z.infer<typeof SocketAttachmentReactionRemoveSchema>;
 
 // Empty content is intentionally permitted: the message may carry attachments
 // (photo/audio/file) whose caption is being cleared. The attachment-aware
@@ -232,6 +340,7 @@ export type SocketMessageEditData = z.infer<typeof SocketMessageEditSchema>;
 
 export const SocketMessageDeleteSchema = z.object({
   messageId: mongoId,
+  reason: z.unknown().optional(),
 });
 
 export type SocketMessageDeleteData = z.infer<typeof SocketMessageDeleteSchema>;

@@ -4,9 +4,14 @@ import os
 
 @MainActor
 final class AnalyticsManager {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = AnalyticsManager()
 
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "analytics")
+    private let logger = MeeshyLog.logger(.analytics)
 
     private init() {
         syncCollectionState()
@@ -56,6 +61,16 @@ extension Route {
         case .communityInvite: return "CommunityInvite"
         case .notifications: return "Notifications"
         case .userStats: return "UserStats"
+        case .progression: return "Progression"
+        // Le NOM de la section, pas un « Progression » de plus : trois pages
+        // qui rendraient le même écran d'analytique ne diraient laquelle est
+        // ouverte, et c'est précisément la question qu'on posera à cette mesure.
+        case .progressionSection(let section): return "Progression.\(section.rawValue)"
+        case .progressionRules: return "Progression.Rules"
+        case .progressionNotebook: return "Progression.Notebook"
+        case .gamePage(let page, _): return page.analyticsName
+        case .progressionConcept(let concept, _): return "Progression.Concept.\(concept.rawValue)"
+        case .progressionDashboard: return "Progression.Dashboard"
         case .links: return "Links"
         case .affiliate: return "Affiliate"
         case .trackingLinks: return "TrackingLinks"
@@ -68,6 +83,7 @@ extension Route {
         case .starredMessages: return "StarredMessages"
         case .friendRequests: return "FriendRequests"
         case .storyNotificationTarget: return "StoryNotificationTarget"
+        case .moodSpotlight: return "MoodSpotlight"
         }
     }
 }

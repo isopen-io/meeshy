@@ -26,6 +26,11 @@ struct SenderIdentity: Equatable, Sendable {
     let moodEmoji: String?
     let presence: PresenceState?
     let storyRing: StoryRingState
+    /// L'auteur a l'écran de cette conversation ouvert (#8892).
+    var isHere: ConversationHere = .absent
+    /// Le contour d'avatar équipé de l'auteur (#10713) : la RÉFÉRENCE servie, que l'avatar
+    /// résout lui-même et pose dans son empreinte (#10946).
+    var ring: ServedProfileDecorItem? = nil
 
     /// « @pseudo » — ou rien. Le fil sert un pseudo VIDE pour un participant
     /// anonyme, et un « @ » nu sous le nom n'est pas une identité.
@@ -49,6 +54,17 @@ struct BubbleFooterModel: Equatable, Sendable {
     /// .sending` — drives `BubbleDeliveryCheck.SendingClockGlyph`'s reveal
     /// debounce (spec §6.2). `nil` for every other delivery state.
     var sendStartedAt: Date?
+    /// #7620 — « modifié » se dit DANS le pied, à côté de l'heure. Posé en
+    /// tête de bulle, le crayon tombait dans le coin arrondi et le
+    /// `clipShape` le rognait.
+    var edit: BubbleEditMark? = nil
+    /// #14369 — le verdict de la couche appareil d'un message hybride.
+    var integrity: HybridDeviceLayerIntegrity? = nil
+
+    /// L'icône de traduction ne se montre que si AUCUN drapeau ne la dit déjà
+    /// (#7599). Lue par la VUE : un site qui plie ses drapeaux après `make`
+    /// (le widget audio) reste soumis à la même règle.
+    var showsTranslateGlyph: Bool { showsTranslate && flags.isEmpty }
 
     /// A send still in flight — clock territory (excludes `.failed`).
     var isPending: Bool {
@@ -110,6 +126,11 @@ extension BubbleFooterModel {
     /// alignée à droite avec la coche de livraison. C'est une information de
     /// premier rang, jamais un détail conditionnel.
     /// `delivery` reste non-nil uniquement pour les messages sortants (`isMe`).
+    ///
+    /// #7599 — un état se dit UNE fois. Des drapeaux affichés disent déjà
+    /// qu'une traduction existe : l'icône 🌐 ne reste que là où elle est la
+    /// seule porte vers la demande. Et un échec d'envoi que la bande de renvoi
+    /// porte ne se redit pas par la coche rouge.
     static func make(
         timeString: String,
         deliveryStatus: MeeshyMessage.DeliveryStatus,
@@ -118,17 +139,73 @@ extension BubbleFooterModel {
         sender: SenderIdentity?,
         flags: [FooterFlag],
         showsTranslate: Bool,
-        sendStartedAt: Date? = nil
+        sendStartedAt: Date? = nil,
+        retryBandShown: Bool = false,
+        edit: BubbleEditMark? = nil,
+        integrity: HybridDeviceLayerIntegrity? = nil
     ) -> BubbleFooterModel {
         BubbleFooterModel(
             sender: sender,
             flags: flags,
-            showsTranslate: showsTranslate,
+            showsTranslate: showsTranslate && flags.isEmpty,
             timestamp: timeString,
-            delivery: isMe ? deliveryStatus : nil,
+            delivery: isMe ? glyphStatus(deliveryStatus, retryBandShown: retryBandShown) : nil,
             isOffline: !isOnline,
             isMe: isMe,
-            sendStartedAt: (isMe && deliveryStatus == .sending) ? sendStartedAt : nil
+            sendStartedAt: (isMe && deliveryStatus == .sending) ? sendStartedAt : nil,
+            edit: edit,
+            integrity: integrity
         )
+    }
+
+    /// #7620 — une bulle n'offre la traduction que si elle porte un TEXTE à
+    /// traduire (ou un audio, dont la transcription se traduit). Une position,
+    /// un fichier, un média seul ou un émoji n'ont rien à traduire.
+    static func offersTranslation(hasText: Bool, isEmojiOnly: Bool, hasAudio: Bool) -> Bool {
+        !isEmojiOnly && (hasText || hasAudio)
+    }
+}
+
+/// L'état « modifié » tel que le pied le dit : le crayon, ou la rotation
+/// pendant que l'édition part au serveur. #11375 — `editedByModerator` : la
+/// dernière modification est celle d'un modérateur de plateforme, dite à tous
+/// en MOTS (« modifié par un modérateur »), jamais par le crayon seul.
+enum BubbleEditMark: Equatable, Sendable {
+    case edited
+    case editedByModerator
+    case saving
+
+    static func resolve(editedAt: Date?, isSaving: Bool, byModerator: Bool = false) -> BubbleEditMark? {
+        if isSaving { return .saving }
+        guard editedAt != nil else { return nil }
+        return byModerator ? .editedByModerator : .edited
+    }
+
+    /// Ce que l'œil lit et l'oreille entend — UN site pour la bulle, la rangée
+    /// plate et les deux compositeurs VoiceOver.
+    static func spokenLabel(byModerator: Bool) -> String {
+        byModerator
+            ? String(localized: "bubble.meta.editedByModerator", defaultValue: "modifié par un modérateur", bundle: .main)
+            : String(localized: "bubble.meta.edited", defaultValue: "modifié", bundle: .main)
+    }
+
+    /// La phrase VoiceOver d'un message modifié — la clé `a11y.message.edited`
+    /// de l'auteur, inchangée ; celle du modérateur, dite comme elle se voit.
+    static func accessibilityLabel(byModerator: Bool) -> String {
+        byModerator ? spokenLabel(byModerator: true) : String(localized: "a11y.message.edited", bundle: .main)
+    }
+}
+
+extension BubbleFooterModel {
+    /// L'état de livraison que la COCHE doit dire — la règle unique de la bulle
+    /// et de la rangée plate (#7599). Un échec d'envoi est dit par la bande de
+    /// renvoi quand elle est montée : la coche se tait alors, elle ne répète
+    /// pas en rouge ce que la bande dit en rouge.
+    static func glyphStatus(
+        _ status: MeeshyMessage.DeliveryStatus?,
+        retryBandShown: Bool
+    ) -> MeeshyMessage.DeliveryStatus? {
+        guard status == .failed, retryBandShown else { return status }
+        return nil
     }
 }

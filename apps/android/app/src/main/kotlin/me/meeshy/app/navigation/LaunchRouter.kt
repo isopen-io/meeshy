@@ -1,6 +1,14 @@
 package me.meeshy.app.navigation
 
 import me.meeshy.sdk.model.call.WaitingCall
+import me.meeshy.sdk.model.composer.ComposerOrigin
+import me.meeshy.sdk.model.link.EmailLinkSecret
+import me.meeshy.sdk.model.push.PushPayload
+import me.meeshy.sdk.model.push.PushTapDestination
+import me.meeshy.sdk.model.story.StoryNotificationContext
+import me.meeshy.app.navigation.graph.CommunityRoutes
+import me.meeshy.app.navigation.graph.GameRoutes
+import me.meeshy.app.navigation.graph.StoryRoutes
 
 /**
  * The primitive launch inputs a notification tap / full-screen call intent carries.
@@ -8,18 +16,33 @@ import me.meeshy.sdk.model.call.WaitingCall
  * platform glue) and hands them to the pure [LaunchRouter], which owns the decision.
  *
  * Keys mirror the extras [me.meeshy.app.push.MeeshyFcmService] sets:
- *  - a **call** full-screen intent carries [callId] / [conversationId] / [callerName] / [isVideo]
+ *  - a **call** full-screen intent carries [callId] / [conversationId] / [callerId] / [callerName] / [isVideo]
  *  - a **message** notification tap carries only [conversationId]
  *  - a cold/normal launch carries none.
  */
 data class LaunchExtras(
     val callId: String? = null,
     val conversationId: String? = null,
+    val callerId: String? = null,
     val callerName: String? = null,
     val isVideo: Boolean = false,
     /** Bouton « Répondre » de la notification CallStyle : décrocher directement. */
     val autoAnswer: Boolean = false,
+    /** Les clés `data` du push touché (type, postId, senderId…) : la table [PushTapDestination] les lit. */
+    val tap: PushPayload = PushPayload(),
+    /** Indice de route de la passerelle (`progression`) : un nom d'écran, jamais une adresse. */
+    val routeHint: String? = null,
+    /** Le jeton d'une graine que le partage entrant a déposée (#13527) : l'hôte du composeur la reprend. */
+    val composerSeed: String? = null,
+    /** Le raccourci d'application touché ([LaunchShortcut]) : « Publier un post » ouvre le composeur du fil. */
+    val shortcut: String? = null,
 )
+
+/** Les raccourcis d'application que le lanceur dépose dans l'intent de lancement. */
+object LaunchShortcut {
+    const val EXTRA: String = "me.meeshy.app.extra.LAUNCH_SHORTCUT"
+    const val COMPOSE_POST: String = "compose_post"
+}
 
 /**
  * Pure single source of truth translating an app-launch's notification extras into
@@ -38,16 +61,58 @@ data class LaunchExtras(
  * `MeeshyApp` wiring a thin layer that only reads extras and calls `navigate`.
  */
 object LaunchRouter {
-    fun route(extras: LaunchExtras): String? = when {
+    fun route(extras: LaunchExtras, signedInUserId: String? = null): String? = when {
         !extras.callId.isNullOrBlank() -> CallRoute.incoming(
             callId = extras.callId,
             conversationId = extras.conversationId.orEmpty(),
             callerName = extras.callerName.orEmpty(),
             isVideo = extras.isVideo,
             autoAnswer = extras.autoAnswer,
+            callerId = extras.callerId.orEmpty(),
         )
-        !extras.conversationId.isNullOrBlank() -> Routes.chat(extras.conversationId)
-        else -> null
+        else -> tapRoute(extras, signedInUserId) ?: sharedMediaRoute(extras) ?: shortcutRoute(extras)
+    }
+
+    /** Une bannière posée pour un autre compte que celui connecté n'ouvre rien : pas de navigation fantôme. */
+    private fun isForAnotherAccount(recipientUserId: String?, signedInUserId: String?): Boolean =
+        recipientUserId != null && signedInUserId != null && recipientUserId != signedInUserId
+
+    /** « Publier un post » : la porte du composeur du fil, celle du placeholder. Un raccourci inconnu n'ouvre rien. */
+    private fun shortcutRoute(extras: LaunchExtras): String? =
+        if (extras.shortcut == LaunchShortcut.COMPOSE_POST) Routes.composer(ComposerOrigin.FeedComposer) else null
+
+    /** Un média partagé par une autre app s'ouvre dans l'hôte du composeur ; un jeton sans la forme de ceux du store n'ouvre rien. */
+    private fun sharedMediaRoute(extras: LaunchExtras): String? =
+        extras.composerSeed?.let { Routes.composer(ComposerOrigin.Share, it) }
+
+    /**
+     * Le toucher d'une notification : la table type -> destination d'iOS ([PushTapDestination]).
+     * Une charge sans type mais avec une conversation (anciennes notifications posees avant les
+     * extras du toucher) ouvre toujours sa conversation.
+     */
+    private fun tapRoute(extras: LaunchExtras, signedInUserId: String?): String? {
+        if (isForAnotherAccount(extras.tap.recipientUserId, signedInUserId)) return null
+        val payload = extras.tap.copy(conversationId = extras.conversationId?.takeIf { it.isNotBlank() } ?: extras.tap.conversationId)
+        return when (val destination = PushTapDestination.resolve(payload, extras.routeHint)) {
+            is PushTapDestination.Conversation -> Routes.chat(destination.conversationId, destination.highlightMessageId)
+            is PushTapDestination.Post -> Routes.postDetail(destination.postId)
+            is PushTapDestination.Reel -> Routes.reels(destination.postId)
+            is PushTapDestination.Story -> Routes.story(destination.userId)
+            is PushTapDestination.StoryContent ->
+                StoryRoutes.storyTarget(
+                    destination.postId,
+                    destination.action,
+                    destination.commentId,
+                    destination.parentCommentId,
+                    StoryNotificationContext.from(payload, System.currentTimeMillis()),
+                )
+            is PushTapDestination.Mood -> Routes.moodSpotlight(destination.statusId)
+            is PushTapDestination.Profile -> Routes.profile(destination.userId)
+            is PushTapDestination.Community -> CommunityRoutes.detail(destination.communityId)
+            PushTapDestination.Notifications -> Routes.NOTIFICATIONS
+            is PushTapDestination.Game -> GameRoutes.route(destination.target)
+            PushTapDestination.None -> null
+        }
     }
 
     /**
@@ -70,18 +135,19 @@ object LaunchRouter {
             route(
                 LaunchExtras(
                     callId = offer.callId,
+                    conversationId = offer.conversationId,
+                    callerId = offer.callerId,
                     callerName = offer.callerName,
                     isVideo = offer.isVideo,
                 ),
             )
         }
 
-    /** Prefixes de deep link menant a la validation d'un magic link — le lien du
-     *  MAIL (`https://meeshy.me/...`, App Link) et son alias de scheme custom. */
-    private val MAGIC_LINK_PREFIXES = listOf(
-        "meeshy://auth/magic-link",
-        "https://meeshy.me/auth/magic-link",
-    )
+    /** Seules origines dont un lien d'e-mail ouvre une session : `meeshy.me` et `www.meeshy.me`, les deux hotes que le
+     *  manifeste revendique (App Link verifie) — comme `DeepLinkRouter.meeshyHosts` d'iOS. Un hote revendique mais non lu
+     *  avalait le lien sans rien afficher (#13465). Le port par defaut est admis ; un hote qui ne fait que commencer comme
+     *  `meeshy.me` ne l'est pas. */
+    private val MEESHY_ORIGIN = Regex("^https://(?:www\\.)?meeshy\\.me(?::443)?(?=[/?#]|\\z)", RegexOption.IGNORE_CASE)
 
     /**
      * Traduit l'URI d'un intent VIEW en route interne, ou `null` si l'URI ne nous
@@ -90,19 +156,76 @@ object LaunchRouter {
      * demarrage — le magic link ne peut PAS l'etre, car sa destination doit etre
      * atteignable HORS authentification et sur un intent chaud (`onNewIntent`).
      *
+     * Un lien a jeton d'e-mail n'entre que par la FORME EXACTE qu'ecrit l'e-mail
+     * ([EmailLinkSecret.exactForm], #10875) et sur l'origine https de Meeshy : jamais
+     * par `meeshy://` (n'importe quelle page ou app ouvre ce scheme et y presenterait
+     * le jeton d'un TIERS, #10873), jamais par une variante (segment en plus, espace,
+     * `;`, encodage, invisible, casse, identifiants, port, http). Une variante part au
+     * navigateur. Le jeton voyage dans le fragment (`#token=`), que le navigateur
+     * n'envoie jamais au serveur ; la requete (`?token=`) reste lue pour les e-mails
+     * partis avant, et le jeton historique ecrit dans le chemin aussi.
+     *
+     * `verify-email` (jeton ET adresse, tous deux requis) mene a la preuve de l'adresse, et
+     * `reset-password` (`/reset-password`, `/auth/reset-password` et l'alias `/auth/email-link/…`)
+     * a « Nouveau mot de passe » : meme forme exacte, memes refus, meme jeton laisse encode.
+     * Sans son secret, un de ces liens n'ouvre rien.
+     *
      * Le token reste ENCODE tel quel dans la route produite : l'argument de
      * navigation le decode une seule fois a l'arrivee — le decoder ici le ferait
      * decoder deux fois et casserait tout token contenant `%` ou `+`.
      */
     fun routeForDeepLink(dataUri: String?): String? {
-        if (dataUri == null) return null
-        val prefix = MAGIC_LINK_PREFIXES.firstOrNull { dataUri.startsWith(it) } ?: return null
-        val query = dataUri.removePrefix(prefix).removePrefix("?")
-        val token = query.split('&')
-            .firstOrNull { it.startsWith("token=") }
-            ?.removePrefix("token=")
-            ?.takeIf { it.isNotBlank() }
-            ?: return null
-        return "auth/magic-link?token=$token"
+        if (dataUri == null || !MEESHY_ORIGIN.containsMatchIn(dataUri)) return null
+        return when (val form = EmailLinkSecret.exactForm(dataUri)) {
+            is EmailLinkSecret.Form.MagicLink ->
+                (form.pathToken ?: linkSecret(name = "token", uri = dataUri))?.let { "auth/magic-link?token=$it" }
+            EmailLinkSecret.Form.ResetPassword ->
+                linkSecret(name = "token", uri = dataUri)?.let(Routes::resetPassword)
+            EmailLinkSecret.Form.VerifyEmail -> {
+                val token = linkSecret(name = "token", uri = dataUri) ?: return null
+                val email = linkSecret(name = "email", uri = dataUri) ?: return null
+                Routes.verifyEmailLink(token = token, email = email)
+            }
+            null -> null
+        }
     }
+
+    /**
+     * Cette destination de lancement s'ouvre-t-elle HORS session ? Seuls les liens d'e-mail a jeton : c'est
+     * precisement eux qui ouvrent une session (connexion, adresse prouvee) ou choisissent un mot de passe.
+     * Tout le reste (chat, appel) attend l'authentification.
+     */
+    fun opensWithoutSession(route: String?): Boolean =
+        route != null && EMAIL_LINK_ROUTE_PREFIXES.any { route.startsWith(it) }
+
+    /**
+     * La route de lancement lue dans `onCreate`. Une activité RESTAURÉE (mort du processus) ou RECRÉÉE (thème, langue,
+     * densité) reçoit l'intent ORIGINAL, adresse et extras intacts : vider `intent.data` n'avait vidé que la copie locale.
+     * Une route à jeton d'e-mail relue là rejouerait un lien déjà présenté, et une route d'appel redécrocherait (#13504)
+     * un appel de groupe que l'utilisateur a quitté et qui dure encore ; les deux sont ignorées — la pile restaurée
+     * montre déjà son écran.
+     */
+    fun onCreateRoute(route: String?, restored: Boolean): String? =
+        route.takeUnless { restored && (opensWithoutSession(it) || CallRoute.isCallRoute(it) || isSharedMediaRoute(it) || isFeedComposerRoute(it)) }
+
+    /** Le raccourci « Publier un post » est à usage unique : une activité recréée ne rouvre pas un composeur déjà présenté. */
+    private fun isFeedComposerRoute(route: String?): Boolean = route == Routes.composer(ComposerOrigin.FeedComposer)
+
+    /** La graine d'un partage est à usage unique : une activité recréée ne rouvre pas un composeur sur un média déjà repris (#13527). */
+    private fun isSharedMediaRoute(route: String?): Boolean = route?.startsWith("composer?origin=share") == true
+
+    private val EMAIL_LINK_ROUTE_PREFIXES =listOf("auth/magic-link", "auth/reset-password", "auth/verify-email")
+
+    /** Le secret d'un lien d'e-mail : le fragment prime, la requete reste lue. Jamais decode ici. */
+    private fun linkSecret(name: String, uri: String): String? {
+        val fragment = uri.substringAfter('#', missingDelimiterValue = "")
+        val query = uri.substringBefore('#').substringAfter('?', missingDelimiterValue = "")
+        return listOf(fragment, query).firstNotNullOfOrNull { parameter(name, it) }
+    }
+
+    private fun parameter(name: String, encoded: String): String? =
+        encoded.split('&')
+            .firstOrNull { it.startsWith("$name=") }
+            ?.removePrefix("$name=")
+            ?.takeIf { it.isNotBlank() }
 }

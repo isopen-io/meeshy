@@ -223,7 +223,7 @@ git commit -m "<test|fix>(ios): align WebRTC connection-state <test|mapping>"
 ## Task 3 — P6 : couvrir `StoryPublishService`
 
 **Files:**
-- Investigate: `apps/ios/Meeshy/Features/Main/Services/StoryPublishService.swift`
+- Investigate: `apps/ios/Meeshy/Features/Stories/Services/StoryPublishService.swift`
 - Create: `apps/ios/MeeshyTests/Unit/Services/StoryPublishServiceTests.swift`
 - Possibly modify: `StoryPublishService.swift` (ajout protocole `StoryPublishServiceProviding` si injectabilité absente)
 
@@ -262,7 +262,7 @@ UUID uniques. Re-vérifier le build.
 - [ ] **Step 6 — Committer**
 
 ```bash
-git add apps/ios/MeeshyTests/Unit/Services/StoryPublishServiceTests.swift apps/ios/Meeshy.xcodeproj/project.pbxproj apps/ios/Meeshy/Features/Main/Services/StoryPublishService.swift
+git add apps/ios/MeeshyTests/Unit/Services/StoryPublishServiceTests.swift apps/ios/Meeshy.xcodeproj/project.pbxproj apps/ios/Meeshy/Features/Stories/Services/StoryPublishService.swift
 git commit -m "test(ios): cover StoryPublishService publish orchestration + offline fallback"
 ```
 

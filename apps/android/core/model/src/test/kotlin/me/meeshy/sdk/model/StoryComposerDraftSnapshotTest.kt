@@ -1,0 +1,661 @@
+package me.meeshy.sdk.model
+
+import com.google.common.truth.Truth.assertThat
+import kotlinx.serialization.json.Json
+import org.junit.Test
+
+/**
+ * [StoryComposerDraftSnapshot] — the durable, primitive-only form of a story composer
+ * draft. Proves the round-trip is faithful and total, and that the three consumer
+ * predicates ([isStructurallyValid], [isWorthRestoring], [sameContentAs]) gate a stored
+ * blob exactly the way the autosave/store contract needs.
+ */
+class StoryComposerDraftSnapshotTest {
+
+    private val json = Json { ignoreUnknownKeys = true }
+
+    private fun sample() = StoryComposerDraftSnapshot(
+        slides = listOf(
+            StoryDraftSlideSnapshot(
+                id = "s1",
+                text = "one",
+                mediaIds = listOf("m1", "m2"),
+                transform = StoryDraftTransformSnapshot(scale = 2.5f, offsetX = 12f, offsetY = -8f),
+                filter = StoryDraftFilterSnapshot(filter = StoryFilter.VINTAGE, intensity = 0.7f),
+                durationSecondsPin = 15.0,
+                background = "gradient:FF2E63:08D9D6",
+                backgroundMediaId = "m1",
+                backgroundLoop = false,
+            ),
+            StoryDraftSlideSnapshot(id = "s2", text = "two"),
+        ),
+        selectedId = "s2",
+        visibility = "FRIENDS",
+        repostOfId = "src-9",
+        updatedAt = "2026-08-26T00:00:00Z",
+    )
+
+    @Test
+    fun `a fully populated snapshot survives a JSON round-trip unchanged`() {
+        val original = sample()
+
+        val restored = json.decodeFromString(
+            StoryComposerDraftSnapshot.serializer(),
+            json.encodeToString(StoryComposerDraftSnapshot.serializer(), original),
+        )
+
+        assertThat(restored).isEqualTo(original)
+        assertThat(restored.slides.first().transform)
+            .isEqualTo(StoryDraftTransformSnapshot(scale = 2.5f, offsetX = 12f, offsetY = -8f))
+        assertThat(restored.slides.first().filter)
+            .isEqualTo(StoryDraftFilterSnapshot(filter = StoryFilter.VINTAGE, intensity = 0.7f))
+        assertThat(restored.slides.first().durationSecondsPin).isEqualTo(15.0)
+        assertThat(restored.slides.first().background).isEqualTo("gradient:FF2E63:08D9D6")
+        assertThat(restored.slides.first().backgroundMediaId).isEqualTo("m1")
+        assertThat(restored.slides.first().backgroundLoop).isFalse()
+        assertThat(restored.slides[1].transform).isNull()
+        assertThat(restored.slides[1].filter).isNull()
+        assertThat(restored.slides[1].durationSecondsPin).isNull()
+        assertThat(restored.slides[1].background).isNull()
+        assertThat(restored.slides[1].backgroundMediaId).isNull()
+        assertThat(restored.slides[1].backgroundLoop).isTrue()
+    }
+
+    @Test
+    fun `a legacy blob without a transform decodes to a null transform`() {
+        val legacy = """{"slides":[{"id":"s1","mediaIds":["m1"]}],"selectedId":"s1"}"""
+
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), legacy)
+
+        assertThat(decoded.slides.single().transform).isNull()
+    }
+
+    @Test
+    fun `a legacy blob without a filter decodes to a null filter`() {
+        val legacy = """{"slides":[{"id":"s1","mediaIds":["m1"]}],"selectedId":"s1"}"""
+
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), legacy)
+
+        assertThat(decoded.slides.single().filter).isNull()
+    }
+
+    @Test
+    fun `a legacy blob without a pinned duration decodes to a null pin`() {
+        val legacy = """{"slides":[{"id":"s1","mediaIds":["m1"]}],"selectedId":"s1"}"""
+
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), legacy)
+
+        assertThat(decoded.slides.single().durationSecondsPin).isNull()
+    }
+
+    @Test
+    fun `a legacy blob without a background decodes to no backdrop and a looping default`() {
+        val legacy = """{"slides":[{"id":"s1","mediaIds":["m1"]}],"selectedId":"s1"}"""
+
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), legacy)
+
+        assertThat(decoded.slides.single().background).isNull()
+        assertThat(decoded.slides.single().backgroundMediaId).isNull()
+        assertThat(decoded.slides.single().backgroundLoop).isTrue()
+    }
+
+    @Test
+    fun `a legacy blob missing every optional field decodes to defaults`() {
+        val legacy = """{"slides":[{"id":"s1"}],"selectedId":"s1"}"""
+
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), legacy)
+
+        assertThat(decoded.visibility).isEqualTo(StoryComposerDraftSnapshot.DEFAULT_VISIBILITY)
+        assertThat(decoded.repostOfId).isNull()
+        assertThat(decoded.updatedAt).isNull()
+        assertThat(decoded.slides.single().text).isEmpty()
+        assertThat(decoded.slides.single().mediaIds).isEmpty()
+    }
+
+    // ---- isStructurallyValid ----
+
+    @Test
+    fun `an empty-slide snapshot is not structurally valid`() {
+        assertThat(StoryComposerDraftSnapshot(slides = emptyList(), selectedId = "s1").isStructurallyValid).isFalse()
+    }
+
+    @Test
+    fun `a selection naming no present slide is not structurally valid`() {
+        val snap = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "x")),
+            selectedId = "ghost",
+        )
+        assertThat(snap.isStructurallyValid).isFalse()
+    }
+
+    @Test
+    fun `slides with a present selection are structurally valid`() {
+        assertThat(sample().isStructurallyValid).isTrue()
+    }
+
+    // ---- isWorthRestoring ----
+
+    @Test
+    fun `a valid but content-empty snapshot is not worth restoring`() {
+        val blank = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "   ")),
+            selectedId = "s1",
+        )
+        assertThat(blank.isWorthRestoring).isFalse()
+    }
+
+    @Test
+    fun `media alone makes a snapshot worth restoring`() {
+        val mediaOnly = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "", mediaIds = listOf("m1"))),
+            selectedId = "s1",
+        )
+        assertThat(mediaOnly.isWorthRestoring).isTrue()
+    }
+
+    @Test
+    fun `a canvas transform alone never makes a snapshot worth restoring`() {
+        val transformOnly = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    text = "",
+                    transform = StoryDraftTransformSnapshot(scale = 2f, offsetX = 5f, offsetY = 0f),
+                ),
+            ),
+            selectedId = "s1",
+        )
+        assertThat(transformOnly.isWorthRestoring).isFalse()
+    }
+
+    @Test
+    fun `a photo filter alone never makes a snapshot worth restoring`() {
+        val filterOnly = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    text = "",
+                    filter = StoryDraftFilterSnapshot(filter = StoryFilter.BW, intensity = 1f),
+                ),
+            ),
+            selectedId = "s1",
+        )
+        assertThat(filterOnly.isWorthRestoring).isFalse()
+    }
+
+    @Test
+    fun `a pinned duration alone never makes a snapshot worth restoring`() {
+        val durationOnly = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(id = "s1", text = "", durationSecondsPin = 12.0),
+            ),
+            selectedId = "s1",
+        )
+        assertThat(durationOnly.isWorthRestoring).isFalse()
+    }
+
+    @Test
+    fun `a colour background alone never makes a snapshot worth restoring`() {
+        val backgroundOnly = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(id = "s1", text = "", background = "2ECC71"),
+            ),
+            selectedId = "s1",
+        )
+        assertThat(backgroundOnly.isWorthRestoring).isFalse()
+    }
+
+    @Test
+    fun `a structurally invalid snapshot is never worth restoring even with content`() {
+        val invalid = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "content")),
+            selectedId = "ghost",
+        )
+        assertThat(invalid.isWorthRestoring).isFalse()
+    }
+
+    // ---- sameContentAs (ignores updatedAt) ----
+
+    @Test
+    fun `two snapshots differing only in updatedAt are the same content`() {
+        val a = sample()
+        val b = a.copy(updatedAt = "2099-01-01T00:00:00Z")
+        assertThat(a.sameContentAs(b)).isTrue()
+    }
+
+    @Test
+    fun `a changed caption is different content`() {
+        val a = sample()
+        val b = a.copy(slides = a.slides.map { it.copy(text = it.text + "!") })
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `a changed set of checked formats is different content`() {
+        val a = sample().copy(format = "POST", formats = listOf("POST", "STORY"))
+        assertThat(a.sameContentAs(a.copy(formats = listOf("POST", "STORY", "REEL")))).isFalse()
+    }
+
+    @Test
+    fun `a changed visibility is different content`() {
+        val a = sample()
+        assertThat(a.sameContentAs(a.copy(visibility = "PUBLIC"))).isFalse()
+    }
+
+    @Test
+    fun `a changed canvas transform is different content`() {
+        val a = sample()
+        val b = a.copy(
+            slides = a.slides.mapIndexed { i, s ->
+                if (i == 0) s.copy(transform = StoryDraftTransformSnapshot(scale = 3f, offsetX = 0f, offsetY = 0f)) else s
+            },
+        )
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `clearing a canvas transform is different content`() {
+        val a = sample()
+        val b = a.copy(slides = a.slides.mapIndexed { i, s -> if (i == 0) s.copy(transform = null) else s })
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `a changed photo filter is different content`() {
+        val a = sample()
+        val b = a.copy(
+            slides = a.slides.mapIndexed { i, s ->
+                if (i == 0) s.copy(filter = StoryDraftFilterSnapshot(filter = StoryFilter.COOL, intensity = 0.7f)) else s
+            },
+        )
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `a changed filter intensity alone is different content`() {
+        val a = sample()
+        val b = a.copy(
+            slides = a.slides.mapIndexed { i, s ->
+                if (i == 0) s.copy(filter = s.filter?.copy(intensity = 0.1f)) else s
+            },
+        )
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `clearing a photo filter is different content`() {
+        val a = sample()
+        val b = a.copy(slides = a.slides.mapIndexed { i, s -> if (i == 0) s.copy(filter = null) else s })
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `a changed pinned duration is different content`() {
+        val a = sample()
+        val b = a.copy(slides = a.slides.mapIndexed { i, s -> if (i == 0) s.copy(durationSecondsPin = 42.0) else s })
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `clearing a pinned duration is different content`() {
+        val a = sample()
+        val b = a.copy(slides = a.slides.mapIndexed { i, s -> if (i == 0) s.copy(durationSecondsPin = null) else s })
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `a changed colour background is different content`() {
+        val a = sample()
+        val b = a.copy(slides = a.slides.mapIndexed { i, s -> if (i == 0) s.copy(background = "000000") else s })
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `clearing a colour background is different content`() {
+        val a = sample()
+        val b = a.copy(slides = a.slides.mapIndexed { i, s -> if (i == 0) s.copy(background = null) else s })
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `a changed background media id is different content`() {
+        val a = sample()
+        val b = a.copy(slides = a.slides.mapIndexed { i, s -> if (i == 0) s.copy(backgroundMediaId = "m2") else s })
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `a changed background loop is different content`() {
+        val a = sample()
+        val b = a.copy(slides = a.slides.mapIndexed { i, s -> if (i == 0) s.copy(backgroundLoop = true) else s })
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    // ---- on-canvas text elements ----
+
+    private fun element() = StoryDraftTextElementSnapshot(
+        id = "e1",
+        text = "on canvas",
+        style = "NEON",
+        color = "FF00AA",
+        align = "LEFT",
+        size = "LARGE",
+        background = StoryTextBackgroundStyle(type = "glass", radius = 24.0),
+        outlineWidth = 4f,
+        outlineColor = "FFFFFF",
+        fadeIn = 1.5f,
+        fadeOut = 2f,
+        startSeconds = 3f,
+        durationSeconds = 5f,
+        x = 0.3f,
+        y = 0.8f,
+        scale = 1.7f,
+        rotationDeg = -30f,
+    )
+
+    @Test
+    fun `a fully populated text element survives a JSON round-trip unchanged`() {
+        val original = element()
+
+        val restored = json.decodeFromString(
+            StoryDraftTextElementSnapshot.serializer(),
+            json.encodeToString(StoryDraftTextElementSnapshot.serializer(), original),
+        )
+
+        assertThat(restored).isEqualTo(original)
+    }
+
+    @Test
+    fun `text elements ride a slide snapshot through a JSON round-trip`() {
+        val original = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", elements = listOf(element()))),
+            selectedId = "s1",
+        )
+
+        val restored = json.decodeFromString(
+            StoryComposerDraftSnapshot.serializer(),
+            json.encodeToString(StoryComposerDraftSnapshot.serializer(), original),
+        )
+
+        assertThat(restored.slides.single().elements).containsExactly(element())
+    }
+
+    @Test
+    fun `a legacy blob without elements decodes to an empty element list`() {
+        val legacy = """{"slides":[{"id":"s1","text":"x"}],"selectedId":"s1"}"""
+
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), legacy)
+
+        assertThat(decoded.slides.single().elements).isEmpty()
+    }
+
+    @Test
+    fun `a text element blob missing every optional field decodes to defaults`() {
+        val legacy = """{"id":"e1"}"""
+
+        val decoded = json.decodeFromString(StoryDraftTextElementSnapshot.serializer(), legacy)
+
+        assertThat(decoded.text).isEmpty()
+        assertThat(decoded.style).isEmpty()
+        assertThat(decoded.color).isEmpty()
+        assertThat(decoded.align).isEmpty()
+        assertThat(decoded.size).isEmpty()
+        assertThat(decoded.background).isNull()
+        assertThat(decoded.outlineWidth).isEqualTo(0f)
+        assertThat(decoded.outlineColor).isNull()
+        assertThat(decoded.fadeIn).isEqualTo(0f)
+        assertThat(decoded.fadeOut).isEqualTo(0f)
+        assertThat(decoded.startSeconds).isEqualTo(0f)
+        assertThat(decoded.durationSeconds).isEqualTo(0f)
+        assertThat(decoded.x).isEqualTo(StoryDraftTextElementSnapshot.CANVAS_CENTER)
+        assertThat(decoded.y).isEqualTo(StoryDraftTextElementSnapshot.CANVAS_CENTER)
+        assertThat(decoded.scale).isEqualTo(StoryDraftTextElementSnapshot.UNIT_SCALE)
+        assertThat(decoded.rotationDeg).isEqualTo(0f)
+    }
+
+    @Test
+    fun `a non-blank text element is publishable`() {
+        assertThat(StoryDraftTextElementSnapshot(id = "e1", text = "hi").isPublishable).isTrue()
+    }
+
+    @Test
+    fun `a blank text element is not publishable`() {
+        assertThat(StoryDraftTextElementSnapshot(id = "e1", text = "   ").isPublishable).isFalse()
+    }
+
+    @Test
+    fun `a publishable text element alone makes a snapshot worth restoring`() {
+        val elementOnly = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(id = "s1", text = "", elements = listOf(element())),
+            ),
+            selectedId = "s1",
+        )
+        assertThat(elementOnly.isWorthRestoring).isTrue()
+    }
+
+    @Test
+    fun `a blank text element alone never makes a snapshot worth restoring`() {
+        val blankElementOnly = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    text = "",
+                    elements = listOf(StoryDraftTextElementSnapshot(id = "e1", text = "  ")),
+                ),
+            ),
+            selectedId = "s1",
+        )
+        assertThat(blankElementOnly.isWorthRestoring).isFalse()
+    }
+
+    @Test
+    fun `a changed text element is different content`() {
+        val a = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "cap", elements = listOf(element()))),
+            selectedId = "s1",
+        )
+        val b = a.copy(
+            slides = a.slides.map { s -> s.copy(elements = s.elements.map { it.copy(text = it.text + "!") }) },
+        )
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `adding a text element is different content`() {
+        val a = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "cap")),
+            selectedId = "s1",
+        )
+        val b = a.copy(slides = a.slides.map { it.copy(elements = listOf(element())) })
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    // ---- on-canvas stickers ----
+
+    private fun sticker() = StoryDraftStickerElementSnapshot(
+        id = "k1",
+        emoji = "🎉",
+        x = 0.25f,
+        y = 0.75f,
+        scale = 1.8f,
+        rotationDeg = -40f,
+    )
+
+    @Test
+    fun `a fully populated sticker survives a JSON round-trip unchanged`() {
+        val original = sticker()
+
+        val restored = json.decodeFromString(
+            StoryDraftStickerElementSnapshot.serializer(),
+            json.encodeToString(StoryDraftStickerElementSnapshot.serializer(), original),
+        )
+
+        assertThat(restored).isEqualTo(original)
+    }
+
+    @Test
+    fun `stickers ride a slide snapshot through a JSON round-trip`() {
+        val original = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", stickers = listOf(sticker()))),
+            selectedId = "s1",
+        )
+
+        val restored = json.decodeFromString(
+            StoryComposerDraftSnapshot.serializer(),
+            json.encodeToString(StoryComposerDraftSnapshot.serializer(), original),
+        )
+
+        assertThat(restored.slides.single().stickers).containsExactly(sticker())
+    }
+
+    @Test
+    fun `a legacy blob without stickers decodes to an empty sticker list`() {
+        val legacy = """{"slides":[{"id":"s1","text":"x"}],"selectedId":"s1"}"""
+
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), legacy)
+
+        assertThat(decoded.slides.single().stickers).isEmpty()
+    }
+
+    @Test
+    fun `a sticker blob missing every optional field decodes to defaults`() {
+        val legacy = """{"id":"k1"}"""
+
+        val decoded = json.decodeFromString(StoryDraftStickerElementSnapshot.serializer(), legacy)
+
+        assertThat(decoded.emoji).isEmpty()
+        assertThat(decoded.x).isEqualTo(StoryDraftTextElementSnapshot.CANVAS_CENTER)
+        assertThat(decoded.y).isEqualTo(StoryDraftTextElementSnapshot.CANVAS_CENTER)
+        assertThat(decoded.scale).isEqualTo(StoryDraftTextElementSnapshot.UNIT_SCALE)
+        assertThat(decoded.rotationDeg).isEqualTo(0f)
+    }
+
+    @Test
+    fun `a non-blank sticker is publishable`() {
+        assertThat(StoryDraftStickerElementSnapshot(id = "k1", emoji = "🎈").isPublishable).isTrue()
+    }
+
+    @Test
+    fun `a blank sticker is not publishable`() {
+        assertThat(StoryDraftStickerElementSnapshot(id = "k1", emoji = "   ").isPublishable).isFalse()
+    }
+
+    @Test
+    fun `a publishable sticker alone makes a snapshot worth restoring`() {
+        val stickerOnly = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(id = "s1", text = "", stickers = listOf(sticker())),
+            ),
+            selectedId = "s1",
+        )
+        assertThat(stickerOnly.isWorthRestoring).isTrue()
+    }
+
+    @Test
+    fun `a blank sticker alone never makes a snapshot worth restoring`() {
+        val blankStickerOnly = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    text = "",
+                    stickers = listOf(StoryDraftStickerElementSnapshot(id = "k1", emoji = "  ")),
+                ),
+            ),
+            selectedId = "s1",
+        )
+        assertThat(blankStickerOnly.isWorthRestoring).isFalse()
+    }
+
+    @Test
+    fun `a changed sticker is different content`() {
+        val a = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "cap", stickers = listOf(sticker()))),
+            selectedId = "s1",
+        )
+        val b = a.copy(
+            slides = a.slides.map { s -> s.copy(stickers = s.stickers.map { it.copy(emoji = "😀") }) },
+        )
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `adding a sticker is different content`() {
+        val a = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "cap")),
+            selectedId = "s1",
+        )
+        val b = a.copy(slides = a.slides.map { it.copy(stickers = listOf(sticker())) })
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `a draft stored by a build that did not await publications decodes as a draft being composed`() {
+        val legacy = """{"slides":[{"id":"s1","text":"avant"}],"selectedId":"s1","visibility":"PUBLIC"}"""
+
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), legacy)
+
+        assertThat(decoded.awaitingPublication).isEmpty()
+        assertThat(decoded.isAwaitingPublication).isFalse()
+        assertThat(decoded.isWorthRestoring).isTrue()
+    }
+
+    @Test
+    fun `a draft awaiting its stories round-trips the rows it waits for`() {
+        val awaiting = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "en route")),
+            selectedId = "s1",
+            awaitingPublication = listOf("cmid_a", "cmid_b"),
+        )
+
+        val decoded = json.decodeFromString(
+            StoryComposerDraftSnapshot.serializer(),
+            json.encodeToString(StoryComposerDraftSnapshot.serializer(), awaiting),
+        )
+
+        assertThat(decoded.awaitingPublication).containsExactly("cmid_a", "cmid_b").inOrder()
+        assertThat(decoded.isAwaitingPublication).isTrue()
+    }
+
+    @Test
+    fun `a drawing survives the round-trip and is content worth restoring on its own`() {
+        val stroke = StoryDrawingStroke(id = "st1", colorHex = "FFFFFF", width = 6.0, points = listOf(StoryDrawingStrokePoint(0.1, 0.2)))
+        val drawn = StoryComposerDraftSnapshot(slides = listOf(StoryDraftSlideSnapshot(id = "s1", strokes = listOf(stroke))), selectedId = "s1")
+
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), json.encodeToString(StoryComposerDraftSnapshot.serializer(), drawn))
+
+        assertThat(decoded.slides.single().strokes).containsExactly(stroke)
+        assertThat(decoded.isWorthRestoring).isTrue()
+    }
+
+    @Test
+    fun `a slide written before drawings were kept reads as drawing nothing`() {
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), """{"slides":[{"id":"s1","text":"a"}],"selectedId":"s1"}""")
+
+        assertThat(decoded.slides.single().strokes).isEmpty()
+    }
+
+    @Test
+    fun `a slide written before the canvas format existed reopens in portrait`() {
+        val legacy = """{"slides":[{"id":"s1"}],"selectedId":"s1"}"""
+
+        val slide = json.decodeFromString<StoryComposerDraftSnapshot>(legacy).slides.single()
+
+        assertThat(slide.canvasFormat).isNull()
+        assertThat(me.meeshy.sdk.model.scene.CanvasFormat.fromWire(slide.canvasFormat))
+            .isEqualTo(me.meeshy.sdk.model.scene.CanvasFormat.PORTRAIT)
+    }
+
+    @Test
+    fun `a landscape canvas format survives a JSON round-trip`() {
+        val landscape = me.meeshy.sdk.model.scene.CanvasFormat.LANDSCAPE
+        val snapshot = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", canvasFormat = landscape.wire)),
+            selectedId = "s1",
+        )
+
+        val decoded = json.decodeFromString<StoryComposerDraftSnapshot>(json.encodeToString(StoryComposerDraftSnapshot.serializer(), snapshot))
+
+        assertThat(me.meeshy.sdk.model.scene.CanvasFormat.fromWire(decoded.slides.single().canvasFormat)).isEqualTo(landscape)
+    }
+}

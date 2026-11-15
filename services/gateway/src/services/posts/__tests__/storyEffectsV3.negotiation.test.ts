@@ -67,6 +67,7 @@ jest.mock('../../../middleware/rate-limiter', () => ({
 }));
 
 jest.mock('../../../utils/withMutationLog', () => ({
+  ...(jest.requireActual('../../../utils/withMutationLog') as object),
   withMutationLog: jest.fn<any>().mockImplementation(({ op }: any) => op()),
 }));
 
@@ -94,6 +95,13 @@ const loadV3Blob = (): Record<string, unknown> =>
 async function buildApp(readerLanguage: string = 'fr'): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const prisma = {
+    /* #7184 — les deux lectures de `getBlockRelatedUserIds` : la garde de
+       blocage traverse `buildFeedVisibilityFilter`, donc tout double qui
+       compose un fil doit les servir. */
+    user: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: [] }),
+    },
     postMention: {
       findMany: jest.fn<any>().mockResolvedValue([]),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
@@ -219,6 +227,19 @@ describe('négociation O17 sur GET /posts/:postId', () => {
     await app.close();
   });
 
+  it('(5 bis, #5195) blob v3-natif, x-canvas-caps: 0 (déclare aucune prise en charge canvas), SANS média : storyEffects OMIS, jamais la sentinelle', async () => {
+    mockGetPostById.mockResolvedValue(storyRow(loadV3Blob()));
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'GET', url: `/posts/${POST_ID}`, headers: { 'x-canvas-caps': '0' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.storyEffects).toBeUndefined();
+    await app.close();
+  });
+
   it('(6) l\'invite suit la langue résolue du lecteur — repli fr', async () => {
     mockGetPostById.mockResolvedValue(storyRow(loadV3Blob()));
     const appEn = await buildApp('en');
@@ -234,14 +255,18 @@ describe('négociation O17 sur GET /posts/:postId', () => {
   });
 
   it('(7) repost d\'une story v3-native, SANS caps : repostOf porte la sentinelle localisée', async () => {
+    // ObjectId VALIDE mais distinct de `POST_ID` — un `postId` non conforme
+    // (ex. `'repost-1'`) est désormais refusé en 400 par `postIdParamsSchema`
+    // avant d'atteindre `getPostById` (#6853).
+    const REPOST_ID = '507f1f77bcf86cd799439033';
     mockGetPostById.mockResolvedValue({
-      id: 'repost-1', type: 'POST', authorId: USER_ID, visibility: 'PUBLIC',
+      id: REPOST_ID, type: 'POST', authorId: USER_ID, visibility: 'PUBLIC',
       visibilityUserIds: [], mentions: [],
       repostOf: { id: POST_ID, type: 'STORY', storyEffects: loadV3Blob() },
     });
     const app = await buildApp('en');
 
-    const res = await app.inject({ method: 'GET', url: '/posts/repost-1' });
+    const res = await app.inject({ method: 'GET', url: `/posts/${REPOST_ID}` });
 
     expect(res.statusCode).toBe(200);
     const nested = res.json().data.repostOf;
@@ -295,6 +320,11 @@ describe('garde de source — withMentions porte TOUJOURS un paramètre lecteur 
 describe('getStories — le tray négocie la forme pour le lecteur', () => {
   function storiesPrisma(storyEffects: unknown) {
     return {
+      /* #7184 — cf. le double de `buildApp` ci-dessus. */
+      user: {
+        findMany: jest.fn<any>().mockResolvedValue([]),
+        findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: [] }),
+      },
       post: {
         findMany: jest.fn<any>().mockResolvedValue([{
           id: POST_ID,
@@ -339,6 +369,16 @@ describe('getStories — le tray négocie la forme pour le lecteur', () => {
     });
 
     expect((result.items[0] as { storyEffects?: unknown }).storyEffects).toEqual(v3);
+  });
+
+  it('lecteur caps=0 (déclare aucune prise en charge canvas), #5195 : blob v3-natif ⇒ storyEffects OMIS', async () => {
+    const service = new PostFeedService(storiesPrisma(loadV3Blob()));
+
+    const result = await service.getStories(USER_ID, {
+      reader: { canvasCaps: 0, readerLanguage: 'en' },
+    });
+
+    expect((result.items[0] as { storyEffects?: unknown }).storyEffects).toBeUndefined();
   });
 });
 

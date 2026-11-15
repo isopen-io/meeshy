@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 @MainActor
@@ -596,9 +597,26 @@ final class QualityThresholdsVideoTests: XCTestCase {
                        "Packet-loss threshold separating 'poor' from 'critical' quality tier")
     }
 
-    func test_maxReconnectAttempts_is3() {
-        XCTAssertEqual(QualityThresholds.maxReconnectAttempts, 3,
+    func test_maxReconnectAttempts_is8() {
+        XCTAssertEqual(QualityThresholds.maxReconnectAttempts, 8,
                        "ICE restart limit before declaring the call unrecoverable")
+    }
+
+    /// #9111 — the CLIENT's reconnection window is bound to the gateway's rules,
+    /// now SHARED (`CallRules`, mirrored from `packages/shared/types/call-rules.ts`):
+    /// it never gives up before the rejoin grace plus one heartbeat (the server
+    /// still holds the seat), and never outlasts `heartbeatTimeout` (the cap of
+    /// the gateway's grace extensions). Supersedes the L6-4 witness, whose
+    /// "stay UNDER the grace" made the client hang up a call the server held.
+    func test_reconnect_totalWindow_coversTheRejoinGrace_andEndsBeforeHeartbeatTimeout() {
+        let attemptWindowSeconds =
+            TimeInterval(QualityThresholds.maxReconnectAttempts) * QualityThresholds.reconnectAttemptBudgetSeconds
+        let worstCaseBackoffSeconds = (1...QualityThresholds.maxReconnectAttempts).reduce(0.0) { total, attempt in
+            total + CallReliabilityPolicy.reconnectBackoffSeconds(attempt: attempt, unitRandom: 1.0)
+        }
+
+        XCTAssertGreaterThanOrEqual(attemptWindowSeconds, CallRules.rejoinGrace + CallRules.heartbeatInterval)
+        XCTAssertLessThanOrEqual(attemptWindowSeconds + worstCaseBackoffSeconds, CallRules.heartbeatTimeout)
     }
 
     func test_disconnectDebounceSeconds_is3point5() {
@@ -814,15 +832,15 @@ final class QualityThresholdsCodecHintsTests: XCTestCase {
 
     // MARK: Opus fmtp
 
-    func test_opusFmtpMaxAverageBitrate_is64kbps() {
-        XCTAssertEqual(QualityThresholds.opusFmtpMaxAverageBitrate, 64_000,
-                       "maxaveragebitrate must equal defaultBitrate (64 kbps)")
+    func test_opusFmtpMaxAverageBitrate_is32kbpsVoice() {
+        XCTAssertEqual(QualityThresholds.opusFmtpMaxAverageBitrate, 32_000,
+                       "maxaveragebitrate is the Wi-Fi voice ceiling (#8697) — 32 kbps mono Opus")
     }
 
-    func test_opusFmtpMaxAverageBitrate_equalsDefaultBitrate() {
+    func test_opusFmtpMaxAverageBitrate_isTheWifiVoiceBudget() {
         XCTAssertEqual(QualityThresholds.opusFmtpMaxAverageBitrate,
-                       QualityThresholds.defaultBitrate,
-                       "Opus fmtp ceiling must stay in sync with the adaptation defaultBitrate")
+                       CallDataProfile.wifi.budget.audio.maxAverageBitrateBps,
+                       "The Opus fmtp ceiling and the Wi-Fi profile must stay one value")
     }
 
     func test_opusFmtpMaxPlaybackRate_is48kHz() {
@@ -837,8 +855,8 @@ final class QualityThresholdsCodecHintsTests: XCTestCase {
         // its expected value — an accidental swap with maxplaybackrate (48 000) would
         // move it off 64 kbps and fail here, without degrading real audio quality.
         XCTAssertEqual(
-            QualityThresholds.opusFmtpMaxAverageBitrate, 64_000,
-            "maxaveragebitrate must stay 64 kbps — guards against a value swap with maxplaybackrate"
+            QualityThresholds.opusFmtpMaxAverageBitrate, 32_000,
+            "maxaveragebitrate must stay 32 kbps — guards against a value swap with maxplaybackrate"
         )
     }
 

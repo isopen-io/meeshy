@@ -1,0 +1,237 @@
+import SwiftUI
+import Combine
+import MeeshySDK
+import MeeshyUI
+
+struct SecurityView: View {
+    @Environment(\.dismiss) private var dismiss
+    private var theme: ThemeManager { ThemeManager.shared }
+    @EnvironmentObject private var authManager: AuthManager
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
+    @State private var showChangePassword = false
+    @State private var landing: SettingsFocus?
+    @State private var showActiveSessions = false
+
+    // 2FA
+    @StateObject private var twoFactorViewModel = TwoFactorViewModel()
+    @State private var showTwoFactorSetupSheet = false
+    @State private var showTwoFactorDisableSheet = false
+    @State private var showBackupCodesSheet = false
+
+    // Conversation lock PIN
+    @ObservedObject private var lockManager: ConversationLockManager
+    /// La section désignée par celui qui ouvre l'écran (la rangée Contact de ma fiche, #18590).
+    private let initialFocus: SettingsFocus?
+    init(lockManager: ConversationLockManager = .shared, focus: SettingsFocus? = nil) {
+        self.lockManager = lockManager
+        self.initialFocus = focus
+    }
+    @State private var showPinSetupSheet = false
+    @State private var showPinChangeSheet = false
+    @State private var showPinRemoveSheet = false
+    @State private var showUnlockAllSheet = false
+
+    // Phone change — le flux est partagé avec la proposition faite avant la
+    // recherche de contacts (#8843).
+    @StateObject private var phoneFlow = PhoneChangeFlowModel()
+
+    private var user: MeeshyUser? { authManager.currentUser }
+
+    var body: some View {
+        ZStack {
+            theme.backgroundGradient.ignoresSafeArea()
+
+            // Retour en verre de l'en-tête partagé (#6481) ; la page possède le défilement.
+            ScrollViewReader { proxy in CollapsibleHeaderPage(
+                title: String(localized: "settings.security.title", defaultValue: "Sécurité", bundle: .main),
+                onBack: { dismiss() },
+                titleColor: theme.textPrimary,
+                backArrowColor: MeeshyColors.indigo500,
+                backgroundColor: theme.backgroundPrimary
+            ) {
+                sectionsContent
+            }.onAppear { focusRequestedSection(proxy) } }
+        }
+        .sheet(isPresented: $showChangePassword) {
+            ChangePasswordView()
+        }
+        // PIN setup (no existing PIN)
+        .sheet(isPresented: $showPinSetupSheet) {
+            masterPinSheet(.setupMasterPin)
+        }
+        // Change PIN (verify current + set new — single multi-step sheet)
+        .sheet(isPresented: $showPinChangeSheet) {
+            masterPinSheet(.changeMasterPin)
+        }
+        // Remove master PIN
+        .sheet(isPresented: $showPinRemoveSheet) {
+            masterPinSheet(.removeMasterPin)
+        }
+        // Unlock all conversations
+        .sheet(isPresented: $showUnlockAllSheet) {
+            masterPinSheet(.unlockAll)
+        }
+        .sheet(isPresented: $showTwoFactorSetupSheet) {
+            TwoFactorSetupView(
+                viewModel: twoFactorViewModel,
+                onComplete: {
+                    showTwoFactorSetupSheet = false
+                    Task { await twoFactorViewModel.checkStatus() }
+                },
+                onCancel: {
+                    showTwoFactorSetupSheet = false
+                    twoFactorViewModel.reset()
+                }
+            )
+            .environmentObject(theme)
+        }
+        .sheet(isPresented: $showTwoFactorDisableSheet) {
+            TwoFactorDisableView(
+                viewModel: twoFactorViewModel,
+                onComplete: {
+                    showTwoFactorDisableSheet = false
+                    Task { await twoFactorViewModel.checkStatus() }
+                },
+                onCancel: { showTwoFactorDisableSheet = false }
+            )
+            .environmentObject(theme)
+        }
+        .sheet(isPresented: $showBackupCodesSheet) {
+            TwoFactorBackupCodesView(
+                viewModel: twoFactorViewModel,
+                onDismiss: {
+                    showBackupCodesSheet = false
+                    twoFactorViewModel.reset()
+                }
+            )
+            .environmentObject(theme)
+        }
+        .onAppear { Task { await twoFactorViewModel.checkStatus() } }
+    }
+
+    private func masterPinSheet(_ mode: ConversationLockSheet.Mode) -> some View {
+        ConversationLockSheet(
+            mode: mode,
+            conversationId: nil,
+            conversationName: String(localized: "settings.security.all_conversations", defaultValue: "toutes les conversations", bundle: .main),
+            onSuccess: {}
+        )
+        .environmentObject(theme)
+    }
+
+    // MARK: - Sections Content
+
+    private var sectionsContent: some View {
+        VStack(spacing: MeeshySpacing.xxl) {
+            passwordSection
+            SecurityTwoFactorSection(
+                viewModel: twoFactorViewModel,
+                onShowBackupCodes: { showBackupCodesSheet = true },
+                onDisable: { showTwoFactorDisableSheet = true },
+                onEnable: { showTwoFactorSetupSheet = true }
+            )
+            SecurityEmailSection(user: user)
+                .id(SettingsFocus.securityEmail.rawValue)
+                .modifier(SettingsFocusHighlight(isActive: landing == .securityEmail))
+            SecurityPhoneSection(user: user, phoneFlow: phoneFlow)
+                .id(SettingsFocus.securityPhone.rawValue)
+                .modifier(SettingsFocusHighlight(isActive: landing == .securityPhone))
+            SecurityConversationLockSection(
+                lockManager: lockManager,
+                onSetup: { showPinSetupSheet = true },
+                onChange: { showPinChangeSheet = true },
+                onUnlockAll: { showUnlockAllSheet = true },
+                onRemove: { showPinRemoveSheet = true }
+            )
+            .id(SettingsFocus.masterPin.rawValue)
+            .modifier(SettingsFocusHighlight(isActive: landing == .masterPin))
+            activeSessionsSection
+            EncryptedDevicesEntry()
+            Spacer().frame(height: 40)
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.lg)
+    }
+
+    /// #16339 — une invite (« configurez un master PIN ») ou la rangée Contact de ma fiche (#18590) a désigné une
+    /// section : l'écran s'y pose et la met en évidence.
+    private func focusRequestedSection(_ proxy: ScrollViewProxy) {
+        let requested = initialFocus == nil ? SettingsFocusRequest.shared.consumeSecurityFocus() : nil
+        guard let target = SettingsFocus.securityLanding(initial: initialFocus, requested: requested) else { return }
+        landing = target
+        let reduce = reduceMotion
+        Task { await DelayedUI.perform(after: MeeshyMotion.pushSettle) {
+            meeshyWithAnimation(MeeshyAnimation.springDefault, reduceMotion: reduce) { proxy.scrollTo(target.rawValue, anchor: .center) }
+        } }
+    }
+
+    // MARK: - Password Section
+
+    private var passwordSection: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            SecuritySectionHeader(title: String(localized: "settings.security.password", defaultValue: "Mot de passe", bundle: .main), icon: "lock.fill", color: MeeshyColors.brandPrimaryHex)
+
+            Button {
+                HapticFeedback.light()
+                showChangePassword = true
+            } label: {
+                HStack(spacing: MeeshySpacing.md) {
+                    SecurityFieldIcon("key.fill", color: MeeshyColors.brandPrimaryHex)
+
+                    Text(String(localized: "settings.security.change_password", defaultValue: "Changer", bundle: .main))
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(theme.textPrimary)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.forward")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(theme.textMuted)
+                }
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.md)
+            }
+            .background(SettingsSectionBackground(tint: MeeshyColors.brandPrimaryHex))
+        }
+    }
+
+    // MARK: - Active Sessions Section
+
+    private var activeSessionsSection: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            SecuritySectionHeader(title: String(localized: "security_sessions_header", defaultValue: "Sessions"), icon: "laptopcomputer.and.iphone", color: MeeshyColors.indigo400Hex)
+            SettingsSentence(text: String(localized: "security_sessions_summary", defaultValue: "Les appareils connectés à votre compte."))
+
+            Button {
+                HapticFeedback.light()
+                showActiveSessions = true
+            } label: {
+                HStack(spacing: MeeshySpacing.md) {
+                    SecurityFieldIcon("laptopcomputer.and.iphone", color: MeeshyColors.indigo400Hex)
+
+                    Text(String(localized: "security_sessions_manage", defaultValue: "Voir les sessions"))
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(theme.textPrimary)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.forward")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(theme.textMuted)
+                }
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.md)
+            }
+            .background(SettingsSectionBackground(tint: MeeshyColors.indigo400Hex))
+        }
+        .sheet(isPresented: $showActiveSessions) {
+            ActiveSessionsView()
+                .environmentObject(theme)
+        }
+    }
+}

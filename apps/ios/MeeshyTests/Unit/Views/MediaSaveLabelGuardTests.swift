@@ -22,7 +22,12 @@ final class MediaSaveLabelGuardTests: XCTestCase {
     }
 
     func test_reelsPlayerView_saveMediaMenuItem_usesSauvegarderLabel() throws {
+        // #6693 — le rail d'actions, son menu « … » et son bouton bookmark ont quitté
+        // l'hôte pour `ReelsPlayerView+ActionRail.swift`. Les deux fichiers sont lus
+        // ENSEMBLE, comme `FeedPostCard` au #4078 : sur l'hôte seul, la garde ne
+        // verrait plus aucune des deux étiquettes qu'elle oppose.
         let source = try sourceWithoutComments("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+            + sourceWithoutComments("Meeshy/Features/Main/Views/ReelsPlayerView+ActionRail.swift")
         XCTAssertTrue(source.contains(#"String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)"#),
             "Le téléchargement média du menu « … » du lecteur plein écran doit afficher « Sauvegarder »")
         XCTAssertTrue(source.contains(#"String(localized: "reels.action.bookmark", defaultValue: "Enregistrer", bundle: .main)"#),
@@ -30,9 +35,14 @@ final class MediaSaveLabelGuardTests: XCTestCase {
     }
 
     func test_feedPostCard_saveMenuItem_usesDynamicLabelByMediaPresence() throws {
+        // #4078 — le menu « … » a suivi la rangée auteur dans l'extension ; le
+        // bouton bookmark dédié de `actionsBar` est resté chez l'hôte. Les deux
+        // moitiés sont donc lues ENSEMBLE : sur un seul fichier, la garde
+        // n'aurait plus vu qu'une des deux étiquettes qu'elle oppose.
         let source = try sourceWithoutComments("Meeshy/Features/Main/Views/FeedPostCard.swift")
-        XCTAssertTrue(source.contains(#"post.primaryReelDisplayMedia != nil"#),
-            "La branche média du menu « … » de FeedPostCard doit rester conditionnée sur primaryReelDisplayMedia")
+            + sourceWithoutComments("Meeshy/Features/Main/Views/FeedPostCard+Header.swift")
+        XCTAssertTrue(source.contains(#"PostSaveAction.route(for: post, coordinator: mediaSaveCoordinator) != .unavailable"#),
+            "#9681 — la branche « Sauvegarder » du menu de FeedPostCard est conditionnée par la règle UNIQUE PostSaveRoute")
         XCTAssertTrue(source.contains(#"String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)"#),
             "Quand la branche média est active, le menu « … » de FeedPostCard doit afficher « Sauvegarder »")
         XCTAssertTrue(source.contains(#"String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main)"#),
@@ -41,8 +51,8 @@ final class MediaSaveLabelGuardTests: XCTestCase {
 
     func test_postDetailView_saveMenuItem_usesDynamicLabelByMediaPresence() throws {
         let source = try sourceWithoutComments("Meeshy/Features/Main/Views/PostDetailView.swift")
-        XCTAssertTrue(source.contains(#"displayPost?.primaryReelDisplayMedia != nil"#),
-            "La branche média du menu « … » de PostDetailView doit rester conditionnée sur primaryReelDisplayMedia")
+        XCTAssertTrue(source.contains(#"PostSaveAction.route(for: $0, coordinator: mediaSaveCoordinator) != .unavailable"#),
+            "#9681 — la branche « Sauvegarder » du menu de PostDetailView est conditionnée par la règle UNIQUE PostSaveRoute")
         XCTAssertTrue(source.contains(#"String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)"#),
             "Quand la branche média est active, le menu « … » de PostDetailView doit afficher « Sauvegarder »")
         XCTAssertTrue(source.contains(#"String(localized: "a11y.post.bookmark_add", defaultValue: "Ajouter aux favoris", bundle: .main)"#),

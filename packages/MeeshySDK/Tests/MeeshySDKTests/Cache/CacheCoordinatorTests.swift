@@ -51,7 +51,8 @@ final class CacheCoordinatorTests: XCTestCase {
             messageService: BareMessageService(),
             messageSocket: msgSocket,
             socialSocket: socialSocket,
-            api: MockAPIClient()
+            api: MockAPIClient(),
+            syncDelta: MockSyncDeltaMuet()
         )
         await engine.startSocketRelay()
         return (coordinator, engine, msgSocket, socialSocket)
@@ -419,6 +420,55 @@ final class CacheCoordinatorTests: XCTestCase {
         XCTAssertEqual(Set(rows.map(\.messageId)), ["msg-1", "msg-2"])
     }
 
+    // MARK: - Éviction ciblée sur édition de contenu
+
+    /// Le message a été édité : sa traduction décrit un texte qui n'existe
+    /// plus. La purge doit emporter la RAM *et* la ligne GRDB — sans la
+    /// seconde, `loadTranslationCaches()` la réinjecte au prochain démarrage.
+    func test_invalidateTranslationsForMessage_dropsMemoryAndPersistedRow() async throws {
+        let db = try makeDB()
+        let (sut, _, _) = try makeSUT(db: db)
+        let translation = TranslationData(
+            id: "tr-1", messageId: "msg-edited", sourceLanguage: "en",
+            targetLanguage: "fr", translatedContent: "Bonjour",
+            translationModel: "nllb-200", confidenceScore: 0.95
+        )
+        await sut.cacheTranslation(TranslationEvent(messageId: "msg-edited", translations: [translation]))
+
+        await sut.invalidateTranslations(for: "msg-edited")
+
+        let cached = await sut.cachedTranslations(for: "msg-edited")
+        XCTAssertNil(cached, "la traduction du texte d'avant l'édition ne doit plus être servie")
+        let rows = try await db.read { db in try TranslationCacheRecord.fetchAll(db) }
+        XCTAssertTrue(rows.isEmpty, "sans la ligne GRDB, le texte périmé survivrait au redémarrage")
+    }
+
+    /// Contre-épreuve : l'éviction est CIBLÉE. Emporter les voisins ferait
+    /// retomber tout le fil sur l'original.
+    func test_invalidateTranslationsForMessage_leavesOtherMessagesCached() async throws {
+        let db = try makeDB()
+        let (sut, _, _) = try makeSUT(db: db)
+        let kept = TranslationData(
+            id: "tr-keep", messageId: "msg-keep", sourceLanguage: "en",
+            targetLanguage: "fr", translatedContent: "Salut",
+            translationModel: "nllb-200", confidenceScore: nil
+        )
+        let dropped = TranslationData(
+            id: "tr-drop", messageId: "msg-drop", sourceLanguage: "en",
+            targetLanguage: "fr", translatedContent: "Bonjour",
+            translationModel: "nllb-200", confidenceScore: nil
+        )
+        await sut.cacheTranslation(TranslationEvent(messageId: "msg-keep", translations: [kept]))
+        await sut.cacheTranslation(TranslationEvent(messageId: "msg-drop", translations: [dropped]))
+
+        await sut.invalidateTranslations(for: "msg-drop")
+
+        let survivor = await sut.cachedTranslations(for: "msg-keep")
+        XCTAssertEqual(survivor?.count, 1)
+        let rows = try await db.read { db in try TranslationCacheRecord.fetchAll(db) }
+        XCTAssertEqual(rows.map(\.messageId), ["msg-keep"])
+    }
+
     // MARK: - Transcription caching (point 42)
 
     func test_cacheTranscription_roundtrip() async throws {
@@ -587,6 +637,7 @@ private final class BareConversationService: ConversationServiceProviding, @unch
     func getById(_ conversationId: String) async throws -> APIConversation { throw MeeshyError.network(.timeout) }
     func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse { throw MeeshyError.network(.timeout) }
     func delete(conversationId: String) async throws {}
+    func obsolete(conversationId: String) async throws -> ConversationObsoleteResult { throw MeeshyError.network(.timeout) }
     func markRead(conversationId: String) async throws {}
     func markAsReceived(conversationId: String) async throws {}
     func markUnread(conversationId: String) async throws {}
@@ -613,6 +664,7 @@ private final class BareMessageService: MessageServiceProviding, @unchecked Send
         MessagesAPIResponse(success: true, data: [], pagination: nil, cursorPagination: nil, hasNewer: nil, meta: nil)
     }
     func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse { throw MeeshyError.network(.timeout) }
+    func listMedia(conversationId: String, kinds: [ConversationMediaKind], query: String?, before: String?, limit: Int, languages: [String]?) async throws -> MessagesAPIResponse { throw MeeshyError.network(.timeout) }
     func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData { throw MeeshyError.network(.timeout) }
     func edit(messageId: String, content: String) async throws -> APIMessage { throw MeeshyError.network(.timeout) }
     func delete(conversationId: String, messageId: String) async throws {}

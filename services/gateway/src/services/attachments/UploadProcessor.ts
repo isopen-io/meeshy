@@ -3,27 +3,39 @@
  * Gère la validation, le stockage physique et le chiffrement
  */
 
+import { apiPath } from '@meeshy/shared/api/prefix';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { spawn } from 'child_process';
-import os from 'os';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 
 const logger = enhancedLogger.child({ module: 'UploadProcessor' });
 import {
   getAttachmentType,
-  getSizeLimit,
   type AttachmentMetadata,
 } from '@meeshy/shared/types/attachment';
+import type { UploaderRole } from '@meeshy/shared/types/upload-limits';
+import { uploadLimitPolicyFromEnv, uploadSizeRefusal, uploaderRole } from './upload-admission.js';
 import type { EncryptionMode } from '@meeshy/shared/types/encryption';
 import {
   AttachmentEncryptionService,
   getAttachmentEncryptionService,
 } from '../AttachmentEncryptionService';
 import { MetadataManager } from './MetadataManager';
-import { planVideoTranscode, buildVideoTranscodeArgs } from './video-transcode-plan.js';
+import { produceMediaRenditions, produceEncryptedThumbnail, imageVariantsJson, renditionsJson } from './media-renditions.js';
+import { UnconvertibleImageError, convertHeifBuffer, isServerConvertedImage } from './heif-conversion.js';
+import { mediaJobQueueFromEnv, type MediaJobQueue } from './media-processing/queue.js';
+import { deferrableKinds, scheduleDeferred } from './media-processing/dispatch.js';
+import { isMediaMetadataStrippable, stripMediaMetadataBuffer } from './media-metadata-strip.js';
+import { verifyDeclaredMimeType } from './ContentSignature.js';
+import { NORMALIZED_AUDIO, normalizeAudioBuffer, normalizedAudioPath } from './audio-normalization.js';
+import { audioOnlyContainerMimeType, mayBeAudioOnlyContainer } from './uploadMimeType.js';
+import { UnsupportedMediaTypeError, PayloadTooLargeError } from '../../errors/custom-errors.js';
+import { runFfmpeg } from './ffmpeg-run.js';
+import { mediaDescriptionFields } from './mediaDescriptionInput.js';
+import { lensAttributionFields } from '../packs/lensAttribution.js';
+import { triggerMessageAttachmentAltTranslation } from './MessageAttachmentAltTranslationService.js';
 
 export interface FileToUpload {
   buffer: Buffer;
@@ -31,6 +43,19 @@ export interface FileToUpload {
   mimeType: string;
   size: number;
 }
+
+/**
+ * Verdict de `validateFile` (#6604). `code` distingue un refus de TAILLE
+ * (413) d'un refus de TYPE (415) — les deux sont des erreurs de DEMANDE,
+ * jamais de serveur, et un appelant HTTP en a besoin pour choisir le bon
+ * statut plutôt que de laisser une exception nue dégénérer en 500 générique.
+ */
+/** Ce que `saveFile` a écrit : un audio peut changer de chemin, de type, et porter sa sonie mesurée (#11259). */
+export type SavedFile = { size: number; relativePath: string; mimeType?: string; loudnessLufs?: number | null };
+
+export type AttachmentValidationVerdict =
+  | { valid: true; error?: undefined; code?: undefined }
+  | { valid: false; error: string; code: 'FILE_TOO_LARGE' | 'UNSUPPORTED_MEDIA_TYPE' };
 
 export interface UploadResult {
   id: string;
@@ -48,6 +73,9 @@ export interface UploadResult {
   sampleRate?: number;
   codec?: string;
   channels?: number;
+  /** #11264 — `pending` quand des rendus sont confiés au worker de médias. */
+  processingState?: string;
+  loudnessLufs?: number;
   metadata?: any;
   fps?: number;
   videoCodec?: string;
@@ -91,6 +119,24 @@ const declaredCaptureInApp = (providedMetadata?: any): boolean =>
   providedMetadata?.capturedInApp === true;
 
 /**
+ * Traduit un verdict `{valid:false}` en exception TYPÉE (#6604) — jamais un
+ * `Error` nu, pour que tout appelant qui laisse l'exception s'échapper (au
+ * lieu de l'avaler comme `uploadMultiple`) obtienne le bon statut HTTP via
+ * `typedErrorResponse` (`errors/custom-errors.ts`) plutôt qu'un 500 générique.
+ *
+ * Prend `code`/`error` à PART (pas le verdict entier) : `strictNullChecks`
+ * étant désactivé pour ce paquet (`tsconfig.json`), le compilateur ne
+ * rétrécit pas `AttachmentValidationVerdict` sur `if (!validation.valid)`
+ * assez pour prouver `code`/`error` définis à l'appel — passer les deux
+ * champs contourne la preuve plutôt que de la contester.
+ */
+function throwUploadValidationError(code: 'FILE_TOO_LARGE' | 'UNSUPPORTED_MEDIA_TYPE', error: string): never {
+  throw code === 'FILE_TOO_LARGE'
+    ? new PayloadTooLargeError(error)
+    : new UnsupportedMediaTypeError(error);
+}
+
+/**
  * Processeur d'upload des attachments
  */
 export class UploadProcessor {
@@ -100,8 +146,11 @@ export class UploadProcessor {
   private encryptionService: AttachmentEncryptionService;
   private metadataManager: MetadataManager;
 
-  constructor(prisma: PrismaClient) {
+  private readonly mediaQueue: MediaJobQueue | null;
+
+  constructor(prisma: PrismaClient, options: { readonly mediaQueue?: MediaJobQueue | null } = {}) {
     this.prisma = prisma;
+    this.mediaQueue = options.mediaQueue === undefined ? mediaJobQueueFromEnv() : options.mediaQueue;
     this.encryptionService = getAttachmentEncryptionService(prisma);
     // UPLOAD_PATH doit être défini dans Docker, fallback sécurisé vers /app/uploads
     this.uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
@@ -143,18 +192,36 @@ export class UploadProcessor {
   }
 
   /**
-   * Valide un fichier selon son type et sa taille
+   * Valide un fichier selon son type, sa taille, et — pour les familles dont
+   * une signature fiable existe (image, audio, SVG, PDF) — la correspondance
+   * entre le `mimeType` déclaré et le contenu réel (#5615). Site UNIQUE de
+   * cette vérification pour `uploadFile`/`uploadEncryptedFile`, donc pour
+   * TOUT upload REST qui passe par `AttachmentService.uploadMultiple` —
+   * inscrit ou anonyme. Avant #5615, `ContentSignature.ts` ne sniffait que
+   * l'exemption anonyme (`classifyAnonymousAttachment`) ; un compte inscrit
+   * pouvait déclarer n'importe quel mimeType sans qu'aucun octet ne soit
+   * jamais regardé.
    */
-  validateFile(file: FileToUpload): { valid: boolean; error?: string } {
-    const attachmentType = getAttachmentType(file.mimeType, file.filename);
-    const sizeLimit = getSizeLimit(attachmentType);
+  validateFile(file: FileToUpload, role: UploaderRole = 'registered'): AttachmentValidationVerdict {
+    // #11266 — la limite est celle du RÔLE de l'appelant (anonymes ÷10).
+    const sizeRefusal = uploadSizeRefusal({
+      policy: uploadLimitPolicyFromEnv(),
+      type: getAttachmentType(file.mimeType, file.filename),
+      role,
+      size: file.size,
+    });
+    if (sizeRefusal) {
+      return { valid: false, code: 'FILE_TOO_LARGE', error: sizeRefusal.message };
+    }
 
-    if (file.size > sizeLimit) {
-      const limitGB = Math.floor(sizeLimit / (1024 * 1024 * 1024));
-      return {
-        valid: false,
-        error: `Fichier trop volumineux. Taille max: ${limitGB}GB`
-      };
+    const signatureVerdict = verifyDeclaredMimeType(file.mimeType, file.buffer);
+    if (signatureVerdict.verified === false) {
+      // #6604 — un type déclaré qui ne correspond pas au contenu réel est un
+      // refus de MÉDIA, pas une panne serveur : le `code` laisse l'appelant
+      // choisir 415 plutôt que de laisser une exception nue dégénérer en 500
+      // générique (§ `throw new Error` plus bas, avalé par `uploadMultiple`
+      // mais nu pour tout appelant qui ne l'avale pas).
+      return { valid: false, code: 'UNSUPPORTED_MEDIA_TYPE', error: signatureVerdict.reason };
     }
 
     return { valid: true };
@@ -177,176 +244,38 @@ export class UploadProcessor {
   }
 
   /**
-   * Amplifie le volume d'un fichier audio avec ffmpeg
-   * Applique +9dB pour améliorer la transcription et la diarization
+   * Sauvegarde physiquement un fichier avec permissions sécurisées.
+   * Un audio est normalisé en M4A : le fichier écrit peut alors changer
+   * d'extension et de type — ce que rend `relativePath`/`mimeType`, et ce que
+   * l'appelant persiste.
    */
-  private async amplifyAudio(buffer: Buffer, mimeType: string): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      // Déterminer le format de sortie basé sur le mimeType
-      let outputFormat = 'mp4';
-      if (mimeType.includes('webm')) outputFormat = 'webm';
-      else if (mimeType.includes('wav')) outputFormat = 'wav';
-      else if (mimeType.includes('mp3')) outputFormat = 'mp3';
-      else if (mimeType.includes('ogg')) outputFormat = 'ogg';
-      else if (mimeType.includes('m4a')) outputFormat = 'm4a';
-
-      // Extension correcte pour les fichiers temp
-      const ext = outputFormat === 'mp4' ? 'mp4' : outputFormat;
-      const tempInputPath = path.join(os.tmpdir(), `audio_input_${uuidv4()}.${ext}`);
-      const tempOutputPath = path.join(os.tmpdir(), `audio_output_${uuidv4()}.${ext}`);
-
-      // Mapping format ffmpeg (m4a -> ipod pour le conteneur M4A)
-      let ffmpegFormat = outputFormat;
-      if (outputFormat === 'm4a') ffmpegFormat = 'ipod';
-
-      // Écrire le buffer temporairement
-      fs.writeFile(tempInputPath, buffer)
-        .then(() => {
-          // Amplifier avec ffmpeg (+9dB). Bitrate aligné sur la source iOS
-          // (64 kbps mono AAC) — ré-encoder à 128 kbps doublait la taille
-          // sans bénéfice perceptif puisque l'audio est déjà mono parlé.
-          const ffmpeg = spawn('ffmpeg', [
-            '-i', tempInputPath,
-            '-af', 'volume=9dB',  // Amplification de +9dB
-            '-c:a', 'aac',        // Codec audio AAC (universel)
-            '-b:a', '64k',        // Bitrate aligné sur la source mobile
-            '-ac', '1',           // Mono (voix)
-            '-f', ffmpegFormat,   // Format de sortie explicite
-            '-y',                 // Overwrite output
-            tempOutputPath
-          ]);
-
-          let stderr = '';
-          ffmpeg.stderr.on('data', (data) => {
-            stderr += data.toString();
-          });
-
-          ffmpeg.on('close', async (code) => {
-            try {
-              // Nettoyer le fichier d'entrée
-              await fs.unlink(tempInputPath).catch(() => {});
-
-              if (code !== 0) {
-                logger.error('Amplification ffmpeg échouée', { stderr });
-                // En cas d'erreur, retourner le buffer original
-                await fs.unlink(tempOutputPath).catch(() => {});
-                resolve(buffer);
-                return;
-              }
-
-              // Lire le fichier amplifié
-              const amplifiedBuffer = await fs.readFile(tempOutputPath);
-
-              // Nettoyer le fichier de sortie
-              await fs.unlink(tempOutputPath).catch(() => {});
-
-              logger.debug('Audio amplifié de +9dB', { inputBytes: buffer.length, outputBytes: amplifiedBuffer.length });
-              resolve(amplifiedBuffer);
-            } catch (error) {
-              logger.error('Erreur lecture audio amplifié', error as Error);
-              await fs.unlink(tempOutputPath).catch(() => {});
-              resolve(buffer);
-            }
-          });
-
-          ffmpeg.on('error', async (error) => {
-            logger.error('Erreur spawn ffmpeg', error as Error);
-            await fs.unlink(tempInputPath).catch(() => {});
-            await fs.unlink(tempOutputPath).catch(() => {});
-            resolve(buffer);
-          });
-        })
-        .catch((error) => {
-          logger.error('Erreur écriture fichier temp', error as Error);
-          resolve(buffer);
-        });
-    });
-  }
-
-  /** Run ffmpeg with the given argv; resolves on exit 0, rejects otherwise. */
-  private runFfmpeg(args: string[], timeoutMs = 5 * 60_000): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const proc = spawn('ffmpeg', args);
-      let stderr = '';
-      const timer = setTimeout(() => {
-        proc.kill('SIGKILL');
-        reject(new Error('ffmpeg transcode timeout'));
-      }, timeoutMs);
-      proc.stderr.on('data', (d) => { stderr += d.toString(); });
-      proc.on('close', (code) => {
-        clearTimeout(timer);
-        code === 0 ? resolve() : reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(-400)}`));
-      });
-      proc.on('error', (e) => { clearTimeout(timer); reject(e); });
-    });
-  }
-
-  /**
-   * D-video bandwidth — downscale/transcode an oversized clip to a lighter,
-   * progressively streamable H.264 mp4. Returns the new stored file (relative
-   * path + size + mime) on success, or `null` to keep the original.
-   *
-   * Defensive by construction: flag-gated (OFF by default), bounded by a max
-   * inline size, transcodes to a temp output and only swaps when the result is
-   * valid AND smaller — any failure/non-benefit leaves the upload untouched.
-   */
-  private async maybeTranscodeVideo(
-    filePath: string,
-    metadata: { width?: number; height?: number; bitrate?: number; videoCodec?: string },
-    fileSize: number
-  ): Promise<{ filePath: string; fileSize: number; mimeType: string } | null> {
-    if (process.env.VIDEO_TRANSCODE !== 'true') return null;
-
-    const plan = planVideoTranscode({
-      width: metadata.width,
-      height: metadata.height,
-      bitrateBps: metadata.bitrate,
-      videoCodec: metadata.videoCodec,
-      sizeBytes: fileSize,
-    });
-    if (!plan) return null;
-
-    const maxSync = Number(process.env.VIDEO_TRANSCODE_MAX_SYNC_BYTES || 200 * 1024 * 1024);
-    if (fileSize > maxSync) return null; // too large to transcode inline; leave as-is
-
-    const inputAbs = path.join(this.uploadBasePath, filePath);
-    const outputRel = filePath.replace(/\.[^.]+$/, '') + '_t.mp4';
-    const outputAbs = path.join(this.uploadBasePath, outputRel);
-
-    try {
-      await this.runFfmpeg(buildVideoTranscodeArgs(inputAbs, outputAbs, plan));
-      const stat = await fs.stat(outputAbs);
-      if (stat.size === 0 || stat.size >= fileSize) {
-        // No benefit — discard the transcode, keep the original.
-        await fs.unlink(outputAbs).catch(() => {});
-        return null;
-      }
-      await fs.unlink(inputAbs).catch(() => {});
-      return { filePath: outputRel, fileSize: stat.size, mimeType: 'video/mp4' };
-    } catch (error) {
-      logger.error('Video transcode failed, keeping original', error as Error);
-      await fs.unlink(outputAbs).catch(() => {});
-      return null;
-    }
-  }
-
-  /**
-   * Sauvegarde physiquement un fichier avec permissions sécurisées
-   * Pour les fichiers audio, applique automatiquement une amplification de +9dB
-   */
-  async saveFile(buffer: Buffer, relativePath: string, mimeType?: string): Promise<void> {
-    const fullPath = path.join(this.uploadBasePath, relativePath);
-    const directory = path.dirname(fullPath);
-
-    await fs.mkdir(directory, { recursive: true });
-
-    // Amplifier automatiquement les fichiers audio
+  async saveFile(
+    buffer: Buffer,
+    relativePath: string,
+    mimeType?: string
+  ): Promise<SavedFile> {
     let finalBuffer = buffer;
+    let finalPath = relativePath;
+    let finalMimeType = mimeType;
+    let loudnessLufs: number | null = null;
     if (mimeType && mimeType.startsWith('audio/')) {
-      logger.debug('Amplification audio avant sauvegarde');
-      finalBuffer = await this.amplifyAudio(buffer, mimeType);
+      const normalized = await normalizeAudioBuffer(buffer, relativePath);
+      if (normalized) {
+        finalBuffer = normalized.buffer;
+        finalPath = normalizedAudioPath(relativePath);
+        finalMimeType = NORMALIZED_AUDIO.mimeType;
+        loudnessLufs = normalized.loudnessLufs;
+      }
+    } else if (mimeType && isMediaMetadataStrippable(mimeType)) {
+      // #3627, #11258 — GPS et métadonnées retirés AVANT persistance, photo et
+      // vidéo : c'est ce fichier que `GET /attachments/:id` sert tel quel.
+      // `mimeType` absent (octets déjà chiffrés) saute cette branche : le
+      // chemin chiffré retire AVANT de chiffrer (`uploadEncryptedFile`).
+      finalBuffer = await stripMediaMetadataBuffer({ buffer, mimeType, fileName: relativePath });
     }
 
+    const fullPath = path.join(this.uploadBasePath, finalPath);
+    await fs.mkdir(path.dirname(fullPath), { recursive: true });
     await fs.writeFile(fullPath, finalBuffer);
 
     try {
@@ -354,20 +283,63 @@ export class UploadProcessor {
     } catch (error) {
       logger.error('Impossible de modifier les permissions du fichier', error as Error);
     }
+
+    return { size: finalBuffer.length, relativePath: finalPath, mimeType: finalMimeType, ...(loudnessLufs === null ? {} : { loudnessLufs }) };
+  }
+
+  /**
+   * Écrit le fichier sous le type de ce qu'il EST (#9693) : un `.mp4` n'a
+   * qu'un type système, `video/mp4`, qu'il porte une image ou non. Une fois
+   * écrit, la sonde lit ses pistes ; sans piste vidéo, il est réécrit comme un
+   * son (normalisé en M4A, comme tout audio). Une vraie vidéo n'est écrite
+   * qu'une fois ; une sonde muette ne change rien.
+   */
+  private async saveAdmittedFile(
+    file: FileToUpload,
+    relativePath: string
+  ): Promise<{ saved: SavedFile; declaredMimeType: string }> {
+    const saved = await this.saveFile(file.buffer, relativePath, file.mimeType);
+    if (!mayBeAudioOnlyContainer(file.mimeType)) return { saved, declaredMimeType: file.mimeType };
+    const storedPath = path.join(this.uploadBasePath, saved.relativePath);
+    const streams = await this.metadataManager.probeMediaStreams(storedPath).catch(() => null);
+    const admitted = audioOnlyContainerMimeType(file.mimeType, streams);
+    if (admitted === file.mimeType) return { saved, declaredMimeType: file.mimeType };
+    await fs.unlink(storedPath).catch(() => {});
+    return { saved: await this.saveFile(file.buffer, relativePath, admitted), declaredMimeType: admitted };
   }
 
   /**
    * Génère une URL publique pour un fichier
    */
   getAttachmentUrl(filePath: string): string {
-    return `${this.publicUrl}/api/v1/attachments/file/${encodeURIComponent(filePath)}`;
+    return `${this.publicUrl}${apiPath(`/attachments/file/${encodeURIComponent(filePath)}`)}`;
   }
 
   /**
-   * Génère le chemin API relatif (sans domaine)
+   * CE QUI SE PERSISTE — la CLÉ DE STOCKAGE, jamais une adresse (#4324, #7022).
+   *
+   * Elle valait `apiPath('/attachments/file/<clé percent-encodée>')` : une
+   * ROUTE, et donc une décision de déploiement (le préfixe, la version) gravée
+   * dans la donnée. 539 `MessageAttachment` et 35 `PostMedia` la portent en
+   * production, la dernière écrite le 2026-09-16 — ce producteur était VIVANT,
+   * et normaliser la base avant de le tarir aurait payé une migration pour un
+   * sursis : chaque téléversement suivant regravait la route.
+   *
+   * La clé est la forme que `tus-handler` écrit déjà (`const fileUrl = relPath`)
+   * et que les quatre surfaces vivantes savent lire — `resolveAttachmentSrc`
+   * (web-v2) en fait son cas NOMINAL, `MeeshyConfig.resolveMediaURL` (iOS) a sa
+   * branche explicite, et la passerelle recompose partout où ça compte
+   * (`publicMediaUrlFromEnv` pour le fil push, `relativePathFromUrl` pour les
+   * octets). Rendre la clé ne leur AJOUTE aucune forme à supporter : elle en
+   * RETIRE une.
+   *
+   * La fonction est l'identité sur `filePath`, et c'est le fait à retenir : la
+   * colonne d'adresse (`fileUrl`) et la colonne de disque (`filePath`) portent
+   * désormais la MÊME valeur. Ce site reste nommé parce qu'il porte la
+   * DÉCISION — ce que la base reçoit se change ici, pas aux cinq appels.
    */
   getAttachmentPath(filePath: string): string {
-    return `/api/v1/attachments/file/${encodeURIComponent(filePath)}`;
+    return filePath;
   }
 
   /**
@@ -396,81 +368,63 @@ export class UploadProcessor {
       size: file.size,
     });
 
-    const validation = this.validateFile(file);
+    const validation = this.validateFile(file, uploaderRole(isAnonymous));
     if (!validation.valid) {
-      logger.error('Validation échouée', { error: validation.error });
-      throw new Error(validation.error);
+      logger.error('Validation échouée', { error: validation.error, code: validation.code });
+      throwUploadValidationError(validation.code, validation.error);
     }
 
-    const filePath = this.generateFilePath(userId, file.filename);
-    await this.saveFile(file.buffer, filePath, file.mimeType);
+    const { saved, declaredMimeType } = await this.saveAdmittedFile(file, this.generateFilePath(userId, file.filename));
+    const filePath = saved.relativePath;
+    const savedMimeType = saved.mimeType ?? declaredMimeType;
 
-    const attachmentType = getAttachmentType(file.mimeType, file.filename);
+    const attachmentType = getAttachmentType(declaredMimeType, file.filename);
     let metadata = await this.metadataManager.extractMetadata(
       filePath,
       attachmentType,
-      file.mimeType,
+      savedMimeType,
       providedMetadata,
-      file.size  // Passer la taille du fichier pour validation de cohérence
+      saved.size  // Passer la taille du fichier RÉELLEMENT écrit (EXIF/audio peuvent la changer)
     );
 
-    // The stored representation may diverge from the upload after transcoding
-    // (e.g. video → capped-resolution H.264 mp4). Everything persisted below
-    // (URL, size, mime, dimensions) reads these, not the raw upload.
-    let storedFilePath = filePath;
-    let storedFileSize = file.size;
-    let storedMimeType = file.mimeType;
-
-    let thumbnailPath: string | null = null;
-    let imageVariants: Array<{ width: number; height: number; url: string; size: number; format: 'webp' }> | undefined;
-    if (attachmentType === 'image') {
-      thumbnailPath = await this.metadataManager.generateThumbnail(filePath);
-      // D4: responsive WebP variants for srcset — plaintext images only.
-      const variants = await this.metadataManager.generateImageVariants(filePath);
-      if (variants.length > 0) {
-        imageVariants = variants.map((v) => ({
-          width: v.width,
-          height: v.height,
-          url: this.getAttachmentPath(v.path),
-          size: v.size,
-          format: 'webp' as const,
-        }));
-      }
-    } else if (attachmentType === 'video') {
-      thumbnailPath = await this.metadataManager.generateVideoThumbnail(filePath);
-      // D-video: downscale/transcode oversized clips to a lighter, progressively
-      // streamable H.264 mp4 (flag-gated, OFF by default; original kept on any
-      // failure or non-benefit). Re-probe so persisted dimensions/size match.
-      const transcoded = await this.maybeTranscodeVideo(filePath, metadata, file.size);
-      if (transcoded) {
-        storedFilePath = transcoded.filePath;
-        storedFileSize = transcoded.fileSize;
-        storedMimeType = transcoded.mimeType;
-        try {
-          metadata = await this.metadataManager.extractMetadata(
-            storedFilePath, attachmentType, storedMimeType, undefined, storedFileSize
-          );
-        } catch {
-          // Keep prior metadata (dimensions ~unchanged after a downscale-fit);
-          // never fail the upload over a re-probe.
-        }
-      }
-    }
-    metadata.thumbnailGenerated = !!thumbnailPath;
-
-    // ThumbHash: backend fallback — skip if client already computed it.
-    // Defense-in-depth length cap (cf. tus-handler.ts) — protège contre un
-    // payload malformé / malveillant qui ferait gonfler la doc DB.
-    const MAX_THUMBHASH_LENGTH = 100;
-    const rawClientThumbHash = providedMetadata?.thumbHash ?? null;
-    let thumbHash: string | null =
-      (rawClientThumbHash && rawClientThumbHash.length <= MAX_THUMBHASH_LENGTH)
-        ? rawClientThumbHash
-        : null;
-    if (!thumbHash) {
-      const { ThumbHashGenerator } = await import('./ThumbHashGenerator.js');
-      thumbHash = await ThumbHashGenerator.generate(path.join(this.uploadBasePath, storedFilePath), storedMimeType);
-    }
+    // Les rendus (vignette, variantes WebP, transcodage vidéo, thumbhash) sont
+    // décidés par la fabrique que le chemin résumable appelle aussi (#11260) :
+    // un même fichier laisse la même trace par les deux portes. La
+    // représentation stockée peut diverger de l'upload après transcodage ;
+    // tout ce qui est persisté plus bas (URL, taille, type, dimensions) lit
+    // `renditions`, pas l'upload brut.
+    // #11264 — ce qui est différé au worker de médias (file allumée seulement).
+    // Différé seulement quand un worker bat : sinon tout reste dans la requête.
+    const deferred = await deferrableKinds(this.mediaQueue, {
+      attachmentType,
+      fileSize: saved.size,
+      compatRenditionEnabled: process.env.VIDEO_COMPAT_RENDITION === 'true',
+    });
+    const renditions = await produceMediaRenditions(
+      { uploadBasePath: this.uploadBasePath, metadataManager: this.metadataManager, runFfmpeg },
+      {
+        relPath: filePath,
+        mimeType: savedMimeType,
+        attachmentType,
+        fileSize: saved.size,
+        metadata,
+        clientThumbHash: providedMetadata?.thumbHash ?? null,
+      },
+      { defer: deferred }
+    ).catch(async (error: unknown) => {
+      // #11263 — un HEIC/AVIF que le serveur ne sait pas convertir n'est
+      // jamais servi tel quel aux lecteurs : l'upload est refusé.
+      if (!(error instanceof UnconvertibleImageError)) throw error;
+      await fs.unlink(path.join(this.uploadBasePath, filePath)).catch(() => {});
+      return throwUploadValidationError('UNSUPPORTED_MEDIA_TYPE', error.message);
+    });
+    const storedFilePath = renditions.storedPath;
+    const storedFileSize = renditions.storedSize;
+    const storedMimeType = renditions.storedMimeType;
+    const thumbnailPath = renditions.thumbnailPath;
+    const imageVariants = renditions.imageVariants;
+    const thumbHash = renditions.thumbHash;
+    metadata = renditions.metadata;
 
     const fileUrl = this.getAttachmentPath(storedFilePath);
     const thumbnailUrl = thumbnailPath ? this.getAttachmentPath(thumbnailPath) : undefined;
@@ -492,7 +446,9 @@ export class UploadProcessor {
         thumbnailPath: thumbnailPath || undefined,
         thumbnailUrl: thumbnailUrl,
         thumbHash: thumbHash || undefined,
-        imageVariants: imageVariants as any,
+        imageVariants: imageVariants ? imageVariantsJson(imageVariants) : undefined,
+        avifVariants: renditions.avifVariants ? imageVariantsJson(renditions.avifVariants) : undefined,
+        renditions: renditions.renditions ? renditionsJson(renditions.renditions) : undefined,
         width: metadata.width,
         height: metadata.height,
         duration: metadata.duration,
@@ -504,12 +460,20 @@ export class UploadProcessor {
         videoCodec: metadata.videoCodec,
         pageCount: metadata.pageCount,
         lineCount: metadata.lineCount,
+        loudnessLufs: saved.loudnessLufs ?? undefined,
         metadata: metadataJson,
         uploadedBy: userId,
         isAnonymous: isAnonymous,
         capturedInApp: declaredCaptureInApp(providedMetadata),
+        // #11327 — la lens qui a produit ce média, retenue si publiée ET installée par l'expéditeur.
+        ...(await lensAttributionFields(this.prisma, isAnonymous ? null : userId, providedMetadata?.lensSlug)),
+        ...mediaDescriptionFields(providedMetadata?.alt),
+        ...(deferred.length > 0 ? { processingState: 'pending' } : {}),
       },
     });
+    // File muette : la pièce reste `pending`, le balayage du worker la reprend.
+    await scheduleDeferred({ queue: this.mediaQueue, target: 'messageAttachment', recordId: attachment.id, kinds: deferred });
+    if (attachment.alt) triggerMessageAttachmentAltTranslation(attachment.id);
 
     return {
       id: attachment.id,
@@ -527,6 +491,8 @@ export class UploadProcessor {
       sampleRate: attachment.sampleRate || undefined,
       codec: attachment.codec || undefined,
       channels: attachment.channels || undefined,
+      processingState: attachment.processingState ?? undefined,
+      loudnessLufs: attachment.loudnessLufs ?? undefined,
       metadata: attachment.metadata || undefined,
       fps: attachment.fps || undefined,
       videoCodec: attachment.videoCodec || undefined,
@@ -554,31 +520,51 @@ export class UploadProcessor {
       encryptionMode,
     });
 
-    const validation = this.validateFile(file);
+    const validation = this.validateFile(file, uploaderRole(isAnonymous));
     if (!validation.valid) {
-      throw new Error(validation.error);
+      throwUploadValidationError(validation.code, validation.error);
     }
 
     const attachmentType = getAttachmentType(file.mimeType, file.filename);
 
     // Amplifier l'audio AVANT chiffrement pour améliorer la transcription/diarization
     let fileBuffer = file.buffer;
+    let storedMimeType = file.mimeType;
+    let loudnessLufs: number | null = null;
     if (attachmentType === 'audio') {
-      logger.debug('Amplification audio avant chiffrement');
-      fileBuffer = await this.amplifyAudio(file.buffer, file.mimeType);
+      const normalized = await normalizeAudioBuffer(file.buffer, file.filename);
+      if (normalized) {
+        fileBuffer = normalized.buffer;
+        storedMimeType = NORMALIZED_AUDIO.mimeType;
+        loudnessLufs = normalized.loudnessLufs;
+      }
+    } else {
+      fileBuffer = await stripMediaMetadataBuffer({ buffer: file.buffer, mimeType: file.mimeType, fileName: file.filename });
+    }
+    // #11263 — un HEIC/AVIF est chiffré en JPEG : le destinataire qui déchiffre
+    // ne reçoit jamais `image/heic`. Ce chemin ne garde aucun rendu en clair,
+    // donc pas l'original non plus. Illisible ⇒ upload refusé.
+    if (attachmentType === 'image' && isServerConvertedImage(file.mimeType)) {
+      fileBuffer = await convertHeifBuffer(fileBuffer, file.mimeType).catch((error: unknown) =>
+        throwUploadValidationError('UNSUPPORTED_MEDIA_TYPE', error instanceof Error ? error.message : 'image illisible'));
+      storedMimeType = 'image/jpeg';
     }
 
-    let thumbnailBuffer: Buffer | undefined;
-    if (attachmentType === 'image') {
-      thumbnailBuffer = await this.metadataManager.generateThumbnailFromBuffer(fileBuffer);
-    } else if (attachmentType === 'video') {
-      thumbnailBuffer = await this.metadataManager.generateVideoThumbnailFromBuffer(fileBuffer, file.mimeType);
-    }
+    // Le serveur reçoit le CLAIR ici : ce chemin n'est pas du E2EE (#9224). Il
+    // retire donc GPS et métadonnées AVANT de chiffrer (#11258), et ne fabrique
+    // que la vignette en tampon, chiffrée avec le fichier — aucune variante ni
+    // thumbhash en clair (voir `media-renditions.ts`).
+    const thumbnailBuffer = await produceEncryptedThumbnail({
+      metadataManager: this.metadataManager,
+      attachmentType,
+      buffer: fileBuffer,
+      mimeType: storedMimeType,
+    });
 
     const encryptionResult = await this.encryptionService.encryptAttachment({
       fileBuffer: fileBuffer,
       filename: file.filename,
-      mimeType: file.mimeType,
+      mimeType: storedMimeType,
       mode: encryptionMode,
       thumbnailBuffer,
     });
@@ -620,7 +606,6 @@ export class UploadProcessor {
 
     const fileUrl = this.getAttachmentPath(filePath);
     const thumbnailUrl = thumbnailPath ? this.getAttachmentPath(thumbnailPath) : undefined;
-    const serverCopyUrl = serverCopyPath ? this.getAttachmentPath(serverCopyPath) : undefined;
 
     const metadataJson = metadata.audioEffectsTimeline
       ? { audioEffectsTimeline: metadata.audioEffectsTimeline } as any
@@ -631,7 +616,7 @@ export class UploadProcessor {
         messageId: messageId || null,
         fileName: path.basename(filePath),
         originalName: file.filename,
-        mimeType: file.mimeType,
+        mimeType: storedMimeType,
         fileSize: encryptionResult.metadata.encryptedSize,
         filePath: filePath,
         fileUrl: fileUrl,
@@ -644,10 +629,13 @@ export class UploadProcessor {
         sampleRate: metadata.sampleRate,
         codec: metadata.codec,
         channels: metadata.channels,
+        loudnessLufs: loudnessLufs ?? undefined,
         metadata: metadataJson,
         uploadedBy: userId,
         isAnonymous: isAnonymous,
         capturedInApp: declaredCaptureInApp(providedMetadata),
+        // #11327 — EN CLAIR à côté d'une pièce chiffrée : métadonnée assumée par le porteur (#11251).
+        ...(await lensAttributionFields(this.prisma, isAnonymous ? null : userId, providedMetadata?.lensSlug)),
         isEncrypted: true,
         encryptionMode: encryptionMode,
         encryptionIv: encryptionResult.metadata.iv,
@@ -678,6 +666,7 @@ export class UploadProcessor {
       sampleRate: attachment.sampleRate || undefined,
       codec: attachment.codec || undefined,
       channels: attachment.channels || undefined,
+      loudnessLufs: attachment.loudnessLufs ?? undefined,
       metadata: attachment.metadata || undefined,
       uploadedBy: attachment.uploadedBy,
       isAnonymous: attachment.isAnonymous,

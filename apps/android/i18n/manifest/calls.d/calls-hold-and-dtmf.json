@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.video.hold.blocked",
+          "androidName": "call_video_hold_blocked",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

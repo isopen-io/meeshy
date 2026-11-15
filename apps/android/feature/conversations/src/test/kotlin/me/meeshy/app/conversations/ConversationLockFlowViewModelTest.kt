@@ -1,5 +1,7 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.model.lock.LockPinMode
+import me.meeshy.sdk.model.lock.LockPinError
 import androidx.work.WorkManager
 import com.google.common.truth.Truth.assertThat
 import io.mockk.every
@@ -22,6 +24,7 @@ import me.meeshy.sdk.chat.InMemoryConversationDraftStore
 import me.meeshy.sdk.chat.InMemoryStarredMessagesStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.lock.ConversationUnlockSessionStore
 import me.meeshy.sdk.lock.InMemoryConversationLockStore
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CategoryEvent
@@ -61,10 +64,17 @@ class ConversationLockFlowViewModelTest {
         messageSocketManager = mockk<MessageSocketManager> {
             every { unreadUpdated } returns MutableSharedFlow()
             every { messageReceived } returns MutableSharedFlow()
+            every { messageEdited } returns MutableSharedFlow()
+            every { messageDeleted } returns MutableSharedFlow()
             every { conversationUpdated } returns MutableSharedFlow()
             every { conversationDeleted } returns MutableSharedFlow()
+            every { conversationRestored } returns MutableSharedFlow()
             every { conversationClosed } returns MutableSharedFlow()
+            every { conversationObsoleted } returns MutableSharedFlow()
             every { participantLeft } returns MutableSharedFlow()
+            every { participantBanned } returns MutableSharedFlow()
+            every { participantJoined } returns MutableSharedFlow()
+            every { participantUnbanned } returns MutableSharedFlow()
             every { userStatus } returns MutableSharedFlow()
             every { presenceSnapshot } returns MutableSharedFlow()
             every { typingStarted } returns MutableSharedFlow()
@@ -79,6 +89,10 @@ class ConversationLockFlowViewModelTest {
         categorySocketManager = mockk<CategorySocketManager> {
             every { categoryEvents } returns MutableSharedFlow<CategoryEvent>()
         },
+        preferencesSocketManager = mockk<me.meeshy.sdk.socket.PreferencesSocketManager> {
+            every { conversationPreferencesUpdated } returns
+                MutableSharedFlow<me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData>()
+        },
         socketManager = mockk<SocketManager> {
             every { connectionState } returns MutableStateFlow(SocketConnectionState.DISCONNECTED)
         },
@@ -86,12 +100,18 @@ class ConversationLockFlowViewModelTest {
             every { currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         },
         lockStore = lockStore,
+        unlockSession = ConversationUnlockSessionStore(),
         storyRepository = mockk<me.meeshy.sdk.story.StoryRepository>(relaxed = true) {
             every { storiesStream(any(), any()) } returns kotlinx.coroutines.flow.emptyFlow()
         },
         statusBarCache = mockk<me.meeshy.sdk.status.StatusBarCache>(relaxed = true) {
             every { load(any()) } returns CacheResult.Empty
         },
+        messagePrefetch = mockk(relaxed = true),
+        networkMonitor = me.meeshy.sdk.network.InMemoryNetworkMonitor(),
+        statusRepository = mockk(relaxed = true),
+        rowSignalsSource = idleRowSignalsSource(),
+        livePatcher = mockk(relaxed = true),
     )
 
     private fun ConversationListViewModel.enter(digits: String) {
@@ -525,5 +545,92 @@ class ConversationLockFlowViewModelTest {
         vm.onRemoveMasterPin()
 
         assertThat(vm.state.value.lockPrompt).isNull()
+    }
+
+    // MARK: - Menu lock entry (parity iOS: master PIN required -> Settings)
+
+    /** Collects the dialog effects emitted during [block]. */
+    private fun TestScope.recordEffects(vm: ConversationListViewModel, block: () -> Unit): List<ConversationListDialogEffect> {
+        val effects = mutableListOf<ConversationListDialogEffect>()
+        val job = launch { vm.dialogs.effects.collect { effects += it } }
+        advanceUntilIdle()
+        block()
+        advanceUntilIdle()
+        job.cancel()
+        return effects
+    }
+
+    @Test
+    fun locking_from_the_menu_without_a_master_pin_raises_the_master_pin_required_alert() = runTest(dispatcher) {
+        val vm = viewModel(InMemoryConversationLockStore())
+        advanceUntilIdle()
+
+        vm.dialogs.requestLock("c1")
+
+        assertThat(vm.dialogs.dialog.value).isEqualTo(ConversationListDialog.MasterPinRequired("c1"))
+        assertThat(vm.state.value.lockPrompt).isNull()
+    }
+
+    @Test
+    fun the_master_pin_required_alert_sends_to_settings_and_closes() = runTest(dispatcher) {
+        val vm = viewModel(InMemoryConversationLockStore())
+        advanceUntilIdle()
+        vm.dialogs.requestLock("c1")
+
+        val effects = recordEffects(vm) { vm.dialogs.confirmMasterPinRequired() }
+
+        assertThat(effects).containsExactly(ConversationListDialogEffect.OpenSettings)
+        assertThat(vm.dialogs.dialog.value).isNull()
+    }
+
+    @Test
+    fun locking_from_the_menu_with_a_master_pin_prompts_for_the_code() = runTest(dispatcher) {
+        val vm = viewModel(InMemoryConversationLockStore().apply { setMasterPin("123456") })
+        advanceUntilIdle()
+
+        vm.dialogs.requestLock("c1")
+
+        assertThat(vm.dialogs.dialog.value).isNull()
+        assertThat(vm.state.value.lockPrompt?.mode).isEqualTo(LockPinMode.LOCK_CONVERSATION)
+    }
+
+    @Test
+    fun a_locked_conversation_opens_after_unlock_and_arms_the_search_it_was_opened_for() = runTest(dispatcher) {
+        val store = InMemoryConversationLockStore().apply {
+            setMasterPin("123456")
+            setLock("c1", "4321")
+        }
+        val vm = viewModel(store)
+        advanceUntilIdle()
+        val opened = mutableListOf<String>()
+        val openJob = launch { vm.openConversation.collect { opened += it } }
+
+        vm.dialogs.openForSearch("c1")
+        advanceUntilIdle()
+        assertThat(opened).isEmpty()
+        assertThat(vm.state.value.lockPrompt?.mode).isEqualTo(LockPinMode.OPEN_CONVERSATION)
+
+        val effects = recordEffects(vm) { vm.enter("4321") }
+        openJob.cancel()
+
+        assertThat(opened).containsExactly("c1")
+        assertThat(effects).containsExactly(ConversationListDialogEffect.ArmSearch("c1"))
+    }
+
+    @Test
+    fun a_plain_unlocked_open_never_arms_the_search() = runTest(dispatcher) {
+        val store = InMemoryConversationLockStore().apply {
+            setMasterPin("123456")
+            setLock("c1", "4321")
+        }
+        val vm = viewModel(store)
+        advanceUntilIdle()
+        vm.dialogs.openForSearch("c1")
+        vm.dismissLockPrompt()
+        vm.onConversationTap("c1")
+
+        val effects = recordEffects(vm) { vm.enter("4321") }
+
+        assertThat(effects).isEmpty()
     }
 }

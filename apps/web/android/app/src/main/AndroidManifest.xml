@@ -1,0 +1,364 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application
+        android:hardwareAccelerated="true"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:localeConfig="@xml/locales_config"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density|fontScale|fontWeightAdjustment|layoutDirection|mcc|mnc|grammaticalGender|colorMode|touchscreen"
+            android:name=".MainActivity"
+            android:hardwareAccelerated="true"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:supportsPictureInPicture="true"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- #5819 — un lien meeshy.me ouvert sur Android ouvre la coque sur son
+                 écran, pas le navigateur. Les chemins suivent l'apple-app-site-association
+                 (public/.well-known/), limités à ceux que l'app SERT : un chemin réclamé
+                 sans écran ouvrirait l'app sur rien (garde : src/lib/links/app-links.test.ts).
+                 MeeshyLinksPlugin relaie l'intent au routeur (src/lib/links/shell-deep-links.ts). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="meeshy.me" />
+                <data android:host="www.meeshy.me" />
+                <data android:pathPrefix="/c/" />
+                <data android:pathPrefix="/chat/" />
+                <data android:pathPrefix="/l/" />
+                <data android:pathPrefix="/u/" />
+                <data android:pathPrefix="/feeds/post/" />
+                <data android:pathPrefix="/post/" />
+                <data android:pathPrefix="/story/" />
+                <data android:pathPrefix="/reel/" />
+                <data android:pathPrefix="/communities/" />
+                <!-- #10881 — les anciennes adresses que l'AASA réclame, et que nginx.conf
+                     redirige en 308 : la coque les lit sous leur forme canonique
+                     (src/lib/links/legacy-paths.ts), comme DeepLinkRouter.swift. -->
+                <data android:pathPrefix="/join/" />
+                <data android:pathPrefix="/conversation/" />
+                <data android:pathPrefix="/users/" />
+                <data android:pathPrefix="/p/" />
+                <data android:pathPrefix="/s/" />
+                <data android:path="/share" />
+                <!-- #10100 — World Wide, l'entrée sans compte et le fil de l'invité en focus. -->
+                <data android:path="/world" />
+                <!-- #9468 — le lien d'invitation, réclamé par l'AASA depuis #8075 :
+                     ouvert dans la coque, le code est retenu par l'app qui inscrira. -->
+                <data android:pathPrefix="/signup/affiliate/" />
+                <!-- #9520 — sa forme courte /signup?ref=, réclamée par l'AASA. Le
+                     filtre ne lit pas la requête : sans code, la coque ouvre son
+                     propre écran d'inscription. -->
+                <data android:path="/signup" />
+                <data android:pathPrefix="/auth/magic-link" />
+                <data android:path="/auth/verify-email" />
+                <data android:path="/me" />
+                <data android:path="/links" />
+                <data android:path="/reels" />
+                <!-- #9947 — une saison ou une semaine de ligue nommée (événements in-app),
+                     comme l'AASA : /me/progression/saison[/n], /me/progression/ligue[/lundi]. -->
+                <data android:pathPrefix="/me/progression/saison" />
+                <data android:pathPrefix="/me/progression/ligue" />
+            </intent-filter>
+
+            <!-- Le schéma court, miroir de CFBundleURLSchemes = meeshy côté iOS. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="meeshy" />
+            </intent-filter>
+
+            <!-- #8884 — Meeshy figure dans la feuille de partage d'Android : une
+                 image, une vidéo ou un lien partagé depuis une autre application
+                 arrive sur la feuille d'envoi. MeeshyShareIntentPlugin copie les
+                 contenus (`content://`, illisibles pour la WebView) en fichiers
+                 temporaires et les remet au web (src/lib/share-incoming/native-inbox.ts).
+                 Les types sont ceux que la feuille sait envoyer, et la catégorie
+                 DEFAULT est ce qui fait proposer l'app par le système (garde :
+                 scripts/check-android-manifest.mjs, auditShareIntentFilters). -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+
+        </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"></meta-data>
+        </provider>
+
+        <!-- #9530 — l'app et meeshy.me partagent leurs identifiants, comme
+             webcredentials sur iOS : le Gestionnaire de mots de passe de Google
+             propose dans la coque le mot de passe enregistré sur le site. -->
+        <meta-data
+            android:name="asset_statements"
+            android:resource="@string/asset_statements" />
+
+        <!-- #7307 — la bannière d'un push rendue par FCM, app fermée : sans ces
+             deux entrées, Android prend l'icône de lancement (un carré blanc
+             dans la barre d'état) et le canal par défaut de FCM au lieu de
+             celui que la passerelle nomme. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_meeshy" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/meeshy_notification_accent" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="meeshy_notifications" />
+
+        <!-- #8049 — l'appel natif de la coque. Le MessagingService du plugin
+             @capacitor/push-notifications est RETIRÉ à la fusion : deux services
+             MESSAGING_EVENT se concurrencent (FCM n'en sert qu'un). Le nôtre
+             l'ÉTEND (MeeshyMessagingService) : il sonne un appel entrant data-only
+             et remet tout autre message au plugin, inchangé. -->
+        <service
+            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
+            tools:node="remove" />
+        <service
+            android:name=".MeeshyMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- #8049 — l'appel en cours tient au premier plan (micro, caméra) : sans
+             lui, Android coupe le micro de la WebView dès que l'écran s'éteint
+             ou que l'utilisateur quitte l'app. RETIRÉ tant que les appels de la
+             coque sont coupés (CallPush.CALLS_ENABLED, #10611) ; à remettre avec
+             eux, check-android-manifest.mjs le réclame alors :
+             <service android:name=".CallForegroundService" android:exported="false"
+                      android:foregroundServiceType="microphone|camera" /> -->
+
+        <!-- #9238 — le message vocal en cours tient le micro au premier plan :
+             sans lui, quitter l'app pendant l'enregistrement le rend muet. -->
+        <service
+            android:name=".RecordingForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <!-- #9257 — le message vocal écouté tient la lecture au premier plan :
+             sans lui, Android gèle l'app mise en cache au milieu du vocal. -->
+        <service
+            android:name=".PlaybackForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <!-- #10641 — le vocal reçu s'écoute depuis sa notification, sans ouvrir
+             l'app : lecteur système (MediaPlayer), au premier plan le temps de
+             la lecture (NotificationVoiceService). -->
+        <service
+            android:name=".NotificationVoiceService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <!-- #8049 — « Refuser » de la notification d'appel, app tuée comprise. -->
+        <receiver
+            android:name=".DeclineCallReceiver"
+            android:exported="false" />
+        <!-- #10921 — balayer une bannière note « écartée » dans l'entonnoir. -->
+        <receiver
+            android:name=".NotificationDismissReceiver"
+            android:exported="false" />
+        <!-- #10626 — les quatre widgets d'écran d'accueil d'iOS (MeeshyWidgets),
+             alimentés par la page via MeeshyWidgetsPlugin : aucun second SDK, aucune
+             mise à jour périodique. WidgetActionActivity relaie les gestes des lignes
+             (ouvrir, marquer lu) ; RecentConversationsService sert la liste. -->
+        <receiver
+            android:name=".UnreadCountWidget"
+            android:exported="false"
+            android:label="@string/widget_unread_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_unread_info" />
+        </receiver>
+        <receiver
+            android:name=".RecentConversationsWidget"
+            android:exported="false"
+            android:label="@string/widget_recent_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_recent_info" />
+        </receiver>
+        <receiver
+            android:name=".QuickReplyWidget"
+            android:exported="false"
+            android:label="@string/widget_quick_reply_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_quick_reply_info" />
+        </receiver>
+        <receiver
+            android:name=".FavoriteContactsWidget"
+            android:exported="false"
+            android:label="@string/widget_favorites_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_favorites_info" />
+        </receiver>
+        <service
+            android:name=".RecentConversationsService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+        <activity
+            android:name=".WidgetActionActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <!-- #11052 — le relais des actions de banniere : note « ouverte », retire la
+             banniere, puis ouvre la destination, comme notificationclick sur le web. -->
+        <activity
+            android:name=".NotificationActionActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+    </application>
+
+    <!-- Permissions -->
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- #7844 — sans elle, la WebView n'active pas la détection des changements
+         de réseau : navigator.onLine reste true et les événements online /
+         offline ne partent jamais (useOnline(), src/lib/net/online.ts, et ses
+         consommateurs socket.ts, receipts.ts, media-absent.ts). L'app native
+         gelée (apps/android) la déclare déjà (AndroidManifest.xml:6). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- #5668 — sans elles, getUserMedia() de la WebView échoue AVANT toute
+         demande à l'utilisateur : le composeur n'atteint jamais l'état
+         "requesting" (recette QEMU, socle du prompt). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- #7307 — Android 13+ (targetSdk 36) : sans elle, aucune bannière ne
+         s'affiche, et requestPermissions() de @capacitor/push-notifications
+         rend « denied » sans dialogue. Le manifeste du plugin ne la fournit
+         pas (il ne déclare que son MessagingService). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- #8007 — la tuile « Position » du composeur (navigator.geolocation)
+         passe par BridgeWebChromeClient.onGeolocationPermissionsShowPrompt,
+         qui demande ces deux permissions a l'execution : non declarees,
+         Android les refuse sans dialogue et la tuile tombe toujours sur
+         « refuse ». L'app native gelee (apps/android) les declare deja. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!-- #8045 — l'appel vidéo : getUserMedia({ video }) de la WebView passe
+         par BridgeWebChromeClient.onPermissionRequest, qui demande CAMERA à
+         l'exécution ; non déclarée, Android la refuse sans dialogue. La
+         caméra reste FACULTATIVE : l'appel vocal sert les appareils sans. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <!-- #10515 — Play déduit le matériel REQUIS des permissions : CAMERA exige
+         aussi l'autofocus, RECORD_AUDIO le micro, et toute application l'écran
+         tactile. Chrome sert Meeshy sur une tablette sans tactile, un
+         Chromebook au clavier ou une caméra à mise au point fixe : la coque
+         aussi, vocaux et appels échouant proprement sans le matériel. -->
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+    <!-- #8049 — l'appel natif de la coque (C10, C11, D6, D15, D16, D19, J1, J2).
+         FOREGROUND_SERVICE + ses deux types : l'appel en cours tient micro et
+         caméra écran éteint (CallForegroundService). USE_FULL_SCREEN_INTENT :
+         la sonnerie plein écran d'un appel reçu app tuée. BLUETOOTH_CONNECT :
+         router l'appel vers un casque (API 31+). WAKE_LOCK : le capteur de
+         proximité éteint l'écran contre l'oreille. VIBRATE : l'haptique aux
+         transitions de l'appel. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- #9257 — la lecture d'un vocal tenue écran éteint (PlaybackForegroundService). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- FOREGROUND_SERVICE_CAMERA et USE_FULL_SCREEN_INTENT : retirés tant que les
+         appels de la coque sont coupés (#10611), rendus avec eux. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- #9617 — la capture d'écran (API 34, Activity.registerScreenCaptureCallback)
+         et l'enregistrement ou la recopie (API 35, WindowManager.addScreenRecordingCallback)
+         d'un contenu qui disparaît s'annoncent à la conversation
+         (MeeshyScreenGuardPlugin). Deux permissions « normal », accordées à
+         l’installation ; sans effet avant Android 14 et 15. La vue unique, elle,
+         est noircie par FLAG_SECURE, qui n'en demande aucune. -->
+    <uses-permission android:name="android.permission.DETECT_SCREEN_CAPTURE" />
+    <uses-permission android:name="android.permission.DETECT_SCREEN_RECORDING" />
+
+    <!-- #8336 — la galerie (@capacitor-community/media, hors androidGalleryMode)
+         écrit dans Android/media/<appId>/Meeshy : dossier propre à l'app,
+         indexé par MediaStore, sans AUCUNE permission de stockage à aucun
+         niveau d'API. READ_MEDIA_* / *_EXTERNAL_STORAGE sont INTERDITES par
+         scripts/check-android-manifest.mjs (FORBIDDEN_PERMISSIONS). -->
+
+    <!-- #7930 — la tuile « Appareil photo » du composeur (<input capture>)
+         passe par BridgeWebChromeClient.showImageCapturePicker, qui ne lance
+         IMAGE_CAPTURE que si resolveActivity trouve une application photo.
+         Depuis l'API 30, la visibilité des paquets la cache sans cette
+         requête : le pont retombait sur le sélecteur de fichiers. -->
+    <!-- #9446 — les sous-titres d'un appel (MeeshySpeechPlugin) : depuis
+         l'API 30, SpeechRecognizer.isRecognitionAvailable ne voit le service
+         de reconnaissance du système que si le manifeste le demande. -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <!-- #10888 — le navigateur des Custom Tabs, que MeeshyLinksPlugin préchauffe :
+             sans cette requête, Android 11+ le cache à la coque. -->
+        <intent>
+            <action android:name="android.support.customtabs.action.CustomTabsService" />
+        </intent>
+    </queries>
+</manifest>

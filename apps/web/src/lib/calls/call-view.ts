@@ -1,0 +1,189 @@
+import type { CallErrorCode } from '@meeshy/shared/types/video-call';
+
+import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
+
+import { type ActiveCall, type CallEndReason, type CallMember } from './call-store';
+
+/**
+ * **CE QUE L'ÉCRAN D'APPEL DIT** (#6382) — les règles d'affichage de
+ * `CallView.swift`, sans DOM : le libellé d'état, le motif de fin, la
+ * disposition, les pastilles d'état. L'écran les lit, les témoins aussi.
+ */
+
+/** Les libellés d'appel SANS paramètre — ceux qu'un état choisit. */
+export type PlainCallKey = Exclude<Extract<InterfaceCatalogKey, `call.${string}`>, 'call.incoming.group' | 'call.waiting.from' | 'call.members' | 'call.a11y.screen' | 'call.callBack.named' | 'call.spotlight.show' | 'call.remove.named' | 'call.screen.peerSharing' | 'call.screen.of' | 'call.quality.indicator' | 'call.alert.weakNetwork' | 'call.alert.capturing' | 'call.preview.seenBy' | 'call.preview.heardBy'>;
+
+export const END_REASON_KEY: Readonly<Record<CallEndReason, PlainCallKey>> = {
+  local: 'call.ended.local',
+  remote: 'call.ended.remote',
+  rejected: 'call.ended.rejected',
+  missed: 'call.ended.missed',
+  busy: 'call.ended.busy',
+  connectionLost: 'call.ended.connectionLost',
+  failed: 'call.ended.failed',
+  permission: 'call.ended.permission',
+  removed: 'call.ended.removed',
+};
+
+/**
+ * Les refus de PRINCIPE de la passerelle (#8073) : un code typé qui a son
+ * propre motif, et qu'un nouvel essai rencontrerait à l'identique.
+ */
+const REFUSAL_KEYS: ReadonlyMap<string, PlainCallKey> = new Map<CallErrorCode, PlainCallKey>([['CALLEE_REFUSES_NON_CONTACTS', 'call.ended.refusedNonContacts']]);
+
+const refusalKeyOf = (detail: string | null): PlainCallKey | null => (detail === null ? null : (REFUSAL_KEYS.get(detail) ?? null));
+
+/** Le libellé sous le nom — `nil` une fois connecté : c'est la durée qui parle. */
+export function callStatusKey(call: Pick<ActiveCall, 'phase' | 'media' | 'callId' | 'direction'>): PlainCallKey | null {
+  switch (call.phase.kind) {
+    case 'incoming':
+      return call.media === 'video' ? 'call.incoming.title.video' : 'call.incoming.title.audio';
+    case 'outgoing':
+      return call.callId === null ? 'call.outgoing.ringing' : 'call.outgoing.waiting';
+    case 'connecting':
+      return 'call.connecting';
+    case 'reconnecting':
+      return 'call.reconnecting';
+    case 'ended':
+      return refusalKeyOf(call.phase.detail) ?? END_REASON_KEY[call.phase.reason];
+    case 'connected':
+      return null;
+  }
+}
+
+/** « Réessayer » d'iOS : après un échec passager ou une absence de réponse, jamais après un raccroché. */
+export function canRetry(call: Pick<ActiveCall, 'phase' | 'direction'>): boolean {
+  if (call.phase.kind !== 'ended' || call.direction !== 'outgoing' || refusalKeyOf(call.phase.detail) !== null) return false;
+  const reason = call.phase.reason;
+  return reason === 'failed' || reason === 'connectionLost' || reason === 'missed' || reason === 'busy';
+}
+
+export type CallLayout = 'portrait' | 'video-duo' | 'grid' | 'screen';
+
+/**
+ * La disposition connectée : un groupe à plus d'un pair est une grille — un
+ * écran partagé y monte à la une de la grille (#8392, `call-spotlight.ts`) ;
+ * ailleurs, un écran partagé par un pair prend la scène (#8063) ; un appel
+ * direct dont au moins une caméra tourne passe en vidéo plein cadre avec la
+ * vignette locale ; le reste est le portrait audio d'iOS.
+ */
+export function callLayout(call: Pick<ActiveCall, 'members' | 'cameraOn' | 'cameraPreview' | 'remoteStreams' | 'isGroup'>): CallLayout {
+  const members = Object.values(call.members);
+  if (call.isGroup && members.length > 1) return 'grid';
+  if (members.some((member) => member.screenSharing && hasVideo(call.remoteStreams[member.userId]))) return 'screen';
+  const remoteVideo = members.some((member) => member.cameraOn && hasVideo(call.remoteStreams[member.userId]));
+  return selfCameraShown(call) || remoteVideo ? 'video-duo' : 'portrait';
+}
+
+/** Ma caméra se montre : émise, ou gardée en aperçu local pendant mon partage (S2.8). */
+export const selfCameraShown = (call: Pick<ActiveCall, 'cameraOn' | 'cameraPreview'>): boolean => call.cameraOn || (call.cameraPreview ?? null) !== null;
+
+/** Le flux de ma vignette : l'aperçu de ma caméra pendant mon partage, sinon mon flux local. */
+export const selfCameraStream = (call: Pick<ActiveCall, 'cameraPreview' | 'localStream'>): MediaStream | null => call.cameraPreview ?? call.localStream;
+
+export function hasVideo(stream: MediaStream | undefined | null): boolean {
+  return stream !== undefined && stream !== null && stream.getVideoTracks().some((track) => track.readyState !== 'ended');
+}
+
+/** Le son de l'appel qu'un mode filme : mon micro, puis la voix de chacun des autres ; rien sans appel. */
+export const callAudioOf = ({ localStream = null, remoteStreams = {} }: Partial<Pick<ActiveCall, 'localStream' | 'remoteStreams'>> = {}): readonly MediaStream[] =>
+  [localStream, ...Object.values(remoteStreams)].filter((stream): stream is MediaStream => stream !== null);
+
+/** Le pair dont l'écran est partagé — celui que nomme la bannière. */
+export function screenSharer(members: Readonly<Record<string, CallMember>>): CallMember | null {
+  return Object.values(members).find((member) => member.screenSharing) ?? null;
+}
+
+/**
+ * Le bouton Écran n'existe que là où `getDisplayMedia` existe : ni la
+ * WebView de la coque Android ni Safari iOS ne l'ont, et un bouton qui ne
+ * peut rien ouvrir serait une promesse fausse.
+ */
+export function canShareScreen(mediaDevices: unknown): boolean {
+  return typeof mediaDevices === 'object' && mediaDevices !== null && typeof (mediaDevices as { readonly getDisplayMedia?: unknown }).getDisplayMedia === 'function';
+}
+
+export type StatusPill = 'mic-muted' | 'peer-muted' | 'poor-network';
+
+export const STATUS_PILL_KEY: Readonly<Record<StatusPill, PlainCallKey>> = {
+  'mic-muted': 'call.mic.muted',
+  'peer-muted': 'call.peer.muted',
+  'poor-network': 'call.quality.poor',
+};
+
+/** Les pastilles de `CallView.swift` que le web sait dire — le partage d'écran n'en est plus une : c'est un bandeau sous l'en-tête (P16.4, `call-top-banners.ts`) ; la survie de ma vidéo non plus : c'est « Vidéo réduite », une pastille de service de la même pile (E4, `call-service-pills.ts`). */
+export function statusPills(call: Pick<ActiveCall, 'micMuted' | 'screenSharing' | 'members' | 'quality' | 'isGroup'>): readonly StatusPill[] {
+  const members = Object.values(call.members);
+  const peerMuted = !call.isGroup && members.length === 1 && members[0]?.micMuted === true;
+  return [
+    ...(call.micMuted ? (['mic-muted'] as const) : []),
+    ...(peerMuted ? (['peer-muted'] as const) : []),
+    ...(call.quality?.level === 'poor' ? (['poor-network'] as const) : []),
+  ];
+}
+
+/**
+ * Les pastilles que la disposition MONTRE : « Micro coupé » reste à l'appel
+ * audio À DEUX (`audioCallLayout` d'iOS, que la scène de groupe ne monte pas) —
+ * en vidéo comme dans la grille, le bouton Micro porte déjà l'état et la planche
+ * ne dessine aucune pastille au-dessus de la scène (P7.4).
+ */
+export function visibleStatusPills(call: Parameters<typeof statusPills>[0], layout: CallLayout): readonly StatusPill[] {
+  return statusPills(call).filter((pill) => layout === 'portrait' || pill !== 'mic-muted');
+}
+
+/** L'ordre des tuiles d'une grille : les pairs connectés d'abord, par nom. */
+export function orderedMembers(members: Readonly<Record<string, CallMember>>): readonly CallMember[] {
+  const rank = (member: CallMember): number => (member.link === 'connected' ? 0 : member.link === 'reconnecting' ? 1 : 2);
+  return Object.values(members).sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+}
+
+/** La mise en avant d'un participant — `null` rend la grille, y compris quand le participant choisi est parti. */
+export function spotlight(members: readonly CallMember[], featuredId: string | null): { readonly featured: CallMember; readonly others: readonly CallMember[] } | null {
+  const featured = members.find((member) => member.userId === featuredId);
+  return featured === undefined ? null : { featured, others: members.filter((member) => member !== featured) };
+}
+
+/**
+ * Les membres d'une grille dans l'ORDRE D'ARRIVÉE (P11.3, `GroupCallStageLaw.tiles` d'Android) : celui
+ * de `call.members`, que l'état d'un lien ne remue pas — un pair qui se reconnecte garde sa case.
+ * Ma vignette, elle, est posée après eux par la grille. `orderedMembers` sert la feuille des
+ * personnes, l'enregistrement et le premier pair du duo, qui veulent les connectés d'abord.
+ */
+export const membersInArrival = (members: Readonly<Record<string, CallMember>>): readonly CallMember[] => Object.values(members);
+
+/**
+ * Colonnes d'une grille de `count` tuiles (soi compris) — `GroupCallGridLayout.layout` d'iOS et
+ * d'Android : deux tuiles s'empilent en portrait et se côtoient en paysage, trois font 2 × 2, quatre
+ * font 2 × 2 sauf UNE rangée de quatre quand la scène est en paysage ET la FENÊTRE de hauteur compacte
+ * (L4.1 : téléphone couché ; W2.1 : une fenêtre de bureau ou un iPad gardent le 2 × 2 de W2), cinq et six
+ * font 2 × 3 en portrait et 3 × 2 en paysage. `compact` se lit sur la fenêtre (`isCompactHeight`), pas
+ * sur la scène, que la colonne du journal ou la pilule raccourcissent.
+ */
+export function gridColumns(count: number, landscape: boolean, compact: boolean): number {
+  if (count <= 1) return 1;
+  if (count === 2) return landscape ? 2 : 1;
+  if (count === 3) return 2;
+  if (count === 4) return landscape && compact ? 4 : 2;
+  return landscape ? 3 : 2;
+}
+
+/**
+ * La grille d'un groupe garde 140 de haut au moins (P12.7, `CallGroupStageSizing` d'iOS) ; en hauteur compacte, les
+ * rangées de la pilule se replient en une ligne. Ici et non avec le bandeau : la pilule (l'écran) et la grille (son chunk) la lisent.
+ */
+export const GRID_MIN_HEIGHT = 140;
+export const COMPACT_HEIGHT = 500;
+
+export const isCompactHeight = (height: number): boolean => height > 0 && height < COMPACT_HEIGHT;
+
+/** La scène audio du duo (#18488, P9b ; `CallDuoAudioFit` d'Android, `CallAudioStageLayout.form` d'iOS) : avatar de 56 en forme compacte, de 40 sous 340 px de haut. */
+export const AUDIO_AVATAR_COMPACT = 56;
+export const AUDIO_AVATAR_TIGHT = 40;
+export const TIGHT_HEIGHT = 340;
+
+/** Compacte sous le journal ouvert dans la pilule (#17529) ET quand la HAUTEUR manque : la pilule entière, (…) compris, doit tenir dans la fenêtre. */
+export const audioStageCompact = ({ journalOpen, height }: { readonly journalOpen: boolean; readonly height: number }): boolean => journalOpen || isCompactHeight(height);
+
+export const audioAvatarSize = ({ compact, height, joined }: { readonly compact: boolean; readonly height: number; readonly joined: boolean }): number =>
+  compact ? (height > 0 && height < TIGHT_HEIGHT ? AUDIO_AVATAR_TIGHT : AUDIO_AVATAR_COMPACT) : joined ? 120 : 112;

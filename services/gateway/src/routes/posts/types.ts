@@ -1,6 +1,12 @@
 import { z } from 'zod';
-import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
+import { OBJECT_ID_REGEX, OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
 import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
+import { POST_VISIBILITIES } from '@meeshy/shared/types/post';
+import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
+import { utf16Bounded } from '@meeshy/shared/utils/validation-primitives';
+import { parseMessageSticker } from '../../services/stickers/messageSticker';
+import { enforceMediaIdsOnCreate, enforceMediaIdsOnUpdate, enforceStoryLimits, enforceStoryTextLengthOnCreate } from './storyLimits';
+import { StoryKeyframesBoundsSchema, StoryScenesBoundsSchema, StoryTimelineDurationSchema } from './storyEffectsBounds';
 
 // ============================================
 // CURSOR PAGINATION HELPERS
@@ -58,7 +64,45 @@ const STORY_LANG_MAX = 16;              // BCP-47
 const STORY_HEX_MAX = 16;               // "#RRGGBBAA" + marge
 const STORY_FONT_MAX = 64;
 const STORY_STYLE_MAX = 64;
-const STORY_ARRAY_CAP = 32;             // medias/texts/stickers/audios par slide
+const STORY_ARRAY_CAP = 32;             // keyframes/variantes ; le NOMBRE d'objets par scène est dans storyLimits.ts
+
+// Les REGLAGES d'une image posee (#9175) — `ImageAdjustments` iOS : seules les
+// valeurs actives voyagent. Bornes LARGES (le client borne chaque reglage a sa
+// plage de curseur) mais finies : une charge ne decide pas du cout du rendu.
+// `passthrough` comme le reste du blob — un reglage plus recent qu'un client
+// ancien voyage, et ce client l'ignore.
+const STORY_ADJUSTMENT_BOUND = 10;
+const adjustmentValue = z.number().finite().min(-STORY_ADJUSTMENT_BOUND).max(STORY_ADJUSTMENT_BOUND).optional();
+// Les EFFETS d'une image (#9498) — bloom et grain, ce que l'outil « Effets » de
+// l'ancien editeur offrait de plus que les reglages — voyagent dans le meme sac.
+// Leur curseur va de 0 a 1 sur iOS comme sur le web : la borne est la sienne.
+const effectValue = z.number().finite().min(0).max(1).optional();
+export const StoryMediaAdjustmentsSchema = z.object({
+  exposure: adjustmentValue,
+  brightness: adjustmentValue,
+  contrast: adjustmentValue,
+  saturation: adjustmentValue,
+  vibrance: adjustmentValue,
+  temperature: adjustmentValue,
+  sharpness: adjustmentValue,
+  blur: adjustmentValue,
+  vignette: adjustmentValue,
+  bloom: effectValue,
+  grain: effectValue,
+}).passthrough();
+
+// Le RECADRAGE d'une image posee (#9499) — `MediaCropRect` iOS : un rectangle
+// en FRACTIONS de la source, origine en haut a gauche, absent quand il est
+// plein. Les quatre bornes ensemble, dans la source, d'aire non nulle — meme
+// contrat que les cles `cropX/Y/W/H` du pont v3 (`canvas-v3.ts`).
+const cropFraction = z.number().finite().min(0).max(1);
+const cropSide = z.number().finite().gt(0).max(1);
+export const StoryMediaCropSchema = z.object({
+  x: cropFraction,
+  y: cropFraction,
+  width: cropSide,
+  height: cropSide,
+});
 
 export const StoryMediaObjectSchema = z.object({
   id: z.string().max(STORY_ID_MAX).optional(),
@@ -69,7 +113,7 @@ export const StoryMediaObjectSchema = z.object({
   aspectRatio: z.number().min(0.05).max(20).optional(),
   x: z.number().min(-10).max(10).optional(),
   y: z.number().min(-10).max(10).optional(),
-  scale: z.number().min(0).max(20).optional(),
+  scale: z.number().min(0).optional(),
   rotation: z.number().min(-720).max(720).optional(),
   // Plafond a 2 : l'auteur peut pousser un media au-dela de son niveau nominal
   // (quitte a saturer, c'est un choix de composition assume). Miroir de
@@ -90,6 +134,12 @@ export const StoryMediaObjectSchema = z.object({
   fadeOut: z.number().min(0).max(60).optional(),
   sourceLanguage: z.string().max(STORY_LANG_MAX).optional(),
   thumbHash: z.string().max(STORY_THUMBHASH_MAX).optional(),
+  // Le filtre PROPRE a l'objet (2026-09-28) : memes valeurs que le filtre de
+  // slide (`StoryEffects.filter`, celui du fond). Borne comme ses freres.
+  filter: z.string().max(32).optional(),
+  adjustments: StoryMediaAdjustmentsSchema.optional(),
+  crop: StoryMediaCropSchema.optional(),
+  keyframes: StoryKeyframesBoundsSchema,
 }).passthrough();
 
 const StoryTextObjectSchema = z.object({
@@ -98,7 +148,7 @@ const StoryTextObjectSchema = z.object({
   content: z.string().max(STORY_TEXT_MAX).optional(),  // legacy field
   x: z.number().min(-10).max(10).optional(),
   y: z.number().min(-10).max(10).optional(),
-  scale: z.number().min(0).max(20).optional(),
+  scale: z.number().min(0).optional(),
   rotation: z.number().min(-720).max(720).optional(),
   fontSize: z.number().min(1).max(1000).optional(),
   textSize: z.number().min(1).max(1000).optional(),  // legacy field
@@ -109,11 +159,17 @@ const StoryTextObjectSchema = z.object({
   textBg: z.string().max(STORY_HEX_MAX).optional(),
   borderColor: z.string().max(STORY_HEX_MAX).optional(),
   borderWidth: z.number().min(0).max(100).optional(),
+  // L'axe EFFET (#4870) — `glow` | `shadow` | `relief`, absent ⇒ aucun. Une
+  // chaîne bornée comme `textStyle`, pas un énuméré : un client plus récent
+  // peut publier une valeur que ce serveur ne connaît pas, et les lecteurs
+  // retombent sur « aucun » plutôt que de refuser la story.
+  textEffect: z.string().max(STORY_STYLE_MAX).optional(),
   zIndex: z.number().int().min(-1000).max(1000).optional(),
   startTime: z.number().min(0).max(86400).optional(),
   duration: z.number().min(0).max(86400).optional(),
   sourceLanguage: z.string().max(STORY_LANG_MAX).optional(),
-  translations: z.record(z.string(), z.string().max(STORY_TEXT_MAX)).optional(),
+  // Traductions écrites par le serveur : jamais bornées par le plafond de création (#13590).
+  translations: z.record(z.string(), z.string()).optional(),
   /**
    * `User.id` quand cet objet EST un badge de référence, absent pour du texte
    * libre. C'est LUI que `collectMentionableText` lit pour exclure le badge de
@@ -125,16 +181,18 @@ const StoryTextObjectSchema = z.object({
    * mérite d'être validé comme les autres.
    */
   referenceUserId: z.string().regex(OBJECT_ID_REGEX).optional(),
+  keyframes: StoryKeyframesBoundsSchema,
 }).passthrough();
 
 const StoryStickerObjectSchema = z.object({
   id: z.string().max(STORY_ID_MAX).optional(),
-  emoji: z.string().max(16).optional(),
+  emoji: utf16Bounded(z.string(), { max: EMOJI_MAX_LENGTH }).optional(),
   x: z.number().min(-10).max(10).optional(),
   y: z.number().min(-10).max(10).optional(),
-  scale: z.number().min(0).max(20).optional(),
+  scale: z.number().min(0).optional(),
   rotation: z.number().min(-720).max(720).optional(),
   zIndex: z.number().int().min(-1000).max(1000).optional(),
+  keyframes: StoryKeyframesBoundsSchema,
 }).passthrough();
 
 export const StoryAudioObjectSchema = z.object({
@@ -172,11 +230,13 @@ const STORY_EFFECTS_MAX_BYTES = 256 * 1024;
 export const StoryEffectsSchema = z.object({
   background: z.string().max(64).optional(),
   thumbHash: z.string().max(STORY_THUMBHASH_MAX).optional(),
-  mediaObjects: z.array(StoryMediaObjectSchema).max(STORY_ARRAY_CAP).optional(),
-  textObjects: z.array(StoryTextObjectSchema).max(STORY_ARRAY_CAP).optional(),
-  stickerObjects: z.array(StoryStickerObjectSchema).max(STORY_ARRAY_CAP).optional(),
-  audioPlayerObjects: z.array(StoryAudioObjectSchema).max(STORY_ARRAY_CAP).optional(),
+  mediaObjects: z.array(StoryMediaObjectSchema).optional(),
+  textObjects: z.array(StoryTextObjectSchema).optional(),
+  stickerObjects: z.array(StoryStickerObjectSchema).optional(),
+  audioPlayerObjects: z.array(StoryAudioObjectSchema).optional(),
   slideDuration: z.number().min(0).max(86400).optional(),
+  timelineDuration: StoryTimelineDurationSchema,
+  scenes: StoryScenesBoundsSchema,
 }).passthrough()
   .refine((effects) => {
     // Garde-fou final : sérialiser et vérifier taille totale. Couvre les
@@ -186,7 +246,8 @@ export const StoryEffectsSchema = z.object({
     } catch {
       return false;
     }
-  }, { message: `storyEffects JSON exceeds ${STORY_EFFECTS_MAX_BYTES} bytes` });
+  }, { message: `storyEffects JSON exceeds ${STORY_EFFECTS_MAX_BYTES} bytes` })
+  .superRefine(enforceStoryLimits);
 
 /**
  * Une personne que le post NOMME sans que son texte le dise.
@@ -224,10 +285,19 @@ export const PostReferenceInputSchema = z.object({
   message: 'userId ou username requis',
 });
 
+/**
+ * L'audience d'une publication — UN seul schéma pour les quatre entrées (création,
+ * édition, republication, publication d'une pièce jointe), dérivé de la liste
+ * partagée `POST_VISIBILITIES`. Quatre `z.enum` recopiés à la main divergent : une
+ * valeur ajoutée à l'un et oubliée aux autres refuse, selon la porte, une audience
+ * que le schéma Prisma accepte.
+ */
+export const PostVisibilitySchema = z.enum(POST_VISIBILITIES);
+
 export const CreatePostSchema = z.object({
   type: z.enum(['POST', 'REEL', 'STORY', 'STATUS']).default('POST'),
-  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
-  visibilityUserIds: z.array(z.string()).max(500).optional(),
+  visibility: PostVisibilitySchema.optional(),
+  visibilityUserIds: z.array(z.string().regex(OBJECT_ID_REGEX)).max(500).optional(),
   content: z.string().max(5000).optional(),
   communityId: z.string().optional(),
   // Story-specific
@@ -236,6 +306,15 @@ export const CreatePostSchema = z.object({
   // vers la bibliothèque de sons (Sound crédité à l'auteur). Ne gouverne que
   // le démuxage vidéo — les pistes audio suivent `feedsSoundLibrary`.
   allowSoundExtraction: z.boolean().optional(),
+  // Réglage AUTEUR posé à la publication (#3959) — désactive TOUT commentaire
+  // sur ce post (`POST /posts/:postId/comments`, création et réponses).
+  commentsDisabled: z.boolean().optional(),
+  // DÉCLARÉ par le client, comme `capturedInApp` sur `PublishAttachmentSchema` :
+  // rien côté serveur ne distingue un média passé par l'éditeur de montage
+  // (recadrage, filtre, découpe) d'un média publié tel quel. Alimente les axes
+  // d'engagement mutuellement exclusifs « montage in-app » (#5542) et
+  // « publication directe » (#5543) — absent ou `false` ⇒ publication directe.
+  editedInApp: z.boolean().optional(),
   // Status/mood-specific
   moodEmoji: z.string().max(10).optional(),
   audioUrl: z.url().optional(),
@@ -243,13 +322,27 @@ export const CreatePostSchema = z.object({
   // Original language override (ISO 639-1/639-3, optional BCP-47 region, e.g. "fr", "bas-CM").
   // `.max(6)` : parité avec la SSOT `CommonSchemas.language`.
   originalLanguage: z.string().min(2).max(6).optional(),
+  // Langue MESURÉE côté client sur `content` (tinyld, `detectMeasuredLanguage`,
+  // #5349) — jamais une préférence d'interface, jamais confondue avec
+  // `originalLanguage` (revendication) ci-dessus. `PostTranslationService` la
+  // préfère à sa propre détection par regex quand `originalLanguage` manque.
+  detectedLanguage: z.string().min(2).max(6).optional(),
   // Media IDs (already uploaded)
-  mediaIds: z.array(z.string()).max(MAX_POST_MEDIA).optional(),
+  mediaIds: z.array(z.string()).optional(), // borne selon le type : storyLimits.ts (enforceMediaIds*)
   // Texte alternatif par média (accessibilité, `PostMedia.alt`) — clé = un id
   // de `mediaIds` ci-dessus, IGNORÉ pour tout id absent de `mediaIds` (le
   // service ne l'applique qu'aux lignes qu'il vient réellement de rattacher
   // à CE post, jamais à un média tiers glissé dans la carte).
   mediaAlt: z.record(z.string(), z.string().max(1000)).optional(),
+  // LÉGENDE par média (`PostMedia.caption`) — même contrat, même garde et même
+  // borne que `mediaAlt` ci-dessus : clé = un id de `mediaIds`, IGNORÉ pour tout
+  // id absent.
+  //
+  // La colonne existait, était SERVIE (`postIncludes.ts`) et n'était écrite par
+  // PERSONNE : ni les routes, ni iOS, ni le web. Un champ rendu que rien ne
+  // remplit (#4055). Il porte, en profil Post, la légende de CE média — distincte
+  // du `content` du post, qui reste celui de la publication (modèle § 3).
+  mediaCaption: z.record(z.string(), z.string().max(1000)).optional(),
   // Références DÉCLARÉES — celles que le texte ne porte pas (badge sur le
   // canevas d'une story, note sous le contenu, métadonnée silencieuse). Chacune
   // porte son mode d'exposition, que l'édition relit pour savoir lesquelles
@@ -275,7 +368,23 @@ export const CreatePostSchema = z.object({
   // est rejetée ici (400 VALIDATION_ERROR), même garde que `visibility`
   // ci-dessus — jamais un `geoPoint`/`geoPrecision` brut, à aucun niveau.
   discoverabilityPrecision: z.enum(['EXACT', 'NEIGHBORHOOD', 'CITY', 'REGION']).optional(),
+  // Opt-in EXPLICITE requis pour obtenir `EXACT` (#3637) — un geste séparé du
+  // simple choix dans l'énumération ci-dessus. Sans lui (ou pour un auteur
+  // dont la majorité n'est pas vérifiée), `EXACT` retombe sur `NEIGHBORHOOD`
+  // côté serveur (`PostService.createPost` via `resolveDiscoverabilityPrecision`).
+  discoverabilityPrecisionConfirmed: z.boolean().optional(),
+  // « Publier AUSSI en réel » (#9476) — OPTIONNEL : un client qui n'envoie que
+  // `type` publie exactement comme avant. Vrai, il n'est admis que sur une
+  // STORY originale (`ALSO_AS_REEL_REQUIRES_STORY` sinon) ; le réel reçoit ses
+  // PROPRES médias, par copie (`services/posts/storyReelCompanion.ts`), ou rien
+  // ne part (`REEL_NOT_QUALIFIED`).
+  alsoAsReel: z.boolean().optional(),
 }).refine((data) => {
+  // Une republication HÉRITE la liste de sa source (`PostService.createPost`,
+  // `repostVisibilityInheritsAudienceList`) : ce que le client envoie est
+  // remplacé, et il ne peut plus la lire — elle n'est servie qu'à l'auteur de
+  // la source (#7407). L'exiger refuserait la republication qu'on autorise.
+  if (data.repostOfId?.trim()) return true;
   if ((data.visibility === 'EXCEPT' || data.visibility === 'ONLY') && (!data.visibilityUserIds || data.visibilityUserIds.length === 0)) {
     return false;
   }
@@ -283,6 +392,13 @@ export const CreatePostSchema = z.object({
 }, { message: 'EXCEPT and ONLY visibility require at least one userId in visibilityUserIds' })
   .refine(hasAnyContentCarrier, {
     message: 'A post must carry something: content, media, audio, a mood, a repost, or story effects',
+  })
+  // 1000 caractères par texte à la CRÉATION (#13590) — sauf une republication, qui recopie le texte STOCKÉ de sa
+  // source (`StoryComposerViewModel(reposting:)`) : une story stockée reste publiable telle qu'elle est.
+  .superRefine((data, ctx) => {
+    enforceMediaIdsOnCreate(data, ctx);
+    if (data.repostOfId?.trim() || !data.storyEffects) return;
+    enforceStoryTextLengthOnCreate(data.storyEffects, ctx);
   });
 
 /**
@@ -336,12 +452,15 @@ function hasAnyContentCarrier(data: {
 
 export const UpdatePostSchema = z.object({
   content: z.string().max(5000).optional(),
-  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
-  visibilityUserIds: z.array(z.string()).max(500).optional(),
+  visibility: PostVisibilitySchema.optional(),
+  visibilityUserIds: z.array(z.string().regex(OBJECT_ID_REGEX)).max(500).optional(),
   storyEffects: StoryEffectsSchema.optional(),
   // Opt-in extraction bande-son vidéo — même contrat que CreatePostSchema.
   // Basculer à false libère l'usage vidéo à la prochaine passe de capture.
   allowSoundExtraction: z.boolean().optional(),
+  // #16541 — l'auteur ferme / rouvre les commentaires depuis l'édition. Absent =
+  // inchangé. Un tiers modérateur passe par `PATCH /posts/:postId/comment-settings`.
+  commentsDisabled: z.boolean().optional(),
   moodEmoji: z.string().max(10).optional(),
   // ISO 639-1 (or BCP-47) source language. Changing it re-runs the Prisme
   // translation pipeline from the new source and discards stale translations.
@@ -360,12 +479,14 @@ export const UpdatePostSchema = z.object({
   // Ids of freshly uploaded media (PostMedia created by TUS with postId=null)
   // to attach during the edit — same contract and bound as CreatePostSchema.
   // On a STORY this counts as a content edit (engagement reset).
-  mediaIds: z.array(z.string()).max(MAX_POST_MEDIA).optional(),
+  mediaIds: z.array(z.string()).optional(), // borne selon le type : storyLimits.ts (enforceMediaIds*)
   // Texte alternatif par média — même contrat que `CreatePostSchema.mediaAlt`
   // (clé = un id de `mediaIds` ci-dessus, ignoré sinon). Édite l'accessibilité
   // d'un média qui vient d'être rattaché ; les médias déjà attachés au post ne
   // se réécrivent pas par ce canal (pas de renvoi d'`id` déjà lié).
   mediaAlt: z.record(z.string(), z.string().max(1000)).optional(),
+  // Légende par média — même contrat que `CreatePostSchema.mediaCaption`.
+  mediaCaption: z.record(z.string(), z.string().max(1000)).optional(),
   // Lieu partagé — tri-état : clé ABSENTE = inchangé, `null` = retrait,
   // objet = remplacement (validé par parseSharedPlace côté route, comme à
   // la création). Écrit/effacé dans metadata.location par le service.
@@ -375,7 +496,8 @@ export const UpdatePostSchema = z.object({
     return false;
   }
   return true;
-}, { message: 'EXCEPT and ONLY visibility require at least one userId in visibilityUserIds' });
+}, { message: 'EXCEPT and ONLY visibility require at least one userId in visibilityUserIds' })
+  .superRefine(enforceMediaIdsOnUpdate);
 
 /// Surfaces d'où peut partir un « Enregistrer ». Volontairement plus courte que
 /// IMPRESSION_SOURCES : seules ces trois surfaces exposent l'action.
@@ -399,17 +521,47 @@ export const CreateCommentSchema = z.object({
   /// from the content as a fallback.
   originalLanguage: z.string().min(2).max(16).optional(),
   /// IDs de PostMedia déjà uploadés (uploadcontext=comment, postId/commentId=null
-  /// pending) à attacher. Wire aligné sur le contrat message-with-attachments
-  /// (tableau), MAIS un commentaire ne porte QU'UN SEUL média → borné à 1.
-  attachmentIds: z.array(z.string()).max(1).optional(),
+  /// pending) à attacher. Wire aligné sur le contrat message-with-attachments.
+  ///
+  /// **BORNÉ À `MAX_POST_MEDIA`, PAS À 1 (#6578).** La directive porteur du
+  /// 2026-09-14 dit « ajouter d'autres média » au PLURIEL, la relation Prisma
+  /// est déjà `PostMedia[]`, et `CommentAttachmentsTray` affiche déjà un
+  /// TABLEAU de vignettes : borner à 1 faisait de ce bandeau un contrôle qui
+  /// ment — il montrait N pièces pour n'en envoyer qu'une. Le plafond RÉUTILISE
+  /// celui des médias d'un post : deux plafonds seraient deux vérités, et la
+  /// seconde dériverait au premier ajustement.
+  ///
+  /// Chaque id est un ObjectId (#9745), comme `attachmentIds` du socket
+  /// (`socket-event-schemas.ts`) : la colonne en est une, et une autre chaîne
+  /// faisait lever la requête d'admission — 500 au lieu d'un refus lisible.
+  attachmentIds: z.array(z.string().regex(OBJECT_ID_REGEX)).max(MAX_POST_MEDIA).optional(),
+  /// Le média du POST COMMENTÉ que ce commentaire cite (#6578) — voie
+  /// `metadata.quotedPostMedia`, AUCUNE colonne. `z.unknown()` parce que la
+  /// forme est tranchée par `admitQuotedPostMedia`, seul site de la règle : la
+  /// NATURE y est DÉRIVÉE du MIME relu et jamais crue sur parole, et un
+  /// `postMediaId` étranger au post y est REFUSÉ. Un schéma qui validerait la
+  /// forme ici donnerait l'illusion d'une garde là où il n'y a qu'une syntaxe.
+  quotedPostMedia: z.unknown().optional(),
   /// Transcription Whisper produite côté mobile pour un média audio (évite la
   /// re-transcription serveur). Même structure que pour les posts.
   mobileTranscription: MobileTranscriptionSchema.optional(),
   /// Lieu partagé — même contrat que CreatePostSchema ci-dessus.
   location: z.unknown().optional(),
+  /// Sticker (#9080) — la MÊME forme que le sticker d'un message
+  /// (`MessageSticker`) : ce descripteur ici, l'image rendue en média joint
+  /// (`attachmentIds`). `z.unknown()` parce que la loi est
+  /// `parseMessageSticker`, seul site : le service l'écrit, blanchi, dans
+  /// `metadata.sticker`.
+  sticker: z.unknown().optional(),
 }).refine(
-  (data) => (data.content?.trim().length ?? 0) > 0 || (data.attachmentIds?.length ?? 0) > 0,
-  { message: 'A comment must have text content or an attached media' },
+  // Un sticker seul rend le corps non vide — mais VALIDE, comme pour un
+  // message (`services/messaging/nonTextBody.ts`) : un sticker que la loi
+  // rejette n'écrirait rien, le commentaire serait vide.
+  (data) =>
+    (data.content?.trim().length ?? 0) > 0 ||
+    (data.attachmentIds?.length ?? 0) > 0 ||
+    parseMessageSticker(data.sticker) !== null,
+  { message: 'A comment must have text content, an attached media or a sticker' },
 );
 
 export const UpdateCommentSchema = z.object({
@@ -422,6 +574,11 @@ export const UpdateCommentSchema = z.object({
   /// Prisma `Int` est un int32 Mongo, et iOS reconstruit un `UInt32` depuis
   /// cette valeur — un flag hors borne casserait les deux côtés.
   effectFlags: z.number().int().min(0).max(0x7FFFFFFF).optional(),
+  // ISO 639-1 (or BCP-47) source language, déclarée par le composer — même
+  // contrat que `UpdatePostSchema.originalLanguage`. N'a d'effet QUE si
+  // `content` change aussi (garde métier dans `PostCommentService.updateComment`) ;
+  // absente sur un changement de texte, la redétection reprend la main.
+  originalLanguage: z.string().min(2).max(16).optional(),
 }).refine(
   (data) => data.content !== undefined || data.effectFlags !== undefined,
   { message: 'Nothing to update' },
@@ -434,7 +591,7 @@ export const RepostSchema = z.object({
   // Audience choisie par le REPOSTEUR. Le composer l'affiche depuis toujours ;
   // sans ce champ elle n'atteignait aucune couche et tout repost sortait avec
   // la visibilité de l'original (donc PUBLIC, seule valeur repostable).
-  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
+  visibility: PostVisibilitySchema.optional(),
 });
 
 export const TranslatePostSchema = z.object({
@@ -502,7 +659,7 @@ export const ReelFeedQuerySchema = FeedQuerySchema.extend({
 });
 
 export const LikeSchema = z.object({
-  emoji: z.string().max(10).default('❤️'),
+  emoji: utf16Bounded(z.string(), { max: EMOJI_MAX_LENGTH }).default('❤️'),
 });
 
 /**
@@ -530,8 +687,26 @@ export const LikeSchema = z.object({
  * geste à l'aveugle que cette route existe pour supprimer.
  */
 export const UnlikeSchema = z.object({
-  emoji: z.string().trim().min(1).max(10).optional(),
+  emoji: utf16Bounded(z.string().trim(), { min: 1, max: EMOJI_MAX_LENGTH }).optional(),
 });
+
+/**
+ * Réponse à un sticker interactif (#3954) — sondage/quiz pose `choice`, un
+ * curseur emoji `numericValue`, une question/« à vous » `text`. Les trois
+ * sont indépendamment optionnels ; au moins un est requis (`.refine`), le
+ * kind `interactive` restant RÉSERVÉ au contrat (#3953) — ce schéma ne valide
+ * pas la forme d'une réponse contre le sous-type de son sticker.
+ */
+export const PostInteractiveResponseSchema = z
+  .object({
+    choice: z.string().trim().min(1).max(200).optional(),
+    numericValue: z.number().finite().optional(),
+    text: z.string().trim().min(1).max(2000).optional(),
+  })
+  .refine(
+    (data) => data.choice !== undefined || data.numericValue !== undefined || data.text !== undefined,
+    { message: 'At least one of choice, numericValue or text is required' },
+  );
 
 // ============================================
 // RESPONSE TYPES
@@ -560,8 +735,34 @@ export interface PostParams {
   postId: string;
 }
 
+/**
+ * `schema.params` Ajv partagé par toute route `/posts/:postId…` de ce module
+ * (#6853). Sans lui, un `postId` non conforme — `"stories"`, un slug, une
+ * chaîne vide — n'est rejeté par aucune couche avant le handler ; il retombe
+ * sur un cast Prisma non gardé qui remonte en 500 générique, opaque pour
+ * l'appelant. Posé en `schema.params`, Ajv refuse la requête AVANT le
+ * handler et le gestionnaire d'erreurs global (`schemaValidationErrorResponse`)
+ * la traduit en 400 nommant le champ fautif.
+ *
+ * `additionalProperties: true` (défaut) : ce schéma ne se prononce QUE sur
+ * `postId` — les routes imbriquées (`:commentId`, `:objectId`, `:mediaId`)
+ * gardent leur propre forme, ou son absence, sans qu'on la redéclare ici.
+ */
+export const postIdParamsSchema = {
+  type: 'object',
+  properties: {
+    postId: { type: 'string', pattern: OBJECT_ID_PATTERN },
+  },
+  required: ['postId'],
+} as const;
+
 export interface CommentParams extends PostParams {
   commentId: string;
+}
+
+export interface PostObjectParams extends PostParams {
+  /** `MeeshySceneObject.id` du sticker à l'intérieur du canvas — chaîne libre, pas un ObjectId. */
+  objectId: string;
 }
 
 export interface UserParams {
@@ -584,11 +785,17 @@ export interface CommunityParams {
  * photo importée. Le serveur ne s'en sert pas pour décider — il l'enregistre
  * dans le journal de mutation, pour que « publié depuis une capture » reste
  * lisible après coup.
+ *
+ * `editedInApp` — même discipline que `capturedInApp`, mais une question
+ * DISTINCTE : est-ce que le média a été RETOUCHÉ (montage, recadrage, filtre)
+ * avant d'être publié depuis cet écran de partage ? Alimente les axes
+ * d'engagement « montage in-app » (#5542) / « publication directe » (#5543).
  */
 export const PublishAttachmentSchema = z.object({
   attachmentId: z.string().min(1),
   target: z.enum(['POST', 'REEL', 'STORY']).optional(),
   content: z.string().max(5000).optional(),
-  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
+  visibility: PostVisibilitySchema.optional(),
   capturedInApp: z.boolean().optional(),
+  editedInApp: z.boolean().optional(),
 });

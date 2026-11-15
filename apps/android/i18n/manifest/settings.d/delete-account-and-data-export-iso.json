@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "account.delete.final.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "account.delete.final.message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.cancel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.delete",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "account.delete.confirmation.value.matched",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "account.delete.confirmation.value.pending",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "account.delete.button.hint.ready",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "account.delete.button.hint.type_phrase",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "account.delete.error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.data.export.button.done",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.data.export.hint.exporting",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.data.export.hint.start",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

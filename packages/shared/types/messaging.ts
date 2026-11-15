@@ -5,6 +5,7 @@
  * Gateway WebSocket ↔ Frontend communication
  */
 
+import type { E2EEDeviceLayerRequest, E2EEDevicesMismatch } from './e2ee-directory.js';
 import type { ApiResponse } from './api-responses.js';
 import type { SocketIOMessage } from './socketio-events.js';
 import type { EncryptedPayload } from './encryption.js';
@@ -119,6 +120,13 @@ export interface MessageRequest {
   readonly storyReplyToId?: string;        // ID de la story pour réponse privée (DM avec contexte story)
   readonly forwardedFromId?: string;        // ID du message original (transfert)
   readonly forwardedFromConversationId?: string; // ID de la conversation source (transfert cross-conversation)
+  /**
+   * #9914 — les pièces de `forwardedFromId` à recopier, dans l'ordre voulu.
+   * Absent : tout le lot (rétrocompatible). Chaque id doit appartenir au
+   * message source, sinon le transfert est refusé
+   * (`FORWARD_REFUSAL_CODES.ATTACHMENT_NOT_IN_SOURCE`).
+   */
+  readonly forwardedAttachmentIds?: readonly string[];
 
   /**
    * Diffusion à plusieurs destinataires (PAS un transfert) : copie côté
@@ -156,6 +164,13 @@ export interface MessageRequest {
   // When present, content field should be empty or ignored
   readonly encryptedPayload?: EncryptedPayload;
 
+  /**
+   * La couche appareil d'un envoi HYBRIDE (#14369) : des enveloppes libsignal
+   * posées à côté d'un `content` en clair. Exclusive de `encryptedPayload` ;
+   * admise seulement dans une conversation `hybrid`.
+   */
+  readonly deviceLayer?: E2EEDeviceLayerRequest;
+
   // Preferences de traduction spécifiques à ce message
   readonly translationPreferences?: MessageTranslationPreferences;
 
@@ -174,6 +189,28 @@ export interface MessageRequest {
    * (`services/location/sharedPlace.ts`), pas dans ce type partagé.
    */
   readonly location?: unknown;
+
+  /**
+   * Sticker (décoration de story ou emoji), champ dédié — même doctrine que
+   * `location` : jamais fusionné dans `metadata` côté client, validé et écrit
+   * dans `Message.metadata.sticker` par la seule passerelle
+   * (`services/stickers/messageSticker.ts`). Forme non typée ici pour la
+   * même raison : la validation stricte vit côté gateway.
+   */
+  readonly sticker?: unknown;
+
+  /**
+   * La PIÈCE NOMMÉE que cette réponse vise (#6164), champ dédié — même
+   * doctrine que `location` et `sticker` : jamais fusionné dans `metadata`
+   * côté client, rangé par la seule passerelle dans
+   * `Message.metadata.attachmentReplyTo`.
+   *
+   * Forme non typée ici pour la même raison que ses deux voisins : la règle
+   * stricte vit côté gateway (`services/messaging/attachmentReplySnapshot.ts`)
+   * — et elle n'est PAS qu'une forme, elle lit la base. La pièce doit
+   * appartenir au message cité, sans quoi l'envoi est REFUSÉ.
+   */
+  readonly attachmentReplyTo?: unknown;
 }
 
 // ===== RÉPONSE UNIFIÉE =====
@@ -225,6 +262,19 @@ export interface TranslationStatus {
 export interface MessageResponse extends ApiResponse<SocketIOMessage> {
   // Message complet avec toutes les relations
   readonly data: SocketIOMessage;  // Includes sender, translations, replyTo, etc.
+  /**
+   * Secondes à attendre avant de réessayer — posé par les SEULS refus
+   * temporaires (`code: 'NEWCOMER_SLOW_MODE'`, #7740). Absent sur un succès et
+   * sur un refus définitif : un client qui le lit peut REPRÉSENTER le message
+   * au lieu de le ranger en échec.
+   */
+  readonly retryAfter?: number;
+  /**
+   * Posé par le seul refus `E2EE_DEVICES_MISMATCH` (Sesame, #3706) : les
+   * appareils manquants, en trop ou périmés que le client doit résoudre avant
+   * de rechiffrer et renvoyer.
+   */
+  readonly e2eeMismatch?: E2EEDevicesMismatch;
 }
 
 // ===== ÉVÉNEMENTS WEBSOCKET UNIFIÉS =====

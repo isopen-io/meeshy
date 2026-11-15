@@ -89,4 +89,72 @@ final class MessageFrameTrackerTests: XCTestCase {
         XCTAssertFalse(tracker.accessOrder.contains("a"),
                        "LRU queue stays consistent after explicit removal")
     }
+
+    // MARK: - #3946 — la boîte qui empêche la mesure de réveiller la racine
+
+    /// La boîte ne réécrit pas la loi : elle la PORTE. Si elle la
+    /// réimplémentait, le plafond LRU aurait deux versions, et la seconde ne
+    /// serait testée par personne.
+    func test_theBox_carriesTheLRULaw_ratherThanReimplementingIt() {
+        let box = MessageFrameBox(maxEntries: 2)
+        box.update(["a": makeFrame(1)])
+        box.update(["b": makeFrame(2)])
+        box.update(["c": makeFrame(3)])
+
+        XCTAssertNil(box.frame(for: "a"), "le plus ancien sort au-delà du plafond — la loi de la valeur")
+        XCTAssertEqual(box.frame(for: "b"), makeFrame(2))
+        XCTAssertEqual(box.frame(for: "c"), makeFrame(3))
+    }
+
+    func test_theBox_forgetsAFrameOnDemand() {
+        let box = MessageFrameBox()
+        box.update(["a": makeFrame(1)])
+        box.removeFrame(for: "a")
+        XCTAssertNil(box.frame(for: "a"))
+    }
+
+    /// **Une RÉFÉRENCE, jamais une valeur.** Une valeur tenue en `@State`
+    /// invalide le body de son propriétaire à chaque mutation — et le
+    /// propriétaire est la racine du fil. En Rivière, chaque bulle publie sa
+    /// frame : la préférence remontait jusqu'ici, invalidait `ConversationView`,
+    /// qui reconstruisait le pane, qui relayoutait, qui republiait. La boucle
+    /// ne se refermait jamais (mesures #3940 : Rivière à +5,9 points de CPU sur
+    /// Bulles, conversation INACTIVE).
+    ///
+    /// Le NOM de la propriété est délibérément inchangé :
+    /// `ConversationLongPressMenuGuardTests` interdit nommément à
+    /// `presentLongPressMenu` de lire `frameTracker`, et une garde négative qui
+    /// cherche un nom disparu passe au vert en perdant sa protection.
+    func test_conversationViewHoldsABox_soMeasuringNeverInvalidatesTheRoot() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Bubble
+            .deletingLastPathComponent()   // Views
+            .deletingLastPathComponent()   // Unit
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // apps/ios
+            .appendingPathComponent("Meeshy/Features/Main/Views/ConversationView.swift")
+        let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+
+        XCTAssertTrue(
+            Self.holdsAFrameBox(source),
+            "`ConversationView` tient à nouveau la carte des frames par VALEUR : chaque mesure de "
+            + "bulle réévalue le body de la racine du fil, et la Rivière reboucle sur elle-même."
+        )
+    }
+
+    /// Contre-épreuve — la garde ci-dessus doit savoir dire NON, sinon elle est
+    /// née verte et ne protège rien.
+    func test_theGuardAbove_wouldCatchTheValueComingBack() {
+        XCTAssertTrue(Self.holdsAFrameBox("@State var frameTracker = MessageFrameBox()"))
+        XCTAssertFalse(
+            Self.holdsAFrameBox("@State var frameTracker = MessageFrameTracker()"),
+            "le retour à la valeur doit faire rougir : c'est exactement le code d'avant le correctif"
+        )
+    }
+
+    private static func holdsAFrameBox(_ source: String) -> Bool {
+        source.contains("@State var frameTracker = MessageFrameBox()")
+            && !source.contains("@State var frameTracker = MessageFrameTracker()")
+    }
+
 }

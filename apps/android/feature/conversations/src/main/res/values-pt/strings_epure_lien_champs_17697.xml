@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shareLink_detail_nameField">Nome do link</string>
+    <string name="share_link_name_question">Quem vê este nome?</string>
+    <string name="share_link_name_note">Só você vê; os convidados não.</string>
+    <string name="shareLink_detail_messageField">Mensagem de convite</string>
+    <string name="share_link_message_question">Quem lê esta mensagem?</string>
+    <string name="share_link_message_note">É exibida aos convidados que abrem o link.</string>
+</resources>

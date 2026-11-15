@@ -24,15 +24,18 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             .deletingLastPathComponent()   // MeeshyTests
             .deletingLastPathComponent()   // apps/ios
             .appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.text(at: url)
     }
 
     private func stripped(_ relativePath: String) throws -> String {
-        AppSourceGuard.stripComments(try source(relativePath))
+        let chrome = relativePath == rowPath
+            ? "\n" + (try source("Meeshy/Features/Focal/Row/FocalFocusChrome.swift"))
+            : ""
+        return AppSourceGuard.stripComments(try source(relativePath) + chrome)
     }
 
     private var hostPath: String { "Meeshy/Features/Main/Views/MessageListViewController.swift" }
-    private var rowPath: String { "Meeshy/Features/Main/Focal/Row/FocalRow.swift" }
+    private var rowPath: String { "Meeshy/Features/Focal/Row/FocalRow.swift" }
 
     // MARK: - Effets (matrice « Effets, mentions, appels »)
 
@@ -51,9 +54,25 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             code.contains("FocalProtectedContent("),
             "FocalRow doit envelopper son bloc contenu dans FocalProtectedContent — sans lui, un message protégé (isBlurred) s'affiche EN CLAIR en Focal (régression de confidentialité)"
         )
+        // #7452 a ÉLARGI ce montage de `isBlurred` à `requiresVeil`, et ce
+        // témoin exigeait encore l'ancien littéral — il est donc devenu rouge
+        // sur `dev` en refusant exactement la généralisation qui a corrigé un
+        // défaut de confidentialité : un TEXTE à vue unique s'affichait en
+        // clair, « Voir une fois » n'existant que sur les médias.
+        //
+        // La condition n'est pas affaiblie, elle est STRICTEMENT plus large :
+        // `MessageProtectionDescriptor.requiresVeil` rend
+        // `badges.contains(.viewOnce) || badges.contains(.blurred)`. Elle reste
+        // une valeur du MODÈLE — ce que ce témoin garde vraiment — et la
+        // branche conditionnelle subsiste, donc un message ordinaire ne paie
+        // toujours ni le `@StateObject` ni le modificateur.
+        //
+        // > Un témoin qui épingle le NOM d'un prédicat plutôt que sa
+        // > PROPRIÉTÉ vote contre toute généralisation de ce prédicat, y
+        // > compris celle qui répare un défaut.
         XCTAssertTrue(
-            code.contains("if content.isBlurred {"),
-            "le montage du wrapper est piloté par content.isBlurred (branche conditionnelle : un message ordinaire ne paie ni le @StateObject ni le modificateur) — la valeur du modèle, jamais un défaut"
+            code.contains("if content.requiresVeil {"),
+            "le montage du wrapper est piloté par content.requiresVeil (branche conditionnelle : un message ordinaire ne paie ni le @StateObject ni le modificateur) — la valeur du modèle, jamais un défaut"
         )
     }
 
@@ -73,28 +92,12 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
 
     // MARK: - Drapeau langue d'origine (arbitrage user 2026-08-18)
 
-    func test_originalLanguageFlag_isAVersionToggle_gatedOnMultipleVersions() throws {
+    /// L'ancien toggle unique `originalLanguageFlag` a quitté `FocalRow` avec
+    /// son dernier appelant (2026-09-25) : la bande `plainLanguageFlags` porte
+    /// le geste (test suivant). L'invariant qui lui survit : l'icône translate
+    /// reste hors de la rangée.
+    func test_translateChip_staysRemovedFromTheRow() throws {
         let code = try stripped(rowPath)
-        guard let flagStart = code.range(of: "private var originalLanguageFlag") else {
-            return XCTFail("originalLanguageFlag introuvable dans FocalRow — le seul indicateur multi-langue de la rangée")
-        }
-        let window = String(code[flagStart.lowerBound...].prefix(2000))
-        XCTAssertTrue(
-            window.contains("if let translation = content.translation"),
-            "le drapeau n'apparaît QUE quand plusieurs versions existent (content.translation non-nil) — jamais sur un message monolingue"
-        )
-        XCTAssertTrue(
-            window.contains("onSetActiveDisplayLanguage?(content.messageId, translation.originalLangCode)"),
-            "tap sur le drapeau d'origine = AFFICHER l'original (arbitrage user 2026-08-18 : le drapeau est un toggle de version)"
-        )
-        XCTAssertTrue(
-            window.contains("onSetActiveDisplayLanguage?(content.messageId, nil)"),
-            "tap sur le drapeau de la langue du profil = REVENIR à la traduction (résolution Prisme) — sans ce retour, la V.O. serait un cul-de-sac"
-        )
-        XCTAssertTrue(
-            window.contains("preferredLangCode") || code.contains("profileLang"),
-            "l'état « original affiché » montre le drapeau de la langue CONFIGURÉE sur le profil (preferredLangCode), jamais un globe"
-        )
         XCTAssertFalse(
             code.contains("translationChip") || code.contains("systemName: \"globe\""),
             "l'icône translate (chip 🌐) reste RETIRÉE de la rangée — le toggle est un DRAPEAU"
@@ -138,7 +141,7 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             "drapeau et réactions partagent une HStack — jamais deux lignes empilées"
         )
         guard let textBlockStart = code.range(of: "private var textBlock"),
-              let textBlockEnd = code.range(of: "private var readMorePayload")
+              let textBlockEnd = code.range(of: "private var expansion:")
         else { return XCTFail("bornes du textBlock introuvables") }
         let textBlockBody = code[textBlockStart.lowerBound..<textBlockEnd.lowerBound]
         XCTAssertFalse(
@@ -211,14 +214,14 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             row.contains("activeAudioLanguage: input.activeDisplayLangCode"),
             "FocalRow doit alimenter FocalAudioBlock avec la bascule de la rangée — sans ce fil, le drapeau change le texte mais jamais la piste"
         )
-        let block = try stripped("Meeshy/Features/Main/Focal/Row/FocalAudioBlock.swift")
+        let block = try stripped("Meeshy/Features/Focal/Row/FocalAudioBlock.swift")
         XCTAssertTrue(
             block.contains("activeAudioLanguageOverride: activeAudioLanguage"),
             "FocalAudioBlock doit forwarder la bascule au widget (AudioMediaView.activeAudioLanguageOverride)"
         )
         XCTAssertTrue(
             block.contains("activeAudioLanguage: activeAudioLanguage"),
-            "le carrousel audio doit recevoir la même bascule — plus jamais un nil en dur"
+            "la liste audio doit recevoir la même bascule — plus jamais un nil en dur"
         )
         let host = try stripped(hostPath)
         XCTAssertTrue(
@@ -226,8 +229,11 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             "l'hôte doit alimenter ThemedMessageBubble.activeAudioLanguage — canal resté mort depuis sa pose (audit 2026-08-18)"
         )
         let vmCode = try stripped("Meeshy/Features/Main/ViewModels/ConversationViewModel.swift")
+        let queueCode = try stripped("Meeshy/Features/Main/ViewModels/ConversationViewModel+AudioQueue.swift")
         XCTAssertTrue(
-            vmCode.contains("fileUrl: effectiveAudioTrackUrl(for: attachment, message: message)"),
+            queueCode.contains("let served = servedAudioTrack(for: attachment, message: message)")
+                && queueCode.contains("fileUrl: served.url")
+                && queueCode.contains("current: queuedAudio(for: attachment, message: message)"),
             "playAudio doit jouer la piste EFFECTIVE (résolveur partagé) — pas attachment.fileUrl en dur"
         )
         let mediaView = try stripped("Meeshy/Features/Main/Views/ConversationMediaViews.swift")
@@ -245,7 +251,7 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             "la bascule du drapeau route par syncActiveTrack — playVariant direct ne couvrait pas la PAUSE (reprise dans l'ancienne langue sous un karaoké basculé)"
         )
         XCTAssertTrue(
-            vmCode.contains("trackUrlResolver:"),
+            queueCode.contains("trackUrlResolver:"),
             "la FILE d'auto-avance (audioQueueTail) doit enfiler la piste EFFECTIVE — sans le résolveur, le 2e vocal sortait en V.O. sous un karaoké traduit"
         )
     }
@@ -258,9 +264,18 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             return XCTFail("scrollToBottom introuvable dans l'hôte")
         }
         let body = String(code[start.lowerBound...].prefix(600))
+        // La déclaration passe par UN geste partagé, qui annule aussi la
+        // libération différée d'un saut précédent.
         XCTAssertTrue(
-            body.contains("isIntentionalProgrammaticScroll = true"),
+            body.contains("beginIntentionalProgrammaticScroll()"),
             "scrollToBottom doit se déclarer INTENTIONNEL — sans ce drapeau, le verrou de scène annule chaque frame de l'animation et le bouton « aller au dernier message » ne fait rien"
+        )
+        guard let geste = code.range(of: "func beginIntentionalProgrammaticScroll() {") else {
+            return XCTFail("beginIntentionalProgrammaticScroll introuvable dans l'hôte")
+        }
+        XCTAssertTrue(
+            String(code[geste.upperBound...].prefix(200)).contains("isIntentionalProgrammaticScroll = true"),
+            "le geste partagé pose le drapeau que le verrou de scène lit"
         )
     }
 
@@ -277,7 +292,7 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
 
     func test_targetedReconfigure_isDeferredDuringGesture() throws {
         let code = try stripped(hostPath)
-        guard let start = code.range(of: "private func reconfigureMessages(serverIds: Set<String>) {") else {
+        guard let start = code.range(of: "func reconfigureMessages(serverIds: Set<String>) {") else {
             return XCTFail("reconfigureMessages introuvable")
         }
         let body = String(code[start.lowerBound...].prefix(1200))
@@ -285,6 +300,144 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             body.contains("deferredTargetedReconfigureIds"),
             "reconfigureMessages doit différer pendant un geste en rangée plate — une traduction tardive qui re-mesure une cellule visible fait sauter le champ visuel (audit 2026-08-18)"
         )
+    }
+
+    // MARK: - Le report est une règle de FLUIDITÉ, pas une règle de MODE (2026-08-25)
+
+    /// **Garde NÉGATIVE** — aucun des trois chemins de reconfiguration ne
+    /// conditionne son report au `readingMode`.
+    ///
+    /// Deux d'entre eux excluaient explicitement `.bubbles` du report §4.7ter
+    /// (`isDeferringReconfigure` et le volet CIBLÉ), si bien que le mode
+    /// NOMINAL était le seul où une traduction, une coche de lecture ou une
+    /// réaction arrivée SOUS LE DOIGT re-mesurait une cellule visible et
+    /// faisait sauter tout ce qui la surplombe. Le troisième chemin
+    /// (`reconfigureVisibleCells`) ne faisait déjà pas cette exception : la
+    /// divergence était INTERNE au fichier, ce qui est exactement la forme
+    /// qu'une exclusion réintroduite en silence reprendrait.
+    ///
+    /// Le report est sûr parce que la reprise ne dépend d'aucun mode : la pose
+    /// (`settleAtRest`) appelle inconditionnellement
+    /// `flushDeferredReconfigureAtSettle`, et la PORTÉE demandée est retenue
+    /// (`deferredReconfigureScope`) — rien ne peut rester périmé, tout est
+    /// resservi à la levée du doigt. Les INSERTIONS, elles, restent immédiates.
+    func test_theReconfigureDeferral_isKeyedOnMovement_neverOnReadingMode() throws {
+        let host = try normalizedHost()
+
+        XCTAssertTrue(
+            host.contains(
+                "let isDeferringReconfigure = !itemsToReconfigure.isEmpty "
+                + "&& (collectionView.isDragging || collectionView.isDecelerating)"
+            ),
+            "le chemin GLOBAL ne retient que les conditions de MOUVEMENT"
+        )
+
+        let targeted = try Self.block(after: "func reconfigureMessages(serverIds: Set<String>) {", in: host)
+        XCTAssertTrue(
+            Self.deferralIsModeAgnostic(targeted),
+            "volet CIBLÉ : le report doit se décider sur le geste seul. Corps lu : \(targeted.prefix(240))"
+        )
+
+        let global = try Self.block(after: "func reconfigureVisibleCells() {", in: host)
+        XCTAssertTrue(
+            Self.deferralIsModeAgnostic(global),
+            "chemin des cellules visibles : inchangé, et toujours mode-agnostique. Corps lu : \(global.prefix(240))"
+        )
+
+        // Ce qui REND le report sûr : la reprise ne connaît aucun mode.
+        let settle = try Self.block(after: "func settleAtRest() {", in: host)
+        XCTAssertTrue(
+            settle.contains("flushDeferredReconfigureAtSettle()"),
+            "la pose rejoue le report — inconditionnellement"
+        )
+        XCTAssertFalse(
+            settle.contains("readingMode"),
+            "…et sans regarder le mode : un flush conditionné laisserait un état périmé à l'écran"
+        )
+        // #4022 — la portée retenue pendant le geste n'est plus un simple `if`
+        // (qui ne savait garder que `.allItems`) mais un `switch` qui accumule
+        // aussi `.items` (union) au lieu de le jeter ; `.allItems` continue de
+        // DOMINER (retenu inchangé quel que soit ce qui arrive ensuite).
+        XCTAssertTrue(
+            host.contains("case .allItems: deferredReconfigureScope = .allItems"),
+            "la PORTÉE demandée pendant le geste est retenue (`.allItems` domine) — sans elle, le flush resservirait moins que ce que le report a retenu"
+        )
+        XCTAssertTrue(
+            host.contains("case .items(let ids):") && host.contains(".union(ids)"),
+            "un `.items` demandé pendant le geste doit s'ACCUMULER (union) plutôt que d'être jeté — sinon "
+                + "une coche posée en pleine décélération incrémente le compteur sans jamais peindre "
+                + "visuellement la sélection (#4022)"
+        )
+    }
+
+    /// **Contre-épreuve** — la garde ci-dessus rougit si l'exclusion `.bubbles`
+    /// revient devant l'une ou l'autre condition de mouvement. Sans elle, la
+    /// garde négative pourrait perdre sa protection en silence.
+    func test_theGuardAbove_wouldCatchTheBubblesExclusionComingBack() {
+        XCTAssertFalse(
+            Self.deferralIsModeAgnostic(
+                " guard let dataSource = dataSource, !serverIds.isEmpty else { return } "
+                + "if readingMode != .bubbles, store.isUserScrolling { "
+                + "deferredTargetedReconfigureIds.formUnion(serverIds) return } "
+            ),
+            "le volet ciblé re-conditionné au mode doit faire rougir la garde"
+        )
+        XCTAssertFalse(
+            Self.deferralIsModeAgnostic(
+                " let isDeferringReconfigure = readingMode != .bubbles && !itemsToReconfigure.isEmpty "
+                + "&& (collectionView.isDragging || collectionView.isDecelerating) "
+            ),
+            "le chemin global re-conditionné au mode aussi"
+        )
+        XCTAssertTrue(
+            Self.deferralIsModeAgnostic(
+                " if store.isUserScrolling { hasDeferredGlobalReconfigure = true return } "
+            ),
+            "…et un report décidé sur le seul geste, lui, doit passer"
+        )
+        XCTAssertFalse(
+            Self.deferralIsModeAgnostic(" let x = 1 "),
+            "un bloc SANS aucune condition de mouvement n'est pas « mode-agnostique » : il ne diffère plus rien du tout"
+        )
+    }
+
+    // MARK: - Prédicat partagé par la garde et sa contre-épreuve
+
+    /// Un bloc DIFFÈRE-t-il sur le seul MOUVEMENT ? Il doit nommer au moins
+    /// une condition de geste, et aucune condition de mode.
+    private static func deferralIsModeAgnostic(_ body: String) -> Bool {
+        let movesOnGesture = body.contains("store.isUserScrolling")
+            || body.contains("collectionView.isDragging")
+        return movesOnGesture && !body.contains("readingMode != .bubbles")
+    }
+
+    /// L'hôte SANS commentaires et à espaces normalisés — une garde qui lirait
+    /// les commentaires rougirait sur la documentation d'un futur correctif.
+    private func normalizedHost() throws -> String {
+        try stripped(hostPath)
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
+    /// Corps d'une déclaration, par PARENTHÉSAGE d'accolades — une garde de
+    /// forme vise le BLOC, jamais le fichier.
+    private static func block(after signature: String, in code: String) throws -> String {
+        let start = try XCTUnwrap(
+            code.range(of: signature),
+            "signature « \(signature) » introuvable — la garde ne peut pas lire un bloc absent"
+        )
+        var depth = 1
+        var index = start.upperBound
+        while index < code.endIndex {
+            if code[index] == "{" { depth += 1 }
+            if code[index] == "}" {
+                depth -= 1
+                if depth == 0 { break }
+            }
+            index = code.index(after: index)
+        }
+        return String(code[start.upperBound ..< index])
     }
 
     // MARK: - Badge non-lus (matrice « Message entrant temps réel »)
@@ -308,6 +461,33 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             code.contains("let typingFlat = self.readingMode != .bubbles"),
             "la tenue plate du typing est décidée par readingMode — la capsule reste le rendu bulles"
         )
+    }
+
+    // MARK: - Humeur de l'auteur (#10528)
+
+    /// La pastille d'humeur se peignait sur l'avatar de l'auteur sans aucun
+    /// gestionnaire : elle prenait le toucher et n'ouvrait rien.
+    func test_host_feedsTheMoodTapToTheRowActions() throws {
+        XCTAssertTrue(
+            try stripped(hostPath).contains("FocalRowActions(onMoodTap: statuses.moodSpotlightHandler(for: senderId))"),
+            "l'hôte doit remettre à la rangée le toucher de l'humeur de l'auteur — il ouvre sa page plein écran (#13987)"
+        )
+    }
+
+    func test_focalRow_forwardsTheMoodTapToBothIdentityHeaders() throws {
+        let code = try stripped(rowPath)
+        XCTAssertEqual(
+            code.components(separatedBy: "onMoodTap: actions.onMoodTap").count - 1, 2,
+            "l'en-tête d'identité de la rangée ET la chip du focus transmettent le toucher de l'humeur"
+        )
+    }
+
+    /// Dans la liste des messages, l'humeur ne s'anime pas : ni respiration
+    /// (le contexte `.custom` n'en a pas), ni pulse.
+    func test_identityHeader_keepsTheMoodStillAndTappable() throws {
+        let code = try stripped("Meeshy/Features/Focal/Row/FocalIdentityHeader.swift")
+        XCTAssertTrue(code.contains("enablePulse: false"), "aucun pulse sur la pastille d'une rangée de message")
+        XCTAssertTrue(code.contains("onMoodTap: onMoodTap"), "l'avatar de l'auteur reçoit le toucher de l'humeur")
     }
 
 }

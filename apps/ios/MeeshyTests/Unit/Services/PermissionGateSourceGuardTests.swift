@@ -17,6 +17,14 @@ final class PermissionGateSourceGuardTests: XCTestCase {
 
     // MARK: - Helpers
 
+    /// L'écran d'inscription est découpé par surface (#8288) : la garde lit
+    /// l'écran ENTIER, pas le seul fichier qui portait le champ avant l'extraction.
+    private func signupScreenSource() throws -> String {
+        try ["SignupView.swift", "SignupView+Card.swift", "SignupView+Phone.swift"]
+            .map { try source("Meeshy/Features/Auth/Signup/\($0)") }
+            .joined(separator: "\n")
+    }
+
     private func source(_ relativePath: String) throws -> String {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()  // Services
@@ -50,12 +58,12 @@ final class PermissionGateSourceGuardTests: XCTestCase {
             "startRecording() doit trancher la permission micro AVANT toute activation de session."
         )
         guard let gateIndex = fn.range(of: "hasMicrophonePermission()")?.lowerBound,
-              let sessionIndex = fn.range(of: "session.setCategory")?.lowerBound else {
+              let sessionIndex = fn.range(of: "recordingSession.begin(")?.lowerBound else {
             return XCTFail("Impossible de localiser la garde et l'activation de session")
         }
         XCTAssertLessThan(
             gateIndex, sessionIndex,
-            "La garde micro doit précéder setCategory/setActive — l'inverse laisse iOS " +
+            "La garde micro doit précéder la prise de session (#11042) — l'inverse laisse iOS " +
             "prompter de façon asynchrone pendant que l'enregistrement a déjà démarré."
         )
     }
@@ -78,7 +86,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// vide sans jamais comprendre. Le chemin CallKit ne permet aucune demande
     /// en amont, d'où la garde ici.
     func test_answerCall_endsCallWhenMicrophoneMissing() throws {
-        let src = try source("Meeshy/Features/Main/Services/CallManager.swift")
+        let src = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         let fn = try body(from: "func answerCall() {", to: "ringbackPlayer.stop()", in: src)
 
         XCTAssertTrue(fn.contains("MediaPermissionState.microphone.isUsable"),
@@ -96,7 +104,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// sans toast ni raccroché : miroir exact du bug déjà corrigé sur
     /// `answerCall()`, resté ouvert sur son propre point d'entrée.
     func test_answerCallReady_endsCallWhenMicrophoneMissing() throws {
-        let src = try source("Meeshy/Features/Main/Services/CallManager.swift")
+        let src = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         let fn = try body(from: "func answerCallReady() async {", to: "// MARK: - Reject Call", in: src)
 
         XCTAssertTrue(fn.contains("MediaPermissionState.microphone.isUsable"),
@@ -129,7 +137,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// silencieux au tap sur « rejoindre » — miroir exact du bug déjà corrigé
     /// sur les deux autres points d'entrée, resté ouvert sur celui-ci.
     func test_rejoinActiveCall_refusesWhenMicrophoneMissing() throws {
-        let src = try source("Meeshy/Features/Main/Services/CallManager.swift")
+        let src = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         let fn = try body(from: "func rejoinActiveCall(callId: String", to: "// MARK: - VoIP Push Incoming Call", in: src)
 
         XCTAssertTrue(fn.contains("MediaPermissionState.microphone.isUsable"),
@@ -155,14 +163,16 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     func test_outgoingCallSurfaces_useThePermissionCheckedEntryPoint() throws {
         let surfaces = [
             "Meeshy/Features/Contacts/CallStarter.swift",
-            "Meeshy/Features/Main/ViewModels/ConversationViewModel.swift",
+            "Meeshy/Features/Main/ViewModels/ConversationViewModel+CallLauncher.swift",
             "Meeshy/Features/Main/Views/ConversationListView+Overlays.swift",
-            "Meeshy/Features/Main/Views/ConversationView+Header.swift",
+            // Le bouton d'appel de l'en-tête de conversation a quitté
+            // `ConversationView+Header.swift` pour son type nominal (654efe9ca5).
+            "Meeshy/Features/Main/Views/ConversationLayers/ConversationHeaderCallButton.swift",
         ]
         for path in surfaces {
             let src = try source(path)
             XCTAssertFalse(
-                src.contains("CallManager.shared.startCall("),
+                src.contains("CallManager.shared.startCall(") || src.contains("outgoingDial.startCall("),
                 "\(path) doit composer via requestPermissionsThenStartCall — " +
                 "`startCall` direct ne demande ni micro ni caméra."
             )
@@ -171,12 +181,16 @@ final class PermissionGateSourceGuardTests: XCTestCase {
                 "\(path) doit utiliser le point d'entrée avec pré-flight de permissions."
             )
         }
+        XCTAssertFalse(
+            try source("Meeshy/Features/Main/Views/ConversationView+Header.swift").contains("outgoingDial.startCall("),
+            "L'en-tête de conversation ne compose jamais par `startCall` direct."
+        )
     }
 
     /// La bannière in-app est le seul chemin où l'on peut demander AVANT que
     /// l'utilisateur accepte — c'est ce que demande le cahier des charges.
     func test_incomingCallView_requestsMicrophoneBeforeAnswering() throws {
-        let src = try source("Meeshy/Features/Main/Views/IncomingCallView.swift")
+        let src = try source("Meeshy/Features/Call/Views/IncomingCallView.swift")
         let fn = try body(from: "private func acceptCall() {", to: "var body: some View", in: src)
 
         XCTAssertTrue(fn.contains("MediaPermissionCoordinator.ensureMicrophone()"),
@@ -190,17 +204,24 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// Le micro était demandé dès l'ouverture de la caméra, y compris pour une
     /// simple photo — un prompt sans motif visible, souvent refusé
     /// définitivement. Il doit désormais arriver au passage en mode Vidéo.
+    /// Un micro DÉJÀ autorisé entre, lui, à l'ouverture (#9328) : aucune
+    /// demande, et plus de reconfiguration qui noircit l'aperçu au déclenchement.
     func test_cameraSession_doesNotAddAudioInputEagerly() throws {
-        let src = try source("Meeshy/Features/Main/Components/CameraView.swift")
-        let setup = try body(from: "private func setupSession() {", to: "func enableAudioCaptureIfNeeded", in: src)
+        let src = try source("Meeshy/Features/Main/Components/CameraModel.swift")
+        let setup = try body(from: "private func setupSession(", to: "func enableAudioCaptureIfNeeded", in: src)
 
         XCTAssertFalse(
-            setup.contains("AVCaptureDevice.default(for: .audio)"),
-            "setupSession() ne doit plus brancher le micro : l'entrée audio est " +
-            "ajoutée paresseusement par enableAudioCaptureIfNeeded() au mode Vidéo."
+            setup.contains("AVCaptureDevice.default(for: .audio)") || setup.contains("ensureMicrophone"),
+            "setupSession() ne DEMANDE jamais le micro : la demande reste à " +
+            "enableAudioCaptureIfNeeded(), au mode Vidéo."
+        )
+        let compact = setup.replacingOccurrences(of: "\\s+", with: "", options: .regularExpression)
+        XCTAssertTrue(
+            compact.contains("CameraAudioArming.armsAtSetup(microphone:AVCaptureDevice.authorizationStatus(for:.audio),"),
+            "Seul un micro déjà autorisé entre à l'ouverture (#9328)."
         )
 
-        let configure = try body(from: "func configure() {", to: "private func setupSession", in: src)
+        let configure = try body(from: "func configure(", to: "private func setupSession", in: src)
         XCTAssertFalse(
             configure.contains(".audio"),
             "configure() ne doit demander QUE la caméra — pas le micro."
@@ -218,13 +239,17 @@ final class PermissionGateSourceGuardTests: XCTestCase {
 
     /// Le panneau de refus (et son bouton Réglages) est la seule chose qui
     /// distingue « caméra refusée » d'un bug d'affichage.
+    /// #9125 — l'ancienne `CameraView` a quitté le dépôt : le viseur du
+    /// composeur, servi seul en plein écran, porte la même promesse.
     func test_cameraView_rendersDeniedPanelInsteadOfBlackPreview() throws {
-        let src = try source("Meeshy/Features/Main/Components/CameraView.swift")
-        XCTAssertTrue(src.contains("permissionDeniedPanel"),
-                      "CameraView doit exposer un panneau de refus.")
-        XCTAssertTrue(src.contains("camera.permission.needsSettingsRedirect"),
+        // #9134 — l'aperçu est PARTAGÉ par les deux montages du viseur.
+        let src = try source("Meeshy/Features/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(src.contains("CameraPermissionPanel()"),
+                      "Le viseur doit exposer un panneau de refus.")
+        XCTAssertTrue(src.contains("ComposerSceneCameraSurface.shown(stage: session.stage, permission: session.camera.permission)"),
                       "Le rendu doit basculer sur l'état d'autorisation publié par le modèle.")
-        XCTAssertTrue(src.contains("MediaPermissionCoordinator.openSettings()"),
+        let panneau = try source("Meeshy/Features/Main/Components/CameraPermissionPanel.swift")
+        XCTAssertTrue(panneau.contains("MediaPermissionCoordinator.openSettings()"),
                       "Le panneau doit offrir l'ouverture des Réglages.")
     }
 
@@ -234,7 +259,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// réclamer l'accès aux photos avant toute intention de l'utilisateur.
     func test_recentMediaStrip_doesNotPromptOnLoad() throws {
         let src = try source("Meeshy/Features/Main/Components/RecentMediaStrip.swift")
-        let fn = try body(from: "func load(limit: Int = 40) {", to: "func requestAccess()", in: src)
+        let fn = try body(from: "func load(limit: Int", to: "func requestAccess()", in: src)
 
         XCTAssertFalse(
             fn.contains("requestAuthorization"),
@@ -250,14 +275,15 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// `didFailWithError` silencieux, et l'utilisateur attendait un recentrage
     /// qui n'arriverait jamais.
     func test_locationPicker_doesNotRequestLocationWhenUnauthorized() throws {
-        let src = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
+        let src = try source("Meeshy/Features/Main/Components/LocationPickerModel.swift")
+        let viewSrc = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
         let fn = try body(from: "func requestPermission() {", to: "func updateSelectedLocation", in: src)
 
         XCTAssertTrue(fn.contains("case .authorizedWhenInUse, .authorizedAlways:"),
                       "Le relevé ne doit partir que sur un statut autorisé.")
         XCTAssertTrue(fn.contains("manager.requestWhenInUseAuthorization()"),
                       "Le statut indéterminé doit déclencher la demande.")
-        XCTAssertTrue(src.contains("locationDeniedBanner"),
+        XCTAssertTrue(viewSrc.contains("locationDeniedBanner"),
                       "Un refus doit être expliqué dans l'UI, pas seulement journalisé.")
     }
 
@@ -267,7 +293,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// ce chemin est exercé à chaque fermeture. Même signature que le crash
     /// `ScrollOffsetRelay`.
     func test_locationPickerModel_isTypeLevelNonisolated() throws {
-        let src = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
+        let src = try source("Meeshy/Features/Main/Components/LocationPickerModel.swift")
 
         XCTAssertTrue(src.contains("nonisolated final class LocationPickerModel"),
                       "Le `nonisolated` doit vivre sur le TYPE : c'est la seule annotation qui désisole la deinit.")
@@ -284,7 +310,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// recevoir avant que SwiftUI ait installé le `@StateObject` publie une
     /// modification en plein cycle de rendu.
     func test_locationPickerModel_doesNotWireCoreLocationFromInit() throws {
-        let src = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
+        let src = try source("Meeshy/Features/Main/Components/LocationPickerModel.swift")
         let initBody = try body(from: "override init() {", to: "func requestPermission()", in: src)
         XCTAssertFalse(initBody.contains("manager.delegate = self"),
                        "Assigner le delegate depuis init() declenche un callback d'autorisation avant que le @StateObject soit installe.")
@@ -299,7 +325,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// `kCLErrorLocationUnknown`, laissant l'UI attendre un relevé qui
     /// n'arrivera pas.
     func test_locationPicker_guardsAgainstConcurrentFixRequests() throws {
-        let src = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
+        let src = try source("Meeshy/Features/Main/Components/LocationPickerModel.swift")
         XCTAssertTrue(src.contains("isAwaitingFix"),
                       "Deux requestLocation() concurrents font annuler la premiere par CoreLocation, qui repond kCLErrorLocationUnknown.")
         let fail = try body(from: "func locationManager(_ manager: CLLocationManager, didFailWithError",
@@ -312,7 +338,8 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// éventuel re-crash diagnosticable au lieu d'imposer une seconde correction
     /// à l'aveugle.
     func test_locationPicker_leavesBreadcrumbsOnEveryAuthorizationStep() throws {
-        let src = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
+        let src = try source("Meeshy/Features/Main/Components/LocationPickerModel.swift")
+            + (try source("Meeshy/Features/Main/Components/LocationPickerBottomCard.swift"))
         for step in ["breadcrumb.request", "breadcrumb.authorization", "breadcrumb.fix",
                      "breadcrumb.failure", "breadcrumb.selection"] {
             XCTAssertTrue(src.contains(step),
@@ -335,8 +362,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
                       "La categorie POI de MapKit est disponible et doit etre conservee.")
     }
 
-    /// Les quatre call sites (message, feed inline, feed sheet, commentaire)
-    /// jetaient le lieu — `FeedCommentsSheet` écrivait littéralement
+    /// Les call sites (message, feed, commentaire) jetaient le lieu — `FeedCommentsSheet` écrivait littéralement
     /// `{ coordinate, _ in }`.
     func test_noCallSiteDiscardsThePlace() throws {
         for path in ["Meeshy/Features/Main/Views/ConversationView+Composer.swift",
@@ -353,22 +379,23 @@ final class PermissionGateSourceGuardTests: XCTestCase {
 
     // MARK: - Partage de position (Task 13, 2026-07-29)
 
-    /// `publishPost()` **et** `publishPostWithAttachments()` sortaient tous deux
-    /// par `createPost(content:)` seul quand il n'y avait pas de fichier : une
-    /// position seule, sans texte ni piece jointe, n'envoyait rien. Corriger un
-    /// seul des deux chemins laisse la moitie du bug.
-    func test_bothPublishPathsCarryTheLocation() throws {
+    // `publishPost()` et `publishPostWithAttachments()` sortaient tous deux par
+    // `createPost(content:)` seul quand il n'y avait pas de fichier : une
+    // position seule n'envoyait rien. Les deux chemins ont quitté le dépôt
+    // (#6016, puis la feuille du fil en #15628) ; la règle se rejoue dans
+    // `ComposerDocumentSendRules.emptyDraft`, mesurée par
+    // `ComposerDocumentToolChainTests.test_unLieuSeul_sansTexteNiMedia_peutPartir`.
+
+    /// Le pendant du retrait : `publishPostWithAttachments` ne doit pas
+    /// REVENIR. Un chemin de publication inline ressuscité sur le fil rouvrirait
+    /// la divergence que #6016 vient de fermer — deux implémentations de
+    /// « publier un post », dont une seule reçoit les corrections.
+    func test_theInlineFeedPublishPath_staysRetired() throws {
         let src = try source("Meeshy/Features/Main/Views/FeedView+Attachments.swift")
-        let publish = try body(from: "private func publishPost()", to: "// MARK:", in: src)
-        XCTAssertTrue(publish.contains("location: pendingPlace"),
-                      "publishPost perd la position dans sa branche sans fichier.")
-
-        let withAttachments = try body(from: "func publishPostWithAttachments", to: "private func publishPost()", in: src)
-        XCTAssertTrue(withAttachments.contains("location: pendingPlace"),
-                      "publishPostWithAttachments a le meme defaut : corriger un seul chemin laisse la moitie du bug.")
-
-        XCTAssertTrue(publish.contains("pendingPlace != nil"),
-                      "Une position seule, sans texte ni piece jointe, doit pouvoir partir.")
+        XCTAssertFalse(AppSourceGuard.stripComments(src).contains("func publishPostWithAttachments"),
+                       "Le chemin inline du fil est retire (#6016) : la publication d'un post passe par "
+                           + "`ComposerDocumentSurface.publishDocument`. Le faire revenir ici redonne deux "
+                           + "implementations a une seule regle.")
     }
 
     // MARK: - Partage de position (Task 14, 2026-07-29)
@@ -389,8 +416,18 @@ final class PermissionGateSourceGuardTests: XCTestCase {
                       "Le lieu en attente doit être capturé au début de submitComment, avant tout early-return.")
         XCTAssertTrue(fn.contains("commentPendingPlace = nil"),
                       "La chip doit être effacée après capture — sinon elle réapparaît sur le commentaire suivant.")
-        XCTAssertTrue(fn.contains("guard !trimmed.isEmpty || media != nil || place != nil else { return }"),
-                      "Un commentaire « lieu seul » (sans texte ni média) doit pouvoir partir — l'ancienne garde à 2 conditions l'aurait avorté silencieusement, exactement comme le bug déjà corrigé sur publishPost.")
+        // La garde « rien à envoyer » vit dans `CommentSendGate.decide` (#9743) :
+        // le lieu y entre, et `CommentSendGateTests.test_readyPieces_send` exécute
+        // qu'un lieu seul part. Ici, la feuille doit le lui REMETTRE.
+        XCTAssertTrue(fn.contains("CommentSendGate.decide(text: trimmed, zone: staged, hasPlace: commentPendingPlace != nil)"),
+                      "Un commentaire « lieu seul » (sans texte ni média) doit pouvoir partir — une décision d'envoi qui ignore le lieu l'avorterait silencieusement, exactement comme le bug déjà corrigé sur publishPost.")
+        let decide = try XCTUnwrap(fn.range(of: "CommentSendGate.decide("))
+        let capture = try XCTUnwrap(fn.range(of: "let place = commentPendingPlace"))
+        let clear = try XCTUnwrap(fn.range(of: "commentPendingPlace = nil"))
+        XCTAssertLessThan(decide.lowerBound, clear.lowerBound,
+                          "La décision lit le lieu AVANT que la chip ne soit effacée.")
+        XCTAssertLessThan(capture.lowerBound, clear.lowerBound,
+                          "Le lieu est capturé avant d'être effacé : sinon le commentaire part sans lui.")
     }
 
     /// Le chemin direct (réseau disponible) doit transmettre le lieu à
@@ -399,8 +436,8 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// ne reçoit jamais rien à persister.
     func test_feedCommentsSheet_submitComment_sendsLocationOnTheDirectPath() throws {
         let src = try source("Meeshy/Features/Main/Views/FeedCommentsSheet.swift")
-        let fn = try body(from: "let apiComment = try await PostService.shared.addComment(",
-                          to: "let feedComment = FeedComment(", in: src)
+        let fn = try body(from: "let payload = CreateCommentPayload(",
+                          to: "CommentPublisher.live.publish(", in: src)
 
         XCTAssertTrue(fn.contains("location: place"),
                       "submitComment doit transmettre le lieu capturé à addComment — sinon il ne part jamais sur le réseau.")
@@ -414,7 +451,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     func test_feedCommentsSheet_submitComment_sendsLocationOnTheOfflinePath() throws {
         let src = try source("Meeshy/Features/Main/Views/FeedCommentsSheet.swift")
         let fn = try body(from: "let payload = CreateCommentPayload(",
-                          to: "try await OfflineQueue.shared.enqueue", in: src)
+                          to: "try await CommentMediaDelivery.entrust", in: src)
 
         XCTAssertTrue(fn.contains("location: place"),
                       "Le repli hors-ligne doit transporter le lieu — sinon une position choisie sans réseau disparaît.")
@@ -433,18 +470,189 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         )
     }
 
+    // MARK: - Langue d'écriture d'un commentaire (#6587)
+    //
+    // La pastille de langue du composer de commentaires était un CONTRÔLE QUI
+    // MENT sur les trois surfaces : l'auteur choisissait une langue, et le
+    // serveur la DEVINAIT par heuristique de mots (`detectLanguage`) parce que
+    // `CreateCommentPayload` ne la portait pas. `PostComment.originalLanguage`
+    // est la langue SOURCE depuis laquelle TOUT lecteur descend son prisme —
+    // une devinette à la place d'une déclaration fausse la résolution pour
+    // tous les lecteurs, sur les trois clients.
+    //
+    // Le compilateur impose désormais le champ à la CONSTRUCTION du payload,
+    // mais il ne peut pas dire QUELLE valeur : il accepterait `nil` partout,
+    // ce qui rendrait la pastille muette à nouveau. Ces gardes épinglent la
+    // valeur SERVIE sur chacun des deux chemins de chaque surface — direct
+    // (REST) et durable (outbox) — qui doivent porter la MÊME langue : ils
+    // partagent le cmid, donc le premier atterri gagne.
+
+    func test_feedCommentsSheet_submitComment_declaresTheComposerLanguageOnBothPaths() throws {
+        let src = try source("Meeshy/Features/Main/Views/FeedCommentsSheet.swift")
+
+        let direct = try body(from: "let payload = CreateCommentPayload(",
+                              to: "CommentPublisher.live.publish(", in: src)
+        XCTAssertTrue(direct.contains("originalLanguage: lang"),
+                      "Le chemin direct doit déclarer la langue de la pastille, sinon le serveur la devine.")
+
+        let offline = try body(from: "let payload = CreateCommentPayload(",
+                               to: "try await CommentMediaDelivery.entrust", in: src)
+        XCTAssertTrue(offline.contains("originalLanguage: lang"),
+                      "Le repli hors-ligne doit déclarer la MÊME langue — les deux chemins partagent le cmid.")
+    }
+
+    func test_storyViewer_submitComment_declaresTheComposerLanguageOnBothPaths() throws {
+        let src = try source("Meeshy/Features/Stories/Views/StoryCommentSession.swift")
+
+        let offline = try body(from: "return CreateCommentPayload(",
+                               to: "try await CommentMediaDelivery.entrust(", in: src)
+        XCTAssertTrue(offline.contains("originalLanguage: language"),
+                      "Le repli hors-ligne d'un commentaire de story doit porter la langue déclarée.")
+
+        // SCOPÉE au seul appel REST (#6587) : `src.contains(…)` sur le fichier
+        // ENTIER était satisfaite par le repli qu'on vient de vérifier — la
+        // garde restait VERTE sur un chemin direct neutralisé, donc elle
+        // n'assurait rien. Une garde de source ne vaut que par sa fenêtre.
+        let direct = try body(from: "return CreateCommentPayload(",
+                              to: "CommentPublisher.live.publish(", in: src)
+        XCTAssertTrue(direct.contains("originalLanguage: language,"),
+                      "Le chemin direct de la story doit déclarer la même langue que son repli.")
+    }
+
+    /// `PostDetailView` montait la pastille (`selectedLanguage: composerLanguage`)
+    /// et ne la transmettait à AUCUNE de ses trois portes d'envoi : le contrôle
+    /// existait, il était sans effet. Les trois doivent recevoir la valeur
+    /// capturée — jamais `nil`, qui rendrait la pastille décorative.
+    func test_postDetailView_submitComment_declaresTheComposerLanguageOnItsThreeDoors() throws {
+        // #6578 — `submitComment` a quitté `PostDetailView.swift` pour l'extension du composer.
+        let src = try source("Meeshy/Features/Main/Views/PostDetailView+CommentComposer.swift")
+        let fn = try body(from: "let effectFlags = flags > 0 ? Int(flags) : nil",
+                          to: "private func startCommentRecording", in: src)
+
+        XCTAssertTrue(fn.contains("let lang = composerLanguage"),
+                      "La langue doit être CAPTURÉE avant le Task, comme le lieu.")
+        for door in ["submitCommentWithMedia(trimmed, originalLanguage: lang",
+                     "sendReply(trimmed, originalLanguage: lang",
+                     "sendComment(trimmed, originalLanguage: lang"] {
+            XCTAssertTrue(fn.contains(door),
+                          "Porte d'envoi sans la langue déclarée : \(door)")
+        }
+    }
+
+    // MARK: - La LIGNE OPTIMISTE porte la langue, elle aussi (#6587)
+    //
+    // Les deux rangées suivantes sont des gardes de SOURCE assumées, faute
+    // d'hôte interrogeable : l'une vit dans une `View` SwiftUI, l'autre derrière
+    // un téléversement réseau dont l'échec ANNULE l'insert qu'on voudrait
+    // observer. Les trois portes qu'un modèle expose (`sendComment`,
+    // `sendReply` côté détail, `sendComment` côté fil) sont, elles, épinglées
+    // par des témoins de COMPORTEMENT — `PostDetailViewModelTests` et
+    // `FeedViewModelTests` appellent, puis lisent `originalLanguage` sur la
+    // ligne rendue. Une garde de source ne prouve pas qu'une valeur arrive ;
+    // elle empêche seulement un futur lot de la retirer en silence.
+
+    /// La ligne optimiste du fil de commentaires d'un post, et la ligne SERVEUR
+    /// qui la remplace à la réponse REST. Sans la seconde, la pastille
+    /// apparaîtrait puis disparaîtrait dans la même seconde sur le chemin
+    /// nominal EN LIGNE — un correctif dont la valeur n'atteint aucun lecteur.
+    func test_feedCommentsSheet_optimisticRow_carriesTheAuthoredLanguage() throws {
+        let src = try source("Meeshy/Features/Main/Views/FeedCommentsSheet.swift")
+
+        let optimistic = try body(from: "let tempId = ClientMutationId.generate()",
+                                  to: "thread.deliver(", in: src)
+        XCTAssertTrue(optimistic.contains("originalLanguage: lang"),
+                      "La ligne optimiste doit porter la langue de la pastille : son auteur la LIT.")
+    }
+
+    /// Même exigence pour la porte MÉDIA du détail de post — celle dont l'insert
+    /// optimiste n'est pas observable (la publication précède la première
+    /// frontière testable, et son échec annule l'insert).
+    func test_postDetailViewModel_mediaDoor_carriesTheAuthoredLanguage() throws {
+        let src = try source("Meeshy/Features/Main/ViewModels/PostDetailViewModel+CommentSend.swift")
+
+        let optimistic = try body(from: "func submitCommentWithMedia(",
+                                  to: "commentThreadModel.deliver(", in: src)
+        XCTAssertTrue(optimistic.contains("originalLanguage: originalLanguage"),
+                      "La ligne optimiste d'un commentaire AVEC MÉDIA doit porter la langue déclarée.")
+    }
+
+    /// La ligne servie qui remplace l'optimiste — un seul site depuis #13133,
+    /// pour la feuille, le détail et la story — garde la langue, sinon la
+    /// pastille clignote.
+    func test_theServedRow_keepsTheAuthoredLanguage() throws {
+        let src = try source("Meeshy/Features/Main/ViewModels/CommentThreadViewModel+Send.swift")
+
+        let served = try body(from: "init(sent api: APIPostComment", to: "quotedMedia: api.quotedCitation", in: src)
+        XCTAssertTrue(served.contains("originalLanguage: api.originalLanguage"),
+                      "La ligne serveur qui remplace l'optimiste doit garder la langue.")
+    }
+
+    /// Le corollaire d'asymétrie du champ REQUIS : `FeedView` portait une
+    /// SECONDE porte de langue (`composerLanguage` + `showComposerLanguagePicker`
+    /// + sa feuille) que rien n'ouvrait jamais — le feed délègue au
+    /// compositeur, qui possède la sienne. Câbler les deux fabriquerait DEUX
+    /// vérités pour une même composition.
+    func test_feedView_carriesNoSecondLanguageDoor() throws {
+        let src = try source("Meeshy/Features/Main/Views/FeedView.swift")
+
+        XCTAssertFalse(src.contains("composerLanguage"),
+                       "FeedView ne doit porter aucune pastille de langue : la porte vivante est celle du compositeur.")
+        XCTAssertFalse(src.contains("showComposerLanguagePicker"),
+                       "Un sélecteur que rien n'ouvre est un contrôle qui ment.")
+    }
+
+    /// `UniversalComposerBar.onRecordingChange` était déclaré et affecté par
+    /// `StoryViewerView+CanvasComposerBar`, mais JAMAIS invoqué par la barre.
+    /// Le câbler tel quel écraserait `isComposerEngaged` à false en fin
+    /// d'enregistrement et relâcherait une pause posée par le focus — la pause
+    /// passe déjà par `onHasContentChange`. On retire, on ne câble pas.
+    func test_universalComposerBar_carriesNoDeadRecordingHook() throws {
+        let bar = try source("Meeshy/Features/Main/Components/UniversalComposerBar.swift")
+        XCTAssertFalse(bar.contains("onRecordingChange"),
+                       "Un rappel jamais invoqué ne doit pas rester déclaré.")
+
+        let host = try source("Meeshy/Features/Stories/Views/StoryViewerView+CanvasComposerBar.swift")
+        XCTAssertTrue(host.contains("onHasContentChange:"),
+                      "La pause de story reste portée par onHasContentChange.")
+    }
+
     // MARK: - Mot de passe
 
-    /// Sans `.newPassword`, iOS ne propose ni mot de passe fort ni — surtout —
+    /// Sans `.newPassword` — que `MeeshyPasswordField` pose pour le rôle `.new`
+    /// (#8054) —, iOS ne propose ni mot de passe fort ni — surtout —
     /// l'enregistrement au trousseau en fin d'inscription.
+    ///
+    /// **UN seul site depuis #5218**, contre deux auparavant : la confirmation
+    /// de mot de passe a disparu avec le wizard. Le compte est donc EXACT et non
+    /// « au moins un » — un second `.newPassword` sur cet écran signifierait que
+    /// la confirmation est revenue, ce que la refonte a retiré exprès.
+    ///
+    /// L'IDENTIFIANT que le trousseau associe au mot de passe n'est plus un
+    /// pseudo mais l'ADRESSE : Apple accepte `.username` **ou** `.emailAddress`
+    /// comme champ de compte, et l'écran n'a plus de champ pseudo à offrir. La
+    /// garde vérifie donc qu'un identifiant est déclaré, sans imposer lequel —
+    /// l'imposer reviendrait à exiger le retour d'un champ supprimé.
     func test_signupPasswordFields_optIntoKeychainSave() throws {
-        let src = try source("Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift")
+        let src = try signupScreenSource()
         XCTAssertEqual(
-            src.components(separatedBy: ".textContentType(.newPassword)").count - 1, 2,
-            "Le mot de passe ET sa confirmation doivent être `.newPassword`."
+            src.components(separatedBy: "role: .new").count - 1, 1,
+            "Une seule saisie de mot de passe, et elle doit être `.newPassword` (`MeeshyPasswordField` rôle `.new`, #8054)."
         )
-        XCTAssertTrue(src.contains(".textContentType(.username)"),
-                      "iOS a besoin de l'identifiant pour savoir quoi enregistrer avec le mot de passe.")
+        XCTAssertTrue(
+            src.contains(".textContentType(.emailAddress)") || src.contains(".textContentType(.username)"),
+            "iOS a besoin de l'identifiant pour savoir quoi enregistrer avec le mot de passe."
+        )
+    }
+
+    /// `fieldBlock` posait `.accessibilityLabel(label)` sur tout son contenu :
+    /// l'œil du mot de passe se lisait « Mot de passe, Masqué » au lieu de
+    /// « Afficher le mot de passe » (mesuré au simulateur, #8054). Le champ de
+    /// mot de passe se libelle LUI-MÊME, et le bloc ne l'écrase pas.
+    func test_signupPasswordField_keepsTheEyeButtonAccessibilityLabel() throws {
+        let src = try signupScreenSource()
+        let block = try XCTUnwrap(src.range(of: "var passwordField: some View").map { String(src[$0.lowerBound...].prefix(1200)) })
+        XCTAssertTrue(block.contains("labelsContent: false"), "Le bloc ne doit pas écraser le libellé de l'œil.")
+        XCTAssertTrue(block.contains("accessibilityLabel:"), "Le champ porte son propre libellé VoiceOver.")
     }
 
     /// `webcredentials:` est ce qui associe l'app au domaine dans le trousseau

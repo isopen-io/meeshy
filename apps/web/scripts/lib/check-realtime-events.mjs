@@ -1,0 +1,722 @@
+/**
+ * 11 — LE FIL TEMPS RÉEL (#6171) — `conversation:updated`, `message:translation`
+ * et le roster multi-frappeurs, rejoués dans un VRAI navigateur par le
+ * bouchon de fixtures (`src/lib/api/fixtures-realtime.ts` § `LIVE_SCHEDULE`)
+ * sur la conversation dédiée `c-live` (§5 étape 6 de la spécification).
+ *
+ * Contexte Playwright : `locale: 'en-US'` — la locale est POSÉE, jamais
+ * héritée du runner. Elle résout AUSSI la langue d'INTERFACE (`en`, script
+ * d'amorçage de `index.html`) : le libellé de frappe, qui vient du catalogue
+ * d'interface (#6206), se lit donc en ANGLAIS pendant que le CONTENU suit le
+ * prisme ci-dessous — deux résolveurs, deux langues, sur le même écran. Sous fixtures le prisme est
+ * `resolveUserLanguagesOrdered({ systemLanguage: 'fr' }, { deviceLocale })`
+ * (`lib/reader.ts:44-52`), donc `['fr','en']` en `en-US` : c'est ce qui rend
+ * le RANG 2 (`en`) OBSERVABLE avant que `fr` ne reprenne la main au rang 1.
+ *
+ * Horloge : `pausedChronology` (`./paused-chronology.mjs`) — `install` PUIS
+ * `pauseAt`, JAMAIS `install` seul. Sous `install` seul, l'horloge truquée de
+ * Playwright 1.62.1 dérive avec le temps MURAL entre deux appels du gate
+ * (mesuré, doc-comment de `paused-chronology.mjs` § 1) : sous contention, la
+ * chronologie peut DÉPASSER l'instant qu'une assertion veut lire — c'est
+ * exactement le rouge de #7054 (« obtenu le FRANÇAIS » à T+4 s, « obtenu
+ * Kwame Mensah écrit » à T+5 s). La scène n'est PAS mesurée ici (aucune
+ * élection Focal, la réserve de `instant.mjs:24-31` qui interdit `install`
+ * pour cette raison ne s'applique donc pas ici).
+ *
+ * La chronologie est ORDONNÉE, jamais calée sur un délai : chaque point
+ * d'arrêt attend SON fait, via `chrono.factBefore(prochainÉvènementMs,
+ * fait)`, AVANT que l'évènement suivant ne tire — en avançant l'horloge par
+ * pas de `CHRONOLOGY_STEP_MS`, jamais par une lecture immédiate après un
+ * `runFor` de durée fixe (§1.2 de la spécification #7054 : le sondage propre
+ * de Playwright, `await-fact.mjs`, n'est PAS truqué, mais ce qui fait
+ * avancer le PRODUIT sous horloge en pause reste `runFor`).
+ *
+ * `INSTANT` est IMPORTÉ de `instant.mjs`, jamais redéclaré (revue-correction
+ * #6171) : la valeur y était recopiée à l'identique, ce qui aurait fait une
+ * QUATRIÈME définition de l'instant des gates — celle qui dérive en silence
+ * pendant que la convergence des trois autres est suivie à part.
+ *
+ * DEUX RUNS (clair, sombre), motif `checkMessageStates` — un état se juge
+ * sur son propre fond. EXTRAIT dès sa naissance (motif
+ * `check-typing-visibility.mjs`) : l'hôte (`check-thread-states.mjs`) est
+ * déjà au-delà du seuil de 1000 lignes. `expect`, `setScheme`,
+ * `AA_THRESHOLD` sont REMIS par l'hôte.
+ */
+import { conversationPreviewString } from '@meeshy/shared/utils/conversation-preview-strings';
+
+import { contrastOf } from './contrast.mjs';
+import { INSTANT } from './instant.mjs';
+import { pausedChronology } from './paused-chronology.mjs';
+
+const textOf = (page, id) => page.locator(`[data-message="${id}"] p`).first().innerText();
+const langOf = (page, id) => page.locator(`[data-message="${id}"] p`).first().getAttribute('lang');
+
+/**
+ * `attachedOn(targetPage, sélecteur)` — un FAIT pour `chrono.factBefore` :
+ * rend `true` dès que le nœud existe dans le DOM de `targetPage`. Générique
+ * sur la page, jamais fermé sur `page` seule (revue de ce lot) : le fil et la
+ * liste ci-dessous vivent sur deux `Page` distinctes du MÊME contexte, et un
+ * fait fermé sur la mauvaise page sonderait un DOM qui ne bougera jamais.
+ */
+const attachedOn = (targetPage, selector) => () =>
+  targetPage.evaluate((sel) => document.querySelector(sel) !== null, selector);
+
+/**
+ * LA TRANSCRIPTION D'UN VOCAL (#7017) — `[data-transcript]`
+ * (`attachment-blocks.tsx`), le MÊME nœud que `check-media.mjs` interroge sur
+ * le chemin REST. Ici il est mesuré sur le chemin TEMPS RÉEL, qu'aucun gate ne
+ * jouait : la transcription Whisper puis les traductions NLLB arrivent APRÈS
+ * le message, par `message:attachment-updated`, et web-v2 ne l'écoutait pas.
+ *
+ * LE TEXTE, JAMAIS LA PRÉSENCE DU NŒUD. `servedTranscript` (`api/prism.ts`)
+ * retombe sur `originalName` quand aucune transcription n'existe : le
+ * paragraphe est donc DÉJÀ LÀ au chargement, avec le nom du fichier. Compter
+ * les nœuds ferait passer un gate qui ne mesure rien — c'est la forme « un
+ * témoin qui ne peut pas tomber » appliquée à un sélecteur.
+ */
+/* Une transcription ABSENTE se lit vide (f3b683623d) : la bulle vocale ne peint plus le nom du fichier en guise de
+   transcription — il a sa propre ligne —, si bien qu'avant le pipeline il n'y a plus de nœud `[data-transcript]`.
+   Attendre ce nœud faisait expirer le gate au lieu de constater « aucune transcription ». */
+const transcriptOf = async (page, id) => {
+  const node = page.locator(`[data-message="${id}"] [data-transcript]`).first();
+  return (await node.count()) === 0 ? '' : node.innerText();
+};
+
+/**
+ * LA LANGUE QU'UN LECTEUR D'ÉCRAN ENTEND, jamais l'attribut posé sur le nœud
+ * (revue-correction #7017).
+ *
+ * `getAttribute('lang')` ne peut pas tomber sur le défaut qui compte : un
+ * attribut ABSENT (`null`) et un attribut VIDE (`''`, la coquille que Preact
+ * laisse derrière une prop disparue — `lang` étant une propriété de
+ * `HTMLElement`, `setProperty` prend la branche `name in dom` et écrit
+ * `dom.lang = ''` au lieu d'appeler `removeAttribute`) se lisent tous deux
+ * comme « rien », alors qu'ils désignent DEUX langues effectives différentes —
+ * la langue HÉRITÉE du document pour le premier, « langue inconnue » pour le
+ * second. Aucune des deux n'est la langue SERVIE.
+ *
+ * `closest('[lang]')` mesure ce que la cascade HTML résout RÉELLEMENT, et il
+ * distingue les trois cas : `'fr'` (le nœud annonce sa langue), `''` (coquille)
+ * et `'en'` (hérité du `<html lang>` que pose le script d'amorçage de la langue
+ * d'INTERFACE). Un témoin écrit sur l'attribut aurait blanchi les deux
+ * derniers.
+ */
+const transcriptServedLangOf = (page, id) =>
+  page.evaluate((messageId) => {
+    const paragraph = document.querySelector(`[data-message="${messageId}"] [data-transcript]`);
+    return paragraph?.closest('[lang]')?.getAttribute('lang') ?? null;
+  }, id);
+
+const documentLangOf = (page) => page.evaluate(() => document.documentElement.lang);
+
+/**
+ * LE LIBELLÉ, lu sur `data-typing-label` — jamais un TEXTE VISIBLE scanné
+ * (revue-correction #6171, défaut 4) : la tenue PLATE (Focal/Script, le
+ * mode PAR DÉFAUT D-7, donc l'état de CE gate) ne rend plus aucun texte —
+ * pastille + trois points seuls, miroir `TypingIndicatorBubble(isFlat:
+ * true)`. `TypingRosterCell` (`components/typing-roster-cell.tsx`) porte le
+ * libellé calculé sur cet attribut dans LES DEUX tenues, précisément pour
+ * qu'un témoin reste vrai quel que soit le mode — l'ancienne forme (scanner
+ * un `<span>` dont le texte finit par « écrit »/« écrivent ») serait devenue
+ * aveugle en tenue plate et aurait fait passer « personne n'écrit » pour
+ * toujours vrai.
+ */
+const typingCellText = (page) =>
+  page.evaluate(() => document.querySelector('main [data-typing-cell]')?.getAttribute('data-typing-label') ?? null);
+
+const typingCellAvatarInitials = (page) =>
+  page.evaluate(
+    () => document.querySelector('main [data-typing-cell] .avatar-root span')?.textContent ?? null,
+  );
+
+const rowLine2Text = (page, conversationId) => page.locator(`[data-row="${conversationId}"] [data-line2]`).innerText();
+
+/**
+ * LE BUDGET D'UN FAIT MONOTONE DÉJÀ TIRÉ, en millisecondes SIMULÉES — pour
+ * les faits que plus aucune entrée de `LIVE_SCHEDULE` ne suit, donc dont la
+ * borne ne protège plus aucun évènement ultérieur. Généreux et anti-blocage,
+ * jamais un délai : `factBefore` s'arrête au fait et ne consomme ce budget
+ * que si le fait n'arrive pas.
+ */
+const MONOTONE_FACT_BUDGET_MS = 5_000;
+
+/**
+ * LE BUDGET D'UNE BASCULE DE MODE, en millisecondes SIMULÉES (revue-
+ * correction #7054, défaut majeur 3) — RELATIF à `chrono.now()`, jamais
+ * l'instant ABSOLU du prochain évènement réel. Les quatre bascules
+ * Focal/Script/Bulles/Focal du § 3 partageaient toutes `origin + 10500`
+ * comme borne : `factBefore` ne réinitialise jamais son compteur `elapsed`,
+ * donc le budget de 1 200 ms (10 500 − 9 300) était CUMULÉ entre les quatre
+ * appels — dès que les deux premiers en consommaient la moitié sous
+ * contention, le troisième sondait une fois, ne consommait aucun pas et
+ * rendait `false` : un `if`, pas une attente, rapporté comme un échec du
+ * PRODUIT. Un budget RELATIF, comme `MONOTONE_FACT_BUDGET_MS` au § 6, rend
+ * à chaque bascule son propre plafond anti-blocage.
+ *
+ * LA VALEUR N'EST PAS ARBITRAIRE : `LIVE_SCHEDULE` porte un `typing:start`
+ * RÉEL de Fatou à `atMs: 10500` (`fixtures-realtime.ts:303`) — le prochain
+ * évènement après le keepalive de Kwame à 9 000 ms. Les quatre bascules
+ * partent de `chrono.now() === origin + 9300` ; à 250 ms chacune, leur somme
+ * dans le pire cas (1 000 ms) reste sous les 1 200 ms de marge avant ce
+ * fait réel, de sorte qu'une bascule qui consommerait tout son budget ne
+ * ferait jamais lire à la suivante un roster déjà changé par l'évènement
+ * suivant de la chronologie.
+ */
+const MODE_SWITCH_FACT_BUDGET_MS = 250;
+
+/**
+ * LE PREMIER FAIT DE LA CHRONOLOGIE, en millisecondes SIMULÉES depuis
+ * `connect()` — l'entrée `message:attachment-updated` de `atMs: 1500`
+ * (`fixtures-realtime.ts` § `LIVE_SCHEDULE`, la première à un coup). Un
+ * écran doit être monté AVANT elle : sinon l'état « au chargement » lu
+ * ensuite serait déjà celui d'après l'évènement.
+ */
+const FIRST_LIVE_EVENT_MS = 1_500;
+
+/**
+ * LE ZÉRO DE LA CHRONOLOGIE D'UNE PAGE, LU — jamais supposé (#9267).
+ * `LIVE_SCHEDULE` se compte depuis `connect()` du bouchon, qui l'annonce sous
+ * `__meeshyFixturesConnectedAt` (`fixtures-realtime.ts`,
+ * `FIXTURES_CONNECTED_AT_GLOBAL`) en temps de l'horloge truquée ; retranché
+ * d'`INSTANT`, il se lit dans le repère de `chrono`. `null` tant que la page
+ * n'est pas connectée.
+ *
+ * L'origine était auparavant l'instant où le premier nœud MONTAIT, tenu pour
+ * « une CONSTANTE du build » (§ 2.2 de `paused-chronology.mjs`). Mesuré sur
+ * le dist de `dev` (2026-10-06) : elle ne l'est pas — le fil et la connexion
+ * sortent de chunks DIFFÉRENTS, chargés à la demande, et la connexion tombe
+ * avant OU après `live-1` selon leur ordre d'arrivée. Chaque `origin + atMs`
+ * visait alors un instant décalé d'autant de la chronologie qu'il lisait.
+ */
+const scheduleZeroOn = async (targetPage) => {
+  const connectedAt = await targetPage.evaluate(() => window.__meeshyFixturesConnectedAt ?? null);
+  return connectedAt === null ? null : connectedAt - INSTANT.getTime();
+};
+
+/**
+ * UNE PAGE DE `c-live` EST PRÊTE quand sa chronologie a commencé ET que son
+ * premier nœud est monté AVANT le premier fait. Deux attentes, deux bornes :
+ * la connexion est un fait MONOTONE qu'aucun évènement ne précède (la
+ * chronologie n'existe pas encore), d'où `MONOTONE_FACT_BUDGET_MS` ; le
+ * montage, lui, est borné par le premier fait RÉEL de cette chronologie,
+ * compté depuis son zéro lu. Rend l'origine, ou `null` si l'une manque.
+ */
+const bootLiveChronology = async ({ chrono, targetPage, selector, expect, what }) => {
+  const connected = await chrono.factBefore(chrono.now() + MONOTONE_FACT_BUDGET_MS, async () => (await scheduleZeroOn(targetPage)) !== null);
+  expect(connected, `${what} : le bouchon temps réel est connecté — la chronologie a commencé`);
+  if (!connected) return null;
+  const origin = await scheduleZeroOn(targetPage);
+  const mounted = await chrono.factBefore(origin + FIRST_LIVE_EVENT_MS, attachedOn(targetPage, selector));
+  expect(
+    mounted,
+    `${what} : son premier nœud est monté avant le premier fait de la chronologie (connexion à ${origin} ms simulées, horloge à ${chrono.now()} ms)`,
+  );
+  if (!mounted) return null;
+  await chrono.advanceTo(Math.max(chrono.now(), origin + 300));
+  return origin;
+};
+
+/**
+ * LE RÉGIME DU CODE LENT (#9267) — une latence MURALE posée sur chaque chunk
+ * JavaScript servi par le dist : une ENTRÉE du scénario (la latence d'un
+ * réseau ou d'un serveur chargé), jamais une attente avant verdict — même
+ * statut que la page d'historique retenue de D-173. C'est le régime dans
+ * lequel un agent chargé tombait une fois sur trois : sans lui, le gate ne
+ * jouait que le régime où les chunks arrivent avant que l'horloge ait franchi
+ * trente pas, et un retour du défaut serait resté invisible au calme.
+ */
+export const SLOW_CODE_LATENCY_MS = 400;
+
+const holdCode = (context, latencyMs) =>
+  context.route(
+    (url) => url.pathname.startsWith('/assets/') && url.pathname.endsWith('.js'),
+    (route) => new Promise((resolve) => setTimeout(resolve, latencyMs)).then(() => route.continue()),
+  );
+
+export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA_THRESHOLD, scheme, codeLatencyMs = 0 }) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'en-US' });
+  await setScheme(context, scheme);
+  if (codeLatencyMs > 0) await holdCode(context, codeLatencyMs);
+  const page = await context.newPage();
+  const chrono = await pausedChronology(page, { time: INSTANT });
+
+  let messageFetches = 0;
+  /**
+   * LE CHEMIN D'API, JAMAIS L'URL ENTIÈRE (revue-correction #5893) — ce
+   * témoin veut compter les RE-LECTURES de `GET /…/messages`. Le prédicat
+   * `req.url().includes('/messages')` comptait aussi les FICHIERS servis par
+   * le dist : dès que `api/messages.ts` est devenu un chunk partagé
+   * (l'arrivée de la route `/feed` dans `api/query.ts` a suffi), Rollup a
+   * émis `assets/messages-<hash>.js`, que le navigateur charge à l'ouverture
+   * du fil — et ce gate rougissait en annonçant une requête d'API que
+   * personne n'avait faite. Un témoin qui nomme un défaut ABSENT coûte plus
+   * cher qu'un témoin manquant : on cherche dans le mauvais fichier.
+   */
+  page.on('request', (req) => {
+    const { pathname } = new URL(req.url());
+    if (pathname.startsWith('/api/') && pathname.includes('/messages')) messageFetches += 1;
+  });
+
+  const label = codeLatencyMs > 0 ? `[${scheme}, code servi en ${codeLatencyMs} ms]` : `[${scheme}]`;
+
+  // ===== 1. LE FIL — message:translation, le RANG du lecteur =====
+  await page.goto(`${BASE}/c/c-live`, { waitUntil: 'load' });
+  const origin = await bootLiveChronology({ chrono, targetPage: page, selector: '[data-message="live-1"]', expect, what: `${label} le fil c-live` });
+  if (origin === null) {
+    await context.close();
+    return;
+  }
+
+  expect((await textOf(page, 'live-1')).includes('Hola'), `${label} live-1 : l'ORIGINAL espagnol au chargement`);
+  expect((await langOf(page, 'live-1')) === 'es', `${label} live-1 : lang="es" au chargement`);
+
+  /**
+   * ===== 1 bis. LE VOCAL — message:attachment-updated (#7017) =====
+   *
+   * Le pipeline audio rend en TROIS temps (`fixtures-realtime.ts` § les trois
+   * entrées `MESSAGE_ATTACHMENT_UPDATED`), et chacun est lu à un arrêt
+   * d'horloge que ce gate observait DÉJÀ : la section ne coûte pas une
+   * milliseconde simulée de plus.
+   *
+   * L'ÉPREUVE DE CE TÉMOIN N'EST PAS SON VERT mais sa MUTATION : retirer
+   * `socket.on(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, …)` de
+   * `src/lib/api/socket.ts` doit le faire TOMBER dès la première assertion de
+   * T+2,5 s. Un gate qu'on n'a pas vu rougir ne garde rien.
+   */
+  const live3AtLoad = await transcriptOf(page, 'live-3');
+  expect(
+    !live3AtLoad.includes('revisión') && !live3AtLoad.includes('review') && !live3AtLoad.includes('revue'),
+    `${label} live-3 : AUCUNE transcription au chargement — le pipeline n'a encore rien produit (obtenu « ${live3AtLoad} »)`,
+  );
+
+  /**
+   * LA PRÉMISSE DES TROIS MESURES DE LANGUE CI-DESSOUS, POSÉE PLUTÔT QUE
+   * SUPPOSÉE (revue-correction #7017). Ce contexte est ouvert en `locale:
+   * 'en-US'`, donc le script d'amorçage de la langue d'INTERFACE
+   * (`inline-interface-language-bootstrap.js`) écrit `<html lang="en">`,
+   * pendant que le CONTENU descend le Prisme du LECTEUR, dont le rang 1 vaut
+   * TOUJOURS `'fr'` (`systemLanguage: 'fr'`, `src/lib/reader.ts`). Les deux
+   * résolveurs DIVERGENT, et c'est cette divergence — le cas NOMINAL d'un
+   * francophone sur un appareil anglais — qui rend les assertions suivantes
+   * falsifiables : sans elle, « annoncer la langue servie » et « ne rien
+   * annoncer » se ressembleraient.
+   */
+  expect(
+    (await documentLangOf(page)) === 'en',
+    `${label} le document est en ANGLAIS (langue d'INTERFACE, locale en-US) pendant que le Prisme sert du contenu français (obtenu ${await documentLangOf(page)})`,
+  );
+
+  await chrono.advanceTo(origin + 2500); // T+2,5 s
+  await chrono.factBefore(
+    origin + 3000,
+    async () => (await langOf(page, 'live-1')) === 'en' && (await transcriptServedLangOf(page, 'live-3')) === 'es',
+  );
+  expect(
+    (await textOf(page, 'live-1')).includes('Hi, is the review still on Thursday?'),
+    `${label} live-1 : la traduction ANGLAISE (rang 2 du Prisme) est servie à T+2 s`,
+  );
+  expect((await langOf(page, 'live-1')) === 'en', `${label} live-1 : lang="en" au rang 2`);
+  expect(
+    (await transcriptOf(page, 'live-3')).includes('¿seguimos con la revisión el jueves?'),
+    `${label} live-3 : la transcription Whisper (es) apparaît SANS rechargement (obtenu « ${await transcriptOf(page, 'live-3')} »)`,
+  );
+  expect(
+    (await transcriptServedLangOf(page, 'live-3')) === 'es',
+    `${label} live-3 : la transcription est ANNONCÉE en "es" — la langue RÉELLEMENT servie, pas celle du lecteur ni celle du document (obtenu ${JSON.stringify(await transcriptServedLangOf(page, 'live-3'))})`,
+  );
+
+  await chrono.advanceTo(origin + 4000); // T+4 s
+  await chrono.factBefore(
+    origin + 4200,
+    async () => (await langOf(page, 'live-1')) === 'fr' && (await transcriptServedLangOf(page, 'live-3')) === 'en',
+  );
+  expect(
+    (await textOf(page, 'live-1')).includes('Bonjour, la revue reste bien jeudi ?'),
+    `${label} live-1 : la traduction FRANÇAISE (rang 1) reprend la main à T+3,5 s`,
+  );
+  expect((await langOf(page, 'live-1')) === 'fr', `${label} live-1 : lang="fr" au rang 1`);
+  /* LE RANG 2, sur la famille AUDIO — la seule traduction disponible à cet
+     instant est `en`, le rang 2 du prisme du lecteur. Un témoin posé au rang 1
+     ne pourrait pas tomber : la descente juste et le court-circuit interdit y
+     rendent le même verdict (CLAUDE.md § Prisme, leçon 261). */
+  expect(
+    (await transcriptOf(page, 'live-3')).includes('shall we keep the review on Thursday?'),
+    `${label} live-3 : la traduction ANGLAISE (rang 2) est servie dès qu'elle arrive (obtenu « ${await transcriptOf(page, 'live-3')} »)`,
+  );
+  expect(
+    (await transcriptServedLangOf(page, 'live-3')) === 'en',
+    `${label} live-3 : la transcription est ANNONCÉE en "en" au rang 2 (obtenu ${JSON.stringify(await transcriptServedLangOf(page, 'live-3'))})`,
+  );
+  expect(messageFetches === 0, `${label} aucune requête « /messages » n'a été déclenchée par la traduction ni par l'enrichissement de la pièce (${messageFetches})`);
+
+  // ===== 2. conversation:updated NE PARLE QU'À LA LISTE =====
+  await chrono.advanceTo(origin + 5000); // T+5 s
+  await chrono.factBefore(origin + 6000, async () => (await transcriptServedLangOf(page, 'live-3')) === 'fr');
+  expect(
+    (await textOf(page, 'live-1')).includes('Bonjour, la revue reste bien jeudi ?'),
+    `${label} live-1 : le fil ne change pas quand conversation:updated arrive (le fil OUVERT n'écoute que message:translation)`,
+  );
+  /**
+   * LE RANG 1 REPREND LA MAIN — et la langue ANNONCÉE doit devenir « fr »,
+   * jamais se taire.
+   *
+   * CE TÉMOIN NE POUVAIT PAS TOMBER, et c'est la revue-correction #7017 qui
+   * l'a mesuré. Il exigeait `lang === null || lang === ''` : les DEUX seules
+   * valeurs que la règle de rendu d'alors pouvait produire à cet instant
+   * (`null` si le nœud naissait ici, `''` — la coquille Preact — parce qu'il
+   * avait porté « en » une seconde plus tôt). Une assertion satisfaite par
+   * l'ensemble des issues possibles ne garde rien.
+   *
+   * Pire, elle CONSACRAIT le défaut. `attachment-blocks.tsx` omettait
+   * l'attribut quand la langue servie valait `READER_LOCALE`, en le justifiant
+   * par « c'est la langue du document » — or le document est en `en` ici
+   * (assertion posée plus haut) et `READER_LOCALE` vaut TOUJOURS `'fr'`. Le
+   * cas où l'attribut disparaissait était donc exactement celui où il est
+   * INDISPENSABLE : un texte français dans un document anglais. Mesuré au
+   * navigateur sur le dist d'avant correctif — quatre instants, `closest
+   * ('[lang]')` :
+   *
+   *     T+0,3 « es »   T+2,5 « es »   T+4 « en »   T+5 « » (langue INCONNUE)
+   *
+   * Un lecteur d'écran lisait donc « Bonjour, on garde la revue jeudi ? » sans
+   * langue déclarée. La coquille `lang=""` sauvait la mise par accident (HTML
+   * la définit comme « langue explicitement inconnue », donc elle n'hérite pas
+   * de l'anglais) ; sur le chemin REST, où le nœud naît sans attribut, rien ne
+   * la sauvait — le français y héritait bel et bien du `<html lang="en">`.
+   *
+   * La règle appliquée désormais n'a plus de cas particulier : on ANNONCE la
+   * langue servie, à tous les rangs. C'est ce que la spécification §4.3 d
+   * demandait (`<p lang="fr">`), et ce que `attachment-blocks.test.tsx` garde
+   * à l'unité avec la divergence interface/Prisme qui la motive.
+   */
+  expect(
+    (await transcriptOf(page, 'live-3')).includes('on garde la revue jeudi ?'),
+    `${label} live-3 : la traduction FRANÇAISE (rang 1) reprend la main à T+4,2 s (obtenu « ${await transcriptOf(page, 'live-3')} »)`,
+  );
+  const rank1Lang = await transcriptServedLangOf(page, 'live-3');
+  expect(
+    rank1Lang === 'fr',
+    `${label} live-3 : la transcription est ANNONCÉE en "fr" au rang 1 — jamais muette dans un document anglais (obtenu ${JSON.stringify(rank1Lang)})`,
+  );
+  expect(messageFetches === 0, `${label} le fil n'a jamais été rechargé pour obtenir la transcription (${messageFetches})`);
+
+  // ===== 3. LE ROSTER, DANS LE FIL =====
+  await chrono.advanceTo(origin + 6300); // T+6,3 s
+  await chrono.factBefore(origin + 7500, async () => /^Kwame Mensah is typing$/.test((await typingCellText(page)) ?? ''));
+  expect(
+    /^Kwame Mensah is typing$/.test((await typingCellText(page)) ?? ''),
+    `${label} T+6,3 s : la cellule dit « Kwame Mensah is typing » (obtenu ${await typingCellText(page)})`,
+  );
+
+  await chrono.advanceTo(origin + 7800); // T+7,8 s
+  await chrono.factBefore(origin + 9000, async () => (await typingCellText(page)) === 'Kwame Mensah and Fatou Bâ are typing');
+  expect(
+    (await typingCellText(page)) === 'Kwame Mensah and Fatou Bâ are typing',
+    `${label} T+7,8 s : « Kwame Mensah and Fatou Bâ are typing » (obtenu ${await typingCellText(page)})`,
+  );
+  expect(
+    (await typingCellAvatarInitials(page)) === 'KM',
+    `${label} T+7,8 s : l'avatar est celui du MENEUR (KM), jamais FB (obtenu ${await typingCellAvatarInitials(page)})`,
+  );
+
+  /**
+   * LE KEEPALIVE NE DÉPLACE PAS LE MENEUR (revue-correction #6171, défaut 3)
+   * — Kwame réarme sa frappe à 9 000 ms (`LIVE_SCHEDULE`, § fixtures-
+   * realtime.ts) : un roster qui le relègue en queue à ce `typing:start`
+   * inverserait le libellé (« Fatou Bâ et Kwame Mensah écrivent ») et
+   * l'avatar (FB) — exactement le défaut mesuré en revue avant correctif
+   * (`typing-store.ts` § `start`, falsifié par `typing-store.test.ts`).
+   */
+  await chrono.advanceTo(origin + 9300); // T+9,3 s — keepalive de Kwame à 9 000 ms.
+  await chrono.factBefore(
+    origin + 10500,
+    async () => (await typingCellText(page)) === 'Kwame Mensah and Fatou Bâ are typing',
+  );
+  expect(
+    (await typingCellText(page)) === 'Kwame Mensah and Fatou Bâ are typing',
+    `${label} T+9,3 s : le keepalive de Kwame ne change PAS l'ordre du roster (obtenu ${await typingCellText(page)})`,
+  );
+  expect(
+    (await typingCellAvatarInitials(page)) === 'KM',
+    `${label} T+9,3 s : le keepalive de Kwame ne lui fait pas perdre le visage du MENEUR (obtenu ${await typingCellAvatarInitials(page)})`,
+  );
+
+  /**
+   * LA CAPSULE N'EST LA TENUE QUE DU MODE BULLES (revue-correction #6171,
+   * défaut 4) — miroir `TypingIndicatorBubble(isFlat: readingMode !=
+   * .bubbles)` (`MessageListViewController.swift:3137-3138`). Basculé ICI, à
+   * deux frappeurs déjà en roster, puis REPOSÉ sur Focal (le mode PAR DÉFAUT,
+   * D-7) avant de reprendre le scénario — un mode qui resterait Bulles
+   * fausserait la suite (la cellule y garde sa capsule à tout instant).
+   *
+   * Aucun de ces quatre bascules n'attend un ÉVÈNEMENT de la chronologie —
+   * la borne `chrono.now() + MODE_SWITCH_FACT_BUDGET_MS` de `factBefore`
+   * n'est qu'un PLAFOND anti-blocage RELATIF (revue-correction #7054,
+   * défaut majeur 3 — voir le doc-comment de la constante : une borne
+   * ABSOLUE partagée entre les quatre appels laissait le budget de la
+   * dernière être ce que les premières avaient laissé) : le rendu d'un clic
+   * de menu est une micro-tâche, `factBefore` y consomme donc 0 pas en
+   * pratique.
+   */
+  // Ce contexte est `en-US` par construction (prémisse ci-dessus) : depuis #10645 l'interface y parle anglais.
+  const modeChip = page.getByRole('button', { name: /Mode de lecture|Reading mode/ });
+  const menuItem = (name) => page.getByRole('menuitemradio', { name });
+  /**
+   * `.rounded-chip` N'EST PAS LE BON SIGNAL — `Avatar` l'emploie DÉJÀ pour la
+   * forme de son insigne d'initiales, DANS LES DEUX TENUES (même défaut que
+   * `typing-roster-cell.test.tsx`, mesuré au premier jet de ce témoin). Le
+   * signal propre à la capsule DE FRAPPE est `.text-time` (le libellé
+   * visible), présent dans la SEULE tenue bulles.
+   */
+  const hasCapsule = () =>
+    page.evaluate(() => document.querySelector('main [data-typing-cell] .text-time') !== null);
+
+  await modeChip.click();
+  await menuItem(/^Focal/).click();
+  const focalFlat = await chrono.factBefore(chrono.now() + MODE_SWITCH_FACT_BUDGET_MS, async () => (await hasCapsule()) === false);
+  expect(focalFlat, `${label} mode Focal (défaut D-7) : la cellule n'a AUCUNE capsule (pastille + points seuls)`);
+
+  await modeChip.click();
+  await menuItem(/^Script/).click();
+  const scriptFlat = await chrono.factBefore(chrono.now() + MODE_SWITCH_FACT_BUDGET_MS, async () => (await hasCapsule()) === false);
+  expect(scriptFlat, `${label} mode Script : la cellule n'a AUCUNE capsule, même tenue que Focal`);
+
+  await modeChip.click();
+  await menuItem(/^(Bulles|Bubbles)/).click();
+  const bubblesCapsule = await chrono.factBefore(chrono.now() + MODE_SWITCH_FACT_BUDGET_MS, async () => (await hasCapsule()) === true);
+  expect(bubblesCapsule, `${label} mode Bulles : la capsule à libellé reste la tenue du mode bulles`);
+
+  await modeChip.click();
+  await menuItem(/^Focal/).click();
+  await chrono.factBefore(chrono.now() + MODE_SWITCH_FACT_BUDGET_MS, async () => (await hasCapsule()) === false);
+
+  await chrono.advanceTo(origin + 13300); // T+13,3 s — Fatou s'arrête à 13 000 ms.
+  await chrono.factBefore(origin + 14000, async () => (await typingCellText(page)) === 'Kwame Mensah is typing');
+  expect(
+    (await typingCellText(page)) === 'Kwame Mensah is typing',
+    `${label} T+13,3 s : Fatou s'est arrêtée, Kwame reste seul (obtenu ${await typingCellText(page)})`,
+  );
+
+  await chrono.advanceTo(origin + 27300); // T+27,3 s — dernier `start` de Kwame à 12 000 ms + 15 000 ms de sécurité.
+  await chrono.factBefore(origin + 30000, async () => (await typingCellText(page)) === null);
+  expect(
+    (await typingCellText(page)) === null,
+    `${label} T+27,3 s : plus aucun frappeur, la cellule a disparu (obtenu ${await typingCellText(page)})`,
+  );
+
+  // ===== 4. LA LISTE — conversation:updated résolu au Prisme, puis la frappe PRIME =====
+  const listPage = await context.newPage();
+  /* PAS de second `install` : l'horloge est PAR CONTEXTE (Playwright 1.62.1,
+     `_browserContext._channel.clockInstall`) — `listPage` partage celle de
+     `chrono`, déjà en pause. La réinstaller ici écraserait son journal en
+     silence (§1.1 de `paused-chronology.mjs`) sans qu'aucun `expect` n'en
+     dépende : c'était un doublon d'infrastructure, pas un témoin. */
+  await listPage.goto(`${BASE}/chats`, { waitUntil: 'load' });
+  const listOrigin = await bootLiveChronology({ chrono, targetPage: listPage, selector: '[data-row="c-live"]', expect, what: `${label} la liste` });
+  if (listOrigin === null) {
+    await context.close();
+    return;
+  }
+  expect(
+    (await rowLine2Text(listPage, 'c-live')).includes('Oui, jeudi 14h.'),
+    `${label} liste, T+0,3 s : la ligne 2 décrit le dernier message CONNU avant l'événement`,
+  );
+
+  await chrono.advanceTo(listOrigin + 5000); // T+5 s — conversation:updated a adopté live-1.
+  await chrono.factBefore(
+    listOrigin + 6000,
+    async () => (await rowLine2Text(listPage, 'c-live')).includes('Bonjour, la revue reste bien jeudi ?'),
+  );
+  const line2AfterAdoption = await rowLine2Text(listPage, 'c-live');
+  expect(
+    line2AfterAdoption.includes('Bonjour, la revue reste bien jeudi ?'),
+    `${label} liste, T+5 s : la ligne 2 adopte live-1 et sert le FRANÇAIS (rang du lecteur) (obtenu « ${line2AfterAdoption} »)`,
+  );
+  const previewLang = await listPage.locator('[data-row="c-live"] [data-line2] span[lang]').first().getAttribute('lang');
+  expect(previewLang === 'fr', `${label} liste, T+5 s : le span de l'aperçu porte lang="fr" (obtenu ${previewLang})`);
+
+  /* L'APERÇU SERVI DOIT SE LIRE — et à l'AA, jamais « mesurable » (revue-
+     correction #6171 : la première forme de ce témoin n'exigeait que
+     `contrast !== null`, donc acceptait n'importe quelle valeur ; mesuré 4,98:1
+     en clair et 9,98:1 en sombre, l'exigence PASSE — la version molle ne
+     retenait rien). `expectQuantifiedContrast` (`check-message-states.mjs`) est
+     réservé aux trois crans iOS qui ne PEUVENT pas tenir l'AA ; la ligne 2 de la
+     Lentille n'en est pas un, et `check-list-actions.mjs` l'exige déjà ailleurs.
+
+     MESURÉ ICI, AVANT que la frappe ne prenne la ligne 2 : après l'avancée
+     suivante ce nœud ne porte plus l'aperçu mais « Kwame Mensah écrit », et le
+     témoin mesurerait un AUTRE texte que celui qu'il nomme. */
+  const contrast = await contrastOf(listPage, `[data-row="c-live"] [data-line2]`);
+  expect(
+    contrast !== null && contrast >= AA_THRESHOLD,
+    `${label} liste, T+5 s : l'aperçu SERVI de la ligne 2 tient l'AA (${contrast}:1 >= ${AA_THRESHOLD})`,
+  );
+
+  await chrono.advanceTo(listOrigin + 6500); // T+6,5 s — la frappe de Kwame PRIME sur l'aperçu.
+  /* #7547 — la ligne 2 parle la langue d'INTERFACE résolue : l'attendu se lit
+     dans le catalogue partagé, jamais le mot français recopié. */
+  const pageLanguage = await listPage.evaluate(() => document.documentElement.lang || 'fr');
+  const typingLabel = conversationPreviewString(pageLanguage, 'typing.one', { name: 'Kwame Mensah' });
+  await chrono.factBefore(listOrigin + 7500, async () => (await rowLine2Text(listPage, 'c-live')).includes(typingLabel));
+  expect(
+    (await rowLine2Text(listPage, 'c-live')).includes(typingLabel),
+    `${label} liste, T+6,5 s : la frappe PRIME sur l'aperçu (Line2Kind)`,
+  );
+
+  // ===== 5. conversation:new — LA CONVERSATION QUI SURGIT (#6807, preuve de #6799) =====
+  /**
+   * CE QUE CETTE SECTION GARDE, et pourquoi elle existe.
+   *
+   * #6799 a trouvé `conversation:new` écouté NULLE PART dans web-v2 : 0
+   * occurrence sur 766 fichiers, alors que la passerelle l'émet à trois sites
+   * et que le legacy l'écoute. Conséquence mesurée : `patchConversation` ne
+   * modifie qu'une page portant DÉJÀ l'id, donc pour un premier DM reçu ou un
+   * ajout à un groupe, le `message:new` suivant patchait le vide EN SILENCE.
+   *
+   * Le correctif INVALIDE la liste — il ne fabrique pas la ligne, la charge
+   * `ConversationNewEventData` étant minimale (une ligne fabriquée afficherait
+   * un direct SANS NOM). Sa valeur n'est donc visible que si la source peut
+   * rendre une conversation que le corpus ne connaissait pas : c'est le rôle
+   * du registre des survenues (`fixtures.ts`), alimenté au TIR de l'entrée.
+   *
+   * `c-surgie` est ABSENTE de `CONVERSATIONS` : sans l'abonnement, l'aperçu
+   * n'arrive qu'au prochain rechargement complet — jamais ici.
+   *
+   * L'ÉPREUVE DE CE TÉMOIN N'EST PAS SON VERT (le correctif le précède) mais
+   * sa MUTATION : retirer `socket.on(SERVER_EVENTS.CONVERSATION_NEW, …)` de
+   * `src/lib/api/socket.ts` doit le faire TOMBER. Un gate qu'on n'a pas vu
+   * rougir ne garde rien.
+   */
+  const rowsBefore = await listPage.locator('[data-row]').count();
+  await chrono.advanceTo(listOrigin + 14500); // T+14,5 s — l'entrée `conversation:new` a tiré.
+  const surgedRow = listPage.locator('[data-row="c-surgie"]');
+  // `factBefore` ne LÈVE jamais (§ `await-fact.mjs`) : un `.catch(() =>
+  // undefined)` de rattrapage n'a donc plus lieu d'être ici.
+  await chrono.factBefore(listOrigin + 30000, attachedOn(listPage, '[data-row="c-surgie"]'));
+  const rowsAfter = await listPage.locator('[data-row]').count();
+  expect(
+    (await surgedRow.count()) === 1,
+    `${label} liste, T+14,5 s : la conversation SURGIE porte sa ligne — sans l'abonnement \`conversation:new\`, rien n'apparaît avant un rechargement complet (rangées ${rowsBefore} → ${rowsAfter}, c-surgie ${await surgedRow.count()})`,
+  );
+
+  await listPage.close();
+
+  // ===== 6. LA PIÈCE PROTÉGÉE ARRIVÉE PAR SOCKET N'ATTEINT PAS LE DOM (#7014) =====
+  /**
+   * LE CHEMIN TEMPS RÉEL, QU'AUCUN GATE NE JOUAIT — et c'est la moitié qui a
+   * fui. `check-media.mjs` exerce `media-10` (la PIÈCE déclarée protégée sur un
+   * message ordinaire, #6189) sur le chemin REST : il était VERT pendant toute
+   * la vie du défaut, parce que le corpus arrive par `GET /messages`, où le
+   * `select` sert bien `isViewOnce`. Le canal SOCKET, lui, ne servait RIEN —
+   * `serializeAttachmentForSocket` énumérait trente champs à la main, sans les
+   * trois de la protection — et `maskedAttachment` échoue OUVERTE quand on ne
+   * la nourrit pas. Une photo à VUE UNIQUE reçue en direct rendait donc son
+   * `<img>` EN CLAIR jusqu'au prochain `GET /messages`.
+   *
+   * CE QUE CE GATE MESURE, exactement : la moitié CLIENT du fail-closed —
+   * `message:new` → `applyMessageNew` → cache TanStack → `decodeMessage` →
+   * bulle → `<Attachments>` → DOM, dans un VRAI navigateur. C'est le segment
+   * qu'aucun autre témoin ne traverse : le témoin bout-à-bout
+   * (`realtime-attachment-protection.test.tsx`) branche le VRAI sérialiseur de
+   * la passerelle mais rend `<Attachments>` à la main, sans cache ni bulle ;
+   * `check-media.mjs` monte la vraie bulle mais n'arrive que par REST.
+   *
+   * La moitié SERVEUR — que la passerelle ÉMET bien ces champs — est tenue
+   * ailleurs, et doit l'être : la charge ci-dessous est une FIXTURE, donc ce
+   * gate ne peut pas prouver ce que le sérialiseur sert. C'est la garde
+   * d'INVENTAIRE (`serializeAttachmentForSocket.test.ts`) qui le prouve, et le
+   * témoin bout-à-bout qui relie les deux.
+   *
+   * L'ÉPREUVE DE CE TÉMOIN N'EST PAS SON VERT mais sa MUTATION : retirer
+   * `isViewOnce` de la pièce de `live-protege` (`fixtures-realtime.ts`) — la
+   * forme EXACTE du défaut, une charge socket muette sur sa protection — doit
+   * le faire tomber. Mesuré en l'écrivant.
+   */
+  const bulleVue = (id, urlServie) =>
+    page.evaluate(
+      ([messageId, url]) => {
+        const bulle = document.querySelector(`[data-message="${messageId}"]`);
+        if (bulle === null) return null;
+        const img = bulle.querySelector('img');
+        return {
+          img: img !== null,
+          src: img?.getAttribute('src') ?? null,
+          substitut: bulle.querySelector('[data-protected-attachment="hidden"]') !== null,
+          /* L'URL est cherchée dans le HTML ENTIER de la bulle, jamais sur le
+             seul `src` d'un `<img>` : un `background-image`, un `<source>`,
+             un `data-` quelconque la ferait fuir tout autant. Les octets dans
+             la page SONT la fuite — un `filter: blur()` n'est pas une
+             rétention (motif `check-media.mjs` § (n)). */
+          urlEnClair: url !== null && bulle.outerHTML.includes(url),
+        };
+      },
+      [id, urlServie ?? null],
+    );
+
+  /**
+   * LE CONTRÔLE EST OBSERVÉ EN PREMIER, et il n'est pas seulement la
+   * contre-épreuve (leçon 261) : c'est LUI qui donne au gate l'URL à chercher
+   * dans la bulle protégée. Recopier ce littéral ici en ferait une SECONDE
+   * définition — celle qui dérive en silence le jour où la fixture change son
+   * média, laissant le témoin chercher une chaîne que plus personne ne sert et
+   * verdir sur une fuite réelle. Le média est servi par la fixture, une fois.
+   *
+   * `live-ordinaire` (30 000 ms) et `live-protege` (31 000 ms) sont datés
+   * depuis la connexion du FIL (`origin`), mais la chronologie est PARTAGÉE
+   * avec la section LISTE ci-dessus (§ doc-comment de tête — une horloge par
+   * CONTEXTE) : au moment où l'exécution atteint cette ligne, l'horloge
+   * partagée a déjà dépassé 42 s (`listOrigin` + les avancées de la §4). Les
+   * deux faits sont donc MONOTONES et déjà tirés.
+   *
+   * LA BORNE EST DONC RELATIVE, JAMAIS L'INSTANT DE L'ÉVÈNEMENT (revue-
+   * correction #7054). Écrite `origin + 31000`, elle est DÉJÀ DÉPASSÉE quand
+   * l'exécution arrive ici : `factBefore` sonde alors UNE fois, ne consomme
+   * aucun pas et rend `false` — c'est un `if`, pas une attente. Le jour où le
+   * rendu du message a un tour de retard (contention, une micro-tâche de
+   * plus), le gate n'a aucun moyen de le rattraper et rougit sur quatre
+   * témoins d'un coup. Une attente qui ne PEUT pas attendre est la jumelle
+   * exacte du délai fixe que ce lot retire : `chrono.now() +
+   * MONOTONE_FACT_BUDGET_MS` lui rend un budget, et comme plus aucune entrée
+   * de `LIVE_SCHEDULE` ne suit 31 000 ms, l'avancer ne peut rien faire tirer
+   * d'autre.
+   */
+  await chrono.factBefore(chrono.now() + MONOTONE_FACT_BUDGET_MS, attachedOn(page, '[data-message="live-ordinaire"]'));
+  const vuOrdinaire = await bulleVue('live-ordinaire', null);
+  expect(
+    vuOrdinaire?.img === true,
+    `${label} CONTRÔLE, T+30,3 s : le média SANS déclaration, arrivé PAR SOCKET, rend bien son <img> — sans quoi les témoins suivants ne pourraient pas tomber (obtenu ${JSON.stringify(vuOrdinaire)})`,
+  );
+  expect(
+    vuOrdinaire?.substitut === false,
+    `${label} CONTRÔLE, T+30,3 s : la pièce ordinaire ne porte AUCUN substitut (obtenu ${JSON.stringify(vuOrdinaire)})`,
+  );
+
+  const urlServie = vuOrdinaire?.src ?? null;
+  expect(
+    typeof urlServie === 'string' && urlServie.length > 0,
+    `${label} CONTRÔLE : l'URL du média est LUE sur la bulle ordinaire, jamais recopiée dans ce gate (obtenue ${urlServie})`,
+  );
+
+  /** LE MÊME MÉDIA, LA MÊME ARRIVÉE — la seule déclaration en plus. Borne
+   *  RELATIVE pour la même raison qu'au-dessus. */
+  await chrono.factBefore(chrono.now() + MONOTONE_FACT_BUDGET_MS, attachedOn(page, '[data-message="live-protege"]'));
+  const vuProtege = await bulleVue('live-protege', urlServie);
+  expect(
+    vuProtege !== null,
+    `${label} T+31,3 s : le message protégé reçu par socket porte bien sa bulle (sinon ce témoin ne mesure RIEN)`,
+  );
+  expect(
+    vuProtege?.img === false,
+    `${label} T+31,3 s : la pièce déclarée \`isViewOnce\` arrivée PAR SOCKET ne rend AUCUN <img> (obtenu ${JSON.stringify(vuProtege)})`,
+  );
+  expect(
+    vuProtege?.urlEnClair === false,
+    `${label} T+31,3 s : l'URL du média protégé n'est NULLE PART dans la bulle (obtenu ${JSON.stringify(vuProtege)})`,
+  );
+  expect(
+    vuProtege?.substitut === true,
+    `${label} T+31,3 s : la pièce protégée porte son substitut \`data-protected-attachment="hidden"\` (obtenu ${JSON.stringify(vuProtege)})`,
+  );
+
+  await context.close();
+}

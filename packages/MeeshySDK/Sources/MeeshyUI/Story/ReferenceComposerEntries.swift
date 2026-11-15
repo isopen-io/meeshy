@@ -52,7 +52,7 @@ public struct ReferenceMentionSuggestions: View {
                     choose(mode, for: user)
                 }
             }
-            .background(RoundedRectangle(cornerRadius: 12).fill(background))
+            .background(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).fill(background))
             .transition(.opacity)
         }
     }
@@ -104,7 +104,7 @@ public struct ReferenceComposerBar: View {
     }
 
     public var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             chip
             ReferenceChipRow(references: references, accentColor: accentColor) {
                 showPicker = true
@@ -129,7 +129,7 @@ public struct ReferenceComposerBar: View {
         } label: {
             Label(String(localized: "reference.sheet.title", defaultValue: "Mentionner", bundle: .module),
                   systemImage: "at")
-                .font(.system(size: 14, weight: .medium))
+                .meeshyScaledFont(14, weight: .medium)
                 .foregroundStyle(accentColor)
         }
         .buttonStyle(.plain)

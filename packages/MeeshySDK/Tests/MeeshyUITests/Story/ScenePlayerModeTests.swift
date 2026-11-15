@@ -36,15 +36,80 @@ final class ScenePlayerModeTests: XCTestCase {
         XCTAssertFalse(config.showsChrome)
     }
 
+    /// #6745 — le réel plein écran rejoue sa scène comme la carte (en boucle),
+    /// mais l'entend comme le reader (son, muet non verrouillé, fil de position).
+    /// Aucun des trois modes existants ne réunissait les deux.
+    func test_reelConfig_isBornPaused_keepsSound_loops_andShowsChrome() {
+        let config = ScenePlayerConfig(mode: .reel)
+        XCTAssertTrue(config.startsPaused)
+        XCTAssertFalse(config.isMuted)
+        XCTAssertFalse(config.locksMute)
+        XCTAssertTrue(config.loops)
+        XCTAssertTrue(config.showsChrome)
+    }
+
     func test_everyMode_isBornPaused() {
-        for mode: ScenePlayerMode in [.reader, .preview, .card] {
+        for mode: ScenePlayerMode in [.reader, .preview, .card, .reel] {
             XCTAssertTrue(ScenePlayerConfig(mode: mode).startsPaused, "\(mode)")
         }
     }
 
-    func test_loopIsTheCardRule_alone() {
+    func test_onlyTheSurfacesThatReplay_loop() {
         XCTAssertFalse(ScenePlayerConfig(mode: .reader).loops)
         XCTAssertFalse(ScenePlayerConfig(mode: .preview).loops)
+        XCTAssertTrue(ScenePlayerConfig(mode: .card).loops)
+        XCTAssertTrue(ScenePlayerConfig(mode: .reel).loops)
+    }
+
+    func test_theReel_reArmsItselfWhenTheSceneCompletes_andKeepsItsSound() {
+        let reel = Self.player(document: Self.textDocument(), mode: .reel)
+        XCTAssertNotNil(reel.host.onCompletion, "loops : le réel se relance lui-même")
+        XCTAssertFalse(reel.host.mute, "le réel plein écran joue AVEC le son")
+
+        let muted = MeeshyScenePlayer(document: Self.textDocument(), mode: .reel,
+                                      sceneIndex: .constant(0), isPlaying: .constant(false),
+                                      accentColorHex: "#7C3AED", isMuted: true)
+        XCTAssertTrue(muted.host.mute, "le muet du réel reste une commande de l'hôte, jamais un verrou")
+    }
+
+    func test_theReel_receivesThePositionFeed_forItsProgress() {
+        var ticks: [Double] = []
+        let reel = Self.player(document: Self.textDocument(), mode: .reel)
+            .onPlaybackTime { ticks.append($0) }
+        reel.host.onPlaybackTime?(2.5)
+        XCTAssertEqual(ticks, [2.5])
+    }
+
+    func test_theReel_resetsItsPublishedPosition_whenTheSceneLoops() {
+        var ticks: [Double] = []
+        let reel = Self.player(document: Self.textDocument(), mode: .reel)
+            .onPlaybackTime { ticks.append($0) }
+        reel.host.onPlaybackTime?(6)
+
+        reel.host.onCompletion?()
+
+        XCTAssertEqual(ticks, [6, 0],
+                       "le tour de boucle remet la position publiée à zéro : la barre de l'hôte ne reste pas pleine")
+    }
+
+    func test_theCard_loopsWithoutPublishingAnyPosition() {
+        var ticks: [Double] = []
+        let card = Self.player(document: Self.textDocument(), mode: .card)
+            .onPlaybackTime { ticks.append($0) }
+
+        card.host.onCompletion?()
+
+        XCTAssertEqual(ticks, [], "sans chrome, la carte ne paie aucun fil de position, tour de boucle compris")
+    }
+
+    func test_playedDuration_isTheDurationOfTheSlideTheHostMounts() {
+        let document = Self.textDocument()
+        let mounted = Self.player(document: document, mode: .reel).host.storyItem
+            .toRenderableSlide(preferredLanguages: [])
+            .computedTotalDuration()
+
+        XCTAssertEqual(MeeshyScenePlayer.playedDuration(document: document), mounted, accuracy: 1e-9)
+        XCTAssertGreaterThan(mounted, 0)
     }
 
     // MARK: - Le player monte l'hôte existant, nourri par le pont v3
@@ -353,10 +418,20 @@ final class ScenePlayerSourceGuardTests: XCTestCase {
             .joined(separator: "\n")
     }
 
-    /// Les deux couches du canvas qui portent un `AVPlayer`.
+    /// Les deux couches du canvas qui portent un `AVPlayer` — chacune lue avec
+    /// ses extensions (`Nom+*.swift`) : la garde suit le TYPE, pas un fichier
+    /// qu'un découpage par responsabilité vide de son code (#9496).
     private static func strippedLayerSources() throws -> [(String, String)] {
-        try ["StoryBackgroundLayer", "StoryMediaLayer"].map { name in
-            (name, try strippedSource("Sources/MeeshyUI/Story/Canvas/Layers/\(name).swift"))
+        let dossier = packageRoot().appendingPathComponent("Sources/MeeshyUI/Story/Canvas/Layers")
+        let fichiers = try FileManager.default.contentsOfDirectory(at: dossier, includingPropertiesForKeys: nil)
+        return try ["StoryBackgroundLayer", "StoryMediaLayer"].map { name in
+            let famille = fichiers.filter {
+                $0.lastPathComponent == "\(name).swift" || $0.lastPathComponent.hasPrefix("\(name)+")
+            }
+            let code = try famille
+                .map { strippingLineComments(try String(contentsOf: $0, encoding: .utf8)) }
+                .joined(separator: "\n")
+            return (name, code)
         }
     }
 

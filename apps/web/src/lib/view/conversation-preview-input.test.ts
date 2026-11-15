@@ -1,0 +1,229 @@
+import { describe, expect, test } from 'bun:test';
+
+import { composeConversationPreview, renderConversationPreviewText } from '@meeshy/shared/utils/conversation-preview';
+
+import type { ListConversation } from '@/lib/api/list-preview';
+import { clearPrintOf } from '@/lib/clear-print';
+import type { Conversation, Message } from '@/lib/api/types';
+
+import { previewInputOf, type PreviewContext } from './conversation-preview-input';
+
+/**
+ * L'ADAPTATEUR DE LA LIGNE (#7547) — la conversation telle que le cache de
+ * liste la tient, projetée sur l'ENTRÉE du composeur partagé (#7546). Il ne
+ * compose rien : ces témoins passent sa sortie au composeur et lisent le texte
+ * rendu, pour prouver que chaque donnée ARRIVE là où le composeur la cherche.
+ */
+
+const ctx = (partial: Partial<PreviewContext> = {}): PreviewContext => ({
+  viewerId: 'u-me',
+  language: 'fr',
+  preferredLanguages: ['fr', 'en'],
+  now: Date.parse('2026-09-23T10:00:00.000Z'),
+  ...partial,
+});
+
+const message = (partial: Record<string, unknown>): Message =>
+  ({
+    id: 'm-1',
+    conversationId: 'c-a',
+    senderId: 'p-alice',
+    content: 'Bonjour',
+    originalLanguage: 'fr',
+    messageType: 'text',
+    messageSource: 'user',
+    isEdited: false,
+    isViewOnce: false,
+    viewOnceCount: 0,
+    isBlurred: false,
+    deliveredCount: 0,
+    readCount: 0,
+    reactionCount: 0,
+    isEncrypted: false,
+    translations: [],
+    createdAt: '2026-09-23T09:59:00.000Z',
+    timestamp: '2026-09-23T09:59:00.000Z',
+    sender: { id: 'p-alice', userId: 'u-alice', displayName: 'Alice' },
+    ...partial,
+  }) as unknown as Message;
+
+const conversation = (partial: Partial<ListConversation> = {}): Conversation =>
+  ({
+    id: 'c-a',
+    type: 'group',
+    status: 'active',
+    visibility: 'private',
+    isActive: true,
+    memberCount: 3,
+    participants: [],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    unreadCount: 0,
+    lastMessage: message({}),
+    lastMessageAt: '2026-09-23T09:59:00.000Z',
+    lastMessageOriginalLanguage: 'fr',
+    ...partial,
+  }) as unknown as Conversation;
+
+const line = (c: Conversation, context: PreviewContext = ctx()): string =>
+  renderConversationPreviewText(composeConversationPreview(previewInputOf(c, context)), context.language);
+
+describe('previewInputOf (#7547)', () => {
+  test('l’auteur est nommé, et le texte vient de la carte du Prisme au rang 2', () => {
+    const c = conversation({
+      lastMessage: message({ content: 'Hello', originalLanguage: 'de' }),
+      lastMessageOriginalLanguage: 'de',
+      lastMessageTranslations: { en: 'Hello there' },
+    });
+    expect(line(c)).toBe('Alice : Hello there');
+  });
+
+  test('mon message dit « Vous », reconnu par le `userId` de l’expéditeur', () => {
+    const c = conversation({ lastMessage: message({ senderId: 'p-me', sender: { id: 'p-me', userId: 'u-me', displayName: 'Moi' } }) });
+    expect(line(c)).toBe('Vous : Bonjour');
+  });
+
+  test('mon optimiste (senderId = mon User.id, sans sender) dit « Vous »', () => {
+    const c = conversation({ lastMessage: message({ senderId: 'u-me', sender: undefined }) });
+    expect(line(c)).toBe('Vous : Bonjour');
+  });
+
+  test('la première pièce jointe porte ses détails, et seulement ceux qui existent', () => {
+    const c = conversation({
+      lastMessage: message({
+        content: '',
+        messageType: 'image',
+        attachments: [{ id: 'a1', mimeType: 'image/jpeg', originalName: 'p.jpg', fileName: 'p.jpg', fileSize: 239_616, width: 450, height: 456 }],
+      }),
+    });
+    expect(line(c)).toBe('Alice : 📷 Photo · 450\u00a0×\u00a0456 · 234 Ko');
+  });
+
+  test('sans résumé servi, le résumé se déduit des pièces du message (message:new, envoi)', () => {
+    const photo = (id: string) => ({ id, mimeType: 'image/png', originalName: `${id}.png`, fileName: `${id}.png`, fileSize: 489_335 });
+    const c = conversation({ lastMessage: message({ content: '', messageType: 'image', attachments: [photo('a1'), photo('a2'), photo('a3')] }) });
+    expect(line(c)).toBe('Alice : 📷 3 photos · 1,4 Mo');
+  });
+
+  test('un transféré se lit depuis `forwardedFromId` quand le drapeau n’est pas servi', () => {
+    const c = conversation({ lastMessage: message({ content: 'texte', forwardedFromId: 'm-0' }) });
+    expect(line(c)).toBe('Alice : ↪ texte');
+  });
+
+  test('sans dernier message : « Nouvelle conversation »', () => {
+    const { lastMessage: _m, ...empty } = conversation() as ListConversation;
+    expect(line(empty as Conversation)).toBe('Nouvelle conversation');
+  });
+
+  test('l’appel en cours, la frappe et le brouillon passent au composeur', () => {
+    const c = conversation({ activeCall: { id: 'call-1', kind: 'audio', participantCount: 3, startedAt: '2026-09-23T09:58:00.000Z' } });
+    expect(line(c)).toBe('📞 Appel en cours · 3 participants');
+    expect(line(conversation(), ctx({ typing: ['Alice', 'Bob'] }))).toBe('Alice et Bob écrivent…');
+    expect(line(conversation(), ctx({ draft: 'Je pensais que…' }))).toBe('Brouillon : Je pensais que…');
+  });
+
+  test('un éphémère décompte depuis MA réception, puis l’échéance servie la plus proche gagne', () => {
+    const c = conversation({ lastMessage: message({ content: 'Rendez-vous à 18h', ephemeralDuration: 300, effectFlags: 1 }) });
+    expect(line(c, ctx({ receivedAt: Date.parse('2026-09-23T09:59:00.000Z') }))).toBe('Alice : 🔥 4 min · Rendez-vous à 18h');
+    expect(
+      line(c, ctx({ receivedAt: Date.parse('2026-09-23T09:59:00.000Z'), servedDeadline: Date.parse('2026-09-23T10:00:30.000Z') })),
+    ).toBe('Alice : 🔥 30 s · Rendez-vous à 18h');
+  });
+
+  test('un sticker de texte se lit par sa phrase (`alt`), hissé de `metadata.sticker`', () => {
+    const c = conversation({
+      lastMessage: message({
+        content: '',
+        messageType: 'image',
+        sticker: { templateId: 'bubble-pop' },
+        attachments: [{ id: 'a1', mimeType: 'image/png', originalName: 's.png', fileName: 's.png', fileSize: 48_000, alt: 'Bonjour à tous' }],
+      }),
+    });
+    expect(line(c)).toBe('Alice : 🏷 Bonjour à tous');
+  });
+
+  test('une vue unique que J\'AI ouverte se lit « Ouvert » — le champ servi PAR LECTEUR, sans compteurs (#7594, #7671)', () => {
+    const c = conversation({ lastMessage: message({ content: '', isViewOnce: true, viewOnceConsumed: true }) });
+    expect(line(c)).toBe('Alice : 👁 Ouvert');
+  });
+
+  test('une vue unique ouverte par un AUTRE reste « à ouvrir » chez moi : l\'ancien compteur global ne décide plus (#7578, #7671)', () => {
+    const c = conversation({
+      lastMessage: message({ content: '', isViewOnce: true, viewOnceCount: 1, maxViewOnceCount: 1, viewOnceConsumed: false }),
+    });
+    expect(line(c)).not.toContain('Ouvert');
+  });
+});
+
+/**
+ * #12992 — LA LIGNE DE LISTE SUIT LA LOI UNIQUE DU CLAIR FORGÉ : dans une
+ * conversation chiffrée de bout en bout, un dernier message qui se dit en
+ * clair après l'activation se dit « chiffré », sans texte, traduction ni pièce.
+ */
+describe('le clair forgé dans la ligne (#12992)', () => {
+  const sealedConversation = (last: Message) =>
+    conversation({ encryptionMode: 'e2ee', encryptionEnabledAt: new Date('2026-09-20T00:00:00.000Z'), lastMessage: last, lastMessageTranslations: { en: 'Send me the SMS code' } } as Partial<ListConversation>);
+
+  test('après l’activation : scellé', () => {
+    const shown = line(sealedConversation(message({ content: 'Envoie-moi le code reçu par SMS', attachments: [{ id: 'a1', mimeType: 'image/jpeg', fileName: 'p.jpg', fileSize: 1 }] })));
+    expect(shown).not.toContain('SMS');
+    expect(shown).not.toContain('Photo');
+    expect(shown).toBe(line(sealedConversation(message({ content: '[Encrypted]', isEncrypted: true, encryptionMode: 'e2ee' }))));
+  });
+
+  test('avant l’activation, vu par ce navigateur avant d’apprendre le bout en bout : lisible', () => {
+    const before = message({ content: 'Avant', createdAt: '2026-09-19T09:59:00.000Z' });
+    const regime = { sealed: true, since: Date.parse('2026-09-20T00:00:00.000Z'), clearKnown: new Set([clearPrintOf(before)!]) };
+    expect(line(sealedConversation(before), ctx({ regime }))).toBe('Alice : Avant');
+  });
+
+  test('audit — l’extrait d’une réaction servie à côté du dernier message se dit chiffré, jamais lu', () => {
+    const reacted = {
+      ...sealedConversation(message({ content: '[Encrypted]', isEncrypted: true, encryptionMode: 'e2ee' })),
+      lastReaction: { emoji: '👍', reactorName: 'Alice', reactorUserId: 'u-alice', messageId: 'm-1', excerpt: 'Envoie-moi le code reçu par SMS', excerptTranslations: { en: 'Send me the SMS code' }, excerptOriginalLanguage: 'fr', excerptProtection: null, createdAt: '2026-09-23T09:59:30.000Z' },
+    } as unknown as Conversation;
+    const input = previewInputOf(reacted, ctx());
+    expect(JSON.stringify(input.lastReaction)).not.toContain('SMS');
+    expect(input.lastReaction?.excerptProtection).toBe('encrypted');
+    expect(line(reacted)).not.toContain('SMS');
+  });
+
+  test('revue — un dernier message reconnu par son empreinte ne se dit pas dans une traduction servie à côté', () => {
+    const before = message({ content: 'Vorher', originalLanguage: 'de', createdAt: '2026-09-19T09:59:00.000Z' });
+    const regime = { sealed: true, since: Date.parse('2026-09-20T00:00:00.000Z'), clearKnown: new Set([clearPrintOf(before)!]) };
+    const forgedTranslation = conversation({
+      encryptionMode: 'e2ee',
+      lastMessage: before,
+      lastMessageOriginalLanguage: 'de',
+      lastMessageTranslations: { fr: 'Envoie-moi le code reçu par SMS' },
+    } as Partial<ListConversation>);
+    expect(line(forgedTranslation, ctx({ regime }))).toBe('Alice : Vorher');
+  });
+
+  test('hors bout en bout, l’extrait d’une réaction reste lu', () => {
+    const reacted = {
+      ...conversation(),
+      lastReaction: { emoji: '👍', reactorName: 'Alice', reactorUserId: 'u-alice', messageId: 'm-1', excerpt: 'Bonjour', excerptTranslations: null, excerptOriginalLanguage: 'fr', excerptProtection: null, createdAt: '2026-09-23T09:59:30.000Z' },
+    } as unknown as Conversation;
+    expect(previewInputOf(reacted, ctx()).lastReaction?.excerpt).toBe('Bonjour');
+  });
+
+  test('avant l’activation mais jamais vu avant l’apprentissage (date servie, antidatable) : scellé', () => {
+    expect(line(sealedConversation(message({ content: 'Antidaté', createdAt: '2026-09-19T09:59:00.000Z' })))).not.toContain('Antidaté');
+  });
+});
+
+describe('relecture : la ligne d’un clair reconnu se dit depuis sa forme vérifiée', () => {
+  test('ni l’appel, ni l’avis système, ni le résumé de pièces servis à côté', () => {
+    const before = message({ content: 'Vorher', originalLanguage: 'de', createdAt: '2026-09-19T09:59:00.000Z' });
+    const regime = { sealed: true, since: Date.parse('2026-09-20T00:00:00.000Z'), clearKnown: new Set([clearPrintOf(before)!]) };
+    const padded = {
+      ...before,
+      callSummary: { kind: 'missed', durationSec: 0 },
+      systemEvent: { key: 'system.member-joined', params: { name: 'SMS' } },
+      attachmentSummary: { count: 1, kinds: ['image'], firstKind: 'image' },
+    };
+    const input = previewInputOf(conversation({ encryptionMode: 'e2ee', lastMessage: padded as unknown as Message } as Partial<ListConversation>), ctx({ regime }));
+    expect(input.lastMessage).toMatchObject({ content: 'Vorher', callSummary: null, systemEvent: null, attachmentSummary: null, translations: null });
+  });
+});

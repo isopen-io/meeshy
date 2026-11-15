@@ -72,6 +72,21 @@ data class CallAnalytics(
         isVideo: Boolean,
         endReason: CallEndReason,
         deviceModel: String,
+    ): Map<String, Any> = fields(durationSeconds, isVideo, endReason.wireValue, deviceModel)
+
+    /**
+     * L'instantané périodique, NON destructif (iOS `emitCallAnalyticsSnapshot(endReasonLabel: "in_progress")`) : la
+     * passerelle écrase la ligne à chaque envoi, donc un kill en arrière-plan ne perd que la dernière fenêtre. Le
+     * rapport terminal l'écrase avec la vraie raison.
+     */
+    fun inProgressFields(durationSeconds: Long, isVideo: Boolean, deviceModel: String): Map<String, Any> =
+        fields(durationSeconds, isVideo, IN_PROGRESS_WIRE, deviceModel)
+
+    private fun fields(
+        durationSeconds: Long,
+        isVideo: Boolean,
+        endReasonWire: String,
+        deviceModel: String,
     ): Map<String, Any> = mapOf(
         "setupTimeMs" to (connectedAtMs?.let { it - startedAtMs } ?: -1L),
         "durationSeconds" to durationSeconds,
@@ -88,7 +103,7 @@ data class CallAnalytics(
         "platform" to "android",
         "deviceModel" to deviceModel,
         "isVideo" to isVideo,
-        "endReason" to endReason.wireValue,
+        "endReason" to endReasonWire,
     )
 
     private fun average(sum: Double): Double = if (sampleCount > 0) sum / sampleCount else 0.0
@@ -108,4 +123,15 @@ data class CallAnalytics(
             tier.wireValue to
                 if (sampleCount > 0) (qualitySampleCounts[tier] ?: 0).toDouble() / sampleCount else 0.0
         }
+
+    companion object {
+        /** Le `endReason` d'un instantané pris pendant l'appel. */
+        const val IN_PROGRESS_WIRE: String = "in_progress"
+
+        /** Cadence des instantanés (iOS `QualityThresholds.analyticsSnapshotIntervalSeconds`). */
+        const val SNAPSHOT_INTERVAL_MS: Long = 60_000
+
+        /** Pendant une reconnexion les stats sont gelées (RTT/perte à 0 liraient « excellent ») : la fenêtre est sautée. */
+        fun snapshotDue(state: CallState): Boolean = state is CallState.Connected
+    }
 }

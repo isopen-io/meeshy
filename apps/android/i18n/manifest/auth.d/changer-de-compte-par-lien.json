@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "signInLink.switchAccount.title",
+          "androidName": "link_switch_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "signInLink.switchAccount.confirm",
+          "androidName": "link_switch_confirm",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

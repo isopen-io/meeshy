@@ -12,22 +12,27 @@ import XCTest
 final class CallViewPiPButtonToggleTests: XCTestCase {
 
     private func callViewSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        try AppSourceGuard.callViewSource()
     }
 
+    /// Le bouton vit dans l'en-tête depuis #17329 ; il n'est offert que si l'appel
+    /// est éligible OU déjà en PiP (`CallHeaderRule`).
     private func pipButtonBlock(in source: String) -> String {
-        guard let range = source.range(of: "if callManager.canActivateSystemPiP {") else {
-            XCTFail("CallView must gate the PiP button on canActivateSystemPiP")
+        guard let range = source.range(of: "func pictureInPictureHeaderButton(") else {
+            XCTFail("CallView must define pictureInPictureHeaderButton")
             return ""
         }
-        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(range.lowerBound, offsetBy: 1400, limitedBy: source.endIndex) ?? source.endIndex
         return String(source[range.lowerBound..<end])
+    }
+
+    func test_pipAction_isOfferedWhenEligibleOrAlreadyActive() throws {
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains("canActivateSystemPiP: callManager.canActivateSystemPiP,")
+                && source.contains("isSystemPiPActive: callManager.isSystemPiPActive,"),
+            "Le bouton PiP doit rester offert tant que le PiP est actif, pour pouvoir en sortir."
+        )
     }
 
     func test_pipButton_branchesOnActiveState_insteadOfAlwaysStarting() throws {

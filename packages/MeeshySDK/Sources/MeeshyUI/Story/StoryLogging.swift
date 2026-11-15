@@ -1,4 +1,5 @@
 import os
+import MeeshySDK
 
 /// Catégories de logs dédiées au sous-système Stories.
 ///
@@ -17,6 +18,5 @@ public extension os.Logger {
     /// Pipeline audio des Stories (composer preview + reader playback).
     /// Catégorie distincte de `media` (utilisée par les mixers) pour permettre
     /// un filtrage Console.app focalisé sur la chaîne reader/composer.
-    static let storyAudio = os.Logger(subsystem: "me.meeshy.app",
-                                      category: "story-audio")
+    static let storyAudio = MeeshyLog.logger(.storyAudio)
 }

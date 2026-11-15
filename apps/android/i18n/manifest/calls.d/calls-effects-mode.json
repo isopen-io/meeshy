@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "androidName": "call_control_effects",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_category_face",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_category_color",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_face_none",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_face_smoothing",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_face_toad",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_face_angel",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_face_demon",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_face_volcano",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_settings",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_settings_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_back",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_back_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_add_look",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_add_look_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_blur",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_smoothing_strength",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_brightness",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_percent",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_next",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_previous",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.mode.effects.category.frame",
+          "androidName": "call_effects_category_frame",
+          "status": "adopted"
+        },
+        {
+          "androidName": "call_effects_category_landscape",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_category_voice",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.mode.effects.applied.title",
+          "androidName": "call_effects_applied_title",
+          "status": "adopted"
+        },
+        {
+          "androidName": "call_effects_layer_entry",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.mode.effects.settings.panel",
+          "androidName": "call_effects_settings_panel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.mode.carousel.position",
+          "androidName": "call_mode_carousel_position",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.mode.effects.applied.cancel",
+          "androidName": "call_effects_layer_undo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.mode.effects.addLook.full",
+          "androidName": "call_effects_add_look_full",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.mode.effects.addLook.full.hint",
+          "androidName": "call_effects_add_look_full_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.mode.montage.settings.hint",
+          "androidName": "call_montage_settings_hint",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

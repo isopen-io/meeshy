@@ -266,3 +266,51 @@ final class VoiceProfileModelsTests: XCTestCase {
         XCTAssertNil(response.samplesDeleted)
     }
 }
+
+// MARK: - VoiceCloningAgeRule (#17309)
+
+final class VoiceCloningAgeRuleTests: XCTestCase {
+
+    private func calendar(_ timeZone: String = "Europe/Paris") -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: timeZone)!
+        return calendar
+    }
+
+    private func day(_ year: Int, _ month: Int, _ day: Int, hour: Int = 0, in calendar: Calendar) -> Date {
+        calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour))!
+    }
+
+    func test_voiceCloningBirthDateLimit_isTodayMinusEighteenCalendarYears_atStartOfDay() {
+        let cal = calendar()
+        let limit = VoiceCloningAgeRule.voiceCloningBirthDateLimit(today: day(2026, 11, 9, hour: 15, in: cal), calendar: cal)
+        XCTAssertEqual(limit, day(2008, 11, 9, in: cal))
+    }
+
+    func test_voiceCloningBirthDateLimit_onLeapDay_fallsBackToFebruaryTwentyEighth() {
+        let cal = calendar()
+        let limit = VoiceCloningAgeRule.voiceCloningBirthDateLimit(today: day(2028, 2, 29, hour: 9, in: cal), calendar: cal)
+        XCTAssertEqual(limit, day(2010, 2, 28, in: cal))
+    }
+
+    func test_isAdmitted_onTheExactEighteenthBirthday_returnsTrue() {
+        let cal = calendar()
+        XCTAssertTrue(VoiceCloningAgeRule.isAdmitted(birthDate: day(2008, 11, 9, hour: 23, in: cal), today: day(2026, 11, 9, hour: 8, in: cal), calendar: cal))
+    }
+
+    func test_isAdmitted_theDayBeforeTheEighteenthBirthday_returnsFalse() {
+        let cal = calendar()
+        XCTAssertFalse(VoiceCloningAgeRule.isAdmitted(birthDate: day(2008, 11, 10, in: cal), today: day(2026, 11, 9, hour: 23, in: cal), calendar: cal))
+    }
+
+    func test_isAdmitted_leapDayBirth_turnsEighteenOnMarchFirst() {
+        let cal = calendar()
+        let birth = day(2008, 2, 29, in: cal)
+        XCTAssertFalse(VoiceCloningAgeRule.isAdmitted(birthDate: birth, today: day(2026, 2, 28, hour: 23, in: cal), calendar: cal))
+        XCTAssertTrue(VoiceCloningAgeRule.isAdmitted(birthDate: birth, today: day(2026, 3, 1, in: cal), calendar: cal))
+    }
+
+    func test_isAdmitted_withoutBirthDate_returnsFalse() {
+        XCTAssertFalse(VoiceCloningAgeRule.isAdmitted(birthDate: nil, today: Date(), calendar: calendar()))
+    }
+}

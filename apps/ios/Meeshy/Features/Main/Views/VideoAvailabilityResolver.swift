@@ -33,9 +33,18 @@ struct VideoAvailabilityResolver<Content: View>: View {
     /// `autoLoad`). Les bulles de conversation gardent `false` : la politique
     /// réseau (WiFi-only / data-saver) y est respectée.
     let autoDownload: Bool
+    /// `false` suspend TOUT démarrage automatique — forcé ou par politique —
+    /// sans toucher au téléchargement manuel ni à l'observation (#9702). Le
+    /// pager de réels le tient fermé hors de sa fenêtre de préchargement :
+    /// sous iOS 16, son `TabView` monte toutes les pages d'un coup, et chacune
+    /// téléchargeait son réel entier. Rouvert, l'auto-démarrage se rejoue.
+    let mayAutoStart: Bool
     let content: (VideoAvailability, @escaping () -> Void) -> Content
 
-    @State private var resolvedAvailability: VideoAvailability = .needsDownload
+    /// `nil` tant que la tâche n'a pas résolu : le premier rendu lit alors le
+    /// disque en synchrone (`VideoAvailability.atFirstRender`), si bien qu'une
+    /// vidéo déjà téléchargée ne se dessine jamais « ↓ » (#10370).
+    @State private var resolvedAvailability: VideoAvailability?
     @StateObject private var downloader = AttachmentDownloader()
 
     private var availability: VideoAvailability {
@@ -45,32 +54,41 @@ struct VideoAvailabilityResolver<Content: View>: View {
         if downloader.isCached {
             return .ready
         }
-        return resolvedAvailability
+        return resolvedAvailability ?? VideoAvailability.atFirstRender(for: attachment)
     }
 
     init(
         attachment: MessageAttachment,
         autoDownload: Bool = false,
+        mayAutoStart: Bool = true,
         @ViewBuilder content: @escaping (VideoAvailability, @escaping () -> Void) -> Content
     ) {
         self.attachment = attachment
         self.autoDownload = autoDownload
+        self.mayAutoStart = mayAutoStart
         self.content = content
     }
 
     var body: some View {
         content(availability) {
-            downloader.start(attachment: attachment, onShare: nil)
+            downloader.start(attachment: attachment, origin: .manual, onShare: nil)
         }
-        .task(id: attachment.id) {
-            resolvedAvailability = await Self.resolveStatic(attachment)
-            if case .needsDownload = resolvedAvailability,
+        .task(id: AutoStartKey(attachmentId: attachment.id, mayAutoStart: mayAutoStart)) {
+            // Branché sur le registre partagé AVANT toute résolution : un
+            // téléchargement de cette vidéo lancé par une autre surface
+            // (galerie, autre cellule) s'affiche ici, et sa fin la rend
+            // « prête » sans re-télécharger (#7492).
+            downloader.observe(attachment)
+            let resting = await Self.resolveStatic(attachment)
+            resolvedAvailability = resting
+            if case .needsDownload = resting,
                !downloader.isDownloading,
                !downloader.isCached {
                 let condition = NetworkConditionMonitor.shared.condition
                 let prefs = MediaDownloadPreferencesStore.shared.preferences
-                if Self.shouldAutoStart(autoDownload: autoDownload, condition: condition, prefs: prefs) {
-                    downloader.start(attachment: attachment, onShare: nil)
+                if Self.shouldAutoStart(autoDownload: autoDownload, mayAutoStart: mayAutoStart,
+                                        condition: condition, prefs: prefs, byteSize: attachment.fileSize) {
+                    downloader.start(attachment: attachment, origin: .automatic, onShare: nil)
                 }
             }
         }
@@ -80,19 +98,54 @@ struct VideoAvailabilityResolver<Content: View>: View {
     /// Hors-ligne : jamais (inutile de lancer un DL sans réseau). Sinon :
     /// `autoDownload` (Feed/Posts) force le téléchargement, ou la politique
     /// réseau de l'utilisateur l'autorise. `kind: .video` figé pour ce resolver.
+    /// Une vidéo de moins de 100 Ko part quel que soit le réseau (#14639).
     static func shouldAutoStart(
         autoDownload: Bool,
+        mayAutoStart: Bool = true,
         condition: NetworkCondition,
-        prefs: MediaDownloadPreferences
+        prefs: MediaDownloadPreferences,
+        byteSize: Int? = nil
     ) -> Bool {
-        guard condition != .offline else { return false }
+        guard mayAutoStart, condition != .offline else { return false }
         return autoDownload || MediaDownloadPolicyEngine.shouldAutoDownload(
-            kind: .video, condition: condition, prefs: prefs
+            kind: .video, condition: condition, prefs: prefs, byteSize: byteSize
         )
+    }
+
+    /// L'identité de la tâche de résolution : rouvrir l'auto-démarrage la rejoue.
+    private struct AutoStartKey: Equatable {
+        let attachmentId: String
+        let mayAutoStart: Bool
     }
 
     /// Static resolver helper, testable without SwiftUI hosting.
     static func resolveStatic(_ attachment: MessageAttachment) async -> VideoAvailability {
+        await VideoAvailability.resting(for: attachment)
+    }
+}
+
+extension VideoAvailability {
+    /// **La disponibilité au PREMIER rendu se lit sur le disque** (#10370),
+    /// comme celle d'un vocal (#7660) : un `stat` synchrone par la règle
+    /// unique `AttachmentDownloadCenter.isOnDevice`. Sans elle, la vidéo
+    /// partait de `.needsDownload` et montrait « ↓ » jusqu'au retour de
+    /// `resting(for:)`, même déjà téléchargée.
+    nonisolated static func atFirstRender(
+        for attachment: MessageAttachment,
+        stat: (String, AttachmentDownloadCenter.CacheStoreKind) -> Bool = {
+            AttachmentDownloadCenter.isInTypedStore(key: $0, kind: $1)
+        },
+        fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) -> VideoAvailability {
+        let onDevice = AttachmentDownloadCenter.isOnDevice(
+            urlString: attachment.fileUrl, kind: .video, stat: stat, fileExists: fileExists
+        )
+        return onDevice ? .ready : .needsDownload
+    }
+
+    /// La disponibilité AU REPOS d'une vidéo — fichier local ou cache vidéo.
+    /// Site UNIQUE (#7492) : la galerie plein écran en tenait une copie.
+    static func resting(for attachment: MessageAttachment) async -> VideoAvailability {
         let urlString = attachment.fileUrl
         if urlString.hasPrefix("file://") {
             let exists = FileManager.default.fileExists(atPath: URL(string: urlString)?.path ?? "")

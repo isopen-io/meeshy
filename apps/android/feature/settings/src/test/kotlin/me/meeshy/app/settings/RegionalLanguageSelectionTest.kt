@@ -119,6 +119,35 @@ class RegionalLanguageSelectionTest {
     }
 
     @Test
+    fun theQueryIgnoresAccentsWhateverSideCarriesThem() {
+        val unaccented = RegionalLanguageSelection.build(regionalCode = null, systemCode = null, query = "francais")
+        val accented = RegionalLanguageSelection.build(regionalCode = null, systemCode = null, query = "PORTUGUÊS")
+
+        assertThat(unaccented.options.map { it.code }).contains("fr")
+        assertThat(accented.options.map { it.code }).contains("pt")
+        assertThat(
+            RegionalLanguageSelection.build(regionalCode = null, systemCode = null, query = "espanol")
+                .options.map { it.code },
+        ).contains("es")
+    }
+
+    @Test
+    fun theQueryFindsANativeScriptNameByItsOwnScript() {
+        val result = RegionalLanguageSelection.build(regionalCode = null, systemCode = null, query = "한국어")
+
+        assertThat(result.options.map { it.code }).containsExactly("ko")
+    }
+
+    @Test
+    fun theNewlyCataloguedLanguagesAreOffered() {
+        val codes = RegionalLanguageSelection.build(regionalCode = null, systemCode = null, query = "")
+            .options.map { it.code }
+
+        assertThat(codes).containsAtLeast("om", "ti", "ny", "ksf", "nnh")
+        assertThat(codes).hasSize(LanguageData.allLanguages.size)
+    }
+
+    @Test
     fun theQueryMatchesByCode() {
         val result = RegionalLanguageSelection.build(regionalCode = null, systemCode = null, query = "ja")
 

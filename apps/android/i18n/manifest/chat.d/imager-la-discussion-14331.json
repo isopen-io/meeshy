@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "forward.imageDiscussion",
+          "androidName": "forward_image_discussion",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.discussion.title",
+          "androidName": "export_discussion_title",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

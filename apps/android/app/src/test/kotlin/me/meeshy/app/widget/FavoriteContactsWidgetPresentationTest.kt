@@ -129,4 +129,58 @@ class FavoriteContactsWidgetPresentationTest {
 
         assertThat(presentation.rows.map { it.id }).containsExactly("fav")
     }
+
+    @Test
+    fun `a row carries the presence token of the served state of its peer`() {
+        val presentation = FavoriteContactsWidgetPresentation.from(
+            conversations = listOf(conversation(id = "c1"), conversation(id = "c2")),
+            currentUserId = "me",
+            presence = mapOf("other-c1" to me.meeshy.sdk.model.PresenceState.AWAY),
+        )
+
+        assertThat(presentation.rows.map { it.presence }).containsExactly("away", null).inOrder()
+    }
+
+    @Test
+    fun `without anything served no row has a presence token`() {
+        val presentation = FavoriteContactsWidgetPresentation.from(
+            conversations = listOf(conversation(id = "c1")),
+            currentUserId = "me",
+        )
+
+        assertThat(presentation.rows.single().presence).isNull()
+    }
+
+    @Test
+    fun `la face moyenne montre quatre favoris et la grande huit`() {
+        assertThat(FavoriteContactsWidgetPresentation.visibleCount(heightDp = 155f)).isEqualTo(4)
+        assertThat(FavoriteContactsWidgetPresentation.visibleCount(heightDp = 345f)).isEqualTo(8)
+    }
+
+    @Test
+    fun `la borne de hauteur bascule en grand a 240 dp`() {
+        assertThat(FavoriteContactsWidgetPresentation.visibleCount(heightDp = 239f)).isEqualTo(4)
+        assertThat(FavoriteContactsWidgetPresentation.visibleCount(heightDp = 240f)).isEqualTo(8)
+    }
+
+    @Test
+    fun `visibleRows borne la liste a la hauteur du widget`() {
+        val many = (1..9).map { conversation(id = "c$it") }
+
+        val presentation = FavoriteContactsWidgetPresentation.from(many, currentUserId = "me")
+
+        assertThat(presentation.rows).hasSize(8)
+        assertThat(presentation.visibleRows(heightDp = 155f)).hasSize(4)
+        assertThat(presentation.visibleRows(heightDp = 345f)).hasSize(8)
+    }
+
+    @Test
+    fun `le lecteur d'ecran lit le nom puis la presence`() {
+        assertThat(FavoriteContactsWidgetPresentation.accessibilityLabel("Mom", "En ligne")).isEqualTo("Mom, En ligne")
+    }
+
+    @Test
+    fun `une presence non servie laisse le nom seul`() {
+        assertThat(FavoriteContactsWidgetPresentation.accessibilityLabel("Mom", null)).isEqualTo("Mom")
+    }
 }

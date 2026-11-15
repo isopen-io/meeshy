@@ -1,0 +1,514 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+
+import SignupScreen, { type SignupVerificationDeps } from '@/routes/signup';
+import type { RegisterBody, RegisterResponseData } from '@/lib/api/auth';
+import type { ApiResult } from '@/lib/api/http';
+import type { VerificationStatusData, VerifyEmailData } from '@/lib/api/verify-email';
+import { sessionStore } from '@/lib/api/session';
+import { forgetPendingVerification } from '@/lib/pending-verification';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+
+/**
+ * L'INSCRIPTION EN PHASES VIVANTES, JUSQU'AU PIXEL (#8288).
+ *
+ * `signup-phases.test.ts` prouve la LOI ; celui-ci prouve qu'elle gouverne
+ * l'écran : téléphone en verre qui ondule, adresse, carte d'identité, code
+ * dans la carte, feu d'artifice, « Parler aux autres ».
+ */
+
+const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+beforeAll(() => {
+  ensureHappyDomRegistered({ url: 'http://localhost/signup' });
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+});
+
+afterAll(async () => {
+  delete globals.IS_REACT_ACT_ENVIRONMENT;
+  await releaseHappyDomIfRegistered();
+});
+
+let container: HTMLDivElement;
+let root: Root;
+
+afterEach(() => {
+  act(() => {
+    root.unmount();
+    sessionStore.getState().clearSession();
+  });
+  container.remove();
+  forgetPendingVerification();
+});
+
+const EMAIL = 'ada.lovelace@meeshy.example';
+
+const WITH_SESSION: ApiResult<RegisterResponseData> = {
+  ok: true,
+  status: 200,
+  data: { user: { id: 'u-1', username: 'ada' }, token: 'jwt', sessionToken: 'sess', expiresIn: 86_400, pendingSessionToken: 'attente-1' },
+};
+
+const SIGNED_IN: ApiResult<VerifyEmailData> = {
+  ok: true,
+  status: 200,
+  data: { token: 'jwt-2', sessionToken: 'sess-2', user: { id: 'u-1', username: 'ada' }, expiresIn: 86_400 },
+};
+
+const PENDING: ApiResult<VerificationStatusData> = { ok: true, status: 200, data: { status: 'pending' } };
+const PROVEN: ApiResult<VerificationStatusData> = { ok: true, status: 200, data: { status: 'proven' } };
+
+type Harness = {
+  readonly el: HTMLDivElement;
+  readonly sent: RegisterBody[];
+  readonly codes: string[];
+};
+
+function mount({
+  reply = WITH_SESSION,
+  verify = SIGNED_IN,
+  status = PENDING,
+  url = '/signup',
+}: {
+  readonly reply?: ApiResult<RegisterResponseData>;
+  readonly verify?: ApiResult<VerifyEmailData>;
+  readonly status?: ApiResult<VerificationStatusData>;
+  readonly url?: string;
+} = {}): Harness {
+  window.history.replaceState({}, '', url);
+  const sent: RegisterBody[] = [];
+  const codes: string[] = [];
+  const verification: SignupVerificationDeps = {
+    verifyEmail: async (request) => {
+      codes.push('code' in request ? request.code : '');
+      return verify;
+    },
+    verificationStatus: async () => status,
+  };
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+  act(() => {
+    root.render(
+      <SignupScreen
+        register={async (body) => {
+          sent.push(body);
+          return reply;
+        }}
+        verification={verification}
+      />,
+    );
+  });
+  return { el: container, sent, codes };
+}
+
+function type(el: HTMLElement, selector: string, value: string) {
+  const input = el.querySelector(selector) as HTMLInputElement;
+  act(() => {
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+async function click(el: HTMLElement, selector: string) {
+  await act(async () => {
+    (el.querySelector(selector) as HTMLElement).click();
+  });
+}
+
+const has = (el: HTMLElement, selector: string) => el.querySelector(selector) !== null;
+const phase = (el: HTMLElement) => el.querySelector('[data-signup-phase]')?.getAttribute('data-signup-phase');
+const primary = (el: HTMLElement) => el.querySelector('[data-signup-primary]') as HTMLButtonElement;
+const card = (el: HTMLElement) => el.querySelector('[data-signup-card]') as HTMLElement;
+const location = () => `${window.location.pathname}${window.location.search}`;
+
+function toCard(el: HTMLElement) {
+  type(el, '#signup-phone', '0612345678');
+  type(el, '#signup-email', EMAIL);
+}
+
+describe('phase 1 — le téléphone d’abord, en verre liquide', () => {
+  test('à l’ouverture : le numéro et son pays — et rien d’autre, aucun moyen de passer (#9343)', () => {
+    const { el } = mount();
+    expect(phase(el)).toBe('phone');
+    expect(has(el, '[data-signup-phone-glass] #signup-phone')).toBe(true);
+    expect(has(el, '[data-signup-country]')).toBe(true);
+    expect(el.querySelector('label[for="signup-phone"]')?.textContent).toBe('Téléphone');
+    expect(el.querySelector('#signup-phone')?.getAttribute('aria-required')).toBe('true');
+    expect(has(el, '[data-signup-skip-phone]')).toBe(false);
+    expect(el.textContent).not.toContain('Plus tard');
+    expect(has(el, '#signup-email')).toBe(false);
+    expect(has(el, '[data-signup-card]')).toBe(false);
+  });
+
+  test('ce que le numéro ouvre se lit d’emblée, sans (i) à ouvrir (#8842)', () => {
+    const { el } = mount();
+    const benefit = el.querySelector('#signup-phone-hint');
+    expect(benefit?.textContent).toBe('Il vous permettra de vous connecter, et à vos proches de vous retrouver.');
+    expect(benefit?.classList.contains('sr-only')).toBe(false);
+    expect(has(el, '[data-signup-phone-glass] [aria-controls="signup-phone-hint"]')).toBe(false);
+  });
+
+  test('« S’inscrire » est déjà là, inactif', () => {
+    const { el } = mount();
+    expect(primary(el).textContent).toBe('S’inscrire');
+    expect(primary(el).disabled).toBe(true);
+  });
+
+  test('chaque frappe fait onduler le verre', () => {
+    const { el } = mount();
+    const glass = el.querySelector('[data-signup-phone-glass]') as HTMLElement;
+    const waves: unknown[] = [];
+    Object.defineProperty(glass, 'animate', {
+      configurable: true,
+      value: (keyframes: unknown) => {
+        waves.push(keyframes);
+        return { cancel: () => undefined };
+      },
+    });
+    type(el, '#signup-phone', '06');
+    type(el, '#signup-phone', '061');
+    expect(waves.length).toBe(2);
+  });
+
+  test('le focus allume l’anneau en fondu, sans repeindre l’ombre du verre (#18322)', () => {
+    const { el } = mount();
+    const glass = el.querySelector('[data-signup-phone-glass]') as HTMLElement;
+    const ring = () => el.querySelector('[data-signup-phone-ring]') as HTMLElement;
+    const shadowAtRest = glass.style.boxShadow;
+    expect(ring().style.opacity).toBe('0');
+    act(() => {
+      (el.querySelector('#signup-phone') as HTMLInputElement).focus();
+    });
+    expect(ring().style.opacity).toBe('1');
+    expect(glass.style.boxShadow).toBe(shadowAtRest);
+    expect(glass.style.transition).not.toContain('box-shadow');
+  });
+});
+
+describe('phase 2 — l’adresse paraît', () => {
+  test('dès que le numéro est donné', () => {
+    const { el } = mount();
+    type(el, '#signup-phone', '0612');
+    expect(has(el, '#signup-email')).toBe(false);
+    type(el, '#signup-phone', '0612345678');
+    expect(phase(el)).toBe('email');
+    expect(has(el, '#signup-email')).toBe(true);
+  });
+
+  test('jamais sans numéro plausible — « 42424242 » ou « 1111100000 » ne l’ouvrent pas (#9343)', () => {
+    const { el } = mount();
+    type(el, '#signup-phone', '42424242');
+    expect(has(el, '#signup-email')).toBe(false);
+    type(el, '#signup-phone', '1111100000');
+    expect(has(el, '#signup-email')).toBe(false);
+    expect(phase(el)).toBe('phone');
+  });
+});
+
+/**
+ * LE REFUS DU NUMÉRO SE DIT SOUS LE CHAMP (#9343) — lié à la saisie par
+ * `aria-describedby`, annoncé par `role="alert"` ; jamais pendant la première
+ * frappe, dès que le champ est quitté avec une saisie.
+ */
+describe('le refus du numéro, sous le champ', () => {
+  const phoneInput = (el: HTMLElement) => el.querySelector('#signup-phone') as HTMLInputElement;
+  const errorOf = (el: HTMLElement) => el.querySelector('#signup-phone-error');
+
+  function blurPhone(el: HTMLElement) {
+    act(() => {
+      phoneInput(el).dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+      phoneInput(el).dispatchEvent(new FocusEvent('blur'));
+    });
+  }
+
+  test('pendant la frappe, rien ne s’affiche', () => {
+    const { el } = mount();
+    type(el, '#signup-phone', '061');
+    expect(errorOf(el)).toBeNull();
+    expect(phoneInput(el).getAttribute('aria-invalid')).toBe('false');
+  });
+
+  test('quitté trop court ⇒ « trop court », cité par le champ et annoncé', () => {
+    const { el } = mount();
+    type(el, '#signup-phone', '061234');
+    blurPhone(el);
+    expect(errorOf(el)?.textContent).toBe('Ce numéro est trop court : 9 chiffres au moins.');
+    expect(errorOf(el)?.getAttribute('role')).toBe('alert');
+    expect(phoneInput(el).getAttribute('aria-describedby')).toBe('signup-phone-error signup-phone-hint');
+    expect(phoneInput(el).getAttribute('aria-invalid')).toBe('true');
+  });
+
+  test('quitté rempli d’un motif ⇒ « ne semble pas réel »', () => {
+    const { el } = mount();
+    type(el, '#signup-phone', '1111100000');
+    blurPhone(el);
+    expect(errorOf(el)?.textContent).toBe('Ce numéro ne semble pas réel : vérifiez-le.');
+  });
+
+  test('corrigé ⇒ le refus disparaît et l’adresse paraît', () => {
+    const { el } = mount();
+    type(el, '#signup-phone', '061234');
+    blurPhone(el);
+    type(el, '#signup-phone', '0612345678');
+    expect(errorOf(el)).toBeNull();
+    expect(has(el, '#signup-email')).toBe(true);
+  });
+
+  test('donné puis EFFACÉ ⇒ l’absence se dit, et « S’inscrire » s’éteint', () => {
+    const { el } = mount();
+    toCard(el);
+    expect(primary(el).disabled).toBe(false);
+    type(el, '#signup-phone', '');
+    expect(errorOf(el)?.textContent).toBe('Saisissez votre numéro de téléphone pour continuer.');
+    expect(primary(el).disabled).toBe(true);
+  });
+});
+
+/**
+ * L'AVERTISSEMENT DE VALIDATION D'ADRESSE, derrière un (i) « Pourquoi un
+ * lien » (#6626). Replié ne veut pas dire absent : la note reste citée par
+ * `aria-describedby` de l'adresse — un lecteur d'écran l'entend en y entrant.
+ */
+describe('l’adresse parue porte son (i)', () => {
+  async function emailShown() {
+    const harness = mount();
+    type(harness.el, '#signup-phone', '0612345678');
+    return harness.el;
+  }
+
+  test('UNE seule phrase, lisible sous le champ : lien ET code, et ce qu’ils valident — plus de (i) qui la contredit (épure #17666)', async () => {
+    const el = await emailShown();
+    const lead = el.querySelector('[data-field-note]') as HTMLElement;
+    expect(lead.textContent).toBe('Un lien et un code à 6 chiffres vous seront envoyés : l’un ou l’autre suffit à valider votre compte.');
+    expect(lead.classList.contains('sr-only')).toBe(false);
+    expect(el.querySelector('button[aria-label="Un lien ou un code ?"]')).toBeNull();
+    expect(el.querySelector('#signup-email')?.getAttribute('aria-describedby')).toBe(lead.id);
+  });
+
+  test('le champ vide ne s’annonce pas invalide pour autant', async () => {
+    const el = await emailShown();
+    expect(el.querySelector('#signup-email')?.getAttribute('aria-invalid')).toBe('false');
+  });
+});
+
+describe('phase 3 — la carte d’identité, en verre liquide', () => {
+  test('une adresse cohérente fait paraître la carte, nom et pseudo pré-dérivés et modifiables', () => {
+    const { el } = mount();
+    toCard(el);
+    expect(phase(el)).toBe('card');
+    const username = card(el).querySelector('#signup-username') as HTMLInputElement;
+    const displayName = card(el).querySelector('#signup-display-name') as HTMLInputElement;
+    expect(username.value).toBe('ada-lovelace');
+    expect(displayName.value).not.toBe('');
+    type(el, '#signup-username', 'ada_l');
+    expect((card(el).querySelector('#signup-username') as HTMLInputElement).value).toBe('ada_l');
+  });
+
+  test('« S’inscrire » s’active : l’inscription sans code est permise', () => {
+    const { el } = mount();
+    toCard(el);
+    expect(primary(el).disabled).toBe(false);
+  });
+
+  test('le pseudo pris et ses suggestions s’affichent DANS la carte', async () => {
+    const { el } = mount({
+      reply: { ok: false, status: 409, code: 'USERNAME_TAKEN', field: 'username', error: 'pris', suggestions: ['ada_l2', 'ada_l3'] },
+    });
+    toCard(el);
+    await click(el, '[data-signup-validate-now]');
+    expect(card(el).textContent).toContain('@ada_l2');
+  });
+
+  test('« Est-ce vous ? » (#8216) s’affiche DANS la carte', async () => {
+    const { el } = mount({
+      reply: {
+        ok: false,
+        status: 409,
+        code: 'EMAIL_TAKEN',
+        field: 'email',
+        error: 'pris',
+        emailOwner: { maskedDisplayName: 'A** L***', maskedUsername: 'a*******e', avatar: null },
+      },
+    });
+    toCard(el);
+    await click(el, '[data-signup-validate-now]');
+    expect(card(el).textContent).toContain('Est-ce vous ?');
+  });
+});
+
+describe('phase 4 — « Valider mon compte maintenant », le code dans la carte', () => {
+  test('crée le compte et fait paraître le code — sans quitter l’inscription', async () => {
+    const { el, sent } = mount();
+    toCard(el);
+    await click(el, '[data-signup-validate-now]');
+    expect(sent.length).toBe(1);
+    expect(phase(el)).toBe('code');
+    expect(has(el, '[data-signup-card] #verify-email-code')).toBe(true);
+    expect(location()).toBe('/signup');
+  });
+
+  /** `auth.register` ÉTABLIT la session avant de répondre (#4264) : la carte
+   * ne doit pas être emmenée vers la liste par la redirection des comptes
+   * déjà connectés, sous les doigts de celui qui attend son code. */
+  test('la session que l’inscription établit ne fait pas quitter la carte', async () => {
+    window.history.replaceState({}, '', '/signup');
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(
+        <SignupScreen
+          register={async () => {
+            sessionStore.getState().establish({ user: { id: 'u-1', username: 'ada' }, token: 'jwt', sessionToken: 'sess', expiresIn: 86_400 });
+            await Promise.resolve();
+            return WITH_SESSION;
+          }}
+          verification={{ verifyEmail: async () => SIGNED_IN, verificationStatus: async () => PENDING }}
+        />,
+      );
+    });
+    toCard(container);
+    await click(container, '[data-signup-validate-now]');
+    expect(location()).toBe('/signup');
+    expect(phase(container)).toBe('code');
+  });
+
+  test('le code juste : feu d’artifice, et « S’inscrire » devient « Parler aux autres »', async () => {
+    const { el, codes } = mount();
+    toCard(el);
+    await click(el, '[data-signup-validate-now]');
+    type(el, '#verify-email-code', '123456');
+    await act(async () => {
+      el.querySelector('[data-signup-card] form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    expect(codes).toEqual(['123456']);
+    expect(phase(el)).toBe('verified');
+    expect(has(el, '[data-signup-celebration]')).toBe(true);
+    expect(primary(el).textContent).toBe('Parler aux autres');
+  });
+
+  test('« Parler aux autres » entre dans l’onboarding', async () => {
+    const { el } = mount();
+    toCard(el);
+    await click(el, '[data-signup-validate-now]');
+    type(el, '#verify-email-code', '123456');
+    await act(async () => {
+      el.querySelector('[data-signup-card] form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    await click(el, '[data-signup-primary]');
+    expect(location()).toBe('/onboarding');
+  });
+
+  test('le lien ouvert ailleurs se reflète dans la carte (#8083)', async () => {
+    const { el } = mount({ status: PROVEN });
+    toCard(el);
+    await click(el, '[data-signup-validate-now]');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(phase(el)).toBe('verified');
+    expect(primary(el).textContent).toBe('Parler aux autres');
+  });
+
+  test('« S’inscrire » sans code entre avec le compte déjà créé — sans en créer un second', async () => {
+    const { el, sent } = mount();
+    toCard(el);
+    await click(el, '[data-signup-validate-now]');
+    await click(el, '[data-signup-primary]');
+    expect(sent.length).toBe(1);
+    expect(location()).toBe('/onboarding');
+  });
+});
+
+describe('« S’inscrire » depuis la carte', () => {
+  test('crée le compte et entre dans l’onboarding', async () => {
+    const { el, sent } = mount();
+    toCard(el);
+    await click(el, '[data-signup-primary]');
+    expect(sent.length).toBe(1);
+    expect(location()).toBe('/onboarding');
+  });
+
+  test('la charge porte le couple numéro + pays, et aucune alerte ne s’interpose (#9343)', async () => {
+    const { el, sent } = mount();
+    toCard(el);
+    await click(el, '[data-signup-primary]');
+    expect(el.querySelector('dialog[data-confirm-dialog="signup-phone-nudge"]')).toBeNull();
+    expect(sent.length).toBe(1);
+    expect(sent[0]?.phoneNumber).toBe('0612345678');
+    expect(typeof sent[0]?.phoneCountryCode).toBe('string');
+  });
+
+  test('une invitation (`next`) garde la priorité', async () => {
+    const { el } = mount({ url: '/signup?next=%2Fchat%2Fmshy_equipe' });
+    toCard(el);
+    await click(el, '[data-signup-primary]');
+    expect(location()).toBe('/chat/mshy_equipe');
+  });
+
+  test('un compte SANS session (revendication) attend son code dans la carte', async () => {
+    const { el } = mount({
+      reply: { ok: true, status: 200, data: { status: 'verification-required', accountCreated: true, email: EMAIL, pendingSessionToken: 'attente-2' } },
+    });
+    toCard(el);
+    await click(el, '[data-signup-primary]');
+    expect(phase(el)).toBe('code');
+    expect(primary(el).disabled).toBe(true);
+    expect(location()).toBe('/signup');
+  });
+});
+
+/**
+ * ÉPURE DES ÉCRANS D'ENTRÉE (#17584, #17666) — l'inscription ne dit rien deux fois.
+ */
+describe('l’inscription ne dit rien deux fois', () => {
+  test('les conditions et la confidentialité ne sont liées QU’UNE fois : par la phrase de consentement, pas aussi par le pied de page', () => {
+    const { el } = mount();
+    expect(el.querySelectorAll('a[href$="/terms"]').length).toBe(1);
+    expect(el.querySelectorAll('a[href$="/privacy"]').length).toBe(1);
+    expect(has(el, '[data-auth-site-footer]')).toBe(true);
+    expect(has(el, '[data-auth-site-link="contact"]')).toBe(true);
+  });
+
+  test('ce que fait l’absence de mot de passe se dit en UNE phrase lisible au repos, sans déroulant ni « facultatif » (#6582, épure #17666)', () => {
+    const { el } = mount();
+    toCard(el);
+    const block = el.querySelector('[data-signup-password-block]') as HTMLElement;
+    const phrase = [...block.querySelectorAll('p')].find((p) => (p.textContent ?? '').startsWith('Sans mot de passe'));
+    expect(phrase?.textContent).toBe('Sans mot de passe, vous vous connectez par un lien reçu par e-mail.');
+    expect(phrase?.classList.contains('sr-only')).toBe(false);
+    expect(phrase?.hasAttribute('hidden')).toBe(false);
+    expect(block.textContent).not.toMatch(/Facultatif/u);
+    expect(has(el, '#signup-password-why')).toBe(false);
+    expect(has(block, 'button[aria-expanded]')).toBe(false);
+    expect(el.textContent).not.toMatch(/Pourquoi mettre un mot de passe/u);
+  });
+
+  test('le champ mot de passe paraît dans la carte par le ressort des barreaux, comme sur iOS (#18322)', () => {
+    const { el } = mount();
+    toCard(el);
+    const block = el.querySelector('[data-signup-password-block]') as HTMLElement;
+    expect(block.closest('[data-rung-reveal="open"]')?.classList.contains('signup-spring')).toBe(true);
+  });
+
+  test('un mot de passe valable se DIT, pas seulement par la couleur du bord (règle 17) — et la phrase « sans mot de passe » se retire', () => {
+    const { el } = mount();
+    toCard(el);
+    type(el, '#signup-password', 'Un-mot-de-passe-solide-2026!');
+    const status = el.querySelector('[data-signup-password-block] [role="status"]');
+    expect(status?.textContent).toBe('Votre compte sera actif immédiatement.');
+    expect(el.querySelector('[data-signup-password-block]')?.textContent).not.toMatch(/Sans mot de passe/u);
+  });
+
+  test('le consentement légal garde ses deux liens DANS la phrase, sans rangée de liens à côté', () => {
+    const { el } = mount();
+    const sentence = [...el.querySelectorAll('p')].find((p) => (p.textContent ?? '').startsWith('En continuant'));
+    expect(sentence?.textContent).toBe('En continuant, vous acceptez les conditions d’utilisation et la politique de confidentialité.');
+    expect(sentence?.querySelector('a[href$="/terms"]')?.textContent).toBe('conditions d’utilisation');
+    expect(sentence?.querySelector('a[href$="/privacy"]')?.textContent).toBe('politique de confidentialité');
+    expect(el.querySelectorAll('a[href$="/terms"]').length).toBe(1);
+    expect(el.querySelectorAll('a[href$="/privacy"]').length).toBe(1);
+  });
+});

@@ -3,6 +3,13 @@ import CryptoKit
 import MeeshySDK
 import os
 
+/// Chiffre le contenu d'un message direct pour son destinataire. Seam
+/// d'injection de `ConversationViewModel` (#8221) : le défaut est
+/// `SessionManager.shared`.
+protocol DirectMessageEncrypting: Sendable {
+    func encryptMessage(_ payload: Data, for userId: String, conversationId: String) async throws -> Data
+}
+
 public actor SessionManager {
     public static let shared = SessionManager()
 
@@ -96,12 +103,6 @@ public actor SessionManager {
         }
     }
 
-    private func unregisterPeer(_ peerId: String) {
-        var peers = UserDefaults.standard.stringArray(forKey: peerListKey) ?? []
-        peers.removeAll { $0 == peerId }
-        UserDefaults.standard.set(peers, forKey: peerListKey)
-    }
-
     // MARK: - Keychain Persistence
 
     private func persistSession(peerId: String, key: SymmetricKey) async {
@@ -130,15 +131,6 @@ public actor SessionManager {
         let key = SymmetricKey(data: data)
         activeSessions[peerId] = key
         return key
-    }
-
-    public func removeSession(peerId: String) {
-        activeSessions.removeValue(forKey: peerId)
-        Task {
-            let userId = await currentUserId()
-            KeychainManager.shared.delete(forKey: keychainPrefix + peerId, account: userId)
-        }
-        unregisterPeer(peerId)
     }
 
     // MARK: - Session Management
@@ -268,6 +260,8 @@ public actor SessionManager {
         E2EEService.shared.clearAllKeys()
     }
 }
+
+extension SessionManager: DirectMessageEncrypting {}
 
 // MARK: - DecryptionSessionProviding Adapter
 

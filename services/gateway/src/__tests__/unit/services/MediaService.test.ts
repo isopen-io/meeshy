@@ -31,8 +31,34 @@ async function writeTestFile(basePath: string, relativePath: string, content: Bu
 // relativePathFromUrl
 // ---------------------------------------------------------------------------
 
+describe('MediaService.relativePathFromUrl — ce que la BASE porte (#4324)', () => {
+  const service = new MediaService('/tmp/uploads-inexistant');
+
+  it('accepte une CLÉ DE STOCKAGE nue — la forme que la base doit porter', () => {
+    // 514 attachements sont stockés ainsi. `relativePathFromUrl` rendait `null`,
+    // donc `deleteMedia` ne supprimait RIEN pour eux, en silence : leurs fichiers
+    // ne sont jamais nettoyés.
+    expect(service.relativePathFromUrl('2025/10/user/photo.png')).toBe('2025/10/user/photo.png');
+  });
+
+  it("accepte une AUTRE version que celle du jour — la version n'est pas écrite ici", () => {
+    expect(service.relativePathFromUrl('/api/v2/attachments/file/2026%2F05%2Fuser%2Ff.jpg'))
+      .toBe('2026/05/user/f.jpg');
+  });
+
+  it('accepte le montage NON versionné, que le serveur sert aussi', () => {
+    expect(service.relativePathFromUrl('/api/attachments/file/2026%2F05%2Fuser%2Ff.jpg'))
+      .toBe('2026/05/user/f.jpg');
+  });
+
+  it("rend null sur ce qui n'est ni une clé ni une adresse de nos fichiers", () => {
+    expect(service.relativePathFromUrl('https://external-cdn.com/media/file.jpg')).toBeNull();
+    expect(service.relativePathFromUrl('')).toBeNull();
+  });
+});
+
 describe('MediaService.relativePathFromUrl', () => {
-  const service = new MediaService('/tmp/uploads', '');
+  const service = new MediaService('/tmp/uploads');
 
   it('extracts the relative path from a relative fileUrl', () => {
     const result = service.relativePathFromUrl('/api/v1/attachments/file/2026%2F05%2Fuser%2Ffile.jpg');
@@ -77,7 +103,7 @@ describe('MediaService.duplicateMedia', () => {
 
   beforeEach(async () => {
     tmpDir = await createTempUploadDir();
-    service = new MediaService(tmpDir, '');
+    service = new MediaService(tmpDir);
   });
 
   afterEach(async () => {
@@ -91,7 +117,12 @@ describe('MediaService.duplicateMedia', () => {
     const originalUrl = `/api/v1/attachments/file/${encodeURIComponent('2026/05/user1/photo.jpg')}`;
     const result = await service.duplicateMedia(originalUrl);
 
-    expect(result.fileUrl).toContain('/api/v1/attachments/file/');
+    // #4324 — ce qui se persiste est la CLÉ du média, plus une adresse : les
+    // trois clients posent la route. La clé désigne le NOUVEAU fichier, jamais
+    // l'ancien — c'est cela que ce témoin garde, et non la forme de l'adresse.
+    expect(result.fileUrl).toBe(result.filePath);
+    expect(result.fileUrl).toMatch(/^snapshots[/\\]snapshot_.*\.jpg$/);
+    expect(result.fileUrl).not.toContain('://');
     expect(result.fileUrl).not.toBe(originalUrl);
     expect(result.fileName).toMatch(/^snapshot_.*\.jpg$/);
     expect(result.filePath).toMatch(/^snapshots[/\\]snapshot_.*\.jpg$/);
@@ -158,7 +189,7 @@ describe('MediaService.deleteMedia', () => {
 
   beforeEach(async () => {
     tmpDir = await createTempUploadDir();
-    service = new MediaService(tmpDir, '');
+    service = new MediaService(tmpDir);
   });
 
   afterEach(async () => {
@@ -198,7 +229,7 @@ describe('MediaService.duplicateMedia — EEXIST retry loop', () => {
 
   beforeEach(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'meeshy-media-test-'));
-    service = new MediaService(tmpDir, '');
+    service = new MediaService(tmpDir);
   });
 
   afterEach(async () => {
@@ -228,7 +259,7 @@ describe('MediaService.planDuplicate', () => {
 
   beforeEach(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'meeshy-plan-test-'));
-    service = new MediaService(tmpDir, '');
+    service = new MediaService(tmpDir);
   });
 
   afterEach(async () => {
@@ -245,7 +276,9 @@ describe('MediaService.planDuplicate', () => {
 
     const plan = service.planDuplicate(url);
 
-    expect(plan.plannedFileUrl).toContain('/api/v1/attachments/file/');
+    // #4324 — la valeur planifiée est la CLÉ du futur média, pas son adresse.
+    expect(plan.plannedFileUrl).toBe(plan.plannedFilePath);
+    expect(plan.plannedFileUrl).not.toContain('://');
     expect(plan.plannedFilePath).toMatch(/^snapshots[/\\]snapshot_.*\.jpg$/);
 
     // commit not called → destination must not exist yet

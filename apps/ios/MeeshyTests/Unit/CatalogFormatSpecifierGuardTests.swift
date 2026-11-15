@@ -1,0 +1,267 @@
+import XCTest
+
+/// **Un spécificateur de format qui ment sur le TYPE ne traduit pas mal : il
+/// CRASHE** (#6073).
+///
+/// `String(localized: "k", defaultValue: "\(n) jours tenus…")` avec `n: Int`
+/// fait générer à Swift un `%lld` ; si la traduction du catalogue porte `%@`,
+/// le formateur lit l'entier 64 bits comme un POINTEUR d'objet et le
+/// déréférence — `SIGSEGV`, pas un texte approximatif.
+///
+/// C'est exactement ce qui est arrivé à `streak.reminder.body` et à
+/// `reveal.badge.tier` : introduites au #6039 avec `%@` dans les sept langues,
+/// elles ont fait crasher `StreakReminderPlanTests` — six tests, six
+/// redémarrages du processus — et auraient fait crasher l'APP de tout
+/// utilisateur tenant une série, au moment précis où elle planifie ses rappels.
+///
+/// **Ce que ce témoin mesure, et ce qu'il ne mesure pas.** Il ne type pas le
+/// Swift : il lit la DÉCLARATION du symbole interpolé dans le même fichier. Un
+/// symbole qu'il ne sait pas typer est ignoré plutôt que deviné — une garde qui
+/// invente un type produirait des rouges que personne ne sait lire, et on
+/// finirait par la désarmer. Sa force est ailleurs : le cas qu'elle attrape est
+/// précisément celui qui crashe, et il ne peut pas se cacher, car un entier
+/// interpolé se déclare toujours quelque part.
+final class CatalogFormatSpecifierGuardTests: XCTestCase {
+
+    private var appRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Unit
+            .deletingLastPathComponent()   // .../MeeshyTests
+            .deletingLastPathComponent()   // .../apps/ios
+            .appendingPathComponent("Meeshy")
+    }
+
+    /// Les spécificateurs qu'un ENTIER accepte. `%@` n'en fait pas partie, et
+    /// c'est tout l'objet de ce fichier.
+    private static let entiersAdmis = ["%lld", "%ld", "%d", "%i", "%llu", "%lu", "%u"]
+
+    private func sources() throws -> [URL] {
+        guard let walker = FileManager.default.enumerator(at: appRoot, includingPropertiesForKeys: nil)
+        else { return [] }
+        return walker.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
+    }
+
+    private func catalogue() throws -> [String: [String: String]] {
+        let url = appRoot.appendingPathComponent("Localizable.xcstrings")
+        let data = try Data(contentsOf: url)
+        guard let racine = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let chaines = racine["strings"] as? [String: Any]
+        else { return [:] }
+
+        var table: [String: [String: String]] = [:]
+        for (cle, valeur) in chaines {
+            guard let entree = valeur as? [String: Any],
+                  let localisations = entree["localizations"] as? [String: Any]
+            else { continue }
+            var parLangue: [String: String] = [:]
+            for (langue, contenu) in localisations {
+                if let unite = (contenu as? [String: Any])?["stringUnit"] as? [String: Any],
+                   let texte = unite["value"] as? String {
+                    parLangue[langue] = texte
+                }
+            }
+            table[cle] = parLangue
+        }
+        return table
+    }
+
+    /// `String(localized: "<clé>", defaultValue: "…\(symbole)…")` → (clé, symbole, position).
+    /// Une seule interpolation suffit à établir le cas : les clés à deux
+    /// arguments numériques n'existent pas encore dans ce catalogue, et le jour
+    /// où elles existeront ce témoin dira qu'il ne les couvre pas plutôt que de
+    /// prétendre le contraire.
+    private func interpolations(dans source: String) -> [(cle: String, symbole: String, position: Int)] {
+        let motif = #"localized:\s*"([^"]+)"\s*,\s*\n?\s*defaultValue:\s*"([^"]*)""#
+        guard let regex = try? NSRegularExpression(pattern: motif, options: [.dotMatchesLineSeparators])
+        else { return [] }
+        let ns = source as NSString
+        return regex.matches(in: source, range: NSRange(location: 0, length: ns.length))
+            .compactMap { m -> (String, String, Int)? in
+                let cle = ns.substring(with: m.range(at: 1))
+                let defaut = ns.substring(with: m.range(at: 2))
+                guard let ouverture = defaut.range(of: #"\("#),
+                      let fermeture = defaut[ouverture.upperBound...].firstIndex(of: ")")
+                else { return nil }
+                let symbole = String(defaut[ouverture.upperBound..<fermeture])
+                    .trimmingCharacters(in: .whitespaces)
+                guard !symbole.isEmpty, !symbole.contains("(") else { return nil }
+                return (cle, symbole, m.range.location)
+            }
+    }
+
+    /// Le symbole est-il déclaré ENTIER, là où il est interpolé ? On lit la déclaration typée LA PLUS PROCHE
+    /// avant le site — paramètre, propriété ou liaison — et rien d'autre : pas d'inférence.
+    ///
+    /// « N'importe où dans le fichier » ne suffisait pas : deux fonctions d'un même fichier nomment `level` l'une
+    /// un `Int`, l'autre un `String` déjà formaté. La garde accusait la seconde, et le catalogue « corrigé » en
+    /// `%lld` affichait un pointeur à la place du niveau (2026-10-14).
+    static func estEntier(_ symbole: String, dans source: String, avant position: Int) -> Bool {
+        let motif = #"\b"# + NSRegularExpression.escapedPattern(for: symbole) + #"\s*:\s*([A-Za-z_][A-Za-z0-9_.]*)"#
+        guard let regex = try? NSRegularExpression(pattern: motif) else { return false }
+        let ns = source as NSString
+        let avant = NSRange(location: 0, length: min(max(0, position), ns.length))
+        guard let derniere = regex.matches(in: source, range: avant).last else { return false }
+        return ns.substring(with: derniere.range(at: 1)) == "Int"
+    }
+
+    func test_laDeclarationLaPlusProcheDecide_pasUnHomonymeDuFichier() {
+        let source = """
+        static func rank(level: Int) -> String { "" }
+        static func locked(level: String) -> String {
+            String(localized: "k", defaultValue: "niveau \\(level)")
+        }
+        """
+        let site = (source as NSString).range(of: "String(localized").location
+        XCTAssertFalse(Self.estEntier("level", dans: source, avant: site))
+        let inverse = """
+        static func locked(level: String) -> String { "" }
+        static func rank(level: Int) -> String {
+            String(localized: "k", defaultValue: "niveau \\(level)")
+        }
+        """
+        XCTAssertTrue(Self.estEntier("level", dans: inverse, avant: (inverse as NSString).range(of: "String(localized").location))
+    }
+
+    func test_uneCleQuiInterpoleUnEntier_nePorteJamaisUnSpecificateurDObjet() throws {
+        let table = try catalogue()
+        XCTAssertGreaterThan(table.count, 500, "catalogue introuvable — la garde ne mesurerait RIEN")
+
+        var fautes: [String] = []
+        for url in try sources() {
+            guard let source = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            for (cle, symbole, position) in interpolations(dans: source)
+            where Self.estEntier(symbole, dans: source, avant: position) {
+                guard let traductions = table[cle] else { continue }
+                for (langue, texte) in traductions.sorted(by: { $0.key < $1.key }) {
+                    guard texte.contains("%@") else { continue }
+                    let admis = Self.entiersAdmis.contains { texte.contains($0) }
+                    if !admis {
+                        fautes.append(
+                            "  \(cle) [\(langue)] — interpole `\(symbole): Int` et la traduction "
+                            + "porte %@ : le formateur déréférencerait l'entier (SIGSEGV). "
+                            + "Attendu %lld. Site : \(url.lastPathComponent)"
+                        )
+                    }
+                }
+            }
+        }
+
+        XCTAssertTrue(
+            fautes.isEmpty,
+            "Spécificateur d'OBJET sur un argument ENTIER — l'app crashe au formatage, "
+            + "elle n'affiche pas un texte faux :\n" + fautes.joined(separator: "\n")
+        )
+    }
+
+    /// Les `%` d'une traduction, comptés comme le formateur les lit : un spécificateur (`%@`, `%1$@`, `%lld`,
+    /// `%.1f`…) ou une substitution du catalogue (`%#@count@`, ses variations plurielles) est un ARGUMENT,
+    /// `%%` un pourcentage littéral, tout autre `%` est NU.
+    static func pourcents(dans texte: String) -> (arguments: Int, nus: Int) {
+        let conversions: Set<Character> = ["@", "d", "D", "i", "u", "U", "x", "X", "f", "F", "e", "E", "g", "G", "c", "s", "S"]
+        let caracteres = Array(texte)
+        var arguments = 0
+        var nus = 0
+        var index = 0
+        while index < caracteres.count {
+            guard caracteres[index] == "%" else {
+                index += 1
+                continue
+            }
+            var curseur = index + 1
+            if curseur < caracteres.count, caracteres[curseur] == "%" {
+                index = curseur + 1
+                continue
+            }
+            let debutPosition = curseur
+            while curseur < caracteres.count, caracteres[curseur].isASCII, caracteres[curseur].isNumber { curseur += 1 }
+            if curseur < caracteres.count, curseur > debutPosition, caracteres[curseur] == "$" {
+                curseur += 1
+            } else {
+                curseur = debutPosition
+            }
+            if let fin = Self.finDeSubstitution(dans: caracteres, depuis: curseur) {
+                arguments += 1
+                index = fin
+                continue
+            }
+            if curseur < caracteres.count, caracteres[curseur] == "." {
+                curseur += 1
+                while curseur < caracteres.count, caracteres[curseur].isASCII, caracteres[curseur].isNumber { curseur += 1 }
+            }
+            while curseur < caracteres.count, caracteres[curseur] == "l" { curseur += 1 }
+            if curseur < caracteres.count, conversions.contains(caracteres[curseur]) {
+                arguments += 1
+                index = curseur + 1
+            } else {
+                nus += 1
+                index += 1
+            }
+        }
+        return (arguments, nus)
+    }
+
+    /// `#@nom@` : la substitution que le catalogue résout par ses variations — l'index qui la suit, sinon `nil`.
+    static func finDeSubstitution(dans caracteres: [Character], depuis debut: Int) -> Int? {
+        guard debut + 1 < caracteres.count, caracteres[debut] == "#", caracteres[debut + 1] == "@",
+              let fermeture = caracteres[(debut + 2)...].firstIndex(of: "@"), fermeture > debut + 2 else { return nil }
+        return fermeture + 1
+    }
+
+    /// Un `%` nu dans une traduction qui porte des arguments — c'est alors elle que le formateur lit. Sans
+    /// argument, rien n'est formaté : « entre 30% et 50% » sort tel quel.
+    static func porteUnPourcentNu(_ texte: String) -> Bool {
+        let compte = pourcents(dans: texte)
+        return compte.arguments > 0 && compte.nus > 0
+    }
+
+    /// **Un `%` littéral dans une traduction À ARGUMENTS s'écrit `%%`.** Le
+    /// formateur lit « % v » comme un spécificateur (drapeau espace, conversion
+    /// inconnue) et « % to » comme « % t o » — un OCTAL qui consomme un argument.
+    /// « 78 % vers le 35 » (`game2.banner.to_next`, la phrase VoiceOver de la
+    /// bannière du joueur) sortait ainsi tronquée ou chiffrée au hasard dans six
+    /// langues : la valeur par défaut Swift échappait le `%`, le catalogue non.
+    func test_uneTraductionAArguments_echappeSonPourcentLitteral() throws {
+        let table = try catalogue()
+        XCTAssertGreaterThan(table.count, 500, "catalogue introuvable — la garde ne mesurerait RIEN")
+
+        let fautes = table.keys.sorted().flatMap { cle in
+            (table[cle] ?? [:]).sorted(by: { $0.key < $1.key })
+                .filter { Self.porteUnPourcentNu($0.value) }
+                .map { "  \(cle) [\($0.key)] — « \($0.value) » : écrire %% pour un pourcentage littéral" }
+        }
+        XCTAssertTrue(
+            fautes.isEmpty,
+            "Un `%` nu dans une traduction formatée est lu comme un spécificateur :\n" + fautes.joined(separator: "\n")
+        )
+    }
+
+    func test_laGardeDuPourcentReconnaitLaFormeQuelleInterdit() {
+        XCTAssertTrue(Self.porteUnPourcentNu("%1$@ % vers le %2$@"))
+        XCTAssertTrue(Self.porteUnPourcentNu("%1$@% to %2$@"))
+        XCTAssertFalse(Self.porteUnPourcentNu("%1$@ %% vers le %2$@"))
+        XCTAssertFalse(Self.porteUnPourcentNu("%1$@%% to %2$@"))
+        XCTAssertFalse(Self.porteUnPourcentNu("entre 30% et 50%"), "sans argument, rien n'est formaté")
+        XCTAssertFalse(Self.porteUnPourcentNu("%lld jours, %.1f km"))
+        XCTAssertFalse(Self.porteUnPourcentNu("%1$@, %#@count@"), "une substitution plurielle du catalogue est un argument")
+        XCTAssertTrue(Self.porteUnPourcentNu("%#@count@ % de plus"))
+        XCTAssertTrue(Self.porteUnPourcentNu("%1$@ %#@"), "une substitution sans nom n'en est pas une")
+    }
+
+    /// La garde doit reconnaître la forme qu'elle interdit, sinon elle est verte
+    /// pour de mauvaises raisons — et elle l'a été le jour où les deux clés sont
+    /// entrées dans le catalogue.
+    func test_laGardeReconnaitLaFormeQuelleInterdit() {
+        let source = """
+        func corps(joursTenus: Int) -> String {
+            String(localized: "k.body", defaultValue: "\\(joursTenus) jours tenus")
+        }
+        """
+        let trouvees = interpolations(dans: source)
+        XCTAssertEqual(trouvees.count, 1, "l'extraction doit voir la paire clé/interpolation")
+        XCTAssertEqual(trouvees.first?.cle, "k.body")
+        XCTAssertEqual(trouvees.first?.symbole, "joursTenus")
+        let site = trouvees.first?.position ?? 0
+        XCTAssertTrue(Self.estEntier("joursTenus", dans: source, avant: site), "un paramètre `: Int` est un entier")
+        XCTAssertFalse(Self.estEntier("autreChose", dans: source, avant: site), "un symbole non déclaré n'est pas deviné")
+    }
+}

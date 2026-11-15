@@ -63,6 +63,40 @@ final class ThemedConversationRowAccessibilityLabelTests: XCTestCase {
         XCTAssertFalse(row.conversationAccessibilityLabel.contains("Hello there"))
     }
 
+    // MARK: - #7548 — VoiceOver dit ce que la ligne composée dit
+
+    func test_conversationAccessibilityLabel_viewOnceMessage_neverSpeaksItsText() {
+        var conversation = makeConversation(
+            lastMessagePreview: "code 4242",
+            lastMessageOriginalLanguage: "fr",
+            lastMessageTranslations: ["en": "code 4242"]
+        )
+        conversation.lastMessageIsViewOnce = true
+        let label = ThemedConversationRow(conversation: conversation, preferredContentLanguages: ["en"])
+            .conversationAccessibilityLabel
+
+        XCTAssertFalse(label.contains("4242"), "une vue unique ne se dit jamais à VoiceOver : \(label)")
+    }
+
+    func test_conversationAccessibilityLabel_voiceMessageWithoutText_saysItsNature() {
+        var conversation = makeConversation(
+            lastMessagePreview: "",
+            lastMessageOriginalLanguage: nil,
+            lastMessageTranslations: nil
+        )
+        conversation.lastMessageAttachments = [
+            MeeshyMessageAttachment(id: "a", originalName: "voice-1.webm", mimeType: "audio/webm", duration: 12000)
+        ]
+        conversation.lastMessageAttachmentCount = 1
+        let label = ThemedConversationRow(conversation: conversation, preferredContentLanguages: ["fr"])
+            .conversationAccessibilityLabel
+
+        XCTAssertTrue(
+            label.contains(String(localized: "attachment.voice", bundle: .main)),
+            "un vocal sans texte se dit par sa nature, pas par le silence : \(label)"
+        )
+    }
+
     // MARK: - Factory Helper
 
     private func makeConversation(

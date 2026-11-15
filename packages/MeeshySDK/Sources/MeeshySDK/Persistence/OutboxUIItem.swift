@@ -14,6 +14,17 @@ public struct OutboxUIItem: Sendable, Equatable, Identifiable {
     public let source: Source
     public let status: OutboxStatus
     public let createdAt: Date
+    /// Horloge de la LIGNE, pas de l'objet : l'instant de sa dernière écriture
+    /// — donc, pour une ligne terminale (`.failed` / `.exhausted`), l'instant
+    /// où elle a RENONCÉ.
+    ///
+    /// La pastille de synchronisation borne l'affichage d'une entrée terminale
+    /// à une courte fenêtre (#4660). Mesurer cette fenêtre sur `createdAt`
+    /// ferait naître PÉRIMÉ tout envoi mis en file il y a longtemps et qui
+    /// échoue maintenant — l'utilisateur ne saurait jamais que son message
+    /// vient d'échouer. Les deux dates répondent à deux questions et vivent
+    /// donc toutes les deux ici.
+    public let updatedAt: Date
 
     public init(
         id: String,
@@ -23,7 +34,8 @@ public struct OutboxUIItem: Sendable, Equatable, Identifiable {
         attachmentCount: Int,
         source: Source,
         status: OutboxStatus,
-        createdAt: Date
+        createdAt: Date,
+        updatedAt: Date? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -33,6 +45,7 @@ public struct OutboxUIItem: Sendable, Equatable, Identifiable {
         self.source = source
         self.status = status
         self.createdAt = createdAt
+        self.updatedAt = updatedAt ?? createdAt
     }
 
     public enum Kind: Sendable, Equatable {
@@ -58,7 +71,30 @@ public struct OutboxUIItem: Sendable, Equatable, Identifiable {
     }
 
     public enum Source: Sendable, Equatable {
-        case conversation(id: String)
+        /// La conversation à ouvrir, et — quand l'entrée vise un message
+        /// précis — **l'ancre de ce message**.
+        ///
+        /// L'ancre voyage ICI, dans la destination, et non à côté d'elle sur
+        /// l'item : « où cette entrée mène-t-elle » est UNE question. Une ancre
+        /// rangée dans un champ voisin pourrait être appliquée à une autre
+        /// conversation que celle qu'on ouvre — le genre de désaccord qu'aucun
+        /// témoin ne voit, chaque moitié restant cohérente avec elle-même.
+        ///
+        /// **Ce que l'ancre contient dépend de ce que l'entrée EST**, et seul
+        /// le site qui la compose le sait :
+        ///
+        /// | entrée | ancre |
+        /// |---|---|
+        /// | envoi (`sendMessage`) | `record.clientMessageId` — l'id LOCAL de la bulle optimiste, celui sous lequel `ConversationViewModel` a inséré la ligne |
+        /// | édition / suppression / réaction | `payload.messageId` — l'id SERVEUR de la cible ; le `clientMessageId` du record y identifie la MUTATION, pas le message |
+        /// | tout le reste (frappe, conversation créée…) | `nil` — il n'y a pas de message à viser |
+        ///
+        /// `nil` n'est pas un repli paresseux : une charge illisible doit
+        /// ouvrir la conversation SANS viser, plutôt que viser un message
+        /// inexistant. Un scroll vers un id introuvable laisse le fil à un
+        /// endroit arbitraire, ce qui se lit comme un bug là où l'absence
+        /// d'ancre ne se lit pas du tout.
+        case conversation(id: String, messageId: String?)
         case post(id: String)
         case story(id: String)
         case unknown
@@ -79,7 +115,34 @@ extension OutboxUIItem {
     /// failures are non-fatal: the returned item falls back to sensible
     /// defaults (no preview, generic icon) so a single corrupted payload does
     /// not hide the entire queue from the pill UI.
+    ///
+    /// L'horloge de la ligne est estampillée ICI, en UN site, et non dans les
+    /// dix mappeurs : ceux-ci composent l'APPARENCE d'une entrée (icône,
+    /// aperçu, ancre), une question à laquelle `updatedAt` ne participe pas.
+    /// Un champ qui QUALIFIE une entrée sans entrer dans sa composition ne se
+    /// trouve pas en cherchant « qui compose cette entrée ? » — c'est ainsi
+    /// qu'on l'oublie dans le onzième mappeur. Le faire voyager par
+    /// construction rend l'oubli impossible.
     public static func from(record: OutboxRecord) -> OutboxUIItem {
+        composed(record: record).stamped(updatedAt: record.updatedAt)
+    }
+
+    /// Copie immuable portant l'horloge de la ligne.
+    private func stamped(updatedAt: Date) -> OutboxUIItem {
+        OutboxUIItem(
+            id: id,
+            kind: kind,
+            titlePreview: titlePreview,
+            iconKind: iconKind,
+            attachmentCount: attachmentCount,
+            source: source,
+            status: status,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+    }
+
+    private static func composed(record: OutboxRecord) -> OutboxUIItem {
         switch record.kind {
         case .sendMessage:
             return mapSendMessage(record: record)
@@ -99,9 +162,13 @@ extension OutboxUIItem {
             return mapCreatePost(record: record)
         case .repostPost:
             return mapRepostPost(record: record)
+        case .toggleBookmarkPost:
+            return mapBookmark(record: record)
         case .markAsRead,
              .markStoryViewed,
              .reportAttachmentStatus,
+             .consumeAfterRead,
+             .reportContentCapture,
              .sendFriendRequest,
              .respondFriendRequest,
              .blockUser,
@@ -151,7 +218,8 @@ extension OutboxUIItem {
             titlePreview: preview,
             iconKind: icon,
             attachmentCount: attachments.count,
-            source: .conversation(id: record.conversationId),
+            source: .conversation(id: record.conversationId,
+                                  messageId: record.clientMessageId),
             status: record.status,
             createdAt: record.createdAt
         )
@@ -192,33 +260,49 @@ extension OutboxUIItem {
             titlePreview: preview,
             iconKind: .text,
             attachmentCount: 0,
-            source: .conversation(id: record.conversationId),
+            source: .conversation(id: record.conversationId,
+                                  messageId: payload?.messageId),
             status: record.status,
             createdAt: record.createdAt
         )
     }
 
     private static func mapDeleteMessage(record: OutboxRecord) -> OutboxUIItem {
+        // La charge n'était décodée par PERSONNE ici — l'aperçu est un
+        // littéral. Elle l'est désormais pour la seule ancre : viser le
+        // message dont la suppression est en attente, c'est montrer où
+        // l'opération se joue.
+        let payload = JSONDecoder().decodeOrLog(OfflineDeletePayload.self, from: record.payload,
+                                                field: "delete payload (sync pill)", id: record.id,
+                                                logger: Logger.ui)
         return OutboxUIItem(
             id: record.id,
             kind: .delete,
             titlePreview: "Suppression…",
             iconKind: .text,
             attachmentCount: 0,
-            source: .conversation(id: record.conversationId),
+            source: .conversation(id: record.conversationId,
+                                  messageId: payload?.messageId),
             status: record.status,
             createdAt: record.createdAt
         )
     }
 
     private static func mapSendReaction(record: OutboxRecord) -> OutboxUIItem {
+        // Emoji ET ancre sortent de la MÊME lecture, y compris sur le chemin
+        // de repli JSON brut : deux décodages parallèles de la même charge
+        // divergeraient au premier ajustement de l'un.
         let emoji: String?
+        let reactedMessageId: String?
         if let payload = try? JSONDecoder().decode(ReactionOutboxPayload.self, from: record.payload) {
             emoji = payload.emoji
+            reactedMessageId = payload.messageId
         } else if let object = try? JSONSerialization.jsonObject(with: record.payload) as? [String: Any] {
             emoji = object["emoji"] as? String
+            reactedMessageId = object["messageId"] as? String
         } else {
             emoji = nil
+            reactedMessageId = nil
         }
         return OutboxUIItem(
             id: record.id,
@@ -226,7 +310,8 @@ extension OutboxUIItem {
             titlePreview: emoji,
             iconKind: .reaction,
             attachmentCount: 0,
-            source: .conversation(id: record.conversationId),
+            source: .conversation(id: record.conversationId,
+                                  messageId: reactedMessageId),
             status: record.status,
             createdAt: record.createdAt
         )
@@ -301,6 +386,10 @@ extension OutboxUIItem {
     /// "Publication de réel" / "Publication de statut" vs "Publication de post")
     /// and to derive an accurate media icon + content preview. Falls back to a
     /// plain post on decode failure.
+    ///
+    /// La source vise la CARTE OPTIMISTE, dont l'id est le cmid de la ligne
+    /// (#10331) : le post serveur n'existe pas encore, et c'est ce cmid que
+    /// « Annuler l'envoi » retire de la file.
     private static func mapCreatePost(record: OutboxRecord) -> OutboxUIItem {
         let payload = JSONDecoder().decodeOrLog(CreatePostPayload.self, from: record.payload,
                                                 field: "create-post payload (sync pill)", id: record.id,
@@ -344,16 +433,17 @@ extension OutboxUIItem {
             titlePreview: preview,
             iconKind: icon,
             attachmentCount: mediaPaths.count,
-            source: .unknown,
+            source: payload.map { .post(id: $0.clientMutationId) } ?? .unknown,
             status: record.status,
             createdAt: record.createdAt
         )
     }
 
     /// A queued repost (`.repostPost`, fil rouge du repost — lot 7 tâche 7.5)
-    /// — `POST /posts/:postId/repost`. Contrairement à `mapCreatePost`, l'id
-    /// SOURCE est déjà connu à l'enfilage (`RepostPostPayload.postId`, le
-    /// post reposté, pas le repost lui-même qui n'existe pas encore) :
+    /// — `POST /posts/:postId/repost`. Contrairement à `mapCreatePost`, qui ne
+    /// vise qu'une carte optimiste, l'id SOURCE est un id serveur connu à
+    /// l'enfilage (`RepostPostPayload.postId`, le post reposté, pas le repost
+    /// lui-même qui n'existe pas encore) :
     /// `source` résout donc en `.post(id:)`, navigable, jamais `.unknown` —
     /// le repli de `mapOther`, qui perd la destination (défaut mesuré en
     /// prod sur `markStoryViewed`, cf. doc de `countsTowardSyncIndicator`
@@ -381,6 +471,22 @@ extension OutboxUIItem {
         )
     }
 
+    /// #15997 — un favori en file mène à SA carte, comme une réaction de post.
+    private static func mapBookmark(record: OutboxRecord) -> OutboxUIItem {
+        let object = (try? JSONSerialization.jsonObject(with: record.payload)) as? [String: Any]
+        let source: Source = (object?["postId"] as? String).map { .post(id: $0) } ?? .unknown
+        return OutboxUIItem(
+            id: record.id,
+            kind: .other(record.kind.rawValue),
+            titlePreview: nil,
+            iconKind: .none,
+            attachmentCount: 0,
+            source: source,
+            status: record.status,
+            createdAt: record.createdAt
+        )
+    }
+
     private static func mapOther(record: OutboxRecord) -> OutboxUIItem {
         return OutboxUIItem(
             id: record.id,
@@ -395,8 +501,7 @@ extension OutboxUIItem {
     }
 
     private static func decodeOfflineQueueItem(_ data: Data) -> OfflineQueueItem? {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
         return decoder.decodeOrLog(OfflineQueueItem.self, from: data,
                                    field: "queue item (sync pill)", logger: Logger.ui)
     }

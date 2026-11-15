@@ -5,6 +5,714 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-09-01 — a deferred follow-up is only closed when EVERY named site is wired (slice `engagement-consent-gate-surfaces`)
+The prior slice `engagement-consent-gate-detail` shipped the pure consent gate on `EngagementSessions.begin` but
+wired only the DETAIL surface, deferring reels/status/story as "three thin per-surface slices". This slice did all
+three at once — the wire is one injected `PrivacyPreferencesStore` + one `consentGranted = preferences.value.allowAnalytics`
+argument per `begin` call site. Lessons:
+- **A privacy gate is not "shipped" while any of its surfaces still bypass it.** The detail slice closed the gate on
+  ONE of four surfaces; the toggle stayed 3/4 dead. Dimension-1 completeness is per-surface: enumerate every call site
+  of the gated primitive (`grep EngagementSurface`) and confirm each passes the flag, not just the one you touched.
+- **Grouping identical one-line wires into one slice is coherent when they share the exact concept.** Three surfaces,
+  one pattern, one privacy invariant — a single slice with one behavioural test per surface reads better than three
+  near-duplicate PRs, and the reviewer scope gate (apps/android-only) is unchanged.
+- **Two direct test-constructor call sites hid behind the `viewModel()` helper.** `StoryViewerViewModelTest` built the
+  VM inline in two tests (failed-load, isOwnStory) that don't use the helper — adding a ctor param breaks them silently
+  until compile. `grep 'StoryViewerViewModel('` in the test file caught both; pass `InMemoryPrivacyPreferencesStore()`
+  (default = consent granted) there so their behaviour is unchanged.
+- **Reels/story have NO bare-impression `viewPost` — only status does.** So the withheld-consent assertion differs by
+  surface: reels/story assert the specific dwell duration is absent (no impression to coexist with); status asserts the
+  dwell duration absent AND the bare `viewPost(id)` impression still fires (the un-gated accounting tier).
+
+## 2026-09-01 — a REDUCED port can silently drop a SECURITY tier; and "any()" matches a defaulted-null arg (slice `engagement-consent-gate-detail`)
+Android's `EngagementSessions` was a deliberately-thin port of iOS `EngagementTracker` — it kept the dwell state
+machine and the qualification threshold, and dropped everything else (micro-actions, watch samples, the outbox…). Fine,
+except one of the dropped pieces was iOS's `begin` `guard consentProvider()`: the reader's `allowAnalytics` toggle. So
+Android reported dwell/watch analytics regardless of consent, and `PrivacyToggle.ALLOW_ANALYTICS` — persisted,
+round-tripped — governed nothing. Lessons:
+- **When you port a reduced version of a rich source, enumerate what you dropped and ask which drops were RULES, not
+  just features.** A dropped micro-action recorder is a feature gap; a dropped consent guard is a privacy regression. The
+  reduction note ("faithfully narrower") hid a dimension-1 hole in plain sight for four surfaces.
+- **The first surface you should re-read on any "we ported X" is the SECURITY/consent tier of the original.** iOS gated
+  ALL engagement at one `guard` in `begin`; the port scattered the machine across per-VM callers and lost the guard
+  because it lived in the ONE place the port collapsed.
+- **Two-tier telemetry: gate the analytics tier, NOT the accounting tier.** iOS fires the deduplicated `viewPost`
+  impression unconditionally (a view-count credit) and gates only the engagement SESSION. Port both tiers with their
+  DIFFERENT consent posture — gating the impression too would under-count views; leaving the session un-gated leaks
+  analytics. Read the original to learn WHICH calls each tier makes before deciding what the gate covers.
+- **Put the gate on the one machine every surface shares, guard-FIRST.** `EngagementSessions.begin` returns inert before
+  `pauseTop` when consent is withheld — so a non-consented overlay doesn't disturb the consented session underneath
+  (proven by the 1200-vs-1000 ms nesting test). One tested site beats four per-VM `if (!allow) return`s.
+- **MockK gotcha: `verify { f("p1", any()) }` MATCHES a call that used the parameter's DEFAULT (`null`).** `viewPost(postId:
+  String, duration: Int? = null)` is ONE function; the impression `viewPost("p1")` records as `viewPost("p1", null)`, and
+  `any()` matches null. To assert "no dwell record", assert the SPECIFIC non-null duration is absent (`viewPost("p1", 10000)`
+  exactly 0) — mirror the existing `viewPost("p1", 999)` pattern, don't reach for `any()`. The first draft failed exactly
+  because `any()` caught the impression.
+
+## 2026-09-01 — a doc-comment that PROMISES a behaviour is where to look for the half the code forgot (slice `banner-group-name-favorite-emoji`)
+`NotificationBannerViewModel`'s class doc said, in plain words, "Le nom LOCAL du groupe est résolu ici … renommage
+(`customName`) et emoji favori" — but the code twelve lines down resolved `groupName = customName ?: title` and never
+touched the favorite emoji. The intent was documented, the SSOT field (`ApiConversationPreferences.reaction`) existed
+and was already consumed by `ConversationFilter.FAVORITES`, and the iOS parity (`composedSubtitle`) was one function —
+yet the banner shipped naming a starred/classified thread by a bare name. Lessons:
+- **A doc-comment that names TWO inputs but the code reads ONE is a live gap, not just stale prose.** When a comment
+  promises "A + B" and the implementation carries only A, trust the comment's INTENT over the code and check whether B
+  was ever wired. It's the cheapest place to find an omission: the author already told you what should be there.
+- **iOS "presentation" types split resolution across a stored `name` and a computed accessor — port BOTH halves.**
+  `ConversationPresentation.name` is `customName ?? title` (set far away in `WidgetDataManager`); `composedSubtitle`
+  prepends the favorite. A faithful Android port folds both into one pure `composed(customName, title, favoriteEmoji)`
+  so the fallback AND the prefix are one tested SSOT — don't port only the accessor and leave the name resolution
+  scattered in the caller (which is exactly how the emoji got dropped).
+- **When you fix ONE surface of a shared concept, name the sibling that still has it.** The banner now resolves the
+  local-first name; the TOAST (`notificationToastSubtitle`) still reads the raw server title because its VM holds no
+  conversation snapshot. Different mechanism, larger fix — recorded in feature-parity §M + PROGRESS "Next" rather than
+  silently widened into this slice. (Same shape as the Prisme "which OTHER content type resolves this?" question.)
+
+## 2026-08-31 — a "blocked, needs an SDK look" surface can be unblocked by asking what the sink ALREADY is (slice `story-viewer-dwell`)
+The story-viewer dwell surface sat deferred for three slices with the note "`markViewed(slideId)` carries no
+duration arg → needs an SDK look first." The SDK look took ten minutes and unblocked it entirely: **`StoryApi
+.markViewed` already POSTs to `posts/{id}/view`** — the exact route `PostApi.viewPost` uses, which already
+carries the optional `duration`, and the gateway already binds/persists it for the story case (a story slide
+is fetched as a post there). A story slide id IS a post id. So the "missing duration-capable story sink" was
+a mirage — the duration-capable sink was the same endpoint, one `@Body` away. Lessons:
+- **Before believing a surface is blocked on a missing capability, read the endpoint it ALREADY hits.** The
+  block was stated in client terms ("markViewed has no duration"); the answer was in the route ("markViewed
+  and viewPost are the same route"). Two client methods that look unrelated can be the same server call.
+- **When a surface has a ViewModel-owned lifecycle signal, the dwell needs ZERO screen wiring.** Status-bubble
+  needed a `DisposableEffect(onDispose)` because a popover has no ViewModel dismiss signal. The story viewer
+  already owns `isDismissed` (mapped to a `null` dwell target in `emit()`) and `onCleared` — so the entire
+  begin/end lifecycle lives in the ViewModel state machine, driven by playback transitions. Prefer the
+  ViewModel-internal seam when one exists; it's fully JVM-testable and can't be forgotten by a future screen.
+- **The dwell twin of an existing "transition with the current item" method is where it belongs.** The story
+  viewer already had `transitionPostRoom(nextId)` (join/leave the post room as the slide changes, guarded by a
+  `currentRoomStoryId` cursor, called in `emit()`). `transitionDwell(nextId)` is its exact structural twin
+  (guarded by `currentDwellStoryId`, called right beside it) — so a same-slide re-emit (reaction, translation
+  merge) no-ops for dwell exactly as it already does for the room. Find the existing per-item transition seam
+  and mirror it, rather than inventing a new lifecycle.
+- **A `-q` gradle run hides BUILD SUCCESSFUL and can leave you unable to tell green from red.** `-q` suppresses
+  the success line (but not BUILD FAILED), so a passing run looks identical to a hung/empty one. Run
+  `--console=plain` (not `-q`) when you need to READ the outcome; rely on the report XML
+  (`build/test-results/.../TEST-*.xml`, `tests=/failures=/errors=`) as the authoritative tally.
+
+## 2026-08-31 — where iOS bundles two side-effects in ONE method, fold them the same way on Android — the call site can't drift out of sync (slice `status-bubble-dwell`)
+The status surface fires an impression (`viewPost`) on popover open and needs a dwell begin at the same
+moment. iOS `StatusBubbleController.present(_:)` does BOTH in one method (fire `viewPost`, then
+`EngagementTracker.begin(.statusBubble)`), and every dismiss path calls `end`. The faithful Android port
+folds the `begin` INTO `markStatusViewed` rather than exposing a separate `beginStatusDwell` the screen
+must remember to pair with it. Lessons:
+- **A second public method the caller must always pair with the first is a drift hazard.** If a future
+  caller invokes `markStatusViewed` without the paired `beginStatusDwell`, the dwell silently stops
+  working and nothing goes red. Folding begin into the impression method makes the pair structural — one call,
+  both effects — exactly as iOS's `present()`. The existing `markStatusViewed` behaviour tests stay green
+  (they neither advance the clock nor call `end`), so the fold is invisible to them and safe.
+- **End a popover/overlay dwell from a `DisposableEffect(key){ onDispose{…} }` keyed on the item, not from
+  each dismiss callback.** The status popover has THREE dismiss paths (tap-outside, react, republish), all
+  setting `selected = null`. Wiring `end` into each is three chances to forget one; a single
+  `DisposableEffect` on the `selected?.let{}` block fires on every path uniformly — the composition
+  leaving IS the dismiss. This is the overlay analogue of the detail screen's `onDispose` seam.
+- **The viewer's OWN status is the "end with no begin" case — make `end` a no-op there, don't special-case
+  it.** Own status opens the popover (so the shared `DisposableEffect` runs its `onDispose`) but fires no
+  `markStatusViewed` (line 107), so no session was opened. `EngagementSessions.end` on an unknown surface
+  returns `null` → records nothing. Test it explicitly (`ending a dwell that never opened records nothing`)
+  so the no-op is a guarantee, not an accident. iOS gets the same shape from `present()`'s early `guard`
+  returning before `begin`.
+
+## 2026-08-31 — a big iOS subsystem can yield a clean one-phase slice if you port the pure HEART and wire ONE surface to a sink that already exists (slice `reels-engagement-dwell`)
+iOS's engagement stack (`EngagementTracker` + `EngagementDispatcher` + `EngagementOutbox` + `EngagementModels`,
+plus a `POST /posts/engagement/batch` endpoint and a durable SQLite outbox) looks far too big for one phase.
+The landable slice was: (1) port only the pure BOOKKEEPING (`EngagementTracker`'s dwell math, topmost-owns-the-
+clock, qualification) as an immutable `:core:model` value type — the outbox/dispatcher/models are I/O and can
+wait; (2) wire exactly ONE of the four surfaces (reels), reusing an EXISTING sink. The sink was the key
+de-risker: `PostRepository.viewPost(id, duration)` already documented an optional dwell duration and reels had
+NO view metric, so the wiring was purely additive (no double-count, no product-semantics decision). Lessons:
+- **`EngagementSurface` is 4 SINGLE-FOCUS regions (`detail`/`reels`/`storyViewer`/`statusBubble`), NOT the feed.**
+  I nearly wired the scrolling feed (a LazyColumn of many concurrent posts) before reading the enum — iOS never
+  tracks dwell there. Read the surface/scope enum before designing the wiring; the granularity decides everything.
+- **Before picking the "cleanest pure core" candidate, verify its SINK is real and non-conflicting.** The dwell
+  tracker's core was beautiful, but on `PostDetail`/`Statuses` the `viewPost` sink is already called dwell-less →
+  wiring there would double-count or force a product decision (record-on-open vs record-on-close-if-qualified).
+  Reels had no existing view record → the one surface where the sink was unambiguous. The wiring target, not the
+  pure core, is where a "clean" slice is won or lost.
+- **Port the WHOLE pure contract even if one surface leaves some branches prod-dormant.** The topmost-owns-the-clock
+  stack only fires with ≥2 concurrent surfaces; reels-only wiring never nests. But omitting it would force the next
+  surface's slice to retrofit the SSOT (the "twin diverges" hazard). Unit-test the full machine now, wire surfaces
+  incrementally — same shape as `ScrollAffordance` shipping all its content variants though one screen state hits few.
+- **RED-proof a state machine by MUTATION, not just by a failing pre-impl run:** disabling `pauseTop` failed exactly
+  the 2 nesting tests; flipping the dwell floor `>=`→`>` failed exactly the 3 boundary-touching tests. Small-ms test
+  values almost hid a real bug in the TEST, not the code: dwell 8 ms never qualifies (floor 1000), so a `QualifiedView`
+  assertion on it was impossible — scale the times so the accrued dwell genuinely crosses the floor.
+
+## 2026-08-31 — "double-count" is a claim about the SERVER, not the client; read the endpoint before deciding a second call is unsafe (slice `post-detail-dwell`)
+The `reels-engagement-dwell` NOTES said `PostDetail`/`Statuses` were harder wiring targets because their
+`viewPost` sink is "already called dwell-less → wiring there would double-count." That framing is what made
+reels look like the ONLY unambiguous surface. It was half-right: reels was clean, but the reason the others
+"double-count" was never verified against the gateway — it was inferred from the client alone. Reading
+`PostService.creditPostView` settled it: it is a `(postId, userId)` singleton — the first call
+(dwell-less impression) increments `viewCount` once, and a SECOND call carrying a duration returns `false`
+(no re-increment) and only raises the stored `duration` to `max(existing, new)`. So a second, dwell-aware
+`viewPost(id, dwellMs)` is purely ADDITIVE — impression + enrichment, exactly iOS's two-record model
+(`.task` impression beside `.trackEngagement` dwell), collapsed onto one endpoint the server already dedups.
+Lessons:
+- **"This second call would double-count" is a statement about the WRITE SIDE.** When the write endpoint is in
+  a repo you can read (here the gateway), read it before letting the fear scope your slice away from a whole
+  surface. The detail/status surfaces were called "harder" for a reason that dissolved on one method read.
+- **A dwell surface that ALREADY fires a dwell-less view is not a conflict — it's the impression half of iOS's
+  own two-record model.** Keep the immediate impression (it counts the open even if the process dies before
+  dispose) and ADD the dwell enrichment on leave; don't replace the impression (that loses the open count) and
+  don't fear the pair (the server keeps the max duration and one view).
+- **End a ViewModel dwell session from the SCREEN's `onDispose`, never `onCleared`.** `onCleared` runs as the
+  scope is being cancelled, so a `viewModelScope.launch` there is likely dropped. The screen's
+  `DisposableEffect(Unit){onDispose{ vm.endDwellSession() }}` runs while the scope is still alive — the exact
+  seam `ReelsScreen` uses via `setCurrentReel(null)`. Make `endDwellSession` idempotent (a second `end` on a
+  closed surface is a no-op) so a later `onCleared` is harmless.
+- **`any()` matches NULL in mockk.** Asserting `coVerify(exactly=0){ viewPost("p1", any()) }` to prove "no dwell
+  record" FALSELY fails, because the null-duration impression matches `any()`. Assert the exact duration the
+  scenario would produce (`viewPost("p1", 999)`) instead — `neq`/`match<Int?>` don't resolve cleanly on a
+  nullable reified arg in this mockk version.
+
+## 2026-08-31 — a correct pure SSOT can still be fed the WRONG input; highlight against the query that PRODUCED the results (slice `global-search-results-query`)
+The prior slice shipped `MessageTextParser.highlightedSegments` and the message row washed its content —
+looked done. But the row was called with the LIVE `state.query`, while iOS highlights against
+`resultsQuery` (the term that produced the shown results). During the 300 ms debounce + network window the
+displayed results are the PREVIOUS query's; washing them against the live input highlights the wrong
+substring or nothing. Two lessons: (1) **a slice that adds a pure SSOT isn't finished when the SSOT is
+correct — check what QUERY/INPUT the call site feeds it.** The bug lived entirely at the call site, not in
+the tested pure function. (2) **A live-input field and a "what produced the current view" field are two
+different things**; conflating them is the same class as the Prisme "which term produced this?" and the
+`resultsQuery`/`searchText` split iOS keeps deliberately. RED-proof for a snapshot field: assert it stays
+on the OLD value while the live field has already moved (a mirror-of-live impl fails exactly that test).
+
+## 2026-08-31 — the session's bootstrap branch can lag `main`; read tracking from `origin/main`, not the checkout
+This run booted on a `dev`-based branch whose `apps/android/tasks/*` were behind `main` — several android
+slices (#4506/#4512/#4533/#4539/#4549) had already merged to `main` after the dev fork, and their pure
+SSOTs (`highlightedSegments`, `HighlightSegment`) simply weren't in the checkout (a `grep` for them came up
+empty and nearly sent me re-implementing a twin). The android routine merges to `main`; `main` is the
+authoritative tracking. **Always `git fetch origin main` and read PROGRESS/feature-parity from
+`origin/main` (and branch the slice off `origin/main`) rather than trusting the checked-out branch's copy.**
+
+## 2026-08-31 — "Rendered in the result rows" is a two-part slice: the DECISION is pure, the WASH is glue (slice `global-search-result-highlight`)
+feature-parity §N listed "query highlighting rendered in the RESULT rows" as one open item. It is really two
+things at two altitudes, and only one of them is a test target:
+- The DECISION — *which* substrings of the plain content match the (accent/case-folded) query — is pure and
+  already had an SSOT (`MessageTextParser.highlightRanges`). What was missing for a plain-text row was the
+  SPLIT of the content into alternating highlighted/plain runs. I added `highlightedSegments(text, term)`
+  that REUSES `highlightRanges` (loops its ranges, fills the gaps) rather than re-scanning — so there is no
+  second search implementation to drift (dimension 11). This is the whole test surface: 12 behavioural tests,
+  including the load-bearing invariant that the runs reassemble to the original text (catches any off-by-one
+  in the gap/tail filling that a per-segment assertion alone might miss).
+- The WASH — mapping each run onto an `AnnotatedString` span — is Compose glue (exempt). Keep it a trivial
+  `if (highlighted) withStyle(background) else append`, no decisions, so the exemption is honest.
+- **Coherence catch worth repeating:** the highlight colour must be the SAME token the chat bubble already
+  uses (`MeeshyPalette.Warning.copy(alpha=0.45f)` in `MessageBubble.kt`), not a fresh one — a term should
+  read identically in the result row and in the conversation it opens. Grepped `highlightColor =` to find the
+  existing wash before picking one.
+- **Parity nuance:** the row renders PLAIN content, not `RichMessageText`. iOS `highlightedText` does the same
+  — markdown/mention/link parsing in a result row would put a tappable link inside a row whose own tap opens
+  the conversation, a dead-end gesture. "Reuse the richest renderer" would have been the wrong instinct here.
+- **RED-proof shape for a segmenter:** mutate the run's `highlighted = true`→`false`. Exactly the match-bearing
+  tests fail; the no-match/boundary tests stay green (they emit no highlighted run) — which simultaneously
+  proves those boundary tests aren't secretly asserting the highlight path.
+
+## 2026-08-31 — Before writing a new pure `:core:model` type, grep for the SSOT it would duplicate (slice `notification-banner-dedup-ssot`)
+The "Next" pointed at the §M notification-toast dedup window as if it were unbuilt. I wrote a fresh pure
+`NotificationDedupWindow` + full test (RED+GREEN both real) before reading §M closely — and found the SSOT
+**already shipped** as `ToastDedupWindow` (2026-08-30). My type was a would-be THIRD copy of the same 2 s
+window: `ToastDedupWindow` (used by the tested-but-orphan `NotificationToastViewModel`), a private
+`LinkedHashMap` inside the LIVE `NotificationBannerViewModel`, and mine. Deleted mine; repointed the slice
+at the real defect (converge the live VM onto the existing SSOT).
+- **Lesson.** A PROGRESS "Next" that says "build X" is a *hypothesis*, not a fact. Before creating any
+  `:core:model` value type, `grep -rl "<concept>Window\|<concept>Cache\|<concept>Policy"` across
+  `core/model` **and** the `:feature` VMs. A pure type that already has a consumer is the SSOT; re-deriving
+  it is the divergent-twin anti-pattern the root CLAUDE.md forbids (dimension 11).
+- **Second, sharper lesson — count the orchestrators, not the building blocks.** The building block was
+  single (`ToastDedupWindow`); the *orchestrators around it* had silently forked into two whole
+  ViewModel+Host pairs (`NotificationToast*` orphan, `NotificationBanner*` live) wrapping the SAME
+  `MeeshyNotificationToast` atom off the SAME socket seam. "The pure core is SSOT" did not make the feature
+  SSOT. When two slices each add "the glue that finally makes X real," suspect a twin — grep for every VM
+  that collects the same socket flow (`notificationReceived`) before adding a third.
+- **Mechanical note.** Reusing an existing Hilt-bound seam (`NotificationToastClock`) needs NO new module:
+  add the ctor param, and `hiltViewModel()` call sites don't change. That made the untested live VM
+  test-pinnable (clock + socket fakes) at zero wiring cost — the same harness as `NotificationToastViewModelTest`.
+
+## 2026-08-31 — RED-prove a guard by mutating the OUTERMOST arm, not the threshold (slice `video-dismiss-watch-report`)
+`VideoDismissWatchReport.shouldReport` has two arms: a duration guard (`complete || watched >= 3`) then the
+detachment gate (`return playerStillHoldsAttachment`). The #3908 defect lives entirely in the SECOND arm — a
+detached player must stay silent even for a completed, hours-long watch. So the RED mutation that proves the
+slice is `return playerStillHoldsAttachment` → `return true` (the pre-#3908 form, which read the player
+unconditionally): it fails exactly the three detached-silence tests and NOTHING else, pinning the guard to its
+one job. Mutating the threshold instead would only prove the duration arm, which iOS already had. Lesson: when a
+pure decision layers a NEW gate on top of an existing one, the RED proof belongs on the NEW gate — pick the
+mutation that collapses precisely the behaviour the slice exists to add, and confirm the failing-test SET is the
+detachment cases, not a superset. Same shape as the root §261 "a rank witness fires on a non-first rank".
+
+## 2026-08-30 — a behaviour test can't isolate a REDUNDANT guard, and that's correct (slice `notification-toast-orchestrator`)
+The toast VM cancels the pending 7 s dismiss when a newer toast appears (`dismissJob?.cancel()`, iOS parity)
+AND the dismiss body re-checks `_currentToast.value?.id == notification.id` before clearing. I tried to
+RED-prove the cancel by deleting it — the suite stayed GREEN, because the id-guard ALREADY protects the
+user-visible behaviour (an older toast's timer never dismisses a newer toast). That's not a missing test: it's
+proof the cancel is a resource-hygiene optimisation, not a correctness mechanism, so a *behaviour* test rightly
+can't distinguish the two. Lesson: when a mutation doesn't turn a test red, first ask whether the mutated line
+is redundant to the behaviour before "strengthening" the test to catch it — asserting the cancel directly would
+be testing the implementation, which the rubric forbids. I renamed the test to
+`anOlderToastsTimerDoesNotDismissANewerToast` (what it proves) and RED-proved the two REAL behaviours instead:
+the VM dedup (`isDuplicate`→`false` fails `aDuplicateDelivery…`) and the auto-dismiss (guard→`false` fails
+`aShownToastAutoDismisses…`), plus the pure `ToastDedupWindow` boundary (`<`→`<=` fails the TTL tests).
+
+## 2026-08-30 — three orphan pure §M blocks were waiting for ONE orchestrator (slice `notification-toast-orchestrator`)
+`NotificationToastPolicy`, `NotificationTypeToggle` and the `MeeshyNotificationToast` atom were each built by a
+prior slice and merged with ZERO callers — the routine's incremental §M cadence (pure core now, wiring later).
+The honest "make it real" slice is the ViewModel that composes all three off the socket seam; it clears the
+orphan debt on the policy in one move. Grep `NotificationToastPolicy`/`MeeshyNotificationToast` for callers
+before adding a fourth pure block — if the third is still uncalled, wire it instead of stacking a fourth.
+
+## 2026-08-30 — Adding a REQUIRED field to a `@Serializable` wire body breaks its "every key present" decode fixtures (slice `notification-prefs-calls-friend-content`)
+`NotificationPreferenceSyncBody` fields are non-nullable with NO Kotlin defaults (a wire contract carries every
+key), so adding `callsEnabled`/`friendContentEnabled` to the data class made `kotlinx.serialization` throw
+`MissingFieldException` on any test JSON fixture that predated them — here `PreferenceSyncBodyReadProjectionTest`'s
+`notificationResponse` (documented "every key present"). The `NotificationPreferenceSyncBodyTest` `from`-projection
+tests did NOT break (they build the body from a `UserNotificationPreferences`, never decode raw JSON), which is
+why the first `check` only surfaced the two decode tests. **Lesson: when you add a field to a `@Serializable` sync
+body, grep the test tree for `decodeFromString<ThatBody>` / raw JSON fixtures with its sibling keys BEFORE running
+the gate** — the round-trip-from-model tests will pass and hide the fixture gap. Fixing the fixture is a
+correction, not a weakening: a real gateway response DOES carry the new key, so I set it to a value (`false`) that
+overrides the local `true` default and STRENGTHENED the witness (`assertThat(next.callsEnabled).isFalse()`).
+
+## 2026-08-30 — `UserNotificationPreferences()` is NOT "all on" (slice `notification-toast-per-type-gate`)
+Two per-type booleans default to `false` in the model: `memberLeftEnabled` and `commentLikeEnabled`
+(`Preferences.kt`). A test fixture named `allOn = UserNotificationPreferences()` therefore lies — and the
+RED run caught it: `everyTypeIsAllowedWhenAllTogglesAreOn` failed at the `member_left`/`comment_like` types
+because their (correctly-mapped) toggle was off by default, not because the production mapping was wrong. The
+fix is in the FIXTURE (`copy(memberLeftEnabled = true, commentLikeEnabled = true)`), not the code. Lesson:
+when a sweep test asserts "every X is true under the default block", first check the default block actually
+sets every relevant field true — a data-class default is a silent third state between "on" and "the test's
+mental model". This is also why the toast policy's `decide_blocksWhenThisTypesPerTypeToggleIsOff` uses
+`member_left` with the bare default block: it's the one type that's blocked *without* having to flip anything.
+
+## 2026-08-30 — the per-type toggle gate keys on the WIRE string, not an enum (slice `notification-toast-per-type-gate`)
+iOS `isTypeEnabled` switches over the decoded `MeeshyNotificationType`; the caller does `rawValue ?? .system`.
+Android has no such enum and doesn't need one — `NotificationTypeToggle.isEnabled(type: String, prefs)` keys
+directly on the raw wire string (both `new_message` and legacy `NEW_MESSAGE`) and reuses the existing
+`NotificationTypeVocabulary.canonical` (unknown → `"system"`) for the exact same `?? .system` collapse. The
+toggle grouping is genuinely its OWN SSOT — it does NOT match the 11-chip filter grouping (`STORY_REPLY` sits
+under the SOCIAL chip but toggles `storyReactionEnabled`; `comment_reaction` under REACTIONS-adjacent but
+toggles `commentLikeEnabled`; `STATUS_UPDATE` under CONTACTS chip but is toggle-less). Don't try to reuse
+`NotificationFilterCategory.DEFAULT_MATCHING` as the toggle map — different question, different answer. The
+completeness guard is the all-off sweep over `KNOWN_TYPES`: any wire type not mapped (and not in the
+always-on set) surfaces as an assertion failure, so a future wire type can't silently fall through.
+
+## 2026-08-30 — a field CONSUMED for one purpose is not WIRED for another (slice `chat-system-notice`)
+Android already carried `Message.isSystemMessage` (`messageSource == "system"`) and had ported the pure
+`BubbleRenderKind`, so the box looked "done at the model layer". But the flag was read in exactly ONE place —
+`MessageGrouping` (a system message never groups) — and `BubbleRenderKind.resolve` had no `isSystem` param at
+all: a join/leave/legacy-summary row fell through to the standard bubble and rendered SIGNED by its author,
+the precise defect iOS's `case .system` (checked FIRST) exists to prevent. **A flag being decoded AND used
+somewhere does not mean it reaches the surface that should branch on it.** The grep that catches this is not
+"does the model have the flag?" but "does the RENDER decision read it?" — the same "grep the consumer, not the
+block" reflex as the ThumbHash cold-load miss (2026-08-29), applied to a boolean instead of a painter. When a
+render-kind SSOT enumerates its arms (Standard/Deleted/Burned/EphemeralExpired), ask which iOS kinds it is
+MISSING before trusting it — `System` was simply absent, and nothing rougissait because the fallthrough
+compiled and rendered *a* bubble.
+
+## 2026-08-30 — port the PRECEDENCE, not just the arm; a witness must fire on a NON-first rank
+iOS resolves `.system` BEFORE `.deleted`/`.burned`/the ephemeral collapse. Adding `Kind.System` is worthless
+if it sits last in the `when` — the interesting behaviour is that a system message that is ALSO deleted /
+view-once-consumed / expired still renders as a notice. So the RED tests assert exactly those collisions
+(system+deleted→System, system+burned→System, system+expired→System), never just "system→System" (which a
+last-place arm would also pass). Same shape as the root CLAUDE.md §261 lesson (a rank witness is written on a
+rank OTHER than the first): here the witness is written on the *conflict*, where a wrong precedence would
+diverge, not on the trivial happy path where every ordering agrees.
+
+## 2026-08-30 — the local gate catches a missing test-file import that the core-only pre-run misses (slice `notification-center-category-filter`)
+A per-module test run (`:core:model:testDebugUnitTest --tests …`) green-lit the pure model, but the FULL
+`assembleDebug testDebugUnitTest` gate then failed on `:feature:notifications:compileDebugUnitTestKotlin` with
+`Unresolved reference 'NotificationFilterCategory'` — the new symbol was used in `NotificationsViewModelTest.kt`
+without its `import me.meeshy.sdk.model.NotificationFilterCategory`. **Lesson: when a slice adds a new `:core:model`
+type AND consumes it from a `:feature` test, a narrow single-module test run cannot prove the feature module; only
+the full multi-module gate compiles the feature test source.** Always run the full `meeshy.sh check` (or at least
+`:feature:<mod>:testDebugUnitTest`) before claiming green — and add the import at the same moment you first
+reference a cross-module symbol in a test, exactly as you would in production code. Cheap catch here (one line), but
+it would have been a red CI on the PR if pushed unverified.
+
+## 2026-08-30 — the `android-37 → android-37.0` symlink DID resolve this run; keep bootstrapping before assuming it can't (slice `global-search-query-cache`)
+The immediately-prior note (below) reported AGP could not resolve `compileSdk = 37` even via the ROUTINE's
+documented `android-37 → android-37.0` symlink. **This run the symlink recipe worked**: install
+`platforms;android-37.0` + `platforms;android-35` + `build-tools;35.0.0` + `platform-tools`, symlink
+`android-37 → android-37.0`, and `assembleDebug` + all-module `testDebugUnitTest` built GREEN (973 tasks, 0
+failed). So the failure below was environment- or revision-specific, not a permanent property of `compileSdk = 37`.
+**Lesson: always attempt the full SDK bootstrap first** — the local Gradle gate is the strongest verification and
+it may well work; only fall back to the embeddable-kotlinc pure-logic harness (still handy for a fast RED-mutation
+check) when the bootstrap actually fails. Don't pre-emptively skip the local gate on the strength of a one-day-old
+note.
+
+## 2026-08-30 — a pure cache is a VALUE, the clock and the socket are the caller's (slice `global-search-query-cache`)
+Porting iOS's in-ViewModel `messageQueryCache` (a mutated array + `Date()` + Combine socket sinks) to Android, the
+clean split is: the cache is a pure immutable `:core:model` value type that takes `nowMillis: Long` as a PARAMETER
+and knows nothing of clocks, sockets or coroutines; the ViewModel supplies `CacheClock.nowMillis()` at the call
+site and owns the socket subscriptions that call `invalidate()`. This keeps EVERY cache branch JVM-testable with a
+plain `Long` (TTL boundary, eviction, blank-key no-op) and keeps the "when" (debounce, clock, socket) in the
+orchestration layer where it belongs (SDK-purity grain). Two design choices worth repeating: (1) `get` is a PURE
+read — an expired entry is a MISS but is NOT evicted on read (eviction happens at `put` via capacity), so a test can
+assert `get` never changes `size`; iOS evicts-on-read by mutating, which a pure value type can't and shouldn't do.
+(2) A no-op returns `this` (blank-key `put`, `invalidate` on empty), letting a test pin inertness with `assertSame`.
+For the ViewModel's socket-invalidation tests, reuse the established `ConversationListViewModelTest` pattern:
+`mockk<MessageSocketManager>` stubbing only the two flows the VM collects, backed by real `MutableSharedFlow`s you
+`emit` into after an `advanceUntilIdle` (so the init collector is subscribed before the emit — a no-replay
+SharedFlow drops anything emitted before subscription). A controllable `CacheClock` fake (a `var` the override
+returns) makes the TTL-expiry path testable without sleeping. Also: a private-constructor `data class` needs
+`@ConsistentCopyVisibility` in this module (precedent `UserCategoryCatalog`) or kotlinc warns about `copy()`
+visibility.
+
+## 2026-08-30 — AGP 8.13 + `compileSdk = 37` can't resolve locally; the symlink recipe no longer holds (slice `search-accent-fold-highlight`)
+`dl.google.com` was reachable, but the ONLY publishable API-37 platform is the preview `platforms;android-37.0`,
+and AGP 8.13 demands target hash `android-37`. That hash is never satisfied — reproduced on (a) a pristine
+`android-37.0`, (b) the ROUTINE's documented `android-37 → android-37.0` symlink, and (c) a fully-normalized COPY
+where `source.properties` ApiLevel, `package.xml` `<api-level>`/path id, and `build.prop` `sdk_full` were all
+forced to `37`. The copy even registered as `platforms;android-37` in AGP's `--info` output, yet
+`Failed to find target with hash string 'android-37'` persisted (AGP builds the hash from the AndroidVersion it
+constructs, not the package id). **So the symlink line in `ROUTINE.md` §Environment recipe is stale for this
+platform revision — don't burn a run chasing it.** When you hit this: don't treat it as `dl.google.com`-denied
+and don't merge on faith. De-risk the PURE logic instead — copy the exact production functions into a standalone
+`.kt`, compile with the embeddable compiler already on disk (`java -cp /opt/gradle-*/lib/'*'
+org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -cp <kotlin-stdlib.jar> Verify.kt -d out`, run
+`java -cp "out:<stdlib>" VerifyKt`), and run every test assertion in a `main()`. That proves the algorithm; the
+**Android** CI check (which DOES build `compileSdk = 37` — prior slices merged green there) is then the real gate.
+A slice verified this way is a PASS only once its Android CI check is green.
+
+## 2026-08-30 — a highlight that folds accents must map ranges back to ORIGINAL indices (slice `search-accent-fold-highlight`)
+Making `highlightRanges` accent-insensitive (iOS `.diacriticInsensitive` parity) is not just "fold both sides then
+`indexOf`": NFD-decomposing + dropping combining marks CHANGES the string length, so a match position in folded
+space is the WRONG index into the original text. The fix is `foldWithMap`: fold per source char and record, for
+each folded char, the source index it came from. A match `[a, b)` in folded space → original range
+`sourceIndexOf[a] until (if b<len sourceIndexOf[b] else text.length)`. That end rule falls out for free: a
+combining mark contributes zero folded chars, so the next folded char's source index sits PAST the mark, extending
+the highlight over the whole decomposed grapheme. Build accented test literals from explicit `\u` code points
+(é = `é` precomposed vs `é` decomposed) — a typed glyph silently normalizes and the decomposed case
+never actually exercises the mark-skipping branch.
+
+## 2026-08-30 — a wire model belongs in the layer that carries the wire, not the layer that first drew it (slice `story-drawing-strokes-wire`)
+The prior slice placed the drawing wire types (`StoryDrawingStroke` &c.) in `:feature:stories` because the
+board reducer was the first consumer. But the SAME type is the payload of `StoryEffects.drawingStrokes`, which
+lives in `:core:model` — and a `:core:model` field cannot reference a `:feature:*` type (dependency points the
+other way). So the wire could not be wired at all until the model was promoted to `:core:model`. iOS had it
+right from the start: `StoryDrawingStroke` sits in `MeeshySDK/Models/` (SDK core), shared by both its
+`StoryEffects` wire and its editor ViewModel — ONE type, no twin. **When a value type is BOTH an editor's
+edit-state AND a field's wire payload, it belongs in the shared/core layer; the feature reducer imports it.**
+The tell that a placement is wrong: you reach to add a serialized field somewhere and the type you need is
+"below" you in the module graph. Promote the type (one move + an import re-point, behaviour identical), don't
+mint a second one — a structurally-identical twin across layers is the divergence CLAUDE.md forbids.
+
+Corollary on `createdAt`: the board slice dropped it as "the reducer never reads it → clock-free". True for the
+REDUCER, but the field is also a wire payload, and iOS's decoder REQUIRES the key. Dropping it would make an
+Android v1 re-serialize emit a stroke iOS then fails to decode. So it came back as an optional `Double?`
+PASSTHROUGH — the reducer still never reads it, but the wire round-trips whole. **"The reducer doesn't read
+it" justifies not branching on a field; it does not justify dropping it from a type that also serializes.**
+
+## 2026-08-29 — an undo/redo reducer's ONE invariant is "what repopulates the redo stack", and every op is judged by it (slice `story-drawing-board`)
+Porting iOS's drawing undo/redo (`StoryComposerViewModel+DrawingEditing`) to a pure immutable
+`StoryDrawingBoard`, the whole correctness story reduces to a single rule: **`redoStack` is populated ONLY by
+`undo`; every other user action decides whether it invalidates redo.** Enumerate the ops against that rule and
+the branches fall out — `commit`/`delete` clear redo (a new action makes "redo forward" caduc); `redo` consumes
+its own stack (LIFO); a property tweak (recolour/resize/smooth) is NOT a new stroke so it leaves redo intact;
+`clear` nukes both. The single RED mutation that proves the suite is dropping `commit`'s `redoStack = emptyList()`
+— it fails EXACTLY the redo-invalidation test, nothing else, because that one line IS the invariant.
+Two deliberate improvements over iOS worth keeping as a pattern for ported reducers: (1) a no-op returns the SAME
+instance (`return this`) rather than a fresh copy — cheaper, and lets a test assert `op(x) == x` to pin
+inertness; (2) `delete` of an ABSENT id is a genuine no-op that keeps redo, whereas iOS's `deleteStroke` calls
+`removeAll` then clears redo unconditionally (so deleting a non-existent stroke silently discarded the redo
+history). Faithful parity is the default, but a user-invisible iOS quirk that throws away state is worth
+diverging from — document the divergence in the doc-comment so the next reader knows it's chosen, not missed.
+Also: omit iOS's `createdAt: Date` from a ported value type when the reducer never reads it (draw order is the
+list order) — it keeps the type pure and its tests clock-free with zero behavioural loss.
+
+## 2026-08-29 — porting an inlined-constant formula: pin the boundary behaviourally, and give the "fold two cores" clause a real seam (slice `call-low-light-boost`)
+Two reusable moves from porting iOS `applyLowLightBoost`:
+- **Boundary tests must not depend on float-exactness.** iOS gates on `normalizedBrightness < 0.3` where
+  `normalized = avg/255`. Testing the exact boundary (`avg = 76.5`) is fragile — `76.5f/255f` may land on
+  either side of `0.3f` (neither is exactly representable). Pin the behaviour with values *clearly* on each
+  side instead: `77f` (≈0.302 → no boost) and `76f` (≈0.298 → small boost). The threshold is proven without
+  ever asserting a float equality on the boundary itself.
+- **Avoid tautology on a ported formula by anchoring concrete outputs, not re-deriving it.** Assert the two
+  fixed points — pitch-black → full strength (EV 1.5, saturation 1.2, …) and bright → `null` — plus monotonic
+  relations (darker boosts more), never `expected = boostFactor * gain` recomputed in the test.
+- **When the parity note says "fold core A into core B", ship the fold as a real one-call seam.** Here
+  `planForFrame(yPlane,…) = plan(FrameLuminance.averageOfYPlane(…))`. It turns two cores that existed apart
+  into a composition the actuator calls in one line, and a degenerate geometry (FrameLuminance → null) flows
+  through to "no boost" for free — the clause becomes code, not a comment.
+
+## 2026-08-29 — SDK bootstrap for compileSdk 37 needs `platforms;android-35` + `build-tools;35.0.0` ALONGSIDE `android-37.0` (slice `story-publish-queue-media-only`)
+Installing only `platforms;android-37.0` (the sole published API-37 platform — no bare `android-37` exists) is
+NOT enough: AGP 8.13.0 resolves `compileSdk = 37` to the target hash `android-37`, and Gradle dies with
+`Failed to find target with hash string 'android-37' in: …` at task-dependency resolution — a red herring that
+looks like a missing platform. Installing `platforms;android-35` + `build-tools;35.0.0` alongside android-37.0
+(the exact package set the last green run used) unblocks resolution and the full gate goes green. So the fresh-
+container recipe is: `cmdline-tools` + accept licences + `sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
+"platform-tools" "platforms;android-35" "build-tools;35.0.0"`. Also: prefer a plain (incremental) rerun for the
+mutation-proof, NOT `--rerun-tasks` — the latter recompiles the whole dependency chain (~2 min) instead of just
+re-running the one test task.
+
+## 2026-08-29 — the outbox decode gate is a Prisme-of-content question: "what does this publish CARRY?", not "does it have TEXT?" (slice `story-publish-queue-media-only`)
+`StoryRepository.decodeStoryPublish` gated on non-blank text (`content?.takeIf { isNotBlank } ?: return null`),
+so a media-only (RAW background) story — `content = null`, `mediaIds = [...]`, exactly what the composer emits —
+decoded to null and vanished from BOTH the optimistic ring AND the failure strip: a queued image/video story
+that FAILED was lost silently, with no retry/discard. The block was fine for text and invisible for media
+because media never composes a caption. **When a decoder/projection gates on ONE payload dimension (text), ask
+what ELSE the row can carry (media, and later a local URI/thumbnail) that the gate silently drops** — the same
+"what travels beside the text?" reflex the gateway Prisme lessons (root CLAUDE.md §124/125) apply to
+notifications, here applied to the outbox. The fix widened the gate to "non-blank text OR ≥1 non-blank media id"
+and made `content` nullable on both building blocks; the failure strip's caption became a localised media
+summary so a media-only row is never a blank line.
+
+## 2026-08-29 — a model field + a decoder + a painter all shipping does NOT mean a surface consumes them (slice `story-slide-thumbhash-placeholder`)
+The ThumbHash blur placeholder was "half-built and invisible": the field was on the model
+(`StoryEffects.thumbHash`, `FeedMedia.thumbHash`), the decoder (`ThumbHash.decodeBase64`) and the Compose
+painter (`rememberThumbHashPainter`) were ported a month ago AND already wired in the feed — yet the story
+viewer's background `AsyncImage` still painted black on cold load, because nobody had passed the hash to it.
+A feature-parity box that reads "ThumbHash decoder shipped" is about the BUILDING BLOCK, not every SURFACE
+that should use it. **Grep the consumer, not the block:** when a placeholder/decoder/resolver exists, search
+every `AsyncImage`/image surface for whether it actually passes the value — an unconsumed capability is a
+cold-load flash the user sees, exactly the instant-app gap (dim. 2/4/8) the block was meant to close. The
+cheap win is wiring the last mile, and it is easy to miss precisely because the parts all look "done".
+
+## 2026-08-29 — when the LAST case a gate guarded goes away, RETIRE the gate; don't leave it as a constant-`false` branch (slice `story-draft-persist-sticker-elements`)
+The story-draft fidelity gate (`deckHasRichContent`) existed to catch content the primitive snapshot could
+not yet represent, purging a stale draft rather than restoring lossily. Six slices lifted its dimensions one
+at a time (transform, filter, duration, background, text elements, stickers); after the last one the gate
+would have been `deck.slides.any { it.stickers.isNotEmpty() }` → wired to a snapshot that now *carries*
+stickers → constant `false`. The temptation is to keep the (now-dead) function and its two call sites "just in
+case". Resisted: a branch that can never be true is a lie about the code's shape — it tells the next reader a
+purge path still exists. So the function, its `resolve` first arm, and its `deckIsPristine` call were all
+removed; `deckIsPristine`'s intent (a silently-added sticker still counts as touched) moved to an explicit
+`it.stickers.isEmpty()`. **Retiring a gate is a behaviour change and needs the same TDD care as adding one**:
+the `resolve` purge-on-rich test became a Save test, the VM does-not-save test became a saves test, and the
+six `deckHasRichContent is …` unit tests were deleted WITH the function — legitimate because each dimension's
+"is persistable" behaviour is already covered by its own Save + round-trip tests, so no behaviour coverage was
+lost (only tests of a deleted symbol). Check that equivalence before deleting a test, every time.
+
+## 2026-08-29 — a durable "object-graph" snapshot can stay primitive-only by riding EXISTING wire SSOTs, not re-spelling them (slice `story-draft-persist-text-elements`)
+The first object-graph dimension of the story fidelity gate (on-canvas `StoryTextElement`, ~13 styled
+fields incl. a sealed `StoryTextBackground` and three enums) looked like it needed a polymorphic
+serialiser. It didn't. Two reuse moves kept the durable `StoryDraftTextElementSnapshot` a flat
+primitive bag:
+- **A sealed value that already projects to a `@Serializable` wire type rides as THAT type — don't
+  invent `{type,hex,radius}` fields.** `StoryTextBackground` already had `toStyleWire(): StoryTextBackgroundStyle?`
+  and `resolve(style, textBg)` as the single source for its tagged-union encoding (the gateway/reader
+  path). The snapshot stores `background: StoryTextBackgroundStyle?` and maps through those exact two
+  functions, so the tagged union is spelled in ONE place and the round-trip is provably the reader's own.
+- **An enum defined in a DOWNSTREAM module (`:feature:stories`) rides a `:core:model` snapshot as its
+  Kotlin `.name` string**, resolved back with `entries.firstOrNull { it.name == s } ?: default`. This
+  keeps the durable-model module free of the composer's enums (no upward dependency) AND is tolerant by
+  construction — an unknown/blank name from a legacy or corrupt blob decays to the element's own default,
+  exactly like every other story restore decoder. `color.ifBlank { DEFAULT_COLOR }` closes the same gap
+  for the one free-form string field.
+- **Same decouple-the-gate discipline as the four scalar dimensions before it**: `deckHasRichContent`
+  dropped its `elements` arm (now representable, gate holds only `stickers`), `deckIsPristine` gained an
+  explicit `elements.isEmpty()` so a silently-added element still counts as touched. And `hasContent`
+  (worth-restoring) counts a **publishable** element only — a blank on-canvas text box carries nothing to
+  restore, matching iOS's "a text-element-only slide publishes iff the text is non-blank".
+- **One flip, one retarget, both genuine behaviour changes not weakenings**: the old `a draft with a text
+  element is not persisted` autosave test now asserts `Save` (the whole point of the slice); the VM
+  rich-content purge test retargeted from a text element to a still-gated sticker so it keeps proving the
+  gate for what's still gated. Mutation-RED-proven three ways (gate arm, pristine guard, hasContent arm).
+
+## 2026-08-27 — a "fidelity gate" over a field that's actually primitive was never a real gate; decouple the gate from pristine before lifting one dimension (slice `story-draft-persist-canvas-transform`)
+The story autosave slice installed a fidelity gate: any slide carrying rich on-canvas content
+(elements/stickers/filter/background/duration/**transform**) was treated as "not persistable" and its
+draft purged rather than restored lossily. But the canvas transform is three floats — trivially
+serialisable. It was in the gate only because the autosave slice hadn't *reached* it, not because it
+couldn't be represented. Lifting it is a textbook thin slice: a nullable primitive snapshot + two mappers.
+- **`deckHasRichContent` (the persistence gate) and `deckIsPristine` (untouched-detection) shared one
+  predicate — decouple them before removing a field from the gate.** Pristine originally = "no rich
+  content" and rich content INCLUDED a non-identity transform, so a silently panned empty canvas counted
+  as touched (a restore wouldn't clobber it). Dropping transform from `deckHasRichContent` (now
+  representable) would have SILENTLY widened pristine to ignore a panned canvas. Fix: `deckIsPristine`
+  gained its own explicit `slides.all { it.transform.isIdentity }`. **When you pull a field out of a
+  predicate that two behaviours share, ask which behaviours still need it and give them their own check.**
+- **A restored-fidelity field is not restore-TRIGGERING content — keep `hasContent`/`isWorthRestoring`
+  unchanged.** A pan/zoom with no media to frame is meaningless; the transform rides along with content
+  (text or media) that already makes the draft worth restoring. So `StoryDraftSlideSnapshot.hasContent`
+  deliberately still checks only text/media. A test asserts a transform-only snapshot is NOT worth
+  restoring — the witness that fidelity ≠ content.
+- **`null` = identity keeps the snapshot thin and legacy-safe.** The transform snapshot is nullable and
+  emitted only when non-identity, so a fresh slide and a pre-slice persisted blob both decode to `null`
+  without ever carrying the default `(1,0,0)` triple — no schema-version bump, no migration.
+- **Flipping ONE assertion to the new correct verdict is a behaviour change, not a weakened test.** The
+  pre-existing `deckHasRichContent is true for a non-identity canvas transform` became `... is false ...`.
+  The reviewer rule "never weaken a test" is about relaxing/deleting assertions to dodge a failure; here
+  the behaviour itself changed and the assertion asserts the new truth. The mutation proof (re-add the
+  transform to the gate → exactly the 3 persistence tests go red) is what proves it's still load-bearing.
+
+## 2026-08-26 — a predicted-unreachable slice becomes a clean pure-core once its seam ships; keep the availability suspend OUT of the pure predicate (slice `story-draft-lost-media-reconcile`)
+The `story-composer-repost-link` NOTES entry (below) had explicitly deferred lost-media detection as
+"unreachable through the public API today — a dangling id can't exist until a draft-RESTORE seam
+exists (restore deck ids from disk WITHOUT their transient in-memory attachments)". That seam shipped
+in `story-composer-draft-autosave`, so this run the slice is a textbook thin vertical: a pure reducer
++ the minimum real wiring.
+- **The pure core takes a SYNC predicate; the impure availability lookup is resolved BEFORE it.**
+  `StoryDraftMediaReconciler.reconcile(snapshot, isAvailable: (String)->Boolean)` stays pure/JVM-total.
+  The VM resolves availability first (a suspend batch over the blob store), collects the surviving ids
+  into a `Set`, then hands the reducer `{ it in availableIds }`. Trying to call a `suspend` blob probe
+  from inside the reducer's predicate would not compile (the lambda is non-suspend) — and would have
+  dragged IO into a unit-pure function. Resolve-then-decide keeps every branch testable off-thread.
+- **Availability is REAL, not a stub — that's what makes the wiring non-orphan.** `OutboxIds.isCmid`
+  (new, the cmid format's own home) classifies a restored id: an offline `cmid_` placeholder resolves
+  against the durable blob store, a server id is available server-side (short-circuits, no probe). The
+  probe is the new cheap `MediaBlobStore.has` → DAO `SELECT EXISTS(...)`, never loading the (multi-MB)
+  bytes just to check presence — an availability sweep over a whole draft costs a boolean per id. A
+  `get()!=null` existence check would have been the perf/memory smell dimension 2/3 flags.
+- **The reducer NEVER drops a slide — it blanks it and reports it.** Removing an emptied slide would
+  risk the deck's ≥1-slide / valid-`selectedId` invariants and shift indices; instead the slide stays
+  blank, its id goes to `recaptureSlideIds`, and the composer prompts a re-capture in place. Cleaner
+  invariants, and the "what to do with an empty slide" product call stays in the caller.
+- **Media loss can empty the WHOLE draft — purge, don't seed a deck of blanks.** After reconcile, if
+  `!snapshot.isWorthRestoring`, `onEnterComposer` clears the store and returns rather than seeding
+  N blank slides (worse than the pristine composer). Same shape as the autosave purge rule, applied
+  post-clean.
+- **Surface the notice through the EXISTING channel.** The composer already renders `errorMessage` in
+  the caption's `supportingText`; a restore that lost media sets `MEDIA_RESTORE_LOST` there — no new
+  Compose surface, no dead-end UI, the notice is a real visible effect (dimension-4 "a control/notice
+  exists if it has an effect"). Made the VM companion `internal` so the message constant is assertable
+  by name from the module's tests instead of duplicating the literal.
+
+## 2026-08-26 — when a feature's model graph is too deep for one thin slice, gate the fidelity instead of faking it (slice `story-composer-draft-autosave`)
+Story-composer draft persistence looked like a single feature but its faithful form is a MULTI-slice effort: the live
+deck graph is deep (sealed `StoryBackgroundValue`/`StoryTextBackground` needing closed-polymorphic serializers, ~12
+nested value types), so annotating it all `@Serializable` — or writing a `StoryEffects`-based reverse map — is far
+past "thin". Two ways to keep the FIRST cut honest and thin:
+- **Persist only what a primitive snapshot represents faithfully** (`{slides:[{id,text,mediaIds}], selectedId,
+  visibility, repostOfId}`) — no deep graph, no polymorphic serializer, a trivially-total round-trip.
+- **Gate the rest, don't drop it silently.** A draft carrying rich on-canvas content is treated as *not yet
+  persistable*: `resolve` purges any stale stored draft and writes nothing, so a restore is NEVER lossy. A partial
+  restore that silently drops the user's stickers/filters would be worse than no restore — the CLAUDE.md "announces a
+  state it doesn't serve" trap (the StoryViewer legacy-text lesson) applies to persistence too. The `[~]` parity
+  marker + a tracked follow-up carry the deferred half; the store+resolver+VM seam the follow-up plugs into ships now.
+- **Reuse the proven SSOT split.** Chat drafts already model this exactly: model in `core:model` (`ConversationDraft`),
+  store in `sdk-core` (`ConversationDraftStore`, `TestDataStores` harness), pure resolver in the feature
+  (`DraftAutosave`). Mirroring it (snapshot/`StoryComposerDraftStore`/`StoryComposerAutosave`) meant zero new DI/test
+  infra to invent — `SdkModule` already had the DataStore+`Json` provider pattern, sdk-core already had `TestDataStores`.
+- **Restore must be pristine-only.** The load is async and can resolve after the first keystroke; gate restore on
+  `deckIsPristine` (single blank slide) so it can never clobber work already begun — iOS `DraftAutosave.restore`'s
+  `!isEditing && currentDraft.isBlank()` rule, ported.
+
+## 2026-08-26 — the repost AUTHOR half is a pure LINK on Android, and a "lost-media" slice is currently unreachable (slice `story-composer-repost-link`)
+Two findings from carving the repost author half:
+- **The author side needs no composer-side badge.** iOS clones a `isLocked` text-object badge into the composer and then
+  must protect it from drag/edit/delete (a brittle, cross-cutting surface). Android already renders repost attribution
+  on the READER (slice `story-viewer-repost-attribution`) from the published story's server-resolved
+  `repostOfId`/`repostAuthorUsername` — so the author side collapses to carrying `repostOfId` onto **every** published
+  slide's `CreateStoryRequest`. The thin slice is: `StoryComposerDraft.repostOfId` + `withRepostOf` (blank→null) +
+  `toCreateStoryRequest` + `publishPlans` per-slide threading + a `onRepostSource` intent, reachable via the viewer's
+  existing options `DropdownMenu` (no new UI surface) and a `story_composer?repostOfId=` optional nav arg. Landing the
+  wiring in the ALREADY-EXERCISED publish path is what keeps the "lost"/link branch testable through the public API.
+- **Why the "Draft lost-media detection" slice was NOT taken this run.** The composer holds media as `deck.mediaIds`
+  resolved against `attachments`/`pendingUploads`. Every public path that adds a deck media id
+  (`applyUploaded`, `queueDurably`) adds its backing attachment/pending in the SAME update, and `onRemoveMedia` drops
+  both together — so a "dangling" id (in the deck, backed by nothing) is **unreachable through the public API today**.
+  A lost-media resolver's core branch therefore can't be driven behaviourally until a draft-RESTORE seam exists (restore
+  deck ids from disk WITHOUT their transient in-memory attachments = the real lost-media scenario). Build the
+  persistence/restore infra FIRST; a lost-media prompt shipped before it would be orphan UI with untestable logic.
+
+## 2026-08-26 — a reader-side "locked badge" slice is a THREE-LAYER port, and each layer needs its own test (slice `story-viewer-repost-attribution`)
+Porting iOS's repost attribution badge (repost glyph + `@handle` after the author's name) looked like "add a Composable
+if-block", but a faithful port touched three layers, each with a distinct failure mode a test had to pin:
+- **Model + wire**: iOS reads `repostAuthorUsername ?? repostAuthorName`; Android's `StoryItem` had only `repostAuthorName`.
+  Added the optional `repostAuthorUsername` wire field AND populated it in the `ApiPost → StoryItem` mapper
+  (`StoryGrouping.toStoryItem`) from `repostOf.author.username` — a mapper is where a "missing" wire datum actually enters,
+  so that's where the mapping test lives (`StoryGroupingTest`: repost→username, non-repost→nulls, blank-username→name).
+- **Pure decision**: `StoryRepostAttribution.resolve` returns `null` (not a repost → no glyph) vs `StoryRepostAttribution(handle)`
+  (`handle==null` → glyph only). Chose the first NON-blank of username→name (improves on iOS's `??`, which renders a lone `@`
+  for a present-but-empty username). The gate (`repostOfId.isNullOrBlank()`) is the mutation-critical branch: `if (false)`
+  reddens EXACTLY the 4 non-repost tests, the handle-preference tests staying green.
+- **Glue projection**: the viewer VM resolves it once into `StorySlideView.repostAttribution` at projection time (per-slide,
+  because each slide is its own story and only some are reposts) — proven via the existing `StoryViewerViewModel` harness
+  (`.copy(repostOf = ApiRepostOf(...))` on a wire post → `state.current?.repostAttribution`).
+Lesson: when a "just show a badge" parity gap spans model→mapper→resolver→VM→Compose, the Compose layer is the exempt tip;
+the value is in testing the mapper (where the datum enters) and the resolver (where the decision lives) SEPARATELY — a single
+VM test would pass even if the mapper silently dropped the username.
+
+## 2026-08-26 — the scope gate must diff against `origin/main`, not the local `main` ref (slice `story-element-context-menu`)
+Branching with `git checkout -B <slice> origin/main` bases the slice on the freshly-fetched remote, but the LOCAL `main`
+ref stays wherever it last was — here dozens of commits behind. So `git diff main...HEAD` (or `git diff --cached main`)
+listed `.github/workflows/*`, `CLAUDE.md`, and a pile of `core/model` files that this slice never touched: they are simply
+NEWER on `origin/main` than on the stale local ref, and the diff shows every commit the local ref is missing as if the
+slice deleted/reverted them. That would fail the "apps/android only" merge gate for a phantom reason. **Always verify scope
+with `git diff --cached --name-only origin/main`** (the real base), or `git fetch origin main && git branch -f main origin/main`
+first. The clean run showed the true 9-file `apps/android`-only diff. Cheap lesson, but it turns a 3-second panic into a
+non-event next time.
+
+## 2026-08-26 — a context-menu resolver earns behavioural tests by being tied to the reducer it fronts (slice `story-element-context-menu`)
+A "which menu rows are enabled?" resolver is trivially tautology-bait: `assertThat(resolve(backElement).sendToBack.enabled).isFalse()`
+just restates the code. The non-tautological form asserts the resolver AGREES WITH THE REDUCER it gates:
+`assertThat(menu.isEnabled(action)).isEqualTo(deck.reorderTextElement(id, action.zOrder!!) !== deck)` — the row is enabled
+exactly when the op is not inert, proven against the real `reorderTextElement`/`duplicateTextElement` inert-ness rather than
+against a hand-set expectation. This also future-proofs the menu: if the reducer's inert conditions ever change, the property
+test fails until the resolver follows. Keep the enum→op mapping (`StoryElementAction.zOrder`) a SINGLE projection so the menu
+and the reducer physically cannot drift, and mutation-prove it (force every row `enabled = true` → only the position/cap
+behavioural tests redden, never the shape/mapping ones).
+
+## 2026-08-26 — closing an author→reader loop: the pure conversion is the INVERSE of the reader's, and the "missing" datum is captured where it's uniquely available (slice `story-composer-background-image-transform`)
+The reader slice below made Android HONOUR a background image's `x`/`y`/`scale` framing; this slice made the composer
+WRITE it, so a story an Android author frames renders framed everywhere (its own reader included). Three reusable moves:
+
+- **Author-side conversion is the reader-side conversion run backwards, and a round-trip test proves it.** The reader
+  reads `offsetFraction = x - 0.5` (then × canvas size); the composer writes `x = 0.5 + offsetX / canvasWidth`. Rather
+  than eyeball the algebra, one test feeds a `StoryCanvasTransform` through `toBackgroundFraming` → a `StoryMediaObject`
+  → the reader's `StoryBackgroundObjectTransform.from` and asserts the offset survives. That single test is the loop's
+  guarantee; it caught nothing here only because the two halves were written to match — which is exactly what it exists
+  to keep true as either half changes.
+- **The "wrinkle" (a datum not retained in the VM) dissolves once you ask where it is UNIQUELY available.** NOTES flagged
+  "canvas width isn't retained at publish". The fix wasn't a new measurement intent — it was noticing that the ONLY way
+  to produce a non-identity transform is `onCanvasTransform`, which is HANDED the canvas size on every gesture. So the
+  size that produced an offset is always in scope to invert it; capture it there. When a needed value seems missing,
+  look at the one code path that could have created the state that needs it — the value is usually passing through.
+- **Float→Double: divide in Double, don't widen a Float quotient.** `(200f / 1920f).toDouble()` differs from
+  `200.0 / 1920.0` by ~2.5e-9 — enough to redden a 1e-9 test. `offset.toDouble() / size.toDouble()` is exact. When a
+  pure conversion feeds a wire `Double`, do the arithmetic in Double from the start.
+- **A guard the reader doesn't need, the author does: frame only the media the canvas actually SHOWED.** The composer
+  canvas previews (and pans) the slide's FIRST attachment, but the author may designate a DIFFERENT attachment as the
+  background. Projecting the pan onto a differently-designated background would mis-frame an image the author never
+  touched — so `resolveBackgroundFraming` returns IDENTITY unless the designated id IS the first resolved slide media.
+  (Corollary follow-up surfaced, not taken: the canvas SHOULD preview the designated background, not the first media.)
+
+## 2026-08-26 — a background object carries the SAME transform fields as a foreground one but the reader converts them DIFFERENTLY (slice `story-viewer-background-media-transform`)
+The Android viewer drew any background image as a plain `ContentScale.Crop` fill, dropping the pan/zoom framing an
+author put on the background `StoryMediaObject`. The trap was assuming a background's `x`/`y`/`scale` mean what a
+foreground object's do. They do NOT: iOS's `StoryCanvasUIView+Rendering.swift` aspect-FILLS the background as a base,
+then applies `scale` + a pixel offset **FROM CENTRE** `((x-0.5)*W, (y-0.5)*H)` + `rotation` ON TOP, clipped — an
+"Instagram zoom inside the background". A foreground object instead uses `x`/`y` as an anchored POSITION and
+`aspectRatio`/`anchor` to size a discrete box (`StoryMediaLayer`); a background ignores `anchor`/`aspectRatio`
+entirely. So the port is a distinct pure conversion (`StoryBackgroundObjectTransform.from`), not a reuse of the
+foreground projection. Kept the offset as a canvas FRACTION (`x-0.5`) so the Compose `graphicsLayer` multiplies by
+its own measured `size` — resolution-independent, no canvas dims threaded into the VM. Confirmed the split by reading
+iOS first (an Explore subagent) BEFORE porting: the alternative reading (background = aspect-fill only, transform is
+a phantom) would have shipped a no-op — the recurring "don't port a non-functional iOS toggle" trap, avoided here by
+reading the RENDER path, not just the model.
+
+Reader-first is deliberate and has precedent: the colour/gradient background shipped reader-side
+(`story-slide-background-value`) as its OWN slice before composer authoring (`story-composer-slide-background`). This
+slice is the reader half; it is NOT a dead end — it renders framing that iOS/web/backend ALREADY publish and Android
+users view cross-client. The standing authoring debt (the author→reader loop, per the 08-25 note below): the composer
+holds framing as a per-slide `StoryCanvasTransform` in **viewport pixels** (scale + offsetX/Y px), while the wire
+wants **normalised** `x`/`y`. Closing the loop needs a px→fraction conversion (`x = 0.5 + offsetX/canvasWidth`) that
+requires the canvas width at publish — not currently retained in the VM. That is the real wrinkle for the follow-up,
+noted so it is not re-discovered. Video-background framing was scoped OUT (separate player render path) and kept at
+IDENTITY, so no regression to the existing video path.
+
+## 2026-08-25 — an authoring designation must produce the exact wire object the reader ALREADY reads (slice `story-composer-background-media`)
+The Android composer published slide media as a flat `mediaIds` list and emitted **no** `effects.mediaObjects` — so
+the reader's rich background path (`resolveBackgroundMedia` → `firstOrNull { it.isBackground }`, and the
+`StorySlideDuration` `bgVideoDur`/`bgAudioDur` loop-extend) was only ever exercised by RAW-publish/legacy wire
+shapes, never by an Android-composed story, which fell back to "first video else first image". Letting the author
+DESIGNATE the background is therefore not just a bit of state — it only becomes real by producing the one
+`StoryMediaObject { isBackground = true }` the reader already consumes. Two things that make the wire correct rather
+than merely present: (1) the composer holds only a media **id**, but the reader needs a **URL + kind + duration** —
+resolve the id against the uploaded-media the VM already tracks (`resolveBackgroundMedia`), keeping the pure mapping
+(`StoryBackgroundMedia.toMediaObject`) unit-testable and off the upload state; (2) only a **video** background feeds
+the duration branch, so carry duration onto `duration`/`intrinsicDuration` for video and OMIT it for an image —
+otherwise an image would spuriously stretch the slide. Corollary invariant: a "designate one" reducer must also
+**clear the pointer when the pointed-at media is removed** (`removeMedia`), or a stale id survives its media.
+Deferred the AUDIO half honestly — the composer has no audio-track surface yet, so `audioPlayerObjects[].isBackground`
+has nothing to designate; a half-slice that shipped a dead audio toggle would be worse than a scoped one.
+
 ## 2026-08-25 — a reader gate is only half a feature: the author→reader loop, and the `toTextObject` field census (slice `story-composer-element-timing`)
 The prior slice made the reader HONOUR a text element's `startTime`/`duration` window, but nothing on Android could
 WRITE those fields: `StoryTextElement.toTextObject` set `fadeIn`/`fadeOut` yet omitted `startTime`/`duration`, so the
@@ -2093,3 +2801,168 @@ routine forbids. Rule: a realtime-fold slice is only thin when the merged data a
 a surface that displays it. When it doesn't, the fold is blocked on a UI slice (here: add `ApiPostComment.media`
 + a comment audio player), and the cheaper sibling is the next in the same family — `comment:updated` (a full
 in-place row replace, no new model field, existing thread host).
+
+## 2026-08-27 — every NEW per-account store must be enumerated against the teardown seam the same run it ships (slice `story-composer-draft-wipe-on-teardown`)
+`SessionTeardown.wipe()` is the single account-teardown seam (clears Room + category snapshot + chat drafts
++ conversation locks). The `story-composer-draft-autosave` slice added a NEW per-account, non-namespaced
+on-device store (`StoryComposerDraftStore`, a Preferences DataStore) and did NOT add it to `wipe()`, so a
+second account on a shared device inherited the previous account's half-written story (caption + attached
+media + audience). A privacy leak identical in kind to the one `wipe()` was built to prevent — reintroduced
+by a store the seam predates.
+- **Rule: a slice that adds a durable per-account store owes the teardown wire in the SAME slice.** The
+  teardown seam is not "done" — it is an inventory that every new store must join. When adding a DataStore/DAO
+  that holds per-account content (not device-level UX prefs like theme/language/notification), the checklist
+  is: does `SessionTeardown.wipe()` clear it? If not, wiring it is part of that slice, not a follow-up.
+  Device-level UX preference stores stay deliberately un-wiped (mirrors iOS `CacheCoordinator.reset()`).
+- **The mutation witness must SEED the store.** `wipe_removesTheStoryComposerDraft` seeds a real draft then
+  asserts `load()` is null post-wipe — dropping `clear()` reddens it (6 run, 1 failed). The idempotent test's
+  added story assertion seeds NOTHING (empty store => `load()` already null), so it is a regression-completeness
+  check, not a mutation witness — honest to record which of the two actually catches the mutation.
+- **Maven Central 429s can make the full local gate unavailable, exactly like the `dl.google.com` denial.**
+  This run, `repo.maven.apache.org` throttled the container proxy (`429 Too Many Requests`) across many backoff
+  attempts, blocking `:sdk-ui`/`:app` dependency downloads (my diff was `:sdk-core`-only, which compiled and
+  tested GREEN before the wider wave). Handle it the ROUTINE CI-reality way: the targeted module test is the
+  local evidence, and the **Android** CI check (clean ubuntu Maven cache, not this proxy) is the authoritative
+  full gate. A retry-with-backoff loop that greps for `429` and re-runs is the right local tool; do not read a
+  429-truncated `compileKotlin FAILED` (no `e:`/error text, daemon vanished) as a code failure.
+
+## 2026-08-28 — the story-draft fidelity gate's three SCALAR dimensions are now all lifted; what remains is object graphs (slice `story-draft-persist-duration`)
+`story-draft-persist-duration` lifted the third and last scalar dimension of the story-composer autosave
+fidelity gate — the author-pinned `StorySlide.durationSecondsPin: Double?`. It followed the transform and
+filter slices' pattern but was even thinner: no nested `@Serializable` snapshot type was needed (the field
+is already a nullable scalar), so the change was one field on `StoryDraftSlideSnapshot`, two mapper lines,
+and the now-routine decoupled-gate move (drop from `deckHasRichContent`, add the explicit `== null` guard to
+`deckIsPristine`). The pin is restored verbatim — it can only reach the snapshot through `setSelectedDuration`,
+which already clamps to `[2,600]` via `StoryDurationPin.clamp`, so no re-clamp on restore.
+- **The remaining fidelity-gate dimensions are NOT scalars — they want real slices, not one-liners.** With
+  transform/filter/duration done, what's left in `deckHasRichContent` is the two object-list dimensions
+  (`elements: List<StoryTextElement>`, `stickers: List<StoryStickerElement>` → their own mirror snapshots)
+  and the sealed background (`StoryBackgroundValue` → closed-polymorphic or wire-string projection, carrying
+  `backgroundMediaId`/`backgroundLoop` WITH it, never alone). The "mirror the last scalar slice" reflex stops
+  here — an object list needs its own element snapshot type and its own round-trip/order tests.
+- **Container bootstrap this run: `dl.google.com` 200; pristine `android-37.0` alone worked** (AGP mapped
+  compileSdk 37 → android-37.0 on first `./gradlew`, no hash error, no copy→patch). Full CI-mirror gate
+  (`assembleDebug testDebugUnitTest`, all modules) BUILD SUCCESSFUL locally — the "try pristine first" note
+  held again.
+
+## 2026-08-29 — a "ported from iOS … matching iOS" doc-comment is a claim to VERIFY, not a fact to trust (slice `call-quality-rtt-longhaul-parity`)
+`CallQualityThresholds` said, in its own KDoc, "the Android SSOT ported from iOS `QualityThresholds`" and
+"matching iOS" — while carrying `VIDEO_FAIR_RTT_MS=200 / VIDEO_POOR_RTT_MS=300 / POOR_RTT_MS=500`, the values
+iOS held *before* it recalibrated the RTT ladder out to `300/500/800` for real long-haul baselines. The port
+was faithful the day it was written and silently drifted when iOS moved. Reusable moves:
+- **When a constant claims parity with another platform, open BOTH and diff the numbers — don't trust the
+  prose.** The divergence here was three literals a `grep` apart; the doc-comment actively hid it. A parity
+  claim ages; the SSOT it names keeps moving. This is the cross-platform twin of leçon 261 ("an énumération of
+  sites carries two claims, and 'these are the sites' is almost never re-checked"): "these values match iOS"
+  is a second, unverified claim riding on "these values were ported from iOS".
+- **A stale threshold is a lenience/parity BUG, priced like the feature it degrades — not tech debt.** The
+  effect wasn't cosmetic: a healthy 350 ms intercontinental call rendered in the weak-link ERROR hue (POOR)
+  when iOS/web showed it FAIR. The roadmap's "une lenteur/dégradation est un BUG" applies verbatim to a
+  misclassification that paints a good call red.
+- **The test that catches a stale boundary must live on a value the boundary actually MOVED past, and name the
+  scenario.** Re-pinning `300 stays GOOD / 300.1 → FAIR` proves the new boundary; the three *named*
+  intercontinental regressions (250→GOOD, 350→FAIR, 550→POOR) are what a future reader greps for when the next
+  recalibration lands — they encode the real Africa↔Asia baseline (155-221 ms backbone + mobile last mile),
+  not just an abstract threshold. RED-proving showed exactly 9 fail against the stale constants, no collateral.
+- **Blast-radius check before touching a shared constant: `grep` its non-test consumers first.** Only
+  `VideoQualityLevel.from(rttMs, packetLoss)` reads these three — the survival policy and sender-cap plan
+  consume the enum *tier*, not raw RTT — so the change could not ripple. Confirmed before editing, not after.
+- **SDK bootstrap reconciliation (vs. the prior run's "pristine android-37.0 alone worked" note):** it did
+  NOT this run — local cmdline-tools `11076708` + AGP 8.13.0 errored `Failed to find target with hash string
+  'android-37'` because only `android-37.0/.1/.2` are published (never a bare `android-37`). Fix off-CI: a
+  `platforms/android-37 → android-37.0` symlink (SDK is local-only, never committed). The two notes are both
+  true — AGP's willingness to auto-map `37 → 37.0` is version/cache-sensitive; if pristine errors, symlink
+  rather than assume the repo is broken. CI is unaffected (its `setup-android` step documents the same quirk).
+
+## 2026-08-29 — a "needs an emulator" pending item often has a PURE half worth extracting first (slice `call-stats-reduce`)
+The prior run's "Next" named "the live WebRTC stats source (`RTCStatsReport → CallQualitySample`)" as device-only.
+That is half true. The FRAMEWORK half (reading `RTCStatsReport`'s `NSObject`/value graph) is device-bound; the
+ARITHMETIC half (per-kind packet sums, codec-id→name resolution, the audio-jitter mean, and — critically — the
+cumulative-counter → interval-loss-**ratio** conversion) is pure and was already factored out on iOS exactly so
+it is unit-testable (`CallStats.reduce` + `WebRTCService.adjustBitrate`, `WebRTCTypes.swift` §5.7). Lesson:
+before shelving a pending item as "emulator only", ask **which slice of it is the decision and which is the I/O**
+— port the decision as `:core:model` now, leave only the thin adapter for the device run. This is the same
+building-blocks-vs-orchestration grain the whole Calls area has followed (the reducer is the input SSOT the
+existing `VideoQualityLevel`/`CallQualitySample` ladder consumes).
+
+Two porting specifics worth keeping:
+- **A cumulative counter is never a fraction.** libwebrtc's `packetsLost`/`packetsReceived` only grow. A tick's
+  loss ratio is `Δlost/(Δlost+Δreceived)` between two snapshots, and each delta must be **clamped ≥ 0** —
+  otherwise an ICE-restart counter reset (current < previous) reads as negative loss when ONLY one axis resets
+  while the other grows (both-axes reset is already caught by `denom > 0`, so a full-reset test does NOT exercise
+  the clamp — a loss-counter-only-reset test does; that's the discriminating case that makes the clamp
+  load-bearing). Watch the denominator: iOS's is `Δlost + Δreceived`, not `Δreceived`.
+- **Fraction vs percent are two consumers.** iOS emits BOTH a `lossRatio` (fraction, feeds `VideoQualityLevel.from`)
+  and a `packetLossPercent` (×100, feeds the gateway call-quality report) from the same deltas. Android's
+  `CallQualitySample.packetLoss` is the FRACTION — porting the ×100 value here would silently pin every call to
+  critical. Document which one you ported so the next reader doesn't "fix" it.
+
+## 2026-08-30 — the routine's "Next" can lag `main`; pick the slice from `git log`, and confirm the file is ABSENT before writing (slice `transcription-active-segment-resolver`)
+I opened PROGRESS.md, read its top entry (`notification-center-category-filter`, #4421) and its "Next", and
+picked `notification-per-type-toggle-gate` from it. Wrong: `git log origin/main -- apps/android` showed #4464,
+#4481, #4435 and #4493 all merged AFTER #4421 without prepending a PROGRESS entry — the per-type toggle gate was
+already on `main`. I only caught it because after `Write`-ing `NotificationTypeToggle.kt`, `git status` showed it
+as **`M` (modified), not `??` (untracked)** — the file already existed and I'd clobbered a committed version.
+Restored with `git checkout`.
+Lessons:
+- **The single source of the frontier is `git log origin/main -- apps/android`, not PROGRESS.md's "Next".** The
+  tracking files are prepended by disciplined slices, but a slice can merge without updating them, so "Next" is
+  advisory and can point at already-done work. Read the log first.
+- **Before writing any new file, confirm it is absent on `main`** (`git status` after `Write` must show `??`, or
+  grep `origin/main` for the type name up front). An `M` on a file you meant to create is the tell that the slice
+  is a duplicate.
+- A cheap guard against re-doing a merged slice: for any candidate, `grep -rl <TypeName>` under `apps/android`
+  BEFORE designing it. Here `NotificationTypeToggle`, `NotificationFilterCategory` and the toast dedup window all
+  already existed — the whole §M notification area is done through #4493.
+
+## 2026-08-31 — AGP 8.13 wants `android-37`, the SDK only publishes `android-37.0` → local gate is CI-only (slice `conversation-stats-client-fallback`)
+The container's manual SDK bootstrap (cmdline-tools 11076708 AND the newer 13114758, `build-tools;35.0.0`,
+`platforms;android-37.0`) could NOT run any Gradle task: **`Failed to find target with hash string 'android-37'`**.
+AGP 8.13.0 maps `compileSdk = 37` to the bare hash `android-37`, but since the minor-SDK releases (36.1, 37.0,
+37.1…) the API-37 platform is published ONLY as the minor-versioned `platforms;android-37.0` (`sdkmanager
+"platforms;android-37"` → "Failed to find package"). None of these bridged it: a symlink `android-37 → android-37.0`
+("Observed package id … in inconsistent location"); a path-patched copy (`<localPackage path>` + `<api-level>` →
+37, offline so nothing reinstalls — AGP simply doesn't list it); a fresh reinstall via newer cmdline-tools.
+- **CI still resolves it** — `.github/workflows/android.yml` uses `android-actions/setup-android@v4`, and `main`
+  is green on this exact AGP, so the merge gate is real; only the CONTAINER's manual toolchain is the problem.
+  This is precisely ROUTINE §"CI reality": local gate unavailable ⇒ push, open the PR, the **Android** check is
+  the compiler. Don't burn a run trying to out-hack the platform table — verify by adversarial diff-read + CI.
+- A prior run (`notification-center-category-filter`) DID build locally via an `android-37 → android-37.0`
+  symlink; that was before `main` moved ~780 commits. If AGP or the SDK snapshot bumped since, the symlink trick
+  is dead — reach for CI, not another sed of `package.xml`.
+
+## 2026-08-31 — server-first with a client fallback is the stats-dashboard shape of cache-first (slice `conversation-stats-client-fallback`)
+The pattern that unlocked a whole maturity arm: **a screen fed by a server aggregation should compute the same
+figures from the data it ALREADY holds, project BOTH through one path, and keep the local snapshot when the
+network fails.** iOS does this implicitly (`serverStats?.x ?? clientComputed.x`); Android had server-only and
+blanked to an error on `NetworkResult.Failure`. The elegant port: `clientComputed(...)` returns the SAME
+`ConversationMessageStatsResponse` the server does, so the existing `project()` renders either — no divergent
+render path, and the failure branch is a one-liner (`if (fallback != null) keep else error`).
+- **A single richer input beats twin inputs.** The ViewModel took `List<String>` (sentiment only); the fallback
+  needs sender/attachments/day too. Rather than pass both a string list AND a message list (divergent twins),
+  the load signature became one `List<ClientStatMessage>` and sentiment derives from `it.content`.
+- **Grouping keys expose data-shape gaps.** iOS groups participants by display name (two "Sam"s merge); keying
+  by id is a free SOTA win in the pure port. But the Android bubble layer carries NO author id and NO video
+  flag — so the `BubbleContent → ClientStatMessage` mapper coarsens (own→`__me__`, video→image). Keep such
+  coarsening in the WIRING mapper, never in the pure core, and document it: the server split stays authoritative.
+
+## 2026-08-31 — "a preference is only real where it is APPLIED, and a message has more than one delivery path" (slice `push-foreground-presentation-gate`)
+The in-app toast (`NotificationToastPolicy`) already honoured push-master / quiet-hours / per-type toggles, so the
+notification preferences LOOKED done. But the SAME message reaches the user by a SECOND path — a FCM banner — and
+`MeeshyFcmService.handleMessagePush` posted one for every foreground push with ZERO gate: a muted type, quiet hours,
+even the conversation on screen still buzzed, and a socket-delivered event double-showed (banner + toast). iOS had
+lived this exact bug and fixed it with `NotificationPresentationResolver`.
+- **The lesson generalises the Prisme "who AFFICHE / what travels À CÔTÉ" family to PREFERENCES:** the question to a
+  preference is not "is it read somewhere?" but "is it read on EVERY path that surfaces the thing it governs?". A
+  toggle honoured on one delivery path and ignored on another is a control without full effect (loi 4).
+- **Reuse beat re-derivation:** the gate is `DndWindow.isActive` + `NotificationTypeToggle.isEnabled` composed with
+  two new branches (on-screen thread, socket-alive dedup) — NOT a second copy of the DND/type logic. A divergent
+  second gate is how the toast and the banner would drift apart the next time a type is added.
+- **A background component needs a process-level seam for nav truth.** The active-thread id lived only inside a
+  ViewModel; the FCM service has none. A `@Singleton ActiveConversationStore` written at the ONE existing nav-truth
+  site (the banner host's active-context effect) carries it across the process boundary — cheaper and safer than
+  threading it through the push payload. Deferred (tracked): fold the toast/banner VMs' own per-instance tracking
+  onto this store so there is a single active-thread SSOT.
+- **`.badge` is an iOS-only presentation option.** Android's app-icon badge is a side effect of a posted
+  notification, not an independent option, so "badge only" collapses to Suppress. Documented in the policy, not
+  silently dropped.

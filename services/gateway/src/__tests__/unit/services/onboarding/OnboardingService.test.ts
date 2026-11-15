@@ -1,0 +1,612 @@
+/**
+ * L'état d'onboarding (#7729) — éligibilité, fenêtre de 7 jours, pré-cochage
+ * depuis l'engagement, régime protégé, suggestions sans croisement entre
+ * classes d'âge (adulte, mineur, âge inconnu) et sans présence.
+ *
+ * @jest-environment node
+ */
+
+import { describe, it, expect, jest } from '@jest/globals';
+import {
+  OnboardingService,
+  ageClassOf,
+  onboardingWindow,
+  selectOnboardingSuggestions,
+} from '../../../../services/onboarding/OnboardingService';
+import { OnboardingStateSchema } from '@meeshy/shared/types/onboarding';
+
+const NOW = new Date('2026-09-26T12:00:00.000Z');
+const VIEWER = '68a000000000000000000001';
+const GLOBAL_ID = '68a0000000000000000000aa';
+const ADULT_BIRTH = new Date('1998-01-01T00:00:00.000Z');
+const MINOR_BIRTH = new Date('2010-01-01T00:00:00.000Z');
+
+type UserRow = {
+  id: string;
+  username: string;
+  displayName: string | null;
+  avatar: string | null;
+  banner?: string | null;
+  birthDate: Date | null;
+  systemLanguage: string;
+  regionalLanguage: string | null;
+  blockedUserIds: string[];
+  isActive: boolean;
+  deletedAt: Date | null;
+  createdAt: Date;
+  onboardingCompletedAt: Date | null;
+  onboardingSteps: string[];
+  emailVerifiedAt: Date | null;
+};
+
+function makeUser(overrides: Partial<UserRow> = {}): UserRow {
+  return {
+    id: VIEWER,
+    username: 'nouvelle',
+    displayName: 'Nouvelle',
+    avatar: null,
+    birthDate: ADULT_BIRTH,
+    systemLanguage: 'fr',
+    regionalLanguage: null,
+    blockedUserIds: [],
+    isActive: true,
+    deletedAt: null,
+    createdAt: new Date('2026-09-25T09:00:00.000Z'),
+    onboardingCompletedAt: null,
+    onboardingSteps: [],
+    emailVerifiedAt: null,
+    ...overrides,
+  };
+}
+
+function makeCandidate(n: number, overrides: Partial<UserRow> = {}): UserRow {
+  const id = `68a0000000000000000001${String(n).padStart(2, '0')}`;
+  return makeUser({ id, username: `nova${n}`, displayName: `Nova ${n}`, ...overrides });
+}
+
+type World = {
+  viewer?: UserRow | null;
+  candidates?: UserRow[];
+  /** Expéditeurs de Global, du plus récent au plus ancien (userId). */
+  globalSenders?: string[];
+  friendRequests?: Array<{ senderId: string; receiverId: string; status: string }>;
+  storyCount?: number;
+  globalCredit?: boolean;
+  globalConversation?: boolean;
+  /** Stories jamais écrites par le lecteur — `deletedAt` posé = supprimée. */
+  authoredStories?: Array<{ deletedAt: Date | null }>;
+  /** Compteurs d'engagement du lecteur (axe, dernier geste) — l'élan en dérive. */
+  counters?: Array<{ axisKey: string; updatedAt: Date }>;
+  milestones?: Array<{ milestoneType: string; milestoneKey: string }>;
+};
+
+function makePrisma(world: World = {}) {
+  const viewer = world.viewer === undefined ? makeUser() : world.viewer;
+  const candidates = world.candidates ?? [];
+  const senders = world.globalSenders ?? [];
+  const friendRequests = world.friendRequests ?? [];
+  const users = [...(viewer ? [viewer] : []), ...candidates];
+  return {
+    user: {
+      findUnique: jest.fn<any>(async (args: any) => users.find((u) => u.id === args.where.id) ?? null),
+      findMany: jest.fn<any>(async (args: any) => users.filter((u) => args.where.id?.in.includes(u.id))),
+      update: jest.fn<any>(async (args: any) => ({ ...viewer, ...args.data })),
+    },
+    conversation: {
+      findUnique: jest.fn<any>(async () => (world.globalConversation === false ? null : { id: GLOBAL_ID })),
+    },
+    message: {
+      findMany: jest.fn<any>(async () => senders.map((userId) => ({ senderId: `p-${userId}` }))),
+    },
+    participant: {
+      findMany: jest.fn<any>(async (args: any) =>
+        (args.where.id.in as string[]).map((id) => ({ id, userId: id.slice(2) })),
+      ),
+    },
+    friendRequest: {
+      findFirst: jest.fn<any>(async (args: any) =>
+        friendRequests.find(
+          (fr) => fr.status === args.where.status && (fr.senderId === VIEWER || fr.receiverId === VIEWER),
+        ) ?? null,
+      ),
+      findMany: jest.fn<any>(async () => friendRequests),
+      count: jest.fn<any>(async (args: any) =>
+        friendRequests.filter((fr) => fr.senderId === args.where.senderId && fr.status === args.where.status && !(args.where.receiverId?.notIn ?? []).includes(fr.receiverId)).length,
+      ),
+    },
+    post: {
+      findFirst: jest.fn<any>(async (args: any) => {
+        const where = args.where;
+        const stories = (world.authoredStories ?? []).filter(
+          (story) => where.deletedAt === undefined || story.deletedAt === where.deletedAt,
+        );
+        return where.authorId === VIEWER && where.type === 'STORY' && stories.length > 0 ? { id: 'story-0' } : null;
+      }),
+    },
+    engagementCounter: {
+      findUnique: jest.fn<any>(async () => (world.storyCount ? { count: world.storyCount } : null)),
+      findMany: jest.fn<any>(async (args: any) =>
+        (world.counters ?? []).filter((row) => row.updatedAt >= args.where.updatedAt.gte),
+      ),
+    },
+    engagementMilestone: {
+      findMany: jest.fn<any>(async () => world.milestones ?? []),
+    },
+    engagementConversationCredit: {
+      findFirst: jest.fn<any>(async () => (world.globalCredit ? { id: 'c1' } : null)),
+    },
+  } as any;
+}
+
+describe('onboardingWindow — éligibilité et fenêtre de 7 jours', () => {
+  it('ouvre le parcours pour un compte créé depuis le lancement, non fini, de moins de 7 jours', () => {
+    expect(onboardingWindow({ createdAt: new Date('2026-09-24T00:00:00.000Z'), completedAt: null, now: NOW })).toBe('open');
+  });
+
+  it('ne concerne pas un compte créé avant le 2026-09-24', () => {
+    expect(onboardingWindow({ createdAt: new Date('2026-09-23T23:59:59.000Z'), completedAt: null, now: NOW })).toBe(
+      'not-concerned',
+    );
+  });
+
+  it('un parcours fini reste fini', () => {
+    expect(onboardingWindow({ createdAt: NOW, completedAt: NOW, now: NOW })).toBe('completed');
+  });
+
+  it('au-delà de 7 jours sans finir, le parcours expire', () => {
+    const createdAt = new Date('2026-09-24T10:00:00.000Z');
+    expect(onboardingWindow({ createdAt, completedAt: null, now: new Date('2026-10-01T10:00:00.000Z') })).toBe('open');
+    expect(onboardingWindow({ createdAt, completedAt: null, now: new Date('2026-10-01T10:00:01.000Z') })).toBe(
+      'expired',
+    );
+  });
+});
+
+describe('ageClassOf — trois classes, lues une fois depuis birthDate', () => {
+  it('distingue l\'adulte vérifié, le mineur vérifié et l\'âge inconnu', () => {
+    expect(ageClassOf(ADULT_BIRTH, NOW)).toBe('adult');
+    expect(ageClassOf(MINOR_BIRTH, NOW)).toBe('minor');
+    expect(ageClassOf(null, NOW)).toBe('unknown');
+  });
+
+  it('bascule adulte le jour des 18 ans', () => {
+    const birth = new Date('2008-09-26T00:00:00.000Z');
+    expect(ageClassOf(birth, new Date('2026-09-25T12:00:00.000Z'))).toBe('minor');
+    expect(ageClassOf(birth, NOW)).toBe('adult');
+  });
+});
+
+describe('OnboardingService.getState', () => {
+  it('sert un état conforme au contrat partagé', async () => {
+    const state = await new OnboardingService(makePrisma()).getState(VIEWER, NOW);
+    expect(OnboardingStateSchema.safeParse(state).success).toBe(true);
+    expect(state).toMatchObject({
+      eligible: true,
+      completedAt: null,
+      seenSteps: [],
+      globalConversationId: GLOBAL_ID,
+    });
+  });
+
+  it('rend null pour un compte inconnu', async () => {
+    expect(await new OnboardingService(makePrisma({ viewer: null })).getState(VIEWER, NOW)).toBeNull();
+  });
+
+  it('pose completedAt paresseusement au-delà de 7 jours et rend eligible=false', async () => {
+    const prisma = makePrisma({ viewer: makeUser({ createdAt: new Date('2026-09-24T01:00:00.000Z') }) });
+    const later = new Date('2026-10-02T00:00:00.000Z');
+
+    const state = await new OnboardingService(prisma).getState(VIEWER, later);
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: VIEWER },
+      data: { onboardingCompletedAt: later },
+    });
+    expect(state?.eligible).toBe(false);
+    expect(state?.completedAt).toBe(later.toISOString());
+  });
+
+  it('n\'écrit rien pour un compte antérieur au lancement', async () => {
+    const prisma = makePrisma({ viewer: makeUser({ createdAt: new Date('2026-01-01T00:00:00.000Z') }) });
+
+    const state = await new OnboardingService(prisma).getState(VIEWER, NOW);
+
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(state?.eligible).toBe(false);
+    expect(state?.completedAt).toBeNull();
+  });
+
+  it('ne sert que les étapes connues, dans l\'ordre du parcours', async () => {
+    const prisma = makePrisma({ viewer: makeUser({ onboardingSteps: ['story', 'legacy', 'languages'] }) });
+    const state = await new OnboardingService(prisma).getState(VIEWER, NOW);
+    expect(state?.seenSteps).toEqual(['languages', 'story']);
+  });
+
+  it('pré-coche story, global et friends depuis l\'engagement déjà produit', async () => {
+    const prisma = makePrisma({
+      storyCount: 1,
+      globalCredit: true,
+      friendRequests: [{ senderId: 'x', receiverId: VIEWER, status: 'accepted' }],
+    });
+    const state = await new OnboardingService(prisma).getState(VIEWER, NOW);
+    expect(state?.prefilledSteps).toEqual(['global', 'story', 'friends']);
+    expect(prisma.engagementCounter.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId_axisKey: { userId: VIEWER, axisKey: 'content.story' } } }),
+    );
+    expect(prisma.engagementConversationCredit.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: VIEWER, conversationId: GLOBAL_ID } }),
+    );
+  });
+
+  it('ne pré-coche rien sans engagement, ni friends sur une demande seulement en attente', async () => {
+    const prisma = makePrisma({ friendRequests: [{ senderId: VIEWER, receiverId: 'x', status: 'pending' }] });
+    const state = await new OnboardingService(prisma).getState(VIEWER, NOW);
+    expect(state?.prefilledSteps).toEqual([]);
+  });
+
+  it('sans Meeshy Global, globalConversationId est null et l\'étape n\'est pas pré-cochée', async () => {
+    const state = await new OnboardingService(makePrisma({ globalConversation: false, globalCredit: true })).getState(
+      VIEWER,
+      NOW,
+    );
+    expect(state?.globalConversationId).toBeNull();
+    expect(state?.prefilledSteps).not.toContain('global');
+    expect(state?.suggestions).toEqual([]);
+  });
+
+  describe('régime protégé (fail-closed)', () => {
+    it('un adulte vérifié : régime ouvert, story publique par défaut', async () => {
+      const state = await new OnboardingService(makePrisma()).getState(VIEWER, NOW);
+      expect(state?.protectedRegime).toBe(false);
+      expect(state?.storyDefaultVisibility).toBe('public');
+    });
+
+    it('un mineur : régime protégé, story aux amis par défaut', async () => {
+      const state = await new OnboardingService(makePrisma({ viewer: makeUser({ birthDate: MINOR_BIRTH }) })).getState(
+        VIEWER,
+        NOW,
+      );
+      expect(state?.protectedRegime).toBe(true);
+      expect(state?.storyDefaultVisibility).toBe('friends');
+    });
+
+    it('une date de naissance inconnue : régime protégé', async () => {
+      const state = await new OnboardingService(makePrisma({ viewer: makeUser({ birthDate: null }) })).getState(
+        VIEWER,
+        NOW,
+      );
+      expect(state?.protectedRegime).toBe(true);
+      expect(state?.storyDefaultVisibility).toBe('friends');
+    });
+  });
+
+  describe('suggestions', () => {
+    it('sert les auteurs récents de Global partageant une langue, au plus 6, sans présence ni date de naissance', async () => {
+      const candidates = Array.from({ length: 8 }, (_, i) => makeCandidate(i, { avatar: i === 0 ? 'https://a/0.png' : null }));
+      const prisma = makePrisma({ candidates, globalSenders: candidates.map((c) => c.id) });
+
+      const state = await new OnboardingService(prisma).getState(VIEWER, NOW);
+
+      expect(state?.suggestions).toHaveLength(6);
+      expect(state?.suggestions[0]).toEqual({
+        id: candidates[0].id,
+        username: 'nova0',
+        displayName: 'Nova 0',
+        avatarUrl: 'https://a/0.png',
+        languages: ['fr'],
+      });
+      const findArgs = prisma.message.findMany.mock.calls[0][0];
+      expect(findArgs.where.conversationId).toBe(GLOBAL_ID);
+      expect(NOW.getTime() - (findArgs.where.createdAt.gte as Date).getTime()).toBe(7 * 24 * 60 * 60 * 1000);
+      const selected = prisma.user.findMany.mock.calls[0][0].select;
+      expect(selected.isOnline).toBeUndefined();
+      expect(selected.lastActiveAt).toBeUndefined();
+    });
+
+    describe('jamais de croisement de classes d\'âge, lues depuis birthDate', () => {
+      const servedIds = async (viewerBirth: Date | null, candidates: UserRow[]) => {
+        const prisma = makePrisma({
+          viewer: makeUser({ birthDate: viewerBirth }),
+          candidates,
+          globalSenders: candidates.map((c) => c.id),
+        });
+        const state = await new OnboardingService(prisma).getState(VIEWER, NOW);
+        return state?.suggestions.map((s) => s.id);
+      };
+      const adult = makeCandidate(1, { birthDate: ADULT_BIRTH });
+      const minor = makeCandidate(2, { birthDate: MINOR_BIRTH });
+      const unknown = makeCandidate(3, { birthDate: null });
+
+      it('un adulte vérifié ne voit ni un âge inconnu ni un mineur', async () => {
+        expect(await servedIds(ADULT_BIRTH, [unknown, minor, adult])).toEqual([adult.id]);
+      });
+
+      it('un mineur vérifié ne voit ni un adulte ni un âge inconnu', async () => {
+        expect(await servedIds(MINOR_BIRTH, [adult, unknown, minor])).toEqual([minor.id]);
+      });
+
+      it('un âge inconnu ne voit jamais un mineur vérifié, ni un adulte vérifié', async () => {
+        expect(await servedIds(null, [minor, adult, unknown])).toEqual([unknown.id]);
+      });
+    });
+
+    it('n\'est calculé que pour un parcours ouvert', async () => {
+      const prisma = makePrisma({
+        viewer: makeUser({ onboardingCompletedAt: NOW }),
+        candidates: [makeCandidate(1)],
+        globalSenders: [makeCandidate(1).id],
+      });
+      const state = await new OnboardingService(prisma).getState(VIEWER, NOW);
+      expect(state?.suggestions).toEqual([]);
+      expect(prisma.message.findMany).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('selectOnboardingSuggestions — la loi pure', () => {
+  const viewer = { id: VIEWER, languages: ['fr', 'es'], ageClass: 'adult' as const, blockedUserIds: [] as string[] };
+  const candidate = (n: number, overrides: Record<string, unknown> = {}) => ({
+    id: `c${n}`,
+    username: `u${n}`,
+    displayName: null as string | null,
+    avatar: null as string | null,
+    languages: ['fr'],
+    ageClass: 'adult' as const,
+    blockedUserIds: [] as string[],
+    active: true,
+    ...overrides,
+  });
+
+  it('jamais de suggestion croisée : chaque classe d\'âge ne voit que la sienne', () => {
+    const pool = [
+      candidate(1, { ageClass: 'adult' }),
+      candidate(2, { ageClass: 'minor' }),
+      candidate(3, { ageClass: 'unknown' }),
+    ];
+    const served = (ageClass: 'adult' | 'minor' | 'unknown') =>
+      selectOnboardingSuggestions({ viewer: { ...viewer, ageClass }, candidates: pool, excludedIds: new Set() }).map(
+        (s) => s.id,
+      );
+    expect(served('adult')).toEqual(['c1']);
+    expect(served('minor')).toEqual(['c2']);
+    expect(served('unknown')).toEqual(['c3']);
+  });
+
+  it('écarte soi, les exclus, les comptes inactifs, les blocages dans les deux sens et les langues sans partage', () => {
+    const pool = [
+      candidate(0, { id: VIEWER }),
+      candidate(1),
+      candidate(2, { active: false }),
+      candidate(3, { blockedUserIds: [VIEWER] }),
+      candidate(4),
+      candidate(5, { languages: ['de'] }),
+      candidate(6, { languages: ['es', 'de'] }),
+    ];
+    const result = selectOnboardingSuggestions({
+      viewer: { ...viewer, blockedUserIds: ['c4'] },
+      candidates: pool,
+      excludedIds: new Set(['c1']),
+    });
+    expect(result.map((s) => s.id)).toEqual(['c6']);
+  });
+
+  it('retombe sur le pseudo quand le nom affiché est absent, et garde l\'ordre de récence', () => {
+    const result = selectOnboardingSuggestions({
+      viewer,
+      candidates: [candidate(2), candidate(1, { displayName: 'Un' })],
+      excludedIds: new Set(),
+    });
+    expect(result).toEqual([
+      { id: 'c2', username: 'u2', displayName: 'u2', avatarUrl: null, languages: ['fr'] },
+      { id: 'c1', username: 'u1', displayName: 'Un', avatarUrl: null, languages: ['fr'] },
+    ]);
+  });
+});
+
+describe('OnboardingService.getState — le courriel et la story (#7907, #8476)', () => {
+  it('courriel non vérifié : `emailVerified` faux, étape `email` NON pré-cochée', async () => {
+    const state = await new OnboardingService(makePrisma()).getState(VIEWER, NOW);
+    expect(state?.emailVerified).toBe(false);
+    expect(state?.prefilledSteps).not.toContain('email');
+  });
+
+  it('courriel vérifié : `emailVerified` vrai, étape `email` pré-cochée, à son rang', async () => {
+    const prisma = makePrisma({ viewer: makeUser({ emailVerifiedAt: new Date('2026-09-25T10:00:00.000Z') }), storyCount: 1 });
+    const state = await new OnboardingService(prisma).getState(VIEWER, NOW);
+    expect(state?.emailVerified).toBe(true);
+    expect(state?.prefilledSteps).toEqual(['email', 'story']);
+  });
+
+  it('non vérifié, dans le délai de grâce (#8476) : publiable, même après une story déjà écrite', async () => {
+    const first = await new OnboardingService(makePrisma()).getState(VIEWER, NOW);
+    const second = await new OnboardingService(makePrisma({ authoredStories: [{ deletedAt: null }] })).getState(VIEWER, NOW);
+    expect(first?.canPublishStory).toBe(true);
+    expect(second?.canPublishStory).toBe(true);
+  });
+
+  it('non vérifié, délai de grâce échu (#8476) : plus publiable', async () => {
+    const afterDeadline = new Date('2026-10-27T00:00:00.000Z');
+    expect((await new OnboardingService(makePrisma()).getState(VIEWER, afterDeadline))?.canPublishStory).toBe(false);
+  });
+
+  it('non vérifié mais porteur d\'un numéro, délai échu : publiable — le numéro n\'est jamais bloquant (#8055)', async () => {
+    const prisma = makePrisma({ viewer: makeUser({ phoneNumber: '+33600000000' } as Partial<UserRow>) });
+    expect((await new OnboardingService(prisma).getState(VIEWER, new Date('2026-10-27T00:00:00.000Z')))?.canPublishStory).toBe(true);
+  });
+
+  it('vérifié : toujours publiable, quelles que soient ses stories', async () => {
+    const prisma = makePrisma({
+      viewer: makeUser({ emailVerifiedAt: new Date('2026-09-25T10:00:00.000Z') }),
+      authoredStories: [{ deletedAt: null }],
+    });
+    expect((await new OnboardingService(prisma).getState(VIEWER, NOW))?.canPublishStory).toBe(true);
+  });
+});
+
+describe('OnboardingService.getState — demandes en attente (#7910)', () => {
+  it('ne compte que les demandes ENVOYÉES par le lecteur et toujours en attente', async () => {
+    const prisma = makePrisma({
+      friendRequests: [
+        { senderId: VIEWER, receiverId: 'a', status: 'pending' },
+        { senderId: VIEWER, receiverId: 'b', status: 'accepted' },
+        { senderId: 'c', receiverId: VIEWER, status: 'pending' },
+      ],
+    });
+    const state = await new OnboardingService(prisma).getState(VIEWER, NOW);
+    expect(state?.pendingFriendRequests).toBe(1);
+  });
+
+  it.each([
+    ['le lecteur a bloqué le destinataire', { viewerBlocks: ['a'], blockers: [] as string[] }],
+    ['le destinataire a bloqué le lecteur', { viewerBlocks: [] as string[], blockers: ['a'] }],
+  ])('#13350 — une demande vers une personne en relation de blocage ne compte pas : %s', async (_sens, b) => {
+    const prisma = makePrisma({
+      viewer: makeUser({ blockedUserIds: b.viewerBlocks }),
+      friendRequests: [
+        { senderId: VIEWER, receiverId: 'a', status: 'pending' },
+        { senderId: VIEWER, receiverId: 'd', status: 'pending' },
+      ],
+    });
+    prisma.user.findMany.mockImplementation(async (args: any) =>
+      args.where.blockedUserIds ? b.blockers.map((id) => ({ id })) : [],
+    );
+    const state = await new OnboardingService(prisma).getState(VIEWER, NOW);
+    expect(state?.pendingFriendRequests).toBe(1);
+  });
+});
+
+describe('OnboardingService.getState — les points à l’élan courant (#7908)', () => {
+  it('compte neuf, aucun élan : le barème nu (13 · 301 · 7), le salut au prix d’un message de la conversation globale (#9666), la story à sa visibilité publique par défaut', async () => {
+    const state = await new OnboardingService(makePrisma()).getState(VIEWER, NOW);
+    expect(state?.stepRewards).toEqual({ global: 13, story: 301, friendship: 7 });
+  });
+
+  it('actif dans deux familles cette semaine : chaque axe crédite à l’élan de SA famille ajoutée', async () => {
+    const recent = new Date('2026-09-25T09:00:00.000Z');
+    const prisma = makePrisma({
+      counters: [
+        { axisKey: 'content.story', updatedAt: recent },
+        { axisKey: 'social.friendship', updatedAt: recent },
+        { axisKey: 'comment.text', updatedAt: new Date('2026-09-01T00:00:00.000Z') },
+      ],
+    });
+    const state = await new OnboardingService(prisma).getState(VIEWER, NOW);
+    // content + social actives (le commentaire est hors fenêtre) :
+    // global = texte dans la globale 8 × 2 (content) + conversation 5 × 3 (+conversation) = 31
+    // story  = story publique 300 × 2 (content) + outil 1 × 3 (+tool) = 603
+    // amitié = 7 × 2 (social déjà active) = 14
+    expect(state?.stepRewards).toEqual({ global: 31, story: 603, friendship: 14 });
+  });
+
+  it('l’assise permanente (dix succès) ajoute un cran à chaque geste', async () => {
+    const milestones = Array.from({ length: 10 }, (_, n) => ({ milestoneType: 'achievement', milestoneKey: `a:${n}` }));
+    const state = await new OnboardingService(makePrisma({ milestones })).getState(VIEWER, NOW);
+    expect(state?.stepRewards).toEqual({ global: 26, story: 602, friendship: 14 });
+  });
+});
+
+describe('OnboardingService.recordStep', () => {
+  it('ajoute l\'étape vue, sans doublon, et rend le nouvel état', async () => {
+    const prisma = makePrisma({ viewer: makeUser({ onboardingSteps: ['languages'] }) });
+
+    await new OnboardingService(prisma).recordStep(VIEWER, { step: 'global', outcome: 'done' }, NOW);
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: VIEWER },
+      data: { onboardingSteps: ['languages', 'global'] },
+    });
+  });
+
+  it('est idempotent : une étape déjà vue n\'écrit rien', async () => {
+    const prisma = makePrisma({ viewer: makeUser({ onboardingSteps: ['languages', 'global'] }) });
+
+    await new OnboardingService(prisma).recordStep(VIEWER, { step: 'global', outcome: 'skipped' }, NOW);
+
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('la cinquième étape vue pose completedAt', async () => {
+    const prisma = makePrisma({ viewer: makeUser({ onboardingSteps: ['languages', 'global', 'story', 'friends'] }) });
+
+    await new OnboardingService(prisma).recordStep(VIEWER, { step: 'notifications', outcome: 'skipped' }, NOW);
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: VIEWER },
+      data: {
+        onboardingSteps: ['languages', 'global', 'story', 'friends', 'notifications'],
+        onboardingCompletedAt: NOW,
+      },
+    });
+  });
+
+  it('finish pose completedAt une seule fois', async () => {
+    const prisma = makePrisma();
+    await new OnboardingService(prisma).recordStep(VIEWER, { finish: true }, NOW);
+    expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: VIEWER }, data: { onboardingCompletedAt: NOW } });
+
+    const done = makePrisma({ viewer: makeUser({ onboardingCompletedAt: new Date('2026-09-25T10:00:00.000Z') }) });
+    const state = await new OnboardingService(done).recordStep(VIEWER, { finish: true }, NOW);
+    expect(done.user.update).not.toHaveBeenCalled();
+    expect(state?.completedAt).toBe('2026-09-25T10:00:00.000Z');
+    expect(state?.eligible).toBe(false);
+  });
+
+  it('rend null pour un compte inconnu', async () => {
+    expect(
+      await new OnboardingService(makePrisma({ viewer: null })).recordStep(VIEWER, { finish: true }, NOW),
+    ).toBeNull();
+  });
+
+  it('enregistre l’étape `email` passée, à son rang (#7907)', async () => {
+    const prisma = makePrisma({ viewer: makeUser({ onboardingSteps: ['languages'] }) });
+    await new OnboardingService(prisma).recordStep(VIEWER, { step: 'email', outcome: 'skipped' }, NOW);
+    expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: VIEWER }, data: { onboardingSteps: ['languages', 'email'] } });
+  });
+
+  it('l’étape `email`, conditionnelle, ne retient pas la clôture : les cinq autres suffisent', async () => {
+    const prisma = makePrisma({ viewer: makeUser({ onboardingSteps: ['languages', 'global', 'story', 'friends'] }) });
+    await new OnboardingService(prisma).recordStep(VIEWER, { step: 'notifications', outcome: 'done' }, NOW);
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ onboardingCompletedAt: NOW }) }),
+    );
+  });
+});
+
+describe('OnboardingService.getState — l\'étape facultative « profile » (#17235)', () => {
+  const PROFILE_CLIENT = { ageStepAware: true, profileStepAware: true };
+
+  it('avatar ET bannière posés : `profile` pré-cochée pour le client qui l\'annonce', async () => {
+    const prisma = makePrisma({ viewer: makeUser({ avatar: 'https://a/v.png', banner: 'https://a/b.png' }) });
+    const state = await new OnboardingService(prisma).getState(VIEWER, NOW, PROFILE_CLIENT);
+    expect(state?.prefilledSteps).toContain('profile');
+  });
+
+  it('un seul des deux posé : `profile` reste à proposer', async () => {
+    const prisma = makePrisma({ viewer: makeUser({ avatar: 'https://a/v.png', banner: null }) });
+    const state = await new OnboardingService(prisma).getState(VIEWER, NOW, PROFILE_CLIENT);
+    expect(state?.prefilledSteps).not.toContain('profile');
+  });
+
+  it('le select d\'état demande avatar et bannière', async () => {
+    const prisma = makePrisma();
+    await new OnboardingService(prisma).getState(VIEWER, NOW, PROFILE_CLIENT);
+    expect(prisma.user.findUnique.mock.calls[0][0].select).toEqual(expect.objectContaining({ avatar: true, banner: true }));
+  });
+
+  it('`profile` vue est servie au client qui l\'annonce, jamais à un client antérieur (#9223)', async () => {
+    const viewer = makeUser({ onboardingSteps: ['languages', 'profile'], avatar: 'a', banner: 'b' });
+    const aware = await new OnboardingService(makePrisma({ viewer })).getState(VIEWER, NOW, PROFILE_CLIENT);
+    expect(aware?.seenSteps).toEqual(['languages', 'profile']);
+    const legacy = await new OnboardingService(makePrisma({ viewer })).getState(VIEWER, NOW, { ageStepAware: true, profileStepAware: false });
+    expect(legacy?.seenSteps).toEqual(['languages']);
+    expect(legacy?.prefilledSteps).not.toContain('profile');
+  });
+
+  it('marquer `profile` passée ne clôt pas le parcours : elle n\'est pas une étape de complétion', async () => {
+    const viewer = makeUser({ onboardingSteps: ['languages', 'global', 'story', 'friends'] });
+    const prisma = makePrisma({ viewer });
+    const state = await new OnboardingService(prisma).recordStep(VIEWER, { step: 'profile', outcome: 'skipped' }, NOW, PROFILE_CLIENT);
+    expect(state?.completedAt).toBeNull();
+    expect(state?.seenSteps).toContain('profile');
+  });
+});

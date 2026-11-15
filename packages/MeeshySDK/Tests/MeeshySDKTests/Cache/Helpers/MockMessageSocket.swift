@@ -5,6 +5,9 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let messageReceived = PassthroughSubject<APIMessage, Never>()
     let messageEdited = PassthroughSubject<APIMessage, Never>()
     let messageDeleted = PassthroughSubject<MessageDeletedEvent, Never>()
+    let messageExpired = PassthroughSubject<MessageExpiredEvent, Never>()
+    let messageCitedPostWithdrawn = PassthroughSubject<MessageCitedPostWithdrawnEvent, Never>()
+    let messageCountdownStarted = PassthroughSubject<MessageCountdownStartedEvent, Never>()
     let messageHiddenForMe = PassthroughSubject<MessageHiddenForMeEvent, Never>()
     let messageRestoredForMe = PassthroughSubject<MessageRestoredForMeEvent, Never>()
     let messagePinned = PassthroughSubject<MessagePinnedEvent, Never>()
@@ -19,8 +22,10 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let userStatusChanged = PassthroughSubject<UserStatusEvent, Never>()
     let presenceSnapshotReceived = PassthroughSubject<PresenceSnapshotEvent, Never>()
     let readStatusUpdated = PassthroughSubject<ReadStatusUpdateEvent, Never>()
+    let pendingMessagesDelivered = PassthroughSubject<PendingMessagesDeliveredEvent, Never>()
     let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusUpdatedEvent, Never>()
     let attachmentUpdated = PassthroughSubject<AttachmentUpdatedEvent, Never>()
+    let attachmentDeleted = PassthroughSubject<AttachmentDeletedEvent, Never>()
     let conversationJoined = PassthroughSubject<ConversationParticipationEvent, Never>()
     let conversationJoinError = PassthroughSubject<ConversationJoinErrorEvent, Never>()
     let conversationLeft = PassthroughSubject<ConversationParticipationEvent, Never>()
@@ -33,11 +38,16 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let participantBanned = PassthroughSubject<ParticipantBannedEvent, Never>()
     let participantUnbanned = PassthroughSubject<ParticipantUnbannedEvent, Never>()
     let conversationClosed = PassthroughSubject<ConversationClosedEvent, Never>()
+    let conversationObsoleted = PassthroughSubject<ConversationObsoletedEvent, Never>()
+    let communityUpdated = PassthroughSubject<CommunityUpdatedEvent, Never>()
     let conversationDeleted = PassthroughSubject<ConversationDeletedSocketEvent, Never>()
+    let conversationRestored = PassthroughSubject<ConversationRestoredSocketEvent, Never>()
     let userPreferencesUpdated = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
     let userPreferencesConversationUpdated = PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never>()
     let conversationStatsReceived = PassthroughSubject<ConversationStatsEvent, Never>()
     let messageConsumed = PassthroughSubject<MessageConsumedEvent, Never>()
+    let viewOncePurged = PassthroughSubject<ViewOncePurgedEvent, Never>()
+    let messageStarred = PassthroughSubject<MessageStarredEvent, Never>()
     let liveLocationStarted = PassthroughSubject<LiveLocationStartedEvent, Never>()
     let liveLocationUpdated = PassthroughSubject<LiveLocationUpdatedEvent, Never>()
     let liveLocationStopped = PassthroughSubject<LiveLocationStoppedEvent, Never>()
@@ -96,7 +106,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     func emitLiveLocationStart(payload: LiveLocationStartPayload) {}
     func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload) {}
     func emitLiveLocationStop(conversationId: String) {}
-    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String?) {}
+    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String?, sticker: MessageSticker?) {}
     func emitCallInitiate(conversationId: String, isVideo: Bool) async throws -> MessageSocketManager.CallInitiateAck {
         MessageSocketManager.CallInitiateAck(callId: "mock-call-id", mode: "audio", iceServers: [])
     }
@@ -114,7 +124,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     func emitCallHeartbeat(callId: String) {}
     func emitCallBackgrounded(callId: String, participantId: String) {}
     func emitCallForegrounded(callId: String, participantId: String) {}
-    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {}
+    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool, kind: CallScreenCaptureKind) {}
     func emitCallTranscriptionSegment(callId: String, segment: CallTranscriptionSegmentPayload) {}
-    func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String, location: SharedPlace?) async -> MessageSocketManager.SendMessageAck? { nil }
+    func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String, location: SharedPlace?, sticker: MessageSticker?) async -> MessageSocketManager.SendMessageAck? { nil }
 }

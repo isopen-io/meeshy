@@ -172,7 +172,7 @@ final class MediaSessionCoordinatorThreadSafetySourceGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Sources/MeeshySDK/MediaSessionCoordinator.swift")
+            .appendingPathComponent("Sources/MeeshySDK/Media/MediaSessionCoordinator.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -226,6 +226,26 @@ final class MediaSessionCoordinatorThreadSafetySourceGuardTests: XCTestCase {
             "serialized emit(_:) helper — every publisher (setCallActive, forward) must go " +
             "through emit(_:), never events.send(_:) directly."
         )
+    }
+
+    /// Every video play and story open called `setCategory` — a synchronous
+    /// audio-server round-trip on the main thread — even when nothing changed.
+    func test_playbackConfigurationDiffers_falseWhenSessionAlreadyMatches() {
+        XCTAssertFalse(MediaSessionCoordinator.playbackConfigurationDiffers(
+            currentCategory: .playback, currentMode: .default, currentOptions: [.duckOthers],
+            mode: .default, options: [.duckOthers]))
+    }
+
+    func test_playbackConfigurationDiffers_trueWhenCategoryModeOrOptionsChange() {
+        XCTAssertTrue(MediaSessionCoordinator.playbackConfigurationDiffers(
+            currentCategory: .playAndRecord, currentMode: .default, currentOptions: [.duckOthers],
+            mode: .default, options: [.duckOthers]))
+        XCTAssertTrue(MediaSessionCoordinator.playbackConfigurationDiffers(
+            currentCategory: .playback, currentMode: .spokenAudio, currentOptions: [.duckOthers],
+            mode: .default, options: [.duckOthers]))
+        XCTAssertTrue(MediaSessionCoordinator.playbackConfigurationDiffers(
+            currentCategory: .playback, currentMode: .default, currentOptions: [.duckOthers],
+            mode: .default, options: []))
     }
 }
 #endif

@@ -1,9 +1,16 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
-import { logError } from '../utils/logger';
+import { logError, logWarn } from '../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { sendSuccess, sendError, sendUnauthorized, sendNotFound, sendForbidden, sendBadRequest, sendInternalError } from '../utils/response.js';
+import { sendSuccess, sendError, sendNotFound, sendBadRequest } from '../utils/response.js';
+import type { UnifiedAuthRequest } from '../middleware/auth';
+import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
+import { creditTranslationRequest, lazyTranslationRequestEngagement } from '../services/messaging/translationRequestCredit';
+import { gatewayKeyring, SERVER_AT_REST_UNREADABLE_TRANSLATION_MESSAGE, translationSourceOf } from '../services/messaging/atRestTranslationSource';
+import { SERVER_AT_REST_UNREADABLE } from '../services/messaging/serverAtRest';
+import { resolveServerTargetLanguages } from '../services/message-translation/serverTargetLanguages';
+import { historyReaderFromAuthContext } from '../services/historyFloor';
+import { readerMayTranslateMessage } from '../services/messaging/translationReadGate';
 
 // Schémas de validation
 const TranslateRequestSchema = z.object({
@@ -14,8 +21,8 @@ const TranslateRequestSchema = z.object({
   source_language: z.string().min(2).max(6).optional(),
   target_language: z.string().min(2).max(6),
   model_type: z.enum(['basic', 'medium', 'premium']).optional(), // Optional car on peut le prédire automatiquement
-  message_id: z.string().optional(), // ID du message pour retraduction
-  conversation_id: z.string().optional() // ID de conversation pour nouveaux messages
+  message_id: z.string().optional(), // ID du message pour retraduction ; la ligne fait foi, `text` est alors ignoré
+  conversation_id: z.string().optional() // Accepté pour compatibilité, ignoré : un texte traduit n'est jamais écrit
 }).refine((data) => {
   // Soit text est fourni, soit message_id est fourni
   return (data.text !== undefined && data.text.length > 0) || (data.message_id !== undefined);
@@ -30,18 +37,6 @@ interface TranslateRequest {
   modelType?: 'basic' | 'medium' | 'premium';
   messageId?: string;
   conversationId?: string;
-}
-
-interface TranslationResult {
-  translated_text: string;
-  source_language: string;
-  target_language: string;
-  original_text: string;
-  model_used: string;
-  confidence: number;
-  processing_time: number;
-  from_cache: boolean;
-  cache_key?: string;
 }
 
 // Fonction pour prédire le type de modèle selon la taille du texte
@@ -95,7 +90,7 @@ const translateRequestSchema = {
     },
     conversation_id: {
       type: 'string',
-      description: 'ID of the conversation. Required when message_id is not provided.',
+      description: 'Accepted for compatibility and ignored. A text translated without message_id is never persisted as a message: sending goes through the message endpoints.',
       example: 'conv_456def'
     }
   },
@@ -202,70 +197,6 @@ const languagesResponseSchema = {
   }
 } as const;
 
-/**
- * OpenAPI schema for language detection request
- */
-const detectLanguageRequestSchema = {
-  type: 'object',
-  properties: {
-    text: {
-      type: 'string',
-      minLength: 1,
-      description: 'Text to detect language from',
-      example: 'Bonjour le monde'
-    }
-  },
-  required: ['text']
-} as const;
-
-/**
- * OpenAPI schema for language detection response
- */
-const detectLanguageResponseSchema = {
-  type: 'object',
-  properties: {
-    success: { type: 'boolean', example: true },
-    data: {
-      type: 'object',
-      properties: {
-        language: {
-          type: 'string',
-          description: 'Detected language code',
-          example: 'fr'
-        },
-        confidence: {
-          type: 'number',
-          minimum: 0,
-          maximum: 1,
-          description: 'Detection confidence score (0-1)',
-          example: 0.7
-        },
-        text: {
-          type: 'string',
-          description: 'Original text that was analyzed',
-          example: 'Bonjour le monde'
-        }
-      }
-    }
-  }
-} as const;
-
-/**
- * OpenAPI schema for E2EE translation error
- */
-const e2eeErrorResponseSchema = {
-  type: 'object',
-  properties: {
-    success: { type: 'boolean', example: false },
-    error: { type: 'string', example: 'E2EE_NOT_TRANSLATABLE' },
-    message: {
-      type: 'string',
-      example: 'End-to-end encrypted messages cannot be translated by the server'
-    }
-  }
-} as const;
-
-
 export async function translationRoutes(fastify: FastifyInstance) {
   // Récupérer le service de traduction depuis les options
   const translationService = fastify.translationService;
@@ -273,6 +204,8 @@ export async function translationRoutes(fastify: FastifyInstance) {
   if (!translationService) {
     throw new Error('MessageTranslationService not provided to translation routes');
   }
+
+  const engagement = lazyTranslationRequestEngagement(() => fastify.prisma);
 
   // Route principale de traduction
   fastify.post<{ Body: TranslateRequest }>('/translate-blocking', {
@@ -287,7 +220,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
     // (socketio/MeeshySocketIOManager.ts:_handleTranslationRequest).
     preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
     schema: {
-      description: 'Translate text synchronously with blocking behavior. This endpoint waits for the translation to complete before responding. Supports both new message translation and retranslation of existing messages. For E2E encrypted messages, translation is not supported as the server cannot decrypt the content.',
+      description: 'Translate text synchronously with blocking behavior. This endpoint waits for the translation to complete before responding. Translates either an existing message (message_id) or a free text; a free text is translated and returned, never persisted as a message. For E2E encrypted messages, translation is not supported as the server cannot decrypt the content.',
       tags: ['translation'],
       summary: 'Translate text (blocking)',
       body: translateRequestSchema,
@@ -301,12 +234,8 @@ export async function translationRoutes(fastify: FastifyInstance) {
           description: 'Unauthorized - invalid or missing authentication',
           ...errorResponseSchema
         },
-        403: {
-          description: 'Forbidden - no access to the requested message',
-          ...errorResponseSchema
-        },
         404: {
-          description: 'Not found - message does not exist',
+          description: 'Not found - the message does not exist or the caller cannot read it',
           ...errorResponseSchema
         },
         500: {
@@ -323,63 +252,68 @@ export async function translationRoutes(fastify: FastifyInstance) {
       const startTime = Date.now();
 
       let result: any;
-      let messageId: string;
+      let messageId: string | undefined;
+      let conversationId: string | undefined;
 
       // Gérer les deux cas : nouveau message vs retraduction
       if (validatedData.message_id) {
         // Cas 1: Retraduction d'un message existant
 
-        // Récupérer le message depuis la base de données
+        // SECURITY (#16557) : la loi de lecture passe AVANT toute lecture de la
+        // ligne, et rien de ce qui suit ne se dit à qui ne lit pas ce message —
+        // ni qu'il existe, ni qu'il est rappelé, ni son régime de chiffrement.
+        // Un seul refus pour tous, comme la route des traductions partagées.
+        const readerMayTranslate = () => readerMayTranslateMessage(fastify.prisma, {
+          reader: historyReaderFromAuthContext((request as UnifiedAuthRequest).authContext),
+          messageId: validatedData.message_id,
+          now: new Date()
+        });
+        if (!(await readerMayTranslate())) {
+          return sendNotFound(reply, 'Message not found');
+        }
+
         const existingMessage = await fastify.prisma.message.findUnique({
           where: { id: validatedData.message_id },
-          include: {
-            conversation: {
-              include: {
-                participants: true
-              }
-            }
-          }
+          include: { conversation: { select: { encryptionMode: true } } }
         });
-
 
         if (!existingMessage) {
           return sendNotFound(reply, 'Message not found');
         }
 
-        // SECURITY: E2EE messages cannot be translated by the server
-        if (existingMessage.encryptionMode === 'e2ee') {
+        // SECURITY: le serveur ne traduit que ce qu'il lit — régime de la
+        // conversation ET du message, régime inconnu ⇒ chiffré (fail-closed).
+        const serverReadsMessage = sharedTranslationServerReadsMessage({
+          conversationEncryptionMode: existingMessage.conversation.encryptionMode,
+          messageIsEncrypted: existingMessage.isEncrypted,
+          messageEncryptionMode: existingMessage.encryptionMode,
+        });
+        if (!serverReadsMessage) {
           return sendBadRequest(reply, 'E2EE_NOT_TRANSLATABLE', { message: 'End-to-end encrypted messages cannot be translated by the server' });
         }
 
-        // SECURITY: vérification d'appartenance INCONDITIONNELLE.
-        // L'ancienne version enfermait ce contrôle dans `if (userId) { ... }` :
-        // sans authentification, `userId` valait `undefined`, la condition
-        // était fausse, et le bloc entier — y compris le refus — était sauté.
-        // Le `preHandler` ci-dessus garantit déjà qu'on n'arrive ici
-        // qu'authentifié, mais le contrôle reste volontairement inconditionnel
-        // et fail-closed : une absence d'identité doit produire un refus,
-        // jamais un passage, même si cette route est un jour dupliquée sans
-        // son preHandler.
-        const userId = request.user?.userId;
-        const hasAccess = !!userId && existingMessage.conversation.participants.some(
-          (member: any) => member.userId === userId
-        );
-        if (!hasAccess) {
-          return sendForbidden(reply, 'Access denied to this message');
+        conversationId = existingMessage.conversationId;
+
+        // #11381 — un message `server`/`hybrid` se traduit depuis son CLAIR, jamais depuis `content: ''`.
+        const source = await translationSourceOf(existingMessage, gatewayKeyring(fastify.prisma));
+        if (!source.readable) {
+          return sendError(reply, 409, SERVER_AT_REST_UNREADABLE_TRANSLATION_MESSAGE, { code: SERVER_AT_REST_UNREADABLE });
         }
 
-        // Utiliser le texte du message existant si pas fourni
-        const messageText = validatedData.text || existingMessage.content;
+        // La ligne fait foi, jamais le texte qu'un appelant affirme être le sien.
+        const messageText = source.row.content;
         const messageSourceLanguage = validatedData.source_language || existingMessage.originalLanguage;
 
-        // OPTIMISATION: Éviter la traduction si source = target (après récupération du message)
-        if (messageSourceLanguage && messageSourceLanguage !== 'auto' &&
-            messageSourceLanguage === validatedData.target_language) {
+        // Rien à demander au translator : la source égale la cible, ou la paire
+        // n'a pas de code NLLB-200 (#3659). Le lecteur reçoit l'ORIGINAL, dans
+        // sa langue (règle 1 du Prisme) — jamais « [BYV] <texte> » après dix
+        // secondes d'attente d'une traduction que personne n'a demandée.
+        if (resolveServerTargetLanguages(messageSourceLanguage, [validatedData.target_language]).length === 0) {
           return sendSuccess(reply, {
             message_id: validatedData.message_id,
             translated_text: messageText,
-            source_language: messageSourceLanguage,
-            target_language: validatedData.target_language,
+            source_language: messageSourceLanguage || 'auto',
+            target_language: messageSourceLanguage || 'auto',
             confidence: 1.0,
             processing_time: 0,
             model: 'none', // Pas de traduction nécessaire
@@ -419,6 +353,12 @@ export async function translationRoutes(fastify: FastifyInstance) {
           translationResult = await translationService.getTranslation(messageId, validatedData.target_language);
         }
 
+        // #16557 — l'attente dure jusqu'à dix secondes : un rappel survenu entre-temps
+        // ne laisse sortir ni la traduction, ni le repli, qui porte le clair.
+        if (!(await readerMayTranslate())) {
+          return sendNotFound(reply, 'Message not found');
+        }
+
         if (!translationResult) {
           // Fallback seulement si la traduction n'est pas disponible après le timeout
           result = {
@@ -434,72 +374,34 @@ export async function translationRoutes(fastify: FastifyInstance) {
         }
 
       } else {
-        // Cas 2: Nouveau message (comportement WebSocket)
-
-        if (!validatedData.conversation_id) {
-          return sendBadRequest(reply, 'conversation_id is required when message_id is not provided');
-        }
-
-        // Déterminer le type de modèle pour le nouveau message
+        // Cas 2: un TEXTE à traduire, qui n'est PAS un envoi. Cette branche
+        // écrivait un message (`handleNewMessage` → `_saveMessageToDatabase`)
+        // hors de `MessagingService.handleMessage`, donc sans aucune de ses
+        // gardes : ni appartenance (`senderParticipant?.id || senderId`), ni
+        // clôture, ni rang, ni mode lent — un compte neuf écrivait dans Meeshy
+        // Global sans limite (#7740). Envoyer passe par les trois transports
+        // qui convergent sur `handleMessage` ; ici, on traduit et on rend.
         const finalModelType = validatedData.model_type === 'basic'
           ? getPredictedModelType(validatedData.text.length)
           : (validatedData.model_type || 'basic');
 
-        // Créer les données du message
-        const senderId = request.user?.userId;
-        if (!senderId) {
-          return sendUnauthorized(reply, 'Authentication required for new message translation');
-        }
-
-        // Resolve the user's participantId in this conversation
-        const senderParticipant = await fastify.prisma.participant.findFirst({
-          where: { userId: senderId, conversationId: validatedData.conversation_id, isActive: true },
-          select: { id: true }
-        });
-
-        const messageData: any = {
-          conversationId: validatedData.conversation_id,
-          content: validatedData.text,
-          senderId: senderParticipant?.id || senderId,
-          originalLanguage: validatedData.source_language || 'auto',
-          targetLanguage: validatedData.target_language,
-          modelType: finalModelType
-        };
-
-        // Appeler handleNewMessage qui gère le nouveau message
-        const handleResult = await translationService.handleNewMessage(messageData);
-        messageId = handleResult.messageId;
-
-        // Attendre la vraie traduction avec un timeout plus long
-        let translationResult2 = null;
-        const maxWaitTime2 = 10000; // 10 secondes
-        const checkInterval2 = 500; // Vérifier toutes les 500ms
-        let waitedTime2 = 0;
-
-        while (!translationResult2 && waitedTime2 < maxWaitTime2) {
-          await new Promise(resolve => setTimeout(resolve, checkInterval2));
-          waitedTime2 += checkInterval2;
-
-          translationResult2 = await translationService.getTranslation(messageId, validatedData.target_language);
-        }
-
-        if (!translationResult2) {
-          // Fallback seulement si la traduction n'est pas disponible après le timeout
-          result = {
-            translatedText: `[${validatedData.target_language.toUpperCase()}] ${validatedData.text}`,
-            sourceLanguage: validatedData.source_language || 'auto',
-            targetLanguage: validatedData.target_language,
-            confidenceScore: 0.1,
-            processingTime: 0.001,
-            modelType: 'fallback'
-          };
-        } else {
-          result = translationResult2;
-        }
+        messageId = undefined;
+        result = await translationService.translateTextDirectly(
+          validatedData.text,
+          validatedData.source_language || 'auto',
+          validatedData.target_language,
+          finalModelType
+        );
       }
 
       const processingTime = (Date.now() - startTime) / 1000;
 
+      creditTranslationRequest({
+        engagement,
+        requester: (request as UnifiedAuthRequest).authContext,
+        conversationId,
+        onError: (error) => logWarn(request.log, 'tool.translation_request engagement credit failed', error)
+      });
 
       return sendSuccess(reply, {
         message_id: messageId,
@@ -548,7 +450,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
         }
       }
     }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     reply.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     return sendSuccess(reply, {
       languages: [
@@ -562,62 +464,6 @@ export async function translationRoutes(fastify: FastifyInstance) {
         { code: 'ar', name: 'Arabic', flag: 'SA' }
       ]
     });
-  });
-
-  // Route pour détecter la langue
-  fastify.post<{ Body: { text: string } }>('/detect-language', {
-    schema: {
-      description: 'Detect the language of a given text using pattern-based analysis. Returns the detected language code and a confidence score. The detection is based on character patterns specific to different languages (accents, special characters).',
-      tags: ['translation'],
-      summary: 'Detect text language',
-      body: detectLanguageRequestSchema,
-      response: {
-        200: detectLanguageResponseSchema,
-        400: {
-          description: 'Bad request - validation error (empty text)',
-          ...errorResponseSchema
-        },
-        500: {
-          description: 'Internal server error - detection failed',
-          ...errorResponseSchema
-        }
-      }
-    }
-  }, async (request: FastifyRequest<{ Body: { text: string } }>, reply: FastifyReply) => {
-    try {
-      const { text } = request.body;
-
-      if (!text || text.length === 0) {
-        return sendBadRequest(reply, 'VALIDATION_ERROR', { message: 'Text is required' });
-      }
-
-      // Détection simple basée sur des patterns
-      let detectedLanguage = 'en';
-      let confidence = 0.5;
-
-      // Détection basique par patterns
-      if (/[àáâäçèéêëìíîïñòóôöùúûüÿ]/i.test(text)) {
-        detectedLanguage = 'fr';
-        confidence = 0.7;
-      } else if (/[ñáéíóúü]/i.test(text)) {
-        detectedLanguage = 'es';
-        confidence = 0.7;
-      } else if (/[äöüß]/i.test(text)) {
-        detectedLanguage = 'de';
-        confidence = 0.7;
-      }
-
-      return sendSuccess(reply, {
-        language: detectedLanguage,
-        confidence: confidence,
-        text: text
-      });
-
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown language detection error';
-      logError(request.log, 'Language detection error:', error);
-      return sendInternalError(reply, errorMessage);
-    }
   });
 
   // Route de test pour le service de traduction
@@ -674,7 +520,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
         }
       }
     }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Test avec un nouveau message (comportement WebSocket)
       const messageData: any = {

@@ -1,0 +1,443 @@
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useStore } from 'zustand/react';
+
+import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
+import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
+
+import { GameBannerOwnSlot } from '@/components/game-profile-slots';
+import { LanguageSheet } from '@/components/language-sheet';
+import { ProfileDecorSheet } from '@/components/profile-decor-sheet';
+import { ProfileTabPanel, ProfileTabs, useProfileTab } from '@/components/profile-tabs';
+import { apiDeps } from '@/lib/api/deps';
+import { appProfileActionDeps } from '@/lib/api/profile-action-deps';
+import { friendRequestsQueryOptions, pendingRequestsOf } from '@/lib/api/friend-requests';
+import {
+  myProfileQueryOptions,
+  myStatsQueryOptions,
+  type MyProfile,
+  type ProfileImageKind,
+  type ProfilePatch,
+} from '@/lib/api/profile';
+import {
+  performImageUpdate,
+  performProfileEdit,
+  type ImageUpdateOutcome,
+  type ProfileEditOutcome,
+} from '@/lib/api/profile-actions';
+import { needsServedPreview, UPLOAD_FORMAT_REFUSED } from '@/lib/media/heif';
+import { PROFILE_IMAGE_ACCEPT } from '@/lib/profile/image-upload';
+import { useEntityImageEdit } from '@/lib/profile/use-entity-image-edit';
+import { appQueryClient } from '@/lib/api/query-client';
+import { sessionStore, type SessionUser } from '@/lib/api/session';
+import { statusMoodsQueryOptions } from '@/lib/api/stories';
+import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { loadProfileDecorCatalog, translateProfileDecor } from '@/lib/i18n-profile-decor-catalog';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { appearanceNames, type AppearanceNames } from '@/lib/profile-decor/catalog';
+import { equipProfileDecor, type DecorSide } from '@/lib/profile-decor/equip';
+import { useDecorDesigns } from '@/lib/profile-decor/use-decor-designs';
+import { useOnline } from '@/lib/net/online';
+import { MY_PROFILE_TABS } from '@/lib/profile/tabs';
+import { usePostGesture } from '@/lib/view/use-post-gesture';
+import { draftIssues, draftOf, draftPatch, type ProfileDraft } from '@/lib/view/profile-draft';
+import { moodsByAuthor } from '@/lib/view/story-tray';
+import {
+  ContactSection,
+  DECOR_ACCENT,
+  DecorEntries,
+  IdentitySection,
+  LanguagesSection,
+  MemberSinceSection,
+  PRISM_RANKS,
+  ProfileHeaderBar,
+  ProfileHero,
+  ProfileHeroSkeleton,
+  ProfileLoadError,
+  ProfileOfflineNotice,
+  ProfileSectionsSkeleton,
+  ProgressionEntry,
+  RequestsSection,
+  StatsSection,
+  type PendingImages,
+  type PrismRank,
+} from '@/routes/profile-sections';
+import { ProfilePostsPanel } from '@/routes/user-profile-posts';
+
+/**
+ * **LE PROFIL** (#6289, #5562) — miroir `ProfileView.swift`. Remplace l'écran
+ * d'attente de #6214. Son adresse complète l'espace `/me` ouvert par
+ * `/me/progression`, et iOS l'ouvre au second tap sur l'avatar du bouton de
+ * droite (`RootView.swift:1570-1579`).
+ *
+ * **Cache d'abord, à deux étages.** La SESSION porte déjà le nom,
+ * l'identifiant, l'avatar et les trois langues : la bannière, l'identité et
+ * les langues se peignent donc au premier rendu, avant toute requête. Le reste
+ * (bio, contact, ancienneté) vient du cache de `GET /me`, persisté ; le
+ * squelette n'est dessiné que pour ce qui manque vraiment.
+ *
+ * **Tout geste est optimiste** (`lib/api/profile-actions.ts`) et se défait
+ * sur un refus, que l'écran annonce. Hors ligne, le profil reste lisible et
+ * les gestes d'écriture sont désactivés — jamais un « enregistré » qui ne
+ * partirait pas.
+ *
+ * **Changer une langue change TOUT le produit sans rechargement** : la session
+ * est écrite au geste, `useReaderLanguages` la lit en primitives, et la liste
+ * des conversations est relue à la confirmation.
+ *
+ * **L'ESSENTIEL D'UN COUP, LE RESTE PAR ONGLETS** (#6330) — sous la bannière,
+ * les quatre compteurs restent visibles quel que soit l'onglet ; puis Détails
+ * (identité, contact, langues, ancienneté), Publications (ses posts, le même
+ * listing que sa fiche publique) et Activité (progression, demandes, dont le
+ * compte se lit déjà sur l'onglet). « Modifier » ramène sur Détails : c'est là
+ * que vivent les champs qu'il ouvre.
+ */
+
+
+const actionDeps = appProfileActionDeps;
+
+/* MON PARTAGE DE BATTERIE (#14147) : son propre chunk — la coupure pour tous, et ce que ce navigateur ne fait pas. */
+const MeBatterySection = lazy(() => import('@/components/battery-panel').then((m) => ({ default: m.MeBatterySection })));
+
+const FIELD_LABELS = {
+  displayName: 'profile.display_name',
+  firstName: 'profile.first_name',
+  lastName: 'profile.last_name',
+  bio: 'profile.bio',
+  systemLanguage: 'profile.language.primary',
+  regionalLanguage: 'profile.language.regional',
+  customDestinationLanguage: 'profile.language.custom',
+} as const satisfies Readonly<Record<string, InterfaceCatalogKey>>;
+
+function editNotice(language: InterfaceLanguage, outcome: ProfileEditOutcome): string {
+  if (outcome.status === 'saved') return translate(language, 'profile.saved');
+  if (outcome.status === 'offline') return translate(language, 'profile.save.offline');
+  if (outcome.status === 'invalid') {
+    const label = Object.entries(FIELD_LABELS).find(([field]) => field === outcome.field)?.[1];
+    return label === undefined ? translate(language, 'profile.save.error') : translate(language, 'profile.save.invalid', { field: translate(language, label) });
+  }
+  return translate(language, 'profile.save.error');
+}
+
+function imageNotice(language: InterfaceLanguage, kind: ProfileImageKind, outcome: ImageUpdateOutcome): string {
+  if (outcome.status === 'saved') return translate(language, kind === 'avatar' ? 'profile.avatar.updated' : 'profile.banner.updated');
+  if (outcome.status === 'offline') return translate(language, 'profile.save.offline');
+  if (outcome.status === 'cancelled') return translate(language, 'profile.image.cancelled');
+  if (outcome.status === 'unreadable') return translate(language, 'profile.image.unreadable');
+  if (outcome.status === 'refused' && outcome.code === UPLOAD_FORMAT_REFUSED) return translate(language, 'profile.image.formatRefused');
+  return translate(language, kind === 'avatar' ? 'profile.avatar.error' : 'profile.banner.error');
+}
+
+type Identity = Pick<MyProfile, 'username' | 'displayName' | 'avatar' | 'banner'>;
+type PrismCodes = Readonly<Record<PrismRank, string | null>>;
+
+const identityOf = (profile: MyProfile | undefined, user: SessionUser | null): Identity | null => {
+  if (profile !== undefined) return profile;
+  if (user === null) return null;
+  return { username: user.username, displayName: user.displayName ?? null, avatar: user.avatar ?? null, banner: null };
+};
+
+const prismOf = (profile: MyProfile | undefined, user: SessionUser | null): PrismCodes | null => {
+  if (profile !== undefined) return profile;
+  if (user === null) return null;
+  return {
+    systemLanguage: user.systemLanguage ?? null,
+    regionalLanguage: user.regionalLanguage ?? null,
+    customDestinationLanguage: user.customDestinationLanguage ?? null,
+  };
+};
+
+const withoutKind = (pending: PendingImages, kind: ProfileImageKind): PendingImages =>
+  kind === 'avatar' ? (pending.banner === undefined ? {} : { banner: pending.banner }) : pending.avatar === undefined ? {} : { avatar: pending.avatar };
+
+export default function ProfileScreen() {
+  const language = currentInterfaceLanguage();
+  const online = useOnline();
+  const sessionUser = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
+  const enabled = apiDeps.source === 'fixtures' || sessionUser !== null;
+
+  const profileQuery = useQuery({ ...myProfileQueryOptions(apiDeps), enabled }, appQueryClient);
+  /* LES COMPTEURS SE SYNCHRONISENT À CHAQUE OUVERTURE (#10092) — le cache se
+     peint d'abord, la lecture repart même s'il est frais : ils bougent sous les
+     gestes des autres. */
+  const statsQuery = useQuery({ ...myStatsQueryOptions(apiDeps), enabled, refetchOnMount: 'always' }, appQueryClient);
+  const receivedRequests = useInfiniteQuery({ ...friendRequestsQueryOptions(apiDeps, 'received'), enabled }, appQueryClient);
+  const profile = profileQuery.data;
+  /* MON HUMEUR (#10530) — lue dans le corpus que le rail a déjà demandé (même
+     clé, même fraîcheur que `useStatusMoods`) : rien n'est demandé à part. */
+  const moodsQuery = useQuery({ ...statusMoodsQueryOptions(apiDeps), staleTime: 60_000, enabled }, appQueryClient);
+  const myId = profile?.id ?? sessionUser?.id;
+  const mood = useMemo(() => (myId === undefined ? undefined : moodsByAuthor(moodsQuery.data ?? []).get(myId)), [moodsQuery.data, myId]);
+  const [tab, selectTab, tabBase] = useProfileTab({ offered: MY_PROFILE_TABS, fallback: 'details' });
+  const { announcement: gestureAnnouncement, onGesture, onShare, onComment, onRepost, repostConfirm, menu } = usePostGesture();
+  const gestures = useMemo(() => ({ onGesture, onShare, onComment, onRepost, menu }), [onGesture, onShare, onComment, onRepost, menu]);
+  const announcePosts = useCallback((text: string) => setNotice({ text }), []);
+
+  const [draft, setDraft] = useState<ProfileDraft | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<{ readonly text: string; readonly bytes?: number } | null>(null);
+  const [openRank, setOpenRank] = useState<PrismRank | null>(null);
+  const [pending, setPending] = useState<PendingImages>({});
+  /* LE DÉCOR (#10632) — les entrées « Bannière » et « Contour » n'existent que si le serveur sert `profileDecor` ;
+     leurs libellés et les noms des choix se chargent à la demande, une fois. */
+  const [decorSide, setDecorSide] = useState<DecorSide | null>(null);
+  const [decorReady, setDecorReady] = useState(false);
+  const [decorNames, setDecorNames] = useState<AppearanceNames | null>(null);
+  const decorServed = profile?.profileDecor !== undefined;
+  const designs = useDecorDesigns(profile?.profileDecor);
+  const controllers = useRef<Partial<Record<ProfileImageKind, AbortController>>>({});
+  const inputs = useRef<Partial<Record<ProfileImageKind, HTMLInputElement | null>>>({});
+
+  useEffect(() => {
+    if (notice === null) return undefined;
+    const handle = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(handle);
+  }, [notice]);
+
+  useEffect(() => {
+    if (!decorServed) return undefined;
+    let live = true;
+    void Promise.all([loadProfileDecorCatalog(language), appearanceNames(language)])
+      .then(([, names]) => {
+        if (!live) return;
+        setDecorNames(names);
+        setDecorReady(true);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [decorServed, language]);
+
+  useEffect(
+    () => () => {
+      Object.values(controllers.current).forEach((controller) => controller?.abort());
+    },
+    [],
+  );
+
+  const identity = identityOf(profile, sessionUser);
+  /* UNE SEULE COULEUR D'ACCENT DE PROFIL (#10741) : celle que voient les autres. */
+  const accent = myId === undefined ? DECOR_ACCENT : authorAccentColor(myId, identity?.displayName ?? identity?.username ?? '');
+  const prism = prismOf(profile, sessionUser);
+  const editing = draft !== null;
+
+  const save = async () => {
+    if (draft === null || profile === undefined) return;
+    if (Object.keys(draftIssues(profile, draft)).length > 0) return;
+    const patch = draftPatch(profile, draft);
+    if (Object.keys(patch).length === 0) {
+      setDraft(null);
+      return;
+    }
+    const typed = draft;
+    setDraft(null);
+    setSaving(true);
+    const outcome = await performProfileEdit({ patch, deps: actionDeps() });
+    setSaving(false);
+    if (outcome.status !== 'saved') setDraft(typed);
+    setNotice({ text: editNotice(language, outcome) });
+  };
+
+  const editPrism = async (patch: ProfilePatch) => {
+    const outcome = await performProfileEdit({ patch, deps: actionDeps() });
+    if (outcome.status !== 'saved') setNotice({ text: editNotice(language, outcome) });
+  };
+
+  const chooseLanguage = (rank: PrismRank, code: string) => {
+    setOpenRank(null);
+    void editPrism({ [rank]: code });
+  };
+
+  const uploadImage = async (kind: ProfileImageKind, file: File) => {
+    /* W9 (#11315) — un HEIC que ce navigateur ne décode pas n'a pas d'aperçu
+       local : l'écran garde l'image servie sous son voile, puis montre le JPEG
+       que la passerelle sert une fois la photo posée. */
+    const preview = (await needsServedPreview(file)) ? null : URL.createObjectURL(file);
+    const controller = new AbortController();
+    controllers.current = { ...controllers.current, [kind]: controller };
+    setPending((current) => ({ ...current, [kind]: preview ?? profile?.[kind] ?? '' }));
+    const outcome = await performImageUpdate({ kind, file, signal: controller.signal, deps: actionDeps() });
+    if (preview !== null) URL.revokeObjectURL(preview);
+    setPending((current) => withoutKind(current, kind));
+    setNotice({ text: imageNotice(language, kind, outcome), ...(outcome.status === 'saved' ? { bytes: outcome.bytesSent } : {}) });
+  };
+
+  /* #17256 — l'image choisie passe par la retouche de la capture, au format
+     de sa cible ; seule l'image retouchée part, Annuler ne pose rien. */
+  const retouch = useEntityImageEdit<ProfileImageKind>({ deliver: (kind, file) => void uploadImage(kind, file) });
+
+  const equipDecor = async (side: DecorSide, choice: ServedProfileDecorItem | null) => {
+    const equipped = profile?.profileDecor?.[side] ?? null;
+    if (equipped?.pack === choice?.pack && equipped?.item === choice?.item) return;
+    const outcome = await equipProfileDecor({ queryClient: appQueryClient, deps: apiDeps, side, choice });
+    if (outcome.status === 'refused') setNotice({ text: translateProfileDecor(language, 'profileDecor.refused') });
+    if (outcome.status === 'error') setNotice({ text: translateProfileDecor(language, 'profileDecor.error') });
+  };
+
+  const decorLabel = (item: ServedProfileDecorItem | null | undefined, table: 'designs' | 'rings' | 'frames'): string | null =>
+    item === null || item === undefined ? null : (decorNames?.[table][item.item] ?? item.item);
+
+  const openSheetRank = PRISM_RANKS.find((entry) => entry.rank === openRank);
+  const requests = pendingRequestsOf(receivedRequests.data);
+  const pendingText = requests === null || requests.count === 0 ? null : `${requests.count}${requests.more ? '+' : ''}`;
+  const badges =
+    pendingText === null || requests === null
+      ? {}
+      : {
+          activity: {
+            text: pendingText,
+            label: translate(language, requests.count === 1 && !requests.more ? 'profile.friend_requests.count.one' : 'profile.friend_requests.count.other', {
+              count: pendingText,
+            }),
+          },
+        };
+
+  return (
+    <div className="flex h-dvh flex-col overflow-hidden pt-safe">
+      <ProfileHeaderBar
+        language={language}
+        editing={editing}
+        saving={saving}
+        online={online}
+        ready={profile !== undefined}
+        onEdit={() => {
+          if (profile === undefined) return;
+          selectTab('details');
+          setDraft(draftOf(profile));
+        }}
+        onCancel={() => setDraft(null)}
+        onSave={() => void save()}
+        saveBlocked={profile !== undefined && draft !== null && Object.keys(draftIssues(profile, draft)).length > 0}
+      />
+      <main id="contenu" className="flex-1 overflow-y-auto px-4 pb-safe">
+        <div className="mx-auto grid max-w-xl gap-6 pb-24 pt-2">
+          {online ? null : <ProfileOfflineNotice language={language} />}
+          {identity === null ? (
+            <ProfileHeroSkeleton />
+          ) : (
+            <ProfileHero
+              language={language}
+              profile={identity}
+              editing={editing && online}
+              pending={pending}
+              onPick={(kind) => inputs.current[kind]?.click()}
+              onCancelUpload={(kind) => controllers.current[kind]?.abort()}
+              game={<GameBannerOwnSlot enabled={enabled} />}
+              mood={mood}
+              moodAuthorId={myId}
+              decor={designs}
+              accent={accent}
+            />
+          )}
+          <StatsSection language={language} stats={statsQuery.data ?? null} />
+          <ProfileTabs language={language} tabs={MY_PROFILE_TABS} active={tab} onChange={selectTab} idBase={tabBase} badges={badges} />
+          <ProfileTabPanel idBase={tabBase} tab={tab}>
+            {tab === 'posts' ? (
+              <ProfilePostsPanel
+                language={language}
+                authorId={profile?.id ?? sessionUser?.id ?? null}
+                stats={null}
+                online={online}
+                gestures={gestures}
+                announce={announcePosts}
+              />
+            ) : tab === 'activity' ? (
+              <>
+                <ProgressionEntry language={language} />
+                <RequestsSection language={language} pending={requests} />
+              </>
+            ) : (
+              <>
+                {profile === undefined ? (
+                  profileQuery.status === 'error' ? (
+                    <ProfileLoadError language={language} onRetry={() => void profileQuery.refetch()} />
+                  ) : (
+                    <ProfileSectionsSkeleton language={language} />
+                  )
+                ) : (
+                  <>
+                    <IdentitySection language={language} profile={profile} editing={editing} draft={draft} onDraft={setDraft} />
+                    <ContactSection language={language} email={profile.email} phone={profile.phone} />
+                    {decorServed && decorReady ? (
+                      <DecorEntries
+                        language={language}
+                        names={{
+                          banner: decorLabel(profile.profileDecor?.banner, 'designs'),
+                          bannerFrame: decorLabel(profile.profileDecor?.bannerFrame, 'frames'),
+                          avatarRing: decorLabel(profile.profileDecor?.avatarRing, 'rings'),
+                        }}
+                        disabled={!online}
+                        onOpen={setDecorSide}
+                      />
+                    ) : null}
+                  </>
+                )}
+                {prism === null ? null : (
+                  <LanguagesSection
+                    language={language}
+                    systemLanguage={prism.systemLanguage}
+                    regionalLanguage={prism.regionalLanguage}
+                    customDestinationLanguage={prism.customDestinationLanguage}
+                    disabled={!online}
+                    onOpen={setOpenRank}
+                    onClear={(rank) => void editPrism({ [rank]: '' })}
+                  />
+                )}
+                <Suspense fallback={null}>
+                  <MeBatterySection language={language} />
+                </Suspense>
+                {profile === undefined ? null : <MemberSinceSection language={language} createdAt={profile.createdAt} />}
+              </>
+            )}
+          </ProfileTabPanel>
+        </div>
+      </main>
+      {(['avatar', 'banner'] as const).map((kind) => (
+        <input
+          key={kind}
+          ref={(element) => {
+            inputs.current = { ...inputs.current, [kind]: element };
+          }}
+          type="file"
+          accept={PROFILE_IMAGE_ACCEPT}
+          data-profile-file={kind}
+          tabIndex={-1}
+          aria-hidden="true"
+          hidden
+          onChange={(event) => retouch.pick(kind, event)}
+        />
+      ))}
+      {retouch.layer}
+      {decorSide === null || !decorReady ? null : (
+        <ProfileDecorSheet
+          side={decorSide}
+          language={language}
+          current={profile?.profileDecor?.[decorSide] ?? null}
+          accent={accent}
+          onChoose={(choice) => void equipDecor(decorSide, choice)}
+          onClose={() => setDecorSide(null)}
+        />
+      )}
+      {openSheetRank === undefined || prism === null ? null : (
+        <LanguageSheet
+          title={translate(language, openSheetRank.title)}
+          {...(prism[openSheetRank.rank] === null ? {} : { selected: prism[openSheetRank.rank] ?? '' })}
+          onSelect={(code) => chooseLanguage(openSheetRank.rank, code)}
+          onClose={() => setOpenRank(null)}
+        />
+      )}
+      <p
+        role="status"
+        aria-live="polite"
+        data-profile-notice
+        {...(notice?.bytes === undefined ? {} : { 'data-uploaded-bytes': String(notice.bytes) })}
+        className="pointer-events-none fixed inset-x-4 bottom-6 mx-auto max-w-sm rounded-chip px-4 py-2.5 text-center text-caption font-semibold empty:hidden"
+        style={{ color: 'var(--color-ios-surface)', backgroundColor: 'var(--color-ios-ink)' }}
+      >
+        {notice?.text ?? gestureAnnouncement}
+      </p>
+      {repostConfirm}
+    </div>
+  );
+}

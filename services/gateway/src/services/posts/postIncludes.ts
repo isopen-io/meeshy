@@ -31,6 +31,7 @@ import { Prisma } from '@meeshy/shared/prisma/client';
  * remain excluded.
  */
 import { NOT_DELETED } from './softDelete';
+import { AVATAR_RING_COLUMN } from '../appearance/profileDecor';
 
 // Ré-exporté ici : la plupart des appelants tiennent déjà `postIncludes` pour
 // leurs formes de `select`/`include` et lisent le prédicat au même endroit.
@@ -41,6 +42,19 @@ export const authorSelect = Prisma.validator<Prisma.UserSelect>()({
   username: true,
   displayName: true,
   avatar: true,
+});
+
+/**
+ * L'auteur d'un post, d'une story, d'un statut ou d'un commentaire TEL QUE LE
+ * FIL LE SERT (#10945) — `authorSelect` + la colonne du contour équipé, lue
+ * dans la même jointure. Elle ne part jamais brute : `withMentions` (posts) et
+ * `hoistCommentCarriers` (commentaires) la résolvent en `profileDecor`. Les
+ * charges servies SANS ces frontières (admin, sons, listes de vues) gardent
+ * `authorSelect`.
+ */
+export const postAuthorSelect = Prisma.validator<Prisma.UserSelect>()({
+  ...authorSelect,
+  ...AVATAR_RING_COLUMN,
 });
 
 /**
@@ -62,14 +76,19 @@ export const authorSelect = Prisma.validator<Prisma.UserSelect>()({
  * brute pendant des mois (cycle 83).
  *
  * Le filtrage vit chez le SERVEUR de la donnée, pas chez sa forme :
- * `PostFeedService.resolveStoryAuthorPresence` tranche par auteur — strict pour
- * qui n'est vu qu'en PUBLIC, préférences seules dès qu'une story de la page
- * prouve un lien posé des deux côtés.
+ * `PostFeedService.resolveStoryAuthorPresence` passe CHAQUE auteur par
+ * `resolveForTargets(viewer, ids)` — critère STRICT, sans exception par
+ * audience (directive du 2026-08-25) : la présence d'un auteur n'est servie
+ * qu'à lui-même, à ADMIN/BIGBOSS, ou à un ami ACCEPTÉ selon ses préférences.
+ * Qu'une story soit adressée `FRIENDS` / `ONLY` / `COMMUNITY` prouve un LIEN
+ * (l'auteur a choisi son audience), pas une AMITIÉ — et un lien ne vaut rien
+ * pour la présence. Le régime « à deux vitesses » par ligne (strict en PUBLIC,
+ * préférences seules dès qu'une ligne prouvait un lien) est SUPPRIMÉ.
  *
  * Derived by spread so any future `authorSelect` field flows through.
  */
 export const storyAuthorSelect = Prisma.validator<Prisma.UserSelect>()({
-  ...authorSelect,
+  ...postAuthorSelect,
   isOnline: true,
   lastActiveAt: true,
   // `banner` complète l'interstitiel : c'était le dernier élément encore
@@ -101,10 +120,30 @@ export const mediaSelect = Prisma.validator<Prisma.PostMediaSelect>()({
   height: true,
   thumbnailUrl: true,
   thumbHash: true,
+  // Variantes WebP responsives (#11260) — OPTIONNEL : absent d'une ligne héritée,
+  // un ancien client ignore la clé.
+  imageVariants: true,
+  avifVariants: true,
+  renditions: true,
+  processingState: true,
+  // #11327 — la lens qui a produit le média de story/post : « Lens par X » à la lecture.
+  lensSlug: true,
   duration: true,
   order: true,
   caption: true,
   alt: true,
+  // Traduction de la LÉGENDE (#6280) — DISTINCTE de `language`/`translations`
+  // ci-dessous, qui décrivent le média (variantes TTS) et ses pistes audio
+  // traduites, jamais sa légende. Voir `packages/shared/decisions.md` § 2026-09-14.
+  captionLanguage: true,
+  captionTranslations: true,
+  // Traduction du texte ALTERNATIF d'accessibilité (#6737) — jumelle exacte
+  // de `captionLanguage`/`captionTranslations` ci-dessus, sur `alt` plutôt que
+  // `caption`. Les colonnes existent depuis PR #6747 (schéma + service) mais
+  // n'avaient jamais rejoint CE select — sans elles, `MediaAltTranslationService`
+  // traduit dans le vide : rien ne peut jamais atteindre un client.
+  altLanguage: true,
+  altTranslations: true,
   language: true,
   variantOf: true,
   transcription: true,
@@ -153,13 +192,17 @@ export const commentsPreviewInclude = Prisma.validator<Prisma.Post$commentsArgs>
     likeCount: true,
     replyCount: true,
     createdAt: true,
+    // #6578 — `postId` est REQUIS par le service de la citation : la re-lecture
+    // du média cité revérifie son appartenance au post commenté SUR LA LIGNE
+    // relue. Sans lui, l'aperçu embarqué sert un `quotedMedia` non vérifié.
+    postId: true,
     // Rappel projet : tout champ lu par un resolver doit figurer dans son
     // `select`. Sans `metadata` ici, un commentaire portant un lieu partagé
     // (`metadata.location`) l'affiche dans la liste complète des commentaires
     // mais pas dans cet aperçu embarqué sur le post — la position semble
     // disparaître selon la surface consultée par le client.
     metadata: true,
-    author: { select: authorSelect },
+    author: { select: postAuthorSelect },
     // A comment's single media (image/video/audio + Prisme transcription/TTS).
     // Without this the feed/reels comments sheet — which reads top-level
     // comments ONLY from this post-embedded preview, never re-fetching them —
@@ -223,11 +266,20 @@ export const repostOfInclude = Prisma.validator<Prisma.Post$repostOfArgs>()({
     audioUrl: true,
     moodEmoji: true,
     originalRepostOfId: true,
-    author: { select: authorSelect },
+    // #10315 — lus pour décider si l'original se SERT encore (`postReferences.ts`),
+    // jamais servis : la projection les retire.
+    visibility: true,
+    moderationHiddenAt: true,
+    deletedAt: true,
+    author: { select: postAuthorSelect },
     media: mediaInclude,
     createdAt: true,
     likeCount: true,
     commentCount: true,
+    // #16541 — l'original fermé ferme aussi ses republications
+    // (`admitCommentHome` lit les deux) : le client le lit ici pour masquer
+    // la barre de composition sans attendre un refus.
+    commentsDisabled: true,
     // `metadata.location` du post SOURCE — sans ce select, `hoistLocationDeep`
     // n'a rien à hisser sur `repostOf` et un repost perd la position de
     // l'original (même porte que `commentsPreviewInclude.metadata`).
@@ -284,23 +336,119 @@ export const trayStorySelect = Prisma.validator<Prisma.PostSelect>()({
       id: true,
       type: true,
       createdAt: true,
-      author: { select: authorSelect },
+      visibility: true,
+      moderationHiddenAt: true,
+      deletedAt: true,
+      author: { select: postAuthorSelect },
       media: mediaInclude,
     },
   },
 });
 
 /**
- * Canonical post include — single source of truth used by every service that
- * needs a fully-hydrated Post (PostService, PostFeedService, PostAudioService,
- * etc.). DO NOT redeclare a local copy: drift between copies is what caused
- * R1 (feed missing Prisme fields) and R3 (audio service stripping reposts).
+ * Every Post scalar EXCEPT `storyViews` — the embedded viewer list reserved
+ * for the author-only `GET /posts/:id/views` route (`routes/posts/interactions.ts`)
+ * — and EXCEPT `reactions`, the legacy Json `[{ userId, emoji, createdAt }]`
+ * (#7406) : it handed every reader of every card the id of everyone who
+ * reacted, unbounded, while `GET /posts/:postId/interactions` reserves that to
+ * the author. No client reads it : `reactionSummary`/`reactionCount` carry the
+ * aggregate, and the viewer's own reactions come from the `PostReaction` table
+ * (`viewerPostState.ts`). It is no longer written by `likePost`/`unlikePost`
+ * either ; only the moderation detail (`routes/admin/posts.ts`) still selects it.
+ *
+ * `visibilityUserIds` IS loaded — the gateway routes its broadcasts and its
+ * notifications with it — but loading is not serving : every read served to
+ * someone else than the author strips it (`audienceList.ts`, #7407).
+ *
+ * `postInclude` used to be a `Prisma.PostInclude` (a relations-only shape):
+ * Prisma always returns EVERY scalar of the model under `include`, so
+ * `storyViews` travelled to every reader of a post — feed, hashtag search,
+ * nearby, reposts, comments-attached posts, all of it — regardless of who's
+ * asking, while the dedicated route enforces "author only". `postInclude` is
+ * now built on top of THIS explicit `select`, so adding a scalar to the model
+ * requires a deliberate decision here instead of an automatic leak (#4791).
  */
-export const postInclude = Prisma.validator<Prisma.PostInclude>()({
-  author: { select: authorSelect },
+export const postScalarSelect = Prisma.validator<Prisma.PostSelect>()({
+  id: true,
+  authorId: true,
+  type: true,
+  visibility: true,
+  visibilityUserIds: true,
+  content: true,
+  originalLanguage: true,
+  detectedLanguage: true,
+  translations: true,
+  metadata: true,
+  geoPoint: true,
+  geoPrecision: true,
+  communityId: true,
+  repostOfId: true,
+  originalRepostOfId: true,
+  isQuote: true,
+  storyEffects: true,
+  allowSoundExtraction: true,
+  commentsDisabled: true,
+  moodEmoji: true,
+  audioUrl: true,
+  audioDuration: true,
+  expiresAt: true,
+  reactionSummary: true,
+  reactionCount: true,
+  likeCount: true,
+  commentCount: true,
+  repostCount: true,
+  viewCount: true,
+  impressionCount: true,
+  bookmarkCount: true,
+  shareCount: true,
+  postOpenCount: true,
+  anonymousViewCount: true,
+  anonymousImpressionCount: true,
+  uniqueViewCount: true,
+  anonymousUniqueViewCount: true,
+  openCountByOrigin: true,
+  viewCountByProvenance: true,
+  listingViewCountByOrigin: true,
+  qualifiedViewCount: true,
+  playCount: true,
+  downloadCount: true,
+  isPinned: true,
+  isEdited: true,
+  contentEditedAt: true,
+  deletedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+/**
+ * Canonical post hydration — single source of truth used by every service
+ * that needs a fully-hydrated Post (PostService, PostFeedService,
+ * PostAudioService, etc.). DO NOT redeclare a local copy: drift between
+ * copies is what caused R1 (feed missing Prisme fields) and R3 (audio
+ * service stripping reposts).
+ *
+ * A `Prisma.PostSelect`, not a `Prisma.PostInclude`: every consumer passes it
+ * under `select:`, never `include:` — `include` cannot express "every scalar
+ * except one", it can only express "every scalar, plus these relations".
+ */
+export const postInclude = Prisma.validator<Prisma.PostSelect>()({
+  ...postScalarSelect,
+  author: { select: postAuthorSelect },
   media: mediaInclude,
   comments: commentsPreviewInclude,
   repostOf: repostOfInclude,
+  postMentions: postMentionInclude,
+});
+
+/**
+ * Status (mood) shape — the explicit scalars plus author and visible
+ * references. The status lists used `include`, which returns EVERY scalar of
+ * the model — `storyViews`, `reactions` and all — whatever `postScalarSelect`
+ * decides (#7406).
+ */
+export const statusPostSelect = Prisma.validator<Prisma.PostSelect>()({
+  ...postScalarSelect,
+  author: { select: postAuthorSelect },
   postMentions: postMentionInclude,
 });
 
@@ -310,7 +458,7 @@ export const postInclude = Prisma.validator<Prisma.PostInclude>()({
  * relation to `postInclude` flows through here automatically, so the two
  * shapes cannot drift apart.
  */
-export const storyPostInclude = Prisma.validator<Prisma.PostInclude>()({
+export const storyPostInclude = Prisma.validator<Prisma.PostSelect>()({
   ...postInclude,
   author: { select: storyAuthorSelect },
 });
@@ -326,4 +474,4 @@ export type AuthorPayload = Prisma.UserGetPayload<{ select: typeof authorSelect 
 export type MediaPayload = Prisma.PostMediaGetPayload<{ select: typeof mediaSelect }>;
 
 /** Fully-hydrated Post — author + media + top-3 comments + repostOf. */
-export type PostPayload = Prisma.PostGetPayload<{ include: typeof postInclude }>;
+export type PostPayload = Prisma.PostGetPayload<{ select: typeof postInclude }>;

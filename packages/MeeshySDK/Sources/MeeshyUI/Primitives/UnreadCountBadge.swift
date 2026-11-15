@@ -54,7 +54,7 @@ public struct UnreadCountBadge: View {
             let badgeColor = MeeshyColors.unreadBadgeBackground(isDark: isDark)
             Text(NotificationBadge.displayed(count))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: NotificationBadge.fontWeight))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .lineLimit(1)
                 .padding(.horizontal, Self.horizontalPadding)
                 .padding(.vertical, Self.verticalPadding)

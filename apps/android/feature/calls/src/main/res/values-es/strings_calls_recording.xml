@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_recording_end_to_end_refused">La grabación no está disponible en una conversación cifrada de extremo a extremo</string>
+</resources>

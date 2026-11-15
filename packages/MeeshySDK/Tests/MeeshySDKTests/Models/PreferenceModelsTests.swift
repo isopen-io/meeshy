@@ -137,7 +137,7 @@ final class PreferenceModelsTests: XCTestCase {
         XCTAssertTrue(defaults.showReadReceipts)
         XCTAssertTrue(defaults.showTypingIndicator)
         XCTAssertTrue(defaults.allowContactRequests)
-        XCTAssertFalse(defaults.allowCallsFromNonContacts)
+        XCTAssertTrue(defaults.acceptCallsFromNonContacts)
         XCTAssertFalse(defaults.saveMediaToGallery)
         XCTAssertFalse(defaults.blockScreenshots)
         XCTAssertEqual(defaults.encryptionPreference, .optional)
@@ -150,6 +150,22 @@ final class PreferenceModelsTests: XCTestCase {
         XCTAssertEqual(decoded, original)
     }
 
+    func testPrivacyPreferences_decodingWithoutTheKey_acceptsCallsFromNonContacts() throws {
+        let decoded = try JSONDecoder().decode(PrivacyPreferences.self, from: Data("{}".utf8))
+        XCTAssertTrue(decoded.acceptCallsFromNonContacts)
+    }
+
+    func testPrivacyPreferences_retiredAllowCallsKey_isIgnoredAndNeverSent() throws {
+        let decoded = try JSONDecoder().decode(
+            PrivacyPreferences.self,
+            from: Data(#"{"allowCallsFromNonContacts":false}"#.utf8)
+        )
+        XCTAssertTrue(decoded.acceptCallsFromNonContacts)
+        let encoded = String(decoding: try JSONEncoder().encode(decoded), as: UTF8.self)
+        XCTAssertFalse(encoded.contains("allowCallsFromNonContacts"))
+        XCTAssertTrue(encoded.contains("acceptCallsFromNonContacts"))
+    }
+
     // MARK: - AudioPreferences
 
     func testAudioPreferencesDefaults() {
@@ -157,7 +173,7 @@ final class PreferenceModelsTests: XCTestCase {
 
         XCTAssertTrue(defaults.transcriptionEnabled)
         XCTAssertEqual(defaults.transcriptionSource, .auto)
-        XCTAssertFalse(defaults.autoTranscribeIncoming)
+        XCTAssertTrue(defaults.autoTranscribeIncoming)
         XCTAssertTrue(defaults.audioTranslationEnabled)
         XCTAssertEqual(defaults.translatedAudioFormat, .mp3)
         XCTAssertTrue(defaults.ttsEnabled)

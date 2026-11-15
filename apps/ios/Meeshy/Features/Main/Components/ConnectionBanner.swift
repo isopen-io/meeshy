@@ -3,9 +3,10 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
-/// Single inline pill at the top of every NavigationStack content view
-/// (mounted via `.safeAreaInset(edge: .top, spacing: 0)` on `RootView` /
-/// `iPadRootView`). Acts as the **orchestrator** for the unified
+/// Single inline pill floating just above the bottom chrome of every screen
+/// (mounted by `.inSyncPillBand()` on `RootView` / `iPadRootView`, docked on
+/// the composer bar and following the keyboard, see `SyncPillPlacement`,
+/// #10840). Acts as the **orchestrator** for the unified
 /// `SyncPill` chip: it collects every signal worth surfacing
 /// (`ConnectionStatus`, offline outbox items, transient online return)
 /// and emits a single list of `SyncPillEntry` to rotate through.
@@ -26,6 +27,16 @@ import MeeshyUI
 /// clears — there is no 3-cycle auto-hide; the rotation runs as long as
 /// the entry list is non-empty.
 struct ConnectionBanner: View {
+    /// #4028 — la pastille cède à une notification in-app. Le gestionnaire est
+    /// un singleton STABLE : l'observer ici plutôt que de faire passer un
+    /// drapeau par les deux hôtes évite d'ajouter la même ligne à deux endroits
+    /// dont l'un est hors budget — et surtout évite une troisième écriture de
+    /// la même question, que la règle `SyncPillVisibility` vient justement de
+    /// rassembler.
+    @ObservedObject private var inAppNotices: NotificationToastManager
+    /// Les annonces de batterie des proches (#14147) : des ÉVÉNEMENTS qui passent dans la rotation puis
+    /// s'éteignent d'eux-mêmes (`BatteryAnnouncementFeed.lifetime`) ; un nouvel événement les ramène.
+    @ObservedObject private var batteryAnnouncements: BatteryAnnouncementFeed
     @StateObject private var statusVM = ConnectionStatusViewModel()
     @StateObject private var syncPillVM = SyncPillViewModel()
     /// Source des frappes hors conversation. Injectée EXPLICITEMENT par
@@ -40,7 +51,31 @@ struct ConnectionBanner: View {
     /// conversations) désactive uniquement les entrées de frappe — le
     /// reste (statut connexion, file d'attente hors-ligne) fonctionne
     /// identiquement.
-    let conversationListViewModel: ConversationListViewModel?
+    ///
+    /// **Le view-model n'est PAS stocké** (#4049) : il n'est lu qu'à l'`init`,
+    /// pour en tirer le publisher ci-dessous. Le garder en propriété invitait
+    /// à écrire `conversationListViewModel.typingUsers` dans `entries` — ce
+    /// qui n'abonne rien et laissait la frappe sans effet à l'écran. Ne pas
+    /// avoir le champ rend ce défaut inécrivable.
+    ///
+    /// Les frappeurs, OBSERVÉS : la re-render reste confinée à la bannière —
+    /// l'hôte (`ConversationListVMOwner`) n'observe toujours rien, et
+    /// `RootView.body` ne se ré-évalue pas pour une frappe.
+    @StateObject private var typingSource: TypingEntriesSource
+
+    // **L'annonce de frappe est retournée à la pastille** (#6188). Elle avait été confiée (#4066) à une
+    // capsule naissant dans la Dynamic Island, orchestrée ici : trois états et
+    // une vue vivaient à cet endroit.
+    //
+    // Il n'en reste RIEN, et c'est le point : les entrées de frappe entrent
+    // déjà dans `entries` (voir `typingEntries`, plus bas), donc la pastille
+    // les reçoit, les fait tourner, les rend tappables par leur `source` — et
+    // décide elle-même de son accent, qu'elle est la seule à pouvoir mesurer.
+    // Dupliquer ici la détection de nouveauté (`seenTypingIDs`) revenait à
+    // tenir deux fois le même fait ; `SyncPill.seenEntryIDs` le tient une.
+    //
+    // `IslandEmergingBanner` a été retiré: plus aucun hôte ne le montait.
+
     /// `true` quand `StoryViewerView` est présenté en `fullScreenCover` —
     /// cache la pill pour qu'elle ne rende plus par-dessus le header story
     /// (bug 2026-05-27). Injecté explicitement pour la même raison que
@@ -49,8 +84,10 @@ struct ConnectionBanner: View {
 
     /// Callback invoked when the user taps an entry whose `source` is
     /// non-nil. The mount point (`RootView` / `iPadRootView`) wires this
-    /// to its router to push onto the navigation stack.
-    private let onItemTap: ((OutboxUIItem.Source) -> Void)?
+    /// to `SyncPillDestination` and presents the result. Returns `false` when
+    /// nothing was opened, so the pill advances its rotation instead of
+    /// staying inert.
+    private let onItemTap: ((OutboxUIItem.Source) -> Bool)?
 
     /// Identifiant de la conversation actuellement à l'écran, quand le point de
     /// montage en connaît une. Elle est exclue des entrées de frappe : son
@@ -102,17 +139,30 @@ struct ConnectionBanner: View {
 
     init(
         conversationListViewModel: ConversationListViewModel?,
-        isStoryViewerPresenting: Bool = false,
-        onItemTap: ((OutboxUIItem.Source) -> Void)? = nil,
-        activeConversationId: (() -> String?)? = nil
+        isStoryViewerPresenting: Bool,
+        onItemTap: ((OutboxUIItem.Source) -> Bool)? = nil,
+        activeConversationId: (() -> String?)? = nil,
+        inAppNotices: NotificationToastManager = .shared,
+        batteryAnnouncements: BatteryAnnouncementFeed = .shared
     ) {
-        self.conversationListViewModel = conversationListViewModel
+        self.inAppNotices = inAppNotices
+        self.batteryAnnouncements = batteryAnnouncements
         self.isStoryViewerPresenting = isStoryViewerPresenting
         self.onItemTap = onItemTap
         self.activeConversationId = activeConversationId
+        // `@StateObject` : l'abonnement naît UNE fois par identité de vue, et
+        // survit aux reconstructions fréquentes de la bannière par ses hôtes.
+        // Le view-model, lui, a une identité stable (possédé par un
+        // `@StateObject` d'hôte), donc la valeur capturée à la première
+        // construction reste la bonne pour toute la durée de vie.
+        _typingSource = StateObject(
+            wrappedValue: TypingEntriesSource(
+                publisher: conversationListViewModel?.$typingUsers.eraseToAnyPublisher()
+            )
+        )
     }
 
-    private var isDisconnected: Bool { statusVM.status == .disconnected }
+    private var isDisconnected: Bool { Self.isDown(statusVM.status) }
     private var isOffline: Bool { statusVM.status == .offline }
     private var isSyncing: Bool { statusVM.status == .syncing }
 
@@ -145,10 +195,10 @@ struct ConnectionBanner: View {
                 source: nil,
                 showsActivityDots: false
             ))
-        } else if isDisconnected && showReconnecting {
+        } else if showReconnecting, let label = Self.downLabel(for: statusVM.status) {
             result.append(SyncPillEntry(
-                id: "status.disconnected",
-                label: String(localized: "connection.reconnecting", defaultValue: "Reconnexion"),
+                id: "status.\(statusVM.status)",
+                label: label,
                 iconName: nil,
                 dotStyle: .warning,
                 source: nil
@@ -175,16 +225,24 @@ struct ConnectionBanner: View {
                 dotStyle: isTerminalFailure ? .error : .brand,
                 source: item.source,
                 // A permanently-failed row is not in flight — no activity dots.
-                showsActivityDots: !isTerminalFailure
+                showsActivityDots: !isTerminalFailure,
+                // **Une ligne terminale se RELANCE d'un doigt** (#5830).
+                // `item.id` EST l'identifiant de la ligne outbox : la pastille
+                // le portait déjà sans jamais s'en servir, et le tap tombait
+                // dans `case .unknown: break` chez les deux racines — une
+                // publication échouée était un mur.
+                retryOutboxId: StuckPublicationRetry.retryableOutboxId(for: item),
+                // #10331 — une publication en file s'annule d'ici aussi.
+                pendingPublicationId: PendingPublicationPill.cancellableId(for: item)
             ))
         }
 
-        if let conversationListViewModel {
-            result.append(contentsOf: Self.typingEntries(
-                typingUsers: conversationListViewModel.typingUsers,
-                excluding: activeConversationId?()
-            ))
-        }
+        result.append(contentsOf: batteryAnnouncements.entries)
+
+        result.append(contentsOf: Self.typingEntries(
+            typingUsers: typingSource.typingUsers,
+            excluding: activeConversationId?()
+        ))
 
         return result
     }
@@ -208,36 +266,28 @@ struct ConnectionBanner: View {
                     label: "@\(username)",
                     iconName: nil,
                     dotStyle: .brand,
-                    source: .conversation(id: conversationId),
+                    // #4027 — la frappe mène à la CONVERSATION, sans ancre :
+                    // « X écrit » ne désigne aucun message, il n'y en a pas
+                    // encore. `nil` est ici le verdict juste, pas un trou.
+                    source: .conversation(id: conversationId, messageId: nil),
                     showsActivityDots: true
                 )
             }
-    }
-
-    /// Marge haute d'un point de montage, une fois la remontée appliquée.
-    ///
-    /// Les quatre hôtes de la pastille lui réservaient chacun leur propre marge
-    /// (72 pt sous le header de conversation, 56/72 pt en flux invité, 8 pt sur
-    /// le viewer de story, 0 sur iPad). La remontée se retranche de cette marge
-    /// plutôt que de s'appliquer en `offset` : bornée à `0`, elle ne peut
-    /// jamais pousser la pastille par-dessus la barre d'état ou la Dynamic
-    /// Island — un hôte déjà collé en haut reste où il est, un hôte qui a de la
-    /// marge la rend.
-    ///
-    /// Fonction pure `static` : c'est la DÉCISION qui se teste, pas le rendu.
-    static func liftedTopPadding(base: CGFloat) -> CGFloat {
-        max(0, base - SyncPillMetrics.topLift)
     }
 
     var body: some View {
         // Skip rendering when StoryViewerView est présenté plein écran —
         // le fullScreenCover du root ne supprime pas les safeAreaInset /
         // overlays du parent et le pill restait visible par-dessus le
-        // header story (bug 2026-05-27).
-        if isStoryViewerPresenting {
+        // header story.
+        if !SyncPillVisibility.isVisible(storyViewerPresenting: isStoryViewerPresenting,
+                                         inAppNoticePresenting: inAppNotices.currentToast != nil) {
             EmptyView()
         } else {
-            SyncPill(entries: entries, onTap: onItemTap)
+            SyncPill(entries: entries,
+                     onTap: onItemTap,
+                     onRetry: { StuckPublicationRetry.retry(outboxId: $0) },
+                     onCancelPublication: { PendingPublicationCancel.start($0) })
                 .adaptiveOnChange(of: statusVM.status) { oldValue, newValue in
                     handleStatusTransition(from: oldValue, to: newValue)
                 }
@@ -270,7 +320,32 @@ struct ConnectionBanner: View {
         previous: ConnectionStatusViewModel.Status?,
         new: ConnectionStatusViewModel.Status
     ) -> Bool {
-        new == .disconnected && previous != .disconnected
+        isDown(new) && !isDown(previous)
+    }
+
+    /// Un socket qui n'a ENCORE JAMAIS été connecté se CONNECTE (#10923) : à
+    /// chaque ouverture de l'app, la pastille disait « Reconnexion en cours »
+    /// d'une première connexion. Le libellé suit le statut, jamais l'inverse.
+    static func downLabelKey(for status: ConnectionStatusViewModel.Status) -> String? {
+        switch status {
+        case .connecting: "connection.connecting"
+        case .disconnected: "connection.reconnecting"
+        case .connected, .syncing, .offline: nil
+        }
+    }
+
+    private static func downLabel(for status: ConnectionStatusViewModel.Status) -> String? {
+        switch downLabelKey(for: status) {
+        case "connection.connecting": String(localized: "connection.connecting", defaultValue: "Connexion en cours")
+        case "connection.reconnecting": String(localized: "connection.reconnecting", defaultValue: "Reconnexion en cours")
+        default: nil
+        }
+    }
+
+    /// Le socket est attendu (première connexion ou reconnexion) alors que le
+    /// réseau est là — la seule situation que la fenêtre de grâce arbitre.
+    static func isDown(_ status: ConnectionStatusViewModel.Status?) -> Bool {
+        status == .disconnected || status == .connecting
     }
 
     /// `true` when, at the end of the grace window, the socket is STILL down so
@@ -280,7 +355,7 @@ struct ConnectionBanner: View {
     static func shouldSurfaceReconnecting(
         statusAtDeadline: ConnectionStatusViewModel.Status
     ) -> Bool {
-        statusAtDeadline == .disconnected
+        isDown(statusAtDeadline)
     }
 
     /// Seeds the surfacing state machine from the status observed at mount,
@@ -291,7 +366,7 @@ struct ConnectionBanner: View {
         switch status {
         case .offline:
             downWasSurfaced = true
-        case .disconnected:
+        case .disconnected, .connecting:
             scheduleReconnectingGrace()
         case .connected, .syncing:
             break
@@ -317,7 +392,7 @@ struct ConnectionBanner: View {
             showReconnecting = false
             downWasSurfaced = true
 
-        case .disconnected:
+        case .disconnected, .connecting:
             if Self.shouldStartReconnectingGrace(previous: previous, new: newValue) {
                 scheduleReconnectingGrace()
             }
@@ -337,8 +412,7 @@ struct ConnectionBanner: View {
     private func scheduleReconnectingGrace() {
         reconnectingGraceTimer?.cancel()
         reconnectingGraceTimer = Task { @MainActor [graceDuration = Self.reconnectingGraceDuration] in
-            try? await Task.sleep(for: graceDuration)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: graceDuration), !Task.isCancelled else { return }
             guard Self.shouldSurfaceReconnecting(statusAtDeadline: statusVM.status) else { return }
             showReconnecting = true
             downWasSurfaced = true
@@ -357,8 +431,7 @@ struct ConnectionBanner: View {
         justReturnedOnlineTimer?.cancel()
         showJustReturnedOnline = true
         justReturnedOnlineTimer = Task { @MainActor [showDuration = Self.onlineAckDuration] in
-            try? await Task.sleep(for: showDuration)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: showDuration), !Task.isCancelled else { return }
             showJustReturnedOnline = false
         }
     }

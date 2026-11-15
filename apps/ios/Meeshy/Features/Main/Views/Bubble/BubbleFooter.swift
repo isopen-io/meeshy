@@ -2,6 +2,23 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
+// MARK: - Toucher de l'humeur de l'auteur (#10529)
+
+private struct BubbleSenderMoodTapKey: EnvironmentKey {
+    static let defaultValue: ((CGPoint) -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    /// Le toucher de la pastille d'humeur de l'auteur, posé par
+    /// `ThemedMessageBubble` pour le pied qui porte son avatar. Une valeur
+    /// d'environnement : le pied reste `Equatable` sur son seul modèle, et
+    /// `BubbleStandardLayout` n'a rien à relayer. `nil` ⇒ pastille décorative.
+    var bubbleSenderMoodTap: ((CGPoint) -> Void)? {
+        get { self[BubbleSenderMoodTapKey.self] }
+        set { self[BubbleSenderMoodTapKey.self] = newValue }
+    }
+}
+
 /// The single message-bubble footer. Renders a `BubbleFooterModel` — flags +
 /// translate on the leading edge, timestamp + delivery check pinned trailing.
 /// `Equatable` on `model` only (the actions are stateless closures), so list
@@ -11,6 +28,9 @@ struct BubbleFooter: View, Equatable {
     let actions: BubbleFooterActions
     let style: BubbleFooterStyle
     let isDark: Bool
+    @Environment(\.bubbleSenderMoodTap) private var senderMoodTap
+    @Environment(\.bubbleSkin) private var skin
+    @Environment(\.pendingUploadProgress) private var pendingUpload
 
     static func == (lhs: BubbleFooter, rhs: BubbleFooter) -> Bool {
         lhs.model == rhs.model && lhs.style == rhs.style && lhs.isDark == rhs.isDark
@@ -33,25 +53,26 @@ struct BubbleFooter: View, Equatable {
         // pas de capsule de fond : juste timestamp + delivery check (si
         // message envoye). Le tout dans un HStack tres serre pour rester
         // visuellement attache a l'emoji.
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
+            editMark
             if let timestamp = model.timestamp {
                 Text(timestamp)
                     .font(.caption.weight(.medium))
-                    .foregroundColor(compactMetaColor)
+                    .foregroundStyle(compactMetaColor)
             }
             if model.delivery != nil {
                 if model.isFailed, let onRetry = actions.onRetry {
                     Button(action: { onRetry(); HapticFeedback.light() }) {
-                        HStack(spacing: 3) {
+                        HStack(spacing: MeeshySpacing.xxs) {
                             deliveryView(tint: compactMetaColor, readTint: readColor)
                             Image(systemName: "arrow.clockwise")
                                 .font(.caption2.weight(.bold))
-                                .foregroundColor(MeeshyColors.error)
+                                .foregroundStyle(MeeshyColors.stateFailed)
                         }
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "bubble.footer.resend", defaultValue: "Resend message", bundle: .main))
+                    .accessibilityLabel(String(localized: "bubble.footer.resend", defaultValue: "Renvoyer le message", bundle: .main))
                 } else {
                     deliveryView(tint: compactMetaColor, readTint: readColor)
                 }
@@ -63,7 +84,7 @@ struct BubbleFooter: View, Equatable {
         // Le compact footer s'affiche TOUJOURS hors d'une bulle (free-floating
         // emoji), donc on n'a pas de fond brand a contraster. On utilise la
         // couleur meta neutre quel que soit isMe.
-        isDark ? .white.opacity(0.55) : .black.opacity(0.5)
+        MeeshyColors.textMuted(isDark: isDark)
     }
 
     // MARK: - Row style (text / emoji / audio / story-reply)
@@ -71,7 +92,7 @@ struct BubbleFooter: View, Equatable {
     @ViewBuilder
     private var rowFooter: some View {
         if let sender = model.sender {
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: MeeshySpacing.sm) {
                 MeeshyAvatar(
                     name: sender.name,
                     context: .messageBubble,
@@ -80,15 +101,19 @@ struct BubbleFooter: View, Equatable {
                     storyState: sender.storyRing,
                     moodEmoji: sender.moodEmoji,
                     presenceState: sender.presence,
+                    isHere: sender.isHere,
+                    ring: sender.ring,
                     enablePulse: false,
                     onTap: actions.onSenderTap,
                     onViewProfile: actions.onSenderTap,
                     onViewStory: actions.onViewStory,
+                    onMoodTap: senderMoodTap,
                     contextMenuItems: avatarMenu(sender: sender)
                 )
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 4) {
-                        // Nom borné à 16 caractères (directive user 2026-07-30) :
+                .modifier(MessageAvatarPressClaim(hasMenu: avatarMenu(sender: sender) != nil))
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    HStack(spacing: MeeshySpacing.xs) {
+                        // Nom borné à 16 caractères:
                         // au-delà, le pseudo mangeait la rangée et repoussait
                         // l'heure + l'accusé de lecture contre le bord. Le
                         // `lineLimit(1)` reste comme filet pour les très grandes
@@ -104,13 +129,13 @@ struct BubbleFooter: View, Equatable {
                     if let username = sender.username {
                         Text(username)
                             .font(.caption2)
-                            .foregroundColor(metaColor.opacity(0.8))
+                            .foregroundStyle(metaColor.opacity(MeeshyOpacity.intense))
                             .lineLimit(1)
                     }
                 }
             }
         } else {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 metaLeading
                 Spacer(minLength: 4)
                 metaTrailing
@@ -123,17 +148,17 @@ struct BubbleFooter: View, Equatable {
     @ViewBuilder
     private var overlayFooter: some View {
         if model.timestamp != nil || model.delivery != nil {
-            HStack(spacing: 3) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 if let timestamp = model.timestamp {
                     Text(timestamp)
                         .font(.caption2.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                 }
-                deliveryView(tint: .white.opacity(0.85), readTint: MeeshyColors.indigo400)
+                deliveryView(tint: .white.opacity(MeeshyOpacity.intense), readTint: MeeshyColors.indigo400)
             }
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(Capsule().fill(Color.black.opacity(0.55)))
+            .padding(.horizontal, MeeshySpacing.xsPlus)
+            .padding(.vertical, MeeshySpacing.xxs)
+            .background(Capsule().fill(MeeshyColors.mediaScrim))
         }
     }
 
@@ -151,22 +176,20 @@ struct BubbleFooter: View, Equatable {
     /// rendait l'affordance instable.
     @ViewBuilder
     private var metaLeading: some View {
-        // Toujours afficher le contrôleur translate quand un callback est
-        // fourni, même si aucune langue alternative n'est encore disponible :
-        // c'est l'entrée vers la demande de traduction (sheet langue / ajout).
-        if let onTranslate = actions.onTranslate {
+        // #7599 / #7620 — l'icône n'est la porte vers la demande que là où
+        // AUCUN drapeau ne dit déjà la traduction. La règle est celle du
+        // MODÈLE : la vue ne la redécide pas à partir du seul rappel.
+        if model.showsTranslateGlyph, let onTranslate = actions.onTranslate {
             Button(action: { onTranslate(); HapticFeedback.light() }) {
                 Image(systemName: "translate")
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(MeeshyColors.indigo400)
+                    .foregroundStyle(MeeshyColors.indigo400)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(model.showsTranslate
-                                ? String(localized: "bubble.footer.translation.available", defaultValue: "Translation available", bundle: .main)
-                                : String(localized: "bubble.footer.translation.request", defaultValue: "Request translation", bundle: .main))
+            .accessibilityLabel(String(localized: "bubble.footer.translation.request", defaultValue: "Demander la traduction", bundle: .main))
         }
         if !model.flags.isEmpty {
-            HStack(spacing: 2) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 ForEach(model.flags, id: \.code) { flag in
                     footerFlagPill(flag)
                 }
@@ -177,27 +200,48 @@ struct BubbleFooter: View, Equatable {
     /// Trailing meta: timestamp + delivery check (or retry button on failure).
     @ViewBuilder
     private var metaTrailing: some View {
+        integrityMark
+        editMark
         if let timestamp = model.timestamp {
             Text(timestamp)
                 .font(.caption.weight(.medium))
-                .foregroundColor(metaColor)
+                .foregroundStyle(metaColor)
         }
         if model.delivery != nil {
             if model.isFailed, let onRetry = actions.onRetry {
                 Button(action: { onRetry(); HapticFeedback.light() }) {
-                    HStack(spacing: 3) {
+                    HStack(spacing: MeeshySpacing.xxs) {
                         deliveryView(tint: metaColor, readTint: readColor)
                         Image(systemName: "arrow.clockwise")
                             .font(.caption2.weight(.bold))
-                            .foregroundColor(MeeshyColors.error)
+                            .foregroundStyle(MeeshyColors.stateFailed)
                     }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "bubble.footer.resend", defaultValue: "Resend message", bundle: .main))
+                .accessibilityLabel(String(localized: "bubble.footer.resend", defaultValue: "Renvoyer le message", bundle: .main))
             } else {
                 deliveryView(tint: metaColor, readTint: readColor)
             }
+        }
+    }
+
+    /// #7620 — « modifié » se dit ICI, juste avant l'heure, comme la rangée
+    /// plate (`FocalMetaRow`) le fait déjà. En tête de bulle, le crayon
+    /// tombait dans le coin arrondi que le `clipShape` de la bulle rogne.
+    /// #14369 — le verdict de la couche appareil d'un hybride, avant l'heure.
+    @ViewBuilder
+    private var integrityMark: some View {
+        if let integrity = model.integrity {
+            BubbleDeviceLayerMark(integrity: integrity, isMe: model.isMe, isDark: isDark)
+        }
+    }
+
+    @ViewBuilder
+    private var editMark: some View {
+        if let edit = model.edit {
+            BubbleEditedIndicator(isMe: model.isMe, isSaving: edit == .saving, hasEditHistory: false, isDark: isDark,
+                                  byModerator: edit == .editedByModerator)
         }
     }
 
@@ -211,7 +255,7 @@ struct BubbleFooter: View, Equatable {
                 readTint: readTint,
                 sendStartedAt: model.sendStartedAt
             )
-            if let onShowReadStatus = actions.onShowReadStatus {
+            if pendingUpload == nil || delivery != .sending, let onShowReadStatus = actions.onShowReadStatus {
                 // Tap sur les coches -> ouvre le sheet detail a l'onglet
                 // "Vues" pour consulter qui a recu / qui a lu. Le bouton
                 // englobe une hit-area 22pt pour rester confortable au
@@ -225,41 +269,28 @@ struct BubbleFooter: View, Equatable {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "bubble.footer.readStatus", defaultValue: "View read status", bundle: .main))
-                .accessibilityHint(String(localized: "bubble.footer.readStatus.hint", defaultValue: "Opens message detail at the Views tab", bundle: .main))
+                .accessibilityLabel(String(localized: "bubble.footer.readStatus", defaultValue: "Voir le statut de lecture", bundle: .main))
+                .accessibilityHint(String(localized: "bubble.footer.readStatus.hint", defaultValue: "Ouvre le détail du message sur l'onglet Vues", bundle: .main))
             } else {
                 check
             }
         }
     }
 
+    /// Le pied de bulle sert la MÊME puce que le fil, le détail, les
+    /// commentaires, la story et les reels — `LanguageFlagChip`, en registre
+    /// `.compact`.
+    ///
+    /// Ce que le registre préserve de la version qui vivait ici : un `Button`
+    /// (et non un `onTapGesture`, dont le tap serait avalé par le
+    /// `.simultaneousGesture(LongPressGesture(0.35))` que `BubbleSwipeContainer`
+    /// pose sur la bulle), un `contentShape` À L'INTÉRIEUR du label, et la cible
+    /// de 22 pt qui tient même quand le drapeau est inactif — sans soulignement,
+    /// le `VStack` retomberait à ~12 pt.
     private func footerFlagPill(_ flag: FooterFlag) -> some View {
-        let display = LanguageDisplay.from(code: flag.code)
-        // `Button + .buttonStyle(.plain)` au lieu de `.onTapGesture` : sans ça
-        // le tap est avalé par le `.simultaneousGesture(LongPressGesture(0.35))`
-        // que `BubbleSwipeContainer` pose sur la bulle. C'est le même pattern
-        // que pour la coche delivery (read receipt) qui marche déjà, et que
-        // pour le bouton translate juste à côté. `.contentShape(Rectangle())`
-        // garde la hit-area de 22pt mini même quand le drapeau n'est pas actif
-        // (pas de soulignement → VStack collapse à ~12pt).
-        return Button {
+        LanguageFlagChip(code: flag.code, isActive: flag.isActive, metrics: .compact) {
             actions.onFlagTap?(flag.code)
-        } label: {
-            VStack(spacing: 1) {
-                Text(display?.flag ?? flag.code.uppercased())
-                    .font(flag.isActive ? .caption : .caption2)
-                if flag.isActive {
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(Color(hex: display?.color ?? LanguageDisplay.defaultColor))
-                        .frame(width: 10, height: 1.5)
-                }
-            }
-            .frame(minWidth: 22, minHeight: 22)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(display?.name ?? flag.code)
-        .accessibilityAddTraits(flag.isActive ? [.isSelected] : [])
     }
 
     @ViewBuilder
@@ -294,7 +325,7 @@ struct BubbleFooter: View, Equatable {
     }
 
     private var metaColor: Color {
-        model.isMe ? .white.opacity(0.7) : (isDark ? .white.opacity(0.55) : .black.opacity(0.5))
+        model.isMe ? skin.ink(MeeshyOpacity.heavy) : MeeshyColors.textMuted(isDark: isDark)
     }
 
     private var readColor: Color {

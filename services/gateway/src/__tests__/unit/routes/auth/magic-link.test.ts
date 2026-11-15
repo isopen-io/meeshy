@@ -2,7 +2,7 @@
  * Unit tests for auth magic-link routes (magic-link.ts)
  * Tests GET /me, POST /refresh, POST /verify-email, POST /resend-verification,
  * POST /send-phone-code, POST /verify-phone, GET /sessions,
- * DELETE /sessions/:sessionId, DELETE /sessions, POST /validate-session.
+ * DELETE /sessions/:sessionId, DELETE /sessions.
  *
  * @jest-environment node
  */
@@ -20,9 +20,19 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
   },
 }));
 
+// Depuis #4264 un JWT porte `sid` — l'identifiant de la ligne `UserSession`
+// qui l'a émis. Le double sert donc par défaut un jeton NOMMÉ : c'est la forme
+// nominale d'après le lot. Les témoins de la fenêtre de transition surchargent
+// ce retour pour rendre un jeton HÉRITÉ (sans `sid`).
 jest.mock('jsonwebtoken', () => ({
-  verify: jest.fn().mockReturnValue({ userId: '507f1f77bcf86cd799439011', username: 'alice', role: 'USER' }),
-  decode: jest.fn().mockReturnValue({ userId: '507f1f77bcf86cd799439011', username: 'alice', role: 'USER' }),
+  verify: jest.fn().mockReturnValue({
+    userId: '507f1f77bcf86cd799439011', username: 'alice', role: 'USER',
+    sid: 'sess-courante', iat: Math.floor(Date.now() / 1000),
+  }),
+  decode: jest.fn().mockReturnValue({
+    userId: '507f1f77bcf86cd799439011', username: 'alice', role: 'USER',
+    sid: 'sess-courante', iat: Math.floor(Date.now() / 1000),
+  }),
 }));
 
 jest.mock('@meeshy/shared/utils/validation', () => ({
@@ -37,11 +47,12 @@ jest.mock('@meeshy/shared/utils/validation', () => ({
   validateSchema: jest.fn((_schema: any, data: any) => data),
 }));
 
+// Schemas de REPONSE reels (#4649) : `errorResponseSchema: { properties: {} }`
+// serialisait tout corps d'erreur en `{}` — invisible pour les vingt-trois
+// assertions `success === false` de ce fichier. Les schemas de REQUETE restent
+// bouchonnes : les rendre reels deplace le refus dans AJV, autre temoin.
 jest.mock('@meeshy/shared/types', () => ({
-  userSchema: { type: 'object', additionalProperties: true },
-  sessionSchema: { type: 'object', additionalProperties: true },
-  errorResponseSchema: { type: 'object', properties: {} },
-  sessionsListResponseSchema: { type: 'object', properties: { success: { type: 'boolean' }, data: { type: 'object' } } },
+  ...(jest.requireActual('@meeshy/shared/types/api-schemas') as object),
   refreshTokenRequestSchema: { type: 'object', properties: { token: { type: 'string' }, sessionToken: { type: 'string' } } },
   verifyEmailRequestSchema: { type: 'object', properties: { token: { type: 'string' }, code: { type: 'string' }, email: { type: 'string' } } },
   resendVerificationRequestSchema: { type: 'object', properties: { email: { type: 'string' } } },
@@ -83,11 +94,21 @@ jest.mock('../../../../routes/auth/types', () => ({
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
+const mockScheduleArrival = jest.fn();
+jest.mock('../../../../services/notifications/contact-joined', () => ({
+  scheduleContactJoinedAnnouncement: (...args: unknown[]) => mockScheduleArrival(...args),
+}));
+
 import { registerMagicLinkRoutes } from '../../../../routes/auth/magic-link';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const USER_ID = '507f1f77bcf86cd799439011';
+
+// #4264 — le témoin du critère 5 exige DEUX sessions : avec une seule, la
+// garde de compte de #4213 suffit déjà et le témoin ne prouverait rien de neuf.
+const SID_COURANTE = 'sess-courante';   // le téléphone qu'on garde en main
+const SID_REVOQUEE = 'sess-revoquee';   // l'appareil qu'on vient de couper
 
 const mockUser = {
   id: USER_ID,
@@ -143,13 +164,48 @@ function makeAuthService(overrides: Record<string, any> = {}) {
   };
 }
 
+/**
+ * Double de `userSession.findFirst` qui répond selon le `where` reçu.
+ *
+ * Un double qui ignore le `where` ne teste pas la requête — or c'est la
+ * requête qui PORTE la garde de #4264 : `{ id: sid, userId, isValid: true }`.
+ * Rendre inconditionnellement une session ferait passer un `sid` révoqué, un
+ * `sid` d'un autre compte et un `sid` inventé, sur une suite verte.
+ */
+function makeFindFirst(sessionsValides: Set<string>) {
+  return jest.fn<any>().mockImplementation(async (args: any) => {
+    const where = args?.where ?? {};
+    if (typeof where.id === 'string') {
+      const idValide = sessionsValides.has(where.id);
+      const bonProprietaire = where.userId === undefined || where.userId === USER_ID;
+      const exigeValide = where.isValid !== true || idValide;
+      return idValide && bonProprietaire && exigeValide ? { id: where.id } : null;
+    }
+    return null;
+  });
+}
+
 function makePrisma(overrides: Record<string, any> = {}) {
+  const { sessionsValides = new Set([SID_COURANTE]), ...rest } = overrides as any;
   return {
+    // #9927 — `/refresh` lit la date de naissance (porte de l'âge minimal).
+    user: { findUnique: jest.fn<any>().mockResolvedValue({ birthDate: null }) },
     userSession: {
-      findFirst: jest.fn<any>().mockResolvedValue(null),
+      findFirst: makeFindFirst(sessionsValides as Set<string>),
       update: jest.fn<any>().mockResolvedValue({}),
+      // Depuis #4213, `/refresh` REFUSE quand l'utilisateur n'a plus AUCUNE
+      // session valide : c'est ce qui fait que la révocation atteint enfin
+      // cette route. Un JWT authentique mais expiré suffisait auparavant à
+      // obtenir un JWT neuf, si bien que couper les sockets ne servait à rien
+      // — le porteur d'un jeton volé se reconnectait dans la seconde.
+      //
+      // Depuis #4264 ce compte ne gouverne PLUS que le régime de transition
+      // (jeton hérité, sans `sid`) ; un jeton nommé est jugé par `findFirst`.
+      // Le double en déclare une : ces témoins portent sur le RENOUVELLEMENT,
+      // pas sur la révocation, qui a les siens.
+      count: jest.fn<any>().mockResolvedValue(1),
     },
-    ...overrides,
+    ...rest,
   };
 }
 
@@ -245,6 +301,31 @@ describe('GET /me — anonymous user', () => {
     expect(body.success).toBe(true);
     await app.close();
   });
+
+  it('serves the shared default for autoTranslateEnabled — an anonymous participant has no preferences row', async () => {
+    // Ce site servait `false` en dur pendant que `participant-helpers`
+    // servait `true` au MÊME participant dans chaque charge de conversation.
+    // L'absence de préférence vaut le DÉFAUT du schéma partagé, pas un
+    // troisième verdict local.
+    const app = await buildApp({
+      authContext: {
+        isAuthenticated: true,
+        type: 'anonymous',
+        userId: 'anon-session-1',
+        anonymousUser: {
+          username: 'anon-user',
+          firstName: null,
+          lastName: null,
+          language: 'fr',
+          permissions: [],
+        },
+        displayName: 'Anonymous',
+      },
+    });
+    const res = await app.inject({ method: 'GET', url: '/me' });
+    expect(res.json().data.user.autoTranslateEnabled).toBe(true);
+    await app.close();
+  });
 });
 
 describe('GET /me — unauthenticated', () => {
@@ -338,6 +419,31 @@ describe('POST /refresh — user not found', () => {
   });
 });
 
+describe('POST /refresh — délai de grâce de l’adresse passé (#8238)', () => {
+  it('refuse le renouvellement : 401 `ACCOUNT_ACTIVATION_REQUIRED`, aucun jeton', async () => {
+    const bloque = { ...mockUser, activation: { phase: 'blocked', deadline: '2026-10-26T00:00:00.000Z', missing: ['email', 'phone'] } };
+    const authService = makeAuthService({ getUserById: jest.fn<any>().mockResolvedValue(bloque) });
+    const app = await buildApp({ authService });
+    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'valid-jwt-token' } });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ success: false, code: 'ACCOUNT_ACTIVATION_REQUIRED' });
+    expect(authService.generateToken).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('pendant le délai (`invite`) le renouvellement a lieu', async () => {
+    const invite = { ...mockUser, activation: { phase: 'invite', deadline: '2026-10-26T00:00:00.000Z', missing: ['email'] } };
+    const authService = makeAuthService({ getUserById: jest.fn<any>().mockResolvedValue(invite) });
+    const app = await buildApp({ authService });
+    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'valid-jwt-token' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(authService.generateToken).toHaveBeenCalled();
+    await app.close();
+  });
+});
+
 describe('POST /refresh — invalid token no userId', () => {
   it('returns 401 when decoded token has no userId', async () => {
     const jwt = await import('jsonwebtoken');
@@ -427,12 +533,7 @@ describe('POST /refresh — signature forgée', () => {
 describe('POST /refresh — with trusted session', () => {
   it('returns 200 and slides session TTL', async () => {
     mockFindTrustedSession.mockResolvedValueOnce({ id: 'sess-1' });
-    const prisma = makePrisma({
-      userSession: {
-        findFirst: jest.fn<any>().mockResolvedValue(null),
-        update: jest.fn<any>().mockResolvedValue({}),
-      },
-    });
+    const prisma = makePrisma();
     const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'POST',
@@ -451,13 +552,8 @@ describe('POST /refresh — with trusted session', () => {
   /// leur TTL initial malgré l'activité de l'utilisateur.
   it('slides the session using the SCHEMA field lastActivityAt (not User.lastActiveAt)', async () => {
     mockFindTrustedSession.mockResolvedValueOnce({ id: 'sess-1' });
-    const update = jest.fn<any>().mockResolvedValue({});
-    const prisma = makePrisma({
-      userSession: {
-        findFirst: jest.fn<any>().mockResolvedValue(null),
-        update,
-      },
-    });
+    const prisma = makePrisma();
+    const update = prisma.userSession.update as jest.Mock<any>;
     const app = await buildApp({ prisma });
     await app.inject({
       method: 'POST',
@@ -481,12 +577,7 @@ describe('POST /refresh — with trusted session', () => {
   // ne dépend donc jamais du User-Agent de la requête en cours.
   it("une session de confiance ne discrimine plus par application — connecté depuis plusieurs apps jamais pénalisé (round 6)", async () => {
     mockFindTrustedSession.mockResolvedValueOnce({ id: 'sess-1' });
-    const prisma = makePrisma({
-      userSession: {
-        findFirst: jest.fn<any>().mockResolvedValue(null),
-        update: jest.fn<any>().mockResolvedValue({}),
-      },
-    });
+    const prisma = makePrisma();
     const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'POST',
@@ -506,73 +597,159 @@ describe('POST /refresh — with trusted session', () => {
   });
 });
 
-// ─── POST /verify-email ───────────────────────────────────────────────────────
+// ─── POST /refresh — la révocation atteint LA session nommée (#4264) ─────────
 
-describe('POST /verify-email — success with token', () => {
-  it('returns 200 on successful email verification', async () => {
-    const app = await buildApp();
+/** Sert un jeton dont la charge est exactement celle passée — signature réputée valide. */
+async function servirJeton(charge: Record<string, unknown>) {
+  const jwt = await import('jsonwebtoken');
+  (jwt.verify as jest.Mock<any>).mockReturnValueOnce(charge);
+  (jwt.decode as jest.Mock<any>).mockReturnValueOnce(charge);
+}
+
+const jetonNomme = (sid: string) => ({
+  userId: USER_ID, username: 'alice', role: 'USER',
+  sid, iat: Math.floor(Date.now() / 1000),
+});
+
+describe('POST /refresh — deux sessions, une révoquée (#4264, critère 5)', () => {
+  // LE témoin du lot. La subtilité est dans le COMPTE : le double déclare
+  // qu'il reste UNE session valide (`count` → 1), donc la garde de #4213 —
+  // « au moins une session valide pour ce compte » — laisse passer les deux
+  // jetons. Avec une seule session, ce témoin ne prouverait rien de neuf.
+  //
+  // Ce que le défaut coûtait : révoquer une session tierce se fait TOUJOURS
+  // depuis un appareil qu'on garde, donc le compte garde une session valide,
+  // donc le jeton volé passait `refresh` — la révocation ne révoquait rien.
+
+  beforeEach(() => { mockFindTrustedSession.mockReset().mockResolvedValue(null); });
+
+  const compteApresRevocation = () => makePrisma({
+    sessionsValides: new Set([SID_COURANTE]), // SID_REVOQUEE vient d'être coupée
+  });
+
+  it('REFUSE le jeton émis par la session révoquée, alors qu\'une autre session reste valide', async () => {
+    const prisma = compteApresRevocation();
+    const app = await buildApp({ prisma });
+    await servirJeton(jetonNomme(SID_REVOQUEE));
+
     const res = await app.inject({
-      method: 'POST',
-      url: '/verify-email',
-      payload: { token: 'verify-token-abc', email: 'alice@test.com' },
+      method: 'POST', url: '/refresh', payload: { token: 'jwt-de-l-appareil-coupe' },
     });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().data?.token).toBeUndefined();
+    // Preuve que le refus vient de la SESSION NOMMÉE et non du compte : le
+    // compte, lui, a toujours une session valide.
+    expect(await prisma.userSession.count()).toBe(1);
+    await app.close();
+  });
+
+  it('ACCEPTE le jeton de la session restée valide, dans le MÊME état du compte', async () => {
+    const app = await buildApp({ prisma: compteApresRevocation() });
+    await servirJeton(jetonNomme(SID_COURANTE));
+
+    const res = await app.inject({
+      method: 'POST', url: '/refresh', payload: { token: 'jwt-du-telephone-garde' },
+    });
+
     expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.success).toBe(true);
+    expect(res.json().data.token).toBe('new-jwt-token');
+    await app.close();
+  });
+
+  it('interroge la session par son id ET par son propriétaire — un `sid` d\'un autre compte ne passe pas', async () => {
+    // Sans `userId` dans le `where`, un `sid` parfaitement valide APPARTENANT
+    // À QUELQU\'UN D\'AUTRE suffirait : la garde vérifierait qu\'une session
+    // existe, jamais qu\'elle est celle du porteur. Le double refuse tout
+    // `where.userId` étranger, ce qui rend le témoin sensible à son retrait.
+    const prisma = makePrisma({ sessionsValides: new Set([SID_COURANTE]) });
+    const app = await buildApp({ prisma });
+    await servirJeton({ ...jetonNomme(SID_COURANTE), userId: USER_ID });
+
+    await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt' } });
+
+    const where = (prisma.userSession.findFirst as jest.Mock<any>).mock.calls[0][0].where;
+    expect(where).toEqual({ id: SID_COURANTE, userId: USER_ID, isValid: true, expiresAt: { gt: expect.any(Date) } });
+    await app.close();
+  });
+
+  it('#10328 — REFUSE le jeton dont la session nommée est ÉCHUE, encore valide en base : le REST la refuse, refresh ne la renouvelle plus (sinon 401 → refresh → 401)', async () => {
+    const echue = { id: SID_COURANTE, userId: USER_ID, isValid: true, expiresAt: new Date(Date.now() - 60_000) };
+    const findFirst = jest.fn<any>().mockImplementation(async ({ where }: any) => {
+      const memeLigne = where.id === echue.id && where.userId === echue.userId;
+      const valide = where.isValid !== true || echue.isValid;
+      const nonEchue = !where.expiresAt?.gt || echue.expiresAt.getTime() > where.expiresAt.gt.getTime();
+      return memeLigne && valide && nonEchue ? { id: echue.id } : null;
+    });
+    const prisma = makePrisma();
+    prisma.userSession.findFirst = findFirst;
+    const app = await buildApp({ prisma });
+    await servirJeton(jetonNomme(SID_COURANTE));
+
+    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt-session-echue' } });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().data?.token).toBeUndefined();
+    await app.close();
+  });
+
+  it('le jeton RENOUVELÉ garde le nom de sa session — `refresh` est le cinquième site d\'émission', async () => {
+    // Critère 1, « `refresh` lui-même ». Si le renouvellement rendait un jeton
+    // anonyme, une seule rotation suffirait à ressortir du régime nominal et à
+    // retomber dans la fenêtre de transition : la garde s\'auto-désarmerait.
+    const authService = makeAuthService();
+    const app = await buildApp({ authService, prisma: makePrisma() });
+    await servirJeton(jetonNomme(SID_COURANTE));
+
+    await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt' } });
+
+    expect(authService.generateToken).toHaveBeenCalledWith(expect.anything(), SID_COURANTE);
     await app.close();
   });
 });
 
-describe('POST /verify-email — already verified', () => {
-  it('returns 200 with alreadyVerified: true', async () => {
-    const authService = makeAuthService({
-      verifyEmail: jest.fn<any>().mockResolvedValue({
-        success: true,
-        alreadyVerified: true,
-        verifiedAt: new Date(),
-      }),
-    });
-    const app = await buildApp({ authService });
-    const res = await app.inject({
-      method: 'POST',
-      url: '/verify-email',
-      payload: { token: 'verify-token-abc', email: 'alice@test.com' },
-    });
+describe('POST /refresh — renouveler adopte une session prouvée par un lien (#10477)', () => {
+  beforeEach(() => { mockFindTrustedSession.mockReset().mockResolvedValue(null); });
+
+  it('une session nommée encore en attente prend son échéance normale, par une écriture conditionnelle', async () => {
+    const attendue = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const prisma = makePrisma();
+    prisma.userSession.findFirst = jest.fn<any>().mockResolvedValue({ id: SID_COURANTE, adoptedExpiresAt: attendue });
+    const updateMany = jest.fn<any>().mockResolvedValue({ count: 1 });
+    (prisma.userSession as Record<string, unknown>).updateMany = updateMany;
+    const app = await buildApp({ prisma });
+    await servirJeton(jetonNomme(SID_COURANTE));
+
+    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt' } });
+
     expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.success).toBe(true);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: SID_COURANTE, isValid: true, expiresAt: { gt: expect.any(Date) }, adoptedExpiresAt: attendue },
+      data: { expiresAt: attendue, adoptedExpiresAt: null },
+    });
+    await app.close();
+  });
+
+  it('une session déjà adoptée ne réécrit rien', async () => {
+    const prisma = makePrisma();
+    const updateMany = jest.fn<any>().mockResolvedValue({ count: 1 });
+    (prisma.userSession as Record<string, unknown>).updateMany = updateMany;
+    const app = await buildApp({ prisma });
+    await servirJeton(jetonNomme(SID_COURANTE));
+
+    await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt' } });
+
+    expect(updateMany).not.toHaveBeenCalled();
     await app.close();
   });
 });
 
-describe('POST /verify-email — failure', () => {
-  it('returns 400 when verification fails', async () => {
-    const authService = makeAuthService({
-      verifyEmail: jest.fn<any>().mockResolvedValue({ success: false, error: 'Token invalide' }),
-    });
-    const app = await buildApp({ authService });
-    const res = await app.inject({
-      method: 'POST',
-      url: '/verify-email',
-      payload: { token: 'bad-token', email: 'alice@test.com' },
-    });
-    expect(res.statusCode).toBe(400);
-    await app.close();
-  });
-});
+// POST /refresh — fenêtre de transition d'un jeton hérité (#4264, critère 3),
+// y compris le critère de fin littéral de #3621 : extrait dans
+// magic-link-refresh-legacy-token.test.ts (#4531 — budget de taille).
 
-describe('POST /verify-email — via code', () => {
-  it('returns 200 when using verification code instead of token', async () => {
-    const app = await buildApp();
-    const res = await app.inject({
-      method: 'POST',
-      url: '/verify-email',
-      payload: { code: '123456', email: 'alice@test.com' },
-    });
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-});
+// POST /verify-email — depuis #8033 la vérification OUVRE la session : ses
+// témoins vivent dans `verify-email-opens-session.test.ts`, sur les schémas RÉELS.
 
 // ─── POST /resend-verification ────────────────────────────────────────────────
 
@@ -654,6 +831,28 @@ describe('POST /verify-phone — success', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.success).toBe(true);
+    await app.close();
+  });
+});
+
+describe('POST /verify-phone — « X a rejoint Meeshy » (#8105)', () => {
+  it('une vérification NEUVE programme l’annonce aux carnets', async () => {
+    mockScheduleArrival.mockClear();
+    const authService = makeAuthService({
+      verifyPhone: jest.fn<any>().mockResolvedValue({ success: true, verifiedUserId: '507f1f77bcf86cd799439011' }),
+    });
+    const app = await buildApp({ authService });
+    await app.inject({ method: 'POST', url: '/verify-phone', payload: { phoneNumber: '+33612345678', code: '123456' } });
+    expect(mockScheduleArrival).toHaveBeenCalledWith(expect.anything(), '507f1f77bcf86cd799439011');
+    await app.close();
+  });
+
+  it('un numéro DÉJÀ vérifié n’annonce rien', async () => {
+    mockScheduleArrival.mockClear();
+    const authService = makeAuthService({ verifyPhone: jest.fn<any>().mockResolvedValue({ success: true }) });
+    const app = await buildApp({ authService });
+    await app.inject({ method: 'POST', url: '/verify-phone', payload: { phoneNumber: '+33612345678', code: '123456' } });
+    expect(mockScheduleArrival).not.toHaveBeenCalled();
     await app.close();
   });
 });
@@ -742,48 +941,6 @@ describe('DELETE /sessions — revoke all', () => {
   });
 });
 
-// ─── POST /validate-session ───────────────────────────────────────────────────
-
-describe('POST /validate-session — invalid session', () => {
-  it('returns 200 with valid: false when session not found', async () => {
-    const app = await buildApp();
-    const res = await app.inject({
-      method: 'POST',
-      url: '/validate-session',
-      payload: { sessionToken: 'unknown-token' },
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.success).toBe(true);
-    await app.close();
-  });
-});
-
-describe('POST /validate-session — valid session', () => {
-  it('returns 200 with valid: true when session is found', async () => {
-    const authService = makeAuthService({
-      validateSessionToken: jest.fn<any>().mockResolvedValue({
-        id: 'sess-1',
-        userId: USER_ID,
-        deviceType: 'desktop',
-        browserName: 'Chrome',
-        osName: 'Linux',
-        location: null,
-        isMobile: false,
-        createdAt: new Date(),
-        lastActivityAt: new Date(),
-        isTrusted: true,
-      }),
-    });
-    const app = await buildApp({ authService });
-    const res = await app.inject({
-      method: 'POST',
-      url: '/validate-session',
-      payload: { sessionToken: 'valid-token' },
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.success).toBe(true);
-    await app.close();
-  });
-});
+// Les deux cas de `POST /validate-session` sont partis avec la route (#4186).
+// Son absence est gardée par un témoin NÉGATIF monté sous le préfixe de
+// production : `__tests__/unit/routes/identity-twins-retired.test.ts`.

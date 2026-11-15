@@ -7,6 +7,8 @@ final class MockSessionService: SessionServiceProviding, @unchecked Sendable {
     // MARK: - Stubbing
 
     var listSessionsResult: Result<[UserSession], Error> = .success([])
+    /// L'attribution servie avec la liste (#9609) — `nil` : un serveur ancien.
+    var geolocation: GeolocationAttribution?
     var revokeSessionResult: Result<Void, Error> = .success(())
     var revokeAllOtherSessionsResult: Result<Void, Error> = .success(())
 
@@ -26,9 +28,9 @@ final class MockSessionService: SessionServiceProviding, @unchecked Sendable {
 
     // MARK: - Protocol
 
-    func listSessions() async throws -> [UserSession] {
+    func listSessions() async throws -> SessionsList {
         listSessionsCallCount += 1
-        return try listSessionsResult.get()
+        return SessionsList(sessions: try listSessionsResult.get(), geolocation: geolocation)
     }
 
     func revokeSession(sessionId: String) async throws {
@@ -37,8 +39,12 @@ final class MockSessionService: SessionServiceProviding, @unchecked Sendable {
         try revokeSessionResult.get()
     }
 
+    /// Ce qui se passe PENDANT l'aller-retour (une relecture qui arrive).
+    var duringRevokeAllOtherSessions: (@MainActor () async -> Void)?
+
     func revokeAllOtherSessions() async throws {
         revokeAllOtherSessionsCallCount += 1
+        await duringRevokeAllOtherSessions?()
         try revokeAllOtherSessionsResult.get()
     }
 }

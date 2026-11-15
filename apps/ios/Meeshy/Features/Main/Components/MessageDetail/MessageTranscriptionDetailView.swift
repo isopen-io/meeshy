@@ -8,38 +8,23 @@ import MeeshyUI
 struct MessageTranscriptionDetailView: View {
     let message: Message
     let contactColor: String
-    let conversationId: String
     var transcription: MessageTranscription? = nil
     var translatedAudios: [MessageTranslatedAudio] = []
-    var onSelectAudioLanguage: ((String?) -> Void)? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
 
     @State private var isRequestingTranscription = false
-    @State private var translatingAudioLanguages: Set<String> = []
-    @State private var mergedTranslatedAudios: [MessageTranslatedAudio] = []
 
     var body: some View {
         content
-            .onAppear {
-                if mergedTranslatedAudios.isEmpty { mergedTranslatedAudios = translatedAudios }
-            }
             .onReceive(
                 MessageSocketManager.shared.transcriptionFailed
                     .filter { $0.messageId == message.id }
                     .receive(on: DispatchQueue.main)
             ) { _ in
                 isRequestingTranscription = false
-                translatingAudioLanguages = []
-            }
-            .onReceive(
-                MessageSocketManager.shared.audioTranslationFailed
-                    .filter { $0.messageId == message.id }
-                    .receive(on: DispatchQueue.main)
-            ) { _ in
-                translatingAudioLanguages = []
             }
     }
 
@@ -50,14 +35,14 @@ struct MessageTranscriptionDetailView: View {
             AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack
         }
 
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.mdPlus) {
             if let transcription {
                 transcriptionAvailableContent(transcription, accent: accent)
             } else {
                 transcriptionEmptyContent(mediaAttachments: mediaAttachments, accent: accent)
             }
 
-            if !mergedTranslatedAudios.isEmpty {
+            if !translatedAudios.isEmpty {
                 translatedAudioTranscriptions(accent: accent)
             }
         }
@@ -68,42 +53,42 @@ struct MessageTranscriptionDetailView: View {
         let langColor = Color(hex: LanguageDisplay.colorHex(for: transcription.language))
         let segments = TranscriptionDisplaySegment.buildFrom(transcription)
 
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             // Language + confidence banner
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "waveform.and.mic")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(langColor)
+                    .foregroundStyle(langColor)
                     .accessibilityHidden(true)
 
-                Text(Self.languageName(for: transcription.language))
+                Text(MessageLanguageDetailView.languageName(for: transcription.language))
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
 
                 Spacer()
 
                 if let conf = transcription.confidence {
-                    Text(String(format: "%.0f%%", conf * 100))
+                    Text(LocalizedNumber.percent(Int((conf * 100).rounded())))
                         .font(.system(.caption2, design: .monospaced).weight(.bold))
-                        .foregroundColor(langColor)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
+                        .foregroundStyle(langColor)
+                        .padding(.horizontal, MeeshySpacing.xsPlus)
+                        .padding(.vertical, MeeshySpacing.xxs)
                         .background(Capsule().fill(langColor.opacity(0.12)))
                 }
 
                 if let durationMs = transcription.durationMs {
-                    Text(formatDuration(durationMs / 1000))
+                    Text(MediaFormat.duration(durationMs / 1000))
                         .font(.system(.caption2, design: .monospaced).weight(.medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
-            .padding(10)
+            .padding(MeeshySpacing.smPlus)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(langColor.opacity(isDark ? 0.08 : 0.05))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(langColor.opacity(0.15), lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                            .stroke(langColor.opacity(0.15), lineWidth: MeeshyBorder.hairline)
                     )
             )
             .accessibilityElement(children: .ignore)
@@ -112,9 +97,9 @@ struct MessageTranscriptionDetailView: View {
             // Full text
             Text(transcription.text)
                 .font(.subheadline)
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 4)
+                .padding(.horizontal, MeeshySpacing.xs)
 
             // Word-by-word segments
             if !segments.isEmpty {
@@ -126,20 +111,20 @@ struct MessageTranscriptionDetailView: View {
                     ForEach(segments) { segment in
                         Text(segment.text + " ")
                             .font(.footnote.weight(.regular))
-                            .foregroundColor(theme.textSecondary)
-                            .padding(.horizontal, 2)
+                            .foregroundStyle(theme.textSecondary)
+                            .padding(.horizontal, MeeshySpacing.xxs)
                             .padding(.vertical, 1)
                             .background(
-                                RoundedRectangle(cornerRadius: 4)
+                                RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                                     .fill(Color(hex: segment.speakerColor).opacity(
                                         transcription.speakerCount ?? 1 > 1 ? 0.1 : 0
                                     ))
                             )
                     }
                 }
-                .padding(8)
+                .padding(MeeshySpacing.sm)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                         .fill(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
                 )
                 // Redondant avec le texte plein ci-dessus (mêmes mots) — la
@@ -148,16 +133,16 @@ struct MessageTranscriptionDetailView: View {
                 .accessibilityHidden(true)
 
                 if let speakerCount = transcription.speakerCount, speakerCount > 1 {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "person.2.fill")
                             .font(.caption2.weight(.medium))
                             .foregroundColor(accent.opacity(0.6))
                             .accessibilityHidden(true)
-                        Text(String(format: String(localized: "message-detail.transcription.speakers", defaultValue: "%d locuteurs detectes", bundle: .main), speakerCount))
+                        Text(String(format: String(localized: "message-detail.transcription.speakers", defaultValue: "%d locuteurs détectés", bundle: .main), speakerCount))
                             .font(.caption.weight(.medium))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, MeeshySpacing.xs)
                     .accessibilityElement(children: .combine)
                 }
             }
@@ -165,57 +150,55 @@ struct MessageTranscriptionDetailView: View {
     }
 
     private func transcriptionEmptyContent(mediaAttachments: [MessageAttachment], accent: Color) -> some View {
-        VStack(spacing: 14) {
+        VStack(spacing: MeeshySpacing.mdPlus) {
             // Attachment cards
             ForEach(mediaAttachments) { attachment in
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     Image(systemName: AttachmentKind(mimeType: attachment.mimeType).sfSymbolName)
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(accent)
                         .frame(width: 20)
                         .accessibilityHidden(true)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName)
                             .font(.footnote.weight(.medium))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                             .lineLimit(1)
 
                         if let duration = attachment.duration {
-                            Text(formatDuration(duration / 1000))
+                            Text(MediaFormat.duration(duration / 1000))
                                 .font(.caption2)
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                         }
                     }
 
                     Spacer()
                 }
-                .padding(10)
+                .padding(MeeshySpacing.smPlus)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                         .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
                 )
                 .accessibilityElement(children: .combine)
             }
 
             // Empty state with transcribe button
-            VStack(spacing: 12) {
-                // Doctrine 84i/86i : glyphe hero d'etat vide (28pt) figé — decoratif,
-                // masqué à VoiceOver (le libellé « Aucune transcription » porte le sens).
+            VStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "text.word.spacing")
-                    .font(.system(size: 28, weight: .light))
-                    .foregroundColor(theme.textMuted.opacity(0.4))
+                    .meeshyScaledFont(MeeshyIconSize.xxxl, weight: .light)
+                    .foregroundStyle(theme.textMuted.opacity(0.4))
                     .accessibilityHidden(true)
 
                 Text(String(localized: "message-detail.transcription.empty", defaultValue: "Aucune transcription", bundle: .main))
                     .font(.subheadline.weight(.medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
 
                 if let firstMedia = mediaAttachments.first {
                     Button {
                         requestTranscription(for: firstMedia.id)
                     } label: {
-                        HStack(spacing: 6) {
+                        HStack(spacing: MeeshySpacing.xsPlus) {
                             if isRequestingTranscription {
                                 ProgressView()
                                     .tint(accent)
@@ -228,10 +211,10 @@ struct MessageTranscriptionDetailView: View {
                                 .font(.footnote.weight(.bold))
                         }
                         .foregroundColor(accent)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.vertical, MeeshySpacing.smPlus)
                         .background(Capsule().fill(accent.opacity(0.15)))
-                        .overlay(Capsule().stroke(accent.opacity(0.3), lineWidth: 0.5))
+                        .overlay(Capsule().stroke(accent.opacity(0.3), lineWidth: MeeshyBorder.hairline))
                     }
                     .disabled(isRequestingTranscription)
                     .accessibilityLabel(String(localized: "message-detail.transcription.transcribe", defaultValue: "Transcrire", bundle: .main))
@@ -241,44 +224,44 @@ struct MessageTranscriptionDetailView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
+            .padding(.vertical, MeeshySpacing.xl)
         }
     }
 
     private func translatedAudioTranscriptions(accent: Color) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             Rectangle()
                 .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
                 .frame(height: 0.5)
 
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "translate")
                     .font(.caption2.weight(.medium))
                     .foregroundColor(accent.opacity(0.6))
                     .accessibilityHidden(true)
                 Text(String(localized: "message-detail.audio-translations", defaultValue: "Traductions audio", bundle: .main))
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, MeeshySpacing.xs)
             .accessibilityAddTraits(.isHeader)
 
-            ForEach(mergedTranslatedAudios, id: \.id) { audio in
+            ForEach(translatedAudios, id: \.id) { audio in
                 let langColor = Color(hex: LanguageDisplay.colorHex(for: audio.targetLanguage))
                 let display = LanguageDisplay.from(code: audio.targetLanguage)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        Text(display?.flag ?? "\u{1F310}")
+                VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
+                    HStack(spacing: MeeshySpacing.sm) {
+                        Text(LanguageFlagChip.flag(for: audio.targetLanguage))
                             .font(.subheadline)
                         Text(display?.name ?? audio.targetLanguage)
                             .font(.footnote.weight(.semibold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
 
                         Spacer()
 
                         if audio.cloned {
-                            HStack(spacing: 3) {
+                            HStack(spacing: MeeshySpacing.xxs) {
                                 Image(systemName: "person.wave.2")
                                     .font(.caption2.weight(.medium))
                                     .accessibilityHidden(true)
@@ -287,30 +270,30 @@ struct MessageTranscriptionDetailView: View {
                                     .minimumScaleFactor(0.8)
                             }
                             .foregroundColor(langColor)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
+                            .padding(.horizontal, MeeshySpacing.xsPlus)
+                            .padding(.vertical, MeeshySpacing.xxs)
                             .background(Capsule().fill(langColor.opacity(0.12)))
                         }
 
-                        Text(formatDuration(audio.durationMs / 1000))
+                        Text(MediaFormat.duration(audio.durationMs / 1000))
                             .font(.system(.caption2, design: .monospaced).weight(.medium))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
 
                     if !audio.transcription.isEmpty {
                         Text(audio.transcription)
                             .font(.footnote)
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                             .lineLimit(4)
                     }
                 }
-                .padding(10)
+                .padding(MeeshySpacing.smPlus)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                         .fill(langColor.opacity(isDark ? 0.06 : 0.03))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(langColor.opacity(0.12), lineWidth: 0.5)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                                .stroke(langColor.opacity(0.12), lineWidth: MeeshyBorder.hairline)
                         )
                 )
                 .accessibilityElement(children: .ignore)
@@ -329,15 +312,11 @@ struct MessageTranscriptionDetailView: View {
         Task {
             do {
                 try await AttachmentService.shared.requestTranscription(attachmentId: attachmentId)
-                await MainActor.run {
-                    isRequestingTranscription = false
-                    HapticFeedback.success()
-                }
+                isRequestingTranscription = false
+                HapticFeedback.success()
             } catch {
-                await MainActor.run {
-                    isRequestingTranscription = false
-                    HapticFeedback.error()
-                }
+                isRequestingTranscription = false
+                HapticFeedback.error()
             }
         }
     }
@@ -346,22 +325,15 @@ struct MessageTranscriptionDetailView: View {
 
     /// Durée parlée locale-aware (« 12 secondes » / « 12 seconds » / « 12 Sekunden »)
     /// — remplace le rendu ambigu « 0:12 » pour VoiceOver. Zéro chaîne à traduire.
-    private func spokenDuration(_ seconds: Int) -> String {
-        let formatter = DateComponentsFormatter()
-        formatter.allowedUnits = seconds >= 60 ? [.minute, .second] : [.second]
-        formatter.unitsStyle = .full
-        return formatter.string(from: TimeInterval(seconds)) ?? formatDuration(seconds)
-    }
-
     private func transcriptionBannerA11yLabel(_ transcription: MessageTranscription) -> String {
         var parts: [String] = [
-            String(format: String(localized: "a11y.transcription.in-language", defaultValue: "Transcription en %@", bundle: .main), Self.languageName(for: transcription.language))
+            String(format: String(localized: "a11y.transcription.in-language", defaultValue: "Transcription en %@", bundle: .main), MessageLanguageDetailView.languageName(for: transcription.language))
         ]
         if let conf = transcription.confidence {
             parts.append(String(format: String(localized: "a11y.transcription.confidence", defaultValue: "confiance %d %%", bundle: .main), Int((conf * 100).rounded())))
         }
         if let durationMs = transcription.durationMs {
-            parts.append(spokenDuration(durationMs / 1000))
+            parts.append(MediaFormat.duration(durationMs / 1000, style: .spoken))
         }
         return parts.joined(separator: ", ")
     }
@@ -372,7 +344,7 @@ struct MessageTranscriptionDetailView: View {
         if audio.cloned {
             parts.append(String(localized: "a11y.audio.cloned-voice", defaultValue: "voix clonée", bundle: .main))
         }
-        parts.append(spokenDuration(audio.durationMs / 1000))
+        parts.append(MediaFormat.duration(audio.durationMs / 1000, style: .spoken))
         if !audio.transcription.isEmpty {
             parts.append(audio.transcription)
         }
@@ -380,14 +352,4 @@ struct MessageTranscriptionDetailView: View {
     }
 
     // MARK: - Helpers
-
-    private func formatDuration(_ seconds: Int) -> String {
-        let mins = seconds / 60
-        let secs = seconds % 60
-        return String(format: "%d:%02d", mins, secs)
-    }
-
-    static func languageName(for code: String) -> String {
-        LanguageDisplay.from(code: code)?.name ?? code.uppercased()
-    }
 }

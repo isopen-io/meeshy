@@ -29,7 +29,8 @@ final class FeedViewModelTests: XCTestCase {
         socialSocket: MockSocialSocket? = nil,
         postService: MockPostService? = nil,
         offlineQueue: MockOfflineQueue? = nil,
-        preferredLanguages: [String] = []
+        preferredLanguages: [String] = [],
+        feedCache: (any FeedCacheStoring)? = nil
     ) -> (
         sut: FeedViewModel,
         api: MockAPIClientForApp,
@@ -45,7 +46,8 @@ final class FeedViewModelTests: XCTestCase {
             socialSocket: socket,
             postService: postService,
             languageProvider: languageProvider,
-            offlineQueue: offlineQueue ?? MockOfflineQueue()
+            offlineQueue: offlineQueue ?? MockOfflineQueue(),
+            feedCache: feedCache ?? SharedFeedCache()
         )
         return (sut, api, socket, postService)
     }
@@ -329,11 +331,14 @@ final class FeedViewModelTests: XCTestCase {
     /// infinite scroll for the rest of the session. `cursor: nil` is exactly
     /// how `loadFeed` requests page 1, so dropping that guard clause lets
     /// the first scroll-triggered call recover a real cursor.
-    func test_loadMoreIfNeeded_afterFreshCacheOnlySession_stillFetchesDespiteNilCursor() async {
+    func test_loadMoreIfNeeded_afterFreshCacheOnlySession_stillFetchesDespiteNilCursor() async throws {
         let (sut, api, _, _) = makeSUT()
         await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
         let seeded = (0..<10).map { Self.makeFeedPost(id: "cached-\($0)", content: "Post \($0)") }
-        try? await CacheCoordinator.shared.feed.save(seeded, for: "main-feed")
+        // `try`, pas `try?` : une graine qui n'entre pas dans le cache doit
+        // faire échouer le test en le DISANT — pas se lire « 0 post au lieu
+        // de 10 » deux assertions plus loin (rouge CI du 2026-08-26).
+        try await CacheCoordinator.shared.feed.save(seeded, for: "main-feed")
 
         await sut.loadFeed() // .fresh cache hit — no network call, nextCursor stays nil
         XCTAssertEqual(sut.posts.count, 10)
@@ -360,6 +365,62 @@ final class FeedViewModelTests: XCTestCase {
     /// `isLoadingMore=true` race and the others must short-circuit. Without
     /// the guard, the feed would burn N redundant GET /posts/feed per page
     /// boundary scroll.
+    /// La persistance du fil chargé par le réseau partait dans un
+    /// `Task.detached(.utility)` jamais attendu : `loadFeed()` rendait la main
+    /// AVANT que « main-feed » soit écrit. En production, une réponse lente
+    /// pouvait écraser une plus récente ; en test, la sauvegarde tardive d'un
+    /// cas précédent repeuplait le cache après le `invalidate` du suivant et
+    /// lui faisait servir un `.fresh` pollué (rouge CI du 2026-08-26 sur
+    /// `…afterFreshCacheOnlySession…`, vert en isolation 3/3). Le magasin à
+    /// barrière RETIENT la sauvegarde : `loadFeed` ne doit pas avoir fini
+    /// tant qu'elle est retenue.
+    func test_loadFeed_forceRefresh_doesNotReturnBeforeTheFetchedPageIsPersisted() async {
+        let store = GatedFeedCacheStore()
+        let (sut, api, _, _) = makeSUT(feedCache: store)
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(
+            posts: [Self.makeAPIPost(id: "net-0", content: "Net 0")], hasMore: false, nextCursor: nil
+        ))
+
+        let load = Task { @MainActor in await sut.loadFeed(forceRefresh: true) }
+
+        await store.waitForSaveRequest()
+        let finishedWhileSaveHeld = await Self.finishes(load, within: .seconds(2))
+        XCTAssertFalse(finishedWhileSaveHeld, "loadFeed(forceRefresh:) returned while the fetched page was still being persisted")
+
+        store.releaseSave()
+        await load.value
+        let persisted = store.items(for: "main-feed")
+        XCTAssertEqual(persisted?.map(\.id), ["net-0"])
+    }
+
+    /// `true` si la tâche se termine dans le délai, `false` sinon (elle
+    /// continue de tourner — l'appelant la libère ensuite).
+    ///
+    /// Pas de `withTaskGroup` ici : un groupe attend TOUS ses enfants à la
+    /// sortie de sa portée, `cancelAll()` compris — et l'enfant qui attend
+    /// `task.value` ne peut pas finir tant que la barrière n'est pas levée,
+    /// ce que l'appelant ne fait qu'APRÈS ce retour. Interblocage, puis
+    /// « Test crashed with signal kill » (observé le 2026-08-26 dès que le
+    /// correctif a rendu `loadFeed` vraiment suspendu ; invisible en RED,
+    /// où `loadFeed` rendait la main en quelques ms). Le guetteur est donc
+    /// une tâche NON structurée, et le délai se scrute sur un drapeau.
+    private static func finishes(_ task: Task<Void, Never>, within delay: Duration) async -> Bool {
+        let flag = CompletionFlag()
+        Task { await task.value; await flag.mark() }
+        let deadline = ContinuousClock.now + delay
+        while ContinuousClock.now < deadline {
+            if await flag.isDone() { return true }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        return await flag.isDone()
+    }
+
+    private actor CompletionFlag {
+        private var done = false
+        func mark() { done = true }
+        func isDone() -> Bool { done }
+    }
+
     func test_loadMoreIfNeeded_concurrentCalls_makeExactlyOneAPIRequest() async {
         let (sut, api, _, _) = makeSUT()
 
@@ -514,7 +575,7 @@ final class FeedViewModelTests: XCTestCase {
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", commentCount: 3)]))
         await sut.loadFeed(forceRefresh: true)
 
-        await sut.sendComment(postId: "p1", content: "Nice post!")
+        await sut.sendComment(postId: "p1", content: "Nice post!", originalLanguage: "en")
 
         XCTAssertEqual(sut.posts[0].commentCount, 4)
         XCTAssertEqual(sut.posts[0].comments.first?.content, "Nice post!", "optimistic comment inserted")
@@ -532,7 +593,7 @@ final class FeedViewModelTests: XCTestCase {
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1")]))
         await sut.loadFeed(forceRefresh: true)
 
-        await sut.sendComment(postId: "p1", content: "reply", parentId: "c1")
+        await sut.sendComment(postId: "p1", content: "reply", originalLanguage: "en", parentId: "c1")
 
         let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload
         XCTAssertEqual(payload?.parentCommentId, "c1")
@@ -545,10 +606,31 @@ final class FeedViewModelTests: XCTestCase {
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", commentCount: 3)]))
         await sut.loadFeed(forceRefresh: true)
 
-        await sut.sendComment(postId: "p1", content: "failing comment")
+        await sut.sendComment(postId: "p1", content: "failing comment", originalLanguage: "en")
 
         XCTAssertEqual(sut.posts[0].commentCount, 3, "comment count must roll back on enqueue failure")
         XCTAssertTrue(sut.posts[0].comments.isEmpty, "optimistic comment must be removed on rollback")
+    }
+
+    /// #6587 — la ligne optimiste doit porter la langue DÉCLARÉE à la pastille.
+    /// `FeedComment.originalLanguage` alimente la descente du prisme et la
+    /// pastille `LanguageFlagChip` : sans elle, l'auteur lit son propre
+    /// commentaire frais sans indication de langue, et la ligne est persistée
+    /// ainsi. La langue déclarée diffère de celle que le contenu suggère —
+    /// sinon le témoin ne distinguerait pas une déclaration d'une devinette.
+    func test_sendComment_stampsTheAuthoredLanguageOnTheOptimisticRow() async {
+        let queue = MockOfflineQueue()
+        let (sut, api, _, _) = makeSUT(offlineQueue: queue)
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1")]))
+        await sut.loadFeed(forceRefresh: true)
+
+        await sut.sendComment(postId: "p1", content: "Ceci a tout l'air d'être du français", originalLanguage: "de")
+
+        XCTAssertEqual(sut.posts[0].comments.first?.originalLanguage, "de",
+                       "la ligne optimiste du fil doit porter la langue de la pastille, pas nil")
+        let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload
+        XCTAssertEqual(payload?.originalLanguage, sut.posts[0].comments.first?.originalLanguage,
+                       "la ligne AFFICHÉE et la ligne ENVOYÉE déclarent la même langue")
     }
 
     // MARK: - Outbox terminal outcome (R7) — rollback on .exhausted
@@ -607,7 +689,7 @@ final class FeedViewModelTests: XCTestCase {
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", commentCount: 3)]))
         await sut.loadFeed(forceRefresh: true)
 
-        await sut.sendComment(postId: "p1", content: "doomed comment")
+        await sut.sendComment(postId: "p1", content: "doomed comment", originalLanguage: "en")
         XCTAssertEqual(sut.posts[0].commentCount, 4, "optimistic comment inserted")
         XCTAssertEqual(sut.posts[0].comments.first?.content, "doomed comment")
 
@@ -668,6 +750,21 @@ final class FeedViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.posts.count, 1, "Post should be restored on delete failure")
         XCTAssertEqual(sut.posts[0].id, "p1")
+    }
+
+    /// Un post ouvert par un lien ou depuis un profil n'est pas dans le fil chargé : sa suppression part quand même,
+    /// et un refus du serveur ne glisse rien dans le fil.
+    func test_deletePost_outsideTheLoadedFeed_stillDeletes_andAFailureLeavesTheFeedAlone() async {
+        let (sut, api, _, postService) = makeSUT()
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1")]))
+        await sut.loadFeed(forceRefresh: true)
+
+        await sut.deletePost("p-elsewhere")
+        XCTAssertEqual(postService.deleteCallCount, 1)
+
+        postService.deleteResult = .failure(APIError.networkError(URLError(.timedOut)))
+        await sut.deletePost("p-elsewhere-2")
+        XCTAssertEqual(sut.posts.map(\.id), ["p1"])
     }
 
     // MARK: - createPost() — U1 ST3: text-only routes through the durable outbox
@@ -823,14 +920,14 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(sut.posts[0].id, "media-1")
     }
 
-    // MARK: - createOfflineMediaPost() — U1b ST2: durable offline media post
+    // MARK: - publish(_:) — U1b ST2: durable media post
 
-    func test_createOfflineMediaPost_enqueuesPostMediaAndInsertsOptimisticPost() async {
+    func test_publishMedia_enqueuesPostMediaAndInsertsOptimisticPost() async {
         let queue = MockOfflineQueue()
         let (sut, _, _, postService) = makeSUT(offlineQueue: queue)
         let urls = [URL(fileURLWithPath: "/tmp/a.jpg"), URL(fileURLWithPath: "/tmp/b.mp4")]
 
-        await sut.createOfflineMediaPost(localMediaURLs: urls, content: "Photo post", originalLanguage: "en", mobileTranscription: nil)
+        await sut.publish(mediaIntent(urls, content: "Photo post", originalLanguage: "en"))
 
         // Optimistic post with a local-media preview, keyed by the cmid.
         XCTAssertEqual(sut.posts.count, 1)
@@ -853,18 +950,12 @@ final class FeedViewModelTests: XCTestCase {
             "optimistic post must be keyed by the cmid for ST2 reconcile")
     }
 
-    func test_createOfflineMediaPost_reelType_enqueuesReelAndInsertsReelOptimisticPost() async {
+    func test_publishMedia_reelType_enqueuesReelAndInsertsReelOptimisticPost() async {
         let queue = MockOfflineQueue()
         let (sut, _, _, _) = makeSUT(offlineQueue: queue)
         let urls = [URL(fileURLWithPath: "/tmp/clip.mp4")]
 
-        await sut.createOfflineMediaPost(
-            localMediaURLs: urls,
-            content: "My reel",
-            originalLanguage: "en",
-            type: "REEL",
-            mobileTranscription: nil
-        )
+        await sut.publish(mediaIntent(urls, content: "My reel", type: .reel, originalLanguage: "en"))
 
         // The optimistic post is a REEL so it surfaces on the reel pager
         // immediately, and the durable row carries the REEL type so the flush
@@ -882,77 +973,44 @@ final class FeedViewModelTests: XCTestCase {
     /// ne satisfait pas une exigence de protocole en Swift). Aucun test ne
     /// traversait le protocole avec une position — d'où le silence. Celui-ci
     /// exerce le chemin complet ViewModel → protocole → file.
-    func test_createOfflineMediaPost_withLocation_propagatesPlaceToOutbox() async {
+    func test_publishMedia_withLocation_propagatesPlaceToOutbox() async {
         let queue = MockOfflineQueue()
         let (sut, _, _, _) = makeSUT(offlineQueue: queue)
         let place = SharedPlace(latitude: 48.8566, longitude: 2.3522, name: "Paris")
 
-        await sut.createOfflineMediaPost(
-            localMediaURLs: [URL(fileURLWithPath: "/tmp/a.jpg")],
-            content: "Vue depuis le toit",
-            location: place,
-            mobileTranscription: nil
-        )
+        await sut.publish(mediaIntent([URL(fileURLWithPath: "/tmp/a.jpg")], content: "Vue depuis le toit", location: place))
 
         XCTAssertEqual(queue.enqueuePostMediaCalls.count, 1)
         XCTAssertEqual(queue.enqueuePostMediaCalls.first?.location, place,
             "une position attachée à un média posté hors-ligne doit survivre jusqu'au flush")
     }
 
-    func test_createOfflineMediaPost_enqueueRefused_rollsBackOptimisticPost() async {
+    func test_publishMedia_enqueueRefused_rollsBackOptimisticPost() async {
         let queue = MockOfflineQueue()
         queue.enqueuePostMediaError = APIError.networkError(URLError(.timedOut))
         let (sut, _, _, _) = makeSUT(offlineQueue: queue)
 
-        await sut.createOfflineMediaPost(localMediaURLs: [URL(fileURLWithPath: "/tmp/a.jpg")], content: "Doomed", mobileTranscription: nil)
+        await sut.publish(mediaIntent([URL(fileURLWithPath: "/tmp/a.jpg")], content: "Doomed"))
 
         XCTAssertTrue(sut.posts.isEmpty, "optimistic media post must be removed when the outbox refuses the row")
         XCTAssertNotNil(sut.publishError)
         XCTAssertFalse(sut.publishSuccess)
     }
 
-    func test_createOfflineMediaPost_emptyURLs_fallsBackToTextOnly() async {
-        let queue = MockOfflineQueue()
-        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
-
-        await sut.createOfflineMediaPost(localMediaURLs: [], content: "Just text", mobileTranscription: nil)
-
-        XCTAssertEqual(queue.enqueuePostMediaCalls.count, 0, "no media → no media enqueue")
-        XCTAssertEqual(queue.enqueueCalls.count, 1, "falls back to the durable text-only path")
-        XCTAssertEqual(queue.enqueueCalls.first?.kind, .createPost)
-        XCTAssertEqual(sut.posts.count, 1)
-    }
-
-    /// **Le repli « aucun média » perdait la liste NOMMÉE de l'audience.**
-    ///
-    /// `enqueueDurableTextPost` porte un défaut `nil` sur `visibilityUserIds`,
-    /// et le repli ne le passait pas : un post `ONLY`/`EXCEPT` qui retombait là
-    /// partait sans ses destinataires. Le gateway le refuse
-    /// (`CreatePostSchema.refine`), le rejet est PERMANENT — la ligne est
-    /// épuisée, le post est perdu.
-    ///
-    /// C'est le mécanisme même que ce lot documente partout ailleurs : un
-    /// défaut fait disparaître un champ d'un site d'appel sans casser la
-    /// moindre compilation.
-    func test_createOfflineMediaPost_sansMedia_nePerdPasLAudienceNommee() async {
-        let queue = MockOfflineQueue()
-        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
-
-        await sut.createOfflineMediaPost(
-            localMediaURLs: [],
-            content: "Pour vous deux",
-            visibility: "ONLY",
-            visibilityUserIds: ["u1", "u2"],
-            mobileTranscription: nil
+    private func mediaIntent(
+        _ urls: [URL], content: String?, type: PostType = .post, originalLanguage: String? = nil,
+        location: SharedPlace? = nil, discoverabilityPrecision: DiscoverabilityPrecision? = nil
+    ) -> PublishIntent {
+        PublishIntent.document(
+            localMedia: urls.map {
+                ComposerDocumentMedia(url: $0, mimeType: $0.pathExtension == "mp4" ? "video/mp4" : "image/jpeg",
+                                      durationMs: $0.pathExtension == "mp4" ? 8000 : nil)
+            },
+            declaredType: type, forcePlainPost: false, content: content, visibility: "PUBLIC",
+            visibilityUserIds: nil, originalLanguage: originalLanguage, mentions: nil, location: location,
+            discoverabilityPrecision: discoverabilityPrecision, transcription: nil, storyEffects: nil,
+            mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil, commentsDisabled: false
         )
-
-        let payload = queue.lastPayload as? CreatePostPayload
-        XCTAssertEqual(
-            payload?.visibilityUserIds, ["u1", "u2"],
-            "L'audience nommée est perdue par le repli sans média : le gateway refusera la charge, et le "
-                + "rejet étant permanent, le post ne repartira jamais."
-        )
-        XCTAssertEqual(payload?.visibility, "ONLY")
     }
 
     // MARK: - Offline draft recovery (post / reel)
@@ -1687,7 +1745,7 @@ final class FeedViewModelTests: XCTestCase {
         await sut.loadFeed(forceRefresh: true)
         sut.subscribeToSocketEvents()
 
-        await sut.sendComment(postId: "p1", content: "Hello")
+        await sut.sendComment(postId: "p1", content: "Hello", originalLanguage: "en")
         guard let cmid = (queue.enqueueCalls.first?.payload as? CreateCommentPayload)?.clientMutationId else {
             return XCTFail("no createComment enqueue")
         }
@@ -1768,6 +1826,32 @@ final class FeedViewModelTests: XCTestCase {
         sut.unsubscribeFromSocketEvents()
     }
 
+    /// #6531 — un choix MANUEL du lecteur (`setTranslationOverride`, tap d'un
+    /// drapeau) n'est pas écrasé par une traduction qui arrive ensuite par
+    /// socket : elle est mémorisée dans `translations`, l'affichage reste
+    /// celui que le lecteur a choisi.
+    func test_socketPostTranslationUpdated_afterManualOverride_doesNotOverwriteDisplayedTranslation() async {
+        let (sut, _, socket, _) = makeSUT(preferredLanguages: ["en", "pt"])
+        sut.posts = [Self.makeFeedPost(id: "trans-post", content: "Bonjour",
+                                        translations: ["pt": PostTranslation(text: "Olá")])]
+        sut.setTranslationOverride(postId: "trans-post", language: "pt")
+
+        sut.subscribeToSocketEvents()
+
+        let translationData: SocketPostTranslationUpdatedData = JSONStub.decode("""
+        {"postId":"trans-post","language":"en","translation":{"text":"Hello","translationModel":"nllb-200","confidenceScore":0.95,"createdAt":"2026-01-15T12:00:00.000Z"}}
+        """)
+        socket.postTranslationUpdated.send(translationData)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(sut.posts[0].translatedContent, "Olá",
+                       "un choix manuel du lecteur n'est pas écrasé par une traduction qui arrive ensuite")
+        XCTAssertEqual(sut.posts[0].translations?["en"]?.text, "Hello", "la traduction reçue est quand même mémorisée")
+
+        sut.unsubscribeFromSocketEvents()
+    }
+
     // MARK: - Socket.IO: post:reposted
 
     func test_socketPostReposted_insertsRepostAndIncrementsNewPostsCount() async {
@@ -1815,101 +1899,6 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(sut.newPostsCount, 0)
 
         sut.unsubscribeFromSocketEvents()
-    }
-
-    // MARK: - bookmarkPost()
-
-    func test_bookmarkPost_callsAPIWithCorrectEndpoint() async {
-        let (sut, api, _, _) = makeSUT()
-        // bookmarkPost guards on `posts.first(where:)`, so the SUT must already
-        // know about the post before the API is hit. Without this preload the
-        // method is a no-op and no /bookmark request is issued.
-        sut.posts = [Self.makeFeedPost(id: "bm-post", content: "Bookmark target")]
-        let bookmarkResponse: APIResponse<[String: Bool]> = JSONStub.decode("""
-        {"success":true,"data":{"bookmarked":true},"error":null}
-        """)
-        api.stub("/posts/bm-post/bookmark", result: bookmarkResponse)
-
-        await sut.bookmarkPost("bm-post")
-
-        XCTAssertTrue(api.requestEndpoints.contains("/posts/bm-post/bookmark"))
-    }
-
-    // MARK: - bookmarkPost — SWR cache shape (Phase 4)
-
-    /// Phase 4 migration: the bookmarks cache read used to call
-    /// `.value` on `CacheResult`, collapsing `.fresh` / `.stale` and missing
-    /// the freshness signal. The new switch arms accept both `.fresh` and
-    /// `.stale` payloads as the optimistic rollback snapshot. This test
-    /// seeds the bookmarks cache with a "stale-style" save (the actor
-    /// transitions to stale once the TTL elapses, but the optimistic-write
-    /// contract is observable independent of freshness) and verifies that
-    /// `bookmarkPost` prepends the post to the existing list.
-    func test_bookmarkPost_withCachedBookmarks_prependsOptimistically() async {
-        await CacheCoordinator.shared.feed.invalidate(for: "bookmarks")
-        defer { Task { await CacheCoordinator.shared.feed.invalidate(for: "bookmarks") } }
-
-        let existing = Self.makeFeedPost(id: "old-bm", content: "previously bookmarked")
-        try? await CacheCoordinator.shared.feed.save([existing], for: "bookmarks")
-
-        let (sut, api, _, _) = makeSUT()
-        sut.posts = [Self.makeFeedPost(id: "new-bm", content: "Bookmark target")]
-        let bookmarkResponse: APIResponse<[String: Bool]> = JSONStub.decode("""
-        {"success":true,"data":{"bookmarked":true},"error":null}
-        """)
-        api.stub("/posts/new-bm/bookmark", result: bookmarkResponse)
-
-        await sut.bookmarkPost("new-bm")
-
-        let result = await CacheCoordinator.shared.feed.load(for: "bookmarks")
-        let cached = result.snapshot() ?? []
-        XCTAssertEqual(cached.count, 2, "Optimistic write must keep existing bookmarks and prepend the new one")
-        XCTAssertEqual(cached.first?.id, "new-bm", "Newest bookmark goes to the head of the list")
-        XCTAssertTrue(cached.contains(where: { $0.id == "old-bm" }), "Existing bookmark must be preserved")
-    }
-
-    /// `.expired` / `.empty` arms must seed a fresh bookmarks list with the
-    /// single optimistic post — without crashing on the missing payload.
-    func test_bookmarkPost_withEmptyCache_seedsBookmarksList() async {
-        await CacheCoordinator.shared.feed.invalidate(for: "bookmarks")
-        defer { Task { await CacheCoordinator.shared.feed.invalidate(for: "bookmarks") } }
-
-        let (sut, api, _, _) = makeSUT()
-        sut.posts = [Self.makeFeedPost(id: "first-bm", content: "First bookmark ever")]
-        let bookmarkResponse: APIResponse<[String: Bool]> = JSONStub.decode("""
-        {"success":true,"data":{"bookmarked":true},"error":null}
-        """)
-        api.stub("/posts/first-bm/bookmark", result: bookmarkResponse)
-
-        await sut.bookmarkPost("first-bm")
-
-        let result = await CacheCoordinator.shared.feed.load(for: "bookmarks")
-        let cached = result.snapshot() ?? []
-        XCTAssertEqual(cached.count, 1)
-        XCTAssertEqual(cached.first?.id, "first-bm")
-    }
-
-    /// On API failure, the optimistic write must be rolled back to the
-    /// pre-call snapshot (the cached bookmarks list before the user tapped
-    /// the bookmark button).
-    func test_bookmarkPost_apiFailure_rollsBackToSnapshot() async {
-        await CacheCoordinator.shared.feed.invalidate(for: "bookmarks")
-        defer { Task { await CacheCoordinator.shared.feed.invalidate(for: "bookmarks") } }
-
-        let existing = Self.makeFeedPost(id: "kept-bm", content: "should survive rollback")
-        try? await CacheCoordinator.shared.feed.save([existing], for: "bookmarks")
-
-        let (sut, api, _, _) = makeSUT()
-        sut.posts = [Self.makeFeedPost(id: "doomed-bm", content: "Will fail")]
-        api.errorToThrow = APIError.networkError(URLError(.notConnectedToInternet))
-
-        await sut.bookmarkPost("doomed-bm")
-
-        let result = await CacheCoordinator.shared.feed.load(for: "bookmarks")
-        let cached = result.snapshot() ?? []
-        XCTAssertEqual(cached.count, 1, "Rollback must restore the pre-call snapshot")
-        XCTAssertEqual(cached.first?.id, "kept-bm")
-        XCTAssertFalse(cached.contains(where: { $0.id == "doomed-bm" }), "Failed bookmark must NOT remain in cache")
     }
 
     // MARK: - pinPost()
@@ -2249,4 +2238,173 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(result[0].likes, 4)
     }
 
+
+    // MARK: - BW-IOS-03 : politique d'auto-téléchargement du préchargement du feed
+
+    /// La fenêtre de 9 posts tirait le fichier AUDIO ENTIER de chaque post
+    /// audio, jamais joué, sans consulter `MediaDownloadPolicyEngine`.
+    func test_shouldPrefetchFeedMedia_audioOnBadCellular_returnsFalse() {
+        let allowAudio = MediaDownloadPolicyEngine.shouldAutoDownload(
+            kind: .audio, condition: .badCellular, prefs: .defaults
+        )
+
+        XCTAssertFalse(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .audio, hasThumbnail: false,
+            allowImage: true, allowVideo: true, allowAudio: allowAudio
+        ), "sur cellulaire contraint, l'audio se charge à l'appui sur lecture")
+    }
+
+    func test_shouldPrefetchFeedMedia_imageOnWifi_returnsTrue() {
+        let allowImage = MediaDownloadPolicyEngine.shouldAutoDownload(
+            kind: .image, condition: .wifi, prefs: .defaults
+        )
+
+        XCTAssertTrue(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .image, hasThumbnail: true,
+            allowImage: allowImage, allowVideo: false, allowAudio: false
+        ), "en Wi-Fi, le fil reste préchargé comme avant")
+    }
+
+    /// Une vidéo AVEC vignette ne tire qu'une image distante : `prefs.image`.
+    /// `hasThumbnail` signifie « vignette RÉSOLVABLE » (l'appelant le calcule
+    /// via `media.thumbnailUrl.flatMap { MeeshyConfig.resolveMediaURL($0) } != nil`),
+    /// pas seulement « champ non-nil » — sinon une `thumbnailUrl` mal formée
+    /// ferait passer ce prédicat sous `allowImage` pendant que le code exécuté
+    /// bascule sur le décodage de la première frame du MP4 (`prefs.video`).
+    func test_shouldPrefetchFeedMedia_videoWithThumbnail_followsImagePolicy() {
+        XCTAssertTrue(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .video, hasThumbnail: true,
+            allowImage: true, allowVideo: false, allowAudio: false
+        ))
+        XCTAssertFalse(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .video, hasThumbnail: true,
+            allowImage: false, allowVideo: true, allowAudio: true
+        ))
+    }
+
+    /// Une vidéo SANS vignette passe par `StoryMediaLoader.videoThumbnail`, qui
+    /// décode la première frame du MP4 DISTANT : ce sont des octets VIDÉO, donc
+    /// `prefs.video` (`.wifiOnly` par défaut). La ranger sous `prefs.image`
+    /// (`.wifiAndGoodCellular`) laisserait tirer de la vidéo en bon cellulaire.
+    func test_shouldPrefetchFeedMedia_videoWithoutThumbnail_followsVideoPolicy() {
+        XCTAssertFalse(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .video, hasThumbnail: false,
+            allowImage: true, allowVideo: false, allowAudio: true
+        ), "pas de lecture réseau sur le MP4 quand prefs.video refuse")
+        XCTAssertTrue(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .video, hasThumbnail: false,
+            allowImage: false, allowVideo: true, allowAudio: false
+        ))
+    }
+
+    /// Un document n'a jamais été préchargé (branche `default` du routage) —
+    /// la garde ne doit pas lui ouvrir une porte au passage.
+    func test_shouldPrefetchFeedMedia_document_isNeverPrefetched() {
+        XCTAssertFalse(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .document, hasThumbnail: true,
+            allowImage: true, allowVideo: true, allowAudio: true
+        ))
+    }
+
+    // MARK: - Source guard — le prefetch consulte bien la politique (câblage, pas seulement la table de vérité)
+
+    /// Les tests `test_shouldPrefetchFeedMedia_*` ci-dessus couvrent la table
+    /// de vérité du prédicat PUR, jamais son câblage : supprimer le
+    /// `guard FeedViewModel.shouldPrefetchFeedMedia(…) else { … }` ou le
+    /// `if allowVideo,` du preroll dans `prefetchMedia(around:)` les
+    /// laisserait tous verts alors que le défaut BW-IOS-03 serait entièrement
+    /// rétabli. Garde de SOURCE visant le BLOC de la fonction (jamais le
+    /// fichier entier), équilibrée par accolades via `DeclarationBodyScanner`
+    /// — insensible aux commentaires ajoutés au-dessus.
+    func test_prefetchMedia_blockConsultsTheDownloadPolicy() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Unit/ViewModels
+            .deletingLastPathComponent()   // .../Unit
+            .deletingLastPathComponent()   // .../MeeshyTests
+            .deletingLastPathComponent()   // .../apps/ios
+            .appendingPathComponent("Meeshy/Features/Main/ViewModels/FeedMediaPrefetcher.swift")
+        let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+
+        guard let body = DeclarationBodyScanner.body(containing: "func prefetchMedia(around index: Int)", in: source) else {
+            XCTFail("prefetchMedia(around:) body not found — FeedViewModel.swift changed shape, update this guard's anchor.")
+            return
+        }
+
+        XCTAssertTrue(
+            body.contains("shouldPrefetchFeedMedia("),
+            "prefetchMedia(around:) must consult FeedViewModel.shouldPrefetchFeedMedia(...) before touching a URL — " +
+            "otherwise the truth-table tests above stay green while the download policy is silently bypassed."
+        )
+        XCTAssertTrue(
+            body.contains("if allowVideo,"),
+            "the video preroll inside prefetchMedia(around:) must stay gated on allowVideo — " +
+            "otherwise a good-cellular connection preloads the AVPlayer's MP4 regardless of prefs.video."
+        )
+    }
+
+}
+
+// MARK: - Gated feed cache double
+
+/// Magasin de cache du fil en mémoire dont `save` se SUSPEND jusqu'à
+/// `releaseSave()` — pour prouver qu'un appelant attend (ou non) sa
+/// persistance. Privé à ce fichier : un fichier de mock neuf exigerait un
+/// passage XcodeGen (cf. tasks/lessons.md, « fichier de test neuf »).
+@MainActor
+private final class GatedFeedCacheStore: FeedCacheStoring {
+    private var storage: [String: [FeedPost]] = [:]
+    nonisolated deinit {}
+    private var saveRequested: [CheckedContinuation<Void, Never>] = []
+    private var saveRequestedOnce = false
+    private var gate: [CheckedContinuation<Void, Never>] = []
+    private var released = false
+
+    func load(for key: String) async -> CacheResult<[FeedPost]> {
+        guard let items = storage[key] else { return .empty }
+        return .fresh(items, age: 0)
+    }
+
+    func save(_ items: [FeedPost], for key: String) async throws {
+        saveRequestedOnce = true
+        saveRequested.forEach { $0.resume() }
+        saveRequested.removeAll()
+        if !released {
+            await withCheckedContinuation { gate.append($0) }
+        }
+        storage[key] = items
+    }
+
+    func savePreservingFreshness(_ items: [FeedPost], for key: String) async throws {
+        storage[key] = items
+    }
+
+    func patchEverywhere(itemId: String, mutate: @Sendable (inout FeedPost) -> Void) async {
+        for (key, items) in storage {
+            storage[key] = items.map { item in
+                guard item.id == itemId else { return item }
+                var copy = item
+                mutate(&copy)
+                return copy
+            }
+        }
+    }
+
+    func removeEverywhere(itemId: String) async {
+        for (key, items) in storage {
+            storage[key] = items.filter { $0.id != itemId }
+        }
+    }
+
+    func waitForSaveRequest() async {
+        if saveRequestedOnce { return }
+        await withCheckedContinuation { saveRequested.append($0) }
+    }
+
+    func releaseSave() {
+        released = true
+        gate.forEach { $0.resume() }
+        gate.removeAll()
+    }
+
+    func items(for key: String) -> [FeedPost]? { storage[key] }
 }

@@ -1,215 +1,130 @@
 package me.meeshy.ui.component.chrome
 
-import androidx.compose.animation.core.EaseOutBack
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.util.lerp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupPositionProvider
-import androidx.compose.ui.window.PopupProperties
-import me.meeshy.sdk.model.chrome.MenuAnchorBounds
-import me.meeshy.sdk.model.chrome.menuPopupOffset
+import kotlinx.coroutines.delay
+import me.meeshy.sdk.model.chrome.FloatingMenuLadder
+import me.meeshy.sdk.model.chrome.unreadBadgeLabel
+import me.meeshy.sdk.model.layout.PointDp
+import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
-import me.meeshy.ui.theme.MeeshyRadius
-import me.meeshy.ui.theme.MeeshySpacing
-import me.meeshy.ui.theme.MeeshyTheme
 
-/** One action in the [MeeshyMenuFab] — an icon, a label, an accent colour, and an
- *  optional unread/pending badge. Opaque data so the atom stays product-agnostic. */
+/** One rung of the ladder — an icon, a label (spoken, not drawn), an accent colour and an
+ *  optional badge. Opaque data so the atom stays product-agnostic. */
 public data class RadialMenuItem(
     val icon: ImageVector,
     val label: String,
     val color: Color,
     val badgeCount: Int = 0,
+    /** Le point de coin sans chiffre (« quelque chose t'attend ici », #18165) ; une pastille de compte prend sa place. */
+    val dot: Boolean = false,
     val onSelect: () -> Unit,
 )
 
+/** Etiquettes de test : le voile et chaque barreau (`menu-ladder-rung-<index>`). */
+public const val MENU_LADDER_VEIL_TAG: String = "menu-ladder-veil"
+public fun menuLadderRungTag(index: Int): String = "menu-ladder-rung-$index"
+
+/** Le point de coin d'un barreau qui signale sans compter (#18165). */
+public const val MENU_LADDER_RUNG_DOT_TAG: String = "menu-ladder-rung-dot"
+
+/** Cible tactile d'un barreau : le disque de 46 dp iOS, porte a 48 dp de toucher. */
+private val RUNG_TARGET = 48.dp
+private val RUNG_DISC = FloatingMenuLadder.ITEM_SIZE.dp
+
 /**
- * The floating action menu (parity plan §4.2 "menu radial"), version ancree :
- * le bouton reste une pastille 56dp deplacable, et le menu deploye vit dans un
- * [Popup] positionne par la geometrie PURE de `core:model` ([menuPopupOffset]).
- *
- * Pourquoi un Popup et non une colonne debordante : le bouton est colle a un bord
- * par l'aimantation, donc une colonne qui deborde de son gabarit sort de l'ecran —
- * observe sur emulateur, tous les libelles etaient coupes. Le Popup recoit la
- * taille reelle du menu et la taille de la fenetre, et la geometrie le RAMENE
- * entierement dans le viewport, quel que soit l'endroit ou l'utilisateur a laisse
- * la pastille.
- *
- * Le menu se deploie a l'ECHELLE (0.3 -> 1, fondu, -30 degres -> 0) avec le stagger
- * signature (0.04 s x index), vers le haut ou vers le bas selon la moitie d'ecran
- * ou vit la pastille — [unfoldUpward] — et les libelles regardent l'interieur de
- * l'ecran — [growRightward].
- *
- * SDK-pure : [items] porte des icones/couleurs/actions opaques ; l'etat est HISSE
- * ([expanded]/[onExpandedChange]) pour que le premier tap du conteneur ouvre le
- * menu d'un coup, comme sur iOS.
+ * Le voile TRANSPARENT de l'echelle ouverte — miroir du `Color.clear` plein ecran de
+ * `RootFloatingChrome` : un tap n'importe ou hors des boutons et des barreaux referme le menu.
+ * A poser SOUS les deux boutons flottants (le second tap sur l'avatar doit les atteindre).
  */
 @Composable
-public fun MeeshyMenuFab(
+public fun MeeshyMenuVeil(expanded: Boolean, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    if (!expanded) return
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .testTag(MENU_LADDER_VEIL_TAG)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onDismiss,
+            )
+            .clearAndSetSemantics { },
+    )
+}
+
+/**
+ * L'echelle verticale du bouton avatar — miroir de `RootFloatingChrome.menuLadder` iOS : des
+ * disques de 46 dp a l'aplomb du bouton, vers le bas ou vers le haut ([opensDownward], decide
+ * par `FloatingButtonGeometry.menuOpensDownward`), apparaissant en echelon de 0,04 s (echelle
+ * 0,3 -> 1, fondu, rotation -30 deg -> 0, ressort 0,4 / 0,65 ; fermeture 0,25 d'un bloc).
+ * Reduire les animations : un simple fondu.
+ *
+ * L'echelle reste MONTEE fermee (opacite 0, ni toucher ni TalkBack) pour que le ressort
+ * d'ouverture parte d'un etat existant. [menuCenter] est en dp, dans le repere de l'ecran.
+ * Le libelle n'est pas dessine : il est annonce, avec [itemHint] comme action du double-tap.
+ */
+@Composable
+public fun MeeshyMenuLadder(
     items: List<RadialMenuItem>,
     expanded: Boolean,
-    onExpandedChange: (Boolean) -> Unit,
-    unfoldUpward: Boolean,
-    growRightward: Boolean,
+    menuCenter: PointDp,
+    opensDownward: Boolean,
+    itemHint: String,
+    onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
-    fabIcon: ImageVector = Icons.Filled.Add,
-    collapsedContent: (@Composable () -> Unit)? = null,
 ) {
-    val fabRotation by animateFloatAsState(
-        targetValue = if (expanded) 45f else 0f,
-        animationSpec = tween(260, easing = EaseOutBack),
-        label = "menu-fab-rotation",
-    )
-
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        if (expanded || collapsedContent == null) {
-            FloatingGradientFab(
-                onClick = { onExpandedChange(!expanded) },
-                icon = fabIcon,
-                contentDescription = null,
-                modifier = Modifier.graphicsLayer { rotationZ = fabRotation },
-            )
-        } else {
-            collapsedContent()
-        }
-
-        if (expanded) {
-            val spacingPx = with(LocalDensity.current) { MeeshySpacing.md.roundToPx() }
-            val positionProvider = remember(spacingPx) { MenuFabPositionProvider(spacingPx) }
-            Popup(
-                popupPositionProvider = positionProvider,
-                onDismissRequest = { onExpandedChange(false) },
-                properties = PopupProperties(focusable = true),
-            ) {
-                MenuItemStack(
-                    items = items,
-                    unfoldUpward = unfoldUpward,
-                    growRightward = growRightward,
-                    onSelect = { item ->
-                        onExpandedChange(false)
-                        item.onSelect()
-                    },
-                )
-            }
-        }
-    }
-}
-
-/**
- * Ancre le menu contre la pastille et le garde DANS la fenetre. Toute la regle vit
- * dans [menuPopupOffset] (core:model), testee en JVM pur — ici on ne fait que
- * traduire les types Compose.
- */
-private class MenuFabPositionProvider(private val spacingPx: Int) : PopupPositionProvider {
-    override fun calculatePosition(
-        anchorBounds: IntRect,
-        windowSize: IntSize,
-        layoutDirection: LayoutDirection,
-        popupContentSize: IntSize,
-    ): IntOffset {
-        val offset = menuPopupOffset(
-            anchor = MenuAnchorBounds(
-                left = anchorBounds.left,
-                top = anchorBounds.top,
-                right = anchorBounds.right,
-                bottom = anchorBounds.bottom,
-            ),
-            menuWidthPx = popupContentSize.width,
-            menuHeightPx = popupContentSize.height,
-            windowWidthPx = windowSize.width,
-            windowHeightPx = windowSize.height,
-            spacingPx = spacingPx,
-        )
-        return IntOffset(offset.xPx, offset.yPx)
-    }
-}
-
-@Composable
-private fun MenuItemStack(
-    items: List<RadialMenuItem>,
-    unfoldUpward: Boolean,
-    growRightward: Boolean,
-    onSelect: (RadialMenuItem) -> Unit,
-) {
-    // Le Popup apparait deja compose : sans cette bascule differee, chaque item
-    // naitrait directement a l'etat final et l'effet d'echelle n'existerait pas.
-    var appeared by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { appeared = true }
-
-    Column(
-        // Respiration contre le bord d'ancrage : sans elle, les pastilles du menu
-        // touchent le bord physique de l'ecran quand la bulle y est aimantee.
-        modifier = Modifier.padding(horizontal = MeeshySpacing.sm),
-        horizontalAlignment = if (growRightward) Alignment.Start else Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
-    ) {
-        // item[0] pop en premier ET reste adjacent a la pastille : rendu inverse
-        // quand le menu monte, rendu naturel quand il descend.
-        val renderOrder = if (unfoldUpward) items.indices.reversed() else items.indices.toList()
-        for (index in renderOrder) {
-            val item = items[index]
-            val progress by animateFloatAsState(
-                targetValue = if (appeared) 1f else 0f,
-                animationSpec = tween(
-                    durationMillis = 260,
-                    delayMillis = index * 40,
-                    easing = EaseOutBack,
-                ),
-                label = "menu-item-$index",
-            )
-            MenuItemRow(
+    val reduceMotion = LocalReduceMotion.current
+    Box(modifier = modifier.fillMaxSize()) {
+        items.forEachIndexed { index, item ->
+            LadderRung(
                 item = item,
-                iconLeading = growRightward,
-                onClick = { onSelect(item) },
-                modifier = Modifier.graphicsLayer {
-                    val scale = lerp(0.3f, 1f, progress)
-                    scaleX = scale
-                    scaleY = scale
-                    alpha = progress.coerceIn(0f, 1f)
-                    rotationZ = lerp(-30f, 0f, progress)
-                    // L'echelle part du coin ou vit la pastille : c'est ce qui donne
-                    // l'impression que le menu SORT du bouton au lieu d'apparaitre.
-                    transformOrigin = TransformOrigin(
-                        pivotFractionX = if (growRightward) 0f else 1f,
-                        pivotFractionY = if (unfoldUpward) 1f else 0f,
-                    )
+                index = index,
+                expanded = expanded,
+                center = PointDp(
+                    x = menuCenter.x,
+                    y = FloatingMenuLadder.itemCenterY(index, menuCenter.y, opensDownward),
+                ),
+                reduceMotion = reduceMotion,
+                hint = itemHint,
+                onClick = {
+                    onDismiss()
+                    item.onSelect()
                 },
             )
         }
@@ -217,70 +132,104 @@ private fun MenuItemStack(
 }
 
 @Composable
-private fun MenuItemRow(
+private fun LadderRung(
     item: RadialMenuItem,
-    iconLeading: Boolean,
+    index: Int,
+    expanded: Boolean,
+    center: PointDp,
+    reduceMotion: Boolean,
+    hint: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier.clickable(onClick = onClick),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (iconLeading) {
-            MenuItemIcon(item)
-            Spacer(Modifier.width(MeeshySpacing.md))
-            MenuItemLabel(item)
+    val haptics = rememberMeeshyHaptics()
+    val progress = remember { Animatable(if (expanded) 1f else 0f) }
+    LaunchedEffect(expanded, reduceMotion) {
+        delay(FloatingMenuLadder.delayMillis(index, opening = expanded))
+        val target = if (expanded) 1f else 0f
+        if (reduceMotion) {
+            progress.animateTo(target, tween(ScrollMotionVisibility.FADE_DURATION_MS))
         } else {
-            MenuItemLabel(item)
-            Spacer(Modifier.width(MeeshySpacing.md))
-            MenuItemIcon(item)
+            val response = if (expanded) FloatingMenuLadder.OPEN_SPRING_RESPONSE else FloatingMenuLadder.CLOSE_SPRING_RESPONSE
+            progress.animateTo(
+                target,
+                spring(dampingRatio = FloatingMenuLadder.SPRING_DAMPING, stiffness = MeeshyMotion.stiffnessForResponse(response)),
+            )
         }
     }
-}
-
-@Composable
-private fun MenuItemLabel(item: RadialMenuItem) {
-    val tokens = MeeshyTheme.tokens
+    val half = RUNG_TARGET.value / 2f
+    val interaction = if (expanded) {
+        Modifier
+            .semantics { contentDescription = item.label }
+            .clickable(onClickLabel = hint, role = Role.Button) {
+                haptics.light()
+                onClick()
+            }
+    } else {
+        Modifier.clearAndSetSemantics { }
+    }
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(MeeshyRadius.pill))
-            .background(tokens.backgroundSecondary)
-            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
+            .offset { IntOffset((center.x - half).dp.roundToPx(), (center.y - half).dp.roundToPx()) }
+            .size(RUNG_TARGET)
+            .graphicsLayer {
+                val frame = FloatingMenuLadder.frame(progress.value, reduceMotion)
+                scaleX = frame.scale
+                scaleY = frame.scale
+                alpha = frame.alpha
+                rotationZ = frame.rotationDegrees
+            }
+            .testTag(menuLadderRungTag(index))
+            .then(interaction),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = item.label,
-            style = MaterialTheme.typography.labelLarge,
-            color = tokens.textPrimary,
-        )
-    }
-}
-
-@Composable
-private fun MenuItemIcon(item: RadialMenuItem) {
-    Box(contentAlignment = Alignment.Center) {
         Box(
             modifier = Modifier
-                .size(46.dp)
-                .clip(CircleShape)
-                .background(item.color),
+                .size(RUNG_DISC)
+                .shadow(
+                    elevation = 8.dp,
+                    shape = CircleShape,
+                    ambientColor = item.color.copy(alpha = 0.45f),
+                    spotColor = item.color.copy(alpha = 0.45f),
+                )
+                .background(Brush.linearGradient(listOf(item.color, item.color.copy(alpha = 0.7f))), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(imageVector = item.icon, contentDescription = item.label, tint = MeeshyPalette.White)
+            Icon(
+                imageVector = item.icon,
+                contentDescription = null,
+                tint = MeeshyPalette.White,
+                modifier = Modifier.size((FloatingMenuLadder.ITEM_SIZE * 0.39f).dp),
+            )
         }
-        if (item.badgeCount > 0) {
+        if (item.dot && item.badgeCount <= 0) {
+            // Le point blanc, meme coin que la pastille — miroir de `ThemedActionButton.showsDot` iOS.
+            val shift = (FloatingMenuLadder.ITEM_SIZE * 0.33f).dp
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(18.dp)
-                    .clip(CircleShape)
-                    .background(MeeshyPalette.ErrorStrong),
+                    .offset(x = shift, y = -shift)
+                    .size(10.dp)
+                    .shadow(elevation = 2.dp, shape = CircleShape)
+                    .background(MeeshyPalette.White, CircleShape)
+                    .testTag(MENU_LADDER_RUNG_DOT_TAG),
+            )
+        }
+        if (item.badgeCount > 0) {
+            // Pastille blanche, chiffre dans la couleur du barreau, decalee de 33 % du disque.
+            val shift = (FloatingMenuLadder.ITEM_SIZE * 0.33f).dp
+            Box(
+                modifier = Modifier
+                    .offset(x = shift, y = -shift)
+                    .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
+                    .background(MeeshyPalette.White, RoundedCornerShape(50))
+                    .padding(horizontal = 4.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = if (item.badgeCount > 9) "9+" else item.badgeCount.toString(),
+                    text = unreadBadgeLabel(item.badgeCount),
+                    color = item.color,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MeeshyPalette.White,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
                 )
             }
         }

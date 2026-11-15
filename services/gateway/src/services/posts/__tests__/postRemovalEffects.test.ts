@@ -35,12 +35,14 @@ const trackingLinkUpdateMany = jest.fn<any>();
 const notificationDeleteMany = jest.fn<any>();
 const runCommandRaw = jest.fn<any>();
 const releasePost = jest.fn<any>();
+const postPointsDeleteMany = jest.fn<any>();
 const announceNotificationsRetracted = jest.fn<any>();
 
 const prisma = {
   adminAuditLog: { create: auditCreate },
   trackingLink: { updateMany: trackingLinkUpdateMany },
   notification: { deleteMany: notificationDeleteMany },
+  engagementPostPoints: { deleteMany: postPointsDeleteMany },
   $runCommandRaw: runCommandRaw,
 } as any;
 
@@ -52,7 +54,11 @@ const removedPost = { id: POST_ID, authorId: AUTHOR_ID, type: 'STORY' };
 function rawFind(ids: readonly string[]) {
   return {
     cursor: {
-      firstBatch: ids.map((id) => ({ _id: { $oid: id }, userId: { $oid: RECIPIENT_ID } })),
+      firstBatch: ids.map((id) => ({
+        _id: { $oid: id },
+        userId: { $oid: RECIPIENT_ID },
+        delivery: { pushSent: true },
+      })),
       id: 0,
       ns: 'meeshy.Notification',
     },
@@ -66,6 +72,7 @@ beforeEach(() => {
   trackingLinkUpdateMany.mockResolvedValue({ count: 0 });
   notificationDeleteMany.mockResolvedValue({ count: 0 });
   releasePost.mockResolvedValue(undefined);
+  postPointsDeleteMany.mockResolvedValue({ count: 0 });
   announceNotificationsRetracted.mockResolvedValue(undefined);
   runCommandRaw.mockResolvedValue(rawFind([]));
 });
@@ -77,12 +84,21 @@ describe('applyPostRemovalEffects — retrait des notifications du post', () => 
     await applyPostRemovalEffects(prisma, removedPost, { id: AUTHOR_ID }, soundCapture, announcer);
 
     expect(runCommandRaw).toHaveBeenCalledWith(
-      expect.objectContaining({ filter: { 'context.postId': { $in: [POST_ID] } } })
+      expect.objectContaining({
+        filter: {
+          type: { $ne: 'content_removed' },
+          $or: [
+            { 'context.postId': { $in: [POST_ID] } },
+            { 'metadata.repostId': { $in: [POST_ID] } },
+            { 'metadata.originalPostId': { $in: [POST_ID] } },
+          ],
+        },
+      })
     );
     expect(notificationDeleteMany).toHaveBeenCalledWith({ where: { id: { in: ['n1', 'n2'] } } });
     expect(announceNotificationsRetracted).toHaveBeenCalledWith([
-      { id: 'n1', userId: RECIPIENT_ID },
-      { id: 'n2', userId: RECIPIENT_ID },
+      { id: 'n1', userId: RECIPIENT_ID, pushSent: true },
+      { id: 'n2', userId: RECIPIENT_ID, pushSent: true },
     ]);
   });
 
@@ -119,6 +135,55 @@ describe('applyPostRemovalEffects — retrait des notifications du post', () => 
       }),
     });
     expect(trackingLinkUpdateMany).toHaveBeenCalled();
+    expect(releasePost).toHaveBeenCalledWith(POST_ID);
+  });
+});
+
+/**
+ * Ce que le post a rapporté à ses lecteurs (#9569). `EngagementPostPoints` n'a
+ * ni relation ni cascade vers `Post` : sans ce retrait, la ligne de cumul de
+ * chaque lecteur survivrait pour toujours à un post que plus aucune lecture ne
+ * demande.
+ */
+describe('applyPostRemovalEffects — ce que le post a rapporté à ses lecteurs', () => {
+  it('retire les lignes de cumul du post, pour TOUS ses lecteurs', async () => {
+    await applyPostRemovalEffects(prisma, removedPost, { id: AUTHOR_ID }, soundCapture, announcer);
+
+    expect(postPointsDeleteMany).toHaveBeenCalledWith({ where: { postId: { in: [POST_ID] } } });
+  });
+
+  it('ne retarde pas ce qui se VOIT : les notifications et les liens partent avant', async () => {
+    const order: string[] = [];
+    runCommandRaw.mockImplementation(async () => {
+      order.push('notifications');
+      return rawFind([]);
+    });
+    trackingLinkUpdateMany.mockImplementation(async () => {
+      order.push('links');
+      return { count: 0 };
+    });
+    postPointsDeleteMany.mockImplementation(async () => {
+      order.push('points');
+      return { count: 0 };
+    });
+
+    await applyPostRemovalEffects(prisma, removedPost, { id: AUTHOR_ID }, soundCapture, announcer);
+
+    expect(order.indexOf('points')).toBeGreaterThan(order.indexOf('notifications'));
+    expect(order.indexOf('points')).toBeGreaterThan(order.indexOf('links'));
+  });
+
+  it('n\'emporte ni la suppression ni les autres effets quand le retrait du cumul échoue', async () => {
+    postPointsDeleteMany.mockRejectedValue(new Error('mongo down'));
+
+    await expect(
+      applyPostRemovalEffects(prisma, removedPost, { id: MODERATOR_ID, reason: 'spam' }, soundCapture, announcer)
+    ).resolves.toBeUndefined();
+
+    expect(trackingLinkUpdateMany).toHaveBeenCalledWith({
+      where: { targetId: { in: [POST_ID] } },
+      data: { isActive: false },
+    });
     expect(releasePost).toHaveBeenCalledWith(POST_ID);
   });
 });

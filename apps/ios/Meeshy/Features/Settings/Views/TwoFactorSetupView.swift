@@ -1,0 +1,732 @@
+import SwiftUI
+import Combine
+import MeeshySDK
+import MeeshyUI
+
+struct TwoFactorSetupView: View {
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+    @ObservedObject var viewModel: TwoFactorViewModel
+
+    let onComplete: () -> Void
+    let onCancel: () -> Void
+
+    enum SetupStep {
+        case loading
+        case showSecret(TwoFactorSetup)
+        case enterCode(TwoFactorSetup)
+        case showBackupCodes([String])
+        case error(String)
+    }
+
+    @State private var step: SetupStep = .loading
+    @State private var verificationCode = ""
+    @State private var verifying = false
+    @State private var codeError: String?
+    @State private var copiedKey = false
+    @State private var copiedCodes = false
+    @State private var delays = DelayedActions()
+
+    private let tfaColor = MeeshyColors.indigo500
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                theme.backgroundGradient.ignoresSafeArea()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: MeeshySpacing.xl) {
+                        switch step {
+                        case .loading:
+                            ProgressView()
+                                .scaleEffect(1.2)
+                                .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.xxxl)
+
+                        case .showSecret(let setup):
+                            secretView(setup)
+
+                        case .enterCode(let setup):
+                            codeEntryView(setup)
+
+                        case .showBackupCodes(let codes):
+                            backupCodesView(codes)
+
+                        case .error(let message):
+                            errorView(message)
+                        }
+                    }
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.top, MeeshySpacing.lg)
+                    .iPadFormWidth()
+                }
+            }
+            .navigationTitle(String(localized: "2fa_setup_title", defaultValue: "Configurer la 2FA"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "2fa_cancel", defaultValue: "Annuler")) {
+                        onCancel()
+                    }
+                    .foregroundColor(tfaColor)
+                }
+            }
+        }
+        .onAppear { initiateSetup() }
+        .onDisappear { delays.cancelAll() }
+    }
+
+    // MARK: - Secret / QR Code Step
+
+    private func secretView(_ setup: TwoFactorSetup) -> some View {
+        VStack(spacing: MeeshySpacing.lg) {
+            Image(systemName: "qrcode")
+                .font(MeeshyFont.relative(80))
+                .foregroundStyle(tfaColor)
+                .padding(.top, MeeshySpacing.xl)
+                .accessibilityHidden(true)
+
+            Text(String(localized: "2fa_scan_instruction", defaultValue: "Scannez ce QR code avec votre application d'authentification"))
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, MeeshySpacing.xl)
+
+            if let base64String = setup.qrCodeDataUrl.components(separatedBy: ",").last,
+               let data = Data(base64Encoded: base64String),
+               let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .interpolation(.none)
+                    .scaledToFit()
+                    .frame(width: 200, height: 200)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
+            } else {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(MeeshyFont.relative(40))
+                    .foregroundStyle(MeeshyColors.warning)
+                    .frame(width: 200, height: 200)
+                    .accessibilityHidden(true)
+            }
+
+            VStack(spacing: MeeshySpacing.sm) {
+                Text(String(localized: "2fa_manual_entry_label", defaultValue: "Ou entrez cette clé manuellement :"))
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(theme.textMuted)
+
+                HStack(spacing: MeeshySpacing.sm) {
+                    Text(setup.secret)
+                        .font(.system(.subheadline, design: .monospaced).weight(.semibold))
+                        .foregroundColor(theme.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .textSelection(.enabled)
+                        .accessibilityLabel(String(localized: "a11y_2fa_secret_key", defaultValue: "Clé secrète"))
+                        .accessibilityValue(setup.secret)
+
+                    Button {
+                        ExpiringClipboard.write(setup.secret)
+                        HapticFeedback.light()
+                        copiedKey = true
+                        delays.run(after: .seconds(2)) { copiedKey = false }
+                    } label: {
+                        Image(systemName: copiedKey ? "checkmark" : "doc.on.doc")
+                            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                            .foregroundStyle(copiedKey ? MeeshyColors.success : tfaColor)
+                    }
+                    .accessibilityLabel(copiedKey ? String(localized: "a11y_copied", defaultValue: "Copié") : String(localized: "a11y_copy_key", defaultValue: "Copier la clé secrète"))
+                }
+                .padding(.horizontal, MeeshySpacing.md + 2)
+                .padding(.vertical, MeeshySpacing.sm + 2)
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                        .fill(tfaColor.opacity(MeeshyOpacity.subtle))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                                .stroke(tfaColor.opacity(MeeshyOpacity.light), lineWidth: 1)
+                        )
+                )
+            }
+
+            Button {
+                HapticFeedback.medium()
+                animate { step = .enterCode(setup) }
+            } label: {
+                Text(String(localized: "2fa_next_button", defaultValue: "Suivant"))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
+                    .foregroundStyle(Color.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, MeeshySpacing.md)
+                    .background(Capsule().fill(tfaColor))
+            }
+            .accessibilityIdentifier("twoFactor.setup.next")
+            .padding(.top, MeeshySpacing.sm)
+        }
+    }
+
+    // MARK: - Code Entry Step
+
+    private func codeEntryView(_ setup: TwoFactorSetup) -> some View {
+        VStack(spacing: MeeshySpacing.lg) {
+            Image(systemName: "lock.shield.fill")
+                .font(MeeshyFont.relative(MeeshyIconSize.hero))
+                .foregroundStyle(tfaColor)
+                .padding(.top, MeeshySpacing.xl)
+                .accessibilityHidden(true)
+
+            Text(String(localized: "2fa_enter_code_instruction", defaultValue: "Entrez le code à 6 chiffres affiché dans votre application"))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                .foregroundStyle(theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, MeeshySpacing.xl)
+
+            TextField(String(localized: "2fa_code_placeholder", defaultValue: "000000"), text: $verificationCode)
+                .font(MeeshyFont.relative(MeeshyFont.displaySize, weight: .bold, design: .monospaced))
+                .multilineTextAlignment(.center)
+                .keyboardType(.numberPad)
+                .textContentType(.oneTimeCode)
+                .foregroundStyle(theme.textPrimary)
+                .padding(.vertical, MeeshySpacing.md + 2)
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                        .fill(tfaColor.opacity(MeeshyOpacity.subtle))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                                .stroke(tfaColor.opacity(MeeshyOpacity.light), lineWidth: 1)
+                        )
+                )
+                .adaptiveOnChange(of: verificationCode) { _, newValue in
+                    verificationCode = String(newValue.prefix(6).filter(\.isNumber))
+                }
+
+            if let codeError {
+                Text(codeError)
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
+                    .foregroundStyle(MeeshyColors.error)
+            }
+
+            Button {
+                HapticFeedback.medium()
+                submitVerification()
+            } label: {
+                HStack(spacing: MeeshySpacing.sm) {
+                    if verifying {
+                        ProgressView().scaleEffect(0.7).tint(.white)
+                    }
+                    Text(String(localized: "2fa_verify_button", defaultValue: "Vérifier et activer"))
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, MeeshySpacing.md)
+                .background(
+                    Capsule().fill(
+                        verificationCode.count == 6 && !verifying
+                            ? tfaColor
+                            : tfaColor.opacity(0.4)
+                    )
+                )
+            }
+            .disabled(verificationCode.count != 6 || verifying)
+
+            Button {
+                HapticFeedback.light()
+                animate { step = .showSecret(setup) }
+            } label: {
+                Text(String(localized: "2fa_back_to_qr", defaultValue: "Retour au QR code"))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                    .foregroundStyle(tfaColor)
+            }
+        }
+    }
+
+    // MARK: - Backup Codes Step
+
+    private func backupCodesView(_ codes: [String]) -> some View {
+        VStack(spacing: MeeshySpacing.lg) {
+            Image(systemName: "checkmark.shield.fill")
+                .font(MeeshyFont.relative(MeeshyIconSize.hero))
+                .foregroundStyle(MeeshyColors.success)
+                .padding(.top, MeeshySpacing.xl)
+                .accessibilityHidden(true)
+
+            Text(String(localized: "2fa_activated_title", defaultValue: "2FA activée avec succès !"))
+                .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold))
+                .foregroundStyle(theme.textPrimary)
+
+            Text(String(localized: "2fa_backup_codes_instruction", defaultValue: "Conservez ces codes de secours dans un endroit sûr. Chaque code ne peut être utilisé qu'une seule fois."))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                .foregroundStyle(theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, MeeshySpacing.lg)
+
+            backupCodesList(codes)
+
+            Button {
+                ExpiringClipboard.write(codes.joined(separator: "\n"))
+                HapticFeedback.success()
+                copiedCodes = true
+                delays.run(after: .seconds(2)) { copiedCodes = false }
+            } label: {
+                HStack(spacing: MeeshySpacing.sm) {
+                    Image(systemName: copiedCodes ? "checkmark" : "doc.on.doc.fill")
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs))
+                    Text(copiedCodes
+                        ? String(localized: "a11y_copied", defaultValue: "Copié")
+                        : String(localized: "2fa_copy_all_codes", defaultValue: "Copier tous les codes"))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                }
+                .foregroundColor(copiedCodes ? MeeshyColors.success : tfaColor)
+                .padding(.horizontal, MeeshySpacing.xl)
+                .padding(.vertical, MeeshySpacing.smPlus)
+                .background(
+                    Capsule().fill((copiedCodes ? MeeshyColors.success : tfaColor).opacity(MeeshyOpacity.light))
+                )
+            }
+            .accessibilityLabel(copiedCodes ? String(localized: "a11y_copied", defaultValue: "Copié") : String(localized: "2fa_copy_all_codes", defaultValue: "Copier tous les codes"))
+
+            Button {
+                HapticFeedback.medium()
+                onComplete()
+            } label: {
+                Text(String(localized: "2fa_done_button", defaultValue: "Terminer"))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
+                    .foregroundStyle(Color.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, MeeshySpacing.md)
+                    .background(Capsule().fill(tfaColor))
+            }
+            .padding(.top, MeeshySpacing.xs)
+        }
+    }
+
+    private func backupCodesList(_ codes: [String]) -> some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: MeeshySpacing.sm) {
+            ForEach(codes, id: \.self) { code in
+                Text(code)
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(theme.textPrimary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, MeeshySpacing.sm)
+                    .background(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.sm - 2)
+                            .fill(tfaColor.opacity(MeeshyOpacity.subtle))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: MeeshyRadius.sm - 2)
+                                    .stroke(tfaColor.opacity(MeeshyOpacity.light), lineWidth: 1)
+                            )
+                    )
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.sm)
+    }
+
+    // MARK: - Error Step
+
+    private func errorView(_ message: String) -> some View {
+        VStack(spacing: MeeshySpacing.lg) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(MeeshyFont.relative(MeeshyIconSize.hero))
+                .foregroundStyle(MeeshyColors.error)
+                .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.sm)
+                .accessibilityHidden(true)
+
+            Text(message)
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                .foregroundStyle(theme.textSecondary)
+                .multilineTextAlignment(.center)
+
+            Button {
+                HapticFeedback.light()
+                initiateSetup()
+            } label: {
+                Text(String(localized: "2fa_retry", defaultValue: "Réessayer"))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                    .foregroundStyle(tfaColor)
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    /// Un changement d'étape se fond ; sous « Réduire les animations », un
+    /// fondu court remplace le ressort.
+    private func animate(_ change: () -> Void) {
+        meeshyWithAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion, change)
+    }
+
+    private func initiateSetup() {
+        step = .loading
+        Task {
+            await viewModel.beginSetup()
+            let next: SetupStep = viewModel.setupData.map { .showSecret($0) }
+                ?? .error(viewModel.error ?? String(localized: "twofactor.error.setup", defaultValue: "Impossible de démarrer la configuration 2FA", bundle: .main))
+            animate { step = next }
+        }
+    }
+
+    private func submitVerification() {
+        verifying = true
+        codeError = nil
+        Task {
+            await viewModel.enable(code: verificationCode)
+            if !viewModel.recoveryCodes.isEmpty {
+                HapticFeedback.success()
+                animate { step = .showBackupCodes(viewModel.recoveryCodes) }
+            } else {
+                HapticFeedback.error()
+                let message = viewModel.error ?? String(localized: "twofactor.error.invalidCode", defaultValue: "Code invalide. Vérifiez et réessayez.", bundle: .main)
+                animate { codeError = message }
+                viewModel.clearError()
+            }
+            verifying = false
+        }
+    }
+}
+
+// MARK: - Two-Factor Disable View
+
+struct TwoFactorDisableView: View {
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    @ObservedObject var viewModel: TwoFactorViewModel
+
+    let onComplete: () -> Void
+    let onCancel: () -> Void
+
+    @State private var disableCode = ""
+    @State private var disablePassword = ""
+    @State private var disabling = false
+    @State private var disableError: String?
+
+    private let tfaColor = MeeshyColors.indigo500
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                theme.backgroundGradient.ignoresSafeArea()
+
+                VStack(spacing: MeeshySpacing.xl) {
+                    Image(systemName: "shield.slash.fill")
+                        .font(MeeshyFont.relative(MeeshyIconSize.hero))
+                        .foregroundStyle(MeeshyColors.error)
+                        .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.sm)
+                        .accessibilityHidden(true)
+
+                    Text(String(localized: "2fa_disable_title", defaultValue: "Désactiver l'authentification à deux facteurs"))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .bold))
+                        .foregroundStyle(theme.textPrimary)
+                        .multilineTextAlignment(.center)
+
+                    Text(String(localized: "2fa_disable_warning", defaultValue: "Votre compte sera moins sécurisé sans 2FA. Entrez votre mot de passe et votre code pour confirmer."))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                        .foregroundStyle(theme.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, MeeshySpacing.xl)
+
+                    MeeshyPasswordField(
+                        String(localized: "2fa_password_placeholder", defaultValue: "Mot de passe"),
+                        text: $disablePassword,
+                        role: .current,
+                        eyeColor: theme.textMuted
+                    )
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .medium))
+                    .foregroundColor(theme.textPrimary)
+                    .padding(.vertical, MeeshySpacing.md + 2)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .background(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                            .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                                    .stroke(MeeshyColors.error.opacity(MeeshyOpacity.light), lineWidth: 1)
+                            )
+                    )
+                    .padding(.horizontal, MeeshySpacing.lg)
+
+                    TextField(String(localized: "2fa_code_placeholder", defaultValue: "000000"), text: $disableCode)
+                        .font(MeeshyFont.relative(MeeshyFont.displaySize, weight: .bold, design: .monospaced))
+                        .multilineTextAlignment(.center)
+                        .keyboardType(.numberPad)
+                        .textContentType(.oneTimeCode)
+                        .foregroundStyle(theme.textPrimary)
+                        .padding(.vertical, MeeshySpacing.md + 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                                .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                                        .stroke(MeeshyColors.error.opacity(MeeshyOpacity.light), lineWidth: 1)
+                                )
+                        )
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .adaptiveOnChange(of: disableCode) { _, newValue in
+                            disableCode = String(newValue.prefix(6).filter(\.isNumber))
+                        }
+
+                    if let disableError {
+                        Text(disableError)
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
+                            .foregroundStyle(MeeshyColors.error)
+                    }
+
+                    Button {
+                        HapticFeedback.medium()
+                        submitDisable()
+                    } label: {
+                        HStack(spacing: MeeshySpacing.sm) {
+                            if disabling {
+                                ProgressView().scaleEffect(0.7).tint(.white)
+                            }
+                            Text(String(localized: "2fa_confirm_disable", defaultValue: "Confirmer la désactivation"))
+                                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, MeeshySpacing.md)
+                        .background(
+                            Capsule().fill(
+                                disableCode.count == 6 && !disablePassword.isEmpty && !disabling
+                                    ? MeeshyColors.error
+                                    : MeeshyColors.error.opacity(0.4)
+                            )
+                        )
+                    }
+                    .disabled(disableCode.count != 6 || disablePassword.isEmpty || disabling)
+                    .accessibilityIdentifier("twoFactor.disable.submit")
+                    .padding(.horizontal, MeeshySpacing.lg)
+
+                    Spacer()
+                }
+                .iPadFormWidth()
+            }
+            .navigationTitle(String(localized: "2fa_disable_nav_title", defaultValue: "Désactiver la 2FA"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "2fa_cancel", defaultValue: "Annuler")) {
+                        onCancel()
+                    }
+                    .foregroundColor(tfaColor)
+                }
+            }
+        }
+    }
+
+    private func submitDisable() {
+        disabling = true
+        disableError = nil
+        Task {
+            await viewModel.disable(code: disableCode, password: disablePassword)
+            if !viewModel.isEnabled {
+                HapticFeedback.success()
+                onComplete()
+            } else {
+                HapticFeedback.error()
+                disableError = viewModel.error ?? String(localized: "twofactor.error.invalidCode", defaultValue: "Code invalide. Vérifiez et réessayez.", bundle: .main)
+                viewModel.clearError()
+            }
+            disabling = false
+        }
+    }
+}
+
+// MARK: - Two-Factor Backup Codes View
+
+struct TwoFactorBackupCodesView: View {
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    @ObservedObject var viewModel: TwoFactorViewModel
+
+    let onDismiss: () -> Void
+
+    @State private var verificationCode = ""
+    @State private var codeSubmitted = false
+    @State private var copiedCodes = false
+    @State private var delays = DelayedActions()
+
+    private let tfaColor = MeeshyColors.indigo500
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                theme.backgroundGradient.ignoresSafeArea()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: MeeshySpacing.lg) {
+                        if !codeSubmitted {
+                            codeEntryStep
+                        } else if viewModel.isLoading {
+                            ProgressView()
+                                .scaleEffect(1.2)
+                                .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.xxxl)
+                        } else if let error = viewModel.error {
+                            VStack(spacing: MeeshySpacing.md) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(MeeshyFont.relative(40))
+                                    .foregroundStyle(MeeshyColors.error)
+                                    .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.sm)
+                                    .accessibilityHidden(true)
+
+                                Text(error)
+                                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                                    .foregroundStyle(theme.textSecondary)
+
+                                Button {
+                                    HapticFeedback.light()
+                                    codeSubmitted = false
+                                    verificationCode = ""
+                                    viewModel.clearError()
+                                } label: {
+                                    Text(String(localized: "2fa_retry", defaultValue: "Réessayer"))
+                                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                                        .foregroundStyle(tfaColor)
+                                }
+                            }
+                        } else {
+                            Image(systemName: "key.fill")
+                                .font(MeeshyFont.relative(40))
+                                .foregroundStyle(tfaColor)
+                                .padding(.top, MeeshySpacing.xl)
+                                .accessibilityHidden(true)
+
+                            Text(String(localized: "2fa_backup_codes_warning", defaultValue: "Ces codes remplacent les précédents. Conservez-les en lieu sûr."))
+                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                                .foregroundStyle(theme.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, MeeshySpacing.lg)
+
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: MeeshySpacing.sm) {
+                                ForEach(viewModel.recoveryCodes, id: \.self) { code in
+                                    Text(code)
+                                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold, design: .monospaced))
+                                        .foregroundStyle(theme.textPrimary)
+                                        .textSelection(.enabled)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, MeeshySpacing.sm)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: MeeshyRadius.sm - 2)
+                                                .fill(tfaColor.opacity(MeeshyOpacity.subtle))
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: MeeshyRadius.sm - 2)
+                                                        .stroke(tfaColor.opacity(MeeshyOpacity.light), lineWidth: 1)
+                                                )
+                                        )
+                                }
+                            }
+                            .padding(.horizontal, MeeshySpacing.sm)
+
+                            Button {
+                                ExpiringClipboard.write(viewModel.recoveryCodes.joined(separator: "\n"))
+                                HapticFeedback.success()
+                                copiedCodes = true
+                                delays.run(after: .seconds(2)) { copiedCodes = false }
+                            } label: {
+                                HStack(spacing: MeeshySpacing.sm) {
+                                    Image(systemName: copiedCodes ? "checkmark" : "doc.on.doc.fill")
+                                        .font(MeeshyFont.relative(MeeshyIconSize.xs))
+                                    Text(copiedCodes
+                                        ? String(localized: "a11y_copied", defaultValue: "Copié")
+                                        : String(localized: "2fa_copy_all_codes", defaultValue: "Copier tous les codes"))
+                                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                                }
+                                .foregroundColor(copiedCodes ? MeeshyColors.success : tfaColor)
+                                .padding(.horizontal, MeeshySpacing.xl)
+                                .padding(.vertical, MeeshySpacing.smPlus)
+                                .background(
+                                    Capsule().fill((copiedCodes ? MeeshyColors.success : tfaColor).opacity(MeeshyOpacity.light))
+                                )
+                            }
+                            .accessibilityLabel(copiedCodes ? String(localized: "a11y_copied", defaultValue: "Copié") : String(localized: "2fa_copy_all_codes", defaultValue: "Copier tous les codes"))
+                        }
+                    }
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.top, MeeshySpacing.lg)
+                    .iPadFormWidth()
+                }
+            }
+            .navigationTitle(String(localized: "2fa_backup_codes_title", defaultValue: "Codes de secours"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(String(localized: "2fa_close", defaultValue: "Fermer")) {
+                        onDismiss()
+                    }
+                    .foregroundColor(tfaColor)
+                }
+            }
+        }
+        .onDisappear { delays.cancelAll() }
+    }
+
+    private var codeEntryStep: some View {
+        VStack(spacing: MeeshySpacing.lg) {
+            Image(systemName: "lock.shield.fill")
+                .font(MeeshyFont.relative(MeeshyIconSize.hero))
+                .foregroundStyle(tfaColor)
+                .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.sm)
+                .accessibilityHidden(true)
+
+            Text(String(localized: "2fa_backup_code_verify", defaultValue: "Entrez votre code 2FA pour générer de nouveaux codes de secours"))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                .foregroundStyle(theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, MeeshySpacing.xl)
+
+            TextField(String(localized: "2fa_code_placeholder", defaultValue: "000000"), text: $verificationCode)
+                .font(MeeshyFont.relative(MeeshyFont.displaySize, weight: .bold, design: .monospaced))
+                .multilineTextAlignment(.center)
+                .keyboardType(.numberPad)
+                .textContentType(.oneTimeCode)
+                .foregroundStyle(theme.textPrimary)
+                .padding(.vertical, MeeshySpacing.md + 2)
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                        .fill(tfaColor.opacity(MeeshyOpacity.subtle))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                                .stroke(tfaColor.opacity(MeeshyOpacity.light), lineWidth: 1)
+                        )
+                )
+                .adaptiveOnChange(of: verificationCode) { _, newValue in
+                    verificationCode = String(newValue.prefix(6).filter(\.isNumber))
+                }
+
+            Button {
+                HapticFeedback.medium()
+                loadCodes()
+            } label: {
+                Text(String(localized: "2fa_generate_codes", defaultValue: "Générer les codes"))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
+                    .foregroundStyle(Color.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, MeeshySpacing.md)
+                    .background(
+                        Capsule().fill(
+                            verificationCode.count == 6
+                                ? tfaColor
+                                : tfaColor.opacity(0.4)
+                        )
+                    )
+            }
+            .disabled(verificationCode.count != 6)
+            .accessibilityIdentifier("twoFactor.backupCodes.submit")
+        }
+    }
+
+    private func loadCodes() {
+        codeSubmitted = true
+        Task {
+            await viewModel.getBackupCodes(code: verificationCode)
+        }
+    }
+}

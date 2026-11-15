@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Noms des compteurs de liens, accordés au nombre (CLDR) : « 1 lien », « 2 liens » (#13357). -->
+<resources>
+    <plurals name="links_count_links">
+        <item quantity="zero">روابط</item>
+        <item quantity="one">رابط</item>
+        <item quantity="two">رابطان</item>
+        <item quantity="few">روابط</item>
+        <item quantity="many">روابط</item>
+        <item quantity="other">روابط</item>
+    </plurals>
+    <plurals name="links_count_groups">
+        <item quantity="zero">مجموعات</item>
+        <item quantity="one">مجموعة</item>
+        <item quantity="two">مجموعتان</item>
+        <item quantity="few">مجموعات</item>
+        <item quantity="many">مجموعات</item>
+        <item quantity="other">مجموعات</item>
+    </plurals>
+    <plurals name="links_count_members">
+        <item quantity="zero">أعضاء</item>
+        <item quantity="one">عضو</item>
+        <item quantity="two">عضوان</item>
+        <item quantity="few">أعضاء</item>
+        <item quantity="many">أعضاء</item>
+        <item quantity="other">أعضاء</item>
+    </plurals>
+    <plurals name="links_count_signups">
+        <item quantity="zero">مسجّلون</item>
+        <item quantity="one">مسجّل</item>
+        <item quantity="two">مسجّلان</item>
+        <item quantity="few">مسجّلون</item>
+        <item quantity="many">مسجّلون</item>
+        <item quantity="other">مسجّلون</item>
+    </plurals>
+    <plurals name="links_count_clicks">
+        <item quantity="zero">نقرات</item>
+        <item quantity="one">نقرة</item>
+        <item quantity="two">نقرتان</item>
+        <item quantity="few">نقرات</item>
+        <item quantity="many">نقرات</item>
+        <item quantity="other">نقرات</item>
+    </plurals>
+    <plurals name="links_count_joined">
+        <item quantity="zero">انضموا</item>
+        <item quantity="one">انضم</item>
+        <item quantity="two">انضما</item>
+        <item quantity="few">انضموا</item>
+        <item quantity="many">انضموا</item>
+        <item quantity="other">انضموا</item>
+    </plurals>
+</resources>

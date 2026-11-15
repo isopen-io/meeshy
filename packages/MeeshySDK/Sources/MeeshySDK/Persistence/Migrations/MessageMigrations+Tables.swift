@@ -1,0 +1,225 @@
+import Foundation
+import GRDB
+
+struct MsgV1MessagesMigration: DatabaseMigration {
+    let identifier = "msg_v1_messages"
+
+    func migrate(_ db: Database) throws {
+        try db.create(table: "messages") { t in
+            t.column("localId", .text).primaryKey()
+            t.column("serverId", .text).indexed()
+            t.column("conversationId", .text).notNull()
+            t.column("senderId", .text).notNull()
+            t.column("content", .text)
+            t.column("originalLanguage", .text).notNull().defaults(to: "fr")
+            t.column("messageType", .text).notNull().defaults(to: "text")
+            t.column("messageSource", .text).notNull().defaults(to: "user")
+            t.column("contentType", .text).notNull().defaults(to: "text")
+            t.column("state", .text).notNull()
+            t.column("retryCount", .integer).notNull().defaults(to: 0)
+            t.column("lastError", .text)
+            t.column("isEncrypted", .boolean).notNull().defaults(to: false)
+            t.column("encryptionMode", .text)
+            t.column("encryptedPayload", .blob)
+            t.column("replyToId", .text)
+            t.column("storyReplyToId", .text)
+            t.column("forwardedFromId", .text)
+            t.column("forwardedFromConversationId", .text)
+            t.column("replyToJson", .blob)
+            t.column("forwardedFromJson", .blob)
+            t.column("expiresAt", .datetime)
+            t.column("effectFlags", .integer).notNull().defaults(to: 0)
+            t.column("maxViewOnceCount", .integer)
+            t.column("viewOnceCount", .integer).notNull().defaults(to: 0)
+            t.column("isEdited", .boolean).notNull().defaults(to: false)
+            t.column("editedAt", .datetime)
+            t.column("deletedAt", .datetime)
+            t.column("pinnedAt", .datetime)
+            t.column("pinnedBy", .text)
+            t.column("senderName", .text)
+            t.column("senderUsername", .text)
+            t.column("senderColor", .text)
+            t.column("senderAvatarURL", .text)
+            t.column("deliveredCount", .integer).notNull().defaults(to: 0)
+            t.column("readCount", .integer).notNull().defaults(to: 0)
+            t.column("deliveredToAllAt", .datetime)
+            t.column("readByAllAt", .datetime)
+            t.column("createdAt", .datetime).notNull()
+            t.column("sentAt", .datetime)
+            t.column("deliveredAt", .datetime)
+            t.column("readAt", .datetime)
+            t.column("updatedAt", .datetime).notNull()
+            t.column("attachmentsJson", .blob)
+            t.column("reactionsJson", .blob)
+            t.column("reactionCount", .integer).notNull().defaults(to: 0)
+            t.column("currentUserReactionsJson", .blob)
+            t.column("mentionedUsersJson", .blob)
+            t.column("cachedBubbleWidth", .double)
+            t.column("cachedBubbleHeight", .double)
+            t.column("cachedLastLineWidth", .double)
+            t.column("cachedLineCount", .integer)
+            t.column("cachedTimestampInline", .boolean)
+            t.column("layoutVersion", .integer).notNull().defaults(to: 0)
+            t.column("layoutMaxWidth", .double)
+            t.column("changeVersion", .integer).notNull().defaults(to: 0)
+        }
+        try db.create(index: "idx_msg_conv_date", on: "messages",
+                      columns: ["conversationId", "createdAt"])
+        try db.create(index: "idx_msg_state", on: "messages", columns: ["state"])
+    }
+}
+
+struct MsgV1PendingIdsMigration: DatabaseMigration {
+    let identifier = "msg_v1_pending_ids"
+
+    func migrate(_ db: Database) throws {
+        try db.create(table: "pending_ids") { t in
+            t.column("localId", .text).primaryKey()
+            t.column("serverId", .text).notNull().indexed()
+            t.column("conversationId", .text).notNull()
+            t.column("reconciledAt", .datetime)
+        }
+    }
+}
+
+struct MsgV1TranslationsMigration: DatabaseMigration {
+    let identifier = "msg_v1_translations"
+
+    func migrate(_ db: Database) throws {
+        try db.create(table: "message_translations") { t in
+            t.column("id", .text).primaryKey()
+            t.column("messageLocalId", .text).notNull().indexed()
+            t.column("messageServerId", .text)
+            t.column("targetLanguage", .text).notNull()
+            t.column("translatedContent", .text).notNull()
+            t.column("translationModel", .text).notNull()
+            t.column("confidenceScore", .double)
+            t.column("sourceLanguage", .text)
+            t.column("receivedAt", .datetime).notNull()
+        }
+        try db.create(index: "idx_trans_msg_lang", on: "message_translations",
+                      columns: ["messageLocalId", "targetLanguage"], unique: true)
+    }
+}
+
+struct MsgV1TranscriptionsMigration: DatabaseMigration {
+    let identifier = "msg_v1_transcriptions"
+
+    func migrate(_ db: Database) throws {
+        try db.create(table: "message_transcriptions") { t in
+            t.column("messageLocalId", .text).primaryKey()
+            t.column("messageServerId", .text)
+            t.column("language", .text).notNull()
+            t.column("text", .text).notNull()
+            t.column("segmentsJson", .blob)
+            t.column("speakerCount", .integer)
+            t.column("receivedAt", .datetime).notNull()
+        }
+    }
+}
+
+struct MsgV1AudioTranslationsMigration: DatabaseMigration {
+    let identifier = "msg_v1_audio_translations"
+
+    func migrate(_ db: Database) throws {
+        try db.create(table: "message_audio_translations") { t in
+            t.column("id", .text).primaryKey()
+            t.column("messageLocalId", .text).notNull().indexed()
+            t.column("messageServerId", .text)
+            t.column("targetLanguage", .text).notNull()
+            t.column("audioUrl", .text)
+            t.column("status", .text).notNull()
+            t.column("receivedAt", .datetime).notNull()
+        }
+    }
+}
+
+struct MsgV1LocalAttachmentsMigration: DatabaseMigration {
+    let identifier = "msg_v1_local_attachments"
+
+    func migrate(_ db: Database) throws {
+        try db.create(table: "local_attachments") { t in
+            t.column("localId", .text).primaryKey()
+            t.column("messageLocalId", .text).notNull().indexed()
+            t.column("type", .text).notNull()
+            t.column("mimeType", .text).notNull()
+            t.column("fileName", .text).notNull()
+            t.column("fileSize", .integer).notNull()
+            t.column("localPath", .text).notNull()
+            t.column("thumbnailPath", .text)
+            t.column("width", .double)
+            t.column("height", .double)
+            t.column("duration", .double)
+            t.column("createdAt", .datetime).notNull()
+            t.column("remoteUrl", .text)
+            t.column("uploadProgress", .double)
+            t.column("uploadState", .text).notNull().defaults(to: "pending")
+        }
+    }
+}
+
+struct MsgV1MessagesFts5Migration: DatabaseMigration {
+    let identifier = "msg_v1_messages_fts5"
+
+    func migrate(_ db: Database) throws {
+        // External-content FTS5 — content lives in `messages`, FTS just indexes
+        // unicode61 remove_diacritics 2 gives French-aware accent folding:
+        // "à", "é", "ç" all match their unaccented forms at query time
+        try db.execute(sql: """
+            CREATE VIRTUAL TABLE messages_fts USING fts5(
+                content,
+                content='messages',
+                content_rowid='rowid',
+                tokenize='unicode61 remove_diacritics 2'
+            )
+            """)
+
+        // Backfill existing rows (exclude soft-deleted messages)
+        try db.execute(sql: """
+            INSERT INTO messages_fts(rowid, content)
+            SELECT rowid, content FROM messages
+            WHERE content IS NOT NULL AND deletedAt IS NULL
+            """)
+
+        // Insert trigger — keep FTS in sync when a new message is stored
+        try db.execute(sql: """
+            CREATE TRIGGER msg_fts_ai AFTER INSERT ON messages BEGIN
+                INSERT INTO messages_fts(rowid, content) VALUES (new.rowid, new.content);
+            END
+            """)
+
+        // Delete trigger — use FTS5 'delete' command for external-content tables
+        try db.execute(sql: """
+            CREATE TRIGGER msg_fts_ad AFTER DELETE ON messages BEGIN
+                INSERT INTO messages_fts(messages_fts, rowid, content)
+                VALUES('delete', old.rowid, old.content);
+            END
+            """)
+
+        // Update trigger — remove stale index entry, insert updated one
+        try db.execute(sql: """
+            CREATE TRIGGER msg_fts_au AFTER UPDATE ON messages BEGIN
+                INSERT INTO messages_fts(messages_fts, rowid, content)
+                VALUES('delete', old.rowid, old.content);
+                INSERT INTO messages_fts(rowid, content) VALUES (new.rowid, new.content);
+            END
+            """)
+    }
+}
+
+struct MessagesSendAttemptsMigration: DatabaseMigration {
+    let identifier = "messages_send_attempts"
+
+    func migrate(_ db: Database) throws {
+        try db.create(table: "send_attempts") { t in
+            t.autoIncrementedPrimaryKey("id")
+            t.column("localId", .text).notNull().indexed()
+            t.column("attemptNumber", .integer).notNull()
+            t.column("transport", .text).notNull()
+            t.column("startedAt", .datetime).notNull()
+            t.column("finishedAt", .datetime)
+            t.column("outcome", .text).notNull()
+            t.column("errorMessage", .text)
+        }
+    }
+}

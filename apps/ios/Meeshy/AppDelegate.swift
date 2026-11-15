@@ -6,9 +6,28 @@ import MeeshySDK
 import MeeshyUI
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.app", category: "push")
+private let logger = MeeshyLog.logger(.push)
 
 class AppDelegate: NSObject, UIApplicationDelegate {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
+
+    /// #17442 — le bouton « Arrêter » de l'alarme d'un Bring s'exécute dans l'app, parfois lancée en arrière-plan pour
+    /// lui : le branchement se pose à la construction du délégué, avant tout lancement.
+    private let bringAlarmStopBinding: Void = BringAlarmStopRouter.handler = { BringCenter.shared.stop(bringId: $0) }
+
+    /// Un réveil en arrière-plan (push silencieux, app tuée) ne passe jamais par
+    /// `checkExistingSession` : `APIClient` n'a pas de jeton alors que le
+    /// Keychain en tient un valide. Le jeton de la session restaurée l'amorce ;
+    /// un jeton déjà posé n'est pas remplacé par un nil.
+    @MainActor
+    static func primeAPITokenFromSession() {
+        guard let token = AuthManager.shared.authToken else { return }
+        APIClient.shared.authToken = token
+    }
 
     // MARK: - Application Lifecycle
 
@@ -27,6 +46,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // delivered at next launch from the OS).
         let crashReporter = Self.bootCrashReporting()
 
+        // Les copies brutes que le composeur, la bande récente et les retouches posent dans `tmp` ne sont
+        // retirées par personne quand la publication n'aboutit pas : une semaine plus tard, elles partent.
+        Task.detached(priority: .background) { TemporaryMediaSweeper.sweep() }
+
         // Install the crash & hang observer first so any crash that happens
         // during the rest of `didFinishLaunching` (or at any later point in
         // this session) is captured. MetricKit also delivers diagnostics
@@ -43,6 +66,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         //   in the same MainActor hop.
         Task { @MainActor in
             CrashDiagnosticsManager.shared.install(crashReporter: crashReporter)
+            ProtectedContentSnapshotVeil.shared.install()
+            ContentCaptureReporter.shared.install() // #9617 — une capture d'un contenu qui disparaît s'annonce
+            SocialEventsV2Reporter.installHub() // #10499 — les événements v2 émis par le SDK rejoignent la file de l'app
+            AnalyticsConsentStanding.installOnCountingBatches() // #10552 — le lot de comptage déclare le même consentement que le lot v2
+            DeletedAccountRetirement.shared.install() // #10482 — un compte supprimé quitte l'appareil, avec son jeu
             MeeshyMetricsSubscriber.shared.register()
             AnalyticsManager.shared.syncCollectionState()
             // P1.5 — surface DependencyContainer boot diagnostics now that
@@ -57,7 +85,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
 
         UNUserNotificationCenter.current().delegate = self
-        registerNotificationCategories()
+        Self.scheduleNotificationCategoriesRegistration()
         BackgroundTaskManager.shared.registerTasks()
 
         // VoIP push registration MUST happen unconditionally, on every
@@ -142,6 +170,21 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     /// us a deterministic place to emit the delivery receipt (double-check
     /// cursor) so the sender sees their message as "received" even when the
     /// recipient never foregrounds the app.
+    /// #13142 — le réveil d'un signal chiffré de bout en bout : un push opaque, le
+    /// même pour tout signal, qui ne nomme ni le signal ni la conversation.
+    /// L'appareil relit ses enveloppes et applique les signaux reçus.
+    private static func handledEndToEndWake(
+        _ userInfo: [AnyHashable: Any], completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) -> Bool {
+        guard (userInfo["type"] as? String) == EndToEndSessionBridge.wakePushType else { return false }
+        Task { @MainActor in
+            primeAPITokenFromSession()
+            await EndToEndSessionBridge.shared.wake()
+            completionHandler(.newData)
+        }
+        return true
+    }
+
     func application(
         _ application: UIApplication,
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
@@ -156,12 +199,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
            let cancelCallId = userInfo["callId"] as? String, !cancelCallId.isEmpty {
             Logger.network.info("call_cancel silent push received (callId=\(cancelCallId, privacy: .public))")
             Task { @MainActor in
-                CallManager.shared.endRingingFromCancellation(callId: cancelCallId)
+                CallManager.shared.incomingRing.endRingingFromCancellation(callId: cancelCallId)
                 completionHandler(.noData)
             }
             return
         }
-
+        if Self.handledEndToEndWake(userInfo, completionHandler: completionHandler) || BatteryCenter.handledPullWake(userInfo, completionHandler: completionHandler) { return }
         // Multi-device : un autre appareil du compte a décroché — pendant
         // socketless de `call:already-answered` (voir sendCallCancellationPushes
         // côté gateway pour le rationale réseau). Le device qui a décroché
@@ -170,7 +213,39 @@ class AppDelegate: NSObject, UIApplicationDelegate {
            let answeredCallId = userInfo["callId"] as? String, !answeredCallId.isEmpty {
             Logger.network.info("call_answered_elsewhere silent push received (callId=\(answeredCallId, privacy: .public))")
             Task { @MainActor in
-                CallManager.shared.endRingingAnsweredElsewhere(callId: answeredCallId)
+                CallManager.shared.incomingRing.endRingingAnsweredElsewhere(callId: answeredCallId)
+                completionHandler(.noData)
+            }
+            return
+        }
+
+        // Révocation (features 4/5) : le gateway retire une notification déjà
+        // poussée (message supprimé, demande d'ami annulée, effacée depuis un
+        // autre appareil) par un push de contrôle silencieux. Ce canal est
+        // précisément celui qu'emprunte l'app quand le socket n'est PAS là
+        // (arrière-plan) : il doit donc faire les QUATRE choses que fait le
+        // socket `notification:deleted` app ouverte — bannière, cache,
+        // compteur ET badge de la cloche — pas seulement la bannière (#3894).
+        // Mêmes atomes que le socket : `NotificationActionHandler.revokeDeliveredBanners`
+        // (bannière) et `NotificationToastManager.applyServerRevocation`
+        // (cache + compteur/badge — ce push ne porte aucun compteur, donc
+        // cette méthode le redemande elle-même, comme `delete()` le fait déjà
+        // pour le geste local équivalent). On termine en `.noData` une fois
+        // les DEUX retraits effectués (le centre de notifications répond en
+        // asynchrone : compléter avant, c'est laisser iOS suspendre le
+        // processus avec la bannière encore affichée).
+        if let revocation = NotificationRevocationPayload(userInfo: userInfo) {
+            Logger.network.info("notification_revoked silent push received (count=\(revocation.notificationIds.count, privacy: .public))")
+            Task { @MainActor in
+                // Même amorce que `NotificationActionHandler.handle()` : un
+                // cold-launch en arrière-plan ne passe jamais par
+                // `checkExistingSession`, donc `APIClient.shared.authToken`
+                // reste nil malgré un jeton Keychain valide — et
+                // `applyServerRevocation` en a besoin pour son GET
+                // `/notifications/unread-count`.
+                Self.primeAPITokenFromSession()
+                await NotificationActionHandler.shared.revokeDeliveredBanners(notificationIds: revocation.notificationIds)
+                await NotificationToastManager.shared.applyServerRevocation(notificationIds: revocation.notificationIds)
                 completionHandler(.noData)
             }
             return
@@ -204,6 +279,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                 Task { @MainActor in state.expire() }
             }
             state.attach(taskId: taskId)
+            // Lancement à froid en arrière-plan : aucun `checkExistingSession`,
+            // `APIClient` sans jeton — synchro, accusé et préchargement
+            // partaient en 401. Même amorce que la branche révocation.
+            Self.primeAPITokenFromSession()
 
             if let unreadTotal {
                 NotificationCoordinator.shared.setInAppNotificationUnread(unreadTotal)
@@ -235,6 +314,36 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                     }
                 }
             }
+
+            // #8358 — la photo reçue app suspendue rejoindra l'album : le push
+            // NOTE, le premier plan VIDE (aucun téléchargement sur ce budget).
+            if let convId {
+                PushedMediaAutoSaveQueue.shared.notePush(conversationId: convId, messageId: messageId)
+                if application.applicationState == .active { await PushedMediaAutoSaveQueue.shared.drain() }
+            }
+
+            // **#3945 — ce qui vient d'être synchronisé doit avoir touché le
+            // DISQUE avant qu'on rende le budget.**
+            //
+            // `syncNow()` et `ensureMessages(force:)` écrivent par le chemin
+            // standard de `GRDBCacheStore` : L1 tout de suite, SQLite après un
+            // débounce de 2 s. `state.finish()` termine la tâche d'arrière-plan
+            // ET le `completionHandler` — il REND le budget, il ne l'attend pas.
+            // Entre ce retour et le débounce, rien ne retient le processus : iOS
+            // suspend puis tue couramment un réveil d'arrière-plan avant les 2 s,
+            // et le message reçu disparaît. Les ~25 s sont un PLAFOND, jamais une
+            // attente ; c'est exactement le défaut de #3894, sur un chemin
+            // beaucoup plus fréquent — chaque message reçu app fermée.
+            //
+            // La deadline vient du budget RESTANT (`SilentPushDurability`), pas
+            // d'un délai fixe : coupé au milieu, `flushAll(deadline:)` laisse des
+            // stores sales, et un délai fixe se trompe dans les deux sens.
+            await CacheCoordinator.shared.flushAll(
+                deadline: SilentPushDurability.flushDeadline(
+                    now: Date(),
+                    backgroundTimeRemaining: UIApplication.shared.backgroundTimeRemaining
+                )
+            )
 
             let handledMs = Int(Date().timeIntervalSince(notifReceivedAt) * 1000)
             Logger.network.info("perf:ios.notif.silent-push.handled messageId=\(messageId ?? "nil", privacy: .public) conversationId=\(convId ?? "nil", privacy: .public) durationMs=\(handledMs, privacy: .public)")
@@ -274,62 +383,85 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
     /// Register interactive actions so notifications on the banner / lock screen /
     /// notification center expose quick replies and mark-as-read buttons.
-    private func registerNotificationCategories() {
+    ///
+    /// Les titres se résolvent dans la langue que l'app publie à ses
+    /// extensions (#8951) : sous une notification déployée, un bouton de
+    /// l'extension et une action de l'app parlent la même langue.
+    /// La langue publiée se lit dans le groupe d'app sur SA file (#11558) —
+    /// derrière la publication de `MeeshyApp.init`, donc après elle — et les
+    /// catégories s'enregistrent ensuite sur le main actor.
+    static func scheduleNotificationCategoriesRegistration(
+        io: AppGroupIO = .shared,
+        store: any InterfaceLanguageProviding & Sendable = AppGroupInterfaceLanguageStore(),
+        register: @escaping @MainActor @Sendable (Bundle) -> Void = { registerNotificationCategories(bundle: $0) }
+    ) {
+        io.enqueue {
+            let bundle = InterfaceLanguageResolver.bundle(store: store)
+            Task { @MainActor in register(bundle) }
+        }
+    }
+
+    /// `register` reçoit le jeu COMPLET des catégories : c'est lui que le
+    /// système connaît, et lui qu'un témoin éprouve (#12655).
+    static func registerNotificationCategories(
+        bundle: Bundle = InterfaceLanguageResolver.bundle(),
+        register: (Set<UNNotificationCategory>) -> Void = { UNUserNotificationCenter.current().setNotificationCategories($0) }
+    ) {
         let replyAction = UNTextInputNotificationAction(
             identifier: MeeshyNotificationAction.reply.rawValue,
-            title: String(localized: "notifications.action.reply", defaultValue: "Reply"),
+            title: String(localized: "notifications.action.reply", defaultValue: "Répondre", bundle: bundle),
             options: [],
-            textInputButtonTitle: String(localized: "notifications.action.send", defaultValue: "Send"),
-            textInputPlaceholder: String(localized: "notifications.action.message", defaultValue: "Message…")
+            textInputButtonTitle: String(localized: "notifications.action.send", defaultValue: "Envoyer", bundle: bundle),
+            textInputPlaceholder: String(localized: "notifications.action.message", defaultValue: "Message…", bundle: bundle)
         )
 
         let markReadAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.markRead.rawValue,
-            title: String(localized: "notifications.action.markRead", defaultValue: "Mark as read"),
+            title: String(localized: "notifications.action.markRead", defaultValue: "Marquer comme lu", bundle: bundle),
             options: []
         )
 
         let commentAction = UNTextInputNotificationAction(
             identifier: MeeshyNotificationAction.comment.rawValue,
-            title: String(localized: "notifications.action.comment", defaultValue: "Comment"),
+            title: String(localized: "notifications.action.comment", defaultValue: "Commenter", bundle: bundle),
             options: [],
-            textInputButtonTitle: String(localized: "notifications.action.send", defaultValue: "Send"),
-            textInputPlaceholder: String(localized: "notifications.action.commentPlaceholder", defaultValue: "Comment…")
+            textInputButtonTitle: String(localized: "notifications.action.send", defaultValue: "Envoyer", bundle: bundle),
+            textInputPlaceholder: String(localized: "notifications.action.commentPlaceholder", defaultValue: "Commenter…", bundle: bundle)
         )
 
         let viewAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.view.rawValue,
-            title: String(localized: "notifications.action.view", defaultValue: "View"),
+            title: String(localized: "notifications.action.view", defaultValue: "Voir", bundle: bundle),
             options: [.foreground]
         )
 
         let acceptAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.accept.rawValue,
-            title: String(localized: "notifications.action.accept", defaultValue: "Accept"),
+            title: String(localized: "notifications.action.accept", defaultValue: "Accepter", bundle: bundle),
             options: []
         )
 
         let declineAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.decline.rawValue,
-            title: String(localized: "notifications.action.decline", defaultValue: "Decline"),
+            title: String(localized: "notifications.action.decline", defaultValue: "Refuser", bundle: bundle),
             options: [.destructive]
         )
 
         let callbackAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.callback.rawValue,
-            title: String(localized: "notifications.action.callback", defaultValue: "Call back"),
+            title: String(localized: "notifications.action.callback", defaultValue: "Rappeler", bundle: bundle),
             options: [.foreground]
         )
 
         let answerCallAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.answerCall.rawValue,
-            title: String(localized: "notifications.action.answer", defaultValue: "Answer"),
+            title: String(localized: "notifications.action.answer", defaultValue: "Répondre", bundle: bundle),
             options: [.foreground]
         )
 
         let declineCallAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.declineCall.rawValue,
-            title: String(localized: "notifications.action.declineCall", defaultValue: "Decline"),
+            title: String(localized: "notifications.action.declineCall", defaultValue: "Refuser", bundle: bundle),
             options: [.destructive]
         )
 
@@ -399,16 +531,26 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             options: [.customDismissAction]
         )
 
-        UNUserNotificationCenter.current().setNotificationCategories([
-            messageCategory,
-            mentionCategory,
-            friendRequestCategory,
-            socialCategory,
-            socialCommentableCategory,
-            callIncomingCategory,
-            callMissedCategory,
-            legacyCallCategory
-        ])
+        register(Set([
+            messageCategory, mentionCategory, friendRequestCategory, socialCategory, socialCommentableCategory,
+            callIncomingCategory, callMissedCategory, legacyCallCategory, LockedConversationNotificationCategory.category,
+        ] + NotificationDetailCategories.categories(reply: replyAction, markRead: markReadAction, bundle: bundle) + [bringNotificationCategory(bundle: bundle)]))
+    }
+
+    /// #17442 — la bannière d'un Bring (catégorie posée par la passerelle, `BRING_PUSH_CATEGORY`) : « Arrêter » l'éteint
+    /// chez tous les appareils sans ouvrir l'app.
+    private static func bringNotificationCategory(bundle: Bundle) -> UNNotificationCategory {
+        let stop = UNNotificationAction(
+            identifier: MeeshyNotificationAction.stopBring.rawValue,
+            title: String(localized: "notifications.action.stopBring", defaultValue: "Arrêter", bundle: bundle),
+            options: [.destructive]
+        )
+        return UNNotificationCategory(
+            identifier: MeeshyNotificationCategory.bring.rawValue,
+            actions: [stop],
+            intentIdentifiers: [],
+            options: []
+        )
     }
 
     // MARK: - Crash Reporting Bootstrap
@@ -479,6 +621,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 /// OS expiration handler or the happy path finishes first.
 @MainActor
 private final class SilentPushState {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     private var completionHandler: ((UIBackgroundFetchResult) -> Void)?
     private var taskId: UIBackgroundTaskIdentifier = .invalid
     private var didFinish = false
@@ -530,6 +677,25 @@ enum MeeshyNotificationCategory: String {
     /// Legacy single call category — superseded by the incoming/missed split,
     /// kept for pushes categorized by a stale NSE during rollout.
     case call = "MEESHY_CALL"
+    /// #8858 — les catégories du DÉTAIL d'un message, choisies par la NSE
+    /// (`NotificationDetailPolicy.refinedCategory`).
+    case location = "MEESHY_LOCATION"
+    case contact = "MEESHY_CONTACT"
+    case invite = "MEESHY_INVITE"
+    /// #8859 — un vocal dont la piste voyage : la notification DÉPLOYÉE le
+    /// fait écouter (`MeeshyNotificationContentExtension`).
+    case audio = "MEESHY_AUDIO"
+    /// #7455 — un message éphémère : la notification DÉPLOYÉE montre son
+    /// décompte vivant (`MeeshyNotificationContentExtension`).
+    case ephemeral = "MEESHY_EPHEMERAL"
+    /// #12655 — une conversation verrouillée par PIN : aucune action rapide
+    /// (`NSEAttachmentPolicy.lockedConversationCategory`).
+    case lockedConversation = "MEESHY_LOCKED_CONVERSATION"
+    /// #17143 — le réveil d'un talkie : la SEULE notification dont la voix se joue sur place
+    /// (`NotificationDetailPolicy.talkieCategory`, lecteur de la notification déployée).
+    case talkie = "MEESHY_TALKIE"
+    /// #17442 — le Bring : le littéral est celui de la passerelle (`BRING_PUSH_CATEGORY`), pas un `MEESHY_*`.
+    case bring = "BRING"
 }
 
 enum MeeshyNotificationAction: String {
@@ -542,6 +708,11 @@ enum MeeshyNotificationAction: String {
     case callback = "MEESHY_ACTION_CALLBACK"
     case answerCall = "MEESHY_ACTION_ANSWER_CALL"
     case declineCall = "MEESHY_ACTION_DECLINE_CALL"
+    case openInMaps = "MEESHY_ACTION_OPEN_IN_MAPS"
+    case addContact = "MEESHY_ACTION_ADD_CONTACT"
+    case joinInvite = "MEESHY_ACTION_JOIN_INVITE"
+    /// #17442 — « Arrêter » sur la bannière d'un Bring.
+    case stopBring = "MEESHY_ACTION_STOP_BRING"
 }
 
 // MARK: - UNUserNotificationCenterDelegate
@@ -550,7 +721,7 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
 
     /// Called when a notification arrives while the app is in the foreground.
     ///
-    /// Policy (2026-05-24, simplified): the Socket.IO connection is the
+    /// Policy (simplified): the Socket.IO connection is the
     /// authoritative signal.
     /// - **Socket connected** → the in-app toast (driven by Socket.IO
     ///   `notification:new`) will fire. Suppress the iOS banner, list entry
@@ -567,11 +738,17 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         let userInfo = notification.request.content.userInfo
+        if BatteryCenter.routesForegroundPush(notification.request.content) || routeBringPush(userInfo) { return completionHandler([]) }
+        if routeTalkieWake(userInfo) { return completionHandler([]) }
         let convId = userInfo["conversationId"] as? String
         let messageId = userInfo["messageId"] as? String
 
         Task { @MainActor in
             PushNotificationManager.shared.noteMessageActivity(userInfo: userInfo)
+            // #10507 — « affichée » au premier plan.
+            if let displayed = SocialNotificationEvents.event(.displayed, userInfo: userInfo) {
+                SocialEventsV2Reporter.shared.emit(displayed)
+            }
 
             // Trigger real-time sync for foreground notifications so the DB
             // and cache stay fresh even when the socket is lagging or the
@@ -592,6 +769,9 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
                         )
                     }
                 }
+                // #8358 — au premier plan, la photo synchronisée rejoint l'album tout de suite.
+                PushedMediaAutoSaveQueue.shared.notePush(conversationId: convId, messageId: messageId)
+                await PushedMediaAutoSaveQueue.shared.drain()
             }
         }
         let type = userInfo["type"] as? String ?? "unknown"
@@ -605,14 +785,32 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         // relais, pas de bannière native. Socket down → bannière système
         // UNIQUEMENT si les préférences l'autorisent (master push, DND, toggle
         // par catégorie), son/badge gatés par « Sons »/« Badges ».
-        completionHandler(NotificationPresentationResolver.options(
+        let options = NotificationPresentationResolver.options(
             socketConnected: socketConnected,
             prefs: UserPreferencesManager.shared.notification,
             rawType: userInfo["type"] as? String,
             conversationType: userInfo["conversationType"] as? String,
             conversationId: conversationId,
-            activeConversationId: MessageSocketManager.shared.activeConversationId
-        ))
+            // iPad multi-fenêtre : une conversation affichée dans N'IMPORTE
+            // QUELLE fenêtre tait sa bannière, pas seulement la plus récente.
+            activeConversationId: conversationId.flatMap {
+                NotificationToastManager.shared.isConversationOpen($0) ? $0 : nil
+            } ?? MessageSocketManager.shared.activeConversationId
+        )
+
+        // Un push de REMPLACEMENT (édition, réaction changée) annule la bannière d'avant AVANT
+        // que la version d'après soit présentée — même règle que la NSE, pour
+        // le cas où elle n'a pas tourné (expirée, push non mutable).
+        guard let replacement = NotificationReplacement(userInfo: userInfo) else {
+            completionHandler(options)
+            return
+        }
+        Task { @MainActor in
+            await NotificationActionHandler.removeDeliveredNotificationsAwaiting(
+                matching: { replacement.covers($0) }
+            )
+            completionHandler(options)
+        }
     }
 
     /// Called when the user interacts with a notification (tap, action button, etc.).
@@ -631,8 +829,19 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         let actionIdentifier = response.actionIdentifier
         let replyText = (response as? UNTextInputNotificationResponse)?.userText
         logger.info("Notification response: action=\(actionIdentifier)")
+        // « Arrêter » ne refait pas sonner le Bring qu'il arrête : le routage de la sonnerie est sauté.
+        if actionIdentifier != UNNotificationDismissActionIdentifier,
+           actionIdentifier != MeeshyNotificationAction.stopBring.rawValue {
+            _ = routeBringPush(userInfo)
+            _ = routeTalkieWake(userInfo)
+        }
 
         Task { @MainActor in
+            // #10507 — « ouverte », ou « écartée » sur une catégorie qui le déclare.
+            let action: SocialNotificationEvent.Action = actionIdentifier == UNNotificationDismissActionIdentifier ? .dismissed : .opened
+            if let event = SocialNotificationEvents.event(action, userInfo: userInfo) {
+                SocialEventsV2Reporter.shared.emit(event)
+            }
             await NotificationActionHandler.shared.handle(
                 actionIdentifier: actionIdentifier,
                 userInfo: userInfo,
@@ -644,3 +853,61 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
 }
 
 
+
+extension AppDelegate {
+    /// #13936 — le push `bring` / `bring_stopped` va au centre du Bring, jamais en bannière : au premier plan il ne
+    /// fait pas DEUX sonneries (dédoublonné avec `bring:ring`), et toucher sa bannière ouvre l'écran d'où UN geste
+    /// l'arrête partout. Rend `false` pour tout autre push. Les valeurs sont ramenées `Sendable` avant le saut.
+    fileprivate func routeBringPush(_ userInfo: [AnyHashable: Any]) -> Bool {
+        guard BringCenter.handlesPush(userInfo) else { return false }
+        let ring = BringRing(push: userInfo)
+        let stopped = BringStopped(push: userInfo)
+        let name = userInfo["fromName"] as? String
+        let avatarURL = userInfo["fromAvatar"] as? String
+        Task { @MainActor in
+            BringCenter.shared.receive(push: ring, stopped: stopped, name: name, avatarURL: avatarURL)
+        }
+        return true
+    }
+}
+
+extension AppDelegate {
+    /// #17143 — le réveil d'un talkie (`talkie_incoming`) : au premier plan comme au toucher de la notification, l'app
+    /// rejoint la prise de parole (`talkie:join`) et la passerelle rejoue la voix, que `TalkieCenter` lit. Au premier
+    /// plan, aucune bannière : la voix sort déjà. Rend `false` pour tout autre push.
+    fileprivate func routeTalkieWake(_ userInfo: [AnyHashable: Any]) -> Bool {
+        guard let push = TalkieWakePush(userInfo: userInfo) else { return false }
+        Task { @MainActor in TalkieWakeJoiner.shared.wake(push) }
+        return true
+    }
+}
+
+/// Le ménage de `tmp` au lancement : les copies d'ingestion du composeur, de la bande des médias récents et des
+/// retouches, plus vieilles qu'une semaine. Aucun composeur n'est ouvert au lancement, et la file de publication
+/// des stories ne retient pas une copie une semaine — au-delà, le brouillon durable vit ailleurs (autosave,
+/// outbox), et une copie de `tmp` n'est plus que du poids.
+nonisolated enum TemporaryMediaSweeper {
+    static let prefixes = ["composer_camera_", "composer_file_", "composer_photo_", "composer_sound_",
+                           "recent_", "retouche-", "video_look_", "meeshy-imagine-", PickedMediaStaging.filePrefix]
+    static let maximumAge: TimeInterval = 7 * 24 * 3600
+
+    /// Les noms à retirer parmi `entries` (nom, date de modification) à l'instant `now`.
+    static func expired(_ entries: [(name: String, modified: Date)], now: Date) -> [String] {
+        entries.filter { entry in
+            prefixes.contains { entry.name.hasPrefix($0) } && now.timeIntervalSince(entry.modified) > maximumAge
+        }.map(\.name)
+    }
+
+    static func sweep(in directory: URL = FileManager.default.temporaryDirectory, now: Date = Date()) {
+        let fm = FileManager.default
+        let keys: [URLResourceKey] = [.contentModificationDateKey]
+        guard let urls = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: keys) else { return }
+        let entries = urls.map { url in
+            (name: url.lastPathComponent,
+             modified: (try? url.resourceValues(forKeys: Set(keys)).contentModificationDate) ?? now)
+        }
+        for name in expired(entries, now: now) {
+            fm.removeItemLogging(at: directory.appendingPathComponent(name), context: "tmp media sweep")
+        }
+    }
+}

@@ -1,20 +1,33 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { PostType } from '@meeshy/shared/prisma/client';
-import { NOT_DELETED } from '../../services/posts/softDelete';
+import { issueSearchId } from '../../services/social/searchFingerprint';
 import { logError } from '../../utils/logger';
 import { buildPaginationMeta } from '../../utils/pagination';
 import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response.js';
 import {
+  CONVERSATION_LAST_MESSAGE_PREVIEW_QUERY,
+  resolveDashboardPreviews,
+} from './dashboardRecentPreview';
+import {
   userMinimalSchema,
-  userStatsSchema,
-  errorResponseSchema
+  errorResponseSchema,
+  participantProfileDecorSchema
 } from '@meeshy/shared/types/api-schemas';
 import type { AuthenticatedRequest, UserIdParams, SearchQuery } from './types';
 import { validatePagination } from '../../utils/pagination';
-import { viewerFromRequest } from './presence-gate';
+import { mayOrderByRawPresence, servedOnlineFirst, viewerFromRequest } from './presence-gate';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
+import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { createDirectoryRouteRateLimitConfig } from '../../middleware/rate-limiter';
+import { jetonRecherche } from '../../utils/search-tokens';
+import { permissionsService } from '../../services/admin/permissions.service';
+import type { UnifiedAuthRequest } from '../../middleware/auth';
+import type { UserRoleEnum } from '@meeshy/shared/types';
+import { computeUserStats, servedUserStats } from '../user-stats';
+import { keepDiscoverable } from '../../services/profile-discoverability';
+import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
+import { activeMembershipOf, COMMUNITY_ACTIVE_COUNTS } from '../communities/serialization';
 
 
 /**
@@ -55,18 +68,65 @@ export async function getDashboardStats(fastify: FastifyInstance) {
                       id: { type: 'string' },
                       title: { type: 'string' },
                       type: { type: 'string', enum: ['direct', 'group'] },
+                      avatar: { type: 'string', nullable: true },
                       isActive: { type: 'boolean' },
+                      /**
+                       * #16590 — l'aperçu DÉCLARE ce que la loi de la ligne de
+                       * liste lui remet.
+                       *
+                       * Il ne déclarait que `content`, `createdAt` et deux
+                       * champs d'expéditeur, et le gestionnaire servait la
+                       * colonne BRUTE : le texte d'une vue unique, d'un flouté,
+                       * d'un chiffré ou d'un éphémère expiré partait en clair.
+                       * La retenue est SERVEUR (`projectListLastMessageBody`
+                       * rend `content: ''`), et ce qui part avec elle sont les
+                       * drapeaux qui QUALIFIENT le placeholder — sans eux,
+                       * fast-json-stringify les retire en silence et le client
+                       * ne peut pas le composer (#6111).
+                       *
+                       * `expiresAt` est l'échéance SERVIE À CE LECTEUR (#7451),
+                       * rapprochée par ce que l'aperçu cite (#8630) — jamais la
+                       * colonne interne de destruction.
+                       *
+                       * `sender` est déclaré LOCALEMENT et SANS `isOnline` :
+                       * `userMinimalSchema` le déclare, et cette route ne passe
+                       * par aucun gate de présence. C'est fail-closed — si la
+                       * colonne apparaît un jour dans l'objet, le sérialiseur
+                       * la retire (précédent du cycle 93).
+                       */
                       lastMessage: {
                         type: 'object',
                         nullable: true,
                         properties: {
+                          id: { type: 'string' },
                           content: { type: 'string' },
                           createdAt: { type: 'string', format: 'date-time' },
+                          messageType: { type: 'string' },
+                          // Les drapeaux qui qualifient le placeholder.
+                          isViewOnce: { type: 'boolean', nullable: true },
+                          isBlurred: { type: 'boolean', nullable: true },
+                          effectFlags: { type: 'number', nullable: true },
+                          expiresAt: { type: 'string', format: 'date-time', nullable: true },
+                          ephemeralDuration: { type: 'integer', nullable: true },
+                          // #11381 — une ligne SCELLÉE le dit, au lieu de sortir vide.
+                          isEncrypted: { type: 'boolean', nullable: true },
+                          encryptionMode: { type: 'string', nullable: true },
+                          // #7594 — par LECTEUR ; `false` hors vue unique.
+                          viewOnceConsumed: { type: 'boolean', nullable: true },
                           sender: {
                             type: 'object',
+                            nullable: true,
                             properties: {
-                              username: { type: 'string' },
-                              displayName: { type: 'string' }
+                              userId: { type: 'string', nullable: true },
+                              displayName: { type: 'string', nullable: true },
+                              user: {
+                                type: 'object',
+                                nullable: true,
+                                properties: {
+                                  username: { type: 'string' },
+                                  displayName: { type: 'string', nullable: true }
+                                }
+                              }
                             }
                           }
                         }
@@ -113,7 +173,6 @@ export async function getDashboardStats(fastify: FastifyInstance) {
         recentConversations,
         totalCommunities,
         recentCommunities,
-        totalMessages,
         messagesThisWeek,
         totalLinks,
         translationsToday
@@ -156,25 +215,11 @@ export async function getDashboardStats(fastify: FastifyInstance) {
             type: true,
             avatar: true,
             updatedAt: true,
-            messages: {
-              where: {
-                deletedAt: null
-              },
-              orderBy: { createdAt: 'desc' },
-              take: 1,
-              select: {
-                id: true,
-                content: true,
-                createdAt: true,
-                sender: {
-                  select: {
-                    userId: true,
-                    displayName: true,
-                    user: { select: { username: true } }
-                  }
-                }
-              }
-            },
+            // #16590 — l'aperçu est LU par le bloc PARTAGÉ de la ligne de
+            // liste, jamais par une projection de quatre champs écrite ici :
+            // c'était la troisième copie, et elle avait perdu le bloc de
+            // protection, l'exclusion des avis de capture et le Prisme.
+            messages: CONVERSATION_LAST_MESSAGE_PREVIEW_QUERY,
             participants: {
               where: { isActive: true },
               take: 5,
@@ -194,17 +239,11 @@ export async function getDashboardStats(fastify: FastifyInstance) {
           take: 5
         }),
         fastify.prisma.communityMember.count({
-          where: {
-            userId
-          }
+          where: activeMembershipOf(userId)
         }),
         fastify.prisma.community.findMany({
           where: {
-            members: {
-              some: {
-                userId
-              }
-            }
+            members: { some: activeMembershipOf(userId) }
           },
           select: {
             id: true,
@@ -213,10 +252,9 @@ export async function getDashboardStats(fastify: FastifyInstance) {
             avatar: true,
             isPrivate: true,
             updatedAt: true,
-            _count: {
-              select: { members: true, Conversation: true }
-            },
+            _count: { select: COMMUNITY_ACTIVE_COUNTS },
             members: {
+              where: { isActive: true },
               take: 5,
               select: {
                 user: {
@@ -232,12 +270,6 @@ export async function getDashboardStats(fastify: FastifyInstance) {
           },
           orderBy: { updatedAt: 'desc' },
           take: 5
-        }),
-        fastify.prisma.message.count({
-          where: {
-            sender: { userId },
-            deletedAt: null
-          }
         }),
         fastify.prisma.message.count({
           where: {
@@ -274,6 +306,15 @@ export async function getDashboardStats(fastify: FastifyInstance) {
         lastUpdated: new Date()
       };
 
+      // #16590 — plancher d'historique (fail-closed), masquage personnel avec
+      // repli sur le message visible précédent, ouverture au repos : les lois
+      // que `GET /conversations` applique à sa ligne, appliquées ici par la
+      // MÊME unité. Trois lectures bornées par la page de cinq.
+      const dashboardPreviews = await resolveDashboardPreviews(fastify.prisma, {
+        userId,
+        conversations: recentConversations as unknown as Parameters<typeof resolveDashboardPreviews>[1]['conversations'],
+      });
+
       const transformedConversations = recentConversations.map(conv => {
         let displayTitle = conv.title;
         if (!displayTitle || displayTitle.trim() === '') {
@@ -299,13 +340,12 @@ export async function getDashboardStats(fastify: FastifyInstance) {
           id: conv.id,
           title: displayTitle,
           type: conv.type,
-          avatar: conv.avatar ?? otherUser?.avatar ?? null,
+          avatar: resolveParticipantAvatar({ avatar: conv.avatar, user: otherUser }),
           isActive: activeConversations > 0,
-          lastMessage: conv.messages && conv.messages.length > 0 ? {
-            content: conv.messages[0].content,
-            createdAt: conv.messages[0].createdAt,
-            sender: conv.messages[0].sender
-          } : null,
+          // #16590 — l'aperçu SERVI, celui que la résolution par lecteur a
+          // retenu : jamais la ligne brute de la requête, qui ignore le
+          // plancher et le masquage.
+          lastMessage: dashboardPreviews.get(conv.id) ?? null,
           members: conv.participants.map((member: any) => member.user)
         };
       });
@@ -329,7 +369,6 @@ export async function getDashboardStats(fastify: FastifyInstance) {
       });
 
     } catch (error) {
-      fastify.log.error(`[DASHBOARD] Error getting stats: ${error instanceof Error ? error.message : String(error)}`);
       logError(fastify.log, 'Get user dashboard stats error:', error);
       return sendInternalError(reply, error instanceof Error ? error.message : 'Unknown error');
     }
@@ -403,105 +442,48 @@ export async function getUserStats(fastify: FastifyInstance) {
         return sendNotFound(reply, 'User not found');
       }
 
-      const userId = user.id;
-
-      const [
-        totalMessages,
-        totalConversations,
-        totalTranslations,
-        friendRequestsReceived,
-        languagesRaw,
-        postsCount,
-        reelsCount,
-        storiesCount,
-      ] = await Promise.all([
-        fastify.prisma.message.count({
-          where: { sender: { userId }, deletedAt: null },
-        }),
-        // Active memberships only: Participant rows are soft-deactivated on
-        // leave/ban/delete-for-me (isActive: false), never deleted. A bare
-        // `{ userId }` count over-reports `totalConversations` and can falsely
-        // unlock `connecteur`. Matches the `isActive: true` filter used for the
-        // profile-completion counts above and the `/users/me/stats` endpoint.
-        fastify.prisma.participant.count({
-          where: { userId, isActive: true },
-        }),
-        fastify.prisma.$runCommandRaw({
-          count: 'Message',
-          query: {
-            'sender.userId': userId,
-            deletedAt: null,
-            translations: { $ne: null, $exists: true },
-          },
-        }).then((r: any) => r.n ?? 0),
-        fastify.prisma.friendRequest.count({
-          where: { receiverId: userId },
-        }),
-        fastify.prisma.message.groupBy({
-          by: ['originalLanguage'],
-          where: {
-            sender: { userId },
-            deletedAt: null,
-            // NOTE: `originalLanguage: { not: null }` was INVALID here — Prisma+Mongo
-            // rejects `not: null` ("Argument `not` must not be null", spammed prod
-            // logs on every profile-stats request). The field is a required
-            // non-nullable String (@default("fr")) so it can never be null; the
-            // clause was redundant. Downstream `.filter(Boolean)` already drops empties.
-          },
-        }),
-        // Compteurs de contenu du profil (parité stricte avec computeUserStats
-        // dans user-stats.ts — R8 : toute métrique doit vivre dans les DEUX
-        // implémentations). `deletedAt: NOT_DELETED` = champ absent sur Mongo ;
-        // stories comptées SANS filtre d'expiration (archive auteur).
-        fastify.prisma.post.count({
-          where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.POST },
-        }),
-        fastify.prisma.post.count({
-          where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.REEL },
-        }),
-        fastify.prisma.post.count({
-          where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.STORY },
-        }),
-      ]);
-
-      const languagesUsed = languagesRaw.length;
-      const memberDays = Math.floor((Date.now() - user.createdAt.getTime()) / (1000 * 60 * 60 * 24));
-      const languages = languagesRaw.map((l) => l.originalLanguage).filter(Boolean);
-
-      const ACHIEVEMENT_THRESHOLDS = {
-        polyglotte: { field: 'languagesUsed', threshold: 5, icon: 'globe', color: '#3498DB', name: 'Polyglotte', description: 'Utiliser 5+ langues' },
-        bavard: { field: 'totalMessages', threshold: 1000, icon: 'bubble.left.and.bubble.right.fill', color: '#FF6B6B', name: 'Bavard', description: 'Envoyer 1000+ messages' },
-        connecteur: { field: 'totalConversations', threshold: 10, icon: 'person.2.fill', color: '#4ECDC4', name: 'Connecteur', description: 'Rejoindre 10+ conversations' },
-        traducteur: { field: 'totalTranslations', threshold: 100, icon: 'character.book.closed.fill', color: '#9B59B6', name: 'Traducteur', description: 'Traduire 100+ messages' },
-        fidele: { field: 'memberDays', threshold: 30, icon: 'calendar.badge.checkmark', color: '#F8B500', name: 'Fidele', description: 'Membre pendant 30+ jours' },
-        populaire: { field: 'friendRequestsReceived', threshold: 50, icon: 'star.fill', color: '#E91E63', name: 'Populaire', description: "Recevoir 50+ demandes d'amis" },
-      } as const;
-
-      const numericStats: Record<string, number> = {
-        totalMessages, totalConversations, totalTranslations, friendRequestsReceived, languagesUsed, memberDays,
-      };
-
-      const achievements = Object.entries(ACHIEVEMENT_THRESHOLDS).map(([key, config]) => {
-        /* istanbul ignore next — all ACHIEVEMENT_THRESHOLDS fields are keys of numericStats */
-        const current = numericStats[config.field] ?? 0;
-        const progress = Math.min(current / config.threshold, 1);
-        return {
-          id: key, name: config.name, description: config.description,
-          icon: config.icon, color: config.color,
-          isUnlocked: current >= config.threshold, progress, threshold: config.threshold, current,
-        };
-      });
+      // LE calcul, pas une copie (#4161).
+      //
+      // Ce handler portait cent lignes qui refaisaient `computeUserStats`
+      // agrégation par agrégation, sous un commentaire annonçant la contrainte
+      // — « parité stricte avec computeUserStats […] toute métrique doit vivre
+      // dans les DEUX implémentations ». Le doc-comment de `computeUserStats`
+      // affirmait de son côté servir « à la fois /users/me/stats et le
+      // /users/:id/stats public », ce qui était faux depuis toujours.
+      //
+      // Les deux exemplaires avaient DÉJÀ divergé, et la mesure est nette —
+      // même compte, même instant, en intégration :
+      //
+      //     GET /users/me/stats        → totalTranslations = 37
+      //     GET /users/<soi>/stats     → totalTranslations = 0
+      //
+      // La copie comptait par `$runCommandRaw` sur `{'sender.userId': …}` :
+      // `sender` est une RELATION Prisma, pas un document imbriqué, si bien que
+      // le filtre ne matchait RIEN. `totalTranslations` valait 0 pour tout le
+      // monde sur cette route depuis sa création, et le succès « Traducteur »
+      // (100 traductions) ne pouvait donc jamais s'y débloquer.
+      const stats = await computeUserStats(fastify.prisma, user.id);
 
       reply.header('Cache-Control', 'private, max-age=300, stale-while-revalidate=3600');
-      return sendSuccess(reply, {
-        totalMessages, totalConversations, totalTranslations,
-        friendRequestsReceived, languagesUsed, memberDays,
-        postsCount, reelsCount, storiesCount,
-        languages, achievements,
-      });
+
+      // L'AUTORISATION, distincte du calcul, et elle aussi à site unique
+      // (`servedUserStats`) : `?expand=stats` sur `/directory/people/:handle`
+      // sert le même objet et doit appliquer la même loi.
+      //
+      // Les quatre compteurs intimes partaient à TOUT compte authentifié, sans
+      // filtre d'amitié ni préférence de confidentialité — mesuré en
+      // intégration sur un viewer tiers.
+      const acteur = (request as unknown as UnifiedAuthRequest).authContext;
+      return sendSuccess(reply, servedUserStats(stats, {
+        estSoi: acteur?.userId === user.id,
+        estAdministration: permissionsService.hasPermission(
+          (acteur?.registeredUser?.role ?? 'USER') as UserRoleEnum,
+          'canViewUsers'
+        ),
+      }));
 
     } catch (error) {
-      fastify.log.error(`[USER_STATS] Error getting user stats: ${error instanceof Error ? error.message : String(error)}`);
+      logError(fastify.log, '[USER_STATS] Error getting user stats', error);
       return sendInternalError(reply, error instanceof Error ? error.message : 'Unknown error');
     }
   });
@@ -510,17 +492,37 @@ export async function getUserStats(fastify: FastifyInstance) {
 /**
  * Search users by query
  */
+/**
+ * `GET /users/search` — ALIAS de `GET /directory/people` (#4159).
+ *
+ * Elle reste montée le temps que les douze sites iOS et les trois sites web
+ * migrent, et jusqu'à extinction des versions installées. Ce qu'elle garde de
+ * l'ancienne route : sa forme de réponse (tableau + `pagination` en offset), que
+ * les clients décodent aujourd'hui.
+ *
+ * Ce qu'elle NE garde pas : le `contains` non ancré sur cinq colonnes. La
+ * recherche passe par les jetons indexés, comme la route cible — un alias qui
+ * conserverait le balayage complet ne corrigerait rien, il déplacerait
+ * seulement l'adresse.
+ *
+ * **Compter les appels Android avant de la retirer** : `apps/android` n'a pas
+ * été inventorié par l'audit, et le cycle 118 a déjà montré qu'il lui manquait
+ * des champs que les deux autres clients avaient.
+ */
 export async function searchUsers(fastify: FastifyInstance) {
   fastify.get('/users/search', {
     onRequest: [fastify.authenticate],
+    // Porte d'ENUMERATION : elle rend une liste de comptes sur un fragment.
+    // Cle par appelant, jamais par adresse (#4145).
+    config: { rateLimit: createDirectoryRouteRateLimitConfig('search') },
     schema: {
-      description: 'Search for users by name, username, email, or display name. Returns paginated results with active users only. Minimum query length is 2 characters.',
+      description: 'Search for users by name, username or display name (substring), or by exact email / phone number. Returns paginated results with active users only. Minimum query length is 2 characters.',
       tags: ['users'],
       summary: 'Search users',
       querystring: {
         type: 'object',
         properties: {
-          q: { type: 'string', minLength: 2, description: 'Search query (name, username, email, displayName)' },
+          q: { type: 'string', minLength: 2, description: 'Search query — substring on names, EXACT match on email or phone number' },
           offset: { type: 'string', default: '0', description: 'Pagination offset' },
           limit: { type: 'string', default: '20', description: 'Results per page (max 100)' }
         }
@@ -540,10 +542,10 @@ export async function searchUsers(fastify: FastifyInstance) {
                   firstName: { type: 'string' },
                   lastName: { type: 'string' },
                   displayName: { type: 'string' },
-                  email: { type: 'string' },
                   isOnline: { type: 'boolean' },
                   lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
-                  systemLanguage: { type: 'string' }
+                  systemLanguage: { type: 'string' },
+                  profileDecor: participantProfileDecorSchema
                 }
               }
             },
@@ -554,6 +556,12 @@ export async function searchUsers(fastify: FastifyInstance) {
                 offset: { type: 'number' },
                 limit: { type: 'number' },
                 returned: { type: 'number' }
+              }
+            },
+            meta: {
+              type: 'object',
+              properties: {
+                searchId: { type: 'string', description: 'Identifiant opaque et signé de la recherche (#10506), recopié par l’événement discovery ; ne contient jamais le texte cherché' }
               }
             }
           }
@@ -579,6 +587,31 @@ export async function searchUsers(fastify: FastifyInstance) {
       }
 
       const searchTerm = q.trim();
+      const searchId = issueSearchId(searchTerm);
+
+      // Deux régimes de correspondance, et la distinction est la garde (#4145).
+      //
+      // Les NOMS acceptent la sous-chaîne : c'est l'usage nominal, on cherche
+      // « mar » pour trouver « Martin ». L'ADRESSE et le NUMÉRO n'acceptent que
+      // l'égalité : ils servent à RETROUVER quelqu'un dont on possède déjà
+      // l'identifiant, jamais à en découvrir. `contains` sur `email`
+      // transformait la route en moissonneuse — `?q=gmail.com` rendait cent
+      // adresses par page, à tout compte authentifié.
+      const ressembleAUnEmail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(searchTerm);
+      const ressembleAUnNumero = /^\+?[0-9][0-9\s.\-()]{5,}$/.test(searchTerm);
+
+      const correspondancesExactes = [
+        ...(ressembleAUnEmail
+          ? [{ email: { equals: searchTerm, mode: 'insensitive' as const } }]
+          : []),
+        ...(ressembleAUnNumero
+          ? [{ phoneNumber: { equals: searchTerm.replace(/[\s.\-()]/g, '') } }]
+          : [])
+      ];
+
+      // Le jeton se replie exactement comme ceux stockés à l'écriture — même
+      // règle, même site (`utils/search-tokens.ts`).
+      const jetonDeRecherche = jetonRecherche(searchTerm);
 
       const whereClause = {
         AND: [
@@ -591,59 +624,55 @@ export async function searchUsers(fastify: FastifyInstance) {
           },
           {
             OR: [
-              {
-                firstName: {
-                  contains: searchTerm,
-                  mode: 'insensitive' as const
-                }
-              },
-              {
-                lastName: {
-                  contains: searchTerm,
-                  mode: 'insensitive' as const
-                }
-              },
-              {
-                username: {
-                  contains: searchTerm,
-                  mode: 'insensitive' as const
-                }
-              },
-              {
-                email: {
-                  contains: searchTerm,
-                  mode: 'insensitive' as const
-                }
-              },
-              {
-                displayName: {
-                  contains: searchTerm,
-                  mode: 'insensitive' as const
-                }
-              }
+              // Les quatre `contains` NON ancrés sur des colonnes non indexées
+              // sont remplacés par UN test d'appartenance au tableau de jetons
+              // (#4159). Chaque frappe balayait auparavant la collection
+              // entière : c'était le défaut le plus coûteux du module, et le
+              // moins visible — rien ne le signalait à part la latence.
+              //
+              // Un alias qui conserverait le balayage complet ne corrigerait
+              // rien : il déplacerait seulement l'adresse.
+              ...(jetonDeRecherche ? [{ searchTokens: { has: jetonDeRecherche } }] : []),
+              ...correspondancesExactes
             ]
           }
         ]
       };
 
+      // L'ORDRE obéit à la loi du CHAMP : trier « en ligne d'abord » en base,
+      // puis masquer `isOnline` à la sortie, laissait lire la présence dans la
+      // POSITION. Seul un viewer que la loi sert FULL peut classer par la
+      // présence brute (`mayOrderByRawPresence`) ; les autres lisent une page
+      // classée par le nom — l'offset reste cohérent d'une page à l'autre —
+      // puis stabilisée, APRÈS la porte, sur la présence SERVIE.
+      const presenceViewer = viewerFromRequest(request);
+
       const [users, totalCount] = await Promise.all([
         fastify.prisma.user.findMany({
           where: whereClause,
+          // `email` n'est PAS chargé (#4145). Ce qui ne sort pas de la base ne
+          // peut pas fuir par une omission de schéma — compter sur
+          // fast-json-stringify pour retenir une donnée personnelle est un
+          // piège armé, pas une garde : la première personne qui ajoute le
+          // champ au schéma publie la fuite sans qu'un témoin tombe.
+          // `phoneNumber` non plus, pour la même raison : la route accepte de
+          // chercher PAR le numéro, jamais de le rendre.
           select: {
             id: true,
             username: true,
             firstName: true,
             lastName: true,
             displayName: true,
-            email: true,
             isOnline: true,
             lastActiveAt: true,
-            systemLanguage: true
+            systemLanguage: true,
+            // #10945 — le contour équipé, résolu en `profileDecor` à la sortie.
+            ...AVATAR_RING_COLUMN
           },
           orderBy: [
-            { isOnline: 'desc' },
-            { firstName: 'asc' },
-            { lastName: 'asc' }
+            ...(mayOrderByRawPresence(presenceViewer) ? [{ isOnline: 'desc' as const }] : []),
+            { firstName: 'asc' as const },
+            { lastName: 'asc' as const }
           ],
           skip: offsetNum,
           take: limitNum
@@ -651,15 +680,24 @@ export async function searchUsers(fastify: FastifyInstance) {
         fastify.prisma.user.count({ where: whereClause })
       ]);
 
-      // Gate de présence : un résultat de recherche n'expose lastActiveAt/isOnline
-      // que pour les contacts (ami/affilié) ou modérateur+ (critère strict).
+      // Gate de présence (régime strict) : un résultat de recherche n'expose
+      // lastActiveAt/isOnline que pour soi, un ami accepté ou ADMIN/BIGBOSS.
+      // Puis la page se classe sur ce qu'elle SERT : un ami en ligne remonte
+      // pour qui a le droit de le voir, un inconnu masqué garde sa place de nom.
+      // « Ne pas être trouvé » (#8104) : la page se lit, PUIS se prive des
+      // comptes cachés — l'offset reste celui de la base.
+      const trouvables = await keepDiscoverable(fastify.prisma, authContext.userId, users);
       const visibilityMap = await getPresenceVisibilityService(fastify.prisma).resolveForTargets(
-        viewerFromRequest(request),
-        users.map(u => u.id),
+        presenceViewer,
+        trouvables.map(u => u.id),
       );
-      const gatedUsers = users.map(u => applyPresenceVisibilityAsOffline(u, visibilityMap.get(u.id)));
+      const gatedUsers = trouvables
+        .map(u => servedPerson(applyPresenceVisibilityAsOffline(u, visibilityMap.get(u.id))))
+        .sort(servedOnlineFirst);
 
-      return sendPaginatedSuccess(reply, gatedUsers, buildPaginationMeta(totalCount, offsetNum, limitNum, gatedUsers.length));
+      return sendPaginatedSuccess(reply, gatedUsers, buildPaginationMeta(totalCount, offsetNum, limitNum, gatedUsers.length), {
+        meta: { searchId },
+      });
     } catch (error) {
       logError(fastify.log, 'Error searching users', error);
       return sendInternalError(reply, 'Internal server error');

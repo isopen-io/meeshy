@@ -16,7 +16,6 @@ struct ThemedBackButton: View {
     let action: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
-    @State private var isPressed = false
 
     // MARK: - Pure formatting helpers (exposed for unit tests)
 
@@ -39,7 +38,7 @@ struct ThemedBackButton: View {
 
     private var gradientStroke: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: color).opacity(0.5), MeeshyColors.indigo300.opacity(0.5)],
+            colors: [Color(hex: color).opacity(MeeshyOpacity.strong), MeeshyColors.indigo300.opacity(MeeshyOpacity.strong)],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -59,21 +58,18 @@ struct ThemedBackButton: View {
         MeeshyColors.unreadBadgeBackground(isDark: colorScheme == .dark)
     }
 
+    /// Le retour répond au doigt comme l'appel (#17095) : la surbrillance du
+    /// `Button` et le verre interactif de la capsule jouent DÈS le toucher —
+    /// l'échelle posée autrefois dans l'action ne jouait qu'au relâcher.
     var body: some View {
-        Button(action: {
-            withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { isPressed = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { isPressed = false }
-            }
-            action()
-        }) {
+        Button(action: action) {
             HStack(spacing: 0) {
                 // Chevron — always visible, in a fixed 40-pt slot so the
                 // back affordance stays anchored regardless of pill width
                 Image(systemName: "chevron.backward")
-                    .font(MeeshyFont.relative(16, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .bold))
                     .foregroundStyle(gradientFill)
-                    .frame(width: 40, height: 40)
+                    .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
 
                 if showsPill {
                     // Vertical separator between chevron and red pill —
@@ -81,9 +77,9 @@ struct ThemedBackButton: View {
                     // the surrounding glass-capsule mood instead of
                     // looking like a hardcoded grey divider.
                     Rectangle()
-                        .fill(Color(hex: color).opacity(0.35))
+                        .fill(Color(hex: color).opacity(MeeshyOpacity.medium))
                         .frame(width: 1, height: 22)
-                        .padding(.trailing, 6)
+                        .padding(.trailing, MeeshySpacing.xsPlus)
 
                     // Red pill — the eye-catcher. Sits INSIDE the outer
                     // glass capsule, hugged by 6-pt padding on each side
@@ -99,35 +95,46 @@ struct ThemedBackButton: View {
                         // VoiceOver reads the count from the button label
                         // (`a11y.back.with_unread`), so the glyph is hidden.
                         .font(.system(size: 12, weight: NotificationBadge.fontWeight, design: .rounded))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, MeeshySpacing.sm)
                         .frame(minWidth: 22, minHeight: 22)
                         .background(
                             Capsule()
                                 .fill(badgeBackground)
                                 .shadow(color: badgeBackground.opacity(0.4), radius: 3, y: 1)
                         )
-                        .padding(.trailing, 6)
+                        .padding(.trailing, MeeshySpacing.xsPlus)
                         .accessibilityHidden(true)
                         .transition(.scale.combined(with: .opacity))
                 }
             }
-            .background(
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .overlay(Capsule().stroke(gradientStroke, lineWidth: 1))
-                    .shadow(color: Color(hex: color).opacity(0.3), radius: 6, y: 3)
-                    .opacity(compactMode ? 0 : 1)
-                    .scaleEffect(compactMode ? 0.4 : 1, anchor: .leading)
-            )
             .frame(minWidth: compactMode ? 24 : 40, minHeight: 40)
-            .scaleEffect(isPressed ? 0.9 : 1)
+            .modifier(HeaderBackCapsule(color: color, stroke: gradientStroke, isCompact: compactMode))
+            .meeshyTapTarget()
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: compactMode)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showsPill)
         }
         .accessibilityLabel(showsPill ? String(format: String(localized: "a11y.back.with_unread", bundle: .main), unreadCount) : String(localized: "a11y.back", bundle: .main))
+    }
+}
+
+/// La capsule du retour : le verre interactif de l'en-tête, teinté comme
+/// l'appel. Replié (en-tête déplié), le chevron se tient seul, sans capsule.
+private struct HeaderBackCapsule: ViewModifier {
+    let color: String
+    let stroke: LinearGradient
+    let isCompact: Bool
+
+    func body(content: Content) -> some View {
+        if isCompact {
+            content
+        } else {
+            content
+                .overlay(Capsule().stroke(stroke, lineWidth: 1))
+                .adaptiveGlass(in: Capsule(), tint: Color(hex: color).opacity(ConversationHeaderGlassGlyph.glassTintOpacity), interactive: ConversationHeaderGlassGlyph.isGlassInteractive)
+        }
     }
 }
 
@@ -141,17 +148,14 @@ struct ThemedAvatarButton: View {
     var avatarURL: String? = nil
     var presenceState: PresenceState? = nil
     var moodEmoji: String? = nil
+    /// Le pair a l'écran de cette conversation ouvert (#8892).
+    var isHere: ConversationHere = .absent
+    /// Le contour équipé du pair, la référence servie (#10946).
+    var ring: ServedProfileDecorItem? = nil
     let action: () -> Void
-    @State private var isPressed = false
 
     var body: some View {
-        Button(action: {
-            withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { isPressed = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { isPressed = false }
-            }
-            action()
-        }) {
+        Button(action: action) {
             MeeshyAvatar(
                 name: name,
                 context: .conversationHeaderCollapsed,
@@ -160,59 +164,16 @@ struct ThemedAvatarButton: View {
                 avatarURL: avatarURL,
                 storyState: storyState,
                 moodEmoji: moodEmoji,
-                presenceState: presenceState
+                presenceState: presenceState,
+                isHere: isHere,
+                ring: ring
             )
-            .shadow(color: Color(hex: color).opacity(isExpanded ? 0.6 : 0.4), radius: isExpanded ? 12 : 8, y: 3)
-            .scaleEffect(isPressed ? 0.9 : (isExpanded ? 1.1 : 1))
+            .shadow(color: Color(hex: color).opacity(0.4), radius: 8, y: 3)
+            .scaleEffect(isExpanded ? 1.1 : 1)
         }
+        .buttonStyle(PressableButtonStyle())
         .accessibilityLabel(String(format: String(localized: "accessibility.user_profile_of", defaultValue: "Profil de %@", bundle: .main), name))
         .accessibilityHint(String(localized: "accessibility.user_profile.hint", defaultValue: "Ouvre les détails du profil", bundle: .main))
-    }
-}
-
-// MARK: - Themed Composer Button
-struct ThemedComposerButton: View {
-    let icon: String
-    let colors: [String]
-    var isActive: Bool = false
-    var rotateIcon: Bool = false
-    let action: () -> Void
-    @State private var isPressed = false
-
-    var body: some View {
-        Button(action: {
-            HapticFeedback.light()
-            withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { isPressed = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { isPressed = false }
-            }
-            action()
-        }) {
-            ZStack {
-                Circle()
-                    .fill(
-                        isActive ?
-                        LinearGradient(colors: colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing) :
-                        LinearGradient(colors: [Color(hex: colors[0]).opacity(0.2), Color(hex: colors[1]).opacity(0.15)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    )
-                    .frame(width: 44, height: 44)
-                    .overlay(
-                        Circle()
-                            .stroke(
-                                LinearGradient(colors: colors.map { Color(hex: $0).opacity(isActive ? 0 : 0.4) }, startPoint: .topLeading, endPoint: .bottomTrailing),
-                                lineWidth: isActive ? 0 : 1
-                            )
-                    )
-                    .shadow(color: Color(hex: colors[0]).opacity(isActive ? 0.5 : 0.2), radius: isActive ? 10 : 6, y: 3)
-
-                Image(systemName: icon)
-                    .font(MeeshyFont.relative(18, weight: .semibold))
-                    .foregroundColor(isActive ? .white : Color(hex: colors[0]))
-                    .rotationEffect(rotateIcon ? .degrees(45) : .degrees(0))
-                    .offset(x: rotateIcon ? -1 : 0, y: rotateIcon ? 1 : 0)
-            }
-            .scaleEffect(isPressed ? 0.9 : 1)
-        }
     }
 }
 

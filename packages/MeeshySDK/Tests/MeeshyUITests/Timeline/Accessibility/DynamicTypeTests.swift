@@ -53,8 +53,7 @@ final class DynamicTypeTests: XCTestCase {
             onScrub: { _ in }
         )
         let host = mount(view, size: CGSize(width: 390, height: 120))
-        XCTAssertGreaterThan(host.view.subviews.count, 0,
-                             "PlayheadView must produce a non-empty hierarchy at .accessibility5")
+        assertRendersVisibleContent(host, viewName: "PlayheadView")
     }
 
     // MARK: - RulerView
@@ -88,8 +87,7 @@ final class DynamicTypeTests: XCTestCase {
         // (RulerView doesn't crash or zero-size itself at the largest
         // Dynamic Type setting).
         let host = mount(view, size: CGSize(width: 390, height: 60))
-        XCTAssertGreaterThan(host.view.subviews.count, 0,
-                             "RulerView should produce a non-empty hierarchy at .accessibility5")
+        assertRendersVisibleContent(host, viewName: "RulerView")
     }
 
     // MARK: - TransportBar
@@ -117,8 +115,7 @@ final class DynamicTypeTests: XCTestCase {
         // view survives mounting at .accessibility5 with a non-empty
         // hierarchy instead of fishing for legacy UILabels.
         let host = mount(bar, size: CGSize(width: 390, height: 120))
-        XCTAssertGreaterThan(host.view.subviews.count, 0,
-                             "TransportBar should produce a non-empty hierarchy at .accessibility5")
+        assertRendersVisibleContent(host, viewName: "TransportBar")
     }
 
     // MARK: - ClipInspector
@@ -173,10 +170,7 @@ final class DynamicTypeTests: XCTestCase {
         // + DURATION + slider/toggle controls, which produces a deep
         // subview tree even at .accessibility5.
         let host = mount(inspector, size: CGSize(width: 390, height: 600))
-        let totalSubviews = host.view.subviewCountRecursive()
-        XCTAssertGreaterThanOrEqual(
-            totalSubviews, 3,
-            "ClipInspector should still render a non-trivial hierarchy at .accessibility5 — got \(totalSubviews) subviews")
+        assertRendersVisibleContent(host, viewName: "ClipInspector")
     }
 
     // MARK: - TransitionBadge
@@ -217,6 +211,24 @@ final class DynamicTypeTests: XCTestCase {
                        "Negative times must clamp to 0")
     }
 
+
+    /// Vérifie que la vue montée ne s'est pas ÉCROULÉE à taille nulle sous
+    /// `.accessibility5` — robuste à la version d'iOS. On n'inspecte NI les
+    /// `subviews` (vides sur iOS 26.x : `UIHostingController` n'y expose plus le
+    /// contenu SwiftUI) NI un rendu image offscreen (non fiable across
+    /// view-types en test). On demande au contrôleur la taille IDÉALE de son
+    /// contenu (`sizeThatFits`) : une hauteur non nulle prouve que SwiftUI a
+    /// bien produit une hiérarchie à disposer — donc pas de collapse.
+    private func assertRendersVisibleContent(_ host: UIHostingController<some View>,
+                                             viewName: String,
+                                             file: StaticString = #filePath,
+                                             line: UInt = #line) {
+        let width = host.view.bounds.width
+        let fitting = host.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude))
+        XCTAssertTrue(fitting.width > 0 && fitting.height > 0,
+                      "\(viewName) doit produire un contenu de taille non nulle à .accessibility5 (collapse détecté : \(fitting))",
+                      file: file, line: line)
+    }
 
     // MARK: - Helpers
 
@@ -281,11 +293,4 @@ extension UIView {
         return out
     }
 
-    /// Total number of subviews in the receiver's subtree (the receiver
-    /// itself is NOT counted). Used by Dynamic Type tests to assert a
-    /// SwiftUI view renders a non-trivial hierarchy without relying on
-    /// `UILabel` introspection (iOS 26 no longer guarantees Text → label).
-    func subviewCountRecursive() -> Int {
-        subviews.reduce(0) { $0 + 1 + $1.subviewCountRecursive() }
-    }
 }

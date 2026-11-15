@@ -1,7 +1,7 @@
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import type {
-  RetractedNotification,
-  RetractedNotificationAnnouncer,
+import {
+  retractedNotificationOf,
+  type RetractedNotificationAnnouncer,
 } from '../notifications/retractedNotifications';
 
 const log = enhancedLogger.child({ module: 'retractPostNotifications' });
@@ -29,6 +29,8 @@ const log = enhancedLogger.child({ module: 'retractPostNotifications' });
  *     chemin dans un blob JSON que l'API Prisma ne sait pas filtrer sur
  *     MongoDB — d'où la commande brute, exactement comme
  *     `markPostNotificationsAsRead` et `retractFriendRequestNotifications`.
+ *     Ces chemins sont indexés par migration (`POST_NOTIFICATION_LINK_PATHS`,
+ *     #14254) : la lecture ne parcourt plus la collection.
  *     Le filtre n'est PAS scopé à un `userId` : un post notifie une AUDIENCE
  *     (auteur, commentateurs du fil, amis prévenus de la publication), donc la
  *     relecture projette `userId` et l'annonce se groupe par destinataire —
@@ -79,10 +81,24 @@ export const POST_NOTIFICATION_RETRACTION_BATCH_SIZE = 200;
  */
 const MAX_RETRACTION_BATCHES = 200;
 
+/**
+ * Les chemins qui lient une ligne à une publication (voir le filtre plus bas).
+ * Chacun est INDEXÉ par `packages/shared/prisma/migrations/2026-11-01-notification-post-link-indexes.mongodb.js`
+ * (#14254) : sans index, chaque lot parcourait toute la collection. Un chemin
+ * ajouté ici sans son index rougit le témoin de cette migration.
+ */
+export const POST_NOTIFICATION_LINK_PATHS = ['context.postId', 'metadata.repostId', 'metadata.originalPostId'] as const;
+
 type RawObjectId = string | { $oid?: string };
 
+type RawNotificationRow = {
+  _id?: RawObjectId;
+  userId?: RawObjectId;
+  delivery?: { pushSent?: unknown };
+};
+
 type RawNotificationBatch = {
-  cursor?: { firstBatch?: ReadonlyArray<{ _id?: RawObjectId; userId?: RawObjectId }> };
+  cursor?: { firstBatch?: ReadonlyArray<RawNotificationRow> };
 };
 
 /**
@@ -123,8 +139,28 @@ export async function retractPostNotifications(
   for (let batch = 0; batch < MAX_RETRACTION_BATCHES; batch += 1) {
     const raw = (await prisma.$runCommandRaw({
       find: 'Notification',
-      filter: { 'context.postId': { $in: targets } },
-      projection: { _id: 1, userId: 1 },
+      // Trois chemins, parce qu'une ligne peut nommer le post sous une AUTRE
+      // clé que celle qu'elle ouvre :
+      //  - `post_repost` : `context.postId` porte l'ORIGINAL (c'est lui qu'elle
+      //    ouvre) et `metadata.repostId` le repost qui l'a produite. Supprimer
+      //    le repost doit la retirer, et seul le second chemin le sait ;
+      //  - les relais d'entourage d'une republication ou d'une citation
+      //    (`friend_content_repost` / `friend_content_quote`, #14070, #14072) :
+      //    `context.postId` porte la REPUBLICATION et `metadata.originalPostId`
+      //    l'original (la racine d'une chaîne). Supprimer l'original doit les
+      //    retirer — « X a republié une publication de Y » n'a plus d'objet —,
+      //    et seul le troisième chemin le sait (#14243).
+      // La notification qui explique à l'auteur le retrait de son contenu nomme
+      // ce même post : la retirer avec lui effacerait l'explication au moment
+      // exact où elle sert (#11160).
+      filter: {
+        type: { $ne: 'content_removed' },
+        $or: POST_NOTIFICATION_LINK_PATHS.map((path) => ({ [path]: { $in: targets } })),
+      },
+      // `delivery.pushSent` : la révocation push ne réveille un appareil que
+      // là où un push est parti. Aucune conversation ici — les lignes d'un post
+      // n'en portent pas.
+      projection: { _id: 1, userId: 1, 'delivery.pushSent': 1 },
       singleBatch: true,
       batchSize: POST_NOTIFICATION_RETRACTION_BATCH_SIZE,
     })) as RawNotificationBatch;
@@ -139,9 +175,11 @@ export async function retractPostNotifications(
     // qu'elle recalcule doivent voir la base d'après le retrait. Une ligne sans
     // `userId` lisible n'est pas annonçable — elle est tout de même supprimée,
     // parce que la laisser ferait boucler la relecture sur elle.
-    const retracted = rows
-      .map((row) => ({ id: objectId(row._id), userId: objectId(row.userId) }))
-      .filter((row): row is RetractedNotification => !!row.id && !!row.userId);
+    const retracted = rows.flatMap((row) => {
+      const id = objectId(row._id);
+      const userId = objectId(row.userId);
+      return id && userId ? [retractedNotificationOf({ id, userId, delivery: row.delivery })] : [];
+    });
     if (retracted.length > 0) {
       await announcer?.announceNotificationsRetracted(retracted);
     }

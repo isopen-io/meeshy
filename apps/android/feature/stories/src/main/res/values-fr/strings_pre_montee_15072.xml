@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_preupload_unit_kb">ko</string>
+    <string name="composer_preupload_unit_mb">Mo</string>
+    <string name="composer_preupload_unit_gb">Go</string>
+</resources>

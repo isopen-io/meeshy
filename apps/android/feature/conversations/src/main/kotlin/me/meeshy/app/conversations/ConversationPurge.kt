@@ -2,6 +2,7 @@ package me.meeshy.app.conversations
 
 import me.meeshy.sdk.model.ConversationClosedSocketEvent
 import me.meeshy.sdk.model.ConversationDeletedSocketEvent
+import me.meeshy.sdk.model.ConversationObsoletedSocketEvent
 import me.meeshy.sdk.model.ParticipantLeftEvent
 
 /**
@@ -33,6 +34,14 @@ object ConversationPurge {
      * carries no usable id.
      */
     fun onConversationClosed(event: ConversationClosedSocketEvent): String? =
+        event.conversationId.takeIf { it.isNotBlank() }
+
+    /**
+     * The conversationId to purge when the conversation was made OBSOLETE (#14645). It always
+     * follows `conversation:closed`; purging twice is harmless, and a client that missed the first
+     * frame still drops the row. Null (inert) when the event carries no usable id.
+     */
+    fun onConversationObsoleted(event: ConversationObsoletedSocketEvent): String? =
         event.conversationId.takeIf { it.isNotBlank() }
 
     /**

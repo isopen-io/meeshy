@@ -9,7 +9,8 @@ final class CallTranscriptionServiceTests: XCTestCase {
 
     private func makeSUT() -> (sut: CallTranscriptionService, socket: MockMessageSocket) {
         let socket = MockMessageSocket()
-        let sut = CallTranscriptionService(socket: socket)
+        let sut = CallTranscriptionService(socket: socket, gateResolver: MockCallCaptionsGateResolver(gate: .open))
+        sut.setCaptionsGateForTesting(.open)
         return (sut, socket)
     }
 
@@ -26,8 +27,8 @@ final class CallTranscriptionServiceTests: XCTestCase {
         translatedText: String? = nil,
         translatedLanguage: String? = nil,
         capturedAt: Date = Date()
-    ) -> Meeshy.TranscriptionSegment {
-        Meeshy.TranscriptionSegment(
+    ) -> Meeshy.CallTranscriptionSegment {
+        Meeshy.CallTranscriptionSegment(
             id: UUID(),
             wireId: wireId,
             text: text,
@@ -99,15 +100,47 @@ final class CallTranscriptionServiceTests: XCTestCase {
         XCTAssertNil(loaded, "A nil callId must never produce a persisted transcript, empty-keyed or otherwise.")
     }
 
-    func test_persistedSegments_retainsBeyondLiveDisplayCap() {
+    /// #8579 — le journal garde TOUT l'appel : l'ancien plafond de 50 phrases
+    /// faisait disparaître le début de la conversation.
+    func test_displayedSegments_longCall_keepsEverySentence() {
         let (sut, _) = makeSUT()
-        for i in 0..<60 {
+        for i in 0..<300 {
             sut.receiveTranslatedSegment(
                 makeSegment(text: "segment \(i)", isFinal: true, capturedAt: Date(timeIntervalSince1970: TimeInterval(i)))
             )
         }
-        XCTAssertEqual(sut.displayedSegments.count, 50, "Live display stays capped at 50, unchanged.")
-        XCTAssertEqual(sut.persistedSegmentsForTesting.count, 60, "The persistence accumulator must retain all 60, not just the last 50.")
+        XCTAssertEqual(sut.displayedSegments.count, 300)
+        XCTAssertEqual(sut.displayedSegments.first?.text, "segment 0")
+        XCTAssertEqual(sut.persistedSegmentsForTesting.count, 300)
+    }
+
+    /// A1.6 — le journal gravé en fin d'appel suit l'heure où chaque phrase a COMMENCÉ, pas l'ordre
+    /// où elles ont été finalisées.
+    func test_persistedSegments_finalizedOutOfStartOrder_areKeptInStartOrder() {
+        let (sut, _) = makeSUT()
+        sut.receiveTranslatedSegment(makeSegment(text: "B", speakerId: "remote-user", isFinal: true, capturedAt: Date(timeIntervalSince1970: 50)))
+        sut.receiveTranslatedSegment(makeSegment(text: "A", speakerId: "remote-user-2", isFinal: true, capturedAt: Date(timeIntervalSince1970: 10)))
+
+        XCTAssertEqual(sut.persistedSegmentsForTesting.map(\.text), ["A", "B"])
+    }
+
+    func test_persistedSegments_aLongSentenceFinalizedLast_keepsItsStartPlace() {
+        let (sut, _) = makeSUT()
+        sut.receivePeerEntry(makeSegment(wireId: "long", text: "début", speakerId: "remote-user", isFinal: false, capturedAt: Date(timeIntervalSince1970: 10)))
+        sut.receivePeerEntry(makeSegment(wireId: "short", text: "court", speakerId: "remote-user-2", isFinal: true, capturedAt: Date(timeIntervalSince1970: 20)))
+        sut.receivePeerEntry(makeSegment(wireId: "long", text: "début et fin", speakerId: "remote-user", isFinal: true, capturedAt: Date(timeIntervalSince1970: 30)))
+
+        XCTAssertEqual(sut.persistedSegmentsForTesting.map(\.text), ["début et fin", "court"], "la phrase finalisée en dernier se range à son DÉBUT, pas à sa fin")
+    }
+
+    func test_displayedSegments_arrivingOutOfOrder_staysInCaptureOrder() {
+        let (sut, _) = makeSUT()
+        [3, 1, 2].forEach { i in
+            sut.receiveTranslatedSegment(
+                makeSegment(text: "segment \(i)", isFinal: true, capturedAt: Date(timeIntervalSince1970: TimeInterval(i)))
+            )
+        }
+        XCTAssertEqual(sut.displayedSegments.map(\.text), ["segment 1", "segment 2", "segment 3"])
     }
 
     func test_displayedSegments_doesNotTruncateBeyondFive() {
@@ -354,7 +387,7 @@ final class CallTranscriptionServiceTests: XCTestCase {
         // applyRecognitionResult (application time) would let a
         // later-arriving-but-earlier-applied callback sort ahead of one that
         // truly arrived first, corrupting the caption order documented on
-        // TranscriptionSegment.capturedAt. capturedAt must therefore be
+        // CallTranscriptionSegment.capturedAt. capturedAt must therefore be
         // captured at arrival time in handleRecognizerCallback and threaded
         // through as a parameter, not re-stamped here.
         //
@@ -372,6 +405,59 @@ final class CallTranscriptionServiceTests: XCTestCase {
             isFinal: false, confidence: 0.9, language: "fr", capturedAt: arrivalTime
         )
         XCTAssertEqual(sut.segments.first?.capturedAt, arrivalTime)
+    }
+
+    // MARK: - Le journal garde tout l'appel, sous-titres coupés compris (#17342, P6.8)
+
+    func test_applyRecognitionResult_partialWhileCaptionsAreOff_stillJoinsTheJournal() {
+        // La porte #13720 décide de la CAPTURE (`isTranscribing`), pas de la
+        // lecture : ma phrase en cours entre au journal même panneau fermé.
+        let (sut, _) = makeSUT()
+        sut.setTranscribingForTesting(true)
+        sut.isShowingOverlay = false
+
+        sut.applyRecognitionResult(
+            text: "Bonj", speakerId: "user-1", startMs: 0, endMs: 400,
+            isFinal: false, confidence: 0.5, language: "fr", capturedAt: Date(timeIntervalSince1970: 100)
+        )
+
+        XCTAssertEqual(sut.segments.map(\.text), ["Bonj"])
+    }
+
+    func test_applyRecognitionResult_partialRevisions_keepTheStartOfTheUtterance() {
+        // Mêmes phrases, même ordre, avant et après l'appel, chez moi comme chez
+        // le pair : un énoncé se range à son DÉBUT (le pair garde la plus ancienne
+        // des dates de ses révisions), pas à l'heure de sa dernière révision.
+        let (sut, _) = makeSUT()
+        sut.setTranscribingForTesting(true)
+
+        sut.applyRecognitionResult(
+            text: "Bonj", speakerId: "user-1", startMs: 0, endMs: 400,
+            isFinal: false, confidence: 0.5, language: "fr", capturedAt: Date(timeIntervalSince1970: 100)
+        )
+        sut.applyRecognitionResult(
+            text: "Bonjour à tous", speakerId: "user-1", startMs: 0, endMs: 1_900,
+            isFinal: false, confidence: 0.7, language: "fr", capturedAt: Date(timeIntervalSince1970: 102)
+        )
+
+        XCTAssertEqual(sut.segments.count, 1, "la révision remplace la précédente sur place")
+        XCTAssertEqual(sut.segments.first?.text, "Bonjour à tous")
+        XCTAssertEqual(sut.segments.first?.capturedAt, Date(timeIntervalSince1970: 100))
+    }
+
+    func test_receivePeerEntry_whileCaptionsAreOff_joinsTheJournalAndTheTranscriptHeldForAfterTheCall() {
+        let (sut, _) = makeSUT()
+        sut.isShowingOverlay = false
+
+        sut.receivePeerEntry(makeSegment(wireId: "u-1", text: "Hello", speakerId: "remote-user", isFinal: true, capturedAt: Date(timeIntervalSince1970: 10)))
+        sut.receiveTranslatedSegment(makeSegment(
+            wireId: "u-1", text: "Hello", speakerId: "remote-user", isFinal: true,
+            translatedText: "Bonjour", translatedLanguage: "fr", capturedAt: Date(timeIntervalSince1970: 11)
+        ))
+
+        XCTAssertEqual(sut.segments.count, 1, "une seule ligne, enrichie sur place")
+        XCTAssertEqual(sut.segments.first?.translatedText, "Bonjour")
+        XCTAssertEqual(sut.persistedSegmentsForTesting.count, 1)
     }
 
     // MARK: - Stale-Callback-After-Redial Guard
@@ -558,7 +644,7 @@ final class CallTranscriptionServiceSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallTranscriptionService.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/CallTranscriptionService.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -669,7 +755,7 @@ final class CallTranscriptionServiceSourceGuardTests: XCTestCase {
     }
 }
 
-// MARK: - TranscriptionSegment Data Model Tests
+// MARK: - CallTranscriptionSegment Data Model Tests
 
 @MainActor
 final class TranscriptionSegmentTests: XCTestCase {
@@ -677,7 +763,7 @@ final class TranscriptionSegmentTests: XCTestCase {
     func test_segment_storesAllProperties() {
         let id = UUID()
         let capturedAt = Date()
-        let segment = Meeshy.TranscriptionSegment(
+        let segment = Meeshy.CallTranscriptionSegment(
             id: id,
             text: "hello world",
             speakerId: "user123",
@@ -705,7 +791,7 @@ final class TranscriptionSegmentTests: XCTestCase {
     }
 
     func test_segment_translationFieldsDefaultToNil() {
-        let segment = Meeshy.TranscriptionSegment(
+        let segment = Meeshy.CallTranscriptionSegment(
             id: UUID(),
             text: "test",
             speakerId: "s1",
@@ -724,8 +810,8 @@ final class TranscriptionSegmentTests: XCTestCase {
     func test_segment_equatable() {
         let id = UUID()
         let capturedAt = Date()
-        let a = Meeshy.TranscriptionSegment(id: id, text: "hi", speakerId: "u1", startTime: 0, endTime: 1, isFinal: true, confidence: 1, language: "en", capturedAt: capturedAt)
-        let b = Meeshy.TranscriptionSegment(id: id, text: "hi", speakerId: "u1", startTime: 0, endTime: 1, isFinal: true, confidence: 1, language: "en", capturedAt: capturedAt)
+        let a = Meeshy.CallTranscriptionSegment(id: id, text: "hi", speakerId: "u1", startTime: 0, endTime: 1, isFinal: true, confidence: 1, language: "en", capturedAt: capturedAt)
+        let b = Meeshy.CallTranscriptionSegment(id: id, text: "hi", speakerId: "u1", startTime: 0, endTime: 1, isFinal: true, confidence: 1, language: "en", capturedAt: capturedAt)
         XCTAssertEqual(a, b)
     }
 }
@@ -773,7 +859,7 @@ final class CallTranscriptionServiceDeadCodeTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallTranscriptionService.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/CallTranscriptionService.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

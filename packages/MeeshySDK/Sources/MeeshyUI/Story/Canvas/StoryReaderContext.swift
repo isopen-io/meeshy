@@ -26,6 +26,25 @@ public struct StoryReaderContext: Sendable {
     /// de LECTURE, `nil` sur le canvas de COMPOSITION — qui garde ses players
     /// privés, seuls capables de suivre une timeline en cours d'édition.
     public let playerProvider: (any StoryCarrierPlayerProviding)?
+    /// **Les médias ADOPTÉS, rendus à leur fichier local** (retour porteur
+    /// 2026-09-28 : l'échange avec l'URL téléversée « doit être imperceptible
+    /// à l'œil »). Clé : l'adresse distante ou le `postMediaId` ; valeur : le
+    /// fichier que l'auteur a choisi. Vide hors composer.
+    public let localMediaAliases: [String: URL]
+
+    /// **Le muet de cette surface est-il VERROUILLÉ ?** (#4084)
+    ///
+    /// `mute` dit l'ÉTAT, celui-ci dit s'il a le droit de changer. Les deux se
+    /// lisent ensemble, comme `ScenePlayerConfig.isMuted` et `locksMute` dont
+    /// il est la projection : une carte de fil est muette PAR CONSTRUCTION.
+    ///
+    /// Sans lui, le verrou n'existait qu'au niveau du PROP, et n'atteignait le
+    /// canvas qu'à la passe de rendu suivante. Entre les deux, la notification
+    /// diffusée `.storyComposerUnmuteCanvas` — postée `object: nil`, donc reçue
+    /// par TOUS les canvas montés — relevait le muet des cartes de fil restées
+    /// vivantes derrière un `fullScreenCover`. Le verrou était juste, testé, et
+    /// contournable.
+    public let locksMute: Bool
 
     public init(preferredLanguages: [String] = [],
                 mute: Bool = false,
@@ -33,13 +52,17 @@ public struct StoryReaderContext: Sendable {
                 postMediaURLResolver: (@Sendable (String) -> URL?)? = nil,
                 imageCache: ImageCacheReader? = nil,
                 localAudioURLResolver: (@Sendable (String) -> URL?)? = nil,
-                playerProvider: (any StoryCarrierPlayerProviding)? = nil) {
+                playerProvider: (any StoryCarrierPlayerProviding)? = nil,
+                locksMute: Bool = false,
+                localMediaAliases: [String: URL] = [:]) {
+        self.localMediaAliases = localMediaAliases
         self.preferredLanguages = preferredLanguages
         self.mute = mute
         self.onCompletion = onCompletion
         self.postMediaURLResolver = postMediaURLResolver
         self.imageCache = imageCache
         self.localAudioURLResolver = localAudioURLResolver
+        self.locksMute = locksMute
         self.playerProvider = playerProvider
     }
 
@@ -56,7 +79,33 @@ public struct StoryReaderContext: Sendable {
                            postMediaURLResolver: postMediaURLResolver,
                            imageCache: imageCache,
                            localAudioURLResolver: localAudioURLResolver,
-                           playerProvider: playerProvider)
+                           playerProvider: playerProvider,
+                           locksMute: locksMute,
+                           localMediaAliases: localMediaAliases)
+    }
+
+    /// **Le fond garde son FICHIER local tant qu'il existe.** Adopté, un fond
+    /// change de clé de routage (le fichier devient l'adresse téléversée) : la
+    /// couche y lisait une NOUVELLE identité, et rechargeait l'image ou recréait
+    /// le lecteur vidéo depuis le réseau — la carte disparaissait. Rendue à son
+    /// fichier, l'identité ne bouge pas.
+    public func aliasingLocalMedia(_ kind: StoryBackgroundLayer.Kind) -> StoryBackgroundLayer.Kind {
+        switch kind {
+        case .image(let cle, let thumbHash):
+            guard let local = existingAlias(cle) else { return kind }
+            return .image(postMediaId: local.absoluteString, thumbHash: thumbHash)
+        case .video(let cle, let looping, let mute, let thumbHash):
+            guard let local = existingAlias(cle) else { return kind }
+            return .video(postMediaId: local.absoluteString, looping: looping, mute: mute, thumbHash: thumbHash)
+        default:
+            return kind
+        }
+    }
+
+    private func existingAlias(_ cle: String) -> URL? {
+        guard let local = localMediaAliases[cle], local.isFileURL,
+              FileManager.default.fileExists(atPath: local.path) else { return nil }
+        return local
     }
 }
 

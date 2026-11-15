@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "circles_action_unlink",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_confirm_cancel",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_demote_acquaintance",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_demote_acquaintance_confirm_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_demote_close",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_demote_close_confirm_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_demote_confirm_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_demote_friend",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_demote_friend_confirm_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_notice_lower_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_promote_blood",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_promote_blood_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_promote_close",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_promote_close_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_promote_friend",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_promote_friend_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_unlink_confirm_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_unlink_confirm_title",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

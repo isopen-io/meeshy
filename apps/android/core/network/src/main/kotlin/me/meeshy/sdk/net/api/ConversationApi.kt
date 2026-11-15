@@ -2,17 +2,24 @@ package me.meeshy.sdk.net.api
 
 import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ApiParticipantProfile
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.HistoryGrantUpdate
 import me.meeshy.sdk.model.ConversationAnalysis
 import me.meeshy.sdk.model.ConversationMessageStatsResponse
 import me.meeshy.sdk.model.CreateConversationRequest
 import me.meeshy.sdk.model.JoinAuthenticatedResponse
+import me.meeshy.sdk.model.MarkedCountResult
 import me.meeshy.sdk.model.PaginatedParticipantsResponse
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
+import me.meeshy.sdk.net.ConditionalResult
+import me.meeshy.sdk.net.conditionalApiCall
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -24,16 +31,37 @@ import retrofit2.http.Query
  * `PUT /user-preferences/conversations/{id}` (gateway `conversation-preferences`
  * route). Null fields are omitted so each call patches only what changed.
  */
+/**
+ * Corps de `POST conversations/{id}/mark-as-read` quand l'accusé NOMME ce qu'il lit (miroir de
+ * `MarkAsReadBody` iOS) : les messages vus, la langue DOMINANTE lue et ses exceptions par message. Le schéma
+ * gateway est strict : aucune autre clé, aucun identifiant mal formé. Tout est optionnel, un accusé d'avant
+ * ce corps (pas de corps du tout) reste servi.
+ */
+@Serializable
+data class MarkReadBody(
+    val messageIds: List<String>? = null,
+    val language: String? = null,
+    val messageLanguages: Map<String, String>? = null,
+    val caughtUpToMessageId: String? = null,
+)
+
 @Serializable
 data class ConversationPreferencesUpdate(
     val isPinned: Boolean? = null,
     val isMuted: Boolean? = null,
     val isArchived: Boolean? = null,
     val mentionsOnly: Boolean? = null,
-    val categoryId: String? = null,
+    /**
+     * A JSON element, not a string: `null` (Kotlin) is dropped by the `explicitNulls = false` encoder and leaves
+     * the category untouched, while [kotlinx.serialization.json.JsonNull] reaches the gateway as an explicit
+     * `"categoryId": null` — the only way to uncategorize (#13784).
+     */
+    val categoryId: kotlinx.serialization.json.JsonElement? = null,
     val customName: String? = null,
     val reaction: String? = null,
     val tags: List<String>? = null,
+    /** Le fond et l'accent personnels (`ConversationAppearance.toWire`) ; absent = laissé tel quel côté serveur. */
+    val appearance: kotlinx.serialization.json.JsonElement? = null,
 )
 
 /**
@@ -48,11 +76,43 @@ data class ParticipantRoleUpdate(val role: String)
 data class AddParticipantRequest(val userId: String)
 
 interface ConversationApi {
+    /**
+     * `GET /conversations` — full page (default: server-side `lastMessageAt
+     * DESC`) when [updatedSince] is omitted, or a DELTA page
+     * (`updatedAt` strictly greater than [updatedSince], sorted `updatedAt
+     * ASC, id ASC`) when it is set — gateway contract:
+     * `services/gateway/src/routes/conversations/core-list.ts:251-264`.
+     * [updatedSince] is an ISO-8601 instant; an unparseable value is
+     * silently ignored server-side and the call falls back to a full page.
+     * #5187 — [ConversationCacheSource] is the sole caller that passes it.
+     */
     @GET("conversations")
     suspend fun list(
         @Query("offset") offset: Int? = null,
         @Query("limit") limit: Int? = null,
+        @Query("updatedSince") updatedSince: String? = null,
     ): ApiResponse<List<ApiConversation>>
+
+    /**
+     * Same request as [list], carrying an optional `If-None-Match` and returning
+     * the raw [Response] instead of the unwrapped envelope — needed to reach the
+     * response's own `ETag` header and to distinguish a genuine 304 (no body,
+     * RFC 7232) from a decoded 200. Gateway contract: `sendWithETag`,
+     * `services/gateway/src/routes/conversations/core-list.ts:892-906` — the
+     * ETag hashes the FULL response body (`data` + `pagination` +
+     * `cursorPagination` + any delta `meta`), so it is valid ONLY for the exact
+     * same query that produced it. #5188 — never call this directly; go
+     * through [listConditionalResult], which keeps [Response] confined to this
+     * module (`:core:network`; see its doc-comment, mirroring [TusApi]'s
+     * `createSession`/`patchChunk`).
+     */
+    @GET("conversations")
+    suspend fun listConditional(
+        @Query("offset") offset: Int? = null,
+        @Query("limit") limit: Int? = null,
+        @Query("updatedSince") updatedSince: String? = null,
+        @Header("If-None-Match") ifNoneMatch: String? = null,
+    ): Response<ApiResponse<List<ApiConversation>>>
 
     @GET("conversations/{id}")
     suspend fun getById(@Path("id") id: String): ApiResponse<ApiConversation>
@@ -72,6 +132,29 @@ interface ConversationApi {
     @POST("conversations")
     suspend fun create(@Body body: CreateConversationRequest): ApiResponse<ApiConversation>
 
+    /**
+     * `GET /conversations?type=direct&withUserId=…&limit=1` — the most recent direct conversation
+     * the caller shares with [withUserId] (gateway `core-list.ts`, parity iOS
+     * `ConversationService.findDirectWith`). An empty list is "none yet", not an error.
+     */
+    @GET("conversations")
+    suspend fun directWith(
+        @Query("type") type: String,
+        @Query("withUserId") withUserId: String,
+        @Query("limit") limit: Int,
+    ): ApiResponse<List<ApiConversation>>
+
+    /**
+     * `GET /conversations?withUserId=…&limit=…` — every conversation the caller shares with
+     * [withUserId], groups included (gateway `core-list.ts`, parity iOS
+     * `ConversationService.listSharedWith`). Feeds the profile's Conversations tab.
+     */
+    @GET("conversations")
+    suspend fun sharedWith(
+        @Query("withUserId") withUserId: String,
+        @Query("limit") limit: Int,
+    ): ApiResponse<List<ApiConversation>>
+
     // Empty-body POST (no @Body — like markRead): the gateway derives the joiner
     // from the JWT. Idempotent server-side (routes/conversations/sharing.ts
     // resolveConversationEntry): an existing member gets the same canonical
@@ -85,6 +168,24 @@ interface ConversationApi {
     // et les badges ne se vidaient jamais durablement.
     @POST("conversations/{id}/mark-as-read")
     suspend fun markRead(@Path("id") id: String): ApiResponse<Unit>
+
+    /** Le même accusé, avec ce qui a été lu et dans quelle langue ([MarkReadBody]). */
+    @POST("conversations/{id}/mark-as-read")
+    suspend fun markReadDeclaring(@Path("id") id: String, @Body body: MarkReadBody): ApiResponse<Unit>
+
+    /**
+     * L'accusé de RÉCEPTION de toute la conversation (le curseur de livraison : la
+     * double coche de l'expéditeur) — gateway `routes/message-read-status.ts`,
+     * `POST /conversations/:conversationId/mark-as-received`. Idempotent côté
+     * serveur ; la charge rend `{ markedCount }`.
+     *
+     * Adresse HISTORIQUE d'une écriture dont le successeur est la collection
+     * `receipts` (le `type` voyage alors dans le corps) : elle reste servie le
+     * temps de la queue des versions installées, et c'est elle qu'utilise iOS
+     * (`PushDeliveryReceiptService`). Elle ne se retire qu'à zéro usage mesuré.
+     */
+    @POST("conversations/{id}/mark-as-received")
+    suspend fun markReceived(@Path("id") id: String): ApiResponse<MarkedCountResult>
 
     // POST /conversations/{id}/mark-unread (gateway routes/conversations/messages.ts):
     // moves the read cursor back before the latest message so the conversation
@@ -199,4 +300,81 @@ interface ConversationApi {
         @Path("id") id: String,
         @Path("userId") userId: String,
     ): ApiResponse<Unit>
+
+    /**
+     * La fiche d'UN participant — identité, capacités d'entrée, réglages du lien
+     * emprunté et octroi d'historique (#3943, port Android de ce que iOS et web
+     * rendent depuis #3877).
+     *
+     * **Le segment porte un `Participant.id`, pas un `User.id`** : le sujet de
+     * cette route est souvent un visiteur venu par un lien partagé, qui n'a
+     * aucune ligne `User`. Les routes voisines de cette même interface nomment
+     * leur paramètre `userId` et visent l'autre colonne — la ressemblance des
+     * deux chemins est un piège, pas une symétrie.
+     *
+     * Le gateway décide seul de ce qu'il sert : `email`, `birthday`, `entryLink`
+     * et `historyVisibleFrom` reviennent `null` à qui n'est pas hôte. Rien n'est
+     * re-filtré ici.
+     */
+    @GET("conversations/{id}/participants/{participantId}/profile")
+    suspend fun participantProfile(
+        @Path("id") id: String,
+        @Path("participantId") participantId: String,
+    ): ApiResponse<ApiParticipantProfile>
+
+    /**
+     * Pose ou retire « voit l'historique depuis le \<date\> » sur un participant.
+     *
+     * Réservé aux admin/creator de la conversation — le serveur tranche, le
+     * client ne fait que gater l'affordance sur `canGrantHistory`. `null`
+     * explicite RETIRE l'octroi ; la clé absente ne dirait rien, et le gateway
+     * distingue les deux (cf. [HistoryGrantUpdate]).
+     */
+    @PATCH("conversations/{id}/participants/{participantId}/rights")
+    suspend fun updateHistoryGrant(
+        @Path("id") id: String,
+        @Path("participantId") participantId: String,
+        @Body body: HistoryGrantUpdate,
+    ): ApiResponse<ParticipantRightsUpdateResult>
+
+    /**
+     * Pose UN droit d'un participant : [ParticipantRightsUpdate.single] ne laisse partir que la clé touchée, la
+     * surcharge étant un delta côté gateway. Rend l'état RÉSOLU, que l'appelant pose tel quel.
+     */
+    @PATCH("conversations/{id}/participants/{participantId}/rights")
+    suspend fun updateParticipantRight(
+        @Path("id") id: String,
+        @Path("participantId") participantId: String,
+        @Body body: me.meeshy.sdk.model.ParticipantRightsUpdate,
+    ): ApiResponse<ParticipantRightsUpdateResult>
 }
+
+/**
+ * Ce que rend `PATCH …/rights` : l'état résolu après écriture, jamais le delta
+ * envoyé. Tous les champs ont un défaut — un modèle plus strict que le fil ne
+ * rendrait pas une réponse incomplète, il ne rendrait rien.
+ */
+@Serializable
+data class ParticipantRightsUpdateResult(
+    val participantId: String? = null,
+    val conversationId: String? = null,
+    val historyVisibleFrom: String? = null,
+    val rights: me.meeshy.sdk.model.ParticipantEntryCapabilities? = null,
+)
+
+/**
+ * [ConversationApi.listConditional] folded into a [ConditionalResult] — a thin
+ * wrapper whose only purpose is keeping every `retrofit2.Response` type
+ * confined to `:core:network` (retrofit is an `implementation`, not `api`,
+ * dependency of this module — `:sdk-core`'s [me.meeshy.sdk.conversation.
+ * ConversationCacheSource] cannot reference [Response] itself, only this
+ * module's own [ConditionalResult]/`ApiError` types). Mirrors [TusApi]'s
+ * `createSession`/`patchChunk`. #5188.
+ */
+suspend fun ConversationApi.listConditionalResult(
+    offset: Int?,
+    limit: Int?,
+    updatedSince: String?,
+    ifNoneMatch: String?,
+): ConditionalResult<List<ApiConversation>> =
+    conditionalApiCall { listConditional(offset, limit, updatedSince, ifNoneMatch) }

@@ -26,17 +26,17 @@ struct FeedPostLocationSticker: View {
             HapticFeedback.light()
             onTap()
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "mappin.circle.fill")
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                 Text(displayLabel)
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(MeeshyColors.indigo900)
+                    .foregroundStyle(MeeshyColors.indigo900)
                     .lineLimit(1)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .background(Capsule().fill(MeeshyColors.indigo50.opacity(0.94)))
         }
         .buttonStyle(.plain)
@@ -77,7 +77,7 @@ struct FeedPostLocationMapCard: View {
             .frame(height: Self.cardHeight)
             .frame(maxWidth: .infinity)
             .overlay { mapLayer }
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
             .overlay(alignment: .bottomLeading) {
                 if let overlayText, !overlayText.isEmpty {
                     textScrim(overlayText)
@@ -85,9 +85,9 @@ struct FeedPostLocationMapCard: View {
             }
             .overlay(alignment: .topLeading) {
                 FeedPostLocationSticker(place: place, onTap: onOpen)
-                    .padding(10)
+                    .padding(MeeshySpacing.smPlus)
             }
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
             .onTapGesture {
                 HapticFeedback.light()
                 onOpen()
@@ -99,6 +99,7 @@ struct FeedPostLocationMapCard: View {
                 defaultValue: "Ouvre le lieu sur la carte",
                 bundle: .main
             ))
+            .accessibilityAction { onOpen() }
             .task(id: colorScheme) {
                 thumbnail = await thumbnailProvider.thumbnail(
                     coordinate: place.clLocationCoordinate,
@@ -121,7 +122,7 @@ struct FeedPostLocationMapCard: View {
                 MeeshyColors.indigo100.opacity(colorScheme == .dark ? 0.15 : 1)
                 Image(systemName: "mappin.and.ellipse")
                     .font(.title2)
-                    .foregroundColor(MeeshyColors.indigo400)
+                    .foregroundStyle(MeeshyColors.indigo400)
             }
         }
     }
@@ -129,11 +130,11 @@ struct FeedPostLocationMapCard: View {
     private func textScrim(_ text: String) -> some View {
         Text(text)
             .font(.subheadline.weight(.medium))
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .lineLimit(4)
             .multilineTextAlignment(.leading)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 LinearGradient(

@@ -1,20 +1,48 @@
+import { notePairInteraction } from './relations/pairInteractionRecorder.js';
 import type { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
 import type { MobileTranscription } from '../routes/posts/types';
-import { authorSelect, commentMediaInclude, NOT_DELETED } from './posts/postIncludes';
+import { commentMediaInclude, NOT_DELETED, postAuthorSelect } from './posts/postIncludes';
 import { TrackingLinkService } from './TrackingLinkService';
+import { syncCommentTrackingLinks } from './posts/publicationTrackingLinks';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace } from './location/sharedPlace';
-import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
+import { parseMessageSticker } from './stickers/messageSticker';
+import { assertCommentMediaClaimable, claimCommentMedia, transcribeCommentAudio } from './posts/commentMediaClaim';
+import { applyCommentMediaOrder } from './posts/mediaOrder';
+import type { QuotedPostMedia } from './posts/quotedPostMediaSnapshot';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { getSharedNotificationService } from './notifications/notification-service-registry';
 import type { RetractedNotificationAnnouncer } from './notifications/retractedNotifications';
 import { retractCommentNotifications } from './posts/retractCommentNotifications';
 import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubjectNotifications';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
-import { ConflictError } from '../errors/custom-errors';
+import { EngagementService } from './engagement/EngagementService';
+import { creditPostEngagement, creditSource, reclaimContentCredits, removalReclaimsAuthorCredits, type PostEngagementRecorder } from './posts/postEngagementCredits';
+import { creditEngagedReaderView } from './posts/postViewCredit';
 
 const log = enhancedLogger.child({ module: 'PostCommentService' });
+
+/**
+ * La forme d'un commentaire tel que sa CRÉATION le rend — et tel qu'un rejeu
+ * d'idempotence doit le resservir (#9603), à l'identique. `postId` est REQUIS
+ * par le service de la citation (#6578) : la relecture du média cité revérifie
+ * son appartenance au post commenté sur la LIGNE relue.
+ */
+const CREATED_COMMENT_SELECT = {
+  id: true,
+  content: true,
+  originalLanguage: true,
+  translations: true,
+  likeCount: true,
+  replyCount: true,
+  effectFlags: true,
+  parentId: true,
+  createdAt: true,
+  metadata: true,
+  postId: true,
+  author: { select: postAuthorSelect },
+} as const;
 
 export class PostCommentService {
   private readonly trackingLinkService: TrackingLinkService;
@@ -24,27 +52,68 @@ export class PostCommentService {
     // Source UNIQUE du mapping `metadata.trackingLinks` partagée avec
     // messages/posts/stories. Injectable pour les tests ; défaut = même prisma.
     trackingLinkService?: TrackingLinkService,
+    // Crédit `tool.comment_like` (#8959) du like REST — voir `likeComment`.
+    private readonly engagement: PostEngagementRecorder = new EngagementService(prisma),
   ) {
     this.trackingLinkService = trackingLinkService ?? new TrackingLinkService(prisma);
   }
 
+  /**
+   * Crée un commentaire.
+   *
+   * La QUEUE des paramètres est un objet d'options (#6578) : elle en portait
+   * neuf, positionnels, et le lot y ajoutait le dixième — un site d'appel ne
+   * pouvait plus dire ce qu'il passait sans compter les virgules. CLAUDE.md
+   * § Code Style le prescrit ; les trois premiers restent positionnels parce
+   * qu'ils sont l'identité même de l'écriture.
+   */
   async addComment(
     postId: string,
     authorId: string,
     content: string,
-    parentId?: string,
-    effectFlags?: number,
-    originalLanguage?: string,
-    /// PostMedia déjà uploadé (pending) à rattacher au commentaire via `commentId`.
-    /// Un commentaire ne porte QU'UN SEUL média.
-    mediaId?: string,
-    /// Transcription Whisper mobile pour un média audio — persistée sur le PostMedia
-    /// (évite la re-transcription serveur, même mécanisme que les posts).
-    mobileTranscription?: MobileTranscription,
-    /// Lieu partagé — champ dédié, jamais un `metadata` brut. Validé par
-    /// `parseSharedPlace` ci-dessous avant écriture.
-    location?: unknown,
+    options: {
+      parentId?: string;
+      effectFlags?: number;
+      originalLanguage?: string;
+      /// PostMedia déjà uploadés (pending) à rattacher au commentaire via
+      /// `commentId`. **PLURIEL depuis #6578** — la relation Prisma est
+      /// `PostMedia[]`, le bandeau du composer affiche un TABLEAU, et la
+      /// directive porteur du 2026-09-14 dit « ajouter d'autres média ».
+      mediaIds?: readonly string[];
+      /// Transcription Whisper mobile pour un média audio — persistée sur le
+      /// PostMedia (évite la re-transcription serveur, même mécanisme que les
+      /// posts). Elle décrit UNE piste : elle se pose sur le média AUDIO du
+      /// lot, jamais sur tous — un commentaire à trois photos et un vocal ne
+      /// doit pas se retrouver avec la même transcription gravée quatre fois.
+      mobileTranscription?: MobileTranscription;
+      /// Lieu partagé — champ dédié, jamais un `metadata` brut. Validé par
+      /// `parseSharedPlace` ci-dessous avant écriture.
+      location?: unknown;
+      /// Sticker (#9080) — la MÊME forme que celui d'un message
+      /// (`MessageSticker`), champ dédié, jamais un `metadata` brut. Validé et
+      /// BLANCHI par `parseMessageSticker` avant écriture ; l'image rendue,
+      /// elle, arrive par `mediaIds` comme tout média de commentaire.
+      sticker?: unknown;
+      /// Le média du POST COMMENTÉ que ce commentaire CITE (#6578), déjà ADMIS
+      /// par `admitQuotedPostMedia` — ce service ne revalide pas l'appartenance,
+      /// il n'en a pas les moyens (il ne reçoit que l'instantané). La garde vit
+      /// au transport, site unique.
+      quotedPostMedia?: QuotedPostMedia | null;
+    } = {},
   ) {
+    const {
+      parentId,
+      effectFlags,
+      originalLanguage,
+      mediaIds,
+      mobileTranscription,
+      location,
+      sticker,
+      quotedPostMedia,
+    } = options;
+    // Un id répété ne doit consommer qu'une place — `Set` préserve l'ordre de
+    // première apparition, exactement comme `applyMediaOrder`.
+    const demandes = [...new Set(mediaIds ?? [])];
     // Verify post exists
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
@@ -52,31 +121,29 @@ export class PostCommentService {
     if (!post) return null;
 
     // If parentId, verify parent exists
+    let parentAuthorId: string | null = null;
     if (parentId) {
       const parent = await this.prisma.postComment.findFirst({
         where: { id: parentId, postId, deletedAt: NOT_DELETED },
       });
       if (!parent) throw new Error('PARENT_NOT_FOUND');
+      parentAuthorId = parent.authorId;
     }
 
-    // Verify the pending media belongs to no post/comment yet (anti-hijack) before linking.
-    if (mediaId) {
-      const media = await this.prisma.postMedia.findUnique({
-        where: { id: mediaId },
-        select: { id: true, postId: true, commentId: true },
-      });
-      if (!media || media.postId || media.commentId) {
-        throw new Error('MEDIA_NOT_AVAILABLE');
-      }
-    }
+    // Chaque média demandé doit être LIBRE et téléversé par l'auteur de la
+    // requête, AVANT toute création (#9745) — `posts/commentMediaClaim.ts`.
+    // Un SEUL média indisponible refuse tout le lot : publier un commentaire
+    // amputé d'une de ses pièces, en silence, est pire que le refus.
+    await assertCommentMediaClaimable(this.prisma, { authorId, mediaIds: demandes });
 
     // Lieu partagé : validation stricte côté serveur (bornes, rejet
     // NaN/Infinity, bornage des chaînes). Chiffrement : stockage EN CLAIR
     // dans `metadata.location`, même décision assumée que pour message/post
     // (cf. services/location/sharedPlace.ts).
     const sharedPlace = parseSharedPlace(location);
+    const stickerDescriptor = parseMessageSticker(sticker);
 
-    const comment = await this.prisma.postComment.create({
+    const creation = {
       data: {
         postId,
         authorId,
@@ -91,107 +158,81 @@ export class PostCommentService {
           originalLanguage != null
             ? (normalizeLanguageCode(originalLanguage) ?? originalLanguage)
             : null,
-        ...(sharedPlace ? { metadata: { location: sharedPlace } as unknown as Prisma.InputJsonValue } : {}),
+        // `metadata` porte QUATRE choses aujourd'hui — le lieu, le sticker, les
+        // liens tracés (écrits plus bas) et le média CITÉ. Composé en une
+        // fois : deux écritures séparées se seraient écrasées l'une l'autre,
+        // `metadata` étant un document remplacé en bloc et non fusionné.
+        ...(sharedPlace || stickerDescriptor || quotedPostMedia
+          ? {
+              metadata: {
+                ...(sharedPlace ? { location: sharedPlace } : {}),
+                ...(stickerDescriptor ? { sticker: stickerDescriptor } : {}),
+                ...(quotedPostMedia ? { quotedPostMedia } : {}),
+              } as unknown as Prisma.InputJsonValue,
+            }
+          : {}),
       },
-      select: {
-        id: true,
-        content: true,
-        originalLanguage: true,
-        translations: true,
-        likeCount: true,
-        replyCount: true,
-        effectFlags: true,
-        parentId: true,
-        createdAt: true,
-        metadata: true,
-        author: { select: authorSelect },
-      },
-    });
-
-    // Lier le média pending au commentaire + persister la transcription mobile éventuelle.
-    //
-    // La pré-vérification anti-hijack plus haut couvre « le média est déjà
-    // pris ». Elle ne couvre PAS deux choses : à qui il appartient, et le fait
-    // qu'elle vérifie puis agit en deux temps — entre le `findUnique` et cet
-    // écrit, un autre commentaire peut avoir réclamé le même média.
-    //
-    // Porter la condition dans le `where` de l'écriture règle les deux : la
-    // base tranche en une opération. `updateMany` est obligatoire pour ça —
-    // `update` n'accepte qu'un critère unique, pas une clause composée.
-    if (mediaId) {
-      const linked = await this.prisma.postMedia.updateMany({
-        where: { id: mediaId, ...claimableMediaWhere(authorId) },
-        data: {
-          commentId: comment.id,
-          ...(mobileTranscription
-            ? {
-                transcription: {
-                  ...mobileTranscription,
-                  segments: mobileTranscription.segments ?? [],
-                  source: 'mobile',
-                } as Prisma.InputJsonValue,
-              }
-            : {}),
-        },
-      });
-      const shortfall = describeClaimShortfall([mediaId], linked.count);
-      if (shortfall) {
-        // Le commentaire existe déjà et reste publié : refuser le média sans
-        // trace donnerait un commentaire vide inexplicable.
-        enhancedLogger.warn(`[PostCommentService] createComment: ${shortfall}`, {
-          commentId: comment.id, authorId, mediaId,
+      select: CREATED_COMMENT_SELECT,
+    };
+    // UNE transaction dès qu'il y a des médias, et elle porte TOUT ce qui fait
+    // le commentaire : la ligne, ses pièces réclamées, leur rang, la
+    // transcription, et leur relecture. Un média pris entre l'admission et la
+    // réclamation — ou n'importe laquelle de ces écritures qui échoue — annule
+    // l'ensemble : rien n'est né, le rejeu repart de zéro.
+    // Sans média, une seule écriture — aucune transaction à ouvrir.
+    const { comment, media } = demandes.length === 0
+      ? { comment: await this.prisma.postComment.create(creation), media: [] }
+      : await this.prisma.$transaction(async (tx) => {
+          const created = await tx.postComment.create(creation);
+          await claimCommentMedia(tx, { commentId: created.id, authorId, mediaIds: demandes });
+          // Le RANG suit l'ordre de la requête — le seul endroit qui porte
+          // l'ordre voulu par l'utilisateur (`applyMediaOrder` côté post).
+          await applyCommentMediaOrder(tx, created.id, demandes);
+          await transcribeCommentAudio(tx, created.id, mobileTranscription);
+          // Renvoyés top-level (`media: [PostMedia]`) — même forme que les posts.
+          const attached = await tx.postMedia.findMany({ where: { commentId: created.id }, ...commentMediaInclude });
+          return { comment: created, media: attached };
         });
-      }
-    }
 
-    // Increment counters
-    await this.prisma.post.update({
+    // À partir d'ici le commentaire EXISTE (#9745). Plus rien ne peut échouer
+    // la création : un échec rendrait 500 pour un commentaire publié, la ligne
+    // de journal de la mutation serait libérée, et le rejeu sous le même
+    // identifiant trouverait ses médias déjà pris (400) — ou, sans média,
+    // publierait un doublon. Les compteurs sont dénormalisés : un écart se
+    // journalise et se rattrape, un commentaire né ne se renie pas.
+    await this.afterBirth('post.commentCount', comment.id, () => this.prisma.post.update({
       where: { id: postId },
       data: { commentCount: { increment: 1 } },
+    }));
+    // #10404 — commenter le post d'un autre, c'est l'avoir vu.
+    await creditEngagedReaderView(this.prisma, { postId, userId: authorId, authorId: post.authorId });
+    // Les cercles (#13932) : commenter le post de l'autre, ou répondre à son commentaire, compte pour la paire.
+    [...new Set([post.authorId, parentAuthorId])].forEach((otherId) => {
+      if (otherId) notePairInteraction(this.prisma, { actorId: authorId, otherId, nature: 'comment', at: comment.createdAt });
     });
-
     if (parentId) {
-      await this.prisma.postComment.update({
+      await this.afterBirth('parent.replyCount', comment.id, () => this.prisma.postComment.update({
         where: { id: parentId },
         data: { replyCount: { increment: 1 } },
-      });
+      }));
     }
 
-    // Le média lié est renvoyé top-level (`media: [PostMedia]`) — même forme que les
-    // posts, décodé identiquement par les clients (viewers inline + plein écran).
-    const media = mediaId
-      ? await this.prisma.postMedia.findMany({
-          where: { commentId: comment.id },
-          ...commentMediaInclude,
-        })
-      : [];
-
-    // Tracking des URLs brutes du commentaire : même mécanisme que les messages
-    // et les posts — mapping `url → token` rangé dans `metadata.trackingLinks`
-    // SANS réécrire le contenu (aperçu vidéo + URL lisible préservés). Le client
-    // rend le lien vers `/l/<token>`. JAMAIS bloquant : le helper avale ses
-    // erreurs (→ []) et l'écriture metadata est gardée.
-    if (content) {
-      try {
-        const trackingLinks = await this.trackingLinkService.collectContentTrackingLinks({
-          content,
-          createdBy: authorId,
-        });
-        if (trackingLinks.length > 0) {
-          const existingMetadata = (comment.metadata as Record<string, unknown> | null) ?? {};
-          const metadata = { ...existingMetadata, trackingLinks } as Prisma.InputJsonValue;
-          await this.prisma.postComment.update({
-            where: { id: comment.id },
-            data: { metadata },
-          });
-          return { ...comment, metadata, media };
-        }
-      } catch {
-        // non-bloquant : un échec de tracking ne doit pas casser le commentaire
-      }
-    }
+    // Carte `metadata.trackingLinks` (#9073) : corps + légende de son média,
+    // mapping `url → token` SANS réécrire le contenu. Jamais bloquant.
+    const trackingMetadata = await syncCommentTrackingLinks({
+      prisma: this.prisma, linkService: this.trackingLinkService, comment: { ...comment, media }, createdBy: authorId,
+    });
+    if (trackingMetadata !== undefined) return { ...comment, metadata: trackingMetadata, media };
 
     return { ...comment, media };
+  }
+
+  private async afterBirth(step: string, commentId: string, work: () => Promise<unknown>): Promise<void> {
+    try {
+      await work();
+    } catch (err) {
+      log.warn('addComment: post-commit step failed, comment kept', { step, commentId, err });
+    }
   }
 
   /**
@@ -204,10 +245,18 @@ export class PostCommentService {
    * POST). Retourne le commentaire au même select que la création (+ media),
    * `null` si introuvable, jette `FORBIDDEN` pour un non-auteur.
    */
+  private async commentsClosedOn(postId: string): Promise<boolean> {
+    const post = await this.prisma.post.findFirst({
+      where: { id: postId },
+      select: { commentsDisabled: true, repostOf: { select: { commentsDisabled: true } } },
+    });
+    return post?.commentsDisabled === true || post?.repostOf?.commentsDisabled === true;
+  }
+
   async updateComment(
     commentId: string,
     userId: string,
-    data: { content?: string; effectFlags?: number },
+    data: { content?: string; effectFlags?: number; originalLanguage?: string },
   ) {
     const existing = await this.prisma.postComment.findFirst({
       where: { id: commentId, deletedAt: NOT_DELETED },
@@ -215,6 +264,10 @@ export class PostCommentService {
     });
     if (!existing) return null;
     if (existing.authorId !== userId) throw new Error('FORBIDDEN');
+    // #16930 — un fil FERMÉ (#16541) s'aime et se signale encore, il ne
+    // s'édite plus : la publication qui porte le commentaire, ou l'original
+    // qu'elle republie — même règle que l'admission (`admitCommentHome`).
+    if (await this.commentsClosedOn(existing.postId)) throw new Error('COMMENTS_DISABLED');
 
     // Contenu blanc : accepté SEULEMENT pour un commentaire à média (retrait
     // de légende) — un commentaire texte ne s'édite pas vers du vide (le
@@ -231,13 +284,15 @@ export class PostCommentService {
     if (contentChanged) updateData.isEdited = true;
     if (data.content !== undefined) updateData.content = data.content;
     if (data.effectFlags !== undefined) updateData.effectFlags = data.effectFlags;
-    // Texte changé → les traductions ET la langue d'origine décrivaient
-    // l'ANCIEN contenu. On purge les deux ; le pipeline de retraduction
-    // redétecte la langue du nouveau texte (originalLanguage absent =
-    // auto-détection, même contrat qu'une création sans claim client).
+    // Texte changé → les traductions décrivaient l'ANCIEN contenu, purgées
+    // dans tous les cas. La langue d'origine suit `data.originalLanguage` —
+    // la déclaration du composer (pastille de langue), même contrat que
+    // `UpdatePostSchema.originalLanguage` — quand l'appelant la fournit ;
+    // sans déclaration, `null` relance l'auto-détection du nouveau texte par
+    // le pipeline de retraduction (comportement inchangé).
     if (contentChanged) {
       updateData.translations = {};
-      updateData.originalLanguage = null;
+      updateData.originalLanguage = data.originalLanguage ?? null;
     }
 
     const comment = await this.prisma.postComment.update({
@@ -255,7 +310,12 @@ export class PostCommentService {
         parentId: true,
         createdAt: true,
         metadata: true,
-        author: { select: authorSelect },
+        // `postId` est REQUIS par le service de la citation (#6578) : la
+        // re-lecture du média cité revérifie son appartenance au post commenté
+        // sur la LIGNE relue — une garde d'écriture ne dit rien des lignes
+        // écrites avant elle.
+        postId: true,
+        author: { select: postAuthorSelect },
       },
     });
 
@@ -286,12 +346,38 @@ export class PostCommentService {
       });
     }
 
-    return { ...comment, postId: existing.postId, contentChanged, media };
+    // Édition : la carte de liens suivis se recalcule (#9073) — le document
+    // rendu porte la nouvelle carte, que la diffusion socket hisse.
+    const trackingMetadata = contentChanged
+      ? await syncCommentTrackingLinks({
+          prisma: this.prisma, linkService: this.trackingLinkService, comment: { ...comment, media }, createdBy: userId,
+        })
+      : undefined;
+    const served = trackingMetadata === undefined ? comment : { ...comment, metadata: trackingMetadata };
+    return { ...served, postId: existing.postId, contentChanged, media };
   }
 
   /// Relecture d'un commentaire au FORMAT de `updateComment` — pour le rejeu
   /// idempotent du PATCH (MutationLog) : une ligne Prisma brute n'a ni
   /// `author` ni `media`, et casserait le décodage côté client.
+  /**
+   * Le commentaire au format de sa création (`addComment` : même sélection,
+   * médias compris) — ce qu'un rejeu d'idempotence resert (#9603). `null` s'il
+   * a été supprimé depuis : le rejeu d'une création ne le ressuscite pas.
+   */
+  async getCommentAsCreated(commentId: string) {
+    const comment = await this.prisma.postComment.findFirst({
+      where: { id: commentId, deletedAt: NOT_DELETED },
+      select: CREATED_COMMENT_SELECT,
+    });
+    if (!comment) return null;
+    const media = await this.prisma.postMedia.findMany({
+      where: { commentId },
+      ...commentMediaInclude,
+    });
+    return { ...comment, media };
+  }
+
   async getCommentAsUpdateResult(commentId: string) {
     const comment = await this.prisma.postComment.findFirst({
       where: { id: commentId, deletedAt: NOT_DELETED },
@@ -308,7 +394,7 @@ export class PostCommentService {
         createdAt: true,
         metadata: true,
         postId: true,
-        author: { select: authorSelect },
+        author: { select: postAuthorSelect },
       },
     });
     if (!comment) return null;
@@ -357,7 +443,12 @@ export class PostCommentService {
         parentId: true,
         createdAt: true,
         metadata: true,
-        author: { select: authorSelect },
+        // `postId` est REQUIS par le service de la citation (#6578) : la
+        // re-lecture du média cité revérifie son appartenance au post commenté
+        // sur la LIGNE relue — une garde d'écriture ne dit rien des lignes
+        // écrites avant elle.
+        postId: true,
+        author: { select: postAuthorSelect },
         media: commentMediaInclude,
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -435,7 +526,12 @@ export class PostCommentService {
         parentId: true,
         createdAt: true,
         metadata: true,
-        author: { select: authorSelect },
+        // `postId` est REQUIS par le service de la citation (#6578) : la
+        // re-lecture du média cité revérifie son appartenance au post commenté
+        // sur la LIGNE relue — une garde d'écriture ne dit rien des lignes
+        // écrites avant elle.
+        postId: true,
+        author: { select: postAuthorSelect },
         media: commentMediaInclude,
       },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -480,12 +576,18 @@ export class PostCommentService {
     // CHAQUE appel — le service n'est enregistré qu'au démarrage du socket,
     // après la construction des routes.
     announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService(),
+    // Le retrait PAR LA MODÉRATION (#10394, `routes/admin/moderation-acts.ts`) : la
+    // garde d'auteur cède à la décision d'un modérateur, déjà autorisée en amont
+    // (`canModerateContent`, hiérarchie), et la reprise des crédits suit la règle
+    // `removalReclaimsAuthorCredits` sous modération.
+    options: { readonly byModeration?: boolean } = {},
   ) {
+    const byModeration = options.byModeration === true;
     const comment = await this.prisma.postComment.findFirst({
       where: { id: commentId, deletedAt: NOT_DELETED },
     });
     if (!comment) return null;
-    if (comment.authorId !== userId) throw new Error('FORBIDDEN');
+    if (comment.authorId !== userId && !byModeration) throw new Error('FORBIDDEN');
 
     // Soft-delete the WHOLE reply subtree, not just the target comment.
     // `addComment` increments `post.commentCount` for EVERY comment — top-level
@@ -498,15 +600,17 @@ export class PostCommentService {
     // `commentCount` by the number of surviving descendants. Collect the subtree
     // breadth-first and remove it atomically-in-count.
     const descendantIds: string[] = [];
+    const descendantAuthors: Array<{ readonly id: string; readonly authorId: string }> = [];
     let frontier = [commentId];
     while (frontier.length > 0) {
       const children = await this.prisma.postComment.findMany({
         where: { parentId: { in: frontier }, deletedAt: NOT_DELETED },
-        select: { id: true },
+        select: { id: true, authorId: true },
       });
       if (children.length === 0) break;
       const childIds = children.map((c) => c.id);
       descendantIds.push(...childIds);
+      descendantAuthors.push(...children);
       frontier = childIds;
     }
 
@@ -521,6 +625,14 @@ export class PostCommentService {
       where: { id: { in: deletedCommentIds } },
       data: { deletedAt },
     });
+
+    // Ce que chaque commentaire retiré a rapporté à SON auteur se reprend
+    // selon `removalReclaimsAuthorCredits` (#9584) : la cible, retirée par son
+    // auteur, oui ; les réponses des AUTRES qu'elle emporte, non. Une
+    // suppression rejouée ne reprend rien.
+    [{ id: commentId, authorId: comment.authorId }, ...descendantAuthors]
+      .filter(({ authorId }) => removalReclaimsAuthorCredits({ removedBy: userId, authorId, byModeration }))
+      .forEach(({ id, authorId }) => reclaimContentCredits(this.prisma, authorId, creditSource.comment(id), this.engagement));
 
     await this.prisma.post.update({
       where: { id: comment.postId },
@@ -578,7 +690,7 @@ export class PostCommentService {
   async likeComment(commentId: string, userId: string, emoji: string = '❤️') {
     const comment = await this.prisma.postComment.findFirst({
       where: { id: commentId, deletedAt: NOT_DELETED },
-      select: { id: true },
+      select: { id: true, postId: true, authorId: true },
     });
     if (!comment) return null;
 
@@ -628,11 +740,26 @@ export class PostCommentService {
     // L'upsert reste idempotent (❤️ sur ❤️ ne change rien), donc le REST demeure
     // un FALLBACK sûr du socket, sans double-comptage si les deux se
     // déclenchent sur le même geste.
-    await this.prisma.commentReaction.upsert({
+    const like = await this.prisma.commentReaction.upsert({
       where: { comment_user_reaction_unique: { commentId, userId, emoji } },
       create: { commentId, userId, emoji },
       update: {},
+      select: { id: true },
     });
+    // `tool.comment_like` (#8959) — seulement quand CET emoji n'était pas déjà
+    // posé : reconfirmer (ou passer en repli derrière le socket, qui l'a déjà
+    // écrit et crédité) ne recrédite pas.
+    if (!alreadyHasThisEmoji) {
+      creditPostEngagement(
+        this.prisma,
+        userId,
+        'tool.comment_like',
+        { postId: comment.postId, targetId: commentId, targetOwnerId: comment.authorId, receipt: creditSource.commentReaction(like.id) },
+        this.engagement,
+      );
+      // Les cercles (#13932) : réagir au commentaire de l'autre compte pour la paire.
+      notePairInteraction(this.prisma, { actorId: userId, otherId: comment.authorId, nature: 'reaction' });
+    }
     return this.syncCommentLikeCounters(commentId);
   }
 
@@ -664,7 +791,7 @@ export class PostCommentService {
     const pile = await this.prisma.commentReaction.findMany({
       where: { commentId, userId, ...(requested ? { emoji: requested } : {}) },
       orderBy: { createdAt: 'desc' },
-      select: { emoji: true },
+      select: { id: true, emoji: true },
       take: 1,
     });
     const cible = pile[0]?.emoji ?? null;
@@ -674,6 +801,8 @@ export class PostCommentService {
     }
 
     await this.prisma.commentReaction.deleteMany({ where: { commentId, userId, emoji: cible } });
+    // Retirer le like reprend ce qu'il a rapporté (#9584).
+    reclaimContentCredits(this.prisma, userId, creditSource.commentReaction(pile[0]!.id), this.engagement);
     // `removedEmoji` voyage AVEC le commentaire, exactement comme sur le chemin
     // des publications (`PostService.unlikePost`). La route diffuse ce que le
     // serveur a FAIT, jamais ce que le client a DEMANDÉ : sans lui, un retrait

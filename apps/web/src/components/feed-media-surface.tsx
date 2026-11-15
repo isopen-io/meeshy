@@ -1,0 +1,197 @@
+import { useState } from 'react';
+
+import { Glyph, GlyphSvg } from './glyph';
+import { FEED_GLYPHS } from './glyphs-feed';
+import { MediaUnavailable } from './media-unavailable';
+import type { FeedCardMedia } from '@/lib/feed/card-model';
+import { isMediaAbsent, noteMediaAbsent } from '@/lib/api/media-absent';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { coordinateNativeMedia } from '@/lib/view/native-media-coordination';
+import { useElectedVideoSrc } from '@/lib/media/served-video';
+
+import { ServedPicture } from './served-picture';
+
+/** #12316 — la colonne du fil ne dépasse pas 640 px ; en dessous, elle prend la largeur de l'écran. */
+export const FEED_MEDIA_SIZES = '(max-width: 640px) 100vw, 640px';
+
+/**
+ * LA SURFACE D'UN MÉDIA — image (ThumbHash peint AVANT toute requête, puis
+ * `loading="lazy"`), vidéo ou son. Remplit son parent (`absolute inset-0`) :
+ * la page d'un carrousel, l'affiche d'un réel ou la tuile d'une mosaïque
+ * (#6514) — trois hôtes, UNE surface.
+ *
+ * `playable` — LA SURFACE LIT, OU ELLE AFFICHE (#6800). Les deux usages sont
+ * RÉELLEMENT distincts, et les confondre casse l'un des deux :
+ *
+ * - un POST vidéo/audio se lit DANS le fil : sans élément média, le glyphe
+ *   `fillPlay` est un contrôle sans effet (loi 4) — il AFFIRME une capacité
+ *   qu'il n'a pas, la forme la plus trompeuse ;
+ * - l'affiche d'un RÉEL ne lit PAS : toucher la carte ouvre le lecteur des
+ *   Réels plein écran (`ReelFeedCard.onTapMedia` ⇒ `ReelsPresenter`, #6457),
+ *   qui possède la lecture. Y monter un `<video>` ferait décoder deux fois la
+ *   même piste pour une vignette qu'on quitte au premier tap. C'est la
+ *   décision que garde `feed-post-card.test.tsx` § « le RÉEL, affiche
+ *   immobile plein cadre ».
+ *
+ * Le défaut est donc `false` : une surface ne lit que si son hôte le DEMANDE.
+ */
+export function FeedMediaSurface({ media, playable = false }: { readonly media: FeedCardMedia; readonly playable?: boolean }) {
+  const [loaded, setLoaded] = useState(false);
+  /**
+   * LE COMPTEUR D'ÉCHECS, ET NON UN `errored: boolean` (#7022). Le verdict se
+   * LIT au registre de module à chaque rendu (`isMediaAbsent(media.src)`) ;
+   * cet état ne sert qu'à REDEMANDER un rendu quand le registre vient
+   * d'apprendre quelque chose.
+   *
+   * La distinction n'est pas théorique : un fil virtualisé RECYCLE ses
+   * composants, donc la même instance sert successivement plusieurs sources.
+   * Un booléen posé au montage porterait le verdict de la rangée PRÉCÉDENTE et
+   * masquerait une image parfaitement vivante — le défaut qu'on ferme, retourné
+   * (c'est la forme web de « un état semé par un seul `onChange` hérite de la
+   * ligne précédente »). Dérivé de `media.src`, il ne peut pas se tromper de
+   * rangée.
+   */
+  const [, setÉchecs] = useState(0);
+  const videoSrc = useElectedVideoSrc(media);
+
+  if (playable && media.kind === 'video') {
+    const language = currentInterfaceLanguage();
+    const poster = media.thumbnailSrc ?? media.placeholder;
+    return (
+      <div className="absolute inset-0" style={{ backgroundColor: 'var(--color-ios-card)' }}>
+        {/* `key={media.src}` (même dispositif que `VideoTile`, #6221) — une
+            source qui change REMONTE l'élément, jamais une réutilisation
+            silencieuse d'un `<video>` déjà lié à une autre piste.
+            `preload="none"` : une page de fil porte plusieurs vidéos, aucune
+            n'ouvre de connexion avant que le lecteur ne la demande.
+            L'AFFICHE devient le `poster` — ce que le navigateur peint avant la
+            première image décodée, là où le `background-image` CSS
+            disparaissait dès que l'élément prenait le cadre. */}
+        <video
+          key={videoSrc}
+          src={videoSrc}
+          {...(poster !== undefined ? { poster } : {})}
+          preload="none"
+          playsInline
+          className="absolute inset-0 size-full object-cover"
+        />
+        <div className="pointer-events-none absolute inset-0 grid place-items-center">
+          <Glyph name="fillPlay" size={44} style={{ color: 'var(--color-on-media-2)' }} title={translate(language, 'feed.post.media.video')} />
+        </div>
+      </div>
+    );
+  }
+
+  if (playable && media.kind === 'audio') {
+    const language = currentInterfaceLanguage();
+    return (
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-4" style={{ backgroundColor: 'var(--color-ios-card)' }}>
+        <GlyphSvg glyph={FEED_GLYPHS.waveform} size={72} style={{ color: 'var(--color-on-media-3)' }} />
+        {/* LE SON SE LIT (#9693) — il était monté `sr-only`, sans contrôle ni
+            geste : un glyphe d'onde au-dessus d'un lecteur muet. Le lecteur
+            natif, comme celui d'un son de commentaire (`comment-media.tsx`),
+            entre au coordinateur : un seul média joue à la fois.
+            `preload="none"` — une page de fil peut porter plusieurs sons ;
+            aucun n'ouvre de connexion avant que le lecteur ne le demande. */}
+        <audio
+          key={media.src}
+          ref={coordinateNativeMedia}
+          src={media.src}
+          controls
+          preload="none"
+          aria-label={translate(language, 'feed.post.media.audio')}
+          className="w-full max-w-xs"
+        />
+      </div>
+    );
+  }
+
+  if (media.kind === 'video' || media.kind === 'audio') {
+    const language = currentInterfaceLanguage();
+    const poster = media.thumbnailSrc ?? media.placeholder;
+    return (
+      <div
+        className="absolute inset-0 grid place-items-center"
+        style={{
+          backgroundColor: 'var(--color-ios-card)',
+          /**
+           * `url("...")`, GUILLEMETÉ (défaut bloquant relevé à la capture,
+           * #5893) — un `data:image/svg+xml` peut contenir un `)` NON
+           * échappé : `encodeURIComponent` échappe `#` mais PAS `(`/`)`
+           * (MDN), et le SVG des fixtures référence son dégradé par
+           * `fill="url(#g)"`. Sans guillemets, le PREMIER `)` rencontré —
+           * celui de cette référence interne, pas la fin de l'URI — clôt le
+           * `url()` CSS prématurément ; le navigateur rejette alors la
+           * valeur ENTIÈRE en silence (`backgroundImage` retombe à `none`,
+           * aucune erreur console) et le repli plein cadre restait BLANC.
+           * Guillemeter est la forme CSS qui admet `)` sans ambiguïté,
+           * quelle que soit la source de l'URL.
+           */
+          ...(poster !== undefined ? { backgroundImage: `url("${poster}")`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}),
+        }}
+      >
+        {media.kind === 'video' ? (
+          <Glyph name="fillPlay" size={44} style={{ color: 'var(--color-on-media-2)' }} title={translate(language, 'feed.post.media.video')} />
+        ) : (
+          <GlyphSvg
+            glyph={FEED_GLYPHS.waveform}
+            size={72}
+            style={{ color: 'var(--color-on-media-3)' }}
+            title={translate(language, 'feed.post.media.audio')}
+          />
+        )}
+      </div>
+    );
+  }
+
+  /**
+   * LE MÉDIA RÉELLEMENT ABSENT (#7022) — état DESSINÉ, et AUCUNE `<img>`
+   * montée : c'est le non-montage qui épargne la requête, pas un masquage.
+   *
+   * Le ThumbHash lui-même se retire avec elle. Il est l'APERÇU d'octets qui
+   * arrivent ; au-dessus d'une absence définitive il ment — une image floue et
+   * plausible fait attendre un chargement qui ne viendra jamais.
+   */
+  if (isMediaAbsent(media.src)) {
+    return (
+      <div className="absolute inset-0">
+        <MediaUnavailable language={currentInterfaceLanguage()} tone="on-card" />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {media.placeholder !== undefined ? (
+        <img src={media.placeholder} alt="" aria-hidden="true" className="absolute inset-0 size-full object-cover" />
+      ) : null}
+      <ServedPicture avifSrcSet={media.avifSrcSet} sizes={FEED_MEDIA_SIZES}>
+        <img
+          src={media.src}
+          {...(media.srcSet !== undefined ? { srcSet: media.srcSet, sizes: FEED_MEDIA_SIZES } : {})}
+          onError={() => {
+            noteMediaAbsent(media.src);
+            setÉchecs((compte) => compte + 1);
+          }}
+          /* `PostMedia.alt` SERVI, jamais la légende (déjà rendue en texte
+             visible sous le média) : la répéter la ferait lire deux fois.
+             Sans texte d'accessibilité, l'image est DÉCORATIVE (`alt=""`) —
+             c'est la forme juste quand rien n'en décrit le contenu. */
+          alt={media.altText ?? ''}
+          /* LA LANGUE DU TEXTE SERVI (#7392) — `lang` sur une image gouverne la
+             VOIX dont un lecteur d'écran prononce son `alt`. C'est la moitié
+             « qui l'AFFICHE » du Prisme (cycle 122), et c'est la seule où elle
+             est audible. Posé seulement quand il y a un texte ET une langue :
+             sur une image décorative il ne qualifierait rien, et sur un texte
+             de langue inconnue il mentirait. */
+          {...(media.altText !== undefined && media.altTextLanguage !== undefined ? { lang: media.altTextLanguage } : {})}
+          loading="lazy"
+          onLoad={() => setLoaded(true)}
+          className="absolute inset-0 size-full object-cover transition-opacity duration-300"
+          style={{ opacity: media.placeholder === undefined || loaded ? 1 : 0 }}
+        />
+      </ServedPicture>
+    </>
+  );
+}

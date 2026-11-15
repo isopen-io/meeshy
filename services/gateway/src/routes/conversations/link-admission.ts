@@ -1,0 +1,963 @@
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { z } from 'zod';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { guestNicknameSchema } from '@meeshy/shared/types/link-join';
+import { sendLengthFloorRefusal, sendZodRefusal, servedGuestNicknameViolation } from '../../utils/identity-name-floor';
+import { logError } from '../../utils/logger';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
+import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
+import { announceMemberArrival } from './memberArrivalFanOut';
+import type { ConversationRoomEmitter } from '../../socketio/emitToConversationParticipants';
+import { creditLinkJoin, type LinkJoinEngagement } from '../links/utils/link-join-credit';
+import {
+  sendSuccess,
+  sendError,
+  sendNotFound,
+  sendBadRequest,
+  sendUnauthorized,
+  sendInternalError,
+} from '../../utils/response';
+import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
+import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import type { UnifiedAuthContext, UnifiedAuthRequest } from '../../middleware/auth';
+import { endGuestSession, refreshGuestSession } from './guest-sessions';
+import { allowedAttachmentKindsJsonSchema } from '@meeshy/shared/types/guest-attachment-kinds';
+import { guestAttachmentKindsOf } from '../../services/attachments/ContentSignature';
+import {
+  admitLinkEntry,
+  isLinkAdmissionRefusal,
+  type LinkAdmissionIdentity,
+  type LinkAdmissionRefusal,
+} from '../../services/conversations/linkAdmission';
+import {
+  REJOIN_PARTICIPANT_STATE,
+  type ConversationEntryDecision,
+} from '../../services/conversations/conversationEntryAdmission';
+import { extractUserAgent } from '../../services/GeoIPService';
+import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
+import { claimLinkUse, LINK_EXHAUSTED_RACE } from './link-admission-claim';
+import { joinAsGuest } from './link-admission-guest';
+import {
+  resolveEntryRights,
+  type ParticipantRightName,
+} from '../../services/participantRights';
+import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
+import {
+  applyCommunityAdmission,
+  loadSalonCommunity,
+  planSalonEntry,
+} from '../../services/conversations/communityMembershipSync';
+import { deferAfterResponse, type AfterResponse } from '../../utils/after-response';
+import {
+  lookupArrivalCountry,
+  recordArrivalCountry,
+  type ArrivalCountryLookup,
+} from '../../services/conversations/arrivalCountry';
+
+// ─── Types partagés par les trois portes (canonique + deux adaptateurs) ──────
+
+export type ParticipantRow = Awaited<ReturnType<PrismaClient['participant']['create']>>;
+type ShareLinkRow = Awaited<ReturnType<PrismaClient['conversationShareLink']['findFirst']>>;
+/** Le lien AVEC sa conversation incluse — jamais `null` passé ce point. */
+export type ShareLinkWithConversation = NonNullable<ShareLinkRow> & {
+  conversation: { id: string; identifier?: string | null; title: string; type: string; isActive: boolean; closedAt: Date | null; communityId?: string | null };
+};
+
+export type GuestRights = Record<ParticipantRightName, boolean>;
+
+export interface LinkJoinProfileInput {
+  readonly firstName: string;
+  readonly lastName: string;
+  /** Ce que le visiteur a explicitement demandé (`username` historique, `nickname` cible). */
+  readonly requestedUsername?: string;
+  readonly email?: string;
+  readonly birthday?: string;
+  /** Déjà normalisée (`normalizeLanguageForDedup`) par le schéma Zod de l'appelant. */
+  readonly language: string;
+  readonly deviceFingerprint?: string;
+}
+
+export type LinkJoinBroadcast = (message: unknown, conversationId: string) => Promise<void>;
+
+export interface LinkJoinParams {
+  readonly prisma: PrismaClient;
+  readonly key: string;
+  /** `undefined` = visiteur sans AUCUNE créance — l'identité vient de la créance, jamais du chemin. */
+  readonly authContext: UnifiedAuthContext | undefined;
+  readonly requestIp: string;
+  /**
+   * La chaîne User-Agent de la requête d'entrée (#10102) — lue pour graver le
+   * poste RÉDUIT d'un invité (`describeGuestClient`), jamais écrite telle quelle.
+   * Absente : aucun poste n'est relevé.
+   */
+  readonly requestUserAgent?: string | null;
+  readonly profile: LinkJoinProfileInput;
+  readonly broadcast?: LinkJoinBroadcast;
+  /**
+   * L'émetteur de l'éventail d'ARRIVÉE (#16837, doctrine dans
+   * `memberArrivalFanOut.ts`). Distinct de `broadcast`, qui ne porte qu'un
+   * MESSAGE de conversation. Il vit ICI, dans le cœur partagé, et non chez les
+   * trois routes qui l'appellent. Absent : rien n'est annoncé.
+   */
+  readonly arrivalIO?: ConversationRoomEmitter | null;
+  /**
+   * Ce qui met les sockets DÉJÀ CONNECTÉES de l'arrivant dans la room de la
+   * conversation. Fourni par les deux portes depuis
+   * `fastify.socketIOHandler?.getManager()`.
+   *
+   * Pourquoi c'est ici, dans le cœur, et non chez une route : `message:new`
+   * part sur la room de conversation SEULE, et les rooms de participation ne se
+   * rejoignent qu'à l'AUTHENTIFICATION. Un compte dont la socket vivait déjà au
+   * moment de sa jointure n'était donc dans aucune audience du fil qu'il venait
+   * de rejoindre, pour toute la durée de cette socket — et dans l'état que
+   * `AuthHandler` nomme le pire : `connectedUsers` le dit joignable, donc tout
+   * expéditeur SAUTE la file hors ligne pour lui. Aucun message, aucun rejeu.
+   *
+   * La porte DÉPRÉCIÉE portait le geste depuis le 2026-08-30, la CANONIQUE —
+   * celle que le web appelle — ne l'a jamais eu. Une règle qui doit être
+   * retapée à chaque porte est une règle qu'une porte finira par ne pas avoir :
+   * la copie locale de `sharing.ts` est retirée, et ce paramètre est ce qui
+   * rend la règle inoubliable pour une troisième porte.
+   *
+   * Absent : rien n'est joint, et la jointure aboutit quand même — c'est un
+   * canal latéral, pas la jointure.
+   */
+  readonly arrivalRooms?: ConversationRoomAdmission | null;
+  /**
+   * Un `Authorization: Bearer` a été PRÉSENTÉ et n'a pas authentifié (#6741) —
+   * la porte `optionalAuth` retombe alors sur un `authContext` anonyme,
+   * INDISCERNABLE d'une requête sans aucune créance. Sans ce signal,
+   * `performLinkJoin` admettrait en invité un appelant dont le jeton a été
+   * refusé, consommant une place du lien sur un compte qu'il croyait utiliser.
+   */
+  readonly rejectedCredential?: boolean;
+  /** #7797 — coutures du pays d'arrivée ; la production prend les défauts. */
+  readonly afterResponse?: AfterResponse;
+  readonly lookupCountry?: ArrivalCountryLookup;
+  /** `social.conversation_link_joined` (#8959) — le moteur partagé par défaut, un double en test. */
+  readonly engagement?: LinkJoinEngagement;
+}
+
+/**
+ * La seule capacité que l'admission demande à la couche socket : faire entrer
+ * les sockets d'un compte dans une room de conversation. Structurelle, pour que
+ * le cœur n'importe pas le gestionnaire et qu'un double de test soit un objet à
+ * une méthode.
+ */
+export type ConversationRoomAdmission = {
+  joinUserToConversationRoom(userId: string, conversationId: string): Promise<void>;
+};
+
+export type LinkJoinOutcome =
+  | { readonly kind: 'not-found' }
+  | { readonly kind: 'invalid-credential' }
+  | { readonly kind: 'refused'; readonly refusal: LinkAdmissionRefusal }
+  | { readonly kind: 'validation'; readonly message: string }
+  /**
+   * `allowedLanguages` — DÉLIBÉRÉMENT hors de `admitLinkEntry` (comme
+   * `requireEmail`/`requireBirthday`/`requireNickname`, cf. son doc-tête) :
+   * elle juge `profile.language`, un champ du CORPS, pas le lien ni
+   * l'identité. Un outcome à part plutôt que `validation` (400) : c'était un
+   * 403 des deux côtés historiquement (`anonymous.ts`), et #4167 étend la
+   * vérification aux deux identités — un des « huit réglages » listés par
+   * l'issue comme absents de la porte inscrite.
+   */
+  | { readonly kind: 'language-not-allowed' }
+  | { readonly kind: 'username-taken'; readonly suggestion: string }
+  | {
+      readonly kind: 'joined';
+      readonly outcome: 'new' | 'rejoin' | 'already-member';
+      readonly shareLink: ShareLinkWithConversation;
+      readonly participant: ParticipantRow;
+      readonly sessionToken?: string;
+      readonly rights: GuestRights;
+    };
+
+// ─── Identité : dérivée de la CRÉANCE, jamais du chemin appelé ───────────────
+
+export function deriveLinkAdmissionIdentity(
+  authContext: UnifiedAuthContext | undefined
+): LinkAdmissionIdentity {
+  if (authContext?.type === 'user' && authContext.isAuthenticated && authContext.userId) {
+    return { kind: 'registered', userId: authContext.userId };
+  }
+  return { kind: 'guest' };
+}
+
+export function resolveClientIp(request: FastifyRequest): string {
+  return request.ip || (request.headers['x-forwarded-for'] as string) || '127.0.0.1';
+}
+
+/**
+ * Les colonnes qui OUVRENT la porte de jointure — la loi, sous forme de donnée
+ * (#4692).
+ *
+ * Toute valeur d'une de ces colonnes vaut une invitation : les trois portes
+ * (`POST /links/:key/members` en `optionalAuth`, `POST /anonymous/join/:linkId`
+ * purement anonyme, `POST /conversations/join/:linkId`) les acceptent
+ * indifféremment, et `admitLinkEntry` ne demande jamais par laquelle le lien a
+ * été trouvé. Une porte d'administration qui sert l'une d'elles distribue une
+ * invitation, quel que soit le nom de la colonne.
+ *
+ * La liste est EXPORTÉE parce que le témoin qui garde cette règle en dérive son
+ * fixture : une énumération tenue à la main dans un test reste verte le jour où
+ * une quatrième colonne rejoint le `OR` (c'est exactement ce qui a laissé
+ * `identifier` sortir pendant que `linkId` était retiré).
+ */
+export const SHARE_LINK_JOIN_KEY_COLUMNS = ['linkId', 'identifier'] as const;
+
+/**
+ * `key` = `linkId` (`mshy_…`) OU `identifier` lisible — **jamais l'ObjectId**.
+ *
+ * L'arme `{ id: key }` a été retirée (#4692) : la console d'administration sert
+ * `ConversationShareLink.id` à BIGBOSS, ADMIN, MODERATOR et AUDIT, et l'appelait
+ * déjà « la référence OPAQUE ». Elle ne l'était pas — cette ligne en faisait une
+ * clé de jointure de plus. Retirer l'ObjectId de la LOI est ce qui rend cette
+ * phrase vraie, plutôt que de retirer à la console le seul identifiant sur
+ * lequel elle agit.
+ *
+ * Coût MESURÉ du retrait, un seul appelant : Android
+ * `GuestJoinViewModel:109` — `info.linkId.ifBlank { info.id }.ifBlank { identifier }`
+ * — un repli défensif dont la branche primaire est peuplée par la passerelle
+ * elle-même (`GET /anonymous/link/:identifier` sert `linkId`). `identifier` et
+ * `linkId` RESTENT acceptées : une URL partagée sous un slug lisible
+ * (`mshy_meeshy-public`) arrive verbatim dans `:key` depuis les trois clients.
+ */
+async function findShareLinkByKey(prisma: PrismaClient, key: string): Promise<ShareLinkWithConversation | null> {
+  const shareLink = await prisma.conversationShareLink.findFirst({
+    where: {
+      OR: SHARE_LINK_JOIN_KEY_COLUMNS.map((colonne) => ({ [colonne]: key })),
+    },
+    include: {
+      conversation: {
+        select: { id: true, identifier: true, title: true, type: true, isActive: true, closedAt: true, communityId: true },
+      },
+    },
+  });
+  return shareLink as ShareLinkWithConversation | null;
+}
+
+/**
+ * Critère de fin #3 de #4167 — l'incrément de `currentUses` est ATOMIQUE : la
+ * lecture-puis-écriture qui laissait deux requêtes concurrentes franchir
+ * ensemble un lien à une place est fermée par un `updateMany` dont le `WHERE`
+ * revérifie la capacité au moment de l'écriture, pas au moment de la lecture
+ * qui a produit le verdict d'admission.
+ *
+ * `count === 0` ⇒ la capacité a été prise entre le verdict et cet appel :
+ * l'appelant refuse `409 LINK_EXHAUSTED`, exactement comme si `admitLinkEntry`
+ * l'avait vu la première fois.
+ *
+ * Les incréments de `currentConcurrentUsers`/`currentUniqueSessions`
+ * voyagent dans le MÊME appel pour un invité (`extraIncrements`) — cf.
+ * `linkAdmission.ts` § doc-tête : ces deux compteurs n'ont de sens que pour
+ * une identité sans lignée persistante, et aucun mécanisme de décrément
+ * n'existe côté inscrit (`POST /conversations/:id/leave` ne touche pas au
+ * lien) ; les y inclure produirait une fuite qui ne se referme jamais.
+ */
+
+const COMMUNITY_MEMBERS_ONLY: LinkAdmissionRefusal = {
+  granted: false,
+  status: 403,
+  code: 'COMMUNITY_MEMBERS_ONLY',
+  message: 'Cette conversation est réservée aux membres de sa communauté',
+};
+
+
+async function joinAsRegistered(
+  prisma: PrismaClient,
+  shareLink: ShareLinkWithConversation,
+  userId: string,
+  entry: ConversationEntryDecision,
+  broadcast: LinkJoinBroadcast | undefined,
+  /**
+   * #18384 — l'admission dans la ROOM, à appeler AVANT le message d'arrivée.
+   *
+   * Elle vivait chez l'appelant, donc APRÈS `postJoinSystemMessage` : l'arrivant
+   * n'était pas dans `conversation:<id>` quand son propre message d'arrivée y
+   * passait, et la file hors ligne ne le rattrapait pas — il figure déjà dans
+   * `connectedUsers` et ne porte aucun marqueur d'injoignabilité. Elle est ici
+   * parce que c'est ici que l'ordre se décide.
+   */
+  admitToRoom: (() => Promise<void>) | undefined
+): Promise<LinkJoinOutcome> {
+  // « Déjà membre » ne consomme rien du lien : aucune place nouvelle n'est
+  // prise, donc aucun incrément — même règle que la porte authentifiée
+  // aujourd'hui (`sharing.ts`), qui répond sans jamais toucher `currentUses`.
+  if (entry.outcome === 'already-member' && entry.participantId) {
+    const existing = await prisma.participant.findUnique({ where: { id: entry.participantId } });
+    if (!existing) {
+      // La ligne désignée par `resolveConversationEntry` a disparu entre les
+      // deux lectures — fail-closed, pas de recréation silencieuse.
+      return { kind: 'refused', refusal: { granted: false, status: 409, code: 'LINK_EXHAUSTED', message: 'État de participation introuvable' } };
+    }
+    return {
+      kind: 'joined',
+      outcome: 'already-member',
+      shareLink,
+      participant: existing,
+      rights: resolveEntryRights(existing, undefined, shareLink.allowViewHistory),
+    };
+  }
+
+  const claimed = await claimLinkUse(prisma, shareLink.id, shareLink.maxUses);
+  if (!claimed) return { kind: 'refused', refusal: LINK_EXHAUSTED_RACE };
+
+  const joiningUserInfo = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { displayName: true, username: true, ...RECIPIENT_LANG_SELECT },
+  });
+
+  const linkMemberFields = {
+    type: 'user',
+    displayName: joiningUserInfo?.displayName || joiningUserInfo?.username || 'User',
+    role: 'member',
+    // #9711 — la langue du COMPTE, descendue de son prisme. Omise, la ligne
+    // prenait le défaut `"en"` du schéma, et un rejoin la gardait fausse.
+    language: recipientLanguage(joiningUserInfo, 'fr'),
+    permissions: {
+      canSendMessages: true,
+      canSendFiles: true,
+      canSendImages: true,
+      // Un utilisateur NOMMÉ entrant par lien est un membre à part entière —
+      // cohérent avec `NEW_MEMBER_PERMISSIONS`
+      // (`services/participantRights.ts:119`) et avec `canSendFiles`/
+      // `canSendImages` ci-dessus : l'hôte n'a jamais dit non (#6091).
+      canSendVideos: true,
+      canSendAudios: true,
+      // Refus ASSUMÉS, alignés sur `NEW_MEMBER_PERMISSIONS`.
+      canSendLocations: false,
+      canSendLinks: false,
+      canViewHistory: shareLink.allowViewHistory,
+    },
+    shareLinkId: shareLink.id,
+  };
+
+  let participant: ParticipantRow;
+  if (entry.outcome === 'rejoin' && entry.participantId) {
+    participant = await prisma.participant.update({
+      where: { id: entry.participantId },
+      data: { ...linkMemberFields, ...REJOIN_PARTICIPANT_STATE },
+    });
+    invalidateParticipantLookup(entry.participantId, shareLink.conversationId);
+  } else {
+    participant = await prisma.participant.create({
+      data: {
+        conversationId: shareLink.conversationId,
+        userId,
+        ...linkMemberFields,
+        joinedAt: new Date(),
+      },
+    });
+  }
+  announceConversationLanguageChange({ kind: 'arrival', conversationId: shareLink.conversationId, language: linkMemberFields.language, readerUserId: userId });
+
+  // #18384 — la room D'ABORD. Fail-OPEN : un adaptateur en panne ne doit pas
+  // retenir une arrivée déjà PERSISTÉE ; l'arrivant retrouvera le message au
+  // premier chargement du fil.
+  if (admitToRoom) await admitToRoom();
+
+  await postJoinSystemMessage(
+    { prisma, broadcast },
+    {
+      conversationId: shareLink.conversationId,
+      participantId: participant.id,
+      displayName: linkMemberFields.displayName,
+      isAnonymous: false,
+      viaShareLink: true,
+    }
+  );
+
+  return {
+    kind: 'joined',
+    outcome: entry.outcome === 'rejoin' ? 'rejoin' : 'new',
+    shareLink,
+    participant,
+    rights: resolveEntryRights(participant, undefined, shareLink.allowViewHistory),
+  };
+}
+
+/**
+ * Le CŒUR de jointure par lien, partagé par `POST /links/:key/members`
+ * (porte canonique) et par l'adaptateur `POST /anonymous/join/:linkId`
+ * (`routes/anonymous.ts`) — critère de fin #2 de #4167. `POST
+ * /conversations/join/:linkId` (`routes/conversations/sharing.ts`) DOIT
+ * l'appeler de la même façon ; ce fichier étant hors territoire pour cette
+ * livraison, le câblage y est déclaré en diff plutôt qu'appliqué (voir le
+ * rapport de livraison de #4167).
+ */
+/**
+ * L'admission dans la room, prête à être appelée au bon moment — ou `undefined`
+ * quand il n'y a rien à admettre (un invité n'a pas de socket vivante).
+ *
+ * Fail-OPEN par décision : l'arrivée est déjà PERSISTÉE quand ceci tourne, et un
+ * adaptateur en panne ne doit pas la retenir. Ce que l'échec coûte est écrit
+ * dans #18381 — un compte joignable aux yeux de `connectedUsers`, absent de la
+ * room, que la file hors ligne saute.
+ */
+function admitArrivalToRoom(
+  params: LinkJoinParams,
+  conversationId: string,
+  arrivingUserId: string,
+): (() => Promise<void>) | undefined {
+  const rooms = params.arrivalRooms;
+  if (!rooms) return undefined;
+  return async () => {
+    try {
+      await rooms.joinUserToConversationRoom(arrivingUserId, conversationId);
+    } catch (error) {
+      logError(
+        `link join could not admit the account into the conversation room (conversation ${conversationId})`,
+        error,
+      );
+    }
+  };
+}
+
+export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinOutcome> {
+  const { prisma, key, authContext, requestIp, profile, broadcast, rejectedCredential } = params;
+
+  // Refusé AVANT toute lecture du lien : une créance rejetée ne crée rien,
+  // qu'importe si le lien lui-même existe ou est ouvert (#6741).
+  if (rejectedCredential) return { kind: 'invalid-credential' };
+
+  const shareLink = await findShareLinkByKey(prisma, key);
+  if (!shareLink) return { kind: 'not-found' };
+
+  const identity = deriveLinkAdmissionIdentity(authContext);
+
+  const verdict = await admitLinkEntry({
+    prisma,
+    link: shareLink,
+    conversation: shareLink.conversation,
+    identity,
+    request: { ip: requestIp },
+  });
+
+  if (isLinkAdmissionRefusal(verdict)) return { kind: 'refused', refusal: verdict };
+
+  // `allowedLanguages` — #4167 point 7 : l'un des huit réglages qui
+  // n'existaient QUE sur la porte anonyme. Canonicalisée des DEUX côtés via
+  // la même SSOT (`normalizeLanguageForDedup`) : les valeurs en base peuvent
+  // porter un tag de région (`fr-FR`), un code 3-lettres (`fra`) ou une casse
+  // mixte, et `profile.language` arrive déjà normalisée par le schéma Zod de
+  // l'appelant — comparer sans canonicaliser les DEUX refuserait un accès qui
+  // doit être accordé.
+  if (
+    shareLink.allowedLanguages.length > 0 &&
+    !shareLink.allowedLanguages.some((l) => normalizeLanguageForDedup(l) === profile.language)
+  ) {
+    return { kind: 'language-not-allowed' };
+  }
+
+  // Validations dépendant du CORPS — délibérément hors de `admitLinkEntry`
+  // (cf. son doc-tête) : `requireEmail`/`requireBirthday`/`requireNickname`
+  // jugent ce que le VISITEUR soumet, pas le lien ni son identité.
+  if (shareLink.requireEmail && (!profile.email || profile.email.trim() === '')) {
+    return { kind: 'validation', message: "L'email est obligatoire pour rejoindre cette conversation" };
+  }
+  if (shareLink.requireBirthday && (!profile.birthday || profile.birthday.trim() === '')) {
+    return { kind: 'validation', message: 'La date de naissance est obligatoire pour rejoindre cette conversation' };
+  }
+  // `requireNickname` ne REFUSE plus un invité (directive porteur 2026-10-13) :
+  // le champ vide passait inaperçu et fermait la porte. Sans pseudo saisi,
+  // `joinAsGuest` en génère un (`automaticNicknameBase`, numéroté par
+  // `numberedAnonymousUsername`, #10602).
+
+  // #16695 — un salon d'une communauté privée n'accueille, par lien, que ce
+  // que l'AUTEUR du lien pourrait y faire entrer aujourd'hui.
+  const community = verdict.entry.outcome === 'already-member'
+    ? null
+    : await loadSalonCommunity(prisma, { communityId: shareLink.conversation.communityId, actorId: shareLink.createdBy });
+  const communityAdmission = await planSalonEntry(
+    prisma,
+    community,
+    identity.kind === 'guest' ? { kind: 'guest' } : { kind: 'registered', userId: identity.userId },
+  );
+  if (communityAdmission.kind === 'refused') return { kind: 'refused', refusal: COMMUNITY_MEMBERS_ONLY };
+
+  const outcome = identity.kind === 'guest'
+    ? await joinAsGuest(prisma, shareLink, profile, broadcast, params.requestUserAgent)
+    : await joinAsRegistered(prisma, shareLink, identity.userId, verdict.entry, broadcast, admitArrivalToRoom(params, shareLink.conversationId, identity.userId));
+
+  // #7797 — une ARRIVÉE (pas « déjà membre ») enregistre son pays, dérivé de
+  // l'IP après la réponse ; l'IP n'est écrite ni sur le participant ni dans
+  // sa session anonyme (#9342).
+  if (outcome.kind === 'joined' && outcome.outcome !== 'already-member') {
+    if (community) await applyCommunityAdmission(prisma, community.communityId, communityAdmission);
+    const participantId = outcome.participant.id;
+    // #16837 — l'arrivée s'annonce aux autres membres. Un invité ne peut pas
+    // en être le SUJET (contrat strict, #16838) ; il en reste DESTINATAIRE.
+    const arrivingUserId = outcome.participant.userId;
+    // L'admission dans la room est faite PLUS HAUT, dans `joinAsRegistered`
+    // (#18384) : elle doit précéder le message d'arrivée, qui part de là.
+    // Elle précédait déjà l'annonce d'adhésion, et son doc-comment ÉNONÇAIT la
+    // loi — « c'est la première qui décide s'il recevra quoi que ce soit du
+    // fil » — en ne la tenant que pour la seconde des deux diffusions.
+    // Un INVITÉ n'en a pas besoin : sa socket naît de cette réponse et
+    // rejoindra ses rooms à son authentification.
+    if (arrivingUserId) {
+      await announceMemberArrival({
+        prisma,
+        io: params.arrivalIO,
+        conversationId: shareLink.conversationId,
+        arrival: {
+          userId: arrivingUserId,
+          displayName: outcome.participant.displayName,
+          joinedAt: outcome.participant.joinedAt ?? new Date(),
+        },
+        onError: (error) => logError(
+          `member arrival fan-out failed on link join (conversation ${shareLink.conversationId})`,
+          error,
+        ),
+      });
+    }
+    (params.afterResponse ?? deferAfterResponse)(
+      () => recordArrivalCountry({
+        prisma,
+        participantId,
+        requestIp,
+        lookupCountry: params.lookupCountry ?? lookupArrivalCountry,
+      }),
+      'link-arrival-country',
+    );
+    creditLinkJoin({ prisma, engagement: params.engagement, creatorId: shareLink.createdBy, identity, participantId });
+  }
+
+  return outcome;
+}
+
+/** Le pseudo d'un invité tel qu'il lui est servi — le profil d'abord, `displayName` en repli. */
+const guestUsernameOf = (participant: ParticipantRow): string =>
+  participant.anonymousSession?.profile?.username ?? participant.displayName;
+
+/**
+ * La forme `{participant, conversation}` historique de `POST
+ * /anonymous/join|refresh` — exportée pour que l'adaptateur
+ * (`routes/anonymous.ts`) la partage plutôt que de la retaper une troisième
+ * fois (le canonique a la sienne, propre au contrat cible).
+ *
+ * ELLE SERT L'ENSEMBLE RÉSOLU, JAMAIS L'INSTANTANÉ. Cette forme lisait
+ * `participant.permissions.*` BRUT — c'est-à-dire l'instantané figé au join —
+ * pendant que la loi unique du dépôt (`services/participantRights.ts`, dont le
+ * doc-comment dit « trois lecteurs de la même règle divergeraient ») classe
+ * `anonymousSession.rights` AU-DESSUS de lui, et que `middleware/auth.ts:571`
+ * la fait respecter à chaque envoi. Elle était donc un QUATRIÈME lecteur, et le
+ * seul à ignorer le levier que `PATCH …/participants/:id/rights` rend à l'hôte :
+ * un lien ouvert en écriture, un droit retiré ensuite, et la charge continuait
+ * d'annoncer « vous pouvez écrire » à quelqu'un que la passerelle refuse.
+ *
+ * `canViewHistory` EST UN DROIT DU PARTICIPANT ; `conversation.allowViewHistory`
+ * reste la COLONNE DU LIEN. Les deux divergent dès qu'une surcharge existe, et
+ * dès qu'une RE-jonction sert la valeur courante du lien à qui lit sa valeur
+ * figée. Le champ du lien ne bouge pas — trois clients le lisent — mais ce qui
+ * décide de la lecture d'un participant est celui du participant, et c'est le
+ * même que `historyFloorFor` (`services/historyFloor.ts`) applique.
+ */
+export function participantConversationPayload(participant: ParticipantRow, shareLink: ShareLinkWithConversation) {
+  const rights = resolveEntryRights(participant, undefined, shareLink.allowViewHistory);
+
+  return {
+    participant: {
+      id: participant.id,
+      username: guestUsernameOf(participant),
+      displayName: participant.displayName,
+      firstName: participant.anonymousSession?.profile?.firstName ?? '',
+      lastName: participant.anonymousSession?.profile?.lastName ?? '',
+      avatar: participant.avatar ?? null,
+      banner: null,
+      language: participant.language,
+      isMeeshyer: false,
+      canSendMessages: rights.canSendMessages,
+      canSendFiles: rights.canSendFiles,
+      canSendImages: rights.canSendImages,
+      canViewHistory: rights.canViewHistory,
+    },
+    conversation: {
+      id: shareLink.conversation.id,
+      title: shareLink.conversation.title,
+      type: shareLink.conversation.type,
+      allowViewHistory: shareLink.allowViewHistory,
+      allowedAttachmentKinds: guestAttachmentKindsOf(shareLink),
+    },
+  };
+}
+
+// ─── Corps de requête — `POST /links/:key/members` ────────────────────────────
+
+const linkMembersBodySchema = z.object({
+  nickname: guestNicknameSchema,
+  email: z.email().optional().or(z.literal('')),
+  birthday: z.iso.datetime().optional().or(z.literal('')),
+  language: z.string().transform((v) => normalizeLanguageForDedup(v)).default('fr'),
+  deviceFingerprint: z.string().optional(),
+});
+
+const PARTICIPANT_RIGHTS_SCHEMA_PROPERTIES = {
+  canSendMessages: { type: 'boolean' },
+  canSendFiles: { type: 'boolean' },
+  canSendImages: { type: 'boolean' },
+  canSendVideos: { type: 'boolean' },
+  canSendAudios: { type: 'boolean' },
+  canSendLocations: { type: 'boolean' },
+  canSendLinks: { type: 'boolean' },
+  canViewHistory: { type: 'boolean' },
+} as const;
+
+const linkMembersResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: {
+      type: 'object',
+      properties: {
+        sessionToken: { type: 'string', description: "Remis une fois — à porter en en-tête X-Session-Token (visiteur sans compte)" },
+        conversationId: { type: 'string' },
+        participantId: { type: 'string' },
+        entry: {
+          type: 'object',
+          properties: {
+            outcome: { type: 'string', enum: ['new', 'rejoin', 'already-member'] },
+            canViewHistory: { type: 'boolean' },
+            rights: { type: 'object', properties: PARTICIPANT_RIGHTS_SCHEMA_PROPERTIES },
+            allowedAttachmentKinds: allowedAttachmentKindsJsonSchema,
+            username: { type: 'string', description: "Le pseudo FINAL de l'invité, nombre compris (#10602) — visiteur sans compte" },
+          },
+        },
+      },
+    },
+  },
+} as const;
+
+function respondToJoinOutcome(reply: FastifyReply, result: LinkJoinOutcome): void {
+  switch (result.kind) {
+    case 'not-found':
+      sendNotFound(reply, 'Lien de conversation introuvable');
+      return;
+    case 'invalid-credential':
+      sendUnauthorized(reply, "Le jeton d'authentification fourni est invalide ou expiré", {
+        code: AUTH_ERROR_CODES.TOKEN_INVALID,
+      });
+      return;
+    case 'validation':
+      sendBadRequest(reply, result.message);
+      return;
+    case 'language-not-allowed':
+      sendError(reply, 403, 'LANGUAGE_NOT_ALLOWED', { message: 'Langue non autorisée pour ce lien' });
+      return;
+    case 'username-taken':
+      sendError(reply, 409, 'USERNAME_TAKEN_IN_CONVERSATION', {
+        message: 'Ce nom d\'utilisateur est déjà utilisé dans cette conversation',
+        details: { suggestedNickname: result.suggestion },
+      });
+      return;
+    case 'refused':
+      sendError(reply, result.refusal.status, result.refusal.code, { message: result.refusal.message });
+      return;
+    case 'joined': {
+      const statusCode = result.outcome === 'new' ? 201 : 200;
+      sendSuccess(
+        reply,
+        {
+          ...(result.sessionToken ? { sessionToken: result.sessionToken } : {}),
+          conversationId: result.shareLink.conversationId,
+          participantId: result.participant.id,
+          entry: {
+            outcome: result.outcome,
+            canViewHistory: result.rights.canViewHistory,
+            // Le lien de partage EST l'audience de `rights` — seul un
+            // visiteur sans compte a besoin de connaître le détail des huit
+            // droits, cf. `docs/product/api-simplification/conversations.md`
+            // § « POST /links/:key/members ». Un inscrit a déjà les siens
+            // par `GET /conversations/:key/participants/:participantKey`.
+            // #10001 — et, au même titre, les familles qu'un invité peut joindre.
+            // #10602 — et le pseudo FINAL que la passerelle lui a donné (nombre
+            // compris) : le client l'affiche, jamais celui qu'il a saisi.
+            ...(result.sessionToken
+              ? {
+                  rights: result.rights,
+                  allowedAttachmentKinds: guestAttachmentKindsOf(result.shareLink),
+                  username: guestUsernameOf(result.participant),
+                }
+              : {}),
+          },
+        },
+        { statusCode }
+      );
+      return;
+    }
+  }
+}
+
+// ─── Enregistrement des routes ────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Fastify's
+// hook typing wants the exact preValidation signature; le reste du dépôt
+// (`sharing.ts`, `participants.ts`) passe ces middlewares en `any` pour la
+// même raison — cf. `registerSharingRoutes`.
+export function registerLinkAdmissionRoutes(
+  fastify: FastifyInstance,
+  prisma: PrismaClient,
+  optionalAuth: any,
+  _requiredAuth: any
+): void {
+  const broadcast: LinkJoinBroadcast = (message, conversationId) =>
+    fastify.socketIOHandler?.getManager()?.broadcastMessage(message as never, conversationId) ?? Promise.resolve();
+
+  // `POST /links/:key/members` — porte CANONIQUE (#4167 critère 2).
+  // S1 (visiteur sans compte) · S2 (inscrit) : l'identité vient de la
+  // créance (`optionalAuth` — JWT si présent, sinon aucune exigence), jamais
+  // du chemin.
+  fastify.post(
+    '/links/:key/members',
+    {
+      schema: {
+        description:
+          'Join a conversation through its share link. Unified admission law for both anonymous visitors and registered accounts.',
+        tags: ['links', 'conversations'],
+        summary: 'Join via share link',
+        params: {
+          type: 'object',
+          required: ['key'],
+          properties: { key: { type: 'string', description: 'linkId (mshy_…) or identifier — never the database id (#4692)' } },
+        },
+        body: {
+          type: 'object',
+          properties: {
+            nickname: { type: 'string', description: 'Requis si le lien exige un pseudo (visiteur sans compte)' },
+            email: { type: 'string', format: 'email' },
+            birthday: { type: 'string', format: 'date-time' },
+            language: { type: 'string', default: 'fr' },
+            deviceFingerprint: { type: 'string' },
+          },
+        },
+        response: {
+          200: linkMembersResponseSchema,
+          201: linkMembersResponseSchema,
+          400: { description: 'Validation error', ...validationErrorResponseSchema },
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+          // #4487 — `fast-json-stringify` RETIRE en silence toute propriété que
+          // le schéma ne déclare pas. Le 409 de cette porte compose un
+          // `suggestedNickname` (le pseudo libre proposé quand celui demandé est
+          // pris) que l'enveloppe nue supprimait avant l'envoi : l'invité lisait
+          // « ce pseudo est pris » sans jamais recevoir l'alternative calculée
+          // pour lui. On ÉTEND l'enveloppe, on ne la recopie pas — l'idiome déjà
+          // posé sur `POST /anonymous/join/:linkId`.
+          409: {
+            ...errorResponseSchema,
+            properties: {
+              ...errorResponseSchema.properties,
+              suggestedNickname: {
+                type: 'string',
+                description: 'Pseudo libre proposé quand celui demandé est déjà pris'
+              },
+            },
+          },
+          410: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
+      preValidation: [optionalAuth],
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const { key } = request.params as { key: string };
+        const body = linkMembersBodySchema.parse(request.body ?? {});
+        // Le pseudo saisi se mesure sur la base qui le SERT (#13825).
+        const pseudoTropCourt = servedGuestNicknameViolation('nickname', body.nickname);
+        if (pseudoTropCourt) {
+          sendLengthFloorRefusal(reply, 'Données invalides', [pseudoTropCourt]);
+          return;
+        }
+        const authContext = (request as UnifiedAuthRequest).authContext;
+
+        // #6741 — un Bearer PRÉSENTÉ dont `optionalAuth` n'a pas pu établir
+        // l'identité (expiré, signature invalide, compte inconnu/inactif)
+        // retombe sur un `authContext` anonyme indiscernable d'une requête
+        // SANS créance. Seule l'ABSENCE de Bearer autorise l'entrée invité.
+        const presentedBearer = request.headers.authorization?.startsWith('Bearer ') ?? false;
+        const rejectedCredential =
+          presentedBearer && !(authContext?.type === 'user' && authContext.isAuthenticated);
+
+        const result = await performLinkJoin({
+          prisma,
+          key,
+          authContext,
+          // `getIO?.()` : l'éventail est ACCESSOIRE (#16837).
+          arrivalIO: fastify.socketIOHandler?.getManager()?.getIO?.(),
+          arrivalRooms: fastify.socketIOHandler?.getManager() ?? null,
+          requestIp: resolveClientIp(request),
+          requestUserAgent: extractUserAgent(request),
+          rejectedCredential,
+          profile: {
+            firstName: body.nickname ?? '',
+            lastName: '',
+            requestedUsername: body.nickname,
+            email: body.email || undefined,
+            birthday: body.birthday || undefined,
+            language: body.language,
+            deviceFingerprint: body.deviceFingerprint,
+          },
+          broadcast,
+        });
+
+        respondToJoinOutcome(reply, result);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          sendZodRefusal(reply, 'Données invalides', error);
+          return;
+        }
+        logError(fastify.log, 'Link members join error:', error);
+        sendInternalError(reply, 'Erreur interne du serveur');
+      }
+    }
+  );
+
+  // `PATCH /guest-sessions/me` — remplace `POST /anonymous/refresh` (#4167 critère 4).
+  fastify.patch(
+    '/guest-sessions/me',
+    {
+      schema: {
+        description: 'Refresh an anonymous guest session. Session token travels in X-Session-Token, never in the body.',
+        tags: ['links'],
+        summary: 'Refresh guest session',
+        headers: {
+          type: 'object',
+          properties: { 'x-session-token': { type: 'string', description: 'Session token from the join response' } },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              data: {
+                type: 'object',
+                properties: {
+                  participant: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string' }, username: { type: 'string' }, displayName: { type: 'string' },
+                      firstName: { type: 'string' }, lastName: { type: 'string' }, avatar: { type: 'string', nullable: true },
+                      banner: { type: 'string', nullable: true }, language: { type: 'string' },
+                      isMeeshyer: { type: 'boolean' }, canSendMessages: { type: 'boolean' },
+                      canSendFiles: { type: 'boolean' }, canSendImages: { type: 'boolean' },
+                      // Le droit RÉSOLU de CE participant — distinct de
+                      // `conversation.allowViewHistory`, qui est la colonne du
+                      // LIEN. Non déclaré, il serait supprimé par
+                      // fast-json-stringify sans qu'aucun témoin ne tombe.
+                      canViewHistory: { type: 'boolean' },
+                    },
+                  },
+                  conversation: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string' }, title: { type: 'string' },
+                      type: { type: 'string', enum: ['direct', 'group'] }, allowViewHistory: { type: 'boolean' },
+                      allowedAttachmentKinds: allowedAttachmentKindsJsonSchema,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          410: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const sessionToken = (request.headers['x-session-token'] as string | undefined)?.trim();
+        if (!sessionToken) {
+          sendBadRequest(reply, 'Session token requis');
+          return;
+        }
+
+        const result = await refreshGuestSession({ prisma, sessionToken });
+        switch (result.kind) {
+          case 'invalid':
+            sendUnauthorized(reply, 'Session invalide ou expirée', { code: AUTH_ERROR_CODES.SESSION_INVALID });
+            return;
+          case 'revoked':
+            sendError(reply, 410, 'GUEST_ACCESS_REVOKED', { message: "L'accès de cet invité a été retiré" });
+            return;
+          case 'link-gone':
+            sendError(reply, 410, 'LINK_DEACTIVATED', { message: 'Le lien a été désactivé' });
+            return;
+          case 'link-expired':
+            sendError(reply, 410, 'LINK_EXPIRED', { message: 'Le lien a expiré' });
+            return;
+          case 'conversation-closed':
+            sendError(reply, 410, 'CONVERSATION_CLOSED', { message: 'Cette conversation est terminée' });
+            return;
+          case 'refreshed':
+            sendSuccess(reply, participantConversationPayload(result.participant, result.shareLink));
+            return;
+        }
+      } catch (error) {
+        logError(fastify.log, 'Guest session refresh error:', error);
+        sendInternalError(reply, 'Erreur interne du serveur');
+      }
+    }
+  );
+
+  // `DELETE /guest-sessions/me` — remplace `POST /anonymous/leave` (#4167 critère 4). IDEMPOTENT.
+  fastify.delete(
+    '/guest-sessions/me',
+    {
+      schema: {
+        description: 'End an anonymous guest session. Idempotent: calling it twice never double-decrements link capacity.',
+        tags: ['links'],
+        summary: 'End guest session',
+        headers: {
+          type: 'object',
+          properties: { 'x-session-token': { type: 'string', description: 'Session token from the join response' } },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              data: { type: 'object', properties: { message: { type: 'string' } } },
+            },
+          },
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const sessionToken = (request.headers['x-session-token'] as string | undefined)?.trim();
+        if (!sessionToken) {
+          sendBadRequest(reply, 'Session token requis');
+          return;
+        }
+
+        // #16948 — la sortie annonce son départ et sort le partant du fil. Les
+        // deux capacités sont des canaux latéraux : un gestionnaire absent ne
+        // compromet pas la fin de session.
+        const result = await endGuestSession({
+          prisma,
+          sessionToken,
+          io: fastify.socketIOHandler?.getManager()?.getIO?.(),
+          manager: fastify.socketIOHandler?.getManager() ?? null,
+        });
+        if (result.kind === 'not-found') {
+          sendNotFound(reply, 'Session introuvable');
+          return;
+        }
+        sendSuccess(reply, { message: 'Session fermée avec succès' });
+      } catch (error) {
+        logError(fastify.log, 'Guest session end error:', error);
+        sendInternalError(reply, 'Erreur interne du serveur');
+      }
+    }
+  );
+}

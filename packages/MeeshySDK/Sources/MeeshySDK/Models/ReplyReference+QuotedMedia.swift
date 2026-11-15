@@ -1,0 +1,115 @@
+import Foundation
+
+// MARK: - La pièce citée, reconstruite depuis les FAITS de la citation (#8230)
+
+public extension ReplyReference {
+
+    /// Le GENRE du média cité, décodé depuis ses deux formes : le MIME brut
+    /// (« video/mp4 », gravé par le cache et les faits) ou le rawValue court
+    /// (« video », posé par la bulle optimiste et l'instantané `attachmentReplyTo`).
+    /// Le MIME des faits l'emporte : c'est le plus précis des deux.
+    var quotedMediaKind: AttachmentKind? {
+        AttachmentKind(quotedType: attachmentMimeType ?? attachmentType)
+    }
+
+    /// La pièce jointe que cette citation décrit, reconstruite depuis ce
+    /// qu'elle porte — pour ouvrir en PLEIN ÉCRAN une pièce dont le message
+    /// n'est pas dans la fenêtre chargée, et pour extraire le poster d'une
+    /// vidéo dont la vignette serveur a raté.
+    ///
+    /// `nil` dès qu'il n'y a rien d'HONNÊTE à ouvrir :
+    /// - une story ou une humeur (leur plein écran est le viewer, zone 3) ;
+    /// - un média PROTÉGÉ — son adresse ne voyage pas, et une pièce protégée
+    ///   reconstruite se présenterait comme ordinaire ;
+    /// - une pièce sans adresse de fichier ;
+    /// - ce qui n'est ni image, ni vidéo, ni audio.
+    ///
+    /// Son identifiant est l'ANCRE de la citation quand elle en porte une,
+    /// sinon un identifiant dérivé du message cité — stable, pour que deux
+    /// ouvertures de la même citation désignent la même pièce.
+    var quotedAttachment: MeeshyMessageAttachment? {
+        reconstructedAttachment(presentedAs: nil)
+    }
+
+    /// La pièce citée que le lecteur COMMUN joue en plein écran : une vidéo ou
+    /// un son, jamais ce qui est protégé ni ce qui n'a pas d'adresse (#9890).
+    ///
+    /// Le moteur partagé (`SharedAVPlayerManager`) ne lit que le cache VIDÉO —
+    /// son repli réseau est supprimé — et le résolveur de disponibilité y range
+    /// ce qu'il télécharge selon le type de la pièce. Un son cité y est donc
+    /// présenté comme un média vidéo : même fichier, même lecture, rangé dans
+    /// le seul cache que le moteur sait relire. Cette pièce ne sert qu'à lire ;
+    /// la citation reste un son partout ailleurs (`quotedAttachment`).
+    var quotedPlayableAttachment: MeeshyMessageAttachment? {
+        switch quotedMediaKind {
+        case .video: return reconstructedAttachment(presentedAs: nil)
+        case .audio: return reconstructedAttachment(presentedAs: Self.sharedEngineMimeType)
+        default: return nil
+        }
+    }
+
+    /// La lecture d'une citation se RAPPORTE au serveur (`watched`) seulement
+    /// pour une VIDÉO qui porte sa vraie ancre (#9890) :
+    /// - un son passe par le moteur vidéo partagé, qui le rapporterait « vu »
+    ///   sur une pièce AUDIO — un accusé faux, diffusé à la conversation ;
+    /// - sans ancre, la pièce porte l'identifiant dérivé `quoted-<message>`,
+    ///   que le serveur ne connaît pas : le rapport partirait dans la file
+    ///   hors-ligne pour un 404.
+    var quotedPlaybackReportsConsumption: Bool {
+        guard quotedMediaKind == .video, quotedPlayableAttachment != nil,
+              let anchor = attachmentId, !anchor.isEmpty else { return false }
+        return true
+    }
+
+    private static let sharedEngineMimeType = "video/mp4"
+
+    private func reconstructedAttachment(presentedAs mime: String?) -> MeeshyMessageAttachment? {
+        guard !isStoryReply, !quotedMediaIsProtected,
+              let fileUrl = attachmentFileUrl, !fileUrl.isEmpty,
+              let kind = quotedMediaKind, let resolved = resolvedMimeType(for: kind)
+        else { return nil }
+        return MeeshyMessageAttachment(
+            id: attachmentId ?? "quoted-\(messageId)",
+            messageId: messageId.isEmpty ? nil : messageId,
+            mimeType: mime ?? resolved,
+            fileSize: attachmentFileSize ?? 0,
+            fileUrl: fileUrl,
+            width: attachmentWidth,
+            height: attachmentHeight,
+            thumbnailUrl: attachmentThumbnailUrl,
+            thumbHash: attachmentThumbHash,
+            duration: attachmentDurationMs,
+            pageCount: attachmentPageCount
+        )
+    }
+
+    /// Le MIME exact quand les faits le portent, sinon un MIME générique du
+    /// genre — assez pour que `MeeshyMessageAttachment.type` route la pièce.
+    private func resolvedMimeType(for kind: AttachmentKind) -> String? {
+        if let exact = attachmentMimeType, AttachmentKind(mimeType: exact) == kind { return exact }
+        return Self.genericMimeType(for: kind)
+    }
+
+    private static func genericMimeType(for kind: AttachmentKind) -> String? {
+        switch kind {
+        case .image: return "image/jpeg"
+        case .video: return "video/mp4"
+        case .audio: return "audio/mp4"
+        default: return nil
+        }
+    }
+}
+
+// MARK: - Le décodeur des DEUX formes d'un genre cité
+
+public extension AttachmentKind {
+    /// Le genre d'un média cité, depuis le rawValue court (« video ») ou le
+    /// MIME brut (« video/mp4 ») — les deux formes qu'`attachmentType` porte
+    /// selon qu'il vient de la bulle optimiste ou du cache. `nil` seulement
+    /// sans valeur ; un type inconnu rend `.other`. Site UNIQUE : la citation
+    /// côté app (`BubbleQuotedReply.resolveAttachmentKind`) le délègue ici.
+    init?(quotedType: String?) {
+        guard let quotedType, !quotedType.isEmpty else { return nil }
+        self = AttachmentKind(rawValue: quotedType) ?? AttachmentKind(mimeType: quotedType)
+    }
+}

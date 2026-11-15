@@ -39,6 +39,13 @@ services/translator/models/*
 **/*.spec.ts
 **/.nyc_output/
 
+# === Coques natives Capacitor (#5604) ===
+# L'image web ne lit rien de ces projets natifs (Android/iOS) : le Dockerfile
+# ne copie que `dist/`. Versionnees depuis #5604 (D-18), elles seraient sinon
+# copiees en pure perte a chaque construction d'image.
+apps/web/android/
+apps/web/ios/
+
 # === IDE ===
 .vscode/
 .idea/
@@ -78,13 +85,24 @@ docker-compose*.yml
 # === Scripts (except entrypoint) ===
 **/scripts/
 **/*.sh
+
+# ... SAUF ceux de la v3.1, dont son BUILD dépend :
+# `vite.config.ts` importe `./scripts/lib/institutional-routes.mjs` (la
+# source unique des cinq adresses institutionnelles), et son greffon de
+# construction lance `scripts/prerender-institutional.tsx`. La règle générique
+# `**/scripts/` ci-dessus les retirait du contexte, et l'erreur aurait désigné
+# un chemin JUSTE vers un fichier qui EXISTE dans le dépôt — rien n'aurait dit
+# qu'il avait été filtré à l'entrée. L'image FINALE n'en porte rien : l'étage
+# `runner` ne copie que `dist/`.
+!apps/web/scripts
+!apps/web/scripts/**
+# La configuration de démarrage de la webapp (#10208) : l'étage `runner` la copie
+# (apps/web/Dockerfile) ; filtrée par `**/*.sh`, le build échouait sur « not found ».
+!apps/web/docker/runtime-config.sh
 !services/gateway/docker-entrypoint.sh
 !services/translator/docker-entrypoint.sh
 !services/translator/docker-entrypoint-mongodb.sh
 !services/translator/docker-entrypoint-volumes.sh
-!infrastructure/docker/images/web/entrypoint.sh
-!apps/web/docker-entrypoint.sh
-!scripts/generate-notification-sounds.js
 
 # === Exclude frontend and translator (only gateway needed) ===
 frontend/

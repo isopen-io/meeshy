@@ -10,7 +10,7 @@ import org.junit.Test
 import java.util.concurrent.TimeUnit
 
 /**
- * Constate a l'usage : une session expiree produit 401/403 sur /conversations,
+ * Constate a l'usage : une session expiree produisait 401 sur /conversations,
  * /posts/feed/stories et /friend-requests, et l'ecran affichait « Check your
  * connection and try again » alors que le reseau fonctionnait. Le message accusait
  * le reseau, et rien ne disait a l'utilisateur qu'il devait se reconnecter.
@@ -43,11 +43,16 @@ class AuthExpiryInterceptorTest {
         assertEquals(1, expired)
     }
 
+    // 403 est le refus NOMINAL du produit (banni, non-membre, role insuffisant) —
+    // pas une anomalie. Le traiter comme une expiration ejectait l'utilisateur de
+    // l'application pour avoir touche une porte fermee (#4862). La raison qui avait
+    // fait ajouter 403 ici a disparu avec #4760 : une session ABSENTE rend
+    // desormais 401, jamais 403.
     @Test
-    fun `a 403 signals an expired session too`() {
+    fun `a 403 does not signal an expired session`() {
         var expired = 0
         AuthExpiryInterceptor { expired++ }.intercept(chainReturning(403))
-        assertEquals(1, expired)
+        assertEquals(0, expired)
     }
 
     // Une panne serveur ne doit PAS deconnecter : l'utilisateur perdrait sa session
@@ -85,11 +90,91 @@ class AuthExpiryInterceptorTest {
         assertEquals(0, expired)
     }
 
+    // Un mot de passe refuse sur la suppression de compte rend 401 INVALID_PASSWORD :
+    // ce n'est pas non plus une session expiree, sinon l'ecran de suppression
+    // renverrait l'utilisateur sur l'ecran de connexion au lieu d'afficher l'erreur.
+    @Test
+    fun `a 401 on account deletion is not an expired session`() {
+        var expired = 0
+        AuthExpiryInterceptor { expired++ }
+            .intercept(chainReturning(401, "https://gate.meeshy.me/api/v1/me/account/deletion"))
+        assertEquals(0, expired)
+    }
+
+    // La seconde etape de connexion et l'attente d'une preuve rendent 401 pour un refus
+    // (code faux, jeton d'attente inconnu) : la session deja ouverte n'est pas en cause.
+    @Test
+    fun `a 401 on the second factor routes is not an expired session`() {
+        listOf("/auth/login/2fa", "/auth/2fa/verify", "/auth/2fa/cancel", "/auth/verification/status").forEach { route ->
+            var expired = 0
+            AuthExpiryInterceptor { expired++ }
+                .intercept(chainReturning(401, "https://gate.meeshy.me/api/v1$route"))
+            assertEquals("$route a signale une session expiree", 0, expired)
+        }
+    }
+
+    // Quitter un compte dont le jeton a expire rend 401 sur /auth/logout : l'utilisateur
+    // vient de choisir de partir, la session n'a pas a lui etre annoncee « expiree ».
+    @Test
+    fun `a 401 on logout is not an expired session`() {
+        var expired = 0
+        AuthExpiryInterceptor { expired++ }
+            .intercept(chainReturning(401, "https://gate.meeshy.me/api/v1/auth/logout"))
+        assertEquals(0, expired)
+    }
+
+    // Un invite dont la session est inconnue rend 401 sur /anonymous/refresh : c'est SA
+    // session, pas celle du compte inscrit eventuellement ouvert a cote.
+    @Test
+    fun `a 401 on the guest session refresh is not an expired account session`() {
+        var expired = 0
+        AuthExpiryInterceptor { expired++ }
+            .intercept(chainReturning(401, "https://gate.meeshy.me/api/v1/anonymous/refresh"))
+        assertEquals(0, expired)
+    }
+
+    // Les routes du second facteur qui appartiennent a une session ouverte restent des
+    // routes de session : un 401 y est bien une expiration.
+    @Test
+    fun `a 401 on an ordinary second factor route still signals an expired session`() {
+        var expired = 0
+        AuthExpiryInterceptor { expired++ }
+            .intercept(chainReturning(401, "https://gate.meeshy.me/api/v1/auth/2fa/status"))
+        assertEquals(1, expired)
+    }
+
+    // Un refus de permission doit atteindre l'appelant AVEC son code et son corps :
+    // c'est ce qui permet a `apiErrorFromHttpException` (core:network/ApiCall.kt)
+    // de servir le message reel de la passerelle ("Insufficient role", etc.) au lieu
+    // d'un ecran de reconnexion.
+    @Test
+    fun `a 403 response passes through unchanged`() {
+        val response = AuthExpiryInterceptor { }.intercept(chainReturning(403))
+        assertEquals(403, response.code)
+    }
+
     // La reponse doit traverser l'intercepteur intacte : l'appelant a toujours
     // besoin de son code pour composer son propre message.
     @Test
     fun `the response passes through unchanged`() {
         val response = AuthExpiryInterceptor { }.intercept(chainReturning(401))
         assertEquals(401, response.code)
+    }
+
+    @Test
+    fun `seule la requete proprietaire signale l expiration`() {
+        var expired = 0
+        AuthExpiryInterceptor(signalsExpiry = { false }, onSessionExpired = { expired++ }).intercept(chainReturning(401))
+        assertEquals(0, expired)
+        AuthExpiryInterceptor(signalsExpiry = { true }, onSessionExpired = { expired++ }).intercept(chainReturning(401))
+        assertEquals(1, expired)
+    }
+
+    @Test
+    fun `les routes d entree d authentification restent exclues meme proprietaires`() {
+        var expired = 0
+        AuthExpiryInterceptor(signalsExpiry = { true }, onSessionExpired = { expired++ })
+            .intercept(chainReturning(401, "https://gate.meeshy.me/api/v1/auth/login/2fa"))
+        assertEquals(0, expired)
     }
 }

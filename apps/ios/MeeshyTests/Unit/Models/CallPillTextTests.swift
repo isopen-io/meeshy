@@ -1,0 +1,497 @@
+import XCTest
+@testable import Meeshy
+
+/// #17343 — les sous-titres et le journal vivent DANS la pilule, au-dessus de sa
+/// rangée de base, dans le même verre, en duo comme en groupe. (…) les range,
+/// refermer les actions les rend, et la pilule rangée laisse les sous-titres dans
+/// un verre sans rangée (loi 11). Ces témoins éprouvent la loi pure ; la vue ne fait
+/// que la dessiner.
+@MainActor
+final class CallPillTextTests: XCTestCase {
+
+    private func text(
+        captions: Bool = true,
+        _ layer: CallScreenLayer = .idle,
+        revealed: Bool = true
+    ) -> CallPillText {
+        CallPillText.resolve(isCaptionsEnabled: captions, layer: layer, isChromeRevealed: revealed)
+    }
+
+    // MARK: - Les sous-titres dans la pilule
+
+    func test_captionsOn_atRest_liveInThePill() {
+        XCTAssertEqual(text(), .captions)
+    }
+
+    func test_captionsOff_atRest_thePillCarriesNoText() {
+        XCTAssertEqual(text(captions: false), .none)
+    }
+
+    // MARK: - (…) les range, refermer les rend
+
+    func test_openMenu_stowsTheCaptions() {
+        XCTAssertEqual(text(.menu), .none)
+        XCTAssertEqual(text(.menuOverJournal), .none)
+    }
+
+    func test_closingTheMenu_givesTheCaptionsBack() {
+        XCTAssertEqual(text(CallScreenLayer.menu.togglingMenu()), .captions)
+    }
+
+    func test_anOptionOpenInThePill_replacesTheCaptions() {
+        XCTAssertEqual(text(.panel(.react)), .none)
+        XCTAssertEqual(text(.panel(.record)), .none)
+    }
+
+    // MARK: - U2.9 — le plein écran de groupe garde les sous-titres
+
+    func test_fullScreenStage_keepsThePillOnlyWhenItCarriesTheCaptionsAlone() {
+        XCTAssertTrue(CallPillText.captionsAlone.isOnStage(isStageFullScreen: true), "les sous-titres allumés survivent au plein écran, dans leur verre sans rangée")
+        XCTAssertFalse(CallPillText.none.isOnStage(isStageFullScreen: true), "sans sous-titres, le plein écran ne garde aucun verre")
+        XCTAssertFalse(CallPillText.captions.isOnStage(isStageFullScreen: true), "la pilule avec sa rangée de base est rangée")
+        XCTAssertFalse(CallPillText.journal.isOnStage(isStageFullScreen: true))
+    }
+
+    func test_stageNotFullScreen_alwaysKeepsThePill() {
+        for content in [CallPillText.none, .captions, .journal, .captionsAlone] {
+            XCTAssertTrue(content.isOnStage(isStageFullScreen: false))
+        }
+    }
+
+    func test_fullScreen_withCaptionsOn_resolvesToTheCaptionsAlone() {
+        XCTAssertEqual(text(captions: true, .idle, revealed: false), .captionsAlone)
+        XCTAssertTrue(text(captions: true, .idle, revealed: false).isOnStage(isStageFullScreen: true))
+        XCTAssertFalse(text(captions: false, .idle, revealed: false).isOnStage(isStageFullScreen: true))
+    }
+
+    // MARK: - Le journal, à la place des sous-titres
+
+    func test_openJournal_takesThePlaceOfTheCaptions() {
+        XCTAssertEqual(text(.panel(.journal)), .journal)
+    }
+
+    /// #17342 — le journal garde tout l'appel, sous-titres allumés ou non : il s'ouvre aussi sans eux.
+    func test_openJournal_withCaptionsOff_isStillThere() {
+        XCTAssertEqual(text(captions: false, .panel(.journal)), .journal)
+    }
+
+    func test_stowedJournal_comesBackWhenTheMenuCloses() {
+        let stowed = CallScreenLayer.panel(.journal).togglingMenu()
+        XCTAssertEqual(text(stowed), .none)
+        XCTAssertEqual(text(stowed.togglingMenu()), .journal)
+    }
+
+    // MARK: - Un toucher range la pilule : les sous-titres restent, sans rangée (loi 11)
+
+    func test_stowedPill_keepsTheCaptions_inAGlassWithoutItsBaseRow() {
+        XCTAssertEqual(text(revealed: false), .captionsAlone)
+    }
+
+    func test_stowedPill_withOpenMenuOrJournal_stillLeavesTheCaptions() {
+        XCTAssertEqual(text(.menu, revealed: false), .captionsAlone)
+        XCTAssertEqual(text(.panel(.journal), revealed: false), .captionsAlone)
+    }
+
+    func test_stowedPill_withCaptionsOff_hasNothingToLeave() {
+        XCTAssertEqual(text(captions: false, revealed: false), .none)
+        XCTAssertEqual(text(captions: false, .panel(.journal), revealed: false), .none)
+    }
+
+    /// Effets et Montage ont leur propre bande : la pilule ne porte rien.
+    func test_aMode_hasItsOwnBand_thePillCarriesNoText() {
+        XCTAssertEqual(text(.mode(.effects)), .none)
+        XCTAssertEqual(text(.mode(.montage), revealed: false), .none)
+    }
+
+    func test_onlyTheCaptionsAloneLeaveTheBaseRowOut() {
+        XCTAssertFalse(CallPillText.captionsAlone.hasBaseRow)
+        XCTAssertTrue([CallPillText.none, .captions, .journal].allSatisfy(\.hasBaseRow))
+    }
+
+    /// G1.3 · G1.11 — UN seul verre : la pilule rangée reste à l'écran avec ses sous-titres
+    /// (elle ne s'efface pas), sa rangée de base se retire par morphisme et le verre se resserre.
+    func test_onlyTheCaptionsAlone_staysOnScreenWhenTheChromeIsStowed() {
+        XCTAssertTrue(CallPillText.captionsAlone.staysWhenChromeStowed)
+        XCTAssertTrue([CallPillText.none, .captions, .journal].allSatisfy { !$0.staysWhenChromeStowed })
+    }
+
+    func test_captionsBand_isInTheGlass_forCaptionsAndForTheStowedCaptions() {
+        XCTAssertTrue(CallPillText.captions.showsCaptionsBand)
+        XCTAssertTrue(CallPillText.captionsAlone.showsCaptionsBand)
+        XCTAssertFalse(CallPillText.none.showsCaptionsBand)
+        XCTAssertFalse(CallPillText.journal.showsCaptionsBand)
+    }
+
+    func test_stowedPill_withCaptions_isTheSameGlassWithoutItsRows_atEveryLayer() {
+        for layer in [CallScreenLayer.idle, .menu, .panel(.journal), .menuOverJournal] {
+            let stowed = text(layer, revealed: false)
+            XCTAssertTrue(stowed.staysWhenChromeStowed, "\(layer) : un seul verre, jamais un second")
+            XCTAssertFalse(stowed.hasBaseRow, "\(layer) : la rangée de base se retire")
+        }
+    }
+
+    /// En audio, seul le journal ouvert resserre l'avatar en en-tête compact : deux
+    /// phrases de sous-titres laissent la personne au centre.
+    func test_onlyTheOpenJournal_compactsTheAudioLayout() {
+        XCTAssertTrue(text(.panel(.journal)).compactsAudioLayout)
+        XCTAssertFalse(text().compactsAudioLayout)
+        XCTAssertFalse(text(.menuOverJournal).compactsAudioLayout)
+        XCTAssertFalse(text(.panel(.journal), revealed: false).compactsAudioLayout)
+    }
+
+    // MARK: - Une seule largeur pour le verre
+
+    func test_width_aPillThatCarriesText_andTheStowedGlass_shareOneCap() {
+        XCTAssertEqual(CallPillWidth.maxWidth(for: .captions, unfoldsAbove: false), 560)
+        XCTAssertEqual(CallPillWidth.maxWidth(for: .journal, unfoldsAbove: true), 560)
+        XCTAssertEqual(CallPillWidth.maxWidth(for: .captionsAlone, unfoldsAbove: false), 560)
+    }
+
+    func test_width_theRestingPill_keepsItsPortraitCap() {
+        XCTAssertEqual(CallPillWidth.maxWidth(for: .none, unfoldsAbove: false), 440)
+        XCTAssertEqual(CallRailsLayout.pillMaxWidth, 440)
+    }
+
+    /// #17935 — UNE borne pour toute pilule agrandie sur fenêtre large, duo comme groupe :
+    /// les deux rangées légendées du groupe, ou une option ouverte dans la pilule, ont la
+    /// borne du verre qui porte du texte (560), plus les 440 de la pilule au repos.
+    func test_width_theGroupRowsUnfolded_shareTheTextCap() {
+        XCTAssertEqual(CallPillWidth.maxWidth(for: .none, unfoldsAbove: true), 560)
+    }
+
+    /// Les vecteurs de la loi, les mêmes pour les miroirs web et Android :
+    /// (texte, quelque chose déplié au-dessus de la rangée de base) → plafond.
+    func test_width_followsTheVectors() {
+        let vectors: [(CallPillText, Bool, CGFloat)] = [
+            (.none, false, 440),
+            (.none, true, 560),
+            (.captions, false, 560),
+            (.journal, true, 560),
+            (.captionsAlone, false, 560),
+        ]
+        for (content, unfoldsAbove, expected) in vectors {
+            XCTAssertEqual(CallPillWidth.maxWidth(for: content, unfoldsAbove: unfoldsAbove), expected, "\(content) · \(unfoldsAbove)")
+        }
+    }
+
+    /// Les cas du miroir Android (#17942), par la disposition réelle : le (…) du duo sort les
+    /// rails sans faire grandir la pilule (440) ; une option tenue dans la pilule, duo comme
+    /// groupe, et les rangées du groupe prennent 560, comme le journal, pour que la largeur
+    /// ne saute pas d'une option au journal.
+    func test_width_byDisposition_matchesTheAndroidCases() {
+        func cap(_ disposition: CallControlsDisposition, _ layer: CallScreenLayer, captions: Bool = false) -> CGFloat {
+            let content = text(captions: captions, layer)
+            return CallPillWidth.maxWidth(for: content, unfoldsAbove: content.hasBaseRow && disposition.unfoldsPill(for: layer))
+        }
+        XCTAssertEqual(cap(.rails, .idle), 440, "Rangée de base seule")
+        XCTAssertEqual(cap(.rails, .menu), 440, "Le (…) du duo sort les rails, la pilule ne grandit pas")
+        XCTAssertEqual(cap(.rails, .panel(.record)), 560, "Une option tenue dans la pilule du duo")
+        XCTAssertEqual(cap(.rows, .menu), 560, "Les deux rangées du groupe")
+        XCTAssertEqual(cap(.rows, .panel(.react)), 560, "Une option tenue dans la pilule du groupe")
+        XCTAssertEqual(cap(.rails, .panel(.journal)), 560)
+        XCTAssertEqual(cap(.rows, .idle, captions: true), 560, "Les sous-titres du groupe")
+    }
+
+    /// La pilule lit sa borne de ce qu'elle déplie VRAIMENT au-dessus de sa rangée :
+    /// le même prédicat que celui qui dessine les rangées ou l'option.
+    func test_pill_readsItsCap_fromWhatItUnfolds() throws {
+        let pill = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Pill.swift"))
+        XCTAssertTrue(pill.contains("let unfoldsAbove = text.hasBaseRow && disposition.unfoldsPill(for: layer)"))
+        XCTAssertTrue(pill.contains("if unfoldsAbove {"), "Les rangées et l'option se dessinent sous le prédicat de la borne")
+        XCTAssertTrue(pill.contains(".frame(maxWidth: CallPillWidth.maxWidth(for: text, unfoldsAbove: unfoldsAbove))"))
+    }
+
+    /// #17933 — UNE grammaire de bande, en duo comme en groupe : la même bande, à même le verre
+    /// de la pilule, deux phrases, un filet, « Journal » en bouton ; aucune carte intérieure
+    /// propre au groupe, aucune jumelle.
+    func test_groupCaptionsBand_isTheDuoBand() throws {
+        let views = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallCaptionsViews.swift"))
+        XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: "CallCaptionsBand", in: views), 1, "Une seule bande de sous-titres")
+        XCTAssertFalse(views.contains("isGroup"), "La bande ne connaît pas le groupe")
+        XCTAssertTrue(views.contains("private func journalButton("), "« Journal » est un bouton au pied de la bande")
+        let transcript = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Transcript.swift"))
+        let band = try XCTUnwrap(transcript.range(of: "func captionsBand(hasOwnGlass: Bool"))
+        let body = String(transcript[band.upperBound...].prefix(600))
+        XCTAssertTrue(body.contains("band.items.suffix(2)"), "Deux phrases, en duo comme en groupe")
+        XCTAssertFalse(body.contains("isGroupStage"), "Aucune bande propre au groupe")
+        let pill = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Pill.swift"))
+        XCTAssertTrue(pill.contains("captionsBand(hasOwnGlass: false)"), "À même le verre de la pilule, sans carte intérieure")
+        XCTAssertTrue(pill.contains("if text.hasBaseRow { pillHairline }"), "Un filet sépare la bande de la rangée")
+    }
+
+    // MARK: - La hauteur du journal
+
+    func test_journalHeight_isAShareOfTheWindow_neverBelowAReadableMinimum() {
+        XCTAssertEqual(CallJournalSizing.height(windowHeight: 844), 844 * 0.45, accuracy: 0.001)
+        XCTAssertEqual(CallJournalSizing.height(windowHeight: 320), CallJournalSizing.minimum)
+    }
+
+    func test_journalHeight_neverExceedsTheMaximum_onATallScreen() {
+        XCTAssertEqual(CallJournalSizing.height(windowHeight: 1366), CallJournalSizing.maximum)
+    }
+
+    func test_journalHeight_withoutAWindow_isTheMinimum() {
+        XCTAssertEqual(CallJournalSizing.height(windowHeight: 0), CallJournalSizing.minimum)
+    }
+}
+
+/// #17343 — le pied des sous-titres : ce que la ligne dit de la traduction, à côté du bouton Journal.
+@MainActor
+final class CallCaptionsFooterTests: XCTestCase {
+
+    private func line(
+        origin: String? = nil,
+        served: String? = nil,
+        awaiting: Bool = false,
+        isEvent: Bool = false
+    ) -> CallCaptionLine {
+        var sut = CallCaptionLine(
+            id: UUID(), speakerId: "u", speakerName: "Awa", text: "Salut",
+            languageTag: origin.map { o in served.map { "\(o) → \($0)" } ?? o },
+            isFinal: true, capturedAt: Date(timeIntervalSince1970: 0),
+            isShowingOriginal: served == nil, canRevealOriginal: served != nil, isEvent: isEvent
+        )
+        sut.originLanguage = origin
+        sut.servedLanguage = served
+        sut.awaitingUntil = awaiting ? Date(timeIntervalSince1970: 8) : nil
+        return sut
+    }
+
+    func test_aTranslatedLine_tellsHowToSeeTheOriginal() {
+        XCTAssertEqual(CallCaptionsFooter.resolve(lines: [line(origin: "EN", served: "FR")]), .touchForOriginal(pair: "EN → FR"))
+    }
+
+    func test_aLineAwaitingItsTranslation_saysSo() {
+        XCTAssertEqual(CallCaptionsFooter.resolve(lines: [line(origin: "EN", awaiting: true)]), .translating(language: "EN"))
+    }
+
+    func test_waitingComesBeforeThePair_theNewestWaitingLineNamesItsLanguage() {
+        let lines = [line(origin: "ES", served: "FR"), line(origin: "EN", awaiting: true), line(origin: "EN")]
+        XCTAssertEqual(CallCaptionsFooter.resolve(lines: lines), .translating(language: "EN"))
+    }
+
+    func test_severalPairs_sayHowManyLanguagesAreTranslated() {
+        let lines = [line(origin: "EN", served: "FR"), line(origin: "ES", served: "FR"), line()]
+        XCTAssertEqual(CallCaptionsFooter.resolve(lines: lines), .translatedLanguages(count: 3))
+    }
+
+    func test_theSamePairTwice_isStillOnePair() {
+        let lines = [line(origin: "EN", served: "FR"), line(origin: "EN", served: "FR")]
+        XCTAssertEqual(CallCaptionsFooter.resolve(lines: lines), .touchForOriginal(pair: "EN → FR"))
+    }
+
+    func test_originalsOnly_sayNothing() {
+        XCTAssertEqual(CallCaptionsFooter.resolve(lines: [line(), line(origin: "EN")]), .none)
+    }
+
+    func test_noLine_saysNothing() {
+        XCTAssertEqual(CallCaptionsFooter.resolve(lines: []), .none)
+    }
+
+    func test_aCaptureEvent_isNotASpeech_itNeverSpeaksForTheFooter() {
+        XCTAssertEqual(CallCaptionsFooter.resolve(lines: [line(origin: "EN", served: "FR", isEvent: true)]), .none)
+    }
+}
+
+/// P9b.15 (#18206, #17529) — repos ↔ journal en duo audio : l'avatar glisse et se réduit vers
+/// l'en-tête compact (120 → 56) pendant que le nom et la durée le rejoignent en fondu, ≈ 200 ms,
+/// puis le chemin inverse ; « Réduire les animations » ⇒ un fondu court, sans déplacement ni
+/// échelle. Mêmes vecteurs qu'Android (`CallAudioStageLayout`) et le web (`PORTRAIT_MORPH_MS`).
+@MainActor
+final class CallAudioStageLayoutTests: XCTestCase {
+
+    func test_avatarGoesFrom120To56_theSizeOfTheCompactHeader() {
+        XCTAssertEqual(CallAudioStageLayout.avatarSize(isCompact: false), 120)
+        XCTAssertEqual(CallAudioStageLayout.avatarSize(isCompact: true), 56)
+        XCTAssertEqual(CallAudioStageLayout.fullAvatarSize, 120)
+        XCTAssertEqual(CallAudioStageLayout.shrinkScale, 56.0 / 120.0, accuracy: 0.0001)
+    }
+
+    func test_theFaceShrinksByAScale_drawnAtItsRestingSize() {
+        XCTAssertEqual(CallAudioStageLayout.faceScale(isCompact: false), 1)
+        XCTAssertEqual(CallAudioStageLayout.faceScale(isCompact: true), CallAudioStageLayout.shrinkScale, accuracy: 0.0001)
+        XCTAssertEqual(
+            CallAudioStageLayout.fullAvatarSize * CallAudioStageLayout.faceScale(isCompact: true),
+            CallAudioStageLayout.avatarSize(isCompact: true),
+            accuracy: 0.0001
+        )
+    }
+
+    func test_thePassageIsAMorph_andUnderReduceMotionAShortFade() {
+        XCTAssertTrue(CallAudioStageLayout.morphs(reduceMotion: false))
+        XCTAssertFalse(CallAudioStageLayout.morphs(reduceMotion: true))
+        XCTAssertEqual(CallAudioStageLayout.transitionDuration(reduceMotion: false), 0.2, accuracy: 0.0001)
+        XCTAssertEqual(CallAudioStageLayout.transitionDuration(reduceMotion: true), CallChromeStow.reducedFadeDuration, accuracy: 0.0001)
+    }
+
+    func test_oneAvatarIdentity_carriesTheMorph_twoUnderReduceMotion() {
+        XCTAssertEqual(
+            CallAudioStageLayout.identity(isCompact: true, reduceMotion: false),
+            CallAudioStageLayout.identity(isCompact: false, reduceMotion: false),
+            "une seule vue : elle glisse et se réduit, jamais recréée"
+        )
+        XCTAssertNotEqual(
+            CallAudioStageLayout.identity(isCompact: true, reduceMotion: true),
+            CallAudioStageLayout.identity(isCompact: false, reduceMotion: true),
+            "Réduire les animations : deux vues qui se fondent sur place, sans déplacement ni échelle"
+        )
+    }
+
+    func test_duoAudio_morphsOneAvatar_insteadOfSwappingTwoLayouts() throws {
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
+        let duo = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var duoLayout: some View", in: connected))
+        XCTAssertTrue(duo.contains("CallAudioStage(isJournalOpen: pillText.compactsAudioLayout"))
+        XCTAssertTrue(duo.contains("audioAvatarPair(isCompact: isCompact)"), "#18488 : la scène décide la forme, l'avatar la suit")
+        XCTAssertFalse(duo.contains("if pillText.compactsAudioLayout {"), "deux sous-arbres échangés : l'avatar s'effaçait et reparaissait")
+        XCTAssertFalse(duo.contains("callAvatarPair(size: 56)"), "un seul avatar, pas un second à 56 pt")
+        let audio = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var audioCallLayout: some View", in: connected))
+        XCTAssertFalse(audio.contains("callAvatarPair("), "la scène pose l'avatar ; le repos ne porte que le nom, la durée et les états")
+        let header = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallCompactAudioHeader", in: connected))
+        XCTAssertFalse(header.contains("avatar"), "l'en-tête compact ne porte que le nom et la durée")
+        XCTAssertTrue(header.contains(".accessibilityLabel(String(localized: \"call.duration.a11y.label\"))"), "la durée reste nommée au lecteur d'écran (P9b.2)")
+    }
+
+    func test_audioStage_changesItsArrangement_keepsTheAvatar_andFadesTheText() throws {
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
+        let stage = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallAudioStage<", in: connected))
+        XCTAssertTrue(stage.contains("AnyLayout(HStackLayout(spacing: MeeshySpacing.md))"), "l'en-tête compact : l'avatar puis le nom et la durée")
+        XCTAssertTrue(stage.contains("AnyLayout(VStackLayout(spacing: MeeshySpacing.lg))"), "le repos : l'avatar au-dessus du nom")
+        XCTAssertTrue(stage.contains("compact(form.showsStatuses).transition(.opacity)"), "le nom et la durée rejoignent l'avatar en fondu")
+        XCTAssertTrue(stage.contains("rest.transition(.opacity)"))
+        XCTAssertTrue(stage.contains(".id(CallAudioStageLayout.identity(form: form, reduceMotion: reduceMotion))"))
+        XCTAssertTrue(stage.contains(".animation(.easeInOut(duration: CallAudioStageLayout.transitionDuration(reduceMotion: reduceMotion)), value: form.isCompact)"), "≈ 200 ms, pas le ressort du (…)")
+        XCTAssertTrue(stage.contains("alignment: isCompact ? .topLeading : .center"), "bord de tête : droite à gauche compris")
+        let states = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+States.swift"))
+        let pair = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func audioAvatarPair(isCompact: Bool) -> some View", in: states))
+        XCTAssertTrue(pair.contains("avatarCircle(size: CallAudioStageLayout.fullAvatarSize)"), "dessiné à sa taille de repos")
+        XCTAssertTrue(pair.contains(".scaleEffect(CallAudioStageLayout.faceScale(isCompact: isCompact))"), "réduit par une échelle : une transformation")
+        XCTAssertTrue(pair.contains("CallPeerSpeechRing(callManager: callManager, mesh: mesh)"), "P9b.13 : l'anneau suit l'avatar à sa taille")
+        XCTAssertLessThan(try XCTUnwrap(pair.range(of: "CallPeerSpeechRing(")).lowerBound,
+                          try XCTUnwrap(pair.range(of: "localAvatarBadge(")).lowerBound,
+                          "l'anneau entoure le disque de l'autre, pas la pastille locale")
+    }
+}
+
+/// #18488 — l'appel vocal à hauteur compacte (iPad en fenêtre basse, Split View, Stage Manager ; l'iPhone
+/// reste en portrait jusqu'à #9771) : la pilule entière, (…) compris, reste dans la fenêtre et touchable.
+/// Le duo audio cède sa place à la pilule : l'avatar, le nom et la durée passent à la forme compacte de
+/// P9b quand la scène n'a plus la hauteur de son repos, et le journal ne prend que ce qu'il reste.
+@MainActor
+final class CallAudioCompactHeightTests: XCTestCase {
+    private let topClearance: CGFloat = 84
+
+    private func form(journal: Bool = false, stage: CGFloat, top: CGFloat? = nil) -> CallAudioStageLayout.Form {
+        CallAudioStageLayout.form(isJournalOpen: journal, stageHeight: stage, topClearance: top ?? topClearance)
+    }
+
+    func test_aTallStage_keepsTheRestLayout() {
+        XCTAssertEqual(form(stage: 700), .rest)
+    }
+
+    func test_anUnmeasuredStage_keepsTheRestLayout_noFlashOfTheCompactForm() {
+        XCTAssertEqual(form(stage: 0), .rest)
+    }
+
+    func test_theRestLayout_needsItsContentBelowTheHeaderRow() {
+        let need = topClearance + CallAudioStageLayout.restContentHeight
+        XCTAssertEqual(form(stage: need), .rest)
+        XCTAssertEqual(form(stage: need - 1), .lowHeight)
+    }
+
+    func test_aLowStage_takesTheCompactForm_ofP9b() {
+        let form = form(stage: 111)
+        XCTAssertEqual(form, .lowHeight)
+        XCTAssertTrue(form.isCompact)
+        XCTAssertEqual(CallAudioStageLayout.avatarSize(form: form), CallAudioStageLayout.compactAvatarSize)
+        XCTAssertEqual(CallAudioStageLayout.faceScale(form: form), CallAudioStageLayout.shrinkScale, accuracy: 0.0001)
+    }
+
+    func test_theOpenJournal_isCompact_whateverTheStageHeight() {
+        XCTAssertEqual(form(journal: true, stage: 900), .journal)
+        XCTAssertEqual(form(journal: true, stage: 90), .journal, "le journal garde la forme de P9b, sans états")
+        XCTAssertTrue(CallAudioStageLayout.Form.journal.isCompact)
+        XCTAssertFalse(CallAudioStageLayout.Form.rest.isCompact)
+    }
+
+    func test_theStates_stayOnScreen_whenOnlyTheHeightIsShort() {
+        XCTAssertTrue(CallAudioStageLayout.Form.lowHeight.showsStatuses, "Micro coupé, Reconnexion… ne disparaissent pas avec la hauteur")
+        XCTAssertFalse(CallAudioStageLayout.Form.journal.showsStatuses, "P9b.2 : aucune rangée d'états sous le journal")
+        XCTAssertFalse(CallAudioStageLayout.Form.rest.showsStatuses, "au repos, les états sont ceux de la disposition de repos")
+    }
+
+    func test_theCompactForm_ofTheJournalIsUntouched() {
+        XCTAssertEqual(CallAudioStageLayout.avatarSize(form: .journal), 56)
+        XCTAssertEqual(CallAudioStageLayout.avatarSize(form: .rest), 120)
+        XCTAssertEqual(CallAudioStageLayout.faceScale(form: .rest), 1)
+    }
+
+    func test_theFormChange_isOneIdentity_orTwoUnderReduceMotion() {
+        XCTAssertEqual(CallAudioStageLayout.identity(form: .lowHeight, reduceMotion: false), CallAudioStageLayout.identity(form: .rest, reduceMotion: false))
+        XCTAssertNotEqual(CallAudioStageLayout.identity(form: .lowHeight, reduceMotion: true), CallAudioStageLayout.identity(form: .rest, reduceMotion: true))
+        XCTAssertEqual(CallAudioStageLayout.identity(form: .lowHeight, reduceMotion: true), CallAudioStageLayout.identity(form: .journal, reduceMotion: true))
+    }
+
+    // MARK: - Le journal ne prend que ce qu'il reste
+
+    func test_journalBudget_aTallWindow_keepsItsShare() {
+        let reserved = CallJournalSizing.reservedAround(topClearance: topClearance, bottomInset: 32)
+        XCTAssertEqual(CallJournalSizing.height(windowHeight: 844, reservedAround: reserved), 844 * 0.45, accuracy: 0.001)
+        XCTAssertEqual(CallJournalSizing.height(windowHeight: 1366, reservedAround: reserved), CallJournalSizing.maximum)
+    }
+
+    func test_journalBudget_neverPushesThePillOutOfTheWindow() {
+        let reserved = CallJournalSizing.reservedAround(topClearance: topClearance, bottomInset: 32)
+        for window in stride(from: CGFloat(360), through: 700, by: 20) {
+            let list = CallJournalSizing.height(windowHeight: window, reservedAround: reserved)
+            XCTAssertLessThanOrEqual(list + reserved, max(window, reserved + CallJournalSizing.compactMinimum),
+                                     "à \(window) pt : le journal, l'avatar et la pilule tiennent, sauf le plancher lisible")
+        }
+    }
+
+    func test_journalBudget_aWindowBelowItsReserve_keepsOnlyTheReadableFloor() {
+        let reserved = CallJournalSizing.reservedAround(topClearance: topClearance, bottomInset: 32)
+        XCTAssertEqual(CallJournalSizing.height(windowHeight: 320, reservedAround: reserved), CallJournalSizing.compactMinimum)
+        XCTAssertLessThan(CallJournalSizing.compactMinimum, CallJournalSizing.minimum)
+    }
+
+    func test_listHeight_theGroupKeepsItsShare_theDuoReadsItsBudget() {
+        XCTAssertEqual(CallJournalSizing.listHeight(isGroup: true, windowHeight: 320, topClearance: 84, bottomInset: 32), CallJournalSizing.minimum)
+        XCTAssertEqual(CallJournalSizing.listHeight(isGroup: false, windowHeight: 320, topClearance: 84, bottomInset: 32), CallJournalSizing.compactMinimum)
+        XCTAssertEqual(CallJournalSizing.listHeight(isGroup: false, windowHeight: 844, topClearance: 84, bottomInset: 32), 844 * 0.45, accuracy: 0.001)
+    }
+
+    func test_journalBudget_theReserveCountsTheCompactHeader_theJournalChrome_andTheBaseRow() {
+        let reserved = CallJournalSizing.reservedAround(topClearance: 84, bottomInset: 32)
+        XCTAssertEqual(reserved,
+                       84 + CallAudioStageLayout.compactAvatarSize + CallJournalSizing.compactHeaderGap
+                           + CallJournalSizing.panelChrome + CallJournalSizing.baseRowHeight + 32)
+    }
+
+    // MARK: - La vue
+
+    func test_theStage_yieldsToThePill_andMeasuresItself() throws {
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
+        let stage = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallAudioStage<", in: connected))
+        XCTAssertTrue(stage.contains("minHeight: 0"), "la scène ne pousse plus la pilule hors de la fenêtre : sa hauteur plancher est nulle")
+        XCTAssertTrue(stage.contains(".clipped()"), "ce qui déborde de la scène ne recouvre jamais la pilule")
+        XCTAssertTrue(stage.contains("CallAudioStageLayout.form("), "la forme se décide par la loi pure")
+        XCTAssertTrue(stage.contains("GeometryReader"), "la hauteur de la scène se mesure sur la scène, jamais sur la fenêtre")
+        XCTAssertTrue(stage.contains("isJournalOpen"))
+    }
+
+    func test_duoAudio_handsTheJournalStateToTheStage_notAReadyMadeCompactFlag() throws {
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
+        let duo = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var duoLayout: some View", in: connected))
+        XCTAssertTrue(duo.contains("CallAudioStage(isJournalOpen: pillText.compactsAudioLayout"))
+        XCTAssertFalse(duo.contains("audioAvatarPair(isCompact: pillText.compactsAudioLayout)"), "l'avatar suit la forme que la scène décide")
+        let header = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallCompactAudioHeader", in: connected))
+        XCTAssertTrue(header.contains("CallAudioStatusRow"), "à hauteur courte, les états restent sous la durée")
+    }
+
+    func test_theJournalPanel_ofTheDuo_readsItsBudget() throws {
+        let transcript = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Transcript.swift"))
+        let rows = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var journalPanelRows: some View", in: transcript))
+        XCTAssertTrue(rows.contains("CallJournalSizing.listHeight(isGroup: isGroupStage, windowHeight: DeviceLayout.windowSize.height"), "le duo lit son budget, le groupe garde sa hauteur : sa grille a sa propre loi")
+    }
+}
+

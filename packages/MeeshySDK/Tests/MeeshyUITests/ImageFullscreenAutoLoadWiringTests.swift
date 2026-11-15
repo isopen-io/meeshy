@@ -21,19 +21,55 @@ final class ImageFullscreenAutoLoadWiringTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    /// 8d3c42a8ba — le chargeur d'images est injecté (`MediaImageLoading`) :
+    /// l'appel porte désormais `imageLoader:`. La propriété gardée ne change
+    /// pas — `autoLoad: true` en dur sur l'image plein écran — et se lit sur
+    /// la source SANS commentaires, dont l'un formule littéralement
+    /// « autoLoad: true » et ferait passer la garde par chance de prose.
     func test_imageFullscreen_forcesAutoLoad_bypassingPolicyGate() throws {
-        let source = try sdkSource("Sources/MeeshyUI/Media/ImageViewerView.swift")
-        XCTAssertTrue(source.contains("CachedAsyncImage(url: url.absoluteString, autoLoad: true)"),
+        let source = ComposerSourceGuard.stripComments(
+            try sdkSource("Sources/MeeshyUI/Media/ImageViewerView.swift")
+        )
+        let fullscreen = try XCTUnwrap(source.range(of: "public struct ImageFullscreen: View {"),
+                                       "ImageFullscreen doit rester déclarée dans ImageViewerView.swift")
+        XCTAssertTrue(source[fullscreen.upperBound...].contains(
+            "CachedAsyncImage(url: url.absoluteString, autoLoad: true, imageLoader: imageLoader)"),
                       "ImageFullscreen must force autoLoad:true — a manual tap overrides the network policy gate (contract §14.1); otherwise Low Data Mode leaves the fullscreen viewer spinning forever.")
     }
 
-    func test_imageFullscreen_savesTheStampedImage_withRawBytesFallback() throws {
+    /// **Directive porteur du 2026-09-12 — elle SUPPLANTE celle du 2026-08-12**
+    /// (« un média qui quitte Meeshy porte sa marque »), sous laquelle ce témoin
+    /// exigeait l'INVERSE : que le viewer passe par `MeeshyImageWatermark.stamped`
+    /// avant d'écrire en photothèque.
+    ///
+    /// La marque est désormais réservée aux œuvres COMPOSÉES (story enregistrée
+    /// ou exportée, scène de post, scène de réel) ; les originaux d'une
+    /// conversation sortent nus. Or ce chemin direct n'est atteint que lorsque
+    /// l'hôte ne fournit pas `onSaveRequested`, c'est-à-dire depuis les deux
+    /// surfaces de conversation — il n'avait donc plus aucun média à marquer.
+    ///
+    /// L'assertion est écrite en NÉGATIF à dessein : un filigrane qui reviendrait
+    /// ici ne casserait rien d'autre, et ne se verrait pas.
+    func test_imageFullscreen_savesTheImageAsReceived_withoutAnyWatermark() throws {
         let source = try sdkSource("Sources/MeeshyUI/Media/ImageViewerView.swift")
-        XCTAssertTrue(source.contains("MeeshyImageWatermark.stamped("),
-                      "ImageFullscreen enregistre l'image MARQUÉE — même règle que le flux unifié de l'app (MediaSaveBranding) : le viewer passe par l'atome de filigrane avant d'écrire en photothèque.")
-        XCTAssertTrue(source.contains("PhotoLibraryManager.shared.saveImage(stamped)"),
-                      "Le chemin nominal écrit l'image marquée via saveImage — plus de saveFromURL : les octets viennent du cache partagé, pas d'un aller-retour réseau.")
-        XCTAssertTrue(source.contains("PhotoLibraryManager.shared.saveImage(data)"),
-                      "Un marquage impossible (format animé, décodage raté) n'empêche JAMAIS l'enregistrement : repli sur les octets d'origine.")
+        XCTAssertFalse(source.contains("MeeshyImageWatermark"),
+                       "Le chemin direct d'ImageFullscreen ne sert que des médias de CONVERSATION : la directive 2026-09-12 leur interdit la marque.")
+        XCTAssertTrue(source.contains("PhotoLibraryManager.shared.addImage(data, alias: attachmentId)"),
+                      "Le chemin nominal écrit les octets REÇUS via addImage (dédoublonné, #10370) — pas de saveFromURL : ils viennent du cache partagé, pas d'un aller-retour réseau.")
+        XCTAssertTrue(source.contains("PhotoLibraryManager.shared.addImageFile(at: onDisk, alias: attachmentId)"),
+                      "#9685 — le fichier du cache part d'abord PAR RÉFÉRENCE, sans relecture ni décodage ; #10370 — par le point d'écriture dédoublonné.")
+    }
+
+    /// **#10930 — on entre sans chrome, le toucher le pose par-dessus**
+    /// (porteur 2026-10-18 : « les contrôleurs s'affichent par-dessus au toucher
+    /// de l'attachement n'importe où »). Le toucher de l'IMAGE bascule comme
+    /// celui du fond ; le double toucher garde le zoom.
+    func test_imageFullscreen_opensWithoutChrome_andAnyTapTogglesIt() throws {
+        let source = try sdkSource("Sources/MeeshyUI/Media/ImageViewerView.swift")
+        XCTAssertTrue(source.contains("@State private var showControls = false"))
+        let zoom = try XCTUnwrap(source.range(of: ", count: 2) {"))
+        let suite = source[zoom.upperBound...]
+        XCTAssertTrue(suite.contains("{ toggleControls() }"),
+                      "le toucher simple de l'image montre ou cache le chrome")
     }
 }

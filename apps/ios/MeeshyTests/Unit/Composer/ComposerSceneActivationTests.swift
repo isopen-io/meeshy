@@ -1,0 +1,295 @@
+import XCTest
+import MeeshySDK
+import MeeshyUI
+@testable import Meeshy
+
+/// **#3939 (retour porteur 2026-08-27) — choisir une couleur de fond ne fait
+/// PLUS naître la scène 9:16 plein écran.**
+///
+/// L'ancienne règle F2 (#3885, `ComposerSceneActivation.activatesScene`,
+/// SUPPRIMÉE) faisait basculer `mountedSurface` vers `.scene` dès qu'un fond
+/// était choisi — un remplacement de route surprenant, jamais demandé :
+/// l'auteur voulait rester sur l'écran document. Incrément SÛR de #3939 :
+/// cette bascule est coupée ; l'incrustation du canvas DANS l'écran document
+/// reste à livrer (sous-tâche explicite de #3939, budget dédié).
+///
+/// STORY/RÉEL, eux, continuent de monter la scène par le FORMAT (routage,
+/// B3/#3926) — INCHANGÉ par ce correctif.
+final class ComposerSceneActivationTests: XCTestCase {
+
+    private static let iosRoot = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+
+    private func source(_ relativePath: String) throws -> String {
+        try String(contentsOf: Self.iosRoot.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+
+    private func compact(_ text: String) -> String {
+        AppSourceGuard.stripComments(text)
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    // 1 — le prédicat F2 est SUPPRIMÉ : plus aucun site ne doit le citer, ni
+    // dans le meuble ni ailleurs — sa réapparition serait la régression même
+    // que ce lot corrige.
+    func test_composerSceneActivation_neSuPlusReferencee() throws {
+        // Commentaires STRIPPÉS avant l'assertion : le fichier explique le
+        // retrait dans un doc-comment qui cite l'ANCIEN nom du type à des
+        // fins historiques — une assertion sur `raw` non dépouillé se
+        // contredirait elle-même (le commentaire qui EXPLIQUE la suppression
+        // ferait rougir le test qui la VÉRIFIE). Seul du CODE qui réintroduit
+        // le type doit faire rougir cette garde.
+        let code = AppSourceGuard.stripComments(
+            try AppSourceGuard.composerHostSource()
+        )
+        XCTAssertFalse(
+            code.contains("ComposerSceneActivation"),
+            "`ComposerSceneActivation` ne doit plus être référencée — choisir un fond ne bascule plus "
+                + "`mountedSurface` vers `.scene` (#3939)."
+        )
+    }
+
+    // 2 — le MEUBLE monte la scène UNIQUEMENT par le routage du format
+    // (STORY/RÉEL) — jamais par la couleur de fond choisie.
+    func test_leMeuble_monteLaScene_parLeRoutageDuFormatSeul() throws {
+        let raw = try AppSourceGuard.composerHostSource()
+        XCTAssertTrue(raw.contains("var mountedSurface"),
+                      "mountedSurface introuvable ou source vide")
+        let src = compact(raw)
+        XCTAssertTrue(
+            src.contains("returnComposerSurfaceRouting.surface(opening:profile.opensWith,format:selectedFormat)"),
+            "`mountedSurface` doit renvoyer directement le routage du format — plus de branche sur le fond."
+        )
+        XCTAssertTrue(
+            src.contains("vardocumentBackground:String?"),
+            "La couleur de fond choisie reste posée dans le SOCLE (`documentBackground`) — utile à "
+                + "l'atelier une fois l'incrustation livrée (#3939), même sans effet de routage aujourd'hui."
+        )
+    }
+
+
+
+    // 5 — le libellé du picker est traduit dans les 7 locales (cliquet i18n).
+    func test_leLibelleDuPicker_estTraduit_7Locales() throws {
+        let catalog = try source("Meeshy/Localizable.xcstrings")
+        let json = try JSONSerialization.jsonObject(with: Data(catalog.utf8)) as? [String: Any]
+        let strings = json?["strings"] as? [String: Any]
+        guard let entry = strings?["composer.document.a11y.background"] as? [String: Any],
+              let locs = entry["localizations"] as? [String: Any] else {
+            return XCTFail("Clé « composer.document.a11y.background » absente du catalogue")
+        }
+        for loc in ["ar", "de", "en", "es", "fr", "it", "pt-BR"] {
+            XCTAssertNotNil(locs[loc], "Picker de fond : locale « \(loc) » manquante (cliquet i18n)")
+        }
+    }
+
+    // 6 — E1 (#3886) : la naissance de la scène SÈME la langue déclarée (la
+    // capsule) dans l'atelier, défaut de tout objet posé.
+    func test_laNaissanceDeLaScene_semeLaLangueDeclaree() throws {
+        let src = compact(try AppSourceGuard.composerHostSource())
+        XCTAssertTrue(
+            src.contains(".adaptiveOnChange(of:documentLanguage,initial:true){_,langueinviewModel.declaredContentLanguage=langue}"),
+            "Quand la scène naît (fond OU STORY), l'atelier reçoit la langue DÉCLARÉE au composer "
+                + "(`documentLanguage`) comme défaut de tout objet — jamais « fr » codé en dur."
+        )
+    }
+
+    // 8 — B1 : la liste portée à la scène ne contient que l'IMAGE et la VIDÉO
+    // (un son ou un document joint n'a pas de place de fond sur un canvas), et
+    // le classement passe par le SEUL classeur MIME du dépôt.
+    /// **Renommée au #4052 — la moitié « audio » de son verdict est TOMBÉE.**
+    ///
+    /// Elle exigeait `case .audio, .file: return nil`, sur le motif « un son n'a
+    /// pas de place de fond sur un canvas ». C'était juste d'un fond VISUEL, et
+    /// faux du son : le modèle (§ 4) lui donne un TROISIÈME emplacement, la
+    /// bande-son de la scène. La garde disait donc, en croyant protéger,
+    /// « n'implémente jamais le § 4 ».
+    ///
+    /// Ce qu'elle protégeait de VRAI est conservé et RENFORCÉ : le classement
+    /// passe toujours par l'unique classeur MIME du dépôt, et le DOCUMENT reste
+    /// hors scène — lui n'a de place ni visuelle ni sonore.
+    func test_leMediaPorte_prendImageVideoEtSon_maisJamaisUnDocument() throws {
+        let raw = try AppSourceGuard.composerHostSource()
+        XCTAssertTrue(raw.contains("var documentContentMedia"),
+                      "documentContentMedia introuvable ou source vide")
+        let src = compact(raw)
+        XCTAssertTrue(
+            src.contains("ComposerIngestRouter.route(mime:media.mimeType)"),
+            "Le classement image/vidéo passe par `ComposerIngestRouter.route(mime:)` — le SEUL classeur MIME "
+                + "du dépôt, jamais un `hasPrefix` recopié."
+        )
+        XCTAssertTrue(
+            src.contains("case.audio:") && src.contains("kind:.audio"),
+            "Le SON doit être porté (#4052) — il devient la bande-son de la scène, le troisième "
+                + "emplacement du modèle § 4."
+        )
+        XCTAssertTrue(
+            src.contains("case.file:returnnil"),
+            "Le DOCUMENT reste hors scène : il n'a de place ni visuelle ni sonore. C'est la moitié de "
+                + "l'ancien verdict qui tient toujours."
+        )
+        XCTAssertFalse(
+            src.contains("case.audio,.file:"),
+            "Le son et le document ne se décident plus ENSEMBLE : les traiter d'un seul cas est ce qui "
+                + "avait fait rejeter le son avec le document."
+        )
+    }
+
+    // 9 — B2 (#3925), **retourné au #4124** : la description ne se peint PLUS
+    // sous le canvas.
+    //
+    // Trois formes en trois lots — barre repliable à chevron (#3925), calque de
+    // lecture (#4065), COUCHE ouverte par une icône (#4124) — et la troisième
+    // est la seule qui rende sa place à la scène. La directive porteur du
+    // 2026-08-28 demande la scène 9:16 CENTRÉE et marginée ; une bande
+    // permanente en bas prend exactement l'espace qu'il faut lui rendre.
+    //
+    // Ce que ce témoin gardait — « la description existe et vit au bon endroit »
+    // — n'est pas affaibli : il asserte désormais qu'elle vit dans une COUCHE,
+    // ce qui est une position tout aussi vérifiable et une place mieux choisie.
+    func test_laDescription_vitDansLeVolet_etNonSousLeCanvas() throws {
+        let raw = try AppSourceGuard.composerHostSource()
+        XCTAssertTrue(raw.contains("var sceneDescriptionPanel"),
+                      "sceneDescriptionPanel introuvable ou source vide")
+        let src = compact(raw)
+        XCTAssertFalse(
+            src.contains("ifmountedSurface==.scene{sceneDescriptionSection}"),
+            "La description est revenue occuper le bas en permanence — la place que la scène centrée réclame."
+        )
+        // **RETOURNÉ une seconde fois au #6126.** #4361 avait remplacé la couche
+        // par une ZONE BASSE, et c'était mieux : écrire une description, c'est
+        // regarder la scène qu'on décrit. Le lot #6126 va au bout du même
+        // raisonnement — la légende ne s'écrit ni au-dessus de la scène ni
+        // en-dessous, mais DANS le volet où on la lit.
+        //
+        // Ce que ce témoin gardait — « la description existe et vit au bon
+        // endroit » — n'est pas affaibli : la place est toujours vérifiable, et
+        // elle est mieux choisie.
+        XCTAssertFalse(
+            src.contains("ifeditsSceneDescription{sceneDescriptionEditor}"),
+            "La zone basse de la légende a disparu au #6126 — elle s'édite en place."
+        )
+        XCTAssertTrue(
+            src.contains("chromeScheme:viewModel.canvasChromeScheme"),
+            "Le volet est bien MONTÉ et branché sur le fond (#6127) — sans quoi l'assertion "
+                + "négative ci-dessus serait verte par omission."
+        )
+    }
+
+    // 10 — **RETOURNÉ au 2026-08-30, sur rappel du porteur** : « cette
+    // description est propre à chaque slide ».
+    //
+    // La garde exigeait que la description écrive dans `documentText` — le texte
+    // de la PUBLICATION — *et* sur la scène. Cette double écriture protégeait la
+    // loi 9 / B1 : un seul contenu, aller-retour scène ↔ document. Sa prémisse
+    // était que la description ÉTAIT le texte du post ; le porteur l'a révoquée,
+    // et le poste n'affiche que son `content`, pas les descriptions.
+    //
+    // Ce qui restait faux même avant : l'ÉCRITURE était déjà propre à la slide
+    // (`applyContentText` pose sur `currentSlide`), mais la LECTURE rendait
+    // `documentText`. À la deuxième slide, on y trouvait la description de la
+    // première — puis on écrasait la sienne en tapant.
+    func test_laDescription_appartientALaSlide_desDeuxCotes() throws {
+        let raw = try AppSourceGuard.composerHostSource()
+        XCTAssertTrue(raw.contains("var sceneDescriptionBinding"),
+                      "sceneDescriptionBinding introuvable ou source vide")
+        let src = compact(raw)
+        // **La règle a changé le 2026-09-02, et cette garde la suit** (#4890).
+        //
+        // Elle épinglait `get:{viewModel.currentSlide.content??""}` et
+        // `set:{viewModel.applyContentText($0)}` — la slide des DEUX côtés,
+        // quel que soit le format. Le modèle produit (§ 3) dit autre chose, et
+        // le disait déjà : en Story et en Réel le texte de la slide EST le
+        // contenu de la publication, en Post c'est la LÉGENDE de son média.
+        //
+        // > Ce qui est gardé n'est donc plus une DESTINATION mais un
+        // > AIGUILLAGE. Continuer d'exiger la slide des deux côtés aurait figé
+        // > la moitié du défaut que le lot corrige — une garde qui protège la
+        // > panne, comme celle de la flèche du socle au même moment.
+        XCTAssertTrue(
+            // **L'aiguillage a TROIS cibles depuis le 2026-09-06**, et s'appelle
+            // `descriptionTarget(format:media:)` — il prend AUSSI le média,
+            // parce que sans média porteur la description EST le contenu du
+            // post. `role(for:)` ne pouvait pas exprimer ce troisième cas.
+            src.contains("switchComposerSlideTextRole.descriptionTarget("),
+            "La destination du texte se DÉCIDE par le rôle, jamais au site : c'est le "
+                + "recouvrement du mot « description » sur deux rôles qui a laissé le défaut vivre."
+        )
+        XCTAssertTrue(
+            src.contains("case.slideContent:returnviewModel.currentSlide.content??\"\"") ,
+            "En S/R/M, la LECTURE vient de la slide COURANTE : lire le texte de la publication "
+                + "montrerait la description d'une autre slide, et la ferait écraser."
+        )
+        XCTAssertTrue(
+            src.contains("case.mediaCaption(letmedia):returndocumentMediaCaptions[media]??\"\""),
+            "En Post AVEC média, elle vient du MÉDIA de la slide : servir le texte du post "
+                + "comme légende de ce média serait le recouvrement que cet aiguillage défait."
+        )
+        XCTAssertTrue(
+            src.contains("case.postContent:"),
+            "… et SANS média porteur, elle EST le contenu du post — la troisième cible, née de la "
+                + "mesure : un canvas sans média voyait sa description refusée en silence par "
+                + "`applyCaption` (`guard let media else { return }`)."
+        )
+        XCTAssertTrue(
+            src.contains("case.slideContent:viewModel.applyContentText(texte)"),
+            "… et l'écriture suit le même aiguillage."
+        )
+        XCTAssertTrue(
+            // **`to: media`, pas `to: selectedSlideMediaURL`** (2026-09-06). Le
+            // média vient désormais de la CIBLE que l'aiguillage a élue
+            // (`case .mediaCaption(let media)`), et non d'une seconde lecture de
+            // la slide courante. C'est plus sûr que ce que ce témoin exigeait :
+            // une relecture peut diverger de l'élection entre les deux lignes,
+            // l'associé du cas ne le peut pas.
+            src.contains("ComposerSlideTextRole.applyCaption(texte,to:media,in:&documentMediaCaptions)"),
+            "La légende s'écrit par MÉDIA. Une carte par SLIDE passerait au compilateur et "
+                + "servirait le mauvais média le jour où un post en portera deux sur une slide."
+        )
+        XCTAssertFalse(
+            src.contains("documentText=newValue"),
+            "Écrire aussi dans `documentText` verserait la description d'une slide dans le "
+                + "contenu du post — que le porteur a explicitement séparé."
+        )
+    }
+
+    // 11 — B2 : les libellés de la section sont traduits dans les 7 locales.
+    //
+    // **`composer.scene.description.a11y.toggle` en est SORTIE au #4065**, avec
+    // le chevron qu'elle nommait : la barre repliable a cédé la place au calque
+    // de lecture, et la clé n'avait plus aucun lecteur. Une clé gardée ici sans
+    // lecteur aurait fait croire à sept traductions vivantes pour un contrôle
+    // qui n'existe plus. Les trois clés du calque prennent sa place.
+    //
+    // **`composer.scene.description.placeholder` en sort à son tour au #6126**,
+    // pour exactement la même raison : sa lectrice était la zone basse
+    // (`sceneDescriptionEditor`), que la légende éditée en place a supprimée. La
+    // clé a été retirée du catalogue avec elle — la garde des clés mortes l'avait
+    // vue. L'invite servie aujourd'hui est celle du VOLET,
+    // `composer.description.placeholder`, et c'est elle qui doit être traduite.
+    //
+    // **`composer.description.placeholder` en sort au #10359** : le volet
+    // reçoit désormais l'amorce du calque (« Ajouter une légende »), un seul mot
+    // pour une seule zone. La clé n'avait plus de lecteur.
+    //
+    // > Cette liste est un INVENTAIRE de ce qui s'affiche, pas une archive de ce
+    // > qui s'est affiché. Une clé y survit à son lecteur sans que rien ne le
+    // > dise — sauf ce témoin, qui rougit le jour où le catalogue la perd.
+    func test_lesLibellesDescription_sontTraduits_7Locales() throws {
+        let catalog = try source("Meeshy/Localizable.xcstrings")
+        let json = try JSONSerialization.jsonObject(with: Data(catalog.utf8)) as? [String: Any]
+        let strings = json?["strings"] as? [String: Any]
+        for key in ["composer.description.amorce",
+                    "composer.description.a11y.edit",
+                    "composer.description.a11y.done"] {
+            guard let entry = strings?[key] as? [String: Any],
+                  let locs = entry["localizations"] as? [String: Any] else {
+                return XCTFail("Clé « \(key) » absente du catalogue")
+            }
+            for loc in ["ar", "de", "en", "es", "fr", "it", "pt-BR"] {
+                XCTAssertNotNil(locs[loc], "Section description « \(key) » : locale « \(loc) » manquante")
+            }
+        }
+    }
+}

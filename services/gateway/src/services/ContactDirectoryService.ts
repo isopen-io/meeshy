@@ -13,13 +13,16 @@
  * vCard) le plus faible — il n'intervient qu'à défaut des deux autres.
  */
 
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import type { NormalizedContact } from '../utils/contact-identifiers.js';
-import { getBlockedUserIdsAmong } from '../utils/blocking.js';
+import { getBlockedUserIdsAmong, getBlockRelatedUserIds } from '../utils/blocking.js';
 import { getPresenceVisibilityService, type PresenceViewer } from './PresenceVisibilityService.js';
+import { undiscoverableAmong } from './profile-discoverability.js';
+import type { PersonProfileDecor } from '@meeshy/shared/types/profile-decor';
+import { AVATAR_RING_COLUMN, authorProfileDecor } from './appearance/authorProfileDecor';
 
 const logger = enhancedLogger.child({ module: 'ContactDirectory' });
 
@@ -30,6 +33,12 @@ const MAX_USERNAME_CLAUSES = 200;
 /** Écritures d'upsert menées de front pendant une synchronisation. */
 const UPSERT_CONCURRENCY = 25;
 const MAX_PAGE_SIZE = 200;
+/**
+ * Un filigrane (`syncStartedAt`) plus vieux que ceci n'autorise plus la purge
+ * du lot final — une synchronisation reprise après une longue interruption
+ * ne doit pas purger sur la foi d'une horloge de départ obsolète.
+ */
+const MAX_WATERMARK_AGE_MS = 24 * 60 * 60 * 1000;
 
 export type MatchedBy = 'phone' | 'email' | 'username';
 
@@ -42,6 +51,8 @@ export type MatchedUserProfile = {
   avatar: string | null;
   isOnline: boolean;
   lastActiveAt: Date | null;
+  /** Le contour d'avatar équipé (#10945) ; absent sans contour. */
+  profileDecor?: PersonProfileDecor;
 };
 
 export type ContactMatch = {
@@ -77,6 +88,7 @@ const MATCH_USER_SELECT = {
   lastActiveAt: true,
   phoneNumber: true,
   email: true,
+  ...AVATAR_RING_COLUMN,
 } as const;
 
 const PUBLIC_USER_SELECT = {
@@ -88,6 +100,7 @@ const PUBLIC_USER_SELECT = {
   avatar: true,
   isOnline: true,
   lastActiveAt: true,
+  ...AVATAR_RING_COLUMN,
 } as const;
 
 function toPublicProfile(user: Record<string, unknown> | null): MatchedUserProfile | null {
@@ -101,6 +114,7 @@ function toPublicProfile(user: Record<string, unknown> | null): MatchedUserProfi
     avatar: (user.avatar as string) ?? null,
     isOnline: Boolean(user.isOnline),
     lastActiveAt: (user.lastActiveAt as Date) ?? null,
+    ...authorProfileDecor({ equippedAvatarRing: user.equippedAvatarRing as string | null | undefined }),
   };
 }
 
@@ -119,6 +133,81 @@ async function inBatches<T>(items: T[], size: number, run: (item: T) => Promise<
   for (let index = 0; index < items.length; index += size) {
     await Promise.all(items.slice(index, index + size).map(run));
   }
+}
+
+/**
+ * La portée d'une recherche de personne par IDENTIFIANT DE CONTACT.
+ *
+ * Cette loi vivait uniquement dans `ContactDirectoryService.match()`, la
+ * jumelle AUTHENTIFIÉE. Ses deux sœurs publiques — `GET /users/email/:email` et
+ * `GET /users/phone/:phone` — répondaient à la même question sans aucun de ces
+ * filtres : un compte désactivé restait consultable, et un utilisateur bloqué
+ * retrouvait le profil de qui l'avait bloqué (#4160).
+ *
+ * Le blocage vaut dans les DEUX sens, et c'est le point : écarter seulement
+ * « les comptes que j'ai bloqués » laisserait celui que j'ai bloqué me
+ * retrouver. La symétrie n'est pas une politesse, c'est la protection.
+ *
+ * Elle est portée par une LISTE, que l'appelant résout par
+ * {@link blockedIdsAroundViewer} — jamais par une clause de `where` sur
+ * `blockedUserIds`, le champ dont les deux tentatives précédentes ont chacune
+ * cassé quelque chose (#6452 puis #6811).
+ */
+export function contactLookupScope(options: {
+  blockedRelatedIds: readonly string[];
+}): Prisma.UserWhereInput {
+  return {
+    isActive: true,
+    // `deletedAt: null` seul serait un PIÈGE, et le dépôt le documente
+    // (`packages/shared/CLAUDE.md` § « Absent vs null ») : sur le connecteur
+    // MongoDB, Prisma enveloppe les filtres scalaires, si bien que
+    // `{ deletedAt: null }` ne matche QUE les documents où le champ est
+    // présent-et-nul. Il n'existe pas dans les lignes créées avant que la
+    // colonne soit ajoutée — mesuré en intégration : les 222 comptes ont
+    // `deletedAt` ABSENT. La clause seule écartait donc TOUT LE MONDE.
+    //
+    // `isSet` est LÉGAL ici et seulement ici : Prisma ne le génère que pour
+    // les champs OPTIONNELS, et `deletedAt` est un `DateTime?`. Le champ
+    // VOISIN `blockedUserIds` est une liste REQUISE, dont le filtre généré
+    // (`StringNullableListFilter`) ne déclare que `equals`, `has`, `hasEvery`,
+    // `hasSome` et `isEmpty` — l'y poser rendait 500 sur les quatre appelants
+    // (#6811). Le type de retour est ce qui l'interdit désormais.
+    //
+    // `AND` et non `OR` à la racine : l'appelant pose lui-même un `OR` pour sa
+    // liste d'identifiants (`ContactDirectoryService.match`), et deux `OR`
+    // frères s'écraseraient en silence.
+    AND: [{ OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] }],
+    // Le blocage sort du `where` et devient une LISTE, dans les deux
+    // directions (`blockedIdsAroundViewer`).
+    //
+    // La direction « qui m'a bloqué » s'écrivait `NOT: { blockedUserIds: {
+    // has: viewerId } }`, et le connecteur MongoDB enveloppe un filtre de
+    // tableau d'un test d'existence : le `NOT` inversait cette absence en
+    // refus, écartant les 206 comptes sur 246 qui n'ont jamais écrit la
+    // colonne (#6452). Une requête POSITIVE `{ has: viewerId }`, servie par
+    // `@@index([blockedUserIds])`, répond à la même question sans jamais
+    // rencontrer le piège : un champ absent ne bloque personne, donc il ne
+    // figure pas dans la réponse, et c'est exactement ce qu'on veut.
+    id: { notIn: [...options.blockedRelatedIds] },
+  };
+}
+
+/**
+ * Les identifiants à ÉCARTER d'une recherche d'annuaire : le blocage dans les
+ * DEUX directions, résolu par des requêtes positives.
+ *
+ * Le compagnon obligé de {@link contactLookupScope}, qui ne porte plus aucune
+ * clause de blocage. Lecture unique, réutilisable sur une requête.
+ */
+export async function blockedIdsAroundViewer(
+  prisma: PrismaClient,
+  viewerId: string
+): Promise<string[]> {
+  // Un `viewerId` vide n'a rien bloqué et n'est bloqué par personne — et le
+  // demander coûterait un `findUnique({ id: '' })`, que le connecteur MongoDB
+  // refuse (« Malformed ObjectID »), c'est-à-dire un 500 de plus.
+  if (!viewerId) return [];
+  return [...(await getBlockRelatedUserIds(prisma, viewerId))];
 }
 
 export class ContactDirectoryService {
@@ -140,16 +229,17 @@ export class ContactDirectoryService {
     const result = new Map<string, ContactMatch>();
     if (phones.length === 0 && emails.length === 0 && usernames.length === 0) return result;
 
-    const blockedUserIds = await this.blockedIdsOf(excludeUserId);
+    const blockedUserIds = await blockedIdsAroundViewer(this.prisma, excludeUserId);
 
     const candidates = await this.prisma.user.findMany({
       where: {
+        // Même loi que les trois sœurs publiques (#6529, #6452, #6811) :
+        // `isActive` et le filtre anti-suppression viennent de la portée, le
+        // blocage vient de la LISTE. `id` est réécrit ici parce que cette
+        // route écarte aussi le demandeur LUI-MÊME, que `contactLookupScope`
+        // n'a pas à connaître.
+        ...contactLookupScope({ blockedRelatedIds: blockedUserIds }),
         id: { notIn: [excludeUserId, ...blockedUserIds] },
-        isActive: true,
-        deletedAt: null,
-        // Un compte qui a bloqué le demandeur ne doit pas ressortir de son
-        // carnet d'adresses — le blocage vaut dans les deux sens.
-        NOT: { blockedUserIds: { has: excludeUserId } },
         OR: [
           ...(phones.length > 0 ? [{ phoneNumber: { in: phones } }] : []),
           ...(emails.length > 0 ? [{ email: { in: emails } }] : []),
@@ -161,10 +251,15 @@ export class ContactDirectoryService {
       select: MATCH_USER_SELECT,
     });
 
+    // « Ne pas être trouvé » (#8104) : un compte caché ne se rapproche d'aucun
+    // carnet, sauf de celui d'un ami accepté.
+    const hidden = await undiscoverableAmong(this.prisma, excludeUserId, candidates.map((candidate) => candidate.id));
+    const discoverable = candidates.filter((candidate) => !hidden.has(candidate.id));
+
     const byPhone = new Map<string, typeof candidates[number]>();
     const byEmail = new Map<string, typeof candidates[number]>();
     const byUsername = new Map<string, typeof candidates[number]>();
-    for (const candidate of candidates) {
+    for (const candidate of discoverable) {
       if (candidate.phoneNumber) byPhone.set(candidate.phoneNumber, candidate);
       if (candidate.email) byEmail.set(candidate.email.toLowerCase(), candidate);
       byUsername.set(candidate.username.toLowerCase(), candidate);
@@ -181,18 +276,36 @@ export class ContactDirectoryService {
   /**
    * Synchronise le carnet : upsert idempotent sur `(ownerId, contactKey)`.
    *
-   * `mode: 'replace'` (synchronisation complète du carnet) purge les entrées
-   * absentes du lot ; `'merge'` (défaut) ne supprime jamais rien — un envoi
-   * partiel ne doit pas amputer le répertoire.
+   * Deux stratégies de purge, mutuellement exclusives :
+   *  - **historique** (ni `syncStartedAt` ni `isFinalBatch` fourni) :
+   *    `mode: 'replace'` purge les entrées absentes de CE lot unique
+   *    (`contactKey notIn`) ; `'merge'` (défaut) ne supprime jamais rien —
+   *    un envoi partiel ne doit pas amputer le répertoire. Adaptée à un
+   *    appel unique, non paginé.
+   *  - **par lots** (`syncStartedAt` et/ou `isFinalBatch` fourni) : la purge
+   *    `contactKey notIn` est structurellement incompatible avec plusieurs
+   *    requêtes successives pour un même carnet — chaque lot ne voit qu'une
+   *    tranche. `mode` est alors ignoré pour la purge : aucun lot
+   *    intermédiaire ne supprime rien, et seul le lot `isFinalBatch: true`
+   *    purge — par FILIGRANE (`lastSyncedAt < syncStartedAt`, ou à défaut
+   *    `receivedAt` pour un lot unique et final), déjà posé par chaque
+   *    upsert des DEUX stratégies. Un filigrane plus vieux que 24h est
+   *    ignoré (`removed: 0`).
    */
   async sync(options: {
     ownerId: string;
     contacts: NormalizedContact[];
     mode?: SyncMode;
+    /** Filigrane client, identique sur tous les lots d'une même synchronisation. */
+    syncStartedAt?: Date;
+    /** `true` sur le dernier lot d'une synchronisation par lots. */
+    isFinalBatch?: boolean;
+    /** Horloge serveur prise à la réception de la requête, avant tout upsert. */
+    receivedAt?: Date;
   }): Promise<{ synced: number; matched: number; removed: number }> {
-    const { ownerId, contacts, mode = 'merge' } = options;
+    const { ownerId, contacts, mode = 'merge', syncStartedAt, isFinalBatch, receivedAt = new Date() } = options;
     const matches = await this.match({ contacts, excludeUserId: ownerId });
-    const syncedAt = new Date();
+    const syncedAt = receivedAt;
 
     await inBatches(contacts, UPSERT_CONCURRENCY, async (contact) => {
       const match = matches.get(contact.contactKey);
@@ -216,8 +329,27 @@ export class ContactDirectoryService {
       });
     });
 
+    const batched = syncStartedAt !== undefined || isFinalBatch !== undefined;
     let removed = 0;
-    if (mode === 'replace') {
+
+    if (batched) {
+      if (isFinalBatch === true) {
+        // Un filigrane demandé APRÈS `receivedAt` (horloge client en avance,
+        // ou dérive NTP entre le premier et le dernier lot) doit être
+        // ramené à `receivedAt` : au-delà, `watermarkAgeMs` deviendrait
+        // négatif et la purge `lastSyncedAt < watermark` engloutirait les
+        // upserts que CE lot vient d'estampiller — tous à `receivedAt`.
+        const requested = syncStartedAt ?? receivedAt;
+        const watermark = requested.getTime() > receivedAt.getTime() ? receivedAt : requested;
+        const watermarkAgeMs = receivedAt.getTime() - watermark.getTime();
+        if (watermarkAgeMs <= MAX_WATERMARK_AGE_MS) {
+          const deletion = await this.prisma.userContact.deleteMany({
+            where: { ownerId, lastSyncedAt: { lt: watermark } },
+          });
+          removed = deletion.count;
+        }
+      }
+    } else if (mode === 'replace') {
       const deletion = await this.prisma.userContact.deleteMany({
         where: { ownerId, contactKey: { notIn: contacts.map((contact) => contact.contactKey) } },
       });
@@ -229,7 +361,7 @@ export class ContactDirectoryService {
       synced: contacts.length,
       matched: matches.size,
       removed,
-      mode,
+      mode: batched ? (isFinalBatch === true ? 'watermark-final' : 'watermark-batch') : mode,
     });
 
     return { synced: contacts.length, matched: matches.size, removed };
@@ -260,23 +392,7 @@ export class ContactDirectoryService {
   }): Promise<{ contacts: DirectoryEntry[]; total: number }> {
     const { ownerId, viewer, offset, limit, filter = 'all', query } = options;
     const take = Math.min(Math.max(limit, 1), MAX_PAGE_SIZE);
-    const search = query?.trim();
-
-    const where = {
-      ownerId,
-      ...(filter === 'meeshy' ? { matchedUserId: { not: null } } : {}),
-      ...(filter === 'invitable' ? { matchedUserId: null } : {}),
-      ...(search
-        ? {
-            OR: [
-              { displayName: { contains: search, mode: 'insensitive' as const } },
-              { emails: { has: search.toLowerCase() } },
-              { usernames: { has: search.toLowerCase() } },
-              { phoneNumbers: { has: search } },
-            ],
-          }
-        : {}),
-    };
+    const where = this.critere({ ownerId, filter, query });
 
     const [rows, total] = await Promise.all([
       this.prisma.userContact.findMany({
@@ -302,6 +418,115 @@ export class ContactDirectoryService {
       this.prisma.userContact.count({ where }),
     ]);
 
+    return { contacts: await this.enrichir(rows, ownerId, viewer), total };
+  }
+
+  /**
+   * Le critère de sélection d'un carnet — SITE UNIQUE.
+   *
+   * Deux lectures s'en servent : la page par décalage (`list`, servie par les
+   * alias) et la page par CURSEUR (`page`, servie par l'adresse canonique).
+   * Écrit deux fois, il divergerait sur le premier filtre ajouté, et les deux
+   * portes ne montreraient plus le même carnet.
+   */
+  private critere(options: { ownerId: string; filter?: DirectoryFilter; query?: string }) {
+    const { ownerId, filter = 'all', query } = options;
+    const search = query?.trim();
+    return {
+      ownerId,
+      ...(filter === 'meeshy' ? { matchedUserId: { not: null } } : {}),
+      ...(filter === 'invitable' ? { matchedUserId: null } : {}),
+      ...(search
+        ? {
+            OR: [
+              { displayName: { contains: search, mode: 'insensitive' as const } },
+              { emails: { has: search.toLowerCase() } },
+              { usernames: { has: search.toLowerCase() } },
+              { phoneNumbers: { has: search } },
+            ],
+          }
+        : {}),
+    };
+  }
+
+  /**
+   * Une page de contacts par CURSEUR, avec delta optionnel (#4163).
+   *
+   * ## Deux ORDRES, et le curseur est le même
+   *
+   * En parcours, l'ordre est celui du produit — les contacts présents sur
+   * Meeshy d'abord, ce sont les seuls sur lesquels on peut agir. En DELTA
+   * (`updatedSince`), l'ordre est chronologique : c'est la seule façon de
+   * reprendre une synchronisation interrompue sans trou ni doublon.
+   *
+   * Le curseur est l'IDENTIFIANT dans les deux cas — Prisma s'en sert pour se
+   * placer dans l'ordre demandé, quel qu'il soit. Un curseur qui changerait de
+   * nature selon le mode obligerait chaque client à savoir lequel il utilise.
+   *
+   * ## Pas de `count()`
+   *
+   * La page par décalage repaie un dénombrement complet à CHAQUE page. Ici,
+   * `hasMore` se lit sur une ligne de plus demandée puis jetée.
+   */
+  async page(options: {
+    ownerId: string;
+    viewer: PresenceViewer;
+    limit: number;
+    cursor?: string;
+    filter?: DirectoryFilter;
+    query?: string;
+    updatedSince?: Date;
+  }): Promise<{ contacts: DirectoryEntry[]; hasMore: boolean; nextCursor: string | null }> {
+    const { ownerId, viewer, limit, cursor, filter, query, updatedSince } = options;
+    const take = Math.min(Math.max(limit, 1), MAX_PAGE_SIZE);
+
+    const where = {
+      ...this.critere({ ownerId, filter, query }),
+      ...(updatedSince ? { updatedAt: { gt: updatedSince } } : {}),
+    };
+
+    const rows = await this.prisma.userContact.findMany({
+      where,
+      orderBy: updatedSince
+        ? [{ updatedAt: 'asc' as const }, { id: 'asc' as const }]
+        : [{ matchedUserId: 'desc' as const }, { displayName: 'asc' as const }, { id: 'asc' as const }],
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      take: take + 1,
+      select: {
+        id: true,
+        contactKey: true,
+        displayName: true,
+        phoneNumbers: true,
+        emails: true,
+        usernames: true,
+        matchedBy: true,
+        matchedAt: true,
+        lastSyncedAt: true,
+        matchedUser: { select: PUBLIC_USER_SELECT },
+      },
+    });
+
+    const hasMore = rows.length > take;
+    const page = hasMore ? rows.slice(0, take) : rows;
+
+    return {
+      contacts: await this.enrichir(page, ownerId, viewer),
+      hasMore,
+      nextCursor: hasMore ? (page[page.length - 1] as { id: string }).id : null,
+    };
+  }
+
+  /**
+   * Ce que la BASE rend → ce que le FIL porte, blocage et présence appliqués.
+   *
+   * Partagé par les deux lectures : la règle « un lien coupé redevient à
+   * inviter » et le gate de présence ne doivent exister qu'une fois.
+   */
+  private async enrichir(
+    rows: Array<Record<string, any>>,
+    ownerId: string,
+    viewer: PresenceViewer
+  ): Promise<DirectoryEntry[]> {
     const matchedIds = [
       ...new Set(
         rows
@@ -309,24 +534,30 @@ export class ContactDirectoryService {
           .filter((id: string | undefined): id is string => typeof id === 'string'),
       ),
     ];
+
     // Une page sans aucun compte rapproché ne pose aucune question de blocage ni
     // de présence : ne pas ouvrir les requêtes pour rien.
     const blocked = matchedIds.length > 0
       ? await getBlockedUserIdsAmong(this.prisma, ownerId, matchedIds)
       : new Set<string>();
-    const visibleIds = matchedIds.filter((id) => !blocked.has(id));
+    // `hideProfileFromSearch` bouge, lui aussi, entre deux synchronisations : la
+    // lecture rejoue la loi de découvrabilité comme elle rejoue le blocage.
+    const hidden = matchedIds.length > 0
+      ? await undiscoverableAmong(this.prisma, ownerId, matchedIds.filter((id) => !blocked.has(id)))
+      : new Set<string>();
+    const severedIds = new Set([...blocked, ...hidden]);
+    const visibleIds = matchedIds.filter((id) => !severedIds.has(id));
     const visibility = visibleIds.length > 0
       ? await getPresenceVisibilityService(this.prisma).resolveForTargets(viewer, visibleIds)
       : new Map<string, PresenceVisibility>();
 
-    return {
-      contacts: rows.map((row: Record<string, any>) => {
+    return rows.map((row: Record<string, any>) => {
         const profile = toPublicProfile(row.matchedUser ?? null);
         // Un lien coupé rend EXACTEMENT ce qu'une re-synchronisation écrirait
         // pour ce contact (`matchedUserId`/`matchedBy`/`matchedAt` à null) : la
         // ligne du carnet reste — c'est l'entrée de l'utilisateur, pas celle du
         // compte bloqué — mais elle redevient « à inviter ».
-        const severed = profile !== null && blocked.has(profile.id);
+        const severed = profile !== null && severedIds.has(profile.id);
         const matchedUser = profile === null || severed
           ? null
           : applyPresenceVisibilityAsOffline(profile, visibility.get(profile.id));
@@ -343,16 +574,7 @@ export class ContactDirectoryService {
           lastSyncedAt: row.lastSyncedAt ?? null,
           matchedUser,
         };
-      }),
-      total,
-    };
-  }
-
-  /** Efface l'intégralité du répertoire de l'utilisateur (droit au retrait). */
-  async clear(ownerId: string): Promise<number> {
-    const deletion = await this.prisma.userContact.deleteMany({ where: { ownerId } });
-    logger.info('Répertoire effacé', { ownerId, removed: deletion.count });
-    return deletion.count;
+      });
   }
 
   private resolveMatch(
@@ -379,12 +601,66 @@ export class ContactDirectoryService {
     }
     return null;
   }
+}
 
-  private async blockedIdsOf(userId: string): Promise<string[]> {
-    const owner = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { blockedUserIds: true },
-    });
-    return owner?.blockedUserIds ?? [];
-  }
+export type AddressBookErasure = {
+  readonly contactsDeleted: number;
+  readonly joinNoticesDeleted: number;
+  readonly arrivalAnnouncementsDeleted: number;
+};
+
+type AnnouncementRow = { id: string; actor: unknown; metadata: unknown };
+
+const announcesJoiner = (joinerId: string) => (notification: AnnouncementRow): boolean => {
+  const actor = notification.actor as { id?: unknown } | null;
+  const metadata = notification.metadata as { joinerIds?: unknown } | null;
+  const joinerIds = Array.isArray(metadata?.joinerIds) ? metadata.joinerIds : [];
+  return actor?.id === joinerId || joinerIds.includes(joinerId);
+};
+
+/**
+ * Efface tout ce que le carnet d'adresses d'un compte SUPPRIMÉ a laissé côté
+ * serveur (#8284 — décision porteur : l'effacement du carnet se fait à la
+ * suppression du compte, jamais à la main).
+ *
+ *  - ses fiches `UserContact` ;
+ *  - les `ContactJoinNotice` qui lui sont adressées (elles disent qui figurait
+ *    dans son carnet) ;
+ *  - les `ContactJoinNotice` qui annoncent SON arrivée à d'autres, et les
+ *    notifications `contact_joined` qui en sont nées (`actor.id` ou
+ *    `metadata.joinerIds`) : elles désignent un compte qui n'existe plus. Une
+ *    annonce GROUPÉE (« Marie et 2 autres ») qui le nomme part entière.
+ *
+ * Les destinataires des annonces se lisent par les `ContactJoinNotice` AVANT de
+ * les effacer : c'est ce qui borne la recherche aux seules boîtes concernées.
+ * Idempotent : une seconde passe ne trouve plus aucune ligne.
+ */
+export async function eraseAddressBookOf(
+  prisma: Pick<PrismaClient, 'userContact' | 'contactJoinNotice' | 'notification'>,
+  userId: string
+): Promise<AddressBookErasure> {
+  const told = await prisma.contactJoinNotice.findMany({ where: { joinerId: userId }, select: { recipientId: true } });
+  const recipientIds = [...new Set(told.map((notice) => notice.recipientId))];
+  const announcements = recipientIds.length === 0
+    ? []
+    : await prisma.notification.findMany({
+        where: { userId: { in: recipientIds }, type: 'contact_joined' },
+        select: { id: true, actor: true, metadata: true },
+      });
+  const withdrawn = announcements.filter(announcesJoiner(userId)).map((notification) => notification.id);
+  const arrivalAnnouncements = withdrawn.length === 0
+    ? { count: 0 }
+    : await prisma.notification.deleteMany({ where: { id: { in: withdrawn } } });
+
+  const [contacts, received, arrivals] = await Promise.all([
+    prisma.userContact.deleteMany({ where: { ownerId: userId } }),
+    prisma.contactJoinNotice.deleteMany({ where: { recipientId: userId } }),
+    prisma.contactJoinNotice.deleteMany({ where: { joinerId: userId } }),
+  ]);
+
+  return {
+    contactsDeleted: contacts.count,
+    joinNoticesDeleted: received.count + arrivals.count,
+    arrivalAnnouncementsDeleted: arrivalAnnouncements.count,
+  };
 }

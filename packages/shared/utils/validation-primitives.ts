@@ -1,0 +1,214 @@
+/**
+ * Les BORNES et MOTIFS que plusieurs familles de schémas Zod partagent —
+ * extraits de `utils/validation.ts` par #5216.
+ *
+ * ## Pourquoi une extraction, et pourquoi celle-ci
+ *
+ * `utils/validation.ts` porte 2700 lignes pour un plafond de 1000 : le dépôt
+ * interdit d'y AJOUTER, il faut en extraire d'abord (directive 2026-09-02). Le
+ * lot qui ouvre l'inscription à un écran de trois champs devait faire grossir
+ * `AuthSchemas` ; c'est donc `AuthSchemas` qui part (`utils/auth-schemas.ts`),
+ * et ce fichier-ci porte ce dont il a besoin ET que le reste de
+ * `validation.ts` partage.
+ *
+ * Le découpage suit la RESPONSABILITÉ, pas la tranche : ici vivent les valeurs
+ * qui ne dépendent d'aucun schéma et dont plusieurs schémas dépendent — une
+ * longueur, deux motifs compilés depuis leur source unique, deux codeurs de
+ * langue. Les recopier chez chaque consommateur aurait fabriqué exactement les
+ * jumelles divergentes que `password-min-length-parity.test.ts` existe pour
+ * empêcher.
+ *
+ * `validation.ts` les ré-exporte quand ses importeurs les nommaient déjà
+ * (`PASSWORD_MIN_LENGTH`) : aucune adresse d'import n'a bougé.
+ *
+ * @module @meeshy/shared/utils/validation-primitives
+ */
+
+import { z } from 'zod';
+import {
+  nameMinLength,
+  personNamePatternSource,
+  usernameMaxLength,
+  usernameMinLength,
+  usernamePatternSource,
+} from '../types/api-schemas.js';
+import { isSupportedLanguage } from './languages.js';
+import { normalizeLanguageCode } from './language-normalize.js';
+import { visibleNameLength, visibleNameText } from './visible-name-length.js';
+
+/**
+ * Nom de personne (prénom / nom). Compilé depuis la source unique
+ * `personNamePatternSource` (types/api-schemas.ts) pour que la couche Ajv
+ * (body JSON schema Fastify) et la couche Zod rendent le même verdict —
+ * notamment l'acceptation des apostrophes typographiques `’`/`ʼ` insérées par
+ * le clavier iOS.
+ */
+export const PERSON_NAME_PATTERN = new RegExp(personNamePatternSource, 'u');
+
+/**
+ * Nom d'utilisateur. Compilé depuis la source unique `usernamePatternSource`
+ * (types/api-schemas.ts) pour que la couche Ajv (body JSON schema Fastify) et la
+ * couche Zod rendent le même verdict — notamment le refus de l'espace et des
+ * lettres accentuées, que le charset ASCII exclut.
+ */
+export const USERNAME_PATTERN = new RegExp(usernamePatternSource);
+
+/**
+ * « Au moins `min` caractères VISIBLES » (#13825) — la moitié de la borne
+ * qu'Ajv ne sait pas dire : son `minLength` compte des unités UTF-16, si bien
+ * que « A » entouré d'espaces, suivi d'un invisible, d'un caractère de
+ * contrôle ou d'une balise vide, ou « É » décomposé, passaient pour deux
+ * caractères avant d'être stockés « A ». La mesure est `visibleNameLength`
+ * (graphèmes du texte nettoyé). Un prédicat plutôt qu'un `.transform` de zod,
+ * qui RÉÉCRIRAIT la valeur : la normalisation reste chez le handler.
+ */
+export const atLeastVisible = (min: number) => (value: string): boolean => visibleNameLength(value) >= min;
+
+/** Une valeur ABSENTE (vide ou blanche une fois nettoyée) passe ; une valeur SAISIE tient la borne. */
+export const blankOrAtLeastVisible = (min: number) => (value: string): boolean =>
+  visibleNameText(value) === '' || atLeastVisible(min)(value);
+
+/**
+ * Le refus d'une borne de longueur, avec son minimum en PARAMÈTRE : la
+ * passerelle le relit (`issue.params.minimum`) pour nommer le champ et le
+ * minimum dans le `message` du 400, au lieu d'un « Invalid data » muet.
+ */
+export const lengthFloorRefusal = (minimum: number) => ({
+  message: `Au moins ${minimum} caractères`,
+  params: { minimum },
+});
+
+export const nameTooShort = lengthFloorRefusal(nameMinLength);
+export const usernameTooShort = `Username trop court (min ${usernameMinLength} caractères)`;
+export const usernameTooLong = `Username trop long (max ${usernameMaxLength} caractères)`;
+
+/**
+ * Longueur minimale d'un mot de passe — UNE règle, pour toutes les portes.
+ *
+ * Elle a valu onze déclarations indépendantes, et trois valeurs différentes :
+ * le wizard web ouvrait le pas suivant dès 6, la checklist affichée à
+ * l'utilisateur en promettait 8, et les schémas serveur en exigeaient 8. Une
+ * saisie de 6 caractères franchissait donc tout le formulaire pour se faire
+ * rejeter à la DERNIÈRE étape par un message Ajv brut, trois écrans après le
+ * champ fautif.
+ *
+ * La borne s'applique aux mots de passe qu'on DÉFINIT. Un mot de passe qu'on
+ * PROUVE (`currentPassword`) n'a qu'à être non vide : c'est le hash qui
+ * l'arbitre, et lui imposer une longueur enfermerait tout compte créé sous une
+ * borne plus basse.
+ *
+ * **Ramenée à 6 sur directive porteur du 2026-09-13**, après mesure en
+ * production : sur les ~24 h de rétention des journaux de la passerelle,
+ * `POST /api/v1/auth/register` a rendu **18 refus pour cette seule borne**,
+ * contre **2 comptes effectivement créés** sur la même journée. Neuf tentatives
+ * d'inscription sur dix échouaient donc sur la longueur du mot de passe.
+ *
+ * Ce que cette valeur ANNULE, et il faut le dire pour que la prochaine session
+ * ne la « corrige » pas : #3629 l'avait portée de 6 à 12 pour une raison qui
+ * reste vraie — 6 caractères laissent passer des mots de passe triviaux
+ * (`zxcvbn`, au reset, en jugeait déjà la moitié trop faibles), et 12 est le
+ * plancher NIST SP 800-63B pour un secret mémorisé sans complexité imposée. Le
+ * porteur a arbitré en connaissance de cet écart : l'inscription qui n'aboutit
+ * pas coûte, aujourd'hui, plus que le mot de passe faible qu'elle laisse
+ * passer.
+ *
+ * Ce qui NE change pas, et qui limite la portée du recul : `zxcvbn` continue de
+ * juger la FORCE au-delà de la longueur (`utils/password-strength.ts`), et la
+ * réinitialisation garde sa propre exigence. Six est un plancher de SAISIE, pas
+ * un satisfecit de sécurité.
+ *
+ * Garde : `__tests__/password-min-length-parity.test.ts`.
+ */
+export const PASSWORD_MIN_LENGTH = 6;
+
+export const passwordTooShort = `Mot de passe trop court (min ${PASSWORD_MIN_LENGTH} caractères)`;
+
+
+/**
+ * Code de langue in-app supporté, **validé ET normalisé** (lowercase).
+ *
+ * Source de vérité unique de la normalisation à l'écriture : `isSupportedLanguage`
+ * accepte les codes de manière insensible à la casse (`'EN'`, `'Fr'`) mais ne les
+ * transforme pas — sans le `.transform` ci-dessous, un `systemLanguage: 'EN'` serait
+ * persisté verbatim et casserait la résolution du Prisme Linguistique côté lecture
+ * (les traductions sont stockées sous clé minuscule). On lowercase donc au point
+ * d'écriture pour garantir l'invariant « la base ne contient que des codes
+ * minuscules », rendant les compensations de lecture (`resolveUserLanguage`) purement
+ * défensives.
+ *
+ * @see packages/shared/utils/conversation-helpers.ts — résolveurs de lecture
+ */
+export const supportedLanguageCode = z
+  .string()
+  .min(2)
+  .max(5)
+  .refine((code) => isSupportedLanguage(code), { message: 'Unsupported language code' })
+  .transform((code) => code.toLowerCase());
+
+/**
+ * Code de langue de destination personnalisée (priorité 3 du Prisme). Contrairement
+ * à {@link supportedLanguageCode}, ce champ n'exige pas que le code figure dans la
+ * liste des langues supportées, mais il DOIT être canonique en base : un locale
+ * région/script-taggé de plateforme (`'fr-FR'`, `'en_US'`) persisté verbatim comme
+ * `'fr-fr'` / `'en-us'` ne matcherait aucune `MessageTranslation.targetLanguage`
+ * (clé lowercase) et forcerait la résolution du Prisme sur le message original.
+ *
+ * Canonicalisation au write boundary via le SSOT {@link normalizeLanguageCode}
+ * (`'fr-FR'`/`'fr_FR'` → `'fr'`, `'en-US'` → `'en'`), avec repli `.toLowerCase()`
+ * pour les codes que le normaliseur ne sait pas réduire (ISO 639-3 supporté comme
+ * `'bas'`, ou code plausible inconnu) : comportement d'acceptation strictement
+ * inchangé, seul le stockage des codes région-taggés est corrigé.
+ *
+ * La borne `.max(6)` reflète la longueur MAXIMALE d'un code 639-3 région-taggé
+ * (`[a-z]{3}` + `-` + `[A-Z]{2}` = 6, ex. `'bas-CM'`, `'ewo-CM'`), miroir de
+ * {@link CommonSchemas.language}. Un `.max(5)` tombait AVANT la `.transform` et
+ * rejetait ces locales de plateforme (`Locale.current` / `Accept-Language`) en
+ * HTTP 400 — la même exclusion silencieuse que l'itération 266 a fermée sur les
+ * langues de contenu, manquée ici parce que `.min`/`.max` sur deux lignes
+ * échappaient à son grep mono-ligne.
+ */
+export const customDestinationLanguageCode = z
+  .string()
+  .min(2)
+  .max(6)
+  .transform((code) => normalizeLanguageCode(code) ?? code.toLowerCase());
+
+/**
+ * Borne de longueur en unités **UTF-16** (`String.length`), posée sans
+ * dépendre de ce que l'installation de zod fait de `.min()`/`.max()`/`.length()`.
+ *
+ * zod ≤4.4 comptait des unités UTF-16 ; zod ≥4.5 est passé à compter des
+ * CODE POINTS Unicode — un fail-open silencieux, à la montée de version, sur
+ * toute borne censée plafonner un COÛT (octets/unités) plutôt qu'un nombre de
+ * caractères perçus : `z.string().max(32)` laisse alors passer 32 emojis
+ * astraux (64 unités UTF-16, ~128 octets) au lieu de 32 (#6235). `.refine()`
+ * ne souffre pas de cette ambiguïté : il lit `value.length`, qui est
+ * `String.length` par définition du langage, quelle que soit la version de
+ * zod installée.
+ *
+ * Réservé aux bornes de STOCKAGE / anti-abus (« au plus N unités UTF-16 »).
+ * Une borne d'AFFICHAGE (« au plus N caractères comme un humain les compte »)
+ * doit rester sur `.min()`/`.max()` natifs, dont la sémantique évoluée de zod
+ * 4.5 s'en rapproche davantage.
+ *
+ * @see EMOJI_MAX_LENGTH (`types/reaction.ts`) — première borne portée ici
+ */
+export function utf16Bounded<S extends z.ZodString>(
+  schema: S,
+  bounds: { min?: number; max?: number },
+): S {
+  return schema.superRefine((value, ctx) => {
+    if (bounds.min !== undefined && value.length < bounds.min) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `String must contain at least ${bounds.min} character(s)`,
+      });
+    }
+    if (bounds.max !== undefined && value.length > bounds.max) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `String must contain at most ${bounds.max} character(s)`,
+      });
+    }
+  });
+}

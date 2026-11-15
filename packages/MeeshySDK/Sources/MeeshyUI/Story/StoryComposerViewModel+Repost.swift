@@ -11,23 +11,21 @@ extension StoryComposerViewModel {
     ///
     /// Clones the active `StoryItem` (the slide currently displayed in the viewer) into a
     /// fresh `StorySlide` (the composer's internal type — different from `StoryItem`),
-    /// appends a non-editable "locked" badge sticker at the bottom-center of the canvas,
-    /// and triggers an asynchronous media preload via the shared `CacheCoordinator`
-    /// (3-tier cache) so the canvas paints instantly once mounted.
+    /// drops any credit chip the source inherited, and triggers an asynchronous media
+    /// preload via the shared `CacheCoordinator` (3-tier cache) so the canvas paints
+    /// instantly once mounted. No « Reposté de @auteur » chip is added (#10524): the
+    /// credit lives in the viewer header, after the date.
     ///
-    /// - Parameters:
-    ///   - story: The source story (the viewer's `StoryItem`). Carries the repost-chain
-    ///            IDs we need (`id`, `repostOfId`, `originalRepostOfId`) — that is why we
-    ///            do not require an `APIPost` here.
-    ///   - authorHandle: What to render in the badge ("Reposté de @\(authorHandle)") —
-    ///                   typically `currentGroup.username` from the iOS caller.
+    /// - Parameter story: The source story (the viewer's `StoryItem`). Carries the
+    ///   repost-chain IDs we need (`id`, `repostOfId`, `originalRepostOfId`) — that is
+    ///   why we do not require an `APIPost` here.
     ///
     /// The publish flow itself is NOT modified — `StoryComposerViewModel` still does not
     /// call `PostService.create*` directly. Publication is delegated to the
     /// `onPublishSlide` callback (`StoryComposerView.swift`) implemented by the iOS app
     /// caller (Phase C), which reads `vm.repostOfId` and forwards it to
     /// `PostService.create(...)` / `createStory(...)` (B.5c).
-    public convenience init(reposting story: StoryItem, authorHandle: String) {
+    public convenience init(reposting story: StoryItem) {
         self.init()
 
         // Repost chain IDs (root-flatten):
@@ -53,38 +51,11 @@ extension StoryComposerViewModel {
             order: 0
         )
 
-        // Locked badge sticker — non-editable text rendered at bottom-center.
-        // The composer (StoryTextObject `isLocked == true`, see Patch B.3) skips
-        // drag/edit/delete for this object so reposters cannot strip the attribution.
-        // Direct interpolation : the Localizable.xcstrings catalog does not yet have
-        // a `story.repost.badge` key with a `%@` placeholder, and `String(localized:)`
-        // requires a StaticString literal (not a runtime-interpolated key). When the
-        // catalog grows a proper entry, switch to `String(format: NSLocalizedString(...))`.
-        let badgeText = "Reposté de @\(authorHandle)"
-        let badge = StoryTextObject(
-            id: UUID().uuidString,
-            text: badgeText,
-            x: 0.5, y: 0.92,
-            scale: 1.0, rotation: 0,
-            fontSize: 14,
-            textStyle: "bold",
-            textColor: "FFFFFF",
-            textAlign: "center",
-            textBg: "6366F1",
-            isLocked: true
-        )
-        var effects = cloned.effects
-        // Strip toute attribution verrouillée héritée de la source avant d'ajouter
-        // la nôtre : reposter un repost empilerait sinon deux badges locked qui se
-        // chevauchent au même point (x:0.5, y:0.92). Les text objects locked sont
-        // EXCLUSIVEMENT des badges d'attribution (ce site est l'unique producteur de
-        // `isLocked: true`), donc ce filtre ne touche jamais le texte éditable de
-        // l'auteur. Le nouveau badge attribue à la source immédiate (`authorHandle`) ;
-        // la racine reste tracée via `originalRepostOfId`.
-        var texts = effects.textObjects.filter { $0.isLocked != true }
-        texts.append(badge)
-        effects.textObjects = texts
-        cloned.effects = effects
+        // **Aucune puce de crédit** (#10524) : le
+        // crédit vit dans l'en-tête du lecteur, après la date. La puce qu'une
+        // source publiée avant la règle porte encore part avec la copie, sans
+        // jamais toucher le texte éditable de l'auteur.
+        cloned.effects.textObjects = StoryRepostCredit.stripped(from: cloned.effects.textObjects)
 
         self.slides = [cloned]
         self.currentSlideIndex = 0

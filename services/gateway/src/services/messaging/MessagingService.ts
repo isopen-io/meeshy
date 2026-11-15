@@ -4,6 +4,7 @@
  */
 
 import { PrismaClient, Message } from '@meeshy/shared/prisma/client';
+import type { ParticipantPermissions, AnonymousRightsOverride } from '@meeshy/shared/prisma/client';
 import type {
   MessageRequest,
   MessageResponse
@@ -13,38 +14,84 @@ import { MessageReadStatusService } from '../MessageReadStatusService';
 import { NotificationService } from '../notifications/NotificationService';
 import { MessageValidator } from './MessageValidator';
 import { MessageProcessor } from './MessageProcessor';
-import { queueMessageTranslation, runMessagePostSaveEffects } from './messagePostSaveEffects';
+import { postSaveToolFields, queueMessageTranslation, runMessagePostSaveEffects } from './messagePostSaveEffects';
+import { EngagementService } from '../engagement/EngagementService';
+import { stickerFromMetadata } from '../stickers/messageSticker';
 import {
   admitMessageForward,
   describeForwardRefusal,
+  forwardedCopyRequest,
   isForwardRefused,
   sanitizeForwardReferences
 } from './forwardAdmission';
+import { admitAttachmentReply } from './attachmentReplySnapshot';
+import { admitStoryReply } from './storyReplyAdmission';
 import {
   admitConversationWrite,
   isConversationWriteRefused,
-  describeConversationWriteRefusal
+  describeConversationWriteRefusal,
+  writeRefusalCode
 } from './conversationWriteAdmission';
+import { sharedSendReservations, type SendReservationStore } from './newcomerSendReservations';
+import { resolveParticipantRights, NEW_MEMBER_PERMISSIONS } from '../participantRights';
+import { servedMessageSender } from '@meeshy/shared/utils/participant-helpers';
+import { ANONYMOUS_SENDER_NAME_SELECT } from './anonymousSenderNameSelect';
+import {
+  attachmentSendRefusal,
+  carriesAttachments,
+  loadCarriedAttachmentMimeTypes,
+  loadGuestAttachmentKinds
+} from './attachmentKindAdmission';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
+import { announceConversationLanguageChange } from '../message-translation/conversationLanguageChanges';
+import { withOrphanedSenderRepair } from './withOrphanedSenderRepair';
+import { announceSenderBacklogRead, type ReadBroadcastDepsProvider } from './senderBacklogRead';
+import { startedGroupAnnouncer, type StartedGroupAnnouncer } from '../conversations/announceStartedGroup';
+import { isE2eePlaintextRefusal } from './e2eePlaintextAdmission';
+import { isServerAtRestCiphertextRefusal, isServerAtRestUnavailable } from './serverAtRest';
+import { isE2eeRelayRefusal } from '../e2ee/e2ee-relay-errors';
+import { persistableEncryption } from './e2eeRelayPayload';
+import { sealMessageIfConversationObsoleted } from '../conversations/obsoleteMessageSeal';
+import { mayReturnToSalon } from '../conversations/communityMembershipSync';
 
 const logger = enhancedLogger.child({ module: 'MessagingService' });
+
+/**
+ * #14107 (audit B5) — un compte dont un droit de média est explicitement FERMÉ
+ * (l'expéditeur d'une demande non acceptée, à tout âge) voit ses transferts et diffusions
+ * gardés comme ses rattachements : sinon un transfert recopie l'image fermée.
+ */
+const closesSomeMedia = (rights: { readonly [K: string]: boolean | null | undefined } | null): boolean =>
+  rights !== null && ['canSendFiles', 'canSendImages', 'canSendVideos', 'canSendAudios'].some((right) => rights[right] === false);
 
 export class MessagingService {
   private validator: MessageValidator;
   private processor: MessageProcessor;
   private readStatusService: MessageReadStatusService;
+  private engagementService: EngagementService;
+  /** #14644 — l'annonce d'un groupe démarré par son premier message. */
+  private readonly startedGroups: StartedGroupAnnouncer;
 
   constructor(
     private readonly prisma: PrismaClient,
     private readonly translationService: MessageTranslationService,
-    notificationService?: NotificationService
+    notificationService?: NotificationService,
+    private readonly readBroadcastDeps?: ReadBroadcastDepsProvider,
+    private readonly sendReservations: SendReservationStore = sharedSendReservations
   ) {
     this.validator = new MessageValidator(prisma);
     this.processor = new MessageProcessor(prisma, notificationService, translationService);
     this.readStatusService = new MessageReadStatusService(prisma);
+    this.engagementService = new EngagementService(prisma);
+    this.startedGroups = startedGroupAnnouncer(() => ({
+      prisma,
+      io: readBroadcastDeps?.().io,
+      notificationService,
+    }));
   }
 
   /**
@@ -70,6 +117,13 @@ export class MessagingService {
     logger.info('perf:messaging.handleMessage', {
       ...corr, step: 'messaging.handleMessage', phase: 'start'
     });
+
+    // La fenêtre du mode lent que l'admission a RÉSERVÉE (règle 4). Tant que
+    // la ligne n'est pas écrite, toute sortie — refus plus bas, panne de
+    // `saveMessage` — la rend : un envoi que personne n'a reçu ne coûte pas
+    // 30 s d'attente. Écrite (ou dédupliquée sur l'original), elle expire.
+    let releaseReservation: (() => Promise<void>) | undefined;
+    let persisted = false;
 
     try {
       // 0. Assainissement des références de transfert — AVANT la validation,
@@ -105,15 +159,25 @@ export class MessagingService {
           const cached = getCachedParticipant(participantId, conversationId);
           if (cached) return cached;
 
+          // `permissions` + `anonymousSession.rights` : nécessaires à
+          // `resolveParticipantRights` (#4855) pour trancher `canSendMessages`
+          // sans lecture Prisma supplémentaire — même projection que
+          // `HISTORY_FLOOR_PARTICIPANT_SELECT` (`services/historyFloor.ts`).
           let p = await this.prisma.participant.findUnique({
             where: { id: participantId },
-            select: { id: true, conversationId: true, isActive: true }
+            select: {
+              id: true, conversationId: true, isActive: true, bannedAt: true,
+              permissions: true, anonymousSession: { select: { rights: true, shareLinkId: true } }
+            }
           });
           if (!p || p.conversationId !== conversationId) {
             logger.error('DEPRECATED: userId passed as participantId — caller must pass Participant.id', { participantId, conversationId });
             p = await this.prisma.participant.findFirst({
-              where: { userId: participantId, conversationId, isActive: true },
-              select: { id: true, conversationId: true, isActive: true }
+              where: { userId: participantId, conversationId, ...PARTICIPATION_VIVANTE },
+              select: {
+                id: true, conversationId: true, isActive: true, bannedAt: true,
+                permissions: true, anonymousSession: { select: { rights: true, shareLinkId: true } }
+              }
             });
           }
           if (!p) {
@@ -127,7 +191,11 @@ export class MessagingService {
         { ...corr, conversationId }
       );
 
-      if (!participant || !participant.isActive) {
+      // #10440 — la participation VIVANTE (`PARTICIPATION_VIVANTE`) : active
+      // ET non bannie. Une ligne active et bannie — la forme que
+      // `restore-for-me` produisait avant #10436 — n'écrit pas, même si une
+      // autre écriture la rallumait un jour sans lire `bannedAt`.
+      if (!participant || !participant.isActive || participant.bannedAt) {
         return this.createErrorResponse(
           'Permissions insuffisantes pour envoyer des messages'
         );
@@ -140,7 +208,7 @@ export class MessagingService {
       if (request.clientMessageId) {
         const earlyHit = await performanceLogger.withTiming(
           'messaging.earlyDedupCheck',
-          () => this.prisma.message.findFirst({
+          () => withOrphanedSenderRepair({ prisma: this.prisma, conversationIds: [conversationId] }, () => this.prisma.message.findFirst({
             where: { conversationId, clientMessageId: request.clientMessageId },
             // Fetch the sender relation so `createSuccessResponse` resolves
             // `senderId` to the User.id (clients compare it to their own
@@ -152,6 +220,7 @@ export class MessagingService {
                 select: {
                   id: true, displayName: true, avatar: true, type: true,
                   nickname: true, userId: true,
+                  ...ANONYMOUS_SENDER_NAME_SELECT,
                   user: {
                     select: {
                       id: true, username: true, displayName: true,
@@ -161,27 +230,29 @@ export class MessagingService {
                 }
               }
             }
-          }),
+          })),
           corr
         );
         if (earlyHit) {
+          // #11381 — la ligne relue est servie (et retraduite) en CLAIR, comme les deux autres chemins de dédup.
+          const openedHit = await this.processor.revealStored(earlyHit);
           // Flag the in-process dedup marker so the caller (MessageHandler)
           // suppresses the `message:new` re-broadcast / agent-notify / stats
           // side effects. Without it, a sequential retry on the same
           // clientMessageId re-broadcasts the bubble to every recipient. This
           // mirrors the P2002 concurrent-retry path in MessageProcessor.saveMessage.
-          (earlyHit as { isDuplicate?: boolean }).isDuplicate = true;
-          const translations = (earlyHit as { translations?: unknown }).translations;
+          (openedHit as { isDuplicate?: boolean }).isDuplicate = true;
+          const translations = (openedHit as { translations?: unknown }).translations;
           if (this.isTranslationsEmpty(translations)) {
-            void this.queueTranslation(earlyHit, earlyHit.originalLanguage ?? 'fr').catch((err) =>
+            void this.queueTranslation(openedHit, openedHit.originalLanguage ?? 'fr').catch((err) =>
               logger.error('background re-translation failed on early dedup', err as Error)
             );
           }
           logger.info('perf:messaging.handleMessage', {
             ...corr, step: 'messaging.handleMessage', phase: 'end',
-            durationMs: Date.now() - startTime, messageId: earlyHit.id, earlyDedupHit: true
+            durationMs: Date.now() - startTime, messageId: openedHit.id, earlyDedupHit: true
           });
-          return this.createSuccessResponse(earlyHit);
+          return this.createSuccessResponse(openedHit);
         }
       }
 
@@ -212,7 +283,9 @@ export class MessagingService {
         'messaging.conversationWriteAdmission',
         () => admitConversationWrite(this.prisma, {
           conversationId,
-          senderParticipantId: participant.id
+          senderParticipantId: participant.id,
+          reservations: this.sendReservations,
+          sendId: request.clientMessageId
         }),
         { ...corr, conversationId }
       );
@@ -222,8 +295,80 @@ export class MessagingService {
           retryAfterSeconds: conversationAdmission.retryAfterSeconds
         });
         return this.createErrorResponse(
-          describeConversationWriteRefusal(conversationAdmission)
+          describeConversationWriteRefusal(conversationAdmission),
+          writeRefusalCode(conversationAdmission),
+          conversationAdmission.reason === 'newcomer-slow-mode' ? conversationAdmission.retryAfterSeconds : undefined
         );
+      }
+      releaseReservation = conversationAdmission.releaseReservation;
+
+      // 3.7. Droit D'ÉCRITURE DU PARTICIPANT (#4855) — distinct de l'état du
+      //      conteneur ci-dessus : `canSendMessages` est un droit PERSONNEL
+      //      (instantané figé au join, retirable par un hôte via
+      //      `PATCH …/participants/:id/rights`), jamais une règle de la
+      //      conversation elle-même. Seul `routes/links/messages.ts`
+      //      l'appliquait jusqu'ici — ni cette route REST canonique ni
+      //      `message:send` (les deux convergent ici) ne le lisaient : un hôte
+      //      qui retirait le droit d'écrire à un invité voyait
+      //      `participant:rights-updated` fermer le composeur du client
+      //      obéissant, pendant qu'un client qui postait quand même (ou sans
+      //      cet écouteur) passait.
+      //
+      //      Même loi que `historyFloorFor` / `participantConversationPayload`
+      //      — `resolveParticipantRights` (`services/participantRights.ts`),
+      //      jamais `participant.permissions` brut : l'instantané ne voit pas
+      //      la surcharge que l'hôte a posée depuis. `=== false` explicite :
+      //      un droit ABSENT (participant auto-créé, ligne héritée sans
+      //      `permissions` sélectionné) est permissif, comme partout ailleurs
+      //      dans ce module — seul un refus EXPLICITE bloque.
+      const senderRights = participant.permissions
+        ? resolveParticipantRights({ permissions: participant.permissions, anonymousSession: participant.anonymousSession })
+        : null;
+      if (senderRights?.canSendMessages === false) {
+        logger.info('participant write right denied', { ...corr, conversationId });
+        return this.createErrorResponse(
+          'Vous n\'êtes pas autorisé à envoyer des messages',
+          'WRITE_NOT_PERMITTED'
+        );
+      }
+
+      // 3.8. Droits DE PIÈCE JOINTE (#5151) — distincts de `canSendMessages`
+      //      ci-dessus : ce qu'on a le droit de JOINDRE, pas d'ÉCRIRE. Un hôte
+      //      peut laisser un invité écrire (`canSendMessages: true`) sans le
+      //      laisser illustrer (`canSendImages: false`) — `upload.ts` ne garde
+      //      que le TÉLÉVERSEMENT du fichier, jamais son admission au moment
+      //      où il est RATTACHÉ à un message envoyé par ce transport. Le droit
+      //      dépend du TYPE de chaque pièce (`attachmentSendRightForMimeType`,
+      //      même table que `senderRights` ci-dessus) — d'où la lecture
+      //      supplémentaire, minimale (id + mimeType uniquement).
+      //
+      //      #10001 — un INVITÉ dont le lien liste ses familles (World Wide)
+      //      relève d'un autre régime : la famille de chaque pièce, jamais
+      //      l'instantané du join (`attachmentKindAdmission.ts`).
+      //
+      //      #10051 — un TRANSFERT ou une DIFFUSION recopie les pièces de sa
+      //      source avec l'invité pour auteur : pour un invité, elles passent
+      //      la même garde que les pièces rattachées. Un compte n'est pas
+      //      concerné (la règle de #5151 ne visait que le rattachement).
+      const guestShareLinkId = participant.anonymousSession?.shareLinkId;
+      const carried = guestShareLinkId || closesSomeMedia(senderRights)
+        ? request
+        : { attachmentIds: request.attachmentIds };
+      if ((senderRights || guestShareLinkId) && carriesAttachments(carried)) {
+        const mimeTypes = await loadCarriedAttachmentMimeTypes(this.prisma, carried);
+        const guestKinds = guestShareLinkId
+          ? await loadGuestAttachmentKinds(this.prisma, { shareLinkId: guestShareLinkId, conversationId })
+          : null;
+        const refusal = attachmentSendRefusal({
+          mimeTypes,
+          guestKinds,
+          senderRights,
+          hostOverride: participant.anonymousSession?.rights
+        });
+        if (refusal) {
+          logger.info('participant attachment refused', { ...corr, conversationId, code: refusal.code });
+          return this.createErrorResponse(refusal.message, refusal.code);
+        }
       }
 
       // 4. Détection de langue — trust the client's `originalLanguage` when
@@ -264,6 +409,46 @@ export class MessagingService {
               )
             : 'fr');
 
+      // 4.4. Admission de la CITATION (#6601) et de sa PIÈCE NOMMÉE (#9909)
+      //      — `replyToId` doit désigner un message VIVANT de CETTE
+      //      conversation, et une pièce citée en plus doit appartenir à ce
+      //      message. Posé ICI parce que les trois transports d'envoi (REST,
+      //      socket texte, socket pièces jointes) convergent sur
+      //      `handleMessage`, seul site qui voit `conversationId` déjà résolu
+      //      sans jamais faire confiance au client.
+      //
+      //      La requête est ensuite RÉÉCRITE avec l'instantané ADMIS : ce que
+      //      le transport a reçu (nature déclarée comprise) n'atteint jamais
+      //      `metadata.attachmentReplyTo`, seule la nature relue du MIME y
+      //      entre. La route REST relit la même garde plus tôt pour répondre
+      //      en 400 ; la seconde lecture est redondante mais inoffensive.
+      const citation = await admitAttachmentReply(this.prisma, {
+        conversationId,
+        replyToId: request.replyToId,
+        attachmentReplyTo: request.attachmentReplyTo
+      });
+      if (!citation.ok) {
+        logger.info('reply citation refused', { ...corr, conversationId, reason: citation.reason });
+        return this.createErrorResponse(citation.reason ?? 'Message cité invalide');
+      }
+      request = { ...request, attachmentReplyTo: citation.snapshot ?? undefined };
+
+      // 4.4 bis. Admission de la STORY citée (#7882) — la jumelle de #6601 sur
+      //      le second champ de citation. `storyReplyToId` gèle l'instantané du
+      //      post dans `metadata.postReplyTo` puis le diffuse aux membres :
+      //      l'expéditeur doit pouvoir VOIR la story, et son auteur être
+      //      membre ACTIF de CETTE conversation.
+      //      Même site, même raison : les trois transports convergent ici.
+      const storyCitation = await admitStoryReply(this.prisma, {
+        conversationId,
+        senderParticipantId: participant.id,
+        storyReplyToId: request.storyReplyToId
+      });
+      if (!storyCitation.ok) {
+        logger.info('story reply citation refused', { ...corr, conversationId, reason: storyCitation.reason });
+        return this.createErrorResponse(storyCitation.reason ?? 'Story citée invalide');
+      }
+
       // 4.5. Admission du TRANSFERT — la dernière sortie de l'éphémère et de la
       //      vue unique. Une copie transférée est une ligne `Message`
       //      indépendante : sans ce garde elle naît sans échéance et sans
@@ -281,14 +466,24 @@ export class MessagingService {
       //      tenir. Sans lui, un transfert dont la source a disparu créait une
       //      ligne sans contenu, sans pièce jointe et sans chiffré — une bulle
       //      vide diffusée à tous. Les deux règles évoluent ensemble.
+      //
+      //      #9579 — l'expéditeur est remis au garde : un transfert n'est admis
+      //      que s'il peut LIRE la source, et la conversation de provenance
+      //      n'est gardée que si la source y vit.
       const forwardAdmission = await admitMessageForward(this.prisma, {
         forwardedFromId: request.forwardedFromId,
+        senderParticipantId: participant.id,
+        forwardedFromConversationId: request.forwardedFromConversationId,
         at: new Date(),
-        bodyOnlyFromSource: this.bodyOnlyFromSource(request)
+        bodyOnlyFromSource: this.bodyOnlyFromSource(request),
+        forwardedAttachmentIds: request.forwardedAttachmentIds,
+        bringsOwnPieces: this.bringsOwnPieces(request)
       });
+      // #9598 — le motif voyage en `code`, stable ; la phrase reste pour les
+      // anciens clients.
       if (isForwardRefused(forwardAdmission)) {
         logger.info('forward refused', { ...corr, reason: forwardAdmission.reason });
-        return this.createErrorResponse(describeForwardRefusal(forwardAdmission));
+        return this.createErrorResponse(describeForwardRefusal(forwardAdmission), forwardAdmission.reason);
       }
 
       // 5. Sauvegarde du message en base. Phase 4 §6.2 — `clientMessageId`
@@ -297,27 +492,27 @@ export class MessagingService {
       //    déclenche un duplicate-key, MessageProcessor relit l'existant
       //    et flague `(message as any).isDuplicate = true`.
       //
-      //    `expiresAt` : l'échéance HÉRITÉE de la source prime sur celle que le
-      //    client a (ou n'a pas) envoyée — c'est tout l'objet du garde
-      //    ci-dessus. Le bit `EPHEMERAL` s'en déduit dans `saveMessage`.
+      //    `forwardedCopyRequest` (#9572) pose le VERDICT du garde ci-dessus,
+      //    APRÈS le spread de la requête : ce qu'un client aurait glissé sous
+      //    `forwardImposes` est écrasé. `saveMessage` en tire durée bornée,
+      //    bits et flou de la copie ; une source indisponible retire
+      //    `forwardedFromId`, donc rien de la source n'est recopié.
       const message = await performanceLogger.withTiming(
         'messaging.saveMessage',
         () => this.processor.saveMessage({
           ...request,
-          ...(forwardAdmission.expiresAt ? { expiresAt: forwardAdmission.expiresAt } : {}),
+          ...forwardedCopyRequest(request, forwardAdmission),
           originalLanguage,
           conversationId,
           senderId: participant!.id,
           mentionedUserIds: request.mentionedUserIds,
-          encryptedContent: request.encryptedPayload?.ciphertext,
-          encryptionMetadata: request.encryptedPayload ? {
-            mode: 'e2ee',
-            ...request.encryptedPayload
-          } as unknown as import('@meeshy/shared/prisma/client').Prisma.InputJsonValue : undefined,
+          ...persistableEncryption(request.encryptedPayload),
+          deviceLayerRelay: request.deviceLayer,
           clientMessageId: request.clientMessageId
         }),
         { ...corr, conversationId }
       );
+      persisted = true;
 
       const isDuplicate =
         Boolean((message as { isDuplicate?: boolean }).isDuplicate);
@@ -350,6 +545,16 @@ export class MessagingService {
         return response;
       }
 
+      // 5 bis. #14643 — admis quand la conversation était ouverte, écrit
+      //        pendant son obsolescence : le message naît effacé et ne part
+      //        nulle part (cf. `obsoleteConversation`, second verrou).
+      if (await sealMessageIfConversationObsoleted(this.prisma, { conversationId, messageId: message.id })) {
+        logger.info('message sealed: conversation obsoleted while writing', { ...corr, conversationId, messageId: message.id });
+        return this.createErrorResponse(
+          describeConversationWriteRefusal({ admitted: false, reason: 'conversation-closed' })
+        );
+      }
+
       // 6. Réponse unifiée — générée immédiatement après la persistance.
       const response = this.createSuccessResponse(message);
 
@@ -370,6 +575,25 @@ export class MessagingService {
       return response;
 
     } catch (error) {
+      // #11216 — un clair refusé en e2ee n'est pas une panne : son motif voyage en `code`.
+      if (isE2eePlaintextRefusal(error)) {
+        logger.info('e2ee plaintext refused', { ...corr });
+        return this.createErrorResponse(error.message, error.code);
+      }
+      // #11381 — sans clé maîtresse, un message server/hybrid est refusé, jamais écrit en clair.
+      if (isServerAtRestUnavailable(error)) {
+        logger.warn('server at-rest encryption unavailable', { ...corr, reason: error.reason });
+        return this.createErrorResponse(error.message, error.code);
+      }
+      if (isServerAtRestCiphertextRefusal(error)) {
+        logger.warn('client at-rest ciphertext refused', { ...corr });
+        return this.createErrorResponse(error.message, error.code);
+      }
+      // #3706 — un envoi libsignal refusé (Sesame, appareil, ancien client) : son code et son écart voyagent.
+      if (isE2eeRelayRefusal(error)) {
+        logger.info('e2ee relay refused', { ...corr, code: error.code });
+        return { ...this.createErrorResponse(error.message, error.code), ...(error.mismatch ? { e2eeMismatch: error.mismatch } : {}) };
+      }
       logger.warn('perf:messaging.handleMessage', {
         ...corr, step: 'messaging.handleMessage', phase: 'end',
         durationMs: Date.now() - startTime, errored: true,
@@ -379,6 +603,14 @@ export class MessagingService {
       return this.createErrorResponse(
         'Erreur interne lors de l\'envoi du message'
       );
+    } finally {
+      if (releaseReservation && !persisted) {
+        await releaseReservation().catch((error: unknown) =>
+          logger.warn('newcomer slow-mode reservation release failed', {
+            ...corr, errorMessage: error instanceof Error ? error.message : String(error)
+          })
+        );
+      }
     }
   }
 
@@ -414,28 +646,48 @@ export class MessagingService {
     const saved = message as typeof message & {
       sender?: { userId?: string | null } | null;
       attachments?: Array<{ mimeType?: string | null }> | null;
+      replyTo?: { sender?: { userId?: string | null } | null } | null;
     };
 
     runMessagePostSaveEffects({
       prisma: this.prisma,
       translationService: this.translationService,
+      engagementService: this.engagementService,
+      startedGroupAnnouncer: this.startedGroups,
       message: {
         id: message.id,
         conversationId: message.conversationId,
         senderId: message.senderId,
         senderUserId: saved.sender?.userId ?? null,
         attachmentMimeTypes: (saved.attachments ?? []).map((att) => att.mimeType ?? ''),
+        hasSticker: Boolean(stickerFromMetadata(message.metadata)),
+        ...postSaveToolFields(saved),
         content: message.content,
         messageType: message.messageType,
-        replyToId: message.replyToId
+        replyToId: message.replyToId,
+        storyReplyToId: message.storyReplyToId ?? null,
+        encryptionMode: message.encryptionMode ?? null
       },
       originalLanguage,
       onError: (effect, err) =>
         logger.error(`post-save ${effect} failed`, err as Error)
     });
 
+    // G-8 (#7347) — l'arriéré que la réponse marque lu se DIT à la
+    // conversation, message par message (`announceSenderBacklogRead`).
+    const frozenSince = new Date();
     void this.readStatusService
       .markMessagesAsRead(senderParticipantId, conversationId, message.id)
+      .then((frozenCount) =>
+        announceSenderBacklogRead({
+          depsProvider: this.readBroadcastDeps,
+          frozenCount,
+          frozenSince,
+          participantId: senderParticipantId,
+          conversationId,
+          senderUserId: saved.sender?.userId ?? null,
+        })
+      )
       .catch((err) =>
         logger.error('post-save markMessagesAsRead failed', err as Error)
       );
@@ -464,9 +716,14 @@ export class MessagingService {
    */
   private bodyOnlyFromSource(request: MessageRequest): boolean {
     if (!request.forwardedFromId) return false;
+    return !request.content?.trim() && !this.bringsOwnPieces(request);
+  }
+
+  /** #10987 — ce que le client renvoie lui-même d'une source que la passerelle ne recopie pas. */
+  private bringsOwnPieces(request: MessageRequest): boolean {
     const hasOwnAttachments =
       (request.attachments?.length ?? 0) > 0 || (request.attachmentIds?.length ?? 0) > 0;
-    return !request.content?.trim() && !hasOwnAttachments && !request.encryptedPayload;
+    return hasOwnAttachments || Boolean(request.encryptedPayload);
   }
 
   /**
@@ -548,6 +805,9 @@ export class MessagingService {
       success: true,
       data: {
         ...message,
+        // #10120 — l'auteur tel que la liste le sert : un invité y porte son
+        // nom donné, son pseudo en handle, jamais son profil de session.
+        ...(senderObj ? { sender: servedMessageSender(senderObj) } : {}),
         senderId: resolvedSenderId,
         senderParticipantId: message.senderId,
         timestamp: message.createdAt
@@ -559,10 +819,12 @@ export class MessagingService {
   /**
    * Génère une réponse d'erreur
    */
-  private createErrorResponse(error: string): MessageResponse {
+  private createErrorResponse(error: string, code?: string, retryAfter?: number): MessageResponse {
     return {
       success: false,
       error,
+      ...(code ? { code } : {}),
+      ...(retryAfter !== undefined ? { retryAfter } : {}),
       data: null as any
     };
   }
@@ -589,13 +851,41 @@ export class MessagingService {
   private async ensureParticipantFromMember(
     userId: string,
     conversationId: string
-  ): Promise<{ id: string; conversationId: string; isActive: boolean } | null> {
+  ): Promise<{
+    id: string;
+    conversationId: string;
+    isActive: boolean;
+    bannedAt: Date | null;
+    permissions: ParticipantPermissions;
+    anonymousSession: { rights: AnonymousRightsOverride | null; shareLinkId: string } | null;
+  } | null> {
     try {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
         select: { id: true, username: true, displayName: true, firstName: true, lastName: true, avatar: true, ...RECIPIENT_LANG_SELECT }
       });
       if (!user) return null;
+
+      // #10443 — le pont ne sert qu'un utilisateur SANS ligne `Participant`
+      // dans cette conversation. Le repli par userId qui l'appelle exige une
+      // participation VIVANTE : un banni, ou un membre parti, y échoue, et un
+      // `ConversationMember` hérité encore actif lui recréait une
+      // participation active — seul l'index unique la refusait, s'il est posé.
+      const existing = await this.prisma.participant.findFirst({
+        where: { userId, conversationId },
+        select: { id: true }
+      });
+      if (existing) return null;
+
+      // #16724 — recréer une participation, c'est ENTRER dans le salon : un
+      // salon d'une communauté privée (ou désactivée) n'accueille que son
+      // créateur et ses membres actifs (#16695, #16704).
+      const conversation = await this.prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { communityId: true }
+      });
+      if (!conversation) return null;
+      if (!(await mayReturnToSalon(this.prisma, { communityId: conversation.communityId, userId }))) return null;
 
       // Check legacy ConversationMember collection via raw query
       const members = await (this.prisma as any).$runCommandRaw({
@@ -628,14 +918,21 @@ export class MessagingService {
           avatar: user.avatar,
           role: roleMap[memberDoc.role] || 'member',
           language: recipientLanguage(user, 'fr'),
+          // #6080 — le repli d'un droit ABSENT du document hérité est la table
+          // du site unique, jamais `false`. Ces `permissions` alimentent
+          // `senderRights` dans la MÊME requête : les deux `?? false` sur vidéo
+          // et audio ne projetaient pas une valeur, ils GOUVERNAIENT le refus de
+          // #5151 — et la collection `ConversationMember` est antérieure à ces
+          // deux droits, donc le cas nominal est l'absence. Ce que le document
+          // hérité DIT reste souverain : `??` distingue « non dit » de `false`.
           permissions: {
-            canSendMessages: memberDoc.canSendMessage ?? true,
-            canSendFiles: memberDoc.canSendFiles ?? true,
-            canSendImages: memberDoc.canSendImages ?? true,
-            canSendVideos: memberDoc.canSendVideos ?? false,
-            canSendAudios: memberDoc.canSendAudios ?? false,
-            canSendLocations: memberDoc.canSendLocations ?? false,
-            canSendLinks: memberDoc.canSendLinks ?? false
+            canSendMessages: memberDoc.canSendMessage ?? NEW_MEMBER_PERMISSIONS.canSendMessages,
+            canSendFiles: memberDoc.canSendFiles ?? NEW_MEMBER_PERMISSIONS.canSendFiles,
+            canSendImages: memberDoc.canSendImages ?? NEW_MEMBER_PERMISSIONS.canSendImages,
+            canSendVideos: memberDoc.canSendVideos ?? NEW_MEMBER_PERMISSIONS.canSendVideos,
+            canSendAudios: memberDoc.canSendAudios ?? NEW_MEMBER_PERMISSIONS.canSendAudios,
+            canSendLocations: memberDoc.canSendLocations ?? NEW_MEMBER_PERMISSIONS.canSendLocations,
+            canSendLinks: memberDoc.canSendLinks ?? NEW_MEMBER_PERMISSIONS.canSendLinks
           },
           isActive: true,
           joinedAt: memberDoc.joinedAt ? new Date(memberDoc.joinedAt) : new Date(),
@@ -647,9 +944,13 @@ export class MessagingService {
           // disparues de la liste).
           deletedForMe: null
         },
-        select: { id: true, conversationId: true, isActive: true }
+        select: {
+          id: true, conversationId: true, isActive: true, bannedAt: true,
+          permissions: true, anonymousSession: { select: { rights: true, shareLinkId: true } }
+        }
       });
 
+      announceConversationLanguageChange({ kind: 'arrival', conversationId, language: recipientLanguage(user, 'fr'), readerUserId: user.id });
       logger.info('Auto-created Participant', { conversationId });
       return participant;
     } catch (error) {

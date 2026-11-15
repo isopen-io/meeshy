@@ -2,9 +2,10 @@ package me.meeshy.app.widget
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
+import java.util.Locale
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -27,13 +28,14 @@ import androidx.glance.layout.padding
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
-import androidx.glance.unit.ColorProvider
 import dagger.hilt.android.EntryPointAccessors
-import kotlinx.coroutines.flow.first
 import me.meeshy.app.MainActivity
 import me.meeshy.app.R
-import me.meeshy.app.conversations.LastMessagePreviewLabels
-import me.meeshy.feature.conversations.R as ConversationsR
+import me.meeshy.app.widget.kit.WidgetTheme
+import me.meeshy.app.widget.kit.widgetSurface
+import me.meeshy.app.widget.kit.WidgetReaderPrismStore
+import me.meeshy.app.widget.kit.widgetEphemeralLabel
+import me.meeshy.app.widget.kit.widgetPreviewLabels
 
 /**
  * Home-screen widget — parity target: iOS `MeeshyWidgets.QuickReplyWidget`
@@ -60,39 +62,37 @@ internal class QuickReplyWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val entryPoint = EntryPointAccessors.fromApplication(context, WidgetEntryPoint::class.java)
-        val conversations = entryPoint.conversationRepository().cachedConversations().first()
+        val conversations = entryPoint.conversationRepository().recentCachedConversations()
         val currentUserId = entryPoint.tokenStore().userId
-        val labels = LastMessagePreviewLabels(
-            photo = context.getString(ConversationsR.string.conversations_preview_photo),
-            video = context.getString(ConversationsR.string.conversations_preview_video),
-            voice = context.getString(ConversationsR.string.conversations_preview_voice),
-            file = context.getString(ConversationsR.string.conversations_preview_file),
-            location = context.getString(ConversationsR.string.conversations_preview_location),
-            none = context.getString(ConversationsR.string.conversations_no_messages),
-            you = context.getString(ConversationsR.string.conversations_preview_you),
-            senderFormat = context.getString(ConversationsR.string.conversations_preview_sender_format),
-            draftPrefix = context.getString(ConversationsR.string.conversations_preview_draft_prefix),
+        val labels = widgetPreviewLabels(context)
+        val prism = WidgetReaderPrismStore(context).load()
+        val chips = quickReplyChips(context, QuickReplyDrafts.draftLanguage(prism))
+        val presentation = QuickReplyWidgetPresentation.from(
+            conversations = conversations,
+            currentUserId = currentUserId,
+            previewLabels = labels,
+            preferredLanguages = prism,
+            ephemeralLabel = widgetEphemeralLabel(context),
         )
-        val presentation = QuickReplyWidgetPresentation.from(conversations, currentUserId, labels)
 
         provideContent {
-            QuickReplyWidgetContent(presentation)
+            QuickReplyWidgetContent(presentation, chips)
         }
     }
 }
 
 @Composable
-private fun QuickReplyWidgetContent(presentation: QuickReplyWidgetPresentation?) {
+private fun QuickReplyWidgetContent(presentation: QuickReplyWidgetPresentation?, chips: List<QuickReplyChip>) {
     val context = LocalContext.current
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(Color.White)
+            .widgetSurface()
             .padding(12.dp),
     ) {
         Text(
             text = context.getString(R.string.widget_quick_reply_title),
-            style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, color = ColorProvider(Color(0xFF4338CA))),
+            style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, color = WidgetTheme.title),
         )
         if (presentation == null) {
             Column(
@@ -104,53 +104,65 @@ private fun QuickReplyWidgetContent(presentation: QuickReplyWidgetPresentation?)
             ) {
                 Text(
                     text = context.getString(R.string.widget_quick_reply_empty),
-                    style = TextStyle(fontSize = 12.sp, color = ColorProvider(Color.Gray)),
+                    style = TextStyle(fontSize = 12.sp, color = WidgetTheme.textSecondary),
                 )
             }
         } else {
             Text(
                 text = presentation.title,
-                style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, color = ColorProvider(Color.Black)),
+                style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, color = WidgetTheme.textPrimary),
                 maxLines = 1,
                 modifier = GlanceModifier.padding(top = 8.dp),
             )
             Text(
                 text = presentation.preview,
-                style = TextStyle(fontSize = 11.sp, color = ColorProvider(Color.DarkGray)),
+                style = TextStyle(fontSize = 11.sp, color = WidgetTheme.textSecondary),
                 maxLines = 2,
             )
             Row(modifier = GlanceModifier.fillMaxWidth().padding(top = 8.dp)) {
-                QuickReplyChip(text = "👍", conversationId = presentation.conversationId)
-                QuickReplyChip(
-                    text = context.getString(R.string.widget_quick_reply_ok),
-                    conversationId = presentation.conversationId,
-                )
-                QuickReplyChip(
-                    text = context.getString(R.string.widget_quick_reply_thanks),
-                    conversationId = presentation.conversationId,
-                )
-                QuickReplyChip(
-                    text = context.getString(R.string.widget_quick_reply_call_me),
-                    conversationId = presentation.conversationId,
-                )
+                chips.forEach { chip ->
+                    QuickReplyChipView(chip = chip, conversationId = presentation.conversationId)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun QuickReplyChip(text: String, conversationId: String) {
+private fun QuickReplyChipView(chip: QuickReplyChip, conversationId: String) {
     val context = LocalContext.current
     Box(
         modifier = GlanceModifier
             .padding(end = 6.dp)
-            .background(ColorProvider(Color(0xFFEEF2FF)))
-            .clickable(actionStartActivityIntent(quickReplyIntent(context, conversationId, text)))
+            .background(WidgetTheme.chipBackground)
+            .clickable(actionStartActivityIntent(quickReplyIntent(context, conversationId, chip.draft)))
             .padding(horizontal = 10.dp, vertical = 6.dp),
     ) {
-        Text(text = text, style = TextStyle(fontSize = 12.sp, color = ColorProvider(Color(0xFF4338CA))))
+        Text(text = chip.label, style = TextStyle(fontSize = 12.sp, color = WidgetTheme.chipText))
     }
 }
+
+/**
+ * Libellés selon la locale de l'appareil (chrome), brouillons selon la langue du compte (contenu
+ * signé par l'utilisateur) : un compte francophone sur un téléphone anglais lit « Thanks! » et
+ * dépose « Merci ! ». Même source de chaînes, deux locales.
+ */
+private fun quickReplyChips(context: Context, draftLanguage: String?): List<QuickReplyChip> {
+    val labels = quickReplyTexts(context)
+    val drafts = draftLanguage?.let { tag ->
+        val configuration = Configuration(context.resources.configuration).apply { setLocale(Locale.forLanguageTag(tag)) }
+        quickReplyTexts(context.createConfigurationContext(configuration))
+    }
+    return QuickReplyDrafts.chips(labels, drafts)
+}
+
+private fun quickReplyTexts(context: Context): QuickReplyTexts =
+    QuickReplyTexts(
+        thumbsUp = "👍",
+        ok = context.getString(R.string.widget_quick_reply_ok),
+        thanks = context.getString(R.string.widget_quick_reply_thanks),
+        callMe = context.getString(R.string.widget_quick_reply_call_me),
+    )
 
 private fun quickReplyIntent(context: Context, conversationId: String, text: String): Intent =
     Intent(

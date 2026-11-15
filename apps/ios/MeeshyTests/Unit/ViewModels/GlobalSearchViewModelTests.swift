@@ -37,7 +37,8 @@ final class GlobalSearchViewModelTests: XCTestCase {
     private func makeSUT(
         searchService: MessageSearchService? = nil,
         messageSocket: MockMessageSocket? = nil,
-        socialSocket: MockSocialSocket? = nil
+        socialSocket: MockSocialSocket? = nil,
+        socialEvents: MockSocialEventsV2Reporter? = nil
     ) throws -> (
         sut: GlobalSearchViewModel,
         mockAPI: MockAPIClientForApp,
@@ -54,9 +55,72 @@ final class GlobalSearchViewModelTests: XCTestCase {
             authManager: mockAuthManager,
             searchService: service,
             messageSocket: messageSocket ?? MockMessageSocket(),
-            socialSocket: socialSocket ?? MockSocialSocket()
+            socialSocket: socialSocket ?? MockSocialSocket(),
+            socialEvents: socialEvents ?? MockSocialEventsV2Reporter()
         )
         return (sut, mockAPI, mockUserService, mockAuthManager)
+    }
+
+    // MARK: - #10505 : l'identifiant de recherche est celui que la passerelle a servi
+
+    private func discoveries(_ reporter: MockSocialEventsV2Reporter, _ action: SocialDiscovery.Action) -> [SocialDiscovery] {
+        reporter.payloads { payload -> SocialDiscovery? in
+            guard case .discovery(let discovery) = payload, discovery.action == action else { return nil }
+            return discovery
+        }
+    }
+
+    func test_performSearch_serverServesSearchId_submittedEventCarriesIt() async throws {
+        let reporter = MockSocialEventsV2Reporter()
+        let (sut, _, mockUserService, _) = try makeSUT(socialEvents: reporter)
+        mockUserService.searchUsersResult = .success([UserSearchResult(id: "u7", username: "aminata")])
+        mockUserService.servedSearchId = "a1b2c3sealed"
+
+        await sut.performSearch(query: "aminata")
+
+        let submitted = discoveries(reporter, .searchSubmitted)
+        XCTAssertEqual(submitted.map(\.searchId), ["a1b2c3sealed"])
+        XCTAssertEqual(submitted.first?.resultCount, 1)
+        XCTAssertEqual(sut.searchId, "a1b2c3sealed")
+    }
+
+    func test_performSearch_serverServesNoSearchId_submittedEventHasNone() async throws {
+        let reporter = MockSocialEventsV2Reporter()
+        let (sut, _, mockUserService, _) = try makeSUT(socialEvents: reporter)
+        mockUserService.searchUsersResult = .success([UserSearchResult(id: "u7", username: "aminata")])
+
+        await sut.performSearch(query: "aminata")
+
+        let submitted = discoveries(reporter, .searchSubmitted)
+        XCTAssertEqual(submitted.count, 1)
+        XCTAssertNil(submitted.first?.searchId, "sans identifiant servi, le client n'en fabrique pas")
+        XCTAssertNil(sut.searchId)
+    }
+
+    func test_noteUserResultTapped_afterAServedSearch_carriesTheServedSearchId() async throws {
+        let reporter = MockSocialEventsV2Reporter()
+        let (sut, _, mockUserService, _) = try makeSUT(socialEvents: reporter)
+        mockUserService.searchUsersResult = .success([UserSearchResult(id: "u7", username: "aminata")])
+        mockUserService.servedSearchId = "a1b2c3sealed"
+        await sut.performSearch(query: "aminata")
+
+        sut.noteUserResultTapped("u7", position: 0)
+
+        XCTAssertEqual(discoveries(reporter, .searchResultClick).map(\.searchId), ["a1b2c3sealed"])
+    }
+
+    func test_noteUserResultTapped_remoteSearchFailed_carriesNoSearchId() async throws {
+        let reporter = MockSocialEventsV2Reporter()
+        let (sut, _, mockUserService, _) = try makeSUT(socialEvents: reporter)
+        mockUserService.searchUsersResult = .success([UserSearchResult(id: "u7", username: "aminata")])
+        mockUserService.servedSearchId = "a1b2c3sealed"
+        await sut.performSearch(query: "aminata")
+        mockUserService.searchUsersResult = .failure(URLError(.notConnectedToInternet))
+        await sut.performSearch(query: "aminata d")
+
+        sut.noteUserResultTapped("u7", position: 0)
+
+        XCTAssertEqual(discoveries(reporter, .searchResultClick).map(\.searchId), [nil], "l'identifiant d'une recherche précédente ne se recopie pas sur la suivante")
     }
 
     /// Drains the main dispatch queue deterministically: enqueues a continuation
@@ -103,7 +167,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
         XCTAssertEqual(sut.searchText, "")
         XCTAssertEqual(sut.selectedTab, .messages)
         XCTAssertTrue(sut.messageResults.isEmpty)
-        XCTAssertTrue(sut.conversationResults.isEmpty)
+        XCTAssertTrue(sut.postResults.isEmpty)
         XCTAssertTrue(sut.userResults.isEmpty)
         XCTAssertFalse(sut.isSearching)
         XCTAssertFalse(sut.hasSearched)
@@ -164,7 +228,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
         await sut.performSearch(query: "fail")
 
         XCTAssertTrue(sut.messageResults.isEmpty)
-        XCTAssertTrue(sut.conversationResults.isEmpty)
+        XCTAssertTrue(sut.postResults.isEmpty)
         XCTAssertTrue(sut.userResults.isEmpty)
         XCTAssertTrue(sut.hasSearched)
     }
@@ -263,6 +327,78 @@ final class GlobalSearchViewModelTests: XCTestCase {
         XCTAssertEqual(ids.count, Set(ids).count, "mergeUnique must deduplicate by message id")
     }
 
+    // MARK: - #9619 — un message qui disparaît ne sort pas par la recherche
+
+    /// La loi de sortie (#9572) : un contenu qui disparaît ne quitte pas sa
+    /// conversation. Un résultat de recherche le montrait en clair, hors de
+    /// toute couche sécurisée, et le laissait capturer — et le seul fait qu'il
+    /// RÉPONDE à la requête dit déjà un mot de son texte. Il n'y paraît donc
+    /// pas, ni par l'index local (FTS5), ni par le volet réseau.
+    func test_searchMessages_localResults_leaveOutMessagesThatDisappear() async throws {
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        var viewOnce = SearchTestMessageRecordFactory.make(
+            localId: "local-view-once", conversationId: "conv-exit", content: "rendezvous secret unique"
+        )
+        viewOnce.effectFlags = MessageEffectFlags.viewOnce.rawValue
+        var timedFlame = SearchTestMessageRecordFactory.make(
+            localId: "local-timed-flame", conversationId: "conv-exit", content: "rendezvous secret flamme"
+        )
+        timedFlame.effectFlags = MessageEffectFlags.ephemeral.rawValue
+        timedFlame.ephemeralDuration = 30
+        var afterRead = SearchTestMessageRecordFactory.make(
+            localId: "local-after-read", conversationId: "conv-exit", content: "rendezvous secret lecture"
+        )
+        afterRead.effectFlags = MessageEffectFlags.ephemeral.rawValue | MessageEffectFlags.ephemeralAfterRead.rawValue
+        let ordinary = SearchTestMessageRecordFactory.make(
+            localId: "local-ordinary", conversationId: "conv-exit", content: "rendezvous public"
+        )
+        let records = [viewOnce, timedFlame, afterRead, ordinary]
+        try await pool.write { db in
+            for record in records { try record.insert(db) }
+        }
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT(
+            searchService: MessageSearchService(reader: pool)
+        )
+        mockAPI.errorToThrow = URLError(.notConnectedToInternet)
+        mockUserService.searchUsersResult = .failure(URLError(.notConnectedToInternet))
+        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
+
+        await sut.performSearch(query: "rendezvous")
+
+        XCTAssertEqual(
+            sut.messageResults.map(\.id), ["local-ordinary"],
+            "une vue unique, une flamme à durée et une flamme après lecture ne sortent pas par la recherche locale"
+        )
+    }
+
+    func test_searchMessages_remoteResults_leaveOutMessagesThatDisappear() async throws {
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
+        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
+        mockUserService.searchUsersResult = .success([])
+        let conversations: APIResponse<[APIConversation]> = JSONStub.decode("""
+        {"success":true,"data":[{"id":"conv-exit","type":"group","title":"Exit","createdAt":"2026-01-01T00:00:00Z"}]}
+        """)
+        mockAPI.stub("/conversations/search", result: conversations)
+        let messages: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {"id":"msg-ordinary","conversationId":"conv-exit","senderId":"user-002","content":"rendezvous public","createdAt":"2026-01-01T00:04:00.000Z"},
+            {"id":"msg-view-once","conversationId":"conv-exit","senderId":"user-002","content":"rendezvous secret unique","isViewOnce":true,"createdAt":"2026-01-01T00:03:00.000Z"},
+            {"id":"msg-timed-flame","conversationId":"conv-exit","senderId":"user-002","content":"rendezvous secret flamme","effectFlags":1,"ephemeralDuration":30,"createdAt":"2026-01-01T00:02:00.000Z"},
+            {"id":"msg-after-read","conversationId":"conv-exit","senderId":"user-002","content":"rendezvous secret lecture","effectFlags":9,"createdAt":"2026-01-01T00:01:00.000Z"},
+            {"id":"msg-view-once-piece","conversationId":"conv-exit","senderId":"user-002","content":"rendezvous secret piece","attachments":[{"id":"att-1","fileName":"a.jpg","originalName":"a.jpg","mimeType":"image/jpeg","fileSize":1,"fileUrl":"https://x/a.jpg","isViewOnce":true,"createdAt":"2026-01-01T00:00:00.000Z"}],"createdAt":"2026-01-01T00:00:00.000Z"}
+        ],"pagination":null,"cursorPagination":null,"hasNewer":null}
+        """)
+        mockAPI.stub("/conversations/conv-exit/messages/search", result: messages)
+
+        await sut.performSearch(query: "rendezvous")
+
+        XCTAssertEqual(
+            sut.messageResults.map(\.id), ["msg-ordinary"],
+            "le volet réseau applique la même loi : rien de ce qui disparaît, pièce jointe protégée comprise"
+        )
+    }
+
     // MARK: - Tab Counts Tests
 
     func test_tabCounts_reflectResultArraySizes() async throws {
@@ -279,7 +415,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.userCount, 3)
         XCTAssertEqual(sut.messageCount, 0)
-        XCTAssertEqual(sut.conversationCount, 0)
+        XCTAssertEqual(sut.postCount, 0)
         XCTAssertEqual(sut.totalResultCount, 3)
     }
 
@@ -497,102 +633,15 @@ final class GlobalSearchViewModelTests: XCTestCase {
 
     // MARK: - Helpers
 
-    // MARK: - Prisme Linguistique de la ligne de resultat
-
-    /// `GET /conversations/search` sert `lastMessageTranslations` /
-    /// `lastMessageOriginalLanguage` au meme titre que `GET /conversations`.
-    /// La ligne de resultat de recherche EST une ligne de conversation : elle
-    /// doit rendre le meme texte que `ThemedConversationRow`, qui resout via
-    /// `resolvedLastMessagePreview`. Avant ce correctif elle rendait
-    /// `lastMessagePreview` brut — donc la langue de l'expediteur.
-    private func stubConversationSearch(
-        on mockAPI: MockAPIClientForApp,
-        translations: String,
-        originalLanguage: String
-    ) {
-        let response: APIResponse<[APIConversation]> = JSONStub.decode("""
-        {"success":true,"data":[{
-          "id":"conv-prisme-1","type":"group","title":"Prisme","createdAt":"2026-01-01T00:00:00Z",
-          "lastMessage":{"id":"msg-1","content":"Hello everyone","createdAt":"2026-01-01T00:00:00Z"},
-          "lastMessageTranslations":\(translations),
-          "lastMessageOriginalLanguage":"\(originalLanguage)"
-        }]}
-        """)
-        mockAPI.stub("/conversations/search", result: response)
-    }
-
-    func test_searchConversations_appliesPrismeToRemoteResultPreview() async throws {
-        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
-        mockAuthManager.simulateLoggedIn(
-            user: MeeshyUser(id: "user-001", username: "testuser", systemLanguage: "fr")
-        )
-        mockUserService.searchUsersResult = .success([])
-        stubConversationSearch(
-            on: mockAPI,
-            translations: #"{"fr":"Bonjour tout le monde"}"#,
-            originalLanguage: "en"
-        )
-
-        await sut.performSearch(query: "prisme")
-
-        XCTAssertEqual(
-            sut.conversationResults.first?.lastMessagePreview, "Bonjour tout le monde",
-            "la ligne de resultat doit rendre la langue primaire du lecteur, pas l'original"
-        )
-    }
-
-    func test_searchConversations_keepsOriginalPreviewWhenNoPreferredTranslation() async throws {
-        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
-        mockAuthManager.simulateLoggedIn(
-            user: MeeshyUser(id: "user-001", username: "testuser", systemLanguage: "fr")
-        )
-        mockUserService.searchUsersResult = .success([])
-        // `es` existe mais n'appartient pas au prisme du lecteur : regle #1 du
-        // Prisme — ne JAMAIS retomber sur une traduction quelconque.
-        stubConversationSearch(
-            on: mockAPI,
-            translations: #"{"es":"Hola a todos"}"#,
-            originalLanguage: "en"
-        )
-
-        await sut.performSearch(query: "prisme")
-
-        XCTAssertEqual(
-            sut.conversationResults.first?.lastMessagePreview, "Hello everyone",
-            "aucune traduction du prisme servie => l'original, jamais une langue tierce"
-        )
-    }
-
-    func test_searchConversations_originalLanguageCompetesAtItsOwnRank() async throws {
-        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
-        // Prisme ["fr", "en"] : la langue d'origine (en) occupe le RANG 2. Elle
-        // ne doit jamais court-circuiter la langue primaire (regle #3, cycle 62).
-        mockAuthManager.simulateLoggedIn(
-            user: MeeshyUser(
-                id: "user-001", username: "testuser",
-                systemLanguage: "fr", regionalLanguage: "en"
-            )
-        )
-        mockUserService.searchUsersResult = .success([])
-        stubConversationSearch(
-            on: mockAPI,
-            translations: #"{"fr":"Bonjour tout le monde"}"#,
-            originalLanguage: "en"
-        )
-
-        await sut.performSearch(query: "prisme")
-
-        XCTAssertEqual(
-            sut.conversationResults.first?.lastMessagePreview, "Bonjour tout le monde",
-            "la langue d'origine au rang 2 ne retrograde pas la langue primaire"
-        )
-    }
-
     private func stubEmptyConversationSearch(on mockAPI: MockAPIClientForApp) {
         let emptyResponse: APIResponse<[APIConversation]> = JSONStub.decode("""
         {"success":true,"data":[]}
         """)
         mockAPI.stub("/conversations/search", result: emptyResponse)
+        let noPosts: PaginatedAPIResponse<[APIPost]> = JSONStub.decode("""
+        {"success":true,"data":[],"pagination":{"limit":30,"hasMore":false,"nextCursor":null}}
+        """)
+        mockAPI.stub("/posts/search", result: noPosts)
     }
 
     private func stubEmptySearchResults(
@@ -606,7 +655,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
 
 // MARK: - UserSearchResult Test Helper
 
-private extension UserSearchResult {
+extension UserSearchResult {
     static func stub(
         id: String = "user-stub",
         username: String = "stubuser",
@@ -624,7 +673,7 @@ private extension UserSearchResult {
 
 // MARK: - MessageRecord Test Factory (local to this test file)
 
-private enum SearchTestMessageRecordFactory {
+enum SearchTestMessageRecordFactory {
     static func make(
         localId: String = "temp_\(UUID().uuidString)",
         conversationId: String = "conv_default",

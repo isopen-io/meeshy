@@ -7,24 +7,22 @@ import os
 // MARK: - WidgetPreviewView
 
 struct WidgetPreviewView: View {
+    @State private var delayed = DelayedActions()
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
-    @EnvironmentObject var router: Router
+    @Environment(\.routerCommands) var router
 
     var onNewConversation: (() -> Void)?
 
     @State private var animatedUnreadCount: Int = 0
-    @State private var showCards = false
     @StateObject private var affiliateVM = AffiliateViewModel()
     @State private var trackingStats: TrackingLinkStats? = nil
     @State private var shareStats: MyShareLinkStats? = nil
     @State private var communityLinks: [CommunityLink] = []
     @State private var showCreateShareLink = false
-
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "widget")
 
     private var totalUnread: Int {
         conversationListViewModel.totalUnreadCount
@@ -33,7 +31,7 @@ struct WidgetPreviewView: View {
     /// B1 (Prisme Linguistique) — prisme du lecteur, même autorité que
     /// `ConversationListView` et que `WidgetDataManager`.
     private var preferredContentLanguages: [String] {
-        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        ReaderPrism.resolve(for: AuthManager.shared.currentUser)
     }
 
     private var recentConversations: [Conversation] {
@@ -83,7 +81,7 @@ struct WidgetPreviewView: View {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(MeeshyFont.relative(22))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xxl))
                             .foregroundStyle(theme.textMuted)
                     }
                     .accessibilityLabel(String(localized: "widget.preview.a11y.closeDashboard", defaultValue: "Fermer le tableau de bord", bundle: .main))
@@ -115,27 +113,27 @@ struct WidgetPreviewView: View {
         VStack(spacing: MeeshySpacing.sm) {
             HStack {
                 Image(systemName: totalUnread > 0 ? "message.badge.filled.fill" : "message.fill")
-                    .font(MeeshyFont.relative(18, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.9))
+                    .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(MeeshyOpacity.intense))
                 Spacer()
                 Text(Date(), style: .time)
-                    .font(MeeshyFont.relative(12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.6))
             }
 
             HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.xs) {
                 Text("\(animatedUnreadCount)")
                     .font(MeeshyFont.relative(56, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .contentTransition(.numericText())
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs / 2) {
-                    Text(String(localized: "widget.preview.messages", defaultValue: "messages", bundle: .main))
-                        .font(MeeshyFont.relative(14, weight: .medium))
-                        .foregroundColor(.white.opacity(0.8))
+                    Text(String(localized: "widget.preview.messages", defaultValue: "Messages", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(MeeshyOpacity.intense))
                     Text(String(localized: "widget.preview.unread", defaultValue: "non lus", bundle: .main))
-                        .font(MeeshyFont.relative(14, weight: .medium))
-                        .foregroundColor(.white.opacity(0.8))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(MeeshyOpacity.intense))
                 }
                 .padding(.bottom, MeeshySpacing.sm + 2)
 
@@ -145,13 +143,13 @@ struct WidgetPreviewView: View {
             if totalUnread == 0 {
                 HStack(spacing: MeeshySpacing.xs + 2) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(MeeshyFont.relative(14))
+                        .font(MeeshyFont.relative(MeeshyIconSize.sm))
                     Text(String(localized: "widget.preview.allRead", defaultValue: "Tout est lu", bundle: .main))
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 }
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(.white.opacity(MeeshyOpacity.intense))
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 2)
+                .padding(.top, MeeshySpacing.xxs)
             }
         }
         .padding(MeeshySpacing.xl)
@@ -167,7 +165,7 @@ struct WidgetPreviewView: View {
                     )
                 )
                 .shadow(
-                    color: (totalUnread > 0 ? MeeshyColors.error : MeeshyColors.indigo400).opacity(0.3),
+                    color: (totalUnread > 0 ? MeeshyColors.error : MeeshyColors.indigo400).opacity(MeeshyOpacity.medium),
                     radius: MeeshySpacing.lg,
                     y: MeeshySpacing.sm
                 )
@@ -180,11 +178,11 @@ struct WidgetPreviewView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             HStack {
                 Image(systemName: "clock.arrow.circlepath")
-                    .font(MeeshyFont.relative(14, weight: .semibold))
-                    .foregroundColor(MeeshyColors.indigo400)
-                Text(String(localized: "widget.preview.recentConversations", defaultValue: "Conversations r\u{00e9}centes", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .bold))
-                    .foregroundColor(theme.textPrimary)
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.indigo400)
+                Text(String(localized: "widget.preview.recentConversations", defaultValue: "Conversations récentes", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
+                    .foregroundStyle(theme.textPrimary)
                 Spacer()
             }
 
@@ -194,13 +192,13 @@ struct WidgetPreviewView: View {
                     title: String(localized: "widget.preview.noConversations", defaultValue: "Aucune conversation", bundle: .main),
                     subtitle: ""
                 )
-                .padding(.vertical, 16)
+                .padding(.vertical, MeeshySpacing.lg)
             } else {
                 ForEach(Array(recentConversations.enumerated()), id: \.element.id) { index, conv in
                     recentConversationRow(conv, index: index)
                     if index < recentConversations.count - 1 {
                         Divider()
-                            .overlay(theme.textMuted.opacity(0.1))
+                            .overlay(theme.textMuted.opacity(MeeshyOpacity.subtle))
                     }
                 }
             }
@@ -216,7 +214,7 @@ struct WidgetPreviewView: View {
                             lineWidth: 1
                         )
                 )
-                .shadow(color: .black.opacity(0.08), radius: MeeshySpacing.md, y: MeeshySpacing.xs)
+                .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: MeeshySpacing.md, y: MeeshySpacing.xs)
         )
     }
 
@@ -239,33 +237,35 @@ struct WidgetPreviewView: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs - 1) {
                     HStack {
                         Text(conv.name)
-                            .font(MeeshyFont.relative(14, weight: .semibold))
-                            .foregroundColor(theme.textPrimary)
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                            .foregroundStyle(theme.textPrimary)
                             .lineLimit(1)
                         Spacer()
                         Text(RelativeTimeFormatter.shortString(for: conv.lastMessageAt))
-                            .font(MeeshyFont.relative(11, weight: .medium))
-                            .foregroundColor(theme.textMuted)
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                            .foregroundStyle(theme.textMuted)
                     }
 
                     // B1 (Prisme Linguistique) — cet écran est l'aperçu du
                     // widget : il doit montrer EXACTEMENT ce que
                     // `WidgetDataManager.publishConversations` publie dans
                     // l'App Group, donc la même résolution de langue.
-                    if let preview = conv.resolvedLastMessagePreview(
+                    // Un message qui disparaît n'y laisse que son libellé (#9622).
+                    if let preview = OutsidePreview.lastMessage(
+                        of: conv,
                         preferredLanguages: preferredContentLanguages
                     ), !preview.isEmpty {
                         Text(preview)
-                            .font(MeeshyFont.relative(12))
-                            .foregroundColor(theme.textMuted)
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                            .foregroundStyle(theme.textMuted)
                             .lineLimit(1)
                     }
                 }
 
                 if conv.userState.unreadCount > 0 {
                     Text("\(conv.userState.unreadCount)")
-                        .font(MeeshyFont.relative(11, weight: .bold))
-                        .foregroundColor(.white)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
+                        .foregroundStyle(Color.white)
                         .frame(minWidth: 20, minHeight: 20)
                         .background(
                             Circle()
@@ -273,7 +273,7 @@ struct WidgetPreviewView: View {
                         )
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, MeeshySpacing.xs)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "widget.preview.a11y.openConversation", defaultValue: "Ouvrir la conversation avec \(conv.name)", bundle: .main))
@@ -285,11 +285,11 @@ struct WidgetPreviewView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             HStack {
                 Image(systemName: "bolt.fill")
-                    .font(MeeshyFont.relative(14, weight: .semibold))
-                    .foregroundColor(MeeshyColors.warning)
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.warning)
                 Text(String(localized: "widget.preview.quickActions", defaultValue: "Actions rapides", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .bold))
-                    .foregroundColor(theme.textPrimary)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
+                    .foregroundStyle(theme.textPrimary)
                 Spacer()
             }
 
@@ -323,11 +323,11 @@ struct WidgetPreviewView: View {
                 ) {
                     dismiss()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        // Drapeau du Router (2026-08-21) — la notification
+                        // Drapeau du Router — la notification
                         // `openFeedComposer` n'avait AUCUN observateur : cette
                         // action ne faisait rien. `RootView` montre le flux,
                         // `ThemedFeedOverlay` ouvre son composeur.
-                        router.pendingOpenFeedComposer = true
+                        router.requestFeedComposer()
                     }
                 }
 
@@ -354,7 +354,7 @@ struct WidgetPreviewView: View {
                             lineWidth: 1
                         )
                 )
-                .shadow(color: .black.opacity(0.08), radius: MeeshySpacing.md, y: MeeshySpacing.xs)
+                .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: MeeshySpacing.md, y: MeeshySpacing.xs)
         )
     }
 
@@ -365,11 +365,11 @@ struct WidgetPreviewView: View {
         } label: {
             VStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: icon)
-                    .font(MeeshyFont.relative(22, weight: .semibold))
-                    .foregroundColor(.white)
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxl, weight: .semibold))
+                    .foregroundStyle(Color.white)
                     .frame(width: 50, height: 50)
                     .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
                             .fill(
                                 LinearGradient(
                                     colors: gradient,
@@ -377,12 +377,12 @@ struct WidgetPreviewView: View {
                                     endPoint: .bottomTrailing
                                 )
                             )
-                            .shadow(color: gradient.first?.opacity(0.3) ?? .clear, radius: 8, y: 4)
+                            .shadow(color: gradient.first?.opacity(MeeshyOpacity.medium) ?? .clear, radius: 8, y: 4)
                     )
 
                 Text(label)
-                    .font(MeeshyFont.relative(11, weight: .semibold))
-                    .foregroundColor(theme.textSecondary)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                    .foregroundStyle(theme.textSecondary)
                     .lineLimit(1)
             }
         }
@@ -396,10 +396,10 @@ struct WidgetPreviewView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             HStack {
                 Image(systemName: "link")
-                    .font(MeeshyFont.relative(13, weight: .semibold))
-                    .foregroundColor(theme.textSecondary)
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                    .foregroundStyle(theme.textSecondary)
                 Text(String(localized: "widget.preview.myLinks", defaultValue: "MES LIENS", bundle: .main))
-                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                     .foregroundColor(theme.textSecondary)
                     .kerning(0.8)
                 Spacer()
@@ -434,7 +434,7 @@ struct WidgetPreviewView: View {
                     }
 
                     linkTypeCard(
-                        title: String(localized: "widget.preview.tracking", defaultValue: "Tracking", bundle: .main),
+                        title: String(localized: "widget.preview.tracking", defaultValue: "Suivi", bundle: .main),
                         icon: "chart.bar.fill",
                         color: MeeshyColors.purple500Hex,
                         stat1: String(localized: "widget.preview.linkCountTracking", defaultValue: "\(trackingStats?.totalLinks ?? 0) lien(s)", bundle: .main),
@@ -447,7 +447,7 @@ struct WidgetPreviewView: View {
                     }
 
                     linkTypeCard(
-                        title: String(localized: "widget.preview.community", defaultValue: "Communaut\u{00e9}", bundle: .main),
+                        title: String(localized: "widget.preview.community", defaultValue: "Communauté", bundle: .main),
                         icon: "person.3.fill",
                         color: MeeshyColors.warningHex,
                         stat1: String(localized: "widget.preview.groupCount", defaultValue: "\(communityLinks.count) groupe(s)", bundle: .main),
@@ -473,7 +473,7 @@ struct WidgetPreviewView: View {
                             lineWidth: 1
                         )
                 )
-                .shadow(color: .black.opacity(0.08), radius: MeeshySpacing.md, y: MeeshySpacing.xs)
+                .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: MeeshySpacing.md, y: MeeshySpacing.xs)
         )
     }
 
@@ -487,34 +487,34 @@ struct WidgetPreviewView: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 ZStack {
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                        .fill(Color(hex: color).opacity(0.15))
-                        .frame(width: 36, height: 36)
+                        .fill(Color(hex: color).opacity(MeeshyOpacity.light))
+                        .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     Image(systemName: icon)
-                        .font(MeeshyFont.relative(16, weight: .semibold))
-                        .foregroundColor(Color(hex: color))
+                        .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
+                        .foregroundStyle(Color(hex: color))
                 }
 
                 Text(title)
-                    .font(MeeshyFont.relative(13, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                    .foregroundStyle(theme.textPrimary)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(stat1)
-                        .font(MeeshyFont.relative(11))
-                        .foregroundColor(theme.textMuted)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                        .foregroundStyle(theme.textMuted)
                     Text(stat2)
-                        .font(MeeshyFont.relative(11))
-                        .foregroundColor(Color(hex: color))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                        .foregroundStyle(Color(hex: color))
                 }
             }
             .padding(MeeshySpacing.md)
             .frame(width: 110)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                    .fill(isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.black.opacity(MeeshyOpacity.faint))
                     .overlay(
                         RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .stroke(Color(hex: color).opacity(0.2), lineWidth: 1)
+                            .stroke(Color(hex: color).opacity(MeeshyOpacity.light), lineWidth: 1)
                     )
             )
         }
@@ -526,7 +526,7 @@ struct WidgetPreviewView: View {
     private var widgetHintBanner: some View {
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: "apps.iphone")
-                .font(MeeshyFont.relative(24, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxl, weight: .medium))
                 .foregroundStyle(
                     LinearGradient(
                         colors: [MeeshyColors.indigo400, MeeshyColors.indigo600],
@@ -535,13 +535,13 @@ struct WidgetPreviewView: View {
                     )
                 )
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(String(localized: "widget.preview.widgetsTitle", defaultValue: "Widgets Meeshy", bundle: .main))
-                    .font(MeeshyFont.relative(14, weight: .bold))
-                    .foregroundColor(theme.textPrimary)
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold))
+                    .foregroundStyle(theme.textPrimary)
                 Text(String(localized: "widget.preview.widgetsHint", defaultValue: "Ajoutez ces widgets à votre écran d'accueil pour un accès rapide.", bundle: .main))
-                    .font(MeeshyFont.relative(12))
-                    .foregroundColor(theme.textMuted)
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                    .foregroundStyle(theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -550,7 +550,7 @@ struct WidgetPreviewView: View {
         .padding(MeeshySpacing.md + 2)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+                .fill(isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.black.opacity(MeeshyOpacity.faint))
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                         .stroke(
@@ -576,7 +576,7 @@ struct WidgetPreviewView: View {
 
         for step in 1...steps {
             let value = Int(Double(target) * Double(step) / Double(steps))
-            DispatchQueue.main.asyncAfter(deadline: .now() + interval * Double(step)) {
+            delayed.run(after: .seconds(interval * Double(step))) {
                 withAnimation(.easeOut(duration: 0.08)) {
                     animatedUnreadCount = value
                 }

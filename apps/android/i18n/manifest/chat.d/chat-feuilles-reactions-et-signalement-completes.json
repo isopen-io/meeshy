@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.reactions.count-a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.reactions.empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.unknown",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.report.confirm.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.report.confirm.message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.send",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.cancel",
+          "status": "adopted"
+        },
+        {
+          "androidName": "chat_reactions_more",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

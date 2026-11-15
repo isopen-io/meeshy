@@ -4,15 +4,139 @@ import {
   UserFilters,
   CreateUserDTO,
   UpdateUserProfileDTO,
-  UpdateEmailDTO,
   UpdateRoleDTO,
   UpdateStatusDTO,
   ResetPasswordDTO
 } from '@meeshy/shared/types';
-import * as bcrypt from 'bcrypt';
+import { withdrawRitualSharesOfUser } from '../relations/ritualShareWithdrawal';
+import { hashPassword } from '../../utils/password-hash';
+import { normalizeEmail } from '../../utils/normalize';
+import { AdminIdentifierTakenError, rethrowIdentifierTaken } from './admin-identifier-taken';
+import { logger, logWarn } from '../../utils/logger';
+import { recipientLanguage } from '../../utils/recipient-language';
+import { searchTokensFor } from '../../utils/search-tokens';
+import { candidatsDePseudo } from '../../utils/username-candidates';
+import {
+  ensureGlobalConversationMembership,
+  type GlobalMembershipSocketManager,
+} from '../conversations/ensureGlobalConversationMembership';
+import { revokePasswordResetTokensForEmailChange } from '../../utils/password-reset-revocation';
+import { cutTogetherWhere } from '../together/togetherDeps';
+
+type UserSortKey = NonNullable<UserFilters['sortBy']>;
+
+const USER_SORT_KEYS: Readonly<Record<UserSortKey, true>> = {
+  createdAt: true,
+  lastActiveAt: true,
+  username: true,
+  email: true,
+  firstName: true,
+  lastName: true
+};
+
+const isUserSortKey = (value: unknown): value is UserSortKey =>
+  typeof value === 'string' && Object.hasOwn(USER_SORT_KEYS, value);
+
+const resolveUserSortKey = (sortBy: unknown): UserSortKey =>
+  isUserSortKey(sortBy) ? sortBy : 'createdAt';
+
+const resolveSortOrder = (sortOrder: unknown): 'asc' | 'desc' =>
+  sortOrder === 'asc' ? 'asc' : 'desc';
+
+/**
+ * Coupe tout canal temps réel que `userId` tient encore. Injecté par la route
+ * (qui seule atteint le manager Socket.IO) ; résolu à l'appel, jamais à la
+ * construction, parce que le manager naît après l'enregistrement des routes.
+ */
+export type SessionRevoker = (userId: string) => Promise<unknown>;
+
+/**
+ * Ce qu'un `resetPassword` administrateur sait de sa cible pour la notifier
+ * (#6831) — pas le `FullUser` entier : `to`/`name` sont ce qu'un transport
+ * e-mail a besoin d'adresser, `language` est déjà résolue (`recipientLanguage`,
+ * SSOT de `utils/recipient-language.ts`) là où `user` est encore lié SANS
+ * `select` à la ligne que `resetPassword` vient d'écrire — jamais recalculée
+ * plus bas, où la projection ne serait plus garantie complète.
+ */
+export type PasswordResetNotificationTarget = {
+  readonly to: string;
+  readonly name: string;
+  readonly language: string;
+};
+
+/**
+ * Envoie la notification « votre mot de passe a été réinitialisé » à la
+ * cible d'un `resetPassword` administrateur — injecté, comme `SessionRevoker` :
+ * ce service ignore tout du transport (e-mail) et ne fait que décider QUAND
+ * l'appeler.
+ */
+export type PasswordResetNotifier = (target: PasswordResetNotificationTarget) => Promise<unknown>;
+
+export type UserManagementServiceDeps = {
+  readonly revokeSessions?: SessionRevoker;
+  /**
+   * Résolu PARESSEUSEMENT, comme `deactivatedUserSessionRevoker` : le manager
+   * n'existe pas encore quand les routes s'enregistrent. Absent = pas de
+   * socket, l'ajout au salon global reste persisté (voir
+   * `ensureGlobalConversationMembership`).
+   */
+  readonly resolveSocketManager?: () => GlobalMembershipSocketManager | null | undefined;
+  readonly notifyPasswordReset?: PasswordResetNotifier;
+  /**
+   * Oublie les cercles de l'équipe après une écriture qui change ce que la loi d'accès
+   * lit d'un compte — rôle, actif, désactivé, supprimé, date de naissance (#16623) : sans
+   * lui, un rôle retiré ou un mineur déclaré garde le privilège d'équipe le temps des
+   * caches (5 min).
+   */
+  readonly forgetTeamCircles?: (userId: string) => Promise<void>;
+  /**
+   * Éteint les partages accordés hors rituel entre collègues de l'équipe quand le compte
+   * cesse d'en être (#16814) : rôle retiré, compte désactivé ou supprimé.
+   */
+  readonly revokeTeamShares?: (userId: string) => Promise<void>;
+  /**
+   * Éteint le partage de position d'un compte désactivé ou supprimé et prévient ceux qui le
+   * voyaient (#16987) : sans lui, l'état scellé court jusqu'à son terme et les lecteurs
+   * gardent un point qui ne bougera plus.
+   */
+  readonly endSharedLocation?: (userId: string) => Promise<void>;
+};
+
+/**
+ * #5331 — les méthodes d'écriture prenaient un `updaterId`/`creatorId` jamais
+ * lu : la piste d'audit de CE service n'est pas ici, elle est posée par
+ * l'appelant (`routes/admin/users-write.ts::tracer`, qui dérive l'acteur du
+ * `request` via `acteurDe()` et écrit sa propre ligne `AuditLog`). Un
+ * paramètre décrivant qui a agi sans jamais le consommer est une signature
+ * qui MENT sur ce que la fonction fait de son entrée — retiré plutôt que
+ * silencé.
+ */
+/**
+ * Ce que la fiche d'administration d'un membre charge EN PLUS de sa ligne :
+ * les compteurs que le web lit dans `_count`. Une seule déclaration, que
+ * `getUserById` et toute écriture qui relit la fiche partagent — une écriture
+ * qui servait la ligne nue de `update` sortait sans (audit du 2026-10-04).
+ */
+export const ADMIN_USER_FICHE_INCLUDE = {
+  _count: {
+    select: {
+      participations: true,
+      createdShareLinks: true,
+      createdTrackingLinks: true,
+      createdAffiliateTokens: true,
+      affiliateRelations: true,
+      referredRelations: true,
+      sentFriendRequests: true,
+      receivedFriendRequests: true,
+    }
+  }
+} as const;
 
 export class UserManagementService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(
+    private prisma: PrismaClient,
+    private readonly deps: UserManagementServiceDeps = {}
+  ) {}
 
   /**
    * Récupère la liste des utilisateurs avec filtres et pagination
@@ -29,6 +153,10 @@ export class UserManagementService {
     if (filters.search) {
       where.OR = [
         { username: { contains: filters.search, mode: 'insensitive' } },
+        // #8876 — le NOM AFFICHÉ est ce que la console montre d'un compte : chercher
+        // « Awa Diop » doit trouver Awa, même quand ni son prénom ni son nom de
+        // famille ne contiennent ces lettres.
+        { displayName: { contains: filters.search, mode: 'insensitive' } },
         { firstName: { contains: filters.search, mode: 'insensitive' } },
         { lastName: { contains: filters.search, mode: 'insensitive' } },
         { email: { contains: filters.search, mode: 'insensitive' } }
@@ -36,7 +164,7 @@ export class UserManagementService {
     }
 
     if (filters.role) {
-      where.role = filters.role;
+      where.role = typeof filters.role === 'string' ? filters.role : { in: [...filters.role] };
     }
 
     if (filters.isActive !== undefined) {
@@ -75,13 +203,7 @@ export class UserManagementService {
       }
     }
 
-    // Construction du tri
-    const orderBy: Record<string, string> = {};
-    if (filters.sortBy) {
-      orderBy[filters.sortBy] = filters.sortOrder || 'desc';
-    } else {
-      orderBy.createdAt = 'desc';
-    }
+    const orderBy = { [resolveUserSortKey(filters.sortBy)]: resolveSortOrder(filters.sortOrder) };
 
     // Exécution de la requête
     const [users, totalUsers] = await Promise.all([
@@ -106,20 +228,7 @@ export class UserManagementService {
   async getUserById(userId: string): Promise<FullUser | null> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: {
-        _count: {
-          select: {
-            participations: true,
-            createdShareLinks: true,
-            createdTrackingLinks: true,
-            createdAffiliateTokens: true,
-            affiliateRelations: true,
-            referredRelations: true,
-            sentFriendRequests: true,
-            receivedFriendRequests: true,
-          }
-        }
-      }
+      include: ADMIN_USER_FICHE_INCLUDE
     });
 
     return user as unknown as FullUser | null;
@@ -127,84 +236,217 @@ export class UserManagementService {
 
   /**
    * Crée un nouvel utilisateur
+   *
+   * Rejoint le salon global "meeshy" COMME UN INSCRIT (#3876) : avant ce lot,
+   * seule l'inscription publique (`AuthService.register`) faisait cet ajout —
+   * un compte créé par un administrateur n'y entrait jamais.
+   * `ensureGlobalConversationMembership` est la SOURCE UNIQUE, partagée par
+   * l'inscription, cette création admin et le seed (`InitService`).
+   *
+   * Best-effort, comme l'inscription publique : une panne de l'ajout au salon
+   * global ne doit pas faire échouer la création du compte.
    */
-  async createUser(data: CreateUserDTO, creatorId: string): Promise<FullUser> {
-    // Hash du mot de passe
-    const hashedPassword = await bcrypt.hash(data.password, 10);
+  async createUser(data: CreateUserDTO): Promise<FullUser> {
+    // Le coût de hachage était 10 ICI et 12 aux trois autres portes (#3629,
+    // soldé au #5216) : un compte créé par un administrateur repartait avec un
+    // hash quatre fois moins cher à casser que celui d'un compte inscrit par la
+    // porte publique, sans que rien ne le signale. Le facteur vit désormais dans
+    // `utils/password-hash`, et il n'y a plus de site où le retaper.
+    const email = normalizeEmail(data.email);
+    await this.assertEmailAvailable(email);
+    await this.assertUsernameAvailable(data.username);
+
+    const hashedPassword = await hashPassword(data.password);
 
     const user = await this.prisma.user.create({
       data: {
         username: data.username,
         firstName: data.firstName,
         lastName: data.lastName,
-        email: data.email,
+        email,
         password: hashedPassword,
         displayName: data.displayName,
+        // Écrits en même temps que les noms : un compte créé sans jetons serait
+        // introuvable jusqu'à sa prochaine modification de profil (#4159).
+        searchTokens: searchTokensFor({
+          username: data.username,
+          displayName: data.displayName,
+          firstName: data.firstName,
+          lastName: data.lastName,
+        }),
         bio: data.bio || '',
         phoneNumber: data.phoneNumber,
         role: (data.role || 'USER') as UserRole,
         systemLanguage: data.systemLanguage || 'en',
         regionalLanguage: data.regionalLanguage || 'en',
         isActive: true,
-        lastActiveAt: new Date()
+        lastActiveAt: new Date(),
+        // L'administrateur ATTESTE l'adresse (#8217) : sans numéro, un compte
+        // n'est actif qu'une fois son adresse prouvée (#8055).
+        ...(data.emailVerified === true ? { emailVerifiedAt: new Date() } : {})
         // TODO: Initialize UserPreferences.application when implemented
       }
-    });
+    }).catch(rethrowIdentifierTaken);
+
+    try {
+      await ensureGlobalConversationMembership(
+        { prisma: this.prisma, resolveSocketManager: this.deps.resolveSocketManager },
+        { userId: user.id, displayName: user.displayName || user.username }
+      );
+    } catch (error) {
+      logWarn(logger, `[UserManagement] Global conversation join failed for admin-created user ${user.id}`, error);
+    }
 
     return user as unknown as FullUser;
   }
 
   /**
    * Met à jour le profil d'un utilisateur
+   *
+   * Recalcule `searchTokens` dès que la donnée touche un champ de nom — la
+   * même règle que `createUser` et `PATCH /users/me/username`, jusqu'ici
+   * absente de ce site : un compte renommé par un administrateur restait
+   * indexé sous son ANCIEN nom et devenait introuvable sous le nouveau (#6823).
+   * Les champs de nom non touchés par `data` sont relus pour ne pas perdre
+   * leurs jetons — `searchTokensFor` ne connaît que ce qu'on lui passe.
    */
   async updateUser(
     userId: string,
-    data: UpdateUserProfileDTO,
-    updaterId: string
+    data: UpdateUserProfileDTO
   ): Promise<FullUser> {
-    const user = await this.prisma.user.update({
+    const touchesName =
+      data.username !== undefined ||
+      data.displayName !== undefined ||
+      data.firstName !== undefined ||
+      data.lastName !== undefined;
+
+    const email = data.email === undefined ? undefined : normalizeEmail(data.email);
+    const emailChanges = email !== undefined && await this.emailDiffersFromCurrent(userId, email);
+    const phoneChanges = data.phoneNumber !== undefined && await this.phoneDiffersFromCurrent(userId, data.phoneNumber);
+    if (email !== undefined) await this.assertEmailAvailable(email, userId);
+    if (data.username !== undefined) await this.assertUsernameAvailable(data.username, userId);
+
+    const searchTokens = touchesName
+      ? searchTokensFor(await this.resolveNameFields(userId, data))
+      : undefined;
+
+    const write = {
       where: { id: userId },
       data: {
         ...data,
+        ...(email !== undefined ? { email } : {}),
+        ...(searchTokens ? { searchTokens } : {}),
+        // Une coordonnée CHANGÉE par l'administration n'a pas été prouvée :
+        // elle perd son état vérifié (spec 2026-10-04 § 7). Resoumettre la
+        // même valeur ne touche à rien.
+        ...(emailChanges ? { emailVerifiedAt: null } : {}),
+        ...(phoneChanges ? { phoneVerifiedAt: null } : {}),
         updatedAt: new Date()
       },
-    });
+    };
+
+    // Un changement d'adresse révoque, dans la MÊME écriture, les liens de
+    // réinitialisation émis vers l'ancienne (#6661) — la règle vivait sur
+    // `updateEmail`, méthode qu'aucune route n'appelait, retirée par #8215.
+    const user = await (emailChanges
+      ? this.prisma.$transaction(async (tx) => {
+          const written = await tx.user.update(write);
+          await revokePasswordResetTokensForEmailChange(tx, userId);
+          return written;
+        })
+      : this.prisma.user.update(write)
+    ).catch(rethrowIdentifierTaken);
+
+    if (data.birthDate !== undefined) await this.forgetTeamCirclesBestEffort(userId);
 
     return user as unknown as FullUser;
   }
 
   /**
-   * Met à jour l'email d'un utilisateur
+   * Refuse une adresse déjà portée par une AUTRE ligne, à la casse près
+   * (#8215) — la même question que les portes publiques
+   * (`routes/users/contact-change.ts`, l'inscription).
    */
-  async updateEmail(
-    userId: string,
-    data: UpdateEmailDTO,
-    updaterId: string
-  ): Promise<FullUser> {
-    // Vérifier le mot de passe actuel
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId }
-    });
-
-    if (!user) {
-      throw new Error('User not found');
-    }
-
-    const isPasswordValid = await bcrypt.compare(data.password, user.password);
-    if (!isPasswordValid) {
-      throw new Error('Invalid password');
-    }
-
-    // Mettre à jour l'email
-    const updatedUser = await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        email: data.newEmail,
-        updatedAt: new Date()
+  private async assertEmailAvailable(email: string, exceptUserId?: string): Promise<void> {
+    const taken = await this.prisma.user.findFirst({
+      where: {
+        email: { equals: email, mode: 'insensitive' },
+        ...(exceptUserId ? { id: { not: exceptUserId } } : {}),
       },
+      select: { id: true },
+    });
+    if (taken) throw new AdminIdentifierTakenError('email');
+  }
+
+  /**
+   * La même question pour le pseudonyme (#8217) — celle que pose
+   * l'inscription publique (`registration-identity.ts`), insensible à la casse.
+   * Au renommage (#8289), le membre lui-même est exclu : changer la CASSE de
+   * son propre pseudo n'est pas le prendre à quelqu'un. Le refus porte les
+   * candidats libres, testés en UNE requête comme `GET /directory/availability`.
+   */
+  private async assertUsernameAvailable(username: string, exceptUserId?: string): Promise<void> {
+    const taken = await this.prisma.user.findFirst({
+      where: {
+        username: { equals: username, mode: 'insensitive' },
+        ...(exceptUserId ? { id: { not: exceptUserId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (taken) throw new AdminIdentifierTakenError('username', await this.freeUsernameCandidates(username));
+  }
+
+  /** Best-effort : une suggestion qui échoue ne change pas un 409 en 500. */
+  private async freeUsernameCandidates(username: string): Promise<string[]> {
+    const candidats = candidatsDePseudo(username);
+    try {
+      const pris = await this.prisma.user.findMany({
+        where: { username: { in: candidats, mode: 'insensitive' } },
+        select: { username: true },
+      });
+      const occupes = new Set((pris ?? []).map((u: { username: string }) => u.username.toLowerCase()));
+      return candidats.filter((c) => !occupes.has(c.toLowerCase())).slice(0, 3);
+    } catch {
+      return [];
+    }
+  }
+
+  private async phoneDiffersFromCurrent(userId: string, phoneNumber: string | null): Promise<boolean> {
+    const current = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { phoneNumber: true },
+    });
+    return (current?.phoneNumber ?? '').trim() !== (phoneNumber ?? '').trim();
+  }
+
+  private async emailDiffersFromCurrent(userId: string, email: string): Promise<boolean> {
+    const current = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+    return normalizeEmail(current?.email ?? '') !== email;
+  }
+
+  private async resolveNameFields(
+    userId: string,
+    data: UpdateUserProfileDTO
+  ): Promise<{
+    username?: string | null;
+    displayName?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+  }> {
+    const current = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { username: true, displayName: true, firstName: true, lastName: true }
     });
 
-    return updatedUser as unknown as FullUser;
+    return {
+      username: data.username !== undefined ? data.username : current?.username,
+      displayName: data.displayName !== undefined ? data.displayName : current?.displayName,
+      firstName: data.firstName !== undefined ? data.firstName : current?.firstName,
+      lastName: data.lastName !== undefined ? data.lastName : current?.lastName,
+    };
   }
 
   /**
@@ -212,8 +454,7 @@ export class UserManagementService {
    */
   async updateRole(
     userId: string,
-    data: UpdateRoleDTO,
-    updaterId: string
+    data: UpdateRoleDTO
   ): Promise<FullUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },
@@ -223,6 +464,9 @@ export class UserManagementService {
       },
     });
 
+    await this.forgetTeamCirclesBestEffort(userId);
+    await this.revokeTeamSharesBestEffort(userId);
+
     return user as unknown as FullUser;
   }
 
@@ -231,9 +475,9 @@ export class UserManagementService {
    */
   async updateStatus(
     userId: string,
-    data: UpdateStatusDTO,
-    updaterId: string
+    data: UpdateStatusDTO
   ): Promise<FullUser> {
+    if (data.isActive) await this.withdrawLeftoverRitualSharesBeforeReturn(userId);
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -243,7 +487,113 @@ export class UserManagementService {
       },
     });
 
+    if (!data.isActive) {
+      await this.revokeSessionsBestEffort(userId, 'deactivation');
+      await this.withdrawRitualSharesBestEffort(userId, 'deactivation');
+      await cutTogetherWhere({ userId });
+      await this.endSharedLocationBestEffort(userId);
+    }
+    await this.forgetTeamCirclesBestEffort(userId);
+    if (!data.isActive) await this.revokeTeamSharesBestEffort(userId);
+
     return user as unknown as FullUser;
+  }
+
+  /** Best-effort, après l'écriture : un partage qui ne s'éteint pas ne défait pas la désactivation. */
+  private async endSharedLocationBestEffort(userId: string): Promise<void> {
+    const end = this.deps.endSharedLocation;
+    if (!end) return;
+    try {
+      await end(userId);
+    } catch (error) {
+      logWarn(logger, `[UserManagement] Shared location was not ended after the departure of user ${userId}`, error);
+    }
+  }
+
+  /** Best-effort, après l'écriture : un cache qui ne s'oublie pas ne rend pas l'opération. */
+  private async forgetTeamCirclesBestEffort(userId: string): Promise<void> {
+    const forget = this.deps.forgetTeamCircles;
+    if (!forget) return;
+    try {
+      await forget(userId);
+    } catch (error) {
+      logWarn(logger, `[UserManagement] Team circles were not forgotten after a change of user ${userId}`, error);
+    }
+  }
+
+  /** Best-effort, après l'écriture : la loi refuse déjà un compte sorti de l'équipe ; l'extinction empêche qu'un lien futur rallume l'accord. */
+  private async revokeTeamSharesBestEffort(userId: string): Promise<void> {
+    const revoke = this.deps.revokeTeamShares;
+    if (!revoke) return;
+    try {
+      await revoke(userId);
+    } catch (error) {
+      logWarn(logger, `[UserManagement] Team shares were not revoked after a change of user ${userId}`, error);
+    }
+  }
+
+  /**
+   * Révoque les sessions actives d'un compte après une écriture qui doit les
+   * invalider — désactivation/bannissement (`updateStatus`, `deleteUser`) ou
+   * réinitialisation de mot de passe par un admin (`resetPassword`, #5569) :
+   * un compte compromis dont le mot de passe est réinitialisé en réponse à un
+   * incident garde sinon ses sessions REST valides jusqu'à expiration du JWT
+   * (jusqu'à 24h). Un socket qui resterait ouvert continuerait de recevoir
+   * ses fils temps réel, d'émettre des `typing:start` (lus « en ligne ») et de
+   * voir la présence des autres. Après l'écriture, jamais avant ; best-effort :
+   * la ligne est déjà posée, une coupure qui échoue ne rend pas l'opération.
+   */
+  private async revokeSessionsBestEffort(userId: string, reason: string): Promise<void> {
+    const revoke = this.deps.revokeSessions;
+    if (!revoke) return;
+    try {
+      await revoke(userId);
+    } catch (error) {
+      logWarn(logger, `[UserManagement] Session revocation failed after ${reason} of user ${userId}`, error);
+    }
+  }
+
+  /** #14924 — un compte parti ne garde aucun partage du rituel ; un retrait qui échoue ne défait pas le geste. */
+  private async withdrawRitualSharesBestEffort(userId: string, reason: string): Promise<void> {
+    try {
+      await withdrawRitualSharesOfUser(this.prisma, { userId });
+    } catch (error) {
+      logWarn(logger, `[UserManagement] Ritual shares not withdrawn after ${reason} of user ${userId}`, error);
+    }
+  }
+
+  /**
+   * #14924 — le retrait au départ est best-effort : un compte qui REVIENT (réactivation,
+   * restauration) le rejoue d'abord, et une panne refuse le retour plutôt que de rendre
+   * un compte aux partages encore allumés. Un compte déjà actif n'est pas touché.
+   */
+  private async withdrawLeftoverRitualSharesBeforeReturn(userId: string): Promise<void> {
+    const current = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isActive: true, deactivatedAt: true, deletedAt: true },
+    });
+    const away = current?.isActive === false || Boolean(current?.deactivatedAt) || Boolean(current?.deletedAt);
+    if (!away) return;
+    await withdrawRitualSharesOfUser(this.prisma, { userId });
+  }
+
+  /**
+   * #6831 — `sendEmail` promettait une notification sans jamais en envoyer
+   * une : le champ traversait la validation et n'était lu par aucun site.
+   * Best-effort comme `revokeSessionsBestEffort` : la ligne est déjà écrite,
+   * un envoi qui échoue ne doit pas faire échouer la réinitialisation.
+   */
+  private async notifyPasswordResetBestEffort(
+    target: PasswordResetNotificationTarget,
+    userId: string
+  ): Promise<void> {
+    const notify = this.deps.notifyPasswordReset;
+    if (!notify) return;
+    try {
+      await notify(target);
+    } catch (error) {
+      logWarn(logger, `[UserManagement] Password reset notification failed for user ${userId}`, error);
+    }
   }
 
   /**
@@ -251,10 +601,9 @@ export class UserManagementService {
    */
   async resetPassword(
     userId: string,
-    data: ResetPasswordDTO,
-    resetById: string
+    data: ResetPasswordDTO
   ): Promise<FullUser> {
-    const hashedPassword = await bcrypt.hash(data.newPassword, 10);
+    const hashedPassword = await hashPassword(data.newPassword);
 
     const user = await this.prisma.user.update({
       where: { id: userId },
@@ -264,35 +613,80 @@ export class UserManagementService {
       },
     });
 
+    // #5569 — un mot de passe réinitialisé par un admin (ex: réponse à un
+    // incident, compte compromis signalé) doit couper les sessions déjà
+    // ouvertes, exactement comme la réinitialisation libre-service
+    // (`PasswordResetService.ts`) le fait déjà pour son propre chemin.
+    await this.revokeSessionsBestEffort(userId, 'password reset');
+
+    // #6831 — `sendEmail` est un OPT-IN explicite de l'admin, jamais le
+    // défaut : un administrateur qui répond à un incident sur un compte
+    // compromis ne veut pas nécessairement alerter son détenteur. La langue
+    // se résout ICI, sur `user` tel que `prisma.user.update` vient de le
+    // rendre SANS `select` (donc avec les quatre colonnes du Prisme) — pas
+    // dans le notificateur, qui ne reverrait qu'un objet déjà découpé.
+    if (data.sendEmail) {
+      await this.notifyPasswordResetBestEffort({
+        to: user.email,
+        name: `${user.firstName} ${user.lastName}`,
+        language: recipientLanguage(user, 'en'),
+      }, userId);
+    }
+
     return user as unknown as FullUser;
   }
 
   /**
-   * Supprime un utilisateur (soft delete)
+   * Supprime un utilisateur (soft delete).
+   *
+   * `deletedBy` N'EST PAS le paramètre d'acteur retiré par #5331 : celui-là
+   * décrivait qui avait agi sans que la méthode le CONSOMME. Ici la valeur est
+   * ÉCRITE — c'est la colonne `User.deletedBy` elle-même, sans laquelle un
+   * compte supprimé serait indistinguable d'une désactivation (#6822).
+   * `deactivatedAt` est posé comme le fait `updateStatus` : un geste plus
+   * grave que « désactiver » ne peut pas laisser ce champ moins renseigné.
    */
-  async deleteUser(userId: string, deletedById: string): Promise<FullUser> {
+  async deleteUser(userId: string, deletedBy: string): Promise<FullUser> {
+    const now = new Date();
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
         isActive: false,
-        updatedAt: new Date()
+        deactivatedAt: now,
+        deletedAt: now,
+        deletedBy,
+        updatedAt: now
       },
     });
+
+    await this.revokeSessionsBestEffort(userId, 'deletion');
+    await this.withdrawRitualSharesBestEffort(userId, 'deletion');
+    await cutTogetherWhere({ userId });
+    await this.endSharedLocationBestEffort(userId);
+    await this.forgetTeamCirclesBestEffort(userId);
+    await this.revokeTeamSharesBestEffort(userId);
 
     return user as unknown as FullUser;
   }
 
   /**
-   * Restaure un utilisateur supprimé
+   * Restaure un utilisateur supprimé — l'inverse EXACT de `deleteUser` : les
+   * trois champs qu'elle pose sont effacés, pas seulement `isActive`.
    */
-  async restoreUser(userId: string, restoredById: string): Promise<FullUser> {
+  async restoreUser(userId: string): Promise<FullUser> {
+    await this.withdrawLeftoverRitualSharesBeforeReturn(userId);
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
         isActive: true,
+        deactivatedAt: null,
+        deletedAt: null,
+        deletedBy: null,
         updatedAt: new Date()
       },
     });
+
+    await this.forgetTeamCirclesBestEffort(userId);
 
     return user as unknown as FullUser;
   }
@@ -332,8 +726,7 @@ export class UserManagementService {
    */
   async verifyEmail(
     userId: string,
-    verified: boolean,
-    updaterId: string
+    verified: boolean
   ): Promise<FullUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },
@@ -351,8 +744,7 @@ export class UserManagementService {
    */
   async verifyPhone(
     userId: string,
-    verified: boolean,
-    updaterId: string
+    verified: boolean
   ): Promise<FullUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },
@@ -368,7 +760,7 @@ export class UserManagementService {
   /**
    * Déverrouille un compte utilisateur
    */
-  async unlockAccount(userId: string, updaterId: string): Promise<FullUser> {
+  async unlockAccount(userId: string): Promise<FullUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -385,7 +777,7 @@ export class UserManagementService {
   /**
    * Active la 2FA pour un utilisateur
    */
-  async enable2FA(userId: string, updaterId: string): Promise<FullUser> {
+  async enable2FA(userId: string): Promise<FullUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -398,15 +790,26 @@ export class UserManagementService {
   }
 
   /**
-   * Désactive la 2FA pour un utilisateur
+   * Désactive la 2FA pour un utilisateur.
+   *
+   * `twoFactorBackupCodes` est déclaré `String[] @default([])` : une liste
+   * scalaire ne s'ANNULE pas, elle se VIDE. Y écrire `null` faisait échouer la
+   * requête Prisma, que le `catch` de la route rendait en « Internal server
+   * error » — le désarmement administrateur, seul chemin de récupération pour
+   * qui a PERDU son appareil, n'a donc jamais abouti (#4206).
+   *
+   * Les champs effacés sont ceux du chemin utilisateur (`TwoFactorService`),
+   * `twoFactorPendingSecret` compris : sans lui, un appairage entamé survivait
+   * au désarmement et pouvait être repris là où il s'était arrêté.
    */
-  async disable2FA(userId: string, updaterId: string): Promise<FullUser> {
+  async disable2FA(userId: string): Promise<FullUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
         twoFactorEnabledAt: null,
         twoFactorSecret: null,
-        twoFactorBackupCodes: null,
+        twoFactorPendingSecret: null,
+        twoFactorBackupCodes: [],
         updatedAt: new Date()
       },
     });
@@ -420,8 +823,7 @@ export class UserManagementService {
   async toggleVoiceConsent(
     userId: string,
     consentType: 'voiceProfile' | 'voiceData' | 'dataProcessing' | 'voiceCloning',
-    enabled: boolean,
-    updaterId: string
+    enabled: boolean
   ): Promise<FullUser> {
     const fieldMap = {
       voiceProfile: 'voiceProfileConsentAt',
@@ -447,8 +849,7 @@ export class UserManagementService {
    */
   async verifyAge(
     userId: string,
-    verified: boolean,
-    updaterId: string
+    verified: boolean
   ): Promise<FullUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },

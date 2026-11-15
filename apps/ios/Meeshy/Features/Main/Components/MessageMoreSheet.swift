@@ -24,12 +24,19 @@ struct MessageMoreSheet: View {
     var onDeleteMedia: (() -> Void)? = nil
     var onPin: (() -> Void)? = nil
     var onToggleStar: (() -> Void)? = nil
+    /// **Épingler la DÉCORATION d'un message-sticker à la palette**
+    /// (2026-09-05). `nil` ⇒ l'hôte ne sait pas le faire ; la RÈGLE ne sert
+    /// alors pas l'entrée, puisque `stickerFavorite` reste `nil` dans son
+    /// contexte — la loi 4 est tenue en amont, pas ici.
+    var onToggleStickerFavorite: (() -> Void)? = nil
     /// Suppression du message entier — route vers le dialogue riche
     /// (« pour tous » / « pour moi ») de `ConversationView`.
     var onDeleteMessage: (() -> Void)? = nil
     var onEdit: (() -> Void)? = nil
     var onCopy: (() -> Void)? = nil
     var onShare: (() -> Void)? = nil
+    /// « Imager » (#8692) — ouvre l'atelier « Imagine » une fois la feuille fermée.
+    var onImagine: (() -> Void)? = nil
     /// Ajout d'une réaction depuis la vue « Réactions » de « Plus… » (voir + ajouter).
     var onReact: ((String) -> Void)? = nil
     var onSelectTranslation: ((MessageTranslation?) -> Void)? = nil
@@ -42,6 +49,9 @@ struct MessageMoreSheet: View {
     var translationRequestFailedPublisher: AnyPublisher<ConversationViewModel.TranslationRequestFailure, Never>? = nil
     var onRequestTextTranslation: ((_ targetLanguage: String, _ sourceLanguage: String) -> Void)? = nil
     var onRequestAudioTranslation: ((_ targetLanguage: String, _ attachmentId: String) -> Void)? = nil
+    /// Chiffrée de bout en bout (#11214) : la feuille DIT pourquoi la
+    /// traduction et la transcription par le serveur n'y figurent pas.
+    var serverFeaturesAbsent: Bool = false
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -57,36 +67,37 @@ struct MessageMoreSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Bouton de fermeture Liquid Glass en HAUT À DROITE (req 2026-07-25)
+            // Bouton de fermeture Liquid Glass en HAUT À DROITE
             // — parité avec le « Close » du sheet réactions et le « X » de la vue
             // Traduire. Remplace l'ancienne capsule « Annuler » épinglée en bas.
             HStack {
                 Spacer()
                 closeButton
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.md)
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 16) {
+                VStack(spacing: MeeshySpacing.lg) {
                     if let selectedItem, isExploration(selectedItem) {
-                        // Morph (req 2026-07-24) : au tap d'un item explorable, la
+                        // Morph: au tap d'un item explorable, la
                         // grille complète se replie en une BANDE D'ICÔNES horizontale
                         // scrollable (Liquid Glass) — le contenu de l'item sélectionné
                         // s'affiche dessous, laissant la place au détail.
                         explorableTabStrip(selected: selectedItem)
-                            .padding(.horizontal, 14)
-                            .padding(.top, 8)
+                            .padding(.horizontal, MeeshySpacing.mdPlus)
+                            .padding(.top, MeeshySpacing.sm)
                         inlineContent(for: selectedItem)
                             .id(selectedItem)
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     } else {
                         glassGridCard
-                            .padding(.horizontal, 14)
-                            .padding(.top, 8)
+                            .padding(.horizontal, MeeshySpacing.mdPlus)
+                            .padding(.top, MeeshySpacing.sm)
+                        if serverFeaturesAbsent { endToEndNotice }
                     }
                 }
-                .padding(.bottom, 24)
+                .padding(.bottom, MeeshySpacing.xxl)
             }
             .animation(.easeInOut(duration: 0.2), value: selectedItem)
         }
@@ -105,24 +116,46 @@ struct MessageMoreSheet: View {
             isPresented: $showDeleteMediaConfirm,
             titleVisibility: .visible
         ) {
-            if message.attachments.filter({ $0.type != .location }).count == 1 {
-                Button(String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main)) {
+            if message.exitOffer.offers(.save), message.attachments.filter({ $0.type != .location }).count == 1 {
+                Button(MessageActionVerb.saveMedia.label) {
                     onSaveMedia?()
                     dismiss()
                 }
             }
-            if message.isForwardable {
-                Button(String(localized: "message-detail.tab.forward", defaultValue: "Transférer", bundle: .main)) {
+            if allMoreItems.contains(.forward) {
+                Button(MessageActionVerb.forward.label) {
                     onForward?()
                     dismiss()
                 }
             }
-            Button(String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main), role: .destructive) {
-                onDeleteMedia?()
-                dismiss()
+            // #9906 — un LOT sans pièce visée ne désigne rien : l'entrée
+            // n'existe pas plutôt que d'effacer la première pièce.
+            if MessagePieceTarget.deletableMedia(in: message, targeted: nil) != nil {
+                Button(MessageActionVerb.deleteMedia.label, role: .destructive) {
+                    onDeleteMedia?()
+                    dismiss()
+                }
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { }
         }
+    }
+
+    /// La mention de ce qui est ABSENT en E2EE — l'absence s'explique, elle
+    /// ne se devine pas (#9224).
+    private var endToEndNotice: some View {
+        Label(
+            String(
+                localized: "message-more.e2ee.notice",
+                defaultValue: "Chiffrée de bout en bout : la traduction et la transcription par le serveur ne sont pas disponibles dans cette conversation.",
+                bundle: .main
+            ),
+            systemImage: "lock.fill"
+        )
+        .font(.footnote)
+        .foregroundStyle(theme.textMuted)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Close Button (Liquid Glass, haut-droite)
@@ -130,8 +163,7 @@ struct MessageMoreSheet: View {
     /// Bouton de fermeture en cercle Liquid Glass, aligné en HAUT À DROITE —
     /// même chrome que le « X » des vues de détail (`MessageLanguageDetailView`,
     /// composer story) et le « Close » du sheet réactions. Glyphe nu dans un
-    /// cercle verre. Remplace l'ancienne capsule « Annuler » du bas (req
-    /// 2026-07-25). Ferme la feuille.
+    /// cercle verre. Remplace l'ancienne capsule « Annuler » du bas. Ferme la feuille.
     private var closeButton: some View {
         Button {
             HapticFeedback.light()
@@ -139,10 +171,12 @@ struct MessageMoreSheet: View {
         } label: {
             Image(systemName: "xmark")
                 .font(.subheadline.weight(.bold))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .frame(width: 30, height: 30)
                 .adaptiveGlass(in: Circle())
                 .contentShape(Circle())
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 30))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
@@ -151,15 +185,15 @@ struct MessageMoreSheet: View {
     // MARK: - Glass Grid Card
 
     private var glassGridCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.mdPlus) {
             ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
                 sectionGrid(for: section)
             }
         }
-        .padding(.vertical, 16)
-        .padding(.horizontal, 12)
+        .padding(.vertical, MeeshySpacing.lg)
+        .padding(.horizontal, MeeshySpacing.md)
         .frame(maxWidth: .infinity)
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous), tint: accent.opacity(0.14))
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous), tint: accent.opacity(0.14))
         .shadow(color: accent.opacity(0.12), radius: 12, x: 0, y: 4)
         .shadow(color: .black.opacity(0.14), radius: 18, x: 0, y: 8)
     }
@@ -167,7 +201,7 @@ struct MessageMoreSheet: View {
     // MARK: - Bande d'icônes horizontale (morph)
 
     /// TOUS les items des sections — la bande horizontale (morph) les affiche
-    /// tous (feedback 2026-07-24 : « il faut toute la liste en horizontal »).
+    /// tous.
     /// Les actions s'exécutent au tap, les explorables basculent le contenu.
     private var allMoreItems: [MoreItem] {
         sections.flatMap { section -> [MoreItem] in
@@ -180,14 +214,14 @@ struct MessageMoreSheet: View {
     /// fait via le bouton de fermeture de `inlineContent`.
     private func explorableTabStrip(selected: MoreItem) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 ForEach(allMoreItems, id: \.self) { item in
                     let color = colorFor(item)
                     let isActive = item == selected
                     Button {
                         handleMoreItemTap(item)
                     } label: {
-                        Image(systemName: symbol(item))
+                        Image(systemName: item.verb.symbol)
                             .font(.callout.weight(.semibold))
                             .foregroundColor(isActive ? color : theme.textSecondary)
                             .frame(width: 44, height: 44)
@@ -196,15 +230,15 @@ struct MessageMoreSheet: View {
                                     ? color.opacity(isDark ? 0.35 : 0.18)
                                     : (isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.05)))
                             )
-                            .overlay(Circle().stroke(isActive ? color.opacity(0.5) : .clear, lineWidth: 1.5))
+                            .overlay(Circle().stroke(isActive ? color.opacity(0.5) : .clear, lineWidth: MeeshyBorder.emphasis))
                     }
                     .buttonStyle(MorePelletButtonStyle())
-                    .accessibilityLabel(labelText(item))
+                    .accessibilityLabel(item.verb.label)
                     .accessibilityAddTraits(isActive ? [.isSelected] : [])
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.sm)
         }
         .adaptiveGlass(in: Capsule(), tint: accent.opacity(0.10))
         .shadow(color: accent.opacity(0.10), radius: 8, x: 0, y: 3)
@@ -225,15 +259,15 @@ struct MessageMoreSheet: View {
     @ViewBuilder
     private func pelletSubGrid(title: String, items: [MoreItem]) -> some View {
         if !items.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 Text(title)
                     .font(.caption2.weight(.semibold))
                     .textCase(.uppercase)
-                    .foregroundColor(theme.textMuted)
-                    .padding(.horizontal, 4)
+                    .foregroundStyle(theme.textMuted)
+                    .padding(.horizontal, MeeshySpacing.xs)
 
-                let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 5)
-                LazyVGrid(columns: columns, spacing: 8) {
+                let columns = Array(repeating: GridItem(.flexible(), spacing: MeeshySpacing.xsPlus), count: 5)
+                LazyVGrid(columns: columns, spacing: MeeshySpacing.sm) {
                     ForEach(Array(items.enumerated()), id: \.element) { index, item in
                         pellet(item, index: index)
                     }
@@ -253,6 +287,14 @@ struct MessageMoreSheet: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 selectedItem = (selectedItem == item) ? nil : item
             }
+        } else if item == .imager {
+            // L'atelier se présente APRÈS la fermeture de cette feuille : présenté
+            // pendant, il serait emporté avec elle (`MessageCardExportPresenter`
+            // attend la fin d'une fermeture en cours).
+            HapticFeedback.medium()
+            let open = onImagine
+            dismiss()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { open?() }
         } else if item == .media {
             // Ouvre le sous-menu média (enregistrer / transférer / supprimer) —
             // jamais de suppression directe (feedback device 2026-07-14).
@@ -266,6 +308,7 @@ struct MessageMoreSheet: View {
             case .thread: onThread?()
             case .pin, .unpin: onPin?()
             case .star, .unstar: onToggleStar?()
+            case .pinSticker, .unpinSticker: onToggleStickerFavorite?()
             case .delete: onDeleteMessage?()
             case .edit: onEdit?()
             case .copy: onCopy?()
@@ -289,7 +332,7 @@ struct MessageMoreSheet: View {
         return Button {
             handleMoreItemTap(item)
         } label: {
-            VStack(spacing: 5) {
+            VStack(spacing: MeeshySpacing.xs) {
                 ZStack {
                     Circle()
                         .fill(
@@ -308,12 +351,12 @@ struct MessageMoreSheet: View {
                         )
                         .frame(width: 42, height: 42)
 
-                    Image(systemName: symbol(item))
+                    Image(systemName: item.verb.symbol)
                         .font(.callout.weight(.semibold))
                         .foregroundColor(color)
                 }
 
-                Text(labelText(item))
+                Text(item.verb.label)
                     .font(.caption2.weight(.medium))
                     .foregroundColor(isActive ? color : theme.textSecondary)
                     .multilineTextAlignment(.center)
@@ -330,7 +373,7 @@ struct MessageMoreSheet: View {
         .buttonStyle(MorePelletButtonStyle())
         // VoiceOver : annonce le seul libellé (évite la double-lecture
         // « glyphe + texte », ex. « globe, Langue »). Le Button conserve son trait.
-        .accessibilityLabel(labelText(item))
+        .accessibilityLabel(item.verb.label)
         // L'état « ouvert » d'une pastille d'exploration (contenu inline déplié)
         // n'était signalé que par la couleur (fill/stroke/label) — invisible pour
         // VoiceOver (WCAG 1.4.1). Le trait .isSelected l'annonce, iOS le localise.
@@ -341,7 +384,10 @@ struct MessageMoreSheet: View {
 
     private func isExploration(_ item: MoreItem) -> Bool {
         switch item {
-        case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar, .delete, .edit, .copy, .share: return false
+        // `pinSticker`/`unpinSticker` FONT et ferment, comme leurs voisins :
+        // épingler une décoration n'ouvre rien à explorer.
+        case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar,
+             .pinSticker, .unpinSticker, .delete, .edit, .copy, .share, .imager: return false
         case .views, .reactions, .language, .transcription, .sentiment, .history, .report: return true
         }
     }
@@ -354,10 +400,15 @@ struct MessageMoreSheet: View {
         case .media: return theme.textSecondary
         case .pin, .unpin: return MeeshyColors.indigo400
         case .star, .unstar: return MeeshyColors.warning
+        // La DÉCORATION porte la couleur de marque, pas celle du favori de
+        // message : deux verbes voisins qui partageraient une couleur se
+        // liraient comme un seul contrôle en deux moitiés.
+        case .pinSticker, .unpinSticker: return MeeshyColors.indigo500
         case .delete: return MeeshyColors.error
         case .edit: return MeeshyColors.indigo500
         case .copy: return MeeshyColors.indigo400
         case .share: return MeeshyColors.info
+        case .imager: return MeeshyColors.indigo500
         case .language: return MeeshyColors.info
         case .views: return MeeshyColors.success
         case .reactions: return MeeshyColors.warning
@@ -374,14 +425,14 @@ struct MessageMoreSheet: View {
     /// sous la grille. Le header remplace la barre de navigation absente.
     private func inlineContent(for item: MoreItem) -> some View {
         let color = colorFor(item)
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: symbol(item))
+        return VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            HStack(spacing: MeeshySpacing.sm) {
+                Image(systemName: item.verb.symbol)
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(color)
-                Text(labelText(item))
+                Text(item.verb.label)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Spacer()
                 Button {
                     HapticFeedback.light()
@@ -391,10 +442,12 @@ struct MessageMoreSheet: View {
                     // fermeture glass de l'app) — glyphe nu dans un cercle verre.
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .frame(width: 28, height: 28)
                         .adaptiveGlass(in: Circle())
                         .contentShape(Circle())
+                        .meeshyTapTarget()
+                        .padding(-MeeshyTapTarget.inset(forVisualSide: 28))
                 }
                 .buttonStyle(.plain)
                 // Bouton icône seule qui replie le contenu d'exploration inline —
@@ -402,11 +455,15 @@ struct MessageMoreSheet: View {
                 // réutilisée (0 clé neuve).
                 .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, MeeshySpacing.xs)
 
+            // #9574 — les fiches détaillées montrent le texte, ses traductions,
+            // sa transcription et ses versions : celles d'un contenu qui
+            // disparaît se rendent dans la couche sécurisée.
             destination(for: item)
+                .captureShield(message.exitOffer.capture.shieldsCapture())
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     /// Contenu détaillé rendu INLINE sous la grille. La feuille est présentée
@@ -417,7 +474,7 @@ struct MessageMoreSheet: View {
     private func destination(for item: MoreItem) -> some View {
         switch item {
         case .language:
-            MessageLanguageDetailView(message: message, contactColor: contactColor, conversationId: conversationId,
+            MessageLanguageDetailView(message: message,
                 textTranslations: textTranslations, transcription: transcription, translatedAudios: translatedAudios,
                 onSelectTranslation: onSelectTranslation, onSelectAudioLanguage: onSelectAudioLanguage,
                 translatingTextLanguages: translatingTextLanguages, translatingAudioLanguages: translatingAudioLanguages,
@@ -426,66 +483,19 @@ struct MessageMoreSheet: View {
         case .views:
             MessageViewsDetailView(message: message, contactColor: contactColor, conversationId: conversationId)
         case .reactions:
-            MessageReactionsDetailView(message: message, contactColor: contactColor, conversationId: conversationId, onReact: onReact)
+            MessageReactionsDetailView(message: message, contactColor: contactColor, onReact: onReact)
         case .transcription:
-            MessageTranscriptionDetailView(message: message, contactColor: contactColor, conversationId: conversationId,
-                transcription: transcription, translatedAudios: translatedAudios, onSelectAudioLanguage: onSelectAudioLanguage)
+            MessageTranscriptionDetailView(message: message, contactColor: contactColor,
+                transcription: transcription, translatedAudios: translatedAudios)
         case .sentiment:
             MessageDetailSentimentTab(content: message.content, isDark: colorScheme == .dark).equatable()
         case .history:
             MessageEditsDetailView(message: message, editRevisions: editRevisions)
         case .report:
-            MessageReportDetailView(message: message, onReport: { onReport?($0, $1); dismiss() }, onDismiss: { dismiss() })
-        case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar, .delete, .edit, .copy, .share:
+            MessageReportDetailView(onReport: { onReport?($0, $1); dismiss() }, onDismiss: { dismiss() })
+        case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar,
+             .pinSticker, .unpinSticker, .delete, .edit, .copy, .share, .imager:
             EmptyView()
-        }
-    }
-
-    private func symbol(_ item: MoreItem) -> String {
-        switch item {
-        case .reply: return "arrowshape.turn.up.left"
-        case .forward: return "arrowshape.turn.up.right"
-        case .thread: return "bubble.left.and.bubble.right"
-        case .media: return "paperclip.badge.ellipsis"
-        case .pin: return "pin"
-        case .unpin: return "pin.slash"
-        case .star: return "star"
-        case .unstar: return "star.slash"
-        case .delete: return "trash"
-        case .edit: return "pencil"
-        case .copy: return "doc.on.doc"
-        case .share: return "square.and.arrow.up"
-        case .language: return "globe"
-        case .views: return "eye"
-        case .reactions: return "face.smiling"
-        case .transcription: return "waveform"
-        case .sentiment: return "brain.head.profile"
-        case .history: return "clock.arrow.circlepath"
-        case .report: return "exclamationmark.triangle"
-        }
-    }
-
-    private func labelText(_ item: MoreItem) -> String {
-        switch item {
-        case .reply: return String(localized: "action.reply", defaultValue: "Répondre", bundle: .main)
-        case .forward: return String(localized: "message-detail.tab.forward", defaultValue: "Transférer", bundle: .main)
-        case .thread: return String(localized: "action.thread", defaultValue: "Discussion", bundle: .main)
-        case .media: return String(localized: "action.media", defaultValue: "Média", bundle: .main)
-        case .pin: return String(localized: "action.pin", defaultValue: "Épingler", bundle: .main)
-        case .unpin: return String(localized: "action.unpin", defaultValue: "Désépingler", bundle: .main)
-        case .star: return String(localized: "action.favorite", defaultValue: "Favori", bundle: .main)
-        case .unstar: return String(localized: "action.unfavorite", defaultValue: "Retirer le favori", bundle: .main)
-        case .delete: return String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main)
-        case .edit: return String(localized: "action.edit", defaultValue: "Éditer", bundle: .main)
-        case .copy: return String(localized: "action.copy", defaultValue: "Copier", bundle: .main)
-        case .share: return String(localized: "action.share", defaultValue: "Partager", bundle: .main)
-        case .language: return String(localized: "message-detail.tab.language", defaultValue: "Traduire", bundle: .main)
-        case .views: return String(localized: "message-detail.tab.views", defaultValue: "Qui a vu", bundle: .main)
-        case .reactions: return String(localized: "message-detail.tab.reactions", defaultValue: "Réactions", bundle: .main)
-        case .transcription: return String(localized: "message-detail.tab.transcription", defaultValue: "Transcription", bundle: .main)
-        case .sentiment: return String(localized: "message-detail.tab.sentiment", defaultValue: "Sentiment", bundle: .main)
-        case .history: return String(localized: "message-detail.tab.history", defaultValue: "Historique", bundle: .main)
-        case .report: return String(localized: "message-detail.tab.report", defaultValue: "Signaler", bundle: .main)
         }
     }
 }

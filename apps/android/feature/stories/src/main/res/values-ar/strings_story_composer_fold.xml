@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_composer_fold">إخفاء منطقة التعليق</string>
+    <string name="story_composer_fold_hint">يغلق لوحة المفاتيح ويطوي منطقة التعليق في فقاعة</string>
+    <string name="story_composer_unfold">إظهار منطقة التعليق</string>
+    <string name="story_composer_unfold_hint">يعيد فتح منطقة التعليق دون فتح لوحة المفاتيح</string>
+    <string name="story_composer_unfold_recording">تسجيل صوتي قيد التقدم</string>
+    <string name="story_composer_unfold_replying">رد قيد الكتابة</string>
+</resources>

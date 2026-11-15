@@ -3,6 +3,22 @@
  * Used to queue messages for offline participants and deliver on reconnect.
  */
 
+/**
+ * #12822 — la charge d'une entrée d'une conversation `server`/`hybrid`, scellée
+ * par la passerelle (AES-256-GCM, clé de la conversation, données authentifiées
+ * liant la conversation, le message, le destinataire, l'événement et la clé de
+ * dédup — `delivery-queue:v2` ; `v1`, conversation et message seuls, ne se lit
+ * plus que pour les entrées enfilées avant v2). Base64 partout ; `aad` nomme la
+ * liaison.
+ */
+export type SealedQueuedPayload = {
+  readonly ciphertext: string;
+  readonly keyId: string;
+  readonly iv: string;
+  readonly authTag: string;
+  readonly aad: string;
+};
+
 export type QueuedMessagePayload = {
   readonly messageId: string;
   /**
@@ -20,10 +36,21 @@ export type QueuedMessagePayload = {
    */
   readonly conversationId: string;
   readonly payload: Record<string, unknown>;
+  /**
+   * #12822 — présent ⇒ `payload` est VIDE et la vraie charge est ici, scellée :
+   * le clair d'une conversation chiffrée au repos ne se pose pas dans Redis. La
+   * passerelle la rouvre au drain ; le fil reçoit l'événement d'avant.
+   */
+  readonly sealedPayload?: SealedQueuedPayload;
   readonly enqueuedAt: string;
   /** Absent (or 'new') = original behavior: a MESSAGE_NEW replay that also
    * bumps the recipient's delivered receipt on drain. 'edited'/'deleted'
    * replay the matching event without touching delivery receipts.
+   * 'expired' replays MESSAGE_EXPIRED — the server-initiated twin of
+   * 'deleted' for a self-destructing message burned by
+   * `ExpiredMessagesCleanupService` rather than by a user action — and is
+   * equally exempt from delivery receipts: nothing was delivered, something
+   * was destroyed.
    * 'reaction-added'/'reaction-removed' replay REACTION_ADDED/REACTION_REMOVED
    * so an offline peer's reaction state converges on reconnect (same as
    * edits/deletes) — they never carry a delivery receipt.
@@ -79,11 +106,34 @@ export type QueuedMessagePayload = {
    * would collapse them into a single entry, keeping only the first language.
    * Supersede-in-place (latest payload wins) is right per language — a
    * re-translation of the same (message, language) replaces the previous text.
-   * Never a delivery receipt: a translation is not a message arriving. */
+   * Never a delivery receipt: a translation is not a message arriving.
+   *
+   * #16688 — 'starred', 'hidden-for-me' et 'restored-for-me' sont les MARQUES
+   * PERSONNELLES du lecteur : un état par (lecteur, message) qui ne concerne
+   * que les AUTRES APPAREILS de ce même compte. Les trois sont les seules
+   * familles de cette file dont l'ACTEUR est le destinataire — c'est pourquoi
+   * le test de joignabilité d'`enqueueForOfflineParticipants`
+   * (« ce compte a-t-il une socket ? ») ne peut rien en dire : l'appareil qui
+   * agit en fournit toujours une, donc la réponse est toujours OUI et aucune
+   * entrée n'était jamais écrite. Voir `enqueuePersonalMessageMark`.
+   *
+   * Aucune des trois ne porte de TEXTE de message (des identifiants, un
+   * booléen, une date) : elles ne déclarent donc pas de régime au repos et
+   * n'entrent pas dans l'index de purge. Aucune n'est une ARRIVÉE : jamais
+   * d'accusé de remise — une étoile n'est pas un message qui arrive.
+   *
+   * Dédup : 'starred' porte l'état ABSOLU du message, donc `messageId` seul est
+   * la bonne identité — un `starred:false` qui arrive après un `starred:true`
+   * SUPPLANTE le premier (le dernier état gagne), ce qui est exactement ce
+   * qu'un appareil absent doit relire. Les deux familles de visibilité
+   * groupent, elles, par CONVERSATION et portent une `dedupKey` qui nomme leur
+   * LOT : superposer deux lots qui se recouvrent sous la seule clé du premier
+   * message perdrait les messages du lot supplanté. */
   readonly eventType?:
     | 'new'
     | 'edited'
     | 'deleted'
+    | 'expired'
     | 'reaction-added'
     | 'reaction-removed'
     | 'attachment-reaction-added'
@@ -92,7 +142,10 @@ export type QueuedMessagePayload = {
     | 'unpinned'
     | 'link-message'
     | 'attachment-updated'
-    | 'translation';
+    | 'translation'
+    | 'starred'
+    | 'hidden-for-me'
+    | 'restored-for-me';
   /** Overrides the identity used for enqueue-time dedup (default: messageId).
    * messageId+eventType alone is correct for edits/deletes/pins (at most one
    * relevant transition matters per message), but reactions need a finer key:
@@ -104,6 +157,52 @@ export type QueuedMessagePayload = {
 
 export const DELIVERY_QUEUE_PREFIX = 'delivery:queue:' as const;
 export const DELIVERY_QUEUE_TTL_SECONDS = 172800;
+
+/**
+ * L'INDEX INVERSE `messageId → clés de file qui portent son texte` (#16706).
+ *
+ * La file est une LISTE PAR UTILISATEUR, donc rien ne permettait d'aller d'un
+ * message vers les files qui en gardent une copie. C'est ce qui a laissé le
+ * CLAIR d'un message détruit survivre jusqu'à 48 h dans Redis (et dans ses
+ * sauvegardes AOF) alors que `ExpiredMessagesCleanupService._burn` revendique
+ * l'invariant « le contenu est détruit » : l'invariant tenait dans Mongo, pas
+ * ici. #16685 avait fermé la REMISE — le drain interroge la vivacité avant
+ * d'émettre — et laissé le STOCKAGE ouvert, délibérément.
+ *
+ * Trois propriétés décident de sa forme :
+ *
+ * 1. **Il n'indexe QUE les familles qui portent du texte**
+ *    (`TextBearingQueuedEvent`). Une suppression, une expiration, une épingle ou
+ *    une réaction ne porte que des identifiants et un emoji : rien à purger, donc
+ *    rien à indexer. C'est ce qui borne la taille de l'index au sous-ensemble
+ *    des messages dont une copie lisible est effectivement stockée.
+ * 2. **Il s'écrit dans l'EVAL qui enfile déjà**, comme une seconde commande du
+ *    même script — pas comme un aller-retour de plus. Le chemin d'enfilage est
+ *    le plus chaud du module (une passe par destinataire hors ligne) et le
+ *    tableau de coûts de #16706 chiffrait cette piste à « une écriture Redis de
+ *    plus par destinataire » : c'est vrai d'une COMMANDE, faux d'un
+ *    ALLER-RETOUR, et c'est l'aller-retour qui coûte.
+ * 3. **Il expire avec les entrées qu'il désigne** (`DELIVERY_QUEUE_TTL_SECONDS`,
+ *    rafraîchi à chaque poussée). Un index qui survivrait à ses files ferait
+ *    balayer des clés vides ; un index qui mourrait avant elles laisserait le
+ *    clair sans moyen de le retrouver — c'est-à-dire le défaut d'origine.
+ *
+ * Son PRÉFIXE est hors de `delivery:queue:` à dessein, et ce n'est pas une
+ * question de goût : `RedisDeliveryQueue.cleanup()` balaie
+ * `SCAN MATCH delivery:queue:*` puis fait un `LRANGE` sur chaque clé trouvée.
+ * Une clé d'index — un `SET` — y répondrait `WRONGTYPE`, l'exception tomberait
+ * dans le `catch` du balayage, et **le nettoyage de TOUTES les files
+ * s'arrêterait** : un index posé pour empêcher le clair de survivre 48 h aurait
+ * empêché la seule unité qui le fait expirer. Le premier nom essayé
+ * (`delivery:queue:msg:`) appariait ce motif.
+ *
+ * Il est un ACCÉLÉRATEUR, jamais une preuve : une purge ne tient pas sa
+ * correction de lui. Une entrée que l'index a perdue (Redis indisponible à
+ * l'enfilage, repli mémoire, TTL) reste refusée à la REMISE par la garde de
+ * vivacité du drain, qui ne lit que la base. Les deux moitiés se complètent —
+ * l'une empêche de GARDER, l'autre de REMETTRE — et aucune ne suppose l'autre.
+ */
+export const DELIVERY_QUEUE_MESSAGE_INDEX_PREFIX = 'delivery:msg-queues:' as const;
 
 /**
  * Hard bound on the number of entries the DURABLE (Redis) slice keeps per user.

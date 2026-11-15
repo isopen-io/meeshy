@@ -1,0 +1,270 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        { "androidName": "game_rules_intro", "status": "android-only" },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.section_steps",
+          "androidName": "game_rules_section_steps",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.1.title",
+          "androidName": "game_rules_1_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.2.title",
+          "androidName": "game_rules_2_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.3.title",
+          "androidName": "game_rules_3_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.4.title",
+          "androidName": "game_rules_4_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.5.title",
+          "androidName": "game_rules_5_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.6.title",
+          "androidName": "game_rules_6_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.7.title",
+          "androidName": "game_rules_7_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.8.title",
+          "androidName": "game_rules_8_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.concept.elans.body",
+          "androidName": "game_rules_concept_elans_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.concept.badges.body",
+          "androidName": "game_rules_concept_badges_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.concept.defis.body",
+          "androidName": "game_rules_concept_defis_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.concept.succes.body",
+          "androidName": "game_rules_concept_succes_body",
+          "status": "adopted"
+        },
+        { "androidName": "game_rules_concept_showcase_body", "status": "android-only" },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.concept.atlas.body",
+          "androidName": "game_rules_concept_atlas_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.concept.chest.name",
+          "androidName": "game_rules_concept_chest_name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.concept.chest.body",
+          "androidName": "game_rules_concept_chest_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.concept.treasury.name",
+          "androidName": "game_rules_concept_treasury_name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.concept.treasury.body",
+          "androidName": "game_rules_concept_treasury_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.concept.steps.name",
+          "androidName": "game_rules_concept_steps_name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.concept.steps.body",
+          "androidName": "game_rules_concept_steps_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.concept.tailwind.name",
+          "androidName": "game_rules_concept_tailwind_name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.concept.duo.name",
+          "androidName": "game_rules_concept_duo_name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step_of",
+          "androidName": "game_guide_step_of",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step.welcome.means",
+          "androidName": "game_guide_step_welcome_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step.welcome.next",
+          "androidName": "game_guide_step_welcome_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step.first_points.what",
+          "androidName": "game_guide_step_first_points_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step.first_points.means",
+          "androidName": "game_guide_step_first_points_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step.first_points.next",
+          "androidName": "game_guide_step_first_points_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step.levels.what",
+          "androidName": "game_guide_step_levels_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step.levels.means",
+          "androidName": "game_guide_step_levels_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step.levels.next",
+          "androidName": "game_guide_step_levels_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step.missions.what",
+          "androidName": "game_guide_step_missions_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step.missions.means",
+          "androidName": "game_guide_step_missions_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step.missions.next",
+          "androidName": "game_guide_step_missions_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step.flame.what",
+          "androidName": "game_guide_step_flame_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step.flame.means",
+          "androidName": "game_guide_step_flame_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step.flame.next",
+          "androidName": "game_guide_step_flame_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step.mint.what",
+          "androidName": "game_guide_step_mint_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step.mint.means",
+          "androidName": "game_guide_step_mint_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step.mint.next",
+          "androidName": "game_guide_step_mint_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step.rank.what",
+          "androidName": "game_guide_step_rank_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step.rank.means",
+          "androidName": "game_guide_step_rank_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.guide.step.rank.next",
+          "androidName": "game_guide_step_rank_next",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

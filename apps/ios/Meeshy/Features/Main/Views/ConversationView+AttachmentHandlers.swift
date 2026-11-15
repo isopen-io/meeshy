@@ -3,6 +3,7 @@ import SwiftUI
 import UIKit
 import PhotosUI
 import AVFoundation
+import ImageIO
 import Combine
 import MeeshySDK
 import MeeshyUI
@@ -11,47 +12,39 @@ import os
 // MARK: - Recording, Sending & Attachment Handlers
 extension ConversationView {
 
-    /// Décision pure et testable du popup de consentement vocal à l'envoi
-    /// (2026-07-08) : uniquement quand le send contient de l'audio, que le
-    /// consentement vocal manque, et qu'on n'a pas déjà proposé cette session.
-    nonisolated static func shouldPromptVoiceConsent(
-        hasAudio: Bool,
-        consentMissing: Bool,
-        alreadyPrompted: Bool
-    ) -> Bool {
-        hasAudio && consentMissing && !alreadyPrompted
+    /// Transcription locale des vocaux (#4948) — singleton app, comme
+    /// `presenceManager` : l'extension ne peut pas déclarer de stockage.
+    var voiceNoteTranscriber: any VoiceNoteLocalTranscribing { VoiceNoteLocalTranscriber.shared }
+
+    /// Pose les transcriptions locales sur la bulle `tempId` — par pièce ET
+    /// par message (le chemin mono-audio lit `messageTranscriptions[msg.id]`).
+    /// Idempotent : appelé dans le slice de l'insert optimiste pour ce qui est
+    /// déjà connu, puis à l'envoi pour ce qui est arrivé entre-temps.
+    func attachLocalTranscriptions(_ transcriptions: [MessageTranscription], tempId: String) {
+        LocalTranscriptionPlacement.place(transcriptions, tempId: tempId, on: viewModel)
     }
 
-    /// Read a local attachment's bytes off the MainActor. `Data(contentsOf:)`
-    /// is a synchronous read; a multi-attachment send (dozens of MB of video)
-    /// previously read every file inline on the MainActor — either while
-    /// building the optimistic-send plan or inside the upload loop's `Task`
-    /// (which inherits MainActor isolation by default) — freezing the UI for
-    /// the whole read duration. Hops to a detached background Task — the
-    /// same technique previously implemented in `AttachmentSendService.swift`
-    /// (removed as dead code, 0 call sites) but never applied to this, the
-    /// actually-live send path.
-    nonisolated static func readAttachmentFileBytes(_ url: URL) async -> Data? {
-        await Task.detached(priority: .utility) { try? Data(contentsOf: url) }.value
-    }
-
-    /// Motif d'échec d'un envoi de pièces jointes, complété d'un conseil
-    /// actionnable quand plusieurs pièces sont en jeu : réduire le nombre de
-    /// pièces et réessayer. Un échec sur un envoi de 150 photos n'a pas le
-    /// même remède qu'un échec sur une pièce isolée, et sans le dire on laisse
-    /// l'utilisateur rejouer à l'identique le même envoi trop lourd.
-    ///
-    /// Silencieux sur une pièce unique — « réduire » n'y veut rien dire.
-    /// Miroir du `withReduceAttachmentsHint` du composer web.
-    nonisolated static func uploadFailureReason(error: Error, attachmentCount: Int) -> String {
-        guard attachmentCount > 1 else { return error.localizedDescription }
-        return "\(error.localizedDescription) Réduisez le nombre de pièces jointes (\(attachmentCount) en cours) et réessayez."
+    /// Rollback de la tuile de lieu (`SendPlaceTileLaw`) : retirée AU TAP
+    /// avec le texte, elle ne revient que si l'envoi qui la porte a échoué.
+    func restorePlaceTile(_ snapshot: SharedPlace?, sent: Bool) {
+        guard let restored = SendPlaceTileLaw.restoration(of: snapshot, sent: sent, current: composerState.pendingPlace) else { return }
+        withAnimation { composerState.pendingPlace = restored }
     }
 
     // MARK: - Recording Functions
     func startRecording() {
         audioRecorder.startRecording()
         HapticFeedback.medium()
+        // #9784 — la prise se suit dans l'îlot quand on quitte l'app, et s'y
+        // arrête par les MÊMES gestes que le composeur.
+        let recorder = audioRecorder
+        VoiceRecordingLiveActivityCoordinator.shared.track(
+            recorder: recorder,
+            conversationId: viewModel.conversationId,
+            title: viewModel.currentConversationName,
+            onStop: { _ = stopRecordingToAttachment() },
+            onCancel: { recorder.cancelRecording() }
+        )
     }
 
     /// Stop the recorder and drop the audio into the composer's attachment
@@ -69,6 +62,15 @@ extension ConversationView {
         let audioAttachment = MessageAttachment.audio(durationMs: durationMs, color: accentColor)
         composerState.pendingMediaFiles[audioAttachment.id] = url
         composerState.pendingAttachments.append(audioAttachment)
+        // Transcription SUR L'APPAREIL dès l'arrêt (#4948, D-AUDIO-01) : elle
+        // tourne pendant que l'utilisateur relit ou tape, pour que la bulle
+        // parte avec son texte et que le serveur n'ait plus qu'à confirmer.
+        if let url {
+            voiceNoteTranscriber.beginTranscription(
+                attachmentId: audioAttachment.id, audioURL: url,
+                durationMs: durationMs, languageCode: composerState.selectedLanguage
+            )
+        }
         return true
     }
 
@@ -79,569 +81,170 @@ extension ConversationView {
     }
 
     func sendMessageWithAttachments() {
-        let composerTrimmed = composerText.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        Logger.messages.info("SendTap composer tap convId=\(viewModel.conversationId, privacy: .public) isUploading=\(composerState.isUploading, privacy: .public) textLen=\(composerTrimmed.count, privacy: .public) pendingAttachments=\(composerState.pendingAttachments.count, privacy: .public) vmIsSending=\(viewModel.isSending, privacy: .public)")
-        guard !composerState.isUploading else {
-            Logger.messages.error("SendTap BLOCKED guard=isUploading convId=\(viewModel.conversationId, privacy: .public)")
-            return
-        }
         let text = composerText.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Lieu capturé AVANT toute remise à zéro d'état : il n'est remis à nil
-        // QU'AU SUCCÈS de l'envoi qui le porte — un échec laisse la tuile en
-        // place pour réessayer sans re-choisir son lieu (lot 2, spec 2026-07-30).
+        Logger.messages.info("SendTap composer tap convId=\(viewModel.conversationId, privacy: .public) isUploading=\(composerState.isUploading, privacy: .public) textLen=\(text.count, privacy: .public) pendingAttachments=\(composerState.pendingAttachments.count, privacy: .public) vmInFlightSends=\(viewModel.sendActivity.inFlight, privacy: .public)")
         let place = composerState.pendingPlace
-        // Garde partagé avec `ConversationViewModel.sendMessage` : un message
-        // « lieu seul » est un envoi valide.
         guard SendEligibility.canSend(text: text, attachmentIds: composerState.pendingAttachments.map(\.id), location: place) else {
             Logger.messages.error("SendTap BLOCKED guard=emptyContent convId=\(viewModel.conversationId, privacy: .public)")
             return
         }
 
-        let pendingRef = composerState.pendingReplyReference
-        let isStory = pendingRef?.isStoryReply == true
-        let refId = pendingRef?.messageId.isEmpty == false ? pendingRef?.messageId : nil
-        let replyId = isStory ? nil : refId
-        let storyReplyId = isStory ? refId : nil
-        let storyRef = isStory ? pendingRef : nil
-
+        let route = outgoingReplyRoute
         let attachments = composerState.pendingAttachments
-        let mediaFiles = composerState.pendingMediaFiles
-        let lang = composerState.selectedLanguage
+        let plan = MultiAttachmentSendPlanner.plan(attachments: attachments, text: text, hasReply: route.hasReply)
+        guard !promptsVoiceConsent(for: plan) else { return }
 
-        let plan = MultiAttachmentSendPlanner.plan(
-            attachments: attachments,
-            text: text,
-            hasReply: refId != nil
+        let intent = AttachmentSendIntent(
+            plan: plan,
+            route: route,
+            relation: ComposerSendRelation.of(route, citing: outgoingAttachmentAnchor),
+            protection: viewModel.captureArmedProtection(replyingTo: route.replyToId),
+            language: composerState.selectedLanguage,
+            place: place,
+            mediaFiles: composerState.pendingMediaFiles
         )
+        guard !attachments.isEmpty else {
+            dispatchTextOnly(text: text, intent: intent)
+            return
+        }
+        launchAttachmentSend(stageAttachmentBubbles(intent))
+    }
 
-        // Popup consentement vocal (2026-07-08) : un envoi contenant de
-        // l'audio sans consentement vocal validé propose UNE fois par session
-        // la traduction automatique (profil vocal + traduction avec la voix).
-        // On interrompt AVANT toute mutation du composer : la décision du
-        // popup relance ce même send avec un état intact.
-        if Self.shouldPromptVoiceConsent(
+    /// Un envoi contenant de l'audio sans consentement vocal validé propose UNE fois par
+    /// session la traduction automatique. L'interruption précède toute mutation du composer :
+    /// la décision du popup relance ce même tap sur un état intact.
+    private func promptsVoiceConsent(for plan: [MultiAttachmentSendPlanner.PlannedMessage]) -> Bool {
+        guard OutgoingAttachmentRules.shouldPromptVoiceConsent(
             hasAudio: plan.contains { $0.kind == .audio },
             consentMissing: viewModel.voiceConsentMissing,
             alreadyPrompted: composerState.voiceConsentPromptedThisSession
-        ) {
-            composerState.voiceConsentPromptedThisSession = true
-            composerState.showVoiceAutoTranslateConsent = true
-            return
-        }
+        ) else { return false }
+        composerState.voiceConsentPromptedThisSession = true
+        composerState.showVoiceAutoTranslateConsent = true
+        return true
+    }
 
-        if attachments.isEmpty {
-            // Text-only send: clear UI immediately
-            composerState.pendingAttachments.removeAll()
-            composerState.pendingMediaFiles.removeAll()
-            composerState.pendingThumbnails.removeAll()
-            purgeDraftAttachmentMedia()
-            composerText.text = ""
-            ReplyContextCleaner(conversationId: viewModel.conversationId)
-                .clear(pendingReplyReference: &composerState.pendingReplyReference)
-            viewModel.stopTypingEmission()
-            HapticFeedback.light()
-            Logger.messages.info("SendTap text-only dispatch convId=\(viewModel.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) — field cleared, launching sendMessage Task")
-            Task {
-                let ok = await viewModel.sendMessage(content: text, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, originalLanguage: lang, location: place)
-                // Succès (ACK ou mise en file durable) : le lieu est parti, la
-                // tuile disparaît. Échec : la tuile reste pour un nouvel essai.
-                if ok, place != nil {
-                    withAnimation { composerState.pendingPlace = nil }
-                }
-            }
-            return
+    private func dispatchTextOnly(text: String, intent: AttachmentSendIntent) {
+        composerState.pendingAttachments.removeAll()
+        composerState.pendingMediaFiles.removeAll()
+        composerState.pendingThumbnails.removeAll()
+        purgeDraftAttachmentMedia()
+        clearComposerForSend()
+        Logger.messages.info("SendTap text-only dispatch convId=\(viewModel.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) — field cleared, launching sendMessage Task")
+        let outgoing = OutgoingMessage(
+            conversationId: ConversationID(viewModel.conversationId), content: text, relation: intent.relation,
+            attachments: .none, protection: intent.protection, originalLanguage: intent.language, location: intent.place
+        )
+        Task {
+            let ok = await viewModel.send(outgoing).isAccepted
+            restorePlaceTile(intent.place, sent: ok)
         }
+    }
 
-        // File upload flow: keep attachments visible, show progress
+    private func clearComposerForSend() {
         composerText.text = ""
+        // Un vocal qui part ne continue pas de jouer depuis le plateau (#7171).
+        pendingAudioPlayer.stop()
+        withAnimation { composerState.pendingPlace = nil }
         ReplyContextCleaner(conversationId: viewModel.conversationId)
             .clear(pendingReplyReference: &composerState.pendingReplyReference)
         viewModel.stopTypingEmission()
-        composerState.isUploading = true
         HapticFeedback.light()
+    }
 
-        // --- Precompute sendable media groups: each paired with a stable tempId ---
-        // Both the optimistic phase and the upload phase iterate this SAME list
-        // so that tempIds never desync (Issue 1: empty-locals groups must be
-        // excluded from BOTH phases, not just the optimistic insert).
-        struct MediaGroupSend {
-            let group: MultiAttachmentSendPlanner.PlannedMessage
-            let tempId: String
-            let locals: [MeeshyMessageAttachment]   // non-empty; already cache-seeded
-        }
-
-        let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-        let senderName = AuthManager.shared.currentUser?.displayName
-        let senderColor = DynamicColorGenerator.colorForName(senderName ?? "?")
+    /// Chaque bulle est posée dans le MÊME tour MainActor que sa transcription locale, sans
+    /// `await` entre les deux. Le plateau se vide dans ce tour : on compose la suite pendant
+    /// que ce lot se téléverse (#14696).
+    private func stageAttachmentBubbles(_ intent: AttachmentSendIntent) -> AttachmentSendBatch {
+        clearComposerForSend()
+        let currentUser = AuthManager.shared.currentUser
         let thumbnails = composerState.pendingThumbnails
-
-        // Build the list once. Side effects (image cache seeding) happen here.
-        let mediaGroupSends: [MediaGroupSend] = plan.filter { $0.kind != .text }.compactMap { group in
-            let locals: [MeeshyMessageAttachment] = group.attachments.compactMap { att in
-                guard let fileURL = mediaFiles[att.id] else { return nil }
-                let isImage = att.mimeType.hasPrefix("image/")
-                if isImage {
-                    // Seed in-memory NSCache + on-disk image cache so the
-                    // optimistic bubble keeps the picture across navigation
-                    // until the server `message:new` reconciliation lands.
-                    // The read hops off the MainActor (readAttachmentFileBytes)
-                    // — this compactMap runs synchronously on the tap-Send
-                    // call stack, so a raw `Data(contentsOf:)` here froze the
-                    // UI for the whole read of every selected photo/video.
-                    let persistKey = fileURL.absoluteString
-                    Task {
-                        guard let data = await ConversationView.readAttachmentFileBytes(fileURL),
-                              let image = UIImage(data: data) else { return }
-                        DiskCacheStore.cacheImageForPreview(image, key: persistKey)
-                        await CacheCoordinator.shared.images.save(data, for: persistKey)
-                    }
-                }
-                // A video/audio file:// URL cannot be decoded as a still — seed
-                // a ThumbHash from the generated thumbnail so the bubble shows a
-                // recognisable preview instantly. Images render from the cache.
-                let optimisticThumbHash = isImage ? nil : thumbnails[att.id]?.toThumbHash()
-                return MeeshyMessageAttachment(
-                    id: att.id,
-                    mimeType: att.mimeType.isEmpty ? "application/octet-stream" : att.mimeType,
-                    fileUrl: fileURL.absoluteString,
-                    width: att.width,
-                    height: att.height,
-                    thumbnailUrl: isImage ? fileURL.absoluteString : nil,
-                    thumbHash: optimisticThumbHash,
-                    duration: att.duration,
-                    uploadedBy: currentUserId,
-                    thumbnailColor: senderColor
-                )
-            }
-            guard !locals.isEmpty else { return nil }
-            // Phase 4 §6.2 — `cid_<uuid v4 lowercase>` so the gateway accepts
-            // the value as `clientMessageId` (the legacy `temp_<UUID>` prefix
-            // fails the strict wire regex).
-            return MediaGroupSend(group: group, tempId: ClientMessageId.generate(), locals: locals)
-        }
-
-        // --- Optimistic media insert: one bubble per sendable group ---
-        // Persist via GRDB (insertOptimisticMediaMessage) so the row survives
-        // the next MessageStore observation refresh. A direct
-        // `viewModel.messages.append` would only live in memory and be wiped
-        // the moment any other GRDB write fires `messagesDidChange`.
-        for send in mediaGroupSends {
-            let msgType: Message.MessageType = send.group.kind == .audio
-                ? .audio
-                : (send.locals.first?.mimeType.hasPrefix("video/") == true ? .video : .image)
-            viewModel.insertOptimisticMediaMessage(
-                tempId: send.tempId,
-                content: "",
-                attachments: send.locals,
-                messageType: msgType,
-                replyToId: send.group.carriesReply ? replyId : nil,
-                storyReplyToId: send.group.carriesReply ? storyReplyId : nil,
-                replyReference: send.group.carriesReply ? storyRef : nil,
-                originalLanguage: lang
-            )
-        }
-
-        // --- Optimistic TEXT insert: upfront, like every media group ---
-        // Le groupe texte est ENVOYÉ en dernier (règle A2.2 de la spec
-        // multi-pièces : le texte est toujours son propre message, après les
-        // pièces). Mais son insert optimiste vivait À L'INTÉRIEUR de
-        // `sendMessage`, appelé après la boucle d'upload : la bulle texte
-        // n'apparaissait donc qu'une fois le DERNIER octet du dernier fichier
-        // monté — l'utilisateur voyait « les pièces d'abord, le message
-        // ensuite ». On pose la ligne ici, dans le même tour MainActor que les
-        // bulles média, en conservant l'ordre d'affichage : `createdAt` est
-        // postérieur aux groupes média puisque l'insert suit, et l'envoi réel
-        // reste en dernier via `existingTempId`.
-        //
-        // `insertOptimisticMediaMessage` n'a de « Media » que le nom : avec
-        // `attachments: []` et `messageType: .text` il construit un
-        // `MessageRecord` texte ordinaire (`attachmentsJson` reste nil) et
-        // `optimisticListPreview` gère déjà `.text`.
-        let textGroupPlan = plan.first(where: { $0.kind == .text })
-        let textTempId: String? = {
-            let hasText = !(textGroupPlan?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            guard hasText || (textGroupPlan == nil && place != nil) else { return nil }
-            return ClientMessageId.generate()
-        }()
-        if let textTempId {
-            viewModel.insertOptimisticMediaMessage(
-                tempId: textTempId,
-                content: textGroupPlan?.text ?? "",
-                attachments: [],
-                messageType: .text,
-                replyToId: textGroupPlan?.carriesReply == true ? replyId : nil,
-                storyReplyToId: textGroupPlan?.carriesReply == true ? storyReplyId : nil,
-                replyReference: textGroupPlan?.carriesReply == true ? storyRef : nil,
-                originalLanguage: lang
-            )
-        }
-
+        let mediaGroupSends = OutgoingMediaGroup.sendable(
+            plan: intent.plan, mediaFiles: intent.mediaFiles, thumbnails: thumbnails,
+            currentUserId: currentUser?.id ?? "",
+            senderColor: DynamicColorGenerator.colorForName(currentUser?.displayName ?? "?")
+        )
+        viewModel.collaborators.uploadProgress.begin(mediaGroupSends.map(\.tempId))
+        insertOptimisticMediaBubbles(mediaGroupSends, intent: intent)
+        let textGroup = intent.plan.first(where: { $0.kind == .text })
+        let textTempId = AttachmentSendBatch.textTempId(textGroup: textGroup, place: intent.place, generate: ClientMessageId.generate)
+        insertOptimisticTextBubble(textGroup: textGroup, tempId: textTempId, intent: intent)
         composerState.pendingAttachments.removeAll()
         composerState.pendingThumbnails.removeAll()
-        // --- End optimistic media insert ---
+        return AttachmentSendBatch(
+            plan: intent.plan, mediaGroupSends: mediaGroupSends, mediaFiles: intent.mediaFiles,
+            thumbnails: thumbnails, textGroup: textGroup, textTempId: textTempId, place: intent.place,
+            relation: intent.relation, replyToId: intent.route.replyToId, protection: intent.protection,
+            language: intent.language, currentUserId: currentUser?.id ?? "",
+            guestAllowedKinds: anonymousSession?.allowedAttachmentKinds
+        )
+    }
 
-        Task {
-            defer {
-                Task { @MainActor in
-                    composerState.pendingMediaFiles.removeAll()
-                    composerState.uploadProgress = nil
-                    composerState.isUploading = false
-                    // APRÈS l'upload : un brouillon restauré envoie depuis les
-                    // copies du dossier draft — purger avant les aurait
-                    // supprimées sous les pieds de l'upload.
-                    purgeDraftAttachmentMedia()
-                }
-            }
-            let serverOrigin = MeeshyConfig.shared.serverOrigin
-            // Une pièce jointe de MESSAGE ne demande pas de compte : un invité
-            // de lien partagé a le droit d'en envoyer (le gateway le lui
-            // accorde), et exiger `authToken` ici lui affichait « Échec de
-            // l'envoi » sans qu'aucune requête ne parte.
-            guard let baseURL = URL(string: serverOrigin),
-                  let credential = APIClient.shared.requestCredential else {
-                await MainActor.run {
-                    composerState.isUploading = false
-                    FeedbackToastManager.shared.showError("Échec de l'envoi de la pièce jointe")
-                }
-                return
-            }
-            let uploader = TusUploadManager(baseURL: baseURL)
-            var progressCancellable: AnyCancellable?
-            progressCancellable = uploader.progressPublisher
-                .receive(on: DispatchQueue.main)
-                .sink { [progressCancellable] progress in
-                    _ = progressCancellable
-                    composerState.uploadProgress = progress
-                }
-
-            var anySuccess = false
-
-            // Upload media groups — same iteration order as the optimistic phase,
-            // using the precomputed tempId for each (Issue 1 fix: no tempIdx desync).
-            for send in mediaGroupSends {
-                // A3 — Audio offline write-ahead: short-circuit to OfflineQueue
-                // when the device is offline, instead of attempting a TUS upload
-                // that will fail immediately.
-                if send.group.kind == .audio, NetworkMonitor.shared.isOffline {
-                    let urls = send.group.attachments.compactMap { mediaFiles[$0.id] }
-                    // Offline: NEVER fall through to the TUS path (it would just
-                    // fail). A race-to-online between this check and the GRDB
-                    // write is handled by the flusher, which drains the queue
-                    // on the next cycle.
-                    guard !urls.isEmpty else {
-                        Logger.messages.warning("Audio group offline but no source URLs — skipping \(send.tempId)")
-                        continue
-                    }
-                    do {
-                        _ = try await OfflineQueue.shared.enqueueAudios(
-                            sourceAudioURLs: urls,
-                            conversationId: viewModel.conversationId,
-                            content: nil,
-                            clientMessageId: send.tempId,
-                            originalLanguage: lang,
-                            replyToId: send.group.carriesReply ? replyId : nil
-                        )
-                        anySuccess = true
-                        Logger.messages.info("Audio group queued offline for \(send.tempId)")
-                    } catch {
-                        Logger.messages.error("Audio offline enqueue failed: \(error.localizedDescription)")
-                        await MainActor.run {
-                            FeedbackToastManager.shared.showError("Échec de la mise en file du message vocal")
-                        }
-                    }
-                    continue   // skip the online TUS path for this group
-                }
-
-                // S7b ST2 — visual-media (photo/video/file) offline write-ahead:
-                // short-circuit to enqueueMedia (durable — survives an app kill
-                // and auto-resends on flush via the ST3 dispatcher branch)
-                // instead of the TUS path that throws offline. Mirrors the audio
-                // branch; the optimistic bubble stays durably `.sending`.
-                if send.group.kind == .visual, NetworkMonitor.shared.isOffline {
-                    let pairs: [(url: URL, kind: String)] = send.group.attachments.compactMap { att in
-                        guard let url = mediaFiles[att.id] else { return nil }
-                        let kind = AttachmentKind(mimeType: MimeTypeResolver.mimeType(forURL: url)).rawValue
-                        return (url, kind)
-                    }
-                    guard !pairs.isEmpty else {
-                        Logger.messages.warning("Visual group offline but no source URLs — skipping \(send.tempId)")
-                        continue
-                    }
-                    do {
-                        _ = try await OfflineQueue.shared.enqueueMedia(
-                            sourceMediaURLs: pairs.map { $0.url },
-                            kinds: pairs.map { $0.kind },
-                            conversationId: viewModel.conversationId,
-                            content: nil,
-                            clientMessageId: send.tempId,
-                            originalLanguage: lang,
-                            replyToId: send.group.carriesReply ? replyId : nil
-                        )
-                        anySuccess = true
-                        Logger.messages.info("Visual group queued offline for \(send.tempId)")
-                    } catch {
-                        // enqueueMedia's copy-error path already flips the bubble
-                        // (emits retryExhausted) + marks the row terminal; surface
-                        // a toast too. Mirrors the audio offline branch.
-                        Logger.messages.error("Visual offline enqueue failed: \(error.localizedDescription)")
-                        await MainActor.run {
-                            FeedbackToastManager.shared.showError("Échec de la mise en file du média")
-                        }
-                    }
-                    continue   // skip the online TUS path for this group
-                }
-
-                do {
-                    var uploadedIds: [String] = []
-                    var localAttachments: [MeeshyMessageAttachment] = []
-                    // Upload PARALLÈLE borné.
-                    //
-                    // `TusUploadManager` porte déjà un pool (`maxConcurrent = 3`)
-                    // et une file d'attente, mais la boucle séquentielle qui
-                    // vivait ici ne lui confiait QU'UN fichier à la fois : le
-                    // pool ne dépassait jamais un actif, sa file restait vide, et
-                    // 199 photos (`maxMediaSelection`) partaient l'une après
-                    // l'autre. Le commentaire de `maxMediaSelection` promettait
-                    // pourtant une borne par la concurrence d'upload — elle
-                    // existait, elle n'était simplement jamais atteinte.
-                    // On confie désormais tout le groupe d'un coup ; c'est
-                    // l'acteur qui borne.
-                    //
-                    // Seules des valeurs `Sendable` franchissent la frontière de
-                    // tâche (URL, String, String?) — l'amorçage de cache, qui lit
-                    // les octets, touche `UIImage` et les stores
-                    // `CacheCoordinator`, reste SÉQUENTIEL en aval : il préserve
-                    // l'ordre des pièces et ne tient qu'un fichier en mémoire à
-                    // la fois (199 photos lues d'un bloc feraient exploser
-                    // l'empreinte mémoire).
-                    let pendingUploads: [(attachment: MeeshyMessageAttachment, fileURL: URL, mimeType: String, thumbHash: String?)] =
-                        send.group.attachments.compactMap { att in
-                            guard let fileURL = mediaFiles[att.id] else { return nil }
-                            return (
-                                att,
-                                fileURL,
-                                send.group.kind == .audio ? "audio/mp4" : att.mimeType,
-                                thumbnails[att.id]?.toThumbHash()
-                            )
-                        }
-
-                    // Déclarer le lot complet AVANT de lancer les uploads, pour
-                    // que la barre de progression affiche d'emblée le vrai total
-                    // fichiers/octets au lieu d'osciller à mesure des
-                    // enregistrements un par un. `pendingUploads` porte
-                    // exactement les pièces qui vont monter — ce filtre vivait
-                    // ici en double, au risque de diverger de la liste
-                    // réellement uploadée.
-                    let plannedBytes = pendingUploads.reduce(Int64(0)) { acc, item in
-                        let size = (try? FileManager.default.attributesOfItem(atPath: item.fileURL.path))?[.size] as? Int64
-                        return acc + (size ?? 0)
-                    }
-                    await uploader.setExpectedBatch(totalFiles: pendingUploads.count, totalBytes: plannedBytes)
-
-                    // Contrat de reprise INCHANGÉ : la première erreur sort du
-                    // groupe (les tâches restantes sont annulées) et rejoint le
-                    // `catch` ci-dessous, qui renvoie le groupe entier vers
-                    // l'outbox durable. Le dedup par `clientMessageId` côté
-                    // gateway couvre le rejeu des pièces déjà montées.
-                    var uploadResults = [TusUploadResult?](repeating: nil, count: pendingUploads.count)
-                    try await withThrowingTaskGroup(of: (Int, TusUploadResult).self) { group in
-                        for (index, item) in pendingUploads.enumerated() {
-                            let fileURL = item.fileURL
-                            let mime = item.mimeType
-                            let thumbHash = item.thumbHash
-                            group.addTask {
-                                let result = try await uploader.uploadFile(
-                                    fileURL: fileURL, mimeType: mime, credential: credential, thumbHash: thumbHash
-                                )
-                                return (index, result)
-                            }
-                        }
-                        for try await (index, result) in group {
-                            uploadResults[index] = result
-                        }
-                    }
-
-                    for (index, item) in pendingUploads.enumerated() {
-                        guard let result = uploadResults[index] else { continue }
-                        let att = item.attachment
-                        let fileURL = item.fileURL
-                        // Off-MainActor read: this `Task` inherits the
-                        // MainActor isolation of `sendMessageWithAttachments`
-                        // (project default actor isolation), so a raw
-                        // `Data(contentsOf:)` here froze the UI for the
-                        // duration of every large video/photo read on send.
-                        let fileData = await ConversationView.readAttachmentFileBytes(fileURL)
-                        uploadedIds.append(result.id)
-                        if let fileData {
-                            // Seed under the exact key the renderer resolves to
-                            // so the optimistic→confirmed transition (file:// →
-                            // server URL) reads a hot cache and never
-                            // re-downloads our own upload. See RC3.3.
-                            let renderKey = MeeshyConfig.resolveMediaURL(result.fileUrl)?.absoluteString ?? result.fileUrl
-                            let effectiveType: MeeshyMessageAttachment.AttachmentType = send.group.kind == .audio ? .audio : att.type
-                            switch effectiveType {
-                            case .audio:
-                                await CacheCoordinator.shared.audio.store(fileData, for: renderKey)
-                                await CacheCoordinator.shared.audio.store(fileData, for: fileURL.absoluteString)
-                            case .image:
-                                await CacheCoordinator.shared.images.store(fileData, for: renderKey)
-                                if let image = UIImage(data: fileData) {
-                                    DiskCacheStore.cacheImageForPreview(image, key: renderKey)
-                                }
-                            default:
-                                await CacheCoordinator.shared.video.store(fileData, for: renderKey)
-                            }
-                            // Seed server-returned thumbnail so the confirmed
-                            // bubble renders from cache (no network flash on
-                            // optimistic→server URL reconciliation). Only for
-                            // non-audio groups which carry a thumbnailUrl.
-                            if effectiveType != .audio,
-                               let thumbUrl = result.thumbnailUrl,
-                               let thumbImage = thumbnails[att.id],
-                               let thumbData = await ImageCompressor.jpegOffMain(thumbImage, quality: 0.8) {
-                                let thumbKey = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString ?? thumbUrl
-                                await CacheCoordinator.shared.thumbnails.store(thumbData, for: thumbKey)
-                                DiskCacheStore.cacheImageForPreview(thumbImage, key: thumbKey)
-                            }
-                        }
-                        localAttachments.append(result.toMessageAttachment(uploadedBy: currentUserId))
-                    }
-                    let ok = await viewModel.sendMessage(
-                        content: "",
-                        replyToId: send.group.carriesReply ? replyId : nil,
-                        storyReplyToId: send.group.carriesReply ? storyReplyId : nil,
-                        storyReplyReference: send.group.carriesReply ? storyRef : nil,
-                        attachmentIds: uploadedIds.isEmpty ? nil : uploadedIds,
-                        localAttachments: localAttachments.isEmpty ? nil : localAttachments,
-                        originalLanguage: lang,
-                        existingTempId: send.tempId
-                    )
-                    anySuccess = anySuccess || ok
-                } catch {
-                    Logger.messages.error("Group upload failed (\(String(describing: send.group.kind))): \(error.localizedDescription)")
-                    // Spec 2026-07-08 (message-send-failure-retry-flow, règle 4) :
-                    // un échec d'upload EN LIGNE rejoint l'outbox durable —
-                    // mêmes re-tentatives automatiques avec backoff que le
-                    // texte — au lieu de basculer la bulle directement en
-                    // `.failed`. `.sendFailed` fait transiter la ligne
-                    // optimiste `.sending` → `.queued` (horloge conservée) ;
-                    // l'indicateur d'échec reste un état terminal atteint par
-                    // `retryExhausted`. Les fichiers déjà uploadés avant
-                    // l'échec seront ré-uploadés au rejeu (le dedup message
-                    // par clientMessageId côté gateway évite tout doublon).
-                    _ = try? await viewModel.messagePersistence.applyEvent(
-                        localId: send.tempId, event: .sendFailed(error))
-                    var requeued = false
-                    if send.group.kind == .audio {
-                        let urls = send.group.attachments.compactMap { mediaFiles[$0.id] }
-                        if !urls.isEmpty {
-                            requeued = (try? await OfflineQueue.shared.enqueueAudios(
-                                sourceAudioURLs: urls,
-                                conversationId: viewModel.conversationId,
-                                content: nil,
-                                clientMessageId: send.tempId,
-                                originalLanguage: lang,
-                                replyToId: send.group.carriesReply ? replyId : nil
-                            )) != nil
-                        }
-                    } else {
-                        let pairs: [(url: URL, kind: String)] = send.group.attachments.compactMap { att in
-                            guard let url = mediaFiles[att.id] else { return nil }
-                            let kind = AttachmentKind(mimeType: MimeTypeResolver.mimeType(forURL: url)).rawValue
-                            return (url, kind)
-                        }
-                        if !pairs.isEmpty {
-                            requeued = (try? await OfflineQueue.shared.enqueueMedia(
-                                sourceMediaURLs: pairs.map { $0.url },
-                                kinds: pairs.map { $0.kind },
-                                conversationId: viewModel.conversationId,
-                                content: nil,
-                                clientMessageId: send.tempId,
-                                originalLanguage: lang,
-                                replyToId: send.group.carriesReply ? replyId : nil
-                            )) != nil
-                        }
-                    }
-                    if requeued {
-                        anySuccess = true
-                        Logger.messages.info("Group upload failed online — requeued to durable outbox \(send.tempId)")
-                    } else {
-                        // Ré-enfilage impossible (fichiers sources disparus,
-                        // disque plein, encodage) : état terminal, retry manuel.
-                        // L'utilisateur ne rejouera pas le même envoi à
-                        // l'identique s'il sait que le volume est en cause —
-                        // parité avec le message d'échec du composer web.
-                        await viewModel.markOptimisticMediaFailed(
-                            tempId: send.tempId,
-                            reason: Self.uploadFailureReason(
-                                error: error,
-                                attachmentCount: send.group.attachments.count
-                            )
-                        )
-                    }
-                }
-            }
-
-            // Send text group last (preserves original planner ordering intent).
-            // Le lieu voyage avec le message texte (envoyé en dernier, comme la
-            // tuile l'annonce dans le composer) ; sans texte, il part comme
-            // message « lieu seul » après les médias. Dans les deux cas
-            // `pendingPlace` n'est remis à nil QU'AU SUCCÈS de l'envoi qui le
-            // porte — un échec laisse la tuile pour réessayer.
-            // `existingTempId` réutilise la ligne optimiste déjà posée en amont
-            // (voir « Optimistic TEXT insert ») : `sendMessage` la fait avancer
-            // au lieu d'en créer une nouvelle, donc la bulle ne bouge pas et
-            // n'apparaît pas une seconde fois.
-            if let textGroup = textGroupPlan {
-                let ok = await viewModel.sendMessage(
-                    content: textGroup.text ?? "",
-                    replyToId: textGroup.carriesReply ? replyId : nil,
-                    storyReplyToId: textGroup.carriesReply ? storyReplyId : nil,
-                    storyReplyReference: textGroup.carriesReply ? storyRef : nil,
-                    originalLanguage: lang,
-                    existingTempId: textTempId,
-                    location: place
-                )
-                if ok, place != nil {
-                    withAnimation { composerState.pendingPlace = nil }
-                }
-                anySuccess = anySuccess || ok
-            } else if place != nil {
-                let ok = await viewModel.sendMessage(
-                    content: "",
-                    originalLanguage: lang,
-                    existingTempId: textTempId,
-                    location: place
-                )
-                if ok {
-                    withAnimation { composerState.pendingPlace = nil }
-                }
-                anySuccess = anySuccess || ok
-            }
-
-            progressCancellable?.cancel()
-
-            // Clean up local files. Audio: defer disk deletion — the optimistic
-            // GRDB row carries the file:// URL until the socket echo flips it to
-            // https (~100-500ms); the play tap reads from disk in that window.
-            let audioURLs = plan.filter { $0.kind == .audio }.flatMap { $0.attachments }.compactMap { mediaFiles[$0.id] }
-            let visualURLs = plan.filter { $0.kind == .visual }.flatMap { $0.attachments }.compactMap { mediaFiles[$0.id] }
-            await MainActor.run {
-                for url in visualURLs { try? FileManager.default.removeItem(at: url) }
-                if !audioURLs.isEmpty {
-                    Task {
-                        try? await Task.sleep(nanoseconds: 10_000_000_000)
-                        for url in audioURLs { try? FileManager.default.removeItem(at: url) }
-                    }
-                }
-                if anySuccess {
-                    HapticFeedback.success()
-                } else {
-                    HapticFeedback.error()
-                    FeedbackToastManager.shared.showError("Échec de l'envoi de la pièce jointe")
-                }
-            }
+    private func insertOptimisticMediaBubbles(_ sends: [OutgoingMediaGroup], intent: AttachmentSendIntent) {
+        for send in sends {
+            viewModel.insertOptimisticMediaMessage(
+                tempId: send.tempId,
+                content: send.group.messageContent,
+                attachments: send.locals,
+                messageType: OutgoingAttachmentRules.optimisticMessageType(
+                    isAudioGroup: send.group.kind == .audio,
+                    mimeTypes: send.locals.map(\.mimeType)
+                ),
+                replyToId: send.group.carriesReply ? intent.route.replyToId : nil,
+                storyReplyToId: send.group.carriesReply ? intent.route.storyReplyToId : nil,
+                replyReference: send.group.carriesReply ? intent.route.storyReference : nil,
+                originalLanguage: intent.language,
+                protection: intent.protection
+            )
+            guard send.group.kind == .audio else { continue }
+            attachLocalTranscriptions(
+                voiceNoteTranscriber.knownTranscriptions(for: send.locals.map(\.id)),
+                tempId: send.tempId
+            )
         }
+    }
+
+    /// La bulle texte d'un lot vocal (ou d'un lieu seul) est posée dès le tap, après les bulles
+    /// média, pour que l'ordre d'affichage soit celui de l'envoi : le texte part en dernier.
+    private func insertOptimisticTextBubble(
+        textGroup: MultiAttachmentSendPlanner.PlannedMessage?, tempId: String?, intent: AttachmentSendIntent
+    ) {
+        guard let tempId else { return }
+        let carriesReply = textGroup?.carriesReply == true
+        viewModel.insertOptimisticMediaMessage(
+            tempId: tempId,
+            content: textGroup?.text ?? "",
+            attachments: [],
+            messageType: .text,
+            replyToId: carriesReply ? intent.route.replyToId : nil,
+            storyReplyToId: carriesReply ? intent.route.storyReplyToId : nil,
+            replyReference: carriesReply ? intent.route.storyReference : nil,
+            originalLanguage: intent.language,
+            protection: intent.protection
+        )
+    }
+
+    /// Plusieurs lots se téléversent ensemble (#14696) ; chaque bulle reçoit la progression de
+    /// SA session (#14702).
+    private func launchAttachmentSend(_ batch: AttachmentSendBatch) {
+        let upload = UUID()
+        let bubbles = batch.mediaGroupSends.map(\.tempId)
+        let progress = viewModel.collaborators.uploadProgress
+        composerState.uploads.begin(upload, mediaIds: Set(batch.mediaFiles.keys))
+        let runner = AttachmentSendRunner(host: viewModel, callbacks: AttachmentSendCallbacks(
+            restorePlace: { place, sent in restorePlaceTile(place, sent: sent) },
+            setProgress: { tempId, sent, total in progress.report(sent: sent, total: total, for: tempId) },
+            abortUpload: { settleUpload(upload, bubbles: bubbles) }
+        ))
+        Task {
+            defer { Task { @MainActor in settleUpload(upload, bubbles: bubbles) } }
+            await runner.run(batch)
+        }
+    }
+
+    private func settleUpload(_ upload: UUID, bubbles: [String]) {
+        viewModel.collaborators.uploadProgress.end(bubbles)
+        if composerState.settleUpload(upload) { purgeDraftAttachmentMedia() }
     }
 
     // `formatRecordingTime(_:)` a vécu ici sans site d'appel. Le compteur de
@@ -650,60 +253,49 @@ extension ConversationView {
 
     // MARK: - Attachment Handlers
     func handlePhotoSelection(_ items: [PhotosPickerItem]) {
-        guard !items.isEmpty else { return }
+        // Une sélection VIDE n'est une confirmation que si le sélecteur a été
+        // ouvert avec des pièces jointes cochées (#9697) : tout décocher puis
+        // valider les retire. Sinon c'est l'écho d'une remise à zéro.
+        guard !items.isEmpty || !composerState.pickerPreselectedAttached.isEmpty else { return }
         // Priming echo (strip multi-selection injected before presenting the
         // picker) — not a user confirmation, nothing to ingest yet.
-        if composerState.photoPickerPriming {
+        if composerState.photoPickerPriming, !items.isEmpty {
             composerState.photoPickerPriming = false
             return
         }
+        // #9697 — décocher dans le sélecteur une image déjà jointe la retire
+        // de la zone. Lu AVANT la remise à zéro, dont l'écho ne retire rien.
+        detachPendingPieces(composerState.consumePickerDeselection(returned: items.map(\.itemIdentifier)))
         composerState.selectedPhotoItems.removeAll()
+        // #9683 — ce qui est déjà dans la zone (présélectionné à l'ouverture)
+        // n'est pas une sélection nouvelle : écarté, comme les doublons.
+        let fresh = RecentMediaAttachmentLink.ingestibleIndices(
+            of: items.map(\.itemIdentifier),
+            excluding: Set(composerState.attachedLibraryAssetIds)
+        )
+        guard !fresh.isEmpty else { return }
         HapticFeedback.light()
-        for item in items {
+        for item in fresh.map({ items[$0] }) {
             let prep = AttachmentPreparationService.shared.preparePhotosPickerItem(
                 item,
                 context: .message,
                 accentColor: accentColor
             )
             trackPreparation(prep)
+            if let assetId = item.itemIdentifier { composerState.linkLibraryAsset(assetId, to: prep.id) }
         }
     }
 
     func handleFileImport(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
-            var importedAny = false
-            for url in urls {
-                guard url.startAccessingSecurityScopedResource() else { continue }
-                defer { url.stopAccessingSecurityScopedResource() }
-
-                let fileName = url.lastPathComponent
-                let fileSize = getFileSize(url)
-                let mimeType = mimeTypeForURL(url)
-
-                // Copy to temp directory (security-scoped resource expires).
-                // A silent `try?` here previously let a failed copy through:
-                // the attachment was added to the composer pointing at a
-                // tempURL that never existed, only failing at the very end
-                // of the send pipeline with no diagnosable cause. Skip this
-                // file and surface the failure instead of adding a phantom
-                // attachment.
-                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("file_\(UUID().uuidString)_\(fileName)")
-                do {
-                    try FileManager.default.copyItem(at: url, to: tempURL)
-                } catch {
-                    Logger.messages.error("File import copy failed for \(fileName, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                    FeedbackToastManager.shared.showError("Échec de l'import de \(fileName)")
-                    continue
-                }
-
+            let importedAny = ComposerFileImporter.importFiles(urls) { copy in
                 appendPendingFileAttachment(
-                    tempURL: tempURL,
-                    fileName: fileName,
-                    mimeType: mimeType,
-                    fileSize: fileSize
+                    tempURL: copy.tempURL,
+                    fileName: copy.fileName,
+                    mimeType: copy.mimeType,
+                    fileSize: copy.fileSize
                 )
-                importedAny = true
             }
             if importedAny { HapticFeedback.light() }
         case .failure:
@@ -711,18 +303,8 @@ extension ConversationView {
         }
     }
 
-    func mimeTypeForURL(_ url: URL) -> String {
-        // Single source of truth lives in `MimeTypeResolver` (MeeshySDK).
-        // See its `forwardTable` for the full extension → mime mapping.
-        MimeTypeResolver.mimeType(forURL: url)
-    }
-
     func getFileSize(_ url: URL) -> Int {
-        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
-              let size = attributes[.size] as? Int else {
-            return 0
-        }
-        return size
+        ComposerFileImporter.fileSize(of: url)
     }
 
     // MARK: - Ingestion par dépôt & collage (UniversalComposerBar.onIngest)
@@ -805,18 +387,18 @@ extension ConversationView {
     /// suivi), exactement comme une capture caméra.
     private func ingestImageFile(at url: URL, name: String) {
         Task { @MainActor in
-            let data = await ConversationView.readAttachmentFileBytes(url)
+            let data = await OutgoingAttachmentRules.readAttachmentFileBytes(url)
             // Le fichier nous appartient ; une fois les octets en mémoire
             // (ou le décodage refusé), la copie disque ne sert plus.
             try? FileManager.default.removeItem(at: url)
-            guard let data, let image = UIImage(data: data) else {
+            guard let data, let source = CGImageSourceCreateWithData(data as CFData, nil), CGImageSourceGetCount(source) > 0 else {
                 // Pas de tuile fantôme : on refuse et on le dit.
                 Logger.messages.error("Ingestion image impossible (lecture ou décodage) pour \(name, privacy: .public)")
                 ComposerIngestFeedback.showFailure(names: [name])
                 return
             }
-            let prep = AttachmentPreparationService.shared.prepareImage(
-                image,
+            let prep = AttachmentPreparationService.shared.prepareImageData(
+                data,
                 context: .message,
                 accentColor: accentColor
             )
@@ -830,35 +412,11 @@ extension ConversationView {
     /// sélection, et la synchro de binding de la barre répercute la valeur),
     /// sinon à la fin du texte courant.
     private func insertComposerText(_ snippet: String) {
-        if isTyping, let field = Self.currentKeyInputResponder() {
+        if isTyping, let field = KeyInputResponderLocator.current() {
             field.insertText(snippet)
             return
         }
         composerText.text += snippet
-    }
-
-    /// Premier répondant de la scène active s'il accepte la saisie clavier.
-    ///
-    /// La scène passe par `DeviceLayout.activeWindowScene`, jamais par un
-    /// parcours de `connectedScenes` fait ici : cet ensemble n'est pas
-    /// ordonné, et sous Split View / Slide Over / Stage Manager la scène qui
-    /// en sort est régulièrement une scène d'ARRIÈRE-PLAN. Insérer le texte
-    /// déposé dans le champ d'une autre fenêtre serait invisible à
-    /// l'utilisateur.
-    private static func currentKeyInputResponder() -> (UIView & UIKeyInput)? {
-        guard let scene = DeviceLayout.activeWindowScene else { return nil }
-        for window in scene.windows {
-            if let responder = firstResponderKeyInput(in: window) { return responder }
-        }
-        return nil
-    }
-
-    private static func firstResponderKeyInput(in view: UIView) -> (UIView & UIKeyInput)? {
-        if view.isFirstResponder { return view as? (UIView & UIKeyInput) }
-        for subview in view.subviews {
-            if let found = firstResponderKeyInput(in: subview) { return found }
-        }
-        return nil
     }
 
     // `addCurrentLocation()` a vécu ici sans site d'appel : elle ne faisait que
@@ -867,9 +425,9 @@ extension ConversationView {
 
     /// Le picker émet désormais un `SharedPlace` complet (nom + adresse +
     /// catégorie) — `MessageAttachment.location` ne portait ni l'un ni
-    /// l'autre et n'est plus le véhicule (Task 11/12, 2026-07-29). Le lieu
+    /// l'autre et n'est plus le véhicule (Task 11/12). Le lieu
     /// reste en attente jusqu'au prochain envoi : `sendMessageWithAttachments`
-    /// le capture et le passe aux trois transports (lot 2, spec 2026-07-30).
+    /// le capture et le passe aux trois transports (lot 2).
     func handleLocationSelection(_ place: SharedPlace) {
         withAnimation {
             composerState.pendingPlace = place
@@ -877,23 +435,22 @@ extension ConversationView {
         HapticFeedback.light()
     }
 
-    func handleCameraVideo(_ url: URL) {
+    @discardableResult
+    func handleCameraVideo(_ url: URL, capturedInApp: Bool = false) -> PreparingAttachment {
         let prep = AttachmentPreparationService.shared.prepareVideo(
             sourceURL: url,
             deleteSourceAfterCompression: true,
             context: .message,
             accentColor: MeeshyColors.errorHex
         )
-        trackPreparation(prep)
+        trackPreparation(prep, capturedInApp: capturedInApp)
+        return prep
     }
 
-    func handleCameraCapture(_ image: UIImage) {
-        let prep = AttachmentPreparationService.shared.prepareImage(
-            image,
-            context: .message,
-            accentColor: accentColor
-        )
-        trackPreparation(prep)
+    /// Les OCTETS de la prise, quand l'objectif les a rendus, partent sans seconde génération d'encodage (#9885).
+    func handleCameraCapture(_ image: UIImage, data: Data? = nil, capturedInApp: Bool = false) {
+        let prep = AttachmentPreparationService.shared.prepareCapture(image, data: data, context: .message, accentColor: accentColor)
+        trackPreparation(prep, capturedInApp: capturedInApp)
     }
 
     /// Wire a `PreparingAttachment` into the composer:
@@ -901,28 +458,10 @@ extension ConversationView {
     /// 2. Observe the handle and, when it reaches `.ready`, promote the
     ///    result into the legacy pending dicts the send pipeline already
     ///    knows how to consume. `.failed` simply drops the tile + toasts.
-    func trackPreparation(_ prep: PreparingAttachment) {
-        composerState.preparingAttachments.append(prep)
-        observePreparation(prep)
-    }
-
-    private func observePreparation(_ prep: PreparingAttachment) {
-        Task { @MainActor [prep] in
-            let result = await prep.awaitCompletion()
-            switch result {
-            case .success(let prepared):
-                composerState.pendingMediaFiles[prepared.attachment.id] = prepared.fileURL
-                if let thumb = prep.thumbnail {
-                    composerState.pendingThumbnails[prepared.attachment.id] = thumb
-                }
-                composerState.pendingAttachments.append(prepared.attachment)
-                HapticFeedback.success()
-            case .failure(.preparationFailed(let message)):
-                HapticFeedback.error()
-                FeedbackToastManager.shared.showError(message)
-            }
-            composerState.preparingAttachments.removeAll { $0.id == prep.id }
-        }
+    func trackPreparation(_ prep: PreparingAttachment, capturedInApp: Bool = false) {
+        PreparationTracking.track(prep, preparing: $composerState.preparingAttachments, attachments: $composerState.pendingAttachments,
+                                  mediaFiles: $composerState.pendingMediaFiles, thumbnails: $composerState.pendingThumbnails,
+                                  capturedInApp: capturedInApp)
     }
 
     func sendMessage() {
@@ -933,7 +472,7 @@ extension ConversationView {
         viewModel.stopTypingEmission()
         HapticFeedback.light()
         Task {
-            await viewModel.sendMessage(content: text, originalLanguage: lang)
+            _ = await viewModel.send(OutgoingMessage(conversationId: ConversationID(viewModel.conversationId), content: text, relation: .none, attachments: .none, originalLanguage: lang))
         }
     }
 

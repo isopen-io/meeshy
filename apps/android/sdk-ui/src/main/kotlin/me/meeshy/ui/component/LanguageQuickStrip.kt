@@ -9,9 +9,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -19,6 +21,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
@@ -29,6 +36,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.ui.R
+import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.sdk.model.accessibility.MotionSpecs
+import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.motion.meeshySpec
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -69,24 +80,108 @@ fun LanguageQuickStrip(
     activeCode: String? = null,
     highlightedIndex: Int? = null,
     onTileBounds: ((Int, Rect) -> Unit)? = null,
+    onOpenAll: (() -> Unit)? = null,
 ) {
+    val scrolling = languageStripScrolls(options.size)
     Row(
-        modifier = modifier
-            .background(MeeshyTheme.tokens.backgroundSecondary, RoundedCornerShape(MeeshyRadius.pill))
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+        modifier = modifier.background(MeeshyTheme.tokens.backgroundSecondary, RoundedCornerShape(MeeshyRadius.pill)),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
-        options.forEachIndexed { index, option ->
-            LanguageChipTile(
-                option = option,
-                isActive = isActiveCode(option.code, activeCode),
-                isHighlighted = highlightedIndex == index,
-                onClick = { onSelect(option) },
-                onBounds = onTileBounds?.let { report -> { rect -> report(index, rect) } },
+        val flags: @Composable () -> Unit = {
+            Row(
+                modifier = Modifier.padding(start = MeeshySpacing.sm, end = if (scrolling) MeeshySpacing.xs else 0.dp, top = MeeshySpacing.xs, bottom = MeeshySpacing.xs),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            ) {
+                options.forEachIndexed { index, option ->
+                    LanguageChipTile(
+                        option = option,
+                        isActive = isActiveCode(option.code, activeCode),
+                        isHighlighted = highlightedIndex == index,
+                        onClick = { onSelect(option) },
+                        onBounds = onTileBounds?.let { report -> { rect -> report(index, rect) } },
+                    )
+                }
+            }
+        }
+        if (scrolling) {
+            // Longue liste : ~5 drapeaux visibles, le reste défile sous un masque en fondu ; le « + » reste épinglé.
+            Box(
+                Modifier
+                    .width(LanguageStripScrollWidth)
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(
+                            brush = Brush.horizontalGradient(
+                                0f to Color.Black,
+                                0.92f to Color.Black,
+                                1f to Color.Transparent,
+                            ),
+                            blendMode = BlendMode.DstIn,
+                        )
+                    }
+                    .horizontalScroll(rememberScrollState()),
+            ) { flags() }
+        } else {
+            flags()
+        }
+        if (onOpenAll != null) {
+            MoreLanguagesTile(
+                isHighlighted = highlightedIndex == plusTileIndex(options.size),
+                onClick = onOpenAll,
+                onBounds = onTileBounds?.let { report -> { rect -> report(plusTileIndex(options.size), rect) } },
             )
         }
+    }
+}
+
+/** Au-delà de ce nombre de drapeaux la rangée défile ; en deçà, la pilule épouse son contenu (iOS `inlineCap`). */
+internal const val LANGUAGE_STRIP_INLINE_CAP: Int = 5
+
+/** L'échelle d'un drapeau survolé par le geste glissé (aucune sous « Réduire les animations »). */
+private const val LANGUAGE_HOVER_SCALE = 1.35f
+
+/** Largeur de la fenêtre défilante : ~5 drapeaux, comme la barre de réactions. */
+private val LanguageStripScrollWidth = 180.dp
+
+internal fun languageStripScrolls(count: Int): Boolean = count > LANGUAGE_STRIP_INLINE_CAP
+
+/** Le « + » épinglé porte l'index qui suit le dernier drapeau, pour le survol du geste glissé. */
+internal fun plusTileIndex(count: Int): Int = count
+
+/** The pinned « + » of the bar (iOS `StoryLanguageQuickBar.plusChip`): opens the full language list. */
+@Composable
+private fun MoreLanguagesTile(isHighlighted: Boolean, onClick: () -> Unit, onBounds: ((Rect) -> Unit)?) {
+    val label = stringResource(R.string.language_strip_more)
+    val reduceMotion = LocalReduceMotion.current
+    val scale by animateFloatAsState(
+        targetValue = MotionSpecs.pressScale(isHighlighted, LANGUAGE_HOVER_SCALE, reduceMotion),
+        animationSpec = meeshySpec(reduceMotion, MeeshyMotion.bouncySpring()),
+        label = "languagePlusScale",
+    )
+    Box(
+        modifier = Modifier
+            .padding(end = MeeshySpacing.sm)
+            .size(36.dp)
+            .let { base -> if (onBounds != null) base.onGloballyPositioned { onBounds(it.boundsInRoot()) } else base }
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(CircleShape)
+            .background(MeeshyPalette.White.copy(alpha = 0.15f))
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = MeeshyIcons.Add,
+            contentDescription = null,
+            tint = MeeshyPalette.White.copy(alpha = 0.9f),
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 
@@ -99,9 +194,10 @@ private fun LanguageChipTile(
     onBounds: ((Rect) -> Unit)?,
 ) {
     val selectLabel = stringResource(R.string.language_strip_select, option.label)
+    val reduceMotion = LocalReduceMotion.current
     val scale by animateFloatAsState(
-        targetValue = if (isHighlighted) 1.35f else 1f,
-        animationSpec = MeeshyMotion.bouncySpring(),
+        targetValue = MotionSpecs.pressScale(isHighlighted, LANGUAGE_HOVER_SCALE, reduceMotion),
+        animationSpec = meeshySpec(reduceMotion, MeeshyMotion.bouncySpring()),
         label = "languageChipScale",
     )
     Box(

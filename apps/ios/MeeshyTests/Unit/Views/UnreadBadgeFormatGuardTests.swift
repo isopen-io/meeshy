@@ -16,21 +16,38 @@ import MeeshyUI
 @MainActor
 final class UnreadBadgeFormatGuardTests: XCTestCase {
 
-    private func viewsDirectory() -> URL {
+    private func featuresDirectory() -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views")
+            .appendingPathComponent("Meeshy/Features")
     }
 
+    /// Les `Views/` de CHAQUE domaine (#13139), au premier niveau comme avant.
     private func swiftSources() throws -> [(name: String, code: String)] {
-        let dir = viewsDirectory()
-        let urls = try FileManager.default
-            .contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
-            .filter { $0.pathExtension == "swift" }
+        let features = featuresDirectory()
+        let domains = try FileManager.default.contentsOfDirectory(atPath: features.path)
+        let urls = try domains.flatMap { domain -> [URL] in
+            let views = features.appendingPathComponent("\(domain)/Views")
+            guard FileManager.default.fileExists(atPath: views.path) else { return [] }
+            return try FileManager.default
+                .contentsOfDirectory(at: views, includingPropertiesForKeys: nil)
+                .filter { $0.pathExtension == "swift" }
+        }
         return try urls.map { (name: $0.lastPathComponent, code: try String(contentsOf: $0, encoding: .utf8)) }
+    }
+
+    /// #13139 : les vues se rangent par domaine. Une garde négative bornée à
+    /// `Features/Main/Views` passerait au vert en perdant les écrans partis
+    /// vers `Profile`, `Settings`, `Stories`, `Links` ou `Auth`.
+    func test_theScan_coversEveryDomain() throws {
+        let names = Set(try swiftSources().map(\.name))
+        for moved in ["ProfileView.swift", "SettingsView.swift", "StoryTrayView.swift",
+                      "LinksHubView.swift", "LoginView.swift", "ThemedConversationRow.swift"] {
+            XCTAssertTrue(names.contains(moved), "\(moved) échappe à la garde des pastilles")
+        }
     }
 
     /// Le motif exact qui produisait le bug, sous ses deux orthographes.

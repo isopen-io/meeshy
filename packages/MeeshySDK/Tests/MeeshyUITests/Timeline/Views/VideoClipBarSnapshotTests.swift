@@ -66,7 +66,8 @@ final class VideoClipBarSnapshotTests: XCTestCase {
     func test_snapshot_videoClip_trimmed() {
         SnapshotHelpers.assertLightDarkSnapshot(
             of: makeBar(title: "trimmed.mp4", duration: 2, startTime: 1),
-            named: "videoClip-trimmed"
+            named: "videoClip-trimmed",
+            perOSBaseline: true
         )
     }
 
@@ -75,7 +76,8 @@ final class VideoClipBarSnapshotTests: XCTestCase {
     func test_snapshot_videoClip_fadeIn() {
         SnapshotHelpers.assertLightDarkSnapshot(
             of: makeBar(title: "fade_in.mp4", fadeIn: 0.8),
-            named: "videoClip-fadeIn"
+            named: "videoClip-fadeIn",
+            perOSBaseline: true
         )
     }
 
@@ -84,7 +86,8 @@ final class VideoClipBarSnapshotTests: XCTestCase {
     func test_snapshot_videoClip_fadeOut() {
         SnapshotHelpers.assertLightDarkSnapshot(
             of: makeBar(title: "fade_out.mp4", fadeOut: 1.0),
-            named: "videoClip-fadeOut"
+            named: "videoClip-fadeOut",
+            perOSBaseline: true
         )
     }
 
@@ -93,7 +96,8 @@ final class VideoClipBarSnapshotTests: XCTestCase {
     func test_snapshot_videoClip_selected() {
         SnapshotHelpers.assertLightDarkSnapshot(
             of: makeBar(title: "selected.mp4", isSelected: true),
-            named: "videoClip-selected"
+            named: "videoClip-selected",
+            perOSBaseline: true
         )
     }
 
@@ -102,7 +106,8 @@ final class VideoClipBarSnapshotTests: XCTestCase {
     func test_snapshot_videoClip_locked() {
         SnapshotHelpers.assertLightDarkSnapshot(
             of: makeBar(title: "locked.mp4", isLocked: true),
-            named: "videoClip-locked"
+            named: "videoClip-locked",
+            perOSBaseline: true
         )
     }
 }

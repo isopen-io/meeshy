@@ -106,7 +106,8 @@ class SplashThemeGuardTest {
         listOf("values", "values-fr", "values-es", "values-pt").forEach { locale ->
             val strings = File(resDir(), "$locale/strings.xml")
             assertWithMessage("$locale/strings.xml exists").that(strings.isFile).isTrue()
-            val text = strings.readText()
+            val generated = File(resDir(), "$locale/strings_generated.xml")
+            val text = strings.readText() + if (generated.isFile) generated.readText() else ""
             assertWithMessage("$locale declares splash_version_label with 2 format args")
                 .that(text)
                 .contains("name=\"splash_version_label\">Meeshy %1\$s")
@@ -121,10 +122,9 @@ class SplashThemeGuardTest {
 
     @Test
     fun `MeeshyApp wires the splash screen with a version label and credit sourced from BuildConfig`() {
-        val meeshyApp = File(
-            appModuleDir(),
-            "src/main/kotlin/me/meeshy/app/navigation/MeeshyApp.kt",
-        ).readText()
+        val navDir = File(appModuleDir(), "src/main/kotlin/me/meeshy/app/navigation")
+        assertThat(File(navDir, "MeeshyApp.kt").readText()).contains("SplashOverlay()")
+        val meeshyApp = File(navDir, "SplashOverlay.kt").readText()
 
         assertThat(meeshyApp).contains("MeeshySplashScreen(")
         assertThat(meeshyApp).contains("versionLabel =")

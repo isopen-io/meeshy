@@ -1,0 +1,582 @@
+import {
+  Suspense,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+  type AnchorHTMLAttributes,
+  type ComponentType,
+  type ReactNode,
+} from 'react';
+
+import { onLayerEntry } from '@/lib/view/layer-entry';
+
+/**
+ * LE ROUTEUR.
+ *
+ * Pourquoi il existe plutot qu'une dependance : TanStack Router pesait
+ * 25,13 Ko gzip, soit 49 % de ce que l'utilisateur telecharge avant de voir
+ * quoi que ce soit — plus de trois fois le runtime de l'interface entiere. Sur
+ * le profil vise (Fast 3G), ce sont 1,1 s a chaque demarrage a froid. Et ce
+ * poids est INCOMPRESSIBLE : mesure faite, retirer toutes ses options rend un
+ * chunk au hash IDENTIQUE. On ne paie pas ce qu'on utilise, on paie le moteur.
+ *
+ * Ce que ce module rend, et qui est ce dont Meeshy a besoin :
+ *   - des routes a PARAMETRES (`/c/$conversation`), TYPES depuis le motif ;
+ *   - des parametres de RECHERCHE (`?autour=&media=`), que la v3 emploie deja
+ *     pour cadrer une tranche de fil et ouvrir un media ;
+ *   - le decoupage par route (chaque ecran est un import a la demande) ;
+ *   - le prechargement A L'INTENTION, jamais au survol de passage ;
+ *   - la restauration du defilement.
+ *
+ * Ce qu'il ne rend PAS, et qu'il faut savoir avant de s'en servir : pas de
+ * chargeurs de route, pas d'etats « pending » de navigation, pas de validation
+ * de parametres de recherche, pas de routes imbriquees au-dela d'un niveau.
+ * Les trois premiers sont couverts par TanStack Query, qui reste ; le
+ * quatrieme est une limite reelle, a lever le jour ou un ecran la rencontre.
+ */
+
+// --- Le typage des parametres, derive du MOTIF lui-meme -------------------
+// `/c/$conversation` rend `{ conversation: string }`. C'est ce qui evite de
+// declarer deux fois la meme information, et c'est l'essentiel de ce que le
+// typage de bout en bout de TanStack apportait ici.
+type Segment<C extends string> = C extends `${infer Head}/${infer Rest}`
+  ? Segment<Head> | Segment<Rest>
+  : C extends `$${infer Name}`
+    ? Name
+    : never;
+
+export type ParamsOf<C extends string> = Record<Segment<C>, string>;
+
+export type RouteTable = Record<string, { readonly pattern: string; readonly screen: () => Promise<{ default: ComponentType }> }>;
+
+type Location = { path: string; search: string };
+
+// --- L'observation de l'URL ------------------------------------------------
+
+function readLocation(): Location {
+  return { path: window.location.pathname, search: window.location.search };
+}
+
+const subscribers = new Set<() => void>();
+let currentLocation: Location =
+  typeof window === 'undefined' ? { path: '/', search: '' } : readLocation();
+
+/**
+ * L'ADRESSE SE RELIT AU RENDU, PAS SEULEMENT A L'IMPORT (#16867). Ce module
+ * s'évalue dans son propre morceau, AVANT le corps de l'entrée qui ramène
+ * l'alias d'un lien d'e-mail à son adresse canonique par un `replaceState`
+ * muet (`links/email-link-boot.ts`) : figée à l'import, l'adresse restait
+ * l'alias, et le premier écran était « Cette adresse n'existe pas ».
+ * L'IDENTITE de l'objet ne change que si l'URL change reellement :
+ * `useSyncExternalStore` compare par reference et re-rendrait sinon.
+ */
+function syncLocation(): boolean {
+  if (typeof window === 'undefined') return false;
+  const next = readLocation();
+  if (next.path === currentLocation.path && next.search === currentLocation.search) return false;
+  currentLocation = next;
+  return true;
+}
+
+function snapshot(): Location {
+  syncLocation();
+  return currentLocation;
+}
+
+function notify(): void {
+  if (!syncLocation()) return;
+  for (const subscriber of subscribers) subscriber();
+}
+
+function subscriber(onSchemeChange: () => void): () => void {
+  subscribers.add(onSchemeChange);
+  return () => subscribers.delete(onSchemeChange);
+}
+
+/**
+ * `isCurrentHref` — l'adresse VISÉE est-elle celle où l'on est DÉJÀ ?
+ *
+ * Comparaison de CHAÎNES, pas de `new URL()` : tous les appelants de
+ * `navigate` passent une adresse RELATIVE À LA RACINE (`href(...)`,
+ * `'/stories'`, `` `${location.pathname}?…` `` — relevé exhaustif au
+ * 2026-09-13), soit exactement la forme que ce concaténé produit. Une forme
+ * ABSOLUE ne s'apparierait pas et retomberait sur l'empilement d'hier :
+ * fail-open, jamais une navigation avalée par erreur — et 120 octets de
+ * moins avant le premier pixel qu'un `new URL()` gardé (le budget de la
+ * courbe se tient à 0,1 Ko près).
+ */
+export function isCurrentHref(url: string): boolean {
+  if (typeof window === 'undefined') return false;
+  return url === `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
+/**
+ * NAVIGUER VERS L'ADRESSE OÙ L'ON EST DÉJÀ N'EMPILE RIEN (revue-correction
+ * #5893, mesuré dans un navigateur réel).
+ *
+ * `pushState` accepte volontiers la MÊME adresse deux fois : chaque tap
+ * ajoutait une entrée. Le bouton flottant de GAUCHE pointait alors sur `feed`
+ * quelle que soit la route (il bascule depuis #6456, `feedDiscDestination`),
+ * donc sur `/feed` il ne changeait RIEN à l'écran — loi 4 — tout en faisant
+ * grossir l'historique : `history.length` 3 → 4 par tap, mesuré. Le bouton
+ * RETOUR matériel d'Android (directive coque 5b) ramenait alors sur `/feed`
+ * au lieu de la liste, autant de fois qu'on avait tapé.
+ *
+ * La garde vit ICI, au SITE UNIQUE de la navigation, et pas chez l'appelant :
+ * les trente écrans à venir porteront tous des liens vers des destinations qui
+ * peuvent être la leur (une échelle de menu, un onglet, un fil d'Ariane), et
+ * une garde par appelant est une garde qu'on oublie.
+ *
+ * Un `replace` EXPLICITE traverse : c'est ainsi qu'une redirection réécrit
+ * l'entrée courante (garde de session, canonicalisation d'URL).
+ *
+ * **UNE DESTINATION CHOISIE DANS UNE COUCHE PREND LA PLACE DE SON ENTRÉE**
+ * (#18523). Un menu, une feuille ou une visionneuse ouverts ont posé une entrée
+ * à l'adresse de l'écran (`lib/view/use-back-dismiss.ts`). Pousser par-dessus
+ * la laissait sous la destination : un retour ramenait l'écran d'origine, le
+ * suivant ne changeait rien. Le lecteur a bien avancé d'un pas — l'entrée de
+ * l'écran reste dessous — donc `hasNavigatedInApp` le compte.
+ */
+export function navigate(url: string, replace = false): void {
+  if (!replace && isCurrentHref(url)) return;
+  if (replace) window.history.replaceState(null, '', url);
+  else {
+    if (onLayerEntry()) window.history.replaceState(null, '', url);
+    else window.history.pushState(null, '', url);
+    navigatedInApp = true;
+  }
+  notify();
+}
+
+let navigatedInApp = false;
+
+/**
+ * LE LECTEUR A-T-IL DÉJÀ AVANCÉ DANS L'APPLICATION ? (#10483) — vrai dès le
+ * premier `pushState`. `document.referrer` est celui du CHARGEMENT de la
+ * page : il ne dit d'où vient un écran que tant que cet écran est celui de
+ * l'atterrissage. Une redirection (`replace`) ne compte pas comme un pas.
+ */
+export function hasNavigatedInApp(): boolean {
+  return navigatedInApp;
+}
+
+/**
+ * L'ADRESSE COURANTE EST-ELLE `path` ? (#10073) — un BOOLÉEN observé, pas
+ * l'adresse : une liste de cent rangées qui demande chacune « suis-je la
+ * conversation ouverte ? » ne re-rend, à chaque navigation, que les DEUX
+ * rangées dont la réponse change.
+ */
+export function useIsCurrentPath(path: string): boolean {
+  return useSyncExternalStore(
+    subscriber,
+    () => snapshot().path === path,
+    () => false,
+  );
+}
+
+// --- La compilation des motifs --------------------------------------------
+
+type CompiledPattern = { readonly regex: RegExp; readonly names: readonly string[] };
+
+export function compile(pattern: string): CompiledPattern {
+  const names: string[] = [];
+  const source = pattern
+    .split('/')
+    .map((segment) => {
+      if (!segment.startsWith('$')) return segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      names.push(segment.slice(1));
+      return '([^/]+)';
+    })
+    .join('/');
+  return { regex: new RegExp(`^${source}/?$`), names };
+}
+
+/**
+ * LA CLÉ DE REMONTAGE D'UN ÉCRAN (#5566, correction de revue, défaut 8) — un
+ * écran à PARAMÈTRES (`/c/$conversation`) ne doit PAS survivre à un
+ * changement de ces paramètres. Sans elle, `<Screen />` gardait la MÊME
+ * identité React d'une navigation fil → fil : chaque `useState(initialiseur)`
+ * de l'écran (mode de lecture collant, horloge d'ouverture, messages)
+ * n'était évalué qu'au premier montage et restait figé sur la conversation
+ * PRÉCÉDENTE, pendant que tout ce qui vient du contexte de route (en-tête,
+ * accent) suivait, lui, la nouvelle — un écran mi-vrai.
+ *
+ * `React.key` force un DÉMONTAGE, jamais un rendu différent : c'est la seule
+ * garantie que CHAQUE `useState` reparte de son initialiseur pour la
+ * nouvelle identité de route. Fonction PURE et exportée : c'est le même
+ * dispositif que `match` juste au-dessus — la seule logique de ce fichier où
+ * une erreur se voit tard et mal mérite un test qui ne passe pas par un DOM.
+ */
+export function routeKey(context: { readonly key: string; readonly params: Record<string, string> }): string {
+  const names = Object.keys(context.params).sort();
+  if (names.length === 0) return context.key;
+  return `${context.key}:${names.map((name) => `${name}=${context.params[name]}`).join('&')}`;
+}
+
+/**
+ * Apparie un chemin a un motif COMPILE et rend ses parametres, ou `null`.
+ *
+ * Fonction PURE et exportee pour qu'elle soit testable seule : l'appariement
+ * est la seule logique du routeur ou une erreur se voit tard et mal (une route
+ * qui ne prend pas, un parametre decode de travers), et la cacher dans un
+ * composant reviendrait a la tester par capture d'ecran.
+ */
+export function match(compile: CompiledPattern, path: string): Record<string, string> | null {
+  const found = compile.regex.exec(path);
+  if (!found) return null;
+  const params: Record<string, string> = {};
+  compile.names.forEach((name, i) => {
+    params[name] = decodeURIComponent(found[i + 1] ?? '');
+  });
+  return params;
+}
+
+// --- Le contexte -----------------------------------------------------------
+
+type RouteContext = { readonly key: string; readonly params: Record<string, string>; readonly search: URLSearchParams };
+
+const Context = createContext<RouteContext | null>(null);
+
+export function useRoute(): RouteContext {
+  const context = useContext(Context);
+  if (!context) throw new Error('useRoute() hors de <Routeur>');
+  return context;
+}
+
+/**
+ * La route COURANTE si l'on est sous `<Routeur>`, `null` sinon — pour une pièce
+ * partagée (le cadre d'administration) qui SURLIGNE la section active quand
+ * elle le peut, et qu'un témoin monte aussi hors routeur.
+ */
+export function useOptionalRoute(): RouteContext | null {
+  return useContext(Context);
+}
+
+/**
+ * UNE COUCHE DE LA COQUILLE NE SURVIT PAS À L'ÉCRAN QUI L'A OUVERTE (#10539) —
+ * la loi que trois hôtes recopiaient : changer d'adresse (route ou paramètre)
+ * la referme, avant la première image de la destination.
+ */
+export function useCloseOnNavigation(close: () => void): void {
+  const address = routeKey(useRoute());
+  useLayoutEffect(() => close, [address]);
+}
+
+export function useParams<T extends string>(): ParamsOf<T> {
+  return useRoute().params as ParamsOf<T>;
+}
+
+/** Les parametres de recherche, et de quoi les REECRIRE sans quitter l'ecran. */
+export function useSearch(): [URLSearchParams, (next: URLSearchParams, replace?: boolean) => void] {
+  const { search } = useRoute();
+  const set = useCallback((next: URLSearchParams, replace = false) => {
+    const chain = next.toString();
+    navigate(`${window.location.pathname}${chain ? `?${chain}` : ''}`, replace);
+  }, []);
+  return [search, set];
+}
+
+// --- La fabrique -----------------------------------------------------------
+
+export type RouterOptions = {
+  /**
+   * Ce qu'un ecran ATTEND avant de se rendre (#6206) — le catalogue
+   * d'interface de la langue resolue. Il est cherche EN PARALLELE du chunk de
+   * l'ecran, jamais apres : en serie, chaque premier ecran paierait un
+   * aller-retour reseau de plus sur la 3G visee. Le squelette tient pendant
+   * les deux.
+   */
+  readonly screenPrerequisite?: () => Promise<unknown>;
+  /**
+   * LE CADRE (#10073) — ce qui ENTOURE l'écran routé, et peut monter à côté de
+   * lui l'écran d'une AUTRE route (`screenOf`) : la liste des conversations à
+   * gauche du fil, sur grand écran. Rendu à la MÊME position de l'arbre quelle
+   * que soit la route, il garde montés les écrans qu'il rend d'une navigation
+   * à l'autre — c'est ce qu'un `<Screen key>` seul ne peut pas faire.
+   */
+  readonly frame?: ComponentType<FrameProps>;
+};
+
+export type FrameProps = {
+  readonly routeKey: string;
+  readonly screen: ReactNode;
+  readonly screenOf: (key: string) => ComponentType | undefined;
+};
+
+/**
+ * UN ÉCRAN, UNE PROMESSE (#10636) — le registre que partagent le rendu, le
+ * préchargement à l'intention et le préchargement de fond.
+ *
+ * `lazy` gardait sa propre promesse : précharger relançait un `import()` à
+ * côté de la sienne, et même un module déjà en mémoire faisait SUSPENDRE
+ * l'écran le temps d'un `then` — l'attente paraissait, une image, sur un écran
+ * déjà là. Ici, un module chargé se rend dans le rendu même de la navigation.
+ *
+ * Un préchargement raté s'oublie : l'ouverture suivante réessaie. Un
+ * chargement raté PENDANT le rendu remonte, une fois, à la limite d'erreur —
+ * le comportement de `lazy`, sans boucle de réessais.
+ */
+type ScreenModule = { readonly default: ComponentType };
+
+function screenRegistryEntry(load: () => Promise<ScreenModule>) {
+  let pending: Promise<ScreenModule> | null = null;
+  let loaded: ComponentType | null = null;
+  let renderFailure: { readonly error: unknown } | null = null;
+
+  const ensure = (fromRender = false): Promise<ScreenModule> => {
+    if (pending !== null) return pending;
+    const request = load().then(
+      (module) => {
+        loaded = module.default;
+        return module;
+      },
+      (error: unknown) => {
+        pending = null;
+        if (fromRender) renderFailure = { error };
+        throw error;
+      },
+    );
+    pending = request;
+    return request;
+  };
+
+  function Screen() {
+    if (loaded !== null) {
+      const Loaded = loaded;
+      return <Loaded />;
+    }
+    if (renderFailure !== null) {
+      const { error } = renderFailure;
+      renderFailure = null;
+      throw error;
+    }
+    throw ensure(true);
+  }
+
+  return { load: (): Promise<ScreenModule> => ensure(), Screen: Screen as ComponentType };
+}
+
+export function createRouter<T extends RouteTable>(table: T, notFound: ComponentType, options: RouterOptions = {}) {
+  const { screenPrerequisite, frame: Frame } = options;
+  const entries = Object.entries(table).map(([key, route]) => {
+    const registry = screenRegistryEntry(
+      screenPrerequisite === undefined
+        ? route.screen
+        : () => Promise.all([route.screen(), screenPrerequisite()]).then(([screen]) => screen),
+    );
+    return {
+      key,
+      pattern: route.pattern,
+      compile: compile(route.pattern),
+      Screen: registry.Screen,
+      load: registry.load,
+    };
+  });
+
+  /** Charge l'écran d'une route sans l'ouvrir — la même promesse que son rendu. */
+  const preload = (key: keyof T & string): Promise<unknown> => {
+    const entry = entries.find((e) => e.key === key);
+    return entry === undefined ? Promise.resolve() : entry.load();
+  };
+
+  const screenOf = (key: string): ComponentType | undefined => entries.find((e) => e.key === key)?.Screen;
+
+  function href<C extends keyof T & string>(
+    key: C,
+    params?: ParamsOf<T[C]['pattern']>,
+    search?: Record<string, string | undefined>,
+  ): string {
+    const entry = entries.find((e) => e.key === key);
+    if (!entry) throw new Error(`Route inconnue : ${key}`);
+    const path = entry.pattern
+      .split('/')
+      .map((segment) =>
+        segment.startsWith('$')
+          ? encodeURIComponent((params as Record<string, string>)[segment.slice(1)] ?? '')
+          : segment,
+      )
+      .join('/');
+    const q = new URLSearchParams();
+    for (const [name, value] of Object.entries(search ?? {})) if (value !== undefined) q.set(name, value);
+    const chain = q.toString();
+    return `${path}${chain ? `?${chain}` : ''}`;
+  }
+
+  function Router({
+    wrap,
+    skeleton,
+  }: {
+    wrap: (children: ReactNode) => ReactNode;
+    /**
+     * Ce qui s'affiche pendant qu'un ecran DECOUPE arrive. Sur la 3G visee ce
+     * n'est pas un detail : le chunk d'un ecran met une seconde ou deux, et un
+     * repli `null` rendrait un ecran BLANC pendant ce temps. La regle du depot
+     * vaut ici comme ailleurs — un squelette qui dit ce qui manque, jamais un
+     * spinner.
+     */
+    skeleton: ReactNode;
+  }) {
+    const location = useSyncExternalStore(subscriber, snapshot, () => currentLocation);
+
+    const resolved = useMemo(() => {
+      for (const entry of entries) {
+        const params = match(entry.compile, location.path);
+        if (params) return { entry, params };
+      }
+      return null;
+    }, [location.path]);
+
+    const context = useMemo<RouteContext>(
+      () => ({
+        key: resolved?.entry.key ?? '',
+        params: resolved?.params ?? {},
+        search: new URLSearchParams(location.search),
+      }),
+      [resolved, location.search],
+    );
+
+    /**
+     * RESTAURATION DU DEFILEMENT. Le navigateur la fait tout seul pour une
+     * navigation de DOCUMENT ; en application, l'URL change sans que rien ne
+     * se recharge, donc c'est a nous. On remonte en haut a chaque nouvelle
+     * adresse, et on rend sa position a un retour arriere.
+     */
+    const positions = useRef(new Map<string, number>());
+    const previous = useRef<string | null>(null);
+    useEffect(() => {
+      const currentHref = location.path + location.search;
+      if (previous.current !== null) positions.current.set(previous.current, window.scrollY);
+      previous.current = currentHref;
+      window.scrollTo(0, positions.current.get(currentHref) ?? 0);
+    }, [location.path, location.search]);
+
+    useEffect(() => {
+      const surPop = () => notify();
+      window.addEventListener('popstate', surPop);
+      return () => window.removeEventListener('popstate', surPop);
+    }, []);
+
+    const Screen = resolved?.entry.Screen ?? notFound;
+
+    return (
+      <Context.Provider value={context}>
+        {wrap(
+          <Suspense fallback={skeleton}>
+            {Frame === undefined ? (
+              <Screen key={routeKey(context)} />
+            ) : (
+              <Frame routeKey={context.key} screen={<Screen key={routeKey(context)} />} screenOf={screenOf} />
+            )}
+          </Suspense>,
+        )}
+      </Context.Provider>
+    );
+  }
+
+  function Link<C extends keyof T & string>({
+    to,
+    params,
+    search,
+    replace = false,
+    children,
+    onClick: onClickProp,
+    onPointerDown: onPointerDownProp,
+    anchorRef,
+    ...rest
+  }: {
+    to: C;
+    params?: ParamsOf<T[C]['pattern']>;
+    search?: Record<string, string | undefined>;
+    /**
+     * REMPLACER l'entree courante au lieu d'en empiler une (defaut : empiler).
+     *
+     * Il existe pour les liens qui REFERMENT plutot qu'ils n'avancent : le
+     * « X » de l'inscription, « Deja un compte ? Se connecter ». Sans lui, ces
+     * gestes s'ecrivaient `<button onClick={navigate(..., true)}>` — un
+     * controle qui NAVIGUE sans etre un lien : pas de `href`, pas d'ouverture
+     * en nouvel onglet, pas de menu contextuel, pas de prechargement, et rien
+     * a montrer dans la barre d'etat. Le motif serait recopie par les 40+
+     * surfaces a venir ; deux lignes ici l'evitent partout.
+     */
+    replace?: boolean;
+    /**
+     * L'ANCRE ELLE-MEME, pour qui doit lui DONNER LE FOCUS (#6104).
+     *
+     * `ref` ne peut pas servir ici : ce composant est generique, et `ref` est
+     * extrait des props par le runtime — par React 19 comme par
+     * `preact/compat`, mais pas de la meme facon. Une porte NOMMEE se comporte
+     * identiquement dans les deux variantes que ce POC compare, ce qui est
+     * exactement sa raison d'etre.
+     *
+     * Elle existe parce qu'un menu ARIA doit pouvoir poser le focus sur ses
+     * lignes (fleches, Home/End, entree dans le menu a l'ouverture — voir
+     * `lib/view/roving-menu.ts`) et qu'une ligne qui NAVIGUE doit rester un
+     * lien. Sans elle, un menu de liens n'aurait eu le choix qu'entre perdre
+     * le clavier et perdre le `href`.
+     */
+    anchorRef?: (element: HTMLAnchorElement | null) => void;
+    children: ReactNode;
+  } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'children'>) {
+    const url = href(to, params, search);
+    const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    /**
+     * PRECHARGEMENT A L'INTENTION, jamais au survol de passage : sur un reseau
+     * paye au mega-octet, precharger ce que le pointeur traverse gaspille des
+     * octets reels. 300 ms d'intention filtrent les passages.
+     */
+    const armPrefetch = () => {
+      const entry = entries.find((e) => e.key === to);
+      if (!entry || timer.current) return;
+      timer.current = setTimeout(() => void entry.load().catch(() => undefined), 300);
+    };
+    /* LE TOUCHER EST UNE INTENTION DÉCLARÉE (#10636) : le doigt posé, l'écran
+       part sans attendre le relâcher ni les 300 ms du survol — le clic qui
+       suit retrouve la même promesse, souvent déjà tenue. */
+    const loadNow = () => {
+      void entries.find((e) => e.key === to)?.load().catch(() => undefined);
+    };
+    const disarm = () => {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
+    };
+    useEffect(() => disarm, []);
+
+    return (
+      <a
+        {...rest}
+        ref={anchorRef}
+        href={url}
+        onPointerDown={(e) => {
+          onPointerDownProp?.(e);
+          loadNow();
+        }}
+        onPointerEnter={armPrefetch}
+        onPointerLeave={disarm}
+        onFocus={armPrefetch}
+        onBlur={disarm}
+        onClick={(e) => {
+          // On laisse le navigateur faire son travail quand l'utilisateur le
+          // lui demande : nouvel onglet, telechargement, cible explicite. Le
+          // `onClick` de l'appelant n'est meme pas invoque pour ces gestes-la
+          // (#5816, E2) : rien de ce qui suit un clic SPA ne doit se produire.
+          if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          onClickProp?.(e);
+          if (e.defaultPrevented) return;
+          e.preventDefault();
+          disarm();
+          navigate(url, replace);
+        }}
+      >
+        {children}
+      </a>
+    );
+  }
+
+  return { Router, Link, href, navigate, preload };
+}

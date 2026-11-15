@@ -1,21 +1,45 @@
 import Foundation
 import os
+import MeeshySDK
 
 protocol ThermalStateMonitorDelegate: AnyObject {
     func thermalStateDidChange(to state: ProcessInfo.ThermalState)
 }
 
-final class ThermalStateMonitor {
+/// Ce que la capture lit de la température de l'appareil (#9349).
+protocol ThermalStateMonitorProviding: AnyObject {
+    var currentState: ProcessInfo.ThermalState { get }
+    var onStateChange: ((ProcessInfo.ThermalState) -> Void)? { get set }
+    func startMonitoring()
+    func stopMonitoring()
+}
+
+final class ThermalStateMonitor: ThermalStateMonitorProviding {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    // Un propriétaire qui oublie `stopMonitoring()` ne laisse pas l'inscription
+    // dans le NotificationCenter à jamais (#9349).
+    nonisolated deinit {
+        thermalObserver.releaseNow { observer in
+            if let observer { NotificationCenter.default.removeObserver(observer) }
+        }
+    }
     weak var delegate: ThermalStateMonitorDelegate?
+    var onStateChange: ((ProcessInfo.ThermalState) -> Void)?
 
     private(set) var currentState: ProcessInfo.ThermalState = .nominal
 
     /// Token de l'observateur bloc (l'API sélecteur ne permet pas de cibler la
     /// queue de livraison ni de hopper sur le main actor).
-    private var thermalObserver: NSObjectProtocol?
+    /// Posé et retiré sur le MainActor, relâché une fois par le `deinit` non
+    /// isolé, quand plus personne ne tient l'objet.
+    private let thermalObserver = TeardownBox<NSObjectProtocol?>(nil)
 
     func startMonitoring() {
         currentState = ProcessInfo.processInfo.thermalState
+        guard thermalObserver.read({ $0 == nil }) else { return }
         // ⚠️ Crash SIGTRAP : le système poste `thermalStateDidChangeNotification`
         // sur une queue de FOND (com.apple.root.user-interactive-qos). Cette classe
         // est @MainActor (target app, SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor) et
@@ -24,19 +48,22 @@ final class ThermalStateMonitor {
         // échouer l'assertion d'isolation Swift 6 → l'app crashait après qu'un appel
         // long ait fait chauffer l'appareil (~5 min). On hoppe explicitement sur le
         // main actor (`MainActor.assumeIsolated` indispo en iOS 16 → `Task`).
-        thermalObserver = NotificationCenter.default.addObserver(
-            forName: ProcessInfo.thermalStateDidChangeNotification,
-            object: nil,
-            queue: nil
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.thermalStateChanged() }
+        thermalObserver.update { observer in
+            observer = NotificationCenter.default.addObserver(
+                forName: ProcessInfo.thermalStateDidChangeNotification,
+                object: nil,
+                queue: nil
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in self?.thermalStateChanged() }
+            }
         }
     }
 
     func stopMonitoring() {
-        if let thermalObserver {
-            NotificationCenter.default.removeObserver(thermalObserver)
-            self.thermalObserver = nil
+        thermalObserver.update { observer in
+            guard let current = observer else { return }
+            NotificationCenter.default.removeObserver(current)
+            observer = nil
         }
     }
 
@@ -46,6 +73,7 @@ final class ThermalStateMonitor {
         currentState = newState
         Logger.calls.info("Thermal state changed to: \(String(describing: newState))")
         delegate?.thermalStateDidChange(to: newState)
+        onStateChange?(newState)
     }
 
     var recommendedMaxFps: Int {
@@ -76,5 +104,5 @@ final class ThermalStateMonitor {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

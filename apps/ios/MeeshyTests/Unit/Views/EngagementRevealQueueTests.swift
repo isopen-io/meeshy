@@ -1,0 +1,188 @@
+import XCTest
+import MeeshySDK
+@testable import Meeshy
+
+/// **Deux succès d'un même geste se voient l'un APRÈS l'autre (#5847).**
+final class EngagementRevealQueueTests: XCTestCase {
+
+    private var volume: EngagementReveal {
+        .composedAchievement(family: AchievementCatalog.families.first { $0.id == "conversation.join.count" }!, tier: 10)
+    }
+    private var ampleur: EngagementReveal {
+        .composedAchievement(family: AchievementCatalog.families.first { $0.id == "conversation.join.size" }!, tier: 10)
+    }
+
+    func test_uneFileNeuveNeMontreRien() {
+        XCTAssertTrue(EngagementRevealQueue().estVide)
+        XCTAssertNil(EngagementRevealQueue().enCours)
+    }
+
+    func test_lePremierPalierPasseAussitotALEcran() {
+        var file = EngagementRevealQueue()
+        file.enfile(volume)
+        XCTAssertEqual(file.enCours, volume)
+        XCTAssertTrue(file.enAttente.isEmpty)
+    }
+
+    func test_leSecondATTEND_puisPrendLaPlaceALaFermeture() {
+        var file = EngagementRevealQueue()
+        file.enfile(volume)
+        file.enfile(ampleur)
+
+        XCTAssertEqual(file.enCours, volume, "le premier reste à l'écran")
+        XCTAssertEqual(file.enAttente, [ampleur])
+
+        file.termine()
+        XCTAssertEqual(file.enCours, ampleur, "le second ne se perd pas")
+
+        file.termine()
+        XCTAssertTrue(file.estVide)
+    }
+
+    /// Le même succès arrive par deux portes — l'événement socket et le tap sur
+    /// la notification qu'il vient de poser. Un succès n'est pas répétable.
+    func test_unMemePalierNeSeCelebreQuUneFois() {
+        var file = EngagementRevealQueue()
+        file.enfile(volume)
+        file.enfile(volume)
+        XCTAssertTrue(file.enAttente.isEmpty)
+
+        file.enfile(ampleur)
+        file.enfile(ampleur)
+        XCTAssertEqual(file.enAttente, [ampleur])
+    }
+
+    /// **Le cas que le témoin ci-dessus ne couvrait PAS — et c'est celui qui
+    /// arrive** (#5903).
+    ///
+    /// Il enfile deux fois SANS fermer entre les deux : il éprouve donc la
+    /// déduplication EN FILE, pas la non-répétition. Son nom promettait l'autre.
+    ///
+    /// Or les deux portes de `EngagementRevealHost` — l'événement socket en
+    /// direct, puis le tap sur la notification que cet événement vient de poser
+    /// — sont séparées par une FERMETURE : il faut refermer la célébration pour
+    /// atteindre la notification. C'est exactement l'instant où la file oubliait
+    /// ce qu'elle venait de montrer, et le succès repassait.
+    func test_unPalierREFERMÉNeSeRecelebrePas() {
+        var file = EngagementRevealQueue()
+        file.enfile(volume)
+        file.termine()
+        XCTAssertTrue(file.estVide)
+
+        file.enfile(volume)
+        XCTAssertTrue(file.estVide, "Un succès n'est pas répétable : le revoir n'aurait aucun sens.")
+    }
+
+    /// La mémoire ne peut pas croître indéfiniment : une file qui retient tout
+    /// ce qu'elle a montré est une fuite, et les paliers restent de toute façon
+    /// ACQUIS — c'est le tableau de bord qui en est l'inventaire, pas la file.
+    func test_laMemoireDesCelebresEstBornee() {
+        var file = EngagementRevealQueue()
+        let paliers = (1...(EngagementRevealQueue.mémoire + 5)).map { EngagementReveal.streak(days: $0) }
+        for palier in paliers {
+            file.enfile(palier)
+            file.termine()
+        }
+        // Le plus ANCIEN est sorti de la mémoire : il peut se re-célébrer.
+        file.enfile(paliers[0])
+        XCTAssertEqual(file.enCours, paliers[0])
+        file.termine()
+
+        // Le plus RÉCENT, lui, est encore retenu.
+        file.enfile(paliers.last!)
+        XCTAssertTrue(file.estVide)
+    }
+
+    func test_laFileEstBornee_uneCelebrationQuOnNePeutPasFermerNEnEstPlusUne() {
+        var file = EngagementRevealQueue()
+        file.enfile(.streak(days: 3))
+        file.enfile(.streak(days: 7))
+        file.enfile(.streak(days: 14))
+        file.enfile(.streak(days: 30))
+
+        XCTAssertEqual(file.enCours, .streak(days: 3))
+        XCTAssertEqual(file.enAttente.count, EngagementRevealQueue.capacité - 1)
+        XCTAssertFalse(file.enAttente.contains(.streak(days: 30)))
+    }
+    // MARK: - #7914 — l'onboarding passe d'abord
+
+    /// Recette 2026-09-25 : « Succès débloqué — Premier pas » couvrait le calque
+    /// d'onboarding ET l'envolée « +14 » qui devait expliquer le gain.
+    func test_enfile_whileSuspendedByOnboarding_holdsTheRevealOffScreen() {
+        var file = EngagementRevealQueue()
+        file.suspends(true)
+
+        file.enfile(volume)
+
+        XCTAssertNil(file.enCours, "rien ne recouvre le calque d'onboarding")
+        XCTAssertEqual(file.enAttente, [volume], "la célébration est gardée, pas perdue")
+    }
+
+    func test_suspends_false_afterOnboarding_playsTheHeldRevealsInOrder() {
+        var file = EngagementRevealQueue()
+        file.suspends(true)
+        file.enfile(volume)
+        file.enfile(ampleur)
+
+        file.suspends(false)
+
+        XCTAssertEqual(file.enCours, volume)
+        XCTAssertEqual(file.enAttente, [ampleur])
+        file.termine()
+        XCTAssertEqual(file.enCours, ampleur)
+    }
+
+    func test_suspends_whileARevealIsAlreadyShowing_neverYanksIt() {
+        var file = EngagementRevealQueue()
+        file.enfile(volume)
+
+        file.suspends(true)
+
+        XCTAssertEqual(file.enCours, volume)
+    }
+
+    func test_termine_whileSuspended_keepsTheNextOneWaiting() {
+        var file = EngagementRevealQueue()
+        file.enfile(volume)
+        file.enfile(ampleur)
+        file.suspends(true)
+
+        file.termine()
+
+        XCTAssertNil(file.enCours)
+        XCTAssertEqual(file.enAttente, [ampleur])
+    }
+    // MARK: - #11556 — un état d'onboarding inchangé ne réécrit pas la file
+
+    /// Recette 2026-10-22 : 15 minutes d'écran blanc au démarrage, le fil principal
+    /// recalculant `EngagementRevealHost.body` sans fin. Chaque réabonnement rejouait
+    /// `isPresented`, et l'écriture de la file — même identique — réinvalidait l'hôte.
+    func test_enSuspendant_sameState_returnsNilSoTheHostWritesNothing() {
+        var suspendue = EngagementRevealQueue()
+        suspendue.suspends(true)
+
+        XCTAssertNil(EngagementRevealQueue().enSuspendant(false))
+        XCTAssertNil(suspendue.enSuspendant(true))
+    }
+
+    func test_enSuspendant_changedState_returnsTheNextQueue() {
+        var file = EngagementRevealQueue()
+        file.suspends(true)
+        file.enfile(volume)
+
+        let reprise = file.enSuspendant(false)
+
+        XCTAssertEqual(reprise?.enCours, volume)
+        XCTAssertEqual(reprise?.estSuspendue, false)
+        XCTAssertEqual(EngagementRevealQueue().enSuspendant(true)?.estSuspendue, true)
+    }
+
+    func test_host_observesOnboardingByValue_neverByAPublisherRebuiltEachRender() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/EngagementRevealHost.swift")
+        let code = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertFalse(code.contains(".onReceive(OnboardingPresenceSignal"), "un éditeur reconstruit à chaque rendu se réabonne et rejoue sa valeur")
+        XCTAssertTrue(code.contains("adaptiveOnChange(of: onboarding.isPresented, initial: true)"), "le montage sous un calque déjà présenté suspend dès le départ")
+    }
+}

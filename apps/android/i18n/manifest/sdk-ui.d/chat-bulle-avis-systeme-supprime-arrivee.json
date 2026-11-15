@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "bubble.joinNotice.openProfile", "androidName": "bubble_joinNotice_openProfile", "status": "adopted" },
+        { "catalog": "app", "iosKey": "bubble.joinNotice.openProfile.hint.doubleTap", "androidName": "bubble_joinNotice_openProfile_hint_doubleTap", "status": "adopted" }
+      ]
+    }
+  }
+}

@@ -1,12 +1,22 @@
 package me.meeshy.sdk.net.api
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.MessagesApiResponse
+import me.meeshy.sdk.model.ReadStatusData
 import me.meeshy.sdk.model.SendMessageRequest
+import me.meeshy.sdk.model.search.GlobalMessageSearchHit
+import me.meeshy.sdk.net.ConditionalResult
+import me.meeshy.sdk.net.conditionalApiCall
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
+import retrofit2.http.Headers
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -16,6 +26,10 @@ import retrofit2.http.Query
 @Serializable
 data class EditMessageRequest(val content: String)
 
+/** Corps de `POST /conversations/:id/messages/after-read/consume` (#8302) : 1 à 200 ids. */
+@Serializable
+data class ConsumeAfterReadRequest(val messageIds: List<String>)
+
 interface MessageApi {
     @GET("conversations/{cid}/messages")
     suspend fun list(
@@ -24,6 +38,99 @@ interface MessageApi {
         @Query("limit") limit: Int? = null,
         @Query("before") before: String? = null,
     ): ApiResponse<List<ApiMessage>>
+
+    /**
+     * The recent-window request [MessageCacheSource][me.meeshy.sdk.conversation.
+     * MessageCacheSource] revalidates with (no `offset`/`limit`/`before` — always
+     * the same shape for a given [conversationId]), carrying an optional
+     * `If-None-Match` and returning the raw [Response] to reach the `ETag`
+     * header and distinguish a genuine 304 from a decoded 200. Gateway
+     * contract: `sendWithETag`, `services/gateway/src/routes/conversations/
+     * messages-list.ts:825-829`. #5188 — never call this directly; go through
+     * [listConditionalResult], which keeps [Response] confined to this module.
+     */
+    @GET("conversations/{cid}/messages")
+    suspend fun listConditional(
+        @Path("cid") conversationId: String,
+        @Header("If-None-Match") ifNoneMatch: String? = null,
+    ): Response<ApiResponse<List<ApiMessage>>>
+
+    /**
+     * Forward-watermark gap backfill (#5206) — `after` resumes from the
+     * CLIENT's own held high-water mark (`createdAt` of its newest
+     * server-confirmed message) instead of a server-issued cursor:
+     * `createdAt > after`, strictly, ascending. `offset`/`before` are
+     * mutually exclusive with this mode server-side (gateway skips ALWAYS 0
+     * here — the `after` value itself IS the cursor; advancing means raising
+     * it, never paginating by offset). Gateway contract:
+     * `services/gateway/src/routes/conversations/messages-list.ts:112`
+     * (schema), `228-232` (mode selection), `370-372` (the `createdAt > after`
+     * filter), `505-529` (ascending order, `limit + 1` probe row for a
+     * PRECISE `hasMore`, `skip` pinned to 0).
+     *
+     * Returns [MessagesApiResponse], NOT the standard [ApiResponse] envelope:
+     * `hasMore`/`nextCursor` live under `cursorPagination` in this mode — the
+     * offset-shaped `pagination` field is never populated for an `after`
+     * request (`messages-list.ts:764`), and `nextCursor` is always `null`
+     * (the client already holds its own continuation, `after`, not a
+     * server-issued id — `messages-list.ts:722-729`).
+     *
+     * Not conditional — no `If-None-Match` sent, deliberately: this is a
+     * DIFFERENT request shape than [listConditional]'s recent window, so its
+     * validator (`ETag` hashes ONE exact query) would never match anyway; a
+     * gap backfill also expects genuinely new data far more often than the
+     * recent window does, making the conditional round-trip a poor bet.
+     */
+    @GET("conversations/{cid}/messages")
+    suspend fun listAfter(
+        @Path("cid") conversationId: String,
+        @Query("after") after: String,
+        @Query("limit") limit: Int? = null,
+    ): MessagesApiResponse
+
+    /**
+     * Lecture CIBLÉE d'un message par son id (#13797) : `around=<id>` avec `limit=1` donne une moitié de
+     * fenêtre nulle de chaque côté, donc la liste ne rend QUE ce message, mais passée par tout
+     * l'enrichissement de la liste (`enrichForwardedMessagesForList` : l'aperçu `forwardedFrom` d'un
+     * transfert), que `GET /messages/{id}` ne sert pas (son `select` n'a que `forwardedFromId`).
+     */
+    @GET("conversations/{cid}/messages")
+    suspend fun listAround(
+        @Path("cid") conversationId: String,
+        @Query("around") messageId: String,
+        @Query("limit") limit: Int = 1,
+    ): ApiResponse<List<ApiMessage>>
+
+    /**
+     * La fenêtre CENTRÉE sur un message (#14670) : `around=<id>` rend la moitié de [limit] de chaque côté.
+     * Comme [listAfter], rend [MessagesApiResponse] : `cursorPagination.hasMore` dit s'il reste du plus
+     * ancien, `hasNewer` (racine, mode `around` seul) s'il reste du plus récent.
+     */
+    @GET("conversations/{cid}/messages")
+    suspend fun listWindowAround(
+        @Path("cid") conversationId: String,
+        @Query("around") messageId: String,
+        @Query("limit") limit: Int,
+    ): MessagesApiResponse
+
+    /**
+     * L'index d'un genre pour l'écran « Médias, liens et documents » : `view=media` (la passerelle ne sert que les
+     * messages porteurs du genre demandé), paginé par `before`. [kinds] est absent pour le visuel (défaut serveur,
+     * compris aussi d'une passerelle antérieure à #8098) ; [query] n'est envoyé qu'à partir de deux caractères.
+     * Comme [listAfter], rend [MessagesApiResponse] : `hasMore`/`nextCursor` vivent sous `cursorPagination`.
+     */
+    @GET("conversations/{cid}/messages")
+    suspend fun listMedia(
+        @Path("cid") conversationId: String,
+        @Query("view") view: String,
+        @Query("limit") limit: Int,
+        @Query("include_replies") includeReplies: Boolean,
+        @Query("include_translations") includeTranslations: Boolean,
+        @Query("kinds") kinds: String?,
+        @Query("q") query: String?,
+        @Query("before") before: String?,
+        @Query("languages") languages: String?,
+    ): MessagesApiResponse
 
     @POST("conversations/{cid}/messages")
     suspend fun send(
@@ -40,6 +147,20 @@ interface MessageApi {
     @DELETE("messages/{id}")
     suspend fun delete(@Path("id") messageId: String): ApiResponse<Unit>
 
+    /**
+     * La recherche des messages de TOUTES mes conversations (#14619) : le serveur sert le texte
+     * élu par le Prisme du lecteur et n'interroge jamais une conversation chiffrée de bout en bout.
+     * `X-Search-Caps: 1` déclare que ce client voile un résultat flouté et peint une transcription
+     * (#16957, #16958) ; sans lui la passerelle ne sert ni l'un ni l'autre.
+     */
+    @Headers("X-Search-Caps: 1")
+    @GET("messages/search")
+    suspend fun searchAll(
+        @Query("q") query: String,
+        @Query("limit") limit: Int? = null,
+        @Query("cursor") cursor: String? = null,
+    ): ApiResponse<List<GlobalMessageSearchHit>>
+
     @GET("conversations/{cid}/messages/search")
     suspend fun search(
         @Path("cid") conversationId: String,
@@ -54,9 +175,46 @@ interface MessageApi {
         @Path("mid") messageId: String,
     ): ApiResponse<Unit>
 
+    /** Fiche « Vu par » : `GET /messages/{id}/read-status` (reçu par, lu par, pas encore vu par). */
+    @GET("messages/{id}/read-status")
+    suspend fun readStatus(@Path("id") messageId: String): ApiResponse<ReadStatusData>
+
     @DELETE("conversations/{cid}/messages/{mid}/pin")
     suspend fun unpin(
         @Path("cid") conversationId: String,
         @Path("mid") messageId: String,
     ): ApiResponse<Unit>
+
+    /**
+     * La flamme-œil (#8302) : à la sortie de la conversation, les messages « après lecture » vus
+     * disparaissent chez l'appelant seul (iOS `MessageService.consumeAfterRead`).
+     */
+    @POST("conversations/{cid}/messages/after-read/consume")
+    suspend fun consumeAfterRead(
+        @Path("cid") conversationId: String,
+        @Body body: ConsumeAfterReadRequest,
+    ): ApiResponse<JsonElement>
+
+    /** La vue unique lue et refermée consomme son compteur serveur (iOS `MessageService.consumeViewOnce`). */
+    @POST("conversations/{cid}/messages/{mid}/consume")
+    suspend fun consumeViewOnce(
+        @Path("cid") conversationId: String,
+        @Path("mid") messageId: String,
+        @Body body: JsonObject = JsonObject(emptyMap()),
+    ): ApiResponse<JsonElement>
 }
+
+/**
+ * [MessageApi.listConditional] folded into a [ConditionalResult] — a thin
+ * wrapper whose only purpose is keeping every `retrofit2.Response` type
+ * confined to `:core:network` (retrofit is an `implementation`, not `api`,
+ * dependency of this module — `:sdk-core`'s [me.meeshy.sdk.conversation.
+ * MessageCacheSource] cannot reference [Response] itself, only this module's
+ * own [ConditionalResult]/`ApiError` types). Mirrors [TusApi]'s
+ * `createSession`/`patchChunk`. #5188.
+ */
+suspend fun MessageApi.listConditionalResult(
+    conversationId: String,
+    ifNoneMatch: String?,
+): ConditionalResult<List<ApiMessage>> =
+    conditionalApiCall { listConditional(conversationId, ifNoneMatch) }

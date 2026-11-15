@@ -1,6 +1,7 @@
 package me.meeshy.app.conversations
 
 import me.meeshy.sdk.model.TypingEvent
+import me.meeshy.sdk.model.TypingNames
 
 /**
  * A peer composing a message in some conversation, identified by [userId] so two users
@@ -37,9 +38,7 @@ object ConversationTypingRoster {
         val conversationId = event.conversationId
         val userId = event.userId
         if (conversationId.isBlank() || userId.isBlank() || userId == selfId) return state
-        val name = event.displayName?.takeIf { it.isNotBlank() }
-            ?: event.username?.takeIf { it.isNotBlank() }
-            ?: userId
+        val name = TypingNames.inConversation(event)
         val updated = state[conversationId].orEmpty() + (userId to ConversationTyper(userId, name))
         return state + (conversationId to updated)
     }

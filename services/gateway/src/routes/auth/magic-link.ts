@@ -1,112 +1,104 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { AgeBelowMinimumError } from '../../errors/custom-errors';
 import jwt from 'jsonwebtoken';
 import {
   userSchema,
-  sessionSchema,
   errorResponseSchema,
   sessionsListResponseSchema,
   refreshTokenRequestSchema,
   verifyEmailRequestSchema,
   resendVerificationRequestSchema,
   sendPhoneCodeRequestSchema,
-  verifyPhoneRequestSchema,
-  validateSessionRequestSchema
+  verifyPhoneRequestSchema
 } from '@meeshy/shared/types';
-import { AuthSchemas, SessionSchemas, validateSchema } from '@meeshy/shared/utils/validation';
-import { createUnifiedAuthMiddleware, findTrustedSession, UnifiedAuthRequest} from '../../middleware/auth';
-import { AuthRouteContext, formatUserResponse } from './types';
+import { AuthSchemas, validateSchema } from '@meeshy/shared/utils/validation';
+import { createUnifiedAuthMiddleware, findTrustedSession} from '../../middleware/auth';
+import { logWarn } from '../../utils/logger';
+import { AuthRouteContext, formatUserResponse, formatSessionResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendInternalError, sendError } from '../../utils/response';
+import { accountIsBelowMinimumAge } from '../../services/auth/minimum-age-gate';
+import { scheduleContactJoinedAnnouncement } from '../../services/notifications/contact-joined';
+import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
+import { accountIsDeleted, sendAccountDeleted } from '../../services/auth/account-deleted';
+import { disconnectSession } from '../../socketio/disconnectSession';
+import {
+  legacyTokenRefusal,
+  type SessionBoundTokenPayload,
+} from '../../services/auth/session-jwt';
+import { depreciee, dateDeRetrait } from '../../utils/deprecation';
+import { handleGetMe, meRouteSharedOptions } from '../me/get-me';
+import { apiPath } from '@meeshy/shared/api/prefix';
+import { verifyEmailResponseSchema } from '@meeshy/shared/types';
+import { getRequestContext } from '../../services/GeoIPService';
+import { mintPendingTwoFactorChallenge, provenChallengeAdoption } from '../../services/auth/pending-two-factor';
+import { validatePasswordStrength } from '../../utils/password-strength';
+import { createVerifyEmailIpRateLimiter, createVerifyEmailAddressRateLimiter } from '../../utils/rate-limiter.js';
+import { openSession } from './open-session';
+import { GEOLOCATION_ATTRIBUTION, readClientSessionHeaders } from '@meeshy/shared/utils/client-session';
+import { recordSessionClientInfo } from '../../services/auth/session-client-info';
+import { currentSessionOf } from '../../services/auth/current-session';
+import { countLegacyLinkLogin, getLegacyLinkLoginCounter, linkLoginConsent } from '../../services/auth/legacy-link-client';
+import { adoptProvenSession, provenSessionAdoption } from '../../services/auth/session-adoption';
 
 // Logger dédié pour magic-link
 const logger = enhancedLogger.child({ module: 'magic-link' });
 
+/**
+ * L'ALIAS déprécié de la lecture de soi (#4178, critère 3).
+ *
+ * `depuis` est le jour où `GET /api/v1/me` est devenue l'adresse cible ;
+ * `retraitLe` en dérive par la fenêtre par défaut de 180 jours
+ * (`identity.md` § « Ordre des étapes », point 5 — `dateDeRetrait`). Le
+ * retrait RÉEL reste gouverné par le compteur d'accès par route
+ * (`ROUTES_SURVEILLEES`, `services/route-usage.service.ts`, qui surveille
+ * déjà `GET /api/v1/auth/me` sous ce numéro d'issue) — cette date INFORME,
+ * elle ne décide pas (`utils/deprecation.ts`, § « Pourquoi `Sunset` est
+ * OPTIONNEL »).
+ *
+ * L'issue #4178 (critère 3) écrit « `Deprecation: true` » : c'est la forme du
+ * brouillon RFC de 2019, PAS celle que `utils/deprecation.ts` sert — le
+ * fichier documente explicitement avoir corrigé cette attribution
+ * (RFC 9745, `Deprecation: @<epoch>`, une date structurée plutôt qu'un
+ * booléen sans information). Suivre l'énoncé de l'issue à la lettre aurait
+ * réécrit une deuxième forme de l'en-tête à côté de celle déjà choisie pour
+ * les quinze autres alias du dépôt (#4154, #4155, #4161, #4164) — la
+ * divergence exacte que ce site unique existe pour fermer.
+ */
+const ALIAS_LECTURE_DE_SOI = {
+  depuis: '2026-08-29',
+  successeur: apiPath('/me'),
+  retraitLe: dateDeRetrait('2026-08-29'),
+} as const;
 
 /**
  * Register magic link, email/phone verification, session management, and /me routes
  */
 export function registerMagicLinkRoutes(context: AuthRouteContext) {
   const { fastify, authService } = context;
+  const verifyEmailIpLimiter = createVerifyEmailIpRateLimiter(context.redis);
+  const verifyEmailAddressLimiter = createVerifyEmailAddressRateLimiter(context.redis);
 
-  // GET /me - Get current authenticated user profile
+  // GET /me — ALIAS de GET /api/v1/me (#4178). Le calcul est PARTAGÉ
+  // (`handleGetMe`, `routes/me/get-me.ts`) : aucune réponse propre à cette
+  // adresse, seulement l'annonce de dépréciation en plus.
+  //
+  // `allowAnonymous: true` CORRIGE un défaut préexistant, pas seulement une
+  // unification : l'ancien montage (`{ requireAuth: true }` sans
+  // `allowAnonymous`) faisait REFUSER en 403, par `createUnifiedAuthMiddleware`
+  // lui-même, tout porteur de `X-Session-Token` — avant d'atteindre le
+  // handler. La branche anonyme du handler ci-dessous existait et était
+  // TESTÉE, mais la suite mockait `createUnifiedAuthMiddleware` et injectait
+  // `authContext` directement : elle ne pouvait pas voir que la vraie garde
+  // ne laissait jamais passer cette branche en production. C'est exactement
+  // le témoin que le critère 6 de #4178 demande : « au rang JWT, une route
+  // régressée vers "authentifié seulement" rendrait le même verdict qu'une
+  // route juste » — sauf qu'ici la régression précédait le correctif.
   fastify.get('/me', {
-    schema: {
-      description: 'Get the current authenticated user profile. Works with both JWT tokens (registered users) and session tokens (anonymous users).',
-      tags: ['auth', 'user'],
-      summary: 'Get current user profile',
-      response: {
-        200: {
-          description: 'User profile retrieved successfully',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                user: userSchema
-              }
-            }
-          }
-        },
-        401: errorResponseSchema,
-        404: errorResponseSchema
-      },
-      security: [{ bearerAuth: [] }]
-    },
-    preValidation: [createUnifiedAuthMiddleware(fastify.prisma, { requireAuth: true })]
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-
-      if (!authContext.isAuthenticated) {
-        return sendUnauthorized(reply, 'Non authentifié');
-      }
-
-      // Registered user (JWT)
-      if (authContext.type === 'user' && authContext.registeredUser) {
-        const user = authContext.registeredUser;
-        const permissions = authService.getUserPermissions(user as any);
-
-        return sendSuccess(reply, {
-          user: formatUserResponse(user, permissions)
-        });
-      }
-
-      // Anonymous user (Session)
-      if (authContext.type === 'anonymous' && authContext.anonymousUser) {
-        const anonymousUser = authContext.anonymousUser;
-
-        return sendSuccess(reply, {
-          user: {
-            id: authContext.userId,
-            username: anonymousUser.username,
-            email: null,
-            firstName: anonymousUser.firstName,
-            lastName: anonymousUser.lastName,
-            displayName: authContext.displayName,
-            avatar: null,
-            role: 'ANONYMOUS',
-            systemLanguage: anonymousUser.language,
-            regionalLanguage: anonymousUser.language,
-            customDestinationLanguage: null,
-            autoTranslateEnabled: false,
-            isOnline: true,
-            lastActiveAt: new Date(),
-            isActive: true,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            permissions: anonymousUser.permissions
-          }
-        });
-      }
-
-      return sendNotFound(reply, 'Utilisateur non trouvé');
-
-    } catch (error) {
-      logger.error('Error in /auth/me', error);
-      sendInternalError(reply, 'Erreur lors de la récupération du profil');
-    }
-  });
+    ...meRouteSharedOptions,
+    onRequest: depreciee(ALIAS_LECTURE_DE_SOI),
+    preValidation: [createUnifiedAuthMiddleware(fastify.prisma, { requireAuth: true, allowAnonymous: true })],
+  }, handleGetMe);
 
   // POST /refresh - Refresh JWT token
   fastify.post('/refresh', {
@@ -133,6 +125,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           }
         },
         401: errorResponseSchema,
+        403: errorResponseSchema,
         404: errorResponseSchema
       },
       security: []
@@ -145,7 +138,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       // Try to decode the JWT — accept expired tokens (ignoreExpiration) so that
       // the client can rotate a valid-but-stale JWT without a sessionToken round-trip.
       // If the signature itself is invalid (tampered), jwt.verify will still throw.
-      let decoded: { userId?: string; username?: string; role?: string } | null = null;
+      let decoded: Partial<SessionBoundTokenPayload> | null = null;
       // Signature réellement vérifiée, ou simple lecture du contenu ? La
       // distinction est TOUT : `jwt.decode` ne vérifie rien, il désérialise.
       // Sans ce drapeau, un jeton forgé avec une signature quelconque suffisait
@@ -153,7 +146,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       // garde en aval ne testait que la PRÉSENCE de `userId`.
       let signatureVerified = false;
       try {
-        decoded = jwt.verify(token, authService['jwtSecret'], { ignoreExpiration: true }) as { userId?: string; username?: string; role?: string };
+        decoded = jwt.verify(token, authService['jwtSecret'], { ignoreExpiration: true }) as Partial<SessionBoundTokenPayload>;
         signatureVerified = true;
       } catch {
         // Signature invalide : le contenu n'est plus qu'une prétention.
@@ -165,19 +158,28 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         // AUCUN recours, qu'une session de confiance existe ou non. On décode
         // quand même pour distinguer « aucun userId du tout » (401 générique
         // ci-dessous) d'une signature invalide (401 explicite juste après).
-        decoded = jwt.decode(token) as { userId?: string; username?: string; role?: string } | null;
+        decoded = jwt.decode(token) as Partial<SessionBoundTokenPayload> | null;
       }
 
       if (!decoded?.userId) {
-        return sendUnauthorized(reply, 'Token invalide ou expiré');
+        return sendUnauthorized(reply, 'Token invalide ou expiré', { code: AUTH_ERROR_CODES.MAGIC_LINK_INVALID });
       }
 
       if (!signatureVerified) {
         logger.warn('Refus de refresh : signature invalide — aucun rattrapage par session (round 6)', {
           claimedUserId: decoded.userId
         });
-        return sendUnauthorized(reply, 'Token invalide ou expiré');
+        return sendUnauthorized(reply, 'Token invalide ou expiré', { code: AUTH_ERROR_CODES.MAGIC_LINK_INVALID });
       }
+
+      // #10264 — « supprimé » ne se dit qu'ici, APRÈS la vérification de la
+      // signature : seul le porteur d'un jeton de CE compte l'apprend. C'est le
+      // chemin nominal d'un appareil resté hors ligne (jeton expiré).
+      const refuseDeletedAccount = () => sendAccountDeleted(reply, decoded.userId);
+      const refuseSession = async (userId: string) =>
+        (await accountIsDeleted(context.prisma, userId))
+          ? refuseDeletedAccount()
+          : sendUnauthorized(reply, 'Session révoquée — veuillez vous reconnecter', { code: AUTH_ERROR_CODES.SESSION_REVOKED });
 
       // À partir d'ici, la signature est AUTHENTIQUE — éventuellement
       // expirée, ce qui est la raison d'être de cette route
@@ -201,13 +203,134 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         }
       }
 
+      // La RÉVOCATION doit atteindre cette route (#4213), et elle doit
+      // atteindre LA session révoquée, pas seulement le compte vidé (#4264).
+      //
+      // Jusqu'à #4213, un JWT authentique mais EXPIRÉ suffisait à obtenir un
+      // JWT neuf, sans jeton de session ni consultation d'aucune liste de
+      // révocation : couper les sockets ne servait à rien, le porteur d'un
+      // jeton volé se reconnectait dans la seconde.
+      //
+      // #4213 ne pouvait garder que l'EXISTENCE d'une session valide pour le
+      // compte, faute de pouvoir dire de QUELLE session ce jeton provenait —
+      // sa charge ne portait que `userId`, `username`, `role`. Révoquer UNE
+      // session laissait donc le jeton volé passer tant que son propriétaire
+      // restait connecté ailleurs, ce qui est le cas NOMINAL : on révoque une
+      // session tierce depuis un appareil qu'on garde.
+      //
+      // Le claim `sid` (voir `services/auth/session-jwt.ts`) permet enfin de
+      // NOMMER au lieu de compter. Deux régimes, et un seul est permanent :
+      const sid = decoded.sid;
+      let attenteAdoption: Date | null = null;
+
+      if (sid) {
+        // Régime NOMINAL — le jeton dit sa session ; c'est celle-là, et aucune
+        // autre, qui décide. `userId` est dans le `where` : sans lui, un `sid`
+        // valide appartenant à un AUTRE compte suffirait à passer la garde.
+        //
+        // #10328 — `expiresAt` aussi : le REST refuse une session échue, et
+        // la renouveler ici ferait boucler le client (401 → refresh → 401).
+        // Le balayage (`cleanupExpiredSessions`) l'invalidait déjà à son
+        // passage ; seul l'intervalle entre l'échéance et le balayage change.
+        const sessionNommee = await context.prisma.userSession.findFirst({
+          where: { id: sid, userId: decoded.userId, isValid: true, expiresAt: { gt: new Date() } },
+          select: { id: true, adoptedExpiresAt: true },
+        });
+
+        if (!sessionNommee) {
+          logger.warn('Refus de refresh : la session nommée par le jeton n\'est plus valide', {
+            userId: decoded.userId,
+            sid,
+          });
+          return refuseSession(decoded.userId);
+        }
+        attenteAdoption = sessionNommee.adoptedExpiresAt ?? null;
+      } else {
+        // Régime de TRANSITION — un jeton émis avant #4264 ne nomme rien.
+        //
+        // Le refuser d'emblée déconnecterait tout le parc installé pour fermer
+        // un cas étroit : c'est le compromis que #4213 avait déjà écarté. Mais
+        // cette route vérifie avec `{ ignoreExpiration: true }` — sa raison
+        // d'être — si bien qu'un tel jeton resterait rafraîchissable
+        // INDÉFINIMENT : « jusqu'à son expiration naturelle » est faux ici,
+        // puisque l'expiration est précisément ignorée. Sans butoir, le repli
+        // devient permanent et la garde ci-dessus n'atteint jamais personne.
+        //
+        // Le butoir est daté et double (âge du jeton + fermeture de la
+        // fenêtre) — voir `legacyTokenRefusal`, qui porte le raisonnement.
+        const refus = legacyTokenRefusal(decoded, new Date());
+
+        if (refus) {
+          logger.warn('Refus de refresh : jeton hérité hors de la fenêtre de transition (#4264)', {
+            userId: decoded.userId,
+            motif: refus,
+          });
+          return refuseSession(decoded.userId);
+        }
+
+        // Dans la fenêtre, la règle de #4213 s'applique telle quelle.
+        const sessionsValides = await context.prisma.userSession.count({
+          where: { userId: decoded.userId, isValid: true },
+        });
+
+        if (sessionsValides === 0) {
+          logger.warn('Refus de refresh : aucune session valide — toutes révoquées', {
+            userId: decoded.userId,
+          });
+          return refuseSession(decoded.userId);
+        }
+      }
+
       const user = await authService.getUserById(decoded.userId);
 
       if (!user) {
+        if (await accountIsDeleted(context.prisma, decoded.userId)) return refuseDeletedAccount();
         return sendNotFound(reply, 'Utilisateur non trouvé');
       }
 
-      const newToken = authService.generateToken(user);
+      // #8238 — le délai de grâce de l'adresse est passé : une session
+      // existante ne se renouvelle plus ; la connexion mènera au code.
+      if (user.activation?.phase === 'blocked') {
+        return sendUnauthorized(reply, 'Confirmez votre adresse e-mail pour continuer', { code: 'ACCOUNT_ACTIVATION_REQUIRED' });
+      }
+
+      // #9927 — un compte de moins de 13 ans déclarés ne prolonge aucune
+      // session. Posé APRÈS toutes les preuves d'identité et de session, dans
+      // leur ordre d'origine (signature, session nommée, compte, délai de
+      // grâce) : le refus ne se dit qu'à qui les a toutes franchies, et AVANT
+      // l'émission du jeton.
+      if (await accountIsBelowMinimumAge(context.prisma, user.id, new Date())) {
+        const refusal = new AgeBelowMinimumError();
+        return sendError(reply, refusal.statusCode, refusal.message, { code: refusal.code });
+      }
+
+      // Le jeton renouvelé garde le nom de SA session (#4264, critère 1 :
+      // « `refresh` lui-même »). Pour un jeton hérité, la session de confiance
+      // présentée sert de porte de sortie de la fenêtre de transition : le
+      // client bascule silencieusement sur un jeton nommé dès qu'il envoie son
+      // `sessionToken`. S'il n'en envoie aucun, le jeton reste anonyme et le
+      // butoir daté reste sa seule échéance — il ne se ré-arme pas, la
+      // fermeture de fenêtre ne dépendant pas du jeton.
+      // #10477 — renouveler, c'est se servir de la session : une session
+      // prouvée par un lien et encore en attente est adoptée ici, après toutes
+      // les preuves, avant l'émission du jeton neuf.
+      if (sid && attenteAdoption) {
+        await adoptProvenSession(context.prisma, { sessionId: sid, adoptedExpiresAt: attenteAdoption, now: new Date() });
+      }
+
+      const newToken = authService.generateToken(user, sid ?? activeSession?.id);
+
+      // #9610 — la version, le build et la plateforme se relèvent à chaque
+      // rafraîchissement, sur la session que le jeton NOMME. Détaché : la
+      // réponse n'attend jamais ce relevé, et il ne lève pas.
+      const sessionNommeeId = sid ?? activeSession?.id;
+      if (sessionNommeeId) {
+        void recordSessionClientInfo(context.prisma, {
+          sessionId: sessionNommeeId,
+          userId: decoded.userId,
+          declared: readClientSessionHeaders(request.headers),
+        }).catch(() => undefined);
+      }
 
       // Sliding window: extend the trusted session another full cycle on every
       // successful refresh and bump lastActiveAt. As long as the user opens the
@@ -221,6 +344,9 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           where: { id: activeSession.id },
           data: {
             expiresAt: nextExpiresAt,
+            // #10477 — l'échéance glissée vaut adoption : aucune attente ne
+            // doit survivre pour la raccourcir ensuite.
+            adoptedExpiresAt: null,
             // P7-3 : le champ du modèle UserSession est `lastActivityAt` —
             // `lastActiveAt` (champ du modèle User) levait
             // PrismaClientValidationError sur CHAQUE refresh, avalée par le
@@ -247,68 +373,133 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
     }
   });
 
-  // POST /verify-email - Verify email with token
+  /**
+   * POST /verify-email — LA PREUVE DE POSSESSION OUVRE LA SESSION (#8033).
+   *
+   * Directive porteur 2026-09-26 : un compte créé à la connexion n'a ni mot de
+   * passe ni session ; la porte « e-mail seul » envoie code + lien à tout
+   * compte. Présenter l'un ou l'autre ici prouve la possession de l'adresse —
+   * la même preuve que le lien magique — et ouvre donc la session, sous la
+   * forme de `POST /login`.
+   *
+   * Gardes, dans l'ordre : débit (IP puis adresse — le code n'a que six
+   * chiffres) ; robustesse du mot de passe optionnel AVANT de consommer le
+   * code ; preuve (`AuthService.verifyEmail`, usage unique) ; second facteur
+   * (le défi, jamais la session) ; compte encore actif.
+   */
   fastify.post('/verify-email', {
     schema: {
-      description: 'Verify user email address with a token sent via email',
+      description: 'Verify an email address with the 6-digit code or the link token, and OPEN THE SESSION (#8033) — same shape as POST /login. A second-factor account receives `requires2FA` + `twoFactorToken` instead. Optional `password` (with `code` only) is applied when the account has none yet. Rate limited.',
       tags: ['auth'],
-      summary: 'Verify email',
+      summary: 'Verify email and sign in',
       body: verifyEmailRequestSchema,
       response: {
-        200: {
-          description: 'Email verified successfully',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: {
-              type: 'object',
-              properties: {
-                message: { type: 'string' },
-                alreadyVerified: { type: 'boolean' },
-                verifiedAt: { type: 'string', format: 'date-time' }
-              }
-            }
-          }
-        },
+        200: verifyEmailResponseSchema,
         400: errorResponseSchema,
+        429: {
+          description: 'Too many verification attempts',
+          ...errorResponseSchema,
+          properties: { ...errorResponseSchema.properties, retryAfter: { type: 'number' } }
+        },
         500: errorResponseSchema
       },
       security: []
-    }
+    },
+    preHandler: [verifyEmailIpLimiter.middleware(), verifyEmailAddressLimiter.middleware()]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const validatedData = validateSchema(AuthSchemas.verifyEmail, request.body, 'verify-email');
-      const { token, code, email } = validatedData;
+      const { token, code, email, password, linkDeviceSecret, confirm } = validateSchema(AuthSchemas.verifyEmail, request.body, 'verify-email');
 
-      logger.info(`[AUTH] Tentative de vérification email pour email=${email} (method=${code ? 'code' : 'token'})`);
-
-      const result = code
-        ? await authService.verifyEmail(code, email, true)
-        : await authService.verifyEmail(token!, email, false);
-
-      if (!result.success) {
-        logger.warn(`[AUTH] ❌ Échec de vérification email result.error=${result.error}`);
-        return sendBadRequest(reply, result.error as string);
+      if (password !== undefined) {
+        const strength = validatePasswordStrength(password);
+        if (!strength.isValid) {
+          return sendBadRequest(reply, `Password requirements: ${strength.errors.join(', ')}`, { code: 'WEAK_PASSWORD' });
+        }
       }
 
-      if (result.alreadyVerified && result.verifiedAt) {
-        logger.info(`[AUTH] ℹ️ Email déjà vérifié pour email=${email} le result.verifiedAt.toISOString()=${result.verifiedAt.toISOString()}`);
+      logger.info(`[AUTH] Vérification email (method=${code ? 'code' : 'token'})`);
+
+      // #10878 — un ancien binaire iOS (avant #10872) garde la connexion directe, comptée.
+      const consent = code === undefined && token !== undefined
+        ? linkLoginConsent({ headers: request.headers, confirm, linkDeviceSecret })
+        : { confirmed: confirm === true, legacyClient: null };
+
+      const result = await authService.verifyEmail({ email, code, token, password, linkDeviceSecret, confirmed: consent.confirmed });
+
+      // #10872 — lien ouvert ailleurs que sur l'appareil demandeur, sans le oui :
+      // rien n'est consommé, aucune session ; le client montre le compte cible.
+      if (result.success === false && result.reason === 'confirmation-required') {
+        logger.info('[AUTH] Lien présenté hors de l’appareil demandeur — confirmation requise');
+        return sendSuccess(reply, { requiresConfirmation: true, account: result.account, intent: result.intent, maskedEmail: result.maskedEmail });
+      }
+
+      if (result.success === false) {
+        logger.warn(`[AUTH] ❌ Échec de vérification email: ${result.reason}`);
+        if (result.reason === 'error') return sendInternalError(reply, result.error);
+        return sendBadRequest(reply, result.error, { code: result.reason === 'expired' ? 'VERIFICATION_EXPIRED' : 'INVALID_VERIFICATION' });
+      }
+
+      countLegacyLinkLogin({ route: 'verify-email', consent, counter: getLegacyLinkLoginCounter() });
+
+      // Une adresse NEUVEMENT prouvée peut annoncer une arrivée aux carnets
+      // qui la contiennent (#8105) — après la réponse, jamais en ligne.
+      if (!result.alreadyVerified) scheduleContactJoinedAnnouncement(fastify.prisma, result.userId);
+
+      const verification = {
+        verified: true,
+        alreadyVerified: result.alreadyVerified,
+        verifiedAt: result.verifiedAt.toISOString(),
+        passwordSet: result.passwordSet
+      };
+
+      if (result.secondFactor === 'indeterminate') {
+        logger.error('[AUTH] État du second facteur indéterminé — session refusée');
+        return sendInternalError(reply, 'Erreur lors de la vérification');
+      }
+
+      const user = await authService.getUserById(result.userId);
+      if (!user) {
+        return sendBadRequest(reply, 'Code de vérification invalide.', { code: 'INVALID_VERIFICATION' });
+      }
+
+      if (result.secondFactor === 'required') {
+        const twoFactorToken = await mintPendingTwoFactorChallenge({ prisma: fastify.prisma, userId: user.id });
         return sendSuccess(reply, {
-          message: 'Votre adresse email est déjà vérifiée.',
-          alreadyVerified: true,
-          verifiedAt: result.verifiedAt.toISOString()
+          ...verification,
+          requires2FA: true,
+          twoFactorToken,
+          ...provenChallengeAdoption(),
+          user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            displayName: user.displayName,
+            avatar: user.avatar
+          },
+          message: 'Veuillez entrer votre code d\'authentification à deux facteurs'
         });
       }
 
-      logger.info(`[AUTH] ✅ Email vérifié avec succès pour email=${email}`);
+      const requestContext = await getRequestContext(request);
+      const opened = await openSession(authService, user, requestContext, 'email_verification');
+
+      logger.info('[AUTH] ✅ Adresse prouvée — session ouverte');
 
       return sendSuccess(reply, {
-        message: 'Votre adresse email a été vérifiée avec succès !',
-        alreadyVerified: false,
-        verifiedAt: result.verifiedAt?.toISOString()
+        ...verification,
+        message: result.alreadyVerified ? 'Connexion réussie.' : 'Votre adresse email a été vérifiée avec succès !',
+        user: formatUserResponse(user, authService.getUserPermissions(user)),
+        token: opened.token,
+        sessionToken: opened.sessionToken,
+        session: formatSessionResponse(opened.session, false),
+        expiresIn: 24 * 60 * 60,
+        ...provenSessionAdoption(opened.session, new Date())
       });
 
     } catch (error) {
+      if (error instanceof AgeBelowMinimumError) throw error;
       logger.error('[AUTH] ❌ Erreur lors de la vérification email', error);
       return sendInternalError(reply, 'Erreur lors de la vérification');
     }
@@ -441,6 +632,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       }
 
       logger.info('[AUTH] ✅ Téléphone vérifié');
+      if (result.verifiedUserId) scheduleContactJoinedAnnouncement(fastify.prisma, result.verifiedUserId);
 
       return sendSuccess(reply, { message: 'Numéro de téléphone vérifié avec succès !' });
 
@@ -459,7 +651,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       headers: {
         type: 'object',
         properties: {
-          'x-session-token': { type: 'string', description: 'Current session token (optional, to mark current session)' }
+          'x-session-token': { type: 'string', description: 'Current session token (optional, legacy). The current session is read from the JWT `sid` claim.' }
         }
       },
       response: {
@@ -471,11 +663,11 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const userId = request.user!.userId;
-      const currentToken = request.headers['x-session-token'] as string | undefined;
 
       logger.info(`[AUTH] Récupération des sessions pour: ${userId}`);
 
-      const sessions = await authService.getUserActiveSessions(userId, currentToken);
+      // #9606 — la courante se lit sur le `sid` du JWT (l'en-tête reste lu).
+      const sessions = await authService.getUserActiveSessions(userId, currentSessionOf(request));
 
       return sendSuccess(reply, {
         sessions: sessions.map(session => ({
@@ -488,16 +680,24 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           browserName: session.browserName,
           browserVersion: session.browserVersion,
           isMobile: session.isMobile,
+          appVersion: session.appVersion,
+          appBuild: session.appBuild,
+          platform: session.platform,
+          deviceName: session.deviceName,
+          loginMethod: session.loginMethod,
           ipAddress: session.ipAddress,
           country: session.country,
           city: session.city,
           location: session.location,
+          timezone: session.timezone,
           createdAt: session.createdAt,
           lastActivityAt: session.lastActivityAt,
           isCurrentSession: session.isCurrentSession,
           isTrusted: session.isTrusted
         })),
-        totalCount: sessions.length
+        totalCount: sessions.length,
+        // La licence CC-BY 4.0 de DB-IP Lite (#9609) : le lieu affiché porte son attribution.
+        geolocation: GEOLOCATION_ATTRIBUTION
       });
 
     } catch (error) {
@@ -560,6 +760,25 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         return sendNotFound(reply, 'Impossible de révoquer cette session');
       }
 
+      // Le socket de CET appareil, et lui seul (#4213).
+      //
+      // Jusqu'ici, révoquer une session passait la ligne à `isValid: false` et
+      // l'appareil continuait de TOUT recevoir — `message:new`,
+      // `conversation:updated` — indéfiniment : un socket n'est authentifié
+      // qu'une fois, au connect, et jamais revérifié.
+      //
+      // `disconnectRevokedSessions` était le mauvais outil ici : elle coupe
+      // TOUS les sockets de l'utilisateur, donc aussi celui depuis lequel on
+      // fait le ménage. `disconnectSession` filtre sur l'identifiant de session
+      // rangé au handshake.
+      await disconnectSession({
+        io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+        userId,
+        sessionId,
+        reason: 'user_revoke',
+        onError: (error) => logWarn(fastify.log, '[AUTH] socket cut failed on session revoke', error),
+      });
+
       logger.info(`[AUTH] ✅ Session révoquée sessionId=${sessionId}`);
 
       return sendSuccess(reply, { message: 'Session révoquée avec succès' });
@@ -579,7 +798,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       headers: {
         type: 'object',
         properties: {
-          'x-session-token': { type: 'string', description: 'Current session token to keep active' }
+          'x-session-token': { type: 'string', description: 'Current session token to keep active (optional, legacy). The current session is read from the JWT `sid` claim.' }
         }
       },
       response: {
@@ -603,13 +822,39 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const userId = request.user!.userId;
-      const currentToken = request.headers['x-session-token'] as string | undefined;
+      // #9606 — « cet appareil-ci » se lit sur le `sid` du JWT. Il se lisait sur
+      // `x-session-token`, qu'aucun client inscrit n'envoie en REST : la
+      // révocation des AUTRES révoquait aussi l'appareil qui la demandait.
+      const courante = currentSessionOf(request);
 
       logger.info(`Révocation de toutes les sessions pour userId=${userId} (sauf courante)`);
 
-      const revokedCount = await authService.revokeAllSessionsExceptCurrent(userId, currentToken);
+      // Les identifiants sont relevés AVANT la révocation (#4213) : après, la
+      // ligne n'est plus « active » et la liste ne la rend plus. Sans eux, on
+      // saurait combien de sessions ont été coupées et aucune ne saurait
+      // laquelle — donc aucun socket ne pourrait être fermé.
+      const aCouper = (await authService.getUserActiveSessions(userId, courante))
+        .filter((session) => !session.isCurrentSession)
+        .map((session) => session.id);
+
+      const revokedCount = await authService.revokeAllSessionsExceptCurrent(userId, courante);
 
         logger.info(`Sessions révoquées count=${revokedCount}`);
+
+      // Chaque session révoquée voit SON socket coupé — jamais celui de
+      // l'appareil courant, qui est précisément celui depuis lequel on fait le
+      // ménage. `disconnectRevokedSessions` les couperait tous, y compris lui.
+      const io = fastify.socketIOHandler?.getManager?.()?.getIO();
+      for (const sessionId of aCouper) {
+        await disconnectSession({
+          io,
+          userId,
+          sessionId,
+          reason: 'user_revoke',
+          message: 'This device was signed out from another device.',
+          onError: (error) => logWarn(fastify.log, '[AUTH] socket cut failed on revoke-others', error),
+        });
+      }
 
       return sendSuccess(reply, {
         message: `${revokedCount} session(s) révoquée(s) avec succès`,
@@ -622,65 +867,13 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
     }
   });
 
-  // POST /validate-session - Validate session token
-  fastify.post('/validate-session', {
-    schema: {
-      description: 'Validate a session token and get session info',
-      tags: ['auth', 'sessions'],
-      summary: 'Validate session token',
-      body: validateSessionRequestSchema,
-      response: {
-        200: {
-          description: 'Session validation result',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: {
-              type: 'object',
-              properties: {
-                valid: { type: 'boolean' },
-                session: { ...sessionSchema, nullable: true }
-              }
-            }
-          }
-        },
-        500: errorResponseSchema
-      },
-      security: []
-    }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const validatedData = validateSchema(SessionSchemas.validateToken, request.body, 'validate-session');
-      const { sessionToken } = validatedData;
-
-      const session = await authService.validateSessionToken(sessionToken);
-
-      if (!session) {
-        return sendSuccess(reply, {
-          valid: false,
-          session: null
-        });
-      }
-
-      return sendSuccess(reply, {
-        valid: true,
-        session: {
-          id: session.id,
-          userId: session.userId,
-          deviceType: session.deviceType,
-          browserName: session.browserName,
-          osName: session.osName,
-          location: session.location,
-          isMobile: session.isMobile,
-          createdAt: session.createdAt,
-          lastActivityAt: session.lastActivityAt,
-          isTrusted: session.isTrusted
-        }
-      });
-
-    } catch (error) {
-      logger.error('[AUTH] ❌ Erreur validation session', error);
-      return sendInternalError(reply, 'Erreur lors de la validation de la session');
-    }
-  });
+  // ─── POST /validate-session a été RETIRÉE (#4186) ───
+  // Un oracle pur, sans débit et sans appelant sur les trois clients (mesuré :
+  // zéro occurrence de `validate-session` hors gateway, iOS/SDK, web et Android
+  // compris). Elle rendait la session ENTIÈRE — appareil, navigateur, OS,
+  // LOCALISATION — à un appelant sans `Authorization`, sur simple présentation
+  // d'un sessionToken. Ce que la validité d'une session doit produire, c'est un
+  // ACTE (une lecture, une écriture) qui échoue en 401 ; pas un verdict servi à
+  // qui le demande.
+  // Témoin d'absence : `__tests__/unit/routes/identity-twins-retired.test.ts`.
 }

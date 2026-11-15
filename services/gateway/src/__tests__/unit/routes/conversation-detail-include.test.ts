@@ -52,18 +52,28 @@ describe('conversationDetailInclude (F1 participants cap + F8 strict select)', (
     ]);
   });
 
+  it('#15717 — loads the ACCOUNT state (user.isActive) that composes accountClosed, and nothing else of the account lifecycle', () => {
+    const userSelect = participants.select.user.select;
+    expect(userSelect.isActive).toBe(true);
+    for (const field of ['deletedAt', 'deactivatedAt']) {
+      expect(userSelect[field]).toBeUndefined();
+    }
+  });
+
   it('never hydrates sensitive or dead participant fields (stripped from the wire anyway)', () => {
     for (const field of ['sessionTokenHash', 'anonymousSession', 'shareLinkId', 'deletedForMe', 'leftAt', 'bannedAt', 'nickname', 'conversationId', 'language']) {
       expect(participants.select[field]).toBeUndefined();
     }
   });
 
-  it('keeps the nested user fields the server needs for default title generation (the wire strips nested user)', () => {
+  it('keeps the nested user fields the server needs for default title generation and the equipped ring (#10713) — the wire strips nested user', () => {
     const userSelect = (participants.select.user as { select: Record<string, unknown> }).select;
     expect(Object.keys(userSelect).sort()).toEqual([
       'displayName',
+      'equippedAvatarRing',
       'firstName',
       'id',
+      'isActive',
       'lastName',
       'username'
     ]);
@@ -88,6 +98,9 @@ describe('conversationDetailInclude (F1 participants cap + F8 strict select)', (
 describe('conversationUserPreferencesSelect (titre DM stable)', () => {
   it('hydrate exactement les préférences que le wire déclare — customName et reaction compris', () => {
     expect(Object.keys(conversationUserPreferencesSelect).sort()).toEqual([
+      // #10631 — le fond et l'accent PERSONNELS du lecteur : sélectionné ET déclaré
+      // dans le wire (`userPreferences[].appearance`), sinon le sérialiseur le retire.
+      'appearance',
       'categoryId',
       // Ajouté pour le masquage personnel de l'aperçu de ligne de liste
       // (`resolveVisibleLastMessages`). Contrairement aux autres clés, il est
@@ -95,18 +108,24 @@ describe('conversationUserPreferencesSelect (titre DM stable)', () => {
       // fast-json-stringify le strippe. Il est ici parce qu'il vit dans le
       // MÊME document que les préférences déjà sélectionnées — le lire coûte
       // zéro requête, alors qu'une lecture séparée en aurait coûté une par
-      // chargement de liste. `deletedForUserAt` est dans le même cas (le wire
-      // ne connaît que sa projection booléenne `isDeletedForUser`).
+      // chargement de liste.
+      //
+      // `deletedForUserAt` figurait ici pour la même raison, et n'y figure
+      // plus : `95ca2becd2` l'a retiré du `select` en même temps que des deux
+      // contrats de fil (arbitrage (a) — un champ sans écrivain servait
+      // « pas supprimée » à une conversation RÉELLEMENT dans la corbeille).
+      // Un témoin qui gèle la composition d'un `select` tombe quand ce
+      // `select` change à dessein : c'est son travail, et c'est ici la seule
+      // ligne à en tirer.
       'clearHistoryBefore',
       'customName',
-      'deletedForUserAt',
       'isArchived',
       'isMuted',
       'isPinned',
       'reaction',
       // G-123 — choix collant du mode de lecture (G-121), lu pour l'entrée
       // d'orchestrateur du pont ✦ (workshop A6). SERVEUR-side uniquement,
-      // comme `clearHistoryBefore`/`deletedForUserAt` : le wire ne le
+      // comme `clearHistoryBefore` : le wire ne le
       // déclare pas, `fast-json-stringify` le strippe de la réponse.
       'readingMode',
       'tags'

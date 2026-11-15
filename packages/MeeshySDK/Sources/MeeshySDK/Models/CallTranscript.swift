@@ -9,13 +9,64 @@ public struct CallTranscript: Codable, Sendable, CacheIdentifiable, Equatable {
     public let conversationId: String
     public let callStartedAt: Date
     public let segments: [CallTranscriptSegment]
+    /// #16665 — les captures d'écran et les bornes de l'enregistrement de
+    /// l'appel, datées comme les phrases. Un transcript gardé avant leur
+    /// ajout se lit sans aucune.
+    public let captures: [CallTranscriptCapture]
     public var id: String { callId }
 
-    public init(callId: String, conversationId: String, callStartedAt: Date, segments: [CallTranscriptSegment]) {
+    public init(callId: String, conversationId: String, callStartedAt: Date, segments: [CallTranscriptSegment], captures: [CallTranscriptCapture] = []) {
         self.callId = callId
         self.conversationId = conversationId
         self.callStartedAt = callStartedAt
         self.segments = segments
+        self.captures = captures
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case callId, conversationId, callStartedAt, segments, captures
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        callId = try container.decode(String.self, forKey: .callId)
+        conversationId = try container.decode(String.self, forKey: .conversationId)
+        callStartedAt = try container.decode(Date.self, forKey: .callStartedAt)
+        segments = try container.decode([CallTranscriptSegment].self, forKey: .segments)
+        captures = try container.decodeIfPresent([CallTranscriptCapture].self, forKey: .captures) ?? []
+    }
+}
+
+/// #16665 — ce qu'une ligne de capture dit : une capture ponctuelle, un
+/// enregistrement d'écran qui commence, ou une borne de l'enregistrement
+/// consenti de l'appel. Les valeurs sont celles du fil de la passerelle.
+public enum CallTranscriptCaptureKind: String, Codable, Sendable, Equatable, CaseIterable {
+    case screenshot
+    case recording
+    case callRecordingStarted = "call-recording-started"
+    case callRecordingStopped = "call-recording-stopped"
+
+    /// Une borne de l'enregistrement de l'appel ne nomme personne.
+    public var namesCapturer: Bool {
+        self == .screenshot || self == .recording
+    }
+}
+
+/// #16665 — une ligne datée du journal : qui a capturé l'écran, ou quand
+/// l'enregistrement de l'appel a commencé et s'est arrêté.
+public struct CallTranscriptCapture: Codable, Sendable, Equatable, Identifiable {
+    public let id: String
+    public let userId: String
+    public let displayName: String
+    public let kind: CallTranscriptCaptureKind
+    public let capturedAt: Date
+
+    public init(id: String, userId: String, displayName: String, kind: CallTranscriptCaptureKind, capturedAt: Date) {
+        self.id = id
+        self.userId = userId
+        self.displayName = displayName
+        self.kind = kind
+        self.capturedAt = capturedAt
     }
 }
 

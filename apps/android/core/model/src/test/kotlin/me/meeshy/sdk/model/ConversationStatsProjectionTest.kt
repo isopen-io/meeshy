@@ -251,4 +251,162 @@ class ConversationStatsProjectionTest {
     fun `language shares are empty when nothing was detected`() {
         assertThat(ConversationStatsProjection.languageShares(emptyList())).isEmpty()
     }
+
+    // ── clientComputed (offline / pre-fetch fallback) ──────────────────────
+
+    private fun clientMessage(
+        sender: String = "u1",
+        name: String? = null,
+        content: String = "",
+        attachments: List<ClientAttachmentKind> = emptyList(),
+        day: LocalDate = today,
+    ) = ClientStatMessage(
+        senderId = sender,
+        senderName = name,
+        content = content,
+        attachmentKinds = attachments,
+        day = day,
+    )
+
+    @Test
+    fun `client fallback counts messages and words over the whole page`() {
+        val stats = ConversationStatsProjection.clientComputed(
+            "c1",
+            listOf(
+                clientMessage(content = "hello there friend"),
+                clientMessage(content = "hi"),
+            ),
+        )
+
+        assertThat(stats.conversationId).isEqualTo("c1")
+        assertThat(stats.totalMessages).isEqualTo(2)
+        assertThat(stats.totalWords).isEqualTo(4)
+    }
+
+    @Test
+    fun `client fallback treats runs of whitespace as one separator`() {
+        val stats = ConversationStatsProjection.clientComputed(
+            "c1",
+            listOf(clientMessage(content = "  spread   out\twords\n")),
+        )
+
+        assertThat(stats.totalWords).isEqualTo(3)
+    }
+
+    @Test
+    fun `client fallback counts an attachment-only message under its kind, not text`() {
+        val stats = ConversationStatsProjection.clientComputed(
+            "c1",
+            listOf(
+                clientMessage(content = "plain words"),
+                clientMessage(content = "caption", attachments = listOf(ClientAttachmentKind.IMAGE)),
+                clientMessage(attachments = listOf(ClientAttachmentKind.AUDIO, ClientAttachmentKind.VIDEO)),
+                clientMessage(attachments = listOf(ClientAttachmentKind.FILE, ClientAttachmentKind.LOCATION)),
+            ),
+        )
+
+        assertThat(stats.contentTypes).isEqualTo(
+            ContentTypeCounts(text = 1, image = 1, audio = 1, video = 1, file = 1, location = 1),
+        )
+    }
+
+    @Test
+    fun `client fallback counts whitespace-only content as a text message like iOS`() {
+        // iOS classifies on `content.isEmpty` (untrimmed): a blank-but-non-empty
+        // body with no attachment is still a TEXT item, though it scores zero words.
+        val stats = ConversationStatsProjection.clientComputed(
+            "c1",
+            listOf(clientMessage(content = "   ")),
+        )
+
+        assertThat(stats.contentTypes.text).isEqualTo(1)
+        assertThat(stats.totalWords).isEqualTo(0)
+    }
+
+    @Test
+    fun `client fallback groups participants by id, not display name`() {
+        val stats = ConversationStatsProjection.clientComputed(
+            "c1",
+            listOf(
+                clientMessage(sender = "a", name = "Sam", content = "one two"),
+                clientMessage(sender = "a", name = "Sam", content = "three"),
+                clientMessage(sender = "b", name = "Sam", content = "four"),
+            ),
+        )
+
+        // Two distinct users sharing the name "Sam" stay separate (iOS merges them).
+        val a = stats.participantStats.single { it.userId == "a" }
+        assertThat(a.messageCount).isEqualTo(2)
+        assertThat(a.wordCount).isEqualTo(3)
+        assertThat(a.name).isEqualTo("Sam")
+        assertThat(stats.participantStats.single { it.userId == "b" }.messageCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `client fallback keeps a later name when the first sighting had none`() {
+        val stats = ConversationStatsProjection.clientComputed(
+            "c1",
+            listOf(
+                clientMessage(sender = "a", name = null, content = "x"),
+                clientMessage(sender = "a", name = "Ada", content = "y"),
+            ),
+        )
+
+        assertThat(stats.participantStats.single().name).isEqualTo("Ada")
+    }
+
+    @Test
+    fun `client fallback buckets messages per calendar day oldest first`() {
+        val stats = ConversationStatsProjection.clientComputed(
+            "c1",
+            listOf(
+                clientMessage(content = "a", day = LocalDate.of(2026, 8, 20)),
+                clientMessage(content = "b", day = LocalDate.of(2026, 8, 18)),
+                clientMessage(content = "c", day = LocalDate.of(2026, 8, 20)),
+            ),
+        )
+
+        assertThat(stats.dailyActivity).containsExactly(
+            DailyActivityEntry("2026-08-18", 1),
+            DailyActivityEntry("2026-08-20", 2),
+        ).inOrder()
+    }
+
+    @Test
+    fun `client fallback sums characters and leaves hourly and language empty`() {
+        val stats = ConversationStatsProjection.clientComputed(
+            "c1",
+            listOf(clientMessage(content = "abcd"), clientMessage(content = "ef")),
+        )
+
+        assertThat(stats.totalCharacters).isEqualTo(6)
+        assertThat(stats.hourlyDistribution).isEmpty()
+        assertThat(stats.languageDistribution).isEmpty()
+    }
+
+    @Test
+    fun `client fallback of an empty page is a zeroed response`() {
+        val stats = ConversationStatsProjection.clientComputed("c1", emptyList())
+
+        assertThat(stats.totalMessages).isEqualTo(0)
+        assertThat(stats.participantStats).isEmpty()
+        assertThat(stats.dailyActivity).isEmpty()
+        assertThat(ConversationStatsProjection.contentTypeBreakdown(stats.contentTypes)).isEmpty()
+    }
+
+    @Test
+    fun `client fallback feeds the same projection the server response does`() {
+        val stats = ConversationStatsProjection.clientComputed(
+            "c1",
+            listOf(
+                clientMessage(sender = "a", content = "one two"),
+                clientMessage(sender = "b", content = "three", attachments = listOf(ClientAttachmentKind.IMAGE)),
+            ),
+        )
+
+        // The downstream breakdown/shares consume the computed response unchanged.
+        val shares = ConversationStatsProjection.participantShares(stats.participantStats, stats.totalMessages)
+        assertThat(shares.map { it.userId }).containsExactly("a", "b").inOrder()
+        assertThat(shares.first().fraction).isWithin(1e-9).of(0.5)
+    }
 }

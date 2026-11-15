@@ -53,7 +53,7 @@ jest.mock('../../../utils/logger', () => ({
 // Mock Prisma
 jest.mock('@meeshy/shared/prisma/client', () => {
   const mockPrisma = {
-    user: {
+    userPreferences: { findMany: jest.fn(async () => []) }, userPreference: { findMany: jest.fn(async () => []) }, user: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
     },
@@ -66,6 +66,12 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     },
     friendRequest: {
       findMany: jest.fn(),
+    },
+    userRelation: { findMany: jest.fn(async () => []) },
+    userContact: { findMany: jest.fn(async () => []) },
+    postReaction: { findMany: jest.fn(async () => []) },
+    conversationMessageStats: {
+      findUnique: jest.fn(),
     },
     mention: {
       create: jest.fn(),
@@ -110,10 +116,10 @@ describe('MentionService', () => {
     // Ensure getCacheStore returns the shared mock instance
     (getCacheStore as jest.Mock).mockReturnValue(mockRedis);
 
-    // Create new Prisma instance
     prisma = new PrismaClient();
+    prisma.conversation.findUnique.mockResolvedValue({ id: 'conv-123', type: 'public' });
+    prisma.participant.findFirst.mockResolvedValue({ id: 'membership-current' });
 
-    // Create service instance
     service = new MentionService(prisma);
   });
 
@@ -422,6 +428,8 @@ describe('MentionService', () => {
       prisma.friendRequest.findMany.mockResolvedValue([]);
       // Default: no other users
       prisma.user.findMany.mockResolvedValue([]);
+      // Default: the conversation carries no activity stats yet
+      prisma.conversationMessageStats.findUnique.mockResolvedValue(null);
     });
 
     it('should return cached suggestions if available', async () => {
@@ -457,7 +465,6 @@ describe('MentionService', () => {
             lastName: 'Doe',
             displayName: 'John Doe',
             avatar: 'https://example.com/john.png',
-            lastActiveAt: new Date(),
           },
         },
       ];
@@ -473,47 +480,24 @@ describe('MentionService', () => {
       expect(mockRedis.set).toHaveBeenCalled();
     });
 
-    it('should prioritize conversation members over friends', async () => {
-      const mockMembers = [
-        {
-          user: {
-            id: 'user-1',
-            username: 'member',
-            firstName: 'Member',
-            lastName: 'User',
-            displayName: null,
-            avatar: null,
-            lastActiveAt: new Date(),
-          },
-        },
-      ];
+    it('places a known user (friend) before the members of an open conversation (#14052)', async () => {
+      const member = { id: 'user-1', username: 'member', firstName: 'Member', lastName: 'User', displayName: null, avatar: null };
+      const friend = { id: 'user-2', username: 'friend', firstName: 'Friend', lastName: 'User', displayName: null, avatar: null };
 
-      const mockFriendships = [
-        {
-          senderId: currentUserId,
-          receiverId: 'user-2',
-          status: 'accepted',
-          sender: null,
-          receiver: {
-            id: 'user-2',
-            username: 'friend',
-            firstName: 'Friend',
-            lastName: 'User',
-            displayName: null,
-            avatar: null,
-          },
-        },
-      ];
-
-      prisma.participant.findMany.mockResolvedValue(mockMembers);
-      prisma.friendRequest.findMany.mockResolvedValue(mockFriendships);
+      prisma.participant.findMany.mockResolvedValue([{ user: member }]);
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: currentUserId, receiverId: friend.id, status: 'accepted', sender: null, receiver: friend },
+      ]);
+      prisma.user.findMany.mockImplementation(async ({ where }: { where: { id?: { in?: string[] } } }) =>
+        where.id?.in ? [friend].filter((u) => where.id?.in?.includes(u.id)) : []
+      );
 
       const result = await service.getUserSuggestionsForConversation(conversationId, currentUserId);
 
-      expect(result[0].username).toBe('member');
-      expect(result[0].badge).toBe('conversation');
-      expect(result[1]?.username).toBe('friend');
-      expect(result[1]?.badge).toBe('friend');
+      expect(result.map((s) => [s.username, s.badge, s.group])).toEqual([
+        ['friend', 'friend', 'known'],
+        ['member', 'conversation', 'context'],
+      ]);
     });
 
     it('should filter by query string', async () => {
@@ -526,7 +510,6 @@ describe('MentionService', () => {
             lastName: 'Doe',
             displayName: null,
             avatar: null,
-            lastActiveAt: new Date(),
           },
         },
         {
@@ -537,7 +520,6 @@ describe('MentionService', () => {
             lastName: 'Smith',
             displayName: null,
             avatar: null,
-            lastActiveAt: new Date(),
           },
         },
       ];
@@ -560,7 +542,6 @@ describe('MentionService', () => {
             lastName: 'Doe',
             displayName: 'Johnny',
             avatar: null,
-            lastActiveAt: new Date(),
           },
         },
       ];
@@ -583,7 +564,6 @@ describe('MentionService', () => {
             lastName: 'Doe',
             displayName: null,
             avatar: null,
-            lastActiveAt: new Date(),
           },
         },
       ];
@@ -618,7 +598,6 @@ describe('MentionService', () => {
           lastName: `${i}`,
           displayName: null,
           avatar: null,
-          lastActiveAt: new Date(),
         },
       }));
 
@@ -640,7 +619,6 @@ describe('MentionService', () => {
             lastName: 'Doe',
             displayName: null,
             avatar: null,
-            lastActiveAt: new Date(),
           },
         },
       ];
@@ -664,7 +642,6 @@ describe('MentionService', () => {
             lastName: 'Doe',
             displayName: null,
             avatar: null,
-            lastActiveAt: new Date(),
           },
         },
       ];
@@ -725,39 +702,144 @@ describe('MentionService', () => {
       ).rejects.toThrow('Database error');
     });
 
-    it('should sort members by lastActiveAt descending', async () => {
-      const now = new Date();
-      const mockMembers = [
-        {
-          user: {
-            id: 'user-1',
-            username: 'old_user',
-            firstName: 'Old',
-            lastName: 'User',
-            displayName: null,
-            avatar: null,
-            lastActiveAt: new Date(now.getTime() - 10000),
-          },
-        },
-        {
-          user: {
-            id: 'user-2',
-            username: 'recent_user',
-            firstName: 'Recent',
-            lastName: 'User',
-            displayName: null,
-            avatar: null,
-            lastActiveAt: now,
-          },
-        },
-      ];
+    it('does not request lastActiveAt nor isOnline in the member select — presence never leaves the row', async () => {
+      await service.getUserSuggestionsForConversation(conversationId, currentUserId);
 
-      prisma.participant.findMany.mockResolvedValue(mockMembers);
+      const [[query]] = prisma.participant.findMany.mock.calls;
+      const userSelect = query.include.user.select;
+      expect(userSelect).not.toHaveProperty('lastActiveAt');
+      expect(userSelect).not.toHaveProperty('isOnline');
+      expect(query.include.user).not.toHaveProperty('include');
+    });
 
-      const result = await service.getUserSuggestionsForConversation(conversationId, currentUserId);
+    describe('member ranking — activity IN the conversation, never global presence', () => {
+      const member = (
+        id: string,
+        username: string,
+        lastActiveAt: Date,
+        displayName: string | null = null
+      ) => ({
+        userId: id,
+        user: { id, username, firstName: username, lastName: 'X', displayName, avatar: null, lastActiveAt },
+      });
+      const statsRow = (lastMessageAtByUserId: Record<string, string | null>) => ({
+        participantStats: Object.fromEntries(
+          Object.entries(lastMessageAtByUserId).map(([key, lastMessageAt]) => [
+            key,
+            { messageCount: 1, lastMessageAt },
+          ])
+        ),
+      });
 
-      expect(result[0].username).toBe('recent_user');
-      expect(result[1].username).toBe('old_user');
+      it('ranks by the last message written in the conversation, not by lastActiveAt', async () => {
+        const now = Date.now();
+        prisma.participant.findMany.mockResolvedValue([
+          member('user-present', 'present', new Date(now)),
+          member('user-writer', 'writer', new Date(now - 3_600_000)),
+        ]);
+        prisma.conversationMessageStats.findUnique.mockResolvedValue(
+          statsRow({
+            'user-present': new Date(now - 86_400_000).toISOString(),
+            'user-writer': new Date(now - 60_000).toISOString(),
+          })
+        );
+
+        const result = await service.getUserSuggestionsForConversation(conversationId, currentUserId);
+
+        expect(result.map(s => s.username)).toEqual(['writer', 'present']);
+      });
+
+      it('reads the activity once, from ConversationMessageStats keyed by the conversation', async () => {
+        await service.getUserSuggestionsForConversation(conversationId, currentUserId);
+
+        expect(prisma.conversationMessageStats.findUnique).toHaveBeenCalledTimes(1);
+        expect(prisma.conversationMessageStats.findUnique).toHaveBeenCalledWith({
+          where: { conversationId },
+          select: { participantStats: true },
+        });
+      });
+
+      it('falls back to alphabetical order (displayName, then username) when the conversation has no stats', async () => {
+        const now = Date.now();
+        prisma.participant.findMany.mockResolvedValue([
+          member('user-z', 'zoe', new Date(now)),
+          member('user-b', 'zulu', new Date(now - 1_000), 'Bob'),
+          member('user-a', 'amara', new Date(now - 2_000)),
+        ]);
+        prisma.conversationMessageStats.findUnique.mockResolvedValue(null);
+
+        const result = await service.getUserSuggestionsForConversation(conversationId, currentUserId);
+
+        expect(result.map(s => s.username)).toEqual(['amara', 'zulu', 'zoe']);
+      });
+
+      it('places members who never wrote after those who did, alphabetically among themselves', async () => {
+        const now = Date.now();
+        prisma.participant.findMany.mockResolvedValue([
+          member('user-silent-z', 'zed', new Date(now)),
+          member('user-silent-a', 'anna', new Date(now - 1_000)),
+          member('user-writer', 'writer', new Date(now - 7_200_000)),
+        ]);
+        prisma.conversationMessageStats.findUnique.mockResolvedValue(
+          statsRow({ 'user-writer': new Date(now - 3_600_000).toISOString(), 'user-silent-z': null })
+        );
+
+        const result = await service.getUserSuggestionsForConversation(conversationId, currentUserId);
+
+        expect(result.map(s => s.username)).toEqual(['writer', 'anna', 'zed']);
+      });
+
+      it('truncates to MAX_SUGGESTIONS on conversation activity — the most recently present member does not squeeze in', async () => {
+        const now = Date.now();
+        const writers = Array.from({ length: 10 }, (_, i) =>
+          member(`user-${i}`, `writer${i}`, new Date(now - (i + 2) * 60_000))
+        );
+        const lurker = member('user-lurker', 'aaa_lurker', new Date(now));
+        prisma.participant.findMany.mockResolvedValue([lurker, ...writers]);
+        prisma.conversationMessageStats.findUnique.mockResolvedValue(
+          statsRow(
+            Object.fromEntries(
+              writers.map((w, i) => [w.user.id, new Date(now - (i + 1) * 60_000).toISOString()])
+            )
+          )
+        );
+
+        const result = await service.getUserSuggestionsForConversation(conversationId, currentUserId);
+
+        expect(result).toHaveLength(10);
+        expect(result.map(s => s.id)).not.toContain('user-lurker');
+        expect(result[0].id).toBe('user-0');
+      });
+
+      it('accepts participantStats persisted as a JSON string', async () => {
+        const now = Date.now();
+        prisma.participant.findMany.mockResolvedValue([
+          member('user-present', 'present', new Date(now)),
+          member('user-writer', 'writer', new Date(now - 3_600_000)),
+        ]);
+        prisma.conversationMessageStats.findUnique.mockResolvedValue({
+          participantStats: JSON.stringify(
+            statsRow({ 'user-writer': new Date(now - 60_000).toISOString() }).participantStats
+          ),
+        });
+
+        const result = await service.getUserSuggestionsForConversation(conversationId, currentUserId);
+
+        expect(result.map(s => s.username)).toEqual(['writer', 'present']);
+      });
+
+      it('does not let the ranking mutate the member list Prisma returned', async () => {
+        const now = Date.now();
+        const rows = [
+          member('user-z', 'zoe', new Date(now - 1_000)),
+          member('user-a', 'amara', new Date(now)),
+        ];
+        prisma.participant.findMany.mockResolvedValue(rows);
+
+        await service.getUserSuggestionsForConversation(conversationId, currentUserId);
+
+        expect(rows.map(r => r.user.id)).toEqual(['user-z', 'user-a']);
+      });
     });
   });
 
@@ -769,13 +851,13 @@ describe('MentionService', () => {
     it('should delete cache entries matching conversation pattern', async () => {
       const conversationId = 'conv-123';
       mockRedis.keys.mockResolvedValue([
-        `mentions:suggestions:${conversationId}:user1:`,
-        `mentions:suggestions:${conversationId}:user2:jo`,
+        `mentions:suggestions:v2:${conversationId}:user1:`,
+        `mentions:suggestions:v2:${conversationId}:user2:jo`,
       ]);
 
       await service.invalidateCacheForConversation(conversationId);
 
-      expect(mockRedis.keys).toHaveBeenCalledWith(`mentions:suggestions:${conversationId}:*`);
+      expect(mockRedis.keys).toHaveBeenCalledWith(`mentions:suggestions:v4:${conversationId}:*`);
       expect(mockRedis.del).toHaveBeenCalledTimes(2);
     });
 
@@ -985,7 +1067,7 @@ describe('MentionService', () => {
         prisma.conversation.findUnique.mockResolvedValue({
           id: conversationId,
           type: 'unknown_type',
-          participants: [],
+          participants: [{ userId: senderId }],
         });
 
         const result = await service.validateMentionPermissions(
@@ -1486,7 +1568,6 @@ describe('MentionService', () => {
             lastName: 'Doe',
             displayName: null,
             avatar: null,
-            lastActiveAt: new Date(),
           },
         },
       ]);

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="storage_unavailable_banner">Speicher nicht verfügbar, die Daten werden nicht gespeichert</string>
+</resources>

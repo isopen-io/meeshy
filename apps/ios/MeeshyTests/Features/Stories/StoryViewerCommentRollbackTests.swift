@@ -6,10 +6,11 @@ import MeeshySDK
 /// media upload silently published the comment WITHOUT its media (the
 /// `try?` just dropped the id), and a failed `postComment` (offline, most
 /// visibly) left the optimistic `temp_` row on screen forever with no
-/// rollback. `StoryViewerView.rollingBackOptimisticComment` is the pure core
+/// rollback. `StoryCommentSession.rollingBackOptimisticComment` is the pure core
 /// of the fix — extracted so it's unit-testable without a live SwiftUI view
 /// (`sendComment`'s network calls aren't injectable, cf.
 /// `StoryViewerReactionFlowTests`'s header comment on the same limitation).
+@MainActor
 final class StoryViewerCommentRollbackTests: XCTestCase {
 
     private func makeComment(id: String, parentId: String? = nil, replies: Int = 0) -> FeedComment {
@@ -21,7 +22,7 @@ final class StoryViewerCommentRollbackTests: XCTestCase {
     func test_rollback_topLevelComment_removesItAndDecrementsCount() {
         let comments = [makeComment(id: "keep"), makeComment(id: "temp_1")]
 
-        let result = StoryViewerView.rollingBackOptimisticComment(
+        let result = StoryCommentSession.rollingBackOptimisticComment(
             id: "temp_1", parentId: nil,
             comments: comments, repliesMap: [:], commentCount: 5
         )
@@ -32,7 +33,7 @@ final class StoryViewerCommentRollbackTests: XCTestCase {
     }
 
     func test_rollback_topLevelComment_countNeverGoesNegative() {
-        let result = StoryViewerView.rollingBackOptimisticComment(
+        let result = StoryCommentSession.rollingBackOptimisticComment(
             id: "temp_1", parentId: nil,
             comments: [makeComment(id: "temp_1")], repliesMap: [:], commentCount: 0
         )
@@ -46,7 +47,7 @@ final class StoryViewerCommentRollbackTests: XCTestCase {
         let parent = makeComment(id: "parent-1", replies: 2)
         let repliesMap = ["parent-1": [makeComment(id: "reply-a", parentId: "parent-1"), makeComment(id: "temp_reply", parentId: "parent-1")]]
 
-        let result = StoryViewerView.rollingBackOptimisticComment(
+        let result = StoryCommentSession.rollingBackOptimisticComment(
             id: "temp_reply", parentId: "parent-1",
             comments: [parent], repliesMap: repliesMap, commentCount: 10
         )
@@ -61,7 +62,7 @@ final class StoryViewerCommentRollbackTests: XCTestCase {
         // visible reply count even though the repliesMap has no entry yet.
         let parent = makeComment(id: "parent-1", replies: 1)
 
-        let result = StoryViewerView.rollingBackOptimisticComment(
+        let result = StoryCommentSession.rollingBackOptimisticComment(
             id: "temp_reply", parentId: "parent-1",
             comments: [parent], repliesMap: [:], commentCount: 3
         )
@@ -74,7 +75,7 @@ final class StoryViewerCommentRollbackTests: XCTestCase {
     func test_rollback_reply_parentReplyCountNeverGoesNegative() {
         let parent = makeComment(id: "parent-1", replies: 0)
 
-        let result = StoryViewerView.rollingBackOptimisticComment(
+        let result = StoryCommentSession.rollingBackOptimisticComment(
             id: "temp_reply", parentId: "parent-1",
             comments: [parent], repliesMap: [:], commentCount: 1
         )
@@ -87,7 +88,7 @@ final class StoryViewerCommentRollbackTests: XCTestCase {
     func test_rollback_unknownId_leavesCollectionsUnchangedButStillDecrementsCount() {
         let comments = [makeComment(id: "keep")]
 
-        let result = StoryViewerView.rollingBackOptimisticComment(
+        let result = StoryCommentSession.rollingBackOptimisticComment(
             id: "never-existed", parentId: nil,
             comments: comments, repliesMap: [:], commentCount: 2
         )

@@ -103,4 +103,19 @@ extension CacheCoordinatorLogoutPurgeTests {
             "UserDisplayNameCache doit être vidé par reset() (logout/switch) — résidu cross-compte sinon"
         )
     }
+
+    /// #8120 — les cartes de conversation (verdicts 403/404 compris) vivent en
+    /// RAM dans un singleton du processus : le reset du logout/switch les vide.
+    func test_reset_conversationCardCached_emptiesTheCardCache() async throws {
+        let db = try makeDB()
+        let c = makeCoordinator(db: db)
+        let target = ConversationCardTarget.direct(conversationId: "c-8120")
+        ConversationCardService.shared.store(.privateConversation, for: target)
+
+        await c.reset()
+
+        guard case .empty = ConversationCardService.shared.cached(target) else {
+            return XCTFail("ConversationCardService doit être vidé par reset() — carte du compte A servie au compte B sinon")
+        }
+    }
 }

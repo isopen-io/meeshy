@@ -12,7 +12,7 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../utils/logger';
-import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendNotFound, sendInternalError, createPaginationMeta } from '../utils/response.js';
+import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, createPaginationMeta } from '../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { COMMUNITY_PREFERENCES_DEFAULTS } from '../config/user-preferences-defaults';
 import { UnifiedAuthRequest } from '../middleware/auth';
@@ -333,6 +333,7 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
             }
           },
           401: errorResponseSchema,
+          403: errorResponseSchema,
           500: errorResponseSchema
         }
       }
@@ -347,6 +348,30 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
         const userId = authContext.userId;
         const { communityId } = request.params;
         const data = request.body;
+
+        // #16856 — le filtre d'appartenance que le handler de réordonnancement,
+        // vingt lignes plus bas, exige en toutes lettres : « un lot non borné
+        // laisserait n'importe quel appelant authentifié fabriquer des lignes de
+        // préférences contre des ids arbitraires ». Il ne valait que pour
+        // l'exemplaire qui le portait — et c'est ICI que la ligne se CRÉE : ce
+        // PUT est son unique créateur, le réordonnancement ne l'upsertant que
+        // pour les communautés dont l'appartenance est déjà prouvée.
+        //
+        // Sans lui, un appelant fabriquait des lignes contre des ids
+        // arbitraires — communautés inexistantes comprises — que
+        // `GET /user-preferences/communities` resservait, et pour lesquelles le
+        // serveur diffusait un `user:preferences-updated`.
+        //
+        // La non-appartenance s'énonce PLATEMENT (403), comme chez le jumeau
+        // conversation : l'appelant sait déjà s'il est membre, donc la réponse
+        // ne lui apprend rien qu'il ne sache.
+        const membership = await fastify.prisma.communityMember.findFirst({
+          where: { userId, communityId, isActive: true },
+          select: { id: true },
+        });
+        if (!membership) {
+          return sendForbidden(reply, 'Not a member of this community');
+        }
 
         // Prepare update data (filter undefined values)
         const updateData: any = {};

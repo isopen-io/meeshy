@@ -59,8 +59,21 @@ final class ConnectionStatusViewModelTests: XCTestCase {
         XCTAssertEqual(harness.sut.status, .offline)
     }
 
-    func test_status_whenOnlineButSocketDisconnected_isDisconnected() async {
+    /// #10923 — un socket qui n'a ENCORE JAMAIS été connecté se CONNECTE ; il
+    /// ne se REconnecte pas. Au lancement, la pastille disait « Reconnexion en
+    /// cours » à chaque ouverture de l'app.
+    func test_status_whenOnlineAndSocketNeverConnected_isConnecting() async {
         let harness = makeSUT(online: true, connected: false, pending: 0)
+        await flush()
+        XCTAssertEqual(harness.sut.status, .connecting)
+    }
+
+    func test_status_whenSocketDropsAfterAConnection_isDisconnected() async {
+        let harness = makeSUT(online: true, connected: false, pending: 0)
+        await flush()
+        harness.connected.send(true)
+        await flush()
+        harness.connected.send(false)
         await flush()
         XCTAssertEqual(harness.sut.status, .disconnected)
     }
@@ -91,15 +104,29 @@ final class ConnectionStatusViewModelTests: XCTestCase {
 
     func test_derive_offlineBeatsOtherSignals() {
         XCTAssertEqual(
-            ConnectionStatusViewModel.derive(online: false, connected: true, pending: 0),
+            ConnectionStatusViewModel.derive(online: false, connected: true, pending: 0, hasConnectedOnce: true),
             .offline
         )
     }
 
-    func test_derive_disconnectedWhenOnlineButSocketDown() {
+    func test_derive_disconnectedWhenOnlineButSocketDownAfterAConnection() {
         XCTAssertEqual(
-            ConnectionStatusViewModel.derive(online: true, connected: false, pending: 7),
+            ConnectionStatusViewModel.derive(online: true, connected: false, pending: 7, hasConnectedOnce: true),
             .disconnected
+        )
+    }
+
+    func test_derive_connectingWhenOnlineAndSocketNeverConnected() {
+        XCTAssertEqual(
+            ConnectionStatusViewModel.derive(online: true, connected: false, pending: 0, hasConnectedOnce: false),
+            .connecting
+        )
+    }
+
+    func test_derive_offlineBeatsAFirstConnection() {
+        XCTAssertEqual(
+            ConnectionStatusViewModel.derive(online: false, connected: false, pending: 0, hasConnectedOnce: false),
+            .offline
         )
     }
 }
@@ -167,6 +194,26 @@ final class ConnectionBannerReconnectingGraceTests: XCTestCase {
         XCTAssertFalse(ConnectionBanner.shouldStartReconnectingGrace(previous: .disconnected, new: .connected))
         XCTAssertFalse(ConnectionBanner.shouldStartReconnectingGrace(previous: .connected, new: .syncing))
         XCTAssertFalse(ConnectionBanner.shouldStartReconnectingGrace(previous: .connected, new: .offline))
+    }
+
+    /// #10923 — une PREMIÈRE connexion lente a la même fenêtre de grâce
+    /// qu'une reconnexion : rien sous 3 s.
+    func test_grace_startsWhenAFirstConnectionBegins() {
+        XCTAssertTrue(ConnectionBanner.shouldStartReconnectingGrace(previous: nil, new: .connecting))
+        XCTAssertFalse(ConnectionBanner.shouldStartReconnectingGrace(previous: .connecting, new: .connecting))
+    }
+
+    /// Une première connexion qui s'est enlisée se dit « Connexion en cours »,
+    /// jamais « Reconnexion en cours ».
+    func test_label_firstConnection_saysConnecting_dropSaysReconnecting() {
+        XCTAssertEqual(ConnectionBanner.downLabelKey(for: .connecting), "connection.connecting")
+        XCTAssertEqual(ConnectionBanner.downLabelKey(for: .disconnected), "connection.reconnecting")
+        XCTAssertNil(ConnectionBanner.downLabelKey(for: .connected))
+        XCTAssertNil(ConnectionBanner.downLabelKey(for: .offline))
+    }
+
+    func test_surface_stalledFirstConnection() {
+        XCTAssertTrue(ConnectionBanner.shouldSurfaceReconnecting(statusAtDeadline: .connecting))
     }
 
     /// At the deadline the "Reconnexion" pill is surfaced only if the socket is

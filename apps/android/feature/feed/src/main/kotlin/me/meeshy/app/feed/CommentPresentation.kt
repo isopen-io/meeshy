@@ -1,5 +1,17 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.lang.ReaderPrism
+import me.meeshy.sdk.model.SocialAudioSurface
+import me.meeshy.sdk.model.LanguageData
+import me.meeshy.sdk.model.SocialAudioChoice
+import me.meeshy.sdk.model.socialAudioChoice
+import me.meeshy.sdk.model.CommentLikeState
+import me.meeshy.sdk.model.CommentEffects
+import me.meeshy.sdk.model.CommentPieceKind
+import me.meeshy.sdk.model.CommentQuotedMedia
+import me.meeshy.sdk.model.CommentVeilRules
+import me.meeshy.sdk.model.quotedCitation
+import me.meeshy.sdk.model.MessageEffects
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPostComment
@@ -14,6 +26,31 @@ import me.meeshy.ui.component.bubble.PostLanguageStrip
  * by [CommentProjection] so the resolution stays unit-testable and the Compose layer
  * stays dumb.
  */
+/**
+ * Un média d'un commentaire : sa vignette (absente pour une vidéo sans image d'aperçu), sa nature, et ce que le plein écran
+ * et l'export en lisent (#13915) — le fichier entier, ses dimensions et sa durée servies.
+ */
+@Immutable
+data class CommentMediaPreview(
+    val id: String,
+    val thumbnailUrl: String?,
+    val isVideo: Boolean,
+    val url: String? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+    val durationMillis: Int? = null,
+    /** Un commentaire vocal (#14265) : il s'écoute dans le fil, il ne s'ouvre pas en plein écran. */
+    val isAudio: Boolean = false,
+    /** Ce qu'est la pièce (#14386) : un FICHIER se lit par son nom et sa taille, il ne se peint pas en vignette. */
+    val kind: CommentPieceKind = if (isVideo) CommentPieceKind.VIDEO else if (isAudio) CommentPieceKind.AUDIO else CommentPieceKind.IMAGE,
+    val fileName: String? = null,
+    val fileSize: Int? = null,
+    /** Les drapeaux d'un vocal (#16541) : l'origine et les langues du lecteur qu'une piste parle, l'active étant celle jouée. */
+    val audioChips: List<LanguageChip> = emptyList(),
+) {
+    val isFile: Boolean get() = kind == CommentPieceKind.FILE
+}
+
 @Immutable
 data class CommentPresentation(
     val id: String,
@@ -30,7 +67,34 @@ data class CommentPresentation(
     val isReply: Boolean,
     val isPending: Boolean,
     val isOwn: Boolean,
-)
+    val depth: Int = 0,
+    /** Les médias joints au commentaire (#12972), dans leur ordre. */
+    val media: List<CommentMediaPreview> = emptyList(),
+    /** Le compte de l'auteur : sa présence servie se lit sur la carte unique. */
+    val authorId: String? = null,
+    /** Le flou et les effets permanents du commentaire (#14385), restreints à ce qu'un commentaire porte. */
+    val effects: MessageEffects = MessageEffects(),
+    /** Le lieu joint au commentaire (#14387), rendu en carte touchable sous son corps. */
+    val place: FeedLocationPresentation? = null,
+    /** Le média du post que le commentaire cite (#6578) : le bandeau de sa ligne ; sa cible a pu disparaître. */
+    val quotedMedia: CommentQuotedMedia? = null,
+    /** Les drapeaux BRUTS servis : la protection (éphémère, vue unique) n'est pas dans [effects], restreint aux bits d'un commentaire. */
+    val effectFlags: Int? = null,
+) {
+    /** Un commentaire flouté se lit sous un voile, en le touchant (iOS `CommentVeilRules`). */
+    val isBlurred: Boolean get() = CommentVeilRules.isVeiled(effects, isRevealed = false)
+
+    /** Un commentaire sans texte (un vocal, une photo seule) ne rend aucun corps : pas de ligne vide sous l'auteur (#14289). */
+    val hasBody: Boolean get() = content.isNotBlank()
+
+    /**
+     * Libellé TalkBack d'une ligne — iso `ReplyCell.accessibilityLabel` : « <nom>, réponse. <contenu>.
+     * <heure> ». [format] est le gabarit localisé à trois arguments positionnels ; [unknownAuthor]
+     * remplace un nom absent.
+     */
+    fun accessibilityLabel(format: String, time: String, unknownAuthor: String): String =
+        String.format(format, authorName ?: unknownAuthor, content, time)
+}
 
 object CommentProjection {
 
@@ -57,6 +121,7 @@ object CommentProjection {
         likeState: CommentLikeState = CommentLikeState(),
         activeLanguageCode: String? = null,
         currentUserId: String? = null,
+        depth: Int = 0,
     ): CommentPresentation {
         val originalCode = comment.originalLanguage.normalizedCode()
         val isTranslated = comment.isTranslated(preferences)
@@ -64,6 +129,7 @@ object CommentProjection {
         val activeIsOriginal = activeCode == null || activeCode == originalCode
         return CommentPresentation(
             id = comment.id,
+            authorId = comment.author?.id?.takeIf { it.isNotBlank() },
             authorName = (comment.author?.displayName ?: comment.author?.username)
                 ?.takeIf { it.isNotBlank() },
             authorAvatarUrl = comment.author?.avatar
@@ -87,7 +153,57 @@ object CommentProjection {
             isReply = !comment.parentId.isNullOrBlank(),
             isPending = isPending,
             isOwn = currentUserId != null && comment.author?.id == currentUserId,
+            depth = depth,
+            media = mediaPreviews(comment, mediaBaseUrl, ReaderPrism.resolve(preferences), audioOverride = activeLanguageCode),
+            effects = CommentEffects.served(comment.effectFlags),
+            place = FeedPostLocationBuilder.build(comment.location),
+            quotedMedia = comment.quotedCitation,
+            effectFlags = comment.effectFlags,
         )
+    }
+
+    private fun mediaPreviews(
+        comment: ApiPostComment,
+        mediaBaseUrl: String?,
+        readerLanguages: List<String> = emptyList(),
+        audioOverride: String? = null,
+    ): List<CommentMediaPreview> =
+        comment.media.orEmpty().sortedBy { it.order ?: 0 }.map { media ->
+            // Un média servi sans type reste une image, comme avant #14386 : seul un type DÉCLARÉ fait un fichier.
+            val kind = media.mimeType?.takeIf { it.isNotBlank() }?.let(CommentPieceKind::of) ?: CommentPieceKind.IMAGE
+            val isVideo = kind == CommentPieceKind.VIDEO
+            val isAudio = kind == CommentPieceKind.AUDIO
+            val audio = if (!isAudio) null else media.socialAudioChoice(
+                surface = SocialAudioSurface.COMMENT,
+                carrierLanguage = comment.originalLanguage,
+                preferredLanguages = readerLanguages,
+                manualOverride = audioOverride,
+                resolveUrl = { resolveFeedMediaUrl(it, mediaBaseUrl) },
+            )
+            val still = if (!kind.isVisual) null else media.thumbnailUrl?.takeIf { it.isNotBlank() } ?: media.fileUrl?.takeIf { it.isNotBlank() && !isVideo }
+            CommentMediaPreview(
+                id = media.id,
+                thumbnailUrl = still?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
+                isVideo = isVideo,
+                isAudio = isAudio,
+                kind = kind,
+                fileName = (media.originalName ?: media.fileName)?.takeIf { it.isNotBlank() },
+                fileSize = media.fileSize,
+                url = if (isAudio) {
+                    audio?.url
+                } else {
+                    media.fileUrl?.takeIf { it.isNotBlank() }?.let { resolveFeedMediaUrl(it, mediaBaseUrl) }
+                },
+                width = media.width,
+                height = media.height,
+                durationMillis = media.duration,
+                audioChips = audio?.chips().orEmpty(),
+            )
+        }
+
+    /** Les drapeaux d'un vocal, dans la forme de la bande des bulles : la langue jouée est l'active. */
+    private fun SocialAudioChoice.chips(): List<LanguageChip> = offered.map { code ->
+        LanguageChip(code = code, info = LanguageData.info(code), isOriginal = code == originalLanguage, isActive = code == servedLanguage)
     }
 
     /**
@@ -104,7 +220,7 @@ object CommentProjection {
     ): String? {
         val originalCode = comment.originalLanguage.normalizedCode()
         val preferredCode = LanguageResolver
-            .preferredTranslation(comment.translations.toTranslationRows(), preferences)
+            .preferredTranslation(comment.translations.toTranslationRows(), preferences, comment.originalLanguage)
             ?.targetLanguage?.normalizedCode()
         val requested = override.normalizedCode()?.takeIf { it.hasContentIn(comment, originalCode) }
         return requested ?: (preferredCode ?: originalCode)

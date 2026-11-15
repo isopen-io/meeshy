@@ -50,9 +50,10 @@ export type ReelAffinityContext = {
   /** Amis + contacts DM de l'utilisateur connecté. */
   contactIds: ReadonlySet<string>;
   /**
-   * Langues que l'utilisateur lit (system + regional + custom destination),
-   * CANONICALISÉES via `normalizeLanguageForDedup` à la construction
-   * (`getViewerLanguages`) — la comparaison `.has()` du scoring en dépend.
+   * Langues que l'utilisateur lit — le prisme ORDONNÉ complet (system > regional
+   * > customDestination > deviceLocale), CANONICALISÉES via
+   * `normalizeLanguageForDedup` à la construction (`getViewerLanguages`) — la
+   * comparaison `.has()` du scoring en dépend.
    */
   viewerLanguages: ReadonlySet<string>;
   /** Réels déjà vus par l'utilisateur (PostView). */

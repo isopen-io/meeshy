@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_composer_media_location_refused">تعذّرت إزالة موقع هذا الملف، لذا لم تتم إضافته. اختر ملفًا آخر.</string>
+</resources>

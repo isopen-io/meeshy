@@ -11,58 +11,114 @@ import MeeshySDK
 /// contacts locaux répondent INSTANTANÉMENT, la recherche réseau complète
 /// ensuite. Une liste qui n'arrive qu'après un aller-retour n'aide personne à
 /// la vitesse où l'on tape un pseudo.
+///
+/// **L'ordre et l'étape sont `MentionSuggestionRule` / `MentionLookupRule`**
+/// (#7847, #14053) — la MÊME règle que `MentionComposerController` côté app :
+/// `@` et une lettre restent locaux, la deuxième lettre n'interroge l'annuaire
+/// que si aucun contact ne correspond, la troisième l'interroge toujours ; les
+/// suivantes affinent localement puis relancent la recherche sans vider ce
+/// qui est déjà affiché.
 @MainActor
 final class MentionSuggestionsModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published private(set) var candidates: [UserSearchResult] = []
     @Published private(set) var isSearching = false
 
     private let userService: AudienceUserSearching
-    private let contactsProvider: AudienceContactsProviding
+    private var contactsProvider: AudienceContactsProviding
     private let currentUserId: String?
+    private let debounce: Duration
     private var contacts: [UserSearchResult] = []
+    private var others: [UserSearchResult] = []
+    /// La requête à laquelle `others` RÉPOND (cf. `MentionSuggestionRule`).
+    private var othersQuery: String?
+    private var query = ""
     private var didLoadContacts = false
     private var searchTask: Task<Void, Never>?
 
     init(currentUserId: String? = AuthManager.shared.currentUser?.id,
          userService: AudienceUserSearching = UserService.shared,
-         contactsProvider: AudienceContactsProviding = FriendsCacheAudienceContacts()) {
+         contactsProvider: AudienceContactsProviding = FriendsCacheAudienceContacts(),
+         debounce: Duration = .milliseconds(300)) {
         self.currentUserId = currentUserId
         self.userService = userService
         self.contactsProvider = contactsProvider
+        self.debounce = debounce
     }
 
-    /// Une seule fois par vie de la vue : les contacts ne bougent pas entre
-    /// deux frappes, et les relire à chaque caractère ferait un accès disque
-    /// par touche.
-    func loadContactsIfNeeded() async {
+    /// Une seule fois par vie de la vue — qui naît au `@` : le cache sert
+    /// d'abord, puis le fournisseur RÉCHAUFFE si le cache était vide ou périmé.
+    /// `provider` est celui que l'app injecte par l'environnement ; sans lui,
+    /// la lecture seule du cache d'amis.
+    func loadContactsIfNeeded(provider: AudienceContactsProviding? = nil) async {
         guard !didLoadContacts else { return }
         didLoadContacts = true
-        contacts = await contactsProvider.cachedContacts().filter { $0.id != currentUserId }
-        if candidates.isEmpty { candidates = contacts }
+        if let provider { contactsProvider = provider }
+        contacts = await contactsProvider.cachedContacts()
+        recompute()
+        guard let refreshed = await contactsProvider.refreshedContacts(), !refreshed.isEmpty else { return }
+        contacts = refreshed
+        recompute()
     }
 
-    /// Le filtre local s'applique TOUT DE SUITE ; la recherche réseau est
-    /// débattue de 300 ms puis fusionnée. Annuler la précédente est ce qui
-    /// empêche une réponse lente d'écraser une frappe plus récente.
     func update(query: String) {
         searchTask?.cancel()
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let local = trimmed.isEmpty ? contacts : contacts.filter {
-            $0.username.localizedCaseInsensitiveContains(trimmed)
-                || ($0.displayName ?? "").localizedCaseInsensitiveContains(trimmed)
+        self.query = trimmed
+        guard MentionLookupRule.stage(for: trimmed, localMatchCount: localMatchCount(for: trimmed)) == .remote else {
+            others = []
+            othersQuery = nil
+            isSearching = false
+            recompute()
+            return
         }
-        candidates = local
-        guard !trimmed.isEmpty else { return }
+        recompute()
+        let debounce = self.debounce
         searchTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(300))
-            guard let self, !Task.isCancelled else { return }
+            guard await cancellableSleep(for: debounce), let self else { return }
             self.isSearching = true
             defer { self.isSearching = false }
             guard let found = try? await self.userService.searchUsers(query: trimmed, limit: 20, offset: 0),
                   !Task.isCancelled else { return }
-            let known = Set(local.map(\.id))
-            self.candidates = local + found.filter { $0.id != self.currentUserId && !known.contains($0.id) }
+            self.others = found
+            self.othersQuery = trimmed
+            self.recompute()
         }
+    }
+
+    private func localMatchCount(for query: String) -> Int {
+        MentionSuggestionRule.localMatches(
+            contacts: contacts, participants: [], query: query,
+            excludingUserId: currentUserId, identity: MentionIdentity.init(userSearchResult:)
+        ).count
+    }
+
+    private func recompute() {
+        candidates = MentionSuggestionRule.ordered(
+            contacts: contacts, participants: [], others: others, othersQuery: othersQuery,
+            query: query, excludingUserId: currentUserId,
+            identity: MentionIdentity.init(userSearchResult:)
+        )
+    }
+}
+
+// MARK: - Fournisseur de contacts injecté par l'app
+
+private struct MentionContactsProviderKey: EnvironmentKey {
+    static let defaultValue: (any AudienceContactsProviding)? = nil
+}
+
+public extension EnvironmentValues {
+    /// **Le fournisseur de contacts des listes `@` du SDK** (#7847). L'app y
+    /// pose son orchestrateur de cache (lecture instantanée + réchauffement) ;
+    /// `nil` ⇒ lecture seule du cache d'amis.
+    var mentionContactsProvider: (any AudienceContactsProviding)? {
+        get { self[MentionContactsProviderKey.self] }
+        set { self[MentionContactsProviderKey.self] = newValue }
     }
 }
 
@@ -89,6 +145,7 @@ public struct MentionSuggestionList<Menu: View>: View {
     /// a été demandée, et c'est lui qui pose ce drapeau.
     private let attachesContextMenu: Bool
     @StateObject private var model = MentionSuggestionsModel()
+    @Environment(\.mentionContactsProvider) private var contactsProvider
 
     public init(query: String,
                 maxHeight: CGFloat = 200,
@@ -131,8 +188,8 @@ public struct MentionSuggestionList<Menu: View>: View {
         }
         .frame(maxHeight: maxHeight)
         .task {
-            await model.loadContactsIfNeeded()
             model.update(query: query)
+            await model.loadContactsIfNeeded(provider: contactsProvider)
         }
         .adaptiveOnChange(of: query) { _, newValue in
             model.update(query: newValue)
@@ -170,15 +227,20 @@ public extension MentionSuggestionList where Menu == EmptyView {
 
 struct MentionSuggestionRow: View {
     let user: UserSearchResult
+    @Environment(\.meeshyPresenceResolver) private var presenceResolver
 
     var body: some View {
         HStack(spacing: MeeshySpacing.sm) {
-            MeeshyAvatar(name: user.displayName ?? user.username,
-                         context: .userListItem,
-                         avatarURL: user.avatar)
+            MeeshyLivePresence {
+                MeeshyAvatar(name: user.displayName ?? user.username,
+                             context: .userListItem,
+                             avatarURL: user.avatar,
+                             presenceState: presenceResolver?(user.id) ?? user.servedPresence,
+                             ring: user.avatarRing)
+            }
             VStack(alignment: .leading, spacing: 1) {
                 Text(user.displayName ?? user.username)
-                    .font(MeeshyFont.relative(14, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                     .lineLimit(1)
                 Text("@\(user.username)")
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
@@ -215,25 +277,70 @@ public struct StoryMentionPickerSheet: View {
     /// affichage qui n'arriverait jamais.
     let modes: [PostReferenceDisplay]
     let onChange: ([ComposerReference]) -> Void
+    /// Le libellé de la validation : « OK » dans le compositeur (#13839).
+    var doneTitle: String?
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.meeshySheetClose) private var hostClose
     @State private var query = ""
+
+    /// **L'état d'avant l'ouverture, retenu pour pouvoir le RENDRE** (#6134).
+    ///
+    /// Cette feuille applique chaque choix au composer à l'instant du tap — ce
+    /// qui était la raison, jusqu'ici, de n'offrir que « Terminé ». La directive
+    /// demande « Annuler », donc il ne s'agit pas d'ajouter une étiquette mais
+    /// de tenir ce qu'elle promet : sans cet instantané, le bouton fermerait la
+    /// feuille en laissant les mentions posées, et l'utilisateur croirait avoir
+    /// refusé.
+    ///
+    /// Posé une seule fois (`?? references` au premier affichage) : un `onAppear`
+    /// qui réécrit rejouerait l'instantané à chaque retour de plan et ferait
+    /// oublier le point de départ réel.
+    @State private var instantane: [ComposerReference]?
 
     public init(references: [ComposerReference],
                 modes: [PostReferenceDisplay] = PostReferenceDisplay.declarable,
+                doneTitle: String? = nil,
                 onChange: @escaping ([ComposerReference]) -> Void) {
         self.references = references
         self.modes = modes
+        self.doneTitle = doneTitle
         self.onChange = onChange
+    }
+
+    /// **OK reste grisé tant que personne n'est nommé** (#13839) : valider une
+    /// liste vide ne valide rien, et « Annuler » sert à partir. Sauf quand la
+    /// liste s'est VIDÉE : retirer tout le monde est une modification, et
+    /// « Annuler » rendrait les mentions retirées.
+    public static func canFinish(references: [ComposerReference], initial: [ComposerReference]) -> Bool {
+        !references.isEmpty || references != initial
+    }
+
+    private func close() {
+        MeeshySheetClose.perform(host: hostClose, system: { dismiss() })
     }
 
     public var body: some View {
         // En-tête explicite plutôt qu'une `NavigationStack` : la sheet est
         // présentée depuis le composer, un `fullScreenCover` sans barre d'état,
         // qui met les insets de safe area à zéro — la même raison qui a fait
-        // écrire l'en-tête à la main dans `AudienceUserPickerView`.
+        // écrire l'en-tête à la main dans `AudienceUserPickerView`. Depuis
+        // #6134 cet en-tête est PARTAGÉ avec la feuille Hashtag, qui vit de
+        // l'autre côté de la frontière SDK.
         VStack(spacing: 0) {
-            header
+            MeeshySheetHeader(
+                title: String(localized: "reference.sheet.title",
+                              defaultValue: "Mentionner", bundle: .module),
+                doneTitle: doneTitle,
+                canFinish: Self.canFinish(references: references, initial: instantane ?? references),
+                onCancel: {
+                    // RENDRE, puis fermer. L'ordre compte : fermer d'abord
+                    // démonterait la vue avant que l'hôte ait reçu l'état.
+                    if let instantane { onChange(instantane) }
+                    close()
+                },
+                onDone: { close() }
+            )
             searchField
             if !references.isEmpty { alreadyReferenced }
             if query.isEmpty {
@@ -259,22 +366,7 @@ public struct StoryMentionPickerSheet: View {
             }
         }
         .modifier(AudiencePickerPresentationStyle())
-    }
-
-    private var header: some View {
-        ZStack {
-            Text(String(localized: "reference.sheet.title", defaultValue: "Mentionner", bundle: .module))
-                .font(MeeshyFont.relative(16, weight: .semibold))
-            HStack {
-                Spacer()
-                // « Terminé » et non « Annuler » : chaque choix est déjà
-                // appliqué au composer, il n'y a plus rien à annuler ici.
-                Button(String(localized: "common.done", defaultValue: "Terminé", bundle: .module)) { dismiss() }
-            }
-        }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.top, MeeshySpacing.lg)
-        .padding(.bottom, MeeshySpacing.sm)
+        .onAppear { instantane = instantane ?? references }
     }
 
     private var searchField: some View {
@@ -296,16 +388,16 @@ public struct StoryMentionPickerSheet: View {
     /// endroit d'où une référence SILENCIEUSE se voit — et donc le seul d'où
     /// elle se retire.
     private var alreadyReferenced: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             sectionTitle(String(localized: "reference.sheet.alreadyReferenced",
                                 defaultValue: "Déjà référencées", bundle: .module))
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     ForEach(references, id: \.username) { reference in
                         referenceChip(reference)
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
             }
             // Nommer quelqu'un lui ouvre le contenu même hors de l'audience
             // choisie : c'est une conséquence du geste, elle se dit là où le
@@ -313,26 +405,26 @@ public struct StoryMentionPickerSheet: View {
             Text(String(localized: "reference.audienceWarning",
                         defaultValue: "Cette personne pourra voir ce contenu même hors de l'audience choisie",
                         bundle: .module))
-                .font(.system(size: 11))
+                .font(MeeshyFont.relative(11))
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
         }
-        .padding(.bottom, 10)
+        .padding(.bottom, MeeshySpacing.smPlus)
     }
 
     private func sectionTitle(_ text: String) -> some View {
         HStack {
             Text(text)
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .foregroundStyle(.secondary)
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 4)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.xs)
     }
 
     private func referenceChip(_ reference: ComposerReference) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             // `Menu` et non `contextMenu` : sur une pastille déjà posée, le
             // geste attendu est un TAP — changer de mode et en choisir un sont
             // le même geste.
@@ -344,11 +436,11 @@ public struct StoryMentionPickerSheet: View {
                     ))
                 }
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: reference.display.symbolName)
                         .font(.system(size: 11, weight: .semibold))
                     Text("@\(reference.username)")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         .lineLimit(1)
                 }
                 .foregroundStyle(reference.display == .silent ? Color.secondary : Color.primary)
@@ -365,9 +457,9 @@ public struct StoryMentionPickerSheet: View {
             .buttonStyle(.plain)
             .accessibilityLabel("\(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .module)) @\(reference.username)")
         }
-        .padding(.leading, 12)
-        .padding(.trailing, 10)
-        .padding(.vertical, 7)
+        .padding(.leading, MeeshySpacing.md)
+        .padding(.trailing, MeeshySpacing.smPlus)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .frame(minHeight: 36)
         .background(Capsule().fill(Color(.secondarySystemBackground)))
     }

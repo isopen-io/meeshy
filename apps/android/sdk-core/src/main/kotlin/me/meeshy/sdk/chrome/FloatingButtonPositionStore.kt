@@ -11,66 +11,83 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import me.meeshy.sdk.model.chrome.FloatingButtonPosition
-import me.meeshy.sdk.model.chrome.decodePosition
-import me.meeshy.sdk.model.chrome.encodePosition
+import me.meeshy.sdk.model.chrome.FloatingButtonGeometry
+import me.meeshy.sdk.model.chrome.FloatingButtonStoredPosition
 
 /**
- * Ou l'utilisateur a range ses deux boutons flottants.
+ * Ou l'utilisateur a range ses deux boutons flottants — miroir des `@AppStorage`
+ * `feedButtonPosition` / `menuButtonPosition` de `RootView` iOS.
  *
- * Meme patron que [me.meeshy.sdk.theme.ThemeStore] : une interface, un double
- * memoire pour les tests, une implementation DataStore, et un codec pur qui degrade
- * au lieu de planter.
+ * Le magasin garde la valeur BRUTE (`v3,L,0.512345`, ou l'ancienne forme `x,y`) : c'est
+ * `FloatingButtonGeometry` qui la lit contre la zone sure mesuree, et qui seule produit une
+ * nouvelle valeur, a la fin d'un vrai glisser. Une valeur illisible n'est jamais propagee :
+ * le bouton retombe sur sa place par defaut au lieu de disparaitre.
+ *
+ * Une cle par bouton : deplacer le menu n'emporte pas le flux.
  */
 public interface FloatingButtonPositionStore {
-    public val leftPosition: StateFlow<FloatingButtonPosition>
-    public val rightPosition: StateFlow<FloatingButtonPosition>
-    public suspend fun setLeftPosition(position: FloatingButtonPosition)
-    public suspend fun setRightPosition(position: FloatingButtonPosition)
+    /** La place du bouton Flux (gauche par defaut). */
+    public val leftStorage: StateFlow<String>
+
+    /** La place du bouton avatar / menu (droite par defaut). */
+    public val rightStorage: StateFlow<String>
+
+    public suspend fun setLeftStorage(value: String)
+    public suspend fun setRightStorage(value: String)
 }
 
+/** Une valeur lisible, ou [fallback] : jamais une chaine corrompue jusqu'a l'ecran. */
+internal fun sanitizedStorage(raw: String?, fallback: String): String =
+    if (raw != null && FloatingButtonStoredPosition.parse(raw) != null) raw else fallback
+
 /** Double de test — aucune E/S. */
-public class InMemoryFloatingButtonPositionStore : FloatingButtonPositionStore {
-    private val _left = MutableStateFlow(FloatingButtonPosition.DEFAULT_LEFT)
-    private val _right = MutableStateFlow(FloatingButtonPosition.DEFAULT_RIGHT)
+public class InMemoryFloatingButtonPositionStore(
+    left: String = FloatingButtonGeometry.DEFAULT_FEED_STORAGE,
+    right: String = FloatingButtonGeometry.DEFAULT_MENU_STORAGE,
+) : FloatingButtonPositionStore {
+    private val _left = MutableStateFlow(sanitizedStorage(left, FloatingButtonGeometry.DEFAULT_FEED_STORAGE))
+    private val _right = MutableStateFlow(sanitizedStorage(right, FloatingButtonGeometry.DEFAULT_MENU_STORAGE))
 
-    override val leftPosition: StateFlow<FloatingButtonPosition> = _left.asStateFlow()
-    override val rightPosition: StateFlow<FloatingButtonPosition> = _right.asStateFlow()
+    override val leftStorage: StateFlow<String> = _left.asStateFlow()
+    override val rightStorage: StateFlow<String> = _right.asStateFlow()
 
-    override suspend fun setLeftPosition(position: FloatingButtonPosition) { _left.value = position }
-    override suspend fun setRightPosition(position: FloatingButtonPosition) { _right.value = position }
+    override suspend fun setLeftStorage(value: String) {
+        _left.value = sanitizedStorage(value, _left.value)
+    }
+
+    override suspend fun setRightStorage(value: String) {
+        _right.value = sanitizedStorage(value, _right.value)
+    }
 }
 
 /**
- * Adossee a un DataStore Preferences.
- *
- * Le decodage passe par le codec pur, donc une preference corrompue rend la position
- * par defaut au lieu de faire disparaitre le bouton — un ecran sans commandes coute
- * infiniment plus qu'une position approximative.
- *
- * Une cle par bouton : deplacer le menu ne doit pas emporter le flux avec lui.
+ * Adossee a un DataStore Preferences. Les cles sont celles de l'ancien format `x,y` : une
+ * position choisie avant la mise a jour est relue (migration par lecture, aucune ecriture tant
+ * que l'utilisateur ne deplace pas le bouton).
  */
 public class DataStoreFloatingButtonPositionStore(
     private val dataStore: DataStore<Preferences>,
     scope: CoroutineScope,
 ) : FloatingButtonPositionStore {
 
-    override val leftPosition: StateFlow<FloatingButtonPosition> =
+    override val leftStorage: StateFlow<String> =
         dataStore.data
-            .map { prefs -> decodePosition(prefs[KEY_LEFT], FloatingButtonPosition.DEFAULT_LEFT) }
-            .stateIn(scope, SharingStarted.Eagerly, FloatingButtonPosition.DEFAULT_LEFT)
+            .map { prefs -> sanitizedStorage(prefs[KEY_LEFT], FloatingButtonGeometry.DEFAULT_FEED_STORAGE) }
+            .stateIn(scope, SharingStarted.Eagerly, FloatingButtonGeometry.DEFAULT_FEED_STORAGE)
 
-    override val rightPosition: StateFlow<FloatingButtonPosition> =
+    override val rightStorage: StateFlow<String> =
         dataStore.data
-            .map { prefs -> decodePosition(prefs[KEY_RIGHT], FloatingButtonPosition.DEFAULT_RIGHT) }
-            .stateIn(scope, SharingStarted.Eagerly, FloatingButtonPosition.DEFAULT_RIGHT)
+            .map { prefs -> sanitizedStorage(prefs[KEY_RIGHT], FloatingButtonGeometry.DEFAULT_MENU_STORAGE) }
+            .stateIn(scope, SharingStarted.Eagerly, FloatingButtonGeometry.DEFAULT_MENU_STORAGE)
 
-    override suspend fun setLeftPosition(position: FloatingButtonPosition) {
-        dataStore.edit { prefs -> prefs[KEY_LEFT] = encodePosition(position) }
+    override suspend fun setLeftStorage(value: String) {
+        if (FloatingButtonStoredPosition.parse(value) == null) return
+        dataStore.edit { prefs -> prefs[KEY_LEFT] = value }
     }
 
-    override suspend fun setRightPosition(position: FloatingButtonPosition) {
-        dataStore.edit { prefs -> prefs[KEY_RIGHT] = encodePosition(position) }
+    override suspend fun setRightStorage(value: String) {
+        if (FloatingButtonStoredPosition.parse(value) == null) return
+        dataStore.edit { prefs -> prefs[KEY_RIGHT] = value }
     }
 
     private companion object {

@@ -81,8 +81,9 @@ Ce script va :
 # Option 1 : Docker Compose local (sans HTTPS)
 docker-compose -f docker-compose.local.yml up -d
 
-# Option 2 : Docker Compose local avec HTTPS
-docker-compose -f docker-compose.local-https.yml up -d
+# Option 2 : Docker Compose local avec HTTPS (mkcert est déjà porté par docker-compose.local.yml —
+# il n'existe plus de composition "local-https" distincte, voir #4547)
+docker-compose -f docker-compose.local.yml up -d
 
 # Vérifier les logs du gateway
 docker logs -f meeshy-local-gateway

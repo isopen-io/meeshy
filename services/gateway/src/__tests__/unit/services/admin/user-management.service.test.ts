@@ -4,75 +4,28 @@
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { UserFilters } from '@meeshy/shared/types';
 
-jest.mock('bcrypt', () => ({
-  hash: jest.fn().mockResolvedValue('hashed_password'),
-  compare: jest.fn().mockResolvedValue(true),
+// Le hachage vit dans `utils/password-hash` — SITE UNIQUE depuis #5216, et le
+// SEUL endroit qui connaisse encore le facteur de coût. Ce service posait 10 là
+// où les trois autres portes posaient 12 : un compte créé par un administrateur
+// repartait avec un hash quatre fois moins cher à casser, sans que rien ne le
+// signale (#3629, soldé). Le coût ayant quitté le site d'appel, ce qui s'assert
+// ici est l'APPEL — et le coût s'assert sur la constante partagée.
+jest.mock('../../../../utils/password-hash', () => ({
+  ...(jest.requireActual('../../../../utils/password-hash') as Record<string, unknown>),
+  hashPassword: jest.fn().mockResolvedValue('hashed_password'),
+  verifyPassword: jest.fn().mockResolvedValue(true),
 }));
 
 import { UserManagementService } from '../../../../services/admin/user-management.service';
-import * as bcrypt from 'bcrypt';
+import { hashPassword, verifyPassword, BCRYPT_COST } from '../../../../utils/password-hash';
+import { logger } from '../../../../utils/logger';
+import { searchTokensFor } from '../../../../utils/search-tokens';
+import { makeUser, makePrisma, makeService } from './user-management-mocks';
 
-const mockHash = bcrypt.hash as jest.Mock;
-const mockCompare = bcrypt.compare as jest.Mock;
-
-function makeUser(overrides: Partial<Record<string, unknown>> = {}) {
-  return {
-    id: '507f1f77bcf86cd799439011',
-    username: 'testuser',
-    firstName: 'John',
-    lastName: 'Doe',
-    displayName: 'John D.',
-    bio: '',
-    email: 'test@example.com',
-    password: 'hashed',
-    phoneNumber: null,
-    avatar: null,
-    role: 'USER',
-    isActive: true,
-    isOnline: false,
-    emailVerifiedAt: null,
-    phoneVerifiedAt: null,
-    lastActiveAt: new Date(),
-    systemLanguage: 'en',
-    regionalLanguage: 'en',
-    customDestinationLanguage: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    deactivatedAt: null,
-    deletedAt: null,
-    twoFactorEnabledAt: null,
-    twoFactorSecret: null,
-    twoFactorBackupCodes: null,
-    failedLoginAttempts: 0,
-    lockedUntil: null,
-    lockedReason: null,
-    ...overrides,
-  };
-}
-
-function makePrisma(methods: Partial<{
-  findMany: jest.Mock;
-  findUnique: jest.Mock;
-  create: jest.Mock;
-  update: jest.Mock;
-  count: jest.Mock;
-}> = {}) {
-  return {
-    user: {
-      findMany: methods.findMany ?? jest.fn(),
-      findUnique: methods.findUnique ?? jest.fn(),
-      create: methods.create ?? jest.fn(),
-      update: methods.update ?? jest.fn(),
-      count: methods.count ?? jest.fn(),
-    },
-  } as unknown as PrismaClient;
-}
-
-function makeService(prisma?: PrismaClient) {
-  return new UserManagementService(prisma ?? makePrisma());
-}
+const mockHash = hashPassword as jest.Mock;
+const mockCompare = verifyPassword as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -116,6 +69,22 @@ describe('UserManagementService.getUsers', () => {
     ]));
   });
 
+  // #8876 — le nom AFFICHÉ est ce que la console montre d'un compte : la recherche
+  // doit le couvrir, sinon « Awa Diop » ne trouve pas Awa.
+  it('searches the display name too, case-insensitively', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const count = jest.fn().mockResolvedValue(0);
+    const svc = makeService(makePrisma({ findMany, count }));
+
+    await svc.getUsers({ search: 'Awa Diop' }, { offset: 0, limit: 10 });
+
+    const callWhere = (findMany.mock.calls[0] as any[])[0].where;
+    expect(callWhere.OR).toEqual(expect.arrayContaining([
+      { displayName: { contains: 'Awa Diop', mode: 'insensitive' } },
+    ]));
+    expect((count.mock.calls[0] as any[])[0].where).toEqual(callWhere);
+  });
+
   it('filters by role when provided', async () => {
     const findMany = jest.fn().mockResolvedValue([]);
     const count = jest.fn().mockResolvedValue(0);
@@ -125,6 +94,18 @@ describe('UserManagementService.getUsers', () => {
 
     const callWhere = (findMany.mock.calls[0] as any[])[0].where;
     expect(callWhere.role).toBe('ADMIN');
+  });
+
+  it('filters by a LIST of roles with an `in` clause — the administration rank is BIGBOSS and ADMIN', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const count = jest.fn().mockResolvedValue(0);
+    const svc = makeService(makePrisma({ findMany, count }));
+
+    await svc.getUsers({ role: ['BIGBOSS', 'ADMIN'] }, { offset: 0, limit: 10 });
+
+    const callWhere = (findMany.mock.calls[0] as any[])[0].where;
+    expect(callWhere.role).toEqual({ in: ['BIGBOSS', 'ADMIN'] });
+    expect(((count.mock.calls[0] as any[])[0]).where.role).toEqual({ in: ['BIGBOSS', 'ADMIN'] });
   });
 
   it('filters isActive: true', async () => {
@@ -302,6 +283,48 @@ describe('UserManagementService.getUsers', () => {
     expect(callOrder).toEqual({ username: 'desc' });
   });
 
+  // Revue adversariale F4 (2026-08-26) : `sortBy` vient de la query — il est
+  // borné par une liste blanche, jamais posé tel quel comme clé d'orderBy.
+  describe('sortBy whitelist', () => {
+    const unknownSortKey = (value: string) => value as unknown as UserFilters['sortBy'];
+
+    const orderByFor = async (filters: UserFilters) => {
+      const findMany = jest.fn().mockResolvedValue([]);
+      const count = jest.fn().mockResolvedValue(0);
+      const svc = makeService(makePrisma({ findMany, count }));
+      await svc.getUsers(filters, { offset: 0, limit: 10 });
+      return (findMany.mock.calls[0] as [{ orderBy: Record<string, string> }])[0].orderBy;
+    };
+
+    it('falls back to createdAt when sortBy is an unknown key', async () => {
+      expect(await orderByFor({ sortBy: unknownSortKey('password'), sortOrder: 'asc' })).toEqual({ createdAt: 'asc' });
+    });
+
+    it('falls back to createdAt when sortBy is __proto__', async () => {
+      const orderBy = await orderByFor({ sortBy: unknownSortKey('__proto__') });
+      expect(orderBy).toEqual({ createdAt: 'desc' });
+      expect(Object.keys(orderBy)).toEqual(['createdAt']);
+    });
+
+    it('falls back to createdAt when sortBy is an inherited Object.prototype key', async () => {
+      expect(await orderByFor({ sortBy: unknownSortKey('constructor') })).toEqual({ createdAt: 'desc' });
+    });
+
+    it('keeps lastActiveAt as a sort key (the route gates it by canViewPresence)', async () => {
+      expect(await orderByFor({ sortBy: 'lastActiveAt', sortOrder: 'asc' })).toEqual({ lastActiveAt: 'asc' });
+    });
+
+    it('accepts every documented sort key', async () => {
+      const keys: NonNullable<UserFilters['sortBy']>[] = ['createdAt', 'lastActiveAt', 'username', 'email', 'firstName', 'lastName'];
+      const orders = await Promise.all(keys.map((sortBy) => orderByFor({ sortBy })));
+      expect(orders).toEqual(keys.map((key) => ({ [key]: 'desc' })));
+    });
+
+    it('bounds sortOrder to asc/desc', async () => {
+      expect(await orderByFor({ sortBy: 'username', sortOrder: '$natural' as unknown as UserFilters['sortOrder'] })).toEqual({ username: 'desc' });
+    });
+  });
+
   it('defaults to createdAt desc sort when sortBy not provided', async () => {
     const findMany = jest.fn().mockResolvedValue([]);
     const count = jest.fn().mockResolvedValue(0);
@@ -354,9 +377,11 @@ describe('UserManagementService.createUser', () => {
       displayName: null,
       bio: null,
       phoneNumber: null,
-    }, 'creator-id');
+    });
 
-    expect(mockHash).toHaveBeenCalledWith('plaintext', 10);
+    expect(mockHash).toHaveBeenCalledWith('plaintext');
+    // Le coût UNIQUE du dépôt : ce service posait 10, les autres portes 12.
+    expect(BCRYPT_COST).toBe(12);
     const callData = (create.mock.calls[0] as any[])[0].data;
     expect(callData.password).toBe('hashed_password');
     expect(callData.isActive).toBe(true);
@@ -370,7 +395,7 @@ describe('UserManagementService.createUser', () => {
       username: 'alice', firstName: 'A', lastName: 'B',
       email: 'alice@ex.com', password: 'pw',
       displayName: null, bio: null, phoneNumber: null,
-    }, 'creator');
+    });
 
     const callData = (create.mock.calls[0] as any[])[0].data;
     expect(callData.role).toBe('USER');
@@ -384,10 +409,68 @@ describe('UserManagementService.createUser', () => {
       username: 'u', firstName: 'F', lastName: 'L',
       email: 'u@e.com', password: 'pw',
       displayName: null, bio: null, phoneNumber: null,
-    }, 'creator');
+    });
 
     const callData = (create.mock.calls[0] as any[])[0].data;
     expect(callData.systemLanguage).toBe('en');
+  });
+});
+
+// ─── createUser — rejoint le salon global "meeshy" comme un inscrit (#3876) ────
+//
+// Avant ce lot, seule l'inscription publique (`AuthService.register`)
+// ajoutait l'utilisateur au salon global — un compte créé par un
+// administrateur n'y entrait jamais.
+
+describe('UserManagementService.createUser — adhésion au salon global', () => {
+  const CREATE_DTO = {
+    username: 'alice', firstName: 'Alice', lastName: 'Smith',
+    email: 'alice@example.com', password: 'pw',
+    displayName: null, bio: null, phoneNumber: null,
+  };
+
+  it('ajoute le compte créé au salon global quand il existe', async () => {
+    const user = makeUser({ id: 'new-admin-created-id', displayName: 'Alice Smith' });
+    const create = jest.fn().mockResolvedValue(user);
+    const prisma = makePrisma({ create });
+    (prisma as any).conversation.findFirst.mockResolvedValue({ id: 'conv-global', identifier: 'meeshy' });
+    const svc = makeService(prisma);
+
+    await svc.createUser(CREATE_DTO as any);
+
+    expect((prisma as any).participant.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          conversationId: 'conv-global',
+          userId: 'new-admin-created-id',
+          role: 'member',
+        }),
+      }),
+    );
+  });
+
+  it("ne fait PAS échouer la création du compte si l'ajout au salon global échoue", async () => {
+    const user = makeUser({ id: 'new-id' });
+    const create = jest.fn().mockResolvedValue(user);
+    const prisma = makePrisma({ create });
+    (prisma as any).conversation.findFirst.mockRejectedValue(new Error('mongo down'));
+    const svc = makeService(prisma);
+
+    const result = await svc.createUser(CREATE_DTO as any);
+
+    expect(result).toBe(user);
+  });
+
+  it("n'ajoute rien au salon global s'il est introuvable — repli silencieux, pas d'erreur", async () => {
+    const user = makeUser({ id: 'new-id' });
+    const create = jest.fn().mockResolvedValue(user);
+    const prisma = makePrisma({ create }); // conversation.findFirst → null par défaut
+    const svc = makeService(prisma);
+
+    const result = await svc.createUser(CREATE_DTO as any);
+
+    expect(result).toBe(user);
+    expect((prisma as any).participant.create).not.toHaveBeenCalled();
   });
 });
 
@@ -398,7 +481,7 @@ describe('UserManagementService.updateUser', () => {
     const update = jest.fn().mockResolvedValue(makeUser({ firstName: 'Updated' }));
     const svc = makeService(makePrisma({ update }));
 
-    const result = await svc.updateUser('user-id', { firstName: 'Updated' } as any, 'updater');
+    const result = await svc.updateUser('user-id', { firstName: 'Updated' } as any);
 
     expect(update).toHaveBeenCalledWith({
       where: { id: 'user-id' },
@@ -406,40 +489,47 @@ describe('UserManagementService.updateUser', () => {
     });
     expect((result as any).firstName).toBe('Updated');
   });
-});
 
-// ─── updateEmail ──────────────────────────────────────────────────────────────
-
-describe('UserManagementService.updateEmail', () => {
-  it('throws when user not found', async () => {
-    const findUnique = jest.fn().mockResolvedValue(null);
-    const svc = makeService(makePrisma({ findUnique }));
-
-    await expect(svc.updateEmail('user-id', { password: 'pw', newEmail: 'new@ex.com' }, 'updater'))
-      .rejects.toThrow('User not found');
-  });
-
-  it('throws when password is invalid', async () => {
-    mockCompare.mockResolvedValueOnce(false);
-    const findUnique = jest.fn().mockResolvedValue(makeUser());
-    const svc = makeService(makePrisma({ findUnique }));
-
-    await expect(svc.updateEmail('user-id', { password: 'wrong', newEmail: 'new@ex.com' }, 'updater'))
-      .rejects.toThrow('Invalid password');
-  });
-
-  it('updates email when password is valid', async () => {
-    mockCompare.mockResolvedValueOnce(true);
-    const findUnique = jest.fn().mockResolvedValue(makeUser({ password: 'hashed' }));
-    const update = jest.fn().mockResolvedValue(makeUser({ email: 'new@ex.com' }));
+  // #6823 — createUser recalculait déjà `searchTokens` ; updateUser écrivait
+  // `data` tel quel et laissait les anciens jetons en place, rendant le compte
+  // introuvable sous son nouveau nom.
+  it('recalculates searchTokens from the merged name when a name field changes', async () => {
+    const current = makeUser({ username: 'oldname', displayName: 'Old Name', firstName: 'Old', lastName: 'Name' });
+    const findUnique = jest.fn().mockResolvedValue(current);
+    const update = jest.fn().mockResolvedValue(makeUser({ username: 'newname' }));
     const svc = makeService(makePrisma({ findUnique, update }));
 
-    const result = await svc.updateEmail('user-id', { password: 'correct', newEmail: 'new@ex.com' }, 'updater');
+    await svc.updateUser('user-id', { username: 'newname' } as any);
 
-    expect(update).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ email: 'new@ex.com' }),
-    }));
-    expect((result as any).email).toBe('new@ex.com');
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { id: 'user-id' },
+      select: { username: true, displayName: true, firstName: true, lastName: true },
+    });
+    const expectedTokens = searchTokensFor({
+      username: 'newname',
+      displayName: 'Old Name',
+      firstName: 'Old',
+      lastName: 'Name',
+    });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'user-id' },
+      data: expect.objectContaining({ searchTokens: expectedTokens }),
+    });
+    // Le nouveau nom est indexé, l'ancien ne l'est plus.
+    expect(expectedTokens).toContain('newname');
+    expect(expectedTokens).not.toContain('oldname');
+  });
+
+  it('does not recompute searchTokens when the update touches no name field', async () => {
+    const findUnique = jest.fn();
+    const update = jest.fn().mockResolvedValue(makeUser({ bio: 'new bio' }));
+    const svc = makeService(makePrisma({ findUnique, update }));
+
+    await svc.updateUser('user-id', { bio: 'new bio' } as any);
+
+    expect(findUnique).not.toHaveBeenCalled();
+    const writtenData = update.mock.calls[0][0].data;
+    expect(writtenData).not.toHaveProperty('searchTokens');
   });
 });
 
@@ -450,7 +540,7 @@ describe('UserManagementService.updateRole', () => {
     const update = jest.fn().mockResolvedValue(makeUser({ role: 'MODERATOR' }));
     const svc = makeService(makePrisma({ update }));
 
-    await svc.updateRole('user-id', { role: 'MODERATOR' }, 'updater');
+    await svc.updateRole('user-id', { role: 'MODERATOR' });
 
     expect(update).toHaveBeenCalledWith({
       where: { id: 'user-id' },
@@ -466,7 +556,7 @@ describe('UserManagementService.updateStatus', () => {
     const update = jest.fn().mockResolvedValue(makeUser({ isActive: true, deactivatedAt: null }));
     const svc = makeService(makePrisma({ update }));
 
-    await svc.updateStatus('user-id', { isActive: true }, 'updater');
+    await svc.updateStatus('user-id', { isActive: true });
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ isActive: true, deactivatedAt: null }),
@@ -477,11 +567,73 @@ describe('UserManagementService.updateStatus', () => {
     const update = jest.fn().mockResolvedValue(makeUser({ isActive: false }));
     const svc = makeService(makePrisma({ update }));
 
-    await svc.updateStatus('user-id', { isActive: false }, 'updater');
+    await svc.updateStatus('user-id', { isActive: false });
 
     const callData = (update.mock.calls[0] as any[])[0].data;
     expect(callData.deactivatedAt).toBeInstanceOf(Date);
     expect(callData.isActive).toBe(false);
+  });
+});
+
+// ─── updateStatus — révocation des sockets du compte désactivé (F9) ───────────
+//
+// Loi : un compte désactivé (`deactivatedAt` non nul) est masqué pour TOUS.
+// F6 a fait taire `user:status` pour un sujet désactivé ; mais tant que ses
+// sockets restent ouverts, un désactivé encore connecté reçoit ses fils temps
+// réel, émet des `typing:start` (lus « en ligne ») et voit la présence des
+// autres. La désactivation doit donc couper ses sockets — APRÈS l'écriture,
+// et sans jamais faire échouer la désactivation si la coupure échoue.
+
+describe('UserManagementService.updateStatus — révocation des sockets du compte désactivé', () => {
+  it("désactiver appelle la révocation avec l'id, APRÈS que l'écriture a abouti", async () => {
+    const order: string[] = [];
+    const update = jest.fn(() => new Promise((resolve) => setTimeout(() => {
+      order.push('written');
+      resolve(makeUser({ isActive: false, deactivatedAt: new Date() }));
+    }, 5)));
+    const revokeSessions = jest.fn(async (userId: string) => { order.push(`revoked:${userId}`); return 1; });
+    const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
+
+    await svc.updateStatus('user-id', { isActive: false });
+
+    expect(revokeSessions).toHaveBeenCalledTimes(1);
+    expect(revokeSessions).toHaveBeenCalledWith('user-id');
+    expect(order).toEqual(['written', 'revoked:user-id']);
+  });
+
+  it('réactiver ne révoque pas', async () => {
+    const update = jest.fn().mockResolvedValue(makeUser({ isActive: true, deactivatedAt: null }));
+    const revokeSessions = jest.fn(async () => 0);
+    const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
+
+    await svc.updateStatus('user-id', { isActive: true });
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(revokeSessions).not.toHaveBeenCalled();
+  });
+
+  it("échec de la révocation ⇒ l'écriture est faite, l'utilisateur est rendu, l'échec est journalisé", async () => {
+    const written = makeUser({ isActive: false, deactivatedAt: new Date() });
+    const update = jest.fn().mockResolvedValue(written);
+    const revokeSessions = jest.fn(async (_userId: string) => { throw new Error('adapter down'); });
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
+
+    const result = await svc.updateStatus('user-id', { isActive: false });
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(result).toBe(written);
+    expect(revokeSessions).toHaveBeenCalledWith('user-id');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('user-id'));
+    warn.mockRestore();
+  });
+
+  it("sans révocateur injecté, désactiver écrit et rend l'utilisateur", async () => {
+    const written = makeUser({ isActive: false, deactivatedAt: new Date() });
+    const update = jest.fn().mockResolvedValue(written);
+    const svc = makeService(makePrisma({ update }));
+
+    await expect(svc.updateStatus('user-id', { isActive: false })).resolves.toBe(written);
   });
 });
 
@@ -492,9 +644,10 @@ describe('UserManagementService.resetPassword', () => {
     const update = jest.fn().mockResolvedValue(makeUser());
     const svc = makeService(makePrisma({ update }));
 
-    await svc.resetPassword('user-id', { newPassword: 'newpass' }, 'resetter');
+    await svc.resetPassword('user-id', { newPassword: 'newpass' });
 
-    expect(mockHash).toHaveBeenCalledWith('newpass', 10);
+    expect(mockHash).toHaveBeenCalledWith('newpass');
+    expect(BCRYPT_COST).toBe(12);
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ password: 'hashed_password' }),
     }));
@@ -508,11 +661,28 @@ describe('UserManagementService.deleteUser', () => {
     const update = jest.fn().mockResolvedValue(makeUser({ isActive: false }));
     const svc = makeService(makePrisma({ update }));
 
-    await svc.deleteUser('user-id', 'deleter');
+    await svc.deleteUser('user-id', 'admin-id');
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ isActive: false }),
     }));
+  });
+
+  // #6822 — un compte « supprimé » n'écrivait que isActive:false, indistinguable
+  // d'une désactivation à la lecture de la console (deletedAt/deletedBy jamais
+  // posés). Les trois champs doivent porter la même date, comme updateStatus le
+  // fait déjà pour deactivatedAt seul.
+  it('writes deletedAt, deletedBy and deactivatedAt so a deletion is distinguishable from a deactivation', async () => {
+    const update = jest.fn().mockResolvedValue(makeUser({ isActive: false }));
+    const svc = makeService(makePrisma({ update }));
+
+    await svc.deleteUser('user-id', 'admin-id');
+
+    const data = update.mock.calls[0][0].data as Record<string, unknown>;
+    expect(data.deletedBy).toBe('admin-id');
+    expect(data.deletedAt).toBeInstanceOf(Date);
+    expect(data.deactivatedAt).toBeInstanceOf(Date);
+    expect(data.deletedAt).toEqual(data.deactivatedAt);
   });
 });
 
@@ -523,10 +693,27 @@ describe('UserManagementService.restoreUser', () => {
     const update = jest.fn().mockResolvedValue(makeUser({ isActive: true }));
     const svc = makeService(makePrisma({ update }));
 
-    await svc.restoreUser('user-id', 'restorer');
+    await svc.restoreUser('user-id');
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ isActive: true }),
+    }));
+  });
+
+  // #6822 — restoreUser est l'inverse EXACT de deleteUser : les trois champs
+  // qu'il pose doivent redevenir vides, pas seulement isActive.
+  it('clears deletedAt, deletedBy and deactivatedAt', async () => {
+    const update = jest.fn().mockResolvedValue(makeUser({ isActive: true }));
+    const svc = makeService(makePrisma({ update }));
+
+    await svc.restoreUser('user-id');
+
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        deletedAt: null,
+        deletedBy: null,
+        deactivatedAt: null,
+      }),
     }));
   });
 });
@@ -566,7 +753,7 @@ describe('UserManagementService.verifyEmail', () => {
     const update = jest.fn().mockResolvedValue(makeUser());
     const svc = makeService(makePrisma({ update }));
 
-    await svc.verifyEmail('user-id', true, 'updater');
+    await svc.verifyEmail('user-id', true);
 
     const callData = (update.mock.calls[0] as any[])[0].data;
     expect(callData.emailVerifiedAt).toBeInstanceOf(Date);
@@ -576,7 +763,7 @@ describe('UserManagementService.verifyEmail', () => {
     const update = jest.fn().mockResolvedValue(makeUser({ emailVerifiedAt: null }));
     const svc = makeService(makePrisma({ update }));
 
-    await svc.verifyEmail('user-id', false, 'updater');
+    await svc.verifyEmail('user-id', false);
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ emailVerifiedAt: null }),
@@ -589,7 +776,7 @@ describe('UserManagementService.verifyPhone', () => {
     const update = jest.fn().mockResolvedValue(makeUser());
     const svc = makeService(makePrisma({ update }));
 
-    await svc.verifyPhone('user-id', true, 'updater');
+    await svc.verifyPhone('user-id', true);
 
     const callData = (update.mock.calls[0] as any[])[0].data;
     expect(callData.phoneVerifiedAt).toBeInstanceOf(Date);
@@ -599,7 +786,7 @@ describe('UserManagementService.verifyPhone', () => {
     const update = jest.fn().mockResolvedValue(makeUser());
     const svc = makeService(makePrisma({ update }));
 
-    await svc.verifyPhone('user-id', false, 'updater');
+    await svc.verifyPhone('user-id', false);
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ phoneVerifiedAt: null }),
@@ -614,7 +801,7 @@ describe('UserManagementService.unlockAccount', () => {
     const update = jest.fn().mockResolvedValue(makeUser());
     const svc = makeService(makePrisma({ update }));
 
-    await svc.unlockAccount('user-id', 'admin');
+    await svc.unlockAccount('user-id');
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
@@ -633,7 +820,7 @@ describe('UserManagementService.enable2FA', () => {
     const update = jest.fn().mockResolvedValue(makeUser());
     const svc = makeService(makePrisma({ update }));
 
-    await svc.enable2FA('user-id', 'admin');
+    await svc.enable2FA('user-id');
 
     const callData = (update.mock.calls[0] as any[])[0].data;
     expect(callData.twoFactorEnabledAt).toBeInstanceOf(Date);
@@ -641,17 +828,23 @@ describe('UserManagementService.enable2FA', () => {
 });
 
 describe('UserManagementService.disable2FA', () => {
+  // Ce témoin exigeait `twoFactorBackupCodes: null` — il CERTIFIAIT le défaut
+  // de #4206 : le champ est `String[] @default([])`, donc Prisma refusait
+  // l'écriture et la route rendait 500. Écrit depuis l'implémentation plutôt
+  // que depuis le comportement, il est resté vert pendant que le geste
+  // n'aboutissait jamais. La forme d'une liste scalaire vidée est `[]`.
   it('clears twoFactor fields', async () => {
     const update = jest.fn().mockResolvedValue(makeUser());
     const svc = makeService(makePrisma({ update }));
 
-    await svc.disable2FA('user-id', 'admin');
+    await svc.disable2FA('user-id');
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         twoFactorEnabledAt: null,
         twoFactorSecret: null,
-        twoFactorBackupCodes: null,
+        twoFactorPendingSecret: null,
+        twoFactorBackupCodes: [],
       }),
     }));
   });
@@ -675,7 +868,7 @@ describe('UserManagementService.toggleVoiceConsent', () => {
       const update = jest.fn().mockResolvedValue(makeUser());
       const svc = makeService(makePrisma({ update }));
 
-      await svc.toggleVoiceConsent('user-id', consentType, true, 'admin');
+      await svc.toggleVoiceConsent('user-id', consentType, true);
 
       const callData = (update.mock.calls[0] as any[])[0].data;
       expect(callData[fieldMap[consentType]]).toBeInstanceOf(Date);
@@ -685,7 +878,7 @@ describe('UserManagementService.toggleVoiceConsent', () => {
       const update = jest.fn().mockResolvedValue(makeUser());
       const svc = makeService(makePrisma({ update }));
 
-      await svc.toggleVoiceConsent('user-id', consentType, false, 'admin');
+      await svc.toggleVoiceConsent('user-id', consentType, false);
 
       const callData = (update.mock.calls[0] as any[])[0].data;
       expect(callData[fieldMap[consentType]]).toBeNull();
@@ -700,7 +893,7 @@ describe('UserManagementService.verifyAge', () => {
     const update = jest.fn().mockResolvedValue(makeUser());
     const svc = makeService(makePrisma({ update }));
 
-    await svc.verifyAge('user-id', true, 'admin');
+    await svc.verifyAge('user-id', true);
 
     const callData = (update.mock.calls[0] as any[])[0].data;
     expect(callData.ageVerifiedAt).toBeInstanceOf(Date);
@@ -710,10 +903,60 @@ describe('UserManagementService.verifyAge', () => {
     const update = jest.fn().mockResolvedValue(makeUser());
     const svc = makeService(makePrisma({ update }));
 
-    await svc.verifyAge('user-id', false, 'admin');
+    await svc.verifyAge('user-id', false);
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ ageVerifiedAt: null }),
     }));
+  });
+});
+
+// ─── deleteUser — révocation des sockets (F9 bis) ─────────────────────────────
+// Un compte supprimé en douceur pose `isActive: false` ET `deactivatedAt`
+// (#6822) : il est hors service au même titre qu'un compte désactivé, et ses
+// sockets doivent tomber de la même façon.
+
+describe('UserManagementService.deleteUser — révocation des sockets du compte supprimé', () => {
+  it("supprimer appelle la révocation avec l'id, APRÈS que l'écriture a abouti", async () => {
+    const order: string[] = [];
+    const update = jest.fn(() => new Promise((resolve) => setTimeout(() => {
+      order.push('written');
+      resolve(makeUser({ isActive: false }));
+    }, 5)));
+    const revokeSessions = jest.fn(async (userId: string) => { order.push(`revoked:${userId}`); return 1; });
+    const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
+
+    await svc.deleteUser('user-id', 'admin-id');
+
+    expect(revokeSessions).toHaveBeenCalledTimes(1);
+    expect(revokeSessions).toHaveBeenCalledWith('user-id');
+    expect(order).toEqual(['written', 'revoked:user-id']);
+  });
+
+  it("échec de la révocation ⇒ la suppression aboutit, l'utilisateur est rendu, l'échec est journalisé", async () => {
+    const written = makeUser({ isActive: false });
+    const update = jest.fn().mockResolvedValue(written);
+    const revokeSessions = jest.fn(async (_userId: string) => { throw new Error('adapter down'); });
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
+
+    const result = await svc.deleteUser('user-id', 'admin-id');
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(result).toBe(written);
+    expect(revokeSessions).toHaveBeenCalledWith('user-id');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('user-id'));
+    warn.mockRestore();
+  });
+
+  it('restaurer ne révoque pas', async () => {
+    const update = jest.fn().mockResolvedValue(makeUser({ isActive: true }));
+    const revokeSessions = jest.fn(async () => 0);
+    const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
+
+    await svc.restoreUser('user-id');
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(revokeSessions).not.toHaveBeenCalled();
   });
 });

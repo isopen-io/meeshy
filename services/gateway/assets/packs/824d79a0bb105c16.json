@@ -1,0 +1,137 @@
+{
+ "domain": "wallpaper",
+ "designs": [
+  {
+   "key": "neige-de-noel",
+   "style": "gradient",
+   "palettes": {
+    "light": {
+     "base": "#F3F7FC",
+     "ink": "#D7E3F1",
+     "soft": "#E7EEF7"
+    },
+    "dark": {
+     "base": "#0A1020",
+     "ink": "#16223D",
+     "soft": "#0E1730"
+    }
+   },
+   "gradient": {
+    "angle": 180,
+    "stops": [
+     {
+      "role": "base",
+      "at": 0
+     },
+     {
+      "role": "soft",
+      "at": 1
+     }
+    ],
+    "blobs": [
+     {
+      "x": 0.5,
+      "y": 0,
+      "r": 0.9,
+      "role": "ink",
+      "opacity": 0.45
+     }
+    ]
+   },
+   "fit": "fill",
+   "lottie": {
+    "src": "76356c212acf9bf9.json",
+    "bytes": 30773,
+    "sha256": "76356c212acf9bf941f1aca7dbac0d522d6e1b0530667ab180d8d661705cf4ae"
+   }
+  },
+  {
+   "key": "ampoules-de-noel",
+   "style": "gradient",
+   "palettes": {
+    "light": {
+     "base": "#FBF8F1",
+     "ink": "#F3E3BC",
+     "soft": "#F1EBDD"
+    },
+    "dark": {
+     "base": "#0F0D0A",
+     "ink": "#2A2010",
+     "soft": "#17140F"
+    }
+   },
+   "gradient": {
+    "angle": 180,
+    "stops": [
+     {
+      "role": "base",
+      "at": 0
+     },
+     {
+      "role": "soft",
+      "at": 1
+     }
+    ],
+    "blobs": [
+     {
+      "x": 0.5,
+      "y": 0.05,
+      "r": 0.8,
+      "role": "ink",
+      "opacity": 0.4
+     }
+    ]
+   },
+   "fit": "fill",
+   "lottie": {
+    "src": "3f315eaf529d3947.json",
+    "bytes": 19538,
+    "sha256": "3f315eaf529d394789b9c6feb418258ac2a2d9ec98caaaf60bbb05ca8dff7ca1"
+   }
+  },
+  {
+   "key": "etincelles-atelier",
+   "style": "gradient",
+   "palettes": {
+    "light": {
+     "base": "#FCF8F6",
+     "ink": "#F6DCD5",
+     "soft": "#EFEDE4"
+    },
+    "dark": {
+     "base": "#110B0B",
+     "ink": "#2B1414",
+     "soft": "#121611"
+    }
+   },
+   "gradient": {
+    "angle": 180,
+    "stops": [
+     {
+      "role": "base",
+      "at": 0
+     },
+     {
+      "role": "soft",
+      "at": 1
+     }
+    ],
+    "blobs": [
+     {
+      "x": 0.5,
+      "y": 1,
+      "r": 0.85,
+      "role": "ink",
+      "opacity": 0.4
+     }
+    ]
+   },
+   "fit": "fill",
+   "lottie": {
+    "src": "cf5704f84d5d73bb.json",
+    "bytes": 22882,
+    "sha256": "cf5704f84d5d73bbb0e4c20a2b91707663a9fc9a140e0ee8452c314d9dd9652e"
+   }
+  }
+ ]
+}

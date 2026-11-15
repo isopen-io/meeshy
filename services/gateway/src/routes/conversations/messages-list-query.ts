@@ -1,0 +1,892 @@
+/**
+ * Aides de la LISTE DE MESSAGES (issue #4284 — découpage de `messages.ts`,
+ * 2945 lignes, en fichiers frères par responsabilité). La route
+ * `GET /conversations/:id/messages` fait à elle seule ~1140 lignes et dépasse
+ * le budget même isolée dans son propre fichier — ce module porte donc ses
+ * AIDES (construction du `select`, sérialisation d'une ligne de message, enrichissement transfert/citation de
+ * post) en fonctions pures nommées, appelées depuis le handler resté dans
+ * `messages-list.ts`. Voir `messages.ts` pour le composeur
+ * (`registerMessagesRoutes`).
+ */
+import { e2eeUpgradeRequired } from '../../services/e2ee/e2ee-upgrade-required';
+import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
+import type { EphemeralReaderResolution } from './ephemeralReaderDeadlines';
+import { aggregateAttachmentReactions } from '../../socketio/serializeAttachmentForSocket';
+import {
+  buildPostReplyTo,
+  postReplyToFromMetadata,
+  POST_REPLY_SNAPSHOT_SELECT,
+} from '../../services/messaging/postReplySnapshot';
+import {
+  CITED_POST_LIVENESS_SELECT,
+  citedPostIdsOf,
+  servePostReplyCitation,
+  withdrawnCitationsOf,
+} from '../../services/messaging/servedPostReply';
+import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
+import { stickerFromMetadata, hoistStickerOnto } from '../../services/stickers/messageSticker';
+import { resolveForwardSourceGateForReader } from '../../services/preferences/forward-source-visibility.js';
+import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
+import { servedDescription } from '../../services/attachments/mediaSideContent';
+import { FORWARD_PIECE_PROTECTION_SELECT, FORWARD_SOURCE_PROTECTION_SELECT, forwardPreviewOf, signReaderAttachmentsIn } from '../../services/attachments/signedAttachmentUrls';
+import type { ReaderFileUrlSigner } from '../../services/attachments/readerFileSignature';
+import { loadPersonalHistoryHidingByConversation, NO_PERSONAL_HIDING } from '../../services/personalHistoryFilter';
+import { attachmentFullSelect, attachmentForwardPreviewSelect, attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER, QUOTED_VISUAL_ATTACHMENT_COUNT_SELECT } from '../../services/attachments/attachmentIncludes';
+import {
+  resolveParticipantAvatar,
+  resolveParticipantDisplayName,
+  resolveAnonymousSenderIdentity,
+  type AvatarBearingParticipant,
+  type DisplayNameBearingParticipant,
+} from '@meeshy/shared/utils/participant-helpers';
+import { applyPresenceVisibilityAsOffline, type PresenceVisibility, type PresenceMissingEntryPolicy } from '@meeshy/shared/utils/presence-visibility';
+import { transformTranslationsToArray } from '../../utils/translation-transformer';
+import { normalizeLanguageForDedup, makeLanguageFilter } from '@meeshy/shared/utils/language-normalize';
+import { servedQuotedMessage } from '../../services/messaging/servedQuotedMessage';
+import { attachmentReplyToFromMetadata } from '../../services/messaging/attachmentReplySnapshot';
+import { messageSenderUserSelect } from './utils/message-sender-select';
+import { logger } from './messages-shared';
+import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import { servedLinkMetadata } from '../../services/messaging/linkTrackingAuthor';
+import { servedEditAttribution, type EditAttributionReader } from '@meeshy/shared/utils/message-edit-attribution';
+import { authorProfileDecor } from '../../services/appearance/authorProfileDecor';
+import { quotedRowOf, signedQuotedReply } from '../../socketio/readerSignedDelivery';
+import type {
+  AttachmentAudioTranslationEntry,
+  CurrentUserConsumption,
+  RawMessageAttachment,
+  CleanedAttachment,
+  RawMessageSender,
+  RawMessageRow,
+  MappedMessageRow,
+} from './messages-list-query-types';
+
+export type { CurrentUserConsumption } from './messages-list-query-types';
+
+/// Un message cité PROTÉGÉ (vue unique, flouté, chiffré) ne fait voyager que
+/// son placeholder — ni texte, ni traduction, ni vignette, ni ThumbHash, ni
+/// transcription. Le prédicat ET la composition de ce qui est SERVI vivent au
+/// site unique `servedQuotedMessage`, partagé avec les deux producteurs de
+/// `message:new` : la garde ne retenait ici que les traductions pendant que
+/// `...message.replyTo` répandait le texte et qu'`attachmentFullSelect`
+/// servait le média (leçon 275 — une garde se mesure sur tout ce que la charge
+/// TRANSPORTE).
+
+/**
+ * Nettoie les attachments pour l'API en transformant les valeurs invalides
+ * Fixe spécifiquement voiceSimilarityScore: false -> null pour compatibilité schéma
+ */
+function cleanAttachmentsForApi(
+  attachments: readonly RawMessageAttachment[] | null | undefined,
+  languageFilter?: readonly string[],
+  currentParticipantId?: string,
+  consumptionMap?: Map<string, CurrentUserConsumption>
+): readonly CleanedAttachment[] | null | undefined {
+  if (!attachments || !Array.isArray(attachments)) {
+    return attachments;
+  }
+
+  // Bandwidth opt-in : restreindre les traductions audio (Prisme) aux langues
+  // demandées, miroir exact du filtre appliqué aux traductions texte. SSOT
+  // `makeLanguageFilter` — canonicalise les DEUX côtés (une clé audio stockée
+  // `'pt-BR'` matche une demande `'pt'`, #5234).
+  const matchesLanguage = makeLanguageFilter(languageFilter);
+
+  if (attachments.length > 0) {
+    logger.debug(`🧹 [CLEAN] Nettoyage de ${attachments.length} attachment(s) pour l'API`);
+  }
+
+  return attachments.map((att, attIndex): CleanedAttachment => {
+    // #12333 — la description sous la loi de `servedDescription` ; la ligne
+    // du message porteur (chargée pour cette seule loi) ne sort jamais.
+    const { message: _carrier, ...row } = att as RawMessageAttachment & { message?: unknown };
+    const cleaned: CleanedAttachment = { ...row, ...servedDescription(att as Parameters<typeof servedDescription>[0]) };
+
+    // BUG2 A' — agréger les réactions par-image en reactionSummary + currentUserReactions
+    // (miroir des réactions message-level) et retirer les rows brutes.
+    const __reactions = aggregateAttachmentReactions(cleaned.reactions, currentParticipantId);
+    cleaned.reactionSummary = __reactions.reactionSummary;
+    cleaned.currentUserReactions = __reactions.currentUserReactions;
+    delete cleaned.reactions;
+
+    // #3909 — la progression PERSONNELLE de lecture, REVENUE, et cette fois
+    // déclarée au `messageAttachmentSchema` avant d'être calculée. #4177
+    // l'avait retirée parce qu'elle mourait à la sérialisation ; l'ordre
+    // corrigé est déclaration → projection → lecteur. `null` = jamais consommé
+    // par ce participant, ce qu'un lecteur doit distinguer de « position 0 ».
+    cleaned.currentUserConsumption = (att.id ? consumptionMap?.get(att.id) : undefined) ?? null;
+
+    // Nettoyer la transcription
+    const transcription = cleaned.transcription;
+    if (transcription && transcription.segments) {
+      const segments = transcription.segments;
+      const originalSegment = segments[0];
+
+      // Log speakerAnalysis
+      let speakerInfo = '';
+      if (transcription.speakerAnalysis) {
+        const speakers = transcription.speakerAnalysis.speakers || [];
+        const withVoiceChars = speakers.filter((s) => s.voiceCharacteristics).length;
+        speakerInfo = `speakerAnalysis: ${speakers.length} speaker(s), voiceChars: ${withVoiceChars}/${speakers.length}`;
+        if (withVoiceChars > 0) {
+          const firstSpeaker = speakers.find((s) => s.voiceCharacteristics);
+          speakerInfo += `, firstSpeaker: sid=${firstSpeaker?.sid}, pitch=${firstSpeaker?.voiceCharacteristics?.pitch?.mean_hz}Hz`;
+        }
+      } else {
+        speakerInfo = '⚠️ AUCUN speakerAnalysis';
+      }
+
+      logger.debug(`🧹 [CLEAN] Attachment ${attIndex} - Transcription: ${segments.length} segments | ${speakerInfo} | segment[0]: hasStartMs=${'startMs' in originalSegment}, hasEndMs=${'endMs' in originalSegment}, hasSpeakerId=${'speakerId' in originalSegment}, voiceSimilarityScoreType=${typeof originalSegment.voiceSimilarityScore}, voiceSimilarityScoreValue=${originalSegment.voiceSimilarityScore}`);
+
+      transcription.segments = segments.map((seg) => ({
+        ...seg,
+        // Convertir false/true en null (schéma attend number | null)
+        voiceSimilarityScore: typeof seg.voiceSimilarityScore === 'number' ? seg.voiceSimilarityScore : null
+      }));
+
+      const cleanedSegment = transcription.segments[0];
+      logger.debug(`🧹 [CLEAN] Segment nettoyé [0]: text="${cleanedSegment.text}", startMs=${cleanedSegment.startMs}, endMs=${cleanedSegment.endMs}, speakerId=${cleanedSegment.speakerId}, voiceSimilarityScore=${cleanedSegment.voiceSimilarityScore}, confidence=${cleanedSegment.confidence}`);
+    }
+
+    // Nettoyer les traductions
+    const translations = cleaned.translations;
+    if (translations && typeof translations === 'object') {
+      const langs = Object.keys(translations);
+      const translationsInfo = langs.map(lang => {
+        const trans = translations[lang];
+        return `${lang}(url="${trans.url || '⚠️ VIDE'}", segments=${trans.segments?.length || 0})`;
+      }).join(', ');
+
+      logger.debug(`🧹 [CLEAN] Attachment ${attIndex} - Traductions: ${langs.length} langue(s) [${translationsInfo}]`);
+
+      const cleanedTranslations: Record<string, AttachmentAudioTranslationEntry> = {};
+      for (const [lang, translation] of Object.entries(translations)) {
+        if (matchesLanguage && !matchesLanguage(lang)) continue;
+        cleanedTranslations[lang] = {
+          ...translation,
+          segments: translation.segments?.map((seg) => ({
+            ...seg,
+            // Convertir false/true en null (schéma attend number | null)
+            voiceSimilarityScore: typeof seg.voiceSimilarityScore === 'number' ? seg.voiceSimilarityScore : null
+          }))
+        };
+      }
+      cleaned.translations = cleanedTranslations;
+    } else {
+      logger.debug(`🧹 [CLEAN] Attachment ${attIndex} - AUCUNE traduction trouvée`);
+    }
+
+    return cleaned;
+  });
+}
+
+/**
+ * Forward watermark filter for GET messages. Given an ISO8601 `after`
+ * timestamp, returns a Prisma `createdAt > after` clause so a client can
+ * resume a missed-message gap from its per-conversation high-water mark
+ * (local-first incremental backfill) instead of refetching offset:0. Returns
+ * null when `after` is absent or unparseable — the caller then keeps its
+ * default offset/cursor paging and never builds an `Invalid Date` filter.
+ */
+export function buildAfterWatermarkClause(after?: string): { createdAt: { gt: Date } } | null {
+  if (!after) return null;
+  const d = new Date(after);
+  if (isNaN(d.getTime())) return null;
+  return { createdAt: { gt: d } };
+}
+
+/**
+ * Bandwidth opt-in `?languages=` — restreint les traductions servies (texte
+ * `transformTranslationsToArray`, message cité `servedQuotedMessage`, pistes
+ * audio du Prisme `cleanAttachmentsForApi`) aux seules langues demandées.
+ * Canonicalise via {@link normalizeLanguageForDedup} (SSOT) : les codes
+ * arrivent VERBATIM du client — locale appareil (`en_US`/`pt_BR`, rang 4 du
+ * Prisme) sur iOS, `Accept-Language` (`en-US`/`pt-BR`) sur le web — quand les
+ * traductions sont stockées sous des clés canoniques 2 lettres (`'pt'`).
+ * Symétrique du chemin socket (`normalizeGroupLanguage` →
+ * `normalizeLanguageCode`, `socketio/utils/message-payload-filter.ts`).
+ *
+ * Absent/vide → `undefined` (comportement historique : toutes les langues).
+ * Dédupliqué (un même code sous deux graphies ne compte qu'une fois) et borné
+ * à 20 entrées.
+ */
+export function parseLanguageFilterParam(languagesStr?: string): string[] | undefined {
+  if (!languagesStr) return undefined;
+  const parsed = Array.from(new Set(
+    languagesStr.split(',')
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map(normalizeLanguageForDedup)
+  )).slice(0, 20);
+  return parsed.length > 0 ? parsed : undefined;
+}
+
+/**
+ * La projection de PROTECTION vit dans `messageProtectionProjection.ts` depuis
+ * #7451 — son `expiresAt` est devenu une résolution PAR LECTEUR, et ce fichier
+ * est borné à 1 000 lignes. Ré-exportée ici : trois modules l'importent par
+ * cette adresse (`messages-search`, `links/utils/message-formatters`, et le
+ * mappeur ci-dessous).
+ */
+import {
+  MESSAGE_PROTECTION_SELECT,
+  mapMessageProtectionFields,
+} from './messageProtectionProjection';
+export { MESSAGE_PROTECTION_SELECT, mapMessageProtectionFields };
+
+/**
+ * Construit le `select` Prisma de `GET /conversations/:id/messages` selon les
+ * paramètres d'inclusion (traductions, réponses citées).
+ */
+export function buildMessageListSelect(options: {
+  includeTranslations: boolean;
+  includeReplies: boolean;
+}): Prisma.MessageSelect {
+  const { includeTranslations, includeReplies } = options;
+      // Construire le select Prisma dynamiquement selon les paramètres d'inclusion
+      // (avant les requêtes pour permettre la parallélisation)
+      const messageSelect: Prisma.MessageSelect = {
+        // ===== CHAMPS DE BASE =====
+        id: true,
+        // Idempotency key — exposed so clients reconcile optimistic rows by
+        // `clientMessageId` on a cold message-list load (avoids duplicate
+        // bubbles when the optimistic→server ack was missed offline).
+        clientMessageId: true,
+        content: true,
+        originalLanguage: true,
+        conversationId: true,
+        senderId: true,
+        messageType: true,
+        messageSource: true,
+        // Structured per-type payload (call-summary facts for system messages)
+        metadata: true,
+
+        // ===== ÉDITION / SUPPRESSION =====
+        isEdited: true,
+        editedAt: true,
+        // #11375 — l'auteur d'une modification faite par un modérateur.
+        thirdPartyEditorId: true,
+        thirdPartyEditorRole: true,
+        deletedAt: true,
+
+        // ===== REPLY / FORWARD =====
+        replyToId: true,
+        storyReplyToId: true,
+        forwardedFromId: true,
+        forwardedFromConversationId: true,
+
+        // ===== VIEW-ONCE / BLUR / EXPIRATION =====
+        ...MESSAGE_PROTECTION_SELECT,
+        // #11269 — lue pour la projection par lecteur (une vue unique purgée ne
+        // sert plus rien à personne), jamais servie : `messageSchema` ne la
+        // déclare pas.
+        viewOnceBurnedAt: true,
+
+        // ===== ÉPINGLAGE =====
+        pinnedAt: true,
+        pinnedBy: true,
+
+        // ===== STATUTS AGRÉGÉS =====
+        // Aucune colonne dénormalisée n'est lue ici : les cinq
+        // (`deliveredToAllAt`, `receivedByAllAt`, `readByAllAt`,
+        // `deliveredCount`, `readCount`) ont perdu leur écrivain quand le suivi
+        // est passé aux curseurs — `updateMessageComputedStatus` est un no-op
+        // assumé. Tout le bloc de statut vient de
+        // `MessageReadStatusService.getConversationReadStatuses`.
+
+        // ===== RÉACTIONS (dénormalisées - toujours incluses) =====
+        reactionSummary: true,
+        reactionCount: true,
+
+        // ===== CHIFFREMENT =====
+        // #11381 — le chiffré et ses métadonnées sont LUS pour que la passerelle
+        // ouvre un message `server`/`hybrid` (`revealAtRestRows`) ; ils ne sortent pas.
+        isEncrypted: true,
+        encryptionMode: true,
+        encryptedContent: true,
+        encryptionMetadata: true,
+
+        // ===== TIMESTAMPS =====
+        createdAt: true,
+        updatedAt: true,
+
+        // ===== MENTIONS =====
+        validatedMentions: true,
+
+        // ===== RELATIONS OBLIGATOIRES =====
+        sender: {
+          select: {
+            id: true,
+            userId: true,
+            displayName: true,
+            avatar: true,
+            type: true,
+            role: true,
+            language: true,
+            // Identité humaine d'un auteur SANS COMPTE : le nom donné au
+            // formulaire d'entrée vit dans le profil de session. Jamais servi
+            // brut (email/birthday) — résolu puis détruit au formatage.
+            anonymousSession: { select: { profile: true } },
+            // #10713 — le contour équipé, résolu en `profileDecor` au formatage.
+            user: { select: { ...messageSenderUserSelect, equippedAvatarRing: true } }
+          }
+        },
+        // #5125, unifié #7070 — `attachmentSocketSelect` (jamais `attachmentMediaSelect`
+        // nu, délibérément SANS drapeau de protection, ni une union locale des
+        // deux) : c'est littéralement la forme du canal socket que #7014 a
+        // nommée, et que cette route écrivait à la main jusqu'ici.
+        attachments: { select: attachmentSocketSelect, orderBy: MESSAGE_ATTACHMENT_ORDER },
+        _count: {
+          select: {
+            reactions: true,
+            statusEntries: true
+          }
+        }
+      };
+
+      // ===== RELATIONS OPTIONNELLES (selon paramètres include_*) =====
+
+      // `translations` est un champ Json sur Message (pas une relation) — on
+      // ne le ramène du DB que si le client le demande. Économie bandwidth :
+      // une conv warm-cache iOS (GRDB déjà peuplé + socket temps réel) appelle
+      // `?include_translations=false` et évite ~22 KB par refresh sur 30
+      // messages × 3 langues. Cold-start envoie `true` par défaut.
+      if (includeTranslations) {
+        messageSelect.translations = true;
+      }
+
+      if (includeReplies) {
+        // Charger les détails du message de réponse
+        messageSelect.replyTo = {
+          select: {
+            id: true,
+            content: true,
+            // #7927 — la suppression garde `content` en base : sans ce champ,
+            // `servedQuotedMessage` ne peut pas savoir qu'il doit le taire.
+            deletedAt: true,
+            originalLanguage: true,
+            createdAt: true,
+            senderId: true,
+            validatedMentions: true,
+            // La protection du message CITÉ — le niveau que ce select ne
+            // demandait pas du tout, alors que `attachmentFullSelect` la sert
+            // déjà sur ses PIÈCES JOINTES (`reply-attachment-protection-contract`).
+            // Sans ces champs, un client ne peut pas savoir qu'il rend le texte
+            // d'un message à vue unique : répondre à un message protégé en
+            // publiait le contenu entier dans chaque bulle-citation du fil.
+            // Même famille, une couche plus haut : ce que la route CONSTRUIT et
+            // ce que le schéma DÉCLARE sont deux vérités séparées — les deux
+            // ont dû bouger.
+            isViewOnce: true,
+            isBlurred: true,
+            expiresAt: true,
+            ephemeralDuration: true,
+            effectFlags: true,
+            isEncrypted: true,
+            encryptionMode: true,
+            // #11381 — la citation d'un message au repos s'ouvre comme la racine.
+            conversationId: true,
+            encryptedContent: true,
+            encryptionMetadata: true,
+            // Le TYPE porte l'icône du placeholder servi à un message protégé
+            // (`protectedPreview` : « 👁️ 🖼️ ») ; sans lui toute citation
+            // masquée se lit « 👁️ 💬 », quel que soit son média.
+            messageType: true,
+            // Lot 2 : le message CITÉ est un objet imbriqué, pas la racine —
+            // le hoist doit porter sur `replyTo` lui-même, pas seulement sur
+            // le message qui cite.
+            metadata: true,
+            // #4945 — la citation descend le Prisme au CHARGEMENT comme à
+            // l'arrivée en direct : le fil socket `include` la ligne entière
+            // (`translations` compris) quand ce select nommé ne le demandait
+            // pas, et un lecteur francophone lisait la même citation en anglais
+            // après un rechargement et en français en temps réel. Même garde
+            // que la racine : le client qui n'en veut pas ne les paie pas.
+            ...(includeTranslations ? { translations: true } : {}),
+            sender: {
+              select: {
+                id: true,
+                userId: true,
+                displayName: true,
+                avatar: true,
+                type: true,
+                language: true,
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    displayName: true,
+                    firstName: true,
+                    lastName: true,
+                    avatar: true
+                  }
+                }
+              }
+            },
+            // #6164 — l'ordre était ABSENT : « la première pièce » que toute
+            // citation rendait était donc ARBITRAIRE d'un appel à l'autre,
+            // MongoDB ne promettant aucun ordre sans `orderBy`. Un défaut pire
+            // que « la 1re au lieu de la 3e » : le même message ne se citait
+            // pas deux fois pareil. Les deux champs existent sur
+            // `MessageAttachment` ; `id` départage deux pièces jointes
+            // enregistrées dans la même milliseconde.
+            //
+            // Le `take` NE MONTE PAS à 10 : chaque message du fil le paierait,
+            // pour une citation qui n'en rend qu'une. La pièce NOMMÉE qui
+            // tombe hors de la fenêtre est rattrapée par son ID, en UNE requête
+            // par page (`backfillCitedAttachments`).
+            attachments: {
+              select: attachmentFullSelect,
+              orderBy: MESSAGE_ATTACHMENT_ORDER,
+              take: 4,
+            },
+            _count: { select: { reactions: true, ...QUOTED_VISUAL_ATTACHMENT_COUNT_SELECT } }
+          }
+        };
+      }
+
+  return messageSelect;
+}
+
+/**
+ * Sérialise une ligne `Message` de `GET /conversations/:id/messages` au
+ * format `GatewayMessage` (@meeshy/shared/types) : présence de l'expéditeur,
+ * pièces jointes nettoyées, traductions filtrées par le Prisme, accusés de
+ * lecture agrégés.
+ */
+export type MessageRowMappingContext = {
+  includeTranslations: boolean;
+  includeReplies: boolean;
+  hasLanguageFilter: boolean;
+  languageFilter: readonly string[] | undefined;
+  currentParticipantId: string | undefined;
+  readStatusMap: Map<string, {
+    deliveredCount: number;
+    readCount: number;
+    recipientCount: number;
+    deliveredToAllAt: Date | null;
+    readByAllAt: Date | null;
+  }>;
+  senderPresenceVis: Map<string, PresenceVisibility>;
+  listMissingEntry: PresenceMissingEntryPolicy;
+  /** #3909 — la progression de lecture du participant, par pièce jointe. */
+  consumptionMap: Map<string, CurrentUserConsumption>;
+  /**
+   * #7451 — l'échéance d'éphémère de CE lecteur, par message. Absente ⇒ aucun
+   * décompte servi : la projection ferme par défaut plutôt que de rendre la
+   * colonne, qui porte l'heure interne de destruction.
+   */
+  ephemeralDeadlines?: Map<string, EphemeralReaderResolution>;
+  /** #7936 — les emojis que CE lecteur a posés, par message. Absente ⇒ `[]`. */
+  readerReactions?: ReadonlyMap<string, readonly string[]>;
+  /**
+   * #9600 — signe, pour `currentParticipantId`, les adresses des pièces
+   * protégées. Absent ou `null` (aucune clé posée) ⇒ l'adresse d'avant.
+   */
+  readerFileUrlSigner?: ReaderFileUrlSigner | null;
+  /** #11375 — le lecteur, juge de ce qu'il lit de l'auteur d'une modification. Absent ⇒ la mention seule. */
+  editAttributionReader?: EditAttributionReader;
+};
+
+/** Retour `any` DÉLIBÉRÉ : l'appelant (`messages-list.ts`) lit `mappedMessages` sans annotation propre. `mappedMessage`, construit ci-dessous, est lui pleinement typé. */
+export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMappingContext): any {
+  const {
+    includeTranslations,
+    includeReplies,
+    hasLanguageFilter,
+    languageFilter,
+    currentParticipantId,
+    readStatusMap,
+    senderPresenceVis,
+    listMissingEntry,
+    ephemeralDeadlines,
+  } = ctx;
+        // Construire l'objet de réponse aligné avec GatewayMessage
+        const mappedMessage: MappedMessageRow = {
+          // Identifiants
+          id: message.id,
+          // Idempotency key — lets clients reconcile an optimistic send with
+          // its server record by `clientMessageId` on a cold list load.
+          clientMessageId: message.clientMessageId ?? null,
+          conversationId: message.conversationId,
+          // CORRECTION senderId: en DB, senderId = Participant.id (FK).
+          // Les clients (iOS/Web) comparent senderId avec leur userId (User.id).
+          // On résout ici : senderId devient sender.userId si disponible.
+          senderId: message.sender?.userId ?? message.sender?.user?.id ?? message.senderId,
+          // Conserver le participantId brut pour debug/internal usage
+          senderParticipantId: message.senderId,
+          
+
+          // Contenu
+          content: message.content,
+          originalLanguage: message.originalLanguage || 'fr',
+          messageType: message.messageType,
+          messageSource: message.messageSource,
+          // Structured per-type payload (call-summary facts for system messages) ;
+          // la carte de liens suivis d'un invité anonyme n'en sort pas (#10286).
+          metadata: servedLinkMetadata(message.metadata, message.sender) ?? undefined,
+
+          // Édition/Suppression
+          isEdited: message.isEdited,
+          editedAt: message.editedAt,
+          // #11375 — servi PAR LECTEUR : la mention à tous, l'identité à qui en rend compte.
+          ...servedEditAttribution(message, ctx.editAttributionReader),
+          deletedAt: message.deletedAt,
+
+          // Reply/Forward
+          replyToId: message.replyToId,
+          storyReplyToId: message.storyReplyToId,
+          forwardedFromId: message.forwardedFromId,
+          forwardedFromConversationId: message.forwardedFromConversationId,
+
+          // View-once / Blur / Expiration — l'échéance est celle du LECTEUR
+          // pour un éphémère (#7451), jamais la colonne.
+          ...mapMessageProtectionFields(message, ephemeralDeadlines?.get(message.id)),
+
+          // Épinglage
+          pinnedAt: message.pinnedAt,
+          pinnedBy: message.pinnedBy,
+
+          // Statuts agrégés — CALCULÉS, jamais lus de la ligne Message : ses
+          // champs `deliveredCount`/`readCount` n'ont aucun écrivain et valent
+          // toujours zéro. Les garder en repli donnait à un compteur mort
+          // l'apparence d'une valeur de secours.
+          //
+          // Les DATES du seuil « tous servis » avaient gardé ce repli une
+          // couche de plus : `deliveredToAllAt`/`readByAllAt` sortaient encore
+          // de la ligne, donc valaient `null` en permanence — et les trois
+          // clients lisent `readByAllAt != null` comme la PREUVE que tous les
+          // destinataires ont lu (`DeliveryStatusResolver`, iOS et Android).
+          // `receivedByAllAt`, lui, n'avait aucun lecteur nulle part : il sort.
+          deliveredToAllAt: readStatusMap.get(message.id)?.deliveredToAllAt ?? null,
+          readByAllAt: readStatusMap.get(message.id)?.readByAllAt ?? null,
+          deliveredCount: readStatusMap.get(message.id)?.deliveredCount ?? 0,
+          readCount: readStatusMap.get(message.id)?.readCount ?? 0,
+          // Dénominateur des destinataires actifs faisant autorité côté serveur
+          // (participants moins l'expéditeur, opt-out retirés). `0` quand rien
+          // n'a été calculé (pas de contexte d'authentification) — le client
+          // retombe alors sur son compte de membres local.
+          recipientCount: readStatusMap.get(message.id)?.recipientCount ?? 0,
+
+          // Réactions (dénormalisées - toujours incluses)
+          reactionSummary: message.reactionSummary,
+          reactionCount: message.reactionCount,
+          // #7936 — MES emojis sur ce message, chargés en UNE requête pour la
+          // page (`loadReaderReactionsByMessage`) et DÉCLARÉS au
+          // `messageSchema` : #4177 les avait retirés parce qu'ils mouraient
+          // à la sérialisation.
+          currentUserReactions: ctx.readerReactions?.get(message.id) ?? [],
+
+          // Chiffrement
+          isEncrypted: message.isEncrypted,
+          encryptionMode: message.encryptionMode,
+          e2eeUpgradeRequired: e2eeUpgradeRequired(message),
+
+          // Timestamps
+          createdAt: message.createdAt,
+          updatedAt: message.updatedAt,
+
+          // Mentions
+          validatedMentions: message.validatedMentions,
+
+          // Relations obligatoires
+          sender: message.sender ? (() => {
+            // Capturé en local : la narrowing ne traverse pas la fermeture de cette IIFE.
+            const sender = message.sender as RawMessageSender;
+            // PII : le profil de session (email/birthday) ne sort JAMAIS — on
+            // en résout l'identité puis on le détruit avant le spread.
+            const { anonymousSession: _anonymousSession, ...senderData } = sender;
+            const anonymousIdentity = sender.type === 'anonymous'
+              ? resolveAnonymousSenderIdentity(sender)
+              : null;
+            return applyPresenceVisibilityAsOffline(
+              {
+                ...senderData,
+                username: anonymousIdentity?.username
+                  ?? sender.user?.username ?? sender.username ?? null,
+                // T16 — firstName/lastName were serialized but read by no client and
+                // are no longer fetched (messageSenderUserSelect trims them).
+                // Auteur sans compte : le nom DONNÉ au formulaire prime, le pseudo
+                // ano_ descend en handle (`username` ci-dessus).
+                displayName: anonymousIdentity && anonymousIdentity.displayName
+                  ? anonymousIdentity.displayName
+                  : resolveParticipantDisplayName(sender),
+                avatar: resolveParticipantAvatar(sender),
+                isOnline: sender.user?.isOnline ?? sender.isOnline ?? null,
+                lastActiveAt: sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null,
+                ...authorProfileDecor(sender.user),
+              },
+              sender.userId ? senderPresenceVis.get(sender.userId) : undefined,
+              { onMissingEntry: listMissingEntry },
+            );
+          })() : null,
+          // #9600 — en DERNIER : l'adresse servie d'une pièce protégée est
+          // celle de CE lecteur. La protection se lit sur la ligne BRUTE
+          // (`expiresAt` de la colonne, pas l'échéance servie au lecteur).
+          attachments: signReaderAttachmentsIn(
+            cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId, ctx.consumptionMap),
+            { message, readerParticipantId: currentParticipantId, signer: ctx.readerFileUrlSigner },
+          ),
+          _count: message._count
+        };
+
+        // Relations optionnelles (selon paramètres include_*)
+        if (includeTranslations && message.translations) {
+          // Transformer JSON vers array pour rétrocompatibilité frontend
+          mappedMessage.translations = transformTranslationsToArray(
+            message.id,
+            message.translations,
+            hasLanguageFilter ? { languages: languageFilter } : undefined
+          );
+        }
+        if (includeReplies && message.replyTo) {
+          const replySender = message.replyTo.sender;
+          // Lot 2 : hoistLocationOnto hisse metadata.location du message CITÉ
+          // — sans lui, une citation d'un message géolocalisé n'affiche
+          // jamais sa position, même si la liste principale la restitue.
+          // #18470 — les pièces de la citation sous les adresses de CE lecteur :
+          // un fichier scellé au repos n'a pas d'adresse nue lisible.
+          mappedMessage.replyTo = signedQuotedReply(hoistStickerOnto(hoistLocationOnto({
+            ...message.replyTo,
+            originalLanguage: message.replyTo.originalLanguage || 'fr',
+            // #4945 — même projection JSON → tableau que la racine, même filtre
+            // de langues ; sans elle le blob Prisma brut voyagerait sous un
+            // nom que les clients lisent comme un tableau. Et le TEXTE et le
+            // MÉDIA de la citation passent par la même garde que ses
+            // traductions : ils sont étalés APRÈS `...message.replyTo`, donc
+            // ils la remplacent.
+            ...servedQuotedMessage(message.replyTo, {
+              includeTranslations,
+              languages: hasLanguageFilter ? languageFilter : undefined,
+              // #6164 — l'instantané est gravé sur le message QUI CITE, pas sur
+              // le message cité : c'est `message.metadata`, jamais
+              // `message.replyTo.metadata` (qui porterait la pièce que le
+              // message CITÉ visait lui-même, un cran plus haut dans le fil).
+              attachmentReplyTo: attachmentReplyToFromMetadata(message.metadata),
+              // #8562 — l'échéance du LECTEUR sur le message cité.
+              ephemeralReader: { resolution: ephemeralDeadlines?.get(message.replyTo.id), now: new Date() },
+            }),
+            sender: replySender ? {
+              ...replySender,
+              username: replySender.user?.username ?? replySender.username ?? null,
+              displayName: resolveParticipantDisplayName(replySender),
+              avatar: resolveParticipantAvatar(replySender),
+            } : null,
+          })), { quoted: quotedRowOf(message), participantId: currentParticipantId, signer: ctx.readerFileUrlSigner });
+        }
+
+        return mappedMessage;
+}
+
+/**
+ * Enrichit `mappedMessages` (mutation en place) avec l'aperçu des messages
+ * transférés — source directe (`forwardedFrom`) et conversation source
+ * (`forwardedFromConversation`) — en respectant la réciprocité de partage de
+ * l'auteur du transfert (`resolveForwardSourceGateForReader`) ET le masquage
+ * personnel du LECTEUR sur le message source (#3616).
+ *
+ * Cette fonction relit le message source par son id — `where: { id: { in:
+ * … } } }`, sans le `where` de la liste principale — donc sans le bénéfice
+ * de `applyPersonalHistoryHiding` que porte cette dernière. Un lecteur ayant
+ * effacé son historique avant une date, ou supprimé-pour-lui le message
+ * source précis, le reverrait sinon resurgir intact dans l'aperçu de
+ * transfert d'un AUTRE message, dans une AUTRE conversation — la fuite est
+ * appliquée EN MÉMOIRE (`loadPersonalHistoryHidingByConversation`), et non
+ * par un merge de `where`, parce que les messages sources d'une même page
+ * peuvent appartenir à plusieurs conversations différentes ; même patron que
+ * `ConversationBridgeService.buildBridgeDataForViewers`. Un message masqué
+ * est traité comme un message introuvable : il n'entre jamais dans
+ * `forwardedMap`, donc `msg.forwardedFrom` reste absent — la même issue que
+ * le code suit déjà quand le message source a été supprimé pour tout le
+ * monde.
+ */
+export async function enrichForwardedMessagesForList(
+  prisma: PrismaClient,
+  userId: string | null | undefined,
+  mappedMessages: MappedMessageRow[]
+): Promise<void> {
+      // Charger les détails du message d'origine et de la conversation source
+      const forwardedIds = mappedMessages
+        .filter((m) => m.forwardedFromId)
+        .map((m) => m.forwardedFromId as string);
+
+      if (forwardedIds.length > 0) {
+        const uniqueForwardedIds = [...new Set(forwardedIds)] as string[];
+
+        // Réciprocité de la SOURCE : elle n'est enrichie que si l'auteur du
+        // transfert ET le lecteur l'autorisent. Résolue AVANT la construction,
+        // pas après : ce qui n'est pas construit ne peut pas fuiter, alors
+        // qu'un objet construit puis « filtré » n'attend qu'un chemin de
+        // sortie oublié. L'auteur du transfert est l'expéditeur du message
+        // PORTEUR — ses préférences sont déjà chaudes dans le cache module,
+        // la liste ayant lu celles de tous les expéditeurs de la page.
+        const forwardSourceGate = await resolveForwardSourceGateForReader(
+          prisma,
+          userId,
+          // Les DEUX porteurs, pas seulement `forwardedFromId` : un message
+          // qui ne nomme que sa conversation source a lui aussi un auteur dont
+          // la volonté compte, et c'est justement le NOM DE GROUPE que la
+          // directive ajoute à la portée de la règle.
+          mappedMessages
+            .filter((m) => m.forwardedFromId || m.forwardedFromConversationId)
+            .map((m) => m.sender?.userId ?? null)
+        );
+
+        // Les sources d'une même page peuvent vivre dans PLUSIEURS
+        // conversations différentes (#6516) : la portée de la réparation ne
+        // peut donc pas être connue avant la lecture — elle se DÉCOUVRE, sur
+        // les mêmes ids, sans jamais sélectionner `sender`.
+        const forwardedMessages = await withOrphanedSenderRepair(
+          { prisma, conversationIds: discoverConversationIdsByMessageIds(prisma, uniqueForwardedIds) },
+          () =>
+            prisma.message.findMany({
+              where: { id: { in: uniqueForwardedIds } },
+              select: {
+                id: true,
+                content: true,
+                senderId: true,
+                conversationId: true,
+                messageType: true,
+                createdAt: true,
+                // Lot 2 : le message d'ORIGINE transféré est un objet imbriqué —
+                // sans `metadata`, un message géolocalisé transféré n'affiche
+                // jamais sa position dans l'aperçu de transfert.
+                metadata: true,
+                sender: {
+                  select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
+                },
+                ...FORWARD_SOURCE_PROTECTION_SELECT, // #9646 — `forwardPreviewOf`
+                attachments: { select: { ...attachmentForwardPreviewSelect, ...FORWARD_PIECE_PROTECTION_SELECT }, orderBy: MESSAGE_ATTACHMENT_ORDER, take: 1 }
+              }
+            })
+        );
+
+        // Masquage personnel du LECTEUR sur le message SOURCE (#3616) — voir
+        // le doc-comment de la fonction. Une lecture groupée par conversation
+        // source, jamais par message : `hiddenMessageIds` est déjà scopé par
+        // conversation côté chargeur, et `clearHistoryBefore` l'est par
+        // construction (`UserConversationPreferences` est une ligne par
+        // (userId, conversationId)).
+        const sourceConversationIds = [...new Set(forwardedMessages.map((m) => m.conversationId))];
+        const readerHidingBySourceConversation = await loadPersonalHistoryHidingByConversation(prisma, {
+          userId,
+          conversationIds: sourceConversationIds,
+        });
+        const isHiddenFromReader = (message: { id: string; conversationId: string; createdAt: Date }): boolean => {
+          const hiding = readerHidingBySourceConversation.get(message.conversationId) ?? NO_PERSONAL_HIDING;
+          if (hiding.hiddenMessageIds.includes(message.id)) return true;
+          return hiding.clearHistoryBefore !== null && message.createdAt.getTime() < hiding.clearHistoryBefore.getTime();
+        };
+
+        const forwardedMap = new Map(
+          forwardedMessages.filter((m) => !isHiddenFromReader(m)).map(m => [m.id, m])
+        );
+
+        // Charger les conversations sources
+        const convIds = mappedMessages
+          .filter((m) => m.forwardedFromConversationId)
+          .map((m) => m.forwardedFromConversationId as string);
+        const uniqueConvIds = [...new Set(convIds)];
+
+        let convMap = new Map<string, any>();
+        if (uniqueConvIds.length > 0) {
+          const conversations = await prisma.conversation.findMany({
+            where: { id: { in: uniqueConvIds } },
+            select: { id: true, title: true, identifier: true, type: true, avatar: true }
+          });
+          convMap = new Map(conversations.map(c => [c.id, c]));
+        }
+
+        // Enrichir chaque message forwardé
+        for (const msg of mappedMessages) {
+          // Les DEUX objets nommants tombent ensemble ou pas du tout : les
+          // trois politiques clientes nomment le groupe à partir du seul
+          // `forwardedFromConversation` et l'auteur d'origine à partir du seul
+          // `forwardedFrom.sender`. N'en taire qu'un laisse l'autre nommer.
+          if (!forwardSourceGate(msg.sender?.userId ?? null)) {
+            // Taire le NOM ne suffit pas : la copie de transfert réutilise le
+            // chemin de stockage de l'original, qui porte le `User.id` de son
+            // auteur. La même réponse livrait l'identité qu'elle refusait de
+            // nommer. Les pièces jointes passent donc à l'adressage par
+            // identifiant — mêmes octets, même autorisation, aucun chemin.
+            msg.attachments = redactForwardedAttachmentUrlsIn(msg.attachments);
+            continue;
+          }
+          if (msg.forwardedFromId) {
+            const original = forwardedMap.get(msg.forwardedFromId);
+            if (original) {
+              // Lot 2 : la position du message TRANSFÉRÉ (l'objet imbriqué),
+              // pas celle de `msg` lui-même — sans elle, un message transféré
+              // géolocalisé n'affiche jamais sa position dans l'aperçu.
+              const forwardedPlace = sharedPlaceFromMetadata(original.metadata);
+              const forwardedSticker = stickerFromMetadata(original.metadata);
+              // `select` plus étroit que les résolveurs partagés : un cast unique plutôt que trois `as any`, comportement inchangé.
+              const originalSender = original.sender as
+                | (AvatarBearingParticipant & DisplayNameBearingParticipant & {
+                    username?: string | null;
+                    user?: { username?: string | null } | null;
+                  })
+                | null;
+              msg.forwardedFrom = {
+                id: original.id,
+                content: original.content,
+                messageType: original.messageType,
+                createdAt: original.createdAt,
+                sender: originalSender ? {
+                  ...originalSender,
+                  username: originalSender.user?.username ?? originalSender.username ?? null,
+                  displayName: resolveParticipantDisplayName(originalSender),
+                  avatar: resolveParticipantAvatar(originalSender),
+                } : null,
+                attachments: forwardPreviewOf(original),
+                ...(forwardedPlace ? { location: forwardedPlace } : {}),
+                ...(forwardedSticker ? { sticker: forwardedSticker } : {}),
+              };
+            }
+          }
+          if (msg.forwardedFromConversationId) {
+            const conv = convMap.get(msg.forwardedFromConversationId);
+            if (conv) {
+              msg.forwardedFromConversation = {
+                id: conv.id,
+                title: conv.title,
+                identifier: conv.identifier,
+                type: conv.type,
+                avatar: conv.avatar
+              };
+            }
+          }
+        }
+      }
+}
+
+export async function enrichPostReplyMessagesForList(
+  prisma: PrismaClient,
+  mappedMessages: readonly MappedMessageRow[]
+): Promise<MappedMessageRow[]> {
+  // ===== ENRICHIR LES RÉPONSES À UN POST (status/story/reel/post) =====
+  // Source de vérité : le SNAPSHOT figé dans `metadata.postReplyTo`, hissé en
+  // `postReplyTo` — il survit à l'expiration du post, PAS à son retrait par
+  // l'auteur (#7950, `servePostReplyCitation`). La résolution live de
+  // `storyReplyToId` n'est qu'un repli pour les réponses legacy sans snapshot.
+  //
+  // UNE requête pour la page : la vivacité de chaque post cité (y compris ceux
+  // que citent `replyTo` et `forwardedFrom`) et, dans le même aller, de quoi
+  // reconstruire le snapshot d'une réponse legacy.
+  const ids = citedPostIdsOf(mappedMessages);
+  const citedPosts = ids.length === 0 ? [] : await prisma.post.findMany({
+    where: { id: { in: [...ids] } },
+    select: { ...POST_REPLY_SNAPSHOT_SELECT, ...CITED_POST_LIVENESS_SELECT },
+  });
+  const postMap = new Map(citedPosts.map((p) => [p.id, p]));
+  const withdrawn = withdrawnCitationsOf(citedPosts);
+
+  return mappedMessages.map((m) => {
+    if (!m.storyReplyToId) return servePostReplyCitation(m, withdrawn);
+    const fromSnapshot = postReplyToFromMetadata(m.metadata);
+    const live = fromSnapshot ? undefined : postMap.get(m.storyReplyToId);
+    const postReplyTo = fromSnapshot ?? (live ? buildPostReplyTo(live) : undefined);
+    const hoisted = postReplyTo ? { ...m, postReplyTo } : m;
+    return servePostReplyCitation(hoisted, withdrawn);
+  });
+}

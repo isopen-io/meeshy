@@ -1,0 +1,815 @@
+import SwiftUI
+import XCTest
+import MeeshyUI
+@testable import Meeshy
+
+/// **Une doctrine tenue à la main est tenue jusqu'au jour où elle ne l'est plus.**
+///
+/// Le dépôt possède un helper de migration Dynamic Type documenté comme « a
+/// mechanical swap » — `MeeshyFont.relative` — et une doctrine, énoncée sous
+/// trois numéros d'itération (**53i**, **82i**, **86i**), qui autorise une
+/// taille FIGÉE quand le glyphe est **borné par un cadre fixe** : une touche de
+/// pavé 72×56, un cercle d'upload 50×50, une pastille capsule qui doit rester
+/// « tight ». Dégeler ces sites-là les ferait déborder — c'est le contraire
+/// d'une amélioration.
+///
+/// Mesuré au 264i : **36 des 37 sites de texte figés portaient leur
+/// justification en commentaire, nommément.** La doctrine était donc respectée
+/// site par site — et **mesurée nulle part** (#4311).
+///
+/// ### Le 37ᵉ, et pourquoi la relecture ne pouvait pas le voir
+///
+/// `ProfileUserPostsList.chip` (bandeau « Postes / Réels / Stories » du profil)
+/// gelait son chiffre à 18 pt sous un libellé en `.caption2`, qui SCALE — dans
+/// une tuile sans hauteur fixe. En AX5, le libellé devenait une fois et demie
+/// plus gros que le nombre qu'il légende : **la hiérarchie typographique de la
+/// carte s'inversait.**
+///
+/// Ses trente-six voisins ont tous un cadre fixe qui justifie le gel. C'est
+/// exactement l'angle mort d'une règle tenue par la relecture : **un site dont
+/// les voisins sont justifiés RESSEMBLE à un site justifié.**
+///
+/// C'est la forme de #4302 (budget de taille déclaré trois fois, mesuré nulle
+/// part) et de #4292 (cliquet i18n épinglé à 1545 pour un backlog réel de 102).
+///
+/// ### Ce que la garde mesure — et ce qu'elle refuse de juger
+///
+/// Elle ne dit PAS si un gel est justifié : cela demanderait de lire un cadre
+/// fixe posé trois vues plus haut. Elle borne la POPULATION, comme
+/// `FileSizeBudgetGuardTests` borne la dette de taille — la liste des fichiers
+/// porteurs est un **surensemble** (elle ne dépend d'aucune classification,
+/// donc rien ne peut la faire rougir à tort), et les deux compteurs ne peuvent
+/// que descendre.
+final class FixedFontSizeGuardTests: XCTestCase {
+
+    // MARK: - Classification
+
+    /// Ce que décore un `.font(.system(size:))`.
+    ///
+    /// `other` n'est pas un échec : deux sites du dépôt sont des glyphes posés
+    /// après un bloc `if/else`, dont la ligne de tête est un `}`. Les compter
+    /// « ni texte ni glyphe » est le repli PRUDENT — ce qui compte est qu'ils ne
+    /// soient pas comptés comme du texte, et ils ne le sont pas.
+    enum Receiver: Equatable { case text, glyph, other }
+
+    struct Site: Equatable {
+        let line: Int
+        let receiver: Receiver
+    }
+
+    private static let textHeads = ["Text(", "Label(", "TextField", "TextEditor", "SecureField"]
+
+    private static func receiver(of head: String) -> Receiver {
+        if textHeads.contains(where: { head.contains($0) }) { return .text }
+        if head.contains("Image(") { return .glyph }
+        return .other
+    }
+
+    /// Les sites figés d'une source, avec le receveur de chacun.
+    ///
+    /// Le masquage passe par `DeclarationBodyScanner.mask` — seul masqueur
+    /// commentaires + chaînes correct du dépôt — qui **préserve les sauts de
+    /// ligne**. Le balayage est donc fait LIGNE À LIGNE plutôt que par index :
+    /// une doctrine écrite en commentaire au-dessus du site (le cas nominal
+    /// ici) ne déplace rien, et il n'y a aucune fenêtre de caractères à deviner.
+    ///
+    /// Pour trouver le receveur, on remonte la chaîne de modificateurs : les
+    /// lignes vides et celles qui commencent par `.` ou `)` sont des
+    /// continuations ; la première qui n'en est pas une porte l'expression de
+    /// tête. Quand le site et sa tête tiennent sur une seule ligne, la partie
+    /// gauche de la ligne suffit.
+    static func frozenSites(in source: String) -> [Site] {
+        sites(in: source, marker: #"\.font\(\s*\.system\(\s*size:"#)
+    }
+
+    static func fixedGlyphSites(in source: String) -> [Site] {
+        sites(in: source, marker: #"\.font\(\s*MeeshyFont\.fixedGlyph\("#)
+    }
+
+    static func sites(in source: String, marker pattern: String) -> [Site] {
+        let lines = DeclarationBodyScanner.mask(source).components(separatedBy: "\n")
+        guard let marker = try? NSRegularExpression(pattern: pattern)
+        else { return [] }
+
+        return lines.enumerated().compactMap { index, line -> Site? in
+            let ns = line as NSString
+            let hit = marker.rangeOfFirstMatch(in: line, range: NSRange(location: 0, length: ns.length))
+            guard hit.location != NSNotFound else { return nil }
+
+            let sameLineHead = ns.substring(to: hit.location)
+            if receiver(of: sameLineHead) != .other {
+                return Site(line: index + 1, receiver: receiver(of: sameLineHead))
+            }
+
+            let above = chainHeadIndex(lines: lines, index: index)
+            return Site(line: index + 1,
+                        receiver: receiver(of: above.map { lines[$0] } ?? ""))
+        }
+    }
+
+    // MARK: - Cliquets
+
+    /// **Fichiers porteurs d'au moins une taille figée, mesurés au 264i.**
+    ///
+    /// SURENSEMBLE volontaire : tout site figé compte, quel que soit son
+    /// receveur. Un écran NEUF ne peut donc pas introduire de taille figée sans
+    /// rougir — il utilise `MeeshyFont.relative(…)`, ou il rejoint cette liste
+    /// dans un commit qui dit pourquoi.
+    ///
+    /// `ProfileUserPostsList.swift` n'y est PAS : ses deux sites sont partis
+    /// avec le correctif du 264i, et un nom qui sort ne revient jamais.
+    private static let bearingFiles: Set<String> = [
+        // #5218 — les trois fichiers du wizard d'inscription ont QUITTÉ la
+        // liste avec leur code : dix-neuf sites figés (dix-huit glyphes de
+        // décor, un drapeau) sont partis d'un coup, et la règle 4 exige que
+        // leurs noms sortent dans le même commit — une liste qui garde un nom
+        // sans site cesse de dire la vérité (#4302). `SignupView`, qui les
+        // remplace, n'en introduit AUCUN : il n'emploie que
+        // `MeeshyFont.relative(…)` et les styles relatifs.
+        "Features/Contacts/KeypadTab.swift",
+        "Features/Main/Components/AddParticipantSheet.swift",
+        "Features/Main/Components/AttachmentLoadingTile.swift",
+        "Features/Main/Components/ConversationDashboardView.swift",
+        "Features/Main/Components/ConversationLockSheet.swift",
+        "Features/Main/Components/ConversationPreferencesTab.swift",
+        "Features/Main/Components/EditPostSheet.swift",
+        "Features/Main/Components/InviteFriendsSheet.swift",
+        "Features/Main/Components/LocationPickerView.swift",
+        "Features/Main/Components/MemberManagementSection.swift",
+        "Features/Main/Components/MessageEffectModifiers.swift",
+        "Features/Main/Components/MessageOverlayPreviewAudioPlayer.swift",
+        // RELOCALISATION pure (#9043) : le lecteur vidéo de l'aperçu d'appui
+        // long (son glyphe « play » dans un disque fixe de 52 pt) a quitté
+        // `MessageOverlayMenu.swift` pour son propre fichier. La POPULATION ne
+        // bouge pas — seul le NOM change ; l'hôte d'origine en garde d'autres.
+        "Features/Main/Components/MessageOverlayPreviewVideoPlayer.swift",
+        "Features/Main/Components/NearbyDiscoverabilityControl.swift",
+        "Features/Main/Components/StatusBubbleOverlay.swift",
+        "Features/Main/Views/Bubble/BubbleFailedRetryBar.swift",
+        // #13132 — RELOCALISATION pure : le conteneur de glissé des bulles a quitté `MessageListView.swift` avec ses deux glyphes.
+        "Features/Main/Views/BubbleSwipeContainer.swift",
+        // RELOCALISATION pure : le bandeau « en réponse à » quitte
+        // `FeedCommentsSheet.swift` avec son glyphe de croix en CADRE FIXE 24×24
+        // (doctrine 82i). La POPULATION ne bouge pas ; le fichier d'origine en
+        // garde un (la croix de l'en-tête) et reste dans la liste.
+        "Features/Main/Views/CommentSheetBanners.swift",
+        "Features/Main/Views/ConversationAnimatedBackground.swift",
+        "Features/Main/Views/ConversationBackgroundComponents.swift",
+        "Features/Main/Views/ConversationHelperViews.swift",
+        // RELOCALISATION pure (colonne iPad étroite, 5681d91a66) : les actions
+        // de l'en-tête de la liste quittent `ConversationListView+Overlays`
+        // pour leur propre fichier, avec leurs glyphes en CADRE FIXE (icônes
+        // `MeeshyIconSize.lg`, chiffre de la pastille). Ni `totalCeiling` ni
+        // `textCeiling` — seul le NOM change.
+        "Features/Main/Views/ConversationListHeaderActions.swift",
+        "Features/Main/Views/ConversationMediaFilmstrip.swift",
+        // #4014 — RELOCALISATION pure, même forme qu'au #4102 : la galerie est
+        // découpée (1259 lignes ⇒ racine / `+Rules` / `+Pages`), et quatre de
+        // ses sept sites figés ont suivi les PAGES. Tous sont des glyphes dans
+        // un CADRE FIXE — bouton poster 64 pt, glyphe d'état vide, libellé de
+        // taille monospace — donc la raison d'exemption voyage avec eux.
+        //
+        // La POPULATION ne bouge pas : ni `totalCeiling` ni `textCeiling` ne
+        // changent, seul le nombre de NOMS augmente. La racine en garde trois
+        // et reste dans la liste.
+        //
+        // > Le piège que ce lot a payé : une découpe déplace du code d'un
+        // > fichier AMNISTIÉ vers un fichier NEUF, et l'amnistie ne suit pas.
+        // > Toutes les lignes existaient déjà ; c'est la liste qui les couvrait
+        // > qui a cessé de les couvrir. Toute extraction hors d'un fichier de
+        // > `bearingFiles` doit inscrire sa destination dans le MÊME commit.
+        // #8878 — `ConversationMediaGalleryView.swift` et son `+Menu` sortent de
+        // la liste (règle 4) : la croix, le menu ⋯ et les trois actions de la
+        // colonne montent les briques du chrome plein écran de MeeshyUI
+        // (`FullscreenCloseButton`, `FullscreenMoreMenu`, `FullscreenActionButton`),
+        // qui portent LEURS glyphes figés dans leur disque.
+        "Features/Main/Views/ConversationMediaGalleryView+Pages.swift",
+        // #9736 — RELOCALISATION pure : la tuile d'une pièce en attente quitte
+        // `ConversationView+ComposerAttachments.swift` pour le composant que
+        // le message et les commentaires montent ensemble. Ses glyphes figés
+        // (tuile fixe de 56, pastille de 18) ont suivi ; le fichier d'origine
+        // n'en porte plus aucun et sort de la liste.
+        "Features/Main/Components/ComposerAttachmentZone.swift",
+        "Features/Main/Views/ConversationView+ComposerBanners.swift",
+        "Features/Main/Views/ConversationView+MessageRow.swift",
+        "Features/Main/Views/FeedCommentsSheet.swift",
+        // #6040 — RELOCALISATION pure, même forme qu'au #4084 et au #4102 : la
+        // FEUILLE de composition quitte `FeedView+Attachments.swift` (1 391
+        // lignes pour une extension que son nom annonçait bien plus étroite) et
+        // emporte AVEC ELLE ses sites figés. La POPULATION ne bouge pas — ni
+        // `totalCeiling` ni `textCeiling` — seul le NOM change ; l'extension
+        // n'en porte plus aucun, elle sort de la liste et n'y revient jamais.
+        //
+        // C'est la JUMELLE de la règle que le doc-comment de `bearingFiles`
+        // énonce en tête : « toute extraction hors d'un fichier de la liste doit
+        // inscrire sa DESTINATION dans le MÊME commit ». Inscrire la
+        // destination ne suffit pas — la source VIDÉE doit sortir, sinon la
+        // liste garde un nom sans site et cesse de dire la vérité (règle 4).
+        // #13132 — RELOCALISATION pure : le « + » du placeholder du fil (18 pt dans son cercle de 40) a quitté `FeedView.swift`.
+        "Features/Main/Views/FeedComposerPlaceholder.swift",
+        "Features/Main/Views/FeedPostCard+Media.swift",
+        // #4096 — la vue `3f` remplace la mosaïque par un carrousel. Le fichier
+        // porte DEUX sites figés dont les origines sont opposées, et les
+        // confondre avalerait en silence le second :
+        //
+        //   · le glyphe de lecture d'une vidéo (12 pt) est une RELOCALISATION —
+        //     il vient de `galleryImageView`, dont le visuel est devenu
+        //     `FeedMediaTile` pour que le carrousel et l'aperçu d'une
+        //     republication rendent la même vignette. La population ne bouge
+        //     pas, seul le nom s'ajoute ;
+        //   · la chevronnette d'une flèche de pagination (14 pt) est un VRAI
+        //     ajout, et `totalCeiling` monte d'un cran pour lui, avec sa raison :
+        //     elle vit dans un cercle de 34 pt qu'elle déborderait si elle
+        //     scalait, exactement la doctrine 86i. La cible tactile reste à 44,
+        //     posée par-dessus.
+        "Features/Main/Views/FeedPostCardCarousel.swift",
+        "Features/Main/Views/FeedView.swift",
+        "Features/Main/Views/GlobalSearchView.swift",
+        "Features/Main/Views/ReelAudioBackdrop.swift",
+        // #7625 — RELOCALISATION pure : la couche audio d'un réel (glyphe héros de
+        // 220 pt et bouton de 84 pt, cadres fixes plein écran) quitte l'hôte hors
+        // budget avec son code. La POPULATION ne bouge pas.
+        "Features/Main/Views/ReelAudioLayer.swift",
+        "Features/Main/Views/ReelRepostEmbedCell.swift",
+        // #6693 — RELOCALISATION pure : les glyphes figés du rail d'actions (26 pt dans
+        // une colonne fixe de 48, doctrine 86i) quittent l'hôte avec le rail. La
+        // POPULATION ne bouge pas ; l'hôte en garde d'autres et reste dans la liste.
+        // #8878 — le rail monte `FullscreenActionButton` (glyphe figé dans sa cellule) et
+        // le menu ⋯ `FullscreenMoreMenu` : il ne garde que le contour de participation,
+        // posé sur le glyphe de l'atome à la MÊME taille figée. `ReelsPlayerView.swift`
+        // sort de la liste (règle 4) : sa croix monte `FullscreenTopBar`.
+        "Features/Main/Views/ReelsPlayerView+ActionRail.swift",
+        "Features/Stories/Views/StoryTrayView.swift",
+        "Features/Main/Views/WebRTCVideoView.swift",
+    ]
+
+    /// Sites figés dont le receveur porte du TEXTE. **Ne doit que DESCENDRE.**
+    ///
+    /// Épinglé à **36**, soit l'état APRÈS le correctif du 264i — le compte
+    /// valait 37 juste avant, ce qui rend ce cliquet rouge sur l'état d'où il
+    /// vient. Pinner sur l'avant aurait scellé le défaut dans la garde, la
+    /// faute même reprochée au cliquet i18n par #4292.
+    /// **35 depuis #5218** : le seul site figé porté par un TEXTE dans le
+    /// wizard d'inscription — la rangée de drapeaux de son décor de langue
+    /// (`Text(flags[i])`, 20 pt) — est parti avec le fichier. Un cliquet qui ne
+    /// descend pas quand la population descend cesse d'être un cliquet.
+    // 35 → 34 (#8878) : le libellé de 10 pt du rail de la story part avec son fichier.
+    // 34 → 33 (#10366) : le code pays figé de la puce de langue repasse en `.caption2`.
+    // 33 → 26 (S7c, #11494) : sept emoji passent par `MeeshyFont.emoji`.
+    // 26 → 21 (#12568) : cinq initiales d'avatar figées (appel ×4, commentaire
+    // de story) laissent la place à `CachedAvatarImage`.
+    // 21 → 20 (#17907) : le compteur des onglets de la fiche conversation part avec eux.
+    private static let textCeiling = 20
+
+    /// Tous receveurs confondus. **Ne doit que DESCENDRE.** 247 avant le
+    /// correctif du 264i, 245 après (le glyphe et le chiffre de la tuile de
+    /// profil), **244 depuis #4136** : l'icône de description a quitté la rangée
+    /// haute pour la rangée d'outils, et y a pris la forme canonique — donc
+    /// `.title3` au lieu d'un `size: 13` figé. Son fichier n'en portait qu'un,
+    /// sur une IMAGE : `textCeiling` ne bouge pas.
+    /// **245 depuis le 2026-08-30.** La barre haute du composer a gagné deux
+    /// contrôles — annuler et rétablir (#4402) — qui reprennent, au caractère
+    /// près, la police de la croix de fermeture posée à leur gauche :
+    /// `.system(size: 13, weight: .bold)`.
+    ///
+    /// C'est le cas que la doctrine autorise, et il faut le dire plutôt que le
+    /// taire : **un CADRE FIXE qui déborderait si la taille scalait**. Les trois
+    /// boutons vivent dans des cercles de `ComposerControlMetrics.visualDiameter`
+    /// ; une police relative y ferait grossir le glyphe sans que le cercle
+    /// suive, et le glyphe sortirait de son verre aux tailles accessibles.
+    ///
+    /// Le cliquet a fait exactement son travail : il n'a pas EMPÊCHÉ l'ajout,
+    /// il a exigé qu'on l'assume par écrit. Un +1 silencieux serait passé
+    /// inaperçu — c'est la règle 1 qui ne voit pas les fichiers déjà porteurs,
+    /// et cette règle-ci qui les rattrape.
+    ///
+    /// **Toujours 245 le même jour**, alors que les deux boutons ont DÉMÉNAGÉ
+    /// de la barre haute vers une capsule du socle : la barre en perd une, le
+    /// socle en gagne une, et la population ne bouge pas.
+    ///
+    /// Le réflexe était d'incrémenter — un fichier de plus dans la liste
+    /// ressemble à une dette de plus. **Un déménagement n'ajoute rien** ; seul
+    /// un site NEUF le fait. Le plafond se mesure, il ne se déduit pas du
+    /// nombre de noms dans la liste.
+    /// **247 depuis le #4013** — la barre d'actions du plein écran porte
+    /// désormais DEUX boutons (« Répondre », « Créer avec ce média »), chacun
+    /// un SF Symbol figé dans un cercle glass de 40 pt. Même doctrine que ses deux voisins immédiats du même fichier
+    /// (fermer, enregistrer), qui la portent déjà mot pour mot : « chrome —
+    /// glyphe figé dans un cercle glass 40 pt, ne pas scaler ». Une police
+    /// relative y ferait grossir le glyphe sans que le cercle suive.
+    ///
+    /// Le cliquet a fait son travail deux fois dans ce lot : il a d'abord
+    /// attrapé une RELOCALISATION (des sites figés passés d'un fichier amnistié
+    /// à un fichier neuf par la découpe), puis ce véritable AJOUT. Les deux se
+    /// traitent différemment — l'un déplace un nom, l'autre monte le plafond —
+    /// et les confondre aurait masqué l'un des deux.
+    /// **248 depuis #4096.** Un cran, pour la chevronnette des flèches de
+    /// pagination du carrousel (14 pt dans un cercle fixe de 34). Le second
+    /// site figé du même fichier — le glyphe de lecture d'une vidéo — n'y
+    /// participe pas : il a été DÉPLACÉ depuis `FeedPostCard+Media.swift`.
+    /// **247 depuis #4586.** Un cran de MOINS : la capsule annuler/rétablir a
+    /// quitté le socle pour le rail des objets, et sa police figée n'a pas
+    /// suivi — le rail emploie `.title3`, comme ses deux contrôleurs voisins.
+    /// `MeeshyComposerHost+Socle.swift` sort donc de `bearingFiles` : il ne
+    /// porte plus aucun site.
+    ///
+    /// > Un plafond qui ne baisse pas quand la population baisse cesse d'être un
+    /// > cliquet et devient un plafond : il ne rougirait plus que sur une
+    /// > régression plus grosse que l'écart accumulé.
+    /// 246 et non 247 : `PostDetailView` a quitté la liste. Ses deux tailles
+    /// figées sont parties dans `PostDetailView+AbsenceStates` à l'extraction,
+    /// puis ont été converties en `MeeshyFont.relative(40)` — une icône d'état
+    /// vide n'a pas de cadre fixe, donc rien ne justifiait qu'elle ignore
+    /// Dynamic Type. Le cliquet DESCEND avec la dette : c'est ce qu'il exige,
+    /// et c'est ce qui l'empêche de devenir un plancher.
+    /// **226 depuis #5218** : vingt crans de MOINS d'un coup. Le wizard
+    /// d'inscription en portait dix-neuf (quinze dans son décor animé, un dans
+    /// sa barre haute, trois dans ses étapes) et le carrousel d'accueil un — et
+    /// les vingt sont partis avec leurs fichiers. `SignupView` et `WelcomeView`
+    /// n'en introduisent aucun.
+    // 226 → 214 (#6481, 2026-09-14) : les pages ouvertes depuis Réglages montent
+    // l'en-tête partagé, et leurs chevrons, croix et (+) faits main à taille figée
+    // sont partis avec lui. `VoiceProfileManageView` sort de `bearingFiles`.
+    // 214 → 213 (#6502) : l'éventail du haut est retiré, et avec lui le chevron
+    // `.font(.system(size: 9, weight: .bold))` de son chip, un GLYPHE (le texte
+    // figé ne bouge donc pas). `ComposerFormatFan.swift` sort de `bearingFiles`
+    // dans le même commit (règle 4) ; `ComposerPublishMenu.swift`, qui le
+    // remplace, n'emploie que des polices relatives.
+    // 213 → 211 (#7795) : la feuille « compte ou anonyme » devient la page
+    // d'invitation de MeeshyUI ; ses deux glyphes figés (20 et 13 pt, sur des
+    // `Image`, donc le texte figé ne bouge pas) partent avec elle.
+    // `ShareLinkIdentitySheet.swift` sort de `bearingFiles` (règle 4).
+    // 211 → 210 (#8231) : le glyphe play de la vidéo du fil quitte
+    // `BubbleStandardLayout+Media.swift` pour `ConversationVideoPoster.swift`,
+    // où il est dimensionné par son cercle (`resizable` + `frame`) et non plus
+    // par une police figée. `BubbleStandardLayout+Media.swift` sort de
+    // `bearingFiles` (règle 4) ; le texte figé ne bouge pas.
+    // 210 → 208 (#8394) : la vue d'appel « C adapté » remplace la barre, les
+    // boutons de la vignette perso et le bouton Sous-titres flottant — onze
+    // glyphes figés deviennent neuf. `CallView.swift` sort de `bearingFiles`
+    // (règle 4), ses parties y entrent ; le texte figé ne bouge pas.
+    // 208 → 200 (#8878) : la galerie de pièces jointes monte le chrome plein écran
+    // du SDK — cinq glyphes figés de la racine (croix, réagir + son « + »,
+    // répondre, composer) et celui du menu ⋯ partent, ainsi que la croix et
+    // l'enregistrement du plein écran audio. `ConversationMediaGalleryView.swift`
+    // et son `+Menu` sortent de `bearingFiles` (règle 4) ; le texte figé ne bouge pas.
+    // 200 → 194 (#8878) : le rail de la story monte `FullscreenActionButton` (trois
+    // sites figés, dont le libellé de 10 pt), l'en-tête monte la croix et le menu ⋯
+    // du SDK (deux glyphes), la croix de repli du conteneur monte `FullscreenTopBar`
+    // (un glyphe). `StoryViewerView+ActionButton.swift` et `+Header.swift` sortent de
+    // `bearingFiles` (règle 4) ; `StoryViewerContainer.swift` garde son glyphe d'erreur.
+    // 194 → 191 (#8878) : le rail des réels n'a plus que le contour de participation
+    // (trois sites → un) et sa croix monte `FullscreenTopBar` (un glyphe).
+    // 191 → 190 (#10366) : la puce de langue repasse sur une ligne en polices
+    // sémantiques, son code pays de 7 pt figé disparaît.
+    // 190 → 186 (#10383) : le plein écran audio dimensionne ses glyphes de
+    // transport et de traduction par leur CADRE (`resizable` + `frame`), plus
+    // par une police figée — quatre glyphes, aucun texte. `AudioFullscreenView`
+    // sort de `bearingFiles` (règle 4) ; sa page n'y entre pas.
+    // 186 → 185 (#11208) : l'aperçu d'appui long rend la cellule du fil, et sa
+    // rangée de fichier reconstruite part avec son glyphe figé.
+    // `MessageOverlayMenu.swift` sort de `bearingFiles` (règle 4) ; le texte
+    // figé ne bouge pas.
+    // 185 → 178 (S7c, #11494) : les mêmes sept emoji.
+    // 178 → 173 (#12568) : les mêmes cinq initiales d'avatar.
+    // 173 → 172 (#13907) : la barre haute quitte le projet avec le glyphe figé
+    // de sa croix ; `ComposerTopBar.swift` sort de `bearingFiles` (règle 4).
+    // 172 → 171 (#14056) : le glyphe figé du `⋯` quitte
+    // `MeeshyComposerHost+Overflow.swift` ; le fichier sort de `bearingFiles`
+    // (règle 4).
+    // 171 → 160 (#15628) : les onze glyphes figés de la feuille du fil et de sa
+    // rangée de pièces quittent le dépôt avec elles ; aucun texte.
+    // 160 → 92 (#17297, GMAIN #17296) : le reste de l'app déclare ses glyphes
+    // figés par `MeeshyFont.fixedGlyph` (−62), six glyphes de `Features/Main`
+    // passent par `meeshyScaledFont` (−6) ; il ne fige plus que des textes encadrés.
+    // 92 → 91 (#17907) : la pastille de compte des onglets de la fiche conversation part avec
+    // l'ancienne barre d'onglets (elle ne rendait plus rien) ; le fichier sort de `bearingFiles`.
+    private static let totalCeiling = 91
+
+    // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
+
+    func test_aucunFichierNeufNIntroduitDeTailleFigee() throws {
+        let newcomers = try sources()
+            .filter { !Self.frozenSites(in: text(of: $0)).isEmpty }
+            .map { relativePath($0) }
+            .filter { !Self.bearingFiles.contains($0) }
+            .sorted()
+
+        XCTAssertTrue(
+            newcomers.isEmpty,
+            "Taille de police figée dans un fichier hors de la dette du 264i. Une taille figée "
+            + "ne se justifie que par un CADRE FIXE qui déborderait si elle scalait (doctrine "
+            + "53i / 82i / 86i) ; partout ailleurs, `MeeshyFont.relative(…)` est un "
+            + "remplacement mécanique qui préserve poids et design :\n  "
+            + newcomers.joined(separator: "\n  ")
+        )
+    }
+
+    // MARK: - Règle 2 — le texte figé ne se répand pas
+
+    func test_leTexteFigeNeSeRepandJamais() throws {
+        let sites = try allSites()
+        let onText = sites.filter { $0.1.receiver == .text }
+
+        XCTAssertLessThanOrEqual(
+            onText.count, Self.textCeiling,
+            "plus de textes à taille figée qu'au 264i (\(Self.textCeiling)). Un TEXTE figé sous "
+            + "un voisin qui scale inverse la hiérarchie de sa carte aux grandes tailles de "
+            + "Dynamic Type — c'est le défaut de #4311 :\n  "
+            + onText.map { "\($0.0):\($0.1.line)" }.sorted().joined(separator: "\n  ")
+        )
+    }
+
+    // MARK: - Règle 3 — et la population entière ne monte pas
+
+    func test_laPopulationFigeeNeMonteJamais() throws {
+        let total = try allSites().count
+
+        XCTAssertLessThanOrEqual(
+            total, Self.totalCeiling,
+            "la population des tailles figées a GROSSI (\(total) > \(Self.totalCeiling)). "
+            + "C'est la règle qui mord quand un fichier DÉJÀ porteur en ajoute une : la règle 1 "
+            + "ne le verrait pas, son nom étant déjà épinglé."
+        )
+    }
+
+    // MARK: - Règle 4 — un fichier qui sort ne revient pas
+
+    func test_unFichierQuiQuitteLaListeEnEstRetire() throws {
+        let stillBearing = Set(
+            try sources()
+                .filter { !Self.frozenSites(in: text(of: $0)).isEmpty }
+                .map { relativePath($0) }
+        )
+
+        let departed = Self.bearingFiles.subtracting(stillBearing).sorted()
+        if !departed.isEmpty {
+            // Sortir de la liste est le but ; le signaler force l'ÉLAGAGE dans le
+            // même commit, sinon la liste garde des noms sans site et cesse de
+            // dire la vérité — le mode de panne de `legacyOverBudget` (#4302).
+            XCTFail(
+                "Ces fichiers n'ont plus aucune taille figée — bravo, et les RETIRER de "
+                + "`bearingFiles` + baisser `totalCeiling` (et `textCeiling` s'il y avait du "
+                + "texte) dans ce même commit :\n  " + departed.joined(separator: "\n  ")
+            )
+        }
+    }
+
+    // MARK: - Règle 5 — un texte de taille exacte est une exception nommée
+
+    struct ExactSizeTextSite: Hashable {
+        let file: String
+        let head: String
+    }
+
+    private static let exactSizes: Set<CGFloat> = [11, 12, 13, 15, 16, 17, 20, 22, 28, 34]
+
+    private static let tokenSizes: [String: CGFloat] = [
+        "microSize": MeeshyFont.microSize,
+        "captionSize": MeeshyFont.captionSize,
+        "footnoteSize": MeeshyFont.footnoteSize,
+        "smallSize": MeeshyFont.smallSize,
+        "subheadSize": MeeshyFont.subheadSize,
+        "labelSize": MeeshyFont.labelSize,
+        "bodySize": MeeshyFont.bodySize,
+        "calloutSize": MeeshyFont.calloutSize,
+        "headlineSize": MeeshyFont.headlineSize,
+        "subtitleSize": MeeshyFont.subtitleSize,
+        "title3Size": MeeshyFont.title3Size,
+        "titleSize": MeeshyFont.titleSize,
+        "displaySize": MeeshyFont.displaySize,
+        "largeTitleSize": MeeshyFont.largeTitleSize
+    ]
+
+    private static let exactSizeTextExceptions: Set<ExactSizeTextSite> = [
+        ExactSizeTextSite(file: "Features/Stories/Views/StoryTrayView.swift",
+                          head: #"Text("\(Int(displayedProgress * 100))%")"#),
+        ExactSizeTextSite(file: "Features/Main/Views/ConversationHelperViews.swift",
+                          head: "Text(Self.displayedUnread(unreadCount))"),
+        ExactSizeTextSite(file: "Features/Main/Components/ConversationDashboardView.swift",
+                          head: #"Text("\(score)")"#)
+    ]
+
+    static func fontSize(of token: String) -> CGFloat? {
+        let trimmed = token.trimmingCharacters(in: .whitespaces)
+        let prefix = "MeeshyFont."
+        guard trimmed.hasPrefix(prefix) else { return Double(trimmed).map { CGFloat($0) } }
+        return tokenSizes[String(trimmed.dropFirst(prefix.count))]
+    }
+
+    static func exactSizeTextHeads(in source: String) -> [String] {
+        let raw = source.components(separatedBy: "\n")
+        let masked = DeclarationBodyScanner.mask(source).components(separatedBy: "\n")
+        guard let marker = try? NSRegularExpression(
+            pattern: #"\.font\(\s*\.system\(\s*size:\s*([^,)]+)"#
+        ) else { return [] }
+
+        return masked.enumerated().compactMap { index, line -> String? in
+            let ns = line as NSString
+            guard let hit = marker.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)),
+                  let size = fontSize(of: ns.substring(with: hit.range(at: 1))),
+                  exactSizes.contains(size),
+                  let head = chainHead(raw: raw, masked: masked, index: index, column: hit.range.location),
+                  textHeads.contains(where: { head.contains($0) })
+            else { return nil }
+            return head
+        }
+    }
+
+    private static func chainHead(raw: [String], masked: [String], index: Int, column: Int) -> String? {
+        let prefix = (masked[index] as NSString).substring(to: column)
+        let trimmedPrefix = prefix.trimmingCharacters(in: .whitespaces)
+        if !trimmedPrefix.isEmpty && !trimmedPrefix.hasPrefix(".") {
+            return String(raw[index].prefix(prefix.count)).trimmingCharacters(in: .whitespaces)
+        }
+        guard let above = chainHeadIndex(lines: masked, index: index) else { return nil }
+        return raw[above].trimmingCharacters(in: .whitespaces)
+    }
+
+    static func chainHeadIndex(lines: [String], index: Int) -> Int? {
+        (0..<index).reversed().first { candidate in
+            let trimmed = lines[candidate].trimmingCharacters(in: .whitespaces)
+            return !(trimmed.isEmpty || trimmed.hasPrefix(".") || trimmed.hasPrefix(")"))
+        }
+    }
+
+    private func exactSizeTextSites() throws -> Set<ExactSizeTextSite> {
+        let found = try sources().flatMap { url in
+            Self.exactSizeTextHeads(in: text(of: url))
+                .map { ExactSizeTextSite(file: relativePath(url), head: $0) }
+        }
+        return Set(found)
+    }
+
+    func test_unTexteDeTailleExacteSeLitEnTeteDeChaine() {
+        let sameLine = "Text(value).font(.system(size: 15, weight: .bold))"
+        XCTAssertEqual(Self.exactSizeTextHeads(in: sameLine), ["Text(value)"])
+
+        let chained = """
+        Text(label)
+            .foregroundColor(.white)
+            .font(.system(size: MeeshyFont.bodySize, design: .rounded))
+        """
+        XCTAssertEqual(Self.exactSizeTextHeads(in: chained), ["Text(label)"])
+
+        let glyph = "Image(systemName: x).font(.system(size: 15))"
+        XCTAssertEqual(Self.exactSizeTextHeads(in: glyph), [])
+
+        let inexact = "Text(x).font(.system(size: 10))"
+        XCTAssertEqual(Self.exactSizeTextHeads(in: inexact), [])
+
+        let dynamic = "Text(x).font(.system(size: size * k))"
+        XCTAssertEqual(Self.exactSizeTextHeads(in: dynamic), [])
+
+        let commented = "// Text(x).font(.system(size: 15))"
+        XCTAssertEqual(Self.exactSizeTextHeads(in: commented), [])
+
+        let inexactToken = """
+        Text("a")
+            .font(.system(size: MeeshyFont.labelSize))
+        """
+        XCTAssertEqual(Self.exactSizeTextHeads(in: inexactToken), [])
+    }
+
+    func test_unTexteDeTailleExacteNExisteQueCommeExceptionNommee() throws {
+        let found = try exactSizeTextSites()
+        let introduced = found.subtracting(Self.exactSizeTextExceptions)
+        let departed = Self.exactSizeTextExceptions.subtracting(found)
+        XCTAssertTrue(introduced.isEmpty,
+                      "texte de taille exacte hors liste — utiliser MeeshyFont.relative : \(introduced.sorted { ($0.file, $0.head) < ($1.file, $1.head) })")
+        XCTAssertTrue(departed.isEmpty,
+                      "exceptions sans site — élaguer la liste : \(departed.sorted { ($0.file, $0.head) < ($1.file, $1.head) })")
+    }
+
+    // MARK: - Bornes
+
+    /// Sans elle, les trois cliquets passeraient au vert en ne regardant rien —
+    /// le mode de panne payé au 256i et rejoué au 257i.
+    func test_leBalayageVoitBienLeDepot() throws {
+        let files = try sources()
+        XCTAssertGreaterThan(files.count, 400, "racine attendue : \(appRoot.path)")
+
+        let names = Set(files.map { relativePath($0) })
+        let missing = Self.bearingFiles.subtracting(names)
+        XCTAssertTrue(missing.isEmpty,
+                      "noms épinglés introuvables sur disque : \(missing.sorted())")
+    }
+
+    /// **La borne qui compte le plus.** Toute la règle 2 repose sur la
+    /// séparation texte / glyphe : un classifieur effondré rendrait `0` texte —
+    /// et le cliquet resterait VERT en ne protégeant plus rien. Les deux
+    /// populations doivent donc être NON VIDES, chacune de son côté.
+    func test_laClassificationSepareBienLesDeuxPopulations() throws {
+        let sites = try allSites().map { $0.1 }
+        // #9125 — 148 : les glyphes figés de l'ancienne `CameraView` sont
+        // partis avec elle ; #10947 — 139 : ceux des deux anciens sélecteurs de
+        // partage aussi ; #15628 — 125 : ceux de la feuille du fil. La borne
+        // garde un classifieur VIVANT, pas un compte.
+        XCTAssertGreaterThan(sites.filter { $0.receiver == .glyph }.count, 60,
+                             "les glyphes sont la population majoritaire (207 au 264i, 125 au #15628, 78 au #17297)")
+        XCTAssertGreaterThan(sites.filter { $0.receiver == .text }.count, 15,
+                             "le texte figé existe (36 au 264i, 20 au #14620) — un 0 ici signerait un classifieur mort")
+    }
+
+    /// Témoins synthétiques : la question dont la réponse est connue d'avance.
+    /// Ils fixent les DEUX chemins du classifieur — tête sur la même ligne, et
+    /// tête retrouvée en remontant une chaîne de modificateurs.
+    func test_leClassifieurLitBienLaTeteDeChaine() {
+        let sameLine = """
+        Text(value).font(.system(size: 12, weight: .bold))
+        """
+        XCTAssertEqual(Self.frozenSites(in: sameLine).map(\.receiver), [.text])
+
+        let chained = """
+        VStack {
+            Image(systemName: icon)
+                .symbolRenderingMode(.hierarchical)
+
+                .font(.system(size: 15, weight: .semibold))
+            Text(label)
+                .foregroundColor(.white)
+                .font(.system(size: 10))
+        }
+        """
+        XCTAssertEqual(Self.frozenSites(in: chained).map(\.receiver), [.glyph, .text])
+
+        // Un site en commentaire n'existe pas : c'est ce que `mask` garantit, et
+        // c'est ce qui autorise la doctrine à être écrite JUSTE au-dessus du site.
+        let commented = """
+        // .font(.system(size: 99)) — doctrine 86i
+        Text(x).font(.system(size: 11))
+        """
+        XCTAssertEqual(Self.frozenSites(in: commented).count, 1)
+    }
+
+    // MARK: - Règle 7 — le périmètre hors Features/Main ne fige que ses textes encadrés
+
+    private static let perimeterCeiling = 4
+
+    private static let mainPrefix = "Features/Main/"
+
+    func test_lePerimetreHorsMainNeFigeQueSesTextesEncadres() throws {
+        let sites = try allSites().filter { !$0.0.hasPrefix(Self.mainPrefix) }
+        XCTAssertLessThanOrEqual(
+            sites.count, Self.perimeterCeiling,
+            "tailles figées hors Features/Main : seuls les quatre textes en cadre fixe (pavé, "
+            + "cercle d'upload) restent. Un glyphe figé par un cadre se déclare par "
+            + "`MeeshyFont.fixedGlyph(…)`, un glyphe en ligne suit Dynamic Type :\n  "
+            + sites.map { "\($0.0):\($0.1.line)" }.sorted().joined(separator: "\n  ")
+        )
+    }
+
+    // MARK: - Règle 8 — un glyphe figé par doctrine ne décore jamais du texte
+
+    func test_unGlypheFigeDeclareNeDecoreJamaisDuTexte() throws {
+        let wrong = try sources().flatMap { url in
+            Self.fixedGlyphSites(in: text(of: url))
+                .filter { $0.receiver != .glyph }
+                .map { "\(relativePath(url)):\($0.line)" }
+        }
+        XCTAssertEqual(wrong, [],
+                       "`MeeshyFont.fixedGlyph` est réservée à une Image : un texte figé se justifie par son cadre, pas par cette API")
+
+        let onText = """
+        Text("x")
+            .font(MeeshyFont.fixedGlyph(12))
+        """
+        XCTAssertEqual(Self.fixedGlyphSites(in: onText).map(\.receiver), [.text])
+        let onImage = """
+        Image(systemName: "x")
+            .font(MeeshyFont.fixedGlyph(12))
+        """
+        XCTAssertEqual(Self.fixedGlyphSites(in: onImage).map(\.receiver), [.glyph])
+    }
+
+    /// La référence nomme son `design` : sans lui, l'appel retient la surcharge
+    /// iOS 16 (`design: Font.Design?` → `nil`), dont le fournisseur ne se compare
+    /// pas égal à celui de `design: .default` — même rendu, deux `Font` distincts.
+    func test_laPoliceDeGlypheFigeRendLaTailleAuPointPres() {
+        XCTAssertEqual(MeeshyFont.fixedGlyph(24, weight: .medium),
+                       Font.system(size: 24, weight: .medium, design: .default))
+        XCTAssertEqual(MeeshyFont.fixedGlyph(30, weight: .regular, design: .rounded),
+                       Font.system(size: 30, weight: .regular, design: .rounded))
+    }
+
+    // MARK: - Règle 9 — un glyphe en ligne à côté d'un texte qui scale suit Dynamic Type
+
+    private static let inlineGlyphSites: [EmojiSite] = [
+        EmojiSite(file: "Features/Profile/Views/ParticipantProfileSheet.swift",
+                  head: #"Image(systemName: "theatermasks.fill")"#,
+                  marker: "MeeshyFont.relative(MeeshyIconSize.xxl"),
+        EmojiSite(file: "Features/Profile/Views/UserStatsView.swift",
+                  head: #"Image(systemName: "exclamationmark.circle.fill")"#,
+                  marker: "MeeshyFont.relative(MeeshyIconSize.md"),
+        EmojiSite(file: "Features/Stories/Views/MyStoryActionBar.swift",
+                  head: "Image(systemName: glyph.systemImage)",
+                  marker: ".meeshyScaledFont(MeeshyIconSize.sm")
+    ]
+
+    func test_unGlypheEnLigneDuResteSuitDynamicType() {
+        let unmarked = Self.inlineGlyphSites.filter { site in
+            let url = appRoot.appendingPathComponent(site.file)
+            return !Self.headIsFollowedByMarker(site, in: text(of: url))
+        }
+        XCTAssertTrue(unmarked.isEmpty,
+                      "un glyphe en ligne près d'un texte qui scale ne se fige pas : \(unmarked.map(\.file))")
+    }
+
+    // MARK: - Règle 6 — un emoji seul porte la police emoji du design system
+
+    struct EmojiSite {
+        let file: String
+        let head: String
+        let marker: String
+    }
+
+    private static let emojiSites: [EmojiSite] = [
+        EmojiSite(file: "Features/Main/Components/MessageDetailSentimentTab.swift",
+                  head: "Text(Self.sentimentEmoji(score))",
+                  marker: ".font(MeeshyFont.emoji(56))"),
+        EmojiSite(file: "Features/Stories/Notifications/StoryExpiredContent.swift",
+                  head: "Text(emoji)",
+                  marker: ".font(MeeshyFont.emoji(64))"),
+        EmojiSite(file: "Features/Stories/Views/StoryReactionFlightView.swift",
+                  head: "Text(flight.emoji)",
+                  marker: ".font(MeeshyFont.emoji(MeeshyFont.displaySize))"),
+        EmojiSite(file: "Features/Main/Components/UniversalComposerBar+Send.swift",
+                  head: "Text(emoji)",
+                  marker: ".font(MeeshyFont.emoji(QuickEmojiGrid.emojiSize))"),
+        EmojiSite(file: "Features/Main/Views/ConversationAnimatedBackground.swift",
+                  head: "Text(flags[i])",
+                  marker: ".font(MeeshyFont.emoji(24))"),
+        EmojiSite(file: "Features/Stories/Views/StoryLanguageQuickBar.swift",
+                  head: "Text(language.flag)",
+                  marker: ".font(MeeshyFont.emoji(MeeshyFont.titleSize))"),
+        EmojiSite(file: "Features/Stories/Views/StoryTrayView.swift",
+                  head: #"Text("\u{1F4AD}")"#,
+                  marker: ".font(MeeshyFont.emoji(MeeshyFont.title3Size))")
+    ]
+
+    private static func headIsFollowedByMarker(_ site: EmojiSite, in source: String) -> Bool {
+        var searchRange = source.startIndex..<source.endIndex
+        while let found = source.range(of: site.head, range: searchRange) {
+            let window = source[found.upperBound...].prefix(160)
+            if window.contains(site.marker) { return true }
+            searchRange = found.upperBound..<source.endIndex
+        }
+        return false
+    }
+
+    func test_unEmojiSeulPorteLaPoliceEmojiDuDesignSysteme() {
+        let unmarked = Self.emojiSites.filter { site in
+            let url = appRoot.appendingPathComponent(site.file)
+            return !Self.headIsFollowedByMarker(site, in: text(of: url))
+        }
+        XCTAssertTrue(
+            unmarked.isEmpty,
+            "un emoji seul doit passer par `MeeshyFont.emoji(_:)` : \(unmarked.map(\.file))"
+        )
+    }
+
+    func test_laPoliceEmojiRendLaTailleFigeeAuPointPres() {
+        XCTAssertEqual(MeeshyFont.emoji(56), Font.system(size: 56))
+        XCTAssertEqual(MeeshyFont.emoji(MeeshyFont.displaySize), Font.system(size: MeeshyFont.displaySize))
+        XCTAssertEqual(MeeshyFont.emoji(MeeshyFont.title3Size), Font.system(size: MeeshyFont.title3Size))
+    }
+
+    // MARK: - Balayage
+
+    private var appRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Guards
+            .deletingLastPathComponent()   // Unit
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // apps/ios
+            .appendingPathComponent("Meeshy")
+    }
+
+    private func sources() throws -> [URL] {
+        guard let walker = FileManager.default.enumerator(at: appRoot, includingPropertiesForKeys: nil)
+        else { return [] }
+        return walker.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
+    }
+
+    private func text(of url: URL) -> String {
+        (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+    }
+
+    /// Chemin relatif à `appRoot`, calculé par COMPOSANTS plutôt que par
+    /// remplacement de préfixe : l'énumérateur peut rendre `/private/var/…` là
+    /// où `#filePath` dit `/var/…`, et un `replacingOccurrences` raterait alors
+    /// silencieusement — laissant les 87 noms épinglés introuvables et les
+    /// quatre règles rouges pour une raison qui n'a rien à voir avec elles.
+    private func relativePath(_ url: URL) -> String {
+        let root = appRoot.standardizedFileURL.pathComponents
+        let full = url.standardizedFileURL.pathComponents
+        guard full.count > root.count else { return url.lastPathComponent }
+        return full.dropFirst(root.count).joined(separator: "/")
+    }
+
+    private func allSites() throws -> [(String, Site)] {
+        try sources().flatMap { url in
+            Self.frozenSites(in: text(of: url)).map { (relativePath(url), $0) }
+        }
+    }
+}

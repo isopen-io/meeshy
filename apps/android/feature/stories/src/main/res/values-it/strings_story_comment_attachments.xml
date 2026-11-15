@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_comment_attach">Allega una foto, un video o un file</string>
+    <string name="stories_comment_attach_remove">Rimuovi l\'allegato</string>
+    <string name="stories_comment_attach_uploading">Caricamento…</string>
+    <string name="stories_comment_attach_failed">Impossibile caricare l\'allegato</string>
+</resources>

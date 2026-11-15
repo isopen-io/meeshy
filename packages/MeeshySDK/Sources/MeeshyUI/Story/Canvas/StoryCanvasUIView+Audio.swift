@@ -26,15 +26,27 @@ extension StoryCanvasUIView {
         return "\(slide.id)#\(slideAudioRevision)#\(langs)"
     }
 
-    /// Materialises the slide's `t = 0` as a host-time. When the playhead is
-    /// already advanced (`currentTime > 0`, composer preview scrub) the origin
-    /// is back-dated so audio and the canvas playhead share one zero (RC4.4).
-    func captureSlideTimelineOrigin() -> UInt64 {
+    /// **L'ancre de la slide : l'origine ET l'écoulé, d'UNE lecture de
+    /// `currentTime`.**
+    ///
+    /// L'origine materialise le `t = 0` de la slide en temps hôte. Quand le
+    /// playhead est déjà avancé (`currentTime > 0` — scrub d'aperçu composer,
+    /// ouverture en détail sur la position d'une carte) elle est BACK-DATÉE,
+    /// pour que l'audio et le playhead du canvas partagent un seul zéro (RC4.4).
+    ///
+    /// Les deux disaient la même chose et se lisaient séparément : l'origine
+    /// back-datée disait au moteur *où est le zéro de la slide*, sans jamais
+    /// lui dire *de combien on est déjà entré*. Le mixer ne pouvait donc que
+    /// planifier chaque clip à une heure DÉJÀ PASSÉE — ce qu'`AVAudioPlayerNode`
+    /// rend en jouant le fichier depuis sa frame 0, sous une vidéo déjà à `t`
+    /// (#6580). Les rendre ensemble est la seule forme où ils ne peuvent pas
+    /// diverger.
+    func captureSlideTimelineAnchor() -> (originHost: UInt64, slideElapsed: Double) {
         let now = mach_absolute_time()
         let elapsed = currentTime.seconds
-        guard elapsed > 0, elapsed.isFinite else { return now }
+        guard elapsed > 0, elapsed.isFinite else { return (now, 0) }
         let back = ReaderAudioMixer.hostTime(forDelaySeconds: elapsed)
-        return back < now ? now - back : now
+        return (back < now ? now - back : now, elapsed)
     }
 
     /// Single funnel for the three `.play` audio entry points (`slide.didSet`,
@@ -84,12 +96,13 @@ extension StoryCanvasUIView {
             return
         }
         requestPlaybackSessionIfNeeded()
-        let origin = captureSlideTimelineOrigin()
+        let anchor = captureSlideTimelineAnchor()
         // Stop any other reader engine before starting this one (RC4.6).
         PlaybackCoordinator.shared.willStartPlaying(external: audioMixer)
         do {
-            _ = try audioMixer.play(originHost: origin,
-                                    slideKey: currentSlideKey)
+            _ = try audioMixer.play(originHost: anchor.originHost,
+                                    slideKey: currentSlideKey,
+                                    slideElapsed: anchor.slideElapsed)
             // Default fade envelope retiré 2026-05-27 — user feedback
             // « il y a encore des fade out et in dans le jeu des audio ».
             // Le mixer respecte uniquement les fadeIn/fadeOut explicites
@@ -98,25 +111,34 @@ extension StoryCanvasUIView {
             // d'enveloppe automatique 30%→100%→5% — le son joue à volume
             // plein dès le début et jusqu'au changement de slide.
         } catch {
-            os.Logger(subsystem: "me.meeshy.app", category: "media")
+            MeeshyLog.logger(.media)
                 .error("ReaderAudioMixer.play failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
-    /// Activates the shared `.playback` `AVAudioSession` through the existing
-    /// `MediaSessionCoordinator` (RC4.3). Refcounted; the boolean keeps this
-    /// view's request/release at exactly one claim.
+    /// Pose la session `.playback` tout de suite (le mixer part dans la foulée), puis la prise
+    /// refcomptée (RC4.3) — une seule par vue, rendue par `releasePlaybackSessionIfNeeded()`.
     func requestPlaybackSessionIfNeeded() {
+        guard StoryAudioActivationPolicy.shouldActivate(
+            hasClips: audioMixer.activeClipCount > 0 || audioMixer.backgroundClipCount > 0,
+            hasSoundingVideo: slideHasSoundingVideo,
+            mute: isAudioMuted) else { return }
         guard !didRequestPlaybackSession else { return }
         didRequestPlaybackSession = true
-        Task { try? await MediaSessionCoordinator.shared.request(role: .playback) }
+        MediaSessionCoordinator.shared.activateContentPlayback(.audible)
+        MediaSessionCoordinator.shared.requestPlaybackInOrder()
+    }
+
+    var slideHasSoundingVideo: Bool {
+        StoryAudioAvailability.videosNeedingAudioProbe(effects: slide.effects)
+            .contains { videoHasAudioTrack[$0.id] != false }
     }
 
     /// Balances `requestPlaybackSessionIfNeeded()`.
     func releasePlaybackSessionIfNeeded() {
         guard didRequestPlaybackSession else { return }
         didRequestPlaybackSession = false
-        Task { await MediaSessionCoordinator.shared.release() }
+        MediaSessionCoordinator.shared.releasePlaybackInOrder()
     }
 
     /// Subscribes to `MediaSessionCoordinator` interruption / route-change
@@ -171,6 +193,10 @@ extension StoryCanvasUIView {
         // les clips audio en `.edit`. Le prefetcher hors-écran (`.edit` sans le
         // flag) reste silencieux.
         guard mode == .play || (mode == .edit && playsAudioInEditMode) else { return }
+        guard StoryAudioActivationPolicy.shouldPrepare(mute: isAudioMuted, muteIsLocked: muteIsLocked) else {
+            slideHasSchedulableAudio = false
+            return
+        }
         // Gate sur la COMPOSITION : `configure(audios:urls:)` démonte les clips
         // en place et recharge les `AVAudioFile`, donc un pass par frappe
         // clavier relançait le son. Seuls un ajout/retrait d'objet, un
@@ -209,6 +235,9 @@ extension StoryCanvasUIView {
         // (entries=0 at that moment) — the in-Task call is what actually
         // schedules the buffers once the cache is warm.
         let slideId = slide.id
+        // L'aperçu d'édition n'a pas de durée de slide : chaque clip y boucle
+        // (`ReaderAudioLoopPolicy`, #10362). Lu ici, avant le Task.
+        let isEditPreview = mode == .edit
         Task { @MainActor [weak self] in
             guard let self else { return }
             var fgURLs: [String: URL] = [:]
@@ -247,7 +276,8 @@ extension StoryCanvasUIView {
             guard self.slide.id == slideId else { return }
 
             do {
-                try self.audioMixer.configure(audios: foreground, urls: fgURLs)
+                try await self.audioMixer.loadAndConfigure(audios: foreground, urls: fgURLs,
+                                                           loopsEveryClip: isEditPreview) { self.slide.id == slideId }
             } catch {
                 os.Logger.storyAudio.error(
                     "ReaderAudioMixer.configure failed: \(error.localizedDescription, privacy: .public)"
@@ -283,11 +313,14 @@ extension StoryCanvasUIView {
                         "BG audio cached audioId=\(background.id, privacy: .public) localFile=\(localURL.lastPathComponent, privacy: .public)"
                     )
                     do {
-                        try self.audioMixer.configureBackground(
+                        try await self.audioMixer.loadAndConfigureBackground(
                             audio: background,
                             url: localURL,
-                            looping: background.loop ?? true
-                        )
+                            looping: ReaderAudioLoopPolicy.loops(declared: background.loop,
+                                                                 isBackground: true,
+                                                                 isEditPreview: isEditPreview),
+                            loopsEveryClip: isEditPreview
+                        ) { self.slide.id == slideId }
                     } catch {
                         os.Logger.storyAudio.error(
                             "ReaderAudioMixer.configureBackground failed audioId=\(background.id, privacy: .public): \(error.localizedDescription, privacy: .public)"
@@ -297,6 +330,9 @@ extension StoryCanvasUIView {
             }
 
             self.audioMixer.setMute(self.readerContext.mute)
+            // Moteur préparé dès que ses clips sont là (#9837) : un canevas né
+            // en pause ne paie plus l'allocation au moment de reprendre.
+            self.audioMixer.prepareForPlayback()
 
             // Le ducking a besoin de savoir quelles vidéos portent réellement
             // du son — sondage une seule fois par clip, mémorisé.
@@ -333,16 +369,24 @@ extension StoryCanvasUIView {
     /// gates content-ready ni de session refcomptée — la session `.playback`
     /// est déjà posée par `applyEditPlayback` (éditeur sonore). Respecte le mute
     /// composer et la preview timeline (qui possède alors l'audio via l'engine).
+    ///
+    /// Un seul canevas d'édition joue à la fois — le dernier monté — et une
+    /// passe planifiée à neuf entre à la phase partagée de la slide, jamais au
+    /// début (`StoryCanvasEditAudioOwnership.swift`, #10362).
     func startEditAudioPlayback() {
-        guard mode == .edit, playsAudioInEditMode, !isTimelinePreviewActive else { return }
+        guard mode == .edit, playsAudioInEditMode, !isTimelinePreviewActive, !StoryEditPlaybackCover.covers(self) else { return }
         guard !MediaSessionCoordinator.shared.isCallActive else { return }
         guard !isAudioMuted else { return }
+        guard mayPlayEditAudio else { return }
         PlaybackCoordinator.shared.willStartPlaying(external: audioMixer)
-        let origin = captureSlideTimelineOrigin()
+        let anchor = editAudioAnchor()
         do {
-            _ = try audioMixer.play(originHost: origin, slideKey: currentSlideKey)
+            _ = try audioMixer.play(originHost: anchor.originHost,
+                                    slideKey: currentSlideKey,
+                                    slideElapsed: anchor.slideElapsed)
+            publishEditAudioPhase()
         } catch {
-            os.Logger(subsystem: "me.meeshy.app", category: "media")
+            MeeshyLog.logger(.media)
                 .error("edit ReaderAudioMixer.play failed: \(error.localizedDescription, privacy: .public)")
         }
     }
@@ -364,7 +408,7 @@ extension StoryCanvasUIView {
     /// encore schedulé pour CETTE slide (fichiers en cours de téléchargement /
     /// cache dans `reconfigureAudioForPlayback`). Le tick santé
     /// (`refreshPlaybackHealth`) gèle alors la timeline — la reprise est en
-    /// phase car `captureSlideTimelineOrigin()` repart du playhead gelé.
+    /// phase car `captureSlideTimelineAnchor()` repart du playhead gelé.
     ///
     /// Anti-deadlock (invariant n°9) :
     /// - clé par slide (`hasStartedPlayback(slideKey:)`) — un `play()` de la
@@ -375,7 +419,9 @@ extension StoryCanvasUIView {
     /// - watchdog `playbackStallWatchdogSeconds` en secours absolu côté
     ///   `applyPlaybackHealth`.
     func isSlideAudioPending() -> Bool {
-        guard slideHasSchedulableAudio else { return false }
+        guard StoryAudioActivationPolicy.shouldActivate(hasClips: slideHasSchedulableAudio,
+                                                        hasSoundingVideo: false,
+                                                        mute: isAudioMuted) else { return false }
         guard !MediaSessionCoordinator.shared.isCallActive else { return false }
         return !audioMixer.hasStartedPlayback(slideKey: currentSlideKey)
     }
@@ -398,17 +444,43 @@ extension StoryCanvasUIView {
         lastAppliedMutedSet = next
     }
 
+    /// **Une notification DIFFUSÉE ne franchit pas un muet verrouillé (#4084).**
+    ///
+    /// `.storyComposerMuteCanvas` / `.storyComposerUnmuteCanvas` sont postées
+    /// `object: nil` : TOUS les `StoryCanvasUIView` montés les reçoivent, y
+    /// compris les cartes de fil restées vivantes derrière un
+    /// `fullScreenCover`. Relever le muet au rail du viewer story coupait donc
+    /// aussi celui du fil — exactement ce que la vue `2f` interdit : « le muet
+    /// reste local à la surface, le couper ici ne coupe rien dans le fil ».
+    ///
+    /// Le verrou existait déjà (`ScenePlayerConfig.locksMute`), il était testé,
+    /// et il était CONTOURNABLE : il vivait sur le prop, et n'atteignait le
+    /// canvas qu'à la passe de rendu suivante. **Un champ de service qui
+    /// DÉCLARE une restriction ne la fait pas respecter** — il faut que le site
+    /// qui mute la lise.
     @objc func handleComposerMute() {
+        guard !muteIsLocked else { return }
         isAudioMuted = true
         audioMixer.setMute(true)
         forEachMediaLayer { $0.isMuted = true }
         backgroundLayer.isMuted = true
     }
 
+    /// Jumelle de `handleComposerMute` — même verrou, et il faut les DEUX : un
+    /// canvas verrouillé muet qu'on laisserait se faire muter resterait
+    /// cohérent par accident, jusqu'au jour où le verrou servira une surface
+    /// verrouillée SONORE.
     @objc func handleComposerUnmute() {
+        guard !muteIsLocked else { return }
         isAudioMuted = false
         audioMixer.setMute(false)
         forEachMediaLayer { $0.isMuted = false }
         backgroundLayer.isMuted = false
+        guard !audioMixer.hasStartedPlayback(slideKey: currentSlideKey) else { return }
+        guard mode == .edit else {
+            startAudioPlayback()
+            return
+        }
+        startEditAudioPlayback()
     }
 }

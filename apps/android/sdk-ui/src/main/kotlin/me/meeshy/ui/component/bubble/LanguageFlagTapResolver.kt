@@ -1,14 +1,14 @@
 package me.meeshy.ui.component.bubble
 
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.BubbleFlagTap
 
 /**
- * Pure resolver for a tap on a language-flag chip — Android port of iOS
- * `BubbleLanguageFlagController.handleTap`, adapted to Android's single-primary
- * display model. Where iOS opens a stacked inline *secondary* panel for a tapped
- * translation, Android switches the primary displayed language: one coherent view
- * instead of a two-tier text stack (the deliberate "better choice" per the
- * routine's mandate to surpass iOS at the design level).
+ * Pure resolver for a tap on a language-flag chip. The chat bubble follows iOS
+ * `BubbleLanguageFlagController.handleTap` ([resolveBubble] : switch primary, open or close
+ * the secondary panel, request the missing translation — the divergence of the single-primary
+ * model is closed, directive #11570). Feed posts, comments and stories keep the single-primary
+ * [resolve], which switches the displayed language.
  *
  * The resolver is stateless and content-agnostic: given the tapped code, the code
  * currently displayed (the active code), the source language, and the available
@@ -63,6 +63,25 @@ public object LanguageFlagTapResolver {
         if (tapped == activeCode.normalized()) return Result.Revert
         return Result.Activate(tapped)
     }
+
+    /**
+     * The bubble's flag tap (iOS parity): the transition of the primary text and of the secondary panel.
+     * [preferredCode] is the Prisme primary language, [translations] the available text translations.
+     */
+    public fun resolveBubble(
+        tappedCode: String,
+        activeCode: String?,
+        secondaryCode: String?,
+        originalLanguage: String?,
+        preferredCode: String?,
+        translations: List<LanguageResolver.TranslationLike>,
+    ): BubbleFlagTap.Outcome = BubbleFlagTap.handleTap(
+        code = tappedCode,
+        current = BubbleFlagTap.Context(activeCode = activeCode, secondaryCode = secondaryCode),
+        originalLanguage = originalLanguage,
+        preferredCode = preferredCode,
+        contentCodes = translations.filter { it.translatedContent.isNotBlank() }.map { it.targetLanguage }.toSet(),
+    )
 
     private fun String?.normalized(): String? =
         this?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }

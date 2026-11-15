@@ -82,6 +82,39 @@ describe('SendMessageBodySchema — content vs attachment validation', () => {
   });
 });
 
+// Un lieu partagé rend aussi le corps non-vide : une géolocalisation seule
+// n'a ni texte ni attachmentIds — même famille d'exemption que
+// forwardedFromId/copyAttachmentsFromMessageId ci-dessus. Sans elle, tout
+// message de géolocalisation seule meurt ici en "Le message ne peut pas être
+// vide", avant même d'atteindre MessageValidator (repro : envoi bloqué pour
+// toujours dans le SyncPill, #4039).
+describe('SendMessageBodySchema — lieu partagé seul', () => {
+  it('accepts a location-only message: empty content, no attachments, a location', () => {
+    const result = SendMessageBodySchema.safeParse({
+      content: '',
+      clientMessageId: cid,
+      location: { latitude: 48.8566, longitude: 2.3522, name: 'Paris' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a location-only message with content omitted entirely', () => {
+    const result = SendMessageBodySchema.safeParse({
+      clientMessageId: cid,
+      location: { latitude: 48.8566, longitude: 2.3522 },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('still rejects an empty message with no content, no attachments and no location', () => {
+    const result = SendMessageBodySchema.safeParse({
+      content: '',
+      clientMessageId: cid,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
 describe('SendMessageBodySchema — clientMessageId is optional', () => {
   it('accepts a text message WITHOUT clientMessageId (non-sync clients, e.g. scripts)', () => {
     const result = SendMessageBodySchema.safeParse({ content: 'hello' });
@@ -144,5 +177,39 @@ describe('SendMessageBodySchema — le chiffrement', () => {
   it('isEncrypted: false n\'exige aucun chiffré', () => {
     const result = SendMessageBodySchema.safeParse({ content: 'bonjour', isEncrypted: false });
     expect(result.success).toBe(true);
+  });
+});
+
+// Sticker (#4823) — même famille d'exemption que `location` : la décoration
+// EST le contenu du message. Et un `metadata` brut envoyé à côté reste hors
+// contrat : `z.object` le strippe, le seul chemin vers `metadata.sticker` est
+// le champ dédié.
+describe('SendMessageBodySchema — sticker', () => {
+  const sticker = { templateId: 'love.heart', slots: { caption: 'Toi' }, animation: 'heartbeat', emoji: '❤️' };
+
+  it('accepte et TRANSMET `sticker` à côté de la pièce jointe image (le cas nominal)', () => {
+    const result = SendMessageBodySchema.safeParse({
+      content: '',
+      clientMessageId: cid,
+      attachmentIds: [attachmentId],
+      sticker,
+    });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.sticker).toEqual(sticker);
+  });
+
+  it('accepte un sticker SEUL — ni texte, ni pièce jointe, ni lieu', () => {
+    const result = SendMessageBodySchema.safeParse({ clientMessageId: cid, sticker });
+    expect(result.success).toBe(true);
+  });
+
+  it('ignore un `metadata` brut envoyé à côté — jamais un passthrough', () => {
+    const result = SendMessageBodySchema.safeParse({
+      content: 'x',
+      clientMessageId: cid,
+      metadata: { sticker, postReplyTo: { id: 'volé' } },
+    });
+    expect(result.success).toBe(true);
+    expect(result.success && 'metadata' in result.data).toBe(false);
   });
 });

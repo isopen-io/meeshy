@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_capture_denied">اسمح لـ Meeshy بالحفظ في المعرض من الإعدادات للاحتفاظ بلقطاتك.</string>
+    <string name="call_mode_record_stop_hint">يحفظ الفيديو في معرضك</string>
+    <string name="call_capture_faces_hint">يحفظ صورة مربعة لكل مشارك في معرضك</string>
+</resources>

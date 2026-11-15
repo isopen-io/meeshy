@@ -7,21 +7,19 @@ import MeeshySDK
 /// covers, reply chips, and composer attachment previews.
 ///
 /// Behaviour driven by `Style` + `ControlSet`. Layout driven by `Frame`.
-/// Performance driven by `PerformanceOptions` (preset inferred from
-/// `Style` when not specified).
+/// Buffering is the live media policy's (`MediaPolicyMonitor`), never a
+/// per-surface preset.
 ///
 /// Replaces : `InlineVideoPlayerView`, `VideoPlayerView`,
-/// `VideoFullscreenPlayerView`, `StoryVideoPlayerView`, the app-side
-/// `VideoMediaView` and `GatedVideoFullscreenPlayer` (those become wrappers
-/// around `VideoAvailabilityResolver { MeeshyVideoPlayer }`).
+/// `VideoFullscreenPlayerView`, the app-side `VideoMediaView`,
+/// `GatedVideoFullscreenPlayer` and `VideoFullscreenPlayer` (those become
+/// wrappers around `VideoAvailabilityResolver { MeeshyVideoPlayer }`).
 public struct MeeshyVideoPlayer: View {
 
     // MARK: - Style
 
     public enum Style: Sendable {
-        case flat
         case inline
-        case mini
         case fullscreen
     }
 
@@ -50,14 +48,28 @@ public struct MeeshyVideoPlayer: View {
         public nonisolated static let airplay     = ControlSet(rawValue: 1 << 11)
         public nonisolated static let pip         = ControlSet(rawValue: 1 << 12)
         public nonisolated static let loop        = ControlSet(rawValue: 1 << 13)
+        /// Les sauts ±10 s du renderer `.inline`, jusqu'ici posés sans
+        /// condition de part et d'autre de lecture/pause : les rendre
+        /// retirables est ce qui permet un jeu à trois contrôles (#8231).
+        public nonisolated static let skip        = ControlSet(rawValue: 1 << 14)
 
         public nonisolated static let none: ControlSet              = []
-        public nonisolated static let inlineDefault: ControlSet     = [.playPause, .scrubber, .duration, .expand, .pip, .airplay, .speed]
+        /// Sans `.pip` : une vidéo inline ne part jamais en PiP, seul le plein
+        /// écran en ouvre un (#11041, décision porteur e).
+        public nonisolated static let inlineDefault: ControlSet     = [.playPause, .skip, .scrubber, .duration, .expand, .airplay, .speed]
+        /// Son · lecture/pause · plein écran — rien d'autre (#8231, lecture
+        /// dans le fil d'une conversation). Ni saut, ni barre, ni temps, ni
+        /// vitesse, ni PiP : tout cela vit au plein écran, à un toucher.
+        public nonisolated static let inlineMinimal: ControlSet     = [.mute, .playPause, .expand]
         public nonisolated static let fullscreenDefault: ControlSet = [
             .playPause, .scrubber, .duration, .save, .share, .close,
             .speed, .author, .mute, .airplay, .pip, .loop
         ]
-        public nonisolated static let miniDefault: ControlSet       = [.duration]
+        /// Le plein écran d'un média qui n'est pas (encore) un message — la
+        /// citation d'une réponse en cours de composition : on le regarde ou on
+        /// l'écoute, on n'en fait rien sortir (ni `.save`, ni `.share`), et
+        /// aucun auteur ni boucle ne s'y ajoute (#9890).
+        public nonisolated static let fullscreenPreview: ControlSet = fullscreenDefault.subtracting([.save, .share, .author, .loop])
     }
 
     // MARK: - Frame
@@ -89,35 +101,8 @@ public struct MeeshyVideoPlayer: View {
         // Bubble/card respectent intégralement le format de la vidéo, jusqu'à
         // un 9:16 portrait qui occupera ~60% d'un écran iPhone. C'est voulu.
         public static let bubble = Frame(maxAspectRatio: nil, maxHeight: nil,  cornerRadius: 0,  border: nil)
-        public static let card   = Frame(maxAspectRatio: nil, maxHeight: nil,  cornerRadius: 12, border: nil)
-        // Mini reste plafonné à 1:1 + 120pt (preview chip, pas de raison de
-        // déborder en hauteur pour un thumbnail).
-        public static let mini   = Frame(maxAspectRatio: 1.0, maxHeight: 120,  cornerRadius: 8,  border: nil)
+        public static let card   = Frame(maxAspectRatio: nil, maxHeight: nil,  cornerRadius: MeeshyRadius.smPlus, border: nil)
         public static let flat   = Frame(maxAspectRatio: nil, maxHeight: nil,  cornerRadius: 0,  border: nil)
-    }
-
-    // MARK: - PerformanceOptions
-
-    public struct PerformanceOptions: Sendable {
-        public var sharedPlayer: Bool
-        public var preloadOnAppear: Bool
-        public var preferredForwardBufferDuration: Double
-        public var waitsToMinimizeStalling: Bool
-        public var preferredPeakBitRate: Double?
-
-        public init(sharedPlayer: Bool, preloadOnAppear: Bool, preferredForwardBufferDuration: Double, waitsToMinimizeStalling: Bool, preferredPeakBitRate: Double?) {
-            self.sharedPlayer = sharedPlayer
-            self.preloadOnAppear = preloadOnAppear
-            self.preferredForwardBufferDuration = preferredForwardBufferDuration
-            self.waitsToMinimizeStalling = waitsToMinimizeStalling
-            self.preferredPeakBitRate = preferredPeakBitRate
-        }
-
-        public static let inline     = PerformanceOptions(sharedPlayer: true,  preloadOnAppear: false, preferredForwardBufferDuration: 2.0, waitsToMinimizeStalling: false, preferredPeakBitRate: nil)
-        public static let carousel   = PerformanceOptions(sharedPlayer: false, preloadOnAppear: true,  preferredForwardBufferDuration: 2.0, waitsToMinimizeStalling: false, preferredPeakBitRate: nil)
-        public static let flat       = PerformanceOptions(sharedPlayer: false, preloadOnAppear: true,  preferredForwardBufferDuration: 1.0, waitsToMinimizeStalling: false, preferredPeakBitRate: nil)
-        public static let fullscreen = PerformanceOptions(sharedPlayer: false, preloadOnAppear: true,  preferredForwardBufferDuration: 4.0, waitsToMinimizeStalling: false, preferredPeakBitRate: nil)
-        public static let mini       = PerformanceOptions(sharedPlayer: false, preloadOnAppear: false, preferredForwardBufferDuration: 0,   waitsToMinimizeStalling: true,  preferredPeakBitRate: nil)
     }
 
     // MARK: - VideoAuthor
@@ -135,15 +120,30 @@ public struct MeeshyVideoPlayer: View {
         }
     }
 
+    // MARK: - Poster
+
+    /// Poster NET d'une vidéo, servi AVANT la première frame décodée (et dans
+    /// l'overlay de téléchargement). Opaque : l'app le RÉSOUT (fichier local,
+    /// poster persisté, extraction) — le SDK ne fait que l'afficher.
+    /// `initial` est lu au montage (aucune transition quand il est déjà
+    /// résident) ; `resolve` prend le relais quand il manque.
+    public struct Poster: Sendable {
+        public let initial: UIImage?
+        public let resolve: (@Sendable @concurrent () async -> UIImage?)?
+        public init(initial: UIImage? = nil, resolve: (@Sendable () async -> UIImage?)? = nil) {
+            self.initial = initial
+            self.resolve = resolve
+        }
+    }
+
     // MARK: - Properties
 
     public let attachment: MeeshyMessageAttachment
     public let style: Style
-    public let controls: ControlSet
+    public private(set) var controls: ControlSet
     public let accentColor: String
     public let frame: Frame
     public let availability: VideoAvailability
-    public let performance: PerformanceOptions
     /// WS3.7 — opaque opt-in for the `.inline` path: when `true`, the inline
     /// renderer starts playback (and unmutes the shared engine) on `.onAppear`
     /// instead of waiting for a tap, provided the asset is ready and no call
@@ -161,10 +161,29 @@ public struct MeeshyVideoPlayer: View {
     /// Paramètre opaque : l'app le réduit pour les petites cellules (grille
     /// multi-média) et garde le défaut 64pt pour les surfaces pleine largeur.
     public let playButtonDiameter: CGFloat
+    /// Paramètre opaque du renderer `.inline` : quand `true`, toucher la vidéo
+    /// HORS de ses contrôles — le poster avant la lecture, la surface pendant —
+    /// appelle `onExpand` au lieu de montrer/masquer les contrôles. Défaut
+    /// `false` : toutes les surfaces existantes gardent leur geste.
+    public let surfaceTapExpands: Bool
+    /// Paramètre opaque : `false` joue la pièce SANS la rapporter — ni
+    /// `watched` au serveur, ni consommation, ni position de reprise. Honoré
+    /// par les deux renderers. Défaut `true` : chaque surface existante garde
+    /// son suivi. L'app décide quand une lecture n'est pas un visionnage
+    /// honnête de CETTE pièce (un son joué par le moteur vidéo, #9890).
+    public let reportsConsumption: Bool
     public let author: VideoAuthor?
     public let caption: String?
     public let fileName: String?
     public let mentionDisplayNames: [String: String]?
+    /// #3897 — honoré UNIQUEMENT par `.fullscreen` (`_FullscreenRenderer`).
+    /// Pas un oubli dans l'autre style : `.inline` (`_InlineRenderer`)
+    /// résout DÉJÀ son propre poster net via `MeeshyVideoThumbnail` (cascade
+    /// équivalente, grade bulle 300px) — passer CE `poster` là-bas serait un
+    /// second chemin concurrent pour le même résultat. Un futur appelant
+    /// passant `poster:` avec un style autre que `.fullscreen` ne doit pas
+    /// s'attendre à un effet.
+    public let poster: Poster?
     public let onDownload: (() -> Void)?
     public let onExpand: (() -> Void)?
     public let onShare: (() -> Void)?
@@ -181,14 +200,16 @@ public struct MeeshyVideoPlayer: View {
         accentColor: String,
         frame: Frame = .bubble,
         availability: VideoAvailability = .ready,
-        performance: PerformanceOptions? = nil,
         autoplayOnAppear: Bool = false,
         autoplayMuted: Bool = false,
         playButtonDiameter: CGFloat = 64,
+        surfaceTapExpands: Bool = false,
+        reportsConsumption: Bool = true,
         author: VideoAuthor? = nil,
         caption: String? = nil,
         fileName: String? = nil,
         mentionDisplayNames: [String: String]? = nil,
+        poster: Poster? = nil,
         onDownload: (() -> Void)? = nil,
         onExpand: (() -> Void)? = nil,
         onShare: (() -> Void)? = nil,
@@ -202,14 +223,16 @@ public struct MeeshyVideoPlayer: View {
         self.accentColor = accentColor
         self.frame = frame
         self.availability = availability
-        self.performance = performance ?? Self.inferPerformance(for: style)
         self.autoplayOnAppear = autoplayOnAppear
         self.autoplayMuted = autoplayMuted
         self.playButtonDiameter = playButtonDiameter
+        self.surfaceTapExpands = surfaceTapExpands
+        self.reportsConsumption = reportsConsumption
         self.author = author
         self.caption = caption
         self.fileName = fileName
         self.mentionDisplayNames = mentionDisplayNames
+        self.poster = poster
         self.onDownload = onDownload
         self.onExpand = onExpand
         self.onShare = onShare
@@ -218,22 +241,23 @@ public struct MeeshyVideoPlayer: View {
         self.onSaveRequested = onSaveRequested
     }
 
-    private static func inferPerformance(for style: Style) -> PerformanceOptions {
-        switch style {
-        case .flat:       return .flat
-        case .inline:     return .inline
-        case .mini:       return .mini
-        case .fullscreen: return .fullscreen
-        }
+    /// Sous un bouclier de capture (#9574), la vidéo protégée n'offre ni PiP
+    /// ni AirPlay : les renderers reçoivent les contrôles PERMIS, et la surface
+    /// ne configure donc aucune fenêtre PiP (`surfaceEnablesPip`).
+    @Environment(\.isCaptureShielded) private var isCaptureShielded
+
+    private var permitted: MeeshyVideoPlayer {
+        var player = self
+        player.controls = ProtectedPlaybackPolicy.of(isCaptureShielded: isCaptureShielded).permitted(controls)
+        return player
     }
 
     public var body: some View {
+        let player = permitted
         Group {
             switch style {
-            case .flat:       _FlatRenderer(player: self)
-            case .inline:     _InlineRenderer(player: self)
-            case .mini:       _MiniRenderer(player: self)
-            case .fullscreen: _FullscreenRenderer(player: self)
+            case .inline:     _InlineRenderer(player: player)
+            case .fullscreen: _FullscreenRenderer(player: player)
             }
         }
     }

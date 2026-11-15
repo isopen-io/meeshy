@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 /// Décrit ce que CE message doit rendre. Construit une fois par cellule,
 /// puis lu par les sous-vues. Aucune sous-vue ne lit `MeeshyMessage` directement —
@@ -9,7 +10,16 @@ nonisolated struct BubbleContent: Equatable {
     enum Kind: Equatable {
         case standard
         case deleted
-        case burned
+        /// Vue unique déjà ouverte par CE lecteur (#7579) : la puce
+        /// `(1) · Déjà ouvert`, permanente, sans contenu. Remplace l'ancien
+        /// « Vu et supprimé », qui se déclenchait sur le compteur GLOBAL du
+        /// serveur — un destinataire qui n'avait rien ouvert lisait alors que
+        /// le message était supprimé.
+        case viewOnceOpened
+        /// Vue unique pas encore ouverte (#7618) : le mode rend la seule puce
+        /// `(1) · Touchez pour afficher`, rien du contenu — qui n'est d'ailleurs
+        /// plus dans ce modèle (`MeeshyMessage.sealedForDisplay`).
+        case viewOnceSealed
         case ephemeralExpired
         /// System notice rendered as a centered capsule (no avatar, no L/R
         /// alignment) — e.g. the call-summary messages "Appel vidéo · 04:32".
@@ -22,7 +32,7 @@ nonisolated struct BubbleContent: Equatable {
         case visualGrid([MeeshyMessageAttachment])    // images + videos
         /// One OR MORE audio tracks of the SAME message. A single track renders
         /// as the existing audio widget; two or more render as a horizontal
-        /// `AudioCarouselView` (multi-track carousel — spec lot A4).
+        /// `AudioStackView` (multi-track carousel — spec lot A4).
         case audio([MeeshyMessageAttachment])
         case nonMedia([MeeshyMessageAttachment])      // file + location
         /// Mixed content: any combination of visual + non-media + audio
@@ -95,6 +105,14 @@ nonisolated struct BubbleContent: Equatable {
         /// builder from `firstLinkURL` → `trackedLinks[firstLinkURL]` →
         /// `https://meeshy.me/l/<token>`. `nil` → façade opens the canonical watchURL.
         let embedTrackedURL: URL?
+        /// Conversation désignée par `firstLinkURL` (lien de partage ou lien
+        /// direct), précalculée une fois par le builder. Non-nil → la bulle
+        /// rend la carte de conversation (#8099) au lieu de l'aperçu OpenGraph.
+        var conversationCardTarget: ConversationCardTarget? = nil
+        /// L'auteur n'a pas de compte (#10286) : aucune adresse n'est un lien
+        /// — ni aperçu, ni carte, ni lecteur, ni lien suivi —, le texte se
+        /// rend tel qu'il a été écrit.
+        var linksAreInert: Bool = false
     }
 
     struct Translation: Equatable {
@@ -116,7 +134,18 @@ nonisolated struct BubbleContent: Equatable {
         let reference: ReplyReference
         let isStory: Bool
 
+        /// Trois groupes plutôt qu'une seule chaîne de `&&` : la projection
+        /// compare dix-huit champs, et une conjonction de cette longueur est ce
+        /// que l'inféreur de types met le plus longtemps à résoudre. Chaque
+        /// groupe dit AUSSI ce qu'il garde — identité, média cité, story.
         static func == (lhs: Reply, rhs: Reply) -> Bool {
+            lhs.isStory == rhs.isStory
+                && sameIdentity(lhs, rhs)
+                && sameQuotedMedia(lhs, rhs)
+                && sameStory(lhs, rhs)
+        }
+
+        private static func sameIdentity(_ lhs: Reply, _ rhs: Reply) -> Bool {
             lhs.reference.messageId == rhs.reference.messageId
                 && lhs.reference.previewText == rhs.reference.previewText
                 // L'avatar de l'auteur cite est une ZONE TACTILE de la citation
@@ -124,16 +153,46 @@ nonisolated struct BubbleContent: Equatable {
                 // coup (refresh serveur, hydratation du cache), son absence de
                 // ce comparateur figeait la citation en initiales pour toujours.
                 && lhs.reference.authorAvatarUrl == rhs.reference.authorAvatarUrl
-                && lhs.isStory == rhs.isStory
                 && lhs.reference.moodEmoji == rhs.reference.moodEmoji
-                && lhs.reference.storyPublishedAt == rhs.reference.storyPublishedAt
+                && lhs.reference.authorIsAnonymous == rhs.reference.authorIsAnonymous
+        }
+
+        private static func sameQuotedMedia(_ lhs: Reply, _ rhs: Reply) -> Bool {
+            // Le GENRE du média cité — il décide du glyphe, du badge play, et
+            // depuis #4946 du fait qu'un document n'annonce pas de pixels. Il
+            // manquait à ce comparateur alors que la peau bulle le porte dans
+            // sa projection depuis toujours : une bulle optimiste posant le
+            // rawValue court (« image ») puis un écho serveur posant le MIME
+            // (« image/jpeg ») laissaient la rangée plate sur son premier rendu.
+            lhs.reference.attachmentType == rhs.reference.attachmentType
                 && lhs.reference.attachmentThumbnailUrl == rhs.reference.attachmentThumbnailUrl
+                // L'adresse du fichier cité décide qu'une vidéo sans vignette
+                // montre son poster (#8230) — elle arrive avec l'écho serveur.
+                && lhs.reference.attachmentFileUrl == rhs.reference.attachmentFileUrl
                 // La protection DECIDE si cette vignette est rendue et si la
                 // zone 2 est armee : elle influence le rendu autant que l'URL
                 // au-dessus. Absente d'ici, une citation figee sur une
                 // premiere resolution silencieuse (blob de cache ancien) ne se
                 // redessinerait jamais quand la protection arrive enfin.
                 && lhs.reference.attachmentIsProtected == rhs.reference.attachmentIsProtected
+                // Les SEPT faits du média cité (#4945) : le flou ThumbHash de la
+                // miniature et la ligne « 1024×768 · 0:42 · 1,2 Mo » que la
+                // citation rend depuis #4946. Ils arrivent APRÈS coup — la bulle
+                // optimiste ne connaît que ce que l'appareil tient, l'écho
+                // serveur apporte le reste. Absents de ce comparateur, la
+                // citation resterait figée sur sa PREMIÈRE résolution, exactement
+                // comme l'avatar et la protection avant eux.
+                && lhs.reference.attachmentThumbHash == rhs.reference.attachmentThumbHash
+                && lhs.reference.attachmentWidth == rhs.reference.attachmentWidth
+                && lhs.reference.attachmentHeight == rhs.reference.attachmentHeight
+                && lhs.reference.attachmentDurationMs == rhs.reference.attachmentDurationMs
+                && lhs.reference.attachmentFileSize == rhs.reference.attachmentFileSize
+                && lhs.reference.attachmentPageCount == rhs.reference.attachmentPageCount
+                && lhs.reference.attachmentMimeType == rhs.reference.attachmentMimeType
+        }
+
+        private static func sameStory(_ lhs: Reply, _ rhs: Reply) -> Bool {
+            lhs.reference.storyPublishedAt == rhs.reference.storyPublishedAt
                 && lhs.reference.storyThumbnailUrl == rhs.reference.storyThumbnailUrl
                 && lhs.reference.storyReactionCount == rhs.reference.storyReactionCount
                 && lhs.reference.storyCommentCount == rhs.reference.storyCommentCount
@@ -141,13 +200,12 @@ nonisolated struct BubbleContent: Equatable {
         }
     }
 
-    struct Ephemeral: Equatable {
-        let expiresAt: Date
-    }
-
     struct Meta: Equatable {
         let timeString: String
         let deliveryStatus: MeeshyMessage.DeliveryStatus?  // nil si reçu
+        /// Le `createdAt` de MON message : ce qui retient l'horloge d'un envoi de moins de
+        /// 200 ms (`SendingClockGlyph`). `nil` sur un message reçu.
+        var sendStartedAt: Date? = nil
     }
 
     /// Resolved facts for a call-summary system message — everything the leaf
@@ -158,6 +216,8 @@ nonisolated struct BubbleContent: Equatable {
         let summary: CallSummaryMetadata
         /// Current user initiated this call (emitted) vs received it.
         let isOutgoing: Bool
+        /// Le lecteur, qui se retire de la ligne des participants pour s'y dire « vous ».
+        let viewerId: String
         /// Gateway-localized label ("Appel vidéo · 04:32", "Appel audio manqué"),
         /// used as the human title base + VoiceOver fallback.
         let fallbackText: String
@@ -167,6 +227,28 @@ nonisolated struct BubbleContent: Equatable {
         /// Full call timestamp, formatted (date + time) in the long-press detail
         /// sheet. Kept as a `Date` so the sheet controls its own formatting.
         let timestamp: Date
+        /// #8064 — l'enregistrement consenti de l'appel, rattaché à SA bulle :
+        /// on le réécoute là où l'appel est raconté.
+        var recording: CallRecording? = nil
+    }
+
+    /// La piste audio d'un appel enregistré. Égalité par identité et par
+    /// fichier servi : la bulle ne se redessine que si la piste change.
+    struct CallRecording: Equatable {
+        let attachment: MeeshyMessageAttachment
+
+        static func == (lhs: CallRecording, rhs: CallRecording) -> Bool {
+            lhs.attachment.id == rhs.attachment.id
+                && lhs.attachment.fileUrl == rhs.attachment.fileUrl
+                && lhs.attachment.duration == rhs.attachment.duration
+        }
+
+        /// #8437 — un appel enregistré en vidéo se rejoue en vidéo.
+        var isVideo: Bool { attachment.type == .video }
+
+        static func from(_ attachments: [MeeshyMessageAttachment]) -> CallRecording? {
+            attachments.first { $0.type == .audio || $0.type == .video }.map(CallRecording.init(attachment:))
+        }
     }
 
     /// Faits résolus d'un avis d'ARRIVÉE — tout ce dont la feuille
@@ -194,6 +276,40 @@ nonisolated struct BubbleContent: Equatable {
         let linkRules: JoinNoticeMetadata.LinkRules?
     }
 
+    /// **Ce qu'un sticker de conversation DESSINE** (#4823) — la projection en
+    /// primitifs de `MessageSticker`, pour que `BubbleSticker` reste une
+    /// feuille `Equatable` sans lire `MeeshyMessage`.
+    ///
+    /// Le PNG rendu par l'expéditeur voyage en pièce jointe image ORDINAIRE :
+    /// c'est le REPLI d'un lecteur qui ne sait pas dessiner le gabarit. Il est
+    /// projeté ici en `Picture` — et non transporté en `MeeshyMessageAttachment`,
+    /// qui n'est pas `Equatable` — puis EXCLU de `attachments` par le builder,
+    /// sinon la grille visuelle le rendrait une seconde fois sous le sticker.
+    struct Sticker: Equatable {
+        /// La pièce jointe PNG, réduite à ce que `ProgressiveCachedImage` lit.
+        struct Picture: Equatable {
+            let attachmentId: String
+            let fileUrl: String
+            let thumbnailUrl: String?
+            let thumbHash: String?
+            let thumbnailColor: String
+        }
+
+        /// Gabarit du `StickerTemplateCatalog`. `nil` ou vide = sticker emoji.
+        let templateId: String?
+        /// Les valeurs FIGÉES des emplacements du gabarit.
+        let slots: [String: String]
+        /// Le mouvement de la décoration — `nil` = immobile.
+        let animation: StickerAnimation?
+        /// L'emoji du sticker, ou le repli d'un gabarit.
+        let emoji: String?
+        /// Le PNG rendu par l'expéditeur, s'il est arrivé.
+        let picture: Picture?
+        /// Le sticker de « Mes stickers » d'où vient l'image (#10630) : la fiche et
+        /// le menu le lisent ici, dans les quatre modes de lecture.
+        var libraryStickerId: String? = nil
+    }
+
     let messageId: String
     let kind: Kind
     let text: Text?
@@ -208,12 +324,99 @@ nonisolated struct BubbleContent: Equatable {
     /// pièces jointes `.location` sont exclues de `attachments` pour qu'un
     /// message portant les deux ne rende le lieu qu'UNE fois.
     let location: SharedPlace?
-    let ephemeral: Ephemeral?
+    /// **Le chrome de protection, résolu UNE fois pour les cinq modes de
+    /// lecture** (#7452). Remplace l'ancien `ephemeral: Ephemeral?`, qui ne
+    /// disait qu'une échéance, et seulement à la bulle et à la rangée plate.
+    ///
+    /// La résolution vit chez `MeeshyMessage.protection` (SDK) : c'est elle qui
+    /// tranche la règle du contrat #7451 — la plus PROCHE de l'échéance servie
+    /// et de « réception locale + durée », l'attente de réception pour
+    /// l'expéditeur, l'expiration. Rivière et Résumé projettent la MÊME valeur
+    /// depuis le même appel, sans passer par `BubbleContent`.
+    let protection: MessageProtectionDescriptor
     let isBlurred: Bool                    // gates le composant de blur reveal
+    /// Le contenu est-il voilé jusqu'au geste du lecteur — flou OU vue unique
+    /// (#7452). Projection de `protection.requiresVeil`, le site de la règle.
+    var requiresVeil: Bool { protection.requiresVeil }
+
+    /// La puce de vue unique que ce message rend À LA PLACE de son contenu,
+    /// ou `nil` pour un message qui montre son contenu (#7618, #7579).
+    var viewOnceChipState: ViewOnceChip.State? {
+        switch kind {
+        case .viewOnceSealed: return .sealed
+        case .viewOnceOpened: return .opened
+        default: return nil
+        }
+    }
+
+    /// Un envoi en cours se voit au repos sur la rangée plate, pour TOUT message de
+    /// l'expéditeur (#16542, #18420) : l'horloge ou l'anneau de téléversement n'attend
+    /// pas un défilement. La vue unique l'exigeait la première (#16130) : sa puce n'a
+    /// aucun contenu qui dise que le message existe encore. Les coches d'un message
+    /// parti restent au geste (`FocalMetaRow.showsDeliveryAtRest`).
+    var pinsPendingDelivery: Bool { isMe }
+
+    /// Le chrome à peindre au-dessus du message : celui d'une vue unique
+    /// scellée ne répète pas la vue unique, que sa puce dit déjà (#7619).
+    var chromeProtection: MessageProtectionDescriptor {
+        kind == .viewOnceSealed || kind == .viewOnceOpened ? protection.withoutViewOnce : protection
+    }
+    /// Ce message est en train d'être DÉTRUIT sous les yeux du lecteur
+    /// (#7467) — projection de `MeeshyMessage.isBurning`.
+    ///
+    /// `var`/`= false` plutôt que `let` : l'init memberwise garde ainsi sa
+    /// compatibilite source avec les fixtures existantes, meme patron que
+    /// `location` et `sticker` sur `APIMessage`. Le builder l'assigne.
+    var isBurning: Bool = false
+
+    /// #14369 — le verdict de la couche appareil d'un message hybride, projeté
+    /// de `MeeshyMessage.deviceLayerIntegrity` : le pied le dit discrètement.
+    var deviceLayerIntegrity: HybridDeviceLayerIntegrity? = nil
+    /// Vue unique TEXTE ouverte et lue sur place (#7579) : la retoucher la
+    /// fait passer à « déjà ouvert ». Projection de
+    /// `MeeshyMessage.isViewOnceRevealed`, posée par le builder.
+    var isViewOnceRevealed: Bool = false
+    /// Ce que les visionneuses ouvertes depuis ce message peuvent laisser
+    /// sortir (#9573) — projection de `Message.exitGate`, posée par le builder.
+    var exitGate: ContentExitGate = .open
+    /// Le verdict de capture de ce message (#9574, #9617) — projection de
+    /// `Message.exitOffer.capture`, posée par le builder. La peau le lit avec
+    /// `shieldsCapture(surfaceAnnounces:)` : noir pour une vue unique, et pour
+    /// une flamme partout où la surface n'annonce pas sa capture.
+    var captureVerdict: ContentExitLaw.CaptureVerdict = .free
+    /// Vue unique scellée dont le toucher ouvre un PLEIN ÉCRAN (#8009) —
+    /// l'image ou la vidéo que le sceau a retirée du modèle.
+    var viewOnceOpensFullscreen: Bool = false
     let isViewOnce: Bool
     let isPinned: Bool
-    let isForwarded: Bool
+    /// **Qui est nommé sous un message transféré — DÉJÀ TRANCHÉ** (#5058).
+    ///
+    /// `nil` ⇒ le message n'a pas été transféré. Un booléen à côté d'une
+    /// attribution serait la paire redondante que le dépôt proscrit ; ici
+    /// l'absence EST le fait, et `isForwarded` n'en est qu'une lecture.
+    ///
+    /// **Pourquoi la valeur est résolue en amont et non par la peau.** Ce champ
+    /// portait `isForwarded: Bool`, et les trois peaux n'en tiraient pas la même
+    /// chose : la bulle appelait `ForwardBadgePolicy.attribution(for:)` sur le
+    /// `Message` qu'elle avait sous la main, la rangée plate ne l'avait PAS et
+    /// retombait sur `.anonymous`. Le doc-comment de `FocalRow` nommait
+    /// l'écart et son motif — « écart signalé, pas une seconde résolution
+    /// inventée » —, et le repli était le bon : jamais celui qui nommerait
+    /// quelqu'un. Mais ce qui manquait était en AMONT, pas dans la peau.
+    ///
+    /// Une règle de CONFIDENTIALITÉ résolue à deux endroits est une règle qui
+    /// divergera : la liste blanche de `ForwardBadgePolicy` échoue FERMÉ, et
+    /// une peau qui la contourne pour « faire pareil » ouvrirait la fuite que
+    /// la liste existe pour fermer. Un seul site résout, trois peaux rendent.
+    let forwardAttribution: ForwardAttribution?
+
+    /// Lecture de commodité — dérivée, jamais stockée à côté.
+    var isForwarded: Bool { forwardAttribution != nil }
     let editedAt: Date?
+    /// #11375 — la dernière modification est celle d'un modérateur de plateforme.
+    /// `var … = false` et non `let` : l'init memberwise sert encore les témoins
+    /// qui ne la nomment pas.
+    var editedByModerator: Bool = false
     let isEditSaving: Bool
     let hasEditHistory: Bool
     let reactions: [MeeshyReactionSummary]
@@ -228,6 +431,21 @@ nonisolated struct BubbleContent: Equatable {
     /// "member-joined"`). Quand nil, un `.system` retombe sur la notice
     /// centrée ordinaire.
     let joinNotice: JoinNotice?
+    /// Présent pour un message-sticker RENDABLE (`message.sticker?.ifRenderable`).
+    /// Quand non nil, `ThemedMessageBubble` monte `BubbleSticker` à la place
+    /// de la bulle standard — sans chrome, comme un emoji libre.
+    ///
+    /// `var … = nil` et non `let` : l'init memberwise sert encore une dizaine
+    /// de témoins (`Unit/Focal/…`) qui énumèrent chaque champ ; une valeur par
+    /// défaut garde leur appel intact, un `let` sans défaut les casserait tous.
+    var sticker: Sticker? = nil
+    /// « dis-lui salut » (#16338) — l'invite qu'un avis d'arrivée offre à ce lecteur, lue
+    /// par TOUS les modes de lecture (Bulles, Focal, Script) ; `nil` sinon.
+    var arrivalsInvite: String? = nil
+
+    /// #13622 — ce que la conversation porteuse permet aux cartes de visite de
+    /// faire du réseau ; `.unknown` (défaut) ne résout rien.
+    var contactCardScope: ContactCardResolutionScope = .unknown
 
     /// Convenience pour tests + branch logic du body.
     var isEmojiOnly: Bool { text?.isEmojiOnly ?? false }
@@ -285,6 +503,20 @@ nonisolated struct BubbleContent: Equatable {
         return false
     }
 
+    /// Un emoji seul qui répond (#10628) : la carte citée en petit, puis
+    /// l'emoji en grand SANS bulle, comme un emoji envoyé seul. Routage de la
+    /// BULLE ; la rangée plate a le sien, `flatRowRendersLargeEmoji`.
+    var emojiReplyFloatsBelowQuote: Bool {
+        isEmojiOnly && reply != nil
+    }
+
+    /// La rangée plate (Focal, Script, Rivière) rend tout emoji seul en grand,
+    /// citation ou non (#10628) : la citation est déjà posée au-dessus
+    /// (`flatRowDrawsQuote`). Le sticker passe avant, il a son propre dessin.
+    var flatRowRendersLargeEmoji: Bool {
+        sticker == nil && isEmojiOnly
+    }
+
     static func == (lhs: BubbleContent, rhs: BubbleContent) -> Bool {
         lhs.messageId == rhs.messageId
             && lhs.kind == rhs.kind
@@ -293,12 +525,19 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.reply == rhs.reply
             && lhs.attachments == rhs.attachments
             && lhs.location == rhs.location
-            && lhs.ephemeral == rhs.ephemeral
+            && lhs.protection == rhs.protection
+            && lhs.isBurning == rhs.isBurning
+            && lhs.deviceLayerIntegrity == rhs.deviceLayerIntegrity
+            && lhs.isViewOnceRevealed == rhs.isViewOnceRevealed
+            && lhs.exitGate == rhs.exitGate
+            && lhs.captureVerdict == rhs.captureVerdict
+            && lhs.viewOnceOpensFullscreen == rhs.viewOnceOpensFullscreen
             && lhs.isBlurred == rhs.isBlurred
             && lhs.isViewOnce == rhs.isViewOnce
             && lhs.isPinned == rhs.isPinned
-            && lhs.isForwarded == rhs.isForwarded
+            && lhs.forwardAttribution == rhs.forwardAttribution
             && lhs.editedAt == rhs.editedAt
+            && lhs.editedByModerator == rhs.editedByModerator
             && lhs.isEditSaving == rhs.isEditSaving
             && lhs.hasEditHistory == rhs.hasEditHistory
             && lhs.reactions.map(\.emoji) == rhs.reactions.map(\.emoji)
@@ -309,5 +548,8 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.senderName == rhs.senderName
             && lhs.callNotice == rhs.callNotice
             && lhs.joinNotice == rhs.joinNotice
+            && lhs.sticker == rhs.sticker
+            && lhs.arrivalsInvite == rhs.arrivalsInvite
+            && lhs.contactCardScope == rhs.contactCardScope
     }
 }

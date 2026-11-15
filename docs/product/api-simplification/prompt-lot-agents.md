@@ -1,0 +1,690 @@
+# Avancer par LOT — le prompt des agents
+
+> Procédure établie le 2026-08-29, après avoir mesuré que livrer une issue en série
+> coûtait **75 min dont 45 min d'attente** (gates + build Docker + déploiement).
+> Le goulot n'est jamais l'écriture : c'est la sérialisation.
+
+## Le principe en une phrase
+
+**N agents écrivent en parallèle dans UN SEUL arbre, chacun sur un territoire de
+FICHIERS exclusif ; l'intégrateur seul touche aux fichiers-carrefour, committe,
+pousse une fois, déploie une fois, et ne ferme que ce que la mesure rend vert.**
+
+Ce n'est pas la stratégie des worktrees parallèles — celle-là a coûté cinq
+features régressées le 2026-08-27, et la directive qui en est sortie dit
+exactement ceci : *un worktree, une branche, répartition par FICHIERS*.
+
+## Composer le lot
+
+Cinq à six issues, choisies **par disjonction de fichiers**, jamais par milestone
+ni par numéro. Deux issues qui touchent le même fichier ne partent pas ensemble —
+même « juste pour un import ».
+
+Avant de lancer, poser le **bail** sur chacune : `Status = In Progress` dans le
+projet « Meeshy — pilotage » + un commentaire de réservation daté. Vérifier
+d'abord que l'issue **est** dans le projet : une issue absente du projet est
+invisible aux autres agents, donc ni réservable ni réservée.
+
+## Le bail — ce qu'il verrouille, et ce qu'il ne verrouille pas
+
+> Établi le 2026-08-29T18:00Z, après qu'une session distante a composé un lot dont
+> deux volets allaient découper `conversations/messages.ts` et
+> `conversations/messages-advanced.ts` — **cinquante-cinq minutes** après qu'une
+> autre session les ait réécrits (`16420a92`, issue #4188 : −346 et −94 lignes).
+> Le lot a été arrêté avant la première écriture, mais rien dans la procédure
+> d'alors ne l'avait signalé : les deux sessions avaient chacune un bail valide,
+> sur deux issues sans aucun lien, dans deux milestones différents.
+
+La règle en une phrase : **on réserve une ISSUE, mais on entre en collision sur un
+FICHIER.** Le bail par issue est nécessaire et il ne suffit pas. Trois défauts
+mesurés, et leur correctif :
+
+### 1. Le champ qui fait foi n'est pas écrivable par une session distante
+
+`Status = In Progress` vit dans Projects v2, qui ne se sert qu'en **GraphQL**. Une
+session `claude.ai/code` n'a droit qu'à un jeu épinglé d'opérations de revue de
+PR : ni `gh`, ni `project item-edit`, ni la mutation de champ. Elle ne peut donc
+**pas** poser le statut sur lequel toute la procédure s'appuie.
+
+> Une procédure dont le verrou n'est pas actionnable par tous ses participants
+> n'a pas de verrou : elle a une convention, et une convention ne bloque personne.
+
+**Correctif — le bail se pose là où TOUT LE MONDE peut écrire, en REST :**
+
+- un **commentaire de réservation** sur l'issue, portant le bloc du § suivant ;
+- `Status = In Progress` **en plus**, par les sessions qui le peuvent, jamais à la
+  place ;
+- une session qui ne peut pas poser le statut **le dit dans son commentaire**, en
+  toutes lettres, pour qu'une session locale le pose pour elle.
+
+### 2. La réservation doit énoncer des CHEMINS, pas seulement un numéro
+
+Un numéro d'issue ne dit rien des fichiers qu'elle va toucher. C'est ce qui a
+laissé #4188 et #4284 se croiser : deux issues, deux milestones, aucun lien
+visible, et les deux mêmes fichiers.
+
+**Correctif — tout commentaire de réservation porte ce bloc, verbatim :**
+
+```
+RESERVATION
+  session   : <identifiant court de la session>
+  issue     : #<n>
+  ouvert    : <horodatage ISO 8601 UTC>
+  chemins   :
+    - services/gateway/src/routes/<...>
+    - apps/web/<...>
+  carrefours: <les fichiers-carrefour que ce lot devra faire modifier a l'integrateur>
+```
+
+Les chemins sont ceux qu'on va **écrire**, pas ceux qu'on va lire. Un répertoire
+se déclare avec `/**`. Une réservation sans bloc `chemins` ne vaut pas
+réservation : elle n'oppose rien à personne.
+
+### 3. Rien ne consultait git — alors que git est la seule mémoire partagée
+
+Le tableau et les commentaires disent ce que les autres *ont annoncé*. Git dit ce
+qu'ils ont **fait**, et il est déjà synchronisé entre toutes les sessions.
+
+**Correctif — deux commandes, obligatoires avant la première ligne écrite :**
+
+```bash
+git fetch origin dev
+
+# (a) Qui a touche MES fichiers recemment ? Un fichier touche par une autre
+#     session dans les 2 dernieres heures n'est PAS libre, quel que soit l'etat
+#     de son issue.
+git log --since="2 hours ago" --oneline --name-only origin/dev -- <chemins revendiques>
+
+# (b) L'issue est-elle DEJA livree ? Le sujet de commit du depot porte le
+#     resultat attendu, donc la recherche par titre attrape ce que la recherche
+#     par numero rate.
+git log --oneline origin/dev --grep "#<n>"
+git log --format=%s -40 origin/dev | grep -i "<quelques mots du titre de l'issue>"
+```
+
+`(a)` est la commande qui aurait arrêté le lot ci-dessus, en une ligne :
+
+```
+$ git log --since="2 hours ago" --oneline origin/dev -- services/gateway/src/routes/conversations/messages-advanced.ts
+16420a92  fix(gateway): aucune porte morte ne subsiste sur les messages ni sur les liens de partage
+```
+
+### Ce que ces trois règles ne couvrent pas, et qu'il faut savoir
+
+Elles réduisent la fenêtre de collision ; elles ne la ferment pas. Entre le moment
+où l'on lit les baux et celui où l'on pose le sien, une autre session peut poser
+le sien. **La fenêtre restante se referme par la relecture** : juste avant de
+lancer les agents — donc après avoir posé le bail —, rejouer `(a)` sur les chemins
+du lot. C'est bon marché, et c'est le seul moment où l'on tient une photo
+cohérente.
+
+Et une règle de prudence qui vaut mieux que toutes les autres : **quand deux lots
+se disputent un fichier, celui qui n'a rien écrit cède.** Un lot arrêté avant sa
+première écriture ne coûte que le temps de lecture de ses agents. Un conflit de
+rebase sur un fichier de trois mille lignes coûte la journée des deux sessions.
+
+## Les fichiers-carrefour, réservés à l'intégrateur
+
+```
+services/gateway/src/route-registration.ts
+packages/shared/prisma/schema.prisma
+packages/shared/types/index.ts
+apps/ios/project.yml
+apps/ios/Meeshy/Localizable.xcstrings
+```
+
+Un agent qui en a besoin le **déclare** ; il ne l'écrit pas. C'est cette règle,
+et elle seule, qui rend le parallélisme sûr.
+
+---
+
+# Le prompt
+
+Remplacer `{{ISSUE}}`, `{{TERRITOIRE}}` et `{{CONSIGNES}}`. Le reste est invariant.
+
+**Et choisir `{{MODELE}}` — un champ de la fiche, pas une option qu'on peut omettre.**
+Le critère est l'ARBITRAGE que la tâche demande, jamais l'importance du lot :
+
+| verbe de la tâche | arbitrage | modèle |
+|---|---|---|
+| énumérer, grepper, extraire d'un log, relever un état, compter | aucun | **haiku** |
+| écrire le correctif d'une issue cadrée — territoire donné, critère de fin écrit, témoins à prouver rouges | borné | **sonnet** |
+| trancher entre deux conceptions, arbitrer deux sources qui font également foi, composer le lot | ouvert | **opus** |
+
+Un agent lancé sans que son verbe ait été nommé est un agent dont le modèle n'a pas
+été choisi : l'omission retombe sur le modèle par défaut, et un relevé fait par le
+modèle le plus lourd est *juste* — simplement payé dix fois son prix, sans aucun
+témoin pour le dire. Détail : `tasks/lessons.md` § 323.
+
+```
+Dépôt : /Users/smpceo/Documents/v2_meeshy. Branche courante : dev (locale).
+NE CHANGE PAS DE BRANCHE.
+
+=== RÈGLES ABSOLUES DU LOT (d'autres agents travaillent DANS LE MÊME ARBRE) ===
+
+1. TERRITOIRE. Tu ne modifies QUE les fichiers de ton territoire, énoncé plus bas.
+   Si tu dois toucher un fichier hors territoire, tu NE LE FAIS PAS : tu le
+   DÉCLARES dans `edits_hors_territoire` avec le chemin, la ligne et le texte
+   exact à insérer. L'intégrateur l'appliquera en série. Un agent qui écrit hors
+   de son territoire fait perdre le travail d'un autre.
+
+2. FICHIERS-CARREFOUR STRICTEMENT INTERDITS, sans exception :
+   services/gateway/src/route-registration.ts
+   packages/shared/prisma/schema.prisma
+   packages/shared/types/index.ts
+   apps/ios/project.yml
+   apps/ios/Meeshy/Localizable.xcstrings
+   Déclare-les dans `edits_hors_territoire`.
+
+3. AUCUN `git` QUI ÉCRIT. Pas de commit, add, stash, checkout, branch, restore,
+   reset. `git status` et `git diff` en lecture seule sont permis. L'intégrateur
+   committe lui-même, par chemins explicites.
+
+4. GATES CIBLÉES SEULEMENT. D'autres agents tournent : ne lance JAMAIS la suite
+   complète (`npx jest` sans argument) ni `xcodebuild`. Uniquement :
+     - services/gateway : `npm run type-check` puis `npx jest <tes suites>`
+     - apps/web         : `npx jest <tes suites>`
+     - apps/android     : `JAVA_HOME=/opt/homebrew/opt/openjdk@21 ./gradlew :module:testDebugUnitTest`
+   L'intégrateur lance les suites complètes une fois, à la fin, pour tout le lot.
+
+5. TDD NON NÉGOCIABLE. Chaque témoin doit être PROUVÉ ROUGE sous la mutation
+   qu'il nomme : tu casses volontairement le code, tu montres le témoin rouge, tu
+   restaures, tu montres le vert. Un témoin jamais vu rouge ne protège rien.
+   Rapporte chaque preuve dans `mutations_prouvees`.
+
+6. VÉRIFIE L'ISSUE AVANT DE LA CROIRE. Le dépôt bouge vite et les issues
+   vieillissent. Trois pièges mesurés le 2026-08-29 :
+     - un ancrage `fichier:ligne` peut désigner un fichier qui EXISTE mais n'est
+       pas le bon (deux `magic-link.ts` sous le même préfixe) — suivre l'ancrage à
+       l'aveugle retire la mauvaise route ;
+     - une prémisse peut être devenue FAUSSE (le correctif a déjà été livré
+       ailleurs) — l'écrire produirait un correctif sans effet ;
+     - un ANTI-TÉMOIN peut rendre la suite verte sur le défaut intact (un double
+       qui mocke ce que le test prétend vérifier). Corrige le double AVANT
+       d'écrire, sinon tu livres sur un témoin qui ne peut pas tomber.
+   Dis ce que tu as trouvé de périmé dans `restant`.
+
+7. STYLE DU DÉPÔT. Commentaires en français, denses, qui disent le POURQUOI et ce
+   que le défaut COÛTAIT — jamais la paraphrase du code. Budget 800–1100 lignes
+   par fichier : au-dessus, on EXTRAIT avant d'ajouter, jamais l'inverse.
+   TypeScript strict, aucun `any`. Lis le CLAUDE.md racine et celui du répertoire
+   où tu travailles AVANT d'écrire.
+
+8. Tu ne fermes ni ne commentes AUCUNE issue GitHub. L'intégrateur le fait après
+   mesure en intégration.
+
+9. MÊME TRANSITOIREMENT, tu ne mutes pas un fichier hors territoire — pas même
+   pour prouver qu'un témoin rougit, pas même en restaurant dans la même
+   commande avec une empreinte avant/après. Un autre agent peut lire ce fichier
+   pendant les quelques secondes de la mutation, et il lira un dépôt incohérent.
+   Si la preuve de ROUGE exige de toucher le fichier d'un autre, DÉCRIS la
+   mutation dans `mutations_prouvees` en disant qu'elle n'a pas été exécutée, et
+   l'intégrateur la rejouera en série.
+
+=== TON TERRITOIRE (issue #{{ISSUE}}) ===
+{{TERRITOIRE}}
+
+=== TA MISSION ===
+Lis l'issue en entier : `gh issue view {{ISSUE}} --json number,title,body,comments`.
+Les COMMENTAIRES comptent autant que le corps : ils portent les corrections de
+prémisse et les avertissements posés depuis l'ouverture.
+
+Elle porte un § « Critère de fin » numéroté. Tu traites CHAQUE critère et tu dis
+pour chacun s'il est fait, partiel ou non fait, AVEC SA PREUVE (sortie de test,
+mesure, extrait de code). Un critère que tu ne peux pas satisfaire depuis ce poste
+— mesure en production, décision du porteur — se déclare `partiel` avec sa raison,
+jamais `fait`.
+
+Si l'issue contient une décision produit à trancher : TRANCHE-LA, écris la
+RAISON dans `decisions`, applique-la. Ne rends pas la main pour un arbitrage —
+une décision écrite vaut mieux qu'une question qui traîne.
+
+=== CONSIGNES PROPRES À CETTE ISSUE ===
+{{CONSIGNES}}
+
+=== CE QUE TU RENDS ===
+La structure demandée. `resume` servira de corps de message de commit : écris-le
+dans le style du dépôt — dense, en français, disant ce que le défaut COÛTAIT et
+pourquoi le correctif a cette forme.
+`a_mesurer_en_integration` doit contenir des commandes curl EXACTES contre
+https://gate.staging.meeshy.me/api/v1/... avec le résultat attendu : l'intégrateur
+les rejouera après déploiement pour prouver la fin de ton issue. Une issue sans
+mesure rejouable ne peut pas être fermée.
+```
+
+## Le schéma de retour
+
+```jsonc
+{
+  "issue": 4156,
+  "statut": "livre | partiel | bloque",
+  "resume": "corps du futur message de commit",
+  "fichiers_modifies": ["chemins repo-relatifs"],
+  "fichiers_crees": ["chemins repo-relatifs"],
+  "edits_hors_territoire": [{ "fichier": "", "raison": "", "edit": "texte exact et où" }],
+  "mutations_prouvees": [{ "mutation": "", "temoins_rouges": 0 }],
+  "gates": ["commande -> résultat chiffré"],
+  "criteres": [{ "numero": 1, "etat": "fait|partiel|non_fait", "preuve": "" }],
+  "a_mesurer_en_integration": ["curl exact -> résultat attendu"],
+  "decisions": ["décision prise, avec sa RAISON"],
+  "restant": ["ce qui reste, et devient un suivi"]
+}
+```
+
+## La moitié de l'intégrateur
+
+Un prompt d'agent sans protocole d'intégration n'est qu'une moitié de mécanisme.
+
+1. **Appliquer les `edits_hors_territoire`** en série, soi-même.
+2. **Lancer les suites complètes UNE fois**, mais **UNE À LA FOIS**.
+   Mesuré le 2026-08-29 : lancer gateway + web + gradle simultanément produit
+   **cinq faux échecs web et cinq faux échecs gateway**, tous verts isolément
+   (226/226, 45/45, 9/9). Les suites lentes dépassent le délai de jest sous
+   contention CPU, et un ensemble d'échecs DISJOINT sur un code identique est la
+   signature d'un flake, jamais d'une régression — mais il coûte une heure à qui
+   le prend au sérieux.
+   Le SDK iOS (14 min) est la seule exception : il ne partage pas le CPU avec
+   jest de la même façon, et ses 14 min tournent utilement pendant le build
+   Docker. Android (gradle) se lance seul, après les autres.
+3. **Committer par chemins explicites**, une issue par commit :
+   `git commit -- <chemins>` — jamais `git commit -a`, qui emporte tout l'index et
+   donc le travail des cinq autres.
+4. **Un seul push, un seul build, un seul déploiement** pour tout le lot.
+5. **Rejouer les `a_mesurer_en_integration`** de chaque agent contre staging.
+   Fermer les issues vertes avec leur preuve ; celles dont la mesure échoue
+   retournent au lot suivant, avec la mesure.
+6. **Le lot N+1 s'écrit pendant que le lot N se construit.** C'est ce recouvrement
+   qui ramène le coût d'une issue de ~75 min à ~5 min.
+
+## La règle du temps mort — jamais d'attente à vide
+
+**Dès qu'un build CI est en cours, on lance le lot suivant. On ne surveille pas
+un build.** Un build dure ~20 min ; les regarder est le seul coût qu'on ne peut
+pas justifier.
+
+L'ordre est donc :
+
+```
+appliquer les édits carrefour
+    │
+    ├── lancer les gates complets (fond, en parallèle)
+    │
+gates verts ──► commit par issue ──► push (le build DÉMARRE)
+    │                                     │
+    │                                     └── lancer IMMÉDIATEMENT le lot N+1
+    │                                            (les agents écrivent pendant le build)
+    │
+    └── build vert ──► déployer staging ──► rejouer les mesures
+                                                │
+                          ┌─────────────────────┴──────────────────────┐
+                          │                                            │
+                    tout est VERT                              une mesure ÉCHOUE
+                          │                                            │
+              fermer les issues avec leur preuve          corriger, re-pousser,
+              et continuer le lot N+1                     re-déployer, re-mesurer
+                          │                                            │
+                          └──────────► le lot N+1 continue PENDANT ◄───┘
+```
+
+**Une mesure rouge n'arrête jamais le lot suivant.** On corrige le point rouge,
+on re-pousse, on re-déploie — et pendant ce temps les agents du lot N+1
+continuent d'écrire. Le seul cas où on suspend, c'est un rouge qui touche un
+fichier du lot N+1 : là on prévient l'agent concerné avant qu'il n'écrive dessus.
+
+**Ce qui ne se pipeline PAS** : les gates complets avant le push. `dev` est une
+branche partagée que des agents distants tirent — y pousser du rouge empoisonne
+tout le monde. Les gates passent AVANT le push, le pipeline commence APRÈS.
+
+## Travailler à plusieurs sessions, y compris distantes
+
+Le bail rend la file partageable, et le dépôt est la seule mémoire commune :
+
+- une session prend un lot en posant son **commentaire de réservation** — bloc
+  `RESERVATION` complet, chemins inclus (§ « Le bail ») — et, si elle le peut,
+  `Status = In Progress` **en plus** ; elle ne touche jamais une issue déjà
+  réservée ;
+- **avant d'écrire une ligne**, elle rejoue les deux commandes git du § « Le
+  bail » sur les chemins qu'elle revendique : un fichier touché par une autre
+  session dans les 2 dernières heures n'est PAS libre, quel que soit l'état de
+  son issue ;
+- un bail sans commit depuis **2 h** est reprenable — le dire dans le
+  commentaire de reprise, avec l'horodatage de l'ancien ;
+- tout part sur `dev` par des commits **par chemins explicites**, jamais `-a` ;
+- avant de composer un lot, `git pull --rebase` puis relire les territoires :
+  une session voisine a pu livrer un fichier qu'on croyait libre ;
+- **quand deux lots se disputent un fichier, celui qui n'a rien écrit cède.**
+
+## Lancer une session DISTANTE (claude.ai/code, ou une autre machine)
+
+Une session distante n'a ni le contexte de cette conversation, ni le lot composé.
+Elle a besoin d'un prompt **autonome**. Le voici — il ne suppose rien d'autre que
+l'accès au dépôt.
+
+```
+Tu rejoins une boucle de livraison sur le dépôt isopen-io/meeshy, branche `dev`.
+
+AVANT TOUTE CHOSE, lis ces deux fichiers — ils portent la procédure et tu la
+suis à la lettre :
+  docs/product/api-simplification/prompt-lot-agents.md   (cette procédure)
+  CLAUDE.md                                              (les lois du dépôt)
+
+=== 1. PRENDS UN LOT, SANS PIÉTINER PERSONNE ===
+
+    gh project item-list 1 --owner isopen-io --format json --limit 900
+
+Ne prends QUE des issues dont le `Status` vaut `Todo`. Une issue `In Progress`
+appartient à quelqu'un d'autre — sauf si son dernier commentaire de réservation
+date de plus de 2 h ET qu'aucun commit ne la référence : elle est alors
+reprenable, et tu le DIS dans ton commentaire de reprise.
+
+Compose un lot de 4 à 6 issues **par disjonction de fichiers**, jamais par
+milestone ni par numéro. Deux issues qui touchent le même fichier ne partent pas
+ensemble. Pour chacune, lis le corps ET les commentaires (`gh issue view <n>
+--json body,comments`) : les commentaires portent les corrections de prémisse.
+
+Réserve-les : un commentaire daté portant le bloc `RESERVATION` du § « Le bail »
+— **avec la liste des CHEMINS que tu vas écrire**, sans quoi la réservation
+n'oppose rien à personne — et `Status = In Progress` si ton accès te le permet.
+Si tu ne peux pas poser le statut (Projects v2 n'est servi qu'en GraphQL, hors de
+portée d'une session distante), DIS-LE dans le commentaire : une session locale
+le posera pour toi.
+
+Puis, AVANT de lancer le moindre agent, vérifie dans git ce que le tableau ne dit
+pas — c'est la seule mémoire partagée entre les sessions :
+
+    git fetch origin dev
+    git log --since="2 hours ago" --oneline --name-only origin/dev -- <tes chemins>
+    git log --oneline origin/dev --grep "#<n>"
+
+Un fichier touché par une autre session dans les 2 dernières heures n'est PAS
+libre, quel que soit l'état de son issue : retire-le du lot. Un commit dont le
+sujet porte le résultat attendu de ton issue signifie qu'elle est DÉJÀ livrée :
+ne la refais pas, commente-la.
+
+=== 2. FAIS ÉCRIRE TES AGENTS ===
+
+Un agent par issue, avec le prompt de la section « Le prompt » du fichier
+ci-dessus, en remplaçant {{ISSUE}}, {{TERRITOIRE}} et {{CONSIGNES}}.
+Les fichiers-carrefour sont à TOI, jamais à eux.
+
+=== 3. INTÈGRE, PUIS PIPELINE ===
+
+Applique les édits carrefour toi-même. Lance les gates — un par un, JAMAIS trois
+en parallèle (mesuré le 2026-08-29 : trois gates lourds simultanés produisent
+5 faux échecs web et 5 faux échecs gateway, tous verts isolément).
+
+Gates verts → un commit par issue, `git commit -- <chemins>` (jamais `-a`) →
+`git push origin HEAD:dev`.
+
+**Le push démarre le build. NE L'ATTENDS PAS : compose et lance le lot suivant.**
+
+Quand le build finit, déploie et mesure :
+    ssh root@meeshy.me 'cd /opt/meeshy/staging && docker compose pull gateway-staging && docker compose up -d gateway-staging'
+    curl -s https://gate.staging.meeshy.me/health     # doit porter TON commit court
+
+Rejoue les `a_mesurer_en_integration` de chaque agent. Ferme les issues vertes
+avec leur preuve ; corrige, re-pousse et re-mesure les rouges — pendant que le
+lot suivant continue d'écrire.
+
+=== CE QUI EST INTERDIT ===
+
+- pousser sur `main` ou déployer en production (staging seulement) ;
+- fermer une issue sans mesure rejouée en intégration ;
+- `git commit -a`, `git add -A`, `git stash`, `git checkout` sur un arbre partagé ;
+- inventer des identifiants : ils sont hors dépôt, dans `apps/ios/fastlane/.env`.
+```
+
+## Le prompt de BOUCLE pour Claude Code **web**
+
+Une session web (claude.ai/code) n'a ni Xcode, ni SDK Android, ni forcément
+l'accès SSH au serveur de staging. Le prompt ci-dessous en tient compte : il
+choisit des lots que la session peut RÉELLEMENT prouver, et il refuse de fermer
+une issue qu'il n'a pas pu mesurer — c'est la seule façon honnête de boucler
+sans surveillance.
+
+À coller après `/loop` :
+
+```
+Tu tiens une boucle de livraison API sur isopen-io/meeshy, branche `dev`.
+Chaque itération = UN LOT. Tu ne t'arrêtes pas entre deux lots.
+
+═══ AU DÉMARRAGE DE CHAQUE ITÉRATION ═══
+
+1. `git pull --rebase` puis lis docs/product/api-simplification/prompt-lot-agents.md
+   — c'est la procédure, tu la suis à la lettre. Lis aussi CLAUDE.md.
+
+2. Prends la file :
+       gh project item-list 1 --owner isopen-io --format json --limit 900
+   Ne prends QUE des issues `Status = Todo` des milestones 65 à 73.
+   Une issue `In Progress` appartient à quelqu'un — sauf si son dernier
+   commentaire de réservation date de plus de 2 h ET qu'aucun commit ne la
+   référence ; tu le dis alors dans ton commentaire de reprise.
+
+3. Compose un lot de 4 à 6 issues **par disjonction de fichiers**.
+   PRIVILÉGIE celles dont les surfaces sont `gateway` et/ou `web` : tu ne peux
+   pas exécuter `xcodebuild` ni `gradlew`, donc une issue iOS/Android partirait
+   sans gate. Si tu en prends une quand même, tu le DIS dans le commit et tu
+   laisses l'issue ouverte pour qu'une session locale passe le gate.
+
+4. Réserve : un commentaire daté portant le bloc `RESERVATION` du § « Le bail »
+   — **avec la liste des CHEMINS que tu vas écrire** — et `Status = In Progress`
+   si ton accès te le permet. Si tu ne peux pas poser le statut, DIS-LE dans le
+   commentaire plutôt que de faire comme si.
+
+4bis. **AVANT de lancer le moindre agent, demande à git ce que le tableau ignore.**
+   C'est la seule mémoire partagée entre les sessions, et elle est déjà à jour :
+
+       git fetch origin dev
+       git log --since="2 hours ago" --oneline --name-only origin/dev -- <tes chemins>
+       git log --oneline origin/dev --grep "#<n>"
+
+   Un fichier touché par une autre session dans les 2 dernières heures n'est PAS
+   libre, quel que soit l'état de son issue : RETIRE-LE du lot. Un commit dont le
+   sujet porte le résultat attendu de ton issue veut dire qu'elle est DÉJÀ livrée :
+   ne la refais pas.
+   Deux issues sans aucun lien — deux milestones différents — peuvent réécrire le
+   même fichier : c'est arrivé le 2026-08-29 entre #4188 et #4284, et seul ce
+   contrôle-là l'aurait vu. **Quand deux lots se disputent un fichier, celui qui
+   n'a rien écrit cède.**
+
+═══ ÉCRITURE ═══
+
+5. Un sous-agent par issue, avec le prompt du § « Le prompt » du document,
+   en remplaçant {{ISSUE}}, {{TERRITOIRE}}, {{CONSIGNES}}.
+   Les fichiers-carrefour sont à TOI, jamais à eux. Ils déclarent, tu appliques.
+
+═══ INTÉGRATION ═══
+
+6. Applique les édits carrefour toi-même, en série.
+
+7. Gates — **UNE À LA FOIS, jamais en parallèle** :
+       cd services/gateway && npm run type-check && npx jest --silent
+       cd apps/web        && npx jest --silent
+   Trois gates simultanés produisent des faux échecs (mesuré : 10, tous verts
+   isolément). Un ensemble d'échecs DISJOINT sur un code identique est un flake :
+   relance la suite SEULE avant de conclure à une régression.
+
+8. Gates verts → un commit par issue, `git commit -F <fichier> -- <chemins>`.
+   JAMAIS `-a`, JAMAIS `add -A` : d'autres sessions travaillent dans ce dépôt.
+   JAMAIS de backticks dans un message : le shell les exécute.
+   Puis UN SEUL `git push origin HEAD:dev`.
+
+═══ LA RÈGLE DU TEMPS MORT ═══
+
+9. **Le push démarre le build. NE L'ATTENDS PAS.** Repars au point 2 et compose
+   le lot suivant. Les agents du lot N+1 écrivent pendant que le lot N construit.
+
+═══ FERMETURE — seulement ce qui est PROUVÉ ═══
+
+10. Quand le build du lot N est fini (`gh run list --branch dev --workflow Docker`),
+    vérifie que staging le porte :
+        curl -s https://gate.staging.meeshy.me/health
+    Si le SHA court de ton commit y est : rejoue les `a_mesurer_en_integration`
+    de chaque agent, ferme les issues VERTES avec leur preuve (mesure collée),
+    et repasse les rouges en `Todo` avec la mesure qui a échoué.
+
+    Si staging ne porte PAS ton commit — tu n'as pas l'accès SSH pour déployer —
+    n'invente rien, mais LAISSE LE RELAIS COMPLET. Pour chaque issue du lot,
+    poste UN commentaire contenant, dans cet ordre :
+
+      1. le titre `## ⏳ Livré sur dev — en attente de mesure en intégration` ;
+      2. le SHA court du commit, et les gates que TU as passés, chiffrés ;
+      3. les gates que tu n'as PAS pu passer, et pourquoi
+         (« pas de Xcode dans cette session », « pas de SDK Android ») ;
+      4. **les commandes `curl` EXACTES de `a_mesurer_en_integration`, avec le
+         résultat attendu de chacune** — c'est ce bloc, et lui seul, qui permet
+         à une session locale de fermer sans relire ton code ;
+      5. critère par critère : `fait` / `partiel` / `non_fait`, avec la preuve
+         dont tu disposes.
+
+    Puis laisse l'issue `In Progress` et continue le lot suivant.
+
+    **Ne ferme JAMAIS une issue sans mesure rejouée.** La fin se prouve.
+    Un commentaire sans le bloc 4 oblige la session locale à tout relire :
+    c'est le seul endroit où bâcler coûte plus cher que de ne rien faire.
+
+11. Si le build CI est ROUGE : c'est prioritaire sur tout. Lis le log, corrige,
+    re-pousse. Le lot suivant continue d'écrire pendant ce temps.
+
+═══ QUAND S'ARRÊTER ═══
+
+Quand plus aucune issue `Todo` ne reste dans les milestones 65 à 73, fais un
+dernier point : ce qui est fermé, ce qui attend un déploiement, ce qui attend un
+gate local. Puis arrête la boucle.
+
+═══ INTERDITS ═══
+
+- pousser sur `main`, déployer en production — staging seulement ;
+- fermer une issue sans mesure rejouée en intégration ;
+- `git commit -a`, `git add -A`, `git stash`, `git checkout` (arbre partagé) ;
+- inventer un identifiant : ils sont hors dépôt (`apps/ios/fastlane/.env`) ;
+- toucher une issue déjà `In Progress` chez quelqu'un d'autre.
+```
+
+### Pourquoi ce prompt refuse de fermer sans mesure
+
+C'est la seule protection contre une boucle qui « avance » en cochant des cases.
+Une session web sans accès SSH ne peut pas déployer ; si elle fermait quand même,
+la file se viderait sans qu'aucune ligne soit prouvée en intégration. Le prompt
+lui fait donc livrer, gater, pousser — et **rendre la main honnêtement** sur la
+seule étape qu'elle ne peut pas faire.
+
+## Le prompt LOCAL de CLÔTURE — vérifier et fermer ce que les sessions web ont livré
+
+Une session web livre sur `dev` mais ne peut ni déployer, ni passer les gates
+iOS/Android. Elle laisse donc des issues `In Progress` avec leurs mesures en
+commentaire. **Ce prompt est l'autre moitié du relais** : sans lui, la file se
+remplit d'un travail fait mais jamais prouvé, ce qui est pire qu'un travail non
+fait — parce que ça se lit comme du progrès.
+
+À coller après `/loop` dans une session **locale** :
+
+```
+Tu tiens la boucle de CLÔTURE. Tu ne développes pas : tu PROUVES et tu fermes.
+Une session web livre sur `dev` sans pouvoir déployer ni gater iOS/Android ;
+ton travail est de finir ce qu'elle ne pouvait pas finir.
+
+═══ 1. TROUVER CE QUI ATTEND ═══
+
+    git pull --rebase
+    gh issue list --repo isopen-io/meeshy --state open --limit 100 \
+      --search "in:comments \"en attente de mesure en intégration\"" \
+      --json number,title,updatedAt
+
+Retiens celles dont le commentaire d'attente porte un SHA **déjà présent sur
+`dev`** (`git log --oneline | grep <sha>`). Une issue dont le commit n'est pas
+sur `dev` n'est pas prête : passe.
+
+═══ 2. AMENER STAGING AU BON COMMIT ═══
+
+    gh run list --branch dev --limit 5 --workflow Docker --json status,conclusion,headSha
+    # le build du SHA doit être `completed success`
+
+    ssh root@meeshy.me 'cd /opt/meeshy/staging && docker compose pull gateway-staging && docker compose up -d gateway-staging'
+    until curl -s https://gate.staging.meeshy.me/health | grep -q "<sha court>"; do sleep 10; done
+
+Si le build est ROUGE : c'est ta priorité. Lis le log, corrige, pousse. Ne
+ferme rien tant que `dev` n'est pas vert.
+
+═══ 3. PASSER LES GATES QUE LA SESSION WEB N'A PAS PU PASSER ═══
+
+Lis le point 3 de son commentaire. Pour chaque surface qu'elle a déclarée non
+gatée, passe le gate ici, UNE À LA FOIS :
+
+    cd packages/MeeshySDK && xcodebuild test -scheme MeeshySDK-Package \
+      -destination 'id=C295B364-8CA6-4214-BC52-E411A97EBFE2' > /tmp/sdk.log 2>&1
+    grep -c "TEST SUCCEEDED" /tmp/sdk.log        # 1 attendu, et lis le total de tests
+
+    ./apps/ios/meeshy.sh test
+    # ATTENTION : ce script rend 0 même sur un bundle qui NE COMPILE PAS (#4258).
+    # Vérifie qu'il a bien exécuté des tests pour CHAQUE phase, pas seulement la 0.
+
+    cd apps/android && JAVA_HOME=/opt/homebrew/opt/openjdk@21 ./gradlew \
+      :core:network:testDebugUnitTest :sdk-core:testDebugUnitTest :app:compileDebugKotlin
+
+Un gate rouge → l'issue repasse `Todo` avec le log, et tu passes à la suivante.
+
+═══ 4. VÉRIFIER LA DoD, CRITÈRE PAR CRITÈRE ═══
+
+Pour CHAQUE issue :
+
+  a. Relis son § « Critère de fin » dans l'issue — pas le résumé du commit,
+     pas le commentaire de la session web : **le texte de l'issue**. C'est lui
+     le contrat.
+
+  b. Rejoue le bloc 4 de son commentaire, commande par commande, et COLLE la
+     sortie réelle. Une commande dont tu ne rejoues pas la sortie ne prouve
+     rien — recopier « attendu : 200 » n'est pas une mesure.
+
+  c. Un critère est `fait` seulement si une mesure ou une sortie de test le
+     montre. « Le code fait ce qu'il faut » n'est pas une preuve : c'est une
+     lecture, et c'est exactement ce que ces boucles existent pour remplacer.
+
+  d. Cherche ce qui part À CÔTÉ de ce qui est mesuré : une charge servie
+     porte-t-elle un champ qu'elle ne devrait pas ? une garde retient-elle le
+     texte mais laisse-t-elle passer le fichier ? C'est la question qui a
+     attrapé les défauts les plus graves de ce dépôt.
+
+═══ 5. FERMER, OU RENDRE ═══
+
+  TOUS les critères `fait` → ferme l'issue avec un commentaire portant :
+      • le commit et les gates, chiffrés ;
+      • les mesures REJOUÉES, avec leur sortie réelle ;
+      • critère par critère, l'état et sa preuve ;
+      • les dimensions mûres et celles qui restent (ouvre une issue par
+        dimension non mûre — jamais une ligne dans un fichier) ;
+      • ce qui reste, s'il reste quelque chose.
+
+  UN critère `partiel` ou `non_fait` → NE FERME PAS. Repasse l'issue en `Todo`,
+  commente la mesure qui a échoué avec sa sortie, et dis ce qui manque. Une
+  issue rendue avec sa mesure vaut mieux qu'une issue fermée sur une intention.
+
+═══ 6. BOUCLER ═══
+
+Reprends au point 1. Quand plus rien n'attend de mesure, dis-le et arrête.
+
+═══ INTERDITS ═══
+
+- fermer sur une lecture de code, un résumé d'agent, ou un « ça devrait marcher » ;
+- fermer une issue dont un gate n'a pas été passé ;
+- toucher la production (staging seulement) ;
+- modifier le code d'une issue que tu clôtures — si elle a besoin d'un correctif,
+  elle repasse `Todo` et retourne dans un lot.
+```
+
+### Pourquoi ce prompt ne développe pas
+
+Séparer PROUVER de ÉCRIRE est délibéré. Une session qui a écrit le code est le
+plus mauvais juge de son propre travail : elle connaît l'intention, donc elle
+lit la preuve avec indulgence. La session de clôture n'a que deux choses — le
+texte de l'issue et des commandes à rejouer — et c'est précisément ce qui la
+rend capable de dire non.
+
+## Ce que ça a donné
+
+| | en série | par lot |
+|---|---:|---:|
+| issues en vol | 1 | 5–6 |
+| déploiements pour 39 issues | 39 | ~7 |
+| attente non recouverte | 45 min/issue | ~0 |
+| durée estimée | ~49 h | ~5–7 h |

@@ -14,7 +14,7 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../utils/logger';
-import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, createPaginationMeta } from '../utils/response.js';
+import { sendError, sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, createPaginationMeta } from '../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
 import { CONVERSATION_PREFERENCES_DEFAULTS } from '../config/user-preferences-defaults';
@@ -29,7 +29,11 @@ import {
   ConversationPreferencesScopeError,
   type ConversationPreferencesWrite,
 } from '../services/conversationPreferencesSync';
+import type { ConversationAppearance } from '@meeshy/shared/types/conversation-appearance';
 import { ReadingModePreferenceSchema, type ReadingModePreference } from '@meeshy/shared/types/reading-modes';
+import { validateConversationAppearance } from '../services/appearance/conversationAppearanceGuard';
+import { startupPackIndex, type PackIndex } from '../services/packs/PackIndex';
+import { PACK_NOT_OWNED_CODE } from './pack-routes';
 
 interface ConversationPreferencesBody {
   isPinned?: boolean;
@@ -42,7 +46,10 @@ interface ConversationPreferencesBody {
   customName?: string | null;
   reaction?: string | null;
   readingMode?: ReadingModePreference;
+  appearance?: unknown;
 }
+
+export type ConversationPreferencesRoutesOptions = { readonly index?: PackIndex };
 
 interface ConversationIdParams {
   conversationId: string;
@@ -75,6 +82,9 @@ const conversationPreferencesSchema = {
     // `ReadingModePreference` (packages/shared/types/reading-modes.ts) — ce que
     // l'utilisateur a choisi. `auto` rend la main à l'orchestrateur (LWS-3).
     readingMode: { type: 'string', enum: READING_MODE_PREFERENCE_VALUES, description: 'Reading-mode preference (auto hands control back to the orchestrator)' },
+    // #10631 : le fond et l'accent PERSONNELS (`ConversationAppearance`). DÉCLARÉ,
+    // sinon fast-json-stringify le retire en silence (même piège que `reaction`).
+    appearance: { type: 'object', nullable: true, additionalProperties: true, description: 'Personal background and accent (ConversationAppearance); null = Signature + computed accent' },
     isDefault: { type: 'boolean', description: 'Whether this is using default values' },
     // Le compteur monotone sur lequel TOUS les clients arbitrent le temps réel
     // (`incoming.version <= local -> drop`). Fastify retire toute propriété
@@ -99,22 +109,6 @@ const conversationPreferencesSchema = {
   }
 } as const;
 
-const conversationCategorySchema = {
-  type: 'object',
-  description: 'User-defined conversation category',
-  properties: {
-    id: { type: 'string', description: 'Unique category ID' },
-    userId: { type: 'string', description: 'User ID' },
-    name: { type: 'string', description: 'Category name' },
-    color: { type: 'string', nullable: true, description: 'Display color (hex code)' },
-    icon: { type: 'string', nullable: true, description: 'Icon identifier' },
-    order: { type: 'number', description: 'Display order among categories' },
-    isExpanded: { type: 'boolean', description: 'Whether category is expanded in UI' },
-    createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
-    updatedAt: { type: 'string', format: 'date-time', description: 'Last update timestamp' }
-  }
-} as const;
-
 const updateConversationPreferencesRequestSchema = {
   type: 'object',
   properties: {
@@ -135,30 +129,10 @@ const updateConversationPreferencesRequestSchema = {
     // Hors énumération ⇒ 400 avant toute écriture (même garde que `categoryId`
     // ci-dessus) : `readingMode` est une préférence versionnée, jamais un
     // magasin clé/valeur libre (E9).
-    readingMode: { type: 'string', enum: READING_MODE_PREFERENCE_VALUES, description: 'Reading-mode preference (auto|focal|script|resume|riviere)' }
-  }
-} as const;
-
-const createCategoryRequestSchema = {
-  type: 'object',
-  required: ['name'],
-  properties: {
-    name: { type: 'string', minLength: 1, maxLength: 100, description: 'Category name' },
-    color: { type: 'string', pattern: '^#[0-9A-Fa-f]{6}$', description: 'Hex color code' },
-    icon: { type: 'string', maxLength: 50, description: 'Icon identifier' },
-    order: { type: 'number', minimum: 0, description: 'Display order' },
-    isExpanded: { type: 'boolean', description: 'Whether expanded by default' }
-  }
-} as const;
-
-const updateCategoryRequestSchema = {
-  type: 'object',
-  properties: {
-    name: { type: 'string', minLength: 1, maxLength: 100, description: 'Category name' },
-    color: { type: 'string', pattern: '^#[0-9A-Fa-f]{6}$', description: 'Hex color code' },
-    icon: { type: 'string', maxLength: 50, description: 'Icon identifier' },
-    order: { type: 'number', minimum: 0, description: 'Display order' },
-    isExpanded: { type: 'boolean', description: 'Whether expanded' }
+    readingMode: { type: 'string', enum: READING_MODE_PREFERENCE_VALUES, description: 'Reading-mode preference (auto|focal|script|resume|riviere)' },
+    // #10631 : validé par `validateConversationAppearance` (Zod strict, possession, pièce jointe).
+    // `null` remet Signature + accent calculé ; absent = inchangé.
+    appearance: { type: 'object', nullable: true, additionalProperties: true, description: 'Personal conversation background and accent; null resets to Signature' }
   }
 } as const;
 
@@ -183,25 +157,6 @@ const reorderConversationsRequestSchema = {
         }
       },
       description: 'Array of conversation reorder updates (max 200)'
-    }
-  }
-} as const;
-
-const reorderCategoriesRequestSchema = {
-  type: 'object',
-  required: ['updates'],
-  properties: {
-    updates: {
-      type: 'array',
-      items: {
-        type: 'object',
-        required: ['categoryId', 'order'],
-        properties: {
-          categoryId: { type: 'string', description: 'Category ID' },
-          order: { type: 'number', minimum: 0, description: 'New order value' }
-        }
-      },
-      description: 'Array of category reorder updates'
     }
   }
 } as const;
@@ -238,7 +193,7 @@ const successMessageResponseSchema = {
 } as const;
 
 
-export default async function conversationPreferencesRoutes(fastify: FastifyInstance) {
+export default async function conversationPreferencesRoutes(fastify: FastifyInstance, options: ConversationPreferencesRoutesOptions = {}) {
 
   // ========== CONVERSATION PREFERENCES ==========
 
@@ -400,6 +355,23 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
     }
   );
 
+  type AppearanceDecision =
+    | { readonly kind: 'skip' }
+    | { readonly kind: 'write'; readonly value: ConversationAppearance | null }
+    | { readonly kind: 'refused'; readonly send: (reply: FastifyReply) => unknown };
+
+  /** #10631 : absent ⇒ rien ; `null` ⇒ remise à Signature ; sinon la garde unique tranche (400 / 403 / 404). */
+  const appearanceGuard = (userId: string, conversationId: string) => async (input: unknown): Promise<AppearanceDecision> => {
+    if (input === undefined) return { kind: 'skip' };
+    if (input === null) return { kind: 'write', value: null };
+    const outcome = await validateConversationAppearance({ prisma: fastify.prisma, index: options.index ?? startupPackIndex(), userId, conversationId, input });
+    if (outcome.kind === 'ok') return { kind: 'write', value: outcome.appearance };
+    if (outcome.kind === 'invalid') return { kind: 'refused', send: (reply) => sendError(reply, 400, 'Invalid appearance', { code: 'INVALID_APPEARANCE' }) };
+    if (outcome.kind === 'not-owned') return { kind: 'refused', send: (reply) => sendForbidden(reply, 'Pack not owned', { code: PACK_NOT_OWNED_CODE }) };
+    if (outcome.kind === 'not-a-participant') return { kind: 'refused', send: (reply) => sendForbidden(reply, 'Not a member of this conversation') };
+    return { kind: 'refused', send: (reply) => sendNotFound(reply, 'Attachment not available', { code: 'ATTACHMENT_NOT_AVAILABLE' }) };
+  };
+
   /**
    * PUT /api/user-preferences/conversations/:conversationId
    * Upsert (create or update) preferences for a conversation
@@ -447,6 +419,9 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         const { conversationId } = request.params;
         const data = request.body;
 
+        const appearance = await appearanceGuard(userId, conversationId)(data.appearance);
+        if (appearance.kind === 'refused') return appearance.send(reply);
+
         // Prepare update data (filter undefined values)
         const updateData: ConversationPreferencesWrite = {
           ...(data.isPinned !== undefined && { isPinned: data.isPinned }),
@@ -459,6 +434,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
           ...(data.customName !== undefined && { customName: data.customName }),
           ...(data.reaction !== undefined && { reaction: data.reaction }),
           ...(data.readingMode !== undefined && { readingMode: data.readingMode }),
+          ...(appearance.kind === 'write' && { appearance: appearance.value }),
         };
 
         const preferences = await writeConversationPreferences(fastify, {

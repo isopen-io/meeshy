@@ -11,6 +11,15 @@ import {
   type MessageMutationManager,
 } from '../socketio/broadcastMessageMutation';
 import { unsetOrNull } from '../utils/prisma-unset';
+import {
+  isLegacyViewOnceBurn,
+  purgeDueViewOnceContent,
+  reevaluateLegacyViewOnceBurn,
+} from './messaging/purgeViewOnceContent';
+import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { loadQuoteDescendants } from './messaging/quoteCascade';
+import { backfillCaptureNoticeDeadlines } from './messaging/captureNoticeRetention';
+import { guardedInterval } from '../utils/guarded-timer';
 
 const log = enhancedLogger.child({ module: 'ExpiredMessagesCleanupService' });
 
@@ -58,12 +67,15 @@ const log = enhancedLogger.child({ module: 'ExpiredMessagesCleanupService' });
  *
  * ─── LES DEUX FAÇONS DONT CETTE PASSE POURRAIT FAIRE PIRE ───────────────────
  *
- * 1. **Apparier un message non éphémère.** Le prédicat `expiresAt: { lt: now }`
- *    est bracketé par TYPE sur MongoDB : `$lt` avec une date n'apparie ni les
- *    nuls ni les absents, malgré l'ordre BSON qui place `null` avant les dates.
- *    C'est vrai — et le rayon de souffle d'une erreur ici est la destruction de
- *    TOUS les messages de la base. Un invariant à ce prix se revérifie DANS le
- *    processus (`_isLapsed`), pas dans un commentaire.
+ * 1. **Apparier un message non éphémère.** Le bracketing par type de `$lt`
+ *    n'est PAS un invariant du chemin d'exécution : le connecteur Prisma/Mongo
+ *    peut passer par un pipeline d'agrégation où `$lt` suit l'ordre BSON total,
+ *    et `null`/absent passent alors AVANT les dates — mesuré en production, la
+ *    page entière se remplissait de lignes sans échéance que le filet refusait
+ *    à chaque passe, bloquant tout burn réel. Le prédicat exclut donc ces états
+ *    EXPLICITEMENT (`isSet: true` + `not: null`), et le rayon de souffle d'une
+ *    erreur restant la destruction de TOUS les messages de la base, l'invariant
+ *    se revérifie DANS le processus (`_isLapsed`), pas dans un commentaire.
  * 2. **Manquer un message vivant.** `deletedAt: null` seul apparie le
  *    présent-et-nul et rien d'autre ; une ligne dont le créateur n'a pas écrit
  *    `LIVE_MESSAGE_MARK` a la colonne ABSENTE et ne serait jamais balayée —
@@ -99,6 +111,10 @@ interface ExpiredMessageRow {
   messageType: string | null;
   expiresAt: Date | null;
   attachments: Array<{ id: string; mimeType: string | null }>;
+  createdAt?: Date;
+  isViewOnce?: boolean | null;
+  ephemeralDuration?: number | null;
+  effectFlags?: number | null;
 }
 
 export interface ExpiredMessagesCleanupOptions {
@@ -119,8 +135,31 @@ export interface ExpiredMessagesCleanupOptions {
 
 export const EXPIRED_MESSAGES_SWEEP_INTERVAL_MS = 60 * 1000;
 
+const EXPIRED_MESSAGE_SELECT = {
+  id: true,
+  conversationId: true,
+  senderId: true,
+  sender: { select: { id: true, userId: true } },
+  // Capturés AVANT l'effacement : `applyMessageRemovalEffects` en a
+  // besoin pour les `m+<token>` du contenu et pour le décompte des
+  // compteurs de conversation, et aucun d'eux n'est relisible ensuite.
+  content: true,
+  metadata: true,
+  messageType: true,
+  expiresAt: true,
+  attachments: { select: { id: true, mimeType: true } },
+  // #7578 — de quoi reconnaître une vue unique NON éphémère que l'ancien
+  // chemin avait programmée pour destruction par cette colonne.
+  createdAt: true,
+  isViewOnce: true,
+  ephemeralDuration: true,
+  effectFlags: true,
+} as const;
+
 export class ExpiredMessagesCleanupService {
   private interval: ReturnType<typeof setInterval> | null = null;
+  private refusalStreak = 0;
+  private suppressedRefusalLogs = 0;
   private readonly batchSize: number;
   private readonly attachmentRemover: ExpiredMessageAttachmentRemover;
   private readonly now: () => Date;
@@ -143,10 +182,16 @@ export class ExpiredMessagesCleanupService {
     // Une passe immédiate au démarrage : le passif accumulé pendant que le
     // service était arrêté est précisément celui qui a le plus dépassé son
     // échéance.
-    void this.cleanup().catch((err) => log.warn('initial sweep failed', { err }));
-    this.interval = setInterval(() => {
+    // #9629 — les avis de capture écrits avant leur échéance la reçoivent
+    // d'abord : la passe immédiate détruit alors ceux qu'elle a déjà dépassés.
+    void backfillCaptureNoticeDeadlines(this.prisma)
+      .then(() => this.cleanup())
+      .catch((err) => log.warn('initial sweep failed', { err }));
+    void this.purgeViewOnce().catch((err) => log.warn('initial view-once purge failed', { err }));
+    this.interval = guardedInterval({ name: 'expired-messages-cleanup', everyMs: intervalMs, logger: log, run: () => {
       void this.cleanup().catch((err) => log.warn('scheduled sweep failed', { err }));
-    }, intervalMs);
+      void this.purgeViewOnce().catch((err) => log.warn('scheduled view-once purge failed', { err }));
+    } });
     this.interval.unref?.();
     log.info('expired-messages sweep started', { intervalMs, batchSize: this.batchSize });
   }
@@ -174,23 +219,16 @@ export class ExpiredMessagesCleanupService {
     try {
       candidates = await this.prisma.message.findMany({
         where: {
-          expiresAt: { lt: now },
+          AND: [
+            { expiresAt: { isSet: true } },
+            { expiresAt: { not: null } },
+            { expiresAt: { lt: now } },
+          ],
+          // `unsetOrNull` rend une clé `OR` — sœur du `AND`, jamais dedans :
+          // les deux se composent en conjonction au premier niveau.
           ...unsetOrNull('deletedAt'),
         },
-        select: {
-          id: true,
-          conversationId: true,
-          senderId: true,
-          sender: { select: { id: true, userId: true } },
-          // Capturés AVANT l'effacement : `applyMessageRemovalEffects` en a
-          // besoin pour les `m+<token>` du contenu et pour le décompte des
-          // compteurs de conversation, et aucun d'eux n'est relisible ensuite.
-          content: true,
-          metadata: true,
-          messageType: true,
-          expiresAt: true,
-          attachments: { select: { id: true, mimeType: true } },
-        },
+        select: EXPIRED_MESSAGE_SELECT,
         orderBy: { expiresAt: 'asc' },
         take: this.batchSize,
       });
@@ -203,19 +241,38 @@ export class ExpiredMessagesCleanupService {
 
     if (lapsed.length !== candidates.length) {
       // Le prédicat de base a rendu une ligne que le filet a refusée : soit
-      // l'hypothèse de bracketing par type est fausse, soit quelqu'un a élargi
-      // la requête. Les deux valent un signal, pas un silence.
-      log.error('expired-messages query returned non-lapsed rows — burn refused', {
-        returned: candidates.length,
-        lapsed: lapsed.length,
-      });
+      // le connecteur ne bracket pas par type, soit quelqu'un a élargi la
+      // requête. Les deux valent un signal, pas un silence — mais un signal
+      // dédoublonné : à la minute, un état persistant vaudrait une tempête.
+      this._reportRefusedRows(candidates, now);
+    } else {
+      this.refusalStreak = 0;
+      this.suppressedRefusalLogs = 0;
     }
 
-    if (lapsed.length === 0) return { burned: 0 };
+    // #7578 — une vue unique NON éphémère n'a rien à faire dans ce balayage :
+    // seul l'ancien `scheduleViewOnceBurn` y posait `expiresAt`, dès la
+    // PREMIÈRE ouverture, auteur compris. La détruire effacerait la bulle pour
+    // tous et le message chez qui ne l'a jamais vu. On la réévalue : son
+    // échéance devient une échéance de PURGE, que `purgeViewOnce` exécute.
+    const legacyViewOnce = lapsed.filter((message) => this._isLegacyViewOnce(message));
+    for (const message of legacyViewOnce) {
+      await reevaluateLegacyViewOnceBurn(
+        this.prisma,
+        { ...message, createdAt: message.createdAt ?? now },
+        now,
+      ).catch((err) => log.warn('legacy view-once burn re-evaluation failed', { messageId: message.id, err }));
+    }
+    const toBurn = lapsed.filter((message) => !this._isLegacyViewOnce(message));
+
+    if (toBurn.length === 0) return { burned: 0 };
 
     let burned = 0;
-    for (const message of lapsed) {
-      if (await this._burn(message, now, announcer)) burned += 1;
+    const inPass = new Set(toBurn.map((message) => message.id));
+    for (const message of toBurn) {
+      if (!(await this._burn(message, now, announcer))) continue;
+      burned += 1;
+      burned += await this._burnReplies(message, inPass, now, announcer);
     }
 
     if (candidates.length === this.batchSize) {
@@ -226,6 +283,122 @@ export class ExpiredMessagesCleanupService {
 
     log.info('expired-messages swept', { burned });
     return { burned };
+  }
+
+  /**
+   * ERROR à la première occurrence, puis au plus une fois toutes les 10 passes
+   * tant que l'état persiste — avec le compte des occurrences tues entre deux,
+   * pour que le volume réel reste lisible. Une passe saine remet tout à zéro.
+   */
+  private _reportRefusedRows(candidates: ExpiredMessageRow[], now: Date): void {
+    this.refusalStreak += 1;
+    if ((this.refusalStreak - 1) % 10 !== 0) {
+      this.suppressedRefusalLogs += 1;
+      return;
+    }
+    const refused = candidates.filter((message) => !this._isLapsed(message, now));
+    log.error('expired-messages query returned non-lapsed rows — burn refused', {
+      returned: candidates.length,
+      lapsed: candidates.length - refused.length,
+      refusedSample: refused.slice(0, 3).map((message) => this._describeRefusedRow(message)),
+      suppressedOccurrences: this.suppressedRefusalLogs,
+    });
+    this.suppressedRefusalLogs = 0;
+  }
+
+  /**
+   * `expiresAt` est typé `Date | null`, mais c'est précisément quand la base
+   * rend AUTRE CHOSE que ce diagnostic doit parler — d'où le passage par
+   * `unknown` avant inspection.
+   */
+  private _describeRefusedRow(message: ExpiredMessageRow): {
+    id: string;
+    expiresAtType: string;
+    expiresAtValue: string;
+  } {
+    const expiresAt: unknown = message.expiresAt;
+    const expiresAtType =
+      expiresAt === null
+        ? 'null'
+        : expiresAt === undefined
+          ? 'undefined'
+          : typeof expiresAt === 'object'
+            ? expiresAt.constructor?.name ?? 'object'
+            : typeof expiresAt;
+    return {
+      id: message.id,
+      expiresAtType,
+      expiresAtValue: JSON.stringify(expiresAt) ?? 'undefined',
+    };
+  }
+
+  private _isLegacyViewOnce(message: ExpiredMessageRow): boolean {
+    return isLegacyViewOnceBurn({ ...message, createdAt: message.createdAt ?? new Date(0) });
+  }
+
+  /**
+   * #7578 — la purge du CONTENU des vues uniques dont l'échéance est passée
+   * (tous les destinataires ont ouvert, ou plafond de rétention). La bulle
+   * reste : ni `deletedAt`, ni `message:expired` — l'annonce est
+   * `message:view-once-purged`.
+   */
+  async purgeViewOnce(): Promise<{ purged: number }> {
+    return purgeDueViewOnceContent(this.prisma, {
+      now: this.now(),
+      attachmentRemover: this.attachmentRemover,
+      onError: (messageId, err) => log.warn('view-once purge failed', { messageId, err }),
+      onPurged: ({ id, ...entry }) => log.info('view-once purged', { messageId: id, ...entry }),
+      announce: (purged) => {
+        this.resolveManager()
+          ?.getIO()
+          ?.to(ROOMS.conversation(purged.conversationId))
+          .emit(SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED, {
+            messageId: purged.id,
+            conversationId: purged.conversationId,
+          });
+      },
+    });
+  }
+
+  /**
+   * #8630 — la destruction d'un éphémère emporte les réponses qui le citent,
+   * transitivement (décision porteur 2026-09-29). C'est la règle de son
+   * EXPÉDITEUR, à qui aucune échéance n'est servie : sa réponse vit jusqu'ici.
+   * Pour tout autre lecteur, la réponse est déjà morte avec sa `D(u)`
+   * (`quoteCascade.ts`) ; ce balayage détruit le contenu au repos. Même chemin
+   * que l'original — fichiers, clair, annonce — pour qu'aucune réponse ne
+   * survive en base à ce qu'elle cite.
+   */
+  private async _burnReplies(
+    message: ExpiredMessageRow,
+    inPass: Set<string>,
+    now: Date,
+    announcer: RetractedNotificationAnnouncer | undefined,
+  ): Promise<number> {
+    const descendants = (await loadQuoteDescendants(this.prisma, [message.id])).filter(
+      (reply) => !inPass.has(reply.id),
+    );
+    if (descendants.length === 0) return 0;
+
+    let rows: ExpiredMessageRow[];
+    try {
+      const ids = descendants.map((reply) => reply.id);
+      rows = ((await this.prisma.message.findMany({
+        where: { id: { in: ids }, ...unsetOrNull('deletedAt') },
+        select: EXPIRED_MESSAGE_SELECT,
+        take: ids.length,
+      })) as ExpiredMessageRow[]).filter((reply) => ids.includes(reply.id));
+    } catch (err) {
+      log.warn('quote cascade rows failed', { messageId: message.id, err });
+      return 0;
+    }
+
+    let burned = 0;
+    for (const reply of descendants.map((d) => rows.find((r) => r.id === d.id)).filter(Boolean) as ExpiredMessageRow[]) {
+      inPass.add(reply.id);
+      if (await this._burn(reply, now, announcer)) burned += 1;
+    }
+    return burned;
   }
 
   /** L'échéance est une DATE, et elle est passée. Tout le reste survit. */
@@ -283,6 +456,7 @@ export class ExpiredMessagesCleanupService {
           metadata: message.metadata,
         },
         announcer,
+        { cause: 'expired' },
       );
     } catch (err) {
       // `applyMessageRemovalEffects` est déjà best-effort effet par effet ; ce
@@ -309,6 +483,15 @@ export class ExpiredMessagesCleanupService {
    * tant que l'onglet vivait — le seul client pour lequel la destruction ne
    * changeait rien à l'écran était celui qui en avait le plus besoin.
    *
+   * `eventType: 'expired'` — pas `'deleted'` — sous son propre nom de fil
+   * (`message:expired`) : les quatre canaux sont identiques à ceux d'une
+   * suppression (même effet visuel, même retrait de la pastille), mais la
+   * CAUSE ne l'est pas — personne n'a demandé ce retrait, le minuteur posé à
+   * l'envoi l'a décidé. Fusionner les deux noms aurait empêché un client qui
+   * veut distinguer les deux (un toast, une ligne de log) de le faire, pour
+   * gagner zéro sur les trois qui ne le veulent pas : ils traitent déjà les
+   * deux événements de façon identique (retirer la bulle).
+   *
    * APRÈS l'effacement, jamais avant : un client qui recharge sur l'événement
    * ne doit pas retrouver la ligne qu'on vient de lui dire détruite.
    *
@@ -332,7 +515,7 @@ export class ExpiredMessagesCleanupService {
       manager,
       conversationId: message.conversationId,
       actorUserId: message.sender?.userId ?? message.senderId,
-      eventType: 'deleted',
+      eventType: 'expired',
       authorId: message.senderId,
       messageId: message.id,
       payload: { messageId: message.id, conversationId: message.conversationId },

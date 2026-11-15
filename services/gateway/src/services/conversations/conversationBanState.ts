@@ -121,3 +121,11 @@ export function resolveUnbanWrite(participant: ParticipantBanState): UnbanTransi
     membershipRestored: true,
   };
 }
+
+/**
+ * Le bannissement levé, l'appartenance NON rendue : la loi de la communauté
+ * qui héberge le salon refuse d'y faire rentrer la personne (#16703).
+ */
+export function liftBanOnly(): UnbanTransition {
+  return { data: { bannedAt: null }, membershipRestored: false };
+}

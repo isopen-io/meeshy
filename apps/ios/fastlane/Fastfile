@@ -151,9 +151,13 @@ platform :ios do
       app_identifier: [
         "me.meeshy.app",
         "me.meeshy.app.notification-service",
+        # #8859 / #8953 — la notification déployée (App ID T75359QHNV).
+        "me.meeshy.app.notification-content",
         "me.meeshy.app.widgets",
         # Ajouté 2026-07-28 avec le ré-embarquement de MeeshyShareExtension.
-        "me.meeshy.app.share-extension"
+        "me.meeshy.app.share-extension",
+        # #8063 / #8953 — le partage d'écran pendant un appel (App ID 67U4MGRB8C).
+        "me.meeshy.app.broadcast"
       ],
       api_key: api_key,
       # readonly skips the Dev Portal round-trip and just installs the certs/profiles
@@ -341,6 +345,11 @@ platform :ios do
 
     build_production
 
+    # Les métadonnées versionnées (fastlane/metadata/) partent avec deliver :
+    # on vérifie les limites App Store Connect ICI, avant l'upload, pour que
+    # le dépassement échoue localement et pas en fin de soumission chez Apple.
+    sh("./check_metadata.sh") unless options[:skip_metadata]
+
     upload_to_app_store(
       api_key: api_key,
       submit_for_review: !options[:skip_review],
@@ -355,7 +364,7 @@ platform :ios do
       app_review_information: app_review_credentials
     )
 
-    version = get_version_number(xcodeproj: "Meeshy.xcodeproj")
+    version = get_version_number(xcodeproj: "Meeshy.xcodeproj", target: "Meeshy")
     UI.success("Version #{version} submitted to App Store!")
   end
 
@@ -367,7 +376,7 @@ platform :ios do
   lane :bump_version do |options|
     type = options[:type] || "patch"
     increment_version_number(bump_type: type)
-    version = get_version_number(xcodeproj: "Meeshy.xcodeproj")
+    version = get_version_number(xcodeproj: "Meeshy.xcodeproj", target: "Meeshy")
     UI.success("Version bumped to #{version}")
   end
 
@@ -378,9 +387,13 @@ platform :ios do
       app_identifier: [
         "me.meeshy.app",
         "me.meeshy.app.notification-service",
+        # #8859 / #8953 — la notification déployée (App ID T75359QHNV).
+        "me.meeshy.app.notification-content",
         "me.meeshy.app.widgets",
         # Ajouté 2026-07-28 avec le ré-embarquement de MeeshyShareExtension.
-        "me.meeshy.app.share-extension"
+        "me.meeshy.app.share-extension",
+        # #8063 / #8953 — le partage d'écran pendant un appel (App ID 67U4MGRB8C).
+        "me.meeshy.app.broadcast"
       ],
       api_key: api_key,
       force: true,

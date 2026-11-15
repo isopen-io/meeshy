@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="community_create_identifier_unavailable">This identifier is already taken</string>
+</resources>

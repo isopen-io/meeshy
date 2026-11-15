@@ -54,7 +54,7 @@ import me.meeshy.ui.theme.MeeshyTheme
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ConversationSettingsSheet(
+internal fun ConversationSettingsSheet(
     conversationId: String,
     accentColor: Color,
     onDismiss: () -> Unit,
@@ -64,6 +64,8 @@ fun ConversationSettingsSheet(
     val context = LocalContext.current
 
     LaunchedEffect(conversationId) { viewModel.load(conversationId) }
+    // #15269 — une entrée interdite est absente, jamais grisée : la feuille se referme si la loi n'accorde pas l'édition.
+    LaunchedEffect(state.isLoaded, state.mayEdit) { if (state.isLoaded && !state.mayEdit) onDismiss() }
     LaunchedEffect(state.justSaved) {
         if (state.justSaved) {
             Toast.makeText(
@@ -105,6 +107,14 @@ fun ConversationSettingsSheet(
                 return@Column
             }
 
+            SectionLabel(stringResource(R.string.conversation_appearance_section_accent))
+            ConversationAccentPicker(
+                catalog = state.catalog,
+                selectedKey = state.appearance.accent,
+                autoColor = accentColor,
+                onSelect = viewModel::setAccent,
+            )
+
             SectionLabel(stringResource(R.string.conversation_settings_write_role))
             MemberRole.entries.forEach { role ->
                 SettingRadioRow(
@@ -117,6 +127,7 @@ fun ConversationSettingsSheet(
 
             SwitchRow(
                 label = stringResource(R.string.conversation_settings_announcement),
+                hint = stringResource(R.string.conversation_settings_announcement_hint),
                 checked = form.isAnnouncementChannel,
                 accentColor = accentColor,
                 onCheckedChange = viewModel::setAnnouncement,
@@ -134,9 +145,18 @@ fun ConversationSettingsSheet(
 
             SwitchRow(
                 label = stringResource(R.string.conversation_settings_auto_translate),
+                hint = stringResource(R.string.conversation_settings_auto_translate_hint),
                 checked = form.autoTranslateEnabled,
                 accentColor = accentColor,
                 onCheckedChange = viewModel::setAutoTranslate,
+            )
+
+            MemberManagementSection(
+                conversationId = conversationId,
+                query = state.memberQuery,
+                onQueryChange = viewModel::setMemberQuery,
+                viewerRole = state.viewerRole,
+                accentColor = accentColor,
             )
 
             if (state.hasError) {
@@ -211,24 +231,30 @@ private fun SettingRadioRow(
 @Composable
 private fun SwitchRow(
     label: String,
+    hint: String,
     checked: Boolean,
     accentColor: Color,
     onCheckedChange: (Boolean) -> Unit,
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onCheckedChange(!checked) }
             .padding(vertical = MeeshySpacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(label, color = MeeshyTheme.tokens.textPrimary)
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(checkedTrackColor = accentColor),
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(label, color = MeeshyTheme.tokens.textPrimary)
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                colors = SwitchDefaults.colors(checkedTrackColor = accentColor),
+            )
+        }
+        Text(hint, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
     }
 }
 

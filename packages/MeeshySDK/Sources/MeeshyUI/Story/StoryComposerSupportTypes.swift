@@ -62,12 +62,6 @@ struct StoryComposerDraft: Codable {
     static let userDefaultsKey = "storyComposerDraft"
 }
 
-// MARK: - Slide Publish Action
-
-public enum SlidePublishAction: Sendable {
-    case retry, skip, cancel
-}
-
 // MARK: - Audio Editor Item Wrapper
 
 struct AudioEditorItemWrapper: Identifiable {
@@ -76,13 +70,6 @@ struct AudioEditorItemWrapper: Identifiable {
     /// Language tagged at record time (recorder strip); seeds the editor's
     /// transcription language. `nil` for file imports → editor default.
     var language: String? = nil
-}
-
-// MARK: - Media Editor Wrappers
-
-struct PendingImageWrapper: Identifiable {
-    let id = UUID()
-    let image: UIImage
 }
 
 /// Le fournisseur de caméra rendu PRÉSENTABLE (S5).
@@ -100,14 +87,3 @@ nonisolated struct PresentedCameraCapture: Identifiable {
     let provider: StoryCameraCaptureProvider
 }
 
-struct EditingMediaImage: Identifiable {
-    let id = UUID()
-    let elementId: String
-    let image: UIImage
-}
-
-struct EditingMediaVideo: Identifiable {
-    let id = UUID()
-    let elementId: String
-    let url: URL
-}

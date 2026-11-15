@@ -30,10 +30,20 @@ final class DeepLinkRouterTrackedDestinationTests: XCTestCase {
         XCTAssertEqual(d, .joinLink(identifier: "mshy_x"))
     }
 
-    func test_reel_routesToPostDetail() {
+    /// Un réel partagé s'ouvre dans le LECTEUR de réels, comme depuis le fil ou
+    /// sa notification — jamais dans le détail d'un post (#7805).
+    func test_reel_routesToReelReader() {
         let d = DeepLinkRouter.trackedDestination(
             for: resolved(kind: "tracking", type: "REEL", targetId: "p1"), token: "tok")
-        XCTAssertEqual(d, .postDetail(postId: "p1"))
+        XCTAssertEqual(d, .reel(postId: "p1"))
+    }
+
+    /// L'`originalUrl` que la passerelle grave pour un réel (`/reel/<id>`) se
+    /// reparse vers le lecteur quand le type manque.
+    func test_reelOriginalUrl_withoutType_routesToReelReader() {
+        let d = DeepLinkRouter.trackedDestination(
+            for: resolved(originalUrl: "https://meeshy.me/reel/r9"), token: "tok")
+        XCTAssertEqual(d, .reel(postId: "r9"))
     }
 
     func test_post_and_status_routeToPostDetail() {
@@ -107,6 +117,31 @@ final class DeepLinkRouterTrackedDestinationTests: XCTestCase {
 
     /// Une `originalUrl` non exploitable (schéma non http) ne devient pas une
     /// ouverture externe : `.unresolvedTrackedLink` reste la seule issue honnête.
+    // MARK: - Lien court d'invitation (#10560)
+
+    func test_invitationLink_carriesItsReferralCode() {
+        let link = resolved(kind: "tracking", type: "EXTERNAL",
+                            originalUrl: "https://meeshy.me/signup/affiliate/aff_1760905804502_9qgxyugbe8o")
+        XCTAssertEqual(DeepLinkRouter.trackedReferralCode(for: link), "aff_1760905804502_9qgxyugbe8o")
+    }
+
+    func test_invitationLinkByQuery_carriesItsReferralCode() {
+        let link = resolved(type: "EXTERNAL", originalUrl: "https://meeshy.me/signup?ref=aff_1760905804502_9qgxyugbe8o")
+        XCTAssertEqual(DeepLinkRouter.trackedReferralCode(for: link), "aff_1760905804502_9qgxyugbe8o")
+    }
+
+    func test_ordinaryLinks_carryNoReferralCode() {
+        XCTAssertNil(DeepLinkRouter.trackedReferralCode(for: nil))
+        XCTAssertNil(DeepLinkRouter.trackedReferralCode(
+            for: resolved(type: "EXTERNAL", originalUrl: "https://example.org/signup/affiliate/aff_1760905804502_9qgxyugbe8o")))
+        XCTAssertNil(DeepLinkRouter.trackedReferralCode(
+            for: resolved(type: "REEL", targetId: "r1", originalUrl: "https://meeshy.me/signup/affiliate/aff_1760905804502_9qgxyugbe8o")))
+        XCTAssertNil(DeepLinkRouter.trackedReferralCode(
+            for: resolved(kind: "conversation", type: "CONVERSATION", targetId: "c1",
+                          originalUrl: "https://meeshy.me/signup/affiliate/aff_1760905804502_9qgxyugbe8o")))
+        XCTAssertNil(DeepLinkRouter.trackedReferralCode(for: resolved(type: "EXTERNAL", originalUrl: "https://meeshy.me/reel/r1")))
+    }
+
     func test_nonWebOriginalUrl_isNotTreatedAsAnExternalOpen() {
         XCTAssertEqual(
             DeepLinkRouter.trackedDestination(

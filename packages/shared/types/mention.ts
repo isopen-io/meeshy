@@ -3,6 +3,8 @@
  * @module shared/types/mention
  */
 
+import type { PersonProfileDecor } from './profile-decor.js';
+
 import { hasMentions as hasMentionsCore, MENTION_HANDLE_CHARS, NAME_BOUNDARY_LEFT } from '../utils/mention-parser.js';
 
 /**
@@ -18,6 +20,13 @@ export interface MentionedUser {
 }
 
 /**
+ * D'où vient une suggestion (#14052) : la passerelle range ses suggestions dans
+ * cet ordre — connaissances, personnes du contexte (intervenants d'un post,
+ * membres d'une conversation), contacts de tout cercle, annuaire.
+ */
+export type MentionSuggestionGroup = 'known' | 'context' | 'contact' | 'directory';
+
+/**
  * Suggestion d'utilisateur pour l'autocomplete de mention
  */
 export interface MentionSuggestion {
@@ -28,6 +37,10 @@ export interface MentionSuggestion {
   readonly badge: 'conversation' | 'friend' | 'other';
   readonly inConversation: boolean;
   readonly isFriend: boolean;
+  /** Le contour d'avatar équipé (#10945) ; absent sans contour. */
+  readonly profileDecor?: PersonProfileDecor;
+  /** Le groupe de la suggestion (#14052) ; absent d'une passerelle antérieure. */
+  readonly group?: MentionSuggestionGroup;
 }
 
 /**
@@ -87,7 +100,11 @@ export interface MentionValidationResult {
  * Requête pour obtenir des suggestions de mentions
  */
 export interface MentionSuggestionsRequest {
-  readonly conversationId: string;
+  /** Le contexte de la mention : une conversation, ou un post (story, réel et mood compris). */
+  readonly contextId?: string;
+  readonly contextType?: 'conversation' | 'post';
+  /** @deprecated forme historique, équivalente à `contextId` + `contextType: 'conversation'`. */
+  readonly conversationId?: string;
   readonly query?: string;
 }
 
@@ -261,16 +278,30 @@ export function hasMentions(content: string): boolean {
  * @param validUsernames - Liste des usernames validés à convertir en liens:
  *   - ["alice", "bob"]: seuls ces usernames deviennent cliquables
  *   - [] ou undefined: AUCUNE mention ne devient cliquable
+ * @param displayNames - Carte `username canonique → nom affiché` (cf.
+ *   `buildMentionDisplayMap`). Elle change le LIBELLÉ du lien, jamais sa CIBLE :
+ *   un nom affiché porte espaces et accents, et ne désigne aucune route.
+ *   Absente ⇒ le handle reste le libellé, comportement d'origine.
  * @returns Contenu avec mentions validées transformées en liens
+ *
+ * La substitution vit ICI, et non dans une passe qui encadrerait cette fonction :
+ * l'appliquer AVANT, c'est remplacer `@jdupont42` par `@Jean Dupont`, que
+ * `MENTION_HANDLE_CHARS` ne reconnaît plus (l'espace coupe le handle) — la mention
+ * cesse d'être cliquable ; l'appliquer APRÈS, c'est réécrire un markdown déjà
+ * produit, dont la cible contient elle-même le handle. Un seul site sait tenir les
+ * deux moitiés ensemble : celui qui fabrique le lien.
  *
  * @example
  * mentionsToLinks("Hello @alice @fakeuser", "/u/{username}", ["alice"])
  * // → "Hello [@alice](/u/alice) @fakeuser"
+ * mentionsToLinks("Hello @alice", "/u/{username}", ["alice"], new Map([["alice", "Alice Cooper"]]))
+ * // → "Hello [@Alice Cooper](/u/alice)"
  */
 export function mentionsToLinks(
   content: string,
   linkTemplate: string = '/u/{username}',
-  validUsernames?: string[]
+  validUsernames?: string[],
+  displayNames?: ReadonlyMap<string, string>
 ): string {
   if (!validUsernames || validUsernames.length === 0) return content;
 
@@ -291,9 +322,11 @@ export function mentionsToLinks(
     }
 
     // Username validé → lien cliquable. L'URL utilise l'username canonique
-    // (minuscules) ; le libellé conserve la casse d'origine du message.
+    // (minuscules) ; le libellé est le nom affiché quand on le connaît, sinon
+    // le handle avec la casse d'origine du message.
     const link = linkTemplate.replace('{username}', canonical);
-    return `[@${username}](${link})`;
+    const label = displayNames?.get(canonical) ?? username;
+    return `[@${label}](${link})`;
   });
 }
 

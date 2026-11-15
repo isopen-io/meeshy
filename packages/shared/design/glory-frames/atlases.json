@@ -1,0 +1,59 @@
+{
+  "generated": "GÉNÉRÉ par `bun run compose:glory-frame-atlases` depuis les vignettes du magasin — ne pas éditer.",
+  "cell": {
+    "width": 90,
+    "height": 160
+  },
+  "atlases": {
+    "09c32ff8abe83c56cafdcf47adb688e4b77d492a0d8d0762577a25f3912c7f26": {
+      "src": "6ef2be70ceb703b3.webp",
+      "bytes": 65780,
+      "sha256": "6ef2be70ceb703b3c91d2a77ce75d58db2f9b46de7340b334ac7287506992f2b"
+    },
+    "2c7bea287a170ffebbd4a9555e6e1f42d4e6e6d8964c5c5c9df5886b90c5bf7b": {
+      "src": "167d9eadec1a2590.webp",
+      "bytes": 53740,
+      "sha256": "167d9eadec1a25904f4899a691158ddcf4d038b7780d72bd7ceaa80dbe35ff36"
+    },
+    "3a5ce8ca032b11a24de94a338844683a5b7a528a23bc9d87ffd4370c51e8f427": {
+      "src": "44fe4cefb0c528e9.webp",
+      "bytes": 68608,
+      "sha256": "44fe4cefb0c528e91470c9f65402caae8c9aa91ef55a0bf8360d6aa6c688ae7b"
+    },
+    "5d58756d7cb0e1ede1ab3da627c350c6a41600b221615351e505e3c736fb6eeb": {
+      "src": "312cf64c661395bf.webp",
+      "bytes": 54948,
+      "sha256": "312cf64c661395bf346c455e9d3fcd78b5abecb55c630b8a622d8f8255d7a0e9"
+    },
+    "636d9b5637150c234362aa7ac3f63e75a1c3db8fd94de1336296aca34e9bf6ea": {
+      "src": "52c8b1142588f10b.webp",
+      "bytes": 72896,
+      "sha256": "52c8b1142588f10bc5784ba97565bf0b8d4233e777663c8d366db47997b09ece"
+    },
+    "bdc0342a7f3a38a9fe2fece9b5be8f0e8e7dbdcdb8b9253a6a1614cd0727c4bc": {
+      "src": "099f8fafc845791e.webp",
+      "bytes": 71894,
+      "sha256": "099f8fafc845791e7469790d697a14b44a81376e27f75f805fb30129e3fcd728"
+    },
+    "c0031c3d5f9a5b6bcabc3db66963e9840ba6f9c9774cd1b78c766c61c3d34875": {
+      "src": "17141d539d52c54a.webp",
+      "bytes": 72408,
+      "sha256": "17141d539d52c54a0f921b29db96a8f3ad536f1171a8f199cc532c92cd291c37"
+    },
+    "dbbecd36cc2fce659308e48fce1fb8e04873bc77448bbb3d4f587ff1a2a406aa": {
+      "src": "2e2d5f6532302344.webp",
+      "bytes": 72752,
+      "sha256": "2e2d5f653230234416f98ed9a6e26fdc859bc8fb88d0c4a920a30a58e9b30211"
+    },
+    "e2097bc12382892da45246811f4d8748301d6468cbb0c2fbd5889e6f0de3f020": {
+      "src": "0cdd58dabc781105.webp",
+      "bytes": 132526,
+      "sha256": "0cdd58dabc781105df9a7ec71a82253708cd598bcbd343979ad232bde071041a"
+    },
+    "edd65b5919061b8ef7611916df8a37c6937717921727b0b9846d4f007df7aeaa": {
+      "src": "fe3036fcc9d8a883.webp",
+      "bytes": 14868,
+      "sha256": "fe3036fcc9d8a8834feb5a81ef9448888c57e5b62c0502d4619d7bc3722aeb52"
+    }
+  }
+}

@@ -1,0 +1,1185 @@
+/**
+ * LE SERVICE WORKER REÇOIT LE PUSH, LE MONTRE, ET LE TAP ATTERRIT (#7305).
+ *
+ * Chargé par `importScripts` EN TÊTE du service worker généré
+ * (`SERVICE_WORKER_SCRIPTS`, `vite.config.ts`), donc ses écouteurs passent
+ * avant ceux de Workbox. Il n'intercepte aucune requête.
+ *
+ * ## CE QU'IL NE FAIT PAS, ET POURQUOI C'EST LE PLUS IMPORTANT
+ *
+ * **Il n'affiche QUE ce que le serveur a composé.** Le corps de la bannière
+ * est descendu dans le Prisme du LECTEUR côté passerelle
+ * (`NotificationService.servedBannerBody`, quatrième famille du Prisme). Ce
+ * worker ne lit donc ni `translatedContent`, ni `translatedLanguage`, ni
+ * `content`, ni `originalLanguage`, ni `encryptedContent` : ce sont des champs
+ * de SERVICE destinés à l'extension de notification iOS. Une seconde descente
+ * servirait, pour un même message, un texte différent de celui qu'iOS montre
+ * — le défaut qui a coûté trois cycles à la passerelle (cycles 121→123).
+ *
+ * **Il ne rend AUCUNE URL venue de la charge** — ni pièce jointe, ni avatar —,
+ * à UNE exception près, la vignette d'une vidéo (#8860, `offreContenu`) : une
+ * clé que la passerelle ne pose qu'hors protection, et que ce worker retient
+ * lui-même sous `notificationLocKey`.
+ * La présence de `notificationLocKey` est une DÉCLARATION de contenu protégé
+ * (éphémère, vue unique, flouté, chiffré) ; la passerelle vide déjà les champs
+ * de média dans ce cas, mais une protection de contenu se mesure sur tout ce
+ * que la charge TRANSPORTE, jamais sur sa seule chaîne (cycle 125 : une photo
+ * à vue unique s'est affichée ENTIÈRE sur un écran verrouillé sous une
+ * bannière qui disait « 👁️ 🖼️ »). L'icône de la bannière est donc un actif
+ * STATIQUE de l'application, et la carte `data` qu'elle emporte est une liste
+ * BLANCHE : les seules clés qui routent le tap.
+ *
+ * ## D-11 — JAMAIS DEUX NOTIFICATIONS POUR UN MÊME ÉVÉNEMENT
+ *
+ * (`decisions.md` § D-11.) Point 1 : aucune bannière SYSTÈME si un client est
+ * ouvert ET visible — dans ce cas le socket porte la bannière in-app, et le
+ * navigateur ne dit pas tout seul au worker si quelqu'un regarde. Point 4 :
+ * déduplication par `notificationId` contre les bannières déjà affichées,
+ * pour la course résiduelle entre push et socket.
+ *
+ * Une CORRECTION n'est pas un second événement (#7342) : elle remplace la
+ * bannière de sa notification là où elle est encore affichée — voir
+ * `corriger()`.
+ *
+ * ## LA TABLE DE DESTINATIONS EST UN JUMEAU GATÉ
+ *
+ * Un script classique chargé par `importScripts` ne peut importer aucun module
+ * TypeScript — ni `resolveTarget` (`src/lib/notifications/target.ts`), ni
+ * `href` (`src/lib/router.tsx`), ni les constantes de `lib/discover/view`. Le
+ * dépôt a déjà tranché ce cas (`src/lib/sw-caches.ts` § `LEGACY_CACHE_NAMESPACE`) :
+ * le jumeau est licite, la dérive ne l'est pas. `scripts/check-push-target-parity.mjs`
+ * compare CE fichier à `target.ts` ET aux motifs de `route-table.tsx`.
+ *
+ * Ce n'est pas une précaution théorique. `public/firebase-messaging-sw.js`,
+ * que ce lot supprime, portait exactement la bonne règle en commentaire
+ * (« toute évolution doit toucher les DEUX SW + le helper ») et composait
+ * quand même `/conversations/<id>`, `/mood` et `/reel` — trois routes sur
+ * trois, dont aucune n'existe. Une règle en prose ne couvre que ce que son
+ * outil exprime.
+ */
+
+/** JUMEAU des motifs de `src/routes/route-table.tsx`. */
+const PUSH_ROUTE_PATTERNS = {
+  thread: '/c/$conversation',
+  story: '/story/$post',
+  mood: '/mood/$post',
+  post: '/post/$post',
+  discover: '/discover',
+  userProfile: '/u/$username',
+  community: '/communities/$community',
+  progression: '/me/progression',
+  progressionLigue: '/me/progression/ligue',
+  progressionSaison: '/me/progression/saison',
+  progressionCarnet: '/me/progression/carnet',
+  settings: '/settings',
+  notifications: '/notifications',
+};
+
+/** JUMEAUX de `src/lib/discover/view.ts`. */
+const DISCOVER_TAB_PARAM = 'onglet';
+const REQUEST_FILTER_PARAM = 'demandes';
+
+/** JUMEAUX des tables de `src/lib/notifications/target.ts`. */
+const EPHEMERAL_ENTITIES = ['STORY', 'STATUS', 'MOOD'];
+const EPHEMERAL_ONLY_TYPES = [
+  'story_reaction',
+  'status_reaction',
+  'story_new_comment',
+  'friend_story_comment',
+  'story_thread_reply',
+  'friend_new_story',
+  'friend_new_mood',
+];
+/** JUMEAU de `MOOD_TYPES` (#10813) : la nouvelle humeur d'un contact a sa page. */
+const MOOD_TYPES = ['friend_new_mood'];
+const REQUEST_TYPES = ['friend_request', 'contact_request'];
+const PROFILE_TYPES = ['contact_joined', 'contact_recently_active', 'device_battery'];
+/** JUMEAU de `MISSED_CALL_TYPES` (#9177) : repli d'un appel manqué sans `conversationId`. */
+const MISSED_CALL_TYPES = ['missed_call', 'CALL_MISSED', 'call_declined'];
+const PROGRESSION_TYPES = [
+  'achievement_unlocked',
+  'ACHIEVEMENT_UNLOCKED',
+  'badge_earned',
+  'streak_milestone',
+  'level_up',
+];
+/** JUMEAU de `PROGRESSION_TYPE_SECTIONS` (#9563) : la fiche que chaque type ouvre, jamais la racine. */
+const PROGRESSION_TYPE_SECTIONS = {
+  achievement_unlocked: 'succes',
+  ACHIEVEMENT_UNLOCKED: 'succes',
+  badge_earned: 'badges',
+  streak_milestone: 'flame',
+  level_up: 'level',
+};
+const GAME_LEAGUE_TYPES = ['game_duo_invited', 'game_duo_accepted', 'game_league_result'];
+const GAME_SEASON_TYPES = ['game_season_step'];
+/** JUMEAU de `GAME_PHOTO_TYPES` (#10175) : le résumé des moments à immortaliser ouvre le carnet. */
+const GAME_PHOTO_TYPES = ['game_photo_moment'];
+const GAME_MISSION_TYPES = ['game_mission_window'];
+const SECURITY_TYPES = [
+  'security_alert',
+  'login_new_device',
+  'SYSTEM_ALERT',
+  'password_changed',
+  'two_factor_enabled',
+  'two_factor_disabled',
+];
+const HINTED_ROUTES = ['discover', 'progression', 'settings', 'notifications'];
+
+/**
+ * LES SEULES CLÉS QUI VOYAGENT AVEC LA BANNIÈRE. Liste BLANCHE, et non un
+ * `delete` des champs sensibles : une liste noire oublie le champ ajouté
+ * demain, une liste blanche le refuse par défaut.
+ */
+const TAP_FIELDS = [
+  'notificationId',
+  'type',
+  'conversationId',
+  'postId',
+  'postType',
+  'contentType',
+  'friendRequestId',
+  'communityId',
+  'senderUsername',
+  'route',
+];
+
+/**
+ * LE NOM DU MESSAGE remis à un client déjà ouvert — JUMEAU de
+ * `NOTIFICATION_CLICKED_MESSAGE` (`src/lib/notifications/tap-navigation.ts`),
+ * qui l'écoute et navigue. Focaliser sans naviguer laisserait le lecteur là
+ * où il était : un contrôle qui ment (loi 4).
+ */
+const NOTIFICATION_CLICKED_MESSAGE = 'NOTIFICATION_CLICKED';
+
+/**
+ * LE CHAMP PAR LEQUEL LA PASSERELLE DÉCLARE UNE CORRECTION — JUMEAU de
+ * `REPRODUCED_PUSH_FIELD` / `REPRODUCED_PUSH_VALUE`
+ * (`packages/shared/types/reproduced-notification-push.ts`), que ce script
+ * classique ne peut pas importer. `sw-push.test.ts` compose ses charges avec
+ * les constantes PARTAGÉES : si ce jumeau dérive, ses témoins rougissent.
+ */
+const REPRODUCED_PUSH_FIELD = 'reproduced';
+const REPRODUCED_PUSH_VALUE = 'true';
+
+/**
+ * LE CHAMP PAR LEQUEL UNE RÉACTION REMPLACE LA PRÉCÉDENTE (#9028) — JUMEAU de
+ * `REPLACES_ACTOR_SUBJECT_FIELD` / `REPLACES_ACTOR_SUBJECT_VALUE`, même
+ * fichier partagé, même garde par les constantes des témoins.
+ * `ACTOR_SUBJECT_KEY` est la clé, posée sur la bannière, qui la retrouve.
+ */
+const REPLACES_ACTOR_SUBJECT_FIELD = 'replacesActorSubject';
+const REPLACES_ACTOR_SUBJECT_VALUE = 'true';
+const ACTOR_SUBJECT_KEY = 'acteurSujet';
+
+/**
+ * L'ACCUSÉ DE REMISE (#7368, W4) — JUMEAU web de
+ * `NSEDataSync.postDeliveryReceipt` (`apps/ios/MeeshyNotificationExtension/NSEDataSync.swift:453-466`),
+ * appelé sans condition par `NotificationService.didReceive` (`NotificationService.swift:65`).
+ *
+ * SANS accusé, l'auteur reste bloqué sur une coche tant que ce destinataire
+ * n'a pas rouvert l'application — l'auto-livraison EN LIGNE de la passerelle
+ * ne part jamais pour un onglet fermé, une PWA suspendue ou une coque en
+ * arrière-plan (`services/gateway/src/routes/conversations/receipts.ts:292`,
+ * doc-comment de la porte iOS). C'est EXACTEMENT le symptôme du relevé
+ * (#7368 § Contexte) : « ✓ jusqu'à reconnexion ».
+ *
+ * `DELIVERY_RECEIPT_TYPES` est le JUMEAU de
+ * `NotificationPayloadHelpers.deliveryReceiptTypes`
+ * (`NotificationPayloadHelpers.swift:244-247`, dérivé de `messageArrivalTypes`
+ * `:224-226`) — les réactions et les événements sociaux portent un
+ * `messageId` (celui du message RÉAGI, pas remis) sans être une remise ; ils
+ * restent dehors.
+ */
+const DELIVERY_RECEIPT_TYPES = [
+  'new_message', 'message_reply', 'reply', 'message_forwarded', 'user_mentioned',
+  'new_conversation', 'new_conversation_direct', 'new_conversation_group',
+  'added_to_conversation',
+];
+
+/**
+ * JUMEAU des TROIS littéraux de `src/lib/notifications/delivery-receipt-credential.ts`
+ * — nom de base, magasin, clé. `sw-push.test.ts` écrit et lit au travers du
+ * MÊME double (`test-support/fake-indexed-db.ts`) que le module TS : c'est le
+ * témoin qui rougirait sur toute dérive entre les deux fichiers, aucun script
+ * classique ne pouvant importer l'autre (doctrine de l'en-tête de ce fichier).
+ */
+const CREDENTIAL_DB_NAME = 'meeshy-push';
+const CREDENTIAL_DB_VERSION = 1;
+const CREDENTIAL_STORE_NAME = 'credential';
+const CREDENTIAL_KEY = 'current';
+
+/**
+ * Lit le crédential posé par la page — `null` si absent, IndexedDB
+ * indisponible (portée privée, navigateur ancien) ou en échec : un accusé
+ * manqué se rattrape à la reconnexion, EXACTEMENT le comportement PRÉCÉDENT
+ * (#7368 § Contexte) — jamais une erreur qui empêcherait la bannière.
+ */
+function lireCredential() {
+  return new Promise((resolve) => {
+    if (typeof self.indexedDB === 'undefined') { resolve(null); return; }
+    let requete;
+    try {
+      requete = self.indexedDB.open(CREDENTIAL_DB_NAME, CREDENTIAL_DB_VERSION);
+    } catch {
+      resolve(null);
+      return;
+    }
+    requete.onupgradeneeded = () => {
+      const db = requete.result;
+      if (!db.objectStoreNames.contains(CREDENTIAL_STORE_NAME)) db.createObjectStore(CREDENTIAL_STORE_NAME);
+    };
+    requete.onerror = () => resolve(null);
+    requete.onsuccess = () => {
+      const db = requete.result;
+      if (!db.objectStoreNames.contains(CREDENTIAL_STORE_NAME)) {
+        db.close();
+        resolve(null);
+        return;
+      }
+      try {
+        const lecture = db.transaction(CREDENTIAL_STORE_NAME).objectStore(CREDENTIAL_STORE_NAME).get(CREDENTIAL_KEY);
+        lecture.onsuccess = () => {
+          db.close();
+          resolve(lecture.result || null);
+        };
+        lecture.onerror = () => {
+          db.close();
+          resolve(null);
+        };
+      } catch {
+        db.close();
+        resolve(null);
+      }
+    };
+  });
+}
+
+/** JUMEAU de `credentialHeaders()` (`src/lib/api/http.ts:215-219`) — les DEUX
+ * régimes, jamais mélangés : un compte enregistré parle en `Authorization`,
+ * un invité de lien en `X-Session-Token`. */
+function entetesCredential(credential) {
+  if (!credential) return null;
+  if (credential.kind === 'registered') return { Authorization: 'Bearer ' + credential.token };
+  if (credential.kind === 'anonymous') return { 'X-Session-Token': credential.sessionToken };
+  return null;
+}
+
+/**
+ * ACCUSE LA REMISE, SI CE PUSH EN ANNONCE UNE — fire-and-forget : un échec
+ * réseau ici laisse le message « envoyé » jusqu'à la reconnexion, le
+ * comportement PRÉCÉDENT, jamais une régression. Route CANONIQUE
+ * (`POST …/receipts`, `services/gateway/src/routes/conversations/receipts.ts:967`),
+ * pas l'alias en sursis `.../delivery-receipt`
+ * (`services/gateway/src/routes/message-read-status.ts:229`, `depreciee()`
+ * depuis le 2026-08-30) : un code neuf n'ouvre pas une porte déjà en sursis.
+ */
+async function accuserRemise(data) {
+  if (DELIVERY_RECEIPT_TYPES.indexOf(texte(data.type)) < 0) return;
+  const conversationId = texte(data.conversationId);
+  const messageId = texte(data.messageId);
+  if (conversationId === '' || messageId === '') return;
+
+  const stocke = await lireCredential();
+  if (stocke === null) return;
+  const entetes = entetesCredential(stocke.credential);
+  if (entetes === null) return;
+  const base = texte(stocke.apiBase);
+
+  try {
+    await self.fetch(base + '/api/v1/conversations/' + encodeURIComponent(conversationId) + '/receipts', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, entetes),
+      body: JSON.stringify({ type: 'delivered', messageIds: [messageId] }),
+      keepalive: true,
+    });
+  } catch {
+    /* Best-effort — voir doc-comment. */
+  }
+}
+
+/** L'icône de la bannière — un actif de l'application, jamais une URL de la charge. */
+const BANNER_ICON = '/android-chrome-192x192.png';
+const BANNER_BADGE = '/badge-72x72.png';
+
+/** `''` vaut absence — la convention de la carte `data` du fil push. */
+function texte(valeur) {
+  return typeof valeur === 'string' ? valeur.trim() : '';
+}
+
+function surfaceSociale(data) {
+  const discriminant = (texte(data.postType) || texte(data.contentType)).toUpperCase();
+  if (discriminant !== '') return EPHEMERAL_ENTITIES.indexOf(discriminant) >= 0 ? 'story' : 'post';
+  return EPHEMERAL_ONLY_TYPES.indexOf(texte(data.type)) >= 0 ? 'story' : 'post';
+}
+
+function demandes() {
+  const search = {};
+  search[DISCOVER_TAB_PARAM] = 'requests';
+  search[REQUEST_FILTER_PARAM] = 'received';
+  return { route: 'discover', params: {}, search };
+}
+
+/** JUMEAU de `resolveTarget()` + son repli de tap (`pushTapTarget()`). */
+function resolvePushTarget(data) {
+  const postId = texte(data.postId);
+  if (postId !== '' && MOOD_TYPES.indexOf(texte(data.type)) >= 0) return { route: 'mood', params: { post: postId }, search: {} };
+  if (postId !== '') {
+    const surface = surfaceSociale(data);
+    /* `?from=notification` (#10483) — le détail compte son impression en
+       `notification`, comme le lien de la liste (`TargetLink`). */
+    return { route: surface, params: { post: postId }, search: surface === 'post' ? { from: 'notification' } : {} };
+  }
+
+  const conversationId = texte(data.conversationId);
+  if (conversationId !== '') return { route: 'thread', params: { conversation: conversationId }, search: {} };
+
+  /* #18052 — « Ajouté à la communauté Y » ouvre la communauté. */
+  const communityId = texte(data.communityId);
+  if (communityId !== '') return { route: 'community', params: { community: communityId }, search: {} };
+
+  const type = texte(data.type);
+  if (texte(data.friendRequestId) !== '' || REQUEST_TYPES.indexOf(type) >= 0) return demandes();
+
+  const pseudo = texte(data.senderUsername);
+  if (PROFILE_TYPES.indexOf(type) >= 0 && pseudo !== '') return { route: 'userProfile', params: { username: pseudo }, search: {} };
+  if (MISSED_CALL_TYPES.indexOf(type) >= 0 && pseudo !== '') return { route: 'userProfile', params: { username: pseudo }, search: {} };
+
+  if (GAME_LEAGUE_TYPES.indexOf(type) >= 0) return { route: 'progressionLigue', params: {}, search: {} };
+  if (GAME_SEASON_TYPES.indexOf(type) >= 0) return { route: 'progressionSaison', params: {}, search: {} };
+  if (GAME_PHOTO_TYPES.indexOf(type) >= 0) return { route: 'progressionCarnet', params: {}, search: {} };
+  if (GAME_MISSION_TYPES.indexOf(type) >= 0) return { route: 'progression', params: {}, search: { section: 'missions' } };
+  if (PROGRESSION_TYPES.indexOf(type) >= 0 && Object.prototype.hasOwnProperty.call(PROGRESSION_TYPE_SECTIONS, type)) {
+    return { route: 'progression', params: {}, search: { section: PROGRESSION_TYPE_SECTIONS[type] } };
+  }
+
+  const indice = texte(data.route);
+  if (HINTED_ROUTES.indexOf(indice) >= 0) {
+    return indice === 'discover' ? demandes() : { route: indice, params: {}, search: {} };
+  }
+
+  if (PROGRESSION_TYPES.indexOf(type) >= 0) return { route: 'progression', params: {}, search: {} };
+  if (SECURITY_TYPES.indexOf(type) >= 0) return { route: 'settings', params: {}, search: {} };
+  return { route: 'notifications', params: {}, search: {} };
+}
+
+/** JUMEAU de `href()` (`src/lib/router.tsx`) — segments `$` encodés, query triée par insertion. */
+function pushTargetUrl(data) {
+  const cible = resolvePushTarget(data);
+  const chemin = PUSH_ROUTE_PATTERNS[cible.route]
+    .split('/')
+    .map((segment) => {
+      if (segment.charAt(0) !== '$') return segment;
+      const valeur = cible.params[segment.slice(1)];
+      return encodeURIComponent(typeof valeur === 'string' ? valeur : '');
+    })
+    .join('/');
+  const query = new URLSearchParams();
+  Object.keys(cible.search).forEach((nom) => query.set(nom, cible.search[nom]));
+  const chaine = query.toString();
+  return chaine === '' ? chemin : chemin + '?' + chaine;
+}
+
+function charge(evenement) {
+  if (!evenement || !evenement.data) return null;
+  try {
+    const lu = evenement.data.json();
+    return lu !== null && typeof lu === 'object' ? lu : null;
+  } catch {
+    /* Une charge illisible n'est pas une notification : ne rien montrer plutôt
+       que de montrer un libellé inventé. */
+    return null;
+  }
+}
+
+function objet(valeur) {
+  return valeur !== null && typeof valeur === 'object' ? valeur : {};
+}
+
+function poserBadge(data) {
+  const brut = texte(data.unreadCount);
+  if (brut === '') return;
+  const compte = Number(brut);
+  if (!Number.isFinite(compte) || compte < 0) return;
+  const nav = self.navigator;
+  if (!nav || typeof nav.setAppBadge !== 'function') return;
+  try {
+    /* Le badge n'est pas une bannière : il vaut même quand D-11 retient
+       l'affichage, sans quoi le compteur de l'application installée resterait
+       en retard sur ce que le lecteur a déjà reçu. */
+    void nav.setAppBadge(compte);
+  } catch {
+    /* Permission retirée, API absente sous cette portée : rien à faire. */
+  }
+}
+
+async function fenetres() {
+  try {
+    return await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  } catch {
+    return [];
+  }
+}
+
+/** La bannière encore affichée de cette notification, ou `null`. */
+async function banniereAffichee(notificationId) {
+  if (notificationId === '') return null;
+  try {
+    const affichees = await self.registration.getNotifications();
+    return (
+      affichees.find((affichee) => affichee && texte(objet(affichee.data).notificationId) === notificationId) || null
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * LE SON ET L'EMPILEMENT SONT CEUX QUE LE LECTEUR A CHOISIS (#7308).
+ *
+ * La passerelle les calcule au chokepoint de ses préférences et les pose dans
+ * le bloc `notification` : `silent` pour `soundEnabled:false`, `tag` pour
+ * l'empilement par conversation — et AUCUN `tag` quand il a choisi
+ * `groupNotifications:false`. Le repli est donc l'identifiant de la
+ * notification, jamais `conversationId` : ce repli-là empilerait quand même.
+ *
+ * Une bannière qui REMPLACE une autre de même tag n'alerte qu'avec
+ * `renotify` ; sans lui, chaque message après le premier d'une conversation
+ * arriverait sans son ni annonce. Il accompagne aussi une bannière muette :
+ * `silent` retire le son et la vibration, pas l'annonce. `showNotification`
+ * lève un TypeError sur `renotify` sans tag et sur `silent` avec `vibrate` —
+ * `renotify` ne part qu'avec un tag, et ce worker ne pose jamais `vibrate`.
+ */
+function livraison(notification, notificationId) {
+  const tag = texte(notification.tag) || notificationId;
+  return {
+    ...(tag === '' ? {} : { tag: tag, renotify: true }),
+    ...(notification.silent === true ? { silent: true } : {}),
+  };
+}
+
+function donneesDuTap(data) {
+  const retenu = {};
+  TAP_FIELDS.forEach((champ) => {
+    const valeur = texte(data[champ]);
+    if (valeur !== '') retenu[champ] = valeur;
+  });
+  return retenu;
+}
+
+const CALL_BACK_TYPES = ['missed_call', 'CALL_MISSED', 'call_declined'];
+const CALL_BACK_ACTION = 'call-back';
+const CALL_BACK_PARAM = 'rappeler';
+const CALL_BACK_NAME_PARAM = 'appelant';
+const CALL_BACK_GROUP_PARAM = 'groupe';
+
+function rappel(data) {
+  const conversationId = texte(data.conversationId);
+  const libelle = texte(data.callBackLabel);
+  if (CALL_BACK_TYPES.indexOf(texte(data.type)) < 0 || conversationId === '' || libelle === '') return null;
+  const typeDeConversation = texte(data.conversationType);
+  const groupe = typeDeConversation !== '' && typeDeConversation !== 'direct';
+  const titre = groupe
+    ? texte(data.conversationTitle)
+    : texte(data.senderDisplayName) || texte(data.senderUsername);
+  return {
+    action: { action: CALL_BACK_ACTION, title: libelle },
+    callBack: { conversationId: conversationId, media: texte(data.callType) === 'video' ? 'video' : 'audio', title: titre, isGroup: groupe },
+  };
+}
+
+/**
+ * LE DÉTAIL DU CONTENU (#8860, jumeau web de #8856) — le CORPS est composé par
+ * la passerelle (`detailedBannerBody` : « 📍 Tour Eiffel », « 👤 Mamadou »,
+ * « ✉️ Invitation · Équipe », « 🔗 domaine », « Réponse à votre story · … ») ;
+ * le worker n'en réécrit aucun mot. Il ajoute ce qu'un texte ne porte pas :
+ *
+ * - les ACTIONS, dans l'ordre d'iOS (`NotificationDetailCategories`) —
+ *   « Ouvrir la carte » (position) ou « Rejoindre » (invitation Meeshy), puis
+ *   « Répondre ». Leurs libellés sont LOCALISÉS par la passerelle
+ *   (`contentActionPushFields`) : ce worker ne charge aucun catalogue, et sans
+ *   libellé servi il n'offre rien ;
+ * - la VIGNETTE d'une vidéo (`thumbnailUrl`, adresse publique https).
+ *
+ * SECOND VERROU : sous `notificationLocKey` (contenu protégé), ni image, ni
+ * carte, ni invitation — la passerelle les retient déjà ; une garde de
+ * confidentialité ne dépend pas de la fidélité de l'autre.
+ *
+ * Aucune requête vers un tiers : la carte est un LIEN vers Plans, ouvert au
+ * toucher — JUMEAU de `mapsUrlOf` (`src/lib/view/message-body.ts`, branche
+ * navigateur). Une invitation ne mène qu'à l'écran d'invitation de CETTE
+ * application — JUMEAU de `inviteAppPath` (`src/lib/notifications/content-detail.ts`).
+ */
+const OPEN_MAP_ACTION = 'open-map';
+const JOIN_ACTION = 'join';
+const REPLY_ACTION = 'reply';
+/** JUMEAU de `COMPOSE_PARAM` (`src/lib/notifications/content-detail.ts`). */
+const COMPOSE_PARAM = 'ecrire';
+const MAPS_ORIGIN = 'https://maps.apple.com/';
+/** JUMEAU de `REPLYABLE_TYPES` (`src/lib/notifications/content-detail.ts`, `contentActionPushFields.ts`). */
+const REPLYABLE_TYPES = ['new_message', 'message_reply', 'reply', 'user_mentioned', 'message_forwarded'];
+const INVITE_FORMS = ['chat', 'join'];
+const SHARE_LINK_KEY = /^[A-Za-z0-9_-]{1,100}$/;
+
+function coordonnee(valeur, borne) {
+  const nombre = Number(texte(valeur));
+  return texte(valeur) !== '' && Number.isFinite(nombre) && Math.abs(nombre) <= borne ? nombre : null;
+}
+
+function adresseCarte(data) {
+  const lat = coordonnee(data.locationLat, 90);
+  const lon = coordonnee(data.locationLon, 180);
+  if (lat === null || lon === null) return null;
+  const nom = texte(data.locationName);
+  return MAPS_ORIGIN + '?ll=' + lat.toFixed(5) + ',' + lon.toFixed(5) + (nom === '' ? '' : '&q=' + encodeURIComponent(nom));
+}
+
+function hoteMeeshy(hote) {
+  return hote === 'meeshy.me' || hote.endsWith('.meeshy.me');
+}
+
+function cheminInvitation(brute) {
+  let url;
+  try {
+    url = new URL(texte(brute));
+  } catch {
+    return null;
+  }
+  const segments = url.pathname.split('/').filter(Boolean);
+  const schemaMeeshy = url.protocol === 'meeshy:';
+  const forme = schemaMeeshy ? url.host : segments[0];
+  const cle = schemaMeeshy ? segments[0] : segments[1];
+  const deMeeshy = schemaMeeshy || (url.protocol === 'https:' && hoteMeeshy(url.hostname.toLowerCase()));
+  if (!deMeeshy || !forme || INVITE_FORMS.indexOf(forme.toLowerCase()) < 0 || !cle || !SHARE_LINK_KEY.test(cle)) return null;
+  return '/chat/' + cle;
+}
+
+function vignette(data) {
+  const url = texte(data.thumbnailUrl);
+  return url.indexOf('https://') === 0 ? url : '';
+}
+
+function offreContenu(data) {
+  const protege = texte(data.notificationLocKey) !== '';
+  const libelle = texte(data.contentActionLabel);
+  const carte = protege || libelle === '' ? null : adresseCarte(data);
+  const invitation = protege || libelle === '' || carte !== null ? null : cheminInvitation(data.inviteUrl);
+  const repondre = texte(data.replyActionLabel);
+  const peutRepondre = repondre !== '' && texte(data.conversationId) !== '' && REPLYABLE_TYPES.indexOf(texte(data.type)) >= 0;
+  const actions = [
+    ...(carte === null ? [] : [{ action: OPEN_MAP_ACTION, title: libelle }]),
+    ...(invitation === null ? [] : [{ action: JOIN_ACTION, title: libelle }]),
+    ...(peutRepondre ? [{ action: REPLY_ACTION, title: repondre }] : []),
+  ];
+  const image = protege ? '' : vignette(data);
+  return {
+    actions: actions,
+    image: image,
+    data: {
+      ...(carte === null ? {} : { mapUrl: carte }),
+      ...(invitation === null ? {} : { invitePath: invitation }),
+    },
+  };
+}
+
+function montrer(banniere, notification, data) {
+  const offre = rappel(data);
+  const contenu = offreContenu(data);
+  const actions = offre === null ? contenu.actions : [offre.action];
+  const cle = acteurSujet(data);
+  const tap = { ...donneesDuTap(data), ...(cle === '' ? {} : { [ACTOR_SUBJECT_KEY]: cle }) };
+  return self.registration.showNotification(banniere.titre, {
+    body: banniere.corps,
+    ...livraison(notification, texte(data.notificationId)),
+    icon: BANNER_ICON,
+    badge: BANNER_BADGE,
+    ...(contenu.image === '' ? {} : { image: contenu.image }),
+    ...(actions.length === 0 ? {} : { actions: actions }),
+    data: offre === null ? { ...tap, ...contenu.data } : { ...tap, callBack: offre.callBack },
+  });
+}
+
+/**
+ * UNE RÉACTION CHANGÉE NE LAISSE QU'UNE BANNIÈRE (#9028).
+ *
+ * ❤️ → 😂 retire une notification et en crée une AUTRE : rien que le tag ni
+ * l'identifiant ne relient. La passerelle déclare le remplacement
+ * (`REPLACES_ACTOR_SUBJECT_FIELD`) ; la bannière remplacée est celle du même
+ * type, du même acteur et du même sujet — le commentaire d'abord, le post qui
+ * le porte seulement à défaut. Le web ne reçoit pas la révocation : sans
+ * cette fermeture, la réaction d'avant restait affichée à côté.
+ */
+function acteurSujet(data) {
+  if (texte(data[REPLACES_ACTOR_SUBJECT_FIELD]) !== REPLACES_ACTOR_SUBJECT_VALUE) return '';
+  const type = texte(data.type);
+  const acteur = texte(data.senderId);
+  const sujet = texte(data.commentId) || texte(data.messageId) || texte(data.postId);
+  return type === '' || acteur === '' || sujet === '' ? '' : [type, acteur, sujet].join('|');
+}
+
+/**
+ * Ferme les bannières que ce push remplace — jamais la sienne : la même
+ * réaction livrée deux fois relève du dédoublonnage (D-11 point 4).
+ */
+async function fermerRemplacees(data) {
+  const cle = acteurSujet(data);
+  if (cle === '') return;
+  const notificationId = texte(data.notificationId);
+  try {
+    const affichees = await self.registration.getNotifications();
+    affichees
+      .filter((affichee) => affichee && texte(objet(affichee.data)[ACTOR_SUBJECT_KEY]) === cle)
+      .filter((affichee) => notificationId === '' || texte(objet(affichee.data).notificationId) !== notificationId)
+      .forEach((affichee) => affichee.close());
+  } catch {
+    /* Barre illisible sous cette portée : la bannière d'avant reste, rien ne casse. */
+  }
+}
+
+/**
+ * UNE CORRECTION REMPLACE UNE BANNIÈRE, ELLE N'EN LÈVE JAMAIS UNE (#7342).
+ *
+ * Éditer un message, un post ou un commentaire réécrit sa notification sous
+ * la MÊME identité, et la passerelle repousse la version d'après en la
+ * déclarant (`REPRODUCED_PUSH_FIELD`). Sur iOS, ce même push nomme la
+ * bannière d'avant (`replacesNotificationId`) et l'extension la retire ; sur
+ * Android, le tag la remplace. Le web, lui, la dédoublonnait (D-11 point 4) et
+ * écartait donc la correction.
+ *
+ * - La bannière de CETTE notification est encore affichée : elle est
+ *   remplacée EN PLACE, sous SON tag — pas sous celui de la charge. Si le
+ *   lecteur a changé `groupNotifications` entre les deux pushes, le tag neuf
+ *   laisserait l'ancienne bannière à côté de la nouvelle ; et chaque bannière
+ *   de ce worker porte un tag, puisque `livraison()` en pose un dès que
+ *   l'identifiant existe.
+ * - Elle dit DÉJÀ le texte d'après (correction livrée deux fois, édition qui
+ *   ne touche pas le texte notifié) : rien — D-11 point 4.
+ * - Elle n'est plus affichée : rien. Un message plus récent de la conversation
+ *   l'a remplacée (même tag, #7340) et la faire remonter cacherait le message
+ *   que le lecteur n'a pas lu ; ou il l'a fermée ; ou il lisait l'application
+ *   quand elle est arrivée (D-11 point 1). Dans les trois cas, la bannière
+ *   visible n'est plus la sienne.
+ *
+ * Le remplacement s'annonce (`renotify`), muet si le son est coupé : iOS fait
+ * sonner le push de remplacement, comme tout contenu neuf.
+ */
+async function corriger(banniere, notification, data) {
+  const affichee = await banniereAffichee(texte(data.notificationId));
+  if (affichee === null) return;
+  if (texte(affichee.title) === banniere.titre && texte(affichee.body) === banniere.corps) return;
+  await montrer(banniere, { ...notification, tag: affichee.tag }, data);
+}
+
+async function afficher(payload) {
+  if (payload === null) return;
+  const data = objet(payload.data);
+  const notification = objet(payload.notification);
+  if (estPushDAppel(data)) {
+    await traiterAppel(data);
+    return;
+  }
+  if (texte(data.type) === TALKIE_PUSH_TYPE) {
+    await annoncerTalkie(data);
+    return;
+  }
+
+  /* Démarré EN PARALLÈLE de la logique de bannière, jamais attendu avant —
+     un accusé de remise ne doit pas retarder ce que le lecteur VOIT. Le
+     `finally` couvre CHAQUE sortie (bannière montrée, corrigée, supprimée ou
+     tue) : `waitUntil` (l'appelant, § bas de fichier) ne tient le worker en
+     vie que pour la promesse qu'`afficher` rend, donc un accusé lancé sans
+     être attendu ici pourrait être tué avant sa fin. */
+  const accuse = accuserRemise(data);
+  try {
+    poserBadge(data);
+
+    const titre = texte(notification.title) || texte(data.title);
+    const corps = texte(notification.body) || texte(data.body);
+    /* Rien à dire : le worker se tait plutôt que d'écrire un libellé qu'aucun
+       catalogue ne porte. */
+    if (titre === '' && corps === '') return;
+    const banniere = titre === '' ? { titre: corps, corps: '' } : { titre: titre, corps: corps };
+
+    /* Avant D-11 : la bannière d'avant dit une réaction qui n'existe plus,
+       que quelqu'un regarde l'application ou non. */
+    await fermerRemplacees(data);
+
+    /* D-11 point 1 — quelqu'un REGARDE l'application : le socket porte la
+       bannière in-app, une bannière système la doublerait. */
+    const ouvertes = await fenetres();
+    if (ouvertes.some((client) => client.visibilityState === 'visible')) return;
+
+    if (texte(data[REPRODUCED_PUSH_FIELD]) === REPRODUCED_PUSH_VALUE) {
+      await corriger(banniere, notification, data);
+      return;
+    }
+
+    /* D-11 point 4 — la course résiduelle entre le push et le socket. */
+    if ((await banniereAffichee(texte(data.notificationId))) !== null) return;
+
+    await montrer(banniere, notification, data);
+  } finally {
+    await accuse;
+  }
+}
+
+/**
+ * LE TALKIE D'URGENCE, ONGLET FERMÉ (#17141, #17144) — un Proche parle pendant
+ * que personne ne regarde : la passerelle pousse `talkie_incoming` (titre et
+ * corps localisés, `talkieId`, `fromUserId`, nom de l'émetteur, et parfois
+ * l'audio `audioUrl`). La notification dit « X vous parle » ; la toucher ouvre
+ * (ou focalise) l'app, qui rattrape la voix par `talkie:join`.
+ *
+ * C'est la SEULE notification de Meeshy qui porte une action de LECTURE
+ * (directive porteur 2026-11-08) : « Écouter » ({@link TALKIE_LISTEN_ACTION})
+ * fait jouer la voix par un onglet déjà ouvert SANS le mettre au premier plan
+ * — un worker ne joue pas de son lui-même ; sans onglet, elle ouvre l'app sur
+ * le talkie. Aucune autre notification ne la porte : `sw-push-talkie.test.ts`
+ * en est le témoin. D-11 vaut ici aussi : un onglet visible l'entend déjà.
+ */
+const TALKIE_PUSH_TYPE = 'talkie_incoming';
+const TALKIE_TAG_PREFIX = 'talkie:';
+const TALKIE_LISTEN_ACTION = 'talkie-listen';
+/** JUMEAUX de `TALKIE_PARAM` et `TALKIE_WAKE_MESSAGE` (`src/lib/talkie/talkie-wake-intent.ts`). */
+const TALKIE_PARAM = 'talkie';
+const TALKIE_WAKE_MESSAGE = 'TALKIE_WAKE';
+/** Le libellé d'« Écouter » quand la passerelle n'en sert pas : le worker ne charge aucun catalogue. */
+const TALKIE_LISTEN_LABELS = { fr: 'Écouter', en: 'Listen', es: 'Escuchar', de: 'Anhören', it: 'Ascolta', pt: 'Ouvir', ar: 'استماع' };
+const TALKIE_TALKS_LABELS = { fr: ' vous parle', en: ' is talking to you', es: ' te está hablando', de: ' spricht mit dir', it: ' ti sta parlando', pt: ' está falando com você', ar: ' يتحدث إليك' };
+
+function langueDuNavigateur() {
+  const langue = texte(self.navigator && self.navigator.language).slice(0, 2).toLowerCase();
+  return Object.prototype.hasOwnProperty.call(TALKIE_LISTEN_LABELS, langue) ? langue : 'en';
+}
+
+/**
+ * L'audio porté par le push ne voyage que s'il vient de la PASSERELLE
+ * configurée (`apiBase` posé par la page avec le crédential) : une autre
+ * origine ferait jouer une fausse voix d'urgence et partir une requête
+ * arbitraire. Sans passerelle connue, rien ne voyage (fail-closed).
+ */
+function audioDuTalkie(valeur, apiBase) {
+  try {
+    const passerelle = new URL(texte(apiBase));
+    const audio = new URL(texte(valeur));
+    return audio.protocol === 'https:' && audio.origin === passerelle.origin ? audio.href : '';
+  } catch {
+    return '';
+  }
+}
+
+async function annoncerTalkie(data) {
+  const talkieId = texte(data.talkieId);
+  const nom = texte(data.fromName) || texte(data.senderName);
+  const langue = langueDuNavigateur();
+  const titre = texte(data.title) || (nom === '' ? '' : nom + TALKIE_TALKS_LABELS[langue]);
+  if (talkieId === '' || texte(data.fromUserId) === '' || titre === '') return;
+
+  const ouvertes = await fenetres();
+  if (ouvertes.some((client) => client.visibilityState === 'visible')) return;
+  const stocke = await lireCredential();
+
+  await self.registration.showNotification(titre, {
+    body: texte(data.body),
+    tag: TALKIE_TAG_PREFIX + talkieId,
+    renotify: true,
+    requireInteraction: true,
+    icon: BANNER_ICON,
+    badge: BANNER_BADGE,
+    actions: [{ action: TALKIE_LISTEN_ACTION, title: texte(data.listenLabel) || TALKIE_LISTEN_LABELS[langue] }],
+    data: { type: TALKIE_PUSH_TYPE, talkieId: talkieId, audioUrl: audioDuTalkie(voixDuTalkie(data), stocke && stocke.apiBase) },
+  });
+}
+
+/* Le push de SUIVI (`phase: 'ended'`, même étiquette : il remplace la
+   bannière) porte la voix gardée en pièce jointe, `attachmentUrl` ; le réveil
+   en direct, sa capacité `audioUrl`. Les deux passent la même garde d'origine. */
+function voixDuTalkie(data) {
+  if (data.phase === 'ended') return texte(data.attachmentUrl) || data.audioUrl;
+  return data.audioUrl;
+}
+
+async function ouvrirTalkie(data, action) {
+  const talkieId = texte(data.talkieId);
+  if (talkieId === '') return;
+  const ecouter = action === TALKIE_LISTEN_ACTION;
+  const audioUrl = ecouter ? texte(data.audioUrl) : '';
+  const ouvertes = await fenetres();
+  const client = ouvertes[0];
+  if (client === undefined) {
+    /* L'adresse d'un onglet neuf ne porte QUE la prise de parole : jamais
+       d'audio dans l'URL de la page (un lien forgé ferait jouer une fausse
+       voix). L'onglet rattrape par `talkie:join`. */
+    await self.clients.openWindow(PUSH_ROUTE_PATTERNS.notifications + '?' + TALKIE_PARAM + '=' + encodeURIComponent(talkieId));
+    return;
+  }
+  if (!ecouter) {
+    await Promise.resolve()
+      .then(() => client.focus())
+      .catch(() => undefined);
+  }
+  client.postMessage({ type: TALKIE_WAKE_MESSAGE, talkieId: talkieId, ...(audioUrl !== '' ? { audioUrl: audioUrl } : {}) });
+}
+
+/**
+ * L'APPEL ENTRANT, ONGLET FERMÉ (#8043) — la sonnerie iOS (CallKit) et
+ * Android (plein écran) a son équivalent web : une notification qui RESTE
+ * (`requireInteraction`), avec Répondre et Refuser.
+ *
+ * La passerelle pousse l'appel DATA-ONLY (`call-incoming-push.ts`), titre,
+ * corps et libellés des deux actions déjà localisés à la langue du lecteur :
+ * ce worker ne charge aucun catalogue. D-11 vaut ici aussi — un onglet
+ * visible sonne déjà par le socket, une notification le doublerait.
+ *
+ * Elle porte le tag `call:<id>` : `call_cancel` (l'appelant a raccroché,
+ * personne n'a répondu) et `call_answered_elsewhere` (un autre appareil a
+ * décroché) la RETIRENT. Une sonnerie qui survit à l'appel est un contrôle
+ * qui ment (loi 4).
+ */
+const CALL_PUSH_TYPE = 'call';
+const CALL_CLOSING_TYPES = ['call_cancel', 'call_answered_elsewhere'];
+const CALL_TAG_PREFIX = 'call:';
+const CALL_ANSWER_ACTION = 'answer';
+const CALL_DECLINE_ACTION = 'decline';
+/** JUMEAU de `CALL_ANSWER_PARAM` (`src/lib/calls/call-answer-intent.ts`). */
+const CALL_ANSWER_PARAM = 'repondre';
+
+function estPushDAppel(data) {
+  const type = texte(data.type);
+  return type === CALL_PUSH_TYPE || CALL_CLOSING_TYPES.indexOf(type) >= 0;
+}
+
+async function fermerSonnerie(callId) {
+  if (callId === '') return;
+  try {
+    const affichees = await self.registration.getNotifications({ tag: CALL_TAG_PREFIX + callId });
+    affichees
+      .filter((affichee) => affichee && affichee.tag === CALL_TAG_PREFIX + callId)
+      .forEach((affichee) => affichee.close());
+  } catch {
+    /* Rien à fermer, ou l'API refuse sous cette portée : l'expiration du push
+       (TTL de sonnerie) borne de toute façon ce qui pourrait rester. */
+  }
+}
+
+async function sonner(data) {
+  const callId = texte(data.callId);
+  const conversationId = texte(data.conversationId);
+  const titre = texte(data.title) || texte(data.callerName);
+  if (callId === '' || conversationId === '' || titre === '') return;
+
+  const ouvertes = await fenetres();
+  if (ouvertes.some((client) => client.visibilityState === 'visible')) return;
+
+  const actions = [
+    { action: CALL_ANSWER_ACTION, title: texte(data.answerLabel) },
+    { action: CALL_DECLINE_ACTION, title: texte(data.declineLabel) },
+  ].filter((action) => action.title !== '');
+
+  await self.registration.showNotification(titre, {
+    body: texte(data.body),
+    tag: CALL_TAG_PREFIX + callId,
+    renotify: true,
+    requireInteraction: true,
+    icon: BANNER_ICON,
+    badge: BANNER_BADGE,
+    actions: actions,
+    data: { type: CALL_PUSH_TYPE, callId: callId, conversationId: conversationId },
+  });
+}
+
+async function traiterAppel(data) {
+  if (texte(data.type) === CALL_PUSH_TYPE) {
+    await sonner(data);
+    return;
+  }
+  await fermerSonnerie(texte(data.callId));
+}
+
+/** Refuse sans socket — `DELETE /api/v1/calls/:callId?reason=rejected`, le refus AVANT d'avoir rejoint. */
+async function refuserAppel(callId) {
+  const stocke = await lireCredential();
+  if (stocke === null) return;
+  const entetes = entetesCredential(stocke.credential);
+  if (entetes === null) return;
+  try {
+    await self.fetch(texte(stocke.apiBase) + '/api/v1/calls/' + encodeURIComponent(callId) + '?reason=rejected', {
+      method: 'DELETE',
+      headers: entetes,
+      keepalive: true,
+    });
+  } catch {
+    /* Le refus manqué laisse l'appelant sonner jusqu'à la fin de sa sonnerie :
+       c'est ce que faisait un onglet fermé avant ce lot, jamais pire. */
+  }
+}
+
+/**
+ * Répondre ouvre le fil de l'appel et le fait DÉCROCHER : l'onglet ouvert
+ * reçoit l'identifiant de l'appel, un onglet neuf le lit dans son adresse
+ * (`?repondre=<id>`). Le toucher du corps ouvre seulement le fil, où
+ * `call:check-active` rejoue la sonnerie à la connexion.
+ */
+async function ouvrirAppel(data, action) {
+  const callId = texte(data.callId);
+  if (action === CALL_DECLINE_ACTION) {
+    await refuserAppel(callId);
+    return;
+  }
+  const fil = pushTargetUrl({ conversationId: data.conversationId });
+  const repondre = action === CALL_ANSWER_ACTION;
+  const ouvertes = await fenetres();
+  const client = ouvertes[0];
+  if (client === undefined) {
+    await self.clients.openWindow(repondre ? fil + '?' + CALL_ANSWER_PARAM + '=' + encodeURIComponent(callId) : fil);
+    return;
+  }
+  try {
+    await client.focus();
+  } catch {
+    /* Voir `ouvrir()`. */
+  }
+  client.postMessage({ type: NOTIFICATION_CLICKED_MESSAGE, url: fil, data: data, ...(repondre ? { answerCallId: callId } : {}) });
+}
+
+async function rappeler(data) {
+  const cible = objet(data.callBack);
+  const conversationId = texte(cible.conversationId);
+  if (conversationId === '') {
+    await ouvrir(data);
+    return;
+  }
+  const callBack = {
+    conversationId: conversationId,
+    media: texte(cible.media) === 'video' ? 'video' : 'audio',
+    title: texte(cible.title),
+    isGroup: cible.isGroup === true,
+  };
+  const fil = pushTargetUrl({ conversationId: conversationId });
+  const ouvertes = await fenetres();
+  const client = ouvertes[0];
+  if (client === undefined) {
+    const query = new URLSearchParams();
+    query.set(CALL_BACK_PARAM, callBack.media);
+    if (callBack.title !== '') query.set(CALL_BACK_NAME_PARAM, callBack.title);
+    if (callBack.isGroup) query.set(CALL_BACK_GROUP_PARAM, '1');
+    await self.clients.openWindow(fil + '?' + query.toString());
+    return;
+  }
+  await Promise.resolve()
+    .then(() => client.focus())
+    .catch(() => undefined);
+  client.postMessage({ type: NOTIFICATION_CLICKED_MESSAGE, url: fil, data: data, callBack: callBack });
+}
+
+/**
+ * LES ACTIONS DU CONTENU (#8860). « Ouvrir la carte » n'ouvre QUE Plans (une
+ * `data` altérée ne fait pas de ce worker une redirection ouverte) ;
+ * « Rejoindre » et « Répondre » restent dans l'application — un onglet NEUF
+ * lit l'intention d'écrire dans son adresse (`?ecrire=1`), un onglet OUVERT la
+ * reçoit à côté du fil (`compose`, `composer-focus-intent.ts`).
+ */
+async function agirSurContenu(data, action) {
+  if (action === OPEN_MAP_ACTION) {
+    const carte = texte(data.mapUrl);
+    if (carte.indexOf(MAPS_ORIGIN) === 0) {
+      await self.clients.openWindow(carte);
+      return;
+    }
+    await ouvrir(data);
+    return;
+  }
+  if (action === JOIN_ACTION) {
+    const chemin = texte(data.invitePath);
+    await ouvrir(data, /^\/chat\/[A-Za-z0-9_-]{1,100}$/.test(chemin) ? chemin : undefined);
+    return;
+  }
+  const fil = pushTargetUrl({ conversationId: data.conversationId });
+  const ouvertes = await fenetres();
+  const client = ouvertes[0];
+  if (client === undefined) {
+    await self.clients.openWindow(fil + '?' + COMPOSE_PARAM + '=1');
+    return;
+  }
+  await Promise.resolve()
+    .then(() => client.focus())
+    .catch(() => undefined);
+  client.postMessage({ type: NOTIFICATION_CLICKED_MESSAGE, url: fil, data: data, compose: true });
+}
+
+async function ouvrir(data, adresse) {
+  const url = adresse === undefined ? pushTargetUrl(data) : adresse;
+  const ouvertes = await fenetres();
+  const client = ouvertes[0];
+  if (client === undefined) {
+    await self.clients.openWindow(url);
+    return;
+  }
+  try {
+    await client.focus();
+  } catch {
+    /* Un client qui refuse le focus reçoit quand même l'adresse : la
+       navigation, elle, aboutit. */
+  }
+  client.postMessage({ type: NOTIFICATION_CLICKED_MESSAGE, url: url, data: data });
+}
+
+/**
+ * L'ENTONNOIR DES NOTIFICATIONS (#10507) — reçue, affichée, ouverte, écartée.
+ * Le worker n'a ni session ni file d'envoi : il ÉCRIT l'événement dans
+ * IndexedDB (`meeshy-telemetry` / `outbox` / `notification-events`, JUMEAU de
+ * `src/lib/notifications/notification-telemetry.ts`), et la page le verse
+ * dans la file v2 à son prochain chargement. Borné à 100 événements ; rien
+ * d'autre que l'identifiant de la notification, son type et le contenu visé
+ * — jamais un titre ni un corps.
+ */
+const TELEMETRIE_DB_NAME = 'meeshy-telemetry';
+const TELEMETRIE_DB_VERSION = 1;
+const TELEMETRIE_STORE_NAME = 'outbox';
+const TELEMETRIE_KEY = 'notification-events';
+const TELEMETRIE_CAP = 100;
+const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
+const CODE_TECHNIQUE = /^[A-Za-z0-9_.:-]{1,64}$/;
+
+let fileTelemetrie = Promise.resolve();
+
+function identifiantEvenement() {
+  if (self.crypto && typeof self.crypto.randomUUID === 'function') return self.crypto.randomUUID();
+  const hex = (n) => Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+  return hex(8) + '-' + hex(4) + '-4' + hex(3) + '-' + (8 + Math.floor(Math.random() * 4)).toString(16) + hex(3) + '-' + hex(12);
+}
+
+function ouvrirTelemetrie() {
+  return new Promise((resolve) => {
+    if (typeof self.indexedDB === 'undefined') { resolve(null); return; }
+    let requete;
+    try {
+      requete = self.indexedDB.open(TELEMETRIE_DB_NAME, TELEMETRIE_DB_VERSION);
+    } catch {
+      resolve(null);
+      return;
+    }
+    requete.onupgradeneeded = () => {
+      const db = requete.result;
+      if (!db.objectStoreNames.contains(TELEMETRIE_STORE_NAME)) db.createObjectStore(TELEMETRIE_STORE_NAME);
+    };
+    requete.onerror = () => resolve(null);
+    requete.onsuccess = () => resolve(requete.result.objectStoreNames.contains(TELEMETRIE_STORE_NAME) ? requete.result : null);
+  });
+}
+
+function lireEtEcrire(db, transformer) {
+  return new Promise((resolve) => {
+    try {
+      const magasin = db.transaction(TELEMETRIE_STORE_NAME, 'readwrite').objectStore(TELEMETRIE_STORE_NAME);
+      const lecture = magasin.get(TELEMETRIE_KEY);
+      lecture.onsuccess = () => {
+        const avant = Array.isArray(lecture.result) ? lecture.result : [];
+        const ecriture = magasin.put(transformer(avant), TELEMETRIE_KEY);
+        ecriture.onsuccess = () => resolve();
+        ecriture.onerror = () => resolve();
+      };
+      lecture.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+function evenementDeNotification(data, action) {
+  const id = texte(data.notificationId);
+  if (!OBJECT_ID.test(id)) return null;
+  const postId = texte(data.postId);
+  const type = texte(data.type);
+  return {
+    type: 'notification',
+    action: action,
+    eventId: identifiantEvenement(),
+    occurredAt: new Date().toISOString(),
+    target: { kind: 'notification', id: id, ...(OBJECT_ID.test(postId) ? { parent: { kind: 'post', id: postId } } : {}) },
+    surface: 'notifications',
+    channel: 'webpush',
+    ...(CODE_TECHNIQUE.test(type) ? { notificationType: type } : {}),
+  };
+}
+
+/** Best-effort, sérialisé : un échec d'IndexedDB ne touche jamais la bannière. */
+function noterNotification(data, actions) {
+  const evenements = actions.map((action) => evenementDeNotification(data, action)).filter((e) => e !== null);
+  if (evenements.length === 0) return Promise.resolve();
+  fileTelemetrie = fileTelemetrie
+    .then(() => ouvrirTelemetrie())
+    .then((db) => {
+      if (db === null) return undefined;
+      return lireEtEcrire(db, (avant) => avant.concat(evenements).slice(-TELEMETRIE_CAP)).then(() => db.close());
+    })
+    .catch(() => undefined);
+  return fileTelemetrie;
+}
+
+async function noterReception(payload) {
+  if (payload === null) return;
+  const data = objet(payload.data);
+  const affichee = await banniereAffichee(texte(data.notificationId)).catch(() => null);
+  await noterNotification(data, affichee === null ? ['received'] : ['received', 'displayed']);
+}
+
+self.addEventListener('push', (evenement) => {
+  const payload = charge(evenement);
+  evenement.waitUntil(Promise.resolve(afficher(payload)).finally(() => noterReception(payload)));
+});
+
+self.addEventListener('notificationclose', (evenement) => {
+  evenement.waitUntil(noterNotification(objet(evenement.notification.data), ['dismissed']));
+});
+
+self.addEventListener('notificationclick', (evenement) => {
+  evenement.notification.close();
+  const data = objet(evenement.notification.data);
+  const action = texte(evenement.action);
+  const ouverture = noterNotification(data, ['opened']);
+  evenement.waitUntil(
+    Promise.all([
+      ouverture,
+      texte(data.type) === TALKIE_PUSH_TYPE
+        ? ouvrirTalkie(data, action)
+        : texte(data.type) === CALL_PUSH_TYPE
+        ? ouvrirAppel(data, action)
+        : action === CALL_BACK_ACTION
+          ? rappeler(data)
+          : action === OPEN_MAP_ACTION || action === JOIN_ACTION || (action === REPLY_ACTION && texte(data.conversationId) !== '')
+            ? agirSurContenu(data, action)
+            : ouvrir(data),
+    ]),
+  );
+});
+
+/**
+ * CE QUE LE GATE INTERROGE. Un jumeau qu'on ne peut pas EXÉCUTER ne se garde
+ * qu'à la lecture — et une lecture ne dit pas dans quel ORDRE les règles
+ * décident. `scripts/check-push-target-parity.mjs` monte donc ce fichier et
+ * fait décider sa table, comme `check-sw-api-cache.mjs` fait décider le
+ * matcher du seau `api` extrait de `dist/sw.js`.
+ */
+self.meeshyPushTarget = {
+  PUSH_ROUTE_PATTERNS: PUSH_ROUTE_PATTERNS,
+  DISCOVER_TAB_PARAM: DISCOVER_TAB_PARAM,
+  REQUEST_FILTER_PARAM: REQUEST_FILTER_PARAM,
+  EPHEMERAL_ENTITIES: EPHEMERAL_ENTITIES,
+  EPHEMERAL_ONLY_TYPES: EPHEMERAL_ONLY_TYPES,
+  MOOD_TYPES: MOOD_TYPES,
+  REQUEST_TYPES: REQUEST_TYPES,
+  PROFILE_TYPES: PROFILE_TYPES,
+  MISSED_CALL_TYPES: MISSED_CALL_TYPES,
+  GAME_LEAGUE_TYPES: GAME_LEAGUE_TYPES,
+  GAME_SEASON_TYPES: GAME_SEASON_TYPES,
+  GAME_PHOTO_TYPES: GAME_PHOTO_TYPES,
+  GAME_MISSION_TYPES: GAME_MISSION_TYPES,
+  PROGRESSION_TYPES: PROGRESSION_TYPES,
+  PROGRESSION_TYPE_SECTIONS: PROGRESSION_TYPE_SECTIONS,
+  SECURITY_TYPES: SECURITY_TYPES,
+  HINTED_ROUTES: HINTED_ROUTES,
+  NOTIFICATION_CLICKED_MESSAGE: NOTIFICATION_CLICKED_MESSAGE,
+  resolvePushTarget: resolvePushTarget,
+  pushTargetUrl: pushTargetUrl,
+};

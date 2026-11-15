@@ -56,6 +56,7 @@ jest.mock('../../../middleware/rate-limiter', () => ({
 }));
 
 jest.mock('../../../utils/withMutationLog', () => ({
+  ...(jest.requireActual('../../../utils/withMutationLog') as object),
   withMutationLog: jest.fn().mockImplementation(({ op }: any) => op()),
 }));
 
@@ -79,14 +80,19 @@ const prismaCommentFindUnique = jest.fn<() => Promise<unknown>>();
  */
 const PUBLIC_ACL = { authorId: 'user-bob', visibility: 'PUBLIC', visibilityUserIds: [] };
 
+/** ObjectId Mongo valide (24 hex) — l'id d'URL, désormais gardé par `isValidObjectId`
+ *  avant d'atteindre Prisma (`resolveInteractionTarget`, #6557). */
+const POST_ID = '507f191e810c19729de860ea';
+
 const prisma = {
+  user: { findFirst: jest.fn<() => Promise<unknown>>().mockResolvedValue(null) },
   post: {
     findUnique: prismaPostFindUnique,
     findFirst: jest.fn<() => Promise<unknown>>().mockResolvedValue(PUBLIC_ACL),
   },
   postComment: {
     findUnique: prismaCommentFindUnique,
-    findFirst: jest.fn<() => Promise<unknown>>().mockResolvedValue({ postId: 'post-1', post: PUBLIC_ACL }),
+    findFirst: jest.fn<() => Promise<unknown>>().mockResolvedValue({ postId: POST_ID, post: PUBLIC_ACL }),
   },
 } as unknown as PrismaClient;
 
@@ -157,7 +163,7 @@ describe('comment notifications — user_mentioned wins over comment_reply/post_
 
     const resp = await app.inject({
       method: 'POST',
-      url: '/posts/post-1/comments',
+      url: `/posts/${POST_ID}/comments`,
       body: { content: '@bob bravo', parentId: 'parent-1' },
     });
 
@@ -175,7 +181,7 @@ describe('comment notifications — user_mentioned wins over comment_reply/post_
 
     const resp = await app.inject({
       method: 'POST',
-      url: '/posts/post-1/comments',
+      url: `/posts/${POST_ID}/comments`,
       body: { content: '@carol bravo', parentId: 'parent-1' },
     });
 
@@ -192,7 +198,7 @@ describe('comment notifications — user_mentioned wins over comment_reply/post_
 
     const resp = await app.inject({
       method: 'POST',
-      url: '/posts/post-1/comments',
+      url: `/posts/${POST_ID}/comments`,
       body: { content: 'bravo', parentId: 'parent-1' },
     });
 
@@ -209,13 +215,56 @@ describe('comment notifications — user_mentioned wins over comment_reply/post_
 
     const resp = await app.inject({
       method: 'POST',
-      url: '/posts/post-1/comments',
+      url: `/posts/${POST_ID}/comments`,
       body: { content: '@bob bravo' },
     });
 
     expect(resp.statusCode).toBe(201);
     expect(notif.createCommentMentionNotificationsBatch).toHaveBeenCalledTimes(1);
     expect(notif.createPostCommentNotification).not.toHaveBeenCalled();
+  });
+
+  // #14168 — la mention ne prévient qu'un lien du commentateur, SAUF ceux que ce
+  // commentaire prévient déjà : la route doit les nommer, sans quoi un parent
+  // nommé sans lien perdrait la mention ET `comment_reply`.
+  it('nomme au lot de mention l’auteur du commentaire parent d’une réponse (#14168)', async () => {
+    mockAddComment.mockResolvedValue({ id: 'reply-9', content: '@bob bravo', originalLanguage: 'fr' });
+    prismaPostFindUnique.mockResolvedValue(post('STORY', 'story-owner'));
+    prismaCommentFindUnique.mockResolvedValue({ authorId: 'user-bob', content: 'parent text' });
+    mockExtractMentions.mockReturnValue(['bob']);
+    mockResolveUsernames.mockResolvedValue(new Map([['bob', { id: 'user-bob' }]]));
+
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, body: { content: '@bob bravo', parentId: 'parent-1' } });
+
+    expect(notif.createCommentMentionNotificationsBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ directlyAddressedUserIds: ['user-bob'] })
+    );
+  });
+
+  it('nomme au lot de mention l’auteur du post pour un commentaire de premier niveau (#14168)', async () => {
+    mockAddComment.mockResolvedValue({ id: 'top-9', content: '@bob bravo', originalLanguage: 'fr' });
+    prismaPostFindUnique.mockResolvedValue(post('POST', 'user-bob'));
+    mockExtractMentions.mockReturnValue(['bob']);
+    mockResolveUsernames.mockResolvedValue(new Map([['bob', { id: 'user-bob' }]]));
+
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, body: { content: '@bob bravo' } });
+
+    expect(notif.createCommentMentionNotificationsBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ directlyAddressedUserIds: ['user-bob'] })
+    );
+  });
+
+  it('passe les nommés au lot des stories en `mentionedUserIds`, jamais en exclusion inconditionnelle (#14168)', async () => {
+    mockAddComment.mockResolvedValue({ id: 'top-10', content: '@carol bravo', originalLanguage: 'fr' });
+    prismaPostFindUnique.mockResolvedValue(post('STORY', 'story-owner'));
+    mockExtractMentions.mockReturnValue(['carol']);
+    mockResolveUsernames.mockResolvedValue(new Map([['carol', { id: 'user-carol' }]]));
+
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, body: { content: '@carol bravo' } });
+
+    const [params] = notif.createStoryCommentNotificationsBatch.mock.calls[0] as unknown as [Record<string, unknown>];
+    expect(params.mentionedUserIds).toEqual(['user-carol']);
+    expect(params.excludeUserIds).toBeUndefined();
   });
 
   // Un commentaire n'a pas d'audience propre : il hérite de celle du POST. Le
@@ -233,7 +282,7 @@ describe('comment notifications — user_mentioned wins over comment_reply/post_
 
     const resp = await app.inject({
       method: 'POST',
-      url: '/posts/post-1/comments',
+      url: `/posts/${POST_ID}/comments`,
       body: { content: '@carol bravo' },
     });
 
@@ -257,7 +306,7 @@ describe('comment notifications — user_mentioned wins over comment_reply/post_
 
     const resp = await app.inject({
       method: 'POST',
-      url: '/posts/post-1/comments',
+      url: `/posts/${POST_ID}/comments`,
       body: { content: '@carol bravo' },
     });
 

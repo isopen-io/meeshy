@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "audio.fullscreen.dial",
+          "status": "adopted"
+        },
+        {
+          "androidName": "audio_fullscreen_dial_value",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

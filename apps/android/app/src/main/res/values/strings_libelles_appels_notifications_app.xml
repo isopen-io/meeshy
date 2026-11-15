@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="a11y_floating_menu_unread">
+        <item quantity="one">%1$d pending notification</item>
+        <item quantity="other">%1$d pending notifications</item>
+    </plurals>
+</resources>

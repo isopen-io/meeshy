@@ -148,6 +148,8 @@ class CallHistoryViewModelTest {
     @Test
     fun `isFilteredEmpty is true when the missed filter matches nothing`() = runTest {
         freshStream(record("a", "incoming"), record("b", "outgoing"))
+        coEvery { repository.fetchPage(any(), any(), any()) } returns
+            NetworkResult.Success(CallHistoryPage(emptyList(), nextCursor = null, hasMore = false))
 
         val vm = viewModel()
         vm.setMissedOnly(true)
@@ -274,5 +276,59 @@ class CallHistoryViewModelTest {
 
         assertThat(vm.state.value.errorMessage).isEqualTo("boom")
         assertThat(vm.state.value.isUserRefreshing).isFalse()
+    }
+
+    @Test
+    fun `the missed filter pages on by itself until it finds the older missed calls`() = runTest {
+        freshStream(record("a", "incoming"), record("b", "outgoing"))
+        coEvery { repository.fetchPage(null, any(), any()) } returns
+            NetworkResult.Success(CallHistoryPage(listOf(record("c", "incoming")), nextCursor = "cur2", hasMore = true))
+        coEvery { repository.fetchPage("cur2", any(), any()) } returns
+            NetworkResult.Success(CallHistoryPage(listOf(record("d", "missed")), nextCursor = null, hasMore = false))
+
+        val vm = viewModel()
+        vm.setMissedOnly(true)
+
+        assertThat(vm.state.value.records.map { it.callId }).containsExactly("d")
+        assertThat(vm.state.value.hasMore).isFalse()
+    }
+
+    @Test
+    fun `the missed filter stops paging on a failure and surfaces it`() = runTest {
+        freshStream(record("a", "incoming"))
+        coEvery { repository.fetchPage(any(), any(), any()) } returns NetworkResult.Failure(ApiError(message = "offline"))
+
+        val vm = viewModel()
+        vm.setMissedOnly(true)
+
+        assertThat(vm.state.value.errorMessage).isEqualTo("offline")
+        coVerify(exactly = 1) { repository.fetchPage(any(), any(), any()) }
+    }
+
+    @Test
+    fun `retry on an empty journal revalidates the head`() = runTest {
+        streamOf { CacheResult.Empty }
+        coEvery { repository.refresh() } returns Unit
+
+        val vm = viewModel()
+        vm.retry()
+
+        coVerify(exactly = 1) { repository.refresh() }
+    }
+
+    @Test
+    fun `retry after a failed older page fetches that page again`() = runTest {
+        freshStream(record("a"), record("b"), record("c"))
+        coEvery { repository.fetchPage(any(), any(), any()) } returnsMany listOf(
+            NetworkResult.Failure(ApiError(message = "offline")),
+            NetworkResult.Success(CallHistoryPage(listOf(record("d")), nextCursor = null, hasMore = false)),
+        )
+
+        val vm = viewModel()
+        vm.loadMoreIfNeeded("c")
+        vm.retry()
+
+        assertThat(vm.state.value.errorMessage).isNull()
+        assertThat(vm.state.value.records.map { it.callId }).containsExactly("a", "b", "c", "d").inOrder()
     }
 }

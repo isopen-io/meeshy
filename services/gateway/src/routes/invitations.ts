@@ -1,22 +1,30 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { logError } from '../utils/logger';
+import { logError, logWarn } from '../utils/logger';
 import { sendSuccess, sendBadRequest, sendNotFound, sendConflict, sendInternalError } from '../utils/response.js';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
+import { createInvitationRateLimitConfig } from '../middleware/rate-limit';
+import { requireEmailVerification } from '../middleware/auth';
+import { generateUniqueAffiliateToken } from './affiliate';
+import { EngagementService } from '../services/engagement/EngagementService';
 
 const sendEmailInvitationSchema = z.object({
   email: z.email(),
 });
 
+/**
+ * Nom générique du jeton d'affiliation créé pour une invitation par e-mail
+ * (#3691). Jamais l'adresse du destinataire : `AffiliateToken.name` est rendu
+ * PUBLIQUEMENT par `GET /affiliate/validate/:token`, et quiconque reçoit ou
+ * relaie le lien ne doit pas y lire l'adresse d'un tiers.
+ */
+const EMAIL_INVITATION_TOKEN_NAME = 'Invitation par e-mail';
+
 export async function invitationRoutes(fastify: FastifyInstance) {
   fastify.post('/invitations/email', {
-    onRequest: [fastify.authenticate],
-    config: {
-      rateLimit: {
-        max: 10,
-        timeWindow: '1 hour',
-      },
-    },
+    // #6437 — inviter sort du compte vers quelqu'un qui n'est pas encore sur Meeshy.
+    onRequest: [fastify.authenticate, requireEmailVerification],
+    config: { rateLimit: createInvitationRateLimitConfig() },
     schema: {
       description: 'Send an email invitation to join Meeshy',
       tags: ['invitations'],
@@ -46,6 +54,33 @@ export async function invitationRoutes(fastify: FastifyInstance) {
       }
 
       const senderName = user.displayName ?? user.username;
+
+      // Relation d'invitation PERSISTÉE (#3691) : un jeton d'affiliation dédié
+      // à cette invitation (usage unique) réutilise la page d'atterrissage et
+      // le pipeline d'attribution existants (`/signup/affiliate/:token` →
+      // `POST /affiliate/register`) plutôt que d'en bâtir un second — le lien
+      // envoyé est donc TRACÉ (jeton unique par invitation) et mène à une page
+      // qui EXISTE, au lieu du `/download` mort.
+      const token = await generateUniqueAffiliateToken(fastify.prisma);
+      const affiliateToken = await fastify.prisma.affiliateToken.create({
+        data: {
+          token,
+          name: EMAIL_INVITATION_TOKEN_NAME,
+          createdBy: userId,
+          maxUses: 1,
+        },
+      });
+      await fastify.prisma.emailInvitation.create({
+        data: {
+          senderId: userId,
+          email,
+          affiliateTokenId: affiliateToken.id,
+        },
+      });
+
+      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3100';
+      const invitationUrl = `${baseUrl}/signup/affiliate/${token}`;
+
       const emailService = (fastify as unknown as { emailService?: { sendInvitationEmail: (data: InvitationEmailData) => Promise<unknown> } }).emailService;
 
       if (emailService) {
@@ -53,14 +88,19 @@ export async function invitationRoutes(fastify: FastifyInstance) {
           to: email,
           senderName,
           senderAvatar: user.avatar,
-          downloadUrl: 'https://meeshy.me/download',
+          downloadUrl: invitationUrl,
           language: recipientLanguage(user, 'fr'),
         });
+        // `social.email_invite` (#8959) — seulement quand l'e-mail est PARTI :
+        // une invitation restée en base sans envoi n'a invité personne.
+        new EngagementService(fastify.prisma)
+          .recordActivity(userId, 'social.email_invite')
+          .catch((error: unknown) => logWarn(fastify.log, 'engagement social.email_invite failed', error));
       } else {
-        fastify.log.warn('EmailService not available, invitation not sent');
+        logWarn(fastify.log, 'EmailService not available, invitation not sent');
       }
 
-      return sendSuccess(reply, { email, sentAt: new Date().toISOString() }, { statusCode: 201 });
+      return sendSuccess(reply, { email, sentAt: new Date().toISOString(), invitationUrl }, { statusCode: 201 });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return sendBadRequest(reply, 'Adresse email invalide', { code: 'VALIDATION_ERROR' });

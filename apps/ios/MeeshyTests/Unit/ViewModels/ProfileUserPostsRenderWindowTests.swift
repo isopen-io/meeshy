@@ -144,7 +144,7 @@ final class ProfileUserPostsRenderWindowTests: XCTestCase {
             .deletingLastPathComponent()   // …/apps
             .deletingLastPathComponent()   // racine
         let code = AppSourceGuard.stripComments(try String(
-            contentsOf: root.appendingPathComponent("apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift"),
+            contentsOf: root.appendingPathComponent("apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift"),
             encoding: .utf8))
 
         guard let flush = code.range(of: "flushImpressions()"),

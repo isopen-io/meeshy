@@ -3,6 +3,54 @@ import MeeshySDK
 import MeeshyUI
 
 extension BubbleContent {
+    /// Le texte d'un message et ce que son PREMIER lien porte (aperçu, façade
+    /// vidéo, carte de conversation) — résolus une seule fois. Partagé par la
+    /// bulle et la Rivière (#8139) : deux résolutions de la carte finiraient
+    /// par diverger au premier format de lien ajouté.
+    ///
+    /// `authorIsAnonymous` (#10286) — un invité sans compte n'émet AUCUN lien :
+    /// ni aperçu, ni carte de conversation, ni lecteur intégré, ni lien suivi ;
+    /// son adresse se lit telle qu'écrite.
+    static func text(
+        raw: String,
+        trackedLinks: [String: String],
+        isEmojiOnly: Bool = false,
+        emojiFontSize: CGFloat? = nil,
+        authorIsAnonymous: Bool = false
+    ) -> Text {
+        if authorIsAnonymous {
+            return Text(
+                raw: raw,
+                isEmojiOnly: isEmojiOnly,
+                emojiFontSize: emojiFontSize,
+                firstLinkURL: nil,
+                embeddedVideo: nil,
+                trackedLinks: [:],
+                embedTrackedURL: nil,
+                conversationCardTarget: nil,
+                linksAreInert: true
+            )
+        }
+        // Précalcul unique du lien (NSDataDetector) — réutilisé par
+        // `hasBubbleBodyContent` et le rendu du link preview sans re-scan.
+        let firstLinkURL = LinkPreviewFetcher.firstURL(in: raw)
+        // Outbound-link tracking: resolve the embed façade destination ONCE here
+        // (firstLinkURL → token → /l/<token>) so the leaf views stay primitive.
+        let embedTrackedURL: URL? = firstLinkURL
+            .flatMap { trackedLinks[$0] }
+            .flatMap { TrackedLink.redirectURL(token: $0) }
+        return Text(
+            raw: raw,
+            isEmojiOnly: isEmojiOnly,
+            emojiFontSize: emojiFontSize,
+            firstLinkURL: firstLinkURL,
+            embeddedVideo: firstLinkURL.flatMap { EmbeddableVideoResolver.resolve(urlString: $0) },
+            trackedLinks: trackedLinks,
+            embedTrackedURL: embedTrackedURL,
+            conversationCardTarget: firstLinkURL.flatMap { ConversationLinkTarget.target(for: $0) }
+        )
+    }
+
     /// Construit le BubbleContent depuis un Message + son contexte de traduction.
     /// Centralise toute la logique aujourd'hui inline dans ThemedMessageBubble :
     /// effectiveContent, currentDisplayLangCode, hasAnyTranslation, isEmojiOnly,
@@ -21,30 +69,44 @@ extension BubbleContent {
         // `preferredLangCode` quand le message n'a AUCUNE traduction texte :
         // sans lui, le drapeau-toggle d'un vocal traduit restait inerte
         // (`preferredLangCode` nil ⇒ tap sans effet) et affichait la
-        // mauvaise face (user 2026-08-18 : le drapeau doit switcher l'audio).
+        // mauvaise face.
         preferredAudioLangCode: String? = nil,
         currentUserId: String,
         timeString: String? = nil,
         isEditSaving: Bool = false,
         hasEditHistory: Bool = false,
         recipientCount: Int = 1,
-        // 4th axis of the Prisme étendu (2026-05-26) — device locale, gated
+        // 4th axis of the Prisme étendu — device locale, gated
         // identically to `regional`/`custom` in `buildAvailableFlags` (only
         // surfaced when a translation actually exists for it). Default `nil`
         // keeps every existing call site (none of which pass this yet)
         // unchanged. See CLAUDE.md "Prisme Linguistique" for resolution order.
         deviceLocale: String? = nil
     ) {
+        // #7618 — **une vue unique non ouverte n'entre pas dans le modèle.**
+        // Le sceau retire texte, pièces, sticker et lieu, et les traductions
+        // qui les disent : aucune sous-vue, aucun libellé accessible, aucun
+        // chargeur de média ne peut plus rendre ce que ce modèle ne porte pas.
+        // #7579 — une vue unique DÉJÀ OUVERTE non plus : son contenu est purgé.
+        let isSealed = message.isViewOnceSealed
+        let withholdsContent = isSealed || message.isViewOnceOpened
+        // #8009 — ce que le toucher de la puce ouvrira, lu AVANT le sceau.
+        self.viewOnceOpensFullscreen = isSealed && message.openableViewOnceMedia != nil
+        let message = message.sealedForDisplay
+        let translations = withholdsContent ? [] : translations
+        let preferredTranslation = withholdsContent ? nil : preferredTranslation
+        let translatedAudios = withholdsContent ? [] : translatedAudios
+        let preferredAudioLangCode = withholdsContent ? nil : preferredAudioLangCode
+
         self.messageId = message.id
+        self.contactCardScope = ContactCardResolutionScope.of(message: message)
         self.isMe = message.isMe
         self.senderName = message.senderName
-
         // --- Kind ---
-        // Note: `.burned` does NOT exclude `isMe`. The sender also sees the
-        // "Vu et efface" state once their view-once message has been consumed,
-        // matching the legacy `ThemedMessageBubble.isViewOnceBurned` semantics
-        // (the wrapper additionally gates on `blurController.isRevealed`,
-        // which is a runtime concern handled in the wrapper, not in BubbleContent).
+        // Une vue unique se consomme PAR PERSONNE (#7579) : l'état « déjà
+        // ouvert » vient de la colonne locale de CE lecteur
+        // (`viewOnceOpenedAt`), auteur compris — jamais du compteur global
+        // `viewOnceCount`, que l'ouverture d'un autre fait monter.
         // System messages (call summaries: "Appel vidéo · 04:32", "Appel
         // refusé", …) render as a centered notice, never as a chat bubble.
         // Checked first so a system message is never mistaken for a deleted /
@@ -53,8 +115,10 @@ extension BubbleContent {
             self.kind = .system
         } else if message.isDeleted {
             self.kind = .deleted
-        } else if message.isViewOnce && message.viewOnceCount > 0 {
-            self.kind = .burned
+        } else if message.isViewOnceOpened {
+            self.kind = .viewOnceOpened
+        } else if isSealed {
+            self.kind = .viewOnceSealed
         } else {
             self.kind = .standard
         }
@@ -65,22 +129,7 @@ extension BubbleContent {
             ?? message.cachedTimeString
             ?? MessageRecord.computeTimeString(for: message.createdAt)
 
-        // --- Call notice (rich call-summary system message) ---
-        // When a system message carries structured call metadata, resolve the
-        // per-viewer direction now (outgoing iff the current user initiated) so
-        // the leaf view stays primitive. Absent metadata (legacy summaries) →
-        // nil, and the `.system` path falls back to the plain centered notice.
-        if message.messageSource == .system, let summary = message.callSummary {
-            self.callNotice = CallNotice(
-                summary: summary,
-                isOutgoing: summary.isOutgoing(currentUserId: currentUserId),
-                fallbackText: message.content,
-                timeString: resolvedTimeString,
-                timestamp: message.createdAt
-            )
-        } else {
-            self.callNotice = nil
-        }
+        self.callNotice = Self.resolveCallNotice(message: message, currentUserId: currentUserId, timeString: resolvedTimeString)
 
         // --- Avis d'arrivée ---
         // Une arrivée n'est PAS une prise de parole : sans branche dédiée elle
@@ -105,11 +154,15 @@ extension BubbleContent {
         }
 
         // --- Text + emoji ---
-        let activeLang = activeDisplayLangCode
-            ?? preferredTranslation?.targetLanguage
-            ?? preferredAudioLangCode
-            ?? message.originalLanguage
-        let effective = Self.resolveEffectiveContent(
+        let activeLang = Self.activeLanguage(
+            of: message, preferredTranslation: preferredTranslation,
+            activeDisplayLangCode: activeDisplayLangCode, preferredAudioLangCode: preferredAudioLangCode
+        )
+        // #9617 — l'avis de capture se compose CHEZ LE LECTEUR (langue
+        // d'interface, fuseau) ; son `content` n'est que le repli français.
+        // #7759 — la ligne d'arrivées de Meeshy Global, de même.
+        let effective = Self.systemNoticeText(for: message)
+            ?? Self.resolveEffectiveContent(
             message: message,
             translations: translations,
             preferredTranslation: preferredTranslation,
@@ -125,38 +178,16 @@ extension BubbleContent {
         // emoji-only. `BubbleStandardLayout` branches on `content.reply` —
         // no reply → free-floating large emoji (no bubble); reply → emoji
         // hosted in the bubble above the quoted-reply card, large & centered.
-        let emojiResult: EmojiDetector.EmojiOnlyResult = {
-            // `message.location` compte comme une pièce jointe pour cette
-            // détection : un emoji accompagné d'un lieu doit rendre la bulle
-            // (qui héberge LocationMessageView), pas l'emoji libre hors bulle —
-            // même sémantique qu'avec l'ancienne pièce jointe `.location`.
-            guard !message.content.isEmpty,
-                  message.attachments.isEmpty,
-                  message.location == nil else {
-                return .notEmojiOnly
-            }
-            return EmojiDetector.analyze(message.content)
-        }()
+        let emojiResult = Self.emojiOnlyResult(of: message)
         let isEmojiOnly = emojiResult != .notEmojiOnly
-        let firstLinkURL = LinkPreviewFetcher.firstURL(in: effective)
-        // Outbound-link tracking: resolve the embed façade destination ONCE here
-        // (firstLinkURL → token → /l/<token>) so the leaf views stay primitive.
-        let embedTrackedURL: URL? = firstLinkURL
-            .flatMap { message.trackedLinkMap[$0] }
-            .flatMap { URL(string: "https://meeshy.me/l/\($0)") }
-        self.text = effective.isEmpty ? nil : Text(
+        self.text = effective.isEmpty ? nil : Self.text(
             raw: effective,
+            trackedLinks: message.trackedLinkMap,
             isEmojiOnly: isEmojiOnly,
             emojiFontSize: emojiResult.fontSize,
-            // Précalcul unique du lien (NSDataDetector) — réutilisé par
-            // `hasBubbleBodyContent` et le rendu du link preview sans re-scan.
-            firstLinkURL: firstLinkURL,
-            // Résolution embed vidéo (YouTube) au même endroit, une seule fois.
-            embeddedVideo: firstLinkURL.flatMap { EmbeddableVideoResolver.resolve(urlString: $0) },
-            trackedLinks: message.trackedLinkMap,
-            embedTrackedURL: embedTrackedURL
+            authorIsAnonymous: message.senderIsAnonymous || !message.senderHasAccount
         )
-
+        self.arrivalsInvite = ArrivalGreeting.invite(for: message, noticeText: effective)
         // --- Translation panel ---
         let hasAny = !translations.isEmpty || !translatedAudios.isEmpty
         if hasAny && !isEmojiOnly {
@@ -191,7 +222,7 @@ extension BubbleContent {
 
         // --- Reply ---
         if let replyRef = message.replyTo {
-            self.reply = Reply(reference: replyRef, isStory: replyRef.isStoryReply)
+            self.reply = Reply(reference: QuotedReplyPresentation.displayed(replyRef), isStory: replyRef.isStoryReply)
         } else {
             self.reply = nil
         }
@@ -205,8 +236,22 @@ extension BubbleContent {
         // reste donc en place pour elles (filtre `nonMedia` ci-dessous).
         self.location = message.location
 
+        // --- Sticker (#4823) ---
+        // Un message-sticker arrive avec `content == ""`, UNE pièce jointe
+        // image (le PNG rendu, repli des lecteurs qui ne dessinent pas le
+        // gabarit) et `message.sticker`. Le PNG est rattaché au sticker et
+        // RETIRÉ de la grille visuelle : sans cette exclusion, la bulle
+        // rendrait le sticker natif ET, dessous, son propre repli en photo.
+        // Un sticker sans rien à peindre vaut absent et laisse la
+        // pièce jointe à la grille — mieux vaut la photo qu'un vide.
+        let sticker = Self.resolveSticker(message.sticker, attachments: message.attachments)
+        self.sticker = sticker
+        let stickerPictureId = sticker?.picture?.attachmentId
+
         // --- Attachments ---
-        let visual = message.attachments.filter { $0.type == .image || $0.type == .video }
+        let visual = message.attachments.filter {
+            ($0.type == .image || $0.type == .video) && $0.id != stickerPictureId
+        }
         let audio = message.attachments.filter { $0.type == .audio }
         // Exclusivité du rendu de lieu : quand `message.location` est présent,
         // une éventuelle pièce jointe `.location` (doublon hérité du cache)
@@ -219,7 +264,7 @@ extension BubbleContent {
         // mixing two-or-more categories falls into `.mixed` which carries audio
         // alongside visual/nonMedia so legacy "image + audio + file" rendering
         // is preserved. `audio` carries ALL audio tracks of the message: one
-        // renders as the existing widget, several as `AudioCarouselView`.
+        // renders as the existing widget, several as `AudioStackView`.
         switch (visual.isEmpty, audio.isEmpty, nonMedia.isEmpty) {
         case (true, true, true):
             self.attachments = .none
@@ -233,34 +278,52 @@ extension BubbleContent {
             self.attachments = .mixed(visual: visual, audio: audio, nonMedia: nonMedia)
         }
 
-        // --- Ephemeral ---
-        if let exp = message.expiresAt, exp.timeIntervalSinceNow > 0 {
-            self.ephemeral = Ephemeral(expiresAt: exp)
-        } else {
-            self.ephemeral = nil
-        }
+        // --- Protection (éphémère / vue unique / flou) ---
+        //
+        // UN appel, pour les cinq modes. La règle d'échéance n'est PAS relue
+        // ici : `MeeshyMessage.protection` la tient (contrat #7451 point 6), et
+        // c'est ce qui permet à la Rivière et au Résumé de projeter exactement
+        // la même chose sans passer par `BubbleContent`.
+        //
+        // L'ancienne ligne (`expiresAt.timeIntervalSinceNow > 0`) lisait
+        // l'échéance calculée à l'ENVOI : un destinataire qui ouvrait la
+        // conversation après coup héritait d'une horloge démarrée chez
+        // quelqu'un d'autre.
+        // Une vue unique OUVERTE se lit sans second voile (#7618) : la puce a
+        // déjà recueilli le geste, le contenu est là pour être lu.
+        let protection = message.protection()
+        self.protection = message.isViewOnceRevealed ? protection.withoutViewOnce : protection
+        (self.isBurning, self.deviceLayerIntegrity) = (message.isBurning, Self.displayedIntegrity(message.deviceLayerIntegrity, displaysOriginal: effective == message.content))
+        self.isViewOnceRevealed = message.isViewOnceRevealed && message.holdsViewOnce
+        self.exitGate = message.exitGate
+        self.captureVerdict = ContentCaptureVisibility.renderedVerdict(for: message)
 
         // --- Other flags ---
         self.isBlurred = message.isBlurred
         self.isViewOnce = message.isViewOnce
         self.isPinned = message.pinnedAt != nil
-        self.isForwarded = message.forwardedFromId != nil
+        self.forwardAttribution = Self.resolvedForwardAttribution(of: message)
         self.editedAt = message.isEdited ? message.updatedAt : nil
+        self.editedByModerator = message.editedByModerator
         self.isEditSaving = isEditSaving
         self.hasEditHistory = hasEditHistory
 
         // --- Reactions ---
         self.reactions = Self.summarizeReactions(message.reactions, currentUserId: currentUserId)
 
-        // --- Meta ---
+        self.meta = Self.resolveMeta(message: message, timeString: resolvedTimeString, recipientCount: recipientCount)
+    }
+
+    /// L'heure et l'accusé de la bulle, et l'instant de départ de MON envoi.
+    static func resolveMeta(message: MeeshyMessage, timeString: String, recipientCount: Int) -> Meta {
         // The footer checkmark must EXACTLY represent the real state of every
         // other interlocutor. `message.deliveryStatus` is promoted to
         // delivered/read as soon as a SINGLE recipient does so — correct for a
         // 1:1 but misleading in a group. Re-resolve with the recipient count so
         // ✓✓ (delivered) / indigo ✓✓ (read) only light up once ALL recipients
         // have received / read. `recipientCount <= 1` trusts the stored status.
-        self.meta = Meta(
-            timeString: resolvedTimeString,
+        return Meta(
+            timeString: timeString,
             deliveryStatus: message.isMe
                 ? DeliveryStatusResolver.resolve(
                     status: message.deliveryStatus,
@@ -276,11 +339,130 @@ extension BubbleContent {
                     // stocké, qui doit rester vrai quelle que soit la préférence.
                     // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
                     showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts)
-                : nil
+                : nil,
+            sendStartedAt: message.isMe ? message.createdAt : nil
         )
     }
 
     // MARK: - Pure helpers (testables)
+
+    /// Le sticker que la bulle dessine, avec le PNG qui l'accompagne — `nil`
+    /// quand le message n'en porte pas, ou en porte un NON rendable (ni
+    /// gabarit ni emoji ni image jointe : rien à peindre). Un `stickerId` de
+    /// bibliothèque seul se dessine par son PNG (#10655).
+    ///
+    /// Le PNG est la PREMIÈRE pièce jointe image : le composer n'en envoie
+    /// qu'une, et un lecteur qui en verrait deux n'aurait aucun moyen de dire
+    /// laquelle est le repli. La projection en `Picture` est faite ICI, une
+    /// fois, pour que la feuille ne relise jamais `MeeshyMessageAttachment`.
+    static func resolveSticker(
+        _ sticker: MessageSticker?,
+        attachments: [MeeshyMessageAttachment]
+    ) -> Sticker? {
+        guard let sticker = sticker?.ifWireWorthy else { return nil }
+        let picture = attachments.first(where: { $0.type == .image }).map {
+            Sticker.Picture(
+                attachmentId: $0.id,
+                fileUrl: $0.fileUrl,
+                thumbnailUrl: $0.thumbnailUrl,
+                thumbHash: $0.thumbHash,
+                thumbnailColor: $0.thumbnailColor
+            )
+        }
+        // #10655 — un sticker de bibliothèque envoyé du web ne porte que son `stickerId` :
+        // il se dessine par son image jointe. Sans image, ni gabarit ni emoji : rien à peindre.
+        guard sticker.isRenderable || picture != nil else { return nil }
+        return Sticker(
+            templateId: sticker.templateId,
+            slots: sticker.slots,
+            animation: sticker.animation,
+            emoji: sticker.emoji,
+            picture: picture,
+            libraryStickerId: sticker.stickerId
+        )
+    }
+
+    /// **La phrase d'un avis de capture** (#9617) pour CE lecteur : langue
+    /// d'interface, fuseau de l'appareil, heure d'ENVOI de l'éphémère capturé.
+    /// `nil` pour tout autre message — et pour un avis dont la métadonnée ne se
+    /// lit pas, qui retombe sur son `content`. Partagée par les quatre modes :
+    /// Bulles, Focal et Script lisent `text.raw`, la Rivière l'appelle.
+    static func captureNoticeText(
+        for message: Message,
+        language: String? = Bundle.main.preferredLocalizations.first,
+        timeZone: TimeZone = .current
+    ) -> String? {
+        guard message.messageSource == .system, let notice = message.captureNotice else { return nil }
+        return CaptureNoticeText.compose(notice, language: language, timeZone: timeZone)
+    }
+
+    /// **La ligne d'arrivées de Meeshy Global** (#7759) dans la langue
+    /// d'interface du lecteur, avec les clés `system.members.arrived.*` que la
+    /// ligne de liste dit déjà. `nil` pour tout autre message — et pour une
+    /// ligne dont la métadonnée ne se lit pas, qui retombe sur son `content`.
+    static func arrivalsNoticeText(for message: Message, strings: ConversationPreviewStrings? = nil) -> String? {
+        guard message.messageSource == .system, let notice = message.arrivalsNotice else { return nil }
+        return notice.text(strings ?? ConversationPreviewCatalog.strings())
+    }
+
+    /// La phrase d'un avis système composée CHEZ LE LECTEUR depuis sa
+    /// métadonnée — capture, arrivées, bascule du chiffrement —, ou `nil` pour
+    /// retomber sur le `content`. Partagée par les quatre modes.
+    static func systemNoticeText(for message: Message) -> String? {
+        captureNoticeText(for: message) ?? arrivalsNoticeText(for: message) ?? encryptionSwitchNoticeText(for: message)
+    }
+
+    /// **L'avis d'une bascule du chiffrement** (#12846, #12840) dans la langue
+    /// du lecteur, composé depuis sa métadonnée : ce que le fil AFFICHE est ce
+    /// que l'envoi compte pour « bascule vue », jamais le texte écrit par le
+    /// serveur. `nil` pour tout autre message.
+    static func encryptionSwitchNoticeText(for message: Message, strings: ConversationPreviewStrings? = nil) -> String? {
+        guard message.messageSource == .system, let notice = message.encryptionSwitchNotice else { return nil }
+        return notice.text(strings ?? ConversationPreviewCatalog.strings())
+    }
+
+    /// La langue que la bulle AFFICHE : le drapeau basculé par le lecteur
+    /// d'abord, puis la traduction préférée, la piste audio préférée, l'original.
+    static func activeLanguage(
+        of message: Message,
+        preferredTranslation: MessageTranslation?,
+        activeDisplayLangCode: String?,
+        preferredAudioLangCode: String? = nil
+    ) -> String {
+        activeDisplayLangCode
+            ?? preferredTranslation?.targetLanguage
+            ?? preferredAudioLangCode
+            ?? message.originalLanguage
+    }
+
+    /// **Ce que le pied dit de la couche appareil d'un hybride** (#14369). Le
+    /// sceau « vérifié » ne couvre que le texte ORIGINAL : à côté d'une
+    /// traduction produite par le serveur, il mentirait — il ne s'affiche donc
+    /// que sur l'original, et revient quand le lecteur bascule vers lui. Un
+    /// écart, lui, se dit dans les deux cas : la traduction vient du texte servi.
+    static func displayedIntegrity(_ integrity: HybridDeviceLayerIntegrity?, displaysOriginal: Bool) -> HybridDeviceLayerIntegrity? {
+        guard integrity == .verified, !displaysOriginal else { return integrity }
+        return nil
+    }
+
+    /// **Le texte que la bulle AFFICHE** (#11233) — le site unique que « Copier »
+    /// lit, pour copier ce que le lecteur a sous les yeux : la langue du drapeau
+    /// qu'il a basculé, jamais la seule traduction préférée.
+    static func displayedText(
+        of message: Message,
+        translations: [MessageTranslation],
+        preferredTranslation: MessageTranslation?,
+        activeDisplayLangCode: String?
+    ) -> String {
+        resolveEffectiveContent(
+            message: message,
+            translations: translations,
+            preferredTranslation: preferredTranslation,
+            activeLangCode: activeLanguage(
+                of: message, preferredTranslation: preferredTranslation, activeDisplayLangCode: activeDisplayLangCode
+            )
+        )
+    }
 
     static func resolveEffectiveContent(
         message: Message,
@@ -313,7 +495,7 @@ extension BubbleContent {
         preferredLang: String?,
         regional: String?,
         custom: String?,
-        // 4th axis of the Prisme étendu (2026-05-26) — gated identically to
+        // 4th axis of the Prisme étendu — gated identically to
         // `regional`/`custom`: only surfaced when a translation (text or
         // audio) actually exists for it. Never supplants the first 3 axes.
         deviceLocale: String? = nil,
@@ -385,5 +567,46 @@ extension BubbleContent {
                     includesMe: entry.data.includesMe
                 )
             }
+    }
+
+    /// **Le site UNIQUE où l'attribution d'un transfert se tranche** (#5058).
+    ///
+    /// `forwardedFromId` dit QUE le message est un transfert ;
+    /// `ForwardBadgePolicy` dit QUI a le droit d'être nommé — un groupe au
+    /// moins public, l'auteur en tête-à-tête, personne sinon. Les deux
+    /// doivent être lus ENSEMBLE : une référence absente sur un transfert
+    /// avéré rend `.anonymous`, qui est un badge, pas une absence de badge.
+    static func resolvedForwardAttribution(of message: MeeshyMessage) -> ForwardAttribution? {
+        message.forwardedFromId == nil ? nil : ForwardBadgePolicy.attribution(for: message.forwardedFrom)
+    }
+
+    /// Le verdict « emoji seul » d'un message, site UNIQUE : la bulle, Focal,
+    /// Script et la Rivière (#10637) lisent la même taille, aucune ne la recalcule.
+    /// Un lieu ou une pièce jointe compte comme un contenu : la bulle qui
+    /// l'héberge reste une bulle.
+    static func emojiOnlyResult(of message: MeeshyMessage) -> EmojiDetector.EmojiOnlyResult {
+        guard !message.content.isEmpty,
+              message.attachments.isEmpty,
+              message.location == nil else {
+            return .notEmojiOnly
+        }
+        return EmojiDetector.analyze(message.content)
+    }
+
+    /// Call notice (rich call-summary system message). When a system message carries structured call
+    /// metadata, resolve the per-viewer direction now (outgoing iff the current user initiated) so the leaf
+    /// view stays primitive. Absent metadata (legacy summaries) → nil, and the `.system` path falls back to
+    /// the plain centered notice.
+    static func resolveCallNotice(message: MeeshyMessage, currentUserId: String, timeString: String) -> CallNotice? {
+        guard message.messageSource == .system, let summary = message.callSummary else { return nil }
+        return CallNotice(
+            summary: summary,
+            isOutgoing: summary.isOutgoing(currentUserId: currentUserId),
+            viewerId: currentUserId,
+            fallbackText: message.content,
+            timeString: timeString,
+            timestamp: message.createdAt,
+            recording: CallRecording.from(message.attachments)
+        )
     }
 }

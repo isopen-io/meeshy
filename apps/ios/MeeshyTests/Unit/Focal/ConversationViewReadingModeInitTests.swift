@@ -7,33 +7,12 @@ import MeeshySDK
 /// `UserDefaults.standard` : `readingModeConversationType(for:)` (mapping
 /// pur, nouveau).
 ///
-/// **RE-PREUVE (I-075, second amendement 2026-08-16)** : la note historique
-/// « `LentilleFeatureFlag.readingModes` vaut `OFF` tant que rien ne l'a
-/// activé » N'EST PLUS VRAIE. Le drapeau cascade désormais vers
-/// `BetaFeaturesPreference` (défaut ON) quand sa propre clé n'a jamais été
-/// posée — sur le vrai domaine (`UserDefaults.standard` + le vrai
-/// `ProcessInfo`), aucun des deux n'a jamais été écrit par ce process de
-/// test, donc `MeeshyFeatureFlags.isReadingModesEnabled` (non injectable) y
-/// vaut RÉELLEMENT `true` maintenant — voir `LentilleFlagGateTests`
-/// (matrice complète) et `FeatureFlagGateTests
-/// .test_isReadingModesEnabled_injectable_defaultsToTrue_viaBetaCascade`
-/// pour la preuve injectable équivalente. Sans conséquence pour CE fichier :
-/// aucun test ci-dessous ne construit `ConversationView` (raison détaillée
-/// plus bas), donc rien ici ne dépendait de la valeur réelle du drapeau.
-///
-/// **I-075 RETIRÉ le 2026-08-18 (décision produit) — la note historique
-/// redevient vraie.** Le paragraphe ci-dessus décrit l'état du code entre le
-/// 2026-08-16 et le 2026-08-18, conservé pour l'historique. L'étage bêta
-/// n'étant plus consulté que si la préférence est EXPLICITEMENT exprimée, et
-/// ce process de test n'ayant jamais rien écrit au vrai domaine,
-/// `MeeshyFeatureFlags.isReadingModesEnabled` y vaut de nouveau `false` —
-/// preuve injectable équivalente : `FeatureFlagGateTests
-/// .test_isReadingModesEnabled_injectable_defaultsToFalse_afterBetaCascadeWithdrawal`
-/// (le témoin cité ci-dessus, retourné et renommé par ce lot). TOUJOURS sans
-/// conséquence pour CE fichier, et pour la même raison qu'en 2026-08-16 :
-/// aucun test ci-dessous ne construit `ConversationView`, donc aucun ne
-/// dépend de la valeur réelle du drapeau — c'est bien pourquoi ce fichier
-/// n'a QUE sa docstring à amender.
+/// **Valeur réelle du drapeau** : sur le vrai domaine (`UserDefaults.standard`),
+/// `MeeshyFeatureFlags.isReadingModesEnabled` vaut `true` depuis la sortie de
+/// bêta (2026-09-14, #6482) — preuve injectable : `FeatureFlagGateTests
+/// .test_isReadingModesEnabled_injectable_nothingWritten_returnsTrue`. Sans
+/// conséquence pour CE fichier : aucun test ci-dessous ne construit
+/// `ConversationView`, donc aucun ne dépend de la valeur réelle du drapeau.
 ///
 /// **Ce que cette suite NE reprouve PAS** : la décision « 4 branches + choix
 /// collant qui PRIME + drapeau OFF » est la loi GELÉE
@@ -61,49 +40,55 @@ import MeeshySDK
 @MainActor
 final class ConversationViewReadingModeInitTests: XCTestCase {
 
+    func test_orchestrateurEtSDKPartagentLeType() {
+        XCTAssertEqual(
+            ObjectIdentifier(ReadingModeOrchestrator.ConversationType.self),
+            ObjectIdentifier(MeeshyConversation.ConversationType.self)
+        )
+    }
+
     // MARK: - readingModeConversationType(for:) — mapping pur, NOUVEAU (F-086)
 
     func test_readingModeConversationType_directMapsDirect() {
-        XCTAssertEqual(ConversationView.readingModeConversationType(for: .direct), .direct)
+        XCTAssertEqual(ConversationViewRules.readingModeConversationType(for: .direct), .direct)
     }
 
     func test_readingModeConversationType_groupMapsGroup() {
-        XCTAssertEqual(ConversationView.readingModeConversationType(for: .group), .group)
+        XCTAssertEqual(ConversationViewRules.readingModeConversationType(for: .group), .group)
     }
 
     func test_readingModeConversationType_publicMapsPublic() {
-        XCTAssertEqual(ConversationView.readingModeConversationType(for: .public), .public)
+        XCTAssertEqual(ConversationViewRules.readingModeConversationType(for: .public), .public)
     }
 
     func test_readingModeConversationType_globalMapsGlobal() {
-        XCTAssertEqual(ConversationView.readingModeConversationType(for: .global), .global)
+        XCTAssertEqual(ConversationViewRules.readingModeConversationType(for: .global), .global)
     }
 
     func test_readingModeConversationType_broadcastMapsBroadcast() {
-        XCTAssertEqual(ConversationView.readingModeConversationType(for: .broadcast), .broadcast)
+        XCTAssertEqual(ConversationViewRules.readingModeConversationType(for: .broadcast), .broadcast)
     }
 
-    /// Les trois cas ABSENTS du miroir gelé (`community`/`channel`/`bot`) —
-    /// RE-PREUVE : `ReadingModeOrchestrator.ConversationType` n'a que 5 cas.
+    /// Les trois cas que la loi ne distingue pas (`community`/`channel`/`bot`).
     /// Repliés sur `.group` : jamais `.direct`, seule distinction qui compte
     /// pour `resolveCapabilities` (éligibilité Rivière : « jamais en direct »).
     func test_readingModeConversationType_communityFallsBackToGroup() {
-        XCTAssertEqual(ConversationView.readingModeConversationType(for: .community), .group)
+        XCTAssertEqual(ConversationViewRules.readingModeConversationType(for: .community), .group)
     }
 
     func test_readingModeConversationType_channelFallsBackToGroup() {
-        XCTAssertEqual(ConversationView.readingModeConversationType(for: .channel), .group)
+        XCTAssertEqual(ConversationViewRules.readingModeConversationType(for: .channel), .group)
     }
 
     func test_readingModeConversationType_botFallsBackToGroup() {
-        XCTAssertEqual(ConversationView.readingModeConversationType(for: .bot), .group)
+        XCTAssertEqual(ConversationViewRules.readingModeConversationType(for: .bot), .group)
     }
 
     /// `nil` (aucune conversation) ⇒ `.group`, cohérent avec `isDirect`
     /// (`ConversationView.isDirect`, ci-dessus dans le fichier) qui traite
     /// déjà un `conversation` nil comme « pas direct ».
     func test_readingModeConversationType_nilFallsBackToGroup() {
-        XCTAssertEqual(ConversationView.readingModeConversationType(for: nil), .group)
+        XCTAssertEqual(ConversationViewRules.readingModeConversationType(for: nil), .group)
     }
 
     // MARK: - Le câblage flag-ON/sticky/OFF de `ConversationView.init`

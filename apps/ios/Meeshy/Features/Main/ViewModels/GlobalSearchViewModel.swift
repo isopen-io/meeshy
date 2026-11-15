@@ -1,6 +1,5 @@
 import Foundation
 import Combine
-import GRDB
 import MeeshySDK
 import MeeshyUI
 
@@ -8,7 +7,7 @@ import MeeshyUI
 
 enum SearchTab: String, CaseIterable, Identifiable {
     case messages = "Messages"
-    case conversations = "Conversations"
+    case posts = "Posts"
     case users = "Utilisateurs"
 
     var id: String { rawValue }
@@ -16,7 +15,7 @@ enum SearchTab: String, CaseIterable, Identifiable {
     var localizedName: String {
         switch self {
         case .messages: return String(localized: "tab.messages", defaultValue: "Messages")
-        case .conversations: return String(localized: "tab.conversations", defaultValue: "Conversations")
+        case .posts: return String(localized: "tab.posts", defaultValue: "Posts")
         case .users: return String(localized: "tab.users", defaultValue: "Utilisateurs")
         }
     }
@@ -24,7 +23,7 @@ enum SearchTab: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .messages: return "text.bubble.fill"
-        case .conversations: return "bubble.left.and.bubble.right.fill"
+        case .posts: return "rectangle.stack.fill"
         case .users: return "person.2.fill"
         }
     }
@@ -32,7 +31,11 @@ enum SearchTab: String, CaseIterable, Identifiable {
 
 // MARK: - Global Search Message Result
 
-struct GlobalSearchMessageResult: Identifiable, Sendable {
+/// `content` est l'extrait à peindre — le texte servi, ou la transcription
+/// qui a répondu (`mediaKind` dit alors de quel média). Un résultat VOILÉ
+/// (#16957) ne porte aucun texte : le voile se pose à la construction, pas
+/// seulement à la peinture, pour qu'aucune surface ne puisse l'oublier.
+nonisolated struct GlobalSearchMessageResult: Identifiable, Sendable, Equatable {
     let id: String
     let conversationId: String
     let conversationName: String
@@ -41,20 +44,43 @@ struct GlobalSearchMessageResult: Identifiable, Sendable {
     let senderName: String
     let senderAvatar: String?
     let createdAt: Date
-}
+    let isVeiled: Bool
+    let mediaKind: APIMessageSearchHit.MediaKind?
 
-// MARK: - Global Search Conversation Result
+    init(
+        id: String,
+        conversationId: String,
+        conversationName: String,
+        conversationAvatar: String?,
+        content: String,
+        senderName: String,
+        senderAvatar: String?,
+        createdAt: Date,
+        isVeiled: Bool = false,
+        mediaKind: APIMessageSearchHit.MediaKind? = nil
+    ) {
+        self.id = id
+        self.conversationId = conversationId
+        self.conversationName = conversationName
+        self.conversationAvatar = conversationAvatar
+        self.content = isVeiled ? "" : content
+        self.senderName = senderName
+        self.senderAvatar = senderAvatar
+        self.createdAt = createdAt
+        self.isVeiled = isVeiled
+        self.mediaKind = mediaKind
+    }
 
-struct GlobalSearchConversationResult: Identifiable, Sendable {
-    let id: String
-    let name: String
-    let avatar: String?
-    let type: MeeshyConversation.ConversationType
-    let memberCount: Int
-    let lastMessagePreview: String?
-    let lastMessageAt: Date
-    let unreadCount: Int
-    let conversation: Conversation
+    /// Le pictogramme du média dont la transcription a répondu (#16958).
+    var mediaIcon: String? {
+        switch mediaKind {
+        case .audio: return "mic.fill"
+        case .video: return "video.fill"
+        case .image: return "photo.fill"
+        case .document: return "doc.fill"
+        case nil: return nil
+        }
+    }
 }
 
 // MARK: - Global Search User Result
@@ -65,6 +91,44 @@ struct GlobalSearchUserResult: Identifiable, Sendable {
     let displayName: String?
     let avatar: String?
     let isOnline: Bool
+    /// Le contour équipé de la personne, la référence servie (#10946).
+    var ring: ServedProfileDecorItem? = nil
+}
+
+// MARK: - Ce qu'un volet de recherche rend
+
+/// Résultat d'un volet de recherche (posts, utilisateurs, messages) :
+/// ses éléments ET la raison d'un échec réseau s'il y en a eu un.
+///
+/// Un `catch { return [] }` rend une panne INDISCERNABLE d'un vide légitime :
+/// l'écran affiche « Aucun résultat » pendant que le réseau est tombé, et le
+/// lecteur accuse sa requête. Le volet dit donc les deux — ce qu'il a pu
+/// servir, et pourquoi il n'a pas pu servir plus.
+///
+/// `nonisolated` : le volet des messages traverse un `withTaskGroup`, dont les
+/// tâches ne portent pas l'isolation de l'appelant. Sous
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, un type déclaré sans ce
+/// qualificatif serait isolé au MainActor jusqu'à son initialiseur mémoire.
+nonisolated struct GlobalSearchLeg<Item: Sendable>: Sendable {
+    let items: [Item]
+    let failure: String?
+    /// Le curseur de la page suivante, quand le serveur a encore à rendre.
+    var nextCursor: String? = nil
+
+    static func served(_ items: [Item]) -> GlobalSearchLeg<Item> {
+        GlobalSearchLeg(items: items, failure: nil)
+    }
+
+    static func failed(_ reason: String) -> GlobalSearchLeg<Item> {
+        GlobalSearchLeg(items: [], failure: reason)
+    }
+}
+
+/// La jambe « personnes » et l'identifiant que la passerelle a servi pour
+/// cette recherche (#10505) — `nil` quand elle n'en a pas servi.
+nonisolated struct GlobalSearchPeopleLeg: Sendable {
+    let leg: GlobalSearchLeg<GlobalSearchUserResult>
+    let searchId: String?
 }
 
 // MARK: - ViewModel
@@ -77,7 +141,7 @@ final class GlobalSearchViewModel: ObservableObject {
     @Published var searchText = ""
     @Published var selectedTab: SearchTab = .messages
     @Published var messageResults: [GlobalSearchMessageResult] = []
-    @Published var conversationResults: [GlobalSearchConversationResult] = []
+    @Published var postResults: [GlobalSearchPostResult] = []
     @Published var userResults: [GlobalSearchUserResult] = []
     @Published private(set) var loadState: LoadState = .idle
     @Published var recentSearches: [String] = []
@@ -91,6 +155,22 @@ final class GlobalSearchViewModel: ObservableObject {
     /// SwiftUI skips re-laying it out while the user types.
     @Published private(set) var resultsQuery = ""
 
+    /// Motif de la dernière panne du volet RÉSEAU, `nil` quand le dernier
+    /// aller-retour a abouti. Publié EN PLUS de `loadState` parce que les deux
+    /// répondent à deux questions distinctes : `loadState` dit ce que l'écran
+    /// doit rendre À LA PLACE de la liste, `remoteFailure` dit qu'une panne a
+    /// eu lieu alors même que des résultats LOCAUX (FTS5, cache) restent
+    /// affichables. Sans lui, une panne servie sur des résultats locaux se
+    /// confondait avec un succès ; sans `loadState`, elle remplaçait une liste
+    /// pleine par un écran d'erreur.
+    @Published private(set) var remoteFailure: String?
+
+    /// Dernière requête effectivement lancée — ce que « Réessayer » rejoue.
+    /// `resultsQuery` ne convient pas : il n'est posé qu'en SORTIE de
+    /// `performSearch`, donc il reste vide précisément quand la recherche a
+    /// échoué avant de rien produire, et le bouton aurait été inerte.
+    private var lastQuery = ""
+
     /// Backwards-compatibility shim — earlier consumers (and `GlobalSearchView`)
     /// read `isSearching` directly. Derived from `loadState` so existing call
     /// sites keep working without churn. Excludes `.cachedStale` so the spinner
@@ -98,14 +178,31 @@ final class GlobalSearchViewModel: ObservableObject {
     /// non-negotiable "no spinner when cache has data" rule (CLAUDE.md).
     var isSearching: Bool { loadState == .loading }
 
+    /// Une recherche tourne PAR-DESSUS des résultats déjà à l'écran. La vue
+    /// rend alors un indicateur DISCRET en surimpression — jamais un spinner
+    /// qui remplace la liste.
+    var isRevalidating: Bool { loadState == .cachedStale }
+
+    /// Y a-t-il quelque chose à l'écran, toutes familles confondues ? C'est
+    /// cette question — et non « le cache LRU a-t-il répondu ? » — qui décide
+    /// entre `.loading` (démarrage à froid, squelette légitime) et
+    /// `.cachedStale` (revalidation discrète). Le cache LRU ne couvre que les
+    /// messages : sur l'onglet Utilisateurs, chaque lettre repassait donc par
+    /// `.loading` alors que la liste était pleine.
+    private var hasDisplayedResults: Bool {
+        !messageResults.isEmpty || !postResults.isEmpty || !userResults.isEmpty
+    }
+
     // MARK: - Dependencies
 
     private let api: APIClientProviding
     private let userService: UserServiceProviding
     private let authManager: AuthManaging
-    private let searchService: MessageSearchService
+    private let messageSearch: ConversationMessageSearchProviding
+    private let postSearch: PostSearchProviding
     private let messageSocket: MessageSocketProviding
     private let socialSocket: SocialSocketProviding
+    private let socialEvents: SocialEventsV2Reporting
 
     // MARK: - Private
 
@@ -140,13 +237,9 @@ final class GlobalSearchViewModel: ObservableObject {
     private static let messageQueryCacheStaleTTL: TimeInterval = 120
 
     /// Tracks the in-flight debounced search so a fresh keystroke can cancel
-    /// the previous round-trip before launching a new one. Marked
-    /// `nonisolated(unsafe)` because writes always happen on the main
-    /// thread (the Combine debounce sink runs on `DispatchQueue.main`) and
-    /// `deinit` — which is implicitly non-isolated under Swift 6 — needs to
-    /// reach the property to cancel a still-flying task. `Task<Void, Never>`
-    /// is `Sendable` so the unchecked access is safe.
-    nonisolated(unsafe) private var searchTask: Task<Void, Never>?
+    /// the previous round-trip before launching a new one. A `TaskSlot` is
+    /// `Sendable`, so the non-isolated `deinit` can cancel a still-flying task.
+    private let searchTask = TaskSlot()
 
     // MARK: - Init
 
@@ -155,28 +248,30 @@ final class GlobalSearchViewModel: ObservableObject {
         userService: UserServiceProviding = UserService.shared,
         authManager: AuthManaging = AuthManager.shared,
         searchService: MessageSearchService? = nil,
+        messageSearch: ConversationMessageSearchProviding? = nil,
+        postSearch: PostSearchProviding? = nil,
         messageSocket: MessageSocketProviding = MessageSocketManager.shared,
-        socialSocket: SocialSocketProviding = SocialSocketManager.shared
+        socialSocket: SocialSocketProviding = SocialSocketManager.shared,
+        socialEvents: SocialEventsV2Reporting? = nil
     ) {
         self.api = api
         self.userService = userService
         self.authManager = authManager
-        self.searchService = searchService ?? MessageSearchService(
-            reader: DependencyContainer.shared.dbPool
+        self.postSearch = postSearch ?? PostSearchService(api: api)
+        self.messageSearch = messageSearch ?? ConversationMessageSearchService(
+            api: api,
+            searchService: searchService ?? MessageSearchService(reader: DependencyContainer.shared.database.pool)
         )
         self.messageSocket = messageSocket
         self.socialSocket = socialSocket
+        self.socialEvents = socialEvents ?? SocialEventsV2Reporter.shared
         loadRecentSearches()
         setupDebounce()
         setupSocketInvalidation()
     }
 
-    deinit {
-        // `searchTask` is `nonisolated(unsafe)` so the implicitly
-        // non-isolated `deinit` can reach it without a Swift 6 isolation
-        // warning. Cancel any in-flight search so we don't leak network
-        // work after the view disappears.
-        searchTask?.cancel()
+    nonisolated deinit {
+        searchTask.cancel()
     }
 
     // MARK: - Socket-driven cache invalidation
@@ -219,42 +314,49 @@ final class GlobalSearchViewModel: ObservableObject {
                     // detached Task that ran to completion (zombie network
                     // work and stale `messageResults` writes once the user
                     // had moved on).
-                    self.searchTask?.cancel()
-                    self.searchTask = Task { [weak self] in
+                    self.searchTask.replace(with: Task { [weak self] in
                         await self?.performSearch(query: trimmed)
-                    }
+                    })
                 } else {
-                    self.searchTask?.cancel()
-                    self.searchTask = nil
+                    self.searchTask.cancel()
                     self.clearResults()
                 }
             }
             .store(in: &cancellables)
     }
 
+    /// Le texte montré à l'utilisateur pour une panne de volet. On ne sert
+    /// JAMAIS `error.localizedDescription` : un message d'URLSession en anglais
+    /// dans une bannière française est pire qu'une phrase générique, et il
+    /// nomme des détails de transport dont le lecteur n'a que faire.
+    private static var remoteFailureMessage: String {
+        String(localized: "common.error.generic")
+    }
+
     // MARK: - Search
 
     func performSearch(query: String) async {
         hasSearched = true
+        lastQuery = query
 
-        // If we have a cached LRU hit for the message tab we are still going
-        // to revalidate downstream (FTS5 + cached merge are served first,
-        // network for conversations/users still runs), so we surface
-        // `.cachedStale` per the architecture-bible rule "no spinner when
-        // cache has data". Otherwise this is a cold load and we honour
-        // `.loading`.
+        // Un spinner ne remplace JAMAIS ce qui est déjà à l'écran. La frappe
+        // relance une recherche toutes les 300 ms (debounce) : poser `.loading`
+        // à chaque fois faisait clignoter la liste lettre après lettre.
+        // `.loading` est donc réservé au démarrage à froid — ni cache LRU, ni
+        // résultat affiché.
         let key = query.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         let hasCachedHit = messageQueryCache.contains { entry in
             entry.query == key &&
             Date().timeIntervalSince(entry.cachedAt) < Self.messageQueryCacheStaleTTL
         }
-        loadState = hasCachedHit ? .cachedStale : .loading
+        loadState = (hasCachedHit || hasDisplayedResults) ? .cachedStale : .loading
 
-        async let conversationsTask = searchConversations(query: query)
+        let reader = authManager.currentUser
+        async let postsTask = postSearch.searchPosts(query: query, reader: reader)
         async let usersTask = searchUsers(query: query)
         async let messagesTask = searchMessages(query: query)
 
-        let (convs, users, msgs) = await (conversationsTask, usersTask, messagesTask)
+        let (posts, users, msgs) = await (postsTask, usersTask, messagesTask)
 
         // Bail out gracefully if the debounce-cancel kicked in mid-flight —
         // we don't want a stale Task overwriting the next query's results
@@ -262,135 +364,78 @@ final class GlobalSearchViewModel: ObservableObject {
         // `.loading` / `.cachedStale`.
         guard !Task.isCancelled else { return }
 
-        conversationResults = convs
-        userResults = users
-        messageResults = msgs
+        postResults = posts.items
+        userResults = users.leg.items
+        messageResults = msgs.items
         resultsQuery = query
+        noteSearchSubmitted(query: query, peopleCount: users.leg.items.count, servedSearchId: users.searchId)
+
+        let failure = posts.failure ?? users.leg.failure ?? msgs.failure
+        remoteFailure = failure
 
         if NetworkMonitor.shared.isOffline {
             loadState = .offline
+        } else if let failure, !hasDisplayedResults {
+            // Rien à montrer ET le réseau est tombé : l'écran dit la panne et
+            // propose de réessayer, au lieu d'un « Aucun résultat » qui accuse
+            // la requête. Avec des résultats servis, on reste `.loaded` — la
+            // panne se dit en bannière discrète, sans effacer la liste.
+            loadState = .error(failure)
         } else {
             loadState = .loaded
         }
     }
 
-    // MARK: - Search Conversations (FTS5-first, network fallback)
+    /// Rejoue la dernière requête lancée. C'est ce que fait le bouton
+    /// « Réessayer » des états hors-ligne et d'erreur — un contrôle qui
+    /// n'aurait pas d'effet ne serait pas un contrôle.
+    /// #10505 — une recherche de personnes : l'identifiant que la passerelle a
+    /// SERVI avec la page (`meta.searchId`) relie la soumission au résultat
+    /// touché. Elle n'ouvre que son propre scellé : sans identifiant servi
+    /// (ancien serveur, recherche distante en panne), les événements partent
+    /// sans — on n'en fabrique pas. Le texte ne part pas.
+    private(set) var searchId: String?
 
-    /// Returns the merged FTS5 + remote results. Pure — does NOT mutate
-    /// `@Published` state. The caller (`performSearch`) gates the write on a
-    /// `Task.isCancelled` check so a debounce-cancelled run can't overwrite
-    /// the next query's results.
-    private func searchConversations(query: String) async -> [GlobalSearchConversationResult] {
-        let localResults = await searchLocalConversations(query: query)
-        let remoteResults = await fetchRemoteConversationResults(query: query)
-        return mergeUniqueConversationResults(local: localResults, remote: remoteResults)
+    private func noteSearchSubmitted(query: String, peopleCount: Int, servedSearchId: String?) {
+        searchId = servedSearchId
+        guard let event = DiscoveryTelemetry.searchSubmitted(searchId: servedSearchId, query: query, peopleCount: peopleCount) else { return }
+        socialEvents.emit(event)
     }
 
-    /// Prisme Linguistique du lecteur, dans l'ordre — systemLanguage,
-    /// regionalLanguage, customDestinationLanguage, puis la locale appareil en
-    /// 4e rang. `MeeshyUser.preferredContentLanguages` est la seule autorité
-    /// iOS sur cet ordre : ne jamais le réimplémenter ici.
-    private var preferredContentLanguages: [String] {
-        authManager.currentUser?.preferredContentLanguages ?? []
+    func noteUserResultTapped(_ userId: String, position: Int) {
+        socialEvents.emit(DiscoveryTelemetry.profileResultTapped(searchId: searchId, userId: userId, position: position))
     }
 
-    private func searchLocalConversations(query: String) async -> [GlobalSearchConversationResult] {
-        let ids = (try? await SearchIndex.shared.searchConversations(query: query, limit: 50)) ?? []
-        guard !ids.isEmpty else { return [] }
-
-        // SWR: FTS5 gave us the IDs to hydrate, so any cached row (fresh or
-        // stale) is usable. The conversation list is already revalidated by
-        // `ConversationListViewModel` on screen-resume, so we do NOT kick a
-        // second revalidate here. `.expired` / `.empty` simply yield no
-        // local hits — the remote leg of `searchConversations` will cover.
-        let result = await CacheCoordinator.shared.conversations.load(for: "list")
-        let cached: [Conversation]
-        switch result {
-        case .fresh(let v, _), .stale(let v, _):
-            cached = v
-        case .expired, .empty:
-            cached = []
+    func retryLastSearch() async {
+        let trimmed = lastQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 2 else { return }
+        // Le réessai passe par LA tâche de recherche, comme une frappe : une
+        // frappe qui suit l'annule, et lui ne peut plus revenir après elle pour
+        // remettre les résultats de l'ancienne requête.
+        let query = lastQuery
+        let task = Task<Void, Never> { [weak self] in
+            await self?.performSearch(query: query)
         }
-        let byId = Dictionary(uniqueKeysWithValues: cached.map { ($0.id, $0) })
-        let preferred = preferredContentLanguages
-
-        return ids.compactMap { id -> GlobalSearchConversationResult? in
-            guard let conv = byId[id] else { return nil }
-            return GlobalSearchConversationResult(
-                id: conv.id,
-                name: conv.displayName,
-                avatar: conv.avatar ?? conv.participantAvatarURL,
-                type: conv.type,
-                memberCount: conv.memberCount,
-                // Même résolution que `ThemedConversationRow` — la ligne de
-                // résultat de recherche est une ligne de conversation, elle doit
-                // rendre le MÊME texte que la liste. Rend l'aperçu original
-                // quand aucune langue du prisme n'est servie (règle #1).
-                lastMessagePreview: conv.resolvedLastMessagePreview(preferredLanguages: preferred),
-                lastMessageAt: conv.lastMessageAt,
-                unreadCount: conv.userState.unreadCount,
-                conversation: conv
-            )
-        }
-    }
-
-    private func fetchRemoteConversationResults(query: String) async -> [GlobalSearchConversationResult] {
-        do {
-            let response: APIResponse<[APIConversation]> = try await api.request(
-                endpoint: "/conversations/search",
-                queryItems: [URLQueryItem(name: "q", value: query)]
-            )
-            let userId = authManager.currentUser?.id ?? ""
-            let preferred = preferredContentLanguages
-            return response.data.map { apiConv in
-                let conv = apiConv.toConversation(currentUserId: userId)
-                return GlobalSearchConversationResult(
-                    id: conv.id,
-                    name: conv.displayName,
-                    avatar: conv.avatar ?? conv.participantAvatarURL,
-                    type: conv.type,
-                    memberCount: conv.memberCount,
-                    // `GET /conversations/search` sert désormais
-                    // `lastMessageTranslations`/`lastMessageOriginalLanguage`
-                    // (jumeau de `GET /conversations`) : les rendre bruts ici
-                    // laisserait la recherche dans la langue de l'expéditeur
-                    // alors que la liste, elle, traduit.
-                    lastMessagePreview: conv.resolvedLastMessagePreview(preferredLanguages: preferred),
-                    lastMessageAt: conv.lastMessageAt,
-                    unreadCount: conv.userState.unreadCount,
-                    conversation: conv
-                )
-            }
-        } catch {
-            return []
-        }
-    }
-
-    private func mergeUniqueConversationResults(
-        local: [GlobalSearchConversationResult],
-        remote: [GlobalSearchConversationResult]
-    ) -> [GlobalSearchConversationResult] {
-        var seen = Set<String>()
-        var merged: [GlobalSearchConversationResult] = []
-        // Remote first: server-side payloads carry the freshest counts /
-        // last-message previews. Local hits fill the gap for items the
-        // server didn't return (e.g., we are offline).
-        for result in remote + local {
-            if seen.insert(result.id).inserted {
-                merged.append(result)
-            }
-        }
-        return merged.sorted { $0.lastMessageAt > $1.lastMessageAt }
+        searchTask.replace(with: task)
+        await task.value
     }
 
     // MARK: - Search Users (FTS5-first, network fallback)
 
     /// Returns the merged FTS5 + remote results. Pure — does NOT mutate
-    /// `@Published` state. See note on `searchConversations`.
-    private func searchUsers(query: String) async -> [GlobalSearchUserResult] {
+    /// `@Published` state. The caller (`performSearch`) gates the write on a
+    /// `Task.isCancelled` check so a debounce-cancelled run can't overwrite
+    /// the next query's results.
+    private func searchUsers(query: String) async -> GlobalSearchPeopleLeg {
         let localResults = await searchLocalUsers(query: query)
-        let remoteResults = await fetchRemoteUserResults(query: query)
-        return mergeUniqueUserResults(local: localResults, remote: remoteResults)
+        let remote = await fetchRemoteUserResults(query: query)
+        return GlobalSearchPeopleLeg(
+            leg: GlobalSearchLeg(
+                items: mergeUniqueUserResults(local: localResults, remote: remote.leg.items),
+                failure: remote.leg.failure
+            ),
+            searchId: remote.searchId
+        )
     }
 
     private func searchLocalUsers(query: String) async -> [GlobalSearchUserResult] {
@@ -420,25 +465,28 @@ final class GlobalSearchViewModel: ObservableObject {
                 username: user.username,
                 displayName: user.displayName,
                 avatar: user.avatar,
-                isOnline: user.isOnline ?? false
+                isOnline: user.isOnline ?? false,
+                ring: user.profileDecor?.avatarRing
             )
         }
     }
 
-    private func fetchRemoteUserResults(query: String) async -> [GlobalSearchUserResult] {
+    private func fetchRemoteUserResults(query: String) async -> GlobalSearchPeopleLeg {
         do {
-            let results = try await userService.searchUsers(query: query, limit: 20, offset: 0)
-            return results.map { user in
+            let page = try await userService.searchPeople(query: query, limit: 20, offset: 0)
+            let items = page.users.map { user in
                 GlobalSearchUserResult(
                     id: user.id,
                     username: user.username,
                     displayName: user.displayName,
                     avatar: user.avatar,
-                    isOnline: user.isOnline ?? false
+                    isOnline: user.isOnline ?? false,
+                    ring: user.avatarRing
                 )
             }
+            return GlobalSearchPeopleLeg(leg: .served(items), searchId: page.searchId)
         } catch {
-            return []
+            return GlobalSearchPeopleLeg(leg: .failed(Self.remoteFailureMessage), searchId: nil)
         }
     }
 
@@ -459,24 +507,43 @@ final class GlobalSearchViewModel: ObservableObject {
 
     // MARK: - Search Messages (FTS5-first, network fallback)
 
+    /// **Un message qui disparaît ne sort pas de sa conversation par la
+    /// recherche** (#9619, loi de sortie #9572). Une vue unique, une flamme à
+    /// durée ou après lecture — sur le message OU sur l'une de ses pièces —
+    /// n'apparaît dans aucun résultat : la rangée le montrerait en clair, hors
+    /// de toute couche sécurisée, et le seul fait qu'il RÉPONDE à la requête
+    /// dirait déjà un mot de son texte. Les deux volets (index local, réseau)
+    /// passent par ici, avant toute mise en cache.
+    nonisolated static func appearsInSearch(_ message: MeeshyMessage) -> Bool {
+        ConversationMessageSearchService.appearsInSearch(message)
+    }
+
     /// Returns the merged FTS5 + remote results. Pure — does NOT mutate
-    /// `@Published` state. See note on `searchConversations`.
-    private func searchMessages(query: String) async -> [GlobalSearchMessageResult] {
+    /// `@Published` state. See note on `searchUsers`.
+    private func searchMessages(query: String) async -> GlobalSearchLeg<GlobalSearchMessageResult> {
         // FTS5 local results — instant, available offline
-        let localResults = await searchLocalMessages(query: query)
+        let localResults = await messageSearch.localMessages(query: query, reader: authManager.currentUser)
 
         // Cache-first for the network leg: if the same query was fetched
         // within the staleTTL window we surface the cached merge immediately
         // and skip the round-trip. The FTS5 results are recomputed each
         // call (cheap, local) so they never go stale.
         if let cached = cachedRemoteResults(for: query) {
-            return mergeUniqueMessageResults(local: localResults, remote: cached)
+            return .served(ConversationMessageSearchService.merged(local: localResults, remote: cached))
         }
 
         // Network — merge fresh server-side hits
-        let remoteResults = await fetchRemoteMessageResults(query: query)
-        cacheRemoteResults(remoteResults, for: query)
-        return mergeUniqueMessageResults(local: localResults, remote: remoteResults)
+        let remote = await messageSearch.remoteMessages(query: query, reader: authManager.currentUser)
+        // On ne met en cache QUE ce qui a abouti : mémoriser le vide d'une
+        // panne sous la clé de la requête la ferait resservir pendant deux
+        // minutes, réseau revenu ou non.
+        if remote.failure == nil {
+            cacheRemoteResults(remote.items, for: query)
+        }
+        return GlobalSearchLeg(
+            items: ConversationMessageSearchService.merged(local: localResults, remote: remote.items),
+            failure: remote.failure
+        )
     }
 
     // MARK: - Message Query Cache (in-memory LRU, 5 entries)
@@ -501,131 +568,15 @@ final class GlobalSearchViewModel: ObservableObject {
         }
     }
 
-    private func searchLocalMessages(query: String) async -> [GlobalSearchMessageResult] {
-        let records = (try? await searchService.search(
-            query: query,
-            limit: 50,
-            conversationId: nil
-        )) ?? []
-        // vm-search-localname-01 — résoudre le nom/avatar LOCALEMENT depuis le
-        // cache conversations (même motif que searchLocalConversations) : le
-        // placeholder ObjectId n'était remplacé par le merge réseau que si le
-        // réseau répondait — précisément jamais offline.
-        let cachedConvs = await CacheCoordinator.shared.conversations.load(for: "list")
-        let conversationsById: [String: MeeshyConversation]
-        switch cachedConvs {
-        case .fresh(let v, _), .stale(let v, _):
-            conversationsById = Dictionary(uniqueKeysWithValues: v.map { ($0.id, $0) })
-        case .expired, .empty:
-            conversationsById = [:]
-        }
-        return records.map { record in
-            let conv = conversationsById[record.conversationId]
-            return GlobalSearchMessageResult(
-                id: record.localId,
-                conversationId: record.conversationId,
-                conversationName: conv?.displayName ?? record.conversationId,
-                conversationAvatar: conv?.avatar ?? conv?.participantAvatarURL,
-                content: record.content ?? "",
-                senderName: record.senderName ?? record.senderUsername ?? "?",
-                senderAvatar: record.senderAvatarURL,
-                createdAt: record.createdAt
-            )
-        }
-    }
-
-    private func fetchRemoteMessageResults(query: String) async -> [GlobalSearchMessageResult] {
-        do {
-            let response: APIResponse<[APIConversation]> = try await api.request(
-                endpoint: "/conversations/search",
-                queryItems: [URLQueryItem(name: "q", value: query)]
-            )
-            let userId = authManager.currentUser?.id ?? ""
-            // Only the first 10 conversations feed the per-conversation message
-            // search below — decode just those, not the whole `/search` response.
-            // Decoding a conversation walks its nested last message + participants,
-            // so dropping the prefix BEFORE the map skips that work for every
-            // result past the 10th on each (per-keystroke) search.
-            let searchConvs = Array(response.data.prefix(10)).map { $0.toConversation(currentUserId: userId) }
-
-            var allResults: [GlobalSearchMessageResult] = []
-            await withTaskGroup(of: [GlobalSearchMessageResult].self) { group in
-                for conv in searchConvs {
-                    group.addTask { [weak self] in
-                        guard let self else { return [] }
-                        return await self.searchMessagesInConversation(
-                            conversationId: conv.id,
-                            conversationName: conv.name,
-                            conversationAvatar: conv.avatar ?? conv.participantAvatarURL,
-                            query: query
-                        )
-                    }
-                }
-                for await results in group {
-                    allResults.append(contentsOf: results)
-                }
-            }
-            return allResults.sorted { $0.createdAt > $1.createdAt }
-        } catch {
-            return []
-        }
-    }
-
-    private func mergeUniqueMessageResults(
-        local: [GlobalSearchMessageResult],
-        remote: [GlobalSearchMessageResult]
-    ) -> [GlobalSearchMessageResult] {
-        var seen = Set<String>()
-        var merged: [GlobalSearchMessageResult] = []
-        // Remote results take precedence (they carry full conversationName, avatar, etc.);
-        // local results fill the gap for any message not returned by the network.
-        for result in remote + local {
-            if seen.insert(result.id).inserted {
-                merged.append(result)
-            }
-        }
-        return merged.sorted { $0.createdAt > $1.createdAt }
-    }
-
-    private func searchMessagesInConversation(
-        conversationId: String,
-        conversationName: String,
-        conversationAvatar: String?,
-        query: String
-    ) async -> [GlobalSearchMessageResult] {
-        do {
-            let response: MessagesAPIResponse = try await api.request(
-                endpoint: "/conversations/\(conversationId)/messages/search",
-                queryItems: [
-                    URLQueryItem(name: "q", value: query),
-                    URLQueryItem(name: "limit", value: "5"),
-                ]
-            )
-            return response.data.map { apiMsg in
-                let senderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username ?? "?"
-                return GlobalSearchMessageResult(
-                    id: apiMsg.id,
-                    conversationId: apiMsg.conversationId,
-                    conversationName: conversationName,
-                    conversationAvatar: conversationAvatar,
-                    content: apiMsg.content ?? "",
-                    senderName: senderName,
-                    senderAvatar: apiMsg.sender?.avatar,
-                    createdAt: apiMsg.createdAt
-                )
-            }
-        } catch {
-            return []
-        }
-    }
-
     // MARK: - Clear Results
 
     private func clearResults() {
         messageResults = []
-        conversationResults = []
+        postResults = []
         userResults = []
         resultsQuery = ""
+        lastQuery = ""
+        remoteFailure = nil
         hasSearched = false
         loadState = .idle
     }
@@ -667,8 +618,8 @@ final class GlobalSearchViewModel: ObservableObject {
     // MARK: - Tab Result Counts
 
     var messageCount: Int { messageResults.count }
-    var conversationCount: Int { conversationResults.count }
+    var postCount: Int { postResults.count }
     var userCount: Int { userResults.count }
 
-    var totalResultCount: Int { messageCount + conversationCount + userCount }
+    var totalResultCount: Int { messageCount + postCount + userCount }
 }

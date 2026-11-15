@@ -1,0 +1,200 @@
+/**
+ * LE VERRE — site UNIQUE de la matière translucide de web-v2 (#6124).
+ *
+ * Pendant web de `adaptiveGlass` / `adaptiveGlassProminent`
+ * (`MeeshyUI/Compatibility/AdaptiveGlass.swift`). Avant ce fichier, neuf
+ * surfaces réécrivaient la matière à la main : cinq opacités (70 / 78 / 80 /
+ * 85 / 92 %, plus 88 pour les disques) et deux rayons de flou (12 et 24 px)
+ * pour une seule matière. `scripts/lib/glass-site.mjs` interdit désormais
+ * tout flou d'arrière-plan et tout ton iOS translucide hors d'ici, sauf
+ * inventaire nommé.
+ *
+ * LA MATIÈRE A DEUX DENSITÉS, UN FLOU, ET UN TON PAR RÔLE — arbitrées sur une
+ * MESURE, pas moyennées. Le fond de repli est ce qui porte le contraste quand
+ * `backdrop-filter` ne s'applique pas (moteur sans support, transparence
+ * réduite) ; le pire cas est donc le fond composé sur du NOIR ou du BLANC pur
+ * passant dessous. Relevé au navigateur (2026-09-13), encre de la surface la
+ * plus exigeante, schéma clair / sombre :
+ *
+ * | densité | pilule de jour (day-ink / card) | en-tête (ink / surface) |
+ * |---|---|---|
+ * | 70 % | **3,54** / 4,68 | 7,58 / 6,89 |
+ * | 78 % | **4,40** / 6,29 | 9,45 / 9,38 |
+ * | 80 % | 4,64 / 6,78 | 9,95 / 10,12 |
+ * | 92 % | 6,21 / 10,24 | 13,36 / 15,11 |
+ *
+ * La pilule de jour, à 70 %, tombait sous AA en clair dès que le flou
+ * manquait : l'écart n'était pas seulement d'aspect.
+ *
+ * - `glass` — 80 %, la densité RÉGULIÈRE : bandes d'en-tête, repères (pilule
+ *   et séparateur de jour), contrôle teinté « revenir en bas », feuille non
+ *   proéminente. Le plus bas palier qui tient AA pour toutes les encres du
+ *   fil, dans les deux schémas.
+ * - `glass-prominent` — 92 %, ce qui se pose SUR du contenu qu'on lit : menus,
+ *   annonce au-dessus du composeur, barre de recherche flottante, disques.
+ * - UN flou, 24 px — celui que le site unique portait déjà.
+ * - Le TON n'est pas la matière : `glass-card` (puces et barres,
+ *   `--color-ios-card`) et `glass-accent` (contrôle teinté, la couleur de la
+ *   conversation) ; la surface d'écran (`--color-ios-surface`) est le défaut.
+ *   Un ton se pose sur la surface de verre ELLE-MÊME, jamais sur un ancêtre :
+ *   la variable s'hérite.
+ *
+ * UN SEUL `color-mix`, la densité portée par une variable : le build double
+ * chaque `color-mix` d'un repli opaque et d'un bloc `@supports` — deux écritures
+ * doublaient ce coût dans la feuille de PREMIÈRE PEINTURE (`budgets.json`).
+ * Le repli qu'il pose (le ton plein) est aussi le plus lisible des replis.
+ *
+ * `backdrop-filter` UNE SEULE FOIS, non préfixé : la minification fusionnait
+ * la paire préfixée en ne gardant que `-webkit-` (mesuré, `thread-menu.css`).
+ * Le préfixe est le travail du build.
+ */
+.glass,
+.glass-prominent {
+  background-color: color-mix(in srgb, var(--glass-tone, var(--color-ios-surface)) var(--glass-density), transparent);
+  backdrop-filter: blur(24px);
+}
+
+.glass {
+  --glass-density: 80%;
+}
+
+/* 94 % ET NON 92 (#7178) — arbitré sur mesure, comme D-51 l'exige.
+   À 92 %, le PLACEHOLDER de la bande du composeur (`--ios-ink-3`, du TEXTE)
+   mesurait 4,40:1 en schéma clair, sous le seuil AA de 4,5. Le remède ne
+   pouvait pas être l'encre : `--ios-ink-3` vaut `indigo700.opacity(0.8)`,
+   déjà le CRAN MINIMAL qu'iOS a arbitré (D-18 bis — « 0.79 échoue sur
+   backgroundTertiary à 4,496:1 »), et D-4 interdit d'en inventer une.
+   Mesuré au pire cas (canvas noir, flou désactivé) : 92 % → 4,40 ·
+   **94 % → 4,55** · 96 % → 4,69 · 100 % → 4,98. 94 est le plus bas palier
+   qui tient, la même méthode que les six mesures de D-51.
+   Le TON n'était pas la réponse : `glass-card` DÉGRADE à 4,21:1 — mesuré
+   avant d'être écarté. Et monter la densité ne peut dégrader AUCUN autre
+   couple : plus opaque, c'est plus de contraste pour toutes les encres. */
+.glass-prominent {
+  --glass-density: 94%;
+}
+
+.glass-card {
+  --glass-tone: var(--color-ios-card);
+}
+
+.glass-accent {
+  --glass-tone: var(--accent);
+}
+
+/* LE VERRE D'APPEL (#8391) — la matière de tout ce qui FLOTTE sur l'écran
+   d'appel : pilule de commandes, rails, puce « Nom · durée », boutons isolés,
+   étiquettes de nom, bandeau des sous-titres.
+
+   L'écran d'appel est TOUJOURS sombre (`call-screen.tsx`, comme iOS) : son
+   verre ne suit pas le schéma. Son ton est `--ios-indigo-950`, un jeton de la
+   palette, le même dans les deux schémas, et son encre est le blanc. Le pire
+   cas n'est donc pas le canevas du schéma (D-51) mais le BLANC pur : sous une
+   commande qui flotte passe n'importe quelle vidéo, un mur clair, un écran
+   partagé. Les deux densités tiennent AA contre ce pire cas, mesurées par
+   `scripts/lib/glass-contrast.mjs` (entrées « appel » de l'inventaire) :
+
+   - `glass-call` — 72 %, la densité régulière ;
+   - `glass-call-prominent` — 86 %, la TEINTE PLUS SOMBRE : ce qu'on LIT (le
+     bandeau des sous-titres, noms de couleur compris) et les commandes posées
+     au-dessus d'un écran partagé à la une, clair par nature.
+
+   Un seul FLOU par groupe : celui de la pilule ou du rail. Chaque bouton À
+   L'INTÉRIEUR porte pourtant son disque de verre (`glass-call-disc`, plus bas,
+   #17345) — un voile et un liseré, jamais un second flou. Le liseré clair, le
+   reflet interne du haut et l'ombre douce sont la forme du verre iOS ; le
+   `saturate` rend sa couleur à la vidéo floutée. */
+.glass-call,
+.glass-call-prominent,
+.glass-call-danger {
+  --glass-call-rim: 1px solid rgb(255 255 255 / 0.22);
+  --glass-call-sheen: inset 0 1px 0 rgb(255 255 255 / 0.18);
+  --glass-call-drop: 0 8px 24px rgb(0 0 0 / 0.28);
+  background-color: color-mix(in srgb, var(--ios-indigo-950) var(--glass-density), transparent);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: var(--glass-call-rim);
+  box-shadow: var(--glass-call-sheen), var(--glass-call-drop);
+  color: white;
+}
+
+.glass-call {
+  --glass-density: 72%;
+}
+
+.glass-call-prominent {
+  --glass-density: 86%;
+}
+
+/* LE VERRE D'APPEL TEINTÉ DE ROUGE (P16.12, #17746) — le bandeau « Vous partagez votre écran » :
+   la matière du verre régulier, sous un voile d'erreur à 35 % (la planche : rgba(217,45,32,.35)).
+   Le voile est un DÉGRADÉ plein posé sur la couleur du verre, jamais une seconde couche
+   d'arrière-plan : un seul flou. Contre le blanc pur, l'encre blanche tient 5,79:1 (AA texte). */
+.glass-call-danger {
+  --glass-density: 72%;
+  background-image: linear-gradient(color-mix(in srgb, var(--ios-error-strong) 35%, transparent), color-mix(in srgb, var(--ios-error-strong) 35%, transparent));
+}
+
+/* LE DISQUE DE VERRE D'UN BOUTON DE L'APPEL (#17345, #17418) — le web reproduit
+   le verre par bouton d'iOS (`CallButtonGlassRule`, #17323) : chaque bouton
+   d'une pilule ou d'un rail est un disque, pas un trou dans le verre du groupe.
+
+   SANS `backdrop-filter` : flouter chaque disque obligerait le navigateur à
+   composer autant de couches d'arrière-plan que de boutons (jusqu'à une
+   douzaine, rangées déployées) à chaque image — le flou de la pilule, un seul,
+   passe SOUS les disques et leur donne leur profondeur. Le disque n'ajoute
+   qu'un voile blanc et le liseré de la pilule.
+
+   Le voile est une variable : le contraste du glyphe blanc se mesure sur elle
+   (`glass-contrast.mjs`, au pire cas du verre d'appel : 4,85:1 à 12 % sur la
+   pilule régulière, minimum non-texte 3:1). Sous le doigt, il s'éclaircit —
+   le verre dessiné ne réagit pas seul — sans animation. */
+.glass-call-disc {
+  --glass-disc-veil: 12%;
+  background-color: color-mix(in srgb, white var(--glass-disc-veil), transparent);
+  border: 1px solid rgb(255 255 255 / 0.22);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18);
+}
+
+.glass-call-disc:active,
+:active > .glass-call-disc {
+  --glass-disc-veil: 22%;
+}
+
+/* RÉDUIRE LA TRANSPARENCE — le verre d'appel cesse de laisser passer l'image :
+   la pilule ne floute plus et se densifie, le disque devient un plein indigo
+   (le glyphe blanc y tient bien au-delà de AA) et garde son liseré. */
+@media (prefers-reduced-transparency: reduce) {
+  .glass-call,
+  .glass-call-prominent,
+  .glass-call-danger {
+    backdrop-filter: none;
+    --glass-density: 100%;
+  }
+
+  .glass-call-disc,
+  .glass-call-disc:active,
+  :active > .glass-call-disc {
+    background-color: var(--ios-indigo-800);
+  }
+}
+
+/* LES COMMANDES POSÉES SUR LA SCÈNE D'UN APPEL (#8550) — le zoom de ma
+   vignette, Plein écran, Retour à la mosaïque, la modération d'une tuile :
+   un toucher sur la scène les efface avec l'en-tête et la pilule, le suivant
+   les rend ; aucune attente ne les efface (#8988). La vidéo, les sous-titres
+   et les réactions restent.
+
+   Un bouton encore visible répond toujours (#8735) : rangées d'un toucher,
+   elles ne laissent passer le doigt qu'à la FIN du fondu — la visibilité suit
+   la transition, et revient d'un coup. */
+[data-call-chrome-fade] {
+  transition: opacity 0.3s ease;
+}
+
+[data-call-chrome='hidden'] [data-call-chrome-fade]:not([data-call-chrome-keep]) {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.3s ease,
+    visibility 0.3s;
+}

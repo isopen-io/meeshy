@@ -104,7 +104,7 @@ FROM python:${PYTHON_VERSION}-slim AS runtime-cpu
 # =============================================================================
 # Stage 2b: GPU Runtime Base (CUDA 12.4)
 # =============================================================================
-FROM nvidia/cuda:13.3.1-runtime-ubuntu22.04 AS runtime-gpu
+FROM nvidia/cuda:13.5.0-runtime-ubuntu22.04 AS runtime-gpu
 
 # Install Python 3.11 on CUDA base (including libpython for shared library support)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -124,7 +124,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # =============================================================================
 # Stage 2c: GPU Runtime Base (CUDA 12.1)
 # =============================================================================
-FROM nvidia/cuda:13.3.1-runtime-ubuntu22.04 AS runtime-gpu-cu121
+FROM nvidia/cuda:13.5.0-runtime-ubuntu22.04 AS runtime-gpu-cu121
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         software-properties-common \
@@ -143,7 +143,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # =============================================================================
 # Stage 2d: GPU Runtime Base (CUDA 11.8)
 # =============================================================================
-FROM nvidia/cuda:13.3.1-runtime-ubuntu22.04 AS runtime-gpu-cu118
+FROM nvidia/cuda:13.5.0-runtime-ubuntu22.04 AS runtime-gpu-cu118
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         software-properties-common \
@@ -205,6 +205,9 @@ ENV HOME=/workspace \
     PYTHONPATH=/workspace:/workspace/generated \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    # #13865 — un crash natif (segfault, abort) imprime la pile Python de
+    # chaque thread dans les journaux, au lieu d'un seul « exit 139 ».
+    PYTHONFAULTHANDLER=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     # Application paths

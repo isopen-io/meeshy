@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 import os
 
-private let outboxFlusherLog = Logger(subsystem: "me.meeshy.sdk", category: "outbox-flusher")
+private let outboxFlusherLog = MeeshyLog.logger(.outboxFlusher, subsystem: .sdk)
 
 public protocol OutboxDispatching: Sendable {
     func dispatch(_ record: OutboxRecord) async throws
@@ -16,8 +16,7 @@ public protocol OutboxDispatching: Sendable {
 @inline(__always)
 internal func reactionContext(for record: OutboxRecord) -> OfflineRetrySuccess.ReactionContext? {
     guard record.kind == .sendReaction else { return nil }
-    let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .iso8601
+    let decoder = MeeshyCoders.decoder(.persistence)
     guard let payload = decoder.decodeOrLog(
         ReactionOutboxPayload.self,
         from: record.payload,
@@ -50,8 +49,7 @@ internal func reactionContext(for record: OutboxRecord) -> OfflineRetrySuccess.R
 @inline(__always)
 internal func cleanupLocalFiles(for record: OutboxRecord) {
     guard record.kind == .sendMessage else { return }
-    let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .iso8601
+    let decoder = MeeshyCoders.decoder(.persistence)
     guard let item = decoder.decodeOrLog(
         OfflineQueueItem.self,
         from: record.payload,
@@ -89,14 +87,12 @@ internal func cleanupLocalFiles(for record: OutboxRecord) {
 
 /// Drains the `outbox` table FIFO, dispatching each pending item via the
 /// supplied `OutboxDispatching`. Failures schedule an exponential backoff
-/// retry; after `maxAttempts` failures the item is marked `.exhausted`.
+/// retry; once `retryPolicy` is exhausted the item is marked `.exhausted`.
 public actor OutboxFlusher {
 
     private let pool: any DatabaseWriter
     private let dispatcher: any OutboxDispatching
-    private let maxAttempts: Int
-    private let baseBackoff: TimeInterval
-    private let maxBackoff: TimeInterval
+    private let retryPolicy: RetryPolicy
     private let onOutcome: (@Sendable (OutboxOutcome) -> Void)?
     /// BW1 — optional gate so the flusher can short-circuit when the device
     /// is offline. Without it, a long airplane-mode session burns through
@@ -105,24 +101,39 @@ public actor OutboxFlusher {
     /// `Sendable` closure form lets call-sites inject the live `Network
     /// ConditionMonitor.shared.isOnline` getter from MainActor without the
     /// SDK Persistence layer importing UIKit/SwiftUI.
-    private let isNetworkReachable: @Sendable () async -> Bool
+    private let isNetworkReachable: @Sendable @concurrent () async -> Bool
+    private let scheduleAppliedFileSweep: AppliedFileSweepScheduler
+
+    /// #15294 — un envoi ACCEPTÉ ne libère pas tout de suite ses copies
+    /// `Documents/pending-*/` : l'accusé précède l'écho serveur, et c'est à
+    /// l'écho que `MessagePersistenceActor.adoptSDKLevel` DÉPLACE la copie dans
+    /// le cache typé, sous l'URL serveur. L'effacer à l'accusé vidait la bulle
+    /// (son `file://` ne désignait plus rien) et privait l'écho de l'adoption.
+    /// Le balayage ne rattrape donc, après ce délai, que ce que l'écho n'a pas
+    /// adopté.
+    public typealias AppliedFileSweepScheduler = @Sendable (@escaping @Sendable () -> Void) -> Void
+    public static let appliedFileSweepGrace: Duration = .seconds(600)
+    public static let afterAppliedFileSweepGrace: AppliedFileSweepScheduler = { sweep in
+        Task.detached(priority: .utility) {
+            do { try await Task.sleep(for: OutboxFlusher.appliedFileSweepGrace) } catch { return }
+            sweep()
+        }
+    }
 
     public init(
         pool: any DatabaseWriter,
         dispatcher: any OutboxDispatching,
-        maxAttempts: Int = 5,
-        baseBackoff: TimeInterval = 2,
-        maxBackoff: TimeInterval = 30,
+        retryPolicy: RetryPolicy = .messageOutbox,
         onOutcome: (@Sendable (OutboxOutcome) -> Void)? = nil,
-        isNetworkReachable: @escaping @Sendable () async -> Bool = { true }
+        isNetworkReachable: @escaping @Sendable () async -> Bool = { true },
+        scheduleAppliedFileSweep: @escaping AppliedFileSweepScheduler = OutboxFlusher.afterAppliedFileSweepGrace
     ) {
         self.pool = pool
         self.dispatcher = dispatcher
-        self.maxAttempts = maxAttempts
-        self.baseBackoff = baseBackoff
-        self.maxBackoff = maxBackoff
+        self.retryPolicy = retryPolicy
         self.onOutcome = onOutcome
         self.isNetworkReachable = isNetworkReachable
+        self.scheduleAppliedFileSweep = scheduleAppliedFileSweep
     }
 
     /// Draine les records `.pending` dont le `nextAttemptAt` est échu.
@@ -156,6 +167,15 @@ public actor OutboxFlusher {
     /// avion, assez court pour qu'un moniteur qui se trompe coûte une minute
     /// d'attente et non la session entière.
     public static let offlineRetrySeconds: TimeInterval = 60
+
+    /// #13824 — ce qu'un échec réécrit sur sa ligne : l'état de la tentative,
+    /// jamais la charge ni la marque d'annulation. L'envoi a pu graver la
+    /// charge pendant qu'il tournait (`recordUploadedPostMedia`) : la
+    /// réécrire depuis l'instantané d'avant l'envoi faisait re-téléverser
+    /// chaque média à chaque tentative.
+    static let attemptStateColumns = [
+        "status", "attempts", "lastError", "updatedAt", "nextAttemptAt", "waitingForFanoutOriginSince",
+    ]
 
     @discardableResult
     public func flush() async -> Date? {
@@ -287,9 +307,12 @@ public actor OutboxFlusher {
     /// transitory auth failure, NOT a permanent dispatch error. It must not consume
     /// the retry budget — otherwise a brief session expiry permanently exhausts every
     /// queued row before the app gets a chance to refresh the token.
+    /// `CancellationError` is the same transitory state seen from the other side:
+    /// APIClient rethrows it when a session exit or an account switch abandons the
+    /// token refresh (#10463), where it used to map it to `.auth(.sessionExpired)`.
     private static func isSessionExpiry(_ error: Error) -> Bool {
         if case MeeshyError.auth = error { return true }
-        return false
+        return error is CancellationError
     }
 
     /// P7-7 — codes URLError de TRANSPORT (réseau/serveur injoignable). Liste
@@ -307,8 +330,8 @@ public actor OutboxFlusher {
     /// refus du serveur. Sans cette distinction, ~2 min d'outage (connection
     /// refused = échec instantané, seul le backoff espace les tentatives)
     /// consomment les 5 attempts → `.exhausted` → l'utilisateur doit re-taper
-    /// Retry PAR message au lieu du flush FIFO automatique au reconnect
-    /// (observé E2E 2026-07-02). Même principe que le gate BW1 (mode avion)
+    /// Retry PAR message au lieu du flush FIFO automatique au reconnect.
+    /// Même principe que le gate BW1 (mode avion)
     /// et que l'exemption session-expiry ci-dessus.
     /// `MeeshyError.network` est la normalisation APIClient de tout URLError
     /// transport ; les URLError bruts couvrent le chemin TUS qui ne passe pas
@@ -341,11 +364,23 @@ public actor OutboxFlusher {
     /// supprimé ce que la ligne avait créé, soit la source éphémère a expiré.
     /// Sans lui dans cette liste, la ligne brûlait ses cinq tentatives pour
     /// finir au même endroit, une minute de ⏳ plus tard.
-    private static let permanentRejectionStatusCodes: Set<Int> = [400, 403, 404, 410, 413, 422]
-    private static func isPermanentServerRejection(_ error: Error) -> Bool {
+    ///
+    /// 415 (#13414) : un média refusé APRÈS le repli JPEG
+    /// (`HEICUploadFallback`) ne passera jamais — rejouer renverrait cinq fois
+    /// les mêmes octets. La ligne sort en échec, gardée sur l'appareil.
+    private static let permanentRejectionStatusCodes: Set<Int> = [400, 403, 404, 410, 413, 415, 422]
+    static func isPermanentServerRejection(_ error: Error) -> Bool {
         // 403 is surfaced as a distinct `.forbidden` case by APIClient (resource
         // access loss, not a session problem) — a permanent reject all the same.
         if case MeeshyError.forbidden = error { return true }
+        // Limite QUOTIDIENNE de gestes (#9571) : terminale jusqu'à `resetAt`.
+        if DailyGestureLimit.from(error) != nil { return true }
+        // #11379 — un clair refusé dans une conversation chiffrée ne se rejoue jamais.
+        if EndToEndSendGate.isServerPlaintextRefusal(error) { return true }
+        // #12985 — un refus posé par l'appareil avant tout transport (cible
+        // chiffrée de bout en bout) ne se lèvera pas en rejouant.
+        if error is EndToEndSendRefusal { return true }
+        if error is UnsupportedImageFormatRefusal { return true }
         if case let MeeshyError.server(statusCode, _) = error {
             return permanentRejectionStatusCodes.contains(statusCode)
         }
@@ -417,6 +452,47 @@ public actor OutboxFlusher {
         }
     }
 
+    /// #10321 — l'envoi tourne dans une `Task` enregistrée par id de ligne,
+    /// pour que `OfflineQueue.cancelPendingPublication` coupe la requête en vol.
+    private func dispatchCancellably(_ record: OutboxRecord) async throws {
+        let dispatcher = self.dispatcher
+        let task = OutboxInflightDispatches.shared.start(record.id) { try await dispatcher.dispatch(record) }
+        defer { OutboxInflightDispatches.shared.unregister(task, for: record.id) }
+        try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    private func wasCancelledByAuthor(_ record: OutboxRecord, error: Error) async -> Bool {
+        if case OutboxCancellationError.cancelledByAuthor = error { return true }
+        guard record.kind == .createPost else { return false }
+        let id = record.id
+        do {
+            return try await pool.read { db in
+                guard let fresh = try OutboxRecord.fetchOne(db, key: id) else { return true }
+                return fresh.cancelRequestedAt != nil
+            }
+        } catch {
+            outboxFlusherLog.error("Cancellation mark unreadable for \(id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+
+    private func finalizeCancelledPublication(_ record: OutboxRecord) async {
+        let id = record.id
+        do {
+            try await pool.write { db in
+                _ = try OutboxRecord.deleteOne(db, key: id)
+            }
+        } catch {
+            outboxFlusherLog.error("Cancelled publication \(id, privacy: .public) not deleted: \(error.localizedDescription, privacy: .public)")
+        }
+        OfflineQueue.removePublicationFiles(payload: record.payload, context: "outbox cancelled publication")
+        outboxFlusherLog.info("Publication \(id, privacy: .public) retirée par son auteur pendant l'envoi")
+    }
+
     private func processRecord(_ record: OutboxRecord) async {
         // S1 — claim atomically; skip dispatch if another flusher beat us to it.
         guard await claimPending(record) else { return }
@@ -424,9 +500,15 @@ public actor OutboxFlusher {
         current.status = .inflight
         current.updatedAt = Date()
         let attemptStartedAt = Date()
+        // #10321 — une ligne reprise par le reclaim des périmés garde sa marque
+        // d'annulation : elle ne repart pas.
+        guard current.cancelRequestedAt == nil else {
+            await finalizeCancelledPublication(current)
+            return
+        }
 
         do {
-            try await dispatcher.dispatch(current)
+            try await dispatchCancellably(current)
             await logSendAttempt(for: current, startedAt: attemptStartedAt, outcome: .success, error: nil)
             let idToDelete = current.id
             do {
@@ -436,15 +518,21 @@ public actor OutboxFlusher {
             } catch {
                 outboxFlusherLog.error("Post-dispatch outbox delete failed for \(idToDelete, privacy: .public): \(error.localizedDescription, privacy: .public) — record may re-dispatch")
             }
-            // A7+A8 — drop any local file the payload referenced. On the
-            // happy path, MessagePersistenceActor.adoptSDKLevel already
-            // moved the file into the typed media cache (cf. DiskCacheStore
-            // .adopt's moveItem), so this is a defensive no-op for the
-            // applied path. Real value is on `.exhausted` below.
-            cleanupLocalFiles(for: current)
+            // A7+A8 — drop any local file the payload referenced, once the
+            // echo has had time to adopt it (#15294, voir
+            // `appliedFileSweepGrace`).
+            let applied = current
+            scheduleAppliedFileSweep { cleanupLocalFiles(for: applied) }
             onOutcome?(.applied(cmid: current.clientMessageId))
         } catch {
             await logSendAttempt(for: current, startedAt: attemptStartedAt, outcome: .failure, error: error)
+            // #10321 — l'auteur a retiré la publication pendant l'envoi : ni
+            // rejeu, ni `.exhausted`. Relu AVANT toute réécriture de la ligne,
+            // dont l'instantané d'avant l'envoi effacerait la marque.
+            if await wasCancelledByAuthor(current, error: error) {
+                await finalizeCancelledPublication(current)
+                return
+            }
             // 401 / session-expiry is TRANSITORY — the app's auth flow refreshes the
             // token (AuthManager.checkExistingSession on resume/reconnect). Treating it
             // like a normal failure burns the retry budget and PERMANENTLY exhausts
@@ -461,11 +549,11 @@ public actor OutboxFlusher {
                 current.lastError = String(describing: error)
                 current.status = .pending
                 current.updatedAt = Date()
-                current.nextAttemptAt = Date().addingTimeInterval(maxBackoff)
+                current.nextAttemptAt = Date().addingTimeInterval(retryPolicy.deferral)
                 let deferredSnapshot = current
                 do {
                     try await pool.write { db in
-                        try deferredSnapshot.update(db)
+                        try deferredSnapshot.update(db, columns: Self.attemptStateColumns)
                     }
                 } catch {
                     // La ligne reste `.inflight` : elle ne sera rejouée qu'au
@@ -494,11 +582,11 @@ public actor OutboxFlusher {
                     current.lastError = String(describing: error)
                     current.status = .pending
                     current.updatedAt = now
-                    current.nextAttemptAt = now.addingTimeInterval(maxBackoff)
+                    current.nextAttemptAt = now.addingTimeInterval(retryPolicy.deferral)
                     let deferredSnapshot = current
                     do {
                         try await pool.write { db in
-                            try deferredSnapshot.update(db)
+                            try deferredSnapshot.update(db, columns: Self.attemptStateColumns)
                         }
                     } catch {
                         // La ligne reste `.inflight` : elle ne sera rejouée
@@ -517,20 +605,18 @@ public actor OutboxFlusher {
             current.updatedAt = Date()
 
             // A permanent 4xx will never succeed — dead-letter now rather than
-            // spin the full backoff schedule. Otherwise cap at `maxAttempts`.
-            if Self.isPermanentServerRejection(error) || current.attempts >= maxAttempts {
+            // spin the full backoff schedule. Otherwise stop once `retryPolicy` is exhausted.
+            if Self.isPermanentServerRejection(error) || retryPolicy.isExhausted(afterFailures: current.attempts) {
                 current.status = .exhausted
             } else {
                 current.status = .pending
-                let backoff = min(maxBackoff, baseBackoff * pow(2.0, Double(current.attempts - 1)))
-                let jitter = Double.random(in: 0...0.5)
-                current.nextAttemptAt = Date().addingTimeInterval(backoff + jitter)
+                current.nextAttemptAt = Date().addingTimeInterval(retryPolicy.delay(afterFailure: current.attempts))
             }
 
             let failedSnapshot = current
             do {
                 try await pool.write { db in
-                    try failedSnapshot.update(db)
+                    try failedSnapshot.update(db, columns: Self.attemptStateColumns)
                 }
             } catch {
                 // `attempts` n'est pas incrémenté : sans trace, la ligne peut
@@ -553,6 +639,9 @@ public actor OutboxFlusher {
                 // pending-audio/.m4a) would otherwise leak forever. Best-
                 // effort delete before emitting the exhausted outcome.
                 cleanupLocalFiles(for: current)
+                if let limit = DailyGestureLimit.from(error) {
+                    DailyGestureLimitLedger.shared.record(limit, clientMutationId: current.clientMessageId)
+                }
                 onOutcome?(.exhausted(cmid: current.clientMessageId))
                 OfflineQueue.shared.emitRetryExhausted(OfflineRetryExhausted(
                     kind: current.kind,

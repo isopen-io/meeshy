@@ -41,6 +41,13 @@ public struct StoryExpiredContent: View {
     public let context: StoryNotificationContext
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// Retour opérant dans les trois contextes : pile iPhone, panneau droit iPad — à la racine de sa pile,
+    /// où la fermeture de l’environnement ne fait rien et laissait la colonne sur son chargeur —, et feuille.
+    private var back: PanelBackAction {
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
+    }
 
     @State private var background: Color = StoryBackgroundPalette.randomBackgroundColorAsColor()
 
@@ -53,7 +60,7 @@ public struct StoryExpiredContent: View {
         ZStack {
             background.ignoresSafeArea()
 
-            VStack(spacing: 24) {
+            VStack(spacing: MeeshySpacing.xxl) {
                 Spacer(minLength: 0)
                 actorHeader
                 triggerVisual
@@ -62,9 +69,9 @@ public struct StoryExpiredContent: View {
                 Spacer(minLength: 0)
                 createCTA
                 backLink
-                    .padding(.bottom, 24)
+                    .padding(.bottom, MeeshySpacing.xxl)
             }
-            .padding(.horizontal, 32)
+            .padding(.horizontal, MeeshySpacing.xxxl)
         }
         .foregroundStyle(Self.foregroundOnBackground(background))
     }
@@ -72,10 +79,12 @@ public struct StoryExpiredContent: View {
     // MARK: - Adaptive foreground (pure, exposed for tests)
 
     /// Picks the legible foreground colour for arbitrary backgrounds based on
-    /// WCAG relative luminance. The 0.6 threshold matches the design tokens
-    /// used by the story canvases.
+    /// WCAG relative luminance — delegates to `Color.readableInk` (#5950),
+    /// which switches at the WCAG contrast-equality point rather than a
+    /// hand-picked `0.6` (that threshold misjudged the whole `0.179 → 0.6`
+    /// range, e.g. story backgrounds like `#46BDCA`).
     public static func foregroundOnBackground(_ bg: Color) -> Color {
-        bg.luminance > 0.6 ? .black : .white
+        bg.readableInk
     }
 
     // MARK: - Sub-views
@@ -83,20 +92,20 @@ public struct StoryExpiredContent: View {
     @ViewBuilder
     private var actorHeader: some View {
         let foreground = Self.foregroundOnBackground(background)
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
                 name: context.actorDisplayName,
                 context: .custom(32),
                 avatarURL: context.actorAvatar
             )
             .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(context.actorDisplayName)
                     .font(.headline)
                     .foregroundStyle(foreground)
                 Text(context.occurredAt.formatted(.relative(presentation: .named)))
                     .font(.caption)
-                    .foregroundStyle(foreground.opacity(0.7))
+                    .foregroundStyle(foreground.opacity(MeeshyOpacity.heavy))
             }
             Spacer(minLength: 0)
         }
@@ -113,15 +122,15 @@ public struct StoryExpiredContent: View {
             // Type would blow the empty-state layout). The emoji IS the reaction
             // content, so it stays labelled for VoiceOver.
             Text(emoji)
-                .font(.system(size: 64))
+                .font(MeeshyFont.emoji(64))
                 .accessibilityLabel(Text(emoji))
         case .comment:
             // Decorative counterpart to the reaction emoji — the comment excerpt
             // and localised title already convey the trigger, so hide it from
             // VoiceOver. Hero glyph ≥40pt → kept fixed, same rationale as above.
             Image(systemName: "bubble.left.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(Self.foregroundOnBackground(background).opacity(0.85))
+                .font(MeeshyFont.fixedGlyph(56))
+                .foregroundStyle(Self.foregroundOnBackground(background).opacity(MeeshyOpacity.intense))
                 .accessibilityHidden(true)
         }
     }
@@ -142,14 +151,10 @@ public struct StoryExpiredContent: View {
     @ViewBuilder
     private var titleBlock: some View {
         let foreground = Self.foregroundOnBackground(background)
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             Text("notifications.story.expired.title")
                 .font(.title2.bold())
                 .foregroundStyle(foreground)
-                .multilineTextAlignment(.center)
-            Text("notifications.story.expired.subtitle")
-                .font(.body)
-                .foregroundStyle(foreground.opacity(0.8))
                 .multilineTextAlignment(.center)
         }
         // Read title + subtitle as one statement rather than two separate swipes.
@@ -164,15 +169,15 @@ public struct StoryExpiredContent: View {
             // Dismiss first so the composer presents from RootView with a
             // clean navigation stack — `.fullScreenCover` over `.fullScreenCover`
             // animates poorly on iOS 16/17.
-            dismiss()
+            back()
             NotificationCenter.default.post(name: .openStoryComposer, object: nil)
         } label: {
             Text("notifications.story.expired.cta.create")
                 .font(.headline)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .padding(.vertical, MeeshySpacing.mdPlus)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .fill(foreground)
                 )
                 .foregroundStyle(background)
@@ -184,12 +189,12 @@ public struct StoryExpiredContent: View {
     private var backLink: some View {
         let foreground = Self.foregroundOnBackground(background)
         Button {
-            dismiss()
+            back()
         } label: {
             Text("notifications.story.expired.back")
                 .font(.subheadline)
                 .underline()
-                .foregroundStyle(foreground.opacity(0.85))
+                .foregroundStyle(foreground.opacity(MeeshyOpacity.intense))
         }
         .buttonStyle(.plain)
     }

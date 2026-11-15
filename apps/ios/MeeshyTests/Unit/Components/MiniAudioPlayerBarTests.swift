@@ -212,6 +212,20 @@ final class MiniAudioPlayerBarTests: XCTestCase {
         try source("Meeshy/Features/Main/Components/MiniAudioPlayerBar.swift")
     }
 
+    /// La croix se touche sur TOUT son cadre de 44 pt (#8983) : sans `contentShape`, un toucher
+    /// sur la partie transparente du cadre tombe sur le corps de la barre, qui ouvre la
+    /// conversation au lieu de fermer le lecteur.
+    func test_closeButton_isTappableOverItsWholeFrame() throws {
+        let code = try barSource()
+        let croix = try XCTUnwrap(code.range(of: "Image(systemName: \"xmark\")"), "La croix du lecteur a disparu.")
+        let bouton = code[croix.upperBound...]
+        let suite = bouton[..<(bouton.range(of: ".buttonStyle(.plain)")?.lowerBound ?? bouton.endIndex)]
+        XCTAssertTrue(
+            suite.contains(".contentShape(Rectangle())"),
+            "Le libellé de la croix doit porter `.contentShape(Rectangle())` après son cadre de 44 pt."
+        )
+    }
+
     /// Apple HIG (and this repo's own iOS rule) put the floor for a tappable
     /// control at 44×44 pt. These three carry `.buttonStyle(.plain)`, which adds
     /// no padding of its own: the hit region is *exactly* the label's frame, so
@@ -257,7 +271,7 @@ final class MiniAudioPlayerBarTests: XCTestCase {
     /// floating call pill". The pill already sizes all three of its controls at
     /// 44×44; this pins the two to the same floor so the claim stays true.
     func test_transportControls_matchTheFloatingCallPillPrecedent() throws {
-        let pill = try source("Meeshy/Features/Main/Views/FloatingCallPillView.swift")
+        let pill = try source("Meeshy/Features/Call/Views/FloatingCallPillView.swift")
 
         XCTAssertGreaterThanOrEqual(
             pill.components(separatedBy: ".frame(width: 44, height: 44)").count - 1, 3,
@@ -281,8 +295,11 @@ final class MiniAudioPlayerBarTests: XCTestCase {
             "Plus d'arrondi : la bande va d'un bord à l'autre."
         )
         XCTAssertTrue(
-            code.contains(".background(MiniAudioPlayerBarStyle.background)"),
-            "Le fond doit être l'aplat de marque, posé via le token de style."
+            code.contains(".background(MiniAudioPlayerBarStyle.background, ignoresSafeAreaEdges: [])"),
+            "Le fond doit être l'aplat de marque, posé via le token de style — et " +
+            "BORNÉ à la hauteur de la barre : le défaut de `.background(_:)` est " +
+            "`.all`, donc sans `ignoresSafeAreaEdges: []` la barre reprend la " +
+            "peinture de la bande du haut en silence (#6579)."
         )
         XCTAssertTrue(
             code.contains(".frame(maxWidth: .infinity)"),

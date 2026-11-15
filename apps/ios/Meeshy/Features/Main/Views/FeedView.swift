@@ -1,43 +1,26 @@
 import SwiftUI
-import PhotosUI
 import Combine
 import os
 import MeeshySDK
 import MeeshyUI
 
 
-// MARK: - ShareableLink
-
-/// Identifiable wrapper around the freshly-minted post/story share URL so
-/// SwiftUI's `.sheet(item:)` can drive presentation directly. `URL` doesn't
-/// conform to `Identifiable`; wrapping is the lightest fix without leaking
-/// state booleans across the view tree.
-struct ShareableLink: Identifiable {
-    let id = UUID()
-    let url: URL
-
-    /// Public web origin posts/stories live on. Hardcoded to the production
-    /// host because an external share must always resolve from a third-party
-    /// network — a staging URL would dead-end for the recipient.
-    static let webBaseURL = "https://meeshy.me"
-
-    /// Raw post detail URL used as a graceful fallback when the gateway can't
-    /// mint a TrackingLink (offline, rate-limited, etc.). The recipient still
-    /// lands on the post; only the attribution analytics are skipped.
-    /// Mirrors the `originalUrl` the gateway uses when minting the link.
-    static func fallback(forPostId postId: String) -> ShareableLink? {
-        URL(string: "\(webBaseURL)/feeds/post/\(postId)").map { ShareableLink(url: $0) }
-    }
-}
-
 // MARK: - Feed View
 struct FeedView: View {
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "feed")
+    /// **La dernière dépendance qui manquait au MEUBLE**.
+    ///
+    /// `DocumentComposerDoor` en a besoin, et l'arbre iPad l'avait déjà sous
+    /// la main (`iPadRootView.conversationViewModel`) — il ne descendait
+    /// simplement pas jusqu'ici. C'est tout ce qui séparait le fil iPad du
+    /// composer que le fil iPhone emploie depuis T3.1.
+    let conversationListViewModel: ConversationListViewModel
+
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.horizontalSizeClass) private var sizeClass
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var routerCommands
+    @Environment(\.meeshyRouter) private var meeshyRouter
     @EnvironmentObject private var statusViewModel: StatusViewModel
     // Stories in the iPad feed: the tray reads the shared StoryViewModel (loaded
     // by `iPadRootView`). FeedView is iPad-only, so these objects are always
@@ -47,44 +30,15 @@ struct FeedView: View {
     // et que `ThemedFeedOverlay` côté iPhone). Injecté par `iPadRootView`.
     @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     @StateObject var viewModel = FeedViewModel()
-    /// Élit le réel le plus centré dans le viewport et pilote sa lecture muette
-    /// (source UNIQUE de "quel réel joue"). Call-aware via son init par défaut.
-    @StateObject private var reelAutoplay = ReelFeedAutoplayCoordinator()
-    /// When true, use the UIKit-backed FeedListView for high-performance scrolling.
-    /// Set to false to keep the existing SwiftUI ScrollView path.
-    @State private var useUIKitList = false
-    @State private var searchText = ""
-    /// Carte plein écran des posts géolocalisés (bouton `map` du header).
-    @State private var showPostsMap = false
+    /// Source UNIQUE de « quel réel joue ». `@State` et NON `@StateObject` (#7010) :
+    /// ce body n'en lit rien, et l'abonnement re-diffait tout `FeedView` au scroll.
+    @State private var reelAutoplay = ReelFeedAutoplayCoordinator()
     @State var showComposer = false
-    @FocusState var isComposerFocused: Bool
-    @State private var composerBounce: Bool = false
     @State var composerText = ""
-    /// Les personnes que ce post nomme SANS que son texte le dise. Aucune n'est
-    /// INLINE : celles-là, le serveur les relit du contenu lui-même. `var` non
-    /// privée — `publishPostWithAttachments()` vit dans l'extension
-    /// `FeedView+Attachments`.
-    @State var composerReferences: [ComposerReference] = []
-    @State private var expandedComments: Set<String> = []
     @State var postVisibility: String = "PUBLIC"
-    /// Audience nommée de la publication en cours (EXCEPT/ONLY) et le
-    /// sélecteur de personnes qui la remplit. Vides tant que l'auteur reste
-    /// sur une visibilité qui n'en demande pas.
+    /// Audience nommée de la publication en cours (EXCEPT/ONLY). Vide tant que
+    /// l'auteur reste sur une visibilité qui n'en demande pas.
     @State  var postVisibilityUserIds: [String] = []
-    @State  var audiencePickerMode: PostVisibility? = nil
-
-    /// La visibilité choisie, relue comme un mode du modèle — un `rawValue`
-    /// inconnu (état corrompu) retombe sur PUBLIC, le défaut produit.
-    var selectedPostVisibility: PostVisibility {
-        PostVisibility(rawValue: postVisibility) ?? .public
-    }
-
-    /// EXCEPT sans exclus = privé fantôme ; ONLY sans inclus = invisible pour
-    /// tous. Le gateway les REFUSE (`CreatePostSchema`) : mieux vaut retenir
-    /// l'envoi ici que le laisser échouer après coup.
-    var postAudienceIncomplete: Bool {
-        selectedPostVisibility.requiresUserSelection && postVisibilityUserIds.isEmpty
-    }
 
     /// A QUALIFYING composition (video || audio || >= 2 images —
     /// `ReelComposition.qualifiesAsReel`) defaults to a REEL; the author can
@@ -93,9 +47,14 @@ struct FeedView: View {
     /// hides and `defaultType` ignores this flag.
     @State var composerForcePlainPost = false
     @State private var showAudioComposer = false
-    @State var composerLanguage: String = DefaultComposerLanguage.resolve()
-    @State var showComposerLanguagePicker = false
-    @State private var headerScrollOffset: CGFloat = 0
+    /// Offset de défilement relayé au header SANS invalider ce body :
+    /// `@State` retient la référence sans s'y abonner, et seul le
+    /// `ScrollOffsetReader` monté autour du header se re-rend à chaque tick.
+    /// Même montage que `ConversationListView` et `ContactsHubView`.
+    /// L'ancien `CGFloat` d'état ré-exécutait ce body ENTIER — 1 449 lignes,
+    /// toutes les cartes du fil et leurs closures — à la cadence de
+    /// l'affichage (#6226).
+    @State private var scrollRelay = ScrollOffsetRelay()
     /// Holds the freshly-minted `meeshy.me/l/<token>` URL when the user taps
     /// the share button on a post — the `.sheet` further down presents the
     /// system share UI as soon as this is non-nil and clears it on dismiss.
@@ -111,121 +70,59 @@ struct FeedView: View {
     // mutating FeedPost values (pure socket-driven path, mirrors FeedCommentsSheet pattern).
     // Feed list does NOT join individual post rooms (too many rooms for a scrolling list).
     // Room join only happens in PostDetailView for the single focused post.
-    @State private var postLikedIds: Set<String> = []
-    @State private var postLikeDelta: [String: Int] = [:]
-    @State private var postHeartInFlightIds: Set<String> = []
-    // Optimistic bookmark / repost / share states. FeedPost has no
-    // server-issued `isBookmarked`/`isReposted` so the parent View tracks
-    // them locally — toggled on tap, cleared on API failure.
-    @State private var postBookmarkedIds: Set<String> = []
-    @State private var postBookmarkInFlightIds: Set<String> = []
-    @State private var postBookmarkDelta: [String: Int] = [:]
-    @State private var postRepostedIds: Set<String> = []
-    @State private var postRepostInFlightIds: Set<String> = []
-    @State private var postRepostDelta: [String: Int] = [:]
-    @State private var postShareInFlightIds: Set<String> = []
-    @State private var postShareDelta: [String: Int] = [:]
+    // Optimistic bookmark / repost / share states: FeedPost has no server-issued
+    // flag for every path so the parent View tracks them locally — toggled on tap,
+    // cleared on API failure. Les règles d'amorçage/réconciliation : `FeedPostEngagementState`.
+    @State private var engagement = FeedPostEngagementState()
 
     // Impression tracking — une impression par APPARITION à l'écran. Le
     // groupement, la persistance et le flush (sortie d'écran / arrière-plan /
     // relance) sont portés par `ImpressionBatcher`.
-    @StateObject private var impressions = ImpressionBatcher(source: "feed")
+    @StateObject private var impressions = ImpressionBatcher(source: "feed", surface: .feed)
 
     // Attachment states
     @State var pendingAttachments: [MessageAttachment] = []
-    /// Lieu choisi via le picker, en attente d'envoi. `SharedPlace` porte le
-    /// nom et l'adresse ; `MessageAttachment.location` ne les portait pas et
-    /// n'est plus le véhicule (Task 11/12, 2026-07-29).
-    @State var pendingPlace: SharedPlace? = nil
-    /// Le SECOND opt-in de position (spec du 2026-08-02 §2) : « rendre ce
-    /// contenu trouvable à proximité ». INDÉPENDANT de `pendingPlace`, qui
-    /// gouverne le badge affiché et ne bouge pas — on peut afficher un lieu
-    /// sans être trouvable, et l'inverse.
-    ///
-    /// `.disabled` à l'ouverture, et reconstruit à chaque choix de lieu :
-    /// l'état porte la mémoire PRÉ-SÉLECTIONNÉE et les paliers offerts, tous
-    /// deux lus au moment où le lieu entre. L'interrupteur, lui, repart fermé
-    /// à chaque publication — le consentement porte sur UNE publication.
-    @State var nearbyDiscoverability: NearbyDiscoverabilityChoice = .disabled
-    @State var pendingMediaFiles: [String: URL] = [:]
-    @State var pendingThumbnails: [String: UIImage] = [:]
-    @State var pendingAudioURL: URL?
     /// `clientMutationId` of a post/reel recovered from the offline queue and
     /// pre-filled as a draft when the composer opened onto a stuck unsent post.
     /// The re-send supersedes this row so it replaces the stuck one (no duplicate
     /// on reconnect). `nil` when the compose is fresh.
     @State var recoveredPostCmid: String?
 
-    /// In-flight preparations rendered as loading tiles in the attachments
-    /// row. Each entry is promoted to `pendingAttachments` once it reaches
-    /// `.ready`. Source-of-truth pipeline:
-    /// `AttachmentPreparationService` (apps/ios/.../Services).
-    @State var preparingAttachments: [PreparingAttachment] = []
-    @State var showPhotoPicker = false
-    @State var selectedPhotoItems: [PhotosPickerItem] = []
-    @State var showCamera = false
-    @State var showFilePicker = false
-    @State var showLocationPicker = false
-    @State var isUploading = false
-    @State var uploadProgress: UploadQueueProgress?
-    @State var isLoadingMedia = false
-    @StateObject var audioRecorder = AudioRecorderManager()
-    @State private var pendingAttachmentType: String?
-    @State var showEmojiPicker = false
+    // (#6226) `audioRecorder` retiré : déclaré ici, il n'était LU nulle part
+    // dans `FeedView*` — un abonnement à vingt hertz et une instance
+    // d'enregistreur vivante pour personne.
     @State private var quoteTargetPost: FeedPost?
-
-    var composerHasContent: Bool {
-        // pendingPlace inclus : sinon le bouton Publier reste desactive pour une
-        // position seule et publishPostWithAttachments() (dont le garde autorise
-        // deja ce cas) ne devient jamais atteignable (Task 13, 2026-07-29).
-        !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty || pendingPlace != nil
-    }
 
     // MARK: - Post Heart Seeding (Prisme Linguistique — reaction state)
 
-    /// Seeds `postLikedIds` from a batch of posts using `post.isLiked` (which the SDK
+    /// Seeds the liked ids from a batch of posts using `post.isLiked` (which the SDK
     /// derives from `APIPost.currentUserReactions`/`isLikedByMe`). Called on initial
     /// load and when new pages arrive. Existing optimistic state is preserved: a post
-    /// already in `postLikedIds` due to an in-flight toggle is not overwritten.
+    /// already liked due to an in-flight toggle is not overwritten.
     static func computePostLikedIds(from posts: [FeedPost]) -> Set<String> {
-        Set(posts.compactMap { $0.isLiked ? $0.id : nil })
+        FeedPostEngagementState.likedPostIds(in: posts)
     }
 
     // MARK: - Post Bookmark Seeding
 
-    /// Hydrates `postBookmarkedIds` from the shared "bookmarks" cache so the
+    /// Hydrates the bookmarked ids from the shared "bookmarks" cache so the
     /// filled icon shows up correctly on first render for posts the user has
     /// already bookmarked. Cache-first, never hits the network — the actual
     /// bookmarks list is refreshed by `BookmarksViewModel` when the user
     /// opens the Favoris tab. Preserves any optimistic state already in
     /// flight by only inserting new IDs.
     private func hydrateBookmarkSeeding() async {
-        let cached = await CacheCoordinator.shared.feed.load(for: "bookmarks")
-        let bookmarks: [FeedPost]
-        switch cached {
-        case .fresh(let v, _), .stale(let v, _):
-            bookmarks = v
-        case .expired, .empty:
+        guard let bookmarks = await FeedPostEngagementRequests.cachedBookmarks() else {
             // Fire-and-forget a background refresh so the next render is
             // hydrated correctly without blocking the current mount.
             Task(priority: .utility) {
-                do {
-                    let resp = try await PostService.shared.getBookmarks(cursor: nil, limit: 50)
-                    let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-                    let posts = resp.data.map { $0.toFeedPost(preferredLanguages: langs) }
-                    try? await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
-                    await MainActor.run {
-                        for p in posts where !postBookmarkInFlightIds.contains(p.id) {
-                            postBookmarkedIds.insert(p.id)
-                        }
-                    }
-                } catch { /* offline / 5xx — bookmarks stay unseeded, no UX harm */ }
+                if let posts = await FeedPostEngagementRequests.refreshBookmarksCache() {
+                    engagement.seedBookmarks(posts)
+                }
             }
             return
         }
-        for p in bookmarks where !postBookmarkInFlightIds.contains(p.id) {
-            postBookmarkedIds.insert(p.id)
-        }
+        engagement.seedBookmarks(bookmarks)
     }
 
     // MARK: - Post Heart Toggle (socket-driven)
@@ -234,21 +131,21 @@ struct FeedView: View {
     private func togglePostHeart(post: FeedPost) {
         let postId = post.id
         Task {
-            guard !postHeartInFlightIds.contains(postId) else { return }
-            postHeartInFlightIds.insert(postId)
+            guard !engagement.heartInFlightIds.contains(postId) else { return }
+            engagement.heartInFlightIds.insert(postId)
             defer {
                 Task { @MainActor in
-                    postHeartInFlightIds.remove(postId)
+                    engagement.heartInFlightIds.remove(postId)
                 }
             }
-            let wasLiked = postLikedIds.contains(postId)
+            let wasLiked = engagement.likedIds.contains(postId)
             // Optimistic update
             if wasLiked {
-                postLikedIds.remove(postId)
-                postLikeDelta[postId, default: 0] -= 1
+                engagement.likedIds.remove(postId)
+                engagement.likeDelta[postId, default: 0] -= 1
             } else {
-                postLikedIds.insert(postId)
-                postLikeDelta[postId, default: 0] += 1
+                engagement.likedIds.insert(postId)
+                engagement.likeDelta[postId, default: 0] += 1
             }
             do {
                 // A6 — hard timeout so the heart-in-flight set never leaks
@@ -265,11 +162,14 @@ struct FeedView: View {
                         )
                     }
                 }
+            } catch where DailyGestureLimit.from(error) != nil { // #9571 : terminale, ni REST ni file
+                engagement.rollbackHeart(postId: postId, wasLiked: wasLiked)
+                DailyGestureLimitNotice.surface(error)
             } catch {
                 // REST fallback when the socket fails (noSocket, timeout,
                 // gateway hiccup). Mirrors the SocialSocketManager call but
                 // hits the persisted `POST/DELETE /posts/:id/like` route.
-                let restOK = await postReactionViaREST(postId: postId, like: !wasLiked)
+                let restOK = await FeedPostEngagementRequests.postReactionViaREST(postId: postId, like: !wasLiked)
                 if !restOK {
                     // Both the live socket call and the REST fallback failed —
                     // most commonly because the device is offline. Durably
@@ -278,8 +178,7 @@ struct FeedView: View {
                     // instead of silently rolling back and losing the like —
                     // the OutboxDispatcher replays it on reconnect and the
                     // canonical `post:liked`/`post:unliked` broadcast handled
-                    // above reconciles `postLikedIds`/`postLikeDelta` once it
-                    // lands.
+                    // above reconciles the liked ids/delta once it lands.
                     let cmid = ClientMutationId.generate()
                     do {
                         let payload = ToggleLikePostPayload(
@@ -296,19 +195,13 @@ struct FeedView: View {
                         // the UI forever: no `post:liked`/`post:unliked` broadcast
                         // will ever arrive for a mutation the outbox gave up on,
                         // and the feed re-seed explicitly skips posts with a live
-                        // `postLikeDelta`.
+                        // like delta.
                         observePostLikeOutcome(cmid: cmid, postId: postId, wasLiked: wasLiked)
                     } catch {
                         // The outbox itself refused the row (pool not
                         // configured, encoding failure) — only now is rolling
                         // back the optimistic UI honest.
-                        if wasLiked {
-                            postLikedIds.insert(postId)
-                            postLikeDelta[postId, default: 0] += 1
-                        } else {
-                            postLikedIds.remove(postId)
-                            postLikeDelta[postId, default: 0] -= 1
-                        }
+                        engagement.rollbackHeart(postId: postId, wasLiked: wasLiked)
                     }
                 }
             }
@@ -326,37 +219,12 @@ struct FeedView: View {
             let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
             for await event in stream {
                 if case .exhausted = event {
-                    if wasLiked {
-                        postLikedIds.insert(postId)
-                        postLikeDelta[postId, default: 0] += 1
-                    } else {
-                        postLikedIds.remove(postId)
-                        postLikeDelta[postId, default: 0] -= 1
-                    }
-                    FeedbackToastManager.shared.showError(
-                        String(localized: "feed.like.error", defaultValue: "Error liking post", bundle: .main)
+                    engagement.rollbackHeart(postId: postId, wasLiked: wasLiked)
+                    FeedbackToastManager.shared.showError(DailyGestureLimitNotice.exhaustedText(clientMutationId: cmid)
+                        ?? String(localized: "feed.like.error", defaultValue: "Impossible d'aimer la publication", bundle: .main)
                     )
                 }
             }
-        }
-    }
-
-    /// Minimal decoder for the `liked` flag returned by both the like and
-    /// unlike REST routes. Ignores `reactionSummary` (heterogeneous) and any
-    /// other fields the gateway may add.
-    private struct LikeRESTPayload: Decodable { let liked: Bool? }
-
-    /// REST fallback for the heart toggle. Returns true on success so the
-    /// caller can skip rolling back its optimistic update.
-    private func postReactionViaREST(postId: String, like: Bool) async -> Bool {
-        do {
-            let _: APIResponse<LikeRESTPayload> = try await APIClient.shared.request(
-                endpoint: "/posts/\(postId)/like",
-                method: like ? "POST" : "DELETE"
-            )
-            return true
-        } catch {
-            return false
         }
     }
 
@@ -364,108 +232,45 @@ struct FeedView: View {
 
     @MainActor
     private func togglePostBookmark(postId: String) {
-        guard !postBookmarkInFlightIds.contains(postId) else { return }
-        let wasBookmarked = postBookmarkedIds.contains(postId)
+        guard !engagement.bookmarkInFlightIds.contains(postId) else { return }
+        let wasBookmarked = engagement.bookmarkedIds.contains(postId)
         // Optimistic flip — UI changes instantly, network confirms after.
         if wasBookmarked {
-            postBookmarkedIds.remove(postId)
-            postBookmarkDelta[postId, default: 0] -= 1
+            engagement.bookmarkedIds.remove(postId)
+            engagement.bookmarkDelta[postId, default: 0] -= 1
         } else {
-            postBookmarkedIds.insert(postId)
-            postBookmarkDelta[postId, default: 0] += 1
+            engagement.bookmarkedIds.insert(postId)
+            engagement.bookmarkDelta[postId, default: 0] += 1
         }
-        postBookmarkInFlightIds.insert(postId)
+        engagement.bookmarkInFlightIds.insert(postId)
+        // L'écrivain unique (#15994) : envoi, cache des favoris, toasts. La
+        // carte se lit DANS le `Task`, sur le MainActor : un `post:updated`
+        // peut l'avoir remplacée entre le toucher et l'écriture du cache.
         Task {
-            defer {
-                Task { @MainActor in
-                    postBookmarkInFlightIds.remove(postId)
-                }
-            }
-            // Capture the post snapshot INSIDE the Task on the MainActor —
-            // outside-capture would freeze a value that a `post:updated`
-            // socket event might invalidate between the tap and the cache
-            // save (race window ~100ms).
-            let postSnapshot = await MainActor.run { viewModel.posts.first(where: { $0.id == postId }) }
-            // Pre-populate the bookmarks cache optimistically so the Favoris
-            // tab shows the post the moment the user opens it. Mirror the
-            // pre-fix behaviour from FeedViewModel.bookmarkPost.
-            let snapshotCache: [FeedPost]? = await {
-                if wasBookmarked { return nil } // remove path handles cache below
-                guard let p = postSnapshot else { return [] }
-                let key = "bookmarks"
-                let r = await CacheCoordinator.shared.feed.load(for: key)
-                let current: [FeedPost]
-                switch r {
-                case .fresh(let v, _), .stale(let v, _): current = v
-                case .expired, .empty: current = []
-                }
-                if !current.contains(where: { $0.id == postId }) {
-                    var updated = current
-                    updated.insert(p, at: 0)
-                    try? await CacheCoordinator.shared.feed.save(updated, for: key)
-                }
-                return current
-            }()
-
-            let success = await callBookmarkAPI(postId: postId, bookmark: !wasBookmarked)
-            if success {
+            defer { engagement.bookmarkInFlightIds.remove(postId) }
+            let shown = viewModel.posts.first(where: { $0.id == postId })
+            await PostBookmarkWriter().write(bookmarked: !wasBookmarked, postId: postId, post: shown, onRejected: {
                 if wasBookmarked {
-                    await pruneBookmarkFromCache(postId: postId)
-                    FeedbackToastManager.shared.showSuccess(String(localized: "post.bookmark.removed", defaultValue: "Retiré des favoris", bundle: .main))
+                    engagement.bookmarkedIds.insert(postId)
+                    engagement.bookmarkDelta[postId, default: 0] += 1
                 } else {
-                    FeedbackToastManager.shared.showSuccess(String(localized: "post.bookmark.added", defaultValue: "Ajouté aux favoris", bundle: .main))
+                    engagement.bookmarkedIds.remove(postId)
+                    engagement.bookmarkDelta[postId, default: 0] -= 1
                 }
-            } else {
-                // Rollback both the UI flip and the cache pre-population.
-                if wasBookmarked {
-                    postBookmarkedIds.insert(postId)
-                    postBookmarkDelta[postId, default: 0] += 1
-                } else {
-                    postBookmarkedIds.remove(postId)
-                    postBookmarkDelta[postId, default: 0] -= 1
-                    if let snap = snapshotCache {
-                        try? await CacheCoordinator.shared.feed.save(snap, for: "bookmarks")
-                    }
-                }
-                FeedbackToastManager.shared.showError(String(localized: "post.bookmark.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main))
-            }
+            })
         }
-    }
-
-    private func callBookmarkAPI(postId: String, bookmark: Bool) async -> Bool {
-        do {
-            let _: APIResponse<[String: Bool]> = try await APIClient.shared.request(
-                endpoint: "/posts/\(postId)/bookmark",
-                method: bookmark ? "POST" : "DELETE"
-            )
-            return true
-        } catch {
-            return false
-        }
-    }
-
-    private func pruneBookmarkFromCache(postId: String) async {
-        let key = "bookmarks"
-        let result = await CacheCoordinator.shared.feed.load(for: key)
-        let current: [FeedPost]
-        switch result {
-        case .fresh(let v, _), .stale(let v, _): current = v
-        case .expired, .empty: return
-        }
-        let updated = current.filter { $0.id != postId }
-        try? await CacheCoordinator.shared.feed.save(updated, for: key)
     }
 
     @MainActor
     private func togglePostRepost(postId: String) {
-        guard !postRepostInFlightIds.contains(postId) else { return }
+        guard !engagement.repostInFlightIds.contains(postId) else { return }
         // Reposts are append-only on the backend — the optimistic state
         // only persists if the server confirmed the create. Bypass the
         // ViewModel call because it swallows errors via Toast and leaves
         // no signal we can rollback against.
-        postRepostedIds.insert(postId)
-        postRepostDelta[postId, default: 0] += 1
-        postRepostInFlightIds.insert(postId)
+        engagement.repostedIds.insert(postId)
+        engagement.repostDelta[postId, default: 0] += 1
+        engagement.repostInFlightIds.insert(postId)
         // L'instantané se prend AVANT d'ouvrir le `Task`, donc dans le tour de
         // boucle du tap : cette fonction est déjà `@MainActor`, mais un `Task`
         // ne s'exécute pas au tap — il s'ENFILE. Lire la carte à l'intérieur
@@ -483,30 +288,30 @@ struct FeedView: View {
         Task {
             defer {
                 Task { @MainActor in
-                    postRepostInFlightIds.remove(postId)
+                    engagement.repostInFlightIds.remove(postId)
                 }
             }
             do {
                 try await RepostPublisher.shared.publish(
                     .simple(postId: cible.postId, targetType: cible.targetType, visibility: nil)
                 )
-                FeedbackToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
+                FeedbackToastManager.shared.showSuccess(String(localized: "post.repost.label", defaultValue: "Repartage"))
             } catch {
-                postRepostedIds.remove(postId)
-                postRepostDelta[postId, default: 0] -= 1
-                FeedbackToastManager.shared.showError(String(localized: "Erreur lors du repost", defaultValue: "Erreur lors du repost"))
+                engagement.repostedIds.remove(postId)
+                engagement.repostDelta[postId, default: 0] -= 1
+                FeedbackToastManager.shared.showError(String(localized: "feed.repost.error", defaultValue: "Erreur lors du repost"))
             }
         }
     }
 
     @MainActor
     private func sharePostWithLink(postId: String) {
-        guard !postShareInFlightIds.contains(postId) else { return }
-        postShareInFlightIds.insert(postId)
+        guard !engagement.shareInFlightIds.contains(postId) else { return }
+        engagement.shareInFlightIds.insert(postId)
         Task {
             defer {
                 Task { @MainActor in
-                    postShareInFlightIds.remove(postId)
+                    engagement.shareInFlightIds.remove(postId)
                 }
             }
             if let shortUrl = await viewModel.sharePost(postId, generateLink: true),
@@ -517,9 +322,9 @@ struct FeedView: View {
                 // left the counter permanently inflated whenever the REST
                 // call failed, because the raw-URL fallback below almost
                 // always succeeds and the old "undo" branch never ran.
-                postShareDelta[postId, default: 0] += 1
-                shareableLink = ShareableLink(url: url)
-            } else if let raw = ShareableLink.fallback(forPostId: postId) {
+                engagement.shareDelta[postId, default: 0] += 1
+                shareableLink = ShareableLink(url: url, fileSource: viewModel.posts.first(where: { $0.id == postId }).map(ShareFileSource.post))
+            } else if let raw = ShareableLink.fallback(forPostId: postId, fileSource: viewModel.posts.first(where: { $0.id == postId }).map(ShareFileSource.post)) {
                 // `sharePost` already surfaced an error toast; the gateway
                 // never recorded this share, so no counter bump — the user
                 // can still forward the raw (untracked) post link.
@@ -528,33 +333,56 @@ struct FeedView: View {
         }
     }
 
-    private var composerLanguageDisplayName: String {
-        let name = Locale.current.localizedString(forLanguageCode: composerLanguage) ?? composerLanguage
-        return name.prefix(1).uppercased() + name.dropFirst()
+    /// Ce que les cartes du fil déclenchent chez l'hôte (l'état optimiste et les
+    /// présentations restent ici).
+    private var postRowActions: FeedPostRowActions {
+        FeedPostRowActions(
+            onHeart: { post in togglePostHeart(post: post) },
+            onRepost: { postId in togglePostRepost(postId: postId) },
+            onBookmark: { postId in togglePostBookmark(postId: postId) },
+            onShare: { postId in sharePostWithLink(postId: postId) },
+            onQuote: { postId in
+                quoteTargetPost = viewModel.posts.first(where: { $0.id == postId })
+            },
+            onEdit: { post in editingPost = post },
+            onOpenReelComments: { post in reelCommentsPost = post },
+            onAuthorMoodTap: { userId, point in statusViewModel.moodTapHandler(for: userId)?(point) },
+            moodLookup: { userId in
+                (emoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
+                 tapHandler: statusViewModel.moodTapHandler(for: userId))
+            },
+            onViewAuthorStory: { authorId in
+                storyViewerCoordinator.present(
+                    StoryViewerRequest(id: authorId, startAtFirstUnviewed: true, singleGroup: true)
+                )
+            }
+        )
     }
 
     private var posts: [FeedPost] { viewModel.posts }
 
-    /// Fingerprint of the like/bookmark/repost "by me" flags across the
-    /// loaded feed, used ONLY to drive the re-seeding `adaptiveOnChange`
-    /// below. `FeedPost: Equatable` is intentionally id-only (it powers
-    /// `.equatable()` list-row diffing) — observing `viewModel.posts`
-    /// directly there silently skipped re-seeding whenever a refresh
-    /// returned the SAME post ids with DIFFERENT flags (e.g. a repost
-    /// confirmed on another device, or a stale-then-fresh cache pass): the
-    /// repost/bookmark icon stayed unfilled forever because `[FeedPost]`
-    /// compared "unchanged". This fingerprint changes whenever any flag
-    /// does, independent of the id-only `Equatable`.
+    /// Fingerprint of the like/bookmark/repost "by me" flags across the loaded
+    /// feed, used ONLY to drive the re-seeding `adaptiveOnChange` below.
+    /// `FeedPost: Equatable` is intentionally id-only, so observing
+    /// `viewModel.posts` there skipped re-seeding whenever a refresh returned the
+    /// SAME ids with DIFFERENT flags; this fingerprint changes whenever any flag does.
     private var feedFlagsFingerprint: [String] {
         viewModel.posts.map { "\($0.id)|\($0.isLiked)|\($0.isBookmarkedByMe)|\($0.isRepostedByMe)" }
     }
 
+    /// #4621 — le pluriel appartient au CATALOGUE, pas à un ternaire Swift.
+    ///
+    /// Le code choisissait entre deux clés selon `count > 1` : une règle
+    /// française plaquée sur les sept langues. L'arabe a SIX catégories de
+    /// pluriel, et aucune n'était atteignable ainsi ; le russe ou le polonais,
+    /// si l'app s'y ouvre un jour, en ont quatre. Une seule clé, avec ses
+    /// `variations.plural`, laisse chaque langue appliquer LA SIENNE.
     private var newPostsBannerText: String {
-        let count = viewModel.newPostsCount
-        let label = count > 1
-            ? String(localized: "nouveaux posts", defaultValue: "nouveaux posts")
-            : String(localized: "nouveau post", defaultValue: "nouveau post")
-        return "\(count) \(label)"
+        String(
+            localized: "feed.new-posts.count",
+            defaultValue: "\(viewModel.newPostsCount) nouveaux posts",
+            bundle: .main
+        )
     }
 
     var body: some View {
@@ -563,24 +391,9 @@ struct FeedView: View {
 
     private var feedBody: some View {
         ZStack {
-            // Themed background
-            theme.backgroundGradient.ignoresSafeArea()
+            FeedAmbientBackdrop()
 
-            // Ambient orbs
-            ForEach(0..<theme.ambientOrbs.count, id: \.self) { i in
-                let orb = theme.ambientOrbs[i]
-                Circle()
-                    .fill(Color(hex: orb.color).opacity(orb.opacity))
-                    .frame(width: orb.size, height: orb.size)
-                    .blur(radius: orb.size / 3)
-                    .offset(x: orb.offset.x, y: orb.offset.y)
-            }
-
-            if useUIKitList, let store = viewModel.feedStore {
-                FeedListView(store: store)
-            } else {
-                feedScrollView
-            }
+            feedScrollView
 
             // Header shown on iPhone AND iPad: the scroll content already
             // reserves `CollapsibleHeaderMetrics.expandedHeight` of top padding,
@@ -589,69 +402,61 @@ struct FeedView: View {
                 // Compact story trail that TAKES THE TITLE'S PLACE in the bar —
                 // reveals as the full-size trail scrolls up under it, so a
                 // scrolled feed shows the trail instead of « Meeshy Feed ».
-                CollapsibleHeader(
-                    title: "Meeshy Feed",
-                    scrollOffset: headerScrollOffset,
-                    showBackButton: false,
-                    titleColor: theme.textPrimary,
-                    backArrowColor: MeeshyColors.indigo500,
-                    backgroundColor: theme.backgroundPrimary,
-                    // Entrée de la carte des posts (retour user 2026-08-12) :
-                    // un bouton toujours visible dans le header — basculement
-                    // liste ↔ carte à un tap, cf. FeedPostsMapView pour le
-                    // raisonnement UX complet. Depuis 2026-08-13 elle voisine le
-                    // bouton Réels, à sa droite : deux lectures du même feed.
-                    trailing: { feedHeaderActions },
-                    titleAccessory: {
-                        AnyView(
-                            // Lancement unifié via StoryViewerCoordinator (cf.
-                            // PinnedStoryTrailBand.presentStory) — même chemin que la trail des chats.
-                            PinnedStoryTrailBand(
-                                viewModel: storyViewModel,
-                                scrollOffset: headerScrollOffset
+                // Seul ce reader se re-rend au fil du défilement — cette
+                // racine écrit `scrollRelay.offset` sans s'y abonner.
+                ScrollOffsetReader(relay: scrollRelay) { offset in
+                    CollapsibleHeader(
+                        title: "Meeshy Feed",
+                        scrollOffset: offset,
+                        showBackButton: false,
+                        titleColor: theme.textPrimary,
+                        backArrowColor: MeeshyColors.indigo500,
+                        backgroundColor: theme.backgroundPrimary,
+                        // Deux lectures du même feed dans le slot trailing : les
+                        // Réels et « À proximité ». La carte des posts d'hier vit
+                        // désormais dans cette dernière (mode Discover, staff).
+                        trailing: { feedHeaderActions },
+                        titleAccessory: {
+                            AnyView(
+                                // Lancement unifié via StoryViewerCoordinator (cf.
+                                // PinnedStoryTrailBand.presentStory) — même chemin que la trail des chats.
+                                PinnedStoryTrailBand(
+                                    viewModel: storyViewModel,
+                                    scrollOffset: offset
+                                )
                             )
-                        )
-                    }
-                )
-                // L'offset du feed change à chaque frame défilée puis se tait :
-                // c'est le seul signal de mouvement dont dispose un
-                // `ScrollView` SwiftUI avant iOS 17.
-                .scrollMotionActive(offset: headerScrollOffset)
+                        }
+                    )
+                    // L'offset du feed change à chaque frame défilée puis se tait :
+                    // c'est le seul signal de mouvement dont dispose un
+                    // `ScrollView` SwiftUI avant iOS 17.
+                    .scrollMotionActive(offset: offset)
+                }
                 Spacer()
             }
 
-            // Full-screen composer overlay
-            if showComposer {
-                composerOverlay
-                    // Draft recovery: when the composer opens onto an empty
-                    // compose, pre-fill the last post/reel that got stuck offline.
-                    .task { await recoverStuckPostDraftIfNeeded() }
-            }
         }
-        .fullScreenCover(isPresented: $showPostsMap) {
-            FeedPostsMapView(posts: locatedPosts) { post in
-                showPostsMap = false
-                router.push(.postDetail(post.id, post))
-            }
-        }
+        // **Le fil iPad monte le MEUBLE** (directive porteur 2026-09-06 : iPad et
+        // iOS utilisent le même composer). L'ancien composer écrit à la main
+        // (`composerOverlay`, RETIRÉ le 2026-09-06) publiait `storyEffects: nil` :
+        // des publications d'une autre nature que l'iPhone (#5322). L'origine est
+        // la MÊME que celle du fil iPhone (`.feedComposer`) — une origine « iPad »
+        // aurait fabriqué une seconde vérité à tenir d'accord avec la première.
+        .relayingMeeshyRouter(meeshyRouter) { $0.feedPostComposer(
+            isPresented: $showComposer, router: $1, viewModel: viewModel,
+            storyViewModel: storyViewModel, statusViewModel: statusViewModel,
+            conversationListViewModel: conversationListViewModel
+        ) }
     }
 
-    // MARK: - Carte des posts
-
-    /// Posts du feed porteurs d'une position — la même source alimente le
-    /// badge du bouton d'entrée et les pins de la carte.
-    private var locatedPosts: [FeedPost] {
-        viewModel.posts.filter { $0.location != nil }
-    }
-
-    /// Actions du header, dans l'ordre de lecture : les Réels, puis la carte
-    /// des posts immédiatement à sa droite (directive user 2026-08-13). Les
-    /// deux ouvrent une autre LECTURE du même feed — elles vont ensemble ; le
-    /// chemin iPhone (`ThemedFeedOverlay.feedHeaderActions`) porte la même paire.
+    /// Actions du header, dans l'ordre de lecture : les Réels, puis « À
+    /// proximité ». Les deux ouvrent une autre LECTURE du même feed — elles
+    /// vont ensemble ; le chemin iPhone (`ThemedFeedOverlay.feedHeaderActions`)
+    /// porte la même paire. La carte des posts du feed (bouton `map`) a fusionné dans « À proximité » — mode
+    /// Discover, réservé au staff de la plateforme.
     private var feedHeaderActions: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             reelsButton
-            postsMapButton
             nearbyButton
         }
         // La marge droite vient du header (`CollapsibleHeaderMetrics.trailingActionsInset`),
@@ -669,31 +474,29 @@ struct FeedView: View {
             ReelsPresenter.shared.presentFresh()
         } label: {
             Image(systemName: "play.rectangle.on.rectangle.fill")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo500)
+                .font(.system(size: MeeshyIconSize.md, weight: .semibold))
+                .foregroundStyle(MeeshyColors.indigo500)
                 .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 36))
         }
         .buttonStyle(.plain)
+        // Les réels dans leur propre fenêtre (iPad) : le fil des publications reste dans la fenêtre principale.
+        .contextMenu {
+            if DetachedWindowOpener.shared.isAvailable {
+                Button {
+                    DetachedWindowOpener.shared.open(.reels(startId: nil))
+                } label: {
+                    Label(
+                        String(localized: "window.detach.reels", defaultValue: "Ouvrir les réels dans une nouvelle fenêtre", bundle: .main),
+                        systemImage: "macwindow.badge.plus"
+                    )
+                }
+            }
+        }
         .accessibilityLabel(String(localized: "feed.header.reels", defaultValue: "Lancer les Réels", bundle: .main))
         .accessibilityIdentifier("feed.header.reels")
-    }
-
-    private var postsMapButton: some View {
-        Button {
-            HapticFeedback.light()
-            showPostsMap = true
-        } label: {
-            Image(systemName: "map")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo500)
-                .frame(width: 36, height: 36)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "feed.map.open", defaultValue: "Posts sur la carte", bundle: .main))
-        .accessibilityHint(String(localized: "feed.map.open.hint", defaultValue: "Affiche les posts géolocalisés sur un plan", bundle: .main))
-        .accessibilityIdentifier("feed.header.map")
     }
 
     /// Troisième entrée du header : la découverte par PROXIMITÉ. Distincte de
@@ -703,13 +506,15 @@ struct FeedView: View {
     private var nearbyButton: some View {
         Button {
             HapticFeedback.light()
-            router.push(.nearbyDiscovery())
+            routerCommands.push(.nearbyDiscovery())
         } label: {
             Image(systemName: "dot.radiowaves.left.and.right")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo500)
+                .font(.system(size: MeeshyIconSize.md, weight: .semibold))
+                .foregroundStyle(MeeshyColors.indigo500)
                 .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 36))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "feed.nearby.open", defaultValue: "Publications à proximité", bundle: .main))
@@ -718,348 +523,23 @@ struct FeedView: View {
     }
 
     // MARK: - Composer Placeholder
+    private func openComposer() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            showComposer = true
+        }
+        HapticFeedback.light()
+    }
+
+    /// La porte du composeur. Une publication en attente ne se signale que par
+    /// l'horloge de sa carte (décision du porteur, #14879).
     private var composerPlaceholder: some View {
-        HStack(spacing: 12) {
-            MeeshyAvatar(
-                name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
-                context: .custom(40),
-                avatarURL: AuthManager.shared.currentUser?.avatar
-            )
-            .accessibilityHidden(true)
-
-            // Text input placeholder
-            Button(action: {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showComposer = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        isComposerFocused = true
-                    }
-                }
-                HapticFeedback.light()
-            }) {
-                HStack {
-                    Text(String(localized: "Partager quelque chose avec le monde...", defaultValue: "Partager quelque chose avec le monde..."))
-                        .font(.subheadline)
-                        .foregroundColor(theme.textMuted)
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(theme.inputBackground)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(theme.inputBorder, lineWidth: 1)
-                        )
-                )
-            }
-            .buttonStyle(PlainButtonStyle())
-            .accessibilityLabel(String(localized: "a11y.feed.compose.open", defaultValue: "Partager quelque chose", bundle: .main))
-            .accessibilityHint(String(localized: "a11y.feed.compose.open.hint", defaultValue: "Ouvre l'éditeur de publication", bundle: .main))
-
-            // Add content button (+)
-            Menu {
-                Button {
-                    pendingAttachmentType = "photo"
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showComposer = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            showPhotoPicker = true
-                        }
-                    }
-                    HapticFeedback.light()
-                } label: {
-                    Label(
-                        String(localized: "Photo ou video", defaultValue: "Photo ou vid\u{00E9}o"),
-                        systemImage: "photo.fill"
-                    )
-                }
-
-                Button {
-                    pendingAttachmentType = "camera"
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showComposer = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            showCamera = true
-                        }
-                    }
-                    HapticFeedback.light()
-                } label: {
-                    Label(
-                        String(localized: "Appareil photo", defaultValue: "Appareil photo"),
-                        systemImage: "camera.fill"
-                    )
-                }
-
-                Button {
-                    showAudioComposer = true
-                    HapticFeedback.light()
-                } label: {
-                    Label(
-                        String(localized: "Enregistrement audio", defaultValue: "Enregistrement audio"),
-                        systemImage: "mic.fill"
-                    )
-                }
-
-                Button {
-                    pendingAttachmentType = "file"
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showComposer = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            showFilePicker = true
-                        }
-                    }
-                    HapticFeedback.light()
-                } label: {
-                    Label(
-                        String(localized: "Fichier", defaultValue: "Fichier"),
-                        systemImage: "doc.fill"
-                    )
-                }
-
-                Button {
-                    pendingAttachmentType = "location"
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showComposer = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            showLocationPicker = true
-                        }
-                    }
-                    HapticFeedback.light()
-                } label: {
-                    Label(
-                        String(localized: "Position", defaultValue: "Position"),
-                        systemImage: "location.fill"
-                    )
-                }
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [MeeshyColors.indigo300, MeeshyColors.info],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 40, height: 40)
-                        .shadow(color: MeeshyColors.indigo300.opacity(0.4), radius: 8, y: 4)
-
-                    Image(systemName: "plus")
-                        // Doctrine 86i : glyphe du FAB dans un cercle de dimension fixe 40×40 → figé
-                        // (l'icône ne doit pas déborder du bouton flottant). Bouton déjà labellisé.
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.white)
-                }
-            }
-            .accessibilityLabel(String(localized: "Ajouter du contenu", defaultValue: "Ajouter du contenu"))
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(theme.surfaceGradient(tint: MeeshyColors.brandPrimaryHex))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(theme.border(tint: MeeshyColors.brandPrimaryHex, intensity: 0.25), lineWidth: 1)
-                )
-        )
-        .padding(.horizontal, 16)
+        FeedComposerPlaceholder(onCompose: openComposer, onRecordAudio: openAudioComposer)
+            .padding(.bottom, MeeshySpacing.sm)
     }
 
-    // MARK: - Feed Post Card
-    @ViewBuilder
-    private func feedPostCardView(for post: FeedPost) -> some View {
-        // On iPad/Mac (regular width) the feed lives in a narrow column where a
-        // full-bleed reel card looks crude, so reels render as the standard
-        // compact card there (author header + bounded media + action bar) for
-        // parity with the iPhone feed. iPhone keeps the immersive full-frame card.
-        if post.isReel && sizeClass != .regular {
-            reelFeedCardView(for: post)
-        } else {
-            standardFeedPostCardView(for: post)
-        }
-    }
-
-    /// Carte Réel plein-cadre. Réutilise EXACTEMENT les handlers optimistes de
-    /// `standardFeedPostCardView` (toggle cœur/repartage/signet/partage) + le
-    /// même bloc d'ouverture viewer (`ReelsPresenter.present`). Le tap média
-    /// fait d'abord le handoff (clear + pause du moteur feed) avant de présenter.
-    private func reelFeedCardView(for post: FeedPost) -> some View {
-        // `ReelFeedCardContainer` observe le coordinator et calcule `isActive` en
-        // interne : le body de FeedView ne dépend donc pas d'`activeReelId` (I1).
-        let isOwnPost = post.authorId == AuthManager.shared.currentUser?.id
-        return ReelFeedCardContainer(
-            coordinator: reelAutoplay,
-            post: post,
-            isDark: isDark,
-            isLiked: postLikedIds.contains(post.id),
-            displayLikeCount: max(0, post.likes + (postLikeDelta[post.id] ?? 0)),
-            isBookmarked: postBookmarkedIds.contains(post.id),
-            displayBookmarkCount: max(0, post.bookmarkCount + (postBookmarkDelta[post.id] ?? 0)),
-            isReposted: postRepostedIds.contains(post.id),
-            displayRepostCount: max(0, post.repostCount + (postRepostDelta[post.id] ?? 0)),
-            displayShareCount: max(0, post.shareCount + (postShareDelta[post.id] ?? 0)),
-            onTapMedia: {
-                // Handoff : le viewer prend la session via son propre usage de
-                // SharedAVPlayerManager ; on stoppe d'abord la lecture muette du
-                // feed pour éviter un conflit de moteur.
-                reelAutoplay.clear()
-                SharedAVPlayerManager.shared.pause()
-                HapticFeedback.medium()
-                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id)
-                }
-                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
-            },
-            onTapGlyph: {
-                // Le logo Réel ouvre la page détail du poste (thread complet),
-                // distinct du tap média qui présente le viewer immersif.
-                router.push(.postDetail(post.id, post))
-                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
-            },
-            onLike: { _ in togglePostHeart(post: post) },
-            onComment: { _ in
-                // Le bouton commentaire d'un réel ouvre la feuille de commentaires
-                // DIRECTEMENT (parité avec les cartes post du feed) — l'utilisateur
-                // commente sans basculer dans le viewer plein écran. La lecture
-                // muette du feed continue derrière la feuille (translucide).
-                HapticFeedback.medium()
-                reelCommentsPost = post
-            },
-            onRepost: { postId in togglePostRepost(postId: postId) },
-            onBookmark: { postId in togglePostBookmark(postId: postId) },
-            onShare: { postId in sharePostWithLink(postId: postId) },
-            onTapAuthor: { authorId in
-                NotificationCenter.default.post(
-                    name: Notification.Name("openProfileSheet"),
-                    object: ["userId": authorId, "username": post.authorUsername ?? post.author]
-                )
-            },
-            onEdit: isOwnPost ? { post in
-                editingPost = post
-            } : nil,
-            onDelete: isOwnPost ? { postId in
-                Task { await viewModel.deletePost(postId) }
-            } : nil,
-            onReport: !isOwnPost ? { postId in
-                Task { await viewModel.reportPost(postId) }
-            } : nil,
-            onPin: isOwnPost ? { postId in
-                Task { await viewModel.pinPost(postId) }
-            } : nil
-        )
-        // Marge latérale volontairement plus serrée que les posts standards
-        // (`FeedPostCard` = 16) → la carte Réel est un peu plus large, tout en
-        // gardant une séparation nette des bords et des boutons flottants.
-        .padding(.horizontal, 12)
-        // Pas de `.equatable()` ici : le conteneur observe le coordinator (non
-        // Equatable). Le court-circuit Equatable vit à l'intérieur, sur `ReelFeedCard`.
-    }
-
-    private func standardFeedPostCardView(for post: FeedPost) -> some View {
-        let isOwnPost = post.authorId == AuthManager.shared.currentUser?.id
-        return FeedPostCard(
-            post: post,
-            onSeeNearby: { place in
-                HapticFeedback.light()
-                router.push(.nearbyDiscovery(initialCoordinate: RouteCoordinate(
-                    latitude: place.latitude, longitude: place.longitude
-                )))
-            },
-            isCommentsExpanded: expandedComments.contains(post.id),
-            isLiked: postLikedIds.contains(post.id),
-            displayLikeCount: max(0, post.likes + (postLikeDelta[post.id] ?? 0)),
-            isHeartInFlight: postHeartInFlightIds.contains(post.id),
-            isBookmarked: postBookmarkedIds.contains(post.id),
-            isBookmarkInFlight: postBookmarkInFlightIds.contains(post.id),
-            displayRepostCount: max(0, post.repostCount + (postRepostDelta[post.id] ?? 0)),
-            displayBookmarkCount: max(0, post.bookmarkCount + (postBookmarkDelta[post.id] ?? 0)),
-            displayShareCount: max(0, post.shareCount + (postShareDelta[post.id] ?? 0)),
-            isReposted: postRepostedIds.contains(post.id),
-            isRepostInFlight: postRepostInFlightIds.contains(post.id),
-            isShareInFlight: postShareInFlightIds.contains(post.id),
-            onToggleComments: {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    if expandedComments.contains(post.id) {
-                        expandedComments.remove(post.id)
-                    } else {
-                        expandedComments.insert(post.id)
-                    }
-                }
-                HapticFeedback.light()
-            },
-            onLike: { _ in
-                togglePostHeart(post: post)
-            },
-            onRepost: { postId in
-                togglePostRepost(postId: postId)
-            },
-            onQuote: { postId in
-                quoteTargetPost = viewModel.posts.first(where: { $0.id == postId })
-            },
-            onShare: { postId in
-                sharePostWithLink(postId: postId)
-            },
-            onBookmark: { postId in
-                togglePostBookmark(postId: postId)
-            },
-            onSelectLanguage: { postId, language in
-                viewModel.setTranslationOverride(postId: postId, language: language)
-            },
-            onTapPost: { post in
-                if post.isReel {
-                    // Reels open straight into the immersive full-screen pager,
-                    // seeded with the feed's reels, never the detail page.
-                    HapticFeedback.medium()
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                        ReelsPresenter.shared.present(
-                            posts: viewModel.posts,
-                            startId: post.id
-                        )
-                    }
-                    Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
-                } else {
-                    router.push(.postDetail(post.id, post))
-                    Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
-                }
-            },
-            onTapRepost: { repostId in
-                router.push(.postDetail(repostId))
-            },
-            onDelete: isOwnPost ? { postId in
-                Task { await viewModel.deletePost(postId) }
-            } : nil,
-            onReport: !isOwnPost ? { postId in
-                Task { await viewModel.reportPost(postId) }
-            } : nil,
-            onPin: isOwnPost ? { postId in
-                Task { await viewModel.pinPost(postId) }
-            } : nil,
-            onEdit: isOwnPost ? { post in
-                editingPost = post
-            } : nil,
-            authorMoodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
-            onAuthorMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
-            moodLookup: { userId in
-                (emoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
-                 tapHandler: statusViewModel.moodTapHandler(for: userId))
-            },
-            authorStoryRing: storyViewModel.storyRingState(forUserId: post.authorId),
-            onViewAuthorStory: {
-                // Parité iPhone (`ThemedFeedOverlay`) : toucher l'avatar d'un auteur
-                // qui a une story ouvre SA story via le coordinator unique. Sans ce
-                // câblage, l'anneau de story et le tap étaient inertes sur iPad.
-                storyViewerCoordinator.present(
-                    StoryViewerRequest(id: post.authorId, startAtFirstUnviewed: true, singleGroup: true)
-                )
-            },
-            // RF2: a POST that reposts a REEL renders inside FeedPostCard (not the
-            // immersive reel card) — hand it the shared autoplay coordinator so the
-            // embedded reel plays muted/inline, elected against the native reels.
-            reelAutoplay: reelAutoplay
-        )
-        .equatable()
+    private func openAudioComposer() {
+        showAudioComposer = true
+        HapticFeedback.light()
     }
 
     // MARK: - Feed Scroll View
@@ -1083,9 +563,6 @@ struct FeedView: View {
 
     private var scrollContent: some View {
         ScrollViewReader { scrollProxy in
-            // Wrapper Meeshy : `.refreshable` natif iOS + indicator brand
-            // anime (logo dashes + degrade indigo). Meme experience que la
-            // liste de conversations — UX coherente cross-screen.
             MeeshyRefreshableScroll(
                 onRefresh: {
                     async let feedRefresh: Void = viewModel.refresh()
@@ -1094,14 +571,11 @@ struct FeedView: View {
                 },
                 coordinateSpaceName: "feedScroll",
                 onScrollOffsetChange: { offset in
-                    headerScrollOffset = offset
+                    scrollRelay.relayFeedOffset(offset)
                 },
                 topPadding: CollapsibleHeaderMetrics.expandedHeight
             ) {
-                LazyVStack(spacing: 16) {
-                    // Anchor pour le banner "nouveaux posts" → scroll vers
-                    // le haut. L'id est attache a un Color.clear de hauteur 0
-                    // au sommet du contenu.
+                LazyVStack(spacing: MeeshySpacing.lg) {
                     Color.clear.frame(height: 0).id("feed-top")
 
                     // Story tray — same component used by the conversation list
@@ -1122,23 +596,21 @@ struct FeedView: View {
                         StoryTrayView(viewModel: storyViewModel)
                     }
 
-                    // Composer placeholder
                     composerPlaceholder
-                        .padding(.bottom, 8)
 
                     // Error state
                     if let error = viewModel.error {
-                        VStack(spacing: 12) {
+                        VStack(spacing: MeeshySpacing.md) {
                             Image(systemName: "exclamationmark.triangle")
                                 .font(.largeTitle)
                                 .foregroundStyle(.secondary)
                                 .accessibilityHidden(true)
-                            Text(String(localized: "Impossible de charger le fil", defaultValue: "Impossible de charger le fil"))
+                            Text(String(localized: "feed.load.error", defaultValue: "Impossible de charger le fil"))
                                 .font(.headline)
                             Text(error)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                            Button(String(localized: "Reessayer", defaultValue: "Reessayer")) {
+                            Button(String(localized: "common.retry", defaultValue: "Réessayer")) {
                                 Task { await viewModel.loadFeed() }
                             }
                             .buttonStyle(.bordered)
@@ -1150,9 +622,8 @@ struct FeedView: View {
                     // Empty state when no posts and no error
                     if viewModel.hasLoaded && viewModel.posts.isEmpty && !viewModel.isLoading && viewModel.error == nil {
                         AdaptiveContentUnavailableView(
-                            String(localized: "Aucune publication", defaultValue: "Aucune publication"),
-                            systemImage: "text.bubble",
-                            description: Text(String(localized: "Les publications de vos contacts apparaitront ici", defaultValue: "Les publications de vos contacts apparaitront ici"))
+                            String(localized: "feed.empty.title", defaultValue: "Aucune publication de vos contacts"),
+                            systemImage: "text.bubble"
                         )
                     }
 
@@ -1170,23 +641,31 @@ struct FeedView: View {
 
                     // Posts with infinite scroll
                     ForEach(posts) { post in
-                        feedPostCardView(for: post)
+                        FeedPostRow(
+                            post: post,
+                            viewModel: viewModel,
+                            reelAutoplay: reelAutoplay,
+                            engagement: engagement.snapshot(for: post),
+                            authorStoryRing: storyViewModel.storyRingState(forUserId: post.authorId),
+                            authorMoodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
+                            actions: postRowActions
+                        )
+                            .equatable()
                             .onAppear {
                                 Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
                                 viewModel.prefetchMediaForPost(post.id)
                                 viewModel.prefetchComments(post.id)
-                                trackImpression(postId: post.id)
                             }
+                            .countsListedImpression(of: post.id, isVideo: post.isReel, in: impressions) { posts.firstIndex { $0.id == post.id } }
                     }
 
-                    // Loading more indicator
+                    // La page suivante arrive : des cartes fantômes, jamais un indicateur sur du fond nu (#6987)
                     if viewModel.isLoadingMore {
-                        ProgressView()
-                            .tint(MeeshyColors.indigo300)
-                            .padding()
+                        SkeletonFeedList(count: 2)
+                            .transition(.opacity)
                     }
                 }
-                .padding(.top, 12)
+                .padding(.top, MeeshySpacing.md)
                 .padding(.bottom, 100)
             }
             .overlay(alignment: .top) {
@@ -1199,7 +678,7 @@ struct FeedView: View {
                         viewModel.acknowledgeNewPosts()
                         HapticFeedback.light()
                     } label: {
-                        HStack(spacing: 8) {
+                        HStack(spacing: MeeshySpacing.sm) {
                             Image(systemName: "arrow.up")
                                 .font(.caption.weight(.bold))
 
@@ -1207,8 +686,8 @@ struct FeedView: View {
                                 .font(.subheadline.weight(.semibold))
                         }
                         .foregroundColor(.white)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, MeeshySpacing.xl)
+                        .padding(.vertical, MeeshySpacing.smPlus)
                         .background(
                             Capsule()
                                 .fill(
@@ -1240,32 +719,17 @@ struct FeedView: View {
                     socketHandler: deps.feedSocketHandler,
                     persistence: deps.feedPersistence
                 )
-                store.startObserving(dbPool: deps.dbPool)
+                store.startObserving()
                 await store.loadInitial()
             }
 
             if viewModel.posts.isEmpty {
                 await viewModel.loadFeed()
             }
-            // Seed liked state from loaded posts (uses post.isLiked which is derived
-            // from APIPost.currentUserReactions / isLikedByMe by the SDK).
+            // Seed liked / bookmark / repost state from the loaded posts (SDK-derived
+            // `isLiked`, server-enriched `isBookmarkedByMe` / `isRepostedByMe`).
             // Preserves existing optimistic state: only seeds posts not yet tracked.
-            let newLiked = FeedView.computePostLikedIds(from: viewModel.posts)
-            for id in newLiked where !postLikedIds.contains(id) && postLikeDelta[id] == nil {
-                postLikedIds.insert(id)
-            }
-            // Seed bookmark/repost flags from the server-enriched fields
-            // on each loaded post (PostFeedService now provides
-            // isBookmarkedByMe + isRepostedByMe alongside isLikedByMe).
-            // Preserves in-flight optimistic state.
-            for post in viewModel.posts {
-                if post.isBookmarkedByMe && !postBookmarkInFlightIds.contains(post.id) {
-                    postBookmarkedIds.insert(post.id)
-                }
-                if post.isRepostedByMe && !postRepostInFlightIds.contains(post.id) {
-                    postRepostedIds.insert(post.id)
-                }
-            }
+            engagement.seedFromLoadedPosts(viewModel.posts)
             // Defensive fallback for backends that haven't been upgraded yet
             // — pull bookmark IDs from the local cache so the filled icon
             // still appears for older sessions or when the server payload
@@ -1277,81 +741,41 @@ struct FeedView: View {
             await storyViewModel.loadStories()
         }
         .adaptiveOnChange(of: feedFlagsFingerprint) { _, _ in
-            let newPosts = viewModel.posts
-            // Merge liked / bookmarked / reposted state when new pages
-            // arrive. Only seed posts not yet tracked to avoid overwriting
-            // optimistic state from in-flight toggles.
-            for post in newPosts where postLikeDelta[post.id] == nil && !postHeartInFlightIds.contains(post.id) {
-                if post.isLiked {
-                    postLikedIds.insert(post.id)
-                } else {
-                    postLikedIds.remove(post.id)
-                }
-            }
-            for post in newPosts where postBookmarkDelta[post.id] == nil && !postBookmarkInFlightIds.contains(post.id) {
-                if post.isBookmarkedByMe {
-                    postBookmarkedIds.insert(post.id)
-                }
-            }
-            for post in newPosts where postRepostDelta[post.id] == nil && !postRepostInFlightIds.contains(post.id) {
-                if post.isRepostedByMe {
-                    postRepostedIds.insert(post.id)
-                }
-            }
+            engagement.reconcile(with: viewModel.posts)
         }
         .onReceive(SocialSocketManager.shared.postReactionAdded.receive(on: DispatchQueue.main)) { event in
-            let heart = StoryViewerView.heartEmoji
-            guard event.emoji == heart else { return }
-            let currentUserId = AuthManager.shared.currentUser?.id
-            if event.userId == currentUserId {
-                postLikedIds.insert(event.postId)
-            } else {
-                postLikeDelta[event.postId, default: 0] += 1
-            }
+            engagement.applyReactionAdded(
+                emoji: event.emoji, userId: event.userId, postId: event.postId,
+                currentUserId: AuthManager.shared.currentUser?.id
+            )
         }
         .onReceive(SocialSocketManager.shared.postReactionRemoved.receive(on: DispatchQueue.main)) { event in
-            let heart = StoryViewerView.heartEmoji
-            guard event.emoji == heart else { return }
-            let currentUserId = AuthManager.shared.currentUser?.id
-            if event.userId == currentUserId {
-                postLikedIds.remove(event.postId)
-            } else {
-                postLikeDelta[event.postId, default: 0] -= 1
-            }
+            engagement.applyReactionRemoved(
+                emoji: event.emoji, userId: event.userId, postId: event.postId,
+                currentUserId: AuthManager.shared.currentUser?.id
+            )
         }
-        // Unification du like : le ❤️ arrive désormais comme `post:liked`/`post:unliked`
-        // (événement CANONIQUE absolu — le ViewModel pose `posts[i].likes = likeCount`).
-        // On réconcilie ici l'état OPTIMISTE local de la vue : le compteur absolu fait
-        // autorité → on purge le delta, et on confirme `isLiked` pour l'acteur. Source
-        // unique pour les 3 vues (feed, détail, reel). Le chemin `post:reaction-*` ci-
-        // dessus reste pour les emojis NON-❤️ (réactions riches).
+        // Unification du like : `post:liked`/`post:unliked` (événement CANONIQUE
+        // absolu) purge le delta optimiste et confirme `isLiked` pour l'acteur.
+        // Le chemin `post:reaction-*` ci-dessus reste pour les emojis NON-❤️.
         .onReceive(SocialSocketManager.shared.postLiked.receive(on: DispatchQueue.main)) { event in
-            postLikeDelta[event.postId] = nil
-            if event.userId == AuthManager.shared.currentUser?.id {
-                postLikedIds.insert(event.postId)
-            }
+            engagement.applyPostLiked(
+                postId: event.postId, userId: event.userId,
+                currentUserId: AuthManager.shared.currentUser?.id
+            )
         }
         .onReceive(SocialSocketManager.shared.postUnliked.receive(on: DispatchQueue.main)) { event in
-            postLikeDelta[event.postId] = nil
-            if event.userId == AuthManager.shared.currentUser?.id {
-                postLikedIds.remove(event.postId)
-            }
+            engagement.applyPostUnliked(
+                postId: event.postId, userId: event.userId,
+                currentUserId: AuthManager.shared.currentUser?.id
+            )
         }
-        // Bookmark : même réconciliation canonique que le like. L'événement est
-        // PERSONNEL (emitToUser) → toujours pour l'utilisateur courant. Le
-        // ViewModel a posé le `bookmarkCount` absolu sur le post ; on purge ici
-        // le delta optimiste local pour que `bookmarkCount + delta` retombe sur
-        // le compteur autoritaire (sans reload). Si le compteur est absent
-        // (vieux gateway), on garde le delta (dégradation gracieuse).
+        // Bookmark : même réconciliation canonique que le like (événement PERSONNEL).
         .onReceive(SocialSocketManager.shared.postBookmarked.receive(on: DispatchQueue.main)) { payload in
-            if payload.bookmarkCount != nil {
-                postBookmarkDelta[payload.postId] = nil
-            }
-            if payload.bookmarked {
-                postBookmarkedIds.insert(payload.postId)
-            } else {
-                postBookmarkedIds.remove(payload.postId)
-            }
+            engagement.applyPostBookmarked(
+                postId: payload.postId, bookmarked: payload.bookmarked,
+                hasAbsoluteCount: payload.bookmarkCount != nil
+            )
         }
         .onDisappear {
             viewModel.unsubscribeFromSocketEvents()
@@ -1374,7 +798,7 @@ struct FeedView: View {
                         await publishAudioPost(audioURL: audioURL, mimeType: mimeType, durationMs: durationMs, transcription: transcription)
                     }
                 },
-                onPublishBorrowed: { sound in
+                onPublishBorrowed: { sound, _ in
                     showAudioComposer = false
                     Task { await publishBorrowedSoundPost(sound) }
                 }
@@ -1384,418 +808,47 @@ struct FeedView: View {
         // niveau root (`.fullScreenCover(item:)`). L'ancien cover local
         // `(isPresented:)` + `selectedStoryUserId` séparé provoquait une capture
         // périmée de l'uid (écran noir « story introuvable »). Supprimé.
-        .sheet(isPresented: $showComposerLanguagePicker) {
-            AudioLanguagePickerView(
-                selectedLocale: Binding(
-                    get: { Locale(identifier: composerLanguage) },
-                    set: { newLocale in
-                        let langCode = newLocale.language.languageCode?.identifier ?? newLocale.identifier
-                        composerLanguage = langCode
-                    }
-                )
-            )
-        }
     }
 
-    // MARK: - Composer Overlay
-    private var composerOverlay: some View {
-        ZStack {
-            // Backdrop
-            Color.black.opacity(0.6)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showComposer = false
-                        isComposerFocused = false
-                        recoveredPostCmid = nil
-                    }
-                }
-
-            // Composer card
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            showComposer = false
-                            isComposerFocused = false
-                            composerText = ""
-                            recoveredPostCmid = nil
-                        }
-                    } label: {
-                        Text(String(localized: "Annuler", defaultValue: "Annuler"))
-                            .font(.subheadline.weight(.medium))
-                            .foregroundColor(theme.textSecondary)
-                    }
-                    .accessibilityLabel(String(localized: "a11y.feed.compose.cancel", defaultValue: "Annuler", bundle: .main))
-                    .accessibilityHint(String(localized: "a11y.feed.compose.cancel.hint", defaultValue: "Ferme l'éditeur sans publier", bundle: .main))
-
-                    Spacer()
-
-                    Text(String(localized: "Nouveau post", defaultValue: "Nouveau post"))
-                        .font(.headline.weight(.bold))
-                        .foregroundColor(theme.textPrimary)
-                        .accessibilityAddTraits(.isHeader)
-
-                    Spacer()
-
-                    Button {
-                        publishPostWithAttachments()
-                    } label: {
-                        if isUploading {
-                            ProgressView()
-                                .tint(MeeshyColors.indigo300)
-                                .scaleEffect(0.8)
-                        } else {
-                            Text(String(localized: "Publier", defaultValue: "Publier"))
-                                .font(.subheadline.weight(.bold))
-                                .foregroundColor(composerHasContent ? MeeshyColors.indigo300 : theme.textMuted)
-                        }
-                    }
-                    .disabled(!composerHasContent || isUploading)
-                    .accessibilityLabel(String(localized: "a11y.feed.compose.publish", defaultValue: "Publier", bundle: .main))
-                    .accessibilityHint(String(localized: "a11y.feed.compose.publish.hint", defaultValue: "Publie votre message dans le fil", bundle: .main))
-                    .accessibilityValue(
-                        isUploading
-                            ? String(localized: "a11y.feed.compose.publish.uploading", defaultValue: "Envoi en cours", bundle: .main)
-                            : (composerHasContent
-                                ? ""
-                                : String(localized: "a11y.feed.compose.publish.disabled", defaultValue: "Indisponible, ajoutez du contenu", bundle: .main))
-                    )
-                }
-                .padding(16)
-                .background(theme.backgroundSecondary)
-
-                Divider().background(theme.inputBorder)
-
-                // User row
-                HStack(spacing: 12) {
-                    MeeshyAvatar(
-                        name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
-                        context: .feedComposer,
-                        avatarURL: AuthManager.shared.currentUser?.avatar
-                    )
-                    .accessibilityHidden(true)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(getUserDisplayName(AuthManager.shared.currentUser, fallback: String(localized: "feed.composer.me", defaultValue: "Moi", bundle: .main)))
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(theme.textPrimary)
-
-                        // Les SIX audiences du modèle, comme le composer story
-                        // et l'éditeur : trois d'entre elles (COMMUNITY,
-                        // EXCEPT, ONLY) étaient inatteignables à la création
-                        // d'un post — offertes ailleurs, refusées ici.
-                        Menu {
-                            ForEach(PostVisibility.allCases) { mode in
-                                Button {
-                                    postVisibility = mode.rawValue
-                                    // Un consentement de découvrabilité ne
-                                    // survit pas à un resserrement d'audience
-                                    // qu'il ne couvrait pas : le contrôle
-                                    // disparaît hors PUBLIC, et un opt-in
-                                    // resté ouvert derrière lui repartirait
-                                    // au prochain élargissement sans que
-                                    // personne ne l'ait réexaminé.
-                                    if mode != .public {
-                                        nearbyDiscoverability.reset()
-                                    }
-                                    if mode.requiresUserSelection {
-                                        audiencePickerMode = mode
-                                    } else {
-                                        postVisibilityUserIds = []
-                                    }
-                                } label: {
-                                    Label(mode.label, systemImage: mode.icon)
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: selectedPostVisibility.icon)
-                                    .font(MeeshyFont.relative(10))
-                                Text(selectedPostVisibility.label)
-                                    .font(MeeshyFont.relative(12))
-                            }
-                            .foregroundColor(theme.textMuted)
-                        }
-                        .sheet(item: $audiencePickerMode) { mode in
-                            AudienceUserPickerView(mode: mode, initialSelection: postVisibilityUserIds) { ids in
-                                postVisibilityUserIds = ids
-                            }
-                        }
-                    }
-
-                    // Réel ⇄ Post toggle — shown ONLY when the current
-                    // composition qualifies as a reel (video >=3s || audio
-                    // >=3s || >= 2 images). Removing an image (2→1) de-
-                    // qualifies: the toggle disappears and
-                    // `ReelComposition.defaultType` publishes a POST
-                    // regardless of this flag — no 1-image REEL possible, nor
-                    // a video/audio under 3 seconds.
-                    if ReelComposition.qualifiesAsReel(
-                        mimeTypes: pendingAttachments.map(\.mimeType)
-                            + (pendingAudioURL != nil ? ["audio/mp4"] : []),
-                        durationsMs: pendingAttachments.map(\.duration)
-                    ) {
-                        Button {
-                            composerForcePlainPost.toggle()
-                            HapticFeedback.light()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: composerForcePlainPost ? "doc.text" : "play.rectangle.on.rectangle.fill")
-                                    .font(.caption2)
-                                Text(composerForcePlainPost
-                                    ? String(localized: "feed.composer.type.post", defaultValue: "Post", bundle: .main)
-                                    : String(localized: "feed.composer.type.reel", defaultValue: "Réel", bundle: .main))
-                                    .font(.caption)
-                            }
-                            .foregroundColor(composerForcePlainPost ? theme.textMuted : MeeshyColors.indigo300)
-                        }
-                        .padding(.leading, 12)
-                        .accessibilityHint(String(localized: "feed.composer.type.hint", defaultValue: "Bascule entre réel et post", bundle: .main))
-                    }
-
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-
-                // Text editor
-                ZStack(alignment: .topLeading) {
-                    if composerText.isEmpty {
-                        Text(String(localized: "Qu'avez-vous en tete ?", defaultValue: "Qu'avez-vous en t\u{00EA}te ?"))
-                            .font(.body)
-                            .foregroundColor(theme.textMuted)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 12)
-                    }
-
-                    TextEditor(text: $composerText)
-                        .focused($isComposerFocused)
-                        .scrollContentBackground(.hidden)
-                        .foregroundColor(theme.textPrimary)
-                        .font(.body)
-                        .frame(minHeight: 120)
-                        .padding(.horizontal, 12)
-                        .padding(.top, 4)
-                }
-                .scaleEffect(composerBounce ? 1.01 : 1.0)
-                .adaptiveOnChange(of: isComposerFocused) { _, newValue in
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
-                        composerBounce = newValue
-                    }
-                }
-
-                // Pending attachments preview
-                if !pendingAttachments.isEmpty || !preparingAttachments.isEmpty || isLoadingMedia || pendingPlace != nil {
-                    feedPendingAttachmentsRow
-                }
-
-                // Upload progress
-                if isUploading, let progress = uploadProgress {
-                    UploadProgressBar(progress: progress, accentColor: MeeshyColors.brandPrimaryHex)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 4)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-
-                // Première porte : la frappe `@`, posée SOUS le champ — la
-                // liste suit la ligne qu'on écrit au lieu de recouvrir ce qui
-                // précède.
-                ReferenceMentionSuggestions(text: $composerText,
-                                            references: $composerReferences,
-                                            background: theme.inputBackground)
-                    .padding(.horizontal, 16)
-
-                Spacer(minLength: 0)
-
-                // Seconde porte, plus l'unique état visible des références —
-                // le seul endroit d'où une SILENCIEUSE se voit, donc le seul
-                // d'où elle se retire.
-                ReferenceComposerBar(references: $composerReferences,
-                                     accentColor: MeeshyColors.indigo500)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 4)
-
-                // Toolbar
-                // Doctrine 82i : les 6 glyphes d'action du composer ci-dessous (photo/caméra/
-                // emoji/fichier/position/audio, 20pt) sont figés — rangée horizontale contrainte
-                // (HStack spacing 16 + Spacer) qui déborderait si les icônes scalaient en XXXL.
-                // Chaque bouton porte déjà son `.accessibilityLabel` → VoiceOver reste complet.
-                HStack(spacing: 16) {
-                    Button { showPhotoPicker = true; HapticFeedback.light() } label: {
-                        Image(systemName: "photo.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(MeeshyColors.brandPrimary)
-                    }
-                    .accessibilityLabel(String(localized: "Ajouter une photo", defaultValue: "Ajouter une photo"))
-                    Button { showCamera = true; HapticFeedback.light() } label: {
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(MeeshyColors.error)
-                    }
-                    .accessibilityLabel(String(localized: "Prendre une photo", defaultValue: "Prendre une photo"))
-                    Button { showEmojiPicker = true; HapticFeedback.light() } label: {
-                        Image(systemName: "face.smiling.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "F8B500"))
-                    }
-                    .accessibilityLabel(String(localized: "Ajouter un emoji", defaultValue: "Ajouter un emoji"))
-                    Button { showFilePicker = true; HapticFeedback.light() } label: {
-                        Image(systemName: "doc.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "9B59B6"))
-                    }
-                    .accessibilityLabel(String(localized: "Joindre un fichier", defaultValue: "Joindre un fichier"))
-                    Button { showLocationPicker = true; HapticFeedback.light() } label: {
-                        Image(systemName: "location.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(MeeshyColors.success)
-                    }
-                    .accessibilityLabel(String(localized: "Partager la position", defaultValue: "Partager la position"))
-                    Button { showAudioComposer = true; HapticFeedback.light() } label: {
-                        Image(systemName: "mic.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(MeeshyColors.errorStrong)
-                    }
-                    .accessibilityLabel(String(localized: "Enregistrer un audio", defaultValue: "Enregistrer un audio"))
-
-                    Spacer()
-
-                    Button {
-                        showComposerLanguagePicker = true
-                        HapticFeedback.light()
-                    } label: {
-                        Text(ComposerLanguageFlag.label(for: composerLanguage))
-                            .font(.footnote.weight(.semibold))
-                            .foregroundColor(MeeshyColors.indigo500)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(MeeshyColors.indigo100.opacity(isDark ? 0.15 : 1))
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(MeeshyColors.indigo300.opacity(0.3), lineWidth: 1)
-                                    )
-                            )
-                    }
-                    .accessibilityLabel(String(localized: "Langue du post", defaultValue: "Langue du post"))
-                    .accessibilityValue(composerLanguageDisplayName)
-                }
-                .padding(16)
-                .background(theme.backgroundSecondary)
-            }
-            .background(theme.backgroundPrimary)
-            .clipShape(RoundedRectangle(cornerRadius: 24))
-            .overlay(
-                RoundedRectangle(cornerRadius: 24)
-                    .stroke(theme.border(tint: MeeshyColors.brandPrimaryHex, intensity: 0.3), lineWidth: 1)
-            )
-            // Cible de dépôt de la recette commune (Lot 1). Cette surface POST
-            // n'instancie pas `UniversalComposerBar` : le point de câblage est
-            // donc le modificateur partagé, appliqué à toute la carte du
-            // composer (champ, tiroir de pièces jointes, barre d'outils) —
-            // même affordance et même résolution que la barre.
-            .modifier(ComposerDropTargetModifier(
-                accentColor: MeeshyColors.brandPrimaryHex,
-                onIngest: { handleFeedComposerIngest($0) }
-            ))
-            .padding(.horizontal, 16)
-            .padding(.vertical, 80)
-            .shadow(color: MeeshyColors.indigo300.opacity(0.2), radius: 30, y: 20)
-        }
-        .transition(.opacity.combined(with: .scale(scale: 0.95)))
-        .zIndex(200)
-        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]))
-        .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
-            handleFeedFileImport(result)
-        }
-        .fullScreenCover(isPresented: $showCamera) {
-            CameraView { result in
-                switch result {
-                case .photo(let image):
-                    handleFeedCameraCapture(image)
-                case .video(let url):
-                    handleFeedCameraVideo(url)
-                }
-            }
-            .ignoresSafeArea()
-        }
-        .sheet(isPresented: $showLocationPicker) {
-            LocationPickerView(accentColor: MeeshyColors.brandPrimaryHex) { place in
-                handleFeedLocationSelection(place)
-            }
-        }
-        .sheet(isPresented: $showEmojiPicker) {
-            EmojiPickerSheet(quickReactions: ["😀", "❤️", "🔥", "👍", "😂", "🎉"]) { emoji in
-                composerText += emoji
-                showEmojiPicker = false
-            }
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-        }
-        .adaptiveOnChange(of: selectedPhotoItems) { _, items in
-            handleFeedPhotoSelection(items)
-        }
-    }
 
     // MARK: - Post Action Presentations
     //
     // Partage, commentaires de réel, édition et citation sont déclenchés depuis
     // les CARTES du feed — jamais depuis le composer. Ces présentations vivaient
-    // pourtant sur `composerOverlay`, monté sous `if showComposer` : composer
-    // fermé, la vue portant le `.sheet` n'existait pas, donc « Partager » et
-    // « Citer » ne produisaient rien. Pire, l'item restait armé et bloquait les
-    // présentations suivantes du feed jusqu'au redémarrage. Elles sont désormais
-    // ancrées au `body`, monté en permanence.
+    // pourtant sur l'overlay inline iPad, monté sous `if showComposer` :
+    // composer fermé, la vue portant le `.sheet` n'existait pas, donc
+    // « Partager » et « Citer » ne produisaient rien. Pire, l'item restait armé
+    // et bloquait les présentations suivantes du feed jusqu'au redémarrage.
+    // Elles sont désormais ancrées au `body`, monté en permanence — et c'est cet
+    // ancrage qui a permis de retirer l'overlay sans rien emporter.
     private func postActionPresentations(_ content: some View) -> some View {
         content
             .sheet(item: $shareableLink) { link in
                 // System share sheet — paste/AirDrop/Messages/etc. all receive the
                 // `meeshy.me/l/<token>` URL so every external touchpoint funnels
                 // through the user's TrackingLink for attribution.
-                ShareSheet(activityItems: [link.url])
+                ShareSheet(activityItems: link.activityItems)
             }
             .sheet(item: $reelCommentsPost) { post in
                 // Même feuille de commentaires que les cartes post (`FeedPostCard`) —
                 // ouverte directement depuis le bouton commentaire d'un réel du feed.
                 CommentsSheetView(post: post, accentColor: post.authorColor)
             }
-            .sheet(item: $editingPost) { post in
-                EditPostSheet(
-                    originalContent: post.content,
-                    originalLanguage: post.originalLanguage,
-                    originalType: post.type,
-                    media: post.media.map { EditablePostMedia($0) },
-                    originalLocation: post.location,
-                    originalVisibility: post.visibility,
-                    originalVisibilityUserIds: post.visibilityUserIds ?? [],
-                    isRepost: post.repost != nil,
-                    onSave: { draft in
-                        await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known)
-                    },
-                    onDismiss: { editingPost = nil }
-                )
+            .postEditCover(item: $editingPost) { post, draft in
+                await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects, additions: draft.additions)
             }
-            .fullScreenCover(item: $quoteTargetPost) { quoted in
-                FeedComposerSheet(
-                    viewModel: viewModel,
-                    initialText: "",
-                    pendingAttachmentType: nil,
-                    quotePost: quoted,
-                    onDismiss: {
-                        quoteTargetPost = nil
-                    }
+            .relayingMeeshyRouter(meeshyRouter) { view, router in view.fullScreenCover(item: $quoteTargetPost) { quoted in
+                QuoteComposerDoor(
+                    quoted: quoted,
+                    storyViewModel: storyViewModel,
+                    router: router,
+                    conversationListViewModel: conversationListViewModel,
+                    statusViewModel: statusViewModel,
+                    onFinish: { quoteTargetPost = nil }
                 )
-            }
-    }
-    // MARK: - Impression Tracking
-
-    private func trackImpression(postId: String) {
-        impressions.record(postId)
+            } }
     }
 }
 
 // See FeedPostCard.swift, FeedPostCard+Media.swift
-// See FeedCommentsSheet.swift (CommentsSheetView, CommentRowView, FeedCard)
+// See FeedCommentsSheet.swift (CommentsSheetView, CommentRowView)

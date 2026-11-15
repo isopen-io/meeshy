@@ -49,7 +49,7 @@ final class CallsTabAccessibilityTests: XCTestCase {
         let source = try callsTabSource()
         // `CallRowDialButton` is the last declaration in the file — no next
         // sibling to bound against, so an open-ended window is legitimate here.
-        guard let vicinity = vicinity(in: source, from: "private struct CallRowDialButton", to: nil) else { return }
+        guard let vicinity = vicinity(in: source, from: "struct CallRowDialButton", to: nil) else { return }
         XCTAssertTrue(
             vicinity.contains("calls.redial") && vicinity.contains(".accessibilityLabel("),
             "CallRowDialButton must carry an accessibility label."

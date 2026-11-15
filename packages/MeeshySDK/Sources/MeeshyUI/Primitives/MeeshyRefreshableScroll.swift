@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 // MARK: - Meeshy Refreshable Scroll
 //
@@ -35,13 +36,18 @@ import SwiftUI
 // `headerScrollOffset` recupere l'offset.
 
 public struct MeeshyRefreshableScroll<Content: View>: View {
-    private let onRefresh: () async -> Void
+    private let onRefresh: @MainActor () async -> Void
     private let coordinateSpaceName: String
     private let onScrollOffsetChange: ((CGFloat) -> Void)?
     private let topPadding: CGFloat
     private let content: Content
 
     @State private var pullPhase: MeeshyPullPhase = .idle
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
 
     /// Seuil de pull (pt) au-dela duquel on passe en `.armed` visuellement
     /// (logo a 100% scale + rotation 180°). Choisi pour matcher le seuil
@@ -51,7 +57,7 @@ public struct MeeshyRefreshableScroll<Content: View>: View {
     private static var pullThreshold: CGFloat { 90 }
 
     public init(
-        onRefresh: @escaping () async -> Void,
+        onRefresh: @escaping @MainActor () async -> Void,
         coordinateSpaceName: String = "meeshyRefreshableScroll",
         onScrollOffsetChange: ((CGFloat) -> Void)? = nil,
         topPadding: CGFloat = 0,
@@ -159,21 +165,21 @@ public struct MeeshyRefreshableScroll<Content: View>: View {
             HapticFeedback.medium()
         }
 
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+        meeshyWithAnimation(MeeshyAnimation.springDefault, reduceMotion: reduceMotion) {
             pullPhase = .refreshing
         }
 
         await onRefresh()
 
         HapticFeedback.success()
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+        meeshyWithAnimation(MeeshyAnimation.springDefault, reduceMotion: reduceMotion) {
             pullPhase = .completing
         }
         // Petite fenetre ou l'utilisateur voit que c'est fini avant
         // que l'indicator se replie. Aligne avec l'experience originale
         // de la liste de conversations (350ms).
-        try? await Task.sleep(for: .seconds(0.4))
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+        _ = await cancellableSleep(for: .milliseconds(400))
+        meeshyWithAnimation(MeeshyAnimation.springDefault, reduceMotion: reduceMotion) {
             pullPhase = .idle
         }
     }

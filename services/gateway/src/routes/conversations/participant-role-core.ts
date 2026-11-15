@@ -1,0 +1,365 @@
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
+import { isMemberCreator, MemberRole } from '@meeshy/shared/types/role-types';
+import { resolveConversationId } from '../../utils/conversation-id-cache';
+import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { getPresenceVisibilityService, type PresenceViewer } from '../../services/PresenceVisibilityService';
+import { presenceFor } from '../users/presence-gate';
+import { resolveTargetParticipant } from './utils/target-participant';
+import { participantActionRefusal } from './utils/participant-authority';
+import { participantListUserSelect } from './utils/participant-projection';
+import { accorder, refuser, type VerdictDeGeste } from './utils/participant-geste-verdict';
+import type { PasserelleSocketDeConversation } from './utils/participant-geste-socket';
+import { announceParticipantRoleWithCapabilities } from '../../services/conversations/obsoleteCapability';
+
+const logger = enhancedLogger.child({ module: 'ConversationParticipantRoleCore' });
+
+/**
+ * **Le NOYAU de `PATCH …/participants/:userId/role`** — extrait de
+ * `participant-role.ts` le 2026-09-01 (#4713).
+ *
+ * Tout ce qui DÉCIDE vit ici : la normalisation du rang demandé, la résolution
+ * de la conversation, l'appartenance et le rang du demandeur, le plancher
+ * `ADMIN`, les deux gardes d'auto-modification, la protection du créateur, la
+ * comparaison de rang (`participantActionRefusal`), l'exigence d'un compte,
+ * l'écriture, la relecture gatée par la présence, la diffusion et la
+ * notification. Le gestionnaire ne garde que le schéma, l'authentification et
+ * la traduction du verdict — patron de `chargerPostsProches`
+ * (`routes/posts/nearby.ts`, #4346).
+ *
+ * L'extraction est un DÉPLACEMENT : aucun ordre d'appel Prisma n'a bougé,
+ * aucun message ni statut de refus n'a changé.
+ *
+ * ─── Ce que le noyau ne calcule PAS lui-même ────────────────────────────────
+ *
+ * `viewer` arrive en paramètre. Il se lit sur la REQUÊTE
+ * (`viewerFromRequest`), qui est précisément ce qu'un noyau appelable ne doit
+ * pas connaître — même raison que `reader` dans `chargerPostsProches`. Le
+ * gestionnaire le résout et le remet ; la LOI de présence, elle, reste
+ * entièrement ici.
+ */
+
+/** Ce que le service de notification doit savoir faire — rien de plus. */
+export interface AvisDeChangementDeRang {
+  createMemberRoleChangedNotification(params: {
+    recipientUserId: string;
+    changedByUserId: string;
+    conversationId: string;
+    newRole: 'ADMIN' | 'MODERATOR' | 'MEMBER';
+    previousRole: string;
+  }): Promise<unknown>;
+}
+
+export type RangDeParticipantServi = {
+  readonly message: string;
+  readonly userId: string;
+  readonly participantId: string;
+  readonly role: string;
+  readonly participant: ReturnType<typeof serializeConversationParticipant> | null;
+};
+
+export type DemandeDeRangDeParticipant = {
+  readonly prisma: PrismaClient;
+  /** Le segment d'URL : un `Conversation.id` ou un identifiant lisible. */
+  readonly conversationIdentifier: string;
+  /** Le segment d'URL de la CIBLE : un `User.id` **ou** un `Participant.id`. */
+  readonly targetKey: string;
+  readonly role: string;
+  readonly currentUserId: string;
+  readonly viewer: PresenceViewer;
+  readonly socketIO: PasserelleSocketDeConversation | null | undefined;
+  readonly notifications: AvisDeChangementDeRang | null | undefined;
+};
+
+const RANGS_ACCEPTES: readonly string[] = ['admin', 'moderator', 'member'];
+
+/**
+ * **La diffusion de `participant:role-updated`**, extraite de
+ * `changerRangDeParticipant` par #7845 pour que la route SOUVERAINE
+ * (`PATCH /admin/conversations/:id/participants/:userId`) annonce le même
+ * événement, sous la même forme, sans en réécrire une copie.
+ *
+ * La charge ne transporte JAMAIS `isOnline`/`lastActiveAt` : une diffusion en
+ * salle n'a pas de destinataire nommé capable de porter une visibilité, et le
+ * type partagé (`ParticipantRoleUpdatedEventData`) ne les déclare pas. Le
+ * `participant` reçu peut donc avoir été gaté pour le DEMANDEUR — ils sont
+ * retirés ici, quel qu'en soit l'état.
+ *
+ * Thread-only pour la SALLE, vérifié plutôt que déduit : aucune ligne de liste
+ * ne rend le rôle d'un AUTRE. La cible, elle, le reçoit dans sa room
+ * personnelle avec sa capacité recalculée (#15987) : ses gestes de liste
+ * (« Rendre obsolète ») suivent son nouveau rang.
+ */
+export function announceParticipantRoleUpdated(params: {
+  readonly manager: ReturnType<PasserelleSocketDeConversation['getManager']>;
+  /** Relit la capacité de la cible pour son nouveau rang (#15987). */
+  readonly prisma: Pick<PrismaClient, 'participant' | 'user'>;
+  readonly conversationId: string;
+  /** La cible RÉSOLUE, jamais le segment d'URL (qui peut porter un `Participant.id`). */
+  readonly targetUserId: string;
+  readonly newRole: string;
+  readonly updatedBy: string;
+  readonly participant: ReturnType<typeof serializeConversationParticipant> | null;
+}): void {
+  const { manager, prisma, conversationId, targetUserId, newRole, updatedBy, participant } = params;
+  if (!manager) return;
+  const participantForBroadcast = participant
+    ? (() => {
+        const { isOnline: _broadcastIsOnline, lastActiveAt: _broadcastLastActiveAt, ...rest } = participant;
+        return rest;
+      })()
+    : null;
+  announceParticipantRoleWithCapabilities(prisma, {
+    io: manager.getIO(),
+    payload: {
+      conversationId,
+      userId: targetUserId,
+      newRole,
+      updatedBy,
+      participant: participantForBroadcast,
+    },
+    onError: (error) => logger.warn('viewerCapabilities unreadable for participant:role-updated', { conversationId, error }),
+  }).catch((error: unknown) => logger.warn('participant:role-updated emission failed', { error }));
+  // Le cache d'identifiants de participant (5 min) servirait sinon l'ancien
+  // rang au prochain `message:send` de la cible.
+  manager.invalidateParticipantCache?.(targetUserId, conversationId);
+}
+
+export async function changerRangDeParticipant(
+  demande: DemandeDeRangDeParticipant,
+): Promise<VerdictDeGeste<RangDeParticipantServi>> {
+  const { prisma, conversationIdentifier, targetKey, currentUserId } = demande;
+
+  const normalizedRole = demande.role.toLowerCase()
+  if (!RANGS_ACCEPTES.includes(normalizedRole)) {
+    return refuser(400, 'Invalid role. Accepted roles are: admin, moderator, member');
+  }
+
+  const conversationId = await resolveConversationId(prisma, conversationIdentifier);
+  if (!conversationId) {
+    return refuser(403, 'Unauthorized access to this conversation');
+  }
+
+  const currentUserParticipant = await prisma.participant.findFirst({
+    where: {
+      conversationId: conversationId,
+      userId: currentUserId,
+      isActive: true
+    },
+    include: {
+      user: true
+    }
+  });
+
+  if (!currentUserParticipant) {
+    return refuser(403, 'Unauthorized access to this conversation');
+  }
+
+  const actor = {
+    conversationRole: currentUserParticipant.role,
+    platformRole: currentUserParticipant.user?.role,
+  };
+
+  // Le PLANCHER, opposé avant même de chercher la cible : un simple membre
+  // n'a rien à apprendre de l'existence — ou non — de la ligne qu'il visait.
+  if (!actorHasMinimumRole(actor, MemberRole.ADMIN)) {
+    return refuser(403, 'Vous n\'avez pas les droits pour modifier les rôles des participants');
+  }
+
+  if (targetKey === currentUserId) {
+    return refuser(400, 'You cannot modify your own role');
+  }
+
+  // La cible se résout sous les DEUX colonnes, comme `/ban` et `DELETE` :
+  // `:userId` porte un `User.id` pour un membre inscrit, un `Participant.id`
+  // pour qui est venu par un lien partagé. Le `findFirst` sur la seule
+  // colonne `userId` ne trouvait jamais les seconds — et répondait
+  // « participant introuvable », ce qui est faux : il existe, c'est la
+  // question qui était mal posée.
+  const targetParticipant = await resolveTargetParticipant(prisma, conversationId, targetKey);
+
+  // `isActive` est vérifié ICI plutôt que dans le `where` : le résolveur
+  // partagé ne filtre pas — bannir un ex-membre est un geste légitime, et
+  // c'est l'appelant qui dit ce qu'il exige de l'état. Changer le rang de
+  // quelqu'un qui est parti n'a, lui, aucun sens.
+  if (!targetParticipant || !targetParticipant.isActive) {
+    return refuser(404, 'Participant not found or inactive');
+  }
+
+  // La garde plus haut compare le segment d'URL ; celle-ci compare
+  // l'identité RÉSOLUE, ce qui couvre l'admin qui se désignerait par son
+  // propre `Participant.id`.
+  if (targetParticipant.userId === currentUserId || targetParticipant.id === currentUserId) {
+    return refuser(400, 'You cannot modify your own role');
+  }
+
+  // Protection, pas permission : sur une ligne `CREATOR` l'égalité
+  // stricte ne tirait pas et le créateur devenait rétrogradable (#4008).
+  // Reste AVANT la comparaison de rang, et pas seulement par habitude : les
+  // deux refusent, mais celui-ci NOMME la raison — « on ne touche pas au
+  // créateur » — là où l'autre dirait seulement « vous n'êtes pas assez
+  // haut », ce qui laisserait croire qu'un rang de plus suffirait.
+  if (isMemberCreator(targetParticipant.role ?? 'member')) {
+    return refuser(403, 'Cannot modify the conversation creator\'s role');
+  }
+
+  // La LOI, enfin — celle que `/ban` portait seul. Sans elle, un
+  // administrateur rétrogradait ses pairs.
+  const refusal = participantActionRefusal({
+    actor,
+    targetRole: targetParticipant.role,
+    floor: MemberRole.ADMIN,
+  });
+  if (refusal) {
+    return refuser(
+      403,
+      refusal === 'below-floor'
+        ? 'Vous n\'avez pas les droits pour modifier les rôles des participants'
+        : 'Vous ne pouvez pas modifier le rang d\'un participant de rang égal ou supérieur au vôtre',
+    );
+  }
+
+  // Le résolveur atteint désormais un visiteur SANS COMPTE ; l'événement qui
+  // annonce le changement, non. `ParticipantRoleUpdatedEvent.userId` est
+  // déclaré NON optionnel chez les trois clients (Android l'a déjà payé une
+  // fois : un champ manquant y faisait lever `MissingFieldException`, avalée
+  // par le `runCatching` du listener — plus AUCUN changement de rang
+  // n'atteignait le trombinoscope, en silence). Émettre `null` ferait perdre
+  // l'événement ENTIER, pas seulement ce champ (#4009).
+  //
+  // On refuse donc explicitement, plutôt que de mentir dans les deux sens :
+  // 404 « introuvable » était faux — la ligne existe —, et servir la
+  // mutation en perdant sa diffusion l'aurait été plus encore. Le jour où
+  // les trois décodeurs acceptent `userId: null` + `participantId`, cette
+  // garde tombe et rien d'autre ne bouge.
+  if (!targetParticipant.userId) {
+    return refuser(
+      400,
+      'A participant without an account cannot hold a conversation rank yet',
+      'PARTICIPANT_HAS_NO_ACCOUNT',
+    );
+  }
+
+  const targetUserId = targetParticipant.userId;
+  const newRole = normalizedRole;
+
+  // ─── Reposer le MÊME rang n'est pas un geste (#17078) ──────────────────────
+  //
+  // Rien à écrire : la ligne porte déjà le rang demandé. Ce qui partait
+  // pourtant à chaque rejeu — un retry après délai, un drain d'outbox, un
+  // double tap :
+  //   - une écriture identique ;
+  //   - `participant:role-updated` à toute la salle, SANS delta ;
+  //   - une notification dont `previousRole === newRole`, soit « X vous a
+  //     nommé administrateur » pour un geste qui n'a rien changé, et elle
+  //     perce la sourdine.
+  //
+  // Le court-circuit est placé APRÈS tous les refus : un appelant sans
+  // autorité reçoit toujours son 403, et un créateur reste protégé — un rejeu
+  // n'est une absence d'effet que pour qui avait le DROIT d'agir.
+  //
+  // **Et il rend un ACCORD, là où la jumelle du bannissement refuse en 400.**
+  // Ce n'est pas une incohérence : un bannissement est un acte de MODÉRATION,
+  // dont le refus informe l'acteur que quelqu'un d'autre l'a déjà fait. Un rang
+  // déjà au rang demandé est l'ÉTAT QUE L'APPELANT A DEMANDÉ ; lui rendre une
+  // erreur ferait échouer un geste réussi.
+  //
+  // La comparaison porte sur `normalizedRole`, jamais sur la chaîne reçue : la
+  // casse ne décide pas d'une conséquence (#4008), et `MEMBER` reposé sur
+  // `member` est le même rejeu.
+  if ((targetParticipant.role ?? 'member') === newRole) {
+    logger.info('[ROLE] rang inchangé — aucune écriture, aucune diffusion, aucun avis', {
+      conversationId,
+      targetUserId,
+      role: newRole,
+    });
+    return accorder({
+      message: 'Rôle du participant mis à jour avec succès',
+      userId: targetUserId,
+      participantId: targetParticipant.id,
+      role: newRole,
+      participant: await participantServiPourRejeu(prisma, targetParticipant.id, demande),
+    });
+  }
+
+  await prisma.participant.update({
+    where: {
+      id: targetParticipant.id
+    },
+    data: {
+      role: newRole
+    }
+  });
+
+  const updatedParticipant = await participantServiPourRejeu(prisma, targetParticipant.id, demande);
+  announceParticipantRoleUpdated({
+    manager: demande.socketIO?.getManager(),
+    prisma,
+    conversationId,
+    targetUserId,
+    newRole,
+    updatedBy: currentUserId,
+    participant: updatedParticipant,
+  });
+
+  const notificationService = demande.notifications;
+  if (notificationService) {
+    notificationService.createMemberRoleChangedNotification({
+      recipientUserId: targetUserId,
+      changedByUserId: currentUserId,
+      conversationId,
+      newRole: newRole.toUpperCase() as 'ADMIN' | 'MODERATOR' | 'MEMBER',
+      previousRole: targetParticipant.role,
+    }).catch((err: unknown) => logger.error('Notification error role_changed', err as Error));
+  }
+
+  return accorder({
+    message: 'Rôle du participant mis à jour avec succès',
+    userId: targetUserId,
+    participantId: targetParticipant.id,
+    role: newRole,
+    participant: updatedParticipant
+  });
+}
+
+/**
+ * Le participant SERVI par cette route — lu puis sérialisé, avec la présence
+ * résolue pour le VIEWER DEMANDEUR (régime strict : soi / ADMIN+ / ami).
+ *
+ * Extrait parce que DEUX sorties le servent désormais (#17078) : la transition
+ * de rang, et le REJEU qui n'écrit rien. Le laisser inline aurait fait du rejeu
+ * une réponse PLUS PAUVRE que celle d'un vrai changement — ce qui est
+ * exactement le défaut que #16961 a corrigé ailleurs : deux projections d'une
+ * même chose, gardées différemment.
+ */
+async function participantServiPourRejeu(
+  prisma: PrismaClient,
+  participantId: string,
+  demande: Pick<DemandeDeRangDeParticipant, 'viewer'>,
+) {
+  const updatedRow = await prisma.participant.findUnique({
+    where: { id: participantId },
+    include: participantListUserSelect
+  });
+
+  // Cette route servait `updatedRow` TEL QUEL sous la clé `participant`, que
+  // `conversationParticipantSchema` déclare. La réponse REST est gatée par
+  // le viewer DEMANDEUR (régime STRICT — self/ADMIN+/ami) : elle seule a
+  // un destinataire nommé capable de porter une visibilité. La diffusion
+  // Socket.IO plus bas n'en a pas — toute la salle la reçoit — donc son
+  // `participant` ne transporte plus `isOnline`/`lastActiveAt` du tout,
+  // gaté ou non ; le type partagé (`ParticipantRoleUpdatedEventData`) ne
+  // les déclare déjà pas.
+  const rolePresenceViewer = demande.viewer;
+  const rolePresenceVis = updatedRow?.userId
+    ? await getPresenceVisibilityService(prisma).resolveForTarget(rolePresenceViewer, {
+        id: updatedRow.userId,
+        deactivatedAt: updatedRow.user?.deactivatedAt ?? null
+      })
+    : presenceFor(rolePresenceViewer, new Map(), null);
+  const updatedParticipant = updatedRow
+    ? serializeConversationParticipant(updatedRow, { presence: rolePresenceVis })
+    : null;
+  return updatedParticipant;
+}

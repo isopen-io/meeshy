@@ -5,6 +5,7 @@
  * @jest-environment node
  */
 
+import { roomDeliveries } from '../../helpers/room-deliveries';
 import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 import { makeChainableIO } from '../../helpers/chainable-io';
@@ -67,9 +68,25 @@ function makePrisma(overrides: Record<string, any> = {}) {
       count: jest.fn<any>().mockResolvedValue(0),
       ...(overrides.participant ?? {}),
     },
+    notification: {
+      // La trace des promotions, que la succession du créateur (#4058) lit
+      // pour dater le rang d'administrateur. Vide par défaut : la règle
+      // replie alors sur `joinedAt`, et reste totale.
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      ...(overrides.notification ?? {}),
+    },
     conversation: {
       update: jest.fn<any>().mockResolvedValue({}),
+      // La loi de succession écarte d'abord le DM JAMAIS UTILISÉ, qui se ferme
+      // au lieu de se transmettre — 0 ici : ces scénarios ne sont pas ce DM.
+      count: jest.fn<any>().mockResolvedValue(0),
       ...(overrides.conversation ?? {}),
+    },
+    // #3740 — la clôture désactive aussi les liens de partage encore actifs du
+    // fil, dans la MÊME transaction.
+    conversationShareLink: {
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      ...(overrides.conversationShareLink ?? {}),
     },
     // La clôture et le départ committent ensemble (cycle 69) : le double rend
     // les résultats dans l'ordre, ce dont la route se sert pour lire l'audience
@@ -135,6 +152,9 @@ describe('POST /conversations/:id/leave — creator with other active members', 
   let app: FastifyInstance;
   let prisma: ReturnType<typeof makePrisma>;
 
+  const ADMIN_ID = '507f1f77bcf86cd799439077';
+  const ADMIN_USER_ID = '507f1f77bcf86cd799439088';
+
   beforeAll(async () => {
     (resolveConversationId as jest.MockedFunction<any>).mockResolvedValue(CONV_ID);
     ({ app, prisma } = await buildApp({
@@ -148,7 +168,20 @@ describe('POST /conversations/:id/leave — creator with other active members', 
             isActive: true,
             displayName: 'Alice',
           }),
-          count: jest.fn<any>().mockResolvedValue(3),
+          findMany: jest.fn<any>().mockResolvedValue([
+            {
+              id: 'p-ancien',
+              userId: 'u-ancien',
+              role: 'member',
+              joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+            },
+            {
+              id: ADMIN_ID,
+              userId: ADMIN_USER_ID,
+              role: 'admin',
+              joinedAt: new Date('2026-06-01T00:00:00.000Z'),
+            },
+          ]),
         },
       },
     }));
@@ -156,15 +189,23 @@ describe('POST /conversations/:id/leave — creator with other active members', 
 
   afterAll(async () => { await app.close(); });
 
-  it('returns 400 when creator tries to leave with other active members', async () => {
+  it('laisse le créateur PARTIR — le fil trouve son héritier (#4058)', async () => {
+    // Cette porte répondait `400` « transférez l'ownership ou supprimez la
+    // conversation » pendant que sa jumelle `delete-for-me.ts` transférait
+    // en silence : un même geste, deux contrats.
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave` });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().success).toBe(false);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
   });
 
-  it('does not update conversation or participant', async () => {
+  it("donne la conversation à l'administrateur, pas au plus ancien membre", async () => {
+    expect(prisma.participant.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: ADMIN_ID }, data: { role: 'creator' } })
+    );
+  });
+
+  it('ne ferme PAS un fil qui a trouvé son héritier', async () => {
     expect(prisma.conversation.update).not.toHaveBeenCalled();
-    expect(prisma.participant.update).not.toHaveBeenCalled();
   });
 });
 
@@ -324,17 +365,22 @@ describe('POST /conversations/:id/leave — les AUTRES appareils du partant', ()
 
   afterAll(async () => { await app.close(); });
 
-  it('chaîne la room PERSONNELLE du partant, après celles des restants', () => {
-    expect(socket.mockIo._roomsFor('conversation:participant-left')).toEqual([
+  it('atteint la room PERSONNELLE du partant, celles des restants et le fil — l\'effectif aux seuls comptes restants (#10205)', () => {
+    const delivered = roomDeliveries(socket.mockIo._sendsFor('conversation:participant-left'));
+    expect([...delivered.keys()].sort()).toEqual([
       `conversation:${CONV_ID}`,
-      `user:${WITNESS_ID}`,
       `user:${ANON_PARTICIPANT_ID}`,
       `user:${USER_ID}`,
-    ]);
+      `user:${WITNESS_ID}`,
+    ].sort());
+    expect(delivered.get(`user:${WITNESS_ID}`)).toHaveProperty('memberCount');
+    for (const room of [`conversation:${CONV_ID}`, `user:${ANON_PARTICIPANT_ID}`, `user:${USER_ID}`]) {
+      expect(delivered.get(room)).not.toHaveProperty('memberCount');
+    }
   });
 
-  it("n'émet qu'UNE fois — un appareil du partant resté dans la room ne double pas", () => {
-    expect(socket.mockIo._sent.filter((s) => s.event === 'conversation:participant-left')).toHaveLength(1);
+  it("n'émet qu'UNE copie par room — un appareil du partant resté dans la room ne double pas", () => {
+    expect(() => roomDeliveries(socket.mockIo._sendsFor('conversation:participant-left'))).not.toThrow();
   });
 
   it('adresse le partant AVANT de le sortir de la room', () => {
@@ -410,16 +456,14 @@ describe('POST /conversations/:id/leave — l\'effectif ENTIER pour l\'admin du 
 
   it('sert 250 à l\'admin du groupe et « 199+ » aux autres', () => {
     const sends = socket.mockIo._sendsFor('conversation:participant-left');
-    expect(sends).toHaveLength(2);
+    const delivered = roomDeliveries(sends);
 
-    expect(sends[0].payload).toMatchObject({ memberCount: 199, memberCountCapped: true });
-    // Sans l'exclusion, l'admin qui a le FIL ouvert recevrait AUSSI la copie
-    // plafonnée, par la room de conversation.
-    expect(sends[0].excepts).toEqual([`user:${WITNESS_ID}`]);
+    // Le fil ne reçoit AUCUN effectif ; il exclut l'admin, servi par sa room.
+    expect(delivered.get(`conversation:${CONV_ID}`)).not.toHaveProperty('memberCount');
+    expect(sends.find((send) => send.rooms.includes(`conversation:${CONV_ID}`))!.excepts).toContain(`user:${WITNESS_ID}`);
 
-    expect(sends[1].rooms).toEqual([`user:${WITNESS_ID}`]);
-    expect(sends[1].payload).toMatchObject({ memberCount: 250 });
-    expect((sends[1].payload as any).memberCountCapped).toBeUndefined();
+    expect(delivered.get(`user:${WITNESS_ID}`)).toMatchObject({ memberCount: 250 });
+    expect(delivered.get(`user:${WITNESS_ID}`).memberCountCapped).toBeUndefined();
   });
 
   it('demande le rôle de conversation ET le rôle plateforme des restants', () => {

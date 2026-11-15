@@ -31,6 +31,11 @@ const buildPrismaMock = () => ({
   },
   communityMember: {
     findMany: jest.fn<any>(),
+    // #16856 — le PUT garde une SEULE communauté : il demande une ligne, pas un
+    // lot. Le défaut par défaut est « membre », puisque ces témoins portent sur
+    // la DIFFUSION et non sur la portée ; celle-ci a ses propres témoins dans
+    // `unit/routes/community-preferences-routes.test.ts`.
+    findFirst: jest.fn<any>().mockResolvedValue({ id: 'member-1' }),
   },
 });
 

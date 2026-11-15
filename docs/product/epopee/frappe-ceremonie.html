@@ -1,0 +1,559 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>La frappe, cérémonie</title><style>
+:root{--text-primary:#14121f;--text-secondary:#5d5a72;--text-tertiary:#8a87a0;--bg-primary:#ffffff;--bg-secondary:#f6f5fb;--bg-tertiary:#ecebf4;--border:#dedbea;--accent:#7c5cff;--warning:#ff9f0a}
+@media (prefers-color-scheme: dark){:root{--text-primary:#f3f1ff;--text-secondary:#b4afd0;--text-tertiary:#8e88ad;--bg-primary:#0f0d1c;--bg-secondary:#1a1730;--bg-tertiary:#24203f;--border:#34305a}}
+body{margin:0;padding:24px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;background:var(--bg-primary);color:var(--text-primary);line-height:1.45}
+h2{margin:0 0 .4rem} .subtitle{color:var(--text-secondary);margin:.2rem 0 1rem} .label{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary)}
+.cards{display:grid;gap:1rem} .card{border:1px solid var(--border);border-radius:14px;background:var(--bg-secondary)} .card.selected{outline:2px solid var(--accent)}
+</style><script>function toggleSelect(el){el.classList.toggle('selected')}</script><script>window.__F2_IMG__='../cadres-de-gloire/generateur/mee/';</script></head><body><!-- Maquette de la séance « épopée du jeu » du 2026-10-20 (design, pas un état). Conception : docs/superpowers/specs/2026-10-20-epopee-du-jeu-design.md --><style>
+  :root { --game-shade: #2b3342; --game-glint: #ffffff; --game-edge: var(--ios-indigo-950); --game-track: color-mix(in srgb, var(--ios-ink) 14%, transparent); --game-rim: #5f6a7d; --game-ash: var(--ios-neutral-500); --game-copper-0: #f3b48a; --game-copper-1: #a5552b; --game-copper-ink: #5a2a12; --game-bronze-0: #e7c08d; --game-bronze-1: #8a5a24; --game-bronze-ink: #4a3010; --game-silver-0: #f4f6fa; --game-silver-1: #8e98a8; --game-silver-ink: #3f4858; --game-gold-0: #fde68a; --game-gold-1: #b7791f; --game-gold-ink: #6b4610; --game-platinum-0: #e0f2fe; --game-platinum-1: #5b7c99; --game-platinum-ink: #2c4459; --game-obsidian-0: #55527a; --game-obsidian-1: #0e0d1a; --game-obsidian-ink: #d7d4f2; --game-prism-0: #f87171; --game-prism-1: #fbbf24; --game-prism-2: #34d399; --game-prism-3: #60a5fa; --game-prism-4: #a855f7; --game-prism-ink: var(--ios-indigo-950); --game-coin-silver-0: #f3f5f9; --game-coin-silver-1: var(--ios-meesh-silver); --game-coin-silver-2: #5f6a7d; --game-coin-silver-ink: #3f4858; --game-coin-silver-in-0: #e3e7ee; --game-coin-silver-in-1: #8f99aa; --game-coin-silver-in-ink: #3f4858; --game-coin-gold-0: #fff1b8; --game-coin-gold-1: #e2a72e; --game-coin-gold-2: #8a5a10; --game-coin-gold-ink: #6b4610; --game-indigo-0: var(--ios-indigo-500); --game-indigo-1: var(--ios-indigo-900); --game-indigo-ink: #ffffff; --game-flame-0: var(--ios-error-strong); --game-flame-1: #f97316; --game-flame-2: #fde047; --game-flame-ink: #7c2d12; --game-enamel-content: var(--ios-indigo-600); --game-enamel-social: #e11d48; --game-enamel-conversation: #7c3aed; --game-enamel-comment: #0d9488; --game-enamel-tool: #d97706; --game-league-quartz: #e5e7eb; --game-league-ambre: #f59e0b; --game-league-jade: #10b981; --game-league-saphir: #3b82f6; --ios-indigo-950: #1e1b4b; --ios-meesh-silver: #a8b1bf; }
+  .f2 { max-width: 1160px; }
+  .f2-lead { color: var(--text-secondary); max-width: 920px; margin-bottom: 1.1rem; line-height: 1.5; }
+  .f2-grid { display: grid; grid-template-columns: minmax(330px, 400px) 1fr; gap: 1.6rem; align-items: start; }
+  @media (max-width: 880px) { .f2-grid { grid-template-columns: 1fr; } }
+
+  .f2-ph { position: relative; min-height: 660px; border-radius: 26px; padding: 14px; background: #120f22; color: #f3f0ff; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+    display: flex; flex-direction: column; gap: 10px; max-width: 390px; box-sizing: border-box; }
+  .f2-nav { display: flex; align-items: center; gap: 10px; }
+  .f2-back { width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,.08); display: grid; place-items: center; color: #8b7dff; font-weight: 700; }
+  .f2-title { font-size: 1.3rem; font-weight: 800; flex: 1; }
+  .f2-blason { font-size: .72rem; font-weight: 700; color: #ffcf5c; background: rgba(255,207,92,.12); border-radius: 999px; padding: 4px 9px; white-space: nowrap; }
+  .f2-card { border-radius: 16px; background: #1c1712; box-shadow: inset 0 0 0 1px rgba(255,200,110,.18); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .f2-lab { font-size: .74rem; font-weight: 700; color: #c9b8ff; }
+  .f2-big { font-size: 1.8rem; font-weight: 800; line-height: 1.05; }
+  .f2-big span { font-size: 1rem; font-weight: 700; color: #ddd5ff; }
+  .f2-small { font-size: .78rem; color: #b9b0e6; }
+  .f2-row { display: flex; gap: 12px; align-items: center; }
+  .f2-minicoin { width: 58px; height: 58px; flex-shrink: 0; }
+  .f2-band { position: relative; height: 128px; border-radius: 14px; overflow: hidden; background: radial-gradient(120% 90% at 50% 100%, #3a2a17 0%, #1d1611 60%, #120e0b 100%); }
+  .f2-band > * { position: absolute; }
+  .f2-band .b-mee, .f2-band .b-meo { width: 74px; height: 74px; object-fit: contain; top: 22px; animation: f2-hover 1.7s ease-in-out infinite; }
+  .f2-band .b-mee { left: 14px; }
+  .f2-band .b-meo { right: 14px; animation-delay: -.85s; }
+  .f2-band .b-anvil { left: calc(50% - 56px); bottom: 8px; width: 112px; height: 26px; background: linear-gradient(#70778a, #2c2f37); clip-path: polygon(0 0, 100% 0, 80% 100%, 20% 100%); }
+  .f2-band .b-coin { left: calc(50% - 30px); bottom: 33px; width: 60px; height: 60px; }
+  .f2-band .b-hammer { right: 70px; top: 22px; width: 6px; height: 52px; background: linear-gradient(90deg, #6b4423, #a8743f 50%, #6b4423); border-radius: 3px; transform: rotate(-18deg); transform-origin: 50% 100%; }
+  .f2-band .b-hammer::before { content: ""; position: absolute; left: -12px; top: -10px; width: 30px; height: 15px; border-radius: 4px; background: linear-gradient(#d0d5df, #7d8392); }
+  @keyframes f2-hover { 0%,100% { translate: 0 0; } 50% { translate: 0 -4px; } }
+  .f2-coin-title { font-size: 1.05rem; font-weight: 700; }
+  .f2-line { font-size: .86rem; line-height: 1.45; color: #ece8ff; margin-top: -4px; }
+  .f2-btn { border: 0; border-radius: 14px; background: #f2c14e; color: #1b1640; font-weight: 800; text-align: center; padding: 11px 10px; font-size: .92rem; cursor: pointer; font-family: inherit; }
+  .f2-btn small { display: block; font-weight: 600; font-size: .72rem; opacity: .8; margin-top: 1px; }
+  .f2-btn:disabled { opacity: .55; cursor: default; }
+  .f2-say { display: flex; gap: 8px; align-items: center; font-size: .8rem; color: #d6cffa; font-style: italic; line-height: 1.35; min-height: 30px; }
+  .f2-say img { width: 30px; height: 30px; object-fit: contain; }
+
+  .fx { position: absolute; inset: 0; z-index: 30; display: none; overflow: hidden; border-radius: 26px; cursor: pointer; }
+  .fx.on { display: block; }
+  .fx-bg { position: absolute; inset: 0; background: radial-gradient(80% 55% at 50% 45%, #2a2014 0%, #120d09 62%, #06050a 100%); }
+  .fx.prism .fx-bg { background: radial-gradient(80% 55% at 50% 45%, #211b42 0%, #0b0918 62%, #040309 100%); }
+  .fx-scene { position: absolute; left: 0; top: 0; width: 360px; height: 640px; transform-origin: 0 0; }
+  .fx-fade { position: absolute; inset: 0; }
+  .fx-fade > *, .fx-scene > .fx-coin, .fx-scene > .fx-glow { position: absolute; }
+  .fx-cv { left: 0; top: 0; width: 360px; height: 640px; }
+  .fx-orb { left: 150px; top: 66px; width: 60px; height: 60px; border-radius: 50%; background: radial-gradient(circle, #fffbe6 0%, #ffd27a 36%, rgba(255,190,90,0) 70%); }
+  .fx.prism .fx-orb { background: radial-gradient(circle, #ffffff 0%, #d9c8ff 30%, rgba(160,120,255,0) 70%); }
+  .fx-orbl { left: 110px; top: 126px; width: 140px; text-align: center; font: 600 11px system-ui, sans-serif; color: #e9d9b0; letter-spacing: .06em; }
+  .fx-anvil { left: 112px; top: 550px; width: 136px; height: 46px; background: linear-gradient(#70778a, #2c2f37); clip-path: polygon(0 0, 100% 0, 82% 100%, 18% 100%); }
+  .fx-anviltop { left: 104px; top: 543px; width: 152px; height: 10px; border-radius: 4px; background: linear-gradient(#a9afbd, #5b6070); }
+  .fx-glow { left: 0; top: 0; width: 240px; height: 240px; border-radius: 50%; opacity: 0; pointer-events: none;
+    background: radial-gradient(circle, rgba(255,240,200,.75) 0%, rgba(255,214,140,.3) 35%, rgba(255,200,120,0) 68%); }
+  .fx.gold .fx-glow { background: radial-gradient(circle, rgba(255,226,140,.85) 0%, rgba(255,190,70,.35) 35%, rgba(255,170,40,0) 68%); }
+  .fx.prism .fx-glow { background: radial-gradient(circle, rgba(255,255,255,.8) 0%, rgba(195,160,255,.35) 35%, rgba(140,200,255,0) 68%); }
+  .fx-coin { left: 0; top: 0; width: 150px; height: 150px; transform-origin: 75px 75px; perspective: 700px; opacity: 0; }
+  .fx-c3d { position: absolute; inset: 0; transform-style: preserve-3d; }
+  .fx-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+  .fx-face.rev { transform: rotateY(180deg); }
+  .fx-die { left: 0; top: 0; width: 26px; height: 50px; border-radius: 4px; opacity: 0; background: linear-gradient(90deg, #5d6270, #c9cfdb 45%, #6d7280); box-shadow: 0 2px 5px rgba(0,0,0,.5); }
+  .fx-bird { left: 0; top: 0; width: 92px; height: 92px; object-fit: contain; }
+  .fx-hammer { left: 0; top: 0; width: 8px; height: 100px; transform-origin: 4px 100px; opacity: 0; background: linear-gradient(90deg, #6b4423, #a8743f 50%, #6b4423); border-radius: 3px; }
+  .fx-hammer::before { content: ""; position: absolute; left: -17px; top: -14px; width: 42px; height: 22px; border-radius: 5px; background: linear-gradient(#d6dbe5, #7d8392); box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); }
+  .fx-flash { left: 0; top: 0; width: 360px; height: 640px; pointer-events: none; opacity: 0; background: radial-gradient(circle at 50% 70%, #fff 0%, rgba(255,250,230,.85) 22%, rgba(255,240,200,0) 62%); }
+  .fx-ring { left: 0; top: 0; width: 60px; height: 60px; border-radius: 50%; border: 3px solid rgba(255,236,180,.95); opacity: 0; box-sizing: border-box; }
+  .fx-rays { left: 0; top: 0; width: 330px; height: 330px; border-radius: 50%; opacity: 0;
+    background: repeating-conic-gradient(rgba(255,214,107,.55) 0 8deg, rgba(255,214,107,0) 8deg 20deg);
+    -webkit-mask: radial-gradient(circle, #000 0%, #000 26%, transparent 70%); mask: radial-gradient(circle, #000 0%, #000 26%, transparent 70%); }
+  .fx.prism .fx-rays { background: repeating-conic-gradient(rgba(255,143,177,.6) 0 7deg, rgba(255,211,107,.55) 7deg 14deg, rgba(143,240,196,.55) 14deg 21deg, rgba(143,200,255,.6) 21deg 28deg, rgba(195,155,255,.6) 28deg 35deg, transparent 35deg 45deg); }
+  .fx-tchak { left: 60px; top: 0; width: 240px; text-align: center; font: 900 28px system-ui, sans-serif; color: #ffcf5c; opacity: 0; text-shadow: 0 2px 0 rgba(0,0,0,.45); }
+  .fx-sign { left: 20px; top: 150px; width: 320px; text-align: center; font: 600 15px system-ui, sans-serif; color: #ffe7a8; opacity: 0; }
+  .fx-sign small { display: block; font-size: 11.5px; color: #cdbd8e; margin-top: 3px; font-weight: 500; }
+  .fx.prism .fx-sign { color: #efe4ff; }
+  .fx-say { left: 16px; top: 606px; width: 328px; text-align: center; font: italic 14px system-ui, sans-serif; color: #f3eaff; opacity: 0; }
+  .fx-ombre { left: 0; top: 0; width: 230px; height: 230px; border-radius: 50%; opacity: 0; background: radial-gradient(circle, rgba(8,6,18,.97) 0%, rgba(8,6,18,.86) 42%, rgba(8,6,18,0) 72%); }
+  .fx-skip { position: absolute; right: 14px; bottom: 10px; font: 10px system-ui, sans-serif; color: rgba(255,255,255,.42); }
+  .f2-glory { position: absolute; z-index: 40; left: 0; top: 0; font-size: .8rem; font-weight: 800; color: #8ff0bd; pointer-events: none; white-space: nowrap; opacity: 0; }
+
+  .f2-ctl { display: flex; flex-direction: column; gap: .9rem; }
+  .f2-buttons { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .f2-buttons button { font: inherit; font-size: .86rem; font-weight: 650; padding: .5rem .8rem; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; }
+  .f2-buttons button.cur { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(124,92,255,.25); }
+  .f2-opts { display: flex; flex-wrap: wrap; gap: 1rem; font-size: .84rem; color: var(--text-secondary); align-items: center; }
+  .f2-scrub { display: flex; gap: .6rem; align-items: center; font-size: .82rem; color: var(--text-secondary); }
+  .f2-scrub input { flex: 1; }
+  .f2-box { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: .8rem 1rem; }
+  .f2-box h4 { font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text-secondary); margin: 0 0 .4rem; }
+  .f2-beats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .25rem; font-size: .86rem; }
+  .f2-beats li { display: grid; grid-template-columns: 3.4rem 1fr; gap: .5rem; padding: .28rem .4rem; border-radius: 8px; }
+  .f2-beats li span { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .f2-beats li.on { background: rgba(255,159,10,.16); }
+  .f2-faces { display: grid; grid-template-columns: repeat(3, 1fr); gap: .8rem; }
+  .f2-faces figure { margin: 0; text-align: center; font-size: .78rem; color: var(--text-secondary); }
+  .f2-faces .pair { display: flex; gap: 6px; justify-content: center; margin-bottom: .3rem; }
+  .f2-faces .pair div { width: 84px; height: 84px; }
+  .f2-faces b { color: var(--text-primary); }
+  @keyframes f2-tw { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
+  .dia { animation: f2-tw 1.6s ease-in-out infinite; }
+</style>
+
+<div class="f2">
+  <h2>La frappe : la lumière, la poussière, puis le marteau</h2>
+  <p class="f2-lead">Des milliers d'étincelles quittent ta lumière et tissent un cercle. Mee y sème de la poussière d'argent et Meo un peu d'or ; pour la pièce d'or, Meo verse de l'or pur ; pour la pièce de prisme, l'or se mêle de diamant. Puis le flan se fige. <b>La frappe arrive à la fin</b> : Mee tient le coin, Meo frappe. Sous le marteau apparaissent la Signature et « MEESHY · UNE MEESH ». La pièce se retourne et montre son revers : Mee sur l'argent, Meo sur l'or, Mee et Meo sur le prisme. Les pièces sont les vraies, dessinées par le code du jeu. Touchez le bouton jaune ou une frappe à droite. Touchez la scène pour la passer, ou faites glisser le curseur pour voir chaque instant.</p>
+
+  <div class="f2-grid">
+    <div class="f2-ph" id="f2-ph">
+      <div class="f2-nav"><div class="f2-back">‹</div><div class="f2-title">L'Héritage</div><div class="f2-blason" id="f2-blason">◆ Passeur IV</div></div>
+      <div class="f2-card" id="f2-coffret">
+        <div class="f2-row">
+          <div class="f2-minicoin" id="f2-coffret-coin"></div>
+          <div style="flex:1;min-width:0">
+            <div class="f2-lab" id="f2-container">Ton Coffret</div>
+            <div class="f2-big"><b id="f2-held">88</b> <span>Meeshes</span></div>
+            <div class="f2-small" id="f2-next">le Coffre s'ouvre à 100</div>
+          </div>
+        </div>
+      </div>
+      <div class="f2-card">
+        <div class="f2-lab">La frappe</div>
+        <div class="f2-band">
+          <img class="b-mee" src="/files/mee-sourire.png" alt="">
+          <div class="b-anvil"></div>
+          <div class="b-coin" id="f2-bandcoin"></div>
+          <div class="b-hammer"></div>
+          <img class="b-meo" src="/files/meo-salut.png" alt="">
+        </div>
+        <div class="f2-coin-title" id="f2-ctitle">La Meesh n° 92</div>
+        <div class="f2-line" id="f2-cline">Elle fige 10 423 étincelles de ta lumière, qui en compte 108 233.</div>
+        <button class="f2-btn" id="f2-btn">Frapper avec Mee et Meo<small>+1 000 de gloire</small></button>
+        <div class="f2-say"><img id="f2-sayimg" src="/files/mee-sourire.png" alt=""><span id="f2-saytext">« La centième sera d'or. »</span></div>
+      </div>
+
+      <div class="fx" id="f2-fx" title="Touchez pour passer">
+        <div class="fx-bg" id="f2-bg"></div>
+        <div class="fx-scene" id="f2-scene">
+          <div class="fx-fade" id="f2-fade">
+            <div class="fx-rays" id="f2-rays"></div>
+            <div class="fx-sign" id="f2-sign">Tes aïeux se manifestent<small id="f2-signsub"></small></div>
+            <div class="fx-orb" id="f2-orb"></div>
+            <div class="fx-orbl">ta lumière</div>
+            <div class="fx-anviltop"></div>
+            <div class="fx-anvil"></div>
+            <canvas class="fx-cv" id="f2-cv"></canvas>
+            <div class="fx-ombre" id="f2-ombre"></div>
+            <img class="fx-bird" id="f2-mee" src="/files/mee-sourire.png" alt="">
+            <img class="fx-bird" id="f2-meo" src="/files/meo-salut.png" alt="">
+            <div class="fx-die" id="f2-die"></div>
+            <div class="fx-hammer" id="f2-hmeo"></div>
+            <div class="fx-hammer" id="f2-hmee"></div>
+            <div class="fx-ring" id="f2-ring"></div>
+            <div class="fx-tchak" id="f2-tchak">Tchak !</div>
+            <div class="fx-flash" id="f2-flash"></div>
+            <div class="fx-say" id="f2-say"></div>
+          </div>
+          <div class="fx-glow" id="f2-glow"></div>
+          <div class="fx-coin" id="f2-coin">
+            <div class="fx-c3d" id="f2-c3d">
+              <div class="fx-face" id="f2-blank"></div>
+              <div class="fx-face" id="f2-obv"></div>
+              <div class="fx-face rev" id="f2-rev"></div>
+            </div>
+          </div>
+        </div>
+        <div class="fx-skip" id="f2-skip">toucher pour passer</div>
+      </div>
+      <div class="f2-glory" id="f2-glory">+1 000 de gloire</div>
+    </div>
+
+    <div class="f2-ctl">
+      <div class="f2-buttons" id="f2-kinds">
+        <button type="button" data-kind="argent" class="cur">La n° 92 · argent</button>
+        <button type="button" data-kind="or">La n° 100 · or</button>
+        <button type="button" data-kind="prisme">La n° 1 000 · prisme</button>
+        <button type="button" data-kind="refus">Si la frappe est refusée</button>
+      </div>
+      <div class="f2-opts">
+        <label><input type="checkbox" id="f2-slowmo"> Ralenti</label>
+        <label><input type="checkbox" id="f2-slownet"> Réseau lent</label>
+        <label><input type="checkbox" id="f2-reduce"> Réduire les animations</label>
+      </div>
+      <div class="f2-scrub"><span>Instant</span><input type="range" id="f2-scrubber" min="0" max="8000" step="10" value="0"><span id="f2-time">0,0 s</span></div>
+      <div class="f2-box">
+        <h4 id="f2-beatstitle">Le déroulé</h4>
+        <ol class="f2-beats" id="f2-beats"></ol>
+      </div>
+      <div class="f2-box">
+        <h4>Les faces de la pièce</h4>
+        <div class="f2-faces" id="f2-faces"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var COINS = {"silver-blank": "<svg viewBox=\"0 0 120 120\" xmlns=\"http://www.w3.org/2000/svg\" width=\"100%\" height=\"100%\"><defs><linearGradient id=\"csb-p-coin-silver\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"var(--game-coin-silver-0)\"></stop><stop offset=\"0.45\" stop-color=\"var(--game-coin-silver-1)\"></stop><stop offset=\"1\" stop-color=\"var(--game-coin-silver-2)\"></stop></linearGradient><linearGradient id=\"csb-p-coin-silver-in\" x1=\"1\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"var(--game-coin-silver-in-0)\"></stop><stop offset=\"1\" stop-color=\"var(--game-coin-silver-in-1)\"></stop></linearGradient><linearGradient id=\"csb-sheen\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"var(--game-glint)\" stop-opacity=\"0\"></stop><stop offset=\"0.5\" stop-color=\"var(--game-glint)\" stop-opacity=\"0.8\"></stop><stop offset=\"1\" stop-color=\"var(--game-glint)\" stop-opacity=\"0\"></stop></linearGradient><path id=\"csb-ring\" d=\"M60 60 m-43 0 a43 43 0 1 1 86 0 a43 43 0 1 1 -86 0\"></path><clipPath id=\"csb-clip\"><circle cx=\"60\" cy=\"60\" r=\"56\"></circle></clipPath></defs><circle cx=\"60\" cy=\"60\" r=\"57\" fill=\"url(#csb-p-coin-silver)\"></circle><circle cx=\"60\" cy=\"60\" r=\"53\" fill=\"none\" stroke=\"var(--game-rim)\" stroke-width=\"1.4\" stroke-dasharray=\"1.4 2\"></circle><circle cx=\"60\" cy=\"60\" r=\"45\" fill=\"url(#csb-p-coin-silver-in)\" stroke=\"var(--game-glint)\" stroke-width=\"1.2\" opacity=\"0.95\"></circle><g clip-path=\"url(#csb-clip)\"><g transform=\"rotate(20 60 60)\"><rect x=\"20\" y=\"-10\" width=\"24\" height=\"140\" fill=\"url(#csb-sheen)\" opacity=\"0.7\"></rect></g></g></svg>", "silver-obverse": "<svg viewBox=\"0 0 120 120\" xmlns=\"http://www.w3.org/2000/svg\" width=\"100%\" height=\"100%\"><defs><linearGradient id=\"cso-p-coin-silver\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"var(--game-coin-silver-0)\"></stop><stop offset=\"0.45\" stop-color=\"var(--game-coin-silver-1)\"></stop><stop offset=\"1\" stop-color=\"var(--game-coin-silver-2)\"></stop></linearGradient><linearGradient id=\"cso-p-coin-silver-in\" x1=\"1\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"var(--game-coin-silver-in-0)\"></stop><stop offset=\"1\" stop-color=\"var(--game-coin-silver-in-1)\"></stop></linearGradient><linearGradient id=\"cso-sheen\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"var(--game-glint)\" stop-opacity=\"0\"></stop><stop offset=\"0.5\" stop-color=\"var(--game-glint)\" stop-opacity=\"0.8\"></stop><stop offset=\"1\" stop-color=\"var(--game-glint)\" stop-opacity=\"0\"></stop></linearGradient><path id=\"cso-ring\" d=\"M60 60 m-43 0 a43 43 0 1 1 86 0 a43 43 0 1 1 -86 0\"></path><clipPath id=\"cso-clip\"><circle cx=\"60\" cy=\"60\" r=\"56\"></circle></clipPath></defs><circle cx=\"60\" cy=\"60\" r=\"57\" fill=\"url(#cso-p-coin-silver)\"></circle><circle cx=\"60\" cy=\"60\" r=\"53\" fill=\"none\" stroke=\"var(--game-rim)\" stroke-width=\"1.4\" stroke-dasharray=\"1.4 2\"></circle><circle cx=\"60\" cy=\"60\" r=\"35\" fill=\"url(#cso-p-coin-silver-in)\" stroke=\"var(--game-glint)\" stroke-width=\"1.6\"></circle><text font-family=\"ui-monospace, SFMono-Regular, Menlo, monospace\" font-size=\"8.4\" letter-spacing=\"2\" fill=\"var(--game-coin-silver-ink)\"><textPath href=\"#cso-ring\">MEESHY · UNE MEESH · MEESHY · UNE MEESH ·</textPath></text><g data-game-signature=\"struck\"><g transform=\"translate(28.188 28.451999999999998) scale(0.064453125)\"><line x1=\"262\" y1=\"384\" x2=\"762\" y2=\"384\" stroke=\"var(--game-shade)\" stroke-opacity=\"0.5\" stroke-width=\"100\" stroke-linecap=\"round\"></line><line x1=\"262\" y1=\"512\" x2=\"662\" y2=\"512\" stroke=\"var(--game-shade)\" stroke-opacity=\"0.5\" stroke-width=\"100\" stroke-linecap=\"round\"></line><line x1=\"262\" y1=\"640\" x2=\"562\" y2=\"640\" stroke=\"var(--game-shade)\" stroke-opacity=\"0.5\" stroke-width=\"100\" stroke-linecap=\"round\"></line></g><g transform=\"translate(26.208 26.076) scale(0.064453125)\"><line x1=\"262\" y1=\"384\" x2=\"762\" y2=\"384\" stroke=\"var(--game-glint)\" stroke-opacity=\"0.85\" stroke-width=\"100\" stroke-linecap=\"round\"></line><line x1=\"262\" y1=\"512\" x2=\"662\" y2=\"512\" stroke=\"var(--game-glint)\" stroke-opacity=\"0.85\" stroke-width=\"100\" stroke-linecap=\"round\"></line><line x1=\"262\" y1=\"640\" x2=\"562\" y2=\"640\" stroke=\"var(--game-glint)\" stroke-opacity=\"0.85\" stroke-width=\"100\" stroke-linecap=\"round\"></line></g><g transform=\"translate(27 27) scale(0.064453125)\"><line x1=\"262\" y1=\"384\" x2=\"762\" y2=\"384\" stroke=\"var(--game-coin-silver-ink)\" stroke-opacity=\"0.7\" stroke-width=\"100\" stroke-linecap=\"round\" data-game-dash=\"0\"></line><line x1=\"262\" y1=\"512\" x2=\"662\" y2=\"512\" stroke=\"var(--game-coin-silver-ink)\" stroke-opacity=\"1\" stroke-width=\"100\" stroke-linecap=\"round\" data-game-dash=\"1\"></line><line x1=\"262\" y1=\"640\" x2=\"562\" y2=\"640\" stroke=\"var(--game-coin-silver-ink)\" stroke-opacity=\"0.75\" stroke-width=\"100\" stroke-linecap=\"round\" data-game-dash=\"2\"></line></g></g><g clip-path=\"url(#cso-clip)\"><g transform=\"rotate(20 60 60)\"><rect x=\"20\" y=\"-10\" width=\"24\" height=\"140\" fill=\"url(#cso-sheen)\" opacity=\"0.7\"></rect></g></g></svg>", "silver-reverse": "<svg viewBox=\"0 0 120 120\" xmlns=\"http://www.w3.org/2000/svg\" width=\"100%\" height=\"100%\"><defs><linearGradient id=\"csr-p-coin-silver\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"var(--game-coin-silver-0)\"></stop><stop offset=\"0.45\" stop-color=\"var(--game-coin-silver-1)\"></stop><stop offset=\"1\" stop-color=\"var(--game-coin-silver-2)\"></stop></linearGradient><linearGradient id=\"csr-p-coin-silver-in\" x1=\"1\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"var(--game-coin-silver-in-0)\"></stop><stop offset=\"1\" stop-color=\"var(--game-coin-silver-in-1)\"></stop></linearGradient><linearGradient id=\"csr-sheen\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"var(--game-glint)\" stop-opacity=\"0\"></stop><stop offset=\"0.5\" stop-color=\"var(--game-glint)\" stop-opacity=\"0.8\"></stop><stop offset=\"1\" stop-color=\"var(--game-glint)\" stop-opacity=\"0\"></stop></linearGradient><path id=\"csr-ring\" d=\"M60 60 m-43 0 a43 43 0 1 1 86 0 a43 43 0 1 1 -86 0\"></path><clipPath id=\"csr-clip\"><circle cx=\"60\" cy=\"60\" r=\"56\"></circle></clipPath><g><filter id=\"csr-engrave\" filterUnits=\"userSpaceOnUse\" x=\"-12\" y=\"-12\" width=\"170\" height=\"170\" color-interpolation-filters=\"sRGB\"><feGaussianBlur in=\"SourceAlpha\" stdDeviation=\"0.7\" result=\"soft\"/><feOffset data-relief=\"shade\" in=\"soft\" dx=\"0\" dy=\"2.4\" result=\"down\"/><feFlood style=\"flood-color:var(--game-edge);flood-opacity:.6\"/><feComposite in2=\"down\" operator=\"in\" result=\"shade\"/><feOffset data-relief=\"light\" in=\"soft\" dx=\"0\" dy=\"-1.3\" result=\"up\"/><feFlood style=\"flood-color:var(--game-glint);flood-opacity:.85\"/><feComposite in2=\"up\" operator=\"in\" result=\"light\"/><feMerge><feMergeNode in=\"shade\"/><feMergeNode in=\"light\"/><feMergeNode in=\"SourceGraphic\"/></feMerge></filter></g></defs><circle cx=\"60\" cy=\"60\" r=\"57\" fill=\"url(#csr-p-coin-silver)\"></circle><circle cx=\"60\" cy=\"60\" r=\"53\" fill=\"none\" stroke=\"var(--game-rim)\" stroke-width=\"1.4\" stroke-dasharray=\"1.4 2\"></circle><circle cx=\"60\" cy=\"60\" r=\"45\" fill=\"url(#csr-p-coin-silver-in)\" stroke=\"var(--game-glint)\" stroke-width=\"1.4\"></circle><g data-game-bird=\"meeJoy\" transform=\"translate(35 31) scale(0.36 0.36)\"><g data-game-pose=\"\"><g filter=\"url(#csr-engrave)\"><defs><radialGradient id=\"csrmeeJoymee1b\" cx=\".38\" cy=\".3\" r=\".8\"><stop offset=\"0\" stop-color=\"#7ff0c8\"/><stop offset=\"1\" stop-color=\"#14b8a6\"/></radialGradient><linearGradient id=\"csrmeeJoymee1w\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e6fff7\"/><stop offset=\"1\" stop-color=\"#7de8d2\"/></linearGradient><linearGradient id=\"csrmeeJoymee1h\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fb7185\"/><stop offset=\"1\" stop-color=\"#e11d48\"/></linearGradient><linearGradient id=\"csrmeeJoymee1k\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fde68a\"/><stop offset=\"1\" stop-color=\"#f59e0b\"/></linearGradient></defs><g class=\"wl1\"><ellipse cx=\"26\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(-34 26 70)\" fill=\"url(#csrmeeJoymee1w)\" stroke=\"#0f766e\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M21 60 q2 12 7 22\" stroke=\"#7de8d2\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g><path d=\"M61 112 C50 116 45 124 47 131 C53 130 57 126 60 122 C62 128 66 132 72 133 C74 125 70 117 66 112 Z\" fill=\"#0f766e\" stroke=\"#0f766e\" stroke-width=\"1.8\" stroke-linejoin=\"round\"/><path d=\"M66 44 C58 28 74 16 84 24 C91 30 84 40 77 35\" fill=\"none\" stroke=\"#0f766e\" stroke-width=\"9.5\" stroke-linecap=\"round\"/><path d=\"M66 44 C58 28 74 16 84 24 C91 30 84 40 77 35\" fill=\"none\" stroke=\"#f43f5e\" stroke-width=\"6\" stroke-linecap=\"round\"/><circle cx=\"72\" cy=\"24\" r=\"1.6\" fill=\"#fff\" opacity=\".75\"/><circle cx=\"70\" cy=\"80\" r=\"40\" fill=\"url(#csrmeeJoymee1b)\" stroke=\"#0f766e\" stroke-width=\"2.4\"/><ellipse cx=\"55\" cy=\"55\" rx=\"13\" ry=\"7.5\" transform=\"rotate(-28 55 55)\" fill=\"#fff\" opacity=\".38\"/><circle cx=\"76\" cy=\"47.5\" r=\"2.6\" fill=\"#fff\" opacity=\".55\"/><ellipse cx=\"70\" cy=\"103\" rx=\"26\" ry=\"16\" fill=\"#f0fdfa\" opacity=\".96\"/><path d=\"M70 117.2 C56.4 109.2 62.8 100.4 70 107.2 C77.2 100.4 83.6 109.2 70 117.2 Z\" fill=\"url(#csrmeeJoymee1h)\"/><circle cx=\"66\" cy=\"107\" r=\"1.5\" fill=\"#fff\" opacity=\".9\"/><ellipse cx=\"45\" cy=\"88\" rx=\"7.5\" ry=\"4.8\" fill=\"#ff7a9a\" opacity=\".85\"/><ellipse cx=\"98\" cy=\"86\" rx=\"7\" ry=\"4.6\" fill=\"#ff7a9a\" opacity=\".85\"/><g class=\"e1\"><path d=\"M49 76 q8 -11 16 0\" fill=\"none\" stroke=\"#1c1941\" stroke-width=\"4.5\" stroke-linecap=\"round\"/><path d=\"M75 76 q8 -11 16 0\" fill=\"none\" stroke=\"#1c1941\" stroke-width=\"4.5\" stroke-linecap=\"round\"/></g><path d=\"M65.5 85 Q60.5 91 65.5 97.5 L86.5 93 Q90.5 91.3 86.5 89.6 Z\" fill=\"url(#csrmeeJoymee1k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M63.8 90.6 Q75 94 87 90.9\" fill=\"none\" stroke=\"#b45309\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><path d=\"M68 86.8 Q75 86 81 88\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1.8\" stroke-linecap=\"round\" opacity=\".7\"/><g class=\"wr1\"><ellipse cx=\"114\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(34 114 70)\" fill=\"url(#csrmeeJoymee1w)\" stroke=\"#0f766e\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M119 60 q-2 12 -7 22\" stroke=\"#7de8d2\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g></g></g></g><text x=\"60\" y=\"96\" text-anchor=\"middle\" font-family=\"-apple-system, system-ui, sans-serif\" font-weight=\"800\" font-size=\"13\" fill=\"var(--game-coin-silver-ink)\">n° 92</text><text x=\"60\" y=\"27\" text-anchor=\"middle\" font-family=\"ui-monospace, SFMono-Regular, Menlo, monospace\" font-size=\"8\" letter-spacing=\"2\" fill=\"var(--game-coin-silver-ink)\">2026</text><g clip-path=\"url(#csr-clip)\"><g transform=\"rotate(20 60 60)\"><rect x=\"20\" y=\"-10\" width=\"24\" height=\"140\" fill=\"url(#csr-sheen)\" opacity=\"0.7\"></rect></g></g></svg>", "gold-blank": "<svg viewBox=\"0 0 120 120\" xmlns=\"http://www.w3.org/2000/svg\" width=\"100%\" height=\"100%\"><defs><linearGradient id=\"cgb-p-coin-gold\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"var(--game-coin-gold-0)\"></stop><stop offset=\"0.5\" stop-color=\"var(--game-coin-gold-1)\"></stop><stop offset=\"1\" stop-color=\"var(--game-coin-gold-2)\"></stop></linearGradient><linearGradient id=\"cgb-p-gold\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"var(--game-gold-0)\"></stop><stop offset=\"1\" stop-color=\"var(--game-gold-1)\"></stop></linearGradient><linearGradient id=\"cgb-sheen\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"var(--game-glint)\" stop-opacity=\"0\"></stop><stop offset=\"0.5\" stop-color=\"var(--game-glint)\" stop-opacity=\"0.8\"></stop><stop offset=\"1\" stop-color=\"var(--game-glint)\" stop-opacity=\"0\"></stop></linearGradient><path id=\"cgb-ring\" d=\"M60 60 m-43 0 a43 43 0 1 1 86 0 a43 43 0 1 1 -86 0\"></path><clipPath id=\"cgb-clip\"><circle cx=\"60\" cy=\"60\" r=\"56\"></circle></clipPath></defs><circle cx=\"60\" cy=\"60\" r=\"57\" fill=\"url(#cgb-p-coin-gold)\"></circle><circle cx=\"60\" cy=\"60\" r=\"53\" fill=\"none\" stroke=\"var(--game-rim)\" stroke-width=\"1.4\" stroke-dasharray=\"1.4 2\"></circle><circle cx=\"60\" cy=\"60\" r=\"45\" fill=\"url(#cgb-p-gold)\" stroke=\"var(--game-glint)\" stroke-width=\"1.2\" opacity=\"0.95\"></circle><g clip-path=\"url(#cgb-clip)\"><g transform=\"rotate(20 60 60)\"><rect x=\"20\" y=\"-10\" width=\"24\" height=\"140\" fill=\"url(#cgb-sheen)\" opacity=\"0.7\"></rect></g></g></svg>", "gold-obverse": "<svg viewBox=\"0 0 120 120\" xmlns=\"http://www.w3.org/2000/svg\" width=\"100%\" height=\"100%\"><defs><linearGradient id=\"cgo-p-coin-gold\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"var(--game-coin-gold-0)\"></stop><stop offset=\"0.5\" stop-color=\"var(--game-coin-gold-1)\"></stop><stop offset=\"1\" stop-color=\"var(--game-coin-gold-2)\"></stop></linearGradient><linearGradient id=\"cgo-p-gold\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"var(--game-gold-0)\"></stop><stop offset=\"1\" stop-color=\"var(--game-gold-1)\"></stop></linearGradient><linearGradient id=\"cgo-sheen\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"var(--game-glint)\" stop-opacity=\"0\"></stop><stop offset=\"0.5\" stop-color=\"var(--game-glint)\" stop-opacity=\"0.8\"></stop><stop offset=\"1\" stop-color=\"var(--game-glint)\" stop-opacity=\"0\"></stop></linearGradient><path id=\"cgo-ring\" d=\"M60 60 m-43 0 a43 43 0 1 1 86 0 a43 43 0 1 1 -86 0\"></path><clipPath id=\"cgo-clip\"><circle cx=\"60\" cy=\"60\" r=\"56\"></circle></clipPath></defs><circle cx=\"60\" cy=\"60\" r=\"57\" fill=\"url(#cgo-p-coin-gold)\"></circle><circle cx=\"60\" cy=\"60\" r=\"53\" fill=\"none\" stroke=\"var(--game-rim)\" stroke-width=\"1.4\" stroke-dasharray=\"1.4 2\"></circle><circle cx=\"60\" cy=\"60\" r=\"35\" fill=\"url(#cgo-p-gold)\" stroke=\"var(--game-glint)\" stroke-width=\"1.6\"></circle><text font-family=\"ui-monospace, SFMono-Regular, Menlo, monospace\" font-size=\"8.4\" letter-spacing=\"2\" fill=\"var(--game-coin-gold-ink)\"><textPath href=\"#cgo-ring\">MEESHY · UNE MEESH · MEESHY · UNE MEESH ·</textPath></text><g data-game-signature=\"struck\"><g transform=\"translate(28.188 28.451999999999998) scale(0.064453125)\"><line x1=\"262\" y1=\"384\" x2=\"762\" y2=\"384\" stroke=\"var(--game-shade)\" stroke-opacity=\"0.5\" stroke-width=\"100\" stroke-linecap=\"round\"></line><line x1=\"262\" y1=\"512\" x2=\"662\" y2=\"512\" stroke=\"var(--game-shade)\" stroke-opacity=\"0.5\" stroke-width=\"100\" stroke-linecap=\"round\"></line><line x1=\"262\" y1=\"640\" x2=\"562\" y2=\"640\" stroke=\"var(--game-shade)\" stroke-opacity=\"0.5\" stroke-width=\"100\" stroke-linecap=\"round\"></line></g><g transform=\"translate(26.208 26.076) scale(0.064453125)\"><line x1=\"262\" y1=\"384\" x2=\"762\" y2=\"384\" stroke=\"var(--game-glint)\" stroke-opacity=\"0.85\" stroke-width=\"100\" stroke-linecap=\"round\"></line><line x1=\"262\" y1=\"512\" x2=\"662\" y2=\"512\" stroke=\"var(--game-glint)\" stroke-opacity=\"0.85\" stroke-width=\"100\" stroke-linecap=\"round\"></line><line x1=\"262\" y1=\"640\" x2=\"562\" y2=\"640\" stroke=\"var(--game-glint)\" stroke-opacity=\"0.85\" stroke-width=\"100\" stroke-linecap=\"round\"></line></g><g transform=\"translate(27 27) scale(0.064453125)\"><line x1=\"262\" y1=\"384\" x2=\"762\" y2=\"384\" stroke=\"var(--game-coin-gold-ink)\" stroke-opacity=\"0.7\" stroke-width=\"100\" stroke-linecap=\"round\" data-game-dash=\"0\"></line><line x1=\"262\" y1=\"512\" x2=\"662\" y2=\"512\" stroke=\"var(--game-coin-gold-ink)\" stroke-opacity=\"1\" stroke-width=\"100\" stroke-linecap=\"round\" data-game-dash=\"1\"></line><line x1=\"262\" y1=\"640\" x2=\"562\" y2=\"640\" stroke=\"var(--game-coin-gold-ink)\" stroke-opacity=\"0.75\" stroke-width=\"100\" stroke-linecap=\"round\" data-game-dash=\"2\"></line></g></g><g clip-path=\"url(#cgo-clip)\"><g transform=\"rotate(20 60 60)\"><rect x=\"20\" y=\"-10\" width=\"24\" height=\"140\" fill=\"url(#cgo-sheen)\" opacity=\"0.7\"></rect></g></g></svg>", "gold-reverse": "<svg viewBox=\"0 0 120 120\" xmlns=\"http://www.w3.org/2000/svg\" width=\"100%\" height=\"100%\"><defs><linearGradient id=\"cgr-p-coin-gold\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"var(--game-coin-gold-0)\"></stop><stop offset=\"0.5\" stop-color=\"var(--game-coin-gold-1)\"></stop><stop offset=\"1\" stop-color=\"var(--game-coin-gold-2)\"></stop></linearGradient><linearGradient id=\"cgr-p-gold\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"var(--game-gold-0)\"></stop><stop offset=\"1\" stop-color=\"var(--game-gold-1)\"></stop></linearGradient><linearGradient id=\"cgr-sheen\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"var(--game-glint)\" stop-opacity=\"0\"></stop><stop offset=\"0.5\" stop-color=\"var(--game-glint)\" stop-opacity=\"0.8\"></stop><stop offset=\"1\" stop-color=\"var(--game-glint)\" stop-opacity=\"0\"></stop></linearGradient><path id=\"cgr-ring\" d=\"M60 60 m-43 0 a43 43 0 1 1 86 0 a43 43 0 1 1 -86 0\"></path><clipPath id=\"cgr-clip\"><circle cx=\"60\" cy=\"60\" r=\"56\"></circle></clipPath><g><filter id=\"cgr-engrave\" filterUnits=\"userSpaceOnUse\" x=\"-12\" y=\"-12\" width=\"170\" height=\"170\" color-interpolation-filters=\"sRGB\"><feGaussianBlur in=\"SourceAlpha\" stdDeviation=\"0.7\" result=\"soft\"/><feOffset data-relief=\"shade\" in=\"soft\" dx=\"0\" dy=\"2.4\" result=\"down\"/><feFlood style=\"flood-color:var(--game-edge);flood-opacity:.6\"/><feComposite in2=\"down\" operator=\"in\" result=\"shade\"/><feOffset data-relief=\"light\" in=\"soft\" dx=\"0\" dy=\"-1.3\" result=\"up\"/><feFlood style=\"flood-color:var(--game-glint);flood-opacity:.85\"/><feComposite in2=\"up\" operator=\"in\" result=\"light\"/><feMerge><feMergeNode in=\"shade\"/><feMergeNode in=\"light\"/><feMergeNode in=\"SourceGraphic\"/></feMerge></filter></g></defs><circle cx=\"60\" cy=\"60\" r=\"57\" fill=\"url(#cgr-p-coin-gold)\"></circle><circle cx=\"60\" cy=\"60\" r=\"53\" fill=\"none\" stroke=\"var(--game-rim)\" stroke-width=\"1.4\" stroke-dasharray=\"1.4 2\"></circle><circle cx=\"60\" cy=\"60\" r=\"45\" fill=\"url(#cgr-p-gold)\" stroke=\"var(--game-glint)\" stroke-width=\"1.4\"></circle><g data-game-bird=\"meoOpen\" transform=\"translate(35 31) scale(0.36 0.36)\"><g data-game-pose=\"\"><g filter=\"url(#cgr-engrave)\"><defs><radialGradient id=\"cgrmeoOpenmeo1b\" cx=\".38\" cy=\".3\" r=\".8\"><stop offset=\"0\" stop-color=\"#5ee6a8\"/><stop offset=\"1\" stop-color=\"#0d9b6c\"/></radialGradient><linearGradient id=\"cgrmeoOpenmeo1w\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e3fcef\"/><stop offset=\"1\" stop-color=\"#86efac\"/></linearGradient><linearGradient id=\"cgrmeoOpenmeo1h\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#a78bfa\"/><stop offset=\"1\" stop-color=\"#6d28d9\"/></linearGradient><linearGradient id=\"cgrmeoOpenmeo1k\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fde68a\"/><stop offset=\"1\" stop-color=\"#f59e0b\"/></linearGradient></defs><g class=\"wl1\"><ellipse cx=\"26\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(-34 26 70)\" fill=\"url(#cgrmeoOpenmeo1w)\" stroke=\"#065f46\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M21 60 q2 12 7 22\" stroke=\"#86efac\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g><path d=\"M61 112 C50 116 45 124 47 131 C53 130 57 126 60 122 C62 128 66 132 72 133 C74 125 70 117 66 112 Z\" fill=\"#d97706\" stroke=\"#065f46\" stroke-width=\"1.8\" stroke-linejoin=\"round\"/><g fill=\"#7c3aed\" stroke=\"#6d28d9\" stroke-width=\"2\" stroke-linejoin=\"round\"><path d=\"M62 45 C58 35 48 31 38 34 C46 37 51 41 53 48 Z\"/><path d=\"M69 43 C68 29 58 20 45 21 C55 27 59 34 60 45 Z\"/><path d=\"M76 43 C77 30 70 18 60 14 C66 23 68 32 67 44 Z\"/></g><circle cx=\"70\" cy=\"80\" r=\"40\" fill=\"url(#cgrmeoOpenmeo1b)\" stroke=\"#065f46\" stroke-width=\"2.4\"/><ellipse cx=\"55\" cy=\"55\" rx=\"13\" ry=\"7.5\" transform=\"rotate(-28 55 55)\" fill=\"#fff\" opacity=\".38\"/><circle cx=\"76\" cy=\"47.5\" r=\"2.6\" fill=\"#fff\" opacity=\".55\"/><ellipse cx=\"70\" cy=\"103\" rx=\"26\" ry=\"16\" fill=\"#ecfdf5\" opacity=\".96\"/><path d=\"M61 107 Q50 110 42 117 Q53 115 62 112 Z\" fill=\"#6d28d9\"/><path d=\"M79 107 Q90 110 98 117 Q87 115 78 112 Z\" fill=\"#6d28d9\"/><path d=\"M70 117.2 C56.4 109.2 62.8 100.4 70 107.2 C77.2 100.4 83.6 109.2 70 117.2 Z\" fill=\"url(#cgrmeoOpenmeo1h)\"/><circle cx=\"66\" cy=\"107\" r=\"1.5\" fill=\"#fff\" opacity=\".9\"/><ellipse cx=\"45\" cy=\"88\" rx=\"7.5\" ry=\"4.8\" fill=\"#ff8fa8\" opacity=\".85\"/><ellipse cx=\"98\" cy=\"86\" rx=\"7\" ry=\"4.6\" fill=\"#ff8fa8\" opacity=\".85\"/><g class=\"e1\"><ellipse cx=\"57\" cy=\"74\" rx=\"9\" ry=\"10.5\" fill=\"#1c1941\"/><ellipse cx=\"57\" cy=\"79\" rx=\"6\" ry=\"4\" fill=\"#4c4a8a\" opacity=\".55\"/><circle cx=\"60\" cy=\"70\" r=\"3.8\" fill=\"#fff\"/><circle cx=\"54\" cy=\"77.8\" r=\"1.7\" fill=\"#fff\"/><ellipse cx=\"83\" cy=\"74\" rx=\"9\" ry=\"10.5\" fill=\"#1c1941\"/><ellipse cx=\"83\" cy=\"79\" rx=\"6\" ry=\"4\" fill=\"#4c4a8a\" opacity=\".55\"/><circle cx=\"86\" cy=\"70\" r=\"3.8\" fill=\"#fff\"/><circle cx=\"80\" cy=\"77.8\" r=\"1.7\" fill=\"#fff\"/></g><path d=\"M65.5 85 Q60.5 91 65.5 97.5 L86.5 93 Q90.5 91.3 86.5 89.6 Z\" fill=\"url(#cgrmeoOpenmeo1k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M63.8 90.6 Q75 94 87 90.9\" fill=\"none\" stroke=\"#b45309\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><path d=\"M68 86.8 Q75 86 81 88\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1.8\" stroke-linecap=\"round\" opacity=\".7\"/><g class=\"wr1\"><ellipse cx=\"114\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(34 114 70)\" fill=\"url(#cgrmeoOpenmeo1w)\" stroke=\"#065f46\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M119 60 q-2 12 -7 22\" stroke=\"#86efac\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g></g></g></g><text x=\"60\" y=\"96\" text-anchor=\"middle\" font-family=\"-apple-system, system-ui, sans-serif\" font-weight=\"800\" font-size=\"13\" fill=\"var(--game-coin-gold-ink)\">n° 100</text><text x=\"60\" y=\"27\" text-anchor=\"middle\" font-family=\"ui-monospace, SFMono-Regular, Menlo, monospace\" font-size=\"8\" letter-spacing=\"2\" fill=\"var(--game-coin-gold-ink)\">2026</text><g clip-path=\"url(#cgr-clip)\"><g transform=\"rotate(20 60 60)\"><rect x=\"20\" y=\"-10\" width=\"24\" height=\"140\" fill=\"url(#cgr-sheen)\" opacity=\"0.7\"></rect></g></g></svg>", "prism-blank": "<svg viewBox=\"0 0 120 120\" xmlns=\"http://www.w3.org/2000/svg\" width=\"100%\" height=\"100%\"><defs><linearGradient id=\"cpb-p-prism\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"var(--game-prism-0)\"></stop><stop offset=\"0.25\" stop-color=\"var(--game-prism-1)\"></stop><stop offset=\"0.5\" stop-color=\"var(--game-prism-2)\"></stop><stop offset=\"0.75\" stop-color=\"var(--game-prism-3)\"></stop><stop offset=\"1\" stop-color=\"var(--game-prism-4)\"></stop></linearGradient><linearGradient id=\"cpb-p-gold\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"var(--game-gold-0)\"></stop><stop offset=\"1\" stop-color=\"var(--game-gold-1)\"></stop></linearGradient><linearGradient id=\"cpb-sheen\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"var(--game-glint)\" stop-opacity=\"0\"></stop><stop offset=\"0.5\" stop-color=\"var(--game-glint)\" stop-opacity=\"0.8\"></stop><stop offset=\"1\" stop-color=\"var(--game-glint)\" stop-opacity=\"0\"></stop></linearGradient><path id=\"cpb-ring\" d=\"M60 60 m-43 0 a43 43 0 1 1 86 0 a43 43 0 1 1 -86 0\"></path><clipPath id=\"cpb-clip\"><circle cx=\"60\" cy=\"60\" r=\"56\"></circle></clipPath></defs><circle cx=\"60\" cy=\"60\" r=\"57\" fill=\"url(#cpb-p-prism)\"></circle><circle cx=\"60\" cy=\"60\" r=\"53\" fill=\"none\" stroke=\"var(--game-rim)\" stroke-width=\"1.4\" stroke-dasharray=\"1.4 2\"></circle><circle cx=\"60\" cy=\"60\" r=\"45\" fill=\"url(#cpb-p-gold)\" stroke=\"var(--game-glint)\" stroke-width=\"1.2\" opacity=\"0.95\"></circle><path class=\"dia\" style=\"animation-delay:0.00s\" fill=\"#ffffff\" opacity=\"0.92\" d=\"M38 40.8L38.704 43.296L41.2 44L38.704 44.704L38 47.2L37.296 44.704L34.8 44L37.296 43.296Z\"></path><path class=\"dia\" style=\"animation-delay:0.37s\" fill=\"#cdeeff\" opacity=\"0.92\" d=\"M80 37.4L80.572 39.428L82.6 40L80.572 40.572L80 42.6L79.428 40.572L77.4 40L79.428 39.428Z\"></path><path class=\"dia\" style=\"animation-delay:0.74s\" fill=\"#ffffff\" opacity=\"0.92\" d=\"M86 70.6L86.748 73.252L89.4 74L86.748 74.748L86 77.4L85.252 74.748L82.6 74L85.252 73.252Z\"></path><path class=\"dia\" style=\"animation-delay:1.11s\" fill=\"#ffd6f2\" opacity=\"0.92\" d=\"M36 77.6L36.528 79.472L38.4 80L36.528 80.528L36 82.4L35.472 80.528L33.6 80L35.472 79.472Z\"></path><path class=\"dia\" style=\"animation-delay:1.48s\" fill=\"#d8ffe9\" opacity=\"0.92\" d=\"M60 27.8L60.484 29.516L62.2 30L60.484 30.484L60 32.2L59.516 30.484L57.8 30L59.516 29.516Z\"></path><path class=\"dia\" style=\"animation-delay:1.85s\" fill=\"#ffffff\" opacity=\"0.92\" d=\"M70 85.2L70.616 87.384L72.8 88L70.616 88.616L70 90.8L69.384 88.616L67.2 88L69.384 87.384Z\"></path><path class=\"dia\" style=\"animation-delay:2.22s\" fill=\"#e2dcff\" opacity=\"0.92\" d=\"M48 60.2L48.396 61.604L49.8 62L48.396 62.396L48 63.8L47.604 62.396L46.2 62L47.604 61.604Z\"></path><path class=\"dia\" style=\"animation-delay:2.59s\" fill=\"#ffffff\" opacity=\"0.92\" d=\"M94 54L94.44 55.56L96 56L94.44 56.44L94 58L93.56 56.44L92 56L93.56 55.56Z\"></path><path class=\"dia\" style=\"animation-delay:2.96s\" fill=\"#cdeeff\" opacity=\"0.92\" d=\"M27 57.8L27.484 59.516L29.2 60L27.484 60.484L27 62.2L26.516 60.484L24.8 60L26.516 59.516Z\"></path><path class=\"dia\" style=\"animation-delay:3.33s\" fill=\"#fff3c4\" opacity=\"0.92\" d=\"M58 74.4L58.352 75.648L59.6 76L58.352 76.352L58 77.6L57.648 76.352L56.4 76L57.648 75.648Z\"></path><g clip-path=\"url(#cpb-clip)\"><g transform=\"rotate(20 60 60)\"><rect x=\"20\" y=\"-10\" width=\"24\" height=\"140\" fill=\"url(#cpb-sheen)\" opacity=\"0.7\"></rect></g></g></svg>", "prism-obverse": "<svg viewBox=\"0 0 120 120\" xmlns=\"http://www.w3.org/2000/svg\" width=\"100%\" height=\"100%\"><defs><linearGradient id=\"cpo-p-prism\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"var(--game-prism-0)\"></stop><stop offset=\"0.25\" stop-color=\"var(--game-prism-1)\"></stop><stop offset=\"0.5\" stop-color=\"var(--game-prism-2)\"></stop><stop offset=\"0.75\" stop-color=\"var(--game-prism-3)\"></stop><stop offset=\"1\" stop-color=\"var(--game-prism-4)\"></stop></linearGradient><linearGradient id=\"cpo-p-gold\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"var(--game-gold-0)\"></stop><stop offset=\"1\" stop-color=\"var(--game-gold-1)\"></stop></linearGradient><linearGradient id=\"cpo-sheen\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"var(--game-glint)\" stop-opacity=\"0\"></stop><stop offset=\"0.5\" stop-color=\"var(--game-glint)\" stop-opacity=\"0.8\"></stop><stop offset=\"1\" stop-color=\"var(--game-glint)\" stop-opacity=\"0\"></stop></linearGradient><path id=\"cpo-ring\" d=\"M60 60 m-43 0 a43 43 0 1 1 86 0 a43 43 0 1 1 -86 0\"></path><clipPath id=\"cpo-clip\"><circle cx=\"60\" cy=\"60\" r=\"56\"></circle></clipPath></defs><circle cx=\"60\" cy=\"60\" r=\"57\" fill=\"url(#cpo-p-prism)\"></circle><circle cx=\"60\" cy=\"60\" r=\"53\" fill=\"none\" stroke=\"var(--game-rim)\" stroke-width=\"1.4\" stroke-dasharray=\"1.4 2\"></circle><circle cx=\"60\" cy=\"60\" r=\"35\" fill=\"url(#cpo-p-gold)\" stroke=\"var(--game-glint)\" stroke-width=\"1.6\"></circle><text font-family=\"ui-monospace, SFMono-Regular, Menlo, monospace\" font-size=\"8.4\" letter-spacing=\"2\" fill=\"var(--game-coin-gold-ink)\"><textPath href=\"#cpo-ring\">MEESHY · UNE MEESH · MEESHY · UNE MEESH ·</textPath></text><g data-game-signature=\"struck\"><g transform=\"translate(28.188 28.451999999999998) scale(0.064453125)\"><line x1=\"262\" y1=\"384\" x2=\"762\" y2=\"384\" stroke=\"var(--game-shade)\" stroke-opacity=\"0.5\" stroke-width=\"100\" stroke-linecap=\"round\"></line><line x1=\"262\" y1=\"512\" x2=\"662\" y2=\"512\" stroke=\"var(--game-shade)\" stroke-opacity=\"0.5\" stroke-width=\"100\" stroke-linecap=\"round\"></line><line x1=\"262\" y1=\"640\" x2=\"562\" y2=\"640\" stroke=\"var(--game-shade)\" stroke-opacity=\"0.5\" stroke-width=\"100\" stroke-linecap=\"round\"></line></g><g transform=\"translate(26.208 26.076) scale(0.064453125)\"><line x1=\"262\" y1=\"384\" x2=\"762\" y2=\"384\" stroke=\"var(--game-glint)\" stroke-opacity=\"0.85\" stroke-width=\"100\" stroke-linecap=\"round\"></line><line x1=\"262\" y1=\"512\" x2=\"662\" y2=\"512\" stroke=\"var(--game-glint)\" stroke-opacity=\"0.85\" stroke-width=\"100\" stroke-linecap=\"round\"></line><line x1=\"262\" y1=\"640\" x2=\"562\" y2=\"640\" stroke=\"var(--game-glint)\" stroke-opacity=\"0.85\" stroke-width=\"100\" stroke-linecap=\"round\"></line></g><g transform=\"translate(27 27) scale(0.064453125)\"><line x1=\"262\" y1=\"384\" x2=\"762\" y2=\"384\" stroke=\"var(--game-coin-gold-ink)\" stroke-opacity=\"0.7\" stroke-width=\"100\" stroke-linecap=\"round\" data-game-dash=\"0\"></line><line x1=\"262\" y1=\"512\" x2=\"662\" y2=\"512\" stroke=\"var(--game-coin-gold-ink)\" stroke-opacity=\"1\" stroke-width=\"100\" stroke-linecap=\"round\" data-game-dash=\"1\"></line><line x1=\"262\" y1=\"640\" x2=\"562\" y2=\"640\" stroke=\"var(--game-coin-gold-ink)\" stroke-opacity=\"0.75\" stroke-width=\"100\" stroke-linecap=\"round\" data-game-dash=\"2\"></line></g></g><path class=\"dia\" style=\"animation-delay:0.00s\" fill=\"#ffffff\" opacity=\"0.92\" d=\"M38 40.8L38.704 43.296L41.2 44L38.704 44.704L38 47.2L37.296 44.704L34.8 44L37.296 43.296Z\"></path><path class=\"dia\" style=\"animation-delay:0.37s\" fill=\"#cdeeff\" opacity=\"0.92\" d=\"M80 37.4L80.572 39.428L82.6 40L80.572 40.572L80 42.6L79.428 40.572L77.4 40L79.428 39.428Z\"></path><path class=\"dia\" style=\"animation-delay:0.74s\" fill=\"#ffffff\" opacity=\"0.92\" d=\"M86 70.6L86.748 73.252L89.4 74L86.748 74.748L86 77.4L85.252 74.748L82.6 74L85.252 73.252Z\"></path><path class=\"dia\" style=\"animation-delay:1.11s\" fill=\"#ffd6f2\" opacity=\"0.92\" d=\"M36 77.6L36.528 79.472L38.4 80L36.528 80.528L36 82.4L35.472 80.528L33.6 80L35.472 79.472Z\"></path><path class=\"dia\" style=\"animation-delay:1.48s\" fill=\"#d8ffe9\" opacity=\"0.92\" d=\"M60 27.8L60.484 29.516L62.2 30L60.484 30.484L60 32.2L59.516 30.484L57.8 30L59.516 29.516Z\"></path><path class=\"dia\" style=\"animation-delay:1.85s\" fill=\"#ffffff\" opacity=\"0.92\" d=\"M70 85.2L70.616 87.384L72.8 88L70.616 88.616L70 90.8L69.384 88.616L67.2 88L69.384 87.384Z\"></path><path class=\"dia\" style=\"animation-delay:2.22s\" fill=\"#e2dcff\" opacity=\"0.92\" d=\"M48 60.2L48.396 61.604L49.8 62L48.396 62.396L48 63.8L47.604 62.396L46.2 62L47.604 61.604Z\"></path><path class=\"dia\" style=\"animation-delay:2.59s\" fill=\"#ffffff\" opacity=\"0.92\" d=\"M94 54L94.44 55.56L96 56L94.44 56.44L94 58L93.56 56.44L92 56L93.56 55.56Z\"></path><path class=\"dia\" style=\"animation-delay:2.96s\" fill=\"#cdeeff\" opacity=\"0.92\" d=\"M27 57.8L27.484 59.516L29.2 60L27.484 60.484L27 62.2L26.516 60.484L24.8 60L26.516 59.516Z\"></path><path class=\"dia\" style=\"animation-delay:3.33s\" fill=\"#fff3c4\" opacity=\"0.92\" d=\"M58 74.4L58.352 75.648L59.6 76L58.352 76.352L58 77.6L57.648 76.352L56.4 76L57.648 75.648Z\"></path><g clip-path=\"url(#cpo-clip)\"><g transform=\"rotate(20 60 60)\"><rect x=\"20\" y=\"-10\" width=\"24\" height=\"140\" fill=\"url(#cpo-sheen)\" opacity=\"0.7\"></rect></g></g></svg>", "prism-reverse": "<svg viewBox=\"0 0 120 120\" xmlns=\"http://www.w3.org/2000/svg\" width=\"100%\" height=\"100%\"><defs><linearGradient id=\"cpr-p-prism\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"var(--game-prism-0)\"></stop><stop offset=\"0.25\" stop-color=\"var(--game-prism-1)\"></stop><stop offset=\"0.5\" stop-color=\"var(--game-prism-2)\"></stop><stop offset=\"0.75\" stop-color=\"var(--game-prism-3)\"></stop><stop offset=\"1\" stop-color=\"var(--game-prism-4)\"></stop></linearGradient><linearGradient id=\"cpr-p-gold\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"var(--game-gold-0)\"></stop><stop offset=\"1\" stop-color=\"var(--game-gold-1)\"></stop></linearGradient><linearGradient id=\"cpr-sheen\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"var(--game-glint)\" stop-opacity=\"0\"></stop><stop offset=\"0.5\" stop-color=\"var(--game-glint)\" stop-opacity=\"0.8\"></stop><stop offset=\"1\" stop-color=\"var(--game-glint)\" stop-opacity=\"0\"></stop></linearGradient><path id=\"cpr-ring\" d=\"M60 60 m-43 0 a43 43 0 1 1 86 0 a43 43 0 1 1 -86 0\"></path><clipPath id=\"cpr-clip\"><circle cx=\"60\" cy=\"60\" r=\"56\"></circle></clipPath><g><filter id=\"cpr-engrave\" filterUnits=\"userSpaceOnUse\" x=\"-12\" y=\"-12\" width=\"170\" height=\"170\" color-interpolation-filters=\"sRGB\"><feGaussianBlur in=\"SourceAlpha\" stdDeviation=\"0.7\" result=\"soft\"/><feOffset data-relief=\"shade\" in=\"soft\" dx=\"0\" dy=\"2.4\" result=\"down\"/><feFlood style=\"flood-color:var(--game-edge);flood-opacity:.6\"/><feComposite in2=\"down\" operator=\"in\" result=\"shade\"/><feOffset data-relief=\"light\" in=\"soft\" dx=\"0\" dy=\"-1.3\" result=\"up\"/><feFlood style=\"flood-color:var(--game-glint);flood-opacity:.85\"/><feComposite in2=\"up\" operator=\"in\" result=\"light\"/><feMerge><feMergeNode in=\"shade\"/><feMergeNode in=\"light\"/><feMergeNode in=\"SourceGraphic\"/></feMerge></filter></g></defs><circle cx=\"60\" cy=\"60\" r=\"57\" fill=\"url(#cpr-p-prism)\"></circle><circle cx=\"60\" cy=\"60\" r=\"53\" fill=\"none\" stroke=\"var(--game-rim)\" stroke-width=\"1.4\" stroke-dasharray=\"1.4 2\"></circle><circle cx=\"60\" cy=\"60\" r=\"45\" fill=\"url(#cpr-p-gold)\" stroke=\"var(--game-glint)\" stroke-width=\"1.4\"></circle><g data-game-bird=\"meeJoy\" transform=\"translate(13 30) scale(0.34 0.34)\"><g data-game-pose=\"\"><g filter=\"url(#cpr-engrave)\"><defs><radialGradient id=\"cprmeeJoymee1b\" cx=\".38\" cy=\".3\" r=\".8\"><stop offset=\"0\" stop-color=\"#7ff0c8\"/><stop offset=\"1\" stop-color=\"#14b8a6\"/></radialGradient><linearGradient id=\"cprmeeJoymee1w\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e6fff7\"/><stop offset=\"1\" stop-color=\"#7de8d2\"/></linearGradient><linearGradient id=\"cprmeeJoymee1h\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fb7185\"/><stop offset=\"1\" stop-color=\"#e11d48\"/></linearGradient><linearGradient id=\"cprmeeJoymee1k\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fde68a\"/><stop offset=\"1\" stop-color=\"#f59e0b\"/></linearGradient></defs><g class=\"wl1\"><ellipse cx=\"26\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(-34 26 70)\" fill=\"url(#cprmeeJoymee1w)\" stroke=\"#0f766e\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M21 60 q2 12 7 22\" stroke=\"#7de8d2\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g><path d=\"M61 112 C50 116 45 124 47 131 C53 130 57 126 60 122 C62 128 66 132 72 133 C74 125 70 117 66 112 Z\" fill=\"#0f766e\" stroke=\"#0f766e\" stroke-width=\"1.8\" stroke-linejoin=\"round\"/><path d=\"M66 44 C58 28 74 16 84 24 C91 30 84 40 77 35\" fill=\"none\" stroke=\"#0f766e\" stroke-width=\"9.5\" stroke-linecap=\"round\"/><path d=\"M66 44 C58 28 74 16 84 24 C91 30 84 40 77 35\" fill=\"none\" stroke=\"#f43f5e\" stroke-width=\"6\" stroke-linecap=\"round\"/><circle cx=\"72\" cy=\"24\" r=\"1.6\" fill=\"#fff\" opacity=\".75\"/><circle cx=\"70\" cy=\"80\" r=\"40\" fill=\"url(#cprmeeJoymee1b)\" stroke=\"#0f766e\" stroke-width=\"2.4\"/><ellipse cx=\"55\" cy=\"55\" rx=\"13\" ry=\"7.5\" transform=\"rotate(-28 55 55)\" fill=\"#fff\" opacity=\".38\"/><circle cx=\"76\" cy=\"47.5\" r=\"2.6\" fill=\"#fff\" opacity=\".55\"/><ellipse cx=\"70\" cy=\"103\" rx=\"26\" ry=\"16\" fill=\"#f0fdfa\" opacity=\".96\"/><path d=\"M70 117.2 C56.4 109.2 62.8 100.4 70 107.2 C77.2 100.4 83.6 109.2 70 117.2 Z\" fill=\"url(#cprmeeJoymee1h)\"/><circle cx=\"66\" cy=\"107\" r=\"1.5\" fill=\"#fff\" opacity=\".9\"/><ellipse cx=\"45\" cy=\"88\" rx=\"7.5\" ry=\"4.8\" fill=\"#ff7a9a\" opacity=\".85\"/><ellipse cx=\"98\" cy=\"86\" rx=\"7\" ry=\"4.6\" fill=\"#ff7a9a\" opacity=\".85\"/><g class=\"e1\"><path d=\"M49 76 q8 -11 16 0\" fill=\"none\" stroke=\"#1c1941\" stroke-width=\"4.5\" stroke-linecap=\"round\"/><path d=\"M75 76 q8 -11 16 0\" fill=\"none\" stroke=\"#1c1941\" stroke-width=\"4.5\" stroke-linecap=\"round\"/></g><path d=\"M65.5 85 Q60.5 91 65.5 97.5 L86.5 93 Q90.5 91.3 86.5 89.6 Z\" fill=\"url(#cprmeeJoymee1k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M63.8 90.6 Q75 94 87 90.9\" fill=\"none\" stroke=\"#b45309\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><path d=\"M68 86.8 Q75 86 81 88\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1.8\" stroke-linecap=\"round\" opacity=\".7\"/><g class=\"wr1\"><ellipse cx=\"114\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(34 114 70)\" fill=\"url(#cprmeeJoymee1w)\" stroke=\"#0f766e\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M119 60 q-2 12 -7 22\" stroke=\"#7de8d2\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g></g></g></g><g data-game-bird=\"meoOpen\" transform=\"translate(107 30) scale(-0.34 0.34)\"><g data-game-pose=\"\"><g filter=\"url(#cpr-engrave)\"><defs><radialGradient id=\"cprmeoOpenmeo1b\" cx=\".38\" cy=\".3\" r=\".8\"><stop offset=\"0\" stop-color=\"#5ee6a8\"/><stop offset=\"1\" stop-color=\"#0d9b6c\"/></radialGradient><linearGradient id=\"cprmeoOpenmeo1w\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e3fcef\"/><stop offset=\"1\" stop-color=\"#86efac\"/></linearGradient><linearGradient id=\"cprmeoOpenmeo1h\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#a78bfa\"/><stop offset=\"1\" stop-color=\"#6d28d9\"/></linearGradient><linearGradient id=\"cprmeoOpenmeo1k\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fde68a\"/><stop offset=\"1\" stop-color=\"#f59e0b\"/></linearGradient></defs><g class=\"wl1\"><ellipse cx=\"26\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(-34 26 70)\" fill=\"url(#cprmeoOpenmeo1w)\" stroke=\"#065f46\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M21 60 q2 12 7 22\" stroke=\"#86efac\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g><path d=\"M61 112 C50 116 45 124 47 131 C53 130 57 126 60 122 C62 128 66 132 72 133 C74 125 70 117 66 112 Z\" fill=\"#d97706\" stroke=\"#065f46\" stroke-width=\"1.8\" stroke-linejoin=\"round\"/><g fill=\"#7c3aed\" stroke=\"#6d28d9\" stroke-width=\"2\" stroke-linejoin=\"round\"><path d=\"M62 45 C58 35 48 31 38 34 C46 37 51 41 53 48 Z\"/><path d=\"M69 43 C68 29 58 20 45 21 C55 27 59 34 60 45 Z\"/><path d=\"M76 43 C77 30 70 18 60 14 C66 23 68 32 67 44 Z\"/></g><circle cx=\"70\" cy=\"80\" r=\"40\" fill=\"url(#cprmeoOpenmeo1b)\" stroke=\"#065f46\" stroke-width=\"2.4\"/><ellipse cx=\"55\" cy=\"55\" rx=\"13\" ry=\"7.5\" transform=\"rotate(-28 55 55)\" fill=\"#fff\" opacity=\".38\"/><circle cx=\"76\" cy=\"47.5\" r=\"2.6\" fill=\"#fff\" opacity=\".55\"/><ellipse cx=\"70\" cy=\"103\" rx=\"26\" ry=\"16\" fill=\"#ecfdf5\" opacity=\".96\"/><path d=\"M61 107 Q50 110 42 117 Q53 115 62 112 Z\" fill=\"#6d28d9\"/><path d=\"M79 107 Q90 110 98 117 Q87 115 78 112 Z\" fill=\"#6d28d9\"/><path d=\"M70 117.2 C56.4 109.2 62.8 100.4 70 107.2 C77.2 100.4 83.6 109.2 70 117.2 Z\" fill=\"url(#cprmeoOpenmeo1h)\"/><circle cx=\"66\" cy=\"107\" r=\"1.5\" fill=\"#fff\" opacity=\".9\"/><ellipse cx=\"45\" cy=\"88\" rx=\"7.5\" ry=\"4.8\" fill=\"#ff8fa8\" opacity=\".85\"/><ellipse cx=\"98\" cy=\"86\" rx=\"7\" ry=\"4.6\" fill=\"#ff8fa8\" opacity=\".85\"/><g class=\"e1\"><ellipse cx=\"57\" cy=\"74\" rx=\"9\" ry=\"10.5\" fill=\"#1c1941\"/><ellipse cx=\"57\" cy=\"79\" rx=\"6\" ry=\"4\" fill=\"#4c4a8a\" opacity=\".55\"/><circle cx=\"60\" cy=\"70\" r=\"3.8\" fill=\"#fff\"/><circle cx=\"54\" cy=\"77.8\" r=\"1.7\" fill=\"#fff\"/><ellipse cx=\"83\" cy=\"74\" rx=\"9\" ry=\"10.5\" fill=\"#1c1941\"/><ellipse cx=\"83\" cy=\"79\" rx=\"6\" ry=\"4\" fill=\"#4c4a8a\" opacity=\".55\"/><circle cx=\"86\" cy=\"70\" r=\"3.8\" fill=\"#fff\"/><circle cx=\"80\" cy=\"77.8\" r=\"1.7\" fill=\"#fff\"/></g><path d=\"M65.5 85 Q60.5 91 65.5 97.5 L86.5 93 Q90.5 91.3 86.5 89.6 Z\" fill=\"url(#cprmeoOpenmeo1k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M63.8 90.6 Q75 94 87 90.9\" fill=\"none\" stroke=\"#b45309\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><path d=\"M68 86.8 Q75 86 81 88\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1.8\" stroke-linecap=\"round\" opacity=\".7\"/><g class=\"wr1\"><ellipse cx=\"114\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(34 114 70)\" fill=\"url(#cprmeoOpenmeo1w)\" stroke=\"#065f46\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M119 60 q-2 12 -7 22\" stroke=\"#86efac\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g></g></g></g><text x=\"60\" y=\"96\" text-anchor=\"middle\" font-family=\"-apple-system, system-ui, sans-serif\" font-weight=\"800\" font-size=\"13\" fill=\"var(--game-coin-gold-ink)\">n° 1 000</text><text x=\"60\" y=\"27\" text-anchor=\"middle\" font-family=\"ui-monospace, SFMono-Regular, Menlo, monospace\" font-size=\"8\" letter-spacing=\"2\" fill=\"var(--game-coin-gold-ink)\">2026</text><path class=\"dia\" style=\"animation-delay:0.00s\" fill=\"#ffffff\" opacity=\"0.92\" d=\"M38 40.8L38.704 43.296L41.2 44L38.704 44.704L38 47.2L37.296 44.704L34.8 44L37.296 43.296Z\"></path><path class=\"dia\" style=\"animation-delay:0.37s\" fill=\"#cdeeff\" opacity=\"0.92\" d=\"M80 37.4L80.572 39.428L82.6 40L80.572 40.572L80 42.6L79.428 40.572L77.4 40L79.428 39.428Z\"></path><path class=\"dia\" style=\"animation-delay:0.74s\" fill=\"#ffffff\" opacity=\"0.92\" d=\"M86 70.6L86.748 73.252L89.4 74L86.748 74.748L86 77.4L85.252 74.748L82.6 74L85.252 73.252Z\"></path><path class=\"dia\" style=\"animation-delay:1.11s\" fill=\"#ffd6f2\" opacity=\"0.92\" d=\"M36 77.6L36.528 79.472L38.4 80L36.528 80.528L36 82.4L35.472 80.528L33.6 80L35.472 79.472Z\"></path><path class=\"dia\" style=\"animation-delay:1.48s\" fill=\"#d8ffe9\" opacity=\"0.92\" d=\"M60 27.8L60.484 29.516L62.2 30L60.484 30.484L60 32.2L59.516 30.484L57.8 30L59.516 29.516Z\"></path><path class=\"dia\" style=\"animation-delay:1.85s\" fill=\"#ffffff\" opacity=\"0.92\" d=\"M70 85.2L70.616 87.384L72.8 88L70.616 88.616L70 90.8L69.384 88.616L67.2 88L69.384 87.384Z\"></path><path class=\"dia\" style=\"animation-delay:2.22s\" fill=\"#e2dcff\" opacity=\"0.92\" d=\"M48 60.2L48.396 61.604L49.8 62L48.396 62.396L48 63.8L47.604 62.396L46.2 62L47.604 61.604Z\"></path><path class=\"dia\" style=\"animation-delay:2.59s\" fill=\"#ffffff\" opacity=\"0.92\" d=\"M94 54L94.44 55.56L96 56L94.44 56.44L94 58L93.56 56.44L92 56L93.56 55.56Z\"></path><path class=\"dia\" style=\"animation-delay:2.96s\" fill=\"#cdeeff\" opacity=\"0.92\" d=\"M27 57.8L27.484 59.516L29.2 60L27.484 60.484L27 62.2L26.516 60.484L24.8 60L26.516 59.516Z\"></path><path class=\"dia\" style=\"animation-delay:3.33s\" fill=\"#fff3c4\" opacity=\"0.92\" d=\"M58 74.4L58.352 75.648L59.6 76L58.352 76.352L58 77.6L57.648 76.352L56.4 76L57.648 75.648Z\"></path><g clip-path=\"url(#cpr-clip)\"><g transform=\"rotate(20 60 60)\"><rect x=\"20\" y=\"-10\" width=\"24\" height=\"140\" fill=\"url(#cpr-sheen)\" opacity=\"0.7\"></rect></g></g></svg>"};
+  var SVGN = 0;
+  function svg(key) { var n = '_' + (++SVGN); return COINS[key].replace(/id="([^"]+)"/g, 'id="$1' + n + '"').replace(/url\(#([^)]+)\)/g, 'url(#$1' + n + ')').replace(/href="#([^"]+)"/g, 'href="#$1' + n + '"'); }
+  var q = function (id) { return document.getElementById(id); };
+  var IMG = function (n) { return (window.__F2_IMG__ || '/files/') + n + '.png'; };
+  var ph = q('f2-ph'), fx = q('f2-fx'), scene = q('f2-scene'), cv = q('f2-cv'), ctx = cv.getContext('2d');
+  var E = {
+    bg: q('f2-bg'), fade: q('f2-fade'), orb: q('f2-orb'), coin: q('f2-coin'), c3d: q('f2-c3d'), blank: q('f2-blank'), obv: q('f2-obv'), rev: q('f2-rev'),
+    glow: q('f2-glow'), die: q('f2-die'), mee: q('f2-mee'), meo: q('f2-meo'), hMeo: q('f2-hmeo'), hMee: q('f2-hmee'), flash: q('f2-flash'), ring: q('f2-ring'),
+    rays: q('f2-rays'), tchak: q('f2-tchak'), sign: q('f2-sign'), signSub: q('f2-signsub'), say: q('f2-say'), ombre: q('f2-ombre'), skip: q('f2-skip'),
+    glory: q('f2-glory'), held: q('f2-held'), container: q('f2-container'), next: q('f2-next'), coffret: q('f2-coffret'), coffretCoin: q('f2-coffret-coin'),
+    blason: q('f2-blason'), ctitle: q('f2-ctitle'), cline: q('f2-cline'), btn: q('f2-btn'), sayImg: q('f2-sayimg'), sayText: q('f2-saytext'),
+    bandCoin: q('f2-bandcoin'), beats: q('f2-beats'), beatsTitle: q('f2-beatstitle'), scrub: q('f2-scrubber'), time: q('f2-time'), faces: q('f2-faces')
+  };
+  ['f2-mee', 'f2-meo', 'f2-sayimg'].forEach(function (id) { var im = q(id); im.src = IMG(id === 'f2-meo' ? 'meo-salut' : 'mee-sourire'); });
+  Array.prototype.forEach.call(document.querySelectorAll('.f2-band img'), function (im, i) { im.src = IMG(i === 0 ? 'mee-sourire' : 'meo-salut'); });
+
+  var SW = 360, SH = 640, C = { x: 180, y: 300 }, R = 84, ORB = { x: 180, y: 96 };
+  var FORM = 168, ANV = 116, ANV_C = { x: 180, y: 543 - ANV / 2 + 3 };
+  var DIE_ON = { x: 180 - 13, y: ANV_C.y - ANV / 2 - 46 };
+  var MEE_HOME = { x: 10, y: 244 }, MEO_HOME = { x: 258, y: 244 }, MEE_STRIKE = { x: 14, y: 404 }, MEO_STRIKE = { x: 252, y: 394 }, MEE_END = { x: 12, y: 262 }, MEO_END = { x: 256, y: 262 };
+  var REST = 12, WIND = 62, HIT = -54, REST_M = -12, WIND_M = -62, HIT_M = 50;
+
+  var nf = function (n) { return n.toLocaleString('fr-FR'); };
+  var clamp = function (x) { return x < 0 ? 0 : x > 1 ? 1 : x; };
+  var seg = function (t, a, b) { return clamp((t - a) / (b - a)); };
+  var lerp = function (a, b, x) { return a + (b - a) * x; };
+  var eOut = function (x) { return 1 - Math.pow(1 - x, 3); };
+  var eIn = function (x) { return x * x * x; };
+  var eIO = function (x) { return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+  var eSine = function (x) { return -(Math.cos(Math.PI * x) - 1) / 2; };
+  var bump = function (t, at, len) { var x = (t - at) / len; return x < 0 || x > 1 ? 0 : Math.sin(Math.PI * x); };
+  function rng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  var HUES = []; for (var hh = 0; hh < 36; hh++) HUES.push('hsl(' + hh * 10 + ', 95%, 72%)');
+  var SILVER = ['#eef1f6', '#c9cfda', '#ffffff', '#dfe4ec'], GOLD = ['#ffd36b', '#f2b136', '#ffe7a3'];
+
+  var KINDS = {
+    argent: { ed: 'silver', n: 92, held: 88, pocket: 108233, price: 10423, after: { n: 93, held: 89, pocket: 97810, price: 10423 },
+      container: 'Ton Coffret', next: "le Coffre s'ouvre à 100", weave: ['#fff6dc', '#ffe6a6', '#ffd27a'],
+      dust: [{ from: 'mee', n: 1500, c: SILVER }, { from: 'meo', n: 170, c: GOLD }], strikes: [0], grand: false,
+      celebrate: ['mee-bravo', 'meo-trophee'], line: '« La n° 92 rejoint ton Coffret. »', rest: "« La centième sera d'or. »",
+      beats: function (p) { return [[p.emit0, "Des milliers d'étincelles quittent ta lumière."], [.95, 'Elles tissent un cercle : deux brins qui se croisent, puis se resserrent.'],
+        [p.dust0, "Mee y sème de la poussière d'argent, Meo un peu d'or."], [p.solid0, "Le flan se fige, argent veiné d'or."],
+        [p.desc0, "Il se pose sur l'enclume ; Mee place le coin."], [p.wind0, 'Meo lève le marteau' + (p.H ? ' et le garde levé : la passerelle répond.' : '.')],
+        [p.impacts[0], 'Tchak ! La frappe grave la Signature et « MEESHY · UNE MEESH ».'], [p.rev0, "La pièce se lève et tourne : au revers, Mee, le n° 92 et l'année."],
+        [p.cele, 'Mee et Meo la fêtent.'], [p.exit0, 'Elle rejoint ton Coffret ; la gloire monte vers ton blason.']]; } },
+    or: { ed: 'gold', n: 100, held: 96, pocket: 108233, price: 10423, after: { n: 101, held: 97, pocket: 97810, price: 13328 },
+      container: 'Ton Coffret', next: "le Coffre s'ouvre à 100", weave: ['#fff1c2', '#ffd96b', '#ffc24d'],
+      dust: [{ from: 'meo', n: 1500, c: GOLD }], strikes: [0, .58, 1.25], grand: true,
+      celebrate: ['mee-jackpot', 'meo-roi'], line: "« La centième est d'or. Tes aïeux l'ont vue. »", rest: '« À la millième, le prisme. »', sign: 'la centième pièce porte leur lumière',
+      beats: function (p) { return [[p.emit0, "Des milliers d'étincelles quittent ta lumière, dorées."], [.95, 'Elles tissent un cercle, deux brins qui se resserrent.'],
+        [p.dust0, "Meo y verse de l'or pur."], [p.solid0, "Le flan se fige, tout d'or."],
+        [p.desc0, "Il se pose sur l'enclume ; Mee place le coin."], [p.wind0, 'Meo lève le marteau' + (p.H ? ' et le garde levé : la passerelle répond.' : '.')],
+        [p.impacts[0], 'Tchak : la gravure apparaît. Tchak…'], [p.imp, "TCHAK ! Des rayons d'or jaillissent."],
+        [p.imp + .5, 'Tes aïeux se manifestent ; au revers, Meo, le n° 100.'], [p.cele, 'Mee et Meo la fêtent.'], [p.exit0, 'Elle rejoint ton Coffret ; la gloire monte.']]; } },
+    prisme: { ed: 'prism', n: 1000, held: 640, pocket: 108233, price: 13328, after: { n: 1001, held: 641, pocket: 94905, price: 13328 },
+      container: 'Ton Trésor', next: "la Réserve s'ouvre à 1 000", weave: 'prism',
+      dust: [{ from: 'meo', n: 900, c: GOLD }, { from: 'mee', n: 950, c: 'diamond' }], strikes: [0, .58, 1.3], grand: true, together: true,
+      celebrate: ['mee-wow', 'meo-feu-artifice'], line: '« La millième est de prisme : toutes les langues y brillent. »', rest: '« La prochaine de prisme sera la deux-millième. »', sign: 'la millième pièce réunit toutes les langues',
+      beats: function (p) { return [[p.emit0, "Des milliers d'étincelles quittent ta lumière, en sept couleurs."], [.95, 'Elles tissent un cercle irisé.'],
+        [p.dust0, "Meo y verse de la poussière d'or, Mee de la poussière de diamant."], [p.solid0, "Le flan se fige : de l'or mêlé de diamant."],
+        [p.desc0, "Il se pose sur l'enclume ; Mee place le coin."], [p.wind0, 'Meo lève le marteau' + (p.H ? ' et le garde levé : la passerelle répond.' : '.')],
+        [p.impacts[0], 'Tchak : la gravure apparaît. Tchak…'], [p.strikes[2] - .45, 'Mee prend un marteau à son tour…'],
+        [p.imp, '… et Mee et Meo frappent ensemble : TCHAK ! Le prisme éclate.'], [p.imp + .5, 'Tes aïeux se manifestent ; au revers, Mee et Meo, le n° 1 000.'],
+        [p.cele, 'Mee et Meo la fêtent.'], [p.exit0, 'Elle rejoint ton Trésor ; la gloire monte.']]; } },
+    refus: { ed: 'silver', n: 92, held: 88, pocket: 108233, price: 10423, container: 'Ton Coffret', next: "le Coffre s'ouvre à 100", weave: ['#fff6dc', '#ffe6a6', '#ffd27a'], refus: true,
+      line: '« Une ombre voile ta lumière. Tes prochaines étincelles la dissiperont, et on frappera. »', rest: "« La centième sera d'or. »",
+      beats: function (p) { return [[p.emit0, 'Les étincelles quittent ta lumière et commencent à tisser.'], [p.refuse - .2, 'La passerelle refuse : une ombre voile le cercle.'],
+        [p.refuse + .1, "Les étincelles se dénouent et reviennent à ta lumière : rien n'est perdu."], [p.say, 'Mee dit ce qui bloque, et ce qui le lèvera.']]; } }
+  };
+
+  function plan(k, H) {
+    var p = { H: H };
+    if (k.refus) { p.emit0 = .3; p.emit1 = 1.0; p.refuse = 1.5; p.ombre0 = 1.25; p.ombre1 = 1.95; p.ombreOff0 = 2.9; p.ombreOff1 = 3.5; p.say = 2.6; p.end = 4.0; p.braid0 = 98; p.braid1 = 99; p.solid0 = 98; p.solid1 = 99; p.impacts = []; p.strikes = []; return p; }
+    p.emit0 = .35; p.emit1 = 1.4; p.braid0 = 2.0; p.braid1 = 2.55; p.dust0 = 2.2; p.dust1 = 2.9; p.solid0 = 3.3; p.solid1 = 3.8; p.desc0 = 3.8; p.desc1 = 4.2;
+    p.move0 = 3.95; p.move1 = 4.3; p.die0 = 4.15; p.die1 = 4.45; p.wind0 = 4.4; p.wind1 = 4.75;
+    var s0 = 4.8 + H;
+    p.strikes = k.strikes.map(function (o) { return s0 + o; });
+    p.impacts = p.strikes.map(function (s) { return s + .09; });
+    p.imp = p.impacts[p.impacts.length - 1];
+    p.engrave0 = p.impacts[0]; p.engrave1 = p.impacts[0] + .18;
+    p.dieOff0 = p.imp + .12; p.dieOff1 = p.imp + .42;
+    p.rev0 = p.imp + .25; p.rev1 = p.imp + (k.grand ? 1.5 : 1.05);
+    p.cele = p.rev1; p.exit0 = p.cele + (k.grand ? 1.2 : .65); p.exit1 = p.exit0 + .65;
+    p.glory0 = p.exit1 - .2; p.glory1 = p.glory0 + .85; p.end = p.glory1 + .15;
+    return p;
+  }
+
+  function build(k, p) {
+    var r = rng(k.n * 7919 + (k.refus ? 17 : 3)), P = { weave: [], dust: [], bursts: [], puff: [] };
+    var nw = k.refus ? 1800 : 2600;
+    for (var i = 0; i < nw; i++) {
+      var ox = ORB.x + (r() - .5) * 22, oy = ORB.y + (r() - .5) * 22;
+      var s = lerp(p.emit0, p.emit1, Math.pow(r(), .9)), d = .55 + r() * .3, th = r() * Math.PI * 2, dir = i % 2 ? 1 : -1;
+      var phi0 = Math.atan2(oy - C.y, ox - C.x), r0 = Math.hypot(ox - C.x, oy - C.y), delta = th - phi0;
+      if (dir > 0) { while (delta < 0) delta += 2 * Math.PI; } else { while (delta > 0) delta -= 2 * Math.PI; }
+      delta += dir * Math.PI * (.3 + r() * .5);
+      P.weave.push({ s: s, d: d, phi0: phi0, delta: delta, r0: r0, dir: dir, j: (r() - .5) * 3.2, tw: r() * 6.28, big: r() < .12,
+        c: k.weave === 'prism' ? null : k.weave[i % k.weave.length], hue: Math.floor((th / (2 * Math.PI)) * 36) });
+    }
+    (k.dust || []).forEach(function (g) {
+      for (var j = 0; j < g.n; j++) {
+        var mee = g.from === 'mee', ox2 = (mee ? 96 : 264) + (r() - .5) * 18, oy2 = 296 + (r() - .5) * 26;
+        var rho = (R - 8) * Math.sqrt(r()), psi = r() * Math.PI * 2, tx = C.x + rho * Math.cos(psi), ty = C.y + rho * Math.sin(psi);
+        P.dust.push({ s: lerp(p.dust0, p.dust1, r()), d: .45 + r() * .3, ox: ox2, oy: oy2, tx: tx, ty: ty, cx: (ox2 + tx) / 2 + (mee ? 10 : -10), cy: Math.min(oy2, ty) - 50 - r() * 40,
+          rho: rho, psi: psi, size: .9 + r() * .9, c: g.c === 'diamond' ? 'D' : g.c[j % g.c.length], hue: j % 36 });
+      }
+    });
+    (p.impacts || []).forEach(function (at, idx) {
+      var last = idx === p.impacts.length - 1, n = last ? (k.grand ? 420 : 320) : 120, pw = last ? (k.grand ? 1.5 : 1.1) : .55;
+      for (var b = 0; b < n; b++) {
+        var ang = -Math.PI * (.08 + .84 * r()), sp = (120 + 260 * r()) * pw;
+        P.bursts.push({ at: at, x: 180 + (r() - .5) * 20, y: ANV_C.y - ANV / 2 - 4, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, life: .45 + r() * .6, size: 1.2 + r() * 1.6,
+          c: k.weave === 'prism' ? null : (r() < .5 ? '#ffe3a0' : '#ffffff'), hue: b % 36 });
+      }
+    });
+    if (!k.refus) for (var m = 0; m < 70; m++) {
+      var side = m % 2 ? 1 : -1;
+      P.puff.push({ at: p.desc1, x: 180 + side * (30 + r() * 30), y: 541, vx: side * (40 + r() * 90), vy: -(10 + r() * 40), life: .4 + r() * .35 });
+    }
+    return P;
+  }
+
+  var K = KINDS.argent, KEY = 'argent', PL = plan(K, 0), PA = build(K, PL), kScale = 1, offX = 0, offY = 0, dpr = Math.min(2, window.devicePixelRatio || 1);
+  var TGT = { x: 60, y: 120, s: .4 }, GL = { x0: 0, y0: 0, x1: 0, y1: 0 }, raf = 0, playing = false, t0 = 0, tNow = 0, speed = 1, birdSrc = {};
+
+  function layout() {
+    var W = ph.clientWidth, H = ph.clientHeight;
+    kScale = Math.min(W / SW, H / SH); offX = (W - SW * kScale) / 2; offY = (H - SH * kScale) / 2;
+    cv.width = Math.round(SW * kScale * dpr); cv.height = Math.round(SH * kScale * dpr);
+    var pr = ph.getBoundingClientRect(), rc = E.coffretCoin.getBoundingClientRect();
+    TGT.x = (rc.left + rc.width / 2 - pr.left - offX) / kScale; TGT.y = (rc.top + rc.height / 2 - pr.top - offY) / kScale; TGT.s = (rc.width / kScale) / 150;
+    var rb = E.btn.getBoundingClientRect(), rl = E.blason.getBoundingClientRect();
+    GL.x0 = rb.left - pr.left + rb.width / 2 - 52; GL.y0 = rb.top - pr.top + 6; GL.x1 = rl.left - pr.left - 6; GL.y1 = rl.top - pr.top;
+  }
+
+  function setBird(img, name) { if (birdSrc[img.id] !== name) { birdSrc[img.id] = name; img.src = IMG(name); } }
+  function tf(el, x, y, extra) { el.style.transform = 'translate(' + x.toFixed(2) + 'px,' + y.toFixed(2) + 'px)' + (extra || ''); }
+
+  function weavePos(w, t) {
+    if (t < w.s) return null;
+    var A = 9 * (1 - seg(t, PL.braid0, PL.braid1)), tt = t;
+    if (K.refus && t > PL.refuse) { tt = 2 * PL.refuse - t; if (tt < w.s) return null; }
+    var x = (tt - w.s) / w.d, phi, rr;
+    if (x < 1) { phi = w.phi0 + w.delta * eSine(x); rr = lerp(w.r0, R + w.dir * A * Math.sin(6 * phi) + w.j, eOut(x)); }
+    else { phi = w.phi0 + w.delta + w.dir * 1.3 * (tt - w.s - w.d); rr = R + w.dir * A * Math.sin(6 * phi) + w.j; }
+    return [C.x + rr * Math.cos(phi), C.y + rr * Math.sin(phi), seg(tt, w.s, w.s + .12)];
+  }
+
+  function draw(t) {
+    ctx.setTransform(kScale * dpr, 0, 0, kScale * dpr, 0, 0);
+    ctx.clearRect(0, 0, SW, SH);
+    ctx.globalCompositeOperation = 'lighter';
+    var hueShift = Math.floor(t * 4) % 36, fadeSolid = 1 - seg(t, PL.solid0, PL.solid1 + .15), i, w, pos, a, col;
+    if (fadeSolid > 0) for (i = 0; i < PA.weave.length; i++) {
+      w = PA.weave[i]; pos = weavePos(w, t); if (!pos) continue;
+      a = pos[2] * fadeSolid * (.62 + .38 * Math.sin(t * 13 + w.tw)); if (a < .02) continue;
+      col = w.c || HUES[(w.hue + hueShift) % 36];
+      ctx.fillStyle = col; ctx.globalAlpha = a * .2; ctx.fillRect(pos[0] - 2.4, pos[1] - 2.4, 4.8, 4.8);
+      ctx.globalAlpha = a; var sz = w.big ? 2.2 : 1.5; ctx.fillRect(pos[0] - sz / 2, pos[1] - sz / 2, sz, sz);
+    }
+    var fadeDust = 1 - seg(t, PL.solid0 + .1, PL.solid1);
+    if (fadeDust > 0) for (i = 0; i < PA.dust.length; i++) {
+      w = PA.dust[i]; if (t < w.s) continue;
+      var x = (t - w.s) / w.d, px, py;
+      if (x < 1) { var e = eIO(x), u = 1 - e; px = u * u * w.ox + 2 * u * e * w.cx + e * e * w.tx; py = u * u * w.oy + 2 * u * e * w.cy + e * e * w.ty; }
+      else { var ang = w.psi + .55 * (t - w.s - w.d); px = C.x + w.rho * Math.cos(ang); py = C.y + w.rho * Math.sin(ang); }
+      a = seg(t, w.s, w.s + .08) * fadeDust; if (a < .02) continue;
+      if (w.c === 'D') {
+        ctx.globalAlpha = a; ctx.fillStyle = i % 7 === 0 ? HUES[(w.hue + hueShift * 3) % 36] : (i % 2 ? '#f4fbff' : '#dff3ff');
+        ctx.fillRect(px - w.size / 2, py - w.size / 2, w.size, w.size);
+        if (i % 9 === 0) { var gl = .55 + .45 * Math.sin(t * 17 + i); ctx.globalAlpha = a * gl; ctx.fillRect(px - 3.2, py - .4, 6.4, .8); ctx.fillRect(px - .4, py - 3.2, .8, 6.4); }
+        continue;
+      }
+      ctx.fillStyle = w.c; ctx.globalAlpha = a * .9; ctx.fillRect(px - w.size / 2, py - w.size / 2, w.size, w.size);
+    }
+    for (i = 0; i < PA.bursts.length; i++) {
+      w = PA.bursts[i]; var dt = t - w.at; if (dt < 0 || dt > w.life) continue;
+      a = 1 - dt / w.life; ctx.fillStyle = w.c || HUES[(w.hue + hueShift) % 36];
+      ctx.globalAlpha = a; ctx.fillRect(w.x + w.vx * dt - w.size / 2, w.y + w.vy * dt + 300 * dt * dt - w.size / 2, w.size, w.size);
+      ctx.globalAlpha = a * .25; ctx.fillRect(w.x + w.vx * dt - 2.5, w.y + w.vy * dt + 300 * dt * dt - 2.5, 5, 5);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    for (i = 0; i < PA.puff.length; i++) {
+      w = PA.puff[i]; var dp = t - w.at; if (dp < 0 || dp > w.life) continue;
+      ctx.globalAlpha = .55 * (1 - dp / w.life); ctx.fillStyle = '#9aa0ad'; ctx.beginPath(); ctx.arc(w.x + w.vx * dp, w.y + w.vy * dp, 2 + dp * 9, 0, 6.283); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function dom(t) {
+    var p = PL, k = K;
+    var open = seg(t, 0, .4), exitA = k.refus ? 1 - seg(t, p.end - .45, p.end) : 1 - seg(t, p.exit0, p.exit1);
+    E.bg.style.opacity = open * exitA; E.fade.style.opacity = open * exitA;
+    var shx = 0, shy = 0;
+    (p.impacts || []).forEach(function (at, idx) { var x = t - at; if (x >= 0 && x < .26) { var pw = idx === p.impacts.length - 1 ? (k.grand ? 1.6 : 1.1) : .55; shx += pw * 4.5 * (1 - x / .26) * Math.sin(x * 95); shy += pw * 2 * (1 - x / .26) * Math.cos(x * 80); } });
+    if (!k.refus) { var xc = t - p.desc1; if (xc >= 0 && xc < .18) shy += 2.2 * (1 - xc / .18) * Math.sin(xc * 120); }
+    scene.style.transform = 'translate(' + (offX + shx * kScale) + 'px,' + (offY + shy * kScale) + 'px) scale(' + kScale + ')';
+    E.orb.style.transform = 'scale(' + (1 + .18 * Math.sin(t * 9) * (t > p.emit0 && t < (k.refus ? p.end : p.emit1 + .4) ? 1 : 0)) + ')';
+
+    var enter = eOut(seg(t, .05, .6));
+    var meeX = lerp(-110, MEE_HOME.x, enter), meeY = MEE_HOME.y, meoX = lerp(380, MEO_HOME.x, enter), meoY = MEO_HOME.y;
+    if (!k.refus) {
+      var mv = eIO(seg(t, p.move0, p.move1)); meeX = lerp(meeX, MEE_STRIKE.x, mv); meeY = lerp(meeY, MEE_STRIKE.y, mv); meoX = lerp(meoX, MEO_STRIKE.x, mv); meoY = lerp(meoY, MEO_STRIKE.y, mv);
+      var bk = eIO(seg(t, p.dieOff1, p.rev1)); meeX = lerp(meeX, MEE_END.x, bk); meeY = lerp(meeY, MEE_END.y, bk); meoX = lerp(meoX, MEO_END.x, bk); meoY = lerp(meoY, MEO_END.y, bk);
+    }
+    meeY += Math.sin(t * 4.3) * 3; meoY += Math.sin(t * 4.3 + 1.7) * 3;
+    var spr = (!k.refus && t > p.dust0 - .1 && t < p.dust1 + .3) ? Math.sin(t * 24) * 7 : 0;
+    var pop = k.refus ? 0 : bump(t, p.cele, .38);
+    setBird(E.mee, k.refus ? (t >= p.say ? 'mee-courage' : 'mee-sourire') : (t >= p.cele ? k.celebrate[0] : 'mee-sourire'));
+    setBird(E.meo, k.refus ? 'meo-salut' : (t >= p.cele ? k.celebrate[1] : 'meo-salut'));
+    tf(E.mee, meeX, meeY, ' rotate(' + spr + 'deg) scale(' + (1 + .14 * pop) + ')');
+    tf(E.meo, meoX, meoY, ' rotate(' + (-spr) + 'deg) scale(' + (1 + .14 * bump(t, (p.cele || 0) + .12, .38)) + ')');
+
+    if (k.refus) {
+      [E.coin, E.die, E.hMeo, E.hMee, E.ring, E.tchak, E.rays, E.sign, E.glow].forEach(function (el) { el.style.opacity = 0; });
+      E.flash.style.opacity = 0;
+      var og = eOut(seg(t, p.ombre0, p.ombre1));
+      E.ombre.style.opacity = .95 * seg(t, p.ombre0, p.ombre0 + .3) * (1 - seg(t, p.ombreOff0, p.ombreOff1));
+      tf(E.ombre, C.x - 115, C.y - 115, ' scale(' + lerp(.3, 1.25, og) + ')');
+      E.say.textContent = k.line; E.say.style.opacity = seg(t, p.say, p.say + .3);
+      return;
+    }
+    E.ombre.style.opacity = 0;
+
+    var wingX = meeX + 72, wingY = meeY + 42, dx, dy;
+    var place = eIO(seg(t, p.die0, p.die1)), lift = eIO(seg(t, p.dieOff0, p.dieOff1));
+    dx = lerp(wingX, DIE_ON.x, place); dy = lerp(wingY, DIE_ON.y, place); dx = lerp(dx, wingX, lift); dy = lerp(dy, wingY, lift);
+    var dsq = 1; p.impacts.forEach(function (at) { dsq -= .1 * bump(t, at, .1); });
+    E.die.style.opacity = seg(t, p.die0 - .2, p.die0) * (1 - seg(t, p.dieOff1, p.dieOff1 + .2));
+    tf(E.die, dx, dy, ' scale(1,' + dsq + ')');
+
+    var ang = lerp(REST, WIND, eIO(seg(t, p.wind0, p.wind1)));
+    if (p.H && t > p.wind1 && t < p.strikes[0]) ang = WIND + Math.sin(t * 30) * 2.5;
+    p.strikes.forEach(function (s, i) {
+      if (t < s) return; var last = i === p.strikes.length - 1;
+      ang = lerp(WIND, HIT, eIn(seg(t, s, s + .09)));
+      if (t >= s + .15) ang = lerp(HIT, last ? REST : WIND, eIO(seg(t, s + .15, s + (last ? .55 : .42))));
+    });
+    E.hMeo.style.opacity = seg(t, p.move0, p.move1) * (1 - seg(t, p.imp + .45, p.imp + .75));
+    tf(E.hMeo, meoX + 12 - 4, meoY + 54 - 100, ' rotate(' + ang + 'deg)');
+    if (k.together) {
+      var sL = p.strikes[p.strikes.length - 1], angM = lerp(REST_M, WIND_M, eIO(seg(t, sL - .45, sL - .1)));
+      if (t >= sL) { angM = lerp(WIND_M, HIT_M, eIn(seg(t, sL, sL + .09))); if (t >= sL + .15) angM = lerp(HIT_M, REST_M, eIO(seg(t, sL + .15, sL + .55))); }
+      E.hMee.style.opacity = seg(t, sL - .6, sL - .4) * (1 - seg(t, p.imp + .45, p.imp + .75));
+      tf(E.hMee, meeX + 80 - 4, meeY + 54 - 100, ' rotate(' + angM + 'deg)');
+    } else E.hMee.style.opacity = 0;
+
+    var cx = C.x, cy = C.y, sc = FORM / 150, rotY = 0;
+    var dsc = seg(t, p.desc0, p.desc1); cy = lerp(C.y, ANV_C.y, eIn(dsc)); sc = lerp(FORM / 150, ANV / 150, eIO(dsc));
+    var squash = 1 - .05 * bump(t, p.desc1, .12); p.impacts.forEach(function (at) { squash -= .07 * bump(t, at, .1); });
+    var rv = seg(t, p.rev0, p.rev1);
+    if (rv > 0) { var er = eOut(rv); cy = lerp(ANV_C.y, C.y, er); sc = lerp(ANV / 150, 1, er); rotY = 540 * eIO(rv); }
+    var ex = seg(t, p.exit0, p.exit1);
+    if (ex > 0) { var e2 = eIO(ex); cx = lerp(C.x, TGT.x, e2); cy = lerp(C.y, TGT.y, e2) - 70 * Math.sin(Math.PI * e2); sc = lerp(1, TGT.s, e2); rotY = 540 + 180 * e2; }
+    E.coin.style.opacity = seg(t, p.solid0, p.solid1) * (1 - seg(t, p.exit1 - .05, p.exit1));
+    E.coin.style.transform = 'translate(' + (cx - 75).toFixed(2) + 'px,' + (cy - 75).toFixed(2) + 'px) scale(' + sc.toFixed(4) + ',' + (sc * squash).toFixed(4) + ')';
+    E.c3d.style.transform = 'rotateY(' + rotY.toFixed(1) + 'deg)';
+    var eng = seg(t, p.engrave0, p.engrave1); E.blank.style.opacity = 1 - eng; E.obv.style.opacity = eng;
+    var glowA = .35 * seg(t, p.solid0, p.solid1) * (1 - seg(t, p.desc0, p.desc1)) + .9 * seg(t, p.imp, p.imp + .3) * (1 - seg(t, p.exit0, p.exit0 + .3));
+    E.glow.style.opacity = glowA; tf(E.glow, cx - 120, cy - 120, ' scale(' + (.6 + .5 * sc) + ')');
+
+    var fl = 0; p.impacts.forEach(function (at, idx) { var x = t - at; if (x >= 0 && x < .32) fl += (idx === p.impacts.length - 1 ? (k.grand ? 1 : .85) : .45) * (1 - x / .32); });
+    E.flash.style.opacity = Math.min(.95, fl);
+    var ringA = 0, ringS = .3, tch = 0, tchS = 1, last = false;
+    p.impacts.forEach(function (at, idx) { var x = t - at; if (x >= 0 && x < .7) { var pw = idx === p.impacts.length - 1 ? (k.grand ? 1.6 : 1.1) : .55; ringA = .95 * (1 - x / .55); ringS = .3 + (2 + 1.6 * pw) * eOut(Math.min(1, x / .55)); tch = x < .08 ? x / .08 : Math.max(0, 1 - (x - .08) / .6); tchS = .8 + .35 * pw * eOut(Math.min(1, x / .2)); last = idx === p.impacts.length - 1; } });
+    E.ring.style.opacity = Math.max(0, ringA); tf(E.ring, 180 - 30, ANV_C.y - 40 - 30, ' scale(' + ringS + ')');
+    E.tchak.textContent = last && k.grand ? 'TCHAK !' : 'Tchak !'; E.tchak.style.opacity = tch; tf(E.tchak, 0, 318, ' scale(' + tchS + ')');
+    if (k.grand) {
+      E.rays.style.opacity = .95 * seg(t, p.imp, p.imp + .5); tf(E.rays, cx - 165, cy - 165, ' rotate(' + (t * 16) + 'deg) scale(' + lerp(.5, 1, seg(t, p.imp, p.imp + .8)) + ')');
+      E.signSub.textContent = k.sign; E.sign.style.opacity = seg(t, p.imp + .5, p.imp + 1); tf(E.sign, 0, 0);
+    } else { E.rays.style.opacity = 0; E.sign.style.opacity = 0; }
+    E.say.textContent = k.line; E.say.style.opacity = seg(t, p.cele, p.cele + .3);
+
+    var g = seg(t, p.glory0, p.glory1), eg = eIO(g);
+    E.glory.style.opacity = g > 0 && g < 1 ? Math.sin(Math.PI * g) : 0;
+    tf(E.glory, lerp(GL.x0, GL.x1, eg), lerp(GL.y0, GL.y1, eg) - 34 * Math.sin(Math.PI * eg));
+    E.blason.style.transform = 'scale(' + (1 + .16 * bump(t, p.glory1 - .05, .32)) + ')';
+    E.held.textContent = nf(t >= p.exit1 ? k.after.held : k.held);
+    E.coffret.style.transform = 'scale(' + (1 + .035 * bump(t, p.exit1, .36)) + ')';
+  }
+
+  function render(t) {
+    tNow = t; draw(t); dom(t);
+    E.scrub.value = Math.round(t * 1000); E.time.textContent = t.toFixed(1).replace('.', ',') + ' s';
+    var lis = E.beats.children, cur = -1, bs = K.beats(PL);
+    for (var i = 0; i < bs.length; i++) if (t >= bs[i][0]) cur = i;
+    for (var j = 0; j < lis.length; j++) lis[j].classList.toggle('on', j === cur);
+  }
+
+  function setRest(k, d) {
+    d = d || k;
+    E.held.textContent = nf(d.held); E.container.textContent = k.container; E.next.textContent = k.next;
+    E.ctitle.textContent = 'La Meesh n° ' + nf(d.n);
+    E.cline.textContent = 'Elle fige ' + nf(d.price) + ' étincelles de ta lumière, qui en compte ' + nf(d.pocket) + '.';
+    E.bandCoin.innerHTML = svg('silver-blank');
+  }
+
+  function load(key) {
+    KEY = key; K = KINDS[key];
+    var H = q('f2-slownet').checked && !K.refus ? 1.5 : 0;
+    PL = plan(K, H); PA = build(K, PL);
+    fx.className = 'fx' + (K.ed === 'gold' ? ' gold' : K.ed === 'prism' ? ' prism' : '');
+    E.blank.innerHTML = svg(K.ed + '-blank'); E.obv.innerHTML = svg(K.ed + '-obverse'); E.rev.innerHTML = svg(K.ed + '-reverse');
+    E.beatsTitle.textContent = 'Le déroulé · ' + (K.refus ? 'frappe refusée' : K.ed === 'silver' ? 'argent' : K.ed === 'gold' ? 'or, chaque centième pièce' : 'prisme, chaque millième pièce') + ', ' + PL.end.toFixed(1).replace('.', ',') + ' s';
+    E.beats.innerHTML = K.beats(PL).map(function (b) { return '<li><span>' + b[0].toFixed(1).replace('.', ',') + ' s</span><div>' + b[1] + '</div></li>'; }).join('');
+    E.scrub.max = Math.round(PL.end * 1000);
+    Array.prototype.forEach.call(document.querySelectorAll('#f2-kinds button'), function (b) { b.classList.toggle('cur', b.getAttribute('data-kind') === key); });
+    setRest(K); layout();
+  }
+
+  function stop() { cancelAnimationFrame(raf); raf = 0; playing = false; E.btn.disabled = false; }
+  function finish() {
+    stop(); fx.classList.remove('on'); E.glory.style.opacity = 0; E.blason.style.transform = ''; E.coffret.style.transform = '';
+    if (K.refus) { setRest(K); E.sayImg.src = IMG('mee-courage'); E.sayText.textContent = K.line; return; }
+    setRest(K, K.after); E.sayImg.src = IMG('mee-sourire'); E.sayText.textContent = K.rest;
+  }
+  function tick(now) {
+    var t = (now - t0) / 1000 * speed;
+    if (t >= PL.end) { render(PL.end); finish(); return; }
+    render(t); raf = requestAnimationFrame(tick);
+  }
+  function play(key) {
+    stop(); load(key || KEY);
+    if (q('f2-reduce').checked) return playReduced();
+    speed = q('f2-slowmo').checked ? .4 : 1; fx.classList.add('on'); playing = true; E.btn.disabled = true;
+    E.sayImg.src = IMG('mee-sourire'); E.sayText.textContent = '« Prêts ? »';
+    t0 = performance.now(); raf = requestAnimationFrame(tick);
+  }
+  function playReduced() {
+    E.beatsTitle.textContent = 'Le déroulé · animations réduites';
+    E.beats.innerHTML = '<li class="on"><span>0,0 s</span><div>' + (K.refus ? 'Le refus se dit en une phrase, sans mouvement.' : 'La pièce apparaît frappée, en fondu ; une seule vibration.') + '</div></li><li><span>0,4 s</span><div>' + (K.refus ? 'La carte dit ce qui bloque.' : "Le Coffret, la carte et la phrase de Mee se mettent à jour ; le lecteur d'écran dit « Meesh n° " + nf(K.n) + ' frappée ».') + '</div></li>';
+    if (K.refus) { E.sayImg.src = IMG('mee-courage'); E.sayText.textContent = K.line; return; }
+    E.bandCoin.style.transition = 'opacity .25s'; E.bandCoin.style.opacity = 0;
+    setTimeout(function () { E.bandCoin.innerHTML = svg(K.ed + '-reverse'); E.bandCoin.style.opacity = 1; E.held.textContent = nf(K.after.held); E.sayImg.src = IMG(K.celebrate[0]); E.sayText.textContent = K.line; }, 260);
+    setTimeout(function () { E.bandCoin.style.opacity = 0; setTimeout(function () { setRest(K, K.after); E.bandCoin.style.opacity = 1; E.sayImg.src = IMG('mee-sourire'); E.sayText.textContent = K.rest; }, 260); }, 2600);
+  }
+
+  E.btn.addEventListener('click', function () { play(KEY === 'refus' ? 'argent' : KEY); });
+  fx.addEventListener('click', function () { if (playing) { render(PL.end); finish(); } });
+  Array.prototype.forEach.call(document.querySelectorAll('#f2-kinds button'), function (b) { b.addEventListener('click', function () { play(b.getAttribute('data-kind')); }); });
+  E.scrub.addEventListener('input', function () { stop(); fx.classList.add('on'); render(E.scrub.value / 1000); });
+  E.scrub.addEventListener('change', function () { if (+E.scrub.value >= PL.end * 1000 - 20) finish(); });
+  q('f2-slownet').addEventListener('change', function () { stop(); fx.classList.remove('on'); load(KEY); });
+  window.addEventListener('resize', function () { layout(); if (fx.classList.contains('on')) render(tNow); });
+
+  E.coffretCoin.innerHTML = svg('silver-obverse');
+  E.faces.innerHTML = [['silver', 'Argent', 'chaque pièce', 'Mee', "de l'argent, un peu d'or"], ['gold', 'Or', 'chaque centième', 'Meo', "de l'or pur"], ['prism', 'Prisme', 'chaque millième', 'Mee et Meo', "de l'or mêlé de diamant"]].map(function (f) {
+    return '<figure><div class="pair"><div>' + svg(f[0] + '-obverse') + '</div><div>' + svg(f[0] + '-reverse') + '</div></div><b>' + f[1] + '</b> · ' + f[2] + '<br>' + f[4] + '<br>avers : la Signature et « MEESHY · UNE MEESH »<br>revers : <b>' + f[3] + '</b>, le numéro, l’année</figure>';
+  }).join('');
+  load('argent');
+
+  var m = /f2=(\w+),([\d.]+)/.exec(location.hash);
+  if (m) { load(m[1]); fx.classList.add('on'); render(parseFloat(m[2])); }
+})();
+</script>
+</body></html>

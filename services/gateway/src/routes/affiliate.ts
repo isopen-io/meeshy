@@ -8,14 +8,17 @@ import { AffiliateTrackingService } from '../services/AffiliateTrackingService';
 import { SecuritySanitizer } from '../utils/sanitize';
 import { validatePagination } from '../utils/pagination';
 import {
-  affiliateTokenSchema,
-  affiliateRelationSchema,
   errorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
+import { affiliateStatsResponseSchema } from './affiliate-response-schemas';
 import { UnifiedAuthRequest } from '../middleware/auth';
 import { generateUniquePublicIdentifier } from '../utils/public-identifier';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../utils/response';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendBadRequest, sendPaginatedSuccess } from '../utils/response';
+import { EngagementService } from '../services/engagement/EngagementService';
+import { linkVisitorFromRequest } from './links/utils/link-visitor';
+import { isShareLinkOpen } from '../services/conversationCard';
+import { AFFILIATE_INVITER_SELECT, affiliateInviterOf } from '../services/linkUnfurl/affiliate';
 
 const logger = enhancedLogger.child({ module: 'AffiliateRoutes' });
 
@@ -81,6 +84,21 @@ export async function generateUniqueAffiliateToken(prisma: {
 }
 
 export default async function affiliateRoutes(fastify: FastifyInstance) {
+  const engagement = new EngagementService(fastify.prisma);
+
+  /**
+   * `social.link_visit` (#8959) : une visite par un lien d'affiliation crédite
+   * son créateur, hors du chemin de la réponse. Le visiteur est établi depuis
+   * la REQUÊTE — le corps de `track-visit` porte des « données visiteur » que
+   * le client choisit, et qui ne doivent décider ni qui compte ni combien.
+   */
+  const creditAffiliateVisit = (request: FastifyRequest, creatorId: string, token: string): void => {
+    const visitor = linkVisitorFromRequest(request as FastifyRequest & Partial<UnifiedAuthRequest>);
+    engagement
+      .recordLinkVisit({ creatorId, linkKey: `affiliate:${token}`, visitorKey: visitor.key, visitorUserId: visitor.userId })
+      .catch((err: unknown) => logger.warn('engagement social.link_visit failed', { err } as never));
+  };
+
   /**
    * POST /affiliate/tokens
    * Create a new affiliate/referral token for user invitations
@@ -201,6 +219,12 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
           }
         }
       });
+
+      // `social.affiliate_link_created` (#8959) — le geste de l'auteur, pas les
+      // jetons qu'une invitation par e-mail fabrique pour lui.
+      engagement
+        .recordActivity(userId, 'social.affiliate_link_created')
+        .catch((err: unknown) => logger.warn('engagement social.affiliate_link_created failed', { err } as never));
 
       // Construire le lien d'affiliation avec le format /signup/affiliate/TOKEN
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3100';
@@ -400,23 +424,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         }
       },
       response: {
-        200: {
-          description: 'Affiliate statistics retrieved successfully',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            // `additionalProperties: true` est INDISPENSABLE : un schéma
-            // `type: 'object'` SANS `properties` fait sérialiser `{}` par
-            // fast-json-stringify. La route répondait donc `data: {}` — les
-            // compteurs, la liste des filleuls et les tokens étaient effacés
-            // à la sérialisation, sans qu'aucune erreur ne le signale.
-            data: {
-              type: 'object',
-              additionalProperties: true,
-              description: 'Affiliate statistics and metrics'
-            }
-          }
-        },
+        200: affiliateStatsResponseSchema,
         400: {
           description: 'Bad request - invalid filter parameters',
           ...errorResponseSchema
@@ -515,7 +523,8 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
                     firstName: { type: 'string', nullable: true, description: 'First name' },
                     lastName: { type: 'string', nullable: true, description: 'Last name' },
                     displayName: { type: 'string', nullable: true, description: 'Display name' },
-                    avatar: { type: 'string', nullable: true, description: 'Avatar URL' }
+                    avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
+                    banner: { type: 'string', nullable: true, description: 'Profile banner URL' }
                   }
                 }
               }
@@ -536,35 +545,18 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
       const affiliateToken = await fastify.prisma.affiliateToken.findUnique({
         where: { token },
         include: {
-          creator: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true
-            }
-          }
+          creator: { select: { id: true, ...AFFILIATE_INVITER_SELECT } }
         }
       });
 
-      if (!affiliateToken) {
+      // Jeton inconnu, désactivé, échu ou épuisé : rien n'est servi.
+      if (!affiliateToken || !isShareLinkOpen(affiliateToken, new Date())) {
         return sendSuccess(reply, { isValid: false });
       }
 
-      // Vérifier si le token est actif
-      if (!affiliateToken.isActive) {
-        return sendSuccess(reply, { isValid: false });
-      }
-
-      // Vérifier si le token a expiré
-      if (affiliateToken.expiresAt && new Date() > affiliateToken.expiresAt) {
-        return sendSuccess(reply, { isValid: false });
-      }
-
-      // Vérifier si le token a atteint sa limite d'utilisation
-      if (affiliateToken.maxUses && affiliateToken.currentUses >= affiliateToken.maxUses) {
+      // Un compte désactivé ou supprimé n'invite plus personne (#10559).
+      const inviter = affiliateInviterOf(affiliateToken.creator);
+      if (inviter === null) {
         return sendSuccess(reply, { isValid: false });
       }
 
@@ -581,10 +573,14 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         affiliateUser: {
           id: affiliateToken.creator.id,
           username: affiliateToken.creator.username,
-          firstName: affiliateToken.creator.firstName,
-          lastName: affiliateToken.creator.lastName,
+          // Le nom civil ne sort JAMAIS d'une porte publique (RGPD art. 5(1)(c), 25(2) ;
+          // conformité H-1) : les champs restent — un ancien client les décode —, à `null`.
+          // Ce que l'invité voit est le nom d'affichage et le pseudo, que le parrain a choisis.
+          firstName: null,
+          lastName: null,
           displayName: affiliateToken.creator.displayName,
-          avatar: affiliateToken.creator.avatar
+          avatar: inviter.avatar,
+          banner: inviter.banner
         }
       });
     } catch (error) {
@@ -655,9 +651,18 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
       const body = trackVisitSchema.parse(request.body);
       const { token, visitorData } = body;
 
-      const result = await AffiliateTrackingService.trackAffiliateVisit(fastify.prisma, token, visitorData || {});
+      // L'adresse et le navigateur ENREGISTRÉS sont ceux de la requête : le
+      // corps ne fait que les prétendre (`request.ip` est l'appelant depuis
+      // que `trustProxy` est posé, #4137).
+      const userAgent = request.headers['user-agent'];
+      const result = await AffiliateTrackingService.trackAffiliateVisit(fastify.prisma, token, {
+        ...visitorData,
+        ipAddress: request.ip,
+        userAgent: typeof userAgent === 'string' ? userAgent : undefined,
+      });
 
       if (result.success) {
+        creditAffiliateVisit(request, result.data.affiliateUserId, token);
         return sendSuccess(reply, { sessionKey: result.data.sessionKey });
       } else {
         return sendBadRequest(reply, result.error);
@@ -827,6 +832,8 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         where: { id: affiliateToken.id },
         data: { clickCount: { increment: 1 } },
       });
+
+      creditAffiliateVisit(request, affiliateToken.createdBy, token);
 
       return sendSuccess(reply, { tracked: true });
     } catch (error) {

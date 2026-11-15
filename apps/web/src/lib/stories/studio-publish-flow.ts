@@ -1,0 +1,169 @@
+import type { ConversationsDeps } from '@/lib/api/conversations';
+import type { ApiResult } from '@/lib/api/http';
+import { publishStory, type PublishStoryResult } from '@/lib/api/stories-publish';
+
+import type { ChoosableAudience } from './publication-audience';
+import { publicationFingerprint, type PublicationKeyring } from './publication-mutation-key';
+import type { PublicationKind } from './publication-kind';
+import { studioFailureKey, type StudioFailureKey } from './studio-page';
+import type { StudioPublication, StudioPublishPlan } from './studio-publish';
+
+/** CE QU'UNE publication vient de commettre, et où en est la séquence —
+ * `published` compte celle-ci : l'appelant retire ses pages du brouillon et
+ * dit « Publication k/N… » sans tenir un second compteur. */
+export type StudioPublishedEvent = {
+  readonly pageIds: readonly string[];
+  readonly postId: string;
+  readonly published: number;
+  readonly total: number;
+};
+
+/** L'issue d'un envoi — un type SOMME : `published`/`total` voyagent sur les
+ * deux issues non terminales, qu'un bandeau ou une file hors ligne liraient de
+ * la même façon. */
+export type StudioPublishOutcome =
+  | { readonly kind: 'published'; readonly postIds: readonly string[] }
+  | { readonly kind: 'failed'; readonly failure: StudioFailureKey; readonly published: number; readonly total: number }
+  | { readonly kind: 'aborted'; readonly published: number; readonly total: number };
+
+/**
+ * **L'ENVOI, SÉQUENTIEL, DANS L'ORDRE DES PAGES** (#7707, miroir
+ * `StoryViewModel+PublicationUpload.swift:99-125`) — chaque publication du
+ * plan (`studioPublishPlan`) part APRÈS que la précédente a RÉUSSI, jamais en
+ * parallèle : l'ordre de `createdAt` est l'ordre de lecture du lecteur, et le
+ * seau `social:write:create` (10/min, `socialRateLimit.ts:262-263`) se
+ * consomme un par un.
+ *
+ * **Une panne ARRÊTE la séquence** : les publications déjà PARTIES restent
+ * parties, celles qui restaient ne partent jamais. **Le signal ne coupe
+ * jamais une requête en vol** — il n'est lu qu'ENTRE deux requêtes (miroir
+ * `guard !Task.isCancelled`, `PublicationUpload.swift:120`) : une création
+ * abandonnée en route peut avoir été commise côté serveur sans que l'écran le
+ * sache. Seule l'ANNULATION de l'auteur (#10316) coupe la requête en vol —
+ * `publishStudioPlan` la transmet au transport, et la clé d'idempotence fait
+ * qu'un rejeu du même contenu ne publie jamais deux fois. Une requête coupée
+ * par CE signal rend `aborted`, jamais un échec.
+ */
+export async function runStudioPublish(params: {
+  readonly plan: Extract<StudioPublishPlan, { kind: 'ready' }>;
+  /** UN envoi réseau — l'appelant y adresse le format, l'audience et la
+   * langue, jamais cette fonction : elle ne connaît que l'ORDRE et l'ARRÊT. */
+  readonly publish: (publication: StudioPublication) => Promise<ApiResult<{ readonly id: string }>>;
+  readonly onPublished?: (event: StudioPublishedEvent) => void;
+  readonly signal?: AbortSignal;
+}): Promise<StudioPublishOutcome> {
+  const total = params.plan.publications.length;
+  const postIds: string[] = [];
+  const stopped = (): boolean => params.signal?.aborted === true;
+  for (const publication of params.plan.publications) {
+    if (stopped()) return { kind: 'aborted', published: postIds.length, total };
+    const result = await params.publish(publication);
+    if (!result.ok && result.code === 'ABORTED' && stopped()) return { kind: 'aborted', published: postIds.length, total };
+    if (!result.ok) {
+      return { kind: 'failed', failure: studioFailureKey(result, 'publish') ?? 'story.studio.failure.network', published: postIds.length, total };
+    }
+    postIds.push(result.data.id);
+    params.onPublished?.({ pageIds: publication.pageIds, postId: result.data.id, published: postIds.length, total });
+  }
+  return { kind: 'published', postIds };
+}
+
+/**
+ * **LE CORPS D'UNE PUBLICATION** (#8413) — le texte du post ne part que sous
+ * un POST : une story et un réel n'ont pas de corps, tout leur texte vit dans
+ * la scène (`storyEffects`, défaut 4 de #6900). Rogné, et absent s'il est
+ * vide : la passerelle ne reçoit jamais un `content` blanc.
+ *
+ * **Le post PROMU en réel garde son texte** (#8603) : « C'est un Réel »
+ * publie le MÊME contenu que le post qu'il remplace — vidéo, texte
+ * d'accompagnement, audience. Un réel composé comme tel reste sans corps.
+ */
+export function studioPublicationContent(params: {
+  readonly kind: PublicationKind;
+  readonly postText: string;
+  readonly promotedFromPost?: boolean;
+}): string | undefined {
+  const bodyTravels = params.kind === 'POST' || (params.kind === 'REEL' && params.promotedFromPost === true);
+  if (!bodyTravels) return undefined;
+  const content = params.postText.trim();
+  return content === '' ? undefined : content;
+}
+
+/** **LE RÉEL VOYAGE-T-IL ?** (#9476) — miroir de `StoryAlsoAsReelWire.flag`
+ * (iOS) : une STORY demandée « aussi en réel », en UNE publication. */
+export function alsoAsReelTravels(params: { readonly kind: PublicationKind; readonly requested: boolean; readonly publicationCount: number }): boolean {
+  return params.requested && params.kind === 'STORY' && params.publicationCount === 1;
+}
+
+/**
+ * **L'ENVOI RÉEL D'UN PLAN** (#7707) — construit la requête `POST
+ * posts.root` de CHAQUE publication (`publishStory`, le port UNIQUE, qui
+ * rejoue la garde `MEDIA_NOT_CLAIMED` par requête) et la fait passer par
+ * `runStudioPublish`. `originalLanguage` suit `publication.hasText` : chaque
+ * story d'une séquence ne dit la langue que de SA page. L'audience est celle
+ * du BROUILLON, identique pour toutes (iOS : `upload.visibility`,
+ * `PublicationUpload.swift:382-384`).
+ */
+export function publishStudioPlan(params: {
+  readonly plan: Extract<StudioPublishPlan, { kind: 'ready' }>;
+  readonly api: ConversationsDeps;
+  readonly kind: PublicationKind;
+  readonly visibility: ChoosableAudience | null;
+  readonly language: string;
+  /** Le texte du post du brouillon (#8413) — `studioPublicationContent`
+   * décide s'il part. */
+  readonly postText?: string;
+  /** Le réel vient de « C'est un Réel » (#8603) : le texte du post le suit. */
+  readonly promotedFromPost?: boolean;
+  /** « Aussi en réel » (#9476) — ne part qu'avec une STORY d'UNE publication
+   * (`alsoAsReelTravels`) : une séquence de plusieurs pages partirait en
+   * autant de réels. */
+  readonly alsoAsReel?: boolean;
+  /** « Désactiver les commentaires » (#16541) — la clé ne part que cochée. */
+  readonly commentsDisabled?: boolean;
+  readonly onPublished?: (event: StudioPublishedEvent) => void;
+  readonly signal?: AbortSignal;
+  /** L'ANNULATION de l'auteur (#10316) — la seule qui coupe une requête EN
+   * VOL ; `signal` doit être abandonné avec elle pour que la séquence rende
+   * `aborted`. */
+  readonly requestSignal?: AbortSignal;
+  /** Une clé par contenu, stable au rejeu (`X-Client-Mutation-Id`, #10316). */
+  readonly keyring?: PublicationKeyring;
+}): Promise<StudioPublishOutcome> {
+  const content = studioPublicationContent({
+    kind: params.kind,
+    postText: params.postText ?? '',
+    ...(params.promotedFromPost !== undefined ? { promotedFromPost: params.promotedFromPost } : {}),
+  });
+  const alsoAsReel = alsoAsReelTravels({ kind: params.kind, requested: params.alsoAsReel === true, publicationCount: params.plan.publications.length });
+  return runStudioPublish({
+    plan: params.plan,
+    ...(params.onPublished !== undefined ? { onPublished: params.onPublished } : {}),
+    ...(params.signal !== undefined ? { signal: params.signal } : {}),
+    publish: (publication): Promise<ApiResult<PublishStoryResult>> => {
+      const body = {
+        type: params.kind,
+        // **RIEN CHOISI ⇒ LA CLÉ EST ABSENTE** (loi 1, D-111/D-115) : le
+        // défaut reste une règle SERVEUR (`core.ts:421`) — jamais un défaut
+        // recopié ici.
+        ...(params.visibility !== null ? { visibility: params.visibility } : {}),
+        // Le corps porte AUSSI une langue : un post dont seul le corps est
+        // écrit la déclare, comme un post dont la scène porte du texte.
+        ...(publication.hasText || content !== undefined ? { originalLanguage: params.language } : {}),
+        ...(content !== undefined ? { content } : {}),
+        ...(publication.mediaCaption !== undefined ? { mediaCaption: publication.mediaCaption } : {}),
+        ...(publication.mediaAlt !== undefined ? { mediaAlt: publication.mediaAlt } : {}),
+        ...(alsoAsReel ? { alsoAsReel: true } : {}),
+        ...(params.commentsDisabled === true ? { commentsDisabled: true } : {}),
+        storyEffects: publication.storyEffects,
+        mediaIds: publication.mediaIds,
+      };
+      return publishStory({
+        ...params.api,
+        ...body,
+        ...(params.keyring !== undefined ? { clientMutationId: params.keyring.keyFor(publicationFingerprint(body)) } : {}),
+        ...(params.requestSignal !== undefined ? { signal: params.requestSignal } : {}),
+      });
+    },
+  });
+}

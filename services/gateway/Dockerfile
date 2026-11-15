@@ -14,7 +14,7 @@
 # intermittence (release v1.25.9 échouée le 2026-08-12 malgré 3 tentatives ×
 # 5 essais curl). Docker Hub est déjà l'origine authentifiée des images de
 # base — plus aucun téléchargement GitHub dans le chemin de build.
-ARG BUN_VERSION=1.1.38
+ARG BUN_VERSION=1.3.14
 FROM docker.io/oven/bun:${BUN_VERSION}-alpine AS bun-dist
 
 FROM node:22-alpine AS base
@@ -25,7 +25,7 @@ LABEL maintainer="Meeshy Development Team <dev@meeshy.me>" \
       org.opencontainers.image.source="https://github.com/isopen-io/meeshy" \
       org.opencontainers.image.documentation="https://docs.meeshy.me/gateway" \
       org.opencontainers.image.vendor="Meeshy" \
-      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.licenses="MIT AND AGPL-3.0-only" \
       org.opencontainers.image.title="Meeshy Gateway" \
       org.opencontainers.image.description="Fastify API gateway for Meeshy platform"
 
@@ -40,7 +40,7 @@ LABEL org.opencontainers.image.created="${BUILD_DATE}" \
 
 ARG PACKAGE_MANAGER=bun
 ARG PNPM_VERSION=9.15.0
-ARG BUN_VERSION=1.1.38
+ARG BUN_VERSION=1.3.14
 
 ENV PNPM_HOME="/pnpm" \
     BUN_INSTALL="/bun" \
@@ -51,7 +51,7 @@ FROM base AS deps
 
 ARG PACKAGE_MANAGER=bun
 ARG PNPM_VERSION=9.15.0
-ARG BUN_VERSION=1.1.38
+ARG BUN_VERSION=1.3.14
 
 # Build tools for native modules (bcrypt, sharp, zeromq)
 RUN apk add --no-cache \
@@ -125,7 +125,7 @@ FROM base AS prod-deps
 
 ARG PACKAGE_MANAGER=bun
 ARG PNPM_VERSION=9.15.0
-ARG BUN_VERSION=1.1.38
+ARG BUN_VERSION=1.3.14
 
 # Build tools for native modules
 RUN apk add --no-cache \
@@ -187,10 +187,37 @@ ENV NODE_ENV=production \
     BUILD_DATE=${BUILD_DATE}
 
 # Runtime dependencies only (no build tools!)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# fonts-dejavu-core : police du watermark serveur (#3600, drawtext ffmpeg +
+# overlay SVG sharp) — sans elle, drawtext échoue faute de `fontfile` et sharp
+# rend le texte de l'overlay avec la police de substitution de fontconfig
+# (jamais celle attendue par `WATERMARK_FONT_FILE`, `services/media/mediaWatermark.ts`).
+# libheif-examples : `heif-convert` (libheif + libde265), qui décode un HEIC
+# d'iPhone pour le servir en JPEG (#11263, `services/attachments/heif-conversion.ts`)
+# — les binaires de sharp ne portent aucun décodeur HEVC. Sans lui, un HEIC est
+# refusé à l'envoi (415), jamais servi tel quel. Il vient des BACKPORTS (#13412) :
+# la libheif 1.15 de bookworm refuse les photos d'iPhone récent (« Too many
+# auxiliary image references » : profondeur, carte de gain, mattes), la 1.19 les
+# décode. Depuis la 1.17, le décodeur HEVC est un greffon à part
+# (`libheif-plugin-libde265`) : sans lui, aucun HEIC ne se décode.
+# libjpeg-turbo-progs : `jpegtran`, la rotation JPEG SANS PERTE d'une photo
+# orientée (#11841, `services/attachments/metadata-strip/jpegtran.ts`) — sans
+# lui, la photo est réencodée une fois, droite et sans GPS quand même.
+# libavif-bin : `avifenc`, qui écrit la variante AVIF HDR (10 bits, BT.2100 PQ)
+# d'une photo à carte de gain (#12290, `services/attachments/hdr-avif.ts`) —
+# sharp n'écrit pas l'étiquette CICP. Sans lui, une photo HDR n'a aucun AVIF.
+RUN . /etc/os-release \
+    && echo "deb http://deb.debian.org/debian ${VERSION_CODENAME}-backports main" > /etc/apt/sources.list.d/backports.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
     tini \
     curl \
     ffmpeg \
+    fonts-dejavu-core \
+    libjpeg-turbo-progs \
+    libavif-bin \
+    && apt-get install -y --no-install-recommends -t "${VERSION_CODENAME}-backports" \
+    libheif-examples \
+    libheif-plugin-libde265 \
+    && heif-convert --list-decoders | grep -q libde265 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -g 1001 nodejs \
     && useradd -u 1001 -g nodejs -m gateway \
@@ -198,6 +225,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && chown -R gateway:nodejs /app
 
 WORKDIR /app
+
+# Le magasin adressé par contenu des packs officiels (#10157, L5) — servi par
+# `GET /api/v1/pack-assets/:file` depuis `/app/assets/packs`. Couche DÉDIÉE et
+# PRÉCOCE : ces fichiers changent rarement, leur couche se réutilise d'une
+# construction à l'autre. Les fichiers du registre d'EXEMPLES y sont aussi, mais
+# ne sont servis que sous `PACK_SAMPLES=1` (staging seulement).
+COPY --chown=gateway:nodejs services/gateway/assets/ ./assets/
 
 # Copy production node_modules from prod-deps
 COPY --from=prod-deps --chown=gateway:nodejs /app/node_modules ./node_modules
@@ -218,6 +252,21 @@ RUN chmod +x /app/docker-entrypoint.sh || true
 
 # Copy package.json for runtime metadata
 COPY --chown=gateway:nodejs services/gateway/package.json ./
+
+# Témoin des migrations embarquées (#10865) : les migrations nommées
+# (`dist/src/migrations/named/`, pilote `mongodb` en dépendance de production)
+# et les scripts mongosh (`packages/shared/prisma/migrations/*.mongodb.js`)
+# doivent être exécutables DEPUIS cette image. La construction échoue si l'un
+# manque — le 2026-10-16, il avait fallu les porter à la main en mongosh.
+# Mode d'emploi : `node dist/src/migrations/named/cli.js list`.
+RUN node dist/src/migrations/named/cli.js verify-image
+
+# Témoin de la mesure de l'immortalisation (#10176) : la requête d'administration
+# en lecture seule se lance DEPUIS cette image (`dist/`, dépendances de
+# production). La construction échoue si son point d'entrée, la loi partagée de
+# la clé ou le client Prisma manquent.
+# Mode d'emploi : `node dist/src/services/game/photoMomentsMeasureCli.js --week AAAA-Www`.
+RUN node dist/src/services/game/photoMomentsMeasureCli.js verify-image
 
 USER gateway
 

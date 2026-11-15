@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_text_format_bar">Formattazione</string>
+    <string name="composer_text_format_bold">Grassetto</string>
+    <string name="composer_text_format_italic">Corsivo</string>
+    <string name="composer_text_format_underline">Sottolineato</string>
+    <string name="composer_text_format_strikethrough">Barrato</string>
+</resources>

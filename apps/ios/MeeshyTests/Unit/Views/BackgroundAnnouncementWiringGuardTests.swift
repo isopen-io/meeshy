@@ -35,11 +35,23 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
     /// résolveur SDK EN DIRECT (en contournant `announcement(for:)`) n'aurait
     /// jamais été détectée. Balaie les TROIS surfaces de lecture elles-mêmes.
     func test_readingSurfaces_neverCallSDKResolverDirectly() throws {
+        // #4084 — les trois surfaces ont été DÉCOUPÉES depuis que cette liste
+        // a été écrite, et une garde NÉGATIVE qui reste sur l'ancien chemin ne
+        // rougit pas : elle passe au vert en ne regardant plus rien. Les hôtes
+        // ET leurs extractions sont donc balayés ENSEMBLE — l'appel interdit se
+        // logerait précisément dans la moitié qui a bougé.
         let surfaces = [
-            "Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift",
-            "Meeshy/Features/Main/Views/StoryViewerView.swift",
+            "Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift",
+            "Meeshy/Features/Stories/Views/StoryViewerView+Header.swift",
+            "Meeshy/Features/Stories/Views/StoryViewerView.swift",
+            // La découpe par cohésion a rangé la lecture du contenu sous son nom : même garde.
+            "Meeshy/Features/Stories/Views/StoryViewerView+ReaderState.swift",
+            "Meeshy/Features/Stories/Views/StoryReaderContentRules.swift",
             "Meeshy/Features/Main/Views/FeedPostCard.swift",
+            "Meeshy/Features/Main/Views/FeedPostCard+Header.swift",
             "Meeshy/Features/Main/Views/ReelsPlayerView.swift",
+            "Meeshy/Features/Main/Views/ReelPageView.swift",
+            "Meeshy/Features/Main/Views/ReelPageView+Info.swift",
         ]
         for path in surfaces {
             let text = try source(path)
@@ -55,7 +67,8 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
     // MARK: - « Trois surfaces »
 
     func test_storyHeader_mountsBackgroundSoundBadge() throws {
-        let text = try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
+        // #4084 — l'en-tête a quitté `+Sidebar` pour son propre fichier.
+        let text = try source("Meeshy/Features/Stories/Views/StoryViewerView+Header.swift")
         XCTAssertTrue(
             text.contains("BackgroundSoundBadge("),
             "Le header de story doit monter BackgroundSoundBadge — la vue commune E1."
@@ -70,7 +83,7 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
     /// un blanc à opacité fixe pour cette raison — le badge doit suivre la même
     /// convention plutôt que `group.avatarColor`.
     func test_storyHeader_backgroundSoundBadge_usesFixedWhiteNotAvatarColor() throws {
-        let text = try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
+        let text = try source("Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift")
         XCTAssertFalse(
             text.contains("accentHex: group.avatarColor"),
             "Sur le fond arbitraire d'une story (photo/vidéo), une couleur " +
@@ -80,7 +93,7 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
     }
 
     func test_storyHeader_noLongerBuildsAdHocAudioDisplay() throws {
-        let text = try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
+        let text = try source("Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift")
         XCTAssertFalse(
             text.contains("switch headerAudioDisplay.display"),
             "Le header ne doit plus fabriquer son propre affichage sonore ad hoc — il délègue " +
@@ -95,15 +108,54 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
             "Le primitive booléenne pré-E1 (existence gérée maintenant par l'enum " +
             "BackgroundAudioAnnouncement lui-même) ne doit plus être déclarée."
         )
-        XCTAssertFalse(
-            text.contains("let headerAudioDisplay: AudioChipHeaderModel"),
-            "Le modèle d'affichage pré-E1 (dérivé, sans title/duration séparables) ne doit " +
-            "plus être déclaré — remplacé par l'annonce brute BackgroundAudioAnnouncement."
-        )
+    }
+
+    // MARK: - Dette E1c : les signatures retirées ne reviennent pas par l'app
+
+    /// Cette garde disait l'inverse de ce qu'elle prouvait : son doc-comment
+    /// jumeau, côté SDK, annonçait que `AudioChipDisplay.resolve` « reste
+    /// vivant pour les appelants APP (`StoryViewerView` ×2) », et celle-ci ne
+    /// cherchait `AudioChipHeaderModel` que dans UN fichier. Mesuré au
+    /// 2026-08-25 :
+    /// `grep -rn 'AudioChipDisplay.resolve(' apps/ios/Meeshy` → 0 ligne. Les
+    /// trois signatures ont quitté le SDK (E1c) ; l'app balaie désormais tout
+    /// son arbre, et rougit dès qu'un site les rappelle.
+    func test_sourcesDeLApp_neRappellentAucuneDesTroisSignaturesRetirees() throws {
+        let bannis = [
+            "AudioChipDisplay.resolve(",
+            "AudioChipHeaderModel",
+            "StoryAudioAvailability.hasBackgroundAudioTrack",
+        ]
+        for banni in bannis {
+            XCTAssertEqual(
+                try Self.appSourceFilesContaining(banni), [],
+                "\(banni) a été retiré du SDK (E1c, aucun appelant de production) — " +
+                "l'app passe par BackgroundSoundBadge.announcement(for:), le résolveur partagé."
+            )
+        }
+    }
+
+    /// Fichiers de `apps/ios/Meeshy` dont une ligne de CODE contient `needle`
+    /// — commentaires retirés, sinon un doc-comment qui NOMME la signature
+    /// bannie ferait rougir la garde sans qu'aucun site ne l'appelle.
+    private static func appSourceFilesContaining(_ needle: String) throws -> [String] {
+        let root = MyStoriesSourceCorpus.appRoot().appendingPathComponent("Meeshy")
+        guard let walker = FileManager.default.enumerator(at: root,
+                                                          includingPropertiesForKeys: nil) else { return [] }
+        let swiftFiles = walker.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
+        XCTAssertGreaterThan(swiftFiles.count, 100,
+                             "Le corpus des sources de l'app est vide ou tronqué — la garde ne prouverait rien")
+        return swiftFiles
+            .filter { url in
+                guard let text = try? String(contentsOf: url, encoding: .utf8) else { return false }
+                return MyStoriesSourceCorpus.strippingComments(text).contains(needle)
+            }
+            .map { $0.lastPathComponent }
+            .sorted()
     }
 
     func test_storyViewer_resolvesAnnouncementThroughSharedHelper() throws {
-        let text = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
+        let text = try source("Meeshy/Features/Stories/Views/StoryViewerView.swift")
         XCTAssertTrue(
             text.contains("BackgroundSoundBadge.announcement(for:"),
             "Le viewer story doit résoudre l'annonce via le résolveur PARTAGÉ, pas en " +
@@ -111,16 +163,21 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
         )
     }
 
+    /// #4078 — le MONTAGE et la RÉSOLUTION ne vivent plus dans le même fichier :
+    /// l'en-tête a été extrait, la valeur est restée chez l'hôte. Deux
+    /// assertions, deux sources — les fusionner ferait passer la garde sur la
+    /// simple présence de l'une des deux.
     func test_feedPostCard_mountsBackgroundSoundBadge() throws {
-        let text = try source("Meeshy/Features/Main/Views/FeedPostCard.swift")
         XCTAssertTrue(
-            text.contains("BackgroundSoundBadge("),
+            try source("Meeshy/Features/Main/Views/FeedPostCard+Header.swift")
+                .contains("BackgroundSoundBadge("),
             "La carte de post doit monter BackgroundSoundBadge."
         )
         XCTAssertTrue(
-            text.contains("BackgroundSoundBadge.announcement(for: post.storyEffects)"),
-            "L'annonce doit être résolue via le helper partagé sur post.storyEffects — " +
-            "les mêmes champs que le viewer, rien d'inventé."
+            try source("Meeshy/Features/Main/Views/FeedPostCard.swift")
+                .contains("BackgroundSoundBadge.announcement(for: post)"),
+            "L'annonce doit être résolue via le helper partagé sur les effets que le post " +
+            "JOUE (#9677) — les siens, ou ceux de la story qu'il republie."
         )
     }
 
@@ -144,7 +201,9 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
     }
 
     func test_reelsPlayerView_mountsBackgroundSoundBadge() throws {
-        let text = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+        // #4484 — la rangée d'info du réel a quitté `ReelsPlayerView.swift`
+        // pour `ReelPageView+Info.swift` (elle appartient à `ReelPageView`).
+        let text = try source("Meeshy/Features/Main/Views/ReelPageView+Info.swift")
         XCTAssertTrue(
             text.contains("BackgroundSoundBadge("),
             "Le plein écran réel doit monter BackgroundSoundBadge."

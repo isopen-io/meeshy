@@ -17,9 +17,11 @@ import me.meeshy.ui.R
  *
  * iOS reserves the rounded design for big titles (`MeeshyFont.relative(..., design:
  * .rounded)`); we adopt Nunito as the single brand family so the whole app carries
- * the rounded signature cohesively. Sizes map 1:1 to the iOS type scale
- * (`DesignTokens.swift` → `MeeshyFont`, parity plan §3.5): caption 10, footnote 11,
- * subhead 13, body 15, headline 17, title 22, largeTitle 34, screen title 46.
+ * the rounded signature cohesively (the gap is recorded in `decisions.md`, ADR-025).
+ * Sizes map 1:1 to the iOS type scale (`DesignTokens.swift` → `MeeshyFont`, parity
+ * plan §3.5) through [MeeshyFontSize]: caption 10, footnote 11, subhead 13, body 15,
+ * headline 17, title 22, largeTitle 34, screen title 46. Every size is in `sp`, so the
+ * text follows the system font size; [meeshyText] builds a one-off style the same way.
  *
  * Nunito ships as a single variable font (`res/font/nunito.ttf`, `wght` axis
  * ExtraLight→Black); each weight is a [FontVariation] on that one file — supported
@@ -32,11 +34,13 @@ private fun nunito(weight: Int): Font = Font(
 )
 
 val NunitoFontFamily: FontFamily = FontFamily(
+    nunito(300),
     nunito(400),
     nunito(500),
     nunito(600),
     nunito(700),
     nunito(800),
+    nunito(900),
 )
 
 val MeeshyTypography: Typography = Typography(
@@ -47,11 +51,11 @@ val MeeshyTypography: Typography = Typography(
     ),
     displayMedium = TextStyle(
         fontFamily = NunitoFontFamily, fontWeight = FontWeight.Bold,
-        fontSize = 34.sp, lineHeight = 40.sp, letterSpacing = (-0.5).sp,
+        fontSize = MeeshyFontSize.largeTitle, lineHeight = 40.sp, letterSpacing = (-0.5).sp,
     ),
     displaySmall = TextStyle(
         fontFamily = NunitoFontFamily, fontWeight = FontWeight.Bold,
-        fontSize = 28.sp, lineHeight = 34.sp, letterSpacing = (-0.25).sp,
+        fontSize = MeeshyFontSize.display, lineHeight = 34.sp, letterSpacing = (-0.25).sp,
     ),
     // Headline
     headlineLarge = TextStyle(
@@ -64,45 +68,45 @@ val MeeshyTypography: Typography = Typography(
     ),
     headlineSmall = TextStyle(
         fontFamily = NunitoFontFamily, fontWeight = FontWeight.SemiBold,
-        fontSize = 22.sp, lineHeight = 28.sp, // iOS title
+        fontSize = MeeshyFontSize.title, lineHeight = 28.sp, // iOS title
     ),
     // Title
     titleLarge = TextStyle(
         fontFamily = NunitoFontFamily, fontWeight = FontWeight.SemiBold,
-        fontSize = 22.sp, lineHeight = 28.sp, // iOS title
+        fontSize = MeeshyFontSize.title, lineHeight = 28.sp, // iOS title
     ),
     titleMedium = TextStyle(
         fontFamily = NunitoFontFamily, fontWeight = FontWeight.SemiBold,
-        fontSize = 17.sp, lineHeight = 24.sp, letterSpacing = 0.1.sp, // iOS headline
+        fontSize = MeeshyFontSize.headline, lineHeight = 24.sp, letterSpacing = 0.1.sp, // iOS headline
     ),
     titleSmall = TextStyle(
         fontFamily = NunitoFontFamily, fontWeight = FontWeight.SemiBold,
-        fontSize = 15.sp, lineHeight = 22.sp,
+        fontSize = MeeshyFontSize.body, lineHeight = 22.sp,
     ),
     // Body
     bodyLarge = TextStyle(
         fontFamily = NunitoFontFamily, fontWeight = FontWeight.Normal,
-        fontSize = 17.sp, lineHeight = 24.sp, // iOS headline as body
+        fontSize = MeeshyFontSize.headline, lineHeight = 24.sp, // iOS headline as body
     ),
     bodyMedium = TextStyle(
         fontFamily = NunitoFontFamily, fontWeight = FontWeight.Normal,
-        fontSize = 15.sp, lineHeight = 22.sp, // iOS body
+        fontSize = MeeshyFontSize.body, lineHeight = 22.sp, // iOS body
     ),
     bodySmall = TextStyle(
         fontFamily = NunitoFontFamily, fontWeight = FontWeight.Normal,
-        fontSize = 13.sp, lineHeight = 18.sp, // iOS subhead
+        fontSize = MeeshyFontSize.subhead, lineHeight = 18.sp, // iOS subhead
     ),
     // Label
     labelLarge = TextStyle(
         fontFamily = NunitoFontFamily, fontWeight = FontWeight.Medium,
-        fontSize = 15.sp, lineHeight = 20.sp,
+        fontSize = MeeshyFontSize.body, lineHeight = 20.sp,
     ),
     labelMedium = TextStyle(
         fontFamily = NunitoFontFamily, fontWeight = FontWeight.Medium,
-        fontSize = 13.sp, lineHeight = 18.sp, letterSpacing = 0.1.sp,
+        fontSize = MeeshyFontSize.subhead, lineHeight = 18.sp, letterSpacing = 0.1.sp,
     ),
     labelSmall = TextStyle(
         fontFamily = NunitoFontFamily, fontWeight = FontWeight.Medium,
-        fontSize = 11.sp, lineHeight = 16.sp, letterSpacing = 0.1.sp, // iOS footnote
+        fontSize = MeeshyFontSize.footnote, lineHeight = 16.sp, letterSpacing = 0.1.sp, // iOS footnote
     ),
 )

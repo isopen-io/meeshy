@@ -1,16 +1,21 @@
 package me.meeshy.sdk.net.api
 
 import kotlinx.serialization.Serializable
+import me.meeshy.sdk.model.AccountDeletionStatus
+import me.meeshy.sdk.model.Achievement
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.BirthDateDeclaration
+import me.meeshy.sdk.model.BirthDateRequest
 import me.meeshy.sdk.model.ChangeEmailRequest
 import me.meeshy.sdk.model.ChangeEmailResponse
 import me.meeshy.sdk.model.ChangePasswordRequest
 import me.meeshy.sdk.model.ChangePasswordResponse
 import me.meeshy.sdk.model.ChangePhoneRequest
 import me.meeshy.sdk.model.ChangePhoneResponse
-import me.meeshy.sdk.model.DeleteAccountRequest
-import me.meeshy.sdk.model.DeleteAccountResponse
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.ProfileDecorWrite
+import me.meeshy.sdk.model.PublicProfile
+import me.meeshy.sdk.model.ServedProfileDecor
 import me.meeshy.sdk.model.TimelinePoint
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.model.UpdateProfileResponse
@@ -18,12 +23,14 @@ import me.meeshy.sdk.model.UserStats
 import me.meeshy.sdk.model.VerifyEmailChangeRequest
 import me.meeshy.sdk.model.VerifyEmailChangeResponse
 import me.meeshy.sdk.model.VerifyPhoneChangeRequest
+import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.VerifyPhoneChangeResponse
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
-import retrofit2.http.HTTP
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -35,7 +42,11 @@ data class UserSearchResult(
     val displayName: String? = null,
     val avatar: String? = null,
     val isOnline: Boolean? = null,
-)
+    val lastActiveAt: String? = null,
+) {
+    /** La présence que la ligne a SERVIE ; `null` (non-ami, rien servi) = aucun point. */
+    fun servedPresence(): UserPresence? = UserPresence.served(isOnline, lastActiveAt)
+}
 
 /** Avatar update body — port of UserService.updateAvatar inline body. */
 @Serializable
@@ -49,7 +60,56 @@ data class UpdateBannerRequest(
     val banner: String,
 )
 
+/**
+ * Body for `POST /me/account/deletion` (`routes/me/delete-account.ts`,
+ * `OpenAccountDeletionBodySchema`) — the modern deletion-request route (#4183, #4799).
+ * Unlike the legacy `DELETE /me/delete-account` route (kept gateway-side for older
+ * installed clients, no longer bound here), it requires the caller's CURRENT
+ * password: a stolen JWT alone can no longer open a deletion request.
+ * [confirmationPhrase] still carries the literal
+ * `me.meeshy.sdk.model.AccountDeletionConfirmation.REQUIRED_PHRASE`.
+ */
+@Serializable
+data class OpenAccountDeletionRequest(
+    val confirmationPhrase: String,
+    val currentPassword: String,
+)
+
+@Serializable
+data class AccountDeletionOpenedResponse(
+    val message: String = "",
+    /** ISO-8601 — the confirmation link's expiry. Kept as the raw wire string; no
+     *  client-side countdown in this lot. */
+    val tokenExpiresAt: String? = null,
+)
+
+/** Un appareil enregistre pour les notifications (`GET users/me/devices`). */
+@Serializable
+data class RegisteredDevice(
+    val id: String,
+    val type: String? = null,
+    val platform: String? = null,
+    val deviceId: String? = null,
+    val deviceName: String? = null,
+    val appVersion: String? = null,
+    val isActive: Boolean = true,
+    val lastUsedAt: String? = null,
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
+)
+
+@Serializable
+data class DeviceRevokedResponse(val message: String? = null)
+
 interface UserApi {
+    /** Les appareils de l'utilisateur. */
+    @GET("users/me/devices")
+    suspend fun listDevices(): ApiResponse<List<RegisteredDevice>>
+
+    /** Revoque un appareil par l'id de SA LIGNE (pas le `deviceId` materiel). */
+    @DELETE("users/me/devices/{id}")
+    suspend fun revokeDevice(@Path("id") id: String): ApiResponse<DeviceRevokedResponse>
+
     @GET("users/search")
     suspend fun search(
         @Query("q") query: String,
@@ -66,17 +126,67 @@ interface UserApi {
     @PATCH("users/me/banner")
     suspend fun updateBanner(@Body body: UpdateBannerRequest): ApiResponse<UpdateProfileResponse>
 
-    @GET("users/{idOrUsername}")
-    suspend fun getProfile(@Path("idOrUsername") idOrUsername: String): ApiResponse<MeeshyUser>
-
-    @GET("u/{username}")
-    suspend fun getPublicProfile(@Path("username") username: String): ApiResponse<MeeshyUser>
+    /**
+     * LE profil public, a UNE adresse — `GET /directory/people/:handle` (#4161, #4250).
+     *
+     * ## Ce que cette methode remplace, et ce que l'inventaire manquant coutait
+     *
+     * Android appelait TROIS alias de cette meme route : `users/{idOrUsername}`
+     * (l'ouverture de profil, seule reellement branchee), `u/{username}` et
+     * `users/id/{id}` (deux jumelles mortes). Le commentaire qui garde ces alias
+     * cote passerelle ne parle que des « versions iOS installees » — Android n'a
+     * ete compte par aucun audit du chantier. Retirer les alias sur cet
+     * inventaire a trois clients aurait coupe l'ouverture de profil sur Android,
+     * y compris depuis un lien partage `meeshy://u/<pseudo>`, dont la queue de
+     * versions installees est longue.
+     *
+     * ## `expand=presence` n'est pas un confort : c'est ce qui evite une PERTE SILENCIEUSE
+     *
+     * La route canonique SUPPRIME `isOnline` et `lastActiveAt` par defaut, la ou
+     * les trois alias les servaient. Migrer sans ce parametre n'aurait produit
+     * aucune erreur de decodage — `MeeshyUser` porte les deux champs en
+     * nullable — mais `ProfileHeaderPresentation.from` aurait lu deux absents,
+     * `isOnline == true` aurait valu faux pour tout le monde, et la pastille de
+     * presence aurait disparu de chaque profil consulte, avec la ligne « vu il y
+     * a X ». Une regression qu'aucun temoin de decodage ne peut voir : le
+     * document decode parfaitement, il est seulement plus pauvre.
+     *
+     * Le parametre ne LEVE aucune garde. `servirProfilPublic` a deja applique la
+     * loi de visibilite du 2026-08-25 quand il compose la charge ; `expand`
+     * decide seulement si l'on POSE la question. Un lecteur non-ami recoit donc
+     * toujours l'absence, et le client ne fabrique rien : pas de champ, pas de
+     * pastille.
+     *
+     * ## Le decodage, champ par champ
+     *
+     * Le document est un [PublicProfile] : le profil et ses trois expansions
+     * (`stats`, `relation`, `isSelf`) sont freres sur le fil. Un bloc `stats`
+     * illisible devient `null`, une `relation` inconnue reste une chaine, un
+     * `isSelf` absent vaut `false` : aucun ne fait echouer le document. Les
+     * valeurs par defaut de `MeeshyUser` absorbent les champs que le profil
+     * public ne sert plus depuis #4161. Restent `id` et `username`, les deux
+     * SEULES proprietes sans defaut — la route les sert toujours.
+     *
+     * [expand] vaut `stats,presence` par defaut : les compteurs du profil
+     * voyagent dans le MEME aller-retour (plus d'appel `users/{id}/stats` pour
+     * un profil tiers). La relation se demande explicitement.
+     *
+     * [handle] accepte un ObjectId ou un pseudo : c'est la detection de
+     * `/users/:id` (`isValidObjectId`), inchangee. Aucune resolution nouvelle
+     * n'est donc a faire ici — un lien de partage se transmet verbatim.
+     *
+     * [expand] a une valeur par defaut, et c'est delibere : laisser le choix a
+     * chaque site d'appel rendrait la perte silencieuse ci-dessus reproductible
+     * par simple oubli.
+     */
+    @GET("directory/people/{handle}")
+    suspend fun getPublicProfile(
+        @Path("handle") handle: String,
+        @Query("expand") expand: String? = "stats,presence",
+    ): ApiResponse<PublicProfile>
 
     @GET("users/email/{email}")
     suspend fun getProfileByEmail(@Path("email") email: String): ApiResponse<MeeshyUser>
-
-    @GET("users/id/{id}")
-    suspend fun getProfileById(@Path("id") id: String): ApiResponse<MeeshyUser>
 
     @GET("users/phone/{phone}")
     suspend fun getProfileByPhone(@Path("phone") phone: String): ApiResponse<MeeshyUser>
@@ -95,10 +205,16 @@ interface UserApi {
     @PATCH("users/me/password")
     suspend fun changePassword(@Body body: ChangePasswordRequest): ApiResponse<ChangePasswordResponse>
 
-    // Retrofit needs @HTTP(hasBody = true) to attach a body to a DELETE — gateway route
-    // `DELETE /api/v1/me/delete-account` (routes/me/delete-account.ts).
-    @HTTP(method = "DELETE", path = "me/delete-account", hasBody = true)
-    suspend fun deleteAccount(@Body body: DeleteAccountRequest): ApiResponse<DeleteAccountResponse>
+    /**
+     * `POST /api/v1/me/account/deletion` (routes/me/delete-account.ts) — the modern
+     * deletion-request route requiring the current password (#4183, #4799). The
+     * legacy `DELETE /api/v1/me/delete-account` route stays registered gateway-side
+     * for older installed clients, but this app no longer calls it.
+     */
+    @POST("me/account/deletion")
+    suspend fun openAccountDeletion(
+        @Body body: OpenAccountDeletionRequest,
+    ): ApiResponse<AccountDeletionOpenedResponse>
 
     @POST("users/me/change-phone")
     suspend fun changePhone(@Body body: ChangePhoneRequest): ApiResponse<ChangePhoneResponse>
@@ -107,6 +223,25 @@ interface UserApi {
     suspend fun verifyPhoneChange(
         @Body body: VerifyPhoneChangeRequest,
     ): ApiResponse<VerifyPhoneChangeResponse>
+
+    /** Les statistiques de SOI — jamais `users/{monId}/stats`. */
+    @GET("users/me/stats")
+    suspend fun getMyStats(): ApiResponse<UserStats>
+
+    @GET("users/me/stats/achievements")
+    suspend fun getMyAchievements(): ApiResponse<List<Achievement>>
+
+    /** L'etat de la demande de suppression (lecture) ; l'ouverture reste [openAccountDeletion]. */
+    @GET("me/account/deletion")
+    suspend fun getAccountDeletionStatus(): ApiResponse<AccountDeletionStatus>
+
+    /** L'age declare, ecrit UNE fois (409 si deja pose). */
+    @PUT("me/birth-date")
+    suspend fun setBirthDate(@Body body: BirthDateRequest): ApiResponse<BirthDateDeclaration>
+
+    /** Equipe / retire un cote du decor de profil ; la reponse fait foi. */
+    @PUT("me/profile-decor")
+    suspend fun updateProfileDecor(@Body body: ProfileDecorWrite): ApiResponse<ServedProfileDecor>
 
     @GET("users/{userId}/stats")
     suspend fun getUserStats(@Path("userId") userId: String): ApiResponse<UserStats>

@@ -1,0 +1,48 @@
+/* LE BADGE DES DEUX BOUTIQUES (#15120, #16407) — la feuille de `StoreBadge`
+ * (`src/landing/store-logos.tsx`), seule source du badge : la landing
+ * l'importe (`landing.css`, inlinée dans chaque landing prérendue) et l'écran
+ * `/download` aussi, dans son propre morceau. Jamais `app.css`.
+ *
+ * Noir, gris et blanc des badges officiels, quel que soit le thème. La classe
+ * DOUBLÉE (`.ld-store.ld-store`, spécificité 0,2,0) l'emporte sur la couleur
+ * des liens de la page hôte (`.ld a`, 0,1,1), sans dépendre de l'ordre ni de la
+ * racine `.ld` que `/download` ne porte pas. */
+.ld-stores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.ld-store.ld-store,
+.ld-store.ld-store:hover {
+  min-height: 52px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  border-radius: 12px;
+  text-align: start;
+  text-decoration: none;
+  white-space: nowrap;
+  /* harmony-exempt: badge de magasin, noir imposé par Apple et Google */
+  background: #000;
+  /* harmony-exempt: badge de magasin, gris imposé par Apple et Google */
+  border: 1px solid #a6a6a6;
+  /* harmony-exempt: badge de magasin, blanc imposé par Apple et Google */
+  color: #fff;
+}
+.ld-store.ld-store:focus-visible {
+  outline: 2px solid var(--ios-indigo-400);
+  outline-offset: 2px;
+}
+.ld-store-name {
+  display: grid;
+  line-height: 1;
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.ld-store-caption {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}

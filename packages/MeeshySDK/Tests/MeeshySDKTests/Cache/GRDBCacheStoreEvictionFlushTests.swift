@@ -114,4 +114,90 @@ final class GRDBCacheStoreEvictionFlushTests: XCTestCase {
             return XCTFail("lastFetchedAt doit survivre au flush d'éviction, got \(second)")
         }
     }
+
+    // MARK: - Un flush d'éviction RATÉ ne jette plus la seule copie
+
+    /// Chiffrement qu'on coupe et rétablit à volonté : la base suspendue en
+    /// arrière-plan (`SQLITE_INTERRUPT`) ou une clé du trousseau indisponible
+    /// font échouer le flush de la même façon.
+    private final class SwitchableEncryption: DatabaseEncryptionProviding, @unchecked Sendable {
+        private let lock = NSLock()
+        private var failing = false
+        func setFailing(_ value: Bool) { lock.lock(); failing = value; lock.unlock() }
+        func encrypt(_ plaintext: Data) -> Data? {
+            lock.lock(); defer { lock.unlock() }
+            return failing ? nil : plaintext
+        }
+        func decrypt(_ ciphertext: Data) -> Data? { ciphertext }
+        var keyFingerprint: String { "switchable" }
+    }
+
+    /// Une instance NEUVE sur la même base lit le disque, jamais la mémoire.
+    private func makeEncryptedStore(maxL1Keys: Int, db: DatabaseQueue, encryption: SwitchableEncryption) -> GRDBCacheStore<String, EvictTestItem> {
+        let policy = CachePolicy(ttl: .hours(1), staleTTL: .minutes(5), maxItemCount: nil, storageLocation: .grdb)
+        return GRDBCacheStore(policy: policy, db: db, maxL1Keys: maxL1Keys, encrypted: true, encryption: encryption)
+    }
+
+    func test_evictL1_whenTheFlushFails_keepsTheMutation_andTheNextFlushSavesIt() async throws {
+        let db = try makeDB()
+        let encryption = SwitchableEncryption()
+        let store = makeEncryptedStore(maxL1Keys: 20, db: db, encryption: encryption)
+
+        try await store.save([EvictTestItem(id: "1", name: "A")], for: "k")
+        await store.update(for: "k") { $0 + [EvictTestItem(id: "2", name: "B")] }
+
+        encryption.setFailing(true)
+        await store.evictL1()
+        encryption.setFailing(false)
+        await store.flushDirtyKeys(deadline: nil)
+
+        let recovered = await makeEncryptedStore(maxL1Keys: 20, db: db, encryption: encryption).loadIgnoringExpiry(for: "k")
+        XCTAssertEqual(recovered?.items.map(\.id), ["1", "2"],
+                       "la mutation que le flush raté n'a pas écrite vivait seulement en L1 : l'éviction ne doit pas la jeter")
+        let dirty = await store.dirtyKeyCount()
+        XCTAssertEqual(dirty, 0)
+    }
+
+    func test_lruEviction_whenTheFlushFails_keepsTheMutation_andTheNextFlushSavesIt() async throws {
+        let db = try makeDB()
+        let encryption = SwitchableEncryption()
+        let store = makeEncryptedStore(maxL1Keys: 1, db: db, encryption: encryption)
+
+        try await store.save([EvictTestItem(id: "1", name: "A")], for: "k1")
+        await store.update(for: "k1") { $0 + [EvictTestItem(id: "2", name: "B")] }
+
+        encryption.setFailing(true)
+        // k2 pousse k1 hors de l'ordre LRU pendant que la base refuse d'écrire.
+        await store.upsert(item: EvictTestItem(id: "3", name: "C"), for: "k2") { $0 + [$1] }
+        encryption.setFailing(false)
+        await store.flushDirtyKeys(deadline: nil)
+
+        let recovered = await makeEncryptedStore(maxL1Keys: 20, db: db, encryption: encryption).loadIgnoringExpiry(for: "k1")
+        XCTAssertEqual(recovered?.items.map(\.id), ["1", "2"])
+        let dirty = await store.dirtyKeyCount()
+        XCTAssertEqual(dirty, 0)
+    }
+
+    func test_load_expiredEntry_whenTheFlushFails_servesTheMutationStale_insteadOfDroppingIt() async throws {
+        let db = try makeDB()
+        let encryption = SwitchableEncryption()
+        let store = makeEncryptedStore(maxL1Keys: 20, db: db, encryption: encryption)
+
+        try await store.save([EvictTestItem(id: "1", name: "A")], for: "k")
+        await store.debugRewindFetchTimestamp(by: .hours(1) + 1, for: "k")
+        await store.update(for: "k") { items in items.map { EvictTestItem(id: $0.id, name: "B") } }
+
+        encryption.setFailing(true)
+        let result = await store.load(for: "k")
+        encryption.setFailing(false)
+
+        guard case .stale(let items, _) = result else {
+            return XCTFail("la seule copie de la mutation se sert périmée, got \(result)")
+        }
+        XCTAssertEqual(items.map(\.name), ["B"])
+
+        await store.flushDirtyKeys(deadline: nil)
+        let recovered = await makeEncryptedStore(maxL1Keys: 20, db: db, encryption: encryption).loadIgnoringExpiry(for: "k")
+        XCTAssertEqual(recovered?.items.map(\.name), ["B"])
+    }
 }

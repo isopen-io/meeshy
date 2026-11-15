@@ -1,11 +1,13 @@
 package me.meeshy.app.profile
 
+import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +23,8 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.SessionTransitionFlags
+import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.user.UserRepository
 import org.junit.After
@@ -78,7 +82,8 @@ class AvatarBannerUploadViewModelTest {
         media: MediaRepository,
         userRepo: UserRepository,
         session: SessionRepository,
-    ) = AvatarBannerUploadViewModel(media, userRepo, session)
+        fence: AccountFence = AccountFence({ session.currentUser.value?.id }, SessionTransitionFlags()),
+    ) = AvatarBannerUploadViewModel(media, userRepo, session, fence)
 
     @Before
     fun setUp() = Dispatchers.setMain(dispatcher)
@@ -309,5 +314,105 @@ class AvatarBannerUploadViewModelTest {
 
         assertThat(vm.state.value.error).isEqualTo(ImageUploadError.UPDATE_FAILED)
         assertThat(session.adopts).isEmpty()
+    }
+
+    @Test
+    fun logoutDuringTheUpload_neverReadoptsTheAccountThatLeft() = runTest(dispatcher) {
+        val media = mockk<MediaRepository>()
+        val uploadDone = CompletableDeferred<NetworkResult<List<UploadedMedia>>>()
+        coEvery { media.upload(any()) } coAnswers { uploadDone.await() }
+        val userRepo = mockk<UserRepository>()
+        coEvery { userRepo.updateAvatar(any()) } returns failure()
+        val session = SessionFixture(user(id = "user-a"))
+        val vm = vm(media, userRepo, session.repository)
+
+        vm.onImagePicked(ImageUploadTarget.AVATAR, item())
+        advanceUntilIdle()
+        session.flow.value = null
+        uploadDone.complete(NetworkResult.Success(listOf(uploaded("https://cdn/a.jpg"))))
+        advanceUntilIdle()
+
+        assertThat(session.adopts).isEmpty()
+        assertThat(session.flow.value).isNull()
+    }
+
+    @Test
+    fun logoutDuringTheConfirm_neverRollsBackOntoTheAccountThatLeft() = runTest(dispatcher) {
+        val media = mockk<MediaRepository>()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("https://cdn/a.jpg")))
+        val confirmDone = CompletableDeferred<NetworkResult<MeeshyUser>>()
+        val userRepo = mockk<UserRepository>()
+        coEvery { userRepo.updateAvatar(any()) } coAnswers { confirmDone.await() }
+        val session = SessionFixture(user(id = "user-a"))
+        val vm = vm(media, userRepo, session.repository)
+
+        vm.onImagePicked(ImageUploadTarget.AVATAR, item())
+        advanceUntilIdle()
+        session.flow.value = user(id = "user-b", avatar = "b-avatar")
+        confirmDone.complete(failure())
+        advanceUntilIdle()
+
+        assertThat(session.flow.value?.id).isEqualTo("user-b")
+        assertThat(session.adopts.map { it.id }).containsExactly("user-a")
+    }
+
+    @Test
+    fun aConfirmLandingAfterTheAccountLeft_neverAdoptsItsServerUser() = runTest(dispatcher) {
+        val media = mockk<MediaRepository>()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("https://cdn/a.jpg")))
+        val confirmDone = CompletableDeferred<NetworkResult<MeeshyUser>>()
+        val userRepo = mockk<UserRepository>()
+        coEvery { userRepo.updateAvatar(any()) } coAnswers { confirmDone.await() }
+        val session = SessionFixture(user(id = "user-a"))
+        val vm = vm(media, userRepo, session.repository)
+
+        vm.onImagePicked(ImageUploadTarget.AVATAR, item())
+        advanceUntilIdle()
+        session.flow.value = null
+        confirmDone.complete(NetworkResult.Success(user(id = "user-a", avatar = "https://cdn/a.jpg")))
+        advanceUntilIdle()
+
+        assertThat(session.flow.value).isNull()
+        assertThat(vm.state.value.uploading).isNull()
+    }
+
+    @Test
+    fun aConfirmedUpload_emitsASucceededEffectForItsTarget() = runTest(dispatcher) {
+        val media = mockk<MediaRepository>()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("https://cdn/b.jpg")))
+        val userRepo = mockk<UserRepository>(relaxed = true)
+        coEvery { userRepo.updateBanner(any()) } returns NetworkResult.Success(user(banner = "https://cdn/b.jpg"))
+        val vm = vm(media, userRepo, SessionFixture(user()).repository)
+
+        vm.effects.test {
+            vm.onImagePicked(ImageUploadTarget.BANNER, item())
+            advanceUntilIdle()
+            assertThat(awaitItem()).isEqualTo(AvatarBannerUploadEffect.Succeeded(ImageUploadTarget.BANNER))
+        }
+    }
+
+    @Test
+    fun anOfflineUploadFailure_emitsAFailedEffect_andLeavesTheSessionUntouched() = runTest(dispatcher) {
+        val media = mockk<MediaRepository>()
+        coEvery { media.upload(any()) } returns failure()
+        val session = SessionFixture(user())
+        val vm = vm(media, mockk(relaxed = true), session.repository)
+
+        vm.effects.test {
+            vm.onImagePicked(ImageUploadTarget.AVATAR, item())
+            advanceUntilIdle()
+            assertThat(awaitItem()).isEqualTo(AvatarBannerUploadEffect.Failed(ImageUploadError.UPLOAD_FAILED))
+        }
+        assertThat(session.adopts).isEmpty()
+    }
+
+    @Test
+    fun aRejectedPick_emitsAFailedEffect() = runTest(dispatcher) {
+        val vm = vm(mockk(relaxed = true), mockk(relaxed = true), SessionFixture(user()).repository)
+
+        vm.effects.test {
+            vm.onImagePicked(ImageUploadTarget.AVATAR, item(mime = "video/mp4"))
+            assertThat(awaitItem()).isEqualTo(AvatarBannerUploadEffect.Failed(ImageUploadError.UNSUPPORTED_TYPE))
+        }
     }
 }

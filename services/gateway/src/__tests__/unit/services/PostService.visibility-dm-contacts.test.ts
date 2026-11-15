@@ -29,6 +29,10 @@ const buildPrisma = () => ({
       // 2e appel : autres membres actifs de ces conversations (le contact DM)
       .mockResolvedValueOnce([{ userId: 'dm-contact-1' }]),
   },
+  userRelation: {
+    findUnique: jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue(null),
+    findMany: jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue([]),
+  },
   friendRequest: {
     findMany: jest.fn<(arg?: unknown) => Promise<unknown>>()
       .mockResolvedValue([{ senderId: 'viewer-1', receiverId: 'friend-1' }]),

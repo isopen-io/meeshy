@@ -3,29 +3,40 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { z } from 'zod';
 import path from 'path';
 import fs from 'fs/promises';
-import { createHash, randomUUID } from 'crypto';
-import { UnifiedAuthRequest } from '../../middleware/auth';
-import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendError } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendNotFound, sendError } from '../../utils/response';
 import { toDTO, soundUploaderInclude } from './sounds';
 import { loadSoundStats } from '../../services/posts/soundStats';
 import {
-  ALLOWED_UPLOAD_MIME as ALLOWED_MIME,
   ALLOWED_AUDIO_EXT,
   EXT_TO_MIME,
-  servableExtension,
   staticFileUrl,
   NOT_MUTED_WHERE,
+  NOT_DELETED_SOUND_WHERE,
 } from '../../services/posts/soundFormats';
 import { createSoundRouteRateLimitConfig } from '../../middleware/rate-limiter';
-import { parseWaveformField } from '../../services/posts/waveformSamples';
+import { logError } from '../../utils/logger.js';
 
-/** Borne MÉMOIRE, pas une limite de durée : `toBuffer()` matérialise tout. */
-const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
-
-// Volume DÉDIÉ, servi uniquement par la route JWT `/static/:filename`.
+// Volume DÉDIÉ, servi uniquement par la route authentifiée `/static/:filename`.
+//
 // Surtout PAS sous UPLOAD_PATH : tout ce qui s'y trouve est exposé par
-// `GET /attachments/file/*` (sans authentification, download.ts:256) et par le
+// `GET /attachments/file/*` (sans authentification, download.ts) et par le
 // montage nginx en lecture seule sur `static.<domaine>`, en cache immutable un an.
+//
+// CE COMMENTAIRE NE NOMME PAS UNE SORTIE À EMPRUNTER — #7015 l'a lu ainsi, et
+// c'est l'inverse. Il énonce une décision de CONFIDENTIALITÉ : ce volume reste
+// hors du magasin public. Mesuré le 2026-09-18 en production :
+// `https://static.meeshy.me/<uuid>.m4a` rend 404 (le volume `gateway_sounds`
+// n'est monté sur aucun nginx statique) ; et sur les 20 publications qui citent
+// ces fichiers, UNE est `PRIVATE`. Les 18 fichiers présents viennent de
+// l'ancienne route d'envoi manuel (`POST /stories/audio`, retirée par #4190),
+// qui ne gatait sur aucune visibilité — leur seule protection actuelle est
+// cette authentification. Le rendre public le serait pour un an de cache.
+// Garde : `__tests__/unit/config/sounds-volume-never-public.test.ts`.
+//
+// Un client qui doit jouer ces octets présente donc une identité. iOS le fait
+// par `APIClient` ; le web le fait par `fetch` + URL d'objet
+// (`apps/web/src/lib/api/protected-media.ts`) — une balise `<audio src>` ne
+// porte aucun en-tête, ce qui rendait 401 sur TOUTE lecture web avant #7015.
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? '/app/sounds';
 
 const ListQuerySchema = z.object({
@@ -38,112 +49,11 @@ export function registerStoryAudioRoutes(
   prisma: PrismaClient,
   requiredAuth: any
 ) {
-  // POST /stories/audio — Upload d'un son d'arrière-plan
-  fastify.post('/stories/audio', {
-    preValidation: [requiredAuth],
-    // La route la plus coûteuse du lot : elle écrit un fichier sans plafond de
-    // durée. Sans limite propre, seul le quota global de 300 req/min la
-    // protégeait — de quoi remplir le volume de sons en une minute.
-    config: { rateLimit: createSoundRouteRateLimitConfig('upload') },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const authContext = (request as UnifiedAuthRequest).authContext;
-    if (!authContext?.registeredUser) {
-      return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
-    }
-
-    // PLAFOND D'OCTETS OBLIGATOIRE. Le multipart global autorise 4 Go
-    // (server.ts:330) et `toBuffer()` matérialise tout en mémoire : un seul
-    // envoi d'un gigaoctet tuait le conteneur. Ce n'est PAS un plafond de durée
-    // — la directive produit du 2026-07-30 l'interdit — mais une borne mémoire :
-    // 100 Mo laissent passer plusieurs heures de parole.
-    let data;
-    try {
-      data = await request.file({ limits: { fileSize: MAX_UPLOAD_BYTES } });
-    } catch {
-      return sendError(reply, 413, 'Audio file too large (100 MB max)', { code: 'FILE_TOO_LARGE' });
-    }
-    if (!data) {
-      return sendBadRequest(reply, 'No file provided', { code: 'NO_FILE' });
-    }
-    if (!ALLOWED_MIME.has(data.mimetype)) {
-      return sendBadRequest(reply, 'Invalid audio format. Supported: mp3, mp4, wav, m4a, aac, ogg', { code: 'INVALID_AUDIO_FORMAT' });
-    }
-
-    // MÊME RÈGLE QUE LA CAPTURE : ce qui n'est pas servable n'entre pas. Prendre
-    // l'extension du nom de fichier client sans la confronter aux six servies
-    // laissait `song.mpga` (MIME `audio/mpeg`, accepté ci-dessus) créer une
-    // ligne dont le `fileUrl` renvoie 400 à VIE.
-    const ext = servableExtension(data.mimetype, data.filename || '');
-    if (!ext) {
-      return sendBadRequest(reply, 'Unsupported audio container', { code: 'INVALID_AUDIO_FORMAT' });
-    }
-
-    const title = String((data.fields['title'] as any)?.value ?? 'Son sans titre').slice(0, 100);
-    const isPublic = (data.fields['isPublic'] as any)?.value !== 'false';
-    const durationRaw = parseInt((data.fields['duration'] as any)?.value ?? '0', 10);
-    // Aucun plafond de durée (directive produit 2026-07-30).
-    const duration = isNaN(durationRaw) ? 0 : durationRaw;
-
-    // Forme d'onde calculee par le client. La decoder ici imposerait ffmpeg
-    // dans le conteneur gateway pour une donnee purement decorative, que le
-    // client possede deja pour l'afficher. Un champ malforme est IGNORE,
-    // jamais une cause de rejet : on ne fait pas echouer l'envoi d'un fichier
-    // sur un ornement.
-    const waveform = parseWaveformField((data.fields['waveform'] as { value?: unknown } | undefined)?.value);
-
-    let buffer: Buffer;
-    try {
-      buffer = await data.toBuffer();
-    } catch {
-      // Le plafond ci-dessus se déclenche ICI quand la taille n'est connue qu'au
-      // fil du flux — c'est le cas nominal d'un envoi sans `Content-Length`.
-      return sendError(reply, 413, 'Audio file too large (100 MB max)', { code: 'FILE_TOO_LARGE' });
-    }
-
-    // OBLIGATOIRE : MongoDB traite l'absence comme `null` dans un index unique.
-    // Sans `contentHash`, le SECOND upload d'un même utilisateur violerait
-    // `@@unique([uploaderId, contentHash])` et renverrait 500.
-    // Haché sur le buffer DÉJÀ en mémoire (`toBuffer()` l'a matérialisé de toute
-    // façon) : même SHA-256 que `SoundCaptureService.hashFile`, donc les deux
-    // chemins de création dédoublonnent ensemble, sans relire le disque.
-    const contentHash = createHash('sha256').update(buffer).digest('hex');
-
-    // Ré-envoyer le même fichier est IDEMPOTENT, pas une erreur. Avant, le
-    // second envoi violait l'index unique et renvoyait une 500 nue.
-    const existing = await prisma.sound.findFirst({
-      where: { uploaderId: authContext.registeredUser.id, contentHash },
-      include: soundUploaderInclude,
-    });
-    if (existing) {
-      return sendSuccess(reply, toDTO(existing as unknown as Record<string, unknown>));
-    }
-
-    await fs.mkdir(UPLOAD_DIR, { recursive: true });
-    const filename = `story_audio_${randomUUID()}${ext}`;
-    await fs.writeFile(path.join(UPLOAD_DIR, filename), buffer);
-
-    const audio = await prisma.sound.create({
-      data: {
-        uploaderId: authContext.registeredUser.id,
-        fileUrl: staticFileUrl(filename),
-        title,
-        duration,
-        // `duration` (secondes) est DÉPRÉCIÉ mais reste écrit pour les
-        // lecteurs existants ; `durationMs` est ce que sert le DTO. Ne
-        // l'écrire qu'ici et pas là rendait la durée nulle côté client :
-        // le composer créait une piste SANS fenêtre temporelle et la story
-        // retombait sur ses 6 s de texte au lieu de durer tout l'audio
-        // (constaté en prod le 2026-08-02 sur « Meeshy Go », 90 s → 6 s).
-        durationMs: duration > 0 ? duration * 1000 : null,
-        waveform,
-        isPublic,
-        contentHash,
-      },
-      include: soundUploaderInclude,
-    });
-
-    return sendSuccess(reply, toDTO(audio as unknown as Record<string, unknown>), { statusCode: 201 });
-  });
+  // #4190 — `POST /stories/audio` a été RETIRÉE : orpheline sur les trois
+  // clients, et la plus coûteuse du module — `toBuffer()` matérialisait tout
+  // l'envoi en MÉMOIRE, d'où la borne de 100 Mo qui part avec elle. `GET
+  // /stories/audio` ci-dessous reste vivante (iOS `SoundLibraryService`) : le
+  // couple est homonyme, seul le verbe distingue la route morte de la vivante.
 
   // GET /stories/audio — Liste bibliothèque publique (triée par popularité)
   fastify.get('/stories/audio', {
@@ -160,7 +70,9 @@ export function registerStoryAudioRoutes(
     // Composé en AND : le prédicat porte son propre OR, et la recherche
     // ci-dessous en ajoute un second — deux clés `OR` au même niveau,
     // la seconde écraserait la première.
-    const where: any = { isPublic: true, AND: [NOT_MUTED_WHERE] };
+    // Un son retiré par son auteur (#9848) quitte la découverte ET la
+    // recherche : le prédicat est posé avant la clause `q`, donc sur les deux.
+    const where: any = { isPublic: true, AND: [NOT_MUTED_WHERE, NOT_DELETED_SOUND_WHERE] };
     if (q) {
       // Titre OU pseudo de l'uploadeur. Un son CAPTURÉ naît sans titre — le
       // libellé « Son original » est composé par le client dans sa langue —
@@ -230,7 +142,7 @@ export function registerStoryAudioRoutes(
       // précisément ce qu'un ayant droit a fait couper. 503 explicite plutôt
       // qu'une 500 anonyme — et la route n'est de toute façon atteignable que
       // si l'authentification a abouti.
-      request.log.error({ err, filename: safeName }, 'static: mute lookup failed');
+      logError(request.log, `static: mute lookup failed (filename=${safeName})`, err);
       return sendError(reply, 503, 'Sound availability cannot be verified', { code: 'SOUND_LOOKUP_FAILED' });
     }
     if (muted) {

@@ -41,11 +41,15 @@ function createMockPrisma(overrides: Record<string, unknown> = {}) {
       findUnique: overrides.userFindUnique ?? jest.fn().mockResolvedValue(null),
     },
     userSession: {
-      findFirst: overrides.sessionFindFirst ?? jest.fn().mockResolvedValue(null),
+      findFirst: overrides.sessionFindFirst ?? jest.fn().mockResolvedValue({ isValid: true, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) }),
       update: overrides.sessionUpdate ?? jest.fn().mockResolvedValue({}),
     },
     participant: {
       findFirst: overrides.participantFindFirst ?? jest.fn().mockResolvedValue(null),
+    },
+    // #10437 — la résolution d'un invité relit son lien (échéance) : un lien vivant, sans échéance.
+    conversationShareLink: {
+      findUnique: jest.fn().mockResolvedValue({ expiresAt: null }),
     },
   } as unknown as ConstructorParameters<typeof AuthMiddleware>[0]
 }
@@ -112,7 +116,7 @@ function createTestParticipant(tokenHash: string, overrides: Record<string, unkn
 }
 
 function signJwt(userId: string): string {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '1h' })
+  return jwt.sign({ userId, sid: '507f1f77bcf86cd799439031' }, JWT_SECRET, { expiresIn: '1h' })
 }
 
 describe('AuthMiddleware', () => {
@@ -312,15 +316,26 @@ describe('AuthMiddleware', () => {
         middleware.createAuthContext(undefined, rawToken)
       ).rejects.toThrow('Invalid session token')
 
+      // `isActive` a QUITTÉ le `where` (#4410) et ce n'est pas un relâchement :
+      // la contrainte a changé de place, pas disparu. Tant qu'elle filtrait la
+      // requête, un invité RÉVOQUÉ et un jeton INVENTÉ rendaient tous deux
+      // « aucune ligne », et le refus ne pouvait pas les distinguer. Elle est
+      // désormais une DÉCISION en aval, qui rend 410 GUEST_ACCESS_REVOKED sur
+      // le premier et 401 sur le second — voir
+      // `guest-access-revoked.test.ts`, qui garde les deux verdicts sur la
+      // valeur SERVIE.
       expect(findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
             sessionTokenHash: expectedHash,
             type: 'anonymous',
-            isActive: true,
           },
         })
       )
+      // Et la colonne est bien CHARGÉE : sans elle, la décision en aval
+      // répondrait « actif » sur tout le monde — un champ de protection absent
+      // de la requête est un piège armé.
+      expect(findFirst.mock.calls[0][0].select.isActive).toBe(true)
     })
 
     it('applies rights overrides from anonymousSession', async () => {

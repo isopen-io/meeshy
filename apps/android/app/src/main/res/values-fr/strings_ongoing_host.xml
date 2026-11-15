@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lot: ongoing-activity-host — boutons et textes des notifications en cours. -->
+<resources>
+    <string name="ongoing_action_cancel">Annuler</string>
+    <string name="ongoing_action_pause">Pause</string>
+    <string name="ongoing_action_resume">Reprendre</string>
+    <string name="ongoing_action_close">Fermer</string>
+    <string name="ongoing_action_hang_up">Raccrocher</string>
+    <string name="ongoing_action_mute">Couper le micro</string>
+    <string name="ongoing_action_unmute">Réactiver le micro</string>
+    <string name="ongoing_outbox_sent_of_total">%1$d sur %2$d envoyés</string>
+    <string name="ongoing_playback_protected">Message vocal</string>
+</resources>

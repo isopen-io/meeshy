@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_publish_block_caption">El pie de texto es demasiado largo — acórtalo para publicar</string>
+    <string name="composer_publish_block_text">Un texto admite 1000 caracteres como máximo — acórtalo para publicar</string>
+    <string name="composer_publish_block_texts">Más de 50 textos en una escena — elimina algunos para publicar</string>
+    <string name="composer_publish_block_stickers">Más de 50 stickers en una escena — elimina algunos para publicar</string>
+    <string name="composer_publish_block_media">Más de 50 medios en una escena — quita algunos para publicar</string>
+    <string name="composer_publish_block_sounds">Más de 50 sonidos en una escena — quita algunos para publicar</string>
+    <string name="composer_publish_block_duration">La story dura más de 2 horas — acorta una diapositiva para publicar</string>
+</resources>

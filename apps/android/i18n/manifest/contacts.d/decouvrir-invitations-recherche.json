@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:contacts": {
+      "resDir": "feature/contacts/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "contacts.discover.invite.sent",
+          "androidName": "contacts_discover_invite_sent",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.discover.sms.unavailable",
+          "androidName": "contacts_discover_sms_unavailable",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.avatar.viewProfile",
+          "androidName": "contacts_discover_view_profile",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

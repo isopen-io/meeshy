@@ -15,6 +15,8 @@ import {
   StoryEffectsSchema,
   CreateCommentSchema,
   TranslatePostSchema,
+  RepostSchema,
+  PublishAttachmentSchema,
 } from '../../../../routes/posts/types';
 import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 
@@ -83,9 +85,9 @@ describe('decodeCursor', () => {
   });
 
   it('returns the decoded data when cursor is valid', () => {
-    const cursor = encodeCursor('2024-03-20T08:00:00.000Z', 'test-id-123');
+    const cursor = encodeCursor('2024-03-20T08:00:00.000Z', '507f1f77bcf86cd799439123');
     const result = decodeCursor(cursor);
-    expect(result).toEqual({ createdAt: '2024-03-20T08:00:00.000Z', id: 'test-id-123' });
+    expect(result).toEqual({ createdAt: '2024-03-20T08:00:00.000Z', id: '507f1f77bcf86cd799439123' });
   });
 
   // ── Confusion de TYPE (durcissement 2026-08-24) ─────────────────────────────
@@ -127,9 +129,9 @@ describe('decodeCursor', () => {
 
   it('strips extra attacker-controlled keys, returning only createdAt and id', () => {
     const crafted = Buffer.from(
-      JSON.stringify({ createdAt: '2024-03-20T08:00:00.000Z', id: 'test-id-123', evil: 'ignored' }),
+      JSON.stringify({ createdAt: '2024-03-20T08:00:00.000Z', id: '507f1f77bcf86cd799439123', evil: 'ignored' }),
     ).toString('base64url');
-    expect(decodeCursor(crafted)).toEqual({ createdAt: '2024-03-20T08:00:00.000Z', id: 'test-id-123' });
+    expect(decodeCursor(crafted)).toEqual({ createdAt: '2024-03-20T08:00:00.000Z', id: '507f1f77bcf86cd799439123' });
   });
 });
 
@@ -153,7 +155,7 @@ describe('CreatePostSchema', () => {
       type: 'POST',
       content: 'Hello',
       visibility: 'EXCEPT',
-      visibilityUserIds: ['user-001'],
+      visibilityUserIds: ['507f1f77bcf86cd799439011'],
     });
     expect(result.success).toBe(true);
   });
@@ -168,8 +170,18 @@ describe('CreatePostSchema', () => {
       type: 'POST',
       content: 'Hello',
       visibility: 'ONLY',
-      visibilityUserIds: ['user-001'],
+      visibilityUserIds: ['507f1f77bcf86cd799439011'],
     });
+    expect(result.success).toBe(true);
+  });
+
+  // #7407 — une republication `EXCEPT`/`ONLY` HÉRITE la liste de sa source :
+  // `PostService.createPost` REMPLACE ce que le client envoie
+  // (`repostVisibilityInheritsAudienceList`). Exiger la liste du client, c'était
+  // exiger une donnée qu'il ne peut plus lire — elle n'est servie qu'à l'auteur
+  // de la source, jamais à celui qui la republie.
+  it.each(['EXCEPT', 'ONLY'])('accepts a %s repost without visibilityUserIds — the list comes from the source', (visibility) => {
+    const result = CreatePostSchema.safeParse({ type: 'STORY', visibility, repostOfId: '507f1f77bcf86cd799439011' });
     expect(result.success).toBe(true);
   });
 
@@ -242,6 +254,29 @@ describe('CreatePostSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  // ── L'axe EFFET d'un texte (#4870) ───────────────────────────────────────
+  //
+  // `textEffect` est LU par les trois clients ; il est borné ici comme
+  // `textStyle`, dont il est l'axe orthogonal. Le `.passthrough()` le
+  // laisserait passer sans borne — seul le garde-fou global de 256 KB
+  // l'arrêterait.
+
+  it('accepts a text object carrying a textEffect', () => {
+    const result = CreatePostSchema.safeParse({
+      type: 'STORY',
+      storyEffects: { textObjects: [{ id: 't', text: 'Salut', x: 0.5, y: 0.5, textEffect: 'glow' }] },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('bounds textEffect like textStyle — a 65-character value is refused', () => {
+    const result = CreatePostSchema.safeParse({
+      type: 'STORY',
+      storyEffects: { textObjects: [{ id: 't', text: 'Salut', x: 0.5, y: 0.5, textEffect: 'x'.repeat(65) }] },
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('accepts mediaAlt as a map of media id to alt text', () => {
     const result = CreatePostSchema.safeParse({
       type: 'POST',
@@ -261,13 +296,13 @@ describe('CreatePostSchema', () => {
   });
 
   it('accepts exactly MAX_POST_MEDIA media ids — the bound is read from @meeshy/shared, not a literal', () => {
-    const mediaIds = Array.from({ length: MAX_POST_MEDIA }, (_, i) => `media-${i}`);
+    const mediaIds = Array.from({ length: MAX_POST_MEDIA }, (_, i) => i.toString(16).padStart(24, '0'));
     const result = CreatePostSchema.safeParse({ type: 'POST', mediaIds });
     expect(result.success).toBe(true);
   });
 
   it('rejects MAX_POST_MEDIA + 1 media ids', () => {
-    const mediaIds = Array.from({ length: MAX_POST_MEDIA + 1 }, (_, i) => `media-${i}`);
+    const mediaIds = Array.from({ length: MAX_POST_MEDIA + 1 }, (_, i) => i.toString(16).padStart(24, '0'));
     const result = CreatePostSchema.safeParse({ type: 'POST', mediaIds });
     expect(result.success).toBe(false);
   });
@@ -304,12 +339,12 @@ describe('UpdatePostSchema', () => {
   });
 
   it('accepts EXCEPT visibility with non-empty visibilityUserIds', () => {
-    const result = UpdatePostSchema.safeParse({ visibility: 'EXCEPT', visibilityUserIds: ['user-1'] });
+    const result = UpdatePostSchema.safeParse({ visibility: 'EXCEPT', visibilityUserIds: ['507f1f77bcf86cd799439011'] });
     expect(result.success).toBe(true);
   });
 
   it('accepts ONLY visibility with non-empty visibilityUserIds', () => {
-    const result = UpdatePostSchema.safeParse({ visibility: 'ONLY', visibilityUserIds: ['user-1'] });
+    const result = UpdatePostSchema.safeParse({ visibility: 'ONLY', visibilityUserIds: ['507f1f77bcf86cd799439011'] });
     expect(result.success).toBe(true);
   });
 
@@ -325,22 +360,22 @@ describe('UpdatePostSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects mediaIds beyond 10 entries', () => {
-    const mediaIds = Array.from({ length: 11 }, (_, i) => `media-${i}`);
+  it('rejects mediaIds beyond the widest bound (a story\'s 200) — the route narrows to 10 for non-stories', () => {
+    const mediaIds = Array.from({ length: 201 }, (_, i) => i.toString(16).padStart(24, '0'));
     const result = UpdatePostSchema.safeParse({ mediaIds });
     expect(result.success).toBe(false);
   });
 
   it('accepts exactly MAX_POST_MEDIA media ids — same shared bound as CreatePostSchema', () => {
-    const mediaIds = Array.from({ length: MAX_POST_MEDIA }, (_, i) => `media-${i}`);
+    const mediaIds = Array.from({ length: MAX_POST_MEDIA }, (_, i) => i.toString(16).padStart(24, '0'));
     const result = UpdatePostSchema.safeParse({ mediaIds });
     expect(result.success).toBe(true);
   });
 
-  it('rejects MAX_POST_MEDIA + 1 media ids', () => {
-    const mediaIds = Array.from({ length: MAX_POST_MEDIA + 1 }, (_, i) => `media-${i}`);
+  it('accepts MAX_POST_MEDIA + 1 media ids at the schema (the post type is stored, the route decides)', () => {
+    const mediaIds = Array.from({ length: MAX_POST_MEDIA + 1 }, (_, i) => i.toString(16).padStart(24, '0'));
     const result = UpdatePostSchema.safeParse({ mediaIds });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
   });
 
   it('accepts mediaAlt alongside newly attached mediaIds', () => {
@@ -375,14 +410,14 @@ describe('StoryEffectsSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects mediaObjects array exceeding 32 entries', () => {
-    const mediaObjects = Array.from({ length: 33 }, (_, i) => ({ id: `media-${i}` }));
+  it('rejects more than 50 images in mediaObjects (#13590)', () => {
+    const mediaObjects = Array.from({ length: 51 }, (_, i) => ({ id: `media-${i}` }));
     const result = StoryEffectsSchema.safeParse({ mediaObjects });
     expect(result.success).toBe(false);
   });
 
-  it('accepts mediaObjects array at max cap (32 entries)', () => {
-    const mediaObjects = Array.from({ length: 32 }, (_, i) => ({ id: `media-${i}` }));
+  it('accepts mediaObjects array at max cap (50 entries)', () => {
+    const mediaObjects = Array.from({ length: 50 }, (_, i) => ({ id: `media-${i}` }));
     const result = StoryEffectsSchema.safeParse({ mediaObjects });
     expect(result.success).toBe(true);
   });
@@ -435,7 +470,7 @@ describe('CreateCommentSchema', () => {
   });
 
   it('parses a valid comment with attachment only (no text)', () => {
-    const result = CreateCommentSchema.safeParse({ attachmentIds: ['media-001'] });
+    const result = CreateCommentSchema.safeParse({ attachmentIds: ['aaaaaaaaaaaaaaaaaaaaa001'] });
     expect(result.success).toBe(true);
   });
 
@@ -450,13 +485,38 @@ describe('CreateCommentSchema', () => {
   });
 
   it('accepts a comment with both content and attachment', () => {
-    const result = CreateCommentSchema.safeParse({ content: 'Great!', attachmentIds: ['media-001'] });
+    const result = CreateCommentSchema.safeParse({ content: 'Great!', attachmentIds: ['aaaaaaaaaaaaaaaaaaaaa001'] });
     expect(result.success).toBe(true);
   });
 
-  it('rejects attachmentIds with more than 1 entry', () => {
-    const result = CreateCommentSchema.safeParse({ attachmentIds: ['media-001', 'media-002'] });
-    expect(result.success).toBe(false);
+  // #6578 — « ajouter d'AUTRES média » : le bornage à 1 est LEVÉ. Le bandeau
+  // du composer affichait déjà un TABLEAU de vignettes pour n'en envoyer qu'une
+  // — un contrôle qui ment.
+  it('accepte PLUSIEURS médias joints à un commentaire', () => {
+    const result = CreateCommentSchema.safeParse({ attachmentIds: ['aaaaaaaaaaaaaaaaaaaaa001', 'aaaaaaaaaaaaaaaaaaaaa002', 'aaaaaaaaaaaaaaaaaaaaa003'] });
+    expect(result.success).toBe(true);
+  });
+
+  it('borne au plafond des médias d’un post — pas un nombre neuf', () => {
+    const onze = Array.from({ length: MAX_POST_MEDIA + 1 }, (_, i) => i.toString(16).padStart(24, '0'));
+    expect(CreateCommentSchema.safeParse({ attachmentIds: onze }).success).toBe(false);
+    expect(CreateCommentSchema.safeParse({ attachmentIds: onze.slice(0, MAX_POST_MEDIA) }).success).toBe(true);
+  });
+});
+
+describe('CreateCommentSchema — un attachmentId est un ObjectId (#9745)', () => {
+  it.each([
+    ['un identifiant lisible', 'media-001'],
+    ['une chaîne vide', ''],
+    ['un ObjectId tronqué', 'aaaaaaaaaaaaaaaaaaaaaaa'],
+    ['un nombre', 42],
+    ['un objet de filtre', { $ne: null }],
+  ])('refuse %s à la validation — jamais une requête Prisma qui lève', (_label, id) => {
+    expect(CreateCommentSchema.safeParse({ content: 'x', attachmentIds: [id] }).success).toBe(false);
+  });
+
+  it('refuse le lot dès qu’UN id est mal formé', () => {
+    expect(CreateCommentSchema.safeParse({ attachmentIds: ['aaaaaaaaaaaaaaaaaaaaaaaa', 'pas-un-id'] }).success).toBe(false);
   });
 });
 
@@ -533,5 +593,30 @@ describe('StoryEffectsSchema — plafond de volume', () => {
       audioPlayerObjects: [{ id: 'a1', postMediaId: 'm1', volume: -0.1 }],
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('les audiences de cercle — un seul schéma d\'audience pour les quatre entrées (#13931)', () => {
+  const CIRCLES = ['ACQUAINTANCES', 'CLOSE', 'BLOOD'] as const;
+  const HISTORIC = ['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE'] as const;
+  const SOURCE_ID = '507f1f77bcf86cd799439011';
+
+  const entrances: ReadonlyArray<readonly [string, (visibility: string) => { success: boolean }]> = [
+    ['CreatePostSchema', (visibility) => CreatePostSchema.safeParse({ type: 'POST', content: 'Bonjour', visibility })],
+    ['UpdatePostSchema', (visibility) => UpdatePostSchema.safeParse({ visibility })],
+    ['RepostSchema', (visibility) => RepostSchema.safeParse({ visibility })],
+    ['PublishAttachmentSchema', (visibility) => PublishAttachmentSchema.safeParse({ attachmentId: SOURCE_ID, visibility })],
+  ];
+
+  it.each(entrances)('%s accepte les trois audiences de cercle et garde les valeurs historiques', (_name, parse) => {
+    [...CIRCLES, ...HISTORIC].forEach((visibility) => expect(parse(visibility).success).toBe(true));
+  });
+
+  it.each(entrances)('%s refuse une audience inconnue, y compris Atome (hors MVP) et la casse approchante', (_name, parse) => {
+    ['ATOM', 'close', 'Blood', 'ACQUAINTANCE', ''].forEach((visibility) => expect(parse(visibility).success).toBe(false));
+  });
+
+  it('une story STATUS (humeur) accepte aussi une audience de cercle', () => {
+    expect(CreatePostSchema.safeParse({ type: 'STATUS', moodEmoji: '🙂', visibility: 'CLOSE' }).success).toBe(true);
   });
 });

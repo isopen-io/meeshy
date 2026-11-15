@@ -125,4 +125,42 @@ final class FeedSocketPersistenceScopeTests: XCTestCase {
             "quitter le feed ne doit plus arrêter la persistance disque"
         )
     }
+
+    // MARK: - L2c/F3 : un repost de type TRAY n'entre pas dans la table du fil
+
+    private static func repostEvent(id: String, type: String) -> SocketPostRepostedData {
+        JSONStub.decode("""
+        {"originalPostId":"original-1","repost":{"id":"\(id)","type":"\(type)","content":"","createdAt":"2026-01-01T00:00:00.000Z","author":{"id":"u1","username":"auteur"}}}
+        """)
+    }
+
+    /// `post:reposted` n'est pas typé : le serveur y pousse le repost quel que
+    /// soit son type. Une story repostée s'insérait donc dans `feed_posts` — la
+    /// table que le secours de pagination HORS-LIGNE de `FeedViewModel` mappe
+    /// telle quelle en `FeedPost`, sans le filtre `belongsToStoryTray` que le
+    /// chemin en direct applique déjà. Le tray reparaissait dans le fil dès que
+    /// le réseau tombait.
+    ///
+    /// Les lignes STORY DÉJÀ persistées ne sont pas purgées par cette garde :
+    /// un résidu observé après mise à jour n'est pas un échec du filtre.
+    func test_postReposted_ofATrayType_neverReachesTheFeedTable() async throws {
+        let socket = MockSocialSocket()
+        let handler = FeedSocketHandler(persistence: feedActor, socialSocket: socket)
+        handler.arm()
+        defer { handler.disarm() }
+
+        socket.postReposted.send(Self.repostEvent(id: "repost-story", type: "STORY"))
+        socket.postReposted.send(Self.repostEvent(id: "repost-status", type: "STATUS"))
+        socket.postReposted.send(Self.repostEvent(id: "repost-post", type: "POST"))
+
+        try await Task.sleep(for: .milliseconds(150))
+        let ids = try feedActor.posts(cursor: nil, limit: 20).map(\.id)
+        XCTAssertFalse(ids.contains("repost-story"),
+                       "une story repostée vit dans le tray, jamais dans la table du fil")
+        XCTAssertFalse(ids.contains("repost-status"),
+                       "même partage par EXCLUSION que `belongsToStoryTray` : STATUS aussi")
+        XCTAssertTrue(ids.contains("repost-post"),
+                       "le repost nominal continue d'être persisté")
+    }
+
 }

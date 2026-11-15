@@ -2,10 +2,11 @@ import XCTest
 @testable import Meeshy
 
 /// Regression coverage for the logout branch of
-/// `adaptiveOnChange(of: authManager.isAuthenticated)` in `MeeshyApp.swift`.
+/// `MeeshyApp.sessionChanged(isAuthenticated:)` in `MeeshyApp+Lifecycle.swift`
+/// (it lived in the main window's `adaptiveOnChange(of: isAuthenticated)`
+/// until the iPad could close that window and take the teardown with it).
 ///
-/// That branch is an inline SwiftUI `onChange` closure, not an extractable
-/// function — `CallManager` (4900+ lines, CallKit/WebRTC-entangled) and
+/// That branch drives singletons that cannot be faked — `CallManager` (4900+ lines, CallKit/WebRTC-entangled) and
 /// `VoIPPushManager` (PushKit-entangled) cannot be driven into a genuine
 /// "active call" / "registered device" state from a unit test host. Mirrors
 /// the existing source-inspection convention in `CallManagerTests.swift`
@@ -20,20 +21,18 @@ final class MeeshyAppLogoutTests: XCTestCase {
             .deletingLastPathComponent() // Services -> Unit
             .deletingLastPathComponent() // Unit -> MeeshyTests
             .deletingLastPathComponent() // MeeshyTests -> apps/ios
-            .appendingPathComponent("Meeshy/MeeshyApp.swift")
+            .appendingPathComponent("Meeshy/MeeshyApp+Lifecycle.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    /// Extracts the `else` branch body of the
-    /// `.adaptiveOnChange(of: authManager.isAuthenticated)` handler: from its
-    /// `} else {` to the start of the next sibling `.adaptiveOnChange`
-    /// modifier immediately following it in the view-modifier chain. Bounding
-    /// on that marker (rather than a fixed-length prefix) survives future
+    /// Extracts the `else` branch body of `sessionChanged(isAuthenticated:)`:
+    /// from its `} else {` to the next function of the extension. Bounding on
+    /// that marker (rather than a fixed-length prefix) survives future
     /// additions to the branch body.
     private func logoutBranchBody(from source: String) -> String? {
-        guard let handlerRange = source.range(of: ".adaptiveOnChange(of: authManager.isAuthenticated)"),
+        guard let handlerRange = source.range(of: "static func sessionChanged(isAuthenticated isAuth: Bool) {"),
               let elseRange = source.range(of: "} else {", range: handlerRange.upperBound..<source.endIndex),
-              let nextHandlerRange = source.range(of: ".adaptiveOnChange(of: deepLinkRouter", range: elseRange.upperBound..<source.endIndex) else {
+              let nextHandlerRange = source.range(of: "private static func handleForegroundTransition", range: elseRange.upperBound..<source.endIndex) else {
             return nil
         }
         return String(source[elseRange.upperBound..<nextHandlerRange.lowerBound])
@@ -42,7 +41,7 @@ final class MeeshyAppLogoutTests: XCTestCase {
     func test_logoutBranch_clearsVoIPRegistration() throws {
         let source = try meeshyAppSource()
         guard let body = logoutBranchBody(from: source) else {
-            XCTFail("Could not locate the logout branch of adaptiveOnChange(of: authManager.isAuthenticated)")
+            XCTFail("Could not locate the logout branch of sessionChanged(isAuthenticated:)")
             return
         }
         XCTAssertTrue(
@@ -56,7 +55,7 @@ final class MeeshyAppLogoutTests: XCTestCase {
     func test_logoutBranch_endsActiveCall() throws {
         let source = try meeshyAppSource()
         guard let body = logoutBranchBody(from: source) else {
-            XCTFail("Could not locate the logout branch of adaptiveOnChange(of: authManager.isAuthenticated)")
+            XCTFail("Could not locate the logout branch of sessionChanged(isAuthenticated:)")
             return
         }
         XCTAssertTrue(

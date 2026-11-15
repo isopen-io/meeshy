@@ -117,4 +117,36 @@ final class StoryExportPreflightTests: XCTestCase {
             "fr"
         )
     }
+
+    /// La descente est celle du Prisme : une préférence régionale sert la
+    /// traduction de sa langue — `preferred.first { available.contains($0) }`
+    /// rendait `nil` et gravait l'original.
+    func test_defaultLanguage_regionalPreference_servesBaseLanguage() {
+        XCTAssertEqual(
+            StoryExportLanguageResolver.defaultLanguage(available: ["en", "es"], preferred: ["en-US"]),
+            "en"
+        )
+    }
+
+    func test_defaultLanguage_caseDiffers_servesAvailableSpelling() {
+        XCTAssertEqual(
+            StoryExportLanguageResolver.defaultLanguage(available: ["FR"], preferred: ["fr"]),
+            "FR"
+        )
+    }
+
+    /// Le rang tient sous normalisation : la première préférence servie gagne.
+    func test_defaultLanguage_normalizedFirstPreferenceWins() {
+        XCTAssertEqual(
+            StoryExportLanguageResolver.defaultLanguage(available: ["es", "fr"], preferred: ["fr-CA", "es"]),
+            "fr"
+        )
+    }
+
+    func test_defaultLanguage_blankPreference_isSkipped() {
+        XCTAssertEqual(
+            StoryExportLanguageResolver.defaultLanguage(available: ["es"], preferred: ["  ", "es"]),
+            "es"
+        )
+    }
 }

@@ -7,7 +7,10 @@ import MeeshyUI
 /// (sender, content preview, source conversation chip, star toggle) so the
 /// page works even when the source conversation is archived or offline.
 struct StarredMessagesView: View {
-    @StateObject private var store = StarredMessagesStore.shared
+    @ObservedObject private var store: StarredMessagesStore
+    init(store: StarredMessagesStore = .shared) {
+        self.store = store
+    }
     @Environment(\.dismiss) private var dismiss
     @Environment(\.isPresented) private var isPresented
     @Environment(\.meeshyPanelDismiss) private var panelDismiss
@@ -17,7 +20,8 @@ struct StarredMessagesView: View {
         PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
     }
     private var theme: ThemeManager { ThemeManager.shared }
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
+    @State private var openNoteID: String?
 
     var body: some View {
         ZStack {
@@ -25,61 +29,93 @@ struct StarredMessagesView: View {
 
             if store.snapshots.isEmpty {
                 emptyState
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 10) {
-                        ForEach(store.snapshots) { snapshot in
-                            StarredRow(snapshot: snapshot, isDark: theme.mode.isDark)
-                                .onTapGesture {
-                                    navigate(to: snapshot)
-                                }
-                                .contextMenu {
-                                    Button(role: .destructive) {
-                                        store.remove(messageId: snapshot.id)
-                                    } label: {
-                                        Label(String(localized: "starred.messages.remove", defaultValue: "Retirer des favoris", bundle: .main), systemImage: "star.slash")
-                                    }
-                                }
-                                .accessibilityElement(children: .combine)
-                                .accessibilityAddTraits(.isButton)
-                                .accessibilityHint(String(localized: "starred.messages.row.hint", defaultValue: "Ouvre la conversation", bundle: .main))
-                                .accessibilityAction { navigate(to: snapshot) }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                }
             }
-        }
-        .navigationTitle(String(localized: "starred.messages.title", defaultValue: "Messages favoris", bundle: .main))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if !store.snapshots.isEmpty {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button(role: .destructive) {
-                            store.clearAll()
-                        } label: {
-                            Label(String(localized: "starred.messages.remove_all", defaultValue: "Tout retirer", bundle: .main), systemImage: "star.slash.fill")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                    .accessibilityLabel(String(localized: "starred.messages.more_options", defaultValue: "Plus d'options", bundle: .main))
-                }
-            }
+
+            // L'en-tête partagé remplace la barre système, masquée par la route
+            // (#6481) : titre, retour en verre et menu dans le même en-tête. La
+            // page passe PAR-DESSUS l'état vide, qui reste centré par ce ZStack.
+            CollapsibleHeaderPage(
+                title: String(localized: "starred.messages.title", defaultValue: "Messages favoris", bundle: .main),
+                onBack: { back() },
+                titleColor: theme.textPrimary,
+                backArrowColor: MeeshyColors.brandPrimary,
+                backgroundColor: theme.backgroundPrimary,
+                trailing: { moreOptionsMenu },
+                content: { rows }
+            )
         }
     }
 
-    // Native HIG empty state (`ContentUnavailableView` on iOS 17+, faithful
-    // fallback on iOS 16) via the shared design-system wrapper — same treatment
-    // as FeedView / CreateShareLinkView. Centered by the enclosing ZStack.
-    private var emptyState: some View {
-        AdaptiveContentUnavailableView(
-            String(localized: "starred.messages.empty.title", defaultValue: "Aucun message favori", bundle: .main),
-            systemImage: "star.circle",
-            description: Text(String(localized: "starred.messages.empty.subtitle", defaultValue: "Appuyez longuement sur un message et choisissez \"Ajouter aux favoris\" pour le retrouver ici.", bundle: .main))
+    private var rows: some View {
+        LazyVStack(spacing: MeeshySpacing.smPlus) {
+            ForEach(store.snapshots) { snapshot in
+                Button { navigate(to: snapshot) } label: {
+                    StarredRow(snapshot: snapshot, isDark: theme.mode.isDark)
+                }
+                .buttonStyle(PressableButtonStyle())
+                .contextMenu {
+                    Button(role: .destructive) {
+                        store.remove(messageId: snapshot.id)
+                    } label: {
+                        Label(String(localized: "starred.messages.remove", defaultValue: "Retirer des favoris", bundle: .main), systemImage: "star.slash")
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityHint(String(localized: "starred.messages.row.hint", defaultValue: "Ouvre la conversation", bundle: .main))
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
+    }
+
+    /// Le menu « Tout retirer », en disque de verre du diamètre du retour. Le
+    /// disque EST le cercle : le glyphe passe d'`ellipsis.circle` à `ellipsis`,
+    /// qui ne s'y dessinerait pas deux fois. Absent sur une liste vide.
+    @ViewBuilder
+    private var moreOptionsMenu: some View {
+        if !store.snapshots.isEmpty {
+            Menu {
+                Button(role: .destructive) {
+                    store.clearAll()
+                } label: {
+                    Label(String(localized: "starred.messages.remove_all", defaultValue: "Tout retirer", bundle: .main), systemImage: "star.slash.fill")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.brandPrimary)
+                    .frame(width: CollapsibleHeaderMetrics.roundChromeDiameter, height: CollapsibleHeaderMetrics.roundChromeDiameter)
+                    .adaptiveGlass(in: Circle(), interactive: true)
+                    .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
+                    .contentShape(Circle())
+            }
+            .accessibilityLabel(String(localized: "starred.messages.more_options", defaultValue: "Plus d'options", bundle: .main))
+        }
+    }
+
+    /// L'état vide tient en une ligne ; le geste qui remplit la liste reste appris ICI, derrière un (i)
+    /// dont le nom est la question à laquelle il répond (règle 4, #18088).
+    static var emptyInfoNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "starred.messages.empty.question", defaultValue: "Comment ajouter un message aux favoris ?", bundle: .main),
+            text: String(localized: "starred.messages.empty.subtitle", defaultValue: "Appui long sur un message, puis « Ajouter aux favoris ».", bundle: .main)
         )
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: MeeshySpacing.md) {
+            Image(systemName: "star.circle")
+                .font(MeeshyFont.relative(40))
+                .foregroundStyle(theme.textMuted)
+                .accessibilityHidden(true)
+            MeeshyInfoNoted(note: Self.emptyInfoNote, openNoteID: $openNoteID, tint: theme.textMuted) {
+                Text(String(localized: "starred.messages.empty.title", defaultValue: "Aucun message favori", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .foregroundStyle(theme.textPrimary)
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.xxxl)
+        .frame(maxWidth: .infinity)
     }
 
     private func navigate(to snapshot: StarredMessageSnapshot) {
@@ -88,8 +124,7 @@ struct StarredMessagesView: View {
         // Le highlight est SCOPÉ à la conversation cible, et la notification
         // est observée par RootView/iPadRootView (elle était sans observateur —
         // tap étoilé = no-op silencieux + highlight qui fuitait ailleurs).
-        router.pendingHighlightMessageId = snapshot.id
-        router.pendingHighlightConversationId = snapshot.conversationId
+        router.requestHighlight(messageId: snapshot.id, inConversation: snapshot.conversationId)
         NotificationCenter.default.post(
             name: .meeshyNavigateToConversation,
             object: snapshot.conversationId
@@ -108,50 +143,50 @@ private struct StarredRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: MeeshySpacing.md) {
             RoundedRectangle(cornerRadius: 3, style: .continuous)
                 .fill(accent)
                 .frame(width: 3)
                 .frame(maxHeight: .infinity)
 
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "star.fill")
-                        .font(MeeshyFont.relative(10, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
                         .foregroundStyle(MeeshyColors.warning)
-                    Text(snapshot.senderName ?? String(localized: "starred.messages.unknown_user", defaultValue: "Utilisateur", bundle: .main))
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                    Text(snapshot.senderName ?? String(localized: "common.unknown_user", defaultValue: "Utilisateur", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundStyle(accent)
                     Spacer(minLength: 4)
                     Text(snapshot.sentAt.formatted(.dateTime.day().month(.abbreviated).hour().minute()))
-                        .font(MeeshyFont.relative(11))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundStyle(isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo700.opacity(0.6))
                 }
 
                 Text(snapshot.contentPreview)
-                    .font(MeeshyFont.relative(14))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize))
                     .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                     .lineLimit(4)
                     .multilineTextAlignment(.leading)
 
                 if let conversationName = snapshot.conversationName {
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "bubble.left.and.bubble.right.fill")
-                            .font(MeeshyFont.relative(9, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                         Text(conversationName)
-                            .font(MeeshyFont.relative(11, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     }
-                    .foregroundStyle(accent.opacity(0.85))
+                    .foregroundStyle(accent.opacity(MeeshyOpacity.intense))
                 }
             }
         }
-        .padding(12)
+        .padding(MeeshySpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
                 .fill(isDark ? MeeshyColors.indigo950.opacity(0.4) : MeeshyColors.indigo50)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(accent.opacity(0.2), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
+                        .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
                 )
         )
     }

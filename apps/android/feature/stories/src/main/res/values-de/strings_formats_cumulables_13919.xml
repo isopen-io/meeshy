@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_publish_failed_story">Die Story wurde nicht veröffentlicht</string>
+    <string name="composer_publish_failed_post">Der Beitrag wurde nicht veröffentlicht</string>
+    <string name="composer_publish_failed_reel">Das Reel wurde nicht veröffentlicht</string>
+</resources>

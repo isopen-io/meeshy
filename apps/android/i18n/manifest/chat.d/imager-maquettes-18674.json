@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "export.card.models.combinations",
+          "androidName": "export_card_models_combinations",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.decor.center",
+          "androidName": "export_card_decor_center",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.decor.label",
+          "androidName": "export_card_decor_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.decor.frame.none",
+          "androidName": "export_card_decor_frame_none",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.decor.frame.panel",
+          "androidName": "export_card_decor_frame_panel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.decor.frame.border",
+          "androidName": "export_card_decor_frame_border",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.decor.ornament.none",
+          "androidName": "export_card_decor_ornament_none",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.decor.ornament.quoteMark",
+          "androidName": "export_card_decor_ornament_quoteMark",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.decor.ornament.accentRule",
+          "androidName": "export_card_decor_ornament_accentRule",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

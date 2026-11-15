@@ -39,6 +39,7 @@ const mockCreateMissedCallNotification = jest.fn<any>().mockResolvedValue(null);
 const mockReleaseActiveCallClaim = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn().mockImplementation(() => ({
     initiateCall: mockInitiateCall,
     generateIceServers: mockGenerateIceServers,
@@ -82,6 +83,7 @@ jest.mock('../../../utils/socket-rate-limiter', () => ({
     destroy: jest.fn(),
   }),
   checkSocketRateLimit: jest.fn<any>().mockResolvedValue(true),
+  callSignalBudgetId: jest.requireActual<typeof import('../../../utils/socket-rate-limiter')>('../../../utils/socket-rate-limiter').callSignalBudgetId,
   SOCKET_RATE_LIMITS: {
     MESSAGE_SEND: { maxRequests: 20, windowMs: 60000, keyPrefix: 'socket:message:send' },
     CALL_INITIATE: { maxRequests: 5, windowMs: 60000, keyPrefix: 'socket:call:initiate' },
@@ -100,6 +102,7 @@ import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
 import { validateSocketEvent } from '../../../middleware/validation';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { openCallRingTables } from '../../helpers/call-ring-policy-tables';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -226,6 +229,7 @@ function makeCallSession() {
 
 function makePrisma(overrides: { updateManyCount?: number } = {}) {
   return {
+    ...openCallRingTables(),
     participant: {
       findFirst: jest.fn<any>().mockResolvedValue({ id: 'participant-abc' }),
       findMany: jest.fn<any>().mockResolvedValue([]),

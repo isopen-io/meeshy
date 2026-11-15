@@ -79,6 +79,10 @@ struct MediaSaveFlowModifier: ViewModifier {
                 case .saved(let destination):
                     HapticFeedback.success()
                     FeedbackToastManager.shared.showSuccess(savedMessage(for: destination))
+                case .alreadyInPhotoLibrary:
+                    HapticFeedback.light()
+                    FeedbackToastManager.shared.showSuccess(
+                        NSLocalizedString("media.save.alreadyInPhotos", value: "Déjà dans la photothèque", comment: ""))
                 case .failed(let message):
                     HapticFeedback.error()
                     FeedbackToastManager.shared.showError(message)
@@ -108,22 +112,22 @@ struct MediaSaveFlowModifier: ViewModifier {
 /// bouton qui ne fait rien ment plus qu'il n'aide.
 private struct MediaSavePreparingIndicator: View {
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             ProgressView()
                 .progressViewStyle(.circular)
                 .tint(.white)
             Text(NSLocalizedString("media.save.preparing", value: "Préparation…", comment: "Shown while the media is being resolved and watermarked before saving"))
                 .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white)
+                .foregroundStyle(MeeshyColors.mediaChromeForeground)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.mdPlus)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
+                .stroke(Color.white.opacity(MeeshyOpacity.light), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.25), radius: 18, y: 8)
+        .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 18, y: 8)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(NSLocalizedString("media.save.preparing", value: "Préparation…", comment: ""))
     }
@@ -134,6 +138,20 @@ extension View {
     /// Déclencher via `coordinator.requestSave(MediaSaveRequest(...))`.
     func mediaSaveFlow(_ coordinator: MediaSaveCoordinator) -> some View {
         modifier(MediaSaveFlowModifier(coordinator: coordinator))
+    }
+}
+
+extension View {
+    /// Pose le portillon de sortie des visionneuses d'après les messages
+    /// PORTEURS de leurs pièces (#9573). Sans porteur connu — une surface hors
+    /// conversation — le portillon de l'hôte reste tel quel.
+    @ViewBuilder
+    func mediaExitGate(carriers: [Message]) -> some View {
+        if carriers.isEmpty {
+            self
+        } else {
+            contentExitGate(MessageExitOffer.mediaExitGate(for: carriers))
+        }
     }
 }
 
@@ -149,6 +167,9 @@ struct SavableMediaFullscreen<Content: View>: View {
     @ViewBuilder let content: (_ requestSave: @escaping () -> Void) -> Content
 
     @StateObject private var saveCoordinator = MediaSaveCoordinator()
+    /// Le portillon de sortie posé par l'hôte (#9573) — second verrou : le
+    /// bouton n'est déjà pas rendu par la visionneuse, la requête ne part pas.
+    @Environment(\.contentExitGate) private var exitGate
 
     var body: some View {
         content(requestSave)
@@ -156,9 +177,12 @@ struct SavableMediaFullscreen<Content: View>: View {
     }
 
     private func requestSave() {
+        saveCoordinator.exitGate = exitGate
+        guard exitGate.mayLeave(attachment.id) else { return }
         HapticFeedback.light()
-        saveCoordinator.requestSave(MediaSaveRequest(
+        saveCoordinator.save(MediaSaveRequest(
             kind: attachment.kind,
+            origin: .transmitted,
             remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
             suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
             attachmentId: attachment.id.isEmpty ? nil : attachment.id
@@ -191,6 +215,11 @@ private struct DocumentExportPicker: UIViewControllerRepresentable {
     }
 
     final class Coordinator: NSObject, UIDocumentPickerDelegate {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
         private let onExported: () -> Void
         private let onCancelled: () -> Void
 

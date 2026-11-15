@@ -88,6 +88,30 @@ final class EngagementOutboxTests: XCTestCase {
         XCTAssertEqual(Set(later.value), ["s1", "s2", "s3"], "rows re-dispatch once the backoff elapses")
     }
 
+    func test_flush_transientFailures_followTheStateSyncSchedule() async {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let clock = SyncBox<Date>(start)
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("engagement-\(UUID().uuidString).db").path
+        let outbox = EngagementOutbox(dbPath: path, clock: { clock.value })
+        await outbox.beginSession(makeSession("s1"))
+        await outbox.finalizeSession(makeSession("s1", dwellMs: 5000))
+        await outbox.flush { _ in .failedTransient }
+
+        var elapsed: TimeInterval = 0
+        for delay in [10.0, 20, 40, 60, 60] {
+            elapsed += delay
+            clock.mutate { $0 = start.addingTimeInterval(elapsed - 1) }
+            let early = SyncBox<Int>(0)
+            await outbox.flush { sessions in early.mutate { $0 += sessions.count }; return .failedTransient }
+            XCTAssertEqual(early.value, 0, "not ready 1 s before the \(delay) s step")
+            clock.mutate { $0 = start.addingTimeInterval(elapsed) }
+            let due = SyncBox<Int>(0)
+            await outbox.flush { sessions in due.mutate { $0 += sessions.count }; return .failedTransient }
+            XCTAssertEqual(due.value, 1, "ready once the \(delay) s step elapses")
+        }
+    }
+
     func test_bootSweep_finalizesOrphanOpenSessions_truncated() async {
         let path = FileManager.default.temporaryDirectory
             .appendingPathComponent("engagement-\(UUID().uuidString).db").path

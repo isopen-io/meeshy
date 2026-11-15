@@ -1,5 +1,7 @@
 package me.meeshy.app.calls
 
+import me.meeshy.sdk.model.call.CallVideoNotice
+import me.meeshy.sdk.model.call.CallConnectedLayoutLaw
 import me.meeshy.sdk.model.call.CallDuration
 import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallRetryPolicy
@@ -39,12 +41,17 @@ enum class CallStatus {
 
 /**
  * Local media intent that rides *alongside* the call phase, never inside the
- * FSM (parity with iOS `CallManager`, where mute/camera are independent of
- * `CallState`). [isCameraOn] is only meaningful for a video call.
+ * FSM (parity with iOS `CallManager`, where mute/camera/speaker are independent
+ * of `CallState`). [isCameraOn] is only meaningful for a video call. [isSpeakerOn]
+ * is local audio routing only — it is never signalled to the peer (parity iOS
+ * `CallManager.isSpeaker`, no `call:media-toggled` counterpart).
  */
 data class CallMedia(
     val isMuted: Boolean = false,
     val isCameraOn: Boolean = true,
+    val isSpeakerOn: Boolean = false,
+    /** La caméra avant capte : seul son aperçu local se rend en miroir. */
+    val isFrontCamera: Boolean = true,
 )
 
 /**
@@ -64,6 +71,10 @@ data class CallConfig(
     val isOutgoing: Boolean,
     val conversationId: String = "",
     val callId: String = "",
+    /** Photo du contact, quand l'appelant la connaît : l'écran d'appel la pose en disque et, floutée, en fond. */
+    val peerAvatarUrl: String? = null,
+    /** Bannière du contact : elle passe avant l'avatar pour le fond flouté. */
+    val peerBannerUrl: String? = null,
 ) {
     companion object {
         val EMPTY: CallConfig = CallConfig(peerId = "", peerName = "", isVideo = false, isOutgoing = false)
@@ -90,6 +101,7 @@ data class CallUiState(
     val isVideoCall: Boolean,
     val isMuted: Boolean,
     val isCameraOn: Boolean,
+    val isSpeakerOn: Boolean,
     val endReason: CallEndReason?,
     val reconnectAttempt: Int,
     /**
@@ -126,6 +138,10 @@ data class CallUiState(
      * `isRemoteScreenCapturing` parity). Never leaks past the call's media phases.
      */
     val isPeerScreenCapturing: Boolean = false,
+    /** #16665 — who the capsule names: the capturer in a group, the call's name in a duo. */
+    val peerScreenCapturerName: String = "",
+    /** R2.2 — who is who in the call, by user id: the consent card names the requester from it, never the call's main peer. */
+    val participantNames: Map<String, String> = emptyMap(),
     /**
      * The latest live caption from the remote speaker (`call:translated-segment`),
      * preferring the server-side translation over the original text — `null` when
@@ -137,13 +153,57 @@ data class CallUiState(
      * audio) — iOS `isRemoteAudioEnabled` parity. Only on the media phases.
      */
     val isPeerMuted: Boolean = false,
+    /** #13333 — what the « Sous-titres » button shows: mode, invitation, and whether this call may carry captions. */
+    val captions: CallCaptionsChip = CallCaptionsChip(),
     /**
      * `true` while the remote peer's camera is off DURING A VIDEO CALL
      * (`call:media-toggled` video) — iOS `isRemoteVideoEnabled` parity, driving
      * the "camera off" placeholder. Never raised on an audio-only call.
      */
     val isPeerCameraOff: Boolean = false,
+    /**
+     * `true` while the remote peer shares their screen (`call:media-toggled` screen) — iOS
+     * `isRemoteSharing`: their stream shows even with their camera off, and the banner says so (#13332).
+     */
+    val isPeerScreenSharing: Boolean = false,
+    /** #16665 — the captures of the call in progress, dated, for the live journal and the captions band (loi 13). */
+    val liveCaptures: List<CallLiveCapture> = emptyList(),
+    /**
+     * `true` while the app itself froze the outgoing video to keep a poor link
+     * alive ([CallVideoHealth]) — the user did NOT turn the camera off, so the
+     * screen says « video paused » rather than showing a lie. Only on the media
+     * phases of a VIDEO call.
+     */
+    val isVideoAutoPaused: Boolean = false,
+    /** L'indicateur discret : image réduite par la chaleur ou lumière insuffisante ([CallVideoHealth]). */
+    val videoNotice: CallVideoNotice = CallVideoNotice.None,
+    /**
+     * La disposition connectée est gardée : `CONNECTED`, ou `RECONNECTING` APRÈS un média établi
+     * (un creux réseau ne vide pas l'écran) — jamais l'écran de connexion à ce moment-là.
+     */
+    val showsConnectedLayout: Boolean = false,
+    /** La durée finale en secondes, pour que TalkBack la dise (« 2 minutes 5 secondes »). */
+    val durationSeconds: Long = 0,
+    /** La caméra avant capte : seul son aperçu local se rend en miroir (l'arrière filme le monde à l'endroit). */
+    val isFrontCamera: Boolean = true,
+    /** L'appel est en attente (appel GSM, alarme) : la surcouche « En attente » s'affiche, micro et caméra s'atténuent. */
+    val isOnHold: Boolean = false,
 ) {
+    /** Le chrono tourne : connecté, ou en reconnexion avec un média déjà établi. */
+    val hasLiveClock: Boolean
+        get() = status == CallStatus.CONNECTED || status == CallStatus.RECONNECTING
+
+    /**
+     * Le même état, chrono GELÉ : pendant que le chrono tourne, l'écran ne change plus à chaque
+     * seconde — seules les feuilles qui AFFICHENT le temps le lisent, par [LocalCallLiveSeconds].
+     * Sans cela, un tic de 1 Hz invalide tout l'écran d'appel (racine, scène, pilule).
+     */
+    fun withFrozenClock(): CallUiState =
+        if (hasLiveClock && durationLabel != null) copy(durationLabel = FROZEN_CLOCK, durationSeconds = 0) else this
+
+    /** The captions as the screen reads them, folded in without a copy when nothing changed. */
+    fun withCaptions(chip: CallCaptionsChip): CallUiState = if (chip == captions) this else copy(captions = chip)
+
     /** Accept / decline are only offered for an incoming, still-ringing call. */
     val showAnswerControls: Boolean
         get() = status == CallStatus.INCOMING
@@ -205,6 +265,11 @@ object CallPresenter {
         caption: String? = null,
         peerAudioEnabled: Boolean = true,
         peerVideoEnabled: Boolean = true,
+        videoAutoPaused: Boolean = false,
+        mediaEstablished: Boolean = false,
+        peerScreenSharing: Boolean = false,
+        videoNotice: CallVideoNotice = CallVideoNotice.None,
+        liveCaptures: List<CallLiveCapture> = emptyList(),
     ): CallUiState {
         val status = statusOf(state)
         val onMediaPhase = status == CallStatus.CONNECTED || status == CallStatus.RECONNECTING
@@ -214,6 +279,8 @@ object CallPresenter {
             isVideoCall = config.isVideo,
             isMuted = media.isMuted,
             isCameraOn = config.isVideo && media.isCameraOn,
+            isFrontCamera = media.isFrontCamera,
+            isSpeakerOn = media.isSpeakerOn,
             endReason = (state as? CallState.Ended)?.reason,
             reconnectAttempt = (state as? CallState.Reconnecting)?.attempt ?: 0,
             durationLabel = durationLabelFor(status, elapsedSeconds),
@@ -227,7 +294,14 @@ object CallPresenter {
             isPeerMuted = onMediaPhase && !peerAudioEnabled,
             // Only a VIDEO call renders a camera indicator — an audio call's
             // peer "camera off" is its permanent, unremarkable state.
-            isPeerCameraOff = onMediaPhase && config.isVideo && !peerVideoEnabled,
+            // A shared screen travels on the video sender: it shows even with the camera off (iOS `isRemoteVideoVisible`).
+            isPeerCameraOff = onMediaPhase && config.isVideo && !peerVideoEnabled && !peerScreenSharing,
+            isPeerScreenSharing = onMediaPhase && peerScreenSharing,
+            liveCaptures = if (onMediaPhase) liveCaptures else emptyList(),
+            isVideoAutoPaused = onMediaPhase && config.isVideo && videoAutoPaused,
+            videoNotice = if (onMediaPhase && config.isVideo && media.isCameraOn) videoNotice else CallVideoNotice.None,
+            showsConnectedLayout = CallConnectedLayoutLaw.showsConnectedLayout(state, mediaEstablished),
+            durationSeconds = elapsedSeconds.coerceAtLeast(0),
         )
     }
 
@@ -265,3 +339,6 @@ object CallPresenter {
         is CallState.Ended -> CallStatus.ENDED
     }
 }
+
+/** Le libellé posé à la place du temps vivant : constant, donc sans effet sur la recomposition. */
+internal const val FROZEN_CLOCK = "00:00"

@@ -8,6 +8,8 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
  */
 export type DirectContactPrisma = Pick<PrismaClient, 'participant'>;
 
+export type ConversingContactPrisma = Pick<PrismaClient, 'participant' | 'message'>;
+
 /**
  * Vrai ssi `a` et `b` sont tous deux membres ACTIFS d'une même conversation
  * directe.
@@ -95,6 +97,49 @@ export async function filterDirectContactIdsAmong(
 
     return new Set(
       shared.map((p) => p.userId).filter((id): id is string => typeof id === 'string')
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Lesquels, parmi `candidates`, partagent avec `userId` une conversation directe
+ * active (la définition de {@link filterDirectContactIdsAmong}) OÙ ILS ONT ÉCRIT
+ * (#14105). Une conversation directe se crée sans le consentement de l'autre et
+ * sans le prévenir : sa seule existence ne prouve aucun lien. Un message que le
+ * candidat y a lui-même envoyé, si. Bornée par les candidats ; `null` en panne.
+ */
+export async function filterConversingContactIdsAmong(
+  prisma: ConversingContactPrisma,
+  userId: string,
+  candidates: readonly string[],
+): Promise<Set<string> | null> {
+  if (candidates.length === 0) return new Set();
+  try {
+    const memberships = await prisma.participant.findMany({
+      where: { userId, isActive: true, conversation: { type: 'direct' } },
+      select: { conversationId: true },
+    });
+    if (memberships.length === 0) return new Set();
+    const theirs = await prisma.participant.findMany({
+      where: {
+        userId: { in: [...candidates] },
+        isActive: true,
+        conversationId: { in: memberships.map((m) => m.conversationId) },
+      },
+      select: { id: true, userId: true },
+    });
+    if (theirs.length === 0) return new Set();
+    const spoke = await prisma.message.findMany({
+      where: { senderId: { in: theirs.map((p) => p.id) }, deletedAt: null },
+      distinct: ['senderId'],
+      select: { senderId: true },
+      take: theirs.length,
+    });
+    const speakers = new Set(spoke.map((m) => m.senderId));
+    return new Set(
+      theirs.filter((p) => speakers.has(p.id)).map((p) => p.userId).filter((id): id is string => typeof id === 'string')
     );
   } catch {
     return null;

@@ -7,7 +7,15 @@ import MeeshySDK
 /// l'ancienne `ForwardBadgePolicy.conversationName(for:)` qui laissait
 /// l'appelant confondre « pas de groupe à nommer » et « interdit de nommer »,
 /// et retomber sur le nom de la PERSONNE. La fuite passait exactement par là.
-enum ForwardAttribution: Equatable {
+/// `nonisolated` par DÉCLARATION (#5058) : le type est pur — trois cas, aucune
+/// vue, aucun singleton. Sans cette annotation, l'isolation `@MainActor` par
+/// défaut du module rend sa conformance `Equatable` inutilisable depuis un
+/// contexte nonisolated, et `BubbleContent.==` en est un. C'est la même cause
+/// que l'erreur soldée sur `StoryCanvasUIView.CanvasItemKind`:
+/// une valeur qui traverse une frontière d'isolation doit le dire, et le
+/// compilateur ne le signale qu'au CONSOMMATEUR — jamais au site de
+/// déclaration.
+nonisolated enum ForwardAttribution: Equatable {
     /// Le groupe source se nomme lui-même. L'auteur disparaît.
     case group(String)
     /// Aucun groupe à nommer (tête-à-tête) : l'auteur reste la seule provenance.
@@ -16,7 +24,7 @@ enum ForwardAttribution: Equatable {
     case anonymous
 }
 
-/// Règle produit du badge « Transféré » (porteur, 2026-08-23) : « le forward
+/// Règle produit du badge « Transféré » (porteur): « le forward
 /// d'un message, document ne doit pas dire de qui il vient mais de quel groupe
 /// si cela vient d'un groupe AU MOINS PUBLIC ».
 ///
@@ -34,7 +42,7 @@ enum ForwardAttribution: Equatable {
 /// apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ForwardBadgePolicy.kt.
 /// Ces deux surfaces ne nomment DÉJÀ jamais la personne ; seul le seuil y reste
 /// à corriger — lot séparé, hors du périmètre de cette branche iOS.
-enum ForwardBadgePolicy {
+nonisolated enum ForwardBadgePolicy {
     /// Types atteignables au-delà d'un cercle fermé : nommer la source n'y
     /// révèle rien qui ne soit déjà public.
     private static let publiclyReachableTypes: Set<String> = [

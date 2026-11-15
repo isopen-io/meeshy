@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "androidName": "cache_purge_cell_selected",
+          "status": "android-only"
+        },
+        {
+          "androidName": "cache_purge_cell_unselected",
+          "status": "android-only"
+        },
+        {
+          "androidName": "cache_purge_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "cache_purge_freed",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

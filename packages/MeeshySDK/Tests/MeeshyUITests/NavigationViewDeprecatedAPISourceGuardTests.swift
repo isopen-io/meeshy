@@ -4,7 +4,7 @@ import XCTest
 /// soft-dépréciée depuis iOS 16 au profit de `NavigationStack` (le plancher de
 /// déploiement du SDK est iOS 16.0+, cf. `packages/MeeshySDK/CLAUDE.md`).
 ///
-/// Cinq écrans modaux (`VoiceProfileWizardView`, `VoiceProfileManageView`,
+/// Cinq écrans modaux (`VoiceProfileWizardView`, `VoiceProfileManageView` — supprimés depuis, doublons morts de l'app —,
 /// `UnifiedPostComposer`, `CodeViewerView`, `DocumentViewerView`) instanciaient
 /// `NavigationView { <une seule vue enfant> }` — aucun n'exploite le mode
 /// master/detail (`NavigationView` ne bascule en `.doubleColumn` sur iPad que

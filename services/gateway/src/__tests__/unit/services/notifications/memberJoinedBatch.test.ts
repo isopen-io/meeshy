@@ -83,6 +83,7 @@ describe('createMemberJoinedNotificationsBatch', () => {
       Promise.resolve({ id: `n-${data.userId}`, ...data, delivery: { emailSent: false, pushSent: false } })
     );
     prisma.user.findUnique.mockResolvedValue({ username: 'newbie', displayName: 'Newbie', avatar: null });
+    prisma.user.findMany.mockResolvedValue([]);
     prisma.conversation.findUnique.mockResolvedValue({ title: 'Le groupe', type: 'group' });
     prisma.participant.count.mockResolvedValue(42);
     prisma.userPreferences.findUnique.mockResolvedValue(null);
@@ -110,6 +111,7 @@ describe('createMemberJoinedNotificationsBatch', () => {
       Promise.resolve({ id: 'n', ...data, delivery: { emailSent: false, pushSent: false } })
     );
     prisma.user.findUnique.mockResolvedValue({ username: 'newbie', displayName: 'Newbie', avatar: null });
+    prisma.user.findMany.mockResolvedValue([]);
     prisma.conversation.findUnique.mockResolvedValue({ title: 'Le groupe', type: 'group' });
     prisma.participant.count.mockResolvedValue(42);
     prisma.userPreferences.findUnique.mockResolvedValue(null);

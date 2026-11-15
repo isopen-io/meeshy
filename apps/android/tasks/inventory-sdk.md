@@ -692,8 +692,26 @@ All models are Decodable/Encodable with readonly properties and optional CodingK
 - [ ] **Participants**
   - `participant:role-updated` ← ParticipantRoleUpdatedEventData { conversationId, userId, newRole, updatedBy, participant }
 
-- [ ] **User Preferences**
-  - `user:preferences-updated` ← { userId, category }
+- [x] **User Preferences** — scope CONVERSATION livré au cycle 130 (#4127)
+  - `user:preferences-updated` ← union de TROIS scopes sous un seul nom :
+    - [x] conversation — `{ userId, conversationId, version, reset, preferences }`
+      → `PreferencesSocketManager` → `ConversationRepository.applyRemoteConversationPreferences`
+      (arbitrage `version <= local ⇒ drop` dans le port pur `applyRemote`)
+    - [x] catégorie — `{ userId, category }` : livré au cycle 131 (#4133).
+      `PreferencesSocketManager.categoryPreferencesUpdated` relaie le NOM, et
+      `PreferencesSyncCoordinator` (collecteur de SESSION, démarré à l'attache et arrêté
+      à la déconnexion) relit la catégorie nommée via les `GET` neufs de `PreferencesApi`
+      puis la projette sur le magasin par `toPreferences(current)` — `current` portant ce
+      que le corps de fil ne porte pas (`extras`, et la jambe chiffrement côté privacy).
+      DEUX catégories sur sept sont gérées : `notification` et `privacy` sont les seules
+      mises en cache côté Android ; les cinq autres n'ont aucun magasin à invalider.
+    - [ ] communauté — `{ userId, communityId, reset, preferences }` : aucun lecteur
+      Android (mesuré : zéro occurrence de `UserCommunityPreferences` sous
+      `apps/android/**`) — rien en cache, donc rien à périmer
+  - `user:preferences-reordered` / `user:preferences-community-reordered` — NON
+    écoutés, décision du cycle 130 : ils ne portent que `orderInCategory`, qu'aucune
+    surface Android ne lit et qu'aucun geste de glisser-déposer ne produit. Un témoin
+    (`PreferencesSocketManagerTest.no reorder listener is registered`) gèle l'absence.
 
 - [ ] **Calls** (complex, see video-call types)
   - `call:initiated`, `call:participant-joined`, `call:signal`, etc.

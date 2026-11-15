@@ -15,6 +15,10 @@ import retrofit2.http.Path
  *   header/live-bubble affordance revalidates before offering « Rejoindre » ;
  * - `GET /calls/active` — crash recovery: the user's own active call across
  *   all conversations, for an app relaunch that lost its call session.
+ *
+ * `activeCall()` has no Android caller yet (#4889) — the "Resume call" banner
+ * this probe feeds exists on iOS as an open, tracked feature (#3586) and
+ * hasn't landed on Android. Premature, not dead: keep the declaration.
  */
 interface ActiveCallApi {
     @GET("conversations/{conversationId}/active-call")

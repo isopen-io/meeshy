@@ -5,19 +5,20 @@ import MeeshyUI
 
 struct NewConversationView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
-    @StateObject private var router = Router()
     @StateObject private var viewModel: NewConversationViewModel
     /// Outgoing-block awareness for graying out / disabling blocked users in
     /// the picker. Observed so rows update live on block/unblock.
-    @ObservedObject private var blockService = BlockService.shared
+    @ObservedObject private var blockService: BlockService
 
     @State private var searchQuery = ""
     @State private var selectedUsers: [SearchedUser] = []
     @State private var groupTitle = ""
+    /// « Nouveau groupe » touché : un groupe, même sans invité (#14646).
+    @State private var groupRequested = false
+    /// Le chiffrement, secondaire, se replie derrière une rangée qui dit le mode retenu.
+    @State private var showsEncryptionOptions = false
 
     /// Default initializer used by production callers. The `wrappedValue:`
     /// argument of `StateObject` is `@autoclosure @escaping`, so the
@@ -26,21 +27,31 @@ struct NewConversationView: View {
     /// of the parent. Constructing the VM inside the body of `init` is
     /// the only shape that gets the lazy semantics; passing a default
     /// argument (`viewModel: VM = VM()`) defeats them.
-    init() {
+    init(blockService: BlockService = .shared) {
         _viewModel = StateObject(wrappedValue: NewConversationViewModel())
+        self.blockService = blockService
     }
 
     /// Test- and preview-only initializer. Tests build the VM with a mock
     /// `APIClientProviding` and inject it ready-made; SwiftUI still
     /// honours the StateObject identity contract because the instance is
     /// captured exactly once.
-    init(testHook viewModel: NewConversationViewModel) {
+    init(testHook viewModel: NewConversationViewModel, blockService: BlockService = .shared) {
         _viewModel = StateObject(wrappedValue: viewModel)
+        self.blockService = blockService
     }
 
     private let accentColor = "818CF8"
 
-    var isGroupMode: Bool { selectedUsers.count > 1 }
+    private var shape: NewConversationShape {
+        .resolve(selectedCount: selectedUsers.count, groupRequested: groupRequested)
+    }
+
+    var isGroupMode: Bool { shape == .group }
+
+    private var canCreate: Bool {
+        NewConversationShape.canCreate(selectedCount: selectedUsers.count, groupRequested: groupRequested, groupTitle: groupTitle)
+    }
 
     var body: some View {
         ZStack {
@@ -48,11 +59,13 @@ struct NewConversationView: View {
 
             VStack(spacing: 0) {
                 header
+                searchField
+                groupToggleRow
                 if isGroupMode { groupTitleField }
                 selectedUsersBar
-                searchField
                 resultsList
             }
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isGroupMode)
         }
         // Contact-first: load the user's contacts as soon as the picker opens,
         // before any search is typed. Cache-First inside the VM keeps this
@@ -115,76 +128,133 @@ struct NewConversationView: View {
 
     private var header: some View {
         HStack {
+            // Une feuille se ferme par (X), jamais par un retour « < » (#14646).
             Button {
                 HapticFeedback.light()
                 dismiss()
             } label: {
-                // Chrome nav glyph: fixed 16pt tap target (doctrine 82i/87i/90i —
-                // header/toolbar chevrons stay fixed, not Dynamic-Type-scaled).
-                Image(systemName: "chevron.backward")
-                    .font(MeeshyFont.relative(16, weight: .semibold))
-                    .foregroundColor(MeeshyColors.indigo400)
+                Image(systemName: "xmark")
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
+                    .foregroundStyle(theme.textMuted)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(theme.textPrimary.opacity(MeeshyOpacity.faint)))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
-            .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
+            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
+            .accessibilityIdentifier("new-conversation-close")
 
             Spacer()
 
-            Text(String(localized: "Nouvelle conversation", defaultValue: "Nouvelle conversation"))
-                .font(MeeshyFont.relative(17, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+            Text(String(localized: "conversation.new.title", defaultValue: "Nouvelle conversation"))
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
+                .foregroundStyle(theme.textPrimary)
 
             Spacer()
 
-            if !selectedUsers.isEmpty {
+            if isGroupMode {
                 Button {
                     HapticFeedback.medium()
-                    Task { await viewModel.createConversation(selectedUsers: selectedUsers, groupTitle: groupTitle) }
+                    Task {
+                        await viewModel.createConversation(
+                            selectedUsers: selectedUsers, groupTitle: groupTitle, groupRequested: groupRequested
+                        )
+                    }
                 } label: {
                     if viewModel.isCreating {
                         ProgressView()
                             .tint(MeeshyColors.indigo400)
                     } else {
-                        Text(String(localized: "Creer", defaultValue: "Cr\u{00E9}er"))
-                            .font(MeeshyFont.relative(14, weight: .bold))
-                            .foregroundColor(MeeshyColors.indigo400)
+                        Text(String(localized: "common.create", defaultValue: "Créer"))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold))
+                            .foregroundStyle(MeeshyColors.indigo400)
                     }
                 }
-                .disabled(viewModel.isCreating || (isGroupMode && groupTitle.trimmingCharacters(in: .whitespaces).isEmpty))
+                .disabled(viewModel.isCreating || !canCreate)
+                .accessibilityIdentifier("new-conversation-create")
             } else {
-                Color.clear.frame(width: 40, height: 24)
+                Color.clear.frame(width: 44, height: 24)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
     }
 
     // MARK: - Group Title Field
 
     private var groupTitleField: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "person.3.fill")
-                .font(MeeshyFont.relative(14, weight: .medium))
-                .foregroundColor(MeeshyColors.indigo600)
+                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
+                .foregroundStyle(MeeshyColors.indigo600)
                 .accessibilityHidden(true)
 
-            TextField(String(localized: "Nom du groupe", defaultValue: "Nom du groupe"), text: $groupTitle)
-                .font(MeeshyFont.relative(15, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+            TextField(String(localized: "conversation.new.group-name.required", defaultValue: "Nom du groupe (obligatoire)", bundle: .main), text: $groupTitle)
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
+                .foregroundStyle(theme.textPrimary)
+                .accessibilityIdentifier("new-conversation-group-title")
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(theme.surfaceGradient(tint: "4338CA"))
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                .fill(theme.surfaceGradient(tint: MeeshyColors.brandDeepHex))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(theme.border(tint: "4338CA"), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                        .stroke(theme.border(tint: MeeshyColors.brandDeepHex), lineWidth: 1)
                 )
         )
-        .padding(.horizontal, 16)
-        .padding(.bottom, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.sm)
         .transition(.opacity.combined(with: .move(edge: .top)))
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isGroupMode)
+    }
+
+    // MARK: - Group Toggle
+
+    /// « Nouveau groupe » : un groupe se crée aussi sans invité — seul, pour un
+    /// audit ou une récolte d'avis — et son titre devient alors obligatoire.
+    private var groupToggleRow: some View {
+        Button {
+            HapticFeedback.light()
+            if groupRequested { selectedUsers.removeAll() }
+            groupRequested.toggle()
+        } label: {
+            HStack(spacing: MeeshySpacing.md) {
+                Image(systemName: "person.3.fill")
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
+                    .foregroundStyle(MeeshyColors.indigo400)
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(MeeshyColors.indigo400.opacity(0.12)))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    Text(String(localized: "conversation.new.group.toggle", defaultValue: "Nouveau groupe", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                        .foregroundStyle(theme.textPrimary)
+                    if groupRequested && selectedUsers.isEmpty {
+                        Text(String(localized: "conversation.new.group.solo-hint", defaultValue: "Vous pouvez le créer seul et inviter plus tard.", bundle: .main))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
+                            .foregroundStyle(theme.textMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: MeeshySpacing.sm)
+                Image(systemName: isGroupMode ? "checkmark.circle.fill" : "circle")
+                    .font(MeeshyFont.relative(MeeshyIconSize.xl))
+                    .foregroundStyle(isGroupMode ? MeeshyColors.indigo400 : theme.textMuted.opacity(0.4))
+                    .accessibilityHidden(true)
+            }
+            .frame(minHeight: 44)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // Deux invités et plus font déjà un groupe : la rangée le dit sans se décocher.
+        .disabled(selectedUsers.count > 1)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.sm)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isGroupMode ? [.isButton, .isSelected] : .isButton)
+        .accessibilityIdentifier("new-conversation-group-toggle")
     }
 
     // MARK: - Selected Users Bar
@@ -193,32 +263,34 @@ struct NewConversationView: View {
     private var selectedUsersBar: some View {
         if !selectedUsers.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     ForEach(selectedUsers) { user in
                         selectedUserChip(user)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.sm)
             }
         }
     }
 
     private func selectedUserChip(_ user: SearchedUser) -> some View {
-        HStack(spacing: 6) {
-            MeeshyAvatar(
+        HStack(spacing: MeeshySpacing.xsPlus) {
+            LivePresence { MeeshyAvatar(
                 name: user.displayName ?? user.username,
                 context: .custom(24),
                 accentColor: DynamicColorGenerator.colorForName(user.username),
                 secondaryColor: accentColor,
+                avatarURL: user.avatar,
                 moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
                 presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt),
+                ring: user.avatarRing,
                 onMoodTap: statusViewModel.moodTapHandler(for: user.id)
-            )
+            ) }
 
             Text(user.displayName ?? user.username)
-                .font(MeeshyFont.relative(12, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                .foregroundStyle(theme.textPrimary)
                 .lineLimit(1)
 
             Button {
@@ -228,13 +300,13 @@ struct NewConversationView: View {
                 }
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(MeeshyFont.relative(14))
-                    .foregroundColor(theme.textMuted)
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm))
+                    .foregroundStyle(theme.textMuted)
             }
             .accessibilityLabel(String(localized: "accessibility.remove_selected_user", bundle: .main))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.smPlus)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(
             Capsule()
                 .fill(MeeshyColors.indigo400.opacity(0.12))
@@ -249,15 +321,15 @@ struct NewConversationView: View {
     // MARK: - Search Field
 
     private var searchField: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "magnifyingglass")
-                .font(MeeshyFont.relative(14, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
+                .foregroundStyle(theme.textMuted)
                 .accessibilityHidden(true)
 
-            TextField(String(localized: "Rechercher un utilisateur...", defaultValue: "Rechercher un utilisateur..."), text: $searchQuery)
-                .font(MeeshyFont.relative(15, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+            TextField(String(localized: "conversation.new.search-placeholder", defaultValue: "Rechercher un utilisateur…"), text: $searchQuery)
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
+                .foregroundStyle(theme.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
 
@@ -270,24 +342,24 @@ struct NewConversationView: View {
                     viewModel.clearSearch()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(MeeshyFont.relative(14))
-                        .foregroundColor(theme.textMuted)
+                        .font(MeeshyFont.relative(MeeshyIconSize.sm))
+                        .foregroundStyle(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "accessibility.clear_search", bundle: .main))
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .stroke(theme.border(tint: accentColor), lineWidth: 1)
                 )
         )
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.sm)
     }
 
     // MARK: - Results List
@@ -303,15 +375,69 @@ struct NewConversationView: View {
 
     private var resultsList: some View {
         ScrollView(showsIndicators: false) {
-            LazyVStack(spacing: 4) {
+            LazyVStack(spacing: MeeshySpacing.xs) {
+                encryptionSection
                 if isSearchActive {
                     searchResultsSection
                 } else {
                     contactsSection
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 4)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.xs)
+        }
+    }
+
+    // MARK: - Encryption
+
+    /// Le mode se choisit à la création : l'offre suit le rôle et la forme
+    /// (tête-à-tête ou groupe) que la sélection dessine. Secondaire, il se
+    /// replie derrière UNE rangée qui dit le mode retenu (#14646).
+    @ViewBuilder
+    private var encryptionSection: some View {
+        let selectedMode = viewModel.encryptionMode(isGroup: isGroupMode)
+        Button {
+            HapticFeedback.light()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showsEncryptionOptions.toggle() }
+        } label: {
+            HStack(spacing: MeeshySpacing.sm) {
+                Image(systemName: "lock.fill")
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
+                    .foregroundStyle(theme.textMuted)
+                    .accessibilityHidden(true)
+                Text(String(localized: "conversation.encryption.create.header", defaultValue: "Chiffrement", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                    .foregroundStyle(theme.textPrimary)
+                Spacer(minLength: MeeshySpacing.sm)
+                Text(selectedMode.label)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                    .foregroundStyle(theme.textMuted)
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                    .foregroundStyle(theme.textMuted)
+                    .rotationEffect(.degrees(showsEncryptionOptions ? 180 : 0))
+                    .accessibilityHidden(true)
+            }
+            .frame(minHeight: 44)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(showsEncryptionOptions
+            ? String(localized: "accessibility.section_expanded", defaultValue: "Développée", bundle: .main)
+            : String(localized: "accessibility.section_collapsed", defaultValue: "Réduite", bundle: .main))
+        .accessibilityIdentifier("new-conversation-encryption-toggle")
+
+        if showsEncryptionOptions {
+            NewConversationEncryptionSection(
+                offer: viewModel.encryptionOffer(isGroup: isGroupMode),
+                selectedMode: selectedMode,
+                accentColor: accentColor,
+                onSelect: { viewModel.chooseEncryptionMode($0, isGroup: isGroupMode) }
+            )
+            .transition(.opacity.combined(with: .move(edge: .top)))
         }
     }
 
@@ -323,21 +449,21 @@ struct NewConversationView: View {
             emptyState
         } else {
             ForEach(viewModel.searchResults) { user in
-                userRow(user)
+                liveUserRow(user)
             }
         }
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             Image(systemName: "person.slash")
                 .font(MeeshyFont.relative(36))
-                .foregroundColor(theme.textMuted.opacity(0.5))
+                .foregroundStyle(theme.textMuted.opacity(0.5))
                 .accessibilityHidden(true)
 
-            Text(String(localized: "Aucun utilisateur trouve", defaultValue: "Aucun utilisateur trouv\u{00E9}"))
-                .font(MeeshyFont.relative(15, weight: .medium))
-                .foregroundColor(theme.textMuted)
+            Text(String(localized: "conversation.new.no-user-found", defaultValue: "Aucun utilisateur trouvé"))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
+                .foregroundStyle(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
@@ -357,7 +483,7 @@ struct NewConversationView: View {
         } else {
             contactsSectionHeader
             ForEach(viewModel.contacts) { user in
-                userRow(user)
+                liveUserRow(user)
             }
         }
     }
@@ -365,34 +491,34 @@ struct NewConversationView: View {
     private var contactsSectionHeader: some View {
         HStack {
             Text(String(localized: "new_conversation.contacts.section", defaultValue: "Vos contacts", bundle: .main))
-                .font(MeeshyFont.relative(12, weight: .semibold))
-                .foregroundColor(theme.textMuted)
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                .foregroundStyle(theme.textMuted)
                 .textCase(.uppercase)
             Spacer()
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 6)
-        .padding(.bottom, 2)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.top, MeeshySpacing.xsPlus)
+        .padding(.bottom, MeeshySpacing.xxs)
         .accessibilityAddTraits(.isHeader)
     }
 
     private var contactsLoadingState: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             ForEach(0..<6, id: \.self) { _ in
                 contactSkeletonRow
             }
         }
-        .padding(.top, 4)
+        .padding(.top, MeeshySpacing.xs)
         .accessibilityLabel(String(localized: "new_conversation.contacts.loading", defaultValue: "Chargement des contacts", bundle: .main))
     }
 
     private var contactSkeletonRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Circle()
                 .fill(theme.textMuted.opacity(0.12))
                 .frame(width: 44, height: 44)
-            VStack(alignment: .leading, spacing: 4) {
-                RoundedRectangle(cornerRadius: 4)
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                     .fill(theme.textMuted.opacity(0.12))
                     .frame(width: 120, height: 12)
                 RoundedRectangle(cornerRadius: 3)
@@ -401,32 +527,31 @@ struct NewConversationView: View {
             }
             Spacer()
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .shimmer()
         .accessibilityHidden(true)
     }
 
     private var contactsEmptyState: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             Image(systemName: "person.2")
                 .font(MeeshyFont.relative(36))
-                .foregroundColor(theme.textMuted.opacity(0.5))
+                .foregroundStyle(theme.textMuted.opacity(0.5))
                 .accessibilityHidden(true)
 
             Text(String(localized: "new_conversation.contacts.empty.title", defaultValue: "Aucun contact", bundle: .main))
-                .font(MeeshyFont.relative(15, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
-
-            Text(String(localized: "new_conversation.contacts.empty.subtitle", defaultValue: "Recherchez un utilisateur pour d\u{00E9}marrer une conversation.", bundle: .main))
-                .font(MeeshyFont.relative(13, weight: .medium))
-                .foregroundColor(theme.textMuted)
-                .multilineTextAlignment(.center)
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                .foregroundStyle(theme.textPrimary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 32)
+        .padding(.horizontal, MeeshySpacing.xxxl)
         .padding(.top, 60)
         .accessibilityElement(children: .combine)
+    }
+
+    private func liveUserRow(_ user: SearchedUser) -> some View {
+        LivePresence { userRow(user) }
     }
 
     private func userRow(_ user: SearchedUser) -> some View {
@@ -434,9 +559,14 @@ struct NewConversationView: View {
         let isBlocked = blockService.isBlocked(userId: user.id)
         let userColor = DynamicColorGenerator.colorForName(user.username)
         let presence = PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt)
+        let isOpening = viewModel.openingUserId == user.id
 
         return Button {
             HapticFeedback.light()
+            guard isGroupMode else {
+                Task { await viewModel.openDirect(with: user) }
+                return
+            }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 if isSelected {
                     selectedUsers.removeAll { $0.id == user.id }
@@ -445,57 +575,44 @@ struct NewConversationView: View {
                 }
             }
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 MeeshyAvatar(
                     name: user.displayName ?? user.username,
                     context: .userListItem,
                     accentColor: userColor,
                     secondaryColor: accentColor,
+                    avatarURL: user.avatar,
                     moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
                     presenceState: presence,
+                    ring: user.avatarRing,
                     onMoodTap: statusViewModel.moodTapHandler(for: user.id)
                 )
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(user.displayName ?? user.username)
-                        .font(MeeshyFont.relative(15, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                        .foregroundStyle(theme.textPrimary)
 
                     Text("@\(user.username)")
-                        .font(MeeshyFont.relative(12, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 Spacer()
 
-                if isBlocked {
-                    Text(String(localized: "new_conversation.user.blocked", defaultValue: "Bloqué", bundle: .main))
-                        .font(MeeshyFont.relative(11, weight: .semibold))
-                        .foregroundColor(MeeshyColors.error.opacity(0.8))
-                    Image(systemName: "hand.raised.fill")
-                        .font(MeeshyFont.relative(16))
-                        .foregroundColor(MeeshyColors.error.opacity(0.7))
-                        .accessibilityHidden(true)
-                } else {
-                    // Selection state is conveyed to VoiceOver by the row's
-                    // `.isSelected` trait below; the glyph itself is decorative.
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(MeeshyFont.relative(20))
-                        .foregroundColor(isSelected ? MeeshyColors.indigo400 : theme.textMuted.opacity(0.4))
-                        .accessibilityHidden(true)
-                }
+                userRowAccessory(isBlocked: isBlocked, isOpening: isOpening, isSelected: isSelected)
             }
             .opacity(isBlocked ? 0.5 : 1)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(isSelected
                         ? AnyShapeStyle(MeeshyColors.indigo400.opacity(0.08))
                         : AnyShapeStyle(theme.surfaceGradient(tint: userColor))
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(
                                 isSelected ? AnyShapeStyle(MeeshyColors.indigo400.opacity(0.3)) : AnyShapeStyle(theme.border(tint: userColor)),
                                 lineWidth: 1
@@ -503,9 +620,33 @@ struct NewConversationView: View {
                     )
             )
         }
-        .disabled(isBlocked)
+        .disabled(isBlocked || viewModel.isCreating)
         .accessibilityLabel(userRowAccessibilityLabel(for: user, isBlocked: isBlocked, presence: presence))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private func userRowAccessory(isBlocked: Bool, isOpening: Bool, isSelected: Bool) -> some View {
+        if isBlocked {
+            Text(String(localized: "new_conversation.user.blocked", defaultValue: "Bloqué", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                .foregroundStyle(MeeshyColors.error.opacity(0.8))
+            Image(systemName: "hand.raised.fill")
+                .font(MeeshyFont.relative(MeeshyIconSize.md))
+                .foregroundStyle(MeeshyColors.error.opacity(0.7))
+                .accessibilityHidden(true)
+        } else if isOpening {
+            ProgressView()
+                .tint(MeeshyColors.indigo400)
+                .accessibilityIdentifier("new-conversation-opening")
+        } else if isGroupMode {
+            // Selection state is conveyed to VoiceOver by the row's
+            // `.isSelected` trait below; the glyph itself is decorative.
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .font(MeeshyFont.relative(MeeshyIconSize.xl))
+                .foregroundStyle(isSelected ? MeeshyColors.indigo400 : theme.textMuted.opacity(0.4))
+                .accessibilityHidden(true)
+        }
     }
 
     // VoiceOver otherwise hears only "displayName, @username": the online dot
@@ -516,7 +657,7 @@ struct NewConversationView: View {
     private func userRowAccessibilityLabel(for user: SearchedUser, isBlocked: Bool, presence: PresenceState) -> String {
         var parts = [user.displayName ?? user.username, "@\(user.username)"]
         if isBlocked {
-            parts.append(String(localized: "new_conversation.user.blocked", defaultValue: "Bloqu\u{00E9}", bundle: .main))
+            parts.append(String(localized: "new_conversation.user.blocked", defaultValue: "Bloqué", bundle: .main))
         } else if presence == .online {
             parts.append(String(localized: "contacts.list.online.lower", defaultValue: "en ligne", bundle: .main))
         }
@@ -530,7 +671,7 @@ struct NewConversationView: View {
 
 // MARK: - Searched User Model
 
-struct SearchedUser: Decodable, Identifiable {
+struct SearchedUser: Decodable, Identifiable, ProfileDecorWearer {
     let id: String
     let username: String
     let firstName: String?
@@ -540,6 +681,8 @@ struct SearchedUser: Decodable, Identifiable {
     let isOnline: Bool?
     let lastActiveAt: Date?
     let avatar: String?
+    /// Le décor servi avec la personne — son contour équipé (#10945, #10946).
+    let profileDecor: ServedProfileDecor?
 }
 
 extension SearchedUser {
@@ -558,7 +701,8 @@ extension SearchedUser {
             email: nil,
             isOnline: friend.isOnline,
             lastActiveAt: friend.lastActiveAt,
-            avatar: friend.avatar
+            avatar: friend.avatar,
+            profileDecor: friend.profileDecor
         )
     }
 }

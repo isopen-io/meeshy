@@ -1,5 +1,8 @@
 # packages/shared - Shared Types & Schema
 
+> ## ⛔ Aucune feature sans issue — règle de démarrage (directive 2026-08-26)
+> **Avant d'écrire la première ligne d'une feature, d'une amélioration ou d'un correctif non trivial**, ouvrir (ou retrouver) son **issue** dans `isopen-io/meeshy`, la placer dans un **milestone précis** (nommé par le résultat attendu, avec échéance) et l'inscrire au projet « Meeshy — pilotage » (https://github.com/orgs/isopen-io/projects/1) avec `Status = In Progress`. Le commit qui livre la ferme (`Closes #n`) avec sa preuve (gate, mesure, PR). **Une tâche sans issue n'existe pas ; un travail sans milestone n'est pas planifié.** Ce qu'on découvre en chemin (dette, dimension non mûre, suivi) devient une issue à son tour — jamais une ligne dans un fichier ou une page. Détail : § « Pilotage du développement » du `CLAUDE.md` racine.
+
 ## Purpose
 Single source of truth for TypeScript types, Prisma schema, encryption, validation, and Socket.IO event definitions shared across all services.
 
@@ -7,7 +10,9 @@ Single source of truth for TypeScript types, Prisma schema, encryption, validati
 ```
 types/              → 46+ TypeScript type files
   index.ts          → Public API exports
-  socketio-events.ts → Event names, rooms, server/client events
+  socketio-events.ts → Facade: re-exporte socketio-events/ (adresse stable)
+  socketio-events/   → Un fichier par domaine + event-names.ts (constantes)
+                       et event-maps.ts (ServerToClient/ClientToServer)
   message.ts        → GatewayMessage, UIMessage types
   conversation.ts   → Conversation + related types
   user.ts           → User types
@@ -35,7 +40,7 @@ prisma/
 **Format**: `entity:action-word` (colons + hyphens, NEVER underscores)
 
 ```typescript
-// packages/shared/types/socketio-events.ts
+// packages/shared/types/socketio-events/event-names.ts
 export const SERVER_EVENTS = {
   MESSAGE_NEW: 'message:new',
   REACTION_ADDED: 'reaction:added',
@@ -112,9 +117,13 @@ export const CommonSchemas = {
 5. Run `npm run build` in shared/
 
 ## Adding Socket.IO Events
-1. Add constant to `SERVER_EVENTS` or `CLIENT_EVENTS` in `socketio-events.ts`
-2. Define data interface (e.g., `ReactionUpdateEventData`)
-3. Add to `ServerToClientEvents` or `ClientToServerEvents` type map
+1. Add constant to `SERVER_EVENTS` or `CLIENT_EVENTS` in `types/socketio-events/event-names.ts`
+   — sauf pour les domaines que le web lit dès sa première peinture (présence « regarde »,
+   session, consentement d'enregistrement) : leur nom va dans `*-event-names.ts`, que les deux
+   cartes répandent, pour que le socle n'importe pas la carte entière (#9966)
+2. Define data interface (e.g., `ReactionUpdateEventData`) in `types/socketio-events/<domaine>.ts`
+3. Add to `ServerToClientEvents` or `ClientToServerEvents` in `types/socketio-events/event-maps.ts`
+   (le SEUL fichier qui cite tous les domaines — c'est l'assemblage, pas un domaine)
 4. Use pattern: `entity:action-word`
 
 **`SERVER_EVENTS` ou `CLIENT_EVENTS`, pas les deux** — sauf si les DEUX sens
@@ -126,6 +135,59 @@ présence est DÉRIVÉE par le backend depuis `isOnline` + `lastActiveAt`, cf.
 `utils/user-presence.ts` — aucun client ne l'annonce), retiré au cycle 60. Une
 déclaration parasite comme celle-là est aussi ce qui empêche d'écrire un garde
 « tout `CLIENT_EVENTS` a un handler gateway » sans liste d'exemptions.
+
+**Ce garde existe depuis le 2026-11-14 (#18499)** : `socket-event-handler-gate`
+ferme la direction MONTANTE, que les cinq cliquets voisins laissaient ouverte —
+un nom de `CLIENT_EVENTS` sans `socket.on` est un canal que le contrat AFFIRME
+et que **Socket.IO laisse tomber sans lever la moindre erreur**. Il est à deux
+sens : une dette neuve rougit chez celui qui l'écrit, et un canal qui gagne son
+écouteur doit SORTIR de l'inventaire. Il tient aussi `CALL_EVENTS`
+(`types/video-call.ts`) dans la portée des gardes : c'est une SECONDE carte de
+noms de fil, et c'est celle que la passerelle importe — un nom ajouté à l'une et
+pas à l'autre échappait à tous les cliquets. Le scan « la passerelle épelle-t-elle
+ce nom ? » est un site UNIQUE (`__tests__/ci/socket-payload-shape/gateway-event-names.ts`),
+partagé avec `socket-event-emitter-gate`.
+
+**Et le septième cliquet garde ce que les six premiers ne peuvent pas voir**
+(`socket-seq-lockstep-gate`, #18602, 2026-11-15). Les six répondent « ce NOM
+existe-t-il de part et d'autre ? » ; le curseur `_seq` n'est pas un champ
+déclaré par événement mais une propriété TRANSVERSE du transport, estampillée
+par `emitWithSeq` et par rien d'autre — donc hors de portée des six par
+construction.
+
+La règle qu'il porte est écrite dans le doc-comment d'`emitWithSeq` : **le
+`_seq` est per-user GLOBAL, pas per-event, donc un client qui n'observe qu'un
+SOUS-ENSEMBLE des événements estampillés voit un trou à chaque événement non
+observé.** Un curseur global observé partiellement est pire que pas de curseur :
+il fabrique des trous là où rien n'a été perdu, et chaque faux trou coûte une
+resynchronisation au client qui le croit. C'est aussi ce qui MOTIVE
+`announceReadBulk` / `announceDeletedBulk`, qui émettent PLAIN délibérément.
+
+Le cliquet dérive des sources les deux ensembles — ce que la passerelle
+estampille, ce que chaque client observe — et rougit sur l'écart dans les deux
+sens. **Ajouter un appelant à `emitWithSeq` le fait tomber en nommant les
+plateformes à étendre dans le même train de release** : c'est là que l'état se
+lit, et plus dans un commentaire. Quatre doc-comments du dépôt (dont celui du
+contrat, `types/socketio-events/notification.ts`) affirmaient que le web
+observait en nommant `notification-socketio.singleton.ts`, un fichier de
+l'application web LEGACY sortie au #7668 — mesuré, `apps/web` n'observe aucun
+curseur (#18601). Le quatrième racontait sa propre erreur ANTÉRIEURE sur
+Android : **corriger une énumération ne lui donne aucun moyen de rester vraie**,
+et le récit de sa faute passée la rend plus crédible, pas moins (leçon
+`tasks/lessons/2026-11-15-une-enumeration-corrigee-reste-une-enumeration.md`).
+
+Deux points de forme, parce qu'ils ont été payés en écrivant la garde :
+
+- **Les deux côtés ne sont pas symétriques.** Côté passerelle, fail-CLOSED : un
+  site `emitWithSeq(` dont l'événement n'est pas résoluble se nomme en rouge.
+  Côté client, une occurrence non liée est ignorée sur une plateforme
+  inventoriée (un client cite son tracker aussi pour le construire ou le
+  remettre à zéro) et ROUGE sur une plateforme qui observe.
+- **Une affirmation d'ABSENCE se mesure sur les OCCURRENCES, jamais sur le
+  relevé enrichi.** L'inventaire « cette plateforme n'observe aucun curseur » a
+  d'abord été mesuré sur le relevé LIÉ : ajouter un observateur au web laissait
+  le témoin VERT, l'occurrence neuve n'étant rattachée à aucune route. Le second
+  sens du cliquet ne pouvait pas tomber dans le sens qu'il nommait.
 
 ## Build
 ```bash
@@ -141,6 +203,11 @@ npm run build   # TypeScript → dist/ (ESM + declarations + source maps)
 
 ## Architectural Decisions
 Voir `decisions.md` dans ce rpertoire pour l'historique des choix architecturaux (TypeScript strict, branded types, type vs interface, Socket.IO events, GatewayMessage vs UIMessage, Zod, encryption DI, ESM, langues, rles, MongoDB/Prisma, API response) avec contexte, alternatives rejetes et consquences.
+
+## Pilotage & maturité (règle transverse — détail dans le `CLAUDE.md` racine)
+- **Le pilotage se fait EXCLUSIVEMENT sur GitHub** (projet « Meeshy — pilotage », milestones, issues) : toute tâche de ce répertoire est une issue au titre sémantique, passée `In Progress` au démarrage et fermée par le commit qui la livre (`Closes #n`). Pas de `todo.md`, pas de page « progress » ; les artifacts servent aux brouillons, au design et aux comptes rendus — jamais à l'état.
+- **Chaque feature est portée à maturité sur les treize dimensions** (sécurité, performance, mémoire, fluidité, accessibilité, cohérence de positionnement, facilité d'usage, UX, compatibilité, utilité, maintenabilité, simplicité d'usage, complétude). Ici, les témoins qui comptent d'abord : UNE définition par type et par règle (maintenabilité — les résolveurs de Prisme sont des sites uniques), compatibilité ascendante des types lus par les trois clients, Zod à chaque frontière de confiance (sécurité), aucune jumelle divergente (cohérence).
+- **La complexité se paie dans le code, jamais chez l'utilisateur.** Une lenteur, une saccade, une action sans feedback immédiat sont des bugs, pas de la dette : ils ont au moins la priorité de la feature qu'ils dégradent. Le commentaire de clôture d'une issue dit quelles dimensions sont mûres et ouvre une issue par dimension restante.
 
 ## Quality Gate
 Codex will review your output once you are done. Self-evaluate and ensure consistent, coherent code before marking any task as complete.

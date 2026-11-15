@@ -1,0 +1,359 @@
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+
+import { auth } from '@/lib/api/auth';
+import { isEmailValid } from '@/lib/signup-form';
+import { useOnline } from '@/lib/net/online';
+import { safeNextPath } from '@/lib/session-guard';
+import { secondClock, type IntervalClock } from '@/lib/view/interval-clock';
+import {
+  formatCountdown,
+  resolveMagicLinkRequest,
+  spokenCountdown,
+  type MagicLinkDeadline,
+  type MagicLinkRequestOutcome,
+} from '@/lib/view/magic-link';
+import { layerMotion } from '@/lib/view/dialog-exit';
+import { useCountdown } from '@/lib/view/use-countdown';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+
+import { AuthRefusal, AuthSubmitButton } from './auth-chrome';
+import { EmailCodeForm, withStrongEmail } from './email-code-form';
+import { EmailSentNotice } from './email-sent-notice';
+import { Field } from './field';
+import { GlyphSvg } from './glyph';
+import { AUTH_GLYPHS } from './glyphs-auth';
+import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from './info-hint';
+
+/**
+ * LE PANNEAU DU LIEN MAGIQUE — la saisie, l'envoi, l'attente et le renvoi,
+ * SANS aucun chrome de page (#6404).
+ *
+ * **Pourquoi il est extrait de `magic-link-flow.tsx`.** Le lien magique devient
+ * la porte PAR DÉFAUT de `/login` (directive porteur 2026-09-13 : « connexion
+ * par magic link comme connexion par défaut pour le moment »), et il garde son
+ * écran plein à `/auth/magic-link` — l'adresse que l'e-mail vise
+ * (`MagicLinkService.ts:548`) et que les liens existants ouvrent. DEUX hôtes,
+ * UN comportement : recopier la machine (état, compte à rebours, renvoi,
+ * erreurs) dans l'écran de connexion en aurait fait deux, qui auraient dérivé
+ * au premier correctif — la jumelle que ce dépôt nomme partout.
+ *
+ * Ce qui reste à l'HÔTE : le titre, l'en-tête, le pied, et ce que « Annuler »
+ * signifie chez lui (fermer l'écran plein, ou revenir à la saisie sur
+ * `/login`). Ce qui vit ICI : tout ce qui a un état.
+ */
+
+export type MagicLinkPanelDeps = {
+  readonly request: typeof auth.requestMagicLink;
+  readonly clock: IntervalClock;
+  readonly now: () => number;
+  /** La saisie du code reçu (#8034) — `auth.verifyEmail` si absent. */
+  readonly verifyEmail?: typeof auth.verifyEmail;
+  /** L'état de l'adresse via le jeton d'attente (#8083) — `auth.verificationStatus` si absent. */
+  readonly verificationStatus?: typeof auth.verificationStatus;
+};
+
+export const defaultMagicLinkDeps: MagicLinkPanelDeps = {
+  request: auth.requestMagicLink,
+  clock: secondClock,
+  now: () => Date.now(),
+};
+
+/** Les espaces PLIENT avec la hauteur (#8418, #10007) : 24 px dès 700 px de
+ * haut, 12 px à 676 px et en dessous — sans règle de média dans la feuille de
+ * la première peinture. */
+const SECTION_GAP = 'clamp(12px, calc(100dvh - 676px), 24px)';
+
+const MAGIC_LINK_SUBMIT_GRADIENT = 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))';
+
+/**
+ * CE QUE « RECEVOIR LE LIEN » DÉCLENCHE SE LIT AU REPOS (épure #17584, règle 7,
+ * verdict du 2026-11-15) : `magicLink.lead` dit, sous le titre, qu'un lien part
+ * par e-mail et qu'il suffit de l'ouvrir. La connexion sans mot de passe est
+ * propre à cette porte — la laisser derrière le (i) faisait d'un bouton un
+ * geste sans explication. Le (i) ne garde que le détail secondaire, nommé par
+ * sa question : « Combien de temps le lien reste-t-il valable ? ». Le budget
+ * d'avant l'épure de `/login` est relevé, motivé (`verbosity-socle.json`).
+ *
+ * UNE LIGNE VISIBLE PAR ÉTAPE, LE « COMMENT » DERRIÈRE UN (i) (#6626).
+ *
+ * Directive porteur 2026-09-15 : « L'utilisateur a besoin de savoir qu'il va se
+ * connecter par email et non de savoir que c'est magic-mail… Garder la baguette
+ * magic mais être clair et simple ». Le mot « magique » ne paraît donc nulle
+ * part à l'écran — la BAGUETTE reste l'icône de la connexion par e-mail — et le
+ * vocabulaire est celui que les trois clients partagent.
+ */
+const howItWorks = (language: InterfaceLanguage): InfoHint => ({
+  label: translate(language, 'magicLink.howItWorks'),
+  text: translate(language, 'magicLink.howItWorks.text'),
+  glyph: AUTH_GLYPHS.info,
+});
+
+function bannerFor(outcome: MagicLinkRequestOutcome | null, language: InterfaceLanguage): string | null {
+  if (outcome === null) return null;
+  if (outcome.kind === 'rate-limited') return translate(language, 'magicLink.rateLimited');
+  if (outcome.kind === 'offline') return translate(language, 'magicLink.offline');
+  if (outcome.kind === 'failed') return outcome.message;
+  return null;
+}
+
+export type MagicLinkPanelProps = {
+  readonly deps?: MagicLinkPanelDeps;
+  /** Ce que rend l'hôte SOUS le formulaire de saisie — l'autre porte, un lien
+   * légal, rien. Jamais rendu pendant l'attente : à cet instant, l'écran ne
+   * propose qu'une chose, ouvrir sa boîte mail. */
+  readonly footer?: ReactNode;
+  /** Ce que « Annuler » fait chez l'hôte, EN PLUS de revenir à la saisie. */
+  readonly onCancel?: () => void;
+  /** Le champ prend le focus au montage — vrai sur l'écran plein, faux quand le
+   * panneau partage `/login` avec d'autres contrôles (voler le focus y
+   * déplacerait le défilement sans que personne ne l'ait demandé). */
+  readonly autoFocus?: boolean;
+  /**
+   * OÙ REVENIR une fois connecté (#6742) — la valeur BRUTE de `?next=`,
+   * clampée ICI (`safeNextPath`), là où elle sert, jamais crue en amont
+   * (même doctrine que `LoginDoors`). Portée jusqu'au lien envoyé par
+   * e-mail (`MagicLinkService.sendMagicLinkEmail`, gateway), que
+   * `MagicLinkValidation` relit en `returnUrl` à l'arrivée.
+   */
+  readonly next?: string | null;
+  /** L'adresse PRÉREMPLIE (#8216) — celle qu'on vient de taper ailleurs
+   * (l'inscription, `?email=`) : la retaper est un geste de trop, et une
+   * occasion de se tromper d'adresse. */
+  readonly initialEmail?: string;
+  /** Envoie la demande DÈS LE MONTAGE, à `initialEmail` (#8216) : l'hôte a
+   * déjà reçu le geste qui la demande (« Recevoir un lien de connexion » d'une
+   * adresse déjà utilisée). Une seule fois par montage. */
+  readonly sendOnMount?: boolean;
+};
+
+export function MagicLinkPanel({
+  deps = defaultMagicLinkDeps,
+  footer,
+  onCancel,
+  autoFocus = false,
+  next = null,
+  initialEmail = '',
+  sendOnMount = false,
+}: MagicLinkPanelProps) {
+  const online = useOnline();
+  const [step, setStep] = useState<'input' | 'waiting'>('input');
+  const [stepChanged, setStepChanged] = useState(false);
+  const [email, setEmail] = useState(initialEmail);
+  const [submitting, setSubmitting] = useState(false);
+  const [outcome, setOutcome] = useState<MagicLinkRequestOutcome | null>(null);
+  const [deadline, setDeadline] = useState<MagicLinkDeadline | null>(null);
+  const [focused, setFocused] = useState(false);
+  const [codeVerified, setCodeVerified] = useState(false);
+  const [pendingSessionToken, setPendingSessionToken] = useState<string | null>(null);
+  const howItWorksState = useInfoHint();
+  const language = currentInterfaceLanguage();
+
+  const remaining = useCountdown(deadline, deps.clock, deps.now);
+  const locale = typeof document === 'object' ? document.documentElement.lang || 'fr' : 'fr';
+
+  async function send() {
+    if (!isEmailValid(email) || submitting || !online) return;
+    setSubmitting(true);
+    setOutcome(null);
+    const returnUrl = safeNextPath(next);
+    const result = await deps.request({ email, ...(returnUrl !== null ? { returnUrl } : {}) });
+    setSubmitting(false);
+    const resolved = resolveMagicLinkRequest(result);
+    if (resolved.kind === 'sent') {
+      setPendingSessionToken(result.ok ? (result.data?.pendingSessionToken ?? null) : null);
+      setDeadline({ startedAt: deps.now(), expiresInSeconds: resolved.expiresInSeconds });
+      setStep('waiting');
+      setStepChanged(true);
+      return;
+    }
+    setOutcome(resolved);
+  }
+
+  const sentOnMount = useRef(false);
+  useEffect(() => {
+    if (!sendOnMount || sentOnMount.current) return;
+    sentOnMount.current = true;
+    void send();
+  }, [sendOnMount]);
+
+  function cancel() {
+    setStep('input');
+    setStepChanged(true);
+    setPendingSessionToken(null);
+    setCodeVerified(false);
+    setOutcome(null);
+    onCancel?.();
+  }
+
+  const fieldError = outcome?.kind === 'invalid-email' ? translate(language, 'magicLink.email.invalid') : undefined;
+  const banner = bannerFor(outcome, language);
+  const hint = howItWorks(language);
+  const stepMotion = stepChanged ? layerMotion(false, { '--layer-shift': '0 0' } as CSSProperties) : null;
+
+  if (step === 'waiting') {
+    const expired = deadline !== null && remaining <= 0;
+    /* L'ÉCRAN « E-MAIL ENVOYÉ » est aussi celui du mot de passe oublié
+       (`EmailSentNotice`, #6643) : l'enveloppe, l'adresse et « Rien reçu ? » y
+       vivent une fois. Ce qui n'appartient qu'à la connexion — le compte à
+       rebours, le renvoi, l'annulation — entre par ses deux emplacements.
+
+       « E-MAIL SEUL → CODE + LIEN » (#8034, arbitrage porteur 2026-09-26) :
+       l'e-mail envoyé porte, compte existant OU nouveau, un code à 6 chiffres
+       ET un lien. Le code se saisit ICI, sans changer d'écran
+       (`EmailCodeForm`, la machine de `/auth/verify-email`) ; il ouvre la
+       session et mène là où une connexion mène. */
+    return (
+      <div className="flex flex-1 flex-col" {...stepMotion}>
+        <EmailSentNotice
+          email={email}
+          lead={withStrongEmail(translate(language, 'emailSent.codeOrLink', { email }), email, 'var(--ios-indigo-400)')}
+          status={
+            <>
+              {expired ? (
+                <p role="alert" style={{ color: 'var(--ios-error)' }}>
+                  {translate(language, 'magicLink.linkExpired')}
+                </p>
+              ) : (
+                <p
+                  role="timer"
+                  aria-live="off"
+                  aria-label={`Le lien expire dans ${spokenCountdown(remaining, locale)}`}
+                  className="font-bold tabular-nums text-screen"
+                  style={{ color: 'var(--ios-indigo-600)' }}
+                >
+                  {formatCountdown(remaining, locale)}
+                </p>
+              )}
+              {codeVerified ? (
+                <p role="status" className="text-title font-semibold" style={{ color: 'var(--ios-success)' }}>
+                  {translate(language, 'verifyEmail.verified')}
+                </p>
+              ) : (
+                <EmailCodeForm
+                  email={email}
+                  next={next}
+                  {...(deps.verifyEmail === undefined ? {} : { verifyEmail: deps.verifyEmail })}
+                  {...(deps.verificationStatus === undefined ? {} : { verificationStatus: deps.verificationStatus })}
+                  pendingSessionToken={pendingSessionToken}
+                  onVerified={() => setCodeVerified(true)}
+                />
+              )}
+            </>
+          }
+        >
+          <button
+            type="button"
+            disabled={(!expired && remaining > 0) || submitting || !online}
+            aria-label={translate(language, 'magicLink.resend.label')}
+            onClick={send}
+            className="inline-flex items-center gap-2 font-semibold text-title"
+            style={{ minHeight: 44, color: expired ? 'var(--ios-indigo-400)' : 'var(--color-ios-ink-2)' }}
+          >
+            <GlyphSvg glyph={AUTH_GLYPHS.arrowClockwise} size={18} />
+            {translate(language, 'magicLink.resend')}
+          </button>
+
+          <button
+            type="button"
+            onClick={cancel}
+            className="text-title font-medium"
+            style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}
+          >
+            {translate(language, 'magicLink.cancel')}
+          </button>
+        </EmailSentNotice>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void send();
+      }}
+      className="flex flex-1 flex-col content-center justify-center px-8"
+      {...stepMotion}
+      style={{ ...stepMotion?.style, gap: SECTION_GAP }}
+      noValidate
+    >
+      <span aria-hidden="true" className="mx-auto" style={{ color: 'var(--ios-indigo-500)' }}>
+        <GlyphSvg glyph={AUTH_GLYPHS.magicWand} size={56} />
+      </span>
+
+      {/* LE (i) SUIT LE DERNIER MOT DU TITRE. Titre et bouton dans une rangée
+          flexible : à 390 px, « Votre adresse e-mail » passe sur deux lignes, sa
+          boîte prend TOUTE la largeur, et le (i) partait flotter au bord de
+          l'écran, loin du texte qu'il explique (mesuré en capture). En ligne,
+          le bouton se range derrière « e-mail », quelle que soit la césure.
+          « e-mail » ne se coupe pas : le navigateur cassait au trait d'union
+          (« e- » / « mail »), mesuré à la capture suivante. */}
+      <div className="grid gap-1 text-center">
+        <div>
+          <h2 className="inline text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+            <UnbrokenLastWord text={translate(language, 'magicLink.title')} />
+          </h2>
+          <InfoHintButton hint={hint} state={howItWorksState} style={{ display: 'inline-grid', verticalAlign: 'middle' }} />
+        </div>
+        <p data-magic-link-lead className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {translate(language, 'magicLink.lead')}
+        </p>
+        <InfoHintText hint={hint} state={howItWorksState} />
+      </div>
+
+      <Field id="magic-link-email" glyph={AUTH_GLYPHS.envelope} tint="var(--ios-indigo-400)" focused={focused} error={fieldError}>
+        {({ id, describedBy }) => (
+          <input
+            id={id}
+            aria-describedby={describedBy}
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
+            autoFocus={autoFocus}
+            value={email}
+            onInput={(e) => setEmail(e.currentTarget.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            placeholder={translate(language, 'magicLink.email.placeholder')}
+            aria-label={translate(language, 'magicLink.email.label')}
+            className="w-full bg-transparent py-3 text-input outline-none"
+            style={{ color: 'var(--color-ios-ink)' }}
+          />
+        )}
+      </Field>
+
+      {banner !== null ? <AuthRefusal>{banner}</AuthRefusal> : null}
+
+      <AuthSubmitButton
+        disabled={!isEmailValid(email) || !online}
+        isSubmitting={submitting}
+        label={translate(language, 'magicLink.submit')}
+        busyLabel={translate(language, 'magicLink.submit.busy')}
+        background={MAGIC_LINK_SUBMIT_GRADIENT}
+      />
+
+      {footer}
+    </form>
+  );
+}
+
+/**
+ * LE DERNIER MOT DU TITRE NE SE COUPE PAS — « e-mail » cassait au trait
+ * d'union (« e- » / « mail », mesuré en capture), et le (i) qui le suit doit
+ * rester collé au texte qu'il explique. Le titre vient du catalogue, dans
+ * l'ordre de SA langue : c'est donc son dernier mot, quel qu'il soit, qui
+ * reste entier.
+ */
+function UnbrokenLastWord({ text }: { readonly text: string }) {
+  const cut = text.lastIndexOf(' ');
+  if (cut < 0) return <span className="whitespace-nowrap">{text}</span>;
+  return (
+    <>
+      {text.slice(0, cut + 1)}
+      <span className="whitespace-nowrap">{text.slice(cut + 1)}</span>
+    </>
+  );
+}

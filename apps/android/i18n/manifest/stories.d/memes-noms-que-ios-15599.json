@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "composer.rail.text",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.rail.media",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.rail.sticker",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.rail.sound",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.rail.background",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.rail.mention",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.rail.place",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.rail.hashtag",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.more.background",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.history.undo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.history.redo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.more.addSlide",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.more.slideDuration",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.more.transitions",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.more.visualEffect",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.more.legend",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.more.share",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.selection.modify",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.selection.duplicate",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.rail.title.text",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.rail.title.media",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.rail.title.sticker",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.rail.title.sound",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.rail.title.drawing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.rail.title.background",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.rail.title.mention",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.rail.title.place",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

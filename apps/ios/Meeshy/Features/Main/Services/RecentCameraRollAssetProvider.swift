@@ -31,16 +31,14 @@ private struct ImageBox: @unchecked Sendable { let image: UIImage? }
 /// faudrait `await` depuis la complétion PhotoKit — laquelle est `@Sendable` et
 /// synchrone — ne serait pas un loquet.
 nonisolated final class PhotoKitResumeLatch: @unchecked Sendable {
-    private let lock = NSLock()
-    private var claimed = false
+    private let claimed = Locked(false)
 
     /// `true` pour le PREMIER appelant seulement.
     func claim() -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !claimed else { return false }
-        claimed = true
-        return true
+        claimed.mutate { taken -> Bool in
+            defer { taken = true }
+            return !taken
+        }
     }
 }
 
@@ -82,8 +80,27 @@ enum RecentCameraRollAsset {
 
     private static func resolveLatest() async -> StoryRecentCameraRollAsset? {
         guard let asset = fetchLatestAsset() else { return nil }
+        // **`.opportunistic` et non `.fastFormat` (#4036).**
+        //
+        // `.fastFormat` ne rend que ce qui est DÉJÀ local, et ne télécharge
+        // jamais — `isNetworkAccessAllowed` ne le gouverne pas. Un asset iCloud
+        // dont la vignette locale a été purgée (bibliothèque « optimiser le
+        // stockage », le réglage par défaut) rendait donc `nil`, et l'amorce
+        // disparaissait SANS UN MOT : l'auteur voyait « Galerie » là où l'ancre
+        // A4 promet « la dernière photo en 1 geste ».
+        //
+        // Mesuré au simulateur le 2026-08-28, autorisation COMPLÈTE accordée,
+        // dans le log de PhotoKit :
+        //
+        //     [ImageManager] no resource found matching image request spec
+        //       … choose: fast-single, load: img, ver: curr, resize: fast
+        //
+        // `.opportunistic` livre un aperçu dégradé puis le final, et honore le
+        // rapatriement réseau que la ligne suivante autorise déjà. Le protocole
+        // « dégradé puis final » est exactement celui que la couture ci-dessous
+        // sait tenir — elle le documente, et n'attendait qu'un mode qui l'emploie.
         guard let thumbnail = await requestImage(
-            asset, targetSize: CGSize(width: 176, height: 176), deliveryMode: .fastFormat)
+            asset, targetSize: CGSize(width: 176, height: 176), deliveryMode: .opportunistic)
         else { return nil }
         return StoryRecentCameraRollAsset(identifier: asset.localIdentifier, thumbnail: thumbnail)
     }
@@ -111,7 +128,7 @@ enum RecentCameraRollAsset {
     // — elle trappe à l'instant où PhotoKit l'invoque depuis sa propre file,
     // avant même que le corps ne tourne. `Task { @MainActor in }` n'y change
     // rien : le piège est à l'entrée. C'est le crash de prod
-    // Meeshy-2026-07-11-131634.ips, vu 7× sur les builds 1201→1235.
+    // Meeshy--131634.ips, vu 7× sur les builds 1201→1235.
     //
     // Même seam, même raison que `RecentMediaStrip` et
     // `CallTranscriptionService.requestPermission()`.

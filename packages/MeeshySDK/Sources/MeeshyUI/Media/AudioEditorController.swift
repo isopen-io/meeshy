@@ -94,8 +94,13 @@ public struct AudioEditorResult: Sendable {
 /// state on the main actor.
 @MainActor
 public final class AudioEditorController: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
-    private static let log = Logger(subsystem: "me.meeshy.app", category: "audio-editor")
+    private static let log = MeeshyLog.logger(.audioEditor)
     private let transcriptionTimeout: TimeInterval = 90
 
     // MARK: Session
@@ -459,8 +464,8 @@ public final class AudioEditorController: ObservableObject {
 
         // Watchdog: a recognizer that never finishes is forced to fail.
         let watchdog = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(transcriptionTimeout))
-            if !Task.isCancelled { EdgeTranscriptionService.shared.cancel() }
+            guard await cancellableSleep(for: .seconds(transcriptionTimeout)) else { return }
+            EdgeTranscriptionService.shared.cancel()
         }
         defer { watchdog.cancel() }
 

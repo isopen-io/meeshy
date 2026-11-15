@@ -8,7 +8,7 @@ struct EffectChip: View {
     let flag: MessageEffectFlags
     let icon: String
     let label: String
-    let accentColor: String
+    let accent: Color
     @Binding var flags: MessageEffectFlags
 
     private var isSelected: Bool { flags.contains(flag) }
@@ -18,23 +18,22 @@ struct EffectChip: View {
             HapticFeedback.light()
             if isSelected { flags.remove(flag) } else { flags.insert(flag) }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: icon)
-                    .font(MeeshyFont.relative(13))
+                    .font(.caption2)
                 Text(label)
-                    .font(MeeshyFont.relative(12, weight: .medium))
+                    .font(.caption).fontWeight(.semibold)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(isSelected ? Color(hex: accentColor).opacity(0.2) : Color.gray.opacity(0.1))
-            .foregroundColor(isSelected ? Color(hex: accentColor) : .secondary)
-            .clipShape(Capsule())
-            .overlay(
+            .foregroundColor(isSelected ? .white : accent)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.xsPlus)
+            .background(
                 Capsule()
-                    .stroke(isSelected ? Color(hex: accentColor).opacity(0.5) : Color.clear, lineWidth: 1)
+                    .fill(isSelected ? accent : accent.opacity(MeeshyOpacity.subtle))
+                    .overlay(Capsule().stroke(accent.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline))
             )
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSelected)
+        .meeshyAnimation(MeeshyAnimation.springFast, value: isSelected)
         .accessibilityLabel("\(label), \(isSelected ? String(localized: "effects.active", defaultValue: "actif", bundle: .main) : String(localized: "effects.inactive", defaultValue: "inactif", bundle: .main))")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
@@ -42,135 +41,101 @@ struct EffectChip: View {
 
 // MARK: - EffectsPickerView
 
+/// **Les effets du message, en petit panneau au-dessus de la barre d'outils**
+/// (#7967, directive porteur 2026-09-25 : « la feuille des effets doit suivre
+/// la même logique que le petit menu des messages éphémères »).
+///
+/// Même forme que le rail de la durée éphémère : un fond arrondi dans le verre
+/// du composeur, des capsules qu'un tap arme ou désarme. Deux rangées — ce qui
+/// joue à l'ARRIVÉE du message, ce qui l'habille EN PERMANENCE. Le
+/// comportement (éphémère, flou, vue unique) n'y figure pas : la barre
+/// d'outils le porte déjà, et deux boutons pour un même réglage se
+/// contrediraient.
 struct EffectsPickerView: View {
-    @Binding var effects: MessageEffects
-    let accentColor: String
-    @Environment(\.dismiss) private var dismiss
+    @Binding var flags: MessageEffectFlags
+    let accent: Color
+    let muted: Color
+    let surface: Color
+
+    typealias Item = (flag: MessageEffectFlags, icon: String, label: String)
+
+    static let entryItems: [Item] = [
+        (.shake, "waveform", String(localized: "effects.shake", defaultValue: "Secousse", bundle: .main)),
+        (.zoom, "arrow.up.left.and.arrow.down.right", String(localized: "effects.zoom", defaultValue: "Zoom", bundle: .main)),
+        (.explode, "rays", String(localized: "effects.explode", defaultValue: "Explosion", bundle: .main)),
+        (.confetti, "party.popper", String(localized: "effects.confetti", defaultValue: "Confettis", bundle: .main)),
+        (.fireworks, "sparkles", String(localized: "effects.fireworks", defaultValue: "Feux d'artifice", bundle: .main)),
+        (.waoo, "star.fill", String(localized: "effects.waoo", defaultValue: "Waouh", bundle: .main)),
+    ]
+
+    static let permanentItems: [Item] = [
+        (.glow, "sun.max", String(localized: "effects.glow", defaultValue: "Lueur", bundle: .main)),
+        (.pulse, "heart.fill", String(localized: "effects.pulse", defaultValue: "Pulsation", bundle: .main)),
+        (.rainbow, "rainbow", String(localized: "effects.rainbow", defaultValue: "Arc-en-ciel", bundle: .main)),
+        (.sparkle, "sparkle", String(localized: "effects.sparkle", defaultValue: "Scintillant", bundle: .main)),
+    ]
+
+    /// Ce que le panneau arme — et donc ce que « Tout effacer » retire, sans
+    /// toucher aux protections que la barre d'outils règle.
+    static let panelFlags: MessageEffectFlags = (entryItems + permanentItems)
+        .reduce(into: MessageEffectFlags()) { $0.insert($1.flag) }
+
+    private var hasPanelEffect: Bool { !flags.intersection(Self.panelFlags).isEmpty }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             HStack {
-                Text(String(localized: "effects.title", defaultValue: "Effets du message", bundle: .main))
-                    .font(MeeshyFont.relative(17, weight: .bold))
+                sectionTitle(String(localized: "effects.section.entry", defaultValue: "Animation d'entrée", bundle: .main))
                 Spacer()
-                Button(String(localized: "common.ok", defaultValue: "OK", bundle: .main)) { dismiss() }
-                    .font(MeeshyFont.relative(15, weight: .semibold))
-                    .foregroundColor(Color(hex: accentColor))
-            }
-            .padding(.horizontal)
-            .padding(.top, 16)
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    effectSection(title: String(localized: "effects.section.behavior", defaultValue: "Comportement", bundle: .main), items: [
-                        (.ephemeral, "hourglass", String(localized: "effects.ephemeral", defaultValue: "\u{00C9}ph\u{00E9}m\u{00E8}re", bundle: .main)),
-                        (.blurred, "eye.slash", String(localized: "effects.blurred", defaultValue: "Flou", bundle: .main)),
-                        (.viewOnce, "1.circle", String(localized: "effects.view-once", defaultValue: "Vue unique", bundle: .main)),
-                    ])
-
-                    effectSection(title: String(localized: "effects.section.entry", defaultValue: "Animation d'entr\u{00E9}e", bundle: .main), items: [
-                        (.shake, "waveform", String(localized: "effects.shake", defaultValue: "Secousse", bundle: .main)),
-                        (.zoom, "arrow.up.left.and.arrow.down.right", String(localized: "effects.zoom", defaultValue: "Zoom", bundle: .main)),
-                        (.explode, "rays", String(localized: "effects.explode", defaultValue: "Explosion", bundle: .main)),
-                        (.confetti, "party.popper", String(localized: "effects.confetti", defaultValue: "Confetti", bundle: .main)),
-                        (.fireworks, "sparkles", String(localized: "effects.fireworks", defaultValue: "Feux d'artifice", bundle: .main)),
-                        (.waoo, "star.fill", String(localized: "effects.waoo", defaultValue: "Waoo", bundle: .main)),
-                    ])
-
-                    effectSection(title: String(localized: "effects.section.permanent", defaultValue: "Effet permanent", bundle: .main), items: [
-                        (.glow, "sun.max", String(localized: "effects.glow", defaultValue: "Lueur", bundle: .main)),
-                        (.pulse, "heart.fill", String(localized: "effects.pulse", defaultValue: "Pulsation", bundle: .main)),
-                        (.rainbow, "rainbow", String(localized: "effects.rainbow", defaultValue: "Arc-en-ciel", bundle: .main)),
-                        (.sparkle, "sparkle", String(localized: "effects.sparkle", defaultValue: "Scintillant", bundle: .main)),
-                    ])
-
-                    if effects.flags.contains(.ephemeral) {
-                        ephemeralDurationPicker
-                    }
-
-                    if effects.hasAnyEffect {
-                        activeEffectsSummary
-                    }
-                }
-                .padding(.bottom, 16)
-            }
-        }
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
-    }
-
-    // MARK: - Effect Section
-
-    @ViewBuilder
-    private func effectSection(title: String, items: [(MessageEffectFlags, String, String)]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(MeeshyFont.relative(13, weight: .semibold))
-                .foregroundColor(.secondary)
-                .padding(.horizontal)
-                .accessibilityAddTraits(.isHeader)
-
-            FlowLayout(spacing: 8) {
-                ForEach(items, id: \.2) { flag, icon, label in
-                    EffectChip(flag: flag, icon: icon, label: label, accentColor: accentColor, flags: $effects.flags)
-                }
-            }
-            .padding(.horizontal)
-        }
-    }
-
-    // MARK: - Ephemeral Duration Picker
-
-    private var ephemeralDurationPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(String(localized: "effects.ephemeral-duration", defaultValue: "Dur\u{00E9}e \u{00E9}ph\u{00E9}m\u{00E8}re", bundle: .main))
-                .font(MeeshyFont.relative(13, weight: .semibold))
-                .foregroundColor(.secondary)
-            HStack(spacing: 8) {
-                ForEach(EphemeralDuration.allCases) { duration in
+                if hasPanelEffect {
                     Button {
                         HapticFeedback.light()
-                        effects.ephemeralDuration = duration.rawValue
+                        flags.subtract(Self.panelFlags)
                     } label: {
-                        Text(duration.label)
-                            .font(MeeshyFont.relative(12, weight: .medium))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(effects.ephemeralDuration == duration.rawValue
-                                        ? Color(hex: accentColor).opacity(0.2)
-                                        : Color.gray.opacity(0.1))
-                            .foregroundColor(effects.ephemeralDuration == duration.rawValue
-                                             ? Color(hex: accentColor)
-                                             : .secondary)
-                            .clipShape(Capsule())
+                        Text(String(localized: "effects.clear-all", defaultValue: "Tout effacer", bundle: .main))
+                            .font(.caption2).fontWeight(.semibold)
+                            .foregroundStyle(MeeshyColors.error.opacity(MeeshyOpacity.intense))
                     }
-                    .accessibilityLabel(String(format: String(localized: "effects.duration-a11y", defaultValue: "Dur\u{00E9}e %@", bundle: .main), duration.label))
-                    .accessibilityAddTraits(effects.ephemeralDuration == duration.rawValue ? .isSelected : [])
+                    .transition(.opacity)
                 }
             }
+            .padding(.horizontal, MeeshySpacing.md)
+
+            chipRow(Self.entryItems)
+
+            sectionTitle(String(localized: "effects.section.permanent", defaultValue: "Effet permanent", bundle: .main))
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.top, MeeshySpacing.xxs)
+
+            chipRow(Self.permanentItems)
         }
-        .padding(.horizontal)
-        .transition(.opacity.combined(with: .move(edge: .top)))
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: effects.flags.contains(.ephemeral))
+        .padding(.vertical, MeeshySpacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                .fill(surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                        .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
+                )
+        )
+        .meeshyAnimation(MeeshyAnimation.springFast, value: hasPanelEffect)
     }
 
-    // MARK: - Active Effects Summary
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.caption2).fontWeight(.semibold)
+            .foregroundStyle(muted)
+            .accessibilityAddTraits(.isHeader)
+    }
 
-    private var activeEffectsSummary: some View {
-        HStack {
-            Text(String(format: String(localized: "effects.active-count", defaultValue: "%d effet(s) actif(s)", bundle: .main), effects.flags.rawValue.nonzeroBitCount))
-                .font(MeeshyFont.relative(12))
-                .foregroundColor(.secondary)
-            Spacer()
-            Button(String(localized: "effects.clear-all", defaultValue: "Tout effacer", bundle: .main)) {
-                HapticFeedback.light()
-                effects = .none
+    private func chipRow(_ items: [Item]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: MeeshySpacing.sm) {
+                ForEach(items, id: \.label) { item in
+                    EffectChip(flag: item.flag, icon: item.icon, label: item.label, accent: accent, flags: $flags)
+                }
             }
-            .font(MeeshyFont.relative(12, weight: .medium))
-            .foregroundColor(MeeshyColors.error.opacity(0.8))
+            .padding(.horizontal, MeeshySpacing.md)
         }
-        .padding(.horizontal)
-        .transition(.opacity)
     }
 }
-

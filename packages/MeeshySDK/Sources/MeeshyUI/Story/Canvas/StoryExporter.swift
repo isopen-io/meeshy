@@ -82,12 +82,26 @@ public enum StoryExporter {
     ///     insérés comme pistes, jamais re-rendus — c'est ce qui permet de
     ///     supprimer la passe de ré-encodage que `StoryExportBranding.wrap`
     ///     imposait (mesurée ~2,5 s sur une story de 10 s).
+    ///   - stickerImageSources: adresses BRUTES des images de stickers, keyées
+    ///     par `postMediaId` (#4852) — le produit de `stickerImageSources(for:media:)`.
+    ///     Un `StorySticker` ne porte pas d'URL et la slide n'a pas la liste des
+    ///     médias : sans cet index, l'export peignait 🖼️ à la place du sticker.
+    ///     Résolues ici en fichiers locaux par le même chemin que `mediaURL`.
+    ///     `[:]` = les stickers image sortent sous leur repli.
+    ///   - images: bitmaps déjà en mémoire (composer, #8599), keyés par id
+    ///     d'élément ou `postMediaId`. Ils priment sur toute adresse : médias
+    ///     retouchés, stickers collés et fond image sortent tels que l'auteur
+    ///     les voit. Voir `StoryExportInputs`.
+    ///   - animations: octets ANIMÉS des stickers (#8610), keyés comme `images`.
     public static func export(_ inputSlide: StorySlide,
                               to outputURL: URL,
                               languages: [String] = [],
                               watermark: StoryExportWatermark? = nil,
                               branding: StoryExportBranding.Plan? = nil,
                               audioResolver: (@Sendable (StoryAudioPlayerObject) -> URL?)? = nil,
+                              stickerImageSources: [String: String] = [:],
+                              images: [String: UIImage] = [:],
+                              animations: [String: Data] = [:],
                               progress: (@Sendable (Double) -> Void)? = nil) async throws {
         // Keep the export alive if the app is backgrounded mid-render — the same
         // net `TusUploadManager` gives uploads. A story export runs a few seconds
@@ -111,6 +125,7 @@ public enum StoryExporter {
         // soit. Placée DANS la fenêtre de `beginBackgroundTask` pour qu'un
         // téléchargement survive au passage en arrière-plan.
         let slide = await hydratingLocalMedia(inputSlide)
+        let stickerImageURLs = await resolvingStickerImageURLs(stickerImageSources)
 
         let composition = AVMutableComposition()
         // Use the deterministic total duration so every element on the slide
@@ -188,7 +203,7 @@ public enum StoryExporter {
             guard let assetVideoTrack = try await asset.loadTracks(withMediaType: .video).first else {
                 throw StoryExporterError.backgroundAssetVideoTrackMissing
             }
-            let assetDuration = try await asset.load(.duration)
+            let window = Self.backgroundSourceWindow(bg, assetDuration: try await asset.load(.duration))
             backgroundVideoAsset = (asset, bg)
             backgroundVideoTransform = (try? await assetVideoTrack.load(.preferredTransform)) ?? .identity
 
@@ -201,9 +216,9 @@ public enum StoryExporter {
                 var inserted = CMTime.zero
                 while inserted < storyDuration {
                     let remaining = storyDuration - inserted
-                    let chunkDuration = CMTimeMinimum(assetDuration, remaining)
+                    let chunkDuration = CMTimeMinimum(window.duration, remaining)
                     try videoTrack.insertTimeRange(
-                        CMTimeRange(start: .zero, duration: chunkDuration),
+                        CMTimeRange(start: window.start, duration: chunkDuration),
                         of: assetVideoTrack,
                         at: storyStart + inserted
                     )
@@ -217,9 +232,9 @@ public enum StoryExporter {
                 // track to draw on for the tail (StoryRenderer keeps rendering
                 // static content — text, stickers, drawings — past the end of
                 // the background clip).
-                let playableDuration = CMTimeMinimum(assetDuration, storyDuration)
+                let playableDuration = CMTimeMinimum(window.duration, storyDuration)
                 try videoTrack.insertTimeRange(
-                    CMTimeRange(start: .zero, duration: playableDuration),
+                    CMTimeRange(start: window.start, duration: playableDuration),
                     of: assetVideoTrack,
                     at: storyStart
                 )
@@ -245,17 +260,9 @@ public enum StoryExporter {
                                        size: canvasRenderSize)
         }
 
-        // 1.5. Audio mixing. Le MP4 export est destiné au partage externe
-        //      (Photos, WhatsApp, AirDrop…) — un viewer sans la story logic
-        //      ne peut pas re-jouer l'audio à partir de raw assets. Il faut
-        //      donc baker l'audio dans le fichier de sortie. Cette étape
-        //      capture l'audio embedded dans le background video (cas le
-        //      plus courant pour les vlogs / clips capturés caméra).
-        //
-        //      Les `audioPlayerObjects` (audios fg + bg + voice) référencent
-        //      leurs assets par `postMediaId` : quand l'appelant fournit
-        //      `audioResolver`, ils sont composés en pistes dédiées avec
-        //      fenêtre timeline + volume + fades + loop (bg uniquement).
+        // 1.5. Le fichier part hors de Meeshy : il fait entendre tout ce que
+        //      le player joue — son de la vidéo de fond, son des vidéos posées
+        //      (#18555), sons posés et son de fond (`audioPlayerObjects`).
         let bgVideoAudioMix = try await composeBackgroundVideoAudio(
             slide: slide,
             composition: composition,
@@ -278,18 +285,19 @@ public enum StoryExporter {
             storyStart: storyStart,
             resolver: audioResolver
         )
+        mixParameters += try await StoryExportForegroundVideoAudio.compose(
+            slide: slide, composition: composition, totalDuration: storyDuration, storyStart: storyStart)
 
-        // Signatures sonores de la marque + atténuation de la story sous la
-        // carte de fin — l'équivalent audio de ce que `wrap` posait dans sa
-        // propre passe, désormais mixé ici.
+        // Signatures sonores de la marque et enveloppe de la story : la loi de
+        // `wrap` (`StoryExportJingleMix`), mixée ici.
         var brandVideoTracks: (intro: CMPersistentTrackID?, outro: CMPersistentTrackID?) = (nil, nil)
         if let plan = branding {
             brandVideoTracks = try await composeBrandVideo(
                 plan: plan, composition: composition, outroFade: outroFade)
-            mixParameters += try await composeBrandAudio(
+            mixParameters = try await composeBrandAudio(
                 plan: plan,
                 composition: composition,
-                outroFade: outroFade,
+                story: CMTimeRange(start: storyStart, end: storyEnd), outroFade: outroFade,
                 storyAudioTracks: composition.tracks(withMediaType: .audio),
                 storyParameters: mixParameters
             )
@@ -310,6 +318,7 @@ public enum StoryExporter {
         videoComposition.customVideoCompositorClass = StoryAVCompositor.self
         let storyTrackID = composition.tracks(withMediaType: .video)
             .first?.trackID ?? kCMPersistentTrackID_Invalid
+        let overlayTracks = await StoryOverlayVideoTracks.compose(slide: slide, into: composition, storyStart: storyStart)
 
         // Segmentation de la timeline. Une instruction unique couvrant tout
         // laisserait `requiredSourceTrackIDs` à nil, et AVFoundation décoderait
@@ -329,7 +338,9 @@ public enum StoryExporter {
                 outroTrackID: brandVideoTracks.outro,
                 introFade: branding?.introFade,
                 outroFade: outroFade,
-                requiredSourceTrackIDs: tracks.map { NSNumber(value: $0) }
+                requiredSourceTrackIDs: StoryOverlayVideoTracks.requiredTrackIDs(tracks, overlays: overlayTracks).map { NSNumber(value: $0) },
+                stickerImageURLs: stickerImageURLs, images: images,
+                animations: animations, overlayTracks: overlayTracks
             )
         }
 
@@ -367,191 +378,13 @@ public enum StoryExporter {
             try FileManager.default.removeItem(at: outputURL)
         }
 
-        try await encode(composition: composition,
-                         videoComposition: videoComposition,
-                         audioMix: audioMix,
-                         to: outputURL,
-                         renderSize: canvasRenderSize,
-                         totalDuration: totalDuration,
-                         progress: progress)
-    }
-
-    // MARK: - Encodage final
-
-    /// Encode la composition dans `outputURL` avec un **débit plafonné**.
-    ///
-    /// Remplace `AVAssetExportSession`, qui n'expose aucun réglage d'encodage :
-    /// ses presets bornent la définition, jamais le bitrate — mesuré, un export
-    /// en pleine définition montait à 58,8 Mbps, soit 441 Mo la minute (cf.
-    /// `StoryExportVideoSettings`). `AVAssetReader` + `AVAssetWriter` est le seul
-    /// couple qui accepte un `AVVideoAverageBitRateKey`.
-    ///
-    /// Le compositor custom reste au centre du dispositif :
-    /// `AVAssetReaderVideoCompositionOutput` honore
-    /// `videoComposition.customVideoCompositorClass` exactement comme la session
-    /// d'export le faisait — les tests pixel du dépôt en sont la preuve, ils
-    /// noirciraient s'il cessait d'être appelé.
-    ///
-    /// ⚠️ Le pompage se fait sur des files DÉDIÉES, jamais sur la principale :
-    /// `StoryAVCompositor.startRequest` repasse par `DispatchQueue.main.sync`
-    /// pour chaque frame, et pomper depuis la file principale l'interbloquerait.
-    static func encode(composition: AVMutableComposition,
-                       videoComposition: AVMutableVideoComposition,
-                       audioMix: AVAudioMix?,
-                       to outputURL: URL,
-                       renderSize: CGSize,
-                       totalDuration: CMTime,
-                       progress: (@Sendable (Double) -> Void)?) async throws {
-        let reader: AVAssetReader
-        let writer: AVAssetWriter
-        do {
-            reader = try AVAssetReader(asset: composition)
-            writer = try AVAssetWriter(url: outputURL, fileType: .mp4)
-        } catch {
-            throw StoryExporterError.sessionCreationFailed
-        }
-        writer.shouldOptimizeForNetworkUse = true
-
-        // --- Vidéo : la composition passe par le compositor, la sortie est
-        //     ré-encodée au débit visé.
-        let videoTracks = composition.tracks(withMediaType: .video)
-        guard !videoTracks.isEmpty else { throw StoryExporterError.sessionCreationFailed }
-        let videoOutput = AVAssetReaderVideoCompositionOutput(
-            videoTracks: videoTracks,
-            videoSettings: [
-                kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA)
-            ])
-        videoOutput.videoComposition = videoComposition
-        videoOutput.alwaysCopiesSampleData = false
-        guard reader.canAdd(videoOutput) else { throw StoryExporterError.sessionCreationFailed }
-        reader.add(videoOutput)
-
-        let videoInput = AVAssetWriterInput(
-            mediaType: .video,
-            outputSettings: StoryExportVideoSettings.video(for: renderSize))
-        videoInput.expectsMediaDataInRealTime = false
-        guard writer.canAdd(videoInput) else { throw StoryExporterError.sessionCreationFailed }
-        writer.add(videoInput)
-
-        // --- Audio : l'`AVAudioMix` (volumes, rampes, automation, atténuation)
-        //     est appliqué par le lecteur, qui rend du PCM ; l'écrivain ré-encode
-        //     en AAC. Sans piste audio, on n'ajoute rien — un MP4 muet est valide.
-        let audioTracks = composition.tracks(withMediaType: .audio)
-        var audioOutput: AVAssetReaderAudioMixOutput?
-        var audioInput: AVAssetWriterInput?
-        if !audioTracks.isEmpty {
-            let output = AVAssetReaderAudioMixOutput(
-                audioTracks: audioTracks,
-                audioSettings: StoryExportVideoSettings.audioReaderSettings)
-            output.audioMix = audioMix
-            output.alwaysCopiesSampleData = false
-            if reader.canAdd(output) {
-                let input = AVAssetWriterInput(
-                    mediaType: .audio,
-                    outputSettings: StoryExportVideoSettings.audio)
-                input.expectsMediaDataInRealTime = false
-                if writer.canAdd(input) {
-                    reader.add(output)
-                    writer.add(input)
-                    audioOutput = output
-                    audioInput = input
-                }
-            }
-        }
-
-        guard writer.startWriting() else {
-            throw StoryExporterError.exportFailed(
-                writer.error?.localizedDescription ?? "startWriting failed")
-        }
-        guard reader.startReading() else {
-            writer.cancelWriting()
-            throw StoryExporterError.exportFailed(
-                reader.error?.localizedDescription ?? "startReading failed")
-        }
-        writer.startSession(atSourceTime: .zero)
-
-        // La progression suit l'horodatage des frames vidéo effectivement
-        // écrites, étranglée à 10 Hz — même contrat que le sondage de
-        // `AVAssetExportSession.progress` qu'elle remplace (cf.
-        // `StoryExporter_ProgressTests`).
-        let reporter = progress.map { ExportProgressReporter(total: totalDuration, emit: $0) }
-
-        let videoPair = PumpPair(input: videoInput, output: videoOutput)
-        let audioPair: PumpPair? = audioInput.flatMap { input in
-            audioOutput.map { PumpPair(input: input, output: $0) }
-        }
-
-        async let videoDone: Void = pump(videoPair, label: "video", reporter: reporter)
-        async let audioDone: Void = {
-            guard let audioPair else { return }
-            await pump(audioPair, label: "audio", reporter: nil)
-        }()
-        _ = await (videoDone, audioDone)
-
-        if reader.status == .failed {
-            writer.cancelWriting()
-            throw StoryExporterError.exportFailed(
-                reader.error?.localizedDescription ?? "reader failed")
-        }
-        if Task.isCancelled {
-            writer.cancelWriting()
-            reader.cancelReading()
-            throw StoryExporterError.exportCancelled
-        }
-
-        await writer.finishWriting()
-        switch writer.status {
-        case .completed:
-            progress?(1.0)
-        case .cancelled:
-            throw StoryExporterError.exportCancelled
-        default:
-            throw StoryExporterError.exportFailed(
-                writer.error?.localizedDescription ?? "writer did not complete")
-        }
-    }
-
-    /// Transfère tous les échantillons de `output` vers `input`, puis clôt
-    /// l'entrée. `requestMediaDataWhenReady` rappelle sur la file fournie tant que
-    /// l'écrivain accepte de la donnée ; on rend la main dès que le lecteur est à
-    /// sec.
-    private nonisolated static func pump(_ pair: PumpPair,
-                                         label: String,
-                                         reporter: ExportProgressReporter?) async {
-        // `nonisolated(unsafe)` : AVAssetWriterInput/AVAssetReaderOutput predate
-        // Swift concurrency and aren't marked Sendable, but `requestMediaDataWhenReady`
-        // is Apple's own documented contract for exactly this cross-queue usage —
-        // the callback below is the ONLY place either is touched, always on `queue`.
-        nonisolated(unsafe) let input = pair.input
-        nonisolated(unsafe) let output = pair.output
-        let queue = DispatchQueue(label: "me.meeshy.story.export.\(label)")
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            let box = ContinuationBox(continuation)
-            input.requestMediaDataWhenReady(on: queue) {
-                while input.isReadyForMoreMediaData {
-                    // `Task.isCancelled` n'aurait aucun sens ici : ce bloc tourne
-                    // sur une file GCD, hors de tout contexte de tâche Swift, et
-                    // renverrait invariablement `false`. L'annulation est relue
-                    // par l'appelant une fois le pompage terminé — même portée
-                    // qu'avec `AVAssetExportSession`, qui allait lui aussi
-                    // jusqu'au bout.
-                    guard let sample = output.copyNextSampleBuffer() else {
-                        input.markAsFinished()
-                        box.resumeOnce()
-                        return
-                    }
-                    if input.append(sample) {
-                        reporter?.observe(CMSampleBufferGetPresentationTimeStamp(sample))
-                    } else {
-                        // L'écrivain a basculé en échec : inutile d'insister, le
-                        // statut est relu par l'appelant.
-                        input.markAsFinished()
-                        box.resumeOnce()
-                        return
-                    }
-                }
-            }
-        }
+        try await StoryExportEncoder.encode(composition: composition,
+                                            videoComposition: videoComposition,
+                                            audioMix: audioMix,
+                                            to: outputURL,
+                                            renderSize: canvasRenderSize,
+                                            totalDuration: totalDuration,
+                                            progress: progress)
     }
 
     // MARK: - Marque composée dans le bake
@@ -596,206 +429,59 @@ public enum StoryExporter {
         return (introID, outroID)
     }
 
-    /// Mixe les deux signatures sonores de la marque et atténue les pistes de
-    /// la story sous la carte de fin — l'équivalent audio de ce que la passe
-    /// `StoryExportBranding.wrap` posait auparavant.
+    /// Mixe les deux signatures sonores de la marque et pose sur chaque piste
+    /// de la story l'enveloppe de `StoryExportJingleMix` — la loi de
+    /// `StoryExportBranding.wrap`. Les jingles jouent tels qu'ils ont été
+    /// synthétisés ; la story monte sous la queue du jingle d'ouverture et
+    /// s'éteint avant celui de fermeture, depuis le volume de son auteur.
     /// - Parameter storyParameters: les paramètres DÉJÀ construits pour les
-    ///   pistes de la story. L'atténuation de fin est posée dessus plutôt que
-    ///   sur un second objet : `AVAudioMix` n'honore qu'une seule entrée par
-    ///   piste, un doublon effacerait silencieusement le volume de l'auteur.
+    ///   pistes de la story (volume auteur, automation, fondus). `AVAudioMix`
+    ///   n'honore qu'une entrée par piste : chacune est reconstruite, la marque
+    ///   par-dessus l'enveloppe de l'auteur, sans rampe qui en chevauche une autre.
+    /// - Returns: une entrée par piste de la story, qui remplace `storyParameters`.
     static func composeBrandAudio(
         plan: StoryExportBranding.Plan,
         composition: AVMutableComposition,
+        story: CMTimeRange,
         outroFade: CMTimeRange?,
         storyAudioTracks: [AVMutableCompositionTrack],
         storyParameters: [AVAudioMixInputParameters]
     ) async throws -> [AVMutableAudioMixInputParameters] {
-        var parameters: [AVMutableAudioMixInputParameters] = []
-
-        // Signature d'ouverture : elle s'estompe sur le fondu vers la story.
-        if let jingle = plan.introJingle, plan.introFade.duration > .zero {
-            let asset = AVURLAsset(url: jingle)
-            if let track = try await asset.loadTracks(withMediaType: .audio).first,
-               let composed = composition.addMutableTrack(
-                   withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
-                let duration = try await asset.load(.duration)
-                try composed.insertTimeRange(
-                    CMTimeRange(start: .zero, duration: duration), of: track, at: .zero)
-                let params = AVMutableAudioMixInputParameters(track: composed)
-                params.setVolumeRamp(fromStartVolume: 1, toEndVolume: 0,
-                                     timeRange: plan.introFade)
-                parameters.append(params)
-            }
+        let introJingleEnd = try await insertJingle(plan.introJingle, into: composition, at: .zero)
+        let outroJingleStart = outroFade.map { $0.start + plan.outroJingleOffset }
+        if let outroJingleStart {
+            _ = try await insertJingle(plan.outroJingle, into: composition, at: outroJingleStart)
         }
-
-        guard let fade = outroFade else { return parameters }
-
-        // Signature de fermeture, décalée à la 2ᵉ phase quand une identité est
-        // peinte (le logo termine alors la vidéo en silence).
-        let asset = AVURLAsset(url: plan.outroJingle)
-        if let track = try await asset.loadTracks(withMediaType: .audio).first,
-           let composed = composition.addMutableTrack(
-               withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
-            let duration = try await asset.load(.duration)
-            try composed.insertTimeRange(
-                CMTimeRange(start: .zero, duration: duration),
-                of: track, at: fade.start + plan.outroJingleOffset)
-            parameters.append(AVMutableAudioMixInputParameters(track: composed))
-        }
-
-        // La story s'éteint pendant que la carte de fin entre. On complète les
-        // paramètres existants quand la piste en a déjà (volume auteur,
-        // automation, fades) et on n'en crée que pour les pistes nominales.
-        let existingIDs = Set(storyParameters.map(\.trackID))
-        for track in storyAudioTracks where !existingIDs.contains(track.trackID) {
-            let params = AVMutableAudioMixInputParameters(track: track)
-            params.setVolumeRamp(fromStartVolume: 1, toEndVolume: 0, timeRange: fade)
-            parameters.append(params)
-        }
-        for case let params as AVMutableAudioMixInputParameters in storyParameters {
-            params.setVolumeRamp(fromStartVolume: 1, toEndVolume: 0, timeRange: fade)
-        }
-        return parameters
-    }
-
-    // MARK: - Encodage : utilitaires de pompage
-
-    /// Couple lecteur/écrivain d'un même flux, transporté jusqu'à sa file de
-    /// pompage.
-    ///
-    /// `AVAssetWriterInput` et `AVAssetReaderOutput` ne sont pas `Sendable`, mais
-    /// chaque couple n'est touché QUE par la file série qui lui est propre —
-    /// `requestMediaDataWhenReady(on:)` sérialise ses rappels, et aucun autre
-    /// site ne les manipule après la mise en place. C'est précisément le cas
-    /// d'usage d'un `@unchecked Sendable` : la sécurité est structurelle, pas
-    /// vérifiable par le compilateur.
-    private nonisolated struct PumpPair: @unchecked Sendable {
-        let input: AVAssetWriterInput
-        let output: AVAssetReaderOutput
-    }
-
-    /// Garantit qu'une continuation n'est reprise qu'UNE fois.
-    ///
-    /// `requestMediaDataWhenReady` rappelle son bloc tant que l'entrée réclame de
-    /// la donnée : la fin de flux peut donc être atteinte plusieurs fois si deux
-    /// rappels se chevauchent. Reprendre deux fois une `CheckedContinuation` est
-    /// une erreur fatale, pas un avertissement.
-    private nonisolated final class ContinuationBox: @unchecked Sendable {
-        private let lock = NSLock()
-        private var continuation: CheckedContinuation<Void, Never>?
-
-        init(_ continuation: CheckedContinuation<Void, Never>) {
-            self.continuation = continuation
-        }
-
-        func resumeOnce() {
-            lock.lock()
-            let pending = continuation
-            continuation = nil
-            lock.unlock()
-            pending?.resume()
+        let fade = StoryExportJingleMix.outroFade(authorCard: plan.outroCarriesAuthor,
+                                                  overlap: StoryExportBranding.outroOverlap)
+        let authored = Dictionary(storyParameters.map { ($0.trackID, $0) }, uniquingKeysWith: { first, _ in first })
+        return storyAudioTracks.map { track in
+            let parameters = AVMutableAudioMixInputParameters(track: track)
+            let ramps = StoryExportJingleMix.storyRamps(
+                over: authored[track.trackID].map(StoryExportBranding.volumeRamps(of:)) ?? [],
+                storyStart: story.start.seconds, storyEnd: story.end.seconds,
+                introJingleEnd: introJingleEnd?.seconds, outroJingleStart: outroJingleStart?.seconds,
+                outroFade: fade)
+            StoryExportBranding.setVolumeRamps(ramps, on: parameters)
+            return parameters
         }
     }
 
-    /// Traduit l'horodatage des frames écrites en fraction de progression,
-    /// étranglée à 10 Hz.
-    ///
-    /// Reprend le contrat que le sondage de `AVAssetExportSession.progress`
-    /// offrait (`StoryExporter_ProgressTests`) : au plus ~10 appels par seconde,
-    /// valeurs dans `0…1`, l'appelant émettant lui-même le `1.0` terminal.
-    /// Appelé depuis la file de pompage, d'où le verrou.
-    private nonisolated final class ExportProgressReporter: @unchecked Sendable {
-        private let lock = NSLock()
-        private let totalSeconds: Double
-        private let emit: @Sendable (Double) -> Void
-        private var lastEmission: TimeInterval = 0
-
-        init(total: CMTime, emit: @escaping @Sendable (Double) -> Void) {
-            self.totalSeconds = max(0.001, CMTimeGetSeconds(total))
-            self.emit = emit
+    /// Insère le jingle EN ENTIER à `time` et rend l'instant où il finit ;
+    /// `nil` sans jingle. Un fichier sans son fait échouer l'export plutôt que
+    /// de livrer une marque muette.
+    private static func insertJingle(_ url: URL?, into composition: AVMutableComposition,
+                                     at time: CMTime) async throws -> CMTime? {
+        guard let url else { return nil }
+        guard let jingle = await StoryExportBranding.loadJingle(at: url) else {
+            throw StoryExportBranding.BrandingError.jingleUnavailable
         }
-
-        func observe(_ presentationTime: CMTime) {
-            let now = ProcessInfo.processInfo.systemUptime
-            lock.lock()
-            let due = now - lastEmission >= 0.1
-            if due { lastEmission = now }
-            lock.unlock()
-            guard due else { return }
-            let fraction = CMTimeGetSeconds(presentationTime) / totalSeconds
-            emit(min(1.0, max(0.0, fraction)))
+        guard let track = composition.addMutableTrack(
+            withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            throw StoryExporterError.sessionCreationFailed
         }
-    }
-
-    // MARK: - Résolution des médias visuels
-
-    /// Adresse LOCALE d'un média visuel — **point de résolution UNIQUE** de tous
-    /// les chemins d'export, miroir exact de `resolveLaneURL` pour l'audio.
-    ///
-    /// Trois formes d'adresse arrivent ici, et une seule était jusqu'ici gérée :
-    /// 1. `file://` — la session composer. Honoré tel quel, mais seulement s'il
-    ///    existe sur CET appareil : un `file://` publié pointe vers la sandbox de
-    ///    l'auteur et serait servi mort à AVFoundation.
-    /// 2. `https://…` — l'URL serveur qu'une story publiée porte réellement
-    ///    (`StoryViewModel` flippe le `file://` local vers `TusUploadResult.fileUrl`).
-    /// 3. `/api/v1/attachments/…` — la même, en relatif, telle que l'émettent
-    ///    `getAttachmentPath` / le forward / le repost.
-    ///
-    /// Les deux dernières sont normalisées par `StoryBackgroundLayer.directURLIfAny`
-    /// (donc par `MeeshyConfig.resolveMediaURL`, garde SSRF comprise) puis
-    /// rapatriées sur disque. C'est exactement la cascade du canvas live : sans
-    /// elle, l'export ne savait résoudre QUE les stories encore ouvertes dans le
-    /// composer, et bakait un fond noir pour toutes les autres.
-    static func resolveVisualURL(_ raw: String, kind: StoryMediaKind?) async -> URL? {
-        guard let url = StoryBackgroundLayer.directURLIfAny(from: raw) else { return nil }
-        if url.isFileURL {
-            return FileManager.default.fileExists(atPath: url.path) ? url : nil
-        }
-        switch kind {
-        case .video: return await CacheCoordinator.videoLocalFileURLAwait(for: url)
-        case .image, .none: return await CacheCoordinator.imageLocalFileURLAwait(for: url)
-        }
-    }
-
-    /// Retourne une copie de `slide` dont chaque média visuel porte une adresse
-    /// LOCALE, prête à être consommée par la suite du pipeline.
-    ///
-    /// Pourquoi réécrire le MODÈLE plutôt que câbler chaque site : quatre
-    /// consommateurs distincts lisent `mediaURL` en aval — la pose de la piste
-    /// vidéo de fond, `StoryAVCompositor.resolveBackgroundImage`,
-    /// `StoryForegroundVideoFrameSource` et `StoryMediaLayer` — et tous
-    /// fonctionnent déjà parfaitement sur un `file://` (c'est ce que prouve le
-    /// chemin composer). Résoudre une fois en amont les répare tous, et rend
-    /// impossible qu'un cinquième consommateur naisse cassé.
-    ///
-    /// **Ne nullifie jamais.** Une adresse non résolvable (hors ligne, 404,
-    /// fichier disparu) est laissée telle quelle : le comportement reste au pire
-    /// celui d'avant la résolution, jamais pire.
-    static func hydratingLocalMedia(_ slide: StorySlide) async -> StorySlide {
-        var hydrated = slide
-
-        if var medias = hydrated.effects.mediaObjects, !medias.isEmpty {
-            for index in medias.indices {
-                guard let raw = medias[index].mediaURL, !raw.isEmpty else { continue }
-                if let local = await resolveVisualURL(raw, kind: medias[index].kind) {
-                    medias[index].mediaURL = local.absoluteString
-                }
-            }
-            hydrated.effects.mediaObjects = medias
-        }
-
-        // Fond legacy : `StoryRenderer.renderBackground` ne le consulte que si
-        // AUCUN `mediaObject` ne porte le fond — on applique ici la même
-        // priorité, pour ne jamais rapatrier un asset que le rendu ignorera.
-        let hasBackgroundObject = (hydrated.effects.mediaObjects ?? [])
-            .contains { $0.isBackground }
-        if !hasBackgroundObject,
-           let legacy = hydrated.mediaURL, !legacy.isEmpty,
-           let local = await resolveVisualURL(legacy, kind: .image) {
-            hydrated.mediaURL = local.absoluteString
-        }
-
-        return hydrated
+        try track.insertTimeRange(CMTimeRange(start: .zero, duration: jingle.duration), of: jingle.track, at: time)
+        return time + jingle.duration
     }
 
     // MARK: - Audio composition
@@ -811,12 +497,8 @@ public enum StoryExporter {
     /// automatically — we simply don't insert anything past the asset's
     /// natural duration when `loop == false`.
     ///
-    /// **Out of scope (V1)** — `audioPlayerObjects` (foreground audios +
-    /// background audio entries + voice) are NOT included here. They
-    /// reference assets by `postMediaId` and require an external resolver
-    /// the exporter doesn't yet receive. Follow-up commit will inject a
-    /// resolver via `StoryExporter.export(_:to:..., audioResolver:)` and
-    /// extend this helper.
+    /// Les sons posés et les vidéos posées ont leur propre composition
+    /// (`composeAudioLanes`, `StoryExportForegroundVideoAudio`).
     static func composeBackgroundVideoAudio(
         slide: StorySlide,
         composition: AVMutableComposition,
@@ -824,9 +506,8 @@ public enum StoryExporter {
         storyStart: CMTime = .zero,
         backgroundVideoAsset: (asset: AVURLAsset, bg: StoryMediaObject)?
     ) async throws -> AVMutableAudioMix? {
-        guard let entry = backgroundVideoAsset else {
-            // Pas de bg video → pas d'audio à composer. Une étape future
-            // ajoutera l'audio des `audioPlayerObjects` ici même.
+        guard let entry = backgroundVideoAsset, Self.backgroundCarriesSound(entry.bg) else {
+            // Pas de bg video, ou un fond MUET (#9136) → pas d'audio à composer.
             return nil
         }
 
@@ -844,7 +525,7 @@ public enum StoryExporter {
             throw StoryExporterError.sessionCreationFailed
         }
 
-        let assetDuration = try await entry.asset.load(.duration)
+        let window = Self.backgroundSourceWindow(entry.bg, assetDuration: try await entry.asset.load(.duration))
 
         if entry.bg.loop {
             // Loop : insert l'audio en boucle pour couvrir totalDuration,
@@ -852,9 +533,9 @@ public enum StoryExporter {
             var inserted = CMTime.zero
             while inserted < totalDuration {
                 let remaining = totalDuration - inserted
-                let chunkDuration = CMTimeMinimum(assetDuration, remaining)
+                let chunkDuration = CMTimeMinimum(window.duration, remaining)
                 try audioTrack.insertTimeRange(
-                    CMTimeRange(start: .zero, duration: chunkDuration),
+                    CMTimeRange(start: window.start, duration: chunkDuration),
                     of: assetAudioTrack,
                     at: storyStart + inserted
                 )
@@ -864,9 +545,9 @@ public enum StoryExporter {
             // No-loop : on insère une fois, clippé à totalDuration. Le
             // tail est silencieux par défaut (AVFoundation n'a pas besoin
             // qu'on ajoute du silence explicite).
-            let playableDuration = CMTimeMinimum(assetDuration, totalDuration)
+            let playableDuration = CMTimeMinimum(window.duration, totalDuration)
             try audioTrack.insertTimeRange(
-                CMTimeRange(start: .zero, duration: playableDuration),
+                CMTimeRange(start: window.start, duration: playableDuration),
                 of: assetAudioTrack,
                 at: storyStart
             )
@@ -1016,25 +697,15 @@ public enum StoryExporter {
     ) async throws -> [AVMutableAudioMixInputParameters] {
         var parameters: [AVMutableAudioMixInputParameters] = []
 
-        for audio in slide.effects.audioPlayerObjects ?? [] {
+        for audio in slide.effects.audioPlayerObjects ?? []
+        where StoryExportClipPlacement.carriesSound(volume: audio.volume, keyframes: audio.keyframes) {
             guard let url = await resolveLaneURL(audio, resolver: resolver) else { continue }
             let asset = AVURLAsset(url: url)
             guard let assetTrack = (try? await asset.loadTracks(withMediaType: .audio))?.first,
                   let assetDuration = try? await asset.load(.duration),
-                  assetDuration > .zero else { continue }
-
-            let start = CMTime(seconds: Double(max(0, audio.startTime ?? 0)),
-                               preferredTimescale: 600)
-            guard start < totalDuration else { continue }
-            let available = totalDuration - start
-            let window: CMTime = {
-                guard let declared = audio.duration, declared > 0 else { return available }
-                return CMTimeMinimum(
-                    CMTime(seconds: Double(declared), preferredTimescale: 600),
-                    available
-                )
-            }()
-            let loopsAsBackground = audio.isBackground == true && audio.loop == true
+                  assetDuration > .zero,
+                  let placement = lanePlacement(audio, assetDuration: assetDuration,
+                                                totalDuration: totalDuration) else { continue }
 
             guard let track = composition.addMutableTrack(
                 withMediaType: .audio,
@@ -1046,352 +717,86 @@ public enum StoryExporter {
             // `start` et `insertedEnd` restent en temps de STORY (les keyframes
             // et fenêtres de l'auteur y sont exprimées) ; seules les POSES dans
             // la composition portent le décalage de l'interlude.
-            let timelineStart = start + storyStart
-            let insertedEnd: CMTime
-            if loopsAsBackground {
-                var inserted = CMTime.zero
-                while inserted < window {
-                    let remaining = window - inserted
-                    let chunk = CMTimeMinimum(assetDuration, remaining)
-                    try track.insertTimeRange(
-                        CMTimeRange(start: .zero, duration: chunk),
-                        of: assetTrack,
-                        at: timelineStart + inserted
-                    )
-                    inserted = inserted + chunk
-                }
-                insertedEnd = start + window
-            } else {
-                let playable = CMTimeMinimum(assetDuration, window)
-                try track.insertTimeRange(
-                    CMTimeRange(start: .zero, duration: playable),
-                    of: assetTrack,
-                    at: timelineStart
-                )
-                insertedEnd = start + playable
+            let insertedEnd = try placement.insert(assetTrack, into: track, storyStart: storyStart)
+            if let params = laneMixParameters(audio, track: track, start: placement.start,
+                                              insertedEnd: insertedEnd, storyStart: storyStart) {
+                parameters.append(params)
             }
-
-            // Plafond `StoryVolume.maxGain` et non 1.0 : un gain au-delà de
-            // 100 % n'est applicable QUE par AVAudioMix, les nodes
-            // AVFoundation étant bornés — le brider ici le rendrait inaudible
-            // partout.
-            let baseVolume = min(StoryVolume.maxGain, max(0, audio.volume))
-            let fadeIn = Double(audio.fadeIn ?? 0)
-            let fadeOut = Double(audio.fadeOut ?? 0)
-            let automation = (audio.keyframes ?? []).filter { $0.volume != nil }
-            let needsMix = abs(baseVolume - 1.0) > 0.001 || fadeIn > 0.01 || fadeOut > 0.01
-                || !automation.isEmpty
-            guard needsMix else { continue }
-
-            let params = AVMutableAudioMixInputParameters(track: track)
-            if automation.isEmpty {
-                params.setVolume(baseVolume, at: .zero)
-            } else {
-                // L'automation prime sur le niveau statique ; les rampes sont
-                // décalées de `start`, position du clip dans la timeline.
-                for (range, from, to) in Self.volumeRamps(base: baseVolume,
-                                                          keyframes: audio.keyframes,
-                                                          duration: insertedEnd.seconds) {
-                    let shifted = CMTimeRange(start: range.start + timelineStart,
-                                              duration: range.duration)
-                    params.setVolumeRamp(fromStartVolume: from, toEndVolume: to,
-                                         timeRange: shifted)
-                }
-            }
-            if fadeIn > 0.01 {
-                params.setVolumeRamp(
-                    fromStartVolume: 0,
-                    toEndVolume: baseVolume,
-                    timeRange: CMTimeRange(
-                        start: timelineStart,
-                        duration: CMTime(seconds: fadeIn, preferredTimescale: 600)
-                    )
-                )
-            }
-            if fadeOut > 0.01 {
-                let rampDuration = CMTime(seconds: fadeOut, preferredTimescale: 600)
-                let rampStart = insertedEnd - rampDuration
-                if rampStart > start {
-                    params.setVolumeRamp(
-                        fromStartVolume: baseVolume,
-                        toEndVolume: 0,
-                        timeRange: CMTimeRange(start: rampStart + storyStart,
-                                               duration: rampDuration)
-                    )
-                }
-            }
-            parameters.append(params)
         }
 
         return parameters
     }
 
-    // MARK: - Synthetic video track (static-only slides)
-
-    /// Inserts a synthetic transparent video track into `composition` covering
-    /// `duration`. No-op if the composition already has any `.video` track.
-    ///
-    /// The synthetic asset is a 1-sec BGRA 0x00000000 movie cached in
-    /// `CacheCoordinator.video` keyed by render size, then `insertTimeRange`
-    /// looped repeatedly to cover the slide's full effective duration. The
-    /// pixel content is irrelevant because `StoryAVCompositor.startRequest`
-    /// overwrites every pixel of every frame via `layerTree.render(in:)`.
-    static func ensureVideoTrack(in composition: AVMutableComposition,
-                                 at startTime: CMTime = .zero,
-                                 duration: CMTime,
-                                 size: CGSize) async throws {
-        if !composition.tracks(withMediaType: .video).isEmpty { return }
-
-        let syntheticURL = try await syntheticTransparentAsset(size: size)
-        let asset = AVURLAsset(url: syntheticURL)
-        guard let assetVideoTrack = try await asset.loadTracks(withMediaType: .video).first else {
-            throw StoryExporterError.syntheticAssetGenerationFailed(
-                "Generated synthetic asset has no video track"
-            )
-        }
-        let assetDuration = try await asset.load(.duration)
-        // Defensive: if the asset somehow ended up empty, we can't loop into it.
-        guard assetDuration > .zero else {
-            throw StoryExporterError.syntheticAssetGenerationFailed(
-                "Synthetic asset has zero duration"
-            )
-        }
-
-        guard let videoTrack = composition.addMutableTrack(
-            withMediaType: .video,
-            preferredTrackID: kCMPersistentTrackID_Invalid
-        ) else {
-            throw StoryExporterError.sessionCreationFailed
-        }
-
-        // Loop the short (1 s) substrate until we reach `duration`. Each chunk
-        // is clipped to the remaining tail so the composition lands exactly on
-        // `duration` — no partial frames past the requested length.
-        var inserted = CMTime.zero
-        while inserted < duration {
-            let remaining = duration - inserted
-            let chunkDuration = CMTimeMinimum(assetDuration, remaining)
-            try videoTrack.insertTimeRange(
-                CMTimeRange(start: .zero, duration: chunkDuration),
-                of: assetVideoTrack,
-                at: startTime + inserted
-            )
-            inserted = inserted + chunkDuration
-        }
+    /// La pose d'un son posé : sa fenêtre de source (rognage compris, #18555),
+    /// sa place sur la scène, et la boucle — réservée au son de FOND.
+    nonisolated static func lanePlacement(_ audio: StoryAudioPlayerObject, assetDuration: CMTime,
+                                          totalDuration: CMTime) -> StoryExportClipPlacement? {
+        let start = CMTime(seconds: Double(max(0, audio.startTime ?? 0)), preferredTimescale: 600)
+        guard start < totalDuration else { return nil }
+        let available = totalDuration - start
+        let window: CMTime = {
+            guard let declared = audio.duration, declared > 0 else { return available }
+            return CMTimeMinimum(CMTime(seconds: Double(declared), preferredTimescale: 600), available)
+        }()
+        let source = StoryExportClipPlacement.sourceWindow(
+            audio.trimBounds(sourceDuration: assetDuration.seconds))
+        return StoryExportClipPlacement(source: source, start: start, window: window,
+                                        loops: audio.isBackground == true && audio.loop == true)
     }
 
-    /// Appends repetitions of the cached transparent substrate to an EXISTING
-    /// video track, starting at `startTime` and covering `duration`. Used to
-    /// pad the tail of a non-looped background video clip that ends before the
-    /// slide's effective duration. Mirrors `ensureVideoTrack`'s loop logic but
-    /// operates on a caller-owned track so we don't add a second track to the
-    /// composition (AVAssetExportSession + custom compositor expects exactly
-    /// one video track in this pipeline).
-    static func appendTransparentTail(to videoTrack: AVMutableCompositionTrack,
-                                      at startTime: CMTime,
-                                      duration: CMTime,
-                                      size: CGSize) async throws {
-        guard duration > .zero else { return }
+    /// Le mix d'un son posé : volume, automation et fondus. `nil` au niveau
+    /// nominal, sans fondu ni automation — AVFoundation joue alors la piste telle quelle.
+    static func laneMixParameters(_ audio: StoryAudioPlayerObject, track: AVMutableCompositionTrack,
+                                  start: CMTime, insertedEnd: CMTime,
+                                  storyStart: CMTime) -> AVMutableAudioMixInputParameters? {
+        // Plafond `StoryVolume.maxGain` et non 1.0 : un gain au-delà de
+        // 100 % n'est applicable QUE par AVAudioMix, les nodes
+        // AVFoundation étant bornés — le brider ici le rendrait inaudible
+        // partout.
+        let baseVolume = min(StoryVolume.maxGain, max(0, audio.volume))
+        let fadeIn = Double(audio.fadeIn ?? 0)
+        let fadeOut = Double(audio.fadeOut ?? 0)
+        let automation = (audio.keyframes ?? []).filter { $0.volume != nil }
+        let needsMix = abs(baseVolume - 1.0) > 0.001 || fadeIn > 0.01 || fadeOut > 0.01
+            || !automation.isEmpty
+        guard needsMix else { return nil }
 
-        let syntheticURL = try await syntheticTransparentAsset(size: size)
-        let asset = AVURLAsset(url: syntheticURL)
-        guard let assetVideoTrack = try await asset.loadTracks(withMediaType: .video).first else {
-            throw StoryExporterError.syntheticAssetGenerationFailed(
-                "Generated synthetic asset has no video track"
-            )
-        }
-        let assetDuration = try await asset.load(.duration)
-        guard assetDuration > .zero else {
-            throw StoryExporterError.syntheticAssetGenerationFailed(
-                "Synthetic asset has zero duration"
-            )
-        }
-
-        var inserted = CMTime.zero
-        while inserted < duration {
-            let remaining = duration - inserted
-            let chunkDuration = CMTimeMinimum(assetDuration, remaining)
-            try videoTrack.insertTimeRange(
-                CMTimeRange(start: .zero, duration: chunkDuration),
-                of: assetVideoTrack,
-                at: startTime + inserted
-            )
-            inserted = inserted + chunkDuration
-        }
-    }
-
-    /// Returns a file URL to a 1-sec transparent BGRA `.mov` asset of the given
-    /// size, generating and caching it on first call. Cache key is the integer
-    /// size in pixels so different render sizes coexist.
-    ///
-    /// The synthetic asset lives in `CacheCoordinator.video`; subsequent calls
-    /// return the cached file without re-generating.
-    static func syntheticTransparentAsset(size: CGSize) async throws -> URL {
-        let cacheKey = "synthetic-transparent-\(Int(size.width))x\(Int(size.height)).mov"
-
-        // Fast path: synchronous nonisolated lookup via CacheCoordinator's
-        // static helper (no actor hop). Returns the file URL if present on
-        // disk. We can't dot into `shared.video.cachedFileURL` directly from
-        // outside the actor — the `.video` property access is isolated.
-        if let cached = CacheCoordinator.videoLocalFileURL(for: cacheKey) {
-            return cached
-        }
-
-        // Cold path: generate the asset off the main actor (AVAssetWriter is
-        // synchronous-blocking; we don't want to stall the calling actor while
-        // it grinds through ~30 BGRA frames + finishWriting()).
-        let generatedURL = try await Task.detached(priority: .userInitiated) {
-            try await Self.generateTransparentMov(size: size, duration: 1.0)
-        }.value
-
-        // Move the generated file into the cache's address space. We read the
-        // bytes back and call `save(_:for:)` so the cache owns the file at the
-        // path `cachedFileURL(for:)` resolves to. Then delete the temp source.
-        let data: Data
-        do {
-            data = try Data(contentsOf: generatedURL)
-        } catch {
-            throw StoryExporterError.syntheticAssetGenerationFailed(
-                "Failed to read generated synthetic asset: \(error.localizedDescription)"
-            )
-        }
-        // `save` is async on the actor; the await covers both the property
-        // access (`.video`) and the actor-isolated method call.
-        await CacheCoordinator.shared.video.save(data, for: cacheKey)
-        try? FileManager.default.removeItem(at: generatedURL)
-
-        guard let cached = CacheCoordinator.videoLocalFileURL(for: cacheKey) else {
-            throw StoryExporterError.syntheticAssetGenerationFailed(
-                "Synthetic asset was generated but cache lookup failed"
-            )
-        }
-        return cached
-    }
-
-    /// Generates a single-track BGRA `.mov` of the given size and duration,
-    /// every pixel 0x00000000. Used as a substrate for static-only slide
-    /// exports — the compositor overwrites every pixel each frame so the
-    /// transparent content is never visible.
-    ///
-    /// Concurrency: this method is `nonisolated` and performs synchronous
-    /// AVAssetWriter calls. It MUST be invoked from a `Task.detached` (off
-    /// the main actor) so the writer's internal queues don't contend with UI
-    /// work. The Swift 6 isolation checker enforces this.
-    nonisolated private static func generateTransparentMov(size: CGSize,
-                                                           duration: TimeInterval) async throws -> URL {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("meeshy-synthetic-transparent-\(UUID().uuidString).mov")
-        if FileManager.default.fileExists(atPath: url.path) {
-            try FileManager.default.removeItem(at: url)
-        }
-
-        // Track success so the temp file is cleaned up on any failure path.
-        // Caller (syntheticTransparentAsset) reads the bytes into Data and
-        // pipes them to CacheCoordinator.video.save — the temp source is
-        // already cleaned up there on success. The defer here covers the
-        // mid-generation throw paths so we don't leak orphan .mov files in
-        // /tmp on repeated failures.
-        var generationSucceeded = false
-        defer {
-            if !generationSucceeded {
-                try? FileManager.default.removeItem(at: url)
+        let timelineStart = start + storyStart
+        let params = AVMutableAudioMixInputParameters(track: track)
+        if automation.isEmpty {
+            params.setVolume(baseVolume, at: .zero)
+        } else {
+            for (range, from, to) in Self.volumeRamps(base: baseVolume,
+                                                      keyframes: audio.keyframes,
+                                                      duration: insertedEnd.seconds) {
+                let shifted = CMTimeRange(start: range.start + timelineStart,
+                                          duration: range.duration)
+                params.setVolumeRamp(fromStartVolume: from, toEndVolume: to,
+                                     timeRange: shifted)
             }
         }
-
-        let writer: AVAssetWriter
-        do {
-            writer = try AVAssetWriter(url: url, fileType: .mov)
-        } catch {
-            throw StoryExporterError.syntheticAssetGenerationFailed(
-                "AVAssetWriter init failed: \(error.localizedDescription)"
+        if fadeIn > 0.01 {
+            params.setVolumeRamp(
+                fromStartVolume: 0,
+                toEndVolume: baseVolume,
+                timeRange: CMTimeRange(
+                    start: timelineStart,
+                    duration: CMTime(seconds: fadeIn, preferredTimescale: 600)
+                )
             )
         }
-
-        // H.264 does NOT preserve alpha — the BGRA 0x00000000 frame below
-        // encodes as opaque black, not transparent. This is intentional and
-        // safe : StoryAVCompositor.startRequest overwrites every pixel via
-        // `layer.render(in:)` so the substrate's color is never visible. If
-        // a future caller blends WITH the substrate (e.g. alpha punch-through
-        // crossfade), switch to AVVideoCodecType.proRes4444 in .mov to get
-        // real transparency at the cost of larger files.
-        let videoSettings: [String: Any] = [
-            AVVideoCodecKey: AVVideoCodecType.h264,
-            AVVideoWidthKey: Int(size.width),
-            AVVideoHeightKey: Int(size.height)
-        ]
-        let input = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
-        input.expectsMediaDataInRealTime = false
-
-        let bufferAttributes: [String: Any] = [
-            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA),
-            kCVPixelBufferWidthKey as String: Int(size.width),
-            kCVPixelBufferHeightKey as String: Int(size.height)
-        ]
-        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
-            assetWriterInput: input,
-            sourcePixelBufferAttributes: bufferAttributes
-        )
-
-        guard writer.canAdd(input) else {
-            throw StoryExporterError.syntheticAssetGenerationFailed(
-                "Cannot add writer input"
-            )
-        }
-        writer.add(input)
-
-        guard writer.startWriting() else {
-            throw StoryExporterError.syntheticAssetGenerationFailed(
-                writer.error?.localizedDescription ?? "startWriting failed"
-            )
-        }
-        writer.startSession(atSourceTime: .zero)
-
-        let fps: Int32 = 30
-        let totalFrames = max(1, Int(duration * Double(fps)))
-
-        for i in 0..<totalFrames {
-            // Spin briefly until the input accepts the next frame. AVAssetWriter
-            // throttles based on its internal buffer state; sleeping 1 ms keeps
-            // CPU low while staying responsive.
-            while !input.isReadyForMoreMediaData {
-                try await Task.sleep(nanoseconds: 1_000_000)
-            }
-            guard let pool = adaptor.pixelBufferPool else {
-                throw StoryExporterError.syntheticAssetGenerationFailed(
-                    "No pixel buffer pool"
+        if fadeOut > 0.01 {
+            let rampDuration = CMTime(seconds: fadeOut, preferredTimescale: 600)
+            let rampStart = insertedEnd - rampDuration
+            if rampStart > start {
+                params.setVolumeRamp(
+                    fromStartVolume: baseVolume,
+                    toEndVolume: 0,
+                    timeRange: CMTimeRange(start: rampStart + storyStart,
+                                           duration: rampDuration)
                 )
             }
-            var pb: CVPixelBuffer?
-            CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &pb)
-            guard let pixelBuffer = pb else {
-                throw StoryExporterError.syntheticAssetGenerationFailed(
-                    "Pixel buffer alloc failed"
-                )
-            }
-            CVPixelBufferLockBaseAddress(pixelBuffer, [])
-            if let base = CVPixelBufferGetBaseAddress(pixelBuffer) {
-                let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
-                let height = CVPixelBufferGetHeight(pixelBuffer)
-                // Zero the buffer (BGRA 0x00000000). Note: H.264 discards
-                // alpha so this encodes as opaque black, NOT transparent —
-                // see top-of-function note. Zeroing prevents undefined memory
-                // from bleeding into the encoded MP4.
-                memset(base, 0, bytesPerRow * height)
-            }
-            CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
-
-            let presentationTime = CMTime(value: CMTimeValue(i), timescale: fps)
-            adaptor.append(pixelBuffer, withPresentationTime: presentationTime)
         }
-
-        input.markAsFinished()
-        await writer.finishWriting()
-        guard writer.status == .completed else {
-            throw StoryExporterError.syntheticAssetGenerationFailed(
-                writer.error?.localizedDescription ?? "Writer did not complete"
-            )
-        }
-        generationSucceeded = true
-        return url
+        return params
     }
 }

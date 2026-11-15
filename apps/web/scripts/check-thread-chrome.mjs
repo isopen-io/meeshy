@@ -1,0 +1,1119 @@
+#!/usr/bin/env node
+/**
+ * LE CHROME DU FIL (#5774, travail 3/3) — le témoin d'ACCEPTATION du lot.
+ *
+ * Il ouvre un navigateur RÉEL sur le `dist` construit et mesure, dans les
+ * DEUX schémas, ce qu'aucun test unitaire ne peut voir : des `opacity`
+ * calculées, des `pointer-events` effectifs, une position à l'écran, un
+ * `scrollTop` après un clic.
+ *
+ * CE QU'IL MESURE
+ *
+ * 1. L'ESCAMOTAGE. En Focal, pendant un geste TENU (`touchstart` + `scroll`),
+ *    l'en-tête ET le composeur portent `opacity: 0` et `pointer-events: none`,
+ *    et reviennent à 1 dans les 300 ms qui suivent `touchend`. En Bulles,
+ *    seule la GRAPPE d'actions de l'en-tête s'efface — l'en-tête lui-même et
+ *    le composeur restent à 1 (miroir `hidesEntireHeader`, `ConversationView.swift:2094-2105`).
+ *
+ * 2. UN APPUI N'EST PAS UN TIRAGE (défaut trouvé en revue de ce lot). Un
+ *    `touchstart` SANS défilement ne cache RIEN : `isDragging`
+ *    (`MessageListViewController.swift:585-592`) ne devient vrai qu'au
+ *    franchissement du seuil de panoramique, jamais au contact. Sans cette
+ *    mesure, chaque tape sur une bulle faisait clignoter tout le chrome
+ *    250 ms — mesuré au navigateur avant correction.
+ *
+ * 3. LA PILULE DE JOUR COLLANTE. Après un défilement de plus de vingt
+ *    rangées : un nœud `role="heading"`, posé au bord bas de l'en-tête plus
+ *    la MARGE dérivée (`--day-pill-top`), portant le libellé du jour de la
+ *    première rangée VISIBLE, RESTANT visible pendant le geste (« le sticker
+ *    de date RESTE », `MessageListViewController.swift:597-605`) et
+ *    TRANSPARENT au doigt (`.allowsHitTesting(false)`,
+ *    `MessageDayStickyOverlay.swift:69` — sans quoi cette bande pleine
+ *    largeur vole le tap de la bulle qui passe dessous).
+ *
+ * 4. « DÉFILER VERS LE BAS ». Après une remontée de deux hauteurs d'écran :
+ *    un bouton de 44 px au moins, atteignable en son centre, dont le clic
+ *    pose `scrollTop` à `scrollHeight − clientHeight` (± 1 px) et qui
+ *    DISPARAÎT ensuite. Son encre est celle que `--accent-ink` sert, et son
+ *    contraste sur la teinte à 85 % de l'accent tient la barre AA (4,5:1) —
+ *    l'encre blanche en dur y valait 1,98:1 en schéma clair.
+ *
+ * 5. HORS REACT. Pendant un geste complet, les DEUX attributs de chrome ne
+ *    mutent qu'aux TRANSITIONS (« dédoublonné aux transitions, jamais à
+ *    chaque frame », `MessageListViewController.swift:585-611`) : un
+ *    `MutationObserver` compte au plus quatre mutations pour un geste, quel
+ *    que soit le nombre d'images de défilement.
+ *
+ * 6. LE BOUTON « REVENIR EN BAS » NE SE REPLIE PAS (#8002). Pendant le même
+ *    geste tenu qui escamote en-tête et composeur, remonté loin du bas, le
+ *    bouton reste à `opacity: 1` et reçoit le doigt.
+ *
+ * 7. LE CLAVIER PART D'ABORD (#8000). Champ du composeur focalisé (le
+ *    clavier virtuel est levé), un geste tactile vers les messages ANCIENS
+ *    retire le focus du champ et ne replie RIEN d'autre : ni
+ *    `data-chrome-header` ni `data-chrome-composer` pendant ce geste. Le
+ *    geste SUIVANT, clavier fermé, replie comme en 1.
+ *
+ * CE QU'IL NE MESURE PAS, ET POURQUOI
+ *
+ * · « recherche ouverte ⇒ rien ne bouge » : aucun état de recherche n'existe
+ *   encore côté web (`components/thread-header.tsx`, le bouton n'a pas
+ *   d'`onClick` — issue compagnon). La porte `searchOpen` de la loi est
+ *   gardée par `src/lib/view/thread-chrome.test.ts` ; ce gate ne peut pas
+ *   l'ATTEINDRE, et ne prétend donc pas la mesurer.
+ * · Le libellé À COMPTE (« 3 messages non lus, Défiler vers le bas ») : le
+ *   compte de `unread-below.ts` ne monte que si un message ARRIVE sous la
+ *   fenêtre, ce qu'aucune fixture ne produit (le socket est #5494). Les deux
+ *   formes du libellé sont gardées par `thread-chrome.test.ts` ; ici on
+ *   mesure le libellé SERVI, à compte nul.
+ */
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { launchChromium } from './lib/browser.mjs';
+import { startDistServer } from './lib/gate-server.mjs';
+import { contrastOf } from './lib/contrast.mjs';
+import { awaitCondition } from './lib/await-fact.mjs';
+
+const APP = fileURLToPath(new URL('..', import.meta.url));
+const DIST = join(APP, 'dist');
+const CAPTURES = join(APP, '..', '..', '.cache', 'web-v2-workflow', 'rendus');
+/* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
+   repliait TOUT sur `index.html`, y compris un `/assets/*.js` dont la lecture
+   échouait — le navigateur rendait alors « Failed to fetch dynamically imported
+   module » pour une panne transitoire, sans aucune trace au journal. */
+const served = await startDistServer(DIST, { serviceWorker: false });
+const BASE = served.base;
+await mkdir(CAPTURES, { recursive: true });
+
+const failures = [];
+const expect = (ok, what) => {
+  if (!ok) failures.push(what);
+  console.log(`  ${ok ? 'ok   ' : 'ECHEC'} ${what}`);
+  return ok;
+};
+
+/**
+ * LE CORPUS : `c-rattrapage` — le SEUL du jeu qui porte TROIS jours
+ * calendaires et assez de rangées pour défiler sur plusieurs écrans
+ * (`lib/api/fixtures-catchup.ts`). Il s'ouvrirait en Résumé Vivant
+ * (`unreadCount: 26`) : la préférence de mode est donc POSÉE avant la
+ * navigation, par la clé que `reading-mode/store.ts:36` lit — jamais par un
+ * détour d'interface.
+ */
+const CONVERSATION = 'c-rattrapage';
+const MODE_KEY = `meeshy.reading-mode.u_u-viewer.${CONVERSATION}`;
+
+const browser = await launchChromium();
+
+/** Le geste, en trois primitives — le DOIGT, jamais la molette (§2 ci-dessus). */
+const touch = (page, kind, dy = 0) =>
+  page.evaluate(
+    ({ kind, dy }) => {
+      const el = document.querySelector('main');
+      const rect = el.getBoundingClientRect();
+      const x = Math.round(rect.left + rect.width / 2);
+      const y = Math.round(rect.top + rect.height / 2);
+      const point = (clientY) => new Touch({ identifier: 1, target: el, clientX: x, clientY });
+      if (kind === 'start') {
+        const t = point(y);
+        el.dispatchEvent(new TouchEvent('touchstart', { bubbles: true, touches: [t], targetTouches: [t], changedTouches: [t] }));
+        return;
+      }
+      if (kind === 'move') {
+        el.scrollTop -= dy;
+        const t = point(y + dy);
+        el.dispatchEvent(new TouchEvent('touchmove', { bubbles: true, touches: [t], targetTouches: [t], changedTouches: [t] }));
+        return;
+      }
+      const t = point(y);
+      el.dispatchEvent(new TouchEvent('touchend', { bubbles: true, touches: [], targetTouches: [], changedTouches: [t] }));
+    },
+    { kind, dy },
+  );
+
+const chromeState = (page) =>
+  page.evaluate(() => {
+    const header = document.querySelector('header.thread-header');
+    const host = header?.parentElement ?? null;
+    const actions = document.querySelector('.thread-header-actions');
+    const composer = document.querySelector('.thread-composer-chrome');
+    const scrollButton = document.querySelector('.thread-scroll-to-bottom');
+    const read = (el) => (el === null ? null : { opacity: getComputedStyle(el).opacity, pointerEvents: getComputedStyle(el).pointerEvents });
+    return {
+      dataHeader: host?.dataset.chromeHeader ?? null,
+      dataComposer: host?.dataset.chromeComposer ?? null,
+      header: read(header),
+      actions: read(actions),
+      composer: read(composer),
+      scrollButton: read(scrollButton),
+      scrollButtonInert: scrollButton?.hasAttribute('inert') ?? null,
+    };
+  });
+
+const openThread = async (scheme, { mode = 'focal' } = {}) => {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 2,
+    hasTouch: true,
+    colorScheme: scheme === 'light' ? 'light' : 'dark',
+  });
+  await context.addInitScript(
+    ({ scheme, key, mode }) => {
+      try {
+        localStorage.setItem('meeshy.scheme', scheme);
+        localStorage.setItem(key, mode);
+      } catch {
+        /* navigation privée : le repli HTML tient pour la page seule. */
+      }
+    },
+    { scheme, key: MODE_KEY, mode },
+  );
+  const page = await context.newPage();
+  await page.goto(`${BASE}/c/${CONVERSATION}`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('main li', { timeout: 20_000 });
+  await page.waitForTimeout(900);
+  page.__context = context;
+  return page;
+};
+const close = async (page) => {
+  await page.close();
+  await page.__context.close();
+};
+
+for (const scheme of ['light', 'dark']) {
+  console.log(`\n--- schéma ${scheme} ---`);
+
+  // ------------------------------------------------------------------ 1 + 2
+  {
+    const page = await openThread(scheme);
+    expect(
+      (await page.locator('main li [data-reading-mode="focal"]').count()) > 0,
+      `${scheme} · le fil est bien en rangée PLATE (Focal) — le corpus du gate`,
+    );
+
+    // --- 2. UN APPUI N'EST PAS UN TIRAGE.
+    await touch(page, 'start');
+    await page.waitForTimeout(300);
+    const tapped = await chromeState(page);
+    expect(
+      tapped.dataHeader === null && tapped.dataComposer === null && tapped.header.opacity === '1',
+      `${scheme} · un APPUI sans défilement ne cache RIEN (${JSON.stringify(tapped.dataHeader)}, opacité ${tapped.header.opacity})`,
+    );
+    await touch(page, 'end');
+    await page.waitForTimeout(200);
+
+    // --- 5. HORS REACT : compter les mutations d'attribut d'un geste ENTIER.
+    await page.evaluate(() => {
+      const host = document.querySelector('header.thread-header').parentElement;
+      window.__chromeMutations = 0;
+      window.__chromeObserver = new MutationObserver((records) => {
+        window.__chromeMutations += records.length;
+      });
+      window.__chromeObserver.observe(host, { attributes: true, attributeFilter: ['data-chrome-header', 'data-chrome-composer'] });
+    });
+
+    // --- 1. L'ESCAMOTAGE, en Focal.
+    await touch(page, 'start');
+    for (let i = 0; i < 8; i += 1) {
+      await touch(page, 'move', 60);
+      await page.waitForTimeout(30);
+    }
+    await page.waitForTimeout(300);
+    const held = await chromeState(page);
+    expect(
+      held.dataHeader === 'entire' && held.dataComposer === 'hidden',
+      `${scheme} · Focal, geste tenu : data-chrome-header="entire" + data-chrome-composer="hidden" (${JSON.stringify([held.dataHeader, held.dataComposer])})`,
+    );
+    expect(
+      held.header.opacity === '0' && held.header.pointerEvents === 'none',
+      `${scheme} · Focal, geste tenu : l'en-tête ENTIER est à opacity 0 et pointer-events none (${JSON.stringify(held.header)})`,
+    );
+    expect(
+      held.composer.opacity === '0' && held.composer.pointerEvents === 'none',
+      `${scheme} · Focal, geste tenu : le composeur est à opacity 0 et pointer-events none (${JSON.stringify(held.composer)})`,
+    );
+
+    // --- 6. #8002 — le bouton « revenir en bas » ne suit PAS le repli.
+    expect(
+      held.scrollButton !== null &&
+        held.scrollButton.opacity === '1' &&
+        held.scrollButton.pointerEvents !== 'none' &&
+        held.scrollButtonInert === false,
+      `${scheme} · geste tenu loin du bas : le bouton « revenir en bas » RESTE visible et joignable (${JSON.stringify([held.scrollButton, held.scrollButtonInert])})`,
+    );
+
+    await page.screenshot({ path: join(CAPTURES, `thread-focal-chrome-hidden.${scheme}.png`) });
+
+    await touch(page, 'end');
+    await page.waitForTimeout(300);
+    const released = await chromeState(page);
+    expect(
+      released.header.opacity === '1' && released.composer.opacity === '1',
+      `${scheme} · 300 ms après touchend, l'en-tête ET le composeur sont revenus à 1 (${JSON.stringify([released.header.opacity, released.composer.opacity])})`,
+    );
+
+    const mutations = await page.evaluate(() => {
+      window.__chromeObserver.disconnect();
+      return window.__chromeMutations;
+    });
+    expect(
+      mutations > 0 && mutations <= 4,
+      `${scheme} · le chrome mute AUX TRANSITIONS seulement : ${mutations} mutations pour 8 images de défilement (attendu 1..4)`,
+    );
+
+    await close(page);
+  }
+
+  // ---------------------------------------------------------------------- 7
+  {
+    const page = await openThread(scheme);
+    /* Chaque geste part du BAS du fil : un `scrollTop` déjà à 0 n'émet aucun
+       `scroll`, et le geste ne serait pas un défilement. */
+    const toBottom = async () => {
+      await page.evaluate(() => {
+        const m = document.querySelector('main');
+        m.scrollTop = m.scrollHeight;
+      });
+      await page.waitForFunction(() => document.querySelector('main').scrollTop > 600, null, { timeout: 3000 }).catch(() => {});
+    };
+    await toBottom();
+    await page.locator('[data-composer] textarea').focus();
+    const focusedBefore = await page.evaluate(() => document.activeElement?.tagName ?? null);
+    expect(focusedBefore === 'TEXTAREA', `${scheme} · le champ du composeur a le focus — le clavier est levé (${focusedBefore})`);
+
+    await touch(page, 'start');
+    for (let i = 0; i < 6; i += 1) {
+      await touch(page, 'move', 60);
+      await page.waitForTimeout(30);
+    }
+    const keyboardClosed = await page
+      .waitForFunction(() => document.activeElement?.tagName !== 'TEXTAREA', null, { timeout: 3000 })
+      .then(() => true, () => false);
+    expect(keyboardClosed, `${scheme} · le défilement vers les anciens FERME le clavier (le champ perd le focus)`);
+    const first = await chromeState(page);
+    expect(
+      first.dataHeader === null && first.dataComposer === null && first.header.opacity === '1',
+      `${scheme} · ce premier geste ne replie RIEN d'autre (${JSON.stringify([first.dataHeader, first.dataComposer, first.header.opacity])})`,
+    );
+    await page.screenshot({ path: join(CAPTURES, `thread-keyboard-first.${scheme}.png`) });
+    await touch(page, 'end');
+    await toBottom();
+
+    await touch(page, 'start');
+    for (let i = 0; i < 4; i += 1) {
+      await touch(page, 'move', 60);
+      await page.waitForTimeout(30);
+    }
+    await page
+      .waitForFunction(() => document.querySelector('header.thread-header')?.parentElement?.dataset.chromeHeader === 'entire', null, { timeout: 3000 })
+      .catch(() => {});
+    const second = await chromeState(page);
+    expect(
+      second.dataHeader === 'entire' && second.dataComposer === 'hidden',
+      `${scheme} · le geste SUIVANT, clavier fermé, replie le chrome (${JSON.stringify([second.dataHeader, second.dataComposer])})`,
+    );
+    await touch(page, 'end');
+    await close(page);
+  }
+
+  // ---------------------------------------------------------------------- 3
+  {
+    const page = await openThread(scheme);
+    await page.evaluate(() => {
+      const m = document.querySelector('main');
+      m.scrollTop = 0;
+    });
+    await page.waitForTimeout(300);
+    // Redescendre de VINGT rangées (borné par la hauteur du fil : le corpus
+    // de fixtures n'en compte pas vingt écrans), pour que la tête visible ne
+    // soit plus la première du fil — là où la sticky se tait, à raison : le
+    // séparateur EN FLUX est encore à l'écran.
+    const travelled = await page.evaluate(() => {
+      const m = document.querySelector('main');
+      const first = document.querySelector('main li[data-index]');
+      const rowHeight = first === null ? 88 : first.getBoundingClientRect().height;
+      m.scrollTop = Math.min(m.scrollHeight - m.clientHeight, 20 * rowHeight);
+      return { scrollTop: m.scrollTop, clientHeight: m.clientHeight };
+    });
+    await page.waitForTimeout(500);
+    expect(
+      travelled.scrollTop > travelled.clientHeight,
+      `${scheme} · le fil a bien défilé de plus d'un écran avant la mesure (${Math.round(travelled.scrollTop)} px)`,
+    );
+
+    const pill = await page.evaluate(() => {
+      const node = document.querySelector('.thread-day-pill');
+      if (node === null) return null;
+      const heading = node.querySelector('[role="heading"]');
+      const rect = node.getBoundingClientRect();
+      const main = document.querySelector('main').getBoundingClientRect();
+      const host = document.querySelector('header.thread-header').parentElement;
+      const centre = document.elementFromPoint(12, Math.round(rect.top + rect.height / 2));
+      // LE LIBELLÉ ATTENDU : le dernier séparateur EN FLUX au-dessus ou sur la
+      // tête visible — la MÊME question que `updateStickyDayLabel` (:896-957).
+      const scroller = document.querySelector('main');
+      let expected = null;
+      for (const li of [...document.querySelectorAll('main li[data-index]')].sort(
+        (a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top,
+      )) {
+        if (li.getBoundingClientRect().bottom <= scroller.getBoundingClientRect().top) {
+          const opener = li.querySelector(':scope > div > span');
+          if (opener !== null) expected = opener.textContent;
+          continue;
+        }
+        const opener = li.querySelector(':scope > div > span');
+        if (opener !== null) expected = opener.textContent;
+        break;
+      }
+      return {
+        label: heading?.textContent ?? null,
+        role: heading?.getAttribute('role') ?? null,
+        expected,
+        top: rect.top,
+        mainTop: main.top,
+        headerBottom: document.querySelector('header.thread-header').getBoundingClientRect().bottom,
+        pillTopVar: getComputedStyle(host).getPropertyValue('--day-pill-top').trim(),
+        pointerEvents: getComputedStyle(node).pointerEvents,
+        catchesTheFinger: node.contains(centre),
+      };
+    });
+
+    if (expect(pill !== null, `${scheme} · une pilule de jour COLLANTE est montée après vingt rangées`)) {
+      expect(pill.role === 'heading', `${scheme} · la pilule collante porte role="heading" (${pill.role})`);
+      expect(
+        pill.label !== null && pill.label === pill.expected,
+        `${scheme} · elle porte le jour de la PREMIÈRE rangée visible (servi « ${pill.label} », attendu « ${pill.expected} »)`,
+      );
+      /**
+       * DEUX assertions, et la PREMIÈRE est la vraie. Comparer la position à
+       * la variable qui la produit ne prouve que l'auto-cohérence : les deux
+       * bougeraient ensemble. Le FAIT à tenir est GÉOMÉTRIQUE — « la pill
+       * démarre SOUS le header » (`MessageDayStickyOverlay.swift:18-20`) :
+       * elle touche le bord bas de l'en-tête, à moins d'une marge.
+       *
+       * LE RÉFÉRENTIEL EST LE BORD BAS DE L'EN-TÊTE, PLUS `main.top` (#6213).
+       * Les deux ont coïncidé tant que le défileur COMMENÇAIT sous la bande —
+       * `main.top` était alors un raccourci commode pour ce bord, et le fait
+       * mesuré était le bon par accident de géométrie. Le défileur couvrant
+       * désormais l'écran entier (le chrome FLOTTE au-dessus), `main.top` vaut
+       * 0 et ce raccourci mesurait la distance au bord HAUT de l'écran : 60 px,
+       * refusés par un seuil qui parlait d'autre chose. La phrase de
+       * l'assertion, elle, n'a pas changé d'un mot — c'est le signe qu'elle
+       * visait juste et que seul son point de mesure était emprunté.
+       */
+      const offset = Math.round(pill.top - pill.headerBottom);
+      expect(
+        offset >= 0 && offset <= 16,
+        `${scheme} · elle démarre SOUS l'en-tête, à moins d'une marge : ${offset} px sous son bord bas`,
+      );
+      /*
+        LA COTE DÉRIVÉE SE MESURE DEPUIS LE HAUT DU CADRE (#6213), pas depuis
+        le bord bas de l'en-tête : `--day-pill-top` porte désormais
+        l'arithmétique iOS ENTIÈRE — encoche + `topOffset`(60) — là où elle
+        n'en portait que le troisième terme (`DAY_PILL_MARGIN`, retirée avec la
+        divergence qu'elle décrivait). C'est donc `pill.top` qu'on lui oppose,
+        pas l'écart au header ; les deux assertions restent DEUX choses
+        distinctes — l'une géométrique (« sous la bande »), l'autre de
+        dérivation (« la cote iOS, servie »).
+      */
+      const derived = Number.parseFloat(pill.pillTopVar);
+      expect(
+        Number.isFinite(derived) && Math.abs(pill.top - derived) <= 1,
+        `${scheme} · et la cote DÉRIVÉE la pose depuis le haut du cadre (--day-pill-top = ${pill.pillTopVar}, pilule à ${Math.round(pill.top)})`,
+      );
+      expect(
+        pill.pointerEvents === 'none' && !pill.catchesTheFinger,
+        `${scheme} · elle est TRANSPARENTE au doigt sur toute sa bande (pointer-events ${pill.pointerEvents}, attrape ${pill.catchesTheFinger})`,
+      );
+    }
+
+    // Elle RESTE pendant le geste — c'est le seul chrome qui ne s'escamote pas.
+    await touch(page, 'start');
+    for (let i = 0; i < 5; i += 1) {
+      await touch(page, 'move', 40);
+      await page.waitForTimeout(30);
+    }
+    await page.waitForTimeout(250);
+    const duringGesture = await page.evaluate(() => {
+      const node = document.querySelector('.thread-day-pill');
+      return node === null ? null : { opacity: getComputedStyle(node).opacity, label: node.textContent };
+    });
+    expect(
+      duringGesture !== null && duringGesture.opacity === '1',
+      `${scheme} · la pilule de jour RESTE pendant le geste (${JSON.stringify(duringGesture)}) — l'en-tête, lui, est parti`,
+    );
+    await touch(page, 'end');
+    await close(page);
+  }
+
+  // ---------------------------------------------------------------------- 4
+  {
+    const page = await openThread(scheme);
+    const twoScreensUp = await page.evaluate(() => {
+      const m = document.querySelector('main');
+      m.scrollTop -= m.clientHeight * 2;
+      return { scrollTop: m.scrollTop, max: m.scrollHeight - m.clientHeight };
+    });
+    await page.waitForTimeout(500);
+
+    const button = await page.evaluate(() => {
+      const b = document.querySelector('.thread-scroll-to-bottom');
+      if (b === null) return null;
+      const r = b.getBoundingClientRect();
+      const cs = getComputedStyle(b);
+      const hit = document.elementFromPoint(Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2));
+      return {
+        label: b.getAttribute('aria-label'),
+        width: r.width,
+        height: r.height,
+        insetEnd: window.innerWidth - r.right,
+        ink: cs.color,
+        surface: cs.backgroundColor,
+        reachable: b.contains(hit),
+        tag: b.tagName,
+      };
+    });
+
+    if (
+      expect(
+        button !== null,
+        `${scheme} · remonté de deux hauteurs d'écran (${Math.round(twoScreensUp.scrollTop)}/${Math.round(twoScreensUp.max)}), le bouton « revenir en bas » est PRÉSENT`,
+      )
+    ) {
+      expect(button.tag === 'BUTTON', `${scheme} · c'est un <button>, jamais un <div onClick> (${button.tag})`);
+      expect(
+        button.width >= 44 && button.height >= 44,
+        `${scheme} · sa cible fait au moins 44 px (${button.width}×${button.height})`,
+      );
+      expect(button.reachable, `${scheme} · son centre lui revient — aucun voisin ne le recouvre`);
+      expect(
+        button.label === 'Défiler vers le bas',
+        `${scheme} · son nom accessible est celui de la loi, à compte nul (« ${button.label} »)`,
+      );
+      const ratio = await contrastOf(page, '.thread-scroll-to-bottom');
+      expect(
+        ratio !== null && ratio >= 4.5,
+        `${scheme} · son encre tient la barre AA sur la teinte de l'accent : ${ratio}:1 (${button.ink} sur ${button.surface})`,
+      );
+    }
+
+    const landed = await (async () => {
+      await page.locator('.thread-scroll-to-bottom').click();
+      await page.waitForTimeout(900);
+      return page.evaluate(() => {
+        const m = document.querySelector('main');
+        return {
+          scrollTop: m.scrollTop,
+          max: m.scrollHeight - m.clientHeight,
+          stillThere: document.querySelector('.thread-scroll-to-bottom') !== null,
+        };
+      });
+    })();
+    expect(
+      Math.abs(landed.scrollTop - landed.max) <= 1,
+      `${scheme} · son clic pose scrollTop au BAS EXACT du défileur (${Math.round(landed.scrollTop)} pour un maximum de ${Math.round(landed.max)})`,
+    );
+    expect(!landed.stillThere, `${scheme} · il se RETIRE une fois le bas atteint`);
+    await close(page);
+  }
+
+  // ---------------------------------------------- 1 (suite) : le mode BULLES
+  {
+    const page = await openThread(scheme, { mode: 'bubbles' });
+    // La peau Bulles ne pose pas `data-reading-mode` : elle se reconnaît à sa
+    // bulle (`.rounded-bubble`), le MÊME témoin que `check-reading-mode.mjs:525`.
+    expect(
+      (await page.locator('main li .rounded-bubble').count()) > 0,
+      `${scheme} · le fil est bien en BULLES pour ce bloc`,
+    );
+    await touch(page, 'start');
+    for (let i = 0; i < 6; i += 1) {
+      await touch(page, 'move', 60);
+      await page.waitForTimeout(30);
+    }
+    await page.waitForTimeout(300);
+    const held = await chromeState(page);
+    expect(
+      held.dataHeader === 'actions' && held.dataComposer === null,
+      `${scheme} · Bulles, geste tenu : SEULE la grappe d'actions est visée (${JSON.stringify([held.dataHeader, held.dataComposer])})`,
+    );
+    expect(
+      held.actions !== null && held.actions.opacity === '0' && held.actions.pointerEvents === 'none',
+      `${scheme} · Bulles : la grappe d'actions s'efface (${JSON.stringify(held.actions)})`,
+    );
+    expect(
+      held.header.opacity === '1' && held.composer.opacity === '1',
+      `${scheme} · Bulles : l'en-tête et le composeur RESTENT (${JSON.stringify([held.header.opacity, held.composer.opacity])})`,
+    );
+    await touch(page, 'end');
+    await close(page);
+  }
+
+  // ---------------------------------------------------------------------- 6
+  /**
+   * LA PASTILLE DE LANGUE DU COMPOSEUR (#5828, § 4.9 de la spécification).
+   * Sur `c-deploiement` (la conversation que `check-thread-states.mjs`
+   * ouvre déjà pour le même genre de mesure — « 0 contrôle sans
+   * gestionnaire ») : la pastille existe, tient la cible d'au moins 44×44,
+   * ne recouvre ni le champ ni le bouton « + », tient le contraste AA ; un
+   * choix dans la feuille la met à jour ET l'envoi suivant porte la langue
+   * choisie jusque dans la bulle SERVIE (`lang="en"`) — l'effet mesuré
+   * jusqu'au pixel, pas un booléen lu dans le code (leçon du dépôt).
+   */
+  {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      colorScheme: scheme === 'light' ? 'light' : 'dark',
+      /**
+       * FRANÇAIS EXPLICITE (#6206) — `spokenLanguageName()` (`lib/view/language-name.ts`)
+       * cadre le nom d'une langue dans `document.documentElement.lang`, que le
+       * socle i18n d'interface (#6206) résout désormais RÉELLEMENT depuis
+       * `navigator.languages` au lieu du littéral `fr` figé d'avant. Sans ce
+       * `locale`, Playwright ouvre en `en-US` par défaut : l'assertion
+       * ci-dessous (« anglais », pas « English ») dépendait donc d'un
+       * accident d'environnement, jamais d'un choix explicite du scénario —
+       * ce test suppose un lecteur français partout ailleurs (le titre de la
+       * feuille reste « Langue d'écriture », jamais traduit).
+       */
+      locale: 'fr-FR',
+    });
+    await context.addInitScript((s) => {
+      try {
+        localStorage.setItem('meeshy.scheme', s);
+      } catch {
+        /* navigation privée : le repli HTML tient pour la page seule. */
+      }
+    }, scheme);
+    const page = await context.newPage();
+    await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
+    await page.waitForSelector('[data-message]');
+    await page.waitForTimeout(300);
+
+    const PILL = '[data-composer] button[aria-label^="Langue d’écriture"]';
+
+    const pillBox = await page.evaluate((sel) => {
+      const pill = document.querySelector(sel);
+      const textarea = document.querySelector('[data-composer] textarea');
+      const plus = document.querySelector('[data-composer] [aria-label="Ouvrir le menu des pièces jointes"]');
+      if (pill === null || textarea === null) return null;
+      const p = pill.getBoundingClientRect();
+      const t = textarea.getBoundingClientRect();
+      const plusBox = plus === null ? null : plus.getBoundingClientRect();
+      const overlapsPlus =
+        plusBox !== null &&
+        !(p.right <= plusBox.left || p.left >= plusBox.right || p.bottom <= plusBox.top || p.top >= plusBox.bottom);
+      /* LA CAPSULE PEINTE, PAS SEULEMENT LA CIBLE (revue-correction #5828) —
+         une capsule plus LARGE que son bouton déborde sans rien changer au
+         rectangle du `<button>` : c'est la peinture qui sortait de l'écran
+         (chevron coupé, mesuré sur les deux schémas avant correction), et
+         `opacity` comme le non-recouvrement du champ la donnaient pour
+         « entièrement visible ». On mesure donc la RÉUNION bouton+capsule
+         contre le cadre, et le défilement horizontal du document. */
+      const painted = [pill, ...pill.querySelectorAll('*')]
+        .map((n) => n.getBoundingClientRect())
+        .reduce((u, r) => ({ left: Math.min(u.left, r.left), right: Math.max(u.right, r.right) }), {
+          left: p.left,
+          right: p.right,
+        });
+      return {
+        width: p.width,
+        height: p.height,
+        bottom: p.bottom,
+        textareaTop: t.top,
+        opacity: getComputedStyle(pill).opacity,
+        overlapsPlus,
+        paintedLeft: painted.left,
+        paintedRight: painted.right,
+        viewportWidth: document.documentElement.clientWidth,
+        docScrollWidth: document.documentElement.scrollWidth,
+      };
+    }, PILL);
+
+    if (expect(pillBox !== null, `${scheme} · une pastille de langue existe dans le composeur`)) {
+      expect(
+        pillBox.width >= 44 && pillBox.height >= 44,
+        `${scheme} · sa cible fait au moins 44×44 (${pillBox.width}×${pillBox.height})`,
+      );
+      expect(Number.parseFloat(pillBox.opacity) === 1, `${scheme} · elle est entièrement visible (opacity ${pillBox.opacity})`);
+      expect(
+        pillBox.paintedLeft >= 0 && pillBox.paintedRight <= pillBox.viewportWidth,
+        `${scheme} · sa CAPSULE PEINTE tient dans le cadre (${Math.round(pillBox.paintedLeft)} → ${Math.round(pillBox.paintedRight)} pour ${pillBox.viewportWidth} px)`,
+      );
+      expect(
+        pillBox.docScrollWidth <= pillBox.viewportWidth,
+        `${scheme} · elle ne fait pas défiler la page horizontalement (${pillBox.docScrollWidth} ≤ ${pillBox.viewportWidth})`,
+      );
+      expect(
+        pillBox.bottom <= pillBox.textareaTop,
+        `${scheme} · elle ne recouvre pas le champ (son bas ${Math.round(pillBox.bottom)} ≤ le haut du champ ${Math.round(pillBox.textareaTop)})`,
+      );
+      expect(!pillBox.overlapsPlus, `${scheme} · elle ne chevauche pas le bouton « + »`);
+
+      const ratio = await contrastOf(page, `${PILL} span`);
+      expect(ratio !== null && ratio >= 4.5, `${scheme} · son contraste encre/fond tient la barre AA (${ratio}:1)`);
+    }
+
+    await page.locator(PILL).click();
+    await page.waitForSelector('dialog[open]');
+    const dialogTitle = await page.locator('dialog[open] h2').textContent();
+    expect(dialogTitle === 'Langue d’écriture', `${scheme} · la feuille est titrée « Langue d’écriture » (« ${dialogTitle} »)`);
+
+    await page.locator('dialog[open] button', { hasText: 'English' }).first().click();
+    await page.waitForTimeout(200);
+    expect((await page.locator('dialog[open]').count()) === 0, `${scheme} · le dialogue s'est refermé après le choix`);
+
+    const afterChoice = await page.locator('[data-composer-language]').getAttribute('aria-label');
+    expect(
+      afterChoice === 'Langue d’écriture : anglais',
+      `${scheme} · l'aria-label devient « Langue d’écriture : anglais » (« ${afterChoice} »)`,
+    );
+
+    await page.locator('[data-composer] textarea').fill('Do you confirm the mockup for tomorrow?');
+    await page.keyboard.press('Enter');
+    /**
+     * ON ATTEND LE FAIT, JAMAIS UN DÉLAI — et par la SSOT du dépôt (#9260,
+     * qui appelle `awaitCondition` de #7054).
+     *
+     * Ce site lisait la langue servie derrière un `waitForTimeout(500)`. Le fil
+     * est VIRTUALISÉ — `check-thread-virtualization.mjs` le mesure, `MAX_CELLS
+     * = 60` sur un corpus de 500 messages — donc la rangée qu'on vient
+     * d'envoyer n'est PAS dans le document à l'instant de l'envoi : elle y
+     * entre quand la fenêtre se recalcule et que la liste se recolle au bas.
+     * Avant ce moment, `rows[rows.length - 1]` est une rangée de FIXTURE, et
+     * les fixtures de rattrapage sont toutes en français
+     * (`src/lib/api/fixtures-catchup.ts`, `originalLanguage: 'fr'`). Le pari
+     * rendait donc un ROUGE qui accusait le produit quand c'était le runner
+     * qui était lent — le sens qui coûte le plus, puisque personne ne peut le
+     * reproduire.
+     *
+     * POURQUOI `awaitCondition` ET PAS UN `waitForFunction` ÉCRIT ICI. La loi
+     * existe déjà, avec ses trois raisons mesurées : elle ne LÈVE jamais (un
+     * throw dans ce gate devient `uncaughtException` → `process.exit(1)` et
+     * jette les témoins déjà verts, cf. `lib/browser.mjs`), son plafond est
+     * une constante nommée proportionnée à la charge, et elle sonde par
+     * intervalle NUMÉRIQUE plutôt que par `requestAnimationFrame`. Le gate des
+     * ÉTATS du fil l'appelle depuis #7054 et un cliquet l'y tient
+     * (`lib/no-fixed-delays.test.ts`) ; le gate du CHROME est resté hors de ce
+     * périmètre, et c'est tout ce qui lui manquait.
+     *
+     * LA MESURE NE S'AFFAIBLIT PAS. `awaitCondition` rend un booléen : à
+     * l'expiration, on relit la langue RÉELLEMENT servie et on échoue AVEC
+     * elle dans le libellé — une vraie dérive du Prisme reste rouge, avec
+     * exactement le message d'avant. Attendre son fait n'est pas fermer les
+     * yeux ; c'est refuser de trancher avant que le fait ait eu lieu.
+     *
+     * CE SITE N'EST PAS LES VINGT-DEUX AUTRES `waitForTimeout` DE CE FICHIER,
+     * et il faut le dire parce que la plupart sont justes : attendre une
+     * TRANSITION (une opacité de chrome qui se stabilise après un geste) n'a
+     * AUCUN fait à sonder — le délai EST l'instrument. Attendre un FAIT (une
+     * rangée montée, une valeur servie) a une condition. Ne convertir que les
+     * seconds, et seulement après avoir mesuré lequel c'est.
+     */
+    const servedLastLang = () =>
+      page.evaluate(() => {
+        const rows = document.querySelectorAll('[data-message]');
+        const last = rows[rows.length - 1];
+        return last?.querySelector('[lang]')?.getAttribute('lang') ?? null;
+      });
+    const servedInEnglish = await awaitCondition(page, () => {
+      const rows = document.querySelectorAll('[data-message]');
+      const last = rows[rows.length - 1];
+      return last?.querySelector('[lang]')?.getAttribute('lang') === 'en';
+    });
+    const lastLang = servedInEnglish ? 'en' : await servedLastLang();
+    expect(lastLang === 'en', `${scheme} · la DERNIÈRE bulle du fil porte lang="en" (« ${lastLang} »)`);
+
+    await context.close();
+  }
+
+  // ---------------------------------------------------------------------- 7
+  /**
+   * LES TROIS BASCULES DE LA RANGÉE HAUTE (#6175, revue-correction) — même
+   * mesure que § 6, étendue aux occupantes qui l'ont rejointe : éphémère,
+   * flou, effets.
+   *
+   * DEUX DÉFAUTS MESURÉS ICI, que le témoin unitaire ne pouvait pas voir :
+   *
+   * · LA CIBLE, EN LARGEUR. `min-h-11` sans `min-w-11` donne 32×44 — le test
+   *   unitaire lisait la CLASSE `min-h-11` et restait vert sur la dimension
+   *   voisine (leçon du dépôt : un témoin vert sur la dimension voisine).
+   *
+   * · LE CONTRASTE DE L'ÉTAT ARMÉ, DANS CHAQUE SCHÉMA. Une encre à la
+   *   couleur d'état sur un lavis de cette MÊME couleur mesurait 4,47:1 pour
+   *   « 1min » en CLAIR et 2,90:1 pour « Flou » en SOMBRE : chacune ne
+   *   rougissait que dans UN des deux schémas. La capsule « effets » en
+   *   portait une troisième forme, à l'accent — donc un contraste qui variait
+   *   avec la couleur de chaque conversation, sans plancher.
+   */
+  {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      colorScheme: scheme === 'light' ? 'light' : 'dark',
+    });
+    await context.addInitScript((s) => {
+      try {
+        localStorage.setItem('meeshy.scheme', s);
+      } catch {
+        /* navigation privée */
+      }
+    }, scheme);
+    const page = await context.newPage();
+    await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
+    await page.waitForSelector('[data-message]');
+    await page.waitForTimeout(300);
+
+    /* Les outils sont rangés derrière le « + » (épure #18361, règle 6) : on l'ouvre comme la personne le ferait. */
+    await page.locator('button[aria-label="Ouvrir le menu des pièces jointes"]').click();
+    await page.waitForSelector('[data-composer-effects]');
+
+    const TOGGLES = [
+      ['[data-composer-ephemeral]', 'éphémère'],
+      ['[data-composer-blur]', 'flou'],
+      ['[data-composer-effects]', 'effets'],
+    ];
+
+    const boxOf = (sel) =>
+      page.evaluate((s) => {
+        const el = document.querySelector(s);
+        if (el === null) return null;
+        const r = el.getBoundingClientRect();
+        return { width: Math.round(r.width * 10) / 10, height: Math.round(r.height * 10) / 10 };
+      }, sel);
+
+    /* LA BARRE GARDE TOUTE SA LARGEUR (#7985, après #7980) — le cadre des
+       emojis rapides vit dans la ligne de saisie, focus ou non : chaque
+       bascule tient sa cible 44×44 dans les DEUX états, et plus rien ne se
+       replie à côté d'un cadre qui ne monte plus sur la barre. */
+    for (const state of ['repos', 'focus']) {
+      if (state === 'focus') await page.locator('[aria-label="Écrire un message"]').focus();
+      for (const [sel, name] of TOGGLES) {
+        const box = await boxOf(sel);
+        expect(
+          box !== null && box.width >= 44 && box.height >= 44,
+          `${scheme} · ${state}, « ${name} » tient la cible 44×44 (${box?.width}×${box?.height})`,
+        );
+      }
+    }
+    await page.locator('[aria-label="Écrire un message"]').blur();
+
+    /* L'ÉTAT ARMÉ, PAS SEULEMENT L'ÉTAT AU REPOS — c'est l'armé qui peint un
+       lavis sous son encre, donc lui seul peut tomber sous AA. On ARME par
+       le geste réel (la loi 4 : le contrôle a un effet), jamais en posant une
+       classe. */
+    await page.locator('[data-composer-ephemeral]').click();
+    await page.waitForSelector('[data-composer-ephemeral-picker]');
+    const picker = await page.evaluate(() =>
+      [...document.querySelectorAll('[data-composer-ephemeral-picker] button')].map((b) => {
+        const r = b.getBoundingClientRect();
+        return { label: b.getAttribute('aria-label') ?? b.textContent, height: Math.round(r.height) };
+      }),
+    );
+    const tooShort = picker.filter((c) => c.height < 44);
+    expect(
+      picker.length > 0 && tooShort.length === 0,
+      `${scheme} · les ${picker.length} capsules de durée tiennent 44 px de haut (${tooShort.map((c) => `${c.label} ${c.height}`).join(', ') || 'toutes'})`,
+    );
+
+    await page.locator('[data-composer-ephemeral-picker] button', { hasText: '1min' }).first().click();
+    await page.locator('[data-composer-blur]').click();
+    await page.waitForTimeout(150);
+
+    for (const [sel, name] of [
+      ['[data-composer-ephemeral]', 'éphémère'],
+      ['[data-composer-blur]', 'flou'],
+    ]) {
+      const armed = await boxOf(sel);
+      expect(armed.width >= 44 && armed.height >= 44, `${scheme} · « ${name} » ARMÉE tient la cible (${armed.width}×${armed.height})`);
+      const ratio = await contrastOf(page, `${sel} span`);
+      expect(ratio !== null && ratio >= 4.5, `${scheme} · « ${name} » ARMÉE tient la barre AA (${ratio}:1)`);
+    }
+
+    /* LE RAIL ÉPHÉMÈRE GARDE 8 PX AVEC LE BORD DU VERRE (#7980, miroir
+       #7966) — en haut et sur les côtés. On le rouvre (le choix l'a fermé). */
+    const railInset = async (sel) =>
+      page.evaluate((s) => {
+        const rail = document.querySelector(s);
+        const glass = document.querySelector('[data-composer]');
+        if (rail === null || glass === null) return null;
+        const r = rail.getBoundingClientRect();
+        const g = glass.getBoundingClientRect();
+        return { top: Math.round(r.top - g.top), start: Math.round(r.left - g.left), end: Math.round(g.right - r.right) };
+      }, sel);
+    await page.locator('[data-composer-ephemeral]').click();
+    await page.locator('[data-composer-ephemeral]').click();
+    await page.waitForSelector('[data-composer-ephemeral-picker]');
+    const ephemeralInset = await railInset('[data-composer-ephemeral-picker]');
+    expect(
+      ephemeralInset !== null && ephemeralInset.top === 8 && ephemeralInset.start === 8 && ephemeralInset.end === 8,
+      `${scheme} · le rail éphémère garde 8 px avec le bord du verre (${JSON.stringify(ephemeralInset)})`,
+    );
+
+    /* LE PANNEAU D'EFFETS (#7980) — INLINE, jamais une feuille : il prend la
+       place du rail éphémère (les deux s'excluent), garde les mêmes 8 px, et
+       ses capsules sont des cibles au même titre. */
+    await page.locator('[data-composer-effects]').click();
+    await page.waitForSelector('[data-composer-effects-panel]');
+    expect((await page.locator('dialog[open]').count()) === 0, `${scheme} · la baguette n'ouvre AUCUNE feuille`);
+    expect(
+      (await page.locator('[data-composer-ephemeral-picker]').count()) === 0,
+      `${scheme} · le panneau d'effets FERME le rail éphémère`,
+    );
+    const effectsInset = await railInset('[data-composer-effects-panel]');
+    expect(
+      effectsInset !== null && effectsInset.top === 8 && effectsInset.start === 8 && effectsInset.end === 8,
+      `${scheme} · le panneau d'effets garde 8 px avec le bord du verre (${JSON.stringify(effectsInset)})`,
+    );
+    const chips = await page.evaluate(() =>
+      [...document.querySelectorAll('[data-composer-effects-panel] button[aria-pressed]')].map((b) => {
+        const r = b.getBoundingClientRect();
+        return { label: b.getAttribute('aria-label') ?? b.textContent, height: Math.round(r.height) };
+      }),
+    );
+    const shortChips = chips.filter((c) => c.height < 44);
+    expect(
+      chips.length === 10 && shortChips.length === 0,
+      `${scheme} · les ${chips.length} capsules du panneau d'effets tiennent 44 px (${shortChips.map((c) => `${c.label} ${c.height}`).join(', ') || 'toutes'})`,
+    );
+
+    await page.locator('[data-composer-effects-panel] button', { hasText: 'Confettis' }).first().click();
+    await page.waitForSelector('[data-composer-effects-panel] button[aria-pressed="true"]');
+    const chipRatio = await contrastOf(page, '[data-composer-effects-panel] button[aria-pressed="true"]');
+    expect(chipRatio !== null && chipRatio >= 4.5, `${scheme} · une capsule d'effet ACTIVE tient la barre AA (${chipRatio}:1)`);
+    const idleRatio = await contrastOf(page, '[data-composer-effects-panel] button[aria-pressed="false"]');
+    expect(idleRatio !== null && idleRatio >= 4.5, `${scheme} · une capsule d'effet au repos tient la barre AA (${idleRatio}:1)`);
+    const clearBox = await page.evaluate(() => {
+      const b = document.querySelector('[data-composer-effects-panel] [data-effects-clear-all]');
+      if (b === null) return null;
+      const r = b.getBoundingClientRect();
+      return { height: Math.round(r.height) };
+    });
+    expect(clearBox !== null && clearBox.height >= 44, `${scheme} · « Tout effacer » paraît, cible ≥ 44 px (${JSON.stringify(clearBox)})`);
+    const clearRatio = await contrastOf(page, '[data-composer-effects-panel] [data-effects-clear-all]');
+    expect(clearRatio !== null && clearRatio >= 4.5, `${scheme} · « Tout effacer » tient la barre AA (${clearRatio}:1)`);
+    await page.screenshot({ path: join(CAPTURES, `thread-composer-effects-panel.${scheme}.png`) });
+
+    await context.close();
+  }
+
+  // ---------------------------------------------------------------------- 8
+  /**
+   * LE CADRE DES EMOJIS RAPIDES (#7985, directive porteur 2026-09-25, après
+   * #7980) — TROIS emojis EN PERMANENCE, sur une rangée, à la hauteur de la
+   * ligne de saisie, focus ou non ; la barre d'outils garde toute sa largeur
+   * (sa porte sticker et sa caméra comprises, #9082) et aucun de ses contrôles ne glisse sous le cadre.
+   * Mesuré à 390 px et à 320 px — la largeur à laquelle l'ancienne forme
+   * « cinq sur tout le côté droit » débordait (#7984).
+   *
+   * LA BARRE TIENT DANS SA BOÎTE (#7992) — à 320 px, la pastille de langue
+   * allait de 252 à 324 px (`scrollWidth` 324 pour 320). Huit cibles de 44 px
+   * ne tiennent pas dans 296 px : comme `ComposerToolbarStrip` (iOS,
+   * `ViewThatFits`), seule la bande menante défile. On mesure donc la barre
+   * (jamais plus large que sa boîte), l'angle droit (entier dans la barre), et
+   * chaque outil de la bande menante une fois amené à l'écran : ENTIER dans la
+   * bande, et c'est lui qui reçoit le doigt en son centre.
+   *
+   * Puis EN SÉRIE : deux taps sur le même emoji font DEUX bulles (plus de
+   * dédoublonnage par contenu), et un double clic sur « Envoyer » n'en fait
+   * qu'UNE (le brouillon est vidé à l'instant de l'envoi). Fixtures seules :
+   * aucun envoi ne quitte le navigateur.
+   *
+   * LA LANGUE SE LIT SANS GESTE (#9251) — la pastille ferme la bande menante
+   * sans y défiler : entière dans la barre aux deux largeurs ; et une bande qui
+   * défile le dit par un fondu à son bord de fin.
+   *
+   * Enfin (#7983) : l'appui long — et Maj+F10 — ouvre la palette sans envoyer
+   * l'emoji pressé, l'emoji choisi y part directement, et au rechargement le
+   * cadre est classé par l'usage de l'appareil.
+   */
+  for (const width of [390, 320]) {
+    const context = await browser.newContext({
+      viewport: { width, height: 844 },
+      colorScheme: scheme === 'light' ? 'light' : 'dark',
+      reducedMotion: 'reduce',
+    });
+    await context.addInitScript((s) => {
+      try {
+        localStorage.setItem('meeshy.scheme', s);
+      } catch {
+        /* navigation privée */
+      }
+    }, scheme);
+    const page = await context.newPage();
+    await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
+    await page.waitForSelector('[data-composer-quick-emoji]');
+    await page.waitForSelector('[data-message]');
+
+    const measure = () =>
+      page.evaluate(() => {
+        const box = (el) => {
+          if (el === null) return null;
+          const r = el.getBoundingClientRect();
+          return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width, height: r.height };
+        };
+        const frame = document.querySelector('[data-composer-quick-emoji]');
+        const toolbar = document.querySelector('[data-composer-toolbar]');
+        const field = document.querySelector('[aria-label="Écrire un message"]')?.parentElement ?? null;
+        const toolbarControls = [...(toolbar?.children ?? [])].filter((c) => c.getBoundingClientRect().width > 0);
+        const rightmost = Math.max(...toolbarControls.map((c) => c.getBoundingClientRect().right));
+        const buttons = [...document.querySelectorAll('[data-composer-quick-emoji] button')].map((b) => {
+          const r = b.getBoundingClientRect();
+          return { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top) };
+        });
+        const leading = toolbar?.querySelector('[data-composer-toolbar-leading]') ?? null;
+        const pill = toolbar?.querySelector('[data-composer-language]') ?? null;
+        const pillPainted = pill === null ? null : [pill, ...pill.querySelectorAll('*')].map((n) => n.getBoundingClientRect()).filter((r) => r.width > 0).reduce(
+          (u, r) => ({ left: Math.min(u.left, r.left), right: Math.max(u.right, r.right), top: Math.min(u.top, r.top), bottom: Math.max(u.bottom, r.bottom) }),
+          { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity },
+        );
+        const pillHit = pill === null ? null : (() => {
+          const r = pill.getBoundingClientRect();
+          return pill.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+        })();
+        const barRect = toolbar?.getBoundingClientRect() ?? null;
+        const pillWhole = pillPainted !== null && barRect !== null && pillHit === true &&
+          pillPainted.left >= Math.max(barRect.left, 0) - 0.5 && pillPainted.right <= Math.min(barRect.right, window.innerWidth) + 0.5;
+        const pillScrolls = pill !== null && leading !== null && leading.contains(pill);
+        const bandScrolls = leading !== null && leading.scrollWidth > leading.clientWidth + 1;
+        const bandSignals = leading !== null && leading.hasAttribute('data-scrolls-further') && getComputedStyle(leading).maskImage.includes('gradient');
+        const controls = [...(toolbar?.querySelectorAll('button, label') ?? [])].filter((c) => c.getBoundingClientRect().width > 0);
+        const nameOf = (c) => c.getAttribute('aria-label') ?? c.querySelector('[aria-label]')?.getAttribute('aria-label') ?? c.tagName;
+        const barBox = toolbar?.getBoundingClientRect() ?? null;
+        const escaping = barBox === null ? [] : controls.filter((c) => {
+          const r = c.getBoundingClientRect();
+          if (leading !== null && leading.contains(c)) return false;
+          return r.left < barBox.left - 0.5 || r.right > barBox.right + 0.5;
+        }).map(nameOf);
+        const unreachable = leading === null ? [] : controls.filter((c) => leading.contains(c)).filter((c) => {
+          c.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+          const r = c.getBoundingClientRect();
+          const host = leading.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return r.left < host.left - 0.5 || r.right > host.right + 0.5 || !c.contains(hit);
+        }).map(nameOf);
+        if (leading !== null) leading.scrollLeft = 0;
+        const small = controls
+          .map((c) => ({ c, r: c.getBoundingClientRect() }))
+          .filter(({ r }) => r.width < 44 || r.height < 44)
+          .map(({ c, r }) => `${nameOf(c)} ${Math.round(r.width)}×${Math.round(r.height)}`);
+        return {
+          barOverflow: toolbar === null ? null : `${toolbar.scrollWidth}/${toolbar.clientWidth}`,
+          barOverflows: toolbar !== null && toolbar.scrollWidth > toolbar.clientWidth,
+          escaping,
+          unreachable,
+          small,
+          frame: box(frame),
+          toolbar: box(toolbar),
+          field: box(field),
+          toolbarRight: rightmost,
+          toolbarScrolls: toolbar === null ? false : toolbar.scrollWidth > toolbar.clientWidth + 1,
+          doors: toolbar?.querySelector('[data-composer-sticker]') === null && toolbar?.querySelector('[data-composer-camera]') === null,
+          pageScrolls: document.documentElement.scrollWidth > window.innerWidth + 1,
+          pill: pillPainted === null ? null : `${Math.round(pillPainted.left)}→${Math.round(pillPainted.right)}`,
+          pillWhole,
+          pillScrolls,
+          bandScrolls,
+          bandSignals,
+          band: leading === null ? null : `${leading.scrollWidth}/${leading.clientWidth}`,
+          buttons,
+        };
+      });
+
+    for (const state of ['repos', 'focus']) {
+      if (state === 'focus') await page.locator('[aria-label="Écrire un message"]').focus();
+      const m = await measure();
+      const tag = `${scheme} · ${width} px · ${state}`;
+      expect(m.buttons.length === 3 && new Set(m.buttons.map((b) => b.top)).size === 1, `${tag} · trois emojis sur UNE rangée (${JSON.stringify(m.buttons)})`);
+      if (expect(m.frame !== null && m.toolbar !== null && m.field !== null, `${tag} · cadre, barre et champ sont rendus`)) {
+        expect(
+          Math.round(m.frame.height) === 44 && m.frame.top >= m.toolbar.bottom - 1 && Math.abs(m.frame.bottom - m.field.bottom) <= 1,
+          `${tag} · le cadre tient la ligne de saisie, 44 px, sous la barre (cadre ${Math.round(m.frame.top)}→${Math.round(m.frame.bottom)}, barre ↓${Math.round(m.toolbar.bottom)}, champ ↓${Math.round(m.field.bottom)})`,
+        );
+        expect(
+          m.toolbarRight <= m.frame.left || m.frame.top >= m.toolbar.bottom - 1,
+          `${tag} · aucun contrôle de la barre ne glisse sous le cadre (dernier bord ${Math.round(m.toolbarRight)}, cadre ←${Math.round(m.frame.left)})`,
+        );
+      }
+      expect(m.doors, `${tag} · la barre ne double plus le sticker et la caméra, rangés dans le menu du + (#18361)`);
+      expect(!m.barOverflows, `${tag} · la barre d'outils ne déborde pas de sa boîte (#7992 — scrollWidth/clientWidth ${m.barOverflow})`);
+      expect(m.escaping.length === 0, `${tag} · aucun contrôle de l'angle droit ne sort de la barre (${m.escaping.join(', ') || 'tous dedans'})`);
+      expect(
+        m.unreachable.length === 0,
+        `${tag} · chaque outil de la bande menante, amené à l'écran, y tient ENTIER et reçoit le doigt (${m.unreachable.join(', ') || 'tous'})`,
+      );
+      expect(m.small.length === 0, `${tag} · chaque contrôle de la barre tient la cible 44×44 (${m.small.join(', ') || 'tous'})`);
+      expect(!m.pageScrolls, `${tag} · aucun défilement horizontal de la page`);
+      expect(
+        m.pillWhole && !m.pillScrolls,
+        `${tag} · la pastille de langue se lit ENTIÈRE sans geste, hors de la bande qui défile (#9251 — capsule ${m.pill}, barre ${m.toolbar === null ? '?' : `${Math.round(m.toolbar.left)}→${Math.round(m.toolbar.right)}`})`,
+      );
+      expect(
+        !m.bandScrolls || m.bandSignals,
+        `${tag} · une bande menante qui défile le DIT par un fondu à son bord de fin (#9251 — ${m.band})`,
+      );
+      const tiny = m.buttons.filter((b) => b.w < 24 || b.h < 24);
+      expect(tiny.length === 0, `${tag} · chaque emoji tient au moins la cible AA de 24 px (${JSON.stringify(m.buttons)})`);
+      await page.screenshot({ path: join(CAPTURES, `thread-composer-quick-emoji.${width}.${state}.${scheme}.png`) });
+    }
+
+    if (width === 390) {
+      const bubbles = () => page.locator('[data-message]').count();
+      const emoji = page.locator('[data-composer-quick-emoji] button').first();
+      const before = await bubbles();
+      await emoji.click();
+      await emoji.click();
+      await page.waitForFunction((n) => document.querySelectorAll('[data-message]').length >= n + 2, before, { timeout: 3000 }).catch(() => {});
+      const afterSeries = await bubbles();
+      expect(afterSeries === before + 2, `${scheme} · deux taps sur le même emoji ⇒ DEUX bulles (${before} → ${afterSeries})`);
+
+      await page.locator('[aria-label="Écrire un message"]').fill('double clic');
+      await page.locator('[aria-label="Envoyer"]').dblclick();
+      await page.waitForTimeout(600);
+      const afterDouble = await bubbles();
+      expect(afterDouble === afterSeries + 1, `${scheme} · double clic sur « Envoyer » ⇒ UNE bulle (${afterSeries} → ${afterDouble})`);
+
+      const picker = '[data-quick-emoji-picker] dialog[open]';
+      const pressed = page.locator('[data-composer-quick-emoji] button').nth(2);
+      await pressed.hover();
+      await page.mouse.down();
+      await page.waitForTimeout(650);
+      await page.mouse.up();
+      const pickerOpened = await page.waitForSelector(picker, { timeout: 3000 }).then(() => true, () => false);
+      expect(pickerOpened, `${scheme} · appui long sur un emoji rapide ⇒ la palette des emojis (#7983)`);
+      expect((await bubbles()) === afterDouble, `${scheme} · l’appui long n’envoie pas l’emoji pressé`);
+      if (pickerOpened) {
+        await page.locator(`${picker} button[aria-label="🎉"]`).click();
+        await page.waitForFunction((n) => document.querySelectorAll('[data-message]').length >= n + 1, afterDouble, { timeout: 3000 }).catch(() => {});
+        expect((await bubbles()) === afterDouble + 1, `${scheme} · l’emoji choisi dans la palette part directement`);
+        expect((await page.locator(picker).count()) === 0, `${scheme} · la palette se referme après le choix`);
+      }
+
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForSelector('[data-composer-quick-emoji]');
+      const ranked = await page.locator('[data-composer-quick-emoji] button').allTextContents();
+      expect(ranked[0] === '😂' && ranked[1] === '🎉', `${scheme} · au rechargement, le cadre est classé par l’usage de cet appareil (${ranked.join(' ')})`);
+
+      const keyboardTarget = page.locator('[data-composer-quick-emoji] button').first();
+      await keyboardTarget.focus();
+      await page.keyboard.press('Shift+F10');
+      const byKeyboard = await page.waitForSelector(picker, { timeout: 3000 }).then(() => true, () => false);
+      expect(byKeyboard, `${scheme} · Maj+F10 sur un emoji rapide ouvre la même palette`);
+      await page.keyboard.press('Escape');
+    }
+
+    await context.close();
+  }
+}
+
+await browser.close();
+served.close();
+
+if (failures.length > 0) {
+  console.error('\n  LE CHROME DU FIL A DÉRIVÉ (#5774) :\n');
+  for (const f of failures) console.error(`    · ${f}`);
+  console.error('');
+  process.exit(1);
+}
+console.log(`\n  Le chrome du fil est conforme à ConversationView.swift / MessageDayStickyOverlay.swift / ConversationScrollControlsView.swift (deux schémas).`);
+console.log(`  Captures : ${join(CAPTURES, 'thread-focal-chrome-hidden.{light,dark}.png')}`);

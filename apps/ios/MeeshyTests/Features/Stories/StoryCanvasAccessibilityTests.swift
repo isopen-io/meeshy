@@ -30,6 +30,26 @@ final class StoryCanvasAccessibilityTests: XCTestCase {
 
     // MARK: - Le contenu est restitué
 
+    /// #4825 — les stickers sont DITS, après les textes, dans l'ordre de pose.
+    func test_label_carriesTheStickers_afterTheTexts() {
+        let label = StoryCanvasAccessibility.label(
+            index: 0, total: 1,
+            authorName: nil,
+            textObjects: [makeText("Bon anniversaire")],
+            preferredLanguages: ["fr"],
+            voiceTranscript: nil,
+            stickerDescriptions: ["Cadran — 14:32", "Cœur, qui bat", "   "]
+        )
+        let texte = label.range(of: "Bon anniversaire")
+        let cadran = label.range(of: "Cadran — 14:32")
+        XCTAssertNotNil(texte); XCTAssertNotNil(cadran)
+        XCTAssertTrue(label.contains("Cœur, qui bat"))
+        if let texte, let cadran {
+            XCTAssertLessThan(texte.lowerBound, cadran.lowerBound, "les textes d'abord, les stickers ensuite")
+        }
+        XCTAssertFalse(label.hasSuffix(". "), "une description vide ne laisse pas de séparateur orphelin")
+    }
+
     func test_label_carriesTheStoryText() {
         let label = StoryCanvasAccessibility.label(
             index: 1, total: 5,

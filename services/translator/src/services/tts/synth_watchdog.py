@@ -13,6 +13,9 @@ from typing import Awaitable, TypeVar
 logger = logging.getLogger(__name__)
 
 DEFAULT_TTS_SYNTH_TIMEOUT_S = float(os.getenv("TTS_SYNTH_TIMEOUT_S", "180"))
+# Écriture disque du WAV généré — bien plus courte que la génération elle-même ;
+# bornée séparément pour qu'un disque bloqué libère aussi le verrou (#5610).
+DEFAULT_TTS_SAVE_TIMEOUT_S = float(os.getenv("TTS_SAVE_TIMEOUT_S", "30"))
 
 T = TypeVar("T")
 

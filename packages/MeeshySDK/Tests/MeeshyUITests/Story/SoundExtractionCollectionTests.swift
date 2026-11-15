@@ -18,12 +18,13 @@ final class SoundExtractionCollectionTests: XCTestCase {
 
     // MARK: - MediaAccessibilityStore
 
-    /// `test_allowsSoundExtraction_defaultsToFalse` rougit si le défaut
-    /// devient `true` : c'est un opt-in de l'auteur sur SON contenu, jamais
-    /// un opt-out.
-    func test_allowsSoundExtraction_defaultsToFalse() {
+    /// `test_allowsSoundExtraction_defaultsToTrue` rougit si l'interrupteur
+    /// affiche un refus que la passerelle n'applique pas : l'absence de choix
+    /// vaut accord (#8012), seul un refus explicite retient la bande-son.
+    func test_allowsSoundExtraction_defaultsToTrue() {
         let store = MediaAccessibilityStore()
-        XCTAssertFalse(store.allowsSoundExtraction())
+        XCTAssertTrue(store.allowsSoundExtraction())
+        XCTAssertNil(store.draftSnapshot().allowSoundExtraction)
     }
 
     /// `test_setAllowsSoundExtraction_roundTrips` rougit si
@@ -37,21 +38,21 @@ final class SoundExtractionCollectionTests: XCTestCase {
         XCTAssertFalse(store.allowsSoundExtraction())
     }
 
-    /// `test_allowSoundExtractionPayload_isNilUntouched` rougit si le
+    /// `test_soundChoice_isNilUntouched` rougit si le
     /// payload renvoie `false` au lieu de `nil` tant que l'auteur n'a jamais
     /// touché l'interrupteur — un update partiel ne doit jamais écraser un
     /// `true` serveur existant avec un `false` que personne n'a choisi.
-    func test_allowSoundExtractionPayload_isNilUntouched() {
+    func test_soundChoice_isNilUntouched() {
         let store = MediaAccessibilityStore()
-        XCTAssertNil(store.allowSoundExtractionPayload())
+        XCTAssertNil(store.draftSnapshot().allowSoundExtraction)
     }
 
-    /// `test_allowSoundExtractionPayload_reflectsExplicitChoice` rougit si
+    /// `test_soundChoice_reflectsExplicitChoice` rougit si
     /// le payload ne reflète pas le dernier choix explicite de l'auteur.
-    func test_allowSoundExtractionPayload_reflectsExplicitChoice() {
+    func test_soundChoice_reflectsExplicitChoice() {
         let store = MediaAccessibilityStore()
         store.setAllowsSoundExtraction(true)
-        XCTAssertEqual(store.allowSoundExtractionPayload(), true)
+        XCTAssertEqual(store.draftSnapshot().allowSoundExtraction, true)
     }
 
     /// `test_removingOneMedia_leavesSoundExtractionChoiceIntact` rougit si
@@ -60,9 +61,9 @@ final class SoundExtractionCollectionTests: XCTestCase {
     /// le post, tant qu'une autre vidéo peut rester dans la composition.
     func test_removingOneMedia_leavesSoundExtractionChoiceIntact() {
         let store = MediaAccessibilityStore()
-        store.setAllowsSoundExtraction(true)
+        store.setAllowsSoundExtraction(false)
         store.remove(mediaId: "media-1")
-        XCTAssertTrue(store.allowsSoundExtraction())
+        XCTAssertFalse(store.allowsSoundExtraction())
     }
 
     // MARK: - Gardes de source
@@ -80,143 +81,32 @@ final class SoundExtractionCollectionTests: XCTestCase {
                       "Une légende doit expliquer la conséquence de l'activation.")
     }
 
-    /// `test_mediaPanel_offersSoundExtractionOnlyWhenVideoPresent` rougit si
-    /// `ComposerToolPanelHost.mediaPanel` cesse de gater
-    /// `SoundExtractionToggle` derrière `hasVideoMedia` : une slide sans
-    /// vidéo n'a pas de bande-son à extraire, offrir l'interrupteur
-    /// collecterait un choix qui ne correspond à rien de publiable.
-    func test_mediaPanel_offersSoundExtractionOnlyWhenVideoPresent() throws {
-        let code = try ComposerSourceGuard.source("Controls/ComposerToolPanelHost.swift")
-        let body = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "private var mediaPanel: some View {", in: code)
-        )
-        XCTAssertTrue(body.contains("if hasVideoMedia {"),
-                      "SoundExtractionToggle doit être gaté à la présence d'une vidéo.")
-        guard let ifRange = body.range(of: "if hasVideoMedia {") else {
-            return XCTFail("garde hasVideoMedia introuvable")
-        }
-        let afterIf = body[ifRange.upperBound...]
-        XCTAssertTrue(afterIf.contains("SoundExtractionToggle("),
-                      "Le toggle doit être À L'INTÉRIEUR de la garde, pas seulement présent ailleurs.")
-    }
-
-    /// `test_mediaPanel_wiresSoundExtractionCommit` rougit si
-    /// `ComposerToolPanelHost.mediaPanel` cesse de relayer le changement du
-    /// toggle jusqu'au store de collecte.
-    func test_mediaPanel_wiresSoundExtractionCommit() throws {
-        let code = try ComposerSourceGuard.source("Controls/ComposerToolPanelHost.swift")
-        let body = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "private var mediaPanel: some View {", in: code)
-        )
-        XCTAssertTrue(body.contains("accessibilityStore.setAllowsSoundExtraction("),
-                      "Le commit du toggle doit atteindre le store de collecte.")
-    }
-
     /// Espaces normalisés — cf. `MediaAltCollectionTests.collapsed` : une garde
     /// ancrée sur un littéral multi-lignes tombe au premier retour à la ligne.
     private func collapsed(_ code: String) -> String {
         code.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
     }
 
-    // MARK: - Le défaut reste CONSERVATEUR (C-bis, correctif 5)
+    // MARK: - Le défaut AFFICHÉ est celui que la passerelle APPLIQUE (#8012)
 
-    /// `test_store_defaultIsNotPermissive` rougit si le repli du store devient
-    /// `?? true` : l'auteur se verrait imposer, sur SON contenu, un choix qu'il
-    /// n'a jamais fait. Le test de comportement voisin
-    /// (`test_allowsSoundExtraction_defaultsToFalse`) prouve le résultat ; cette
-    /// garde nomme le MÉCANISME, pour qu'un repli inversé ne puisse pas se
-    /// glisser derrière une reformulation.
-    func test_store_defaultIsNotPermissive() throws {
+    /// `test_store_defaultMirrorsTheGateway` rougit si le repli du store
+    /// redevient `?? false` : la passerelle lit l'absence de choix comme un
+    /// accord (`videoSoundExtractionAllowed`, directive porteur 2026-09-26),
+    /// donc un interrupteur éteint par défaut MENTIRAIT sur ce qui sera publié.
+    /// Le test de comportement voisin (`test_allowsSoundExtraction_defaultsToTrue`)
+    /// prouve le résultat ; cette garde nomme le MÉCANISME.
+    func test_store_defaultMirrorsTheGateway() throws {
         let code = try ComposerSourceGuard.source("Controls/MediaAccessibilityStore.swift")
         let flat = collapsed(code)
-        XCTAssertTrue(flat.contains("allowSoundExtractionOverride ?? false"),
-                      "Le repli du store doit rester le refus.")
-        XCTAssertFalse(flat.contains("allowSoundExtractionOverride ?? true"),
-                       "Un repli permissif prendrait la décision à la place de l'auteur.")
-    }
-
-    /// `test_mediaPanel_readsToggleStateFromTheStore` rougit si `isOn:` du
-    /// `SoundExtractionToggle` devient un littéral (`true` / `false`) au lieu de
-    /// lire le store : l'interrupteur afficherait un état qui n'est pas celui
-    /// qui sera publié.
-    func test_mediaPanel_readsToggleStateFromTheStore() throws {
-        let code = try ComposerSourceGuard.source("Controls/ComposerToolPanelHost.swift")
-        let body = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "private var mediaPanel: some View {", in: code)
-        )
-        let flat = collapsed(body)
-        XCTAssertTrue(flat.contains("isOn: accessibilityStore.allowsSoundExtraction()"),
-                      "L'état affiché doit venir du store, seul détenteur du défaut conservateur.")
-        XCTAssertFalse(flat.contains("isOn: true"),
-                       "Un état codé en dur trahirait le choix de l'auteur.")
+        XCTAssertTrue(flat.contains("allowSoundExtractionOverride ?? true"),
+                      "Le repli du store doit afficher l'accord que la passerelle applique.")
+        XCTAssertFalse(flat.contains("allowSoundExtractionOverride ?? false"),
+                       "Un repli au refus afficherait un état que la publication ne suit pas.")
     }
 
     // MARK: - La chaîne ATTEINT le point de publication (C-bis, correctif 3)
 
-    /// `test_bottomBand_passesSoundExtractionCallbackDownToToolPanelHost`
-    /// rougit si `ComposerBottomBand` cesse de passer
-    /// `onAllowSoundExtractionChanged` au host : le host EXPOSE ce rappel
-    /// depuis la vague 2, mais personne ne le lui passait — l'opt-in de
-    /// l'auteur n'atteignait jamais le réseau.
-    func test_bottomBand_passesSoundExtractionCallbackDownToToolPanelHost() throws {
-        let code = try ComposerSourceGuard.source("Controls/ComposerBottomBand.swift")
-        let body = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "var body: some View", in: code)
-        )
-        XCTAssertTrue(
-            collapsed(body).contains("onAllowSoundExtractionChanged: onAllowSoundExtractionChanged"),
-            "Le band doit relayer l'opt-in jusqu'au host de panneau.")
-    }
-
-    /// `test_controlsLayer_relaysSoundExtractionCallbackToBottomBand` rougit si
-    /// la couche de contrôles cesse de relayer l'opt-in au band.
-    func test_controlsLayer_relaysSoundExtractionCallbackToBottomBand() throws {
-        let code = try ComposerSourceGuard.source("Controls/ComposerControlsLayer.swift")
-        let body = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "public var body: some View", in: code)
-        )
-        XCTAssertTrue(
-            collapsed(body).contains("onAllowSoundExtractionChanged: onAllowSoundExtractionChanged"),
-            "La couche de contrôles doit relayer l'opt-in au band.")
-    }
-
-    /// `test_controlsLayer_exposesSoundExtractionCallbackToItsParent` rougit si
-    /// le point de sortie publique disparaît : le parent qui tient la
-    /// publication n'aurait plus de canal pour apprendre le choix de l'auteur.
-    func test_controlsLayer_exposesSoundExtractionCallbackToItsParent() throws {
-        let code = try ComposerSourceGuard.source("Controls/ComposerControlsLayer.swift")
-        XCTAssertTrue(
-            collapsed(code).contains("onAllowSoundExtractionChanged: ((Bool) -> Void)? = nil"),
-            "L'opt-in doit être un paramètre d'init, sinon le parent n'a aucun canal.")
-        let initBody = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "public init(", in: code)
-        )
-        XCTAssertTrue(
-            collapsed(initBody).contains("self.onAllowSoundExtractionChanged = onAllowSoundExtractionChanged"),
-            "L'init doit CONSERVER le rappel reçu — le déclarer sans l'assigner le laisse nil.")
-    }
-
     // MARK: - V3-4 — l'opt-in PART (transport, pas seulement collecte)
-
-    /// `test_accessibilityHandoff_carriesTheExplicitChoice` rougit si la charge
-    /// remise à la publication cesse de porter le choix de l'auteur. Première
-    /// assertion comportementale du transport : `allowSoundExtractionPayload()`
-    /// n'avait, avant ce lot, aucun appelant de production.
-    func test_accessibilityHandoff_carriesTheExplicitChoice() {
-        let store = MediaAccessibilityStore()
-        store.setAllowsSoundExtraction(true)
-
-        XCTAssertEqual(StoryComposerView.accessibilityHandoff(from: store).allowSoundExtraction, true)
-    }
-
-    /// `test_accessibilityHandoff_staysSilentOnAnUntouchedSwitch` rougit si un
-    /// interrupteur jamais touché se met à envoyer `false` : le défaut serveur
-    /// s'appliquerait alors par écrasement au lieu de s'appliquer par silence.
-    func test_accessibilityHandoff_staysSilentOnAnUntouchedSwitch() {
-        XCTAssertNil(
-            StoryComposerView.accessibilityHandoff(from: MediaAccessibilityStore()).allowSoundExtraction
-        )
-    }
 
     /// `test_createStoryRequest_encodesAllowSoundExtraction` rougit si le champ
     /// disparaît du corps de `POST /posts` : le gateway l'accepte depuis
@@ -242,28 +132,6 @@ final class SoundExtractionCollectionTests: XCTestCase {
         )
 
         XCTAssertNil(json["allowSoundExtraction"])
-    }
-
-    /// `test_allowSoundExtractionPayload_hasAtLeastOneProductionCaller` rougit
-    /// si le snapshot redevient orphelin.
-    ///
-    /// Formulée en POSITIF : une garde qui interdirait un motif resterait verte
-    /// le jour où ce motif change de nom, alors que l'état mesuré avant ce lot
-    /// était précisément « la fonction existe, elle est testée, personne ne
-    /// l'appelle ».
-    func test_allowSoundExtractionPayload_hasAtLeastOneProductionCaller() throws {
-        let callers = try ComposerSourceGuard.allStorySources()
-            .filter { $0.path != "Controls/MediaAccessibilityStore.swift" }
-            .filter { $0.code.contains("allowSoundExtractionPayload()") }
-            .map { $0.path }
-
-        XCTAssertFalse(
-            callers.isEmpty,
-            """
-            `allowSoundExtractionPayload()` n'a AUCUN appelant hors de sa propre \
-            déclaration : l'interrupteur se bascule et ne part nulle part.
-            """
-        )
     }
 
     /// `test_mediaAccessibilityPanel_hasNoPerMediaSoundToggle` rougit si un
@@ -306,17 +174,17 @@ final class SoundExtractionCollectionTests: XCTestCase {
         XCTAssertTrue(store.allowsSoundExtraction())
     }
 
-    /// `test_restore_ofADraftWithoutAChoice_keepsTheConservativeDefault` rougit
-    /// si la reprise d'un brouillon muet fabriquait un choix : le défaut du
-    /// store est le refus, mais c'est un défaut, pas une décision de l'auteur —
-    /// le payload doit rester silencieux.
-    func test_restore_ofADraftWithoutAChoice_keepsTheConservativeDefault() {
+    /// `test_restore_ofADraftWithoutAChoice_keepsTheDefault` rougit si la
+    /// reprise d'un brouillon muet fabriquait un choix : le défaut du store est
+    /// l'accord, mais c'est un défaut, pas une décision de l'auteur — le
+    /// payload doit rester silencieux.
+    func test_restore_ofADraftWithoutAChoice_keepsTheDefault() {
         let store = MediaAccessibilityStore()
-        store.setAllowsSoundExtraction(true)
+        store.setAllowsSoundExtraction(false)
 
         store.restore(from: .empty)
 
-        XCTAssertFalse(store.allowsSoundExtraction())
-        XCTAssertNil(store.allowSoundExtractionPayload())
+        XCTAssertTrue(store.allowsSoundExtraction())
+        XCTAssertNil(store.draftSnapshot().allowSoundExtraction)
     }
 }

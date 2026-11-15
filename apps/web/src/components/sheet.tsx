@@ -1,0 +1,291 @@
+import { useEffect, useId, useRef, type MouseEvent, type ReactNode } from 'react';
+
+import '@/styles/sheet-motion.css';
+
+import { Glyph } from './glyph';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { DIALOG_MOTION_STYLE, useDialogExit } from '@/lib/view/dialog-exit';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+
+/**
+ * LA FEUILLE PLEIN ÉCRAN, CHERCHABLE (#5555, correction de revue défaut 4) —
+ * l'hôte des choix longs : pays, langue lue, et les listes des 40+ surfaces à
+ * venir.
+ *
+ * POURQUOI `<dialog>` ET PAS `<div role="dialog" aria-modal="true">`. Les
+ * deux premières feuilles étaient des `div` : au clavier, la tabulation
+ * continuait DERRIÈRE la feuille dans le formulaire d'inscription — on
+ * pouvait taper son mot de passe sans voir le champ — et Échap ne fermait
+ * rien. `aria-modal="true"` ANNONCE une modale ; il n'en fait pas une. Ouvert
+ * par `showModal()`, `<dialog>` REND les trois comportements que l'annonce
+ * promettait : le piège de focus, la touche Échap, et l'inertie de tout ce
+ * qui est derrière — sans une ligne de gestion de touches à maintenir dans
+ * trente écrans.
+ *
+ * `onClose` est branché sur l'événement `close` du DIALOGUE, jamais sur le
+ * seul bouton : Échap et le bouton passent alors par le MÊME chemin, et il
+ * n'existe pas d'état où la feuille est fermée pour le navigateur mais
+ * toujours montée pour React.
+ *
+ * LE CONTENU RESTE À L'APPELANT (la liste, son filtrage, son état vide) :
+ * cette coquille porte le comportement modal, l'en-tête et le champ de
+ * recherche — c'est-à-dire exactement ce qui serait recopié de travers.
+ *
+ * LE CHAMP DE RECHERCHE EST OPTIONNEL (#5814, § 5 étape 4) — la feuille
+ * « Détails du message » n'a rien à filtrer : une recherche sur cinq lignes
+ * n'a aucun effet, et un contrôle sans effet est le défaut que la loi 4 du
+ * dépôt interdit. (« Ajouter une réaction » cherche depuis #10531 : elle
+ * porte tous les emojis.) Les
+ * quatre props de recherche vont ENSEMBLE (aucune n'a de sens seule) —
+ * absentes, le bandeau de recherche ne se monte pas du tout.
+ */
+export function Sheet({
+  title,
+  searchLabel,
+  searchPlaceholder,
+  search,
+  onSearchChange,
+  bodyAs = 'ul',
+  presentation = 'fullscreen',
+  accessory,
+  closeLabel,
+  backLabel,
+  backEntry = true,
+  restoreFocusTo,
+  dialogData,
+  onClose,
+  children,
+}: {
+  title: string;
+  /**
+   * Le NOM ACCESSIBLE du bouton de fermeture. Par défaut, « Fermer » dans la langue
+   * d'interface ; un hôte qui lit une AUTRE langue que celle-là — l'administration, servie
+   * en anglais aux interfaces allemande, italienne et arabe — passe la sienne : sans cela
+   * le lecteur d'écran annonçait « Fermer » en français sur une feuille anglaise.
+   */
+  closeLabel?: string;
+  /**
+   * Une feuille DÉTAIL ouverte depuis une autre (#16386) : l'en-tête porte un
+   * chevron (<) — ce libellé est son nom accessible — au lieu de la croix. Le
+   * geste est le même (la feuille se ferme et rend la précédente), le glyphe
+   * dit qu'on REVIENT, pas qu'on quitte.
+   */
+  backLabel?: string;
+  searchLabel?: string;
+  searchPlaceholder?: string;
+  search?: string;
+  onSearchChange?: (value: string) => void;
+  /**
+   * CE QUE LE CORPS DE LA FEUILLE **EST** (#6862, lot C).
+   *
+   * `'ul'` (défaut) — une LISTE de choix : pays, langue, réactions. La feuille
+   * porte la liste, elle défile, ses enfants sont des `<li>`.
+   *
+   * `'div'` — un ARBRE, qui apporte sa propre structure et son propre
+   * défilement. La lecture souveraine y monte le fil virtualisé, dont la
+   * racine est une `<ol>` : un `<ol>` enfant DIRECT d'un `<ul>` n'est pas du
+   * HTML valide, et le lecteur d'écran annonce alors « liste, 1 élément »
+   * par-dessus la vraie liste de messages. La feuille rend ici le CADRE
+   * (flex, hauteur), jamais le défilement — c'est le virtualiseur qui a besoin
+   * de désigner son propre conteneur de défilement.
+   */
+  bodyAs?: 'ul' | 'div';
+  /**
+   * PLEIN ÉCRAN ou MODALE CENTRÉE (#8289).
+   *
+   * `'fullscreen'` (défaut) — les choix longs, qu'on parcourt et qu'on filtre.
+   * Plein écran sur un TÉLÉPHONE seulement : à partir de 768 px (#10070), c'est
+   * une fenêtre centrée de 40 rem sur 85 % de la hauteur, posée sur le voile —
+   * sur un ordinateur, plus aucune modale ne prend tout l'écran. Sa hauteur est
+   * FIXÉE, pas seulement plafonnée : un corps `'div'` (le fil virtualisé) garde
+   * un cadre mesurable. Un clic sur le voile la ferme, comme la feuille basse.
+   * `'centered'` — un FORMULAIRE court (photo, mot de passe, bannissement) :
+   * largeur bornée à 36 rem avec une gouttière d'1 rem de chaque côté, hauteur
+   * bornée à 90 % de l'écran, centré par les marges automatiques du
+   * `<dialog>` modal — le même geste sur un téléphone, une tablette et un
+   * bureau, et l'écran d'où l'on vient reste visible derrière le voile.
+   *
+   * `'wide'` — la même modale centrée, LARGE (64 rem) : le détail d'une zone
+   * d'administration (graphiques, classements) qu'une carte résumée ouvre
+   * (`AdminDetailSheet`). Sur un téléphone, elle prend la largeur moins la
+   * gouttière, comme la centrée.
+   *
+   * `'bottom'` — une FEUILLE BASSE (#9563) : les précisions d'un élément du jeu,
+   * qu'on ouvre d'un toucher et qu'on referme aussitôt. Sur un téléphone elle
+   * monte du bas, sur toute la largeur, coins hauts arrondis ; à partir de
+   * 640 px c'est un dialogue centré (32 rem). Un toucher sur le voile la ferme,
+   * et elle rend le focus à l'élément qui l'a ouverte.
+   */
+  presentation?: 'fullscreen' | 'centered' | 'wide' | 'bottom';
+  /**
+   * L'élément à qui RENDRE le focus à la fermeture (#9563). `<dialog>` le rend de
+   * lui-même à l'élément actif d'avant `showModal()` ; le nommer le garantit
+   * quand la feuille est montée par un hôte éloigné du bouton touché.
+   */
+  restoreFocusTo?: HTMLElement | null;
+  /** Des attributs `data-*` posés sur le `<dialog>` : ce que la feuille montre, pour qui la cherche. */
+  dialogData?: Readonly<Record<`data-${string}`, string>>;
+  /** Les gestes propres à la feuille, au bout de l'en-tête (le composer d'export : « Au hasard », « Format par défaut »). */
+  accessory?: ReactNode;
+  /**
+   * La feuille pose-t-elle SA propre entrée d'historique (le retour matériel la
+   * ferme) ? `false` quand son ouverture vit déjà dans l'adresse
+   * (`AdminDetailSheet` sous `useAdminOpen`) : l'adresse a poussé l'entrée, le
+   * retour la consomme et démonte la feuille — une seconde entrée coûterait un
+   * second retour.
+   */
+  backEntry?: boolean;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const restoreRef = useRef(restoreFocusTo ?? null);
+  /* La sortie (#18362) : le ✕, le chevron et le voile passent par `leave` ; Échap et le démontage par
+     l'hôte (retour, `dismissAllLayers`, choix, changement de route) jouent le même fantôme d'office. */
+  const { leave } = useDialogExit(ref, { kind: presentation });
+
+  /**
+   * LE RETOUR MATÉRIEL FERME LA FEUILLE, PAS L'ÉCRAN (correction de revue,
+   * défaut 5 — MESURÉ sur l'émulateur Android).
+   *
+   * `<dialog>` répond à Échap, mais Échap n'est PAS le retour d'Android :
+   * `MainActivity` (coque, #5604) appelle `webView.goBack()` dès que la
+   * WebView a de l'historique, sans savoir qu'une modale est ouverte. Mesuré
+   * sur `Meeshy_Poc_Web-v31` : feuille de langue ouverte sur `/signup`, un
+   * appui BACK rendait `/login` — la feuille fermée ET le formulaire perdu,
+   * saisie comprise, pour un seul geste.
+   *
+   * LE GESTE VIT DÉSORMAIS DANS `useBackDismiss` (revue #5814, défaut majeur
+   * 6) — extrait d'ici pour que `MessageMenu` (un portail, pas un
+   * `<dialog>`) et toute couche future (visionneuse de média…) le partagent,
+   * plutôt que de le réécrire une jumelle divergente.
+   */
+  useBackDismiss(onClose, { history: backEntry });
+
+  /** Le comportement PROPRE au `<dialog>` (le piège de focus/Échap natifs) —
+   * distinct du geste de retour ci-dessus, qui ne connaît rien de `<dialog>`. */
+  useEffect(() => {
+    const dialog = ref.current;
+    if (dialog === null) return;
+    if (!dialog.open) dialog.showModal();
+    return () => {
+      if (dialog.open) dialog.close();
+      restoreRef.current?.focus();
+    };
+  }, []);
+
+  const centree = presentation !== 'fullscreen';
+  const basse = presentation === 'bottom';
+  const largeur = presentation === 'wide' ? 'w-[min(64rem,calc(100%-2rem))]' : 'w-[min(36rem,calc(100%-2rem))]';
+  /* Basse : collée au bas de l'écran et pleine largeur sur un téléphone ; centrée et bornée dès 640 px. */
+  const cadre = basse
+    ? 'mx-auto mb-0 mt-auto w-full max-w-full rounded-t-card sm:m-auto sm:w-[min(32rem,calc(100%-2rem))] sm:rounded-card max-h-[min(88dvh,calc(100%-1rem))]'
+    : `m-auto ${largeur} max-h-[min(90dvh,calc(100%-2rem))] rounded-card`;
+  /* Plein écran sur un téléphone, fenêtre centrée bornée dès 768 px (#10070). */
+  const pleinEcran =
+    'm-0 p-0 w-full max-w-full h-full max-h-full backdrop:bg-veil md:m-auto md:w-[min(40rem,calc(100%-4rem))] md:h-[min(85dvh,calc(100%-4rem))] md:rounded-card md:overflow-hidden';
+  /* Un toucher sur le VOILE ferme la feuille basse — et la feuille plein écran, qui n'a de voile visible que sur un
+     ordinateur : sur un téléphone son contenu couvre tout le `<dialog>`, aucun clic ne l'atteint. Le voile est le
+     `<dialog>` lui-même, hors de son contenu. */
+  const onBackdrop = basse || !centree
+    ? (event: MouseEvent<HTMLDialogElement>) => {
+        if (event.target === event.currentTarget) leave();
+      }
+    : undefined;
+
+  return (
+    <dialog
+      ref={ref}
+      onClose={onClose}
+      aria-labelledby={titleId}
+      data-sheet-presentation={presentation}
+      {...dialogData}
+      {...(onBackdrop === undefined ? {} : { onClick: onBackdrop })}
+      className={centree ? `${cadre} overflow-hidden p-0 backdrop:bg-veil` : pleinEcran}
+      style={{
+        ...DIALOG_MOTION_STYLE,
+        border: 0,
+        backgroundColor: 'var(--color-ios-surface)',
+        color: 'var(--color-ios-ink)',
+        boxShadow: '0 24px 64px color-mix(in srgb, var(--color-media-backdrop) 28%, transparent)',
+      }}
+    >
+      <div className={centree ? 'flex max-h-[min(90dvh,calc(100dvh-2rem))] flex-col' : 'flex h-full flex-col'}>
+        <div className={`flex shrink-0 items-center gap-3 px-4 pb-2 ${centree ? 'pt-2' : 'pt-safe md:pt-2'}`}>
+          {backLabel === undefined ? (
+            <button
+              type="button"
+              onClick={leave}
+              data-sheet-close=""
+              className="grid place-items-center rounded-chip"
+              style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-2)' }}
+              aria-label={closeLabel ?? translate(currentInterfaceLanguage(), 'common.close')}
+            >
+              <Glyph name="x" size={20} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={leave}
+              data-sheet-back=""
+              className="grid place-items-center rounded-chip"
+              style={{ minHeight: 44, minWidth: 44, color: 'var(--color-primary)' }}
+              aria-label={backLabel}
+            >
+              <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
+            </button>
+          )}
+          <h2 id={titleId} data-sheet-title="" className="flex-1 text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+            {title}
+          </h2>
+          {accessory}
+        </div>
+
+        {onSearchChange === undefined ? null : (
+          <div className="shrink-0 px-4 pb-2">
+            <div
+              className="flex items-center gap-2 rounded-[14px] px-4"
+              style={{ minHeight: 44, backgroundColor: 'var(--color-ios-card)' }}
+            >
+              <Glyph name="magnifyingGlass" size={18} style={{ color: 'var(--color-ios-ink-3)' }} />
+              <input
+                type="search"
+                value={search ?? ''}
+                /* `onInput`, la convention des champs texte du dépôt
+                   (`composer.tsx`, `test-support/react-events-probe.test.tsx`) :
+                   un `onChange` n'y est jamais rappelé sous happy-dom, et la
+                   recherche d'une feuille restait sans témoin (#8103). */
+                onInput={(e) => onSearchChange(e.currentTarget.value)}
+                placeholder={searchPlaceholder}
+                className="w-full bg-transparent py-2 text-body outline-none"
+                style={{ color: 'var(--color-ios-ink)' }}
+                aria-label={searchLabel}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Centrée, la feuille est BORNÉE : son corps défile lui-même, quel
+            qu'il soit — sans `min-h-0`, un enfant de flex refuse de rétrécir
+            sous son contenu et le bas du formulaire serait rogné. */}
+        {bodyAs === 'ul' ? (
+          <ul className={`min-h-0 flex-1 overflow-y-auto ${centree ? 'pb-2' : 'pb-safe md:pb-2'}`}>{children}</ul>
+        ) : (
+          <div className={`flex min-h-0 flex-1 flex-col ${centree ? `overflow-y-auto overflow-x-clip overscroll-x-none ${basse ? 'pb-safe' : 'pb-2'}` : 'pb-safe md:pb-2'}`}>{children}</div>
+        )}
+      </div>
+    </dialog>
+  );
+}
+
+/** L'état VIDE d'une feuille — une liste qui ne rend rien n'est pas un état
+ * (règle du chantier), et les deux feuilles doivent le dire de la MÊME façon. */
+export function SheetEmpty({ label }: { label: string }) {
+  return (
+    <li className="px-4 py-6 text-center text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
+      {label}
+    </li>
+  );
+}

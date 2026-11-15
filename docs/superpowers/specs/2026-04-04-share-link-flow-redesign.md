@@ -153,8 +153,8 @@ Verifier que :
 | `apps/ios/Meeshy/Features/Main/Components/InviteFriendsSheet.swift` | Creer |
 | `apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:65-73` | Modifier — renommer "Partager" → "Inviter mes amis", ouvrir sheet |
 | `apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift` | Modifier — ajouter state + sheet binding pour InviteFriendsSheet |
-| `apps/ios/Meeshy/Features/Main/Views/ShareLinksView.swift` | Verifier/enrichir — ajouter recherche si absente |
-| `apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift` | Conserver — reste accessible depuis ShareLinksView pour creation globale |
+| `apps/ios/Meeshy/Features/Links/Views/ShareLinksView.swift` | Verifier/enrichir — ajouter recherche si absente |
+| `apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift` | Conserver — reste accessible depuis ShareLinksView pour creation globale |
 
 ## Hors scope
 

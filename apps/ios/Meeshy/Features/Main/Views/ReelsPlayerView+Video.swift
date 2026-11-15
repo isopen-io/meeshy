@@ -1,0 +1,430 @@
+import SwiftUI
+import AVKit
+import MeeshySDK
+import MeeshyUI
+
+// =============================================================================
+//  Cluster VIDÉO des réels — extrait de `ReelsPlayerView.swift` (#4628)
+// =============================================================================
+//
+//  Le fichier hôte faisait 1 969 lignes pour un budget de 800-1100 (`CLAUDE.md`
+//  racine, § Code Style). La règle qui mord n'est pas le dépassement mais sa
+//  conséquence : « Ajouter à un fichier déjà hors budget est INTERDIT : on
+//  extrait d'abord, on ajoute ensuite. » Elle bloquait #3912, dont le site
+//  d'assignation naturel (`ReelVideoView.drive()`) vit ici.
+//
+//  Trois types, un seul sujet — la vidéo d'un réel jouée par le moteur partagé :
+//  la vue de page, sa surface `UIViewRepresentable`, et la `UIView` dont le
+//  calque EST un `AVPlayerLayer`.
+//
+//  Ce que la découpe NE fait PAS : elle ne solde pas la dette. L'hôte descend à
+//  ~1 711 lignes, toujours hors budget — les clusters IMAGE et AUDIO restent à
+//  sortir, dans leur propre lot pour ne pas mêler un rangement à un déblocage.
+
+// MARK: - Reel Video
+
+/// Plays a reel video full-bleed through the single shared engine
+/// (`SharedAVPlayerManager`). Because the manager holds one player, only the
+/// active reel ever plays — moving to the next reel loads its URL and the
+/// previous one is released. The poster (thumbHash → thumbnail) stays visible
+/// underneath until the first frame is ready. Tap toggles play/pause.
+/// `internal` (et non `private`) depuis la découpe : `ReelPageView` la monte
+/// depuis `ReelsPlayerView.swift`, et `private` porte sur le FICHIER.
+struct ReelVideoView: View {
+    let media: FeedMedia
+    /// Le réel est ÉLU (#9837) : il passe la moitié de l'écran, peut-être
+    /// encore sous le doigt.
+    let isActive: Bool
+    /// Le défilement s'est posé sur ce réel (#10354). Élu sans être posé, la
+    /// page ne fait que `play()` le lecteur déjà attaché à sa surface
+    /// (`ReelSwitchWork`) ; le moteur complet attend la pose.
+    var isSettled: Bool = true
+    /// Gate: the first reel's playback starts only once the liquid reveal disc
+    /// has reached full screen. Until then the poster (first frame) stays
+    /// visible PAUSED. Subsequent reels (paged to after the reveal) see this as
+    /// already `true`, so they play normally.
+    let revealCompleted: Bool
+    /// La page a le droit de télécharger sa vidéo d'elle-même (#9702) : vraie
+    /// pour la page active et celles de la fenêtre de préchargement. Sous
+    /// iOS 16, le `TabView` du pager monte TOUTES les pages et chacune
+    /// téléchargeait son réel entier ; hors de la fenêtre, la page attend.
+    var mayDownload: Bool = true
+    /// Le réel de la page — la mesure du passage (#9837) l'attend.
+    var reelId: String = ""
+
+    // Plain reference (NOT @ObservedObject): only `player` identity and
+    // `activeURL` matter for this page wrapper (backdrop + poster +
+    // GeometryReader) — `ReelScrubBar` is the one view that legitimately needs
+    // the 5-10Hz `currentTime` ticks. Observing the singleton here re-rendered
+    // the WHOLE page on every tick. Scoped via onReceive($activeURL/$player).
+    private let manager = SharedAVPlayerManager.shared
+    @State private var activeURL: String = SharedAVPlayerManager.shared.activeURL
+    @State private var player: AVPlayer?
+    /// Le lecteur PRÉPARÉ de ce réel, laissé dans le pool (#9837) : la page
+    /// voisine y attache sa surface, en pause, pour que sa première image soit
+    /// déjà à l'écran quand elle arrive. Le moteur adopte la même instance.
+    @State private var pooledPlayer: AVPlayer?
+
+    private var attachment: MeeshyMessageAttachment { media.toMessageAttachment() }
+    /// Élu ET posé : le moteur partagé, la session, le PiP et les rapports.
+    private var isEngaged: Bool { ReelSwitchWork.engages(isElected: isActive, isSettled: isSettled) }
+    /// Le verdict de montage du MOTEUR (#9575), au rôle plein écran.
+    private var isShowingThis: Bool {
+        player != nil && SharedAVPlayerManager.mayMountFullscreenPlayer(
+            surfaceMedia: attachment.fileUrl, activeMedia: activeURL)
+    }
+
+    var body: some View {
+        VideoAvailabilityResolver(attachment: attachment, autoDownload: true, mayAutoStart: mayDownload) { availability, _ in
+            // #12027 : prêt aussi pendant un téléchargement LISIBLE — le
+            // moteur joue sa tête (`SharedAVPlayerManager.load`, étape 3).
+            content(ready: availability.playsNow(fileUrl: attachment.fileUrl))
+        }
+        .onReceive(manager.$activeURL) { activeURL = $0 }
+        .onReceive(manager.$player) { player = $0 }
+        .onReceive(NotificationCenter.default.publisher(for: StoryMediaLoader.poolDidChange)) { _ in
+            refreshPooledPlayer()
+        }
+        .onAppear { refreshPooledPlayer() }
+        .adaptiveOnChange(of: mayDownload) { _, _ in refreshPooledPlayer() }
+        .task(id: PlaybackProbe(active: isActive, player: displayedPlayer.map(ObjectIdentifier.init))) {
+            await reportFirstPlayback()
+        }
+        // Le réel plein écran REPREND sa vidéo au retour au premier plan : la
+        // fenêtre PiP se referme, la lecture continue ici (#9575).
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            guard isEngaged else { return }
+            manager.reclaimFromPip(urlString: attachment.fileUrl)
+        }
+    }
+
+    /// Ratio du média, 9:16 par défaut quand les dimensions manquent — le même
+    /// repli que `ReelImageView.mediaAspect`, pour que poster et image ne
+    /// puissent pas diverger sur un média sans dimensions.
+    private var mediaAspect: CGFloat {
+        // Repli 9:16 — `SceneShape.aspect` (#6896/#6904), même repli que
+        // `ReelImageView.mediaAspect`.
+        guard let w = media.width, let h = media.height, w > 0, h > 0 else { return SceneShape.aspect }
+        return CGFloat(w) / CGFloat(h)
+    }
+
+    /// La plus grande boîte au ratio du média qui tient dans `container`.
+    /// Garde un conteneur nul (première passe de layout) en le rendant tel quel.
+    private func posterFit(in container: CGSize) -> CGSize {
+        guard container.width > 0, container.height > 0 else { return container }
+        let containerAspect = container.width / container.height
+        if mediaAspect > containerAspect {
+            return CGSize(width: container.width, height: container.width / mediaAspect)
+        }
+        return CGSize(width: container.height * mediaAspect, height: container.height)
+    }
+
+    @ViewBuilder
+    private func content(ready: Bool) -> some View {
+        // GeometryReader reports the REAL finite allocated size; an explicit
+        // `.frame(width:height:)` from it pins the video surface to the screen.
+        // A layer-backed `UIViewRepresentable` otherwise reports the video's
+        // aspect-fill intrinsic width (e.g. 1561pt for 16:9) and `.frame(maxWidth:
+        // .infinity)` does NOT clamp it — that inflated the page ZStack to the
+        // video width and pushed the action rail / info / scrub bar off-screen.
+        GeometryReader { geo in
+            ZStack {
+                // Blurred ambient fill behind the `.fit` poster/video so the WHOLE
+                // reel is visible (letterboxed), never cropped and never black
+                // bars — mirrors the `.fit` image carousel (`ReelImageBackdrop`).
+                ReelImageBackdrop(media: media).equatable()
+
+                // Le poster est CADRÉ à la boîte du réel, jamais laissé
+                // s'étendre (directive porteur 2026-08-30 : « le réel en plein
+                // écran a en fond une image SANS FLOU »).
+                //
+                // `contentMode: .fit` ne suffisait pas : `ReelPoster` pose
+                // ensuite `.frame(maxWidth: .infinity, maxHeight: .infinity)`,
+                // et `ProgressiveCachedImage` n'a aucun ratio intrinsèque avant
+                // le chargement — le poster prenait donc TOUTE la surface et
+                // recouvrait le fond flou du thumbHash par le thumbnail NET.
+                // Le fond ThumbHash était bien monté ; on ne le voyait pas.
+                //
+                // Même remède que le chemin IMAGE (`fittedSize(in:)` de
+                // `ReelImageView`) : une frame explicite calculée depuis les
+                // dimensions du média, qui laisse le fond flou visible autour.
+                ReelPoster(thumbHash: media.thumbHash, url: media.thumbnailUrl ?? media.url, color: media.thumbnailColor, contentMode: .fit)
+                    .equatable()
+                    .frame(width: posterFit(in: geo.size).width, height: posterFit(in: geo.size).height)
+                    .clipped()
+
+                // Tap-to-pause is handled by the page-level tap zone (ReelPageView),
+                // so this surface stays gesture-free to avoid swallowing scrub/rail
+                // touches.
+                //
+                // UNE seule surface, quel que soit le lecteur affiché (#9837) :
+                // le voisin la monte sur son lecteur préparé, le moteur adopte
+                // cette même instance à l'élection — aucune nouvelle surface,
+                // donc aucune première image à attendre. La page quittée garde
+                // l'image du moteur au lieu de retomber sur le poster.
+                if ready, let shown = displayedPlayer {
+                    ReelVideoSurface(player: shown, videoGravity: .resizeAspect,
+                                     presentation: .fullscreen, requestsPip: isEngaged && isShowingThis)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                } else if isEngaged, !ready {
+                    ProgressView()
+                        .tint(.white)
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
+            .onAppear { drive(ready: ready) }
+            // Le passage suit `ReelSwitchWork` (#10354). Élu pendant le geste :
+            // le lecteur déjà attaché joue, rien d'autre. Quitté : une pause
+            // BRUTE, sans rapport ni écriture — ils partent une fois posé.
+            // Posé : le moteur complet (`drive`).
+            .adaptiveOnChange(of: isActive) { _, active in
+                if active { switchIn(ready: ready) } else { switchOut() }
+            }
+            .adaptiveOnChange(of: isSettled) { _, _ in drive(ready: ready) }
+            .adaptiveOnChange(of: ready) { _, _ in drive(ready: ready) }
+            .adaptiveOnChange(of: revealCompleted) { _, _ in drive(ready: ready) }
+            // F3 — re-drive the video when a call ENDS. The call-start (true) edge
+            // pauses via `ReelsPlayerView`'s `$callState` subscription; the
+            // in-process WebRTC teardown posts no system interruption-ended, so a
+            // reel opened during a call would stay frozen on its poster. `drive`
+            // is gated on `!isCallActive` + a no-op once already playing.
+            // `.receive(on: .main)` so `isCallActive` is already cleared when the
+            // guard re-checks it.
+            .onReceive(
+                CallManagerHost.shared.callStatePublisher
+                    .map(\.isActive)
+                    .removeDuplicates()
+                    .receive(on: DispatchQueue.main)
+            ) { callActive in
+                if !callActive { drive(ready: ready) }
+            }
+            .onDisappear {
+                // Releasing only when this page actually owns the engine avoids
+                // tearing down the next reel that has already loaded during paging.
+                //
+                // `!revealCompleted` : NE PAS détruire l'engine sur le disappear
+                // TRANSITOIRE de l'ouverture. À t≈duration le masque tombe
+                // (`reelsRevealMasked → false`), ce qui fait basculer
+                // `ReelsRevealMaskModifier` de `content.mask(...)` vers `content`
+                // (branches d'identité différentes) → SwiftUI recrée cette vue.
+                // Détruire ici le player qui vient de démarrer (playLead) forçait un
+                // reload + `play()` depuis 0 → le réel jouait DEUX fois. La vraie
+                // fermeture passe par `closeReels()` qui met `revealCompleted = false`
+                // d'abord, donc le teardown légitime fire toujours.
+                if isShowingThis, !revealCompleted { manager.stop() }
+            }
+        }
+        .ignoresSafeArea()
+    }
+
+    /// **La langue que le rapport `watched` déclare (#3912).**
+    ///
+    /// `SharedAVPlayerManager.consumedLanguageProvider` était DÉCLARÉ (`:110`) et
+    /// LU (`:412`), assigné nulle part — un contrat mort. Tout rapport de
+    /// visionnage partait donc avec `language: nil`.
+    ///
+    /// **Ce n'est PAS le miroir du chemin audio**, et la différence décide de ce
+    /// qu'il faut déclarer. `AudioPlayerView` publie une SÉLECTION : l'auditeur
+    /// choisit une piste TTS traduite, et `"orig"` se résout en langue de
+    /// transcription. La vidéo n'offre aucun choix — `drive()` charge
+    /// `attachment.fileUrl`, l'ORIGINAL, sans condition ; la sélection de piste
+    /// (`ReelPageView.resolvedAudioUrl`) ne sert que les réels AUDIO.
+    ///
+    /// Ce qu'un lecteur ENTEND sur une vidéo est donc la piste d'origine, et la
+    /// seule source qui en connaisse la langue est sa TRANSCRIPTION. Ce n'est
+    /// pas un pis-aller : `reel.originalLanguage` décrit la langue du POST — son
+    /// texte — qui peut différer de ce qui est parlé dans la vidéo.
+    ///
+    /// Sans transcription, le fournisseur rend `nil` — et c'est exact : personne
+    /// ne sait quelle langue a été entendue. Un `nil` qui dit « je ne sais pas »
+    /// vaut mieux qu'une langue inventée depuis le texte du post.
+    private func publishConsumedLanguage() {
+        let spoken = Self.consumedLanguage(for: media)
+        manager.consumedLanguageProvider = { spoken }
+    }
+
+    /// La résolution PURE, testable sans moteur ni vue — même patron que
+    /// `ReelMediaAutostart.shouldStart` : ce qui se décide se décide dans une
+    /// fonction qu'un témoin peut appeler.
+    nonisolated static func consumedLanguage(for media: FeedMedia) -> String? {
+        media.transcription?.language
+    }
+
+    /// Le lecteur que la surface affiche — loi `ReelVideoDisplay`.
+    private var displayedPlayer: AVPlayer? {
+        ReelVideoDisplay.player(engineShowsThis: isShowingThis, enginePlayer: player,
+                                pooledPlayer: pooledPlayer)
+    }
+
+    /// Relit le pool : hors de la fenêtre de préchargement, la page ne tient
+    /// aucun lecteur (mémoire et décodeurs bornés par le pool, trois au plus).
+    private func refreshPooledPlayer() {
+        let url = mayDownload ? MeeshyConfig.resolveMediaURL(attachment.fileUrl) : nil
+        let pooled = url.flatMap(StoryMediaLoader.shared.peekCachedPlayer(for:))
+        if pooledPlayer !== pooled { pooledPlayer = pooled }
+    }
+
+    private struct PlaybackProbe: Hashable {
+        let active: Bool
+        let player: ObjectIdentifier?
+    }
+
+    /// Ferme la mesure du passage (#9837) quand le lecteur de ce réel, actif,
+    /// avance vraiment — pas quand `play()` est demandé. Le lecteur AFFICHÉ :
+    /// pendant le geste, c'est celui du pool qui joue (#10354).
+    private func reportFirstPlayback() async {
+        guard isActive, let shown = displayedPlayer else { return }
+        for await status in shown.publisher(for: \.timeControlStatus).values where status == .playing {
+            ReelSwitchSignpost.mediaStarted(reelId, kind: "video")
+            return
+        }
+    }
+
+    /// Le réel devient élu. Déjà posé (retour sur la page quittée sans
+    /// relâcher) : le moteur reprend. Sinon, pendant le geste : `play()` du
+    /// lecteur attaché à la surface, s'il y en a un — sinon le poster reste,
+    /// et le lecteur se crée une fois la page posée.
+    private func switchIn(ready: Bool) {
+        if isEngaged {
+            drive(ready: ready)
+            return
+        }
+        guard ReelSwitchWork.mayPlayAttachedPlayer(
+            ready: ready, revealCompleted: revealCompleted,
+            isCallActive: MediaSessionCoordinator.shared.isCallActive,
+            hasAttachedPlayer: displayedPlayer != nil
+        ), let shown = displayedPlayer else { return }
+        shown.play()
+    }
+
+    /// Le réel n'est plus élu : son lecteur s'arrête, sans rien d'autre.
+    private func switchOut() {
+        if isShowingThis {
+            manager.pauseForSwitch()
+        } else {
+            displayedPlayer?.pause()
+        }
+    }
+
+    private func drive(ready: Bool) {
+        // Défense en profondeur call-aware (miroir de `ReelFeedVideoSurface.drive`) :
+        // ne jamais (re)lancer un réel pendant un appel — la session audio appartient
+        // à l'appel. La mise en pause immédiate au démarrage d'un appel est gérée par
+        // l'abonnement `CallManager.$callState` dans `ReelsPlayerView`.
+        guard isEngaged, ready, !MediaSessionCoordinator.shared.isCallActive else { return }
+        if manager.activeURL != attachment.fileUrl {
+            manager.load(urlString: attachment.fileUrl, attachmentId: media.id)
+            // Reposée APRÈS `load()` — qui appelle `cleanup()` — et clé par la
+            // pièce jointe qu'elle qualifie : ce moteur est partagé (#7212).
+            manager.setServedConsumption(attachment.currentUserConsumption, for: media.id)
+            manager.setPlaybackSubject(PlaybackQoESubject(target: SocialTarget(kind: .reel, id: reelId), surface: SocialSurface(.reels), mediaId: media.id))
+        }
+        publishConsumedLanguage()
+        // Le viewer plein écran joue TOUJOURS avec le son. La surface de fond du
+        // feed (`ReelFeedVideoSurface`) exprime maintenant son silence via
+        // `isForceMuted` (intention PAR SURFACE, transitoire) plutôt que la
+        // préférence globale `isMuted` — elle se relâche d'elle-même en perdant
+        // l'activité, mais on la réaffirme ici en défense en profondeur : sur
+        // l'entrée depuis le feed pour la MÊME url, le court-circuit
+        // `activeURL == fileUrl` ci-dessus saute `load()` (qui l'aurait sinon
+        // réinitialisée via `cleanup()`), et l'ordre exact des transitions
+        // `isActive` entre le feed et le viewer n'est pas garanti.
+        manager.isForceMuted = false
+        // `isMuted` reste réaffirmé inconditionnellement : c'est la préférence
+        // utilisateur globale (persistée entre vidéos par design), mais le
+        // viewer plein écran est le contexte où le son est TOUJOURS attendu.
+        manager.isMuted = false
+        // Looping MUST be (re)asserted AFTER `load()`. `load()` calls
+        // `cleanup()` internally, which resets `shouldLoop = false`; setting it
+        // before `load()` is silently clobbered, so the very first end-of-item
+        // takes the tear-down branch and the reel never replays (the "scrub bar
+        // dead after one play-through" bug). Re-asserting here every drive pass
+        // also keeps it true across the reveal transition's disappear/reappear.
+        manager.shouldLoop = true
+        // Hold on the poster (PAUSED) until the liquid reveal completes; start
+        // playback only when the disc has reached full screen.
+        guard revealCompleted else { return }
+        manager.play()
+    }
+}
+
+/// Full-bleed video surface backed DIRECTLY by an `AVPlayerLayer` (not
+/// `AVPlayerViewController`). A plain layer-backed `UIView` composites correctly
+/// BENEATH the SwiftUI overlays in the ZStack; `AVPlayerViewController` instead
+/// renders its video ABOVE same-level SwiftUI siblings, which was hiding the
+/// action rail / info / scrub bar. The player is owned by `SharedAVPlayerManager`;
+/// this only renders it. Mirrors the SDK's `_AVPlayerLayerView` (Story player).
+/// `internal` (not `private`) so the feed-card surface (`ReelFeedVideoSurface`)
+/// can reuse the same chrome-free render path for muted background playback.
+struct ReelVideoSurface: UIViewRepresentable {
+    let player: AVPlayer
+    /// `.resizeAspectFill` (default) crops the video edge-to-edge — kept for the
+    /// feed-card surface. The fullscreen viewer passes `.resizeAspect` so the
+    /// WHOLE video is visible, letterboxed over the blurred ambient backdrop
+    /// (mirrors the `.fit` image carousel — never a cropped reel).
+    var videoGravity: AVLayerVideoGravity = .resizeAspectFill
+    /// Le viewer plein écran opte pour le Picture-in-Picture : quitter l'app
+    /// pendant la lecture bascule le réel en fenêtre PiP (auto-start système)
+    /// au lieu de laisser sa bande-son jouer invisible en arrière-plan ;
+    /// fermer la fenêtre arrête la vidéo. La surface muette du feed
+    /// (`ReelFeedVideoSurface`) reste hors PiP — un autoplay silencieux ne
+    /// doit jamais ouvrir de fenêtre. La décision passe par
+    /// `PipPresentationLaw` : seul le plein écran ouvre un PiP (#11041, e).
+    var presentation: VideoPresentation = .inline
+    var requestsPip: Bool = false
+
+    private var enablesPip: Bool {
+        PipPresentationLaw.mayConfigurePip(presentation: presentation, requestsPip: requestsPip)
+    }
+
+    func makeUIView(context: Context) -> ReelPlayerLayerView {
+        let view = ReelPlayerLayerView()
+        // Transparent (was black): under `.resizeAspect` the letterbox bars must
+        // reveal the blurred backdrop behind the surface, not a black band.
+        view.backgroundColor = .clear
+        view.playerLayer.player = player
+        view.playerLayer.videoGravity = videoGravity
+        if enablesPip {
+            SharedAVPlayerManager.shared.configurePip(playerLayer: view.playerLayer, deferred: true)
+        }
+        return view
+    }
+
+    func updateUIView(_ view: ReelPlayerLayerView, context: Context) {
+        if view.playerLayer.player !== player {
+            view.playerLayer.player = player
+        }
+        if view.playerLayer.videoGravity != videoGravity {
+            view.playerLayer.videoGravity = videoGravity
+        }
+        if enablesPip {
+            // Idempotent (garde d'identité de layer dans `configurePip`) —
+            // ré-attache après le remount que provoque la chute du masque de
+            // reveal (`ReelsRevealMaskModifier` change de branche d'identité).
+            SharedAVPlayerManager.shared.configurePip(playerLayer: view.playerLayer, deferred: true)
+        }
+    }
+
+    /// Pin the surface to the proposed size. Without this a layer-backed
+    /// `UIViewRepresentable` reports the video's aspect-fill intrinsic size,
+    /// inflating the enclosing ZStack and pushing the SwiftUI overlays off-screen.
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: ReelPlayerLayerView, context: Context) -> CGSize? {
+        proposal.replacingUnspecifiedDimensions()
+    }
+}
+
+/// Layer-backed `UIView` whose backing layer IS an `AVPlayerLayer` — GPU-composited
+/// video that respects SwiftUI ZStack z-ordering (overlays stay on top).
+/// `internal` (not `private`) because the now-`internal` `ReelVideoSurface`
+/// exposes it through its representable methods (shared with `ReelFeedVideoSurface`).
+final class ReelPlayerLayerView: UIView {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
+    override static var layerClass: AnyClass { AVPlayerLayer.self }
+    var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+}

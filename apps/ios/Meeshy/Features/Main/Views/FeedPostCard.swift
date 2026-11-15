@@ -8,8 +8,7 @@ import MeeshyUI
 // MARK: - Feed Post Card
 struct FeedPostCard: View {
     let post: FeedPost
-    /// « Voir près d'ici » sur le badge de position du post (spec du
-    /// 2026-08-02 §4 — points d'entrée). Fermeture OPTIONNELLE, jamais un
+    /// « Voir près d'ici » sur le badge de position du post. Fermeture OPTIONNELLE, jamais un
     /// `@EnvironmentObject` : cette carte est une feuille `.equatable()` et
     /// n'observe rien. Les hôtes qui ont un routeur la branchent ; les autres
     /// (aperçus, listes de profil) restent valides sans rien changer, et le
@@ -19,7 +18,6 @@ struct FeedPostCard: View {
     /// raccourci vers une coordonnée DÉJÀ affichée publiquement, pas une
     /// autorisation.
     var onSeeNearby: ((SharedPlace) -> Void)? = nil
-    var isCommentsExpanded: Bool = false
     /// Socket-driven liked state. When nil, falls back to post.isLiked (legacy path).
     var isLiked: Bool? = nil
     /// Display like count with optimistic delta already applied. When nil, falls back to post.likes.
@@ -41,7 +39,6 @@ struct FeedPostCard: View {
     var isRepostInFlight: Bool = false
     /// True while a share request is in-flight (mint short link).
     var isShareInFlight: Bool = false
-    var onToggleComments: (() -> Void)? = nil
     /// Hoiste la présentation de la feuille de commentaires chez l'HÔTE. La
     /// carte empile déjà plusieurs `.sheet`/`.fullScreenCover` sur sa propre
     /// vue : présentée à l'intérieur d'une feuille (profil), la sheet interne
@@ -61,6 +58,8 @@ struct FeedPostCard: View {
     /// inline expansion happens regardless; this is an additional side-effect.
     var onSeeMore: (() -> Void)? = nil
     var onDelete: ((String) -> Void)? = nil
+    /// #11151 — « Retirer » la publication d'un autre (modération) : l'hôte présente le motif.
+    var onRemove: PublicationModerationOffer? = nil
     var onReport: ((String) -> Void)? = nil
     var onPin: ((String) -> Void)? = nil
     var onEdit: ((FeedPost) -> Void)? = nil
@@ -84,29 +83,35 @@ struct FeedPostCard: View {
 
     // Lecture directe sans @ObservedObject — leaf view rendue dans un ForEach,
     // évite que chaque changement de thème force un re-render de toutes les cards.
-    private var theme: ThemeManager { ThemeManager.shared }
-    @State private var showCommentsSheet = false
-    @State private var showTranslationSheet = false
-    @State private var showRepostOptions = false
-    @State private var selectedProfileUser: ProfileSheetUser?
+    var theme: ThemeManager { ThemeManager.shared }
+    @State var showCommentsSheet = false
+    /// Commentaire auquel la feuille s'ouvre EN RÉPONSE — posé par le glissé
+    /// d'un commentaire de l'aperçu (#8582), effacé à la fermeture.
+    @State var commentsReplyTarget: FeedComment?
+    @State var showTranslationSheet = false
+    /// La feuille « Vues » de l'auteur — qui a vu, et ce que chacun a fait (#9727).
+    @State var showViewersSheet = false
+    @State var selectedProfileUser: ProfileSheetUser?
     @State var audioFullscreen: AudioFullscreenSource?
-    @State private var secondaryLangCode: String? = nil
+    @State var secondaryLangCode: String? = nil
     @State private var activeDisplayLangCode: String? = nil
     @State var fullscreenMediaId: String? = nil
+    /// La scène par laquelle on ENTRE en plein écran — posée par le doigt sur
+    /// une tuile de mosaïque ou une page de carrousel.
+    @State var fullscreenSceneIndex: Int = 0
     @State var showFullscreenGallery = false
     @State private var isTextExpanded = false
     /// Lieu du post ouvert plein écran (tap sur le sticker ou la carte).
-    @State private var fullscreenPlace: BubbleFullscreenPlace?
+    @State var fullscreenPlace: BubbleFullscreenPlace?
     /// Flux « Enregistrer en local » du menu « … » — déclenché uniquement
     /// quand le post a un média (sinon Enregistrer bascule le favori in-app).
-    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
+    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator(exitGate: .open)
 
     var accentColor: String { post.authorColor }
-    private var topComments: [FeedComment] { Array(post.comments.sorted { $0.likes > $1.likes }.prefix(3)) }
 
     /// True when the signed-in user authored this post — gates the private reach
     /// stats (impressions + views) shown only to the author.
-    private var isAuthor: Bool {
+    var isAuthor: Bool {
         guard let me = AuthManager.shared.currentUser?.id else { return false }
         return me == post.authorId
     }
@@ -135,6 +140,8 @@ struct FeedPostCard: View {
     /// the original reposted post (`repost.id`), never the reposter's outer card
     /// (`post.id`). Routed through the enclosing repost Button. Pure; unit-tested.
     static func repostTapTargetId(for repost: RepostContent) -> String { repost.id }
+
+    static func repostBodyText(for repost: RepostContent) -> String { repost.displayContent }
 
     /// VoiceOver label for the tappable media preview. Distinguishes a video
     /// from an image (and falls back to a generic "media" wording for mixed or
@@ -182,7 +189,7 @@ struct FeedPostCard: View {
     /// flag tap (`activeDisplayLangCode`) always overrides the auto-resolution.
     private var currentDisplayLangCode: String {
         activeDisplayLangCode
-            ?? post.resolvedLanguageCode(preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+            ?? post.resolvedLanguageCode(preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
             ?? "fr"
     }
 
@@ -211,11 +218,11 @@ struct FeedPostCard: View {
         return post.translations?.first(where: { $0.key.lowercased() == code })?.value.text
     }
 
-    private func buildAvailableFlags() -> [String] {
+    func buildAvailableFlags() -> [String] {
         Self.availableFlags(
             originalLanguage: post.originalLanguage,
             translationKeys: post.translations.map { Array($0.keys) } ?? [],
-            preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             activeLanguage: currentDisplayLangCode
         )
     }
@@ -246,13 +253,15 @@ struct FeedPostCard: View {
         return all.filter { $0 != activeLanguage }
     }
 
-    private func handleFlagTap(_ code: String) {
+    /// Le retour haptique appartient à `LanguageFlagChip` — seul appelant de
+    /// cette méthode — et non aux trois sorties de sa logique : une puce qui
+    /// vibre à l'appui, toujours, quel que soit ce que l'appui déclenche.
+    func handleFlagTap(_ code: String) {
         let isOriginal = code == post.originalLanguage?.lowercased()
         let hasContent = isOriginal || post.translations?.keys.contains(where: { $0.lowercased() == code }) == true
 
         if !hasContent {
             onSelectLanguage?(post.id, code)
-            HapticFeedback.light()
             return
         }
 
@@ -267,14 +276,6 @@ struct FeedPostCard: View {
                 secondaryLangCode = isShowing ? nil : code
             }
         }
-        HapticFeedback.light()
-    }
-
-    /// Vidéo embeddable (YouTube) détectée dans le contenu affiché. Dérivée (non stockée) :
-    /// le gate `.equatable()` (compare `post.content`) ne ré-évalue le body que si le contenu
-    /// change, donc le NSDataDetector ne tourne pas à chaque re-render parent.
-    private var embeddedVideo: EmbeddedVideo? {
-        EmbeddableVideoResolver.resolve(in: effectiveContent)
     }
 
     /// Teinte des liens cliquables dans le corps du post.
@@ -292,7 +293,7 @@ struct FeedPostCard: View {
     /// CLAIRE, le même repli AA que les mentions/hashtags du corps
     /// (`mentionTint`, indigo vérifié AA) plutôt que l'accent brut du post,
     /// qui peut échouer AA sur fond blanc (revue totale U16).
-    private var backgroundSoundAccentHex: String {
+    var backgroundSoundAccentHex: String {
         theme.mode.isDark ? accentColor : MeeshyColors.indigo600Hex
     }
 
@@ -300,8 +301,8 @@ struct FeedPostCard: View {
     /// auteur, exposée comme UNE valeur réutilisable : le bouton muet
     /// (B3.6, Task E2) partage cette valeur avec le badge, jamais une
     /// seconde condition d'existence qui pourrait diverger.
-    private var backgroundSoundAnnouncement: BackgroundAudioAnnouncement {
-        BackgroundSoundBadge.announcement(for: post.storyEffects)
+    var backgroundSoundAnnouncement: BackgroundAudioAnnouncement {
+        BackgroundSoundBadge.announcement(for: post)
     }
 
     /// Document canvas v3 PROPRE au post (Task E3) — distinct du canvas d'un
@@ -311,89 +312,104 @@ struct FeedPostCard: View {
     /// TOUJOURS par `CanvasV3(migrating:)` (`StoryModels.swift:1889-1890`) côté
     /// iOS, et le composer web construit `{ v: 3, scenes: [...] }` directement
     /// (`StoryComposer.tsx:288`). `X-Canvas-Caps: 3` est posé depuis
-    /// `cf05538d9` (2026-08-22, `ClientInfoProvider.swift:77`), donc le
+    /// `cf05538d9` (`ClientInfoProvider.swift:77`), donc le
     /// gateway sert ce v3 natif au lieu de la sentinelle. `nil` reste le cas
     /// d'un post SANS storyEffects (post média simple, sans canvas).
     private var cardSceneDocument: CanvasV3? { post.storyEffects?.canvasV3 }
 
-    /// Largeur plafonnée — même convention que `StoryRepostEmbedCell` (un
-    /// iPad en colonne large n'étire pas la scène en mur vertical géant).
-    /// La hauteur n'est PAS dupliquée en constante : `.aspectRatio(9:16)`
-    /// la dérive de la largeur RÉELLEMENT proposée par le parent (voir
-    /// `cardScenePlayer(document:)`) — un plafond en points calculé sur la
-    /// largeur MAXIMALE (420 × 16/9 = 747pt) déforme la scène dès que la
-    /// carte est plus étroite que ce plafond (≈329pt sur iPhone 16 Pro,
-    /// après le double padding horizontal de 16pt de la carte).
-    private static let cardSceneMaxWidth: CGFloat = 420
-
-    /// Scène du post en carte (Task E3) — `MeeshyScenePlayer(.card)`. Née en
-    /// PAUSE et le RESTE : `sceneIndex`/`isPlaying` sont des `.constant`
-    /// figés, jamais un `@State` qu'un futur commit pourrait faire basculer.
-    /// « La carte de POST naît en pause, le mouvement est au tap » (revue
-    /// Fable n°25) — la lecture vit dans LA DESTINATION du tap (`onTapPost`,
-    /// le plein écran EXISTANT, `PostDetailView`), jamais dans la carte :
-    /// zéro AVPlayer/décodage actif ici. `ScenePlayerConfig(mode: .card)`
-    /// verrouille déjà `isMuted`/`loops`/`startsPaused` côté SDK (B4 gelé) ;
-    /// `isPlaying: .constant(false)` garantit qu'aucune commande locale ne
-    /// lève jamais la pause.
+    /// La scène du post se rend chez elle — `PostSceneCard` +
+    /// `PostSceneCardContainer` (`FeedSceneAutoplay.swift`), qui portent aussi
+    /// celle d'une story repartagée. Les deux surfaces obéissent à la MÊME loi que les réels: le viewport élit celle qui joue,
+    /// une seule à la fois, muette, et un appel les tait toutes.
     ///
-    /// `.preferredContentLanguages(...)` câble le Prisme Linguistique — même
-    /// source que le voisin `StoryRepostEmbedCell` (branche `isStoryRepost`
-    /// juste en dessous) : sans cet appel `MeeshyScenePlayer` garde
-    /// `languages: []` et `StoryTextObject.resolvedText` rend
-    /// inconditionnellement le texte ORIGINAL de l'auteur (correctif rejet
-    /// DoD, constat 1 — « le prisme s'applique à TOUT le contenu »).
-    ///
-    /// `.aspectRatio(9.0/16.0, contentMode: .fit)` — même patron que
-    /// `StoryRepostEmbedCell`, qui rend le MÊME hôte (`StoryReaderRepresentable`
-    /// via `MeeshyScenePlayer`) dans le MÊME fil sans jamais avoir récursé.
-    /// C'est un modificateur TOP-DOWN : le parent propose une taille à
-    /// l'enfant, l'enfant ne mesure jamais sa propre taille pour la
-    /// reboucler sur le layout — distinct du piège self-sizing BOTTOM-UP
-    /// (un hôte hosted qui DÉRIVE sa propre hauteur et la reboucle,
-    /// famille du crash SIGTRAP `_updateVisibleCellsNow` ×7 documenté par
-    /// l'incident `MessageListLayout.swift` 2026-08-18 — SwiftUI DANS une
-    /// cellule UIKit, l'inverse du cas présent, UIKit DANS SwiftUI) : un
-    /// `GeometryReader` local resterait interdit, `.aspectRatio` ne l'est
-    /// pas (correctif rejet DoD, constat 2).
-    @ViewBuilder
-    private func cardScenePlayer(document: CanvasV3) -> some View {
-        MeeshyScenePlayer(
-            document: document,
-            mode: .card,
-            sceneIndex: .constant(0),
-            isPlaying: .constant(false),
-            accentColorHex: accentColor
-        )
-        .preferredContentLanguages(AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
-        .aspectRatio(9.0 / 16.0, contentMode: .fit)
-        .frame(maxWidth: Self.cardSceneMaxWidth)
-        .frame(maxWidth: .infinity, alignment: .center)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .contentShape(Rectangle())
-        .onTapGesture { onTapPost?(post) }
-    }
+    /// L'extraction n'était pas un choix de style : ce fichier est en dette de
+    /// taille (liste `legacyOverBudget`), et la directive interdit d'ajouter à
+    /// un fichier hors budget avant d'en avoir extrait. La découpe suit la
+    /// responsabilité — ce qui LIT une scène quitte ce qui compose une carte.
 
     /// VoiceOver label pour la scène de carte — même convention que
     /// `mediaAccessibilityLabel` (attribution à l'auteur).
     private var cardSceneAccessibilityLabel: String {
-        String(format: String(localized: "a11y.feed.post.scene", defaultValue: "Scène partagée par %@", bundle: .main), post.author)
+        let attribution = String(
+            format: String(localized: "a11y.feed.post.scene",
+                           defaultValue: "Scène partagée par %@", bundle: .main),
+            post.author)
+        // **La légende ENTRE dans le libellé**.
+        //
+        // La carte est un élément unique (`accessibilityElement(children:
+        // .ignore)`) : tout ce qu'on peint DEDANS — dont la surimpression de
+        // légende posée le même jour — disparaît de l'arbre. VoiceOver
+        // annonçait « Scène partagée par Demo » et taisait le texte que
+        // l'auteur avait écrit pour décrire son image.
+        //
+        // > **Un `overlay` posé sur un élément qui ignore ses enfants est
+        // > peint pour l'œil et muet pour l'oreille.** Le défaut ne se voit
+        // > pas — la couche s'affiche —, et il ne se lit pas non plus : les
+        // > deux modificateurs sont justes séparément, c'est leur ORDRE qui
+        // > décide. Trouvé en cherchant la légende dans l'arbre pour la
+        // > vérifier à l'écran ; sans ce détour, elle serait restée inaudible.
+        //
+        // La légende ENTIÈRE est servie ici, pas sa version abrégée : les
+        // vingt mots sont une contrainte de PLACE, et l'oreille n'en a pas.
+        guard let caption = cardSceneCaption?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !caption.isEmpty
+        else { return attribution }
+        return "\(attribution). \(caption)"
     }
 
-    /// Destination trackée `/l/<token>` pour la façade vidéo, dérivée de la
-    /// première URL du contenu via `post.trackedLinkMap`. `nil` → watchURL.
-    private var embedTrackedURL: URL? {
-        guard let raw = LinkPreviewFetcher.firstURL(in: effectiveContent),
-              let token = post.trackedLinkMap[raw] else { return nil }
-        return URL(string: "https://meeshy.me/l/\(token)")
+    /// **Le média que le plein écran doit ouvrir sur une carte de SCÈNE.**
+    ///
+    /// Le premier visuel du post — celui que la scène montre. `nil` quand la
+    /// scène n'a aucun média (un canvas de texte, de dessin ou de stickers) :
+    /// il n'y a alors rien à agrandir, et le geste retombe sur l'ouverture de
+    /// la publication plutôt que de ne rien faire.
+    private var cardSceneFullscreenMedia: FeedMedia? {
+        post.media.first { $0.type == .image || $0.type == .video }
+    }
+
+    /// **La légende que la carte de scène affiche** — celle du média que la scène
+    /// montre, servie par le Prisme et le MÊME juge que le fil (`SocialMediaCaption`),
+    /// jamais le texte du post : celui-ci est déjà rendu au-dessus de la carte.
+    private var cardSceneCaption: String? {
+        guard let cardSceneDocument else {
+            return cardSceneFullscreenMedia?.resolvedCaption(preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)) }
+        return SceneCaption.resolve(sceneIndex: 0, in: cardSceneDocument, post: post,
+                                    carrierFallback: false, preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
+    }
+
+    /// **Ce qui décide du plein écran est la SCÈNE, jamais le média** (dans le lot qui a introduit le plein écran de scène).
+    ///
+    /// La première écriture demandait « ce post a-t-il une image à agrandir ? »
+    /// — hérité du temps où le plein écran feuilletait des médias. Depuis que
+    /// le player rejoue le canvas, la question est « ce post a-t-il une scène à
+    /// rejouer ? », et les deux divergent sur exactement les cas que le porteur
+    /// demande d'éprouver : un canvas de TEXTE, de DESSIN, de STICKERS, ou à
+    /// fond de COULEUR n'a aucun média — et se peint pourtant parfaitement.
+    ///
+    /// > **Un correctif qui change la NATURE d'une destination doit relire la
+    /// > condition qui y mène.** La route neuve savait rendre une scène sans
+    /// > média ; la porte, restée sur l'ancienne question, n'y menait pas. Rien
+    /// > ne rougissait : le repli sur le détail est un comportement licite, et
+    /// > c'est ce qui rend l'écart invisible.
+    private var cardSceneOpensFullscreen: Bool {
+        SocialFullscreenRoute.scene(of: post) != nil || cardSceneFullscreenMedia != nil
+    }
+
+    /// L'indice VoiceOver DIT ce que le doigt fait — et il change avec lui.
+    private var cardSceneOpenHint: String {
+        cardSceneOpensFullscreen
+            ? String(localized: "a11y.feed.scene.fullscreen.hint",
+                     defaultValue: "Touche deux fois pour voir en plein écran", bundle: .main)
+            : String(localized: "a11y.feed.post.open.hint",
+                     defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Main content
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                 // Tappable content area (author, text, media, repost)
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                     // Author header
                     authorHeader
 
@@ -403,7 +419,7 @@ struct FeedPostCard: View {
                     // sur le texte non-lien (priorité au lien = défaut SwiftUI).
                     // Post « position seule » : le texte part EN OVERLAY sur la
                     // carte (`FeedPostLocationMapCard` plus bas) — le bloc texte
-                    // standard serait un doublon (directive user 2026-07-30).
+                    // standard serait un doublon.
                     let truncation = truncatedContent
                     if isLocationOnlyPost {
                         EmptyView()
@@ -438,7 +454,7 @@ struct FeedPostCard: View {
                                 // Hauteur de layout compacte (24pt) : l'ancien minHeight 44
                                 // creusait ~14pt de vide au-dessus et en dessous du libellé
                                 // avant la rangée d'actions (même correctif que le « Voir
-                                // plus » des bulles, 2026-07-08). Cible tactile 44pt HIG via
+                                // plus » des bulles). Cible tactile 44pt HIG via
                                 // un contentShape étendu UNIQUEMENT vers le bas
                                 // (`DownwardExtendedTapShape`, +20pt) — vers le texte du post
                                 // au-dessus, jamais.
@@ -467,31 +483,31 @@ struct FeedPostCard: View {
                         let display = LanguageDisplay.from(code: code)
 
                         VStack(spacing: 0) {
-                            HStack(spacing: 6) {
+                            HStack(spacing: MeeshySpacing.xsPlus) {
                                 Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
                                 Circle().fill(langColor).frame(width: 4, height: 4)
                                 Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
                             }
 
-                            VStack(alignment: .leading, spacing: 4) {
+                            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                                 if let display {
-                                    HStack(spacing: 4) {
+                                    HStack(spacing: MeeshySpacing.xs) {
                                         Text(display.flag).font(.caption)
                                         Text(display.name)
                                             .font(.caption2.weight(.semibold))
-                                            .foregroundColor(langColor)
+                                            .foregroundStyle(langColor)
                                     }
                                 }
                                 Text(content)
                                     .font(.footnote)
-                                    .foregroundColor(theme.textPrimary.opacity(0.8))
+                                    .foregroundStyle(theme.textPrimary.opacity(0.8))
                                     .fixedSize(horizontal: false, vertical: true)
                             }
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 10)
+                            .padding(.vertical, MeeshySpacing.sm)
+                            .padding(.horizontal, MeeshySpacing.smPlus)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(langColor.opacity(0.08))
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                         }
                         .transition(.opacity.combined(with: .move(edge: .top)))
                         .accessibilityElement(children: .combine)
@@ -503,6 +519,7 @@ struct FeedPostCard: View {
                 .onTapGesture {
                     onTapPost?(post)
                 }
+                .accessibilityAction(named: Text(String(localized: "feed.post.open", bundle: .main))) { onTapPost?(post) }
 
                 // « Avec … » + marqueur personnel — HORS de la zone tappable
                 // ci-dessus : ses chips ouvrent CHACUN un profil différent, pas
@@ -516,32 +533,104 @@ struct FeedPostCard: View {
 
                 // Embed vidéo (YouTube) détecté dans le contenu : player façade
                 // (vignette → lecture inline), hors du geste d'ouverture du post.
-                if let embeddedVideo {
-                    VideoEmbedContainer(video: embeddedVideo, accent: Color(hex: accentColor), trackedURL: embedTrackedURL)
-                        .padding(.top, 8)
-                }
+                FeedPostEmbedRow(content: effectiveContent, accentHex: accentColor, trackedLinks: post.trackedLinkMap)
+                    .equatable()
 
                 // Scène du POST (Task E3) : le post porte son PROPRE canvas v3
                 // (composé, pas reposté) — la scène le remplace entièrement, elle
                 // compose déjà média + audio + texte. Priorité sur les branches
                 // repost ci-dessous : un post scène n'est ni un repost de story
                 // ni un repost de réel.
-                if let cardSceneDocument {
-                    cardScenePlayer(document: cardSceneDocument)
+                // **Plusieurs scènes ⇒ une MOSAÏQUE** (#5322). Une scène
+                // seule garde son rendu : une mosaïque d'un élément n'est pas
+                // une mosaïque, et le player a une scène à JOUER.
+                //
+                // Les deux branches ne partagent pas leurs modificateurs, et
+                // ce n'est pas une duplication : elles ne portent pas la même
+                // accessibilité. La carte mono-scène est UN bouton — « ouvrir
+                // en plein écran » ; la mosaïque en porte quatre, un par
+                // tuile, chacun menant à SA scène. Les réunir sous un
+                // `.accessibilityElement(children: .ignore)` commun aurait
+                // ravalé les quatre en un seul, et VoiceOver n'aurait plus
+                // atteint que la première scène — le défaut même que ce lot
+                // corrige, réintroduit par l'arbre d'accessibilité.
+                if let cardSceneDocument, cardSceneDocument.scenes.count > 1 {
+                    PostSceneMosaicSurface(
+                        // Le coordinateur DESCEND : sans lui, un carrousel de
+                        // scènes serait la seule surface de canvas du fil à ne
+                        // jamais jouer — une quatrième politique de lecture.
+                        coordinator: reelAutoplay,
+                        post: post,
+                        document: cardSceneDocument,
+                        accentColor: accentColor,
+                        preferredContentLanguages:
+                            ReaderPrism.resolve(for: AuthManager.shared.currentUser),
+                        // **L'index VOYAGE** : la tuile touchée ouvre SA scène.
+                        onTapScene: { index in
+                            if cardSceneOpensFullscreen { openSceneFullscreen(at: index) }
+                            else { onTapPost?(post) }
+                        }
+                    )
+                    .sceneZoomSource(postId: post.id)
+                    // **La légende paraît dans TOUS les modes, tronquée**
+                    // (qui ABOLIT la règle « pas
+                    // de légende en mosaïque ») — mais elle est peinte PAR
+                    // `PostSceneMosaic`, et non ici en `overlay`.
+                    //
+                    // La raison est la PAGE : le carrousel est le mode par
+                    // défaut, sa page courante vit dans cette vue-là, et une
+                    // légende posée au-dessus d'elle ne pouvait pas la
+                    // connaître. Elle restait figée sur le premier média
+                    // pendant que le doigt faisait défiler les scènes.
+                } else if let cardSceneDocument {
+                    PostSceneSurface(
+                        coordinator: reelAutoplay,
+                        post: post,
+                        document: cardSceneDocument,
+                        accentColor: accentColor,
+                        onTapPost: onTapPost,
+                        // **Le doigt sur la scène ouvre le PLEIN ÉCRAN**
+                        // jamais le détail du
+                        // post. La scène EST le contenu : la toucher demande à
+                        // la voir en grand, pas à lire ses commentaires.
+                        onTapScene: cardSceneOpensFullscreen ? { openSceneFullscreen() } : nil
+                    )
+                        .sceneZoomSource(postId: post.id)
+                        // **La légende PAR-DESSUS la scène**. La carte de scène n'en affichait aucune:
+                        // l'auteur composait sa légende, la retrouvait en plein
+                        // écran, et le fil n'en montrait rien — alors que c'est
+                        // là qu'on décide d'ouvrir ou de passer.
+                        //
+                        // Posée en `overlay` plutôt que dans la scène : elle
+                        // décrit le contenu, elle n'en fait pas partie. L'y
+                        // peindre la ferait entrer dans l'aperçu ET dans
+                        // l'export (loi 6).
+                        .overlay(alignment: .bottom) {
+                            FeedCaptionOverlay(caption: cardSceneCaption)
+                        }
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(cardSceneAccessibilityLabel)
-                        .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
+                        // **L'annonce SUIT le geste** — sinon le contrôle ment.
+                        // VoiceOver disait « ouvrir la publication » pendant
+                        // que le doigt ouvre désormais le plein écran ; laisser
+                        // les deux diverger donnerait à qui n'y voit pas une
+                        // description de ce que l'écran NE fait plus.
+                        .accessibilityHint(cardSceneOpenHint)
                         .accessibilityAddTraits(.isButton)
-                        .accessibilityAction { onTapPost?(post) }
+                        .accessibilityAction {
+                            if cardSceneOpensFullscreen { openSceneFullscreen() }
+                            else { onTapPost?(post) }
+                        }
                 } else if isStoryRepost {
                     // Repost-of-STORY: render the embedded story canvas (muted, autoplay).
                     // For this branch the gateway has snapshotted the original story media
                     // into the outer POST, but the canonical source is `post.repost` —
                     // we reuse `StoryReaderRepresentable(repost:)` so the rendering matches
                     // the in-viewer experience pixel-for-pixel.
-                    StoryRepostEmbedCell(
+                    StoryRepostSurface(
+                        coordinator: reelAutoplay,
                         post: post,
-                        preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages
+                        preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
                     )
                 } else if isReelRepost {
                     // Repost-of-REEL: a reel's content lives in media/caption, never
@@ -576,7 +665,7 @@ struct FeedPostCard: View {
                     }
                 }
 
-                // Lieu attaché au post (constat user 2026-07-30) : carte pleine
+                // Lieu attaché au post: carte pleine
                 // largeur + texte en overlay quand la position est le seul
                 // contenu visuel, sinon sticker compact — cliquables tous deux.
                 if let place = post.location {
@@ -597,26 +686,58 @@ struct FeedPostCard: View {
                 }
 
                 // Actions bar (not inside the tap target)
-                actionsBar
+                FeedPostActionsBar(
+                    postId: post.id,
+                    accentColor: accentColor,
+                    isDark: theme.mode.isDark,
+                    isLikedByMe: isLiked ?? post.isLiked,
+                    likeCount: max(0, displayLikeCount ?? post.likes),
+                    isHeartInFlight: isHeartInFlight,
+                    commentCount: post.commentCount,
+                    isCommentsSheetPresented: showCommentsSheet,
+                    repostCount: displayRepostCount ?? post.repostCount,
+                    isReposted: isReposted,
+                    isRepostInFlight: isRepostInFlight,
+                    bookmarkCount: displayBookmarkCount ?? post.bookmarkCount,
+                    isBookmarked: isBookmarked,
+                    isBookmarkInFlight: isBookmarkInFlight,
+                    shareCount: displayShareCount ?? post.shareCount,
+                    isShareInFlight: isShareInFlight,
+                    onLike: onLike,
+                    onOpenCommentsTap: {
+                        if let onOpenComments {
+                            onOpenComments()
+                        } else {
+                            showCommentsSheet = true
+                        }
+                    },
+                    onRepost: onRepost,
+                    onQuote: onQuote,
+                    onBookmark: onBookmark,
+                    sendSubject: .publication(post),
+                    onImager: imagerAction,
+                    onImagerQuick: imagerQuickAction
+                )
+                .equatable()
             }
-            .padding(16)
-
+            .padding(MeeshySpacing.lg)
             // Comments preview (compact)
             if !post.comments.isEmpty {
                 commentsPreview
+                    .commentMediaGallery(topLevel: post.comments, post: post)
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                         .stroke(theme.border(tint: accentColor, intensity: 0.25), lineWidth: 1)
                 )
         )
-        .padding(.horizontal, 16)
-        .sheet(isPresented: $showCommentsSheet) {
-            CommentsSheetView(post: post, accentColor: accentColor)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .sheet(isPresented: $showCommentsSheet, onDismiss: { commentsReplyTarget = nil }) {
+            CommentsSheetView(post: post, accentColor: accentColor, initialReplyTarget: commentsReplyTarget)
         }
         .sheet(isPresented: $showTranslationSheet) {
             PostTranslationSheet(
@@ -658,10 +779,10 @@ struct FeedPostCard: View {
                     }, onOpenReel: { reel, reels in
                         ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil }
                     }))
-                }
+                }, dependencies: .live
             )
             .presentationDetents([.large, .medium])
-            .presentationDragIndicator(.visible)
+            .presentationDragIndicator(.visible).closesForConversationOpening(.sheet)
         }
         .fullScreenCover(item: $fullscreenPlace) { item in
             // Même surface plein écran que la bulle de message : carte +
@@ -673,276 +794,37 @@ struct FeedPostCard: View {
                 address: item.place.address,
                 accentColor: accentColor,
                 senderName: post.author
-            )
+            ).closesForConversationOpening(.place)
         }
-        .fullScreenCover(isPresented: $showFullscreenGallery) {
-            let attachments = post.media
-                .filter { $0.type == .image || $0.type == .video }
-                .map { $0.toMessageAttachment() }
-            let senderInfo = ConversationViewModel.MediaSenderInfo(
-                senderName: post.author,
-                senderAvatarURL: post.authorAvatarURL,
-                senderColor: post.authorColor,
-                sentAt: post.timestamp
-            )
-            let senderMap = Dictionary(uniqueKeysWithValues: attachments.map { ($0.id, senderInfo) })
-            ConversationMediaGalleryView(
-                allAttachments: attachments,
-                startAttachmentId: fullscreenMediaId ?? attachments.first?.id ?? "",
-                accentColor: accentColor,
-                senderInfoMap: senderMap
-            )
-        }
+        .socialMediaGallery(
+            post: post,
+            isPresented: $showFullscreenGallery,
+            startMediaId: fullscreenMediaId,
+            startSceneIndex: fullscreenSceneIndex,
+            accentColor: accentColor,
+            preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
+            zoomSourceID: SceneZoomTransition.destinationID(postId: post.id, hasScene: cardSceneDocument != nil,
+                                                            startMediaId: fullscreenMediaId)
+        )
         .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
         .mediaSaveFlow(mediaSaveCoordinator)
+        #if DEBUG
+        .onAppear { VitrineRendu.shared.signaler(.fil) }
+        #endif
     }
 
-    /// Déclenche le flux unifié « Enregistrer en local » sur le média principal
-    /// du post (repost-aware via `primaryReelDisplayMedia`). No-op si absent —
-    /// gardé par l'appelant (`post.primaryReelDisplayMedia != nil`).
-    private func requestSaveMedia() {
-        guard let media = post.primaryReelDisplayMedia, let url = media.url, !url.isEmpty else { return }
-        HapticFeedback.light()
-        let attachmentKind: AttachmentKind
-        switch media.type {
-        case .video: attachmentKind = .video
-        case .audio: attachmentKind = .audio
-        case .document: attachmentKind = .document
-        case .image: attachmentKind = .image
-        }
-        mediaSaveCoordinator.requestSave(MediaSaveRequest(
-            kind: attachmentKind,
-            remoteURLString: url,
-            suggestedFileName: media.fileName
-        ))
+    func requestSaveMedia() {
+        PostSaveAction.perform(post, coordinator: mediaSaveCoordinator)
     }
 
-    // MARK: - Author Header
-    private var authorHeader: some View {
-        HStack(spacing: 12) {
-            // Avatar
-            MeeshyAvatar(
-                name: post.author,
-                context: .postAuthor,
-                accentColor: accentColor,
-                avatarURL: post.authorAvatarURL,
-                storyState: authorStoryRing,
-                moodEmoji: authorMoodEmoji,
-                onViewProfile: { selectedProfileUser = .from(feedPost: post) },
-                onViewStory: onViewAuthorStory,
-                onMoodTap: onAuthorMoodTap,
-                contextMenuItems: [
-                    AvatarContextMenuItem(label: String(localized: "feed.post.view_profile", defaultValue: "Voir le profil", bundle: .main), icon: "person.fill") {
-                        selectedProfileUser = .from(feedPost: post)
-                    }
-                ]
-            )
-            .accessibilityLabel(String(format: String(localized: "a11y.feed.post.author_avatar", defaultValue: "Profil de %@", bundle: .main), post.author))
-            .accessibilityHint(String(localized: "a11y.feed.post.author_avatar.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
-
-            VStack(alignment: .leading, spacing: 2) {
-                // Author name with repost indicator
-                HStack(spacing: 6) {
-                    Text(post.author)
-                        .font(.subheadline.weight(.bold))
-                        .foregroundColor(theme.textPrimary)
-
-                    // Attribution de republication, juste après le pseudo :
-                    // l'icône, puis l'AUTEUR D'ORIGINE — rien d'autre (directive
-                    // user 2026-08-19). La formule « a republié de @handle »
-                    // disait en toutes lettres ce que l'icône dit déjà, et
-                    // poussait le handle en bout de ligne, là où la troncature
-                    // le mangeait en premier sur une carte étroite : le seul
-                    // mot qui porte l'information était le premier sacrifié.
-                    //
-                    // Rien ne se perd pour VoiceOver : la phrase complète
-                    // devient l'étiquette du groupe, l'icône restant muette.
-                    // Elle serait sinon lue « @handle » sans dire pourquoi.
-                    if post.repostAuthor != nil {
-                        let handle = post.repost?.authorUsername ?? post.repostAuthor
-                        HStack(spacing: 3) {
-                            Image(systemName: "arrow.2.squarepath")
-                                .font(.caption2)
-                            if let handle {
-                                Text("@\(handle)")
-                                    .font(.caption)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                            }
-                        }
-                        .foregroundColor(theme.textMuted)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(
-                            handle.map {
-                                String(format: String(localized: "feed.post.reposted_from",
-                                                      defaultValue: "a republié de @%@",
-                                                      bundle: .main), $0)
-                            } ?? String(localized: "feed.post.reposted",
-                                        defaultValue: "a republié", bundle: .main)
-                        )
-                    }
-
-                    // Annonce du fond (B3.3-5), résolveur unique partagé
-                    // avec le viewer story et le plein écran réel (E1) —
-                    // BackgroundSoundBadge rend EmptyView sans piste (B3.5).
-                    BackgroundSoundBadge(
-                        announcement: backgroundSoundAnnouncement,
-                        accentHex: backgroundSoundAccentHex
-                    )
-                    .equatable()
-                }
-
-                HStack(spacing: 4) {
-                    Text(timeAgo(from: post.timestamp))
-                        .font(.caption)
-                        .foregroundColor(theme.accentText(accentColor))
-
-                    let flags = buildAvailableFlags()
-                    if !flags.isEmpty || post.translations?.isEmpty == false {
-                        Text("·")
-                            .font(.caption)
-                            .foregroundColor(theme.textMuted)
-
-                        ForEach(flags, id: \.self) { code in
-                            let display = LanguageDisplay.from(code: code)
-                            let isActive = code == secondaryLangCode
-                            VStack(spacing: 1) {
-                                Text(display?.flag ?? code.uppercased())
-                                    .font(isActive ? .caption : .caption2)
-                                    .scaleEffect(isActive ? 1.05 : 1.0)
-                                if isActive {
-                                    RoundedRectangle(cornerRadius: 1)
-                                        .fill(Color(hex: display?.color ?? LanguageDisplay.defaultColor))
-                                        .frame(width: 10, height: 1.5)
-                                }
-                            }
-                            .animation(.easeInOut(duration: 0.2), value: isActive)
-                            .onTapGesture { handleFlagTap(code) }
-                            .accessibilityLabel(String(localized: "feed.post.flag.a11y", defaultValue: "Afficher en \(display?.name ?? code)", bundle: .main))
-                            .accessibilityAddTraits(.isButton)
-                        }
-
-                        if post.translations?.isEmpty == false {
-                            Image(systemName: "translate")
-                                .font(.caption2.weight(.medium))
-                                .foregroundColor(MeeshyColors.indigo400)
-                                .frame(minWidth: 32, minHeight: 32)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    HapticFeedback.light()
-                                    showTranslationSheet = true
-                                }
-                                .accessibilityLabel(String(localized: "feed.post.translate.a11y", defaultValue: "Voir les traductions", bundle: .main))
-                                .accessibilityAddTraits(.isButton)
-                        }
-                    }
-
-                    // Reach stats (impressions · views) — visible ONLY to the
-                    // post's author, after the meta row (private analytics).
-                    if isAuthor {
-                        Text("·").font(.caption).foregroundColor(theme.textMuted)
-                        HStack(spacing: 3) {
-                            ReachMetricLabel(
-                                icon: "chart.bar.fill",
-                                count: post.impressionCount,
-                                label: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main),
-                                tint: theme.textMuted
-                            )
-                            Text("·").font(.caption2).foregroundColor(theme.textMuted)
-                                .accessibilityHidden(true)
-                            ReachMetricLabel(
-                                icon: "eye.fill",
-                                count: post.viewCount,
-                                label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
-                                tint: theme.textMuted
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer()
-
-            Menu {
-                if let onTapPost {
-                    Button {
-                        onTapPost(post)
-                        HapticFeedback.light()
-                    } label: {
-                        Label(String(localized: "feed.post.open", defaultValue: "Ouvrir", bundle: .main), systemImage: "arrow.up.right.square")
-                    }
-                }
-                Button {
-                    UIPasteboard.general.string = post.content
-                    HapticFeedback.success()
-                } label: {
-                    Label(String(localized: "feed.post.copy_text", defaultValue: "Copier le texte", bundle: .main), systemImage: "doc.on.doc")
-                }
-                Button {
-                    onShare?(post.id)
-                    HapticFeedback.light()
-                } label: {
-                    Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
-                }
-                Button {
-                    if post.primaryReelDisplayMedia != nil {
-                        requestSaveMedia()
-                    } else {
-                        onBookmark?(post.id)
-                        HapticFeedback.light()
-                    }
-                } label: {
-                    Label(
-                        post.primaryReelDisplayMedia != nil
-                            ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
-                            : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
-                        systemImage: post.primaryReelDisplayMedia != nil ? "arrow.down.to.line" : "bookmark"
-                    )
-                }
-                if onPin != nil {
-                    Button {
-                        onPin?(post.id)
-                        HapticFeedback.light()
-                    } label: {
-                        Label(String(localized: "feed.post.pin", defaultValue: "Epingler", bundle: .main), systemImage: "pin")
-                    }
-                }
-                if onEdit != nil {
-                    Button {
-                        onEdit?(post)
-                        HapticFeedback.light()
-                    } label: {
-                        Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
-                    }
-                }
-                if onDelete != nil {
-                    Divider()
-                    Button(role: .destructive) {
-                        onDelete?(post.id)
-                        HapticFeedback.medium()
-                    } label: {
-                        Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
-                    }
-                }
-                if onReport != nil {
-                    Divider()
-                    Button(role: .destructive) {
-                        onReport?(post.id)
-                        HapticFeedback.medium()
-                    } label: {
-                        Label(String(localized: "feed.post.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
-                    }
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(MeeshyFont.relative(16))
-                    .foregroundColor(theme.textMuted)
-                    .padding(8)
-            }
-            .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
-            .accessibilityHint(String(localized: "feed.post.more_options.hint", defaultValue: "Ouvre le menu des actions", bundle: .main))
-        }
+    var canSaveMedia: Bool {
+        PostSaveAction.route(for: post, coordinator: mediaSaveCoordinator) != .unavailable
     }
+    var imagerAction: (() -> Void)? { PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator) }
+    var imagerQuickAction: (() -> Void)? {
+        MessageCardExportMenu.hasDefaultFormat ? PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator, quick: true) : nil
+    }
+
 
     // MARK: - Repost View
     private func repostView(_ repost: RepostContent) -> some View {
@@ -950,39 +832,40 @@ struct FeedPostCard: View {
             HapticFeedback.light()
             onTapRepost?(Self.repostTapTargetId(for: repost))
         } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                // Original author
-                HStack(spacing: 8) {
-                    MeeshyAvatar(
+            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
+                HStack(spacing: MeeshySpacing.sm) {
+                    LivePresence { MeeshyAvatar(
                         name: repost.author,
                         context: .postComment,
                         accentColor: repost.authorColor,
-                        avatarURL: repost.authorAvatarURL
-                    )
+                        avatarURL: repost.authorAvatarURL,
+                        presenceState: PresenceManager.shared.knownPresenceState(for: repost.authorId),
+                        ring: repost.authorRing
+                    ) }
 
                     Text(repost.author)
                         .font(.footnote.weight(.semibold))
                         .foregroundColor(theme.accentText(repost.authorColor))
 
-                    Text("·")
-                        .foregroundColor(theme.textMuted)
+                    MetaSeparator()
+                        .foregroundStyle(theme.textMuted)
 
-                    Text(timeAgo(from: repost.timestamp))
+                    Text(RelativeTimeFormatter.shortString(for: repost.timestamp))
                         .font(.caption)
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 // Original content — préfixé du mood emoji pour un STATUS
                 // reposté (sinon un mood republié n'afficherait qu'un corps vide).
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.xsPlus) {
                     if let mood = repost.moodEmoji, !mood.isEmpty {
                         Text(mood)
                             .font(.body)
                             .accessibilityHidden(true)
                     }
-                    Text(repost.content)
+                    Text(Self.repostBodyText(for: repost))
                         .font(.footnote)
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .lineLimit(4)
                 }
 
@@ -1003,9 +886,8 @@ struct FeedPostCard: View {
                     }
                 }
 
-                // Original stats
-                HStack(spacing: 12) {
-                    HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.md) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "heart.fill")
                             .font(.caption2)
                             .accessibilityHidden(true)
@@ -1018,13 +900,13 @@ struct FeedPostCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(theme.accentText(repost.authorColor).opacity(0.2), lineWidth: 1)
                     )
             )
@@ -1034,436 +916,8 @@ struct FeedPostCard: View {
         .accessibilityHint(String(localized: "feed.post.original.hint", defaultValue: "Ouvre la publication originale", bundle: .main))
     }
 
-    // MARK: - Media Preview
-    // See FeedPostCard+Media.swift
+    // MARK: - Media Preview (FeedPostCard+Media.swift)
 
-    // MARK: - Actions Bar
-    @State private var likeAnimating = false
-
-    /// Effective liked state: socket-driven override when available, else post.isLiked.
-    private var effectiveIsLiked: Bool { isLiked ?? post.isLiked }
-    /// Effective display count: socket-driven override when available, else post.likes.
-    private var effectiveLikeCount: Int { max(0, displayLikeCount ?? post.likes) }
-
-    private var actionsBar: some View {
-        HStack(spacing: 0) {
-            // Like with heart burst animation (socket-driven — see FeedView.postLikedIds)
-            Button {
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
-                    likeAnimating = true
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    likeAnimating = false
-                }
-                onLike?(post.id)
-                HapticFeedback.light()
-            } label: {
-                HStack(spacing: 6) {
-                    ZStack {
-                        // Burst ring behind heart
-                        if effectiveIsLiked {
-                            Circle()
-                                .stroke(MeeshyColors.error.opacity(likeAnimating ? 0.6 : 0), lineWidth: likeAnimating ? 2 : 0)
-                                .frame(width: likeAnimating ? 32 : 18, height: likeAnimating ? 32 : 18)
-                                .animation(.easeOut(duration: 0.4), value: likeAnimating)
-                        }
-
-                        let heartColor: Color = effectiveIsLiked ? MeeshyColors.error : (effectiveLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary)
-                        Image(systemName: effectiveIsLiked || effectiveLikeCount > 0 ? "heart.fill" : "heart")
-                            .font(MeeshyFont.relative(18))
-                            .foregroundColor(heartColor)
-                            .scaleEffect(likeAnimating ? 1.3 : (effectiveIsLiked ? 1.1 : 1.0))
-                            .rotationEffect(.degrees(likeAnimating ? -15 : 0))
-                            .opacity(isHeartInFlight ? 0.5 : 1.0)
-                        // Accent BORDER on the glyph when the current user liked.
-                        if effectiveIsLiked {
-                            Image(systemName: "heart")
-                                .font(MeeshyFont.relative(18))
-                                .foregroundColor(Color(hex: accentColor))
-                                .scaleEffect(likeAnimating ? 1.3 : 1.1)
-                                .rotationEffect(.degrees(likeAnimating ? -15 : 0))
-                        }
-                    }
-
-                    Text("\(effectiveLikeCount)")
-                        .font(.footnote.weight(.medium))
-                        .foregroundColor(effectiveIsLiked ? MeeshyColors.error : (effectiveLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary))
-                        .contentTransition(.numericText())
-                }
-            }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
-            // de hit se limitait au tracé — le marque-page (icone fine, sans
-            // compteur) ratait un tap sur deux a l'usage.
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-            .disabled(isHeartInFlight)
-            .animation(.easeOut(duration: 0.2), value: effectiveIsLiked)
-            .accessibilityLabel(String(localized: "a11y.feed.post.like", defaultValue: "Aimer", bundle: .main))
-            .accessibilityValue(PostStatAccessibility.likesLabel(effectiveLikeCount))
-            .accessibilityAddTraits(effectiveIsLiked ? .isSelected : [])
-
-            Spacer()
-
-            // Comment
-            Button {
-                if let onOpenComments {
-                    onOpenComments()
-                } else {
-                    showCommentsSheet = true
-                }
-                HapticFeedback.light()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "bubble.right")
-                        .font(MeeshyFont.relative(17))
-
-                    if post.commentCount > 0 {
-                        Text("\(post.commentCount)")
-                            .font(.footnote.weight(.medium))
-                    }
-                }
-                .foregroundColor(showCommentsSheet ? theme.accentText(accentColor) : theme.textSecondary)
-            }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
-            // de hit se limitait au tracé — le marque-page (icone fine, sans
-            // compteur) ratait un tap sur deux a l'usage.
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-            .accessibilityLabel(String(localized: "feed.post.comments_count", defaultValue: "\(post.commentCount) commentaires", bundle: .main))
-            .accessibilityHint(String(localized: "feed.post.comments.hint", defaultValue: "Ouvre les commentaires", bundle: .main))
-
-            Spacer()
-
-            // Repost
-            Button {
-                showRepostOptions = true
-                HapticFeedback.light()
-            } label: {
-                HStack(spacing: 6) {
-                    ZStack {
-                        Image(systemName: isReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath")
-                            .font(MeeshyFont.relative(17))
-                            .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
-                        // Accent BORDER on the glyph when the current user reposted.
-                        if isReposted {
-                            Image(systemName: "arrow.2.squarepath.circle")
-                                .font(MeeshyFont.relative(17))
-                                .foregroundColor(Color(hex: accentColor))
-                        }
-                    }
-                    let count = displayRepostCount ?? post.repostCount
-                    if count > 0 {
-                        Text("\(count)")
-                            .font(.footnote.weight(.medium))
-                            .contentTransition(.numericText())
-                    }
-                }
-                .foregroundColor(isReposted ? MeeshyColors.success : theme.textSecondary)
-                .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isReposted)
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
-            }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
-            // de hit se limitait au tracé — le marque-page (icone fine, sans
-            // compteur) ratait un tap sur deux a l'usage.
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-            .disabled(isRepostInFlight)
-            .accessibilityLabel(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main))
-            .accessibilityValue(String(format: String(localized: "a11y.feed.post.repost.value", defaultValue: "%d repartages", bundle: .main), displayRepostCount ?? post.repostCount))
-            .accessibilityHint(String(localized: "a11y.feed.post.repost.hint", defaultValue: "Repartage ou cite cette publication", bundle: .main))
-            .accessibilityAddTraits(isReposted ? .isSelected : [])
-            .alert(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main), isPresented: $showRepostOptions) {
-                Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) { onRepost?(post.id) }
-                Button(String(localized: "feed.post.quote", defaultValue: "Citer", bundle: .main)) { onQuote?(post.id) }
-                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
-            }
-
-            Spacer()
-
-            // Bookmark
-            Button {
-                onBookmark?(post.id)
-                HapticFeedback.light()
-            } label: {
-                HStack(spacing: 6) {
-                    ZStack {
-                        Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
-                            .font(MeeshyFont.relative(17))
-                            .scaleEffect(isBookmarkInFlight ? 0.85 : 1.0)
-                        // Accent BORDER on the glyph when the current user bookmarked.
-                        if isBookmarked {
-                            Image(systemName: "bookmark")
-                                .font(MeeshyFont.relative(17))
-                                .foregroundColor(Color(hex: accentColor))
-                        }
-                    }
-                    let count = displayBookmarkCount ?? post.bookmarkCount
-                    if count > 0 {
-                        Text("\(count)")
-                            .font(.footnote.weight(.medium))
-                            .contentTransition(.numericText())
-                    }
-                }
-                .foregroundColor(isBookmarked ? MeeshyColors.warning : theme.textSecondary)
-                .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isBookmarked)
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isBookmarkInFlight)
-            }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
-            // de hit se limitait au tracé — le marque-page (icone fine, sans
-            // compteur) ratait un tap sur deux a l'usage.
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-            .disabled(isBookmarkInFlight)
-            .accessibilityLabel(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main))
-            .accessibilityValue(String(format: String(localized: "a11y.feed.post.save.value", defaultValue: "%d enregistrements", bundle: .main), displayBookmarkCount ?? post.bookmarkCount))
-            .accessibilityHint(String(localized: "a11y.feed.post.save.hint", defaultValue: "Enregistre la publication dans vos favoris", bundle: .main))
-            .accessibilityAddTraits(isBookmarked ? .isSelected : [])
-
-            Spacer()
-
-            // Share
-            Button {
-                onShare?(post.id)
-                HapticFeedback.light()
-            } label: {
-                HStack(spacing: 6) {
-                    ZStack {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(MeeshyFont.relative(17))
-                            .opacity(isShareInFlight ? 0 : 1)
-                        if isShareInFlight {
-                            ProgressView()
-                                .scaleEffect(0.6)
-                                .progressViewStyle(.circular)
-                        }
-                    }
-                    let count = displayShareCount ?? post.shareCount
-                    if count > 0 {
-                        Text("\(count)")
-                            .font(.footnote.weight(.medium))
-                            .contentTransition(.numericText())
-                    }
-                }
-                .foregroundColor(theme.textSecondary)
-                .animation(.easeInOut(duration: 0.2), value: isShareInFlight)
-            }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
-            // de hit se limitait au tracé — le marque-page (icone fine, sans
-            // compteur) ratait un tap sur deux a l'usage.
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-            .disabled(isShareInFlight)
-            .accessibilityLabel(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main))
-            .accessibilityValue(String(format: String(localized: "a11y.feed.post.share.value", defaultValue: "%d partages", bundle: .main), displayShareCount ?? post.shareCount))
-            .accessibilityHint(String(localized: "a11y.feed.post.share.hint", defaultValue: "Partage cette publication via un lien", bundle: .main))
-
-            // Pas de bouton muet ici en E2 (correctif revue DoD, constat
-            // majeur #2) : la carte n'embarque encore AUCUN lecteur local
-            // capable de jouer le fond (l'embed story-repost fige
-            // `mute: true` dans `StoryRepostEmbedCell`, hors périmètre E2 ;
-            // la scène jouée dans la carte arrive avec E3,
-            // `MeeshyScenePlayer(.card)`). Le badge d'ANNONCE ci-dessus
-            // (`backgroundSoundAnnouncement`, rangée auteur, E1) reste seul
-            // — un bouton sans lecteur à piloter serait décoratif.
-        }
-        .padding(.top, 4)
-    }
-
-    // MARK: - Comments Preview (Top 3 Comments)
-    private var commentsPreview: some View {
-        Button {
-            showCommentsSheet = true
-            HapticFeedback.light()
-        } label: {
-            VStack(alignment: .leading, spacing: 0) {
-                // Divider
-                Rectangle()
-                    .fill(theme.inputBorder.opacity(0.5))
-                    .frame(height: 1)
-                    .padding(.horizontal, 16)
-
-                VStack(alignment: .leading, spacing: 12) {
-                    let comments = topComments
-                    ForEach(Array(comments.enumerated()), id: \.element.id) { index, comment in
-                        topCommentRow(comment: comment, isLast: index == comments.count - 1)
-                    }
-
-                    // "See all comments" link
-                    HStack(spacing: 8) {
-                        // Stacked avatars of remaining commenters
-                        if post.comments.count > 3 {
-                            HStack(spacing: -6) {
-                                ForEach(Array(post.comments.dropFirst(3).prefix(3).enumerated()), id: \.element.id) { index, comment in
-                                    MeeshyAvatar(
-                                        name: comment.author,
-                                        context: .postReaction,
-                                        accentColor: comment.authorColor,
-                                        avatarURL: comment.authorAvatarURL
-                                    )
-                                        .overlay(
-                                            Circle()
-                                                .stroke(theme.backgroundPrimary, lineWidth: 1.5)
-                                        )
-                                        .zIndex(Double(3 - index))
-                                }
-                            }
-                        }
-
-                        Text(String(localized: "feed.post.view_comments", defaultValue: "Voir les \(post.comments.count) commentaires", bundle: .main))
-                            .font(.footnote.weight(.semibold))
-                            .foregroundColor(theme.accentText(accentColor))
-
-                        Spacer()
-
-                        Image(systemName: "chevron.forward")
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(theme.textMuted)
-                            .accessibilityHidden(true)
-                    }
-                    .padding(.top, 4)
-                }
-                .padding(14)
-            }
-        }
-        .buttonStyle(PlainButtonStyle())
-        .accessibilityLabel(String(localized: "feed.post.view_comments", defaultValue: "Voir les \(post.comments.count) commentaires", bundle: .main))
-        .accessibilityHint(String(localized: "feed.post.view_comments.hint", defaultValue: "Ouvre la liste des commentaires", bundle: .main))
-    }
-
-    // MARK: - Top Comment Row
-    private func topCommentRow(comment: FeedComment, isLast: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 10) {
-                // Avatar
-                let commentMood = moodLookup?(comment.authorId)
-                MeeshyAvatar(
-                    name: comment.author,
-                    context: .postComment,
-                    accentColor: comment.authorColor,
-                    avatarURL: comment.authorAvatarURL,
-                    moodEmoji: commentMood?.emoji,
-                    onViewProfile: { selectedProfileUser = .from(feedComment: comment) },
-                    onMoodTap: commentMood?.tapHandler,
-                    contextMenuItems: [
-                        AvatarContextMenuItem(label: String(localized: "feed.post.view_profile", defaultValue: "Voir le profil", bundle: .main), icon: "person.fill") {
-                            selectedProfileUser = .from(feedComment: comment)
-                        }
-                    ]
-                )
-
-                VStack(alignment: .leading, spacing: 4) {
-                    // Author name + language flags
-                    HStack(spacing: 4) {
-                        Text(comment.author)
-                            .font(.footnote.weight(.semibold))
-                            .foregroundColor(theme.accentText(comment.authorColor))
-
-                        if let origLang = comment.originalLanguage, comment.translatedContent != nil {
-                            Text("·").font(.caption2).foregroundColor(theme.textMuted)
-
-                            let origDisplay = LanguageDisplay.from(code: origLang)
-                            Text(origDisplay?.flag ?? "?")
-                                .font(.caption2)
-
-                            let userLangs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-                            let targetLang = userLangs.first?.lowercased() ?? "fr"
-                            let targetDisplay = LanguageDisplay.from(code: targetLang)
-                            Text(targetDisplay?.flag ?? "?")
-                                .font(.caption2)
-
-                            Image(systemName: "translate")
-                                .font(.caption2.weight(.medium))
-                                .foregroundColor(MeeshyColors.indigo400)
-                                .accessibilityHidden(true)
-                        }
-                    }
-
-                    // Content (Prisme Linguistique) — masqué pour un commentaire
-                    // média-seul (displayContent vide) : évite une ligne fantôme.
-                    if !comment.displayContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text(comment.displayContent)
-                            .font(.footnote)
-                            .foregroundColor(theme.textPrimary)
-                            .lineLimit(2)
-                    }
-
-                    // Média unique (image/vidéo/audio) — rendu inline dans l'aperçu
-                    // du feed avec les MÊMES building blocks que la sheet. L'audio est
-                    // ainsi lisible/arrêtable directement (le player porte son propre
-                    // bouton, qui capte le tap sans ouvrir la sheet).
-                    if let media = comment.media.first {
-                        CommentMediaView(
-                            media: media,
-                            accentColor: accentColor,
-                            commentId: comment.id,
-                            authorName: comment.author,
-                            authorAvatarURL: comment.authorAvatarURL,
-                            authorColor: comment.authorColor,
-                            sentAt: comment.timestamp
-                        )
-                        .padding(.top, 2)
-                    }
-
-                    // Lieu attaché au commentaire — sticker cliquable (même
-                    // véhicule SharedPlace que le post porteur).
-                    if let place = comment.location {
-                        FeedPostLocationSticker(place: place) {
-                            fullscreenPlace = BubbleFullscreenPlace(place: place)
-                        }
-                        .padding(.top, 2)
-                    }
-
-                    // Stats row: likes and replies
-                    HStack(spacing: 16) {
-                        // Likes
-                        HStack(spacing: 4) {
-                            Image(systemName: "heart.fill")
-                                .font(.caption)
-                                .foregroundColor(MeeshyColors.error)
-                                .accessibilityHidden(true)
-                            Text("\(comment.likes)")
-                                .font(.caption.weight(.medium))
-                                .foregroundColor(theme.textMuted)
-                        }
-
-                        // Replies
-                        if comment.replies > 0 {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrowshape.turn.up.left.fill")
-                                    .font(.caption2)
-                                    .foregroundColor(theme.accentText(accentColor).opacity(0.7))
-                                    .accessibilityHidden(true)
-                                Text(PostStatAccessibility.repliesLabel(comment.replies))
-                                    .font(.caption.weight(.medium))
-                                    .foregroundColor(theme.textMuted)
-                            }
-                        }
-
-                        Spacer()
-
-                        // Timestamp
-                        Text(timeAgo(from: comment.timestamp))
-                            .font(.caption2)
-                            .foregroundColor(theme.textMuted)
-                    }
-                    .padding(.top, 2)
-                }
-            }
-
-            // Separator (except for last item)
-            if !isLast {
-                Rectangle()
-                    .fill(theme.inputBorder.opacity(0.3))
-                    .frame(height: 1)
-                    .padding(.leading, 42)
-                    .padding(.top, 10)
-            }
-        }
-    }
-
-    func timeAgo(from date: Date) -> String {
-        RelativeTimeFormatter.shortString(for: date)
-    }
 }
 
 // MARK: - Equatable (enables .equatable() in ForEach to prevent unnecessary re-renders)
@@ -1490,9 +944,10 @@ extension FeedPostCard: Equatable {
             && lhs.post.content == rhs.post.content
             && lhs.post.mentions == rhs.post.mentions
             && lhs.post.translatedContent == rhs.post.translatedContent
-            && (lhs.post.translations?.count ?? 0) == (rhs.post.translations?.count ?? 0)
-            && lhs.isCommentsExpanded == rhs.isCommentsExpanded
+            && lhs.post.repost?.translatedContent == rhs.post.repost?.translatedContent
+            && Self.translatableSignature(of: lhs.post) == Self.translatableSignature(of: rhs.post)
             && lhs.authorMoodEmoji == rhs.authorMoodEmoji
             && lhs.authorStoryRing == rhs.authorStoryRing
+            && lhs.post.authorRing == rhs.post.authorRing && lhs.post.commentsDisabled == rhs.post.commentsDisabled
     }
 }

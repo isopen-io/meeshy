@@ -18,10 +18,10 @@ package me.meeshy.app.chat
  * tap-to-cycle chip instead of iOS's context menu — while keeping the exact same
  * `0.5 … 2.0×` grid.
  *
- * The actual `MediaPlayer` (audio) / video-surface plumbing is Android-runtime
- * glue that lives app-side; it maps player callbacks onto [ready] / [failed] /
- * [tick] / [onEnded] and applies [progress] / [playbackRate] / [isPlaying] back
- * onto the platform player.
+ * The actual player (audio: the Media3 [VoiceNoteEngine] through
+ * [OverlayAudioPreview]) / video-surface plumbing is Android-runtime glue; it
+ * maps player callbacks onto [ready] / [failed] / [tick] / [onEnded] and applies
+ * [progress] / [playbackRate] / [isPlaying] back onto the platform player.
  */
 class OverlayMediaTransport private constructor(
     val currentUrl: String?,
@@ -117,6 +117,12 @@ class OverlayMediaTransport private constructor(
             progress = clamped / durationSeconds,
         )
     }
+
+    /**
+     * The same media now answers to [url] (#15969 — its send was acknowledged, its address went from the device's copy to
+     * the served one): the label changes, nothing reloads, the playhead stays. Inert when nothing is loaded.
+     */
+    fun relabeled(url: String): OverlayMediaTransport = if (currentUrl == null || currentUrl == url) this else copy(currentUrl = url)
 
     /** The item played to the end: rewind to the start and stop (iOS end observer). */
     fun onEnded(): OverlayMediaTransport = copy(isPlaying = false, progress = 0.0, currentSeconds = 0.0)

@@ -49,6 +49,7 @@ import type {
   PersonalMessageVisibilityRef,
 } from '@meeshy/shared/types/socketio-events';
 import { broadcastToUser } from '../utils/socket-broadcast';
+import { enqueuePersonalVisibilityMark } from '../socketio/enqueuePersonalMessageMark';
 import { retractNotificationsForHiddenMessages } from './messaging/retractHiddenMessageNotifications';
 import { refreshPersonalConversationPreview } from './messaging/personalPreviewRefresh';
 import { logger } from '../utils/logger';
@@ -96,15 +97,28 @@ export async function hideMessagesForUser(
     }
   );
 
+  const hiddenAt = new Date().toISOString();
   const payload: MessageHiddenForMeEventData = {
     userId,
     messages: messages.map((m) => ({
       messageId: m.messageId,
       conversationId: m.conversationId,
     })),
-    hiddenAt: new Date().toISOString(),
+    hiddenAt,
   };
   broadcastToUser(fastify, userId, SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, payload);
+  // Le CINQUIÈME devoir (#16688), et il conditionnait les trois précédents :
+  // la diffusion ci-dessus n'atteint que les appareils ALLUMÉS. Celui qui est
+  // resté éteint ne recevait rien, et la file de rejeu — le seul rattrapage du
+  // système — ne pouvait pas le servir : son test d'audience interroge la
+  // connexion du COMPTE, que l'appareil acteur fournit toujours. Détail et
+  // mesure : `socketio/enqueuePersonalMessageMark.ts`.
+  await enqueuePersonalVisibilityMark({
+    userId,
+    eventType: 'hidden-for-me',
+    messages,
+    at: hiddenAt,
+  });
 
   // Le fil sait ; la ligne de liste, non. Elle porte son propre aperçu, et le
   // remplaçant d'un dernier message masqué n'est pas calculable côté client.
@@ -136,12 +150,21 @@ export async function restoreMessageForUser(
     where: { userId_messageId: { userId, messageId: message.messageId } },
   });
 
+  const restoredAt = new Date().toISOString();
   const payload: MessageRestoredForMeEventData = {
     userId,
     messages: [{ messageId: message.messageId, conversationId: message.conversationId }],
-    restoredAt: new Date().toISOString(),
+    restoredAt,
   };
   broadcastToUser(fastify, userId, SERVER_EVENTS.MESSAGE_RESTORED_FOR_ME, payload);
+  // Symétrique du masquage, pour la même raison (#16688) : sans entrée de file,
+  // l'appareil éteint garde le message masqué pour toujours.
+  await enqueuePersonalVisibilityMark({
+    userId,
+    eventType: 'restored-for-me',
+    messages: [{ messageId: message.messageId, conversationId: message.conversationId }],
+    at: restoredAt,
+  });
 
   // Symétrique du masquage : rendre un message peut lui rendre aussi la place
   // de dernier message visible de ce lecteur.

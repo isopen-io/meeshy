@@ -18,8 +18,8 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessagingService } from '../../services/MessagingService';
 import { encryptionService } from '../../services/EncryptionService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
-import type { MessageRequest } from '../../../shared/types/messaging';
-import type { EncryptedPayload, EncryptionMode } from '../../../shared/types/encryption';
+import type { MessageRequest } from '@meeshy/shared/types/messaging';
+import type { EncryptedPayload, EncryptionMode } from '@meeshy/shared/types/encryption';
 import crypto from 'crypto';
 
 describe('E2EE Full Flow Integration Tests', () => {
@@ -369,7 +369,7 @@ describe('E2EE Full Flow Integration Tests', () => {
       expect(conversation?.autoTranslateEnabled).toBe(true);
 
       // Verify canAutoTranslate utility
-      const { canAutoTranslate } = await import('../../../shared/types/encryption');
+      const { canAutoTranslate } = await import('@meeshy/shared/types/encryption');
       const translatable = canAutoTranslate({
         encryptionEnabledAt: conversation!.encryptionEnabledAt,
         encryptionMode: conversation!.encryptionMode as EncryptionMode,
@@ -444,7 +444,7 @@ describe('E2EE Full Flow Integration Tests', () => {
       expect(conversation?.autoTranslateEnabled).toBe(false);
 
       // Verify canAutoTranslate utility
-      const { canAutoTranslate } = await import('../../../shared/types/encryption');
+      const { canAutoTranslate } = await import('@meeshy/shared/types/encryption');
       const translatable = canAutoTranslate({
         encryptionEnabledAt: conversation!.encryptionEnabledAt,
         encryptionMode: conversation!.encryptionMode as EncryptionMode,
@@ -473,7 +473,7 @@ describe('E2EE Full Flow Integration Tests', () => {
 
   describe('8. Encryption Utility Functions', () => {
     it('should correctly determine if message is encrypted', async () => {
-      const { isMessageEncrypted } = await import('../../../shared/types/encryption');
+      const { isMessageEncrypted } = await import('@meeshy/shared/types/encryption');
 
       const conversation = await prisma.conversation.findUnique({
         where: { id: directConversation.id }
@@ -500,7 +500,7 @@ describe('E2EE Full Flow Integration Tests', () => {
     });
 
     it('should get correct encryption status', async () => {
-      const { getEncryptionStatus } = await import('../../../shared/types/encryption');
+      const { getEncryptionStatus } = await import('@meeshy/shared/types/encryption');
 
       const conversation = await prisma.conversation.findUnique({
         where: { id: directConversation.id }
@@ -540,7 +540,7 @@ describe('E2EE Full Flow Integration Tests', () => {
     });
 
     it('should handle mixed conversation with both encrypted and plaintext history', async () => {
-      const { isMessageEncrypted } = await import('../../../shared/types/encryption');
+      const { isMessageEncrypted } = await import('@meeshy/shared/types/encryption');
 
       const conversation = await prisma.conversation.findUnique({
         where: { id: directConversation.id }

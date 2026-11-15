@@ -22,6 +22,36 @@ class StoryContentResolverTest {
         StoryItem(id = "s1", content = content, translations = translations)
 
     @Test
+    fun `an original written in the primary language wins over a lower-rank translation (Prisme rule 3)`() {
+        val resolved = StoryContentResolver.resolve(
+            StoryItem(
+                id = "s1",
+                content = "bonjour",
+                originalLanguage = "fr",
+                translations = listOf(StoryTranslation(language = "en", content = "hello")),
+            ),
+            prefs(system = "fr", regional = "en"),
+        )
+        assertThat(resolved.content).isEqualTo("bonjour")
+        assertThat(resolved.isTranslated).isFalse()
+    }
+
+    @Test
+    fun `an original at rank two yields to the primary-language translation (no short-circuit)`() {
+        val resolved = StoryContentResolver.resolve(
+            StoryItem(
+                id = "s1",
+                content = "hello",
+                originalLanguage = "en",
+                translations = listOf(StoryTranslation(language = "fr", content = "bonjour")),
+            ),
+            prefs(system = "fr", regional = "en"),
+        )
+        assertThat(resolved.content).isEqualTo("bonjour")
+        assertThat(resolved.languageCode).isEqualTo("fr")
+    }
+
+    @Test
     fun `returns the preferred-language translation when available`() {
         val resolved = StoryContentResolver.resolve(
             item("bonjour", listOf(StoryTranslation(language = "en", content = "hello"))),

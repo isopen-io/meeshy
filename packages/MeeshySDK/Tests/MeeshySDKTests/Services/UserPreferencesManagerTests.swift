@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 import GRDB
 @testable import MeeshySDK
 
@@ -21,6 +22,10 @@ final class UserPreferencesManagerTests: XCTestCase {
         // this, `pendingCategories` from a prior test leaks into this one's
         // `shouldApplyRemote`/`applyRemote`-adjacent assertions.
         manager.pendingCategories.removeAll()
+        // #6624 — `fetchFromBackend()` relit aussi `GET /me/consents` : sans
+        // double, un témoin de relecture appellerait le vrai réseau.
+        manager.consentService = MockConsentService()
+        manager.grantedConsents = []
     }
 
     override func tearDown() {
@@ -34,7 +39,31 @@ final class UserPreferencesManagerTests: XCTestCase {
         // whichever `OfflineQueue` pool is configured by the time it fires.
         manager.isAuthenticatedOverride = nil
         manager.service = PreferenceService.shared
+        manager.consentService = ConsentService.shared
+        manager.grantedConsents = []
         super.tearDown()
+    }
+
+    // MARK: - Un changement plus récent garde sa protection
+
+    /// A part au serveur ; B est posé pendant l'aller-retour. La fin de A levait
+    /// la protection de la catégorie : une relecture du serveur écrasait B,
+    /// qui partait ensuite sous sa forme écrasée.
+    func test_sync_aNewerChangeDuringTheRoundTrip_keepsTheCategoryPending() async {
+        manager.updateNotification { $0.soundEnabled = false }
+        var posedNewerChange = false
+        manager.isAuthenticatedOverride = { [manager] in
+            if !posedNewerChange {
+                posedNewerChange = true
+                manager?.updateNotification { $0.vibrationEnabled = false }
+            }
+            return false
+        }
+
+        await manager.resumeOrphanedPendingSyncs([.notification])
+
+        XCTAssertTrue(manager.pendingCategories.contains(.notification),
+                      "B attend encore sa synchro : la catégorie reste protégée de la relecture du serveur")
     }
 
     // MARK: - resetToDefaults
@@ -184,36 +213,134 @@ final class UserPreferencesManagerTests: XCTestCase {
         XCTAssertTrue(manager.application.reducedMotion)
     }
 
-    // MARK: - Voice Consent (espace de préférences)
+    // MARK: - Voice Consent (#6624 — PUT /me/consents, jamais PATCH application)
 
     func test_voiceConsentGranted_defaultsToFalse() {
         XCTAssertFalse(manager.voiceConsentGranted)
         XCTAssertFalse(manager.voiceCloningConsentGranted)
     }
 
-    func test_grantVoiceAutoTranslationConsent_setsConsentChainAndAudioFeatures() {
-        manager.grantVoiceAutoTranslationConsent()
+    func test_grantVoiceAutoTranslationConsent_grantsVoiceCloningThroughTheConsentRoute() async throws {
+        let consents = MockConsentService()
+        manager.consentService = consents
 
+        try await manager.grantVoiceAutoTranslationConsent()
+
+        XCTAssertEqual(consents.setConsentCalls, [.init(purpose: .voiceCloning, granted: true)])
         XCTAssertTrue(manager.voiceConsentGranted)
         XCTAssertTrue(manager.voiceCloningConsentGranted)
-        XCTAssertNotNil(manager.application.dataProcessingConsentAt)
-        XCTAssertNotNil(manager.application.voiceDataConsentAt)
-        XCTAssertNotNil(manager.application.voiceProfileConsentAt)
-        XCTAssertNotNil(manager.application.voiceCloningEnabledAt)
+    }
+
+    func test_grantVoiceAutoTranslationConsent_turnsOnTheAudioFeatures() async throws {
+        try await manager.grantVoiceAutoTranslationConsent()
+
         XCTAssertTrue(manager.audio.transcriptionEnabled)
         XCTAssertTrue(manager.audio.audioTranslationEnabled)
         XCTAssertTrue(manager.audio.ttsEnabled)
         XCTAssertTrue(manager.audio.voiceProfileEnabled)
+        XCTAssertTrue(manager.pendingCategories.contains(.audio))
     }
 
-    func test_grantVoiceAutoTranslationConsent_isIdempotent_neverRewritesTimestamps() {
-        let first = Date(timeIntervalSince1970: 1_700_000_000)
-        manager.grantVoiceAutoTranslationConsent(now: first)
-        let stamped = manager.application.voiceProfileConsentAt
+    func test_grantVoiceAutoTranslationConsent_writesNothingIntoApplicationPreferences() async throws {
+        try await manager.grantVoiceAutoTranslationConsent()
 
-        manager.grantVoiceAutoTranslationConsent(now: first.addingTimeInterval(3600))
+        XCTAssertEqual(manager.application, .defaults)
+        XCTAssertFalse(manager.pendingCategories.contains(.application))
+    }
 
-        XCTAssertEqual(manager.application.voiceProfileConsentAt, stamped)
+    func test_grantVoiceAutoTranslationConsent_whenConsentRouteFails_throwsAndClaimsNothing() async {
+        let consents = MockConsentService()
+        consents.setConsentError = MeeshyError.server(statusCode: 409, message: "CONSENT_POLICY_VERSION_MISMATCH")
+        manager.consentService = consents
+
+        do {
+            try await manager.grantVoiceAutoTranslationConsent()
+            XCTFail("un consentement refusé par la passerelle ne doit jamais passer pour enregistré")
+        } catch {}
+
+        XCTAssertFalse(manager.voiceConsentGranted)
+        XCTAssertFalse(manager.voiceCloningConsentGranted)
+        XCTAssertEqual(manager.audio, .defaults)
+        XCTAssertTrue(manager.pendingCategories.isEmpty)
+    }
+
+    func test_grantVoiceAutoTranslationConsent_whenGatewayAnswersNotGranted_throws() async {
+        let consents = RefusingConsentService()
+        manager.consentService = consents
+
+        do {
+            try await manager.grantVoiceAutoTranslationConsent()
+            XCTFail("une réponse `granted: false` n'accorde rien")
+        } catch {
+            XCTAssertEqual(error as? ConsentServiceError, .notGranted(.voiceCloning))
+        }
+        XCTAssertFalse(manager.voiceConsentGranted)
+    }
+
+    func test_fetchFromBackend_refreshesGrantedConsentsFromTheServer() async {
+        let prefs = MockPreferenceService()
+        prefs.allPreferencesResult = .defaults
+        manager.service = prefs
+        manager.isAuthenticatedOverride = { true }
+        let consents = MockConsentService()
+        consents.consentsResult = .success([
+            Self.servedConsent(.dataProcessing, granted: true),
+            Self.servedConsent(.voiceData, granted: true),
+            Self.servedConsent(.voiceProfile, granted: true),
+            Self.servedConsent(.voiceCloning, granted: false),
+        ])
+        manager.consentService = consents
+
+        await manager.fetchFromBackend()
+
+        XCTAssertTrue(manager.voiceConsentGranted)
+        XCTAssertFalse(manager.voiceCloningConsentGranted)
+    }
+
+    func test_fetchFromBackend_whenServerRevokedTheConsent_forgetsTheLocalGrant() async throws {
+        try await manager.grantVoiceAutoTranslationConsent()
+        let prefs = MockPreferenceService()
+        prefs.allPreferencesResult = .defaults
+        manager.service = prefs
+        manager.isAuthenticatedOverride = { true }
+        let consents = MockConsentService()
+        consents.consentsResult = .success([Self.servedConsent(.voiceProfile, granted: false)])
+        manager.consentService = consents
+
+        await manager.fetchFromBackend()
+
+        XCTAssertFalse(manager.voiceConsentGranted)
+    }
+
+    func test_fetchFromBackend_whenConsentsReadFails_keepsTheKnownGrant() async throws {
+        try await manager.grantVoiceAutoTranslationConsent()
+        let prefs = MockPreferenceService()
+        prefs.allPreferencesResult = .defaults
+        manager.service = prefs
+        manager.isAuthenticatedOverride = { true }
+        let consents = MockConsentService()
+        consents.consentsResult = .failure(MeeshyError.server(statusCode: 503, message: "indisponible"))
+        manager.consentService = consents
+
+        await manager.fetchFromBackend()
+
+        XCTAssertTrue(manager.voiceConsentGranted)
+    }
+
+    func test_resetSession_forgetsTheGrantedConsents() async throws {
+        try await manager.grantVoiceAutoTranslationConsent()
+
+        manager.resetSession()
+
+        XCTAssertFalse(manager.voiceConsentGranted)
+        XCTAssertFalse(manager.voiceCloningConsentGranted)
+    }
+
+    private static func servedConsent(_ purpose: ConsentPurpose, granted: Bool) -> ConsentEntry {
+        ConsentEntry(
+            purpose: purpose.rawValue, granted: granted,
+            grantedAt: granted ? "2026-09-15T10:00:00.000Z" : nil, policyVersion: ConsentPolicy.defaultVersion
+        )
     }
 
     // MARK: - shouldApplyRemote (applyRemote server-wins race, P1)
@@ -389,6 +516,301 @@ final class UserPreferencesManagerTests: XCTestCase {
         let count = try await pool.read { db in try OutboxRecord.fetchCount(db) }
         XCTAssertEqual(count, 0, "not authenticated yet — must not attempt delivery")
     }
+
+    /// #6624 — le critère de fin de l'issue, lu sur le corps RÉELLEMENT mis en
+    /// file : sur un appareil dont le bloc local porte encore les horodatages
+    /// d'avant le correctif, accorder la traduction vocale puis changer de
+    /// thème envoie `PATCH /me/preferences/application` sans aucune clé que la
+    /// passerelle refuse.
+    func test_grantVoiceAutoTranslationConsent_thenThemeChange_applicationBodyCarriesNoRefusedConsentKey() async throws {
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        await OfflineQueue.shared.configure(pool: pool)
+        await OfflineQueue.shared.clearAll()
+        manager.isAuthenticatedOverride = { true }
+        manager.updateApplication {
+            $0.dataProcessingConsentAt = "2026-09-14T15:47:48.000Z"
+            $0.voiceProfileConsentAt = "2026-09-14T15:47:48.000Z"
+            $0.voiceCloningEnabledAt = "2026-09-14T15:47:48.000Z"
+        }
+        let consents = MockConsentService()
+        manager.consentService = consents
+
+        try await manager.grantVoiceAutoTranslationConsent()
+        manager.updateApplication { $0.theme = .dark }
+        await manager.resumeOrphanedPendingSyncs([.application])
+
+        let records = try await pool.read { db in try OutboxRecord.fetchAll(db) }
+        let payloads = try records.map { try JSONDecoder().decode(UpdateSettingsPayload.self, from: $0.payload) }
+        let application = try XCTUnwrap(payloads.first { $0.category == PreferenceCategory.application.rawValue })
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: application.body) as? [String: Any])
+        let refused: Set<String> = [
+            "dataProcessingConsentAt", "voiceDataConsentAt", "voiceProfileConsentAt",
+            "voiceCloningConsentAt", "voiceCloningEnabledAt",
+        ]
+
+        XCTAssertEqual(consents.setConsentCalls, [.init(purpose: .voiceCloning, granted: true)])
+        XCTAssertEqual(body["theme"] as? String, "dark")
+        XCTAssertTrue(Set(body.keys).isDisjoint(with: refused), "clés refusées dans le corps : \(Set(body.keys).intersection(refused).sorted())")
+    }
+
+    // MARK: - namesUserLevelCategory (scope de la diffusion — décision pure)
+    //
+    // `user:preferences-updated` est une UNION de trois scopes sur un seul nom
+    // d'événement. Ce prédicat est ce qui empêche la relecture des sept blocs
+    // user-level de partir sur un scope qui ne la concerne pas.
+
+    func test_namesUserLevelCategory_acceptsEverySevenServerCategories() {
+        for category in PreferenceCategory.allCases {
+            let event = UserPreferencesUpdatedEvent(userId: "u1", category: category.rawValue)
+            XCTAssertTrue(
+                UserPreferencesManager.namesUserLevelCategory(event),
+                "les sept noms du gateway (preferences-broadcast.ts) doivent tous déclencher : \(category.rawValue)"
+            )
+        }
+    }
+
+    func test_namesUserLevelCategory_rejectsEventNamingAConversation() {
+        let event = UserPreferencesUpdatedEvent(
+            userId: "u1", category: PreferenceCategory.notification.rawValue, conversationId: "conv1"
+        )
+
+        XCTAssertFalse(
+            UserPreferencesManager.namesUserLevelCategory(event),
+            "un scope conversation ne doit JAMAIS coûter un GET /me/preferences complet, même quand son `category` porte par hasard un nom user-level"
+        )
+    }
+
+    func test_namesUserLevelCategory_rejectsUnknownCategoryName() {
+        for unknown in ["pin", "mute", "reaction", "conversation", ""] {
+            let event = UserPreferencesUpdatedEvent(userId: "u1", category: unknown)
+            XCTAssertFalse(
+                UserPreferencesManager.namesUserLevelCategory(event),
+                "une catégorie hors des sept noms gelés n'est pas une raison de relire : \(unknown)"
+            )
+        }
+    }
+
+    // MARK: - observeRemotePreferenceBroadcast (le troisième déclencheur)
+    //
+    // Le déclencheur VIF, à côté des deux déclencheurs de cycle de vie. Les
+    // témoins ci-dessous poussent leur propre sujet dans le seam d'injection
+    // plutôt que le publisher du socket partagé.
+
+    func test_remoteBroadcast_categoryScope_refetchesAndAppliesRemoteValue() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { true }
+        var remote = UserPreferences.defaults
+        remote.notification.newMessageEnabled = false
+        mock.allPreferencesResult = remote
+
+        let subject = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
+        manager.observeRemotePreferenceBroadcast(subject.eraseToAnyPublisher())
+
+        subject.send(UserPreferencesUpdatedEvent(userId: "u1", category: "notification"))
+        await Self.settleCoalescingWindow()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 1,
+                       "une diffusion de scope catégorie relit — sans attendre un retour au premier plan")
+        XCTAssertFalse(manager.notification.newMessageEnabled,
+                       "et la valeur relue atteint le bloc en mémoire")
+    }
+
+    func test_remoteBroadcast_burstOfSevenCategories_collapsesIntoASingleRead() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { true }
+        mock.allPreferencesResult = .defaults
+
+        let subject = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
+        manager.observeRemotePreferenceBroadcast(subject.eraseToAnyPublisher())
+
+        // `DELETE /me/preferences` émet UNE FOIS PAR CATÉGORIE effacée, et il
+        // n'existe pas de GET par catégorie : sans regroupement, une remise à
+        // zéro globale coûte sept lectures complètes.
+        for category in PreferenceCategory.allCases {
+            subject.send(UserPreferencesUpdatedEvent(userId: "u1", category: category.rawValue))
+        }
+        await Self.settleCoalescingWindow()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 1,
+                       "sept événements pour un geste ⇒ une seule relecture")
+    }
+
+    func test_remoteBroadcast_conversationScope_doesNotRefetch() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { true }
+        mock.allPreferencesResult = .defaults
+
+        let subject = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
+        manager.observeRemotePreferenceBroadcast(subject.eraseToAnyPublisher())
+
+        subject.send(UserPreferencesUpdatedEvent(
+            userId: "u1", category: "notification", conversationId: "conv1", isPinned: true
+        ))
+        await Self.settleCoalescingWindow()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 0,
+                       "chaque épinglage venu d'un autre appareil ne doit pas coûter une lecture des sept blocs")
+    }
+
+    func test_remoteBroadcast_notAuthenticated_doesNotRefetch() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { false }
+        mock.allPreferencesResult = .defaults
+
+        let subject = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
+        manager.observeRemotePreferenceBroadcast(subject.eraseToAnyPublisher())
+
+        subject.send(UserPreferencesUpdatedEvent(userId: "u1", category: "privacy"))
+        await Self.settleCoalescingWindow()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 0,
+                       "la garde d'authentification de fetchFromBackend vaut aussi sur ce chemin")
+    }
+
+    /// L'ÉCHO. Le gateway renvoie la diffusion au compte ÉMETTEUR : l'appareil
+    /// qui vient de basculer un interrupteur reçoit l'annonce de son propre
+    /// geste, et la relecture qu'elle déclenche court contre le PATCH encore
+    /// en vol. Sans le veto `pendingCategories`, le réglage que l'utilisateur
+    /// vient de changer REVIENT tout seul à l'ancienne valeur — pire qu'un
+    /// réglage périmé, puisqu'il l'a vu changer puis se défaire (cycle 132,
+    /// leçon 310, tranchée ici par le veto qui existait déjà).
+    func test_remoteBroadcast_echoOfOwnPendingEdit_doesNotUndoTheGesture() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { true }
+        // Valeur SERVEUR périmée : celle d'avant le geste local.
+        mock.allPreferencesResult = .defaults
+        XCTAssertTrue(UserNotificationPreferences.defaults.newMessageEnabled,
+                      "précondition : la valeur serveur périmée est bien l'inverse du geste ci-dessous")
+
+        manager.updateNotification { $0.newMessageEnabled = false }
+        XCTAssertTrue(manager.pendingCategories.contains(.notification),
+                      "précondition : le geste local est marqué pending avant son debounce")
+
+        let subject = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
+        manager.observeRemotePreferenceBroadcast(subject.eraseToAnyPublisher())
+
+        subject.send(UserPreferencesUpdatedEvent(userId: "u1", category: "notification"))
+        await Self.settleCoalescingWindow()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 1, "précondition : la relecture a bien eu lieu")
+        XCTAssertFalse(manager.notification.newMessageEnabled,
+                       "l'écho de son propre geste ne doit pas rendre à l'utilisateur la valeur qu'il vient de quitter")
+    }
+
+    // MARK: - observeSocketReconnection (le quatrième déclencheur — PÉRENNE)
+    //
+    // Le second déclencheur PÉRENNE, à parité d'Android (#4197) et du web
+    // (#4209) : une reconnexion socket relit les blocs, car une diffusion émise
+    // pendant la coupure n'est jamais rejouée. Les témoins poussent leur propre
+    // sujet dans le seam d'injection plutôt que le publisher du socket partagé.
+
+    func test_socketReconnect_refetchesAndAppliesRemoteValue() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { true }
+        var remote = UserPreferences.defaults
+        remote.notification.newMessageEnabled = false
+        mock.allPreferencesResult = remote
+
+        let subject = PassthroughSubject<Void, Never>()
+        manager.observeSocketReconnection(subject.eraseToAnyPublisher())
+
+        subject.send(())
+        await Self.settleReconnect()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 1,
+                       "une reconnexion relit — une diffusion manquée pendant la coupure n'est jamais rejouée")
+        XCTAssertFalse(manager.notification.newMessageEnabled,
+                       "et la valeur relue atteint le bloc en mémoire")
+    }
+
+    func test_socketReconnect_twoBursts_fetchesInArrivalOrder() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { true }
+        var stale = UserPreferences.defaults
+        stale.notification.newMessageEnabled = true
+        var latest = UserPreferences.defaults
+        latest.notification.newMessageEnabled = false
+        mock.queuedResults = [stale, latest]
+
+        let subject = PassthroughSubject<Void, Never>()
+        manager.observeSocketReconnection(subject.eraseToAnyPublisher())
+
+        subject.send(())
+        subject.send(())
+        await Self.settleReconnect()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 2)
+        XCTAssertFalse(manager.notification.newMessageEnabled,
+                       "la seconde réponse est appliquée en dernier")
+    }
+
+    func test_socketReconnect_notAuthenticated_doesNotRefetch() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { false }
+        mock.allPreferencesResult = .defaults
+
+        let subject = PassthroughSubject<Void, Never>()
+        manager.observeSocketReconnection(subject.eraseToAnyPublisher())
+
+        subject.send(())
+        await Self.settleReconnect()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 0,
+                       "la garde d'authentification de fetchFromBackend vaut aussi sur ce chemin")
+    }
+
+    /// Le veto `pendingCategories`. Une reconnexion RELIT pendant que l'outbox
+    /// draine encore le geste local en vol : sans le veto (via `applyRemote`), la
+    /// valeur SERVEUR périmée écraserait le réglage que l'utilisateur vient de
+    /// changer — pire qu'un bloc périmé, puisqu'il l'a vu changer puis se défaire
+    /// (leçon 310, tranchée par le veto qui existait déjà).
+    func test_socketReconnect_pendingLocalEdit_isNotUndone() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { true }
+        // Valeur SERVEUR périmée : celle d'avant le geste local.
+        mock.allPreferencesResult = .defaults
+        XCTAssertTrue(UserNotificationPreferences.defaults.newMessageEnabled,
+                      "précondition : la valeur serveur périmée est bien l'inverse du geste ci-dessous")
+
+        manager.updateNotification { $0.newMessageEnabled = false }
+        XCTAssertTrue(manager.pendingCategories.contains(.notification),
+                      "précondition : le geste local est marqué pending avant son debounce")
+
+        let subject = PassthroughSubject<Void, Never>()
+        manager.observeSocketReconnection(subject.eraseToAnyPublisher())
+
+        subject.send(())
+        await Self.settleReconnect()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 1, "précondition : la relecture a bien eu lieu")
+        XCTAssertFalse(manager.notification.newMessageEnabled,
+                       "une relecture déclenchée par la reconnexion ne rend pas à l'utilisateur la valeur qu'il vient de quitter")
+    }
+
+    /// Attend la fenêtre de regroupement de production, plus une marge pour le
+    /// `Task` que le sink lance et le hop d'acteur de `fetchFromBackend()`.
+    /// La fenêtre est LUE sur le code de production, jamais recopiée.
+    private static func settleCoalescingWindow() async {
+        let window = UserPreferencesManager.remoteRefreshCoalescingWindow
+        try? await Task.sleep(nanoseconds: UInt64((window + 0.35) * 1_000_000_000))
+    }
+
+    /// Le chemin de reconnexion n'a PAS de fenêtre de regroupement (un
+    /// `didReconnect` par reconnexion réelle, `fetchFromBackend` idempotent) :
+    /// on n'attend que le `Task` du sink et le hop d'acteur.
+    private static func settleReconnect() async {
+        try? await Task.sleep(nanoseconds: 350_000_000)
+    }
 }
 
 // MARK: - Test Doubles
@@ -401,6 +823,7 @@ final class UserPreferencesManagerTests: XCTestCase {
 /// DO have one, in `PreferenceService.swift`).
 private final class MockPreferenceService: PreferenceServiceProviding, @unchecked Sendable {
     var allPreferencesResult: UserPreferences?
+    var queuedResults: [UserPreferences] = []
     private(set) var getAllPreferencesCallCount = 0
 
     func getCategories() async throws -> [ConversationCategory] { [] }
@@ -415,6 +838,7 @@ private final class MockPreferenceService: PreferenceServiceProviding, @unchecke
 
     func getAllPreferences() async throws -> UserPreferences {
         getAllPreferencesCallCount += 1
+        if !queuedResults.isEmpty { return queuedResults.removeFirst() }
         guard let allPreferencesResult else { throw MockPreferenceServiceError.notStubbed }
         return allPreferencesResult
     }

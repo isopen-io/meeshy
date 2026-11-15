@@ -1,0 +1,365 @@
+package me.meeshy.sdk.model
+
+import kotlinx.serialization.Serializable
+
+/**
+ * The durable form of one slide's persisted 9:16 canvas pan/zoom — the three scalars of
+ * the composer's `StoryCanvasTransform` ([scale], [offsetX], [offsetY]). A slide snapshot
+ * holds this only when the framing is **non-identity**: `null` means the slide was never
+ * panned or zoomed, so a legacy blob and a fresh slide both decode to "no transform"
+ * without carrying the default triple. Still primitive-only — no object graph, no
+ * polymorphic serialiser.
+ */
+@Serializable
+data class StoryDraftTransformSnapshot(
+    val scale: Float,
+    val offsetX: Float,
+    val offsetY: Float,
+)
+
+/**
+ * The durable form of one slide's persisted photo filter — the [filter] the composer's
+ * Effets picker chose and its [intensity] (0..1 strength). A slide snapshot holds this
+ * only when a filter is **set**: `null` means the slide has no filter, so a legacy blob
+ * and a fresh slide both decode to "no filter" without inventing a default. Intensity has
+ * no visual effect with no filter to blend, so it is carried only alongside a filter and
+ * never persisted on its own — the same "fidelity rides with its content" rule the
+ * [StoryDraftTransformSnapshot] follows. [StoryFilter] is already primitive-serialisable,
+ * so this stays object-graph-free.
+ */
+@Serializable
+data class StoryDraftFilterSnapshot(
+    val filter: StoryFilter,
+    val intensity: Float,
+)
+
+/**
+ * The durable form of one on-canvas text element of a story composer draft — the flat,
+ * primitive-only mirror of `:feature:stories` `StoryTextElement`. Every styled field the
+ * composer owns is projected onto a primitive here so the snapshot stays object-graph-free
+ * and needs no polymorphic serialiser: the element's style / alignment / size enums ride as
+ * their Kotlin enum [style]/[align]/[size] **names** (a blank or unknown name decodes to the
+ * element's own default at the mapper), its backing rides as the already-`@Serializable`
+ * [StoryTextBackgroundStyle] tagged union ([background], `null` = no backing), and its
+ * outline / fade / timing pairs and its normalised position/scale/rotation ride as bare
+ * scalars. The reverse mapping (names → enums, [background] → the sealed backing) lives in
+ * `:feature:stories` alongside the types it rebuilds, keeping this module free of the
+ * composer's enums.
+ *
+ * Every field is defaulted so a legacy/partial blob decodes rather than throwing: a missing
+ * [text] is empty, a missing enum name resolves to the element default, and a missing
+ * position/scale/rotation decodes to the canvas centre, unit scale and upright rotation.
+ */
+@Serializable
+data class StoryDraftTextElementSnapshot(
+    val id: String,
+    val text: String = "",
+    val style: String = "",
+    val color: String = "",
+    val align: String = "",
+    val size: String = "",
+    val background: StoryTextBackgroundStyle? = null,
+    val outlineWidth: Float = 0f,
+    val outlineColor: String? = null,
+    /** Le cadre (#13561) : nom de fil de la forme (`""` : arrondi), marge, liseré — défauts d'un blob d'avant. */
+    val frameShape: String = "",
+    val framePaddingScale: Float = 1f,
+    val frameBorderWidth: Float = 0f,
+    val frameBorderColor: String? = null,
+    /** La langue d'ÉCRITURE choisie par l'auteur (#13534) ; `null` : celle de la publication. */
+    val sourceLanguage: String? = null,
+    val fadeIn: Float = 0f,
+    val fadeOut: Float = 0f,
+    val startSeconds: Float = 0f,
+    val durationSeconds: Float = 0f,
+    val x: Float = CANVAS_CENTER,
+    val y: Float = CANVAS_CENTER,
+    val scale: Float = UNIT_SCALE,
+    val rotationDeg: Float = 0f,
+    /** La personne que nomme un badge de mention épinglée (#13846) ; un blob d'avant se lit « un texte ». */
+    val referenceUserId: String? = null,
+    /** Le rang de l'objet dans l'ordre UNIQUE de la scène (#13852) ; un blob d'avant se lit 0 et garde l'ordre des familles. */
+    val zIndex: Int = 0,
+    /** Ses images clés (#14271) ; un blob d'avant se lit « aucune ». */
+    val keyframes: List<StoryKeyframe> = emptyList(),
+) {
+    /** True once the element carries publishable content — non-blank [text]. */
+    val isPublishable: Boolean get() = text.isNotBlank()
+
+    companion object {
+        /** Normalised canvas centre — where a fresh element sits (mirror of `StoryTextElement.CENTER`). */
+        const val CANVAS_CENTER: Float = 0.5f
+
+        /** At-rest scale — the element renders at its intrinsic size. */
+        const val UNIT_SCALE: Float = 1f
+    }
+}
+
+/**
+ * The durable form of one on-canvas emoji sticker of a story composer draft — the flat,
+ * primitive-only mirror of `:feature:stories` `StoryStickerElement`. A sticker carries far
+ * less than a text element — no style/alignment/size enums, no backing, no outline/fade/timing
+ * pairs — so every field is already a bare primitive: its stable [id], its [emoji] glyph and
+ * its normalised on-canvas [x]/[y] position, [scale] and [rotationDeg]. The reverse mapping
+ * (this → `StoryStickerElement`) lives in `:feature:stories` alongside the type it rebuilds,
+ * keeping this module free of the composer's canvas types.
+ *
+ * Every field is defaulted so a legacy/partial blob decodes rather than throwing: a missing
+ * [emoji] is empty, and a missing position/scale/rotation decodes to the canvas centre, unit
+ * scale and upright rotation — the same durable canvas neutrals a text element decays to,
+ * reused from [StoryDraftTextElementSnapshot] so the geometry defaults live in one place.
+ */
+@Serializable
+data class StoryDraftStickerElementSnapshot(
+    val id: String,
+    val emoji: String = "",
+    val x: Float = StoryDraftTextElementSnapshot.CANVAS_CENTER,
+    val y: Float = StoryDraftTextElementSnapshot.CANVAS_CENTER,
+    val scale: Float = StoryDraftTextElementSnapshot.UNIT_SCALE,
+    val rotationDeg: Float = 0f,
+    val startSeconds: Float = 0f,
+    val durationSeconds: Float = 0f,
+    /** #13847 — additifs : un brouillon d'avant les relit vides (un emoji). */
+    val templateId: String = "",
+    val slots: Map<String, String> = emptyMap(),
+    val postMediaId: String = "",
+    val provider: String? = null,
+    val imageUrl: String? = null,
+    val animation: String? = null,
+    /** Le rang de l'objet dans l'ordre UNIQUE de la scène (#13852) ; un blob d'avant se lit 0 et garde l'ordre des familles. */
+    val zIndex: Int = 0,
+) {
+    /** True once the sticker carries publishable content — an emoji, a template or an uploaded image. */
+    val isPublishable: Boolean get() = emoji.isNotBlank() || templateId.isNotBlank() || postMediaId.isNotBlank()
+}
+
+/** Un média de la slide posé sur la scène : son id et sa pose normalisée (centre 0,5 ; échelle 1 ; droit). */
+@Serializable
+data class StoryDraftPlacedMediaSnapshot(
+    val id: String,
+    val x: Float = StoryDraftTextElementSnapshot.CANVAS_CENTER,
+    val y: Float = StoryDraftTextElementSnapshot.CANVAS_CENTER,
+    val scale: Float = StoryDraftTextElementSnapshot.UNIT_SCALE,
+    val rotationDeg: Float = 0f,
+    /** Le filtre propre du média (nom du fil, #13603) ; un blob d'avant ou un nom inconnu se lit « aucun filtre ». */
+    val filter: String? = null,
+    /** Les réglages et effets propres du média (#13599) ; un blob d'avant se lit « aucun réglage ». */
+    val adjustments: ImageAdjustments? = null,
+    /** La fenêtre de source d'une vidéo rognée (#13600), en secondes, les deux bornes ou aucune ; un blob d'avant se lit « source entière ». */
+    val sourceStart: Double? = null,
+    val sourceEnd: Double? = null,
+    /** Le recadrage d'une image posée (#13849), en fractions de la source ; un blob d'avant se lit « source entière ». */
+    val crop: StoryMediaCrop? = null,
+    /** Le rang de l'objet dans l'ordre UNIQUE de la scène (#13852) ; un blob d'avant se lit 0 et garde l'ordre des familles. */
+    val zIndex: Int = 0,
+    /** L'identité de l'OBJET quand elle n'est pas celle de son média (une copie, #13902) ; un blob d'avant se lit `null` : l'objet est son média. */
+    val objectId: String? = null,
+    /** Sa fenêtre d'apparition dans la slide (#13902), en secondes, 0 = dès le début / jusqu'à la fin ; un blob d'avant se lit « toute la slide ». */
+    val startSeconds: Float = 0f,
+    val durationSeconds: Float = 0f,
+    /** Le volume d'auteur d'une vidéo posée (#13973, A-E4) et le niveau que le muet a quitté ; un blob d'avant se lit « à plein, jamais coupé ». */
+    val volume: Float = 1f,
+    val mutedVolumeMemento: Float? = null,
+    /** Ses images clés (#14271) ; un blob d'avant se lit « aucune ». */
+    val keyframes: List<StoryKeyframe> = emptyList(),
+)
+
+/**
+ * The durable form of one slide of an in-progress story composer draft — the fields this
+ * persistence slice round-trips faithfully: the slide's stable [id], its caption [text],
+ * the [mediaIds] attached to it (uploaded ids and offline `cmid` placeholders alike), its
+ * persisted 9:16 canvas [transform] (pan/zoom, `null` = identity), its photo [filter]
+ * (`null` = none), its pinned on-screen [durationSecondsPin] (`null` = duration derived
+ * from content, not pinned by the author), its colour/gradient [background] (the wire
+ * string of [StoryBackgroundValue], `null` = no author backdrop), the [backgroundMediaId]
+ * designated as its looping backdrop (`null` = none), whether that backdrop
+ * [backgroundLoop]s (defaults `true`, matching the reader's `loop ?: true`), its on-canvas
+ * text [elements] ([StoryDraftTextElementSnapshot]) and its on-canvas [stickers]
+ * ([StoryDraftStickerElementSnapshot]). With stickers now carried, **every** dimension of a
+ * composer slide round-trips through this snapshot — a restore is no longer lossy for any
+ * content, so `:feature:stories` `StoryComposerAutosave` no longer gates a draft as
+ * "not yet persistable".
+ *
+ * Every field is a primitive, a list of primitives, or a primitive-only nested value
+ * ([StoryDraftTransformSnapshot], [StoryDraftFilterSnapshot], [StoryDraftTextElementSnapshot],
+ * [StoryDraftStickerElementSnapshot]) — the [background] rides as its already-serialisable
+ * [StoryBackgroundValue] wire string rather than a polymorphic value — so the snapshot
+ * serialises with no deep object graph and no polymorphic serialiser, the deliberate cost of
+ * keeping this cut thin and its round-trip trivially total.
+ */
+@Serializable
+data class StoryDraftSlideSnapshot(
+    val id: String,
+    val text: String = "",
+    val mediaIds: List<String> = emptyList(),
+    val transform: StoryDraftTransformSnapshot? = null,
+    val filter: StoryDraftFilterSnapshot? = null,
+    val durationSecondsPin: Double? = null,
+    val background: String? = null,
+    val backgroundMediaId: String? = null,
+    val backgroundLoop: Boolean = true,
+    val elements: List<StoryDraftTextElementSnapshot> = emptyList(),
+    val stickers: List<StoryDraftStickerElementSnapshot> = emptyList(),
+    /** Les sons de la slide — l'objet de piste lui-même est déjà sérialisable, `soundId` et crédit compris. */
+    val audio: List<StoryAudioPlayerObject> = emptyList(),
+    /** Cadre de la slide (#13431) : cadrage du fond, fond des bandes, ouverture, fermeture — noms du fil, jamais d'enum. */
+    val fitMode: String? = null,
+    val backdrop: String? = null,
+    val opening: String? = null,
+    val closing: String? = null,
+    /** La durée de source de chaque piste (identifiant -> secondes), pour que la fenêtre propre d'un son survive au brouillon. */
+    val soundSources: Map<String, Float> = emptyMap(),
+    /** Les médias de premier plan posés sur la scène (#13630) ; un blob d'avant se lit « aucun ». */
+    val placedMedia: List<StoryDraftPlacedMediaSnapshot> = emptyList(),
+    /** Les réglages et effets du média de FOND (#13652) ; un blob d'avant se lit « rien de réglé ». */
+    val backgroundAdjustments: ImageAdjustments? = null,
+    /** La fenêtre gardée de la vidéo de FOND dans sa source (#13973) ; un blob d'avant se lit « entière ». */
+    val backgroundSourceStart: Double? = null,
+    val backgroundSourceEnd: Double? = null,
+    /** Le quart de tour du média de FOND et le volume d'une vidéo de fond (#14083) ; un blob d'avant se lit « droit, à plein volume ». */
+    val backgroundRotation: Float = 0f,
+    val backgroundVolume: Float = 1f,
+    val backgroundMutedVolumeMemento: Float? = null,
+    /** Le recadrage du média de FOND (iOS `crop` de l'objet `isBackground`, #13973) ; un blob d'avant se lit « entier ». */
+    val backgroundCrop: StoryMediaCrop? = null,
+    /** Les pastilles de lieu posées sur la scène (#13846) ; un blob d'avant se lit « aucune ». */
+    val places: List<StoryLocationObject> = emptyList(),
+    /** La transcription de chaque piste (#13848) ; un blob d'avant se lit « aucune ». */
+    val soundTranscriptions: Map<String, MobileTranscriptionPayload> = emptyMap(),
+    /** Les vidéos s'atténuent sous le son de fond ; un blob d'avant se lit « oui ». */
+    val videosDuckUnderSound: Boolean = true,
+    /** Le look de chaque média de la diapo (#13841, format v1 d'iOS), posé ou de fond ; un blob d'avant ou illisible se lit « aucun ». */
+    @Serializable(with = StoryMediaLooksSerializer::class)
+    val mediaLooks: Map<String, StoryMediaLook> = emptyMap(),
+    /** Le dessin à main levée de la diapo (#13863) ; un blob d'avant se lit « aucun trait ». */
+    val strokes: List<StoryDrawingStroke> = emptyList(),
+    /** Le format du cadre de la diapo (`"landscape"`) ; absent : un blob d'avant se rouvre en 9:16. */
+    val canvasFormat: String? = null,
+) {
+    /**
+     * True once the slide carries content worth restoring: a caption, attached media, a
+     * publishable (non-blank) on-canvas text [elements] entry, or a publishable (non-blank
+     * emoji) [stickers] entry. A canvas [transform], a photo [filter], a pinned
+     * [durationSecondsPin] and a colour [background] are fidelity that ride along with such
+     * content — a pan/zoom, a filter, a duration pin or a backdrop with no media to frame,
+     * tint, time or sit behind is meaningless — so they deliberately do **not** make a slide
+     * worth restoring on their own. ([backgroundMediaId] can only ever name an attached media,
+     * so it never appears without a [mediaIds] entry that already makes the slide worth
+     * restoring; a **blank** text element or sticker likewise carries nothing to restore, so
+     * only a publishable one counts.) A drawn [strokes] layer is content of its own.
+     */
+    val hasContent: Boolean
+        get() = text.isNotBlank() || mediaIds.isNotEmpty() || elements.any { it.isPublishable } ||
+            stickers.any { it.isPublishable } || audio.isNotEmpty() || places.isNotEmpty() || strokes.isNotEmpty()
+}
+
+/**
+ * What the author attached to the story as a whole beside its slides (#13451): the people it
+ * [mentions], the per-media alternative text [mediaAlt] and caption [mediaCaption] (keyed by
+ * media id, like the composer's `mediaAlt` / `mediaCaption`), and the [allowSoundExtraction]
+ * choice (`null` = never decided, the server default). All defaulted: a blob written before
+ * these were kept decodes to "nothing attached".
+ */
+@Serializable
+data class StoryDraftAnnotations(
+    val mentions: List<PostMentionInput> = emptyList(),
+    val mediaAlt: Map<String, String> = emptyMap(),
+    val mediaCaption: Map<String, String> = emptyMap(),
+    val allowSoundExtraction: Boolean? = null,
+    /** The author closed the comments of what they are composing (#16541) ; absent from an older blob = open. */
+    val commentsDisabled: Boolean = false,
+) {
+    /** The annotations that still describe [present] media: a description never outlives its media. */
+    fun keepingMedia(present: Collection<String>): StoryDraftAnnotations = copy(
+        mediaAlt = mediaAlt.filterKeys { it in present },
+        mediaCaption = mediaCaption.filterKeys { it in present },
+    )
+}
+
+/**
+ * The durable snapshot of the whole story composer — the Android building block behind
+ * iOS `StoryComposerDraft` (its `Codable` `{slides, visibilityPreference}` UserDefaults
+ * form) and `StoryDraftStore.save(slides:visibility:)`. A stateless value: the durable
+ * [me.meeshy.sdk] `StoryComposerDraftStore` owns the bytes; the *when to save vs purge*
+ * product rule lives in `:feature:stories` `StoryComposerAutosave`.
+ *
+ * The composer is a single draft (not keyed like a per-conversation chat draft), so the
+ * store holds at most one of these. [visibility] is the wire string of the composer's
+ * audience selection; [repostOfId] carries a repost link when the draft reposts another
+ * story (blank/absent otherwise); [updatedAt] is an ISO timestamp for diagnostics and is
+ * never part of the content identity ([sameContentAs]).
+ *
+ * [awaitingPublication] names the outbox rows a publish of this draft queued (#13417): the
+ * draft is then kept — never restored into a new composer, never purged by it — until every
+ * one of them is gone (confirmed by the server, or discarded by the author).
+ *
+ * Every field is defaulted so a legacy/partial persisted blob decodes rather than
+ * throwing; a structurally broken blob (no slides, or a [selectedId] that names no
+ * present slide) is reported by [isStructurallyValid] and treated as "no draft" by the
+ * consumer instead of crashing the composer.
+ */
+@Serializable
+data class StoryComposerDraftSnapshot(
+    val slides: List<StoryDraftSlideSnapshot> = emptyList(),
+    val selectedId: String = "",
+    val visibility: String = DEFAULT_VISIBILITY,
+    val repostOfId: String? = null,
+    /** La liste « visible par » / « sauf » du brouillon ; vide pour tout autre mode et pour un blob d'avant. */
+    val visibilityUserIds: List<String> = emptyList(),
+    val updatedAt: String? = null,
+    /** Mentions, textes alternatifs, légendes et extraction du son (#13451) ; vide pour un blob d'avant. */
+    val annotations: StoryDraftAnnotations = StoryDraftAnnotations(),
+    val awaitingPublication: List<String> = emptyList(),
+    /** Le texte du post ou du réel (#13863), hors de la scène ; vide pour une story et pour un blob d'avant. */
+    val postText: String = "",
+    /** Le format où la scène était composée (nom de [me.meeshy.sdk.model.composer.ComposerFormat]) ; `null` : une story. */
+    val format: String? = null,
+    /** Les pièces téléversées que la scène porte, avec leur type et leur durée : ce qui qualifie un réel au retour. */
+    val media: List<UploadedMedia> = emptyList(),
+    val formats: List<String> = emptyList(),
+    /** La story publiée que ce brouillon ÉDITE (iOS `draftEditingPostId`) ; `null` : une création, et un blob d'avant. */
+    val editingPostId: String? = null,
+) {
+    /** Whether a publish of this draft is still owed a server confirmation (see [awaitingPublication]). */
+    val isAwaitingPublication: Boolean
+        get() = awaitingPublication.isNotEmpty()
+
+    /**
+     * Whether this snapshot describes a composer that could actually be rebuilt: it holds
+     * at least one slide **and** its [selectedId] names one of them. A blob failing this
+     * is corrupt/legacy and must be treated as "no stored draft" (never rebuilt into a deck).
+     */
+    val isStructurallyValid: Boolean
+        get() = slides.isNotEmpty() && slides.any { it.id == selectedId }
+
+    /**
+     * Whether the snapshot is worth restoring — it is structurally valid **and** at least
+     * one slide carries content (a caption or attached media). A valid-but-empty snapshot
+     * (a single blank slide) restores nothing, so it never clobbers a freshly opened composer.
+     */
+    val isWorthRestoring: Boolean
+        get() = isStructurallyValid && (slides.any { it.hasContent } || postText.isNotBlank())
+
+    /**
+     * Content equality that ignores [updatedAt]: two snapshots are the same *draft* when
+     * their slides, selection, audience and repost link match, whatever their timestamps.
+     * The autosave decision uses this so re-saving an unchanged composer writes nothing.
+     */
+    fun sameContentAs(other: StoryComposerDraftSnapshot): Boolean =
+        slides == other.slides &&
+            selectedId == other.selectedId &&
+            visibility == other.visibility &&
+            repostOfId == other.repostOfId &&
+            visibilityUserIds == other.visibilityUserIds &&
+            annotations == other.annotations &&
+            postText == other.postText &&
+            format == other.format &&
+            formats == other.formats &&
+            media == other.media &&
+            editingPostId == other.editingPostId
+
+    companion object {
+        /** The audience a fresh draft defaults to — parity with the composer's `StoryVisibility.PUBLIC`. */
+        const val DEFAULT_VISIBILITY: String = "PUBLIC"
+    }
+}

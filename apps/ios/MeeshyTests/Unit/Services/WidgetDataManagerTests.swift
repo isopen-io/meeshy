@@ -6,6 +6,49 @@ import MeeshySDK
 @MainActor
 final class WidgetDataManagerTests: XCTestCase {
 
+    // MARK: - #11558 — l'environnement API part hors du fil principal
+
+    /// Ouvrir le groupe d'app et y écrire sont des XPC synchrones, et seules les
+    /// extensions lisent la valeur : l'écriture part sur la file `AppGroupIO`.
+    func test_publishAPIBaseURL_writesTheAppGroupOnItsQueue_notOnTheCallingThread() throws {
+        let suite = "group.test.meeshy.apibase.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let io = AppGroupIO(label: "WidgetDataManagerTests.apiBase")
+        let gate = DispatchSemaphore(value: 0)
+        io.enqueue { gate.wait() }
+        let sut = WidgetDataManager(suiteName: suite)
+
+        sut.publishAPIBaseURL("https://staging.meeshy.me", io: io)
+
+        XCTAssertNil(defaults.string(forKey: "meeshy_api_base_url"), "rien ne s'écrit avant le tour de la file")
+        gate.signal()
+        io.drain()
+        XCTAssertEqual(defaults.string(forKey: "meeshy_api_base_url"), "https://staging.meeshy.me")
+    }
+
+    /// L'assertion d'arrière-plan qui garantit l'écriture (`beginBackgroundTask`)
+    /// est elle-même un XPC synchrone vers le démon d'exécution. Ouverte dans
+    /// `prepareProcess`, elle tombait sur le fil principal avant la liste ; la
+    /// publication attend donc que l'écran de lancement se soit levé, liste rendue.
+    func test_coldStart_publishesTheAPIEnvironmentOnlyOnceTheSplashHasLifted() throws {
+        let sequence = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/MeeshyApp+LaunchSequence.swift")
+        let source = DeclarationBodyScanner.mask(try String(contentsOf: sequence, encoding: .utf8))
+        let prepare = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func prepareProcess()", in: source))
+        let finish = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func finishLaunch()", in: source))
+
+        XCTAssertFalse(prepare.contains("publishAPIBaseURL"), "prepareProcess précède le premier rendu : aucune assertion d'arrière-plan n'y part")
+        XCTAssertFalse(prepare.contains("beginBackgroundTask"))
+        let ready = try XCTUnwrap(finish.range(of: "launchSplash.markReady()"))
+        let publish = try XCTUnwrap(finish.range(of: "publishAPIBaseURL()"), "l'environnement API reste publié à chaque démarrage")
+        XCTAssertLessThan(ready.upperBound, publish.lowerBound, "la publication suit la levée de l'écran de lancement")
+    }
+
     // MARK: - appgroup-01 — wipeAll (wipe de logout)
 
     private func makeWipeSUT() throws -> (WidgetDataManager, UserDefaults, [URL]) {
@@ -21,6 +64,38 @@ final class WidgetDataManagerTests: XCTestCase {
         }
         let sut = WidgetDataManager(suiteName: suite, stagingDirectories: dirs)
         return (sut, defaults, dirs)
+    }
+
+    /// Les fiches de relais et de studio de l'extension portent le texte et les
+    /// fichiers du compte sortant : le wipe de logout les purge avec le reste.
+    func test_theLogoutWipe_purgesTheShareRelaysAndStudioHandoffs() throws {
+        let relays = try XCTUnwrap(ShareRelayHandoff.directoryURL(), "le conteneur App Group est accessible à l'hôte des tests")
+        let composes = try XCTUnwrap(ShareComposeHandoffConsumer.directoryURL())
+        let purged = WidgetDataManager.accountStagingDirectories()
+        XCTAssertTrue(purged.contains(relays))
+        XCTAssertTrue(purged.contains(composes))
+    }
+
+    /// Ce que l'app tient EN MÉMOIRE d'une fiche de l'extension part avec la
+    /// déconnexion : un studio armé pour le compte sortant ne s'ouvre pas sous
+    /// le suivant (#10986).
+    func test_theLogoutForget_dropsTheStudioComposeHeldInMemory() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("wipe-compose-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        let fiche = ShareComposeHandoff(shareId: "cid_a", createdAt: Date(timeIntervalSince1970: 1_000), text: "Texte",
+                                        media: [], ownerUserId: "alice")
+        try JSONEncoder.meeshyShareCompose.encode(fiche).write(to: dir.appendingPathComponent("cid_a.json"))
+        let compose = ShareComposeHandoffConsumer(directory: { dir }, mediaRoot: { nil }, currentUserId: { "alice" })
+        await compose.consumeNext()
+        XCTAssertNotNil(compose.pending)
+
+        WidgetDataManager.forgetHeldShares(
+            relay: ShareRelayConsumer(directory: { nil }, mediaRoot: { nil }, currentUserId: { nil }),
+            compose: compose
+        )
+
+        XCTAssertNil(compose.pending)
     }
 
     func test_wipeAll_removesWidgetKeysAndStagingDirs() throws {
@@ -166,6 +241,111 @@ final class WidgetDataManagerTests: XCTestCase {
         ])
 
         XCTAssertEqual(try publishedPreviews(from: defaults), ["Alice: Bonjour"])
+    }
+
+    // MARK: - #9622 — le texte d'un message qui disparaît ne sort pas sur l'écran d'accueil
+
+    /// Le serveur sert le TEXTE d'une flamme à durée dans l'aperçu de liste
+    /// (avec son décompte) ; le widget l'affichait sur l'écran d'accueil, hors
+    /// de toute couche sécurisée, et le gardait après la destruction du message
+    /// tant que sa frise n'était pas rafraîchie.
+    private func makeDisappearingConversation(
+        type: MeeshyConversation.ConversationType = .direct,
+        senderName: String? = nil,
+        protect: (inout MeeshyConversation) -> Void
+    ) -> MeeshyConversation {
+        var conversation = makeConversation(
+            type: type,
+            lastMessagePreview: "Rendez-vous à 18 h au quai",
+            lastMessageOriginalLanguage: "fr",
+            lastMessageTranslations: nil,
+            lastMessageSenderName: senderName
+        )
+        protect(&conversation)
+        return conversation
+    }
+
+    func test_publishConversations_timedFlame_publishesItsProtectionLabel_neverItsText() throws {
+        let (sut, defaults) = try makePrismSUT(preferredLanguages: ["fr"])
+        sut.publishConversations([
+            makeDisappearingConversation {
+                $0.lastMessageNature = LastMessageNature(
+                    effectFlags: Int(MessageEffectFlags.ephemeral.rawValue), ephemeralDuration: 30
+                )
+            }
+        ])
+
+        XCTAssertEqual(
+            try publishedPreviews(from: defaults),
+            [try XCTUnwrap(OutsidePreview.protectionLabel(for: .timedFlame))],
+            "une flamme à durée ne laisse sur l'écran d'accueil que son libellé de protection"
+        )
+    }
+
+    func test_publishConversations_viewOnceAndAfterReadFlame_publishTheirProtectionLabels() throws {
+        let (sut, defaults) = try makePrismSUT(preferredLanguages: ["fr"])
+        sut.publishConversations([
+            makeDisappearingConversation { $0.lastMessageIsViewOnce = true },
+        ])
+        XCTAssertEqual(
+            try publishedPreviews(from: defaults),
+            [try XCTUnwrap(OutsidePreview.protectionLabel(for: .viewOnce))]
+        )
+
+        sut.publishConversations([
+            makeDisappearingConversation {
+                $0.lastMessageNature = LastMessageNature(
+                    effectFlags: Int(MessageEffectFlags.ephemeral.rawValue | MessageEffectFlags.ephemeralAfterRead.rawValue)
+                )
+            },
+        ])
+        XCTAssertEqual(
+            try publishedPreviews(from: defaults),
+            [try XCTUnwrap(OutsidePreview.protectionLabel(for: .afterReadFlame))]
+        )
+    }
+
+    /// Fermé par défaut : une échéance servie SANS nature (serveur antérieur,
+    /// cache ancien) déclare un éphémère dont la durée ne se lit pas.
+    func test_publishConversations_servedDeadlineWithoutNature_isTreatedAsDisappearing() throws {
+        let (sut, defaults) = try makePrismSUT(preferredLanguages: ["fr"])
+        sut.publishConversations([
+            makeDisappearingConversation { $0.lastMessageExpiresAt = Date().addingTimeInterval(60) }
+        ])
+
+        let published = try XCTUnwrap(try publishedPreviews(from: defaults).first)
+        XCTAssertFalse(published.contains("Rendez-vous"), "aucun mot du texte ne sort : \(published)")
+    }
+
+    func test_publishConversations_disappearingInAGroup_keepsTheSenderPrefixOverTheLabel() throws {
+        let (sut, defaults) = try makePrismSUT(preferredLanguages: ["fr"])
+        sut.publishConversations([
+            makeDisappearingConversation(type: .group, senderName: "Alice") {
+                $0.lastMessageNature = LastMessageNature(
+                    effectFlags: Int(MessageEffectFlags.ephemeral.rawValue), ephemeralDuration: 30
+                )
+            }
+        ])
+
+        XCTAssertEqual(
+            try publishedPreviews(from: defaults),
+            ["Alice: \(try XCTUnwrap(OutsidePreview.protectionLabel(for: .timedFlame)))"]
+        )
+    }
+
+    func test_outsidePreview_ordinaryMessage_keepsTheResolvedPreview() {
+        XCTAssertNil(OutsidePreview.protectionLabel(for: .ordinary))
+        XCTAssertEqual(
+            OutsidePreview.lastMessage(
+                of: makeConversation(
+                    lastMessagePreview: "Hello there",
+                    lastMessageOriginalLanguage: "en",
+                    lastMessageTranslations: ["fr": "Bonjour"]
+                ),
+                preferredLanguages: ["fr"]
+            ),
+            "Bonjour"
+        )
     }
 
     // MARK: - WidgetConversation Data Model
@@ -330,6 +510,112 @@ final class WidgetDataManagerTests: XCTestCase {
             "seules les conversations directes épinglées sont publiées, got \(decoded.map(\.id))"
         )
     }
+
+    // MARK: - #11387 — une conversation verrouillée ne sort pas son contenu
+
+    @MainActor
+    private final class LockedIds {
+        nonisolated deinit {}
+        var ids: Set<String> = []
+    }
+
+    private func makeLockSUT(locked: LockedIds) throws -> (WidgetDataManager, UserDefaults) {
+        let suite = "group.test.meeshy.widgetlock.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        let sut = WidgetDataManager(
+            suiteName: suite,
+            stagingDirectories: [],
+            preferredContentLanguages: { ["fr"] },
+            shareDirectoryOwner: { "000000000000000000000u01" },
+            shareDirectoryPeople: { _ in [] },
+            contentLocks: { locked.ids }
+        )
+        return (sut, defaults)
+    }
+
+    private func makeSecretConversation() -> MeeshyConversation {
+        makeConversation(
+            lastMessagePreview: "Mot de passe: 1234",
+            lastMessageOriginalLanguage: "fr",
+            lastMessageTranslations: nil
+        )
+    }
+
+    func test_publishConversations_lockedConversation_publishesTheLockLabel_neverItsLastMessage() throws {
+        let locked = LockedIds()
+        locked.ids = ["conv-1"]
+        let (sut, defaults) = try makeLockSUT(locked: locked)
+
+        sut.publishConversations([makeSecretConversation()])
+
+        XCTAssertEqual(try publishedPreviews(from: defaults), [ConversationLockedPreviewLine.label])
+    }
+
+    /// L'extension de notification lit le verrou dans ce cliché : sans lui, la
+    /// bannière d'une conversation verrouillée montrerait le message en clair.
+    func test_publishConversationSnapshots_lockedConversation_declaresTheLockToTheNotificationExtension() throws {
+        let locked = LockedIds()
+        locked.ids = ["conv-1"]
+        let (sut, defaults) = try makeLockSUT(locked: locked)
+
+        sut.publishConversationSnapshots([makeSecretConversation()], categoryNamesById: [:])
+
+        let data = try XCTUnwrap(defaults.data(forKey: "conversation_snapshots"))
+        let snapshots = try JSONDecoder().decode([String: ConversationSnapshotPayload].self, from: data)
+        XCTAssertEqual(snapshots["conv-1"]?.isLocked, true)
+    }
+
+    /// Verrouiller ne touche pas la liste : sans republication, le widget et
+    /// l'extension garderaient le clair jusqu'au prochain message.
+    func test_republishForContentLocks_rewritesWhatWasPublished() throws {
+        let locked = LockedIds()
+        let (sut, defaults) = try makeLockSUT(locked: locked)
+        sut.publishConversations([makeSecretConversation()])
+        XCTAssertEqual(try publishedPreviews(from: defaults), ["Mot de passe: 1234"])
+
+        locked.ids = ["conv-1"]
+        sut.republishForContentLocks()
+        XCTAssertEqual(try publishedPreviews(from: defaults), [ConversationLockedPreviewLine.label])
+
+        locked.ids = []
+        sut.republishForContentLocks()
+        XCTAssertEqual(try publishedPreviews(from: defaults), ["Mot de passe: 1234"])
+    }
+
+    /// Sans compte connecté (la déconnexion lève tous les verrous), un
+    /// changement de verrou ne republie rien.
+    func test_republishForContentLocks_withoutAConnectedAccount_publishesNothing() throws {
+        let suite = "group.test.meeshy.widgetlock.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        let sut = WidgetDataManager(
+            suiteName: suite,
+            stagingDirectories: [],
+            preferredContentLanguages: { ["fr"] },
+            shareDirectoryOwner: { nil },
+            contentLocks: { [] }
+        )
+        sut.publishConversations([makeSecretConversation()])
+        defaults.removeObject(forKey: "recent_conversations")
+
+        sut.republishForContentLocks()
+
+        XCTAssertNil(defaults.data(forKey: "recent_conversations"))
+    }
+
+    /// Après la déconnexion, un changement de verrou ne republie JAMAIS les
+    /// conversations du compte sortant.
+    func test_republishForContentLocks_afterTheLogoutWipe_publishesNothing() throws {
+        let locked = LockedIds()
+        let (sut, defaults) = try makeLockSUT(locked: locked)
+        sut.publishConversations([makeSecretConversation()])
+        sut.wipeAll()
+
+        sut.republishForContentLocks()
+
+        XCTAssertNil(defaults.data(forKey: "recent_conversations"))
+    }
 }
 
 
@@ -343,17 +629,24 @@ final class WidgetDataManagerTests: XCTestCase {
 /// Motifs cherchés APRÈS retrait des commentaires (piège connu du dépôt).
 final class MeeshyWidgetsSourceGuardTests: XCTestCase {
 
-    private var widgetsSourceURL: URL {
+    private var widgetsFolderURL: URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()  // Services
             .deletingLastPathComponent()  // Unit
             .deletingLastPathComponent()  // MeeshyTests
             .deletingLastPathComponent()  // ios
-            .appendingPathComponent("MeeshyWidgets/MeeshyWidgets.swift")
+            .appendingPathComponent("MeeshyWidgets", isDirectory: true)
     }
 
     private func strippedSource() throws -> String {
-        strippingComments(try String(contentsOf: widgetsSourceURL, encoding: .utf8))
+        let files = try FileManager.default.contentsOfDirectory(atPath: widgetsFolderURL.path)
+            .filter { $0.hasSuffix(".swift") }
+            .sorted()
+        let joined = try files
+            .map { try String(contentsOf: widgetsFolderURL.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
+        XCTAssertFalse(joined.isEmpty, "No Swift source found in apps/ios/MeeshyWidgets/")
+        return strippingComments(joined)
     }
 
     /// Corps d'une fonction : de son en-tête jusqu'à l'ancre structurelle
@@ -371,7 +664,7 @@ final class MeeshyWidgetsSourceGuardTests: XCTestCase {
             until: "private func",
             in: source
         ) else {
-            XCTFail("Could not locate loadConversations body in MeeshyWidgets.swift")
+            XCTFail("Could not locate loadConversations body in MeeshyWidgets/")
             return
         }
         XCTAssertFalse(
@@ -388,7 +681,7 @@ final class MeeshyWidgetsSourceGuardTests: XCTestCase {
             until: "\nstruct ",
             in: source
         ) else {
-            XCTFail("Could not locate loadFavorites body in MeeshyWidgets.swift")
+            XCTFail("Could not locate loadFavorites body in MeeshyWidgets/")
             return
         }
         XCTAssertFalse(
@@ -460,14 +753,14 @@ final class MeeshyWidgetsSourceGuardTests: XCTestCase {
 
 /// Fiche appgroup-05 — test de contrat app↔widget : `WidgetConversation`
 /// (côté app, encodé par `WidgetDataManager`) et `Conversation` (miroir
-/// dupliqué dans MeeshyWidgets.swift, non compilable dans ce bundle) doivent
+/// dupliqué dans MeeshyWidgets/WidgetModels.swift, non compilable dans ce bundle) doivent
 /// rester décodables l'un depuis l'autre. Le miroir STRICT local reproduit le
 /// struct widget champ à champ ; toute dérive du contrat JSON casse ce test
 /// au lieu de rendre le widget silencieusement vide (pattern
 /// `SharePendingSendContractTests`).
 final class WidgetConversationContractTests: XCTestCase {
 
-    /// Miroir exact du struct `Conversation` de MeeshyWidgets.swift.
+    /// Miroir exact du struct `Conversation` de MeeshyWidgets/WidgetModels.swift.
     private struct WidgetMirrorConversation: Decodable {
         let id: String
         let contactName: String

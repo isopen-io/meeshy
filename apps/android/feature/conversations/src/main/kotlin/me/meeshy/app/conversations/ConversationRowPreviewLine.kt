@@ -1,0 +1,188 @@
+package me.meeshy.app.conversations
+
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import me.meeshy.feature.conversations.R
+import me.meeshy.sdk.model.preview.PreviewFinish
+import me.meeshy.ui.component.media.rememberMediaKindStrings
+import me.meeshy.ui.theme.LentilleMetrics
+import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.MeeshyTheme
+
+/**
+ * Kind-aware preview line — the Compose surface for [RowPreview.kind]. Standard
+ * typing/draft/last-message text renders as before (accent when live-activity,
+ * secondary otherwise). Expired/hidden/view-once messages render italic with a
+ * kind icon and a muted or accent tint that mirrors iOS
+ * `ThemedConversationRow.lastMessagePreviewView`. Ephemeral-active shows the same
+ * body text with a leading timer badge so a still-readable ephemeral is obvious.
+ *
+ * The last message's applied effect (#16975, [RowPreview.effect]) paints here, FROZEN: a veil of
+ * bars with no character for a blurred message, a static glow / gradient / ✨ / accent dot for a
+ * persistent effect, and a one-shot shake or pop when a new last message lands on a composed row
+ * ([rememberPreviewEntrance]).
+ *
+ * Compose glue — the kind classification (pure) is covered by [MessageSummaryKindTest]
+ * / [MessageSummaryLineTest] / [ConversationRowPreviewKindTest]; the visual mapping
+ * here is testable-exempt Compose per `TDD-COVERAGE.md`.
+ */
+@Composable
+internal fun ConversationRowPreviewLine(
+    preview: RowPreview,
+    primaryAccent: Color,
+    modifier: Modifier = Modifier,
+) {
+    val bodySmall = MaterialTheme.typography.bodySmall.copy(fontSize = LentilleMetrics.Line2.size)
+    val textSecondary = MeeshyTheme.tokens.textSecondary
+    val textMuted = MeeshyTheme.tokens.textSecondary.copy(alpha = 0.65f)
+    val standardColor = if (preview.isAccent) primaryAccent else textSecondary
+
+    val (icon, contentDescriptionRes, tint, italic) = when (preview.kind) {
+        MessageSummaryKind.EXPIRED -> RowPreviewKindStyle(
+            icon = Icons.Filled.HourglassEmpty,
+            contentDescriptionRes = R.string.conversations_preview_expired_content_description,
+            tint = textMuted,
+            italic = true,
+        )
+        MessageSummaryKind.HIDDEN -> RowPreviewKindStyle(
+            icon = Icons.Filled.VisibilityOff,
+            contentDescriptionRes = R.string.conversations_preview_hidden_content_description,
+            tint = textSecondary,
+            italic = true,
+        )
+        MessageSummaryKind.VIEW_ONCE, MessageSummaryKind.AFTER_READ -> RowPreviewKindStyle(
+            icon = Icons.Filled.LocalFireDepartment,
+            contentDescriptionRes = R.string.conversations_preview_view_once_content_description,
+            tint = primaryAccent,
+            italic = true,
+        )
+        MessageSummaryKind.ENCRYPTED -> RowPreviewKindStyle(
+            icon = Icons.Filled.Lock,
+            contentDescriptionRes = null,
+            tint = textSecondary,
+            italic = true,
+        )
+        MessageSummaryKind.EPHEMERAL_ACTIVE -> RowPreviewKindStyle(
+            icon = Icons.Filled.Timer,
+            contentDescriptionRes = R.string.conversations_preview_ephemeral_content_description,
+            tint = standardColor,
+            italic = false,
+        )
+        MessageSummaryKind.STANDARD -> RowPreviewKindStyle(
+            icon = null,
+            contentDescriptionRes = null,
+            tint = standardColor,
+            italic = false,
+        )
+    }
+
+    val effect = preview.effect
+    val entrance = rememberPreviewEntrance(preview.messageId, effect?.entrance)
+    val finish = effect?.finish
+    val isDark = MeeshyTheme.isDark
+
+    Row(modifier = modifier.then(entrance), verticalAlignment = Alignment.CenterVertically) {
+        preview.draftLabel?.let { label ->
+            Text(
+                text = label,
+                style = bodySmall,
+                color = MeeshyPalette.Error,
+                maxLines = 1,
+                modifier = Modifier.padding(end = MeeshySpacing.xs),
+            )
+        }
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescriptionRes?.let { stringResource(it) },
+                tint = tint,
+                modifier = Modifier
+                    .size(14.dp)
+                    .padding(end = MeeshySpacing.xs),
+            )
+        }
+        if (effect?.veil == true) {
+            PreviewVeil(color = tint)
+        } else {
+            PreviewFinishMark(finish = finish, accent = primaryAccent)
+            PreviewText(
+                text = preview.text,
+                style = bodySmall.copy(fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal),
+                color = tint,
+                finish = finish,
+                accent = primaryAccent,
+                isDark = isDark,
+            )
+        }
+    }
+}
+
+/**
+ * The line's text with its FROZEN finish. Rainbow goes through [BasicText]: Material `Text` merges a
+ * solid colour into the style, and a solid colour replaces the brush.
+ */
+@Composable
+private fun PreviewText(
+    text: String,
+    style: TextStyle,
+    color: Color,
+    finish: PreviewFinish?,
+    accent: Color,
+    isDark: Boolean,
+) {
+    val finished = style.withPreviewFinish(finish, accent = accent, isDark = isDark)
+    if (finish == PreviewFinish.RAINBOW) {
+        BasicText(text = text, style = finished, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    } else {
+        Text(text = text, style = finished, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+private data class RowPreviewKindStyle(
+    val icon: androidx.compose.ui.graphics.vector.ImageVector?,
+    val contentDescriptionRes: Int?,
+    val tint: Color,
+    val italic: Boolean,
+)
+
+@Composable
+internal fun lastMessagePreviewLabels(): LastMessagePreviewLabels =
+    LastMessagePreviewLabels(
+        photo = "",
+        video = "",
+        voice = "",
+        file = "",
+        location = "",
+        none = stringResource(R.string.conversations_no_messages),
+        you = stringResource(R.string.conversations_preview_you),
+        senderFormat = stringResource(R.string.conversations_preview_sender_format),
+        draftPrefix = stringResource(R.string.conversations_preview_draft_prefix),
+        draftLabel = stringResource(R.string.conversations_preview_draft_label),
+        expired = stringResource(R.string.conversations_preview_expired),
+        hidden = stringResource(R.string.conversations_preview_hidden),
+        viewOnce = stringResource(R.string.conversations_preview_view_once),
+        encrypted = stringResource(R.string.conversations_preview_end_to_end),
+        sticker = stringResource(R.string.conversations_preview_sticker),
+    ).withMediaKinds(rememberMediaKindStrings())

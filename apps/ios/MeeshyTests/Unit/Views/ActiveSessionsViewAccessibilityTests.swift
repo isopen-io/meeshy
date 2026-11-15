@@ -18,7 +18,7 @@ final class ActiveSessionsViewAccessibilityTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/ActiveSessionsView.swift")
+            .appendingPathComponent("Meeshy/Features/Settings/Views/ActiveSessionsView.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -45,8 +45,11 @@ final class ActiveSessionsViewAccessibilityTests: XCTestCase {
 
     func test_screenTitle_carriesHeaderTrait() throws {
         let source = try activeSessionsViewSource()
+        // Since #6481 the title is rendered by the shared `CollapsibleHeader`, which
+        // carries the header trait itself (guarded in MeeshyUI by
+        // `CollapsibleHeaderTitleAccessibilityTests`): mounting it is the proof.
         XCTAssertTrue(
-            source.contains(".accessibilityAddTraits(.isHeader)"),
+            source.contains(".accessibilityAddTraits(.isHeader)") || source.contains("CollapsibleHeader("),
             "The screen title ('Sessions actives') must carry the header trait so VoiceOver " +
             "users can jump to it via the Headings rotor."
         )
@@ -57,8 +60,9 @@ final class ActiveSessionsViewAccessibilityTests: XCTestCase {
         // Grouping the info block must NOT swallow the per-session revoke action:
         // the button keeps its own explicit label and stays actionable.
         XCTAssertTrue(
-            source.contains("sessions_revoke"),
-            "The per-session revoke button must remain a separately-labelled, actionable element."
+            source.contains("sessions.revoke.a11y"),
+            "The per-session revoke button must remain a separately-labelled, actionable element "
+            + "that names the device it signs out (#9612)."
         )
     }
 
@@ -73,5 +77,24 @@ final class ActiveSessionsViewAccessibilityTests: XCTestCase {
             source.contains("AdaptiveContentUnavailableView("),
             "The empty state must delegate to the shared native ContentUnavailableView wrapper."
         )
+    }
+
+    /// #9612 — la courante est marquée et ne porte aucun bouton de
+    /// déconnexion ; chaque fermeture passe par une confirmation ; le pied
+    /// porte l'attribution que la licence de DB-IP exige.
+    func test_currentSessionHasNoRevokeButton_andRevocationsAreConfirmed() throws {
+        let source = try activeSessionsViewSource()
+        XCTAssertTrue(source.contains("if !row.isCurrent {"), "La session courante ne se déconnecte pas d'ici.")
+        XCTAssertTrue(source.contains("viewModel.requestRevoke(session)"), "Le geste demande, la confirmation exécute.")
+        XCTAssertTrue(source.contains(".confirmationDialog("), "Aucune fermeture sans confirmation.")
+        XCTAssertTrue(source.contains("viewModel.attribution.text"), "L'attribution DB-IP accompagne les lieux.")
+    }
+
+    /// Cache-first : jamais d'indicateur de chargement sur une liste connue ;
+    /// le squelette ne sert que l'écran vide.
+    func test_noSpinner_onlyASkeletonOnAnEmptyCache() throws {
+        let source = try activeSessionsViewSource()
+        XCTAssertFalse(source.contains("ProgressView("), "Un spinner masquerait une liste déjà connue.")
+        XCTAssertTrue(source.contains("SkeletonShape("))
     }
 }

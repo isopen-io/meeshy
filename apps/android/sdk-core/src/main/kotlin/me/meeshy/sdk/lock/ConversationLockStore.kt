@@ -32,6 +32,16 @@ interface ConversationLockStore {
      */
     val lockedConversationIdsFlow: StateFlow<Set<String>>
 
+    /**
+     * Reactive mirror of [hasMasterPin] — emits on every mutation of the master PIN (set, guarded
+     * remove that did remove, force remove, logout wipe), so a Settings row or a gate can follow it
+     * without re-reading the vault.
+     */
+    val masterPinConfigured: StateFlow<Boolean>
+
+    /** Reactive count of locked conversations — always `lockedConversationIdsFlow.value.size`. */
+    val lockCount: StateFlow<Int>
+
     fun hasMasterPin(): Boolean
     fun setMasterPin(pin: String)
     fun verifyMasterPin(pin: String): Boolean
@@ -64,32 +74,43 @@ class InMemoryConversationLockStore : ConversationLockStore {
     private var masterPinHash: String? = null
     private val lockHashes = mutableMapOf<String, String>()
     private val _lockedConversationIdsFlow = MutableStateFlow<Set<String>>(emptySet())
+    private val _masterPinConfigured = MutableStateFlow(false)
+    private val _lockCount = MutableStateFlow(0)
 
     override val lockedConversationIds: Set<String> get() = lockHashes.keys.toSet()
     override val lockedConversationIdsFlow: StateFlow<Set<String>> = _lockedConversationIdsFlow.asStateFlow()
+    override val masterPinConfigured: StateFlow<Boolean> = _masterPinConfigured.asStateFlow()
+    override val lockCount: StateFlow<Int> = _lockCount.asStateFlow()
+
+    private fun publishLocks() {
+        _lockedConversationIdsFlow.value = lockHashes.keys.toSet()
+        _lockCount.value = lockHashes.size
+    }
 
     override fun hasMasterPin(): Boolean = masterPinHash != null
 
     override fun setMasterPin(pin: String) {
         masterPinHash = PinHasher.hash(pin)
+        _masterPinConfigured.value = true
     }
 
     override fun verifyMasterPin(pin: String): Boolean =
         masterPinHash != null && masterPinHash == PinHasher.hash(pin)
 
     override fun removeMasterPin() {
-        if (lockHashes.isEmpty()) masterPinHash = null
+        if (lockHashes.isEmpty()) forceRemoveMasterPin()
     }
 
     override fun forceRemoveMasterPin() {
         masterPinHash = null
+        _masterPinConfigured.value = false
     }
 
     override fun isLocked(conversationId: String): Boolean = lockHashes.containsKey(conversationId)
 
     override fun setLock(conversationId: String, pin: String) {
         lockHashes[conversationId] = PinHasher.hash(pin)
-        _lockedConversationIdsFlow.value = lockHashes.keys.toSet()
+        publishLocks()
     }
 
     override fun verifyLock(conversationId: String, pin: String): Boolean =
@@ -97,11 +118,11 @@ class InMemoryConversationLockStore : ConversationLockStore {
 
     override fun removeLock(conversationId: String) {
         lockHashes.remove(conversationId)
-        _lockedConversationIdsFlow.value = lockHashes.keys.toSet()
+        publishLocks()
     }
 
     override fun removeAllLocks() {
         lockHashes.clear()
-        _lockedConversationIdsFlow.value = emptySet()
+        publishLocks()
     }
 }

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "stories_viewer_export_save",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_viewer_export_share",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_viewer_export_imager",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

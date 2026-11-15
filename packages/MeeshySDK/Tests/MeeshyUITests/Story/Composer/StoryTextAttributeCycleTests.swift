@@ -298,4 +298,69 @@ final class StoryTextAttributeCycleTests: XCTestCase {
         XCTAssertEqual(StoryTextAttributeCycle.indicator(.language, of: obj),
                        .code("PT"))
     }
+
+    // MARK: - Effet (#4870)
+
+    /// Le cycle visite CHAQUE effet de la gamme puis reboucle sur « aucun » : un
+    /// effet doit pouvoir se RETIRER d'un tap, pas seulement se changer.
+    ///
+    /// **La gamme se LIT, elle ne se recopie pas.** Ce témoin épinglait
+    /// `["glow", "shadow", "relief", nil]` — les quatre effets de l'époque. La
+    /// gamme est passée à quatorze, puis a gagné cinq néons : le témoin est
+    /// tombé alors que le cycle faisait exactement son travail. Une liste
+    /// recopiée mesure la DATE du témoin, pas la règle ; `pickerChoices` est
+    /// ce que `advanceEffect` parcourt depuis que le sélecteur n'offre plus que
+    /// quatre effets (#17112), et c'est donc la seule référence qui ne puisse
+    /// pas diverger de lui.
+    func test_effect_visitsEveryStepThenWrapsAround() {
+        let gamme = StoryTextEffect.pickerChoices
+        // `rawValue`, jamais `gamme.first == StoryTextEffect.none` : sur un
+        // Optional, `.none` se résout vers `Optional.none` et le témoin dirait
+        // « la gamme est VIDE » en croyant dire « elle commence par aucun ».
+        XCTAssertEqual(gamme.first?.rawValue, StoryTextEffect.none.rawValue,
+                       "« aucun » ouvre la gamme — le cycle en dépend")
+        let attendus = gamme.dropFirst().map { Optional($0.rawValue) } + [nil]
+        let seen = trace(.effect, from: text(), taps: gamme.count) { $0.textEffect }
+        XCTAssertEqual(seen, attendus, "le cycle doit visiter toute la gamme, puis rendre la main à « aucun »")
+    }
+
+    /// « Aucun » s'écrit `nil`, jamais `"none"` : un texte sans effet garde le
+    /// JSON qu'il avait, et un blob publié ne change pas de forme.
+    func test_effect_returningToNone_writesNil() {
+        var obj = text()
+        // Le DERNIER de la gamme, pas un effet nommé : c'est lui qui précède le
+        // retour à « aucun », et il change à chaque élargissement.
+        obj.textEffect = StoryTextEffect.pickerChoices.last?.rawValue
+        StoryTextAttributeCycle.advance(.effect, on: &obj)
+        XCTAssertNil(obj.textEffect)
+        XCTAssertEqual(obj.parsedTextEffect, StoryTextEffect.none)
+    }
+
+    /// Une valeur inconnue (client plus récent) repart du début plutôt que de
+    /// bloquer la rotation.
+    func test_effect_fromAnUnknownValue_restartsTheCycle() {
+        var obj = text()
+        obj.textEffect = "effect-from-the-future"
+        StoryTextAttributeCycle.advance(.effect, on: &obj)
+        XCTAssertEqual(obj.textEffect, "neon")
+    }
+
+    /// Un effet retiré du sélecteur (#17112) n'enferme pas la rotation : le
+    /// tap suivant repart vers le premier des quatre effets offerts.
+    func test_effect_fromALegacyEffect_movesIntoTheFourOfferedEffects() {
+        var obj = text()
+        obj.textEffect = "glow"
+        StoryTextAttributeCycle.advance(.effect, on: &obj)
+        XCTAssertEqual(obj.textEffect, "neon")
+    }
+
+    /// La bulle rend « Aa » AVEC l'effet courant — pas un pictogramme figé.
+    func test_indicator_forEffect_showsTheCurrentEffect() {
+        var obj = text()
+        XCTAssertEqual(StoryTextAttributeCycle.indicator(.effect, of: obj),
+                       .effectGlyph("Aa", effect: StoryTextEffect.none))
+        obj.textEffect = "shadow"
+        XCTAssertEqual(StoryTextAttributeCycle.indicator(.effect, of: obj),
+                       .effectGlyph("Aa", effect: .shadow))
+    }
 }

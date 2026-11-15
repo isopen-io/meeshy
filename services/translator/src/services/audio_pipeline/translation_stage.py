@@ -14,7 +14,7 @@ Architecture:
 - Stateless stage (no pipeline knowledge)
 - Dependency injection for services
 - Cache-first strategy
-- ThreadPoolExecutor for true GPU parallelization
+- Languages run concurrently on the task loop; blocking work goes to executors (#13865)
 """
 
 import os
@@ -24,9 +24,9 @@ import asyncio
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from utils.audio_format import mime_type_for
+from utils.audio_pipeline_metrics import timed_audio_stage
 
 # Import services
 from ..tts_service import (
@@ -66,6 +66,23 @@ class TranslatedAudioVersion:
     audio_mime_type: Optional[str] = None
     # Segments traduits pour synchronisation audio
     segments: Optional[List[Dict[str, Any]]] = None
+    # Vrai quand la TTS a échoué : le texte traduit voyage seul, sans piste (#16340)
+    text_only: bool = False
+
+    @classmethod
+    def text_only_version(cls, language: str, translated_text: str) -> "TranslatedAudioVersion":
+        return cls(
+            language=language,
+            translated_text=translated_text,
+            audio_path="",
+            audio_url="",
+            duration_ms=0,
+            format="",
+            voice_cloned=False,
+            voice_quality=0.0,
+            processing_time_ms=0,
+            text_only=True,
+        )
 
 
 class TranslationStage:
@@ -83,7 +100,7 @@ class TranslationStage:
     - Single responsibility: translation + TTS
     - No database persistence
     - Cache-first architecture
-    - True parallelization with ThreadPoolExecutor
+    - Concurrent languages on the task loop (#13865)
     """
 
     def __init__(
@@ -316,7 +333,7 @@ class TranslationStage:
             f"{languages_to_process}"
         )
 
-        # Parallel processing with ThreadPoolExecutor
+        # Concurrent processing on the task loop (#13865)
         parallel_start = time.time()
         results = await self._process_languages_parallel(
             languages=languages_to_process,
@@ -409,113 +426,56 @@ class TranslationStage:
         target_languages: Optional[List[str]] = None
     ) -> Dict[str, Optional[TranslatedAudioVersion]]:
         """
-        Process languages in parallel using ThreadPoolExecutor.
+        Process languages concurrently on the task's own event loop.
 
-        True parallelization via separate event loops per thread.
+        #13865 — the Redis client, its pool locks and connections, and the ZMQ
+        socket that publishes each track belong to the loop that created them.
+        Running each language in a thread with its own (uvloop) loop made the
+        first cache GET raise RuntimeError, left a connection bound to a closed
+        loop in the shared pool, and killed the process with a segfault (139).
+        Translation, TTS and retranscription already run their blocking work in
+        executors, so coroutines on one loop keep the languages parallel.
+        The task context (regime and message, #13102) follows each coroutine.
         """
-        tasks = [(lang, cloning_params) for lang in languages]
+        semaphore = asyncio.Semaphore(max(1, max_workers))
+        completed = 0
 
-        def run_tasks():
-            """Execute tasks in parallel via ThreadPoolExecutor"""
-            results = {}
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                # Submit all tasks
-                futures = {
-                    executor.submit(
-                        self._process_single_language_sync,
-                        lang,
-                        source_text,
-                        source_language,
-                        audio_hash,
-                        voice_model,
-                        message_id,
-                        attachment_id,
-                        model_type,
-                        lang_cloning_params,
-                        source_audio_path,
-                        on_translation_ready,
-                        target_languages
-                    ): lang
-                    for lang, lang_cloning_params in tasks
-                }
-
-                # Collect results
-                completed = 0
-                for future in as_completed(futures):
-                    lang = futures[future]
-                    try:
-                        lang_result, translation = future.result()
-                        results[lang_result] = translation
-                        completed += 1
-                        logger.info(
-                            f"[TRANSLATION_STAGE] Progress: "
-                            f"{completed}/{len(languages)} ({lang})"
-                        )
-                    except Exception as e:
-                        logger.error(f"[TRANSLATION_STAGE] Error processing {lang}: {e}")
-                        results[lang] = None
-
-            return results
-
-        # Execute in thread pool
-        loop = asyncio.get_event_loop()
-        results = await loop.run_in_executor(None, run_tasks)
-        return results
-
-    def _process_single_language_sync(
-        self,
-        target_lang: str,
-        source_text: str,
-        source_language: str,
-        audio_hash: str,
-        voice_model: Optional[VoiceModel],
-        message_id: str,
-        attachment_id: str,
-        model_type: str,
-        cloning_params: Optional[Dict[str, Any]],
-        source_audio_path: Optional[str] = None,
-        on_translation_ready: Optional[any] = None,
-        target_languages: Optional[List[str]] = None
-    ) -> Tuple[str, Optional[TranslatedAudioVersion]]:
-        """
-        Process a single language synchronously (for ThreadPoolExecutor).
-
-        Creates new event loop for true parallelization.
-        """
-        lang_start = time.time()
-
-        try:
-            # Create new event loop for this thread
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-            try:
-                result = loop.run_until_complete(
-                    self._process_single_language_async(
-                        target_lang=target_lang,
-                        source_text=source_text,
-                        source_language=source_language,
-                        audio_hash=audio_hash,
-                        voice_model=voice_model,
-                        message_id=message_id,
-                        attachment_id=attachment_id,
-                        model_type=model_type,
-                        cloning_params=cloning_params,
-                        lang_start=lang_start,
-                        source_audio_path=source_audio_path,
-                        on_translation_ready=on_translation_ready,
-                        target_languages=target_languages
-                    )
+        async def run(lang: str) -> Tuple[str, Optional[TranslatedAudioVersion]]:
+            nonlocal completed
+            async with semaphore:
+                outcome = await self._process_single_language_async(
+                    target_lang=lang,
+                    source_text=source_text,
+                    source_language=source_language,
+                    audio_hash=audio_hash,
+                    voice_model=voice_model,
+                    message_id=message_id,
+                    attachment_id=attachment_id,
+                    model_type=model_type,
+                    cloning_params=cloning_params,
+                    lang_start=time.time(),
+                    source_audio_path=source_audio_path,
+                    on_translation_ready=on_translation_ready,
+                    target_languages=target_languages
                 )
-                return result
-            finally:
-                loop.close()
+            completed += 1
+            logger.info(
+                f"[TRANSLATION_STAGE] Progress: "
+                f"{completed}/{len(languages)} ({lang})"
+            )
+            return outcome
 
-        except Exception as e:
-            logger.error(f"[TRANSLATION_STAGE] Error processing {target_lang}: {e}")
-            import traceback
-            traceback.print_exc()
-            return (target_lang, None)
+        outcomes = await asyncio.gather(*(run(lang) for lang in languages), return_exceptions=True)
+
+        results: Dict[str, Optional[TranslatedAudioVersion]] = {}
+        for lang, outcome in zip(languages, outcomes):
+            if isinstance(outcome, BaseException):
+                logger.error(f"[TRANSLATION_STAGE] Error processing {lang}: {outcome}")
+                results[lang] = None
+                continue
+            lang_result, translation = outcome
+            results[lang_result] = translation
+        return results
 
     async def _process_single_language_async(
         self,
@@ -547,47 +507,31 @@ class TranslationStage:
                 text=source_text,
                 source_language=source_language,
                 target_language=target_lang,
-                model_type=model_type
+                model_type=model_type,
+                message_id=message_id
             )
 
-            # 2. Generate TTS audio
-            if voice_model:
-                # PRIORITÉ 1: Utiliser les conditionals pré-calculés si disponibles
-                # (plus rapide et qualité constante - évite recalcul à chaque synthèse)
-                has_conditionals = (
-                    hasattr(voice_model, 'chatterbox_conditionals') and
-                    voice_model.chatterbox_conditionals is not None
+            # 2. Generate TTS audio — une synthèse en échec garde le TEXTE (#16340)
+            try:
+                tts_result = await self._synthesize_translation(
+                    target_lang=target_lang,
+                    translated_text=translated_text,
+                    voice_model=voice_model,
+                    message_id=message_id,
+                    attachment_id=attachment_id,
+                    cloning_params=cloning_params,
+                    source_audio_path=source_audio_path,
                 )
-
-                if has_conditionals:
-                    tts_result = await self.tts_service.synthesize_with_conditionals(
-                        text=translated_text,
-                        conditionals=voice_model.chatterbox_conditionals,
-                        target_language=target_lang,
-                        output_format=self.tts_output_format,
-                        message_id=f"{message_id}_{attachment_id}",
-                        cloning_params=cloning_params
-                    )
-                else:
-                    # PRIORITÉ 2: Calculer depuis l'audio de référence
-                    # (fallback si pas de conditionals pré-calculés)
-                    speaker_audio = source_audio_path if source_audio_path and os.path.exists(source_audio_path) else getattr(voice_model, 'reference_audio_path', None)
-
-                    tts_result = await self.tts_service.synthesize_with_voice(
-                        text=translated_text,
-                        speaker_audio_path=speaker_audio,
-                        target_language=target_lang,
-                        output_format=self.tts_output_format,
-                        message_id=f"{message_id}_{attachment_id}",
-                        cloning_params=cloning_params
-                    )
-            else:
-                tts_result = await self.tts_service.synthesize(
-                    text=translated_text,
-                    language=target_lang,
-                    output_format=self.tts_output_format,
-                    cloning_params=cloning_params
+            except Exception as tts_error:
+                logger.error(
+                    f"[TRANSLATION_STAGE] TTS en échec pour {target_lang}, traduction texte seule: {tts_error}"
                 )
+                text_only = TranslatedAudioVersion.text_only_version(target_lang, translated_text)
+                await self._notify_translation_ready(
+                    on_translation_ready, target_languages, target_lang,
+                    message_id, attachment_id, text_only, None,
+                )
+                return (target_lang, text_only)
 
             # 3. RE-TRANSCRIPTION LÉGÈRE POUR SEGMENTS FINS (mono-locuteur)
             # ═══════════════════════════════════════════════════════════════
@@ -666,7 +610,8 @@ class TranslationStage:
                 language=target_lang,
                 translated_text=translated_text,
                 tts_result=tts_result,
-                segments=fine_segments  # Sauvegarder les segments dans le cache
+                segments=fine_segments,  # Sauvegarder les segments dans le cache
+                attachment_id=attachment_id
             )
 
             # 5. Créer le résultat
@@ -686,37 +631,10 @@ class TranslationStage:
             )
 
             # 6. Callback pour remontée progressive (MONO-SPEAKER)
-            if on_translation_ready and target_languages:
-                try:
-                    # Déterminer le type d'événement selon le nombre de langues
-                    total_languages = len(target_languages)
-                    is_single_language = total_languages == 1
-                    current_index = target_languages.index(target_lang) + 1
-                    is_last_language = current_index == total_languages
-
-                    translation_data = {
-                        'message_id': message_id,
-                        'attachment_id': attachment_id,
-                        'language': target_lang,
-                        'translation': translation_result,
-                        'segments': fine_segments,
-                        # Métadonnées pour déterminer le type d'événement
-                        'is_single_language': is_single_language,
-                        'is_last_language': is_last_language,
-                        'current_index': current_index,
-                        'total_languages': total_languages
-                    }
-
-                    # Appeler le callback (peut être async)
-                    if asyncio.iscoroutinefunction(on_translation_ready):
-                        await on_translation_ready(translation_data)
-                    else:
-                        on_translation_ready(translation_data)
-
-                except Exception as e:
-                    logger.warning(f"[TRANSLATION_STAGE] ⚠️ Erreur callback traduction: {e}")
-                    import traceback
-                    traceback.print_exc()
+            await self._notify_translation_ready(
+                on_translation_ready, target_languages, target_lang,
+                message_id, attachment_id, translation_result, fine_segments,
+            )
 
             # 7. Return result
             return (target_lang, translation_result)
@@ -727,12 +645,105 @@ class TranslationStage:
             traceback.print_exc()
             return (target_lang, None)
 
+    async def _synthesize_translation(
+        self,
+        target_lang: str,
+        translated_text: str,
+        voice_model: Optional[VoiceModel],
+        message_id: str,
+        attachment_id: str,
+        cloning_params: Optional[Dict[str, Any]],
+        source_audio_path: Optional[str],
+    ):
+        if voice_model:
+            # PRIORITÉ 1: Utiliser les conditionals pré-calculés si disponibles
+            # (plus rapide et qualité constante - évite recalcul à chaque synthèse)
+            has_conditionals = (
+                hasattr(voice_model, 'chatterbox_conditionals') and
+                voice_model.chatterbox_conditionals is not None
+            )
+
+            if has_conditionals:
+                tts_result = await self.tts_service.synthesize_with_conditionals(
+                    text=translated_text,
+                    conditionals=voice_model.chatterbox_conditionals,
+                    target_language=target_lang,
+                    output_format=self.tts_output_format,
+                    message_id=f"{message_id}_{attachment_id}",
+                    cloning_params=cloning_params
+                )
+            else:
+                # PRIORITÉ 2: Calculer depuis l'audio de référence
+                # (fallback si pas de conditionals pré-calculés)
+                speaker_audio = source_audio_path if source_audio_path and os.path.exists(source_audio_path) else getattr(voice_model, 'reference_audio_path', None)
+
+                tts_result = await self.tts_service.synthesize_with_voice(
+                    text=translated_text,
+                    speaker_audio_path=speaker_audio,
+                    target_language=target_lang,
+                    output_format=self.tts_output_format,
+                    message_id=f"{message_id}_{attachment_id}",
+                    cloning_params=cloning_params
+                )
+        else:
+            tts_result = await self.tts_service.synthesize(
+                text=translated_text,
+                language=target_lang,
+                output_format=self.tts_output_format,
+                cloning_params=cloning_params
+            )
+
+        return tts_result
+
+    async def _notify_translation_ready(
+        self,
+        on_translation_ready,
+        target_languages: Optional[List[str]],
+        target_lang: str,
+        message_id: str,
+        attachment_id: str,
+        translation_result: "TranslatedAudioVersion",
+        fine_segments: Optional[List[Dict[str, Any]]],
+    ) -> None:
+        if on_translation_ready and target_languages:
+            try:
+                # Déterminer le type d'événement selon le nombre de langues
+                total_languages = len(target_languages)
+                is_single_language = total_languages == 1
+                current_index = target_languages.index(target_lang) + 1
+                is_last_language = current_index == total_languages
+
+                translation_data = {
+                    'message_id': message_id,
+                    'attachment_id': attachment_id,
+                    'language': target_lang,
+                    'translation': translation_result,
+                    'segments': fine_segments,
+                    # Métadonnées pour déterminer le type d'événement
+                    'is_single_language': is_single_language,
+                    'is_last_language': is_last_language,
+                    'current_index': current_index,
+                    'total_languages': total_languages
+                }
+
+                # Appeler le callback (peut être async)
+                if asyncio.iscoroutinefunction(on_translation_ready):
+                    await on_translation_ready(translation_data)
+                else:
+                    on_translation_ready(translation_data)
+
+            except Exception as e:
+                logger.warning(f"[TRANSLATION_STAGE] ⚠️ Erreur callback traduction: {e}")
+                import traceback
+                traceback.print_exc()
+
     async def _translate_text_with_cache(
         self,
         text: str,
         source_language: str,
         target_language: str,
-        model_type: str
+        model_type: str,
+        message_id: Optional[str] = None
     ) -> str:
         """Translate text with cache lookup"""
         # Check cache
@@ -755,26 +766,30 @@ class TranslationStage:
             text,
             source_language,
             target_language,
-            model_type
+            model_type,
+            message_id=message_id
         )
 
-        # Cache result
+        # Cache result — indexé sous son message (#13102)
         await self.translation_cache.set_translation(
             text=text,
             source_lang=source_language,
             target_lang=target_language,
             translated_text=translated,
-            model_type=model_type
+            model_type=model_type,
+            message_id=message_id
         )
 
         return translated
 
+    @timed_audio_stage("nllb")
     async def _translate_text(
         self,
         text: str,
         source_language: str,
         target_language: str,
-        model_type: str
+        model_type: str,
+        message_id: Optional[str] = None
     ) -> str:
         """Translate text via ML service"""
         if not self.translation_service:
@@ -790,7 +805,8 @@ class TranslationStage:
                 source_language=source_language,
                 target_language=target_language,
                 model_type=model_type,
-                source_channel="audio_pipeline"
+                source_channel="audio_pipeline",
+                message_id=message_id
             )
             return result.get('translated_text', text)
 
@@ -804,7 +820,8 @@ class TranslationStage:
         language: str,
         translated_text: str,
         tts_result: TTSResult,
-        segments: Optional[List[Dict[str, Any]]] = None  # Segments traduits pour synchronisation
+        segments: Optional[List[Dict[str, Any]]] = None,  # Segments traduits pour synchronisation
+        attachment_id: Optional[str] = None
     ) -> bool:
         """Cache translated audio for reuse"""
         try:
@@ -824,7 +841,8 @@ class TranslationStage:
             await self.audio_cache.set_translated_audio_by_hash(
                 audio_hash,
                 language,
-                cache_data
+                cache_data,
+                attachment_id=attachment_id
             )
 
             logger.debug(

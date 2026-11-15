@@ -1,0 +1,90 @@
+package me.meeshy.app.stories
+
+import me.meeshy.sdk.model.ImageAdjustments
+import me.meeshy.sdk.model.StoryMediaObject
+import me.meeshy.sdk.model.composer.StoryLimits
+import me.meeshy.sdk.model.media.MediaTrimBounds
+import me.meeshy.sdk.model.scene.StoryBackgroundFraming
+import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
+
+/**
+ * The resolved metadata of the media a composer slide has designated as its single
+ * looping background — everything the reader needs to render it as the slide's
+ * background layer and to derive the slide duration from it.
+ *
+ * The pure composer deck ([StorySlide.backgroundMediaId]) holds only the media *id*;
+ * the ViewModel resolves that id to this value from the [me.meeshy.sdk.model.UploadedMedia]
+ * it already tracks, so the wire mapping ([toMediaObject]) stays a pure, unit-tested
+ * function rather than reaching into upload state.
+ *
+ * [url] is `null` for a background still waiting on its offline upload: the object then names the
+ * placeholder `cmid`, travels with its framing and loop in the outbox row, and the drainer's write-back
+ * swaps in the real media id once it lands (#13605).
+ *
+ * Mirrors iOS designating exactly one canvas media object `isBackground: true` per
+ * slide; the produced object is what the Android viewer's `resolveBackgroundMedia`
+ * (`firstOrNull { it.isBackground }`) and the `StorySlideDuration` `bgVideoDur` branch
+ * already read on the reader side.
+ */
+data class StoryBackgroundMedia(
+    val mediaId: String,
+    val url: String?,
+    val mimeType: String,
+    val durationSeconds: Double?,
+    val loop: Boolean = true,
+    val framing: StoryBackgroundFraming = StoryBackgroundFraming.IDENTITY,
+    /** Les réglages et effets du fond (#13652) ; ce que le média PEINT part au fil, jamais un réglage qu'aucun rendu ne sert. */
+    val adjustments: ImageAdjustments? = null,
+    /** La fenêtre gardée d'une vidéo de fond (#13973) ; une image n'en a pas. */
+    val window: MediaTrimBounds? = null,
+    /** Le quart de tour du fond, son recadrage (#13973) et le volume d'une vidéo de fond (#14083) ; au repos, rien de plus au fil. */
+    val setting: StoryBackgroundSetting = StoryBackgroundSetting(),
+) {
+    /** A `video/…` MIME denotes a looping background video; anything else is an image. */
+    val isVideo: Boolean get() = mimeType.startsWith("video", ignoreCase = true)
+
+    /** The strictly-positive duration to publish (a video's loop period), held to the two hours a story may last (#13590), or `null`. */
+    private val publishableDuration: Double?
+        get() = durationSeconds?.takeIf { it.isFinite() && it > 0.0 }?.coerceAtMost(StoryLimits.TOTAL_SECONDS)
+
+    /**
+     * Builds the `isBackground` [StoryMediaObject] the reader honours. A video carries
+     * its [durationSeconds] onto both `intrinsicDuration` and `duration` so the reader's
+     * `StorySlideDuration` `bgVideoDur` branch can loop the slide to at least the video's
+     * length; an image carries no duration (it does not drive slide length).
+     *
+     * [loop] is honoured **only for a video** — mirroring iOS's `supportsLoop` (looping is
+     * a video/audio-background affordance, never an image's): the reader's video branch
+     * reads `backgroundObject?.loop ?: true`, while its image branch is unconditionally
+     * looping. Emitting the author's `loop = false` onto an image would be a wire value no
+     * reader honours, so an image always publishes `loop = true`.
+     *
+     * [framing] (the author's pan/zoom) is carried as normalised `x`/`y`/`scale` for **both an
+     * image and a video** — each client's reader converts these back via
+     * [StoryBackgroundObjectTransform.from] (the image branch and, since the prior slice, the
+     * video branch alike), closing the author→reader loop. An unframed background carries the
+     * neutral [StoryBackgroundFraming.IDENTITY], which serialises to the bare centred defaults.
+     */
+    fun toMediaObject(): StoryMediaObject =
+        StoryMediaObject(
+            id = mediaId,
+            postMediaId = mediaId,
+            mediaURL = url,
+            mediaType = if (isVideo) "video" else "image",
+            placement = "media",
+            x = framing.x,
+            y = framing.y,
+            scale = framing.scale,
+            isBackground = true,
+            adjustments = adjustments?.served(isVideo)?.takeUnless { it.isNeutral },
+            loop = if (isVideo) loop else true,
+            intrinsicDuration = publishableDuration?.takeIf { isVideo },
+            duration = publishableDuration?.takeIf { isVideo },
+            sourceStart = window?.start?.takeIf { isVideo },
+            sourceEnd = window?.end?.takeIf { isVideo },
+            rotation = setting.rotationDeg.toDouble(),
+            volume = if (isVideo) setting.volume else 1f,
+            mutedVolumeMemento = setting.mutedVolumeMemento.takeIf { isVideo },
+            crop = setting.crop,
+        )
+}

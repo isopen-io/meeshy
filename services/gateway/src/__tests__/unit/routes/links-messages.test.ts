@@ -1,287 +1,77 @@
 /**
  * Unit tests for links/messages routes.
- * Tests POST /links/:identifier/messages (anonymous) and
- * POST /links/:identifier/messages/auth (authenticated).
+ * Tests POST /links/:identifier/messages — le SEUL transport d'envoi par lien.
+ *
+ * `POST /links/:identifier/messages/auth` a été RETIRÉE (#4188). Aucun des
+ * quatre clients ne l'appelait, et pour le fil global `meeshy` elle fabriquait
+ * un participant SYNTHÉTIQUE `{ id: userId }` : le message partait avec un
+ * `User.id` dans `Message.senderId`, colonne qui attend un `Participant.id`, et
+ * la garde d'appartenance était court-circuitée. Un membre inscrit écrit par le
+ * transport nominal. Les deux tables paramétrées plus bas (contrat du corps 201,
+ * obligations post-commit) ont donc perdu leur ligne `authenticated` : ce
+ * qu'elles verrouillent reste dû par le jumeau anonyme, seul survivant.
+ * L'absence de la route est verrouillée par `dead-doors-are-not-mounted.test.ts`.
+ *
+ * L'échafaudage partagé vit dans `links-messages.harness.ts` ; les mentions,
+ * dans `links-messages-mentions.test.ts`.
  *
  * @jest-environment node
  */
 
 import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
-import Fastify, { FastifyInstance } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-// ─── Mocks ────────────────────────────────────────────────────────────────────
+// ─── Mocks — hissés au sommet de CE module, donc déclarés ici ────────────────
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => require('./links-messages.harness').loggerModule());
+jest.mock('../../../utils/session-token', () => require('./links-messages.harness').sessionTokenModule());
+jest.mock('../../../services/TrackingLinkService', () =>
+  require('./links-messages.harness').trackingLinkServiceModule()
+);
+jest.mock('../../../middleware/auth', () => require('./links-messages.harness').authModule());
+jest.mock('@meeshy/shared/types/api-schemas', () => require('./links-messages.harness').apiSchemasModule());
+jest.mock('@meeshy/shared/types/socketio-events', () =>
+  require('./links-messages.harness').socketioEventsModule()
+);
+jest.mock('../../../services/ConversationStatsService', () =>
+  require('./links-messages.harness').conversationStatsModule()
+);
+jest.mock('../../../routes/links/types', () =>
+  require('./links-messages.harness').linkTypesModule(
+    jest.requireActual('../../../routes/links/types') as Record<string, unknown>
+  )
+);
 
-jest.mock('../../../utils/session-token', () => ({
-  hashSessionToken: jest.fn((token: string) => 'hashed-' + token),
-}));
+// ─── Import après les mocks ──────────────────────────────────────────────────
 
-const mockProcessMessageLinks = jest.fn<any>().mockResolvedValue({
-  processedContent: 'Hello!',
-  trackingLinks: [],
-});
-const mockUpdateTrackingLinksMessageId = jest.fn<any>().mockResolvedValue(undefined);
-jest.mock('../../../services/TrackingLinkService', () => ({
-  TrackingLinkService: jest.fn().mockImplementation(() => ({
-    processMessageLinks: (...a: any[]) => mockProcessMessageLinks(...a),
-    updateTrackingLinksMessageId: (...a: any[]) => mockUpdateTrackingLinksMessageId(...a),
-  })),
-}));
-
-const mockAuthMiddleware = jest.fn<any>();
-jest.mock('../../../middleware/auth', () => ({
-  createUnifiedAuthMiddleware: () => mockAuthMiddleware,
-  isRegisteredUser: (ctx: any) => ctx?.type === 'registered',
-  UnifiedAuthRequest: {},
-}));
-
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-      message: { type: 'string' },
-      code: { type: 'string' },
-    },
-  },
-}));
-
-jest.mock('@meeshy/shared/types/socketio-events', () => ({
-  SERVER_EVENTS: { LINK_MESSAGE_NEW: 'link:message-new' },
-  ROOMS: { conversation: (id: string) => `conversation:${id}` },
-}));
-
-// Post-save language stats: a real singleton driven by a mock prisma would only
-// exercise its own error path here. The route's obligation is that it FIRES,
-// which is what the double records.
-const mockUpdateOnNewMessage = jest.fn<any>().mockResolvedValue(undefined);
-jest.mock('../../../services/ConversationStatsService', () => ({
-  conversationStatsService: {
-    updateOnNewMessage: (...a: any[]) => mockUpdateOnNewMessage(...a),
-  },
-}));
-
-// Controllable parse mock
-const mockParse = jest.fn<any>((body: any) => ({
-  content: body?.content ?? 'Hello!',
-  originalLanguage: body?.originalLanguage ?? 'fr',
-  messageType: body?.messageType ?? 'text',
-  clientMessageId: body?.clientMessageId ?? 'cid_test',
-}));
-
-// Only `sendMessageSchema.parse` is stubbed (to drive Zod failures); every
-// response-shaping constant is the REAL one. A permissive stand-in
-// (`additionalProperties: true`) would make fast-json-stringify echo whatever
-// the route hands it, so a truncating schema would still look correct here —
-// exactly the coincidence the cycle-7 review flagged (D4).
-jest.mock('../../../routes/links/types', () => ({
-  ...(jest.requireActual('../../../routes/links/types') as Record<string, unknown>),
-  sendMessageSchema: { parse: (...a: any[]) => mockParse(...a) },
-}));
-
-// ─── Import after mocks ───────────────────────────────────────────────────────
-
-import { registerMessageRoutes } from '../../../routes/links/messages';
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const USER_ID = 'user-abc123';
-const MSHY_ID = 'mshy_link_abc123';
-const DB_ID = '507f1f77bcf86cd799439055';
-const CONV_ID = '507f1f77bcf86cd799439022';
-const PART_ID = '507f1f77bcf86cd799439033';
-const LINK_DB_ID = '507f1f77bcf86cd799439011';
-const MSG_ID = '507f1f77bcf86cd799439044';
-const PEER_USER_ID = '507f1f77bcf86cd799439055';
-const SESSION_TOKEN = 'anon_session_token';
-
-const mockShareLink = {
-  id: LINK_DB_ID, linkId: MSHY_ID, conversationId: CONV_ID,
-  isActive: true, expiresAt: null, allowAnonymousMessages: true,
-  conversation: { id: CONV_ID, identifier: 'some-conv', title: 'Test', type: 'group' },
-};
-
-const mockParticipantShareLink = {
-  id: LINK_DB_ID, conversationId: CONV_ID,
-  isActive: true, allowAnonymousMessages: true, expiresAt: null,
-};
-
-const mockAnonParticipant = {
-  id: PART_ID, conversationId: CONV_ID, type: 'anonymous',
-  displayName: 'anon', language: 'fr',
-  sessionTokenHash: 'hashed-' + SESSION_TOKEN,
-  isActive: true,
-  permissions: { canSendMessages: true, canSendFiles: false },
-  anonymousSession: { shareLinkId: LINK_DB_ID },
-};
-
-const CID = 'cid_550e8400-e29b-41d4-a716-446655440000';
-
-const mockMessage = {
-  id: MSG_ID, content: 'Hello!', originalLanguage: 'fr', messageType: 'text',
-  clientMessageId: CID,
-  isEdited: false, editedAt: null, deletedAt: null, replyToId: null,
-  createdAt: new Date(), updatedAt: new Date(),
-  sender: { id: PART_ID, userId: null, displayName: 'anon', avatar: null, type: 'anonymous', language: 'fr', user: null },
-};
-
-const mockAuthContext = {
-  type: 'registered' as const,
-  userId: USER_ID,
-  hasFullAccess: true,
-  registeredUser: { id: USER_ID, username: 'alice', role: 'USER' },
-};
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function makePrisma(overrides: Record<string, any> = {}) {
-  return {
-    conversationShareLink: {
-      findUnique: jest.fn<any>().mockImplementation(async (opts: any) => {
-        if (opts?.where?.id === LINK_DB_ID) return mockParticipantShareLink;
-        return mockShareLink;
-      }),
-    },
-    participant: {
-      findFirst: jest.fn<any>().mockResolvedValue(mockAnonParticipant),
-      // Éventail de notifications : résolution de l'identité de l'expéditeur.
-      findUnique: jest.fn<any>().mockResolvedValue({
-        userId: null, displayName: 'anon', avatar: null,
-      }),
-    },
-    user: {
-      findUnique: jest.fn<any>().mockResolvedValue({
-        username: 'alice', displayName: 'Alice', avatar: null,
-      }),
-    },
-    message: {
-      create: jest.fn<any>().mockResolvedValue(mockMessage),
-      findUnique: jest.fn<any>().mockResolvedValue(null),
-      // Écriture de `validatedMentions` : la seule trace durable qu'un `@`
-      // envoyé par lien a été reconnu.
-      update: jest.fn<any>().mockResolvedValue(undefined),
-    },
-    conversation: {
-      update: jest.fn<any>().mockResolvedValue(undefined),
-      findUnique: jest.fn<any>().mockResolvedValue({
-        title: 'Test', type: 'group', participants: [{ userId: PEER_USER_ID }],
-      }),
-    },
-    messageAttachment: { findMany: jest.fn<any>().mockResolvedValue([]) },
-    userConversationPreferences: { findMany: jest.fn<any>().mockResolvedValue([]) },
-    ...overrides,
-  } as any;
-}
-
-/**
- * Le résolveur de mentions, sous la seule forme structurale que
- * `resolveMessageMentions` consomme. Par défaut il reconnaît `@bob` et le
- * résout vers le pair inscrit de la conversation.
- */
-function makeMentionResolver(overrides: Record<string, any> = {}) {
-  return {
-    extractMentionsWithParticipants: jest.fn<any>().mockReturnValue(['bob']),
-    resolveUsernames: jest.fn<any>().mockResolvedValue(
-      new Map([['bob', { id: PEER_USER_ID, username: 'bob' }]])
-    ),
-    validateMentionPermissions: jest.fn<any>().mockResolvedValue({ validUserIds: [PEER_USER_ID] }),
-    createMentions: jest.fn<any>().mockResolvedValue(undefined),
-    ...overrides,
-  };
-}
-
-function makeNotificationService() {
-  return {
-    createReplyNotification: jest.fn<any>().mockResolvedValue(null),
-    createMentionNotificationsBatch: jest.fn<any>().mockResolvedValue(0),
-    createMessageNotification: jest.fn<any>().mockResolvedValue(null),
-  };
-}
-
-function makeTranslationService() {
-  return { handleNewMessage: jest.fn<any>().mockResolvedValue({ status: 'queued' }) };
-}
-
-function makeSocketIOHandler(hasManager = false) {
-  if (!hasManager) {
-    return {
-      getManager: () => null,
-      to: jest.fn(),
-      emit: jest.fn(),
-      enqueueOfflineLinkMessage: jest.fn(),
-      emitUnreadCountsToRecipients: jest.fn(),
-      autoDeliverToOnlineRecipients: jest.fn(),
-    };
-  }
-  const emit = jest.fn();
-  const to = jest.fn(() => ({ emit }));
-  // The manager's offline-queue surface is part of what a link message send
-  // must exercise: the room emit only reaches CONNECTED sockets, so without
-  // this second call an offline participant never learns the message exists.
-  const enqueueOfflineLinkMessage = jest.fn<any>().mockResolvedValue(undefined);
-  // Third audience: every recipient's unread badge. The room emit announces the
-  // message, the queue replays it — neither moves the counter.
-  const emitUnreadCountsToRecipients = jest.fn<any>().mockResolvedValue(undefined);
-  // Quatrième obligation, et la seule tournée vers l'EXPÉDITEUR : l'accusé de
-  // livraison. Sans elle, l'indicateur de l'auteur d'un message par lien reste
-  // sur « envoyé » à vie, même quand tous ses destinataires sont connectés.
-  const autoDeliverToOnlineRecipients = jest.fn<any>().mockResolvedValue(undefined);
-  return {
-    getManager: () => ({
-      getIO: () => ({ to }),
-      enqueueOfflineLinkMessage,
-      emitUnreadCountsToRecipients,
-      autoDeliverToOnlineRecipients,
-    }),
-    to,
-    emit,
-    enqueueOfflineLinkMessage,
-    emitUnreadCountsToRecipients,
-    autoDeliverToOnlineRecipients,
-  };
-}
-
-async function buildApp(opts: {
-  prisma?: any;
-  socketIOHandler?: any;
-  authContext?: any;
-  translationService?: any;
-  notificationService?: any;
-  mentionService?: any;
-} = {}): Promise<FastifyInstance> {
-  const ctx = opts.authContext ?? mockAuthContext;
-  mockAuthMiddleware.mockImplementation(async (req: any) => {
-    req.authContext = ctx;
-  });
-
-  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  app.decorate('prisma', opts.prisma ?? makePrisma());
-  app.decorate('socketIOHandler', opts.socketIOHandler ?? makeSocketIOHandler(false));
-  app.decorate(
-    'translationService',
-    opts.translationService === null ? undefined : opts.translationService ?? makeTranslationService()
-  );
-  app.decorate(
-    'notificationService',
-    opts.notificationService === null ? undefined : opts.notificationService ?? makeNotificationService()
-  );
-  app.decorate(
-    'mentionService',
-    opts.mentionService === null ? undefined : opts.mentionService ?? makeMentionResolver()
-  );
-  await registerMessageRoutes(app);
-  await app.ready();
-  return app;
-}
-
-/** Les effets post-commit sont fire-and-forget : ils se règlent après le 201. */
-const flushPostSaveEffects = () => new Promise((resolve) => setImmediate(resolve));
-
-const VALID_BODY = { content: 'Hello!', clientMessageId: CID };
-const ANON_HEADERS = { 'x-session-token': SESSION_TOKEN };
+import {
+  mockProcessExplicitLinksInContent,
+  mockCollectContentTrackingLinks,
+  mockUpdateTrackingLinksMessageId,
+  mockUpdateOnNewMessage,
+  mockParse,
+  MSHY_ID,
+  DB_ID,
+  CONV_ID,
+  PART_ID,
+  LINK_DB_ID,
+  MSG_ID,
+  PEER_USER_ID,
+  mockShareLink,
+  mockParticipantShareLink,
+  mockAnonParticipant,
+  CID,
+  mockMessage,
+  makePrisma,
+  makeNotificationService,
+  makeTranslationService,
+  makeSocketIOHandler,
+  buildApp,
+  flushPostSaveEffects,
+  VALID_BODY,
+  ANON_HEADERS,
+} from './links-messages.harness';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Anonymous route: POST /links/:identifier/messages
@@ -485,38 +275,39 @@ describe('POST /links/:id/messages — anonymous: conversation close', () => {
   });
 });
 
-// Les DEUX branches de résolution, et pas seulement celle qu'on corrige en
-// premier : `mshy_…` est la forme que produisent les URLs réelles, l'id brut
-// celle des appels internes. Une garde posée sur une seule des deux a l'air
-// d'une garde entière.
-describe.each([
-  ['mshy_ link id', MSHY_ID],
-  ['raw db id', DB_ID],
-])('POST /links/:id/messages/auth — conversation close (%s)', (_label, linkParam) => {
+describe('POST /links/:id/messages — anonymous: conversation obsoleted while writing (#14643)', () => {
+  const OBSOLETED_AT = new Date('2026-11-02T10:00:00.000Z');
   let app: FastifyInstance;
   let prisma: any;
+  let socket: any;
+  let translationService: any;
   beforeAll(async () => {
     prisma = makePrisma();
-    prisma.conversationShareLink.findUnique = jest.fn<any>().mockImplementation(
-      async (args: any) => ({
-        ...mockShareLink,
-        conversation: projectConversation(args, {
-          ...mockShareLink.conversation,
-          isActive: false,
-          closedAt: CLOSED_AT,
-        }),
-      })
-    );
-    app = await buildApp({ prisma });
+    prisma.message.updateMany = jest.fn<any>().mockResolvedValue({ count: 1 });
+    prisma.conversation.findUnique = jest.fn<any>().mockImplementation(async () => ({
+      title: 'Test', type: 'group', participants: [{ userId: PEER_USER_ID }],
+      deletedAt: prisma.message.create.mock.calls.length > 0 ? OBSOLETED_AT : null,
+    }));
+    socket = makeSocketIOHandler(true);
+    translationService = makeTranslationService();
+    app = await buildApp({ prisma, socketIOHandler: socket, translationService });
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 410 and writes nothing when the conversation is closed', async () => {
+  it('returns 410, the written message is born deleted, and nothing is broadcast', async () => {
     const res = await app.inject({
-      method: 'POST', url: `/links/${linkParam}/messages/auth`, payload: VALID_BODY,
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: VALID_BODY,
     });
+    await flushPostSaveEffects();
     expect(res.statusCode).toBe(410);
-    expect(prisma.message.create).not.toHaveBeenCalled();
+    expect(prisma.message.updateMany).toHaveBeenCalledWith({
+      where: { id: MSG_ID, OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] },
+      data: { deletedAt: OBSOLETED_AT },
+    });
+    expect(socket.to).not.toHaveBeenCalled();
+    expect(socket.enqueueOfflineLinkMessage).not.toHaveBeenCalled();
+    expect(translationService.handleNewMessage).not.toHaveBeenCalled();
   });
 });
 
@@ -601,62 +392,28 @@ describe('POST /links/:id/messages — anonymous: canal d’annonces', () => {
   });
 });
 
-// Les DEUX branches ici aussi : le rang d'écriture se lit dans la MÊME
-// projection que l'état terminal, donc un champ oublié dans l'une des deux la
-// rendrait inerte exactement comme la garde de clôture l'avait été.
-describe.each([
-  ['mshy_ link id', MSHY_ID],
-  ['raw db id', DB_ID],
-])('POST /links/:id/messages/auth — canal d’annonces (%s)', (_label, linkParam) => {
-  let app: FastifyInstance;
-  let prisma: any;
-  beforeAll(async () => {
-    prisma = makePrisma();
-    prisma.conversationShareLink.findUnique = jest.fn<any>().mockImplementation(
-      async (args: any) => ({
-        ...mockShareLink,
-        conversation: projectConversation(args, {
-          ...mockShareLink.conversation,
-          isActive: true,
-          closedAt: null,
-          isAnnouncementChannel: true,
-          defaultWriteRole: 'admin',
-        }),
-      })
-    );
-    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
-    prisma.participant.findUnique = jest.fn<any>().mockResolvedValue({
-      role: 'member', user: { role: 'USER' },
-    });
-    app = await buildApp({ prisma });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 403 and writes nothing for a plain member', async () => {
-    const res = await app.inject({
-      method: 'POST', url: `/links/${linkParam}/messages/auth`, payload: VALID_BODY,
-    });
-    expect(res.statusCode).toBe(403);
-    expect(prisma.message.create).not.toHaveBeenCalled();
-  });
-});
-
-describe('POST /links/:id/messages — anonymous: with tracking links', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('calls updateTrackingLinksMessageId when trackingLinks is non-empty', async () => {
-    mockProcessMessageLinks.mockResolvedValueOnce({
-      processedContent: 'Hi [tracked]!',
-      trackingLinks: [{ token: 'tok-1' }, { token: 'tok-2' }],
-    });
-    const res = await app.inject({
+// #10286 — un invité anonyme ne fait JAMAIS de ses adresses des liens suivis :
+// aucun `TrackingLink` minté, aucune carte `trackingLinks`, le texte tel qu'écrit.
+describe('POST /links/:id/messages — anonymous: addresses are never tracked', () => {
+  it('stores the content exactly as written, mints nothing and serves no trackingLinks', async () => {
+    mockProcessExplicitLinksInContent.mockResolvedValueOnce({ processedContent: 'Vois m+abc et https://evil.example/a', trackingLinks: [] });
+    mockCollectContentTrackingLinks.mockResolvedValueOnce([{ url: 'https://evil.example/a', token: 'tok-1' }]);
+    const content = 'Vois <https://evil.example/a> et https://evil.example/a';
+    const prisma = makePrisma();
+    const linkApp = await buildApp({ prisma });
+    const res = await linkApp.inject({
       method: 'POST', url: `/links/${MSHY_ID}/messages`,
-      headers: ANON_HEADERS, payload: VALID_BODY,
+      headers: ANON_HEADERS, payload: { ...VALID_BODY, content },
     });
+    await linkApp.close();
     expect(res.statusCode).toBe(201);
-    expect(mockUpdateTrackingLinksMessageId).toHaveBeenCalledWith(['tok-1', 'tok-2'], MSG_ID);
+    const data = (prisma.message.create as jest.Mock<any>).mock.calls[0][0].data;
+    expect(data.content).toBe(content);
+    expect(data.metadata?.trackingLinks).toBeUndefined();
+    expect(mockProcessExplicitLinksInContent).not.toHaveBeenCalled();
+    expect(mockCollectContentTrackingLinks).not.toHaveBeenCalled();
+    expect(mockUpdateTrackingLinksMessageId).not.toHaveBeenCalled();
+    expect(res.json().data.message).not.toHaveProperty('trackingLinks');
   });
 });
 
@@ -927,309 +684,6 @@ describe('POST /links/:id/messages — anonymous: DB error', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Auth route: POST /links/:identifier/messages/auth
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('POST /links/:id/messages/auth — non-registered user', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp({
-      authContext: { type: 'anonymous', userId: 'anon', hasFullAccess: false, registeredUser: null },
-    });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 403 when user is not registered', async () => {
-    const res = await app.inject({ method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY });
-    expect(res.statusCode).toBe(403);
-  });
-});
-
-describe('POST /links/:id/messages/auth — share link not found', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue(null);
-    app = await buildApp({ prisma });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 404 when share link not found', async () => {
-    const res = await app.inject({ method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY });
-    expect(res.statusCode).toBe(404);
-  });
-});
-
-describe('POST /links/:id/messages/auth — non-mshy_ identifier', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique = jest.fn<any>().mockImplementation(async (opts: any) => {
-      if (opts?.where?.id === DB_ID) return mockShareLink;
-      return null;
-    });
-    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
-    app = await buildApp({ prisma });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 201 when using db id (non-mshy_ path)', async () => {
-    const res = await app.inject({ method: 'POST', url: `/links/${DB_ID}/messages/auth`, payload: VALID_BODY });
-    expect(res.statusCode).toBe(201);
-  });
-});
-
-describe('POST /links/:id/messages/auth — link inactive', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue({ ...mockShareLink, isActive: false });
-    app = await buildApp({ prisma });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 410 when share link is inactive', async () => {
-    const res = await app.inject({ method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY });
-    expect(res.statusCode).toBe(410);
-  });
-});
-
-describe('POST /links/:id/messages/auth — link expired', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue({
-      ...mockShareLink, isActive: true, expiresAt: new Date('2020-01-01'),
-    });
-    app = await buildApp({ prisma });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 410 when share link has expired', async () => {
-    const res = await app.inject({ method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY });
-    expect(res.statusCode).toBe(410);
-  });
-});
-
-describe('POST /links/:id/messages/auth — not a participant', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue(mockShareLink);
-    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue(null);
-    app = await buildApp({ prisma });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 403 when user is not a participant', async () => {
-    const res = await app.inject({ method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY });
-    expect(res.statusCode).toBe(403);
-  });
-});
-
-describe('POST /links/:id/messages/auth — meeshy global conversation auto-join', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue({
-      ...mockShareLink, conversation: { id: CONV_ID, identifier: 'meeshy', title: 'Meeshy', type: 'group' },
-    });
-    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue(null); // not found
-    app = await buildApp({ prisma });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 201 when meeshy conversation and participant is auto-joined', async () => {
-    const res = await app.inject({ method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY });
-    expect(res.statusCode).toBe(201);
-  });
-});
-
-describe('POST /links/:id/messages/auth — with tracking links', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue(mockShareLink);
-    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
-    app = await buildApp({ prisma });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('calls updateTrackingLinksMessageId when trackingLinks is non-empty', async () => {
-    mockProcessMessageLinks.mockResolvedValueOnce({
-      processedContent: 'Hi [tracked]!',
-      trackingLinks: [{ token: 'tok-auth-1' }],
-    });
-    const res = await app.inject({ method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY });
-    expect(res.statusCode).toBe(201);
-    expect(mockUpdateTrackingLinksMessageId).toHaveBeenCalledWith(['tok-auth-1'], MSG_ID);
-  });
-});
-
-describe('POST /links/:id/messages/auth — socketIO emit', () => {
-  let app: FastifyInstance;
-  let socketIOHandler: ReturnType<typeof makeSocketIOHandler>;
-  beforeAll(async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue(mockShareLink);
-    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
-    socketIOHandler = makeSocketIOHandler(true);
-    app = await buildApp({ prisma, socketIOHandler });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 201 and emits socket event when socketIO manager is available', async () => {
-    const res = await app.inject({ method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().success).toBe(true);
-  });
-
-  it('carries the conversationId and senderId, exactly like the anonymous twin', () => {
-    expect(socketIOHandler.to).toHaveBeenCalledWith(`conversation:${CONV_ID}`);
-    const [, payload] = socketIOHandler.emit.mock.calls[0] as [string, { message: Record<string, unknown> }];
-    expect(payload.message.conversationId).toBe(CONV_ID);
-    expect(payload.message.senderId).toBe(PART_ID);
-  });
-
-  // Même garantie hors ligne que le jumeau anonyme : les deux routes servent la
-  // même conversation aux mêmes participants, une seule des deux couvrant les
-  // pairs déconnectés serait exactement l'asymétrie que le point unique existe
-  // pour rendre inécrivable.
-  it('queues the message for participants who are offline right now', () => {
-    expect(socketIOHandler.enqueueOfflineLinkMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        conversationId: CONV_ID,
-        actorParticipantId: PART_ID,
-        messageId: MSG_ID,
-      })
-    );
-  });
-
-  // Même argument que pour la file hors ligne : les deux routes servent la même
-  // conversation aux mêmes participants.
-  it('pushes a fresh unread badge to every recipient', () => {
-    expect(socketIOHandler.emitUnreadCountsToRecipients).toHaveBeenCalledWith({
-      conversationId: CONV_ID,
-      senderId: PART_ID,
-    });
-  });
-
-  // Et même argument pour l'accusé de livraison : une seule des deux routes
-  // faisant avancer la coche de son expéditeur serait l'asymétrie exacte que
-  // le point d'appel unique existe pour rendre inécrivable.
-  it('acks delivery to the sender for recipients who are online right now', () => {
-    expect(socketIOHandler.autoDeliverToOnlineRecipients).toHaveBeenCalledWith(
-      { id: MSG_ID, senderId: PART_ID },
-      CONV_ID
-    );
-  });
-});
-
-// Le jumeau authentifié devait le même silence à ses destinataires : aucun
-// push, aucune notification in-app, aucune ligne `Notification`. Ici
-// l'expéditeur EST un utilisateur inscrit — l'acteur vient de sa ligne `User`.
-describe('POST /links/:id/messages/auth — notification fan-out', () => {
-  let app: FastifyInstance;
-  let notificationService: ReturnType<typeof makeNotificationService>;
-
-  beforeAll(async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue(mockShareLink);
-    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
-    prisma.participant.findUnique = jest.fn<any>().mockResolvedValue({
-      userId: USER_ID, displayName: 'Alice', avatar: null,
-    });
-    notificationService = makeNotificationService();
-    app = await buildApp({ prisma, socketIOHandler: makeSocketIOHandler(true), notificationService });
-    await app.inject({ method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY });
-    await flushPostSaveEffects();
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('notifies every registered recipient, with the author resolved to their user', () => {
-    expect(notificationService.createMessageNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        recipientUserId: PEER_USER_ID,
-        senderId: USER_ID,
-        senderProfile: { username: 'alice', displayName: 'Alice', avatar: null },
-        messageId: MSG_ID,
-        conversationId: CONV_ID,
-      })
-    );
-  });
-});
-
-describe('POST /links/:id/messages/auth — success', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue(mockShareLink);
-    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
-    app = await buildApp({ prisma });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 201 with message data', async () => {
-    const res = await app.inject({ method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().success).toBe(true);
-    expect(res.json().data.messageId).toBe(MSG_ID);
-  });
-});
-
-describe('POST /links/:id/messages/auth — originalLanguage canonicalization', () => {
-  let app: FastifyInstance;
-  let prisma: any;
-  beforeAll(async () => {
-    prisma = makePrisma();
-    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue(mockShareLink);
-    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
-    app = await buildApp({ prisma });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('canonicalizes a region-tagged claim at the write boundary', async () => {
-    const res = await app.inject({
-      method: 'POST', url: `/links/${MSHY_ID}/messages/auth`,
-      payload: { ...VALID_BODY, originalLanguage: 'pt-BR' },
-    });
-    expect(res.statusCode).toBe(201);
-    expect(prisma.message.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'pt' }) })
-    );
-  });
-});
-
-describe('POST /links/:id/messages/auth — ZodError catch', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 400 when body parse throws ZodError', async () => {
-    mockParse.mockImplementationOnce(() => {
-      throw new z.ZodError([{ code: 'custom', message: 'Invalid', path: ['content'] }]);
-    });
-    const res = await app.inject({ method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY });
-    expect(res.statusCode).toBe(400);
-  });
-});
-
-describe('POST /links/:id/messages/auth — DB error', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique = jest.fn<any>().mockRejectedValue(new Error('DB failure'));
-    app = await buildApp({ prisma });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 500 on unexpected DB error', async () => {
-    const res = await app.inject({ method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY });
-    expect(res.statusCode).toBe(500);
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // Language canonicalisation at the write boundary (iteration 219)
 // The share-link message-create paths bypass the MessagingService funnel (which
 // normalizes `originalLanguage` since iteration 218), so they must canonicalise
@@ -1268,24 +722,6 @@ describe('POST /links/:id/messages — anonymous: originalLanguage canonicalisat
   });
 });
 
-describe('POST /links/:id/messages/auth — authenticated: originalLanguage canonicalisation', () => {
-  it('normalizes a region-tagged locale (en_US) to its canonical code (en) before persisting', async () => {
-    const prisma = makePrisma();
-    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue(mockShareLink);
-    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
-    const app = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'POST', url: `/links/${MSHY_ID}/messages/auth`,
-      payload: { ...VALID_BODY, originalLanguage: 'en_US' },
-    });
-    expect(res.statusCode).toBe(201);
-    expect(prisma.message.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'en' }) })
-    );
-    await app.close();
-  });
-});
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // 201 response body contract — what the AUTHOR gets back
 //
@@ -1309,17 +745,6 @@ describe.each([
     url: `/links/${MSHY_ID}/messages`,
     headers: ANON_HEADERS,
     prisma: () => makePrisma(),
-  },
-  {
-    label: 'authenticated',
-    url: `/links/${MSHY_ID}/messages/auth`,
-    headers: {} as Record<string, string>,
-    prisma: () => {
-      const prisma = makePrisma();
-      prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue(mockShareLink);
-      prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
-      return prisma;
-    },
   },
 ])('201 body contract — $label route', ({ url, headers, prisma: makeRoutePrisma }) => {
   async function post(messageOverrides: Record<string, unknown> = {}, body: Record<string, unknown> = {}) {
@@ -1405,17 +830,6 @@ describe.each([
     headers: ANON_HEADERS,
     prisma: () => makePrisma(),
   },
-  {
-    label: 'authenticated',
-    url: `/links/${MSHY_ID}/messages/auth`,
-    headers: {} as Record<string, string>,
-    prisma: () => {
-      const prisma = makePrisma();
-      prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue(mockShareLink);
-      prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
-      return prisma;
-    },
-  },
 ])('post-save obligations — $label route', ({ url, headers, prisma: makeRoutePrisma }) => {
   async function post(opts: { prisma?: any; translationService?: any; body?: Record<string, unknown> } = {}) {
     const prisma = opts.prisma ?? makeRoutePrisma();
@@ -1443,8 +857,8 @@ describe.each([
     );
   });
 
-  it('traduit le contenu STOCKÉ (URLs réécrites), pas le corps reçu', async () => {
-    mockProcessMessageLinks.mockResolvedValueOnce({
+  it('traduit le contenu STOCKÉ (<url> réécrite), pas le corps reçu', async () => {
+    mockProcessExplicitLinksInContent.mockResolvedValueOnce({
       processedContent: 'Regarde https://mshy.link/t/tok',
       trackingLinks: [],
     });
@@ -1456,7 +870,7 @@ describe.each([
 
     const { translationService } = await post({
       prisma,
-      body: { content: 'Regarde https://example.com/article' },
+      body: { content: 'Regarde <https://example.com/article>' },
     });
 
     expect(translationService.handleNewMessage).toHaveBeenCalledWith(
@@ -1502,225 +916,5 @@ describe.each([
 
     expect(res.statusCode).toBe(201);
     expect(prisma.conversation.update).toHaveBeenCalled();
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Mentions — `Message.validatedMentions`, lignes `Mention`, notification dédiée
-//
-// Les deux routes de lien contournent `MessagingService.handleMessage`, donc
-// `MessageProcessor` en entier — et `processMentionsInDB` vivait sous DEUX
-// niveaux de `private` à l'intérieur. Un `@alice` envoyé par lien ne produisait
-// AUCUNE ligne `Mention` (absent de l'inbox `/mentions`), AUCUN
-// `validatedMentions` (le web surligne depuis ce champ : le texte restait brut,
-// à vie) et AUCUNE notification de mention — le mentionné ne recevait que la
-// notification « message régulier », muette pour qui a coché « mentions
-// seulement » ou mis la conversation en sourdine.
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const MENTION_MESSAGE = { ...mockMessage, content: 'salut @bob' };
-
-function makeMentionPrisma() {
-  const prisma = makePrisma();
-  prisma.message.create = jest.fn<any>().mockResolvedValue(MENTION_MESSAGE);
-  return prisma;
-}
-
-describe('POST /links/:id/messages — anonymous: mentions', () => {
-  let app: FastifyInstance;
-  let prisma: any;
-  let mentionService: ReturnType<typeof makeMentionResolver>;
-  let notificationService: ReturnType<typeof makeNotificationService>;
-  let body: any;
-
-  beforeAll(async () => {
-    prisma = makeMentionPrisma();
-    mentionService = makeMentionResolver();
-    notificationService = makeNotificationService();
-    app = await buildApp({
-      prisma, mentionService, notificationService,
-      socketIOHandler: makeSocketIOHandler(true),
-    });
-    const res = await app.inject({
-      method: 'POST', url: `/links/${MSHY_ID}/messages`,
-      headers: ANON_HEADERS, payload: VALID_BODY,
-    });
-    body = res.json();
-    await flushPostSaveEffects();
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('creates the Mention rows the /mentions inbox reads', () => {
-    expect(mentionService.createMentions).toHaveBeenCalledWith(MSG_ID, [PEER_USER_ID]);
-  });
-
-  it('persists the validated usernames on the message', () => {
-    expect(prisma.message.update).toHaveBeenCalledWith({
-      where: { id: MSG_ID },
-      data: { validatedMentions: ['bob'] },
-    });
-  });
-
-  // Le schéma de réponse 201 ne laisse passer que ce qu'il NOMME : un champ
-  // ajouté au payload sans l'être au schéma est tronqué sans erreur ni log.
-  it('serves the validated mentions back to the author', () => {
-    expect(body.data.message.validatedMentions).toEqual(['bob']);
-  });
-
-  // La validation compare l'expéditeur aux `Participant.userId` des membres,
-  // donc à des `User.id`. Un participant de lien ANONYME n'en possède aucun :
-  // `null` dit qu'il n'est aucun des mentionnés. Lui passer son `Participant.id`
-  // comparait deux espaces disjoints — une inégalité toujours vraie, donc une
-  // règle d'auto-mention qui ne se déclenchait jamais.
-  it('validates the mention against the conversation, with no user identity for an anonymous sender', () => {
-    expect(mentionService.validateMentionPermissions).toHaveBeenCalledWith(
-      CONV_ID, [PEER_USER_ID], null
-    );
-  });
-
-  // Une mention perce la sourdine ; la notification régulière, non. Le
-  // mentionné doit donc quitter l'éventail régulier pour le lot dédié.
-  it('notifies the mentioned recipient as a mention, not as a regular message', () => {
-    expect(notificationService.createMentionNotificationsBatch).toHaveBeenCalledWith(
-      [PEER_USER_ID],
-      expect.objectContaining({ conversationId: CONV_ID, messageId: MSG_ID }),
-      [PEER_USER_ID]
-    );
-    expect(notificationService.createMessageNotification).not.toHaveBeenCalled();
-  });
-});
-
-describe('POST /links/:id/messages — anonymous: a message without @ costs nothing', () => {
-  let app: FastifyInstance;
-  let prisma: any;
-  let mentionService: ReturnType<typeof makeMentionResolver>;
-
-  beforeAll(async () => {
-    prisma = makePrisma();
-    mentionService = makeMentionResolver();
-    app = await buildApp({ prisma, mentionService, socketIOHandler: makeSocketIOHandler(true) });
-    await app.inject({
-      method: 'POST', url: `/links/${MSHY_ID}/messages`,
-      headers: ANON_HEADERS, payload: VALID_BODY,
-    });
-    await flushPostSaveEffects();
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('skips every mention query when the content carries no @', () => {
-    expect(mentionService.extractMentionsWithParticipants).not.toHaveBeenCalled();
-    expect(prisma.message.update).not.toHaveBeenCalled();
-  });
-});
-
-describe('POST /links/:id/messages — anonymous: no mention service wired', () => {
-  let app: FastifyInstance;
-
-  beforeAll(async () => {
-    app = await buildApp({
-      prisma: makeMentionPrisma(), mentionService: null,
-      socketIOHandler: makeSocketIOHandler(true),
-    });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('still returns 201, with an empty mention set', async () => {
-    const res = await app.inject({
-      method: 'POST', url: `/links/${MSHY_ID}/messages`,
-      headers: ANON_HEADERS, payload: VALID_BODY,
-    });
-    await flushPostSaveEffects();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.message.validatedMentions).toEqual([]);
-  });
-});
-
-describe('POST /links/:id/messages — anonymous: mention failures never reach the sender', () => {
-  let app: FastifyInstance;
-
-  beforeAll(async () => {
-    app = await buildApp({
-      prisma: makeMentionPrisma(),
-      mentionService: makeMentionResolver({
-        resolveUsernames: jest.fn<any>().mockRejectedValue(new Error('mongo down')),
-      }),
-      socketIOHandler: makeSocketIOHandler(true),
-    });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('still returns 201 when mention resolution throws', async () => {
-    const res = await app.inject({
-      method: 'POST', url: `/links/${MSHY_ID}/messages`,
-      headers: ANON_HEADERS, payload: VALID_BODY,
-    });
-    await flushPostSaveEffects();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.message.validatedMentions).toEqual([]);
-  });
-});
-
-// Le jumeau authentifié doit les mêmes trois effets, pour la même raison : deux
-// routes qui écrivent dans la même conversation ne peuvent pas en honorer des
-// sous-ensembles différents.
-describe('POST /links/:id/messages/auth — mentions', () => {
-  let app: FastifyInstance;
-  let prisma: any;
-  let mentionService: ReturnType<typeof makeMentionResolver>;
-  let notificationService: ReturnType<typeof makeNotificationService>;
-  let body: any;
-
-  beforeAll(async () => {
-    prisma = makeMentionPrisma();
-    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue(mockShareLink);
-    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
-    prisma.participant.findUnique = jest.fn<any>().mockResolvedValue({
-      userId: USER_ID, displayName: 'Alice', avatar: null,
-    });
-    mentionService = makeMentionResolver();
-    notificationService = makeNotificationService();
-    app = await buildApp({
-      prisma, mentionService, notificationService,
-      socketIOHandler: makeSocketIOHandler(true),
-    });
-    const res = await app.inject({
-      method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY,
-    });
-    body = res.json();
-    await flushPostSaveEffects();
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('creates the Mention rows and persists the validated usernames', () => {
-    expect(mentionService.createMentions).toHaveBeenCalledWith(MSG_ID, [PEER_USER_ID]);
-    expect(prisma.message.update).toHaveBeenCalledWith({
-      where: { id: MSG_ID },
-      data: { validatedMentions: ['bob'] },
-    });
-  });
-
-  it('serves the validated mentions back to the author', () => {
-    expect(body.data.message.validatedMentions).toEqual(['bob']);
-  });
-
-  it('notifies the mentioned recipient as a mention', () => {
-    expect(notificationService.createMentionNotificationsBatch).toHaveBeenCalledWith(
-      [PEER_USER_ID],
-      expect.objectContaining({ senderId: USER_ID, conversationId: CONV_ID, messageId: MSG_ID }),
-      [PEER_USER_ID]
-    );
-  });
-
-  // Le pendant du cas anonyme : un expéditeur INSCRIT possède un `User.id`, et
-  // c'est lui — pas son `Participant.id` — que la validation doit recevoir, dans
-  // le même espace que les mentionnés qu'elle lui compare.
-  it('validates the mention against the sender USER identity behind the participant', () => {
-    expect(prisma.participant.findUnique).toHaveBeenCalledWith({
-      where: { id: PART_ID },
-      select: { userId: true },
-    });
-    expect(mentionService.validateMentionPermissions).toHaveBeenCalledWith(
-      CONV_ID, [PEER_USER_ID], USER_ID
-    );
   });
 });

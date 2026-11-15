@@ -1,64 +1,77 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
-import { UnifiedAuthRequest } from '../../middleware/auth';
+import { UnifiedAuthRequest, requirePublishingGrace, createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
-import { storyContentEditRequested } from '../../services/posts/storyEditPolicy';
+import { NOT_DELETED } from '../../services/posts/softDelete';
+import { decideContentRemoval, MODERATION_REASON_MESSAGE, notifyContentRemoved, removedPostContentType } from '../../services/moderation/contentRemoval';
+import { withViewerPoints } from '../../services/engagement/viewerPostPoints';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
-import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams, PublishAttachmentSchema } from './types';
+import {
+  runPublicationEffects,
+  servePublishedPost,
+  finalReferences,
+  hoistLocation,
+  hoistTrackingLinks,
+  type PublishedPostRow,
+  type PublishedPostType,
+} from './publication';
+import { mediaIdsMaxFor, storyLimitFromIssues } from './storyLimits';
+import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams, PublishAttachmentSchema, postIdParamsSchema } from './types';
 import { MediaService } from '../../services/MediaService';
+import {
+  publishStoryAlsoAsReel,
+  ReelCompanionNotQualifiedError,
+  REEL_NOT_QUALIFIED,
+  ALSO_AS_REEL_REQUIRES_STORY,
+} from '../../services/posts/storyReelCompanion';
 import {
   planAttachmentPublication,
   postMediaFieldsFromAttachment,
-  DEFAULT_PUBLICATION_VISIBILITY,
+  defaultVisibilityForPostType,
 } from '../../services/posts/publishAttachment';
+// Les prédicats PARTAGÉS de protection — les mêmes qui gouvernent la bannière de
+// notification (cycle 125). La protection se lit aux DEUX niveaux : le message
+// parent (`protectedPreview`, où vit une vraie vue unique / flou / éphémère /
+// chiffré) et la pièce jointe (`maskedAttachment`). Les réutiliser, plutôt que
+// de réécrire la règle, garantit qu'un post publié ne fuit pas ce qu'un push
+// masque.
+import { protectedPreview, maskedAttachment } from '../../services/notifications/notification-preview';
+import { contentExitLawOfSource } from '@meeshy/shared/utils/content-exit-law';
 import { canAccessConversation } from '../conversations/utils/access-control';
-import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone } from '../../utils/response';
-import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
+import { mayServePostToAnonymous } from './anonymousPostGate';
+import { noteRepostInteraction, notifyRepostedAuthor, readRepostedSource, repostedAuthorToNotify } from './repostedAuthorNotification';
+import { audienceChangeVerdict, mayRepostSource } from '../../services/posts/moderationHold';
+import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone, sendConflict } from '../../utils/response';
+import { getAppVersionFloor, getAppStoreUrl } from '../../utils/appVersion';
+import { rejectBelowAppVersionFloor as rejectBelowFloor } from '../../middleware/app-version-floor';
 import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
+import { issuesServies } from '../../utils/zod-issue-schema';
 import { MentionService } from '../../services/MentionService';
-import { resolvePostMentions, reconcilePostMentions } from '../../services/posts/postMentions';
-import type { ResolvedPostMentions } from '../../services/posts/postMentions';
+import { reconcilePostMentions } from '../../services/posts/postMentions';
 import {
   withMentions,
   graftReferences,
-  readPostReferences,
   projectReferencesForViewer,
-  type PostReference,
 } from '../../services/posts/postReferences';
 import { HashtagService } from '../../services/HashtagService';
-import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
-import { withMutationLog, MutationResultGone } from '../../utils/withMutationLog';
+import { EngagementService } from '../../services/engagement/EngagementService';
+import {
+  createSocialTranslateRateLimitConfig,
+  createSharedWriteRateLimitPreHandler,
+} from './socialRateLimit';
+import { withMutationVerdict, MutationResultGone } from '../../utils/withMutationLog';
+import { MutationInFlight } from '../../services/MutationLogService';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
-import { hoistLocationDeep, parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
-import { WIRE_BROADCAST, wireReaderFromRequest, isCanvasV3, unclaimedCanvasMediaIds } from '../../services/posts/storyEffectsV3';
+import { parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
+import { WIRE_BROADCAST, isCanvasV3, unclaimedCanvasMediaIds } from '../../services/posts/storyEffectsV3';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
-
-/**
- * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
- * socket d'un post/story/status — miroir exact du hoist `trackingLinks` des
- * messages (`MessageHandler`). Le destinataire rend le lien (texte + façade
- * vidéo) vers `/l/<token>` sans réécrire l'URL. Les réponses REST exposent déjà
- * `metadata` ; ce hoist ne sert que les payloads temps réel. No-op si absent.
- */
-function hoistTrackingLinks<T extends Record<string, unknown>>(post: T): T {
-  const metadata = post?.metadata as Record<string, unknown> | null | undefined;
-  const tl = metadata?.trackingLinks;
-  if (Array.isArray(tl) && tl.length > 0) {
-    return { ...post, trackingLinks: tl } as T;
-  }
-  return post;
-}
-
-/**
- * Hisse `metadata.location` en top-level `location`, sur le post ET sur
- * chaque commentaire de son aperçu embarqué (`post.comments`) — voir
- * `hoistLocationDeep` (services/location/sharedPlace.ts). Appliqué à la fois
- * à la réponse REST et au payload socket (contrairement à `trackingLinks`,
- * qui ne hissait jusqu'ici que le payload socket, et qui ne descend pas dans
- * `comments`). No-op si rien ne porte de lieu.
- */
-const hoistLocation = hoistLocationDeep;
+import { announceCitedPostWithdrawal } from '../../socketio/announceCitedPostWithdrawal';
+import { logError, logWarn } from '../../utils/logger.js';
+import { isBlockedWithAny } from '../../utils/blocking';
+import { mayPublishInCommunity } from '../../services/posts/communityFeed';
+import { OnlyUnlinkedBudgetRefused, refuseOnlyUnlinkedBudget, releaseOnlyUnlinkedBudget, spendOnlyUnlinkedBudget } from './onlyUnlinkedBudget';
+import { spendOnlyUnlinkedBudgetOnEdit } from './onlyUnlinkedBudgetOnEdit';
 
 /**
  * Écriture stricte de `storyEffects` (spec §C3, O15) — DERRIÈRE
@@ -72,6 +85,16 @@ const hoistLocation = hoistLocationDeep;
  *   jour serait un mensonge) ⇒ 400 CANVAS_INVALID + `issues`.
  * Rend `true` si une réponse d'erreur est partie (l'appelant sort).
  */
+function rejectInvalidBody(reply: FastifyReply, issues: ReadonlyArray<object>): void {
+  const limit = storyLimitFromIssues(issues);
+  const served = issuesServies(issues.slice(0, 5));
+  logWarn(reply.log, `[${reply.request.method} ${reply.request.routeOptions.url}] body refused: ${JSON.stringify(served)}`);
+  sendBadRequest(reply, 'Invalid request', {
+    code: 'VALIDATION_ERROR',
+    details: { issues: served, ...(limit ? { storyLimit: limit.code, limit: limit.max } : {}) },
+  });
+}
+
 /**
  * Plancher `X-App-Version` (spec §C3, O2) — la porte d'en-tête ne juge que
  * les requêtes qui EN PORTENT UN : l'ABSENCE passe TOUJOURS (le web est
@@ -87,17 +110,7 @@ function rejectBelowAppVersionFloor(
   data: { storyEffects?: unknown; type?: string }
 ): boolean {
   if (data.storyEffects == null && data.type !== 'STORY') return false;
-  const versionHeader = request.headers['x-app-version'];
-  const version = typeof versionHeader === 'string' ? versionHeader : undefined;
-  if (!isBelowFloor(version, getAppVersionFloor())) return false;
-  const platformHeader = request.headers['x-app-platform'];
-  sendUpgradeRequired(reply, 'App version outdated - update the app', {
-    details: {
-      minVersion: getAppVersionFloor(),
-      storeUrl: getAppStoreUrl(typeof platformHeader === 'string' ? platformHeader : undefined),
-    },
-  });
-  return true;
+  return rejectBelowFloor(request, reply);
 }
 
 function rejectNonV3StoryEffects(
@@ -119,9 +132,12 @@ function rejectNonV3StoryEffects(
   }
   const parsedCanvas = CanvasV3Schema.safeParse(storyEffects);
   if (!parsedCanvas.success) {
+    // La borne est ICI : `issuesServies` ne tronque pas — elle NORMALISE la
+    // forme (site unique #4487). Cinq issues suffisent à se corriger, et un
+    // canvas cassé peut en rendre des dizaines sur un écran verrouillé.
     sendBadRequest(reply, 'Invalid canvas', {
       code: 'CANVAS_INVALID',
-      details: { issues: parsedCanvas.error.issues.slice(0, 5) },
+      details: { issues: issuesServies(parsedCanvas.error.issues.slice(0, 5)) },
     });
     return true;
   }
@@ -153,34 +169,56 @@ function rejectUnclaimedCanvasMedia(
   return true;
 }
 
+/*
+ * `sanitizeMediaCaptions` vivait ICI, et n'était appelée par personne (#4055).
+ *
+ * Elle est SUPPRIMÉE, pas rebranchée : l'assainissement des deux colonnes de
+ * texte par média a rejoint `PostService.applyMediaText`, leur point de passage
+ * obligé avant la base. La garder à la route en aurait fait une seconde règle
+ * pour la même question — et celle-ci ne couvrait que `caption`, laissant `alt`
+ * sans garde alors que les deux partagent déjà leur écriture.
+ *
+ * Ce qu'elle laisse comme leçon : une garde MORTE est pire qu'une garde
+ * absente. L'absence se cherche ; la présence rassure.
+ */
+
 export function registerCoreRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
-  requiredAuth: any
+  requiredAuth: any,
+  // #9149 — la porte d'un LIEN PARTAGÉ : `GET /posts/:postId` laisse entrer un
+  // visiteur sans compte, que `anonymousPostGate` juge. Absente, la route reste
+  // fermée comme avant (fail-closed) : seul `postRoutes` la câble.
+  optionalAuth: ReturnType<typeof createUnifiedAuthMiddleware> = requiredAuth
 ) {
   const postService = new PostService(prisma);
+  // Les octets que « aussi en réel » COPIE (#9476) — la même interface que
+  // l'instantané de republication (`MediaStorage`).
+  const companionStorage = new MediaService();
+  // #4147 critère 2 — seau PARTAGÉ avec POST /posts/:postId/repost
+  // (interactions.ts, sa PROPRE instance de ce même preHandler) :
+  // `config.rateLimit` ne PEUT PAS le faire (chaque route qui le déclare
+  // reçoit son propre "child store", namespacé par sa méthode+URL — cf.
+  // socialRateLimit.ts, en-tête). Le partage réel vient de la CLÉ Redis
+  // (`social:write:create:{userId}`, verbatim, calculée pareil des deux
+  // côtés) — pas de l'identité de la fermeture, qui peut légitimement
+  // différer par fichier. Une seule instance ICI, réutilisée par les deux
+  // routes créatrices ci-dessous, pour ne construire le preHandler qu'une
+  // fois par démarrage plutôt qu'à chaque enregistrement de route.
+  const sharedWriteRateLimit = createSharedWriteRateLimitPreHandler();
   const mentionService = new MentionService(prisma);
   const hashtagService = new HashtagService(prisma);
+  const engagementService = new EngagementService(prisma);
 
   /**
-   * Le jeu FINAL des références d'un post, à servir après une écriture.
-   *
-   * Trois états, et les distinguer est tout l'intérêt : la résolution n'a rien
-   * pu établir (`undefined` — l'appelant garde ce que la relation portait, une
-   * mention périmée valant mieux qu'une mention détruite), le post ne nomme
-   * plus personne (`[]` sans ouvrir de requête — le cas de l'immense majorité
-   * des publications), ou il en nomme, et la seule source de leur profil et de
-   * leur mode est la base d'APRÈS l'écriture.
+   * Le corps de la PUBLICATION vit dans `./publication` (#4151) — un noyau
+   * unique, appelé par `POST /posts` et `POST /posts/from-attachment`. Ce qui
+   * reste ici est ce qui DIFFÈRE : la porte, la validation de son corps, et la
+   * décision de quelle ligne écrire. L'ÉDITION garde son propre chemin (elle
+   * réconcilie plutôt qu'elle ne crée) et n'emprunte au noyau que la relecture
+   * des références et la composition de la réponse.
    */
-  const finalReferences = async (
-    postId: string,
-    resolved: ResolvedPostMentions,
-    onError: (error: unknown) => void
-  ): Promise<PostReference[] | undefined> => {
-    if (!resolved.reconciled) return undefined;
-    if (resolved.mentionedUserIds.length === 0) return [];
-    return readPostReferences({ prisma, postId, onError });
-  };
+  const publicationContext = { fastify, prisma, mentionService, hashtagService, engagementService };
 
   // POST /posts — Create a new post
   //
@@ -202,9 +240,13 @@ export function registerCoreRoutes(
    * la table `Sound` avant d'effacer des octets, et les pièces jointes n'y
    * figurent pas.
    */
+  // Publier depuis une pièce jointe EST une création de post : même budget
+  // PARTAGÉ que POST /posts et POST /posts/:postId/repost
+  // (`sharedWriteRateLimit`, cf. définition ci-dessus).
   fastify.post('/posts/from-attachment', {
-    preValidation: [requiredAuth],
-    config: { rateLimit: createPostRouteRateLimitConfig('create') },
+    // #8476 — même porte de publication que POST /posts ci-dessous.
+    preValidation: [requiredAuth, requirePublishingGrace],
+    preHandler: [sharedWriteRateLimit],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -222,9 +264,50 @@ export function registerCoreRoutes(
         select: {
           id: true, messageId: true, mimeType: true, fileUrl: true, thumbnailUrl: true,
           originalName: true, width: true, height: true, duration: true, codec: true, thumbHash: true,
-          message: { select: { conversationId: true, conversation: { select: { identifier: true } } } },
+          // Le crédit de la lens (#11327) suit la copie vers le post.
+          lensSlug: true,
+          // Protection au niveau PIÈCE JOINTE (lue par `maskedAttachment`).
+          isViewOnce: true, isBlurred: true, effectFlags: true,
+          // Protection au niveau MESSAGE PARENT (lue par `protectedPreview`) —
+          // c'est LÀ que vit une vraie vue unique / flou / éphémère / chiffré.
+          // Une garde qui ne lisait que la pièce jointe laissait tout cela
+          // sortir EN CLAIR vers un post.
+          message: { select: {
+            conversationId: true,
+            // #14242 — `senderId` est un Participant.id : le blocage se lit sur son `userId`.
+            sender: { select: { userId: true } },
+            conversation: { select: { identifier: true } },
+            messageType: true, isViewOnce: true, isBlurred: true, isEncrypted: true,
+            effectFlags: true, expiresAt: true, createdAt: true,
+            // #9572 — la loi de sortie lit la durée ET chaque pièce du message :
+            // publier la pièce ordinaire d'un message dont une AUTRE pièce est
+            // à vue unique reste une sortie de ce message.
+            ephemeralDuration: true,
+            attachments: { select: { isViewOnce: true, isBlurred: true, effectFlags: true } },
+          } },
         },
       });
+
+      // Le VERDICT de protection, composé par les prédicats partagés aux DEUX
+      // niveaux. `protectedPreview` couvre aussi l'éphémère (refusé, cohérent
+      // avec la bannière) ; `maskedAttachment` couvre la pièce jointe masquée.
+      const mediaProtected =
+        protectedPreview({
+          messageType: attachment?.message?.messageType ?? null,
+          isViewOnce: attachment?.message?.isViewOnce,
+          isBlurred: attachment?.message?.isBlurred,
+          isEncrypted: attachment?.message?.isEncrypted,
+          effectFlags: attachment?.message?.effectFlags,
+          expiresAt: attachment?.message?.expiresAt,
+        }) !== null
+        || maskedAttachment({
+          isViewOnce: attachment?.isViewOnce,
+          isBlurred: attachment?.isBlurred,
+          effectFlags: attachment?.effectFlags,
+        })
+        // Le verdict « exporter » de la loi de sortie, FERMÉ sur une projection
+        // incomplète. Sans message parent, l'appartenance refuse plus bas.
+        || (attachment?.message != null && !contentExitLawOfSource(attachment.message).exportable);
 
       // L'appartenance est établie AVANT de planifier : le plan lui-même refuse
       // sans elle, mais lui donner un verdict d'accès faux le rendrait complice.
@@ -243,6 +326,7 @@ export function registerCoreRoutes(
           ? { ...attachment, messageId: attachment.messageId ?? null }
           : null,
         callerIsMemberOfConversation: isMember,
+        mediaIsProtected: mediaProtected,
         target: parsed.data.target,
       });
 
@@ -251,9 +335,16 @@ export function registerCoreRoutes(
         if (reason === 'forbidden') {
           return sendForbidden(reply, 'Not a member of this conversation', { code: 'FORBIDDEN' });
         }
+        if (reason === 'protected-media') {
+          return sendBadRequest(reply, 'This media is protected and cannot be published', { code: 'PROTECTED_MEDIA' });
+        }
         if (reason === 'unpublishable-media') {
           return sendBadRequest(reply, 'This media cannot be published', { code: 'UNPUBLISHABLE_MEDIA' });
         }
+        return sendNotFound(reply, 'Attachment not found', { code: 'ATTACHMENT_NOT_FOUND' });
+      }
+      // #14242 — publier la pièce d'un expéditeur avec qui un blocage existe se refuse comme une pièce introuvable.
+      if (await isBlockedWithAny(prisma, authContext.registeredUser.id, [attachment?.message?.sender?.userId])) {
         return sendNotFound(reply, 'Attachment not found', { code: 'ATTACHMENT_NOT_FOUND' });
       }
 
@@ -272,10 +363,14 @@ export function registerCoreRoutes(
         }),
       });
 
+      const postType = plan.plan.postType;
       const post = await postService.createPost(
         {
-          type: plan.plan.postType,
-          visibility: parsed.data.visibility ?? DEFAULT_PUBLICATION_VISIBILITY,
+          type: postType,
+          // La visibilité par défaut SUIT le type : une STORY tombe sur FRIENDS
+          // (parité avec `POST /posts`), tout le reste sur PUBLIC. Une constante
+          // unique rendait toute story publiée depuis un partage PUBLIQUE.
+          visibility: parsed.data.visibility ?? defaultVisibilityForPostType(postType),
           content: parsed.data.content
             ? SecuritySanitizer.sanitizeText(parsed.data.content)
             : undefined,
@@ -284,15 +379,42 @@ export function registerCoreRoutes(
         authContext.registeredUser.id,
       );
 
-      return sendSuccess(reply, post, { message: 'Published' });
+      // Le CORPS de la publication — le noyau partagé avec `POST /posts`
+      // (#4151). Il porte tout ce qui suit l'écriture : Prisme, mentions,
+      // relecture des références, diffusion, hashtags, éventail d'amis, et la
+      // composition du corps servi. La charge de from-attachment n'a ni canal
+      // `mentions` déclaré ni effets de scène — seul le TEXTE de la légende
+      // nomme, d'où les deux `undefined`.
+      const served = await runPublicationEffects({
+        ...publicationContext,
+        request,
+        post: post as unknown as PublishedPostRow,
+        authorId: authContext.registeredUser.id,
+        postType: postType as PublishedPostType,
+        submittedContent: parsed.data.content,
+        storyEffects: undefined,
+        declaredMentions: undefined,
+        editedInApp: parsed.data.editedInApp,
+        porte: 'POST /posts/from-attachment',
+      });
+
+      return sendSuccess(reply, served, { statusCode: 201 });
     } catch (error) {
       return sendInternalError(reply, 'Failed to publish attachment', { code: 'PUBLISH_FAILED' });
     }
   });
 
+  // #4147 critère 2 & témoin dédié (social-write-rate-limit.test.ts) : ce
+  // seau (`social:write:create:{userId}`) est PARTAGÉ avec
+  // POST /posts/from-attachment ci-dessus et POST /posts/:postId/repost
+  // (interactions.ts) — la garde du contournement « créer via repost pour
+  // éviter le plafond de création » vit dans ce partage, pas dans un
+  // plafond individuel supplémentaire.
   fastify.post('/posts', {
-    preValidation: [requiredAuth],
-    config: { rateLimit: createPostRouteRateLimitConfig('create') },
+    // #8476 — publier suit le délai de grâce de l'adresse (#8238) ; avant le
+    // budget d'écriture partagé pour ne pas le consommer en pure perte.
+    preValidation: [requiredAuth, requirePublishingGrace],
+    preHandler: [sharedWriteRateLimit],
     bodyLimit: 1 * 1024 * 1024,
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -303,7 +425,7 @@ export function registerCoreRoutes(
 
       const parsed = CreatePostSchema.safeParse(request.body);
       if (!parsed.success) {
-        return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
+        return rejectInvalidBody(reply, parsed.error.issues ?? []);
       }
 
       if (rejectBelowAppVersionFloor(request, reply, parsed.data)) {
@@ -318,8 +440,32 @@ export function registerCoreRoutes(
         return;
       }
 
+      // « Aussi en réel » (#9476) : une STORY originale seulement — une
+      // republication désigne les médias de sa SOURCE, et aucun autre type n'a
+      // de second format à porter.
+      const { alsoAsReel, ...creation } = parsed.data;
+      if (alsoAsReel === true && (creation.type !== 'STORY' || creation.repostOfId)) {
+        return sendBadRequest(reply, 'alsoAsReel requires an original story', { code: ALSO_AS_REEL_REQUIRES_STORY });
+      }
+      if (creation.repostOfId?.trim() && !(await mayRepostSource(prisma, creation.repostOfId, authContext.registeredUser.id))) {
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
+      const authorId = authContext.registeredUser.id;
+      // #6379 — publier dans une communauté : ses membres et son créateur seulement, même refus pour tout le reste.
+      if (creation.communityId !== undefined && !(await mayPublishInCommunity(prisma, creation.communityId, authorId))) {
+        return sendForbidden(reply, 'Not allowed to publish in this community', { code: 'COMMUNITY_POST_FORBIDDEN' });
+      }
+      // #14105 — un post ONLY original : ses choisis sans lien comptent au plafond
+      // quotidien, débités DANS l'opération journalisée (une création rejouée ne
+      // recompte rien) et rendus si l'écriture échoue.
+      const countsOnlyUnlinked = creation.visibility === 'ONLY' && !creation.repostOfId?.trim();
       type CreatedPost = Awaited<ReturnType<typeof postService.createPost>>;
-      const post = await withMutationLog<CreatedPost>({
+      let companionReel: (CreatedPost & { id: string }) | undefined;
+      // #9603 — le verdict du journal dit si la publication vient d'être
+      // écrite ou si elle est REJOUÉE. Rejouée, elle est resservie et rien de
+      // ce qui suit la première écriture ne repart : ni crédit, ni diffusion,
+      // ni mentions, ni éventail d'amis.
+      const { result: post, replayed } = await withMutationVerdict<CreatedPost>({
         request,
         fastify,
         userId: authContext.registeredUser.id,
@@ -328,186 +474,142 @@ export function registerCoreRoutes(
         // Rejouer sur un résultat disparu fabriquerait un doublon (contenu
         // supprimé qui ressuscite), d'où le 410 rendu par le catch de la route.
         replayCost: 'diverges',
-        op: () => postService.createPost({
-          ...parsed.data,
-          content: parsed.data.content !== undefined ? SecuritySanitizer.sanitizeText(parsed.data.content) : undefined,
-          type: parsed.data.type ?? 'POST',
-          visibility: parsed.data.visibility ?? (parsed.data.type === 'STORY' ? 'FRIENDS' : 'PUBLIC'),
-        }, authContext.registeredUser.id) as Promise<CreatedPost & { id: string }>,
+        op: async () => {
+          const spent = countsOnlyUnlinked
+            ? await spendOnlyUnlinkedBudget({ fastify, prisma, authorId, chosenIds: creation.visibilityUserIds ?? [] })
+            : null;
+          if (spent && !spent.allowed) throw new OnlyUnlinkedBudgetRefused(spent);
+          return publish().catch(async (error: unknown) => {
+            if (spent) await releaseOnlyUnlinkedBudget({ fastify, authorId, unlinked: spent.unlinked });
+            throw error;
+          });
+        },
         onDuplicate: async (resultId) => {
           const replayed = await postService.getPostById(resultId, authContext.registeredUser.id);
           return replayed ? (replayed as unknown as CreatedPost & { id: string }) : null;
         },
       });
-
-      // Trigger async translation for text content (fire-and-forget).
-      //
-      // G2 — seules les STORY sont EXCLUES : leur `content` est déjà traduit
-      // par le pipeline audience-driven du service
-      // (`PostService.triggerStoryTextTranslation`) ; déclencher AUSSI
-      // `translatePost` (5 langues fixes) doublait les jobs ZMQ et créait
-      // des écritures concurrentes dans `Post.translations`.
-      //
-      // La condition testait `=== 'POST'`, ce qui laissait REEL et STATUS
-      // sans aucun pipeline — ni ici, ni dans le service. Or le feed de
-      // production est fait presque uniquement de REEL portant du texte :
-      // vérifié le 2026-07-27, 40 REEL consécutifs sans une seule traduction.
-      // Le Prisme ne s'appliquait donc pas au gros du contenu. On exclut
-      // désormais STORY explicitement, pour qu'un futur type soit couvert
-      // par défaut plutôt qu'oublié en silence.
-      const postType = parsed.data.type ?? 'POST';
-      const shouldTranslateContent = Boolean(parsed.data.content) && postType !== 'STORY';
-      if (shouldTranslateContent) {
-        try {
-          const translationService = PostTranslationService.shared;
-          translationService.translatePost(
-            (post as any).id,
-            parsed.data.content,
-            // Use the canonical language persisted by createPost (SSOT) rather
-            // than the raw client claim — it already incorporates the normalized
-            // claim (or the detected fallback) and matches the NLLB source keys.
-            (post as any).originalLanguage,
-            authContext.registeredUser.id,
-          ).catch((err) => fastify.log.warn({ err }, '[POST /posts]: translate post failed'));
-        } catch {
-          // PostTranslationService not initialized — skip silently
+      function publish(): Promise<CreatedPost & { id: string }> {
+        // `detectedLanguage` (#5349) EST désormais une entrée de
+        // `PostService.createPost`, persistée sur `Post` (#5422) : sans elle,
+        // une traduction demandée après coup (`translateOnDemand`) retombait
+        // sur la détection regex du serveur au lieu de la mesure on-device
+        // déjà faite à la création. Elle traverse donc par le spread comme le
+        // reste de `parsed.data`, au même titre qu'`originalLanguage`.
+        const input = {
+          ...creation,
+          content: creation.content !== undefined ? SecuritySanitizer.sanitizeText(creation.content) : undefined,
+          type: creation.type ?? 'POST',
+          visibility: creation.visibility ?? (creation.type === 'STORY' ? 'FRIENDS' : 'PUBLIC'),
+        };
+        if (alsoAsReel !== true) {
+          return postService.createPost(input, authorId) as Promise<CreatedPost & { id: string }>;
         }
+        // Les DEUX publications, ou aucune. Le journal de mutation retient la
+        // STORY (l'id rendu) ; le réel voyage à côté, dans `reel`.
+        return publishStoryAlsoAsReel({
+          prisma,
+          storage: companionStorage,
+          createPost: (post, author) => postService.createPost(post, author) as Promise<CreatedPost & { id: string }>,
+          retractPost: (postId, author) => postService.deletePost(postId, author, { actorRole: 'USER', reason: 'also-as-reel-rollback' }),
+        }, input, authorId).then(({ story, reel }) => {
+          companionReel = reel;
+          return story;
+        });
       }
 
-      const postContent = (post as any).content as string | undefined;
+      if (replayed) {
+        return sendSuccess(reply, servePublishedPost({
+          post: post as unknown as Record<string, unknown>,
+          references: undefined,
+          request,
+        }), { statusCode: 201 });
+      }
 
-      // GW1 — use the DECORATED instance (wired push+socket+email by
-      // server.ts), never a bare local NotificationService: a bare instance
-      // persists notifications but silently drops every push and socket emit
-      // (friend_new_post/friend_new_story/friend_new_mood never delivered).
-      // The guard keeps degraded boot working (decoration happens after
-      // SocketIOManager init; standalone harnesses may not have it).
-      const notifService = fastify.notificationService;
+      // #10525 — une story ou un mood republié par le composeur passe par ICI,
+      // pas par `/repost` : son auteur doit être prévenu de la même façon. La
+      // source est relue AVANT le noyau, qui retire son auteur de l'éventail
+      // d'amis (« a republié votre story » prime sur « nouvelle story ») ; une
+      // relecture qui jette ne défait pas une publication actée (#6524).
+      const sourcePostId = (post as { repostOfId?: string | null }).repostOfId ?? null;
+      const repostedSource = sourcePostId
+        ? await readRepostedSource((id, viewer) => postService.getPostById(id, viewer), sourcePostId, authorId)
+            .catch((err: unknown) => {
+              logWarn(fastify.log, '[POST /posts]: reposted source read failed', err);
+              return null;
+            })
+        : null;
 
-      // Persist and notify post-body mentions. Single entry point shared with
-      // the edit path (services/posts/postMentions.ts) — never throws.
-      const createdMentions = await resolvePostMentions({
-        prisma,
-        mentionService,
-        notificationService: notifService,
-        post: {
-          id: (post as any).id as string,
-          authorId: authContext.registeredUser.id,
-          // Discriminant d'entité → surface ouverte au tap côté client.
-          type: postType as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
-          // Audience du post — décide qui, parmi les nommés, a le droit d'être
-          // prévenu. Un mentionné hors audience recevait l'extrait du contenu.
-          visibility: (post as any).visibility as string | undefined,
-          visibilityUserIds: (post as any).visibilityUserIds as string[] | undefined,
-        },
-        content: postContent,
+      // Le CORPS de la publication — le noyau partagé avec
+      // `POST /posts/from-attachment` (#4151). Il porte le Prisme, les
+      // mentions, la relecture des références, la diffusion, les hashtags,
+      // l'éventail d'amis et la composition du corps servi.
+      //
+      // `postType` est le type DEMANDÉ, pas celui qui a été écrit : la branche
+      // de diffusion suit l'intention (`createPost` peut avoir dégradé un REEL
+      // non qualifiant en POST, ce qui ne change pas la branche mais changerait
+      // le contrat si on lisait la ligne), l'éventail d'amis suit la base.
+      const served = await runPublicationEffects({
+        ...publicationContext,
+        request,
+        post: post as unknown as PublishedPostRow,
+        authorId: authContext.registeredUser.id,
+        postType: (parsed.data.type ?? 'POST') as PublishedPostType,
+        submittedContent: parsed.data.content,
         // Le texte d'une story ne vit pas dans sa légende : il vit dans les
         // objets de canevas. Sans ce champ, un `@handle` tapé sur une slide ne
-        // nommait personne.
-        storyEffects: parsed.data.storyEffects,
+        // nommait personne. Le canvas ENREGISTRÉ, jamais celui de la requête :
+        // `createPost` a pu y retirer une puce de crédit indue (#10497).
+        storyEffects: (post as { storyEffects?: unknown }).storyEffects,
         // Les nommés que le TEXTE ne porte pas : badge posé sur le canevas
         // d'une story, note sous le contenu, métadonnée silencieuse. Sans ce
         // canal, les nommer imposait d'écrire leur `@handle` dans la légende —
         // une phrase inventée pour satisfaire l'extracteur, visible de tous et
         // traduite par le Prisme comme du contenu d'auteur.
-        declared: parsed.data.mentions,
-        onError: (err: unknown) => {
-          fastify.log.error(`[POST /posts] post mention reconcile failed: ${err}`);
-        },
-      });
-      // L'éventail vers les amis exclut les mentionnés : `user_mentioned` prime
-      // sur `friend_new_post`, sinon un ami nommé reçoit les deux.
-      const mentionedUserIdsForDedup = [...createdMentions.mentionedUserIds];
-
-      // Le jeu FINAL, relu APRÈS l'écriture des lignes. `createPost` a chargé
-      // sa relation avant que `resolvePostMentions` n'existe pour ce post : la
-      // servir telle quelle rendait `mentions: []` PAR CONSTRUCTION, et les
-      // deux clients lisent `[]` comme un verdict (« personne ne matche »),
-      // pas comme une absence de savoir — l'auteur voyait son propre `@alice`
-      // en texte mort.
-      const references = await finalReferences((post as any).id as string, createdMentions, (err: unknown) => {
-        fastify.log.error(`[POST /posts] post reference reload failed: ${err}`);
+        declaredMentions: parsed.data.mentions,
+        // Langue MESURÉE côté composer web (#5349) — voir la note d'en-tête
+        // de `runPublicationEffects` pour son rang face à `originalLanguage`.
+        detectedLanguage: parsed.data.detectedLanguage,
+        editedInApp: parsed.data.editedInApp,
+        porte: 'POST /posts',
+        repostedAuthorId: repostedAuthorToNotify(repostedSource, authorId),
       });
 
-      // Broadcast via Socket.IO — APRÈS la résolution, seul instant où les
-      // références du post existent. Avant, l'événement partait avec la
-      // relation vide qu'il venait de charger.
-      const socialEvents = fastify.socialEvents;
-      if (socialEvents) {
-        // La charge utile temps réel est servie à une AUDIENCE : elle reste
-        // neutre, sans les silencieuses — même règle que le `select` des feeds
-        // (`postMentionInclude`), appliquée ici parce que le jeu relu, lui, les
-        // porte toutes.
-        const broadcastReferences = references && projectReferencesForViewer({
-          references,
-          authorId: authContext.registeredUser.id,
-          viewerId: undefined,
-        });
-        // `withMentions` AUSSI sur l'événement : une charge utile temps réel est
-        // une charge utile. Servie sous le nom de la relation Prisma
-        // (`postMentions`), elle ne se décode pas — la clé exposée est
-        // `mentions`, ici comme dans la réponse rendue plus bas.
-        const broadcastPost = withMentions(
-          graftReferences(
-            hoistLocation(hoistTrackingLinks(post)) as unknown as Record<string, unknown>,
-            broadcastReferences
-          ),
-          WIRE_BROADCAST
-        ) as unknown as Post;
-        if (postType === 'STORY') {
-          // U1 parity — voir `broadcastPostCreated` juste en dessous : sans
-          // l'écho du cmid, une STORY créée hors-ligne (dont un repost via
-          // `POST /posts { repostOfId }`) ne pouvait jamais réconcilier son
-          // item optimiste avec la story serveur.
-          socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast story created failed'));
-        } else if (postType === 'STATUS') {
-          // U1 parity — même raison que STORY ci-dessus.
-          socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast status created failed'));
-        } else {
-          // U1 — echo the request cmid so an offline author reconciles its
-          // optimistic temp post (keyed by cmid) with this server post.
-          socialEvents.broadcastPostCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast post created failed'));
-        }
+      if (sourcePostId) {
+        noteRepostInteraction(fastify.prisma, { actorId: authorId, source: repostedSource });
+        notifyRepostedAuthor(fastify.notificationService, {
+          actorId: authorId,
+          source: repostedSource,
+          sourcePostId,
+          repostId: post.id,
+          reposterEntourageNotified: true,
+        }).catch((err: unknown) => logWarn(fastify.log, '[POST /posts]: notify post repost failed', err));
       }
 
-      if (postContent) {
-        const hashtags = hashtagService.extractHashtags(postContent);
-        if (hashtags.length > 0) {
-          hashtagService.createPostHashtags((post as any).id as string, hashtags).catch((err: unknown) => {
-            fastify.log.error(`[POST /posts] hashtag persist failed: ${err}`);
-          });
-        }
+      if (!companionReel) {
+        return sendSuccess(reply, served, { statusCode: 201 });
       }
-
-      // Fan-out to friends: user_mentioned takes priority (dedup via excludeUserIds)
-      if (notifService) {
-        const postTypeForNotif = ((post as any).type ?? parsed.data.type ?? 'POST') as 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL';
-        notifService.createFriendContentNotificationsBatch({
-          postId: (post as any).id as string,
-          authorId: authContext.registeredUser.id,
-          contentType: postTypeForNotif,
-          excerpt: postContent?.slice(0, 100),
-          postCreatedAt: (post as any).createdAt ?? undefined,
-          postExpiresAt: (post as any).expiresAt ?? undefined,
-          excludeUserIds: mentionedUserIdsForDedup,
-          visibility: (post as any).visibility as string | undefined,
-          visibilityUserIds: (post as any).visibilityUserIds as string[] | undefined,
-        }).catch((err: unknown) => {
-          fastify.log.error(`[POST /posts] friend content notification fan-out failed: ${err}`);
-        });
-      }
-
-      // La réponse va à l'AUTEUR, et lui voit tout — y compris les silencieuses
-      // qu'il vient de poser, sans quoi il ne pourrait plus en retirer une.
-      return sendSuccess(
-        reply,
-        withMentions(
-          graftReferences(hoistLocation(post as unknown as Record<string, unknown>), references),
-          wireReaderFromRequest(request as UnifiedAuthRequest)
-        ),
-        { statusCode: 201 }
-      );
+      // Le réel est une publication à part entière : il passe par le MÊME
+      // noyau (Prisme, mentions, diffusion, hashtags, éventail d'amis).
+      const servedReel = await runPublicationEffects({
+        ...publicationContext,
+        request,
+        post: companionReel as unknown as PublishedPostRow,
+        authorId,
+        postType: 'REEL',
+        submittedContent: parsed.data.content,
+        storyEffects: companionReel.storyEffects,
+        declaredMentions: parsed.data.mentions,
+        detectedLanguage: parsed.data.detectedLanguage,
+        editedInApp: parsed.data.editedInApp,
+        porte: 'POST /posts',
+      });
+      return sendSuccess(reply, { ...served, reel: servedReel }, { statusCode: 201 });
     } catch (error) {
+      if (error instanceof ReelCompanionNotQualifiedError) {
+        return sendError(reply, 422, 'The composition does not qualify as a reel', { code: REEL_NOT_QUALIFIED });
+      }
+      if (error instanceof OnlyUnlinkedBudgetRefused) return refuseOnlyUnlinkedBudget(reply, error.verdict);
       // Le cmid a bien été appliqué, mais son résultat n'est plus relisible
       // (contenu supprimé, expiré, ou hors de la tranche ACL du lecteur) et
       // l'op DIVERGE — la rejouer recréerait une ligne que l'auteur a fait
@@ -516,19 +618,33 @@ export function registerCoreRoutes(
       if (error instanceof MutationResultGone) {
         return sendGone(reply, 'Post already applied, its result is gone', { code: 'MUTATION_RESULT_GONE' });
       }
-      fastify.log.error(`[POST /posts] Error: ${error}`);
+      // Une requête jumelle (même cmid) publie en ce moment : ni resservir ni
+      // rejouer. 409, que la file durable iOS retente.
+      if (error instanceof MutationInFlight) {
+        return sendConflict(reply, 'Post already in flight', { code: 'MUTATION_IN_FLIGHT' });
+      }
+      logError(fastify.log, '[POST /posts] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
   // GET /posts/:postId — Get post by ID
   fastify.get('/posts/:postId', {
-    preValidation: [requiredAuth],
+    schema: { params: postIdParamsSchema },
+    preValidation: [optionalAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       const viewerUserId = authContext?.registeredUser?.id;
       const { postId } = request.params;
+
+      // #9149 — un visiteur SANS COMPTE (aucune session, ou l'invité d'un lien
+      // de conversation) ne lit que ce que `anonymousPostGate` autorise :
+      // public, vivant, d'un auteur actif, original compris. Refusé, il reçoit
+      // le même 404 qu'une publication inexistante.
+      if (viewerUserId === undefined && !(await mayServePostToAnonymous(prisma, postId))) {
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
 
       const post = await postService.getPostById(postId, viewerUserId);
       if (!post) {
@@ -537,17 +653,26 @@ export function registerCoreRoutes(
 
       reply.header('Cache-Control', 'private, no-cache');
 
+      // `viewerPoints` (#9569) — ce que ce post a rapporté au LECTEUR. Posé
+      // ICI et non dans `getPostById` : ce dernier nourrit aussi les réponses
+      // d'ÉCRITURE (like, republication, rejeu), qui partent avant que le
+      // crédit du geste soit écrit — elles serviraient une valeur périmée
+      // qu'un client poserait par-dessus celle de `engagement:post-updated`.
+      // Une lecture le sert ; une écriture ne le porte pas.
+      const [served] = await withViewerPoints(prisma, viewerUserId, [post]);
+
       // `getPostById` a déjà aplati ET projeté la racine pour CE lecteur —
       // `withMentions` y est neutre. Ce qu'il reste à faire est l'imbriqué : le
       // post ORIGINAL d'une republication porte, lui, la relation sous son nom
       // de schéma (`repostOfInclude`), et un client ne décode pas
       // `repostOf.postMentions`.
-      return sendSuccess(reply, withMentions(
-        hoistLocation(post as unknown as Record<string, unknown>),
-        wireReaderFromRequest(request as UnifiedAuthRequest)
-      ));
+      return sendSuccess(reply, servePublishedPost({
+        post: served as unknown as Record<string, unknown>,
+        references: undefined,
+        request,
+      }));
     } catch (error) {
-      fastify.log.error(`[GET /posts/:postId] Error: ${error}`);
+      logError(fastify.log, '[GET /posts/:postId] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -555,6 +680,7 @@ export function registerCoreRoutes(
   // PUT /posts/:postId — Update a post (author only)
   // Per-route bodyLimit 1MB — voir POST /posts pour la justification.
   fastify.put('/posts/:postId', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
     bodyLimit: 1 * 1024 * 1024,
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
@@ -567,12 +693,28 @@ export function registerCoreRoutes(
       const { postId } = request.params;
       const parsed = UpdatePostSchema.safeParse(request.body);
       if (!parsed.success) {
-        return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
+        return rejectInvalidBody(reply, parsed.error.issues ?? []);
       }
 
       if (rejectNonV3StoryEffects(request, reply, parsed.data.storyEffects)) {
         return;
       }
+
+      // Au-delà de dix médias, seul un post STORY est admis : le type est celui du post STOCKÉ, le corps ne le porte pas.
+      if ((parsed.data.mediaIds?.length ?? 0) > mediaIdsMaxFor(undefined)) {
+        const stored = await prisma.post.findUnique({ where: { id: postId }, select: { type: true } });
+        const max = mediaIdsMaxFor(stored?.type);
+        if (stored && parsed.data.mediaIds!.length > max) {
+          return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR', details: { limit: max } });
+        }
+      }
+
+      // #10315 — une publication mise hors ligne par la modération ne se
+      // rouvre pas par une édition de son auteur, ni une republication au-delà
+      // de sa source.
+      const audience = await audienceChangeVerdict(prisma, { postId, userId: authContext.registeredUser.id, requestedVisibility: parsed.data.visibility });
+      if (audience.refusal === 'held') return sendForbidden(reply, 'This publication is held offline by moderation', { code: 'POST_MODERATION_HELD' });
+      if (audience.refusal === 'repost-broader') return sendForbidden(reply, 'A repost cannot be broader than its source', { code: 'REPOST_AUDIENCE_BROADER' });
 
       // Lieu à l'édition — tri-état : absent = inchangé, null = retrait,
       // objet = remplacement validé par le MÊME parseSharedPlace que la
@@ -590,13 +732,32 @@ export function registerCoreRoutes(
         }
       }
 
+      // #14105 — débité APRÈS les refus de saisie : un 400 ne coûte rien.
+      const onlyBudget = await spendOnlyUnlinkedBudgetOnEdit(fastify, prisma, { postId, authorId: authContext.registeredUser.id, update: parsed.data });
+      if (!onlyBudget.allowed) return refuseOnlyUnlinkedBudget(reply, onlyBudget);
+
       const baseUpdateData = parsed.data.content !== undefined
         ? { ...parsed.data, content: SecuritySanitizer.sanitizeText(parsed.data.content) }
         : parsed.data;
       const sanitizedUpdateData = { ...baseUpdateData, location: locationUpdate };
-      const post = await postService.updatePost(postId, authContext.registeredUser.id, sanitizedUpdateData);
+      // L'écriture porte la condition « pas hors ligne » (`updatePost`) : un retrait posé
+      // pendant la requête la fait échouer (P2025), et ce refus se dit comme le verdict.
+      const releaseOnlyBudget = () => releaseOnlyUnlinkedBudget({ fastify, authorId: authContext.registeredUser.id, unlinked: onlyBudget.unlinked });
+      const post = await postService.updatePost(postId, authContext.registeredUser.id, sanitizedUpdateData).catch(async (error: unknown) => {
+        if (parsed.data.visibility !== undefined && parsed.data.visibility !== 'PRIVATE' && (error as { code?: unknown } | null)?.code === 'P2025') return 'held' as const;
+        await releaseOnlyBudget();
+        throw error;
+      });
+      if (post === 'held' || !post) await releaseOnlyBudget();
+      if (post === 'held') return sendForbidden(reply, 'This publication is held offline by moderation', { code: 'POST_MODERATION_HELD' });
       if (!post) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
+      if (audience.clearsPriorVisibility) {
+        await prisma.post.updateMany({
+          where: { id: postId, authorId: authContext.registeredUser.id, OR: [{ moderationHiddenAt: null }, { moderationHiddenAt: { isSet: false } }] },
+          data: { moderationPriorVisibility: null },
+        });
       }
 
       // Une édition RÉCONCILIE : elle retire les lignes des partants et ne
@@ -627,7 +788,7 @@ export function registerCoreRoutes(
         // correction de frappe — elles n'y sont pas, c'est leur raison d'être.
         declared: parsed.data.mentions,
         onError: (err: unknown) => {
-          fastify.log.error(`[PUT /posts/:postId] post mention reconcile failed: ${err}`);
+          logError(fastify.log, '[PUT /posts/:postId] post mention reconcile failed', err);
         },
       });
 
@@ -636,19 +797,24 @@ export function registerCoreRoutes(
       // laissait une référence révoquée affichée chez tous les lecteurs, que
       // rien n'invalidait ensuite (le web remplace le post en cache sans
       // refetch), et privait l'édition de toute façon d'annoncer une entrante.
-      const references = await finalReferences(postId, reconciled, (err: unknown) => {
-        fastify.log.error(`[PUT /posts/:postId] post reference reload failed: ${err}`);
+      const references = await finalReferences({
+        prisma,
+        postId,
+        resolved: reconciled,
+        onError: (err: unknown) => {
+          logError(fastify.log, '[PUT /posts/:postId] post reference reload failed', err);
+        },
       });
 
       {
         const editHashtags = editedContent ? hashtagService.extractHashtags(editedContent) : [];
         if (editHashtags.length > 0) {
           hashtagService.createPostHashtags(postId, editHashtags).catch((err: unknown) => {
-            fastify.log.error(`[PUT /posts/:postId] hashtag persist failed: ${err}`);
+            logError(fastify.log, '[PUT /posts/:postId] hashtag persist failed', err);
           });
         }
         hashtagService.reconcileRemovedHashtags(postId, editHashtags.map((h) => h.tag)).catch((err: unknown) => {
-          fastify.log.error(`[PUT /posts/:postId] hashtag reconcile failed: ${err}`);
+          logError(fastify.log, '[PUT /posts/:postId] hashtag reconcile failed', err);
         });
       }
 
@@ -672,30 +838,30 @@ export function registerCoreRoutes(
         // — doit rester visible sur CE broadcast aussi, sinon un post modifié
         // après coup (visibilité, contenu…) republierait sans sa position.
         const broadcastPost = withMentions(
-          graftReferences(hoistLocation(post as unknown as Record<string, unknown>), broadcastReferences),
+          graftReferences(hoistLocation(hoistTrackingLinks(post as unknown as Record<string, unknown>)), broadcastReferences),
           WIRE_BROADCAST
         ) as unknown as Post;
         if (updatedPostType === 'STORY') {
-          // Même prédicat que le reset d'engagement du service — les deux ne
-          // peuvent pas diverger sur un même payload.
+          // #16386 — une édition garde l'engagement : `false` dit aux clients,
+          // anciens compris, de garder la story « vue » et ses compteurs.
           socialEvents.broadcastStoryUpdated(broadcastPost, authContext.registeredUser.id, {
-            engagementReset: storyContentEditRequested(parsed.data),
-          }).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast story updated failed'));
+            engagementReset: false,
+          }).catch((err) => logWarn(fastify.log, '[PUT /posts/:postId]: broadcast story updated failed', err));
         } else if (updatedPostType === 'STATUS') {
-          socialEvents.broadcastStatusUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast status updated failed'));
+          socialEvents.broadcastStatusUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => logWarn(fastify.log, '[PUT /posts/:postId]: broadcast status updated failed', err));
         } else {
-          socialEvents.broadcastPostUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast post updated failed'));
+          socialEvents.broadcastPostUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => logWarn(fastify.log, '[PUT /posts/:postId]: broadcast post updated failed', err));
         }
       }
 
       // La réponse va à l'AUTEUR — seul autorisé à éditer — et lui voit tout.
-      return sendSuccess(
-        reply,
-        withMentions(
-          graftReferences(hoistLocation(post as unknown as Record<string, unknown>), references),
-          wireReaderFromRequest(request as UnifiedAuthRequest)
-        )
-      );
+      // Même composition que les portes de création (`servePublishedPost`,
+      // #4151) : une édition rend le même post que la publication.
+      return sendSuccess(reply, servePublishedPost({
+        post: post as unknown as Record<string, unknown>,
+        references,
+        request,
+      }));
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Not authorized to edit this post', { code: 'FORBIDDEN' });
@@ -705,13 +871,14 @@ export function registerCoreRoutes(
       if (error instanceof Error && (error as { statusCode?: number }).statusCode === 422) {
         return sendBadRequest(reply, error.message, { code: 'INVALID_POST_UPDATE' });
       }
-      fastify.log.error(`[PUT /posts/:postId] Error: ${error}`);
+      logError(fastify.log, '[PUT /posts/:postId] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
   // DELETE /posts/:postId — Soft delete (auteur, ou modérateur et plus avec audit)
   fastify.delete('/posts/:postId', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
@@ -721,11 +888,33 @@ export function registerCoreRoutes(
       }
 
       const { postId } = request.params;
-      const result = await postService.deletePost(postId, authContext.registeredUser.id, {
-        actorRole: authContext.registeredUser.role,
+      const actor = authContext.registeredUser;
+      const target = await prisma.post.findFirst({ where: { id: postId, deletedAt: NOT_DELETED }, select: { authorId: true, type: true } });
+      if (!target) {
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
+      // #11149 — un tiers (MODERATOR+, dominant l'auteur) retire avec un motif.
+      const decision = await decideContentRemoval(prisma, { actorId: actor.id, actorRole: actor.role, authorId: target.authorId, body: request.body });
+      if (decision.kind === 'refused') {
+        return decision.status === 400
+          ? sendBadRequest(reply, MODERATION_REASON_MESSAGE, { code: decision.code })
+          : sendForbidden(reply, 'Not authorized to delete this post', { code: decision.code });
+      }
+      const result = await postService.deletePost(postId, actor.id, {
+        actorRole: actor.role,
+        ...(decision.kind === 'moderation' ? { reason: decision.reason } : {}),
       });
       if (!result) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
+      if (decision.kind === 'moderation') {
+        notifyContentRemoved({ prisma }, {
+          authorUserId: target.authorId,
+          contentType: removedPostContentType(target.type),
+          contentId: postId,
+          postId,
+          reason: decision.reason,
+        }).catch((err) => logWarn(fastify.log, '[DELETE /posts/:postId]: author notification failed', err));
       }
 
       // `deletePost` autorise « l'auteur OU un modérateur et plus » : l'acteur
@@ -734,22 +923,38 @@ export function registerCoreRoutes(
       broadcastPostRemoval(
         fastify.socialEvents,
         result,
-        (err) => fastify.log.warn({ err }, '[DELETE /posts/:postId]: broadcast deletion failed')
+        (err) => logWarn(fastify.log, '[DELETE /posts/:postId]: broadcast deletion failed', err)
       );
+      // #7969 — les conversations qui CITENT ce post passent leur carte en
+      // « Story indisponible » sans relire ; best-effort, jamais attendu.
+      announceCitedPostWithdrawal({
+        prisma,
+        io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+        post: result,
+      }).catch((err) => logWarn(fastify.log, '[DELETE /posts/:postId]: cited-post announce failed', err));
 
       return sendSuccess(reply, { deleted: true });
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Not authorized to delete this post', { code: 'FORBIDDEN' });
       }
-      fastify.log.error(`[DELETE /posts/:postId] Error: ${error}`);
+      logError(fastify.log, '[DELETE /posts/:postId] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
   // POST /posts/:postId/translate — Request on-demand translation for a specific language
+  //
+  // #4147 critère 3 — chaque appel enfile un job ZMQ coûteux vers le
+  // translator ; cette route n'avait AUCUN plafond avant ce lot. Seau
+  // PARTAGÉ avec POST /posts/:postId/comments/:commentId/translate
+  // (comments.ts, même fabrique `createSocialTranslateRateLimitConfig`) : le
+  // pipeline de traduction protégé est le même, qu'on traduise un post ou un
+  // commentaire.
   fastify.post('/posts/:postId/translate', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
+    config: { rateLimit: createSocialTranslateRateLimitConfig() },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -785,7 +990,7 @@ export function registerCoreRoutes(
 
       return sendSuccess(reply, { requested: true, targetLanguage: parsed.data.targetLanguage });
     } catch (error) {
-      fastify.log.error(`[POST /posts/:postId/translate] Error: ${error}`);
+      logError(fastify.log, '[POST /posts/:postId/translate] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });

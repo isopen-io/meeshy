@@ -63,6 +63,13 @@ updates:
     # next 16 casse Turbopack contre @meeshy/shared transpilé (cf. PR #1542, #1676) —
     # bloquer les majeures tant que la migration n'est pas vetée manuellement
     ignore:
+      # Aucune montée MAJEURE automatique (directive porteur 2026-11-08) : elles
+      # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # zod est épinglé à 4.4.3 par `overrides` (budget de poids de la première
+      # peinture web, cf0b73804c / cf3196a4db) : jamais de montée automatique.
+      - dependency-name: "zod"
       - dependency-name: "next"
         update-types: ["version-update:semver-major"]
       # CI tourne sous Node 22 : les majeures de @types/node doivent suivre
@@ -119,6 +126,18 @@ updates:
       - dependency-type: "indirect"
     versioning-strategy: increase
     ignore:
+      # Aucune montée MAJEURE automatique (directive porteur 2026-11-08) : elles
+      # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # zod est épinglé à 4.4.3 par `overrides` (budget de poids de la première
+      # peinture web, cf0b73804c / cf3196a4db) : jamais de montée automatique.
+      - dependency-name: "zod"
+      # libsignal : UNE version pour la passerelle, shared, iOS et Android
+      # (#17113). Aucune montée automatique, correctif compris : elle désaligne
+      # les quatre plateformes et casse les vecteurs croisés. Montée à la main,
+      # les quatre ensemble, avec son issue.
+      - dependency-name: "@signalapp/libsignal-client"
       # Prisma v7 désactivé jusqu'à la prise en compte de MongoDB
       # (Prisma 7 retire `datasource url` du schema → P1012 ; migration vers prisma.config.ts + adapter requise)
       - dependency-name: "prisma"
@@ -179,15 +198,42 @@ updates:
       - dependency-type: "direct"
       - dependency-type: "indirect"
     ignore:
+      # Aucune montée MAJEURE automatique (directive porteur 2026-11-08) : elles
+      # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # Épinglés à la main, jamais par Dependabot : numpy<1.24.0 (ESPnet 202412 +
+      # chatterbox-tts, voir espnet ci-dessous) et httpcore 0.17.3 (Prisma Python).
+      - dependency-name: "numpy"
+      - dependency-name: "httpcore"
       # espnet 202509+/202511 exigent numpy>=2.0, incompatible avec le pin
       # numpy<1.24.0 (ESPnet 202412 + chatterbox-tts). Un bump casse le build
       # Docker translator (cf. #1539 → CI Docker #2074). Rester sur 202412.
       - dependency-name: "espnet"
       - dependency-name: "espnet-model-zoo"
+      # speechbrain 1.1.2 exige torch>=2.7.1 : il fait monter l'image à torch 2.12 /
+      # torchaudio 2.11, malgré le pin torch==2.6.0 du Dockerfile (et chatterbox-tts
+      # qui l'exige). La synthèse TTS échouait à chaque vocal, aucune traduction
+      # audio ne partait (#16340). Rester sous 1.1.2 tant que torch reste à 2.6.0.
+      - dependency-name: "speechbrain"
+        versions: [">=1.1.2"]
       # grpcio-tools/grpcio-reflection 1.76.0 (pin documenté dans requirements.txt)
       # plafonnent protobuf <7.0.0 ; un bump 7.x casse l'install du translator
       - dependency-name: "protobuf"
         versions: [">=7.0.0"]
+      # …et le plafond vaut dans les DEUX sens : grpcio-reflection 1.83.1 exige
+      # protobuf>=7.35.1 (#5508 fusionné le 2026-09-13 a cassé Build translator).
+      # La famille ne bouge qu'ensemble, jamais par un bump isolé.
+      - dependency-name: "grpcio-reflection"
+        versions: [">=1.77.0"]
+      - dependency-name: "grpcio-tools"
+        versions: [">=1.77.0"]
+      # anyio 4.15.0 rend `anyio.abc` inatteignable sans import explicite, et
+      # httpcore 0.17.3 (épinglé pour Prisma) l'annote à la création de classe :
+      # l'image translator ne se construit plus. 4.15.1 corrige (anyio#1311) —
+      # seule la version fautive est ignorée (détail : requirements.txt).
+      - dependency-name: "anyio"
+        versions: ["4.15.0"]
       # pyannote-audio>=4.0 → pyannote-core>=6.0.1 → numpy>=2.0 + torch>=2.8.0,
       # incompatibles avec numpy<1.24.0 et torch==2.6.0 (Dockerfile). Le bump
       # Dependabot #1674 (3.4.0→4.0.7) a cassé le build Docker translator
@@ -225,6 +271,18 @@ updates:
       - dependency-type: "indirect"
     versioning-strategy: increase
     ignore:
+      # Aucune montée MAJEURE automatique (directive porteur 2026-11-08) : elles
+      # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # zod est épinglé à 4.4.3 par `overrides` (budget de poids de la première
+      # peinture web, cf0b73804c / cf3196a4db) : jamais de montée automatique.
+      - dependency-name: "zod"
+      # libsignal : UNE version pour la passerelle, shared, iOS et Android
+      # (#17113). Aucune montée automatique, correctif compris : elle désaligne
+      # les quatre plateformes et casse les vecteurs croisés. Montée à la main,
+      # les quatre ensemble, avec son issue.
+      - dependency-name: "@signalapp/libsignal-client"
       # Prisma v7 désactivé jusqu'à la prise en compte de MongoDB
       # (Prisma 7 retire `datasource url` du schema → P1012 ; migration vers prisma.config.ts + adapter requise)
       - dependency-name: "prisma"
@@ -266,6 +324,18 @@ updates:
       - dependency-type: "indirect"
     versioning-strategy: increase
     ignore:
+      # Aucune montée MAJEURE automatique (directive porteur 2026-11-08) : elles
+      # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # zod est épinglé à 4.4.3 par `overrides` (budget de poids de la première
+      # peinture web, cf0b73804c / cf3196a4db) : jamais de montée automatique.
+      - dependency-name: "zod"
+      # libsignal : UNE version pour la passerelle, shared, iOS et Android
+      # (#17113). Aucune montée automatique, correctif compris : elle désaligne
+      # les quatre plateformes et casse les vecteurs croisés. Montée à la main,
+      # les quatre ensemble, avec son issue.
+      - dependency-name: "@signalapp/libsignal-client"
       # CI tourne sous Node 22 : les majeures de @types/node doivent suivre
       # manuellement la version Node de CI (cf. PR #2493 recréée malgré ignore)
       - dependency-name: "@types/node"
@@ -275,6 +345,52 @@ updates:
       # (#2524 reverté, le groupe build-tools l'avait embarqué). Rester sur 6.x
       # tant que ts-jest ne supporte pas TS 7.
       - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+
+  # bun.lock — resynchronisation SEULE, sans toucher aux manifestes (#6230).
+  # Les cinq entrées npm ci-dessus bougent `package.json` et `pnpm-lock.yaml` ;
+  # aucune ne connaît `bun.lock`, le lock que CI et développement local
+  # installent réellement (CLAUDE.md § Build System — bun est le défaut,
+  # parité CI). Une PR npm/pnpm fusionnée sans régénération de `bun.lock`
+  # laisse donc un retard qui n'est visible qu'au prochain `bun install`
+  # manuel (#6230 : @signalapp/libsignal-client, zod, @tus/server, sharp
+  # avaient chacun dérivé de la sorte).
+  # `versioning-strategy: lockfile-only` ne rouvre AUCUNE portée de
+  # `package.json` : cette entrée se contente de réaligner `bun.lock` sur ce
+  # que les manifestes acceptent déjà. Une entrée `package-ecosystem: bun`
+  # sans cette restriction dupliquerait les PR de montée de version des
+  # entrées npm ci-dessus sur les mêmes paquets — deux branches Dependabot
+  # éditant le même `package.json`, en conflit l'une avec l'autre.
+  # Le gate CI qui referme la boucle : `scripts/check-lockfile-alignment.mjs`
+  # (job `quality`, étape « Lockfile alignment guard ») fait déjà rougir
+  # toute PR — Dependabot ou humaine — dont `bun.lock` diverge des
+  # manifestes ; cette entrée réduit la fréquence à laquelle ça arrive, le
+  # gate reste la garantie. Passer `bun install` en `--frozen-lockfile` dans
+  # `ci.yml` a été considéré et écarté : le gate ci-dessus détecte déjà tout
+  # désalignement, avec un message qui nomme le paquet et le site en cause —
+  # `--frozen-lockfile` échouerait sur le même désalignement avec un message
+  # bun générique, sans rien garantir de plus.
+  - package-ecosystem: "bun"
+    directory: "/"
+    versioning-strategy: "lockfile-only"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "monorepo"
+    commit-message:
+      prefix: "chore(deps-bun-lock)"
+      include: "scope"
+    reviewers:
+      - "isopen-io/meeshy-maintainers"
+    ignore:
+      # Aucune montée MAJEURE automatique (directive porteur 2026-11-08) : elles
+      # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
+      - dependency-name: "*"
         update-types: ["version-update:semver-major"]
 
   # ===========================================================================
@@ -306,6 +422,11 @@ updates:
         patterns:
           - "*test*"
           - "*coverage*"
+    ignore:
+      # Aucune montée MAJEURE automatique (directive porteur 2026-11-08) : elles
+      # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # ===========================================================================
   # DOCKER - Images de base
@@ -328,6 +449,11 @@ updates:
       include: "scope"
     reviewers:
       - "isopen-io/meeshy-maintainers"
+    ignore:
+      # Aucune montée MAJEURE automatique (directive porteur 2026-11-08) : elles
+      # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "docker"
     directory: "/services/gateway"
@@ -346,6 +472,11 @@ updates:
       include: "scope"
     reviewers:
       - "isopen-io/meeshy-maintainers"
+    ignore:
+      # Aucune montée MAJEURE automatique (directive porteur 2026-11-08) : elles
+      # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "docker"
     directory: "/services/translator"
@@ -364,6 +495,11 @@ updates:
       include: "scope"
     reviewers:
       - "isopen-io/meeshy-maintainers"
+    ignore:
+      # Aucune montée MAJEURE automatique (directive porteur 2026-11-08) : elles
+      # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
 # =============================================================================
 # CONFIGURATION NOTES

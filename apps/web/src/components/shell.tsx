@@ -1,0 +1,313 @@
+import { lazy, useEffect, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
+import { useStore } from 'zustand/react';
+
+import { useEmailGatePresenter } from '@/lib/activation/email-gate-presenter';
+import { useActivationInviteArmed } from '@/lib/activation/invite-gate';
+import { useAppUpdateAnnounced } from '@/lib/app-update/pending-store';
+import { apiDeps } from '@/lib/api/deps';
+import { departureStore } from '@/lib/conversation-departure';
+import { sessionStore } from '@/lib/api/session';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { conversationPreviewStore } from '@/lib/notifications/conversation-preview';
+import { inAppBannerStore } from '@/lib/notifications/in-app-banner';
+import { skipLinkLabel } from '@/lib/skip-link';
+import { floatingMenusHost, floatingMenusRouteKey } from '@/lib/view/floating-gate';
+import { isWide, subscribeWide } from '@/lib/view/split-query';
+import { useSyncPillArmed } from '@/lib/view/sync-pill-gate';
+import { useRoute } from '@/lib/router';
+
+import { CallLayer } from './call-layer';
+import { LazyFloatingMenus as FloatingMenus, loadFloatingMenus } from './floating-menus-lazy';
+import { loadConversationPreviewHost } from './conversation-preview-chunks';
+import { MoodPeekHost } from './mood-peek-host';
+import { OptionalChunk } from './optional-chunk';
+import { ProfilePeekHost } from './profile-peek-host';
+import { SendSheetHost } from './send-sheet-host';
+import { TopBand } from './top-band';
+
+/**
+ * LA COQUILLE — deliberement mince.
+ *
+ * Il n'y a NI barre d'onglets NI barre de navigation : l'app iOS n'en a
+ * aucune (`.navigationBarHidden(true)` partout), chaque ecran dessine son
+ * propre en-tete flottant. Une coquille qui poserait ici un chrome commun
+ * ferait diverger les deux interfaces des le premier ecran.
+ *
+ * Ce qu'elle porte, et qu'aucun ecran ne doit reimplementer : le lien
+ * d'evitement, VISIBLE au clavier — un lien d'evitement invisible n'evite
+ * rien.
+ *
+ * ...et LA PASTILLE DE SYNCHRONISATION (#6080), seule exception à la minceur
+ * ci-dessus — fondée sur la MÊME raison qu'elle. iOS n'a ni barre d'onglets ni
+ * barre de navigation, mais il a bien UNE couche de chrome flottant au-dessus
+ * de tous les écrans (`RootChromeLayer`), et c'est exactement là que vit sa
+ * pastille. La poser dans chaque écran la ferait diverger d'un écran à
+ * l'autre ; la poser ici la rend identique partout, ce que la coquille
+ * cherchait déjà.
+ *
+ * **Elle est chargée À LA DEMANDE, et ce n'est pas une optimisation
+ * spéculative** : montée en statique, elle pesait 5,57 Ko AVANT LE PREMIER
+ * PIXEL — mesuré, 37,15 → 42,72 Ko —, soit 14 % d'un budget de 40 Ko dépensés
+ * sur tous les écrans pour un objet invisible la quasi-totalité du temps. Le
+ * gate du poids l'a refusée. Seul `useSyncPillArmed` reste en statique : il ne
+ * connaît ni glyphe, ni libellé, ni la loi de priorité, et c'est sa réponse OUI
+ * qui la REND.
+ *
+ * **Mais son chunk est CHERCHÉ dès le premier rendu, pas au moment du besoin.**
+ * « À la demande » se retourne contre cette pastille et contre elle seule : le
+ * moment où elle sert est précisément celui où le réseau est tombé. Mesuré —
+ * `net::ERR_INTERNET_DISCONNECTED` sur le chunk, `Suspense` jamais résolu,
+ * `fallback={null}`, donc AUCUN signe de coupure à l'écran. L'indicateur
+ * d'absence de réseau allait le chercher sur le réseau.
+ *
+ * Le préchargement sépare les deux questions que `lazy()` confondait : ce qui
+ * pèse AVANT LE PREMIER PIXEL (le budget — le chunk reste hors du point
+ * d'entrée) et ce qui est DISPONIBLE quand on en a besoin (la fiabilité — il
+ * est résolu pendant qu'on est encore en ligne).
+ */
+const chargerPastille = () => import('./sync-pill').then((m) => ({ default: m.SyncPill }));
+const SyncPill = lazy(chargerPastille);
+
+/**
+ * ...ET LES DEUX MENUS FLOTTANTS (#6104), seconde exception à la minceur, sur
+ * la MÊME fondation que la première : iOS n'a pas de barre commune, mais il a
+ * bien une couche de chrome flottant au-dessus de tous les écrans
+ * (`RootChromeLayer`), et ses deux boutons y vivent
+ * (`RootView.draggableFloatingButtons`, `.zIndex(100)`).
+ *
+ * **Ils sont chargés à la demande pour la raison déjà mesurée sur la
+ * pastille** — la première peinture est à 37,19 Ko pour un plafond de 40 — et
+ * **préchargés pour une raison DIFFÉRENTE de la sienne**. La pastille est
+ * préchargée parce que le moment où elle sert est celui où le réseau est
+ * tombé ; les menus le sont parce qu'ils sont le SEUL chemin vers sept écrans
+ * de l'application : les attendre au premier appui ferait clignoter la
+ * navigation entière au démarrage.
+ *
+ * **`floatingMenusHost` seul reste en statique**, exactement comme
+ * `useSyncPillArmed` : il ne connaît ni glyphe, ni libellé, ni géométrie — il
+ * répond OÙ (la fenêtre, la colonne de la liste, nulle part) sur une clé de
+ * route, et c'est sa réponse qui rend le reste. Leur chargement vit dans
+ * `floating-menus-lazy.ts` depuis #10117 : le cadre côte à côte pose les mêmes
+ * menus dans la colonne de la liste, sur le même chunk.
+ */
+
+/**
+ * ...ET LA BANNIÈRE DE MISE À JOUR (#6936), troisième exception à la minceur,
+ * sur la MÊME fondation que les deux autres : iOS pose ses annonces vivantes
+ * dans sa couche de chrome flottant, au-dessus de tous les écrans.
+ *
+ * **À la demande, et SANS préchargement** — contrairement à la pastille et aux
+ * menus, dont les raisons de préchargement ne valent pas ici : la pastille sert
+ * au moment où le réseau tombe, les menus sont le seul chemin vers sept écrans.
+ * Une bannière de mise à jour, elle, ne peut apparaître QUE si le réseau vient
+ * de répondre — c'est une version neuve qui vient d'être téléchargée. La payer
+ * à chaque chargement de page pour une annonce qui n'arrive qu'aux
+ * déploiements serait le contraire d'un budget tenu.
+ *
+ * `useAppUpdateAnnounced` seul reste en statique, exactement comme
+ * `useSyncPillArmed` : il répond OUI ou NON, et c'est son OUI qui va chercher
+ * la bannière, ses libellés et le contrôleur de mise à jour.
+ */
+const chargerBanniereMaj = () =>
+  Promise.all([import('./app-update-banner'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => ({
+    default: m.AppUpdateBanner,
+  }));
+const AppUpdateBanner = lazy(chargerBanniereMaj);
+
+/**
+ * ...ET LE BADGE DE NON-LUS (W4, #7221), quatrième exception — la seule qui ne
+ * peint aucun pixel. D-L1 : le titre de l'onglet et `navigator.setAppBadge`
+ * portent le nombre de CONVERSATIONS non lues, hors muettes. Il vit dans la
+ * coquille parce qu'elle est le seul composant présent sur TOUTES les routes
+ * (un badge accroché à la Lentille disparaîtrait dès qu'on ouvre un fil), et
+ * À LA DEMANDE parce qu'il lit le cache des conversations — voir
+ * `components/app-badge.tsx` pour la mesure qui l'a sorti du socle.
+ *
+ * Son chunk est devenu le CHROME DIFFÉRÉ (`deferred-chrome.tsx`, #10174) : il
+ * arme aussi, au repos, l'hôte des invitations à immortaliser, qui se pose
+ * dans la colonne de la bande du haut — la bande, dans l'entrée, n'en paie
+ * rien.
+ */
+const chargerChromeDiffere = () => import('./deferred-chrome').then((m) => ({ default: m.DeferredChrome }));
+const DeferredChrome = lazy(chargerChromeDiffere);
+
+/**
+ * ...ET L'INVITATION À VALIDER SON COMPTE (#8239), cinquième exception : de J7
+ * à J28, la modal « Validez votre compte » s'ouvre à l'OUVERTURE de l'app,
+ * quelle que soit la route — donc ici. À la demande, SANS préchargement, sur
+ * le modèle de la bannière : `useActivationInviteArmed` seul est statique, et
+ * son OUI (session ouverte, pas encore montrée aujourd'hui) va chercher l'hôte,
+ * qui relit l'état servi et n'ouvre la modal qu'en phase `invite`.
+ */
+const chargerInvitation = () =>
+  Promise.all([import('./activation-invite-host'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => ({
+    default: m.ActivationInviteHost,
+  }));
+const ActivationInviteHost = lazy(chargerInvitation);
+
+/**
+ * ...ET LA GARDE DE L'E-MAIL (#8365), sixième exception : publier, inviter par
+ * e-mail ou créer un lien sans adresse prouvée ouvre la validation, quelle que
+ * soit la route — donc ici. `useEmailGatePresenter` seul est statique ; la
+ * demande en cours va chercher l'hôte, qui relit l'adresse et envoie le code.
+ */
+const chargerGardeEmail = () =>
+  Promise.all([import('./email-gate-host'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => ({
+    default: m.EmailGateHost,
+  }));
+const EmailGateHost = lazy(chargerGardeEmail);
+
+/**
+ * ...ET LA BANNIÈRE IN-APP (#8727), septième exception : une notification
+ * réseau descend sur toutes les routes. `inAppBannerStore` seul est statique
+ * (la connexion l'alimente) ; sa première bannière va chercher la peinture et
+ * les libellés.
+ */
+const chargerBanniereNotification = () =>
+  Promise.all([
+    import('./notification-toast'),
+    loadInterfaceCatalog(currentInterfaceLanguage()),
+    loadNotificationRowCatalog(currentInterfaceLanguage()),
+  ]).then(([m]) => ({
+    default: m.NotificationToastHost,
+  }));
+const NotificationToastHost = lazy(chargerBanniereNotification);
+
+/**
+ * ...ET L'APERÇU DE CONVERSATION TIRÉ DE LA BANNIÈRE (#8821) : il survit à la
+ * bannière qui l'a ouvert, d'où son propre magasin et son propre hôte.
+ */
+const ConversationPreviewHost = lazy(() =>
+  Promise.all([loadConversationPreviewHost(), loadNotificationRowCatalog(currentInterfaceLanguage())]).then(([m]) => ({
+    default: m.ConversationPreviewHost,
+  })),
+);
+
+/**
+ * ...ET LE DÉPART D'UNE CONVERSATION (#7285, #7837) : la confirmation de
+ * « Quitter » / « Supprimer » et l'échec qui ramène la rangée valent pour la
+ * liste ET le fil, côte à côte sur grand écran — une seule couche, montée ici.
+ * `departureStore` seul est statique ; la demande va chercher l'hôte.
+ */
+const ConversationDepartureHost = lazy(() =>
+  Promise.all([import('./conversation-departure-host'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => ({
+    default: m.ConversationDepartureHost,
+  })),
+);
+
+export default function Shell({ children }: { children: ReactNode }) {
+  const connecte = useStore(sessionStore, (state) => state.session.status === 'authenticated') || apiDeps.source === 'fixtures';
+  const [bandeau, setBandeau] = useState(0);
+  const banniereNotification = useStore(inAppBannerStore, (state) => state.current !== null);
+  const apercuOuvert = useStore(conversationPreviewStore, (state) => state.conversationId !== null);
+  const departEnCours = useStore(departureStore, (state) => state.request !== null || state.failure !== null);
+  const pastilleArmee = useSyncPillArmed();
+  const majAnnoncee = useAppUpdateAnnounced();
+  const invitationArmee = useActivationInviteArmed();
+  const gardeEmail = useEmailGatePresenter();
+  const route = useRoute();
+  const routeKey = route.key;
+  /* SUR ORDINATEUR, LE CADRE CÔTE À CÔTE POSE LES MENUS DANS LA COLONNE DE LA
+     LISTE (#10117) : la coquille ne les pose sur la fenêtre que hors du cadre,
+     par la même règle — jamais deux couches. */
+  const large = useSyncExternalStore(subscribeWide, isWide, () => false);
+  const invite = useStore(sessionStore, (state) => state.session.status === 'guest');
+  const menusArmes = floatingMenusHost({ routeKey: floatingMenusRouteKey(route), wide: large, guest: invite }) === 'screen';
+
+  /* APRÈS le premier pixel, pendant qu'on est encore en ligne. L'effet ne
+     s'exécute pas au rendu serveur, donc le préchauffage institutionnel n'en
+     paie rien ; et `import()` est idempotent — le rendu de la pastille réutilise
+     le module déjà résolu au lieu de rouvrir une requête. */
+  useEffect(() => {
+    void chargerPastille();
+    void loadFloatingMenus();
+  }, []);
+
+  return (
+    <div className="min-h-dvh" {...(bandeau > 0 ? { 'data-top-band-host': '', style: { '--top-band': `${bandeau}px` } as CSSProperties } : {})}>
+      <a
+        href="#contenu"
+        className="skip-link"
+      >
+        {skipLinkLabel(currentInterfaceLanguage())}
+      </a>
+      {/* `fallback={null}` : une pastille qui n'est pas encore là ne doit rien
+          peindre — surtout pas un squelette, qui annoncerait un état qu'on ne
+          connaît pas encore. */}
+      {pastilleArmee ? (
+        <OptionalChunk>
+          <SyncPill />
+        </OptionalChunk>
+      ) : null}
+      {/* Aucun pixel au premier rendu, aucune garde de route : le badge vaut
+          sur toutes les routes, et il n'émet aucune requête
+          (`useConversationsSnapshot` observe le cache, `enabled: false`) ;
+          l'hôte des invitations n'arrive qu'au repos, dans la bande du haut. */}
+      <OptionalChunk>
+        <DeferredChrome routeKey={routeKey} signedIn={connecte} />
+      </OptionalChunk>
+      {majAnnoncee ? (
+        <OptionalChunk>
+          <AppUpdateBanner />
+        </OptionalChunk>
+      ) : null}
+      {children}
+      {/* LE PROFIL D'UN AUTEUR S'OUVRE PAR-DESSUS L'ÉCRAN, sur toutes les
+          routes (`profile-peek-host.tsx`) — la feuille, elle, est chargée au
+          premier toucher. */}
+      <ProfilePeekHost />
+      {/* L'HUMEUR TOUCHÉE S'OUVRE PAR-DESSUS L'ÉCRAN (#10528), comme la bulle
+          d'iOS (`StatusBubbleController`) — chargée au premier toucher. */}
+      <MoodPeekHost />
+      {/* L'APPEL AU-DESSUS DE TOUT (#6382) — un appel survit à la navigation
+          et un appel entrant s'affiche sur toutes les routes, comme
+          `CallPresentationLayer.swift`. Sans appel, rien n'est chargé. */}
+      {banniereNotification ? (
+        <OptionalChunk>
+          <NotificationToastHost />
+        </OptionalChunk>
+      ) : null}
+      <CallLayer />
+      {/* LA PILE DU HAUT (#9279, #9494) — « Reprendre l'appel », le
+          mini-lecteur, puis la bannière du joueur quand rien ne joue : l'appel
+          prime, puis l'audio (`top-band.tsx`). Sur les hubs, elle réserve sa
+          hauteur dans `--top-band`, que l'arbre des écrans ajoute à son
+          `--safe-top`. */}
+      <TopBand routeKey={routeKey} signedIn={connecte} onInset={setBandeau} />
+      {invitationArmee ? (
+        <OptionalChunk>
+          <ActivationInviteHost />
+        </OptionalChunk>
+      ) : null}
+      {gardeEmail !== null ? (
+        <OptionalChunk>
+          <EmailGateHost reason={gardeEmail} />
+        </OptionalChunk>
+      ) : null}
+      {/* APRÈS `children` : à z-index égal, c'est l'ordre du document qui
+          tranche, et un menu recouvert par l'écran qu'il commande serait le
+          défaut le plus bête du lot. */}
+      {menusArmes ? (
+        <OptionalChunk>
+          <FloatingMenus routeKey={routeKey} />
+        </OptionalChunk>
+      ) : null}
+      {apercuOuvert ? (
+        <OptionalChunk>
+          <ConversationPreviewHost />
+        </OptionalChunk>
+      ) : null}
+      {departEnCours ? (
+        <OptionalChunk>
+          <ConversationDepartureHost />
+        </OptionalChunk>
+      ) : null}
+      {/* LA FEUILLE D'ENVOI (#8884) : transfert, partage, publication — toute
+          entrée l'ouvre par `openSendSheet`. L'hôte ne porte que l'abonnement ;
+          la feuille est chargée au premier appel. */}
+      <SendSheetHost />
+    </div>
+  );
+}

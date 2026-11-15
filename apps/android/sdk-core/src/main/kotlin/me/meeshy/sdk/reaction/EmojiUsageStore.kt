@@ -5,6 +5,8 @@ import android.content.SharedPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import me.meeshy.sdk.model.EmojiCatalog
+import me.meeshy.sdk.model.EmojiUsageRanker
 
 /**
  * Persists how often the user reacts with each emoji so the quick-reaction
@@ -18,6 +20,10 @@ import kotlinx.coroutines.flow.asStateFlow
 interface EmojiUsageStore {
     val usage: StateFlow<Map<String, Int>>
     fun record(emoji: String)
+
+    /** The [count] most-used emojis, padded with [defaults] — iOS `EmojiUsageTracker.topEmojis`. */
+    fun top(count: Int, defaults: List<String> = EmojiCatalog.defaultQuickReactions): List<String> =
+        EmojiUsageRanker.topEmojis(usage = usage.value, defaults = defaults, count = count)
 }
 
 /** Volatile store — for tests and previews. */

@@ -1,0 +1,84 @@
+package me.meeshy.sdk.model
+
+/**
+ * The write-role hierarchy exactly as the gateway names it at the schema
+ * (`defaultWriteRole`) — port of `WRITE_ROLE_RANK`
+ * (`services/gateway/src/services/messaging/conversationWriteAdmission.ts`).
+ * `everyone` sits below [MemberRole]'s own floor (`member`), which is why this
+ * lives as its own string-keyed table rather than reusing [MemberRole.level].
+ */
+private val WRITE_ROLE_RANK: Map<String, Int> = mapOf(
+    "everyone" to 0,
+    "member" to 1,
+    "moderator" to 2,
+    "admin" to 3,
+    "creator" to 4,
+)
+
+/** Rank an announcement channel requires — it PRIMES over [ApiConversation.defaultWriteRole]. */
+private const val ANNOUNCEMENT_REQUIRED_ROLE = "admin"
+
+/**
+ * Container types with no write hierarchy at all — port of
+ * `WRITE_HIERARCHY_FREE_TYPES`. `global` has no moderation tier; a `direct`
+ * has no admin over its lone peer, so neither `defaultWriteRole` nor
+ * `isAnnouncementChannel` (both legacy-writable, never intentionally set on
+ * these types) is allowed to restrict them.
+ */
+private val WRITE_HIERARCHY_FREE_TYPES: Set<String> = setOf("global", "direct")
+
+/**
+ * Whether [currentUserId] may write a message into this conversation — the
+ * client-side mirror of the gateway's rank check in
+ * `conversationWriteAdmission.ts`, plus the two additional gates a picker
+ * must apply before ever attempting a send: the conversation must still be
+ * active, and the reader must not have soft-deleted it for themselves.
+ *
+ * An absent write setting is PERMISSIVE (rank 0, `everyone`), mirroring the
+ * gateway: a conversation created before the write-role migration allows
+ * anyone. A caller not resolvable in [ApiConversation.participants] (and no
+ * server-computed [ApiConversation.currentUserRole]) defaults to `member`,
+ * matching [MemberRole.from]'s own default.
+ */
+fun ApiConversation.mayCurrentUserWrite(currentUserId: String? = null): Boolean {
+    // #13110 — the native Android app neither seals nor opens libsignal yet (#13015):
+    // an end-to-end conversation is never a target of a forward, a share or a story
+    // reply, whose text and pieces would reach the gateway in clear.
+    if (EndToEndRegime.isEndToEnd(encryptionMode)) return false
+    if (isActive == false) return false
+    if (resolvedPreferences?.deletedForUserAt != null) return false
+    if (type in WRITE_HIERARCHY_FREE_TYPES) return true
+
+    val requiredRole = if (isAnnouncementChannel) ANNOUNCEMENT_REQUIRED_ROLE else (defaultWriteRole ?: "everyone")
+    val requiredRank = WRITE_ROLE_RANK[requiredRole] ?: 0
+    if (requiredRank == 0) return true
+
+    val userRoleWire = currentUserRole ?: currentUserRole(currentUserId).wireValue
+    val userRank = WRITE_ROLE_RANK[userRoleWire] ?: WRITE_ROLE_RANK.getValue("member")
+    return userRank >= requiredRank
+}
+
+/**
+ * Pourquoi le composeur cède la place à un bandeau de lecture seule (#15269) — miroir de
+ * `composerOrReadOnlyZone` (`ConversationView+ComposerBanners.swift`) : la conversation terminée
+ * prime, puis Global avant 18 ans. Une restriction que la passerelle sait nommer sans fermer le
+ * composeur ([ConversationWriteRestriction.Unknown]) ne ferme rien : la passerelle refuse, et dit pourquoi.
+ */
+enum class ComposerClosure {
+    /** La conversation est terminée (`isActive == false`) : elle se lit, elle ne s'écrit plus. */
+    ENDED,
+
+    /** Global n'admet l'écriture qu'à partir de 18 ans. */
+    MINOR_GLOBAL,
+}
+
+/**
+ * Ce qui ferme le composeur de cette conversation pour son lecteur, ou `null` quand il s'ouvre.
+ * [learned] est la restriction qu'un REFUS d'envoi a apprise (403 `GLOBAL_ADULTS_ONLY`) : elle vaut
+ * celle que la conversation sert, même quand un cache antérieur ne la portait pas.
+ */
+fun ApiConversation.composerClosure(learned: ConversationWriteRestriction? = null): ComposerClosure? = when {
+    isActive == false -> ComposerClosure.ENDED
+    learned?.closesComposer == true || viewerWriteRestriction?.closesComposer == true -> ComposerClosure.MINOR_GLOBAL
+    else -> null
+}

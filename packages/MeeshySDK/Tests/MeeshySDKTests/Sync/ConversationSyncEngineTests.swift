@@ -27,7 +27,9 @@ final class ConversationSyncEngineTests: XCTestCase {
             messageService: mockMsgService,
             messageSocket: mockMessageSocket,
             socialSocket: mockSocialSocket,
-            api: mockAPI
+            api: mockAPI,
+            syncDelta: MockSyncDeltaMuet(),
+            currentUserId: { "" }
         )
     }
 
@@ -67,7 +69,8 @@ final class ConversationSyncEngineTests: XCTestCase {
             messageService: MockMessageService(),
             messageSocket: MockMessageSocket(),
             socialSocket: MockSocialSocket(),
-            api: MockAPIClient()
+            api: MockAPIClient(),
+            syncDelta: MockSyncDeltaMuet()
         )
 
         let ok = await engine.fullSync()
@@ -771,6 +774,88 @@ final class ConversationSyncEngineTests: XCTestCase {
         await fulfillment(of: [persisted], timeout: 2.0)
     }
 
+    // MARK: - Coalescence des accusés de réception
+
+    /// `POST /conversations/{id}/mark-as-received` ne porte aucun `messageId` :
+    /// dix messages d'une rafale produisaient dix requêtes IDENTIQUES, sur une
+    /// route dont le quota de 30 req/min est PARTAGÉ avec `mark-read`. Une
+    /// conversation animée épuisait donc à elle seule le budget des accusés de
+    /// LECTURE, que rien ne rejoue.
+    func test_tenIncomingMessagesInOneBurst_triggerASingleMarkAsReceived() async throws {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([("conv-burst", 0)])
+        let coalescing = makeCoalescingEngine(window: 1.0)
+        await coalescing.startSocketRelay()
+
+        for index in 0..<10 {
+            mockMessageSocket.messageReceived.send(
+                TestFactories.makeAPIMessage(
+                    id: "burst-\(index)", conversationId: "conv-burst", senderId: "other-user"
+                )
+            )
+        }
+
+        try await Task.sleep(nanoseconds: 2_200_000_000)
+
+        XCTAssertEqual(mockConvService.markAsReceivedCounts["conv-burst"], 1,
+                       "une rafale doit se réduire à un seul accusé de réception")
+    }
+
+    /// Contre-épreuve : la coalescence est PAR CONVERSATION. La replier sur un
+    /// seul verrou global perdrait l'accusé de la seconde conversation.
+    func test_twoDistinctConversations_eachGetTheirOwnMarkAsReceived() async throws {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([("conv-a", 0), ("conv-b", 0)])
+        let coalescing = makeCoalescingEngine(window: 1.0)
+        await coalescing.startSocketRelay()
+
+        mockMessageSocket.messageReceived.send(
+            TestFactories.makeAPIMessage(id: "a-1", conversationId: "conv-a", senderId: "other-user")
+        )
+        mockMessageSocket.messageReceived.send(
+            TestFactories.makeAPIMessage(id: "b-1", conversationId: "conv-b", senderId: "other-user")
+        )
+
+        try await Task.sleep(nanoseconds: 2_200_000_000)
+
+        XCTAssertEqual(mockConvService.markAsReceivedCounts["conv-a"], 1)
+        XCTAssertEqual(mockConvService.markAsReceivedCounts["conv-b"], 1)
+    }
+
+    /// La fenêtre ne survit pas au relais : sur un changement de compte, un
+    /// envoi encore en attente partirait sous la session SUIVANTE.
+    func test_stopSocketRelay_dropsPendingMarkAsReceived() async throws {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([("conv-logout", 0)])
+        let coalescing = makeCoalescingEngine(window: 1.0)
+        await coalescing.startSocketRelay()
+
+        mockMessageSocket.messageReceived.send(
+            TestFactories.makeAPIMessage(id: "logout-1", conversationId: "conv-logout", senderId: "other-user")
+        )
+        // Assez pour que la fenêtre soit ARMÉE, bien avant qu'elle n'expire —
+        // sans quoi le témoin passerait au vert sans rien avoir annulé.
+        try await Task.sleep(nanoseconds: 400_000_000)
+        await coalescing.stopSocketRelay()
+
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+
+        XCTAssertNil(mockConvService.markAsReceivedCounts["conv-logout"],
+                     "un accusé armé sous la session précédente ne doit jamais partir")
+    }
+
+    private func makeCoalescingEngine(window: TimeInterval) -> ConversationSyncEngine {
+        ConversationSyncEngine(
+            cache: .shared,
+            conversationService: mockConvService,
+            messageService: mockMsgService,
+            messageSocket: mockMessageSocket,
+            socialSocket: mockSocialSocket,
+            api: mockAPI,
+            markAsReceivedWindow: window
+        )
+    }
+
     // MARK: - Total Unread Aggregator (cross-conversation)
 
     /// The sync engine must expose a CurrentValueSubject that aggregates the
@@ -1292,6 +1377,22 @@ final class ConversationSyncEngineTests: XCTestCase {
         XCTAssertNil(loaded, "deleting the call-summary message must sweep its local transcript")
     }
 
+    /// #8095 — un message supprimé quitte l'INDEX des médias : la galerie ne
+    /// doit plus feuilleter une photo que son auteur a retirée, même quand le
+    /// message n'est plus dans la fenêtre chargée.
+    func test_messageDeleted_removesCarrierFromConversationMediaIndex() async {
+        let kept = TestFactories.makeMessage(id: "m-media-kept", conversationId: "c-media-del", content: "")
+        let gone = TestFactories.makeMessage(id: "m-media-gone", conversationId: "c-media-del", content: "")
+        try? await CacheCoordinator.shared.conversationMedia.save([kept, gone], for: "c-media-del")
+        await engine.startSocketRelay()
+
+        mockMessageSocket.messageDeleted.send(MessageDeletedEvent(messageId: "m-media-gone", conversationId: "c-media-del"))
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        let index = await CacheCoordinator.shared.conversationMedia.load(for: "c-media-del").snapshot() ?? []
+        XCTAssertEqual(index.map(\.id), ["m-media-kept"])
+    }
+
     /// A deleted message with no `callSummary` (the overwhelmingly common
     /// case — a regular text message) must not crash or otherwise misbehave
     /// when the sweep runs its `callId` resolution.
@@ -1538,6 +1639,19 @@ final class ConversationSyncEngineTests: XCTestCase {
 
 // MARK: - Mock ConversationService
 
+/// LA SOURDINE `/sync` DES HARNAIS HISTORIQUES (#4172) : depuis que `fullSync`
+/// tente la voie `/sync` EN TÊTE, un moteur de test SANS `syncDelta` injecté
+/// fabriquerait le client RÉEL — et chaque plein paierait 15 s de timeout
+/// réseau avant son repli. `muet` sur la première page = repli immédiat vers
+/// le chemin historique, celui que ces harnais mesurent.
+final class MockSyncDeltaMuet: SyncDeltaClientProviding, @unchecked Sendable {
+    func demandeLeDelta<Row: Decodable & Sendable>(
+        _ demande: SyncDeltaRequest,
+        creance _: SyncDeltaCredential,
+        rangeant _: Row.Type
+    ) async -> SyncDeltaOutcome<Row> { .muet }
+}
+
 final class MockConversationService: ConversationServiceProviding, @unchecked Sendable {
     var listResult: Result<OffsetPaginatedAPIResponse<[APIConversation]>, Error> = .success(
         OffsetPaginatedAPIResponse(success: true, data: [], pagination: nil, error: nil)
@@ -1549,14 +1663,29 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
     /// n'est jamais atteint. Un offset absent retombe sur `listResult`.
     var listResultsByOffset: [Int: Result<OffsetPaginatedAPIResponse<[APIConversation]>, Error>] = [:]
 
+    /// Compte des `mark-as-received` par conversation. Verrouillé : les envois
+    /// partent de tâches détachées pendant que le test lit le compteur.
+    private let markAsReceivedLock = NSLock()
+    private var _markAsReceivedCounts: [String: Int] = [:]
+    var markAsReceivedCounts: [String: Int] {
+        markAsReceivedLock.withLock { _markAsReceivedCounts }
+    }
+
     func reset() {
         listCallCount = 0
+        listResponder = nil
         listResultsByOffset = [:]
         listResult = .success(OffsetPaginatedAPIResponse(success: true, data: [], pagination: nil, error: nil))
+        markAsReceivedLock.withLock { _markAsReceivedCounts = [:] }
     }
+
+    /// Répondeur prioritaire — permet à un témoin de SUSPENDRE une page ou de
+    /// changer de compte PENDANT la requête (#8651).
+    var listResponder: ((Int) async throws -> OffsetPaginatedAPIResponse<[APIConversation]>)?
 
     func list(offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APIConversation]> {
         listCallCount += 1
+        if let listResponder { return try await listResponder(offset) }
         if let scoped = listResultsByOffset[offset] { return try scoped.get() }
         return try listResult.get()
     }
@@ -1567,11 +1696,16 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
 
     func search(query: String) async throws -> [APIConversation] { [] }
 
-    func getById(_ conversationId: String) async throws -> APIConversation { fatalError("Not used in tests") }
+    func getById(_ conversationId: String) async throws -> APIConversation { throw MeeshyError.network(.timeout) }
     func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse { fatalError("Not used in tests") }
     func delete(conversationId: String) async throws {}
+    func obsolete(conversationId: String) async throws -> ConversationObsoleteResult { throw MeeshyError.network(.timeout) }
     func markRead(conversationId: String) async throws {}
-    func markAsReceived(conversationId: String) async throws {}
+    func markAsReceived(conversationId: String) async throws {
+        markAsReceivedLock.withLock {
+            _markAsReceivedCounts[conversationId, default: 0] += 1
+        }
+    }
     func markUnread(conversationId: String) async throws {}
     func getParticipants(conversationId: String, limit: Int, cursor: String?) async throws -> PaginatedAPIResponse<[APIParticipant]> { fatalError("Not used in tests") }
     func deleteForMe(conversationId: String) async throws {}
@@ -1615,6 +1749,7 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
     }
 
     func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse { fatalError("Not used in tests") }
+    func listMedia(conversationId: String, kinds: [ConversationMediaKind], query: String?, before: String?, limit: Int, languages: [String]?) async throws -> MessagesAPIResponse { fatalError("Not used in tests") }
     func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData { fatalError("Not used in tests") }
     func edit(messageId: String, content: String) async throws -> APIMessage { fatalError("Not used in tests") }
     func delete(conversationId: String, messageId: String) async throws {}
@@ -1685,6 +1820,7 @@ private final class GapMockConversationService: ConversationServiceProviding, @u
     func getById(_ conversationId: String) async throws -> APIConversation { fatalError("Not used in tests") }
     func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse { fatalError("Not used in tests") }
     func delete(conversationId: String) async throws {}
+    func obsolete(conversationId: String) async throws -> ConversationObsoleteResult { throw MeeshyError.network(.timeout) }
     func markRead(conversationId: String) async throws {}
     func markAsReceived(conversationId: String) async throws {}
     func markUnread(conversationId: String) async throws {}
@@ -1700,76 +1836,58 @@ private final class GapMockConversationService: ConversationServiceProviding, @u
     func unbanParticipant(conversationId: String, key: String) async throws {}
 }
 
-// MARK: - Read-receipt frontier (don't mark a message read after the read moment)
+// MARK: - Read receipt on the cache: only the described message moves (#7433)
 
+/// Ces témoins gardaient la « frontière de lecture » (2026-06-08) : un accusé ne
+/// pouvait marquer lu un message envoyé APRÈS l'instant de lecture. #7433 a
+/// remplacé la frontière par le message DÉCRIT — le même défaut se garde
+/// désormais en nommant le message lu : celui envoyé ensuite reste « envoyé ».
 final class ReadReceiptFrontierTests: XCTestCase {
 
-    private func ownMessage(_ content: String, at seconds: TimeInterval,
+    private func ownMessage(_ id: String, at seconds: TimeInterval,
                             status: MeeshyMessage.DeliveryStatus = .sent, isMe: Bool = true) -> MeeshyMessage {
-        MeeshyMessage(conversationId: "c", content: content,
+        MeeshyMessage(id: id, conversationId: "c", content: id,
                       createdAt: Date(timeIntervalSince1970: seconds),
                       deliveryStatus: status, isMe: isMe)
     }
 
-    /// The bug: a message I send AFTER the peer's read moment must NOT be marked
-    /// `.read`. The read event's `updatedAt` is the frontier; only messages
-    /// created at or before it were actually seen.
-    func test_applyReadReceipt_messageSentAfterFrontier_staysUnread() {
-        let frontier = Date(timeIntervalSince1970: 1000)
-        let messages = [ownMessage("before", at: 900), ownMessage("after", at: 1100)]
-
-        let result = ConversationSyncEngine.applyReadReceipt(
-            to: messages, newStatus: .read, deliveredCount: 1, readCount: 1, frontier: frontier)
-
-        XCTAssertEqual(result[0].deliveryStatus, .read, "the message sent before the read moment is read")
-        XCTAssertEqual(result[1].deliveryStatus, .sent,
-                       "a message sent AFTER the read moment must NOT falsely show as read")
+    private func readOf(_ messageId: String?) -> ReadStatusSummary {
+        ReadStatusSummary(totalMembers: 1, deliveredCount: 1, readCount: 1, messageId: messageId)
     }
 
-    func test_applyReadReceipt_allWithinFrontier_allAdvance() {
-        let frontier = Date(timeIntervalSince1970: 1000)
-        let messages = [ownMessage("m1", at: 800), ownMessage("m2", at: 900)]
+    func test_applyReadReceipt_messageSentAfterTheReadOne_staysUnread() {
+        let messages = [ownMessage("before", at: 900), ownMessage("after", at: 1100)]
 
-        let result = ConversationSyncEngine.applyReadReceipt(
-            to: messages, newStatus: .read, deliveredCount: 1, readCount: 1, frontier: frontier)
+        let result = ConversationSyncEngine.applyReadReceipt(to: messages, summary: readOf("before"))
 
-        XCTAssertEqual(result.map(\.deliveryStatus), [.read, .read])
+        XCTAssertEqual(result[0].deliveryStatus, .read, "the message the receipt describes is read")
+        XCTAssertEqual(result[1].deliveryStatus, .sent,
+                       "a message sent AFTER the read one must NOT falsely show as read")
+    }
+
+    func test_applyReadReceipt_unnamedSummary_describesTheLatestAckedMessage() {
+        let messages = [ownMessage("m1", at: 800), ownMessage("m2", at: 900), ownMessage("pending", at: 1000, status: .sending)]
+
+        let result = ConversationSyncEngine.applyReadReceipt(to: messages, summary: readOf(nil))
+
+        XCTAssertEqual(result.map(\.deliveryStatus), [.sent, .read, .sending])
         XCTAssertEqual(result[1].readCount, 1)
     }
 
-    /// The frontier `continue` must not break the "older than the first read are
-    /// all read" short-circuit: a newest message past the frontier is skipped,
-    /// the middle (in-frontier) advances, and the oldest already-read stops it.
-    func test_applyReadReceipt_skipPastFrontier_thenStopAtAlreadyRead() {
-        let frontier = Date(timeIntervalSince1970: 1000)
-        let messages = [
-            ownMessage("old", at: 700, status: .read),
-            ownMessage("mid", at: 900, status: .sent),
-            ownMessage("new", at: 1100, status: .sent)
-        ]
-
-        let result = ConversationSyncEngine.applyReadReceipt(
-            to: messages, newStatus: .read, deliveredCount: 1, readCount: 1, frontier: frontier)
-
-        XCTAssertEqual(result.map(\.deliveryStatus), [.read, .read, .sent])
-    }
-
     func test_applyReadReceipt_ignoresOtherUsersMessages() {
-        let frontier = Date(timeIntervalSince1970: 1000)
         let messages = [ownMessage("theirs", at: 900, status: .sent, isMe: false)]
 
-        let result = ConversationSyncEngine.applyReadReceipt(
-            to: messages, newStatus: .read, deliveredCount: 1, readCount: 1, frontier: frontier)
+        let result = ConversationSyncEngine.applyReadReceipt(to: messages, summary: readOf("theirs"))
 
         XCTAssertEqual(result[0].deliveryStatus, .sent, "a peer's message is never my delivery status")
     }
 
     func test_applyReadReceipt_deliveredDoesNotRegressRead() {
-        let frontier = Date(timeIntervalSince1970: 1000)
         let messages = [ownMessage("m", at: 900, status: .read)]
 
         let result = ConversationSyncEngine.applyReadReceipt(
-            to: messages, newStatus: .delivered, deliveredCount: 2, readCount: 0, frontier: frontier)
+            to: messages,
+            summary: ReadStatusSummary(totalMembers: 1, deliveredCount: 2, readCount: 0, messageId: "m"))
 
         XCTAssertEqual(result[0].deliveryStatus, .read, "a delivered update must not downgrade a read message")
     }

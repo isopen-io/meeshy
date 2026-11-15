@@ -313,12 +313,12 @@ uv add --dev pytest
 uv lock --upgrade
 # Ou: make uv-upgrade
 
-# Installer avec GPU
-uv sync --extra gpu
+# Installer avec GPU (torch remplacé depuis l'index CUDA)
+UV_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cu124 uv sync --extra dev --reinstall-package torch --reinstall-package torchaudio
 # Ou: make uv-sync-gpu
 
-# Installer avec CPU
-uv sync --extra cpu
+# Installer avec CPU (défaut : index pytorch-cpu de [tool.uv.sources])
+uv sync --extra dev
 # Ou: make uv-sync-cpu
 
 # Exécuter une commande

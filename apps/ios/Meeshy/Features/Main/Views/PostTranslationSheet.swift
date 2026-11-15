@@ -9,8 +9,6 @@ struct PostTranslationSheet: View {
     var onRequestTranslation: ((String, String) -> Void)? // (postId, targetLanguage)
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @State private var requestingLanguages: Set<String> = []
     @State private var requestedLanguages: Set<String> = []
@@ -24,7 +22,7 @@ struct PostTranslationSheet: View {
         let existing = Set(availableTranslations.keys.map { $0.lowercased() })
         let origLang = post.originalLanguage?.lowercased() ?? ""
         var missing: [String] = []
-        for lang in user?.preferredContentLanguages ?? [] {
+        for lang in ReaderPrism.resolve(for: user) {
             let l = lang.lowercased()
             if l != origLang && !existing.contains(l) && !missing.contains(l) {
                 missing.append(l)
@@ -39,7 +37,7 @@ struct PostTranslationSheet: View {
                 theme.backgroundGradient.ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
                         originalSection
                         if !availableTranslations.isEmpty {
                             translationsSection
@@ -48,7 +46,7 @@ struct PostTranslationSheet: View {
                             requestTranslationSection
                         }
                     }
-                    .padding(16)
+                    .padding(MeeshySpacing.lg)
                 }
             }
             .navigationTitle(String(localized: "feed.post.translation.title", defaultValue: "Langues", bundle: .main))
@@ -60,9 +58,11 @@ struct PostTranslationSheet: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.subheadline.weight(.semibold))
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                             .frame(width: 32, height: 32)
                             .background(Circle().fill(theme.inputBackground))
+                            .meeshyTapTarget()
+                            .padding(-MeeshyTapTarget.inset(forVisualSide: 32))
                     }
                     .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                 }
@@ -80,34 +80,34 @@ struct PostTranslationSheet: View {
             onSelectLanguage?(post.originalLanguage ?? "")
             dismiss()
         } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     let display = LanguageDisplay.from(code: post.originalLanguage)
-                    Text(display?.flag ?? languageFlag(post.originalLanguage ?? "?"))
+                    Text(LanguageFlagChip.flag(for: post.originalLanguage ?? ""))
                     Text("\(String(localized: "feed.post.translation.original", defaultValue: "Original", bundle: .main)) (\(display?.name ?? post.originalLanguage ?? "?"))")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
 
                     Spacer()
 
                     Image(systemName: "checkmark.circle.fill")
                         .font(.callout)
-                        .foregroundColor(MeeshyColors.success)
+                        .foregroundStyle(MeeshyColors.success)
                 }
 
                 Text(post.content)
                     .font(.subheadline)
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                     .lineLimit(4)
                     .multilineTextAlignment(.leading)
             }
-            .padding(14)
+            .padding(MeeshySpacing.mdPlus)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.inputBackground)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(theme.inputBorder, lineWidth: 1)
                     )
             )
@@ -118,10 +118,10 @@ struct PostTranslationSheet: View {
     // MARK: - Available Translations
 
     private var translationsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             Text(String(localized: "feed.post.translation.available", defaultValue: "Traductions disponibles", bundle: .main))
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             ForEach(Array(availableTranslations.keys.sorted()), id: \.self) { lang in
                 Button {
@@ -129,20 +129,20 @@ struct PostTranslationSheet: View {
                     onSelectLanguage?(lang)
                     dismiss()
                 } label: {
-                    HStack(spacing: 10) {
+                    HStack(spacing: MeeshySpacing.smPlus) {
                         let display = LanguageDisplay.from(code: lang)
-                        Text(display?.flag ?? languageFlag(lang))
+                        Text(LanguageFlagChip.flag(for: lang))
                             .font(.title3)
 
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             Text(display?.name ?? Locale.current.localizedString(forLanguageCode: lang) ?? lang)
                                 .font(.subheadline.weight(.medium))
-                                .foregroundColor(theme.textPrimary)
+                                .foregroundStyle(theme.textPrimary)
 
                             if let text = availableTranslations[lang]?.text {
                                 Text(text)
                                     .font(.caption)
-                                    .foregroundColor(theme.textMuted)
+                                    .foregroundStyle(theme.textMuted)
                                     .lineLimit(1)
                             }
                         }
@@ -159,14 +159,14 @@ struct PostTranslationSheet: View {
 
                         Image(systemName: "chevron.forward")
                             .font(.caption.weight(.semibold))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
-                    .padding(12)
+                    .padding(MeeshySpacing.md)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                             .fill(theme.inputBackground)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 12)
+                                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                                     .stroke(theme.inputBorder, lineWidth: 1)
                             )
                     )
@@ -179,28 +179,28 @@ struct PostTranslationSheet: View {
     // MARK: - Request New Translations
 
     private var requestTranslationSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             Text(String(localized: "feed.post.translation.other_languages", defaultValue: "Autres langues", bundle: .main))
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             ForEach(missingLanguages, id: \.self) { lang in
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     let display = LanguageDisplay.from(code: lang)
-                    Text(display?.flag ?? languageFlag(lang))
+                    Text(LanguageFlagChip.flag(for: lang))
                         .font(.title3)
 
                     Text(display?.name ?? Locale.current.localizedString(forLanguageCode: lang) ?? lang)
                         .font(.subheadline.weight(.medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
 
                     Spacer()
 
                     if requestedLanguages.contains(lang) {
-                        HStack(spacing: 4) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Image(systemName: "checkmark")
                                 .font(.caption2.weight(.bold))
-                            Text(String(localized: "feed.post.translation.requested", defaultValue: "Demandee", bundle: .main))
+                            Text(String(localized: "feed.post.translation.requested", defaultValue: "Demandée", bundle: .main))
                                 .font(.caption2.weight(.medium))
                         }
                         .foregroundColor(MeeshyColors.success)
@@ -223,27 +223,27 @@ struct PostTranslationSheet: View {
                                 }
                             }
                         } label: {
-                            HStack(spacing: 4) {
+                            HStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: "translate")
                                     .font(.caption.weight(.medium))
                                 Text(String(localized: "feed.post.translation.translate", defaultValue: "Traduire", bundle: .main))
                                     .font(.caption.weight(.semibold))
                             }
                             .foregroundColor(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
+                            .padding(.horizontal, MeeshySpacing.md)
+                            .padding(.vertical, MeeshySpacing.xsPlus)
                             .background(
                                 Capsule().fill(MeeshyColors.brandGradient)
                             )
                         }
                     }
                 }
-                .padding(12)
+                .padding(MeeshySpacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .fill(theme.inputBackground)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 12)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                                 .stroke(theme.inputBorder.opacity(0.5), lineWidth: 1)
                         )
                 )
@@ -251,7 +251,7 @@ struct PostTranslationSheet: View {
         }
     }
 
-    private func languageFlag(_ code: String) -> String {
-        LanguageDisplay.from(code: code)?.flag ?? "\u{1F310}"
-    }
+    // `languageFlag` a vécu ici : il refaisait la lecture que `display` venait
+    // de faire, puis repliait sur 🌐 — un glyphe qui ne distingue AUCUNE langue
+    // d'une autre, là où la source unique rend le code en capitales (#4260).
 }

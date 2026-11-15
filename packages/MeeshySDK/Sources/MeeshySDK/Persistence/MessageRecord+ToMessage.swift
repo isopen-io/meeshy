@@ -58,18 +58,35 @@ extension MessageRecord {
             decoder.decodeOrLog(CallSummaryMetadata.self, from: $0, field: "callSummaryJson", id: localId)
         }
 
-        let uiJoinNotice = joinNoticeJson.flatMap {
-            decoder.decodeOrLog(JoinNoticeMetadata.self, from: $0, field: "joinNoticeJson", id: localId)
-        }
+        // Arrivée OU capture (#9617) — la colonne porte l'avis du message système.
+        let systemNotice = SystemNoticeColumn.decode(joinNoticeJson, decoder: decoder, id: localId)
 
         let uiLocation = locationJson.flatMap { json -> SharedPlace? in
             guard let data = json.data(using: .utf8) else { return nil }
             return decoder.decodeOrLog(SharedPlace.self, from: data, field: "locationJson", id: localId)
         }
 
+        // Un sticker relu du cache mais non rendable vaut absence — la règle
+        // vit dans `MessageSticker.ifWireWorthy`, elle n'est pas réécrite ici.
+        let uiSticker = stickerJson.flatMap { json -> MessageSticker? in
+            guard let data = json.data(using: .utf8) else { return nil }
+            return decoder.decodeOrLog(MessageSticker.self, from: data, field: "stickerJson", id: localId)?.ifWireWorthy
+        }
+
         var effects = MessageEffects.none
         if effectFlags > 0 {
             effects.flags = MessageEffectFlags(rawValue: effectFlags)
+        }
+        // #7508 — la DURÉE remonte du cache, exactement comme
+        // `APIMessage.toMessage` la remonte du fil. Sans elle, un éphémère
+        // arrivé par `message:new` (qui ne porte AUCUNE échéance, contrat
+        // #7451 point 4) ressortait de GRDB sans la moindre horloge : le
+        // drapeau disait « éphémère », `EphemeralDeadline.resolve` rendait
+        // `.notEphemeral` faute de source, et le fil n'affichait ni flamme ni
+        // décompte tout en ne retirant jamais la bulle.
+        if let ephemeralDuration, ephemeralDuration > 0 {
+            effects.ephemeralDuration = ephemeralDuration
+            effects.flags.insert(.ephemeral)
         }
 
         let deliveryStatus: MeeshyMessage.DeliveryStatus = {
@@ -103,7 +120,7 @@ extension MessageRecord {
 
         let resolvedColor = senderName.map { DynamicColorGenerator.colorForName($0) }
 
-        return MeeshyMessage(
+        var message = MeeshyMessage(
             id: serverId ?? localId,
             conversationId: conversationId,
             senderId: senderId,
@@ -112,7 +129,7 @@ extension MessageRecord {
             messageType: msgType,
             messageSource: msgSource,
             isEdited: isEdited,
-            editedAt: editedAt,
+            editedAt: editedAt, editedById: editedById,
             deletedAt: deletedAt,
             replyToId: replyToId,
             storyReplyToId: storyReplyToId,
@@ -137,6 +154,10 @@ extension MessageRecord {
             senderColor: resolvedColor ?? senderColor,
             senderAvatarURL: senderAvatarURL,
             senderUserId: senderId == currentUserId ? currentUserId : nil,
+            senderIsAnonymous: senderIsAnonymous ?? false,
+            // #10286 — inconnu (ligne antérieure, écho sans sender) ⇒ liens
+            // INERTES chez autrui ; la revalidation REST remplit la colonne.
+            senderHasAccount: senderHasAccount ?? (senderId == currentUserId || msgSource != .user),
             deliveryStatus: deliveryStatus,
             isMe: senderId == currentUserId,
             deliveredToAllAt: deliveredToAllAt,
@@ -146,8 +167,18 @@ extension MessageRecord {
             recipientCount: recipientCount,
             cachedTimeString: cachedTimeString,
             callSummary: uiCallSummary,
-            joinNotice: uiJoinNotice,
-            location: uiLocation
+            joinNotice: systemNotice.join,
+            captureNotice: systemNotice.capture,
+            arrivalsNotice: systemNotice.arrivals, encryptionSwitchNotice: systemNotice.encryptionSwitch,
+            location: uiLocation,
+            sticker: uiSticker
         )
+        // #7579 — l'état « déjà ouvert » d'une vue unique vit dans la colonne ;
+        // le fil, qui ne lit que GRDB, le reçoit d'ici.
+        (message.viewOnceOpenedAt, message.servedClientMessageId) = (viewOnceOpenedAt, servedClientMessageId)
+        message.senderRing = Self.decodeJSONText(ServedProfileDecorItem.self, senderRingJson, field: "senderRingJson", id: localId)
+        message.trackedLinkMap = Self.decodeJSONText([TrackedLink].self, trackedLinksJson,
+                                                     field: "trackedLinksJson", id: localId)?.trackedLinkMap ?? [:]
+        return message
     }
 }

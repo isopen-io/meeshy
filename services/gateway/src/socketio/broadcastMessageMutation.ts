@@ -1,5 +1,10 @@
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import type { MessageDeletedEventData } from '@meeshy/shared/types/socketio-events';
+import type {
+  MessageDeletedEventData,
+  MessageExpiredEventData,
+  MessagePinnedEventData,
+  MessageUnpinnedEventData,
+} from '@meeshy/shared/types/socketio-events';
 import type { buildMessageEditedCore } from './messageEditedPayload';
 import {
   emitConversationPreviewUpdate,
@@ -8,24 +13,57 @@ import {
 } from './emitConversationPreviewUpdate';
 import type { Anonymized, ServerEmitTarget } from './serverEmit';
 import type { QueuedVariantFor } from './queuedEventContract';
+import {
+  messageReadership,
+  blockedReaderKeys,
+  emitEditedToReaders,
+  type MessageReadership,
+} from './editedAudience';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { withSealedQuote } from '../services/messaging/servedQuotedMessage';
+import { readerSignedPlanForMessageId } from './readerSignedDelivery';
+import { stripClientMessageId } from './utils/message-ack-shaping';
 
 // Ce relais ne lit rien lui-même : il transmet le prisma de l'aperçu tel quel.
 // Le dériver plutôt que le redéclarer est ce qui empêche les deux listes de
 // modèles de diverger.
-type MutationPrisma = PreviewPrisma;
+/**
+ * #9646 — l'édition d'un message protégé relit sa protection et ses
+ * destinataires admis (`readerSignedPlanForMessageId`).
+ */
+type MutationPrisma = PreviewPrisma & Pick<PrismaClient, 'participant' | 'conversationShareLink' | 'message'>;
 
 /**
  * The `MeeshySocketIOManager` surface this helper needs, kept structural so it
  * accepts both the production manager and a test double, and so the REST route
  * files never have to import the manager class.
  */
+/**
+ * Ce que l'enfilage hors ligne d'une mutation reçoit — **un type NOMMÉ, parce
+ * qu'il était recopié à deux endroits** : ici et dans la signature de
+ * `MeeshySocketIOManager.enqueueOfflineMessageMutation`. Un relais qui recopie
+ * champ par champ est un inventaire à tenir à jour, et il retient en silence
+ * chaque champ ajouté en amont (cycle 126).
+ */
+export type MessageMutationQueueParams = {
+  conversationId: string;
+  actorUserId: string | null | undefined;
+  messageId: string;
+  /** #8562 — la variante d'un lecteur que la charge commune ne peut pas servir. */
+  resolvePayloadForReader?: (queueKey: string) => Record<string, unknown>;
+  /**
+   * Les clés de file qui ne doivent RIEN recevoir de cette mutation — les
+   * lecteurs dont le plancher d'historique place ce message hors de leur
+   * portée. Sans elles, la file PERSISTAIT 48 h, sous la clé d'un invité entré
+   * par un lien sans historique, le texte d'un message qu'aucune route ne lui
+   * sert.
+   */
+  excludedQueueKeys?: ReadonlySet<string>;
+} & QueuedVariantFor<'edited' | 'deleted' | 'expired' | 'pinned' | 'unpinned'>;
+
 export interface MessageMutationManager {
   getIO(): PreviewEmitIO | null | undefined;
-  enqueueOfflineMessageMutation(params: {
-    conversationId: string;
-    actorUserId: string | null | undefined;
-    messageId: string;
-  } & QueuedVariantFor<'edited' | 'deleted'>): Promise<void>;
+  enqueueOfflineMessageMutation(params: MessageMutationQueueParams): Promise<void>;
   emitUnreadCountsToRecipients?(params: {
     conversationId: string;
     senderId: string | null | undefined;
@@ -54,9 +92,11 @@ export interface MessageMutationManager {
  */
 export type MessageEditedMutationPayload = ReturnType<typeof buildMessageEditedCore>;
 export type MessageDeletedMutationPayload = Anonymized<MessageDeletedEventData>;
+export type MessageExpiredMutationPayload = Anonymized<MessageExpiredEventData>;
+export type MessagePinnedMutationPayload = Anonymized<MessagePinnedEventData>;
+export type MessageUnpinnedMutationPayload = Anonymized<MessageUnpinnedEventData>;
 
 type MessageMutationBase<TPayload> = {
-  prisma: MutationPrisma;
   manager: MessageMutationManager | null | undefined;
   conversationId: string;
   actorUserId: string;
@@ -66,21 +106,72 @@ type MessageMutationBase<TPayload> = {
 };
 
 /**
- * `authorId` n'existe QUE sur la suppression, et y est REQUIS.
+ * `authorId` n'existe QUE sur la suppression et sur l'expiration, et la CLÉ y
+ * est requise.
  *
- * Requis, parce qu'une suppression doit repousser la pastille de non-lus et que
- * l'exclusion porte sur l'AUTEUR du message : le type est ce qui empêche un
- * sixième transport de suppression de rouvrir la brèche en silence.
+ * La clé, pas la VALEUR : le type est `string | null | undefined`, donc il
+ * oblige le transport à se prononcer et ne garantit pas qu'il nomme quelqu'un.
+ * La distinction a pris du poids avec #16691 — un `authorId` nul ne faisait
+ * avant AUCUNE pastille (le gate `!senderId` sortait tôt) ; il en pousse
+ * désormais une à TOUS les participants, auteur compris, puisque sans auteur
+ * il n'y a personne à exclure. Inoffensif aujourd'hui, les quatre appelants
+ * passant une colonne non nulle (`message.senderId`, requise au schéma), et le
+ * compte servi restant juste (`computeUnreadCounts` soustrait les messages
+ * propres depuis la BASE). Resserrer la valeur en `string` est un lot à part :
+ * il faut d'abord prouver les quatre appelants au type.
+ *
+ * Requis, parce que les deux doivent repousser la pastille de non-lus et que
+ * l'exclusion porte sur l'AUTEUR du message.
+ * `'expired'` est le transport SERVEUR de la même famille — un message
+ * autodestructible échu et brûlé par `ExpiredMessagesCleanupService` plutôt
+ * qu'une suppression demandée — et il ne compte pas plus dans le badge qu'une
+ * suppression : le message ne compte plus, quelle que soit la main qui l'a
+ * retiré.
  *
  * Absent de l'édition, parce qu'éditer ne change aucun compte : redemander le
  * badge y coûterait deux requêtes par frappe validée, pour zéro delta.
+ *
+ * **`prisma` n'existe QUE sur les mutations qui déplacent l'APERÇU**, et
+ * c'est la même façon de parler : le type dit quelles audiences chaque mutation
+ * doit atteindre, plutôt que de laisser un drapeau le décider au corps de la
+ * fonction. Éditer change le texte du dernier message, supprimer ou expirer
+ * change quel message est le dernier — les trois se voient depuis la liste des
+ * conversations. Épingler n'y change RIEN : ni l'aperçu, ni son ordre, ni son
+ * compteur. Exiger le client Prisma pour l'épingle aurait fait payer à chaque
+ * épinglage la passe d'aperçu (`emitConversationPreviewUpdate` relit la
+ * conversation et son dernier message) pour zéro delta observable, et — pire —
+ * aurait donné la passe pour obligatoire au prochain transport qui recopierait
+ * la forme.
  */
 export type MessageMutationParams =
-  | (MessageMutationBase<MessageEditedMutationPayload> & { eventType: 'edited' })
+  | (MessageMutationBase<MessageEditedMutationPayload> & {
+      eventType: 'edited';
+      prisma: MutationPrisma;
+      /**
+       * #8562 — les lecteurs pour qui le message CITÉ par ce message est un
+       * éphémère déjà échu, avec leur échéance (`loadSealedQuoteAudience`).
+       * Ils reçoivent la citation SCELLÉE, et la room ne la leur sert pas.
+       */
+      sealedQuoteAudience?: ReadonlyMap<string, Date>;
+      /** #12822 — le message est chiffré au repos : sa nouvelle version part scellée dans la file hors ligne. */
+      atRest: boolean;
+    })
   | (MessageMutationBase<MessageDeletedMutationPayload> & {
       eventType: 'deleted';
+      prisma: MutationPrisma;
       authorId: string | null | undefined;
-    });
+    })
+  | (MessageMutationBase<MessageExpiredMutationPayload> & {
+      // Server-initiated twin of 'deleted' (a TTL burn, not a user request) —
+      // same audiences, for the same reason: the destroyed message may have
+      // been the conversation's last, and its author's unread badge must stop
+      // counting it.
+      eventType: 'expired';
+      prisma: MutationPrisma;
+      authorId: string | null | undefined;
+    })
+  | (MessageMutationBase<MessagePinnedMutationPayload> & { eventType: 'pinned' })
+  | (MessageMutationBase<MessageUnpinnedMutationPayload> & { eventType: 'unpinned' });
 
 /**
  * L'émission de la room, discriminée sur `eventType`.
@@ -100,15 +191,27 @@ function emitToConversationRoom(
   params: MessageMutationParams,
 ): void {
   if (!target) return;
-  if (params.eventType === 'edited') {
-    target.emit(SERVER_EVENTS.MESSAGE_EDITED, params.payload);
-    return;
+  switch (params.eventType) {
+    case 'edited':
+      target.emit(SERVER_EVENTS.MESSAGE_EDITED, params.payload);
+      return;
+    case 'deleted':
+      target.emit(SERVER_EVENTS.MESSAGE_DELETED, params.payload);
+      return;
+    case 'expired':
+      target.emit(SERVER_EVENTS.MESSAGE_EXPIRED, params.payload);
+      return;
+    case 'pinned':
+      target.emit(SERVER_EVENTS.MESSAGE_PINNED, params.payload);
+      return;
+    case 'unpinned':
+      target.emit(SERVER_EVENTS.MESSAGE_UNPINNED, params.payload);
+      return;
   }
-  target.emit(SERVER_EVENTS.MESSAGE_DELETED, params.payload);
 }
 
 /**
- * The single REST-side broadcaster for a message edit or delete.
+ * The single REST-side broadcaster for a message edit, delete, pin or unpin.
  *
  * A message mutation has to reach THREE audiences, and every one of them is a
  * separate channel:
@@ -137,6 +240,27 @@ function emitToConversationRoom(
  * committed by the time this runs; a broadcast failure must not turn a
  * successful edit into a 500. `onError` lets callers log against the
  * originating request.
+ *
+ * ── L'ÉPINGLE, sixième transport, arrivée au cycle 130 bis ──────────────────────
+ *
+ * « Collapsing them here means a sixth transport cannot silently reopen it »,
+ * dit le paragraphe ci-dessus. Le sixième transport est arrivé — les deux
+ * entrées d'épingle REST — et il a re-codé (1) et (3) à la main plutôt que
+ * d'appeler. La phrase disait vrai de ce qu'elle GARDAIT et faux de ce qu'elle
+ * PRÉDISAIT : rien n'oblige un nouvel écrivain à passer par ici, et le seul
+ * effet d'un helper à peu d'appelants est de documenter que quelques sites
+ * appliquent la règle.
+ *
+ * Ce que la copie manuscrite avait perdu, mesuré :
+ *
+ *  - **l'émission de room n'était pas gardée.** `io.to(room).emit(...)` LÈVE
+ *    quand l'adaptateur ou l'encodeur est en défaut, et l'épingle était déjà
+ *    COMMISE en base : la levée remontait au `catch` de la route, qui rendait
+ *    500 pour une écriture réussie — puis, la levée ayant sauté la suite,
+ *    l'entrée de file hors ligne n'était jamais posée. Un incident cosmétique
+ *    emportait la seule garantie DURABLE du chemin (règle du cycle 116) ;
+ *  - **la mise en file était détachée sans `.catch`** — la forme que la leçon
+ *    230 interdit, et que ce fichier commente à deux endroits.
  */
 /**
  * Le couple `(eventType, payload)` de la FILE, narrowé une fois.
@@ -147,28 +271,144 @@ function emitToConversationRoom(
  * cycle 104 a corrigé sur l'ÉMISSION, une couche plus bas et pour la même
  * raison.
  */
-function queuedVariant(params: MessageMutationParams): QueuedVariantFor<'edited' | 'deleted'> {
-  return params.eventType === 'edited'
-    ? { eventType: 'edited', payload: params.payload }
-    : { eventType: 'deleted', payload: params.payload };
+function queuedVariant(
+  params: MessageMutationParams,
+): QueuedVariantFor<'edited' | 'deleted' | 'expired' | 'pinned' | 'unpinned'> {
+  switch (params.eventType) {
+    case 'edited':
+      return { eventType: 'edited', payload: params.payload, atRest: params.atRest };
+    case 'deleted':
+      return { eventType: 'deleted', payload: params.payload };
+    case 'expired':
+      return { eventType: 'expired', payload: params.payload };
+    case 'pinned':
+      return { eventType: 'pinned', payload: params.payload };
+    case 'unpinned':
+      return { eventType: 'unpinned', payload: params.payload };
+  }
 }
 
-export async function broadcastMessageMutation(params: MessageMutationParams): Promise<void> {
-  const { prisma, manager, conversationId, actorUserId, eventType, messageId, payload, onError } = params;
+const NO_SEALED_READER: ReadonlyMap<string, Date> = new Map();
+
+const sealedVariant = <T extends object>(payload: T, sealed: ReadonlyMap<string, Date>, key: string): T => {
+  const at = sealed.get(key);
+  return at ? withSealedQuote(payload, at) : payload;
+};
+
+/**
+ * #16689 — `clientMessageId` ne franchit pas ce transport, sur AUCUNE de ses
+ * sorties.
+ *
+ * C'est l'id OPTIMISTE de l'auteur. Les quatre chemins d'ENVOI le retirent déjà
+ * de la charge des pairs par ce MÊME helper ; les trois transports REST
+ * d'édition l'y laissaient entrer en étalant la ligne Prisma brute, et le type
+ * ne pouvait pas le dire — le contrôle des propriétés excédentaires est
+ * invisible à travers un spread (§ CLAUDE.md, cycle 106), et c'est par un
+ * spread que ces charges se composent.
+ *
+ * Le retrait se fait ICI, à l'ENTRÉE, et non aux trois sites d'appel : ce
+ * transport a SIX sorties pour une même charge — la room, la variante scellée,
+ * le plan signé par lecteur, la room personnelle, l'entrée de file et la
+ * variante de file par lecteur. Garder le champ à l'entrée les couvre toutes
+ * par construction, là où un retrait par appelant est l'« inventaire à tenir à
+ * jour » que la leçon 279 décrit : le septième chemin ne l'aurait pas.
+ *
+ * Le `switch` n'est pas un ornement : destructurer l'union rendrait `eventType`
+ * et `payload` à deux unions INDÉPENDANTES, et le couple cesserait d'être
+ * corrélé à l'étage même où il vient de l'être (cycle 106). `Omit` est ici une
+ * identité de type — aucun payload du contrat ne DÉCLARE ce champ — donc rien
+ * ne se rétrécit en aval.
+ *
+ * L'AUTEUR, lui, garde son id : il le reçoit par la réponse REST, qui compose
+ * sa propre charge et ne passe pas par ce transport.
+ */
+function withSanitizedPayload(params: MessageMutationParams): MessageMutationParams {
+  switch (params.eventType) {
+    case 'edited':
+      return { ...params, payload: stripClientMessageId(params.payload) };
+    case 'deleted':
+      return { ...params, payload: stripClientMessageId(params.payload) };
+    case 'expired':
+      return { ...params, payload: stripClientMessageId(params.payload) };
+    case 'pinned':
+      return { ...params, payload: stripClientMessageId(params.payload) };
+    case 'unpinned':
+      return { ...params, payload: stripClientMessageId(params.payload) };
+  }
+}
+
+export async function broadcastMessageMutation(rawParams: MessageMutationParams): Promise<void> {
+  const params = withSanitizedPayload(rawParams);
+  const { manager, conversationId, actorUserId, eventType, messageId, onError } = params;
   if (!manager) return;
 
+  const sealed = params.eventType === 'edited' ? params.sealedQuoteAudience ?? NO_SEALED_READER : NO_SEALED_READER;
+  // Le texte d'une édition ne part qu'à ceux qui ont le droit de LIRE le
+  // message — voir `readableByBestEffort`. Résolu AVANT le `try` d'émission, et
+  // partagé par les DEUX canaux : le direct et la file. Les autres familles de
+  // cette fonction (`deleted`, `expired`, `pinned`, `unpinned`) ne portent que
+  // des ids, pas de contenu : leur audience ne change pas ici, et c'est une
+  // décision — révéler l'EXISTENCE d'un message est une question distincte,
+  // suivie par sa propre issue.
+  const readership: MessageReadership =
+    params.eventType === 'edited'
+      ? await messageReadership(params.prisma, conversationId, messageId, onError)
+      : { kind: 'room' };
+  const blockedKeys = blockedReaderKeys(readership);
   try {
-    emitToConversationRoom(manager.getIO()?.to(ROOMS.conversation(conversationId)), params);
+    // #9646 — un message protégé qui porte des pièces : par destinataire,
+    // chacun sa variante (scellée ou non) et ses adresses signées.
+    const plan = params.eventType === 'edited'
+      ? await readerSignedPlanForMessageId(params.prisma, {
+          conversationId,
+          messageId,
+          attachments: (params.payload as { readonly attachments?: unknown }).attachments,
+        })
+      : null;
+    const io = manager.getIO();
+    if (readership.kind === 'unknown') {
+      // Ni qui est bloqué, ni qui est autorisé : rien ne part en direct, et
+      // rien n'entre en file (voir l'enfilage plus bas). La relecture de la
+      // page sert le texte édité, sous le plancher appliqué côté serveur.
+    } else if (params.eventType === 'edited') {
+      // Les TROIS sorties de l'édition sont gardées par le MÊME site que le
+      // transport socket (`editedAudience.ts`) : une règle retapée à chaque
+      // site est une règle qu'un site finira par ne pas avoir.
+      emitEditedToReaders({
+        io,
+        conversationId,
+        payload: params.payload,
+        plan,
+        sealed,
+        blocked: blockedKeys,
+        sealedVariant: (payload, key) => sealedVariant(payload, sealed, key),
+        sealedForAll: (payload) =>
+          withSealedQuote(payload, new Date(Math.min(...[...sealed.values()].map((at) => at.getTime())))),
+      });
+    } else {
+      emitToConversationRoom(io?.to(ROOMS.conversation(conversationId)), params);
+    }
   } catch (error) {
     onError?.(error);
   }
 
-  await emitConversationPreviewUpdate(prisma, manager.getIO(), conversationId, actorUserId, onError);
+  // (2) La liste des conversations, sur les deux mutations qui la DÉPLACENT.
+  // L'épingle n'en est pas une (cf. `MessageMutationParams`) : elle ne touche ni
+  // l'aperçu, ni son ordre, ni son compteur, et le type est ce qui la dispense —
+  // aucun drapeau à lire ici, aucun `prisma` à fournir là-bas.
+  if (
+    params.eventType === 'edited' ||
+    params.eventType === 'deleted' ||
+    params.eventType === 'expired'
+  ) {
+    await emitConversationPreviewUpdate(params.prisma, manager.getIO(), conversationId, actorUserId, onError);
+  }
 
-  // (4) La pastille de non-lus, sur une SUPPRESSION seulement : le message ne
-  // compte plus, et sans cette poussée la liste web (`staleTime: Infinity`) le
-  // compterait indéfiniment. Le décompte est déjà juste — il ne manquait que de
-  // le redemander. Exclusion sur l'AUTEUR, jamais sur l'acteur : un modérateur
+  // (4) La pastille de non-lus, sur une SUPPRESSION ou une EXPIRATION : le
+  // message ne compte plus, et sans cette poussée la liste web
+  // (`staleTime: Infinity`) le compterait indéfiniment. Le décompte est déjà
+  // juste — il ne manquait que de le redemander. Exclusion sur l'AUTEUR, jamais
+  // sur l'acteur : un modérateur
   // qui supprime le message d'un autre est lui-même un destinataire à
   // rafraîchir. Cf. `README.md` § « La pastille de non-lus ».
   //
@@ -179,7 +419,7 @@ export async function broadcastMessageMutation(params: MessageMutationParams): P
   // obligatoire — un rejet non traité termine le process sous le
   // `--unhandled-rejections=throw` par défaut de Node 22 — et le try/catch garde
   // l'APPEL lui-même (un double de manager sans la méthode).
-  if (eventType === 'deleted') {
+  if (eventType === 'deleted' || eventType === 'expired') {
     try {
       void manager.emitUnreadCountsToRecipients?.({
         conversationId,
@@ -204,18 +444,34 @@ export async function broadcastMessageMutation(params: MessageMutationParams): P
   // Ne PAS raisonner « l'implémentation actuelle avale ses erreurs » :
   // `MessageMutationManager` est une interface structurelle, la garantie
   // appartient donc à ce fichier, pas au collaborateur. Le jumeau
-  // `broadcastReactionMutation` garde l'appel identique de cette manière ;
-  // c'était ici la dernière exception de la famille.
+  // `broadcastReactionMutation` garde l'appel identique de cette manière.
+  //
+  // Cette ligne portait « c'était ici la dernière exception de la famille ».
+  // C'était une AFFIRMATION, et le balayage du cycle 130 bis l'a mesurée fausse :
+  // il en restait QUATORZE dans `services/gateway/src/`, dont deux à cinquante
+  // lignes d'ici, sur les deux entrées d'épingle. Une famille se COMPTE, elle
+  // ne se conclut pas depuis le site qu'on vient de corriger — c'est la règle
+  // du cycle 93 (« un compte est une affirmation ») appliquée à un inventaire
+  // de sites. Le cliquet qui la tient désormais :
+  // `src/__tests__/detached-promise-catch-sweep.ts`.
   try {
+    if (readership.kind === 'unknown') return;
     void Promise.resolve(
       manager.enqueueOfflineMessageMutation({
         conversationId,
         actorUserId,
         messageId,
+        // La file est la TROISIÈME sortie de la même charge, et elle PERSISTE
+        // 48 h : sans cette exclusion, le texte d'un message hors du plancher
+        // d'un invité l'attendait dans Redis sous sa clé.
+        ...(blockedKeys.size > 0 ? { excludedQueueKeys: blockedKeys } : {}),
         // Le couple part CORRÉLÉ (cycle 106) : le destructurer le rendrait à
         // deux unions indépendantes, et la file cesserait d'être gardée à
         // l'étage même où elle vient de l'être.
         ...queuedVariant(params),
+        ...(sealed.size > 0
+          ? { resolvePayloadForReader: (queueKey: string) => sealedVariant(params.payload, sealed, queueKey) }
+          : {}),
       })
     ).catch((error: unknown) => onError?.(error));
   } catch (error) {

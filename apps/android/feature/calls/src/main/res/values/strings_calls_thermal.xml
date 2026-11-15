@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_video_notice_reduced">Video reduced to let the phone cool down</string>
+    <string name="call_video_notice_low_light">Low light: your image may look dark</string>
+    <string name="call_video_thermal_audio_only">Phone too hot: the call continues with audio only</string>
+</resources>

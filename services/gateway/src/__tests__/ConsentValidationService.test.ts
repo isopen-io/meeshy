@@ -18,12 +18,16 @@
 import { ConsentValidationService } from '../services/ConsentValidationService';
 
 const NOW = new Date('2026-01-01T00:00:00Z');
+// #17309 — le clonage exige 18 ans révolus ; ces témoins ne portent pas sur l'âge.
+const ADULT_BIRTH_DATE = new Date('1990-01-01T00:00:00Z');
 
 function makePrisma(userOverrides?: object, userPrefsOverrides?: object | null) {
   return {
     user: {
       findUnique: jest.fn().mockResolvedValue(
-        userOverrides !== undefined ? userOverrides : {
+        userOverrides !== undefined
+          ? (userOverrides === null ? null : { birthDate: ADULT_BIRTH_DATE, ...userOverrides })
+          : {
           dataProcessingConsentAt: null,
           voiceDataConsentAt: null,
           voiceProfileConsentAt: null,
@@ -57,7 +61,12 @@ describe('ConsentValidationService', () => {
       await expect(svc.getConsentStatus(userId)).rejects.toThrow('User not found');
     });
 
-    it('returns all-true in development mode regardless of DB state', async () => {
+    it('NODE_ENV=development n’accorde plus rien tout seul — un consentement se prouve par une donnée (#4348)', async () => {
+      // Le court-circuit `NODE_ENV === 'development'` de #4348 est SUPPRIMÉ :
+      // une base sans aucun consentement rend `false` partout, MÊME en
+      // développement. Les comptes de développement passent désormais la
+      // garde parce qu'ils ont une VRAIE colonne horodatée — voir
+      // `packages/shared/seed.ts` (les sept comptes seed).
       process.env.NODE_ENV = 'development';
       const prisma = makePrisma({
         dataProcessingConsentAt: null,
@@ -69,17 +78,33 @@ describe('ConsentValidationService', () => {
       const status = await svc.getConsentStatus(userId);
 
       expect(status).toEqual({
-        hasDataProcessingConsent: true,
-        hasVoiceDataConsent: true,
-        hasVoiceProfileConsent: true,
-        hasVoiceCloningConsent: true,
-        hasThirdPartyServicesConsent: true,
-        canTranscribeAudio: true,
-        canTranslateText: true,
-        canTranslateAudio: true,
-        canGenerateTranslatedAudio: true,
-        canUseVoiceCloning: true,
+        hasDataProcessingConsent: false,
+        hasAnalyticsConsent: false,
+        hasVoiceDataConsent: false,
+        hasVoiceProfileConsent: false,
+        hasVoiceCloningConsent: false,
+        canTranscribeAudio: false,
+        canTranslateText: false,
+        canTranslateAudio: false,
+        canGenerateTranslatedAudio: false,
+        canUseVoiceCloning: false,
       });
+    });
+
+    it('NODE_ENV=development lit la VRAIE colonne quand elle est posée — comme tout autre environnement', async () => {
+      process.env.NODE_ENV = 'development';
+      const now = new Date();
+      const prisma = makePrisma({
+        dataProcessingConsentAt: now,
+        voiceDataConsentAt: now,
+        voiceProfileConsentAt: now,
+        voiceCloningEnabledAt: now,
+      });
+      const svc = new ConsentValidationService(prisma);
+      const status = await svc.getConsentStatus(userId);
+
+      expect(status.hasDataProcessingConsent).toBe(true);
+      expect(status.canUseVoiceCloning).toBe(true);
     });
 
     it('returns all-false when user has no consents and no preferences', async () => {
@@ -95,10 +120,10 @@ describe('ConsentValidationService', () => {
 
       expect(status).toEqual({
         hasDataProcessingConsent: false,
+        hasAnalyticsConsent: false,
         hasVoiceDataConsent: false,
         hasVoiceProfileConsent: false,
         hasVoiceCloningConsent: false,
-        hasThirdPartyServicesConsent: false,
         canTranscribeAudio: false,
         canTranslateText: false,
         canTranslateAudio: false,
@@ -290,29 +315,76 @@ describe('ConsentValidationService', () => {
       expect(status.canUseVoiceCloning).toBe(false);
     });
 
-    it('hasThirdPartyServicesConsent requires dataProcessingConsent', async () => {
+    // #4343 — remplace « hasThirdPartyServicesConsent requires
+    // dataProcessingConsent ». Le statut ne porte PLUS ce champ : le blob
+    // `application` ne pouvait pas le recevoir (Zod strippait), aucune route
+    // ne l'écrivait, aucune colonne `User` ne le portait. Le témoin garde
+    // désormais son ABSENCE, y compris quand le blob prétend le contraire —
+    // c'est le cas qui distingue « le champ a disparu » de « il est faux ».
+    it('le statut ne porte plus hasThirdPartyServicesConsent, même si le blob application le prétend (#4343)', async () => {
       process.env.NODE_ENV = 'test';
       const prisma = makePrisma(
-        { dataProcessingConsentAt: null, voiceDataConsentAt: null, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
+        { dataProcessingConsentAt: NOW, voiceDataConsentAt: null, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
         { audio: {}, application: { thirdPartyServicesConsentAt: NOW } }
       );
       const svc = new ConsentValidationService(prisma);
       const status = await svc.getConsentStatus(userId);
 
-      expect(status.hasThirdPartyServicesConsent).toBe(false);
+      expect(status).not.toHaveProperty('hasThirdPartyServicesConsent');
     });
 
-    it('UserPreferences.application overrides User fields for dataProcessingConsentAt', async () => {
+    // #4180 — remplace l'ancien "UserPreferences.application overrides User
+    // fields for dataProcessingConsentAt", qui GARDAIT le défaut : le blob
+    // JSON de préférences n'a plus AUCUNE priorité, ni même aucun effet, sur
+    // les quatre consentements de base. Seule `User.*ConsentAt` — la colonne
+    // que `VoiceProfileService.updateConsent` horodate côté serveur — fait
+    // foi. Un blob qui AFFIRME un consentement que la colonne ne porte pas
+    // ne doit plus jamais l'accorder : c'est exactement ce qu'un client
+    // malveillant (ou un vieux client qui parlait encore l'ancien contrat)
+    // pourrait tenter.
+    it('un blob application qui AFFIRME un consentement sans la colonne User ne l\'accorde plus', async () => {
       process.env.NODE_ENV = 'test';
-      // User has no consent, but application prefs do
       const prisma = makePrisma(
         { dataProcessingConsentAt: null, voiceDataConsentAt: null, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
-        { audio: {}, application: { dataProcessingConsentAt: NOW } }
+        { audio: {}, application: { dataProcessingConsentAt: NOW, voiceCloningConsentAt: NOW } }
       );
       const svc = new ConsentValidationService(prisma);
       const status = await svc.getConsentStatus(userId);
 
-      expect(status.hasDataProcessingConsent).toBe(true);
+      expect(status.hasDataProcessingConsent).toBe(false);
+      expect(status.hasVoiceCloningConsent).toBe(false);
+    });
+
+    // Le cas qui PROUVE la révocation (critère de fin #4180, § Témoins) :
+    // un témoin posé seulement sur l'OCTROI ne tombait pas, l'ancien
+    // fallback (`applicationPrefs.xxx || user.xxx`) et la lecture directe
+    // rendant le même verdict quand les DEUX sources s'accordent. Ici elles
+    // divergent délibérément — colonne User REVOQUÉE (`null`, posée par
+    // `POST /voice/profile/consent { voiceCloningConsent: false }`), blob
+    // application ENCORE daté d'AVANT la révocation (jamais nettoyé, puisque
+    // cette route n'écrit que la colonne User) — et c'est le cas que
+    // l'ancien code ratait : `applicationPrefs.voiceCloningConsentAt` gagnait
+    // par `||`, donc `canUseVoiceCloning` restait `true` après retrait.
+    it('une révocation sur la colonne User l\'emporte sur un blob application resté daté (stale)', async () => {
+      process.env.NODE_ENV = 'test';
+      const prisma = makePrisma(
+        {
+          dataProcessingConsentAt: NOW,
+          voiceDataConsentAt: NOW,
+          voiceProfileConsentAt: NOW,
+          voiceCloningEnabledAt: null, // révoqué via POST /voice/profile/consent
+        },
+        {
+          audio: {},
+          // Blob JAMAIS nettoyé par la révocation — daté AVANT le retrait.
+          application: { voiceCloningConsentAt: NOW, voiceCloningEnabledAt: NOW },
+        }
+      );
+      const svc = new ConsentValidationService(prisma);
+      const status = await svc.getConsentStatus(userId);
+
+      expect(status.hasVoiceCloningConsent).toBe(false);
+      expect(status.canUseVoiceCloning).toBe(false);
     });
 
     it('handles null userPreferences gracefully', async () => {
@@ -493,7 +565,9 @@ describe('ConsentValidationService', () => {
     it('returns no violations when dataProcessingConsent given and flags enabled', async () => {
       process.env.NODE_ENV = 'test';
       const svc = new ConsentValidationService(makePrisma(
-        { dataProcessingConsentAt: NOW, voiceDataConsentAt: null, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
+        // #4709 — `allowAnalytics` exige désormais `analyticsConsentAt`, pas
+        // seulement `dataProcessingConsentAt` (dont il reste l'enfant direct).
+        { dataProcessingConsentAt: NOW, analyticsConsentAt: NOW, voiceDataConsentAt: null, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
         null
       ));
       const violations = await svc.validatePrivacyPreferences(userId, {
@@ -506,11 +580,25 @@ describe('ConsentValidationService', () => {
     it('adds violation for allowAnalytics without dataProcessingConsent', async () => {
       process.env.NODE_ENV = 'test';
       const svc = new ConsentValidationService(makePrisma(
-        { dataProcessingConsentAt: null, voiceDataConsentAt: null, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
+        { dataProcessingConsentAt: null, analyticsConsentAt: null, voiceDataConsentAt: null, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
         null
       ));
       const violations = await svc.validatePrivacyPreferences(userId, { allowAnalytics: true });
       expect(violations.find(v => v.field === 'allowAnalytics')).toBeDefined();
+    });
+
+    // #4709 — avoir SEULEMENT `dataProcessingConsentAt` ne suffit plus :
+    // `analyticsConsentAt` est un consentement dédié, pas une retombée.
+    it('adds violation for allowAnalytics when dataProcessingConsent is present but analyticsConsentAt is not', async () => {
+      process.env.NODE_ENV = 'test';
+      const svc = new ConsentValidationService(makePrisma(
+        { dataProcessingConsentAt: NOW, analyticsConsentAt: null, voiceDataConsentAt: null, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
+        null
+      ));
+      const violations = await svc.validatePrivacyPreferences(userId, { allowAnalytics: true });
+      const violation = violations.find(v => v.field === 'allowAnalytics');
+      expect(violation).toBeDefined();
+      expect(violation?.requiredConsents).toEqual(['analyticsConsentAt']);
     });
 
     it('adds violation for shareUsageData without dataProcessingConsent', async () => {
@@ -528,7 +616,7 @@ describe('ConsentValidationService', () => {
   // validateVideoPreferences
   // ---------------------------------------------------------------------------
   describe('validateVideoPreferences', () => {
-    it('returns no violations when thirdPartyServicesConsent given', async () => {
+    it('returns no violations when scanning is requested (#4343 : plus aucun consentement exigé)', async () => {
       process.env.NODE_ENV = 'test';
       const svc = new ConsentValidationService(makePrisma(
         { dataProcessingConsentAt: NOW, voiceDataConsentAt: null, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
@@ -585,15 +673,19 @@ describe('ConsentValidationService', () => {
       expect(violations).toHaveLength(0);
     });
 
-    it('adds violation for scanFilesForMalware without thirdPartyServicesConsent', async () => {
+    // #4343 — la garde a été RETIRÉE (option b), pas assouplie : cette
+    // préférence vaut `true` par défaut au schéma, et aucun scanner tiers
+    // n'existe dans le dépôt. Le témoin garde l'absence de violation POUR UN
+    // UTILISATEUR SANS AUCUN CONSENTEMENT — la fixture la plus sévère, celle
+    // que l'ancien test n'exerçait pas (il accordait `dataProcessing`).
+    it('scanFilesForMalware ne dépend plus d\'aucun consentement (#4343)', async () => {
       process.env.NODE_ENV = 'test';
       const svc = new ConsentValidationService(makePrisma(
-        { dataProcessingConsentAt: NOW, voiceDataConsentAt: null, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
+        { dataProcessingConsentAt: null, voiceDataConsentAt: null, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
         null
       ));
       const violations = await svc.validateDocumentPreferences(userId, { scanFilesForMalware: true });
-      expect(violations.find(v => v.field === 'scanFilesForMalware')).toBeDefined();
-      expect(violations[0].requiredConsents).toContain('thirdPartyServicesConsentAt');
+      expect(violations).toHaveLength(0);
     });
 
     it('no violation when scanFilesForMalware is false', async () => {
@@ -634,14 +726,16 @@ describe('ConsentValidationService', () => {
       expect(violations.find(v => v.field === 'telemetryEnabled')).toBeDefined();
     });
 
-    it('adds violation for betaFeaturesEnabled without thirdPartyServicesConsent', async () => {
+    // #4343 — même retrait : activer un drapeau de fonctionnalité n'envoie
+    // rien nulle part, donc n'est pas un traitement à consentir.
+    it('betaFeaturesEnabled ne dépend plus d\'aucun consentement (#4343)', async () => {
       process.env.NODE_ENV = 'test';
       const svc = new ConsentValidationService(makePrisma(
-        { dataProcessingConsentAt: NOW, voiceDataConsentAt: null, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
+        { dataProcessingConsentAt: null, voiceDataConsentAt: null, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
         null
       ));
       const violations = await svc.validateApplicationPreferences(userId, { betaFeaturesEnabled: true });
-      expect(violations.find(v => v.field === 'betaFeaturesEnabled')).toBeDefined();
+      expect(violations).toHaveLength(0);
     });
   });
 
@@ -689,14 +783,24 @@ describe('ConsentValidationService', () => {
       expect(violations.find(v => v.field === 'virtualBackgroundEnabled')).toBeDefined();
     });
 
+    // #4343 — l'aiguillage vers `document` ne peut plus se PROUVER par une
+    // violation : `validateDocumentPreferences` n'en produit plus aucune
+    // depuis le retrait de la garde `scanFilesForMalware`. Un témoin qui
+    // attendrait un tableau vide ne distinguerait pas « aiguillé vers
+    // document » de « tombé dans le `default` », donc ne garderait rien. On
+    // observe donc l'APPEL lui-même — la seule chose que ce test a jamais
+    // voulu dire.
     it('routes "document" category to validateDocumentPreferences', async () => {
       process.env.NODE_ENV = 'test';
       const svc = new ConsentValidationService(makePrisma(
         { dataProcessingConsentAt: null, voiceDataConsentAt: null, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
         null
       ));
-      const violations = await svc.validatePreferences(userId, 'document', { scanFilesForMalware: true });
-      expect(violations.find(v => v.field === 'scanFilesForMalware')).toBeDefined();
+      const spy = jest.spyOn(svc, 'validateDocumentPreferences');
+
+      await svc.validatePreferences(userId, 'document', { scanFilesForMalware: true });
+
+      expect(spy).toHaveBeenCalledWith(userId, { scanFilesForMalware: true });
     });
 
     it('routes "application" category to validateApplicationPreferences', async () => {

@@ -7,7 +7,6 @@ import Intents
 // No AppIntents.framework dependency found. ». L'import le fait passer en scan
 // bénin (« no relevant symbols »). Cette NSE ne définit aucun App Intent.
 import AppIntents
-import GRDB
 import MeeshySDK
 
 /// Rich-push service extension.
@@ -18,197 +17,251 @@ import MeeshySDK
 ///   quick actions on the banner / lock screen / notification center.
 /// - Override the badge value so iOS keeps the displayed count in sync without a
 ///   foreground round-trip.
-nonisolated class NotificationService: UNNotificationServiceExtension {
+class NotificationService: UNNotificationServiceExtension {
 
-    private var contentHandler: ((UNNotificationContent) -> Void)?
+    private var delivery: NSEDelivery<UNNotificationContent>?
     private var bestAttemptContent: UNMutableNotificationContent?
-
-    // Timestamp recorded at the very start of didReceive so that each download
-    // can cap its URLRequest timeout to what's left in the OS budget.
-    private var extensionStartTime: Date = .distantPast
-
-    // The OS grants the NSE ~30 s. We reserve 3 s at the end for INSendMessageIntent
-    // construction + contentHandler invocation, giving downloads 27 s total.
-    private static let nseBudget: TimeInterval = 27
-    // Never start a download with less than 2 s left — it would almost certainly
-    // time out mid-transfer and leave the extension hung right up to the OS kill.
-    private static let minDownloadBudget: TimeInterval = 2
+    private var enrichment: Task<Void, Never>?
+    private var bringAlarm: Task<Bool, Never>?
 
     override func didReceive(
         _ request: UNNotificationRequest,
         withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
     ) {
-        extensionStartTime = Date()
-        self.contentHandler = contentHandler
-        bestAttemptContent = request.content.mutableCopy() as? UNMutableNotificationContent
-
-        guard let bestAttemptContent else {
-            contentHandler(request.content)
+        let budget = NSEBudget(start: Date())
+        let delivery = NSEDelivery(handler: contentHandler)
+        self.delivery = delivery
+        // #10507 — « reçue » : déposée dans la boîte du groupe d'app, sans réseau.
+        if let received = SocialNotificationEvents.event(.received, userInfo: request.content.userInfo) {
+            SocialNotificationInbox.shared.append(received)
+        }
+        guard let content = request.content.mutableCopy() as? UNMutableNotificationContent else {
+            delivery.deliver(request.content)
             return
         }
-
-        applyCategory(to: bestAttemptContent)
-        applyBadge(to: bestAttemptContent)
-        applyThreading(to: bestAttemptContent)
-        // Préférences de notification (miroir App Group) — APRÈS applyBadge et
-        // applyThreading pour que sons/badge/regroupement coupés gagnent, et
-        // avant tout chemin de sortie (contentHandler / expiration).
-        NSEPreferencesGate.apply(
-            preferences: NSEPreferencesGate.loadPreferences() ?? .defaults,
-            to: bestAttemptContent,
-            rawType: bestAttemptContent.userInfo["type"] as? String
+        bestAttemptContent = content
+        ringBringAlarm(request.content.userInfo)
+        prepareBestAttempt(content)
+        startEnrichment(
+            request: request,
+            content: content,
+            delivery: delivery,
+            budget: budget
         )
-        updateSharedUnreadCount(from: bestAttemptContent.userInfo)
-        prefetchMessageData(from: bestAttemptContent.userInfo)
-        prefetchSocialData(from: bestAttemptContent.userInfo)
-        prePersistMessage(from: bestAttemptContent.userInfo)
-        postDeliveryReceipt(from: bestAttemptContent.userInfo)
+    }
 
-        let userInfo = bestAttemptContent.userInfo
+    /// #17442 (essai AlarmKit) — un push `bring` programme l'alarme système avant même que la bannière soit livrée ;
+    /// un push `bring_stopped` la retire. Derrière le drapeau et iOS 26 : ailleurs, la ligne est sans effet. L'extension
+    /// ne montre jamais la demande d'autorisation — l'app la fait au premier Bring reçu ouverte.
+    private func ringBringAlarm(_ userInfo: [AnyHashable: Any]) {
+        let action = BringAlarmPlan.action(push: userInfo, now: Date())
+        guard action != .none else { return }
+        BringAlarmLog.note("NSE : push du Bring reçu — \(Self.bringTrace(action))")
+        bringAlarm = Task { await BringAlarmCoordinator.system.apply(action, mayAsk: false) }
+    }
 
-        // E2EE decryption: if the push payload contains encrypted content,
-        // attempt to decrypt it locally using the shared Keychain session key.
-        // On success, replace the notification body with the decrypted plaintext.
-        var didDecrypt = false
-        if let encryptedContent = userInfo["encryptedContent"] as? String,
-           let senderId = userInfo["senderId"] as? String,
-           !encryptedContent.isEmpty {
-            if let decrypted = NSEDecryptor.decrypt(
-                encryptedBase64: encryptedContent,
-                senderUserId: senderId
-            ) {
-                bestAttemptContent.body = decrypted
-                didDecrypt = true
-            }
-        }
-
-        // Localize protected message placeholders.
-        //
-        // The gateway now sends icon-only bodies for protected messages
-        // ("👁️ 🎵", "🔥 💬 5min", "🌫️ 🖼️", "🔒 🎬") that already convey
-        // protection + content type without leaking content. Those bodies
-        // are emoji and don't need locale-side localisation, so we MUST
-        // NOT clobber them with NSLocalizedString here.
-        //
-        // The locKey override is still useful for ONE case : E2EE pushes
-        // where decryption failed locally (key missing, sender device key
-        // not paired, etc.). In that case the gateway has no way to know
-        // it couldn't be decrypted client-side, so its iconified body
-        // ("🔒 🎵") is fine — but historically the NSE swapped it for the
-        // user's localised "Message chiffré" string, which is friendlier.
-        // We keep that behaviour gated strictly to the E2EE-failure path :
-        // any non-E2EE protected message (view-once / blurred / ephemeral)
-        // keeps the iconified body from the gateway.
-        let isEncryptedPush = userInfo["isEncrypted"] as? Bool == true
-            || (userInfo["encryptedContent"] as? String).map { !$0.isEmpty } == true
-        if isEncryptedPush, !didDecrypt,
-           let locKey = userInfo["notificationLocKey"] as? String, !locKey.isEmpty {
-            let localized = NSLocalizedString(locKey, comment: "")
-            if localized != locKey {
-                bestAttemptContent.body = localized
-            }
-        }
-
-        // Bug B — audio-only E2EE messages reach the device with an empty
-        // plaintext body (the gateway encrypts only the optional caption,
-        // which is empty for a voice memo). Without a fallback the user
-        // sees just the sender name with no hint that a voice message is
-        // waiting. We apply this AFTER the decryption and locKey steps so
-        // we only catch the truly-empty case, never a decrypted caption.
-        if let fallback = NotificationPayloadHelpers.audioBodyFallback(
-            currentBody: bestAttemptContent.body,
-            userInfo: userInfo
-        ) {
-            bestAttemptContent.body = fallback
-        }
-
-        // Prisme Linguistique (i18n serveur) : pour `message_reaction`, le gateway
-        // envoie désormais le body DÉJÀ localisé dans la langue du destinataire
-        // (« reacted ❤️ to your message » / « a réagi ❤️ à votre message » …, via
-        // `notificationString(lang, 'reaction.message')`). Le NSE ne reconstruit
-        // plus rien : il affiche le body tel quel. Le nom du réacteur est porté par
-        // INSendMessageIntent (titre Communication Notification), l'avatar via
-        // INPerson.image. Voir docs/superpowers/specs/2026-06-16-notification-system-i18n-design.md
-
-        let isCommunicationType = Self.communicationTypes.contains(
-            userInfo["type"] as? String ?? ""
-        )
-
-        // Phase A — separate concerns:
-        //   1. `imageURL`  → sender's avatar — ONLY fed to INPerson.image so the
-        //      Communication Notification renders it on the left of the banner
-        //      with the app icon as a badge bottom-right (WhatsApp/Telegram style).
-        //      NEVER attached as UNNotificationAttachment — that slot is for
-        //      message media, and feeding the avatar there made iOS render it as
-        //      the message preview while the banner kept showing the default
-        //      app icon on the left.
-        //   2. `attachmentUrl` + `attachmentMimeType` → media of the message
-        //      itself (audio/image/video). Downloaded and attached with a UTI
-        //      typeHint so iOS picks the native inline renderer (audio waveform
-        //      with play button, image preview, video thumbnail with tap-to-play).
-        let group = DispatchGroup()
-        var avatarData: Data?
-        nonisolated(unsafe) var messageAttachment: UNNotificationAttachment?
-
-        // Les URLs du payload sont RELATIVES quand le média est servi par le
-        // gateway (`/api/v1/attachments/file/…`) : `URL(string:)` les accepte
-        // mais produit une URL sans hôte, que `URLSession` refuse. On les
-        // résout contre l'origine API de confiance (allowlist NSE) — sans quoi
-        // l'avatar n'arrive jamais et la bannière retombe sur l'icône de l'app.
-        let apiBaseURL = NSEDataSync.trustedApiBaseURL
-
-        if let avatarURLString = userInfo["imageURL"] as? String,
-           let avatarURL = NotificationPayloadHelpers.resolveRemoteMediaURL(
-               avatarURLString, apiBaseURL: apiBaseURL
-           ) {
-            group.enter()
-            downloadData(from: avatarURL) { data in
-                avatarData = data
-                group.leave()
-            }
-        }
-
-        if let attachmentURLString = userInfo["attachmentUrl"] as? String,
-           let attachmentURL = NotificationPayloadHelpers.resolveRemoteMediaURL(
-               attachmentURLString, apiBaseURL: apiBaseURL
-           ) {
-            let mime = userInfo["attachmentMimeType"] as? String ?? ""
-            group.enter()
-            downloadData(from: attachmentURL) { [weak self] data in
-                defer { group.leave() }
-                guard let self, let data else { return }
-                messageAttachment = self.createMessageAttachment(
-                    from: data,
-                    originalURL: attachmentURL,
-                    mimeType: mime
-                )
-            }
-        }
-
-        group.notify(queue: .global(qos: .userInitiated)) { [weak self] in
-            guard let self else {
-                contentHandler(bestAttemptContent)
-                return
-            }
-            if let messageAttachment {
-                bestAttemptContent.attachments = [messageAttachment]
-            }
-            if isCommunicationType {
-                let finalContent = self.applyCommunicationIntent(
-                    to: bestAttemptContent,
-                    avatarData: avatarData
-                )
-                contentHandler(finalContent)
-            } else {
-                contentHandler(bestAttemptContent)
-            }
+    /// Ce que le journal dit d'une action : son genre et l'identifiant du Bring, jamais le titre (le nom de l'expéditeur).
+    private static func bringTrace(_ action: BringAlarmPlan.Action) -> String {
+        switch action {
+        case .ring(let request): "sonner \(request.bringId)"
+        case .silence(let bringId): "taire \(bringId)"
+        case .none: "rien"
         }
     }
 
     override func serviceExtensionTimeWillExpire() {
-        if let contentHandler, let bestAttemptContent {
-            contentHandler(bestAttemptContent)
+        enrichment?.cancel()
+        guard let bestAttemptContent else { return }
+        delivery?.deliver(bestAttemptContent)
+    }
+
+    // MARK: - Pipeline
+
+    private func prepareBestAttempt(_ content: UNMutableNotificationContent) {
+        let lock = Self.conversationLock(content.userInfo)
+        // #11387 — l'ORDRE est une loi pure (`NSEPreparationStep.plan`) : une
+        // conversation verrouillée, ou dont le verrou est inconnu (#12655), est
+        // scellée avant toute décision, ne dépose rien de son message, et son
+        // corps est remplacé en dernier.
+        for step in NSEPreparationStep.plan(for: lock) {
+            perform(step, on: content, lock: lock)
         }
+    }
+
+    private func perform(_ step: NSEPreparationStep, on content: UNMutableNotificationContent, lock: NSEConversationLock) {
+        switch step {
+        case .sealLockedConversation:
+            content.userInfo = NSEAttachmentPolicy.sealingLockedConversation(content.userInfo, isLocked: true)
+        case .applyCategory:
+            // #17143 — le réveil d'un talkie : sa catégorie dédiée, la seule dont la voix se joue sur place.
+            if let talkie = NotificationDetailPolicy.talkieCategory(forType: content.userInfo["type"] as? String ?? "") {
+                content.userInfo = NotificationDetailPolicy.sealingUntrustedTalkieVoice(content.userInfo, apiBaseURL: NSEDataSync.trustedApiBaseURL)
+                content.categoryIdentifier = talkie
+            } else {
+                applyCategory(to: content)
+            }
+            // #12655 — verrouillée, scellée ou inconnue : aucune action rapide.
+            content.categoryIdentifier = NSEAttachmentPolicy.category(
+                content.categoryIdentifier, under: lock, userInfo: content.userInfo
+            )
+        case .applyBadge:
+            applyBadge(to: content)
+        case .applyThreading:
+            applyThreading(to: content)
+        case .applyPreferences:
+            // Préférences de notification (miroir App Group) — APRÈS applyBadge et
+            // applyThreading pour que sons/badge/regroupement coupés gagnent, et
+            // avant tout chemin de sortie (contentHandler / expiration).
+            NSEPreferencesGate.apply(
+                preferences: NSEPreferencesGate.loadPreferences() ?? .defaults,
+                to: content,
+                rawType: content.userInfo["type"] as? String
+            )
+        case .updateUnreadCount:
+            updateSharedUnreadCount(from: content.userInfo)
+        case .syncMessage:
+            prefetchMessageData(from: content.userInfo)
+        case .prefetchSocial:
+            prefetchSocialData(from: content.userInfo)
+        case .prePersistMessage:
+            NSEMessagePrePersister.prePersist(from: content.userInfo)
+        case .postDeliveryReceipt:
+            postDeliveryReceipt(from: content.userInfo)
+        case .rewriteBody:
+            applyBodyRewrites(to: content)
+        case .applyEphemeralDeadline:
+            // #7453 — L'ÉCHÉANCE, pas une durée figée : une HEURE ne se périme pas,
+            // et elle est aussi GRAVÉE dans le `userInfo` où les balayages la lisent.
+            applyEphemeralDeadline(to: content)
+        case .sweepExpiredBanners:
+            // Une NSE s'exécute à chaque push reçu : l'occasion la plus fréquente
+            // de retirer les bannières dont l'échéance est passée.
+            Self.sweepExpiredDeliveredBanners()
+        case .replaceBodyWithLockLabel:
+            content.body = NSLocalizedString(
+                NSEAttachmentPolicy.lockedConversationLocKey,
+                bundle: InterfaceLanguageResolver.bundle(),
+                comment: ""
+            )
+        }
+    }
+
+    /// La conversation est-elle verrouillée par PIN sur cet appareil ? Le
+    /// fichier miroir que l'app dépose dans le groupe d'apps fait foi (#11387),
+    /// lu en UNE fois : s'ouvrir est son signal, son contenu la donnée
+    /// (#12655). Le cliché `conversation_snapshots` et la clé de renfort ne
+    /// peuvent qu'ajouter un verrou.
+    private static func conversationLock(_ userInfo: [AnyHashable: Any]) -> NSEConversationLock {
+        let suiteName = "group.me.meeshy.apps"
+        let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: suiteName)
+        return NSELockedConversationMirror.conversationLock(
+            conversationId: userInfo["conversationId"] as? String,
+            readFile: { NSELockedConversationMirror.readFile(at: NSELockedConversationMirror.fileURL(inContainer: container)) },
+            readLegacyKey: {
+                UserDefaults(suiteName: suiteName)?.stringArray(forKey: NSELockedConversationMirror.legacyDefaultsKey)
+            },
+            snapshotDeclaresLock: { NSEDataSync.conversationDetails(forId: $0)?.isLocked ?? false }
+        )
+    }
+
+    private func applyBodyRewrites(to content: UNMutableNotificationContent) {
+        let userInfo = content.userInfo
+        var didDecrypt = false
+        if let encryptedContent = userInfo["encryptedContent"] as? String,
+           let senderId = userInfo["senderId"] as? String,
+           !encryptedContent.isEmpty,
+           let decrypted = NSEDecryptor.decrypt(encryptedBase64: encryptedContent, senderUserId: senderId) {
+            content.body = decrypted
+            didDecrypt = true
+        }
+        // Les corps protégés de la passerelle sont des emoji déjà localisés :
+        // seul l'échec de déchiffrement E2EE les remplace par le libellé du
+        // catalogue de l'extension.
+        let isEncryptedPush = userInfo["isEncrypted"] as? Bool == true
+            || (userInfo["encryptedContent"] as? String).map { !$0.isEmpty } == true
+        if isEncryptedPush, !didDecrypt,
+           let locKey = userInfo["notificationLocKey"] as? String, !locKey.isEmpty {
+            let localized = NSLocalizedString(locKey, bundle: InterfaceLanguageResolver.bundle(), comment: "")
+            if localized != locKey {
+                content.body = localized
+            }
+        }
+        // Bug B — un vocal E2EE arrive au corps vide : le repli audio n'agit
+        // qu'APRÈS déchiffrement et locKey, jamais sur une légende déchiffrée.
+        if let fallback = NotificationPayloadHelpers.audioBodyFallback(
+            currentBody: content.body,
+            userInfo: userInfo
+        ) {
+            content.body = fallback
+        }
+        // #8858 — position, contact, invitation, lien : le corps DIT le détail
+        // quand la passerelle ne l'a pas composé (vide, ou URL brute).
+        applyDetailedBody(to: content)
+    }
+
+    private func startEnrichment(
+        request: UNNotificationRequest,
+        content: UNMutableNotificationContent,
+        delivery: NSEDelivery<UNNotificationContent>,
+        budget: NSEBudget
+    ) {
+        guard let working = content.mutableCopy() as? UNMutableNotificationContent else {
+            delivery.deliver(content)
+            return
+        }
+        let userInfo = working.userInfo
+        let plan = NSEEnrichmentRequest.make(
+            userInfo: userInfo,
+            apiBaseURL: NSEDataSync.trustedApiBaseURL,
+            budget: budget,
+            now: Date()
+        )
+        let isCommunicationType = Self.communicationTypes.contains(userInfo["type"] as? String ?? "")
+        let identifier = request.identifier
+        let owned = NSEOwnedContent(content: working)
+        let alarm = bringAlarm
+        enrichment = Task {
+            _ = await alarm?.value
+            await NotificationService.deliverEnriched(
+                owned.content,
+                plan: plan,
+                incomingIdentifier: identifier,
+                budget: budget,
+                delivery: delivery,
+                isCommunicationType: isCommunicationType
+            )
+        }
+    }
+
+    private static func deliverEnriched(
+        _ working: UNMutableNotificationContent,
+        plan: NSEEnrichmentRequest,
+        incomingIdentifier: String,
+        budget: NSEBudget,
+        delivery: NSEDelivery<UNNotificationContent>,
+        isCommunicationType: Bool
+    ) async {
+        let result = await enrich(plan, incomingIdentifier: incomingIdentifier, budget: budget)
+        guard !delivery.hasDelivered else {
+            discard(result)
+            return
+        }
+        delivery.deliver(finalContent(from: working, result: result, isCommunicationType: isCommunicationType))
+    }
+
+    private static func finalContent(
+        from content: UNMutableNotificationContent,
+        result: NSEEnrichmentResult,
+        isCommunicationType: Bool
+    ) -> UNNotificationContent {
+        if let file = result.attachment,
+           let attachment = createMessageAttachment(
+               fromFile: file.fileURL, originalURL: file.originalURL, mimeType: file.mimeType
+           ) {
+            content.attachments = [attachment]
+        }
+        guard isCommunicationType else { return content }
+        return applyCommunicationIntent(to: content, avatarData: result.avatarData)
     }
 
     // MARK: - Enrichment
@@ -291,7 +344,12 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             return
         }
 
-        content.categoryIdentifier = category
+        // #8858 — une position, une carte de visite ou une invitation appellent
+        // leurs propres actions (Plans, Contacts, Rejoindre).
+        content.categoryIdentifier = NotificationDetailPolicy.refinedCategory(
+            category, type: rawType, userInfo: content.userInfo,
+            declared: content.categoryIdentifier
+        )
     }
 
     /// Respect the per-push badge override so the lock screen shows an accurate count.
@@ -370,166 +428,58 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         NSEDataSync.syncPost(postId: postId) { _ in }
     }
 
-    // MARK: - GRDB Pre-persist
+    // MARK: - GRDB Pre-persist (voir NSEMessagePrePersister)
 
-    /// Writes the incoming message directly to the App Group GRDB store so that
-    /// when the user taps the notification banner the message is already available
-    /// locally — no network round-trip required on cold launch.
-    ///
-    /// This is a best-effort, fire-and-forget operation. Any failure is silently
-    /// swallowed; the main app will fetch the message from the REST API on resume.
-    private static let sharedPool: DatabasePool? = {
-        guard let path = appGroupDatabasePath() else { return nil }
-        do {
-            // N1 — mirror of `DependencyContainer.dbConfig()`'s busy timeout:
-            // the main app holds its own pool on this same file, and GRDB's
-            // default `.immediateError` busy mode would turn a cross-process
-            // write collision into an SQLITE_BUSY swallowed by the catch
-            // below (pre-persisted bubble silently lost).
-            var config = Configuration()
-            config.busyMode = .timeout(5)
-            let pool = try DatabasePool(path: path, configuration: config)
-            try MessageDatabaseMigrations.runAll(on: pool)
-            return pool
-        } catch { return nil }
-    }()
+    // MARK: - Éphémère (#7453)
 
-    /// Pré-enregistre la bulle d'un message qui ARRIVE, et rien d'autre.
+    /// Réécrit le corps avec l'heure d'échéance et grave cette échéance dans
+    /// le `userInfo`.
     ///
-    /// Deux verrous, et aucun ne subsume l'autre :
-    ///
-    ///  1. **le TYPE** — `prePersistedMessagePlan` refuse tout push dont le
-    ///     `messageId` ne désigne pas un message qui arrive. Il n'y avait aucun
-    ///     gate ici, alors que le frère d'en dessous (`postDeliveryReceipt`) en
-    ///     porte un et que son commentaire NOMME le cas exclu. Une notification
-    ///     de RÉACTION porte le `messageId` du message RÉAGI — celui que le
-    ///     destinataire a le plus souvent écrit lui-même — et un `senderId` qui
-    ///     est celui du réacteur : `save()` étant un UPSERT sur la clé primaire
-    ///     `localId`, réagir à un message VIDAIT son texte en base, lui
-    ///     réassignait son auteur, le rehorodatait à l'instant du push et
-    ///     jetait ses pièces jointes, ses réactions et sa citation.
-    ///
-    ///  2. **la LIGNE** — une bulle pré-enregistrée est un PLACEHOLDER pour la
-    ///     fenêtre qui précède la synchro REST. Elle n'a donc jamais à
-    ///     remplacer une ligne canonique déjà là, quel que soit le type qui
-    ///     l'amène : l'écriture est un INSERT, jamais un UPSERT. C'est ce
-    ///     second verrou qui couvre le cas du chemin d'ÉDITION, où une mention
-    ///     ajoutée à un message EXISTANT produit un `user_mentioned` légitime
-    ///     sur un `messageId` que le destinataire peut déjà détenir.
-    private func prePersistMessage(from userInfo: [AnyHashable: Any]) {
-        // Audit 2026-05-11: For E2EE messages we deliberately skip the
-        // pre-persist path. The push payload's plaintext `content` field
-        // is just the placeholder ("Encrypted message"), and writing
-        // `isEncrypted: false` would let attacker-controlled push content
-        // render in the bubble until NSEDataSync.syncMessage's API
-        // response overwrites it. NSEDataSync already fetches the
-        // canonical record from the gateway and writes it via the
-        // pending-messages path — that's the trustworthy source.
-        //
-        // Audit 2026-08-13: that last sentence is a PREMISE, and it was false
-        // from the day it was written until this audit — `syncMessage` aimed
-        // at a route the gateway never registered, so an E2EE push staged
-        // NOTHING: no pre-persist (skipped here, correctly) and no canonical
-        // fetch (404). The skip is only safe while the fetch works; whoever
-        // changes `NSEDataSync.syncMessage`'s endpoint owns this branch too.
-        //
-        // Ce refus, comme le gate de type et la lecture des champs GW5, vit
-        // désormais dans `prePersistedMessagePlan` — pur, donc gardé par des
-        // témoins.
-        guard let pool = Self.sharedPool,
-              let plan = NotificationPayloadHelpers.prePersistedMessagePlan(
-                  userInfo: userInfo,
-                  now: Date()
-              )
-        else { return }
+    /// Les deux vont ensemble et se font ici : le corps est ce que
+    /// l'utilisateur LIT, l'échéance du `userInfo` est ce qui permettra de
+    /// retirer la bannière quand elle sera passée. Poser l'un sans l'autre
+    /// laisserait soit une bannière qui annonce une heure et ne part pas, soit
+    /// une bannière qui part sans avoir jamais dit quand.
+    private func applyEphemeralDeadline(to content: UNMutableNotificationContent) {
+        guard let deadline = NotificationPayloadHelpers.ephemeralDeadline(
+            userInfo: content.userInfo,
+            now: Date()
+        ) else { return }
 
-        do {
-            let now = Date()
-            let record = MessageRecord(
-                localId: plan.messageId, serverId: plan.messageId,
-                conversationId: plan.conversationId, senderId: plan.senderId,
-                // Don't hardcode "fr" — read from push payload if present, else
-                // default to "en" (the safer fake for an unknown language than
-                // the previous "fr" which guaranteed wrong Prisme Linguistique
-                // resolution for non-French speakers). The NSEDataSync API
-                // fetch will overwrite with the canonical value seconds later.
-                content: plan.content,
-                originalLanguage: plan.originalLanguage,
-                messageType: plan.messageType, messageSource: "user",
-                contentType: plan.contentType,
-                // Incoming messages are .delivered (received by us), not
-                // .sent (which means "sent BY us and acked by server").
-                // The previous .sent value broke any GRDB query that
-                // partitions by sender ownership.
-                state: .delivered, retryCount: 0, lastError: nil,
-                isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
-                replyToId: nil, storyReplyToId: nil,
-                forwardedFromId: nil, forwardedFromConversationId: nil,
-                replyToJson: nil, forwardedFromJson: nil,
-                expiresAt: nil, effectFlags: 0,
-                maxViewOnceCount: nil, viewOnceCount: 0,
-                isEdited: false, editedAt: nil, deletedAt: nil,
-                pinnedAt: nil, pinnedBy: nil,
-                // `senderName` était lu sous une clé qu'AUCUN producteur
-                // n'émet : la bulle pré-enregistrée était anonyme. Les trois
-                // clés réelles (`senderDisplayName`, `senderUsername`,
-                // `senderAvatar`) sont celles que `applyCommunicationIntent`
-                // lit cent lignes plus bas, dans ce même fichier.
-                senderName: plan.senderName,
-                senderUsername: plan.senderUsername,
-                senderColor: nil, senderAvatarURL: plan.senderAvatarURL,
-                deliveredCount: 0, readCount: 0,
-                deliveredToAllAt: nil, readByAllAt: nil,
-                createdAt: plan.createdAt, sentAt: nil,
-                deliveredAt: nil, readAt: nil, updatedAt: now,
-                attachmentsJson: nil, reactionsJson: nil,
-                reactionCount: 0, currentUserReactionsJson: nil,
-                mentionedUsersJson: nil,
-                cachedBubbleWidth: nil, cachedBubbleHeight: nil,
-                cachedLastLineWidth: nil, cachedLineCount: nil,
-                cachedTimestampInline: nil,
-                layoutVersion: 0, layoutMaxWidth: nil,
-                changeVersion: 0
-            )
+        if let body = NotificationPayloadHelpers.ephemeralBodyOverride(
+            userInfo: content.userInfo,
+            deadline: deadline
+        ) {
+            content.body = body
+        }
 
-            // INSERT, jamais UPSERT (verrou 2 ci-dessus) : un placeholder ne
-            // remplace pas une ligne canonique. `save()` écrasait TOUTES les
-            // colonnes de la ligne existante.
-            try pool.write { db in
-                guard try MessageRecord.fetchOne(db, key: plan.messageId) == nil else { return }
-                try record.insert(db)
+        var userInfo = content.userInfo
+        userInfo[EphemeralBannerDeadline.userInfoKey] = deadline.timeIntervalSince1970
+        content.userInfo = userInfo
+    }
+
+    /// Retire les bannières délivrées dont l'échéance est passée.
+    ///
+    /// Fire-and-forget : le centre de notifications répond en asynchrone, et ce
+    /// balayage ne doit jamais retarder l'affichage. Il ne touche QUE les
+    /// bannières qui portent une échéance — une notification ordinaire n'est
+    /// jamais retirée par ce chemin.
+    static func sweepExpiredDeliveredBanners(now: Date = Date()) {
+        // Le centre est redemandé DANS la fermeture plutôt que capturé : une
+        // fermeture d'API système doit être `@Sendable`, et la capture d'un
+        // objet de framework y coûte une exception de concurrence pour rien —
+        // `current()` rend le même singleton.
+        UNUserNotificationCenter.current().getDeliveredNotifications { delivered in
+            let entries = delivered.map {
+                (id: $0.request.identifier, userInfo: $0.request.content.userInfo)
             }
-        } catch {
-            // Silent fail — the app will fetch the message from the API on launch.
+            let expired = EphemeralBannerDeadline.expiredIdentifiers(from: entries, now: now)
+            guard !expired.isEmpty else { return }
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: expired)
         }
     }
 
-    /// Returns the path to the shared App Group SQLite database, or nil if
-    /// the App Group entitlement is not available (misconfigured signing,
-    /// stripped entitlement on Ad Hoc builds, etc.). Audit 2026-05-11
-    /// removed the prior `containerURL!` force-unwrap which crashed the
-    /// extension via EXC_BREAKPOINT on the very first push when the
-    /// entitlement was absent — invisible to users, hard to diagnose
-    /// without a sysdiagnose.
-    private static func appGroupDatabasePath() -> String? {
-        guard let container = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: "group.me.meeshy.apps"
-        ) else { return nil }
-        let dbDir = container.appendingPathComponent("Database")
-        nseCreateDirectory(dbDir, context: "NSE database directory")
-        return dbDir.appendingPathComponent("meeshy_messages.sqlite").path
-    }
-
     // MARK: - Delivery Receipt
-
-    /// Push types that mean "a new message was delivered to this recipient".
-    /// Reactions and social events also carry a `messageId`, but they do not
-    /// constitute message delivery, so they are excluded.
-    private static let deliveryReceiptTypes: Set<String> = [
-        "new_message", "message_reply", "reply", "message_forwarded",
-        "new_conversation", "new_conversation_direct", "new_conversation_group",
-        "added_to_conversation"
-    ]
 
     /// Acknowledge delivery of a push-delivered message to the gateway.
     ///
@@ -548,7 +498,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
               !messageId.isEmpty, !conversationId.isEmpty else { return }
 
         let type = userInfo["type"] as? String ?? ""
-        guard Self.deliveryReceiptTypes.contains(type) else { return }
+        guard NotificationPayloadHelpers.isDeliveryReceiptType(type) else { return }
 
         NSEDataSync.postDeliveryReceipt(
             conversationId: conversationId,
@@ -576,12 +526,14 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         "comment_like", "comment_reply", "comment_reaction",
         "story_new_comment", "story_thread_reply", "friend_story_comment",
         "friend_new_story", "friend_new_post", "friend_new_mood",
-        "friend_request", "contact_request"
+        "friend_request", "contact_request", "contact_joined", "contact_recently_active",
+        // Le jeu (#9490) : un duo vient d'un ami, dont l'avatar dit QUI. La ligue et la saison n'ont pas d'acteur.
+        "game_duo_invited", "game_duo_accepted"
     ]
 
     /// Creates an `INSendMessageIntent` and returns updated notification content
     /// that iOS renders with circular avatar + sender name + group name.
-    private func applyCommunicationIntent(
+    private static func applyCommunicationIntent(
         to content: UNMutableNotificationContent,
         avatarData: Data?
     ) -> UNNotificationContent {
@@ -727,44 +679,29 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
 
     // MARK: - Attachments
 
-    /// Generic data download for any push payload URL (avatar or message media).
-    /// Fire-and-forget — completion is invoked exactly once, with nil on any failure.
-    ///
-    /// The timeout is dynamically capped to the remaining OS budget so that a slow
-    /// download never holds the notification hostage past the 30 s kill deadline.
-    /// If the remaining budget is below `minDownloadBudget` the download is skipped
-    /// immediately (completion(nil)) — better to deliver without rich content than
-    /// to let the extension be killed mid-transfer with no content at all.
-    private func downloadData(
-        from url: URL,
-        completion: @escaping (Data?) -> Void
-    ) {
-        let elapsed = Date().timeIntervalSince(extensionStartTime)
-        let budgetRemaining = Self.nseBudget - elapsed
-        guard budgetRemaining > Self.minDownloadBudget else {
-            completion(nil)
-            return
+    /// Taille d'un fichier local, `nil` s'il a disparu. C'est la mesure du
+    /// SECOND étage de `NSEAttachmentPolicy` : un serveur n'est jamais tenu par
+    /// la taille qu'il annonce sur le fil.
+    static func fileSize(at url: URL) -> Int? {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path) else {
+            return nil
         }
-        // Cap to 12 s max per download; reduce proportionally as budget shrinks.
-        let timeout = min(12, budgetRemaining)
-        nonisolated(unsafe) let completion = completion
-        let request = URLRequest(url: url, timeoutInterval: timeout)
-        let task = URLSession.shared.dataTask(with: request) { data, _, error in
-            guard let data, error == nil else {
-                completion(nil)
-                return
-            }
-            completion(data)
-        }
-        task.resume()
+        return (attributes[.size] as? NSNumber)?.intValue
     }
 
     /// Creates a UNNotificationAttachment from raw bytes for a message media.
     /// Picks the right file extension + UTI typeHint so iOS renders the attachment
     /// in its native style (image preview, audio waveform with play button, video
     /// thumbnail with tap-to-play).
-    private func createMessageAttachment(
-        from data: Data,
+    ///
+    /// **Prend un FICHIER, plus des octets (#7003)** : le corps n'a jamais
+    /// transité par la mémoire, il est descendu sur disque et il n'y a qu'à le
+    /// renommer avec la bonne extension. `UNNotificationAttachment` déplace
+    /// ensuite ce fichier dans son propre magasin ; s'il refuse, on efface —
+    /// une extension qui laisse des temporaires derrière elle les paie au
+    /// push suivant.
+    static func createMessageAttachment(
+        fromFile downloadedFile: URL,
         originalURL: URL,
         mimeType: String
     ) -> UNNotificationAttachment? {
@@ -775,7 +712,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         let tempFile = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + "." + ext)
         do {
-            try data.write(to: tempFile)
+            try FileManager.default.moveItem(at: downloadedFile, to: tempFile)
             var options: [String: Any] = [:]
             if let typeHint {
                 options[UNNotificationAttachmentOptionsTypeHintKey] = typeHint
@@ -786,6 +723,8 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
                 options: options.isEmpty ? nil : options
             )
         } catch {
+            try? FileManager.default.removeItem(at: tempFile)
+            try? FileManager.default.removeItem(at: downloadedFile)
             return nil
         }
     }
@@ -803,6 +742,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             if normalized.contains("gif") { return ("gif", "com.compuserve.gif") }
             if normalized.contains("webp") { return ("webp", "org.webmproject.webp") }
             if normalized.contains("heic") { return ("heic", "public.heic") }
+            if normalized.contains("heif") { return ("heif", "public.heif") }
             return ("jpg", "public.jpeg")
         }
         if normalized.hasPrefix("audio/") {
@@ -829,4 +769,11 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         let ext = fallbackPathExtension.isEmpty ? "bin" : fallbackPathExtension
         return (ext, nil)
     }
+}
+
+// unchecked: le contenu est copié juste avant la tâche d'enrichissement et n'est plus touché que par elle ;
+// l'expiration livre bestAttemptContent, un autre objet. Le vérificateur par régions de Xcode 26.1.1 ne sait pas
+// analyser cette capture (« pattern that the region based isolation checker does not understand »).
+struct NSEOwnedContent: @unchecked Sendable {
+    let content: UNMutableNotificationContent
 }

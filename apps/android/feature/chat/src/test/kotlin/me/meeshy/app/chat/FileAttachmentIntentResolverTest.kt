@@ -1,0 +1,70 @@
+package me.meeshy.app.chat
+
+import com.google.common.truth.Truth.assertThat
+import org.junit.Test
+
+/**
+ * Covers [FileAttachmentIntentResolver.resolveMimeType] — the pure mime resolution this
+ * task calls out ("Résolution mime→intent en pur testé"). The `viewIntent`/`shareIntent`
+ * builders touch `android.content.Intent`/`Uri` and stay coverage-exempt, matching this
+ * repo's convention for framework glue (see `CameraCaptureFileTest.kt`).
+ */
+class FileAttachmentIntentResolverTest {
+
+    @Test
+    fun a_meaningful_declared_mime_type_wins_over_the_extension() {
+        val resolved = FileAttachmentIntentResolver.resolveMimeType(
+            mimeType = "application/pdf",
+            fileName = "report.docx",
+        )
+        assertThat(resolved).isEqualTo("application/pdf")
+    }
+
+    @Test
+    fun a_blank_declared_mime_type_falls_back_to_the_extension() {
+        val resolved = FileAttachmentIntentResolver.resolveMimeType(mimeType = "  ", fileName = "notes.txt")
+        assertThat(resolved).isEqualTo("text/plain")
+    }
+
+    @Test
+    fun a_null_declared_mime_type_falls_back_to_the_extension() {
+        val resolved = FileAttachmentIntentResolver.resolveMimeType(mimeType = null, fileName = "archive.zip")
+        assertThat(resolved).isEqualTo("application/zip")
+    }
+
+    @Test
+    fun an_octet_stream_declared_mime_type_is_treated_as_uninformative() {
+        val resolved = FileAttachmentIntentResolver.resolveMimeType(
+            mimeType = "application/octet-stream",
+            fileName = "source.kt",
+        )
+        // MimeTypeResolver has no "kt" entry, so this still falls through to octet-stream —
+        // the point of this case is that a generic declared type doesn't short-circuit the
+        // extension lookup, not that "kt" resolves to something more specific.
+        assertThat(resolved).isEqualTo("application/octet-stream")
+    }
+
+    @Test
+    fun an_unknown_extension_with_no_declared_mime_type_falls_back_to_octet_stream() {
+        val resolved = FileAttachmentIntentResolver.resolveMimeType(mimeType = null, fileName = "data.unknownext")
+        assertThat(resolved).isEqualTo("application/octet-stream")
+    }
+
+    @Test
+    fun only_a_content_uri_may_be_lent_to_another_app() {
+        assertThat(FileAttachmentIntentResolver.canHandOff("content")).isTrue()
+        assertThat(FileAttachmentIntentResolver.canHandOff("CONTENT")).isTrue()
+        assertThat(FileAttachmentIntentResolver.canHandOff("file")).isFalse()
+        assertThat(FileAttachmentIntentResolver.canHandOff("https")).isFalse()
+        assertThat(FileAttachmentIntentResolver.canHandOff(null)).isFalse()
+    }
+
+    @Test
+    fun a_card_phone_number_is_reduced_to_what_a_dialer_accepts() {
+        assertThat(FileAttachmentIntentResolver.dialableNumber("+33 6 12-34.56 78")).isEqualTo("+33612345678")
+        assertThat(FileAttachmentIntentResolver.dialableNumber("(555) 010 99")).isEqualTo("55501099")
+        assertThat(FileAttachmentIntentResolver.dialableNumber("*#*#")).isNull()
+        assertThat(FileAttachmentIntentResolver.dialableNumber("pas un numero")).isNull()
+        assertThat(FileAttachmentIntentResolver.dialableNumber(null)).isNull()
+    }
+}

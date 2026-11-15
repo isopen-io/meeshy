@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import Combine
 import MeeshySDK
 import MeeshyUI
 @testable import Meeshy
@@ -99,6 +100,45 @@ final class AttachmentDownloaderTests: XCTestCase {
                       "The download badge must be hidden for local file:// media")
     }
 
+    /// #7492 — une vidéo n'a qu'UN composant de téléchargement : le bouton de
+    /// son lecteur. Le badge se posait par-dessus la même tuile.
+    func test_downloadBadge_forVideo_yieldsToThePlayer() {
+        let video = MeeshyMessageAttachment(
+            id: "att-vid-\(UUID().uuidString)",
+            mimeType: "video/mp4",
+            fileUrl: "https://cdn.example.com/clip.mp4",
+            uploadedBy: "user-test"
+        )
+        XCTAssertTrue(makeBadge(attachment: video, deliveryStatus: .sent).yieldsToThePlayer)
+        XCTAssertFalse(
+            makeBadge(
+                attachment: makeImageAttachment(fileUrl: "https://cdn.example.com/photo.jpg"),
+                deliveryStatus: .sent
+            ).yieldsToThePlayer,
+            "l'image n'a pas d'autre affordance de téléchargement : le badge reste le sien"
+        )
+    }
+
+    /// #11586 — la case « +N » ne monte pas de lecteur : la vidéo n'y a plus
+    /// d'autre affordance de téléchargement que le badge, comme la photo.
+    func test_downloadBadge_forVideoOnATileWithoutPlayer_keepsItsBadge() {
+        let video = MeeshyMessageAttachment(
+            id: "att-vid-\(UUID().uuidString)",
+            mimeType: "video/mp4",
+            fileUrl: "https://cdn.example.com/clip.mp4",
+            uploadedBy: "user-test"
+        )
+        let badge = DownloadBadgeView(
+            attachment: video,
+            accentColor: "#6366F1",
+            messageDeliveryStatus: .sent,
+            tileHostsVideoPlayer: false
+        )
+
+        XCTAssertFalse(badge.yieldsToThePlayer,
+                       "sans lecteur sur la case, le badge est le seul chemin de téléchargement de la vidéo")
+    }
+
     func test_downloadBadge_forConfirmedServerMedia_isVisible() {
         let badge = makeBadge(
             attachment: makeImageAttachment(fileUrl: "https://cdn.example.com/photo.jpg"),
@@ -108,87 +148,45 @@ final class AttachmentDownloaderTests: XCTestCase {
                        "The download badge must remain available for confirmed remote media")
     }
 
-    // MARK: - Byte-size formatting
+    // MARK: - Téléchargement en flux par le funnel du store (source guard, #9863)
 
-    /// `AttachmentDownloader.fmt` must delegate to the single SDK-wide
-    /// `formatMediaFileSize` helper — locks the fix for the divergent
-    /// binary-vs-decimal formatters bug (AudioPlayerView.formatBytes used to
-    /// disagree with this one despite a comment claiming parity).
-    func test_fmt_delegatesToSharedSDKFileSizeFormatter() {
-        XCTAssertEqual(AttachmentDownloader.fmt(870_400), formatMediaFileSize(870_400))
-        XCTAssertEqual(AttachmentDownloader.fmt(1_048_576), formatMediaFileSize(1_048_576))
-    }
-
-    // MARK: - registerInFlightDownload race (source guard)
-
-    /// `startDownloadFlow` used to discard `registerInFlightDownload`'s Bool
-    /// return and unconditionally await its OWN byte task — so when a second
-    /// bubble (or a second language of the same audio) resolved to the exact
-    /// same cache key between the initial piggyback check and this
-    /// registration attempt, BOTH calls streamed the full file concurrently.
-    /// `startDownloadFlow` runs inside a `Task.detached` closure doing real
-    /// `URLSession` I/O, which this repo's own test suite for this class
-    /// deliberately never exercises (no wall-clock/network flakiness) — a
-    /// source guard is the established pattern here for wiring that can't be
-    /// driven through the public API without spinning up real networking
-    /// (cf. `CameraModelSwitchDuringRecordingTests`).
-    private func conversationMediaViewsSource() throws -> String {
+    /// `run` itérait `URLSession.bytes` OCTET PAR OCTET (≈ 30 millions de
+    /// tours de boucle et de `checkCancellation` pour une vidéo de 30 Mo) et
+    /// accumulait le fichier entier dans un `Data` avant de l'écrire. Il passe
+    /// désormais par `DiskCacheStore.data(for:progress:)` — téléchargement vers
+    /// un fichier, déplacé dans le cache, dédoublonné avec tout autre chemin en
+    /// vol. Garde de source : `run` fait de vraies E/S `URLSession` que cette
+    /// suite n'exerce pas (le comportement est prouvé côté SDK par
+    /// `DiskCacheStoreStreamedTransferTests`).
+    private func downloadCenterSource() throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // Views/
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // apps/ios/
-            .appendingPathComponent("Meeshy/Features/Main/Views/ConversationMediaViews.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Views/AttachmentDownloadCenter.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    func test_startDownloadFlow_honorsRegisterInFlightDownloadReturnValue() throws {
-        let source = try conversationMediaViewsSource()
-        XCTAssertFalse(
-            source.contains("await store.registerInFlightDownload(byteTask, for: resolvedKey)\n                let data = try await byteTask.value"),
-            "startDownloadFlow must not discard registerInFlightDownload's Bool and unconditionally await its own task"
-        )
+    func test_run_streamsThroughTheStoreFunnel_neverIteratesBytes() throws {
+        let source = try downloadCenterSource()
+        XCTAssertFalse(source.contains("asyncBytes"), "le centre ne doit plus itérer les octets d'une réponse")
+        XCTAssertFalse(source.contains(".bytes(from:"), "le centre ne doit plus ouvrir URLSession.bytes")
+        XCTAssertFalse(source.contains("registerInFlightDownload"), "le dédoublonnage appartient au funnel du store")
         XCTAssertTrue(
-            source.contains("let registered = await store.registerInFlightDownload(byteTask, for: resolvedKey)"),
-            "startDownloadFlow must capture registerInFlightDownload's return value"
-        )
-        XCTAssertTrue(
-            source.contains("byteTask.cancel()"),
-            "Losing the registration race must cancel the now-redundant task instead of letting it run to completion"
+            source.contains("store.data(for: resolvedKey, profile: profile, progress:"),
+            "le centre télécharge par le funnel en flux du store, qui rapporte la progression"
         )
     }
 
-    /// B9 fix — `registerInFlightDownload`'s entry can self-clear (the winner
-    /// persists its payload, then its wrapper Task nils the registry) between
-    /// our failed registration and the very next `inFlightDownload(for:)`
-    /// read, since both are actor hops with a real suspension point in
-    /// between. The previous fallback (`else { data = try await
-    /// byteTask.value }`) awaited its OWN just-cancelled task in that case:
-    /// `Task.checkCancellation()` inside the byte loop throws
-    /// `CancellationError`, which the outer `catch`'s cancellation guard
-    /// (`guard !Task.isCancelled, !(error is CancellationError) else {
-    /// return }` — written for the explicit user-tap-cancel path, where
-    /// `cancel()` already resets state before this catch ever runs) silently
-    /// swallows, stranding `isDownloading == true` forever with the badge
-    /// spinner stuck and `startDownloadFlow`'s own entry guard blocking any
-    /// retry. `byteTask.value` must therefore appear exactly once in the
-    /// function (the `registered == true` winner path) — never as a fallback
-    /// once the entry has vanished.
-    func test_startDownloadFlow_losingRaceWithClearedEntry_neverAwaitsOwnCancelledTask() throws {
-        let source = try conversationMediaViewsSource()
-        let occurrences = source.components(separatedBy: "byteTask.value").count - 1
-        XCTAssertEqual(
-            occurrences, 1,
-            "byteTask.value must be awaited only on the registration-winner path — a second occurrence means the "
-            + "loser falls back to awaiting its OWN cancelled task, whose CancellationError is swallowed by the "
-            + "outer catch's cancellation guard and strands isDownloading == true forever"
-        )
-        XCTAssertTrue(
-            source.contains("data = try await store.data(for: resolvedKey)"),
-            "When the in-flight entry vanished after losing the race, the fallback must read through the store's "
-            + "own idempotent fetch (cache-hit if the winner already persisted, safe re-fetch otherwise) instead "
-            + "of the loser's own cancelled task"
-        )
+    /// Un transfert REJOINT puis annulé par un autre (purge) lève
+    /// `CancellationError` sans que la tâche du centre soit annulée : avaler
+    /// cette erreur laissait la surface sur « téléchargement » à jamais. Seule
+    /// l'annulation de la tâche du centre se tait.
+    func test_run_foreignCancellation_failsInsteadOfStranding() throws {
+        let source = try downloadCenterSource()
+        XCTAssertFalse(source.contains("error is CancellationError"))
+        XCTAssertTrue(source.contains("guard !Task.isCancelled else { return }\n            await fail(key: resolvedKey)"))
     }
 }
 
@@ -212,6 +210,34 @@ final class MediaAutoDownloadDecisionTests: XCTestCase {
         )
     }
 
+    /// #14639 — une vidéo de moins de 100 Ko part quel que soit le réseau ; seul le hors-ligne la retient.
+    func test_video_under100KB_autoStartsOnAnyNetwork_butNotOffline() {
+        let prefs = MediaDownloadPreferences(video: .never)
+        XCTAssertTrue(VideoAvailabilityResolver<EmptyView>.shouldAutoStart(
+            autoDownload: false, condition: .badCellular, prefs: prefs, byteSize: 99_999))
+        XCTAssertFalse(VideoAvailabilityResolver<EmptyView>.shouldAutoStart(
+            autoDownload: false, condition: .badCellular, prefs: prefs, byteSize: 102_400))
+        XCTAssertFalse(VideoAvailabilityResolver<EmptyView>.shouldAutoStart(
+            autoDownload: false, condition: .offline, prefs: prefs, byteSize: 99_999))
+    }
+
+    /// La bulle remet la taille de la pièce au résolveur, et l'image du fil à son chargeur.
+    func test_bubbles_passTheAttachmentSize_toTheDownloadDecision() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views")
+        let expectations = [
+            "VideoAvailabilityResolver.swift": "byteSize: attachment.fileSize",
+            "Bubble/BubbleStandardLayout+Media.swift": "byteSize: attachment.fileSize",
+            "Bubble/BubbleCarouselView.swift": "byteSize: attachment.fileSize",
+        ]
+        for (file, needle) in expectations {
+            let code = AppSourceGuard.stripComments(try String(contentsOf: root.appendingPathComponent(file), encoding: .utf8))
+            XCTAssertTrue(code.contains(needle), file)
+        }
+    }
+
     func test_video_autoDownloadTrue_offline_returnsFalse() {
         let prefs = MediaDownloadPreferences(video: .always)
         XCTAssertFalse(
@@ -219,6 +245,24 @@ final class MediaAutoDownloadDecisionTests: XCTestCase {
                 autoDownload: true, condition: .offline, prefs: prefs
             ),
             "No download must start while offline, even with autoDownload forced"
+        )
+    }
+
+    /// #9702 — le pager de réels ferme l'auto-démarrage hors de sa fenêtre de
+    /// préchargement : sous iOS 16, son `TabView` monte TOUTES les pages, et
+    /// chacune téléchargeait son réel entier. Fermé, rien ne part — ni forcé,
+    /// ni par la politique réseau.
+    func test_video_mayAutoStartFalse_neverStarts_evenForcedOnWifi() {
+        let prefs = MediaDownloadPreferences(video: .always)
+        XCTAssertFalse(
+            VideoAvailabilityResolver<EmptyView>.shouldAutoStart(
+                autoDownload: true, mayAutoStart: false, condition: .wifi, prefs: prefs
+            )
+        )
+        XCTAssertFalse(
+            VideoAvailabilityResolver<EmptyView>.shouldAutoStart(
+                autoDownload: false, mayAutoStart: false, condition: .wifi, prefs: prefs
+            )
         )
     }
 
@@ -321,5 +365,383 @@ final class MediaAutoDownloadDecisionTests: XCTestCase {
             isCached: false, progress: 0, downloadedBytes: 0, totalBytes: 0,
             resting: .ready)
         XCTAssertEqual(a, .ready)
+    }
+}
+
+/// #7492 — UN téléchargement par média, partagé par toutes les surfaces qui le
+/// montrent. Chaque façade (`AttachmentDownloader`) observe la clé de cache de
+/// son média dans `AttachmentDownloadCenter` : deux surfaces voient la MÊME
+/// progression, finissent ensemble, et un média déjà sur disque ne repart
+/// jamais sur le réseau.
+@MainActor
+final class AttachmentDownloadCenterTests: XCTestCase {
+
+    private func makeVideo(fileUrl: String = "https://cdn.example.com/v-\(UUID().uuidString).mp4") -> MeeshyMessageAttachment {
+        MeeshyMessageAttachment(
+            id: "att-vid-\(UUID().uuidString)",
+            mimeType: "video/mp4",
+            fileUrl: fileUrl,
+            uploadedBy: "user-test"
+        )
+    }
+
+    private func makeSUT() -> (center: AttachmentDownloadCenter, bubble: AttachmentDownloader, gallery: AttachmentDownloader) {
+        let center = AttachmentDownloadCenter()
+        return (center, AttachmentDownloader(center: center), AttachmentDownloader(center: center))
+    }
+
+    func test_twoSurfacesOnTheSameMedia_showTheSameProgress() {
+        let (center, bubble, gallery) = makeSUT()
+        let video = makeVideo()
+        bubble.observe(video)
+        gallery.observe(video)
+        let key = AttachmentDownloadCenter.key(for: video.fileUrl)
+
+        center.publish(.progress(.init(downloadedBytes: 40, totalBytes: 100)), for: key)
+
+        XCTAssertTrue(bubble.isDownloading)
+        XCTAssertTrue(gallery.isDownloading)
+        XCTAssertEqual(bubble.progress, 0.4, accuracy: 0.001)
+        XCTAssertEqual(gallery.progress, 0.4, accuracy: 0.001)
+    }
+
+    func test_aDownloadFinishedElsewhere_marksEveryObserverCached() {
+        let (center, bubble, gallery) = makeSUT()
+        let video = makeVideo()
+        bubble.observe(video)
+        gallery.observe(video)
+        let key = AttachmentDownloadCenter.key(for: video.fileUrl)
+
+        center.publish(.progress(.init(downloadedBytes: 0, totalBytes: 100)), for: key)
+        center.publish(.finished(totalBytes: 100), for: key)
+
+        XCTAssertTrue(bubble.isCached, "la bulle doit passer à « prête » quand la galerie finit")
+        XCTAssertFalse(bubble.isDownloading)
+        XCTAssertTrue(gallery.isCached)
+    }
+
+    func test_aSurfaceMountedMidDownload_joinsTheRunningProgress() {
+        let (center, bubble, gallery) = makeSUT()
+        let video = makeVideo()
+        bubble.observe(video)
+        let key = AttachmentDownloadCenter.key(for: video.fileUrl)
+        center.publish(.progress(.init(downloadedBytes: 70, totalBytes: 100)), for: key)
+
+        gallery.observe(video)
+
+        XCTAssertTrue(gallery.isDownloading, "une surface montée en cours de route lit le téléchargement en cours")
+        XCTAssertEqual(gallery.progress, 0.7, accuracy: 0.001)
+    }
+
+    func test_anotherMediaEvent_neverLeaksIntoThisSurface() {
+        let (center, bubble, _) = makeSUT()
+        let video = makeVideo()
+        bubble.observe(video)
+
+        center.publish(.progress(.init(downloadedBytes: 10, totalBytes: 100)), for: "https://cdn.example.com/other.mp4")
+
+        XCTAssertFalse(bubble.isDownloading)
+    }
+
+    func test_cancelFromOneSurface_stopsTheDownloadEverywhere() {
+        let (_, bubble, gallery) = makeSUT()
+        let video = makeVideo(fileUrl: "https://cdn.example.invalid/v-\(UUID().uuidString).mp4")
+        gallery.observe(video)
+
+        bubble.start(attachment: video, origin: .manual, onShare: nil)
+        XCTAssertTrue(gallery.isDownloading, "le téléchargement lancé par la bulle s'affiche dans la galerie")
+
+        gallery.cancel()
+
+        XCTAssertFalse(bubble.isDownloading)
+        XCTAssertFalse(gallery.isDownloading)
+    }
+
+    func test_start_onAMediaAlreadyOnDisk_finishesFromTheCache() async {
+        let (_, bubble, _) = makeSUT()
+        let video = makeVideo(fileUrl: "https://cdn.example.invalid/v-\(UUID().uuidString).mp4")
+        let key = AttachmentDownloadCenter.key(for: video.fileUrl)
+        await CacheCoordinator.shared.video.store(Data([0x00, 0x01, 0x02]), for: key)
+        let cached = expectation(description: "servi par le cache local, sans réseau")
+        let subscription = bubble.$isCached.first(where: { $0 }).sink { _ in cached.fulfill() }
+
+        bubble.start(attachment: video, origin: .manual, onShare: nil)
+
+        await fulfillment(of: [cached], timeout: 5)
+        subscription.cancel()
+        await CacheCoordinator.shared.video.invalidate(for: key)
+    }
+
+    // MARK: - #7625 — le préchargement passe par le MÊME registre, en silence
+
+    /// Le réel suivant se télécharge AVANT le swipe : sa surface, montée au
+    /// moment où il entre à l'écran, doit rejoindre ce téléchargement au lieu
+    /// d'en ouvrir un second — et le trouver « prêt » s'il a fini.
+    func test_prefetch_aSurfaceMountedLater_joinsThePrefetch() {
+        let center = AttachmentDownloadCenter(haptics: { _ in })
+        let surface = AttachmentDownloader(center: center)
+        let video = makeVideo(fileUrl: "https://cdn.example.invalid/v-\(UUID().uuidString).mp4")
+
+        center.prefetch(urlString: video.fileUrl, expectedSize: 100, cacheStore: .video)
+        surface.observe(video)
+
+        XCTAssertTrue(surface.isDownloading, "la surface doit lire le préchargement en cours, pas en lancer un autre")
+        center.cancel(key: AttachmentDownloadCenter.key(for: video.fileUrl))
+    }
+
+    /// Un préchargement est invisible : il ne doit pas faire vibrer le
+    /// téléphone à chaque réel qui défile, ni au départ ni à la fin.
+    func test_prefetch_finishedFromTheCache_neverVibrates() async {
+        var haptics: [AttachmentDownloadCenter.Haptic] = []
+        let center = AttachmentDownloadCenter(haptics: { haptics.append($0) })
+        let surface = AttachmentDownloader(center: center)
+        let video = makeVideo(fileUrl: "https://cdn.example.invalid/v-\(UUID().uuidString).mp4")
+        let key = AttachmentDownloadCenter.key(for: video.fileUrl)
+        await CacheCoordinator.shared.video.store(Data([0x00, 0x01, 0x02]), for: key)
+        surface.observe(video)
+        let cached = expectation(description: "préchargement terminé depuis le cache")
+        let subscription = surface.$isCached.first(where: { $0 }).sink { _ in cached.fulfill() }
+
+        center.prefetch(urlString: video.fileUrl, expectedSize: 3, cacheStore: .video)
+
+        await fulfillment(of: [cached], timeout: 5)
+        XCTAssertEqual(haptics, [], "un préchargement ne vibre jamais")
+        subscription.cancel()
+        await CacheCoordinator.shared.video.invalidate(for: key)
+    }
+
+    /// Le témoin du canal : un téléchargement DEMANDÉ garde sa vibration de
+    /// départ — sans quoi le test précédent serait vert par un canal débranché.
+    func test_start_requestedByTheUser_stillVibrates() {
+        var haptics: [AttachmentDownloadCenter.Haptic] = []
+        let center = AttachmentDownloadCenter(haptics: { haptics.append($0) })
+        let key = "https://cdn.example.invalid/v-\(UUID().uuidString).mp4"
+
+        center.start(urlString: key, expectedSize: 100, cacheStore: .video, origin: .manual)
+
+        XCTAssertEqual(haptics, [.light])
+        center.cancel(key: AttachmentDownloadCenter.key(for: key))
+    }
+
+    // MARK: - #8573 — seul un téléchargement MANUEL vibre
+
+    /// Un téléchargement AUTOMATIQUE (politique réseau, feed, galerie) ne
+    /// vibre pas au départ : l'utilisateur n'a rien touché.
+    func test_start_automaticOrigin_neverVibratesOnStart() {
+        var haptics: [AttachmentDownloadCenter.Haptic] = []
+        let center = AttachmentDownloadCenter(haptics: { haptics.append($0) })
+        let key = "https://cdn.example.invalid/v-\(UUID().uuidString).mp4"
+
+        center.start(urlString: key, expectedSize: 100, cacheStore: .video, origin: .automatic)
+
+        XCTAssertEqual(haptics, [])
+        center.cancel(key: AttachmentDownloadCenter.key(for: key))
+    }
+
+    /// Ni à la fin : un auto-téléchargement servi par le cache termine en silence.
+    func test_start_automaticOriginFinishedFromTheCache_neverVibrates() async {
+        var haptics: [AttachmentDownloadCenter.Haptic] = []
+        let center = AttachmentDownloadCenter(haptics: { haptics.append($0) })
+        let surface = AttachmentDownloader(center: center)
+        let video = makeVideo(fileUrl: "https://cdn.example.invalid/v-\(UUID().uuidString).mp4")
+        let key = AttachmentDownloadCenter.key(for: video.fileUrl)
+        await CacheCoordinator.shared.video.store(Data([0x00, 0x01, 0x02]), for: key)
+        let cached = expectation(description: "auto-téléchargement terminé depuis le cache")
+        let subscription = surface.$isCached.first(where: { $0 }).sink { _ in cached.fulfill() }
+
+        surface.start(attachment: video, origin: .automatic, onShare: nil)
+
+        await fulfillment(of: [cached], timeout: 5)
+        XCTAssertEqual(haptics, [], "un téléchargement automatique ne vibre jamais")
+        subscription.cancel()
+        await CacheCoordinator.shared.video.invalidate(for: key)
+    }
+
+    /// Le témoin du canal : le MÊME parcours, demandé par un tap, vibre au
+    /// départ puis à la fin — sans quoi le test précédent serait vert par un
+    /// canal débranché.
+    func test_start_manualOriginFinishedFromTheCache_vibratesOnStartAndSuccess() async {
+        var haptics: [AttachmentDownloadCenter.Haptic] = []
+        let center = AttachmentDownloadCenter(haptics: { haptics.append($0) })
+        let surface = AttachmentDownloader(center: center)
+        let video = makeVideo(fileUrl: "https://cdn.example.invalid/v-\(UUID().uuidString).mp4")
+        let key = AttachmentDownloadCenter.key(for: video.fileUrl)
+        await CacheCoordinator.shared.video.store(Data([0x00, 0x01, 0x02]), for: key)
+        let cached = expectation(description: "téléchargement manuel terminé depuis le cache")
+        let subscription = surface.$isCached.first(where: { $0 }).sink { _ in cached.fulfill() }
+
+        surface.start(attachment: video, origin: .manual, onShare: nil)
+
+        await fulfillment(of: [cached], timeout: 5)
+        XCTAssertEqual(haptics, [.light, .success])
+        subscription.cancel()
+        await CacheCoordinator.shared.video.invalidate(for: key)
+    }
+
+    /// Un auto-téléchargement de piste traduite qui échoue ne vibre pas non plus.
+    func test_startTranslatedAudio_automaticOriginFailing_neverVibrates() async {
+        var haptics: [AttachmentDownloadCenter.Haptic] = []
+        let center = AttachmentDownloadCenter(haptics: { haptics.append($0) })
+        let surface = AttachmentDownloader(center: center)
+        let url = "https://cdn.example.invalid/a-\(UUID().uuidString).m4a"
+        let failed = expectation(description: "le téléchargement échoue")
+        let subscription = center.events(for: AttachmentDownloadCenter.key(for: url))
+            .filter { $0 == .failed }
+            .first()
+            .sink { _ in failed.fulfill() }
+
+        surface.startTranslatedAudio(url: url, fileSize: 0, origin: .automatic)
+
+        await fulfillment(of: [failed], timeout: 15)
+        XCTAssertEqual(haptics, [], "un échec d'auto-téléchargement ne vibre pas")
+        subscription.cancel()
+    }
+
+    // MARK: - #9882 — la fin d'un fichier se SIGNALE, elle ne s'interroge plus
+
+    private func waitUntilAwaited(_ key: String, on center: AttachmentDownloadCenter) async {
+        while center.endWaiterCount(for: key) == 0 { await Task.yield() }
+    }
+
+    func test_awaitEnd_withNothingInFlight_returnsAtOnce() async {
+        let center = AttachmentDownloadCenter(haptics: { _ in })
+
+        let end = await center.awaitEnd(of: "https://cdn.example.invalid/idle.mp4")
+
+        XCTAssertNil(end, "aucun téléchargement en cours : rien à attendre")
+    }
+
+    func test_awaitEnd_wakesOnTheFinish_withoutPolling() async {
+        let center = AttachmentDownloadCenter(haptics: { _ in })
+        let key = "https://cdn.example.invalid/v-\(UUID().uuidString).mp4"
+        center.publish(.progress(.init(downloadedBytes: 0, totalBytes: 100)), for: key)
+        let waiter = Task { @MainActor in await center.awaitEnd(of: key) }
+        await waitUntilAwaited(key, on: center)
+
+        center.publish(.progress(.init(downloadedBytes: 50, totalBytes: 100)), for: key)
+        center.publish(.finished(totalBytes: 100), for: key)
+
+        let end = await waiter.value
+        XCTAssertEqual(end, .finished(totalBytes: 100), "une progression ne réveille pas ; la fin, si")
+        XCTAssertEqual(center.endWaiterCount(for: key), 0)
+    }
+
+    /// Retirée de la fenêtre ou échouée : l'attente se lève sur toute fin.
+    func test_awaitEnd_wakesOnAFailureOrAWithdrawal() async {
+        let center = AttachmentDownloadCenter(haptics: { _ in })
+        for end in [AttachmentDownloadCenter.Event.failed, .cancelled] {
+            let key = "https://cdn.example.invalid/v-\(UUID().uuidString).mp4"
+            center.publish(.progress(.init(downloadedBytes: 0, totalBytes: 100)), for: key)
+            let waiter = Task { @MainActor in await center.awaitEnd(of: key) }
+            await waitUntilAwaited(key, on: center)
+
+            center.publish(end, for: key)
+
+            let received = await waiter.value
+            XCTAssertEqual(received, end)
+        }
+    }
+
+    /// Le balayage suivant annule la passe qui attendait : elle se libère
+    /// aussitôt, et le registre ne garde aucune attente orpheline.
+    func test_awaitEnd_whenTheWaiterIsCancelled_returnsNil_andForgetsIt() async {
+        let center = AttachmentDownloadCenter(haptics: { _ in })
+        let key = "https://cdn.example.invalid/v-\(UUID().uuidString).mp4"
+        center.publish(.progress(.init(downloadedBytes: 0, totalBytes: 100)), for: key)
+        let waiter = Task { @MainActor in await center.awaitEnd(of: key) }
+        await waitUntilAwaited(key, on: center)
+
+        waiter.cancel()
+
+        let end = await waiter.value
+        XCTAssertNil(end)
+        XCTAssertEqual(center.endWaiterCount(for: key), 0)
+        center.publish(.finished(totalBytes: 100), for: key)
+    }
+}
+
+/// #11569 — sur la dernière case d'une grille (« +N »), le badge de
+/// téléchargement se posait au CENTRE, par-dessus le libellé : on ne lisait ni
+/// l'un ni l'autre tant que la photo n'était pas téléchargée. Une seule loi de
+/// placement sert la bulle et le Fil.
+final class MediaTileDownloadPlacementTests: XCTestCase {
+
+    func test_resolve_overflowTile_sameCompactCornerInBubbleAndFocal() {
+        let bubble = MediaTileDownloadPlacement.resolve(surface: .bubbleGrid, overflowCount: 3)
+        let focal = MediaTileDownloadPlacement.resolve(surface: .focalGrid, overflowCount: 3)
+
+        XCTAssertEqual(bubble, focal, "la case « +N » a la même disposition dans les deux modes")
+        XCTAssertEqual(bubble.alignment, .topLeading)
+        XCTAssertEqual(bubble.form, .compact)
+    }
+
+    /// Sur la dernière case, la bulle pose l'heure et l'état d'envoi en bas à
+    /// droite ; les deux modes posent les réactions en bas à gauche et le
+    /// compteur de vue unique en haut à droite.
+    func test_resolve_overflowTile_takesTheOnlyCornerNoOtherBadgeHolds() {
+        let held: [Alignment] = [.bottomTrailing, .bottomLeading, .topTrailing]
+        for surface in [MediaTileDownloadPlacement.Surface.bubbleGrid, .focalGrid] {
+            let placement = MediaTileDownloadPlacement.resolve(surface: surface, overflowCount: 2)
+            XCTAssertFalse(held.contains(placement.alignment),
+                           "le badge de la case « +N » ne se pose sur aucune autre pastille (\(surface))")
+        }
+    }
+
+    func test_resolve_overflowTile_badgeNeverSharesTheOverflowLabelAnchor() {
+        for surface in [MediaTileDownloadPlacement.Surface.bubbleGrid, .focalGrid] {
+            let placement = MediaTileDownloadPlacement.resolve(surface: surface, overflowCount: 1)
+            XCTAssertNotEqual(placement.alignment, MediaTileDownloadPlacement.overflowLabelAlignment,
+                              "le badge ne se pose jamais sur le « +N » (\(surface))")
+        }
+    }
+
+    func test_resolve_plainBubbleTile_keepsTheCentredProminentBadge() {
+        let placement = MediaTileDownloadPlacement.resolve(surface: .bubbleGrid, overflowCount: 0)
+
+        XCTAssertEqual(placement, MediaTileDownloadPlacement(alignment: .center, form: .prominent))
+    }
+
+    func test_resolve_plainFocalTile_keepsItsCornerProminentBadge() {
+        let placement = MediaTileDownloadPlacement.resolve(surface: .focalGrid, overflowCount: 0)
+
+        XCTAssertEqual(placement, MediaTileDownloadPlacement(alignment: .bottomTrailing, form: .prominent))
+    }
+
+    func test_compactForm_keepsTheMinimumTapTarget() {
+        XCTAssertGreaterThanOrEqual(MediaTileDownloadPlacement.compactHitTarget, MeeshyControlSize.tapTarget)
+    }
+}
+
+/// #11586 — une vidéo posée sur la case « +N » montait le lecteur inline (Fil)
+/// ou un poster à bouton lecture (Bulles) sous le voile : un bouton central
+/// par-dessus le « +N », sur une case dont le toucher ouvre la galerie. Une
+/// seule loi dit ce que la case fait d'une vidéo, pour la bulle et le Fil.
+final class MediaTileVideoPresentationTests: XCTestCase {
+
+    func test_resolve_overflowTile_showsAStillPosterWithoutPlaybackCue() {
+        let presentation = MediaTileVideoPresentation.resolve(overflowCount: 3, isHiddenByProtection: false)
+
+        XCTAssertEqual(presentation, .poster(showsPlaybackCue: false))
+        XCTAssertFalse(presentation.hostsPlayer, "la case « +N » ouvre la galerie : aucun lecteur ne s'y monte")
+        XCTAssertFalse(presentation.showsPlaybackCue, "aucun bouton lecture ne se pose sur le « +N »")
+    }
+
+    func test_resolve_overflowTile_winsOverProtection() {
+        XCTAssertEqual(MediaTileVideoPresentation.resolve(overflowCount: 1, isHiddenByProtection: true),
+                       .poster(showsPlaybackCue: false))
+    }
+
+    func test_resolve_hiddenProtectedTile_keepsThePosterAndItsCue() {
+        let presentation = MediaTileVideoPresentation.resolve(overflowCount: 0, isHiddenByProtection: true)
+
+        XCTAssertEqual(presentation, .poster(showsPlaybackCue: true))
+        XCTAssertFalse(presentation.hostsPlayer)
+    }
+
+    func test_resolve_plainTile_mountsTheInlinePlayer() {
+        let presentation = MediaTileVideoPresentation.resolve(overflowCount: 0, isHiddenByProtection: false)
+
+        XCTAssertEqual(presentation, .inlinePlayer)
+        XCTAssertTrue(presentation.hostsPlayer)
     }
 }

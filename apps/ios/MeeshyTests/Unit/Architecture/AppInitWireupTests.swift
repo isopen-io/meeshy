@@ -138,82 +138,49 @@ final class AppInitWireupTests: XCTestCase {
         )
     }
 
-    // MARK: - Composer de story : le sélecteur de lieu vient de l'app
+    // MARK: - Composer de story : les fournisseurs viennent de l'app
 
-    /// Le composer de story vit au SDK ; le sélecteur de lieu, non (MapKit,
-    /// CoreLocation, `MediaPermissionCoordinator`, catalogue `.main`). Le SDK
-    /// expose donc `\.storyLocationPicker` et l'app l'alimente. Un site de
-    /// présentation qui oublie l'injection rend le chip « Lieu » invisible : la
-    /// pastille redevient inatteignable, sans le moindre signal.
-    func test_everyStoryComposerPresentation_injectsTheLocationPicker() throws {
-        for path in Self.storyComposerPresentationSites {
-            let src = try appSource(path)
-            let presentations = occurrences(of: "StoryComposerView(", in: src)
-                + occurrences(of: "UnifiedPostComposer(", in: src)
-            let injections = occurrences(of: ".storyLocationPickerProvided()", in: src)
-            XCTAssertGreaterThan(presentations, 0, "\(path) ne présente plus de composer de story ?")
-            XCTAssertEqual(
-                injections, presentations,
-                "\(path) : chaque présentation du composer doit injecter le picker de lieu "
-                    + "(.storyLocationPickerProvided()) — sinon le chip « Lieu » n'est pas rendu."
-            )
-        }
-    }
-
-    /// S5 — mêmes causes, mêmes effets : la caméra (AVCaptureSession,
-    /// permissions), la pellicule (PhotoKit) et la lecture du presse-papier
-    /// (`NSItemProvider`, autorisation sandbox) restent app-side, le composer
-    /// SDK expose TROIS points d'injection. Un site de présentation qui les
-    /// oublie fait disparaître les amorces de la page blanche SANS le moindre
-    /// signal — c'est exactement ce que ce jumeau du garde-fou « Lieu »
-    /// interdit.
+    /// Le sélecteur de lieu (MapKit, CoreLocation), la caméra
+    /// (AVCaptureSession), la pellicule (PhotoKit), le presse-papier
+    /// (`NSItemProvider`) et la bibliothèque de stickers restent app-side : le
+    /// SDK expose des points d'injection, et le meuble les alimente. Un
+    /// présentateur qui les oublie fait disparaître la pastille « Lieu » ou la
+    /// capsule « Coller » SANS le moindre signal.
     ///
-    /// C5b l'a vérifié dans le mauvais sens : `storyPasteProvided()` a été
-    /// écrit, testé, et n'a JAMAIS été appelé — donc `\.storyPaste` restait
-    /// `nil` partout, donc `BlankCanvasPasteStarter` ne rendait rien sur aucun
-    /// écran. Cette garde ne connaissait que deux des trois injections : c'est
-    /// l'omission qu'elle couvre désormais.
-    func test_everyStoryComposerPresentation_injectsTheBlankCanvasStarters() throws {
-        let injections = [
-            ".storyCameraCaptureProvided()":
-                "sans injection caméra, l'amorce « Caméra » n'est pas rendue.",
-            ".storyRecentCameraRollProvided()":
-                "sans injection pellicule, la vignette « dernière photo » n'est pas rendue.",
-            ".storyPasteProvided()":
-                "sans injection presse-papier, la capsule « Coller » n'est pas rendue — "
-                    + "`\\.storyPaste` reste nil et `BlankCanvasPasteStarter` rend un corps vide."
-        ]
-        for path in Self.storyComposerPresentationSites {
-            let src = try appSource(path)
-            let presentations = occurrences(of: "StoryComposerView(", in: src)
-                + occurrences(of: "UnifiedPostComposer(", in: src)
-            XCTAssertGreaterThan(presentations, 0, "\(path) ne présente plus de composer de story ?")
-            for (modifier, why) in injections {
+    /// Depuis le #15629, l'atelier du SDK a quitté le dépôt : il n'y a plus de
+    /// « présentation du composer » à compter. La loi est désormais celle de
+    /// `composerPortalProviders` — UNE liste, posée à CHACUN des présentateurs
+    /// du meuble (feuilles système et ancrées). Chaque fournisseur y est écrit
+    /// une fois : un second exemplaire empilerait deux couches sur la même clé
+    /// d'environnement, la dernière gagnant en silence.
+    func test_theComposerPortals_injectEveryAppSideProvider_once() throws {
+        for unit in Self.storyComposerPresentationUnits {
+            let src = try appUnit(unit)
+            let path = "\(unit)+*.swift"
+            XCTAssertGreaterThanOrEqual(
+                occurrences(of: ".composerPortalProviders(format:", in: src), 2,
+                "\(path) : les deux présentateurs du meuble (feuilles système et ancrées) posent la MÊME liste."
+            )
+            for provider in [".storyLocationPickerProvided()",
+                             ".storyCameraCaptureProvided()",
+                             ".storyRecentCameraRollProvided()",
+                             ".storyPasteProvided()",
+                             ".storyStickerLibraryProvided()"] {
                 XCTAssertEqual(
-                    occurrences(of: modifier, in: src), presentations,
-                    "\(path) : \(why)"
+                    occurrences(of: provider, in: src), 1,
+                    "\(path) : \(provider) s'écrit UNE fois, dans `composerPortalProviders`."
                 )
             }
         }
     }
 
-    /// Tous les fichiers qui MONTENT un composer de story eux-mêmes : un site
-    /// oublié par ce garde-fou est un site où les amorces de page blanche
-    /// disparaissent sans le moindre signal. `MeeshyComposerHost` (C3) en fait
-    /// partie — c'est le meuble qui enveloppe l'atelier, donc un site de
-    /// présentation à part entière.
-    ///
-    /// V3-2 — `StoryTrayActions` en est SORTI, et c'est un acquis, pas un
-    /// oubli : la porte de création délègue désormais au meuble, qui pose les
-    /// fournisseurs au plus près de l'atelier. Les reposer sur le cover en
-    /// empilerait DEUX couches — la dernière gagne, en silence, et le compte
-    /// « injections == présentations » cesserait de mesurer quoi que ce soit.
-    /// L'invariant côté porte est tenu par
-    /// `test_theStoryCreationDoor_mountsTheComposerHost_andLetsItPoseTheProviders`.
-    private static let storyComposerPresentationSites = [
-        "Meeshy/Features/Main/Views/StoryTrayView.swift",
-        "Meeshy/Features/Main/Views/StoryViewerView.swift",
-        "Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"
+    /// L'UNITÉ du meuble, jamais un seul de ses fichiers : la question
+    /// « chaque présentateur a-t-il ses fournisseurs ? » se répond dans
+    /// l'ARBRE DE VUES, et lire l'unité en est la seule approximation
+    /// textuelle qui ne se périme pas au prochain découpage
+    /// (`AppSourceGuard.unit`).
+    private static let storyComposerPresentationUnits = [
+        "Meeshy/Features/Composer/MeeshyComposerHost"
     ]
 
     // MARK: - V3-2 : la porte de création monte le MEUBLE, pas l'atelier nu
@@ -241,7 +208,7 @@ final class AppInitWireupTests: XCTestCase {
     /// `MeeshyComposerHostGuardTests.test_theHost_hasAtLeastOneProductionCaller`
     /// ferme la dernière issue.
     func test_theStoryCreationDoor_mountsTheComposerHost_andLetsItPoseTheProviders() throws {
-        let path = "Meeshy/Features/Main/Views/StoryTrayActions.swift"
+        let path = "Meeshy/Features/Stories/Views/StoryTrayActions.swift"
         let src = try appSource(path)
 
         XCTAssertEqual(
@@ -285,20 +252,17 @@ final class AppInitWireupTests: XCTestCase {
     /// qui l'exigerait quand même ferait rougir du code correct — et serait
     /// désactivée à la première occasion.
     ///
-    /// V3-2 — la chaîne de création compte désormais DEUX maillons, et
-    /// l'audience doit traverser les deux : la porte la donne au meuble
-    /// (`MeeshyComposerHost(`), le meuble la donne à l'atelier
-    /// (`StoryComposerView(`). Le site seul ne suffit donc plus à nommer ce
-    /// qu'on y cherche — d'où le montage attendu, écrit fichier par fichier.
-    /// Un maillon qui l'oublie retombe sur `PostVisibility.friends` sans un mot.
+    /// Depuis le #15629 la chaîne n'a plus qu'UN maillon : la porte donne
+    /// l'audience au meuble (`MeeshyComposerHost(`), qui en sème lui-même le
+    /// sélecteur du socle (`MeeshyComposerHostGuardTests
+    /// .test_host_handsTheMemorisedAudienceToTheWorkshop`).
     private static let storyComposerCreationMounts: [(path: String, mount: String)] = [
-        ("Meeshy/Features/Main/Views/StoryTrayActions.swift", "MeeshyComposerHost("),
+        ("Meeshy/Features/Stories/Views/StoryTrayActions.swift", "MeeshyComposerHost("),
         // Lot 5 — la porte du média REÇU est le second site qui monte une
         // SCÈNE, et l'audience y traverse les mêmes deux maillons. Elle entre
         // ici plutôt que dans une garde à elle : le jour où un troisième site
         // ouvre l'atelier, c'est cette liste qu'on relira.
-        ("Meeshy/Features/Main/Composer/ConversationMediaComposerDoor.swift", "MeeshyComposerHost("),
-        ("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift", "StoryComposerView(")
+        ("Meeshy/Features/Composer/MediaComposerDoor.swift", "MeeshyComposerHost(")
     ]
 
     func test_everyCreationComposerPresentation_passesTheMemorisedAudience() throws {
@@ -326,21 +290,26 @@ final class AppInitWireupTests: XCTestCase {
     /// (« Attempt to present … which is already presenting »). C'est la course
     /// que les `Task.sleep(350 ms)` masquaient.
     func test_theStoryComposerCoverIsMountedOnlyAtTheRoots() throws {
-        let mounts = ["Meeshy/Features/Main/Views/RootView.swift",
-                      "Meeshy/Features/Main/Views/iPadRootView+Sheets.swift"]
+        // Les covers vivent dans les couches nominales des racines (#5837).
+        let mounts = ["Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift",
+                      "Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift"]
         for path in mounts {
             XCTAssertEqual(
                 occurrences(of: ".storyComposerCover(", in: try appSource(path)), 1,
                 "\(path) : une racine, un montage."
             )
         }
-        for path in ["Meeshy/Features/Main/Views/StoryTrayView.swift",
+        for path in ["Meeshy/Features/Stories/Views/StoryTrayView.swift",
                      "Meeshy/Features/Main/Views/RootViewComponents.swift",
                      "Meeshy/Features/Main/Views/FeedView.swift",
                      "Meeshy/Features/Main/Views/ConversationListView.swift"] {
+            // L'UNITÉ du type (`Foo.swift` + `Foo+*.swift`) : le rail de stories de la
+            // liste vit dans `ConversationListView+StoryRail.swift`, et un balayage
+            // négatif du seul fichier-tête verdirait en lisant la moitié sans l'interdit.
+            let unit = AppSourceGuard.stripComments(try AppSourceGuard.unit(path))
             XCTAssertEqual(
-                occurrences(of: "isPresented: $viewModel.showStoryComposer", in: try appSource(path))
-                    + occurrences(of: "isPresented: $storyViewModel.showStoryComposer", in: try appSource(path)),
+                occurrences(of: "isPresented: $viewModel.showStoryComposer", in: unit)
+                    + occurrences(of: "isPresented: $storyViewModel.showStoryComposer", in: unit),
                 0,
                 "\(path) : les hôtes DÉCLENCHENT le composer, ils ne le présentent plus."
             )
@@ -354,6 +323,27 @@ final class AppInitWireupTests: XCTestCase {
     /// Source d'un fichier de l'app, commentaires `//` retirés — un `.contains`
     /// qui matche un commentaire ne prouve rien (et les doc-comments de ces deux
     /// vues NOMMENT les composers qu'on compte ici).
+    /// Le TYPE et toutes ses extensions — `Foo.swift` + `Foo+*.swift` —
+    /// concaténés puis dépouillés de leurs commentaires, comme `appSource`.
+    ///
+    /// Une garde qui nomme un FICHIER se périme au premier découpage ; une
+    /// garde qui nomme une UNITÉ y survit. C'est la doctrine d'`AppSourceGuard`
+    /// (§ « L'UNITÉ, jamais le seul fichier-tête » du `CLAUDE.md` iOS), portée
+    /// ici parce que ce fichier a son propre lecteur de sources.
+    private func appUnit(_ relativePrefix: String) throws -> String {
+        let projectRoot = #filePath.components(separatedBy: "/MeeshyTests/").first ?? ""
+        let dossier = (relativePrefix as NSString).deletingLastPathComponent
+        let base = (relativePrefix as NSString).lastPathComponent
+        let absolu = "\(projectRoot)/\(dossier)"
+        let noms = try FileManager.default.contentsOfDirectory(atPath: absolu)
+            .filter { $0 == "\(base).swift" || ($0.hasPrefix("\(base)+") && $0.hasSuffix(".swift")) }
+            .sorted()
+        XCTAssertFalse(noms.isEmpty, "unité « \(relativePrefix) » introuvable — la garde ne garde plus rien")
+        return try noms
+            .map { try appSource("\(dossier)/\($0)") }
+            .joined(separator: "\n")
+    }
+
     private func appSource(_ relativePath: String) throws -> String {
         let projectRoot = #filePath.components(separatedBy: "/MeeshyTests/").first ?? ""
         let raw = try String(contentsOfFile: "\(projectRoot)/\(relativePath)", encoding: .utf8)
@@ -364,6 +354,30 @@ final class AppInitWireupTests: XCTestCase {
                 return line[line.startIndex..<comment.lowerBound]
             }
             .joined(separator: "\n")
+    }
+
+    /// Un push silencieux qui réveille l'app tuée passe par un lancement en
+    /// arrière-plan sans `checkExistingSession` : `APIClient.shared.authToken`
+    /// reste nil malgré un jeton Keychain valide. Seule la branche « révocation »
+    /// l'amorçait — la synchro, l'accusé de réception et le préchargement du
+    /// message partaient sans jeton (401), ce qui annulait le réveil.
+    func test_silentMessagePush_primesTheAPITokenBeforeItsNetworkCalls() throws {
+        let source = try appSource("Meeshy/AppDelegate.swift")
+        let start = try XCTUnwrap(source.range(of: "\"meeshy.silent-push\""))
+        let sync = try XCTUnwrap(source.range(of: "NotificationCoordinator.shared.syncNow()",
+                                              range: start.upperBound..<source.endIndex))
+        let window = String(source[start.upperBound..<sync.lowerBound])
+        XCTAssertTrue(window.contains("primeAPITokenFromSession()"),
+                      "le jeton doit être amorcé avant la synchro du réveil silencieux")
+    }
+
+    func test_reelSwitchIntervals_reachMetricKit() throws {
+        let source = try appSource("Meeshy/Features/Main/Views/ReelInstantSwitch.swift")
+
+        XCTAssertTrue(source.contains("MXMetricManager.makeLogHandle(category: \"ReelSwitch\")"))
+        XCTAssertTrue(source.contains("mxSignpost(.begin"))
+        XCTAssertTrue(source.contains("mxSignpost(.end"))
+        XCTAssertTrue(MeeshyMetricsSubscriber.mediaCategories.contains("ReelSwitch"))
     }
 
     // MARK: - Helpers

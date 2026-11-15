@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_clear_all_message">Todos os slides recomeçam vazios, sobre o fundo neutro. Desfazer restaura os slides.</string>
+    <string name="composer_media_sources">Escolher uma fonte</string>
+    <string name="composer_preview_close">Fechar a pré-visualização</string>
+    <string name="composer_preview_previous">Slide anterior</string>
+    <string name="composer_preview_next">Próximo slide</string>
+</resources>

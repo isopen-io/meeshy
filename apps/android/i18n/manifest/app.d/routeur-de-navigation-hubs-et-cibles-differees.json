@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "route.title.settings",
+          "androidName": "route_title_settings",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.profile",
+          "androidName": "route_title_profile",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.discover",
+          "androidName": "route_title_discover",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.nearby",
+          "androidName": "route_title_nearby",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.communities",
+          "androidName": "route_title_communities",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.community",
+          "androidName": "route_title_community",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.community_create",
+          "androidName": "route_title_community_create",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.community_settings",
+          "androidName": "route_title_community_settings",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.members",
+          "androidName": "route_title_members",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.invite",
+          "androidName": "route_title_invite",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.notifications",
+          "androidName": "route_title_notifications",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.links",
+          "androidName": "route_title_links",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.affiliate",
+          "androidName": "route_title_affiliate",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.tracking_links",
+          "androidName": "route_title_tracking_links",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.share_links",
+          "androidName": "route_title_share_links",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.community_links",
+          "androidName": "route_title_community_links",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.data_export",
+          "androidName": "route_title_data_export",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.post",
+          "androidName": "route_title_post",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.bookmarks",
+          "androidName": "route_title_bookmarks",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.starred",
+          "androidName": "route_title_starred",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.friend_requests",
+          "androidName": "route_title_friend_requests",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.story",
+          "androidName": "route_title_story",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.mood",
+          "androidName": "route_title_mood",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.conversations",
+          "androidName": "route_title_conversations",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.progression",
+          "androidName": "route_title_progression",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

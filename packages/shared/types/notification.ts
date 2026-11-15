@@ -6,6 +6,10 @@
  * à partir du `type`, `actor`, `context` et `metadata`.
  */
 
+import type { PostType } from './post.js';
+import type { NotificationAttachmentWire } from './notification-attachment-wire.js';
+import type { NotificationContentDetail } from './notification-content-detail.js';
+
 // =====================================================
 // NOTIFICATION TYPES & ENUMS
 // =====================================================
@@ -51,6 +55,14 @@ export enum NotificationTypeEnum {
   CONTACT_UNBLOCKED = 'contact_unblocked',
   FRIEND_REQUEST = 'friend_request',
   FRIEND_ACCEPTED = 'friend_accepted',
+  /** Un compte du carnet d'adresses du destinataire vient d'arriver sur Meeshy (#8105). */
+  CONTACT_JOINED = 'contact_joined',
+  /** Un ami ou un contact du carnet est revenu sur Meeshy — au plus une fois par 3 h et par personne (#8285). */
+  CONTACT_RECENTLY_ACTIVE = 'contact_recently_active',
+  /** La Connaissance est née toute seule : chacun a assez échangé avec l'autre (#13932). Discrète, jamais une demande. */
+  RELATION_ACQUAINTANCE = 'relation_acquaintance',
+  /** La batterie d'un Proche ou d'un Sang l'empêchera bientôt de répondre (#14147) : le palier est dans les métadonnées. */
+  DEVICE_BATTERY = 'device_battery',
 
   // ===== INTERACTION EVENTS =====
   USER_MENTIONED = 'user_mentioned',
@@ -70,12 +82,19 @@ export enum NotificationTypeEnum {
   COMMENT_REACTION = 'comment_reaction',
   STORY_NEW_COMMENT = 'story_new_comment',
   FRIEND_STORY_COMMENT = 'friend_story_comment',
+  /** Réaction d'un tiers au contenu d'un proche, relayée à l'entourage commun (#14068). */
+  FRIEND_CONTENT_REACTION = 'friend_content_reaction',
+  /** Partage par un tiers du contenu d'un proche, ou d'un proche de son propre contenu (#14069). */
+  FRIEND_CONTENT_SHARE = 'friend_content_share',
+  /** Republication (#14070) ou citation (#14072) du contenu d'un proche, relayée à son entourage. */
+  FRIEND_CONTENT_REPOST = 'friend_content_repost',
+  FRIEND_CONTENT_QUOTE = 'friend_content_quote',
   STORY_THREAD_REPLY = 'story_thread_reply',
 
   // ===== FRIEND CONTENT EVENTS (Phase 4F) =====
   // Fired when a friend publishes new content.
-  // STATUS and MOOD share friend_new_mood — they are lightweight
-  // ephemeral content and grouping avoids type proliferation.
+  // `friend_new_mood` porte du STATUS : le nom PRODUIT a donné son nom au type
+  // de notification et le garde (§ 7), le DISCRIMINANT dit STATUS (#4906).
   FRIEND_NEW_STORY = 'friend_new_story',
   FRIEND_NEW_POST = 'friend_new_post',
   FRIEND_NEW_MOOD = 'friend_new_mood',
@@ -156,6 +175,20 @@ export enum NotificationTypeEnum {
   LEVEL_UP = 'level_up',
   BADGE_EARNED = 'badge_earned',
 
+  // ===== JEU MEESHY (#9490) — au plus une notification de jeu par jour, préférence `gameEnabled` =====
+  /** Un ami t'invite à la mission en duo de la semaine. */
+  GAME_DUO_INVITED = 'game_duo_invited',
+  /** Ton ami a accepté la mission en duo. */
+  GAME_DUO_ACCEPTED = 'game_duo_accepted',
+  /** Le résultat de ta semaine de ligue : montée, maintien, descente, coupe. Aucun nom de joueur. */
+  GAME_LEAGUE_RESULT = 'game_league_result',
+  /** Une étape de la saison est atteinte. */
+  GAME_SEASON_STEP = 'game_season_step',
+  /** La mission personnelle du jour commence : sa plage horaire est dans le texte (#9539). */
+  GAME_MISSION_WINDOW = 'game_mission_window',
+  /** Des étapes du jeu franchies app fermée peuvent rejoindre le carnet : une notification groupée, dans le plafond (#10175). */
+  GAME_PHOTO_MOMENT = 'game_photo_moment',
+
   // ===== PAYMENT/SUBSCRIPTION =====
   SUBSCRIPTION_EXPIRING = 'subscription_expiring',
   SUBSCRIPTION_RENEWED = 'subscription_renewed',
@@ -201,8 +234,12 @@ export interface NotificationActor {
 /**
  * CONTEXT - Où c'est arrivé
  * Contexte de navigation pour la notification
+ *
+ * Le média INLINE de la bannière (URL, mime, taille, durée du 1er attachment)
+ * est HÉRITÉ de `NotificationAttachmentWire` : ces quatre champs décrivent un
+ * FICHIER, pas un endroit, et ils voyagent ensemble (#7003).
  */
-export interface NotificationContext {
+export interface NotificationContext extends NotificationAttachmentWire {
   readonly conversationId?: string;
   readonly conversationTitle?: string;
   /** Avatar (image URL) de la conversation/groupe. Sert de repli à la toast
@@ -210,6 +247,11 @@ export interface NotificationContext {
    *  groupe). @see schema.prisma Conversation.avatar */
   readonly conversationAvatar?: string;
   readonly conversationType?: 'direct' | 'group' | 'public' | 'global' | 'broadcast';
+  /** #14669 — régime de chiffrement de la conversation tel que la passerelle le
+   *  sert (`e2ee`, `server`, `hybrid`) ; absent pour le clair. Le client décide
+   *  où part une réponse rapide sans relire la conversation.
+   *  @see schema.prisma Conversation.encryptionMode */
+  readonly conversationEncryptionMode?: string;
   readonly messageId?: string;
   readonly originalMessageId?: string;
   readonly callSessionId?: string;
@@ -224,15 +266,6 @@ export interface NotificationContext {
   readonly parentCommentId?: string;
   readonly encryptedContent?: string;
   readonly notificationLocKey?: string;
-  /** Phase A iOS Communication Notifications — URL accessible publiquement du
-   *  1er attachment du message (image/audio/video). Téléchargé par
-   *  MeeshyNotificationExtension et attaché comme UNNotificationAttachment
-   *  natif avec UTI typeHint (audio waveform, image preview, video thumbnail). */
-  readonly firstAttachmentUrl?: string;
-  /** MIME type du 1er attachment, ex. `audio/m4a`, `image/jpeg`, `video/mp4`. */
-  readonly firstAttachmentMimeType?: string;
-  /** Durée en millisecondes du 1er attachment audio/video. */
-  readonly firstAttachmentDurationMs?: number;
   /** Date de publication ISO de l'entité sociale liée (post/story/réel/mood).
    *  Permet au client d'afficher « publié il y a 2 j » même quand le contenu
    *  n'est plus accessible (story expirée). @see schema.prisma Post.createdAt */
@@ -249,6 +282,10 @@ export interface NotificationContext {
    *  bulle pré-persistée par la NSE porte le bon rendu.
    *  @see schema.prisma Message.messageType */
   readonly messageType?: string;
+  /** #7451 — durée d'un éphémère (s) + bitfield d'effets ; jamais d'échéance, fausse
+   *  par construction sur un canal qui atteint un appareil ÉTEINT. @see services/notifications/ephemeralPushFields.ts */
+  readonly ephemeralDuration?: number;
+  readonly effectFlags?: number;
   /** GW5 — Prisme : traduction du message vers la langue résolue du
    *  destinataire quand elle existe déjà en DB au fan-out (tronquée à 200
    *  chars, jamais chiffrée). Absente = le contenu original est déjà dans la
@@ -276,6 +313,12 @@ export interface NotificationContext {
    *  étiquetait faux tout message non anglais et faussait la résolution du
    *  Prisme sur la bulle pré-enregistrée. @see schema.prisma Message.originalLanguage */
   readonly messageOriginalLanguage?: string;
+  /** #8857 — position, contact, invitation, lien, sticker, vignette vidéo, réponse à une story. */
+  readonly contentDetail?: NotificationContentDetail;
+  /** #18052 — la communauté où le destinataire vient d'être ajouté : le tap ouvre son détail. */
+  readonly communityId?: string;
+  /** #18052 — son nom tel qu'écrit, pour la ligne de la cloche. */
+  readonly communityName?: string;
 }
 
 /**
@@ -354,7 +397,7 @@ export interface NotificationDelivery {
  * Metadata de base commune à toutes les notifications
  */
 interface BaseNotificationMetadata {
-  readonly action?: 'view_message' | 'view_conversation' | 'view_post' | 'join_conversation' | 'accept_or_reject_contact' | 'open_call' | 'view_details' | 'update_app' | 'none';
+  readonly action?: 'view_message' | 'view_conversation' | 'view_post' | 'join_conversation' | 'accept_or_reject_contact' | 'view_profile' | 'open_call' | 'view_details' | 'view_community' | 'update_app' | 'none';
 }
 
 /**
@@ -468,10 +511,21 @@ export interface PostLikeNotificationMetadata extends BaseNotificationMetadata {
 }
 
 /**
- * Type de contenu social — pilote le wording et l'icône côté client.
- * REEL = vidéo verticale courte (distincte de POST/STORY/MOOD/STATUS).
+ * Type de contenu social qui TRAVERSE LE FIL — le type de `metadata.postType`
+ * et `metadata.contentType`, les discriminants que les trois clients lisent.
+ * C'est EXACTEMENT `PostType`, par ALIAS et non par recopie : une recopie
+ * dérive en silence, l'alias rend la dérive IMPOSSIBLE.
+ *
+ * **`'MOOD'` en est sorti (#4906)** — nom PRODUIT de `STATUS`, et le § 7 de
+ * `docs/product/meeshy-composer-modele.md` tient la frontière : un identifiant
+ * de fil garde `status`, la prose dit « mood ». Rien ne l'émettait, ce qui ne
+ * le rendait pas inoffensif — **une valeur de fil que personne n'émet est une
+ * AUTORISATION**, et deux surfaces la traitaient à part. La tolérance de
+ * LECTURE reste (clients, `NotificationPostLabelKind` au catalogue) : on ne
+ * durcit pas sur une valeur déjà persistée.
+ * Cliquet : `__tests__/types/social-post-type-wire-guard.test.ts`.
  */
-export type SocialPostType = 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
+export type SocialPostType = PostType;
 
 /**
  * Metadata pour post_comment / comment_reply
@@ -560,6 +614,104 @@ export interface LoginNewDeviceNotificationMetadata extends BaseNotificationMeta
 }
 
 /**
+ * Metadata pour contact_joined (#8105) — « X a rejoint Meeshy ».
+ *
+ * Ne transporte que ce qu'un profil public montre : jamais le numéro ni
+ * l'e-mail apparié. `joinerIds` grandit quand plusieurs contacts arrivent
+ * en peu de temps chez le même destinataire (une seule ligne regroupée).
+ */
+export interface ContactJoinedNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_profile';
+  readonly joinerIds: readonly string[];
+  readonly joinerCount: number;
+}
+
+/**
+ * Metadata pour contact_recently_active (#8285) — « X était sur Meeshy
+ * récemment ». `userId` est la personne revenue : le toucher ouvre son profil.
+ * Aucune heure de connexion ne voyage — la notification dit « récemment »,
+ * jamais « à 14 h 02 ».
+ */
+export interface ContactRecentlyActiveNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_profile';
+  readonly userId: string;
+}
+
+/**
+ * Metadata pour relation_acquaintance (#13932) — la Connaissance née toute seule.
+ * `userId` est l'AUTRE personne : le toucher ouvre son profil. Aucun compte
+ * d'interactions ne voyage : la notification dit le résultat, pas la mesure.
+ */
+export interface RelationAcquaintanceNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_profile';
+  readonly userId: string;
+  readonly relationLevel: 'ACQUAINTANCE';
+  readonly origin: 'auto-acquaintance';
+}
+
+/**
+ * Metadata pour device_battery (#14147) — la batterie d'un Proche ou d'un Sang.
+ * `userId` est l'ÉMETTEUR : le toucher ouvre son profil. Seul le palier se range :
+ * ni le niveau (il n'est que dans le corps), ni l'appareil, ni l'estimation, ni
+ * l'heure du relevé. La ligne expire avec l'état (24 h) : aucun historique.
+ */
+export interface DeviceBatteryNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_profile';
+  readonly userId: string;
+  readonly batteryKind: 'critical' | 'probably-off' | 'back-on' | 'charging' | 'recharged';
+}
+
+/** Le contenu qu'un retrait par la modération a visé (#11149). */
+export type RemovedContentType = 'message' | 'post' | 'reel' | 'story' | 'comment';
+
+/**
+ * Metadata de `content_removed` (#11149) — adressée à l'AUTEUR seul. Le motif
+ * voyage ; ni le contenu retiré ni l'identité de celui qui l'a retiré.
+ */
+export interface ContentRemovedNotificationMetadata extends BaseNotificationMetadata {
+  readonly contentType: RemovedContentType;
+  readonly contentId: string;
+  readonly conversationId?: string;
+  readonly conversationTitle?: string;
+  readonly postId?: string;
+  readonly reason?: string;
+  /** La publication n'est pas retirée mais passée en PRIVÉ par la modération (#11158) : seul l'auteur la voit encore. */
+  readonly madePrivate?: true;
+}
+
+/**
+ * Metadata des notifications du JEU (#9490). `gameSection` dit où le toucher mène dans la
+ * Progression ; rien d'autre ne voyage que ce que le destinataire sait déjà de LUI : jamais
+ * l'identité d'un joueur de ligue (pseudonyme ou compte), jamais une heure d'activité.
+ */
+export interface GameDuoNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_details';
+  readonly route: 'progression';
+  readonly gameSection: 'duo';
+  readonly duoId: string;
+  readonly weekKey: string;
+}
+
+export interface GameLeagueResultNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_details';
+  readonly route: 'progression';
+  readonly gameSection: 'league';
+  readonly weekKey: string;
+  readonly league: string;
+  readonly outcome: 'promoted' | 'stayed' | 'relegated';
+  readonly cup: 'gold' | 'silver' | 'bronze' | null;
+}
+
+export interface GameSeasonStepNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_details';
+  readonly route: 'progression';
+  readonly gameSection: 'season';
+  readonly season: number;
+  readonly step: number;
+  readonly completed: boolean;
+}
+
+/**
  * Metadata générique pour autres types
  */
 export interface GenericNotificationMetadata extends BaseNotificationMetadata {
@@ -586,6 +738,14 @@ export type NotificationMetadata =
   | CommentLikeNotificationMetadata
   | FriendContentNotificationMetadata
   | LoginNewDeviceNotificationMetadata
+  | ContactJoinedNotificationMetadata
+  | ContactRecentlyActiveNotificationMetadata
+  | RelationAcquaintanceNotificationMetadata
+  | DeviceBatteryNotificationMetadata
+  | ContentRemovedNotificationMetadata
+  | GameDuoNotificationMetadata
+  | GameLeagueResultNotificationMetadata
+  | GameSeasonStepNotificationMetadata
   | GenericNotificationMetadata;
 
 // =====================================================
@@ -771,88 +931,6 @@ export interface NotificationCounts {
 }
 
 // =====================================================
-// NOTIFICATION PREFERENCES
-// =====================================================
-
-/**
- * Préférences de notifications utilisateur
- */
-export interface NotificationPreference {
-  readonly id: string;
-  readonly userId: string;
-
-  // === GLOBAL SETTINGS ===
-  readonly pushEnabled: boolean;
-  readonly emailEnabled: boolean;
-  readonly soundEnabled: boolean;
-
-  // === PER-TYPE SETTINGS ===
-  readonly newMessageEnabled: boolean;
-  readonly missedCallEnabled: boolean;
-  readonly systemEnabled: boolean;
-  readonly conversationEnabled: boolean;
-  readonly replyEnabled: boolean;
-  readonly mentionEnabled: boolean;
-  readonly reactionEnabled: boolean;
-  readonly contactRequestEnabled: boolean;
-  readonly memberJoinedEnabled: boolean;
-
-  // === DO NOT DISTURB ===
-  readonly dndEnabled: boolean;
-  readonly dndStartTime?: string;
-  readonly dndEndTime?: string;
-
-  // === MUTED CONVERSATIONS ===
-  readonly mutedConversations?: readonly string[];
-
-  readonly createdAt: Date;
-  readonly updatedAt: Date;
-}
-
-/**
- * DTO pour créer des préférences
- */
-export interface CreateNotificationPreferenceDTO {
-  readonly userId: string;
-  readonly pushEnabled?: boolean;
-  readonly emailEnabled?: boolean;
-  readonly soundEnabled?: boolean;
-  readonly newMessageEnabled?: boolean;
-  readonly missedCallEnabled?: boolean;
-  readonly systemEnabled?: boolean;
-  readonly conversationEnabled?: boolean;
-  readonly replyEnabled?: boolean;
-  readonly mentionEnabled?: boolean;
-  readonly reactionEnabled?: boolean;
-  readonly contactRequestEnabled?: boolean;
-  readonly memberJoinedEnabled?: boolean;
-  readonly dndEnabled?: boolean;
-  readonly dndStartTime?: string;
-  readonly dndEndTime?: string;
-}
-
-/**
- * DTO pour mettre à jour des préférences
- */
-export interface UpdateNotificationPreferenceDTO {
-  readonly pushEnabled?: boolean;
-  readonly emailEnabled?: boolean;
-  readonly soundEnabled?: boolean;
-  readonly newMessageEnabled?: boolean;
-  readonly missedCallEnabled?: boolean;
-  readonly systemEnabled?: boolean;
-  readonly conversationEnabled?: boolean;
-  readonly replyEnabled?: boolean;
-  readonly mentionEnabled?: boolean;
-  readonly reactionEnabled?: boolean;
-  readonly contactRequestEnabled?: boolean;
-  readonly memberJoinedEnabled?: boolean;
-  readonly dndEnabled?: boolean;
-  readonly dndStartTime?: string;
-  readonly dndEndTime?: string;
-}
-
-// =====================================================
 // UTILITIES
 // =====================================================
 
@@ -871,116 +949,4 @@ export function isNotificationExpired(notification: Notification): boolean {
  */
 export function isNotificationUnread(notification: Notification): boolean {
   return !notification.state.isRead && !isNotificationExpired(notification);
-}
-
-/**
- * Vérifie si le mode DND est actif
- */
-export function isDNDActive(prefs: NotificationPreference): boolean {
-  if (!prefs.dndEnabled) {
-    return false;
-  }
-
-  if (!prefs.dndStartTime || !prefs.dndEndTime) {
-    return prefs.dndEnabled;
-  }
-
-  const now = new Date();
-  const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-
-  const start = prefs.dndStartTime;
-  const end = prefs.dndEndTime;
-
-  // Handle overnight DND (e.g., 22:00 - 08:00)
-  if (start > end) {
-    return currentTime >= start || currentTime < end;
-  }
-
-  // Normal DND (e.g., 14:00 - 16:00)
-  return currentTime >= start && currentTime < end;
-}
-
-/**
- * Vérifie si un type de notification est activé
- */
-export function isNotificationTypeEnabled(
-  prefs: NotificationPreference,
-  type: NotificationType | string
-): boolean {
-  switch (type) {
-    case 'new_message':
-      return prefs.newMessageEnabled;
-    case 'missed_call':
-      return prefs.missedCallEnabled;
-    case 'system':
-    case 'security_alert':
-      return prefs.systemEnabled;
-    case 'new_conversation':
-      return prefs.conversationEnabled;
-    case 'reply':
-      return prefs.replyEnabled;
-    case 'mention':
-    case 'user_mentioned':
-      return prefs.mentionEnabled;
-    case 'reaction':
-    case 'message_reaction':
-      return prefs.reactionEnabled;
-    case 'contact_request':
-    case 'friend_request':
-    case 'contact_accepted':
-      return prefs.contactRequestEnabled;
-    case 'member_joined':
-    case 'member_left':
-      return prefs.memberJoinedEnabled;
-    default:
-      return true;
-  }
-}
-
-/**
- * Détermine si une notification doit être envoyée
- */
-export function shouldSendNotification(
-  prefs: NotificationPreference,
-  type: NotificationType | string,
-  channel: 'push' | 'email'
-): boolean {
-  if (channel === 'push' && !prefs.pushEnabled) {
-    return false;
-  }
-  if (channel === 'email' && !prefs.emailEnabled) {
-    return false;
-  }
-
-  if (!isNotificationTypeEnabled(prefs, type)) {
-    return false;
-  }
-
-  if (type !== 'security_alert' && isDNDActive(prefs)) {
-    return false;
-  }
-
-  return true;
-}
-
-/**
- * Crée les préférences par défaut
- */
-export function getDefaultNotificationPreferences(userId: string): CreateNotificationPreferenceDTO {
-  return {
-    userId,
-    pushEnabled: true,
-    emailEnabled: true,
-    soundEnabled: true,
-    newMessageEnabled: true,
-    missedCallEnabled: true,
-    systemEnabled: true,
-    conversationEnabled: true,
-    replyEnabled: true,
-    mentionEnabled: true,
-    reactionEnabled: true,
-    contactRequestEnabled: true,
-    memberJoinedEnabled: true,
-    dndEnabled: false,
-  };
 }

@@ -4,6 +4,13 @@ import GRDB
 public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendable {
     public static let databaseTableName = "messages"
 
+    /// Les colonnes écrites sur le disque : celles de la ligne, sauf le texte
+    /// d'un message chiffré de bout en bout, qui s'écrit en littéral (#12999).
+    /// Aucun chemin d'écriture d'un `MessageRecord` ne peut y poser un clair.
+    public func encode(to container: inout PersistenceContainer) throws {
+        try MessageRecordDiskColumns(record: EndToEndDiskPlaintextLaw.sealed(self)).encode(to: &container)
+    }
+
     // Identity
     public var localId: String
     public var serverId: String?
@@ -37,6 +44,16 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
 
     // Ephemeral / Effects
     public var expiresAt: Date?
+    /// La DURÉE d'un éphémère, en secondes (#7451 point 4, suite #7508).
+    ///
+    /// Distincte d'`expiresAt`, et pas redondante avec elle : `expiresAt` est
+    /// l'échéance SERVIE pour ce lecteur, que le temps réel ne peut pas porter
+    /// (une diffusion de room est la même pour tous, l'échéance est par
+    /// destinataire). La durée, elle, est la même pour tout le monde — elle
+    /// voyage donc sur `message:new`, et c'est elle que le client recompose
+    /// avec sa PREMIÈRE réception locale. Sans elle en base, un éphémère relu
+    /// depuis GRDB n'a plus AUCUNE horloge.
+    public var ephemeralDuration: Int?
     public var effectFlags: UInt32
     public var maxViewOnceCount: Int?
     public var viewOnceCount: Int
@@ -44,6 +61,15 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     // Edit / Delete
     public var isEdited: Bool
     public var editedAt: Date?
+    /// #11375 — l'éditeur tiers de la dernière version tel que la passerelle
+    /// l'a servi à ce lecteur : le `User.id` du modérateur (ADMIN, BIGBOSS,
+    /// lui-même) ou la marque sans identité `"moderator"` ; `nil` quand c'est
+    /// l'auteur (ou ligne antérieure).
+    public var editedById: String?
+    /// #14369 — l'identifiant client tel que la passerelle le sert (`nil` pour
+    /// une ligne antérieure, remplie à la revalidation). Lu par la couche
+    /// appareil d'un hybride pour rattacher son enveloppe à CE message.
+    public var servedClientMessageId: String?
     public var deletedAt: Date?
 
     // Pin
@@ -95,6 +121,38 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     /// colonnes de position (`PostRecord`/`CommentRecord`, Task 16).
     public var locationJson: String?
 
+    /// Sticker du message (JSON `MessageSticker`), hissé depuis
+    /// `APIMessage.sticker` (#4823). Même forme que `locationJson` — texte,
+    /// pas `Data` — et même raison d'exister : le pipeline ne stocke jamais
+    /// l'`APIMessage` brut, donc un sticker affiché en ligne mais jamais
+    /// persisté ici disparaîtrait au relaunch (principe Cache-First).
+    public var stickerJson: String?
+
+    /// La carte `url → token` des liens suivis (#9104), en `[TrackedLink]` JSON.
+    public var trackedLinksJson: String?
+
+    /// L'auteur n'a pas de compte (`Participant.type == "anonymous"`, #10286).
+    /// Le fil ne lit que GRDB : sans cette colonne, ses adresses redevenaient
+    /// cliquables au premier rechargement. `nil` (lignes antérieures) ⇒ inconnu.
+    public var senderIsAnonymous: Bool?
+
+    /// L'auteur a prouvé un compte (`sender.type` user ou bot, #10286) — ne
+    /// gouverne que les liens. `nil` (lignes antérieures, écho sans sender
+    /// jamais complété) ⇒ inconnu : liens inertes, sauf message propre ou
+    /// système (fail-closed).
+    public var senderHasAccount: Bool?
+
+    /// Le contour d'avatar équipé de l'auteur (#10713), en `ServedProfileDecorItem` JSON.
+    /// `nil` ⇒ aucun contour (ou ligne antérieure, remplie à la revalidation).
+    public var senderRingJson: String?
+
+    /// **L'instant où CE lecteur a ouvert cette vue unique** (#7579) — `nil`
+    /// tant qu'il ne l'a pas ouverte. Colonne LOCALE et par personne : ce que
+    /// les autres ouvrent n'y touche pas. Non nulle, elle est PERMANENTE : la
+    /// ligne reste « déjà ouverte », son contenu purgé, jusqu'à l'échéance d'un
+    /// éphémère ou une suppression explicite.
+    public var viewOnceOpenedAt: Date?
+
     // Pre-computed layout (CTFramesetter)
     public var cachedBubbleWidth: Double?
     public var cachedBubbleHeight: Double?
@@ -144,8 +202,16 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         callSummaryJson: Data? = nil,
         joinNoticeJson: Data? = nil,
         recipientCount: Int = 0,
-        locationJson: String? = nil
+        locationJson: String? = nil,
+        stickerJson: String? = nil,
+        ephemeralDuration: Int? = nil,
+        viewOnceOpenedAt: Date? = nil,
+        trackedLinksJson: String? = nil,
+        senderIsAnonymous: Bool? = nil,
+        senderHasAccount: Bool? = nil,
+        senderRingJson: String? = nil
     ) {
+        self.viewOnceOpenedAt = viewOnceOpenedAt
         self.localId = localId
         self.serverId = serverId
         self.conversationId = conversationId
@@ -168,6 +234,7 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         self.replyToJson = replyToJson
         self.forwardedFromJson = forwardedFromJson
         self.expiresAt = expiresAt
+        self.ephemeralDuration = ephemeralDuration
         self.effectFlags = effectFlags
         self.maxViewOnceCount = maxViewOnceCount
         self.viewOnceCount = viewOnceCount
@@ -207,6 +274,11 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         self.joinNoticeJson = joinNoticeJson
         self.recipientCount = recipientCount
         self.locationJson = locationJson
+        self.stickerJson = stickerJson
+        self.trackedLinksJson = trackedLinksJson
+        self.senderIsAnonymous = senderIsAnonymous
+        self.senderHasAccount = senderHasAccount
+        self.senderRingJson = senderRingJson
     }
 
     // MARK: - Timestamp pre-compute helper
@@ -217,22 +289,21 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
 }
 
 // Thread-safe singleton formatter — avoids per-call DateFormatter allocations.
-// DateFormatter.string(from:) is not thread-safe; NSLock guards concurrent callers.
-public final class TimeStringCache: @unchecked Sendable {
+// DateFormatter.string(from:) is not thread-safe; Locked serializes concurrent callers.
+public final class TimeStringCache: Sendable {
     public static let shared = TimeStringCache()
 
-    private let lock = NSLock()
-    private let formatter: DateFormatter = {
+    private let formatter = Locked(uncheckedState: TimeStringCache.makeFormatter())
+
+    private static func makeFormatter() -> DateFormatter {
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
         f.locale = Locale.current
         return f
-    }()
+    }
 
     public func format(_ date: Date) -> String {
-        lock.lock()
-        defer { lock.unlock() }
-        return formatter.string(from: date)
+        formatter.read { $0.string(from: date) }
     }
 }
 

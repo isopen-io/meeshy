@@ -11,33 +11,36 @@ import MeeshySDK
 /// Not pixel-perfect — sufficient for thumbHash blur placeholders (~28 bytes).
 public enum StorySlideRenderer {
 
-    /// Shared Core Image context for filter rasterisation. `CIContext` is the
-    /// most expensive Core Image object to build (it sets up the GPU render
-    /// context) and is documented thread-safe + reusable, yet a new one was
-    /// created per filtered slide composite. Build it once.
-    private static let filterContext = CIContext()
-
     /// Render a complete slide composite: background (color/image) + text overlays + foreground images.
     /// Returns nil only if rendering fails (shouldn't happen).
     public static func renderComposite(
         slide: StorySlide,
         bgImage: UIImage?,
         loadedImages: [String: UIImage] = [:],
-        size: CGSize = CGSize(width: 100, height: 178)
+        size: CGSize = CGSize(width: 100, height: 178),
+        scale: CGFloat? = nil,
+        soundMarker: ((StoryAudioPlayerObject, CGSize) -> Void)? = nil
     ) -> UIImage? {
         // Default ~100x178 (9:16) is enough for a ThumbHash (~32x32 avg colours).
         // Callers needing a crisp preview — the story-tray cover thumbnail that must
         // show ALL composer layers (text + drawing + media) — pass a larger `size`.
         // Every layer draw scales relative to `size`, so geometry stays correct.
 
-        let renderer = UIGraphicsImageRenderer(size: size)
+        // `scale` : la densité de la vignette d'une tuile de scène (#5037) ;
+        // `nil` garde celle de l'écran, comme avant.
+        let format = UIGraphicsImageRendererFormat.default()
+        if let scale {
+            format.scale = scale
+            format.preferredRange = .standard
+        }
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
         let base = renderer.image { ctx in
             let rect = CGRect(origin: .zero, size: size)
             let cgCtx = ctx.cgContext
 
             // 1. Background color — UNIQUEMENT sans fond visuel de fond. Avec un fond
             // média (image/vidéo via mediaObjects, ou legacy `bgImage`), pas de fond
-            // coloré (user 2026-06-03) : base neutre noire, le média est dessiné par
+            // coloré : base neutre noire, le média est dessiné par
             // dessus (étapes 2 / 2b). D'autant plus nécessaire qu'un fond zoomé/pané ne
             // remplit plus le rect (transform it.50) → la couleur fuirait en bandes.
             let hasVisualBg = (bgImage != nil) || slide.effects.hasVisualBackgroundMedia
@@ -49,8 +52,8 @@ public enum StorySlideRenderer {
                 // covers composites (Prisme visuel des thumbnails).
                 switch StoryBackgroundValue.parse(slide.effects.background ?? "1E1B4B") {
                 case .gradient(let a, let b):
-                    let c1 = (UIColor(hex: a) ?? .black).cgColor
-                    let c2 = (UIColor(hex: b) ?? .black).cgColor
+                    let c1 = (HexColor(hex: a)?.uiColor ?? .black).cgColor
+                    let c2 = (HexColor(hex: b)?.uiColor ?? .black).cgColor
                     if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
                                                  colors: [c1, c2] as CFArray,
                                                  locations: [0, 1]) {
@@ -65,7 +68,7 @@ public enum StorySlideRenderer {
                         cgCtx.fill(rect)
                     }
                 case .hex(let h):
-                    (UIColor(hex: h) ?? .black).setFill()
+                    (HexColor(hex: h)?.uiColor ?? .black).setFill()
                     cgCtx.fill(rect)
                 }
             }
@@ -94,6 +97,17 @@ public enum StorySlideRenderer {
                let bgMedia = slide.effects.resolvedBackgroundMedia,
                let rawBgMediaImage = loadedImages[bgMedia.id] {
                 let bgMediaImage = filterBackground(rawBgMediaImage, effects: slide.effects)
+                // **Un fond AJUSTÉ se rend entier** (#8414) : ses bandes prennent
+                // le fond choisi au panneau Cadre (ou le média flouté), puis le
+                // média s'y pose sans être rogné — comme le canvas et le lecteur.
+                let ajuste = !StoryBackgroundFraming.rendersFilled(slide.effects.backgroundTransform?.videoFitMode)
+                if ajuste {
+                    drawBackdrop(StoryBackdrop.resolve(slide.effects.backgroundTransform?.backdrop),
+                                 of: bgMediaImage, in: rect, ctx: cgCtx)
+                }
+                let poser: (UIImage) -> Void = { image in
+                    if ajuste { drawAspectFit(image, in: rect) } else { drawAspectFill(image, in: rect, ctx: cgCtx) }
+                }
                 // Transform du fond (zoom/pan/rotation) — parité avec `SlideMiniPreview`
                 // (référence non-ambiguë : `.scaleEffect(scale)` + `.rotationEffect(rotation)`
                 // autour du centre, puis `.position(x·w, y·h)`) et le canvas. Sans ça un fond
@@ -114,59 +128,57 @@ public enum StorySlideRenderer {
                     cgCtx.rotate(by: CGFloat(bgMedia.rotation) * .pi / 180)
                     cgCtx.scaleBy(x: CGFloat(bgMedia.scale), y: CGFloat(bgMedia.scale))
                     cgCtx.translateBy(x: -cx, y: -cy)
-                    drawAspectFill(bgMediaImage, in: rect, ctx: cgCtx)
+                    poser(bgMediaImage)
                     cgCtx.restoreGState()
                 } else {
-                    drawAspectFill(bgMediaImage, in: rect, ctx: cgCtx)
+                    poser(bgMediaImage)
                 }
             }
 
-            // 3. Text overlays
-            for textObj in slide.effects.textObjects {
-                drawTextObject(textObj, in: size, ctx: cgCtx)
-            }
-
-            // 4. Foreground media — EXCLUT le média de fond (résolu en 2b), sinon
-            //    double-dessin + occlusion du texte (cf. 2b). Dessine tout média
-            //    foreground qui a une frame chargée : IMAGE **et VIDÉO** (poster frame
-            //    dans `loadedImages`), à parité avec `SlideMiniPreview` (qui ne filtre
-            //    pas par kind). Sans la vidéo foreground, un clip placé sur le slide
-            //    manquait au thumbnail/thumbHash. L'audio (pas de frame chargée) est
-            //    naturellement ignoré (le `if let img` échoue).
-            for obj in slide.effects.resolvedForegroundMediaObjects {
-                if let img = loadedImages[obj.id] {
-                    drawMediaObject(obj, image: img, in: size, ctx: cgCtx)
+            // 3. Les objets de PREMIER PLAN, à leur rang (#14181) — l'ordre du
+            //    moteur de scène (`SceneAudioStageRule.stackedObjects`) : texte,
+            //    média, sticker, lieu, et la pastille de son qu'un objet
+            //    recouvre, chacun à sa place dans l'empilement. À rang égal,
+            //    l'ordre des familles reste celui d'avant.
+            //    - Média : EXCLUT le fond (résolu en 2b). IMAGE **et VIDÉO**
+            //      (poster frame dans `loadedImages`) ; le filtre et les réglages
+            //      PROPRES à une image (#8474, #9175) par la même fonction que le
+            //      player, ceux d'une vidéo par la chaîne de sa lecture (#9169).
+            //    - Sticker : image intégrée si son bitmap est chargé (sous l'id
+            //      d'ÉLÉMENT), glyphe sinon.
+            //    - Lieu : la même `StoryLocationLayer` que le canvas et l'export.
+            //    - Son : peint par l'hôte qui le demande (`soundMarker`) ; le
+            //      composite du ThumbHash et des couvertures n'en peint aucun.
+            for objet in SceneAudioStageRule.stackedObjects(in: slide.effects) {
+                switch objet {
+                case .text(let textObj):
+                    drawTextObject(textObj, in: size, ctx: cgCtx)
+                case .media(let obj):
+                    guard let img = loadedImages[obj.id] else { continue }
+                    let peinte = obj.kind == .image ? StoryMediaLayer.filtered(img, for: obj) ?? img
+                        : StoryVideoAdjustmentsProcessor.poster(img, for: obj)
+                    drawMediaObject(obj, image: MediaCropPresentation.keptPart(peinte, of: obj), in: size, ctx: cgCtx)
+                case .sticker(let sticker):
+                    drawSticker(sticker, image: loadedImages[sticker.id], in: size, renderScale: format.scale, ctx: cgCtx)
+                case .place(let location):
+                    drawLocationObject(location, in: size, renderScale: format.scale, ctx: cgCtx)
+                case .audio(let son):
+                    soundMarker?(son, size)
                 }
-            }
-
-            // 5. Stickers — image intégrée si son bitmap est chargé, glyphe sinon.
-            //    Le bitmap arrive par le MÊME `loadedImages` que les autres
-            //    médias (étapes 2b et 4), sous l'id d'ÉLÉMENT.
-            if let stickers = slide.effects.stickerObjects {
-                for sticker in stickers {
-                    drawSticker(sticker, image: loadedImages[sticker.id], in: size, ctx: cgCtx)
-                }
-            }
-
-            // 5b. Pastilles de lieu — même source de vérité que le canvas et
-            //     l'export : on configure une `StoryLocationLayer` puis on la
-            //     rend dans le contexte. Redessiner le badge à la main ici
-            //     rejouerait la divergence déjà payée sur les stickers (taille
-            //     codée en dur, `baseSize` ignoré).
-            for location in slide.locationObjects {
-                drawLocationObject(location, in: size, ctx: cgCtx)
             }
 
             // 6. Drawing layer — TOPMOST (modern strokes preferred, legacy PKDrawing
             // fallback). Mirrors `StoryRenderer` where the drawing overlay sits at
             // zPosition 9999 above every item (text/media/stickers). Without this
             // the thumbHash placeholder ignored the drawing entirely (spec user
-            // 2026-06-01 : ThumbHash de TOUTE la story avec toutes les couches :
+            // ThumbHash de TOUTE la story avec toutes les couches :
             // image, texte ET dessin). Strokes are rasterised at design size
             // (1080x1920) then stretched into the composite rect — the same
             // design→bounds mapping the live `MeeshyStrokeCanvas` uses.
             if let strokes = slide.effects.drawingStrokes, !strokes.isEmpty {
-                StoryStrokeRasterizer.image(strokes: strokes, scale: 1)?.draw(in: rect)
+                // Vectoriel, à la résolution du composite : plus de bitmap
+                // 1080×1920 alloué pour une vignette de 44 points (#5037).
+                StoryStrokeRasterizer.draw(strokes: strokes, in: cgCtx, rect: rect)
             } else if let data = slide.effects.drawingData,
                       let drawing = try? PKDrawing(data: data), !drawing.bounds.isEmpty {
                 drawing.image(from: drawing.bounds, scale: 1).draw(in: rect)
@@ -203,10 +215,13 @@ public enum StorySlideRenderer {
     ///
     /// Résultat : la miniature de tray et le placeholder ThumbHash ne
     /// correspondaient pas à la story jouée — un saut de couleur au chargement.
+    ///
+    /// Depuis #9496, le fond porte aussi les RÉGLAGES de son média, cuits après
+    /// le filtre par la même fonction que la couche de fond du lecteur
+    /// (`StoryBackgroundLook`) — une affiche de fond vidéo n'en reçoit ni
+    /// netteté ni flou, comme ses trames.
     static func filterBackground(_ image: UIImage, effects: StoryEffects) -> UIImage {
-        guard let raw = effects.filter, let filter = StoryFilter(rawValue: raw) else { return image }
-        let intensity = Float(max(0.0, min(1.0, effects.filterIntensity ?? 1.0)))
-        return StoryFilterProcessor.apply(filter, to: image, intensity: intensity)
+        StoryBackgroundLook.image(image, effects: effects)
     }
 
     /// Compute thumbHash for a complete slide composite.
@@ -240,13 +255,13 @@ public enum StorySlideRenderer {
         // projeté par `size.width / 1080` — parité avec le canvas réel (`StoryTextLayer`)
         // et `SlideMiniPreview`. L'ancien diviseur `390` (largeur device) rendait le
         // texte ~2,77× trop gros dans le composite ThumbHash.
-        // `resolvedSize × scale` = `designFontSize` du canvas (`StoryTextLayer` : `fontSize * scale`).
-        // Le pinch écrit `text.scale` (StoryCanvasUIView.updateScale, 0.3…4.0) — sans le `× scale`
-        // ici, un texte agrandi/réduit au doigt s'affichait à sa taille de BASE dans le cover/thumbHash
-        // (incohérence avec le canvas). Parité avec `drawMediaObject`/`drawSticker` qui appliquent déjà scale.
-        let designFontSize = textObj.resolvedSize * textObj.scale
+        // Le pinch écrit `text.scale` (StoryCanvasUIView.updateScale, 0.3…4.0). Comme sur le
+        // canvas (#9139), il agrandit le CADRE entier — la mise en ligne se fait à la taille
+        // d'édition, puis le contexte est mis à l'échelle autour du centre : un texte agrandi
+        // garde ses lignes dans le cover/thumbHash comme dans la scène.
+        let designFontSize = textObj.resolvedSize
         let fontSize = max(6, size.width * CGFloat(designFontSize / Double(CanvasGeometry.designWidth)))
-        let textColor = UIColor(hex: textObj.textColor ?? "FFFFFF") ?? .white
+        let textColor = HexColor(hex: textObj.textColor ?? "FFFFFF")?.uiColor ?? .white
 
         let style = NSMutableParagraphStyle()
         switch textObj.textAlign {
@@ -265,9 +280,18 @@ public enum StorySlideRenderer {
         // Fond du texte — dérivé de `resolvedBackgroundStyle` (et NON du seul champ
         // legacy `textBg`). Le contrôle « Fond du texte » écrit aujourd'hui
         // `backgroundStyle = .solid/.glass` avec `textBg = nil`, donc lire `textBg`
-        // seul ratait la boîte → thumbHash sans le fond du texte (bug 2026-06-01).
+        // seul ratait la boîte → thumbHash sans le fond du texte.
         if let bg = compositeBackgroundColor(for: textObj) {
             attrs[.backgroundColor] = bg
+        }
+
+        // L'EFFET (#4870) — même site de conversion que le canvas et l'éditeur
+        // en ligne, projeté sur `NSShadow` à la taille de police COMPOSITE :
+        // sans lui, la cover et le thumbHash montreraient un texte plat là où
+        // la scène brille.
+        if let shadow = StoryTextEffectRendering.nsShadow(
+            for: textObj, fontSize: fontSize, textColor: textColor) {
+            attrs[.shadow] = shadow
         }
 
         let textWidth = size.width * 0.85
@@ -283,7 +307,33 @@ public enum StorySlideRenderer {
         // Rotation autour du centre — parité canvas (`StoryTextLayer`). Sans ça un texte
         // pivoté apparaissait DROIT dans le composite cover/thumbHash (≠ ce que l'auteur voit).
         drawRotated(textObj.rotation, around: CGPoint(x: centerX, y: centerY), in: ctx) {
+            // `drawRotated` ne sauve pas l'état pour un texte droit : l'échelle
+            // se sauve elle-même, sans quoi elle fuirait sur l'objet suivant.
+            let scale = CGFloat(max(textObj.scale, 0.0001))
+            ctx.saveGState()
+            ctx.translateBy(x: centerX, y: centerY)
+            ctx.scaleBy(x: scale, y: scale)
+            ctx.translateBy(x: -centerX, y: -centerY)
             (textObj.text as NSString).draw(in: textRect, withAttributes: attrs)
+            drawFlames(of: textObj, glyphAttributes: attrs, in: textRect, fontSize: fontSize, ctx: ctx)
+            ctx.restoreGState()
+        }
+    }
+
+    /// **La Flamme figée sur sa phase 0** (#17112) : la couverture et le
+    /// thumbHash montrent les mêmes flammes sur les mêmes lettres que la scène,
+    /// image fixe déterministe. La silhouette se prend sur le MÊME tracé que
+    /// le texte peint juste avant — sans ombre ni fond, seule la couverture
+    /// des glyphes compte.
+    private static func drawFlames(of textObj: StoryTextObject,
+                                   glyphAttributes: [NSAttributedString.Key: Any],
+                                   in textRect: CGRect, fontSize: CGFloat, ctx: CGContext) {
+        guard textObj.parsedTextEffect.burns else { return }
+        let glyphs = NSAttributedString(
+            string: textObj.text,
+            attributes: glyphAttributes.filter { $0.key != .shadow && $0.key != .backgroundColor })
+        StoryFlameTextRenderer.drawStill(in: ctx, glyphRect: textRect, fontSize: fontSize) { _ in
+            glyphs.draw(in: CGRect(origin: .zero, size: textRect.size))
         }
     }
 
@@ -298,7 +348,7 @@ public enum StorySlideRenderer {
         case .none:
             return nil
         case .solid(let hex):
-            return UIColor(hex: hex)
+            return HexColor(hex: hex)?.uiColor
         case .glass:
             return UIColor.white.withAlphaComponent(0.25)
         }
@@ -324,7 +374,7 @@ public enum StorySlideRenderer {
     /// (jamais étirée) et clippée aux coins arrondis (`cornerRadiusFraction`), avec
     /// un bord blanc 2px comme `applyForegroundFrames` du canvas.
     private static func drawMediaObject(_ obj: StoryMediaObject, image: UIImage, in size: CGSize, ctx: CGContext) {
-        let designBox = StoryMediaLayer.baseMediaDesignSize(aspectRatio: obj.aspectRatio)
+        let designBox = StoryMediaLayer.baseMediaDesignSize(for: obj)
         let projection = size.width / CanvasGeometry.designWidth
         let boxW = designBox.width * CGFloat(obj.scale) * projection
         let boxH = designBox.height * CGFloat(obj.scale) * projection
@@ -356,6 +406,26 @@ public enum StorySlideRenderer {
     /// Dessine `image` en **aspect-fill** dans `rect` (recadré, jamais étiré),
     /// clippé à `rect` — équivalent raster de `contentsGravity = .resizeAspectFill`
     /// utilisé par `StoryBackgroundLayer` / `StoryMediaLayer` du reader.
+    /// Les bandes d'un fond ajusté : la teinte choisie, ou le média réduit à
+    /// quelques pixels puis étiré — un flou sans filtre, comme la bande du canvas.
+    private static func drawBackdrop(_ fond: StoryBackdrop, of image: UIImage,
+                                     in rect: CGRect, ctx: CGContext) {
+        if let hex = fond.solidHex {
+            (HexColor(hex: hex)?.uiColor ?? .black).setFill()
+            ctx.fill(rect)
+            return
+        }
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let minuscule = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8), format: format).image { _ in
+            image.draw(in: CGRect(x: 0, y: 0, width: 8, height: 8))
+        }
+        ctx.saveGState()
+        ctx.interpolationQuality = .high
+        minuscule.draw(in: rect)
+        ctx.restoreGState()
+    }
+
     private static func drawAspectFill(_ image: UIImage, in rect: CGRect, ctx: CGContext) {
         let imgSize = image.size
         guard imgSize.width > 0, imgSize.height > 0, rect.width > 0, rect.height > 0 else {
@@ -384,9 +454,9 @@ public enum StorySlideRenderer {
     /// `render(in:)` ignore `position`/`anchorPoint`/`transform` du layer, donc
     /// l'ancrage et la rotation sont appliqués ici au CTM, comme pour les
     /// textes et les médias.
-    private static func drawLocationObject(_ location: StoryLocationObject, in size: CGSize, ctx: CGContext) {
+    private static func drawLocationObject(_ location: StoryLocationObject, in size: CGSize, renderScale: CGFloat, ctx: CGContext) {
         let layer = StoryLocationLayer()
-        layer.configure(with: location, geometry: CanvasGeometry(renderSize: size), mode: .play)
+        layer.configure(with: location, geometry: CanvasGeometry(renderSize: size), mode: .play, renderScale: renderScale)
         let box = layer.bounds.size
         guard box.width > 0, box.height > 0 else { return }
         let center = layer.position
@@ -412,7 +482,7 @@ public enum StorySlideRenderer {
     /// Sans bitmap on peint `wireEmoji` plutôt que `emoji` : un sticker image
     /// écrit ailleurs peut n'avoir aucun emoji, et peindre la chaîne vide
     /// laisserait un TROU là où l'auteur a posé quelque chose.
-    private static func drawSticker(_ sticker: StorySticker, image: UIImage?, in size: CGSize, ctx: CGContext) {
+    private static func drawSticker(_ sticker: StorySticker, image: UIImage?, in size: CGSize, renderScale: CGFloat, ctx: CGContext) {
         // `0.15` codé en dur ET `baseSize` ignoré : la miniature ne
         // correspondait ni au canvas ni à l'export. Règle partagée désormais.
         let side = CanvasGeometry.stickerFontSize(baseSize: sticker.baseSize,
@@ -423,6 +493,28 @@ public enum StorySlideRenderer {
         let center = CGPoint(x: size.width * sticker.x, y: size.height * sticker.y)
         drawRotated(sticker.rotation, around: center, in: ctx) {
             guard let image else {
+                // **Le second renderer doit connaître le gabarit** (#4718).
+                // `StoryRenderer` (CALayer) et celui-ci (CGContext) sont deux
+                // chemins de rendu distincts : n'en câbler qu'un donnerait une
+                // décoration visible au canvas et absente de la miniature — ou
+                // l'inverse. La couche est le SITE UNIQUE du dessin, ici comme
+                // pour la pastille de lieu juste au-dessus.
+                if sticker.kind == .template {
+                    let layer = StoryStickerLayer()
+                    layer.configure(with: sticker,
+                                    geometry: CanvasGeometry(renderSize: size),
+                                    mode: .play,
+                                    renderScale: renderScale)
+                    let boîte = layer.bounds.size
+                    if boîte.width > 0, boîte.height > 0 {
+                        ctx.saveGState()
+                        ctx.translateBy(x: center.x - boîte.width * sticker.anchor.x,
+                                        y: center.y - boîte.height * sticker.anchor.y)
+                        layer.render(in: ctx)
+                        ctx.restoreGState()
+                        return
+                    }
+                }
                 let attrs: [NSAttributedString.Key: Any] = [
                     .font: UIFont.systemFont(ofSize: side),
                 ]
@@ -449,21 +541,5 @@ public enum StorySlideRenderer {
                               y: rect.midY - drawH / 2,
                               width: drawW,
                               height: drawH))
-    }
-}
-
-// MARK: - UIColor hex init (standalone for MeeshyUI context)
-
-private extension UIColor {
-    convenience init?(hex: String) {
-        var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
-        hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
-        guard hexSanitized.count == 6, let rgb = UInt64(hexSanitized, radix: 16) else { return nil }
-        self.init(
-            red: CGFloat((rgb >> 16) & 0xFF) / 255.0,
-            green: CGFloat((rgb >> 8) & 0xFF) / 255.0,
-            blue: CGFloat(rgb & 0xFF) / 255.0,
-            alpha: 1.0
-        )
     }
 }

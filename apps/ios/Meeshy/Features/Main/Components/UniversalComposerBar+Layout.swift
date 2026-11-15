@@ -1,0 +1,441 @@
+import SwiftUI
+import MeeshyUI
+import AVFoundation
+import Combine
+import MeeshySDK
+
+// MARK: - Extracted from UniversalComposerBar.swift
+
+// ============================================================================
+// MARK: - Disposition & Corps
+// ============================================================================
+//
+// Découpage mécanique du fichier (#4104, budget 800–1100 lignes/fichier) —
+// porte la disposition de la barre : le corps (`body`), le bouton flottant
+// minimisé, le composer déployé et son fond. Aucun changement de
+// comportement, seulement un déplacement de lignes.
+
+extension UniversalComposerBar {
+
+    // MARK: - Body
+
+    var body: some View {
+        Group {
+            if isMinimized {
+                ComposerMinimizedButton(
+                    showsVoice: resolvedShowVoice, isDark: style == .dark, mutedColor: theme.textMuted,
+                    accent: servedAccent, secondary: servedSecondary,
+                    onVoice: { expandAndStartRecording() }, onWrite: { expandComposer() })
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+            } else {
+                expandedComposer
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .offset(y: dragOffsetY)
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                if value.translation.height > 0 {
+                                    dragOffsetY = value.translation.height * 0.5
+                                }
+                            }
+                            .onEnded { value in
+                                if value.translation.height > 80 {
+                                    // Swipe down: dismiss whichever input surface
+                                    // is up — the keyboard or the attachment
+                                    // carousel — and optionally minimize.
+                                    isFocused = false
+                                    if showAttachOptions {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                            showAttachOptions = false
+                                        }
+                                    }
+                                    if startMinimized {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            isMinimized = true
+                                            dragOffsetY = 0
+                                        }
+                                        onCollapse?()
+                                    } else {
+                                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                            dragOffsetY = 0
+                                        }
+                                    }
+                                } else {
+                                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                        dragOffsetY = 0
+                                    }
+                                }
+                            }
+                    )
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isMinimized)
+        .modifier(bottomClearance)
+        // Cible de dépôt sur le conteneur externe : couvre toute la bande
+        // (champ, barre d'outils, bandeaux édition/réponse, tiroir
+        // d'attachements). Voir UniversalComposerBar+Drop.swift.
+        .modifier(ComposerDropTargetModifier(accentColor: servedAccentHex, onIngest: onIngest))
+        .onAppear {
+            isMinimized = startMinimized
+            ownKeyboard.adopt(host: hostKeyboard)
+        }
+        // La prise vocale appartient au parent, qui possède son `AVAudioRecorder` (#4560).
+    }
+
+    private func recordQuickEmojiFieldWidth(_ width: CGFloat) {
+        guard actionSlot == .quickEmoji, quickEmojiDrag == 0, quickEmojiHeld == 0 else { return }
+        quickEmojiFieldWidth = width
+    }
+
+    /// Clavier fermé, au moins un bouton d'air sous la barre (#11565).
+    private var bottomClearance: ComposerBottomClearanceModifier {
+        ComposerBottomClearanceModifier(
+            ownBottomPadding: isMinimized ? MeeshySpacing.md : MeeshySpacing.xs, safeAreaBottom: hostInsets.bottom,
+            windowHeight: hostWindowHeight, inputSurfaceShown: !isMinimized && (isFocused || showAttachOptions))
+    }
+
+    // MARK: - Expanded Composer
+
+    private var expandedComposer: some View {
+        VStack(spacing: 0) {
+            if startMinimized {
+                swipeHandle
+            }
+
+            // Ce qui accompagne le message — réponse, édition, pièces
+            // jointes, presse-papiers — vit DANS le verre (#8417).
+            panelHeader
+
+            // Les rails qui s'ouvrent au-dessus de la barre d'outils gardent
+            // une marge avec le bord du verre (#7966) : leur propre
+            // `.padding(.horizontal, 8)` sur les côtés, celle-ci en haut.
+            if showEphemeralPicker {
+                ephemeralDurationPicker
+                    .padding(.top, Self.railTopInset)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
+            // Les effets du message s'ouvrent comme la durée éphémère : un
+            // petit panneau dans le verre, jamais une feuille (#7967).
+            if showEffectsPanel {
+                EffectsPickerView(
+                    flags: pendingEffects.flags,
+                    accent: servedAccent,
+                    muted: mutedColor,
+                    surface: railSurface
+                )
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.top, Self.railTopInset)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
+            if showPermanentEffectsPicker {
+                permanentEffectsInlinePicker
+                    .padding(.top, Self.railTopInset)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
+            if !effectiveIsRecording {
+                topToolbar
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.top, MeeshySpacing.xsPlus)
+                    .padding(.bottom, MeeshySpacing.xxs)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            // Pendant la prise, la barre d'outils s'efface ; un hôte qui le
+            // demande garde son ⌄ seul, tout à droite (#9893).
+            if let fold = resolvedFoldControl,
+               ComposerFoldPlacement.rowDuringRecording(isRecording: effectiveIsRecording,
+                                                        survivesRecording: fold.survivesRecording) {
+                HStack {
+                    Spacer(minLength: 0)
+                    foldButton(fold)
+                }
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.top, MeeshySpacing.xsPlus)
+                .transition(.opacity)
+            }
+
+            // Composer row — either the recording bar (full-width pill, iMessage-style)
+            // or the regular layout: [ (+) attach ]  [ text field ]  [ mic / send ]
+            if effectiveIsRecording {
+                recordingBar
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.smPlus)
+                    .transition(
+                        reduceMotion
+                            ? .opacity
+                            : .asymmetric(
+                                insertion: .opacity.combined(with: .scale(scale: 0.96)),
+                                removal: .opacity
+                            )
+                    )
+            } else {
+                // Gras, italique, souligné, barré — dès qu'un mot est
+                // sélectionné (#7849, iOS 18+).
+                if showsFormatBar {
+                    ComposerFormatBar(accent: servedAccent, onFormat: applyEmphasis)
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .padding(.top, MeeshySpacing.xsPlus)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+                HStack(alignment: .bottom, spacing: MeeshySpacing.md) {
+                    if resolvedShowAttachment {
+                        attachButton
+                    }
+
+                    // Center: text field. While the carousel is up, an overlay intercepts taps to bring
+                    // the keyboard back (the field isn't focused then). When the keyboard is already up
+                    // there is no overlay, so the TextField keeps its native tap-to-place-cursor behaviour.
+                    textInputField
+                        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { recordQuickEmojiFieldWidth($0) }
+                        .simultaneousGesture(TapGesture().onEnded { collapseQuickEmojiBand(after: .textTouched) })
+                        .overlay {
+                            if showAttachOptions {
+                                Color.clear
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { focusTextField() }
+                            }
+                        }
+
+                    actionButton
+                }
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: hasContent)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.smPlus)
+                .transition(.opacity)
+            }
+
+            // Attachment carousel — slides up in the keyboard's place when
+            // the (+) toggle is active. Sized to the last known keyboard
+            // height so swapping keyboard <-> carousel keeps the input row
+            // perfectly still.
+            if showAttachOptions && !effectiveIsRecording {
+                attachmentCarouselPanel
+                    .modifier(ComposerPanelFrame(resting: attachmentPanelHeight, yields: panelYieldsToHost))
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .adaptiveLiquidGlass(in: Self.panelShape, tint: panelGlassTint)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.bottom, MeeshySpacing.xs)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showEphemeralPicker)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: dominantProtection)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showPermanentEffectsPicker)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showEffectsPanel)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showAttachOptions)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: allAttachments.count)
+        .animation(
+            reduceMotion
+                ? .easeInOut(duration: 0.2)
+                : .spring(response: 0.35, dampingFraction: 0.8),
+            value: effectiveIsRecording
+        )
+        .adaptiveOnChange(of: attachments.count) { _, _ in notifyContentChange() }
+        .adaptiveOnChange(of: effectiveIsRecording) { _, _ in notifyContentChange() }
+        .adaptiveOnChange(of: showAttachOptions) { _, open in onAttachmentsVisibilityChange?(open) }
+        .onAppear {
+            currentLanguage = selectedLanguage
+            if let id = storyId, let draft = getDraft?(id) {
+                text = draft.text
+                attachments = draft.attachments
+            }
+        }
+        .adaptiveOnChange(of: selectedLanguage) { _, newValue in
+            currentLanguage = newValue
+        }
+        .adaptiveOnChange(of: storyId) { oldId, newId in
+            if let oldId {
+                if effectiveIsRecording { forceStopRecording() }
+                onSaveDraft?(oldId, text, attachments)
+            }
+            if let newId, let draft = getDraft?(newId) {
+                text = draft.text
+                attachments = draft.attachments
+            } else {
+                text = ""
+                attachments = []
+            }
+            showAttachOptions = false
+            isFocused = false
+            textAnalyzer.reset()
+            notifyContentChange()
+        }
+        .adaptiveOnChange(of: focusTrigger.wrappedValue) { _, shouldFocus in
+            if shouldFocus {
+                isFocused = true
+                focusTrigger.wrappedValue = false
+            }
+        }
+        .adaptiveOnChange(of: isFocused) { _, focused in
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
+                focusBounce = focused
+            }
+            if focused {
+                onAnyInteraction?()
+                collapseQuickEmojiBand(after: .textTouched)
+            }
+            if focused && showAttachOptions {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showAttachOptions = false
+                }
+            }
+            onFocusChange?(focused)
+        }
+        // Détection de langue en temps réel (Prisme Linguistique).
+        //
+        // `TextAnalyzer.performAnalysis` mute `language` ET `languageConfidence`
+        // dans le **même** `DispatchQueue.main.async` — observer la confiance
+        // seule suffit (elle change toujours en même temps que la langue).
+        // Évite un double-fire de `applyDetectedLanguage` par cycle de
+        // détection.
+        //
+        // Adoption au seuil 86 % (`ComposerLanguageResolver.confidenceFloor`).
+        // Tant qu'aucune langue n'a atteint 86 %, le pill et la langue
+        // envoyée restent sur le défaut « fr ». À 10 mots, le détecteur se
+        // verrouille — la dernière langue à ≥ 86 % (ou « fr » si rien) est
+        // définitive pour ce message.
+        //
+        // Override manuel (menu) : prioritaire, propagé immédiatement
+        // (force=true) quelle que soit la confiance.
+        .adaptiveOnChange(of: textAnalyzer.languageConfidence) { _, _ in
+            applyDetectedLanguage()
+        }
+        .adaptiveOnChange(of: textAnalyzer.languageOverride?.code) { _, _ in
+            applyDetectedLanguage(force: true)
+        }
+        .adaptiveOnChange(of: text) { oldValue, newValue in
+            caretFollowsWrite(newValue)
+            onAnyInteraction?()
+            notifyContentChange()
+            textAnalyzer.analyze(text: newValue)
+            // Texte vidé : on retombe sur le défaut (« fr ») pour que la
+            // prochaine frappe parte d'un état propre. **Sauf** si la
+            // langue a été choisie à la main (override) — dans ce cas on
+            // respecte le choix utilisateur même quand le champ se vide,
+            // sinon le pill afficherait EN (override) mais on enverrait FR.
+            if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               textAnalyzer.languageOverride == nil {
+                let defaultLanguage = DefaultComposerLanguage.resolve()
+                if currentLanguage != defaultLanguage {
+                    currentLanguage = defaultLanguage
+                    onLanguageChange?(defaultLanguage)
+                }
+            }
+            onTextChange?(newValue)
+            if let binding = textBinding, binding.wrappedValue != newValue {
+                binding.wrappedValue = newValue
+            }
+            if isFocused && !typeWave {
+                typeWave = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    typeWave = false
+                }
+            }
+            if !newValue.isEmpty && showAttachOptions {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showAttachOptions = false
+                }
+            }
+            // Collage : fichier `file://` → pièce jointe ; au-delà de la limite → `.txt` (#9037)
+            handleClipboardCheck(newValue, previous: oldValue)
+        }
+        .adaptiveOnChange(of: textBinding?.wrappedValue) { _, newValue in
+            guard let newValue, newValue != text else { return }
+            text = newValue
+        }
+        .sheet(isPresented: $textAnalyzer.showLanguagePicker) {
+            LanguagePickerSheet(
+                style: isDark ? .dark : .light,
+                onSelect: { lang in
+                    let detected = DetectedLanguage.find(code: lang.id) ??
+                        DetectedLanguage(id: lang.id, code: lang.id, flag: lang.flag, name: lang.name)
+                    textAnalyzer.lockToLanguage(detected)
+                    currentLanguage = detected.code
+                    onLanguageChange?(detected.code)
+                },
+                onDismiss: { textAnalyzer.showLanguagePicker = false }
+            )
+        }
+        // **Les dix cadres à mots, ouverts par un appui long sur la pastille**
+        // (#5326). La feuille est montée ICI, sur la barre, et pas chez l'hôte :
+        // le texte qu'elle rend est celui du champ, qui vit dans la barre.
+        // Chez l'hôte, elle aurait relu un binding et se serait redessinée un
+        // tour de run loop plus tard que la frappe.
+        .sheet(isPresented: $showTextStickerSheet) {
+            ComposerTextStickerSheet(
+                text: text.trimmingCharacters(in: .whitespacesAndNewlines),
+                accentColor: servedAccentHex,
+                onPick: { gabarit in sendTextSticker(gabarit) }
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .adaptiveOnChange(of: injectedEmoji.wrappedValue) { _, emoji in
+            if !emoji.isEmpty {
+                text += emoji
+                DispatchQueue.main.async {
+                    injectedEmoji.wrappedValue = ""
+                }
+            }
+        }
+    }
+
+    // ========================================================================
+    // MARK: - En-tête du verre
+    // ========================================================================
+
+    /// **Ce qui accompagne le message vit dans le verre** (#8417, directive
+    /// porteur 2026-09-27). Les bandeaux de l'hôte — cartes arrondies du fil
+    /// comme bandes plates de la story — prennent la forme d'une carte posée
+    /// sur la plaque, avec la marge des rails (#7966).
+    @ViewBuilder
+    var panelHeader: some View {
+        if editBanner != nil || replyBanner != nil {
+            VStack(spacing: MeeshySpacing.xsPlus) {
+                if let banner = editBanner { banner.clipShape(Self.bannerShape) }
+                if let banner = replyBanner { banner.clipShape(Self.bannerShape) }
+            }
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.top, Self.railTopInset)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+
+        // Custom attachments (real thumbnails from parent) or default chips
+        if let custom = customAttachmentsPreview {
+            custom
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.top, MeeshySpacing.xs)
+                .transition(.scale.combined(with: .opacity))
+        } else if !allAttachments.isEmpty {
+            attachmentsPreview
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+
+        // Clipboard content preview (for pasted text > 2000 chars)
+        if let clip = clipboardContent {
+            clipboardContentPreview(clip)
+                .padding(.top, MeeshySpacing.sm)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    static let bannerShape = RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
+
+    // ========================================================================
+    // MARK: - Panneau de verre
+    // ========================================================================
+
+    /// **Toute la barre repose sur UN panneau de verre** (#7884) — réel sur iOS 26, fait maison avant. Il remplace le
+    /// fond transparent de #3920 ; les éléments posés dessus (champ, (+),
+    /// enregistrement, pastille de langue) sont du verre aussi.
+    static let panelShape = RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous)
+    static let fieldShape = RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous)
+
+    /// Une protection armée voile le panneau ENTIER de sa teinte (#7667) :
+    /// toute la barre dit l'état, pas seulement la pastille qui l'a allumé.
+    var panelGlassTint: Color? {
+        dominantProtection.map { $0.panelWash(isDark: isDark) }
+    }
+}

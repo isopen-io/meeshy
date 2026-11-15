@@ -79,6 +79,94 @@ final class LocalizationCatalogGuardTests: XCTestCase {
         ]
     }
 
+    // MARK: - Doublons de clé (mesure sur le TEXTE, jamais sur le JSON parsé)
+
+    /// Chemins des catalogues, relatifs à la racine du dépôt — mêmes fichiers
+    /// que `catalogs()`, mais lus comme du TEXTE.
+    private static let catalogPaths = [
+        "apps/ios/Meeshy/Localizable.xcstrings",
+        "packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings",
+    ]
+
+    /// Compte les occurrences de chaque clé de PREMIER NIVEAU dans le texte brut
+    /// du catalogue (l'objet `strings`), sans jamais passer par un parseur JSON.
+    ///
+    /// Un parseur JSON garde la DERNIÈRE valeur d'une clé répétée : le dictionnaire
+    /// qu'il produit ne peut donc jamais révéler qu'une clé était en double — c'est
+    /// exactement ce qui a laissé 68 doublons invisibles au catalogue de l'app
+    /// (#6021). Le comptage ci-dessous reproduit la forme que Xcode écrit pour
+    /// une entrée de premier niveau — 4 espaces d'indentation, la clé, puis `{` —
+    /// qu'elle ouvre un bloc multi-ligne (`"clé": {`) ou une entrée vide sur une
+    /// seule ligne (`"clé": {}`, ~130 occurrences dans le catalogue SDK).
+    private func topLevelKeyOccurrences(inRawText text: String) -> [String] {
+        var occurrences: [String] = []
+        let pattern = "^    \"((?:[^\"\\\\]|\\\\.)*)\":\\s*\\{"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        text.enumerateLines { line, _ in
+            let nsLine = line as NSString
+            guard let match = regex.firstMatch(
+                in: line, range: NSRange(location: 0, length: nsLine.length)
+            ) else { return }
+            occurrences.append(nsLine.substring(with: match.range(at: 1)))
+        }
+        return occurrences
+    }
+
+    /// Zéro doublon, mesuré sur le texte — le seul terrain où un doublon peut se
+    /// voir, puisque tout dictionnaire construit depuis le JSON les a déjà
+    /// silencieusement résolus à la dernière valeur.
+    func test_aucuneCléDePremierNiveauNestEnDouble() throws {
+        for relativePath in Self.catalogPaths {
+            let url = repoRoot().appendingPathComponent(relativePath)
+            let data = try Data(contentsOf: url)
+            let text = try XCTUnwrap(String(data: data, encoding: .utf8), "Encodage illisible : \(relativePath)")
+            let occurrences = topLevelKeyOccurrences(inRawText: text)
+            XCTAssertGreaterThan(occurrences.count, 1000, "Balayage texte quasi vide : \(relativePath)")
+
+            var counts: [String: Int] = [:]
+            for key in occurrences { counts[key, default: 0] += 1 }
+            let duplicates = counts.filter { $0.value > 1 }.keys.sorted()
+
+            XCTAssertTrue(
+                duplicates.isEmpty,
+                """
+                [\(relativePath)] \(duplicates.count) clé(s) de premier niveau en double — \
+                seule la DERNIÈRE occurrence est servie, la ou les précédentes sont un \
+                doublon mort qu'un outil qui réécrit le catalogue supprimera en silence :
+                \(duplicates.prefix(25).joined(separator: "\n"))
+                """
+            )
+        }
+    }
+
+    /// L'analyse doit reconnaître les deux formes qu'écrit Xcode pour une entrée
+    /// de premier niveau, et ignorer tout ce qui n'en est pas une.
+    func test_lAnalyseDesOccurrencesReconnaîtLesDeuxFormes() {
+        let sample = """
+        {
+          "sourceLanguage": "fr",
+          "strings": {
+            "a.b": {
+              "localizations": {
+                "en": {
+                  "stringUnit": {
+                    "state": "translated",
+                    "value": "hello"
+                  }
+                }
+              }
+            },
+            "c.d": {},
+            "a.b": {
+              "localizations": {}
+            }
+          },
+          "version": "1.0"
+        }
+        """
+        XCTAssertEqual(topLevelKeyOccurrences(inRawText: sample), ["a.b", "c.d", "a.b"])
+    }
+
     // MARK: - Marqueurs de format
 
     /// `%@`, `%lld`, `%1$@`… avec leur éventuel index de position.
@@ -257,5 +345,88 @@ final class LocalizationCatalogGuardTests: XCTestCase {
         XCTAssertEqual(formatSpecifiers("Export… %lld%%"), ["%lld"], "« %% » est un pourcentage, pas un marqueur")
         XCTAssertEqual(formatSpecifiers("Aucun marqueur ici"), [])
         XCTAssertEqual(formatSpecifiers("100 % de réussite"), [], "Un « % » isolé n'est pas un marqueur")
+    }
+
+    // MARK: - Chiffrement au repos (#11374, #11381)
+
+    /// `server` et `hybrid` sont chiffrés AU REPOS : le serveur lit et traduit.
+    /// L'écran d'activation présentait `hybrid` comme « E2EE + serveur » — la
+    /// promesse de sécurité était fausse au moment même où l'on choisit.
+    func test_lesModesAuReposNePromettentJamaisLeBoutEnBout() throws {
+        let forbidden = ["E2EE", "bout en bout", "end-to-end", "Ende-zu-Ende", "extremo a extremo", "ponta a ponta", "تام"]
+        let keys = [
+            "conversation.encryption.mode.server.label", "conversation.encryption.mode.server.description",
+            "conversation.encryption.mode.hybrid.label", "conversation.encryption.mode.hybrid.description",
+        ]
+        let app = try XCTUnwrap(try catalogs().first { $0.name == "app" })
+        for key in keys {
+            let byLang = try XCTUnwrap(app.strings[key], "Clé absente du catalogue : \(key)")
+            XCTAssertEqual(byLang.count, 7, "\(key) doit exister dans les sept langues")
+            for (lang, value) in byLang {
+                for word in forbidden {
+                    XCTAssertFalse(value.localizedCaseInsensitiveContains(word), "\(key) [\(lang)] promet le bout en bout : « \(value) »")
+                }
+            }
+        }
+        let sheet = repoRoot().appendingPathComponent("apps/ios/Meeshy/Features/Main/Components/ConversationEncryptionDetailSheet.swift")
+        let source = try String(contentsOf: sheet, encoding: .utf8)
+        XCTAssertFalse(source.contains("E2EE + serveur"), "La valeur par défaut du libellé hybride promet encore le bout en bout")
+    }
+
+    /// #14369 — la couche appareil d'un hybride ne couvre que le TEXTE d'un
+    /// tête-à-tête entre appareils compatibles, et ne cache rien au serveur :
+    /// le résumé et la description ne disent ni « bout en bout » ni « chaque
+    /// message » (audit adversarial du lot), dans aucune des sept langues.
+    func test_leModeHybrideNePrometNiChaqueMessageNiLeBoutEnBout() throws {
+        let forbidden = [
+            "bout en bout", "end-to-end", "end to end", "Ende-zu-Ende", "extremo a extremo", "ponta a ponta", "طرف إلى طرف",
+            "chaque message", "every message", "each message", "jede Nachricht", "cada mensaje", "ogni messaggio", "cada mensagem", "كل رسالة",
+        ]
+        let app = try XCTUnwrap(try catalogs().first { $0.name == "app" })
+        for key in ["conversation.encryption.mode.hybrid.description", "conversation.encryption.summary.hybrid"] {
+            let byLang = try XCTUnwrap(app.strings[key], "Clé absente du catalogue : \(key)")
+            XCTAssertEqual(byLang.count, 7, "\(key) doit exister dans les sept langues")
+            for (lang, value) in byLang {
+                for word in forbidden {
+                    XCTAssertFalse(value.localizedCaseInsensitiveContains(word), "\(key) [\(lang)] promet trop : « \(value) »")
+                }
+            }
+        }
+    }
+
+    // MARK: - Le mode se choisit à la création (directive porteur du 2026-11-01)
+
+    /// Les clés de l'écran de création existent dans les sept langues, sous les
+    /// noms que les miroirs Android et web relisent.
+    func test_lesClesDuChoixALaCreationExistentDansLesSeptLangues() throws {
+        let app = try XCTUnwrap(try catalogs().first { $0.name == "app" })
+        for key in [
+            "conversation.encryption.create.header",
+            "conversation.encryption.create.e2ee.soonGroups",
+            "conversation.encryption.create.footer",
+        ] {
+            let byLang = try XCTUnwrap(app.strings[key], "Clé absente du catalogue : \(key)")
+            XCTAssertEqual(byLang.count, 7, "\(key) doit exister dans les sept langues")
+        }
+    }
+
+    /// L'utilisateur lit ce que le mode fait de ses messages, jamais qui détient
+    /// une clé ni un nom d'algorithme : « Meeshy peut lire » et « AES-256-GCM »
+    /// quittent la fiche.
+    func test_laFicheChiffrementNeDitNiQuiLitNiLAlgorithme() throws {
+        let app = try XCTUnwrap(try catalogs().first { $0.name == "app" })
+        let keys = [
+            "conversation.encryption.mode.server.label", "conversation.encryption.mode.hybrid.label",
+            "conversation.encryption.mode.e2ee.label", "conversation.encryption.mode.server.description",
+            "conversation.encryption.mode.hybrid.description", "conversation.encryption.summary.server",
+            "conversation.encryption.summary.hybrid", "conversation.encryption.fact.encryptedOnServerServerReads",
+            "conversation.encryption.fact.storedWithoutEncryption", "conversation.encryption.fact.onlyParticipantsRead",
+        ]
+        for key in keys {
+            let fr = try XCTUnwrap(app.strings[key]?["fr"], "Clé absente du catalogue : \(key)")
+            for word in ["Meeshy peut", "Meeshy n’a pas", "AES-256", "en clair"] {
+                XCTAssertFalse(fr.contains(word), "\(key) dit encore « \(word) » : « \(fr) »")
+            }
+        }
     }
 }

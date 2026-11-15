@@ -22,23 +22,10 @@
  * attendu AVANT la révélation de la bulle sur iOS. Détruire dans la foulée
  * prendrait le média des mains de celui à qui il était destiné.
  *
- * Ce module ne détruit donc pas : il pose l'ÉCHÉANCE, et le balayage éphémère
- * (`ExpiredMessagesCleanupService`, cycle 92) exécute — fichiers, clair,
- * traductions, effets de retrait et annonce `message:deleted` comprises. Une
- * seule implémentation de la destruction, déjà éprouvée, pour les deux
- * promesses du schéma qui la réclament.
- *
- * ─── L'ÉCHÉANCE NE SE REPOUSSE JAMAIS ───────────────────────────────────────
- *
- * Un message peut être à la fois éphémère et à vue unique. Écrire l'échéance de
- * grâce par-dessus un `expiresAt` plus proche RALLONGERAIT la vie d'un contenu
- * que l'émetteur a voulu plus court — une régression silencieuse sur la
- * promesse la plus forte des deux. Le prédicat n'apparie donc que l'absence, le
- * nul, et les échéances POSTÉRIEURES à celle qu'on veut poser.
- *
- * Les deux états « pas d'échéance » comptent tous les deux : `expiresAt` est
- * ABSENT des messages non éphémères (Prisma n'écrit pas les optionnels qu'on ne
- * lui donne pas) et présent-et-nul sur les chemins qui le remettent à zéro.
+ * Ce module ne détruit donc pas : il pose l'ÉCHÉANCE de purge
+ * (`viewOnceBurnAt`), et le balayage (`purgeDueViewOnceContent`) purge le
+ * CONTENU en gardant la bulle (#7578). Jamais `expiresAt` : c'est la colonne de
+ * l'éphémère, et elle supprimait la bulle pour tous.
  *
  * @jest-environment node
  */
@@ -67,9 +54,17 @@ describe('scheduleViewOnceBurn', () => {
     const result = await scheduleViewOnceBurn(prisma, { messageId: MESSAGE_ID, at: AT });
 
     const expected = new Date(AT.getTime() + VIEW_ONCE_BURN_GRACE_MS);
-    expect(result).toEqual({ scheduled: true, expiresAt: expected });
+    expect(result).toEqual({ scheduled: true, viewOnceBurnAt: expected });
     expect(messageUpdateMany).toHaveBeenCalledTimes(1);
-    expect(messageUpdateMany.mock.calls[0][0].data).toEqual({ expiresAt: expected });
+    expect(messageUpdateMany.mock.calls[0][0].data).toEqual({ viewOnceBurnAt: expected });
+  });
+
+  it("n'écrit JAMAIS expiresAt — la colonne de l'éphémère supprimerait la bulle pour tous (#7578)", async () => {
+    await scheduleViewOnceBurn(prisma, { messageId: MESSAGE_ID, at: AT });
+
+    const { where, data } = messageUpdateMany.mock.calls[0][0];
+    expect(data).not.toHaveProperty('expiresAt');
+    expect(JSON.stringify(where)).not.toContain('expiresAt');
   });
 
   it('laisse au spectateur qui vient de payer sa vue le temps de la regarder', () => {
@@ -90,7 +85,7 @@ describe('scheduleViewOnceBurn', () => {
 
     const { OR } = messageUpdateMany.mock.calls[0][0].where;
     expect(OR).toEqual(
-      expect.arrayContaining([{ expiresAt: null }, { expiresAt: { isSet: false } }]),
+      expect.arrayContaining([{ viewOnceBurnAt: null }, { viewOnceBurnAt: { isSet: false } }]),
     );
   });
 
@@ -99,7 +94,7 @@ describe('scheduleViewOnceBurn', () => {
 
     const { OR } = messageUpdateMany.mock.calls[0][0].where;
     const deadline = new Date(AT.getTime() + VIEW_ONCE_BURN_GRACE_MS);
-    expect(OR).toEqual(expect.arrayContaining([{ expiresAt: { gt: deadline } }]));
+    expect(OR).toEqual(expect.arrayContaining([{ viewOnceBurnAt: { gt: deadline } }]));
   });
 
   it("ne repousse JAMAIS une échéance déjà plus proche — le prédicat ne l'apparie pas", async () => {
@@ -107,8 +102,8 @@ describe('scheduleViewOnceBurn', () => {
 
     const result = await scheduleViewOnceBurn(prisma, { messageId: MESSAGE_ID, at: AT });
 
-    // Rien d'apparié : l'éphémère de 30 s garde son échéance, et c'est elle qui
-    // détruira le message. Le budget épuisé n'y ajoute rien.
+    // Rien d'apparié : une échéance plus proche garde la main. La grâce ne
+    // rallonge jamais la vie d'un contenu.
     expect(result.scheduled).toBe(false);
   });
 

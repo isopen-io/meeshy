@@ -1,0 +1,429 @@
+import { describe, expect, test } from 'bun:test';
+
+import { nameMinLength, registerRequestSchema, usernameMinLength } from '@meeshy/shared/types/api-schemas/auth';
+
+import {
+  PASSWORD_MIN,
+  composeRegisterBody,
+  defaultLanguages,
+  isDisplayNameValid,
+  hasDisplayName,
+  isPhoneValid,
+  phoneRefusal,
+  isEmailValid,
+  isPasswordValid,
+  hasPassword,
+  canSubmit,
+  effectiveDisplayName,
+  effectiveUsername,
+  isIdentityDefined,
+  usernameFieldRefusal,
+  displayNameFieldRefusal,
+  USERNAME_MAX,
+  type SignupFormState,
+} from './signup-form';
+import { usernameRefusalMessage } from './view/auth-feedback';
+import { countryOf } from './countries';
+
+/**
+ * LE MODÈLE D'INSCRIPTION (#5555, T3/T4/T10) — miroir de `SignupForm.swift`,
+ * avec les sources PARTAGÉES (`personNamePatternSource`, `registerRequestSchema`)
+ * à la place des constantes recopiées.
+ */
+
+const FR = countryOf('FR')!;
+
+function baseForm(overrides: Partial<SignupFormState> = {}): SignupFormState {
+  return {
+    username: null,
+    displayName: 'Ada Lovelace',
+    email: 'ada@example.com',
+    phoneDigits: '0612345678',
+    password: 'un-mot-de-passe-solide',
+    country: FR,
+    systemLanguage: 'fr',
+    regionalLanguage: 'en',
+    ...overrides,
+  };
+}
+
+describe('PASSWORD_MIN — LUE depuis le schéma serveur, jamais un littéral local', () => {
+  test('vaut exactement registerRequestSchema.properties.password.minLength', () => {
+    expect(PASSWORD_MIN).toBe(registerRequestSchema.properties.password.minLength);
+  });
+});
+
+describe('validation locale — displayName', () => {
+  // #6441 — un champ VIDE est LÉGITIME : la passerelle DÉRIVE le nom affiché
+  // de la partie locale de l'adresse. Même arbitrage que le mot de passe ; le
+  // refuser ici rendrait le client plus strict que le serveur, et rien ne
+  // rougirait nulle part.
+  test('vide ⇒ valide (la passerelle le dérive de l’adresse)', () => expect(isDisplayNameValid('')).toBe(true));
+  test('vide après trim ⇒ valide aussi', () => expect(isDisplayNameValid('   ')).toBe(true));
+  test('101 caractères ⇒ invalide', () => expect(isDisplayNameValid('a'.repeat(101))).toBe(false));
+  test('sans lettre ("123 456") ⇒ invalide', () => expect(isDisplayNameValid('123 456')).toBe(false));
+  test('avec accents et apostrophes ("Aïcha O’Neil") ⇒ valide', () =>
+    expect(isDisplayNameValid('Aïcha O’Neil')).toBe(true));
+  test('100 caractères avec au moins une lettre ⇒ valide', () => expect(isDisplayNameValid(`${'a'.repeat(99)}b`)).toBe(true));
+});
+
+describe('validation locale — email', () => {
+  test('"a@b" (pas de TLD) ⇒ invalide', () => expect(isEmailValid('a@b')).toBe(false));
+  test('"ada@example.com" ⇒ valide', () => expect(isEmailValid('ada@example.com')).toBe(true));
+});
+
+describe('validation locale — password (borne LUE, pas un littéral)', () => {
+  test(`${PASSWORD_MIN - 1} caractères ⇒ invalide`, () => expect(isPasswordValid('a'.repeat(PASSWORD_MIN - 1))).toBe(false));
+  test(`${PASSWORD_MIN} caractères ⇒ valide`, () => expect(isPasswordValid('a'.repeat(PASSWORD_MIN))).toBe(true));
+  // #6424 — un champ VIDE est LÉGITIME : le compte naît sans mot de passe et sa
+  // porte est le lien magique. Garder l'ancienne règle rendrait le client plus
+  // strict que le serveur, et rien ne rougirait nulle part.
+  test('champ vide ⇒ valide', () => expect(isPasswordValid('')).toBe(true));
+});
+
+describe('hasPassword — TAPÉ, ce qui n’est pas la même question que VALIDE (#6424)', () => {
+  test('champ vide ⇒ false', () => expect(hasPassword('')).toBe(false));
+  test('saisie trop courte ⇒ true — elle est tapée, même si elle sera refusée', () =>
+    expect(hasPassword('a')).toBe(true));
+});
+
+describe('hasDisplayName — TAPÉ, ce qui n’est pas la même question que VALIDE (#6441)', () => {
+  test('champ vide ⇒ false', () => expect(hasDisplayName('')).toBe(false));
+  test('espaces seuls ⇒ false — rien n’a été nommé', () => expect(hasDisplayName('   ')).toBe(false));
+  test('saisie refusée par le pattern ⇒ true — elle est tapée', () => expect(hasDisplayName('123')).toBe(true));
+});
+
+describe('canSubmit — l’ADRESSE et le NUMÉRO (#6441, #9343)', () => {
+  test('nom + e-mail + numéro + mot de passe valides ⇒ actif', () => expect(canSubmit(baseForm())).toBe(true));
+  /**
+   * Le témoin de #6441, gardé : nom affiché et mot de passe VIDES n'éteignent
+   * rien. Le numéro, lui, est désormais requis par l'écran (#9343) — il reste
+   * renseigné ici pour que seul le relâchement des deux autres champs juge.
+   */
+  test('nom affiché vide, mot de passe vide ⇒ ACTIF', () =>
+    expect(canSubmit(baseForm({ displayName: '', password: '' }))).toBe(true));
+  test('adresse vide ⇒ inactif', () =>
+    expect(canSubmit(baseForm({ displayName: '', email: '', password: '' }))).toBe(false));
+  test('nom affiché TAPÉ mais sans lettre ⇒ inactif — une saisie fournie tient sa borne', () =>
+    expect(canSubmit(baseForm({ displayName: '123 456' }))).toBe(false));
+  test('mot de passe trop court ⇒ inactif', () =>
+    expect(canSubmit(baseForm({ password: 'a'.repeat(PASSWORD_MIN - 1) }))).toBe(false));
+  test('mot de passe vide ⇒ n’empêche rien (#6424)', () =>
+    expect(canSubmit(baseForm({ password: '' }))).toBe(true));
+});
+
+describe('le numéro est REQUIS par l’écran, et plausible (#6479, #9343)', () => {
+  // Directive porteur 2026-10-04 : le numéro est obligatoire dans les
+  // FRONTENDS seulement — la passerelle accepte toujours une adresse seule.
+  test('champ VIDE ⇒ bouton éteint', () => expect(canSubmit(baseForm({ phoneDigits: '' }))).toBe(false));
+  test('des espaces ou des tirets seuls ne font pas un numéro ⇒ bouton éteint', () =>
+    expect(canSubmit(baseForm({ phoneDigits: ' - ' }))).toBe(false));
+  test('« 1111100000 » ⇒ bouton éteint', () =>
+    expect(canSubmit(baseForm({ phoneDigits: '1111100000' }))).toBe(false));
+  test('« 42424242 » ⇒ bouton éteint', () =>
+    expect(canSubmit(baseForm({ phoneDigits: '42424242' }))).toBe(false));
+  test('un vrai numéro ⇒ bouton actif', () =>
+    expect(canSubmit(baseForm({ phoneDigits: '0612345678' }))).toBe(true));
+  test('le motif du refus est NOMMÉ — l’absence comprise', () => {
+    expect(phoneRefusal('')).toBe('missing');
+    expect(phoneRefusal(' - ')).toBe('missing');
+    expect(phoneRefusal('06123456')).toBe('too-short');
+    expect(phoneRefusal('1111100000')).toBe('identical-run');
+    expect(phoneRefusal('424242424242')).toBe('repeated-pattern');
+    expect(phoneRefusal('06 12 34 56 78')).toBeNull();
+  });
+  test('isPhoneValid n’accepte plus le vide', () => {
+    expect(isPhoneValid('')).toBe(false);
+    expect(isPhoneValid('06123456')).toBe(false);
+    expect(isPhoneValid('06 12 34 56 78')).toBe(true);
+  });
+});
+
+describe('composeRegisterBody — sans nom affiché TAPÉ (#6441, révisé #6479)', () => {
+  /**
+   * LA LOI A CHANGÉ, et le témoin avec elle.
+   *
+   * #6441 omettait la clé pour que la PASSERELLE dérive. #6479 renverse la
+   * charge de la preuve sur directive porteur : « ici on a des données et la
+   * passerelle doit utiliser ces données ». L'écran MONTRE le nom affiché
+   * dérivé — c'est une donnée, sous les yeux de l'utilisateur, qui l'a
+   * acceptée en continuant. Elle part.
+   *
+   * Ce qui SURVIT de #6441 : la clé reste OMISE quand il n'y a réellement
+   * rien à envoyer. `displayNameProperty` porte `minLength: 1` — une chaîne
+   * vide serait une VALEUR refusée, et l'inscription échouerait dans le cas
+   * même qu'elle ouvre.
+   */
+  test('le nom affiché DÉRIVÉ part — la passerelle n’a plus à l’inventer', () => {
+    const body = composeRegisterBody(baseForm({ displayName: '', email: 'jean.dupont@example.com' }));
+    expect(body.displayName).toBe('Jean Dupont');
+    expect(body.username).toBe('jean-dupont');
+  });
+
+  test('espaces seuls ⇒ la dérivation gagne, comme un champ vide', () => {
+    const body = composeRegisterBody(baseForm({ displayName: '   ', email: 'jean.dupont@example.com' }));
+    expect(body.displayName).toBe('Jean Dupont');
+  });
+
+  /**
+   * Le SEUL cas où la passerelle doit encore chercher : une adresse dont rien
+   * n'est slugifiable. `pseudoRacine` y retombe sur le recours `user` —
+   * l'envoyer garantirait une collision pour tout le monde. On n'a alors
+   * AUCUNE donnée, et c'est la règle du porteur lue jusqu'au bout.
+   */
+  test('une adresse non slugifiable ⇒ les DEUX clés restent absentes', () => {
+    const body = composeRegisterBody(baseForm({ displayName: '', email: 'a@b.co' }));
+    expect('username' in body).toBe(false);
+    expect('displayName' in body).toBe(false);
+  });
+
+  test('la borne du serveur refuserait la chaîne vide — ce que l’omission évite', () => {
+    expect(registerRequestSchema.properties.displayName.minLength).toBe(nameMinLength);
+    expect(nameMinLength).toBeGreaterThan(0);
+  });
+
+  test('le reste de la charge est intact', () => {
+    const body = composeRegisterBody(baseForm({ displayName: '' }));
+    expect(body.email).toBe(baseForm().email.toLowerCase());
+    expect(body.password).toBe(baseForm().password);
+  });
+
+  test('un nom TAPÉ voyage, débarrassé de ses espaces de bord', () => {
+    const body = composeRegisterBody(baseForm({ displayName: '  Ada Lovelace  ' }));
+    expect(body.displayName).toBe('Ada Lovelace');
+  });
+});
+
+describe('composeRegisterBody — sans mot de passe (#6424)', () => {
+  /**
+   * Le témoin qui compte : la clé est OMISE, pas posée à `''`.
+   *
+   * Une chaîne vide serait une VALEUR, refusée par la borne de longueur du
+   * serveur — le formulaire échouerait précisément dans le cas qu'il vient
+   * d'ouvrir, et le refus parlerait d'un mot de passe trop court à quelqu'un
+   * qui n'en a pas voulu.
+   */
+  test('la clé password est ABSENTE de la charge', () => {
+    const body = composeRegisterBody(baseForm({ password: '' }));
+    expect('password' in body).toBe(false);
+  });
+
+  test('le reste de la charge est intact', () => {
+    const body = composeRegisterBody(baseForm({ password: '' }));
+    expect(body.email).toBe(baseForm().email.toLowerCase());
+    expect(body.displayName).toBe('Ada Lovelace');
+  });
+
+  test('un mot de passe TAPÉ voyage tel quel', () => {
+    const body = composeRegisterBody(baseForm({ password: '  secret  ' }));
+    expect(body.password).toBe('  secret  ');
+  });
+});
+
+describe('composeRegisterBody — la charge EXACTE de POST /auth/register (register.ts:133)', () => {
+  /**
+   * `username` A CHANGÉ DE CAMP (#6479), `firstName`/`lastName` NON.
+   *
+   * Directive porteur : « dès qu'un champ username est rempli la passerelle n'a
+   * plus rien à créer ». L'écran montre le pseudo, donc il l'envoie — et
+   * `resoudreUsername` l'emploie tel quel. Les deux noms d'état civil, eux,
+   * restent DÉRIVÉS du nom affiché côté serveur : rien ne les saisit.
+   */
+  test('trim + minuscules l’e-mail ; username PART, firstName/lastName jamais', () => {
+    const body = composeRegisterBody(baseForm({ email: '  Ada.Lovelace@Example.COM  ' }));
+    expect(body.email).toBe('ada.lovelace@example.com');
+    expect(body.username).toBe('ada-lovelace');
+    expect('firstName' in body).toBe(false);
+    expect('lastName' in body).toBe(false);
+  });
+
+  test('téléphone renseigné ⇒ TOUT ou RIEN — chiffres tels quels + phoneCountryCode ISO', () => {
+    const body = composeRegisterBody(baseForm({ phoneDigits: '0612345678', country: FR }));
+    expect(body.phoneNumber).toBe('0612345678');
+    expect(body.phoneCountryCode).toBe('FR');
+  });
+
+  test('le couple numéro + pays part TOUJOURS — l’écran ne compose plus de charge sans numéro (#9343)', () => {
+    const body = composeRegisterBody(baseForm({ phoneDigits: '06 12 34 56 78', country: countryOf('BE')! }));
+    expect(body.phoneNumber).toBe('0612345678');
+    expect(body.phoneCountryCode).toBe('BE');
+  });
+
+  test('un code de parrainage BIEN FORMÉ part en `affiliateToken`, normalisé (#8058)', () => {
+    const body = composeRegisterBody(baseForm(), { referralCode: '  aff_abc123 ' });
+    expect(body.affiliateToken).toBe('aff_abc123');
+    expect('affiliateSessionKey' in body).toBe(false);
+  });
+
+  test('la clé de session d’affiliation accompagne le jeton quand elle est connue (#8058)', () => {
+    const body = composeRegisterBody(baseForm(), { referralCode: 'aff_abc123', referralSessionKey: 'sk-1' });
+    expect(body.affiliateSessionKey).toBe('sk-1');
+  });
+
+  test('un code vide ou mal formé ⇒ AUCUNE clé de parrainage (#8058)', () => {
+    expect('affiliateToken' in composeRegisterBody(baseForm(), { referralCode: '' })).toBe(false);
+    expect('affiliateToken' in composeRegisterBody(baseForm(), { referralCode: 'deux mots' })).toBe(false);
+    expect('affiliateSessionKey' in composeRegisterBody(baseForm(), { referralCode: '', referralSessionKey: 'sk-1' })).toBe(false);
+  });
+
+  test('les chiffres non numériques (espaces, points) sont filtrés avant envoi', () => {
+    const body = composeRegisterBody(baseForm({ phoneDigits: '06 12.34 56 78' }));
+    expect(body.phoneNumber).toBe('0612345678');
+  });
+
+  test('systemLanguage/regionalLanguage portent les deux rangs du formulaire', () => {
+    const body = composeRegisterBody(baseForm({ systemLanguage: 'es', regionalLanguage: 'en' }));
+    expect(body.systemLanguage).toBe('es');
+    expect(body.regionalLanguage).toBe('en');
+  });
+});
+
+describe('défauts de locale (miroir SignupForm.swift:190-198, rang AUTRE que le premier)', () => {
+  test('fr-FR ⇒ system fr, regional en', () => {
+    const langs = defaultLanguages('fr-FR');
+    expect(langs.systemLanguage).toBe('fr');
+    expect(langs.regionalLanguage).toBe('en');
+  });
+
+  test('en-US ⇒ system en, regional fr (rang 2 ≠ rang 1)', () => {
+    const langs = defaultLanguages('en-US');
+    expect(langs.systemLanguage).toBe('en');
+    expect(langs.regionalLanguage).toBe('fr');
+  });
+
+  test('locale non servie ("gd", gaélique écossais) ⇒ system fr', () => {
+    const langs = defaultLanguages('gd-GB');
+    expect(langs.systemLanguage).toBe('fr');
+  });
+});
+
+/**
+ * NOM AFFICHÉ ET PSEUDO EN DIRECT (#7897). `null` = jamais touché : le champ
+ * suit l'adresse ; une chaîne = la saisie, qui gagne.
+ */
+describe('identité dérivée en direct (#7897)', () => {
+  const vierge = baseForm({ displayName: null, email: 'jean.dupont@example.com' });
+
+  test('nom affiché et pseudo sont tirés de l’adresse', () => {
+    expect(effectiveDisplayName(vierge)).toBe('Jean Dupont');
+    expect(effectiveUsername(vierge)).toBe('jean-dupont');
+  });
+
+  test('le pseudo vient de l’ADRESSE, pas du nom affiché tapé', () =>
+    expect(effectiveUsername({ ...vierge, displayName: 'Johnny' })).toBe('jean-dupont'));
+
+  test('un nom affiché TAPÉ gagne ; vidé, la dérivation revient', () => {
+    expect(effectiveDisplayName({ ...vierge, displayName: 'JD' })).toBe('JD');
+    expect(effectiveDisplayName({ ...vierge, displayName: '  ' })).toBe('Jean Dupont');
+  });
+
+  test('l’identité est définie dès qu’une adresse nommante est tapée', () =>
+    expect(isIdentityDefined(vierge)).toBe(true));
+
+  test('une adresse non slugifiable ne définit rien tant qu’un pseudo n’est pas tapé', () => {
+    const muette = baseForm({ displayName: null, email: 'a@b.co' });
+    expect(isIdentityDefined(muette)).toBe(false);
+    expect(isIdentityDefined({ ...muette, username: 'awa', displayName: 'Awa' })).toBe(true);
+  });
+});
+
+/**
+ * LA BORNE DU PSEUDO PENDANT LA SAISIE (#8082) — la même que la passerelle :
+ * `usernameMaxLength` de `registerRequestSchema`, jamais un littéral.
+ */
+describe('le pseudo tapé tient la borne du schéma partagé', () => {
+  test('la borne est LUE sur le schéma', () =>
+    expect(USERNAME_MAX).toBe(registerRequestSchema.properties.username.maxLength));
+
+  test('17 caractères (le pseudo de la recette) ⇒ refus « trop long » et bouton inactif', () => {
+    const form = baseForm({ username: 'direction_recette' });
+    expect(usernameFieldRefusal(form)).toBe('too-long');
+    expect(canSubmit(form)).toBe(false);
+    expect(isIdentityDefined(form)).toBe(false);
+  });
+
+  test('16 caractères ⇒ aucun refus', () => {
+    const form = baseForm({ username: 'direction_recett' });
+    expect(usernameFieldRefusal(form)).toBeNull();
+    expect(canSubmit(form)).toBe(true);
+  });
+
+  test('un espace ou un accent ⇒ refus de caractères', () =>
+    expect(usernameFieldRefusal(baseForm({ username: 'josé' }))).toBe('invalid-characters'));
+
+  test('pseudo jamais touché ⇒ la dérivation est recevable, aucun refus', () =>
+    expect(usernameFieldRefusal(baseForm({ username: null }))).toBeNull());
+
+  test('le message nomme la borne, jamais « réessayez »', () => {
+    const message = usernameRefusalMessage('fr', 'too-long');
+    expect(message).toContain(String(USERNAME_MAX));
+    expect(message).not.toMatch(/réessayez/i);
+  });
+});
+
+/**
+ * LE PLANCHER DES NOMS ET DU PSEUDO (#13825, directive porteur 2026-10-30) —
+ * « A » ou « B » ne sont ni un nom ni un pseudo ; « Al », « Li », « Ly » et
+ * « Sy » passent. Jugé sur la saisie ROGNÉE, avant l'envoi.
+ */
+describe('le nom affiché tapé a au moins deux caractères', () => {
+  test('« A » est refusé, le bouton reste inactif', () => {
+    const form = baseForm({ displayName: 'A' });
+    expect(isDisplayNameValid('A')).toBe(false);
+    expect(displayNameFieldRefusal(form)).toBe('too-short');
+    expect(canSubmit(form)).toBe(false);
+    expect(isIdentityDefined(form)).toBe(false);
+  });
+
+  test('« Al » passe', () => {
+    const form = baseForm({ displayName: 'Al' });
+    expect(isDisplayNameValid('Al')).toBe(true);
+    expect(displayNameFieldRefusal(form)).toBeNull();
+    expect(canSubmit(form)).toBe(true);
+  });
+
+  test('les espaces ne comptent pas : « A » entouré d\'espaces reste refusé, « Al » rogné passe', () => {
+    expect(isDisplayNameValid('  A  ')).toBe(false);
+    expect(isDisplayNameValid('  Al  ')).toBe(true);
+  });
+
+  test('la longueur est celle que la passerelle VOIT : « É » décomposé vaut un caractère, « Ét » deux', () => {
+    expect(isDisplayNameValid('E\u0301')).toBe(false);
+    expect(displayNameFieldRefusal(baseForm({ displayName: 'E\u0301' }))).toBe('too-short');
+    expect(isDisplayNameValid('E\u0301t')).toBe(true);
+  });
+
+  test('un champ vide ou jamais touché n\'est PAS refusé : la passerelle le dérive de l\'adresse', () => {
+    expect(displayNameFieldRefusal(baseForm({ displayName: null }))).toBeNull();
+    expect(displayNameFieldRefusal(baseForm({ displayName: '   ' }))).toBeNull();
+  });
+
+  test('un nom DÉRIVÉ d\'une lettre n\'est pas envoyé comme s\'il suffisait', () => {
+    const muette = baseForm({ displayName: null, email: 'a@exemple.com', username: 'ada' });
+    expect(isIdentityDefined(muette)).toBe(false);
+  });
+});
+
+describe('le pseudo tapé a au moins trois caractères', () => {
+  test('la borne est celle du schéma partagé', () => {
+    const court = baseForm({ username: 'a'.repeat(usernameMinLength - 1) });
+    expect(usernameFieldRefusal(court)).toBe('too-short');
+    expect(canSubmit(court)).toBe(false);
+    expect(usernameFieldRefusal(baseForm({ username: 'a'.repeat(usernameMinLength) }))).toBeNull();
+  });
+
+  test('« Al » est refusé comme pseudo, « Ali » passe (attend usernameMinLength = 3 du lot partagé)', () => {
+    expect(usernameFieldRefusal(baseForm({ username: 'Al' }))).toBe('too-short');
+    expect(canSubmit(baseForm({ username: 'Al' }))).toBe(false);
+    expect(usernameFieldRefusal(baseForm({ username: 'Ali' }))).toBeNull();
+  });
+
+  test('« Al » entouré d\'espaces est rogné avant d\'être jugé', () => {
+    expect(usernameFieldRefusal(baseForm({ username: '  Al  ' }))).toBe('too-short');
+    expect(usernameFieldRefusal(baseForm({ username: '  Ali  ' }))).toBeNull();
+  });
+
+  test('le message affiche le minimum', () => {
+    expect(usernameRefusalMessage('fr', 'too-short')).toContain(String(usernameMinLength));
+  });
+});

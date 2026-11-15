@@ -14,7 +14,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AudioTranslateService } from './AudioTranslateService';
 import { ZmqTranslationClient } from './zmq-translation';
-import { normalizeStoredAnalysis, normalizeVoiceProsody } from './voice-analysis-normalize';
+import { normalizeStoredAnalysis } from './voice-analysis-normalize';
 import type {
   VoiceQualityAnalysis,
   VoiceAnalysisType,
@@ -111,7 +111,7 @@ export class VoiceAnalysisService {
 
       // Persister dans MongoDB si demandé
       if (persist) {
-        await this.persistAttachmentAnalysis(attachmentId, messageId, analysis);
+        await this.persistAttachmentAnalysis(attachmentId, analysis);
         persisted = true;
         logger.info(`[VoiceAnalysis] Persisted analysis for attachment: ${attachmentId}`);
       }
@@ -166,7 +166,6 @@ export class VoiceAnalysisService {
    */
   private async persistAttachmentAnalysis(
     attachmentId: string,
-    messageId: string,
     analysis: VoiceQualityAnalysis
   ): Promise<void> {
     // Chercher l'attachment et sa transcription

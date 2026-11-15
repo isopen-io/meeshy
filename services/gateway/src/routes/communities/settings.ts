@@ -13,9 +13,12 @@ import {
 } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { sendSuccess, sendUnauthorized, sendNotFound, sendForbidden, sendConflict, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendForbidden, sendConflict, sendInternalError } from '../../utils/response.js';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
-import { flattenCommunityCounts } from './serialization';
+import { identityImagesAreCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../services/attachments/identityImageOwnership';
+import { COMMUNITY_ACTIVE_COUNTS, flattenCommunityCounts } from './serialization';
+import { admitSalonOccupants, closeSalonsAfterSwitch, isBecomingPrivate } from '../../services/conversations/communitySalonAdoption';
+import { scheduleCommunityUpdatedBroadcastFrom } from '../../services/community-updated-broadcast';
 
 const logger = enhancedLogger.child({ module: 'CommunitySettingsRoutes' });
 
@@ -55,6 +58,10 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
           description: 'Access denied - only the community creator can update the community',
           ...errorResponseSchema
         },
+        400: {
+          description: 'Invalid community fields',
+          ...errorResponseSchema
+        },
         404: {
           description: 'Community not found',
           ...errorResponseSchema
@@ -72,7 +79,11 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
-      const validatedData = UpdateCommunitySchema.parse(request.body);
+      const parsed = UpdateCommunitySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendBadRequest(reply, 'Invalid community', { code: 'INVALID_COMMUNITY' });
+      }
+      const validatedData = parsed.data;
 
       // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
@@ -83,9 +94,10 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
       const userId = authContext.userId;
 
       // Verifier que l'utilisateur est le createur de la communaute
+      // #8876 — communauté désactivée par l'administration : 404, comme pour les lecteurs publics.
       const community = await fastify.prisma.community.findFirst({
-        where: { id },
-        select: { createdBy: true, identifier: true }
+        where: { id, isActive: true },
+        select: { createdBy: true, identifier: true, isPrivate: true, avatar: true, banner: true }
       });
 
       if (!community) {
@@ -93,7 +105,18 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
       }
 
       if (community.createdBy !== userId) {
-        return sendForbidden(reply, 'Only community creator can update community');
+        return sendForbidden(reply, 'Only community creator can update community', { code: 'COMMUNITY_CREATOR_ONLY' });
+      }
+
+      const ownsImages = await identityImagesAreCallers(fastify.prisma, {
+        userId,
+        images: [
+          { reference: validatedData.avatar, current: community.avatar },
+          { reference: validatedData.banner, current: community.banner },
+        ],
+      });
+      if (!ownsImages) {
+        return sendBadRequest(reply, 'Invalid community', { code: IDENTITY_IMAGE_NOT_OWNED });
       }
 
       // Preparer les donnees de mise a jour
@@ -116,12 +139,19 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
           });
 
           if (existingCommunity) {
-            return sendConflict(reply, `A community with identifier "${newIdentifier}" already exists`);
+            return sendConflict(reply, `A community with identifier "${newIdentifier}" already exists`, { code: 'COMMUNITY_IDENTIFIER_TAKEN' });
           }
         }
 
         updateData.identifier = newIdentifier;
       }
+
+      // #16723 — passer en privée fait entrer les occupants des salons AVANT la
+      // bascule ; ceux qui ne peuvent pas entrer en sortent APRÈS.
+      const closesSalons = isBecomingPrivate({ before: community.isPrivate, requested: validatedData.isPrivate });
+      const outsiders = closesSalons
+        ? await admitSalonOccupants(fastify.prisma, { communityId: id, createdBy: community.createdBy })
+        : [];
 
       const updatedCommunity = await fastify.prisma.community.update({
         where: { id },
@@ -135,14 +165,16 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
               avatar: true
             }
           },
-          _count: {
-            select: {
-              members: true,
-              Conversation: true
-            }
-          }
+          _count: { select: COMMUNITY_ACTIVE_COUNTS }
         }
       });
+      if (closesSalons) {
+        await closeSalonsAfterSwitch(
+          { prisma: fastify.prisma, socketIOHandler: fastify.socketIOHandler },
+          { communityId: id, createdBy: community.createdBy, outsiders, now: new Date() },
+        );
+      }
+      scheduleCommunityUpdatedBroadcastFrom(fastify, { communityId: id });
 
       return sendSuccess(reply, flattenCommunityCounts(updatedCommunity));
     } catch (error) {
@@ -155,7 +187,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
   fastify.delete('/communities/:id', {
     onRequest: [fastify.authenticate],
     schema: {
-      description: 'Delete a community permanently. Only the community creator can delete the community. This will also cascade delete all associated members and conversations.',
+      description: 'Delete a community permanently. Only the community creator can delete the community. Members, member preferences and shares are removed; its conversations are detached (kept, no longer in the community).',
       tags: ['communities'],
       summary: 'Delete a community',
       params: {
@@ -212,9 +244,10 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
 
       const userId = authContext.userId;
 
-      // Verifier que l'utilisateur est le createur de la communaute
+      // #6377 — une communauté désactivée par l'administration n'existe plus
+      // pour son créateur (#8876) : la supprimer effacerait ce que l'équipe a retenu.
       const community = await fastify.prisma.community.findFirst({
-        where: { id },
+        where: { id, isActive: true },
         select: { createdBy: true }
       });
 
@@ -223,12 +256,16 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
       }
 
       if (community.createdBy !== userId) {
-        return sendForbidden(reply, 'Only community creator can delete community');
+        return sendForbidden(reply, 'Only community creator can delete community', { code: 'COMMUNITY_CREATOR_ONLY' });
       }
 
-      await fastify.prisma.community.delete({
-        where: { id }
-      });
+      await fastify.prisma.$transaction([
+        fastify.prisma.conversation.updateMany({ where: { communityId: id }, data: { communityId: null } }),
+        fastify.prisma.communityMember.deleteMany({ where: { communityId: id } }),
+        fastify.prisma.userCommunityPreferences.deleteMany({ where: { communityId: id } }),
+        fastify.prisma.conversationShare.deleteMany({ where: { communityId: id } }),
+        fastify.prisma.community.delete({ where: { id } })
+      ]);
 
       return sendSuccess(reply, { message: 'Community deleted successfully' });
     } catch (error) {

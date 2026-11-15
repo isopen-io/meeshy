@@ -47,6 +47,7 @@ jest.mock('../../../utils/response', () => ({
 }));
 
 jest.mock('../../../utils/logger', () => ({
+  ...(jest.requireActual('../../../utils/logger') as object),
   logger: {
     info: jest.fn(),
     debug: jest.fn(),
@@ -66,7 +67,7 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
-import { pushTokenRoutes } from '../../../routes/push-tokens';
+import { pushTokenRoutes, MAX_ACTIVE_PUSH_TOKENS_PER_TYPE } from '../../../routes/push-tokens';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -83,6 +84,7 @@ function createMockPrisma() {
   return {
     pushToken: {
       upsert: jest.fn<any>(),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
       findMany: jest.fn<any>().mockResolvedValue([]),
     },
@@ -340,6 +342,133 @@ describe('POST /users/register-device-token', () => {
         create: expect.objectContaining({ apnsEnvironment: 'production' }),
       })
     );
+  });
+
+  it('deactivates other active tokens of the same user/deviceId/type on registration', async () => {
+    const { fastify, pr, reply } = setup();
+    const route = getRoute(fastify, 'POST', 'register-device-token');
+    pr.pushToken.upsert.mockResolvedValue(
+      makePushToken({ id: 'fresh-record-id', createdAt: NOW, updatedAt: NOW })
+    );
+
+    const req = makeRequest({
+      body: {
+        token: 'apns-second-token-1234567890',
+        platform: 'ios',
+        deviceId: 'iphone-hardware-abc',
+      },
+    });
+    await route.handler(req, reply);
+
+    expect(pr.pushToken.updateMany).toHaveBeenCalledWith({
+      where: {
+        isActive: true,
+        id: { not: 'fresh-record-id' },
+        userId: USER_ID,
+        deviceId: 'iphone-hardware-abc',
+        type: 'apns',
+      },
+      data: { isActive: false },
+    });
+    expect(mockSendSuccess).toHaveBeenCalled();
+  });
+
+  it('detaches the token from its previous owner BEFORE attaching it to the new one', async () => {
+    const { fastify, pr, reply } = setup();
+    const route = getRoute(fastify, 'POST', 'register-device-token');
+    pr.pushToken.upsert.mockResolvedValue(
+      makePushToken({ id: 'fresh-record-id', createdAt: NOW, updatedAt: NOW })
+    );
+
+    const req = makeRequest({
+      body: { token: 'apns-reassigned-token-1234567890', platform: 'ios' },
+    });
+    await route.handler(req, reply);
+
+    expect(pr.pushToken.updateMany).toHaveBeenCalledWith({
+      where: {
+        isActive: true,
+        token: 'apns-reassigned-token-1234567890',
+        userId: { not: USER_ID },
+      },
+      data: { isActive: false },
+    });
+    const detachOrder = pr.pushToken.updateMany.mock.invocationCallOrder[0];
+    const attachOrder = pr.pushToken.upsert.mock.invocationCallOrder[0];
+    expect(detachOrder).toBeLessThan(attachOrder);
+  });
+
+  it('stamps registeredAt on create AND on re-registration, so a live device stays recent', async () => {
+    const { fastify, pr, reply } = setup();
+    const route = getRoute(fastify, 'POST', 'register-device-token');
+    pr.pushToken.upsert.mockResolvedValue(makePushToken());
+
+    await route.handler(
+      makeRequest({ body: { token: 'apns-token-1234567890abcdef', platform: 'ios' } }),
+      reply
+    );
+
+    const upsertArgs = pr.pushToken.upsert.mock.calls[0][0] as any;
+    expect(upsertArgs.create.registeredAt).toBeInstanceOf(Date);
+    expect(upsertArgs.update.registeredAt).toBeInstanceOf(Date);
+  });
+
+  it('retires the active tokens of the same user/type beyond the most recently registered ones (clients without deviceId)', async () => {
+    const { fastify, pr, reply } = setup();
+    const route = getRoute(fastify, 'POST', 'register-device-token');
+    pr.pushToken.upsert.mockResolvedValue(makePushToken({ id: 'fresh-record-id', type: 'voip' }));
+    pr.pushToken.findMany.mockResolvedValue([{ id: 'stale-1' }, { id: 'stale-2' }]);
+
+    await route.handler(
+      makeRequest({ body: { token: 'voip-token-1234567890abcdef', platform: 'ios', type: 'voip' } }),
+      reply
+    );
+
+    expect(pr.pushToken.findMany).toHaveBeenCalledWith({
+      where: { userId: USER_ID, type: 'voip', isActive: true, id: { not: 'fresh-record-id' } },
+      orderBy: [{ registeredAt: 'desc' }, { createdAt: 'desc' }],
+      skip: MAX_ACTIVE_PUSH_TOKENS_PER_TYPE - 1,
+      select: { id: true },
+    });
+    expect(pr.pushToken.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['stale-1', 'stale-2'] }, userId: USER_ID },
+      data: { isActive: false },
+    });
+    expect(mockSendSuccess).toHaveBeenCalled();
+  });
+
+  it('retires nothing when the user is within the per-type bound', async () => {
+    const { fastify, pr, reply } = setup();
+    const route = getRoute(fastify, 'POST', 'register-device-token');
+    pr.pushToken.upsert.mockResolvedValue(makePushToken({ id: 'fresh-record-id' }));
+    pr.pushToken.findMany.mockResolvedValue([]);
+
+    await route.handler(
+      makeRequest({ body: { token: 'apns-token-1234567890abcdef', platform: 'ios' } }),
+      reply
+    );
+
+    expect(pr.pushToken.updateMany).toHaveBeenCalledTimes(1);
+    expect(mockSendSuccess).toHaveBeenCalled();
+  });
+
+  it('bounds the per-type active tokens at a handful of real devices', () => {
+    expect(MAX_ACTIVE_PUSH_TOKENS_PER_TYPE).toBeGreaterThanOrEqual(3);
+    expect(MAX_ACTIVE_PUSH_TOKENS_PER_TYPE).toBeLessThanOrEqual(10);
+  });
+
+  it('returns 500 when stale-token deactivation fails', async () => {
+    const { fastify, pr, reply } = setup();
+    const route = getRoute(fastify, 'POST', 'register-device-token');
+    pr.pushToken.upsert.mockResolvedValue(makePushToken({ createdAt: NOW, updatedAt: NOW }));
+    pr.pushToken.updateMany.mockRejectedValue(new Error('DB error'));
+
+    const req = makeRequest({
+      body: { token: 'apns-token-1234567890abcdef', platform: 'ios' },
+    });
+    await route.handler(req, reply);
+
+    expect(mockSendInternalError).toHaveBeenCalledWith(reply, expect.any(String));
   });
 
   it('returns 401 when authContext is absent', async () => {

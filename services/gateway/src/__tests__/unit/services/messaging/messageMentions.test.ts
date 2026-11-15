@@ -10,6 +10,9 @@ import { describe, it, expect, jest } from '@jest/globals';
 import { resolveMessageMentions, replaceMessageMentions, reconcileEditedMentions } from '../../../../services/messaging/messageMentions';
 
 const MESSAGE = { id: 'msg-1', conversationId: 'conv-1', senderId: 'part-1' };
+// #14066 — l'expéditeur est un membre ACTIF de la conversation du message :
+// sinon il ne cite personne.
+const ACTIVE_SENDER = { userId: 'u-sender', isActive: true, conversationId: 'conv-1' };
 
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
@@ -17,7 +20,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
       findMany: jest.fn<any>().mockResolvedValue([
         { userId: 'u-alice', displayName: 'Alice', user: { id: 'u-alice', username: 'alice', displayName: 'Alice' } },
       ]),
-      findUnique: jest.fn<any>().mockResolvedValue({ userId: 'u-sender' }),
+      findUnique: jest.fn<any>().mockResolvedValue(ACTIVE_SENDER),
     },
     user: { findMany: jest.fn<any>().mockResolvedValue([]) },
     // Cycle 123 bis — la notification d'un ENTRANT relit les drapeaux de
@@ -115,6 +118,28 @@ describe('resolveMessageMentions — court-circuit', () => {
     expect(candidates).not.toContain('u-50');
   });
 
+  // Le plafond compte des PERSONNES, comme son nom le dit (#17073). L'autre
+  // source de la même donnée ne peut PAS porter deux fois la même personne :
+  // l'extraction passe par une carte `username → user`. La liste explicite,
+  // elle, pouvait — et `slice(0, 50)` bornait alors cinquante COPIES, si bien
+  // qu'une charge `[victime ×50]` consommait tout le plafond pour un seul
+  // destinataire. Le témoin du plafond ci-dessus ne pouvait pas le voir : ses
+  // soixante entrées sont toutes distinctes.
+  it('le plafond compte des personnes, pas des occurrences', async () => {
+    const explicit = [...Array.from({ length: 60 }, () => 'u-victime'), 'u-autre'];
+    const prisma = makePrisma({ user: { findMany: jest.fn<any>().mockResolvedValue([]) } });
+    const mentionService = makeMentionService({
+      validateMentionPermissions: jest.fn<any>().mockResolvedValue({ validUserIds: [] }),
+    });
+
+    await resolveMessageMentions({
+      prisma, mentionService, message: MESSAGE,
+      content: 'sans arobase', explicitMentionedUserIds: explicit,
+    });
+
+    expect(mentionService.validateMentionPermissions.mock.calls[0][1]).toEqual(['u-victime', 'u-autre']);
+  });
+
   it('rend le lot vide sans service de mentions câblé', async () => {
     const prisma = makePrisma();
 
@@ -176,7 +201,7 @@ describe('resolveMessageMentions — chemin nominal', () => {
 
     expect(prisma.participant.findUnique).toHaveBeenCalledWith({
       where: { id: 'part-1' },
-      select: { userId: true },
+      select: { userId: true, isActive: true, bannedAt: true, conversationId: true },
     });
     expect(mentionService.validateMentionPermissions).toHaveBeenCalledWith('conv-1', ['u-alice'], 'u-sender');
   });
@@ -190,7 +215,7 @@ describe('resolveMessageMentions — chemin nominal', () => {
         findMany: jest.fn<any>().mockResolvedValue([
           { userId: 'u-alice', displayName: 'Alice', user: { id: 'u-alice', username: 'alice', displayName: 'Alice' } },
         ]),
-        findUnique: jest.fn<any>().mockResolvedValue({ userId: null }),
+        findUnique: jest.fn<any>().mockResolvedValue({ userId: null, isActive: true, conversationId: 'conv-1' }),
       },
     });
     const mentionService = makeMentionService();
@@ -276,7 +301,10 @@ describe('resolveMessageMentions — dégradations', () => {
   // le parseur reste appelé, avec la seule liste vide.
   it('dégrade vers une liste de participants vide quand leur lecture échoue', async () => {
     const prisma = makePrisma({
-      participant: { findMany: jest.fn<any>().mockRejectedValue(new Error('mongo down')) },
+      participant: {
+        findMany: jest.fn<any>().mockRejectedValue(new Error('mongo down')),
+        findUnique: jest.fn<any>().mockResolvedValue(ACTIVE_SENDER),
+      },
     });
     const mentionService = makeMentionService();
     const onError = jest.fn();
@@ -384,6 +412,7 @@ describe('replaceMessageMentions — réconciliation', () => {
         findMany: jest.fn<any>().mockResolvedValue([
           { userId: 'u-john', displayName: 'John Doe', user: { id: 'u-john', username: 'john', displayName: 'John Doe' } },
         ]),
+        findUnique: jest.fn<any>().mockResolvedValue(ACTIVE_SENDER),
       },
       mention: {
         findMany: jest.fn<any>().mockResolvedValue([{ mentionedUserId: 'u-john' }]),
@@ -581,6 +610,60 @@ describe('reconcileEditedMentions', () => {
       },
       ['u-alice', 'u-sender']
     );
+  });
+
+  /**
+   * #17074 — une DEMANDE de message en attente ne sonne pas, et l'ÉDITION était
+   * la porte par laquelle elle sonnait quand même.
+   *
+   * La garde #14107 est posée sur l'éventail d'ENVOI (`messageNotificationFanOut`,
+   * `messageRequestAt instanceof Date` ⇒ `silenced`) et sur l'événement socket
+   * `mention:created` de l'édition (`MessageHandler`, par
+   * `withoutPendingMessageRequests`) — pas sur l'éventail de NOTIFICATION de
+   * cette même édition.
+   *
+   * Ce qu'un inconnu obtenait en éditant son message pour y ajouter `@cible` :
+   * une notification `priority: 'high'`, donc bannière + e-mail immédiat si la
+   * cible est hors ligne, et le texte édité ENTIER sur le fil push sous la clé
+   * `content`, que la NSE iOS lit et PRÉ-ENREGISTRE en bulle dans sa base
+   * locale. Le canal socket, lui, s'était tu.
+   *
+   * Le témoin ne peut pas être posé au cas nominal : sans demande en attente, la
+   * garde absente et la garde juste rendent le même verdict.
+   */
+  it("n'annonce pas une mention ajoutée par édition au destinataire d'une demande en attente (#17074)", async () => {
+    const prisma = makeEditPrisma({
+      conversation: {
+        findUnique: jest.fn<any>().mockResolvedValue({
+          participants: [
+            { userId: 'u-alice', messageRequestAt: new Date('2026-11-01T08:00:00Z') },
+            { userId: 'u-sender', messageRequestAt: null },
+          ],
+        }),
+      },
+    });
+    const notificationService = makeNotifier();
+
+    const result = await reconcileEditedMentions({
+      prisma, mentionService: makeMentionService(), notificationService,
+      message: MESSAGE, content: 'salut @alice', editorUserId: 'u-sender',
+    });
+
+    // La réconciliation a bien eu lieu : c'est la NOTIFICATION qui se tait.
+    expect(result.reconciled).toBe(true);
+    expect(result.newlyMentionedUserIds).toEqual(['u-alice']);
+    expect(notificationService.createMentionNotificationsBatch).not.toHaveBeenCalled();
+  });
+
+  it('la lecture des participants demande bien `messageRequestAt` — sans la colonne, la garde ne peut pas tomber', async () => {
+    const prisma = makeEditPrisma();
+    await reconcileEditedMentions({
+      prisma, mentionService: makeMentionService(), notificationService: makeNotifier(),
+      message: MESSAGE, content: 'salut @alice', editorUserId: 'u-sender',
+    });
+
+    const [args] = prisma.conversation.findUnique.mock.calls[0] as [{ select: { participants: { select: Record<string, boolean> } } }];
+    expect(args.select.participants.select).toMatchObject({ userId: true, messageRequestAt: true });
   });
 
   it('une mention ajoutée en ÉDITANT un message éphémère hérite de son échéance', async () => {

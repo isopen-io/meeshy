@@ -79,12 +79,12 @@ final class AuthManagerLogoutSyncCheckpointsPurgeTests: XCTestCase {
         assertCheckpointsCleared("au logout")
     }
 
-    func test_requireReauthentication_clearsSyncCheckpoints() async {
+    func test_requireReauthentication_clearsSyncCheckpoints() async throws {
         // `requireReauthentication` est private (scope fichier) — déclenchement
         // indirect par le seul chemin public qui l'invoque : refreshSession
         // avec un service qui répond `.auth(.sessionExpired)` (précédent :
         // AuthManagerRefreshTests.testConcurrentRefreshPropagatesErrors).
-        AuthManager.shared.applySession(token: "tok-sync04b", sessionToken: "sess", user: makeUser())
+        try AuthManager.shared.applySession(token: "tok-sync04b", sessionToken: "sess", user: makeUser())
         AuthManager.shared.authService = SessionExpiredAuthServiceStub()
         seedCheckpoints()
 

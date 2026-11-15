@@ -1,0 +1,104 @@
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+
+import { INTERFACE_LANGUAGE_KEY } from './inline-interface-language-bootstrap.js';
+import { translate } from './i18n-catalog';
+import { currentInterfaceLanguage, followBrowserInterfaceLanguage, interfaceLanguageOf, setInterfaceLanguage } from './interface-language';
+
+/**
+ * `currentInterfaceLanguage`/`setInterfaceLanguage` (#6206) — même patron que
+ * `scheme.test.ts`, mais avec le DOM ENREGISTRÉ (happy-dom) plutôt qu'un mock
+ * manuel : contrairement au schéma clair/sombre, ce module ne réaffecte
+ * jamais `document` lui-même, seulement `document.documentElement.lang`, une
+ * propriété ordinaire sous happy-dom.
+ */
+
+beforeAll(() => {
+  ensureHappyDomRegistered();
+});
+
+afterAll(async () => {
+  await releaseHappyDomIfRegistered();
+});
+
+afterEach(() => {
+  document.documentElement.lang = 'fr';
+  document.documentElement.dir = 'ltr';
+  try {
+    localStorage.removeItem(INTERFACE_LANGUAGE_KEY);
+  } catch {
+    /* rien à nettoyer */
+  }
+});
+
+describe('currentInterfaceLanguage — lit document.documentElement.lang, jamais ne le recalcule', () => {
+  test('rend la langue posée par le script inline', () => {
+    document.documentElement.lang = 'en';
+    expect(currentInterfaceLanguage()).toBe('en');
+  });
+
+  test('rend chacune des sept langues cataloguées', () => {
+    for (const language of ['fr', 'en', 'es', 'pt', 'de', 'it', 'ar']) {
+      document.documentElement.lang = language;
+      expect(currentInterfaceLanguage()).toBe(language);
+    }
+  });
+
+  test('retombe sur le défaut « fr » si la valeur posée est une langue non cataloguée', () => {
+    document.documentElement.lang = 'sw';
+    expect(currentInterfaceLanguage()).toBe('fr');
+  });
+
+  test('retombe sur le défaut « fr » si l’attribut est vide', () => {
+    document.documentElement.lang = '';
+    expect(currentInterfaceLanguage()).toBe('fr');
+  });
+});
+
+describe('setInterfaceLanguage — pose ET persiste, contrairement au suivi système du schéma', () => {
+  test('pose document.documentElement.lang', async () => {
+    await setInterfaceLanguage('en');
+    expect(document.documentElement.lang).toBe('en');
+  });
+
+  test('persiste le choix pour le prochain démarrage', async () => {
+    await setInterfaceLanguage('en');
+    expect(localStorage.getItem(INTERFACE_LANGUAGE_KEY)).toBe('en');
+  });
+
+  /**
+   * La langue n'est posée qu'une fois son catalogue CHARGÉ : un libellé rendu
+   * entre les deux lirait une langue dont aucun texte n'est disponible.
+   */
+  test('charge le catalogue de la langue AVANT de la poser', async () => {
+    await setInterfaceLanguage('it');
+    expect(translate(currentInterfaceLanguage(), 'root.menu.settings')).toBe('Impostazioni');
+  });
+});
+
+describe('le sens de lecture suit la langue d’interface (#8803)', () => {
+  test('passer à l’arabe retourne la page, en revenir la remet à l’endroit', async () => {
+    await setInterfaceLanguage('ar');
+    expect(document.documentElement.dir).toBe('rtl');
+    await setInterfaceLanguage('fr');
+    expect(document.documentElement.dir).toBe('ltr');
+  });
+
+  test('« Automatique » pose aussi le sens de la langue résolue', async () => {
+    await followBrowserInterfaceLanguage(['ar-EG']);
+    expect(document.documentElement.dir).toBe('rtl');
+    await followBrowserInterfaceLanguage(['en-US']);
+    expect(document.documentElement.dir).toBe('ltr');
+  });
+});
+
+describe('interfaceLanguageOf — la langue d’interface qu’un code désigne (#9710)', () => {
+  test('une langue du produit se reconnaît, région et casse comprises ; une autre n’en désigne aucune', () => {
+    expect(interfaceLanguageOf('en')).toBe('en');
+    expect(interfaceLanguageOf('pt-BR')).toBe('pt');
+    expect(interfaceLanguageOf('AR')).toBe('ar');
+    expect(interfaceLanguageOf('ja')).toBeNull();
+    expect(interfaceLanguageOf('')).toBeNull();
+  });
+});

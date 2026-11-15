@@ -64,7 +64,7 @@ struct ConversationBackgroundConfig {
         self.isE2EEncrypted = conversation.encryptionMode == "e2ee"
         self.memberCount = conversation.memberCount
         self.topLanguages = topLanguages
-        let palette = conversation.colorPalette
+        let palette = conversation.displayPalette(isDark: isDarkMode)
         self.accentHex = palette.primary
         self.secondaryHex = palette.secondary
         self.isDarkMode = isDarkMode
@@ -109,7 +109,7 @@ struct ConversationBackgroundConfig {
     /// animations PLUS each decorative sub-component's own pulse/orbit
     /// re-evaluated SwiftUI bodies at up to 120 Hz (ProMotion) the entire time a
     /// conversation was open — pegging the main thread and heating the device
-    /// (device trace 2026-06-10, `ConversationAnimatedBackground.body` was the
+    /// (`ConversationAnimatedBackground.body` was the
     /// hottest app symbol). When `false`, every animation kickoff early-returns
     /// and the background renders its STATIC resting composition (gradient +
     /// overlays at phase 0). Flip to `true` — or drive it from a scroll/typing
@@ -120,6 +120,7 @@ struct ConversationBackgroundConfig {
 // MARK: - Main View
 
 struct ConversationAnimatedBackground: View {
+    @State private var delayed = DelayedActions()
     let config: ConversationBackgroundConfig
 
     @State private var animate = false
@@ -236,7 +237,7 @@ struct ConversationAnimatedBackground: View {
         orbitPhase = 0
         groupColorPhase = false
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        delayed.run(after: .milliseconds(100)) {
             withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
                 animate = true
             }
@@ -460,7 +461,7 @@ struct ConversationAnimatedBackground: View {
 
             Image(systemName: "person.3.fill")
                 .font(.system(size: 24))
-                .foregroundColor(currentGroupColor.opacity(0.40))
+                .foregroundStyle(currentGroupColor.opacity(0.40))
         }
     }
 
@@ -482,9 +483,9 @@ struct ConversationAnimatedBackground: View {
         return Group {
             if config.memberCount > avatarCount {
                 Text("+\(config.memberCount - avatarCount)")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(currentGroupColor.opacity(0.50))
-                    .padding(.horizontal, 10)
+                    .font(.system(size: MeeshyFont.labelSize, weight: .bold))
+                    .foregroundStyle(currentGroupColor.opacity(0.50))
+                    .padding(.horizontal, MeeshySpacing.smPlus)
                     .padding(.vertical, 5)
                     .background(Capsule().fill(currentGroupColor.opacity(0.12)))
                     .offset(y: 60)
@@ -498,7 +499,7 @@ struct ConversationAnimatedBackground: View {
         ZStack {
             ForEach(0..<4, id: \.self) { i in
                 Circle()
-                    .stroke(config.accentColor.opacity(0.20 - Double(i) * 0.03), lineWidth: 2)
+                    .stroke(config.accentColor.opacity(0.20 - Double(i) * 0.03), lineWidth: MeeshyBorder.strong)
                     .frame(width: 70 + CGFloat(i) * 50, height: 70 + CGFloat(i) * 50)
                     .scaleEffect(animate ? 1.15 : 0.9)
                     .animation(
@@ -551,7 +552,7 @@ struct ConversationAnimatedBackground: View {
                 .animation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true), value: animate)
 
             Circle()
-                .stroke(config.accentColor.opacity(animate ? 0.22 : 0.12), lineWidth: 2)
+                .stroke(config.accentColor.opacity(animate ? 0.22 : 0.12), lineWidth: MeeshyBorder.strong)
                 .frame(width: 110, height: 110)
                 .scaleEffect(animate ? 1.05 : 0.95)
                 .animation(.easeInOut(duration: 2).repeatForever(autoreverses: true), value: animate)
@@ -572,7 +573,7 @@ struct ConversationAnimatedBackground: View {
         return ZStack {
             ForEach(0..<6, id: \.self) { i in
                 Image(systemName: isE2EE ? "lock.shield.fill" : "lock.fill")
-                    .font(.system(size: 14))
+                    .font(.system(size: MeeshyIconSize.sm))
                     .foregroundColor(config.accentColor.opacity(0.35))
                     .offset(
                         x: cos(CGFloat(i) * .pi / 3 + orbitPhase * 0.2) * (animate ? 110 : 90),
@@ -598,7 +599,7 @@ struct ConversationAnimatedBackground: View {
                 ForEach(0..<4, id: \.self) { i in
                     ZStack {
                         Image(systemName: "envelope.fill")
-                            .font(.system(size: 16))
+                            .font(.system(size: MeeshyIconSize.md))
                             .foregroundColor(config.accentColor.opacity(0.20))
                         Circle()
                             .fill(config.accentColor.opacity(0.30))
@@ -626,7 +627,7 @@ struct ConversationAnimatedBackground: View {
         return ZStack {
             ForEach(0..<flagCount, id: \.self) { i in
                 Text(flags[i])
-                    .font(.system(size: 24))
+                    .font(MeeshyFont.emoji(24))
                     .shadow(color: .black.opacity(0.15), radius: 2)
                     .offset(
                         x: cos(CGFloat(i) * .pi * 2 / CGFloat(flagCount) + orbitPhase) * (size.width * 0.35),

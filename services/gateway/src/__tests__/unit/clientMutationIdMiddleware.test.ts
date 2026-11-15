@@ -83,13 +83,17 @@ describe('clientMutationId middleware', () => {
       headers: { 'x-client-mutation-id': 'not-a-cmid' },
     });
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual({
-      success: false,
-      error: {
-        code: 'INVALID_MUTATION_ID',
+    // #4434 — l'enveloppe du dépôt porte `error` en CHAÎNE et `message` à la
+    // RACINE. Ce témoin figeait la forme OBJET, que `errorResponseSchema`
+    // coerce en « [object Object] » dès qu'une route déclare son 400 : il
+    // attestait donc une charge qu'aucun client réel ne recevait.
+    expect(res.json()).toEqual(
+      expect.objectContaining({
+        success: false,
+        error: 'INVALID_MUTATION_ID',
         message: 'Invalid cmid format',
-      },
-    });
+      })
+    );
   });
 
   it('rejects empty string header with 400', async () => {
@@ -117,8 +121,8 @@ describe('clientMutationId middleware', () => {
       headers: { 'x-client-mutation-id': 'cmid_550E8400-E29B-41D4-A716-446655440000' },
     });
     expect(res.statusCode).toBe(400);
-    const body = res.json() as { error?: { code?: string } };
-    expect(body.error?.code).toBe('INVALID_MUTATION_ID');
+    const body = res.json() as { error?: string };
+    expect(body.error).toBe('INVALID_MUTATION_ID');
   });
 
   it('rejects an array header value (typeof !== string) with 400', async () => {
@@ -135,7 +139,7 @@ describe('clientMutationId middleware', () => {
     const res = await app.inject({ method: 'GET', url: '/check' });
     expect(res.statusCode).toBe(400);
     const body = res.json() as any;
-    expect(body.error?.code).toBe('INVALID_MUTATION_ID');
+    expect(body.error).toBe('INVALID_MUTATION_ID');
   });
 
   it('is idempotent: calling registerClientMutationIdHook twice does not throw', async () => {

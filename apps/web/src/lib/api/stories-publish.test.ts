@@ -1,0 +1,251 @@
+import { describe, expect, test } from 'bun:test';
+
+import { buildStoryCanvasEffects, studioMediaIds } from '@/lib/stories/story-document';
+import { newTextLayer } from '@/lib/stories/studio-text';
+
+import { createHttpTransport } from './http';
+import { fixtureStories, publishStory, recordFixtureStory } from './stories-publish';
+
+const BACKGROUND = { postMediaId: 'pm-bg', fileUrl: '2026/09/u1/bg.jpg' } as const;
+const texts = (text: string) => (text === '' ? [] : [newTextLayer({ id: 'text-1', language: 'fr', text })]);
+
+function fakeFetch(response: { readonly status: number; readonly body?: unknown }) {
+  const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
+  const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({ url: String(input), init: init ?? {} });
+    return new Response(response.body === undefined ? null : JSON.stringify(response.body), { status: response.status });
+  }) as typeof fetch;
+  return { impl, calls };
+}
+
+function headerOf(init: RequestInit, name: string): string | null {
+  const headers = init.headers;
+  if (headers instanceof Headers) return headers.get(name);
+  if (headers && typeof headers === 'object') {
+    const entry = Object.entries(headers as Record<string, string>).find(([k]) => k.toLowerCase() === name.toLowerCase());
+    return entry?.[1] ?? null;
+  }
+  return null;
+}
+
+describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
+  test('corps exact : type STORY, content, storyEffects, mediaIds ; X-Canvas-Caps posé (§3.3)', async () => {
+    const effects = buildStoryCanvasEffects({ texts: texts('Bonjour'), background: { source: BACKGROUND, mediaType: 'image' } })!;
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    const result = await publishStory({
+      source: 'gateway',
+      transport,
+      content: 'Bonjour',
+      originalLanguage: 'fr',
+      storyEffects: effects,
+      mediaIds: studioMediaIds([{ background: BACKGROUND }]),
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.id).toBe('post-1');
+    const call = calls[0]!;
+    expect(call.url).toBe('/api/v1/posts');
+    expect(headerOf(call.init, 'X-Canvas-Caps')).toBe('3');
+    const body = JSON.parse(String(call.init.body));
+    expect(body.type).toBe('STORY');
+    expect(body.content).toBe('Bonjour');
+    expect(body.mediaIds).toEqual(['pm-bg']);
+    expect(body.storyEffects.v).toBe(3);
+  });
+
+  test('le MÊME canevas part en POST ou en RÉEL quand le studio publie un autre format (#7497)', async () => {
+    const effects = buildStoryCanvasEffects({ texts: texts('Bonjour'), background: { source: BACKGROUND, mediaType: 'image' } })!;
+    for (const type of ['POST', 'REEL'] as const) {
+      const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+      const transport = createHttpTransport({ base: '', fetchImpl: impl });
+      await publishStory({ source: 'gateway', transport, type, storyEffects: effects, mediaIds: studioMediaIds([{ background: BACKGROUND }]) });
+      const body = JSON.parse(String(calls[0]!.init.body));
+      expect(body.type).toBe(type);
+      expect(body.storyEffects.v).toBe(3);
+    }
+  });
+
+  test('un média RÉFÉRENCÉ mais absent de mediaIds ⇒ le port refuse, AUCUN appel réseau', async () => {
+    const effects = buildStoryCanvasEffects({ texts: [], background: { source: BACKGROUND, mediaType: 'image' } })!;
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    const result = await publishStory({ source: 'gateway', transport, content: '', storyEffects: effects, mediaIds: [] });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('MEDIA_NOT_CLAIMED');
+    expect(calls).toHaveLength(0);
+  });
+
+  test('un document AVEC texte de scène ⇒ corps POST SANS `content` (défaut 4, revue-correction)', async () => {
+    const effects = buildStoryCanvasEffects({ texts: texts('Bonjour') })!;
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    await publishStory({ source: 'gateway', transport, originalLanguage: 'fr', storyEffects: effects, mediaIds: [] });
+
+    const body = JSON.parse(String(calls[0]!.init.body));
+    expect('content' in body).toBe(false);
+    expect(body.storyEffects.scenes[0].objects.some((o: { kind: string }) => o.kind === 'text')).toBe(true);
+  });
+
+  /** **LA LÉGENDE D'UN MÉDIA VOYAGE, ET SÉPARÉMENT DE `content`** (#6944) —
+   * `mediaCaption` est la carte `{ postMediaId → texte }` que
+   * `CreatePostSchema` attend (`routes/posts/types.ts:282`) ; `content` est le
+   * contenu de la PUBLICATION, qu'une story n'a pas. Les confondre est la
+   * faute que la directive porteur du 2026-09-17 a levée. */
+  test('`mediaCaption` part dans le corps, et une story reste SANS `content`', async () => {
+    const effects = buildStoryCanvasEffects({ texts: texts('Bonjour'), background: { source: BACKGROUND, mediaType: 'image' } })!;
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    await publishStory({
+      source: 'gateway',
+      transport,
+      originalLanguage: 'fr',
+      mediaCaption: { 'pm-bg': 'Au lever du jour' },
+      storyEffects: effects,
+      mediaIds: studioMediaIds([{ background: BACKGROUND }]),
+    });
+
+    const body = JSON.parse(String(calls[0]!.init.body));
+    expect(body.mediaCaption).toEqual({ 'pm-bg': 'Au lever du jour' });
+    expect('content' in body).toBe(false);
+  });
+
+  test('aucune légende ⇒ AUCUNE clé `mediaCaption` dans le corps', async () => {
+    const effects = buildStoryCanvasEffects({ texts: texts('Bonjour') })!;
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    await publishStory({ source: 'gateway', transport, storyEffects: effects, mediaIds: [] });
+    expect('mediaCaption' in JSON.parse(String(calls[0]!.init.body))).toBe(false);
+  });
+
+  test('un refus CANVAS_INVALID de la passerelle (core.ts:118-129) traverse tel quel', async () => {
+    const effects = buildStoryCanvasEffects({ texts: texts('x') })!;
+    const { impl } = fakeFetch({ status: 400, body: { success: false, error: 'Invalid canvas', code: 'CANVAS_INVALID' } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    const result = await publishStory({ source: 'gateway', transport, content: 'x', storyEffects: effects, mediaIds: [] });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(400);
+      expect(result.code).toBe('CANVAS_INVALID');
+    }
+  });
+
+  /** #7683, D-115 — `visibility` PART uniquement quand l'auteur l'a choisie ;
+   * sans choix, la clé est ABSENTE du corps (D-111), jamais un défaut
+   * recopié côté client. */
+  test('`visibility` part dans le corps quand elle est fournie', async () => {
+    const effects = buildStoryCanvasEffects({ texts: texts('Bonjour') })!;
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    await publishStory({ source: 'gateway', transport, visibility: 'FRIENDS', originalLanguage: 'fr', storyEffects: effects, mediaIds: [] });
+
+    expect(JSON.parse(String(calls[0]!.init.body)).visibility).toBe('FRIENDS');
+  });
+
+  test('aucune `visibility` fournie ⇒ AUCUNE clé `visibility` dans le corps', async () => {
+    const effects = buildStoryCanvasEffects({ texts: texts('Bonjour') })!;
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    await publishStory({ source: 'gateway', transport, originalLanguage: 'fr', storyEffects: effects, mediaIds: [] });
+
+    expect('visibility' in JSON.parse(String(calls[0]!.init.body))).toBe(false);
+  });
+
+  test('un échec serveur (429) traverse tel quel — le composeur affiche sa raison', async () => {
+    const effects = buildStoryCanvasEffects({ texts: texts('x') })!;
+    const { impl } = fakeFetch({ status: 429, body: { success: false, error: 'Too many requests', retryAfter: 12 } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    const result = await publishStory({ source: 'gateway', transport, content: 'x', storyEffects: effects, mediaIds: [] });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(429);
+      expect(result.retryAfter).toBe(12);
+    }
+  });
+});
+
+describe('publishStory — la clé d’idempotence (#10316)', () => {
+  const effects = () => buildStoryCanvasEffects({ texts: texts('Bonjour'), background: { source: BACKGROUND, mediaType: 'image' } })!;
+
+  test('`clientMutationId` part en X-Client-Mutation-Id, à côté de X-Canvas-Caps', async () => {
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const clientMutationId = 'cmid_0f8b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d';
+    await publishStory({ source: 'gateway', transport, storyEffects: effects(), mediaIds: ['pm-bg'], clientMutationId });
+    expect(headerOf(calls[0]!.init, 'X-Client-Mutation-Id')).toBe(clientMutationId);
+    expect(headerOf(calls[0]!.init, 'X-Canvas-Caps')).toBe('3');
+  });
+
+  test('sans clé, aucun en-tête X-Client-Mutation-Id', async () => {
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    await publishStory({ source: 'gateway', transport, storyEffects: effects(), mediaIds: ['pm-bg'] });
+    expect(headerOf(calls[0]!.init, 'X-Client-Mutation-Id')).toBeNull();
+  });
+});
+
+describe('publishStory — la source fixtures ne touche jamais le réseau', () => {
+  test('source fixtures ⇒ un identifiant simulé, aucun fetch, le document toujours VALIDÉ', async () => {
+    const effects = buildStoryCanvasEffects({ texts: texts('Bonjour') })!;
+    const { impl, calls } = fakeFetch({ status: 500 });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    const result = await publishStory({ source: 'fixtures', transport, content: 'Bonjour', storyEffects: effects, mediaIds: [] });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.id.startsWith('fx-story-')).toBe(true);
+    expect(calls).toHaveLength(0);
+
+    const refused = await publishStory({
+      source: 'fixtures',
+      transport,
+      content: '',
+      storyEffects: buildStoryCanvasEffects({ texts: [], background: { source: BACKGROUND, mediaType: 'image' } })!,
+      mediaIds: [],
+    });
+    expect(refused.ok).toBe(false);
+  });
+});
+
+/**
+ * `recordFixtureStory` / `fixtureStories` (#7707) — le registre des stories
+ * PUBLIÉES en fixtures, motif EXACT de `recordFixtureMood`/`fixtureMoods`
+ * (`api/status.ts`) : sans lui, une story publiée hors réseau n'a aucun effet
+ * observable, `loadStoryTray` reservant le corpus littéral d'origine.
+ */
+describe('recordFixtureStory / fixtureStories — le registre des stories publiées en fixtures (#7707)', () => {
+  test('publier une STORY en fixtures l’enregistre EN TÊTE ; publier un POST ne l’enregistre PAS', async () => {
+    const effects = buildStoryCanvasEffects({ texts: texts('Un') })!;
+    const { impl } = fakeFetch({ status: 500 });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const before = fixtureStories().length;
+    const startedAt = Date.now();
+
+    const story = await publishStory({ source: 'fixtures', transport, storyEffects: effects, mediaIds: [] });
+    expect(story.ok).toBe(true);
+    expect(fixtureStories()).toHaveLength(before + 1);
+    if (story.ok) expect(fixtureStories()[0]?.id).toBe(story.data.id);
+    // L'instant de la PUBLICATION, comme la passerelle le pose — jamais celui
+    // d'une lecture ultérieure du plateau.
+    expect(Date.parse(fixtureStories()[0]?.createdAt ?? '')).toBeGreaterThanOrEqual(startedAt);
+
+    await publishStory({ source: 'fixtures', transport, type: 'POST', storyEffects: effects, mediaIds: [] });
+    expect(fixtureStories()).toHaveLength(before + 1);
+  });
+
+  test('`recordFixtureStory` place la nouvelle entrée EN TÊTE — même ordre que le corpus servi (`createdAt desc`)', () => {
+    const before = fixtureStories().length;
+    recordFixtureStory({ id: 'fx-story-manuelle', authorId: 'u-viewer', createdAt: '2026-09-24T10:00:00.000Z' });
+    expect(fixtureStories()).toHaveLength(before + 1);
+    expect(fixtureStories()[0]).toEqual({ id: 'fx-story-manuelle', authorId: 'u-viewer', createdAt: '2026-09-24T10:00:00.000Z' });
+  });
+});

@@ -592,7 +592,7 @@ git commit -m "feat(sdk/ui): StoryCanvasReaderView - pixel-perfect canvas recons
 ### Task 6: Intégrer StoryCanvasReaderView dans StoryViewerView
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift`
 
 Repérer la fonction `storyCard(geometry:)`. Remplacer les Layer 2 (media) + Layer 4 (texte+stickers) + Layer 3 (filter) par un seul `StoryCanvasReaderView` :
 
@@ -680,7 +680,7 @@ Expected: `** BUILD SUCCEEDED **`
 **Step 5: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift
 git commit -m "feat(ios): story viewer pixel-perfect canvas + Prisme translation indicator"
 ```
 
@@ -689,8 +689,8 @@ git commit -m "feat(ios): story viewer pixel-perfect canvas + Prisme translation
 ### Task 7: Indicateur audio de fond + Prisme Vocal dans le Viewer
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift`
 
 **Step 1: Ajouter l'état AVAudioPlayer**
 
@@ -854,8 +854,8 @@ private var voiceCaptionOverlay: some View {
 
 ```bash
 ./apps/ios/meeshy.sh build 2>&1 | tail -5
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift \
-        apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift \
+        apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift
 git commit -m "feat(ios): background audio playback + vocal caption overlay in story viewer"
 ```
 
@@ -1134,7 +1134,7 @@ Expected: `** BUILD SUCCEEDED **`
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView.swift \
         packages/MeeshySDK/Sources/MeeshyUI/Story/StoryAudioPanel.swift \
         packages/MeeshySDK/Sources/MeeshyUI/Story/StoryVoiceRecorder.swift \
-        apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift
+        apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift
 git rm packages/MeeshySDK/Sources/MeeshyUI/Story/StoryMusicPicker.swift
 git commit -m "feat(ios): story composer rework - 5-button toolbar, audio panel, voice recorder"
 ```

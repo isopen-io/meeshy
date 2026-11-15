@@ -4,14 +4,22 @@ import XCTest
 @MainActor
 final class CallViewAccessibilityTests: XCTestCase {
 
-    private func callViewSource() throws -> String {
+    /// La source unique du vocabulaire de bascule, depuis qu'elle a quitté
+    /// `CallView.swift` (253i, #4266).
+    private func toggleModifierSource() throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Components/ToggleStateAccessibility.swift")
         return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// L'UNITÉ de l'écran d'appel (#8276) : `CallView.swift`, ses extensions
+    /// et les vues feuilles de la pilule et des sous-titres.
+    private func callViewSource() throws -> String {
+        try AppSourceGuard.callViewSource()
     }
 
     // MARK: - Video duration badge
@@ -26,12 +34,23 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
+    /// 247i pins the SPOKEN twin, not the displayed one. The intent of 206i/210i/211i
+    /// is unchanged — label once, value separately — but `formattedDuration` is a
+    /// clock spelling, and a speech synthesiser reads "02:05" as a time of day. The
+    /// negative half matters as much as the positive one: re-pointing the value at
+    /// the on-screen form is precisely the regression this guards.
     func test_videoDurationBadge_hasAccessibilityValue() throws {
         let source = try callViewSource()
         XCTAssertTrue(
-            source.contains("accessibilityValue(callManager.formattedDuration)"),
+            source.contains("accessibilityValue(callManager.spokenDuration)"),
             "The video duration badge must expose the timer via .accessibilityValue " +
             "so VoiceOver reads the label once and the dynamic value separately."
+        )
+        XCTAssertFalse(
+            source.contains("accessibilityValue(callManager.formattedDuration)"),
+            "No accessibility value may carry the CLOCK spelling: VoiceOver announces " +
+            "'02:05' as an hour. The spoken twin (CallManager.spokenDuration) says " +
+            "'2 minutes 5 seconds'."
         )
     }
 
@@ -81,23 +100,23 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
-    // MARK: - callControlButton hint handling
+    // MARK: - Pill button hint handling (#8394)
 
-    func test_callControlButton_doesNotPassEmptyHint() throws {
+    func test_pillButton_doesNotPassEmptyHint() throws {
         let source = try callViewSource()
         XCTAssertFalse(
             source.contains(".accessibilityHint(hint ?? \"\")"),
-            "callControlButton must not pass an empty string to .accessibilityHint. " +
+            "CallPillButton must not pass an empty string to .accessibilityHint. " +
             "Use .optionalAccessibilityHint(_:) so the modifier is skipped entirely when " +
             "the hint is nil — empty strings create a redundant no-op modifier chain."
         )
     }
 
-    func test_callControlButton_usesOptionalAccessibilityHint() throws {
+    func test_pillButton_usesOptionalAccessibilityHint() throws {
         let source = try callViewSource()
         XCTAssertTrue(
             source.contains("optionalAccessibilityHint(hint)"),
-            "callControlButton must delegate hint application to .optionalAccessibilityHint " +
+            "CallPillButton must delegate hint application to .optionalAccessibilityHint " +
             "so the modifier is only applied when a non-nil hint is provided."
         )
     }
@@ -111,17 +130,29 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
-    func test_callToggleAccessibility_isNotFilePrivate() throws {
-        // FloatingCallPillView (a different file) reuses this modifier for its
-        // mute/speaker buttons so both call surfaces expose identical toggle
-        // semantics to VoiceOver. `private extension View { ... }` at top level
-        // is file-scoped in Swift and would make the modifier invisible outside
-        // CallView.swift.
-        let source = try callViewSource()
+    /// **Le modificateur a DÉMÉNAGÉ, et cette garde l'a suivi (253i, #4266).**
+    ///
+    /// Son intention n'a pas changé d'un mot : ce modificateur doit rester
+    /// visible hors du fichier qui le déclare. Ce qui a changé, c'est le
+    /// fichier — `toggleStateAccessibility` vivait dans `CallView.swift`, et
+    /// c'est précisément ce nom et ce lieu qui l'avaient enfermé dans les cinq
+    /// surfaces d'appel pendant que quatre bascules ailleurs ne disaient leur
+    /// état que par une couleur.
+    ///
+    /// **Laissée sur `CallView.swift`, cette garde serait passée au VERT en
+    /// cessant de voir** : le fichier ne contient plus le motif interdit. Une
+    /// garde qui suit un renommage sans changer de cible est une garde morte.
+    func test_toggleStateAccessibility_isNotFilePrivate() throws {
+        let source = try toggleModifierSource()
         XCTAssertFalse(
-            source.contains("private extension View {\n    @ViewBuilder\n    func callToggleAccessibility"),
-            "callToggleAccessibility must not be declared in a `private extension View` — " +
-            "that restricts it to CallView.swift and FloatingCallPillView could not reuse it."
+            source.contains("private extension View"),
+            "toggleStateAccessibility ne doit pas être déclaré dans une `private extension " +
+            "View` — cela le restreindrait à son fichier, et les six surfaces qui " +
+            "l'appliquent (appels, composer, liste, story) ne pourraient plus le réutiliser."
+        )
+        XCTAssertTrue(
+            source.contains("func toggleStateAccessibility(isToggle: Bool, isActive: Bool)"),
+            "la source unique du vocabulaire de bascule doit porter ce modificateur"
         )
     }
 
@@ -231,16 +262,20 @@ final class CallViewAccessibilityTests: XCTestCase {
         // conveys the state), and the icon+text row must read as one
         // VoiceOver stop, not two disjoint announcements.
         let source = try callViewSource()
-        guard let range = source.range(of: "private var remoteCameraOffPlaceholder: some View {") else {
+        // G4.2 : le placeholder est devenu `CallRemoteCameraOffPlaceholder` (anneau et
+        // halo de parole) ; `remoteCameraOffPlaceholder` ne fait plus que le monter
+        // avec le visage `avatarFace(size: 96, …)`.
+        guard let mount = source.range(of: "private var remoteCameraOffPlaceholder: some View {"),
+              let range = source.range(of: "struct CallRemoteCameraOffPlaceholder<Avatar: View>: View {"),
+              let end = source.range(of: "private nonisolated struct CallGroupStageHeightKey", range: range.lowerBound ..< source.endIndex) else {
             XCTFail("CallView must define remoteCameraOffPlaceholder")
             return
         }
-        let end = source.index(range.lowerBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
-        let body = String(source[range.lowerBound ..< end])
         XCTAssertTrue(
-            body.contains("avatarCircle(size: 96)"),
+            String(source[mount.lowerBound ..< range.lowerBound]).contains("avatarFace(size: 96"),
             "remoteCameraOffPlaceholder must show the peer's avatar in place of a frozen last frame."
         )
+        let body = String(source[range.lowerBound ..< end.lowerBound])
         XCTAssertTrue(
             body.contains(".accessibilityHidden(true)"),
             "The decorative avatar in remoteCameraOffPlaceholder must be hidden from VoiceOver — " +
@@ -258,13 +293,13 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
-    // MARK: - callToggleAccessibility compound modifier
+    // MARK: - toggleStateAccessibility compound modifier
 
-    func test_callControlButton_usesCallToggleAccessibilityModifier() throws {
+    func test_pillButton_usesToggleStateAccessibilityModifier() throws {
         let source = try callViewSource()
         XCTAssertTrue(
-            source.contains("callToggleAccessibility"),
-            "callControlButton must apply the callToggleAccessibility modifier to bundle " +
+            source.contains("toggleStateAccessibility"),
+            "CallPillButton must apply the toggleStateAccessibility modifier to bundle " +
             "label, hint, trait, and value into a single reusable modifier — avoids " +
             "repeated .accessibilityLabel/.accessibilityHint chains that drift out of sync."
         )
@@ -273,9 +308,7 @@ final class CallViewAccessibilityTests: XCTestCase {
     // MARK: - Mute / speaker / camera-flip accessibility hints (audit fix)
 
     func test_muteButton_hasAccessibilityHint() throws {
-        // Audit fix: unlike the video-pause button in the same controlButtonsRow
-        // (which passes a hint because its consequence isn't obvious), mute and
-        // speaker were the two outliers with no `hint:` argument at all.
+        // Audit fix: mute was an outlier with no `hint:` argument at all.
         let source = try callViewSource()
         guard let range = source.range(of: "callManager.toggleMute()") else {
             XCTFail("CallView must wire the mute toggle action")
@@ -285,111 +318,139 @@ final class CallViewAccessibilityTests: XCTestCase {
         let vicinity = String(source[start..<range.upperBound])
         XCTAssertTrue(
             vicinity.contains("call.control.mute.hint"),
-            "The mute callControlButton call must pass hint: call.control.mute.hint so VoiceOver " +
+            "The pill mute button must pass hint: call.control.mute.hint so VoiceOver " +
             "users know muting affects what the other party hears, not just their own label."
         )
     }
 
-    func test_speakerButton_hasAccessibilityHint() throws {
+    /// #8394 — « Sortie » : toucher bascule le haut-parleur, maintenir ouvre
+    /// le menu de sortie. Ce partage ne se DEVINE pas : l'indice le dit.
+    func test_outputButton_togglesSpeakerOnTap_andSaysSoInItsHint() throws {
         let source = try callViewSource()
-        guard let range = source.range(of: "callManager.toggleSpeaker()") else {
-            XCTFail("CallView must wire the speaker toggle action")
+        XCTAssertTrue(
+            source.contains("onToggleSpeaker: { callManager.toggleSpeaker() }"),
+            "Le toucher de « Sortie » doit basculer le haut-parleur."
+        )
+        guard let range = source.range(of: "} primaryAction: {") else {
+            XCTFail("« Sortie » doit être un Menu(primaryAction:) — toucher bascule, maintenir ouvre le menu")
             return
         }
-        let start = source.index(range.lowerBound, offsetBy: -700, limitedBy: source.startIndex) ?? source.startIndex
-        let vicinity = String(source[start..<range.upperBound])
+        let end = source.index(range.lowerBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound ..< end])
         XCTAssertTrue(
-            vicinity.contains("call.control.speaker.hint"),
-            "The speaker callControlButton call must pass hint: call.control.speaker.hint."
+            vicinity.contains("call.control.output.hint"),
+            "« Sortie » doit porter l'indice call.control.output.hint : sans lui, rien ne dit à " +
+            "VoiceOver que maintenir ouvre le choix de la sortie."
+        )
+        XCTAssertTrue(
+            vicinity.contains("accessibilityAction(named:"),
+            "Le sélecteur de sortie doit rester atteignable sans appui long : une action nommée."
         )
     }
 
     func test_flipCameraButton_hasAccessibilityHint() throws {
+        // Deux boutons basculent la caméra : celui du (…) de la pilule, et celui
+        // qui encadre MA vignette (#8747), qui lit son libellé dans
+        // `CallMyImageCopy`. CHACUN doit porter l'indice, pas seulement le
+        // premier trouvé.
         let source = try callViewSource()
-        guard let range = source.range(of: "callManager.switchCamera()") else {
-            XCTFail("CallView must wire the camera-flip action")
+        var searchStart = source.startIndex
+        var sites = 0
+        while let range = source.range(of: "callManager.cameraActuator.switchCamera()", range: searchStart..<source.endIndex) {
+            sites += 1
+            let start = source.index(range.lowerBound, offsetBy: -500, limitedBy: source.startIndex) ?? source.startIndex
+            let vicinity = String(source[start..<range.upperBound])
+            XCTAssertTrue(
+                vicinity.contains("call.control.flipCamera.hint") || vicinity.contains("CallMyImageCopy.flipHint"),
+                "Every camera-flip button must pass hint: call.control.flipCamera.hint (site \(sites))."
+            )
+            searchStart = range.upperBound
+        }
+        XCTAssertGreaterThan(sites, 0, "CallView must wire the camera-flip action")
+
+        guard let helper = source.range(of: "static var flipHint: String {") else {
+            XCTFail("CallMyImageCopy.flipHint must exist when a flip button reads it")
             return
         }
-        let start = source.index(range.lowerBound, offsetBy: -500, limitedBy: source.startIndex) ?? source.startIndex
-        let vicinity = String(source[start..<range.upperBound])
+        let end = source.index(helper.upperBound, offsetBy: 200, limitedBy: source.endIndex) ?? source.endIndex
         XCTAssertTrue(
-            vicinity.contains("call.control.flipCamera.hint"),
-            "The camera-flip pipFrameButton call must pass hint: call.control.flipCamera.hint — " +
-            "its sibling pipFrameButton (filters) already does, so the omission wasn't deliberate."
+            source[helper.upperBound..<end].contains("\"call.control.flipCamera.hint\""),
+            "CallMyImageCopy.flipHint must resolve call.control.flipCamera.hint."
         )
     }
 
-    // MARK: - Effects toggle button accessibility
+    // MARK: - Effects button before the connection (OPUS-4)
 
-    func test_effectsToggleButton_hasAccessibilityHint() throws {
-        // The call.filters.a11y label now appears on TWO controls (the bottom-bar
-        // effects toggle AND the self-preview pipFrameButton, Fix 8) — EVERY
-        // occurrence must pair the label with the call.filters.hint hint, or
-        // VoiceOver users get no indication that the control toggles the video
-        // effects toolbar.
+    /// OPUS-4 — avant la connexion, « Effets » ouvre le MÊME mode que l'appel
+    /// établi, avec le libellé et l'indice VoiceOver de la pilule : plus de
+    /// second panneau ni d'état « ouvert/fermé » propre à la sonnerie.
+    func test_preConnectEffectsButton_entersTheEffectsMode() throws {
         let source = try callViewSource()
-        var searchStart = source.startIndex
-        var occurrences = 0
-        while let labelRange = source.range(of: "call.filters.a11y", range: searchStart..<source.endIndex) {
-            occurrences += 1
-            let end = source.index(labelRange.lowerBound, offsetBy: 600, limitedBy: source.endIndex) ?? source.endIndex
-            let vicinity = String(source[labelRange.lowerBound ..< end])
-            XCTAssertTrue(
-                vicinity.contains(".accessibilityHint"),
-                "occurrence #\(occurrences) of call.filters.a11y has no .accessibilityHint nearby — " +
-                "unlike every sibling control (mute/speaker/camera/end-call via callControlButton)."
-            )
-            XCTAssertTrue(
-                vicinity.contains("call.filters.hint"),
-                "occurrence #\(occurrences) of call.filters.a11y must pair with the " +
-                "call.filters.hint localization key."
-            )
-            searchStart = labelRange.upperBound
+        guard let start = source.range(of: "var effectsModeButton: some View {"),
+              let end = source.range(of: "var endCallButton: some View {", range: start.upperBound..<source.endIndex) else {
+            XCTFail("CallView must define effectsModeButton then endCallButton")
+            return
         }
-        XCTAssertGreaterThan(occurrences, 0, "effectsToggleButton must carry the call.filters.a11y accessibility label")
+        let button = String(source[start.upperBound ..< end.lowerBound])
+        XCTAssertTrue(button.contains("enterMode(.effects)"), "Effets ouvre le mode « Effets de ma caméra »")
+        XCTAssertTrue(button.contains(".accessibilityLabel(CallControlsCopy.effects)"))
+        XCTAssertTrue(button.contains(".accessibilityHint(CallControlsCopy.effectsHint)"))
+        for gone in ["showEffectsToolbar", "CallEffectsOverlay", "VideoFiltersPanel", "call.filters.a11y", "call.filters.hint"] {
+            XCTAssertFalse(source.contains(gone), "\(gone) a disparu avec l'ancien panneau d'effets")
+        }
+    }
+
+    /// APP-5, loi 9 — le mode ouvert avant la connexion est le MÊME que celui
+    /// de l'appel établi, et ses réglages (vue P8b) portent le flou du fond :
+    /// rien n'est à rajouter ailleurs, ni second panneau à faire revivre.
+    func test_effectsMode_beforeAndAfterTheConnection_offersTheBackgroundBlur() throws {
+        let source = try callViewSource()
+        guard let start = source.range(of: "private func modeControls(_ mode: CallScreenMode) -> some View {"),
+              let end = source.range(of: "} montage: {", range: start.upperBound ..< source.endIndex) else {
+            XCTFail("CallView must route the effects mode through modeControls")
+            return
+        }
+        let effects = String(source[start.upperBound ..< end.lowerBound])
+        XCTAssertTrue(effects.contains("CallEffectsModeControls(callManager: callManager"), "Un seul jeu de commandes d'effets, avant comme après la connexion")
+        XCTAssertFalse(effects.contains("if showsConnectedLayout"), "Les commandes d'effets ne dépendent pas de l'appel établi")
+
+        let controls = try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift")
+        XCTAssertTrue(controls.contains("config = config.withBackgroundBlur(blurs)"), "Le flou du fond se règle dans le mode Effets")
+        XCTAssertTrue(controls.contains("Text(CallEffectsCopy.blur)"), "Une ligne titrée « Flou du fond »")
     }
 
     // MARK: - Video toggle accessibility value (audit fix — inverted state, 2026-08-13)
 
-    func test_callControlButton_hasSeparateToggleValueParameter() throws {
-        // The video button reuses `isActive` for its CTA visual highlight (true
-        // when video is OFF, to draw the eye toward turning it on) — the OPPOSITE
-        // of the real feature state. Reusing that same boolean for the VoiceOver
-        // on/off value would announce the state backwards. callControlButton must
-        // expose a dedicated toggleValue so a caller can decouple "highlight" from
-        // "actual state" while every other caller keeps today's behaviour.
+    func test_pillButton_hasSeparateToggleStateParameter() throws {
+        // The visual kind (active / warning) and the spoken on/off value are
+        // two facts: an auto-paused camera is drawn amber while the user still
+        // WANTS it on. CallPillButton must take the spoken state on its own.
         let source = try callViewSource()
         XCTAssertTrue(
-            source.contains("toggleValue: Bool? = nil"),
-            "callControlButton must accept an optional toggleValue parameter, " +
-            "separate from isActive, so the accessibility value can differ from " +
-            "the visual highlight state."
+            source.contains("var toggleState: Bool? = nil"),
+            "CallPillButton must accept an optional toggleState, separate from its visual kind."
         )
         XCTAssertTrue(
-            source.contains("callToggleAccessibility(isToggle: isToggle, isActive: toggleValue ?? isActive)"),
-            "callControlButton must feed toggleValue (falling back to isActive) into " +
-            "callToggleAccessibility — callers that don't pass toggleValue must keep " +
-            "today's behaviour (mute/speaker/PiP), only the video button overrides it."
+            source.contains(".toggleStateAccessibility(isToggle: toggleState != nil, isActive: toggleState ?? false)"),
+            "CallPillButton must feed toggleState into toggleStateAccessibility — a button " +
+            "without it (Fin, Retourner, Messages) is not announced as a toggle."
         )
     }
 
-    func test_videoButton_accessibilityValueReflectsCameraIntent_notCTAHighlight() throws {
-        // Regression guard: `isActive` on this call site is
-        // `videoAutoPaused ? true : !callManager.isVideoEnabled` — a CTA highlight,
-        // not the real camera state. Without toggleValue, VoiceOver announced
-        // "Désactiver la vidéo, Désactivé" while video was ON, and "Activer la
-        // vidéo, Activé" while OFF — exactly backwards.
+    func test_videoButton_accessibilityValueReflectsCameraIntent_notItsTint() throws {
+        // Regression guard: the camera's visual state is `.warning` when the
+        // survival layer paused it — not the camera's real on/off state.
         let source = try callViewSource()
-        guard let range = source.range(of: "callManager.toggleVideo()") else {
+        guard let range = source.range(of: "callManager.cameraActuator.toggleVideo()") else {
             XCTFail("CallView must wire the video toggle action")
             return
         }
-        let start = source.index(range.lowerBound, offsetBy: -1200, limitedBy: source.startIndex) ?? source.startIndex
+        let start = source.index(range.lowerBound, offsetBy: -2000, limitedBy: source.startIndex) ?? source.startIndex
         let vicinity = String(source[start..<range.upperBound])
         XCTAssertTrue(
-            vicinity.contains("toggleValue: callManager.isVideoEnabled"),
-            "The video callControlButton call must pass toggleValue: callManager.isVideoEnabled " +
-            "so VoiceOver announces the camera's real on/off state, not the inverted CTA highlight."
+            vicinity.contains("let isEnabled = callManager.isVideoEnabled") && vicinity.contains("toggleState: isEnabled"),
+            "The video button must pass toggleState: callManager.isVideoEnabled so VoiceOver " +
+            "announces the camera's real on/off state, not its tint."
         )
     }
 
@@ -403,7 +464,7 @@ final class CallViewAccessibilityTests: XCTestCase {
         // "Filtres" toolbar glyph never lit up even though a filter was
         // silently active (VideoFilterPipeline.process has the same fix).
         let source = try callViewSource()
-        guard let range = source.range(of: "private var hasActiveEffects: Bool {") else {
+        guard let range = source.range(of: "var hasActiveEffects: Bool {") else {
             XCTFail("CallView must declare hasActiveEffects")
             return
         }
@@ -436,51 +497,42 @@ final class CallViewAccessibilityTests: XCTestCase {
 
     // MARK: - HIG 44×44 minimum hit targets
 
-    func test_pipFrameButton_hitTargetMeetsHIGMinimum() throws {
+    /// #8394 — Retourner et Effets ont quitté la vignette perso pour le rail
+    /// « mon image » : la vignette se déplace et permute, rien d'autre.
+    func test_selfView_carriesNoControl_flipAndEffectsLiveInTheMyImageRail() throws {
         let source = try callViewSource()
-        guard let range = source.range(of: "private func pipFrameButton") else {
-            XCTFail("pipFrameButton must exist")
+        guard let start = source.range(of: "var pipView: some View {"),
+              let end = source.range(of: "var videoAutoPaused: Bool {", range: start.upperBound..<source.endIndex) else {
+            XCTFail("CallView must define pipView then videoAutoPaused")
             return
         }
-        let end = source.index(range.lowerBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
-        let body = String(source[range.lowerBound ..< end])
-        XCTAssertTrue(
-            body.contains(".frame(width: 44, height: 44)"),
-            "pipFrameButton's visual glyph is 28pt (too small for the 100×140 self-view tile), " +
-            "but its tappable area must still meet the HIG 44×44 minimum via an invisible " +
-            "expanded frame + contentShape."
+        let pip = String(source[start.upperBound ..< end.lowerBound])
+        XCTAssertFalse(
+            pip.contains("switchCamera") || pip.contains("showEffectsToolbar"),
+            "La vignette perso ne porte plus Retourner ni Effets (#8394)."
         )
         XCTAssertTrue(
-            body.contains(".contentShape(Rectangle())"),
-            "pipFrameButton must apply .contentShape(Rectangle()) so the entire expanded " +
-            "44×44 frame is tappable, not just the visible 28pt circle."
+            source.contains("case .flipCamera:") && source.contains("case .effects:"),
+            "Retourner et Effets vivent dans les actions « mon image »."
         )
     }
 
-    func test_pipFrameButton_usesAdaptiveGlass_notFlatDarkCircle() throws {
+    func test_pillButtons_hitTargetMeetsHIGMinimum() throws {
         let source = try callViewSource()
-        guard let range = source.range(of: "private func pipFrameButton") else {
-            XCTFail("pipFrameButton must exist")
-            return
-        }
-        let end = source.index(range.lowerBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
-        let body = String(source[range.lowerBound ..< end])
         XCTAssertTrue(
-            body.contains(".callControlGlass(diameter: 28, isActive: false, tint: .white)"),
-            "pipFrameButton must use the same adaptiveGlass-backed callControlGlass wrapper " +
-            "as every other circular call control (task #17) — not a hand-rolled " +
-            "Color.black.opacity(0.45) circle."
+            source.contains(".frame(minWidth: 44, minHeight: 44)")
+                || source.contains(".frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)"),
+            "Every pill / row button must keep a 44×44 target, whatever its drawn diameter."
         )
-        XCTAssertFalse(
-            body.contains("Color.black.opacity(0.45)"),
-            "pipFrameButton's old flat dark-circle background must be fully removed, not left " +
-            "as dead code alongside the new glass treatment."
+        XCTAssertTrue(
+            source.contains("static let rowGlyphDiameter: CGFloat = 44"),
+            "The duo action-row glyphs are drawn at 44 pt at least (#8432)."
         )
     }
 
     func test_minimizeChevron_hitTargetMeetsHIGMinimum() throws {
         let source = try callViewSource()
-        guard let range = source.range(of: "callControlGlass(diameter: 40, isActive: false, tint: .white)") else {
+        guard let range = source.range(of: "callControlGlass(diameter: 40, isActive: isActive, tint: .white)") else {
             XCTFail("Minimize chevron's 40pt glass circle must exist")
             return
         }
@@ -518,55 +570,32 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
-    // MARK: - CallEffectsOverlay wiring
-
-    func test_callEffectsOverlay_receivesCallManagerFromParent() throws {
-        // `CallEffectsOverlay(... )` must not fall back to instantiating
-        // `CallManager.shared` itself (`@ObservedObject private var callManager
-        // = CallManager.shared`) — that re-creates the subscription on every
-        // CallView body re-evaluation (pulse animation, showEffectsToolbar
-        // toggle, control-bar auto-hide). CallView and IncomingCallView were
-        // already fixed for this exact hazard (Audit P1-16); the overlay must
-        // receive the same singleton instance CallView already holds.
-        let source = try callViewSource()
-        guard let range = source.range(of: "CallEffectsOverlay(") else {
-            XCTFail("CallView must instantiate CallEffectsOverlay")
-            return
-        }
-        let end = source.index(range.lowerBound, offsetBy: 200, limitedBy: source.endIndex) ?? source.endIndex
-        let call = String(source[range.lowerBound ..< end])
-        XCTAssertTrue(
-            call.contains("callManager: callManager"),
-            "CallView must pass its own `callManager` into CallEffectsOverlay so the child " +
-            "reuses the parent's @ObservedObject subscription instead of creating its own."
-        )
-    }
-
     // MARK: - audioCallLayout avatar VoiceOver double-read
 
     func test_audioCallLayout_avatarPairIsAccessibilityHidden() throws {
         // `pulsingAvatar` already hides its avatar because the remote user's
         // name is rendered as a Text directly below it — without this, VoiceOver
         // reads the avatar initial, then "Vous", then the full name as three
-        // disjoint stops. `audioCallLayout` (the established audio-call screen)
-        // has the exact same avatar-then-name shape but was missing the guard.
+        // disjoint stops. P9b.15 (#18206) : the established audio-call screen
+        // now poses ONE avatar for the rest and the compact header
+        // (`CallAudioStage`), the same guard follows it there.
         let source = try callViewSource()
-        guard let layoutRange = source.range(of: "private var audioCallLayout: some View {") else {
-            XCTFail("CallView must define audioCallLayout")
+        guard let layoutRange = source.range(of: "private var duoLayout: some View {") else {
+            XCTFail("CallView must define duoLayout")
             return
         }
         guard let avatarRange = source.range(
-            of: "callAvatarPair(size: 120)",
+            of: "audioAvatarPair(isCompact: isCompact)",
             range: layoutRange.upperBound..<source.endIndex
         ) else {
-            XCTFail("audioCallLayout must call callAvatarPair(size: 120)")
+            XCTFail("duoLayout must pose audioAvatarPair(isCompact:) in its audio stage")
             return
         }
-        let end = source.index(avatarRange.upperBound, offsetBy: 60, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(avatarRange.upperBound, offsetBy: 80, limitedBy: source.endIndex) ?? source.endIndex
         let vicinity = String(source[avatarRange.lowerBound ..< end])
         XCTAssertTrue(
             vicinity.contains(".accessibilityHidden(true)"),
-            "audioCallLayout's callAvatarPair(size: 120) must carry .accessibilityHidden(true) " +
+            "the audio stage's avatar must carry .accessibilityHidden(true) " +
             "to avoid VoiceOver double-reading the avatar initial and the adjacent remote-name Text."
         )
     }
@@ -599,7 +628,7 @@ final class CallViewAccessibilityTests: XCTestCase {
 
     func test_audioCallLayout_durationCapsule_hasLabelledAccessibilityValue() throws {
         let source = try callViewSource()
-        let vicinity = try audioDurationCapsuleVicinity(source, layout: "private var audioCallLayout: some View {")
+        let vicinity = try audioDurationCapsuleVicinity(source, layout: "var audioCallLayout: some View {")
         XCTAssertTrue(
             vicinity.contains("accessibilityLabel(String(localized: \"call.duration.a11y.label\"))"),
             "audioCallLayout's duration Text must carry an explicit call.duration.a11y.label so " +
@@ -607,25 +636,11 @@ final class CallViewAccessibilityTests: XCTestCase {
             "glyph is invisible on a healthy link."
         )
         XCTAssertTrue(
-            vicinity.contains("accessibilityValue(callManager.formattedDuration)"),
+            vicinity.contains("accessibilityValue(callManager.spokenDuration)"),
             "audioCallLayout's duration Text must expose the timer via .accessibilityValue so the " +
             "static label reads once and the dynamic value updates separately (paired with the " +
-            "capsule's existing .updatesFrequently trait)."
-        )
-    }
-
-    func test_compactAudioCallHeader_durationCapsule_hasLabelledAccessibilityValue() throws {
-        let source = try callViewSource()
-        let vicinity = try audioDurationCapsuleVicinity(source, layout: "private var compactAudioCallHeader: some View {")
-        XCTAssertTrue(
-            vicinity.contains("accessibilityLabel(String(localized: \"call.duration.a11y.label\"))"),
-            "compactAudioCallHeader's duration Text must carry the same explicit " +
-            "call.duration.a11y.label — this caption-mode header has no status-pill row, so the " +
-            "labelled value is the only place the timer gains meaning for VoiceOver."
-        )
-        XCTAssertTrue(
-            vicinity.contains("accessibilityValue(callManager.formattedDuration)"),
-            "compactAudioCallHeader's duration Text must expose the timer via .accessibilityValue."
+            "capsule's existing .updatesFrequently trait) — in its SPOKEN form (247i), since a " +
+            "speech synthesiser reads the clock spelling '1:23' as a time of day."
         )
     }
 
@@ -638,7 +653,7 @@ final class CallViewAccessibilityTests: XCTestCase {
     /// call-duration-only element causes no information loss.
     func test_audioDurationCapsules_collapseToIgnoreForNakedReadoutFix() throws {
         let source = try callViewSource()
-        for marker in ["private var audioCallLayout: some View {", "private var compactAudioCallHeader: some View {"] {
+        for marker in ["var audioCallLayout: some View {"] {
             let vicinity = try audioDurationCapsuleVicinity(source, layout: marker)
             XCTAssertTrue(
                 vicinity.contains(".accessibilityElement(children: .ignore)"),
@@ -669,24 +684,26 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
-    /// TransientCallSignalGlyph is mounted TWICE (audio capsule status area + this video
-    /// overlay badge, cf. test_signalGlyph_isMountedInDurationBadges) — these two tests must
-    /// scope their search to the SECOND (video) occurrence, inside videoCallLayout, or they'd
-    /// silently inspect the unrelated audio-layout mount instead.
-    private func videoDurationBadgeVicinity(_ source: String, window: Int = 2200) -> String {
-        guard let layoutRange = source.range(of: "private var videoCallLayout: some View {") else {
-            XCTFail("CallView must define videoCallLayout")
+    /// TransientCallSignalGlyph is mounted TWICE (audio capsule status area + the header's
+    /// duration chip, #8394) — these tests scope their search to the chip, inside
+    /// `durationChip`, or they'd silently inspect the unrelated audio-layout mount instead.
+    private func videoDurationBadgeVicinity(_ source: String) -> String {
+        guard source.contains("var durationChip: some View {") else {
+            XCTFail("CallView must define durationChip")
             return ""
         }
-        guard let badgeRange = source.range(
-            of: "TransientCallSignalGlyph(strength: signalStrength)",
-            range: layoutRange.upperBound..<source.endIndex
-        ) else {
+        guard let chipRange = source.range(of: "struct CallHeaderCapsuleChip: View {") else {
+            XCTFail("The duration badge must be drawn by CallHeaderCapsuleChip")
+            return ""
+        }
+        let chip = source[chipRange.lowerBound...]
+        let end = chip.range(of: "\n}\n")?.upperBound ?? chip.endIndex
+        let body = String(chip[..<end])
+        guard body.contains("TransientCallSignalGlyph(strength: signalStrength)") else {
             XCTFail("CallView must mount TransientCallSignalGlyph in the video duration badge")
             return ""
         }
-        let end = source.index(badgeRange.lowerBound, offsetBy: window, limitedBy: source.endIndex) ?? source.endIndex
-        return String(source[badgeRange.lowerBound ..< end])
+        return body
     }
 
     func test_videoDurationBadge_isExplicitOpaqueAccessibilityElement() throws {
@@ -715,7 +732,7 @@ final class CallViewAccessibilityTests: XCTestCase {
 
     func test_videoDurationBadgeAccessibilityLabel_includesPeerDegradedState() throws {
         let source = try callViewSource()
-        guard let range = source.range(of: "private var videoDurationBadgeAccessibilityLabel: String {") else {
+        guard let range = source.range(of: "var videoDurationBadgeAccessibilityLabel: String {") else {
             XCTFail("CallView must define videoDurationBadgeAccessibilityLabel")
             return
         }
@@ -732,44 +749,4 @@ final class CallViewAccessibilityTests: XCTestCase {
             "degraded — visual parity: the glyph itself only appears when isDegraded."
         )
     }
-}
-
-// MARK: - Island banner emergence transition (2026-07-03 UX feedback)
-
-/// Retour user : « la pill doit apparaître plus lentement avec une
-/// accélération à mi-chemin — on doit voir comment ça sort de l'encoche, et
-/// comment ça y retourne ». Le mouvement (les DEUX sens) vit dans la transition
-/// interne d'IslandEmergingBanner — verrouillé ici pour le jour où le composant
-/// resservira (il n'est plus monté dans CallView depuis le retrait des bannières
-/// réseau pop-up, 2026-07-13).
-@MainActor
-final class IslandBannerEmergenceTransitionTests: XCTestCase {
-
-    private func source(_ path: String) throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent(path)
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
-    func test_banner_usesSlowStartTimingCurves_forBothDirections() throws {
-        let banner = try source("Meeshy/Features/Main/Components/IslandEmergingBanner.swift")
-        XCTAssertTrue(
-            banner.contains(".asymmetric") && banner.contains("insertion:") && banner.contains("removal:"),
-            "The emergence must be an asymmetric transition — insertion (out of the island) AND removal (back into the island) each with their own curve."
-        )
-        let curveCount = banner.components(separatedBy: ".timingCurve(").count - 1
-        XCTAssertGreaterThanOrEqual(
-            curveCount, 2,
-            "Both directions must use custom slow-start timing curves (user feedback 2026-07-03: slow appearance, mid-way acceleration) — a spring starts fast and hides the emergence from the island."
-        )
-        XCTAssertFalse(
-            banner.contains("withAnimation(.spring"),
-            "The old fast-start spring emergence must not come back — the capsule must visibly grow out of the island."
-        )
-    }
-
 }

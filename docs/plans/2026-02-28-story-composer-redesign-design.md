@@ -203,10 +203,10 @@ StoryComposerView.onAppear:
 | Fichier | Type de changement |
 |---------|-------------------|
 | `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView.swift` | Refactor principal |
-| `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift` | `publishAllSlides()` |
-| `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift` | Passer `isPreviewMode` |
+| `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift` | `publishAllSlides()` |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift` | Passer `isPreviewMode` |
 | `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift` | Extension `StorySlide.toPreviewStoryItem()` |
-| `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` | Param `isPreviewMode` + auto-dismiss |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` | Param `isPreviewMode` + auto-dismiss |
 
 ---
 

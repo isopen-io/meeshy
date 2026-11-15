@@ -3,10 +3,10 @@
  * Fonctions utilitaires pour le client ZMQ
  */
 
-import { promises as fs } from 'fs';
+import { readStoredFile } from '../../attachments/atRest/atRestFiles';
 import { existsSync, statSync } from 'fs';
 import path from 'path';
-import { AUDIO_BASE64_SIZE_THRESHOLD } from '../types';
+import { AUDIO_BASE64_SIZE_THRESHOLD, LEGACY_POOL_FULL_ERROR, TRANSLATION_POOL_FULL_ERROR_CODE } from '../types';
 import { enhancedLogger } from '../../../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'ZmqHelpers' });
@@ -18,6 +18,8 @@ export interface AudioBinaryData {
   buffer: Buffer;
   mimeType: string;
   size: number;
+  /** #13102 — l'audio venait d'un fichier scellé au repos : sa tâche part `atRest`. */
+  sealed?: boolean;
 }
 
 /**
@@ -45,8 +47,9 @@ export async function loadAudioAsBinary(audioPath?: string): Promise<AudioBinary
       return null;
     }
 
-    // Lire le buffer brut (pas d'encodage base64!)
-    const buffer = await fs.readFile(audioPath);
+    // Lire le buffer brut (pas d'encodage base64!) — #13100 : le CLAIR d'un
+    // fichier scellé au repos, déchiffré en mémoire pour les trames binaires.
+    const { bytes: buffer, sealed } = await readStoredFile(audioPath, { uploadRoot: process.env.UPLOAD_PATH || '/app/uploads' });
 
     // Déterminer le mime type
     const ext = path.extname(audioPath).toLowerCase();
@@ -61,9 +64,9 @@ export async function loadAudioAsBinary(audioPath?: string): Promise<AudioBinary
     };
     const mimeType = mimeTypes[ext] || 'audio/wav';
 
-    logger.debug('Audio chargé en binaire', { sizeKB: (stats.size / 1024).toFixed(1), mimeType });
+    logger.debug('Audio chargé en binaire', { sizeKB: (buffer.length / 1024).toFixed(1), mimeType });
 
-    return { buffer, mimeType, size: stats.size };
+    return { buffer, mimeType, size: buffer.length, ...(sealed ? { sealed: true } : {}) };
   } catch (error) {
     logger.warn('Erreur lecture fichier audio', error as Error);
     return null;
@@ -119,7 +122,17 @@ export function mimeTypeToAudioFormat(mimeType: string): string {
  * Un seul endroit décrit donc la convention : producteurs ET consommateurs.
  */
 
-export const TRANSLATION_TARGET_NAMESPACES = ['post', 'comment', 'story'] as const;
+/**
+ * `direct-text` : un texte traduit à la volée, sans ligne à persister
+ * (`translateTextDirectly`, servi par `POST /translate-blocking` sans
+ * `message_id`). Son unique consommateur est l'écouteur que la requête pose
+ * elle-même, apparié par `taskId`.
+ *
+ * `call-caption` : un sous-titre d'appel en direct (`<callId>:<startMs>`),
+ * persisté par le relais lui-même (`call-transcription-relay.ts`) qui écoute
+ * `translationCompleted:<id>` — jamais une ligne `Message` (#16625).
+ */
+export const TRANSLATION_TARGET_NAMESPACES = ['post', 'comment', 'story', 'media-caption', 'media-alt', 'message-attachment-caption', 'message-attachment-alt', 'direct-text', 'call-caption'] as const;
 
 export type TranslationTargetNamespace = (typeof TRANSLATION_TARGET_NAMESPACES)[number];
 
@@ -145,3 +158,11 @@ export function translationTargetNamespace(messageId: string): string | null {
 export function isMessageTranslationTarget(messageId: string): boolean {
   return translationTargetNamespace(messageId) === null;
 }
+
+/**
+ * Le seul site qui reconnaît le refus transitoire : par son code, ou par son
+ * libellé tant qu'un translator ancien peut encore ne porter que lui.
+ * Confronté à la source Python par `transientPoolRefusal.contract.test.ts`.
+ */
+export const isTransientPoolRefusal = (event: { readonly error?: string; readonly errorCode?: string }): boolean =>
+  event.errorCode === TRANSLATION_POOL_FULL_ERROR_CODE || event.error === LEGACY_POOL_FULL_ERROR;

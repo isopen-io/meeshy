@@ -2,6 +2,7 @@ package me.meeshy.sdk.model.auth
 
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.LanguageInfo
+import me.meeshy.sdk.model.search.SearchTextFolder
 
 /**
  * Which of the two content-language slots the wizard's language step is editing.
@@ -40,17 +41,20 @@ public object LanguageStepSelection {
 
     /**
      * iOS `filteredLanguages`: an empty query yields the whole list; otherwise a
-     * case-insensitive match on the native name OR the code (faithful to iOS, which
-     * checks `searchText.isEmpty` untrimmed and matches `name`/`id`).
+     * case- AND accent-insensitive match on the native name OR the code (faithful to
+     * iOS, which checks `searchText.isEmpty` untrimmed and matches `name`/`id`). The
+     * native names carry their real diacritics ("Français"), so "francais" must still
+     * find them ([SearchTextFolder], the port of iOS `.diacriticInsensitive`).
      */
     public fun filter(
         query: String,
         languages: List<LanguageInfo> = pickerLanguages,
     ): List<LanguageInfo> {
         if (query.isEmpty()) return languages
-        val lower = query.lowercase()
+        val needle = SearchTextFolder.fold(query)
         return languages.filter {
-            it.nativeName.lowercase().contains(lower) || it.code.lowercase().contains(lower)
+            SearchTextFolder.fold(it.nativeName).contains(needle) ||
+                SearchTextFolder.fold(it.code).contains(needle)
         }
     }
 

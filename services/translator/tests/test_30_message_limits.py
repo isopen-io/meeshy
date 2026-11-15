@@ -145,6 +145,63 @@ class TestCanTranslateMessage:
         assert can_translate_message(message) is False
 
 
+class TestValidateAudioDuration:
+    """Tests for validate_audio_duration function (#3668)"""
+
+    def test_short_audio_is_valid(self):
+        from config.message_limits import validate_audio_duration
+
+        is_valid, error = validate_audio_duration(5000)
+        assert is_valid is True
+        assert error is None
+
+    def test_missing_duration_is_valid(self):
+        """A caller that hasn't measured duration yet must not be rejected
+        for it — absence is not the same as a violation."""
+        from config.message_limits import validate_audio_duration
+
+        is_valid, error = validate_audio_duration(None)
+        assert is_valid is True
+        assert error is None
+
+    def test_zero_duration_is_valid(self):
+        from config.message_limits import validate_audio_duration
+
+        is_valid, error = validate_audio_duration(0)
+        assert is_valid is True
+        assert error is None
+
+    def test_audio_at_limit_is_valid(self):
+        from config.message_limits import validate_audio_duration, MessageLimits
+
+        is_valid, error = validate_audio_duration(MessageLimits.MAX_AUDIO_DURATION_MS)
+        assert is_valid is True
+        assert error is None
+
+    def test_audio_too_long_is_rejected(self):
+        from config.message_limits import validate_audio_duration, MessageLimits
+
+        too_long = MessageLimits.MAX_AUDIO_DURATION_MS + 1000
+        is_valid, error = validate_audio_duration(too_long)
+
+        assert is_valid is False
+        assert error is not None
+        assert str(MessageLimits.MAX_AUDIO_DURATION_MS // 1000) in error
+
+    def test_env_override(self):
+        with patch.dict(os.environ, {'MAX_AUDIO_DURATION_MS': '30000'}):
+            import importlib
+            import config.message_limits as ml
+            importlib.reload(ml)
+
+            assert ml.MessageLimits.MAX_AUDIO_DURATION_MS == 30000
+            is_valid, error = ml.validate_audio_duration(30001)
+            assert is_valid is False
+            assert "30" in error
+
+        importlib.reload(ml)
+
+
 class TestShouldConvertToTextAttachment:
     """Tests for should_convert_to_text_attachment function"""
 

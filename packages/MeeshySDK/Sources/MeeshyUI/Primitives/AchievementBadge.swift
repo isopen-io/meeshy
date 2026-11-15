@@ -42,7 +42,7 @@ public struct AchievementBadge: View {
                     LinearGradient(
                         colors: [
                             Color(hex: achievement.color),
-                            Color(hex: achievement.color).opacity(0.7)
+                            Color(hex: achievement.color).opacity(MeeshyOpacity.heavy)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -53,8 +53,8 @@ public struct AchievementBadge: View {
 
             // Icon
             Image(systemName: achievement.icon)
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundColor(.white)
+                .font(.system(size: MeeshyIconSize.xxl, weight: .semibold))
+                .foregroundStyle(Color.white)
                 .opacity(achievement.isUnlocked ? 1.0 : 0.4)
 
             // Checkmark overlay for unlocked
@@ -68,8 +68,8 @@ public struct AchievementBadge: View {
                             .frame(width: 20, height: 20)
                             .overlay(
                                 Image(systemName: "checkmark")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.white)
+                                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
+                                    .foregroundStyle(Color.white)
                             )
                             .shadow(color: MeeshyColors.indigo500.opacity(0.4), radius: 4)
                     }
@@ -91,14 +91,14 @@ public struct AchievementBadge: View {
 #if DEBUG
 struct AchievementBadge_Previews: PreviewProvider {
     static var previews: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: MeeshySpacing.xl) {
             AchievementBadge(
                 achievement: Achievement(
                     id: "1",
                     name: "First Message",
                     description: "Send your first message",
                     icon: "paperplane.fill",
-                    color: "FF2E63",
+                    color: MeeshyColors.tileRoseHex,
                     isUnlocked: true,
                     progress: 1.0,
                     threshold: 1,
@@ -112,7 +112,7 @@ struct AchievementBadge_Previews: PreviewProvider {
                     name: "Translator",
                     description: "Translate 100 messages",
                     icon: "globe",
-                    color: "08D9D6",
+                    color: MeeshyColors.tileCyanHex,
                     isUnlocked: false,
                     progress: 0.65,
                     threshold: 100,
@@ -126,7 +126,7 @@ struct AchievementBadge_Previews: PreviewProvider {
                     name: "Social Butterfly",
                     description: "Join 10 conversations",
                     icon: "person.3.fill",
-                    color: "A855F7",
+                    color: MeeshyColors.purple500Hex,
                     isUnlocked: false,
                     progress: 0.0,
                     threshold: 10,

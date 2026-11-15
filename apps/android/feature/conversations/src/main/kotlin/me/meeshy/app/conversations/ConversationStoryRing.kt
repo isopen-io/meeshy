@@ -2,20 +2,22 @@ package me.meeshy.app.conversations
 
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.StoryGroup
+import me.meeshy.sdk.model.interlocutor
 import me.meeshy.sdk.story.hasUnviewed
 import me.meeshy.sdk.story.isFullyExpired
-import me.meeshy.sdk.theme.otherParticipantUserId
 import me.meeshy.ui.component.StoryRingState
 
 /**
  * Pure port of iOS `StoryViewModel.storyRingState(forUserId:)` and
  * `ConversationListView.storyRingState(for:)` (SSOT:
- * `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:1351`,
+ * `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift:1351`,
  * `apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:690`).
  *
  * The rules — first match wins:
  *   1. A group conversation, or a direct one whose other participant cannot be
- *      resolved, carries no ring ([StoryRingState.None]).
+ *      elected (including an UNKNOWN reader — #11615), carries no ring
+ *      ([StoryRingState.None]). The peer is the one [interlocutor] election the
+ *      row's name and avatar come from, so the ring always rings the person shown.
  *   2. When the peer has no active story group (missing or [isFullyExpired]),
  *      the row carries no ring ([StoryRingState.None]).
  *   3. When the peer's group has any [hasUnviewed] story, the row is
@@ -43,7 +45,7 @@ object ConversationStoryRing {
         groups: List<StoryGroup>,
         nowMillis: Long,
     ): StoryRingState = ringFor(
-        userId = conversation.otherParticipantUserId(currentUserId),
+        userId = conversation.interlocutor(currentUserId)?.userId,
         groups = groups,
         nowMillis = nowMillis,
     )

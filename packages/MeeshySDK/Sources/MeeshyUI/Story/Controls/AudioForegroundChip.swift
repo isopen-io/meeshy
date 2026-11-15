@@ -14,6 +14,11 @@ import MeeshySDK
 /// slide / story, appeler `clear()` pour repartir d'un état neutre.
 @MainActor
 public final class StoryReaderAudioMuteRegistry: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     public static let shared = StoryReaderAudioMuteRegistry()
 
@@ -52,6 +57,11 @@ public final class StoryReaderAudioMuteRegistry: ObservableObject {
 /// les vues observatrices.
 @MainActor
 public final class StoryReaderPlayheadState: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     public static let shared = StoryReaderPlayheadState()
 
@@ -103,6 +113,19 @@ public final class StoryReaderPlayheadState: ObservableObject {
 @MainActor
 public struct AudioForegroundChip: View {
 
+    /// **Ce qui suspend l'animation de la puce** (#3915) — DEUX raisons, et
+    /// elles ne se remplacent pas.
+    ///
+    /// La sourdine est une décision de l'AUTEUR : elle survit à l'inactivité et
+    /// se voit (l'icône change, l'opacité tombe). Le repos de l'écran est une
+    /// décision de l'APPAREIL : il ne change rien à ce que la puce dit, il
+    /// arrête seulement de le redessiner. Les confondre en un seul drapeau
+    /// ferait qu'un réveil rallumerait le son d'une piste que l'auteur a coupée.
+    public nonisolated static func animationIsPaused(isUserMuted: Bool,
+                                                     isEditClockThrottled: Bool) -> Bool {
+        isUserMuted || isEditClockThrottled
+    }
+
     public enum Mode: Sendable {
         case composer
         case reader
@@ -113,18 +136,38 @@ public struct AudioForegroundChip: View {
     public let mode: Mode
     public let isSelected: Bool
     public let isUserMuted: Bool
+    /// **L'écran est-il au repos ?** (#3915)
+    ///
+    /// `StoryCanvasUIView` met son horloge d'édition en veille après une
+    /// fenêtre d'inactivité (`EditClockThrottle`, #3906). Ce ralenti ne
+    /// touchait PAS cette puce : ses deux `TimelineView(.animation(…))`
+    /// tournent sur l'horloge d'ANIMATION propre de SwiftUI, indépendante de
+    /// `editDisplayLink`. Une piste non mise en sourdine — le cas courant
+    /// d'une musique de fond — redessinait donc à 30 fps indéfiniment sur un
+    /// écran que personne ne touche.
+    ///
+    /// > Mettre une horloge en veille n'endort pas les autres. Une veille se
+    /// > mesure sur ce qui continue de se réveiller tout seul par-dessous,
+    /// > jamais sur celle qu'on vient d'arrêter.
+    public let isEditClockThrottled: Bool
     public let onDragEnd: () -> Void
     public let onTap: () -> Void
     /// Tap sur l'icône (mode `.composer`) → coupe / réactive le son de cette
     /// piste. Le composer persiste via le `volume` du modèle (0 = muet).
     public let onToggleMute: () -> Void
-    /// Durée de la slide, fournie par le READER (l'overlay la possède) —
-    /// arme le compte à rebours « · M:SS » du crédit défilant. Le composer
-    /// n'en passe pas : son canvas `.edit` n'alimente pas le playhead, un
-    /// compteur y serait un chiffre mort.
+    /// Durée de la slide, fournie par le READER (l'overlay la possède). Le
+    /// chrono de la puce ne la lit pas : il lit l'écoulé de sa surface
+    /// (`\.sceneAudioChipElapsed`) et la passe de sa piste.
     public let slideDuration: TimeInterval?
 
     @GestureState private var dragOffset: CGSize = .zero
+    /// **Le facteur du pinch EN COURS** (#4722), éphémère comme `dragOffset` et
+    /// pour la même raison : le modèle n'est écrit qu'au relâchement, sinon
+    /// chaque tick du geste republierait la slide et ferait re-rendre tout ce
+    /// qui l'observe.
+    @GestureState private var pinchScale: CGFloat = 1
+    /// L'angle de la rotation EN COURS, éphémère comme le pinch.
+    @GestureState private var twist: Angle = .zero
     @Environment(\.colorScheme) private var colorScheme
 
     public init(audioObject: Binding<StoryAudioPlayerObject>,
@@ -132,6 +175,7 @@ public struct AudioForegroundChip: View {
                 mode: Mode = .composer,
                 isSelected: Bool = false,
                 isUserMuted: Bool = false,
+                isEditClockThrottled: Bool = false,
                 slideDuration: TimeInterval? = nil,
                 onDragEnd: @escaping () -> Void = {},
                 onTap: @escaping () -> Void = {},
@@ -141,6 +185,7 @@ public struct AudioForegroundChip: View {
         self.mode = mode
         self.isSelected = isSelected
         self.isUserMuted = isUserMuted
+        self.isEditClockThrottled = isEditClockThrottled
         self.slideDuration = slideDuration
         self.onDragEnd = onDragEnd
         self.onTap = onTap
@@ -151,15 +196,52 @@ public struct AudioForegroundChip: View {
         Group {
             switch mode {
             case .composer:
-                positionedChip.gesture(dragGesture)
+                // **Les deux gestes SIMULTANÉMENT** (#4722). Chaînés par
+                // `.gesture()` successifs, SwiftUI n'en reconnaît qu'un : le
+                // pinch, à deux doigts, commence toujours par un déplacement
+                // que le drag revendique d'abord — la puce se déplaçait au
+                // lieu de grandir.
+                // La rotation se joint aux deux (#16294) : la puce se pince,
+                // se zoome et se tourne comme tout objet de la scène.
+                positionedChip
+                    .gesture(dragGesture.simultaneously(with: pinchGesture).simultaneously(with: rotationGesture))
+                    // **Posées ICI et non dans `positionedChip`** : le lecteur
+                    // n'a pas de geste de taille, et une action nommée qui
+                    // n'agirait pas y serait un contrôle inerte annoncé à
+                    // VoiceOver — la loi 4 dans la forme où elle coûte le plus,
+                    // puisque seule une personne qui n'entend pas la promesse
+                    // échouer la découvrirait.
+                    .accessibilityAction(named: Text(Self.enlargeActionLabel)) {
+                        stepScale(by: Self.accessibilityScaleStep)
+                    }
+                    .accessibilityAction(named: Text(Self.shrinkActionLabel)) {
+                        stepScale(by: 1 / Self.accessibilityScaleStep)
+                    }
             case .reader:
                 positionedChip
             }
         }
     }
 
+    /// **La taille RENDUE** — celle du modèle, multipliée par le geste en cours
+    /// (#4722).
+    ///
+    /// En `.reader`, le pinch n'existe pas et `pinchScale` vaut son état de
+    /// repos : la même expression sert les deux modes sans les distinguer, ce
+    /// qui garantit qu'une puce publiée se lit exactement à la taille où
+    /// l'auteur l'a laissée.
+    private var renderedScale: CGFloat {
+        CGFloat(SceneObjectScalePolicy.sanitized(audioObject.scale ?? 1)) * pinchScale
+    }
+
     private var positionedChip: some View {
         chipContent
+            // AVANT `.position` : le modificateur de position place le CENTRE
+            // du contenu, que l'échelle ne déplace pas. Appliqué après, il
+            // mettrait la coordonnée elle-même à l'échelle — une puce à droite
+            // de la scène partirait hors cadre en grandissant.
+            .scaleEffect(renderedScale)
+            .rotationEffect(.degrees(audioObject.rotation ?? 0) + twist)
             .position(
                 x: max(0, min(canvasSize.width, audioObject.x * canvasSize.width)) + dragOffset.width,
                 y: max(0, min(canvasSize.height, audioObject.y * canvasSize.height)) + dragOffset.height
@@ -172,16 +254,16 @@ public struct AudioForegroundChip: View {
             .accessibilityValue(accessibilityValueLabel)
             .accessibilityHint(accessibilityHintLabel)
             .accessibilityAddTraits(.isButton)
+            .accessibilityAction { onTap() }
     }
 
     private var chipContent: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             muteToggleIcon
                 .frame(width: 18, height: 18)
-            // Son de bibliothèque → crédit défilant « titre · @pseudo · M:SS » ;
+            // Son de bibliothèque → crédit défilant « titre · @pseudo » ;
             // piste propre (première publication) → sinusoïde, comme toujours.
-            // Le compteur ne s'arme qu'au reader (slideDuration fourni) — le
-            // frame s'élargit alors juste assez pour loger « · M:SS ».
+            // Le temps n'y défile plus : le chrono qui boucle le dit à droite.
             //
             // Passe par le résolveur PROMU (B8f, arbitrage 9) plutôt que par
             // `resolve` : le cache froid (métadonnées non résolues) reste
@@ -191,22 +273,32 @@ public struct AudioForegroundChip: View {
                 sound: AudioChipDisplay.borrowedSound(soundId: audioObject.soundId),
                 libraryTitle: audioObject.name,
                 libraryUsername: audioObject.soundAuthorUsername,
-                libraryDuration: nil
+                libraryDuration: nil,
+                libraryReleasedAt: audioObject.soundReleaseDate
             )) {
             case .marquee(let text):
                 AudioChipMarquee(text: text,
-                                 paused: isUserMuted,
-                                 window: readerPlaybackWindow)
-                    .frame(width: readerPlaybackWindow == nil ? 92 : 124, height: 18)
+                                 paused: Self.animationIsPaused(
+                                    isUserMuted: isUserMuted,
+                                    isEditClockThrottled: isEditClockThrottled))
+                    .frame(width: 92, height: 18)
                     .opacity(isUserMuted ? 0.55 : 1.0)
             case .waveform:
-                AudioForegroundSineWave(paused: isUserMuted)
+                AudioForegroundSineWave(paused: Self.animationIsPaused(
+                    isUserMuted: isUserMuted,
+                    isEditClockThrottled: isEditClockThrottled))
                     .frame(width: 54, height: 18)
                     .opacity(isUserMuted ? 0.35 : 1.0)
             }
+            // Le chrono qui boucle (#16294), aux mesures de l'export
+            // (`StoryAudioChipPlacement.chronoWidth`) : la puce peinte dans le
+            // canvas et celle-ci ont la même largeur.
+            SceneAudioChipChronoText(timing: SceneAudioChipTiming(audio: audioObject),
+                                     fontSize: 12, dimmed: isUserMuted)
+                .frame(width: StoryAudioChipPlacement.chronoWidth, height: 18, alignment: .trailing)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(
             Capsule()
@@ -238,9 +330,9 @@ public struct AudioForegroundChip: View {
     @ViewBuilder
     private var iconView: some View {
         let icon = Image(systemName: iconName)
-            .font(.system(size: 14, weight: .bold))
+            .font(.system(size: MeeshyIconSize.sm, weight: .bold))
         if isUserMuted {
-            icon.foregroundColor(.white.opacity(0.55))
+            icon.foregroundStyle(.white.opacity(MeeshyOpacity.strong))
         } else {
             icon.foregroundStyle(MeeshyColors.brandGradient)
         }
@@ -250,28 +342,25 @@ public struct AudioForegroundChip: View {
         isUserMuted ? "waveform.slash" : "waveform"
     }
 
-    /// Fenêtre du secteur pour le compteur du marquee — mêmes primitives et
-    /// même fin de fenêtre que `AudioForegroundReaderOverlay.visibleAudios`
-    /// (le compteur atteint 0:00 exactement quand la chip disparaît).
-    /// `nil` hors reader : pas de compteur.
-    private var readerPlaybackWindow: AudioChipPlaybackWindow? {
-        guard let slideDuration else { return nil }
-        return AudioChipPlaybackWindow(
-            startTime: audioObject.startTime.map(TimeInterval.init),
-            duration: audioObject.duration.map(TimeInterval.init),
-            isBackground: audioObject.isBackground == true,
-            slideDuration: slideDuration)
-    }
-
     private var strokeColor: Color {
         isSelected
             ? MeeshyColors.indigo400
-            : (colorScheme == .dark ? Color.white.opacity(0.25) : MeeshyColors.indigo950.opacity(0.18))
+            : (colorScheme == .dark ? Color.white.opacity(MeeshyOpacity.medium) : MeeshyColors.indigo950.opacity(MeeshyOpacity.light))
     }
 
     // MARK: Accessibility strings
 
-    private var accessibilityTitle: String { "Audio foreground" }
+    /// Son nom — le titre de la piste, sinon le pseudo de l'auteur d'un son
+    /// emprunté, sinon « Son sur la scène » — et la durée de sa passe (#16294).
+    private var accessibilityTitle: String {
+        let title = audioObject.name?.trimmingCharacters(in: .whitespaces)
+        let author = audioObject.soundAuthorUsername.map { "@" + $0 }
+        let name = [title, author].compactMap { $0?.isEmpty == false ? $0 : nil }.first
+            ?? String(localized: "story.audio.chip.a11y.name", defaultValue: "Son sur la scène", bundle: .module)
+        guard let pass = SceneAudioChipClock.passSeconds(of: audioObject) else { return name }
+        let format = String(localized: "story.audio.chip.a11y.duration", defaultValue: "%1$@, dure %2$@", bundle: .module)
+        return String(format: format, name, SceneAudioChipClock.label(pass))
+    }
 
     private var accessibilityValueLabel: String {
         switch mode {
@@ -285,7 +374,9 @@ public struct AudioForegroundChip: View {
     private var accessibilityHintLabel: String {
         switch mode {
         case .composer:
-            return String(localized: "story.audio.chip.hint.composer", defaultValue: "Double tap pour sélectionner. Faites glisser pour déplacer.", bundle: .module)
+            return String(localized: "story.audio.chip.hint.composer",
+                          defaultValue: "Double tap pour sélectionner. Faites glisser pour déplacer, pincez pour redimensionner.",
+                          bundle: .module)
         case .reader:
             return String(localized: "story.audio.chip.hint.reader", defaultValue: "Double tap pour couper ou activer cette piste audio.", bundle: .module)
         }
@@ -302,6 +393,70 @@ public struct AudioForegroundChip: View {
                 audioObject.y = min(1, max(0, nextY))
                 onDragEnd()
             }
+    }
+
+    /// **Pincer redimensionne la puce** (#4722, directive porteur 2026-09-01 :
+    /// « en chip resizable sur la scène »).
+    ///
+    /// `MagnificationGesture` et non `MagnifyGesture` : la seconde est iOS 17+,
+    /// et le plancher de l'app est iOS 16. La dépréciation ne retire rien —
+    /// elle nomme le successeur qu'on prendra le jour où le plancher montera.
+    ///
+    /// Le modèle n'est écrit qu'au relâchement, comme pour le déplacement : la
+    /// slide est un `@Binding` que la scène entière observe, et la republier à
+    /// chaque tick du geste ferait re-rendre le canvas pendant qu'on pince —
+    /// exactement l'image perdue que la dimension 4 interdit.
+    private var pinchGesture: some Gesture {
+        MagnificationGesture()
+            .updating($pinchScale) { value, state, _ in state = value }
+            .onEnded { value in
+                audioObject.scale = SceneObjectScalePolicy.settled(
+                    base: audioObject.scale ?? 1, gestureScale: Double(value),
+                    unitSide: SceneObjectUnitSide.designSide(of: .audio(audioObject)))
+                onDragEnd()
+            }
+    }
+
+    /// **Le pas des actions d'accessibilité** — un cran qui SE VOIT.
+    ///
+    /// VoiceOver ne pince pas : sans ces deux actions, le redimensionnement
+    /// serait une capacité réservée à qui voit l'écran et pose deux doigts
+    /// dessus. `1.25` est assez fin pour viser, assez franc pour que chaque
+    /// pression change quelque chose.
+    /// La rotation passe par la loi du canvas (`SceneObjectRotationPolicy`) :
+    /// une puce enfouie sous un objet, tournée par le canvas, et une puce
+    /// posée par-dessus tournent du même angle sous les mêmes doigts.
+    private var rotationGesture: some Gesture {
+        RotationGesture()
+            .updating($twist) { value, state, _ in
+                state = .degrees(SceneObjectRotationPolicy.settled(base: 0, gestureRadians: value.radians))
+            }
+            .onEnded { value in
+                audioObject.rotation = SceneObjectRotationPolicy.settled(base: audioObject.rotation ?? 0,
+                                                                         gestureRadians: value.radians)
+                onDragEnd()
+            }
+    }
+
+    private static let accessibilityScaleStep: Double = 1.25
+
+    static var enlargeActionLabel: String {
+        String(localized: "story.audio.chip.action.enlarge",
+               defaultValue: "Agrandir la puce", bundle: .module)
+    }
+
+    static var shrinkActionLabel: String {
+        String(localized: "story.audio.chip.action.shrink",
+               defaultValue: "Réduire la puce", bundle: .module)
+    }
+
+    /// Applique un cran d'échelle. Passe par la MÊME règle que le pinch : deux
+    /// chemins vers une grandeur, une seule borne.
+    private func stepScale(by factor: Double) {
+        audioObject.scale = SceneObjectScalePolicy.settled(
+            base: audioObject.scale ?? 1, gestureScale: factor,
+            unitSide: SceneObjectUnitSide.designSide(of: .audio(audioObject)))
+        onDragEnd()
     }
 }
 
@@ -336,7 +491,7 @@ public struct StoryWaveformBadgeView: View {
                                                  width: barWidth * 0.6,
                                                  height: height),
                              cornerRadius: barWidth * 0.3),
-                        with: .color(.white.opacity(0.9))
+                        with: .color(.white.opacity(MeeshyOpacity.intense))
                     )
                 }
             }
@@ -386,8 +541,8 @@ struct AudioForegroundSineWave: View {
                     x += step
                 }
                 ctx.stroke(path,
-                           with: .color(.white.opacity(0.9)),
-                           style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+                           with: .color(.white.opacity(MeeshyOpacity.intense)),
+                           style: StrokeStyle(lineWidth: MeeshyBorder.emphasis, lineCap: .round, lineJoin: .round))
             }
         }
     }
@@ -452,13 +607,24 @@ public struct AudioForegroundReaderOverlay: View {
     /// — `StoryCanvasUIView` souscrit à la registry et applique au mixer.
     public let onTap: ((StoryAudioPlayerObject) -> Void)?
 
-    @ObservedObject private var playhead = StoryReaderPlayheadState.shared
-    @ObservedObject private var muteRegistry = StoryReaderAudioMuteRegistry.shared
+    /// **Les identifiants VISIBLES, pas le temps** (#7010).
+    ///
+    /// Le playhead publie ≈ 30 fois par seconde ; cet overlay, lui, ne change
+    /// qu'aux FRONTIÈRES de fenêtre — quelques fois par slide. Observé, il
+    /// reconstruisait son `GeometryReader`, son `ForEach` et chacun de ses
+    /// chips (onde animée comprise) trente fois par seconde pour un rendu
+    /// identique. L'abonnement vit désormais dans un `onReceive` qui FILTRE :
+    /// il n'écrit cet état que si l'appartenance a bougé, donc le corps ne se
+    /// ré-évalue qu'à l'ouverture ou à la fermeture d'une fenêtre.
+    @State private var visibleAudioIds: [String] = []
+    @ObservedObject private var muteRegistry: StoryReaderAudioMuteRegistry
 
     public init(foregroundAudios: [StoryAudioPlayerObject],
                 slideDuration: TimeInterval,
                 fallbackElapsedTime: TimeInterval? = nil,
-                onTap: ((StoryAudioPlayerObject) -> Void)? = nil) {
+                onTap: ((StoryAudioPlayerObject) -> Void)? = nil,
+                muteRegistry: StoryReaderAudioMuteRegistry = .shared) {
+        self.muteRegistry = muteRegistry
         self.foregroundAudios = foregroundAudios
         self.slideDuration = slideDuration
         self.fallbackElapsedTime = fallbackElapsedTime
@@ -485,6 +651,18 @@ public struct AudioForegroundReaderOverlay: View {
                 )
             }
         }
+        .environment(\.sceneAudioChipElapsed, readerElapsed)
+        // `@Published` livre sa valeur COURANTE à la souscription : la
+        // première appartenance est donc calculée au montage, sans attendre le
+        // premier tic — un chip dont la fenêtre couvre 0 s'affiche tout de
+        // suite, exactement comme avant.
+        .onReceive(StoryReaderPlayheadState.shared.$elapsedSeconds) { seconds in
+            let ids = Self.visibleAudios(in: foregroundAudios,
+                                         elapsed: seconds ?? fallbackElapsedTime ?? 0,
+                                         slideDuration: slideDuration).map(\.id)
+            guard ids != visibleAudioIds else { return }
+            visibleAudioIds = ids
+        }
         // Quand l'overlay disparaît (viewer fermé), reset les états partagés
         // pour ne pas fuiter vers le prochain cycle (re-entry rapide sur la
         // même story sinon le mute persiste).
@@ -494,16 +672,17 @@ public struct AudioForegroundReaderOverlay: View {
         }
     }
 
-    /// Playhead effectif : le clock canvas dès qu'un tick a été publié,
-    /// sinon le fallback fourni par le caller, sinon `0`.
-    private var elapsedTime: TimeInterval {
-        playhead.elapsedSeconds ?? fallbackElapsedTime ?? 0
+    /// Le chrono des puces lit le playhead du lecteur, sans l'observer.
+    private var readerElapsed: SceneAudioChipElapsed {
+        let fallback = fallbackElapsedTime ?? 0
+        return SceneAudioChipElapsed { StoryReaderPlayheadState.shared.elapsedSeconds ?? fallback }
     }
 
+    /// L'ORDRE vient des audios de la slide, jamais de la liste d'identifiants
+    /// — celle-ci ne dit QUE l'appartenance.
     private var visibleAudios: [StoryAudioPlayerObject] {
-        Self.visibleAudios(in: foregroundAudios,
-                           elapsed: elapsedTime,
-                           slideDuration: slideDuration)
+        let visibles = Set(visibleAudioIds)
+        return foregroundAudios.filter { visibles.contains($0.id) }
     }
 
     /// État muet AFFICHÉ par le chip reader — pur, extrait pour tests.
@@ -528,7 +707,7 @@ public struct AudioForegroundReaderOverlay: View {
                                      elapsed: TimeInterval,
                                      slideDuration: TimeInterval) -> [StoryAudioPlayerObject] {
         audios.filter { audio in
-            guard audio.isBackground != true else { return false }
+            guard SceneAudioStageRule.isStaged(audio) else { return false }
             let start = Double(audio.startTime ?? 0)
             let end = audio.duration.map { start + Double($0) } ?? slideDuration
             return elapsed >= start && elapsed <= end

@@ -1,0 +1,44 @@
+/**
+ * LES SOUS-TITRES D'UN APPEL ET SA TRANSCRIPTION (#8048) — tranche du catalogue,
+ * RÉPANDUE par `catalog-ar.ts` comme `catalog-ar-call-quality.ts` : le bouton
+ * Sous-titres de l'écran d'appel, le panneau et son journal
+ * (`call-captions-panel.tsx`), la transcription d'après l'appel dans la bulle
+ * du fil (`call-transcript-panel.tsx`).
+ */
+const arCallCaptions = {
+  'call.captions.original': 'إظهار الترجمة النصية الأصلية',
+  'call.captions.invited': 'إظهار الترجمة النصية — محاورك يقرؤها بالفعل',
+  'callCaptions.footer.touchForOriginal': '{pair} · المس = الأصل',
+  'callCaptions.footer.translating': '{language} · الترجمة جارية',
+  'callCaptions.footer.translatedLanguages.one': 'تمت الترجمة · {count} لغة',
+  'callCaptions.footer.translatedLanguages.two': 'تمت الترجمة · لغتان',
+  'callCaptions.footer.translatedLanguages.few': 'تمت الترجمة · {count} لغات',
+  'callCaptions.footer.translatedLanguages.many': 'تمت الترجمة · {count} لغةً',
+  'callCaptions.footer.translatedLanguages.other': 'تمت الترجمة · {count} لغة',
+  'callCaptions.self': 'أنا',
+  'callCaptions.regionLabel': 'الترجمة النصية للمكالمة',
+  'callCaptions.translating': 'الترجمة جارية',
+  'callCaptions.region': 'الترجمة النصية',
+  'callCaptions.waiting': 'تظهر الترجمة النصية هنا بمجرد أن يتحدث أحد',
+  'callCaptions.listening': 'يتم تحويل صوتك إلى نص',
+  'callCaptions.unsupported': 'لا يُحوَّل صوتك إلى نص على هذا الجهاز: يمكنك قراءة الآخرين',
+  'callCaptions.denied': 'تم رفض التعرف على الكلام: يمكنك قراءة الآخرين',
+  'callCaptions.sealed': 'الترجمة النصية غير متاحة: هذه المحادثة مشفرة من طرف إلى طرف، أو تعذّر التحقق من تشفيرها',
+  'callCaptions.journal.title': 'سجل المكالمة',
+  'callCaptions.participant': 'مشارك',
+  'callTranscript.show': 'إظهار النص المكتوب',
+  'callTranscript.hide': 'إخفاء النص المكتوب',
+  'callTranscript.title': 'النص المكتوب للمكالمة',
+  'callTranscript.loading': 'جارٍ تحميل النص المكتوب…',
+  'callTranscript.empty': 'لا يوجد تفريغ',
+  'callTranscript.error': 'النص المكتوب غير متاح',
+  'callTranscript.retry': 'إعادة المحاولة',
+  'callTranscript.showOriginal': 'عرض الأصل',
+  'callTranscript.showTranslated': 'عرض الترجمة',
+  'callJournal.capture.screenshot': 'التقط صورة للشاشة',
+  'callJournal.capture.recording': 'يسجّل الشاشة',
+  'callJournal.recording.started': 'بدأ تسجيل المكالمة',
+  'callJournal.recording.stopped': 'توقّف تسجيل المكالمة',
+} as const;
+
+export default arCallCaptions;

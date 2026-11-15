@@ -15,28 +15,51 @@
  */
 
 import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
 import speakeasy from 'speakeasy';
-import zxcvbn from 'zxcvbn';
 import axios from 'axios';
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CacheStore } from './CacheStore';
 import { EmailService } from './EmailService';
 import { GeoIPService } from './GeoIPService';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { hashPassword, verifyPassword } from '../utils/password-hash';
 import { unsetOrNull } from '../utils/prisma-unset';
-import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
-import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
+import { validatePasswordStrength } from '../utils/password-strength';
+import { RECIPIENT_LANG_SELECT, recipientLanguage, type RecipientLanguagePrefs } from '../utils/recipient-language';
+import { emailProofFields, settleEmailAddressProof } from './auth/email-address-proof';
+import { scheduleContactJoinedAnnouncement } from './notifications/contact-joined';
+import { retireDevicesAfterSessionEnd } from './e2ee/device-retirement';
+import { emailSecretLink } from '../utils/email-secret-link';
+import {
+  createResetSecondFactorAttempts,
+  RESET_SECOND_FACTOR_MAX_ATTEMPTS,
+  type ResetSecondFactorAttempts
+} from './auth/reset-second-factor-attempts';
 
 // Logger dédié pour PasswordResetService
 const logger = enhancedLogger.child({ module: 'PasswordResetService' });
 
 
-const BCRYPT_COST = 12;
 const TOKEN_EXPIRY_MINUTES = 15;
 const MAX_RESET_ATTEMPTS_24H = 10;
 const PASSWORD_HISTORY_COUNT = 10;
-const MIN_PASSWORD_SCORE = 3; // zxcvbn score (0-4)
+
+/**
+ * Le préfixe d'un jeton LIVRÉ PAR E-MAIL (#6642).
+ *
+ * `completePasswordReset` reçoit deux jetons du même format : celui que
+ * `requestPasswordReset` dépose dans la boîte, et celui que
+ * `PhonePasswordResetService.verifyCode` rend après un code SMS. Le premier
+ * prouve la possession de l'adresse, le second celle du téléphone — seul le
+ * premier a le droit de poser `emailVerifiedAt`.
+ *
+ * Le canal est lié au SECRET, pas à une colonne : le préfixe fait partie de la
+ * chaîne hachée, donc un jeton SMS ne se « promeut » pas en l'y ajoutant (son
+ * hash ne désignerait plus aucune ligne), et `.` n'appartient pas à l'alphabet
+ * base64url — aucun jeton SMS ne commence ainsi par hasard. Les clients
+ * transportent le jeton tel quel.
+ */
+const EMAIL_LINK_TOKEN_PREFIX = 'email.';
 
 export interface PasswordResetRequest {
   email: string;
@@ -56,13 +79,51 @@ export interface PasswordResetCompletion {
   userAgent: string;
 }
 
+/**
+ * Pourquoi un `POST /auth/reset-password` est refusé (#10866) — servi en `code`
+ * à côté du texte historique (`error`, inchangé pour les clients déjà
+ * publiés) : l'écran distingue le lien mort, le mot de passe refusé et le code
+ * 2FA faux sans lire une phrase anglaise.
+ */
+export type PasswordResetRefusalCode =
+  | 'RESET_PASSWORD_MISMATCH'
+  | 'RESET_PASSWORD_WEAK'
+  | 'RESET_PASSWORD_REUSED'
+  | 'RESET_TOKEN_INVALID'
+  | 'ACCOUNT_LOCKED'
+  | 'TWO_FACTOR_REQUIRED'
+  | 'TWO_FACTOR_INVALID'
+  | 'TWO_FACTOR_ATTEMPTS_EXHAUSTED'
+  | 'RESET_UNAVAILABLE';
+
+type PasswordResetCompletionResult =
+  | { success: true; message: string; userId: string; error?: undefined; code?: undefined }
+  | { success: false; error: string; code: PasswordResetRefusalCode; message?: undefined; userId?: undefined };
+
+type SecondFactorHolder = RecipientLanguagePrefs & {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+};
+
+const INVALID_RESET_TOKEN = 'Invalid or expired reset token';
+const RESET_FAILED = 'An error occurred while resetting your password. Please try again.';
+
+const refuse = (code: PasswordResetRefusalCode, error: string): PasswordResetCompletionResult => ({
+  success: false,
+  error,
+  code
+});
+
 export class PasswordResetService {
   constructor(
     private prisma: PrismaClient,
     private cache: CacheStore,
     private emailService: EmailService,
     private geoIPService: GeoIPService,
-    private captchaSecret: string
+    private captchaSecret: string,
+    private secondFactorAttempts: ResetSecondFactorAttempts = createResetSecondFactorAttempts()
   ) {}
 
   /**
@@ -115,6 +176,7 @@ export class PasswordResetService {
           id: true,
           email: true,
           emailVerifiedAt: true,
+          password: true,
           lockedUntil: true,
           passwordResetAttempts: true,
           lastPasswordResetAttempt: true,
@@ -130,15 +192,17 @@ export class PasswordResetService {
         return this.genericSuccessResponse();
       }
 
-      // 5. Email not verified - return generic response
-      if (!user.emailVerifiedAt) {
-        logger.info('[PasswordResetService] ❌ Email not verified - returning generic response');
-        await this.logSecurityEvent(user.id, 'PASSWORD_RESET_UNVERIFIED_EMAIL', 'LOW', {
-          email: user.email
-        });
-        return this.genericSuccessResponse();
-      }
-      logger.info('[PasswordResetService] ✅ Email verified at:', user.emailVerifiedAt);
+      // Le hash ne sert qu'à SAVOIR si le compte en a un : seul ce booléen en
+      // sort (témoin : `PasswordResetService.passwordless.test.ts`). `user` reste
+      // lié à sa requête — le balayage du cadrage (#4642) remonte
+      // `recipientLanguage(user)` jusqu'à `RECIPIENT_LANG_SELECT` par cette liaison.
+      const hasPassword = user.password !== null;
+
+      // 5. Une adresse NON vérifiée reçoit la réinitialisation NORMALE (#8238,
+      // précision porteur 2026-09-27) : l'USAGE du lien prouve l'adresse
+      // (`completePasswordReset`), il n'y a donc rien à garder ici. La garde
+      // de #6642 (adresse non vérifiée + mot de passe ⇒ aucun lien) est levée.
+      logger.info(`[PasswordResetService] ✅ Reset link admitted hasPassword=${hasPassword}`);
 
       // 6. Check account lockout
       const isLocked = await this.checkAccountLockout(user.id);
@@ -173,8 +237,8 @@ export class PasswordResetService {
         // 9. Revoke existing tokens
         await this.revokeExistingTokens(user.id);
 
-        // 10. Generate secure token
-        const token = crypto.randomBytes(32).toString('base64url');
+        // 10. Generate secure token — le canal voyage DANS le secret haché
+        const token = `${EMAIL_LINK_TOKEN_PREFIX}${crypto.randomBytes(32).toString('base64url')}`;
         const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
         // 11. Get geolocation
@@ -189,8 +253,7 @@ export class PasswordResetService {
             ipAddress,
             userAgent,
             deviceFingerprint,
-            geoLocation: geoData?.location || null,
-            geoCoordinates: geoData ? `${geoData.latitude},${geoData.longitude}` : null
+            geoLocation: geoData?.location || null
           }
         });
 
@@ -214,9 +277,10 @@ export class PasswordResetService {
         await this.emailService.sendPasswordResetEmail({
           to: user.email,
           name: `${user.firstName} ${user.lastName}`,
-          resetLink: `${process.env.FRONTEND_URL}/reset-password?token=${token}`,
+          resetLink: emailSecretLink({ base: process.env.FRONTEND_URL || 'https://meeshy.me', path: '/reset-password', secret: { token } }),
           expiryMinutes: TOKEN_EXPIRY_MINUTES,
-          language: recipientLanguage(user, 'en')
+          language: recipientLanguage(user, 'en'),
+          intent: hasPassword ? 'reset' : 'set'
         });
 
       } finally {
@@ -246,7 +310,7 @@ export class PasswordResetService {
    */
   async completePasswordReset(
     request: PasswordResetCompletion
-  ): Promise<{ success: boolean; message?: string; error?: string; userId?: string }> {
+  ): Promise<PasswordResetCompletionResult> {
     const {
       token,
       newPassword,
@@ -260,16 +324,13 @@ export class PasswordResetService {
     try {
       // 1. Validate passwords match
       if (newPassword !== confirmPassword) {
-        return { success: false, error: 'Passwords do not match' };
+        return refuse('RESET_PASSWORD_MISMATCH', 'Passwords do not match');
       }
 
       // 2. Validate password strength
-      const passwordValidation = this.validatePasswordStrength(newPassword);
+      const passwordValidation = validatePasswordStrength(newPassword);
       if (!passwordValidation.isValid) {
-        return {
-          success: false,
-          error: `Password requirements: ${passwordValidation.errors.join(', ')}`
-        };
+        return refuse('RESET_PASSWORD_WEAK', `Password requirements: ${passwordValidation.errors.join(', ')}`);
       }
 
       // 3. Hash submitted token
@@ -286,6 +347,7 @@ export class PasswordResetService {
               firstName: true,
               lastName: true,
               password: true,
+              emailVerifiedAt: true,
               twoFactorSecret: true,
               twoFactorEnabledAt: true,
               ...RECIPIENT_LANG_SELECT
@@ -299,7 +361,7 @@ export class PasswordResetService {
           ipAddress,
           tokenHash: tokenHash.substring(0, 8) // Log first 8 chars only
         });
-        return { success: false, error: 'Invalid or expired reset token' };
+        return refuse('RESET_TOKEN_INVALID', INVALID_RESET_TOKEN);
       }
 
       // 5. Check token expiry
@@ -307,7 +369,7 @@ export class PasswordResetService {
         await this.logSecurityEvent(resetToken.userId, 'PASSWORD_RESET_EXPIRED_TOKEN', 'LOW', {
           ipAddress
         });
-        return { success: false, error: 'Invalid or expired reset token' };
+        return refuse('RESET_TOKEN_INVALID', INVALID_RESET_TOKEN);
       }
 
       // 6. Check if token already used
@@ -316,7 +378,7 @@ export class PasswordResetService {
           ipAddress,
           originalUse: resetToken.usedAt.toISOString()
         });
-        return { success: false, error: 'Invalid or expired reset token' };
+        return refuse('RESET_TOKEN_INVALID', INVALID_RESET_TOKEN);
       }
 
       // 7. Check if token is revoked
@@ -325,7 +387,7 @@ export class PasswordResetService {
           ipAddress,
           revokedReason: resetToken.revokedReason
         });
-        return { success: false, error: 'Invalid or expired reset token' };
+        return refuse('RESET_TOKEN_INVALID', INVALID_RESET_TOKEN);
       }
 
       const user = resetToken.user;
@@ -333,32 +395,23 @@ export class PasswordResetService {
       // 8. Check account lockout
       const isLocked = await this.checkAccountLockout(user.id);
       if (isLocked) {
-        return { success: false, error: 'Account is locked. Please contact support.' };
+        return refuse('ACCOUNT_LOCKED', 'Account is locked. Please contact support.');
       }
 
-      // 9. Verify 2FA if enabled
+      // 9. Verify 2FA if enabled — chaque code consomme un essai du JETON,
+      // réservé avant la vérification (#10866).
       if (user.twoFactorEnabledAt) {
         if (!twoFactorCode) {
-          return { success: false, error: '2FA code required' };
+          return refuse('TWO_FACTOR_REQUIRED', '2FA code required');
         }
-
-        const is2FAValid = await this.verify2FA(user.id, twoFactorCode);
-        if (!is2FAValid) {
-          await this.logSecurityEvent(user.id, 'TWO_FA_FAILED', 'HIGH', {
-            context: 'password_reset',
-            ipAddress
-          });
-          return { success: false, error: 'Invalid 2FA code' };
-        }
+        const refusal = await this.checkSecondFactor({ resetTokenId: resetToken.id, user, twoFactorCode, ipAddress });
+        if (refusal) return refusal;
       }
 
       // 10. Check password history (prevent reuse)
       const isPasswordUnique = await this.checkPasswordHistory(user.id, newPassword);
       if (!isPasswordUnique) {
-        return {
-          success: false,
-          error: 'Password was used recently. Please choose a different password.'
-        };
+        return refuse('RESET_PASSWORD_REUSED', 'Password was used recently. Please choose a different password.');
       }
 
       // 11. Detect anomalies
@@ -366,7 +419,6 @@ export class PasswordResetService {
       const anomaly = await this.detectAnomalies(
         user.id,
         deviceFingerprint || '',
-        ipAddress,
         geoData?.location || ''
       );
 
@@ -386,21 +438,42 @@ export class PasswordResetService {
         });
       }
 
-      // 12. Hash new password (bcrypt cost=12)
-      const hashedPassword = await bcrypt.hash(newPassword, BCRYPT_COST);
+      // 12. Hash new password — coût UNIQUE du dépôt (`utils/password-hash`)
+      const hashedPassword = await hashPassword(newPassword);
 
-      // 13. Transaction: Update password, invalidate sessions, mark token used
+      // 13. Transaction: Update password, invalidate sessions, mark token used.
+      // Un lien DÉPOSÉ dans la boîte prouve qu'on la possède (#6642) : il pose
+      // `emailVerifiedAt` s'il manquait, sans quoi un compte qui vient de définir
+      // son premier mot de passe redeviendrait muet à sa prochaine demande. Un
+      // jeton du parcours SMS ne prouve que le téléphone (`EMAIL_LINK_TOKEN_PREFIX`).
+      // Le fragment vient du site UNIQUE de la preuve d'adresse par e-mail
+      // (#8238, `./auth/email-address-proof`).
+      const provenAt = new Date();
+      const mailboxProof = token.startsWith(EMAIL_LINK_TOKEN_PREFIX) ? emailProofFields(user, provenAt) : {};
       await this.prisma.$transaction(async (tx) => {
+        // #10475 — le jeton se consomme D'ABORD, par une écriture
+        // CONDITIONNELLE : deux réinitialisations concurrentes passaient toutes
+        // deux la lecture de `usedAt` (étape 4) et écrivaient chacune un mot de
+        // passe. Celle qui perd annule sa transaction avant toute autre écriture.
+        // `usedAt` d'un jeton frais est ABSENT du document : `unsetOrNull`.
+        const consumed = await tx.passwordResetToken.updateMany({
+          where: { id: resetToken.id, isRevoked: false, ...unsetOrNull('usedAt') },
+          data: { usedAt: new Date() }
+        });
+        if (consumed.count !== 1) throw new ResetTokenAlreadyConsumed();
+
         // Update password
         await tx.user.update({
           where: { id: user.id },
           data: {
+            ...mailboxProof,
             password: hashedPassword,
             lastPasswordChange: new Date(),
             passwordResetAttempts: 0,
             failedLoginAttempts: 0,
             lockedUntil: null,
             lockedReason: null,
+            lastLoginAt: new Date(),
             lastLoginIp: ipAddress,
             lastLoginLocation: geoData?.location || null,
             lastLoginDevice: deviceFingerprint || null
@@ -418,12 +491,6 @@ export class PasswordResetService {
           }
         });
 
-        // Mark token as used
-        await tx.passwordResetToken.update({
-          where: { id: resetToken.id },
-          data: { usedAt: new Date() }
-        });
-
         // Invalidate all user sessions
         await tx.userSession.updateMany({
           where: { userId: user.id, isValid: true },
@@ -434,6 +501,20 @@ export class PasswordResetService {
           }
         });
       });
+      // #12543 — les appareils chiffrés des sessions fermées cessent d'être destinataires.
+      await retireDevicesAfterSessionEnd(this.prisma, { userId: user.id }, (error) =>
+        logger.warn('e2ee devices not retired after password reset; the sweep will', { error }));
+
+      if (mailboxProof.emailVerifiedAt) {
+        await settleEmailAddressProof(
+          {
+            prisma: this.prisma,
+            cache: this.cache,
+            announce: (userId) => scheduleContactJoinedAnnouncement(this.prisma, userId),
+          },
+          { userId: user.id, now: provenAt, newlyProven: true }
+        );
+      }
 
       // 14. Log successful reset
       await this.logSecurityEvent(user.id, 'PASSWORD_RESET_SUCCESS', 'MEDIUM', {
@@ -458,17 +539,92 @@ export class PasswordResetService {
       };
 
     } catch (error) {
+      if (error instanceof ResetTokenAlreadyConsumed || isWriteConflict(error)) {
+        return refuse('RESET_TOKEN_INVALID', INVALID_RESET_TOKEN);
+      }
       logger.error('[PasswordResetService] Error in completePasswordReset', error);
-      return {
-        success: false,
-        error: 'An error occurred while resetting your password. Please try again.'
-      };
+      return refuse('RESET_UNAVAILABLE', RESET_FAILED);
     }
   }
 
   // =====================================
   // HELPER METHODS
   // =====================================
+
+  /**
+   * Le code 2FA d'une réinitialisation (#10866). L'essai est RÉSERVÉ avant la
+   * vérification — un rang atomique par jeton — et rendu quand le code est
+   * juste. Au-delà du plafond, ou au dernier code faux, le jeton est révoqué :
+   * il faut redemander un lien. Un compteur muet refuse (fail-closed).
+   */
+  private async checkSecondFactor(params: {
+    resetTokenId: string;
+    user: SecondFactorHolder;
+    twoFactorCode: string;
+    ipAddress: string;
+  }): Promise<PasswordResetCompletionResult | null> {
+    const { resetTokenId, user, twoFactorCode, ipAddress } = params;
+    const rank = await this.secondFactorAttempts.reserve(resetTokenId);
+    if (rank === null) {
+      logger.error('[PasswordResetService] Second-factor attempt counter unavailable — reset refused');
+      return refuse('RESET_UNAVAILABLE', RESET_FAILED);
+    }
+    if (rank > RESET_SECOND_FACTOR_MAX_ATTEMPTS) {
+      await this.revokeAfterSecondFactorFailures({ resetTokenId, user, ipAddress });
+      return this.secondFactorExhausted();
+    }
+
+    const is2FAValid = await this.verify2FA(user.id, twoFactorCode);
+    if (is2FAValid) {
+      await this.secondFactorAttempts.release(resetTokenId);
+      return null;
+    }
+
+    await this.logSecurityEvent(user.id, 'TWO_FA_FAILED', 'HIGH', {
+      context: 'password_reset',
+      attempt: rank,
+      ipAddress
+    });
+    if (rank < RESET_SECOND_FACTOR_MAX_ATTEMPTS) {
+      return refuse('TWO_FACTOR_INVALID', 'Invalid 2FA code');
+    }
+    await this.revokeAfterSecondFactorFailures({ resetTokenId, user, ipAddress });
+    return this.secondFactorExhausted();
+  }
+
+  private secondFactorExhausted(): PasswordResetCompletionResult {
+    return refuse('TWO_FACTOR_ATTEMPTS_EXHAUSTED', 'Too many invalid 2FA codes. Please request a new reset link.');
+  }
+
+  /** Révoque le jeton UNE fois ; seul l'appel qui le révoque journalise et prévient le titulaire. */
+  private async revokeAfterSecondFactorFailures(params: {
+    resetTokenId: string;
+    user: SecondFactorHolder;
+    ipAddress: string;
+  }): Promise<void> {
+    const { resetTokenId, user, ipAddress } = params;
+    const revoked = await this.prisma.passwordResetToken.updateMany({
+      where: { id: resetTokenId, isRevoked: false },
+      data: { isRevoked: true, revokedReason: 'TWO_FACTOR_FAILURES' }
+    });
+    if (revoked.count !== 1) return;
+
+    await this.logSecurityEvent(user.id, 'PASSWORD_RESET_2FA_ATTEMPTS_EXHAUSTED', 'HIGH', {
+      ipAddress,
+      maxAttempts: RESET_SECOND_FACTOR_MAX_ATTEMPTS
+    });
+    try {
+      await this.emailService.sendSecurityAlertEmail({
+        to: user.email,
+        name: `${user.firstName} ${user.lastName}`,
+        alertType: 'Password reset link disabled',
+        details: `A password reset link for your account was disabled after ${RESET_SECOND_FACTOR_MAX_ATTEMPTS} invalid two-factor codes. If this was not you, your mailbox may be compromised.`,
+        language: recipientLanguage(user, 'en')
+      });
+    } catch (error) {
+      logger.error('[PasswordResetService] Failed to send 2FA exhaustion alert', error);
+    }
+  }
 
   private genericSuccessResponse() {
     return {
@@ -636,49 +792,6 @@ export class PasswordResetService {
     });
   }
 
-  private validatePasswordStrength(password: string): {
-    isValid: boolean;
-    errors: string[];
-  } {
-    const errors: string[] = [];
-
-    // Basic requirements
-    if (password.length < PASSWORD_MIN_LENGTH) {
-      errors.push(`minimum ${PASSWORD_MIN_LENGTH} characters`);
-    }
-
-    if (!/[a-z]/.test(password)) {
-      errors.push('one lowercase letter');
-    }
-
-    if (!/[A-Z]/.test(password)) {
-      errors.push('one uppercase letter');
-    }
-
-    if (!/[0-9]/.test(password)) {
-      errors.push('one digit');
-    }
-
-    // Special character is optional (bonus for stronger password)
-    // if (!/[^a-zA-Z0-9]/.test(password)) {
-    //   errors.push('one special character');
-    // }
-
-    // Use zxcvbn for advanced strength checking
-    const result = zxcvbn(password);
-    if (result.score < MIN_PASSWORD_SCORE) {
-      errors.push(`password strength score is ${result.score}/4 (minimum: ${MIN_PASSWORD_SCORE}/4)`);
-      if (result.feedback.warning) {
-        errors.push(result.feedback.warning);
-      }
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors
-    };
-  }
-
   private async checkPasswordHistory(userId: string, newPassword: string): Promise<boolean> {
     const history = await this.prisma.passwordHistory.findMany({
       where: { userId },
@@ -688,7 +801,7 @@ export class PasswordResetService {
     });
 
     for (const entry of history) {
-      const isMatch = await bcrypt.compare(newPassword, entry.passwordHash);
+      const isMatch = await verifyPassword(newPassword, entry.passwordHash);
       if (isMatch) {
         return false; // Password was used before
       }
@@ -721,17 +834,39 @@ export class PasswordResetService {
     return isValid;
   }
 
+  // #5355 — décision produit sur les deux questions laissées ouvertes par
+  // #5331 (dette de paramètre mort, résolue en préfixant `_deviceFingerprint`/
+  // `_ipAddress`, cette dernière depuis retirée : voir point 2) :
+  //
+  // 1. Un appareil différent de celui enregistré déclenche l'alerte SEUL,
+  //    sans exiger de changement de pays. C'est le cas nominal d'un vol
+  //    d'identifiants : le mot de passe est réinitialisé depuis le MÊME pays
+  //    que la victime, sur un appareil qu'elle ne reconnaît pas.
+  // 2. Une IP différente SEULE n'est PAS comparée — délibérément, donc le
+  //    paramètre `ipAddress` est RETIRÉ plutôt que gardé mort : VPN,
+  //    itinérance mobile, renouvellement DHCP du FAI en changent une pour un
+  //    utilisateur légitime bien plus souvent qu'un attaquant, ce qui en
+  //    ferait du bruit garanti sans valeur de signal.
+  //
+  // Les deux tiennent parce que cette alerte est CONSULTATIVE, jamais un
+  // verrou : `isAnomaly: true` envoie un e-mail de sécurité, il ne bloque
+  // jamais la réinitialisation (c'est le 2FA, quand il est activé, qui
+  // gouverne l'admission). Un faux positif coûte un e-mail, jamais un
+  // verrouillage — ce qui justifie un seuil plus sensible que sur une garde
+  // bloquante.
   private async detectAnomalies(
     userId: string,
     deviceFingerprint: string,
-    ipAddress: string,
     geoLocation: string
   ): Promise<{ isAnomaly: boolean; reason?: string }> {
+    // `lastLoginIp` n'est PAS chargée : la décision ci-dessus l'exclut comme
+    // signal, et une colonne chargée sans être lue finit toujours par se
+    // faire relire (piège armé — voir la note de `getConsentStatus` sur le
+    // même patron).
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         lastLoginDevice: true,
-        lastLoginIp: true,
         lastLoginLocation: true,
         lastActiveAt: true
       }
@@ -755,6 +890,17 @@ export class PasswordResetService {
           };
         }
       }
+    }
+
+    // Unrecognized device (#5355) — no signal on a first-ever reset
+    // (`lastLoginDevice` absent) or when the caller sent no fingerprint at
+    // all; both would otherwise read as "always different" and alert on
+    // every reset.
+    if (user.lastLoginDevice && deviceFingerprint && user.lastLoginDevice !== deviceFingerprint) {
+      return {
+        isAnomaly: true,
+        reason: 'Password reset completed from an unrecognized device'
+      };
     }
 
     return { isAnomaly: false };
@@ -786,3 +932,15 @@ export class PasswordResetService {
     }
   }
 }
+
+/** Le jeton a été consommé par une AUTRE réinitialisation entre la lecture et l'écriture (#10475). */
+class ResetTokenAlreadyConsumed extends Error {}
+
+/**
+ * #10475 — sur MongoDB, la réinitialisation qui PERD la course ne voit pas
+ * toujours `count: 0` : sa transaction peut lever un conflit d'écriture
+ * (P2034) sur la ligne du jeton que la gagnante vient de consommer. Rien n'a
+ * été écrit, et la réponse est celle d'un jeton déjà consommé.
+ */
+const isWriteConflict = (error: unknown): boolean =>
+  error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';

@@ -1,7 +1,15 @@
 package me.meeshy.app.chat
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ContentExitLaw
+import me.meeshy.sdk.model.ConversationClearance
+import me.meeshy.sdk.model.MessageExitOffer
 import me.meeshy.sdk.model.PinAction
+import me.meeshy.ui.component.bubble.BubbleContent
+import me.meeshy.ui.component.bubble.BubbleContentBuilder
+import me.meeshy.ui.component.bubble.DeliveryStatus
 import org.junit.Test
 
 class MessageActionMenuTest {
@@ -17,6 +25,16 @@ class MessageActionMenuTest {
         canEdit: Boolean = false,
         canDeleteForEveryone: Boolean = false,
         pinAction: PinAction = PinAction.Pin,
+        hasOpenableFile: Boolean = false,
+        isEdited: Boolean = false,
+        hasText: Boolean = true,
+        hasPlace: Boolean = false,
+        hostedEntries: Set<MessageAction> = emptySet(),
+        exitOffer: MessageExitOffer = MessageExitOffer.Unrestricted,
+        signalClearance: ConversationClearance = ConversationClearance.CLEAR,
+        isReadByServer: Boolean = false,
+        isNotice: Boolean = false,
+        isQuotableNotice: Boolean = false,
     ) = MessageActionContext(
         isDeleted = isDeleted,
         isPending = isPending,
@@ -28,7 +46,68 @@ class MessageActionMenuTest {
         canEdit = canEdit,
         canDeleteForEveryone = canDeleteForEveryone,
         pinAction = pinAction,
+        hasOpenableFile = hasOpenableFile,
+        isEdited = isEdited,
+        hasText = hasText,
+        hasPlace = hasPlace,
+        hostedEntries = hostedEntries,
+        exitOffer = exitOffer,
+        signalClearance = signalClearance,
+        isReadByServer = isReadByServer,
+        isNotice = isNotice,
+        isQuotableNotice = isQuotableNotice,
     )
+
+    private fun offer(law: ContentExitLaw, blur: Boolean = false) =
+        MessageExitOffer(law, holdsBlur = blur, isEncrypted = false)
+
+    @Test
+    fun a_quotable_notice_is_answered_and_never_forwarded_nor_edited() {
+        val actions = MessageActionMenu.actions(ctx(isNotice = true, isQuotableNotice = true, isOutgoing = true, canEdit = false))
+        assertThat(actions).contains(MessageAction.Reply)
+        assertThat(actions).containsNoneOf(MessageAction.Forward, MessageAction.Edit)
+    }
+
+    @Test
+    fun a_notice_that_is_not_quotable_is_never_answered() {
+        val actions = MessageActionMenu.actions(ctx(isNotice = true))
+        assertThat(actions).containsNoneOf(MessageAction.Reply, MessageAction.Forward)
+    }
+
+    @Test
+    fun a_view_once_message_offers_no_exit_entry() {
+        val actions = MessageActionMenu.actions(
+            ctx(
+                hasOpenableFile = true,
+                hostedEntries = setOf(MessageAction.ExportCard),
+                exitOffer = offer(ContentExitLaw.ViewOnce),
+            ),
+        )
+        assertThat(actions).containsNoneOf(
+            MessageAction.Forward,
+            MessageAction.Copy,
+            MessageAction.OpenFile,
+            MessageAction.ShareFile,
+            MessageAction.ExportCard,
+        )
+        assertThat(actions).contains(MessageAction.Reply)
+    }
+
+    @Test
+    fun a_timed_flame_message_can_only_be_forwarded() {
+        val actions = MessageActionMenu.actions(
+            ctx(hasOpenableFile = true, exitOffer = offer(ContentExitLaw.timedFlame(60))),
+        )
+        assertThat(actions).contains(MessageAction.Forward)
+        assertThat(actions).containsNoneOf(MessageAction.Copy, MessageAction.OpenFile, MessageAction.ShareFile)
+    }
+
+    @Test
+    fun a_blurred_message_is_forwardable_but_not_copyable() {
+        val actions = MessageActionMenu.actions(ctx(exitOffer = offer(ContentExitLaw.Ordinary, blur = true)))
+        assertThat(actions).contains(MessageAction.Forward)
+        assertThat(actions).doesNotContain(MessageAction.Copy)
+    }
 
     // MARK: - isActionable derivation
 
@@ -263,5 +342,222 @@ class MessageActionMenuTest {
     fun copy_survives_on_a_non_actionable_message_that_is_not_deleted() {
         val actions = MessageActionMenu.actions(ctx(isFailed = true))
         assertThat(actions).contains(MessageAction.Copy)
+    }
+
+    // MARK: - file attachment branch
+
+    @Test
+    fun a_message_with_an_openable_file_offers_open_and_share_right_after_copy() {
+        assertThat(MessageActionMenu.actions(ctx(hasOpenableFile = true))).containsExactly(
+            MessageAction.Reply,
+            MessageAction.Forward,
+            MessageAction.Copy,
+            MessageAction.OpenFile,
+            MessageAction.ShareFile,
+            MessageAction.Pin,
+            MessageAction.Star,
+            MessageAction.DeleteForMe,
+            MessageAction.Report,
+        ).inOrder()
+    }
+
+    @Test
+    fun a_message_without_an_openable_file_offers_neither_open_nor_share() {
+        val actions = MessageActionMenu.actions(ctx(hasOpenableFile = false))
+        assertThat(actions).containsNoneOf(MessageAction.OpenFile, MessageAction.ShareFile)
+    }
+
+    @Test
+    fun a_pending_send_with_a_file_still_offers_open_and_share() {
+        // Opening/sharing a file doesn't depend on this message's own send state —
+        // unlike reply/forward/star/delete, which require `isActionable`.
+        val actions = MessageActionMenu.actions(ctx(isPending = true, hasOpenableFile = true))
+        assertThat(actions).containsExactly(
+            MessageAction.Copy,
+            MessageAction.OpenFile,
+            MessageAction.ShareFile,
+            MessageAction.Pin,
+        ).inOrder()
+    }
+
+    // MARK: - detail / selection entries
+
+    @Test
+    fun a_message_with_a_place_offers_the_map_fiche_once_hosted() {
+        val hosted = setOf(MessageAction.Map)
+        assertThat(MessageActionMenu.actions(ctx(hasPlace = true, hostedEntries = hosted))).contains(MessageAction.Map)
+        assertThat(MessageActionMenu.actions(ctx(hasPlace = false, hostedEntries = hosted))).doesNotContain(MessageAction.Map)
+        assertThat(MessageActionMenu.actions(ctx(hasPlace = true))).doesNotContain(MessageAction.Map)
+        assertThat(hostedDetailEntries(showReadReceipts = false)).contains(MessageAction.Map)
+        assertThat(hostedDetailEntries(showReadReceipts = false)).contains(MessageAction.ExportCard)
+    }
+
+    private val allHosted = setOf(
+        MessageAction.Views, MessageAction.History, MessageAction.Sentiment,
+        MessageAction.Select, MessageAction.ExportCard,
+    )
+
+    @Test
+    fun nothing_new_is_offered_while_the_host_serves_no_entry() {
+        val actions = MessageActionMenu.actions(ctx(isEdited = true))
+        assertThat(actions).containsNoneIn(allHosted)
+    }
+
+    @Test
+    fun a_received_edited_text_offers_actions_then_information_then_report() {
+        assertThat(MessageActionMenu.actions(ctx(isEdited = true, hostedEntries = allHosted))).containsExactly(
+            MessageAction.Reply,
+            MessageAction.Forward,
+            MessageAction.Copy,
+            MessageAction.Select,
+            MessageAction.ExportCard,
+            MessageAction.Pin,
+            MessageAction.Star,
+            MessageAction.DeleteForMe,
+            MessageAction.Views,
+            MessageAction.History,
+            MessageAction.Sentiment,
+            MessageAction.Report,
+        ).inOrder()
+    }
+
+    @Test
+    fun history_needs_an_edited_message() {
+        assertThat(MessageActionMenu.actions(ctx(isEdited = false, hostedEntries = allHosted)))
+            .doesNotContain(MessageAction.History)
+    }
+
+    @Test
+    fun sentiment_and_card_export_need_text() {
+        val actions = MessageActionMenu.actions(ctx(hasText = false, hostedEntries = allHosted))
+        assertThat(actions).containsNoneOf(MessageAction.Sentiment, MessageAction.ExportCard)
+        assertThat(actions).containsAtLeast(MessageAction.Views, MessageAction.Select)
+    }
+
+    @Test
+    fun a_deleted_message_exposes_none_of_the_new_entries() {
+        val actions = MessageActionMenu.actions(
+            ctx(isDeleted = true, isEdited = true, pinAction = PinAction.Unavailable, hostedEntries = allHosted),
+        )
+        assertThat(actions).isEmpty()
+    }
+
+    @Test
+    fun pending_and_failed_sends_keep_views_select_and_info_but_stay_without_report() {
+        listOf(ctx(isPending = true, isOutgoing = true, isEdited = true, hostedEntries = allHosted),
+            ctx(isFailed = true, isOutgoing = true, isEdited = true, hostedEntries = allHosted)).forEach {
+            val actions = MessageActionMenu.actions(it)
+            assertThat(actions).containsAtLeast(
+                MessageAction.Select, MessageAction.Views, MessageAction.History, MessageAction.Sentiment,
+            )
+            assertThat(actions).doesNotContain(MessageAction.Report)
+        }
+    }
+
+    @Test
+    fun an_outgoing_message_offers_the_new_entries_without_report() {
+        val actions = MessageActionMenu.actions(ctx(isOutgoing = true, hostedEntries = allHosted))
+        assertThat(actions).containsAtLeast(MessageAction.Views, MessageAction.Sentiment)
+        assertThat(actions).doesNotContain(MessageAction.Report)
+    }
+
+    @Test
+    fun `an end-to-end message this device cannot open is neither copied nor forwarded (#13110)`() {
+        val actions = MessageActionMenu.actions(ctx().copy(isEndToEndSealed = true))
+
+        assertThat(actions).doesNotContain(MessageAction.Copy)
+        assertThat(actions).doesNotContain(MessageAction.Forward)
+    }
+
+    @Test
+    fun `an end-to-end conversation offers no reaction, no pin and no deletion for everyone, only for me (#13790)`() {
+        listOf(PinAction.Pin, PinAction.Unpin).forEach { pin ->
+            val context = ctx(isOutgoing = true, canDeleteForEveryone = true, pinAction = pin, signalClearance = ConversationClearance.END_TO_END)
+
+            assertThat(MessageActionMenu.actions(context))
+                .containsNoneOf(MessageAction.Pin, MessageAction.Unpin, MessageAction.DeleteForEveryone)
+            assertThat(MessageActionMenu.actions(context)).contains(MessageAction.DeleteForMe)
+            assertThat(context.offersReaction).isFalse()
+        }
+    }
+
+    @Test
+    fun `a conversation whose mode is not known yet offers none of them either (#13790)`() {
+        val context = ctx(isOutgoing = true, canDeleteForEveryone = true, signalClearance = ConversationClearance.UNKNOWN)
+
+        assertThat(MessageActionMenu.actions(context)).containsNoneOf(MessageAction.Pin, MessageAction.DeleteForEveryone)
+        assertThat(context.offersReaction).isFalse()
+    }
+
+    @Test
+    fun `a conversation known clear keeps the reaction strip, the pin and the deletion for everyone (#13790)`() {
+        val context = ctx(isOutgoing = true, canDeleteForEveryone = true)
+
+        assertThat(MessageActionMenu.actions(context)).containsAtLeast(MessageAction.Pin, MessageAction.DeleteForEveryone)
+        assertThat(context.offersReaction).isTrue()
+        assertThat(ctx(isPending = true).offersReaction).isFalse()
+    }
+
+    @Test
+    fun `the one factory of the menu context is closed until the host says what it knows of the conversation (#13790)`() {
+        val context = BubbleContent(
+            messageId = "65f000000000000000000001",
+            text = "salut",
+            isOutgoing = true,
+            isTranslated = false,
+            originalText = null,
+            senderName = null,
+            showSenderName = false,
+            isEdited = false,
+            isDeleted = false,
+            createdAtIso = null,
+            deliveryStatus = DeliveryStatus.Sent,
+        ).actionContext(canWrite = true, canDeleteForEveryone = true, pinAction = PinAction.Pin)
+
+        assertThat(MessageActionMenu.actions(context)).containsNoneOf(MessageAction.Pin, MessageAction.DeleteForEveryone)
+        assertThat(context.offersReaction).isFalse()
+    }
+
+    // ── #13804 — un message écrit en clair avant l'activation reste supprimable pour tous, jugé sur sa LIGNE ──
+
+    @Test
+    fun `in an end-to-end conversation, an own message the server reads is still deletable for everyone, nothing else comes back (#13804)`() {
+        listOf(ConversationClearance.END_TO_END, ConversationClearance.UNKNOWN).forEach { clearance ->
+            val context = ctx(isOutgoing = true, canDeleteForEveryone = true, signalClearance = clearance, isReadByServer = true)
+
+            assertThat(MessageActionMenu.actions(context)).containsAtLeast(MessageAction.DeleteForEveryone, MessageAction.DeleteForMe)
+            assertThat(MessageActionMenu.actions(context)).containsNoneOf(MessageAction.Pin, MessageAction.Unpin)
+            assertThat(context.offersReaction).isFalse()
+        }
+    }
+
+    @Test
+    fun `a message the server reads still needs the deletion window and an own message (#13804)`() {
+        assertThat(MessageActionMenu.actions(ctx(isOutgoing = true, canDeleteForEveryone = false, signalClearance = ConversationClearance.END_TO_END, isReadByServer = true)))
+            .doesNotContain(MessageAction.DeleteForEveryone)
+        assertThat(MessageActionMenu.actions(ctx(isOutgoing = false, canDeleteForEveryone = true, signalClearance = ConversationClearance.END_TO_END, isReadByServer = true)))
+            .doesNotContain(MessageAction.DeleteForEveryone)
+    }
+
+    private val prefs = object : LanguageResolver.ContentLanguagePreferences {
+        override val systemLanguage: String? = "fr"
+        override val regionalLanguage: String? = null
+        override val customDestinationLanguage: String? = null
+    }
+
+    private fun built(isEncrypted: Boolean?, mode: String?) = BubbleContentBuilder.build(
+        ApiMessage(id = "65f000000000000000000001", conversationId = "c1", senderId = "me", content = "salut", isEncrypted = isEncrypted, encryptionMode = mode),
+        currentUserId = "me",
+        preferences = prefs,
+    ).actionContext(canWrite = true, canDeleteForEveryone = true, signalClearance = ConversationClearance.END_TO_END)
+
+    @Test
+    fun `the bubble built from the served row says whether the server reads it, as the gateway judges the erasure (#13804)`() {
+        listOf(built(null, null), built(false, null), built(true, "server"), built(true, "hybrid")).forEach { context ->
+            assertThat(MessageActionMenu.actions(context)).contains(MessageAction.DeleteForEveryone)
+        }
+        listOf(built(true, "e2ee"), built(true, null), built(null, "e2ee"), built(true, "signal_v4")).forEach { context ->
+            assertThat(MessageActionMenu.actions(context)).doesNotContain(MessageAction.DeleteForEveryone)
+        }
     }
 }

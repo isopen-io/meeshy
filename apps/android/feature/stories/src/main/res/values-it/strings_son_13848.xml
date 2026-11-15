@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_sound_sheet_title">Suono della storia</string>
+    <string name="story_sound_sheet_current">In questa slide</string>
+    <string name="story_sound_sheet_role_background">In sottofondo</string>
+    <string name="story_sound_sheet_role_scene">Sulla scena</string>
+    <string name="story_sound_sheet_volume">Volume</string>
+    <string name="story_sound_sheet_language">Lingua del suono</string>
+    <string name="story_sound_sheet_language_more">Altro</string>
+    <string name="story_sound_sheet_transcription">Trascrizione</string>
+    <string name="story_sound_sheet_transcription_edit">Modifica</string>
+    <string name="story_sound_sheet_transcription_write">Scrivi</string>
+    <string name="story_sound_sheet_transcription_retry">Riprova</string>
+    <string name="story_sound_sheet_transcription_running">Trascrizione sul tuo dispositivo…</string>
+    <string name="story_sound_sheet_transcription_server">Il tuo dispositivo non trascrive questa lingua: lo farà Meeshy alla pubblicazione.</string>
+    <string name="story_sound_sheet_transcription_failed">La trascrizione non è riuscita.</string>
+    <string name="story_sound_sheet_transcription_silent">Non si è sentito nulla.</string>
+    <string name="story_sound_sheet_trim">Taglia</string>
+    <string name="story_sound_sheet_ducking">Abbassa i video sotto il suono di sottofondo</string>
+    <string name="story_sound_sheet_source_record">Registra</string>
+    <string name="story_sound_sheet_source_files">File</string>
+    <string name="story_sound_sheet_source_library">Libreria</string>
+    <string name="story_sound_sheet_recording">Registrazione %1$s</string>
+    <string name="story_sound_sheet_stop">Ferma</string>
+    <string name="story_sound_sheet_redo">Rifai</string>
+    <string name="story_sound_sheet_add">Aggiungi</string>
+    <string name="story_sound_sheet_uploading">Aggiunta…</string>
+    <string name="story_sound_sheet_mic_denied">Consenti il microfono per registrare un suono.</string>
+    <string name="story_sound_sheet_import_failed">Impossibile leggere questo file come suono.</string>
+    <string name="story_sound_sheet_upload_failed">Impossibile inviare il suono. Controlla la connessione e riprova.</string>
+    <string name="story_sound_sheet_back">Indietro</string>
+    <string name="story_sound_sheet_new_take">Nuovo suono</string>
+</resources>

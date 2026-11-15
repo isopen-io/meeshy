@@ -89,7 +89,8 @@ final class ReelFeedSoundButtonWiringGuardTests: XCTestCase {
             )
         }
         XCTAssertFalse(
-            text.contains("MediaSessionCoordinator.shared.activatePlaybackSync"),
+            text.contains("MediaSessionCoordinator.shared.activatePlaybackSync")
+                || text.contains("MediaSessionCoordinator.shared.activateContentPlayback"),
             "Aucun armement explicite de .duckOthers ici — play() (SharedAVPlayerManager) l'arme déjà, " +
             "correctement gated sur effectiveMuted au complet. Un appel séparé ici a été retiré parce " +
             "qu'il gatait sur forceMuted SEUL (DoD S2 rejet, constat majeur #2)."
@@ -249,10 +250,15 @@ final class ReelFeedSoundButtonWiringGuardTests: XCTestCase {
         )
     }
 
+    /// #8878 — le bouton monte le disque plein écran partagé : la cible 44×44
+    /// et la zone de hit rectangulaire vivent dans l'atome du SDK, épinglé à
+    /// `MeeshyControlSize.tapTarget` (44) par `FullscreenChromeMetricsTests`.
     func test_reelFeedSoundButton_hasFortyFourPointHitTarget() throws {
         let text = try source("Meeshy/Features/Main/Components/ReelFeedSoundButton.swift")
-        XCTAssertTrue(text.contains(".frame(minWidth: 44, minHeight: 44)"), "Cible tactile 44×44 (HIG) manquante.")
-        XCTAssertTrue(text.contains(".contentShape(Rectangle())"), "Zone de hit non élargie au rectangle complet.")
+        XCTAssertTrue(text.contains("FullscreenChromeButton("), "Le bouton de son doit monter le disque plein écran partagé.")
+        let atom = try source("../../packages/MeeshySDK/Sources/MeeshyUI/Fullscreen/FullscreenChromeButton.swift")
+        XCTAssertTrue(atom.contains(".frame(width: FullscreenChromeMetrics.tapTarget,"), "Cible tactile 44×44 (HIG) manquante.")
+        XCTAssertTrue(atom.contains(".contentShape(Rectangle())"), "Zone de hit non élargie au rectangle complet.")
     }
 
     // MARK: - ReelRepostEmbedCell : le bouton est HISSÉ hors du label du Button englobant

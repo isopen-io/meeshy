@@ -5,19 +5,12 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * Le lien du mail (`https://meeshy.me/auth/magic-link?token=...`) et son alias
- * de scheme custom (`meeshy://auth/magic-link?token=...`) doivent tous deux
- * mener a l'ecran de validation — et RIEN d'autre ne doit matcher.
+ * Seul le lien du mail (`https://meeshy.me/auth/magic-link?token=...`, App Link
+ * verifie) mene a l'ecran de validation. Le scheme custom `meeshy://` s'ouvre
+ * depuis n'importe quelle page ou app : un jeton d'e-mail recu par lui
+ * connecterait la victime au compte de l'attaquant (#10873).
  */
 class MagicLinkDeepLinkTest {
-
-    @Test
-    fun `the custom scheme magic link routes to validation with its token`() {
-        assertEquals(
-            "auth/magic-link?token=abc123",
-            LaunchRouter.routeForDeepLink("meeshy://auth/magic-link?token=abc123"),
-        )
-    }
 
     @Test
     fun `the https email link routes to validation with its token`() {
@@ -33,8 +26,18 @@ class MagicLinkDeepLinkTest {
     fun `an url-encoded token is preserved verbatim in the route`() {
         assertEquals(
             "auth/magic-link?token=a%2Bb%3D",
-            LaunchRouter.routeForDeepLink("meeshy://auth/magic-link?token=a%2Bb%3D"),
+            LaunchRouter.routeForDeepLink("https://meeshy.me/auth/magic-link?token=a%2Bb%3D"),
         )
+    }
+
+    @Test
+    fun `an email-token link received through the custom scheme yields no route`() {
+        assertNull(LaunchRouter.routeForDeepLink("meeshy://auth/magic-link?token=abc123"))
+        assertNull(LaunchRouter.routeForDeepLink("meeshy://auth/magic-link?token=a%2Bb%3D"))
+        assertNull(LaunchRouter.routeForDeepLink("meeshy://auth/email-link?token=abc123"))
+        assertNull(LaunchRouter.routeForDeepLink("meeshy://auth/verify-email?token=abc123"))
+        assertNull(LaunchRouter.routeForDeepLink("meeshy://auth/reset-password?token=abc123"))
+        assertNull(LaunchRouter.routeForDeepLink("MEESHY://auth/magic-link?token=abc123"))
     }
 
     @Test
@@ -42,8 +45,8 @@ class MagicLinkDeepLinkTest {
         assertNull(LaunchRouter.routeForDeepLink(null))
         assertNull(LaunchRouter.routeForDeepLink("meeshy://chat/abc"))
         assertNull(LaunchRouter.routeForDeepLink("https://meeshy.me/story/xyz"))
-        assertNull(LaunchRouter.routeForDeepLink("meeshy://auth/magic-link"))
-        assertNull(LaunchRouter.routeForDeepLink("meeshy://auth/magic-link?token="))
+        assertNull(LaunchRouter.routeForDeepLink("https://meeshy.me/auth/magic-link"))
+        assertNull(LaunchRouter.routeForDeepLink("https://meeshy.me/auth/magic-link?token="))
         assertNull(LaunchRouter.routeForDeepLink("https://evil.example/auth/magic-link?token=abc"))
     }
 }

@@ -109,9 +109,10 @@ final class StoryComposerViewModel_TextEditingTests: XCTestCase {
         XCTAssertEqual(vm.textEditingMode, .inactive)
     }
 
-    /// L'ordre est celui de la barre d'outils : le verrouiller documente la
-    /// disposition et fait échouer le test avec le nom de l'outil ajouté ou
-    /// déplacé, là où un simple compte disait seulement « 9 au lieu de 8 ».
+    /// L'ordre est celui de l'ÉNUMÉRÉ (la barre lit `TextEditTool.all`, cf.
+    /// ci-dessous) : le verrouiller fait échouer le test avec le nom de
+    /// l'outil ajouté ou déplacé, là où un simple compte disait seulement
+    /// « 9 au lieu de 8 ».
     ///
     /// `language` a rejoint la liste le 2026-07-25 : la langue d'écriture se
     /// règle à côté des attributs visuels parce qu'une langue source fausse ne
@@ -120,10 +121,15 @@ final class StoryComposerViewModel_TextEditingTests: XCTestCase {
     /// valeurs continues, réglées par curseur dans le panneau Police. Les
     /// loger derrière une bulle chacune coûtait deux places sur une rangée
     /// dont la largeur est comptée.
+    /// `effect` a rejoint la liste le 2026-09-02 (#4870), EN QUEUE de
+    /// l'énuméré : c'est `TextEditTool.all` qui porte l'ordre de la rangée
+    /// (l'EFFET y est deuxième, après la police), et les deux ordres ne
+    /// coïncident plus — ce que `TextEditToolbarLayoutTests` garde de son
+    /// côté. Cette liste-ci documente l'ÉNUMÉRÉ, pas la barre.
     func test_textEditTool_hasAllCases() {
         XCTAssertEqual(
             TextEditTool.allCases,
-            [.style, .color, .align, .background, .frame, .border, .language]
+            [.style, .color, .align, .background, .frame, .border, .language, .effect]
         )
     }
 }

@@ -1,0 +1,375 @@
+import SwiftUI
+import Combine
+import MeeshySDK
+import MeeshyUI
+
+struct ChangePasswordView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    @State private var currentPassword = ""
+    @State private var newPassword = ""
+    @State private var confirmPassword = ""
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+    @State private var showSuccess = false
+    /// #9186 — `security.hasPassword` servi par la passerelle ; `nil` tant
+    /// qu'il est inconnu, et le formulaire reste celui d'un changement.
+    @State private var hasPassword: Bool?
+    @FocusState private var focusedField: Field?
+
+    private let accentColor = MeeshyColors.brandPrimaryHex
+
+    private enum Field {
+        case current, newPass, confirm
+    }
+
+    private var form: PasswordChangeForm {
+        PasswordChangeForm(
+            hasPassword: hasPassword,
+            currentPassword: currentPassword,
+            newPassword: newPassword,
+            confirmPassword: confirmPassword
+        )
+    }
+
+    private var passwordsMatch: Bool { form.passwordsMatch }
+
+    private var isValid: Bool { form.canSubmit }
+
+    var body: some View {
+        ZStack {
+            theme.backgroundGradient.ignoresSafeArea()
+
+            // L'en-tête partagé porte le retour en verre (#6481) ; la page
+            // possède le défilement, l'écran ne fournit que son formulaire.
+            CollapsibleHeaderPage(
+                title: String(localized: "auth.password.change.title", defaultValue: "Mot de passe", bundle: .main),
+                onBack: { dismiss() },
+                titleColor: theme.textPrimary,
+                backArrowColor: Color(hex: accentColor),
+                backgroundColor: theme.backgroundPrimary
+            ) {
+                formContent
+            }
+
+            if showSuccess {
+                successOverlay
+            }
+        }
+        .task {
+            hasPassword = try? await AuthService.shared.hasPassword()
+        }
+    }
+
+    // MARK: - Form Content
+
+    private var formContent: some View {
+        VStack(spacing: MeeshySpacing.xxl) {
+            if form.asksCurrentPassword {
+                currentPasswordSection
+            }
+            newPasswordSection
+            validationHints
+            saveButton
+
+            Spacer().frame(height: 40)
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.lg)
+        .iPadFormWidth()
+    }
+
+    // MARK: - Current Password
+
+    private var currentPasswordSection: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            VStack(spacing: 0) {
+                secureField(
+                    icon: "lock.fill",
+                    title: String(localized: "auth.password.change.current.field", defaultValue: "Mot de passe actuel", bundle: .main),
+                    text: $currentPassword,
+                    placeholder: String(localized: "auth.password.change.current.placeholder", defaultValue: "Entrez votre mot de passe", bundle: .main),
+                    color: MeeshyColors.indigo600Hex,
+                    field: .current
+                )
+            }
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                    .fill(theme.surfaceGradient(tint: MeeshyColors.indigo600Hex))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                            .stroke(theme.border(tint: MeeshyColors.indigo600Hex), lineWidth: 1)
+                    )
+            )
+        }
+    }
+
+    // MARK: - New Password
+
+    private var newPasswordSection: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            VStack(spacing: 0) {
+                secureField(
+                    icon: "key.fill",
+                    title: String(localized: "auth.password.change.new.field", defaultValue: "Nouveau mot de passe", bundle: .main),
+                    text: $newPassword,
+                    placeholder: "",
+                    color: accentColor,
+                    field: .newPass
+                )
+
+                if !newPassword.isEmpty {
+                    HStack(spacing: MeeshySpacing.md) {
+                        Color.clear.frame(width: 28, height: 1)
+                        PasswordStrengthIndicator(password: newPassword)
+                    }
+                    .padding(.horizontal, MeeshySpacing.mdPlus)
+                    .padding(.bottom, MeeshySpacing.sm)
+                }
+
+                secureField(
+                    icon: "checkmark.lock.fill",
+                    title: String(localized: "auth.password.change.confirm.field", defaultValue: "Confirmer", bundle: .main),
+                    text: $confirmPassword,
+                    placeholder: String(localized: "auth.password.change.confirm.placeholder", defaultValue: "Retapez le mot de passe", bundle: .main),
+                    color: accentColor,
+                    field: .confirm
+                )
+            }
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                    .fill(theme.surfaceGradient(tint: accentColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                            .stroke(theme.border(tint: accentColor), lineWidth: 1)
+                    )
+            )
+        }
+    }
+
+    // MARK: - Validation Hints
+
+    private var validationHints: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
+            validationRow(
+                text: String(localized: "auth.password.change.validation.length", defaultValue: "Minimum 8 caractères", bundle: .main),
+                met: form.meetsMinLength
+            )
+            validationRow(
+                text: String(localized: "auth.password.change.validation.match", defaultValue: "Les mots de passe correspondent", bundle: .main),
+                met: passwordsMatch && !newPassword.isEmpty
+            )
+        }
+        .padding(.horizontal, MeeshySpacing.xs)
+    }
+
+    private func validationRow(text: String, met: Bool) -> some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            Image(systemName: met ? "checkmark.circle.fill" : "circle")
+                .font(.subheadline)
+                .foregroundStyle(met ? MeeshyColors.success : theme.textMuted)
+                // Statut porté par la couleur (vert=rempli) + la forme du glyphe. VoiceOver
+                // ne doit pas relire l'icône : l'état passe par le trait `.isSelected` de la
+                // rangée ci-dessous (« ne jamais reposer sur la couleur seule »).
+                .accessibilityHidden(true)
+
+            Text(text)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(met ? MeeshyColors.success : theme.textMuted)
+
+            Spacer()
+        }
+        .accessibilityElement(children: .combine)
+        // Trait système (localisé « sélectionné » par iOS) → l'état rempli/non-rempli est
+        // annoncé à VoiceOver sans dépendre de la couleur ni introduire de clé i18n.
+        .accessibilityAddTraits(met ? .isSelected : [])
+    }
+
+    // MARK: - Save Button
+
+    private var saveButton: some View {
+        VStack(spacing: MeeshySpacing.sm) {
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(MeeshyColors.error)
+                    .multilineTextAlignment(.center)
+                    .transition(.opacity)
+            }
+
+            Button {
+                HapticFeedback.medium()
+                changePassword()
+            } label: {
+                HStack(spacing: MeeshySpacing.sm) {
+                    if isSaving {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                            .tint(.white)
+                    }
+                    Text(form.asksCurrentPassword
+                         ? String(localized: "auth.password.change.submit", defaultValue: "Changer le mot de passe", bundle: .main)
+                         : String(localized: "auth.password.set.submit", defaultValue: "Définir le mot de passe", bundle: .main))
+                        .font(.subheadline.weight(.bold))
+                }
+                .foregroundStyle(Color.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, MeeshySpacing.mdPlus)
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                        .fill(
+                            isValid && !isSaving
+                                ? Color(hex: accentColor)
+                                : Color(hex: accentColor).opacity(0.4)
+                        )
+                )
+            }
+            .disabled(!isValid || isSaving)
+            .accessibilityIdentifier("auth.password.change.submit")
+        }
+    }
+
+    // MARK: - Success Overlay
+
+    private var successOverlay: some View {
+        VStack(spacing: MeeshySpacing.md) {
+            // Héros décoratif ≥40pt : diamètre fixe, exclu du Dynamic Type (doctrine 84i/87i).
+            // Le sens est porté par le texte ci-dessous → masqué de VoiceOver.
+            Image(systemName: "checkmark.shield.fill")
+                .font(MeeshyFont.fixedGlyph(MeeshyIconSize.hero))
+                .foregroundStyle(MeeshyColors.success)
+                .accessibilityHidden(true)
+
+            Text(form.asksCurrentPassword
+                 ? String(localized: "auth.password.change.success", defaultValue: "Mot de passe modifié", bundle: .main)
+                 : String(localized: "auth.password.set.success", defaultValue: "Mot de passe défini", bundle: .main))
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(theme.textPrimary)
+        }
+        // Confirmation transitoire (auto-dismiss 1,5 s) → un seul élément VoiceOver lisible.
+        .accessibilityElement(children: .combine)
+        .padding(MeeshySpacing.xxxl)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
+                        .stroke(MeeshyColors.success.opacity(MeeshyOpacity.medium), lineWidth: 1)
+                )
+        )
+        .meeshyTransition(.scale.combined(with: .opacity))
+    }
+
+    // MARK: - Reusable Components
+
+    private func secureField(
+        icon: String,
+        title: String,
+        text: Binding<String>,
+        placeholder: String,
+        color: String,
+        field: Field
+    ) -> some View {
+        HStack(spacing: MeeshySpacing.md) {
+            Image(systemName: icon)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Color(hex: color))
+                .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xs)
+                        .fill(Color(hex: color).opacity(MeeshyOpacity.light))
+                )
+                // Glyphe décoratif : le sens du champ est porté par son
+                // accessibilityLabel ci-dessous → jamais relu par VoiceOver.
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                Text(title)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(theme.textMuted)
+                    // Libellé visuel doublon : masqué de VoiceOver, son rôle
+                    // est réassigné au SecureField via accessibilityLabel
+                    // (doctrine 186i « stop placeholder-as-name »).
+                    .accessibilityHidden(true)
+
+                // Le champ « actuel » est `.current` (AutoFill le pré-remplit
+                // depuis le trousseau) ; les champs du nouveau mot de passe sont
+                // `.new`, ce qui déclenche la proposition de mot de passe fort ET
+                // la mise à jour de l'entrée existante au trousseau. VoiceOver
+                // annonce le rôle du champ (`accessibilityLabel: title`) au lieu
+                // du seul placeholder qui disparaît dès la première frappe.
+                MeeshyPasswordField(
+                    placeholder,
+                    text: text,
+                    role: field == .current ? .current : .new,
+                    focus: $focusedField,
+                    equals: field,
+                    accessibilityLabel: title,
+                    eyeColor: theme.textMuted
+                )
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(theme.textPrimary)
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
+    }
+
+    // MARK: - Actions
+
+    /// Le message d'erreur se fond sous le bouton : sa transition ne jouait
+    /// jamais, faute de transaction animée autour de la mutation.
+    private func showError(_ message: String?) {
+        meeshyWithAnimation(.easeInOut(duration: MeeshyGlassRecipe.toneFadeDuration), reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion) {
+            errorMessage = message
+        }
+    }
+
+    private func changePassword() {
+        guard isValid else { return }
+        let submitted = form
+
+        isSaving = true
+        errorMessage = nil
+        focusedField = nil
+
+        Task {
+            do {
+                try await AuthService.shared.changePassword(
+                    currentPassword: submitted.submittedCurrentPassword,
+                    newPassword: submitted.newPassword
+                )
+
+                HapticFeedback.success()
+                meeshyWithAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion) {
+                    showSuccess = true
+                }
+                _ = await cancellableSleep(for: .milliseconds(1500))
+                dismiss()
+            } catch let error as MeeshyError {
+                HapticFeedback.error()
+                // Le stack réseau ne lève que MeeshyError (pas APIError) : un 400
+                // = « mot de passe actuel incorrect » → message localisé dédié.
+                if case .server(let statusCode, let msg) = error {
+                    showError(statusCode == 400 && submitted.asksCurrentPassword
+                        ? String(localized: "auth.password.change.error.current", defaultValue: "Mot de passe actuel incorrect", bundle: .main)
+                        : msg)
+                } else {
+                    showError(error.localizedDescription)
+                }
+            } catch {
+                HapticFeedback.error()
+                showError(String(localized: "common.error.generic", defaultValue: "Une erreur est survenue", bundle: .main))
+            }
+            isSaving = false
+        }
+    }
+}

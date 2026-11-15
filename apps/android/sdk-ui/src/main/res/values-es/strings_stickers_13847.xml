@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sticker_library_title">Mis stickers</string>
+    <string name="sticker_library_empty">Pega una imagen para empezar tu biblioteca</string>
+    <string name="sticker_library_lift">Recortar</string>
+    <string name="sticker_library_lift_a11y">Recortar el sujeto de una foto</string>
+    <string name="sticker_library_item_a11y">Sticker de tu biblioteca</string>
+    <string name="sticker_library_paste">Pegar</string>
+    <string name="sticker_pack_by">por %1$s</string>
+    <string name="sticker_text_example">¡Hola!</string>
+    <string name="sticker_text_placeholder">Escribe tus palabras…</string>
+    <string name="sticker_text_field_a11y">Texto de la decoración</string>
+    <string name="sticker_custom_text">Texto</string>
+    <string name="sticker_custom_time">Hora</string>
+    <string name="sticker_shop_install">Instalar</string>
+    <string name="sticker_shop_remove">Quitar</string>
+    <string name="sticker_shop_failed">No se pudo cambiar el pack. Inténtalo de nuevo.</string>
+    <string name="sticker_template_text_speech_bubble">Bocadillo</string>
+    <string name="sticker_template_text_thought_bubble">Pensamiento</string>
+    <string name="sticker_template_text_sticky_note">Nota adhesiva</string>
+    <string name="sticker_template_text_ribbon">Cinta</string>
+    <string name="sticker_template_text_badge">Insignia</string>
+    <string name="sticker_template_text_neon">Neón</string>
+    <string name="sticker_template_text_tag">Etiqueta</string>
+    <string name="sticker_template_text_signboard">Letrero</string>
+    <string name="sticker_template_text_tape">Cinta adhesiva</string>
+    <string name="sticker_template_text_stamp">Sello</string>
+    <string name="sticker_template_time_digital">Reloj digital</string>
+    <string name="sticker_template_time_analog">Esfera de reloj</string>
+    <string name="sticker_template_time_ribbon">Cinta</string>
+    <string name="sticker_template_time_calendar_day">Hoja de calendario</string>
+    <string name="sticker_template_time_a11y">%1$s, %2$s</string>
+</resources>

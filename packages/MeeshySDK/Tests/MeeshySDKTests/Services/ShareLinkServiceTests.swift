@@ -32,19 +32,24 @@ final class ShareLinkServiceTests: XCTestCase {
 
     func test_listMyLinks_callsCorrectEndpoint() async throws {
         let response = APIResponse<[MyShareLink]>(success: true, data: [], error: nil)
-        mock.stub("/links?offset=0&limit=50", result: response)
+        mock.stub("/links", result: response)
 
         _ = try await service.listMyLinks()
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/links?offset=0&limit=50")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/links")
+        XCTAssertEqual(mock.lastRequest?.queryItems, [
+            URLQueryItem(name: "offset", value: "0"),
+            URLQueryItem(name: "limit", value: "50"),
+            URLQueryItem(name: "expand", value: "conversation,policy")
+        ])
         XCTAssertEqual(mock.lastRequest?.method, "GET")
     }
 
     func test_listMyLinks_returnsLinks() async throws {
         let links = [makeMyShareLink(id: "l1"), makeMyShareLink(id: "l2")]
         let response = APIResponse<[MyShareLink]>(success: true, data: links, error: nil)
-        mock.stub("/links?offset=0&limit=50", result: response)
+        mock.stub("/links", result: response)
 
         let result = try await service.listMyLinks()
 
@@ -78,7 +83,11 @@ final class ShareLinkServiceTests: XCTestCase {
             requireAccount: false, requireNickname: false,
             requireEmail: false, requireBirthday: false,
             allowedLanguages: [],
-            conversation: ShareLinkConversation(id: "c1", title: "Chat", description: nil, type: "GROUP", createdAt: Date()),
+            guestRights: .schemaDefaults,
+            conversation: ShareLinkConversation(
+                id: "c1", title: "Chat", description: nil, type: "GROUP", createdAt: Date(),
+                avatar: nil, banner: nil
+            ),
             creator: ShareLinkCreator(id: "u1", username: "alice", firstName: nil, lastName: nil, displayName: "Alice", avatar: nil),
             stats: ShareLinkStats(totalParticipants: 10, memberCount: 8, anonymousCount: 2, languageCount: 3, spokenLanguages: ["fr", "en", "es"])
         )
@@ -116,17 +125,151 @@ final class ShareLinkServiceTests: XCTestCase {
         XCTAssertTrue(result.isActive)
     }
 
+    /// #10381 — l'expiration choisie dans la feuille de création voyage dans le corps de `POST /links`, sous le nom
+    /// que la passerelle lit (`createLinkSchema.expiresAt`, ISO 8601) ; « Jamais » OMET la clé — un `null` serait
+    /// refusé par `z.iso.datetime().optional()`.
+    func test_createShareLink_carriesTheChosenExpiry_andOmitsItWhenNever() async throws {
+        let rawResponse = CreateShareLinkResponse(
+            linkId: "lk_new",
+            conversationId: "conv1",
+            shareLink: CreateShareLinkResponse.ShareLinkDetail(
+                id: "sl_new", linkId: "lk_new", name: nil,
+                description: nil, expiresAt: nil, isActive: true
+            )
+        )
+        mock.stub("/links", result: APIResponse<CreateShareLinkResponse>(success: true, data: rawResponse, error: nil))
+
+        _ = try await service.createShareLink(request: CreateShareLinkRequest(conversationId: "conv1", expiresAt: "2026-10-19T20:55:52Z"))
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["expiresAt"] as? String, "2026-10-19T20:55:52Z")
+
+        _ = try await service.createShareLink(request: CreateShareLinkRequest(conversationId: "conv1"))
+        XCTAssertNotNil(mock.lastRequest?.bodyJSON)
+        XCTAssertFalse(mock.lastRequest?.bodyJSON?.keys.contains("expiresAt") ?? true, "« Jamais » n'écrit pas expiresAt: null")
+    }
+
     // MARK: - toggleLink
 
     func test_toggleLink_callsCorrectEndpoint() async throws {
-        let link = makeMyShareLink()
-        let response = APIResponse<MyShareLink>(success: true, data: link, error: nil)
+        let response = APIResponse(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/links/lk1", result: response)
 
         try await service.toggleLink(linkId: "lk1", isActive: false)
 
         XCTAssertEqual(mock.lastRequest?.endpoint, "/links/lk1")
         XCTAssertEqual(mock.lastRequest?.method, "PATCH")
+    }
+
+    // MARK: - fetchLinkStats (#7797)
+
+    func test_fetchLinkStats_getsTheLinkStatsAddress() async throws {
+        let stats = ShareLinkArrivalStats(visits: 12, arrivals: 4, anonymousArrivals: 1)
+        mock.stub("/links/mshy_abc/stats", result: APIResponse<ShareLinkArrivalStats>(success: true, data: stats, error: nil))
+
+        let result = try await service.fetchLinkStats(linkId: "mshy_abc")
+
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/links/mshy_abc/stats")
+        XCTAssertEqual(mock.lastRequest?.method, "GET")
+        XCTAssertEqual(result, stats)
+    }
+
+    func test_fetchLinkStats_notFound_propagatesSoTheDetailCanDegrade() async {
+        mock.stubError("/links/mshy_abc/stats", error: MeeshyError.server(statusCode: 404, message: "Not Found"))
+
+        do {
+            _ = try await service.fetchLinkStats(linkId: "mshy_abc")
+            XCTFail("Expected the 404 to propagate")
+        } catch let error as MeeshyError {
+            guard case .server(404, _) = error else { return XCTFail("Expected 404, got \(error)") }
+        } catch {
+            XCTFail("Expected MeeshyError, got \(type(of: error))")
+        }
+    }
+
+    // MARK: - fetchLinkArrivals (#7813)
+
+    func test_fetchLinkArrivals_firstPage_getsTheArrivalsAddressWithLimitAndNoCursor() async throws {
+        let page = ShareLinkArrivalsPage(arrivals: [
+            ShareLinkArrivalEntry(displayName: "Priya", isAnonymous: true, country: "IN", language: "hi", joinedAt: Date(timeIntervalSince1970: 1_759_000_000))
+        ], nextCursor: "c2")
+        mock.stub("/links/mshy_abc/arrivals", result: APIResponse<ShareLinkArrivalsPage>(success: true, data: page, error: nil))
+
+        let result = try await service.fetchLinkArrivals(linkId: "mshy_abc", cursor: nil, limit: 30)
+
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/links/mshy_abc/arrivals")
+        XCTAssertEqual(mock.lastRequest?.method, "GET")
+        XCTAssertEqual(mock.lastRequest?.queryItems, [URLQueryItem(name: "limit", value: "30")])
+        XCTAssertEqual(result, page)
+    }
+
+    func test_fetchLinkArrivals_nextPage_forwardsTheOpaqueCursor() async throws {
+        let page = ShareLinkArrivalsPage(arrivals: [], nextCursor: nil)
+        mock.stub("/links/mshy_abc/arrivals", result: APIResponse<ShareLinkArrivalsPage>(success: true, data: page, error: nil))
+
+        _ = try await service.fetchLinkArrivals(linkId: "mshy_abc", cursor: "eyJ0IjoxfQ", limit: 50)
+
+        XCTAssertEqual(mock.lastRequest?.queryItems, [
+            URLQueryItem(name: "limit", value: "50"),
+            URLQueryItem(name: "cursor", value: "eyJ0IjoxfQ")
+        ])
+    }
+
+    func test_fetchLinkArrivals_forbidden_propagates() async {
+        mock.stubError("/links/mshy_abc/arrivals", error: MeeshyError.server(statusCode: 403, message: "Forbidden"))
+
+        do {
+            _ = try await service.fetchLinkArrivals(linkId: "mshy_abc", cursor: nil, limit: 30)
+            XCTFail("Expected the 403 to propagate")
+        } catch let error as MeeshyError {
+            guard case .server(403, _) = error else { return XCTFail("Expected 403, got \(error)") }
+        } catch {
+            XCTFail("Expected MeeshyError, got \(type(of: error))")
+        }
+    }
+
+    // MARK: - updateLink (#7797)
+
+    private func makeSettings(maxUses: Int? = nil, expiresAt: Date? = nil) -> ShareLinkSettings {
+        ShareLinkSettings(
+            name: "Nova — Discord",
+            description: "Viens !",
+            expiresAt: expiresAt,
+            maxUses: maxUses,
+            maxConcurrentUsers: 50,
+            requireAccount: false,
+            requireNickname: true,
+            requireEmail: false,
+            requireBirthday: false,
+            allowedLanguages: ["fr", "en"],
+            guestRights: ShareLinkGuestRights(messages: true, images: false, files: false, history: true)
+        )
+    }
+
+    func test_updateLink_patchesTheWholeSettings() async throws {
+        mock.stub("/links/mshy_abc", result: APIResponse<EmptySuccess>(success: true, data: EmptySuccess(), error: nil))
+
+        try await service.updateLink(linkId: "mshy_abc", settings: makeSettings(maxUses: 10))
+
+        let body = try XCTUnwrap(mock.lastRequest?.bodyJSON)
+        XCTAssertEqual(mock.lastRequest?.method, "PATCH")
+        XCTAssertEqual(body["name"] as? String, "Nova — Discord")
+        XCTAssertEqual(body["description"] as? String, "Viens !")
+        XCTAssertEqual(body["maxUses"] as? Int, 10)
+        XCTAssertEqual(body["maxConcurrentUsers"] as? Int, 50)
+        XCTAssertEqual(body["allowedLanguages"] as? [String], ["fr", "en"])
+        XCTAssertEqual(body["allowAnonymousImages"] as? Bool, false)
+        XCTAssertEqual(body["allowViewHistory"] as? Bool, true)
+        XCTAssertEqual(body["requireNickname"] as? Bool, true)
+    }
+
+    func test_updateLink_liftedLimits_areSentAsExplicitNulls() async throws {
+        mock.stub("/links/mshy_abc", result: APIResponse<EmptySuccess>(success: true, data: EmptySuccess(), error: nil))
+
+        try await service.updateLink(linkId: "mshy_abc", settings: makeSettings(maxUses: nil, expiresAt: nil))
+
+        let body = try XCTUnwrap(mock.lastRequest?.bodyJSON)
+        XCTAssertTrue(body.keys.contains("maxUses"), "an omitted field leaves the old limit in place on the gateway")
+        XCTAssertTrue(body["maxUses"] is NSNull)
+        XCTAssertTrue(body["expiresAt"] is NSNull)
     }
 
     // MARK: - deleteLink
@@ -139,6 +282,20 @@ final class ShareLinkServiceTests: XCTestCase {
 
         XCTAssertEqual(mock.lastRequest?.endpoint, "/links/lk1")
         XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+    }
+
+    // MARK: - leaveAnonymousSession
+
+    func test_leaveAnonymousSession_callsGuestSessionsMeWithSessionTokenHeader() async throws {
+        let response = APIResponse(success: true, data: DiscardedResponseBody(), error: nil)
+        mock.stub("/guest-sessions/me", result: response)
+
+        try await service.leaveAnonymousSession(sessionToken: "anon_abc123")
+
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/guest-sessions/me")
+        XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+        XCTAssertEqual(mock.lastRequest?.headers?["X-Session-Token"], "anon_abc123")
+        XCTAssertNil(mock.lastRequest?.bodyJSON)
     }
 
     // MARK: - Error handling

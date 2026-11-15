@@ -100,7 +100,13 @@ describe('CONVERSATION_PREFERENCES_DEFAULTS', () => {
     expect(CONVERSATION_PREFERENCES_DEFAULTS.isArchived).toBe(false);
     expect(CONVERSATION_PREFERENCES_DEFAULTS.tags).toEqual([]);
     expect(CONVERSATION_PREFERENCES_DEFAULTS.categoryId).toBeNull();
-    expect(CONVERSATION_PREFERENCES_DEFAULTS.deletedForUserAt).toBeNull();
+    // #4332 puis `95ca2becd2` — `deletedForUserAt` a perdu son unique écrivain,
+    // puis sa colonne, son `select` et ses deux déclarations de contrat.
+    // L'assertion « vaut `null` » gelait sa PRÉSENCE ; devenue `undefined`, elle
+    // ne mesurait plus rien. Celle-ci gèle son ABSENCE — strictement plus forte,
+    // et alignée sur `security/no-writerless-conversation-field-guard.test.ts`,
+    // qui interdit son retour côté production.
+    expect(CONVERSATION_PREFERENCES_DEFAULTS).not.toHaveProperty('deletedForUserAt');
   });
 
   it('does not carry `version`', () => {

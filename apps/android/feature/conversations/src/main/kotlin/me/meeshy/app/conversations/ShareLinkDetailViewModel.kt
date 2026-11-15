@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.ShareLinkDetailState
+import me.meeshy.sdk.model.ShareLinkEditDraft
 import me.meeshy.sdk.model.auth.ServerEnvironmentResolver
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -54,7 +55,12 @@ class ShareLinkDetailViewModel @Inject constructor(
     val state: StateFlow<ShareLinkDetailState> = _state.asStateFlow()
 
     init {
-        load()
+        val row = repository.cache.find(linkId)
+        if (row != null) {
+            _state.update { it.fromRow(row, webOrigin, now()) }
+        } else {
+            load()
+        }
     }
 
     fun load() {
@@ -62,8 +68,10 @@ class ShareLinkDetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 when (val result = repository.listMyLinks()) {
-                    is NetworkResult.Success ->
+                    is NetworkResult.Success -> {
+                        repository.cache.put(result.data)
                         _state.update { it.resolved(result.data, linkId, webOrigin, now()) }
+                    }
 
                     is NetworkResult.Failure ->
                         _state.update { it.failed(result.error.message) }
@@ -74,21 +82,59 @@ class ShareLinkDetailViewModel @Inject constructor(
         }
     }
 
+    /** Saisie dans le formulaire d'édition : n'écrit que le BROUILLON. */
+    fun onDraftChange(draft: ShareLinkEditDraft) {
+        _state.update { it.withDraft(draft) }
+    }
+
+    /**
+     * Enregistre le brouillon : la fiche montre d'abord le lien modifié, puis `PATCH
+     * /links/:linkId` ne reçoit QUE les champs modifiés (un champ vidé part en `null`
+     * explicite). Un échec rend le lien d'avant et garde le brouillon pour réessayer.
+     */
+    fun save() {
+        val before = _state.value
+        val previous = before.link ?: return
+        val patch = before.patch() ?: return
+        if (!before.canSave) return
+        _state.update { it.saving(webOrigin, now()) }
+        _state.value.link?.let(repository.cache::replace)
+        viewModelScope.launch {
+            try {
+                when (repository.update(previous.linkId, patch)) {
+                    is NetworkResult.Success -> _state.update { it.saved() }
+                    is NetworkResult.Failure -> {
+                        _state.update { it.saveFailed(previous, webOrigin, now()) }
+                        repository.cache.replace(previous)
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            }
+        }
+    }
+
+    /** Le retour (enregistré / échec) a été dit à l'écran. */
+    fun feedbackShown() {
+        _state.update { it.feedbackShown() }
+    }
+
     /**
      * Optimistically flip the link's active flag, then confirm with the server; a
-     * network failure rolls back to the snapshot and surfaces the error. Inert when no
-     * link is resolved.
+     * network failure rolls back the link (the draft in progress is kept) and surfaces
+     * the error. Inert when no link is resolved.
      */
     fun toggleActive() {
         val current = _state.value.link ?: return
-        val snapshot = _state.value
         val newActive = !current.isActive
         _state.update { it.toggled() }
+        _state.value.link?.let(repository.cache::replace)
         viewModelScope.launch {
             try {
                 val result = repository.setActive(current.linkId, newActive)
                 if (result is NetworkResult.Failure) {
-                    _state.value = snapshot.failed(result.error.message)
+                    _state.update { it.toggleFailed(current, result.error.message, webOrigin, now()) }
+                    repository.cache.replace(current)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -106,7 +152,10 @@ class ShareLinkDetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 when (val result = repository.delete(current.linkId)) {
-                    is NetworkResult.Success -> _state.update { it.markDeleted() }
+                    is NetworkResult.Success -> {
+                        repository.cache.remove(current.linkId)
+                        _state.update { it.markDeleted() }
+                    }
                     is NetworkResult.Failure -> _state.update { it.failed(result.error.message) }
                 }
             } catch (e: CancellationException) {

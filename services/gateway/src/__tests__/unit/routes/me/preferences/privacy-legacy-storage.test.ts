@@ -282,18 +282,10 @@ describe('la remise à zéro efface les DEUX rangements', () => {
     await app.close();
   });
 
-  it('DELETE / (toutes catégories) retire aussi les lignes héritées', async () => {
-    const prisma = makePrisma();
-    const app = await buildApp(prisma);
-
-    const res = await app.inject({ method: 'DELETE', url: '/' });
-
-    expect(res.statusCode).toBe(200);
-    expect(prisma.userPreference.deleteMany).toHaveBeenCalledWith({
-      where: { userId: USER_ID, key: { in: LEGACY_KEYS } },
-    });
-    await app.close();
-  });
+  // Le cas jumeau — « DELETE / (toutes catégories) » — a disparu avec la route
+  // globale (#4186). Le rangement des lignes héritées n'y perd rien : il est
+  // branché en `afterWrite` sur la catégorie `privacy`, donc sur le DELETE
+  // ci-dessus, qui est désormais le seul chemin.
 
   it('une écriture réussie converge vers un seul rangement', async () => {
     const prisma = makePrisma();

@@ -1,0 +1,92 @@
+[
+ {
+  "file": "poses-pied.jpg",
+  "rank": "Ambassadeur",
+  "division": 1,
+  "option": "pied",
+  "name": "Le Seuil des Victorieux",
+  "story": "Mee en fête et Meo brandissant sa coupe montent la garde sur le stylobate, au pied des colonnes ioniques ; sous eux, l'aurore se lève sur la mer de nuées de l'Olympe, comme pour les athlètes couronnés au seuil du temple.",
+  "layout": "pied",
+  "message": null
+ },
+ {
+  "file": "poses-perches.jpg",
+  "rank": "Ambassadeur",
+  "division": 1,
+  "option": "perches",
+  "name": "Les Gardiens du Fronton",
+  "story": "Perchés sur les rampants de marbre, de part et d'autre de l'écu guilloché aux ailes de la Victoire, Mee salue et Meo trône couronné, comme les acrotères vivants du sanctuaire.",
+  "layout": "perches",
+  "message": null
+ },
+ {
+  "file": "poses-cotes.jpg",
+  "rank": "Ambassadeur",
+  "division": 1,
+  "option": "cotes",
+  "name": "Le Regard entre les Colonnes",
+  "story": "Mee et Meo se penchent depuis le péristyle pour voir la photo, émerveillés et applaudissant, entre les fûts cannelés et sous les festons de laurier liés de pourpre.",
+  "layout": "cotes",
+  "message": null
+ },
+ {
+  "file": "poses-ruban.jpg",
+  "rank": "Ambassadeur",
+  "division": 1,
+  "option": "ruban",
+  "name": "L'Étoffe d'Honneur",
+  "story": "Comme les colombes des frises antiques, Mee et Meo tiennent au bec une bande de kente, l'étoffe tissée en bandes étroites des Asante et des Ewe qu'on offre à l'hôte d'honneur : l'Ambassadeur la porte jusqu'à l'Olympe.",
+  "layout": "ruban",
+  "message": "Merci la famille"
+ },
+ {
+  "file": "poses-selfie.jpg",
+  "rank": "Ambassadeur",
+  "division": 1,
+  "option": "selfie",
+  "name": "Le Selfie du Péristyle",
+  "story": "Meo s'invite en grand dans la photo, téléphone levé, sous les festons de laurier noués de pourpre qui pendent des volutes d'or ; la pluie de feuilles d'or d'Olympie (la phyllobolia) tombe le long des colonnes.",
+  "layout": "selfie",
+  "message": null
+ },
+ {
+  "file": "poses-message-cartouche.jpg",
+  "rank": "Ambassadeur",
+  "division": 1,
+  "option": "message-cartouche",
+  "name": "La Dédicace de Lapis",
+  "story": "Le message est gravé dans une tabula ansata de lapis-lazuli piqué de pyrite, aux anses d'or en queue d'aronde, la table votive des sanctuaires gréco-romains ; les cœurs de Mee et Meo l'escortent.",
+  "layout": "pied",
+  "message": "Pour toi, maman"
+ },
+ {
+  "file": "poses-message-ruban.jpg",
+  "rank": "Ambassadeur",
+  "division": 1,
+  "option": "message-ruban",
+  "name": "La Banderole de Pourpre",
+  "story": "Une banderole de pourpre tyrienne à queues fourchues porte le titre sur son arc et le message au-dessous ; Mee et Meo trinquent depuis le fronton.",
+  "layout": "perches",
+  "message": "On l'a fait ensemble"
+ },
+ {
+  "file": "poses-message-parchemin.jpg",
+  "rank": "Ambassadeur",
+  "division": 1,
+  "option": "message-parchemin",
+  "name": "Le Volumen de l'Aède",
+  "story": "Le message est écrit sur un volumen de papyrus déroulé entre deux bâtons d'ébène à pommeaux d'or, souligné d'une grecque ; Mee monte au ciel sur son nuage et Meo lui joue la sérénade.",
+  "layout": "cotes",
+  "message": "Le voyage continue"
+ },
+ {
+  "file": "poses-groupe.jpg",
+  "rank": "Ambassadeur",
+  "division": 1,
+  "option": "groupe",
+  "name": "Les Cœurs Liés",
+  "story": "La photo de groupe à trois prend place sous l'écu ailé de la Victoire ; la table de lapis porte en or l'Akoma ntoaso, les cœurs liés des Adinkra akan, et la chaîne Nkonsonkonson, avec le proverbe africain du chemin fait ensemble.",
+  "layout": "pied",
+  "message": "Ensemble, on va plus loin"
+ }
+]

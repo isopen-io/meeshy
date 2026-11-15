@@ -4,11 +4,21 @@
  */
 
 import * as path from 'path';
-import { PrismaClient, Message } from '@meeshy/shared/prisma/client';
-import type { Prisma } from '@meeshy/shared/prisma/client';
-import type { MessageRequest } from '@meeshy/shared/types';
+import { composeMessageEffectFlags, ephemeralSendFields } from './ephemeralSendFields';
+import { copiedAttachmentFields } from './copiedAttachmentFields';
+import { exitProtectedCopy } from './copyExitProtection';
+import type { ForwardImposition } from './forwardAdmission';
+import { declaredReplyProtection } from './replyProtectionContagion';
+import { assertPlaintextAdmitted, E2EE_CONTENT_PLACEHOLDER, type EncryptionRegime } from './e2eePlaintextAdmission';
+import { admitSendUnderRegime } from './e2eeSendAdmission';
+import { persistAdmittedEnvelopes } from './e2eeEnvelopePersistence';
+import { atRestModeOf, sealsAtRest, sealTextAtRest } from './atRestWrite';
+import { isSealedAtRest, isServerAtRestMode, revealAtRestWithQuote, servedClearAtRest, ServerAtRestUnavailableError } from './serverAtRest';
+import { HYBRID_DEVICE_LAYER_METADATA_KEY, LIBSIGNAL_PROTOCOL, type E2EEDeviceLayerRequest, type E2EERelayRequest } from '@meeshy/shared/types/e2ee-directory';
+import { PrismaClient, Message, type Prisma } from '@meeshy/shared/prisma/client';
 import { TrackingLinkService } from '../TrackingLinkService';
 import { processExplicitLinks } from './messageLinks';
+import { linkTrackingAuthorOf, UNTRACKED_LINK_AUTHOR, type LinkTrackingAuthor } from './linkTrackingAuthor';
 import { MentionService } from '../MentionService';
 import { EncryptionService } from '../EncryptionService';
 import { NotificationService } from '../notifications/NotificationService';
@@ -18,23 +28,30 @@ import {
   type MessageNotificationTarget,
 } from './messageNotificationFanOut';
 import { resolveMessageMentions } from './messageMentions';
+import { noteMessageInteractions } from '../relations/messageInteractions';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { AttachmentService } from '../attachments';
 import { copyAttachmentsFromMessage } from './copyAttachments';
 import { deriveMessageTypeForAttachments } from './attachmentMessageType';
-import { attachmentFullSelect } from '../attachments/attachmentIncludes';
+import { attachmentFullSelect, attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER, QUOTED_VISUAL_ATTACHMENT_COUNT } from '../attachments/attachmentIncludes';
+import { ANONYMOUS_SENDER_NAME_SELECT } from './anonymousSenderNameSelect';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { shouldProcessAudioAttachment } from '../../utils/transcription';
-import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import {
   buildPostReplyTo,
   POST_REPLY_SNAPSHOT_SELECT,
   type PostReplyTo,
 } from './postReplySnapshot';
-import { parseSharedPlace } from '../location/sharedPlace';
+import { clientDeclaredMetadata } from './clientDeclaredMetadata';
+import { E2EE_PLAINTEXT_LOCATION_WITHHELD } from '../location/sharedPlace';
 import { LIVE_MESSAGE_MARK } from './liveMessage';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { mapWithConcurrency } from '@meeshy/shared/utils/concurrency';
+import { findExistingMessage, findContentWindowDuplicate } from './messageDedupProjection';
+import { MESSAGE_AUTHOR_USER_SELECT } from './messageAuthorSelect';
+import type { SocketAttachmentRow } from '../../socketio/serializeAttachmentForSocket';
+import { prismaAtRestFileStore, type AtRestFileAccess } from '../attachments/atRest/atRestFiles';
+import { contentDisappears, gatewaySealDeps, requireFileSealingKey, sealMessageAttachmentsAtRest, sendCarriesFiles } from './sealMessageAttachments';
 
 // Logger dédié pour MessageProcessor
 const logger = enhancedLogger.child({ module: 'MessageProcessor' });
@@ -64,23 +81,26 @@ export class MessageProcessor {
   private mentionService: MentionService;
   private encryptionService: EncryptionService;
   private attachmentService: AttachmentService;
+  private atRestFiles: AtRestFileAccess;
 
   constructor(
     private readonly prisma: PrismaClient,
     private readonly notificationService?: NotificationService,
-    private readonly translationService?: MessageTranslationService
+    private readonly translationService?: MessageTranslationService,
+    atRestFiles?: AtRestFileAccess
   ) {
     this.trackingLinkService = new TrackingLinkService(prisma);
     this.mentionService = new MentionService(prisma);
     this.encryptionService = new EncryptionService(prisma);
     this.attachmentService = new AttachmentService(prisma);
+    this.atRestFiles = atRestFiles ?? { store: prismaAtRestFileStore(prisma), keyring: this.encryptionService };
   }
 
   /**
-   * Traite les liens du contenu selon les règles suivantes :
-   * - Règle 1 : Markdown [texte](url) → lien normal (pas de tracking)
-   * - Règle 2 : URLs brutes → aucun tracking automatique (cf. `buildRawUrlTrackingLinks`)
-   * - Règle 3 : [[url]] → force le tracking → m+token
+   * Traite les liens du contenu selon les règles suivantes (#9093) :
+   * - Règle 1 : Markdown [texte](url) → contenu intact, suivi par la carte (cf. `buildRawUrlTrackingLinks`)
+   * - Règle 2 : URLs brutes → contenu intact, suivies par la carte (cf. `buildRawUrlTrackingLinks`)
+   * - Règle 3 : [[url]] → contenu intact, AUCUN suivi
    * - Règle 4 : <url> → force le tracking → m+token
    *
    * Le corps de ces quatre étapes vivait ICI, en second exemplaire complet de
@@ -111,25 +131,23 @@ export class MessageProcessor {
   }
 
   /**
-   * L'identité UTILISATEUR derrière le participant expéditeur — la seule que
-   * `TrackingLink.createdBy` accepte de désigner (`/tracking-links` y compare
-   * un `User.id` pour lister « mes liens » ET pour autoriser l'accès).
+   * Qui, derrière le participant expéditeur, a le droit de voir ses adresses
+   * suivies — et au nom de quel `User.id` (`TrackingLink.createdBy`, contre
+   * lequel `/tracking-links` liste « mes liens » ET autorise l'accès).
    *
-   * `undefined` pour un expéditeur anonyme (aucun `User.id`) comme pour une
-   * lecture en échec : dans les deux cas, un lien sans propriétaire vaut mieux
-   * qu'un lien attribué à un id qui ne désigne aucun utilisateur. Même forme et
-   * même raison que `resolveSenderUserId` côté mentions (cf. messageMentions.ts).
+   * Un invité anonyme n'est jamais suivi (#10286), et une lecture en échec non
+   * plus : sans preuve d'un compte inscrit, le texte part tel qu'écrit.
    */
-  private async resolveLinkAuthorUserId(senderParticipantId: string): Promise<string | undefined> {
+  private async resolveLinkTrackingAuthor(senderParticipantId: string): Promise<LinkTrackingAuthor> {
     try {
       const participant = await this.prisma.participant.findUnique({
         where: { id: senderParticipantId },
-        select: { userId: true },
+        select: { userId: true, type: true },
       });
-      return participant?.userId ?? undefined;
+      return linkTrackingAuthorOf(participant);
     } catch (error) {
       logger.error('[MessageProcessor] Error resolving link author', error);
-      return undefined;
+      return UNTRACKED_LINK_AUTHOR;
     }
   }
 
@@ -154,33 +172,17 @@ export class MessageProcessor {
   }
 
   /**
-   * Get encryption context for a conversation
-   * Determines if and how a message should be encrypted
+   * Le chiffrement d'un message, décidé par le RÉGIME de sa conversation et par
+   * lui seul : un `messageType` déclaré n'en dispense jamais (#12822 — un
+   * `system` venu d'un client rangeait le clair dans une conversation
+   * `server`/`hybrid`). Les avis de la passerelle ne passent pas par ici.
    */
   async getEncryptionContext(
     conversationId: string,
     content: string,
-    messageType: string
+    knownRegime?: EncryptionRegime | null
   ): Promise<MessageEncryptionContext> {
-    // System messages are NEVER encrypted
-    if (messageType === 'system') {
-      return {
-        isEncrypted: false,
-        mode: null,
-        encryptedContent: null,
-        encryptionMetadata: null
-      };
-    }
-
-    // Check if conversation has encryption enabled
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: {
-        encryptionMode: true,
-        encryptionEnabledAt: true,
-        serverEncryptionKeyId: true
-      }
-    });
+    const conversation = knownRegime === undefined ? await this.readEncryptionRegime(conversationId) : knownRegime;
 
     // No encryption enabled
     if (!conversation?.encryptionEnabledAt || !conversation.encryptionMode) {
@@ -194,9 +196,9 @@ export class MessageProcessor {
 
     const mode = conversation.encryptionMode as EncryptionMode;
 
-    // E2EE mode: encryption happens client-side
+    // E2EE : l'appareil chiffre ; un texte en clair est REFUSÉ, jamais écrit (#9224, #11216).
     if (mode === 'e2ee') {
-      logger.warn('[MessageProcessor] E2EE message received as plaintext - client should encrypt');
+      assertPlaintextAdmitted({ encryptionMode: mode, plaintext: content });
       return {
         isEncrypted: false,
         mode: 'e2ee',
@@ -205,63 +207,38 @@ export class MessageProcessor {
       };
     }
 
-    try {
-      // Server mode: encrypt content server-side
-      if (mode === 'server') {
-        const encrypted = await this.encryptionService.encryptMessage(
-          content,
-          'server',
-          conversationId
-        );
-
-        return {
-          isEncrypted: true,
-          mode: 'server',
-          encryptedContent: encrypted.ciphertext,
-          encryptionMetadata: encrypted.metadata as Prisma.InputJsonValue
-        };
-      }
-
-      // Hybrid mode: encrypt the server layer
-      if (mode === 'hybrid') {
-        const serverLayer = await this.encryptionService.encryptHybridServerLayer(
-          content,
-          conversationId
-        );
-
-        return {
-          isEncrypted: true,
-          mode: 'hybrid',
-          encryptedContent: serverLayer.ciphertext,
-          encryptionMetadata: {
-            mode: 'hybrid',
-            protocol: 'aes-256-gcm',
-            keyId: serverLayer.keyId,
-            iv: serverLayer.iv,
-            authTag: serverLayer.authTag,
-            canTranslate: true,
-            timestamp: Date.now()
-          } as Prisma.InputJsonValue
-        };
-      }
-
-      // Unknown mode - fallback to plaintext
-      logger.warn(`[MessageProcessor] Unknown encryption mode: ${mode}`);
-      return {
-        isEncrypted: false,
-        mode: null,
-        encryptedContent: null,
-        encryptionMetadata: null
-      };
-    } catch (error) {
-      logger.error('[MessageProcessor] Encryption failed', error);
-      return {
-        isEncrypted: false,
-        mode: null,
-        encryptedContent: null,
-        encryptionMetadata: null
-      };
+    // #11381 — un mode que la passerelle ne sait pas chiffrer est REFUSÉ, comme
+    // une clé absente : la conversation se croit chiffrée, rien ne s'y écrit en clair.
+    if (!isServerAtRestMode(mode)) {
+      logger.warn(`[MessageProcessor] Unknown encryption mode refused: ${mode}`);
+      throw new ServerAtRestUnavailableError('unknown-mode');
     }
+
+    const sealed = await sealTextAtRest({
+      sealer: this.encryptionService,
+      mode,
+      conversationId,
+      plaintext: content,
+      preferredKeyId: conversation.serverEncryptionKeyId ?? null,
+    });
+    // Un message sans texte n'a rien à sceller : il se range non chiffré, mode gardé.
+    if (!sealed) return { isEncrypted: false, mode: atRestModeOf(mode), encryptedContent: null, encryptionMetadata: null };
+    return { isEncrypted: true, mode: sealed.mode, encryptedContent: sealed.encryptedContent, encryptionMetadata: sealed.encryptionMetadata };
+  }
+
+  /**
+   * #11381 — une ligne LUE en base (rejeu d'un `clientMessageId`, doublon) et
+   * sa citation, servies en clair comme la liste les sert.
+   */
+  revealStored<T extends Parameters<typeof revealAtRestWithQuote>[0]>(row: T): Promise<T> {
+    return revealAtRestWithQuote(row, this.encryptionService);
+  }
+
+  private readEncryptionRegime(conversationId: string): Promise<EncryptionRegime | null> {
+    return this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { encryptionMode: true, encryptionEnabledAt: true, serverEncryptionKeyId: true }
+    });
   }
 
   /**
@@ -276,7 +253,7 @@ export class MessageProcessor {
    * existing record's `translations` blob is empty (translator was down on
    * the first attempt).
    */
-  async saveMessage(data: {
+  async saveMessage(request: {
     conversationId: string;
     senderId: string;
     content: string;
@@ -286,6 +263,10 @@ export class MessageProcessor {
     replyToId?: string;
     storyReplyToId?: string;
     forwardedFromId?: string;
+    /** #9572 — le verdict d'`admitMessageForward` ; REQUIS avec `forwardedFromId` (`exitProtectedCopy`). */
+    forwardImposes?: ForwardImposition | null;
+    /** #9914, D7 — le verdict d'`admitMessageForward` : les pièces de la source à recopier ; `[]` n'en recopie aucune. */
+    forwardCopySelection?: readonly string[];
     forwardedFromConversationId?: string;
     /**
      * Diffusion à plusieurs destinataires (pas un transfert) : copie
@@ -300,12 +281,26 @@ export class MessageProcessor {
     isBlurred?: boolean;
     effectFlags?: number;
     expiresAt?: Date;
+    /** Durée d'un éphémère en secondes (#7451) — le décompte part de la RÉCEPTION. */
+    ephemeralDuration?: number;
     isViewOnce?: boolean;
     maxViewOnceCount?: number;
     clientMessageId?: string;
     /** Lieu partagé — champ dédié, jamais un `metadata` brut. Validé par `parseSharedPlace`. */
     location?: unknown;
+    /** Sticker (#4823) — champ dédié, même doctrine. Validé par `parseMessageSticker`. */
+    sticker?: unknown;
+    /** Pièce NOMMÉE citée (#6164) — même doctrine : admise par `admitAttachmentReply`, forme gardée par `parseAttachmentReplyTo`. */
+    attachmentReplyTo?: unknown;
+    /** Envoi libsignal par appareil (#3706) : admis par `admitSendUnderRegime`, rangé par `persistAdmittedEnvelopes`. */
+    e2eeRelay?: E2EERelayRequest;
+    /** Couche appareil d'un envoi hybride (#14369) : admise comme `e2eeRelay`, à côté du clair scellé au repos. */
+    deviceLayerRelay?: E2EEDeviceLayerRequest;
   }): Promise<Message> {
+    // #11216, #12518 — refusé AVANT tout le reste ; `endToEnd` éteint les pipelines serveur.
+    const { regime, carriesCiphertext, endToEnd, relay, deviceLayer } = await admitSendUnderRegime(this.prisma, request);
+
+    const data = await exitProtectedCopy(this.prisma, await declaredReplyProtection(this.prisma, request));
     const corr: Record<string, any> = {
       clientMessageId: data.clientMessageId,
       conversationId: data.conversationId,
@@ -322,50 +317,55 @@ export class MessageProcessor {
     // sans lien ne produit aucun `TrackingLink`, donc aucun propriétaire à
     // désigner. `containsLinks` couvre les deux syntaxes explicites autant que
     // les URLs brutes : `[[https://…]]` contient une URL.
-    const linkAuthorUserId = this.containsLinks(data.content)
-      ? await this.resolveLinkAuthorUserId(data.senderId)
-      : undefined;
+    //
+    // Un expéditeur non inscrit (invité anonyme, participant introuvable) ne
+    // voit aucune adresse suivie (#10286) : ni réécriture, ni carte.
+    // #11381 — au repos, aucune adresse ne se range en clair à côté du chiffré.
+    const sealedAtRest = sealsAtRest(regime);
+    // #13100 — ses fichiers seront scellés : sans clé, refusé AVANT l'écriture.
+    if (sealedAtRest && sendCarriesFiles(request)) await requireFileSealingKey(this.atRestFiles, request.conversationId);
+    const linkAuthor = !endToEnd && !sealedAtRest && this.containsLinks(data.content)
+      ? await this.resolveLinkTrackingAuthor(data.senderId)
+      : UNTRACKED_LINK_AUTHOR;
 
     // ÉTAPE 1: Traiter les liens AVANT de sauvegarder le message
-    const processedContent = await performanceLogger.withTiming(
-      'messaging.processLinks',
-      () => this.processLinksInContent(
-        data.content,
-        data.conversationId,
-        linkAuthorUserId,
-        undefined
-      ),
-      corr
-    );
+    const processedContent = linkAuthor.tracked
+      ? await performanceLogger.withTiming(
+          'messaging.processLinks',
+          () => this.processLinksInContent(data.content, data.conversationId, linkAuthor.userId, undefined),
+          corr
+        )
+      : data.content;
 
     // ÉTAPE 2: Get encryption context for this message
     let encryptionContext: MessageEncryptionContext;
 
-    if (data.encryptedContent && data.encryptionMetadata) {
-      const metadata = data.encryptionMetadata as Record<string, unknown>;
+    if (carriesCiphertext) {
+      // #12562 — un chiffré n'est admis QUE dans une conversation e2ee : le
+      // mode de la ligne est celui de la conversation, jamais celui du client.
       encryptionContext = {
         isEncrypted: true,
-        mode: (metadata.mode as EncryptionMode) || 'e2ee',
+        mode: 'e2ee',
         encryptedContent: data.encryptedContent,
         encryptionMetadata: data.encryptionMetadata
       };
+    } else if (endToEnd) {
+      // Le mode de la ligne est celui de la conversation, quel que soit le
+      // `messageType` déclaré : l'éventail et la traduction le lisent.
+      encryptionContext = { isEncrypted: false, mode: 'e2ee', encryptedContent: null, encryptionMetadata: null };
     } else {
       encryptionContext = await performanceLogger.withTiming(
         'messaging.encryptionContext',
         () => this.getEncryptionContext(
           data.conversationId,
           processedContent.trim(),
-          data.messageType || 'text'
+          regime
         ),
         corr
       );
     }
 
-    // Compute effectFlags: use provided value or derive from legacy fields
-    let effectFlags = data.effectFlags ?? 0;
-    if (data.isBlurred && !(effectFlags & MESSAGE_EFFECT_FLAGS.BLURRED)) effectFlags |= MESSAGE_EFFECT_FLAGS.BLURRED;
-    if (data.expiresAt && !(effectFlags & MESSAGE_EFFECT_FLAGS.EPHEMERAL)) effectFlags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
-    if (data.isViewOnce && !(effectFlags & MESSAGE_EFFECT_FLAGS.VIEW_ONCE)) effectFlags |= MESSAGE_EFFECT_FLAGS.VIEW_ONCE;
+    const effectFlags = composeMessageEffectFlags(data);
 
     // Réponse à un post (status/story/reel/post) : GELER un snapshot du post
     // cité MAINTENANT, pendant qu'il existe encore. Sans ça, à l'expiration
@@ -381,22 +381,24 @@ export class MessageProcessor {
     // `metadata.trackingLinks`. Le client rend le lien (texte + façade vidéo) vers
     // `/l/<token>` (capture du clic + redirection) tout en gardant l'URL/aperçu.
     // Ignoré pour les messages chiffrés (contenu vide côté serveur).
-    const trackingLinks = encryptionContext.isEncrypted
+    const trackingLinks = encryptionContext.isEncrypted || !linkAuthor.tracked
       ? []
-      : await this.buildRawUrlTrackingLinks(processedContent, data.conversationId, linkAuthorUserId);
+      : await this.buildRawUrlTrackingLinks(processedContent, data.conversationId, linkAuthor.userId);
 
-    // Partage de position : le client transporte un champ `location` DÉDIÉ
-    // (jamais un `metadata` brut — voir sharedPlace.ts). `parseSharedPlace`
-    // revalide les coordonnées côté serveur avant écriture. Chiffrement :
-    // stockage EN CLAIR dans `metadata.location`, décision assumée (cf.
-    // commentaire de tête de sharedPlace.ts) — au même régime que
-    // `postReplyTo` / `trackingLinks` ci-dessus.
-    const sharedPlace = parseSharedPlace(data.location);
-
-    const messageMetadata: Record<string, unknown> = {};
-    if (postReplyTo) messageMetadata.postReplyTo = postReplyTo;
-    if (trackingLinks.length > 0) messageMetadata.trackingLinks = trackingLinks;
-    if (sharedPlace) messageMetadata.location = sharedPlace;
+    // Les blocs que le CLIENT déclare (`location`, `sticker`) passent par leurs
+    // parseurs dédiés — jamais un `metadata` brut, cf. `clientDeclaredMetadata.ts`.
+    // #12526 — en e2ee, un lieu en clair est retenu ; le message chiffré passe.
+    const messageMetadata: Record<string, unknown> = {
+      ...(deviceLayer ? { [HYBRID_DEVICE_LAYER_METADATA_KEY]: LIBSIGNAL_PROTOCOL } : {}),
+      ...(postReplyTo ? { postReplyTo } : {}),
+      ...(trackingLinks.length > 0 ? { trackingLinks } : {}),
+      ...clientDeclaredMetadata(data, {
+        endToEnd,
+        onWithheld: (field) => logger.warn('plaintext block withheld from an end-to-end conversation', {
+          code: E2EE_PLAINTEXT_LOCATION_WITHHELD, field, conversationId: data.conversationId,
+        }),
+      }),
+    };
 
     // ÉTAPE 3: Créer le message avec le contenu traité et encryption.
     //
@@ -409,7 +411,7 @@ export class MessageProcessor {
     const messageData = {
       conversationId: data.conversationId,
       senderId: data.senderId,
-      content: encryptionContext.isEncrypted ? '' : processedContent.trim(),
+      content: encryptionContext.isEncrypted ? (relay && !deviceLayer ? E2EE_CONTENT_PLACEHOLDER : '') : processedContent.trim(),
       originalLanguage: data.originalLanguage,
       messageType: data.messageType || 'text',
       messageSource: data.messageSource || 'user',
@@ -425,13 +427,45 @@ export class MessageProcessor {
       encryptedContent: encryptionContext.encryptedContent,
       encryptionMetadata: encryptionContext.encryptionMetadata,
       isBlurred: data.isBlurred || false,
-      expiresAt: data.expiresAt || null,
+      // #7451 — la DURÉE s'enregistre ; `expiresAt` devient interne.
+      ...ephemeralSendFields({ ephemeralDuration: data.ephemeralDuration, expiresAt: data.expiresAt, isViewOnce: data.isViewOnce, effectFlags, durationBoundsAfterRead: data.durationBoundsAfterRead, now: new Date() }),
       effectFlags,
       isViewOnce: data.isViewOnce || false,
       maxViewOnceCount: data.maxViewOnceCount ?? null,
       ...LIVE_MESSAGE_MARK,
       ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {})
     } as const;
+
+    // #6910 — REPLI de déduplication, en amont de l'INSERT.
+    //
+    // La garde nominale est `(conversationId, clientMessageId)` quelques lignes
+    // plus bas, et elle est correcte. Son angle mort est un producteur qui
+    // REFABRIQUE sa clé à chaque ré-émission : la clé neuve ne matche rien, donc
+    // la contrainte n'a rien à reconnaître. Mesuré en production le 2026-09-17 —
+    // sur 28 groupes de messages dupliqués, 28 portaient une clé par copie et
+    // AUCUN n'en partageait une.
+    //
+    // La sortie est celle du chemin P2002, à l'identique : on rend le message
+    // EXISTANT avec `isDuplicate`, jamais une erreur. Les trois gardes
+    // `!isDuplicate` des appelants sautent alors la re-diffusion, et
+    // l'expéditeur voit son message — une seule fois.
+    const alreadySent = await findContentWindowDuplicate({
+      prisma: this.prisma,
+      candidate: {
+        conversationId: messageData.conversationId,
+        senderId: messageData.senderId,
+        // Le littéral d'un envoi libsignal n'est pas son contenu : deux messages chiffrés ne se confondent jamais.
+        content: relay ? '' : messageData.content,
+        ...(data.attachmentIds ? { attachmentIds: data.attachmentIds } : {})
+      },
+      ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {}),
+      corr
+    });
+
+    if (alreadySent) {
+      const servedDuplicate = await this.revealStored(alreadySent);
+      return { ...servedDuplicate, isDuplicate: true, timestamp: alreadySent.createdAt } as Message;
+    }
 
     let message: Message;
     let isDuplicate = false;
@@ -449,19 +483,11 @@ export class MessageProcessor {
                 type: true,
                 nickname: true,
                 userId: true,
-                user: {
-                  select: {
-                    id: true,
-                    username: true,
-                    displayName: true,
-                    firstName: true,
-                    lastName: true,
-                    avatar: true
-                  }
-                }
+                ...ANONYMOUS_SENDER_NAME_SELECT,
+                user: { select: MESSAGE_AUTHOR_USER_SELECT }
               }
             },
-            attachments: true,
+            attachments: { orderBy: MESSAGE_ATTACHMENT_ORDER },
             replyTo: {
               include: {
                 sender: {
@@ -487,7 +513,9 @@ export class MessageProcessor {
                 // Parité avec le chemin REST (messages.ts) : le snapshot du
                 // message cité doit porter ses pièces jointes, sinon l'aperçu
                 // de citation n'affiche rien sur les messages reçus en socket.
-                attachments: { select: attachmentFullSelect, take: 4 }
+                attachments: { select: attachmentFullSelect, orderBy: MESSAGE_ATTACHMENT_ORDER, take: 4 },
+                // #9915 — le « +N » de la citation compte TOUTES ses tuiles.
+                ...QUOTED_VISUAL_ATTACHMENT_COUNT
               }
             }
           }
@@ -507,50 +535,13 @@ export class MessageProcessor {
       // a Prisma `@@unique` directive — so the `findUnique` compound
       // type is not generated. The compound `@@index` declared in the
       // schema still backs this query for performance.
-      const existing = await performanceLogger.withTiming(
-        'messaging.dedupFindFirst',
-        () => this.prisma.message.findFirst({
-          where: {
-            conversationId: data.conversationId,
-            clientMessageId: data.clientMessageId
-          },
-          include: {
-            sender: {
-              select: {
-                id: true, displayName: true, avatar: true, type: true,
-                nickname: true, userId: true,
-                user: {
-                  select: {
-                    id: true, username: true, displayName: true,
-                    firstName: true, lastName: true, avatar: true
-                  }
-                }
-              }
-            },
-            attachments: true,
-            replyTo: {
-              include: {
-                sender: {
-                  select: {
-                    id: true, displayName: true, avatar: true, type: true,
-                    nickname: true, userId: true,
-                    user: {
-                      select: {
-                        id: true, username: true, displayName: true,
-                        firstName: true, lastName: true, avatar: true
-                      }
-                    }
-                  }
-                },
-                // Parité REST : porter les pièces jointes du message cité
-                // (sinon l'aperçu de citation est vide via le dédup socket).
-                attachments: { select: attachmentFullSelect, take: 4 }
-              }
-            }
-          }
-        }),
+      const existing = await findExistingMessage({
+        prisma: this.prisma,
+        where: { conversationId: data.conversationId, clientMessageId: data.clientMessageId },
+        conversationId: data.conversationId,
+        timingLabel: 'messaging.dedupFindFirst',
         corr
-      );
+      });
       if (!existing) {
         // Race condition we cannot reconcile — bubble up the original error.
         logger.error('P2002 raised but no existing record found for clientMessageId', {
@@ -559,7 +550,7 @@ export class MessageProcessor {
         });
         throw e;
       }
-      message = existing;
+      message = await this.revealStored(existing);
       isDuplicate = true;
       logger.info('Idempotent dedup hit on clientMessageId', {
         conversationId: data.conversationId,
@@ -586,10 +577,12 @@ export class MessageProcessor {
 
     const corrWithMsg = { ...corr, messageId: message.id };
 
+    if (relay) await persistAdmittedEnvelopes(this.prisma, { message, relay });
+
     // ÉTAPE 4: Gérer les attachments (Lier ou Copier pour forward)
     await performanceLogger.withTiming(
       'messaging.handleAttachments',
-      () => this.handleAttachments(data, message),
+      () => this.handleAttachments(data, message, { serverReads: !endToEnd, sealsAtRest: sealedAtRest }),
       corrWithMsg
     );
 
@@ -608,10 +601,17 @@ export class MessageProcessor {
       const refreshedAttachments = await performanceLogger.withTiming(
         'messaging.refreshAttachments',
         () => this.prisma.messageAttachment.findMany({
-          where: { messageId: message.id }
+          where: { messageId: message.id }, select: attachmentSocketSelect, orderBy: MESSAGE_ATTACHMENT_ORDER // #7070 — repart TELLE QUELLE sur message:new/edited REST/ZMQ
         }),
         corrWithMsg
       );
+      // #7028 (#7014) — cliquet de type À LA SOURCE : en aval, `Array.isArray`
+      // érode `message.attachments` vers `any[]`, invisible au cliquet de
+      // `serializeAttachmentForSocket`. Affectation-fantôme (pas d'annotation
+      // du callback, qui érode `att.mimeType` requis plus bas) : un `select`
+      // sans protection rougit ICI (TS2322).
+      const _refreshedAttachmentsCarryProtection: readonly SocketAttachmentRow[] = refreshedAttachments;
+      void _refreshedAttachmentsCarryProtection;
       (message as Message & { attachments: unknown[] }).attachments = refreshedAttachments;
 
       // ÉTAPE 4 ter: Dire ce QU'EST ce message, maintenant qu'on sait ce qu'il
@@ -659,8 +659,12 @@ export class MessageProcessor {
       corrWithMsg
     );
 
+    // #11381 — l'expéditeur, `message:new` et la traduction reçoivent le CLAIR ;
+    // la base n'a reçu que le chiffré (ÉTAPE 3) et la notification (ÉTAPE 6) son placeholder.
+    const opened = isSealedAtRest(message) ? servedClearAtRest(message, processedContent.trim()) : message;
+    const served = await this.revealStored(opened);
     return {
-      ...message,
+      ...served,
       timestamp: message.createdAt
     } as Message;
   }
@@ -673,11 +677,16 @@ export class MessageProcessor {
       senderId: string;
       attachmentIds?: readonly string[];
       forwardedFromId?: string;
+      forwardCopySelection?: readonly string[];
       copyAttachmentsFromMessageId?: string;
       conversationId: string;
     },
-    message: Message
+    message: Message,
+    options: { readonly serverReads: boolean; readonly sealsAtRest: boolean }
   ): Promise<void> {
+    const sealFiles = () => options.sealsAtRest
+      ? sealMessageAttachmentsAtRest(gatewaySealDeps(this.prisma, this.atRestFiles), { messageId: message.id, conversationId: data.conversationId })
+      : Promise.resolve();
     // Diffusion à plusieurs destinataires (PAS un transfert) : copie SERVEUR
     // des pièces jointes du message désigné. Volontairement HORS du
     // try/catch ci-dessous — celui-ci absorbe les échecs du forward en
@@ -708,23 +717,27 @@ export class MessageProcessor {
         );
         throw error;
       }
+      await sealFiles();
       return;
     }
 
     try {
       // 1. Lier les attachments pré-uploadés
       if (data.attachmentIds && data.attachmentIds.length > 0) {
-        await this.attachmentService.associateAttachmentsToMessage(data.attachmentIds, message.id);
+        await this.attachmentService.associateAttachmentsToMessage(data.attachmentIds, message.id, message);
+        // #13100 — scellés AVANT le départ de l'audio et avant `message:new`.
+        await sealFiles();
 
-        // Déclencher le traitement audio si nécessaire
-        if (this.translationService) {
-          this.processAudioAttachments(data.attachmentIds, message.id, data.conversationId, data.senderId)
+        // Déclencher le traitement audio si nécessaire — jamais en e2ee (#12518).
+        if (this.translationService && options.serverReads) {
+          this.processAudioAttachments(data.attachmentIds, message.id, data.conversationId, data.senderId, { atRest: options.sealsAtRest || contentDisappears(message) })
             .catch(err => logger.error('[MessageProcessor] Audio processing failed', err));
         }
       }
       // 2. Copier les attachments si c'est un forward et qu'aucun nouvel attachment n'est fourni
       else if (data.forwardedFromId) {
-        await this.copyForwardedAttachments(data.forwardedFromId, message.id, data.senderId);
+        await this.copyForwardedAttachments(data.forwardedFromId, message.id, data.senderId, data.forwardCopySelection);
+        await sealFiles();
       }
     } catch (error) {
       logger.error('[MessageProcessor] Error handling attachments', error);
@@ -732,89 +745,39 @@ export class MessageProcessor {
   }
 
   /**
-   * Copie les attachments d'un message original vers un nouveau message (Forward)
+   * Copie les attachments d'un message original vers un nouveau message (Forward).
+   *
+   * `selection` est le verdict d'`admitMessageForward` (#9914, D7) : absent, tout
+   * le lot ; présent, ces pièces-là dans cet ordre — `[]` ne lit ni ne recopie
+   * rien (source chiffrée, contenu renvoyé par le client).
    */
-  private async copyForwardedAttachments(originalMessageId: string, newMessageId: string, senderId: string): Promise<void> {
+  private async copyForwardedAttachments(
+    originalMessageId: string,
+    newMessageId: string,
+    senderId: string,
+    selection?: readonly string[]
+  ): Promise<void> {
     try {
-      const originalAttachments = await this.prisma.messageAttachment.findMany({
-        where: { messageId: originalMessageId }
+      if (selection !== undefined && selection.length === 0) return;
+      const found = await this.prisma.messageAttachment.findMany({
+        where: selection ? { messageId: originalMessageId, id: { in: [...selection] } } : { messageId: originalMessageId },
+        orderBy: MESSAGE_ATTACHMENT_ORDER
       });
+      const originalAttachments = selection
+        ? selection.flatMap((id) => found.filter((att) => att.id === id))
+        : found;
 
       if (originalAttachments.length === 0) return;
 
       const createdAttachments = await Promise.all(
-        originalAttachments.map(att =>
+        originalAttachments.map((att, rank) =>
           this.prisma.messageAttachment.create({
             data: {
-              messageId: newMessageId,
-              fileName: att.fileName,
-              originalName: att.originalName,
-              mimeType: att.mimeType,
-              fileSize: att.fileSize,
-              filePath: att.filePath,
-              fileUrl: att.fileUrl,
-              title: att.title,
-              alt: att.alt,
-              caption: att.caption,
+              ...copiedAttachmentFields(att),
+              messageId: newMessageId, rank,
               forwardedFromAttachmentId: att.id,
               isForwarded: true,
-              width: att.width,
-              height: att.height,
-              thumbnailPath: att.thumbnailPath,
-              thumbnailUrl: att.thumbnailUrl,
-              duration: att.duration,
-              bitrate: att.bitrate,
-              sampleRate: att.sampleRate,
-              codec: att.codec,
-              channels: att.channels,
-              fps: att.fps,
-              videoCodec: att.videoCodec,
-              pageCount: att.pageCount,
-              lineCount: att.lineCount,
               uploadedBy: senderId,
-              isAnonymous: false,
-              transcription: att.transcription ?? undefined,
-              translations: att.translations ?? undefined,
-              metadata: att.metadata ?? undefined,
-
-              // Le placeholder instantané et les variantes WebP sont DÉJÀ
-              // dérivés de ces octets-là. Les laisser derrière condamnait la
-              // copie au téléchargement pleine taille pour un travail déjà fait.
-              thumbHash: att.thumbHash,
-              imageVariants: att.imageVariants ?? undefined,
-
-              // ── Ce que la copie doit dire de SES PROPRES OCTETS ───────────
-              //
-              // `filePath`/`fileUrl` sont repris à l'identique : les deux lignes
-              // désignent le MÊME blob. Quand l'original est chiffré, ce blob
-              // est du chiffré — et la copie naissait pourtant sans un seul de
-              // ces champs, donc avec le défaut Prisma `isEncrypted: false`.
-              //
-              // Le gateway ne déchiffre rien : `routes/attachments/download.ts`
-              // sert les octets bruts et c'est le CLIENT qui déchiffre, d'après
-              // ce que la ligne déclare (`attachmentIncludes` publie
-              // `isEncrypted`, `encryptionMode`, `encryptionIv`,
-              // `encryptionAuthTag` exactement pour ça). Une copie qui annonce
-              // « clair » en pointant du chiffré fait donc rendre le chiffré
-              // TEL QUEL comme s'il était le média : le client ne déchiffre pas,
-              // puisqu'on vient de lui dire qu'il n'y a rien à déchiffrer.
-              //
-              // Le fait est porté par les OCTETS ; le drapeau n'en est que
-              // l'écho. Copier les octets par référence en laissant l'écho
-              // derrière, c'est faire mentir la ligne sur ce qu'elle contient.
-              // `originalFileSize` compte au même titre : `fileSize` porte la
-              // taille CHIFFRÉE (cf. `UploadProcessor`) et il EST copié.
-              isEncrypted: att.isEncrypted,
-              encryptionMode: att.encryptionMode,
-              encryptionIv: att.encryptionIv,
-              encryptionAuthTag: att.encryptionAuthTag,
-              encryptionHmac: att.encryptionHmac,
-              originalFileHash: att.originalFileHash,
-              encryptedFileHash: att.encryptedFileHash,
-              originalFileSize: att.originalFileSize,
-              serverKeyId: att.serverKeyId,
-              thumbnailEncryptionIv: att.thumbnailEncryptionIv,
-              thumbnailEncryptionAuthTag: att.thumbnailEncryptionAuthTag,
             }
           })
         )
@@ -845,7 +808,8 @@ export class MessageProcessor {
     attachmentIds: readonly string[],
     messageId: string,
     conversationId: string,
-    senderId: string
+    senderId: string,
+    regime: { readonly atRest: boolean } = { atRest: false }
   ): Promise<void> {
     if (!this.translationService) return;
 
@@ -916,7 +880,8 @@ export class MessageProcessor {
               audioDurationMs: audioAtt.duration || 0,
               mobileTranscription: mobileTranscription,
               generateVoiceClone: true,
-              modelType: 'medium'
+              modelType: 'medium',
+              ...(regime.atRest ? { atRest: true } : {})
             });
             return true;
           } catch (error) {
@@ -996,6 +961,24 @@ export class MessageProcessor {
       // « pas de `@`, pas de requête » vit dans l'unité, pas ici : c'est une
       // garde qu'un nouvel écrivain oublierait.
       const validatedMentionUserIds = await this.processMentionsInDB(data, message, processedContent);
+
+      // Les cercles (#13932) : le FAIT du message compte pour la paire, jamais son contenu.
+      const counted = message as Message & {
+        sender?: { userId?: string | null } | null;
+        replyTo?: { sender?: { userId?: string | null } | null } | null;
+        attachments?: ReadonlyArray<{ mimeType?: string | null }> | null;
+      };
+      noteMessageInteractions(this.prisma, {
+        conversationId: data.conversationId,
+        senderUserId: counted.sender?.userId ?? null,
+        messageSource: message.messageSource,
+        messageType: message.messageType,
+        encryptionMode: message.encryptionMode,
+        attachmentMimeTypes: (counted.attachments ?? []).map((attachment) => attachment.mimeType),
+        replyToAuthorUserId: counted.replyTo?.sender?.userId ?? null,
+        isStoryReply: Boolean(message.storyReplyToId),
+        mentionedUserIds: validatedMentionUserIds,
+      });
 
       // 2. Déclencher les notifications (Mentions, Réponses, Messages)
       if (this.notificationService) {

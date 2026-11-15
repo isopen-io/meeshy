@@ -116,9 +116,25 @@ describe('Admin languages routes — extra coverage', () => {
       expect(res.statusCode).toBe(200);
     });
 
-    it('allows ANALYST role', async () => {
-      setupStatsMocks(prisma);
+    // #4157 — ANTI-TÉMOIN corrigé. La garde était `canViewAnalytics`
+    // (`ANALYST.canViewAnalytics = true`) ; la matrice donne `canAccessAdmin
+    // = false` à ANALYST, et ces trois routes vivent sous
+    // `/admin/languages/*` — un périmètre d'administration, pas la surface où
+    // `canViewAnalytics` d'ANALYST s'exerce. Ce témoin attestait « accès
+    // accordé à un rôle qui n'a pas d'accès administrateur ».
+    it('rejects ANALYST role — pas de canAccessAdmin (#4157)', async () => {
       app = buildApp(prisma, makeAuthContext('ANALYST'));
+      await app.ready();
+
+      const res = await app.inject({ method: 'GET', url: '/stats' });
+      expect(res.statusCode).toBe(403);
+    });
+
+    // #4157 — MODERATOR n'était testé nulle part sur ce fichier ; la matrice
+    // lui donne `canAccessAdmin = true`, comme AUDIT/BIGBOSS ci-dessus.
+    it('allows MODERATOR role (canAccessAdmin, #4157)', async () => {
+      setupStatsMocks(prisma);
+      app = buildApp(prisma, makeAuthContext('MODERATOR'));
       await app.ready();
 
       const res = await app.inject({ method: 'GET', url: '/stats' });

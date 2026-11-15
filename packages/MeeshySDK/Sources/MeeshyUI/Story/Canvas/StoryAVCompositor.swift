@@ -20,10 +20,16 @@ import MeeshySDK
 ///   (e.g. inside a `DispatchQueue.main.sync` block) — that would deadlock when
 ///   the worker thread tries to bridge back to main. Always call from a `Task`.
 public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     private nonisolated let contextQueue = DispatchQueue(label: "me.meeshy.story.compositor.context")
     private nonisolated(unsafe) var _renderContext: AVVideoCompositionRenderContext?
     private nonisolated(unsafe) var _shouldCancelAllRequests = false
+    private nonisolated(unsafe) var _audioChipPainter: StoryAudioChipPainter?
 
     /// Layer-tree cache reused across the export's frames. AVFoundation
     /// instantiates one `StoryAVCompositor` per export session via
@@ -164,13 +170,12 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         // bridged main-actor block keeps `buffer` from crossing isolation
         // boundaries (CVPixelBuffer is not Sendable in Swift 6).
         let cache = layerCache
-        // Decode foreground overlay frames HERE, on the compositor's worker
-        // queue — NEVER inside the bridged `main.sync` below, where a synchronous
-        // `AVAssetImageGenerator` decode deadlocks against AVFoundation (the
-        // export would hang indefinitely). The provider then just looks up the
-        // pre-decoded frame by media id.
+        // Decode foreground overlay frames HERE, on the worker queue — NEVER inside the bridged `main.sync`
+        // below, where a synchronous `AVAssetImageGenerator` decode deadlocks against AVFoundation. Une vidéo
+        // qui a sa piste (#9877) est lue dans la composition, en séquence ; le générateur n'est qu'un repli.
         let overlayFrames = foregroundVideoFrameSource.decodeOverlayFrames(
-            slide: instruction.slide, at: storyTime)
+            slide: instruction.slide, at: storyTime, trackFrames: instruction.overlayFrames(in: request),
+            tracks: instruction.overlayTracks)
         DispatchQueue.main.sync {
             MainActor.assumeIsolated {
                 do {
@@ -187,6 +192,10 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                          mediaFrameProvider: { media, _ in
                                              overlayFrames[media.id]
                                          },
+                                         stickerImageURLs: instruction.stickerImageURLs,
+                                         images: instruction.images,
+                                         animations: instruction.animations,
+                                         audioChipPainter: self.sharedAudioChipPainter(),
                                          watermark: instruction.watermark,
                                          brandUnderlay: introFrame,
                                          storyOpacity: storyAlpha,
@@ -198,6 +207,17 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                 }
             }
         }
+    }
+
+    /// Le peintre des puces de son de CETTE session d'export (#8611) : ses
+    /// gabarits — verre teinté, liseré, icône, crédit — se rasterisent une
+    /// fois pour toutes les images, pas une fois par image.
+    @MainActor
+    internal func sharedAudioChipPainter() -> StoryAudioChipPainter {
+        if let existing = _audioChipPainter { return existing }
+        let created = StoryAudioChipPainter()
+        _audioChipPainter = created
+        return created
     }
 
     /// Lazily creates (on first call) and returns the per-export shared
@@ -240,6 +260,10 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                      cache: StoryRendererCache,
                                      backdropCapture: any BackdropCapturing,
                                      mediaFrameProvider: ((StoryMediaObject, CMTime) -> CGImage?)? = nil,
+                                     stickerImageURLs: [String: URL] = [:],
+                                     images: [String: UIImage] = [:],
+                                     animations: [String: Data] = [:],
+                                     audioChipPainter: StoryAudioChipPainter? = nil,
                                      watermark: StoryExportWatermark? = nil,
                                      brandUnderlay: CVPixelBuffer? = nil,
                                      storyOpacity: CGFloat = 1,
@@ -264,31 +288,34 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                                       geometry: geometry,
                                                       time: time,
                                                       mode: .play,
-                                                      languages: languages)
+                                                      languages: languages, contentsScale: 1.0)
 
-            // Foreground layer tree (text/media/stickers/drawing).
+            // Foreground layer tree (text/media/stickers/drawing). Les bitmaps
+            // des stickers IMAGE arrivent par un lecteur SYNCHRONE : la couche
+            // les pose au build, avant `layer.render(in:)` — une tâche les
+            // poserait après, sur une frame déjà encodée (#4852).
             let tree = StoryRenderer.render(slide: slide,
                                             into: geometry,
                                             at: time,
                                             mode: .play,
                                             languages: languages,
+                                            imageCache: stickerImageCache(for: stickerImageURLs, images: images,
+                                                                          animations: animations),
                                             cache: cache,
                                             backdropProvider: { frame in
                                                 backdropCapture.cropRegion(frame)
                                             },
                                             mediaFrameProvider: mediaFrameProvider,
-                                            contentsScale: 1.0)
-
-            // Opening transition — only visible during the first
-            // `StoryRenderer.slideTransitionDuration`. The live canvas uses
-            // `CABasicAnimation`, but `layer.render(in:)` doesn't run the
-            // animation engine — it renders the model layer as-is. So we
-            // apply the static state of the opening at the current playhead
-            // directly on the model layer.
-            if let opening = slide.effects.opening,
-               time.seconds < StoryRenderer.slideTransitionDuration {
-                applyStaticOpening(opening, rootLayer: tree, elapsed: time.seconds)
-            }
+                                            contentsScale: 1.0,
+                                            reduceMotion: false)
+            // `render(in:)` ne fait tourner aucune animation : l'image de
+            // chaque GIF se pose ici, au temps de la frame (#8610).
+            StoryRenderer.advanceAnimatedStickers(in: tree, at: time)
+            // Entrée et sortie de la slide, posées au temps de la frame : le
+            // player les joue, `layer.render(in:)` ne fait tourner aucune animation.
+            applyStaticOpening(slide.effects.opening, rootLayer: tree, elapsed: time.seconds)
+            applyStaticClosing(slide.effects.closing, rootLayer: tree, elapsed: time.seconds,
+                               totalDuration: slide.computedTotalDuration())
             layer = tree
         }
 
@@ -421,7 +448,13 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
             // which reads the media object's local file URL OR fetches via
             // CacheCoordinator. Respect the user's videoFitMode override
             // (auto / "fit" / "fill") so the export matches the canvas.
-            if let bgImage = resolveBackgroundImage(for: slide) {
+            // Le fond se peint par la fonction du lecteur (#9496) : filtre de
+            // slide, puis réglages de son média — la pièce rendue montre ce que
+            // l'aperçu montrait. Mis en cache par l'instance mémoïsée : une
+            // seule cuisson pour toute la session d'export.
+            if let brut = resolveBackgroundImage(for: slide, images: images) {
+                let bgImage = StoryBackgroundLook.image(brut, effects: slide.effects,
+                                                        imageId: "export-fond-\(ObjectIdentifier(brut).hashValue)")
                 let canvasSize = CGSize(width: width, height: height)
                 let mode = slide.effects.backgroundTransform?.videoFitMode
                 let gravity = StoryBackgroundLayer.resolveImageGravity(
@@ -431,7 +464,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                 if gravity == .resizeAspect {
                     // Letterbox: paint the story background color first (revealed by bands)
                     if let bgHex = slide.effects.background,
-                       let color = parseHex(bgHex) {
+                       let color = HexColor(hex: bgHex)?.uiColor {
                         cg.saveGState()
                         cg.setFillColor(color.cgColor)
                         cg.fill(CGRect(origin: .zero, size: canvasSize))
@@ -445,6 +478,15 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         }
 
         layer.render(in: cg)
+
+        // Les puces des sons posés sur la scène (#8599, #8609) : à l'écran une
+        // surcouche SwiftUI, absente de l'arbre — peintes ici par-dessus, sur
+        // les pixels déjà posés, que leur verre floute. Dans un calque de
+        // transparence ouvert, ces pixels ne sont pas encore dans le tampon :
+        // la capsule prend alors sa teinte pleine.
+        (audioChipPainter ?? StoryAudioChipPainter())
+            .paint(slide: slide, into: CanvasGeometry(renderSize: renderSize), at: time,
+                   in: cg, samplesBackdrop: !blendsStory)
 
         if let watermark {
             watermark.draw(in: cg,
@@ -485,15 +527,19 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     }
 
     /// Applies the static state of an opening transition to `rootLayer` at
-    /// playback position `elapsed`. Mirrors `StoryRenderer.applyOpening` but
-    /// without CABasicAnimation — `layer.render(in:)` doesn't run the
-    /// animation engine, so we compute the model-layer state by hand each
-    /// frame. Progress is `elapsed / StoryRenderer.slideTransitionDuration`
-    /// clamped to `[0, 1]`.
+    /// playback position `elapsed` — the frame-by-frame twin of
+    /// `StoryRenderer.applyOpening` (same signature, same window, no-op past
+    /// it or without effect). `layer.render(in:)` doesn't run the animation
+    /// engine, so the value a `CABasicAnimation` would be interpolating is
+    /// written by hand on the model layer: `.zoom` / `.slide` sample
+    /// `StoryRenderer.openingSublayerTransform`, the very curve the live
+    /// animation runs between its two ends. Progress is
+    /// `elapsed / StoryRenderer.slideTransitionDuration` clamped to `[0, 1]`.
     @MainActor
-    private static func applyStaticOpening(_ effect: StoryTransitionEffect,
-                                           rootLayer: CALayer,
-                                           elapsed: Double) {
+    static func applyStaticOpening(_ effect: StoryTransitionEffect?,
+                                   rootLayer: CALayer,
+                                   elapsed: Double) {
+        guard let effect, elapsed < StoryRenderer.slideTransitionDuration else { return }
         let progress = max(0.0, min(1.0, elapsed / StoryRenderer.slideTransitionDuration))
         switch effect {
         case .fade:
@@ -511,8 +557,21 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                      clockwise: true).cgPath
             rootLayer.mask = mask
         case .zoom, .slide:
-            break
+            rootLayer.sublayerTransform = StoryRenderer.openingSublayerTransform(
+                effect, progress: progress, canvasWidth: rootLayer.bounds.width)
         }
+    }
+
+    /// La sortie de la slide (#18555), par la fonction même du player
+    /// (`StoryRenderer.applyClosing`). Hors de sa fenêtre elle ne touche à rien :
+    /// sa valeur neutre écraserait l'entrée posée juste avant sur une slide courte.
+    @MainActor
+    static func applyStaticClosing(_ effect: StoryTransitionEffect?,
+                                   rootLayer: CALayer,
+                                   elapsed: Double,
+                                   totalDuration: Double) {
+        guard StoryRenderer.closingProgress(totalDuration: totalDuration, at: elapsed) > 0 else { return }
+        StoryRenderer.applyClosing(effect, rootLayer: rootLayer, elapsed: elapsed, totalDuration: totalDuration)
     }
 
     /// Dernier bitmap de fond décodé, mémoïsé par adresse.
@@ -530,6 +589,65 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     @MainActor
     private static var backgroundImageMemo: (key: String, image: UIImage)?
 
+    /// Bitmaps des stickers IMAGE, décodés une fois par jeu d'adresses — et,
+    /// pour un fichier ANIMÉ (GIF, APNG…), ses octets (#8610).
+    ///
+    /// Même contrat que `backgroundImageMemo` : appelé à CHAQUE frame, mémoïsé
+    /// sur son entrée — le jeu d'adresses est constant pour toute la session
+    /// d'export, donc une seule entrée suffit, remplacée dès que l'entrée change.
+    /// Même contrepartie assumée : le dernier jeu de bitmaps reste retenu
+    /// jusqu'à l'export suivant.
+    @MainActor
+    private static var stickerImagesMemo: (urls: [String: URL], files: StickerFiles)?
+
+    private struct StickerFiles {
+        let images: [String: UIImage]
+        let animations: [String: Data]
+    }
+
+    /// Le lecteur SYNCHRONE des bitmaps de stickers pour une session d'export.
+    ///
+    /// Les adresses sont attendues LOCALES, keyées par `postMediaId` — la voie
+    /// du fond (`resolveBackgroundImage`) : `StoryExporter` rapatrie les assets
+    /// AVANT la composition, parce qu'ici on est sur le main actor, en
+    /// synchrone, une fois par frame. Un fichier qui ne charge pas est omis :
+    /// la couche peint alors son repli 🖼️, jamais un trou. `nil` quand la
+    /// story n'adresse aucun sticker image, pour que le rendu des autres
+    /// stories reste celui d'avant.
+    ///
+    /// Les octets ANIMÉS voyagent à côté des bitmaps (#8610) : ceux d'un
+    /// fichier publié qui est un GIF, et ceux que le composer tient en mémoire
+    /// (`animations`, qui priment comme `images`).
+    @MainActor
+    internal static func stickerImageCache(for stickerImageURLs: [String: URL],
+                                           images: [String: UIImage] = [:],
+                                           animations: [String: Data] = [:]) -> ImageCacheReader? {
+        guard !stickerImageURLs.isEmpty || !images.isEmpty || !animations.isEmpty else { return nil }
+        let files = decodedStickerFiles(for: stickerImageURLs)
+        // Les bitmaps en mémoire PRIMENT (#8599) : c'est la version que
+        // l'auteur voit, retouches comprises. La fusion n'est pas mémoïsée —
+        // quelques entrées par frame, et aucune rétention au-delà de l'export.
+        return ComposerImageCacheReader(images: files.images.merging(images) { _, memoire in memoire },
+                                        animations: files.animations.merging(animations) { _, memoire in memoire },
+                                        version: 0)
+    }
+
+    @MainActor
+    private static func decodedStickerFiles(for stickerImageURLs: [String: URL]) -> StickerFiles {
+        guard !stickerImageURLs.isEmpty else { return StickerFiles(images: [:], animations: [:]) }
+        if let memo = stickerImagesMemo, memo.urls == stickerImageURLs { return memo.files }
+        var images: [String: UIImage] = [:]
+        var animations: [String: Data] = [:]
+        for (key, url) in stickerImageURLs {
+            guard let bytes = try? Data(contentsOf: url), let image = UIImage(data: bytes) else { continue }
+            images[key] = image
+            if AnimatedImageDecoder.animates(bytes) { animations[key] = bytes }
+        }
+        let files = StickerFiles(images: images, animations: animations)
+        stickerImagesMemo = (stickerImageURLs, files)
+        return files
+    }
+
     /// Resolves the bitmap for a slide whose background is an image.
     ///
     /// Priorité IDENTIQUE à celle de `StoryRenderer.renderBackground` : l'entrée
@@ -546,11 +664,21 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     /// Retourne `nil` si l'image ne charge pas — l'appelant laisse alors le
     /// substrat intact.
     @MainActor
-    private static func resolveBackgroundImage(for slide: StorySlide) -> UIImage? {
+    private static func resolveBackgroundImage(for slide: StorySlide,
+                                               images: [String: UIImage] = [:]) -> UIImage? {
         let candidate: String?
         if let bg = slide.effects.mediaObjects?.first(where: {
             $0.isBackground && $0.kind == .image
         }) {
+            // Le bitmap en mémoire du composer prime (#8599) — même clé que
+            // `StoryMediaLayer` : `postMediaId`, sinon l'id de l'élément.
+            if let inMemory = [bg.postMediaId, bg.id].lazy.compactMap({ images[$0] }).first {
+                let key = "memory:\(ObjectIdentifier(inMemory).hashValue)"
+                if let memo = backgroundImageMemo, memo.key == key { return memo.image }
+                guard let redressee = upright(inMemory) else { return nil }
+                backgroundImageMemo = (key, redressee)
+                return redressee
+            }
             candidate = bg.mediaURL
         } else {
             candidate = slide.mediaURL
@@ -565,9 +693,21 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         } else {
             loaded = UIImage(contentsOfFile: candidate)
         }
-        guard let image = loaded else { return nil }
+        // Redressée UNE fois ici plutôt qu'à chaque frame par les peintres : un
+        // fond EXIF tourné coûterait sinon une passe de dessin plein cadre par
+        // frame exportée.
+        guard let image = loaded.flatMap(Self.upright) else { return nil }
         backgroundImageMemo = (candidate, image)
         return image
+    }
+
+    /// Le bitmap tel qu'il s'affiche, orientation `.up` — voir
+    /// `CanvasImageOrientation.displayCGImage` (#8600).
+    @MainActor
+    static func upright(_ image: UIImage) -> UIImage? {
+        guard image.imageOrientation != .up else { return image }
+        guard let cgImage = CanvasImageOrientation.displayCGImage(image) else { return nil }
+        return UIImage(cgImage: cgImage, scale: image.scale, orientation: .up)
     }
 
     /// Paints `image` in `cg` to fill `size`, preserving aspect ratio
@@ -575,7 +715,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     /// the slide's background image before the foreground tree renders on top.
     @MainActor
     private static func paintAspectFill(image: UIImage, in cg: CGContext, size: CGSize) {
-        guard let cgImage = image.cgImage else { return }
+        guard let cgImage = CanvasImageOrientation.displayCGImage(image) else { return }
         let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
         let imageAspect = imageSize.width / imageSize.height
         let targetAspect = size.width / size.height
@@ -607,27 +747,13 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         cg.restoreGState()
     }
 
-    /// Parses a `#RRGGBB` or `RRGGBB` hex string into a UIColor. Returns nil if
-    /// the input doesn't match. Local helper to avoid leaking visibility from
-    /// the file-private `UIColor(hex:)` declared in StorySlideRenderer.
-    @MainActor
-    private static func parseHex(_ hex: String) -> UIColor? {
-        var s = hex
-        if s.hasPrefix("#") { s.removeFirst() }
-        guard s.count == 6, let v = UInt32(s, radix: 16) else { return nil }
-        return UIColor(red: CGFloat((v >> 16) & 0xff) / 255,
-                       green: CGFloat((v >> 8) & 0xff) / 255,
-                       blue: CGFloat(v & 0xff) / 255,
-                       alpha: 1)
-    }
-
     /// Paints `image` in `cg` to FIT entirely inside `size`, preserving aspect
     /// ratio (`UIView.ContentMode.scaleAspectFit`). Letterbox bands appear if
     /// the image aspect ratio differs from the canvas. Caller paints the
     /// background color first so bands are coloured, not transparent.
     @MainActor
     private static func paintAspectFit(image: UIImage, in cg: CGContext, size: CGSize) {
-        guard let cgImage = image.cgImage else { return }
+        guard let cgImage = CanvasImageOrientation.displayCGImage(image) else { return }
         let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
         guard imageSize.width > 0, imageSize.height > 0 else { return }
         let scale = min(size.width / imageSize.width, size.height / imageSize.height)
@@ -656,15 +782,10 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                         slide: StorySlide,
                                         in cg: CGContext,
                                         size: CGSize) {
-        var ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        if !transform.isIdentity {
-            ciImage = ciImage.transformed(by: transform)
-            // Re-seat the extent at the origin after a rotating/translating
-            // preferredTransform so `createCGImage` captures the whole frame.
-            ciImage = ciImage.transformed(
-                by: CGAffineTransform(translationX: -ciImage.extent.origin.x,
-                                      y: -ciImage.extent.origin.y))
-        }
+        // Les réglages du fond vidéo (#9496), par la chaîne de ses trames lues.
+        let ciImage = StoryBackgroundLook.videoFrame(
+            orientedFrame(CIImage(cvPixelBuffer: pixelBuffer), preferredTransform: transform),
+            effects: slide.effects)
         guard let cgImage = StoryRenderingContext.shared.ciContext.createCGImage(
             ciImage, from: ciImage.extent) else { return }
 
@@ -674,7 +795,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
             canvasSize: size,
             override: slide.effects.backgroundTransform?.videoFitMode)
         if gravity == .resizeAspect {
-            if let bgHex = slide.effects.background, let color = parseHex(bgHex) {
+            if let bgHex = slide.effects.background, let color = HexColor(hex: bgHex)?.uiColor {
                 cg.saveGState()
                 cg.setFillColor(color.cgColor)
                 cg.fill(CGRect(origin: .zero, size: size))
@@ -685,101 +806,27 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
             paintAspectFill(image: image, in: cg, size: size)
         }
     }
-}
 
-/// Composition instruction carrying the `StorySlide` whose frame at any given
-/// `CMTime` is delegated to `StoryRenderer.render` by `StoryAVCompositor`.
-/// `languages` is threaded so the baked MP4 reflects the author's chosen
-/// export language (Prisme Linguistique).
-public final class StoryCompositionInstruction: NSObject,
-                                                 AVVideoCompositionInstructionProtocol,
-                                                 @unchecked Sendable {
-    public let slide: StorySlide
-    public let languages: [String]
-    public let timeRange: CMTimeRange
-    public let watermark: StoryExportWatermark?
-    /// `preferredTransform` of the background video track (identity when the
-    /// slide has no background video). The custom compositor receives decoded
-    /// source frames in their storage orientation, so it must apply this itself.
-    public let backgroundVideoTransform: CGAffineTransform
-    /// Décalage de la story dans la composition — non nul quand un interlude de
-    /// marque la précède. TOUT le rendu de la slide se fait à
-    /// `compositionTime - storyStart` : keyframes, transitions et filigrane
-    /// restent datés en temps de story.
-    public let storyStart: CMTime
-    /// Piste portant le substrat de la story (fond vidéo ou substrat synthétique).
-    public let storyTrackID: CMPersistentTrackID
-    /// Pistes des clips de marque, `nil` quand l'emballage est absent.
-    public let introTrackID: CMPersistentTrackID?
-    public let outroTrackID: CMPersistentTrackID?
-    /// Fenêtres de fondu, en temps de COMPOSITION.
-    public let introFade: CMTimeRange?
-    public let outroFade: CMTimeRange?
-    public let enablePostProcessing: Bool = false
-    public let containsTweening: Bool = true
-    /// Pistes que ce segment consomme RÉELLEMENT.
+    /// **La frame redressée — `preferredTransform` appliquée dans SON repère**
+    /// (#8600).
     ///
-    /// `nil` signifie « toutes les pistes de la composition » : AVFoundation
-    /// décode alors les trois pistes (story + interlude + carte de fin) pour
-    /// CHAQUE frame, y compris là où deux d'entre elles sont invisibles. Avec
-    /// l'emballage composé dans le bake, ça multipliait le coût de l'export.
-    /// `StoryExporter` segmente donc la timeline et déclare, segment par
-    /// segment, les seules pistes utiles.
-    public let requiredSourceTrackIDs: [NSValue]?
-    public let passthroughTrackID: CMPersistentTrackID = kCMPersistentTrackID_Invalid
-
-    public nonisolated init(slide: StorySlide, languages: [String] = [],
-                            timeRange: CMTimeRange,
-                            watermark: StoryExportWatermark? = nil,
-                            backgroundVideoTransform: CGAffineTransform = .identity,
-                            storyStart: CMTime = .zero,
-                            storyTrackID: CMPersistentTrackID = kCMPersistentTrackID_Invalid,
-                            introTrackID: CMPersistentTrackID? = nil,
-                            outroTrackID: CMPersistentTrackID? = nil,
-                            introFade: CMTimeRange? = nil,
-                            outroFade: CMTimeRange? = nil,
-                            requiredSourceTrackIDs: [NSValue]? = nil) {
-        self.requiredSourceTrackIDs = requiredSourceTrackIDs
-        self.slide = slide
-        self.languages = languages
-        self.timeRange = timeRange
-        self.watermark = watermark
-        self.backgroundVideoTransform = backgroundVideoTransform
-        self.storyStart = storyStart
-        self.storyTrackID = storyTrackID
-        self.introTrackID = introTrackID
-        self.outroTrackID = outroTrackID
-        self.introFade = introFade
-        self.outroFade = outroFade
-        super.init()
-    }
-
-    /// Opacité de la couche STORY au temps de composition `t` : elle se lève
-    /// pendant le fondu d'ouverture, tient, puis s'efface sous la carte de fin.
-    /// Hors emballage, elle vaut 1 partout.
-    nonisolated func storyOpacity(at t: CMTime) -> CGFloat {
-        var alpha: CGFloat = 1
-        if let fade = introFade, fade.duration > .zero {
-            alpha *= Self.progress(t, in: fade)
-        }
-        if let fade = outroFade, fade.duration > .zero {
-            alpha *= 1 - Self.progress(t, in: fade)
-        }
-        return alpha
-    }
-
-    /// Opacité de la carte de fin : nulle avant son fondu, pleine ensuite.
-    nonisolated func outroOpacity(at t: CMTime) -> CGFloat {
-        guard let fade = outroFade, fade.duration > .zero else { return 0 }
-        return Self.progress(t, in: fade)
-    }
-
-    /// Fraction `0…1` de `t` dans `range`, bornée aux extrémités.
-    nonisolated static func progress(_ t: CMTime, in range: CMTimeRange) -> CGFloat {
-        if t <= range.start { return 0 }
-        let end = CMTimeAdd(range.start, range.duration)
-        if t >= end { return 1 }
-        return CGFloat(CMTimeGetSeconds(CMTimeSubtract(t, range.start))
-                       / CMTimeGetSeconds(range.duration))
+    /// La transformation d'une piste est exprimée en repère IMAGE, Y vers le
+    /// BAS. Une `CIImage` vit en Y vers le HAUT : la poser telle quelle y
+    /// inverse le sens de chaque quart de tour, et un clip tourné en portrait
+    /// sortait retourné de 180°. On la conjugue donc par le retournement
+    /// vertical — vers le repère image avec la hauteur de STOCKAGE, retour
+    /// avec la hauteur AFFICHÉE — puis on reloge l'étendue à l'origine.
+    nonisolated static func orientedFrame(_ image: CIImage,
+                                          preferredTransform transform: CGAffineTransform) -> CIImage {
+        guard !transform.isIdentity else { return image }
+        let stored = image.extent
+        let displayed = stored.applying(transform)
+        let toImageSpace = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: stored.height)
+        let backToCoreImage = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: displayed.height)
+        let oriented = image.transformed(by: toImageSpace
+            .concatenating(transform)
+            .concatenating(backToCoreImage))
+        return oriented.transformed(by: CGAffineTransform(translationX: -oriented.extent.origin.x,
+                                                          y: -oriented.extent.origin.y))
     }
 }

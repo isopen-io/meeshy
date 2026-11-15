@@ -44,7 +44,7 @@ final class MessageListPerformanceTests: XCTestCase {
         let pool = try makeDatabase(messageCount: 1000)
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let store = MessageStore(conversationId: "c1", persistence: persistence)
-        await store.loadInitial()
+        await store.refreshFromDB()
 
         XCTAssertEqual(store.messages.count, MessageStore.initialWindowSize,
             "loadInitial loads only the most-recent window (initialWindowSize); older messages page in on scroll")
@@ -58,13 +58,90 @@ final class MessageListPerformanceTests: XCTestCase {
         }
     }
 
+    /// **Le prix de la DÉCISION, désormais payé à chaque événement (#4944).**
+    ///
+    /// L'empreinte est ce qui remplace la préparation complète sur le chemin
+    /// chaud : elle parcourt la fenêtre sans rien allouer. Ce banc la mesure
+    /// SEULE — c'est le plancher irréductible du nouveau chemin, à comparer
+    /// avec `test_snapshotDataPrep_loadedWindow_cpu` juste au-dessus, qui
+    /// mesure ce qu'on ne paie plus.
+    func test_snapshotPrepFingerprint_loadedWindow_cpu() async throws {
+        let pool = try makeDatabase(messageCount: 1000)
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let store = MessageStore(conversationId: "c1", persistence: persistence)
+        await store.refreshFromDB()
+
+        let opts = XCTMeasureOptions()
+        opts.iterationCount = 10
+        measure(metrics: [XCTClockMetric(), XCTCPUMetric()], options: opts) {
+            _ = MessageListSnapshotPrep.Fingerprint(records: store.messages)
+        }
+    }
+
+    /// **AVANT/APRÈS de la mémoïsation de la préparation de snapshot (#4944).**
+    ///
+    /// Un fil vivant émet plusieurs événements de CONTENU par seconde (accusés
+    /// de lecture, réactions, traductions du Prisme, transcriptions, retry
+    /// d'outbox) : aucun ne change la composition de la fenêtre, et chacun
+    /// rebâtissait pourtant `reversed` + les items + `groupByDay` + la carte
+    /// `serverId`. COLD = ce comportement. WARM = la décision par empreinte,
+    /// qui reconstruit à la PREMIÈRE pose puis réutilise.
+    func test_snapshotPrep_contentEvents_warmVsCold() async throws {
+        let pool = try makeRealisticDatabase(messageCount: 5000)
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let store = MessageStore(conversationId: "c1", persistence: persistence)
+        await store.refreshFromDB()
+        var rounds = 0
+        while store.messages.count < 1000, rounds < 30 {
+            guard let oldest = store.messages.first?.createdAt else { break }
+            if !(await store.loadOlder(before: oldest)) { break }
+            rounds += 1
+        }
+        let records = store.messages
+        let poses = 20
+        let calendar = Calendar.current
+
+        // COLD : préparation reconstruite à chaque pose (comportement d'AVANT).
+        let coldStart = Date()
+        for _ in 0..<poses {
+            _ = MessageListSnapshotPrep(
+                reversedRecords: Array(records.reversed()),
+                fingerprint: MessageListSnapshotPrep.Fingerprint(records: records),
+                calendar: calendar
+            )
+        }
+        let coldMs = Date().timeIntervalSince(coldStart) * 1000
+
+        // WARM : l'empreinte décide, la préparation est réutilisée.
+        var memo: MessageListSnapshotPrep?
+        let warmStart = Date()
+        for _ in 0..<poses {
+            let fingerprint = MessageListSnapshotPrep.Fingerprint(records: records)
+            if let current = memo, current.fingerprint == fingerprint { continue }
+            memo = MessageListSnapshotPrep(
+                reversedRecords: Array(records.reversed()),
+                fingerprint: fingerprint,
+                calendar: calendar
+            )
+        }
+        let warmMs = Date().timeIntervalSince(warmStart) * 1000
+
+        print(String(
+            format: "[PERF] prépa snapshot ×%d sur %d msgs : AVANT(rebuild)=%.1fms  APRÈS(empreinte)=%.1fms  → ×%.1f plus rapide",
+            poses, records.count, coldMs, warmMs, coldMs / max(warmMs, 0.0001)
+        ))
+        XCTAssertNotNil(memo, "la première pose construit bien une préparation")
+        XCTAssertLessThan(warmMs, coldMs,
+                          "la décision par empreinte doit battre la reconstruction répétée")
+    }
+
     /// Measures repeated iteration over a 1000-message slice — simulates the
     /// per-frame work of a fast scroll through a pre-loaded MessageStore.
     func test_messageWindowIteration_1000Messages_underBudget() async throws {
         let pool = try makeDatabase(messageCount: 1000)
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let store = MessageStore(conversationId: "c1", persistence: persistence)
-        await store.loadInitial()
+        await store.refreshFromDB()
 
         let options = XCTMeasureOptions()
         options.iterationCount = 10
@@ -84,7 +161,7 @@ final class MessageListPerformanceTests: XCTestCase {
         let pool = try makeDatabase(messageCount: 1000)
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let store = MessageStore(conversationId: "c1", persistence: persistence)
-        await store.loadInitial()
+        await store.refreshFromDB()
 
         // Index borné par la fenêtre initiale (initialWindowSize = 200), pas
         // le total inséré — `loadInitial` ne charge que la fenêtre récente.
@@ -161,7 +238,7 @@ final class MessageListPerformanceTests: XCTestCase {
         let pool = try makeRealisticDatabase(messageCount: 2000)
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let store = MessageStore(conversationId: "c1", persistence: persistence)
-        await store.loadInitial()
+        await store.refreshFromDB()
         // Faire grandir la fenêtre chargée vers un état "scroll profond"
         // (~1000) pour qu'`applySnapshot` traite un grand item-set réaliste,
         // pas seulement la fenêtre initiale de 200.
@@ -216,7 +293,7 @@ final class MessageListPerformanceTests: XCTestCase {
         let pool = try makeRealisticDatabase(messageCount: 5000)
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let store = MessageStore(conversationId: "c1", persistence: persistence)
-        await store.loadInitial()
+        await store.refreshFromDB()
         var rounds = 0
         while store.messages.count < 2000, rounds < 60 {
             guard let oldest = store.messages.first?.createdAt else { break }
@@ -239,7 +316,36 @@ final class MessageListPerformanceTests: XCTestCase {
         window.rootViewController = vc
         window.makeKeyAndVisible()
         vc.view.layoutIfNeeded()
-        guard let cv = vc.view.subviews.compactMap({ $0 as? UICollectionView }).first else {
+        // **La recherche descend la hiérarchie ENTIÈRE, pas son premier étage.**
+        //
+        // `vc.view.subviews.compactMap { $0 as? UICollectionView }` ne regardait
+        // que les enfants DIRECTS. La liste a été ENVELOPPÉE un temps par le
+        // conteneur de voile (#6013, retiré en #6537) : elle n'était alors plus
+        // au premier étage, et ce témoin échouait sur
+        // « UICollectionView introuvable » : il ne mesurait plus RIEN, en
+        // annonçant un défaut de structure là où il n'y avait qu'un conteneur
+        // de plus.
+        //
+        // > Un témoin de PERFORMANCE qui ne trouve pas son sujet ne devient pas
+        // La recherche RÉCURSIVE reste : elle est juste que la liste soit
+        // enveloppée ou non, et c'est précisément ce qui la rend durable.
+        //
+        // > lent : il devient muet, et son rouge parle d'autre chose que de ce
+        // > qu'il surveille. C'est la pire des deux pannes — on cesse de
+        // > mesurer le coût du défilement sans cesser de croire qu'on le
+        // > mesure.
+        //
+        // Descendre récursivement dit la même chose et survit au prochain
+        // habillage : ce qui compte est qu'IL Y AIT une liste à faire défiler,
+        // pas qu'elle soit posée à un étage convenu.
+        func firstCollectionView(in root: UIView) -> UICollectionView? {
+            if let cv = root as? UICollectionView { return cv }
+            for sub in root.subviews {
+                if let found = firstCollectionView(in: sub) { return found }
+            }
+            return nil
+        }
+        guard let cv = firstCollectionView(in: vc.view) else {
             return XCTFail("UICollectionView introuvable dans la hiérarchie du VC")
         }
 
@@ -296,7 +402,7 @@ final class MessageListPerformanceTests: XCTestCase {
         let pool = try makeRealisticDatabase(messageCount: 5000)
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let store = MessageStore(conversationId: "c1", persistence: persistence)
-        await store.loadInitial()
+        await store.refreshFromDB()
         var rounds = 0
         while store.messages.count < 2000, rounds < 60 {
             guard let oldest = store.messages.first?.createdAt else { break }
@@ -351,7 +457,7 @@ final class MessageListPerformanceTests: XCTestCase {
         let pool = try makeRealisticDatabase(messageCount: 5000)
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let store = MessageStore(conversationId: "c1", persistence: persistence)
-        await store.loadInitial()
+        await store.refreshFromDB()
         var rounds = 0
         while store.messages.count < 2000, rounds < 60 {
             guard let oldest = store.messages.first?.createdAt else { break }

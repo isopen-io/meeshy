@@ -1,0 +1,245 @@
+import XCTest
+import MeeshySDK
+import SwiftUI
+@testable import Meeshy
+
+/// **Le menu « … » d'un commentaire : quelles actions, pour ce commentaire et
+/// ce lecteur** (#8709).
+///
+/// Directive porteur 2026-09-29 : « permettre, si on est auteur, de pouvoir
+/// éditer ; signaler pour les autres ; copier ». La loi est UNE — la ligne d'un
+/// commentaire de post et celle d'un commentaire de story la lisent toutes
+/// deux. « Imager » a quitté ce menu pour la rangée d'actions (#16541).
+@MainActor
+final class CommentMenuPolicyTests: XCTestCase {
+
+    private static let me = "u-me"
+
+    private static func comment(
+        id: String = "c1",
+        authorId: String = "u-other",
+        content: String = "Bonjour",
+        translated: String? = nil,
+        parentId: String? = nil,
+        flags: MessageEffectFlags = []
+    ) -> FeedComment {
+        FeedComment(id: id, author: "Awa", authorId: authorId, content: content,
+                    parentId: parentId, effectFlags: Int(flags.rawValue),
+                    originalLanguage: translated == nil ? nil : "fr", translatedContent: translated)
+    }
+
+    private static func actions(
+        _ comment: FeedComment,
+        viewerId: String? = me,
+        editable: Bool = true,
+        deletable: Bool = false,
+        removable: Bool = false,
+        commentsClosed: Bool = false
+    ) -> [CommentMenuAction] {
+        CommentMenuPolicy.actions(
+            for: comment, viewerId: viewerId, servedText: comment.displayContent,
+            editable: editable, deletable: deletable, removable: removable,
+            commentsClosed: commentsClosed
+        )
+    }
+
+    // MARK: - Auteur / autres
+
+    func test_actions_forItsAuthor_offerEditAndNeverReport() {
+        let mine = Self.comment(authorId: Self.me)
+        XCTAssertEqual(Self.actions(mine), [.copy, .edit])
+        XCTAssertEqual(Self.actions(mine, deletable: true), [.copy, .edit, .delete])
+    }
+
+    func test_actions_forAnotherReader_offerReportAndNeverEditNorDelete() {
+        let theirs = Self.comment(authorId: "u-other")
+        XCTAssertEqual(Self.actions(theirs, deletable: true), [.copy, .report])
+    }
+
+    func test_actions_whenTheHostCannotEdit_theAuthorGetsNoEdit() {
+        XCTAssertEqual(Self.actions(Self.comment(authorId: Self.me), editable: false), [.copy])
+    }
+
+    func test_actions_forAnUnknownReader_offerNeitherEditNorReport() {
+        XCTAssertEqual(Self.actions(Self.comment(authorId: ""), viewerId: ""), [.copy])
+        XCTAssertEqual(Self.actions(Self.comment(authorId: Self.me), viewerId: nil), [.copy])
+    }
+
+    // MARK: - Fil fermé (#16930)
+
+    /// Règle porteur 2026-11-08 : sur une publication aux commentaires fermés,
+    /// on ne MODIFIE plus un commentaire — la passerelle refuse le PATCH — mais
+    /// l'auteur le supprime toujours, et les autres le signalent toujours.
+    func test_actions_onAClosedThread_theAuthorLosesEditButKeepsDelete() {
+        let mine = Self.comment(authorId: Self.me)
+        XCTAssertEqual(Self.actions(mine, deletable: true, commentsClosed: true), [.copy, .delete])
+    }
+
+    func test_actions_onAClosedThread_anotherReaderKeepsReportAndRemove() {
+        let theirs = Self.comment(authorId: "u-other")
+        XCTAssertEqual(Self.actions(theirs, removable: true, commentsClosed: true), [.copy, .report, .remove])
+    }
+
+    func test_actions_onAnOpenThread_theAuthorStillEdits() {
+        let mine = Self.comment(authorId: Self.me)
+        XCTAssertEqual(Self.actions(mine, deletable: true, commentsClosed: false), [.copy, .edit, .delete])
+    }
+
+    // MARK: - Retrait par la modération (#11151)
+
+    func test_actions_whenTheHostCanRemove_anotherReadersCommentOffersRemoveAfterReport() {
+        let theirs = Self.comment(authorId: "u-other")
+        XCTAssertEqual(Self.actions(theirs, removable: true), [.copy, .report, .remove])
+    }
+
+    func test_actions_removeIsNeverOfferedOnItsOwnComment() {
+        let mine = Self.comment(authorId: Self.me)
+        XCTAssertFalse(Self.actions(mine, deletable: true, removable: true).contains(.remove))
+    }
+
+    func test_actions_removeIsNeverOfferedToAnUnknownReader() {
+        XCTAssertFalse(Self.actions(Self.comment(authorId: "u-other"), viewerId: nil, removable: true).contains(.remove))
+    }
+
+    func test_actions_withoutTheRemovalRight_noRemove() {
+        XCTAssertFalse(Self.actions(Self.comment(authorId: "u-other")).contains(.remove))
+    }
+
+    // MARK: - Protections
+
+    func test_actions_aProtectedComment_isNeverCopied() {
+        for flag in [MessageEffectFlags.blurred, .viewOnce, .ephemeral] {
+            let hidden = Self.comment(flags: flag)
+            XCTAssertFalse(Self.actions(hidden).contains(.copy), "\(flag)")
+            XCTAssertTrue(Self.actions(hidden).contains(.report), "\(flag)")
+        }
+    }
+
+    func test_actions_aBlankServedText_isNotCopied() {
+        XCTAssertEqual(Self.actions(Self.comment(content: "   ")), [.report])
+    }
+
+    // MARK: - La carte d'une réponse
+
+    func test_imagineRequest_aReplyCarriesItsRoot_asTheQuote() throws {
+        let root = Self.comment(id: "root", content: "Bonjour", translated: "Hello")
+        let reply = Self.comment(id: "r1", content: "Salut", parentId: "root")
+        let request = try XCTUnwrap(MessageCardExportMenu.request(
+            comment: reply, showOriginal: false, accentColor: "6366F1",
+            viewer: MessageCardSubject.Viewer(id: Self.me, displayName: "Moi"), handle: "moi", quoting: root
+        ))
+        XCTAssertEqual(request.subject.quoted?.text, "Hello")
+        XCTAssertEqual(request.subject.reply.text, "Salut")
+    }
+
+    // MARK: - Brouillon d'édition d'un commentaire de story
+
+    func test_editedDraft_aBlankOrUnchangedDraft_isNotSent() {
+        XCTAssertNil(StoryCommentEditing.draftToSend("   ", original: "Bonjour"))
+        XCTAssertNil(StoryCommentEditing.draftToSend("Bonjour ", original: "Bonjour"))
+        XCTAssertEqual(StoryCommentEditing.draftToSend("  Bonsoir ", original: "Bonjour"), "Bonsoir")
+    }
+}
+
+/// **Retirer un commentaire de story** (#11159) : la modération retire le
+/// commentaire d'un autre, avec un motif — la racine emporte ses réponses, une
+/// réponse décompte son parent ; optimiste, défait si la passerelle refuse.
+@MainActor
+final class StoryCommentRemovalTests: XCTestCase {
+
+    private static func comment(id: String, authorId: String = "u-other", parentId: String? = nil, replies: Int = 0) -> FeedComment {
+        FeedComment(id: id, author: "Awa", authorId: authorId, content: "Bonjour", replies: replies, parentId: parentId)
+    }
+
+    private final class Thread {
+        var comments: [FeedComment]
+        var replies: [String: [FeedComment]]
+        var count: Int
+        init(comments: [FeedComment], replies: [String: [FeedComment]], count: Int) {
+            self.comments = comments
+            self.replies = replies
+            self.count = count
+        }
+    }
+
+    private static func writer(_ thread: Thread, service: MockPostService) -> StoryCommentThreadWriter {
+        StoryCommentThreadWriter(
+            postId: "story-1",
+            comments: Binding(get: { thread.comments }, set: { thread.comments = $0 }),
+            replies: Binding(get: { thread.replies }, set: { thread.replies = $0 }),
+            count: Binding(get: { thread.count }, set: { thread.count = $0 }),
+            service: service
+        )
+    }
+
+    func test_remove_accepted_sendsTheReason_andKeepsTheCommentOut() async {
+        let service = MockPostService()
+        let thread = Thread(comments: [Self.comment(id: "a"), Self.comment(id: "b")], replies: [:], count: 2)
+
+        await Self.writer(thread, service: service).remove(Self.comment(id: "a"), reason: "Propos haineux")
+
+        XCTAssertEqual(service.lastDeleteCommentPostId, "story-1")
+        XCTAssertEqual(service.lastDeleteCommentCommentId, "a")
+        XCTAssertEqual(service.lastDeleteCommentReason, "Propos haineux")
+        XCTAssertEqual(thread.comments.map(\.id), ["b"])
+        XCTAssertEqual(thread.count, 1)
+    }
+
+    func test_remove_refused_restoresTheThreadAndTheCount() async {
+        let service = MockPostService()
+        service.deleteCommentResult = .failure(APIError.serverError(403, "forbidden"))
+        let thread = Thread(comments: [Self.comment(id: "a", replies: 1)], replies: ["a": [Self.comment(id: "r1", parentId: "a")]], count: 2)
+
+        await Self.writer(thread, service: service).remove(Self.comment(id: "a", replies: 1), reason: "Spam répété")
+
+        XCTAssertEqual(thread.comments.map(\.id), ["a"])
+        XCTAssertEqual(thread.replies["a"]?.map(\.id), ["r1"])
+        XCTAssertEqual(thread.count, 2)
+    }
+
+    // MARK: - Éditer sur un fil fermé (#16930)
+
+    private static let closedRefusal = MeeshyError.forbidden(
+        reason: "Les commentaires sont désactivés",
+        body: Data(#"{"success":false,"error":"Les commentaires sont désactivés","code":"COMMENTS_DISABLED"}"#.utf8))
+
+    private static func closingWriter(_ thread: Thread, service: MockPostService, onCommentsClosed: @escaping () -> Void) -> StoryCommentThreadWriter {
+        var built = Self.writer(thread, service: service)
+        built.onCommentsClosed = onCommentsClosed
+        return built
+    }
+
+    func test_edit_refusedBecauseCommentsAreClosed_restoresTheTextAndClosesTheStory() async {
+        let service = MockPostService()
+        service.updateCommentResult = .failure(Self.closedRefusal)
+        let thread = Thread(comments: [Self.comment(id: "a")], replies: [:], count: 1)
+        var closed = 0
+
+        await Self.closingWriter(thread, service: service) { closed += 1 }.edit(Self.comment(id: "a"), content: "Bonsoir")
+
+        XCTAssertEqual(service.updateCommentCallCount, 1)
+        XCTAssertEqual(thread.comments.first?.content, "Bonjour", "le refus défait l'édition optimiste")
+        XCTAssertEqual(closed, 1, "la story se ferme localement, sans attendre story:updated")
+    }
+
+    func test_edit_refusedForAnotherReason_restoresTheText_andLeavesTheStoryOpen() async {
+        let service = MockPostService()
+        service.updateCommentResult = .failure(MeeshyError.forbidden(reason: nil, body: nil))
+        let thread = Thread(comments: [Self.comment(id: "a")], replies: [:], count: 1)
+        var closed = 0
+
+        await Self.closingWriter(thread, service: service) { closed += 1 }.edit(Self.comment(id: "a"), content: "Bonsoir")
+
+        XCTAssertEqual(thread.comments.first?.content, "Bonjour")
+        XCTAssertEqual(closed, 0)
+    }
+
+    func test_commentOffer_platformModeratorOnAnothersComment_isOffered_neverOnTheirOwn() {
+        let theirs = Self.comment(id: "a", authorId: "u-other")
+        for role in ["MODERATOR", "ADMIN", "BIGBOSS"] {
+            XCTAssertNotNil(ContentRemovalOffer.comment(theirs, viewerId: "mod", viewerRole: role) { _ in }, role)
+        }
+        XCTAssertNil(ContentRemovalOffer.comment(theirs, viewerId: "mod", viewerRole: "USER") { _ in })
+        XCTAssertNil(ContentRemovalOffer.comment(Self.comment(id: "m", authorId: "mod"), viewerId: "mod", viewerRole: "BIGBOSS") { _ in })
+    }
+}

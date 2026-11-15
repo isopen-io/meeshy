@@ -100,6 +100,16 @@ final class ReelRepostEmbedCellTests: XCTestCase {
         XCTAssertTrue(label.contains("42"), "The like count is visible, so it must be announced")
     }
 
+    /// #16002 — la légende du réel cité est celle du Prisme, au rang 2.
+    func test_reelCardAccessibilityLabel_announcesThePrismCaption_atSecondRank() {
+        let repost = RepostContent(author: "Marie", content: "Hello", likes: 1, type: "REEL",
+                                   originalLanguage: "en", translations: ["fr": PostTranslation(text: "Bonjour")])
+            .resolved(preferredLanguages: ["fr", "en"])
+        let label = ReelRepostEmbedCell.reelCardAccessibilityLabel(for: repost)
+        XCTAssertTrue(label.contains("Bonjour"))
+        XCTAssertFalse(label.contains("Hello"))
+    }
+
     func test_reelCardAccessibilityLabel_emptyCaption_omitsCaptionSegmentWithoutEmptyPunctuation() {
         let repost = RepostContent(author: "Marie", content: "", likes: 3, type: "REEL")
         let label = ReelRepostEmbedCell.reelCardAccessibilityLabel(for: repost)

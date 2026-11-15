@@ -17,12 +17,14 @@ jest.mock('../../../utils/logger', () => ({
 const mockCacheGet = jest.fn<any>().mockResolvedValue(null);
 const mockCacheSet = jest.fn<any>().mockResolvedValue(undefined);
 const mockCacheDel = jest.fn<any>().mockResolvedValue(undefined);
+const mockCacheKeys = jest.fn<any>().mockResolvedValue([]);
 
 jest.mock('../../../services/CacheStore', () => ({
   getCacheStore: () => ({
     get: (...a: any[]) => mockCacheGet(...a),
     set: (...a: any[]) => mockCacheSet(...a),
     del: (...a: any[]) => mockCacheDel(...a),
+    keys: (...a: any[]) => mockCacheKeys(...a),
   }),
 }));
 
@@ -101,14 +103,26 @@ describe('GET /dashboard — forbidden (USER role)', () => {
   });
 });
 
-describe('GET /dashboard — forbidden (MODERATOR role)', () => {
+// #4157 — ANTI-TÉMOIN corrigé. Ce bloc affirmait `403` pour MODERATOR alors
+// que la matrice centrale (`canAccessAdmin`) le laisse toujours passer : la
+// contradiction était double sur cette route (MODERATOR exclu à tort, ANALYST
+// admis à tort, voir le bloc suivant) et CE témoin gelait la première moitié
+// du défaut au lieu de le garder. La garde était `canViewAnalytics`
+// (`MODERATOR.canViewAnalytics = false`) ; elle est désormais `canAccessAdmin`
+// (`MODERATOR.canAccessAdmin = true`) — MODERATOR administre, il doit pouvoir
+// ouvrir le tableau de bord.
+describe('GET /dashboard — success (MODERATOR role)', () => {
   let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp('MODERATOR'); });
+  beforeAll(async () => {
+    mockCacheGet.mockResolvedValue(null);
+    app = await buildApp('MODERATOR');
+  });
   afterAll(async () => { await app.close(); });
 
-  it('returns 403 when user has MODERATOR role', async () => {
+  it('returns 200 when user has MODERATOR role (canAccessAdmin, #4157)', async () => {
     const res = await app.inject({ method: 'GET', url: '/dashboard' });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
   });
 });
 
@@ -124,11 +138,17 @@ describe('GET /dashboard — success (ADMIN)', () => {
     const res = await app.inject({ method: 'GET', url: '/dashboard' });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
-    expect(res.headers['cache-control']).toContain('private');
+    expect(res.headers['cache-control']).toBe('no-store');
   });
 });
 
-describe('GET /dashboard — success (ANALYST)', () => {
+// #4157 — ANTI-TÉMOIN corrigé. « ANALYST admis » était le défaut le PLUS
+// PARLANT de ce fichier : la matrice centrale donne `canAccessAdmin = false`
+// à ANALYST — un rôle SANS accès administrateur ouvrait pourtant le tableau
+// de bord au complet (comptes, communautés, signalements). Ce témoin
+// attestait exactement ce que l'issue nomme « accès accordé à un rôle qui
+// n'a pas d'accès administrateur ».
+describe('GET /dashboard — forbidden (ANALYST)', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
     mockCacheGet.mockResolvedValue(null);
@@ -136,10 +156,9 @@ describe('GET /dashboard — success (ANALYST)', () => {
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 200 for ANALYST role', async () => {
+  it('returns 403 for ANALYST role — pas de canAccessAdmin (#4157)', async () => {
     const res = await app.inject({ method: 'GET', url: '/dashboard' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
+    expect(res.statusCode).toBe(403);
   });
 });
 
@@ -177,7 +196,8 @@ describe('GET /dashboard — cached response', () => {
     const res = await app.inject({ method: 'GET', url: '/dashboard' });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
-    expect(res.headers['cache-control']).toContain('max-age=600');
+    // `no-store` : « Recalculer maintenant » doit pouvoir relire (audit 2026-10-04).
+    expect(res.headers['cache-control']).toBe('no-store');
   });
 });
 
@@ -244,6 +264,16 @@ describe('POST /dashboard/invalidate-cache — success (ADMIN)', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
     expect(mockCacheDel).toHaveBeenCalled();
+  });
+
+  it('purge aussi les caches des statistiques (admin:analytics:*)', async () => {
+    mockCacheDel.mockClear();
+    mockCacheKeys.mockResolvedValueOnce(['admin:analytics:kpis:7d', 'admin:analytics:hourly-activity']);
+    const res = await app.inject({ method: 'POST', url: '/dashboard/invalidate-cache' });
+    expect(res.statusCode).toBe(200);
+    expect(mockCacheKeys).toHaveBeenCalledWith('admin:analytics:*');
+    const purges = mockCacheDel.mock.calls.map((c: unknown[]) => c[0]);
+    expect(purges).toEqual(expect.arrayContaining(['admin:analytics:kpis:7d', 'admin:analytics:hourly-activity']));
   });
 });
 

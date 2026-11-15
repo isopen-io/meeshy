@@ -314,6 +314,33 @@ final class OutboxDispatcherTests: XCTestCase {
 
     // MARK: - sendFriendRequest: corrupt payload → MeeshyError.server(400, _)
 
+    // MARK: - unblockUser : le rejeu d'un déblocage déjà appliqué aboutit (#16008)
+
+    /// La charge 404 EXACTE de `debloquer` (`routes/directory/blocks.ts` →
+    /// `sendNotFound`), telle que `APIClient` en tire son message (`message ?? error`).
+    private let alreadyUnblockedBody = #"{"success":false,"error":"User is not in your blocked list","message":"User is not in your blocked list"}"#
+
+    private func servedMessage(_ body: String) throws -> String {
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any])
+        return try XCTUnwrap((json["message"] as? String) ?? (json["error"] as? String))
+    }
+
+    func test_unblockReplay_whenServerAlreadyUnblocked_isASuccess() throws {
+        let error = MeeshyError.server(statusCode: 404, message: try servedMessage(alreadyUnblockedBody))
+        XCTAssertTrue(UnblockReplay.isAlreadyApplied(error))
+    }
+
+    func test_unblockReplay_whenAnotherNotFound_staysARefusal() throws {
+        let unknownUser = #"{"success":false,"error":"User not found","message":"User not found"}"#
+        let error = MeeshyError.server(statusCode: 404, message: try servedMessage(unknownUser))
+        XCTAssertFalse(UnblockReplay.isAlreadyApplied(error))
+    }
+
+    func test_unblockReplay_whenSameMessageOnAnotherStatus_staysARefusal() {
+        let error = MeeshyError.server(statusCode: 400, message: UnblockReplay.notInBlockedListMessage)
+        XCTAssertFalse(UnblockReplay.isAlreadyApplied(error))
+    }
+
     func test_dispatch_sendFriendRequest_whenCorruptPayload_throwsCode400() async {
         let record = makeRecord(kind: .sendFriendRequest, payload: corrupt)
         do {
@@ -417,6 +444,20 @@ final class OutboxDispatcherTests: XCTestCase {
         do {
             try await makeSUT().dispatch(record)
             XCTFail("Expected MeeshyError.server(400, _) for corrupt toggleLikePost payload")
+        } catch MeeshyError.server(let statusCode, _) {
+            XCTAssertEqual(statusCode, 400)
+        } catch {
+            XCTFail("Unexpected error type: \(error)")
+        }
+    }
+
+    // MARK: - toggleBookmarkPost: corrupt payload → MeeshyError.server(400, _) (#15997)
+
+    func test_dispatch_toggleBookmarkPost_whenCorruptPayload_throwsCode400() async {
+        let record = makeRecord(kind: .toggleBookmarkPost, payload: corrupt)
+        do {
+            try await makeSUT().dispatch(record)
+            XCTFail("Expected MeeshyError.server(400, _) for corrupt toggleBookmarkPost payload")
         } catch MeeshyError.server(let statusCode, _) {
             XCTAssertEqual(statusCode, 400)
         } catch {
@@ -541,5 +582,31 @@ final class OutboxDispatcherTests: XCTestCase {
         } catch {
             XCTFail("Expected silent drop for sentinel conversationId in toggleLikeComment, got: \(error)")
         }
+    }
+}
+
+/// #10500 — la vue d'une story rejouée par la file hors ligne garde
+/// l'identité de SA ligne : une réponse perdue puis un rejeu ne la recomptent
+/// pas, et elle est datée de sa mise en file.
+extension OutboxDispatcherTests {
+
+    func test_storyView_sameRow_sameEventId_datedWhenQueued() {
+        let payload = MarkStoryViewedPayload(clientMutationId: "cmid_0f8fad5b-d9cb-469f-a165-70867728950e", storyId: "s1")
+        let queuedAt = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let first = OutboxDispatcher.storyView(payload, queuedAt: queuedAt)
+        let replay = OutboxDispatcher.storyView(payload, queuedAt: queuedAt)
+
+        XCTAssertEqual(first.stamp, replay.stamp)
+        XCTAssertEqual(first.stamp.eventId, "0f8fad5b-d9cb-469f-a165-70867728950e")
+        XCTAssertEqual(first.stamp.occurredAt, queuedAt)
+        XCTAssertEqual(first.event, .view(postId: "s1", durationMs: nil, surface: .story, entry: nil))
+    }
+
+    func test_storyView_twoRows_twoEventIds() {
+        let one = OutboxDispatcher.storyView(MarkStoryViewedPayload(clientMutationId: ClientMutationId.generate(), storyId: "s1"), queuedAt: Date())
+        let other = OutboxDispatcher.storyView(MarkStoryViewedPayload(clientMutationId: ClientMutationId.generate(), storyId: "s1"), queuedAt: Date())
+
+        XCTAssertNotEqual(one.stamp.eventId, other.stamp.eventId, "Deux vues distinctes restent deux vues.")
     }
 }

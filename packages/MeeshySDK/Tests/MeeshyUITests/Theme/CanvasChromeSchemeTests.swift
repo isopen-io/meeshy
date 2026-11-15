@@ -124,4 +124,62 @@ final class CanvasChromeSchemeTests: XCTestCase {
             CanvasChromeScheme.scheme(background: nil, hasMediaBackground: true, mediaLuminance: 0.25),
             .dark)
     }
+
+    // MARK: - Glyphe NU posé sur un média (#6704, #6693)
+    //
+    // Les rails du lecteur de story et du lecteur de Réels posent leurs glyphes
+    // SANS verre. Le biais de `mediaDarkThreshold` (0,35) s'appuie sur le contraste
+    // local du verre dépoli : sans lui, un glyphe blanc sur une luminance de 0,35 ne
+    // tient que 2,63:1. Recette du 2026-09-15 : Enregistrer mesuré à 2,62:1 sur un
+    // fond local de 0,35.
+
+    /// Les deux teintes que `glassControlForeground()` peint : blanc en sombre,
+    /// `indigo950` en clair. L'oracle ne décide rien, il mesure.
+    private func contrasteDuGlyphe(_ scheme: ColorScheme, surLuminance fond: Double) -> Double {
+        let glyphe = scheme == .dark ? 1.0 : (CanvasChromeScheme.relativeLuminance(hex: "1E1B4B") ?? -1)
+        return (max(glyphe, fond) + 0.05) / (min(glyphe, fond) + 0.05)
+    }
+
+    func test_glypheNu_tientTroisPourUn_surToutFondUniforme() {
+        for pas in 0...200 {
+            let fond = Double(pas) / 200
+            let scheme = CanvasChromeScheme.scheme(forBareGlyphOver: fond)
+            XCTAssertGreaterThanOrEqual(
+                contrasteDuGlyphe(scheme, surLuminance: fond), 3,
+                "fond L \(fond) → \(scheme) : \(String(format: "%.2f", contrasteDuGlyphe(scheme, surLuminance: fond))):1")
+        }
+    }
+
+    func test_glypheNu_sAssombritSurUnFondMiClairQueLeSeuilMediaLaisseraitBlanc() {
+        XCTAssertEqual(CanvasChromeScheme.scheme(forBareGlyphOver: 0.32), .light)
+        XCTAssertEqual(CanvasChromeScheme.scheme(background: nil, hasMediaBackground: true, mediaLuminance: 0.32), .dark,
+                       "garde de fabrique : le verre, lui, garde sa convention")
+    }
+
+    func test_glypheNu_sansLuminance_gardeLeDefautDeLaLoi() {
+        XCTAssertEqual(CanvasChromeScheme.scheme(forBareGlyphOver: nil),
+                       CanvasChromeScheme.scheme(background: nil, hasMediaBackground: true, mediaLuminance: nil))
+    }
+
+    /// Un fond UNI et un glyphe nu sur un média se décident à la même frontière :
+    /// une slide crème peinte en couleur et une photo crème ne donnent pas deux rails.
+    func test_leFondUni_etLeGlypheNu_suiventLaMemeFrontiere() {
+        for hex in ["1A2744", "EEF2FF", "808080", "2E2E2E", "B0B0B0", "757575", "7A7A7A"] {
+            XCTAssertEqual(
+                CanvasChromeScheme.scheme(background: hex, hasMediaBackground: false),
+                CanvasChromeScheme.scheme(forBareGlyphOver: CanvasChromeScheme.backgroundLuminance(hex)),
+                hex)
+        }
+    }
+
+    // MARK: - Le plancher : un halo de la polarité opposée au glyphe
+
+    /// Sous un même glyphe, des bandes cyan et bleu ne laissent aucune teinte tenir
+    /// 3:1 sur les deux (blanc 1,25 sur cyan, indigo 1,86 sur bleu). Le halo est le
+    /// plancher : NOIR sous un glyphe blanc, BLANC sous un glyphe sombre — un halo
+    /// noir autour d'un glyphe indigo ne le détacherait d'aucune bande sombre.
+    func test_leHalo_prendLaPolariteOpposeeAuGlyphe() {
+        XCTAssertEqual(CanvasChromeScheme.legibilityHalo(for: .dark), .black)
+        XCTAssertEqual(CanvasChromeScheme.legibilityHalo(for: .light), .white)
+    }
 }

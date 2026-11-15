@@ -1,0 +1,112 @@
+import SwiftUI
+import Combine
+import MeeshySDK
+import MeeshyUI
+
+struct DataStorageView: View {
+    @Environment(\.dismiss) private var dismiss
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    @State private var cacheSize: Int = 0
+
+    private let accentColor = MeeshyColors.brandPrimaryHex
+
+    var body: some View {
+        ZStack {
+            theme.backgroundGradient.ignoresSafeArea()
+
+            CollapsibleHeaderPage(
+                title: String(localized: "settings.data.storage.title", defaultValue: "Stockage", bundle: .main),
+                onBack: { dismiss() },
+                titleColor: theme.textPrimary,
+                backArrowColor: Color(hex: accentColor),
+                backgroundColor: theme.backgroundPrimary,
+                content: { pageContent }
+            )
+        }
+        .task {
+            await loadCacheSize()
+        }
+    }
+
+    // MARK: - Content
+
+    private var pageContent: some View {
+        VStack(spacing: MeeshySpacing.xl) {
+            cacheSection
+            // Purge SÉLECTIVE (type × domaine). Vit dans MeeshyUI pour que
+            // ses libellés soient servis par le catalogue du module —
+            // `bundle: .module` — plutôt que par celui de l'app.
+            SelectiveCachePurgeView()
+            Spacer().frame(height: 40)
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.lg)
+    }
+
+    // MARK: - Cache Section
+
+    private var cacheSection: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            sectionHeader(title: String(localized: "settings.data.storage.section.cache", defaultValue: "Cache média", bundle: .main), icon: "externaldrive.fill", color: accentColor)
+
+            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
+                HStack(spacing: MeeshySpacing.md) {
+                    fieldIcon("folder.fill", color: accentColor)
+
+                    Text(String(localized: "settings.data.storage.cache.description", defaultValue: "Chargé plus vite, vidé après 7 jours.", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
+                        .foregroundStyle(theme.textMuted)
+
+                    Spacer()
+
+                    Text(MediaFormat.bytes(Int64(cacheSize)))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                        .foregroundStyle(Color(hex: accentColor))
+                }
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.smPlus)
+            }
+            .background(SettingsSectionBackground(tint: accentColor))
+        }
+    }
+
+    // MARK: - Actions
+
+    private func loadCacheSize() async {
+        let imageSize = await CacheCoordinator.shared.images.estimatedDiskBytes()
+        let audioSize = await CacheCoordinator.shared.audio.estimatedDiskBytes()
+        let videoSize = await CacheCoordinator.shared.video.estimatedDiskBytes()
+        let thumbnailSize = await CacheCoordinator.shared.thumbnails.estimatedDiskBytes()
+        cacheSize = imageSize + audioSize + videoSize + thumbnailSize
+    }
+
+    // MARK: - Helpers
+
+    private func sectionHeader(title: String, icon: String, color: String) -> some View {
+        HStack(spacing: MeeshySpacing.xsPlus) {
+            Image(systemName: icon)
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                .foregroundStyle(Color(hex: color))
+                // Décorative — jumelle de `SettingsView.settingsSection` : sans
+                // ce masque, VoiceOver annonce le nom du symbole avant le titre.
+                .accessibilityHidden(true)
+            Text(title.uppercased())
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
+                .foregroundColor(Color(hex: color))
+                .tracking(1.2)
+        }
+        .padding(.leading, MeeshySpacing.xs)
+    }
+
+    private func fieldIcon(_ name: String, color: String) -> some View {
+        Image(systemName: name)
+            .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
+            .foregroundStyle(Color(hex: color))
+            .frame(width: 28, height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.xs)
+                    .fill(Color(hex: color).opacity(0.12))
+            )
+    }
+}

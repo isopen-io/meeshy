@@ -6,6 +6,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import java.time.format.FormatStyle
 import java.util.Locale
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 
 /**
  * Compact, locale-aware label for an ISO-8601 instant such as a post or notification
@@ -25,3 +26,16 @@ fun shortDateTimeLabel(
 } catch (e: DateTimeParseException) {
     iso
 }
+
+private val BUBBLE_CLOCK: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)
+
+/**
+ * The clock a chat bubble shows next to its delivery check — `HH:mm` in the viewer's zone,
+ * exactly like iOS `TimeStringCache` (`dateFormat = "HH:mm"`). An unreadable or missing
+ * instant yields `null`: the footer then shows no clock rather than a raw wire string.
+ */
+fun bubbleClockLabel(
+    iso: String?,
+    zone: ZoneId = ZoneId.systemDefault(),
+): String? = isoToEpochMillisOrNull(iso)
+    ?.let { Instant.ofEpochMilli(it).atZone(zone).format(BUBBLE_CLOCK) }

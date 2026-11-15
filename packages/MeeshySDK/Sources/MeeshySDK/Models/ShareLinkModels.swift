@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Share Link Info (GET /anonymous/link/:identifier)
 
-public struct ShareLinkInfo: Decodable {
+public struct ShareLinkInfo: Decodable, Sendable {
     public let id: String
     public let linkId: String
     public let name: String?
@@ -17,20 +17,71 @@ public struct ShareLinkInfo: Decodable {
     public let requireEmail: Bool
     public let requireBirthday: Bool
     public let allowedLanguages: [String]
+    /// Droits d'un invité SANS compte. L'aperçu public les sert depuis #7795 ;
+    /// une passerelle plus ancienne les omet, d'où les défauts du schéma
+    /// Prisma (`ConversationShareLink`) au décodage plutôt qu'un échec.
+    public let guestRights: ShareLinkGuestRights
     public let conversation: ShareLinkConversation
     public let creator: ShareLinkCreator
     public let stats: ShareLinkStats
+
+    /// L'adresse canonique `/chat/<linkId>` — jamais `/l/<token>` (suivi) ni
+    /// le slug `identifier` (#7795).
+    public var address: ShareLinkAddress { ShareLinkAddress(linkId: linkId) }
 }
 
-public struct ShareLinkConversation: Decodable {
+// Décodage écrit dans une EXTENSION : le constructeur membre à membre reste
+// disponible (tests, aperçus).
+extension ShareLinkInfo {
+    enum CodingKeys: String, CodingKey {
+        case id, linkId, name, description, expiresAt, maxUses, currentUses
+        case maxConcurrentUsers, currentConcurrentUsers
+        case requireAccount, requireNickname, requireEmail, requireBirthday
+        case allowedLanguages, conversation, creator, stats
+        case allowAnonymousMessages, allowAnonymousImages, allowAnonymousFiles, allowViewHistory
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        linkId = try c.decode(String.self, forKey: .linkId)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
+        maxUses = try c.decodeIfPresent(Int.self, forKey: .maxUses)
+        currentUses = try c.decodeIfPresent(Int.self, forKey: .currentUses) ?? 0
+        maxConcurrentUsers = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentUsers)
+        currentConcurrentUsers = try c.decodeIfPresent(Int.self, forKey: .currentConcurrentUsers) ?? 0
+        requireAccount = try c.decodeIfPresent(Bool.self, forKey: .requireAccount) ?? false
+        requireNickname = try c.decodeIfPresent(Bool.self, forKey: .requireNickname) ?? false
+        requireEmail = try c.decodeIfPresent(Bool.self, forKey: .requireEmail) ?? false
+        requireBirthday = try c.decodeIfPresent(Bool.self, forKey: .requireBirthday) ?? false
+        allowedLanguages = try c.decodeIfPresent([String].self, forKey: .allowedLanguages) ?? []
+        guestRights = ShareLinkGuestRights(
+            messages: try c.decodeIfPresent(Bool.self, forKey: .allowAnonymousMessages),
+            images: try c.decodeIfPresent(Bool.self, forKey: .allowAnonymousImages),
+            files: try c.decodeIfPresent(Bool.self, forKey: .allowAnonymousFiles),
+            history: try c.decodeIfPresent(Bool.self, forKey: .allowViewHistory)
+        )
+        conversation = try c.decode(ShareLinkConversation.self, forKey: .conversation)
+        creator = try c.decode(ShareLinkCreator.self, forKey: .creator)
+        stats = try c.decode(ShareLinkStats.self, forKey: .stats)
+    }
+}
+
+public struct ShareLinkConversation: Decodable, Sendable {
     public let id: String
     public let title: String?
     public let description: String?
     public let type: String
     public let createdAt: Date
+    /// Logo du groupe — servi par l'aperçu depuis #7794 ; absent avant.
+    public let avatar: String?
+    /// Bannière du groupe — servie par l'aperçu depuis #7794 ; absente avant.
+    public let banner: String?
 }
 
-public struct ShareLinkCreator: Decodable {
+public struct ShareLinkCreator: Decodable, Sendable {
     public let id: String
     public let username: String
     public let firstName: String?
@@ -43,12 +94,48 @@ public struct ShareLinkCreator: Decodable {
     }
 }
 
-public struct ShareLinkStats: Decodable {
+/// L'identifiant du créateur ne part pas vers un visiteur sans compte
+/// (#10205, #10216) : son absence ne fait pas tomber la page d'invitation.
+extension ShareLinkCreator {
+    enum CodingKeys: String, CodingKey {
+        case id, username, firstName, lastName, displayName, avatar
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? ""
+        username = try c.decode(String.self, forKey: .username)
+        firstName = try c.decodeIfPresent(String.self, forKey: .firstName)
+        lastName = try c.decodeIfPresent(String.self, forKey: .lastName)
+        displayName = try c.decodeIfPresent(String.self, forKey: .displayName)
+        avatar = try c.decodeIfPresent(String.self, forKey: .avatar)
+    }
+}
+
+public struct ShareLinkStats: Decodable, Sendable {
     public let totalParticipants: Int
     public let memberCount: Int
     public let anonymousCount: Int
     public let languageCount: Int
     public let spokenLanguages: [String]
+}
+
+/// Un visiteur sans compte ne reçoit pas les effectifs (#10205, #10216) : un
+/// serveur qui les tait — ou les sert neutres, à zéro — se décode, et l'écran
+/// ne montre aucun « 0 personnes » (`InviteGroupFacts`).
+extension ShareLinkStats {
+    enum CodingKeys: String, CodingKey {
+        case totalParticipants, memberCount, anonymousCount, languageCount, spokenLanguages
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        totalParticipants = try c.decodeIfPresent(Int.self, forKey: .totalParticipants) ?? 0
+        memberCount = try c.decodeIfPresent(Int.self, forKey: .memberCount) ?? 0
+        anonymousCount = try c.decodeIfPresent(Int.self, forKey: .anonymousCount) ?? 0
+        languageCount = try c.decodeIfPresent(Int.self, forKey: .languageCount) ?? 0
+        spokenLanguages = try c.decodeIfPresent([String].self, forKey: .spokenLanguages) ?? []
+    }
 }
 
 // MARK: - Anonymous Join Request (POST /anonymous/join/:linkId)
@@ -122,6 +209,13 @@ public struct JoinedConversation: Decodable {
     public let title: String?
     public let type: String
     public let allowViewHistory: Bool
+    /// Les familles BRUTES qu'un invité de ce lien peut joindre (#10001) —
+    /// absent ou `null` quand le lien ne restreint rien.
+    public let allowedAttachmentKinds: [String]?
+
+    public var attachmentAllowance: GuestAttachmentAllowance {
+        GuestAttachmentAllowance(kinds: GuestAttachmentKind.knownKinds(from: allowedAttachmentKinds))
+    }
 }
 
 // MARK: - Create Share Link Request (POST /links)
@@ -213,7 +307,7 @@ public struct CreatedShareLink {
 
 // MARK: - User's Own Links (authenticated)
 
-public struct MyShareLink: Codable, Identifiable, Sendable, CacheIdentifiable {
+public struct MyShareLink: Codable, Identifiable, Sendable, CacheIdentifiable, Equatable {
     public let id: String
     public let linkId: String
     public let identifier: String?
@@ -225,7 +319,76 @@ public struct MyShareLink: Codable, Identifiable, Sendable, CacheIdentifiable {
     public let createdAt: Date
     public let conversationTitle: String?
 
+    // Servis avec `?expand=conversation,policy` (#7797). Optionnels : un cache
+    // écrit par une version antérieure, ou une passerelle qui ne les sert pas,
+    // les omet — `settings` résout alors les défauts du schéma.
+    public let description: String?
+    public let maxConcurrentUsers: Int?
+    public let currentConcurrentUsers: Int?
+    public let allowAnonymousMessages: Bool?
+    public let allowAnonymousFiles: Bool?
+    public let allowAnonymousImages: Bool?
+    public let allowViewHistory: Bool?
+    public let requireAccount: Bool?
+    public let requireNickname: Bool?
+    public let requireEmail: Bool?
+    public let requireBirthday: Bool?
+    public let allowedLanguages: [String]?
+    public let conversation: ShareLinkConversationSummary?
+
+    public init(
+        id: String,
+        linkId: String,
+        identifier: String?,
+        name: String?,
+        isActive: Bool,
+        currentUses: Int,
+        maxUses: Int?,
+        expiresAt: Date?,
+        createdAt: Date,
+        conversationTitle: String?,
+        description: String? = nil,
+        maxConcurrentUsers: Int? = nil,
+        currentConcurrentUsers: Int? = nil,
+        allowAnonymousMessages: Bool? = nil,
+        allowAnonymousFiles: Bool? = nil,
+        allowAnonymousImages: Bool? = nil,
+        allowViewHistory: Bool? = nil,
+        requireAccount: Bool? = nil,
+        requireNickname: Bool? = nil,
+        requireEmail: Bool? = nil,
+        requireBirthday: Bool? = nil,
+        allowedLanguages: [String]? = nil,
+        conversation: ShareLinkConversationSummary? = nil
+    ) {
+        self.id = id
+        self.linkId = linkId
+        self.identifier = identifier
+        self.name = name
+        self.isActive = isActive
+        self.currentUses = currentUses
+        self.maxUses = maxUses
+        self.expiresAt = expiresAt
+        self.createdAt = createdAt
+        self.conversationTitle = conversationTitle
+        self.description = description
+        self.maxConcurrentUsers = maxConcurrentUsers
+        self.currentConcurrentUsers = currentConcurrentUsers
+        self.allowAnonymousMessages = allowAnonymousMessages
+        self.allowAnonymousFiles = allowAnonymousFiles
+        self.allowAnonymousImages = allowAnonymousImages
+        self.allowViewHistory = allowViewHistory
+        self.requireAccount = requireAccount
+        self.requireNickname = requireNickname
+        self.requireEmail = requireEmail
+        self.requireBirthday = requireBirthday
+        self.allowedLanguages = allowedLanguages
+        self.conversation = conversation
+    }
+
     public var displayName: String { name ?? identifier ?? linkId }
+    /// L'adresse canonique `/chat/<linkId>` que la fiche montre, copie et partage.
+    public var address: ShareLinkAddress { ShareLinkAddress(linkId: linkId) }
     /// `/chat/<slug>` est l'URL canonique d'un lien de partage — la page web qui
     /// ouvre la conversation dans la vue courante ET un Universal Link revendiqué
     /// par l'app (`DeepLinkRouter` → `.chatLink`, traité comme `.joinLink`).

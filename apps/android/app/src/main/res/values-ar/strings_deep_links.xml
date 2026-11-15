@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="deep_link_error_not_found">الرابط غير موجود</string>
+    <string name="deep_link_error_inactive">لم يعد هذا الرابط نشطًا</string>
+    <string name="deep_link_error_forbidden">تم رفض الوصول إلى هذه المحادثة</string>
+    <string name="deep_link_error_unresolved">تعذّر فتح هذا الرابط</string>
+    <string name="shortcut_recent_conversations">المحادثات الأخيرة</string>
+    <string name="shortcut_unread_conversations">غير المقروءة</string>
+</resources>

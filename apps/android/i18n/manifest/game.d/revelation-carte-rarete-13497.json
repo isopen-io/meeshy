@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game2.rarity.common",
+          "androidName": "game2_rarity_common",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.rarity.rare",
+          "androidName": "game2_rarity_rare",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.rarity.epic",
+          "androidName": "game2_rarity_epic",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.rarity.legendary",
+          "androidName": "game2_rarity_legendary",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.rarity.mythic",
+          "androidName": "game2_rarity_mythic",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.rarity.share",
+          "androidName": "game2_rarity_share",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.rarity.aria",
+          "androidName": "game2_rarity_aria",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.rarity.measuring",
+          "androidName": "game2_rarity_measuring",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "reveal.achievement.photo",
+          "androidName": "reveal_achievement_photo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.kicker.achievement",
+          "androidName": "game_photo_kicker_achievement",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.author.label.achievement",
+          "androidName": "game_photo_author_label_achievement",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.failed",
+          "androidName": "game_photo_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.share",
+          "androidName": "game_photo_share",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

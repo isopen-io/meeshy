@@ -163,6 +163,113 @@ class CanvasV3ProjectionTest {
         assertThat(projected.timelineDuration).isEqualTo(4.5)
     }
 
+    /**
+     * Les traits éditables (`drawingStrokes`) traversent le pont exactement comme
+     * la forme v1 les décode à plat : le v3 les porte sur l'objet `kind:"drawing"`
+     * (`payload.strokes`), et une projection correcte rend depuis la seconde ce que
+     * la première lit directement. L'oracle est la PAIRE de fixtures partagée
+     * `v1-legacy-rich` — toute dérive entre clients rougit ici.
+     */
+    @Test
+    fun `les traits de dessin d'un document v3 projettent comme la forme v1`() {
+        val legacy = effects("v1-legacy-rich").drawingStrokes
+        val projected = effects("v1-legacy-rich.v3").drawingStrokes
+
+        assertThat(legacy).isNotNull()
+        assertThat(projected).isEqualTo(legacy)
+    }
+
+    /**
+     * L'assertion ci-dessus porte sur l'ÉGALITÉ structurelle complète, mais un
+     * champ qui se décoderait en silence à sa valeur par défaut y passerait
+     * inaperçu si l'oracle le portait aussi par défaut. On épingle donc les
+     * valeurs non-défaut du trait : outil, lissage, pression par point, largeur,
+     * `captureVersion` et `createdAt` — tout ce que le fil transporte.
+     */
+    @Test
+    fun `un trait projete conserve outil lissage pression et metadonnees`() {
+        val stroke = effects("v1-legacy-rich.v3").drawingStrokes!!.single()
+
+        assertThat(stroke.id).isEqualTo("stroke-1")
+        assertThat(stroke.tool).isEqualTo(StrokeTool.MARKER)
+        assertThat(stroke.smoothing).isEqualTo(StrokeSmoothing.CURVE)
+        assertThat(stroke.colorHex).isEqualTo("FF3B30")
+        assertThat(stroke.width).isEqualTo(12.0)
+        assertThat(stroke.captureVersion).isEqualTo(1)
+        assertThat(stroke.createdAt).isEqualTo(776000000.0)
+        assertThat(stroke.points.map { it.pressure }).containsExactly(0.4, 0.95).inOrder()
+    }
+
+    /**
+     * Un objet `drawing` ne portant que le blob PKDrawing legacy (`data`, base64,
+     * sans rendu Android) et aucun trait exploitable ne fabrique pas une couche de
+     * dessin vide : `drawingStrokes` reste `null`, comme les autres familles
+     * normalisent le vide.
+     */
+    @Test
+    fun `un objet drawing sans traits exploitables ne fabrique pas de couche vide`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+                { "id": "drawing", "kind": "drawing",
+                  "anchor": { "t": "free", "x": 0.5, "y": 0.5 }, "plane": "fg",
+                  "payload": { "data": "AQIDBA==" } }
+              ] } ] }
+            """.trimIndent(),
+        )
+
+        assertThat(projected.drawingStrokes).isNull()
+    }
+
+    /**
+     * Un tableau `strokes` PRÉSENT mais VIDE ne diffère pas, à l'affichage, d'une
+     * absence de dessin : `drawingStrokes` reste `null` (chemin `takeIf` distinct de
+     * la clé absente ci-dessus), et non une liste vide qui laisserait croire à une
+     * couche.
+     */
+    @Test
+    fun `un objet drawing au tableau strokes vide reste null`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+                { "id": "drawing", "kind": "drawing",
+                  "anchor": { "t": "free", "x": 0.5, "y": 0.5 }, "plane": "fg",
+                  "payload": { "strokes": [] } }
+              ] } ] }
+            """.trimIndent(),
+        )
+
+        assertThat(projected.drawingStrokes).isNull()
+    }
+
+    /**
+     * Le payload v3 est permissif par contrat : une clé future inconnue au décodeur
+     * (`champInconnuFutur`) sur un trait ne doit jamais faire disparaître le trait
+     * — ni la scène — comme pour les autres familles.
+     */
+    @Test
+    fun `un trait avec des cles de payload inconnues traverse la projection`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+                { "id": "drawing", "kind": "drawing",
+                  "anchor": { "t": "free", "x": 0.5, "y": 0.5 }, "plane": "fg",
+                  "payload": { "strokes": [
+                    { "id": "s1", "colorHex": "00FF00", "width": 4,
+                      "points": [ { "x": 0.1, "y": 0.1 } ], "champInconnuFutur": 7 }
+                  ] } }
+              ] } ] }
+            """.trimIndent(),
+        )
+        val stroke = projected.drawingStrokes!!.single()
+
+        assertThat(stroke.id).isEqualTo("s1")
+        assertThat(stroke.tool).isEqualTo(StrokeTool.PEN)
+        assertThat(stroke.captureVersion).isEqualTo(0)
+        assertThat(stroke.createdAt).isNull()
+        assertThat(stroke.points.single().pressure).isEqualTo(1.0)
+    }
+
     /** Une clé de payload inconnue au décodeur Android ne doit jamais faire échouer la scène. */
     @Test
     fun `un sticker avec des cles de payload inconnues traverse la projection`() {
@@ -179,5 +286,377 @@ class CanvasV3ProjectionTest {
 
         assertThat(sticker.emoji).isEqualTo("🎉")
         assertThat(sticker.hasImage).isFalse()
+    }
+
+    /**
+     * L'axe EFFET (#4870) est une clé du `payload`, permissif par contrat : la
+     * projection la relit sur le modèle v1 — sinon un texte composé sur iOS
+     * perdrait sa lueur en traversant le pont, sans qu'aucune erreur ne le dise.
+     */
+    @Test
+    fun `l'effet d'un texte v3 traverse la projection`() {
+        val document = """
+            {"v": 3, "scenes": [{"id": "s1", "objects": [{
+              "id": "t1", "kind": "text",
+              "anchor": {"t": "free", "x": 0.5, "y": 0.5},
+              "plane": "fg", "z": 0,
+              "transform": {"scale": 1.0, "rotation": 0.0, "opacity": 1.0},
+              "payload": {"text": "Bonjour", "textEffect": "relief"}
+            }]}]}
+        """.trimIndent()
+        val effects = json.decodeFromString(StoryEffectsWireSerializer, document)
+        val text = effects.textObjects.single()
+        assertThat(text.textEffect).isEqualTo("relief")
+        assertThat(StoryTextEffect.fromWire(text.textEffect)).isEqualTo(StoryTextEffect.RELIEF)
+    }
+
+    /**
+     * #5085 — **les quatre bornes du recadrage arrivent bien jusqu'au modèle.**
+     *
+     * Elles voyagent à plat dans la charge (`cropX`/`cropY`/`cropW`/`cropH`),
+     * que le contrat déclare permissive : rien ne les refusait, et rien ne les
+     * LISAIT non plus. Ce témoin est le second fait — le premier étant la
+     * clause de `canvas-v3.ts` qui les déclare.
+     */
+    @Test
+    fun `les bornes de recadrage d un media arrivent au modele`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+              { "id": "m1", "kind": "media", "anchor": { "t": "free", "x": 0.5, "y": 0.5 },
+                "plane": "content", "z": 0,
+                "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+                "payload": { "mediaURL": "https://cdn/x.jpg",
+                             "cropX": 0.0, "cropY": 0.5, "cropW": 1.0, "cropH": 0.5 } }
+            ] } ] }
+            """.trimIndent(),
+        )
+        val media = projected.mediaObjects?.firstOrNull()
+        assertThat(media).isNotNull()
+        assertThat(media!!.crop).isEqualTo(StoryMediaCrop(x = 0.0, y = 0.5, width = 1.0, height = 0.5))
+    }
+
+    /**
+     * **Le cadrage d'un fond posé en plan `content` traverse la projection** (#14199, iOS « second passage » de
+     * `StoryEffects(rendering:)`). Le post de recette « Hors ligne 13416 » porte son image de fond en `plane: content`,
+     * `isBackground: true`, et son AJUSTÉ (`videoFitMode: "fit"`) dans `payload.transform`. Seul le plan `bg` était lu : le
+     * cadrage tombait, le player remplissait la scène et rognait le texte gravé près du bord.
+     */
+    @Test
+    fun `le cadrage d'un fond pose en plan content traverse la projection`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "page-1", "objects": [
+              { "id": "background", "kind": "media", "anchor": { "t": "free", "x": 0.5, "y": 0.5 },
+                "plane": "content", "z": 0,
+                "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+                "payload": { "postMediaId": "6ae0f5853ee363fd25a2d2b9", "mediaURL": "2026/10/u/hors-ligne.webp",
+                             "mediaType": "image", "isBackground": true,
+                             "transform": { "videoFitMode": "fit", "backdrop": "black" }, "aspectRatio": 0.75 } }
+            ] } ] }
+            """.trimIndent(),
+        )
+
+        assertThat(projected.backgroundTransform?.videoFitMode).isEqualTo("fit")
+        assertThat(projected.backgroundTransform?.backdrop).isEqualTo("black")
+        assertThat(projected.mediaObjects?.single()?.isBackground).isTrue()
+    }
+
+    /** Un média POSÉ (pas le fond) ne prête jamais son `payload.transform` au fond de la scène. */
+    @Test
+    fun `un media pose ne prete pas son cadrage au fond`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+              { "id": "m1", "kind": "media", "anchor": { "t": "free", "x": 0.3, "y": 0.3 },
+                "plane": "content", "z": 1,
+                "transform": { "scale": 0.5, "rotation": 0, "opacity": 1 },
+                "payload": { "mediaURL": "https://cdn/x.jpg", "mediaType": "image", "transform": { "videoFitMode": "fit" } } }
+            ] } ] }
+            """.trimIndent(),
+        )
+
+        assertThat(projected.backgroundTransform).isNull()
+    }
+
+    /**
+     * **Un recadrage amputé ne devient pas un cadrage fabriqué.** Le contrat le
+     * refuse au fil ; le modèle le refuse aussi, parce qu'un document déjà
+     * stocké sous l'ancienne forme ne repasse par aucune validation.
+     */
+    @Test
+    fun `un recadrage amputé au fil ne produit aucun cadrage`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+              { "id": "m1", "kind": "media", "anchor": { "t": "free", "x": 0.5, "y": 0.5 },
+                "plane": "content", "z": 0,
+                "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+                "payload": { "mediaURL": "https://cdn/x.jpg",
+                             "cropX": 0.0, "cropY": 0.5, "cropW": 1.0 } }
+            ] } ] }
+            """.trimIndent(),
+        )
+        assertThat(projected.mediaObjects?.firstOrNull()?.crop).isNull()
+    }
+
+    /**
+     * **La frontière de ce lot, dite plutôt que supposée** (#5085).
+     *
+     * En v3, un média de plan `bg` ne devient PAS un [StoryMediaObject] : il se
+     * réduit à `background` (une chaîne) et `backgroundTransform`. Le
+     * recadrage d'un FOND v3 ne peut donc atteindre aucun lecteur Android —
+     * non parce que le champ manque, mais parce que l'objet qui le porterait
+     * n'existe pas à l'arrivée.
+     *
+     * C'est une lacune PRÉEXISTANTE et plus large que le recadrage : le même
+     * aiguillage perd `isBackground`, `mediaURL` et `loop` de l'objet. Le fond
+     * v1 (le cas nominal aujourd'hui, `mediaObjects` + `isBackground`) est,
+     * lui, entièrement servi.
+     *
+     * Ce témoin ne demande pas de corriger — il EMPÊCHE la lacune de se
+     * refermer en silence. Le jour où l'aiguillage v3 émettra un objet, il
+     * rougira, et son auteur lira ici pourquoi il ne le faisait pas.
+     */
+    @Test
+    fun `un media de plan bg en v3 ne devient pas un objet media`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+              { "id": "m1", "kind": "media", "anchor": { "t": "free", "x": 0.5, "y": 0.5 },
+                "plane": "bg", "z": 0,
+                "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+                "payload": { "background": "https://cdn/x.jpg",
+                             "cropX": 0.0, "cropY": 0.5, "cropW": 1.0, "cropH": 0.5 } }
+            ] } ] }
+            """.trimIndent(),
+        )
+        assertThat(projected.mediaObjects).isNull()
+        assertThat(projected.background).isEqualTo("https://cdn/x.jpg")
+    }
+
+    /**
+     * #5129 — **les bornes de LECTURE d'un média arrivent au modèle.**
+     *
+     * Elles voyagent à plat dans la charge (`sourceStart`/`sourceEnd`), écrites
+     * par iOS pour les médias comme pour les audios. Android n'en avait
+     * AUCUNE notion — ni sous ce nom, ni sous un autre : un clip dont l'auteur
+     * avait gardé les secondes 3 → 8 d'une vidéo de trente secondes jouait les
+     * trente.
+     *
+     * **À ne pas confondre avec `startTime`/`duration`**, qui gouvernent QUAND
+     * l'objet est à l'écran sur la timeline de la slide. Ces deux-ci disent
+     * QUELLE PARTIE de la source joue une fois qu'il y est. Les deux axes
+     * coexistent : un clip visible de 0 à 5 s peut jouer les secondes 3 → 8 de
+     * son fichier.
+     */
+    @Test
+    fun `les bornes de lecture d un media arrivent au modele`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+              { "id": "m1", "kind": "media", "anchor": { "t": "free", "x": 0.5, "y": 0.5 },
+                "plane": "content", "z": 0,
+                "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+                "timing": { "start": 0.0 },
+                "payload": { "mediaURL": "https://cdn/x.mp4", "duration": 5.0,
+                             "sourceStart": 3.0, "sourceEnd": 8.0 } }
+            ] } ] }
+            """.trimIndent(),
+        )
+        val media = projected.mediaObjects?.firstOrNull()
+        assertThat(media).isNotNull()
+        assertThat(media!!.sourceStart).isEqualTo(3.0)
+        assertThat(media.sourceEnd).isEqualTo(8.0)
+        // **Les deux axes ne vivent même pas au même endroit du fil**, et c'est
+        // ce que ce témoin fixe : `start` est porté par `timing`, FRÈRE de la
+        // charge, tandis que les bornes de lecture sont DANS la charge. Ma
+        // première rédaction posait `startTime` dans le payload — il n'y a
+        // jamais été lu, et le témoin est tombé en me l'apprenant.
+        assertThat(media.startTime).isEqualTo(0.0)
+        assertThat(media.duration).isEqualTo(5.0)
+    }
+
+    /**
+     * #5129 — **un audio rogné l'est aussi.** iOS écrit les deux bornes sur les
+     * deux familles (`CanvasV3Migration.swift:457` et `:542`) ; les lire pour le
+     * seul média laisserait un vocal rogné jouer en entier.
+     */
+    @Test
+    fun `les bornes de lecture d un audio arrivent au modele`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+              { "id": "a1", "kind": "audio", "anchor": { "t": "free", "x": 0.5, "y": 0.8 },
+                "plane": "content", "z": 0,
+                "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+                "payload": { "postMediaId": "pm1", "sourceStart": 1.5, "sourceEnd": 4.25 } }
+            ] } ] }
+            """.trimIndent(),
+        )
+        val audio = projected.audioPlayerObjects?.firstOrNull()
+        assertThat(audio).isNotNull()
+        assertThat(audio!!.sourceStart).isEqualTo(1.5f)
+        assertThat(audio.sourceEnd).isEqualTo(4.25f)
+    }
+
+    /**
+     * **Une borne SEULE est une fenêtre à demi ouverte, pas une fenêtre nulle**
+     * — correction du 2026-09-04.
+     *
+     * La première rédaction refusait la paire incomplète, par analogie avec le
+     * recadrage (#5085). L'analogie était fausse : quatre fractions de cadre
+     * amputées n'ont aucun repli sensé, mais **une fin de lecture manquante en a
+     * un, évident — la fin du fichier.**
+     *
+     * iOS le fait déjà (`StoryMediaLayer.startLoadingTrimWindow` charge
+     * `asset.duration` et complète), et l'écrivain émet les deux bornes
+     * INDÉPENDAMMENT (deux `if let` séparés). Refuser ici faisait jouer à 0 sur
+     * Android un clip qui démarrait à 3 s sur iOS — une divergence introduite
+     * par le correctif lui-même.
+     */
+    @Test
+    fun `une borne de lecture seule ouvre la fenêtre jusqu à la fin`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+              { "id": "m1", "kind": "media", "anchor": { "t": "free", "x": 0.5, "y": 0.5 },
+                "plane": "content", "z": 0,
+                "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+                "payload": { "mediaURL": "https://cdn/x.mp4", "sourceStart": 3.0 } }
+            ] } ] }
+            """.trimIndent(),
+        )
+        val media = projected.mediaObjects?.firstOrNull()
+        assertThat(media).isNotNull()
+        assertThat(media!!.sourceStart).isEqualTo(3.0)
+        assertThat(media.sourceEnd).isNull()
+        // Et la fenêtre servie au lecteur est ouverte à droite : ExoPlayer
+        // l'exprime nativement en omettant `setEndPositionMs`.
+        assertThat(StorySourceWindow.clippingMs(media.sourceStart, media.sourceEnd))
+            .isEqualTo(StorySourceWindowMs(3000L, null))
+    }
+
+    /**
+     * **Une FIN seule se lit « du début jusqu'à `end` ».** Le début implicite est
+     * zéro, et il n'a rien d'inventé — c'est là que toute source commence.
+     */
+    @Test
+    fun `une fin de lecture seule borne depuis le début`() {
+        assertThat(StorySourceWindow.clippingMs(null, 8.0))
+            .isEqualTo(StorySourceWindowMs(0L, 8000L))
+    }
+
+    /**
+     * **Un début NUL avec une fin absente n'est pas une fenêtre** — c'est la
+     * source entière. La servir comme fenêtre ferait porter au lecteur un
+     * découpage qui ne découpe rien.
+     */
+    @Test
+    fun `un début nul sans fin ne produit aucune fenêtre`() {
+        assertThat(StorySourceWindow.clippingMs(0.0, null)).isNull()
+        assertThat(StorySourceWindow.clippingMs(null, null)).isNull()
+    }
+
+    /**
+     * #5129 — **la conversion en millisecondes est une DÉCISION, donc elle se
+     * teste.** Elle vit dans la règle et non dans la surface de lecture, qui
+     * reste opaque : celle-ci reçoit deux nombres ou rien.
+     */
+    @Test
+    fun `la fenêtre de lecture se convertit en millisecondes`() {
+        assertThat(StorySourceWindow.clippingMs(3.0, 8.0)).isEqualTo(StorySourceWindowMs(3000L, 8000L))
+        assertThat(StorySourceWindow.clippingMs(1.5, 4.25)).isEqualTo(StorySourceWindowMs(1500L, 4250L))
+        // Ces deux-là ne sont PLUS nulles depuis la correction du 2026-09-04 :
+        // une borne seule ouvre la fenêtre du côté manquant. Leurs cas propres
+        // sont épinglés par les deux témoins dédiés ci-dessous.
+        assertThat(StorySourceWindow.clippingMs(null, 8.0)).isEqualTo(StorySourceWindowMs(0L, 8000L))
+        assertThat(StorySourceWindow.clippingMs(3.0, null)).isEqualTo(StorySourceWindowMs(3000L, null))
+    }
+
+    /**
+     * **Deux bornes distinctes en secondes peuvent se confondre en millisecondes**
+     * (3,0000 et 3,0004). La fenêtre serait VIDE, et le clip se tairait — un
+     * silence qu'aucun message n'expliquerait. La règle refuse, comme elle refuse
+     * `end <= start`.
+     */
+    @Test
+    fun `une fenêtre qui s aplatit à la milliseconde est refusée`() {
+        assertThat(StorySourceWindow.clippingMs(3.0000, 3.0004)).isNull()
+        assertThat(StorySourceWindow.clippingMs(3.0000, 3.0011)).isEqualTo(StorySourceWindowMs(3000L, 3001L))
+    }
+
+    private fun v3Scene(objectJson: String): StoryEffects = json.decodeFromString(
+        StoryEffectsWireSerializer,
+        """{"v":3,"scenes":[{"id":"s","objects":[$objectJson]}]}""",
+    )
+
+    @Test
+    fun `un sticker gabarit v3 projette gabarit emplacements et animation`() {
+        val sticker = v3Scene(
+            """{"id":"g","kind":"sticker","locale":"fr","payload":{"templateId":"love.heart",
+            "slots":{"title":"Salut"},"animation":"pulse"}}""",
+        ).stickerObjects!!.single()
+        assertThat(sticker.templateId).isEqualTo("love.heart")
+        assertThat(sticker.slots).containsExactly("title", "Salut")
+        assertThat(sticker.stickerAnimation).isEqualTo(StickerAnimation.PULSE)
+        assertThat(sticker.sourceLanguage).isEqualTo("fr")
+    }
+
+    @Test
+    fun `un texte v3 projette poids et cadre`() {
+        val texte = v3Scene(
+            """{"id":"t","kind":"text","payload":{"text":"Hi","fontWeight":"bold","frameShape":"pill",
+            "framePaddingScale":2,"frameBorderWidth":4,"frameBorderColor":"00FF00"}}""",
+        ).textObjects.single()
+        assertThat(texte.fontWeight).isEqualTo("bold")
+        assertThat(texte.frameShape).isEqualTo("pill")
+        assertThat(texte.framePaddingScale).isEqualTo(2.0)
+        assertThat(texte.frameBorderWidth).isEqualTo(4.0)
+        assertThat(texte.frameBorderColor).isEqualTo("00FF00")
+    }
+
+    @Test
+    fun `un media v3 projette ses reglages d image et neutre vaut aucun`() {
+        val regle = v3Scene(
+            """{"id":"m","kind":"media","payload":{"postMediaId":"p","adjustments":{"exposure":0.5,"blur":2}}}""",
+        ).mediaObjects!!.single()
+        assertThat(regle.adjustments!![AdjustmentKind.EXPOSURE]).isEqualTo(0.5f)
+        assertThat(regle.adjustments!![AdjustmentKind.BLUR]).isEqualTo(1f)
+        val neutre = v3Scene("""{"id":"m","kind":"media","payload":{"postMediaId":"p","adjustments":{}}}""")
+            .mediaObjects!!.single()
+        assertThat(neutre.adjustments).isNull()
+    }
+    /**
+     * #13893 — un son de la bibliothèque POSÉ sur la scène d'un post (recette « Recette 14200 ») : le projeté gardait sa durée
+     * et perdait son fichier, sa provenance et son nom. Le lecteur ne trouvait rien à jouer, la fiche rien à nommer. iOS lit
+     * les sept clés (`CanvasV3RenderRules.audioObject`).
+     */
+    @Test
+    fun `un son emprunte pose sur la scene garde son fichier, sa provenance et son nom`() {
+        val audio = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "s1", "objects": [
+              { "id": "borrowed-6ada52e99bc6c72f73df09c4", "kind": "audio", "anchor": { "t": "free", "x": 0.5, "y": 0.5 },
+                "plane": "content", "z": 1, "transform": { "scale": 1.5, "rotation": 10, "opacity": 1 },
+                "timing": { "keyframes": [ { "time": 0.5, "volume": 0.4 } ] },
+                "payload": { "duration": 5.023, "soundId": "6ada52e99bc6c72f73df09c4", "soundAuthorUsername": "recretrait_b",
+                             "soundCreatedAt": "2026-10-22T18:16:09.512Z", "postMediaId": null, "name": "Pluie",
+                             "mediaURL": "/api/v1/static/3b5f3f05.m4a", "placement": null, "mutedVolumeMemento": 0.8,
+                             "waveformSamples": [0.25, 0.5] } }
+            ] } ] }
+            """.trimIndent(),
+        ).audioPlayerObjects!!.single()
+
+        assertThat(audio.mediaURL).isEqualTo("/api/v1/static/3b5f3f05.m4a")
+        assertThat(audio.soundId).isEqualTo("6ada52e99bc6c72f73df09c4")
+        assertThat(audio.soundAuthorUsername).isEqualTo("recretrait_b")
+        assertThat(audio.soundCreatedAt).isEqualTo("2026-10-22T18:16:09.512Z")
+        assertThat(audio.name).isEqualTo("Pluie")
+        assertThat(audio.waveformSamples).containsExactly(0.25f, 0.5f).inOrder()
+        assertThat(audio.mutedVolumeMemento).isEqualTo(0.8f)
+        assertThat(audio.keyframes).hasSize(1)
+        assertThat(audio.scale).isEqualTo(1.5)
+        assertThat(audio.rotation).isEqualTo(10.0)
     }
 }

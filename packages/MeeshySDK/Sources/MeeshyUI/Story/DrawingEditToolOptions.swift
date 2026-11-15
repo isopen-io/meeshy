@@ -138,7 +138,7 @@ struct DrawingEditToolOptions: View {
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(.secondary)
             Text("\(Int(currentWidth))")
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .frame(width: 30)
         }
@@ -162,7 +162,7 @@ struct DrawingEditToolOptions: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: symbol).font(.system(size: 13, weight: .semibold))
-                Text(label).font(.system(size: 12, weight: .semibold))
+                Text(label).font(MeeshyFont.relative(12, weight: .semibold))
             }
             .foregroundStyle(isSel ? Color.white : Color.primary)
             .frame(maxWidth: .infinity)

@@ -4,13 +4,37 @@
  */
 
 import type { PostReference, ReferenceAccess } from './post-reference.js';
+import type { PersonProfileDecor } from './profile-decor.js';
+import type { ReachBreakdown } from './content-reach.js';
 
 // =====================================================
 // ENUMS
 // =====================================================
 
 export type PostType = 'POST' | 'REEL' | 'STORY' | 'STATUS';
-export type PostVisibility = 'PUBLIC' | 'FRIENDS' | 'COMMUNITY' | 'PRIVATE' | 'EXCEPT' | 'ONLY';
+
+/**
+ * Les audiences d'une publication, source UNIQUE de la liste (schéma Prisma
+ * `PostVisibility`, schémas Zod du gateway, listes d'écrans d'administration).
+ *
+ * `ACQUAINTANCES`, `CLOSE` et `BLOOD` (cercles, #13931) se lisent au NIVEAU
+ * EFFECTIF de l'auteur avec le lecteur : Connaissance et au-dessus, Proche et
+ * au-dessus, Sang seul. `FRIENDS` garde son sens historique « Amis et
+ * au-dessus ». Aucune valeur n'est retirée ; un client qui ne connaît pas une
+ * valeur servie ne la lit JAMAIS comme `PUBLIC` (décodage fail-closed).
+ */
+export const POST_VISIBILITIES = [
+  'PUBLIC',
+  'FRIENDS',
+  'COMMUNITY',
+  'PRIVATE',
+  'EXCEPT',
+  'ONLY',
+  'ACQUAINTANCES',
+  'CLOSE',
+  'BLOOD',
+] as const;
+export type PostVisibility = (typeof POST_VISIBILITIES)[number];
 
 /**
  * Audience par défaut de TOUTE publication — POST, REEL, STORY, STATUS
@@ -44,12 +68,38 @@ export interface ContentTrackingLink {
 }
 
 /**
+ * LE MÉDIA DU POST QU'UN COMMENTAIRE CITE (#6578) — l'instantané FIGÉ, et RIEN
+ * d'autre.
+ *
+ * Voie `metadata.quotedPostMedia`, AUCUNE colonne — même arbitrage porteur que
+ * #6123/#6164 (voie C hybride). Ce qui est gravé ne peut jamais devenir un
+ * secret : l'ancre du saut et la NATURE du média. **Tout ce qui DÉCRIT le média
+ * — vignette, `fileUrl`, nom, taille, DURÉE, légende, alt — est RELU à chaque
+ * service** et voyage à côté, en `quotedMedia`. Figer l'un d'eux ici
+ * survivrait à la suppression du média et à une légende retirée.
+ *
+ * La liste complète de ce qui est révocable vit avec la garde d'écriture, dans
+ * `services/gateway/src/services/posts/quotedPostMediaSnapshot.ts`.
+ *
+ * `undefined` ⇒ le commentaire parle du POST, pas d'un média en particulier.
+ * Aucun commentaire existant ne change de rendu.
+ */
+export interface QuotedPostMediaRef {
+  /** L'ancre du saut — `PostMedia.id`, TOUJOURS un média du post commenté. */
+  readonly postMediaId: string;
+  /** La NATURE du média, dérivée du MIME côté serveur — jamais déclarée par le client. */
+  readonly kind: 'image' | 'video' | 'audio' | 'location' | 'file';
+}
+
+/**
  * Métadonnées structurées libres d'un post/commentaire (parité Message.metadata).
  * `trackingLinks` est rempli automatiquement à la création quand le contenu
  * contient des URLs brutes.
  */
 export interface PostMetadata {
   readonly trackingLinks?: readonly ContentTrackingLink[];
+  /** Le média du post que CE commentaire cite (#6578) — cf. {@link QuotedPostMediaRef}. */
+  readonly quotedPostMedia?: QuotedPostMediaRef;
   readonly [key: string]: unknown;
 }
 
@@ -69,6 +119,8 @@ export interface PostAuthor {
    */
   readonly isOnline?: boolean;
   readonly lastActiveAt?: Date | string | null;
+  /** Le contour d'avatar équipé (#10945) ; absent sans contour. */
+  readonly profileDecor?: PersonProfileDecor;
 }
 
 export interface PostMedia {
@@ -85,6 +137,19 @@ export interface PostMedia {
   readonly order: number;
   readonly caption?: string | null;
   readonly alt?: string | null;
+  /**
+   * Langue SOURCE de `alt` et carte de ses traductions (#6737, suite de la
+   * décision produit #6534) — même forme que `Post.translations`
+   * (`{ [lang]: { text, translationModel, confidenceScore?, createdAt,
+   * updatedAt? } }`, voir `media-caption-translation.ts`). `null`/absent tant
+   * que `alt` est vide ou n'a pas encore été traduit. `altTranslations` reste
+   * `unknown` ici : la résolution du Prisme passe par
+   * `resolvePrismTranslation()`/`buildPostTranslationRecord()`
+   * (`@meeshy/shared/utils/conversation-helpers`), jamais par une lecture
+   * directe de cette carte.
+   */
+  readonly altLanguage?: string | null;
+  readonly altTranslations?: unknown;
 }
 
 export interface PostComment {
@@ -99,6 +164,20 @@ export interface PostComment {
   readonly metadata?: PostMetadata | null;
   /** Copie hissée top-level de `metadata.trackingLinks` sur le payload socket. */
   readonly trackingLinks?: readonly ContentTrackingLink[];
+  /**
+   * Copie hissée top-level de `metadata.quotedPostMedia` (#6578) — l'ancre
+   * FIGÉE, servie sur les QUATRE surfaces (liste, réponses, création, écho
+   * socket). Elle survit à la disparition du média : un média cité supprimé ou
+   * détaché dit « une photo » et rien de plus.
+   */
+  readonly quotedPostMedia?: QuotedPostMediaRef;
+  /**
+   * Le média cité, RELU à chaque service (#6578) — la moitié RÉVOCABLE de la
+   * citation. Absent quand le média n'existe plus, ou quand il a quitté le post
+   * commenté (fail-closed : une garde d'écriture ne dit rien des lignes écrites
+   * avant elle). Même forme que `PostMedia` d'un post, donc même décodeur.
+   */
+  readonly quotedMedia?: PostMedia | null;
   readonly likeCount: number;
   readonly replyCount: number;
   readonly reactionSummary?: Record<string, number> | null;
@@ -128,6 +207,11 @@ export interface Post {
   readonly authorId: string;
   readonly type: PostType;
   readonly visibility: PostVisibility;
+  /**
+   * La liste d'audience (`ONLY` : les visés ; `EXCEPT` : les exclus). Servie à
+   * l'AUTEUR de la publication seulement — absente pour tout autre lecteur,
+   * et pour l'auteur d'une republication, qui l'hérite de sa source (#7407).
+   */
   readonly visibilityUserIds?: readonly string[];
   readonly content?: string | null;
   readonly originalLanguage?: string | null;
@@ -149,16 +233,52 @@ export interface Post {
   readonly audioUrl?: string | null;
   readonly audioDuration?: number | null;
   readonly storyEffects?: unknown;
-  readonly reactions?: readonly PostReaction[] | null;
   readonly reactionSummary?: Record<string, number> | null;
   readonly reactionCount?: number;
   readonly currentUserReactions?: readonly string[];
   readonly isLikedByMe?: boolean;
+  /**
+   * Les points que CE post a rapportés au LECTEUR (#9569) : sa publication
+   * s'il en est l'auteur, ses réactions, commentaires, republications, signets,
+   * vues de story — la somme de ce qui lui a réellement été crédité. Servi sur
+   * les LECTURES (fil, listes, détail, stories) à un lecteur connecté ; absent
+   * pour un lecteur sans compte, d'un ancien serveur et des réponses d'écriture
+   * — absent veut dire « garde ce que tu sais », jamais zéro. Après un geste,
+   * la nouvelle valeur arrive par `engagement:post-updated`
+   * (`PostEngagementSnapshot`), adressé au lecteur seul. Elle peut BAISSER :
+   * retirer un contenu reprend ses points ; `keptViewerPoints` dit laquelle de
+   * deux valeurs garder.
+   */
+  readonly viewerPoints?: number;
   readonly bookmarkedAt?: string | Date | null;
   readonly likeCount: number;
   readonly commentCount: number;
   readonly repostCount: number;
   readonly viewCount: number;
+  /**
+   * Part ANONYME de `viewCount` / `impressionCount` (#10483) — lecteurs sans
+   * compte. Les totaux l'incluent déjà. Absent d'un ancien serveur, `null` sur
+   * un post antérieur à la colonne : à lire comme 0.
+   */
+  readonly anonymousViewCount?: number | null;
+  readonly anonymousImpressionCount?: number | null;
+  /**
+   * Vues UNIQUES par jeton (#10483) : `viewCount` compte CHAQUE ouverture, ce
+   * champ une fois par lecteur (compte ou anonyme), `anonymousUniqueViewCount`
+   * en est la part anonyme. Servis, pas encore affichés. Absents d'un ancien
+   * serveur, `null` sur un post antérieur : à lire comme 0.
+   */
+  readonly uniqueViewCount?: number | null;
+  readonly anonymousUniqueViewCount?: number | null;
+  /**
+   * Ventilations de la portée (#10483, `@meeshy/shared/types/content-reach`) :
+   * engagements d'ouverture (tap d'un listing) par origine, vues comptées par
+   * provenance, vues de listing par origine. Absents d'un ancien serveur ou
+   * d'un post qui n'en a jamais reçu : à lire comme vides.
+   */
+  readonly openCountByOrigin?: ReachBreakdown | null;
+  readonly viewCountByProvenance?: ReachBreakdown | null;
+  readonly listingViewCountByOrigin?: ReachBreakdown | null;
   readonly bookmarkCount: number;
   readonly shareCount: number;
   readonly isPinned: boolean;
@@ -205,12 +325,6 @@ export interface Post {
    * recalculé depuis `expiresAt` côté client.
    */
   readonly referenceAccess?: ReferenceAccess;
-}
-
-export interface PostReaction {
-  readonly userId: string;
-  readonly emoji: string;
-  readonly createdAt: string;
 }
 
 export interface PostView {
@@ -512,6 +626,48 @@ export interface CommentMediaUpdatedEventData {
   readonly postId: string;
   readonly commentId: string;
   readonly comment: PostComment;
+}
+
+/**
+ * Émis (`media:caption-translation-updated`) quand le pipeline ZMQ a traduit
+ * la LÉGENDE (`PostMedia.caption`) d'un média — post OU commentaire (#6280).
+ * DISTINCT de `PostTranslationUpdatedEventData` (traduit `Post.content`, pas
+ * la légende d'un média du carrousel) et de `CommentMediaUpdatedEventData`
+ * (recharge le commentaire ENTIER pour une transcription audio prête).
+ * `commentId` est absent quand le média appartient directement à un post.
+ */
+export interface MediaCaptionTranslationUpdatedEventData {
+  readonly mediaId: string;
+  readonly postId: string;
+  readonly commentId?: string;
+  readonly language: string;
+  readonly translation: {
+    readonly text: string;
+    readonly translationModel: string;
+    readonly confidenceScore?: number;
+    readonly createdAt: string;
+  };
+}
+
+/**
+ * Émis (`media:alt-translation-updated`) quand le pipeline ZMQ a traduit le
+ * texte ALTERNATIF d'accessibilité (`PostMedia.alt`) d'un média — post OU
+ * commentaire (#6737, suite de la décision #6534). Jumelle exacte de
+ * `MediaCaptionTranslationUpdatedEventData`, sur un champ DISTINCT : `alt`
+ * décrit le média pour un lecteur d'écran, `caption` est une légende
+ * éditoriale — les deux se traduisent indépendamment.
+ */
+export interface MediaAltTranslationUpdatedEventData {
+  readonly mediaId: string;
+  readonly postId: string;
+  readonly commentId?: string;
+  readonly language: string;
+  readonly translation: {
+    readonly text: string;
+    readonly translationModel: string;
+    readonly confidenceScore?: number;
+    readonly createdAt: string;
+  };
 }
 
 export interface CommentReactionAggregation {

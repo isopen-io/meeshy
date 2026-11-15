@@ -23,8 +23,11 @@ export const DocumentPreferenceSchema = z.object({
   autoDeleteOldFiles: z.boolean().default(false),
   fileRetentionDays: z.number().min(7).max(365).default(90),
 
-  // Compression
+  // Compression forte, choisie pour économiser des données : chaque image est
+  // réduite au budget de son contexte. `false` (défaut) n'est PAS « sans
+  // compression » : l'image part en HD, en une génération perceptuelle (#9885).
   compressImagesOnUpload: z.boolean().default(false),
+  // Qualité (10–100) de la compression forte seulement.
   imageCompressionQuality: z.number().min(10).max(100).default(85),
 
   // Formats acceptés
@@ -41,7 +44,29 @@ export const DocumentPreferenceSchema = z.object({
 
   // Sécurité
   scanFilesForMalware: z.boolean().default(true),
-  allowExternalLinks: z.boolean().default(true)
+  allowExternalLinks: z.boolean().default(true),
+
+  /**
+   * Le canal de COMPATIBILITÉ ASCENDANTE, déclaré (#4589).
+   *
+   * Les sept blocs de préférences du SDK iOS le portent
+   * (`PreferenceModels.swift`), et iOS encode le bloc ENTIER comme corps de
+   * requête (`UserPreferencesManager`, `try encoder.encode(privacy)`). Il
+   * arrivait donc sur chaque écriture, et le mode *strip* de Zod le retirait :
+   * mesuré sur staging le 2026-08-31, un `PATCH {"extras":{"sonde":"4589"}}`
+   * rendait `success: true` et la relecture ne rendait RIEN. Le canal de
+   * compatibilité ascendante d'iOS n'a jamais fonctionné.
+   *
+   * Le déclarer a deux effets, et le second est celui qui compte : il rend au
+   * client son aller-retour, et il permet à la frontière de REFUSER tout le
+   * reste (`.strict()` dans `submittedFrom`) sans casser les trois clients.
+   * Une porte de sortie nommée est ce qui autorise à fermer les autres.
+   *
+   * Facultatif et SANS défaut : il ne doit apparaître dans un document servi
+   * que si quelque chose y a été stocké — sinon les sept catégories gagneraient
+   * un `extras: {}` que ni le web ni Android n'attendent.
+   */
+  extras: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type DocumentPreference = z.infer<typeof DocumentPreferenceSchema>;

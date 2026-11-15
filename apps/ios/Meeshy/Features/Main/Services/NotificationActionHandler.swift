@@ -1,92 +1,13 @@
 import UIKit
+import Combine
 @preconcurrency import UserNotifications
 import MeeshySDK
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.app", category: "push")
-
-// MARK: - Injection seams
-
-/// Background-task envelope around the whole action flow — iOS suspends the
-/// process the instant the delegate callback returns unless the work is
-/// covered by `beginBackgroundTask` (same hazard as the silent-push path,
-/// see `SilentPushState`).
-@MainActor
-protocol BackgroundTaskScheduling {
-    func beginTask(name: String, expirationHandler: (@Sendable () -> Void)?) -> UIBackgroundTaskIdentifier
-    func endTask(_ identifier: UIBackgroundTaskIdentifier)
-}
-
-@MainActor
-struct UIApplicationBackgroundTaskScheduler: BackgroundTaskScheduling {
-    func beginTask(name: String, expirationHandler: (@Sendable () -> Void)?) -> UIBackgroundTaskIdentifier {
-        UIApplication.shared.beginBackgroundTask(withName: name, expirationHandler: expirationHandler)
-    }
-
-    func endTask(_ identifier: UIBackgroundTaskIdentifier) {
-        guard identifier != .invalid else { return }
-        UIApplication.shared.endBackgroundTask(identifier)
-    }
-}
-
-/// Ends the wrapped background task exactly once, from whichever fires first:
-/// the normal completion path (`defer` in `handle()`) or iOS's expiration
-/// callback when the awaited flow outlives the background window (~30 s — the
-/// action flow chains up to two 60 s-timeout REST calls, so a stalled network
-/// mechanically exceeds it). Apple: failing to end an expired task terminates
-/// the process (0x8BADF00D family) — same hazard the silent-push path guards
-/// via `SilentPushState`.
-@MainActor
-final class BackgroundTaskLease {
-    private let scheduler: BackgroundTaskScheduling
-    private var identifier: UIBackgroundTaskIdentifier = .invalid
-
-    init(scheduler: BackgroundTaskScheduling, name: String) {
-        self.scheduler = scheduler
-        self.identifier = scheduler.beginTask(name: name) { [weak self] in
-            Task { @MainActor in self?.end() }
-        }
-    }
-
-    func end() {
-        guard identifier != .invalid else { return }
-        scheduler.endTask(identifier)
-        identifier = .invalid
-    }
-}
-
-/// Slice of `OfflineQueue` the handler needs: the durable message path
-/// (kind `.sendMessage`) and the generic mutation path (`.createComment`, …).
-nonisolated protocol NotificationReplyQueueing {
-    func enqueue(_ item: OfflineQueueItem) async throws
-    @discardableResult
-    func enqueue<P: Codable & Sendable>(
-        _ kind: OutboxKind,
-        payload: P,
-        conversationId: String?
-    ) async throws -> String
-}
-
-extension OfflineQueue: NotificationReplyQueueing {}
-
-/// Optimistic-write slice of `MessagePersistenceActor`.
-nonisolated protocol OptimisticMessagePersisting {
-    func insertOptimistic(_ record: MessageRecord) async throws
-    func markOptimisticFailed(localId: String, reason: String) async throws
-}
-
-extension MessagePersistenceActor: OptimisticMessagePersisting {}
+private nonisolated let logger = MeeshyLog.logger(.push)
 
 // MARK: - NotificationActionHandler
 
-@MainActor
-protocol NotificationActionHandling {
-    func handle(
-        actionIdentifier: String,
-        userInfo: [AnyHashable: Any],
-        replyText: String?
-    ) async
-}
 
 /// R1/R2 — the injectable handler behind
 /// `AppDelegate.userNotificationCenter(_:didReceive:withCompletionHandler:)`.
@@ -107,30 +28,73 @@ protocol NotificationActionHandling {
 ///     `clientMessageId` so the outbox flusher can safely retry.
 @MainActor
 final class NotificationActionHandler: NotificationActionHandling {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     static let shared = NotificationActionHandler()
 
-    private let messageService: MessageServiceProviding
-    private let conversationService: ConversationServiceProviding
+    let messageService: MessageServiceProviding
+    let conversationService: ConversationServiceProviding
     private let postService: PostServiceProviding
-    private let friendService: FriendServiceProviding
-    private let replyQueue: NotificationReplyQueueing
+    /// Le seul chemin réseau d'un commentaire (#9743) — il lie la requête au
+    /// compte de l'auteur.
+    let commentPublisher: CommentPublisher
+    /// Une réponse rapide à un commentaire n'a pu ni partir ni rejoindre la
+    /// file : l'utilisateur, hors de l'app, l'apprend par une notification.
+    let notifyUnsentComment: @MainActor () -> Void
+    let friendService: FriendServiceProviding
+    let replyQueue: NotificationReplyQueueing
     private let injectedPersistence: OptimisticMessagePersisting?
     private let injectedPrepareReplyQueue: (@MainActor () async -> Void)?
     private let backgroundTasks: BackgroundTaskScheduling
-    private let authTokenProvider: @MainActor () -> String?
+    let authTokenProvider: @MainActor () -> String?
     private let applyAuthToken: @MainActor (String?) -> Void
-    private let currentUserId: @MainActor () -> String?
-    private let preferredLanguage: @MainActor () -> String?
-    private let isRegisteredUser: @MainActor () -> Bool
-    private let openNotification: @MainActor ([AnyHashable: Any]) -> Void
-    private let localMarkRead: @MainActor (String) -> Void
-    private let removeDeliveredForConversation: @MainActor (String) -> Void
-    private let removeDeliveredForPost: @MainActor (String) -> Void
+    let currentUserId: @MainActor () -> String?
+    let preferredLanguage: @MainActor () -> String?
+    let isRegisteredUser: @MainActor () -> Bool
+    let openNotification: @MainActor ([AnyHashable: Any]) -> Void
+    private let dialCallBack: @MainActor (CallBackRequest) -> Void
+    let localMarkRead: @MainActor (String) -> Void
+    /// #12655 — la conversation PEUT-elle être verrouillée par PIN sur cet
+    /// appareil ? Oui tant que la liste des verrous n'est pas lue (fail-closed).
+    private let conversationLocks: any ConversationLockProbing
+    /// #12655 — une réponse refusée sous PIN le dit, hors de l'app.
+    private let notifyRefusedReply: @MainActor (String?) -> Void
+    private let stopBring: @MainActor (String) async -> Void
+    /// L'unique consommation du SDK, injectée pour que les tests l'observent :
+    /// `NotificationToastManager` est un singleton `@MainActor` sans couture de
+    /// service, et un témoin ne peut pas mesurer un aller-retour REST réel.
+    private let consume: @MainActor (NotificationRef) async -> Void
+    let removeDeliveredForConversation: @MainActor (String) -> Void
+    let removeDeliveredForPost: @MainActor (String) -> Void
+    let removeDeliveredForNotificationIds: @MainActor ([String]) async -> Void
+    /// #8858 — les trois gestes du DÉTAIL d'un message : Plans, Contacts, et
+    /// le parcours de lien de conversation (Anonyme / Mon compte, #8726).
+    private let openExternalURL: @MainActor (URL) -> Void
+    private let openDeepLink: @MainActor (URL) -> Void
+    private let presentNewContact: @MainActor (NotificationContactCard) -> Void
+    /// La loi du fil appliquée à la conversation de la réponse (#12641, #12985).
+    let destinationGuard: EndToEndDestinationGuard
+    /// Le refus d'une réponse vers une conversation chiffrée se DIT (audit M4),
+    /// et sa bannière ouvre la conversation.
+    let notifyRefusedEndToEndReply: @MainActor (String, EndToEndSendRefusal) -> Void
+    /// Le coffre libsignal, seul lieu du clair d'une réponse chiffrée (#13067).
+    let endToEnd: any EndToEndMessagingProviding
+    /// #14667, #14673 — les réponses dont le régime attend d'être relu.
+    private let repliesAwaitingRegime: any NotificationRepliesAwaitingRegimeStoring
+    private let awaitingReplyRules: NotificationReplyRegimeWait.Rules
+    var revocationSubscription: AnyCancellable?
+    /// #7453 — l'abonnement au retour au premier plan, qui rejoue le balayage
+    /// des bannières éphémères échues. Un nouvel appel REMPLACE l'abonnement :
+    /// la racine SwiftUI peut rejouer son câblage sans balayer deux fois.
+    var foregroundSweepSubscription: AnyCancellable?
 
     /// Resolved lazily so tests never touch `DependencyContainer.shared`
     /// (which opens the on-disk GRDB pool).
-    private var messagePersistence: OptimisticMessagePersisting {
+    var messagePersistence: OptimisticMessagePersisting {
         injectedPersistence ?? DependencyContainer.shared.messagePersistence
     }
 
@@ -143,9 +107,9 @@ final class NotificationActionHandler: NotificationActionHandling {
     /// `OfflineQueue.configure` is idempotent for the same shared pool, so
     /// wiring it again on a warm launch is harmless. Resolved lazily like
     /// `messagePersistence` so tests never touch `DependencyContainer.shared`.
-    private var prepareReplyQueue: @MainActor () async -> Void {
+    var prepareReplyQueue: @MainActor () async -> Void {
         injectedPrepareReplyQueue ?? {
-            await OfflineQueue.shared.configure(pool: DependencyContainer.shared.dbPool)
+            await OfflineQueue.shared.configure(pool: DependencyContainer.shared.database.pool)
         }
     }
 
@@ -153,14 +117,19 @@ final class NotificationActionHandler: NotificationActionHandling {
         messageService: MessageServiceProviding = MessageService.shared,
         conversationService: ConversationServiceProviding = ConversationService.shared,
         postService: PostServiceProviding = PostService.shared,
+        commentPublisher: CommentPublisher = .live,
+        notifyUnsentComment: @escaping @MainActor () -> Void = { NotificationReplyFailure.post() },
         friendService: FriendServiceProviding = FriendService.shared,
         replyQueue: NotificationReplyQueueing = OfflineQueue.shared,
         messagePersistence: OptimisticMessagePersisting? = nil,
         backgroundTasks: BackgroundTaskScheduling = UIApplicationBackgroundTaskScheduler(),
         authTokenProvider: @escaping @MainActor () -> String? = { AuthManager.shared.authToken },
         applyAuthToken: @escaping @MainActor (String?) -> Void = { APIClient.shared.authToken = $0 },
-        currentUserId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
+        currentUserId: @escaping @MainActor () -> String? = {
+            AuthManager.shared.currentUser?.id ?? AuthManager.shared.persistedActiveUserId
+        },
         preferredLanguage: @escaping @MainActor () -> String? = {
+            // Défaut de COMPOSITION (langue proposée, repli « fr ») — pas une lecture (#11875).
             AuthManager.shared.currentUser?.preferredContentLanguages.first
         },
         isRegisteredUser: @escaping @MainActor () -> Bool = {
@@ -168,7 +137,12 @@ final class NotificationActionHandler: NotificationActionHandling {
             return user.isAnonymous != true
         },
         openNotification: @escaping @MainActor ([AnyHashable: Any]) -> Void = {
+            // iPad, fenêtre détachée devant : la cible s'ouvre dans la fenêtre principale — qui revient d'abord.
+            MainWindowRegistry.shared.bringPrimaryForwardIfHidden()
             PushNotificationManager.shared.handleNotification(userInfo: $0)
+        },
+        dialCallBack: @escaping @MainActor (CallBackRequest) -> Void = { request in
+            CallBackDialer.shared.dial(request)
         },
         localMarkRead: @escaping @MainActor (String) -> Void = { conversationId in
             // Les trois surfaces du compteur, en un seul point d'écriture.
@@ -180,21 +154,54 @@ final class NotificationActionHandler: NotificationActionHandling {
             // ouverture d'écran passe, elle, par `onConversationOpened`.
             NotificationToastManager.shared.onConversationMarkedRead(conversationId)
         },
+        consume: @escaping @MainActor (NotificationRef) async -> Void = { ref in
+            await NotificationToastManager.shared.consume(ref)
+        },
+        // #6999 — par le FIL, pas par la seule clé de charge : le
+        // `threadIdentifier` est ce qu'iOS a REGROUPÉ, et une bannière peut y
+        // être rangée sans que sa charge porte `conversationId` / `postId`.
         removeDeliveredForConversation: @escaping @MainActor (String) -> Void = { conversationId in
-            NotificationActionHandler.removeDeliveredNotifications(
-                matching: { ($0["conversationId"] as? String) == conversationId }
-            )
+            NotificationActionHandler.removeDeliveredBanners(forThreadOf: .conversation(id: conversationId))
         },
         removeDeliveredForPost: @escaping @MainActor (String) -> Void = { postId in
-            NotificationActionHandler.removeDeliveredNotifications(
-                matching: { ($0["postId"] as? String) == postId }
+            NotificationActionHandler.removeDeliveredBanners(forThreadOf: .post(id: postId))
+        },
+        removeDeliveredForNotificationIds: @escaping @MainActor ([String]) async -> Void = { ids in
+            let revocation = NotificationRevocationPayload(notificationIds: ids, conversationIds: [])
+            await NotificationActionHandler.removeDeliveredNotificationsAwaiting(
+                matching: { revocation.covers($0) }
             )
         },
-        prepareReplyQueue: (@MainActor () async -> Void)? = nil
+        prepareReplyQueue: (@MainActor () async -> Void)? = nil,
+        openExternalURL: @escaping @MainActor (URL) -> Void = { UIApplication.shared.open($0) },
+        openDeepLink: @escaping @MainActor (URL) -> Void = { _ = DeepLinkRouter.shared.handle(url: $0) },
+        presentNewContact: @escaping @MainActor (NotificationContactCard) -> Void = {
+            NotificationContactPresenter.present($0)
+        },
+        conversationLocks: any ConversationLockProbing = ConversationLockManager.shared,
+        notifyRefusedReply: @escaping @MainActor (String?) -> Void = {
+            NotificationReplyFailure.postRefusedUnderConversationPin(conversationId: $0)
+        },
+        destinationGuard: EndToEndDestinationGuard = EndToEndDestinationGuard(),
+        notifyRefusedEndToEndReply: @escaping @MainActor (String, EndToEndSendRefusal) -> Void = {
+            NotificationReplyFailure.postEndToEndReplyRefused(conversationId: $0, refusal: $1)
+        },
+        endToEnd: any EndToEndMessagingProviding = EndToEndMessagingRuntime.shared,
+        repliesAwaitingRegime: any NotificationRepliesAwaitingRegimeStoring = NotificationRepliesAwaitingRegime.shared,
+        awaitingReplyRules: NotificationReplyRegimeWait.Rules = .live,
+        stopBring: @escaping @MainActor (String) async -> Void = { await BringCenter.shared.stopAndWait(bringId: $0) }
     ) {
+        self.stopBring = stopBring
+        self.repliesAwaitingRegime = repliesAwaitingRegime
+        self.awaitingReplyRules = awaitingReplyRules
+        self.destinationGuard = destinationGuard
+        self.notifyRefusedEndToEndReply = notifyRefusedEndToEndReply
+        self.endToEnd = endToEnd
         self.messageService = messageService
         self.conversationService = conversationService
         self.postService = postService
+        self.commentPublisher = commentPublisher
+        self.notifyUnsentComment = notifyUnsentComment
         self.friendService = friendService
         self.replyQueue = replyQueue
         self.injectedPersistence = messagePersistence
@@ -206,9 +213,17 @@ final class NotificationActionHandler: NotificationActionHandling {
         self.preferredLanguage = preferredLanguage
         self.isRegisteredUser = isRegisteredUser
         self.openNotification = openNotification
+        self.dialCallBack = dialCallBack
         self.localMarkRead = localMarkRead
+        self.consume = consume
         self.removeDeliveredForConversation = removeDeliveredForConversation
         self.removeDeliveredForPost = removeDeliveredForPost
+        self.removeDeliveredForNotificationIds = removeDeliveredForNotificationIds
+        self.openExternalURL = openExternalURL
+        self.openDeepLink = openDeepLink
+        self.presentNewContact = presentNewContact
+        self.conversationLocks = conversationLocks
+        self.notifyRefusedReply = notifyRefusedReply
     }
 
     // MARK: - Entry point
@@ -231,10 +246,13 @@ final class NotificationActionHandler: NotificationActionHandling {
         applyAuthToken(authTokenProvider())
 
         let payload = NotificationPayload(userInfo: userInfo)
+        guard !refusesUnderConversationPin(actionIdentifier, payload: payload, userInfo: userInfo) else { return }
 
         switch actionIdentifier {
         case UNNotificationDefaultActionIdentifier:
+            // #6999 — OUVRIR, c'est CONSOMMER ; la navigation d'ABORD, la consommation attend le `markAsRead` REST.
             openNotification(userInfo)
+            await consumeTapped(payload)
 
         case UNNotificationDismissActionIdentifier:
             break
@@ -243,7 +261,7 @@ final class NotificationActionHandler: NotificationActionHandling {
             await handleMarkRead(payload)
 
         case MeeshyNotificationAction.reply.rawValue:
-            await handleReply(payload, replyText: replyText)
+            await handleReply(payload, userInfo: userInfo, replyText: replyText)
 
         case MeeshyNotificationAction.comment.rawValue:
             await handleComment(payload, userInfo: userInfo, replyText: replyText)
@@ -254,12 +272,29 @@ final class NotificationActionHandler: NotificationActionHandling {
         case MeeshyNotificationAction.decline.rawValue:
             await handleFriendResponse(payload, userInfo: userInfo, accepted: false)
 
+        case MeeshyNotificationAction.callback.rawValue:
+            await consumeTapped(payload)
+            guard let request = CallBackRequest(notification: payload) else {
+                openNotification(userInfo)
+                return
+            }
+            dialCallBack(request)
+
         case MeeshyNotificationAction.view.rawValue,
-             MeeshyNotificationAction.callback.rawValue,
              MeeshyNotificationAction.answerCall.rawValue:
             // All of these surface the app to the relevant screen — the
             // deep-link router decides the destination based on payload.type.
             openNotification(userInfo)
+            await consumeTapped(payload)
+
+        case MeeshyNotificationAction.openInMaps.rawValue,
+             MeeshyNotificationAction.addContact.rawValue,
+             MeeshyNotificationAction.joinInvite.rawValue:
+            handleDetailAction(actionIdentifier, userInfo: userInfo)
+            await consumeTapped(payload)
+
+        case MeeshyNotificationAction.stopBring.rawValue:
+            await handleStopBring(userInfo)
 
         case MeeshyNotificationAction.declineCall.rawValue:
             // Silent decline — no navigation. The VoIP layer handles the
@@ -269,7 +304,101 @@ final class NotificationActionHandler: NotificationActionHandling {
 
         default:
             openNotification(userInfo)
+            await consumeTapped(payload)
         }
+    }
+
+    /// #17442 — « Arrêter » sur la bannière d'un Bring : le Bring s'éteint partout, l'app ne s'ouvre pas.
+    private func handleStopBring(_ userInfo: [AnyHashable: Any]) async {
+        guard let bringId = userInfo["bringId"] as? String, !bringId.isEmpty else { return }
+        await stopBring(bringId)
+    }
+
+    // MARK: - Conversation verrouillée par PIN (#12655)
+
+    /// Les gestes qu'une conversation sous PIN refuse depuis l'écran
+    /// verrouillé : ceux qui ÉCRIVENT dans la conversation (répondre, marquer
+    /// lu) et ceux qui AGISSENT sur son contenu (suivre l'invitation, ajouter
+    /// le contact, ouvrir la position dans Plans).
+    static let pinGuardedActions: Set<String> = [
+        MeeshyNotificationAction.reply.rawValue,
+        MeeshyNotificationAction.markRead.rawValue,
+        MeeshyNotificationAction.joinInvite.rawValue,
+        MeeshyNotificationAction.addContact.rawValue,
+        MeeshyNotificationAction.openInMaps.rawValue,
+    ]
+
+    /// Défense en profondeur derrière la catégorie sans action de l'extension :
+    /// une bannière livrée avant le verrou, ou catégorisée par la passerelle
+    /// quand l'extension n'a pas tourné (tuée, hors budget), porte encore ses
+    /// gestes. Sur une conversation verrouillée (ou une charge scellée), rien
+    /// ne part, rien n'est marqué lu, aucun lien n'est suivi : l'app s'ouvre
+    /// sur la conversation, que la porte du routeur garde par le PIN. Une
+    /// réponse, exécutée en arrière-plan, le dit par une notification locale.
+    private func refusesUnderConversationPin(
+        _ actionIdentifier: String,
+        payload: NotificationPayload,
+        userInfo: [AnyHashable: Any]
+    ) -> Bool {
+        guard Self.pinGuardedActions.contains(actionIdentifier) else { return false }
+        let locked = payload.conversationId.map { conversationLocks.mayBeLocked($0) } ?? false
+        guard locked || NSEAttachmentPolicy.isSealedForLockedConversation(userInfo) else { return false }
+        logger.info("notification action refused: conversation locked by PIN")
+        if actionIdentifier == MeeshyNotificationAction.reply.rawValue {
+            notifyRefusedReply(payload.conversationId)
+        }
+        openNotification(userInfo)
+        return true
+    }
+
+    // MARK: - Détail d'un message (#8858)
+
+    /// Exécute le geste que la catégorie du détail propose. Le détail se relit
+    /// par la MÊME politique que l'extension a appliquée pour choisir la
+    /// catégorie — protection comprise. Faute de détail lisible, le geste
+    /// ouvre la notification : un bouton ne reste jamais inerte.
+    private func handleDetailAction(_ actionIdentifier: String, userInfo: [AnyHashable: Any]) {
+        switch (actionIdentifier, NotificationDetailPolicy.detail(userInfo: userInfo)) {
+        case (MeeshyNotificationAction.openInMaps.rawValue, .location(let place)?):
+            guard let url = place.mapsURL else { return openNotification(userInfo) }
+            openExternalURL(url)
+        case (MeeshyNotificationAction.addContact.rawValue, .contact(let card)?):
+            openNotification(userInfo)
+            presentNewContact(card)
+        case (MeeshyNotificationAction.joinInvite.rawValue, .invite(let invite)?):
+            // Une invitation ne mène qu'à une jointure : un lien d'e-mail
+            // glissé à sa place n'entre jamais par la voie système (#10874).
+            guard Self.isInvitation(invite.url) else { return openNotification(userInfo) }
+            openDeepLink(invite.url)
+        default:
+            openNotification(userInfo)
+        }
+    }
+
+    static func isInvitation(_ url: URL) -> Bool {
+        switch DeepLinkParser.parse(url) {
+        case .joinLink, .chatLink: return true
+        default: return false
+        }
+    }
+
+    // MARK: - Consommation d'une bannière (#6999)
+
+    /// Marque lue la notification que le geste vient d'ouvrir ou de résoudre.
+    ///
+    /// `notificationId` est la SEULE clé qui couvre tous les types : un
+    /// `security_alert`, un `login_new_device`, un `password_changed`, un
+    /// `friend_request` n'ont ni `conversationId` ni `postId`, et n'avaient donc
+    /// aucun chemin vers « lu » — ils le restaient à vie. Le gateway la pose
+    /// depuis toujours ; c'est le décodeur client qui l'ignorait.
+    ///
+    /// La consommation par FIL (conversation, post) n'est PAS faite ici : elle
+    /// suit la navigation (`onConversationOpened` / `onPostOpened`), qui sait
+    /// ce qui s'est réellement ouvert. Faire les deux marquerait lues des
+    /// lignes que l'utilisateur n'a pas atteintes si le routage échoue.
+    func consumeTapped(_ payload: NotificationPayload) async {
+        guard let notificationId = payload.notificationId else { return }
+        await consume(.notification(id: notificationId))
     }
 
     // MARK: - Mark read
@@ -285,286 +414,16 @@ final class NotificationActionHandler: NotificationActionHandling {
         removeDeliveredForConversation(conversationId)
     }
 
-    // MARK: - Durable quick reply (R2)
-
-    private func handleReply(_ payload: NotificationPayload, replyText: String?) async {
-        guard let conversationId = payload.conversationId else {
-            logger.warning("reply action without conversationId — ignoring")
-            return
-        }
-        let text = (replyText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else {
-            logger.warning("reply action with empty text — ignoring")
-            return
-        }
-        guard let userId = currentUserId() else {
-            logger.warning("reply action without an active user — ignoring")
-            return
-        }
-
-        let originalLanguage = preferredLanguage()
-        let item = OfflineQueueItem(
-            conversationId: conversationId,
-            content: text,
-            originalLanguage: originalLanguage,
-            replyToId: payload.messageId
-        )
-
-        do {
-            try await messagePersistence.insertOptimistic(
-                makeOptimisticReplyRecord(
-                    item: item,
-                    senderId: userId,
-                    replyToId: payload.messageId
-                )
-            )
-        } catch {
-            logger.error("reply optimistic insert failed: \(error.localizedDescription, privacy: .public)")
-        }
-
-        await prepareReplyQueue()
-        var outboxRowLanded = false
-        do {
-            try await replyQueue.enqueue(item)
-            outboxRowLanded = true
-        } catch {
-            logger.error("reply outbox enqueue failed: \(error.localizedDescription, privacy: .public)")
-        }
-
-        do {
-            let request = SendMessageRequest(
-                content: text,
-                originalLanguage: originalLanguage,
-                replyToId: payload.messageId,
-                clientMessageId: item.clientMessageId
-            )
-            _ = try await messageService.send(conversationId: conversationId, request: request)
-            logger.info("notification reply sent for conversation \(conversationId, privacy: .public)")
-        } catch {
-            logger.error("reply REST send failed: \(error.localizedDescription, privacy: .public)")
-            if !outboxRowLanded {
-                do {
-                    try await messagePersistence.markOptimisticFailed(
-                        localId: item.clientMessageId,
-                        reason: error.localizedDescription
-                    )
-                } catch {
-                    logger.error("reply markOptimisticFailed failed: \(error.localizedDescription, privacy: .public)")
-                }
-            }
-        }
-
-        localMarkRead(conversationId)
-        do {
-            try await conversationService.markRead(conversationId: conversationId)
-        } catch {
-            logger.error("post-reply markRead failed: \(error.localizedDescription, privacy: .public)")
-        }
-        removeDeliveredForConversation(conversationId)
-    }
-
-    private func makeOptimisticReplyRecord(
-        item: OfflineQueueItem,
-        senderId: String,
-        replyToId: String?
-    ) -> MessageRecord {
-        MessageRecord(
-            localId: item.clientMessageId, serverId: nil,
-            conversationId: item.conversationId, senderId: senderId,
-            content: item.content,
-            originalLanguage: item.originalLanguage ?? "fr",
-            messageType: "text", messageSource: "user", contentType: "text",
-            state: .sending, retryCount: 0, lastError: nil,
-            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
-            replyToId: replyToId, storyReplyToId: nil,
-            forwardedFromId: nil, forwardedFromConversationId: nil,
-            replyToJson: nil, forwardedFromJson: nil,
-            expiresAt: nil, effectFlags: 0,
-            maxViewOnceCount: nil, viewOnceCount: 0,
-            isEdited: false, editedAt: nil, deletedAt: nil,
-            pinnedAt: nil, pinnedBy: nil,
-            senderName: nil, senderUsername: nil,
-            senderColor: nil, senderAvatarURL: nil,
-            deliveredCount: 0, readCount: 0,
-            deliveredToAllAt: nil, readByAllAt: nil,
-            createdAt: Date(), sentAt: nil,
-            deliveredAt: nil, readAt: nil, updatedAt: Date(),
-            attachmentsJson: nil, reactionsJson: nil,
-            reactionCount: 0, currentUserReactionsJson: nil,
-            mentionedUsersJson: nil,
-            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
-            cachedLastLineWidth: nil, cachedLineCount: nil,
-            cachedTimestampInline: nil,
-            layoutVersion: 0, layoutMaxWidth: nil,
-            changeVersion: 0
-        )
-    }
-
-    // MARK: - Inline comment on social pushes (R3/R4)
-
-    /// Threading rule (spec D4-R3, décidé) :
-    ///  - comment / thread notifications → the produced comment is a threaded
-    ///    reply to THE notified comment (`parentId = commentId`) ;
-    ///  - `friend_new_post` (or any non-thread type) → root comment ;
-    ///  - missing `commentId` on a thread type → degrade to a root comment
-    ///    rather than dropping the user's text.
-    nonisolated static func threadedParentCommentId(
-        type: String,
-        notifiedCommentId: String?
-    ) -> String? {
-        let threadReplyTypes: Set<String> = [
-            "post_comment",
-            "comment_reply",
-            "story_new_comment",
-            "story_thread_reply",
-            "friend_story_comment"
-        ]
-        guard threadReplyTypes.contains(type),
-              let notifiedCommentId,
-              !notifiedCommentId.isEmpty else { return nil }
-        return notifiedCommentId
-    }
-
-    private func handleComment(
-        _ payload: NotificationPayload,
-        userInfo: [AnyHashable: Any],
-        replyText: String?
-    ) async {
-        guard let postId = payload.postId else {
-            logger.warning("comment action without postId — ignoring")
-            return
-        }
-        let text = (replyText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else {
-            logger.warning("comment action with empty text — ignoring")
-            return
-        }
-        guard isRegisteredUser() else {
-            logger.warning("comment action from an anonymous session — commenting requires a registered account, ignoring")
-            return
-        }
-
-        let parentId = Self.threadedParentCommentId(
-            type: payload.type ?? "",
-            notifiedCommentId: userInfo["commentId"] as? String
-        )
-        let clientMutationId = ClientMutationId.generate()
-
-        await prepareReplyQueue()
-        do {
-            try await replyQueue.enqueue(
-                .createComment,
-                payload: CreateCommentPayload(
-                    clientMutationId: clientMutationId,
-                    postId: postId,
-                    parentCommentId: parentId,
-                    content: text
-                ),
-                conversationId: nil
-            )
-        } catch {
-            logger.error("comment outbox enqueue failed: \(error.localizedDescription, privacy: .public)")
-        }
-
-        do {
-            _ = try await postService.addComment(
-                postId: postId,
-                content: text,
-                parentId: parentId,
-                effectFlags: nil,
-                clientMutationId: clientMutationId
-            )
-            logger.info("notification comment sent for post \(postId, privacy: .public)")
-        } catch {
-            logger.error("comment REST send failed — outbox row will retry with the same mutation id: \(error.localizedDescription, privacy: .public)")
-        }
-
-        removeDeliveredForPost(postId)
-    }
-
-    // MARK: - Friend request accept / decline (R5)
-
-    /// R5 — ACCEPT/DECLINE execute the REST response in background instead of
-    /// the historical navigation (which parked a `pendingNotificationPayload`
-    /// that lock-screen taps never consumed — the request was neither
-    /// accepted nor refused). The push carries `senderId` (and
-    /// `friendRequestId` once the gateway enriches its payload); when only
-    /// the sender is known, the pending request is resolved via
-    /// `receivedRequests`.
-    private func handleFriendResponse(
-        _ payload: NotificationPayload,
-        userInfo: [AnyHashable: Any],
-        accepted: Bool
-    ) async {
-        let type = payload.type ?? ""
-        guard type == "friend_request" || type == "contact_request" else {
-            // accept/decline are only registered on MEESHY_FRIEND_REQUEST —
-            // an unexpected type falls back to the historical navigation.
-            openNotification(userInfo)
-            return
-        }
-        guard isRegisteredUser() else {
-            logger.warning("friend request action from an anonymous session — ignoring")
-            return
-        }
-
-        do {
-            guard let requestId = try await resolveFriendRequestId(payload, userInfo: userInfo) else {
-                logger.warning("friend request action without resolvable request id — falling back to navigation")
-                openNotification(userInfo)
-                return
-            }
-            _ = try await friendService.respond(requestId: requestId, accepted: accepted)
-            logger.info("friend request \(requestId, privacy: .public) \(accepted ? "accepted" : "declined", privacy: .public) from notification")
-            if let senderId = payload.senderId {
-                Self.removeDeliveredNotifications(
-                    matching: {
-                        ($0["type"] as? String) == type
-                            && ($0["senderId"] as? String) == senderId
-                    }
-                )
-            }
-        } catch {
-            // A thrown resolution (`receivedRequests`) or a failed `respond`
-            // must not silently drop the user's intent — surface the app on
-            // the request screen, same degradation as the unresolvable-id
-            // path above. The banner is only purged on success, so the user
-            // can also re-tap later.
-            logger.error("friend request \(accepted ? "accept" : "decline", privacy: .public) failed: \(error.localizedDescription, privacy: .public) — falling back to navigation")
-            openNotification(userInfo)
-        }
-    }
-
-    private func resolveFriendRequestId(
-        _ payload: NotificationPayload,
-        userInfo: [AnyHashable: Any]
-    ) async throws -> String? {
-        if let explicit = userInfo["friendRequestId"] as? String, !explicit.isEmpty {
-            return explicit
-        }
-        guard let senderId = payload.senderId else { return nil }
-        let pending = try await friendService.receivedRequests(offset: 0, limit: 50)
-        return pending.data.first(where: { $0.senderId == senderId })?.id
-    }
-
-    // MARK: - Notification hygiene
-
-    /// Remove already-delivered banners matching the predicate. Without this,
-    /// after a lock-screen action the banner lingers in Notification Center
-    /// while the coordinator's badge count says 0.
-    nonisolated static func removeDeliveredNotifications(
-        matching predicate: @escaping @Sendable ([AnyHashable: Any]) -> Bool
-    ) {
-        // `.current()` returns the same shared instance every call — fetched
-        // fresh on both sides instead of captured, so the completion handler
-        // doesn't need to carry a UNUserNotificationCenter (not Sendable)
-        // across the @Sendable boundary.
-        UNUserNotificationCenter.current().getDeliveredNotifications { notifications in
-            let matching = notifications
-                .filter { predicate($0.request.content.userInfo) }
-                .map(\.request.identifier)
-            guard !matching.isEmpty else { return }
-            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: matching)
-        }
-    }
+    /// #14667, #14673 — la suite des réponses dont le régime attend : relecture,
+    /// retrait, effacement du clair (`NotificationReplyRegimeWait`).
+    lazy var awaitingReplies = NotificationReplyRegimeWait(
+        store: repliesAwaitingRegime,
+        rules: awaitingReplyRules,
+        endToEnd: endToEnd,
+        currentUserId: currentUserId,
+        destination: { [unowned self] in await self.replyRegime.destination(of: $0, userInfo: [:]) },
+        offThreadReply: { [unowned self] in self.offThreadReply },
+        sendReadable: { [unowned self] in await self.sendReadableReply($0, senderId: $1) },
+        notifyRefusedEndToEndReply: notifyRefusedEndToEndReply
+    )
 }

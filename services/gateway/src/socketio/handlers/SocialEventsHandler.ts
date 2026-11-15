@@ -7,13 +7,16 @@
 import type { MeeshyIOServer as SocketIOServer, MeeshySocket as Socket } from '../typed-socket';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
-import type { ServerToClientEvents } from '@meeshy/shared/types/socketio-events';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { getCommunityCoMemberIds } from '../../services/posts/communityVisibility';
+import { communityPostAudienceIdsOf, type CommunityPostRef } from '../../services/posts/communityVisibility';
 import { emitServerEvent, type ServerEventName, type ServerEventPayload } from '../serverEmit';
+import { withAudienceListFor, withoutAudienceList } from '../../services/posts/audienceList';
+import { withoutBlockedRecipients } from '../../utils/blocking';
+import { amisAcceptes } from '../../services/friendship';
+import { circleAudienceIds } from '../../services/posts/postAudience';
+import { POST_CIRCLE_VISIBILITIES, postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
 import type {
   Post,
-  PostComment,
   PostLikedEventData,
   PostUnlikedEventData,
   PostRepostedEventData,
@@ -31,6 +34,8 @@ import type {
   PostTranslationUpdatedEventData,
   CommentTranslationUpdatedEventData,
   CommentMediaUpdatedEventData,
+  MediaCaptionTranslationUpdatedEventData,
+  MediaAltTranslationUpdatedEventData,
 } from '@meeshy/shared/types/post';
 
 // enhancedLogger (Pino) sort en prod ; le `logger` Winston de server.ts est
@@ -111,25 +116,33 @@ export class SocialEventsHandler {
   // ==============================================
 
   private async getFriendIds(userId: string): Promise<string[]> {
-    const cached = this.friendsCache.get(userId);
+    return this.cachedAudience(userId, () => amisAcceptes(this.prisma, userId), 'friend IDs');
+  }
+
+  /**
+   * L'audience d'un CERCLE de l'auteur (`ACQUAINTANCES`, `CLOSE`, `BLOOD`, #13931) :
+   * les comptes de niveau effectif au moins égal, lus par la loi des cercles.
+   * `null` pour toute autre visibilité. Le même cache de 30 s que les amis, sous
+   * une clé par cran : un like sur un post `CLOSE` ne relit pas le graphe à chaque
+   * événement.
+   */
+  private async getCircleAudience(authorId: string, visibility: string | null | undefined): Promise<string[] | null> {
+    if (postCircleAudienceFloor(visibility) === null) return null;
+    return this.cachedAudience(
+      `${visibility}:${authorId}`,
+      async () => (await circleAudienceIds(this.prisma, authorId, visibility)) ?? [],
+      'circle audience'
+    );
+  }
+
+  private async cachedAudience(key: string, load: () => Promise<string[]>, what: string): Promise<string[]> {
+    const cached = this.friendsCache.get(key);
     if (cached && cached.expiresAt > Date.now()) {
       return cached.ids;
     }
 
     try {
-      const friendships = await this.prisma.friendRequest.findMany({
-        where: {
-          OR: [
-            { senderId: userId, status: 'accepted' },
-            { receiverId: userId, status: 'accepted' },
-          ],
-        },
-        select: { senderId: true, receiverId: true },
-      });
-
-      const ids = friendships.map(f =>
-        f.senderId === userId ? f.receiverId : f.senderId
-      );
+      const ids = await load();
 
       if (this.friendsCache.size >= 500) {
         const now = Date.now();
@@ -141,12 +154,27 @@ export class SocialEventsHandler {
           if (oldest !== undefined) this.friendsCache.delete(oldest);
         }
       }
-      this.friendsCache.set(userId, { ids, expiresAt: Date.now() + this.FRIENDS_CACHE_TTL_MS });
+      this.friendsCache.set(key, { ids, expiresAt: Date.now() + this.FRIENDS_CACHE_TTL_MS });
       return ids;
     } catch (error) {
-      logger.error('social events — error fetching friend IDs', { userId, error });
+      logger.error(`social events — error fetching ${what}`, { key, error });
       return [];
     }
+  }
+
+  /**
+   * Retire de l'audience toute personne en relation de blocage avec l'auteur,
+   * dans un sens ou dans l'autre (#13350). Appliqué APRÈS le cache d'amitiés,
+   * jamais dedans : un blocage prend effet à l'émission suivante, sans attendre
+   * l'expiration des 30 s. Une lecture qui échoue ferme l'audience.
+   */
+  private async withoutBlocked(authorId: string, recipientIds: string[]): Promise<string[]> {
+    return withoutBlockedRecipients(this.prisma, authorId, recipientIds);
+  }
+
+  /** Les amis de l'auteur hors relation de blocage (#13350). */
+  private async getUnblockedFriendIds(authorId: string): Promise<string[]> {
+    return this.withoutBlocked(authorId, await this.getFriendIds(authorId));
   }
 
   /**
@@ -178,8 +206,34 @@ export class SocialEventsHandler {
     postId: string,
     event: E,
     data: SocialEventPayload<E>,
+    actorId?: string,
   ): void {
-    const rooms = [...recipientIds, authorId].map((id) => ROOMS.feed(id));
+    // **L'ACTEUR fait partie de l'audience de son propre geste** (retour
+    // porteur 2026-09-13 : « le like n'est pas synchronisé entre les
+    // différentes vues »).
+    //
+    // `recipientIds` sont les amis de l'AUTEUR, filtrés par visibilité. Celui
+    // qui AGIT n'y figurait que par accident — s'il se trouvait être ami de
+    // l'auteur, ou l'auteur lui-même. Or le fil sert des posts PUBLICS
+    // d'inconnus (`buildPostVisibilityOrFilter` accepte
+    // `visibility: PUBLIC` sans restriction d'auteur), et le fil ne rejoint
+    // AUCUNE post room — les seuls `joinPostRoom` sont le détail, le reel
+    // viewer, la feuille de commentaires et le lecteur de story.
+    //
+    // Conséquence côté client : aimer depuis le fil le post public d'un
+    // inconnu n'émettait rien vers son auteur. Aucun modèle n'apprenait le
+    // like — ni `FeedViewModel.posts`, ni `CacheCoordinator`, ni GRDB ; seul
+    // l'état optimiste de la VUE le savait, et il meurt avec elle. Le cœur se
+    // vidait donc en passant au reel viewer, qui sème son état depuis
+    // `FeedPost.isLiked`.
+    //
+    // `io.to([...])` dédoublonne (cf. `emitToUserFeedAndPostRoom` plus bas) :
+    // ajouter l'acteur ne double aucune livraison quand il est déjà ami ou
+    // auteur. Les six consommateurs client sont déjà abonnés ET déjà gardés
+    // sur l'acteur (`if actorId == currentUserId`) — cette ligne suffit donc à
+    // fermer la boucle sur toutes les surfaces à la fois.
+    const audience = actorId ? [...recipientIds, authorId, actorId] : [...recipientIds, authorId];
+    const rooms = audience.map((id) => ROOMS.feed(id));
     rooms.push(ROOMS.post(postId));
     emitServerEvent(this.io.to(rooms), event, data);
   }
@@ -214,6 +268,48 @@ export class SocialEventsHandler {
     data: SocialEventPayload<E>,
   ): void {
     emitServerEvent(this.io.to([ROOMS.feed(userId), ROOMS.post(postId)]), event, data);
+  }
+
+  /**
+   * Une PUBLICATION vers son audience — sa liste d'audience ne part qu'à la
+   * salle de son AUTEUR (#7407).
+   *
+   * `visibilityUserIds` route la diffusion (`getVisibilityFilteredRecipients`
+   * a décidé des salles) ; la charge, elle, atteint les amis et, pour une mise
+   * à jour, la salle de la publication, où se tient n'importe quel spectateur.
+   * Un ami non exclu y apprenait QUI l'auteur avait écarté. L'auteur garde sa
+   * liste : ses autres appareils la persistent depuis cet écho. Une
+   * republication, dont la liste est HÉRITÉE de sa source, ne la rend à
+   * personne, son auteur compris (`audienceList.ts`).
+   *
+   * Chaque socket reçoit l'événement UNE fois, sous la forme qui lui revient.
+   * Sans salle de publication, l'émission garde la forme d'`emitToFriends` :
+   * une par salle de fil, personnelle (`feed:subscribe` ne rejoint que la
+   * sienne). Avec elle, celle d'`emitToFeedsAndPostRoom` : UNE émission sur
+   * l'union — Socket.IO dédoublonne l'ami présent dans sa salle de fil ET dans
+   * la salle de la publication — SAUF les sockets de l'auteur (`except`), qui
+   * s'y tient quand il regarde sa propre publication et reçoit la sienne.
+   *
+   * Cinquième seam, contraint comme les quatre du cycle 100 : `payloadFor` rend
+   * un `SocialEventPayload<E>`, le couple (événement, charge) reste vérifié.
+   */
+  private emitPostToAudience<E extends SocialEventName>(
+    recipientIds: readonly string[],
+    authorId: string,
+    event: E,
+    payloadFor: (post: Post) => SocialEventPayload<E>,
+    post: Post,
+    postRoomId?: string,
+  ): void {
+    const authorRoom = ROOMS.feed(authorId);
+    const audiencePayload = payloadFor(withoutAudienceList(post));
+    const audienceRooms = recipientIds.filter((id) => id !== authorId).map((id) => ROOMS.feed(id));
+    if (postRoomId) {
+      emitServerEvent(this.io.to([...audienceRooms, ROOMS.post(postRoomId)]).except(authorRoom), event, audiencePayload);
+    } else {
+      for (const room of audienceRooms) emitServerEvent(this.io.to(room), event, audiencePayload);
+    }
+    emitServerEvent(this.io.to(authorRoom), event, payloadFor(withAudienceListFor(post, authorId)));
   }
 
   // ==============================================
@@ -251,15 +347,35 @@ export class SocialEventsHandler {
    *
    * Une visibilité INCONNUE retombe sur les amis (`default:`), jamais sur une
    * ouverture plus large : même politique que `filterPostConsumers`.
+   *
+   * `post` est REQUIS aussi (#17178) : une publication `COMMUNITY` posée dans une
+   * communauté ne part qu'aux membres actifs et au créateur de CETTE communauté,
+   * jamais aux co-membres de l'auteur dans une autre. Sa communauté est relue
+   * quand l'appelant ne la tient pas ; post introuvable ou panne ⇒ personne.
    */
   private async getVisibilityFilteredRecipients(
     authorId: string,
     visibility: string | null | undefined,
-    visibilityUserIds: string[]
+    visibilityUserIds: string[],
+    post: CommunityPostRef
+  ): Promise<string[]> {
+    return this.withoutBlocked(authorId, await this.getAudienceBeforeBlocking(authorId, visibility, visibilityUserIds, post));
+  }
+
+  private async getAudienceBeforeBlocking(
+    authorId: string,
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
+    post: CommunityPostRef
   ): Promise<string[]> {
     if (visibility === 'COMMUNITY') {
-      return getCommunityCoMemberIds(this.prisma, authorId);
+      return communityPostAudienceIdsOf(this.prisma, authorId, post);
     }
+
+    // Un cercle n'est JAMAIS replié sur « les amis » : ni Proches ni Sang ne
+    // doivent recevoir la diffusion d'un Ami qui n'a pas le niveau (#13931).
+    const circleAudience = await this.getCircleAudience(authorId, visibility);
+    if (circleAudience) return circleAudience;
 
     const friendIds = await this.getFriendIds(authorId);
 
@@ -289,11 +405,12 @@ export class SocialEventsHandler {
       authorId,
       post.visibility as string | undefined,
       (post.visibilityUserIds as string[] | undefined) ?? [],
+      { postId: post.id, communityId: post.communityId },
     );
     logger.info(`📣 post:created fanout author=${authorId} postId=${post.id} recipients=${recipients.length}`);
     // U1 — echo the cmid so the author's offline-created optimistic post (keyed
     // by cmid) reconciles to the server id instead of duplicating.
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.POST_CREATED, { post, clientMutationId });
+    this.emitPostToAudience(recipients, authorId, SERVER_EVENTS.POST_CREATED, (p) => ({ post: p, clientMutationId }), post);
   }
 
   async broadcastPostUpdated(post: Post, authorId: string): Promise<void> {
@@ -301,12 +418,13 @@ export class SocialEventsHandler {
       authorId,
       post.visibility as string | undefined,
       (post.visibilityUserIds as string[] | undefined) ?? [],
+      { postId: post.id, communityId: post.communityId },
     );
-    // Feed rooms filtrées par visibilité + post room, UN SEUL emit dédoublonné
-    // (miroir broadcastPostLiked). Caveat assumé : si l'édition RESTREINT la
+    // Feed rooms filtrées par visibilité + post room, chaque socket servi UNE
+    // fois (`emitPostToAudience`). Caveat assumé : si l'édition RESTREINT la
     // visibilité, les membres déjà joints à la post room reçoivent encore
     // cette update — même sémantique que comment:added, pas d'éviction de room.
-    this.emitToFeedsAndPostRoom(recipients, authorId, post.id, SERVER_EVENTS.POST_UPDATED, { post });
+    this.emitPostToAudience(recipients, authorId, SERVER_EVENTS.POST_UPDATED, (p) => ({ post: p }), post, post.id);
   }
 
   async broadcastPostDeleted(postId: string, authorId: string): Promise<void> {
@@ -314,7 +432,7 @@ export class SocialEventsHandler {
     // suppression, sinon un viewer non-ami resté sur le détail/reel d'un post
     // supprimé ne le sait jamais. `post:join` est gaté par visibilité côté
     // serveur (PostReactionHandler) et io.to([...]) dédoublonne.
-    const friendIds = await this.getFriendIds(authorId);
+    const friendIds = await this.getUnblockedFriendIds(authorId);
     this.emitToFeedsAndPostRoom(friendIds, authorId, postId, SERVER_EVENTS.POST_DELETED, { postId, authorId });
   }
 
@@ -324,10 +442,10 @@ export class SocialEventsHandler {
     visibility: string | null | undefined,
     visibilityUserIds: string[],
   ): Promise<void> {
-    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
     // Feed rooms (amis filtrés par visibilité + auteur) ET post room (détail /
     // reel viewer) en UN SEUL emit dédoublonné — plus de double-livraison.
-    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_LIKED, data);
+    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_LIKED, data, data.userId);
   }
 
   async broadcastPostUnliked(
@@ -336,8 +454,8 @@ export class SocialEventsHandler {
     visibility: string | null | undefined,
     visibilityUserIds: string[],
   ): Promise<void> {
-    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
-    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_UNLIKED, data);
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
+    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_UNLIKED, data, data.userId);
   }
 
   async broadcastPostReposted(data: PostRepostedEventData, authorId: string): Promise<void> {
@@ -347,8 +465,13 @@ export class SocialEventsHandler {
       authorId,
       repost?.visibility as string | undefined,
       (repost?.visibilityUserIds as string[] | undefined) ?? [],
+      { postId: repost?.id ?? data.originalPostId, communityId: repost?.communityId },
     );
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.POST_REPOSTED, data);
+    if (!repost) {
+      this.emitToFriends(recipients, authorId, SERVER_EVENTS.POST_REPOSTED, data);
+      return;
+    }
+    this.emitPostToAudience(recipients, authorId, SERVER_EVENTS.POST_REPOSTED, (p) => ({ ...data, repost: p }), repost);
   }
 
   /**
@@ -372,20 +495,23 @@ export class SocialEventsHandler {
     // correctly filtered.
     const visibility = story.visibility;
     const visibilityUserIds = [...(story.visibilityUserIds ?? [])];
-    const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
+    const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds, {
+      postId: story.id,
+      communityId: story.communityId,
+    });
     logger.info(
       `📣 story:created fanout author=${authorId} storyId=${story.id} visibility=${visibility} recipients=${recipients.length}`
     );
     // U1 parity — echo the cmid so an offline author's optimistic story
     // (keyed by cmid) reconciles to the server story instead of duplicating.
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STORY_CREATED, { story, clientMutationId });
+    this.emitPostToAudience(recipients, authorId, SERVER_EVENTS.STORY_CREATED, (p) => ({ story: p, clientMutationId }), story);
   }
 
   /// Emitted when an author edits a published story (PUT /posts/:id). Mirrors
   /// `broadcastStoryCreated`'s visibility filtering — only viewers who can
   /// currently see the story receive the update.
-  /// `engagementReset: true` when the edit wiped views/reactions (content
-  /// edit) — clients must mark the story unseen again for every viewer.
+  /// `engagementReset` stays in the contract for older clients; an edit keeps
+  /// views and reactions since #16386, so the route sends `false`.
   async broadcastStoryUpdated(
     story: Post,
     authorId: string,
@@ -393,18 +519,19 @@ export class SocialEventsHandler {
   ): Promise<void> {
     const visibility = story.visibility;
     const visibilityUserIds = [...(story.visibilityUserIds ?? [])];
-    const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STORY_UPDATED, {
-      story,
-      engagementReset: options?.engagementReset ?? false,
+    const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds, {
+      postId: story.id,
+      communityId: story.communityId,
     });
+    const engagementReset = options?.engagementReset ?? false;
+    this.emitPostToAudience(recipients, authorId, SERVER_EVENTS.STORY_UPDATED, (p) => ({ story: p, engagementReset }), story);
   }
 
   /// Emitted when an author deletes a story. Sent to all friends (we don't have
   /// the visibility metadata anymore — and over-broadcasting a deletion is safe:
   /// recipients who never had the story silently ignore it).
   async broadcastStoryDeleted(storyId: string, authorId: string): Promise<void> {
-    const friendIds = await this.getFriendIds(authorId);
+    const friendIds = await this.getUnblockedFriendIds(authorId);
     this.emitToFriends(friendIds, authorId, SERVER_EVENTS.STORY_DELETED, { storyId, authorId });
   }
 
@@ -431,24 +558,30 @@ export class SocialEventsHandler {
   async broadcastStatusCreated(status: Post, authorId: string, clientMutationId?: string): Promise<void> {
     const visibility = status.visibility;
     const visibilityUserIds = [...(status.visibilityUserIds ?? [])];
-    const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
+    const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds, {
+      postId: status.id,
+      communityId: status.communityId,
+    });
     logger.info(
       `📣 status:created fanout author=${authorId} statusId=${status.id} visibility=${visibility} recipients=${recipients.length}`
     );
     // U1 parity — echo the cmid so an offline author's optimistic status
     // (keyed by cmid) reconciles to the server status instead of duplicating.
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STATUS_CREATED, { status, clientMutationId });
+    this.emitPostToAudience(recipients, authorId, SERVER_EVENTS.STATUS_CREATED, (p) => ({ status: p, clientMutationId }), status);
   }
 
   async broadcastStatusUpdated(status: Post, authorId: string): Promise<void> {
     const visibility = status.visibility;
     const visibilityUserIds = [...(status.visibilityUserIds ?? [])];
-    const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STATUS_UPDATED, { status });
+    const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds, {
+      postId: status.id,
+      communityId: status.communityId,
+    });
+    this.emitPostToAudience(recipients, authorId, SERVER_EVENTS.STATUS_UPDATED, (p) => ({ status: p }), status);
   }
 
   async broadcastStatusDeleted(statusId: string, authorId: string, visibility: string | null | undefined, visibilityUserIds: string[]): Promise<void> {
-    const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
+    const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds, { postId: statusId });
     this.emitToFriends(recipients, authorId, SERVER_EVENTS.STATUS_DELETED, { statusId, authorId });
   }
 
@@ -505,7 +638,7 @@ export class SocialEventsHandler {
     visibility: string | null | undefined,
     visibilityUserIds: string[],
   ): Promise<void> {
-    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
     const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
     this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_ADDED, data);
   }
@@ -523,7 +656,7 @@ export class SocialEventsHandler {
     visibility: string | null | undefined,
     visibilityUserIds: string[],
   ): Promise<void> {
-    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
     const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
     this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_UPDATED, data);
   }
@@ -534,7 +667,7 @@ export class SocialEventsHandler {
     visibility: string | null | undefined,
     visibilityUserIds: string[],
   ): Promise<void> {
-    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
     const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
     this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_DELETED, data);
   }
@@ -569,14 +702,20 @@ export class SocialEventsHandler {
   // POST/COMMENT TRANSLATION BROADCASTS
   // ==============================================
 
+  /**
+   * Même audience que sa jumelle `broadcastMediaCaptionTranslationUpdated` : les
+   * feed rooms autorisées par la visibilité + l'auteur + la post room (#7395).
+   * Sans la post room, le lecteur d'une publication PUBLIQUE qui n'est pas ami
+   * de son auteur recevait la légende traduite en direct, jamais le TEXTE.
+   */
   async broadcastPostTranslationUpdated(
     data: PostTranslationUpdatedEventData,
     postAuthorId: string,
     visibility: string | null | undefined,
     visibilityUserIds: string[],
   ): Promise<void> {
-    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
-    this.emitToFriends(recipients, postAuthorId, SERVER_EVENTS.POST_TRANSLATION_UPDATED, data);
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
+    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_TRANSLATION_UPDATED, data);
   }
 
   async broadcastCommentTranslationUpdated(
@@ -585,7 +724,7 @@ export class SocialEventsHandler {
     visibility: string | null | undefined,
     visibilityUserIds: string[],
   ): Promise<void> {
-    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
     const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
     this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, data);
   }
@@ -602,9 +741,52 @@ export class SocialEventsHandler {
     visibility: string | null | undefined,
     visibilityUserIds: string[],
   ): Promise<void> {
-    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
     const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
     this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, data);
+  }
+
+  /**
+   * Diffuse `media:caption-translation-updated` (traduction de légende de
+   * média prête, #6280) à la même audience filtrée par visibilité que les
+   * autres traductions du post porteur. Un média de COMMENTAIRE utilise les
+   * mêmes rooms que `comment:translation-updated`/`comment:media-updated`
+   * (post room comprise, join-gated) ; un média de POST direct utilise
+   * `emitToFeedsAndPostRoom` (même déduplication que `broadcastPostUpdated`).
+   */
+  async broadcastMediaCaptionTranslationUpdated(
+    data: MediaCaptionTranslationUpdatedEventData,
+    postAuthorId: string,
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
+  ): Promise<void> {
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
+    if (data.commentId) {
+      const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
+      this.io.to(rooms).emit(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data);
+      return;
+    }
+    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data);
+  }
+
+  /**
+   * Diffuse `media:alt-translation-updated` (traduction de texte alternatif
+   * d'accessibilité prête, #6737) — jumelle exacte de
+   * `broadcastMediaCaptionTranslationUpdated`, même audience.
+   */
+  async broadcastMediaAltTranslationUpdated(
+    data: MediaAltTranslationUpdatedEventData,
+    postAuthorId: string,
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
+  ): Promise<void> {
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
+    if (data.commentId) {
+      const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
+      this.io.to(rooms).emit(SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, data);
+      return;
+    }
+    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, data);
   }
 
   // ==============================================
@@ -612,9 +794,12 @@ export class SocialEventsHandler {
   // ==============================================
 
   /**
-   * Invalide le cache des amis (par ex. après un nouvel ami accepté)
+   * Invalide les audiences en cache de `userId` après un changement de lien : ses
+   * amis ET chacun de ses cercles (`<visibilité>:<id>`). Un Proche baissé en Ami ne
+   * doit plus recevoir, même 30 s, la diffusion d'un post `CLOSE` (#13931).
    */
   invalidateFriendsCache(userId: string): void {
     this.friendsCache.delete(userId);
+    POST_CIRCLE_VISIBILITIES.forEach((visibility) => this.friendsCache.delete(`${visibility}:${userId}`));
   }
 }

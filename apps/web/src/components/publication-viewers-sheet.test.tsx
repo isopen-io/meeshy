@@ -1,0 +1,221 @@
+import { QueryClientProvider, onlineManager } from '@tanstack/react-query';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+
+import { appQueryClient } from '@/lib/api/query-client';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadViewerEngagementCatalog } from '@/lib/i18n-viewer-engagement-catalog';
+import { createActMounter } from '@/test-support/act-mount';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+
+import { PublicationViewersSheet } from './publication-viewers-sheet';
+
+/**
+ * **« QUI A VU MA STORY »** (#7116) — patron `message-receipts-sheet.test.tsx` :
+ * les fixtures (`fixtures-viewers.ts`) rendent des cartes DÉTERMINISTES, ce
+ * fichier mesure que le montage React descend jusqu'au DOM et respecte la
+ * porte AUTEUR (`getPostInteractions`, 403/404), pas la loi elle-même.
+ */
+const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+beforeAll(async () => {
+  ensureHappyDomRegistered();
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+  await loadInterfaceCatalog('fr');
+  await loadViewerEngagementCatalog('fr');
+});
+
+afterAll(async () => {
+  delete globals.IS_REACT_ACT_ENVIRONMENT;
+  await releaseHappyDomIfRegistered();
+});
+
+const mounter = createActMounter();
+afterEach(() => {
+  mounter.unmountAll();
+  appQueryClient.clear();
+});
+
+async function mountSheet(props: { readonly postId: string; readonly viewCount: number | null; readonly subject?: 'story' | 'publication'; readonly anonymousViewCount?: number }): Promise<HTMLElement> {
+  const host = await mounter.mount(
+    <QueryClientProvider client={appQueryClient}>
+      <ul>
+        <PublicationViewersSheet {...props} onClose={() => {}} />
+      </ul>
+    </QueryClientProvider>,
+  );
+  await mounter.settle();
+  return host;
+}
+
+describe('PublicationViewersSheet — la liste des lecteurs de MA story', () => {
+  test('« st-mienne » rend ses trois vues, avec réaction et repli sur le pseudo', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: 3 });
+
+    const rows = host.querySelectorAll('[data-story-viewer]');
+    expect(rows).toHaveLength(3);
+    expect(host.querySelectorAll('[data-story-viewer-reaction]')).toHaveLength(1);
+    // Une ligne sans `displayName` affiche le pseudo — jamais une case vide.
+    expect(host.textContent).toContain('elan.roy');
+  });
+
+  test('le TITRE porte le compte AUTORITATIF, jamais la longueur de la page (C4)', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: 8 });
+    expect(host.querySelector('h2')?.textContent).toContain('8');
+  });
+
+  test('une story d’AUTRUI (403) ⇒ l’état REFUS dit pourquoi — « réessayer » n’y changerait rien', async () => {
+    const host = await mountSheet({ postId: 'st-amie-1', viewCount: 5 });
+    expect(host.querySelector('[data-viewers-forbidden]')?.textContent).toBe('Seul l’auteur peut voir qui a regardé cette story.');
+    expect(host.querySelector('[data-viewers-retry]')).toBeNull();
+    expect(host.querySelectorAll('[data-story-viewer]')).toHaveLength(0);
+  });
+
+  test('une story INTROUVABLE (404) ⇒ l’erreur avec « Réessayer », et réessayer REFAIT la requête', async () => {
+    const host = await mountSheet({ postId: 'st-inconnue', viewCount: null });
+    expect(host.querySelector('[data-viewers-error]')).not.toBeNull();
+    expect(host.querySelectorAll('[data-story-viewer]')).toHaveLength(0);
+    const before = appQueryClient.getQueryState(['stories', 'viewers', 'st-inconnue'])?.dataUpdateCount ?? 0;
+    const errorsBefore = appQueryClient.getQueryState(['stories', 'viewers', 'st-inconnue'])?.errorUpdateCount ?? 0;
+    host.querySelector<HTMLButtonElement>('[data-viewers-retry]')?.click();
+    await mounter.settle();
+    const errorsAfter = appQueryClient.getQueryState(['stories', 'viewers', 'st-inconnue'])?.errorUpdateCount ?? 0;
+    expect(before).toBe(0);
+    expect(errorsAfter).toBeGreaterThan(errorsBefore);
+  });
+
+  test('sous chaque nom, ce que la personne a fait — et rien pour qui n’a rien fait (#9727)', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: 3 });
+    const noor = host.querySelector('[data-story-viewer="u-viewer-noor"]');
+    expect(noor?.querySelector('[data-story-viewer-reaction]')?.textContent).toBe('🔥 ❤️');
+    expect([...(noor?.querySelectorAll('[data-story-viewer-mark]') ?? [])].map((mark) => [mark.getAttribute('data-story-viewer-mark'), mark.textContent])).toEqual([
+      ['comments', '1'],
+      ['replies', '2'],
+    ]);
+    expect(host.querySelector('[data-story-viewer="u-viewer-elan"] [data-story-viewer-marks]')).toBeNull();
+  });
+
+  test('toucher une ligne ouvre SON détail en feuille PLEIN ÉCRAN, avec en-tête et (<), en toutes lettres et le lien vers son profil (#16386)', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: 3 });
+    const row = host.querySelector<HTMLButtonElement>('[data-story-viewer="u-viewer-noor"] [data-story-viewer-open]');
+    expect(row?.getAttribute('aria-label')).toBe('Voir ce que Noor Haddad a fait');
+    row?.click();
+    await mounter.settle();
+
+    const sheet = host.querySelector<HTMLDialogElement>('dialog[data-viewer-detail-sheet]');
+    expect(sheet?.getAttribute('data-sheet-presentation')).toBe('fullscreen');
+    expect(sheet?.querySelector('[data-sheet-title]')?.textContent).toBe('Noor Haddad');
+    expect(sheet?.querySelector('[data-sheet-close]')).toBeNull();
+    const back = sheet?.querySelector<HTMLButtonElement>('[data-sheet-back]');
+    expect(back?.getAttribute('aria-label')).toBe('Retour aux vues');
+
+    const detail = sheet?.querySelector('[data-viewer-detail="u-viewer-noor"]');
+    expect([...(detail?.querySelectorAll('[data-viewer-detail-mark]') ?? [])].map((mark) => mark.textContent)).toEqual([
+      'Réactions : 🔥 ❤️',
+      '1 commentaire',
+      '2 réponses',
+    ]);
+    expect(detail?.querySelector<HTMLAnchorElement>('[data-viewer-detail-profile]')?.getAttribute('href')).toBe('/u/noor.haddad');
+    expect(detail?.querySelector('[data-viewer-detail-back]')).toBeNull();
+  });
+
+  test('le chevron (<) referme le détail, rend la liste intacte et le focus à la ligne d’où l’on venait', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: 3 });
+    host.querySelector<HTMLButtonElement>('[data-story-viewer="u-viewer-elan"] [data-story-viewer-open]')?.click();
+    await mounter.settle();
+    expect(host.querySelector('[data-viewer-detail-only-viewed]')?.textContent).toBe('A vu, sans autre interaction');
+    host.querySelector<HTMLButtonElement>('dialog[data-viewer-detail-sheet] [data-sheet-back]')?.click();
+    await mounter.settle();
+    expect(host.querySelector('dialog[data-viewer-detail-sheet]')).toBeNull();
+    expect(host.querySelectorAll('[data-story-viewer]')).toHaveLength(3);
+    expect(document.activeElement).toBe(host.querySelector('[data-story-viewer="u-viewer-elan"] [data-story-viewer-open]'));
+  });
+
+  test('détail de l’activité INDISPONIBLE ⇒ la liste le dit, discrètement, et le détail d’une personne ne prétend pas qu’elle n’a rien fait (#9727)', async () => {
+    const host = await mountSheet({ postId: 'st-mienne-detail-indisponible', viewCount: 2 });
+    expect(host.querySelector('[data-viewers-engagement-unavailable]')?.textContent).toBe('Le détail de l’activité est momentanément indisponible.');
+    expect(host.querySelectorAll('[data-story-viewer]')).toHaveLength(2);
+    host.querySelector<HTMLButtonElement>('[data-story-viewer-open]')?.click();
+    await mounter.settle();
+    expect(host.querySelector('[data-viewer-detail-only-viewed]')).toBeNull();
+    expect(host.querySelector('[data-viewer-detail-unavailable]')?.textContent).toBe('Le détail de l’activité est momentanément indisponible.');
+  });
+
+  test('détail servi ⇒ aucune mention d’indisponibilité', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: 3 });
+    expect(host.querySelector('[data-viewers-engagement-unavailable]')).toBeNull();
+  });
+
+  test('sur un post, le refus parle de la publication, pas d’une story', async () => {
+    const host = await mountSheet({ postId: 'st-amie-1', viewCount: 5, subject: 'publication' });
+    expect(host.querySelector('[data-viewers-forbidden]')?.textContent).toBe('Vous n’avez pas accès à la liste de qui a vu cette publication.');
+  });
+
+  test('#11065 — le compte RELU avec la liste prime sur l’instantané de l’ouverture : jamais « 2 vues » au-dessus de trois lecteurs', async () => {
+    const host = await mountSheet({ postId: 'st-mienne-compte-relu', viewCount: 2 });
+    expect(host.querySelectorAll('[data-story-viewer]')).toHaveLength(3);
+    expect(host.querySelector('h2')?.textContent).toBe('4 vues');
+  });
+
+  test('compte AUTORITATIF absent ⇒ l’en-tête retombe sur la liste servie, jamais « 0 vue » au-dessus de trois lecteurs', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: null });
+    expect(host.querySelector('h2')?.textContent).toBe('3 vues');
+  });
+
+  test('HORS LIGNE sans cache ⇒ l’état hors-ligne, jamais « Aucune vue » (un mensonge)', async () => {
+    /* TanStack met la requête EN PAUSE hors ligne — ni données, ni erreur
+       (`lib/view/cold-state.ts`). Le premier jet lisait ce couple comme une
+       liste VIDE et annonçait « Aucune vue pour le moment » à un auteur que
+       huit personnes avaient vu. */
+    onlineManager.setOnline(false);
+    try {
+      const host = await mountSheet({ postId: 'st-mienne', viewCount: 8 });
+      expect(host.querySelector('[data-viewers-offline]')?.textContent).toBe('Hors ligne — la liste s’affichera au retour du réseau.');
+      expect(host.querySelector('[data-viewers-empty]')).toBeNull();
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
+  test('aucune vue ⇒ l’état VIDE, le titre seul', async () => {
+    const host = await mountSheet({ postId: 'st-mienne-sans-vue', viewCount: 0 });
+    expect(host.querySelector('[data-story-viewer]')).toBeNull();
+    expect(host.querySelector('[data-viewers-empty]')).not.toBeNull();
+    expect(host.textContent).toContain('Aucune vue pour le moment');
+    expect(host.textContent).not.toContain('apparaîtront ici');
+  });
+
+  test('#18446 — compte nul ⇒ le titre est « Vues », jamais « 0 vues »', async () => {
+    const host = await mountSheet({ postId: 'st-mienne-sans-vue', viewCount: 0 });
+    expect(host.querySelector('h2')?.textContent).toBe('Vues');
+    expect(host.textContent).not.toContain('0 vues');
+  });
+});
+
+describe('PublicationViewersSheet — « et N visiteurs » (#10483)', () => {
+  test('champ absent (ancien serveur) ⇒ aucune ligne de visiteurs', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: 3 });
+    expect(host.querySelector('[data-viewers-visitors]')).toBeNull();
+  });
+
+  test('N > 0 ⇒ la ligne « et N visiteurs » suit la liste nominative', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: 7, anonymousViewCount: 4 });
+    expect(host.querySelectorAll('[data-story-viewer]')).toHaveLength(3);
+    expect(host.querySelector('[data-viewers-visitors]')?.textContent).toBe('et 4 visiteurs sans compte');
+  });
+
+  test('un seul visiteur ⇒ le singulier', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: 4, anonymousViewCount: 1 });
+    expect(host.querySelector('[data-viewers-visitors]')?.textContent).toBe('et 1 visiteur sans compte');
+  });
+
+  test('aucun lecteur nommé mais des visiteurs ⇒ la ligne des visiteurs, jamais « Aucune vue »', async () => {
+    const host = await mountSheet({ postId: 'st-mienne-sans-vue', viewCount: 2, anonymousViewCount: 2 });
+    expect(host.querySelector('[data-viewers-empty]')).toBeNull();
+    expect(host.querySelector('[data-viewers-visitors]')?.textContent).toBe('2 visiteurs sans compte');
+  });
+
+  test('zéro visiteur ⇒ aucune ligne', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: 3, anonymousViewCount: 0 });
+    expect(host.querySelector('[data-viewers-visitors]')).toBeNull();
+  });
+});

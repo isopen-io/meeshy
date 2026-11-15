@@ -1,0 +1,255 @@
+import XCTest
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+@testable import Meeshy
+
+/// La barre du composeur prend la couleur de la protection la plus forte (#7667).
+///
+/// Directive porteur 2026-09-24 : « L'universal bar adopte la couleur de
+/// l'effet le plus impactant éphémère > vue unique > flou […] Le message ne
+/// peut pas être flou et vue unique ! »
+///
+/// Les huit combinaisons des trois bascules sont énumérées : une règle de
+/// priorité testée sur trois cas seulement laisse passer l'ordre inverse dès
+/// que deux bascules sont allumées ensemble.
+@MainActor
+final class ComposerProtectionToneTests: XCTestCase {
+
+    // MARK: - La protection dominante, sur les huit combinaisons
+
+    func test_dominant_aucuneBascule_rendNil() {
+        XCTAssertNil(ComposerProtection.dominant(ephemeral: false, viewOnce: false, blurred: false))
+    }
+
+    func test_dominant_flouSeul_rendFlou() {
+        XCTAssertEqual(ComposerProtection.dominant(ephemeral: false, viewOnce: false, blurred: true), .blurred)
+    }
+
+    func test_dominant_vueUniqueSeule_rendVueUnique() {
+        XCTAssertEqual(ComposerProtection.dominant(ephemeral: false, viewOnce: true, blurred: false), .viewOnce)
+    }
+
+    func test_dominant_vueUniqueEtFlou_rendVueUnique() {
+        XCTAssertEqual(ComposerProtection.dominant(ephemeral: false, viewOnce: true, blurred: true), .viewOnce)
+    }
+
+    func test_dominant_ephemereSeul_rendEphemere() {
+        XCTAssertEqual(ComposerProtection.dominant(ephemeral: true, viewOnce: false, blurred: false), .ephemeral)
+    }
+
+    func test_dominant_ephemereEtFlou_rendEphemere() {
+        XCTAssertEqual(ComposerProtection.dominant(ephemeral: true, viewOnce: false, blurred: true), .ephemeral)
+    }
+
+    func test_dominant_ephemereEtVueUnique_rendEphemere() {
+        XCTAssertEqual(ComposerProtection.dominant(ephemeral: true, viewOnce: true, blurred: false), .ephemeral)
+    }
+
+    func test_dominant_lesTrois_rendEphemere() {
+        XCTAssertEqual(ComposerProtection.dominant(ephemeral: true, viewOnce: true, blurred: true), .ephemeral)
+    }
+
+    // MARK: - Une protection a UNE couleur partout
+
+    /// Vue unique et flou : la teinte de la barre est celle que le fil peint
+    /// sur la capsule de la même protection (`MessageProtectionChrome`,
+    /// #7599) — pas une seconde table qui divergerait au premier réglage.
+    func test_teinte_vueUniqueEtFlou_sontCellesDuChromeDuFil() {
+        XCTAssertEqual(ComposerProtection.viewOnce.tintHex,
+                       MessageProtectionChrome.presentation(for: .viewOnce).tintHex)
+        XCTAssertEqual(ComposerProtection.blurred.tintHex,
+                       MessageProtectionChrome.presentation(for: .blurred).tintHex)
+    }
+
+    /// Directive porteur (#7667) : « la barre sera rouge pour éphémère ». Le
+    /// rouge d'alerte, pas l'orange du fil — l'écart est la décision #7677.
+    func test_teinte_ephemere_estLeRougeDAlerte() {
+        XCTAssertEqual(ComposerProtection.ephemeral.tintHex, MeeshyColors.errorHex)
+        XCTAssertNotEqual(ComposerProtection.ephemeral.tintHex,
+                          MessageProtectionChrome.presentation(for: .ephemeral(.awaitingReception(duration: 60))).tintHex)
+    }
+
+    func test_teinte_lesTroisProtectionsSontDistinctes() {
+        let teintes = Set(ComposerProtection.allCases.map(\.tintHex))
+        XCTAssertEqual(teintes.count, ComposerProtection.allCases.count)
+    }
+
+    // MARK: - L'accent servi à la barre
+
+    func test_accentServi_sansProtection_gardeLAccentDeLHote() {
+        let accent = ComposerProtection.servedAccent(for: nil, hostAccent: "FF00AA", hostSecondary: "00AAFF")
+        XCTAssertEqual(accent.primary, "FF00AA")
+        XCTAssertEqual(accent.secondary, "00AAFF")
+    }
+
+    func test_accentServi_avecProtection_prendLaTeinteSurLesDeuxArrets() {
+        for protection in ComposerProtection.allCases {
+            let accent = ComposerProtection.servedAccent(for: protection, hostAccent: "FF00AA", hostSecondary: "00AAFF")
+            XCTAssertEqual(accent.primary, protection.tintHex)
+            XCTAssertEqual(accent.secondary, protection.tintHex,
+                           "un second arrêt resté à l'accent de l'hôte donnerait un dégradé hybride")
+        }
+    }
+
+    // MARK: - Flou et vue unique sont exclusifs
+
+    func test_basculerFlou_depuisVueUnique_eteintLaVueUnique() {
+        let etat = ComposerProtection.togglingVeil(.blurred, blurred: false, viewOnce: true)
+        XCTAssertEqual(etat.blurred, true)
+        XCTAssertEqual(etat.viewOnce, false)
+    }
+
+    func test_basculerVueUnique_depuisFlou_eteintLeFlou() {
+        let etat = ComposerProtection.togglingVeil(.viewOnce, blurred: true, viewOnce: false)
+        XCTAssertEqual(etat.blurred, false)
+        XCTAssertEqual(etat.viewOnce, true)
+    }
+
+    func test_basculerFlou_actif_leDesarmeSansToucherLaVueUnique() {
+        let etat = ComposerProtection.togglingVeil(.blurred, blurred: true, viewOnce: false)
+        XCTAssertEqual(etat.blurred, false)
+        XCTAssertEqual(etat.viewOnce, false)
+    }
+
+    func test_basculerVueUnique_active_laDesarme() {
+        let etat = ComposerProtection.togglingVeil(.viewOnce, blurred: false, viewOnce: true)
+        XCTAssertEqual(etat.blurred, false)
+        XCTAssertEqual(etat.viewOnce, false)
+    }
+
+    /// L'éphémère n'est pas un voile : le passer ici ne touche à rien.
+    func test_basculerEphemere_nestPasUnVoile() {
+        let etat = ComposerProtection.togglingVeil(.ephemeral, blurred: true, viewOnce: false)
+        XCTAssertEqual(etat.blurred, true)
+        XCTAssertEqual(etat.viewOnce, false)
+    }
+
+    // MARK: - TOUTE la barre lit l'accent servi
+
+    /// « Toute la barre », pas seulement la pastille : une lecture directe de
+    /// l'accent de l'hôte dans un fichier de la barre est une surface qui
+    /// resterait à la couleur de la conversation sous une protection armée.
+    /// Les deux seules lectures admises sont celles des getters servis
+    /// (`servedAccent`, `servedSecondary`) ; le modificateur de dépôt porte
+    /// son PROPRE `accentColor`, reçu de la barre déjà servi.
+    func test_barre_neLitJamaisLAccentDeLHoteEnDirect() throws {
+        let parties = AppSourceGuard.unitURLs("Meeshy/Features/Main/Components/UniversalComposerBar.swift")
+            .filter { !$0.lastPathComponent.hasSuffix("+Drop.swift") }
+        XCTAssertGreaterThan(parties.count, 5, "la garde ne voit plus les extensions de la barre")
+        let source = try parties
+            .map { AppSourceGuard.stripComments(try String(contentsOf: $0, encoding: .utf8)) }
+            .joined(separator: "\n")
+        let lecturesDirectes = source.components(separatedBy: "Color(hex: accentColor)").count - 1
+            + source.components(separatedBy: "Color(hex: secondaryColor)").count - 1
+        XCTAssertEqual(lecturesDirectes, 2, "seuls servedAccent et servedSecondary lisent l'accent de l'hôte")
+        XCTAssertFalse(source.contains("accentColor: accentColor"),
+                       "un enfant de la barre reçoit l'accent de l'hôte au lieu de l'accent servi")
+        XCTAssertFalse(source.contains("isBlurEnabled.wrappedValue.toggle()"),
+                       "la bascule du flou contourne l'exclusivité avec la vue unique")
+        XCTAssertFalse(source.contains("isViewOnceEnabled.wrappedValue.toggle()"),
+                       "la bascule de la vue unique contourne l'exclusivité avec le flou")
+    }
+
+    // MARK: - Le lecteur d'écran entend l'état dominant
+
+    func test_etatAnnonce_nonVidePourChaqueProtection() {
+        for protection in ComposerProtection.allCases {
+            XCTAssertFalse(protection.accessibilityState.isEmpty)
+        }
+        XCTAssertNotEqual(ComposerProtection.viewOnce.accessibilityState,
+                          ComposerProtection.blurred.accessibilityState)
+    }
+}
+
+/// **UNE loi de teinte d'icône** (#9121) : un effet armé donne SA couleur à
+/// toutes les icônes de la barre — la protection dominante la sienne, un effet
+/// de message (sans couleur propre) la couleur de marque ; sinon la couleur
+/// COMMUNE des icônes. Avant : seule une protection colorait, et seulement
+/// certaines portes en thème clair ; les bascules au repos restaient grises.
+@MainActor
+final class ComposerIconTintTests: XCTestCase {
+
+    func test_resolve_nothingArmed_returnsCommon() {
+        XCTAssertEqual(ComposerIconTint.resolve(protection: nil, hasMessageEffect: false), .common)
+        XCTAssertNil(ComposerIconTint.common.hex)
+    }
+
+    func test_resolve_protectionArmed_returnsItsColor() {
+        for protection in ComposerProtection.allCases {
+            let tint = ComposerIconTint.resolve(protection: protection, hasMessageEffect: true)
+            XCTAssertEqual(tint, .protection(protection))
+            XCTAssertEqual(tint.hex, protection.tintHex)
+        }
+    }
+
+    func test_resolve_messageEffectOnly_returnsBrand() {
+        let tint = ComposerIconTint.resolve(protection: nil, hasMessageEffect: true)
+        XCTAssertEqual(tint, .brand)
+        XCTAssertEqual(tint.hex, MeeshyColors.brandPrimaryHex)
+    }
+
+    func test_resolve_severalEffectsArmed_strongestProtectionWins() {
+        let dominant = ComposerProtection.dominant(ephemeral: true, viewOnce: true, blurred: false)
+        XCTAssertEqual(ComposerIconTint.resolve(protection: dominant, hasMessageEffect: true), .protection(.ephemeral))
+        let veil = ComposerProtection.dominant(ephemeral: false, viewOnce: false, blurred: true)
+        XCTAssertEqual(ComposerIconTint.resolve(protection: veil, hasMessageEffect: true), .protection(.blurred))
+    }
+
+    func test_color_ephemeralOnLight_takesTheAlertInk() {
+        WCAGContrast.assertSameRendering(
+            ComposerIconTint.protection(.ephemeral).color(common: .clear, isDark: false),
+            MeeshyColors.errorInk, "éphémère, clair")
+        WCAGContrast.assertSameRendering(
+            ComposerIconTint.protection(.ephemeral).color(common: .clear, isDark: true),
+            MeeshyColors.error, "éphémère, sombre")
+    }
+
+    func test_color_common_returnsTheThemeColor() {
+        WCAGContrast.assertSameRendering(
+            ComposerIconTint.common.color(common: MeeshyColors.textSecondary(isDark: false), isDark: false),
+            MeeshyColors.textSecondary(isDark: false), "commune, clair")
+    }
+
+    /// Dimension 5 : une icône teintée tient 3:1 sur le panneau qu'elle
+    /// habite — le fond primaire du thème, voilé par la protection armée.
+    func test_color_everyTint_holdsThreeToOneOnTheBarPanel() {
+        let tints: [ComposerIconTint] = ComposerProtection.allCases.map { .protection($0) } + [.brand, .common]
+        var failures: [String] = []
+        for isDark in [false, true] {
+            let base = MeeshyColors.backgroundPrimary(isDark: isDark)
+            for tint in tints {
+                let panel: Color
+                if case .protection(let protection) = tint {
+                    panel = WCAGContrast.composite(protection.panelWash(isDark: isDark), over: base)
+                } else {
+                    panel = base
+                }
+                let ink = tint.color(common: MeeshyColors.textSecondary(isDark: isDark), isDark: isDark)
+                let ratio = WCAGContrast.ratioOfTranslucentForeground(ink, on: panel)
+                if ratio < 3 { failures.append("\(tint) \(isDark ? "sombre" : "clair") : \(WCAGContrast.fmt(ratio)):1") }
+            }
+        }
+        XCTAssertEqual(failures, [], "Sous 3:1 sur le panneau de la barre.")
+    }
+
+    func test_bar_everyIconReadsTheLaw() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let read = { (path: String) in
+            try String(contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Components/" + path), encoding: .utf8)
+        }
+        let toolbar = try read("UniversalComposerBar+Toolbar.swift")
+        let protections = try read("UniversalComposerBar+Protections.swift")
+        let attachments = try read("UniversalComposerBar+Attachments.swift")
+        XCTAssertFalse(toolbar.contains(".white.opacity(0.9) : servedAccent"), "Les portes lisent la loi, plus un accent clair seulement.")
+        XCTAssertFalse(protections.contains(": mutedColor)"), "Une bascule au repos lit la couleur commune de la loi.")
+        XCTAssertTrue(protections.contains("ComposerIconTint.resolve("), "La barre consulte la loi.")
+        XCTAssertFalse(attachments.contains("Color.white.opacity(0.85) : accent"), "Le « + » lit la loi.")
+        XCTAssertFalse(protections.contains(".foregroundColor(isActive ? ComposerProtection."), "Une bascule armée lit l'encre de la loi.")
+        XCTAssertTrue(toolbar.contains(".foregroundColor(iconTint)\n        }\n        .accessibilityLabel(String(localized: \"a11y.composer.language\""), "La pastille de langue lit la loi.")
+        let recording = try read("UniversalComposerBar+Recording.swift")
+        XCTAssertTrue(recording.contains("Image(systemName: \"mic.fill\")\n                        .font(.callout.weight(.medium))\n                        .foregroundColor(iconTint)"), "Le micro du champ lit la loi.")
+    }
+}

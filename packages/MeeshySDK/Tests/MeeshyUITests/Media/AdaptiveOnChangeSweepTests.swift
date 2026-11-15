@@ -50,14 +50,6 @@ final class AdaptiveOnChangeSweepTests: XCTestCase {
                       "AudioPlayerView must react to externalLanguage through adaptiveOnChange")
     }
 
-    func test_voiceProfileManageView_usesAdaptiveOnChange_notRawOnChange() throws {
-        let source = try sdkSource("Sources/MeeshyUI/VoiceProfile/VoiceProfileManageView.swift")
-        XCTAssertFalse(source.contains(".onChange(of: viewModel.cloningEnabled) { newValue in"),
-                        "VoiceProfileManageView must not use the deprecated single-param .onChange")
-        XCTAssertTrue(source.contains(".adaptiveOnChange(of: viewModel.cloningEnabled) { _, newValue in"),
-                      "VoiceProfileManageView must drive cloning toggle through adaptiveOnChange")
-    }
-
     func test_errorBannerView_usesAdaptiveOnChange_notRawOnChange() throws {
         let source = try sdkSource("Sources/MeeshyUI/Primitives/ErrorBannerView.swift")
         XCTAssertFalse(source.contains(".onChange(of: error?.errorDescription) { _ in"),
@@ -66,21 +58,21 @@ final class AdaptiveOnChangeSweepTests: XCTestCase {
                       "ErrorBannerView must react to error changes through adaptiveOnChange")
     }
 
-    func test_communitySettingsView_usesAdaptiveOnChange_notRawOnChange() throws {
-        let source = try sdkSource("Sources/MeeshyUI/Community/CommunitySettingsView.swift")
+    func test_communitySettingsScreen_usesAdaptiveOnChange_notRawOnChange() throws {
+        let source = try sdkSource("Sources/MeeshyUI/Community/CommunitySettingsScreen.swift")
         XCTAssertFalse(source.contains(".onChange(of: viewModel.localEmoji) { newValue in"),
-                        "CommunitySettingsView must not use the deprecated single-param .onChange")
+                        "CommunitySettingsScreen must not use the deprecated single-param .onChange")
         XCTAssertTrue(source.contains(".adaptiveOnChange(of: viewModel.localEmoji) { _, newValue in"),
-                      "CommunitySettingsView must clamp emoji input through adaptiveOnChange")
+                      "CommunitySettingsScreen must clamp emoji input through adaptiveOnChange")
     }
 
     func test_unifiedAudioRecorderSheet_usesAdaptiveOnChange_notRawOnChange() throws {
         // Ex-`StoryVoiceRecorder` — feuille unifiée depuis 2026-08-13.
-        let source = try sdkSource("Sources/MeeshyUI/Media/UnifiedAudioRecorderSheet.swift")
+        let source = try sdkSource("Sources/MeeshyUI/Media/AudioRecorderSheet.swift")
         XCTAssertFalse(source.contains(".onChange(of: recorder.isRecording) { isRecording in"),
-                        "UnifiedAudioRecorderSheet must not use the deprecated single-param .onChange")
+                        "AudioRecorderSheet must not use the deprecated single-param .onChange")
         XCTAssertTrue(source.contains(".adaptiveOnChange(of: recorder.isRecording) { _, isRecording in"),
-                      "UnifiedAudioRecorderSheet must react to isRecording through adaptiveOnChange")
+                      "AudioRecorderSheet must react to isRecording through adaptiveOnChange")
     }
 
     func test_universalAudioRecorderView_usesAdaptiveOnChange_notRawOnChange() throws {

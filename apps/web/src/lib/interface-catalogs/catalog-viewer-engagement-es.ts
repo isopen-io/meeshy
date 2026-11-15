@@ -1,0 +1,27 @@
+/** La feuille « Vues » enrichie (#9727), ESPAGNOL — voir `catalog-viewer-engagement-fr.ts`. */
+import type { ViewerEngagementCatalog } from '@/lib/i18n-viewer-engagement-catalog';
+
+const es = {
+  'viewerEngagement.shares.one': '{count} compartido',
+  'viewerEngagement.shares.other': '{count} compartidos',
+  'viewerEngagement.reposts.one': '{count} republicación',
+  'viewerEngagement.reposts.other': '{count} republicaciones',
+  'viewerEngagement.comments.one': '{count} comentario',
+  'viewerEngagement.comments.other': '{count} comentarios',
+  'viewerEngagement.replies.one': '{count} respuesta',
+  'viewerEngagement.replies.other': '{count} respuestas',
+  'viewerEngagement.reactions': 'Reacciones: {emojis}',
+  'viewerEngagement.viewedAt': 'Visto a las {time}',
+  'viewerEngagement.onlyViewed': 'Lo vio, sin otra interacción',
+  'viewerEngagement.openProfile': 'Ver perfil',
+  'viewerEngagement.back': 'Volver a las vistas',
+  'viewerEngagement.openDetail': 'Ver lo que hizo {name}',
+  'viewerEngagement.forbidden': 'No tienes acceso a la lista de quién vio esta publicación.',
+  'viewerEngagement.unavailable': 'El detalle de la actividad no está disponible por el momento.',
+  'viewerEngagement.visitors.one': 'y {count} visitante sin cuenta',
+  'viewerEngagement.visitors.other': 'y {count} visitantes sin cuenta',
+  'viewerEngagement.visitors.only.one': '{count} visitante sin cuenta',
+  'viewerEngagement.visitors.only.other': '{count} visitantes sin cuenta',
+} satisfies ViewerEngagementCatalog;
+
+export default es;

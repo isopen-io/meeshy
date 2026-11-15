@@ -3,6 +3,7 @@ package me.meeshy.sdk.socket
 import io.mockk.mockk
 import io.mockk.verify
 import io.mockk.verifyOrder
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class RealtimeSessionCoordinatorTest {
@@ -11,14 +12,20 @@ class RealtimeSessionCoordinatorTest {
     private val messageSocketManager: MessageSocketManager = mockk(relaxed = true)
     private val socialSocketManager: SocialSocketManager = mockk(relaxed = true)
     private val categorySocketManager: CategorySocketManager = mockk(relaxed = true)
+    private val preferencesSocketManager: PreferencesSocketManager = mockk(relaxed = true)
+    private val preferencesSyncCoordinator: me.meeshy.sdk.preferences.PreferencesSyncCoordinator =
+        mockk(relaxed = true)
     private val callSignalManager: CallSignalManager = mockk(relaxed = true)
 
-    private fun coordinator() = RealtimeSessionCoordinator(
+    private fun coordinator(bindings: Set<RealtimeBinding> = emptySet()) = RealtimeSessionCoordinator(
         socketManager = socketManager,
         messageSocketManager = messageSocketManager,
         socialSocketManager = socialSocketManager,
         categorySocketManager = categorySocketManager,
+        preferencesSocketManager = preferencesSocketManager,
+        preferencesSyncCoordinator = preferencesSyncCoordinator,
         callSignalManager = callSignalManager,
+        bindings = bindings,
     )
 
     @Test
@@ -30,7 +37,9 @@ class RealtimeSessionCoordinatorTest {
             messageSocketManager.attach()
             socialSocketManager.attach()
             categorySocketManager.attach()
+            preferencesSocketManager.attach()
             callSignalManager.attach()
+            preferencesSyncCoordinator.start()
         }
     }
 
@@ -45,6 +54,8 @@ class RealtimeSessionCoordinatorTest {
         verify(exactly = 1) { messageSocketManager.attach() }
         verify(exactly = 1) { socialSocketManager.attach() }
         verify(exactly = 1) { categorySocketManager.attach() }
+        verify(exactly = 1) { preferencesSocketManager.attach() }
+        verify(exactly = 1) { preferencesSyncCoordinator.start() }
         verify(exactly = 1) { callSignalManager.attach() }
     }
 
@@ -56,6 +67,21 @@ class RealtimeSessionCoordinatorTest {
         coordinator.onAuthenticatedChanged(isAuthenticated = false)
 
         verify(exactly = 1) { socketManager.disconnect() }
+    }
+
+    /**
+     * Le collecteur de preferences vit pour la SESSION, pas pour le socket : sans cet
+     * arret, il resterait abonne apres une deconnexion et rejouerait une relecture sur
+     * le compte suivant.
+     */
+    @Test
+    fun `signing out stops the preferences collector`() {
+        val coordinator = coordinator()
+
+        coordinator.onAuthenticatedChanged(isAuthenticated = true)
+        coordinator.onAuthenticatedChanged(isAuthenticated = false)
+
+        verify(exactly = 1) { preferencesSyncCoordinator.stop() }
     }
 
     @Test
@@ -90,7 +116,60 @@ class RealtimeSessionCoordinatorTest {
         verify(exactly = 2) { messageSocketManager.attach() }
         verify(exactly = 2) { socialSocketManager.attach() }
         verify(exactly = 2) { categorySocketManager.attach() }
+        verify(exactly = 2) { preferencesSocketManager.attach() }
+        verify(exactly = 2) { preferencesSyncCoordinator.start() }
         verify(exactly = 2) { callSignalManager.attach() }
         verify(exactly = 1) { socketManager.disconnect() }
+    }
+
+    private class RecordingBinding(private val failOnAttach: Boolean = false) : RealtimeBinding {
+        val events = mutableListOf<String>()
+        override fun attach() {
+            events += "attach"
+            if (failOnAttach) error("boom")
+        }
+        override fun detach() {
+            events += "detach"
+        }
+    }
+
+    @Test
+    fun `signing in attaches every bound realtime binding and signing out detaches it`() {
+        val binding = RecordingBinding()
+        val coordinator = coordinator(setOf(binding))
+
+        coordinator.onAuthenticatedChanged(isAuthenticated = true)
+        coordinator.onAuthenticatedChanged(isAuthenticated = false)
+
+        assertEquals(listOf("attach", "detach"), binding.events)
+        verifyOrder {
+            callSignalManager.attach()
+            socketManager.disconnect()
+        }
+    }
+
+    @Test
+    fun `a failing binding does not stop the other bindings`() {
+        val healthy = RecordingBinding()
+
+        coordinator(setOf(RecordingBinding(failOnAttach = true), healthy)).onAuthenticatedChanged(isAuthenticated = true)
+
+        assertEquals(listOf("attach"), healthy.events)
+    }
+
+    @Test
+    fun `a binding attaches after the connection is requested and again after a re-arm`() {
+        val binding = RecordingBinding()
+        val coordinator = coordinator(setOf(binding))
+
+        coordinator.onAuthenticatedChanged(isAuthenticated = true)
+        coordinator.onAuthenticatedChanged(isAuthenticated = false)
+        coordinator.onAuthenticatedChanged(isAuthenticated = true)
+
+        assertEquals(listOf("attach", "detach", "attach"), binding.events)
+        verifyOrder {
+            socketManager.connect()
+            messageSocketManager.attach()
+        }
     }
 }

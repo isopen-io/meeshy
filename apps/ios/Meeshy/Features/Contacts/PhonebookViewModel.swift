@@ -3,6 +3,11 @@ import Combine
 import Contacts
 import MeeshySDK
 import MeeshyUI
+import os
+
+// `nonisolated` : `os.Logger` est un type valeur thread-safe (doc Apple) et ce
+// journal est écrit depuis `DirectoryPaging`, marqué `nonisolated`.
+private nonisolated let phonebookPagingLogger = MeeshyLog.logger(.phonebook)
 
 /// Répertoire — le carnet d'adresses de l'appareil, synchronisé et CONSERVÉ
 /// côté serveur, consultable sans re-scanner les contacts.
@@ -13,15 +18,22 @@ import MeeshyUI
 /// on ne lit pas son carnet d'adresses derrière son dos.
 @MainActor
 final class PhonebookViewModel: ObservableObject {
-    @Published private(set) var contacts: [DirectoryContact] = []
+    @Published private(set) var contacts: [DirectoryContact] = [] { didSet { recomputeDerived() } }
     @Published private(set) var loadState: LoadState = .idle
     @Published private(set) var isSyncing = false
     /// Utilisateurs de la plateforme trouvés par le RELAIS de recherche —
     /// alimenté seulement quand le répertoire ne répond pas à la requête.
     @Published private(set) var platformResults: [UserSearchResult] = []
     @Published private(set) var isSearchingPlatform = false
-    @Published var activeFilter: DirectoryFilter = .all
-    @Published var searchQuery: String = ""
+    @Published var activeFilter: DirectoryFilter = .all { didSet { recomputeDerived() } }
+    @Published var searchQuery: String = "" { didSet { recomputeDerived() } }
+    /// Dérivés de `contacts` / `activeFilter` / `searchQuery`, recalculés une
+    /// fois par changement (`recomputeDerived()`, ci-dessous) plutôt qu'à
+    /// chaque lecture — `PhonebookListView.content` lisait `visibleContacts`
+    /// jusqu'à quatre fois par passe de rendu, chacune reparcourant tout
+    /// l'annuaire.
+    @Published private(set) var visibleContacts: [DirectoryContact] = []
+    @Published private(set) var meeshyCount = 0
 
     private let directoryService: ContactDirectoryServiceProviding
     private let contactSync: ContactSyncProviding
@@ -50,7 +62,7 @@ final class PhonebookViewModel: ObservableObject {
         self.searchDebounce = searchDebounce
     }
 
-    deinit {
+    nonisolated deinit {
         revalidationTask?.cancel()
         platformSearchTask?.cancel()
     }
@@ -59,10 +71,13 @@ final class PhonebookViewModel: ObservableObject {
 
     /// Filtrage et recherche appliqués localement : le répertoire est déjà en
     /// mémoire, faire un aller-retour réseau à chaque frappe ferait clignoter
-    /// une liste que l'utilisateur voit déjà.
-    var visibleContacts: [DirectoryContact] {
-        var result = contacts
+    /// une liste que l'utilisateur voit déjà. Alimente `visibleContacts` /
+    /// `meeshyCount` (stockés, ci-dessus) au lieu de les recalculer à chaque
+    /// lecture.
+    private func recomputeDerived() {
+        meeshyCount = contacts.filter(\.isOnMeeshy).count
 
+        var result = contacts
         switch activeFilter {
         case .all: break
         case .meeshy: result = result.filter(\.isOnMeeshy)
@@ -70,17 +85,18 @@ final class PhonebookViewModel: ObservableObject {
         }
 
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return result }
+        guard !query.isEmpty else {
+            visibleContacts = result
+            return
+        }
 
-        return result.filter { contact in
+        visibleContacts = result.filter { contact in
             contact.resolvedName.lowercased().contains(query)
                 || contact.matchedUser?.username.lowercased().contains(query) == true
                 || contact.emails.contains { $0.contains(query) }
                 || contact.phoneNumbers.contains { $0.contains(query) }
         }
     }
-
-    var meeshyCount: Int { contacts.filter(\.isOnMeeshy).count }
 
     var isEmpty: Bool { contacts.isEmpty }
 
@@ -143,15 +159,15 @@ final class PhonebookViewModel: ObservableObject {
     private func refreshFromNetwork() async {
         do {
             // Le répertoire ENTIER, page par page — plus de plafond à 200
-            // (directive 2026-08-21, « Répertoire vide » au-delà).
+            // (« Répertoire vide » au-delà).
             let all = try await directoryService.listAll(filter: .all, query: nil)
             contacts = all
             loadState = .loaded
-            try? await CacheCoordinator.shared.phonebook.save(all, for: cacheKey)
+            await bestEffort("phonebookViewModel.phonebook.save", category: .cache) { try await CacheCoordinator.shared.phonebook.save(all, for: cacheKey) }
         } catch {
             // Le cache déjà affiché prime : une revalidation ratée ne doit pas
             // effacer un répertoire consultable (dégradation offline).
-            loadState = contacts.isEmpty ? .error(String(localized: "contacts.phonebook.load-error", defaultValue: "Impossible de charger le repertoire", bundle: .main)) : .loaded
+            loadState = contacts.isEmpty ? .error(String(localized: "contacts.phonebook.load-error", defaultValue: "Impossible de charger le répertoire", bundle: .main)) : .loaded
         }
     }
 
@@ -175,7 +191,7 @@ final class PhonebookViewModel: ObservableObject {
             HapticFeedback.success()
             FeedbackToastManager.shared.showSuccess(
                 String(
-                    format: String(localized: "contacts.phonebook.sync-done", defaultValue: "%d contacts synchronises, %d sur Meeshy", bundle: .main),
+                    format: String(localized: "contacts.phonebook.sync-done", defaultValue: "%d contacts synchronisés, %d sur Meeshy", bundle: .main),
                     result.syncedCount,
                     result.matchedCount
                 )
@@ -188,7 +204,7 @@ final class PhonebookViewModel: ObservableObject {
             guard !silent else { return }
             HapticFeedback.error()
             FeedbackToastManager.shared.showError(
-                String(localized: "contacts.phonebook.sync-error", defaultValue: "Impossible de synchroniser le repertoire", bundle: .main)
+                String(localized: "contacts.phonebook.sync-error", defaultValue: "Impossible de synchroniser le répertoire", bundle: .main)
             )
         }
     }
@@ -211,8 +227,7 @@ final class PhonebookViewModel: ObservableObject {
         let debounce = searchDebounce
         let userService = self.userService
         platformSearchTask = Task { [weak self] in
-            try? await Task.sleep(for: debounce)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: debounce), !Task.isCancelled else { return }
             await self?.runPlatformSearch(query: query, using: userService)
         }
         await platformSearchTask?.value
@@ -248,23 +263,6 @@ final class PhonebookViewModel: ObservableObject {
         return await startConversation(withUserId: user.id)
     }
 
-    /// Efface le répertoire conservé côté serveur (droit au retrait).
-    func eraseDirectory() async {
-        do {
-            _ = try await directoryService.clear()
-            contacts = []
-            loadState = .loaded
-            try? await CacheCoordinator.shared.phonebook.save([], for: cacheKey)
-            FeedbackToastManager.shared.showSuccess(
-                String(localized: "contacts.phonebook.erased", defaultValue: "Repertoire efface", bundle: .main)
-            )
-        } catch {
-            FeedbackToastManager.shared.showError(
-                String(localized: "contacts.phonebook.erase-error", defaultValue: "Impossible d'effacer le repertoire", bundle: .main)
-            )
-        }
-    }
-
     func setFilter(_ filter: DirectoryFilter) {
         activeFilter = filter
         HapticFeedback.light()
@@ -272,13 +270,17 @@ final class PhonebookViewModel: ObservableObject {
 
     /// Message d'invitation pour un contact hors plateforme.
     func invitationMessage(for contact: DirectoryContact) -> String {
-        let name = contact.resolvedName
+        Self.invitationMessage(name: contact.resolvedName)
+    }
+
+    /// Le texte d'invitation UNIQUE — répertoire et carte de visite (#8101).
+    nonisolated static func invitationMessage(name: String) -> String {
         let greeting = name.isEmpty ? "Salut" : "Salut \(name)"
         return "\(greeting) ! Rejoins-moi sur Meeshy : https://meeshy.me/download"
     }
 }
 
-// MARK: - Pagination complète du répertoire (2026-08-21)
+// MARK: - Pagination complète du répertoire
 
 /// Règle pure : y a-t-il une page de plus ? Le serveur fait foi quand il le
 /// dit (`hasMore`) ; sinon une page PLEINE en annonce une autre, une page
@@ -286,33 +288,70 @@ final class PhonebookViewModel: ObservableObject {
 // `nonisolated` : consommé depuis des contextes async hors acteur (isolation
 // MainActor par défaut du module) — un défaut d'argument isolé fait tomber SILGen.
 nonisolated enum DirectoryPaging {
-    static let pageSize = 200
-    /// Filet contre un serveur qui répondrait toujours `hasMore` : 25 pages
-    /// de 200 = 5 000 contacts, au-delà du plus gros carnet d'adresses.
-    static let maxPages = 25
+    /// Le plafond de page est désormais celui de la ROUTE (#4163) : elle REFUSE
+    /// au-delà de 100, là où le service rabotait à 200 en silence. Demander
+    /// 200 rendrait un 400.
+    static let pageSize = 100
+    /// Filet contre un serveur qui répondrait toujours `hasMore` : 500 pages de
+    /// 100 = 50 000 contacts, la même borne qu'avant à taille de page moitié.
+    ///
+    /// Il ne sert plus au cas nominal : une revalidation passe par le DELTA
+    /// (`updatedSince`) et ne lit que ce qui a bougé. Ce filet ne couvre plus
+    /// que la PREMIÈRE lecture d'un carnet, et l'anomalie d'un serveur qui ne
+    /// clôt jamais sa pagination.
+    static let maxPages = 500
 
     static func hasMore(received: Int, pageSize: Int, serverHasMore: Bool?) -> Bool {
         guard received > 0 else { return false }
         if let serverHasMore { return serverHasMore }
         return received >= pageSize
     }
+
+    /// Le filet a servi : la lecture s'arrête sur un plafond, pas sur la fin du
+    /// répertoire. Un filet atteint est un incident, jamais une fin normale.
+    static func logCapReached(maxPages: Int, read: Int) {
+        phonebookPagingLogger.warning(
+            "Répertoire tronqué en lecture : plafond de \(maxPages, privacy: .public) pages atteint, \(read, privacy: .public) contacts lus"
+        )
+    }
 }
 
 extension ContactDirectoryServiceProviding {
-    /// Toutes les pages du répertoire, concaténées dans l'ordre du serveur.
+    /// Le répertoire, par CURSEUR — et par DELTA quand on sait depuis quand.
+    ///
+    /// La lecture paginait par DÉCALAGE, ce qui repayait un dénombrement
+    /// complet à chaque page, et n'avait ni delta ni ETag : chaque
+    /// revalidation retéléchargeait le carnet ENTIER (#4163).
+    ///
+    /// `updatedSince` change la NATURE de l'appel : sans lui c'est une première
+    /// lecture, avec lui c'est un rattrapage borné à ce qui a bougé. Le
+    /// filigrane vient de l'`appliedAt` que rend une synchronisation — ce que
+    /// le serveur vient d'écrire est exactement ce qu'il reste à relire.
     nonisolated func listAll(
         filter: DirectoryFilter,
         query: String?,
+        updatedSince: Date? = nil,
         pageSize: Int = DirectoryPaging.pageSize,
         maxPages: Int = DirectoryPaging.maxPages
     ) async throws -> [DirectoryContact] {
         var all: [DirectoryContact] = []
-        var offset = 0
+        var cursor: String?
+        var reachedTheEnd = false
         for _ in 0..<maxPages {
-            let page = try await list(offset: offset, limit: pageSize, filter: filter, query: query)
+            let page = try await self.page(
+                cursor: cursor, limit: pageSize, filter: filter, query: query, updatedSince: updatedSince
+            )
             all += page.data
-            guard DirectoryPaging.hasMore(received: page.data.count, pageSize: pageSize, serverHasMore: page.pagination?.hasMore) else { break }
-            offset += page.data.count
+            guard DirectoryPaging.hasMore(
+                received: page.data.count, pageSize: pageSize, serverHasMore: page.pagination?.hasMore
+            ), let suivant = page.pagination?.nextCursor else {
+                reachedTheEnd = true
+                break
+            }
+            cursor = suivant
+        }
+        if !reachedTheEnd {
+            DirectoryPaging.logCapReached(maxPages: maxPages, read: all.count)
         }
         return all
     }

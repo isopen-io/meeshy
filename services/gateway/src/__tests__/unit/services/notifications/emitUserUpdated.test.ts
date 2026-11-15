@@ -71,6 +71,43 @@ describe('NotificationService.emitUserUpdated', () => {
     expect(mockPrisma.participant.findMany).not.toHaveBeenCalled();
   });
 
+  it('ne porte à un pair QUE les champs publics du profil — jamais contact, présence ni rôle (#8889)', async () => {
+    const mockPrisma = makePrismaMock([{ userId: 'partner-B' }]);
+    const service = new NotificationService(mockPrisma);
+    service.setSocketIO(mockIO);
+
+    const leaky = {
+      displayName: 'Ada',
+      firstName: 'Ada',
+      lastName: null,
+      username: 'ada',
+      avatar: 'a.webp',
+      banner: 'b.webp',
+      email: 'ada@example.com',
+      phoneNumber: '+33600000000',
+      isOnline: true,
+      lastActiveAt: new Date(),
+      role: 'ADMIN',
+    };
+    await service.emitUserUpdated({ userId: 'user-A', changes: leaky as never });
+
+    expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.USER_UPDATED, {
+      userId: 'user-A',
+      changes: { displayName: 'Ada', firstName: 'Ada', lastName: null, username: 'ada', avatar: 'a.webp', banner: 'b.webp' },
+    });
+  });
+
+  it('un champ ABSENT reste absent : le delta ne fabrique aucun effacement (#8889)', async () => {
+    const mockPrisma = makePrismaMock([{ userId: 'partner-B' }]);
+    const service = new NotificationService(mockPrisma);
+    service.setSocketIO(mockIO);
+
+    await service.emitUserUpdated({ userId: 'user-A', changes: { avatar: 'new.png' } });
+
+    const [, payload] = mockIO.emit.mock.calls[0];
+    expect(Object.keys(payload.changes)).toEqual(['avatar']);
+  });
+
   it('never persists a Notification row for this realtime-only signal', async () => {
     const mockPrisma = makePrismaMock([{ userId: 'partner-B' }]);
     mockPrisma.notification = { create: jest.fn() };

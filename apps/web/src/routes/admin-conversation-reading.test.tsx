@@ -1,0 +1,845 @@
+import { QueryClientProvider, dehydrate } from '@tanstack/react-query';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+
+import { ADMIN_SOUVERAIN_PREFIXE } from '@/lib/api/admin-conversations';
+import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
+import { appQueryClient, persistableQuery } from '@/lib/api/query-client';
+import type { Viewer } from '@/lib/api/viewer';
+import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
+import { createActMounter } from '@/test-support/act-mount';
+import { adminIdentityFixture } from '@/test-support/admin-assertions';
+import { ADMIN_PERMISSIONS_QUERY_KEY } from '@/lib/api/admin';
+import { receptionOf } from '@/lib/view/ephemeral-reception';
+import { createFakeIntersectionObservers } from '@/test-support/fake-intersection-observer';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { simulateLayout } from '@/test-support/simulated-layout';
+
+import { AdminConversationReading } from './admin-conversation-reading';
+
+/**
+ * **LA LECTURE SOUVERAINE, AU PRISME DU MEMBRE** (#6862, lot C) — le premier
+ * témoin de RENDU d'un écran d'administration du dépôt.
+ *
+ * ## Pourquoi il ne peut pas se remplacer par un témoin de bibliothèque
+ *
+ * `prisme-membre.test.ts` prouve que la DESCENTE est juste ; il ne prouve pas
+ * qu'elle atteint un PIXEL. C'est exactement la distance que le CLAUDE.md
+ * racine nomme au cycle 122 (« qui AFFICHE ce qu'il élit ? ») et qu'il a fallu
+ * trois cycles pour parcourir : un résolveur juste dont la valeur n'atteint
+ * aucun lecteur n'a corrigé personne. Ce fichier lit le DOM.
+ *
+ * ## LE TÉMOIN DE RANG SE LIT SUR LE RANG 2 (leçon 261)
+ *
+ * Au rang 1, une règle juste et une règle fausse rendent le MÊME verdict : le
+ * témoin ne peut pas tomber. Le corpus ci-dessous est donc construit pour que
+ * le rang 1 du membre (`de`) n'ait AUCUNE traduction :
+ *
+ * | prisme | rang servi | texte attendu |
+ * |---|---|---|
+ * | membre `['de','es']` | 2 (`es`) | **Hola** |
+ * | administrateur `['fr']` | 1 (`fr`) | Bonjour |
+ * | un résolveur qui ne lit que le rang 1 | aucun | Hello (l'original) |
+ *
+ * Les trois textes sont DIFFÉRENTS : le témoin distingue donc « le bon prisme »
+ * de « le prisme de l'administrateur » ET de « une descente qui s'arrête au
+ * premier rang ». Un corpus où le membre et l'administrateur partagent une
+ * langue verdirait par coïncidence.
+ */
+
+const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+/**
+ * **HAPPY-DOM NE FAIT PAS DE MISE EN PAGE, ET LE VIRTUALISEUR NE REND RIEN SANS
+ * ELLE.** `calculateRange` (`@tanstack/virtual-core`) rend `null` dès que
+ * `outerSize === 0`, que happy-dom fixe à `0`, faute de moteur de rendu. Les
+ * dimensions que lit le virtualiseur, et pourquoi le simulacre les pose toutes,
+ * sont dites chez `simulateLayout` (`@/test-support/simulated-layout`).
+ *
+ * Sans ce simulacre, `getVirtualItems()` est VIDE : le témoin mesurerait un
+ * écran sans une seule rangée, et il verdirait sur « pas de Bonjour » aussi
+ * bien que sur « pas de Hola ». On ne simule donc aucun comportement du
+ * produit — on rend la seule chose que happy-dom ne fait pas : une hauteur.
+ */
+const HAUTEUR_SIMULEE = 800;
+const LARGEUR_SIMULEE = 390;
+
+
+let restaureLaMiseEnPage: (() => void) | null = null;
+
+beforeAll(async () => {
+  ensureHappyDomRegistered();
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+  restaureLaMiseEnPage = simulateLayout({ height: HAUTEUR_SIMULEE, width: LARGEUR_SIMULEE });
+  // `translateAdmin` LÈVE sur un catalogue non chargé — c'est son contrat, et
+  // il vaut aussi pour un témoin.
+  await loadAdminInterfaceCatalog('fr');
+});
+
+afterAll(async () => {
+  delete globals.IS_REACT_ACT_ENVIRONMENT;
+  restaureLaMiseEnPage?.();
+  await releaseHappyDomIfRegistered();
+});
+
+const mounter = createActMounter();
+/* Le lecteur est un ADMIN : le motif écrit précède la lecture. Le rang souverain, qui lit
+   sans motif (spec 2026-10-04 § 4), a son propre témoin. Posée dans le cache, la matrice
+   ne part pas sur le réseau. */
+beforeEach(() => {
+  appQueryClient.setQueryData(ADMIN_PERMISSIONS_QUERY_KEY, adminIdentityFixture({ role: 'ADMIN' }));
+});
+afterEach(() => {
+  mounter.unmountAll();
+  appQueryClient.clear();
+  try {
+    localStorage.clear();
+  } catch {
+    /* un stockage refusé n'est pas l'objet de ce fichier */
+  }
+});
+
+const MOTIF = 'Enquête sur un signalement (#9142)';
+const CONVERSATION = 'c-lot-c';
+
+/** Le fil SERVI par la passerelle : `createdAt DESC`, forme canonique. */
+const CHARGE = {
+  data: [
+    {
+      id: 'm-chiffre',
+      conversationId: CONVERSATION,
+      senderId: 'u-bob',
+      content: null,
+      originalLanguage: 'en',
+      messageType: 'text',
+      messageSource: 'user',
+      isEdited: false,
+      isViewOnce: false,
+      viewOnceCount: 0,
+      isBlurred: false,
+      reactionCount: 0,
+      /* PROTÉGÉ PAR CHIFFREMENT SEUL — la loi CLIENT (`protectionOf`) ne
+         connaît ni `isEncrypted` ni `encryptionMode` et rendrait « standard ».
+         C'est le cas qui produisait une bulle VIDE. */
+      isEncrypted: true,
+      encryptionMode: 'e2ee',
+      isProtected: true,
+      translations: [],
+      attachmentCount: 0,
+      attachments: [],
+      replyTo: null,
+      createdAt: '2026-06-02T11:00:00.000Z',
+      sender: { id: 'p-bob', userId: 'u-bob', displayName: 'Bob', avatar: null, user: { id: 'u-bob', username: 'bob' } },
+    },
+    {
+      id: 'm-traduit',
+      conversationId: CONVERSATION,
+      senderId: 'u-alice',
+      content: 'Hello',
+      originalLanguage: 'en',
+      messageType: 'text',
+      messageSource: 'user',
+      isEdited: false,
+      isViewOnce: false,
+      viewOnceCount: 0,
+      isBlurred: false,
+      reactionCount: 0,
+      isEncrypted: false,
+      isProtected: false,
+      /* NI ALLEMAND (rang 1 du membre) : c'est ce qui force la descente. */
+      translations: [
+        { id: 't-es', messageId: 'm-traduit', targetLanguage: 'es', translatedContent: 'Hola', createdAt: '2026-06-02T10:00:05.000Z' },
+        { id: 't-fr', messageId: 'm-traduit', targetLanguage: 'fr', translatedContent: 'Bonjour', createdAt: '2026-06-02T10:00:05.000Z' },
+      ],
+      /* IMAGE ET VOCAL — la consigne du porteur nomme les deux : « un
+         ADMIN/BIGBOSS lit toutes les conversations, images et audio ». Un fil
+         qui rendrait le TEXTE et jetterait les pièces satisferait chaque
+         témoin de Prisme et manquerait la moitié de la demande. */
+      attachmentCount: 2,
+      attachments: [
+        {
+          id: 'a-image',
+          messageId: 'm-traduit',
+          originalName: 'plan.png',
+          mimeType: 'image/png',
+          fileSize: 96,
+          fileUrl: 'data:image/png;base64,PIXEL-SOUVERAIN',
+          thumbnailUrl: null,
+          transcription: null,
+          translations: null,
+          imageVariants: null,
+          isProtected: false,
+          isViewOnce: false,
+          viewOnceCount: 0,
+          isBlurred: false,
+        },
+        {
+          id: 'a-vocal',
+          messageId: 'm-traduit',
+          originalName: 'note.m4a',
+          mimeType: 'audio/mp4',
+          fileSize: 2048,
+          fileUrl: 'data:audio/mp4;base64,VOCAL-SOUVERAIN',
+          thumbnailUrl: null,
+          transcription: { language: 'en', text: 'Hello team' },
+          translations: { es: { type: 'audio', transcription: 'Hola equipo', url: 'data:audio/mp4;base64,VOCAL-ES' } },
+          imageVariants: null,
+          isProtected: false,
+          isViewOnce: false,
+          viewOnceCount: 0,
+          isBlurred: false,
+        },
+      ],
+      replyTo: null,
+      createdAt: '2026-06-02T10:00:00.000Z',
+      sender: {
+        id: 'p-alice',
+        userId: 'u-alice',
+        displayName: 'Alice',
+        avatar: null,
+        user: { id: 'u-alice', username: 'alice' },
+      },
+    },
+  ],
+  pagination: { total: 2, offset: 0, limit: 30, hasMore: false },
+};
+
+/** Un transport qui répond à la route souveraine QUEL QUE SOIT le motif encodé. */
+function transportSouverain(): { readonly transport: HttpTransport; readonly calls: () => readonly HttpRequest[] } {
+  const calls: HttpRequest[] = [];
+  const transport = (async () => ({ ok: false, status: 0, error: 'jamais appelé' })) as unknown as HttpTransport;
+  transport.request = (async (req: HttpRequest): Promise<ApiResult<unknown>> => {
+    calls.push(req);
+    if (req.path.startsWith(`/api/v1/admin/conversations/${CONVERSATION}/messages`)) {
+      return { ok: true, data: CHARGE };
+    }
+    return { ok: false, status: 404, error: `non prévu : ${req.method} ${req.path}` };
+  }) as HttpTransport['request'];
+  return { transport, calls: () => calls };
+}
+
+const VIEWER: Viewer = { id: 'u-membre', handle: 'membre', displayName: 'Le membre', isAnonymous: false };
+
+async function lire(readerLanguages: readonly string[], prisme: 'membre' | 'lecteur' = 'membre') {
+  const { transport, calls } = transportSouverain();
+  const host = await mounter.mount(
+    <QueryClientProvider client={appQueryClient}>
+      <AdminConversationReading
+        conversationId={CONVERSATION}
+        language="fr"
+        prisme={prisme}
+        readerLanguages={readerLanguages}
+        viewer={VIEWER}
+        deps={{ source: 'gateway', transport }}
+      />
+    </QueryClientProvider>,
+  );
+
+  // LE MOTIF D'ABORD — la requête n'est pas armée avant.
+  mounter.type(host, '[data-admin-reason]', MOTIF);
+  await mounter.click(host.querySelector('[data-admin-reason-submit]') as HTMLElement | null);
+  await mounter.settle();
+
+  return { host, calls };
+}
+
+describe('le motif écrit précède la requête, et il est FIGÉ', () => {
+  test('AUCUN appel ne part tant que le motif n’est pas validé', async () => {
+    const { transport, calls } = transportSouverain();
+    await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminConversationReading
+          conversationId={CONVERSATION}
+          language="fr"
+          prisme="membre"
+          readerLanguages={['de', 'es']}
+          viewer={VIEWER}
+          deps={{ source: 'gateway', transport }}
+        />
+      </QueryClientProvider>,
+    );
+    await mounter.settle();
+    expect(calls().length).toBe(0);
+  });
+
+  test('le motif VALIDÉ part en querystring, et le formulaire disparaît', async () => {
+    const { host, calls } = await lire(['de', 'es']);
+    expect(calls().length).toBeGreaterThan(0);
+    expect(calls()[0]?.path).toContain(new URLSearchParams({ reason: MOTIF }).toString());
+    // FIGÉ : il n'y a plus de champ à modifier une fois la lecture demandée.
+    expect(host.querySelector('[data-admin-reason]')).toBe(null);
+  });
+});
+
+describe('le motif est borné à la SAISIE, jumelle du schéma de la route des pièces (#11510)', () => {
+  test('le champ porte maxLength 500, et un motif plus long ne désarme pas « Lire » sans le rouvrir : il ne l’arme pas', async () => {
+    const { transport, calls } = transportSouverain();
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminConversationReading
+          conversationId={CONVERSATION}
+          language="fr"
+          prisme="membre"
+          readerLanguages={['de', 'es']}
+          viewer={VIEWER}
+          deps={{ source: 'gateway', transport }}
+        />
+      </QueryClientProvider>,
+    );
+    await mounter.settle();
+    const champ = host.querySelector<HTMLTextAreaElement>('[data-admin-reason]');
+    expect(champ?.getAttribute('maxlength')).toBe('500');
+    mounter.type(host, '[data-admin-reason]', 'x'.repeat(600));
+    await mounter.settle();
+    expect(host.querySelector<HTMLButtonElement>('[data-admin-reason-submit]')?.disabled).toBe(true);
+    expect(calls().length).toBe(0);
+  });
+});
+
+describe('un ADMIN ne se justifie pas : le motif proposé est déjà écrit (#11410)', () => {
+  test('le champ s’ouvre rempli, « Lire » part d’un seul geste avec le motif proposé', async () => {
+    appQueryClient.setQueryData(ADMIN_PERMISSIONS_QUERY_KEY, adminIdentityFixture({ role: 'ADMIN' }));
+    const { transport, calls } = transportSouverain();
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminConversationReading conversationId={CONVERSATION} language="fr" prisme="membre" readerLanguages={['fr']} viewer={VIEWER} deps={{ source: 'gateway', transport }} />
+      </QueryClientProvider>,
+    );
+    const champ = host.querySelector<HTMLTextAreaElement>('[data-admin-reason]');
+    expect(champ?.value).toBe('Contrôle aléatoire, test de fonctionnalité et suivi client');
+    expect(host.querySelector<HTMLButtonElement>('[data-admin-reason-submit]')?.disabled).toBe(false);
+    await mounter.click(host.querySelector('[data-admin-reason-submit]') as HTMLElement | null);
+    await mounter.settle();
+    expect(calls()[0]?.path).toContain(new URLSearchParams({ reason: 'Contrôle aléatoire, test de fonctionnalité et suivi client' }).toString());
+  });
+});
+
+describe('LA VRAIE VUE, AU PRISME DU MEMBRE', () => {
+  test('sert le RANG 2 du membre — ni son rang 1 absent, ni la langue de l’administrateur', async () => {
+    const { host } = await lire(['de', 'es']);
+    const texte = host.textContent ?? '';
+
+    expect(texte).toContain('Hola');
+    // La langue de l'ADMINISTRATEUR : servie, ce serait le défaut que ce lot corrige.
+    expect(texte).not.toContain('Bonjour');
+    // L'ORIGINAL : servi, c'est la signature d'un résolveur qui ne lit que le rang 1.
+    expect(texte).not.toContain('Hello');
+  });
+
+  test('LE CONTRASTE — le MÊME corpus au prisme de l’administrateur rend un AUTRE texte', async () => {
+    // Sans ce second montage, le témoin ci-dessus verdirait aussi bien si le
+    // composant ignorait `readerLanguages` et servait toujours l'espagnol.
+    const { host } = await lire(['fr']);
+    const texte = host.textContent ?? '';
+
+    expect(texte).toContain('Bonjour');
+    expect(texte).not.toContain('Hola');
+  });
+
+  test('rend LA BULLE du produit, pas une ligne à plat — l’auteur est là', async () => {
+    const { host } = await lire(['de', 'es']);
+    expect(host.querySelector('[data-row="m-traduit"]')).not.toBe(null);
+    expect(host.textContent ?? '').toContain('Alice');
+  });
+
+  test('DIT dans quelle langue il sert — un administrateur ne doit pas prendre une traduction pour l’original', async () => {
+    const { host } = await lire(['de', 'es']);
+    expect(host.querySelector('[data-admin-reading-prism]')?.textContent).toContain('de › es');
+  });
+
+  /**
+   * **ET IL NE LE DIT QUE QUAND C'EST VRAI** (#6862, recette au navigateur).
+   *
+   * `/adm/conversations/:id` n'administre AUCUN membre : son prisme est celui
+   * du lecteur, comme partout ailleurs dans l'application. Le bandeau y
+   * annonçait pourtant « Lu dans le prisme du membre : fr › en » — une phrase
+   * fausse sur la langue servie, qui fait prendre sa propre traduction pour
+   * celle d'un tiers. Aucun témoin ne pouvait tomber : le composant rendait la
+   * MÊME phrase dans les deux cas, et le seul témoin existant la lisait depuis
+   * le cas où elle est juste.
+   */
+  test('mais PAS quand le prisme est celui du lecteur — il n’y a aucun membre à annoncer', async () => {
+    const { host } = await lire(['fr'], 'lecteur');
+    // Le fil EST peint : sans ce constat, l'absence du bandeau se confondrait
+    // avec un écran vide (leçon 261 — un verdict qui ne peut pas tomber).
+    expect(host.textContent ?? '').toContain('Bonjour');
+    expect(host.querySelector('[data-admin-reading-prism]')).toBe(null);
+  });
+});
+
+describe('UN MESSAGE PROTÉGÉ REND SA MENTION — jamais une bulle vide', () => {
+  test('la mention est PEINTE', async () => {
+    const { host } = await lire(['de', 'es']);
+    expect(host.textContent ?? '').toContain('Contenu retenu');
+  });
+
+  test('AUCUN voile à toucher : il n’y a rien à révéler', async () => {
+    // Le contenu n'est pas masqué à l'affichage, il est ABSENT de la charge.
+    // Offrir « Toucher pour révéler » découvrirait une bulle vide — le contrôle
+    // sans effet que la loi 4 interdit.
+    const { host } = await lire(['de', 'es']);
+    expect(host.querySelector('[data-protected="hidden"]')).toBe(null);
+  });
+
+  test('le libellé LU dit la même chose que le libellé PEINT', async () => {
+    const { host } = await lire(['de', 'es']);
+    const rangee = host.querySelector('[data-row="m-chiffre"] [role="article"], [role="article"][aria-label]');
+    const etiquettes = [...host.querySelectorAll('[role="article"]')].map((n) => n.getAttribute('aria-label') ?? '');
+    expect(rangee).not.toBe(null);
+    expect(etiquettes.some((label) => label.includes('Contenu retenu'))).toBe(true);
+  });
+});
+
+describe('RIEN DE CE QUI EST LU NE TOUCHE LE DISQUE', () => {
+  test('la lecture EST bien dans le cache sous le préfixe souverain', async () => {
+    // Le point d'accroche UNIQUE de l'exclusion. Sans ce témoin, celui qui
+    // suit verdirait aussi bien parce que la clé est exclue que parce
+    // qu'aucune requête n'a jamais été mise en cache.
+    await lire(['de', 'es']);
+    const clefs = appQueryClient
+      .getQueryCache()
+      .getAll()
+      .map((q) => q.queryKey);
+    expect(clefs.some((clef) => clef[0] === ADMIN_SOUVERAIN_PREFIXE)).toBe(true);
+  });
+
+  test('le contenu servi est REFUSÉ par le prédicat de déshydratation', async () => {
+    const { host } = await lire(['de', 'es']);
+    // Le contenu EST à l'écran — sans quoi ce témoin verdirait sur un écran vide.
+    expect(host.textContent ?? '').toContain('Hola');
+
+    /* On joue le prédicat RÉEL du socle (`persistableQuery`), pas une copie :
+       une copie verdirait pendant que la règle du produit aurait changé. Et on
+       passe par `dehydrate` plutôt que par `localStorage` — sous `bun test`, le
+       stockage n'existe pas encore quand `query-client.ts` se charge, et le
+       `try/catch` de `persist()` avale alors l'écriture : le témoin serait vert
+       que la garde soit posée ou RETIRÉE. */
+    const etat = JSON.stringify(dehydrate(appQueryClient, { shouldDehydrateQuery: persistableQuery }));
+    expect(etat).not.toContain('Hola');
+    expect(etat).not.toContain('Hello');
+    expect(etat).not.toContain(ADMIN_SOUVERAIN_PREFIXE);
+  });
+
+  test('LE CONTRÔLE POSITIF — une requête ORDINAIRE, elle, est bien déshydratée', async () => {
+    // Sans lui, le témoin ci-dessus verdirait aussi si `dehydrate` ne rendait
+    // jamais rien : « aucun contenu souverain » et « aucun contenu du tout »
+    // produisent la même chaîne.
+    await lire(['de', 'es']);
+    appQueryClient.setQueryData(['conversations', 'c-ordinaire'], { repere: 'Hola-ordinaire' });
+
+    const etat = JSON.stringify(dehydrate(appQueryClient, { shouldDehydrateQuery: persistableQuery }));
+    expect(etat).toContain('Hola-ordinaire');
+  });
+});
+
+/**
+ * **AUCUN CONTRÔLE INERTE DANS LA FENÊTRE DE LECTURE** (#6862,
+ * revue-correction) — la loi 4 suivie jusqu'au PIXEL, et non jusqu'au
+ * consommateur.
+ *
+ * Rendre les capacités OPTIONNELLES au type ne suffisait pas : les deux peaux
+ * appelaient `onPickLanguage?.(…)`, si bien que la pastille du Prisme et les
+ * drapeaux du pied restaient PEINTS, focalisables et annoncés — et que cliquer
+ * ne changeait pas le texte lu. C'est le défaut de `PostCard` (CLAUDE.md
+ * § Prisme, cycle 123) : « suivre une donnée jusqu'à son consommateur s'arrête
+ * un cran trop tôt ».
+ *
+ * Le témoin porte sur l'ÉCRAN, et non sur les peaux seules : c'est ici que se
+ * décide QUI monte quoi, et une jumelle par peau ne dirait rien de l'hôte.
+ */
+describe('la lecture souveraine ne peint AUCUN contrôle sans effet', () => {
+  test('aucun bouton de prise de langue — ni pastille, ni drapeau', async () => {
+    const { host } = await lire(['de', 'es']);
+    // Le message TRADUIT est bien à l'écran : sans lui, ce témoin verdirait
+    // sur une page vide (leçon 261 — un verdict qui ne peut pas tomber).
+    expect(host.textContent ?? '').toContain('Hola');
+    expect(host.querySelectorAll('[data-prism-toggle]').length).toBe(0);
+    expect(host.querySelectorAll('[data-prism-flag]').length).toBe(0);
+  });
+
+  test('mais le FAIT de la traduction reste dit — l’indicateur du Prisme survit', async () => {
+    const { host } = await lire(['de', 'es']);
+    expect(host.querySelectorAll('[data-prism-indicator]').length).toBeGreaterThan(0);
+  });
+
+  /**
+   * L'INVENTAIRE DES GESTES OFFERTS — la forme GÉNÉRALE de la loi 4, qui
+   * attrapera le prochain contrôle monté sans sa capacité ; un témoin nommé ne
+   * garde que ce qu'il nomme.
+   *
+   * Chaque entrée est un geste dont l'effet EXISTE ici : tourner la page, ouvrir
+   * une image, jouer un vocal, en changer la vitesse. Un bouton de plus fait
+   * rougir ce témoin, et c'est voulu — il faudra alors dire lequel, et prouver
+   * qu'il fait quelque chose.
+   */
+  const GESTES_OFFERTS = ['Fil', 'Médias', 'Ouvrir plan.png', 'Lire l’audio', 'Vitesse de lecture', 'Ouvrir en plein écran'];
+
+  test('la fenêtre n’offre QUE les gestes dont l’effet existe', async () => {
+    const { host } = await lire(['de', 'es']);
+    const inconnus = [...host.querySelectorAll('button')]
+      .map((bouton) => (bouton.getAttribute('aria-label') ?? bouton.textContent ?? '').trim())
+      .filter((nom) => !GESTES_OFFERTS.includes(nom));
+
+    expect(inconnus).toEqual([]);
+  });
+});
+
+/**
+ * **LES IMAGES ET L'AUDIO, PAS SEULEMENT LE TEXTE** (#6862,
+ * revue-correction) — la consigne du porteur nomme les trois, et les témoins
+ * de Prisme ci-dessus verdiraient tous sur un fil qui rendrait le texte et
+ * jetterait les pièces : ils n'interrogent que des chaînes.
+ *
+ * Et la piste VOCALE suit le Prisme DU MEMBRE comme le texte : le cycle 128 du
+ * `CLAUDE.md` a coûté une bannière française au-dessus d'un vocal anglais
+ * parce qu'un correctif avait descendu le prisme du TEXTE et laissé l'URL de
+ * l'original partir douze lignes plus bas. Ici, le membre lit `de › es` : la
+ * piste servie doit être l'espagnole.
+ */
+describe('la lecture souveraine rend aussi ce qui n’est pas du texte', () => {
+  test('l’image du message atteint le DOM', async () => {
+    const { host } = await lire(['de', 'es']);
+    expect(host.querySelector('[data-attachment="a-image"]')).not.toBe(null);
+    expect(host.innerHTML).toContain('PIXEL-SOUVERAIN');
+  });
+
+  test('le vocal est JOUABLE — un <audio> avec sa source', async () => {
+    const { host } = await lire(['de', 'es']);
+    expect(host.querySelector('[data-attachment="a-vocal"] audio')).not.toBe(null);
+  });
+
+  test('et la piste servie suit le prisme DU MEMBRE, jamais l’original', async () => {
+    const { host } = await lire(['de', 'es']);
+    const audio = host.querySelector('[data-attachment="a-vocal"] audio');
+    expect(audio?.getAttribute('src') ?? '').toContain('VOCAL-ES');
+  });
+
+  test('CONTRASTE — au prisme de l’administrateur (fr), c’est l’ORIGINAL qui est servi', async () => {
+    // `fr` n'a aucune piste : la règle du Prisme est alors de servir
+    // l'original, jamais `translations.first` (règle critique 1).
+    const { host } = await lire(['fr']);
+    const audio = host.querySelector('[data-attachment="a-vocal"] audio');
+    expect(audio?.getAttribute('src') ?? '').toContain('VOCAL-SOUVERAIN');
+  });
+});
+
+describe('le rang souverain lit sans motif (spec 2026-10-04 § 4)', () => {
+  test('aucune saisie : la lecture est armée d’emblée, sans `reason` dans l’adresse', async () => {
+    appQueryClient.setQueryData(ADMIN_PERMISSIONS_QUERY_KEY, adminIdentityFixture({ role: 'BIGBOSS' }));
+    const { transport, calls } = transportSouverain();
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminConversationReading
+          conversationId={CONVERSATION}
+          language="fr"
+          prisme="membre"
+          readerLanguages={['de', 'es']}
+          viewer={VIEWER}
+          deps={{ source: 'gateway', transport }}
+        />
+      </QueryClientProvider>,
+    );
+    await mounter.settle();
+    await mounter.settle();
+    expect(host.querySelector('[data-admin-reason]')).toBe(null);
+    expect(calls().length).toBeGreaterThan(0);
+    expect(calls()[0]?.path).not.toContain('reason=');
+  });
+});
+
+/** Un transport qui sert UNE réponse donnée à la route souveraine. */
+function transportRendant(reponse: ApiResult<unknown>): HttpTransport {
+  const transport = (async () => ({ ok: false, status: 0, error: 'jamais appelé' })) as unknown as HttpTransport;
+  transport.request = (async () => reponse) as HttpTransport['request'];
+  return transport;
+}
+
+async function lireAvec(reponse: ApiResult<unknown>) {
+  const host = await mounter.mount(
+    <QueryClientProvider client={appQueryClient}>
+      <AdminConversationReading
+        conversationId={CONVERSATION}
+        language="fr"
+        prisme="lecteur"
+        readerLanguages={['fr']}
+        viewer={VIEWER}
+        deps={{ source: 'gateway', transport: transportRendant(reponse) }}
+      />
+    </QueryClientProvider>,
+  );
+  mounter.type(host, '[data-admin-reason]', MOTIF);
+  await mounter.click(host.querySelector('[data-admin-reason-submit]') as HTMLElement | null);
+  await mounter.settle();
+  await mounter.settle();
+  return host;
+}
+
+describe('une lecture en échec dit POURQUOI (audit 2026-10-04)', () => {
+  test('403 : un refus, jamais « une panne » — et rien à réessayer', async () => {
+    const host = await lireAvec({ ok: false, status: 403, error: 'Forbidden' });
+    expect(host.querySelector('[data-admin-reading-failure="denied"]')).not.toBe(null);
+    expect(host.querySelector('[data-admin-denied-inline]')).not.toBe(null);
+    expect(host.querySelector('[data-admin-retry]')).toBe(null);
+  });
+
+  test('404 : la conversation n’existe plus', async () => {
+    const host = await lireAvec({ ok: false, status: 404, error: 'Not found' });
+    expect(host.querySelector('[data-admin-reading-failure="missing"]')?.textContent).toContain('n’existe plus');
+    expect(host.querySelector('[data-admin-retry]')).toBe(null);
+  });
+
+  test('toute autre erreur : la panne, avec « Réessayer »', async () => {
+    const host = await lireAvec({ ok: false, status: 500, error: 'boom' });
+    expect(host.querySelector('[data-admin-reading-failure="error"]')).not.toBe(null);
+    expect(host.querySelector('[data-admin-retry]')).not.toBe(null);
+  });
+});
+
+/**
+ * **UN ÉPHÉMÈRE LU PAR L'ADMINISTRATION RESTE LÀ, ET PORTE SA MARQUE** (audit
+ * 2026-10-04) — la passerelle sert `ephemeralDuration` (`ec175875e1`). Le fil
+ * du produit, voyant une durée sur le message d'un autre, POSE une réception
+ * locale (`resolveEphemeralDeadline`) et lance le décompte : le message
+ * disparaîtrait sous les yeux de l'administrateur — et sa réception, écrite
+ * dans le stockage du poste, serait celle d'un lecteur qui n'en est pas un.
+ * Le témoin lit les deux : la rangée et sa marque, et AUCUNE réception posée.
+ */
+describe('un message éphémère, en lecture souveraine', () => {
+  const EPHEMERE = {
+    id: 'm-ephemere',
+    conversationId: CONVERSATION,
+    senderId: 'u-alice',
+    content: 'Je disparais dans trente secondes',
+    originalLanguage: 'fr',
+    messageType: 'text',
+    messageSource: 'user',
+    isEdited: false,
+    isViewOnce: false,
+    viewOnceCount: 0,
+    isBlurred: false,
+    reactionCount: 0,
+    isEncrypted: false,
+    isProtected: false,
+    expiresAt: null,
+    ephemeralDuration: 30,
+    translations: [],
+    attachmentCount: 0,
+    attachments: [],
+    replyTo: null,
+    createdAt: '2026-06-02T12:00:00.000Z',
+    sender: { id: 'p-alice', userId: 'u-alice', displayName: 'Alice', avatar: null, user: { id: 'u-alice', username: 'alice' } },
+  };
+
+  test('la rangée reste peinte, porte « éphémère · 30 s », et aucune réception n’est posée', async () => {
+    const host = await lireAvec({ ok: true, data: { data: [EPHEMERE], pagination: { total: 1, offset: 0, limit: 30, hasMore: false } } });
+    expect(host.querySelector('[data-row="m-ephemere"]')).not.toBe(null);
+    expect(host.textContent ?? '').toContain('Je disparais dans trente secondes');
+    expect(host.querySelector('[data-admin-ephemeral="m-ephemere"]')?.textContent).toMatch(/éphémère · 30\s?s/i);
+    expect(receptionOf('m-ephemere')).toBe(null);
+  });
+});
+
+/**
+ * **LE FIL SE REMONTE D'UN GESTE** (#11457, demande porteur 2026-10-21 : « on scroll du
+ * plus récent en bas au plus ancien en haut »). La lecture s'ouvre sur la page la plus
+ * RÉCENTE ; une prise posée en TÊTE du fil demande la page plus ancienne quand elle entre
+ * dans la vue, et la page arrive AU-DESSUS. Plus de « Précédent / Suivant ».
+ *
+ * L'observateur est un faux qui sait ce qu'il observe : `emitAll(1)` met la prise dans la
+ * vue, exactement ce que fait un défilement vers le haut.
+ */
+describe('le fil souverain se remonte en continu (#11457)', () => {
+  const observers = createFakeIntersectionObservers();
+  let natif: typeof IntersectionObserver | undefined;
+  beforeEach(() => {
+    observers.reset();
+    natif = globalThis.IntersectionObserver;
+    globalThis.IntersectionObserver = observers.FakeIntersectionObserver as unknown as typeof IntersectionObserver;
+  });
+  afterEach(() => {
+    if (natif !== undefined) globalThis.IntersectionObserver = natif;
+  });
+
+  const [ANCIEN] = CHARGE.data.slice(-1);
+  const RECENT = {
+    ...ANCIEN,
+    id: 'm-recent',
+    content: 'Dernier mot',
+    translations: [],
+    attachmentCount: 0,
+    attachments: [],
+    createdAt: '2026-06-02T12:00:00.000Z',
+  };
+  const PAGE_RECENTE = { data: [RECENT], pagination: { total: 3, offset: 0, limit: 30, hasMore: true } };
+  /* Le message CHIFFRÉ porte ici une pièce : sans elle, « la pellicule n'expose pas un
+     message retenu » verdirait aussi bien sans la garde. */
+  const [CHIFFRE, TRADUIT] = CHARGE.data;
+  if (CHIFFRE === undefined || TRADUIT === undefined) throw new Error('corpus : le message chiffré et le message traduit sont attendus');
+  const RETENU_AVEC_PIECE = {
+    ...CHIFFRE,
+    attachmentCount: 1,
+    attachments: [{ ...TRADUIT?.attachments[0], id: 'a-secret', messageId: 'm-chiffre', fileUrl: 'data:image/png;base64,SECRET' }],
+  };
+  const PAGE_ANCIENNE = { data: [RETENU_AVEC_PIECE, TRADUIT], pagination: { total: 3, offset: 30, limit: 30, hasMore: false } };
+
+  /* LA PELLICULE (#11510) lit sa PROPRE route : les pièces servies au curseur, chaque
+     pièce avec son PORTEUR résumé. La pièce du message CHIFFRÉ y est servie RETENUE —
+     et DÉLIBÉRÉMENT bavarde (`fileUrl` présent) : un témoin fail-closed se mesure sur
+     une charge plus généreuse que ce que le serveur sert. */
+  const porteurDe = (message: Record<string, unknown>, isProtected: boolean) => ({
+    id: message.id,
+    createdAt: message.createdAt,
+    senderId: message.senderId,
+    sender: message.sender,
+    isProtected,
+  });
+  const PIECES_SERVIES = [
+    { ...(RETENU_AVEC_PIECE.attachments[0] as Record<string, unknown>), isProtected: true, message: porteurDe(RETENU_AVEC_PIECE, true) },
+    ...TRADUIT.attachments.map((piece: Record<string, unknown>) => ({ ...piece, message: porteurDe(TRADUIT, false) })),
+  ];
+  const PELLICULE_PAGE_1 = { data: PIECES_SERVIES, pagination: { limit: 60, hasMore: true, nextCursor: 'jeton-suivant', form: 'keyset' } };
+  const PELLICULE_PAGE_2 = { data: [], pagination: { limit: 60, hasMore: false, nextCursor: null, form: 'keyset' } };
+
+  function transportEnDeuxPages() {
+    const calls: HttpRequest[] = [];
+    const transport = (async () => ({ ok: false, status: 0, error: 'jamais appelé' })) as unknown as HttpTransport;
+    transport.request = (async (req: HttpRequest): Promise<ApiResult<unknown>> => {
+      calls.push(req);
+      if (req.path.startsWith(`/api/v1/admin/conversations/${CONVERSATION}/attachments`)) {
+        return { ok: true, data: req.path.includes('cursor=jeton-suivant') ? PELLICULE_PAGE_2 : PELLICULE_PAGE_1 };
+      }
+      if (!req.path.startsWith(`/api/v1/admin/conversations/${CONVERSATION}/messages`)) return { ok: false, status: 404, error: 'non prévu' };
+      return { ok: true, data: req.path.includes('offset=30') ? PAGE_ANCIENNE : PAGE_RECENTE };
+    }) as HttpTransport['request'];
+    return { transport, calls: () => calls };
+  }
+
+  async function ouvrir() {
+    const { transport, calls } = transportEnDeuxPages();
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminConversationReading conversationId={CONVERSATION} language="fr" prisme="lecteur" readerLanguages={['fr']} viewer={VIEWER} deps={{ source: 'gateway', transport }} />
+      </QueryClientProvider>,
+    );
+    mounter.type(host, '[data-admin-reason]', MOTIF);
+    await mounter.click(host.querySelector('[data-admin-reason-submit]') as HTMLElement | null);
+    await mounter.settle();
+    return { host, calls };
+  }
+
+  const remonter = async () => {
+    observers.emitAll(1);
+    await mounter.settle();
+  };
+
+  const ouvrirLesMedias = async (host: HTMLElement) => {
+    await mounter.click(host.querySelector('[data-admin-reading-tab="media"]') as HTMLElement | null);
+    await mounter.settle();
+    await mounter.settle();
+  };
+
+  test('s’ouvre sur la page la plus RÉCENTE, sans bouton de pagination', async () => {
+    const { host, calls } = await ouvrir();
+    expect(host.textContent ?? '').toContain('Dernier mot');
+    expect(host.textContent ?? '').not.toContain('Bonjour');
+    expect(calls().filter((c) => c.path.includes('/messages'))).toHaveLength(1);
+    expect(host.querySelector('[data-admin-messages-prev]')).toBeNull();
+    expect(host.querySelector('[data-admin-messages-next]')).toBeNull();
+    expect(host.querySelector('[data-thread-older]')?.getAttribute('data-thread-older')).toBe('idle');
+  });
+
+  test('remonter demande la page plus ANCIENNE, sous le même motif, et la pose AU-DESSUS', async () => {
+    const { host, calls } = await ouvrir();
+    await remonter();
+    const lectures = calls().filter((c) => c.path.includes('/messages'));
+    expect(lectures).toHaveLength(2);
+    expect(lectures[1]?.path).toContain('offset=30');
+    expect(lectures[1]?.path).toContain('reason=');
+    const texte = host.textContent ?? '';
+    expect(texte).toContain('Bonjour');
+    expect(texte.indexOf('Bonjour')).toBeLessThan(texte.indexOf('Dernier mot'));
+  });
+
+  test('remonté jusqu’au bout, le fil DIT qu’il commence là, et ne demande plus rien', async () => {
+    const { host, calls } = await ouvrir();
+    expect(host.querySelector('[data-admin-reading-start]')?.textContent ?? '').toBe('');
+    await remonter();
+    expect(host.querySelector('[data-thread-older]')?.getAttribute('data-thread-older')).toBe('exhausted');
+    expect(host.querySelector('[data-admin-reading-start]')?.textContent).toContain('Début de la conversation');
+    await remonter();
+    expect(calls().filter((c) => c.path.includes('/messages'))).toHaveLength(2);
+  });
+
+  /**
+   * **LA PELLICULE NE PARCOURT PLUS LE FIL** (#11510). Elle lit sa propre route, sous
+   * le même motif, sans qu'aucune page de messages de plus ne soit demandée : les
+   * pièces d'un message pas encore chargé (ici `m-traduit`, dans la page ANCIENNE) y
+   * sont dès l'ouverture.
+   */
+  test('l’onglet « Médias » lit SA route, sous le même motif, et montre les pièces d’un message pas encore chargé', async () => {
+    const { host, calls } = await ouvrir();
+    await ouvrirLesMedias(host);
+    expect(host.querySelector('[data-admin-reading-tab="media"]')?.getAttribute('aria-selected')).toBe('true');
+    const lectures = calls().filter((c) => c.path.includes('/attachments'));
+    expect(lectures).toHaveLength(1);
+    expect(lectures[0]?.path).toContain('reason=');
+    expect(calls().filter((c) => c.path.includes('/messages'))).toHaveLength(1);
+    expect(host.querySelector('[data-media-hub-tile="m-traduit:a-image"]')).not.toBeNull();
+    expect(host.querySelector('[data-media-hub-row="m-traduit:a-vocal"]')).not.toBeNull();
+  });
+
+  test('… et jamais la pièce d’un message RETENU — ni sa tuile, ni son URL, même servie bavarde', async () => {
+    const { host } = await ouvrir();
+    await ouvrirLesMedias(host);
+    expect(host.querySelectorAll('[data-media-hub-tile^="m-chiffre"], [data-media-hub-row^="m-chiffre"]')).toHaveLength(0);
+    expect(host.querySelector('[data-admin-reading-media]')?.innerHTML ?? '').not.toContain('SECRET');
+  });
+
+  test('sa prise du bas demande la page SUIVANTE par son curseur — jamais une page de messages', async () => {
+    const { host, calls } = await ouvrir();
+    await ouvrirLesMedias(host);
+    expect(host.querySelector('[data-admin-reading-media-more]')?.getAttribute('data-admin-reading-media-more')).toBe('idle');
+    await remonter();
+    const lectures = calls().filter((c) => c.path.includes('/attachments'));
+    expect(lectures).toHaveLength(2);
+    expect(lectures[1]?.path).toContain('cursor=jeton-suivant');
+    expect(host.querySelector('[data-admin-reading-media-more]')).toBeNull();
+  });
+
+  test('une puce de genre interroge la route avec `kind=` — filtrer est une requête, pas un tri', async () => {
+    const { host, calls } = await ouvrir();
+    await ouvrirLesMedias(host);
+    await mounter.click(host.querySelector('[data-admin-reading-media-kind="audio"]') as HTMLElement | null);
+    await mounter.settle();
+    const lectures = calls().filter((c) => c.path.includes('/attachments'));
+    expect(lectures[lectures.length - 1]?.path).toContain('kind=audio');
+    expect(host.querySelector('[data-admin-reading-media-kind="audio"]')?.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  /**
+   * **« VOIR DANS LE FIL » REMONTE JUSQU'AU MESSAGE.** La pièce vient d'une route qui ne
+   * suit pas les pages du fil : `m-traduit` n'est pas chargé quand on touche sa
+   * vignette. Le fil demande la page plus ancienne, puis saute — un contrôle qui ne
+   * mènerait nulle part serait inerte (loi 4).
+   */
+  test('toucher une vignette ramène au FIL, le remonte jusqu’au message qui la porte, et y saute', async () => {
+    const { host, calls } = await ouvrir();
+    await ouvrirLesMedias(host);
+    expect(host.querySelector('[data-row="m-traduit"]')).toBeNull();
+    await mounter.click(host.querySelector('[data-media-hub-tile="m-traduit:a-image"]') as HTMLElement | null);
+    await mounter.settle();
+    await mounter.settle();
+    expect(host.querySelector('[data-admin-reading-tab="thread"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(host.querySelector('[data-admin-reading-media-panel]')?.hasAttribute('hidden')).toBe(true);
+    expect(calls().filter((c) => c.path.includes('offset=30'))).toHaveLength(1);
+    expect(host.querySelector('[data-row="m-traduit"]')).not.toBeNull();
+  });
+
+  test('revenir sur l’onglet Médias ne relit pas la pellicule : elle est restée montée', async () => {
+    const { host, calls } = await ouvrir();
+    await ouvrirLesMedias(host);
+    await mounter.click(host.querySelector('[data-admin-reading-tab="thread"]') as HTMLElement | null);
+    await ouvrirLesMedias(host);
+    expect(calls().filter((c) => c.path.includes('/attachments'))).toHaveLength(1);
+    expect(host.querySelector('[data-admin-reading-media-panel]')?.hasAttribute('hidden')).toBe(false);
+  });
+});

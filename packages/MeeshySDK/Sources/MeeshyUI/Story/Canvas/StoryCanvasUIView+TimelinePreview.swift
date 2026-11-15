@@ -37,10 +37,23 @@ extension StoryCanvasUIView {
     /// timeline possède l'audio pendant la preview.
     var effectiveAudioMuted: Bool { isAudioMuted || isTimelinePreviewActive }
 
+    /// **À l'arrêt, la frise montre ce qui est HORS de sa fenêtre en fantôme**
+    /// (maquette `Main.dc.html` : caché en lecture, `.25` à l'arrêt) — l'auteur
+    /// voit ce qu'il règle sans croire qu'il l'a perdu. En lecture, rien : la
+    /// scène est ce que le lecteur montrera.
+    static let timelineGhostOpacity: Float = 0.25
+
+    var timelineGhostOpacity: Float? {
+        isTimelinePreviewActive && !timelinePreviewPlaying ? Self.timelineGhostOpacity : nil
+    }
+
     /// Entre en preview (seconds non-nil), met à jour le playhead, ou en sort
     /// (nil). No-op hors `.edit` — le reader/viewer ne preview jamais.
     public func setTimelinePreview(seconds: Double?) {
         guard mode == .edit else { return }
+        // Scrubbing the timeline sheet is a composer-control interaction —
+        // wakes the idle-throttled edit clock (issue #3906).
+        noteEditInteraction()
         let wasActive = isTimelinePreviewActive
         timelinePreviewSeconds = seconds
         guard let seconds else {
@@ -61,11 +74,19 @@ extension StoryCanvasUIView {
     public func setTimelinePreviewPlaying(_ playing: Bool) {
         guard isTimelinePreviewActive else { return }
         guard timelinePreviewPlaying != playing else { return }
+        // Pressing play/pause is itself an interaction, and — while playing —
+        // `isEditMediaActivelyPlaying` only forces full rate on the NEXT tick;
+        // this wakes the (possibly idled) clock immediately, with no gap
+        // (issue #3906).
+        noteEditInteraction()
         timelinePreviewPlaying = playing
         pushSlidePlayheadToLayers()
         backgroundLayer.isPlaybackActive = playing
         foregroundVideosPlaybackActive = playing
         if !playing {
+            // À l'arrêt, le fantôme revient : ce qui est hors fenêtre se
+            // redessine à .25 sans attendre le prochain déplacement de tête.
+            rebuildLayers()
             alignPreviewPlayersPaused()
         }
     }
@@ -75,12 +96,17 @@ extension StoryCanvasUIView {
     /// `stop()` (et non `pause()`) purge la `startedSlideKey` du mixer canvas :
     /// la sortie de preview repartira donc d'une planification neuve, à zéro.
     /// C'est l'un des deux seuls points de reset autorisés du son d'édition —
-    /// « ouvrir l'outil timeline » (directive user 2026-07-30) ; l'autre est le
+    /// « ouvrir l'outil timeline » ; l'autre est le
     /// bouton lecture/pause de la timeline, porté par l'engine lui-même. Toute
     /// autre manipulation du canvas laisse la boucle intacte.
+    ///
+    /// La phase partagée des canevas d'édition (#10362) s'oublie avec : sans
+    /// cela, la sortie reprendrait la boucle où elle en était au lieu de la
+    /// relancer.
     private func enterTimelinePreview() {
         audioMixer.stop()
         lastAudioConfigRevision = nil
+        Self.editAudioPhase = nil
     }
 
     /// Sortie de preview : redonne le canvas au mode édition nominal — les
@@ -113,6 +139,11 @@ extension StoryCanvasUIView {
 /// `StoryComposerCanvasView.makeUIView`, consommé par le bridge composer.
 @MainActor
 public final class StoryCanvasTimelineBridge {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public weak var canvas: StoryCanvasUIView?
 
     public init() {}

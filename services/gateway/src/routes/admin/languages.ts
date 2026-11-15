@@ -1,10 +1,11 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { Prisma } from '@meeshy/shared/prisma/client';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { logError } from '../../utils/logger';
-import { UnifiedAuthRequest } from '../../middleware/auth';
-import { sendSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendInternalError } from '../../utils/response.js';
 import { validateQuery } from '../../validation/helpers.js';
 import { LanguageStatsQuerySchema, LanguageTimelineQuerySchema, TranslationAccuracyQuerySchema } from '../../validation/admin-schemas.js';
+import { requirePermission } from '../../middleware/authorize';
 
 // Les agrégations lourdes (utilisateurs distincts, paires de traduction, timeline)
 // sont exécutées côté MongoDB via aggregateRaw : seuls les agrégats traversent le
@@ -89,19 +90,16 @@ function dailyLanguageCountsPipeline(options: { since: Date; language?: string }
 }
 
 // Middleware pour vérifier les permissions admin
-const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return sendUnauthorized(reply, 'Authentification requise');
-  }
-
-  const userRole = authContext.registeredUser.role;
-  const canView = ['BIGBOSS', 'ADMIN', 'AUDIT', 'ANALYST'].includes(userRole);
-
-  if (!canView) {
-    return sendForbidden(reply, 'Permission insuffisante');
-  }
-};
+// `requireAdmin` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+//
+// #4157 — même défaut que `analytics.ts` et `dashboard.ts` : `canViewAnalytics`
+// admet ANALYST, qui n'a PAS `canAccessAdmin` dans la matrice centrale. Ces
+// trois routes vivent sous `/admin/languages/*` — la garde d'entrée d'un
+// périmètre d'administration est `canAccessAdmin`, pas une permission de
+// domaine qu'ANALYST porte pour une raison étrangère à `/admin`.
+const requireAdmin = requirePermission('canAccessAdmin');
 
 export async function languagesRoutes(fastify: FastifyInstance) {
   /**
@@ -207,9 +205,13 @@ export async function languagesRoutes(fastify: FastifyInstance) {
         }
       });
 
+      // #5146 — systemLanguage est persisté VERBATIM (région/casse variables selon
+      // le client) ; replier chaque bucket sur son code canonique et ADDITIONNER
+      // les comptes qui convergent, plutôt que d'écraser le dernier bucket lu.
       const usersLanguageMap = usersByLanguage.reduce((acc, item) => {
         if (item.systemLanguage) {
-          acc[item.systemLanguage] = item._count.id;
+          const canonical = normalizeLanguageForDedup(item.systemLanguage);
+          acc[canonical] = (acc[canonical] ?? 0) + item._count.id;
         }
         return acc;
       }, {} as Record<string, number>);
@@ -288,7 +290,6 @@ export async function languagesRoutes(fastify: FastifyInstance) {
       const period = query.period || '7d';
       const language = query.language; // Langue spécifique (optionnel)
 
-      const now = new Date();
       let days = 7;
 
       switch (period) {

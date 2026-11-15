@@ -25,6 +25,40 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertEqual(fetched[0].state, .sending)
     }
 
+    // MARK: - Un message « own » se vise par son id serveur
+
+    /// Un message envoyé de cet appareil garde sa ligne optimiste `cid_*` ;
+    /// l'interface et les événements socket le désignent par son id SERVEUR.
+    /// Épingler, rétablir une suppression ou rafraîchir ses pièces jointes ne
+    /// visaient que `localId` : l'écriture ne touchait aucune ligne.
+    private func insertOwnAckedMessage() async throws {
+        try await actor.insertOptimistic(MessageRecordFactory.make(localId: "cid_own_pin", conversationId: "conv_own"))
+        _ = try await actor.applyEvent(localId: "cid_own_pin", event: .serverAck(serverId: "srv_own_pin", at: Date()))
+    }
+
+    func test_updatePinned_byServerId_reachesTheOwnOptimisticRow() async throws {
+        try await insertOwnAckedMessage()
+        try await actor.updatePinned(localId: "srv_own_pin", pinnedAt: Date(), pinnedBy: "me")
+        let row = try XCTUnwrap(try actor.messages(for: "conv_own", limit: 10).first)
+        XCTAssertNotNil(row.pinnedAt, "l'épingle d'un autre appareil se voit sur mon propre message")
+    }
+
+    func test_markUndeleted_byServerId_reachesTheOwnOptimisticRow() async throws {
+        try await insertOwnAckedMessage()
+        try await actor.markDeleted(localId: "srv_own_pin", deletedAt: Date())
+        try await actor.markUndeleted(localId: "srv_own_pin")
+        let row = try XCTUnwrap(try actor.messages(for: "conv_own", limit: 10).first)
+        XCTAssertNil(row.deletedAt, "une suppression refusée par le serveur se rétablit")
+    }
+
+    func test_updateAttachmentsJson_byServerId_reachesTheOwnOptimisticRow() async throws {
+        try await insertOwnAckedMessage()
+        let json = Data("[]".utf8)
+        try await actor.updateAttachmentsJson(localId: "srv_own_pin", attachmentsJson: json)
+        let row = try XCTUnwrap(try actor.messages(for: "conv_own", limit: 10).first)
+        XCTAssertEqual(row.attachmentsJson, json)
+    }
+
     // MARK: - Apply Event
 
     func test_applyEvent_serverAck_updatesStateAndPersists() async throws {
@@ -347,6 +381,65 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertEqual(fetched.count, 1, "une seule row par (message, langue)")
         XCTAssertEqual(fetched[0].translatedContent, "Hello v2")
         XCTAssertEqual(fetched[0].id, "m1-en", "l'id est remplacé par celui du dernier écrivain")
+    }
+
+    /// Éditer un message périme TOUTES ses traductions : elles décrivent un
+    /// texte qui n'existe plus. Vider le seul dictionnaire en mémoire serait
+    /// cosmétique — l'hydratation GRDB réinjecterait le texte d'avant, et le
+    /// symptôme survivrait au redémarrage.
+    func test_deleteTranslations_removesEveryLanguageOfTheMessage() async throws {
+        for (index, lang) in ["en", "es"].enumerated() {
+            try await actor.saveTranslation(TranslationRecord(
+                id: "edited-\(lang)", messageLocalId: "edited", messageServerId: nil,
+                targetLanguage: lang, translatedContent: "v\(index)",
+                translationModel: "nllb-200", confidenceScore: nil,
+                sourceLanguage: "fr", receivedAt: Date()
+            ))
+        }
+
+        try await actor.deleteTranslations(messageLocalId: "edited")
+
+        XCTAssertTrue(try actor.translations(for: "edited").isEmpty)
+    }
+
+    /// Un message « own » garde sa ligne optimiste `cid_*` en local alors que
+    /// `message:edited` porte l'id SERVEUR. Résoudre sur la seule colonne locale
+    /// ne toucherait AUCUNE ligne — l'édition de son propre message depuis un
+    /// autre appareil laisserait la traduction périmée en base.
+    func test_deleteTranslations_byServerId_alsoRemovesRowsKeyedOnTheLocalId() async throws {
+        try await actor.saveTranslation(TranslationRecord(
+            id: "cid-en", messageLocalId: "cid_own", messageServerId: "srv_own",
+            targetLanguage: "en", translatedContent: "Hello",
+            translationModel: "nllb-200", confidenceScore: nil,
+            sourceLanguage: "fr", receivedAt: Date()
+        ))
+
+        try await actor.deleteTranslations(messageLocalId: "srv_own")
+
+        XCTAssertTrue(try actor.translations(for: "cid_own").isEmpty)
+    }
+
+    /// Contre-épreuve de la purge : elle est CIBLÉE. Une éviction qui emporte
+    /// les traductions des messages voisins ferait retomber tout le fil sur
+    /// l'original.
+    func test_deleteTranslations_leavesOtherMessagesUntouched() async throws {
+        try await actor.saveTranslation(TranslationRecord(
+            id: "keep-en", messageLocalId: "keep", messageServerId: nil,
+            targetLanguage: "en", translatedContent: "Kept",
+            translationModel: "nllb-200", confidenceScore: nil,
+            sourceLanguage: "fr", receivedAt: Date()
+        ))
+        try await actor.saveTranslation(TranslationRecord(
+            id: "drop-en", messageLocalId: "drop", messageServerId: nil,
+            targetLanguage: "en", translatedContent: "Dropped",
+            translationModel: "nllb-200", confidenceScore: nil,
+            sourceLanguage: "fr", receivedAt: Date()
+        ))
+
+        try await actor.deleteTranslations(messageLocalId: "drop")
+
+        XCTAssertEqual(try actor.translations(for: "keep").count, 1)
+        XCTAssertTrue(try actor.translations(for: "drop").isEmpty)
     }
 
     /// La collision ne doit plus faire lever le db.write entier : avant le fix,
@@ -1283,6 +1376,51 @@ final class MessagePersistenceActorTests: XCTestCase {
             "ThumbHash must survive ingestion so the bubble shows an instant blur placeholder")
     }
 
+    /// #7070/#7098 — le décodage (`APIMessageAttachment`) portait déjà la
+    /// protection et le fait du chiffrement d'une pièce ; c'est la PROJECTION
+    /// au domaine gravée en cache (`MeeshyMessageAttachment`, celle que
+    /// `FocalAttachmentBlock` et `MessageActionResolver` lisent) qui les
+    /// laissait tomber au défaut `false`/`0`. Témoin sur le DOMAINE, jamais
+    /// sur `APIMessageAttachment` — décoder n'est pas lire.
+    func test_upsertFromAPIMessages_persistsAttachmentProtectionAndEncryption() async throws {
+        let apiMsg = makeAPIMessage(
+            id: "srv_protected_1",
+            conversationId: "conv_protected",
+            content: nil,
+            attachments: [[
+                "id": "att_protected",
+                "mimeType": "image/jpeg",
+                "fileUrl": "https://cdn.example/secret.jpg",
+                "isViewOnce": true,
+                "maxViewOnceCount": 1,
+                "viewOnceCount": 0,
+                "isBlurred": true,
+                "effectFlags": 4,
+                "isForwarded": true,
+                "forwardedFromAttachmentId": "att_original",
+                "isEncrypted": true,
+                "encryptionMode": "e2ee"
+            ]]
+        )
+
+        try await actor.upsertFromAPIMessages([apiMsg])
+
+        let rows = try actor.messages(for: "conv_protected", limit: 10)
+        let json = try XCTUnwrap(rows[0].attachmentsJson)
+        let attachments = try JSONDecoder().decode([MeeshyMessageAttachment].self, from: json)
+        XCTAssertEqual(attachments.count, 1)
+        let att = attachments[0]
+        XCTAssertTrue(att.isViewOnce, "une pièce à vue unique arrivée par le fil doit rester protégée en cache")
+        XCTAssertEqual(att.maxViewOnceCount, 1)
+        XCTAssertEqual(att.viewOnceCount, 0)
+        XCTAssertTrue(att.isBlurred)
+        XCTAssertEqual(att.effectFlags, 4)
+        XCTAssertTrue(att.isForwarded)
+        XCTAssertEqual(att.forwardedFromAttachmentId, "att_original")
+        XCTAssertTrue(att.isEncrypted, "une pièce chiffrée doit rester marquée pour restreindre ses actions")
+        XCTAssertEqual(att.encryptionMode, "e2ee")
+    }
+
     /// RC2.2 — an encrypted DM keeps its ciphertext + flag; cleartext never
     /// touches disk (the display pipeline decrypts in memory).
     func test_upsertFromAPIMessages_encryptedMessage_persistsCiphertextAndFlag() async throws {
@@ -1402,7 +1540,9 @@ final class MessagePersistenceActorTests: XCTestCase {
         await actor.start()
         let apiMsg = makeAPIMessage(id: "srv_buf_1", conversationId: "conv_buf", content: "Buffered")
 
-        await actor.bufferIncomingAPIMessages([apiMsg])
+        // Le prisme voyage AVEC l'opération : il est résolu par le producteur,
+        // jamais lu depuis la boucle d'écriture (qui attendrait le MainActor).
+        await actor.bufferIncomingAPIMessages([apiMsg], preferredLanguages: ["fr"])
 
         var rows: [MessageRecord] = []
         for _ in 0..<60 {
@@ -1412,6 +1552,117 @@ final class MessagePersistenceActorTests: XCTestCase {
         }
         XCTAssertEqual(rows.count, 1, "bufferIncomingAPIMessages must commit through the write stream")
         XCTAssertEqual(rows.first?.content, "Buffered")
+    }
+
+    /// `message:new` part dans le flux d'écriture, `message:deleted` s'écrit
+    /// tout de suite : la suppression trouvait la table sans la ligne et le
+    /// message arrivait ensuite intact — « supprimé pour tous », il restait lisible.
+    func test_markDeleted_beforeItsBufferedMessageLands_stillDeletesIt() async throws {
+        let apiMsg = makeAPIMessage(id: "srv_race_1", conversationId: "conv_race", content: "secret")
+        await actor.bufferIncomingAPIMessages([apiMsg], preferredLanguages: ["fr"])
+        try await actor.markDeleted(localId: "srv_race_1", deletedAt: Date())
+        await actor.start()
+
+        var rows: [MessageRecord] = []
+        for _ in 0..<60 {
+            rows = try actor.messages(for: "conv_race", limit: 10)
+            if rows.first?.deletedAt != nil { break }
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertNotNil(rows.first?.deletedAt, "la suppression arrivée avant la ligne s'applique à son arrivée")
+        XCTAssertNil(rows.first?.content)
+    }
+
+    /// Généralisation de la suppression ci-dessus (cycle 4) : une MODIFICATION
+    /// arrivée avant sa ligne s'appliquait à rien, et le message arrivait avec
+    /// son ancien texte.
+    func test_markEdited_beforeItsBufferedMessageLands_stillEditsIt() async throws {
+        let apiMsg = makeAPIMessage(id: "srv_race_edit", conversationId: "conv_race_edit", content: "avant")
+        await actor.bufferIncomingAPIMessages([apiMsg], preferredLanguages: ["fr"])
+        try await actor.markEdited(localId: "srv_race_edit", newContent: "après", editedAt: Date())
+        await actor.start()
+
+        var rows: [MessageRecord] = []
+        for _ in 0..<60 {
+            rows = try actor.messages(for: "conv_race_edit", limit: 10)
+            if rows.first?.content == "après" { break }
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.content, "après", "la modification arrivée avant la ligne s'applique à son arrivée")
+        XCTAssertEqual(rows.first?.isEdited, true)
+    }
+
+    /// Et une RÉACTION arrivée avant sa ligne n'apparaissait jamais.
+    func test_appendReaction_beforeItsBufferedMessageLands_stillShowsIt() async throws {
+        let apiMsg = makeAPIMessage(id: "srv_race_react", conversationId: "conv_race_react", content: "salut")
+        await actor.bufferIncomingAPIMessages([apiMsg], preferredLanguages: ["fr"])
+        try await actor.appendReaction(localId: "srv_race_react", reactionId: "r_race", messageId: "srv_race_react",
+                                       participantId: "p_race", emoji: "🔥")
+        await actor.start()
+
+        var rows: [MessageRecord] = []
+        for _ in 0..<60 {
+            rows = try actor.messages(for: "conv_race_react", limit: 10)
+            if (rows.first?.reactionCount ?? 0) > 0 { break }
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
+        XCTAssertEqual(rows.first?.reactionCount, 1, "la réaction arrivée avant la ligne s'applique à son arrivée")
+        let json = try XCTUnwrap(rows.first?.reactionsJson)
+        XCTAssertEqual(try JSONDecoder().decode([MeeshyReaction].self, from: json).map(\.emoji), ["🔥"])
+    }
+
+    /// Une modification gardée plus vieille qu'une autre gardée ne la remplace pas.
+    func test_pendingEdits_keepTheNewest() async throws {
+        let now = Date()
+        try await actor.markEdited(localId: "srv_order", newContent: "récent", editedAt: now)
+        try await actor.markEdited(localId: "srv_order", newContent: "ancien", editedAt: now.addingTimeInterval(-60))
+        let kept = await actor.pendingRowEvents["srv_order"]?.edit?.newContent
+        XCTAssertEqual(kept, "récent")
+    }
+
+    /// Ce qui attend un message qu'on ne recevra jamais ne vit pas au-delà de
+    /// sa durée de vie.
+    func test_pendingRowEvents_expireAfterTheirLifetime() async throws {
+        let past = Date().addingTimeInterval(-(PendingRowEventBuffer.lifetime + 1))
+        await actor.rememberPendingRowEvent("srv_stale", now: past) {
+            $0.edit = .init(newContent: "périmé", editedAt: past, marksEdited: true, noticeJson: nil)
+        }
+        let apiMsg = makeAPIMessage(id: "srv_stale", conversationId: "conv_stale", content: "servi")
+        await actor.bufferIncomingAPIMessages([apiMsg], preferredLanguages: ["fr"])
+        await actor.start()
+
+        var rows: [MessageRecord] = []
+        for _ in 0..<60 {
+            rows = try actor.messages(for: "conv_stale", limit: 10)
+            if !rows.isEmpty { break }
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
+        try await Task.sleep(nanoseconds: 100_000_000)
+        rows = try actor.messages(for: "conv_stale", limit: 10)
+        XCTAssertEqual(rows.first?.content, "servi", "un événement échu ne se rejoue pas")
+        let stillPending = await actor.pendingRowEvents["srv_stale"]
+        XCTAssertNil(stillPending)
+    }
+
+    /// Bornés en nombre : le plus ancien part, les réactions d'une ligne aussi.
+    func test_pendingRowEvents_areBoundedInCount_andPerRowReactions() async throws {
+        let cap = PendingRowEventBuffer.cap
+        for index in 0...cap {
+            try await actor.markDeleted(localId: "srv_cap_\(index)", deletedAt: Date())
+        }
+        let count = await actor.pendingRowEvents.count
+        let first = await actor.pendingRowEvents["srv_cap_0"]
+        XCTAssertEqual(count, cap)
+        XCTAssertNil(first, "le plus ancien est oublié")
+
+        for index in 0..<(PendingRowEventBuffer.reactionCapPerRow + 5) {
+            try await actor.appendReaction(localId: "srv_many", reactionId: "r_\(index)", messageId: "srv_many",
+                                           participantId: "p_\(index)", emoji: "👍")
+        }
+        let reactions = await actor.pendingRowEvents["srv_many"]?.reactions.count
+        XCTAssertEqual(reactions, PendingRowEventBuffer.reactionCapPerRow)
     }
 
     // MARK: - Socket mutators resolve own messages by serverId
@@ -1979,6 +2230,60 @@ final class MessagePersistenceActorTests: XCTestCase {
         let remaining = try await dbQueue.read { db in try OutboxRecord.fetchAll(db).map(\.id).sorted() }
         XCTAssertEqual(remaining, ["ex_recent", "pend_old"],
             "recent exhausted (still retriable) + old non-terminal rows must survive")
+    }
+
+    /// #4044 — **la purge ne connaît AUCUN kind, et c'est ce qu'il faut prouver.**
+    ///
+    /// Le témoin voisin n'exerce que `.blockUser` : il resterait vert si
+    /// quelqu'un ajoutait un jour une liste blanche de kinds à
+    /// `purgeExhaustedOlderThan`, et les lignes laissées dehors
+    /// s'accumuleraient sans que rien ne rougisse. C'est exactement le
+    /// scénario relevé sur appareil réel — 19 lignes `markStoryViewed`
+    /// épuisées sur un 500 permanent, qui alimentaient le bruit de la
+    /// pastille de synchro.
+    ///
+    /// Le kind du terrain est donc nommé ICI, aux côtés de deux autres, pour
+    /// que la propriété testée soit « la purge est AVEUGLE au kind » et non
+    /// « la purge traite ce kind-là ».
+    func test_purgeExhaustedOlderThan_isKindAgnostic_reclaimsMarkStoryViewedToo() async throws {
+        let old = Date().addingTimeInterval(-10 * 86_400)
+        let kinds: [OutboxKind] = [.markStoryViewed, .markAsRead, .blockUser]
+        try await dbQueue.write { db in
+            for (i, kind) in kinds.enumerated() {
+                try OutboxRecord(id: "ex_\(kind.rawValue)", kind: kind, conversationId: "c",
+                                 clientMessageId: "c\(i)", payload: Data(), status: .exhausted,
+                                 attempts: 5, lastError: "server(statusCode: 500)",
+                                 createdAt: old, updatedAt: old, nextAttemptAt: old).insert(db)
+            }
+        }
+
+        let deleted = try await actor.purgeExhaustedOlderThan(days: 7)
+
+        XCTAssertEqual(deleted, kinds.count,
+            "la purge doit reclaimer toute ligne terminale périmée, quel que soit son kind")
+        let remaining = try await dbQueue.read { db in try OutboxRecord.fetchAll(db).count }
+        XCTAssertEqual(remaining, 0, "aucune ligne épuisée périmée ne doit survivre à la purge")
+    }
+
+    /// #13415 — une PUBLICATION non envoyée ne se purge jamais en silence :
+    /// elle reste sur l'appareil jusqu'à la confirmation du serveur ou à sa
+    /// suppression par l'auteur, quel que soit son âge.
+    func test_purgeExhaustedOlderThan_keepsAnUnsentPublication_whateverItsAge() async throws {
+        let old = Date().addingTimeInterval(-90 * 86_400)
+        try await dbQueue.write { db in
+            try OutboxRecord(id: "ofqm_post", kind: .createPost, conversationId: "", clientMessageId: "cmid_post",
+                             payload: Data(), status: .exhausted, attempts: 5, lastError: "415",
+                             createdAt: old, updatedAt: old, nextAttemptAt: old).insert(db)
+            try OutboxRecord(id: "ex_read", kind: .markAsRead, conversationId: "c", clientMessageId: "c1",
+                             payload: Data(), status: .exhausted, attempts: 5, lastError: "500",
+                             createdAt: old, updatedAt: old, nextAttemptAt: old).insert(db)
+        }
+
+        let deleted = try await actor.purgeExhaustedOlderThan(days: 7)
+
+        XCTAssertEqual(deleted, 1)
+        let remaining = try await dbQueue.read { db in try OutboxRecord.fetchAll(db).map(\.id) }
+        XCTAssertEqual(remaining, ["ofqm_post"])
     }
 
     // MARK: - appendReaction authoritative cap (own-reaction echo double-count)

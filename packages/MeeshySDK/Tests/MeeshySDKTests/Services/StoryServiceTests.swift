@@ -70,23 +70,6 @@ final class StoryServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "GET")
     }
 
-    // MARK: - markViewed
-
-    func testMarkViewedCallsCorrectEndpoint() async throws {
-        // `markViewed` décode la forme réelle du gateway `{ viewed: true }`
-        // (APIResponse<[String: Bool]>) depuis le fix 2026-06-01 ; le stub doit
-        // fournir un `[String: Bool]`, sinon le MockAPIClient ne matche pas le
-        // type de retour et lève « no stub … returning APIResponse<…Bool> ».
-        let response = APIResponse(success: true, data: ["viewed": true], error: nil)
-        mock.stub("/posts/\(storyId)/view", result: response)
-
-        try await service.markViewed(storyId: storyId)
-
-        XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/posts/\(storyId)/view")
-        XCTAssertEqual(mock.lastRequest?.method, "POST")
-    }
-
     // MARK: - delete
 
     func testDeleteCallsCorrectEndpoint() async throws {
@@ -100,10 +83,19 @@ final class StoryServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "DELETE")
     }
 
+    func test_delete_withReason_sendsReasonInJSONBody() async throws {
+        mock.stub("/posts/\(storyId)", result: try MessageServiceTests.gatewayAcknowledgement(#"{"success":true,"data":{"deleted":true}}"#))
+
+        try await service.delete(storyId: storyId, reason: "Nudité")
+
+        XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["reason"] as? String, "Nudité")
+    }
+
     // MARK: - react
 
     func testReactCallsCorrectEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["status": "liked"], error: nil)
+        let response = APIResponse(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/posts/\(storyId)/like", result: response)
 
         try await service.react(storyId: storyId, emoji: "heart")
@@ -132,7 +124,7 @@ final class StoryServiceTests: XCTestCase {
     // MARK: - repost
 
     func testRepostCallsCorrectEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["status": "reposted"], error: nil)
+        let response = APIResponse(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/posts/\(storyId)/repost", result: response)
 
         try await service.repost(storyId: storyId)

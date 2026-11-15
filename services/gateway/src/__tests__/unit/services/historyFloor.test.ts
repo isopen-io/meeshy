@@ -1,0 +1,765 @@
+/**
+ * Tests — `services/historyFloor`.
+ *
+ * La règle, dans l'ordre où elle se lit :
+ *   (i)   admin / creator de la conversation ⇒ tout l'historique ;
+ *   (ii)  octroi par DATE (`historyVisibleFrom`) ⇒ depuis cette date ;
+ *   (iii) droit figé booléen explicite ⇒ tout, ou depuis l'arrivée ;
+ *   (iv)  lien de partage qui ferme l'historique ⇒ depuis l'arrivée ;
+ *   (v)   sinon (legacy, ABSENT) ⇒ tout — aucune régression sur l'existant.
+ *
+ * @jest-environment node
+ */
+
+import { describe, it, expect, jest } from '@jest/globals';
+import {
+  HISTORY_FLOOR_PARTICIPANT_SELECT,
+  applyHistoryFloor,
+  historyFloorClause,
+  historyFloorFor,
+  historyReaderFromAuthContext,
+  linkGrantsHistory,
+  loadHistoryFloor,
+  loadHistoryFloors,
+  loadHistoryFloorsFor,
+  loadHistoryFloorsOrFail,
+  loadReaderHistoryFloor,
+  type HistoryFloorParticipation,
+} from '../../../services/historyFloor';
+
+const JOINED = new Date('2026-06-15T00:00:00Z');
+const LATER = new Date('2026-07-01T00:00:00Z');
+const GRANTED_FROM = new Date('2026-01-01T00:00:00Z');
+
+const prismaWith = (links: Array<{ id: string; allowViewHistory: boolean }>) =>
+  ({
+    conversationShareLink: {
+      findMany: jest.fn<any>().mockResolvedValue(links),
+      findUnique: jest.fn<any>(async ({ where }: any) => links.find((l) => l.id === where.id) ?? null),
+    },
+  }) as never;
+
+const participation = (over: Partial<HistoryFloorParticipation> = {}): HistoryFloorParticipation => ({
+  conversationId: 'c1',
+  joinedAt: JOINED,
+  shareLinkId: 'sl-1',
+  ...over,
+});
+
+// ─── historyFloorFor — la règle, énoncée UNE fois ────────────────────────────
+
+describe('historyFloorFor — (i) un administrateur voit tout', () => {
+  it('ouvre tout à un admin, même avec un droit figé fermé ET un lien fermé', () => {
+    expect(
+      historyFloorFor(
+        { role: 'admin', joinedAt: JOINED, shareLinkId: 'sl-1', permissions: { canViewHistory: false } },
+        { allowViewHistory: false },
+      ),
+    ).toBeNull();
+  });
+
+  it('ouvre tout à un creator', () => {
+    expect(
+      historyFloorFor({ role: 'creator', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false } }, null),
+    ).toBeNull();
+  });
+
+  it('replie la casse du rôle — `ADMIN` est un admin', () => {
+    expect(
+      historyFloorFor({ role: 'ADMIN', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false } }, null),
+    ).toBeNull();
+  });
+
+  it('ne fait PAS d’un modérateur un admin', () => {
+    expect(
+      historyFloorFor({ role: 'moderator', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false } }, null),
+    ).toEqual(JOINED);
+  });
+
+  it('le rang prime sur un octroi par date — un admin n’est pas borné par sa propre date', () => {
+    expect(
+      historyFloorFor({ role: 'admin', joinedAt: JOINED, shareLinkId: null, historyVisibleFrom: GRANTED_FROM }, null),
+    ).toBeNull();
+  });
+});
+
+// #3892 — décision porteur (2026-08-27) : un ADMIN/BIGBOSS de la PLATEFORME
+// bypasse le plancher même sans rang élevé DANS cette conversation précise —
+// même patron que la présence (`PresenceVisibilityService`, qui voit déjà
+// ADMIN/BIGBOSS). Un simple membre de la conversation qui se trouve être
+// ADMIN/BIGBOSS de la plateforme lit tout, comme s'il en était admin.
+describe('historyFloorFor — (i-bis) un administrateur ou BIGBOSS de la PLATEFORME voit tout', () => {
+  it('ouvre tout à un ADMIN plateforme, même simple membre DANS la conversation', () => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: 'sl-1', permissions: { canViewHistory: false }, user: { role: 'ADMIN' } },
+        { allowViewHistory: false },
+      ),
+    ).toBeNull();
+  });
+
+  it('ouvre tout à un BIGBOSS plateforme, même simple membre DANS la conversation', () => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false }, user: { role: 'BIGBOSS' } },
+        null,
+      ),
+    ).toBeNull();
+  });
+
+  it('lit le rôle plateforme EXACTEMENT, comme la table des rôles privilégiés (#11217) — `User.role` est un enum en majuscules', () => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false }, user: { role: 'admin' } },
+        null,
+      ),
+    ).toEqual(JOINED);
+  });
+
+  it('fait d’un MODERATOR plateforme un bypass, comme ADMIN/BIGBOSS (décision porteur du 2026-10-24, #11217)', () => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false }, user: { role: 'MODERATOR' } },
+        null,
+      ),
+    ).toBeNull();
+  });
+
+  it.each(['AUDIT', 'ANALYST'])('ne fait PAS de %s plateforme un bypass — ils restent ordinaires', (role) => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false }, user: { role } },
+        null,
+      ),
+    ).toEqual(JOINED);
+  });
+
+  it('un `user` absent (appelant qui n’a pas chargé la colonne) se comporte comme avant — aucun bypass, aucun throw', () => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false } },
+        null,
+      ),
+    ).toEqual(JOINED);
+  });
+
+  it('un `user.role` absent (participant sans compte — anonyme) se comporte comme avant', () => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false }, user: null },
+        null,
+      ),
+    ).toEqual(JOINED);
+  });
+});
+
+describe('historyFloorFor — (ii) l’octroi par DATE d’un administrateur', () => {
+  it('rend la date octroyée, même quand le droit figé refuse l’historique', () => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: null, historyVisibleFrom: GRANTED_FROM, permissions: { canViewHistory: false } },
+        null,
+      ),
+    ).toEqual(GRANTED_FROM);
+  });
+
+  it('rend la date octroyée, même quand le lien ferme l’historique', () => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: 'sl-1', historyVisibleFrom: GRANTED_FROM },
+        { allowViewHistory: false },
+      ),
+    ).toEqual(GRANTED_FROM);
+  });
+
+  it('prime sur la surcharge de l’hôte — la date est le levier le plus récent', () => {
+    expect(
+      historyFloorFor(
+        {
+          joinedAt: JOINED,
+          shareLinkId: 'sl-1',
+          historyVisibleFrom: GRANTED_FROM,
+          permissions: { canViewHistory: true },
+          anonymousSession: { rights: { canViewHistory: false } },
+        },
+        { allowViewHistory: true },
+      ),
+    ).toEqual(GRANTED_FROM);
+  });
+
+  it('`null` n’est pas un octroi — la règle ordinaire s’applique', () => {
+    expect(
+      historyFloorFor({ joinedAt: JOINED, shareLinkId: null, historyVisibleFrom: null, permissions: { canViewHistory: false } }, null),
+    ).toEqual(JOINED);
+  });
+});
+
+describe('historyFloorFor — (iii) le droit figé au join, SANS lien', () => {
+  it('borne à l’arrivée un membre ajouté après coup (droit figé `false`, aucun lien)', () => {
+    expect(historyFloorFor({ joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false } }, null)).toEqual(JOINED);
+  });
+
+  it('ouvre tout à un membre dont le droit figé l’accorde', () => {
+    expect(historyFloorFor({ joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: true } }, null)).toBeNull();
+  });
+
+  it('laisse la SURCHARGE de l’hôte primer sur le droit figé', () => {
+    expect(
+      historyFloorFor(
+        {
+          joinedAt: JOINED,
+          shareLinkId: 'sl-1',
+          permissions: { canViewHistory: true },
+          anonymousSession: { rights: { canViewHistory: false } },
+        },
+        { allowViewHistory: true },
+      ),
+    ).toEqual(JOINED);
+  });
+
+  it('ignore une surcharge qui ne nomme PAS l’historique', () => {
+    expect(
+      historyFloorFor(
+        {
+          joinedAt: JOINED,
+          shareLinkId: 'sl-1',
+          permissions: { canViewHistory: false },
+          anonymousSession: { rights: { canSendFiles: true } },
+        },
+        { allowViewHistory: true },
+      ),
+    ).toEqual(JOINED);
+  });
+});
+
+describe('historyFloorFor — (iv) le lien de partage, quand rien n’est figé', () => {
+  it('rend `joinedAt` quand le lien ferme l’historique', () => {
+    expect(historyFloorFor(participation(), { allowViewHistory: false })).toEqual(JOINED);
+  });
+
+  it('ne rend RIEN quand le lien ouvre l’historique', () => {
+    expect(historyFloorFor(participation(), { allowViewHistory: true })).toBeNull();
+  });
+
+  it('ouvre l’historique quand le droit figé l’accorde, MÊME si le lien le ferme', () => {
+    expect(
+      historyFloorFor({ joinedAt: JOINED, shareLinkId: 'sl-1', permissions: { canViewHistory: true } }, { allowViewHistory: false }),
+    ).toBeNull();
+  });
+
+  it('ferme l’historique quand le droit figé le refuse, MÊME si le lien l’ouvre', () => {
+    expect(
+      historyFloorFor({ joinedAt: JOINED, shareLinkId: 'sl-1', permissions: { canViewHistory: false } }, { allowViewHistory: true }),
+    ).toEqual(JOINED);
+  });
+
+  it('retombe sur le lien quand le droit figé est ABSENT — participation d’avant le champ', () => {
+    expect(historyFloorFor({ joinedAt: JOINED, shareLinkId: 'sl-1', permissions: {} }, { allowViewHistory: false })).toEqual(JOINED);
+  });
+
+  /**
+   * #17140 — le témoin INVERSE de celui qu'il remplace.
+   *
+   * Il gelait « ne borne RIEN quand le lien est INTROUVABLE », présenté comme
+   * la posture unique du dépôt. C'était un fail-OPEN décisionnel : la
+   * participation DÉCLARE être entrée par un lien, et on ne sait plus rien de
+   * ce que ce lien accordait. Deux unités de production fabriquent ce cas —
+   * `deleteShareLinksRevokingGuests` (purge d'un compte) et `cleanupExpiredData`
+   * (balayage horaire des liens ÉCHUS) — parce que toutes deux ne révoquent
+   * que les invités `type: 'anonymous'` avant de supprimer la ligne.
+   */
+  it('borne à l’arrivée quand le lien est INTROUVABLE — fail-CLOSED (#17140)', () => {
+    expect(historyFloorFor(participation(), null)).toEqual(JOINED);
+  });
+
+  it('et ce refus ne prime PAS sur un droit figé qui accorde — le lien n’est que le dernier repli', () => {
+    expect(
+      historyFloorFor({ joinedAt: JOINED, shareLinkId: 'sl-1', permissions: { canViewHistory: true } }, null),
+    ).toBeNull();
+  });
+
+  it('ni sur un octroi par DATE, ni sur un rang d’administrateur', () => {
+    expect(historyFloorFor(participation({ historyVisibleFrom: GRANTED_FROM }), null)).toEqual(GRANTED_FROM);
+    expect(historyFloorFor(participation({ role: 'admin' }), null)).toBeNull();
+  });
+});
+
+/**
+ * #17140 — l'arbitrage du lien, ÉNONCÉ UNE FOIS.
+ *
+ * `linkGrantsHistory` existe parce que la fiche d'un participant
+ * (`participants-reads.ts`) doit ANNONCER exactement ce que `historyFloorFor`
+ * APPLIQUE. Elle le retapait (`shareLink?.allowViewHistory ?? true`), et le
+ * retapage confondait les deux raisons d'avoir `null` en face.
+ */
+/**
+ * #17140 (audit adversarial) — **le prédicat partagé ne suffit pas : l'OPÉRANDE
+ * doit l'être aussi.**
+ *
+ * `Participant.shareLinkId` et `anonymousSession.shareLinkId` coexistent en
+ * base — la migration vers le modèle Participant n'écrit QUE la seconde, et
+ * `ExpiredShareLinksCleanupService.shareLinkIdsHeldByActiveGuests` PAGINE les
+ * lignes qui n'ont que celle-là. Ce module ne lisait que la colonne : une ligne
+ * migrée se réglait au rang « aucun lien emprunté » ⇒ AUCUN plancher, même
+ * quand le lien EXISTE et ferme l'historique. La loi est `guestShareLinkId()`.
+ */
+describe('historyFloorFor — l’id du lien se prend sur les DEUX champs (#17140)', () => {
+  const migre = (over: Partial<HistoryFloorParticipation> = {}): HistoryFloorParticipation => ({
+    conversationId: 'c1',
+    joinedAt: JOINED,
+    shareLinkId: null,
+    anonymousSession: { shareLinkId: 'sl-1' },
+    ...over,
+  });
+
+  it('BORNE une ligne migrée dont le lien ferme l’historique — la colonne est absente, pas le lien', () => {
+    expect(historyFloorFor(migre(), { allowViewHistory: false })).toEqual(JOINED);
+  });
+
+  it('n’ouvre rien de plus quand ce lien-là est INTROUVABLE', () => {
+    expect(historyFloorFor(migre(), null)).toEqual(JOINED);
+  });
+
+  it('et ouvre quand ce lien-là accorde', () => {
+    expect(historyFloorFor(migre(), { allowViewHistory: true })).toBeNull();
+  });
+
+  it('la COLONNE prime sur la copie embarquée — même précédence que `guestShareLinkId`', async () => {
+    const prisma = prismaWith([{ id: 'sl-colonne', allowViewHistory: false }]);
+    const floor = await loadHistoryFloor(prisma, {
+      joinedAt: JOINED,
+      shareLinkId: 'sl-colonne',
+      anonymousSession: { shareLinkId: 'sl-embarque' },
+    });
+    expect(floor).toEqual(JOINED);
+    expect((prisma as any).conversationShareLink.findUnique.mock.calls[0][0].where.id).toBe('sl-colonne');
+  });
+
+  it('le chargeur ALIGNÉ interroge l’id embarqué quand la colonne manque', async () => {
+    const prisma = prismaWith([{ id: 'sl-1', allowViewHistory: false }]);
+    expect(await loadHistoryFloorsFor(prisma, [migre()])).toEqual([JOINED]);
+    expect((prisma as any).conversationShareLink.findMany.mock.calls[0][0].where).toEqual({ id: { in: ['sl-1'] } });
+  });
+
+  it('et la PROJECTION demande les deux — une loi qu’aucun `select` ne ramène n’est appliquée nulle part', () => {
+    expect(HISTORY_FLOOR_PARTICIPANT_SELECT.anonymousSession).toEqual({
+      select: { rights: true, shareLinkId: true },
+    });
+  });
+
+  it('une ligne SANS aucun des deux reste au rang legacy — rien ne borne', () => {
+    expect(historyFloorFor(migre({ anonymousSession: { shareLinkId: null } }), null)).toBeNull();
+  });
+});
+
+describe('linkGrantsHistory — « aucun lien » et « lien disparu » ne sont pas la même réponse', () => {
+  it('accorde quand la participation n’a emprunté AUCUN lien — rien ne borne qui n’est entré par rien', () => {
+    expect(linkGrantsHistory(null, null)).toBe(true);
+    expect(linkGrantsHistory(undefined, null)).toBe(true);
+  });
+
+  it('refuse quand un `shareLinkId` est posé et que sa ligne a DISPARU', () => {
+    expect(linkGrantsHistory('sl-1', null)).toBe(false);
+  });
+
+  it('rend ce que la ligne dit quand elle est là', () => {
+    expect(linkGrantsHistory('sl-1', { allowViewHistory: true })).toBe(true);
+    expect(linkGrantsHistory('sl-1', { allowViewHistory: false })).toBe(false);
+  });
+});
+
+describe('historyFloorFor — (v) legacy : ABSENT n’est pas « faux »', () => {
+  it('ne borne RIEN pour une participation sans lien ni droit figé (ajout direct d’avant le champ)', () => {
+    expect(historyFloorFor(participation({ shareLinkId: null }), null)).toBeNull();
+  });
+
+  it('ne borne RIEN quand `permissions` manque entièrement et que le lien ouvre', () => {
+    expect(historyFloorFor({ joinedAt: JOINED, shareLinkId: 'sl-1' }, { allowViewHistory: true })).toBeNull();
+  });
+
+  it('ne borne RIEN quand `role` manque — un appelant qui ne le charge pas n’ouvre rien de plus', () => {
+    expect(historyFloorFor({ joinedAt: JOINED, shareLinkId: null }, null)).toBeNull();
+  });
+});
+
+// ─── Les chargeurs ───────────────────────────────────────────────────────────
+
+describe('loadHistoryFloor — forme unitaire', () => {
+  it('ne lit AUCUN lien quand le verdict est acquis avant lui (admin)', async () => {
+    const prisma = prismaWith([{ id: 'sl-1', allowViewHistory: false }]);
+    const floor = await loadHistoryFloor(prisma, { role: 'admin', joinedAt: JOINED, shareLinkId: 'sl-1' });
+    expect(floor).toBeNull();
+    expect((prisma as any).conversationShareLink.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('ne lit AUCUN lien pour un membre au droit figé fermé — le lien ne décide plus', async () => {
+    const prisma = prismaWith([{ id: 'sl-1', allowViewHistory: true }]);
+    const floor = await loadHistoryFloor(prisma, { joinedAt: JOINED, shareLinkId: 'sl-1', permissions: { canViewHistory: false } });
+    expect(floor).toEqual(JOINED);
+    expect((prisma as any).conversationShareLink.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('lit le lien quand rien n’est figé', async () => {
+    const prisma = prismaWith([{ id: 'sl-1', allowViewHistory: false }]);
+    expect(await loadHistoryFloor(prisma, participation())).toEqual(JOINED);
+  });
+
+  it('réutilise le lien que l’appelant tient déjà, s’il est celui de la participation', async () => {
+    const prisma = prismaWith([]);
+    const floor = await loadHistoryFloor(prisma, participation(), { link: { id: 'sl-1', allowViewHistory: false } });
+    expect(floor).toEqual(JOINED);
+    expect((prisma as any).conversationShareLink.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('n’emprunte PAS un lien qui n’est pas celui de la participation', async () => {
+    const prisma = prismaWith([{ id: 'sl-1', allowViewHistory: true }]);
+    const floor = await loadHistoryFloor(prisma, participation(), { link: { id: 'sl-other', allowViewHistory: false } });
+    expect(floor).toBeNull();
+    expect((prisma as any).conversationShareLink.findUnique).toHaveBeenCalledTimes(1);
+  });
+
+  it('propage l’échec de lecture — un contrôle d’accès illisible ne sert rien', async () => {
+    const prisma = {
+      conversationShareLink: { findUnique: jest.fn<any>().mockRejectedValue(new Error('mongo down')) },
+    } as never;
+    await expect(loadHistoryFloor(prisma, participation())).rejects.toThrow('mongo down');
+  });
+
+  /**
+   * #17140 — la lecture ABOUTIT et ne trouve rien. Ce n'est pas l'échec
+   * ci-dessus : elle a répondu, et sa réponse est « ce lien n'existe plus ».
+   */
+  it('borne à l’arrivée quand la lecture aboutit sur RIEN (lien supprimé depuis la jointure)', async () => {
+    const prisma = prismaWith([]);
+    expect(await loadHistoryFloor(prisma, participation())).toEqual(JOINED);
+    expect((prisma as any).conversationShareLink.findUnique).toHaveBeenCalledTimes(1);
+  });
+
+  it('et quand l’appelant tient un lien qui n’est pas le sien, c’est la LECTURE qui tranche — pas le sien', async () => {
+    const prisma = prismaWith([]);
+    const floor = await loadHistoryFloor(prisma, participation(), { link: { id: 'sl-other', allowViewHistory: true } });
+    expect(floor).toEqual(JOINED);
+  });
+});
+
+describe('loadHistoryFloorsFor — forme ALIGNÉE (un plancher par ligne)', () => {
+  it('rend un verdict par participation, dans l’ordre', async () => {
+    const prisma = prismaWith([{ id: 'sl-1', allowViewHistory: false }]);
+    const floors = await loadHistoryFloorsFor(prisma, [
+      { role: 'admin', joinedAt: JOINED, shareLinkId: 'sl-1' },
+      { joinedAt: LATER, shareLinkId: 'sl-1' },
+      { joinedAt: JOINED, shareLinkId: null, historyVisibleFrom: GRANTED_FROM },
+    ]);
+    expect(floors).toEqual([null, LATER, GRANTED_FROM]);
+  });
+
+  it('n’interroge que les liens dont le verdict dépend', async () => {
+    const prisma = prismaWith([{ id: 'sl-2', allowViewHistory: false }]);
+    await loadHistoryFloorsFor(prisma, [
+      { role: 'admin', joinedAt: JOINED, shareLinkId: 'sl-1' },
+      { joinedAt: JOINED, shareLinkId: 'sl-2' },
+    ]);
+    expect((prisma as any).conversationShareLink.findMany.mock.calls[0][0].where).toEqual({ id: { in: ['sl-2'] } });
+  });
+
+  it('n’émet AUCUNE requête quand tout se décide avant le lien', async () => {
+    const prisma = prismaWith([]);
+    const floors = await loadHistoryFloorsFor(prisma, [
+      { joinedAt: JOINED, shareLinkId: null },
+      { joinedAt: JOINED, shareLinkId: 'sl-1', permissions: { canViewHistory: false } },
+    ]);
+    expect(floors).toEqual([null, JOINED]);
+    expect((prisma as any).conversationShareLink.findMany).not.toHaveBeenCalled();
+  });
+
+  /**
+   * #17140 — sur une page MIXTE, une seule ligne orpheline ne doit emporter ni
+   * ouvrir les autres : chaque index garde son propre verdict.
+   */
+  it('borne la SEULE participation dont le lien a disparu, et laisse les autres intactes', async () => {
+    const floors = await loadHistoryFloorsFor(prismaWith([{ id: 'sl-vivant', allowViewHistory: true }]), [
+      { joinedAt: JOINED, shareLinkId: 'sl-vivant' },
+      { joinedAt: LATER, shareLinkId: 'sl-mort' },
+      { joinedAt: JOINED, shareLinkId: null },
+    ]);
+    expect(floors).toEqual([null, LATER, null]);
+  });
+});
+
+describe('loadHistoryFloors — forme ENSEMBLISTE (par conversation)', () => {
+  it('pose le plancher à `joinedAt` quand le lien ferme l’historique', async () => {
+    const floors = await loadHistoryFloors(prismaWith([{ id: 'sl-1', allowViewHistory: false }]), [participation()]);
+    expect(floors.get('c1')).toEqual(JOINED);
+  });
+
+  it('ne pose rien quand le lien ouvre l’historique', async () => {
+    const floors = await loadHistoryFloors(prismaWith([{ id: 'sl-1', allowViewHistory: true }]), [participation()]);
+    expect(floors.size).toBe(0);
+  });
+
+  it('pose un plancher SANS lien pour un membre ajouté après coup', async () => {
+    const prisma = prismaWith([]);
+    const floors = await loadHistoryFloors(prisma, [
+      participation({ shareLinkId: null, permissions: { canViewHistory: false } }),
+    ]);
+    expect(floors.get('c1')).toEqual(JOINED);
+    expect((prisma as any).conversationShareLink.findMany).not.toHaveBeenCalled();
+  });
+
+  it('n’émet AUCUNE requête pour des participations sans lien', async () => {
+    const prisma = prismaWith([]);
+    const floors = await loadHistoryFloors(prisma, [
+      participation({ shareLinkId: null }),
+      participation({ conversationId: 'c2', shareLinkId: null }),
+    ]);
+    expect(floors.size).toBe(0);
+    expect((prisma as any).conversationShareLink.findMany).not.toHaveBeenCalled();
+  });
+
+  it('dédoublonne les liens et garde le `joinedAt` PROPRE à chaque conversation', async () => {
+    const prisma = prismaWith([{ id: 'sl-1', allowViewHistory: false }]);
+    const floors = await loadHistoryFloors(prisma, [
+      participation({ conversationId: 'c1', joinedAt: JOINED }),
+      participation({ conversationId: 'c2', joinedAt: LATER }),
+    ]);
+    expect((prisma as any).conversationShareLink.findMany).toHaveBeenCalledTimes(1);
+    expect((prisma as any).conversationShareLink.findMany.mock.calls[0][0].where).toEqual({ id: { in: ['sl-1'] } });
+    expect(floors.get('c1')).toEqual(JOINED);
+    expect(floors.get('c2')).toEqual(LATER);
+  });
+
+  it('BORNE sur un lien introuvable — même posture que GET messages, désormais fail-CLOSED (#17140)', async () => {
+    const floors = await loadHistoryFloors(prismaWith([]), [participation()]);
+    expect(floors.get('c1')).toEqual(JOINED);
+  });
+
+  it('rend le MÊME verdict que la forme unitaire', async () => {
+    const floors = await loadHistoryFloors(prismaWith([{ id: 'sl-1', allowViewHistory: false }]), [participation()]);
+    expect(historyFloorFor(participation(), { allowViewHistory: false })).toEqual(floors.get('c1'));
+  });
+});
+
+describe('historyFloorClause', () => {
+  it('rend {} quand rien n’est borné — la requête de l’appelant reste intacte', () => {
+    expect(historyFloorClause(['c1', 'c2'], new Map())).toEqual({});
+  });
+
+  it('rend le OR sous AND — le premier niveau appartient déjà au keyset', () => {
+    const clause = historyFloorClause(['c1', 'c2'], new Map([['c2', JOINED]]));
+    expect(clause).toEqual({
+      AND: [{ OR: [{ conversationId: 'c1' }, { conversationId: 'c2', createdAt: { gte: JOINED } }] }],
+    });
+  });
+
+  it('n’a pas de clé `OR` de premier niveau, qu’un keyset écraserait', () => {
+    expect(Object.keys(historyFloorClause(['c1'], new Map([['c1', JOINED]])))).toEqual(['AND']);
+  });
+});
+
+describe('applyHistoryFloor', () => {
+  it('laisse la clause intacte sans plancher', () => {
+    const where = { conversationId: 'c1', deletedAt: null };
+    expect(applyHistoryFloor(where, null)).toBe(where);
+  });
+
+  it('pose `createdAt.gte` sans toucher au reste', () => {
+    expect(applyHistoryFloor({ conversationId: 'c1', deletedAt: null }, JOINED)).toEqual({
+      conversationId: 'c1',
+      deletedAt: null,
+      createdAt: { gte: JOINED },
+    });
+  });
+
+  it('se COMBINE à une borne `lt` déjà posée (curseur, mode around)', () => {
+    expect(applyHistoryFloor({ conversationId: 'c1', createdAt: { lt: LATER } }, JOINED)).toEqual({
+      conversationId: 'c1',
+      createdAt: { lt: LATER, gte: JOINED },
+    });
+  });
+
+  it('garde la borne `gte` la plus STRICTE quand l’appelant en avait déjà une', () => {
+    expect(applyHistoryFloor({ createdAt: { gte: LATER } }, JOINED)).toEqual({ createdAt: { gte: LATER } });
+    expect(applyHistoryFloor({ createdAt: { gte: JOINED } }, LATER)).toEqual({ createdAt: { gte: LATER } });
+  });
+
+  // #3893 point 3 : `where.createdAt` peut arriver sous deux formes que le
+  // code d'origine ne reconnaissait pas — une Date LITTÉRALE (égalité, pas une
+  // borne) et un `gte` en chaîne ISO (le connecteur Mongo les accepte). Dans
+  // les deux cas, l'ancien code perdait la contrainte de l'appelant et la
+  // remplaçait par le plancher SEUL — un ÉLARGISSEMENT, jamais une restriction.
+  it('une Date LITTÉRALE déjà >= au plancher reste intacte — l’égalité est déjà plus stricte', () => {
+    expect(applyHistoryFloor({ conversationId: 'c1', createdAt: LATER }, JOINED)).toEqual({
+      conversationId: 'c1',
+      createdAt: LATER,
+    });
+  });
+
+  it('une Date LITTÉRALE antérieure au plancher devient un intervalle IMPOSSIBLE, jamais le plancher seul', () => {
+    const result = applyHistoryFloor({ conversationId: 'c1', createdAt: JOINED }, LATER) as unknown as {
+      createdAt: { gte: Date; lt: Date };
+    };
+    // Ne DOIT jamais dégénérer en `{ gte: LATER }` seul, qui rouvrirait tout
+    // ce qui suit le plancher — la ligne demandée par l'égalité, elle,
+    // n'existe pas dans cette fenêtre.
+    expect(result.createdAt.gte).toEqual(result.createdAt.lt);
+    expect(result.createdAt.gte >= LATER).toBe(true);
+  });
+
+  it('un `gte` en CHAÎNE ISO plus strict que le plancher est conservé — comparé, pas ignoré', () => {
+    expect(applyHistoryFloor({ createdAt: { gte: LATER.toISOString() } }, JOINED)).toEqual({
+      createdAt: { gte: LATER },
+    });
+  });
+
+  it('un `gte` en CHAÎNE ISO moins strict que le plancher cède au plancher', () => {
+    expect(applyHistoryFloor({ createdAt: { gte: JOINED.toISOString() } }, LATER)).toEqual({
+      createdAt: { gte: LATER },
+    });
+  });
+});
+
+describe('loadHistoryFloorsOrFail', () => {
+  it('retire les conversations dont le verdict DÉPEND d’un lien illisible, et elles seules', async () => {
+    const prisma = {
+      conversationShareLink: { findMany: jest.fn<any>().mockRejectedValue(new Error('mongo down')) },
+    } as never;
+
+    const result = await loadHistoryFloorsOrFail(prisma, [
+      participation({ conversationId: 'c-link' }),
+      participation({ conversationId: 'c-plain', shareLinkId: null }),
+      participation({ conversationId: 'c-admin', role: 'admin' }),
+      participation({ conversationId: 'c-frozen', permissions: { canViewHistory: false } }),
+    ]);
+
+    // Un contrôle d'accès qu'on ne peut pas lire ne se dégrade pas en « aucun
+    // contrôle » : seule la conversation dont le lien décide sort du service.
+    expect(result.unreadableConversationIds).toEqual(['c-link']);
+    // `c-frozen` se règle au rang (iii), SANS lien : la panne de la requête
+    // liens ne peut rien lui retirer, et son plancher reste applicable.
+    expect(result.floors.get('c-frozen')).toEqual(JOINED);
+    // `c-plain` et `c-admin` ne sont bornées par rien : absentes de la carte.
+    expect(result.floors.size).toBe(1);
+  });
+
+  /**
+   * Le défaut que ce témoin ferme : le `catch` vidait TOUTE la carte, alors
+   * qu'il ne pouvait rien apprendre sur les conversations dont le verdict était
+   * déjà rendu SANS lien (rangs i à iii). Sur une page MIXTE, une panne de la
+   * requête liens faisait donc perdre le plancher des conversations réglées, et
+   * elles redevenaient lisibles INTÉGRALEMENT — l'appelant n'apprenait ni leur
+   * plancher (`floors`) ni leur illisibilité (`unreadableConversationIds`).
+   */
+  it('GARDE le plancher d’une conversation réglée sans lien quand la requête liens ÉCHOUE', async () => {
+    const prisma = {
+      conversationShareLink: { findMany: jest.fn<any>().mockRejectedValue(new Error('mongo down')) },
+    } as never;
+
+    const result = await loadHistoryFloorsOrFail(prisma, [
+      participation({ conversationId: 'c-link' }),
+      participation({ conversationId: 'c-frozen', permissions: { canViewHistory: false } }),
+      participation({ conversationId: 'c-granted', historyVisibleFrom: GRANTED_FROM }),
+    ]);
+
+    expect(result.floors.get('c-frozen')).toEqual(JOINED);
+    expect(result.floors.get('c-granted')).toEqual(GRANTED_FROM);
+    expect(result.unreadableConversationIds).toEqual(['c-link']);
+    expect(result.unreadableConversationIds).not.toContain('c-frozen');
+    expect(result.unreadableConversationIds).not.toContain('c-granted');
+  });
+
+  it('ne lit AUCUN lien — donc ne peut pas échouer — quand tout se règle avant le lien', async () => {
+    const findMany = jest.fn<any>().mockRejectedValue(new Error('mongo down'));
+    const result = await loadHistoryFloorsOrFail({ conversationShareLink: { findMany } } as never, [
+      participation({ conversationId: 'c-frozen', shareLinkId: null, permissions: { canViewHistory: false } }),
+    ]);
+
+    expect(findMany).not.toHaveBeenCalled();
+    expect(result.floors.get('c-frozen')).toEqual(JOINED);
+    expect(result.unreadableConversationIds).toEqual([]);
+  });
+
+  it('ne retire rien quand la lecture aboutit', async () => {
+    const result = await loadHistoryFloorsOrFail(prismaWith([{ id: 'sl-1', allowViewHistory: false }]), [participation()]);
+    expect(result.unreadableConversationIds).toEqual([]);
+    expect(result.floors.get('c1')).toEqual(JOINED);
+  });
+
+  /**
+   * #17140 — la distinction que ce lot pose, vue d'ici : une LEVÉE rend la
+   * conversation ILLISIBLE (on ne sait rien, on ne sert rien) ; une lecture qui
+   * ABOUTIT sur rien rend un PLANCHER (on sait que le lien a disparu, on sert
+   * depuis l'arrivée). Les confondre renverrait à « aucun plancher ».
+   */
+  it('une lecture qui aboutit sur RIEN n’est pas illisible — elle BORNE', async () => {
+    const result = await loadHistoryFloorsOrFail(prismaWith([]), [participation()]);
+    expect(result.unreadableConversationIds).toEqual([]);
+    expect(result.floors.get('c1')).toEqual(JOINED);
+  });
+});
+
+// ─── Le lecteur, depuis son contexte d'auth ──────────────────────────────────
+
+describe('historyReaderFromAuthContext', () => {
+  it('nomme un anonyme par son `participantId`', () => {
+    expect(historyReaderFromAuthContext({ type: 'anonymous', participantId: 'p-1', userId: 'p-1' })).toEqual({
+      kind: 'anonymous',
+      participantId: 'p-1',
+    });
+  });
+
+  it('nomme un anonyme par `userId` quand seul ce champ porte son id — même colonne', () => {
+    expect(historyReaderFromAuthContext({ type: 'anonymous', userId: 'p-1' })).toEqual({ kind: 'anonymous', participantId: 'p-1' });
+  });
+
+  it('nomme un inscrit par son `userId`', () => {
+    expect(historyReaderFromAuthContext({ type: 'user', userId: 'u-1' })).toEqual({ kind: 'user', userId: 'u-1' });
+  });
+
+  it('ne nomme personne pour un visiteur nu', () => {
+    expect(historyReaderFromAuthContext({ isAnonymous: true })).toBeNull();
+    expect(historyReaderFromAuthContext(null)).toBeNull();
+  });
+});
+
+describe('loadReaderHistoryFloor', () => {
+  const prismaWithRow = (row: unknown) =>
+    ({
+      participant: { findFirst: jest.fn<any>().mockResolvedValue(row) },
+      conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue({ allowViewHistory: false }) },
+    }) as never;
+
+  it('cherche un anonyme par `id` et borne à son arrivée', async () => {
+    const prisma = prismaWithRow({ role: 'member', joinedAt: JOINED, shareLinkId: 'sl-1', permissions: { canViewHistory: false } });
+    const floor = await loadReaderHistoryFloor(prisma, { conversationId: 'c1', reader: { kind: 'anonymous', participantId: 'p-1' } });
+    expect(floor).toEqual(JOINED);
+    expect((prisma as any).participant.findFirst.mock.calls[0][0]).toMatchObject({
+      where: { id: 'p-1', conversationId: 'c1', isActive: true },
+      select: HISTORY_FLOOR_PARTICIPANT_SELECT,
+    });
+  });
+
+  it('cherche un inscrit par `userId`', async () => {
+    const prisma = prismaWithRow({ role: 'admin', joinedAt: JOINED, shareLinkId: null });
+    const floor = await loadReaderHistoryFloor(prisma, { conversationId: 'c1', reader: { kind: 'user', userId: 'u-1' } });
+    expect(floor).toBeNull();
+    expect((prisma as any).participant.findFirst.mock.calls[0][0].where).toEqual({ userId: 'u-1', conversationId: 'c1', isActive: true });
+  });
+
+  it('ne borne rien pour qui n’a pas de ligne — rien ne précède une arrivée qui n’a pas eu lieu', async () => {
+    const prisma = prismaWithRow(null);
+    expect(await loadReaderHistoryFloor(prisma, { conversationId: 'c1', reader: { kind: 'user', userId: 'u-1' } })).toBeNull();
+  });
+
+  it('ne borne rien et ne lit rien sans lecteur nommé', async () => {
+    const prisma = prismaWithRow({ joinedAt: JOINED, shareLinkId: 'sl-1' });
+    expect(await loadReaderHistoryFloor(prisma, { conversationId: 'c1', reader: null })).toBeNull();
+    expect((prisma as any).participant.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('propage l’échec — fail-closed, la route en fait un 500', async () => {
+    const prisma = { participant: { findFirst: jest.fn<any>().mockRejectedValue(new Error('mongo down')) } } as never;
+    await expect(
+      loadReaderHistoryFloor(prisma, { conversationId: 'c1', reader: { kind: 'user', userId: 'u-1' } }),
+    ).rejects.toThrow('mongo down');
+  });
+});

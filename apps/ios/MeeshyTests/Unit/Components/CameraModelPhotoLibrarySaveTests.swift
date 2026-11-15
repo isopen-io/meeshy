@@ -21,14 +21,16 @@ import XCTest
 ///     inline Photos call in this `@MainActor` type.
 final class CameraModelPhotoLibrarySaveTests: XCTestCase {
 
-    private func cameraViewSource() throws -> String {
+    private func cameraViewSource(_ fichier: String = "CameraModel.swift") throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Components/CameraView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+            .appendingPathComponent("Meeshy/Features/Main/Components/\(fichier)")
+        let video = url.deletingLastPathComponent().appendingPathComponent("CameraModel+Video.swift")
+        let suite = fichier == "CameraModel.swift" ? "\n" + (try String(contentsOf: video, encoding: .utf8)) : ""
+        return try String(contentsOf: url, encoding: .utf8) + suite
     }
 
     private func body(from startMarker: String, to endMarker: String, in source: String) throws -> String {
@@ -40,14 +42,14 @@ final class CameraModelPhotoLibrarySaveTests: XCTestCase {
     }
 
     func test_photoCapture_savesViaPhotoLibraryManager() throws {
-        let source = try cameraViewSource()
+        let source = try cameraViewSource("CameraModel+PhotoCapture.swift")
         let fn = try body(
             from: "func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto",
-            to: "// MARK: - Video Delegate",
+            to: "// MARK: - Video recording",
             in: source
         )
         XCTAssertTrue(
-            fn.contains("PhotoLibraryManager.shared.saveImage(data)"),
+            fn.contains("PhotoLibraryManager.shared.saveImageFile(data"),
             "A successfully captured photo must be saved to the photo library via " +
             "the non-@MainActor PhotoLibraryManager (passing the ORIGINAL encoded " +
             "bytes), so it appears in RecentMediaStripModel's grid via the " +
@@ -86,13 +88,13 @@ final class CameraModelPhotoLibrarySaveTests: XCTestCase {
         let source = try cameraViewSource()
         XCTAssertFalse(
             source.contains(".performChanges("),
-            "CameraView (a @MainActor type) must not invoke PHPhotoLibrary." +
+            "CameraModel (a @MainActor type) must not invoke PHPhotoLibrary." +
             "performChanges inline — the change-block runs off-main and traps. " +
             "Delegate to the non-@MainActor PhotoLibraryManager instead."
         )
         XCTAssertFalse(
             source.contains("PHAssetChangeRequest"),
-            "CameraView must not construct PHAssetChangeRequest inline — Photos " +
+            "CameraModel must not construct PHAssetChangeRequest inline — Photos " +
             "library writes belong to PhotoLibraryManager."
         )
     }

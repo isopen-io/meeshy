@@ -1,0 +1,37 @@
+{
+  "_law": "Le tier média d'un appareil (#11281) — loi PURE sur des entrées NEUTRES, rejouée par iOS (DeviceMediaTier.classify) et par le web (W10, apps/web/src/lib/device/capability-tier.ts). Aucune plateforme n'y lit une puce : la détection de puce, quand elle existe, ne fait que PRODUIRE ces entrées.",
+  "_inputs": {
+    "memoryGB": "mémoire RAPPORTÉE en Gio (iOS : ProcessInfo.physicalMemory ; web : navigator.deviceMemory), null = inconnue, ne baisse rien",
+    "cores": "cœurs logiques actifs (iOS : activeProcessorCount ; web : navigator.hardwareConcurrency), null = inconnu, ne baisse rien",
+    "maxFps": "cadence maximale de l'écran (120 = ProMotion)",
+    "hwAV1": "décodage AV1 matériel",
+    "hwHEVC": "décodage HEVC matériel",
+    "lowPower": "économie d'énergie active",
+    "thermal": "nominal | fair | serious | critical"
+  },
+  "vectors": [
+    { "name": "iPhone 8 (2 Go)", "input": { "memoryGB": 1.875, "cores": 6, "maxFps": 60, "hwAV1": false, "hwHEVC": true, "lowPower": false, "thermal": "nominal" }, "tier": "low" },
+    { "name": "iPhone X (3 Go)", "input": { "memoryGB": 2.8, "cores": 6, "maxFps": 60, "hwAV1": false, "hwHEVC": true, "lowPower": false, "thermal": "nominal" }, "tier": "mid" },
+    { "name": "iPhone 12 (4 Go)", "input": { "memoryGB": 3.7, "cores": 6, "maxFps": 60, "hwAV1": false, "hwHEVC": true, "lowPower": false, "thermal": "nominal" }, "tier": "high" },
+    { "name": "iPhone 13 Pro (6 Go, 120 Hz, sans AV1)", "input": { "memoryGB": 5.6, "cores": 6, "maxFps": 120, "hwAV1": false, "hwHEVC": true, "lowPower": false, "thermal": "nominal" }, "tier": "high" },
+    { "name": "iPhone 16 (8 Go, AV1, 60 Hz)", "input": { "memoryGB": 7.5, "cores": 6, "maxFps": 60, "hwAV1": true, "hwHEVC": true, "lowPower": false, "thermal": "nominal" }, "tier": "high" },
+    { "name": "iPhone 16 Pro (8 Go, AV1, 120 Hz)", "input": { "memoryGB": 7.5, "cores": 6, "maxFps": 120, "hwAV1": true, "hwHEVC": true, "lowPower": false, "thermal": "nominal" }, "tier": "pro" },
+    { "name": "iPad 7e génération (3 Go, 2 cœurs actifs)", "input": { "memoryGB": 2.8, "cores": 2, "maxFps": 60, "hwAV1": false, "hwHEVC": true, "lowPower": false, "thermal": "nominal" }, "tier": "mid" },
+    { "name": "iPad Pro M4 (16 Go, AV1, 120 Hz)", "input": { "memoryGB": 15.5, "cores": 10, "maxFps": 120, "hwAV1": true, "hwHEVC": true, "lowPower": false, "thermal": "nominal" }, "tier": "pro" },
+    { "name": "aucun décodeur HEVC matériel", "input": { "memoryGB": 7.5, "cores": 8, "maxFps": 120, "hwAV1": true, "hwHEVC": false, "lowPower": false, "thermal": "nominal" }, "tier": "low" },
+    { "name": "mémoire juste sous le palier moyen", "input": { "memoryGB": 2.4, "cores": 6, "maxFps": 60, "hwAV1": false, "hwHEVC": true, "lowPower": false, "thermal": "nominal" }, "tier": "low" },
+    { "name": "mémoire juste sous le palier haut", "input": { "memoryGB": 3.4, "cores": 6, "maxFps": 60, "hwAV1": false, "hwHEVC": true, "lowPower": false, "thermal": "nominal" }, "tier": "mid" },
+    { "name": "mémoire juste sous le palier pro", "input": { "memoryGB": 5.4, "cores": 6, "maxFps": 120, "hwAV1": true, "hwHEVC": true, "lowPower": false, "thermal": "nominal" }, "tier": "high" },
+    { "name": "deux cœurs : plafonné à moyen", "input": { "memoryGB": 7.5, "cores": 2, "maxFps": 120, "hwAV1": true, "hwHEVC": true, "lowPower": false, "thermal": "nominal" }, "tier": "mid" },
+    { "name": "quatre cœurs : haut, jamais pro", "input": { "memoryGB": 7.5, "cores": 4, "maxFps": 120, "hwAV1": true, "hwHEVC": true, "lowPower": false, "thermal": "nominal" }, "tier": "high" },
+    { "name": "Safari : mémoire inconnue, ne baisse rien", "input": { "memoryGB": null, "cores": 8, "maxFps": 120, "hwAV1": true, "hwHEVC": true, "lowPower": false, "thermal": "nominal" }, "tier": "pro" },
+    { "name": "mémoire et cœurs inconnus, 60 Hz", "input": { "memoryGB": null, "cores": null, "maxFps": 60, "hwAV1": false, "hwHEVC": true, "lowPower": false, "thermal": "nominal" }, "tier": "high" },
+    { "name": "Android d'entrée de gamme (2 Go, 8 cœurs)", "input": { "memoryGB": 2, "cores": 8, "maxFps": 60, "hwAV1": false, "hwHEVC": true, "lowPower": false, "thermal": "nominal" }, "tier": "low" },
+    { "name": "Android milieu de gamme (4 Go, 8 cœurs, 90 Hz)", "input": { "memoryGB": 4, "cores": 8, "maxFps": 90, "hwAV1": false, "hwHEVC": true, "lowPower": false, "thermal": "nominal" }, "tier": "high" },
+    { "name": "économie d'énergie : plafonné à moyen", "input": { "memoryGB": 7.5, "cores": 6, "maxFps": 120, "hwAV1": true, "hwHEVC": true, "lowPower": true, "thermal": "nominal" }, "tier": "mid" },
+    { "name": "économie d'énergie sur un appareil bas : reste bas", "input": { "memoryGB": 1.875, "cores": 6, "maxFps": 60, "hwAV1": false, "hwHEVC": true, "lowPower": true, "thermal": "nominal" }, "tier": "low" },
+    { "name": "chaleur « fair » : rien ne change", "input": { "memoryGB": 7.5, "cores": 6, "maxFps": 120, "hwAV1": true, "hwHEVC": true, "lowPower": false, "thermal": "fair" }, "tier": "pro" },
+    { "name": "chaleur « serious » : bas", "input": { "memoryGB": 7.5, "cores": 6, "maxFps": 120, "hwAV1": true, "hwHEVC": true, "lowPower": false, "thermal": "serious" }, "tier": "low" },
+    { "name": "chaleur « critical » : bas", "input": { "memoryGB": 7.5, "cores": 6, "maxFps": 120, "hwAV1": true, "hwHEVC": true, "lowPower": false, "thermal": "critical" }, "tier": "low" }
+  ]
+}

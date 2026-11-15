@@ -6,10 +6,14 @@
  */
 
 import { PrismaClient, PostType, PostVisibility } from '@meeshy/shared/prisma/client';
-import { doUsersShareCommunity } from './communityVisibility';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
+import { doUsersShareCommunity, isCommunityReadableBy } from './communityVisibility';
 import { doUsersShareDirectConversation } from './directContactVisibility';
 import { verdictFor } from './referenceAccess';
 import { NOT_DELETED } from './softDelete';
+import { amitieAcceptee } from '../friendship';
+import { postCircleAudienceFeature } from '@meeshy/shared/utils/relation-levels';
+import { pairAccess, type PairAccessDb } from '../relations/pairAccess';
 
 export type PostVisibilityRecord = {
   /**
@@ -34,6 +38,13 @@ export type PostVisibilityRecord = {
    * pour perpétuel, donc tout droit éteint pour intact.
    */
   expiresAt: Date | null;
+  /**
+   * La communauté où le post est publié, `null` hors communauté. REQUISE pour la
+   * même raison qu'`expiresAt` : une audience `COMMUNITY` rattachée ne se lit que
+   * par les membres de CETTE communauté (#16892) ; l'oublier rouvrirait la règle
+   * « co-membre de n'importe quelle communauté de l'auteur ».
+   */
+  communityId: string | null;
 };
 
 /**
@@ -45,8 +56,25 @@ export type PostVisibilityRecord = {
  */
 export type PostAclPrisma = Pick<
   PrismaClient,
-  'post' | 'postComment' | 'friendRequest' | 'communityMember' | 'participant' | 'postMention'
+  'post' | 'postComment' | 'friendRequest' | 'userRelation' | 'community' | 'communityMember' | 'participant' | 'postMention' | 'user'
 >;
+
+/**
+ * Les CERCLES d'un lecteur, pour le filtre de liste (#13931) : les auteurs dont le
+ * niveau effectif avec lui atteint AU MOINS Connaissance, Proche, Sang. Un auteur
+ * Sang figure donc dans les trois listes — c'est ce qui rend les branches du
+ * filtre indépendantes (`ACQUAINTANCES` ⊇ `CLOSE` ⊇ `BLOOD` côté lecteur).
+ *
+ * Vide par défaut : un appelant qui ne les fournit pas ne sert AUCUNE audience de
+ * cercle (fail-closed), jamais « tous les amis ».
+ */
+export type PostCircles = {
+  readonly acquaintance: readonly string[];
+  readonly close: readonly string[];
+  readonly blood: readonly string[];
+};
+
+export const NO_POST_CIRCLES: PostCircles = { acquaintance: [], close: [], blood: [] };
 
 /**
  * G5 — canonical Prisma OR-filter for post visibility, the single source both
@@ -79,29 +107,72 @@ export type PostAclPrisma = Pick<
  * l'accord des deux formes unitaire/lot est verrouillé cas par cas dans
  * `__tests__/unit/services/posts/postAudienceConsumption.test.ts`.
  */
+/**
+ * `blockedAuthorIds` — LE BLOCAGE, DANS LES DEUX SENS (#7184).
+ *
+ * La branche `{ visibility: PUBLIC }` ci-dessous n'a AUCUNE contrainte
+ * d'auteur, et `PUBLIC` est le défaut Prisma (`schema.prisma:3307`) : c'est par
+ * elle, et elle seule, que le contenu d'une personne qui avait bloqué le
+ * lecteur continuait de passer — publications, réels et stories. Mesuré avant
+ * ce lot : le mot `block` n'apparaissait pas une fois dans ce fichier.
+ *
+ * L'exclusion se pose donc AU-DESSUS du `OR`, jamais dans une de ses branches :
+ * la poser sur `FRIENDS` aurait laissé `PUBLIC` grand ouvert, et le défaut
+ * aurait survécu à son propre correctif.
+ *
+ * **La SYMÉTRIE est juste ici, et elle ne l'est pas sur le profil.** La garde
+ * jumelle (`routes/users/profile-block-gate.ts`) sert encore la fiche d'une
+ * personne que J'AI bloquée, parce que c'est de là qu'on débloque. Le contenu
+ * veut l'inverse : bloquer, c'est d'abord ne plus voir ce que l'autre publie.
+ * Les appelants résolvent donc `blockedIdsAroundViewer`
+ * (`services/ContactDirectoryService.ts:194`), qui confond les deux directions
+ * à dessein.
+ *
+ * La forme ne change QUE lorsqu'il y a quelque chose à écarter : un
+ * `notIn: []` ne garde rien et coûterait un niveau d'imbrication à chaque plan
+ * de requête, pour l'écrasante majorité des lecteurs qui n'ont bloqué
+ * personne. Tous les appelants posent déjà ce fragment dans un `AND` parent,
+ * où un `AND` imbriqué est légal.
+ */
 export function buildPostVisibilityOrFilter(
   viewerId: string,
   audienceIds: string[],
-  communityCoMemberIds: string[] = []
+  communityCoMemberIds: string[] = [],
+  blockedAuthorIds: readonly string[] = [],
+  circles: PostCircles = NO_POST_CIRCLES,
+  readableCommunityIds: readonly string[] = []
 ) {
-  return {
+  const audience = {
     OR: [
       { authorId: viewerId },
       { visibility: PostVisibility.PUBLIC },
-      { visibility: PostVisibility.COMMUNITY, authorId: { in: communityCoMemberIds } },
+      {
+        visibility: PostVisibility.COMMUNITY,
+        authorId: { in: communityCoMemberIds },
+        OR: [{ communityId: null }, { communityId: { isSet: false } }],
+      },
       { visibility: PostVisibility.FRIENDS, authorId: { in: audienceIds } },
       { visibility: PostVisibility.EXCEPT, authorId: { in: audienceIds }, NOT: { visibilityUserIds: { has: viewerId } } },
       { visibility: PostVisibility.ONLY, visibilityUserIds: { has: viewerId } },
+      { visibility: PostVisibility.ACQUAINTANCES, authorId: { in: [...circles.acquaintance] } },
+      { visibility: PostVisibility.CLOSE, authorId: { in: [...circles.close] } },
+      { visibility: PostVisibility.BLOOD, authorId: { in: [...circles.blood] } },
+      { visibility: PostVisibility.COMMUNITY, communityId: { in: [...readableCommunityIds] } },
     ],
   };
+  if (blockedAuthorIds.length === 0) return audience;
+  return { AND: [audience, { authorId: { notIn: [...blockedAuthorIds] } }] };
 }
 
 /**
  * Checks whether `userId` is allowed to see `post` based on its visibility setting.
  *
  * PUBLIC    → everyone
- * COMMUNITY → author + members sharing at least one community with the author
+ * COMMUNITY → posted in a community: its active members and its creator (#16892);
+ *              otherwise: members sharing at least one community with the author
  * FRIENDS   → post author + accepted friends of author
+ * ACQUAINTANCES / CLOSE / BLOOD → author + effective level (minimum of both grants)
+ *              of at least Connaissance / Proche / Sang — never a DM contact (#13931)
  * PRIVATE   → author only
  * ONLY      → userId must be in visibilityUserIds
  * EXCEPT    → userId must NOT be in visibilityUserIds, AND must be a friend
@@ -181,7 +252,14 @@ async function matchesPostAudience(
       return post.visibilityUserIds.includes(userId);
 
     case PostVisibility.COMMUNITY:
-      return doUsersShareCommunity(prisma, post.authorId, userId);
+      return post.communityId
+        ? isCommunityReadableBy(prisma, post.communityId, userId)
+        : doUsersShareCommunity(prisma, post.authorId, userId);
+
+    case PostVisibility.ACQUAINTANCES:
+    case PostVisibility.CLOSE:
+    case PostVisibility.BLOOD:
+      return circleAudienceAdmits(prisma, post.authorId, userId, post.visibility);
 
     case PostVisibility.FRIENDS:
     case PostVisibility.EXCEPT: {
@@ -191,17 +269,7 @@ async function matchesPostAudience(
       if (post.visibility === PostVisibility.EXCEPT && post.visibilityUserIds.includes(userId)) {
         return false;
       }
-      const friendship = await prisma.friendRequest.findFirst({
-        where: {
-          status: 'accepted',
-          OR: [
-            { senderId: post.authorId, receiverId: userId },
-            { senderId: userId, receiverId: post.authorId },
-          ],
-        },
-        select: { id: true },
-      });
-      if (friendship !== null) return true;
+      if (await amitieAcceptee(prisma, post.authorId, userId)) return true;
       // Le contact DM n'est consulté qu'en second — l'amitié est le cas
       // dominant et coûte une seule requête bornée.
       return options.includeDirectContacts === true
@@ -210,6 +278,29 @@ async function matchesPostAudience(
 
     default:
       return false;
+  }
+}
+
+/**
+ * La LOI (`resolveRelationAccess`) admet-elle `viewerId` à l'audience de cercle
+ * `visibility` de l'auteur ? Le seul verdict unitaire des cercles : le niveau effectif
+ * (le minimum des deux accords, RG-01), le blocage et, entre deux comptes de l'équipe,
+ * le privilège sans lien (#16623) y sont jugés ensemble, sans contact de message direct
+ * et sans comparaison de niveaux écrite ici (garde `relation-access-single-site-guard`).
+ * Une valeur qui n'est pas un cercle, ou une lecture en échec, ne donne jamais accès.
+ */
+export async function circleAudienceAdmits(
+  prisma: PairAccessDb,
+  authorId: string,
+  viewerId: string,
+  visibility: string
+): Promise<boolean> {
+  const feature = postCircleAudienceFeature(visibility);
+  if (!feature) return false;
+  try {
+    return (await pairAccess(prisma, { feature, viewerId, targetId: authorId })).allowed;
+  } catch {
+    return false;
   }
 }
 
@@ -262,6 +353,7 @@ const POST_ACL_SELECT = {
   visibility: true,
   visibilityUserIds: true,
   expiresAt: true,
+  communityId: true,
 } as const;
 
 /**
@@ -294,13 +386,39 @@ export async function loadPostAcl(
 export async function loadCommentPostAcl(
   prisma: PostAclPrisma,
   commentId: string,
-): Promise<{ postId: string; post: PostVisibilityRecord } | null> {
+): Promise<CommentThreadAcl | null> {
   const comment = await prisma.postComment.findFirst({
     where: { id: commentId, deletedAt: NOT_DELETED },
-    select: { postId: true, post: { select: POST_ACL_SELECT } },
+    select: { postId: true, post: { select: { ...POST_ACL_SELECT, isQuote: true, repostOfId: true, originalRepostOfId: true } } },
   });
   if (!comment?.post) return null;
   return { postId: comment.postId, post: comment.post };
+}
+
+/** Le post qui porte un commentaire, et ce qui dit s'il est une republication simple. */
+export type CommentThreadAcl = {
+  readonly postId: string;
+  readonly post: PostVisibilityRecord & {
+    readonly isQuote?: boolean;
+    readonly repostOfId?: string | null;
+    readonly originalRepostOfId?: string | null;
+  };
+};
+
+/**
+ * Le fil d'un commentaire est-il ouvert à cet acteur, en LECTURE ? Le post qui
+ * le porte d'abord ; s'il est une REPUBLICATION SIMPLE — qui a son propre fil
+ * depuis #9584 —, son original aussi : c'est la règle des republications, celle
+ * de `resolveConsumptionTarget` (un original illisible ou supprimé ferme le fil
+ * de ses republications ; une republication d'éphémère garde sa vie propre).
+ */
+export async function canUserConsumeThread(prisma: PostAclPrisma, thread: CommentThreadAcl, userId?: string): Promise<boolean> {
+  return (await canUserConsumePost(prisma, thread.post, userId)) && isRepostRootOpen(prisma, thread.post, userId, canUserConsumePost);
+}
+
+/** Le même fil, en INTERACTION (amis stricts sur la republication ET sur l'original). */
+export async function canUserInteractWithThread(prisma: PostAclPrisma, thread: CommentThreadAcl, userId?: string): Promise<boolean> {
+  return (await canUserInteractWithPost(prisma, thread.post, userId)) && isRepostRootOpen(prisma, thread.post, userId, canUserInteractWithPost);
 }
 
 /**
@@ -350,7 +468,11 @@ export async function canUserInteractWithPost(
 /**
  * Tranche ACL + redirection d'un post CANDIDAT à une interaction sociale
  * (like/réaction, commentaire). Porte, en plus de `PostVisibilityRecord`, les
- * champs qui décident SI ce post redirige vers sa racine.
+ * champs qui décident SI ce post redirige vers sa racine — et `commentsDisabled`
+ * (#3959), un PASSAGER qui ne participe à AUCUNE décision de redirection : il
+ * évite au seul appelant qui en a besoin (`POST /posts/:postId/comments`) une
+ * seconde requête sur la cible déjà résolue (racine d'un repost simple
+ * comprise). Les appelants « like/réaction » l'ignorent simplement.
  */
 export type PostRedirectRecord = PostVisibilityRecord & {
   id: string;
@@ -358,7 +480,22 @@ export type PostRedirectRecord = PostVisibilityRecord & {
   isQuote: boolean;
   repostOfId: string | null;
   originalRepostOfId: string | null;
+  commentsDisabled: boolean;
+  /**
+   * La REPUBLICATION SIMPLE que la redirection a traversée pour arriver ici
+   * (#9584) — absente quand le post nommé est la cible elle-même. La résolution
+   * vient d'en vérifier l'audience : une réaction qui l'emprunte la crédite
+   * AUSSI, un commentaire s'y range (`commentHome`), sans seconde lecture.
+   */
+  redirectedFrom?: RepostPassage & { readonly commentsDisabled: boolean };
 };
+
+/**
+ * Le post traversé par une redirection — ce qu'un crédit doit savoir de lui.
+ * `type` range une réaction dans la série de son acte (#10389) ; absent, elle
+ * n'en fait avancer aucune.
+ */
+export type RepostPassage = { readonly id: string; readonly authorId: string; readonly type?: string | null };
 
 const POST_REDIRECT_SELECT = {
   id: true,
@@ -366,10 +503,12 @@ const POST_REDIRECT_SELECT = {
   visibility: true,
   visibilityUserIds: true,
   expiresAt: true,
+  communityId: true,
   type: true,
   isQuote: true,
   repostOfId: true,
   originalRepostOfId: true,
+  commentsDisabled: true,
 } as const;
 
 async function loadPostRedirectRecord(
@@ -452,21 +591,57 @@ async function resolveRedirectTarget(
   userId: string | undefined,
   verdict: (prisma: PostAclPrisma, post: PostVisibilityRecord, userId?: string) => Promise<boolean>,
 ): Promise<PostRedirectRecord | null> {
+  // #6557 — un `postId` MALFORMÉ (jeton de mutation optimiste `cmid_<uuid>`,
+  // id local `tmp_…`) est le même refus indistinct que « absent » ou « hors
+  // audience », jamais une exception : Mongo ne l'ignore pas, il LÈVE
+  // (`P2023 Malformed ObjectID`) avant qu'aucune règle d'audience ne se
+  // prononce, et la route rendait un 500 là où GET/POST /posts/:postId/comments
+  // et interactions.ts attendent un 404 `POST_NOT_FOUND`. Même garde que
+  // `mayConsumePost` (postConsumptionGate.ts, #4044) — court-circuite AVANT
+  // la requête, sans coûter d'aller-retour.
+  if (!isValidObjectId(postId)) return null;
+
   const post = await loadPostRedirectRecord(prisma, postId);
   if (!post || !(await verdict(prisma, post, userId))) return null;
 
-  const isSimpleRepost = !post.isQuote && Boolean(post.repostOfId);
-  if (!isSimpleRepost) return post;
-
-  const rootId = post.originalRepostOfId ?? post.repostOfId!;
-  if (rootId === post.id) return post;
+  const rootId = simpleRepostRootId(post);
+  if (rootId === null) return post;
 
   const root = await loadPostRedirectRoot(prisma, rootId);
   if (!root) return null;
   if (isEphemeralPostType(root.type)) return post;
 
   if (root.deletedAt != null || !(await verdict(prisma, root, userId))) return null;
-  return root;
+  return { ...root, redirectedFrom: { id: post.id, authorId: post.authorId, type: post.type, commentsDisabled: post.commentsDisabled } };
+}
+
+type RepostShape = {
+  readonly id: string;
+  readonly isQuote?: boolean;
+  readonly repostOfId?: string | null;
+  readonly originalRepostOfId?: string | null;
+};
+
+/** La racine d'une republication SIMPLE (jamais le parent intermédiaire d'une chaîne), `null` sinon. */
+export function simpleRepostRootId(post: RepostShape): string | null {
+  if (post.isQuote || !post.repostOfId) return null;
+  const rootId = post.originalRepostOfId ?? post.repostOfId;
+  return rootId === post.id ? null : rootId;
+}
+
+/** La racine d'une republication simple est-elle ouverte à cet acteur ? Vrai pour tout autre post. */
+async function isRepostRootOpen(
+  prisma: PostAclPrisma,
+  post: RepostShape,
+  userId: string | undefined,
+  verdict: (prisma: PostAclPrisma, post: PostVisibilityRecord, userId?: string) => Promise<boolean>,
+): Promise<boolean> {
+  const rootId = simpleRepostRootId(post);
+  if (rootId === null) return true;
+  const root = await loadPostRedirectRoot(prisma, rootId);
+  if (!root) return false;
+  if (isEphemeralPostType(root.type)) return true;
+  return root.deletedAt == null && verdict(prisma, root, userId);
 }
 
 /** Redirection pour ÉCRIRE/RÉAGIR (like, réaction, commentaire) — amis stricts. */

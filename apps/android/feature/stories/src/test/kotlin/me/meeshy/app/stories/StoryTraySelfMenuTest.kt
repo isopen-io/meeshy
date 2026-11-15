@@ -1,0 +1,46 @@
+package me.meeshy.app.stories
+
+import com.google.common.truth.Truth.assertThat
+import org.junit.Test
+
+/**
+ * L'anneau « Ma story » propose toujours d'en ajouter une, et de voir la sienne quand elle
+ * existe — iOS `StoryTrayView` : badge « + » permanent et menu contextuel de l'avatar.
+ */
+class StoryTraySelfMenuTest {
+
+    private fun ring(count: Int) = StoryRing(
+        userId = "me",
+        displayName = "Moi",
+        avatarUrl = null,
+        accentHex = "6366F1",
+        hasUnviewed = false,
+        storyCount = count,
+        unviewedCount = 0,
+        isMine = true,
+    )
+
+    @Test
+    fun `with a live story the menu offers to view it, then to add another`() {
+        assertThat(StoryTraySelfMenu.actions(ring(count = 2)))
+            .containsExactly(StoryTraySelfAction.ViewMyStory, StoryTraySelfAction.ManageStories, StoryTraySelfAction.AddStory)
+            .inOrder()
+    }
+
+    @Test
+    fun `without a live story the menu still reaches the archive, then offers to add one`() {
+        assertThat(StoryTraySelfMenu.actions(ring(count = 0)))
+            .containsExactly(StoryTraySelfAction.ManageStories, StoryTraySelfAction.AddStory).inOrder()
+        assertThat(StoryTraySelfMenu.actions(null))
+            .containsExactly(StoryTraySelfAction.ManageStories, StoryTraySelfAction.AddStory).inOrder()
+    }
+
+    @Test
+    fun `with the mood door wired the menu offers to change it, then to see the profile - the avatar menu of iOS`() {
+        assertThat(StoryTraySelfMenu.actions(ring(count = 1), canChangeMood = true, canViewProfile = true))
+            .containsExactly(
+                StoryTraySelfAction.ViewMyStory, StoryTraySelfAction.ManageStories, StoryTraySelfAction.AddStory,
+                StoryTraySelfAction.ChangeMood, StoryTraySelfAction.ViewProfile,
+            ).inOrder()
+    }
+}

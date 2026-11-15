@@ -31,7 +31,7 @@ public extension Array where Element == StoryGroup {
     ///   tout le monde, auteur compris (c'est une volonté, pas un délai) ;
     /// - ou qu'elle est expirée ET n'appartient pas à `currentUserId` :
     ///   l'auteur garde l'accès à ses propres stories expirées pour y lire
-    ///   réactions et commentaires (spec 2026-06-23).
+    /// réactions et commentaires.
     ///
     /// Un groupe vidé de toutes ses stories sort du tray — y compris s'il
     /// arrivait déjà vide : une bulle sans contenu ne s'ouvre pas, la garder ne

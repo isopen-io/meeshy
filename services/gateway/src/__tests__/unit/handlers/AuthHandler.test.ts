@@ -44,7 +44,10 @@ jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
 import jwt from 'jsonwebtoken';
 import { validateSocketEvent } from '../../../middleware/validation';
 import { AuthHandler } from '../../../socketio/handlers/AuthHandler';
+import { LIVE_SID, liveSession } from '../../../services/auth/__tests__/live-session-double';
+import { CallAlreadyEndedError } from '../../../services/CallService';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { PRESENCE_AWAY_GRACE_MS } from '../../../socketio/presence-foreground';
 
 // ─── Factories ─────────────────────────────────────────────────────────────────
 
@@ -62,12 +65,12 @@ function makeSocket(id = 'sock-1') {
   } as any;
 }
 
-function makeUser(id = 'u-1') {
+function makeUser(id = 'aaaaaaaaaaaaaaaaaaaaaaa1') {
   return { id, systemLanguage: 'en', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null };
 }
 
 function makeParticipant(id = 'p-1', conversationId = 'conv-1') {
-  return { id, displayName: 'Anon', language: 'fr', conversationId };
+  return { id, displayName: 'Anon', language: 'fr', conversationId, isActive: true };
 }
 
 function makePrisma(opts: {
@@ -84,9 +87,8 @@ function makePrisma(opts: {
       findFirst: jest.fn<any>().mockResolvedValue(opts.participant ?? null),
       findMany: jest.fn<any>().mockResolvedValue([]),
     },
-    callParticipant: {
-      findMany: jest.fn<any>().mockResolvedValue(opts.callParticipants ?? []),
-    },
+    userSession: { findFirst: jest.fn<any>().mockResolvedValue(liveSession()) },
+    callParticipant: { findMany: jest.fn<any>().mockResolvedValue(opts.callParticipants ?? []) },
   } as any;
 }
 
@@ -129,7 +131,7 @@ describe('handleManualAuthentication', () => {
   // qui. Ce bloc décrivait cette API-là — elle n'existe pas.
   beforeEach(() => {
     process.env.JWT_SECRET = 'test-secret';
-    (jwt.verify as jest.MockedFunction<any>).mockReturnValue({ userId: 'u-1' });
+    (jwt.verify as jest.MockedFunction<any>).mockReturnValue({ userId: 'aaaaaaaaaaaaaaaaaaaaaaa1', sid: LIVE_SID });
     (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({
       success: true,
       data: { token: 'my.jwt.token', sessionToken: undefined, language: undefined },
@@ -248,11 +250,40 @@ describe('handleTokenAuthentication', () => {
     socket.handshake.auth.token = 'Bearer my.jwt.token';
     const user = makeUser();
     const prisma = makePrisma({ user });
-    (jwt.verify as jest.MockedFunction<any>).mockReturnValue({ userId: user.id });
+    (jwt.verify as jest.MockedFunction<any>).mockReturnValue({ userId: user.id, sid: LIVE_SID });
     const handler = makeHandler(prisma);
     await handler.handleTokenAuthentication(socket);
     expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.AUTHENTICATED, expect.objectContaining({ success: true }));
     delete process.env.JWT_SECRET;
+  });
+
+  // #10575 — iOS et Android rejouent leur `presence:app-state` pendant que
+  // l'authentification court : l'arrière-plan déclaré avant l'enregistrement
+  // est retenu, l'annonce « en ligne » de la première socket est suivie du
+  // départ après la grâce, et ses pongs ne datent plus rien.
+  it('retient un arrière-plan déclaré avant l’enregistrement de la socket', async () => {
+    jest.useFakeTimers();
+    process.env.JWT_SECRET = 'test-secret';
+    const socket = makeSocket();
+    socket.handshake.auth.token = 'Bearer my.jwt.token';
+    const user = makeUser();
+    (jwt.verify as jest.MockedFunction<any>).mockReturnValue({ userId: user.id, sid: LIVE_SID });
+    const services = makeServices();
+    const handler = makeHandler(makePrisma({ user }), services);
+
+    await handler.handleAppState(socket, { foreground: false });
+    await handler.handleTokenAuthentication(socket);
+    expect(handler.isPresent(user.id)).toBe(false);
+    await jest.advanceTimersByTimeAsync(PRESENCE_AWAY_GRACE_MS);
+
+    expect(services.maintenanceService.updateUserOnlineStatus.mock.calls).toEqual([
+      [user.id, true, true],
+      [user.id, false, true],
+    ]);
+    handler.handleEnginePong(socket);
+    expect(services.statusService.noteHeartbeat).not.toHaveBeenCalled();
+    delete process.env.JWT_SECRET;
+    jest.useRealTimers();
   });
 
   it('emits ERROR on jwt.verify failure', async () => {
@@ -281,9 +312,9 @@ describe('handleDisconnection', () => {
     const socket2 = makeSocket('sock-b');
     const user = makeUser();
     const prisma = makePrisma();
-    const connectedUsers = new Map([['u-1', { id: user.id, socketId: 'sock-a', isAnonymous: false, language: 'en', resolvedLanguages: ['en'] }]]);
-    const socketToUser = new Map([['sock-a', 'u-1'], ['sock-b', 'u-1']]);
-    const userSockets = new Map([['u-1', new Set(['sock-a', 'sock-b'])]]);
+    const connectedUsers = new Map([['aaaaaaaaaaaaaaaaaaaaaaa1', { id: user.id, socketId: 'sock-a', isAnonymous: false, language: 'en', resolvedLanguages: ['en'] }]]);
+    const socketToUser = new Map([['sock-a', 'aaaaaaaaaaaaaaaaaaaaaaa1'], ['sock-b', 'aaaaaaaaaaaaaaaaaaaaaaa1']]);
+    const userSockets = new Map([['aaaaaaaaaaaaaaaaaaaaaaa1', new Set(['sock-a', 'sock-b'])]]);
     const handler = new AuthHandler({
       prisma,
       ...makeServices(),
@@ -293,16 +324,16 @@ describe('handleDisconnection', () => {
     });
     await handler.handleDisconnection(socket1);
     // sock-b remains, user should still be in connectedUsers
-    expect(connectedUsers.has('u-1')).toBe(true);
+    expect(connectedUsers.has('aaaaaaaaaaaaaaaaaaaaaaa1')).toBe(true);
   });
 
   it('marks user disconnected and updates online status for last socket', async () => {
     const socket = makeSocket('sock-1');
     const services = makeServices();
     const prisma = makePrisma({ callParticipants: [] });
-    const connectedUsers = new Map([['u-1', { id: 'u-1', socketId: 'sock-1', isAnonymous: false, language: 'en', resolvedLanguages: ['en'] }]]);
-    const socketToUser = new Map([['sock-1', 'u-1']]);
-    const userSockets = new Map([['u-1', new Set(['sock-1'])]]);
+    const connectedUsers = new Map([['aaaaaaaaaaaaaaaaaaaaaaa1', { id: 'aaaaaaaaaaaaaaaaaaaaaaa1', socketId: 'sock-1', isAnonymous: false, language: 'en', resolvedLanguages: ['en'] }]]);
+    const socketToUser = new Map([['sock-1', 'aaaaaaaaaaaaaaaaaaaaaaa1']]);
+    const userSockets = new Map([['aaaaaaaaaaaaaaaaaaaaaaa1', new Set(['sock-1'])]]);
     const handler = new AuthHandler({
       prisma,
       ...services,
@@ -311,8 +342,8 @@ describe('handleDisconnection', () => {
       userSockets,
     });
     await handler.handleDisconnection(socket);
-    expect(services.statusService.markDisconnected).toHaveBeenCalledWith('u-1', false);
-    expect(services.maintenanceService.updateUserOnlineStatus).toHaveBeenCalledWith('u-1', false, true);
+    expect(services.statusService.markDisconnected).toHaveBeenCalledWith('aaaaaaaaaaaaaaaaaaaaaaa1', false);
+    expect(services.maintenanceService.updateUserOnlineStatus).toHaveBeenCalledWith('aaaaaaaaaaaaaaaaaaaaaaa1', false, true);
   });
 
   // L'auto-leave immédiat est réservé aux INVITÉS : un utilisateur enregistré a
@@ -339,6 +370,43 @@ describe('handleDisconnection', () => {
     });
     await handler.handleDisconnection(socket);
     expect(services.callService.leaveCall).toHaveBeenCalledTimes(2);
+  });
+
+  // Vague 182 (#4202/Vague 181 follow-up) — leaveCall() throws
+  // CallAlreadyEndedError when this leave lost the race to a concurrent
+  // terminal write, not when it genuinely failed: the call is already
+  // correctly closed by whichever path won. The loop must absorb it via
+  // `absorbAlreadyEndedCallLeave` instead of falling into the generic
+  // `forceCleanupCallParticipant` fallback, which would force-end an
+  // already-ended call a second time.
+  it('absorbs CallAlreadyEndedError as a no-op instead of force-cleaning up an already-ended call', async () => {
+    const socket = makeSocket('sock-1');
+    const services = makeServices();
+    (services.callService.leaveCall as jest.MockedFunction<any>)
+      .mockRejectedValue(new CallAlreadyEndedError('completed'));
+    const callParticipants = [
+      { callSessionId: 'call-1', participantId: 'cp-1', callSession: { id: 'call-1' } },
+    ];
+    const prisma = makePrisma({ callParticipants });
+    const connectedUsers = new Map([['p-1', { id: 'p-1', socketId: 'sock-1', isAnonymous: true, language: 'en', resolvedLanguages: [] }]]);
+    const socketToUser = new Map([['sock-1', 'p-1']]);
+    const userSockets = new Map([['p-1', new Set(['sock-1'])]]);
+    const forceCleanupCallParticipant = jest.fn<any>().mockResolvedValue(undefined);
+    const absorbAlreadyEndedCallLeave = jest.fn<any>().mockResolvedValue(undefined);
+    const handler = new AuthHandler({
+      prisma,
+      ...services,
+      connectedUsers,
+      socketToUser,
+      userSockets,
+      forceCleanupCallParticipant,
+      absorbAlreadyEndedCallLeave,
+    });
+    await handler.handleDisconnection(socket);
+    expect(absorbAlreadyEndedCallLeave).toHaveBeenCalledWith(
+      expect.objectContaining({ callId: 'call-1', error: expect.any(CallAlreadyEndedError) })
+    );
+    expect(forceCleanupCallParticipant).not.toHaveBeenCalled();
   });
 
   it('updates anonymous online status on disconnect', async () => {
@@ -377,8 +445,8 @@ describe('handleHeartbeat', () => {
     const socket = makeSocket('sock-1');
     const services = makeServices();
     const prisma = makePrisma({ user: makeUser() });
-    const connectedUsers = new Map([['u-1', { id: 'u-1', socketId: 'sock-1', isAnonymous: false, language: 'en', resolvedLanguages: ['en'] }]]);
-    const socketToUser = new Map([['sock-1', 'u-1']]);
+    const connectedUsers = new Map([['aaaaaaaaaaaaaaaaaaaaaaa1', { id: 'aaaaaaaaaaaaaaaaaaaaaaa1', socketId: 'sock-1', isAnonymous: false, language: 'en', resolvedLanguages: ['en'] }]]);
+    const socketToUser = new Map([['sock-1', 'aaaaaaaaaaaaaaaaaaaaaaa1']]);
     const handler = new AuthHandler({
       prisma,
       ...services,
@@ -387,7 +455,7 @@ describe('handleHeartbeat', () => {
       userSockets: new Map(),
     });
     await handler.handleHeartbeat(socket);
-    expect(services.statusService.noteHeartbeat).toHaveBeenCalledWith('u-1', false);
+    expect(services.statusService.noteHeartbeat).toHaveBeenCalledWith('aaaaaaaaaaaaaaaaaaaaaaa1', false);
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 

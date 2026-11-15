@@ -1,0 +1,497 @@
+import type { CursorPaginationMeta, PaginationMeta } from '@meeshy/shared/types/api-responses';
+
+import type { Transport } from '../net/transport';
+
+import { anySignal, timeoutSignal } from './abort';
+import { accountOfIdentityKey, deletedAccountOf, ownDeletedAccount } from './account-deleted';
+import { guestAccessEndOf, type GuestAccessEnd } from './guest-access-end';
+
+/**
+ * LE CLIENT HTTP RÉEL (#5605, T2) — le transport que `apiConfig`/`session.ts`
+ * cablent, `fetchImpl` INJECTABLE pour les témoins.
+ *
+ * DEUX RÉGIMES D'IDENTITÉ, JAMAIS MÉLANGÉS (`APIClient.swift:480-483`) : un
+ * utilisateur enregistré parle en `Authorization: Bearer <JWT>`, un invité de
+ * lien en `X-Session-Token: <anon_…>`. Présenter le jeton anonyme en Bearer
+ * fait répondre « Invalid JWT token » côté passerelle — les deux en-têtes ne
+ * partent donc JAMAIS ensemble depuis `credential()`.
+ *
+ * `X-Device-Locale` part sur CHAQUE appel dès que le résolveur est fourni —
+ * c'est le rang 4 du Prisme Linguistique (CLAUDE.md racine, règle 2),
+ * consommé par `deviceLocale.ts:147` côté passerelle.
+ *
+ * ANNULABLE — `signal` est TRANSMIS à `fetch`. Sans lui, aucune requête ne
+ * s'annule : quitter un écran laisserait sa requête vivre jusqu'au bout, et
+ * TanStack Query n'aurait aucun moyen d'abandonner celle qu'il remplace. Une
+ * annulation est rendue comme un échec PORTANT `code: 'ABORTED'` — jamais
+ * confondue avec une panne réseau, que l'appelant, lui, doit signaler.
+ *
+ * DÉLAI DE GARDE (#5605, revue-correction) — `signal` seul ne borne QUE
+ * l'annulation VOULUE par l'appelant ; une passerelle qui accepte la
+ * connexion puis se tait (redémarrage, réseau qui se dégrade sans se
+ * couper) laissait sinon la requête pendue indéfiniment, ce que la
+ * dimension 2 (« combien de temps avant que l'utilisateur VOIE quelque
+ * chose ») interdit. `timeoutMs` compose un délai (`timeoutSignal`) AVEC le
+ * `signal` de l'appelant (`anySignal`, jamais l'un À LA PLACE de l'autre —
+ * `./abort.ts`, avec repli pour une WebView antérieure à Chromium 116, #8481)
+ * et rend l'expiration comme `code: 'TIMEOUT'` — distinct de
+ * `'ABORTED'`, pour qu'un écran propose « réessayer » sans le confondre
+ * avec un départ volontaire. Distinguer les deux se fait en relisant l'état
+ * des DEUX signaux sources après coup, jamais le nom de l'erreur : un
+ * `fetchImpl` de test qui n'imite pas la forme exacte de `DOMException`
+ * resterait sinon indétectable.
+ *
+ * LES EN-TÊTES DE L'APPELANT GAGNENT EN DERNIER — motif direct
+ * `APIClient.swift` (« Caller-provided headers are applied last so they win
+ * over defaults ») : c'est ce qui permet à `auth.ts#logout()` de poser
+ * `X-Session-Token` explicitement (l'identité de LA session à invalider,
+ * distincte du `Authorization` d'authentification, `login.ts:355-386`) sans
+ * que ce module invente un troisième régime de crédential pour un seul appel.
+ */
+
+/** Les DEUX régimes, gravés comme un type SOMME plutôt qu'un `String` nu
+ * (`APIClient.swift` : « un `String` nu oblige chaque appelant à SUPPOSER le
+ * protocole » — défaut déjà payé côté web, fix du 2026-08-18). */
+export type Credential =
+  | { readonly kind: 'registered'; readonly token: string }
+  | { readonly kind: 'anonymous'; readonly sessionToken: string };
+
+export type ApiFailure = {
+  readonly ok: false;
+  readonly status: number;
+  readonly error: string;
+  readonly code?: string;
+  /** Le champ de formulaire que ce refus vise — `details.field` de
+   * `sendError()` (`services/gateway/src/utils/response.ts`), étalé à la
+   * RACINE de l'enveloppe (`register.ts:401-407`, `409` § champ conflit). Sans
+   * lui, aucun refus d'inscription ne peut se poser SOUS son champ (#5555, T1). */
+  readonly field?: string;
+  /** Le délai RÉEL, en secondes, avant qu'un 429 ne se rouvre — posé par
+   * `RateLimiter.middleware()` (`rate-limiter.ts:307`) à la racine de
+   * l'enveloppe. Sans lui, un texte de refus ne peut que MENTIR un délai en
+   * dur ou rester vague (#5912) : la fenêtre d'un limiteur est une donnée du
+   * serveur, jamais une constante du client. */
+  readonly retryAfter?: number;
+  /**
+   * Les pseudos LIBRES servis avec un refus `USERNAME_TAKEN` (#6479).
+   *
+   * `suggestionsDePseudo` (`registration.service.ts`) en rend trois, en UNE
+   * requête : proposer un remède coûte le même aller-retour que constater le
+   * problème. Depuis que l'écran ENVOIE le pseudo qu'il montre, une collision
+   * est un REFUS et non plus un renommage silencieux — sans ces trois valeurs,
+   * l'utilisateur se retrouverait devant un mur.
+   */
+  readonly suggestions?: readonly string[];
+  /**
+   * LE PSEUDO LIBRE servi avec un refus `USERNAME_TAKEN_IN_CONVERSATION`
+   * (#5561) — posé À LA RACINE de l'enveloppe par la porte de jonction, qui
+   * étend son schéma de réponse exprès pour le déclarer
+   * (`link-admission.ts:778-787` : sans cette déclaration,
+   * `fast-json-stringify` le supprimerait en silence).
+   *
+   * DISTINCT de `suggestions` ci-dessus, qui en rend TROIS à l'inscription : ici
+   * la passerelle en calcule UN, dans le contexte de CETTE conversation — deux
+   * conversations peuvent rendre deux pseudos différents pour le même visiteur.
+   * Les confondre ferait proposer un pseudo libre ailleurs, et repris ici.
+   */
+  readonly suggestedNickname?: string;
+  /**
+   * LE DÉTENTEUR MASQUÉ d'une adresse déjà prise (#8214), posé à la racine
+   * d'un `409 EMAIL_TAKEN`. BRUT ici — le transport ne connaît aucun schéma
+   * métier ; `decodeEmailOwner` (`email-owner.ts`) le valide là où il sert.
+   */
+  readonly emailOwner?: unknown;
+};
+
+export type ApiSuccess<T> = {
+  readonly ok: true;
+  readonly data: T;
+  /**
+   * LE CODE HTTP DU SUCCÈS (#5814) — optionnel : un appelant qui construit
+   * un `ApiResult` à la main (un témoin, `fixtures-reactions.ts`) n'a rien à
+   * fournir qu'il n'a pas. `createHttpTransport` le pose TOUJOURS
+   * (`response.status`, connu à cet instant). Le SEUL consommateur qui en a
+   * besoin aujourd'hui : `reactionOutcome` (`api/reactions.ts`) distingue
+   * 201 (créée) de 200 (`addResult.unchanged`,
+   * `services/gateway/src/routes/reactions.ts:181-187`) — une distinction
+   * que ni `data` ni `pagination` ne portent.
+   */
+  readonly status?: number;
+  readonly pagination?: PaginationMeta;
+  /**
+   * #5650 (F2/§3.3) — la pagination CURSEUR d'une route qui la sert à côté de
+   * `pagination` (`GET /conversations/:id/messages`,
+   * `services/gateway/src/routes/conversations/messages-list.ts:743-756` :
+   * `{ data, cursorPagination, meta, pagination? }` — DEUX champs de
+   * pagination SIBLINGS de `data`, jamais imbriqués dedans). Sans ce champ,
+   * `hasOlder` (§ `messages.ts`) était irrécupérable depuis ce pont UNIQUE : le
+   * SEUL autre choix était un second chemin réseau pour le fil, exactement la
+   * jumelle divergente que ce transport existe pour éviter.
+   */
+  readonly cursorPagination?: CursorPaginationMeta;
+  /** #7420 — la fenêtre `?around=` de `GET …/messages` dit, à côté de `data`,
+   * s'il existe plus RÉCENT qu'elle (`messages-list.ts`, `hasNewer`). */
+  readonly hasNewer?: boolean;
+  /**
+   * #6361 — les MÉTA-DONNÉES qu'une route pose à côté de `data`
+   * (`GET /links?include=summary` : `meta.summary`, les agrégats réels de ses
+   * liens). Transmises telles quelles et NON typées : c'est au port qui les
+   * lit de les valider (`decodeShareLinksSummary`, `zod/mini`).
+   */
+  readonly meta?: Readonly<Record<string, unknown>>;
+};
+
+export type ApiResult<T> = ApiSuccess<T> | ApiFailure;
+
+export type HttpRequest = {
+  readonly method: 'GET' | 'PUT' | 'POST' | 'PATCH' | 'DELETE';
+  readonly path: string;
+  readonly body?: unknown;
+  /** Transmis tel quel à `fetch` — l'appelant (TanStack Query, un effet de
+   * vue) reste le seul à décider quand abandonner. */
+  readonly signal?: AbortSignal;
+  /** Gagne sur les en-têtes par défaut (crédential, locale) — motif
+   * `APIClient.swift`, réservé aux appels qui doivent nommer une identité
+   * hors du crédential courant (`logout()` § `X-Session-Token`). */
+  readonly headers?: Readonly<Record<string, string>>;
+  /**
+   * REMPLACE le crédential de la session POUR CET APPEL (#8816) — `null` part
+   * nu. La jonction ANONYME d'un compte connecté ne doit porter ni son Bearer
+   * (la porte, en authentification optionnelle, ferait entrer le COMPTE) ni
+   * rien qui le nomme. L'appel n'appartient alors à AUCUNE identité de
+   * session : son 401 ne ferme rien, et sa réponse se résout même si la
+   * session change pendant le vol.
+   */
+  readonly credential?: Credential | null;
+  /**
+   * LE COMPTE PROPRIÉTAIRE du jeton que porte cet appel quand il n'est pas
+   * celui de la session (`credential` forcé, en-têtes explicites) : sans lui,
+   * un 401 « compte supprimé » ne fait partir aucun compte (audit #10237).
+   */
+  readonly tokenOwner?: string;
+  /**
+   * REMPLACE le délai de garde du transport POUR CET APPEL (revue-correction
+   * #5668). `DEFAULT_TIMEOUT_MS` est arbitré contre le p95 d'un appel JSON
+   * (voir son doc-comment) : il ne dit RIEN d'un téléversement, dont la durée
+   * est proportionnelle aux OCTETS et non à la latence. Une photo de 4 Mo sur
+   * le profil Fast 3G que ce dépôt budgète (`budgets.json § network_note`,
+   * ~400 kbit/s en montée) demande plus de quatre-vingts secondes : avec les
+   * 15 s du défaut, AUCUN envoi de photo n'aboutissait sur ce profil, et
+   * l'échec se lisait « la passerelle n'a pas répondu ». `0` ou négatif
+   * DÉSACTIVE le délai — seul le signal de l'appelant tranche alors.
+   */
+  readonly timeoutMs?: number;
+  /** Transmis à `fetch` : la requête survit au déchargement de la page
+   * (`pagehide`), pour un dernier appel qu'on n'attendra pas (#10474). */
+  readonly keepalive?: boolean;
+};
+
+export type HttpTransportOptions = {
+  readonly base: string;
+  readonly credential?: () => Credential | null;
+  /**
+   * QUI parle — une clé d'identité stable (le compte, pas son jeton), relue
+   * au départ ET à l'arrivée de chaque requête (#8674). Une réponse obtenue
+   * avec le crédential d'une identité qui n'est plus la courante ne se résout
+   * JAMAIS : ni son `queryFn` ni le rollback d'une mutation de l'identité
+   * précédente ne s'exécutent sous la suivante.
+   */
+  readonly identity?: () => string | null;
+  readonly deviceLocale?: () => string | null;
+  /** Notifié sur un 401 PORTANT un crédential, et seulement là. Un 403
+   * (interdit) ou un 500 (panne) ne disent rien du jeton courant — et un 401
+   * sur un appel qui n'a présenté AUCUN jeton non plus : `POST /auth/login`
+   * refusé (`login.ts:133`, `security: []`) déconnecterait sinon la session
+   * en cours pour un mot de passe mal tapé dans un ré-authentifiant. */
+  readonly onUnauthorized?: (refusal: UnauthorizedRefusal) => void;
+  /**
+   * Notifié quand un 401 dit « ce compte a été supprimé » (#10237, contrat
+   * #10264 : `code: 'ACCOUNT_DELETED'` + `accountId`) — avec le compte NOMMÉ,
+   * même si l'identité courante a changé pendant le vol : c'est l'identifiant
+   * du jeton refusé, jamais celui du compte actif.
+   */
+  readonly onAccountDeleted?: (accountId: string) => void;
+  /** Notifié quand la passerelle dit à une session d'INVITÉ que son accès est
+   * fini (#10442, `guest-access-end.ts`) : lien expiré ou invité retiré. Ni un
+   * compte ni un appel au crédential forcé ne le déclenchent. */
+  readonly onGuestAccessEnded?: (reason: GuestAccessEnd) => void;
+  readonly fetchImpl?: typeof fetch;
+  /** Délai de garde en ms, `DEFAULT_TIMEOUT_MS` par défaut. `0` ou négatif
+   * DÉSACTIVE le délai (utile à un témoin qui veut isoler un autre
+   * comportement) — jamais le défaut d'une passerelle réelle. */
+  readonly timeoutMs?: number;
+};
+
+/** Ce que dit un 401 — lu dans son corps, pour que la fin de session sache pourquoi. */
+export type UnauthorizedRefusal = {
+  readonly status: 401;
+  readonly code?: string;
+  readonly accountId?: string;
+};
+
+export type HttpTransport = Transport & {
+  request<T>(request: HttpRequest): Promise<ApiResult<T>>;
+};
+
+const GENERIC_ERROR = (status: number): string => `Erreur ${status}`;
+
+/**
+ * Valeur CONSERVATRICE, ARBITRÉE contre le p95 MESURÉ (#5650, §7.3) —
+ * `GET /conversations` (5 tirs sur `gate.staging.meeshy.me`, compte
+ * `cible-web-trois`) : 1.662 / 1.668 / 1.857 / 1.634 / 1.516 s — p95 (5e
+ * tir) ≈ 1,52 s, pire cas observé 1,86 s. `GET /conversations/:id` :
+ * ~0,30-0,32 s. `GET …/messages?limit=50` : ~0,60-0,69 s. Règle retenue
+ * (§7.3 de la spécification) : `p95 × 3 < 15 s` ⇒ la valeur reste — ici
+ * 1,86 × 3 ≈ 5,6 s, largement sous le plafond. `15_000` n'est donc plus
+ * PROVISOIRE : c'est une garde large, mesurée, pas une estimation.
+ *
+ * C'EST LA SEULE HORLOGE SUR CE CHEMIN, service worker compris : dans la
+ * VARIANTE A (PWA), le service worker route `/api/**` en NetworkFirst SANS
+ * délai (`vite.config.ts` § runtimeCaching) — sa copie disque ne sert que si
+ * le réseau ÉCHOUE. Il tranchait jadis à trois secondes, et un lecteur EN
+ * LIGNE recevait alors une réponse rangée qui écrasait le temps réel
+ * (#9637).
+ */
+const DEFAULT_TIMEOUT_MS = 15_000;
+
+/** Un appel « porte une identité » s'il présente un crédential OU si
+ * l'appelant a nommé lui-même l'un des deux en-têtes d'identité — le cas de
+ * `auth.ts#logout()`, qui les pose APRÈS le wipe local. Comparaison
+ * insensible à la casse : les noms d'en-têtes HTTP le sont. */
+function namesAnIdentity(headers: Readonly<Record<string, string>> | undefined): boolean {
+  if (headers === undefined) return false;
+  return Object.keys(headers).some((name) => {
+    const lower = name.toLowerCase();
+    return lower === 'authorization' || lower === 'x-session-token';
+  });
+}
+
+/** « Quel en-tête pour quel régime » — le SITE UNIQUE, que le transport JSON
+ * et le client TUS (`post-media-upload.ts`, corps binaires hors de ce
+ * transport) partagent : un second site divergerait au premier régime ajouté. */
+export function credentialHeaders(credential: Credential | null): Record<string, string> {
+  if (credential === null) return {};
+  if (credential.kind === 'registered') return { Authorization: `Bearer ${credential.token}` };
+  return { 'X-Session-Token': credential.sessionToken };
+}
+
+/** Narrowing FAIL-CLOSED de l'enveloppe (`ApiResponse<T>`,
+ * `@meeshy/shared/types/api-responses.ts:106-115`) : une réponse non-JSON ou
+ * sans `success` déclarée rend un échec générique, jamais `undefined`. */
+function envelopeOf(payload: unknown): Record<string, unknown> {
+  return payload !== null && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
+}
+
+/**
+ * Le champ visé par un refus — sous DEUX formes, mesurées en direct sur le
+ * staging réel (#5555, recette) :
+ *
+ *  1. `envelope.field` — une CHAÎNE À LA RACINE, posée par `sendError()`
+ *     (`services/gateway/src/utils/response.ts`, `details` étalé) : la forme
+ *     des refus APPLICATIFS (`register.ts` catch, `isRegistrationRefusal`).
+ *  2. `envelope.details` — un TABLEAU `{ field, message }[]`, posé par
+ *     `schemaValidationErrorResponse()` (`services/gateway/src/utils/schema-validation-error.ts`) :
+ *     la forme des refus AJV (le body ne respecte même pas le schéma JSON de
+ *     la route, avant que le handler ne s'exécute — `server.ts`, « Refus de
+ *     SCHÉMA »). Vérifié en direct : `POST /auth/register` avec un mot de
+ *     passe de 5 caractères contre `gate.staging.meeshy.me` rend
+ *     `{ details: [{ field: 'password', message: '…' }] }`, SANS `field` à
+ *     la racine — la première forme seule aurait laissé ce refus tomber au
+ *     bandeau générique plutôt que sous le champ mot de passe.
+ *
+ * Le PREMIER élément du tableau gagne — même règle que
+ * `SignupViewModel.applyRejection` (iOS) : « le premier message qui vise un
+ * champ gagne ».
+ */
+/** Les pseudos de rechange, étalés à la racine par `sendError` comme `field`. */
+function suggestionsOf(envelope: Record<string, unknown>): readonly string[] {
+  const brut = envelope.suggestions;
+  if (!Array.isArray(brut)) return [];
+  return brut.filter((valeur): valeur is string => typeof valeur === 'string');
+}
+
+function fieldOf(envelope: Record<string, unknown>): string | undefined {
+  if (typeof envelope.field === 'string') return envelope.field;
+  if (Array.isArray(envelope.details)) {
+    const first = envelope.details[0];
+    if (first !== null && typeof first === 'object' && typeof (first as { field?: unknown }).field === 'string') {
+      return (first as { field: string }).field;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Compose le `signal` de l'appelant AVEC un délai de garde — jamais l'un À
+ * LA PLACE de l'autre (motif `APIClient.swift` § en-têtes, appliqué ici aux
+ * signaux). `timeoutMs <= 0` désactive le délai : seul le signal de
+ * l'appelant, s'il existe, gouverne alors l'annulation.
+ */
+function composeSignal(
+  callerSignal: AbortSignal | undefined,
+  timeoutMs: number,
+): { readonly signal: AbortSignal | undefined; readonly timeoutSignal: AbortSignal | undefined } {
+  const deadline = timeoutMs > 0 ? timeoutSignal(timeoutMs) : undefined;
+  if (callerSignal === undefined) return { signal: deadline, timeoutSignal: deadline };
+  if (deadline === undefined) return { signal: callerSignal, timeoutSignal: deadline };
+  return { signal: anySignal([callerSignal, deadline]), timeoutSignal: deadline };
+}
+
+/**
+ * La CAUSE d'une annulation se lit sur l'ÉTAT des signaux SOURCES après
+ * coup, jamais sur le NOM de l'erreur qu'a rendu `fetchImpl` : un mock de
+ * témoin n'a aucune raison d'imiter la forme exacte d'une `DOMException`
+ * (`AbortError` vs `TimeoutError`), et un moteur réel peut nommer la
+ * sienne différemment de `fetch`. Le repli sur `error.name === 'AbortError'`
+ * couvre le seul cas que l'état des signaux ne peut pas trancher : un appel
+ * SANS signal explicite (ni de l'appelant, ni de délai — `timeoutMs <= 0`)
+ * dont `fetchImpl` a quand même produit une annulation par un mécanisme qui
+ * lui est propre.
+ */
+function abortCode(
+  error: unknown,
+  sources: { readonly callerSignal: AbortSignal | undefined; readonly timeoutSignal: AbortSignal | undefined },
+): 'ABORTED' | 'TIMEOUT' | undefined {
+  const { callerSignal, timeoutSignal } = sources;
+  if (timeoutSignal?.aborted === true) return 'TIMEOUT';
+  if (callerSignal?.aborted === true) return 'ABORTED';
+  if (error instanceof Error && error.name === 'AbortError') return 'ABORTED';
+  return undefined;
+}
+
+/**
+ * LA RÉPONSE D'UNE IDENTITÉ QUITTÉE (#8674) — une promesse qui ne se résout
+ * jamais. Ni succès (son `queryFn` écrirait la donnée d'A dans le cache de
+ * B), ni échec (le rollback d'une mutation d'A y recopierait l'instantané
+ * d'A) : rien de ce qui attend cette réponse ne s'exécute sous B. Personne ne
+ * la retient une fois son appelant démonté ; elle part avec lui.
+ */
+const NEVER: Promise<never> = new Promise<never>(() => undefined);
+
+function refusalOf(envelope: Record<string, unknown>): UnauthorizedRefusal {
+  return {
+    status: 401,
+    ...(typeof envelope.code === 'string' ? { code: envelope.code } : {}),
+    ...(typeof envelope.accountId === 'string' ? { accountId: envelope.accountId } : {}),
+  };
+}
+
+export function createHttpTransport(options: HttpTransportOptions): HttpTransport {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  async function request<T>(req: HttpRequest): Promise<ApiResult<T>> {
+    const url = `${options.base}${req.path}`;
+    const locale = options.deviceLocale?.() ?? null;
+    const forced = req.credential !== undefined;
+    const credential = forced ? (req.credential ?? null) : (options.credential?.() ?? null);
+    const presentsIdentity = !forced && (credential !== null || namesAnIdentity(req.headers));
+    const issuedUnder = options.identity?.() ?? null;
+    const identityChanged = (): boolean => !forced && options.identity !== undefined && options.identity() !== issuedUnder;
+    /** La charge d'une identité quittée — seulement quand CE transport a
+     * présenté le crédential de session : une requête publique ne porte
+     * rien de personnel. */
+    const staleForReader = (): boolean => credential !== null && identityChanged();
+    /**
+     * UN CORPS `FormData` (#5668, upload multipart) NE POSE JAMAIS SON PROPRE
+     * `Content-Type` : c'est le NAVIGATEUR qui doit l'écrire, `boundary`
+     * compris — un en-tête posé ICI le fige SANS le `boundary`, et la
+     * passerelle (`@fastify/multipart`) ne peut alors plus découper les
+     * parties (`upload.ts:59-207`, `consumes: ['multipart/form-data']`).
+     */
+    const formBody = req.body instanceof FormData ? req.body : undefined;
+    const headers: Record<string, string> = {
+      ...credentialHeaders(credential),
+      ...(locale ? { 'X-Device-Locale': locale } : {}),
+      ...(req.body !== undefined && formBody === undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...req.headers,
+    };
+
+    const { signal, timeoutSignal } = composeSignal(req.signal, req.timeoutMs ?? timeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetchImpl(url, {
+        method: req.method,
+        headers,
+        ...(signal !== undefined ? { signal } : {}),
+        ...(req.keepalive === true ? { keepalive: true } : {}),
+        ...(req.body !== undefined ? { body: formBody ?? JSON.stringify(req.body) } : {}),
+      });
+    } catch (error) {
+      if (staleForReader()) return NEVER;
+      const code = abortCode(error, { callerSignal: req.signal, timeoutSignal });
+      return {
+        ok: false,
+        status: 0,
+        error: error instanceof Error ? error.message : 'Réseau indisponible',
+        ...(code !== undefined ? { code } : {}),
+      };
+    }
+
+    const unauthorized = response.status === 401 && (credential !== null || namesAnIdentity(req.headers));
+    if (staleForReader() && !unauthorized) return NEVER;
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = undefined;
+    }
+    const envelope = envelopeOf(payload);
+    /* Un compte supprimé est NOMMÉ par son refus : il part même si l'appareil a
+       changé de compte pendant le vol (#10237) — mais seulement s'il est le
+       propriétaire du jeton présenté. */
+    const tokenOwner = req.tokenOwner ?? (forced || namesAnIdentity(req.headers) ? null : accountOfIdentityKey(issuedUnder));
+    const deletedAccount = unauthorized ? ownDeletedAccount(deletedAccountOf(envelope), tokenOwner) : null;
+    if (staleForReader()) {
+      if (deletedAccount !== null) options.onAccountDeleted?.(deletedAccount);
+      return NEVER;
+    }
+    /* Un 401 ne dit rien de l'identité COURANTE si elle n'est plus celle qui
+       a demandé : la déconnexion d'A, rejouée sur ses en-têtes explicites, ne
+       ferme jamais la session de B ouverte entre-temps. */
+    if (unauthorized && presentsIdentity && !identityChanged()) options.onUnauthorized?.(refusalOf(envelope));
+    if (deletedAccount !== null) options.onAccountDeleted?.(deletedAccount);
+
+    if (envelope.success === true) {
+      return {
+        ok: true,
+        data: envelope.data as T,
+        status: response.status,
+        ...(envelope.pagination !== undefined ? { pagination: envelope.pagination as PaginationMeta } : {}),
+        ...(envelope.cursorPagination !== undefined
+          ? { cursorPagination: envelope.cursorPagination as CursorPaginationMeta }
+          : {}),
+        ...(typeof envelope.hasNewer === 'boolean' ? { hasNewer: envelope.hasNewer } : {}),
+        ...(envelope.meta !== null && typeof envelope.meta === 'object' && !Array.isArray(envelope.meta)
+          ? { meta: envelope.meta as Readonly<Record<string, unknown>> }
+          : {}),
+      };
+    }
+
+    const error = typeof envelope.error === 'string' ? envelope.error : GENERIC_ERROR(response.status);
+    const code = typeof envelope.code === 'string' ? envelope.code : undefined;
+    const guestEnd = !forced && credential?.kind === 'anonymous' && !identityChanged() ? guestAccessEndOf({ status: response.status, error, ...(code !== undefined ? { code } : {}) }) : null;
+    if (guestEnd !== null) options.onGuestAccessEnded?.(guestEnd);
+
+    const field = fieldOf(envelope);
+    return {
+      ok: false,
+      status: response.status,
+      error,
+      ...(code !== undefined ? { code } : {}),
+      ...(field !== undefined ? { field } : {}),
+      ...(typeof envelope.retryAfter === 'number' ? { retryAfter: envelope.retryAfter } : {}),
+      ...(suggestionsOf(envelope).length > 0 ? { suggestions: suggestionsOf(envelope) } : {}),
+      ...(typeof envelope.suggestedNickname === 'string' && envelope.suggestedNickname.trim() !== ''
+        ? { suggestedNickname: envelope.suggestedNickname }
+        : {}),
+      ...(envelope.emailOwner !== undefined && envelope.emailOwner !== null ? { emailOwner: envelope.emailOwner } : {}),
+    };
+  }
+
+  const transport = (({ method, path, body }) => request({ method, path, body })) as HttpTransport;
+  transport.request = request;
+  return transport;
+}

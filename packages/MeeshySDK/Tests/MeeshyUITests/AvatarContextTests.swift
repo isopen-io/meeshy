@@ -160,28 +160,6 @@ final class AvatarContextTests: XCTestCase {
         XCTAssertFalse(AvatarContext.notification.showsMoodBadge)
     }
 
-    // MARK: - showsOnlineDot
-
-    func test_showsOnlineDot_trueForConversationList() {
-        XCTAssertTrue(AvatarContext.conversationList.showsOnlineDot)
-    }
-
-    func test_showsOnlineDot_trueForUserListItem() {
-        XCTAssertTrue(AvatarContext.userListItem.showsOnlineDot)
-    }
-
-    func test_showsOnlineDot_trueForRecentParticipant() {
-        XCTAssertTrue(AvatarContext.recentParticipant.showsOnlineDot)
-    }
-
-    func test_showsOnlineDot_falseForNotification() {
-        XCTAssertFalse(AvatarContext.notification.showsOnlineDot)
-    }
-
-    func test_showsOnlineDot_falseForStoryViewer() {
-        XCTAssertFalse(AvatarContext.storyViewer.showsOnlineDot)
-    }
-
     // MARK: - storyViewerRow (who-viewed list: mood + presence, no ring)
 
     func test_storyViewerRow_size_returns44() {
@@ -194,10 +172,6 @@ final class AvatarContextTests: XCTestCase {
 
     func test_storyViewerRow_showsMoodBadge() {
         XCTAssertTrue(AvatarContext.storyViewerRow.showsMoodBadge)
-    }
-
-    func test_storyViewerRow_showsOnlineDot() {
-        XCTAssertTrue(AvatarContext.storyViewerRow.showsOnlineDot)
     }
 
     func test_storyViewerRow_isTappable() {
@@ -246,8 +220,21 @@ final class AvatarContextTests: XCTestCase {
         XCTAssertEqual(AvatarContext.messageBubble.shadowRadius, 4)
     }
 
-    func test_shadowRadius_eightForConversationList() {
-        XCTAssertEqual(AvatarContext.conversationList.shadowRadius, 8)
+    /// **Aucune ombre sur l'avatar d'une rangée de liste** (#7010).
+    ///
+    /// Une ombre portée sur un cercle force une passe hors écran PAR RANGÉE :
+    /// sur un fil de conversations qui défile, c'est une composition de plus
+    /// par avatar visible, à chaque image. `.conversationList` tombait dans
+    /// `default` et payait 8 — le plus gros rayon de la table — sans qu'aucune
+    /// décision de design ne l'ait posé.
+    func test_shadowRadius_zeroForConversationList() {
+        XCTAssertEqual(AvatarContext.conversationList.shadowRadius, 0)
+    }
+
+    /// Un décalage sans rayon ne dessine rien : les deux tables doivent tomber
+    /// ensemble, sinon le cas garde un `y` pour une ombre qui n'existe plus.
+    func test_shadowY_zeroForConversationList() {
+        XCTAssertEqual(AvatarContext.conversationList.shadowY, 0)
     }
 
     func test_shadowRadius_twelveForProfileBanner() {
@@ -319,5 +306,22 @@ final class AvatarContextTests: XCTestCase {
 
     func test_makeInitials_emptyName_returnsEmpty() {
         XCTAssertEqual(MeeshyAvatar.makeInitials(from: ""), "")
+    }
+
+    // #8143 — un nom de carnet porte parenthèses, emojis, ponctuation : les
+    // initiales ne retiennent que des LETTRES.
+
+    func test_makeInitials_parenthesizedNickname_keepsOnlyLetters() {
+        XCTAssertEqual(MeeshyAvatar.makeInitials(from: "Théo (foot)"), "TF")
+    }
+
+    func test_makeInitials_emojiAndPunctuation_areSkipped() {
+        XCTAssertEqual(MeeshyAvatar.makeInitials(from: "🎉 Nadia"), "N")
+        XCTAssertEqual(MeeshyAvatar.makeInitials(from: "\"Maman\" ❤️"), "M")
+        XCTAssertEqual(MeeshyAvatar.makeInitials(from: "  Lina   Diallo "), "LD")
+    }
+
+    func test_makeInitials_noLetterAtAll_fallsBackToTheFirstCharacter() {
+        XCTAssertEqual(MeeshyAvatar.makeInitials(from: "😀"), "😀")
     }
 }

@@ -144,15 +144,13 @@ Testez la connexion aux interfaces suivantes avec les nouveaux mots de passe (di
    - Utilisateur: `admin`
    - Mot de passe: voir `secrets/clear.txt`
 
-2. **MongoDB UI:** https://mongo.meeshy.me
-   - Utilisateur: `admin`
-   - Mot de passe: voir `secrets/clear.txt`
+2. **MongoDB UI / Redis UI** (#3640 — plus routées par Traefik, accès tunnel SSH uniquement) :
+   ```bash
+   ssh -L 8081:127.0.0.1:8081 -L 8082:127.0.0.1:8082 root@meeshy.me
+   ```
+   Puis ouvrir `http://localhost:8081` (Mongo) / `http://localhost:8082` (Redis) en local — aucun mot de passe applicatif, l'accès SSH est le seul contrôle.
 
-3. **Redis UI:** https://redis.meeshy.me
-   - Utilisateur: `admin`
-   - Mot de passe: voir `secrets/clear.txt`
-
-4. **Application Meeshy:** https://meeshy.me
+3. **Application Meeshy:** https://meeshy.me
    - Testez les 3 utilisateurs:
      - `admin` / [voir secrets/clear.txt]
      - `meeshy` / [voir secrets/clear.txt]

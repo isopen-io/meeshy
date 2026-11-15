@@ -8,22 +8,23 @@ import MeeshyUI
 /// Fullscreen gallery that allows swiping through ALL visual media in the conversation.
 /// Opened when tapping any image/video in a message bubble.
 ///
-/// ## Budget de rendu (2026-08-25)
+/// ## Budget de rendu
 ///
-/// La galerie freezait au défilement pour trois raisons cumulées, toutes du
-/// même genre : **de l'état à la racine que seule UNE page consomme**.
+/// La galerie tient son budget de rendu contre trois causes de freeze au
+/// défilement, toutes du même genre : **de l'état à la racine que seule UNE
+/// page consomme**.
 ///
-/// 1. `scale` / `offset` vivaient sur la racine. Un pincement ou un glissement
-///    les réécrit à la fréquence d'affichage — chaque écriture invalidait le
+/// 1. `scale` / `offset` sur la racine : un pincement ou un glissement
+///    les réécrit à la fréquence d'affichage — chaque écriture invaliderait le
 ///    `body` racine, donc le pager, donc TOUTES les pages réalisées.
-/// 2. `currentIndex` était un `@State` mis à jour par un `firstIndex(where:)`
-///    linéaire à chaque changement de page ; il est désormais DÉRIVÉ d'une
+/// 2. `currentIndex` en `@State` mis à jour par un `firstIndex(where:)`
+///    linéaire à chaque changement de page ; il est DÉRIVÉ d'une
 ///    carte `id → index` construite une fois (O(1), aucune écriture d'état).
 /// 3. Le `LazyHStack` réalise les pages paresseusement mais ne les libère
-///    JAMAIS : après vingt swipes, vingt images plein format restaient
-///    décodées en mémoire, chaque page vidéo gardait ses trois abonnements
-///    Combine et sa résolution de disponibilité — et déclenchait même son
-///    auto-téléchargement. Le coût grandissait donc avec la distance parcourue,
+///    JAMAIS : après vingt swipes, vingt images plein format resteraient
+///    décodées en mémoire, chaque page vidéo garderait ses trois abonnements
+///    Combine et sa résolution de disponibilité — et déclencherait même son
+///    auto-téléchargement. Le coût grandirait donc avec la distance parcourue,
 ///    ce qui est exactement le symptôme rapporté (« plus je défile, plus ça
 ///    rame »).
 ///
@@ -43,109 +44,379 @@ struct ConversationMediaGalleryView: View {
     let accentColor: String
     /// Maps attachment.id → caption text (message content or attachment caption)
     var captionMap: [String: String] = [:]
+    /// **Ce que la légende POURRAIT dire, langue par langue.**
+    ///
+    /// `captionMap` reste le chemin simple — une légende, sans alternative — et
+    /// tous ses appelants continuent de fonctionner tels quels. `captionServings`
+    /// est le chemin RICHE : il porte le texte servi ET ses langues, donc il
+    /// permet la bascule que la carte du fil offrait déjà et que le plein écran
+    /// perdait.
+    ///
+    /// Vide, ou avec des `alternatives` vides, ⇒ aucun contrôle n'est peint
+    /// (loi 4 : un contrôle sans effet est ABSENT, jamais grisé).
+    var captionServings: [String: SocialMediaCaptionServing] = [:]
+    /// attachment.id → la carte des liens suivis du PORTEUR de la légende.
+    var captionLinks: [String: [String: String]] = [:]
+
+    /// **Le repli de la légende est un état d'ÉCRAN, pas de média** —
+    /// mais il se REMET à chaque page. Feuilleter vers un autre média présente
+    /// une autre légende : la garder dépliée ferait s'ouvrir en grand un texte
+    /// que l'utilisateur n'a pas demandé à lire, et masquerait le média qu'il
+    /// vient d'atteindre.
+    @State private var captionExpanded = false
+    /// La langue choisie PAR MÉDIA. Par média et non globale : deux pièces d'un
+    /// même lot peuvent porter des légendes de provenances différentes, et une
+    /// langue choisie sur l'une ne dit rien de l'autre.
+    /// `internal` — la légende servie se lit depuis `+Captions.swift`, et
+    /// `private` est une portée de FICHIER.
+    @State var captionLanguage: [String: String] = [:]
+    /// Le sélecteur complet d'émojis, ouvert par le « + » de la rangée. Un `Bool`
+    /// et non la pièce elle-même : la rangée ne s'affiche QUE pour la page
+    /// courante, donc la cible se relit au moment du choix — deux états
+    /// parallèles auraient permis à l'un de viser une page que l'autre a quittée.
+    ///
+    /// `internal` — la traînée d'émojis et sa feuille vivent dans
+    /// `+Actions.swift`, et `private` est une portée de FICHIER.
+    /// Même prix que celui payé par `currentPageID` plus bas.
+    @State var showFullEmojiPicker = false
+    /// **La rangée d'émojis est OUVERTE** quand l'utilisateur la demande : les
+    /// réactions s'activent comme répondre ou composer, par un bouton réagir
+    /// (emoji +) qui affiche la traîne des emojis.
+    ///
+    /// Au repos le visualiseur est NU — rien ne se pose sur l'image. Cet état
+    /// répond à une question qui n'est PAS celle de la loi : la loi dit si la
+    /// pièce offre de réagir, celui-ci dit si l'utilisateur l'a demandé. Il se
+    /// remet à `false` au changement de pièce (`handlePageChange`) : la rangée
+    /// appartient au média qu'on regardait.
+    /// `internal` — l'orchestration du plein cadre la referme en entrant
+    /// (`+Presentation.swift`), et `private` est une portée de FICHIER. Même
+    /// prix que celui payé par `currentPageID` ci-dessous.
+    @State var reactionBarOpen = false
     /// Maps attachment.id → sender info (name, avatar, color, date)
     var senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:]
 
+    /// `false` pour les galeries POST / COMMENTAIRE : leurs pièces ne
+    /// sont pas des `MessageAttachment` (cf. `+Consumption.swift`).
+    var reportsAttachmentConsumption: Bool = true
+
+    /// **Créer une story, un réel ou un post avec CE média.**
+    ///
+    /// Une CLOSURE, et pas un chemin que la galerie prendrait elle-même : elle
+    /// ne connaît que des pièces jointes — jamais le `Message` ni le
+    /// `Comment` qui les porte. Résoudre le porteur est l'affaire de l'hôte,
+    /// qui seul tient la liste.
+    ///
+    /// `nil` ⇒ **aucun bouton**. C'est la loi 4 : un contrôle existe s'il a un
+    /// effet. Un hôte qui ne sait pas résoudre le porteur n'affiche pas une
+    /// action inerte — il n'en affiche pas du tout.
+    var onComposeWithMedia: ((MessageAttachment) -> Void)?
+
+    /// **Répondre au média** — c'est-à-dire au MESSAGE (conversation) ou
+    /// au COMMENTAIRE (post, story, réel) qui le porte.
+    ///
+    /// Même forme que ci-dessus, et pour la même raison : la galerie ne connaît
+    /// pas le porteur. `nil` ⇒ aucun bouton.
+    var onReplyToMedia: ((MessageAttachment) -> Void)?
+
+    /// **Répondre à la pièce SANS quitter son plein écran.**
+    ///
+    /// `(pièce, texte, langue)` — la galerie ne connaît que des pièces jointes ;
+    /// résoudre le porteur, composer l'ancre et envoyer sont l'affaire de
+    /// l'hôte, comme pour `onReplyToMedia`.
+    ///
+    /// Câblée ⇒ le bouton « répondre » monte la barre universelle AU-DESSUS du
+    /// média et **ne referme rien**. `nil` ⇒ l'ancien chemin
+    /// (`onReplyToMedia`) reste seul offert, ce que font les hôtes SOCIAUX dont
+    /// le porteur est un commentaire. La bascule vit dans
+    /// `FullscreenReplyRoute`, jamais dans deux `if` d'appelants.
+    var onSendReplyToMedia: ((MessageAttachment, String, String) -> Void)?
+
+    /// La CITATION à peindre au-dessus de la rangée de saisie — composée par
+    /// l'hôte via la fabrique unique, parce qu'elle a besoin du MESSAGE porteur
+    /// que la galerie ne connaît pas.
+    ///
+    /// `nil` rendu ⇒ la barre ne monte pas : une bannière qui ne sait pas dire
+    /// ce qu'elle cite vaut moins que pas de bannière du tout.
+    var replyCitation: ((MessageAttachment) -> ReplyReference?)?
+
+    /// **Réagir à la PIÈCE, depuis le plein écran.**
+    ///
+    /// La pièce voyage AVEC l'émoji : la galerie sait quelle page est ouverte,
+    /// l'hôte non. Un rappel qui ne porterait que l'émoji laisserait l'hôte
+    /// deviner la cible — et il devinerait le message, ce qui ferait mentir la
+    /// rangée sur ce qu'elle vise.
+    ///
+    /// `nil` ⇒ **ni bouton ni rangée** (loi 4, appliquée par
+    /// `AttachmentReactionOffer.offersReaction`). C'est le cas des hôtes
+    /// SOCIAUX — post, story, réel, commentaire : le serveur n'expose aucune
+    /// réaction par MÉDIA pour eux (`AttachmentReaction` est indexée sur un
+    /// `messageId` de conversation, et `PostMedia` ne porte aucune relation de
+    /// réaction). Ils n'affichent donc pas une barre inerte : ils n'en
+    /// affichent pas.
+    var onReactToMedia: ((MessageAttachment, String) -> Void)?
+
+    /// **Transférer la pièce** (#12420) — rail et ⋯. `nil` ⇒ aucune entrée (loi 4).
+    var onForwardMedia: ((MessageAttachment) -> Void)?
+    var onImagerMedia: ((MessageAttachment) -> Void)?
+    var imageableMedia: ((MessageAttachment) -> Bool)?
+
+    /// **La publication dont la galerie montre les SCÈNES** — `nil` hors
+    /// d'un post. Une pièce dont l'identité est dans `scenes` est une page scène
+    /// (`+ScenePage.swift`) ; toutes les autres restent des pièces jointes.
+    var sceneContext: GallerySceneContext?
+
+    /// **« Répondre » existe-t-il sur CETTE pièce ?** `nil` ⇒ sur toutes.
+    /// Un média joint à un commentaire ne se cite pas depuis un post : le geste
+    /// n'y existe pas (loi 4), au lieu d'un bouton qui ne ferait rien.
+    var replyableMedia: ((MessageAttachment) -> Bool)?
+
+    /// **« Créer avec ce média » existe-t-il sur CETTE pièce ?** (#6709) `nil` ⇒ sur
+    /// toutes. Un post offre la pièce qu'on REGARDE — une scène et son média, jamais
+    /// un média de commentaire : sans cible, pas de bouton (loi 4).
+    var composableMedia: ((MessageAttachment) -> Bool)?
+
+    /// **« Réagir » existe-t-il sur CETTE pièce ?** `nil` ⇒ sur toutes.
+    /// Une pièce dont le porteur est inconnu ne peut pas refléter sa réaction :
+    /// le bouton n'y existe pas (loi 4). Hors fenêtre, l'index la repeint.
+    var reactableMedia: ((MessageAttachment) -> Bool)?
+
+    /// **« Transférer » existe-t-il sur CETTE pièce ?** `nil` ⇒ sur toutes.
+    var forwardableMedia: ((MessageAttachment) -> Bool)?
+
+    /// **Où la colonne d'actions est posée sur le plateau** — mesurée, parce
+    /// que la hauteur du bloc auteur et légende qui la porte change avec la page.
+    /// Elle décide du fond que la colonne a sous elle
+    /// (`MediaGalleryStage.columnBackdrop`). `internal` : `+Geometry.swift` la lit.
+    @State var actionColumnFrame: CGRect = .zero
+
+    /// **La région du plateau où elle se mesure** — celle qui porte le
+    /// cadre et le chrome. Le cadre et son média y sont posés au milieu : sa taille
+    /// dit où ils sont peints. `internal` : `+Geometry.swift` l'écrit.
+    @State var cadreRegionSize: CGSize = .zero
+
+    /// #10352 — le viewport RÉEL de la galerie, mesuré sur son fond (`stageViewport`), la fenêtre en repli.
+    @State var measuredViewport: CGSize = .zero
+
     /// `id → position`, construite une fois à la présentation. Remplace les
     /// `firstIndex(where:)` linéaires qui tournaient à chaque changement de page
-    /// ET à chaque fermeture (`stopActiveVideoAudio`).
-    private let indexByID: [String: Int]
+    /// ET à chaque fermeture (`stopActiveVideoAudio`). `internal` : `+Consumption.swift` la lit.
+    let indexByID: [String: Int]
+    /// La forme du lot, lue une fois ici et non par chaque page.
+    let lotShape: GalleryLotShape
 
     @Environment(\.dismiss) private var dismiss
-    @State private var currentPageID: String?
-    @State private var showControls = true
-    @StateObject private var saveCoordinator = MediaSaveCoordinator()
+    /// Les marges sûres de la fenêtre qui porte la vue, mesurées par sa racine (hors de `body`).
+    @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets
+    /// Publiées par la racine, sinon MESURÉES hors de `body` (`GallerySafeArea`, #12422).
+    var galleryInsets: EdgeInsets { GallerySafeArea.resolve(published: sceneSafeAreaInsets, measured: measuredSafeArea) }
+    @State var measuredSafeArea: EdgeInsets?
+    /// `internal` — le couloir bas du plateau le PILOTE depuis
+    /// `+Geometry.swift`, et `private` est une portée de FICHIER. Même prix que
+    /// celui payé par les pages, et pour la même raison.
+    @State var currentPageID: String?
+    /// Les pages de la source au dernier suivi : de quoi trouver la VOISINE
+    /// d'une pièce retirée (`GalleryPagePinning.pageAfterRemoval`).
+    @State var lastPageIDs: [String]
+    /// **L'état d'immersion, un seul** (spec § 3.2). Un booléen ne peut pas
+    /// porter la RAISON de l'entrée, et sans elle l'appui long et le glissement
+    /// rendraient le même écran. Il ne
+    /// s'écrit qu'en un endroit — `onEnterStage`, `+Presentation.swift`. Il ne
+    /// commande que le plateau : on ENTRE en plein écran, sans
+    /// chrome, et le toucher le pose par-dessus le média sans en changer les
+    /// cotes (`MediaStageVeil.geometryPresentation`).
+    @State var stagePresentation: StagePresentation
+    /// `internal` — le menu ⋯ le PILOTE depuis `+Menu.swift`, et `private` est
+    /// une portée de FICHIER. Même prix que celui payé par `currentPageID`
+    /// au-dessus, et pour la même raison.
+    @StateObject var saveCoordinator = MediaSaveCoordinator()
     // Plain reference (NOT @ObservedObject): only `activeURL`/`player` identity
-    // drive this root's rendering (`videoTransportLayer`) — the manager also
-    // publishes `currentTime` at 5-10Hz, which used to re-render the WHOLE
-    // gallery root continuously. Scoped via onReceive($activeURL/$player).
-    private let videoManager = SharedAVPlayerManager.shared
-    @State private var videoManagerActiveURL: String = SharedAVPlayerManager.shared.activeURL
-    @State private var videoManagerPlayer: AVPlayer?
+    // drive this root's rendering (the band and the centred play/pause,
+    // `+Transport.swift`) — the manager also publishes `currentTime` at 5-10Hz,
+    // which used to re-render the WHOLE gallery root continuously. Scoped via
+    // onReceive($activeURL/$player); the band is the only view that observes
+    // the manager, so the ticking stays inside it.
+    let videoManager = SharedAVPlayerManager.shared
+    /// `internal` — la bande du couloir et la couche centrale les LISENT depuis
+    /// `+Transport.swift`, et `private` est une portée de FICHIER. Même prix que
+    /// celui payé par `currentPageID`, et pour la même raison.
+    @State var videoManagerActiveURL: String = SharedAVPlayerManager.shared.activeURL
+    @State var videoManagerPlayer: AVPlayer?
+    /// Lu par la seule pastille « en pause » : `pausedOnEntry` se souvient du
+    /// GESTE, et une pastille qui survivrait à la reprise affirmerait le
+    /// contraire de ce qu'on voit. `isPlaying` ne publie qu'aux TRANSITIONS,
+    /// contrairement au `currentTime` qui interdit d'observer le manager en bloc.
+    @State var videoManagerIsPlaying: Bool = SharedAVPlayerManager.shared.isPlaying
+    /// #9577 — le bouton pause central s'efface une seconde après le début de
+    /// la lecture ; la règle est au SDK, `+Transport.swift` la peint.
+    @State var playPauseFade = FullscreenPlayPauseFade()
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
+
+    /// **La pièce à laquelle la barre RÉPOND** — `nil` au repos, ce qui
+    /// est l'état nominal : le visualiseur est NU tant qu'on n'a pas demandé à
+    /// parler.
+    ///
+    /// La PIÈCE et non un booléen : la barre doit citer ce qu'on regardait au
+    /// moment du tap. Feuilleter pendant qu'elle est ouverte ne change pas ce
+    /// qu'on cite — sinon le brouillon en cours changerait de destinataire sous
+    /// les doigts, et la bannière mentirait sur ce que l'envoi gravera.
+    @State private var replyTarget: MessageAttachment?
+
+    /// La transition clavier ANNONCÉE, seule source de sa hauteur.
+    @State private var replyKeyboard: KeyboardTransition?
+
+    /// **La commande de lecture de la scène ouverte** — l'équivalent,
+    /// pour une scène, de l'état de lecture du player partagé. Levée à chaque
+    /// page : un plein écran est une demande de voir, y compris ce qui bouge.
+    /// `internal` — `+Presentation.swift` et `+Transport.swift` l'écrivent.
+    @State var scenePlaying = true
+    /// L'horloge du curseur de scène, en `@State` pour ne pas observer ses 60 Hz ici.
+    @State var sceneClock = GallerySceneClock()
+
+    /// La page image en cours de visionnage. `internal` : `+Consumption.swift` l'écrit.
+    @State var imageViewSession = GalleryImageViewSession()
 
     init(
         allAttachments: [MessageAttachment],
         startAttachmentId: String,
         accentColor: String,
+        captionServings: [String: SocialMediaCaptionServing] = [:],
         captionMap: [String: String] = [:],
-        senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:]
+        captionLinks: [String: [String: String]] = [:],
+        senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:],
+        reportsAttachmentConsumption: Bool = true,
+        onComposeWithMedia: ((MessageAttachment) -> Void)? = nil,
+        onReplyToMedia: ((MessageAttachment) -> Void)? = nil,
+        onSendReplyToMedia: ((MessageAttachment, String, String) -> Void)? = nil,
+        replyCitation: ((MessageAttachment) -> ReplyReference?)? = nil,
+        onReactToMedia: ((MessageAttachment, String) -> Void)? = nil,
+        onForwardMedia: ((MessageAttachment) -> Void)? = nil,
+        onImagerMedia: ((MessageAttachment) -> Void)? = nil,
+        imageableMedia: ((MessageAttachment) -> Bool)? = nil,
+        replyableMedia: ((MessageAttachment) -> Bool)? = nil,
+        composableMedia: ((MessageAttachment) -> Bool)? = nil,
+        reactableMedia: ((MessageAttachment) -> Bool)? = nil,
+        forwardableMedia: ((MessageAttachment) -> Bool)? = nil,
+        sceneContext: GallerySceneContext? = nil,
+        entryPresentation: StagePresentation? = nil
     ) {
-        self.allAttachments = allAttachments
+        let pages = GalleryPagePinning.distinct(allAttachments)
+        self.allAttachments = pages
+        _stagePresentation = State(initialValue: entryPresentation
+            ?? MediaStageVeil.entryPresentation(voiceOverRunning: UIAccessibility.isVoiceOverRunning))
         self.startAttachmentId = startAttachmentId
         self.accentColor = accentColor
+        self.captionServings = captionServings
         self.captionMap = captionMap
+        self.captionLinks = captionLinks
         self.senderInfoMap = senderInfoMap
-        let positions = Dictionary(
-            allAttachments.enumerated().map { ($0.element.id, $0.offset) },
-            uniquingKeysWith: { first, _ in first }
-        )
+        self.reportsAttachmentConsumption = reportsAttachmentConsumption
+        self.onComposeWithMedia = onComposeWithMedia
+        self.onReplyToMedia = onReplyToMedia
+        self.onSendReplyToMedia = onSendReplyToMedia
+        self.replyCitation = replyCitation
+        self.onReactToMedia = onReactToMedia
+        self.replyableMedia = replyableMedia
+        self.composableMedia = composableMedia
+        self.reactableMedia = reactableMedia
+        self.onForwardMedia = onForwardMedia
+        self.onImagerMedia = onImagerMedia
+        self.imageableMedia = imageableMedia
+        self.forwardableMedia = forwardableMedia
+        self.sceneContext = sceneContext
+        let positions = Dictionary(uniqueKeysWithValues: pages.enumerated().map { ($0.element.id, $0.offset) })
         self.indexByID = positions
+        self.lotShape = GalleryLotShape(pages)
+        _lastPageIDs = State(initialValue: pages.map(\.id))
         _currentPageID = State(
             initialValue: positions[startAttachmentId] != nil
                 ? startAttachmentId
-                : allAttachments.first?.id
+                : pages.first?.id
         )
     }
 
     /// Position courante, DÉRIVÉE de `currentPageID` — plus de `@State`
     /// miroir à tenir synchronisé (et donc plus d'écriture d'état, donc plus
     /// d'invalidation racine, à chaque page traversée).
-    private var currentIndex: Int {
-        guard let currentPageID, let index = indexByID[currentPageID] else { return 0 }
+    ///
+    /// Une page qui n'est plus dans la source (message supprimé pour tous,
+    /// éphémère expiré) n'a PAS de position : rendre 0 faisait réagir,
+    /// répondre, enregistrer ou PARTAGER la première pièce à la place de celle
+    /// regardée. La position rendue est alors hors bornes, et chaque lecteur
+    /// (`currentIndex < allAttachments.count`) s'abstient le temps que
+    /// `keepCurrentPageAcrossGrowth` épingle la voisine.
+    var currentIndex: Int {
+        guard let currentPageID, let index = indexByID[currentPageID] else { return allAttachments.count }
         return index
-    }
-
-    /// Annonce VoiceOver de l'état du bouton d'enregistrement. Vide au repos.
-    private var saveStateAccessibilityValue: String {
-        saveCoordinator.isProcessing
-            ? String(localized: "common.saving", defaultValue: "Enregistrement…", bundle: .main)
-            : ""
-    }
-
-    /// Position lisible du média courant pour VoiceOver — la capsule « n / N »
-    /// serait sinon lue « n barre oblique N » (position portée par le seul texte).
-    private var galleryPositionAccessibilityLabel: String {
-        String(
-            format: String(localized: "gallery.position", defaultValue: "Média %1$d sur %2$d", bundle: .main),
-            currentIndex + 1,
-            allAttachments.count
-        )
-    }
-
-    /// Libellé VoiceOver d'une image plein écran : la légende si le call site en
-    /// fournit une, sinon un libellé générique (l'image ne doit jamais être muette).
-    private func imageAccessibilityLabel(_ attachment: MessageAttachment) -> String {
-        if let caption = captionMap[attachment.id], !caption.isEmpty {
-            return caption
-        }
-        return String(localized: "gallery.image", defaultValue: "Image", bundle: .main)
-    }
-
-    /// Résumé VoiceOver de la rangée métadonnées (dimensions + poids), joint de
-    /// façon locale-aware. Chaîne vide si aucune métadonnée n'est disponible.
-    private func mediaMetadataAccessibilityLabel(_ att: MessageAttachment) -> String {
-        var parts: [String] = []
-        if let w = att.width, let h = att.height, w > 0, h > 0 {
-            parts.append(String(
-                format: String(localized: "gallery.dimensions", defaultValue: "%1$d par %2$d", bundle: .main),
-                w, h
-            ))
-        }
-        if att.fileSize > 0 {
-            parts.append(att.fileSizeFormatted)
-        }
-        return ListFormatter.localizedString(byJoining: parts)
     }
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
+                .modifier(GalleryMeasurement(viewport: $measuredViewport, safeArea: $measuredSafeArea))
 
+            // **LE SOL d'une page scène** : on préserve le même fond que pour la story.
+            // Le noir ci-dessus reste le sol des pages image et vidéo ; une page
+            // SCÈNE reçoit par-dessus la MÊME matière que le lecteur de stories
+            // peint autour de sa carte. Le montage vit dans `+ScenePage.swift`,
+            // avec le reste de ce qui ne concerne que les scènes.
+            sceneFloorLayer
+
+            // **Le clavier ne pousse pas le cadre hors de l'écran** :
+            // la scène et tout le plateau IGNORENT la zone sûre du clavier,
+            // seule la couche de saisie la respecte. Sans cette asymétrie,
+            // SwiftUI remonte la pile entière et le média sort par le haut au
+            // moment précis où l'on veut en parler.
             galleryPager
+                .ignoresSafeArea(.keyboard, edges: .bottom)
+
+            // **LE VOILE de lisibilité, sur TOUT l'écran** — doctrine et
+            // entrées dans `+Scrims.swift`.
+            stageScrimsLayer
 
             overlayLayer
+                .ignoresSafeArea(.keyboard, edges: .bottom)
+
+            // **Ce que l'appui long a promis** : la pastille est la
+            // seule chose qui distingue ses deux portes à l'écran. Elle vit
+            // au-dessus du plateau, qui n'existe pas là où elle s'affiche.
+            pausedBadgeLayer
+                .ignoresSafeArea(.keyboard, edges: .bottom)
+
+            // **La traînée d'émojis est la couche la PLUS HAUTE du visualiseur** : les
+            // réactions apparaissent par-dessus tous les autres contrôleurs.
+            //
+            // DERNIER enfant du `ZStack` racine, et non un `.zIndex()` posé plus
+            // bas : `zIndex` n'ordonne qu'entre FRÈRES d'un même conteneur. La
+            // traînée vivait dans la pile de `controlsOverlay`, où elle
+            // PARTAGEAIT la hauteur avec le bloc bas — aucun `zIndex` ne l'aurait
+            // sortie de cette pile, et rien n'aurait empêché le bloc bas de la
+            // comprimer. Le rang se gagne par la COUCHE.
+            reactionLayer
+                .ignoresSafeArea(.keyboard, edges: .bottom)
+
+            // **La barre de réponse est la couche du DIALOGUE** — au
+            // même rang que la traînée d'émojis, et pour la même raison : elle
+            // doit passer par-dessus tous les contrôleurs du plateau.
+            GalleryReplyComposerLayer(accentColor: accentColor,
+                                      replyCitation: replyCitation,
+                                      onSendReplyToMedia: onSendReplyToMedia,
+                                      replyTarget: $replyTarget)
+                // L'inset est EXPLICITE : l'ajustement automatique de
+                // SwiftUI ne s'applique pas à une couche alignée en bas d'un
+                // `ZStack` que ses quatre autres enfants étendent à l'écran
+                // entier. Détail et mesure : `MediaReplyKeyboardInset`.
+                .padding(.bottom, MediaReplyKeyboardInset.bottomInset(for: replyKeyboard))
+                .animation(.easeOut(duration: replyKeyboard?.duration ?? 0.25), value: replyKeyboard?.height)
         }
-        .statusBar(hidden: true)
+        // **L'inset clavier est neutralisé à la RACINE, pas par couche.**
+        // Mesuré au simulateur : posé sur les enfants, il ne protège rien —
+        // c'est la racine du `fullScreenCover` que la fenêtre pousse, et les
+        // couches montent avec elle (le média sortait par le haut, « Fermer »
+        // à y = −47). La pile ne bouge donc plus du tout, et la SEULE chose qui
+        // suit le clavier est la couche de saisie, par son padding explicite.
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+        .observingKeyboardTransition($replyKeyboard)
+        .statusBarHidden(true)
         .onAppear {
             // Filet de sécurité : `scrollPosition(id:)` honore la valeur initiale
             // posée en `init`, mais une présentation qui recycle un état
@@ -154,42 +425,92 @@ struct ConversationMediaGalleryView: View {
                 currentPageID = startAttachmentId
             }
             prefetchNeighbors(around: currentIndex)
+            trackImageOpen(leaving: nil, entering: currentPageID)
         }
+        .onDisappear { trackImageOpen(leaving: currentPageID, entering: nil) }
         .onReceive(videoManager.$activeURL) { videoManagerActiveURL = $0 }
         .onReceive(videoManager.$player) { videoManagerPlayer = $0 }
+        .onReceive(videoManager.$isPlaying) {
+            videoManagerIsPlaying = $0
+            playPauseFade = playPauseFade.playback(isPlaying: $0)
+        }
+        .task(id: playPauseFade) { await fadePlayPauseAfterDelay() }
+        .sheet(isPresented: $showFullEmojiPicker) { fullEmojiPickerSheet }
+        // Présentée en `fullScreenCover`, la galerie recouvre l'hôte
+        // des toasts de la racine : « Enregistrer » se tairait à l'écran.
+        .feedbackToastOverlay()
     }
 
-    /// L'animation de `showControls` est portée ICI et non sur la racine :
+    /// L'animation de l'état d'immersion est portée ICI et non sur la racine :
     /// posée sur le `ZStack` racine, elle installait une transaction animée sur
     /// TOUT l'arbre — pager compris — à chaque bascule des contrôles.
+    ///
+    /// **`allowsHitTesting` n'est pas une ceinture de plus : c'est la garde**
+    /// La couche s'en va en FONDU, donc elle reste dans l'arbre — et
+    /// atteignable — pendant toute la transition : sans cette ligne, un tap posé
+    /// pendant ces deux dixièmes fermerait la galerie par un bouton que
+    /// l'utilisateur voit déjà disparaître.
+    /// **Le chrome du plateau, et ce qui l'efface** (immersion et voile).
+    ///
+    /// Deux façons de n'avoir aucun contrôle à l'écran, et elles ne se
+    /// confondent pas : le plein cadre a RENDU la place du plateau, une
+    /// ouverture la VOILE — sa place reste réservée, pour que le média ne bouge
+    /// pas sous le doigt qui vise un émoji, ni sous le clavier qui monte.
+    /// `MediaStageVeil` tient les deux d'un seul verdict, et il en connaît
+    /// DEUX : la traînée d'émojis et la barre de réponse.
     private var overlayLayer: some View {
-        ZStack {
-            if showControls {
+        let overlays = stageOverlays
+        let chrome = MediaStageVeil.showsChrome(presentation: stagePresentation,
+                                                overlays: overlays)
+        return ZStack {
+            if chrome {
+                // Le plateau ENTIER — les deux couloirs et ce qui se pose sur le
+                // cadre, transport vidéo compris : il commande le média,
+                // donc il vit sur le cadre, plus dans une couche flottante à lui.
                 controlsOverlay
-                    .transition(.opacity)
-                // Contrôles de transport vidéo (play/pause/scrub/skip/speed/mute/pip)
-                // pour la vidéo en cours de lecture. Avant : la galerie rendait une
-                // couche AVPlayerLayer brute SANS aucun contrôle ("AUCUN CONTROLEUR").
-                // Composant SDK partagé `VideoTransportControls` piloté par le même
-                // `SharedAVPlayerManager`. Posé au-dessus des métadonnées (z-order).
-                videoTransportLayer
                     .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: showControls)
+        .allowsHitTesting(chrome)
+        .animation(.easeInOut(duration: 0.2), value: stagePresentation)
+        .animation(.easeInOut(duration: 0.2), value: overlays)
+    }
+
+    /// **Ce que le visualiseur a monté au-dessus de la scène — site UNIQUE**
+    ///
+    /// Deux surfaces montent pour qu'on PARLE de la pièce : la traînée d'émojis
+    /// et la barre de réponse. Elles exigent la même chose — le silence autour —
+    /// et c'est ce que le voile lit. Composer la disjonction ici plutôt que dans
+    /// `MediaStageVeil.Overlays.isOpen` aurait remis la loi dans un `body`,
+    /// injouable en XCTest ; ce site ne fait que NOMMER les deux états de la vue.
+    var stageOverlays: MediaStageVeil.Overlays {
+        MediaStageVeil.Overlays(reactionRow: reactionBarOpen,
+                                replyBar: replyTarget != nil)
     }
 
     // MARK: - Pager
 
+    /// **Le pager occupe la ZONE LIBRE, jamais l'écran entier.** Ses
+    /// deux retraits sont ceux que le solveur a réservés — lui et le plateau
+    /// lisent la MÊME table (`stageCorridors`, `+Geometry.swift`).
     private var galleryPager: some View {
+        // Par SÉLECTION : la page se suit par son identité quand le
+        // catalogue insère des pièces avant elle, et ouvrir la 900e ne
+        // construit pas les 899 qui la précèdent.
         AdaptiveHorizontalPager(
             items: allAttachments,
             currentPageID: $currentPageID,
-            fillVertical: true
+            fillVertical: true,
+            paging: .selection
         ) { index, attachment in
             galleryPage(attachment, index: index)
         }
+        .padding(.top, plateauTopInset)
+        .padding(.bottom, plateauBottomInset)
         .ignoresSafeArea()
+        .adaptiveOnChange(of: GallerySourceSignature(allAttachments)) { _, _ in
+            keepCurrentPageAcrossGrowth()
+        }
         .adaptiveOnChange(of: currentPageID) { oldID, newID in
             handlePageChange(from: oldID, to: newID)
         }
@@ -197,6 +518,27 @@ struct ConversationMediaGalleryView: View {
 
     private func handlePageChange(from oldID: String?, to newID: String?) {
         guard let newID, let newIndex = indexByID[newID] else { return }
+
+        // **Le repli se REMET à chaque média.** Feuilleter présente une
+        // AUTRE légende ; la garder dépliée ouvrirait en grand un texte que
+        // personne n'a demandé à lire, par-dessus le média qu'on vient
+        // d'atteindre. C'est l'inverse du volet de description du composer, qui
+        // est une préférence d'écran parce qu'il commente TOUTE la publication.
+        if oldID != newID, captionExpanded { captionExpanded = false }
+
+        // **La rangée d'émojis appartient à la pièce qu'on REGARDAIT** (#6084,
+        // révision porteur). La laisser ouverte la ferait surgir sur un média que
+        // personne n'a demandé à commenter, et un émoji tapé par réflexe
+        // atterrirait sur la mauvaise pièce — le pire des deux, parce qu'il
+        // aurait l'air d'avoir marché. Même contrat que le repli de légende juste
+        // au-dessus, et pour la même raison.
+        if oldID != newID, reactionBarOpen { reactionBarOpen = false }
+
+        // **Une scène atteinte au glissement se LIT** : la commande se
+        // relève à chaque page, comme une vidéo active part d'elle-même
+        // (`GalleryVideoPage`). La pause posée sur la scène précédente ne suit pas
+        // le lecteur sur la suivante.
+        if oldID != newID, !scenePlaying { scenePlaying = true }
 
         if let oldID, oldID != newID, let oldIndex = indexByID[oldID] {
             let oldAtt = allAttachments[oldIndex]
@@ -207,8 +549,9 @@ struct ConversationMediaGalleryView: View {
                 // `activeURL` set → `hasPlayingInlineVideo` stayed true.
                 videoManager.release(urlString: oldAtt.fileUrl)
             }
-            HapticFeedback.light()
         }
+
+        if oldID != newID { trackImageOpen(leaving: oldID, entering: newID) }
 
         prefetchNeighbors(around: newIndex)
     }
@@ -224,14 +567,25 @@ struct ConversationMediaGalleryView: View {
     private func galleryPage(_ attachment: MessageAttachment, index: Int) -> some View {
         let distance = abs(index - currentIndex)
 
+        if !GalleryRenderWindow.buildsPage(distance: distance) {
+            Color.black
+        } else {
+            builtGalleryPage(attachment, distance: distance)
+        }
+    }
+
+    @ViewBuilder
+    private func builtGalleryPage(_ attachment: MessageAttachment, distance: Int) -> some View {
         switch attachment.type {
         case .image:
             GalleryImagePage(
                 attachment: attachment,
+                stage: stage(for: attachment),
+                presentation: stagePresentation,
                 isActive: distance == 0,
                 rendersFullPixels: GalleryRenderWindow.rendersFullPixels(distance: distance),
                 accessibilityLabel: imageAccessibilityLabel(attachment),
-                onToggleControls: { toggleControls() },
+                onEnterStage: { onEnterStage($0) },
                 onDismiss: { dismissGallery() }
             )
             .equatable()
@@ -239,21 +593,28 @@ struct ConversationMediaGalleryView: View {
         case .video:
             GalleryVideoPage(
                 attachment: attachment,
+                stage: stage(for: attachment),
+                presentation: stagePresentation,
                 accentColor: accentColor,
+                isActive: distance == 0,
                 isWindowed: GalleryRenderWindow.rendersFullPixels(distance: distance),
-                onToggleControls: { toggleControls() },
+                onEnterStage: { onEnterStage($0) },
                 onCacheActivation: { cacheAttachment(attachment) },
                 onDismiss: { dismiss() }
             )
             .equatable()
 
         default:
-            Color.black
+            // **Une scène de post est une pièce SYNTHÉTIQUE** : son MIME
+            // n'est ni image ni vidéo, donc elle arrive ici. Sa nature se lit sur
+            // `sceneContext`, jamais sur le MIME ; toute autre pièce reste noire.
+            if let scene = sceneContext?.scenes[attachment.id] {
+                scenePage(scene, attachment: attachment, distance: distance,
+                          onDismiss: { dismissGallery() })
+            } else {
+                Color.black
+            }
         }
-    }
-
-    private func toggleControls() {
-        showControls.toggle()
     }
 
     private func dismissGallery() {
@@ -263,15 +624,53 @@ struct ConversationMediaGalleryView: View {
 
     // MARK: - Caption Overlay
 
-    private func captionOverlay(_ text: String) -> some View {
-        Text(text)
-            .font(MeeshyFont.relative(14, weight: .medium))
-            .foregroundColor(.white.opacity(0.85))
-            .multilineTextAlignment(.leading)
-            .lineLimit(4)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
+    /// La rangée de langues de la légende (`GalleryCaptionLanguageRow`) — absente
+    /// dès qu'il n'y a rien à basculer (loi 4).
+    @ViewBuilder
+    private func captionLanguageRow(_ id: String) -> some View {
+        let langues = captionLanguages(id)
+        if !langues.isEmpty {
+            GalleryCaptionLanguageRow(languages: langues,
+                                      active: activeCaptionLanguage(id)) { code in
+                captionLanguage[id] = code
+            }
+        }
+    }
+
+    /// **La légende du plein écran rejoint la couche PARTAGÉE.**
+    ///
+    /// Une troisième façon de replier la même chose — `Text` brut,
+    /// `lineLimit(4)`, aucune bascule — serait la forme INERTE : une légende de
+    /// cinq lignes s'y arrêterait au milieu d'une phrase, sans que rien n'indique
+    /// qu'il en reste, ni ne permette de la lire.
+    ///
+    /// > Deux surfaces converties sur trois, c'est une règle qui a l'air
+    /// > partagée. La troisième ne rougit pas : elle affiche un texte, tronqué
+    /// > proprement, et seule la comparaison avec ses sœurs le révèle.
+    ///
+    /// Ce qui passe au composant est la RÈGLE — 15 mots de tête au-delà de 30,
+    /// l'invite, l'ancrage bas-gauche déplié. Le retrait reste 16 pt, celui de
+    /// `bottomMetadataOverlay` juste au-dessus : la légende s'aligne sur sa
+    /// colonne, comme en réel.
+    private func captionOverlay(_ text: String, links: [String: String]) -> some View {
+        MediaCaptionOverlay(caption: text,
+                            isExpanded: captionExpanded,
+                            trackedLinks: links,
+                            horizontalInset: 16,
+                            maxExpandedHeight: cadreCaptionMaxHeight,
+                            // **« JUSTE afficher le texte déplié avec effet
+                            // ombre »** — donc pas de voile en plus. Le
+                            // dégradé noir du composant sert les hôtes qui
+                            // n'ont rien d'autre pour détacher le texte ; ici
+                            // l'ombre suffit, et le voile masquait le média
+                            // que l'utilisateur est venu regarder.
+                            dimsBackgroundWhenExpanded: false,
+                            onToggle: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    captionExpanded.toggle()
+                                }
+                            })
+            .padding(.vertical, MeeshySpacing.sm)
     }
 
     // MARK: - Controls Overlay
@@ -279,178 +678,265 @@ struct ConversationMediaGalleryView: View {
     private var controlsOverlay: some View {
         VStack(spacing: 0) {
             HStack {
-                Button {
-                    dismissGallery()
-                } label: {
-                    // Chrome : glyphe `xmark` figé dans un cercle glass 40pt
-                    // (doctrine 82i) — ne pas scaler. Glass APRÈS le sizing.
-                    Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 40, height: 40)
-                        .adaptiveGlass(in: Circle(), interactive: true)
-                        .padding()
-                }
-                .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
+                FullscreenCloseButton(tone: .onMedia) { dismissGallery() }
 
+                // La capsule « n / N » n'a pas sa place dans ce couloir : le rail du couloir
+                // bas MONTRE déjà la position — vignette active bordée de
+                // blanc — et il la dit mieux qu'un texte. Le libellé VoiceOver
+                // de position vit sur chaque vignette du rail (`FilmstripThumbnail`).
                 Spacer()
 
-                if allAttachments.count > 1 {
-                    Text("\(currentIndex + 1) / \(allAttachments.count)")
-                        .font(MeeshyFont.relative(13, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .adaptiveGlass(in: Capsule())
-                        .contentTransition(.numericText())
-                        .animation(.spring(response: 0.3), value: currentIndex)
-                        .accessibilityLabel(galleryPositionAccessibilityLabel)
-                }
-
-                Spacer()
-
-                if currentIndex < allAttachments.count {
-                    Button { requestSaveCurrent() } label: {
-                        Group {
-                            if saveCoordinator.isProcessing {
-                                ProgressView().tint(.white)
-                            } else {
-                                Image(systemName: "arrow.down.to.line")
-                            }
-                        }
-                        // Chrome : glyphe d'état figé dans un cadre tap fixe
-                        // 40×40 (doctrine 82i) — ne pas scaler.
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.9))
-                        .frame(width: 40, height: 40)
-                        .adaptiveGlass(in: Circle(), interactive: true)
-                        .padding(.trailing, 12)
-                        .padding(.top, 8)
-                    }
-                    .disabled(saveCoordinator.isProcessing)
-                    .accessibilityLabel(String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main))
-                    .accessibilityValue(saveStateAccessibilityValue)
-                    // Composant UNIFIÉ « Enregistrer » : même sheet de
-                    // destinations pour image et vidéo (Photos / Fichiers /
-                    // Partager), issue via toast + haptics.
-                    .mediaSaveFlow(saveCoordinator)
-                } else {
-                    Color.clear.frame(width: 52, height: 40).padding(.trailing, 12)
-                }
+                // L'enregistrement est une ENTRÉE du menu ⋯, à côté du partage hors de
+                // l'application. Le menu et
+                // ses deux transports vivent dans `+Menu.swift`.
+                overflowMenu
             }
+            .padding(.horizontal, MediaGalleryStage.gutter + 2)
+            .frame(height: MediaGalleryStage.topCorridorHeight)
 
-            Spacer(minLength: 0)
+            // LE CADRE, puis LES DEUX BANDES DU COULOIR BAS. Ce qui se pose sur
+            // le cadre part avec lui ; ce qui PARCOURT reste au plateau
+            // (`+Geometry.swift`, `+Transport.swift`) — la progression du média
+            // d'abord, le rail de la série ensuite. L'ordre est la directive
+            // porteur mot pour mot : « la progression […] en bas juste
+            // au-dessus du rail de défilement ».
+            cadreRegion
+                .padding(.bottom, MediaGalleryStage.gutter)
 
-            bottomOverlay
+            transportCorridor
+
+            railCorridor
         }
+        .padding(.top, stageCorridors.safeTop)
+        .padding(.bottom, stageCorridors.safeBottom)
+        .ignoresSafeArea()
     }
 
-    /// Bas de l'écran : auteur du média, légende, puis — sur TOUTE la rangée,
-    /// par-dessous — la pellicule de toute la conversation.
+    /// Bas du CADRE : auteur du média, sa date, sa ligne format / dimensions /
+    /// poids, puis la légende. **Pas d'actions** : elles vivent dans le rail, à
+    /// droite de ce bloc (`cadreActionColumn`, #12420).
+    ///
+    /// **La pellicule n'est pas là** : elle vit dans le couloir bas du
+    /// plateau (`railCorridor`, `+Geometry.swift`), où plus aucune légende
+    /// dépliée ne peut la comprimer. Le voile, lui, est monté d'un cran
+    /// (`cadreOverlay`) : un dégradé par étage ferait deux lisières.
     @ViewBuilder
-    private var bottomOverlay: some View {
+    var bottomOverlay: some View {
         if currentIndex < allAttachments.count {
             let att = allAttachments[currentIndex]
             VStack(alignment: .leading, spacing: 0) {
+                // **L'auteur n'est pas effacé par le dépliage : il est POUSSÉ vers le haut.**
+                // Le « voir plus » de la légende affiche le texte déplié avec effet ombre, en
+                // repoussant le détail de l'auteur vers le haut.
+                //
+                // Le bas de l'écran est une ressource FINIE : une légende dépliée et une carte
+                // d'auteur s'y disputent la place. C'est la pile ancrée en bas qui fait le
+                // travail — la légende grandit, ses voisins montent — et la lisibilité est
+                // portée par l'ombre de `MediaCaptionOverlay`, jamais par la place qu'on
+                // prendrait à quelqu'un d'autre. Ni fondu ni gate : rien ne se cache.
+                //
+                // La story répond autrement à la même question — « où trouver la place ? » —
+                // parce qu'elle n'a pas le même voisinage : la scène se FLOUTE
+                // (`StoryViewerView+Canvas`).
                 bottomMetadataOverlay(att)
-                if let caption = captionMap[att.id], !caption.isEmpty {
-                    captionOverlay(caption)
-                }
-                if allAttachments.count > 1 {
-                    ConversationMediaFilmstrip(
-                        attachments: allAttachments,
-                        currentPageID: $currentPageID,
-                        accentColor: accentColor
+                // **La légende d'une SCÈNE se traduit par sa propre source** : texte du
+                // post ou légende du média, chacun par
+                // sa route, avec LA feuille de traduction des messages. Montée
+                // avec l'identité de la pièce : la langue choisie ne suit pas le
+                // lecteur sur la page suivante, qui porte un autre contenu.
+                if let context = sceneContext, let anchor = context.captions[att.id],
+                   let texte = captionMap[att.id] {
+                    GallerySceneCaptionBlock(
+                        post: context.post,
+                        anchor: anchor,
+                        fallbackText: texte,
+                        preferredLanguages: context.captionLanguages,
+                        isExpanded: captionExpanded,
+                        maxExpandedHeight: cadreCaptionMaxHeight,
+                        onToggle: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                captionExpanded.toggle()
+                            }
+                        }
                     )
+                    .id(att.id)
+                } else if let caption = servedCaption(att.id) {
+                    captionLanguageRow(att.id)
+                    captionOverlay(caption, links: captionLinks[att.id] ?? [:])
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .top, endPoint: .bottom)
-            )
         }
     }
 
     // MARK: - Video Transport Controls (for the currently playing video)
+    //
+    // **Le transport vit dans `+Transport.swift`** : la progression est au
+    // couloir du plateau (`transportCorridor`) et le play/pause au centre du
+    // média (`cadreCenterPlayPause`). Ce commentaire reste pour que la
+    // recherche de « videoTransportLayer » atterrisse quelque part.
 
-    /// Marge basse du transport vidéo : il doit rester au-dessus du bloc bas,
-    /// dont la hauteur change selon que la pellicule est montée ou non.
-    private var videoTransportBottomInset: CGFloat {
-        allAttachments.count > 1 ? 132 + ConversationMediaFilmstrip.reservedHeight : 132
+    /// **Les actions sont en COLONNE VERTICALE à droite**, sur la zone sombre du
+    /// plateau : elles prennent le gabarit de la barre latérale du lecteur de
+    /// story (`StoryViewerView+Sidebar.swift`).
+    ///
+    /// ## Elle se POSE sur le cadre — elle ne lui prend pas de largeur
+    ///
+    /// Un vrai couloir latéral, réservé AVANT le cadre comme les couloirs haut
+    /// et bas, coûterait **356 × 633 → 322 × 572** sur une scène 9:16, soit un
+    /// cinquième de la surface. Arbitrage porteur : *« on va essayer de garder
+    /// l'aspect des story mais ce ne sont pas des story »* — `MediaStageFraming`
+    /// ne gagne AUCUN champ ici.
+    ///
+    /// **La règle du composer (aucun contrôle sur le canvas) ne l'interdit pas**,
+    /// et il faut le dire ici parce qu'un lot futur la citerait pour « corriger »
+    /// ce choix : elle gouverne le COMPOSER, où un contrôle posé sur la scène entre
+    /// en concurrence avec le geste d'ÉDITION. En lecture il n'y a aucune édition à
+    /// protéger, et le lecteur de story pose sa colonne sur son canvas.
+    /// Une colonne vide ne prend RIEN — ni largeur, ni hauteur (loi 4).
+    var cadreActionColumn: some View {
+        FullscreenActionRail {
+            if currentIndex < allAttachments.count {
+                mediaActions(allAttachments[currentIndex])
+                // #12420 — Enregistrer et Transférer : dans le rail ET dans le ⋯.
+                GalleryRailExitActions(contentId: allAttachments[currentIndex].id,
+                                       offersSave: currentSaveSubject != nil,
+                                       offersForward: currentOffersForward,
+                                       onSave: requestSaveCurrent,
+                                       onForward: forwardCurrent,
+                                       onImager: GalleryImagerOffer.action(for: currentAttachment, onImagerMedia, offered: imageableMedia))
+            }
+            cadreTransportRail // #9577 — le son se range sous les actions
+        }
+        // La colonne MESURE sa place sur le plateau : c'est elle, et non le
+        // média de la page, qui dit ce qui est peint sous ses boutons.
+        .onGeometryChange(for: CGRect.self) { proxy in
+            proxy.frame(in: .named(MediaGalleryStage.cadreSpace))
+        } action: { cadre in
+            actionColumnFrame = cadre
+        }
+        .fixedSize()
+        .padding(.trailing, MediaGalleryStage.gutter)
+        // La colonne est POSÉE sur le plateau : sa teinte suit
+        // la luminance de ce qu'elle a SOUS elle — le média, la bande du
+        // hors-champ, ou le sol noir sous un cadre plus court —, jamais le blanc
+        // d'office (1,83:1 sur une vidéo violette).
+        .mediaChromeTinted()
+        .mediaChromeScheme(for: currentIndex < allAttachments.count
+                           ? MediaGalleryStage.columnBackdrop(for: allAttachments[currentIndex],
+                                                              stage: currentStage,
+                                                              region: cadreRegionSize,
+                                                              columnFrame: actionColumnFrame)
+                           : nil)
     }
 
     @ViewBuilder
-    private var videoTransportLayer: some View {
-        if currentIndex < allAttachments.count {
-            let att = allAttachments[currentIndex]
-            if att.type == .video,
-               videoManagerActiveURL == att.fileUrl,
-               videoManagerPlayer != nil {
-                VideoTransportControls(
-                    manager: videoManager,
-                    accentColor: accentColor,
-                    controls: [.playPause, .scrubber, .duration, .speed, .mute, .pip]
-                )
-                // Ancré entre la top bar (close/save) et les métadonnées bas.
-                .padding(.top, 64)
-                .padding(.bottom, videoTransportBottomInset)
+    private func mediaActions(_ att: MessageAttachment) -> some View {
+        // **« Réagir » est une ACTION, pas un ornement** : les réactions sur les
+        // attachements en plein écran s'activent comme répondre ou composer, par
+        // un bouton réagir (emoji +) qui affiche la traîne des emojis.
+        //
+        // Il rejoint donc CETTE rangée — même rang, même gabarit 40 pt, même
+        // verre que Répondre et Composer — au lieu de poser sa rangée d'émojis
+        // sur l'image en permanence.
+        //
+        // **La garde remonte d'un cran** : c'est l'EXISTENCE du bouton que la loi
+        // décide, pas seulement celle de la rangée. Plus simple et plus sûr — une
+        // pièce protégée n'a alors même pas d'entrée vers le geste, et il n'y a
+        // plus qu'un endroit où la protection pourrait être oubliée.
+        if AttachmentReactionOffer.offersReaction(surface: .fullscreen,
+                                                  attachment: att,
+                                                  hasHandler: onReactToMedia != nil && (reactableMedia?(att) ?? true)) {
+            FullscreenActionButton.react(
+                label: String(localized: "media.react.title",
+                              defaultValue: "Réagir", bundle: .main),
+                hint: String(localized: "media.react.hint",
+                             defaultValue: "Affiche la rangée d'émojis pour réagir à ce média.",
+                             bundle: .main),
+                style: .disc(.adaptive),
+                isOpen: reactionBarOpen
+            ) {
+                HapticFeedback.light()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    reactionBarOpen.toggle()
+                }
+            }
+        }
+        // **Un média PROTÉGÉ ne se cite pas** : la bannière de citation
+        // porte la vignette du média, ce qui ferait sortir de la conversation
+        // ce qu'une vue unique, un flou ou un chiffrement y retiennent. Le
+        // prédicat est celui que le menu d'appui long lit déjà —
+        // `ComposableAttachment.isProtected` — plutôt qu'une seconde écriture
+        // des trois mêmes drapeaux.
+        //
+        // **La ROUTE décide, pas deux `if` côte à côte** : sans elle,
+        // un hôte qui câble les deux rappels monterait la barre PENDANT que la
+        // galerie se referme sous elle.
+        let route = FullscreenReplyRoute.route(
+            isProtected: ComposableAttachment.isProtected(att),
+            hasInPlaceComposer: onSendReplyToMedia != nil && replyCitation != nil,
+            // `replyableMedia` : un hôte de post ne relaie que ce qu'il
+            // sait citer — jamais un média joint à un commentaire.
+            hasThreadHandOff: onReplyToMedia != nil && (replyableMedia?(att) ?? true)
+        )
+        if route != .none {
+            FullscreenActionButton.reply(
+                label: String(localized: "media.reply.title",
+                              defaultValue: "Répondre", bundle: .main),
+                hint: route == .composeInPlace
+                    ? String(localized: "media.reply.hint.inPlace",
+                             defaultValue: "Ouvre la zone de saisie au-dessus de ce média, en le citant.",
+                             bundle: .main)
+                    : String(localized: "media.reply.hint",
+                             defaultValue: "Cite le message qui porte ce média et revient au composer.",
+                             bundle: .main),
+                style: .disc(.adaptive)
+            ) {
+                HapticFeedback.light()
+                switch route {
+                case .composeInPlace:
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        // **Les deux ouvertures ne partagent pas le bas de
+                        // l'écran**. Elles vivent dans deux `@State`
+                        // indépendants : rien dans le type ne les empêche
+                        // d'être montées ensemble, et la traînée d'émojis
+                        // flotterait alors au-dessus du champ de saisie. Le
+                        // voile ne peut pas trancher cela — il ne fait que
+                        // constater ce qui est monté ; c'est au geste qui ouvre
+                        // la seconde de congédier la première.
+                        reactionBarOpen = false
+                        replyTarget = att
+                    }
+                case .handOffToThread:
+                    onReplyToMedia?(att)
+                case .none:
+                    break
+                }
+            }
+        }
+        // `composableMedia` (#6709) : « Créer avec ce média » seulement sur une pièce qui a sa cible.
+        if let onComposeWithMedia, composableMedia?(att) ?? true {
+            FullscreenActionButton(
+                systemImage: FullscreenChromeSymbol.compose,
+                label: String(localized: "media.compose.title",
+                              defaultValue: "Créer avec ce média", bundle: .main),
+                hint: String(localized: "media.compose.hint",
+                             defaultValue: "Ouvre le composer avec ce média posé.",
+                             bundle: .main),
+                style: .disc(.adaptive)
+            ) {
+                HapticFeedback.light()
+                onComposeWithMedia(att)
             }
         }
     }
 
     private func bottomMetadataOverlay(_ att: MessageAttachment) -> some View {
-        let info = senderInfoMap[att.id]
-        return VStack(alignment: .leading, spacing: 6) {
-            // Rangée auteur : affichée seulement si l'info est fournie par le call
-            // site — sinon on masque (pas d'avatar « ? » vide au-dessus des dimensions).
-            if let info {
-                HStack(spacing: 10) {
-                    MeeshyAvatar(
-                        name: info.senderName,
-                        context: .messageBubble,
-                        accentColor: info.senderColor,
-                        avatarURL: info.senderAvatarURL
-                    )
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(info.senderName)
-                            .font(MeeshyFont.relative(14, weight: .semibold))
-                            .foregroundColor(.white)
-                        Text(info.sentAt, format: .dateTime.day().month(.abbreviated).hour().minute())
-                            .font(MeeshyFont.relative(12, weight: .medium))
-                            .foregroundColor(.white.opacity(0.6))
-                    }
-                    Spacer()
-                }
-                .accessibilityElement(children: .combine)
-            }
-            HStack(spacing: 8) {
-                // Glyphe de type média décoratif (apparié aux dimensions) —
-                // scale avec le texte mais masqué de VoiceOver.
-                Image(systemName: att.type == .video ? "video.fill" : "photo")
-                    .font(MeeshyFont.relative(11))
-                    .foregroundColor(.white.opacity(0.6))
-                    .accessibilityHidden(true)
-                if let w = att.width, let h = att.height, w > 0, h > 0 {
-                    Text("\(w) \u{00D7} \(h)")
-                        .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.6))
-                }
-                if att.fileSize > 0 {
-                    Text(att.fileSizeFormatted)
-                        .font(MeeshyFont.relative(11, weight: .medium))
-                        .foregroundColor(.white.opacity(0.5))
-                }
-                Spacer()
-            }
-            // Regroupe dimensions + poids en un seul arrêt VoiceOver et remplace
-            // le « × » (lu « multiplication ») par un « par » localisé.
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(mediaMetadataAccessibilityLabel(att))
-            .accessibilityHidden(mediaMetadataAccessibilityLabel(att).isEmpty)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
+        GalleryMediaMetadataBlock(att: att,
+                                  info: senderInfoMap[att.id],
+                                  isScene: sceneContext?.scenes[att.id] != nil,
+                                  videoManager: videoManager,
+                                  currentAttachmentIsActiveTrack: currentAttachmentIsActiveTrack)
     }
 
     // MARK: - Actions
@@ -477,25 +963,7 @@ struct ConversationMediaGalleryView: View {
 
     private func cacheAttachment(_ attachment: MessageAttachment?) {
         guard let attachment else { return }
-        // Préchauffe le cache image DÉCODÉ (`_imageCache`) : l'ouverture plein
-        // écran touche alors le fast-path synchrone de `ProgressiveCachedImage`
-        // (`DiskCacheStore.cachedImage`) → affichage instantané, sans placeholder.
-        // Pour une vidéo on préchauffe sa vignette (l'image montrée avant
-        // lecture) ; le fichier vidéo lui-même est mis en cache par
-        // `SharedAVPlayerManager` au tap lecture.
-        let urlStr: String
-        switch attachment.type {
-        case .video:
-            urlStr = attachment.thumbnailUrl ?? ""
-        default:
-            // 5.2 — préchauffer la MÊME variante que celle affichée, pas l'original,
-            // sinon on téléchargerait les deux.
-            urlStr = GalleryImageSource.fullscreenURL(for: attachment)
-        }
-        guard !urlStr.isEmpty,
-              let resolved = MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString
-        else { return }
-        Task { _ = await CacheCoordinator.shared.images.image(for: resolved) }
+        GalleryPrewarm.warm(attachment)
     }
 
     /// Préchauffe STRICTEMENT la fenêtre de rendu. L'ancienne valeur (±2)
@@ -505,525 +973,5 @@ struct ConversationMediaGalleryView: View {
         guard let range = GalleryRenderWindow.prefetchRange(around: index, count: allAttachments.count)
         else { return }
         range.forEach { cacheAttachment(allAttachments[$0]) }
-    }
-
-    private func requestSaveCurrent() {
-        guard currentIndex < allAttachments.count else { return }
-        let att = allAttachments[currentIndex]
-        let urlStr = att.fileUrl.isEmpty ? (att.thumbnailUrl ?? "") : att.fileUrl
-        guard !urlStr.isEmpty else { return }
-        HapticFeedback.light()
-        saveCoordinator.requestSave(MediaSaveRequest(
-            kind: att.type == .video ? .video : .image,
-            remoteURLString: urlStr,
-            suggestedFileName: att.originalName.isEmpty ? nil : att.originalName,
-            attachmentId: att.id.isEmpty ? nil : att.id
-        ))
-    }
-}
-
-// MARK: - Render window
-
-/// Combien de pages, de part et d'autre de la page courante, rendent le média
-/// PLEIN FORMAT — et lesquelles se contentent d'un aperçu.
-///
-/// C'est LA règle qui borne le coût de la galerie. Sans elle, le `LazyHStack`
-/// réalise une page de plus à chaque swipe et n'en libère jamais aucune : le
-/// travail vivant croît avec la distance parcourue, ce qui est exactement le
-/// symptôme « plus je défile, plus ça rame ». Isolée ici parce qu'une règle qui
-/// borne un coût doit pouvoir être VÉRIFIÉE : le ralentissement qu'elle évite
-/// ne se voit sur aucune capture d'écran.
-enum GalleryRenderWindow {
-    /// Rayon en pages. `1` — la page visible et ses deux voisines immédiates,
-    /// soit exactement ce qu'un glissement en cours peut montrer.
-    static let radius = 1
-
-    static func rendersFullPixels(distance: Int) -> Bool {
-        abs(distance) <= radius
-    }
-
-    /// Ce qu'on préchauffe : STRICTEMENT la fenêtre de rendu. Préchauffer
-    /// au-delà décoderait des images que personne ne peut voir, donc de la
-    /// pression mémoire pure — donc des évictions, donc un re-décodage au
-    /// retour, l'inverse de l'intention.
-    static func prefetchRange(around index: Int, count: Int) -> ClosedRange<Int>? {
-        guard count > 0, index >= 0, index < count else { return nil }
-        return max(0, index - radius)...min(count - 1, index + radius)
-    }
-}
-
-// MARK: - Fullscreen image source
-
-/// Sélection de la variante d'image servie en plein écran.
-///
-/// Vit ici — et non dans un fichier de pellicule séparé — parce que
-/// `UIScreen.main.bounds` y est un budget de DÉCODAGE (la largeur maximale
-/// qu'une image pourra jamais devoir couvrir), pas une mesure de mise en page :
-/// `WindowMetricsSSOTTests` n'autorise cette lecture que dans les deux fichiers
-/// qui la font pour cette raison.
-private enum GalleryImageSource {
-    /// 5.2 — URL d'image à charger en plein écran : la plus petite variante
-    /// `>=` la largeur écran (évite l'original multi-Mo quand une 1920 suffit).
-    /// Sans variante (image chiffrée) → l'original. Utilisée pour l'affichage ET
-    /// le préchauffage (cohérence : on warm ce qu'on affiche). Pas de `targetSize`
-    /// downsample côté plein écran : le pinch-zoom a besoin des pixels de la
-    /// variante. La sauvegarde Photos garde l'original (qualité maximale).
-    @MainActor
-    static func fullscreenURL(for attachment: MessageAttachment) -> String {
-        let original = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
-        guard !original.isEmpty else { return "" }
-        let targetPx = Int((UIScreen.main.bounds.width * UIScreen.main.scale).rounded())
-        return ImageVariantSelector.bestImageURL(
-            variants: attachment.imageVariants ?? [],
-            originalURL: original,
-            originalWidth: attachment.width,
-            targetWidthPx: targetPx
-        )
-    }
-}
-
-// MARK: - Gallery Image Page (pinch-to-zoom, pan, vertical drag-to-dismiss)
-
-/// Une page image de la galerie, PROPRIÉTAIRE de sa transformation.
-///
-/// C'est le point clé du correctif de fluidité : zoom et déplacement sont un
-/// état LOCAL. Un pincement ne peut donc plus invalider la racine — et par elle
-/// toutes les autres pages réalisées — à la fréquence d'affichage.
-private struct GalleryImagePage: View, Equatable {
-    let attachment: MessageAttachment
-    /// La page visible. Seule l'active répond aux gestes et rend l'image plein
-    /// format en priorité ; les autres se contentent d'être prêtes.
-    let isActive: Bool
-    /// Dans la fenêtre de rendu : rend le média plein format. Hors fenêtre, la
-    /// page ne rend qu'un aperçu léger — le décodage plein format est LIBÉRÉ.
-    let rendersFullPixels: Bool
-    let accessibilityLabel: String
-    let onToggleControls: () -> Void
-    let onDismiss: () -> Void
-
-    /// Les fermetures ne participent pas : elles n'encapsulent que des actions
-    /// stables (bascule des contrôles, fermeture). Comparer l'identité + les
-    /// deux drapeaux de position suffit à décider d'un re-rendu.
-    static func == (lhs: GalleryImagePage, rhs: GalleryImagePage) -> Bool {
-        lhs.attachment.id == rhs.attachment.id
-            && lhs.isActive == rhs.isActive
-            && lhs.rendersFullPixels == rhs.rendersFullPixels
-            && lhs.accessibilityLabel == rhs.accessibilityLabel
-    }
-
-    /// Échelle EN COURS de pincement. `committedScale` est celle acquise à la
-    /// fin du geste : sans elle, un second pincement repartait de 1 (le geste
-    /// rend un facteur RELATIF), ce qui faisait sauter l'image.
-    @State private var scale: CGFloat = 1
-    @State private var committedScale: CGFloat = 1
-    @State private var offset: CGSize = .zero
-    @State private var committedOffset: CGSize = .zero
-
-    private static let maxScale: CGFloat = 5
-    private static let dismissThreshold: CGFloat = 150
-    /// Aperçu hors fenêtre : la VIGNETTE, décodée à une taille d'affichage
-    /// modeste. Une page à ±2 n'est pas atteignable sans être traversée — elle
-    /// n'a donc aucun pixel à fournir au zoom.
-    private static let previewSize = CGSize(width: 320, height: 320)
-
-    private var isZoomed: Bool { committedScale > 1 }
-
-    private var thumbnailURL: String? {
-        attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-    }
-
-    private var hasRenderableSource: Bool {
-        !attachment.fileUrl.isEmpty || thumbnailURL != nil || attachment.thumbHash != nil
-    }
-
-    var body: some View {
-        ZStack {
-            Color.black
-
-            if hasRenderableSource {
-                imageLayer
-                    .aspectRatio(contentMode: .fit)
-                    .scaleEffect(scale)
-                    .offset(offset)
-                    .gesture(zoomGesture, including: isActive ? .all : .none)
-                    .highPriorityGesture(panGesture, including: isActive && isZoomed ? .all : .none)
-                    .gesture(dismissGesture, including: isActive && !isZoomed ? .all : .none)
-                    .onTapGesture(count: 2) { toggleZoom() }
-                    // Sans label, l'image plein écran est un élément VoiceOver muet quand
-                    // on balaie la galerie. Caption si fournie, sinon libellé générique.
-                    .accessibilityLabel(accessibilityLabel)
-                    .accessibilityAddTraits(.isImage)
-            } else {
-                // Glyphe d'état-vide décoratif ≥40pt figé (doctrine 74i/86i).
-                Image(systemName: "photo")
-                    .font(.system(size: 48))
-                    .foregroundColor(.white.opacity(0.3))
-                    .accessibilityHidden(true)
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture { onToggleControls() }
-        .adaptiveOnChange(of: isActive) { _, active in
-            guard !active else { return }
-            resetTransform()
-        }
-    }
-
-    /// L'URL servie DANS la fenêtre : la variante élue, avec repli sur
-    /// l'original puis sur la vignette. Écrit en retours anticipés — un
-    /// ternaire imbriqué mêlant `String` et `String?` se lit mal.
-    private var fullPixelURL: String? {
-        let selected = GalleryImageSource.fullscreenURL(for: attachment)
-        if !selected.isEmpty { return selected }
-        if !attachment.fileUrl.isEmpty { return attachment.fileUrl }
-        return thumbnailURL
-    }
-
-    /// Hors fenêtre de rendu on ne monte JAMAIS l'URL plein format : c'est ce
-    /// qui borne le nombre d'images décodées vivantes, quel que soit le nombre
-    /// de médias traversés. La bascule se produit à ±2 pages — jamais à
-    /// l'écran, donc jamais visible.
-    @ViewBuilder
-    private var imageLayer: some View {
-        if rendersFullPixels {
-            ProgressiveCachedImage(
-                thumbHash: attachment.thumbHash,
-                thumbnailUrl: thumbnailURL,
-                fullUrl: fullPixelURL
-            ) {
-                ProgressView().tint(.white)
-            }
-        } else {
-            ProgressiveCachedImage(
-                thumbHash: attachment.thumbHash,
-                thumbnailUrl: thumbnailURL,
-                fullUrl: thumbnailURL,
-                targetSize: Self.previewSize
-            ) {
-                Color.black
-            }
-        }
-    }
-
-    // MARK: Gestures
-
-    private var zoomGesture: some Gesture {
-        MagnificationGesture()
-            .onChanged { value in
-                scale = min(Self.maxScale, max(1, committedScale * value))
-            }
-            .onEnded { _ in
-                let settled = min(Self.maxScale, max(1, scale))
-                withAnimation(.spring(response: 0.3)) {
-                    scale = settled
-                    if settled <= 1 { offset = .zero }
-                }
-                committedScale = settled
-                committedOffset = settled <= 1 ? .zero : offset
-            }
-    }
-
-    /// Déplacement quand l'image est zoomée. En `highPriorityGesture` : sans
-    /// cela le `ScrollView` de pagination gagne l'arbitrage horizontal et
-    /// l'utilisateur ne peut pas atteindre les bords d'une image agrandie.
-    private var panGesture: some Gesture {
-        DragGesture(minimumDistance: 1)
-            .onChanged { value in
-                offset = CGSize(
-                    width: committedOffset.width + value.translation.width,
-                    height: committedOffset.height + value.translation.height
-                )
-            }
-            .onEnded { _ in committedOffset = offset }
-    }
-
-    /// Glissement VERTICAL de fermeture. `minimumDistance: 30` est délibéré :
-    /// il laisse la pagination horizontale gagner l'arbitrage.
-    private var dismissGesture: some Gesture {
-        DragGesture(minimumDistance: 30)
-            .onChanged { value in
-                // Only respond to primarily vertical drags
-                guard abs(value.translation.height) > abs(value.translation.width) else { return }
-                offset = CGSize(width: 0, height: value.translation.height)
-            }
-            .onEnded { value in
-                guard abs(value.translation.height) > abs(value.translation.width) else {
-                    withAnimation(.spring()) { offset = .zero }
-                    return
-                }
-                if abs(value.translation.height) > Self.dismissThreshold {
-                    onDismiss()
-                } else {
-                    withAnimation(.spring()) { offset = .zero }
-                }
-            }
-    }
-
-    private func toggleZoom() {
-        let target: CGFloat = committedScale > 1 ? 1 : 2.5
-        withAnimation(.spring()) {
-            scale = target
-            offset = .zero
-        }
-        committedScale = target
-        committedOffset = .zero
-    }
-
-    private func resetTransform() {
-        guard scale != 1 || offset != .zero else { return }
-        scale = 1
-        committedScale = 1
-        offset = .zero
-        committedOffset = .zero
-    }
-}
-
-// MARK: - Gallery Video Page (per-item availability gate)
-
-/// Per-page gating wrapper for the video viewer inside
-/// `ConversationMediaGalleryView`. Resolves `VideoAvailability` against
-/// `CacheCoordinator.shared.video`, triggers auto-DL via the policy engine,
-/// and only invokes `SharedAVPlayerManager.load()` once the video is on
-/// disk — coherent with the streaming-fallback removal in the manager.
-///
-/// `isWindowed` borne le travail : hors fenêtre, la page ne résout AUCUNE
-/// disponibilité et ne déclenche AUCUN auto-téléchargement. Sans cette porte,
-/// traverser une conversation de vingt vidéos en lançait vingt.
-private struct GalleryVideoPage: View, Equatable {
-    let attachment: MessageAttachment
-    let accentColor: String
-    let isWindowed: Bool
-    let onToggleControls: () -> Void
-    let onCacheActivation: () -> Void
-    let onDismiss: () -> Void
-
-    static func == (lhs: GalleryVideoPage, rhs: GalleryVideoPage) -> Bool {
-        lhs.attachment.id == rhs.attachment.id
-            && lhs.accentColor == rhs.accentColor
-            && lhs.isWindowed == rhs.isWindowed
-    }
-
-    // Plain reference (NOT @ObservedObject): only `activeURL`/`player`/
-    // `isPlaying` drive this page's rendering — the manager also publishes
-    // `currentTime` at 5-10Hz, which used to re-render EVERY gallery page
-    // continuously. Scoped via onReceive($activeURL/$player/$isPlaying).
-    private let videoManager = SharedAVPlayerManager.shared
-    @State private var videoManagerActiveURL: String = SharedAVPlayerManager.shared.activeURL
-    @State private var videoManagerPlayer: AVPlayer?
-    @State private var videoManagerIsPlaying: Bool = SharedAVPlayerManager.shared.isPlaying
-    @State private var resolvedAvailability: VideoAvailability = .needsDownload
-    @StateObject private var downloader = AttachmentDownloader()
-    /// Décalage de fermeture, LOCAL à la page (cf. `GalleryImagePage`).
-    @State private var offset: CGSize = .zero
-
-    private var availability: VideoAvailability {
-        if downloader.isDownloading {
-            return .downloading(progress: downloader.progress)
-        }
-        if downloader.isCached {
-            return .ready
-        }
-        return resolvedAvailability
-    }
-
-    private var isPlayerActive: Bool {
-        videoManagerActiveURL == attachment.fileUrl && videoManagerIsPlaying
-    }
-
-    private var isPlayerAttached: Bool {
-        videoManagerActiveURL == attachment.fileUrl
-    }
-
-    private func resolveAvailability() async {
-        let urlString = attachment.fileUrl
-        if urlString.hasPrefix("file://") {
-            let exists = FileManager.default.fileExists(
-                atPath: URL(string: urlString)?.path ?? ""
-            )
-            resolvedAvailability = VideoAvailability.resolve(
-                isLocalFile: true, localFileExists: exists, isServerCached: false
-            )
-            return
-        }
-        let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-        let cached = await CacheCoordinator.shared.video.isCached(resolved)
-        resolvedAvailability = VideoAvailability.resolve(
-            isLocalFile: false, localFileExists: false, isServerCached: cached
-        )
-    }
-
-    var body: some View {
-        ZStack {
-            if !isPlayerActive {
-                thumbnailLayer
-            }
-
-            if isPlayerActive || isPlayerAttached {
-                if let player = videoManagerPlayer {
-                    FullscreenAVPlayerLayerView(player: player, gravity: .resizeAspect)
-                        .ignoresSafeArea()
-                }
-            }
-
-            // Un seul contrôleur : une fois le player attaché à cette URL
-            // (lecture OU pause), play/pause appartient au transport partagé
-            // (`VideoTransportControls`). Gater sur `!isPlayerActive` faisait
-            // réapparaître ce poster 64pt PENDANT la pause, empilé sur le
-            // play/pause 64pt du transport (double contrôleur, bug user).
-            if !isPlayerAttached {
-                playOrDownloadButton
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture { onToggleControls() }
-        .offset(y: offset.height)
-        .gesture(dismissGesture)
-        // La clé inclut `isWindowed` : la tâche ne tourne QUE dans la fenêtre,
-        // et rejoue dès qu'une page y entre.
-        .task(id: "\(attachment.id)#\(isWindowed)") {
-            guard isWindowed else { return }
-            if !downloader.isDownloading {
-                downloader.isCached = false
-            }
-            await resolveAvailability()
-            if case .needsDownload = resolvedAvailability, !downloader.isDownloading {
-                let condition = NetworkConditionMonitor.shared.condition
-                let prefs = MediaDownloadPreferencesStore.shared.preferences
-                if MediaDownloadPolicyEngine.shouldAutoDownload(
-                    kind: .video, condition: condition, prefs: prefs
-                ) {
-                    downloader.start(attachment: attachment, onShare: nil)
-                }
-            }
-        }
-        .onReceive(videoManager.$activeURL) { videoManagerActiveURL = $0 }
-        .onReceive(videoManager.$player) { videoManagerPlayer = $0 }
-        .onReceive(videoManager.$isPlaying) { videoManagerIsPlaying = $0 }
-    }
-
-    private var dismissGesture: some Gesture {
-        DragGesture(minimumDistance: 30)
-            .onChanged { value in
-                guard abs(value.translation.height) > abs(value.translation.width) else { return }
-                offset = CGSize(width: 0, height: value.translation.height)
-            }
-            .onEnded { value in
-                guard abs(value.translation.height) > abs(value.translation.width) else {
-                    withAnimation(.spring()) { offset = .zero }
-                    return
-                }
-                if abs(value.translation.height) > 150 {
-                    if videoManager.isPlaying && videoManager.activeURL == attachment.fileUrl {
-                        videoManager.startPip()
-                    } else if videoManager.activeURL == attachment.fileUrl {
-                        // Vidéo EN PAUSE : pas de handoff PiP — sans cette
-                        // libération, le player partagé restait attaché
-                        // (`activeURL` posé) et la bulle en dessous rendait la
-                        // frame gelée au lieu de son thumbnail, footer masqué.
-                        videoManager.release(urlString: attachment.fileUrl)
-                    }
-                    onDismiss()
-                } else {
-                    withAnimation(.spring()) { offset = .zero }
-                }
-            }
-    }
-
-    @ViewBuilder
-    private var thumbnailLayer: some View {
-        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-        if thumbUrl != nil || attachment.thumbHash != nil {
-            ProgressiveCachedImage(
-                thumbHash: attachment.thumbHash,
-                thumbnailUrl: thumbUrl,
-                fullUrl: thumbUrl
-            ) {
-                Color(hex: attachment.thumbnailColor)
-            }
-            .aspectRatio(contentMode: .fit)
-        }
-    }
-
-    @ViewBuilder
-    private var playOrDownloadButton: some View {
-        Button {
-            switch availability {
-            case .ready:
-                // Défense en profondeur : la galerie n'exprime jamais de mute
-                // forcé — si une autre surface (le feed) a laissé `isForceMuted`
-                // activé (elle le relâche normalement d'elle-même en perdant
-                // l'activité), on ne veut jamais en hériter silencieusement ici.
-                videoManager.isForceMuted = false
-                videoManager.load(urlString: attachment.fileUrl, attachmentId: attachment.id.isEmpty ? nil : attachment.id)
-                videoManager.play()
-                onCacheActivation()
-                HapticFeedback.light()
-            case .needsDownload:
-                downloader.start(attachment: attachment, onShare: nil)
-                HapticFeedback.light()
-            case .downloading:
-                break
-            }
-        } label: {
-            buttonContent
-                .frame(width: 64, height: 64)
-                .adaptiveGlassProminent(in: Circle(), tint: Color(hex: accentColor).opacity(0.85))
-        }
-        .disabled({
-            if case .downloading = availability { return true }
-            return false
-        }())
-        .accessibilityLabel(playOrDownloadAccessibilityLabel)
-    }
-
-    /// Label VoiceOver du bouton central selon l'état (lecture / téléchargement
-    /// / progression). Les glyphes internes sont décoratifs.
-    private var playOrDownloadAccessibilityLabel: String {
-        switch availability {
-        case .ready:
-            return String(localized: "media.playVideo", defaultValue: "Lire la vidéo", bundle: .main)
-        case .needsDownload:
-            return String(localized: "media.downloadVideo", defaultValue: "Télécharger la vidéo", bundle: .main)
-        case .downloading:
-            return String(localized: "common.downloading", defaultValue: "Téléchargement…", bundle: .main)
-        }
-    }
-
-    @ViewBuilder
-    private var buttonContent: some View {
-        // Glyphes/label figés : contenus d'un contrôle circulaire de taille
-        // fixe (56/64pt) — les scaler déborderait le cercle. État porté par
-        // `playOrDownloadAccessibilityLabel` sur le bouton parent.
-        switch availability {
-        case .ready:
-            Image(systemName: "play.fill")
-                .font(.system(size: 22, weight: .bold))
-                .foregroundColor(.white)
-                .offset(x: 2)
-        case .needsDownload:
-            VStack(spacing: 2) {
-                Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.white)
-                if attachment.fileSize > 0 {
-                    Text(AttachmentDownloader.fmt(Int64(attachment.fileSize)))
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.9))
-                }
-            }
-        case .downloading(let progress):
-            if progress > 0 {
-                Circle()
-                    .trim(from: 0, to: progress)
-                    .stroke(Color.white, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .frame(width: 32, height: 32)
-                    .animation(.linear(duration: 0.2), value: progress)
-            } else {
-                ProgressView()
-                    .tint(.white)
-                    .scaleEffect(0.9)
-            }
-        }
     }
 }

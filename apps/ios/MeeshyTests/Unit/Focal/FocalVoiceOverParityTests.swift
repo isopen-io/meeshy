@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// F-090 (WS-11) — VoiceOver : libellés composés, ordre de lecture, éléments
@@ -39,7 +40,7 @@ final class FocalVoiceOverParityTests: XCTestCase {
         attachments: BubbleContent.Attachments = .none,
         editedAt: Date? = nil,
         isPinned: Bool = false,
-        ephemeral: BubbleContent.Ephemeral? = nil,
+        protection: MessageProtectionDescriptor = .unprotected,
         reactions: [MeeshyReactionSummary] = [],
         deliveryStatus: MeeshyMessage.DeliveryStatus? = nil
     ) -> BubbleContent {
@@ -56,11 +57,11 @@ final class FocalVoiceOverParityTests: XCTestCase {
             reply: nil,
             attachments: attachments,
             location: nil,
-            ephemeral: ephemeral,
+            protection: protection,
             isBlurred: false,
             isViewOnce: false,
             isPinned: isPinned,
-            isForwarded: false,
+            forwardAttribution: nil,
             editedAt: editedAt,
             isEditSaving: false,
             hasEditHistory: false,
@@ -135,22 +136,54 @@ final class FocalVoiceOverParityTests: XCTestCase {
     /// leur ordre RELATIF une fois tous présents ensemble — ce test comble
     /// ce trou avec les six segments de fin réunis sur UN seul message.
     func test_compose_trailingSegments_respectTheFrozenOrder() {
+        let deadline = Date().addingTimeInterval(240)
+        let ephemeralDescriptor = MessageProtectionDescriptor(
+            badges: [.ephemeral(.running(deadline: deadline))],
+            ephemeralState: .running(deadline: deadline)
+        )
         let content = makeContent(
             isMe: true,
             text: "Voilà",
             editedAt: Date(),
             isPinned: true,
-            ephemeral: BubbleContent.Ephemeral(expiresAt: Date()),
+            protection: ephemeralDescriptor,
             reactions: [MeeshyReactionSummary(emoji: "👍", count: 2)],
             deliveryStatus: .read
         )
         let parts = MessageAccessibilityLabelComposer.compose(content).components(separatedBy: ", ")
 
         let timeIndex = parts.firstIndex(of: "10:41")!
-        let deliveryIndex = parts.firstIndex(of: "lu")!
+        // The catalog, not the French word: `a11y.delivery.read` was ABSENT from the
+        // catalog until 270i, so `String(localized:)` returned its `defaultValue` —
+        // « lu » — in every locale, and this literal matched anywhere. Localizing the
+        // key made the CI simulator (English) compose « read », and the force-unwrap
+        // below trapped. A test that hardcodes a source-language string passes only
+        // while the string is NOT localized.
+        let deliveryIndex = parts.firstIndex(of: String(localized: "a11y.delivery.read", bundle: .main))!
         let editedIndex = parts.firstIndex(of: String(localized: "a11y.message.edited", bundle: .main))!
         let pinnedIndex = parts.firstIndex(of: String(localized: "a11y.message.pinned", bundle: .main))!
-        let ephemeralIndex = parts.firstIndex(of: String(localized: "a11y.message.ephemeral", bundle: .main))!
+        // #7452 — le segment éphémère dit désormais l'ÉCHÉANCE, et il vient du
+        // site unique (`MessageProtectionChrome.accessibilityLabels`). On le
+        // cherche par sa RACINE — tout ce qui précède le premier chiffre —
+        // parce que le temps restant peut glisser d'une seconde entre la
+        // composition et l'assertion, et qu'une égalité stricte ferait un
+        // témoin intermittent.
+        //
+        // #7513 — et la racine se prend dans le MÊME découpage que le libellé
+        // composé. « Message éphémère, disparaît dans 4 minutes » porte
+        // lui-même une virgule : la racine « tout ce qui précède le premier
+        // chiffre » CHEVAUCHE alors la césure de `components(separatedBy: ", ")`
+        // et ne préfixe plus AUCUNE part — `firstIndex {…}!` explosait, et le
+        // témoin tombait en signal trap plutôt qu'en assertion.
+        //
+        // > Chercher une sous-chaîne dans une liste issue d'un découpage exige
+        // > de la découper d'abord par le MÊME séparateur. Sinon la recherche
+        // > porte sur une forme que la liste ne peut pas contenir.
+        let ephemeralSample = MessageProtectionChrome.accessibilityLabels(for: ephemeralDescriptor)[0]
+        let ephemeralHead = ephemeralSample.components(separatedBy: ", ").first ?? ephemeralSample
+        let ephemeralStem = String(ephemeralHead.prefix { !$0.isNumber })
+        XCTAssertFalse(ephemeralStem.isEmpty)
+        let ephemeralIndex = parts.firstIndex { $0.hasPrefix(ephemeralStem) }!
         let reactionsIndex = parts.firstIndex { $0.contains("👍") }!
 
         XCTAssertTrue(timeIndex < deliveryIndex, "heure doit précéder l'accusé de livraison")
@@ -168,7 +201,7 @@ final class FocalVoiceOverParityTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Focal/Row")
+            .appendingPathComponent("Meeshy/Features/Focal/Row")
     }
 
     /// Pour chaque `Image(systemName:` de `Focal/Row/**`, vérifie qu'une des

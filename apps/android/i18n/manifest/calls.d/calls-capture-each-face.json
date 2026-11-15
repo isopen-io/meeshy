@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.faces",
+          "androidName": "call_capture_faces",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.faces.saved",
+          "androidName": "call_capture_faces_saved",
+          "status": "adopted"
+        },
+        {
+          "androidName": "call_capture_faces_hint",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

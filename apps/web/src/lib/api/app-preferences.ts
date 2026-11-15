@@ -1,0 +1,248 @@
+import * as z from 'zod/mini';
+import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
+
+import { unwrap } from './client';
+import type { DataSource } from './config';
+import type { ApiResult, HttpTransport } from './http';
+
+/**
+ * **LE PORT DES RÉGLAGES D'USAGE** (#5563) — `GET`/`PATCH me.preferences`,
+ * les routes unifiées de #4181 (`services/gateway/src/routes/me/preferences/
+ * unified-routes.ts`). Miroir `UserPreferencesManager` (iOS), limité à ce que
+ * l'écran montre.
+ *
+ * **Un réglage n'entre ici que si la passerelle l'OBÉIT** (loi 4 : un contrôle
+ * existe s'il a un effet) :
+ *  - `application.theme` — relu par iOS à chaque synchronisation
+ *    (`ThemeManager.observeRemoteThemeSync`) ;
+ *  - `notification.pushEnabled` / `soundEnabled` — la porte et la sourdine de
+ *    `PushNotificationService` (`shouldSendPush`, `muted`) ;
+ *  - `notification.contactActivityEnabled` — la RÉCEPTION de « X était sur
+ *    Meeshy récemment » (#8285) ;
+ *  - `notification.gameEnabled` — les notifications du JEU (invitation et
+ *    acceptation de duo, résultat de ligue, étape de saison), que `GameNotifier`
+ *    lit avant tout autre garde (#9490) ; absente côté serveur : reçues ;
+ *  - `notification.gamePhotoEnabled` — « Moments à immortaliser » (#10268) : le
+ *    PUSH d'une étape franchie app fermée, que la porte du type
+ *    `game_photo_moment` (`notifications/type-preference.ts`) lit après
+ *    `gameEnabled` ; absente côté serveur : reçus ;
+ *  - `notification.bringEnabled` — « Recevoir des Bring » (#16588), l'interrupteur
+ *    GLOBAL que `BringService.recipientPreferences` lit avant de faire sonner :
+ *    coupé, chaque émetteur lit « Bring indisponible » ; absent côté serveur :
+ *    reçus ;
+ *  - `privacy.showOnlineStatus` / `showLastSeen` — `PresenceVisibilityService`
+ *    et l'audience de `user:status` (`socketio/presence-audience.ts`) ;
+ *  - `privacy.showReadReceipts` — `MessageReadStatusService`,
+ *    `MeeshySocketIOManager` ;
+ *  - `privacy.showTypingIndicator` — `PrivacyPreferencesService` ;
+ *  - `privacy.hideProfileFromSearch` — toutes les recherches par identifiant
+ *    (numéro, e-mail, carnet) et l'annonce « X a rejoint Meeshy » (#8104, #8105) ;
+ *  - `privacy.acceptCallsFromNonContacts` — la porte de sonnerie des appels
+ *    (`services/calls/callRingPolicy.ts`, #8073) ;
+ *  - `privacy.notifyContactsOnReturn` — l'ÉMISSION de « X était sur Meeshy
+ *    récemment » vers les amis et les porteurs du numéro ou de l'e-mail
+ *    (#8285), jamais quand la présence est masquée ;
+ *  - `privacy.saveMediaToGallery` — « Sauvegarder média » (#14641), la porte
+ *    de l'enregistrement automatique des médias reçus dans la galerie de la
+ *    coque Android (`gallery/auto-save-runtime.ts`), synchronisée avec iOS ;
+ *    ABSENTE à la lecture (ancien serveur) : coupée — un média ne rejoint la
+ *    galerie que si on le veut ;
+ *  - `privacy.allowAnalytics` — LUE seulement (#10502) : la bascule
+ *    « Analytique » d'iOS, qui gouverne le consentement que la télémétrie
+ *    déclare (`lib/telemetry/analytics-consent.ts`) ; coupée ⇒ `denied`, et
+ *    la passerelle ne range alors aucune ligne de comportement. OPTIONNELLE à
+ *    la lecture : absente, elle reste INCONNUE, jamais un refus ni un accord.
+ * Les vibrations (aucun lecteur serveur, aucun effet web) et le téléchargement
+ * automatique des médias (#5563, issue dédiée) n'y sont PAS.
+ *
+ * **La lecture est une PROJECTION** : `?fields=` ne demande que ces seize
+ * valeurs, et le décodeur n'en laisse entrer aucune autre — le cache de
+ * requêtes est persisté dans le `localStorage` (`query-client.ts`). Une valeur
+ * de mauvais type rend la lecture ILLISIBLE plutôt qu'une valeur devinée : une
+ * bascule de confidentialité affichée à tort « désactivée » ferait croire au
+ * lecteur qu'il est caché quand il ne l'est pas.
+ */
+
+export const APP_PREFERENCES_QUERY_KEY = ['me', 'app-preferences'] as const;
+
+export type AppPreferencesDeps = { readonly source: DataSource; readonly transport: HttpTransport };
+
+const ThemeMode = z.enum(['light', 'dark', 'auto']);
+
+const Application = z.object({ theme: ThemeMode });
+/** `gameEnabled`, `gamePhotoEnabled` et `bringEnabled` sont OPTIONNELS à la lecture : un serveur qui ne les sert pas (avant #9490, #10175, #14407) veut dire « reçu ». */
+const Notification = z.object({
+  pushEnabled: z.boolean(),
+  soundEnabled: z.boolean(),
+  contactActivityEnabled: z.boolean(),
+  bringEnabled: z.optional(z.boolean()),
+  gameEnabled: z.optional(z.boolean()),
+  gamePhotoEnabled: z.optional(z.boolean()),
+});
+const Privacy = z.object({
+  showOnlineStatus: z.boolean(),
+  showLastSeen: z.boolean(),
+  showReadReceipts: z.boolean(),
+  showTypingIndicator: z.boolean(),
+  hideProfileFromSearch: z.boolean(),
+  acceptCallsFromNonContacts: z.boolean(),
+  notifyContactsOnReturn: z.boolean(),
+  saveMediaToGallery: z.optional(z.boolean()),
+  allowAnalytics: z.optional(z.boolean()),
+});
+
+const Complete = z.object({ application: Application, notification: Notification, privacy: Privacy });
+const Served = z.object({
+  application: z.optional(Application),
+  notification: z.optional(Notification),
+  privacy: z.optional(Privacy),
+});
+
+export type ThemeMode = z.infer<typeof ThemeMode>;
+
+export type AppPreferences = Readonly<
+  z.infer<typeof Application> &
+    Omit<z.infer<typeof Notification>, 'gameEnabled' | 'gamePhotoEnabled' | 'bringEnabled'> &
+    Omit<z.infer<typeof Privacy>, 'saveMediaToGallery'> & {
+      readonly gameEnabled: boolean;
+      readonly gamePhotoEnabled: boolean;
+      readonly bringEnabled: boolean;
+      readonly saveMediaToGallery: boolean;
+    }
+>;
+
+export type PreferencesPatch = Partial<AppPreferences>;
+
+export type PreferenceCategory = 'application' | 'notification' | 'privacy';
+
+/** Chaque réglage, et la catégorie de la passerelle qui le range. */
+export const APP_PREFERENCE_FIELDS = {
+  theme: 'application',
+  pushEnabled: 'notification',
+  soundEnabled: 'notification',
+  contactActivityEnabled: 'notification',
+  bringEnabled: 'notification',
+  gameEnabled: 'notification',
+  gamePhotoEnabled: 'notification',
+  showOnlineStatus: 'privacy',
+  showLastSeen: 'privacy',
+  showReadReceipts: 'privacy',
+  showTypingIndicator: 'privacy',
+  hideProfileFromSearch: 'privacy',
+  acceptCallsFromNonContacts: 'privacy',
+  notifyContactsOnReturn: 'privacy',
+  saveMediaToGallery: 'privacy',
+  allowAnalytics: 'privacy',
+} as const satisfies Readonly<Record<keyof AppPreferences, PreferenceCategory>>;
+
+type PreferenceKey = keyof typeof APP_PREFERENCE_FIELDS;
+
+const PREFERENCE_KEYS = Object.keys(APP_PREFERENCE_FIELDS) as readonly PreferenceKey[];
+
+const FIELDS_QUERY = PREFERENCE_KEYS.map((key) => `${APP_PREFERENCE_FIELDS[key]}.${key}`).join(',');
+
+export function decodeAppPreferences(raw: unknown): AppPreferences | null {
+  const parsed = Complete.safeParse(raw);
+  if (!parsed.success) return null;
+  const { allowAnalytics, ...privacy } = parsed.data.privacy;
+  return {
+    ...parsed.data.application,
+    ...parsed.data.notification,
+    ...privacy,
+    ...(allowAnalytics === undefined ? {} : { allowAnalytics }),
+    gameEnabled: parsed.data.notification.gameEnabled ?? true,
+    gamePhotoEnabled: parsed.data.notification.gamePhotoEnabled ?? true,
+    bringEnabled: parsed.data.notification.bringEnabled ?? true,
+    saveMediaToGallery: parsed.data.privacy.saveMediaToGallery ?? false,
+  };
+}
+
+export function decodeServedPreferences(raw: unknown): PreferencesPatch | null {
+  const parsed = Served.safeParse(raw);
+  if (!parsed.success) return null;
+  const { gameEnabled, gamePhotoEnabled, bringEnabled, ...notification } = parsed.data.notification ?? {};
+  const { allowAnalytics, saveMediaToGallery, ...privacy } = parsed.data.privacy ?? {};
+  return {
+    ...parsed.data.application,
+    ...notification,
+    ...(gameEnabled === undefined ? {} : { gameEnabled }),
+    ...(gamePhotoEnabled === undefined ? {} : { gamePhotoEnabled }),
+    ...(bringEnabled === undefined ? {} : { bringEnabled }),
+    ...privacy,
+    ...(allowAnalytics === undefined ? {} : { allowAnalytics }),
+    ...(saveMediaToGallery === undefined ? {} : { saveMediaToGallery }),
+  };
+}
+
+export type PreferencesPatchBody = Partial<Record<PreferenceCategory, Readonly<Record<string, boolean | ThemeMode>>>>;
+
+export function preferencesPatchBody(patch: PreferencesPatch): PreferencesPatchBody {
+  return PREFERENCE_KEYS.reduce<PreferencesPatchBody>((body, key) => {
+    const value = patch[key];
+    if (value === undefined) return body;
+    const category = APP_PREFERENCE_FIELDS[key];
+    return { ...body, [category]: { ...body[category], [key]: value } };
+  }, {});
+}
+
+const withSignal = (signal: AbortSignal | undefined) => (signal === undefined ? {} : { signal });
+
+export async function loadAppPreferences(
+  params: AppPreferencesDeps & { readonly signal?: AbortSignal },
+): Promise<ApiResult<AppPreferences>> {
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    const { fixtureAppPreferences } = await import('./fixtures-app-preferences');
+    return { ok: true, data: fixtureAppPreferences() };
+  }
+  const result = await params.transport.request<unknown>({
+    method: 'GET',
+    path: `${meEndpoints.preferences}?fields=${FIELDS_QUERY}`,
+    ...withSignal(params.signal),
+  });
+  if (!result.ok) return result;
+  const preferences = decodeAppPreferences(result.data);
+  return preferences === null ? { ok: false, status: 0, error: 'Réglages illisibles' } : { ok: true, data: preferences };
+}
+
+export async function patchAppPreferences(deps: AppPreferencesDeps, patch: PreferencesPatch): Promise<ApiResult<PreferencesPatch>> {
+  if (__FIXTURES__ && deps.source === 'fixtures') {
+    const { fixturePatchAppPreferences } = await import('./fixtures-app-preferences');
+    return { ok: true, data: fixturePatchAppPreferences(patch) };
+  }
+  const result = await deps.transport.request<unknown>({
+    method: 'PATCH',
+    path: meEndpoints.preferences,
+    body: preferencesPatchBody(patch),
+  });
+  if (!result.ok) return result;
+  const served = decodeServedPreferences(result.data);
+  return served === null ? { ok: false, status: 0, error: 'Réglages illisibles' } : { ok: true, data: served };
+}
+
+/**
+ * **TRENTE MINUTES DE FRAÎCHEUR** (#6974) — le cas le PLUS net du lot : des
+ * réglages n'ont qu'un auteur, et il est assis devant l'écran. `routes/
+ * settings.tsx:154` les relisait pourtant à chaque retour de focus passé les
+ * 30 s du défaut (`query-client.ts:234`).
+ *
+ * Ce qui autorise la fenêtre : `app-preferences-actions.ts` écrit le cache aux
+ * TROIS temps d'un basculement (`:62` l'avance optimiste, `:69` le retour
+ * arrière sur échec, `:74` la valeur SERVIE) — un réglage changé ici n'attend
+ * jamais une relecture pour s'afficher.
+ *
+ * Ce que la fenêtre coûte : aucun événement socket ne porte
+ * `['me', 'app-preferences']` (vérifié sur `socket.ts`). Un réglage changé
+ * depuis un AUTRE appareil met jusqu'à 30 min à arriver dans cet onglet — ce
+ * qui est exactement la situation où le lecteur vient de le changer lui-même
+ * ailleurs, et a déjà vu le résultat là-bas.
+ */
+export const APP_PREFERENCES_STALE_TIME = 30 * 60_000;
+
+export function appPreferencesQueryOptions(deps: AppPreferencesDeps) {
+  return {
+    queryKey: APP_PREFERENCES_QUERY_KEY,
+    staleTime: APP_PREFERENCES_STALE_TIME,
+    queryFn: async ({ signal }: { readonly signal?: AbortSignal }) =>
+      unwrap(await loadAppPreferences({ ...deps, ...withSignal(signal) })),
+  };
+}

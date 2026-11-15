@@ -1,0 +1,649 @@
+package me.meeshy.app.chat
+
+import androidx.work.WorkManager
+import com.google.common.truth.Truth.assertThat
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.justRun
+import io.mockk.mockk
+import io.mockk.slot
+import io.mockk.verify
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.chat.InMemoryConversationDraftStore
+import me.meeshy.sdk.composer.ComposerAffordances
+import me.meeshy.sdk.conversation.LocalMessage
+import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.lang.LanguageIdentification
+import me.meeshy.sdk.lang.LanguageIdentifying
+import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.media.MediaUploadQueue
+import me.meeshy.sdk.mention.MentionSearch
+import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.MessageSticker
+import me.meeshy.sdk.model.ConversationDraft
+import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.reaction.InMemoryRecentEmojiStore
+import me.meeshy.sdk.session.InMemoryAnonymousSessionStore
+import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.MessageSocketManager
+import org.junit.Test
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class ChatComposerControllerTest {
+
+    private val me = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+
+    private class Rig(
+        val controller: ChatComposerController,
+        val flow: MutableStateFlow<ChatUiState>,
+        val messages: MutableStateFlow<List<LocalMessage>>,
+        val repo: MessageRepository,
+        val socket: MessageSocketManager,
+        val workManager: WorkManager,
+        val drafts: InMemoryConversationDraftStore,
+        val uploads: MediaUploadQueue,
+        val holder: ComposerTextHolder,
+        val recents: InMemoryRecentEmojiStore,
+    ) {
+        val state: ChatUiState get() = flow.value
+        val text: ComposerTextState get() = holder.state
+    }
+
+    private fun TestScope.rig(
+        initial: ChatUiState = ChatUiState(conversationId = "c1"),
+        initialText: String = "",
+        loaded: List<LocalMessage> = emptyList(),
+        user: MeeshyUser? = me,
+        drafts: Map<String, ConversationDraft> = emptyMap(),
+        identifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
+    ): Rig {
+        val flow = MutableStateFlow(initial)
+        val messages = MutableStateFlow(loaded)
+        val repo = mockk<MessageRepository>(relaxed = true)
+        coEvery { repo.sendOptimistic(any(), any(), any(), any(), any()) } returns "cmid_1"
+        coEvery { repo.editOptimistic(any(), any()) } returns true
+        val session = mockk<SessionRepository>()
+        every { session.currentUser } returns MutableStateFlow(user)
+        val socket = mockk<MessageSocketManager>()
+        justRun { socket.emitTypingStart(any()) }
+        justRun { socket.emitTypingStop(any()) }
+        val workManager = mockk<WorkManager>(relaxed = true)
+        val draftStore = InMemoryConversationDraftStore(drafts)
+        val uploads = mockk<MediaUploadQueue>(relaxed = true)
+        coEvery { uploads.enqueue(any(), any(), any()) } returns "upload-cmid"
+        val clock = object : CacheClock {
+            override fun nowMillis(): Long = NOW
+        }
+        val holder = ComposerTextHolder(initialText)
+        val recents = InMemoryRecentEmojiStore()
+        val controller = ChatComposerController(
+            scope = screenScope(),
+            state = ChatStateAccess(flow),
+            conversationId = "c1",
+            messages = messages,
+            messageRepository = repo,
+            sessionRepository = session,
+            draftStore = draftStore,
+            mediaUploadQueue = uploads,
+            mentionSearch = mockk<MentionSearch>(relaxed = true),
+            anonymousSessionStore = InMemoryAnonymousSessionStore(null),
+            messageSocketManager = socket,
+            workManager = workManager,
+            clock = clock,
+            composerText = holder,
+            recentEmojis = recents,
+            languageIdentifier = identifier,
+        )
+        return Rig(controller, flow, messages, repo, socket, workManager, draftStore, uploads, holder, recents)
+    }
+
+    // --- sending -------------------------------------------------------------------------------
+
+    @Test
+    fun `a send posts the trimmed draft, clears the composer and queues the flush`() = runTest {
+        val r = rig()
+        r.controller.onDraftChange("  bonjour  ")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c1", "bonjour", any(), me, null) }
+        assertThat(r.text.text).isEmpty()
+        assertThat(r.text.revision).isEqualTo(1)
+        assertThat(r.state.lastSelfSentAtMillis).isEqualTo(NOW)
+        verify(exactly = 1) { r.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun `a send stamps the language the identifier recognised with enough confidence`() = runTest {
+        val r = rig(identifier = LanguageIdentifying { LanguageIdentification("en", 0.9) })
+        r.controller.onDraftChange("Hello there my dear friend")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c1", "Hello there my dear friend", "en", me, null) }
+    }
+
+    @Test
+    fun `a doubtful identification falls back to the sender language`() = runTest {
+        val r = rig(identifier = LanguageIdentifying { LanguageIdentification("en", 0.4) })
+        r.controller.onDraftChange("Hello there my dear friend")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c1", "Hello there my dear friend", "fr", me, null) }
+    }
+
+    @Test
+    fun `a manual language pick wins over identification`() = runTest {
+        val r = rig(identifier = LanguageIdentifying { LanguageIdentification("en", 0.99) })
+        r.controller.onDraftChange("Hello there my dear friend")
+        r.controller.onComposerLanguagePicked("es")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c1", "Hello there my dear friend", "es", me, null) }
+    }
+
+    @Test
+    fun `a blank draft and a signed-out viewer send nothing`() = runTest {
+        val blank = rig()
+        blank.controller.onDraftChange("   ")
+        blank.controller.send()
+
+        val signedOut = rig(user = null)
+        signedOut.controller.onDraftChange("hello")
+        signedOut.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { blank.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { signedOut.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+        assertThat(signedOut.text.text).isEqualTo("hello")
+    }
+
+    @Test
+    fun `a running slow-mode cooldown refuses the send and keeps the draft`() = runTest {
+        val r = rig(
+            ChatUiState(conversationId = "c1", slowModeSeconds = 30, lastSelfSentAtMillis = NOW - 1_000L),
+        )
+        r.controller.onDraftChange("too soon")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+        assertThat(r.text.text).isEqualTo("too soon")
+    }
+
+    @Test
+    fun `a failing repository surfaces the error and the draft is already cleared`() = runTest {
+        val r = rig()
+        coEvery { r.repo.sendOptimistic(any(), any(), any(), any(), any()) } throws RuntimeException("disk full")
+        r.controller.onDraftChange("hello")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        assertThat(r.state.errorMessage).isEqualTo("disk full")
+        assertThat(r.text.text).isEmpty()
+    }
+
+    // --- reply and edit ------------------------------------------------------------------------
+
+    @Test
+    fun `replying arms the target and the next send carries it`() = runTest {
+        val r = rig(loaded = listOf(LocalMessage(ApiMessage(id = "m1", conversationId = "c1", senderId = "other", content = "yo"))))
+
+        r.controller.startReply("m1")
+        assertThat(r.state.replyingToMessageId).isEqualTo("m1")
+        r.controller.onDraftChange("yes")
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c1", "yes", any(), me, "m1") }
+        assertThat(r.state.replyingToMessageId).isNull()
+    }
+
+    @Test
+    fun `a reply to a message that is not loaded is inert, and cancelling disarms it`() = runTest {
+        val r = rig(loaded = listOf(LocalMessage(ApiMessage(id = "m1", conversationId = "c1", senderId = "other", content = "yo"))))
+
+        r.controller.startReply("ghost")
+        assertThat(r.state.replyingToMessageId).isNull()
+
+        r.controller.startReply("m1")
+        r.controller.cancelReply()
+        assertThat(r.state.replyingToMessageId).isNull()
+    }
+
+    @Test
+    fun `editing a recent own message loads it into the composer and the send applies the edit`() = runTest {
+        val own = LocalMessage(
+            ApiMessage(
+                id = "m1",
+                conversationId = "c1",
+                senderId = "me",
+                content = "typo",
+                createdAt = java.time.Instant.ofEpochMilli(NOW - 60_000L).toString(),
+            ),
+        )
+        val r = rig(loaded = listOf(own))
+
+        r.controller.startEdit("m1")
+        assertThat(r.state.editingMessageId).isEqualTo("m1")
+        assertThat(r.text.text).isEqualTo("typo")
+
+        r.controller.onDraftChange("fixed")
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.editOptimistic("m1", "fixed") }
+        coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+        assertThat(r.state.editingMessageId).isNull()
+        assertThat(r.text.text).isEmpty()
+    }
+
+    @Test
+    fun `cancelling an edit gives back the draft that was being written`() = runTest {
+        val r = rig(loaded = listOf(ownRecent("m1", "typo")))
+        r.controller.onDraftChange("un brouillon")
+
+        r.controller.startEdit("m1")
+        r.controller.onDraftChange("typo corrigé")
+        r.controller.cancelEdit()
+
+        assertThat(r.state.editingMessageId).isNull()
+        assertThat(r.text.text).isEqualTo("un brouillon")
+    }
+
+    @Test
+    fun `sending an edit gives back the draft that was being written`() = runTest {
+        val r = rig(loaded = listOf(ownRecent("m1", "typo")))
+        r.controller.onDraftChange("un brouillon")
+
+        r.controller.startEdit("m1")
+        r.controller.onDraftChange("fixed")
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.editOptimistic("m1", "fixed") }
+        assertThat(r.text.text).isEqualTo("un brouillon")
+    }
+
+    @Test
+    fun `chaining two edits keeps the draft from before the first one`() = runTest {
+        val r = rig(loaded = listOf(ownRecent("m1", "premier"), ownRecent("m2", "second")))
+        r.controller.onDraftChange("mon texte")
+
+        r.controller.startEdit("m1")
+        r.controller.startEdit("m2")
+        r.controller.cancelEdit()
+
+        assertThat(r.text.text).isEqualTo("mon texte")
+    }
+
+    @Test
+    fun `an edit without any change sends nothing and leaves edit mode`() = runTest {
+        val r = rig(loaded = listOf(ownRecent("m1", "inchangé")))
+
+        r.controller.startEdit("m1")
+        r.controller.onDraftChange("  inchangé ")
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { r.repo.editOptimistic(any(), any()) }
+        assertThat(r.state.editingMessageId).isNull()
+        assertThat(r.text.text).isEmpty()
+    }
+
+    @Test
+    fun `the emojis of a sent message join the recent emojis, the last typed first`() = runTest {
+        val r = rig()
+        r.controller.onDraftChange("Bravo 🎉 merci ❤️")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        assertThat(r.recents.history.value).containsExactly("❤️", "🎉").inOrder()
+    }
+
+    // --- la langue choisie tient (#12484) ---------------------------------------------------------
+
+    @Test
+    fun `a french draft typed letter by letter keeps the french pill and leaves in french`() = runTest {
+        val r = rig(identifier = LanguageIdentifying { LanguageIdentification("pt", 0.4) })
+        val text = "Recette offline Android"
+
+        val pills = text.indices.map { end ->
+            r.controller.onDraftChange(text.substring(0, end + 1))
+            r.state.composerLanguageCode
+        }
+        r.controller.send()
+        advanceUntilIdle()
+
+        assertThat(pills.toSet()).containsExactly("fr")
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c1", text, "fr", me, null) }
+    }
+
+    @Test
+    fun `a manual pick survives the draft and the send`() = runTest {
+        val r = rig(identifier = LanguageIdentifying { LanguageIdentification("pt", 0.99) })
+        r.controller.onComposerLanguagePicked("es")
+        r.controller.onDraftChange("Recette offline Android")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c1", "Recette offline Android", "es", me, null) }
+    }
+
+    @Test
+    fun `leaving an edit empties the field and gives back the default pill`() = runTest {
+        val r = rig(loaded = listOf(ownRecent("m1", "typo")))
+
+        r.controller.startEdit("m1")
+        r.controller.onDraftChange("Il gatto è sul tavolo perché non vuole più mangiare")
+        assertThat(r.state.composerLanguageCode).isEqualTo("it")
+        r.controller.cancelEdit()
+
+        assertThat(r.text.text).isEmpty()
+        assertThat(r.state.composerLanguageCode).isEqualTo("fr")
+    }
+
+    @Test
+    fun `applying an edit gives back the pill of the restored draft`() = runTest {
+        val r = rig(loaded = listOf(ownRecent("m1", "typo")))
+
+        r.controller.startEdit("m1")
+        r.controller.onDraftChange("Il gatto è sul tavolo perché non vuole più mangiare")
+        r.controller.send()
+        advanceUntilIdle()
+
+        assertThat(r.text.text).isEmpty()
+        assertThat(r.state.composerLanguageCode).isEqualTo("fr")
+    }
+
+    private fun ownRecent(id: String, content: String) = LocalMessage(
+        ApiMessage(
+            id = id,
+            conversationId = "c1",
+            senderId = "me",
+            content = content,
+            createdAt = java.time.Instant.ofEpochMilli(NOW - 60_000L).toString(),
+        ),
+    )
+
+    @Test
+    fun `someone else's message cannot be edited`() = runTest {
+        val theirs = LocalMessage(ApiMessage(id = "m1", conversationId = "c1", senderId = "other", content = "yo"))
+        val r = rig(loaded = listOf(theirs))
+
+        r.controller.startEdit("m1")
+
+        assertThat(r.state.editingMessageId).isNull()
+        assertThat(r.text.text).isEmpty()
+    }
+
+    // --- drafts ----------------------------------------------------------------------------------
+
+    @Test
+    fun `typing auto-saves the draft and emptying the composer purges it`() = runTest {
+        val r = rig()
+
+        r.controller.onDraftChange("half a sentence")
+        advanceTimeBy(100)
+        assertThat(r.drafts.load("c1")?.text).isEqualTo("half a sentence")
+
+        r.controller.onDraftChange("")
+        advanceTimeBy(100)
+        assertThat(r.drafts.load("c1")).isNull()
+        r.controller.release()
+    }
+
+    @Test
+    fun `the stored draft is restored into an idle composer`() = runTest {
+        val r = rig(drafts = mapOf("c1" to ConversationDraft(conversationId = "c1", text = "unsent", replyToId = "m9")))
+
+        r.controller.restoreStoredDraft()
+
+        assertThat(r.text.text).isEqualTo("unsent")
+        assertThat(r.state.replyingToMessageId).isEqualTo("m9")
+        assertThat(r.text.revision).isEqualTo(1)
+    }
+
+    @Test
+    fun `a stored draft never overwrites what the viewer is already typing`() = runTest {
+        val r = rig(
+            initialText = "from a quick reply",
+            drafts = mapOf("c1" to ConversationDraft(conversationId = "c1", text = "unsent")),
+        )
+
+        r.controller.restoreStoredDraft()
+
+        assertThat(r.text.text).isEqualTo("from a quick reply")
+    }
+
+    // --- typing emission ---------------------------------------------------------------------------
+
+    @Test
+    fun `the first keystroke announces typing once and silence ends it`() = runTest {
+        val r = rig()
+
+        r.controller.onDraftChange("h")
+        r.controller.onDraftChange("he")
+        verify(exactly = 1) { r.socket.emitTypingStart("c1") }
+
+        advanceTimeBy(3_100)
+        verify(exactly = 1) { r.socket.emitTypingStop("c1") }
+    }
+
+    @Test
+    fun `tearing the screen down ends a typing emission that is still running`() = runTest {
+        val r = rig()
+        r.controller.onDraftChange("h")
+
+        r.controller.release()
+        r.controller.release()
+
+        verify(exactly = 1) { r.socket.emitTypingStop("c1") }
+    }
+
+    // --- end-to-end encryption (#13110) --------------------------------------------------------
+
+    @Test
+    fun `an end-to-end conversation sends no text — nothing leaves the device`() = runTest {
+        val r = rig(initial = ChatUiState(conversationId = "c1", encryptionMode = "e2ee"))
+        r.controller.onDraftChange("le code est 4417")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { r.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun `an end-to-end conversation sends no edit either`() = runTest {
+        val r = rig(initial = ChatUiState(conversationId = "c1", encryptionMode = "e2ee", editingMessageId = "m-old"))
+        r.controller.onDraftChange("texte modifié")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { r.repo.editOptimistic(any(), any()) }
+    }
+
+    @Test
+    fun `an end-to-end conversation offers no writing affordance and no reply`() {
+        val state = ChatUiState(conversationId = "c1", encryptionMode = "e2ee")
+
+        assertThat(state.isEndToEnd).isTrue()
+        assertThat(state.composerAffordances).isEqualTo(ComposerAffordances.CLOSED)
+        assertThat(state.viewerMayWrite).isFalse()
+    }
+
+    @Test
+    fun `a server-encrypted conversation still writes`() {
+        val state = ChatUiState(conversationId = "c1", encryptionMode = "server")
+
+        assertThat(state.isEndToEnd).isFalse()
+        assertThat(state.composerAffordances.canSendText).isTrue()
+        assertThat(state.viewerMayWrite).isTrue()
+    }
+
+    // --- sticker (#14334) -----------------------------------------------------------------------
+
+    private fun stickerFile(): java.io.File =
+        java.io.File.createTempFile("sticker", ".png").apply { writeBytes(byteArrayOf(1, 2, 3)); deleteOnExit() }
+
+    @Test
+    fun `#14334 a sticker leaves at once, its image queued and its recipe on the optimistic bubble`() = runTest {
+        val r = rig(initial = ChatUiState(conversationId = "c1", replyingToMessageId = "r1"))
+        val file = stickerFile()
+        val sticker = MessageSticker(templateId = "mee.mee-coucou", emoji = "👋")
+        val item = slot<MediaUploadItem>()
+        coEvery { r.uploads.enqueue(capture(item), any(), any()) } returns "upload-cmid"
+        val attachments = slot<List<ApiMessageAttachment>>()
+
+        r.controller.sendSticker(file, "image/png", sticker, 512, 512)
+        advanceUntilIdle()
+
+        assertThat(item.captured.mimeType).isEqualTo("image/png")
+        assertThat(item.captured.bytes.toList()).containsExactly(1.toByte(), 2.toByte(), 3.toByte()).inOrder()
+        coVerify(exactly = 1) {
+            r.repo.sendOptimistic(
+                conversationId = "c1", content = "", originalLanguage = "fr", sender = me, replyToId = "r1",
+                storyReplyToId = any(), forwardedFromId = any(), forwardedFromConversationId = any(), effects = any(),
+                messageType = "image", attachmentUploadCmids = listOf("upload-cmid"), attachments = capture(attachments),
+                location = any(), forwardedAttachmentIds = any(), sticker = sticker,
+            )
+        }
+        val bubble = attachments.captured.single()
+        assertThat(bubble.id).isEqualTo("upload-cmid")
+        assertThat(bubble.fileUrl).isEqualTo("file://" + file.absolutePath)
+        assertThat(bubble.width).isEqualTo(512)
+        assertThat(r.state.replyingToMessageId).isNull()
+        verify(exactly = 1) { r.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun `#14334 an end-to-end conversation sends no sticker`() = runTest {
+        val r = rig(initial = ChatUiState(conversationId = "c1", encryptionMode = "e2ee"))
+
+        r.controller.sendSticker(stickerFile(), "image/png", MessageSticker(emoji = "🔥"), 512, 512)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { r.uploads.enqueue(any(), any(), any()) }
+        verify(exactly = 0) { r.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    // --- shared place (#13316) -----------------------------------------------------------------
+
+    private val tourEiffel = SharedPlace(48.8584, 2.2945, "Tour Eiffel", "Paris", "landmark")
+
+    @Test
+    fun `a place alone is sendable — empty text, the place rides the request`() = runTest {
+        val r = rig()
+        r.controller.setPendingPlace(tourEiffel)
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            r.repo.sendOptimistic(conversationId = "c1", content = "", originalLanguage = any(), sender = me, location = tourEiffel)
+        }
+        assertThat(r.controller.pendingPlace.value).isNull()
+    }
+
+    @Test
+    fun `a place with text travels on the same message`() = runTest {
+        val r = rig()
+        r.controller.onDraftChange("rendez-vous ici")
+        r.controller.setPendingPlace(tourEiffel)
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            r.repo.sendOptimistic(conversationId = "c1", content = "rendez-vous ici", originalLanguage = any(), sender = me, location = tourEiffel)
+        }
+    }
+
+    @Test
+    fun `removing the pending place leaves nothing to send`() = runTest {
+        val r = rig()
+        r.controller.setPendingPlace(tourEiffel)
+        r.controller.clearPendingPlace()
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `an end-to-end conversation sends no place — fail closed`() = runTest {
+        val r = rig(initial = ChatUiState(conversationId = "c1", encryptionMode = "e2ee"))
+        r.controller.setPendingPlace(tourEiffel)
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+    }
+
+    private companion object {
+        const val NOW = 1_700_000_000_000L
+    }
+
+    // --- end-to-end: no draft in clear on disk (#14632) ----------------------------------------
+
+    private val endToEnd = ChatUiState(conversationId = "c1", encryptionMode = "e2ee", directPeerUserId = "bob", endToEndAvailable = true)
+
+    @Test
+    fun `typing in an end to end conversation never writes the draft to disk`() = runTest {
+        val r = rig(initial = endToEnd)
+
+        r.controller.onDraftChange("mon secret")
+        advanceUntilIdle()
+
+        assertThat(r.drafts.load("c1")).isNull()
+        assertThat(r.text.text).isEqualTo("mon secret")
+    }
+
+    @Test
+    fun `typing in an end to end conversation removes a draft written in clear before`() = runTest {
+        val r = rig(initial = endToEnd, drafts = mapOf("c1" to ConversationDraft(conversationId = "c1", text = "ancien clair")))
+
+        r.controller.onDraftChange("mon secret")
+        advanceUntilIdle()
+
+        assertThat(r.drafts.load("c1")).isNull()
+    }
+
+    @Test
+    fun `learning the conversation is end to end takes its stored draft off the disk but keeps it in the composer`() = runTest {
+        val r = rig(drafts = mapOf("c1" to ConversationDraft(conversationId = "c1", text = "ancien clair")))
+        r.controller.restoreStoredDraft()
+        r.flow.value = endToEnd
+
+        r.controller.forgetEndToEndDraftOnDisk()
+        advanceUntilIdle()
+
+        assertThat(r.drafts.load("c1")).isNull()
+        assertThat(r.text.text).isEqualTo("ancien clair")
+    }
+
+}

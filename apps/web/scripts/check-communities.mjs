@@ -1,0 +1,652 @@
+#!/usr/bin/env node
+/**
+ * SES COMMUNAUTÉS SE LISENT, S'OUVRENT ET SE CRÉENT — et on peut les atteindre (#6364).
+ *
+ * Les témoins `bun test` du lot prouvent les LOIS : la projection des charges
+ * de la passerelle, les bornes d'un brouillon, l'écriture du cache à la
+ * création, la recherche servie depuis le cache, où chaque pièce mène. Aucun ne
+ * traverse le CÂBLAGE ni la FEUILLE DE STYLE — une carte qu'un disque flottant
+ * recouvre, un nom blanc illisible sur une communauté jaune, un refus 409 qui ne
+ * se pose sous aucun champ, ou `/communities/new` lu comme l'identifiant d'une
+ * communauté les laissent tous verts. Ce gate les mesure dans un navigateur
+ * réel, sur le `dist` construit (source fixtures : trois communautés), dans les
+ * DEUX schémas et aux deux gabarits de la charte (390 × 844, 320 × 568) :
+ *
+ *  1. `/communities` rend la grille des trois communautés — plus l'écran
+ *     d'attente — et « + » mène à `/communities/new` ;
+ *  2. AU REPOS, chaque contrôle et chaque texte visible retombe sur lui-même à
+ *     son centre (`elementFromPoint`) — aucun disque flottant n'en vole un — et
+ *     chaque contrôle fait au moins 44 de haut ; chaque carte s'atteint une fois
+ *     amenée au milieu de l'écran ;
+ *  3. les textes tiennent AA dans les deux schémas — ceux des CARTES mesurés
+ *     contre le pixel le PLUS CLAIR réellement peint sous eux (texte masqué,
+ *     capture, luminance maximale), parce qu'un fond en dégradé ne se lit pas
+ *     dans `background-color` ;
+ *  4. une recherche se peint depuis le cache en moins d'une seconde, une
+ *     recherche sans réponse nomme ce qu'elle cherchait, et l'effacer rend la
+ *     grille ;
+ *  5. une carte ouvre SON détail (titre, compteurs, conversations), une
+ *     conversation ouvre SON fil, et une adresse inconnue rend le refus ;
+ *  6. la création : bouton désactivé tant que le nom manque, couple de focus
+ *     des trois champs, aperçu vivant, 409 posé SOUS l'identifiant, une
+ *     personne ajoutée dès la création (#6376, cibles de 44), puis une
+ *     création qui REMPLACE l'écran par le détail — qui dit que la personne y
+ *     est entrée — et se lit en tête de liste au retour ;
+ *  7. hors ligne, la liste reste lisible et le dit, et la création ne part pas ;
+ *     la pastille de synchronisation ne recouvre pas la recherche (#6401) ;
+ *  8. les membres (#6375) : le détail y mène, les rôles se lisent AA, un
+ *     administrateur repasse un modérateur membre et retire un membre confirmé ;
+ *  9. les réglages (#6377) : le créateur seul y entre, renomme sa communauté
+ *     (le détail le lit au retour), la supprime confirmée — un autre lecteur
+ *     n'a que le refus ;
+ * 10. les publications (#6379) : l'onglet « Publications » peint la carte du
+ *     Flux, un seul panneau à la fois, onglets AA et de 44, flèches au clavier ;
+ * 11. aucune erreur de page.
+ *
+ * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
+ */
+import { mkdir, stat } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import { launchChromium } from './lib/browser.mjs';
+import { startDistServer } from './lib/gate-server.mjs';
+import { contrastOf } from './lib/contrast.mjs';
+import { syncPillOverlap } from './lib/sync-pill-clearance.mjs';
+import { reachAtRest, resumeExclusions } from './lib/reach-at-rest.mjs';
+
+const DIST = new URL('../dist/', import.meta.url).pathname;
+/* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
+   repliait TOUT sur `index.html`, y compris un `/assets/*.js` dont la lecture
+   échouait — le navigateur rendait alors « Failed to fetch dynamically imported
+   module » pour une panne transitoire, sans aucune trace au journal. */
+const served = await startDistServer(DIST, { serviceWorker: false });
+const BASE = served.base;
+
+const CAPTURE_DIR = process.env.CAPTURE_DIR ?? null;
+if (CAPTURE_DIR !== null) await mkdir(CAPTURE_DIR, { recursive: true });
+
+const failures = [];
+const check = (ok, what) => {
+  if (ok) console.log(`  ok    ${what}`);
+  else failures.push(what);
+};
+
+const TAP_FLOOR = 44;
+const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+/** Le lecteur des fixtures (`fixtures-base.ts` › `VIEWER_ID`), créateur d'« Équipe déploiement ». */
+const SESSION = {
+  token: 'jwt-check-communities',
+  sessionToken: 'sess-check-communities',
+  user: { id: 'u-viewer', username: 'gate-viewer', displayName: 'Vous' },
+  expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+};
+const WCAG_AA = 4.5;
+
+const capture = async (page, name) => {
+  if (CAPTURE_DIR !== null) await page.screenshot({ path: join(CAPTURE_DIR, `${name}.png`) });
+};
+
+const textOf = (page, selector) => page.$eval(selector, (el) => (el.textContent ?? '').trim()).catch(() => null);
+
+const settle = (page) => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+
+/**
+ * LES CIBLES DU RELEVÉ AU REPOS — la mesure elle-même vit dans
+ * `lib/reach-at-rest.mjs`, SITE UNIQUE depuis #7040.
+ *
+ * Ce fichier en portait une copie, comme six autres gates. Toutes ouvraient sur
+ * un `visible()` qui RENVOYAIT UN TABLEAU VIDE pour un élément dont le centre
+ * sortait du viewport : un contrôle hors cadre ne cassait rien, n'apparaissait
+ * nulle part, et le gate restait vert avec un contrôle de moins. Un tel élément
+ * est désormais MESURÉ et rendu `ok: false` — et ce qui est légitimement hors
+ * cadre (écrêté par un conteneur, déclaré `inert`/`aria-hidden`) s'écarte sous
+ * une raison ÉCRITE, comptée par `resumeExclusions()`.
+ */
+const REACH = {
+  controls: 'header a, header button, [data-community-back], [data-community-search], #contenu a, #contenu button',
+  texts: '#contenu h1, [data-community-name], [data-community-counts], #contenu p, #contenu h2',
+};
+
+/** Chaque carte, amenée au milieu de l'écran puis mesurée. */
+const reachCards = async (page) => {
+  const ids = await page.$$eval('[data-community-card]', (els) => els.map((el) => el.getAttribute('data-community-card')));
+  const out = [];
+  for (const id of ids) {
+    out.push(
+      await page.evaluate(async (cardId) => {
+        const el = document.querySelector(`[data-community-card="${cardId}"]`);
+        el.scrollIntoView({ block: 'center' });
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return { carte: cardId, ok: hit !== null && el.contains(hit), hauteur: r.height };
+      }, id),
+    );
+  }
+  await page.evaluate(() => document.getElementById('contenu')?.scrollTo({ top: 0 }));
+  return out;
+};
+
+/**
+ * LE CONTRASTE D'UN TEXTE BLANC SUR CE QUI EST PEINT SOUS LUI — le texte et ses
+ * glyphes passent transparents le temps d'une capture de leur boîte, et la
+ * luminance la PLUS HAUTE de la capture est le pire fond. Le décodage se fait
+ * dans la page (Blob + `createImageBitmap`) : aucune requête, aucune CSP.
+ */
+const worstContrastUnderWhite = async (page, selector) => {
+  /* Le défilement d'abord, et SEUL : la boîte lue dans la même évaluation que
+     `scrollIntoView` est celle d'AVANT le défilement, et la capture tombait
+     alors sur le texte voisin — mesuré, un nom à 1,27:1 qui était la
+     description blanche de la carte, peinte là où le nom se trouvait. */
+  await page.$eval(selector, (el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  await settle(page);
+  await page.waitForTimeout(80);
+  /* Sous les LIGNES de texte réellement posées (`Range.getClientRects`), jamais
+     sous la boîte de l'élément : une boîte pleine largeur englobe l'anneau blanc
+     de l'avatar voisin, où aucune lettre n'est peinte. */
+  /* Deux pièges mesurés : un élément `line-clamp` rend aussi les rectangles de
+     ses lignes MASQUÉES (posés sur les compteurs voisins), et un texte
+     `sr-only` rend sa largeur NON rognée (jusque sur la carte d'à côté). Seuls
+     les nœuds de texte visibles comptent, rognés à la boîte de l'élément. */
+  const boxes = await page.$eval(selector, (el) => {
+    const own = el.getBoundingClientRect();
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const lines = [];
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      if (node.parentElement === null || node.parentElement.closest('.sr-only') !== null || (node.textContent ?? '').trim() === '') continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      for (const r of range.getClientRects()) {
+        const left = Math.max(r.left, own.left, 0);
+        const top = Math.max(r.top, own.top, 0);
+        const right = Math.min(r.right, own.right, innerWidth);
+        const bottom = Math.min(r.bottom, own.bottom, innerHeight);
+        if (right - left > 1 && bottom - top > 1) lines.push({ x: left, y: top, width: right - left, height: bottom - top });
+      }
+    }
+    [el, ...el.querySelectorAll('*')].forEach((node) => {
+      node.dataset.inkProbe = node.style.getPropertyValue('color');
+      node.style.setProperty('color', 'transparent', 'important');
+    });
+    return lines;
+  });
+  await settle(page);
+  const pngs = [];
+  for (const clip of boxes) pngs.push(await page.screenshot({ clip, animations: 'disabled' }));
+  await page.$eval(selector, (el) => {
+    [el, ...el.querySelectorAll('*')].forEach((node) => {
+      const previous = node.dataset.inkProbe ?? '';
+      node.style.removeProperty('color');
+      if (previous !== '') node.style.setProperty('color', previous);
+      delete node.dataset.inkProbe;
+    });
+  });
+  const brightest = await page.evaluate(async (images) => Math.max(0, ...(await Promise.all(images.map(async (b64) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = canvas.getContext('2d');
+    context.drawImage(bitmap, 0, 0);
+    const { data } = context.getImageData(0, 0, bitmap.width, bitmap.height);
+    const lin = (c) => {
+      const s = c / 255;
+      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    };
+    let max = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const l = 0.2126 * lin(data[i]) + 0.7152 * lin(data[i + 1]) + 0.0722 * lin(data[i + 2]);
+      if (l > max) max = l;
+    }
+    return max;
+  })))), pngs.map((png) => png.toString('base64')));
+  return Math.round((1.05 / (brightest + 0.05)) * 100) / 100;
+};
+
+/** Les quatre invariants du couple de focus (`check-field-focus.mjs`). */
+const focusCouples = async (page) => {
+  const selector = '#contenu .field-box :is(input, textarea)';
+  const count = await page.$$eval(selector, (els) => els.length);
+  const out = [];
+  for (let i = 0; i < count; i += 1) {
+    await page.evaluate(({ s, n }) => document.querySelectorAll(s)[n].blur(), { s: selector, n: i });
+    await page.waitForTimeout(120);
+    const rest = await page.evaluate(({ s, n }) => {
+      const box = getComputedStyle(document.querySelectorAll(s)[n].closest('.field-box'));
+      return { color: box.borderTopColor, width: box.borderTopWidth };
+    }, { s: selector, n: i });
+    await page.evaluate(({ s, n }) => document.querySelectorAll(s)[n].focus(), { s: selector, n: i });
+    await page.waitForTimeout(120);
+    out.push(
+      await page.evaluate(
+        ({ s, n, r }) => {
+          const el = document.querySelectorAll(s)[n];
+          const c = getComputedStyle(el);
+          const box = getComputedStyle(el.closest('.field-box'));
+          return {
+            champ: el.id,
+            ok: c.boxShadow === 'none' && c.outlineStyle === 'none' && box.borderTopColor !== r.color && box.borderTopWidth !== r.width,
+            bordure: `${r.color} ${r.width} → ${box.borderTopColor} ${box.borderTopWidth}`,
+          };
+        },
+        { s: selector, n: i, r: rest },
+      ),
+    );
+  }
+  await page.evaluate(({ s }) => document.querySelectorAll(s).forEach((el) => el.blur()), { s: selector });
+  return out;
+};
+
+const cardNames = (page) => page.$$eval('[data-community-name]', (els) => els.map((el) => (el.textContent ?? '').trim()));
+
+const browser = await launchChromium();
+try {
+  for (const scheme of ['light', 'dark']) {
+    for (const [width, height] of [
+      [390, 844],
+      [320, 568],
+    ]) {
+      const label = `${scheme === 'light' ? 'clair' : 'sombre'} ${width}×${height}`;
+      const slug = `${scheme}-${width}x${height}`;
+      const context = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, locale: 'fr-FR' });
+      /* Le lecteur de recette est CONNECTÉ (#6377) : « Réglages » n'est offert qu'au créateur,
+         et l'écran le reconnaît à l'identité de la session, jamais à un rôle deviné. */
+      await context.addInitScript((session) => window.localStorage.setItem('meeshy.session', JSON.stringify(session)), SESSION);
+      const page = await context.newPage();
+      page.setDefaultTimeout(10_000);
+      const errors = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+
+      // ------------------------------------------------ 1. la grille, et plus l'écran d'attente
+      await page.goto(`${BASE}/communities`, { waitUntil: 'load' });
+      await page.waitForSelector('[data-community-card]');
+      const menus = await page.waitForSelector('.floating-menus', { timeout: 8000 }).then(() => true, () => false);
+      await page.waitForTimeout(300);
+      check(menus, `${label} : les disques flottants sont posés — l'atteignabilité se mesure contre eux`);
+      const names = await cardNames(page);
+      check(
+        names.length === 3 && ['Les polyglottes de Dakar', 'Équipe déploiement', 'Club de lecture'].every((name) => names.includes(name)),
+        `${label} : la grille porte les trois communautés (${JSON.stringify(names)})`,
+      );
+      check((await page.$('text=Cet écran arrive bientôt.')) === null, `${label} : l'écran d'attente a disparu`);
+      check((await textOf(page, 'header h1')) === 'Communautés', `${label} : le titre de l'écran`);
+      check((await page.getAttribute('[data-community-create]', 'href')) === '/communities/new', `${label} : « + » mène à /communities/new`);
+      check(
+        ((await textOf(page, '[data-community-card="m-polyglottes"] [data-community-counts]')) ?? '').replace(/\s/gu, ' ').includes('1,3 k membres'),
+        `${label} : un compteur s'abrège dans la langue (« 1,3 k membres »)`,
+      );
+      await capture(page, `communautes-${slug}`);
+
+      // ------------------------------------------------ 2. atteignabilité
+      const rest = await reachAtRest(page, REACH);
+      const blocked = rest.controls.filter((c) => !c.ok);
+      check(rest.controls.length >= 4, `${label} : au repos, retour, « + », recherche et au moins une carte mesurés (${rest.controls.length}, ${resumeExclusions(rest)})`);
+      check(blocked.length === 0, `${label} : aucun contrôle n'est volé à son centre au repos — ${JSON.stringify(blocked)}`);
+      const stolen = rest.texts.filter((t) => !t.ok);
+      check(rest.texts.length >= 3, `${label} : au moins trois textes visibles mesurés au repos (${rest.texts.length})`);
+      check(stolen.length === 0, `${label} : aucun texte n'est volé à son centre au repos — ${JSON.stringify(stolen)}`);
+      const small = rest.controls.filter((c) => c.hauteur < TAP_FLOOR);
+      check(small.length === 0, `${label} : chaque contrôle fait au moins ${TAP_FLOOR} de haut — ${JSON.stringify(small)}`);
+      const cards = await reachCards(page);
+      check(cards.length === 3 && cards.every((c) => c.ok && c.hauteur >= TAP_FLOOR), `${label} : chaque carte s'atteint — ${JSON.stringify(cards)}`);
+
+      // ------------------------------------------------ 3. contraste AA
+      const inks = { titre: await contrastOf(page, 'header h1') };
+      for (const id of ['m-polyglottes', 'm-deploiement', 'm-lecture']) {
+        inks[`${id} nom`] = await worstContrastUnderWhite(page, `[data-community-card="${id}"] [data-community-name]`);
+        inks[`${id} compteurs`] = await worstContrastUnderWhite(page, `[data-community-card="${id}"] [data-community-counts]`);
+      }
+      await page.evaluate(() => document.getElementById('contenu')?.scrollTo({ top: 0 }));
+      /* Le texte d'une carte ne monte jamais dans la bande de l'avatar : un nom de
+         deux lignes sur une description de deux lignes, au gabarit étroit, est le
+         pire cas du jeu de fixtures. */
+      const bands = await page.$$eval('[data-community-card]', (els) =>
+        els.map((card) => {
+          const avatar = card.querySelector('.rounded-full').getBoundingClientRect();
+          const text = card.querySelector('[data-community-name]').getBoundingClientRect();
+          return { carte: card.getAttribute('data-community-card'), ecart: Math.round(text.top - avatar.bottom) };
+        }),
+      );
+      check(bands.every((band) => band.ecart >= 2), `${label} : le texte d'une carte reste sous la bande de l'avatar — ${JSON.stringify(bands)}`);
+      const faibles = Object.entries(inks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
+      check(faibles.length === 0, `${label} : chaque texte de la liste tient AA, cartes mesurées au pire pixel — ${JSON.stringify(inks)}`);
+
+      // ------------------------------------------------ 4. la recherche
+      await page.fill('[data-community-search]', 'club');
+      const fromCache = await page
+        .waitForFunction(
+          () => {
+            const shown = [...document.querySelectorAll('[data-community-name]')].map((el) => (el.textContent ?? '').trim());
+            return shown.length === 1 && shown[0] === 'Club de lecture';
+          },
+          undefined,
+          { timeout: 1000 },
+        )
+        .then(() => true, () => false);
+      check(fromCache, `${label} : « club » ne laisse que « Club de lecture », en moins d'une seconde`);
+      await page.fill('[data-community-search]', 'zzz');
+      await page.waitForSelector('[data-community-search-empty]');
+      check(((await textOf(page, '[data-community-search-empty]')) ?? '').includes('« zzz »'), `${label} : une recherche sans réponse nomme ce qu'elle cherchait`);
+      const emptyInk = await contrastOf(page, '[data-community-search-empty]');
+      check(emptyInk !== null && emptyInk >= WCAG_AA, `${label} : et tient AA (${emptyInk})`);
+      await page.click('[data-community-search-clear]');
+      await page.waitForFunction(() => document.querySelectorAll('[data-community-card]').length === 3);
+      check((await page.inputValue('[data-community-search]')) === '', `${label} : effacer vide le champ et rend la grille`);
+
+      // ------------------------------------------------ 5. le détail, puis un fil
+      await page.click('[data-community-card="m-deploiement"]');
+      await page.waitForURL('**/communities/m-deploiement');
+      await page.waitForSelector('[data-community-hero]');
+      await page.waitForSelector('[data-community-conversation]');
+      await page.waitForTimeout(250);
+      check((await textOf(page, '[data-community-title]')) === 'Équipe déploiement', `${label} : la carte ouvre SON détail`);
+      check((await textOf(page, '[data-community-members-count]')) === '9', `${label} : les compteurs du détail`);
+      const rows = await page.$$eval('[data-community-conversation]', (els) => els.map((el) => el.getAttribute('href')));
+      check(JSON.stringify(rows) === JSON.stringify(['/c/c-deploiement', '/c/c-annonces']), `${label} : ses conversations mènent à leurs fils (${JSON.stringify(rows)})`);
+      check((await page.$('.floating-menus')) === null, `${label} : le détail, route profonde, ne porte pas les disques (miroir isDeepRoute)`);
+      const detailRest = await reachAtRest(page, REACH);
+      const detailBlocked = detailRest.controls.filter((c) => !c.ok || c.hauteur < TAP_FLOOR);
+      check(detailRest.controls.length >= 2 && detailBlocked.length === 0, `${label} : le retour et les conversations visibles s'atteignent — ${JSON.stringify(detailBlocked)}`);
+      const detailInks = {
+        titre: await contrastOf(page, '[data-community-title]'),
+        confidentialite: await contrastOf(page, '[data-community-hero] [data-community-privacy]'),
+        libelle: await contrastOf(page, '[data-community-members-link] .font-semibold'),
+        section: await contrastOf(page, '#community-conversations'),
+        ligne: await contrastOf(page, '[data-community-conversation] .text-body'),
+        membres: await contrastOf(page, '[data-community-conversation] .text-caption'),
+      };
+      const detailFaibles = Object.entries(detailInks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
+      check(detailFaibles.length === 0, `${label} : chaque texte du détail tient AA — ${JSON.stringify(detailInks)}`);
+      await capture(page, `communaute-${slug}`);
+      await page.click('[data-community-conversation="c-deploiement"]');
+      await page.waitForURL('**/c/c-deploiement');
+      check(true, `${label} : une conversation ouvre son fil`);
+      await page.goBack();
+      await page.waitForSelector('[data-community-hero]');
+      // LES PUBLICATIONS (#6379) : deux onglets, « Publications » peint la carte du Flux depuis
+      // le port de la communauté, et les flèches rendent « Conversations » au clavier.
+      check(
+        (await page.getAttribute('[data-community-tab="channels"]', 'aria-selected')) === 'true',
+        `${label} : le détail s'ouvre sur l'onglet Conversations`,
+      );
+      await page.click('[data-community-tab="posts"]');
+      await page.waitForSelector('[data-community-posts] [data-feed-card-id]');
+      const communityCards = await page.$$eval('[data-community-posts] [data-feed-card-id]', (els) => els.map((el) => el.getAttribute('data-feed-card-id')));
+      check(communityCards.length === 2, `${label} : l'onglet Publications peint les deux publications de la communauté (${JSON.stringify(communityCards)})`);
+      check((await page.$('[data-community-conversation]')) === null, `${label} : un seul panneau à la fois`);
+      const tabInks = {
+        choisi: await contrastOf(page, '[data-community-tab="posts"]'),
+        autre: await contrastOf(page, '[data-community-tab="channels"]'),
+      };
+      check(Object.values(tabInks).every((ratio) => ratio !== null && ratio >= WCAG_AA), `${label} : les deux onglets tiennent AA — ${JSON.stringify(tabInks)}`);
+      const tabHeights = await page.$$eval('[data-community-tab]', (els) => els.map((el) => el.getBoundingClientRect().height));
+      check(tabHeights.every((h) => h >= TAP_FLOOR), `${label} : chaque onglet fait au moins ${TAP_FLOOR} de haut (${JSON.stringify(tabHeights)})`);
+      await capture(page, `communaute-publications-${slug}`);
+      await page.focus('[data-community-tab="posts"]');
+      await page.keyboard.press('ArrowLeft');
+      await page.waitForSelector('[data-community-conversation]');
+      check(
+        (await page.evaluate(() => document.activeElement?.getAttribute('data-community-tab'))) === 'channels',
+        `${label} : la flèche rend « Conversations », focus compris`,
+      );
+      // LES MEMBRES (#6375) : le détail y mène, les rôles se lisent AA, et un administrateur
+      // (le lecteur a créé « Équipe déploiement ») change un rôle et retire un membre, au geste.
+      await page.click('[data-community-members-link]');
+      await page.waitForURL('**/communities/m-deploiement/members');
+      await page.waitForSelector('[data-community-member]');
+      const sections = await page.$$eval('[data-community-member-section]', (els) => els.map((el) => el.getAttribute('data-community-member-section')));
+      check(JSON.stringify(sections) === JSON.stringify(['admin', 'moderator', 'member']), `${label} : les membres se rangent par rôle (${JSON.stringify(sections)})`);
+      const managed = await page.$$eval('[data-community-member]', (els) =>
+        els.filter((el) => el.querySelector('[data-community-member-manage]') !== null).map((el) => el.getAttribute('data-community-member')),
+      );
+      check(
+        JSON.stringify(managed) === JSON.stringify(['u-amina', 'u-kwame', 'u-ines', 'u-yuki']),
+        `${label} : ni sa propre ligne ni celle du créateur n'offrent de geste (${JSON.stringify(managed)})`,
+      );
+      const membersRest = await reachAtRest(page, REACH);
+      const membersBlocked = membersRest.controls.filter((c) => !c.ok || c.hauteur < TAP_FLOOR);
+      check(membersRest.controls.length >= 3 && membersBlocked.length === 0, `${label} : le retour et chaque « Gérer » s'atteignent, 44 au moins — ${JSON.stringify(membersBlocked)}`);
+      const memberInks = {
+        titre: await contrastOf(page, 'header h1'),
+        nom: await contrastOf(page, '[data-community-member="u-amina"] .text-body'),
+        admin: await contrastOf(page, '[data-community-member-role="admin"]'),
+        moderateur: await contrastOf(page, '[data-community-member-role="moderator"]'),
+        membre: await contrastOf(page, '[data-community-member-role="member"]'),
+        section: await contrastOf(page, '#community-members-admin'),
+      };
+      const memberFaibles = Object.entries(memberInks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
+      check(memberFaibles.length === 0, `${label} : chaque texte des membres tient AA — ${JSON.stringify(memberInks)}`);
+      await capture(page, `communaute-membres-${slug}`);
+      await page.click('[data-community-member="u-kwame"] [data-community-member-manage]');
+      check(
+        (await page.getAttribute('[data-community-member="u-kwame"] [data-community-member-manage]', 'aria-expanded')) === 'true',
+        `${label} : « Gérer » se déplie et le dit`,
+      );
+      await page.click('[data-community-member="u-kwame"] [data-community-member-make="member"]');
+      await page.waitForSelector('[data-community-member-section="member"] [data-community-member="u-kwame"]');
+      check(true, `${label} : repasser membre range la ligne sous « Membres »`);
+      await page.click('[data-community-member="u-yuki"] [data-community-member-manage]');
+      await page.click('[data-community-member="u-yuki"] [data-community-member-remove]');
+      await page.waitForSelector('[data-confirm-dialog="community-member-remove"]');
+      check(((await textOf(page, '[data-confirm-dialog="community-member-remove"]')) ?? '').includes('Yuki Tanaka'), `${label} : le retrait se confirme, en nommant le membre`);
+      await page.click('[data-confirm-dialog="community-member-remove"] [data-confirm="confirm"]');
+      await page.waitForSelector('[data-community-member="u-yuki"]', { state: 'detached' });
+      check((await page.$('[data-community-members-failure]')) === null, `${label} : le retrait part sans erreur, et la ligne disparaît`);
+      await page.click('[data-community-members-back]');
+      await page.waitForSelector('[data-community-hero]');
+      // INVITER (#6376) : le détail ouvre la feuille, les amis y sont avant toute frappe,
+      // le choix se dit sur le bouton, et l'issue se lit sous « Membres ».
+      await page.click('[data-community-invite-open]');
+      await page.waitForSelector('[data-community-invite-candidate="u-bruno"]');
+      const inviteRest = await reachAtRest(page, { controls: '[data-community-invite] button', texts: '[data-community-invite] .text-body' });
+      const inviteBlocked = inviteRest.controls.filter((c) => !c.ok || c.hauteur < TAP_FLOOR);
+      check(inviteRest.controls.length >= 2 && inviteBlocked.length === 0, `${label} : chaque contrôle de la feuille « Inviter » s'atteint, 44 au moins — ${JSON.stringify(inviteBlocked)}`);
+      const inviteInks = {
+        nom: await contrastOf(page, '[data-community-invite-candidate="u-bruno"] .text-body'),
+        pseudo: await contrastOf(page, '[data-community-invite-candidate="u-bruno"] .text-caption'),
+      };
+      const inviteFaibles = Object.entries(inviteInks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
+      check(inviteFaibles.length === 0, `${label} : chaque texte de la feuille « Inviter » tient AA — ${JSON.stringify(inviteInks)}`);
+      await page.click('[data-community-invite-candidate="u-bruno"]');
+      check((await textOf(page, '[data-community-invite-submit]')) === 'Inviter 1 personne', `${label} : le choix se dit sur le bouton`);
+      await capture(page, `communaute-inviter-${slug}`);
+      await page.click('[data-community-invite-submit]');
+      await page.waitForSelector('[data-community-invite-status]');
+      check((await textOf(page, '[data-community-invite-status]')) === '1 personne a rejoint la communauté.', `${label} : l'invitation se dit, la feuille se ferme`);
+      check((await page.$('[data-community-invite]')) === null, `${label} : la feuille est fermée après l'envoi`);
+      // LES RÉGLAGES (#6377) : le créateur y entre depuis le détail, le formulaire est rempli
+      // depuis le cache, « Enregistrer » n'agit qu'une fois quelque chose changé, le nouveau nom
+      // se lit au retour ; supprimer se confirme en nommant la communauté et ramène à la liste,
+      // où elle a disparu. Un autre lecteur n'a ni l'entrée ni le formulaire.
+      await page.click('[data-community-settings-link]');
+      await page.waitForURL('**/communities/m-deploiement/settings');
+      await page.waitForSelector('#community-settings-name');
+      check((await page.inputValue('#community-settings-name')) === 'Équipe déploiement', `${label} : les réglages se remplissent depuis le cache`);
+      check((await page.getAttribute('[data-community-settings-save]', 'aria-disabled')) === 'true', `${label} : « Enregistrer » est inerte tant que rien ne change`);
+      const settingsRest = await reachAtRest(page, REACH);
+      const settingsBlocked = settingsRest.controls.filter((c) => !c.ok || c.hauteur < TAP_FLOOR);
+      check(settingsRest.controls.length >= 2 && settingsBlocked.length === 0, `${label} : chaque contrôle des réglages s'atteint, 44 au moins — ${JSON.stringify(settingsBlocked)}`);
+      const settingsInks = {
+        titre: await contrastOf(page, 'header h1'),
+        section: await contrastOf(page, '#community-settings-info'),
+        danger: await contrastOf(page, '#community-settings-danger'),
+        supprimer: await contrastOf(page, '[data-community-settings-delete] .flex-1'),
+      };
+      const settingsFaibles = Object.entries(settingsInks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
+      check(settingsFaibles.length === 0, `${label} : chaque texte des réglages tient AA — ${JSON.stringify(settingsInks)}`);
+      await capture(page, `communaute-reglages-${slug}`);
+      // L'AVATAR ET LA BANNIÈRE (#6377, seconde moitié) : deux boutons nommés ouvrent le
+      // sélecteur ; l'image choisie se dit prête, rend « Enregistrer » actif, et le détail la
+      // porte après l'enregistrement.
+      check(
+        (await page.getAttribute('[data-community-settings-pick="banner"]', 'aria-label')) === 'Changer la bannière' &&
+          (await page.getAttribute('[data-community-settings-pick="avatar"]', 'aria-label')) === 'Changer l’avatar',
+        `${label} : la bannière et l'avatar se changent par deux boutons nommés`,
+      );
+      const picks = await page.$$eval('[data-community-settings-pick]', (els) => els.map((el) => { const r = el.getBoundingClientRect(); return Math.min(Math.round(r.width), Math.round(r.height)); }));
+      check(picks.length === 2 && picks.every((side) => side >= TAP_FLOOR), `${label} : chaque bouton d'image fait au moins 44 — ${JSON.stringify(picks)}`);
+      // #17256 — l'image choisie passe d'abord par la retouche de la capture, au format de sa
+      // cible : rond 1:1 pour l'avatar, bandeau 3:1 pour la bannière. Rien ne part avant
+      // « Terminé » ; ✕ n'envoie rien.
+      const retouchRatio = () =>
+        page.$eval('[data-entity-image-retouch] [data-scene-stage]', (el) => {
+          const box = el.getBoundingClientRect();
+          return box.height > 0 ? box.width / box.height : 0;
+        });
+      const noticeShown = async () => ((await page.getAttribute('[data-community-settings-notice]', 'data-community-settings-notice')) ?? '') !== '';
+      await page.setInputFiles('[data-community-settings-file="avatar"]', { name: 'avatar.png', mimeType: 'image/png', buffer: Buffer.from(TINY_PNG, 'base64') });
+      await page.waitForSelector('[data-entity-image-retouch="avatar"] [data-scene-stage][data-scene-format="avatar"]', { timeout: 20_000 });
+      const avatarRatio = await retouchRatio();
+      check(Math.abs(avatarRatio - 1) < 0.01, `${label} : l'avatar se retouche en scène carrée (${avatarRatio.toFixed(3)})`);
+      check((await page.$('[data-entity-image-veil="round"]')) !== null, `${label} : la retouche de l'avatar voile ce qui tombe hors du cercle`);
+      check(!(await noticeShown()), `${label} : rien ne part avant « Terminé »`);
+      await page.click('[data-entity-image-retouch] [data-story-retouch-cancel]');
+      await page.waitForFunction(() => document.querySelector('[data-entity-image-retouch]') === null);
+      await page.waitForTimeout(300);
+      check(!(await noticeShown()), `${label} : ✕ referme la retouche sans rien envoyer`);
+      await page.setInputFiles('[data-community-settings-file="banner"]', { name: 'banniere.png', mimeType: 'image/png', buffer: Buffer.from(TINY_PNG, 'base64') });
+      await page.waitForSelector('[data-entity-image-retouch="banner"] [data-scene-stage][data-scene-format="banner"]', { timeout: 20_000 });
+      const bannerRatio = await retouchRatio();
+      check(Math.abs(bannerRatio - 3) < 0.03, `${label} : la bannière se retouche en bandeau 3:1 (${bannerRatio.toFixed(3)})`);
+      check((await page.$('[data-entity-image-veil]')) === null, `${label} : la bannière n'a pas de voile rond`);
+      check(!(await noticeShown()), `${label} : la bannière ne part pas avant « Terminé »`);
+      await page.click('[data-entity-image-retouch] [data-story-retouch-done]');
+      await page.waitForSelector('[data-community-settings-notice="community.settings.banner.uploaded"]', { timeout: 20_000 });
+      check((await textOf(page, '[data-community-settings-notice]')) === 'Bannière prête : enregistrez pour la publier.', `${label} : la bannière choisie se dit prête`);
+      check((await page.getAttribute('[data-community-settings-save]', 'aria-disabled')) === 'false', `${label} : une image posée rend « Enregistrer » actif`);
+      check((await page.$('[data-community-settings-images] img')) !== null, `${label} : la bannière choisie s'affiche dans les réglages`);
+      await capture(page, `communaute-reglages-images-${slug}`);
+      await page.fill('#community-settings-name', 'Équipe mise en ligne');
+      check((await page.getAttribute('[data-community-settings-save]', 'aria-disabled')) === 'false', `${label} : un nom changé rend « Enregistrer » actif`);
+      await page.click('[data-community-settings-save]');
+      await page.waitForSelector('[data-community-settings-notice="community.settings.saved"]');
+      check((await textOf(page, '[data-community-settings-notice]')) === 'Communauté mise à jour.', `${label} : l'enregistrement se dit`);
+      await page.click('[data-community-settings-back]');
+      await page.waitForSelector('[data-community-hero]');
+      check((await textOf(page, '[data-community-title]')) === 'Équipe mise en ligne', `${label} : le détail porte le nouveau nom`);
+      check((await page.$('[data-community-hero] img')) !== null, `${label} : et la nouvelle bannière`);
+      await page.click('[data-community-settings-link]');
+      await page.waitForSelector('[data-community-settings-delete]');
+      // RENDRE PRIVÉE SE CONFIRME (#16787) : rouvrir part sans détour ; repasser en privée
+      // ouvre une confirmation qui dit qui sort ; « Annuler » n'envoie rien.
+      await page.click('[data-community-privacy-toggle]');
+      await page.click('[data-community-settings-save]');
+      await page.waitForSelector('[data-community-settings-notice="community.settings.saved"]');
+      check((await page.$('[data-confirm-dialog="community-private"]')) === null, `${label} : rouvrir une communauté part sans confirmation`);
+      await page.click('[data-community-privacy-toggle]');
+      await page.click('[data-community-settings-save]');
+      await page.waitForSelector('[data-confirm-dialog="community-private"]');
+      check(((await textOf(page, '[data-confirm-dialog="community-private"]')) ?? '').includes('Anciens membres et comptes bloqués quitteront ses conversations'), `${label} : rendre privée se confirme en disant qui sort`);
+      check((await page.getAttribute('[data-community-settings-notice]', 'data-community-settings-notice')) === '', `${label} : rien n'est parti avant la confirmation`);
+      await page.click('[data-confirm-dialog="community-private"] [data-confirm="cancel"]');
+      await page.waitForFunction(() => document.querySelector('[data-confirm-dialog="community-private"]') === null);
+      check((await page.getAttribute('[data-community-settings-save]', 'aria-disabled')) === 'false', `${label} : « Annuler » garde le brouillon, rien n'est parti`);
+      await page.click('[data-community-settings-save]');
+      await page.waitForSelector('[data-confirm-dialog="community-private"]');
+      await page.click('[data-confirm-dialog="community-private"] [data-confirm="confirm"]');
+      await page.waitForSelector('[data-community-settings-notice="community.settings.saved"]');
+      check((await page.getAttribute('[data-community-privacy-toggle]', 'aria-checked')) === 'true', `${label} : confirmée, la communauté est privée`);
+      await page.click('[data-community-settings-delete]');
+      await page.waitForSelector('[data-confirm-dialog="community-delete"]');
+      check(((await textOf(page, '[data-confirm-dialog="community-delete"]')) ?? '').includes('Équipe mise en ligne'), `${label} : la suppression se confirme, en nommant la communauté`);
+      await page.click('[data-confirm-dialog="community-delete"] [data-confirm="confirm"]');
+      await page.waitForURL((url) => url.pathname === '/communities');
+      await page.waitForSelector('[data-community-card]');
+      check((await page.$('[data-community-card="m-deploiement"]')) === null, `${label} : supprimée, elle a quitté la liste`);
+      await page.goto(`${BASE}/communities/m-polyglottes`, { waitUntil: 'load' });
+      await page.waitForSelector('[data-community-hero]');
+      check((await page.$('[data-community-settings-link]')) === null, `${label} : un lecteur qui ne l'a pas créée n'a pas l'entrée « Réglages »`);
+      await page.goto(`${BASE}/communities/m-polyglottes/settings`, { waitUntil: 'load' });
+      await page.waitForSelector('[data-community-settings-refused]');
+      check((await page.$('[data-community-settings-save]')) === null, `${label} : ni le formulaire, mais le refus dessiné`);
+      await page.goto(`${BASE}/communities/inconnue`, { waitUntil: 'load' });
+      await page.waitForSelector('[data-community-refused]');
+      check((await textOf(page, '[data-community-refused] p')) === 'Communauté introuvable', `${label} : une adresse inconnue rend le refus`);
+      await capture(page, `communaute-refus-${slug}`);
+
+      // ------------------------------------------------ 6. la création
+      await page.goto(`${BASE}/communities`, { waitUntil: 'load' });
+      await page.waitForSelector('[data-community-card]');
+      await page.click('[data-community-create]');
+      await page.waitForURL('**/communities/new');
+      await page.waitForSelector('[data-community-submit]');
+      check(await page.$eval('[data-community-submit]', (el) => el.disabled), `${label} : sans nom, « Créer la communauté » est désactivé`);
+      const couples = await focusCouples(page);
+      check(couples.length === 3 && couples.every((c) => c.ok), `${label} : les trois champs gardent leur couple de focus — ${JSON.stringify(couples)}`);
+      await page.fill('#community-name', 'Atelier web');
+      check(((await textOf(page, '[data-community-preview]')) ?? '').includes('Atelier web'), `${label} : l'aperçu porte le nom tapé`);
+      await page.click('[data-community-privacy-toggle]');
+      check((await page.getAttribute('[data-community-privacy-toggle]', 'aria-checked')) === 'false', `${label} : la bascule rend la communauté publique`);
+      check(((await textOf(page, '[data-community-preview]')) ?? '').includes('Publique'), `${label} : et l'aperçu le dit`);
+      const previewInk = await worstContrastUnderWhite(page, '[data-community-preview] .line-clamp-2');
+      check(previewInk >= WCAG_AA, `${label} : le nom de l'aperçu tient AA au pire pixel (${previewInk})`);
+      await capture(page, `communaute-creation-${slug}`);
+      await page.fill('#community-identifier', 'polyglottes');
+      await page.click('[data-community-submit]');
+      await page.waitForSelector('#community-identifier-error');
+      check((await textOf(page, '#community-identifier-error')) === 'Cet identifiant est déjà pris.', `${label} : un identifiant pris se refuse SOUS son champ`);
+      check(new URL(page.url()).pathname === '/communities/new', `${label} : et l'écran reste ouvert`);
+      await page.fill('#community-identifier', 'atelier-web');
+      check((await page.$('#community-identifier-error')) === null, `${label} : corriger le champ retire son refus`);
+      check((await page.$('[data-community-new-members-candidate]')) === null, `${label} : « Ajouter des membres » ne propose personne avant la première lettre`);
+      await page.fill('[data-community-new-members-search]', 'b');
+      await page.waitForSelector('[data-community-new-members-candidate="u-bruno"]');
+      await page.click('[data-community-new-members-candidate="u-bruno"]');
+      check((await page.getAttribute('[data-community-new-members-candidate="u-bruno"]', 'aria-checked')) === 'true', `${label} : une personne se coche`);
+      check(
+        (await page.getAttribute('[data-community-new-members-chosen="u-bruno"]', 'aria-label')) === 'Retirer Bruno Laurent',
+        `${label} : et sa pastille dit comment la retirer`,
+      );
+      const memberTargets = await page.$$eval('[data-community-new-members] button', (els) => els.map((el) => Math.round(el.getBoundingClientRect().height)));
+      check(memberTargets.every((h) => h >= 44), `${label} : chaque cible d'« Ajouter des membres » fait au moins 44 — ${JSON.stringify(memberTargets)}`);
+      await capture(page, `communaute-creation-membres-${slug}`);
+      await page.click('[data-community-submit]');
+      await page.waitForURL(/\/communities\/m-[^/]+$/);
+      await page.waitForSelector('[data-community-title]');
+      check((await textOf(page, '[data-community-title]')) === 'Atelier web', `${label} : créée, l'écran devient son détail`);
+      check(((await textOf(page, '[data-community-hero] [data-community-privacy]')) ?? '') === 'Publique', `${label} : publique, comme choisi`);
+      check(
+        (await textOf(page, '[data-community-invite-status]')) === '1 personne a rejoint la communauté.',
+        `${label} : le détail dit que la personne choisie à la création y est entrée`,
+      );
+      await page.goBack();
+      await page.waitForURL('**/communities');
+      await page.waitForSelector('[data-community-card]');
+      check((await cardNames(page))[0] === 'Atelier web', `${label} : le retour ramène à la liste, la nouvelle en tête`);
+
+      // ------------------------------------------------ 7. hors ligne
+      await context.setOffline(true);
+      await page.waitForSelector('[data-community-offline]');
+      check((await cardNames(page)).length >= 3, `${label} : hors ligne, la liste reste lisible et le dit`);
+
+      // -------------------------------- 7 bis. la pastille ne recouvre pas la recherche (#6401)
+      await page.waitForSelector('.sync-pill');
+      const communitiesOverlap = await syncPillOverlap(page, ['[data-community-search]']);
+      check(communitiesOverlap.pill !== null, `${label} : hors ligne, la pastille de synchronisation est posée`);
+      check(
+        communitiesOverlap.covers.length === 0,
+        `${label} : hors ligne, la pastille ne recouvre pas le champ de recherche — ${JSON.stringify(communitiesOverlap.covers)}`,
+      );
+
+      await capture(page, `communautes-hors-ligne-${slug}`);
+      await page.click('[data-community-create]');
+      await page.waitForURL('**/communities/new');
+      await page.fill('#community-name', 'Hors ligne');
+      check(await page.$eval('[data-community-submit]', (el) => el.disabled), `${label} : hors ligne, la création ne part pas`);
+      await context.setOffline(false);
+
+      check(errors.length === 0, `${label} : aucune erreur de page — ${JSON.stringify(errors)}`);
+      await context.close();
+    }
+  }
+} finally {
+  await browser.close();
+  served.close();
+}
+
+if (failures.length > 0) {
+  console.error(`\n  ${failures.length} invariant(s) rompu(s) :`);
+  for (const f of failures) console.error(`    · ${f}`);
+  process.exit(1);
+}
+console.log('\n  Ses communautés se lisent, s’ouvrent, se créent, s’atteignent et tiennent AA.\n');

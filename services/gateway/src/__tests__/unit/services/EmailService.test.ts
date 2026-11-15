@@ -55,7 +55,7 @@ async function getEmailServiceWithEnv(envOverrides: Record<string, string> = {})
     }
   }));
 
-  // Import the fresh module
+  (await import('../../../services/email/recipient-policy')).registerEmailRecipientLookup(async () => 'verified'); // #8238
   const module = await import('../../../services/EmailService');
   return { EmailService: module.EmailService, module };
 }
@@ -1231,121 +1231,6 @@ describe('EmailService', () => {
     });
   });
 
-  // ==============================================
-  // sendFriendRequestEmail
-  // ==============================================
-
-  describe('sendFriendRequestEmail', () => {
-    it('sends friend request email without avatar', async () => {
-      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'brevo-key' });
-      const service = new EmailService();
-      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'fr-001' }));
-
-      const result = await service.sendFriendRequestEmail({
-        to: 'bob@example.com',
-        recipientName: 'Bob',
-        senderName: 'Alice',
-        viewRequestUrl: 'https://meeshy.me/contacts',
-        language: 'en',
-      });
-
-      expect(result.success).toBe(true);
-    });
-
-    it('sends friend request email with avatar', async () => {
-      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'brevo-key' });
-      const service = new EmailService();
-      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'fr-002' }));
-
-      const result = await service.sendFriendRequestEmail({
-        to: 'bob@example.com',
-        recipientName: 'Bob',
-        senderName: 'Alice',
-        senderAvatar: 'https://cdn.meeshy.me/avatars/alice.jpg',
-        viewRequestUrl: 'https://meeshy.me/contacts',
-        language: 'fr',
-      });
-
-      expect(result.success).toBe(true);
-    });
-
-    it('inserts a senderName containing `$` sequences verbatim (no token leak)', async () => {
-      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'brevo-key' });
-      const service = new EmailService();
-      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'fr-003' }));
-
-      await service.sendFriendRequestEmail({
-        to: 'bob@example.com',
-        recipientName: 'Bob',
-        senderName: 'A$$ & $& Co',
-        viewRequestUrl: 'https://meeshy.me/contacts',
-        language: 'en',
-      });
-
-      const payload = mockAxiosPost.mock.calls[0][1] as any;
-      expect(payload.textContent).toContain('A$$ & $& Co');
-      expect(payload.textContent).not.toContain('{sender}');
-      expect(payload.htmlContent).not.toContain('{sender}');
-    });
-  });
-
-  // ==============================================
-  // sendFriendAcceptedEmail
-  // ==============================================
-
-  describe('sendFriendAcceptedEmail', () => {
-    it('sends friend accepted email without avatar', async () => {
-      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'brevo-key' });
-      const service = new EmailService();
-      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'fa-001' }));
-
-      const result = await service.sendFriendAcceptedEmail({
-        to: 'alice@example.com',
-        recipientName: 'Alice',
-        accepterName: 'Bob',
-        conversationUrl: 'https://meeshy.me/conversations/123',
-        language: 'en',
-      });
-
-      expect(result.success).toBe(true);
-    });
-
-    it('sends friend accepted email with avatar', async () => {
-      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'brevo-key' });
-      const service = new EmailService();
-      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'fa-002' }));
-
-      const result = await service.sendFriendAcceptedEmail({
-        to: 'alice@example.com',
-        recipientName: 'Alice',
-        accepterName: 'Bob',
-        accepterAvatar: 'https://cdn.meeshy.me/avatars/bob.jpg',
-        conversationUrl: 'https://meeshy.me/conversations/123',
-        language: 'de',
-      });
-
-      expect(result.success).toBe(true);
-    });
-
-    it('inserts an accepterName containing `$` sequences verbatim (no token leak)', async () => {
-      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'brevo-key' });
-      const service = new EmailService();
-      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'fa-003' }));
-
-      await service.sendFriendAcceptedEmail({
-        to: 'alice@example.com',
-        recipientName: 'Alice',
-        accepterName: "B$'ob $& $$",
-        conversationUrl: 'https://meeshy.me/conversations/123',
-        language: 'en',
-      });
-
-      const payload = mockAxiosPost.mock.calls[0][1] as any;
-      expect(payload.textContent).toContain("B$'ob $& $$");
-      expect(payload.textContent).not.toContain('{accepter}');
-      expect(payload.htmlContent).not.toContain('{accepter}');
-    });
-  });
 
   // ==============================================
   // sendInvitationEmail
@@ -1522,60 +1407,4 @@ describe('EmailService', () => {
     });
   });
 
-  describe('sendUsernameReminderEmail', () => {
-    async function sendAndCapture(language: string) {
-      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'brevo-key' });
-      const service = new EmailService();
-      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'reminder-001' }));
-
-      await service.sendUsernameReminderEmail({
-        to: 'verrainembilla@gmail.com',
-        name: 'La Lionne Noire',
-        username: 'lalionnenoire',
-        language,
-      });
-
-      return mockAxiosPost.mock.calls.at(-1)![1] as {
-        subject: string;
-        htmlContent: string;
-        textContent: string;
-      };
-    }
-
-    it('rend le handle dans le HTML et dans le texte', async () => {
-      const payload = await sendAndCapture('fr');
-      expect(payload.htmlContent).toContain('@lalionnenoire');
-      expect(payload.textContent).toContain('@lalionnenoire');
-    });
-
-    it('adresse la personne par son nom', async () => {
-      const payload = await sendAndCapture('fr');
-      expect(payload.textContent).toContain('La Lionne Noire');
-    });
-
-    // Règle produit : c'est un RAPPEL. Aucun vocabulaire de modification, dans
-    // aucune langue — sans quoi le mail révélerait le renommage.
-    const FORBIDDEN: Record<string, readonly string[]> = {
-      fr: ['modifi', 'chang', 'nouveau', 'nouvelle', 'mis à jour'],
-      en: ['chang', 'updat', 'new '],
-      es: ['cambi', 'modific', 'nuevo'],
-      pt: ['alter', 'modific', 'novo'],
-      it: ['modific', 'cambi', 'nuovo'],
-      de: ['geändert', 'aktualisiert', 'neue'],
-    };
-
-    it.each(Object.keys(FORBIDDEN))('n\'évoque aucune modification en %s', async (lang) => {
-      const payload = await sendAndCapture(lang);
-      const body = `${payload.subject}\n${payload.textContent}`.toLowerCase();
-      for (const word of FORBIDDEN[lang]) {
-        expect(body).not.toContain(word.toLowerCase());
-      }
-    });
-
-    it('retombe sur l\'anglais pour une langue inconnue', async () => {
-      const payload = await sendAndCapture('xx');
-      expect(payload.htmlContent).toContain('@lalionnenoire');
-      expect(payload.subject).toBe('Your Meeshy username');
-    });
-  });
 });

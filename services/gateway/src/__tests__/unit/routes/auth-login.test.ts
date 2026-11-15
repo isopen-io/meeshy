@@ -56,6 +56,8 @@ jest.mock('../../../services/SessionService', () => ({
 jest.mock('../../../utils/rate-limiter.js', () => ({
   createLoginRateLimiter: () => ({ middleware: () => async () => {} }),
   createAuthGlobalRateLimiter: () => ({ middleware: () => async () => {} }),
+  // `/login/2fa` n'avait AUCUN preHandler ; elle en porte désormais un (#4138).
+  createTwoFactorLoginRateLimiter: () => ({ middleware: () => async () => {} }),
 }));
 
 jest.mock('jsonwebtoken', () => ({
@@ -112,6 +114,8 @@ function makeAuthService(overrides: any = {}) {
     getUserPermissions: jest.fn<any>().mockReturnValue([]),
     updateOnlineStatus: jest.fn<any>().mockResolvedValue(undefined),
     logout: jest.fn<any>().mockResolvedValue(true),
+    logoutCurrent: jest.fn<any>().mockResolvedValue(1),
+    getUserActiveSessions: jest.fn<any>().mockResolvedValue([]),
     completeAuthWith2FA: jest.fn<any>().mockResolvedValue(MOCK_AUTH_RESULT),
     ...overrides,
   };
@@ -373,14 +377,15 @@ describe('POST /logout — with session token', () => {
   });
   afterAll(async () => { await app.close(); });
 
-  it('calls authService.logout with the session token', async () => {
+  it('closes the session named by the header, bounded to the caller (audit P2)', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/logout',
       headers: { 'x-session-token': 'sess-xyz' },
     });
     expect(res.statusCode).toBe(200);
-    expect(authService.logout).toHaveBeenCalledWith('sess-xyz');
+    expect(authService.logoutCurrent).toHaveBeenCalledWith(USER_ID, { sessionId: null, sessionToken: 'sess-xyz' });
+    expect(authService.logout).not.toHaveBeenCalled();
   });
 });
 

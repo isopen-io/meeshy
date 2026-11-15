@@ -6,6 +6,9 @@ import MeeshyUI
 struct ThreadView: View {
     let parentMessage: MeeshyMessage
     let conversationId: String
+    /// Le chemin de la réponse : par la conversation (scellée ou refusée) quand
+    /// elle est chiffrée de bout en bout, sinon REST ou outbox (#11379).
+    let replyDispatcher: ThreadReplyDispatcher
 
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
@@ -40,66 +43,67 @@ struct ThreadView: View {
 
     private var header: some View {
         HStack {
-            Button {
-                HapticFeedback.light()
+            MeeshyGlassButton(
+                systemImage: "xmark",
+                label: String(localized: "common.close", defaultValue: "Fermer", bundle: .main),
+                size: .s36
+            ) {
                 dismiss()
-            } label: {
-                Image(systemName: "chevron.backward")
-                    .font(.callout.weight(.semibold))
-                    .foregroundColor(Color(hex: accentColor))
             }
-            .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
 
             Spacer()
 
             Text(String(localized: "thread.title", defaultValue: "Discussion", bundle: .main))
                 .font(.body.weight(.bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
-            Text(String(localized: "thread.repliesCount", defaultValue: "\(replies.count) reponses", bundle: .main))
+            Text(String(localized: "thread.repliesCount", defaultValue: "\(replies.count) réponses", bundle: .main))
                 .font(.caption.weight(.medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
     }
 
     // MARK: - Content
 
     private var scrollContent: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
                 parentMessageView
                 repliesDivider
                 repliesList
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.sm)
         }
     }
 
     private var parentMessageView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                MeeshyAvatar(
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.sm) {
+                LivePresence { MeeshyAvatar(
                     name: parentMessage.senderName ?? "?",
                     context: .messageBubble,
                     accentColor: accentColor,
-                    moodEmoji: statusViewModel.statusForUser(userId: parentMessage.senderId)?.moodEmoji,
-                    onMoodTap: statusViewModel.moodTapHandler(for: parentMessage.senderId)
-                )
+                    avatarURL: parentMessage.senderAvatarURL,
+                    moodEmoji: statusViewModel.statusForUser(userId: parentMessage.viewingKey)?.moodEmoji,
+                    presenceState: parentMessage.isMe ? nil : PresenceManager.shared.presenceState(forSenderOf: parentMessage),
+                    ring: parentMessage.senderRing,
+                    onMoodTap: statusViewModel.moodSpotlightHandler(for: parentMessage.viewingKey)
+                ) }
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(parentMessage.senderName ?? String(localized: "common.unknown", defaultValue: "Unknown", bundle: .main))
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    Text(parentMessage.senderName ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main))
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
 
                     Text(parentMessage.createdAt, style: .relative)
                         .font(.caption2)
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
                 .accessibilityElement(children: .combine)
 
@@ -108,14 +112,15 @@ struct ThreadView: View {
 
             Text(parentMessage.content)
                 .font(.subheadline)
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
+                .captureShield(parentMessage.exitOffer.capture.shieldsCapture()) // #9574
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .stroke(theme.border(tint: accentColor), lineWidth: 1)
                 )
         )
@@ -124,16 +129,16 @@ struct ThreadView: View {
     private var repliesDivider: some View {
         HStack {
             Rectangle()
-                .fill(Color(hex: accentColor).opacity(0.3))
+                .fill(Color(hex: accentColor).opacity(MeeshyOpacity.medium))
                 .frame(height: 1)
 
-            Text(String(localized: "thread.repliesCount", defaultValue: "\(replies.count) reponses", bundle: .main))
+            Text(String(localized: "thread.repliesCount", defaultValue: "\(replies.count) réponses", bundle: .main))
                 .font(.caption2.weight(.bold))
-                .foregroundColor(Color(hex: accentColor))
-                .padding(.horizontal, 8)
+                .foregroundStyle(Color(hex: accentColor))
+                .padding(.horizontal, MeeshySpacing.sm)
 
             Rectangle()
-                .fill(Color(hex: accentColor).opacity(0.3))
+                .fill(Color(hex: accentColor).opacity(MeeshyOpacity.medium))
                 .frame(height: 1)
         }
         .accessibilityElement(children: .combine)
@@ -141,7 +146,7 @@ struct ThreadView: View {
     }
 
     private var repliesList: some View {
-        LazyVStack(spacing: 8) {
+        LazyVStack(spacing: MeeshySpacing.sm) {
             ForEach(replies) { reply in
                 replyRow(reply)
             }
@@ -149,57 +154,61 @@ struct ThreadView: View {
     }
 
     private func replyRow(_ message: MeeshyMessage) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            MeeshyAvatar(
+        HStack(alignment: .top, spacing: MeeshySpacing.smPlus) {
+            LivePresence { MeeshyAvatar(
                 name: message.senderName ?? "?",
                 context: .postComment,
                 accentColor: message.senderColor ?? accentColor,
-                moodEmoji: statusViewModel.statusForUser(userId: message.senderId)?.moodEmoji,
-                onMoodTap: statusViewModel.moodTapHandler(for: message.senderId)
-            )
+                avatarURL: message.senderAvatarURL,
+                moodEmoji: statusViewModel.statusForUser(userId: message.viewingKey)?.moodEmoji,
+                presenceState: message.isMe ? nil : PresenceManager.shared.presenceState(forSenderOf: message),
+                ring: message.senderRing,
+                onMoodTap: statusViewModel.moodSpotlightHandler(for: message.viewingKey)
+            ) }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 HStack {
-                    Text(message.senderName ?? String(localized: "common.unknown", defaultValue: "Unknown", bundle: .main))
+                    Text(message.senderName ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main))
                         .font(.caption.weight(.semibold))
                         .foregroundColor(Color(hex: message.senderColor ?? accentColor))
 
                     Text(message.createdAt, style: .relative)
                         .font(.caption2)
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 Text(message.content)
                     .font(.subheadline)
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
+                    .captureShield(message.exitOffer.capture.shieldsCapture()) // #9574
             }
             .accessibilityElement(children: .combine)
 
             Spacer()
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, MeeshySpacing.xs)
     }
 
     // MARK: - Composer
 
     private var composerBar: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             if let sendError {
                 Text(sendError)
                     .font(.caption2)
                     .foregroundColor(MeeshyColors.error)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, MeeshySpacing.lg)
                     .transition(.opacity)
-                    .accessibilityLabel(String(localized: "Erreur d'envoi", defaultValue: "Send error"))
+                    .accessibilityLabel(String(localized: "thread.send.error", defaultValue: "Erreur d'envoi"))
                     .accessibilityValue(sendError)
             }
 
-            HStack(spacing: 10) {
-                TextField(String(localized: "thread.reply.placeholder", defaultValue: "Repondre...", bundle: .main), text: $replyText)
+            HStack(spacing: MeeshySpacing.smPlus) {
+                TextField(String(localized: "thread.reply.placeholder", defaultValue: "Répondre…", bundle: .main), text: $replyText)
                     .font(.subheadline)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, MeeshySpacing.mdPlus)
+                    .padding(.vertical, MeeshySpacing.smPlus)
                     .background(
                         Capsule()
                             .fill(theme.surfaceGradient(tint: accentColor))
@@ -235,10 +244,10 @@ struct ThreadView: View {
                     ? Text("")
                     : Text(String(localized: "composer.send.hint", defaultValue: "Envoie le texte saisi", bundle: .main)))
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
         }
-        .padding(.vertical, 10)
-        .background(isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.8))
+        .padding(.vertical, MeeshySpacing.smPlus)
+        .background(isDark ? Color.black.opacity(MeeshyOpacity.medium) : Color.white.opacity(MeeshyOpacity.intense))
     }
 
     // MARK: - Actions
@@ -300,6 +309,10 @@ struct ThreadView: View {
     /// durably enqueued via the SAME `ofq_*` outbox row
     /// `OutboxDispatcher.dispatchSendMessage` already replays for
     /// `ConversationViewModel`, instead of being attempted (and lost).
+    ///
+    /// #11379 — dans une conversation chiffrée, `replyDispatcher` passe par
+    /// l'envoi de la conversation : la bulle (en échec, renvoyable) vit au
+    /// fil principal, et le fil de réponses dit pourquoi rien n'est parti.
     private func sendReply() {
         let text = replyText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
@@ -310,8 +323,33 @@ struct ThreadView: View {
         sendError = nil
 
         let clientMessageId = ClientMessageId.generate()
+        let sealed = replyDispatcher.requiresSeal()
+        if !sealed { replies.append(optimisticReply(text: text, clientMessageId: clientMessageId)) }
+
+        Task {
+            do {
+                switch try await replyDispatcher.dispatch(text: text, clientMessageId: clientMessageId) {
+                case .sent:
+                    isSending = false
+                    await loadReplies()
+                case .queued:
+                    isSending = false
+                case .refused(let reason):
+                    sendError = reason
+                    isSending = false
+                }
+            } catch {
+                replies.removeAll { $0.id == clientMessageId }
+                replyText = savedText
+                sendError = error.localizedDescription
+                isSending = false
+            }
+        }
+    }
+
+    private func optimisticReply(text: String, clientMessageId: String) -> MeeshyMessage {
         let user = AuthManager.shared.currentUser
-        let optimisticReply = MeeshyMessage(
+        return MeeshyMessage(
             id: clientMessageId,
             clientMessageId: clientMessageId,
             conversationId: conversationId,
@@ -325,41 +363,5 @@ struct ThreadView: View {
             deliveryStatus: .sending,
             isMe: true
         )
-        replies.append(optimisticReply)
-
-        Task {
-            guard NetworkMonitor.shared.isOnline else {
-                let queueItem = OfflineQueueItem(
-                    conversationId: conversationId,
-                    content: text,
-                    clientMessageId: clientMessageId,
-                    replyToId: parentMessage.id
-                )
-                do {
-                    try await OfflineQueue.shared.enqueue(queueItem)
-                    isSending = false
-                } catch {
-                    replies.removeAll { $0.id == clientMessageId }
-                    replyText = savedText
-                    sendError = error.localizedDescription
-                    isSending = false
-                }
-                return
-            }
-            do {
-                let request = SendMessageRequest(content: text, replyToId: parentMessage.id, clientMessageId: clientMessageId)
-                _ = try await MessageService.shared.send(
-                    conversationId: conversationId,
-                    request: request
-                )
-                isSending = false
-                await loadReplies()
-            } catch {
-                replies.removeAll { $0.id == clientMessageId }
-                replyText = savedText
-                sendError = error.localizedDescription
-                isSending = false
-            }
-        }
     }
 }

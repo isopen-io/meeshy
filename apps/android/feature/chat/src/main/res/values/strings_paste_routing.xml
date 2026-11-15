@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="paste_media_too_large">This item is too large to paste.</string>
+</resources>

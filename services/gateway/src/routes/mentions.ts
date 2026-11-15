@@ -1,15 +1,15 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth.js';
 import { MentionService } from '../services/MentionService.js';
 import { validateParams, validateQuery } from '../validation/helpers.js';
 import { SuggestionsQuerySchema, MessageIdParamSchema, MyMentionsQuerySchema } from '../validation/mentions-schemas.js';
-import type {
-  MentionSuggestionsResponse,
-  GetMessageMentionsResponse,
-  GetUserMentionsResponse
-} from '@meeshy/shared/types/index';
 import type { MentionSuggestion } from '../services/MentionService.js';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../utils/response.js';
+import { historyReaderFromAuthContext, loadReaderHistoryFloor } from '../services/historyFloor.js';
+import { mapMessageProtectionFields } from './conversations/messageProtectionProjection.js';
+import { keepAliveForReaderAcrossConversations, withInheritedExpiry } from '../services/messaging/quoteCascade.js';
+import { logError } from '../utils/logger.js';
+import { captureNoticeWithheldFrom } from '../services/messaging/captureNoticeVisibility';
 
 interface MessageParams {
   messageId: string;
@@ -89,21 +89,16 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, suggestions);
     } catch (error) {
       // Post/conversation not found or access denied
-      if (error instanceof Error && error.message.includes('non trouvé ou accès refusé')) {
+      if (error instanceof Error && error.message.includes('accès refusé')) {
         return sendForbidden(reply, error.message);
       }
 
       // Log détaillé de l'erreur pour debug
-      fastify.log.error({
-        err: error,
-        contextId: request.query.contextId,
-        contextType: request.query.contextType,
-        conversationId: request.query.conversationId,
-        query: request.query.query,
-        userId: (request as UnifiedAuthRequest).authContext.userId,
-        stack: error instanceof Error ? error.stack : undefined,
-        message: error instanceof Error ? error.message : String(error)
-      }, 'Error getting mention suggestions');
+      logError(
+        fastify.log,
+        `Error getting mention suggestions (contextId=${request.query.contextId}, contextType=${request.query.contextType}, conversationId=${request.query.conversationId}, query=${request.query.query}, userId=${(request as UnifiedAuthRequest).authContext.userId})`,
+        error
+      );
 
       return sendInternalError(reply, 'Erreur lors de la récupération des suggestions');
     }
@@ -149,6 +144,24 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
         return sendNotFound(reply, 'Message non trouvé ou accès refusé');
       }
 
+      // Cette route révèle DEUX choses d'un message : qu'il existe, et qui y est
+      // mentionné. Sous le plancher d'historique du lecteur, ni l'une ni l'autre
+      // ne lui appartiennent. 404 et non 403 — même réponse que le fil
+      // (`threads.ts`) et que l'épinglé : un message d'avant l'arrivée n'est pas
+      // interdit, il n'existe pas pour ce lecteur, et un 403 confirmerait
+      // exactement ce qu'on lui cache. Le plancher se lit APRÈS le message,
+      // parce qu'il faut sa conversation pour le connaître.
+      const historyFloor = await loadReaderHistoryFloor(prisma, {
+        conversationId: message.conversationId,
+        reader: historyReaderFromAuthContext(authRequest.authContext)
+      });
+      if (historyFloor && message.createdAt < historyFloor) {
+        return sendNotFound(reply, 'Message non trouvé ou accès refusé');
+      }
+      if (await captureNoticeWithheldFrom(prisma, { row: message, reader: historyReaderFromAuthContext(authRequest.authContext) })) {
+        return sendNotFound(reply, 'Message non trouvé ou accès refusé');
+      }
+
       // Récupérer les mentions
       const mentions = await mentionService.getMentionsForMessage(messageId);
 
@@ -165,7 +178,7 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
         }
       })));
     } catch (error) {
-      fastify.log.error({ err: error }, 'Error getting message mentions');
+      logError(fastify.log, 'Error getting message mentions', error);
       return sendInternalError(reply, 'Erreur lors de la récupération des mentions');
     }
   });
@@ -195,7 +208,63 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
         limit || 50
       );
 
-      return sendSuccess(reply, mentions.map(mention => ({
+      // #16583 — LES DEUX COUPURES DE SERVICE, SUR UNE LISTE QUI TRAVERSE LES
+      // CONVERSATIONS.
+      //
+      // #16558 a doté cette porte des drapeaux de protection et a tranché, à
+      // raison, de servir `expiresAt: null` faute d'échéances de lecteur
+      // résolues. Il n'a pas posé la COUPURE — ce sont deux questions, et seule
+      // la première avait été instruite : « quelle échéance servir ? » puis
+      // « ce message a-t-il le droit d'être servi à ce lecteur ? ».
+      //
+      // Et c'est leur COMPOSITION qui aggravait. Un éphémère échu arrivait avec
+      // `expiresAt: null`, `isViewOnce: false`, `isBlurred: false` : le client
+      // n'avait AUCUN drapeau à lire, donc rendait une bulle ORDINAIRE. Le
+      // choix fail-closed sur le décompte est juste pris seul ; combiné à
+      // l'absence de coupure, il retirait au client le dernier indice qui lui
+      // aurait fait masquer la bulle.
+      //
+      // La clé de lecteur est PAR CONVERSATION (`MessageStatusEntry` est indexé
+      // par `Participant.id`, lui-même scopé par conversation), d'où la forme
+      // `…AcrossConversations` — une clé unique ferait paraître « décompte pas
+      // démarré » tout message d'une autre conversation, donc servirait PLUS.
+      // Une liste vide ne coûte aucune requête.
+      const mentionRows = mentions.map((mention) => mention.message);
+      const mentionConversationIds = [...new Set(mentionRows.map((row) => row.conversationId))];
+      const mentionReaderKeys = mentionConversationIds.length === 0
+        ? []
+        : await prisma.participant.findMany({
+            where: { userId, conversationId: { in: mentionConversationIds }, isActive: true },
+            select: { id: true, conversationId: true },
+            // #4165 — borné, et la borne est EXACTE, pas un plafond arbitraire :
+            // un utilisateur n'a au plus qu'UNE participation active par
+            // conversation, donc le nombre de conversations distinctes de la
+            // page est le maximum de lignes que cette lecture peut rendre.
+            take: mentionConversationIds.length,
+          });
+      const mentionReaderPage = await keepAliveForReaderAcrossConversations(
+        prisma,
+        mentionRows,
+        new Map(mentionReaderKeys.map((row) => [row.conversationId, row.id])),
+      );
+      const aliveMentionIds = new Set(mentionReaderPage.alive.map((row) => row.id));
+      const servableMentions = mentions.filter((mention) => aliveMentionIds.has(mention.message.id));
+
+      /**
+       * La protection servie d'une mention : l'échéance de CE lecteur, puis
+       * raccourcie par ce que la mention cite. `withInheritedExpiry` s'adresse
+       * à une ligne qui porte son `id` — on le lui donne et on ne le réémet
+       * pas, l'objet servi le posant déjà lui-même.
+       */
+      const servedProtection = (row: (typeof mentionRows)[number]) => {
+        const { id: _addressedById, ...protection } = withInheritedExpiry(
+          { id: row.id, ...mapMessageProtectionFields(row, mentionReaderPage.deadlines.get(row.id)) },
+          mentionReaderPage.inherited,
+        );
+        return protection;
+      };
+
+      return sendSuccess(reply, servableMentions.map(mention => ({
         id: mention.id,
         messageId: mention.messageId,
         mentionedAt: mention.mentionedAt,
@@ -205,6 +274,12 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
           conversationId: mention.message.conversationId,
           senderId: mention.message.senderId,
           createdAt: mention.message.createdAt,
+          // #16558 — les drapeaux que le client lit pour VOILER la bulle et
+          // refuser son transfert. #16583 — et depuis que les échéances du
+          // lecteur sont résolues ci-dessus, l'`expiresAt` servi est LE SIEN,
+          // plus le `null` prudent d'alors ni la colonne interne. L'échéance
+          // héritée d'une citation la raccourcit encore, jamais ne l'allonge.
+          ...servedProtection(mention.message),
           sender: mention.message.sender ? {
             id: mention.message.sender.id,
             username: mention.message.sender.user?.username,
@@ -219,7 +294,7 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
         }
       })));
     } catch (error) {
-      fastify.log.error({ err: error }, 'Error getting user mentions');
+      logError(fastify.log, 'Error getting user mentions', error);
       return sendInternalError(reply, 'Erreur lors de la récupération des mentions');
     }
   });

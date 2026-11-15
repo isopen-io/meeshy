@@ -1,4 +1,5 @@
 import XCTest
+import AVFoundation
 @testable import Meeshy
 
 /// Source-analysis guards for the camera-switch-mid-recording fix (2026-07-09).
@@ -24,8 +25,9 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Components/CameraView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+            .appendingPathComponent("Meeshy/Features/Main/Components/CameraModel.swift")
+        let video = url.deletingLastPathComponent().appendingPathComponent("CameraModel+Video.swift")
+        return try String(contentsOf: url, encoding: .utf8) + "\n" + String(contentsOf: video, encoding: .utf8)
     }
 
     private func body(from startMarker: String, to endMarker: String, in source: String) throws -> String {
@@ -38,7 +40,7 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
 
     func test_switchCamera_whileRecording_doesNotReconfigureInputInPlace() throws {
         let source = try cameraViewSource()
-        let fn = try body(from: "func switchCamera() {", to: "private func performCameraSwitch", in: source)
+        let fn = try body(from: "func switchCamera() {", to: "func performCameraSwitch", in: source)
 
         XCTAssertTrue(
             fn.contains("if isRecordingVideo"),
@@ -60,7 +62,7 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
 
     func test_switchCamera_guardsReentrancyWhileAlreadySwitching() throws {
         let source = try cameraViewSource()
-        let fn = try body(from: "func switchCamera() {", to: "private func performCameraSwitch", in: source)
+        let fn = try body(from: "func switchCamera() {", to: "func performCameraSwitch", in: source)
         XCTAssertTrue(
             fn.contains("guard !isSwitchingCameraDuringRecording else { return }"),
             "switchCamera() must no-op while a previous switch is still settling — " +
@@ -71,7 +73,7 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
 
     func test_stopRecording_queuesRequestWhenCalledMidSwitch() throws {
         let source = try cameraViewSource()
-        let fn = try body(from: "func stopRecording() {", to: "func stop() {", in: source)
+        let fn = try body(from: "func stopRecording() {", to: "private func handleSegmentFinished", in: source)
         XCTAssertTrue(
             fn.contains("pendingStopRequested = true"),
             "stopRecording() called while a camera switch is mid-flight must " +
@@ -96,7 +98,7 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
 
     func test_handleSegmentFinished_onlyMergesWhenMoreThanOneSegment() throws {
         let source = try cameraViewSource()
-        let fn = try body(from: "private func handleSegmentFinished", to: "nonisolated static func mergeSegments", in: source)
+        let fn = try body(from: "func handleSegmentFinished", to: "nonisolated static func mergeSegments", in: source)
         XCTAssertTrue(
             fn.contains("segments.count > 1 ? await Self.mergeSegments(segments) : segments.first"),
             "The fast path (no camera switch occurred, exactly one segment) must " +
@@ -108,7 +110,7 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
 
     func test_handleSegmentFinished_midSwitch_neverTogglesIsRecordingVideoFalse() throws {
         let source = try cameraViewSource()
-        let fn = try body(from: "private func handleSegmentFinished", to: "nonisolated static func mergeSegments", in: source)
+        let fn = try body(from: "func handleSegmentFinished", to: "nonisolated static func mergeSegments", in: source)
         guard let switchBranchStart = fn.range(of: "if isSwitchingCameraDuringRecording {") else {
             XCTFail("Could not locate the mid-switch branch in handleSegmentFinished"); return
         }
@@ -126,8 +128,14 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
     // this is pinned structurally rather than via synthetic AVFoundation media)
 
     private func mergeSegmentsBody() throws -> String {
-        let source = try cameraViewSource()
-        return try body(from: "nonisolated static func mergeSegments(_ urls: [URL]) async -> URL? {", to: "\n}", in: source)
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Components/CameraSegmentMerger.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        return try body(from: "static func merge(_ urls: [URL]) async -> URL? {", to: "\n}", in: source)
     }
 
     func test_mergeSegments_skipsUnreadableSegmentsInsteadOfFailingEntirely() throws {
@@ -201,13 +209,34 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
         )
     }
 
-    func test_mergeSegments_exportsToMovViaHighestQualityPreset() throws {
+    /// **Le preset se DÉCIDE, il ne se cite plus** (#5052).
+    ///
+    /// Ce témoin épinglait le littéral `AVAssetExportPresetHighestQuality`, sur
+    /// une intention juste : « ceci est une prise vue par l'utilisateur, pas un
+    /// rendu de vignette ». `CameraSegmentMergePolicy` sert désormais cette
+    /// intention MIEUX que le littéral — `Passthrough` ne ré-encode pas du tout
+    /// quand les segments sont homogènes, et le littéral y payait un transcodage
+    /// complet pour rien. La garde était donc périmée par un correctif, pas
+    /// contredite par lui.
+    ///
+    /// Elle se RE-VISE sur ce qui reste vrai : l'export délègue à la politique.
+    /// Ce que la politique décide est éprouvé ailleurs, par des témoins de
+    /// COMPORTEMENT sur une fonction pure — `CameraSegmentMergePolicyTests`, six
+    /// cas dont celui qui refuse d'affirmer une homogénéité non mesurée. Une
+    /// garde de source n'a pas à redire ce qu'un test de comportement établit.
+    func test_mergeSegments_exportsToMovViaThePolicyDecidedPreset() throws {
         let fn = try mergeSegmentsBody()
         XCTAssertTrue(
-            fn.contains("AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)"),
-            "The stitched composition must export via AVAssetExportSession at " +
-            "the highest-quality preset — this is a user-facing recording, not " +
-            "a thumbnail/preview render."
+            fn.contains("CameraSegmentMergePolicy.preset(formats:"),
+            "Le preset d'export se DÉCIDE depuis les formats des segments — " +
+            "un littéral rendrait la vue 4b impossible à tenir (« concatène des " +
+            "pistes déjà encodées, quasi instantané quelle que soit la durée »)."
+        )
+        XCTAssertTrue(
+            fn.contains("AVAssetExportSession(asset: composition, presetName: preset)"),
+            "…et la valeur décidée est celle que l'export REÇOIT : une politique " +
+            "calculée puis ignorée serait pire qu'un littéral, parce qu'elle " +
+            "aurait l'air d'être appliquée."
         )
         XCTAssertTrue(
             fn.contains("exportSession.outputFileType = .mov"),
@@ -221,5 +250,104 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
             "surface as nil so callers fail soft to the last segment instead " +
             "of handing off a broken/partial file."
         )
+    }
+}
+
+/// **Une vidéo interrompue garde ce qui a été filmé** (OPUS-11).
+///
+/// Un appel entrant, le passage en arrière-plan ou Siri closent la prise avec
+/// une erreur ET un fichier valide (`AVErrorRecordingSuccessfullyFinishedKey`).
+/// `handleSegmentFinished` jetait tout dès `error != nil` : 40 s de vidéo
+/// disparaissaient sans un mot.
+@MainActor
+final class CameraRecordingInterruptionTests: XCTestCase {
+
+    private func erreur(fichierValide: Bool?) -> NSError {
+        var info: [String: Any] = [:]
+        if let fichierValide { info[AVErrorRecordingSuccessfullyFinishedKey] = fichierValide }
+        return NSError(domain: AVFoundationErrorDomain, code: AVError.Code.sessionWasInterrupted.rawValue, userInfo: info)
+    }
+
+    func test_sansErreur_laPriseSuitSonCours() {
+        XCTAssertEqual(CameraRecordingEnding.of(nil), .finished)
+        XCTAssertEqual(CameraRecordingEnding.finished.next(keptSegments: 1), .asUsual)
+    }
+
+    func test_erreurAvecFichierValide_laPriseEstGardee() {
+        let fin = CameraRecordingEnding.of(erreur(fichierValide: true))
+        XCTAssertEqual(fin, .interrupted)
+        XCTAssertTrue(fin.keepsFile)
+        XCTAssertEqual(fin.next(keptSegments: 1), .keepWhatWasFilmed)
+    }
+
+    func test_erreurSansFichierValide_estUnePerte() {
+        XCTAssertEqual(CameraRecordingEnding.of(erreur(fichierValide: false)), .lost)
+        XCTAssertEqual(CameraRecordingEnding.of(erreur(fichierValide: nil)), .lost)
+        XCTAssertFalse(CameraRecordingEnding.lost.keepsFile)
+        XCTAssertEqual(CameraRecordingEnding.lost.next(keptSegments: 0), .nothingToKeep)
+    }
+
+    /// Après une bascule d'objectif, les segments déjà pris restent même si le
+    /// dernier est illisible.
+    func test_pertePartielle_gardeLesSegmentsDejaPris() {
+        XCTAssertEqual(CameraRecordingEnding.lost.next(keptSegments: 2), .keepWhatWasFilmed)
+    }
+
+    private func source(_ chemin: String) throws -> String {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: racine.appendingPathComponent(chemin), encoding: .utf8)
+    }
+
+    private func corps(_ texte: String, de debut: String, a fin: String) -> String {
+        guard let d = texte.range(of: debut) else { return "" }
+        let f = texte.range(of: fin, range: d.upperBound..<texte.endIndex)?.lowerBound ?? texte.endIndex
+        return String(texte[d.lowerBound..<f])
+    }
+
+    func test_laFinDeSegmentLitLErreurAuLieuDeLaJeter() throws {
+        let modele = try source("Meeshy/Features/Main/Components/CameraModel.swift")
+            + "\n" + source("Meeshy/Features/Main/Components/CameraModel+Video.swift")
+        let fn = corps(modele, de: "func handleSegmentFinished", a: "private func resumeRecordingAfterSwitch")
+        XCTAssertFalse(fn.isEmpty)
+        XCTAssertFalse(fn.contains("guard error == nil"),
+                       "Une erreur n'est pas une perte : AVFoundation livre un fichier valide après une interruption.")
+        XCTAssertTrue(fn.contains("CameraRecordingEnding.of(error)"))
+        XCTAssertTrue(fn.contains("deliverInterruptedRecording(token: jeton)"))
+    }
+
+    func test_laPriseInterrompueEstAnnoncee() throws {
+        let modele = try source("Meeshy/Features/Main/Components/CameraModel.swift")
+            + "\n" + source("Meeshy/Features/Main/Components/CameraModel+Video.swift")
+        let fn = corps(modele, de: "private func deliverInterruptedRecording", a: "private func deliverRecording")
+        XCTAssertTrue(fn.contains("await deliverRecording(token: token)"))
+        XCTAssertTrue(fn.contains("CameraTakeNotice.announceInterruptedRecording()"),
+                      "La coupure doit se dire : l'auteur croyait filmer encore.")
+    }
+
+    /// Une photo sans données ne sort plus en silence.
+    func test_unePhotoSansDonnees_seDit() throws {
+        let modele = try source("Meeshy/Features/Main/Components/CameraModel+PhotoCapture.swift")
+        let fn = corps(modele, de: "didFinishProcessingPhoto photo:", a: "let nom = ComposerPhotoEncoding")
+        XCTAssertEqual(fn.components(separatedBy: "self.photoWasLost()").count - 1, 2)
+        let perte = corps(modele, de: "func photoWasLost()", a: "/// Le tic du cadre")
+        XCTAssertTrue(perte.contains("CameraTakeNotice.announceLostPhoto()"))
+    }
+
+    /// Un assemblage raté garde le dernier segment ; les autres ne restent pas dans `tmp/`.
+    func test_assemblageRate_neLaissePasDeSegmentsOrphelins() throws {
+        let modele = try source("Meeshy/Features/Main/Components/CameraModel.swift")
+            + "\n" + source("Meeshy/Features/Main/Components/CameraModel+Video.swift")
+        let fn = corps(modele, de: "private func deliverRecording", a: "nonisolated static func mergeSegments")
+        XCTAssertTrue(fn.contains("for segment in segments.dropLast()"))
+    }
+
+    /// Le viseur, encore « en prise », se clôt lui aussi : sinon le cadenas et le
+    /// chrono restent affichés sur une caméra qui ne filme plus.
+    func test_leViseurClotUnePriseCloseParLeSysteme() throws {
+        let prises = try source("Meeshy/Features/Composer/ComposerCaptureSession+Takes.swift")
+        let fn = corps(prises, de: "func videoArrived(", a: "switch intent {")
+        XCTAssertTrue(fn.contains("if stage == .recording { closeTake() }"))
     }
 }

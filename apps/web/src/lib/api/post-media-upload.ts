@@ -1,0 +1,425 @@
+import * as uploadsEndpoints from '@meeshy/shared/api/endpoints/uploads';
+
+import { anySignal, timeoutSignal } from './abort';
+import type { DataSource } from './config';
+import { credentialHeaders, type ApiFailure, type ApiResult, type Credential } from './http';
+import { TUS_CHECKPOINT_MAX_AGE_MS, claimTusLease, idbTusCheckpointStore, tusFingerprint, type TusCheckpointStore } from './tus-checkpoint';
+
+/**
+ * LE CLIENT TUS D'UN `PostMedia` (#6900, § 1.5 de la spécification) — le
+ * MÊME protocole que `TusUploadManager.swift` (`:180-196`, `:288-520`,
+ * `:520-582`) : `POST uploads.root` (201 + `Location`), `PATCH` par
+ * tranches (`Upload-Offset`), `HEAD` pour se réaligner sur un 409, une
+ * nouvelle création sur un 404/410. Sans rafraîchissement de jeton (web-v2
+ * n'en a aucun).
+ *
+ * **La reprise SURVIT à un rechargement (#11311).** Un checkpoint IndexedDB
+ * (`tus-checkpoint.ts` : adresse de session, offset accepté, empreinte du
+ * fichier) est écrit après la création puis après chaque tranche ; un envoi du
+ * même fichier, d'une autre page, relit l'offset du SERVEUR (`HEAD`) et repart de
+ * là au lieu de recréer une session. Une panne réseau ou une annulation GARDE le
+ * checkpoint, un refus définitif de la passerelle le PURGE.
+ *
+ * `uploadPostMedia` ne CRÉE de `PostMedia` que pour un contexte `{post, story,
+ * status, comment}` — `isPostMediaUploadContext`,
+ * `packages/shared/types/attachment.ts`. `uploadMessageAttachment` (#12974)
+ * ouvre la même session SANS contexte : la passerelle crée un
+ * `MessageAttachment` — la voie des fichiers trop lourds pour la route directe
+ * (`lib/api/attachments.ts`, `SMALL_FILE_THRESHOLD`).
+ *
+ * **Rend un `ApiResult`, et ne REJETTE JAMAIS** — réseau coupé, annulation,
+ * délai dépassé, nom de fichier non ASCII : chaque panne est une VALEUR. Un
+ * appelant qui attend l'accusé (la publication, § 1.4) ne peut pas rester
+ * suspendu sur une promesse rejetée que personne n'a attrapée.
+ *
+ * Chargé en `import()` par le studio à la PREMIÈRE sélection de fichier
+ * (chunk `post_media_upload`, `budgets.json`) : l'écran s'ouvre sans lui.
+ */
+export type PostMediaUploadContext = 'post' | 'story' | 'status' | 'comment';
+
+export type PostMediaUploadResult = {
+  readonly postMediaId: string;
+  readonly fileUrl: string;
+  readonly mimeType: string;
+  readonly thumbHash?: string;
+};
+
+export type PostMediaUploadDeps = {
+  readonly source: DataSource;
+  readonly base: string;
+  readonly credential: () => Credential | null;
+  readonly fetchImpl?: typeof fetch;
+};
+
+export type PostMediaUploadParams = PostMediaUploadDeps & {
+  readonly file: File;
+  readonly uploadContext: PostMediaUploadContext;
+  /** Une empreinte CLIENTE (`thumbhash`, `tus-handler.ts:457-465`) — servie
+   * seulement quand l'appelant en tient déjà une ; la passerelle en génère une
+   * sinon (`:466-472`). */
+  readonly thumbHash?: string;
+  readonly signal?: AbortSignal;
+  /** Fraction envoyée, de 0 à 1 — rappelée après chaque tranche acceptée. */
+  readonly onProgress?: (fraction: number) => void;
+  /** Injectée par les témoins ; `WEB_TUS_CHUNK_BYTES` en production. */
+  readonly chunkSize?: number;
+  readonly checkpoints?: TusCheckpointStore | null;
+  readonly now?: () => number;
+  /** Injectée par les témoins ; une vraie attente en production (débit 429). */
+  readonly sleep?: (ms: number) => Promise<void>;
+};
+
+/** La reprise d'une PIÈCE JOINTE de message (#12974) — la même session TUS,
+ * SANS contexte de publication : la passerelle crée alors un
+ * `MessageAttachment` (`tus-handler.ts`, branche hors `isPostMediaUploadContext`),
+ * comme `TusUploadManager.swift` pour l'outbox iOS. */
+export type MessageAttachmentUploadParams = Omit<PostMediaUploadParams, 'uploadContext'>;
+
+type TusParams = MessageAttachmentUploadParams & { readonly uploadContext?: PostMediaUploadContext };
+
+/**
+ * LA TRANCHE WEB — 2 Mio, pas les 10 Mo de `TUS_CHUNK_SIZE` (calibrés pour
+ * `URLSession`, question 9.6). Chaque requête a son propre délai de garde
+ * (`TUS_REQUEST_TIMEOUT_MS`) : sur le profil que ce dépôt budgète (Fast 3G,
+ * ~400 kbit/s, `budgets.json § network`), 10 Mo demandent ~200 s — au-delà du
+ * délai, donc un échec systématique —, 2 Mio ~40 s. Seule la tranche EN VOL
+ * est lue en mémoire (`File.slice`), jamais le fichier entier : une vidéo de
+ * plusieurs centaines de mégaoctets ne tient pas dans une WebView Android.
+ */
+export const WEB_TUS_CHUNK_BYTES = 2 * 1024 * 1024;
+export const TUS_REQUEST_TIMEOUT_MS = 120_000;
+
+const UPLOADS_PATH = uploadsEndpoints.root;
+const TUS_RESUMABLE = '1.0.0';
+/** Réalignements sur 409 avant d'abandonner — une boucle BORNÉE : un serveur
+ * dont l'offset ne progresse jamais rend la main plutôt que de tourner. */
+const MAX_OFFSET_REALIGNMENTS = 8;
+/** LE DÉBIT N'ARRÊTE PAS UNE MONTÉE (#12974) — le seau global de la passerelle
+ * (300 requêtes/minute par adresse) se remplit en moins d'une minute sur un
+ * partage de plusieurs gigaoctets. Une tranche refusée en 429 attend
+ * `Retry-After` (borné) puis repart du même offset ; au-delà de ces attentes,
+ * le 429 remonte et le checkpoint reste pour la reprise. */
+const MAX_THROTTLE_WAITS = 30;
+const MAX_THROTTLE_WAIT_MS = 60_000;
+const DEFAULT_THROTTLE_WAIT_MS = 5_000;
+
+function throttleWaitMs(response: Response): number {
+  const seconds = Number(response.headers.get('Retry-After'));
+  const wanted = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : DEFAULT_THROTTLE_WAIT_MS;
+  return Math.min(MAX_THROTTLE_WAIT_MS, wanted);
+}
+
+const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+function failure(status: number, error: string, code?: string): ApiFailure {
+  return { ok: false, status, error, ...(code !== undefined ? { code } : {}) };
+}
+
+/** UTF-8 → base64, la forme que `@tus/utils` DÉCODE (`Metadata.js:35`,
+ * `Buffer.from(value, 'base64').toString('utf8')`). `btoa` seul encode du
+ * Latin-1 — « été.jpg » arriverait mutilé — et LÈVE sur tout caractère
+ * au-delà de U+00FF (un nom de fichier en arabe, l'une des sept langues). */
+function base64Utf8(value: string): string {
+  const binary = Array.from(new TextEncoder().encode(value), (byte) => String.fromCharCode(byte)).join('');
+  return btoa(binary);
+}
+
+function uploadMetadataHeader(entries: ReadonlyArray<readonly [string, string]>): string {
+  return entries.map(([key, value]) => `${key} ${base64Utf8(value)}`).join(',');
+}
+
+type Exchange = { readonly kind: 'response'; readonly response: Response } | { readonly kind: 'failure'; readonly failure: ApiFailure };
+
+/** Un aller-retour, jamais une exception : le signal de l'appelant COMPOSÉ au
+ * délai de garde (motif `http.ts#composeSignal`), la cause lue sur l'état des
+ * signaux sources après coup. */
+async function exchange(
+  url: string,
+  init: RequestInit,
+  params: Pick<TusParams, 'signal' | 'fetchImpl'>,
+): Promise<Exchange> {
+  const deadline = timeoutSignal(TUS_REQUEST_TIMEOUT_MS);
+  const signal = params.signal === undefined ? deadline : anySignal([params.signal, deadline]);
+  try {
+    const response = await (params.fetchImpl ?? fetch)(url, { ...init, signal });
+    return { kind: 'response', response };
+  } catch (error) {
+    if (params.signal?.aborted === true) return { kind: 'failure', failure: failure(0, 'Téléversement annulé', 'ABORTED') };
+    if (deadline.aborted) return { kind: 'failure', failure: failure(0, 'La passerelle n’a pas répondu', 'TIMEOUT') };
+    const message = error instanceof Error ? error.message : 'Réseau indisponible';
+    return { kind: 'failure', failure: failure(0, message, 'NETWORK') };
+  }
+}
+
+async function textOf(response: Response): Promise<string> {
+  try {
+    return (await response.text()).trim();
+  } catch {
+    return '';
+  }
+}
+
+async function refusal(response: Response): Promise<ApiFailure> {
+  return failure(response.status, (await textOf(response)) || `Erreur ${response.status}`);
+}
+
+function offsetOf(response: Response): number | null {
+  const raw = response.headers.get('Upload-Offset');
+  const parsed = raw === null || raw === '' ? Number.NaN : Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+/** `Location` — absolue ou relative (`uploads.byWildcard(<id>)`) selon que
+ * `@tus/server` a reçu un hôte de confiance (`respectForwardedHeaders`). */
+function resolvedLocation(location: string, base: string): string {
+  if (/^https?:\/\//i.test(location)) return location;
+  return `${base}${location.startsWith('/') ? '' : '/'}${location}`;
+}
+
+async function createUpload(params: TusParams, credential: Credential): Promise<string | ApiFailure> {
+  const entries: Array<readonly [string, string]> = [
+    ['filename', params.file.name],
+    ['filetype', params.file.type !== '' ? params.file.type : 'application/octet-stream'],
+    ...(params.uploadContext !== undefined ? [['uploadcontext', params.uploadContext] as const] : []),
+    ...(params.thumbHash !== undefined ? [['thumbhash', params.thumbHash] as const] : []),
+  ];
+  const created = await exchange(
+    `${params.base}${UPLOADS_PATH}`,
+    {
+      method: 'POST',
+      headers: {
+        ...credentialHeaders(credential),
+        'Tus-Resumable': TUS_RESUMABLE,
+        'Upload-Length': String(params.file.size),
+        'Upload-Metadata': uploadMetadataHeader(entries),
+      },
+    },
+    params,
+  );
+  if (created.kind === 'failure') return created.failure;
+  if (created.response.status !== 201) return refusal(created.response);
+  const location = created.response.headers.get('Location');
+  if (location === null || location === '') return failure(201, 'Réponse de téléversement sans Location', 'TUS_NO_LOCATION');
+  return resolvedLocation(location, params.base);
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** Le corps de la DERNIÈRE tranche (`tus-handler.ts:612-652`), narrowé champ
+ * par champ — jamais un résultat inventé depuis une réponse partielle. */
+async function finishedMedia(response: Response): Promise<PostMediaUploadResult | null> {
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    return null;
+  }
+  if (!isRecord(payload) || payload.success !== true || !isRecord(payload.data)) return null;
+  const attachment = payload.data.attachment;
+  if (!isRecord(attachment)) return null;
+  const { id, fileUrl, mimeType, thumbHash } = attachment;
+  if (typeof id !== 'string' || id === '' || typeof fileUrl !== 'string' || typeof mimeType !== 'string') return null;
+  return { postMediaId: id, fileUrl, mimeType, ...(typeof thumbHash === 'string' && thumbHash !== '' ? { thumbHash } : {}) };
+}
+
+let fixtureUploads = 0;
+
+export async function uploadPostMedia(params: PostMediaUploadParams): Promise<ApiResult<PostMediaUploadResult>> {
+  const total = params.file.size;
+  if (total === 0) return failure(400, 'Fichier vide', 'EMPTY_FILE');
+
+  // Les fixtures miment l'ACCUSÉ de `tus-handler.ts:612-652` sans session ni
+  // réseau — comme tous les ports de `lib/api/*` sous cette source.
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    fixtureUploads += 1;
+    params.onProgress?.(1);
+    return {
+      ok: true,
+      data: { postMediaId: `fx-pm-${fixtureUploads}`, fileUrl: `fixtures/${params.file.name}`, mimeType: params.file.type },
+    };
+  }
+
+  const credential = params.credential();
+  if (credential === null) return failure(401, 'Authentification requise', 'UNAUTHORIZED');
+  if (credential.kind === 'anonymous') {
+    return failure(403, 'Post media upload requires an identifiable registered account', 'POST_MEDIA_REQUIRES_ACCOUNT');
+  }
+
+  return resumableUpload(params, credential);
+}
+
+let fixtureAttachments = 0;
+
+export async function uploadMessageAttachment(params: MessageAttachmentUploadParams): Promise<ApiResult<{ readonly attachmentId: string }>> {
+  if (params.file.size === 0) return failure(400, 'Fichier vide', 'EMPTY_FILE');
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    fixtureAttachments += 1;
+    params.onProgress?.(1);
+    return { ok: true, data: { attachmentId: `fx-att-tus-${fixtureAttachments}` } };
+  }
+  const credential = params.credential();
+  if (credential === null) return failure(401, 'Authentification requise', 'UNAUTHORIZED');
+  const result = await resumableUpload(params, credential);
+  return result.ok ? { ok: true, data: { attachmentId: result.data.postMediaId } } : result;
+}
+
+async function resumableUpload(params: TusParams, credential: Credential): Promise<ApiResult<PostMediaUploadResult>> {
+  const store = params.checkpoints === undefined ? idbTusCheckpointStore() : params.checkpoints;
+  /* Une pièce jointe et un média de publication du MÊME fichier ne se reprennent jamais l'un l'autre :
+     la session TUS a créé une ligne de l'une OU de l'autre table. */
+  const fingerprint = tusFingerprint({ ...params, uploadContext: params.uploadContext ?? 'message' });
+  const release = store === null ? null : claimTusLease(fingerprint);
+  const checkpoints = release === null ? null : store;
+  try {
+    const result = await transmit(params, credential, { checkpoints, fingerprint });
+    if (checkpoints !== null && settlesCheckpoint(result)) await checkpoints.remove(fingerprint);
+    return result;
+  } finally {
+    release?.();
+  }
+}
+
+type CheckpointContext = { readonly checkpoints: TusCheckpointStore | null; readonly fingerprint: string };
+
+/** Ce qui rend un checkpoint inutile : l'envoi est fini, tous ses octets sont partis, ou la passerelle a refusé
+ * pour de bon (4xx hors authentification, délai et débit). Une panne réseau, une annulation, un 5xx ou un jeton
+ * absent le GARDENT — c'est tout le but de la reprise. */
+function settlesCheckpoint(result: ApiResult<PostMediaUploadResult>): boolean {
+  if (result.ok) return true;
+  const { status } = result;
+  return (status >= 200 && status < 300) || (status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429);
+}
+
+const isDefinitiveRefusal = (status: number): boolean => status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429;
+
+type Session = { readonly location: string; readonly offset: number };
+
+/** La session d'un envoi précédent du même fichier, relue côté serveur — le checkpoint n'est qu'un REPÈRE, l'offset
+ * de la passerelle fait foi. `null` : repartir d'une session neuve (checkpoint périmé, d'une autre taille, déjà
+ * entièrement envoyé, ou session oubliée du serveur). Un `HEAD` en panne rend la panne et GARDE le checkpoint. */
+async function resumedSession(
+  params: TusParams,
+  credential: Credential,
+  context: CheckpointContext & { readonly checkpoints: TusCheckpointStore },
+): Promise<Session | ApiFailure | null> {
+  const { checkpoints, fingerprint } = context;
+  const total = params.file.size;
+  const found = await checkpoints.find(fingerprint);
+  if (found === null) return null;
+  const age = (params.now ?? Date.now)() - found.savedAt;
+  if (age > TUS_CHECKPOINT_MAX_AGE_MS || found.fileSize !== total || found.offset >= total) {
+    await checkpoints.remove(fingerprint);
+    return null;
+  }
+  const location = resolvedLocation(found.location, params.base);
+  const head = await exchange(location, { method: 'HEAD', headers: { ...credentialHeaders(credential), 'Tus-Resumable': TUS_RESUMABLE } }, params);
+  if (head.kind === 'failure') return head.failure;
+  const { response } = head;
+  if (response.status === 200) {
+    const served = offsetOf(response);
+    if (served !== null && served < total) return { location, offset: served };
+    await checkpoints.remove(fingerprint);
+    return null;
+  }
+  if (!isDefinitiveRefusal(response.status)) return refusal(response);
+  await checkpoints.remove(fingerprint);
+  return null;
+}
+
+async function transmit(
+  params: TusParams,
+  credential: Credential,
+  context: CheckpointContext,
+): Promise<ApiResult<PostMediaUploadResult>> {
+  const total = params.file.size;
+  const chunkSize = Math.max(1, params.chunkSize ?? WEB_TUS_CHUNK_BYTES);
+  const { checkpoints, fingerprint } = context;
+  const remember = (location: string, offset: number): Promise<void> =>
+    checkpoints === null ? Promise.resolve() : checkpoints.save({ location, offset, fileSize: total, fingerprint, savedAt: (params.now ?? Date.now)() });
+
+  const resumed = checkpoints === null ? null : await resumedSession(params, credential, { checkpoints, fingerprint });
+  if (resumed !== null && 'ok' in resumed) return resumed;
+  const created = resumed === null ? await createUpload(params, credential) : resumed.location;
+  if (typeof created !== 'string') return created;
+
+  let location = created;
+  let offset = resumed === null ? 0 : resumed.offset;
+  if (resumed === null) await remember(location, 0);
+  let realignments = 0;
+  let throttleWaits = 0;
+  let restarted = false;
+
+  while (offset < total) {
+    const end = Math.min(offset + chunkSize, total);
+    /* L'IDENTITÉ EST RELUE À CHAQUE TRANCHE, ET SON ABSENCE ARRÊTE TOUT (#9743) —
+       une tranche ne part jamais sans jeton, ni après la sortie de son auteur. */
+    const live = params.credential();
+    if (live === null) return failure(401, 'Authentification requise', 'UNAUTHORIZED');
+    const patched = await exchange(
+      location,
+      {
+        method: 'PATCH',
+        headers: {
+          ...credentialHeaders(live),
+          'Tus-Resumable': TUS_RESUMABLE,
+          'Content-Type': 'application/offset+octet-stream',
+          'Upload-Offset': String(offset),
+        },
+        body: params.file.slice(offset, end),
+      },
+      params,
+    );
+    if (patched.kind === 'failure') return patched.failure;
+    const { response } = patched;
+
+    if (response.status === 200 || response.status === 204) {
+      const next = offsetOf(response) ?? end;
+      params.onProgress?.(Math.min(1, next / total));
+      if (next >= total) {
+        const media = await finishedMedia(response);
+        return media === null ? failure(response.status, 'Réponse de fin de téléversement illisible', 'TUS_FINISH_UNREADABLE') : { ok: true, data: media };
+      }
+      offset = next;
+      await remember(location, offset);
+      continue;
+    }
+
+    if (response.status === 429 && throttleWaits < MAX_THROTTLE_WAITS) {
+      throttleWaits += 1;
+      await (params.sleep ?? realSleep)(throttleWaitMs(response));
+      continue;
+    }
+
+    if (response.status === 409) {
+      realignments += 1;
+      if (realignments > MAX_OFFSET_REALIGNMENTS) return refusal(response);
+      const relive = params.credential();
+      if (relive === null) return failure(401, 'Authentification requise', 'UNAUTHORIZED');
+      const head = await exchange(location, { method: 'HEAD', headers: { ...credentialHeaders(relive), 'Tus-Resumable': TUS_RESUMABLE } }, params);
+      if (head.kind === 'failure') return head.failure;
+      const served = head.response.status === 200 ? offsetOf(head.response) : null;
+      if (served === null) return failure(409, 'Décalage serveur illisible', 'TUS_OFFSET_UNKNOWN');
+      offset = served;
+      await remember(location, offset);
+      continue;
+    }
+
+    if (response.status === 404 || response.status === 410) {
+      if (restarted) return failure(response.status, 'Session de téléversement perdue', 'TUS_SESSION_LOST');
+      restarted = true;
+      const again = params.credential();
+      if (again === null || again.kind !== credential.kind) return failure(401, 'Authentification requise', 'UNAUTHORIZED');
+      const recreated = await createUpload(params, again);
+      if (typeof recreated !== 'string') return recreated;
+      location = recreated;
+      offset = 0;
+      await remember(location, 0);
+      continue;
+    }
+
+    return refusal(response);
+  }
+
+  return failure(0, 'Téléversement inachevé', 'TUS_UNFINISHED');
+}

@@ -29,6 +29,7 @@ from .voice_metadata import VoiceModel, VoiceCharacteristics
 from .voice_analyzer import get_voice_analyzer
 from .voice_fingerprint import VoiceFingerprint
 from utils.audio_format_converter import convert_to_wav_if_needed
+from utils.voice_cache_guard import guard_voice_cache_id, voice_cache_user_dir
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,8 @@ class VoiceCloneModelCreator:
         Returns:
             VoiceModel prêt à l'emploi
         """
+        user_id = guard_voice_cache_id(user_id)
+
         # Déterminer l'environnement
         environment = os.getenv('ENVIRONMENT', os.getenv('NODE_ENV', 'production')).lower()
         is_development = environment in ['development', 'dev']
@@ -313,11 +316,13 @@ class VoiceCloneModelCreator:
                     )
 
             # Créer un dossier temporaire pour l'embedding (nécessaire pour TTS)
-            profile_user_id = profile_data.get('userId', user_id)
-            user_dir = self.voice_cache_dir / profile_user_id
+            profile_user_id = guard_voice_cache_id(profile_data.get('userId') or user_id)
+            profile_id = guard_voice_cache_id(
+                profile_data.get('profileId') or f"vfp_{profile_user_id[:8]}"
+            )
+            user_dir = voice_cache_user_dir(self.voice_cache_dir, profile_user_id)
             user_dir.mkdir(parents=True, exist_ok=True)
 
-            profile_id = profile_data.get('profileId', f"vfp_{profile_user_id[:8]}")
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             # SÉCURITÉ: .npy au lieu de .pkl (numpy safe vs pickle unsafe)
             embedding_filename = f"{profile_user_id}_{profile_id}_{timestamp}_gateway.npy"
@@ -551,6 +556,7 @@ class VoiceCloneModelCreator:
         Returns:
             VoiceModel nouvellement créé
         """
+        user_dir = voice_cache_user_dir(self.voice_cache_dir, user_id)
         start_time = time.time()
         logger.info(
             f"[MODEL_CREATOR] 🎤 Création modèle pour {user_id} "
@@ -579,7 +585,6 @@ class VoiceCloneModelCreator:
             )
 
         # Créer le dossier utilisateur: {voice_cache_dir}/{user_id}/
-        user_dir = self.voice_cache_dir / user_id
         user_dir.mkdir(parents=True, exist_ok=True)
 
         # =====================================================================
@@ -719,6 +724,7 @@ class VoiceCloneModelCreator:
         Returns:
             VoiceModel amélioré
         """
+        user_dir = voice_cache_user_dir(self.voice_cache_dir, existing_model.user_id) / "temp"
         logger.info(
             f"[MODEL_CREATOR] 🔄 Vérification amélioration modèle pour "
             f"{existing_model.user_id}"
@@ -750,7 +756,6 @@ class VoiceCloneModelCreator:
             logger.info(f"[MODEL_CREATOR] ✅ Signature vocale vérifiée: {reason}")
 
         # Extraire embedding du nouvel audio
-        user_dir = self.voice_cache_dir / existing_model.user_id / "temp"
         user_dir.mkdir(parents=True, exist_ok=True)
 
         new_embedding = await self._audio_processor.extract_voice_embedding(

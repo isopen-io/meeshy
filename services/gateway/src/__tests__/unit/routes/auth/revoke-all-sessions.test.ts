@@ -68,7 +68,7 @@ describe('GET /auth/revoke-all-sessions — invalid token', () => {
   it('returns 400 HTML when jwt.verify throws', async () => {
     mockVerify.mockImplementation(() => { throw new Error('invalid token'); });
     const app = await buildApp();
-    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=bad-token' });
+    const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=bad-token' });
     expect(res.statusCode).toBe(400);
     expect(res.headers['content-type']).toMatch(/text\/html/);
     expect(res.body).toContain('expired or invalid');
@@ -80,9 +80,9 @@ describe('GET /auth/revoke-all-sessions — wrong action in payload', () => {
   it('returns 400 HTML when action is not revoke-all', async () => {
     mockVerify.mockReturnValue({ userId: 'user-1', action: 'other-action' });
     const app = await buildApp();
-    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=valid-token' });
+    const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=valid-token' });
     expect(res.statusCode).toBe(400);
-    expect(res.body).toContain('Invalid link');
+    expect(res.body).toContain('expired or invalid');
     await app.close();
   });
 });
@@ -91,7 +91,7 @@ describe('GET /auth/revoke-all-sessions — missing userId in payload', () => {
   it('returns 400 HTML when userId is absent', async () => {
     mockVerify.mockReturnValue({ action: 'revoke-all' });
     const app = await buildApp();
-    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=valid-token' });
+    const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=valid-token' });
     expect(res.statusCode).toBe(400);
     await app.close();
   });
@@ -102,7 +102,7 @@ describe('GET /auth/revoke-all-sessions — success', () => {
     mockVerify.mockReturnValue({ userId: 'usr-123', action: 'revoke-all' });
     mockInvalidateAllSessions.mockResolvedValue(5);
     const app = await buildApp();
-    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=valid-token' });
+    const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=valid-token' });
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toMatch(/text\/html/);
     expect(res.body).toContain('sessions disconnected');
@@ -124,7 +124,7 @@ describe('GET /auth/revoke-all-sessions — live sockets', () => {
     const { rooms, handler } = makeSocketIOHandler([socket, { ...socket }]);
 
     const app = await buildApp(handler);
-    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=valid-token' });
+    const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=valid-token' });
 
     expect(res.statusCode).toBe(200);
     expect(rooms).toEqual(['user:usr-123']);
@@ -138,7 +138,7 @@ describe('GET /auth/revoke-all-sessions — live sockets', () => {
     mockVerify.mockReturnValue({ userId: 'usr-123', action: 'revoke-all' });
     mockInvalidateAllSessions.mockResolvedValue(1);
     const app = await buildApp();
-    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=valid-token' });
+    const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=valid-token' });
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('sessions disconnected');
     await app.close();
@@ -159,9 +159,58 @@ describe('GET /auth/revoke-all-sessions — live sockets', () => {
       }),
     };
     const app = await buildApp(handler);
-    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=valid-token' });
+    const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=valid-token' });
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('sessions disconnected');
+    await app.close();
+  });
+});
+
+/**
+ * #10859 — le lien neuf porte son jeton dans le FRAGMENT : la page web le remet
+ * dans le CORPS d'un POST, jamais dans une adresse qu'un journal d'accès garde.
+ */
+describe('POST /auth/revoke-all-sessions — le jeton voyage dans le corps', () => {
+  it('révoque les sessions et répond en JSON, sans rien lire de la requête', async () => {
+    mockVerify.mockReturnValue({ userId: 'usr-123', action: 'revoke-all' });
+    mockInvalidateAllSessions.mockResolvedValue(4);
+    const app = await buildApp();
+    const res = await app.inject({ method: 'POST', url: '/revoke-all-sessions', payload: { token: 'valid-token' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, data: { revokedCount: 4 } });
+    expect(mockVerify.mock.calls.at(-1)?.[0]).toBe('valid-token');
+    expect(mockInvalidateAllSessions).toHaveBeenCalledWith('usr-123', undefined, 'email_revoke_all');
+    await app.close();
+  });
+
+  it('coupe aussi les sockets vivantes', async () => {
+    mockVerify.mockReturnValue({ userId: 'usr-123', action: 'revoke-all' });
+    mockInvalidateAllSessions.mockResolvedValue(1);
+    const closed: boolean[] = [];
+    const socket = { emit: () => undefined, disconnect: (close?: boolean) => closed.push(close === true) };
+    const { handler } = makeSocketIOHandler([socket]);
+    const app = await buildApp(handler);
+    const res = await app.inject({ method: 'POST', url: '/revoke-all-sessions', payload: { token: 'valid-token' } });
+    expect(res.statusCode).toBe(200);
+    expect(closed).toEqual([true]);
+    await app.close();
+  });
+
+  it('refuse un jeton invalide par un code lisible', async () => {
+    mockVerify.mockImplementation(() => { throw new Error('invalid token'); });
+    mockInvalidateAllSessions.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({ method: 'POST', url: '/revoke-all-sessions', payload: { token: 'bad' } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ success: false, code: 'INVALID_OR_EXPIRED_LINK' });
+    expect(mockInvalidateAllSessions).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('refuse un corps sans jeton', async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: 'POST', url: '/revoke-all-sessions', payload: {} });
+    expect(res.statusCode).toBe(400);
     await app.close();
   });
 });

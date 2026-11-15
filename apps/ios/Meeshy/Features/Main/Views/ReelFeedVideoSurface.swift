@@ -44,8 +44,7 @@ nonisolated enum ReelEngineOwnershipPolicy {
 /// ni scrub (ils vivent dans le viewer plein écran). Affiché aspect-fill.
 ///
 /// Différence avec le viewer : le son suit l'intention de SESSION du fil
-/// (`ReelFeedSoundIntent`, S2 — bouton de son du fil, exigence produit
-/// 2026-08-22) — muet par défaut, activable par carte via le bouton de son.
+/// (`ReelFeedSoundIntent`, S2 — bouton de son du fil) — muet par défaut, activable par carte via le bouton de son.
 /// L'écriture du mute passe par `ReelFeedSoundButtonPolicy.apply(soundOn:to:)`
 /// (cf. `drive`) : couper le son du fil ne touche jamais `isMuted`
 /// (préférence globale), mais l'ACTIVER le clarifie explicitement à `false`
@@ -53,6 +52,8 @@ nonisolated enum ReelEngineOwnershipPolicy {
 struct ReelFeedVideoSurface: View {
     let media: FeedMedia
     let isActive: Bool
+    /// #10504 — le contenu dont la lecture est mesurée (`playback`).
+    var playbackTarget: SocialTarget? = nil
 
     /// Reporté au parent (D3, S2) : `true` quand CETTE instance possède
     /// RÉELLEMENT le moteur partagé et qu'il joue bien SA vidéo
@@ -98,6 +99,9 @@ struct ReelFeedVideoSurface: View {
     /// à `true` (DoD S2 rejet, constat majeur #2).
     @State private var isMutedMirror: Bool = SharedAVPlayerManager.shared.isMuted
     @State private var isForceMutedMirror: Bool = SharedAVPlayerManager.shared.isForceMuted
+    /// Miroir du PiP (#9575) : la carte ne monte pas le lecteur que la fenêtre
+    /// PiP joue.
+    @State private var isPipActiveMirror: Bool = SharedAVPlayerManager.shared.isPipActive
 
     /// `true` once THIS card instance has actually driven the shared engine
     /// (called `load()`/`play()` while active) and not yet relinquished it.
@@ -110,19 +114,29 @@ struct ReelFeedVideoSurface: View {
     @State private var ownsEngine = false
 
     private var attachment: MeeshyMessageAttachment { media.toMessageAttachment() }
+    /// Le verdict de montage du MOTEUR (#9575), au rôle EN LIGNE : faux tant
+    /// que la fenêtre PiP joue ce média — la carte rend son poster, et ne
+    /// met pas non plus en pause une lecture qui n'est plus la sienne.
     private var isShowingThis: Bool {
-        player != nil && activeURL == attachment.fileUrl
+        player != nil && SharedAVPlayerManager.mayMountPlayer(
+            role: .inline,
+            surfaceMedia: attachment.fileUrl,
+            activeMedia: activeURL,
+            isPipActive: isPipActiveMirror)
     }
 
     var body: some View {
         VideoAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, _ in
-            content(ready: availability == .ready)
+            // #12027 : prêt aussi pendant un téléchargement LISIBLE — le
+            // moteur joue sa tête (`SharedAVPlayerManager.load`, étape 3).
+            content(ready: availability.playsNow(fileUrl: attachment.fileUrl))
         }
         .onReceive(manager.$activeURL) { activeURL = $0 }
         .onReceive(manager.$player) { player = $0 }
         .onReceive(ReelFeedSoundIntent.shared.$isSoundOn) { soundOn = $0 }
         .onReceive(manager.$isMuted) { isMutedMirror = $0; isSoundAudible.wrappedValue = !($0 || isForceMutedMirror) }
         .onReceive(manager.$isForceMuted) { isForceMutedMirror = $0; isSoundAudible.wrappedValue = !(isMutedMirror || $0) }
+        .onReceive(manager.$isPipActive) { isPipActiveMirror = $0 }
     }
 
     @ViewBuilder
@@ -198,8 +212,16 @@ struct ReelFeedVideoSurface: View {
             }
             return
         }
+        // La fenêtre PiP joue CE média : la carte ne reprend pas le moteur —
+        // ni lecture relancée, ni muet du fil posé sur ce que l'utilisateur
+        // écoute ailleurs (#9575).
+        guard !(manager.isPipActive && manager.activeURL == attachment.fileUrl) else { return }
         if manager.activeURL != attachment.fileUrl {
             manager.load(urlString: attachment.fileUrl, attachmentId: media.id)
+            // Reposée APRÈS `load()` — qui appelle `cleanup()` — et clé par la
+            // pièce jointe qu'elle qualifie : ce moteur est partagé (#7212).
+            manager.setServedConsumption(attachment.currentUserConsumption, for: media.id)
+            manager.setPlaybackSubject(playbackTarget.map { PlaybackQoESubject(target: $0, surface: SocialSurface(.feed), mediaId: media.id) })
         }
         updateEngineOwnership(true)
         // Loop DOIT être (ré)affirmé APRÈS `load()` : `load()` appelle `cleanup()`
@@ -218,10 +240,9 @@ struct ReelFeedVideoSurface: View {
         // (DoD S2 rejet, constat majeur #2).
         ReelFeedSoundButtonPolicy.apply(soundOn: soundOn, to: manager)
         manager.shouldLoop = true
-        // D5 : aucun armement explicite de `.duckOthers` ici — `apply()`
+        // D5 : aucun armement explicite de la session ici — `apply()`
         // ci-dessus a déjà résolu `isMuted`/`isForceMuted` AVANT cet appel, et
-        // `manager.play()` (SharedAVPlayerManager) arme lui-même `.duckOthers`,
-        // gated sur `effectiveMuted` AU COMPLET (isMuted OU isForceMuted) — pas
+        // `manager.play()` arme lui-même la session (loi #11039), lue sur `effectiveMuted` AU COMPLET (isMuted OU isForceMuted) — pas
         // seulement sur `isForceMuted` comme le faisait l'ancien appel explicite
         // ici, qui pouvait armer la session pour une vidéo restée silencieuse
         // quand `isMuted` seul valait `true` (DoD S2 rejet, constat majeur #2).

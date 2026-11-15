@@ -6,12 +6,12 @@ import MeeshySDK
 
 public struct GlassCard: ViewModifier {
     public var cornerRadius: CGFloat = 20
-    @ObservedObject private var theme = ThemeManager.shared
+    @ResolvedThemePalette private var theme
 
     public func body(content: Content) -> some View {
         content
             .background(.ultraThinMaterial)
-            .cornerRadius(cornerRadius)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .stroke(MeeshyColors.glassBorderGradient(isDark: theme.mode.isDark), lineWidth: 1)
@@ -43,32 +43,25 @@ public extension View {
     }
 }
 
-// MARK: - Glowing Border
-
-public struct GlowingBorder: ViewModifier {
-    public let gradient: LinearGradient
-    public var cornerRadius: CGFloat = 20
-    public var lineWidth: CGFloat = 2
-
-    public func body(content: Content) -> some View {
-        content
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(gradient, lineWidth: lineWidth)
-            )
-    }
-}
-
 // MARK: - Pressable Button
 
+/// La réponse d'appui d'une surface SANS verre : un léger enfoncement et un
+/// voile sombre. Sous « Réduire les animations », l'échelle reste à 1 et seul
+/// le voile répond (K02 § 4).
 public struct PressableButton: ViewModifier {
     @State private var isPressed = false
 
+    nonisolated static func effectiveScale(isPressed: Bool, reduceMotion: Bool) -> CGFloat {
+        isPressed && !reduceMotion ? 0.93 : 1
+    }
+
+    nonisolated static func effectiveBrightness(isPressed: Bool) -> Double {
+        isPressed ? -0.05 : 0
+    }
+
     public func body(content: Content) -> some View {
         content
-            .scaleEffect(isPressed ? 0.93 : 1.0)
-            .brightness(isPressed ? -0.05 : 0)
-            .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
+            .modifier(PressableResponse(isPressed: isPressed))
             .simultaneousGesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in isPressed = true }
@@ -77,105 +70,91 @@ public struct PressableButton: ViewModifier {
     }
 }
 
-// MARK: - Shimmer Effect
+/// La même réponse que `pressable()`, pilotée par l'état pressé du BOUTON et
+/// non par un geste : un défilement qui part du bouton annule l'appui, et la
+/// liste qui le porte défile librement.
+public struct PressableButtonStyle: ButtonStyle {
+    public init() {}
 
-public struct ShimmerEffect: ViewModifier {
-    @State private var phase: CGFloat = 0
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .modifier(PressableResponse(isPressed: configuration.isPressed))
+    }
+}
+
+private struct PressableResponse: ViewModifier {
+    let isPressed: Bool
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
-    private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
+    }
 
-    public func body(content: Content) -> some View {
+    func body(content: Content) -> some View {
         content
-            .overlay(
-                GeometryReader { geo in
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0),
-                            Color.white.opacity(0.15),
-                            Color.white.opacity(0)
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: geo.size.width * 0.6)
-                    .offset(x: -geo.size.width * 0.3 + phase * (geo.size.width * 1.6))
-                    .mask(content)
-                }
-            )
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.linear(duration: 2.0).repeatForever(autoreverses: false)) {
-                    phase = 1
-                }
-            }
-            .onDisappear {
-                withTransaction(Transaction(animation: nil)) {
-                    phase = 0
-                }
-            }
+            .scaleEffect(PressableButton.effectiveScale(isPressed: isPressed, reduceMotion: reduceMotion))
+            .brightness(PressableButton.effectiveBrightness(isPressed: isPressed))
+            .meeshyAnimation(MeeshyAnimation.springFast, value: isPressed)
+    }
+}
+
+// MARK: - Shimmer Effect
+
+/// Tenue « voile » du reflet de chargement. Délègue à `LoadingSheen`,
+/// l'unique reflet animé du SDK (#9869).
+public struct ShimmerEffect: ViewModifier {
+    public func body(content: Content) -> some View {
+        content.modifier(LoadingSheen(style: .veil))
     }
 }
 
 // MARK: - Pulse Effect
 
+/// **La pulsation — une seule implémentation** (#9891). L'app en déclarait une
+/// homonyme pour l'effet `pulse` d'un message (1,02 en 1 s) ; elle s'écrit
+/// désormais `PulseEffect(intensity: 0.02, period: 1.0)`. Une intensité nulle
+/// ne démarre aucune boucle : un effet inactif ne coûte pas une animation
+/// infinie de 1 à 1.
 public struct PulseEffect: ViewModifier {
     public let intensity: CGFloat
+    public let period: Double
     @State private var isPulsing = false
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
     private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
 
-    public init(intensity: CGFloat = 0.04) {
+    public init(intensity: CGFloat = 0.04, period: Double = 1.8) {
         self.intensity = intensity
+        self.period = period
+    }
+
+    nonisolated static func pulses(intensity: CGFloat, reduceMotion: Bool) -> Bool {
+        intensity > 0 && !reduceMotion
     }
 
     public func body(content: Content) -> some View {
         content
             .scaleEffect(isPulsing ? 1 + intensity : 1)
             .animation(
-                .easeInOut(duration: 1.8).repeatForever(autoreverses: true),
+                .easeInOut(duration: period).repeatForever(autoreverses: true),
                 value: isPulsing
             )
-            .onAppear { guard !reduceMotion else { return }; isPulsing = true }
+            .onAppear {
+                guard Self.pulses(intensity: intensity, reduceMotion: reduceMotion) else { return }
+                isPulsing = true
+            }
+            // Une amplitude nouvelle relance le pulse sur place, sans recréer
+            // la vue qui le porte (#9065 : le mood change d'amplitude selon
+            // ce que fait le pair, et ne doit pas rejouer son arrivée).
+            .adaptiveOnChange(of: intensity) { _, _ in
+                guard !reduceMotion else { return }
+                withTransaction(Transaction(animation: nil)) { isPulsing = false }
+                guard Self.pulses(intensity: intensity, reduceMotion: reduceMotion) else { return }
+                DispatchQueue.main.async { isPulsing = true }
+            }
             .onDisappear {
                 withTransaction(Transaction(animation: nil)) {
                     isPulsing = false
-                }
-            }
-    }
-}
-
-// MARK: - Breathing Glow Effect
-
-public struct BreathingGlow: ViewModifier {
-    public let color: Color
-    public let intensity: Double
-    @State private var isGlowing = false
-    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
-    private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
-
-    public init(color: Color, intensity: Double = 0.5) {
-        self.color = color
-        self.intensity = intensity
-    }
-
-    public func body(content: Content) -> some View {
-        content
-            .shadow(
-                color: color.opacity(isGlowing ? intensity : intensity * 0.3),
-                radius: isGlowing ? 12 : 6,
-                y: isGlowing ? 6 : 3
-            )
-            .animation(
-                .easeInOut(duration: 2.0).repeatForever(autoreverses: true),
-                value: isGlowing
-            )
-            .onAppear { guard !reduceMotion else { return }; isGlowing = true }
-            .onDisappear {
-                withTransaction(Transaction(animation: nil)) {
-                    isGlowing = false
                 }
             }
     }
@@ -274,18 +253,29 @@ public struct FloatingAnimation: ViewModifier {
 
 // MARK: - Bounce On Tap
 
+/// L'échelle d'appui d'une surface sans verre ; aucune sous « Réduire les
+/// animations ».
 public struct BounceOnTap: ViewModifier {
     public let scale: CGFloat
     @State private var isPressed = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
+    }
 
     public init(scale: CGFloat = 0.92) {
         self.scale = scale
     }
 
+    nonisolated static func effectiveScale(isPressed: Bool, pressedScale: CGFloat, reduceMotion: Bool) -> CGFloat {
+        isPressed && !reduceMotion ? pressedScale : 1
+    }
+
     public func body(content: Content) -> some View {
         content
-            .scaleEffect(isPressed ? scale : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
+            .scaleEffect(Self.effectiveScale(isPressed: isPressed, pressedScale: scale, reduceMotion: reduceMotion))
+            .meeshyAnimation(MeeshyAnimation.springFast, value: isPressed)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in
@@ -298,23 +288,34 @@ public struct BounceOnTap: ViewModifier {
 
 // MARK: - Bounce On Focus (text fields)
 
+/// Le léger grossissement d'un champ mis au point ; aucun sous « Réduire les
+/// animations ».
 public struct BounceOnFocus: ViewModifier {
     public let focused: Bool
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
+    }
 
     public init(focused: Bool) {
         self.focused = focused
     }
 
+    nonisolated static func effectiveScale(focused: Bool, reduceMotion: Bool) -> CGFloat {
+        focused && !reduceMotion ? 1.02 : 1
+    }
+
     public func body(content: Content) -> some View {
         content
-            .scaleEffect(focused ? 1.02 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: focused)
+            .scaleEffect(Self.effectiveScale(focused: focused, reduceMotion: reduceMotion))
+            .meeshyAnimation(MeeshyAnimation.springFast, value: focused)
     }
 }
 
 // MARK: - Rounded Corner Shape
 
-public struct RoundedCorner: Shape {
+nonisolated public struct RoundedCorner: Shape {
     public var radius: CGFloat = .infinity
     public var corners: UIRectCorner = .allCorners
 
@@ -336,10 +337,6 @@ extension View {
         modifier(GlassCard(cornerRadius: cornerRadius))
     }
 
-    public func glowingBorder(_ gradient: LinearGradient = MeeshyColors.brandGradient, cornerRadius: CGFloat = 20, lineWidth: CGFloat = 2) -> some View {
-        modifier(GlowingBorder(gradient: gradient, cornerRadius: cornerRadius, lineWidth: lineWidth))
-    }
-
     public func pressable() -> some View {
         modifier(PressableButton())
     }
@@ -348,12 +345,8 @@ extension View {
         modifier(ShimmerEffect())
     }
 
-    public func pulse(intensity: CGFloat = 0.04) -> some View {
-        modifier(PulseEffect(intensity: intensity))
-    }
-
-    public func breathingGlow(color: Color, intensity: Double = 0.5) -> some View {
-        modifier(BreathingGlow(color: color, intensity: intensity))
+    public func pulse(intensity: CGFloat = 0.04, period: Double = 1.8) -> some View {
+        modifier(PulseEffect(intensity: intensity, period: period))
     }
 
     public func staggeredAppear(index: Int, baseDelay: Double = 0.05) -> some View {

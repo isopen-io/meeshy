@@ -1,5 +1,9 @@
 import XCTest
 import ImageIO
+import AVFoundation
+import CoreMedia
+import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 @MainActor
@@ -71,6 +75,39 @@ final class MediaCompressorTests: XCTestCase {
         XCTAssertFalse(result.data.isEmpty)
         XCTAssertEqual(result.mimeType, "image/jpeg")
         XCTAssertNotNil(UIImage(data: result.data))
+    }
+
+    /// **#6922 — une image réduite partait TROIS fois plus grande.** Le rendu
+    /// de `downsample(cgImage:)` prenait l'échelle de l'écran : une photo de
+    /// 4 000 px « réduite » à 2 048 points sortait à 6 144 px sur un écran ×3,
+    /// soit un bitmap transitoire de 113 Mo par image et un JPEG plus lourd que
+    /// l'original. Le plafond se compte en PIXELS.
+    func test_compressImage_largeImage_encodesAtTheCapInPixels() async throws {
+        let image = makeTestImage(width: 4000, height: 1000)
+
+        let result = await makeSUT().compressImage(image, maxDimension: 2048)
+
+        XCTAssertEqual(try pixelSize(of: result.data), CGSize(width: 2048, height: 512))
+    }
+
+    /// Le composer tient ses photos à la taille que la publication envoie
+    /// (`SceneImageDownsampling.workingMaxPixelSize`) : si l'un bouge sans
+    /// l'autre, la scène montrerait plus — ou moins — que ce qui part.
+    func test_compressImage_defaultCap_isTheComposerWorkingSize() async throws {
+        let image = makeTestImage(width: 5000, height: 1000)
+
+        let result = await makeSUT().compressImage(image)
+
+        let taille = try pixelSize(of: result.data)
+        XCTAssertEqual(max(taille.width, taille.height), SceneImageDownsampling.workingMaxPixelSize)
+    }
+
+    private func pixelSize(of data: Data) throws -> CGSize {
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(data as CFData, nil))
+        let proprietes = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+        let largeur = try XCTUnwrap(proprietes[kCGImagePropertyPixelWidth] as? NSNumber)
+        let hauteur = try XCTUnwrap(proprietes[kCGImagePropertyPixelHeight] as? NSNumber)
+        return CGSize(width: largeur.doubleValue, height: hauteur.doubleValue)
     }
 
     // MARK: - compressImageData — MIME Detection
@@ -175,6 +212,53 @@ final class MediaCompressorTests: XCTestCase {
         XCTAssertNotNil(UIImage(data: result.data))
     }
 
+    // MARK: - compressImageData — HEIC natif (#11291)
+
+    /// Une passerelle qui convertit (S8, #11263) reçoit le HEIC de l'iPhone tel
+    /// quel : mêmes octets, `image/heic`, aucune génération d'encodage.
+    func test_compressImageData_nativeHEICPolicy_keepsTheHEICBytesAndMime() async throws {
+        let sut = makeSUT()
+        let heicData = makeHEICData()
+        let policy = MediaContext.message.outgoingImagePolicy(compresses: false, qualityPercent: 85,
+                                                              keepsLocation: false, heicDelivery: .native)
+
+        let compressed = await sut.compressImageData(heicData, policy: policy)
+        let result = try XCTUnwrap(compressed)
+
+        XCTAssertEqual(result.mimeType, "image/heic")
+        XCTAssertEqual(result.fileExtension, "heic")
+        XCTAssertEqual(result.data, heicData)
+    }
+
+    func test_compressImageData_defaultPolicy_stillTranscodesHEICToJPEG() async throws {
+        let sut = makeSUT()
+        let policy = MediaContext.message.outgoingImagePolicy(compresses: false, qualityPercent: 85, keepsLocation: false)
+
+        let compressed = await sut.compressImageData(makeHEICData(), policy: policy)
+        let result = try XCTUnwrap(compressed)
+
+        XCTAssertEqual(result.mimeType, "image/jpeg")
+        XCTAssertEqual([UInt8](result.data.prefix(3)), [0xFF, 0xD8, 0xFF])
+    }
+
+    /// Seul le message porte le repli d'envoi (MediaGroupUploader, rejeu hors
+    /// ligne) : les autres contextes gardent le JPEG de compatibilité.
+    func test_heicDelivery_messageFollowsTheMemo_otherContextsStayJPEG() {
+        let suite = "heic-memo-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+
+        XCTAssertEqual(MediaContext.message.heicDelivery(in: defaults, now: now), .native)
+        XCTAssertEqual(MediaContext.story.heicDelivery(in: defaults, now: now), .jpegCompatibility)
+        XCTAssertEqual(MediaContext.feedPost.heicDelivery(in: defaults, now: now), .jpegCompatibility)
+        XCTAssertEqual(MediaContext.avatar.heicDelivery(in: defaults, now: now), .jpegCompatibility)
+        XCTAssertEqual(MediaContext.fullscreen.heicDelivery(in: defaults, now: now), .jpegCompatibility)
+
+        HEICDeliveryMemo.record(.refuses, in: defaults, now: now)
+        XCTAssertEqual(MediaContext.message.heicDelivery(in: defaults, now: now), .jpegCompatibility)
+    }
+
     // MARK: - compressImageData — HEIC downsample failure must not mislabel bytes
 
     /// If ImageIO fails to decode/downsample a genuinely HEIC-tagged buffer
@@ -253,6 +337,50 @@ final class MediaCompressorTests: XCTestCase {
         XCTAssertEqual(result.fileExtension, "jpg")
     }
 
+    // MARK: - compressImageData — une génération au plus (#9885)
+
+    func test_compressImageData_jpegWithinBudget_bytesAreIdentical() async {
+        let jpegData = makeJPEGData(width: 800, height: 600)
+
+        let result = await makeSUT().compressImageData(jpegData, maxDimension: 1200)
+
+        XCTAssertEqual(result.data, jpegData, "un JPEG dans le budget part octet pour octet")
+        XCTAssertEqual(result.pixelSize, CGSize(width: 800, height: 600))
+    }
+
+    func test_compressImageData_jpegOverBudget_isReducedToTheBudget() async throws {
+        let jpegData = makeJPEGData(width: 2400, height: 1200)
+
+        let result = await makeSUT().compressImageData(jpegData, maxDimension: 1200)
+
+        XCTAssertEqual(result.pixelSize, CGSize(width: 1200, height: 600))
+        XCTAssertEqual(try pixelSize(of: result.data), CGSize(width: 1200, height: 600))
+    }
+
+    /// Par défaut : HD et q 0,85, quelle que soit la qualité réglée pour la compression forte.
+    func test_outgoingPolicy_compressionOff_keepsTheHDCeiling_atThePerceptualQuality() {
+        let policy = MediaContext.message.outgoingImagePolicy(compresses: false, qualityPercent: 40, keepsLocation: false)
+
+        XCTAssertFalse(policy.compresses)
+        XCTAssertEqual(policy.pixelBudget, OutgoingImagePolicy.defaultHDPixelCeiling)
+        XCTAssertEqual(policy.quality, 0.85, accuracy: 0.0001)
+        XCTAssertFalse(policy.keepsLocation)
+    }
+
+    func test_outgoingPolicy_compressionOn_usesTheContextBudgetAndQuality() {
+        let policy = MediaContext.message.outgoingImagePolicy(compresses: true, qualityPercent: 70, keepsLocation: true)
+
+        XCTAssertEqual(policy.pixelBudget, MediaContext.message.maxImageDimension)
+        XCTAssertEqual(policy.quality, 0.70, accuracy: 0.0001)
+        XCTAssertTrue(policy.keepsLocation)
+    }
+
+    func test_outgoingPolicy_avatarAlwaysCompresses() {
+        let policy = MediaContext.avatar.outgoingImagePolicy(compresses: false, qualityPercent: 85, keepsLocation: false)
+
+        XCTAssertEqual(policy.pixelBudget, MediaContext.avatar.maxImageDimension)
+    }
+
     // MARK: - compressImageData — Short data fallback
 
     func test_compressImageData_dataTooShort_defaultsToJPEG() async {
@@ -262,6 +390,60 @@ final class MediaCompressorTests: XCTestCase {
         let result = await sut.compressImageData(shortData)
 
         XCTAssertEqual(result.mimeType, "image/jpeg")
+    }
+
+    // MARK: - compressImage — l'orientation visible survit à la réduction (#9403)
+
+    func test_compressImage_portraitRightOrientedLargeImage_keepsPortraitPixels() async {
+        let sut = makeSUT()
+        let image = makeOrientedImage(pixelWidth: 4000, pixelHeight: 3000, orientation: .right)
+
+        let result = await sut.compressImage(image, maxDimension: 2048)
+
+        let decoded = decodedPixels(result.data)
+        XCTAssertEqual(decoded?.width, 1536)
+        XCTAssertEqual(decoded?.height, 2048)
+        XCTAssertEqual(decoded?.orientation, 1)
+    }
+
+    func test_compressImage_portraitRightOrientedLargeImage_isSeenUpright() async {
+        let sut = makeSUT()
+        let image = makeOrientedImage(pixelWidth: 4000, pixelHeight: 3000, orientation: .right)
+
+        let result = await sut.compressImage(image, maxDimension: 2048)
+
+        let seen = UIImage(data: result.data)
+        XCTAssertEqual(seen?.size.width, 1536)
+        XCTAssertEqual(seen?.size.height, 2048)
+    }
+
+    func test_compressImage_upOrientedLargeImage_keepsLandscapePixels() async {
+        let sut = makeSUT()
+        let image = makeOrientedImage(pixelWidth: 4000, pixelHeight: 3000, orientation: .up)
+
+        let result = await sut.compressImage(image, maxDimension: 2048)
+
+        let decoded = decodedPixels(result.data)
+        XCTAssertEqual(decoded?.width, 2048)
+        XCTAssertEqual(decoded?.height, 1536)
+        XCTAssertEqual(decoded?.orientation, 1)
+    }
+
+    private func makeOrientedImage(pixelWidth: CGFloat, pixelHeight: CGFloat,
+                                   orientation: UIImage.Orientation) -> UIImage {
+        let raw = makeTestImage(width: pixelWidth, height: pixelHeight)
+        return UIImage(cgImage: raw.cgImage!, scale: 1, orientation: orientation)
+    }
+
+    private func decodedPixels(_ data: Data) -> (width: Int, height: Int, orientation: Int)? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int else {
+            return nil
+        }
+        let orientation = properties[kCGImagePropertyOrientation] as? Int ?? 1
+        return (width, height, orientation)
     }
 
     // MARK: - Factory Helpers
@@ -333,5 +515,108 @@ final class MediaCompressorTests: XCTestCase {
         data[10] = 0x42 // B
         data[11] = 0x50 // P
         return data
+    }
+
+    // MARK: - Une vidéo envoyée en message est en HD (#11915)
+
+    func test_videoSendBudget_unMessage_partEn1080p_auPlafondDesPublications() {
+        let budget = MediaContext.message.videoSendBudget(compresses: false)
+        XCTAssertEqual(budget.maxResolution, CGSize(width: 1080, height: 1920), "le verdict HD : 1080p, jamais 720p par défaut")
+        XCTAssertEqual(budget, MediaContext.story.videoSendBudget(compresses: false),
+                       "un rendu du composer se remuxe aussi pour un message")
+    }
+
+    func test_videoSendBudget_laCompressionForte_resteUnChoixExplicite() {
+        let forte = MediaContext.message.videoSendBudget(compresses: true)
+        XCTAssertEqual(forte.maxResolution, CGSize(width: 720, height: 1280))
+        XCTAssertLessThan(forte.bitRate, MediaContext.message.videoSendBudget(compresses: false).bitRate)
+        XCTAssertEqual(MediaContext.avatar.videoSendBudget(compresses: false), MediaContext.avatar.videoSendBudget(compresses: true),
+                       "un avatar se réduit toujours")
+    }
+
+    func test_videoSendBudget_poidsAuPlafond_30et60secondes() {
+        let budget = MediaContext.message.videoSendBudget(compresses: false)
+        XCTAssertEqual(budget.maximumBytes(seconds: 30), 15_480_000, "≈ 15,5 Mo au plafond pour 30 s, image et son")
+        XCTAssertEqual(budget.maximumBytes(seconds: 60), 30_960_000, "≈ 31 Mo au plafond pour 60 s")
+    }
+
+    func test_fitSize_uneVideoPaysage_garde1080p() {
+        let boite = MediaContext.message.videoSendBudget(compresses: false).maxResolution
+        XCTAssertEqual(VideoEncodePass.fitSize(CGSize(width: 1920, height: 1080), within: boite), CGSize(width: 1920, height: 1080),
+                       "un paysage 1080p n'est pas ramené à 1080 de large")
+        XCTAssertEqual(VideoEncodePass.fitSize(CGSize(width: 3840, height: 2160), within: boite), CGSize(width: 1920, height: 1080))
+        XCTAssertEqual(VideoEncodePass.fitSize(CGSize(width: 1280, height: 720), within: boite), CGSize(width: 1280, height: 720),
+                       "une source plus basse garde sa définition")
+    }
+
+    func test_envoiDUnePiece_litLaCompressionForteDeLUtilisateur() throws {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let code = try String(contentsOf: racine.appendingPathComponent(
+            "Meeshy/Features/Main/Services/AttachmentPreparationService.swift"), encoding: .utf8)
+        XCTAssertTrue(code.contains("budget: context.storedVideoSendBudget()"))
+    }
+
+    // MARK: - L'étiquette couleur suit la vidéo (#9332)
+
+    func test_etiquetteCouleur_reporteCelleDeLaSource() throws {
+        let source = try XCTUnwrap(Self.formatDescription(extensions: [
+            kCMFormatDescriptionExtension_ColorPrimaries: kCMFormatDescriptionColorPrimaries_P3_D65,
+            kCMFormatDescriptionExtension_TransferFunction: kCMFormatDescriptionTransferFunction_ITU_R_709_2,
+            kCMFormatDescriptionExtension_YCbCrMatrix: kCMFormatDescriptionYCbCrMatrix_ITU_R_709_2,
+        ]))
+        let etiquette = try XCTUnwrap(VideoColorTagging.properties(of: source),
+                                      "une prise P3 ré-encodée sans étiquette ressort délavée")
+        XCTAssertEqual(etiquette[AVVideoColorPrimariesKey], AVVideoColorPrimaries_P3_D65)
+        XCTAssertEqual(etiquette[AVVideoTransferFunctionKey], AVVideoTransferFunction_ITU_R_709_2)
+        XCTAssertEqual(etiquette[AVVideoYCbCrMatrixKey], AVVideoYCbCrMatrix_ITU_R_709_2)
+    }
+
+    func test_etiquetteCouleur_uneSourceMuetteResteMuette() throws {
+        let source = try XCTUnwrap(Self.formatDescription(extensions: [:]))
+        XCTAssertNil(VideoColorTagging.properties(of: source), "rien n'est inventé")
+    }
+
+    func test_compressVideo_poseLEtiquetteDeLaSource() throws {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let code = try String(contentsOf: racine.appendingPathComponent(
+            "Meeshy/Features/Main/Services/MediaCompressor.swift"), encoding: .utf8)
+        XCTAssertTrue(code.contains("VideoColorTagging.properties(of:)"))
+        XCTAssertTrue(code.contains("VideoTranscodeRecipe(source:"),
+                      "l'étiquette lue alimente la loi des réglages, qui la reporte (#11290)")
+    }
+
+    /// #11290 — le choix du codec se lit sur les ENCODEURS : savoir lire du
+    /// HEVC ne dit pas qu'on sait en écrire.
+    func test_compressVideo_choisitLeCodecSurLEncodeur() throws {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let code = try String(contentsOf: racine.appendingPathComponent(
+            "Meeshy/Features/Main/Services/MediaCompressor.swift"), encoding: .utf8)
+        XCTAssertTrue(code.contains("VideoEncoderAvailability.encodesHEVC"))
+        XCTAssertFalse(code.contains("VTIsHardwareDecodeSupported"))
+        XCTAssertFalse(code.contains("AVSampleRateKey: 44100"), "le son part en 48 kHz, réglé par la loi")
+    }
+
+    private static func formatDescription(extensions: [CFString: Any]) -> CMFormatDescription? {
+        var description: CMFormatDescription?
+        CMVideoFormatDescriptionCreate(allocator: kCFAllocatorDefault, codecType: kCMVideoCodecType_H264,
+                                       width: 1920, height: 1080, extensions: extensions as CFDictionary,
+                                       formatDescriptionOut: &description)
+        return description
+    }
+}
+
+/// La forme d'appel historique des témoins : compression demandée, budget
+/// explicite, lieu non conservé.
+private extension MediaCompressor {
+    func compressImageData(_ data: Data, maxDimension: CGFloat = 2048) -> CompressedImageResult {
+        let policy = OutgoingImagePolicy(maxPixelDimension: maxDimension, compresses: true,
+                                         quality: OutgoingImagePolicy.perceptualQuality, keepsLocation: false)
+        return compressImageData(data, policy: policy) ?? CompressedImageResult(data: Data(), mimeType: "")
     }
 }

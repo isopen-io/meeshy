@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release : tout le trafic est HTTPS, aucune exception. Les cibles de développement
+     (localhost, 10.0.2.2) ne sont autorisées en clair que par la variante debug de ce
+     fichier : app/src/debug/res/xml/network_security_config.xml. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

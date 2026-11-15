@@ -1,5 +1,6 @@
 import {
   authorSelect,
+  postAuthorSelect,
   storyAuthorSelect,
   mediaSelect,
   mediaInclude,
@@ -8,6 +9,8 @@ import {
   repostOfInclude,
   postInclude,
   postMentionInclude,
+  postScalarSelect,
+  storyPostInclude,
 } from '../postIncludes';
 
 describe('posts/postIncludes — canonical shared selects', () => {
@@ -90,16 +93,47 @@ describe('posts/postIncludes — canonical shared selects', () => {
         'height',
         'thumbnailUrl',
         'thumbHash',
+        'imageVariants',
+        'avifVariants',
+        'renditions',
+        'processingState',
+        'lensSlug',
         'duration',
         'order',
         'caption',
         'alt',
+        'captionLanguage',
+        'captionTranslations',
+        'altLanguage',
+        'altTranslations',
         'language',
         'variantOf',
         'transcription',
         'translations',
       ];
       expect(Object.keys(mediaSelect).sort()).toEqual(expectedKeys.sort());
+    });
+
+    it('exposes lensSlug (#11327) — le crédit « Lens par X » voyage avec le média de story/post', () => {
+      expect(mediaSelect).toEqual(expect.objectContaining({ lensSlug: true }));
+    });
+
+    it('exposes the caption translation fields (#6280) — distinct from the audio-track translations', () => {
+      expect(mediaSelect).toEqual(
+        expect.objectContaining({
+          captionLanguage: true,
+          captionTranslations: true,
+        }),
+      );
+    });
+
+    it('exposes the alt-text translation fields (#6737) — distinct from the caption translations', () => {
+      expect(mediaSelect).toEqual(
+        expect.objectContaining({
+          altLanguage: true,
+          altTranslations: true,
+        }),
+      );
     });
   });
 
@@ -132,7 +166,7 @@ describe('posts/postIncludes — canonical shared selects', () => {
     });
 
     it('includes author identity on every comment preview', () => {
-      expect(commentsPreviewInclude.select.author).toEqual({ select: authorSelect });
+      expect(commentsPreviewInclude.select.author).toEqual({ select: postAuthorSelect });
     });
 
     it('surfaces translations + originalLanguage so the Prisme resolver can render', () => {
@@ -206,6 +240,8 @@ describe('posts/postIncludes — canonical shared selects', () => {
           'createdAt',
           'likeCount',
           'commentCount',
+          // #16541 — un original fermé ferme ses republications : le client le lit ici.
+          'commentsDisabled',
           'metadata',
           'viewCount',
           'repostCount',
@@ -218,6 +254,10 @@ describe('posts/postIncludes — canonical shared selects', () => {
           // inexistant que la validation serveur existe pour supprimer.
           // La forme partagée est verrouillée par `repostReferenceInclude.test.ts`.
           'postMentions',
+          // #10315 — lus pour décider si l'original se sert encore, retirés par la projection.
+          'visibility',
+          'moderationHiddenAt',
+          'deletedAt',
         ].sort(),
       );
     });
@@ -257,17 +297,73 @@ describe('posts/postIncludes — canonical shared selects', () => {
     });
   });
 
+  describe('postScalarSelect — every Post scalar EXCEPT storyViews (#4791)', () => {
+    // `GET /posts/:id/views` (routes/posts/interactions.ts) reserves the
+    // embedded viewer list to the post's author, 403-ing every other reader.
+    // Before this select existed, `postInclude` was a `Prisma.PostInclude` —
+    // and Prisma returns EVERY scalar of a model under `include`, so
+    // `storyViews` travelled to every reader of a post through the feed,
+    // hashtag search, nearby, reposts, comments-attached posts — anywhere
+    // `postInclude` was used — regardless of the dedicated route's 403.
+    it('never selects storyViews', () => {
+      expect(postScalarSelect).not.toHaveProperty('storyViews');
+      expect(Object.keys(postScalarSelect)).not.toContain('storyViews');
+    });
+
+    it('selects the documented reach counters and content fields', () => {
+      expect(postScalarSelect).toEqual(
+        expect.objectContaining({
+          id: true,
+          content: true,
+          type: true,
+          visibility: true,
+          originalLanguage: true,
+          translations: true,
+          likeCount: true,
+          commentCount: true,
+          viewCount: true,
+          createdAt: true,
+          updatedAt: true,
+        }),
+      );
+    });
+  });
+
   describe('postInclude — canonical hydration', () => {
     // La relation s'appelle `postMentions` (le schéma nomme
     // `Post.postMentions`) ; la clé EXPOSÉE au client reste `mentions`, via le
     // remappage `withMentions`.
-    it('composes the five shared building blocks', () => {
+    it('composes every Post scalar (minus storyViews) with the five shared relation blocks', () => {
       expect(postInclude).toEqual({
-        author: { select: authorSelect },
+        ...postScalarSelect,
+        author: { select: postAuthorSelect },
         media: mediaInclude,
         comments: commentsPreviewInclude,
         repostOf: repostOfInclude,
         postMentions: postMentionInclude,
+      });
+    });
+
+    // The confidentiality guard itself: it's this shape — passed as `select:`,
+    // never `include:` — that every consumer (PostService, PostFeedService,
+    // PostAudioService, the feed/hashtag/nearby routes...) sends to Prisma.
+    // A `select` is the only Prisma shape that CAN express "every scalar
+    // except one" — an `include` cannot, it always returns every scalar of
+    // the model regardless of what relations it names.
+    it('never serves storyViews to a generic post reader', () => {
+      expect(postInclude).not.toHaveProperty('storyViews');
+    });
+  });
+
+  describe('storyPostInclude — story-scoped hydration', () => {
+    it('inherits the storyViews omission from postInclude', () => {
+      expect(storyPostInclude).not.toHaveProperty('storyViews');
+    });
+
+    it('swaps in the presence-carrying author shape only', () => {
+      expect(storyPostInclude).toEqual({
+        ...postInclude,
+        author: { select: storyAuthorSelect },
       });
     });
   });

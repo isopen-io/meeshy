@@ -323,29 +323,50 @@ public struct StoryTimelineView: View {
     }
 
     // MARK: - Hoisted computed properties (MEDIUM 7)
-    // Keyed only on viewModel.project — stable when currentTime / zoomScale change.
+    // Mémoïsés sur la révision du projet (#9874) : un calcul par version du
+    // projet, pas un par body. Les caches ne sont jamais observés.
+
+    private struct CompactKey: Equatable {
+        let revision: UInt
+        let selectedClipId: String?
+    }
+
+    @State private var allTracksMemo = KeyedMemo<UInt, [CompactTrack]>()
+    @State private var compactTracksMemo = KeyedMemo<CompactKey, [CompactTrack]>()
+    @State private var junctionsMemo = KeyedMemo<UInt, [TransitionJunction]>()
+    @State private var keyframeMarkersMemo = KeyedMemo<UInt, [KeyframeMarker]>()
 
     private var hoistedAllTracks: [CompactTrack] {
-        Self.resolveAllTracks(project: viewModel.project)
+        allTracksMemo.value(for: viewModel.projectRevision) {
+            Self.resolveAllTracks(project: viewModel.project)
+        }
     }
 
     private var hoistedCompactTracks: [CompactTrack] {
-        Self.resolveCompactTracks(
-            project: viewModel.project,
-            selectedClipId: viewModel.selection.selectedClipId,
-            maxCount: Self.compactMaxTracks
-        )
+        let key = CompactKey(revision: viewModel.projectRevision,
+                             selectedClipId: viewModel.selection.selectedClipId)
+        return compactTracksMemo.value(for: key) {
+            Self.resolveCompactTracks(
+                project: viewModel.project,
+                selectedClipId: key.selectedClipId,
+                maxCount: Self.compactMaxTracks
+            )
+        }
     }
 
     private var hoistedJunctions: [TransitionJunction] {
-        TransitionJunctionResolver.resolve(
-            project: viewModel.project,
-            slideDuration: viewModel.project.slideDuration
-        )
+        junctionsMemo.value(for: viewModel.projectRevision) {
+            TransitionJunctionResolver.resolve(
+                project: viewModel.project,
+                slideDuration: viewModel.project.slideDuration
+            )
+        }
     }
 
     private var hoistedKeyframeMarkers: [KeyframeMarker] {
-        KeyframeMarkerResolver.resolve(project: viewModel.project)
+        keyframeMarkersMemo.value(for: viewModel.projectRevision) {
+            KeyframeMarkerResolver.resolve(project: viewModel.project)
+        }
     }
 
     // MARK: - Body
@@ -376,7 +397,7 @@ public struct StoryTimelineView: View {
         )
         .gesture(swipeUpExpand)
         // Surface d'édition complète : sélectionner un clip, un keyframe ou une
-        // transition ouvre son inspecteur en SHEET (item 8, 2026-07-25). Le
+        // transition ouvre son inspecteur en SHEET. Le
         // survol translucide qu'on utilisait avant recouvrait précisément la
         // piste qu'on réglait ; la sheet libère la timeline et apporte les
         // affordances système (poignée, glisser-fermer, paliers de hauteur).
@@ -389,12 +410,12 @@ public struct StoryTimelineView: View {
 
     /// Le readout temps est AFFICHÉ en Quick : masqué un temps (vague modale
     /// allégée), il a été redemandé à chaud — « remet le time dans la vue
-    /// simple ! » (user, 2026-07-11). Le paramètre TransportBar reste : c'est
+    /// simple ! ». Le paramètre TransportBar reste : c'est
     /// le point de bascule si le produit retranche à nouveau.
     public static let transportShowsTimeReadout = true
 
     /// Bande d'opérations SOUS la bande des outils : historique, snap,
-    /// prolongation « +10 s » et enregistrement (retour user 2026-07-20) —
+    /// prolongation « +10 s » et enregistrement —
     /// le transport en dessous ne garde que lecture / temps / zoom / son.
     private var operationsBar: some View {
         TimelineOperationsBar(
@@ -412,8 +433,9 @@ public struct StoryTimelineView: View {
     private var transport: some View {
         TransportBar(
             isPlaying: viewModel.isPlaying,
-            currentTime: viewModel.currentTime,
+            currentTime: 0,
             duration: viewModel.project.slideDuration,
+            playhead: viewModel.playhead,
             zoomScale: viewModel.zoomScale,
             isMuted: viewModel.isMuted,
             showsTimeReadout: Self.transportShowsTimeReadout,
@@ -449,7 +471,7 @@ public struct StoryTimelineView: View {
         if tracks.isEmpty {
             TimelineEmptyState(isDark: colorScheme == .dark)
                 .padding(.vertical, 28)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
         } else {
             let geometry = TimelineGeometry(zoomScale: viewModel.zoomScale)
             VStack(spacing: 0) {
@@ -463,7 +485,7 @@ public struct StoryTimelineView: View {
                 TimelineScrubArea(
                     totalDuration: viewModel.project.slideDuration,
                     geometry: geometry,
-                    currentTime: viewModel.currentTime,
+                    playhead: viewModel.playhead,
                     isDark: colorScheme == .dark,
                     minLaneWidth: 200,
                     rulerHeight: 22,
@@ -487,7 +509,7 @@ public struct StoryTimelineView: View {
     @ViewBuilder
     private func trackRows(tracks: [CompactTrack], laneWidth: CGFloat,
                            geometry: TimelineGeometry) -> some View {
-        let rows = VStack(spacing: 4) {
+        let rows = VStack(spacing: MeeshySpacing.xs) {
             ForEach(tracks, id: \.id) { track in
                 let clipDuration = Self.trackDurationSeconds(track: track, project: viewModel.project)
                 let index = Self.trackTypeIndex(for: track)
@@ -567,8 +589,8 @@ public struct StoryTimelineView: View {
                     let raw = String(localized: String.LocalizationValue(key), bundle: .module)
                     Text(isExpanded ? raw : String(format: raw, hidden))
                         .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(.ultraThinMaterial, in: Capsule())
                         .background(Capsule().fill(MeeshyColors.indigo500.opacity(0.18)))
                         .foregroundStyle(MeeshyColors.indigo700)
@@ -576,8 +598,8 @@ public struct StoryTimelineView: View {
                 .buttonStyle(.plain)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .opacity(collapsedFooterOpacity)
         }
     }

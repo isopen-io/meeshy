@@ -1,0 +1,1001 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Partage unique</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Mise en page : une planche de design — prose étroite, maquettes de téléphone 390 px en grille,
+   tables de matrice dans leur propre défilement. La page suit les plans indigo du SDK. */
+:root{
+  --bg:#F2F2F8; --surface:#FFFFFF; --ink:#18172B; --muted:#585774; --line:#DADAE8;
+  --accent:#4F46E5; --accent-soft:#E0E7FF; --frame:#1B1A26;
+  --ok:#047857; --warn:#B45309; --err:#B91C1C; --eph:#C2410C; --vo:#4F46E5;
+  --ok-soft:#D1FAE5; --warn-soft:#FEF3C7; --err-soft:#FEE2E2; --eph-soft:#FFEDD5;
+  /* le téléphone : les plans et encres iOS (packages/design-tokens/ios.css) */
+  --ph-bg:#FFFFFF; --ph-card:#F8F7FF; --ph-ink:#1E1B4B; --ph-ink2:color-mix(in srgb,#4338CA 80%,transparent);
+  --ph-ink3:#6B7280; --ph-line:color-mix(in srgb,#000 8%,transparent); --ph-fill:color-mix(in srgb,#4338CA 7%,transparent);
+  --brand:#6366F1; --brand-ink:#FFFFFF; --presence:#34D399;
+  --display:"Familjen Grotesk","Helvetica Neue",Arial,sans-serif;
+  --body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --ios:-apple-system,"SF Pro Text",system-ui,"Segoe UI",Roboto,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D0C15; --surface:#16151F; --ink:#ECECF6; --muted:#A2A1BC; --line:#2A2839;
+    --accent:#A5B4FC; --accent-soft:#25234A; --frame:#2C2A3B;
+    --ok:#34D399; --warn:#FBBF24; --err:#F87171; --eph:#FB923C; --vo:#A5B4FC;
+    --ok-soft:#0F2F26; --warn-soft:#33270B; --err-soft:#3A1717; --eph-soft:#3A2010;
+    --ph-bg:#09090B; --ph-card:#13111C; --ph-ink:#EEF2FF; --ph-ink2:#A5B4FC;
+    --ph-ink3:#9CA3AF; --ph-line:color-mix(in srgb,#fff 8%,transparent); --ph-fill:color-mix(in srgb,#fff 7%,transparent);
+    --brand:#6366F1; --brand-ink:#FFFFFF;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D0C15; --surface:#16151F; --ink:#ECECF6; --muted:#A2A1BC; --line:#2A2839;
+  --accent:#A5B4FC; --accent-soft:#25234A; --frame:#2C2A3B;
+  --ok:#34D399; --warn:#FBBF24; --err:#F87171; --eph:#FB923C; --vo:#A5B4FC;
+  --ok-soft:#0F2F26; --warn-soft:#33270B; --err-soft:#3A1717; --eph-soft:#3A2010;
+  --ph-bg:#09090B; --ph-card:#13111C; --ph-ink:#EEF2FF; --ph-ink2:#A5B4FC;
+  --ph-ink3:#9CA3AF; --ph-line:color-mix(in srgb,#fff 8%,transparent); --ph-fill:color-mix(in srgb,#fff 7%,transparent);
+  --brand:#6366F1; --brand-ink:#FFFFFF;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 17px/1.55 var(--body);overflow-x:hidden}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:clamp(44px,8vw,84px);line-height:.98;font-weight:700}
+h2{font-size:clamp(28px,4vw,40px);line-height:1.08;font-weight:700}
+h3{font-size:20px;line-height:1.2;font-weight:600}
+p{margin:0}
+code,.mono{font:400 .82em/1.35 var(--mono);color:var(--muted);overflow-wrap:anywhere}
+a{color:var(--accent)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
+.prose{max-width:68ch;display:grid;gap:12px}
+.eyebrow{font:700 12px/1 var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.muted{color:var(--muted)}
+
+/* en-tête */
+.top{padding-block:28px 8px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}
+.top .ref{font:500 13px/1.3 var(--mono);color:var(--muted)}
+.themebtn{font:700 14px/1 var(--body);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:10px 16px;min-height:44px;cursor:pointer}
+.hero{padding-block:24px 36px;display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
+.lede{font-size:clamp(19px,2.2vw,23px);line-height:1.45;max-width:44ch}
+.thesis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:8px}
+.thesis div{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;min-width:0}
+.thesis b{display:block;font:600 15px/1.25 var(--display);margin-bottom:4px}
+.thesis span{font-size:15px;color:var(--muted)}
+.toc{display:flex;flex-wrap:wrap;gap:8px;padding-block:4px 8px}
+.toc a{font:700 14px/1 var(--body);text-decoration:none;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:11px 14px;min-height:44px;display:inline-flex;align-items:center}
+
+section.blk{padding-block:48px 8px;border-top:1px solid var(--line);margin-top:36px;display:grid;grid-template-columns:minmax(0,1fr);gap:22px}
+.blk-head{display:grid;gap:10px}
+
+/* tables */
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14.5px;line-height:1.4}
+th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--line)}
+thead th{font:700 12px/1.2 var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--bg);position:sticky;top:0}
+tbody tr:last-child td{border-bottom:0}
+td code{font-size:12px}
+.inv{min-width:980px}
+.mx{min-width:900px;font-variant-numeric:tabular-nums}
+.mx td,.mx th{text-align:center}
+.mx td:first-child,.mx th:first-child{text-align:left;white-space:nowrap}
+.y{color:var(--ok);font-weight:700}
+.n{color:var(--muted)}
+.c{color:var(--warn);font-weight:700}
+.x{color:var(--err);font-weight:700}
+.q{color:var(--accent);font-weight:700}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:14px;color:var(--muted)}
+.count{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.count div{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 16px;min-width:0}
+.count b{font:700 34px/1 var(--display);display:block;font-variant-numeric:tabular-nums}
+.count span{font-size:14px;color:var(--muted)}
+
+/* anatomie */
+.anat{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:28px;align-items:start}
+.zones{list-style:none;margin:0;padding:0;display:grid;gap:10px;counter-reset:z}
+.zones li{display:grid;grid-template-columns:36px minmax(0,1fr);gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px}
+.zones li::before{counter-increment:z;content:counter(z);font:700 18px/36px var(--display);text-align:center;width:36px;height:36px;border-radius:50%;background:var(--accent-soft);color:var(--accent)}
+.zones b{font:600 16px/1.3 var(--display);display:block}
+.zones span{font-size:15px;color:var(--muted)}
+.rules{display:grid;gap:8px;margin:0;padding-left:20px}
+.rules li{max-width:68ch}
+
+/* grille des vues */
+.views{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,360px),1fr));gap:36px 28px;align-items:start}
+.view{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;min-width:0}
+.view h3 .id{font:500 13px/1 var(--mono);color:var(--accent);margin-right:8px}
+.view .why{font-size:15px;color:var(--muted)}
+.note{font-size:14px;border-left:3px solid var(--warn);background:var(--warn-soft);padding:8px 12px;border-radius:0 10px 10px 0}
+
+/* ---------- le téléphone ---------- */
+.phone{width:100%;max-width:390px;border-radius:48px;padding:9px;background:var(--frame);box-shadow:0 18px 40px -22px rgba(20,16,60,.55)}
+.scr{border-radius:40px;overflow:hidden;background:var(--ph-bg);color:var(--ph-ink);font:400 15px/1.3 var(--ios);display:flex;flex-direction:column;min-height:740px;position:relative}
+.scr.short{min-height:0}
+.sb{display:flex;justify-content:space-between;align-items:center;padding:14px 28px 4px;font:600 15px/1 var(--ios)}
+.sb i{display:inline-flex;gap:5px;align-items:center}
+.sb i::before{content:"";width:17px;height:10px;border-radius:2px;background:currentColor;opacity:.85}
+.sb i::after{content:"";width:24px;height:11px;border-radius:3px;border:1.5px solid currentColor;opacity:.85}
+.grab{width:36px;height:5px;border-radius:3px;background:var(--ph-ink3);opacity:.45;margin:6px auto 2px}
+.nav{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:8px 16px 6px;gap:8px}
+.nav .l{color:var(--brand);font-size:16px}
+.nav .t{font:600 17px/1.2 var(--ios);text-align:center}
+.nav .r{justify-self:end;color:var(--brand);font-size:15px}
+.zl{display:flex;justify-content:space-between;align-items:baseline;padding:10px 16px 6px;font:600 12px/1 var(--ios);letter-spacing:.04em;text-transform:uppercase;color:var(--ph-ink3)}
+.zl em{font-style:normal;text-transform:none;letter-spacing:0;color:var(--brand);font-weight:500;font-size:13px}
+.tray{display:flex;gap:8px;overflow-x:auto;padding:2px 16px 6px;scrollbar-width:none}
+.tile{flex:none;width:76px;height:100px;border-radius:12px;position:relative;color:#fff;overflow:hidden}
+.tile .rm{position:absolute;top:5px;right:5px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.55);display:grid;place-items:center}
+.tile .rm svg{width:12px;height:12px}
+.tile .ord{position:absolute;bottom:5px;left:5px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:rgba(0,0,0,.55);font:600 11px/20px var(--ios);text-align:center}
+.tile .dur{position:absolute;bottom:5px;right:6px;font:600 11px/1 var(--ios);text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.tile.sel{outline:2.5px solid var(--brand);outline-offset:-2.5px}
+.tile.off{opacity:.38}
+.tile.flag::after{content:"";position:absolute;inset:0;border:2.5px solid var(--err);border-radius:12px}
+.tile.more{background:var(--ph-fill);color:var(--ph-ink2);display:grid;place-items:center;font:600 15px/1 var(--ios)}
+.ph1{background:linear-gradient(160deg,#F6A35B,#C2416B 58%,#3B1D5A)}
+.ph2{background:linear-gradient(200deg,#7DD3C0,#2A7F8F 55%,#173A4A)}
+.ph3{background:linear-gradient(170deg,#E9E4D0,#A3B18A 50%,#3A5A40)}
+.ph4{background:linear-gradient(190deg,#FDE68A,#F59E0B 45%,#7C2D12)}
+.vid{background:linear-gradient(180deg,#334155,#0F172A)}
+.vid .play{position:absolute;inset:0;display:grid;place-items:center}
+.vid .play svg{width:26px;height:26px;opacity:.9}
+.card{margin:2px 16px 6px;border-radius:14px;background:var(--ph-card);border:1px solid var(--ph-line);padding:10px 12px;display:flex;gap:10px;align-items:center;min-width:0}
+.card .ic{flex:none;width:40px;height:40px;border-radius:10px;background:var(--ph-fill);display:grid;place-items:center;color:var(--brand)}
+.card .ic svg{width:20px;height:20px}
+.card .tx{min-width:0;display:grid;gap:2px}
+.card .tx b{font:600 14px/1.25 var(--ios);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .tx span{font-size:12.5px;color:var(--ph-ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .thumb{flex:none;width:52px;height:52px;border-radius:10px}
+.bub{margin:2px 16px 4px;display:flex;gap:8px;align-items:flex-end}
+.bub p{background:var(--ph-fill);border-radius:18px;padding:8px 12px;font-size:14px;max-width:78%}
+.bub.me{justify-content:flex-end}
+.bub.me p{background:var(--brand);color:var(--brand-ink)}
+.bub .tag{font:600 11px/1 var(--ios);display:inline-flex;align-items:center;gap:4px;padding:4px 7px;border-radius:9px}
+.bub.gone p{text-decoration:line-through;opacity:.45}
+.tag.eph{background:var(--eph-soft);color:var(--eph)}
+.tag.vo{background:var(--accent-soft);color:var(--vo)}
+.tag.lk{background:var(--ok-soft);color:var(--ok)}
+.tag svg{width:12px;height:12px}
+.acts{display:flex;gap:8px;overflow-x:auto;padding:4px 16px 8px;scrollbar-width:none}
+.pill{flex:none;display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 13px;border-radius:999px;border:1px solid color-mix(in srgb,var(--brand) 45%,transparent);color:var(--ph-ink2);font:500 14px/1 var(--ios)}
+.pill svg{width:16px;height:16px}
+.pill.on{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+.pill.dis{opacity:.4;border-style:dashed}
+.pill.ghost{border-color:var(--ph-line);color:var(--ph-ink)}
+.why-line{padding:0 16px 8px;font-size:12.5px;color:var(--ph-ink3);display:flex;gap:6px;align-items:flex-start}
+.why-line svg{width:14px;height:14px;flex:none;margin-top:1px}
+.dura{margin:4px 16px 8px;padding:10px 12px;border-radius:14px;background:var(--eph-soft);display:grid;gap:8px}
+.dura b{font:600 13px/1.2 var(--ios);color:var(--eph);display:flex;gap:6px;align-items:center}
+.dura b svg{width:14px;height:14px}
+.dura .seg{display:flex;gap:6px;flex-wrap:wrap}
+.dura .seg span{min-height:32px;display:inline-flex;align-items:center;padding:0 11px;border-radius:999px;border:1px solid color-mix(in srgb,var(--eph) 40%,transparent);font:500 13px/1 var(--ios);color:var(--ph-ink)}
+.dura .seg span.on{background:var(--eph);border-color:var(--eph);color:#fff}
+.search{margin:6px 16px 4px;display:flex;align-items:center;gap:8px;white-space:nowrap;overflow:hidden;background:var(--ph-fill);border-radius:12px;padding:0 10px;min-height:38px;color:var(--ph-ink3);font-size:15px}
+.search svg{width:16px;height:16px;flex:none}
+.search.typing{color:var(--ph-ink)}
+.search.typing::after{content:"";width:2px;height:18px;background:var(--brand);margin-left:-6px}
+.recents{display:flex;gap:14px;overflow-x:auto;padding:8px 16px 6px;scrollbar-width:none}
+.rc{flex:none;width:60px;display:grid;justify-items:center;gap:5px;font-size:11.5px;text-align:center;color:var(--ph-ink)}
+.rc span{width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sect{padding:12px 16px 4px;font:600 13px/1 var(--ios);color:var(--ph-ink3)}
+.row{display:flex;align-items:center;gap:12px;padding:7px 16px;min-height:56px}
+.row .tx{flex:1;min-width:0;display:grid;gap:2px}
+.row .tx b{font:500 15.5px/1.2 var(--ios);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .tx span{font-size:12.5px;color:var(--ph-ink3);display:flex;gap:4px;align-items:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.row .tx span svg{width:12px;height:12px;flex:none}
+.row.on{background:color-mix(in srgb,var(--brand) 10%,transparent)}
+.chk{flex:none;width:24px;height:24px;border-radius:50%;border:1.8px solid var(--ph-ink3);opacity:.6}
+.chk.on{opacity:1;border:0;background:var(--brand);display:grid;place-items:center;color:#fff}
+.chk.on svg{width:14px;height:14px}
+.st{flex:none;font:600 12.5px/1 var(--ios);display:inline-flex;align-items:center;gap:5px}
+.st svg{width:15px;height:15px}
+.st.ok{color:var(--ok)}
+.st.wait{color:var(--ph-ink3)}
+.st.err{color:var(--err)}
+.retry{flex:none;min-height:32px;padding:0 12px;border-radius:999px;background:var(--err-soft);color:var(--err);font:600 13px/32px var(--ios);display:inline-flex;gap:5px;align-items:center}
+.retry svg{width:14px;height:14px}
+.ring{flex:none;width:28px;height:28px;border-radius:50%;background:conic-gradient(var(--brand) calc(var(--p)*1%),var(--ph-fill) 0);display:grid;place-items:center}
+.ring::after{content:"";width:20px;height:20px;border-radius:50%;background:var(--ph-bg)}
+.banner{margin:6px 16px;padding:10px 12px;border-radius:12px;font-size:13px;display:flex;gap:8px;align-items:flex-start}
+.banner svg{width:16px;height:16px;flex:none;margin-top:1px}
+.banner.off{background:var(--ph-fill);color:var(--ph-ink)}
+.banner.warn{background:var(--warn-soft);color:var(--ph-ink)}
+.banner.warn svg{color:var(--warn)}
+.banner.lock{background:var(--ok-soft);color:var(--ph-ink)}
+.banner.lock svg{color:var(--ok)}
+.spacer{flex:1}
+.bar{border-top:1px solid var(--ph-line);background:var(--ph-bg);padding:8px 16px 26px;display:grid;gap:8px}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.chip{flex:none;display:inline-flex;align-items:center;gap:6px;padding:3px 8px 3px 3px;border-radius:999px;background:var(--ph-fill);font:500 13px/1 var(--ios)}
+.chip svg{width:11px;height:11px;opacity:.6}
+.chip.warn{background:var(--warn-soft)}
+.cap{display:flex;align-items:center;min-height:40px;border-radius:20px;border:1px solid var(--ph-line);padding:0 14px;color:var(--ph-ink3);font-size:15px}
+.cap.filled{color:var(--ph-ink)}
+.seg2{display:grid;grid-template-columns:1fr 1fr;background:var(--ph-fill);border-radius:10px;padding:2px;font:500 13px/1 var(--ios)}
+.seg2 span{min-height:32px;display:grid;place-items:center;border-radius:8px;color:var(--ph-ink2)}
+.seg2 span.on{background:var(--ph-bg);color:var(--ph-ink);box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.send{min-height:50px;border-radius:14px;background:var(--brand);color:var(--brand-ink);font:600 17px/50px var(--ios);text-align:center}
+.send.dis{background:var(--ph-fill);color:var(--ph-ink3)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ghostbtn{min-height:50px;border-radius:14px;background:var(--ph-fill);color:var(--ph-ink);font:600 16px/50px var(--ios);text-align:center}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px}
+.toggle i{flex:none;width:44px;height:26px;border-radius:13px;background:var(--ph-fill);position:relative}
+.toggle i::after{content:"";position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.toggle i.on{background:var(--ok)}
+.toggle i.on::after{left:20px}
+.skel{height:12px;border-radius:6px;background:var(--ph-fill)}
+.skrow{display:flex;gap:12px;align-items:center;padding:9px 16px}
+.skrow .a{width:44px;height:44px;border-radius:50%;background:var(--ph-fill);flex:none}
+.skrow .l{flex:1;display:grid;gap:7px}
+.empty{padding:26px 26px 10px;text-align:center;display:grid;gap:8px;justify-items:center}
+.empty .big{width:56px;height:56px;border-radius:50%;background:var(--ph-fill);display:grid;place-items:center;color:var(--brand)}
+.empty .big svg{width:26px;height:26px}
+.empty b{font:600 17px/1.25 var(--ios)}
+.empty p{font-size:14px;color:var(--ph-ink3);max-width:30ch}
+.lockcard{margin:18px 16px;padding:20px 18px;border-radius:18px;background:var(--ph-card);border:1px solid var(--ph-line);display:grid;gap:10px;justify-items:center;text-align:center}
+.lockcard .big{width:56px;height:56px;border-radius:50%;background:var(--accent-soft);color:var(--vo);display:grid;place-items:center}
+.lockcard .big svg{width:26px;height:26px}
+.lockcard b{font:600 17px/1.25 var(--ios)}
+.lockcard p{font-size:14px;color:var(--ph-ink3)}
+.minis{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr));gap:16px}
+.mini .scr{min-height:0;border-radius:30px}
+.mini.phone{border-radius:38px}
+
+/* avatars : contour équipé (cadre) et présence servie */
+.av{--a:#6366F1;--s:44px;position:relative;flex:none;width:var(--s);height:var(--s);border-radius:50%;background:var(--a);color:#fff;display:grid;place-items:center;font:600 calc(var(--s)*.36)/1 var(--ios)}
+.av.l{--s:56px}
+.av.s{--s:22px;font-size:9px}
+.av.grp{border-radius:30%}
+.av.fr::before{content:"";position:absolute;inset:-4px;border-radius:50%;padding:2.5px;background:var(--frm);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+.fr-gold{--frm:conic-gradient(from 200deg,#FDE68A,#B7791F,#FFF4C2,#B7791F,#FDE68A)}
+.fr-aurora{--frm:conic-gradient(from 90deg,#34D399,#60A5FA,#A855F7,#F472B6,#34D399)}
+.fr-ember{--frm:conic-gradient(from 0deg,#F97316,#FBBF24,#EF4444,#F97316)}
+.av .pd{position:absolute;right:-1px;bottom:-1px;width:calc(var(--s)*.27);height:calc(var(--s)*.27);border-radius:50%;background:var(--presence);box-shadow:0 0 0 2.5px var(--ph-bg)}
+.av .ck{position:absolute;right:-3px;bottom:-3px;width:22px;height:22px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 2.5px var(--ph-bg);display:grid;place-items:center}
+.av .ck svg{width:12px;height:12px}
+.av svg.in{width:45%;height:45%}
+.ico{width:1em;height:1em;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.ico.f{fill:currentColor;stroke:none}
+
+/* gestes */
+.path{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.path .g{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:15px}
+.path .g b{font-family:var(--display);color:var(--accent);margin-right:6px}
+.path .arr{color:var(--muted)}
+
+/* décisions */
+.dec{display:grid;gap:12px;margin:0;padding:0;list-style:none}
+.dec li{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:grid;grid-template-columns:52px minmax(0,1fr);gap:4px 12px}
+.dec .k{font:600 14px/1.4 var(--mono);color:var(--accent);grid-row:span 3}
+.dec b{font:600 16px/1.35 var(--display)}
+.dec .opt{font-size:15px;color:var(--muted)}
+.dec .rec{font-size:15px}
+.dec .rec::before{content:"Proposé : ";font-weight:700;color:var(--ok)}
+.cols2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:8px;min-width:0}
+.box ul{margin:0;padding-left:20px;display:grid;gap:6px;font-size:15.5px}
+footer{padding-block:48px 64px;color:var(--muted);font-size:14px}
+
+@media (max-width:860px){
+  .anat,.cols2{grid-template-columns:1fr}
+  .thesis,.count{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:480px){
+  .thesis{grid-template-columns:1fr}
+  .scr{min-height:0}
+  .phone{border-radius:40px;padding:7px}
+  .scr{border-radius:34px}
+}
+@media (prefers-reduced-motion:no-preference){
+  .ring{transition:background .3s}
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+    <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 3c1 3 5 5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-4 2.5-5 .3 1.6 1.2 2.6 2.5 3 0-3-1-5.5 0-8z"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-wifioff" viewBox="0 0 24 24"><path d="M3 3l18 18M8.5 16.5a5 5 0 0 1 7 0M5 12.5a10 10 0 0 1 4-2.3M19 12.5a10 10 0 0 0-3.2-2M2 8.8a15 15 0 0 1 4.3-2.6M22 8.8A15 15 0 0 0 11 5M12 20h.01"/></symbol>
+    <symbol id="i-retry" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.6L4 8.7M4 4v4.7h4.7"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7zM14 3v5h5"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6 6 0 0 1 3.5 5.5"/></symbol>
+    <symbol id="i-story" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" stroke-dasharray="3 2.3"/><path d="M12 8.5v7M8.5 12h7"/></symbol>
+    <symbol id="i-post" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M4 15l4.5-4.5 4 4 3-3L20 16"/></symbol>
+    <symbol id="i-reel" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 9h18M8 5l2 4M13 5l2 4M10.5 12.5v4l3.5-2z"/></symbol>
+    <symbol id="i-wand" viewBox="0 0 24 24"><path d="M5 19L15 9M15 3l.8 2.2L18 6l-2.2.8L15 9l-.8-2.2L12 6l2.2-.8zM19 11l.5 1.3 1.3.5-1.3.5L19 14.6l-.5-1.3-1.3-.5 1.3-.5z"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="M21 16l-5-5-8 8"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3.5l9.5 16.5h-19zM12 10v4M12 17h.01"/></symbol>
+    <symbol id="i-out" viewBox="0 0 24 24"><path d="M12 3v12M7.5 7.5L12 3l4.5 4.5M5 12v7h14v-7"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10l9-6 9 6v10H3zM9 20v-6h6v6"/></symbol>
+    <symbol id="i-person" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <div class="top">
+    <span class="ref">docs/product/partage-unique · #10949 · 2026-10-18 · brouillon à valider</span>
+    <button class="themebtn" id="theme-toggle" type="button" aria-label="Basculer entre clair et sombre">Clair / sombre</button>
+  </div>
+
+  <header class="hero">
+    <span class="eyebrow">Vue cible · iOS, web, coque Android</span>
+    <h1>Partage unique</h1>
+    <p class="lede">Un seul écran reçoit tout ce qu'on veut envoyer, qu'il vienne d'une autre app ou de Meeshy, et l'envoie à qui l'on veut, en deux gestes.</p>
+    <div class="thesis">
+      <div><b>Un écran</b><span>L'extension iOS, la cible de partage web et Android, et chaque « Transférer » ouvrent le même composant.</span></div>
+      <div><b>Un ordre</b><span>Ce qui part, ce qu'on peut en faire, à qui, puis Envoyer. Jamais dans un autre ordre.</span></div>
+      <div><b>Une loi</b><span>La loi de sortie décide ce qui sort. Une action interdite n'est pas rendue, et la planche dit pourquoi.</span></div>
+      <div><b>Deux gestes</b><span>Toucher un destinataire récent, puis Envoyer. Tout le reste est facultatif.</span></div>
+    </div>
+    <nav class="toc" aria-label="Sections">
+      <a href="#existant">Ce qui existe</a>
+      <a href="#anatomie">Anatomie</a>
+      <a href="#vues">Vues</a>
+      <a href="#matrice">Matrices</a>
+      <a href="#alignement">Alignement</a>
+      <a href="#decisions">Décisions</a>
+    </nav>
+  </header>
+
+  <!-- ===================== ÉTAT DES LIEUX ===================== -->
+  <section class="blk" id="existant">
+    <div class="blk-head">
+      <span class="eyebrow">État des lieux · relevé sur dev le 2026-10-18</span>
+      <h2>Quatre sélecteurs pour un seul geste</h2>
+      <div class="prose">
+        <p>iOS en a trois, qui ne savent pas les mêmes choses. Le web n'en a qu'un, <code>SendSheet</code>, déjà proche de la cible : c'est lui qui sert de référence fonctionnelle, et l'interface iOS sert de référence de disposition.</p>
+      </div>
+    </div>
+    <div class="count">
+      <div><b>3</b><span>sélecteurs iOS (extension, Transférer, Partager avec…)</span></div>
+      <div><b>1</b><span>sélecteur web et Android (<code>SendSheet</code>)</span></div>
+      <div><b>0</b><span>avatar de sélecteur qui montre le contour équipé ou la présence</span></div>
+      <div><b>0</b><span>sélecteur qui crée un groupe ou vise une communauté</span></div>
+    </div>
+    <div class="tbl">
+      <table class="inv">
+        <thead><tr><th>Sélecteur</th><th>Ouvert par</th><th>Ce qu'il sait faire</th><th>Ce qui manque</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>iOS · extension de partage</b><br><code>apps/ios/MeeshyShareExtension/ShareViewController.swift:361</code></td>
+            <td>La feuille de partage système : texte, 1 lien, jusqu'à 20 images, vidéos ou fichiers (<code>MeeshyShareExtension/Info.plist</code>, <code>NSExtensionActivationRule</code>).</td>
+            <td>Conversations récentes lues dans l'App Group (<code>ShareConversationStore.swift:62-68</code>) ; jusqu'à 10 cibles, 20 fichiers, 500 Mio (<code>ShareLimits.swift:15-21</code>) ; aperçu des médias ; envoi différé « Sera envoyé à la reconnexion » (<code>ShareViewController.swift:650</code>) ; « Composer » remet la pièce au studio de l'app (<code>ShareComposeHandoff.swift</code>, <code>ShareComposeDoor.swift</code>).</td>
+            <td>Aucune recherche, aucune personne sans conversation, aucune légende. Avatar = initiales sur couleur (<code>:660-690</code>), sans photo, contour ni présence. On ne retire pas une pièce. Pas de publication directe.</td>
+          </tr>
+          <tr>
+            <td><b>iOS · « Transférer »</b><br><code>apps/ios/Meeshy/Features/Main/Components/ForwardPickerSheet.swift:21</code></td>
+            <td>Barre rapide (<code>ConversationView+MessageRow.swift:373</code>) et sélection multiple (<code>ConversationView+Selection.swift:128</code>).</td>
+            <td>Conversations en cache d'abord (<code>ForwardPickerViewModel.swift:125-129</code>), puis contacts, amis et répertoire, par recherche serveur (<code>:205-266</code>) ; sélection multiple ; état par ligne envoi, envoyé, échec (<code>ForwardPickerModel.swift:16-21</code>) ; rangée de durée d'une flamme (<code>ForwardDurationRow.swift</code>) ; Publier en story, réel ou post (<code>ForwardPickerSheet.swift:413-594</code>) ; Composer ; Imager la discussion (#9039).</td>
+            <td>Pas de légende. Pas de pièce seule (<code>MessagePieceTarget.swift:139-145</code>, la passerelle copie tout le lot, #9914). Pas d'aperçu ni de retrait par pièce. <code>MeeshyAvatar</code> sans <code>presenceState</code> ni contour (<code>:850</code>). Ni communauté, ni groupe à créer.</td>
+          </tr>
+          <tr>
+            <td><b>iOS · « Partager avec… »</b><br><code>apps/ios/Meeshy/Features/Main/Views/SharePickerView.swift:18</code></td>
+            <td>Story (<code>StoryViewerView.swift:868</code>, <code>MyStoriesView.swift:256</code>) et lien profond de partage (<code>Router.swift:705-711</code>).</td>
+            <td>Texte, lien, image, message, story (<code>:8-14</code>) ; recherche locale (<code>:203</code>) ; un toucher envoie à une conversation, une à la fois.</td>
+            <td>Pas de sélection multiple, pas de personne, pas de légende, pas de publication, pas de file hors ligne. Indicateur de chargement plein écran (<code>:236</code>).</td>
+          </tr>
+          <tr>
+            <td><b>Web et coque Android · <code>SendSheet</code></b><br><code>apps/web/src/components/send-sheet.tsx</code> (551 l.) et <code>src/lib/send/send-sheet-{plan,run,store}.ts</code></td>
+            <td>Cible de partage PWA (<code>share-target.ts</code>, <code>vite.config.ts:634</code>) et intent Android (<code>AndroidManifest.xml:97-110</code>), réunis dans <code>share-incoming/incoming-share.ts</code> ; messages (<code>lib/view/forward.ts:117-134</code>), pièce (<code>use-piece-menu.ts:155</code>), visionneuse, post (<code>publication-share.ts:45-70</code>), story (<code>stories/send-request.ts:25-48</code>).</td>
+            <td>8 récents, conversations en cache filtrées, personnes (amis puis recherche dès 2 caractères) ; ouvre ou crée la conversation directe ; légende de 5 000 caractères ; statut par destinataire et « Réessayer » ; pastilles POST, STORY, RÉEL ; « Copier le lien » et « Plus d'options » quand il y a une URL ; durée d'une flamme. Plafonds : 10 destinataires, 3 publications, 10 fichiers (<code>send-sheet-plan.ts:28-32</code>).</td>
+            <td>Pas de groupe à créer, pas de communauté, pas de recherche serveur des conversations. La reprise hors ligne vit dans la feuille ouverte (<code>send-sheet-run.ts:29-30</code>). Avatar sans contour ni présence (<code>send-sheet-parts.tsx:196</code>). Audio et fichiers entrants écartés (<code>incoming-share.ts:25</code>), texte joint à des fichiers jeté (<code>:42</code>), <code>SEND_MULTIPLE</code> sans texte. RÉEL offert pour 2 images (<code>send-sheet-plan.ts:142</code>), contre la règle iOS (#9286). Aucun partage de profil.</td>
+          </tr>
+          <tr>
+            <td><b>Feuilles système, les deux plateformes</b></td>
+            <td>Post, réel, story, invitation, lien de conversation : <code>PostDetailView.swift:999</code>, <code>ReelsPlayerView.swift:191</code>, <code>InviteFriendsSheet.swift:116</code>, <code>ConversationInfoSheet.swift:163</code> ; web <code>lib/view/invitation.ts:55-150</code>.</td>
+            <td>Envoient un lien hors de Meeshy (feuille système, pont Android, puis presse-papiers).</td>
+            <td>Sur iOS, un post ne s'envoie à une conversation Meeshy que par son lien : relevé, aucun envoi direct trouvé.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="cols2">
+      <div class="box">
+        <h3>Ce que la passerelle ne sait pas encore</h3>
+        <ul>
+          <li>Copier une seule pièce : <code>copyForwardedAttachments</code> copie tout le lot (<code>MessageProcessor.ts:737-740</code>, #9914). Aucun <code>forwardedAttachmentIds</code> au dépôt.</li>
+          <li>Un refus de transfert rend une phrase sans <code>code</code> stable (#9598, #9590).</li>
+          <li><code>forwardAdmission.ts</code> ne lit aucun drapeau de chiffrement : la copie serveur d'un contenu chiffré n'a pas de règle écrite.</li>
+        </ul>
+      </div>
+      <div class="box">
+        <h3>Ce qui est déjà tenu et se réutilise</h3>
+        <ul>
+          <li>La loi de sortie : <code>packages/shared/utils/content-exit-law.ts</code>, miroir iOS <code>MessageExitOffer</code> (<code>Models/Message.swift:53</code>), web <code>lib/view/content-exit.ts</code>.</li>
+          <li>La machine à états par destinataire : iOS <code>ForwardPickerModel</code>, web <code>send-sheet-run.ts</code>.</li>
+          <li>Le studio semé par un partage : iOS <code>ShareComposeDoor</code>, web <code>compose-from-share.ts</code> et <code>studio-seed.ts</code> (#9286).</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== ANATOMIE ===================== -->
+  <section class="blk" id="anatomie">
+    <div class="blk-head">
+      <span class="eyebrow">Le composant</span>
+      <h2>Quatre zones, toujours dans cet ordre</h2>
+    </div>
+    <div class="anat">
+      <ol class="zones">
+        <li><div><b>Ce qui part</b><span>L'aperçu de chaque pièce, dans l'ordre d'envoi. Un appui long réordonne, la croix retire. Un message, un post ou un profil s'y montre en carte.</span></div></li>
+        <li><div><b>Ce qu'on peut en faire</b><span>Publier en story, post ou réel (cochables comme des destinataires), « Modifier dans le studio », puis Enregistrer, Copier le lien, Imager. Une entrée interdite n'apparaît pas ; une ligne grise dit pourquoi.</span></div></li>
+        <li><div><b>À qui</b><span>Recherche, rangée des récents, puis Conversations, Personnes, Communautés. Avatar avec son contour équipé ; pastille de présence seulement là où le serveur la sert (amis acceptés).</span></div></li>
+        <li><div><b>Envoyer</b><span>Barre fixe : destinataires choisis, légende (une par envoi), « Ensemble / Séparément » à partir de deux pièces, et le bouton qui compte les destinataires.</span></div></li>
+      </ol>
+      <div class="box">
+        <h3>Règles de tenue</h3>
+        <ul class="rules">
+          <li>La liste se lit dans le cache d'abord : jamais d'indicateur de chargement quand des conversations sont en cache. Un squelette seulement au tout premier lancement.</li>
+          <li>Chaque envoi part avec un retour immédiat sur sa ligne (envoi, envoyé, échec). La feuille peut se fermer pendant l'envoi : la file d'attente continue.</li>
+          <li>Hors ligne, rien n'est refusé : l'envoi entre dans la file et part au retour du réseau, y compris après fermeture de l'app.</li>
+          <li>La loi de sortie décide. Le client masque, le serveur refuse avec un code stable. Une sélection mixte retire ce qui ne sort pas et dit combien partent.</li>
+          <li>La même pièce garde la même place : une vidéo n'est pas convertie, un audio reste un audio, un fichier reste un fichier.</li>
+          <li>Les mots de l'écran sont les mêmes sur iOS, dans l'extension, sur le web et dans la coque Android, dans les sept langues.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="path" aria-label="Chemin nominal en deux gestes">
+      <span class="g"><b>1</b>Toucher « Ana » dans les récents</span>
+      <span class="arr" aria-hidden="true">→</span>
+      <span class="g"><b>2</b>Envoyer</span>
+      <span class="arr" aria-hidden="true">→</span>
+      <span class="g">La ligne d'Ana passe à « Envoyé », la feuille se ferme, un toast propose « Ouvrir »</span>
+    </div>
+  </section>
+
+  <!-- ===================== VUES ===================== -->
+  <section class="blk" id="vues">
+    <div class="blk-head">
+      <span class="eyebrow">Maquettes · largeur 390</span>
+      <h2>Les vues</h2>
+      <p class="muted" style="max-width:68ch">Disposition iOS, couleurs du SDK (indigo de marque, plans <code>ios.css</code>). Le web et la coque Android rendent le même écran en feuille du bas ; l'extension iOS le rend dans sa feuille système.</p>
+    </div>
+
+    <div class="views">
+
+      <!-- V1 -->
+      <article class="view">
+        <h3><span class="id">V1</span>Depuis une autre app</h3>
+        <p class="why">Photos → Partager → Meeshy : deux photos et une vidéo. Ana est cochée d'un toucher dans les récents, la story est cochée comme un destinataire.</p>
+        <div class="phone"><div class="scr">
+          <div class="sb"><span>9:41</span><i></i></div>
+          <div class="grab"></div>
+          <div class="nav"><span class="l">Annuler</span><span class="t">Envoyer</span><span class="r">Studio</span></div>
+          <div class="zl">Ce qui part · 3 <em>Appui long pour réordonner</em></div>
+          <div class="tray">
+            <div class="tile ph1"><span class="rm"><svg class="ico"><use href="#i-x"/></svg></span><span class="ord">1</span></div>
+            <div class="tile ph2"><span class="rm"><svg class="ico"><use href="#i-x"/></svg></span><span class="ord">2</span></div>
+            <div class="tile vid"><span class="play"><svg class="ico"><use href="#i-play"/></svg></span><span class="rm"><svg class="ico"><use href="#i-x"/></svg></span><span class="ord">3</span><span class="dur">0:14</span></div>
+          </div>
+          <div class="zl">Publier</div>
+          <div class="acts">
+            <span class="pill on"><svg class="ico"><use href="#i-story"/></svg>Ma story</span>
+            <span class="pill"><svg class="ico"><use href="#i-post"/></svg>Mon fil</span>
+            <span class="pill"><svg class="ico"><use href="#i-reel"/></svg>Réel</span>
+            <span class="pill ghost"><svg class="ico"><use href="#i-wand"/></svg>Modifier dans le studio</span>
+          </div>
+          <div class="search"><svg class="ico"><use href="#i-search"/></svg>Rechercher une personne, un groupe</div>
+          <div class="recents">
+            <div class="rc"><div class="av l fr fr-gold" style="--a:#E07A5F">AK<span class="ck"><svg class="ico" style="color:#fff"><use href="#i-check"/></svg></span></div><span>Ana</span></div>
+            <div class="rc"><div class="av l grp" style="--a:#3D8B7A">ÉL</div><span>Équipe Lyon</span></div>
+            <div class="rc"><div class="av l fr fr-aurora" style="--a:#5B6CF0">MB<span class="pd"></span></div><span>Moussa</span></div>
+            <div class="rc"><div class="av l" style="--a:#B5651D">FD</div><span>Famille Diallo</span></div>
+            <div class="rc"><div class="av l" style="--a:#8E5BD6">LM</div><span>Léa</span></div>
+          </div>
+          <div class="sect">Conversations</div>
+          <div class="row"><div class="av grp" style="--a:#3D8B7A">ÉL</div><div class="tx"><b>Équipe Lyon</b><span>Groupe · 12 membres</span></div><span class="chk"></span></div>
+          <div class="row"><div class="av" style="--a:#2F6FB0">PD</div><div class="tx"><b>Projet Dakar</b><span><svg class="ico"><use href="#i-lock"/></svg>Chiffrée · 4 membres</span></div><span class="chk"></span></div>
+          <div class="sect">Personnes</div>
+          <div class="row"><div class="av fr fr-ember" style="--a:#C0392B">YS<span class="pd"></span></div><div class="tx"><b>Yao Sène</b><span>Ami · pas encore de conversation</span></div><span class="chk"></span></div>
+          <div class="sect">Communautés</div>
+          <div class="row"><div class="av grp" style="--a:#7A5AF8"><svg class="ico in"><use href="#i-home"/></svg></div><div class="tx"><b>Lyon Polyglotte</b><span>3 canaux où vous pouvez écrire</span></div><span class="chk"></span></div>
+          <div class="spacer"></div>
+          <div class="bar">
+            <div class="chips">
+              <span class="chip"><span class="av s" style="--a:#E07A5F">AK</span>Ana<svg class="ico"><use href="#i-x"/></svg></span>
+              <span class="chip"><span class="av s" style="--a:#6366F1"><svg class="ico in" style="width:70%;height:70%"><use href="#i-story"/></svg></span>Ma story<svg class="ico"><use href="#i-x"/></svg></span>
+            </div>
+            <div class="cap">Ajouter un message…</div>
+            <div class="seg2" role="group" aria-label="Façon d'envoyer"><span class="on">Ensemble</span><span>Séparément</span></div>
+            <div class="send">Envoyer · 2</div>
+          </div>
+        </div></div>
+      </article>
+
+      <!-- V2 -->
+      <article class="view">
+        <h3><span class="id">V2</span>Une pièce d'un message à sept pièces</h3>
+        <p class="why">Appui long sur la 3ᵉ photo → Transférer. Seule cette pièce part ; « Tout le message » élargit sans fermer l'écran.</p>
+        <div class="phone"><div class="scr">
+          <div class="sb"><span>9:41</span><i></i></div>
+          <div class="grab"></div>
+          <div class="nav"><span class="l">Annuler</span><span class="t">Transférer</span><span class="r"></span></div>
+          <div class="zl">Ce qui part · 1 pièce sur 7 <em>Tout le message</em></div>
+          <div class="tray">
+            <div class="tile ph1 off"></div>
+            <div class="tile ph4 off"></div>
+            <div class="tile ph3 sel"><span class="ord">3</span></div>
+            <div class="tile ph2 off"></div>
+            <div class="tile more">+3</div>
+          </div>
+          <div class="why-line"><svg class="ico"><use href="#i-image"/></svg>Photo 3 sur 7 · message d'Ana, aujourd'hui 14:02</div>
+          <div class="zl">Publier</div>
+          <div class="acts">
+            <span class="pill"><svg class="ico"><use href="#i-story"/></svg>Ma story</span>
+            <span class="pill"><svg class="ico"><use href="#i-post"/></svg>Mon fil</span>
+            <span class="pill dis"><svg class="ico"><use href="#i-reel"/></svg>Réel</span>
+          </div>
+          <div class="why-line"><svg class="ico"><use href="#i-reel"/></svg>Une photo seule ne fait pas un réel.</div>
+          <div class="acts">
+            <span class="pill ghost"><svg class="ico"><use href="#i-save"/></svg>Enregistrer</span>
+            <span class="pill ghost"><svg class="ico"><use href="#i-out"/></svg>Partager hors de Meeshy</span>
+          </div>
+          <div class="search"><svg class="ico"><use href="#i-search"/></svg>Rechercher une personne, un groupe</div>
+          <div class="recents">
+            <div class="rc"><div class="av l grp" style="--a:#3D8B7A">ÉL<span class="ck"><svg class="ico" style="color:#fff"><use href="#i-check"/></svg></span></div><span>Équipe Lyon</span></div>
+            <div class="rc"><div class="av l fr fr-aurora" style="--a:#5B6CF0">MB<span class="pd"></span></div><span>Moussa</span></div>
+            <div class="rc"><div class="av l" style="--a:#B5651D">FD</div><span>Famille Diallo</span></div>
+            <div class="rc"><div class="av l" style="--a:#8E5BD6">LM</div><span>Léa</span></div>
+          </div>
+          <div class="sect">Conversations</div>
+          <div class="row on"><div class="av grp" style="--a:#3D8B7A">ÉL</div><div class="tx"><b>Équipe Lyon</b><span>Groupe · 12 membres</span></div><span class="chk on"><svg class="ico"><use href="#i-check"/></svg></span></div>
+          <div class="row"><div class="av" style="--a:#B5651D">FD</div><div class="tx"><b>Famille Diallo</b><span>Groupe · 6 membres</span></div><span class="chk"></span></div>
+          <div class="spacer"></div>
+          <div class="bar">
+            <div class="cap filled">Regarde la vue depuis Fourvière</div>
+            <div class="send">Transférer · 1</div>
+          </div>
+        </div></div>
+        <p class="note">Exige la copie d'une pièce par la passerelle (#9914). D'ici là, iOS n'offre pas l'entrée, le web l'offre (<code>use-piece-menu.ts:155</code>) : écart à fermer dans le même lot.</p>
+      </article>
+
+      <!-- V3 -->
+      <article class="view">
+        <h3><span class="id">V3</span>Plusieurs messages, dont un qui ne sort pas</h3>
+        <p class="why">Sélection multiple de quatre messages. Le message à vue unique est retiré, avec son motif ; les trois autres partent dans l'ordre.</p>
+        <div class="phone"><div class="scr">
+          <div class="sb"><span>9:41</span><i></i></div>
+          <div class="grab"></div>
+          <div class="nav"><span class="l">Annuler</span><span class="t">Transférer</span><span class="r"></span></div>
+          <div class="zl">Ce qui part · 3 messages sur 4</div>
+          <div class="bub"><div class="av s" style="--a:#E07A5F">AK</div><p>On se retrouve à la gare Part-Dieu ?</p></div>
+          <div class="bub me"><p>Oui, 18 h devant la voie G</p></div>
+          <div class="bub gone"><div class="av s" style="--a:#E07A5F">AK</div><p>Photo du billet</p><span class="tag vo"><svg class="ico"><use href="#i-eye"/></svg>Vue unique</span></div>
+          <div class="bub"><div class="av s" style="--a:#E07A5F">AK</div><p>Parfait, à tout à l'heure</p></div>
+          <div class="banner warn"><svg class="ico"><use href="#i-alert"/></svg><span>La photo à vue unique reste dans cette conversation. Les trois autres messages partent.</span></div>
+          <div class="acts">
+            <span class="pill ghost"><svg class="ico"><use href="#i-image"/></svg>Imager la discussion</span>
+            <span class="pill ghost"><svg class="ico"><use href="#i-copy"/></svg>Copier le texte</span>
+          </div>
+          <div class="search"><svg class="ico"><use href="#i-search"/></svg>Rechercher une personne, un groupe</div>
+          <div class="sect">Conversations</div>
+          <div class="row on"><div class="av fr fr-aurora" style="--a:#5B6CF0">MB<span class="pd"></span></div><div class="tx"><b>Moussa Ba</b><span>En ligne</span></div><span class="chk on"><svg class="ico"><use href="#i-check"/></svg></span></div>
+          <div class="row"><div class="av grp" style="--a:#3D8B7A">ÉL</div><div class="tx"><b>Équipe Lyon</b><span>Groupe · 12 membres</span></div><span class="chk"></span></div>
+          <div class="spacer"></div>
+          <div class="bar">
+            <div class="cap">Ajouter un message…</div>
+            <div class="send">Transférer 3 messages · 1</div>
+          </div>
+        </div></div>
+        <p class="note">Le web refuse aujourd'hui toute la sélection dès qu'un message ne sort pas (<code>lib/view/forward.ts:53-58</code>). Voir D6.</p>
+      </article>
+
+      <!-- V4 -->
+      <article class="view">
+        <h3><span class="id">V4</span>Une publication</h3>
+        <p class="why">Un post du fil. Il part comme une carte dans la conversation ; le lien se copie ; « Republier » le met sur mon fil.</p>
+        <div class="phone"><div class="scr">
+          <div class="sb"><span>9:41</span><i></i></div>
+          <div class="grab"></div>
+          <div class="nav"><span class="l">Annuler</span><span class="t">Envoyer</span><span class="r"></span></div>
+          <div class="zl">Ce qui part</div>
+          <div class="card"><div class="thumb ph4"></div><div class="tx"><b>Marché de Sandaga, samedi matin</b><span>Post d'Aminata Fall · 4 photos · traduit du wolof</span></div></div>
+          <div class="zl">Publier</div>
+          <div class="acts">
+            <span class="pill"><svg class="ico"><use href="#i-post"/></svg>Republier sur mon fil</span>
+            <span class="pill"><svg class="ico"><use href="#i-story"/></svg>Ma story</span>
+          </div>
+          <div class="acts">
+            <span class="pill ghost"><svg class="ico"><use href="#i-link"/></svg>Copier le lien</span>
+            <span class="pill ghost"><svg class="ico"><use href="#i-out"/></svg>Partager hors de Meeshy</span>
+          </div>
+          <div class="search"><svg class="ico"><use href="#i-search"/></svg>Rechercher une personne, un groupe</div>
+          <div class="recents">
+            <div class="rc"><div class="av l fr fr-gold" style="--a:#E07A5F">AK<span class="ck"><svg class="ico" style="color:#fff"><use href="#i-check"/></svg></span></div><span>Ana</span></div>
+            <div class="rc"><div class="av l grp" style="--a:#3D8B7A">ÉL<span class="ck"><svg class="ico" style="color:#fff"><use href="#i-check"/></svg></span></div><span>Équipe Lyon</span></div>
+            <div class="rc"><div class="av l fr fr-aurora" style="--a:#5B6CF0">MB<span class="pd"></span></div><span>Moussa</span></div>
+            <div class="rc"><div class="av l" style="--a:#8E5BD6">LM</div><span>Léa</span></div>
+          </div>
+          <div class="sect">Autres contenus, même écran</div>
+          <div class="card"><div class="ic"><svg class="ico"><use href="#i-story"/></svg></div><div class="tx"><b>Story de Moussa</b><span>Visible encore 6 h · part comme carte, s'ouvre si l'auteur le permet</span></div></div>
+          <div class="card"><div class="ic"><svg class="ico"><use href="#i-reel"/></svg></div><div class="tx"><b>Réel « Cuisine du dimanche »</b><span>0:42 · part comme carte jouable</span></div></div>
+          <div class="card"><div class="ic"><svg class="ico"><use href="#i-person"/></svg></div><div class="tx"><b>Profil de Léa Martin</b><span>Carte de profil · « Ajouter en ami » chez le destinataire</span></div></div>
+          <div class="card"><div class="ic"><svg class="ico"><use href="#i-users"/></svg></div><div class="tx"><b>Inviter dans « Équipe Lyon »</b><span>Lien d'invitation · valable 7 jours</span></div></div>
+          <div class="spacer"></div>
+          <div class="bar">
+            <div class="cap">Ajouter un message…</div>
+            <div class="send">Envoyer · 2</div>
+          </div>
+        </div></div>
+      </article>
+
+      <!-- V5 -->
+      <article class="view">
+        <h3><span class="id">V5</span>Recherche et nouveau groupe</h3>
+        <p class="why">La recherche fusionne personnes, conversations et communautés, côté serveur. Deux personnes sans conversation : on choisit de leur écrire chacune, ou de créer un groupe.</p>
+        <div class="phone"><div class="scr">
+          <div class="sb"><span>9:41</span><i></i></div>
+          <div class="grab"></div>
+          <div class="nav"><span class="l">Annuler</span><span class="t">Envoyer</span><span class="r"></span></div>
+          <div class="zl">Ce qui part</div>
+          <div class="card"><div class="ic"><svg class="ico"><use href="#i-link"/></svg></div><div class="tx"><b>Programme du festival Lumière</b><span>festival-lumiere.org</span></div></div>
+          <div class="search typing"><svg class="ico"><use href="#i-search"/></svg>lé</div>
+          <div class="sect">Personnes</div>
+          <div class="row on"><div class="av fr fr-aurora" style="--a:#8E5BD6">LM<span class="pd"></span></div><div class="tx"><b>Léa Martin</b><span>Amie · en ligne</span></div><span class="chk on"><svg class="ico"><use href="#i-check"/></svg></span></div>
+          <div class="row on"><div class="av" style="--a:#1F7A8C">LN</div><div class="tx"><b>Léon Ndiaye</b><span>Dans vos contacts · pas encore de conversation</span></div><span class="chk on"><svg class="ico"><use href="#i-check"/></svg></span></div>
+          <div class="row"><div class="av" style="--a:#9C6644">LT</div><div class="tx"><b>Lélia Traoré</b><span>@lelia · amis en commun : 3</span></div><span class="chk"></span></div>
+          <div class="sect">Conversations</div>
+          <div class="row"><div class="av grp" style="--a:#6D597A">LS</div><div class="tx"><b>Lecture du soir</b><span>Groupe · 5 membres</span></div><span class="chk"></span></div>
+          <div class="sect">Communautés</div>
+          <div class="row"><div class="av grp" style="--a:#7A5AF8"><svg class="ico in"><use href="#i-home"/></svg></div><div class="tx"><b>Lectures partagées</b><span>Canal #annonces · vous pouvez écrire</span></div><span class="chk"></span></div>
+          <div class="spacer"></div>
+          <div class="bar">
+            <div class="toggle"><span>Créer un groupe avec Léa et Léon</span><i></i></div>
+            <div class="cap">Ajouter un message…</div>
+            <div class="send">Envoyer · 2</div>
+          </div>
+        </div></div>
+      </article>
+
+      <!-- V6 -->
+      <article class="view">
+        <h3><span class="id">V6</span>Envoi, destinataire par destinataire</h3>
+        <p class="why">Après « Envoyer », chaque ligne dit où en est son envoi. Le réseau tombe : ce qui n'est pas parti attend, rien n'est perdu.</p>
+        <div class="phone"><div class="scr">
+          <div class="sb"><span>9:41</span><i></i></div>
+          <div class="grab"></div>
+          <div class="nav"><span class="l">Fermer</span><span class="t">Envoi</span><span class="r">Tout réessayer</span></div>
+          <div class="banner off"><svg class="ico"><use href="#i-wifioff"/></svg><span>Hors ligne. Ce qui n'est pas parti partira au retour du réseau, même si vous fermez Meeshy.</span></div>
+          <div class="zl">3 pièces · 4 destinataires</div>
+          <div class="row"><div class="av fr fr-gold" style="--a:#E07A5F">AK</div><div class="tx"><b>Ana Kouassi</b><span>3 pièces</span></div><span class="st ok"><svg class="ico"><use href="#i-check"/></svg>Envoyé</span></div>
+          <div class="row"><div class="av grp" style="--a:#3D8B7A">ÉL</div><div class="tx"><b>Équipe Lyon</b><span>Pièce 2 sur 3 · 18 Mo sur 29</span></div><span class="ring" style="--p:62" role="img" aria-label="62 pour cent"></span></div>
+          <div class="row"><div class="av" style="--a:#2F6FB0">PD</div><div class="tx"><b>Projet Dakar</b><span style="color:var(--err)">Refusé : fichier trop lourd</span></div><span class="retry"><svg class="ico"><use href="#i-retry"/></svg>Réessayer</span></div>
+          <div class="row"><div class="av" style="--a:#6366F1"><svg class="ico in"><use href="#i-story"/></svg></div><div class="tx"><b>Ma story</b><span>En attente du réseau</span></div><span class="st wait"><svg class="ico"><use href="#i-clock"/></svg>En file</span></div>
+          <div class="spacer"></div>
+          <div class="bar">
+            <div class="two"><div class="ghostbtn">Fermer</div><div class="send">Ouvrir Ana</div></div>
+          </div>
+        </div></div>
+      </article>
+
+      <!-- V7 -->
+      <article class="view">
+        <h3><span class="id">V7</span>Une flamme à durée</h3>
+        <p class="why">Elle se transfère, et rien d'autre. La durée de la source est choisie d'avance ; on ne peut que la raccourcir.</p>
+        <div class="phone"><div class="scr">
+          <div class="sb"><span>9:41</span><i></i></div>
+          <div class="grab"></div>
+          <div class="nav"><span class="l">Annuler</span><span class="t">Transférer</span><span class="r"></span></div>
+          <div class="zl">Ce qui part</div>
+          <div class="bub"><div class="av s" style="--a:#E07A5F">AK</div><p>Le code du portail : 4471B</p><span class="tag eph"><svg class="ico"><use href="#i-flame"/></svg>1 h</span></div>
+          <div class="dura">
+            <b><svg class="ico"><use href="#i-flame"/></svg>La copie disparaîtra après</b>
+            <div class="seg"><span class="on">1 h · comme l'original</span><span>10 min</span><span>1 min</span><span>30 s</span></div>
+          </div>
+          <div class="why-line"><svg class="ico"><use href="#i-lock"/></svg>Une flamme ne se publie pas, ne s'enregistre pas et ne se copie pas. Sa copie disparaît aussi après lecture et ne se retransfère pas.</div>
+          <div class="search"><svg class="ico"><use href="#i-search"/></svg>Rechercher une personne, un groupe</div>
+          <div class="sect">Conversations</div>
+          <div class="row on"><div class="av fr fr-aurora" style="--a:#8E5BD6">LM<span class="pd"></span></div><div class="tx"><b>Léa Martin</b><span>Amie · en ligne</span></div><span class="chk on"><svg class="ico"><use href="#i-check"/></svg></span></div>
+          <div class="row"><div class="av" style="--a:#B5651D">FD</div><div class="tx"><b>Famille Diallo</b><span>Groupe · 6 membres</span></div><span class="chk"></span></div>
+          <div class="row"><div class="av grp" style="--a:#7A5AF8"><svg class="ico in"><use href="#i-home"/></svg></div><div class="tx"><b>Lyon Polyglotte · #général</b><span>Communauté</span></div><span class="chk"></span></div>
+          <div class="spacer"></div>
+          <div class="bar">
+            <div class="send">Transférer · 1</div>
+          </div>
+        </div></div>
+      </article>
+
+      <!-- V8 -->
+      <article class="view">
+        <h3><span class="id">V8</span>Une conversation chiffrée</h3>
+        <p class="why">Le contenu vient d'une conversation chiffrée. Il ne se publie pas ; vers une conversation qui ne l'est pas, l'écran le dit avant l'envoi.</p>
+        <div class="phone"><div class="scr">
+          <div class="sb"><span>9:41</span><i></i></div>
+          <div class="grab"></div>
+          <div class="nav"><span class="l">Annuler</span><span class="t">Transférer</span><span class="r"></span></div>
+          <div class="zl">Ce qui part</div>
+          <div class="bub"><div class="av s" style="--a:#2F6FB0">PD</div><p>Le devis signé est dans le dossier partagé</p><span class="tag lk"><svg class="ico"><use href="#i-lock"/></svg>Chiffré</span></div>
+          <div class="why-line"><svg class="ico"><use href="#i-lock"/></svg>Un message chiffré ne se publie pas. Il se transfère, se copie et s'enregistre sur cet appareil.</div>
+          <div class="acts">
+            <span class="pill ghost"><svg class="ico"><use href="#i-copy"/></svg>Copier le texte</span>
+          </div>
+          <div class="search"><svg class="ico"><use href="#i-search"/></svg>Rechercher une personne, un groupe</div>
+          <div class="sect">Conversations</div>
+          <div class="row on"><div class="av" style="--a:#0E7C66">CD</div><div class="tx"><b>Comptabilité Dakar</b><span><svg class="ico"><use href="#i-lock"/></svg>Chiffrée · rechiffré ici</span></div><span class="chk on"><svg class="ico"><use href="#i-check"/></svg></span></div>
+          <div class="row on"><div class="av grp" style="--a:#3D8B7A">ÉL</div><div class="tx"><b>Équipe Lyon</b><span style="color:var(--warn)">Non chiffrée · lisible par le serveur</span></div><span class="chk on"><svg class="ico"><use href="#i-check"/></svg></span></div>
+          <div class="row"><div class="av fr fr-gold" style="--a:#E07A5F">AK</div><div class="tx"><b>Ana Kouassi</b><span>Non chiffrée</span></div><span class="chk"></span></div>
+          <div class="spacer"></div>
+          <div class="bar">
+            <div class="banner warn" style="margin:0"><svg class="ico"><use href="#i-alert"/></svg><span>« Équipe Lyon » n'est pas chiffrée : ce message y sortira du chiffrement de bout en bout.</span></div>
+            <div class="chips">
+              <span class="chip"><span class="av s" style="--a:#0E7C66">CD</span>Comptabilité<svg class="ico"><use href="#i-x"/></svg></span>
+              <span class="chip warn"><span class="av s" style="--a:#3D8B7A">ÉL</span>Équipe Lyon<svg class="ico"><use href="#i-x"/></svg></span>
+            </div>
+            <div class="send">Transférer · 2</div>
+          </div>
+        </div></div>
+        <p class="note">La passerelle copie les pièces côté serveur (<code>copyForwardedAttachments</code>) : pour une source chiffrée, la copie doit se faire sur l'appareil. Voir D7.</p>
+      </article>
+
+      <!-- V9 -->
+      <article class="view">
+        <h3><span class="id">V9</span>Trop lourd</h3>
+        <p class="why">22 fichiers et 612 Mo arrivent d'une autre app. L'écran dit la limite, marque ce qui dépasse et propose de le retirer d'un geste.</p>
+        <div class="phone"><div class="scr">
+          <div class="sb"><span>9:41</span><i></i></div>
+          <div class="grab"></div>
+          <div class="nav"><span class="l">Annuler</span><span class="t">Envoyer</span><span class="r">Studio</span></div>
+          <div class="banner warn"><svg class="ico"><use href="#i-alert"/></svg><span>22 fichiers, 612 Mo. Un partage emporte au plus 20 fichiers et 500 Mo.</span></div>
+          <div class="zl">Ce qui part · 22 <em>Retirer les 2 derniers</em></div>
+          <div class="tray">
+            <div class="tile ph1"><span class="ord">1</span></div>
+            <div class="tile vid"><span class="play"><svg class="ico"><use href="#i-play"/></svg></span><span class="ord">2</span><span class="dur">4:10</span></div>
+            <div class="tile ph3"><span class="ord">3</span></div>
+            <div class="tile more">+17</div>
+            <div class="tile ph2 flag"><span class="rm"><svg class="ico"><use href="#i-x"/></svg></span><span class="ord">21</span></div>
+            <div class="tile vid flag"><span class="rm"><svg class="ico"><use href="#i-x"/></svg></span><span class="ord">22</span><span class="dur">9:52</span></div>
+          </div>
+          <div class="why-line"><svg class="ico"><use href="#i-file"/></svg>La vidéo n° 22 pèse 140 Mo à elle seule.</div>
+          <div class="search"><svg class="ico"><use href="#i-search"/></svg>Rechercher une personne, un groupe</div>
+          <div class="sect">Conversations</div>
+          <div class="row on"><div class="av" style="--a:#B5651D">FD</div><div class="tx"><b>Famille Diallo</b><span>Groupe · 6 membres</span></div><span class="chk on"><svg class="ico"><use href="#i-check"/></svg></span></div>
+          <div class="row"><div class="av grp" style="--a:#3D8B7A">ÉL</div><div class="tx"><b>Équipe Lyon</b><span>Groupe · 12 membres</span></div><span class="chk"></span></div>
+          <div class="spacer"></div>
+          <div class="bar">
+            <div class="seg2" role="group" aria-label="Façon d'envoyer"><span class="on">Ensemble</span><span>Séparément</span></div>
+            <div class="send dis">Retirez 2 fichiers pour envoyer</div>
+          </div>
+        </div></div>
+      </article>
+
+    </div>
+
+    <div class="blk-head" style="margin-top:12px">
+      <h3>Vide, chargement, déconnecté, interdit</h3>
+      <p class="why muted">Fragments d'écran : seule la zone qui change est montrée.</p>
+    </div>
+    <div class="minis">
+      <div class="view">
+        <div class="phone mini"><div class="scr short">
+          <div class="grab"></div>
+          <div class="nav"><span class="l">Annuler</span><span class="t">Envoyer</span><span class="r"></span></div>
+          <div class="search"><svg class="ico"><use href="#i-search"/></svg>Rechercher une personne, un groupe</div>
+          <div class="skrow"><span class="a"></span><span class="l"><span class="skel" style="width:60%"></span><span class="skel" style="width:35%"></span></span></div>
+          <div class="skrow"><span class="a"></span><span class="l"><span class="skel" style="width:48%"></span><span class="skel" style="width:30%"></span></span></div>
+          <div class="skrow"><span class="a"></span><span class="l"><span class="skel" style="width:55%"></span><span class="skel" style="width:40%"></span></span></div>
+          <div style="height:18px"></div>
+        </div></div>
+        <p class="why"><b>Premier lancement, cache vide.</b> Squelette, recherche déjà active. Avec un cache, même ancien, la liste s'affiche aussitôt et se met à jour sans bruit.</p>
+      </div>
+      <div class="view">
+        <div class="phone mini"><div class="scr short">
+          <div class="grab"></div>
+          <div class="nav"><span class="l">Annuler</span><span class="t">Envoyer</span><span class="r"></span></div>
+          <div class="empty"><span class="big"><svg class="ico"><use href="#i-users"/></svg></span><b>Personne ici pour l'instant</b><p>Cherchez une personne par son nom, son pseudo ou son numéro. Vous pouvez aussi publier en story.</p></div>
+          <div class="search"><svg class="ico"><use href="#i-search"/></svg>Rechercher une personne</div>
+          <div style="height:18px"></div>
+        </div></div>
+        <p class="why"><b>Aucune conversation.</b> Pas d'impasse : la recherche et la publication restent offertes.</p>
+      </div>
+      <div class="view">
+        <div class="phone mini"><div class="scr short">
+          <div class="grab"></div>
+          <div class="nav"><span class="l">Annuler</span><span class="t">Envoyer avec Meeshy</span><span class="r"></span></div>
+          <div class="empty"><span class="big"><svg class="ico"><use href="#i-person"/></svg></span><b>Connectez-vous pour envoyer</b><p>Votre partage est gardé. Il vous attend dans Meeshy, ou dans le studio si vous voulez le publier.</p></div>
+          <div class="bar"><div class="two"><div class="ghostbtn">Studio</div><div class="send">Ouvrir Meeshy</div></div></div>
+        </div></div>
+        <p class="why"><b>Extension ou cible de partage, déconnecté.</b> Rien ne se perd : iOS garde la fiche (<code>ShareComposeHandoff</code>), le web la garde une heure (<code>web-inbox.ts</code>).</p>
+      </div>
+      <div class="view">
+        <div class="phone mini"><div class="scr short">
+          <div class="grab"></div>
+          <div class="nav"><span class="l"></span><span class="t">Transférer</span><span class="r"></span></div>
+          <div class="lockcard"><span class="big"><svg class="ico"><use href="#i-eye"/></svg></span><b>Ce message ne sort pas de Meeshy</b><p>Il est à vue unique : il ne se transfère, ne s'enregistre et ne se partage pas. Il reste dans la conversation, le temps d'être vu.</p></div>
+          <div class="bar"><div class="ghostbtn">Compris</div></div>
+        </div></div>
+        <p class="why"><b>Interdit motivé.</b> L'entrée n'est normalement pas rendue (#9573). Cet écran n'apparaît que si tout ce qui est choisi est protégé, par exemple une sélection de vues uniques ou un refus du serveur.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== MATRICES ===================== -->
+  <section class="blk" id="matrice">
+    <div class="blk-head">
+      <span class="eyebrow">Recette</span>
+      <h2>Entrées, actions, états</h2>
+      <div class="legend">
+        <span><span class="y">✓</span> offert</span>
+        <span><span class="c">◐</span> sous condition</span>
+        <span><span class="n">—</span> sans objet</span>
+        <span><span class="q">?</span> décision à prendre</span>
+        <span><span class="x">✕</span> interdit, non rendu</span>
+      </div>
+    </div>
+
+    <h3>Entrées × actions (contenu ordinaire)</h3>
+    <div class="tbl">
+      <table class="mx">
+        <thead><tr><th>Entrée</th><th>Envoyer</th><th>Légende</th><th>Retirer, réordonner</th><th>Ensemble / séparément</th><th>Post</th><th>Story</th><th>Réel</th><th>Studio</th><th>Enregistrer</th><th>Copier le lien</th><th>Imager</th></tr></thead>
+        <tbody>
+          <tr><td>Texte (autre app)</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>Lien</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td><td class="y">✓</td><td class="n">—</td><td class="y">✓</td><td class="n">—</td></tr>
+          <tr><td>1 image</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td><td class="y">✓</td><td class="y">✓</td><td class="x">✕</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>1 vidéo</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td><td class="y">✓</td><td class="y">✓</td><td class="c">◐ qualifie</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>2 à 20 médias</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="c">◐ qualifie</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>Audio</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="q">?</td><td class="q">?</td><td class="n">—</td><td class="q">?</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>Fichier</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>Une pièce d'un message</td><td class="c">◐ #9914</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td><td class="y">✓</td><td class="y">✓</td><td class="c">◐ qualifie</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>Un message entier</td><td class="y">✓</td><td class="y">✓</td><td class="c">◐ ses pièces</td><td class="n">—</td><td class="c">◐ média</td><td class="c">◐ média</td><td class="c">◐ qualifie</td><td class="c">◐ média</td><td class="c">◐ média</td><td class="n">—</td><td class="y">✓</td></tr>
+          <tr><td>Plusieurs messages</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓ retirer</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="y">✓</td></tr>
+          <tr><td>Publication (post)</td><td class="y">✓ carte</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td><td class="y">✓ republier</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="y">✓</td><td class="n">—</td></tr>
+          <tr><td>Story</td><td class="y">✓ carte</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="q">?</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="y">✓</td><td class="n">—</td></tr>
+          <tr><td>Réel</td><td class="y">✓ carte</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td><td class="y">✓ republier</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="y">✓</td><td class="n">—</td></tr>
+          <tr><td>Profil</td><td class="y">✓ carte</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="y">✓</td><td class="n">—</td></tr>
+          <tr><td>Conversation à inviter</td><td class="y">✓ invitation</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="y">✓</td><td class="n">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted" style="font-size:15px">« Qualifie » : la règle iOS <code>qualifiesAsReel</code> (<code>ComposerDocumentSendRules.swift</code>), reprise sur le web (#9286 lot 4). « Média » : seulement si le message porte une pièce que la loi laisse publier (<code>ComposableAttachment.offers</code>).</p>
+
+    <h3>Nature du contenu × actions</h3>
+    <div class="tbl">
+      <table class="mx">
+        <thead><tr><th>Nature (loi de sortie)</th><th>Transférer</th><th>Durée de la copie</th><th>Publier, studio</th><th>Enregistrer</th><th>Copier</th><th>Partager hors de Meeshy</th><th>Imager</th><th>Ce que dit l'écran</th></tr></thead>
+        <tbody>
+          <tr><td>Ordinaire</td><td class="y">✓</td><td class="n">—</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td style="text-align:left">Rien de particulier</td></tr>
+          <tr><td>Flamme à durée</td><td class="y">✓</td><td class="c">≤ source, présélectionnée</td><td class="x">✕</td><td class="x">✕</td><td class="x">✕</td><td class="x">✕</td><td class="x">✕</td><td style="text-align:left">Rangée de durée et une ligne de motif (V7)</td></tr>
+          <tr><td>Flamme après lecture</td><td class="x">✕</td><td class="n">—</td><td class="x">✕</td><td class="x">✕</td><td class="x">✕</td><td class="x">✕</td><td class="x">✕</td><td style="text-align:left">Entrée absente ; retirée d'une sélection avec motif (V3)</td></tr>
+          <tr><td>Vue unique</td><td class="x">✕</td><td class="n">—</td><td class="x">✕</td><td class="x">✕</td><td class="x">✕</td><td class="x">✕</td><td class="x">✕</td><td style="text-align:left">Idem, carte « ne sort pas de Meeshy » si rien d'autre</td></tr>
+          <tr><td>Flouté</td><td class="q">?</td><td class="n">—</td><td class="x">✕</td><td class="x">✕</td><td class="x">✕</td><td class="x">✕</td><td class="x">✕</td><td style="text-align:left">iOS : rien ne sort (<code>Message.swift:48</code>) ; web : transfert flouté (D8)</td></tr>
+          <tr><td>Chiffré</td><td class="y">✓</td><td class="n">—</td><td class="x">✕</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td style="text-align:left">Cadenas ; avertissement vers une destination non chiffrée (V8)</td></tr>
+          <tr><td>Cite un contenu protégé</td><td class="y">✓</td><td class="n">—</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="x">✕</td><td style="text-align:left">Décision porteur 2026-10-08 : ne s'image pas</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>États × où ils se voient</h3>
+    <div class="tbl">
+      <table class="inv" style="min-width:860px">
+        <thead><tr><th>État</th><th>Ce que voit l'utilisateur</th><th>Règle</th><th>Vue</th></tr></thead>
+        <tbody>
+          <tr><td><b>Vide, premier lancement</b></td><td>Squelette de 3 lignes, recherche active</td><td>Seul cas où un squelette est permis</td><td>Fragment 1</td></tr>
+          <tr><td><b>Aucune conversation</b></td><td>« Personne ici pour l'instant » + recherche + publier</td><td>Jamais d'impasse</td><td>Fragment 2</td></tr>
+          <tr><td><b>Chargement avec cache</b></td><td>La liste du cache, sans indicateur, mise à jour en silence</td><td>Cache-first, stale-while-revalidate</td><td>V1</td></tr>
+          <tr><td><b>Déconnecté (extension, cible)</b></td><td>« Connectez-vous pour envoyer », partage gardé, Studio offert</td><td>La fiche survit à la connexion</td><td>Fragment 3</td></tr>
+          <tr><td><b>Hors ligne</b></td><td>Bandeau ; « Envoyer » reste actif ; les lignes passent « En file »</td><td>File durable, FIFO au retour, survit à la fermeture</td><td>V6</td></tr>
+          <tr><td><b>Envoi en cours</b></td><td>Anneau de progression par destinataire, pièce n sur N</td><td>Retour immédiat sur la ligne touchée</td><td>V6</td></tr>
+          <tr><td><b>Envoyé</b></td><td>« Envoyé » sur la ligne, toast « Envoyé à Ana · Ouvrir »</td><td>Pas de navigation imposée</td><td>V6</td></tr>
+          <tr><td><b>Erreur</b></td><td>Motif dans la langue du lecteur + « Réessayer » ; « Tout réessayer »</td><td>Le motif vient du <code>code</code> serveur (#9598)</td><td>V6</td></tr>
+          <tr><td><b>Interdit motivé</b></td><td>Entrée absente, ligne de motif, ou carte « ne sort pas »</td><td>Loi de sortie, côté client et serveur</td><td>V3, V7, fragment 4</td></tr>
+          <tr><td><b>Chiffré</b></td><td>Cadenas ; publication absente ; avertissement de sortie du chiffrement</td><td>E2EE optionnel, fail-closed (#9224)</td><td>V8</td></tr>
+          <tr><td><b>Trop lourd</b></td><td>Bandeau chiffré, pièces marquées, « Retirer les 2 derniers »</td><td>Bouton désactivé qui dit quoi faire</td><td>V9</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== ALIGNEMENT ===================== -->
+  <section class="blk" id="alignement">
+    <div class="blk-head">
+      <span class="eyebrow">Même écran, même ordre, mêmes mots</span>
+      <h2>Alignement des plateformes</h2>
+    </div>
+    <div class="tbl">
+      <table class="inv" style="min-width:880px">
+        <thead><tr><th></th><th>iOS · extension</th><th>iOS · app</th><th>Web · PWA</th><th>Coque Android</th></tr></thead>
+        <tbody>
+          <tr><td><b>Entrée</b></td><td>Feuille système, « Meeshy »</td><td>Transférer, Partager, Envoyer le profil, Inviter</td><td><code>share_target</code> POST <code>/share</code> + entrées internes</td><td>Intent <code>SEND</code> / <code>SEND_MULTIPLE</code> + entrées internes</td></tr>
+          <tr><td><b>Composant</b></td><td>Même vue SwiftUI, cible de l'extension (sans MeeshyUI lourd, plafond mémoire de l'extension)</td><td>Même vue, MeeshyUI</td><td colspan="2"><code>SendSheet</code> refondu sur la disposition ci-dessus</td></tr>
+          <tr><td><b>Destinataires</b></td><td>Cache App Group, puis recherche serveur si session</td><td colspan="3">Cache d'abord, puis serveur : conversations, personnes, communautés</td></tr>
+          <tr><td><b>Types acceptés</b></td><td>Texte, lien, images, vidéos, fichiers (<code>Info.plist</code>)</td><td>Tout contenu Meeshy</td><td colspan="2">À ouvrir : audio, fichiers, texte avec fichiers (D9)</td></tr>
+          <tr><td><b>Studio</b></td><td>Remet la fiche à l'app (<code>ShareComposeHandoff</code>)</td><td><code>ShareComposeDoor</code>, profil <code>.share</code></td><td colspan="2">Graine riche et persistée (#9286 lots 1, 2, 5)</td></tr>
+          <tr><td><b>Hors ligne</b></td><td>Fiche différée, reprise par l'app</td><td>OfflineQueue</td><td colspan="2">File durable à créer (aujourd'hui dans la feuille ouverte)</td></tr>
+          <tr><td><b>Chiffrement</b></td><td>Clés à rendre lisibles par l'extension, ou relais à l'app (D7)</td><td colspan="3">Rechiffrement sur l'appareil pour une destination chiffrée</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="cols2">
+      <div class="box">
+        <h3>Vocabulaire commun (fr de référence)</h3>
+        <ul>
+          <li>Titre : <b>Envoyer</b> ; <b>Transférer</b> quand la source est un message ; <b>Envoyer avec Meeshy</b> dans l'extension.</li>
+          <li>Zones : <b>Ce qui part</b>, <b>Publier</b>, <b>Conversations</b>, <b>Personnes</b>, <b>Communautés</b>.</li>
+          <li>Pastilles : <b>Ma story</b>, <b>Mon fil</b>, <b>Réel</b>, <b>Modifier dans le studio</b>.</li>
+          <li>Actions : <b>Enregistrer</b>, <b>Copier le lien</b>, <b>Copier le texte</b>, <b>Imager la discussion</b>, <b>Partager hors de Meeshy</b>.</li>
+          <li>Barre : <b>Ajouter un message…</b>, <b>Ensemble</b> / <b>Séparément</b>, <b>Envoyer · n</b>.</li>
+          <li>États : <b>Envoyé</b>, <b>En file</b>, <b>Réessayer</b>, <b>Tout réessayer</b>.</li>
+        </ul>
+      </div>
+      <div class="box">
+        <h3>Accessibilité</h3>
+        <ul>
+          <li>Chaque ligne est un seul élément : « Équipe Lyon, groupe, 12 membres, sélectionné ». Le contour décoratif est muet, la présence se dit (« en ligne »).</li>
+          <li>Le bouton annonce son effet : « Envoyer à 2 destinataires ». Chaque changement d'état d'envoi s'annonce sur la ligne.</li>
+          <li>Réordonner sans glisser : actions d'accessibilité « Avancer », « Reculer », « Retirer » sur chaque pièce.</li>
+          <li>Cibles de 44 pt au moins (pastilles, croix de retrait agrandie par sa zone tactile). Dynamic Type : rangées horizontales qui défilent, jamais tronquées.</li>
+          <li>Web : focus visible, Échap ferme, Entrée envoie depuis la légende, flèches dans la liste. RTL : l'ordre des pièces se lit de droite à gauche.</li>
+          <li>Contrastes AA dans les deux thèmes ; l'avertissement de chiffrement ne repose pas que sur la couleur (icône + texte).</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== DÉCISIONS ===================== -->
+  <section class="blk" id="decisions">
+    <div class="blk-head">
+      <span class="eyebrow">À valider par le porteur</span>
+      <h2>Décisions</h2>
+      <p class="muted" style="max-width:68ch">Chacune a une proposition. Celles qui restent ouvertes deviennent des issues <code>décision-produit</code> du milestone.</p>
+    </div>
+    <ol class="dec">
+      <li><span class="k">D1</span><b>« Transférer » ouvre-t-il l'écran directement, depuis toutes les portes ? (#5989)</b><span class="opt">Aujourd'hui : la barre rapide ouvre le sélecteur, « Plus… » arme la sélection multiple.</span><span class="rec">ouvrir l'écran partout ; la sélection multiple reste « Sélectionner » dans « Plus… », et l'écran permet de retirer un message.</span></li>
+      <li><span class="k">D2</span><b>Story, post et réel sont-ils des destinataires cochables ou des actions immédiates ?</b><span class="opt">Web : pastilles cochées puis un seul « Envoyer ». iOS : publication immédiate avec confirmation.</span><span class="rec">cochables (modèle web) : « Ana + ma story » en deux gestes ; « Modifier dans le studio » reste l'action immédiate.</span></li>
+      <li><span class="k">D3</span><b>« Ensemble / Séparément » : quel défaut, et où va la légende ?</b><span class="opt">Ensemble = un message à n pièces ; séparément = n messages.</span><span class="rec">défaut « Ensemble » ; la légende est le texte du message, ou du premier en « Séparément ».</span></li>
+      <li><span class="k">D4</span><b>La légende d'un transfert : message à part ou commentaire attaché à la copie ?</b><span class="opt">Web aujourd'hui : second message après la copie.</span><span class="rec">message à part, juste après : la copie reste fidèle à sa source.</span></li>
+      <li><span class="k">D5</span><b>Le bouton de destination unique ouvre-t-il la conversation après l'envoi ?</b><span class="opt">iOS : toast puis ouverture possible ; web : la feuille se ferme.</span><span class="rec">toast « Envoyé à Ana · Ouvrir », sans navigation imposée.</span></li>
+      <li><span class="k">D6</span><b>Une sélection qui mêle un contenu protégé : tout ou rien, ou on retire le protégé ?</b><span class="opt">Web : refus de toute la sélection (<code>forward.ts:53-58</code>).</span><span class="rec">retirer le protégé avec son motif et envoyer le reste (V3).</span></li>
+      <li><span class="k">D7</span><b>Un contenu chiffré vers une conversation non chiffrée : refuser ou avertir ?</b><span class="opt">La passerelle n'a pas de règle (<code>forwardAdmission.ts</code>) et copie côté serveur.</span><span class="rec">avertir une fois par envoi (V8), copie faite sur l'appareil ; l'extension iOS relaie à l'app tant qu'elle n'a pas les clés. À passer par <code>crypto-e2ee</code> et <code>auditeur-adversarial</code>.</span></li>
+      <li><span class="k">D8</span><b>Un message flouté se transfère-t-il ?</b><span class="opt">iOS : rien ne sort d'un flouté (#8009). Web : transfert permis, la copie reste floutée.</span><span class="rec">transfert permis, flou hérité ; tout le reste interdit. Aligner iOS.</span></li>
+      <li><span class="k">D9</span><b>Quels types la cible de partage web et Android accepte-t-elle ?</b><span class="opt">Aujourd'hui : images et vidéos ; audio et fichiers écartés, texte joint jeté.</span><span class="rec">audio et tout fichier ; le texte joint devient la légende (#9286 lot 6).</span></li>
+      <li><span class="k">D10</span><b>Plafonds communs</b><span class="opt">iOS extension : 20 fichiers, 500 Mio, 10 cibles. Web : 10 fichiers à publier, 10 destinataires, 3 publications.</span><span class="rec">20 fichiers, 500 Mo et 10 destinataires partout ; publication bornée à 10 médias.</span></li>
+      <li><span class="k">D11</span><b>Une communauté comme destination</b><span class="opt">Ses canaux où j'écris, ou son fil de publications ?</span><span class="rec">la ligne se déplie en canaux où l'on peut écrire ; publier dans la communauté est un second temps.</span></li>
+      <li><span class="k">D12</span><b>Créer un groupe depuis l'écran</b><span class="opt">Aujourd'hui aucun sélecteur ne le fait.</span><span class="rec">interrupteur « Créer un groupe avec… » dès deux personnes cochées, éteint par défaut (V5).</span></li>
+      <li><span class="k">D13</span><b>Un audio partagé peut-il devenir un post ou une story ?</b><span class="opt">Le studio porte déjà les sons.</span><span class="rec">oui, en story sur fond uni, et en post audio ; pas de réel.</span></li>
+      <li><span class="k">D14</span><b>Republier la story de quelqu'un dans la mienne</b><span class="opt">Aucun réglage d'auteur aujourd'hui.</span><span class="rec">non pour ce lot : une story s'envoie en carte et son lien se copie.</span></li>
+      <li><span class="k">D15</span><b>Partager un profil</b><span class="opt">Absent du web, lien seul sur iOS.</span><span class="rec">entrée « Envoyer le profil » sur le profil, carte profil dans la conversation, lien copiable.</span></li>
+    </ol>
+  </section>
+
+  <footer>
+    <p>Sources : #10949, #10947, #10948, #9914, #9908, #9286, #9039, #5989, milestone « Un contenu qui disparaît ne sort jamais de Meeshy » (#9572, #9573, #9598). Planche de design, sans état de tâche : l'état vit dans les issues.</p>
+  </footer>
+</div>
+<script>
+(function(){
+  var b=document.getElementById('theme-toggle');
+  if(!b)return;
+  b.addEventListener('click',function(){
+    var r=document.documentElement;
+    var cur=r.getAttribute('data-theme');
+    var dark=cur?cur==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;
+    r.setAttribute('data-theme',dark?'light':'dark');
+  });
+})();
+</script>
+</body>
+</html>

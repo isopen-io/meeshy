@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="a11y_message_videos">%1$d مقاطع فيديو</string>
+    <string name="a11y_message_reply_to_you">نفسك</string>
+    <string name="a11y_message_contact_card">جهة اتصال مشتركة: %1$s</string>
+    <string name="a11y_message_contact_card_account">على Meeshy: %1$s</string>
+    <string name="a11y_delivery_slow">إرسال بطيء</string>
+    <string name="a11y_message_view_once_sealed">رسالة تُعرض مرة واحدة، اضغط للعرض</string>
+    <string name="a11y_message_view_once">عرض مرة واحدة</string>
+    <string name="a11y_message_blurred">مموّه</string>
+</resources>

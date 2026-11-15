@@ -10,33 +10,33 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.ActivityPeriod
+import me.meeshy.sdk.model.ClientStatMessage
 import me.meeshy.sdk.model.ContentTypeKind
 import me.meeshy.sdk.model.ContentTypeShare
 import me.meeshy.sdk.model.LanguageShare
@@ -47,113 +47,32 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
-import java.time.LocalDate
 import kotlin.math.roundToInt
 
 /**
- * Conversation statistics dashboard bottom sheet (feature-parity §Chat — "stats
- * rings + activity-over-time + content-type breakdown"). Presented from the chat
- * header. Every derivation lives in the tested [ConversationStatsViewModel] +
- * `ConversationStatsProjection`, so this is coverage-exempt Compose glue: total
- * pills, content-type bars, an accent activity mini-chart with a period picker, a
- * busiest-participant list, and a language breakdown.
+ * La feuille du tableau de bord unifié (Stats + Analyse), présentée depuis l'en-tête du fil.
+ * Le contenu vit dans [ConversationDashboardContent] ; ce fichier garde les atomes de
+ * section partagés (barres, sélecteur de période, sentiment, états vide et erreur).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ConversationStatsSheet(
+internal fun ConversationStatsSheet(
     conversationId: String,
     accentColor: Color,
-    messageContents: List<String>,
+    clientMessages: List<ClientStatMessage>,
     onDismiss: () -> Unit,
     viewModel: ConversationStatsViewModel = hiltViewModel(),
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
-
-    LaunchedEffect(conversationId) { viewModel.load(conversationId, messageContents) }
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = MeeshySpacing.lg)
-                .padding(bottom = MeeshySpacing.xl),
-            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-        ) {
-            Text(
-                stringResource(R.string.conversation_stats_title),
-                style = MaterialTheme.typography.titleSmall,
-                color = MeeshyTheme.tokens.textPrimary,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(vertical = MeeshySpacing.sm),
-            )
-
-            when {
-                state.isLoading -> CircularProgressIndicator(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .padding(vertical = MeeshySpacing.lg),
-                    color = accentColor,
-                )
-
-                state.hasError -> ErrorState(accentColor, onRetry = viewModel::retry)
-
-                state.phase == StatsPhase.Empty -> CenteredHint(stringResource(R.string.conversation_stats_empty))
-
-                else -> LoadedContent(state, accentColor, viewModel::selectPeriod)
-            }
-        }
+        ConversationDashboardContent(conversationId, accentColor, clientMessages, statsViewModel = viewModel)
     }
 }
 
 @Composable
-private fun LoadedContent(
-    state: ConversationStatsUiState,
-    accentColor: Color,
-    onSelectPeriod: (ActivityPeriod) -> Unit,
-) {
-    Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-        TotalPill(state.totalMessages, stringResource(R.string.conversation_stats_messages), accentColor, Modifier.weight(1f))
-        TotalPill(state.totalWords, stringResource(R.string.conversation_stats_words), MeeshyPalette.Info, Modifier.weight(1f))
-    }
-
-    if (state.contentTypes.isNotEmpty()) {
-        SectionLabel(stringResource(R.string.conversation_stats_content_types))
-        state.contentTypes.forEach { ContentTypeBar(it, accentColor) }
-    }
-
-    val today = LocalDate.now()
-    val activity = state.activity(today)
-    SectionLabel(stringResource(R.string.conversation_stats_activity))
-    PeriodPicker(state.period, accentColor, onSelectPeriod)
-    if (activity.isEmpty()) {
-        CenteredHint(stringResource(R.string.conversation_stats_activity_empty))
-    } else {
-        ActivityChart(activity.map { it.count }, accentColor)
-    }
-
-    if (state.participants.isNotEmpty()) {
-        SectionLabel(stringResource(R.string.conversation_stats_participants))
-        state.participants.take(PARTICIPANT_ROW_LIMIT).forEach { ParticipantRow(it, accentColor) }
-    }
-
-    if (state.languages.isNotEmpty()) {
-        SectionLabel(stringResource(R.string.conversation_stats_languages))
-        state.languages.take(LANGUAGE_ROW_LIMIT).forEach { LanguageRow(it, accentColor) }
-    }
-
-    state.sentiment?.let { sentiment ->
-        SectionLabel(stringResource(R.string.conversation_stats_sentiment))
-        SentimentSummary(sentiment)
-        SentimentBar(sentiment)
-    }
-}
-
-@Composable
-private fun SentimentSummary(sentiment: SentimentBreakdown) {
+internal fun SentimentSummary(sentiment: SentimentBreakdown) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -208,7 +127,7 @@ private fun SentimentColumn(
 }
 
 @Composable
-private fun SentimentBar(sentiment: SentimentBreakdown) {
+internal fun SentimentBar(sentiment: SentimentBreakdown) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -254,7 +173,7 @@ private fun TotalPill(value: Int, label: String, tint: Color, modifier: Modifier
 }
 
 @Composable
-private fun ContentTypeBar(share: ContentTypeShare, accentColor: Color) {
+internal fun ContentTypeBar(share: ContentTypeShare, accentColor: Color) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -294,7 +213,7 @@ private fun ContentTypeBar(share: ContentTypeShare, accentColor: Color) {
 }
 
 @Composable
-private fun ActivityChart(counts: List<Int>, accentColor: Color) {
+internal fun ActivityChart(counts: List<Int>, accentColor: Color) {
     val max = (counts.maxOrNull() ?: 1).coerceAtLeast(1)
     Row(
         modifier = Modifier
@@ -318,16 +237,24 @@ private fun ActivityChart(counts: List<Int>, accentColor: Color) {
 }
 
 @Composable
-private fun PeriodPicker(selected: ActivityPeriod, accentColor: Color, onSelect: (ActivityPeriod) -> Unit) {
+internal fun PeriodPicker(current: ActivityPeriod, accentColor: Color, onSelect: (ActivityPeriod) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
         ActivityPeriod.entries.forEach { period ->
-            val active = period == selected
+            val active = period == current
+            val a11y = periodDescription(period)
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(MeeshyRadius.md))
                     .background(if (active) accentColor else MeeshyTheme.tokens.textMuted.copy(alpha = 0.10f))
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = a11y
+                        selected = active
+                        role = Role.Tab
+                    }
                     .clickable { onSelect(period) }
+                    .defaultMinSize(minHeight = 48.dp)
                     .padding(horizontal = MeeshySpacing.md, vertical = 6.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     periodLabel(period),
@@ -341,7 +268,7 @@ private fun PeriodPicker(selected: ActivityPeriod, accentColor: Color, onSelect:
 }
 
 @Composable
-private fun ParticipantRow(share: ParticipantShare, accentColor: Color) {
+internal fun ParticipantRow(share: ParticipantShare, accentColor: Color) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -374,7 +301,7 @@ private fun ParticipantRow(share: ParticipantShare, accentColor: Color) {
 }
 
 @Composable
-private fun LanguageRow(share: LanguageShare, accentColor: Color) {
+internal fun LanguageRow(share: LanguageShare, accentColor: Color) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -407,7 +334,7 @@ private fun LanguageRow(share: LanguageShare, accentColor: Color) {
 }
 
 @Composable
-private fun ErrorState(accentColor: Color, onRetry: () -> Unit) {
+internal fun ErrorState(accentColor: Color, onRetry: () -> Unit, message: String = stringResource(R.string.conversation_stats_error)) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -416,7 +343,7 @@ private fun ErrorState(accentColor: Color, onRetry: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
         Text(
-            stringResource(R.string.conversation_stats_error),
+            message,
             color = MeeshyPalette.Error,
             textAlign = TextAlign.Center,
         )
@@ -427,7 +354,7 @@ private fun ErrorState(accentColor: Color, onRetry: () -> Unit) {
 }
 
 @Composable
-private fun CenteredHint(text: String) {
+internal fun CenteredHint(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.bodySmall,
@@ -440,7 +367,7 @@ private fun CenteredHint(text: String) {
 }
 
 @Composable
-private fun SectionLabel(text: String) {
+internal fun DashboardSectionLabel(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.labelMedium,
@@ -463,6 +390,15 @@ private fun contentTypeLabel(kind: ContentTypeKind): String = stringResource(
 )
 
 @Composable
+private fun periodDescription(period: ActivityPeriod): String = stringResource(
+    when (period) {
+        ActivityPeriod.WEEK -> R.string.dashboard_period_week
+        ActivityPeriod.MONTH -> R.string.dashboard_period_month
+        ActivityPeriod.ALL -> R.string.dashboard_period_all
+    },
+)
+
+@Composable
 private fun periodLabel(period: ActivityPeriod): String = stringResource(
     when (period) {
         ActivityPeriod.WEEK -> R.string.conversation_stats_period_week
@@ -471,5 +407,3 @@ private fun periodLabel(period: ActivityPeriod): String = stringResource(
     },
 )
 
-private const val PARTICIPANT_ROW_LIMIT = 10
-private const val LANGUAGE_ROW_LIMIT = 6
